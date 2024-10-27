@@ -1,0 +1,20 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Launch Chrome against localhost",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:5500",
+      "webRoot": "${workspaceFolder}/dist",
+      "runtimeArgs": [
+        "--load-extension=${workspaceFolder}/dist",
+      ],
+      "sourceMaps": true,
+      "sourceMapPathOverrides": {
+        "fpmkpflgklcbdcpbdhjpopcnoaneepjf://*": "${workspaceFolder}/*"
+      },
+      "trace": true
+    }
+  ]
+}
