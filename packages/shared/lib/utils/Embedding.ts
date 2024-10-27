@@ -27,7 +27,7 @@ export class Embedding {
         lastHiddenState: { data: Float32Array; dims: number[]; }
         , attentionMask: {
             data: BigInt64Array; dims: number[];
-        }): tf.Tensor {
+        }): tf.Tensor<tf.Rank> {
 
         // tf.tensor 无法处理 BigInt64Array, 所以我们需要将其转换为普通数组
         const attentionMaskArray = Array.from(attentionMask.data, (value: bigint) => Number(value));
@@ -82,13 +82,13 @@ export class Embedding {
             embeddings = await this.encode([text1, text2]);
 
 
-            const embedding1 = embeddings.slice([0, 0], [1, -1]) as tf.Tensor;
-            const embedding2 = embeddings.slice([1, 0], [1, -1]) as tf.Tensor;
+            const embedding1 = embeddings.slice([0, 0], [1, -1]);
+            const embedding2 = embeddings.slice([1, 0], [1, -1]);
 
             // 计算余弦相似度
             const similarity = cosineSimilarity(
-                embedding1.arraySync()[0],
-                embedding2.arraySync()[0]
+                tf.tensor1d(embedding1.dataSync()),
+                tf.tensor1d(embedding2.dataSync())
             );
 
             return similarity;

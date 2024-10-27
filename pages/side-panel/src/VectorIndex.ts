@@ -1,11 +1,11 @@
 import { math } from '@extension/shared';
-
+import type { tf } from '@extension/shared';
 
 interface HashBucket {
     id: string; // 哈希签名即桶ID
     vectors: {
         id: string;
-        vector: number[];
+        vector: tf.Tensor1D;
     }[];  // 向量集合
 }
 
@@ -46,7 +46,7 @@ export class LSHIndex {
     }
 
     // 计算向量的LSH签名
-    private computeHash(vector: number[], tableIndex: number): string {
+    private computeHash(vector: tf.Tensor1D, tableIndex: number): string {
         const signature: number[] = [];
         for (let i = 0; i < this.numHashesPerTable; i++) {
             const projIndex = tableIndex * this.numHashesPerTable + i;
@@ -65,7 +65,7 @@ export class LSHIndex {
     }
 
     // 添加向量到索引
-    async addVector(id: string, vector: number[]): Promise<void> {
+    async addVector(id: string, vector: tf.Tensor1D): Promise<void> {
         for (let i = 0; i < this.numTables; i++) {
             const hash = this.computeHash(vector, i);
             if (!this.tables[i].has(hash)) {
@@ -76,14 +76,14 @@ export class LSHIndex {
     }
 
     // 批量添加向量
-    async addVectors(vectors: { id: string, vector: number[] }[]): Promise<void> {
+    async addVectors(vectors: { id: string, vector: tf.Tensor1D }[]): Promise<void> {
         for (const { id, vector } of vectors) {
             await this.addVector(id, vector);
         }
     }
 
     // 查找相似向量
-    async findSimilar(queryVector: number[], limit: number): Promise<Set<string>> {
+    async findSimilar(queryVector: tf.Tensor1D, limit: number): Promise<Set<string>> {
         const candidateIds = new Set<string>();
 
         // 在每个hash表中查找候选项
