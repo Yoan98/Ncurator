@@ -2,31 +2,27 @@ import '@src/SidePanel.css';
 import { useStorage, withErrorBoundary, withSuspense } from '@extension/shared';
 import { exampleThemeStorage } from '@extension/storage';
 import type { ComponentPropsWithoutRef } from 'react';
-import { useEffect } from 'react';
-import Embedding from './Embedding';
+import { useRef, useEffect } from 'react';
 
 const SidePanel = () => {
-    const test = async () => {
-        const embedding = new Embedding();
-        await embedding.init();
-
-        const res = await embedding.computeSimilarity('How is the weather today?', '今天天气怎么样?');
-        console.log(res);
-
-
-    }
-
-    useEffect(() => {
-        test();
-
-    }, []);
-
-
     const theme = useStorage(exampleThemeStorage);
     const isLight = theme === 'light';
     const logo = isLight ? 'side-panel/logo_vertical.svg' : 'side-panel/logo_vertical_dark.svg';
     const goGithubSite = () =>
         chrome.tabs.create({ url: 'https://github.com/Jonghakseo/chrome-extension-boilerplate-react-vite' });
+
+    const workerRef = useRef<Worker>();
+
+    useEffect(() => {
+        workerRef.current = new Worker(new URL('./embeddingWorker.ts', import.meta.url));
+        workerRef.current.onmessage = (event) => {
+            console.log('Received message from worker:', event.data);
+        };
+
+        return () => {
+            workerRef.current?.terminate();
+        };
+    }, []);
 
     return (
         <div className={`App ${isLight ? 'bg-slate-50' : 'bg-gray-800'}`}>
@@ -37,13 +33,17 @@ const SidePanel = () => {
                 <p>
                     Edit <code>pages/side-panel/src/SidePanel.tsx</code>
                 </p>
-                <ToggleButton>Toggle theme</ToggleButton>
+                <ToggleButton workerRef={workerRef}>Toggle theme</ToggleButton>
             </header>
         </div>
     );
 };
 
-const ToggleButton = (props: ComponentPropsWithoutRef<'button'>) => {
+const ToggleButton = (props: ComponentPropsWithoutRef<'button'> & { workerRef: React.MutableRefObject<Worker | undefined> }) => {
+    function sendMessageToWorker() {
+        props.workerRef.current?.postMessage('Hello from SidePanel');
+    }
+
     const theme = useStorage(exampleThemeStorage);
     return (
         <button
@@ -53,7 +53,7 @@ const ToggleButton = (props: ComponentPropsWithoutRef<'button'>) => {
                 'font-bold mt-4 py-1 px-4 rounded shadow hover:scale-105 ' +
                 (theme === 'light' ? 'bg-white text-black' : 'bg-black text-white')
             }
-            onClick={exampleThemeStorage.toggle}>
+            onClick={sendMessageToWorker}>
             {props.children}
         </button>
     );

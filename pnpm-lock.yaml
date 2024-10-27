@@ -108,6 +108,12 @@ importers:
       '@extension/storage':
         specifier: workspace:*
         version: link:../packages/storage
+      '@huggingface/transformers':
+        specifier: ^3.0.0
+        version: 3.0.0
+      '@tensorflow/tfjs':
+        specifier: ^4.22.0
+        version: 4.22.0(seedrandom@3.0.5)
       webextension-polyfill:
         specifier: ^0.12.0
         version: 0.12.0
@@ -189,6 +195,13 @@ importers:
         version: link:../tsconfig
 
   packages/shared:
+    dependencies:
+      '@huggingface/transformers':
+        specifier: ^3.0.0
+        version: 3.0.0
+      '@tensorflow/tfjs':
+        specifier: ^4.22.0
+        version: 4.22.0(seedrandom@3.0.5)
     devDependencies:
       '@extension/storage':
         specifier: workspace:*
@@ -460,12 +473,6 @@ importers:
       '@extension/storage':
         specifier: workspace:*
         version: link:../../packages/storage
-      '@huggingface/transformers':
-        specifier: ^3.0.0
-        version: 3.0.0
-      '@tensorflow/tfjs':
-        specifier: ^4.22.0
-        version: 4.22.0(seedrandom@3.0.5)
     devDependencies:
       '@extension/tailwindcss-config':
         specifier: workspace:*

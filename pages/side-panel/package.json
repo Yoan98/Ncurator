@@ -20,9 +20,7 @@
     },
     "dependencies": {
         "@extension/shared": "workspace:*",
-        "@extension/storage": "workspace:*",
-        "@huggingface/transformers": "^3.0.0",
-        "@tensorflow/tfjs": "^4.22.0"
+        "@extension/storage": "workspace:*"
     },
     "devDependencies": {
         "@extension/tailwindcss-config": "workspace:*",
