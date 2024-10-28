@@ -22,12 +22,17 @@ export class Embedding {
 
     }
 
-    // 计算平均值池化
+    /**
+     * 计算平均值池化
+     * @param lastHiddenState
+     * @param attentionMask
+     * @returns  {tf.Tensor2D} 返回的张量的形状为 [batchSize, hiddenSize] [句子数量, 句子向量数组长度]
+     */
     private meanPooling(
-        lastHiddenState: { data: Float32Array; dims: number[]; }
+        lastHiddenState: { data: Float32Array; dims: [number, number, number]; }
         , attentionMask: {
-            data: BigInt64Array; dims: number[];
-        }): tf.Tensor<tf.Rank> {
+            data: BigInt64Array; dims: [number, number];
+        }): tf.Tensor2D {
 
         // tf.tensor 无法处理 BigInt64Array, 所以我们需要将其转换为普通数组
         const attentionMaskArray = Array.from(attentionMask.data, (value: bigint) => Number(value));
@@ -35,24 +40,29 @@ export class Embedding {
         return tf.tidy(() => {
             // 转换为 TensorFlow 张量
             const hiddenState = tf.tensor(lastHiddenState.data,
-                lastHiddenState.dims);
-            const mask = tf.tensor(attentionMaskArray, attentionMask.dims);
+                lastHiddenState.dims) as tf.Tensor3D;
+            const mask = tf.tensor(attentionMaskArray, attentionMask.dims) as tf.Tensor2D;
 
             // 扩展 mask 维度以匹配隐藏状态
-            const expandedMask = tf.expandDims(mask, -1);
+            const expandedMask = tf.expandDims(mask, -1) as tf.Tensor3D;
 
             // 应用 mask 并计算平均值
-            const maskedEmbeddings = tf.mul(hiddenState, expandedMask);
-            const sumEmbeddings = tf.sum(maskedEmbeddings, 1);
-            const sumMask = tf.maximum(tf.sum(expandedMask, 1), tf.scalar(1e-9));
-
+            const maskedEmbeddings = tf.mul(hiddenState, expandedMask) as tf.Tensor3D;
+            const sumEmbeddings = tf.sum(maskedEmbeddings, 1) as tf.Tensor2D;
+            const sumMask = tf.maximum(tf.sum(expandedMask, 1), tf.scalar(1e-9)) as tf.Tensor2D;
 
             return tf.div(sumEmbeddings, sumMask);
-
         });
     }
 
-    async encode(texts: string | string[]): Promise<tf.Tensor> {
+    /**
+     * 将文本向量化且平均池化
+     * 注:批量文本处理会比循环执行encode更快
+     * control your input sequence length up to 8192,base on jinaai/jina-embeddings-v2-base-zh
+     * @param texts
+     * @returns
+     */
+    async encode(texts: string | string[]): Promise<tf.Tensor2D> {
         if (!this.model || !this.tokenizer) {
             await this.init();
         }
@@ -61,7 +71,7 @@ export class Embedding {
         const encoded = await this.tokenizer(inputTexts, {
             padding: true,
             truncation: true,
-            maxLength: 512,
+            maxLength: 2048,
             return_tensors: 'pt',
         });
 
@@ -72,23 +82,23 @@ export class Embedding {
             output.last_hidden_state,
             encoded.attention_mask
         );
+
     }
 
     async computeSimilarity(text1: string, text2: string): Promise<number> {
-        let embeddings: tf.Tensor | null = null;
+        let embeddings: tf.Tensor2D | null = null;
 
         try {
             // 批量获取嵌入
             embeddings = await this.encode([text1, text2]);
 
-
-            const embedding1 = embeddings.slice([0, 0], [1, -1]);
-            const embedding2 = embeddings.slice([1, 0], [1, -1]);
+            const embedding1 = embeddings.slice([0, 0], [1, -1]).reshape([-1]) as tf.Tensor1D;
+            const embedding2 = embeddings.slice([1, 0], [1, -1]).reshape([-1]) as tf.Tensor1D;
 
             // 计算余弦相似度
             const similarity = cosineSimilarity(
-                tf.tensor1d(embedding1.dataSync()),
-                tf.tensor1d(embedding2.dataSync())
+                embedding1,
+                embedding2
             );
 
             return similarity;

@@ -1,14 +1,20 @@
-import { math } from '@extension/shared';
-import type { tf } from '@extension/shared';
+import { math, tf } from '@extension/shared';
 
 interface HashBucket {
     id: string; // 哈希签名即桶ID
     vectors: {
-        id: string;
+        id: number;
         vector: tf.Tensor1D;
     }[];  // 向量集合
 }
 
+interface LSHIndexConstructor {
+    dimensions: number;
+    numTables?: number;
+    numHashesPerTable?: number;
+    similarityThreshold?: number;
+    localProjections?: number[][];
+}
 // LSH (Locality-Sensitive Hashing) 实现
 export class LSHIndex {
     // 哈希表数量
@@ -19,24 +25,29 @@ export class LSHIndex {
     // 向量维度(一维向量的数量)
     private dimensions: number;
     // 所有的哈希表
-    private tables: Map<string, HashBucket>[];
+    public tables: Map<string, HashBucket>[];
     // 随机投影向量, 用于计算哈希签名
-    private projections: number[][];
+    public projections: number[][];
     // 相似度阈值
     private similarityThreshold: number;
 
-    constructor(dimensions: number, numTables = 10, numHashesPerTable = 4, similarityThreshold = 0.8) {
+    constructor({ dimensions, numTables = 10, numHashesPerTable = 4, similarityThreshold = 0.8, localProjections }: LSHIndexConstructor) {
         this.dimensions = dimensions;
         this.numTables = numTables;
         this.numHashesPerTable = numHashesPerTable;
         this.similarityThreshold = similarityThreshold;
         this.tables = Array(numTables).fill(null).map(() => new Map());
-        this.projections = this.generateProjections();
+        this.projections = this.generateProjections(localProjections);
     }
 
     // 生成随机投影向量
-    private generateProjections(): number[][] {
-        const projections: number[][] = [];
+    private generateProjections(localProjections?: number[][]): number[][] {
+        if (localProjections?.length) {
+            return localProjections
+        }
+
+        const projections: number[][] = []
+        // 生成随机投影向量
         for (let i = 0; i < this.numTables * this.numHashesPerTable; i++) {
             const projection = Array(this.dimensions).fill(0)
                 .map(() => (Math.random() * 2 - 1)); // 生成-1到1之间的随机数
@@ -52,20 +63,22 @@ export class LSHIndex {
             const projIndex = tableIndex * this.numHashesPerTable + i;
             const projection = this.projections[projIndex];
 
+            const projectionTensor = tf.tensor1d(projection);
             // 计算向量点积
-            let dotProduct = 0;
-            for (let j = 0; j < this.dimensions; j++) {
-                dotProduct += vector[j] * projection[j];
-            }
+            const dotProduct = vector.dot(projectionTensor) as tf.Scalar;
 
+            console.log('dotProduct.dataSync', dotProduct.dataSync());
             // 使用符号作为hash位
-            signature.push(dotProduct > 0 ? 1 : 0);
+            signature.push(dotProduct.dataSync()[0] > 0 ? 1 : 0);
+
+            dotProduct.dispose();
+            projectionTensor.dispose();
         }
         return signature.join('');
     }
 
     // 添加向量到索引
-    async addVector(id: string, vector: tf.Tensor1D): Promise<void> {
+    async addVector(id: number, vector: tf.Tensor1D): Promise<void> {
         for (let i = 0; i < this.numTables; i++) {
             const hash = this.computeHash(vector, i);
             if (!this.tables[i].has(hash)) {
@@ -76,7 +89,7 @@ export class LSHIndex {
     }
 
     // 批量添加向量
-    async addVectors(vectors: { id: string, vector: tf.Tensor1D }[]): Promise<void> {
+    async addVectors(vectors: { id: number, vector: tf.Tensor1D }[]): Promise<void> {
         for (const { id, vector } of vectors) {
             await this.addVector(id, vector);
         }
@@ -84,7 +97,7 @@ export class LSHIndex {
 
     // 查找相似向量
     async findSimilar(queryVector: tf.Tensor1D, limit: number): Promise<Set<string>> {
-        const candidateIds = new Set<string>();
+        const candidateIds = new Set<number>();
 
         // 在每个hash表中查找候选项
         for (let i = 0; i < this.numTables; i++) {
