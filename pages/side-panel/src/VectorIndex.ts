@@ -1,12 +1,23 @@
-import { math, tf } from '@extension/shared';
+import { math, tf, constant } from '@extension/shared';
+
+export interface LSH_INDEX_STORE {
+    id: number;
+    lsh_table: LSHTables;
+}
+export interface LSH_PROJECTION_STORE {
+    id: number;
+    data: number[][];
+}
 
 interface HashBucket {
     id: string; // 哈希签名即桶ID
     vectors: {
         id: number;
-        vector: tf.Tensor1D;
+        vector: Float32Array;
     }[];  // 向量集合
 }
+
+type LSHTables = Map<string, HashBucket>[]
 
 interface LSHIndexConstructor {
     dimensions: number;
@@ -14,6 +25,7 @@ interface LSHIndexConstructor {
     numHashesPerTable?: number;
     similarityThreshold?: number;
     localProjections?: number[][];
+    tables?: LSHTables;
 }
 // LSH (Locality-Sensitive Hashing) 实现
 export class LSHIndex {
@@ -25,18 +37,21 @@ export class LSHIndex {
     // 向量维度(一维向量的数量)
     private dimensions: number;
     // 所有的哈希表
-    public tables: Map<string, HashBucket>[];
+    public tables: LSHTables;
     // 随机投影向量, 用于计算哈希签名
     public projections: number[][];
-    // 相似度阈值
+    // 相似度阈值,目前jinaai/jina-embeddings-v2-base-zh测试的感觉,超过0.5的相似度就是相似的
     private similarityThreshold: number;
 
-    constructor({ dimensions, numTables = 10, numHashesPerTable = 4, similarityThreshold = 0.8, localProjections }: LSHIndexConstructor) {
+    private maxLshChunkSize = constant.MAX_LSH_CHUNK_SIZE; // LSH索引表,每条数据存储的最大chunk数量,即所有table下所有bucket里的向量或chunk数量
+
+    constructor({ dimensions, numTables = 10, numHashesPerTable = 4, similarityThreshold = 0.5, localProjections, tables }: LSHIndexConstructor) {
         this.dimensions = dimensions;
         this.numTables = numTables;
         this.numHashesPerTable = numHashesPerTable;
         this.similarityThreshold = similarityThreshold;
-        this.tables = Array(numTables).fill(null).map(() => new Map());
+
+        this.initialTables(tables);
         this.projections = this.generateProjections(localProjections);
     }
 
@@ -67,7 +82,6 @@ export class LSHIndex {
             // 计算向量点积
             const dotProduct = vector.dot(projectionTensor) as tf.Scalar;
 
-            console.log('dotProduct.dataSync', dotProduct.dataSync());
             // 使用符号作为hash位
             signature.push(dotProduct.dataSync()[0] > 0 ? 1 : 0);
 
@@ -84,29 +98,55 @@ export class LSHIndex {
             if (!this.tables[i].has(hash)) {
                 this.tables[i].set(hash, { id: hash, vectors: [] });
             }
-            this.tables[i].get(hash)!.vectors.push({ id, vector });
+            this.tables[i].get(hash)!.vectors.push({ id, vector: vector.dataSync() as Float32Array });
         }
     }
 
-    // 批量添加向量
-    async addVectors(vectors: { id: number, vector: tf.Tensor1D }[]): Promise<void> {
-        for (const { id, vector } of vectors) {
+    /**
+     * 批量添加向量,
+     * @param vectors 数量不能超过MAX_LSH_CHUNK_SIZE
+     * @returns
+     */
+    async addVectors(vectors: { id: number, vector: tf.Tensor1D }[]): Promise<LSHTables> {
+        if (vectors.length > this.maxLshChunkSize) {
+            throw new Error('The number of vectors cannot exceed the maximum value of MAX_LSH_CHUNK_SIZE');
+        }
+
+        for (let i = 0; i < vectors.length; i++) {
+            const { id, vector } = vectors[i];
             await this.addVector(id, vector);
         }
+
+        return this.tables;
+    }
+
+    initialTables(tables?: LSHTables) {
+        this.tables = tables ? tables : Array(this.numTables).fill(null).map(() => new Map());
     }
 
     // 查找相似向量
-    async findSimilar(queryVector: tf.Tensor1D, limit: number): Promise<Set<string>> {
+    // todo: 增加分页,通过将搜索条件的结果单独存储,并标记最新索引,以便下次搜索时直接从最新索引开始搜索
+    async findSimilar({ queryVector, limit = 10, tables = this.tables }: {
+        queryVector: tf.Tensor1D,
+        limit?: number,
+        tables?: LSHTables
+    }): Promise<Set<number>> {
         const candidateIds = new Set<number>();
 
         // 在每个hash表中查找候选项
         for (let i = 0; i < this.numTables; i++) {
             const hash = this.computeHash(queryVector, i);
-            const bucket = this.tables[i].get(hash);
+
+            const bucket = tables[i].get(hash);
             if (bucket) {
+                console.log('bucket', bucket);
                 for (const { id, vector } of bucket.vectors) {
                     // 计算余弦相似度
-                    const similarity = math.cosineSimilarity(queryVector, vector);
+                    const storageVector = tf.tensor1d(vector);
+                    const similarity = math.cosineSimilarity(queryVector, storageVector);
+
+                    storageVector.dispose();
+
                     if (similarity > this.similarityThreshold) {
                         candidateIds.add(id);
                     }

@@ -1,8 +1,10 @@
+import { constant } from '@extension/shared';
+
+
 // 定义基础类型
 interface TextChunk {
     id: string;
     text: string;
-    parentId: string;  // 父文档ID
     vector: number[];  // 向量表示
     metadata?: Record<string, any>;
 }
@@ -49,10 +51,14 @@ export class IndexDBStore {
         db.createObjectStore('chunks', { keyPath: 'id', autoIncrement: true });
 
         // 创建LSH随机向量表
-        db.createObjectStore('lsh_projections', { keyPath: 'id', autoIncrement: true });
+        db.createObjectStore(constant.LSH_PROJECTION_DB_STORE_NAME, { keyPath: 'id', autoIncrement: true });
+
+        // 创建LSH索引表
+        db.createObjectStore(constant.LSH_INDEX_STORE_NAME, { keyPath: 'id', autoIncrement: true });
 
         console.log('IndexDB Store initialized');
     }
+
 
     // 插入数据
     add({ storeName, data }: {
@@ -92,7 +98,7 @@ export class IndexDBStore {
     delete({ storeName, key }: {
         storeName: string;
         key: string | number;
-    }): Promise<Record<string, any>> {
+    }): Promise<void> {
         if (!this.db) throw new Error('Database not initialized');
 
         return new Promise((resolve, reject) => {
@@ -209,20 +215,5 @@ export class IndexDBStore {
     //         transaction.onerror = () => reject(transaction.error);
     //     });
     // }
-
-    // 按父文档ID查询
-    async getByParentId(parentId: string): Promise<TextChunk[]> {
-        if (!this.db) throw new Error('Database not initialized');
-
-        return new Promise((resolve, reject) => {
-            const transaction = this.db!.transaction('chunks', 'readonly');
-            const store = transaction.objectStore('chunks');
-            const index = store.index('parentId');
-            const request = index.getAll(parentId);
-
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
-    }
 
 }
