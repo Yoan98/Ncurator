@@ -3,6 +3,7 @@ import { useStorage, withErrorBoundary, withSuspense } from '@extension/shared';
 import { exampleThemeStorage } from '@extension/storage';
 import type { ComponentPropsWithoutRef } from 'react';
 import { useRef, useEffect } from 'react';
+import { createWorker } from 'tesseract.js';
 
 const SidePanel = () => {
     const theme = useStorage(exampleThemeStorage);
@@ -14,10 +15,24 @@ const SidePanel = () => {
     const workerRef = useRef<Worker>();
 
     useEffect(() => {
-        workerRef.current = new Worker(new URL('./embeddingWorker.ts', import.meta.url));
+        workerRef.current = new Worker(new URL('./worker/embeddingWorker.ts', import.meta.url));
         workerRef.current.onmessage = (event) => {
             console.log('Received message from worker:', event.data);
         };
+
+        chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
+            const action = request.data.action;
+            const img = request.data.data;
+
+            if (action === 'screenshot') {
+                console.log('Received screenshot action from background:', img);
+                const worker = await createWorker('eng');
+                console.log('Worker created');
+                const ret = await worker.recognize(img);
+                console.log(ret.data.text);
+                await worker.terminate();
+            }
+        });
 
         return () => {
             workerRef.current?.terminate();

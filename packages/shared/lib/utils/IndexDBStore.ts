@@ -1,12 +1,12 @@
-import { constant } from '@extension/shared';
+import * as constant from './constant';
 
 
-// 定义基础类型
 interface TextChunk {
     id: string;
     text: string;
-    vector: number[];  // 向量表示
-    metadata?: Record<string, any>;
+    document_link?: string;
+    document_id?: number;
+    document_title?: string;
 }
 
 interface SearchResult {
@@ -48,7 +48,7 @@ export class IndexDBStore {
     // 初始化表与索引
     private initialStore(db: IDBDatabase): void {
         // 创建主存储表
-        db.createObjectStore('chunks', { keyPath: 'id', autoIncrement: true });
+        db.createObjectStore(constant.TEXT_CHUNK_STORE_NAME, { keyPath: 'id', autoIncrement: true });
 
         // 创建LSH随机向量表
         db.createObjectStore(constant.LSH_PROJECTION_DB_STORE_NAME, { keyPath: 'id', autoIncrement: true });
@@ -59,6 +59,16 @@ export class IndexDBStore {
         console.log('IndexDB Store initialized');
     }
 
+    /**
+     * 分割句子
+     * @param text
+     * @returns
+     */
+    extractSentence(text: string) {
+        const segmenter = new Intl.Segmenter(['CN', 'en'], { granularity: 'sentence' });
+        const segments = Array.from(segmenter.segment(text));
+        return segments
+    }
 
     // 插入数据
     add({ storeName, data }: {
@@ -160,26 +170,6 @@ export class IndexDBStore {
     }
 
 
-    // 批量存储文本块和向量
-    async batchStore(chunks: TextChunk[]): Promise<void> {
-        if (!this.db) throw new Error('Database not initialized');
-
-        const BATCH_SIZE = 1000;
-        for (let i = 0; i < chunks.length; i += BATCH_SIZE) {
-            const batch = chunks.slice(i, i + BATCH_SIZE);
-            await new Promise<void>((resolve, reject) => {
-                const transaction = this.db!.transaction('chunks', 'readwrite');
-                const store = transaction.objectStore('chunks');
-
-                batch.forEach(chunk => {
-                    store.put(chunk);
-                });
-
-                transaction.oncomplete = () => resolve();
-                transaction.onerror = () => reject(transaction.error);
-            });
-        }
-    }
 
     // 使用LSH (Locality-Sensitive Hashing)进行向量搜索
     // async search(queryVector: number[], limit: number = 10): Promise<SearchResult[]> {

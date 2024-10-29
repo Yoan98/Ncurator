@@ -1,4 +1,6 @@
-import { math, tf, constant } from '@extension/shared';
+import * as math from './math';
+import * as constant from './constant';
+import * as tf from '@tensorflow/tfjs';
 
 export interface LSH_INDEX_STORE {
     id: number;

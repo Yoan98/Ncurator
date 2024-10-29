@@ -1,12 +1,11 @@
-import { Embedding, constant } from '@extension/shared';
-import { LSHIndex } from './VectorIndex';
-import { IndexDBStore } from './IndexDBStore';
-import type { LSH_INDEX_STORE, LSH_PROJECTION_STORE } from './VectorIndex'
+import { Embedding, constant, LSHIndex, IndexDBStore } from '@extension/shared';
+import type { LSH_INDEX_STORE, LSH_PROJECTION_STORE } from '@extension/shared'
 
 addEventListener('message', async (event: MessageEvent) => {
 
     console.log('Received message in worker:', event.data);
 
+    //!写入向量索引
     // const embedding = new Embedding();
     // await embedding.init();
 
@@ -45,32 +44,35 @@ addEventListener('message', async (event: MessageEvent) => {
     // });
     // console.log('LSH Index added to IndexDB');
 
-    // 测试读取
-    const embedding = new Embedding();
-    await embedding.init();
+    // !写入text chunk
 
-    const store = new IndexDBStore();
-    await store.connect(constant.DEFAULT_INDEXDB_NAME);
 
-    const lshIndexData: LSH_INDEX_STORE = await store.get({
-        storeName: constant.LSH_INDEX_STORE_NAME,
-        key: 1
-    });
-    const localProjections: LSH_PROJECTION_STORE = await store.get({
-        storeName: constant.LSH_PROJECTION_DB_STORE_NAME,
-        key: 1
-    })
+    //! 测试读取
+    // const embedding = new Embedding();
+    // await embedding.init();
 
-    const lshIndex = new LSHIndex({ dimensions: constant.EMBEDDING_HIDDEN_SIZE, localProjections: localProjections.data, similarityThreshold: 0.7, tables: lshIndexData.lsh_table });
+    // const store = new IndexDBStore();
+    // await store.connect(constant.DEFAULT_INDEXDB_NAME);
 
-    const question = await embedding.encode(['今天天气如何?']);
+    // const lshIndexData: LSH_INDEX_STORE = await store.get({
+    //     storeName: constant.LSH_INDEX_STORE_NAME,
+    //     key: 1
+    // });
+    // const localProjections: LSH_PROJECTION_STORE = await store.get({
+    //     storeName: constant.LSH_PROJECTION_DB_STORE_NAME,
+    //     key: 1
+    // })
 
-    const res = await lshIndex.findSimilar({
-        queryVector: question.slice([0, 0], [1, -1]).reshape([-1]),
+    // const lshIndex = new LSHIndex({ dimensions: constant.EMBEDDING_HIDDEN_SIZE, localProjections: localProjections.data, similarityThreshold: 0.7, tables: lshIndexData.lsh_table });
 
-    })
-    console.log('lshIndexData', lshIndexData);
-    console.log('res', res);
+    // const question = await embedding.encode(['今天天气如何?']);
+
+    // const res = await lshIndex.findSimilar({
+    //     queryVector: question.slice([0, 0], [1, -1]).reshape([-1]),
+
+    // })
+    // console.log('lshIndexData', lshIndexData);
+    // console.log('res', res);
 
 
 

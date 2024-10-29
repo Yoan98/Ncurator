@@ -3,4 +3,5 @@ export const DEFAULT_INDEXDB_NAME = 'YCURATOR'; // 默认的IndexDB数据库名�
 export const LSH_PROJECTION_DB_STORE_NAME = 'lsh_projection';
 export const LSH_PROJECTION_KEY_NAME = 'data';
 export const LSH_INDEX_STORE_NAME = 'lsh_index';
+export const TEXT_CHUNK_STORE_NAME = 'text_index';
 export const MAX_LSH_CHUNK_SIZE = 1000; //LSH索引表,每条数据存储的最大chunk数量,即所有table下所有bucket里的向量或chunk数量

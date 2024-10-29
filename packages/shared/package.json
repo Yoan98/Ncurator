@@ -22,7 +22,8 @@
     },
     "dependencies": {
         "@huggingface/transformers": "^3.0.0",
-        "@tensorflow/tfjs": "^4.22.0"
+        "@tensorflow/tfjs": "^4.22.0",
+        "axios": "^1.7.7"
     },
     "devDependencies": {
         "@extension/storage": "workspace:*",
