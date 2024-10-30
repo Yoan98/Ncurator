@@ -26,11 +26,17 @@ const SidePanel = () => {
 
             if (action === 'screenshot') {
                 console.log('Received screenshot action from background:', img);
-                const worker = await createWorker('eng');
+                const worker = await createWorker(['eng', 'chi_sim'], 1, {
+                    corePath: chrome.runtime.getURL("/side-panel/tesseract-core.wasm.js"),
+                    workerPath: chrome.runtime.getURL("/side-panel/worker.min.js"),
+                    workerBlobURL: false,
+                    logger: (m: any) => console.log(m),
+                });
                 console.log('Worker created');
                 const ret = await worker.recognize(img);
                 console.log(ret.data.text);
                 await worker.terminate();
+
             }
         });
 

@@ -14,6 +14,7 @@ export default function App() {
 
         const canvas = await html2canvas(element);
         const img = canvas.toDataURL('image/png');
+        console.log('img', img);
         chrome.runtime.sendMessage({
             action: "sendMessage",
             data: {
