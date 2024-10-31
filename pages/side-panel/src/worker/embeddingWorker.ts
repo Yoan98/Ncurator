@@ -2,8 +2,7 @@ import { Embedding, constant, LSHIndex, IndexDBStore, tool } from '@extension/sh
 import type { LSH_INDEX_STORE, LSH_PROJECTION_STORE, tf, TextChunk } from '@extension/shared'
 
 addEventListener('message', async (event: MessageEvent) => {
-
-    console.log('Received message in worker:', event.data);
+    console.log('Received message in embedding worker:');
 
     // 将数据存入indexDB的text chunk表
     const storageDataToTextChunk = async (sentences: Intl.SegmentData[]): Promise<[TextChunk[], string[]]> => {
@@ -50,12 +49,12 @@ addEventListener('message', async (event: MessageEvent) => {
         // 获取库中是否已有LSH随机向量
         const store = new IndexDBStore();
         await store.connect(constant.DEFAULT_INDEXDB_NAME);
-        const localProjections: LSH_PROJECTION_STORE = await store.get({
+        const localProjections: LSH_PROJECTION_STORE | undefined = await store.get({
             storeName: constant.LSH_PROJECTION_DB_STORE_NAME,
             key: constant.LSH_PROJECTION_KEY_VALUE
         })
         // 初始化LSH索引
-        const lshIndex = new LSHIndex({ dimensions: constant.EMBEDDING_HIDDEN_SIZE, localProjections: localProjections.data, similarityThreshold: 0.7 });
+        const lshIndex = new LSHIndex({ dimensions: constant.EMBEDDING_HIDDEN_SIZE, localProjections: localProjections?.data, similarityThreshold: 0.7 });
         // 如果库中没有LSH随机向量，则将其存储到库中
         if (!localProjections) {
             await store.add({
@@ -76,6 +75,44 @@ addEventListener('message', async (event: MessageEvent) => {
         });
     }
 
+    // 相似句子匹配
+    const similarSentenceMatch = async (question: string) => {
+        // 向量化句子
+        const embedding = new Embedding();
+        await embedding.init();
+        const embeddingOutput = await embedding.encode(question);
+
+        // 读取indexDB中的LSH索引表
+        const store = new IndexDBStore();
+        await store.connect(constant.DEFAULT_INDEXDB_NAME);
+        const lshIndexStoreList: LSH_INDEX_STORE[] = await store.getAll({
+            storeName: constant.LSH_INDEX_STORE_NAME,
+        });
+        if (!lshIndexStoreList.length) throw new Error('No LSH index data found');
+
+        console.time('find similar');
+        // 遍历索引表，查找相似句子
+        const localProjections: LSH_PROJECTION_STORE | undefined = await store.get({
+            storeName: constant.LSH_PROJECTION_DB_STORE_NAME,
+            key: constant.LSH_PROJECTION_KEY_VALUE
+        })
+        console.log('localProjections', localProjections);
+        const similarKeys: Set<number> = new Set();
+        for (const lshIndexData of lshIndexStoreList) {
+            console.log('lshIndexData', lshIndexData);
+            const lshIndex = new LSHIndex({ dimensions: constant.EMBEDDING_HIDDEN_SIZE, localProjections: localProjections?.data, similarityThreshold: 0.7, tables: lshIndexData.lsh_table });
+
+            // 查找相似句子
+            const res = await lshIndex.findSimilar({
+                queryVector: embeddingOutput.slice([0, 0], [1, -1]).reshape([-1]),
+
+            })
+            res.forEach(key => similarKeys.add(key));
+        }
+        console.log('similar keys', similarKeys);
+        console.timeEnd('find similar');
+    }
+
 
     switch (event.data.action) {
         case 'text':
@@ -86,43 +123,26 @@ addEventListener('message', async (event: MessageEvent) => {
             console.log('sentences', sentences);
 
             const [textChunkList, pureTextList] = await storageDataToTextChunk(sentences)
-
+            console.log('start LSH storage');
             await storageTextChunkToLSH(textChunkList, pureTextList);
+            console.log('finished LSH storage');
 
             break;
         case 'question':
             const question = event.data.data;
             if (!question) throw new Error('No question data received');
+            console.log('question', question);
 
-            // 向量化句子
+            await similarSentenceMatch(question);
+
+        case 'test':
+            console.log('test');
+
             const embedding = new Embedding();
             await embedding.init();
-            const questionOutput = await embedding.encode(question);
 
-            // 读取indexDB中的LSH索引表
-            const store = new IndexDBStore();
-            await store.connect(constant.DEFAULT_INDEXDB_NAME);
-            const lshIndexStoreList: LSH_INDEX_STORE[] = await store.getAll({
-                storeName: constant.LSH_INDEX_STORE_NAME,
-            });
-            if (!lshIndexStoreList.length) throw new Error('No LSH index data found');
-
-            // 遍历索引表，查找相似句子
-            const localProjections: LSH_PROJECTION_STORE = await store.get({
-                storeName: constant.LSH_PROJECTION_DB_STORE_NAME,
-                key: constant.LSH_PROJECTION_KEY_VALUE
-            })
-            for (const lshIndexData of lshIndexStoreList) {
-                const lshIndex = new LSHIndex({ dimensions: constant.EMBEDDING_HIDDEN_SIZE, localProjections: localProjections.data, similarityThreshold: 0.7, tables: lshIndexData.lsh_table });
-
-                // 查找相似句子
-                const res = await lshIndex.findSimilar({
-                    queryVector: question.slice([0, 0], [1, -1]).reshape([-1]),
-
-                })
-                console.log('similar keys', res);
-            }
-
+            const res = await embedding.computeSimilarity('打包工具', '打包⼯具的基本思路1打包⼯具的基本思路1打包⼯具的基本思路');
+            console.log('res', res);
         default:
             break;
     }
@@ -131,6 +151,5 @@ addEventListener('message', async (event: MessageEvent) => {
 
 
 
-    // const res = await embedding.computeSimilarity('天气好好', 'build的时候，docker会校验每个步骤是否使用缓存，机制是根据前后相同指令是否有更改来决定，字符串的命令则会校验字符串是否相等，相等则使用缓存；如果是copy这类文件命令，则会对比前后文件是否相同来使用缓存；当某一步缓存失效后，下面的步骤都将不使用缓存；');
-    // console.log('res', res);
+
 });

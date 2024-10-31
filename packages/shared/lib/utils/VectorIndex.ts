@@ -145,7 +145,7 @@ export class LSHIndex {
                     // 计算余弦相似度
                     const storageVector = tf.tensor1d(vector);
                     const similarity = math.cosineSimilarity(queryVector, storageVector);
-
+                    console.log('similarity', similarity);
                     storageVector.dispose();
 
                     if (similarity > this.similarityThreshold) {

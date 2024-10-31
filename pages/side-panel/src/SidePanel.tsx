@@ -2,18 +2,13 @@ import '@src/SidePanel.css';
 import { useStorage, withErrorBoundary, withSuspense, Connector } from '@extension/shared';
 import { exampleThemeStorage } from '@extension/storage';
 import type { ComponentPropsWithoutRef } from 'react';
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { createWorker } from 'tesseract.js';
 
 const SidePanel = () => {
-    const theme = useStorage(exampleThemeStorage);
-    const isLight = theme === 'light';
-    const logo = isLight ? 'side-panel/logo_vertical.svg' : 'side-panel/logo_vertical_dark.svg';
-    const goGithubSite = () =>
-        chrome.tabs.create({ url: 'https://github.com/Jonghakseo/chrome-extension-boilerplate-react-vite' });
 
     const embeddingWorkerRef = useRef<Worker>();
-
+    const [question, setQuestion] = useState<string>('');
 
     const handleFileChange = async (event) => {
         const file = event.target.files[0];
@@ -29,6 +24,19 @@ const SidePanel = () => {
         });
     };
 
+    const hdQuestionSubmit = async () => {
+        embeddingWorkerRef.current?.postMessage({
+            action: 'question',
+            data: question
+        });
+    }
+
+    const hdTest = async () => {
+        embeddingWorkerRef.current?.postMessage({
+            action: 'test',
+            data: 'test'
+        });
+    }
 
     useEffect(() => {
         embeddingWorkerRef.current = new Worker(new URL('./worker/embeddingWorker.ts', import.meta.url));
@@ -63,20 +71,26 @@ const SidePanel = () => {
     }, []);
 
     return (
-        <div className={`App ${isLight ? 'bg-slate-50' : 'bg-gray-800'}`}>
-            <header className={`App-header ${isLight ? 'text-gray-900' : 'text-gray-100'}`}>
-                <button onClick={goGithubSite}>
-                    <img src={chrome.runtime.getURL(logo)} className="App-logo" alt="logo" />
-                </button>
-                <p>
-                    Edit <code>pages/side-panel/src/SidePanel.tsx</code>
-                </p>
-                <ToggleButton workerRef={embeddingWorkerRef}>Toggle theme</ToggleButton>
+        <div className='App bg-gray-400  flex-col content-center justify-center space-y-4'>
 
+            <div className='flex items-center justify-center'>
                 {/* 上传文件 */}
                 <input type="file" accept=".pdf, .docx" onChange={handleFileChange} />
+            </div>
 
-            </header>
+            <div className='flex items-center justify-center'>
+                {/* input输入框 */}
+                <input type="text" id="input" onInput={(e) => {
+                    setQuestion(e.currentTarget.value);
+                }} />
+                {/* 按钮 */}
+                <button id="submit" onClick={hdQuestionSubmit}>Submit</button>
+            </div>
+
+            <div>
+                <button onClick={hdTest}>test</button>
+            </div>
+
         </div>
     );
 };
