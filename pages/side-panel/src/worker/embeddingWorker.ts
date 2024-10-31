@@ -1,4 +1,4 @@
-import { Embedding, constant, LSHIndex, IndexDBStore, util } from '@extension/shared';
+import { Embedding, constant, LSHIndex, IndexDBStore, tool } from '@extension/shared';
 import type { LSH_INDEX_STORE, LSH_PROJECTION_STORE, tf, TextChunk } from '@extension/shared'
 
 addEventListener('message', async (event: MessageEvent) => {
@@ -6,7 +6,7 @@ addEventListener('message', async (event: MessageEvent) => {
     console.log('Received message in worker:', event.data);
 
     // 将数据存入indexDB的text chunk表
-    const storageDataToTextChunk = async (sentences: Intl.SegmentData[]) => {
+    const storageDataToTextChunk = async (sentences: Intl.SegmentData[]): Promise<[TextChunk[], string[]]> => {
         const pureTextList: string[] = []
         let textChunkList: TextChunk[] = []
 
@@ -32,12 +32,10 @@ addEventListener('message', async (event: MessageEvent) => {
 
     // 将数据存入indexDB的LSH索引表
     const storageTextChunkToLSH = async (textChunkList: TextChunk[], pureTextList: string[]) => {
-
         // 向量化句子
         const embedding = new Embedding();
         await embedding.init();
         const embeddingOutput = await embedding.encode(pureTextList);
-        console.log('embeddingOutput', embeddingOutput);
 
 
         // 生成向量数组
@@ -47,124 +45,88 @@ addEventListener('message', async (event: MessageEvent) => {
                 vector: embeddingOutput.slice([index, 0], [1, -1]).reshape([-1]) as tf.Tensor1D
             }
         });
-        console.log('vectors', vectors);
 
+        // * 构建索引
         // 获取库中是否已有LSH随机向量
         const store = new IndexDBStore();
         await store.connect(constant.DEFAULT_INDEXDB_NAME);
-        const localProjections: number[][] | undefined = await store.get({
+        const localProjections: LSH_PROJECTION_STORE = await store.get({
             storeName: constant.LSH_PROJECTION_DB_STORE_NAME,
-            key: constant.LSH_PROJECTION_KEY_NAME
+            key: constant.LSH_PROJECTION_KEY_VALUE
         })
         // 初始化LSH索引
-        const lshIndex = new LSHIndex({ dimensions: constant.EMBEDDING_HIDDEN_SIZE, localProjections, similarityThreshold: 0.7 });
+        const lshIndex = new LSHIndex({ dimensions: constant.EMBEDDING_HIDDEN_SIZE, localProjections: localProjections.data, similarityThreshold: 0.7 });
         // 如果库中没有LSH随机向量，则将其存储到库中
         if (!localProjections) {
             await store.add({
                 storeName: constant.LSH_PROJECTION_DB_STORE_NAME,
                 data: {
-                    [constant.LSH_PROJECTION_KEY_NAME]: lshIndex.projections
+                    [constant.LSH_PROJECTION_DATA_NAME]: lshIndex.projections
                 }
             });
         }
 
         // 将LSH索引存储到indexDB
         const LSHTables = await lshIndex.addVectors(vectors);
-        console.log('LSHTables', LSHTables);
         await store.add({
             storeName: constant.LSH_INDEX_STORE_NAME,
             data: {
                 lsh_table: LSHTables
             }
         });
-        return LSHTables;
     }
 
 
     switch (event.data.action) {
         case 'text':
             const text = event.data.data;
+            if (!text) throw new Error('No text data received');
             // 提取句子
-            const sentences = util.extractSentence(text);
+            const sentences = tool.extractSentence(text);
             console.log('sentences', sentences);
 
-            const res = await storageDataToTextChunk(sentences)
-            console.log('res', res);
+            const [textChunkList, pureTextList] = await storageDataToTextChunk(sentences)
 
+            await storageTextChunkToLSH(textChunkList, pureTextList);
 
             break;
+        case 'question':
+            const question = event.data.data;
+            if (!question) throw new Error('No question data received');
+
+            // 向量化句子
+            const embedding = new Embedding();
+            await embedding.init();
+            const questionOutput = await embedding.encode(question);
+
+            // 读取indexDB中的LSH索引表
+            const store = new IndexDBStore();
+            await store.connect(constant.DEFAULT_INDEXDB_NAME);
+            const lshIndexStoreList: LSH_INDEX_STORE[] = await store.getAll({
+                storeName: constant.LSH_INDEX_STORE_NAME,
+            });
+            if (!lshIndexStoreList.length) throw new Error('No LSH index data found');
+
+            // 遍历索引表，查找相似句子
+            const localProjections: LSH_PROJECTION_STORE = await store.get({
+                storeName: constant.LSH_PROJECTION_DB_STORE_NAME,
+                key: constant.LSH_PROJECTION_KEY_VALUE
+            })
+            for (const lshIndexData of lshIndexStoreList) {
+                const lshIndex = new LSHIndex({ dimensions: constant.EMBEDDING_HIDDEN_SIZE, localProjections: localProjections.data, similarityThreshold: 0.7, tables: lshIndexData.lsh_table });
+
+                // 查找相似句子
+                const res = await lshIndex.findSimilar({
+                    queryVector: question.slice([0, 0], [1, -1]).reshape([-1]),
+
+                })
+                console.log('similar keys', res);
+            }
+
         default:
             break;
     }
 
-    //!写入向量索引
-    // const embedding = new Embedding();
-    // await embedding.init();
-
-    // // 获取库中是否已有LSH随机向量
-    // const store = new IndexDBStore();
-    // await store.connect(constant.DEFAULT_INDEXDB_NAME);
-    // const localProjections: number[][] | undefined = await store.get({
-    //     storeName: constant.LSH_PROJECTION_DB_STORE_NAME,
-    //     key: constant.LSH_PROJECTION_KEY_NAME
-    // })
-
-    // const lshIndex = new LSHIndex({ dimensions: constant.EMBEDDING_HIDDEN_SIZE, localProjections, similarityThreshold: 0.7 });
-
-    // if (!localProjections) {
-    //     // 如果库中没有LSH随机向量，则将其存储到库中
-    //     await store.add({
-    //         storeName: constant.LSH_PROJECTION_DB_STORE_NAME,
-    //         data: {
-    //             [constant.LSH_PROJECTION_KEY_NAME]: lshIndex.projections
-    //         }
-    //     });
-    // }
-
-    // const output = await embedding.encode(['How is the weather today?']);
-
-
-    // // 测试将LSH索引存储到indexDB
-    // const LSHTables = await lshIndex.addVectors([{ id: 1, vector: output.slice([0, 0], [1, -1]).reshape([-1]) }]);
-
-    // console.log('LSHTables', LSHTables);
-    // await store.add({
-    //     storeName: constant.LSH_INDEX_STORE_NAME,
-    //     data: {
-    //         lsh_table: LSHTables
-    //     }
-    // });
-    // console.log('LSH Index added to IndexDB');
-
-    // !写入text chunk
-
-
-    //! 测试读取
-    // const embedding = new Embedding();
-    // await embedding.init();
-
-    // const store = new IndexDBStore();
-    // await store.connect(constant.DEFAULT_INDEXDB_NAME);
-
-    // const lshIndexData: LSH_INDEX_STORE = await store.get({
-    //     storeName: constant.LSH_INDEX_STORE_NAME,
-    //     key: 1
-    // });
-    // const localProjections: LSH_PROJECTION_STORE = await store.get({
-    //     storeName: constant.LSH_PROJECTION_DB_STORE_NAME,
-    //     key: 1
-    // })
-
-    // const lshIndex = new LSHIndex({ dimensions: constant.EMBEDDING_HIDDEN_SIZE, localProjections: localProjections.data, similarityThreshold: 0.7, tables: lshIndexData.lsh_table });
-
-    // const question = await embedding.encode(['今天天气如何?']);
-
-    // const res = await lshIndex.findSimilar({
-    //     queryVector: question.slice([0, 0], [1, -1]).reshape([-1]),
-
-    // })
-    // console.log('lshIndexData', lshIndexData);
-    // console.log('res', res);
 
 
 

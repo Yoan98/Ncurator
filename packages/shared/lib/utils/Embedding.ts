@@ -58,7 +58,7 @@ export class Embedding {
     /**
      * 将文本向量化且平均池化
      * 注:批量文本处理会比循环执行encode更快
-     * control your input sequence length up to 8192,base on jinaai/jina-embeddings-v2-base-zh
+     * 这里是耗时最久的地方,112个句子,耗时十分钟多点,例子(图形学笔记)
      * @param texts
      * @returns
      */
@@ -68,20 +68,32 @@ export class Embedding {
         }
         const inputTexts = Array.isArray(texts) ? texts : [texts];
 
+        // 分词
+        // 此处耗时可忽略不计
         const encoded = await this.tokenizer(inputTexts, {
             padding: true,
             truncation: true,
+            // 如果句子分词后的token超过2048，将被截断,也意味着信息丢失,精确度降低,但是速度会更快
+            // jina-embeddings-v2-base-zh模型所能支持的最大长度为8192
             maxLength: 2048,
             return_tensors: 'pt',
         });
 
+        console.time('model')
         // 获取模型输出
+        // 此处耗时最久,model大概占了整个encode的93%,加载43个句子的情况,句子越多占比越大
         const output = await this.model(encoded);
+        console.timeEnd('model')
 
-        return this.meanPooling(
+        // 计算平均值池化
+        // 此处耗时可忽略不计
+        const meanRes = this.meanPooling(
             output.last_hidden_state,
             encoded.attention_mask
         );
+
+
+        return meanRes
 
     }
 

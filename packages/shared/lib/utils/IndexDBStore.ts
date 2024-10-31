@@ -167,7 +167,7 @@ export class IndexDBStore {
     getAll({ storeName, indexName }: {
         storeName: string;
         indexName?: string;
-    }): Promise<Record<string, any>[]> {
+    }): Promise<any> {
         if (!this.db) throw new Error('Database not initialized');
 
         return new Promise((resolve, reject) => {

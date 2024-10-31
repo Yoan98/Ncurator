@@ -127,7 +127,6 @@ export class LSHIndex {
     }
 
     // 查找相似向量
-    // todo: 增加分页,通过将搜索条件的结果单独存储,并标记最新索引,以便下次搜索时直接从最新索引开始搜索
     async findSimilar({ queryVector, limit = 10, tables = this.tables }: {
         queryVector: tf.Tensor1D,
         limit?: number,
