@@ -1,5 +1,5 @@
 import '@src/SidePanel.css';
-import { useStorage, withErrorBoundary, withSuspense } from '@extension/shared';
+import { useStorage, withErrorBoundary, withSuspense, Connector } from '@extension/shared';
 import { exampleThemeStorage } from '@extension/storage';
 import type { ComponentPropsWithoutRef } from 'react';
 import { useRef, useEffect } from 'react';
@@ -12,36 +12,53 @@ const SidePanel = () => {
     const goGithubSite = () =>
         chrome.tabs.create({ url: 'https://github.com/Jonghakseo/chrome-extension-boilerplate-react-vite' });
 
-    const workerRef = useRef<Worker>();
+    const embeddingWorkerRef = useRef<Worker>();
+
+
+    const handleFileChange = async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const fileConnector = new Connector.FileConnector();
+        const text = await fileConnector.getRawText(file);
+
+
+        embeddingWorkerRef.current?.postMessage({
+            action: 'text',
+            data: text
+        });
+    };
+
 
     useEffect(() => {
-        workerRef.current = new Worker(new URL('./worker/embeddingWorker.ts', import.meta.url));
-        workerRef.current.onmessage = (event) => {
+        embeddingWorkerRef.current = new Worker(new URL('./worker/embeddingWorker.ts', import.meta.url));
+        embeddingWorkerRef.current.onmessage = (event) => {
             console.log('Received message from worker:', event.data);
         };
 
-        chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
-            const action = request.data.action;
-            const img = request.data.data;
+        // 图片识别demo
+        // chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
+        //     const action = request.data.action;
+        //     const img = request.data.data;
 
-            if (action === 'screenshot') {
-                console.log('Received screenshot action from background:', img);
-                const worker = await createWorker(['eng', 'chi_sim'], 1, {
-                    corePath: chrome.runtime.getURL("/side-panel/tesseract-core.wasm.js"),
-                    workerPath: chrome.runtime.getURL("/side-panel/worker.min.js"),
-                    workerBlobURL: false,
-                    logger: (m: any) => console.log(m),
-                });
-                console.log('Worker created');
-                const ret = await worker.recognize(img);
-                console.log(ret.data.text);
-                await worker.terminate();
+        //     if (action === 'screenshot') {
+        //         console.log('Received screenshot action from background:', img);
+        //         const worker = await createWorker(['eng', 'chi_sim'], 1, {
+        //             corePath: chrome.runtime.getURL("/side-panel/tesseract-core.wasm.js"),
+        //             workerPath:chrome.runtime.getURL("/side-panel/tesseract-worker.min.js")",
+        //             workerBlobURL: false,
+        //             logger: (m: any) => console.log(m),
+        //         });
+        //         console.log('Worker created');
+        //         const ret = await worker.recognize(img);
+        //         console.log(ret.data.text);
+        //         await worker.terminate();
 
-            }
-        });
+        //     }
+        // });
 
         return () => {
-            workerRef.current?.terminate();
+            embeddingWorkerRef.current?.terminate();
         };
     }, []);
 
@@ -54,7 +71,11 @@ const SidePanel = () => {
                 <p>
                     Edit <code>pages/side-panel/src/SidePanel.tsx</code>
                 </p>
-                <ToggleButton workerRef={workerRef}>Toggle theme</ToggleButton>
+                <ToggleButton workerRef={embeddingWorkerRef}>Toggle theme</ToggleButton>
+
+                {/* 上传文件 */}
+                <input type="file" accept=".pdf, .docx" onChange={handleFileChange} />
+
             </header>
         </div>
     );

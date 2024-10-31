@@ -1,12 +1,13 @@
 import * as constant from './constant';
 
 
-interface TextChunk {
-    id: string;
+export interface TextChunk {
+    id?: number;
     text: string;
     document_link?: string;
     document_id?: number;
     document_title?: string;
+    document_name?: string;
 }
 
 interface SearchResult {
@@ -59,31 +60,48 @@ export class IndexDBStore {
         console.log('IndexDB Store initialized');
     }
 
-    /**
-     * 分割句子
-     * @param text
-     * @returns
-     */
-    extractSentence(text: string) {
-        const segmenter = new Intl.Segmenter(['CN', 'en'], { granularity: 'sentence' });
-        const segments = Array.from(segmenter.segment(text));
-        return segments
-    }
-
     // 插入数据
     add({ storeName, data }: {
         storeName: string;
         data: Record<string, any>;
-    }): Promise<void> {
+    }): Promise<IDBValidKey> {
         if (!this.db) throw new Error('Database not initialized');
 
         return new Promise((resolve, reject) => {
             const transaction = this.db!.transaction(storeName, 'readwrite');
             const store = transaction.objectStore(storeName);
 
-            store.add(data);
+            const addRes = store.add(data);
+            let addId: IDBValidKey;
+            addRes.onsuccess = () => {
+                addId = addRes.result;
+            };
+            transaction.oncomplete = () => resolve(addId);
+            transaction.onerror = () => reject(transaction.error);
+        });
+    }
+    // 批量插入数据,返回插入后的数据包含id
+    addBatch<T>({ storeName, data }: {
+        storeName: string;
+        data: T[];
+    }): Promise<(T & { id: IDBValidKey })[]> {
+        if (!this.db) throw new Error('Database not initialized');
 
-            transaction.oncomplete = () => resolve();
+        return new Promise((resolve, reject) => {
+            const transaction = this.db!.transaction(storeName, 'readwrite');
+            const store = transaction.objectStore(storeName);
+
+            data.forEach((item, index) => {
+                const addRes = store.add(item);
+
+                addRes.onsuccess = () => {
+                    // @ts-ignore
+                    data[index].id = addRes.result;
+                };
+            });
+
+            // @ts-ignore
+            transaction.oncomplete = () => resolve(data);
             transaction.onerror = () => reject(transaction.error);
         });
     }

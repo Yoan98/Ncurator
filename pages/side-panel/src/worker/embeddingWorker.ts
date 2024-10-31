@@ -1,9 +1,101 @@
-import { Embedding, constant, LSHIndex, IndexDBStore } from '@extension/shared';
-import type { LSH_INDEX_STORE, LSH_PROJECTION_STORE } from '@extension/shared'
+import { Embedding, constant, LSHIndex, IndexDBStore, util } from '@extension/shared';
+import type { LSH_INDEX_STORE, LSH_PROJECTION_STORE, tf, TextChunk } from '@extension/shared'
 
 addEventListener('message', async (event: MessageEvent) => {
 
     console.log('Received message in worker:', event.data);
+
+    // 将数据存入indexDB的text chunk表
+    const storageDataToTextChunk = async (sentences: Intl.SegmentData[]) => {
+        const pureTextList: string[] = []
+        let textChunkList: TextChunk[] = []
+
+        for (const sentence of sentences) {
+            pureTextList.push(sentence.segment);
+
+            textChunkList.push({
+                text: sentence.segment
+            })
+
+        }
+
+        const store = new IndexDBStore();
+        await store.connect(constant.DEFAULT_INDEXDB_NAME);
+
+        textChunkList = await store.addBatch<TextChunk>({
+            storeName: constant.TEXT_CHUNK_STORE_NAME,
+            data: textChunkList
+        });
+
+        return [textChunkList, pureTextList];
+    }
+
+    // 将数据存入indexDB的LSH索引表
+    const storageTextChunkToLSH = async (textChunkList: TextChunk[], pureTextList: string[]) => {
+
+        // 向量化句子
+        const embedding = new Embedding();
+        await embedding.init();
+        const embeddingOutput = await embedding.encode(pureTextList);
+        console.log('embeddingOutput', embeddingOutput);
+
+
+        // 生成向量数组
+        const vectors = textChunkList.map((chunk, index) => {
+            return {
+                id: chunk.id!,
+                vector: embeddingOutput.slice([index, 0], [1, -1]).reshape([-1]) as tf.Tensor1D
+            }
+        });
+        console.log('vectors', vectors);
+
+        // 获取库中是否已有LSH随机向量
+        const store = new IndexDBStore();
+        await store.connect(constant.DEFAULT_INDEXDB_NAME);
+        const localProjections: number[][] | undefined = await store.get({
+            storeName: constant.LSH_PROJECTION_DB_STORE_NAME,
+            key: constant.LSH_PROJECTION_KEY_NAME
+        })
+        // 初始化LSH索引
+        const lshIndex = new LSHIndex({ dimensions: constant.EMBEDDING_HIDDEN_SIZE, localProjections, similarityThreshold: 0.7 });
+        // 如果库中没有LSH随机向量，则将其存储到库中
+        if (!localProjections) {
+            await store.add({
+                storeName: constant.LSH_PROJECTION_DB_STORE_NAME,
+                data: {
+                    [constant.LSH_PROJECTION_KEY_NAME]: lshIndex.projections
+                }
+            });
+        }
+
+        // 将LSH索引存储到indexDB
+        const LSHTables = await lshIndex.addVectors(vectors);
+        console.log('LSHTables', LSHTables);
+        await store.add({
+            storeName: constant.LSH_INDEX_STORE_NAME,
+            data: {
+                lsh_table: LSHTables
+            }
+        });
+        return LSHTables;
+    }
+
+
+    switch (event.data.action) {
+        case 'text':
+            const text = event.data.data;
+            // 提取句子
+            const sentences = util.extractSentence(text);
+            console.log('sentences', sentences);
+
+            const res = await storageDataToTextChunk(sentences)
+            console.log('res', res);
+
+
+            break;
+        default:
+            break;
+    }
 
     //!写入向量索引
     // const embedding = new Embedding();
