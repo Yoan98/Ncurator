@@ -1,26 +1,38 @@
-import { Embedding, constant, LSHIndex, IndexDBStore, tool } from '@extension/shared';
-import type { LSH_INDEX_STORE, LSH_PROJECTION_STORE, tf, TextChunk } from '@extension/shared'
+import { embedding, constant, LSHIndex, IndexDBStore, tool } from '@extension/shared';
+import type { LSH_INDEX_STORE, LSH_PROJECTION_STORE, tf, TextChunk, langchainDocuments } from '@extension/shared'
 
+
+// 后面给存储chunk和lsh单独写一个worker
+// 搜索单独写一个worker
 addEventListener('message', async (event: MessageEvent) => {
     console.log('Received message in embedding worker:');
 
     // 将数据存入indexDB的text chunk表
-    const storageDataToTextChunk = async (sentences: Intl.SegmentData[]): Promise<[TextChunk[], string[]]> => {
+    const storageDataToTextChunk = async (splits: langchainDocuments.Document[]): Promise<[TextChunk[], string[]]> => {
         const pureTextList: string[] = []
         let textChunkList: TextChunk[] = []
 
-        for (const sentence of sentences) {
-            pureTextList.push(sentence.segment);
+        for (const split of splits) {
+            pureTextList.push(split.pageContent);
 
             textChunkList.push({
-                text: sentence.segment
+                text: split.pageContent,
+                metadata: {
+                    loc: {
+                        lines: {
+                            from: split.metadata.loc.lines.from,
+                            to: split.metadata.loc.lines.to
+                        },
+                        pageNumber: split.metadata.loc.pageNumber
+                    }
+                }
             })
-
         }
 
         const store = new IndexDBStore();
         await store.connect(constant.DEFAULT_INDEXDB_NAME);
 
+        // 会自动添加id到textChunk里
         textChunkList = await store.addBatch<TextChunk>({
             storeName: constant.TEXT_CHUNK_STORE_NAME,
             data: textChunkList
@@ -32,10 +44,8 @@ addEventListener('message', async (event: MessageEvent) => {
     // 将数据存入indexDB的LSH索引表
     const storageTextChunkToLSH = async (textChunkList: TextChunk[], pureTextList: string[]) => {
         // 向量化句子
-        const embedding = new Embedding();
-        await embedding.init();
+        // 此处也可考虑抽成worker,并行处理,如一个worker执行50条,因为这里耗时较长
         const embeddingOutput = await embedding.encode(pureTextList);
-
 
         // 生成向量数组
         const vectors = textChunkList.map((chunk, index) => {
@@ -77,9 +87,8 @@ addEventListener('message', async (event: MessageEvent) => {
 
     // 相似句子匹配
     const similarSentenceMatch = async (question: string) => {
+
         // 向量化句子
-        const embedding = new Embedding();
-        await embedding.init();
         const embeddingOutput = await embedding.encode(question);
 
         // 读取indexDB中的LSH索引表
@@ -90,59 +99,62 @@ addEventListener('message', async (event: MessageEvent) => {
         });
         if (!lshIndexStoreList.length) throw new Error('No LSH index data found');
 
-        console.time('find similar');
+
         // 遍历索引表，查找相似句子
         const localProjections: LSH_PROJECTION_STORE | undefined = await store.get({
             storeName: constant.LSH_PROJECTION_DB_STORE_NAME,
             key: constant.LSH_PROJECTION_KEY_VALUE
         })
-        console.log('localProjections', localProjections);
-        const similarKeys: Set<number> = new Set();
+        let matchedData: any = []
         for (const lshIndexData of lshIndexStoreList) {
             console.log('lshIndexData', lshIndexData);
-            const lshIndex = new LSHIndex({ dimensions: constant.EMBEDDING_HIDDEN_SIZE, localProjections: localProjections?.data, similarityThreshold: 0.7, tables: lshIndexData.lsh_table });
+            const lshIndex = new LSHIndex({ dimensions: constant.EMBEDDING_HIDDEN_SIZE, localProjections: localProjections?.data, tables: lshIndexData.lsh_table });
 
             // 查找相似句子
-            const res = await lshIndex.findSimilar({
+            matchedData = await lshIndex.findSimilar({
                 queryVector: embeddingOutput.slice([0, 0], [1, -1]).reshape([-1]),
 
             })
-            res.forEach(key => similarKeys.add(key));
         }
-        console.log('similar keys', similarKeys);
-        console.timeEnd('find similar');
+        return matchedData
     }
 
+    const messageData = event.data.data;
+    if (!messageData) throw new Error('No message data received');
 
     switch (event.data.action) {
-        case 'text':
-            const text = event.data.data;
-            if (!text) throw new Error('No text data received');
+        case 'storage_chunk':
+            const splits = messageData
             // 提取句子
-            const sentences = tool.extractSentence(text);
-            console.log('sentences', sentences);
+            console.log('splits', splits);
 
-            const [textChunkList, pureTextList] = await storageDataToTextChunk(sentences)
+            const [textChunkList, pureTextList] = await storageDataToTextChunk(splits)
             console.log('start LSH storage');
             await storageTextChunkToLSH(textChunkList, pureTextList);
             console.log('finished LSH storage');
 
             break;
         case 'question':
-            const question = event.data.data;
-            if (!question) throw new Error('No question data received');
+            const question = messageData;
             console.log('question', question);
 
-            await similarSentenceMatch(question);
+            console.time('searching similar');
+            const res = await similarSentenceMatch(question);
+            console.log('search res', res);
+            console.timeEnd('searching similar');
 
+            break;
         case 'test':
             console.log('test');
 
-            const embedding = new Embedding();
-            await embedding.init();
+            const ress = await embedding.computeSimilarity('打包工具', '打包⼯具的基本思路1打包⼯具的基本思路1打包⼯具的基本思路');
+            console.log('res', ress);
+            break;
+        case 'testExtractSentence':
+            // 提取句子
+            const sentences1 = tool.extractSentence(messageData);
+            console.log('sentences', sentences1.map(item => item.segment));
 
-            const res = await embedding.computeSimilarity('打包工具', '打包⼯具的基本思路1打包⼯具的基本思路1打包⼯具的基本思路');
-            console.log('res', res);
         default:
             break;
     }

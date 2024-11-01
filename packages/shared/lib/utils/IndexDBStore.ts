@@ -4,10 +4,15 @@ import * as constant from './constant';
 export interface TextChunk {
     id?: number;
     text: string;
-    document_link?: string;
-    document_id?: number;
-    document_title?: string;
-    document_name?: string;
+    metadata?: {
+        loc: {
+            lines: {
+                from: number;
+                to: number;
+            }
+            pageNumber: number;
+        }
+    }
 }
 
 interface SearchResult {

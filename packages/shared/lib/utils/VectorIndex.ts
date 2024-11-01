@@ -45,8 +45,6 @@ export class LSHIndex {
     // 相似度阈值,目前jinaai/jina-embeddings-v2-base-zh测试的感觉,超过0.5的相似度就是相似的
     private similarityThreshold: number;
 
-    private maxLshChunkSize = constant.MAX_LSH_CHUNK_SIZE; // LSH索引表,每条数据存储的最大chunk数量,即所有table下所有bucket里的向量或chunk数量
-
     constructor({ dimensions, numTables = 10, numHashesPerTable = 4, similarityThreshold = 0.5, localProjections, tables }: LSHIndexConstructor) {
         this.dimensions = dimensions;
         this.numTables = numTables;
@@ -110,10 +108,6 @@ export class LSHIndex {
      * @returns
      */
     async addVectors(vectors: { id: number, vector: tf.Tensor1D }[]): Promise<LSHTables> {
-        if (vectors.length > this.maxLshChunkSize) {
-            throw new Error('The number of vectors cannot exceed the maximum value of MAX_LSH_CHUNK_SIZE');
-        }
-
         for (let i = 0; i < vectors.length; i++) {
             const { id, vector } = vectors[i];
             await this.addVector(id, vector);
@@ -127,12 +121,11 @@ export class LSHIndex {
     }
 
     // 查找相似向量
-    async findSimilar({ queryVector, limit = 10, tables = this.tables }: {
+    async findSimilar({ queryVector, tables = this.tables }: {
         queryVector: tf.Tensor1D,
-        limit?: number,
         tables?: LSHTables
-    }): Promise<Set<number>> {
-        const candidateIds = new Set<number>();
+    }): Promise<{ id: number, similarity: number }[]> {
+        const candidate: { id: number, similarity: number }[] = []
 
         // 在每个hash表中查找候选项
         for (let i = 0; i < this.numTables; i++) {
@@ -140,32 +133,23 @@ export class LSHIndex {
 
             const bucket = tables[i].get(hash);
             if (bucket) {
-                console.log('bucket', bucket);
                 for (const { id, vector } of bucket.vectors) {
                     // 计算余弦相似度
                     const storageVector = tf.tensor1d(vector);
                     const similarity = math.cosineSimilarity(queryVector, storageVector);
-                    console.log('similarity', similarity);
                     storageVector.dispose();
 
                     if (similarity > this.similarityThreshold) {
-                        candidateIds.add(id);
-                    }
-
-                    // 如果找到足够的候选项，提前结束搜索
-                    if (candidateIds.size >= limit) {
-                        break;
+                        candidate.push({
+                            id,
+                            similarity
+                        });
                     }
                 }
             }
-
-            // 如果找到足够的候选项，提前结束搜索
-            if (candidateIds.size >= limit) {
-                break;
-            }
         }
 
-        return candidateIds;
+        return candidate;
     }
 }
 

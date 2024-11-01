@@ -22,6 +22,9 @@
     },
     "dependencies": {
         "@huggingface/transformers": "^3.0.0",
+        "@langchain/community": "^0.3.11",
+        "@langchain/core": "^0.3.16",
+        "@langchain/textsplitters": "^0.1.0",
         "@tensorflow/tfjs": "^4.22.0",
         "axios": "^1.7.7",
         "mammoth": "^1.8.0",

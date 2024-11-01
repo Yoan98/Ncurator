@@ -15,12 +15,11 @@ const SidePanel = () => {
         if (!file) return;
 
         const fileConnector = new Connector.FileConnector();
-        const text = await fileConnector.getRawText(file);
-
+        const splits = await fileConnector.getSplits(file);
 
         embeddingWorkerRef.current?.postMessage({
-            action: 'text',
-            data: text
+            action: 'storage_chunk',
+            data: splits
         });
     };
 
