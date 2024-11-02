@@ -3,7 +3,7 @@ import { embedding } from '@extension/shared';
 
 
 const embeddingText = async (texts: string[]) => {
-    await embedding.init()
+    await embedding.load()
     const embeddingOutput = await embedding.encode(texts);
     return { embeddedSentences: embeddingOutput.arraySync(), texts: texts };
 }

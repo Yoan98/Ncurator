@@ -4,6 +4,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = './pdf.worker.min.mjs';
 import { WebPDFLoader } from "@langchain/community/document_loaders/web/pdf";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters"
 import { Document } from "@langchain/core/documents";
+import { SPLITTER_BIGGER_CHUNK_SIZE, SPLITTER_BIGGER_CHUNK_OVERLAP } from './constant'
 
 // 文件连接器,读取上传文件的内容数据
 export class FileConnector {
@@ -22,8 +23,8 @@ export class FileConnector {
             const textRes = await mammoth.extractRawText({ arrayBuffer: fileBuffer })
 
             const textSplitter = new RecursiveCharacterTextSplitter({
-                chunkSize: 1000,
-                chunkOverlap: 200,
+                chunkSize: SPLITTER_BIGGER_CHUNK_SIZE,
+                chunkOverlap: SPLITTER_BIGGER_CHUNK_OVERLAP,
             });
 
             const chunks = await textSplitter.splitDocuments([new Document({ pageContent: textRes.value })]);
@@ -37,8 +38,8 @@ export class FileConnector {
             const docs = await loader.load();
 
             const textSplitter = new RecursiveCharacterTextSplitter({
-                chunkSize: 1000,
-                chunkOverlap: 200,
+                chunkSize: SPLITTER_BIGGER_CHUNK_SIZE,
+                chunkOverlap: SPLITTER_BIGGER_CHUNK_OVERLAP,
             });
 
             const chunks = await textSplitter.splitDocuments(docs);

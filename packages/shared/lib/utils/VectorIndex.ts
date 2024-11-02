@@ -131,10 +131,10 @@ export class LSHIndex {
     }
 
     // 查找相似向量
-    async findSimilar({ queryVector, tables = this.tables }: {
+    findSimilar({ queryVector, tables = this.tables }: {
         queryVector: tf.Tensor1D,
         tables?: LSHTables
-    }): Promise<{ id: number, similarity: number }[]> {
+    }): { id: number, similarity: number }[] {
         const candidate: { id: number, similarity: number }[] = []
 
         // 在每个hash表中查找候选项
@@ -150,10 +150,12 @@ export class LSHIndex {
                     storageVector.dispose();
 
                     if (similarity > this.similarityThreshold) {
-                        candidate.push({
-                            id,
-                            similarity
-                        });
+                        if (!candidate.some(item => item.id === id)) {
+                            candidate.push({
+                                id,
+                                similarity
+                            });
+                        }
                     }
                 }
             }

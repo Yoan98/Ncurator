@@ -9,7 +9,7 @@ export class Embedding {
     constructor() {
     }
 
-    async init() {
+    async load() {
         if (this.model && this.tokenizer) {
             return;
         }

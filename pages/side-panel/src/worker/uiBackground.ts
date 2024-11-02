@@ -4,9 +4,7 @@ import workerpool from 'workerpool';
 // @ts-ignore
 import WorkerURL from './embedding?url&worker'
 
-const embeddingWorkerPool = workerpool.pool(WorkerURL, {
-    maxQueueSize: 10
-});
+const embeddingWorkerPool = workerpool.pool(WorkerURL);
 
 // 提取要保存到数据库的chunk和要embedding的纯文本
 const transToTextList = (splits: langchainDocuments.Document[]): [TextChunk[], string[][], number] => {
@@ -95,7 +93,7 @@ const storageTextChunkToLSH = async (textChunkList: TextChunk[], pureTextList: s
         key: constant.LSH_PROJECTION_KEY_VALUE
     })
     // 初始化LSH索引
-    const lshIndex = new LSHIndex({ dimensions: constant.EMBEDDING_HIDDEN_SIZE, localProjections: localProjections?.data, similarityThreshold: 0.7 });
+    const lshIndex = new LSHIndex({ dimensions: constant.EMBEDDING_HIDDEN_SIZE, localProjections: localProjections?.data, });
     // 如果库中没有LSH随机向量，则将其存储到库中
     if (!localProjections) {
         await store.add({
@@ -120,7 +118,7 @@ const storageTextChunkToLSH = async (textChunkList: TextChunk[], pureTextList: s
 // 搜索文档
 const searchDocument = async (question: string) => {
     // 向量化句子
-    embedding.init()
+    await embedding.load()
     const embeddingOutput = await embedding.encode(question);
 
     // 读取indexDB中的LSH索引表
@@ -137,18 +135,18 @@ const searchDocument = async (question: string) => {
         storeName: constant.LSH_PROJECTION_DB_STORE_NAME,
         key: constant.LSH_PROJECTION_KEY_VALUE
     })
-    let matchedData: any = []
+    const searchedRes: any = []
     for (const lshIndexData of lshIndexStoreList) {
-        console.log('lshIndexData', lshIndexData);
         const lshIndex = new LSHIndex({ dimensions: constant.EMBEDDING_HIDDEN_SIZE, localProjections: localProjections?.data, tables: lshIndexData.lsh_table });
 
         // 查找相似句子
-        matchedData = await lshIndex.findSimilar({
+        const res = lshIndex.findSimilar({
             queryVector: embeddingOutput.slice([0, 0], [1, -1]).reshape([-1]),
-
         })
+        searchedRes.push(...res)
+
     }
-    return matchedData
+    return searchedRes
 }
 
 // 存储文档

@@ -40,18 +40,15 @@ const SidePanel = () => {
     };
 
     const hdQuestionSubmit = async () => {
-        storageWorkerRef.current?.postMessage({
-            action: 'question',
-            data: question
-        });
+        console.log('start searchDocument');
+        console.time('searchDocument');
+        const res = await uiBgPoolRef.current?.exec('searchDocument', [question])
+        console.timeEnd('searchDocument');
+        console.log('end searchDocument');
+        console.log('search result', res);
     }
 
-    const hdTest = async () => {
-        storageWorkerRef.current?.postMessage({
-            action: 'test',
-            data: 'test'
-        });
-    }
+    const hdTest = async () => { }
 
 
     useEffect(() => {
