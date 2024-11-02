@@ -5,27 +5,38 @@ import type { ComponentPropsWithoutRef } from 'react';
 import { useRef, useEffect, useState } from 'react';
 import workerpool from 'workerpool';
 import type { Pool } from 'workerpool';
-import WorkerURL from './worker/embeddingWorker?url&worker'
+//@ts-ignore
+import WorkerURL from './worker/uiBackground?url&worker'
 
 const SidePanel = () => {
 
     const storageWorkerRef = useRef<Worker>();
-    const workerpoolRef = useRef<Pool>();
+    const uiBgPoolRef = useRef<Pool>();
 
     const [question, setQuestion] = useState<string>('');
 
     const handleFileChange = async (event) => {
-        const file = event.target.files[0];
-        if (!file) return;
+        const files = event.target.files;
+        if (!files || files.length === 0) {
+            throw new Error('No file selected');
+        }
         console.log('file change');
 
-        const fileConnector = new Connector.FileConnector();
-        const splits = await fileConnector.getSplits(file);
+        // if (files.length > 5) {
+        //     throw new Error('Too many files selected');
+        // }
 
-        storageWorkerRef.current?.postMessage({
-            action: 'storage_chunk',
-            data: splits
-        });
+        const fileConnector = new Connector.FileConnector();
+        for (const file of files) {
+            const splits = await fileConnector.getSplits(file);
+
+            console.log('start storageDocument');
+            console.time('storageDocument');
+            await uiBgPoolRef.current?.exec('storageDocument', [splits])
+            console.timeEnd('storageDocument');
+            console.log('end storageDocument');
+        }
+
     };
 
     const hdQuestionSubmit = async () => {
@@ -42,28 +53,9 @@ const SidePanel = () => {
         });
     }
 
-    const hdTestWorkerPool = async () => {
-        console.log('start workerpool');
-        workerpoolRef.current?.exec('heavyComputation', [{ count: 1000000 }]).then(res => {
-            console.log('Result from workerpool:', res);
-            console.log(JSON.stringify(workerpoolRef.current?.stats()));
-        })
-        workerpoolRef.current?.exec('heavyComputation', [{ count: 1000000 }]).then(res => {
-            console.log('Result from workerpool:', res);
-            console.log(JSON.stringify(workerpoolRef.current?.stats()));
-        })
-    }
 
     useEffect(() => {
-        storageWorkerRef.current = new Worker(new URL('./worker/storageWorker.ts', import.meta.url));
-        storageWorkerRef.current.onmessage = (event) => {
-            console.log('Received message from worker:', event.data);
-        };
-
-
-        workerpoolRef.current = workerpool.pool(WorkerURL, { maxWorkers: 4 });
-
-
+        uiBgPoolRef.current = workerpool.pool(WorkerURL);
     }, []);
 
     return (
@@ -71,7 +63,7 @@ const SidePanel = () => {
 
             <div className='flex items-center justify-center'>
                 {/* 上传文件 */}
-                <input type="file" accept=".pdf, .docx" onChange={handleFileChange} />
+                <input type="file" accept=".pdf, .docx" multiple onChange={handleFileChange} />
             </div>
 
             <div className='flex items-center justify-center'>
@@ -85,10 +77,6 @@ const SidePanel = () => {
 
             <div>
                 <button onClick={hdTest}>test</button>
-            </div>
-
-            <div>
-                <button onClick={hdTestWorkerPool}>test workerpool</button>
             </div>
 
         </div>
