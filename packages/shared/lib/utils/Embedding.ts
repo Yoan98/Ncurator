@@ -10,6 +10,9 @@ export class Embedding {
     }
 
     async init() {
+        if (this.model && this.tokenizer) {
+            return;
+        }
         // 初始化模型和分词器
         [this.model, this.tokenizer] = await Promise.all([
             AutoModel.from_pretrained('jinaai/jina-embeddings-v2-base-zh', {
@@ -67,7 +70,6 @@ export class Embedding {
         }
         const inputTexts = Array.isArray(texts) ? texts : [texts];
 
-        console.time('encode_tokenizer')
         // 分词
         // 此处耗时可忽略不计
         const encoded = await this.tokenizer(inputTexts, {
@@ -78,22 +80,17 @@ export class Embedding {
             maxLength: 2048,
             return_tensors: 'pt',
         });
-        console.timeEnd('encode_tokenizer')
 
-        console.time('encode_model')
         // 获取模型输出
         // 此处耗时最久,model大概占了整个encode的93%,加载43个句子的情况,句子越多占比越大
         const output = await this.model(encoded);
-        console.timeEnd('encode_model')
 
-        console.time('encode_mean_pooling')
         // 计算平均值池化
         // 此处耗时可忽略不计
         const meanRes = this.meanPooling(
             output.last_hidden_state,
             encoded.attention_mask
         );
-        console.timeEnd('encode_mean_pooling')
 
 
         return meanRes
@@ -125,4 +122,3 @@ export class Embedding {
 }
 
 export const embedding = new Embedding()
-embedding.init()

@@ -21,7 +21,8 @@
     "dependencies": {
         "@extension/shared": "workspace:*",
         "@extension/storage": "workspace:*",
-        "tesseract.js": "^5.1.1"
+        "tesseract.js": "^5.1.1",
+        "workerpool": "^9.2.0"
     },
     "devDependencies": {
         "@extension/tailwindcss-config": "workspace:*",

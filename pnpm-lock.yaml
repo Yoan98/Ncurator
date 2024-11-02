@@ -211,9 +211,6 @@ importers:
       mammoth:
         specifier: ^1.8.0
         version: 1.8.0
-      pdf-parse:
-        specifier: ^1.1.1
-        version: 1.1.1
       pdfjs-dist:
         specifier: ^4.7.76
         version: 4.7.76
@@ -494,6 +491,9 @@ importers:
       tesseract.js:
         specifier: ^5.1.1
         version: 5.1.1
+      workerpool:
+        specifier: ^9.2.0
+        version: 9.2.0
     devDependencies:
       '@extension/tailwindcss-config':
         specifier: workspace:*
@@ -5354,6 +5354,9 @@ packages:
   workerpool@6.5.1:
     resolution: {integrity: sha512-Fs4dNYcsdpYSAfVxhnl1L5zTksjvOJxtC5hzMNl+1t9B8hTJTdKDyZ5ju7ztgPy+ft9tBFXoOlDNiOT9WUXZlA==}
 
+  workerpool@9.2.0:
+    resolution: {integrity: sha512-PKZqBOCo6CYkVOwAxWxQaSF2Fvb5Iv2fCeTP7buyWI2GiynWr46NcXSgK/idoV6e60dgCBfgYc+Un3HMvmqP8w==}
+
   wrap-ansi@6.2.0:
     resolution: {integrity: sha512-r6lPcBGxZXlIcymEu7InxDMhdW0KDxpLgoFLcguasxCaJ/SOIZwINatK9KY/tf+ZrlywOKU0UDj3ATXUBfxJXA==}
     engines: {node: '>=8'}
@@ -9012,7 +9015,8 @@ snapshots:
 
   node-domexception@1.0.0: {}
 
-  node-ensure@0.0.0: {}
+  node-ensure@0.0.0:
+    optional: true
 
   node-fetch@2.6.13:
     dependencies:
@@ -9279,6 +9283,7 @@ snapshots:
       node-ensure: 0.0.0
     transitivePeerDependencies:
       - supports-color
+    optional: true
 
   pdfjs-dist@4.7.76:
     optionalDependencies:
@@ -10512,6 +10517,8 @@ snapshots:
   word-wrap@1.2.5: {}
 
   workerpool@6.5.1: {}
+
+  workerpool@9.2.0: {}
 
   wrap-ansi@6.2.0:
     dependencies:

@@ -3,70 +3,67 @@ import { useStorage, withErrorBoundary, withSuspense, Connector } from '@extensi
 import { exampleThemeStorage } from '@extension/storage';
 import type { ComponentPropsWithoutRef } from 'react';
 import { useRef, useEffect, useState } from 'react';
-import { createWorker } from 'tesseract.js';
+import workerpool from 'workerpool';
+import type { Pool } from 'workerpool';
+import WorkerURL from './worker/embeddingWorker?url&worker'
 
 const SidePanel = () => {
 
-    const embeddingWorkerRef = useRef<Worker>();
+    const storageWorkerRef = useRef<Worker>();
+    const workerpoolRef = useRef<Pool>();
+
     const [question, setQuestion] = useState<string>('');
 
     const handleFileChange = async (event) => {
         const file = event.target.files[0];
         if (!file) return;
+        console.log('file change');
 
         const fileConnector = new Connector.FileConnector();
         const splits = await fileConnector.getSplits(file);
 
-        embeddingWorkerRef.current?.postMessage({
+        storageWorkerRef.current?.postMessage({
             action: 'storage_chunk',
             data: splits
         });
     };
 
     const hdQuestionSubmit = async () => {
-        embeddingWorkerRef.current?.postMessage({
+        storageWorkerRef.current?.postMessage({
             action: 'question',
             data: question
         });
     }
 
     const hdTest = async () => {
-        embeddingWorkerRef.current?.postMessage({
+        storageWorkerRef.current?.postMessage({
             action: 'test',
             data: 'test'
         });
     }
 
+    const hdTestWorkerPool = async () => {
+        console.log('start workerpool');
+        workerpoolRef.current?.exec('heavyComputation', [{ count: 1000000 }]).then(res => {
+            console.log('Result from workerpool:', res);
+            console.log(JSON.stringify(workerpoolRef.current?.stats()));
+        })
+        workerpoolRef.current?.exec('heavyComputation', [{ count: 1000000 }]).then(res => {
+            console.log('Result from workerpool:', res);
+            console.log(JSON.stringify(workerpoolRef.current?.stats()));
+        })
+    }
+
     useEffect(() => {
-        embeddingWorkerRef.current = new Worker(new URL('./worker/embeddingWorker.ts', import.meta.url));
-        embeddingWorkerRef.current.onmessage = (event) => {
+        storageWorkerRef.current = new Worker(new URL('./worker/storageWorker.ts', import.meta.url));
+        storageWorkerRef.current.onmessage = (event) => {
             console.log('Received message from worker:', event.data);
         };
 
-        // 图片识别demo
-        // chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
-        //     const action = request.data.action;
-        //     const img = request.data.data;
 
-        //     if (action === 'screenshot') {
-        //         console.log('Received screenshot action from background:', img);
-        //         const worker = await createWorker(['eng', 'chi_sim'], 1, {
-        //             corePath: chrome.runtime.getURL("/side-panel/tesseract-core.wasm.js"),
-        //             workerPath:chrome.runtime.getURL("/side-panel/tesseract-worker.min.js")",
-        //             workerBlobURL: false,
-        //             logger: (m: any) => console.log(m),
-        //         });
-        //         console.log('Worker created');
-        //         const ret = await worker.recognize(img);
-        //         console.log(ret.data.text);
-        //         await worker.terminate();
+        workerpoolRef.current = workerpool.pool(WorkerURL, { maxWorkers: 4 });
 
-        //     }
-        // });
 
-        return () => {
-            embeddingWorkerRef.current?.terminate();
-        };
     }, []);
 
     return (
@@ -88,6 +85,10 @@ const SidePanel = () => {
 
             <div>
                 <button onClick={hdTest}>test</button>
+            </div>
+
+            <div>
+                <button onClick={hdTestWorkerPool}>test workerpool</button>
             </div>
 
         </div>

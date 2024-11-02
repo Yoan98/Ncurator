@@ -29,12 +29,21 @@ interface LSHIndexConstructor {
     localProjections?: number[][];
     tables?: LSHTables;
 }
-// LSH (Locality-Sensitive Hashing) 实现
+/**
+ * LSH (Locality-Sensitive Hashing) 实现
+ * * 使用时需尽量考虑,存入tables的数数量,
+ * * 尽可能多存且考虑到内存大小,numTables, numHashesPerTable,计算机性能这几个因素
+ * todo: 暂时先不考一组tables最大存储数量,等后续摸底实测后来调整
+ */
 export class LSHIndex {
     // 哈希表数量
+    // 该数值越大,存储时间,空间,搜索时间增大,搜索范围性增高(变相提高搜索精度)
+    // 因为哈希表越多,同一句子存在不同哈希表下不同桶的几率越大(因为不同表下的随机投影向量)
     private numTables: number;
-    // 每个哈希表的哈希函数数量
-    // numTables和numHashesPerTable数量越多，精度越高，但速度越慢
+    // 每个哈希表下桶的哈希位数
+    // 该数值越大,存储时间增大,搜索时间减小(数据越大越明显)
+    // 因为增加了桶的数量,减少了桶内的向量数量
+    // 虽然计算每个哈希表的哈希函数时间略微增大,但这个哈希函数的时间复杂度是O(1),因为在同一组哈希表下,不会随着数据量增大而增大哈希函数的计算时间
     private numHashesPerTable: number;
     // 向量维度(一维向量的数量)
     private dimensions: number;
@@ -72,6 +81,7 @@ export class LSHIndex {
     }
 
     // 计算向量的LSH签名
+    // 相对于数据量增加,时间复杂度O(1),因为投影向量是固定的
     private computeHash(vector: tf.Tensor1D, tableIndex: number): string {
         const signature: number[] = [];
         for (let i = 0; i < this.numHashesPerTable; i++) {
@@ -103,8 +113,8 @@ export class LSHIndex {
     }
 
     /**
-     * 批量添加向量,
-     * @param vectors 数量不能超过MAX_LSH_CHUNK_SIZE
+     * 批量添加向量
+     * @param vectors
      * @returns
      */
     async addVectors(vectors: { id: number, vector: tf.Tensor1D }[]): Promise<LSHTables> {
