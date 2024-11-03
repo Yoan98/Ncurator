@@ -4,7 +4,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = './pdf.worker.min.mjs';
 import { WebPDFLoader } from "@langchain/community/document_loaders/web/pdf";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters"
 import { Document } from "@langchain/core/documents";
-import { SPLITTER_BIGGER_CHUNK_SIZE, SPLITTER_BIGGER_CHUNK_OVERLAP } from './constant'
+import { SPLITTER_BIG_CHUNK_SIZE, SPLITTER_BIG_CHUNK_OVERLAP, SPLITTER_MINI_CHUNK_SIZE, SPLITTER_MINI_CHUNK_OVERLAP, SPLITTER_SEPARATORS } from './constant'
 
 // 文件连接器,读取上传文件的内容数据
 export class FileConnector {
@@ -12,7 +12,10 @@ export class FileConnector {
     constructor() {
     }
 
-    async getSplits(file: File): Promise<Document[]> {
+    async getSplits(file: File): Promise<{
+        bigSplits: Document[],
+        miniSplits: Document[]
+    }> {
         const fileBuffer = await file.arrayBuffer();
 
         if (!fileBuffer) {
@@ -20,31 +23,58 @@ export class FileConnector {
         }
 
         if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+            // word文档处理
             const textRes = await mammoth.extractRawText({ arrayBuffer: fileBuffer })
 
-            const textSplitter = new RecursiveCharacterTextSplitter({
-                chunkSize: SPLITTER_BIGGER_CHUNK_SIZE,
-                chunkOverlap: SPLITTER_BIGGER_CHUNK_OVERLAP,
+            const docs = [new Document({ pageContent: textRes.value })]
+            // 分割大文档
+            const bigSplitter = new RecursiveCharacterTextSplitter({
+                chunkSize: SPLITTER_BIG_CHUNK_SIZE,
+                chunkOverlap: SPLITTER_BIG_CHUNK_OVERLAP,
+                separators: SPLITTER_SEPARATORS
             });
+            const bigSplits = await bigSplitter.splitDocuments(docs);
 
-            const chunks = await textSplitter.splitDocuments([new Document({ pageContent: textRes.value })]);
+            // 分割小文档
+            const miniSplitter = new RecursiveCharacterTextSplitter({
+                chunkSize: SPLITTER_MINI_CHUNK_SIZE,
+                chunkOverlap: SPLITTER_MINI_CHUNK_OVERLAP,
+                separators: SPLITTER_SEPARATORS
+            });
+            const miniSplits = await miniSplitter.splitDocuments(docs);
 
-            return chunks
+            return {
+                bigSplits,
+                miniSplits
+            }
 
         } else if (file.type === 'application/pdf') {
+            // pdf文档处理
             const loader = new WebPDFLoader(file, {
                 pdfjs: () => Promise.resolve(pdfjsLib),
             });
             const docs = await loader.load();
 
-            const textSplitter = new RecursiveCharacterTextSplitter({
-                chunkSize: SPLITTER_BIGGER_CHUNK_SIZE,
-                chunkOverlap: SPLITTER_BIGGER_CHUNK_OVERLAP,
+            // 分割大文档
+            const bigSplitter = new RecursiveCharacterTextSplitter({
+                chunkSize: SPLITTER_BIG_CHUNK_SIZE,
+                chunkOverlap: SPLITTER_BIG_CHUNK_OVERLAP,
+                separators: SPLITTER_SEPARATORS
             });
+            const bigSplits = await bigSplitter.splitDocuments(docs);
 
-            const chunks = await textSplitter.splitDocuments(docs);
+            // 分割小文档
+            const miniSplitter = new RecursiveCharacterTextSplitter({
+                chunkSize: SPLITTER_MINI_CHUNK_SIZE,
+                chunkOverlap: SPLITTER_MINI_CHUNK_OVERLAP,
+                separators: SPLITTER_SEPARATORS
+            });
+            const miniSplits = await miniSplitter.splitDocuments(docs);
 
-            return chunks
+            return {
+                bigSplits,
+                miniSplits
+            }
         } else {
             throw new Error('file type not supported')
         }

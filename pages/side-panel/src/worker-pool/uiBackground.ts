@@ -1,17 +1,17 @@
-import { embedding, constant, LSHIndex, IndexDBStore, tool, tf } from '@extension/shared';
+import { embedding, constant, LSHIndex, IndexDBStore, tf } from '@extension/shared';
 import type { LSH_INDEX_STORE, LSH_PROJECTION_STORE, TextChunk, langchainDocuments } from '@extension/shared'
 import workerpool from 'workerpool';
 // @ts-ignore
-import WorkerURL from './embedding?url&worker'
+import WorkerURL from './calculation?url&worker'
 
-const embeddingWorkerPool = workerpool.pool(WorkerURL);
+const calculationWorkerPool = workerpool.pool(WorkerURL);
 
 // 提取要保存到数据库的chunk和要embedding的纯文本
 const transToTextList = (splits: langchainDocuments.Document[]): [TextChunk[], string[][], number] => {
-    let splitPureSize = 10
+    let perWorkerHandleTextSize = 10
     // 根据splits长度决定每个worker处理的纯文本数量
     if (splits.length <= 10) {
-        splitPureSize = 3
+        perWorkerHandleTextSize = 3
     }
 
     const pureTextList: string[][] = []
@@ -23,7 +23,7 @@ const transToTextList = (splits: langchainDocuments.Document[]): [TextChunk[], s
         temp.push(splits[i].
             pageContent
         )
-        if (temp.length === splitPureSize) {
+        if (temp.length === perWorkerHandleTextSize) {
             pureTextList.push(temp)
             temp = []
         }
@@ -47,7 +47,7 @@ const transToTextList = (splits: langchainDocuments.Document[]): [TextChunk[], s
         pureTextList.push(temp)
     }
 
-    return [textChunkList, pureTextList, splitPureSize]
+    return [textChunkList, pureTextList, perWorkerHandleTextSize]
 }
 // 将数据存入indexDB的text chunk表
 const storageDataToTextChunk = async (textChunkList: TextChunk[]): Promise<TextChunk[]> => {
@@ -63,19 +63,19 @@ const storageDataToTextChunk = async (textChunkList: TextChunk[]): Promise<TextC
     return textChunkList;
 }
 // 将数据存入indexDB的LSH索引表
-const storageTextChunkToLSH = async (textChunkList: TextChunk[], pureTextList: string[][], splitPureSize: number) => {
+const storageTextChunkToLSH = async (textChunkList: TextChunk[], pureTextList: string[][], perWorkerHandleTextSize: number) => {
     // 多线程向量化句子
     console.time('embedding encode');
     const execTasks = pureTextList.map(item => {
-        return embeddingWorkerPool.exec('embeddingText', [item])
+        return calculationWorkerPool.exec('embeddingText', [item])
     })
     const embeddingOutput: { texts: string[], embeddedSentences: number[][] }[] = await Promise.all(execTasks)
     console.timeEnd('embedding encode');
 
     // 生成向量数组
     const vectors = textChunkList.map((chunk, index) => {
-        const embeddingOutputIndex = Math.floor(index / splitPureSize)
-        const curVectorIndex = index % splitPureSize
+        const embeddingOutputIndex = Math.floor(index / perWorkerHandleTextSize)
+        const curVectorIndex = index % perWorkerHandleTextSize
         const embeddingTensor = tf.tensor1d(embeddingOutput[embeddingOutputIndex].embeddedSentences[curVectorIndex])
         return {
             id: chunk.id!,
@@ -150,18 +150,25 @@ const searchDocument = async (question: string) => {
 }
 
 // 存储文档
-const storageDocument = async (splits: langchainDocuments.Document[]) => {
-    let [textChunkList, pureTextList, splitPureSize] = transToTextList(splits)
+const storageDocument = async (bigSplits: langchainDocuments.Document[], miniSplits: langchainDocuments.Document[]) => {
+    let [textChunkList, pureTextList, perWorkerHandleTextSize] = transToTextList(bigSplits.concat(miniSplits))
 
     // 将数据存入indexDB的text chunk表
     textChunkList = await storageDataToTextChunk(textChunkList)
 
     // 将文本向量化后存入indexDB的LSH索引表
-    await storageTextChunkToLSH(textChunkList, pureTextList, splitPureSize);
+    await storageTextChunkToLSH(textChunkList, pureTextList, perWorkerHandleTextSize);
 }
 
+// 测试相似度
+const testSimilarity = async (text1, text2) => {
+    await embedding.load()
+    const similarity = await embedding.computeSimilarity(text1, text2)
+    return similarity
+}
 
 workerpool.worker({
     searchDocument,
-    storageDocument
+    storageDocument,
+    testSimilarity
 });

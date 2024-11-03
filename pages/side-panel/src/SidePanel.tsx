@@ -6,14 +6,15 @@ import { useRef, useEffect, useState } from 'react';
 import workerpool from 'workerpool';
 import type { Pool } from 'workerpool';
 //@ts-ignore
-import WorkerURL from './worker/uiBackground?url&worker'
+import WorkerURL from './worker-pool/uiBackground?url&worker'
 
 const SidePanel = () => {
 
-    const storageWorkerRef = useRef<Worker>();
     const uiBgPoolRef = useRef<Pool>();
 
     const [question, setQuestion] = useState<string>('');
+    const [text1, setText1] = useState<string>('');
+    const [text2, setText2] = useState<string>('');
 
     const handleFileChange = async (event) => {
         const files = event.target.files;
@@ -28,11 +29,13 @@ const SidePanel = () => {
 
         const fileConnector = new Connector.FileConnector();
         for (const file of files) {
-            const splits = await fileConnector.getSplits(file);
+            const { bigSplits, miniSplits } = await fileConnector.getSplits(file);
+            console.log('big splits', bigSplits)
+            console.log('mini splits', miniSplits)
 
             console.log('start storageDocument');
             console.time('storageDocument');
-            await uiBgPoolRef.current?.exec('storageDocument', [splits])
+            await uiBgPoolRef.current?.exec('storageDocument', [bigSplits, miniSplits]);
             console.timeEnd('storageDocument');
             console.log('end storageDocument');
         }
@@ -48,7 +51,10 @@ const SidePanel = () => {
         console.log('search result', res);
     }
 
-    const hdTest = async () => { }
+    const hdTestSimilarity = async () => {
+        const res = await uiBgPoolRef.current?.exec('testSimilarity', [text1, text2])
+        console.log('similarity result', res);
+    }
 
 
     useEffect(() => {
@@ -72,8 +78,15 @@ const SidePanel = () => {
                 <button id="submit" onClick={hdQuestionSubmit}>Submit</button>
             </div>
 
-            <div>
-                <button onClick={hdTest}>test</button>
+            <div className='flex flex-col gap-2'>
+                <input type="text" id="input" onInput={(e) => {
+                    setText1(e.currentTarget.value);
+                }} />
+                <input type="text" id="input" onInput={(e) => {
+                    setText2(e.currentTarget.value);
+                }} />
+
+                <button id="submit" onClick={hdTestSimilarity}>Submit</button>
             </div>
 
         </div>
