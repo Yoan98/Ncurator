@@ -2,14 +2,6 @@ import * as math from './math';
 import * as constant from './constant';
 import * as tf from '@tensorflow/tfjs';
 
-export interface LSH_INDEX_STORE {
-    id: number;
-    lsh_table: LSHTables;
-}
-export interface LSH_PROJECTION_STORE {
-    id: number;
-    data: number[][];
-}
 
 interface HashBucket {
     id: string; // 哈希签名即桶ID
@@ -19,7 +11,7 @@ interface HashBucket {
     }[];  // 向量集合
 }
 
-type LSHTables = Map<string, HashBucket>[]
+export type LSHTables = Map<string, HashBucket>[]
 
 interface LSHIndexConstructor {
     dimensions: number;
@@ -33,6 +25,7 @@ interface LSHIndexConstructor {
  * LSH (Locality-Sensitive Hashing) 实现
  * * 使用时需尽量考虑,存入tables的数数量,
  * * 尽可能多存且考虑到内存大小,numTables, numHashesPerTable,计算机性能这几个因素
+ * 搜索下的平均情况下的时间复杂度为 n * numTables / 2 ^ numHashesPerTable
  * todo: 暂时先不考一组tables最大存储数量,等后续摸底实测后来调整
  */
 export class LSHIndex {

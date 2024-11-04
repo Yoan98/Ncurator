@@ -12,9 +12,9 @@ export class FileConnector {
     constructor() {
     }
 
-    async getSplits(file: File): Promise<{
-        bigSplits: Document[],
-        miniSplits: Document[]
+    async getChunks(file: File): Promise<{
+        bigChunks: Document[],
+        miniChunks: Document[]
     }> {
         const fileBuffer = await file.arrayBuffer();
 
@@ -33,7 +33,7 @@ export class FileConnector {
                 chunkOverlap: SPLITTER_BIG_CHUNK_OVERLAP,
                 separators: SPLITTER_SEPARATORS
             });
-            const bigSplits = await bigSplitter.splitDocuments(docs);
+            const bigChunks = await bigSplitter.splitDocuments(docs);
 
             // 分割小文档
             const miniSplitter = new RecursiveCharacterTextSplitter({
@@ -41,11 +41,11 @@ export class FileConnector {
                 chunkOverlap: SPLITTER_MINI_CHUNK_OVERLAP,
                 separators: SPLITTER_SEPARATORS
             });
-            const miniSplits = await miniSplitter.splitDocuments(docs);
+            const miniChunks = await miniSplitter.splitDocuments(docs);
 
             return {
-                bigSplits,
-                miniSplits
+                bigChunks,
+                miniChunks
             }
 
         } else if (file.type === 'application/pdf') {
@@ -55,25 +55,25 @@ export class FileConnector {
             });
             const docs = await loader.load();
 
-            // 分割大文档
+            // 分割成大块
             const bigSplitter = new RecursiveCharacterTextSplitter({
                 chunkSize: SPLITTER_BIG_CHUNK_SIZE,
                 chunkOverlap: SPLITTER_BIG_CHUNK_OVERLAP,
                 separators: SPLITTER_SEPARATORS
             });
-            const bigSplits = await bigSplitter.splitDocuments(docs);
+            const bigChunks = await bigSplitter.splitDocuments(docs);
 
-            // 分割小文档
+            // 分割小块
             const miniSplitter = new RecursiveCharacterTextSplitter({
                 chunkSize: SPLITTER_MINI_CHUNK_SIZE,
                 chunkOverlap: SPLITTER_MINI_CHUNK_OVERLAP,
                 separators: SPLITTER_SEPARATORS
             });
-            const miniSplits = await miniSplitter.splitDocuments(docs);
+            const miniChunks = await miniSplitter.splitDocuments(docs);
 
             return {
-                bigSplits,
-                miniSplits
+                bigChunks,
+                miniChunks
             }
         } else {
             throw new Error('file type not supported')

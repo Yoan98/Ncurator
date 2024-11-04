@@ -9,6 +9,11 @@ export class Embedding {
     constructor() {
     }
 
+    /**
+     * 加载模型和分词器
+     * !注意:该方法执行后,内存会增加小1G(不会累计),尤其注意多线程的使用
+     * @returns
+     */
     async load() {
         if (this.model && this.tokenizer) {
             return;

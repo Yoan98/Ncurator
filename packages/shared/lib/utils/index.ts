@@ -6,7 +6,6 @@ export * from './Request';
 export * as math from './math';
 export * as constant from './constant';
 export * as Connector from './Connector';
-export * as tool from './tool';
 export * as tf from '@tensorflow/tfjs';
 export * as langchainDocuments from "@langchain/core/documents";
 

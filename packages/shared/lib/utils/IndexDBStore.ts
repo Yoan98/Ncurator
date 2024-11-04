@@ -1,25 +1,5 @@
 import * as constant from './constant';
 
-
-export interface TextChunk {
-    id?: number;
-    text: string;
-    metadata?: {
-        loc: {
-            lines: {
-                from: number;
-                to: number;
-            }
-            pageNumber: number;
-        }
-    }
-}
-
-interface SearchResult {
-    chunk: TextChunk;
-    score: number;
-}
-
 // 主存储类
 export class IndexDBStore {
     private dbName: string;
@@ -61,6 +41,8 @@ export class IndexDBStore {
 
         // 创建LSH索引表
         db.createObjectStore(constant.LSH_INDEX_STORE_NAME, { keyPath: 'id', autoIncrement: true });
+        // 创建connection表
+        db.createObjectStore(constant.CONNECTION_STORE_NAME, { keyPath: 'id', autoIncrement: true });
 
         console.log('IndexDB Store initialized');
     }
@@ -192,41 +174,5 @@ export class IndexDBStore {
         });
     }
 
-
-
-    // 使用LSH (Locality-Sensitive Hashing)进行向量搜索
-    // async search(queryVector: number[], limit: number = 10): Promise<SearchResult[]> {
-    //     if (!this.db) throw new Error('Database not initialized');
-
-    //     // 实现近似最近邻搜索
-    //     return new Promise((resolve, reject) => {
-    //         const transaction = this.db!.transaction('chunks', 'readonly');
-    //         const store = transaction.objectStore('chunks');
-    //         const results: SearchResult[] = [];
-
-    //         // 使用游标遍历，在实际应用中应该使用更高效的索引查询
-    //         store.openCursor().onsuccess = (event) => {
-    //             const cursor = (event.target as IDBRequest).result;
-
-    //             // if (cursor) {
-    //             //     const chunk = cursor.value as TextChunk;
-    //             //     const similarity = VectorUtils.cosineSimilarity(queryVector, chunk.vector);
-
-    //             //     results.push({
-    //             //         chunk,
-    //             //         score: similarity
-    //             //     });
-
-    //             //     cursor.continue();
-    //             // } else {
-    //             //     // 排序并返回前N个结果
-    //             //     results.sort((a, b) => b.score - a.score);
-    //             //     resolve(results.slice(0, limit));
-    //             // }
-    //         };
-
-    //         transaction.onerror = () => reject(transaction.error);
-    //     });
-    // }
 
 }

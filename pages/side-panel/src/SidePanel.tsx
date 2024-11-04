@@ -29,13 +29,11 @@ const SidePanel = () => {
 
         const fileConnector = new Connector.FileConnector();
         for (const file of files) {
-            const { bigSplits, miniSplits } = await fileConnector.getSplits(file);
-            console.log('big splits', bigSplits)
-            console.log('mini splits', miniSplits)
+            const { bigChunks, miniChunks } = await fileConnector.getChunks(file);
 
             console.log('start storageDocument');
             console.time('storageDocument');
-            await uiBgPoolRef.current?.exec('storageDocument', [bigSplits, miniSplits]);
+            await uiBgPoolRef.current?.exec('storageDocument', [bigChunks, miniChunks, file]);
             console.timeEnd('storageDocument');
             console.log('end storageDocument');
         }
@@ -58,7 +56,9 @@ const SidePanel = () => {
 
 
     useEffect(() => {
-        uiBgPoolRef.current = workerpool.pool(WorkerURL);
+        uiBgPoolRef.current = workerpool.pool(WorkerURL, {
+            maxWorkers: 1,
+        });
     }, []);
 
     return (
