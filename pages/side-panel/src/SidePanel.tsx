@@ -6,11 +6,15 @@ import { useRef, useEffect, useState } from 'react';
 import workerpool from 'workerpool';
 import type { Pool } from 'workerpool';
 //@ts-ignore
-import WorkerURL from './worker-pool/uiBackground?url&worker'
+import storageWorkerURL from './worker-pool/storageDoc?url&worker'
+//@ts-ignore
+import searchWorkerURL from './worker-pool/searchDoc?url&worker'
+
 
 const SidePanel = () => {
 
-    const uiBgPoolRef = useRef<Pool>();
+    const storagePoolRef = useRef<Pool>();
+    const searchPoolRef = useRef<Pool>();
 
     const [question, setQuestion] = useState<string>('');
     const [text1, setText1] = useState<string>('');
@@ -33,7 +37,7 @@ const SidePanel = () => {
 
             console.log('start storageDocument');
             console.time('storageDocument');
-            await uiBgPoolRef.current?.exec('storageDocument', [bigChunks, miniChunks, file]);
+            await storagePoolRef.current?.exec('storageDocument', [bigChunks, miniChunks, file]);
             console.timeEnd('storageDocument');
             console.log('end storageDocument');
         }
@@ -43,22 +47,28 @@ const SidePanel = () => {
     const hdQuestionSubmit = async () => {
         console.log('start searchDocument');
         console.time('searchDocument');
-        const res = await uiBgPoolRef.current?.exec('searchDocument', [question])
+        const res = await searchPoolRef.current?.exec('searchDocument', [question])
         console.timeEnd('searchDocument');
         console.log('end searchDocument');
         console.log('search result', res);
     }
 
     const hdTestSimilarity = async () => {
-        const res = await uiBgPoolRef.current?.exec('testSimilarity', [text1, text2])
+        const res = await storagePoolRef.current?.exec('testSimilarity', [text1, text2])
         console.log('similarity result', res);
     }
 
 
+
     useEffect(() => {
-        uiBgPoolRef.current = workerpool.pool(WorkerURL, {
+        storagePoolRef.current = workerpool.pool(storageWorkerURL, {
             maxWorkers: 1,
         });
+
+        searchPoolRef.current = workerpool.pool(searchWorkerURL, {
+            maxWorkers: 1,
+        });
+
     }, []);
 
     return (
@@ -88,6 +98,7 @@ const SidePanel = () => {
 
                 <button id="submit" onClick={hdTestSimilarity}>Submit</button>
             </div>
+
 
         </div>
     );

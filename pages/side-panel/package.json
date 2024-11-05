@@ -21,6 +21,8 @@
     "dependencies": {
         "@extension/shared": "workspace:*",
         "@extension/storage": "workspace:*",
+        "@types/lunr": "^2.3.7",
+        "lunr": "^2.3.9",
         "tesseract.js": "^5.1.1",
         "workerpool": "^9.2.0"
     },

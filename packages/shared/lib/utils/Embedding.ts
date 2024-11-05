@@ -1,6 +1,19 @@
-import { AutoModel, AutoTokenizer } from '@huggingface/transformers';
+import { AutoModel, AutoTokenizer, env } from '@huggingface/transformers';
 import { cosineSimilarity } from './math';
 import * as tf from '@tensorflow/tfjs';
+
+// @ts-ignore
+// 配置本地wasm文件路径
+// embedding被用于worker线程中,所以被打包到assest中了,而wasm文件在public中,被打包到外层了,所以这里这里路径是../
+env.backends.onnx.wasm.wasmPaths = '../';
+// 使用本地模型
+env.allowRemoteModels = false;
+env.allowLocalModels = true;
+env.localModelPath = '../models';
+// 这里可以配置远程服务器地址，加载模型将走这个地址，避免有些人没发翻墙，无法加载模型
+// env.remoteHost = 'http://localhost:3000';
+// console.log('env', env)
+
 
 export class Embedding {
     private model: any;
@@ -11,7 +24,7 @@ export class Embedding {
 
     /**
      * 加载模型和分词器
-     * !注意:该方法执行后,内存会增加小1G(不会累计),尤其注意多线程的使用
+     * !注意:该方法执行后,内存会占用较多(q8下0.7G,fp16为1G),尤其注意多线程的使用
      * @returns
      */
     async load() {
@@ -20,10 +33,13 @@ export class Embedding {
         }
         // 初始化模型和分词器
         [this.model, this.tokenizer] = await Promise.all([
-            AutoModel.from_pretrained('jinaai/jina-embeddings-v2-base-zh', {
-                dtype: 'fp16'
+            AutoModel.from_pretrained('jina-embeddings-v2-base-zh', {
+                dtype: 'fp16',
+                local_files_only: true,
             }),
-            AutoTokenizer.from_pretrained('jinaai/jina-embeddings-v2-base-zh'),
+            AutoTokenizer.from_pretrained('jina-embeddings-v2-base-zh', {
+                local_files_only: true,
+            }),
         ]);
 
         console.log('Model and tokenizer initialized');

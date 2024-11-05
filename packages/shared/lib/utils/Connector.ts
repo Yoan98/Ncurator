@@ -24,6 +24,7 @@ export class FileConnector {
 
         if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
             // word文档处理
+            // todo:模仿pdf文档处理
             const textRes = await mammoth.extractRawText({ arrayBuffer: fileBuffer })
 
             const docs = [new Document({ pageContent: textRes.value })]

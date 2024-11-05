@@ -43,6 +43,8 @@ export class IndexDBStore {
         db.createObjectStore(constant.LSH_INDEX_STORE_NAME, { keyPath: 'id', autoIncrement: true });
         // 创建connection表
         db.createObjectStore(constant.CONNECTION_STORE_NAME, { keyPath: 'id', autoIncrement: true });
+        // 创建full text索引表
+        db.createObjectStore(constant.FULL_TEXT_INDEX_STORE_NAME, { keyPath: 'id', autoIncrement: true });
 
         console.log('IndexDB Store initialized');
     }

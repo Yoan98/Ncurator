@@ -5,7 +5,6 @@ import { embedding } from '@extension/shared';
 
 // 向量化文本
 const embeddingText = async (texts: string[] | string) => {
-    //！需注意执行embedding.load()后，这个线程将会增加近1G的内存占用
     await embedding.load()
     const embeddingOutput = await embedding.encode(texts);
     const data = embeddingOutput.dataSync();

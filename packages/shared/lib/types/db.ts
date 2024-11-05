@@ -28,9 +28,15 @@ export namespace DB {
     // connection表
     export interface CONNECTION {
         id?: number;
-        type: 'file';
-        text_chunk_ids?: number[];
-        lsh_index_ids?: number[];
+        connector_type: 'file' | 'notion';
+        text_chunk_ids: number[];
+        lsh_index_ids: number[];
+        full_text_index_ids: number[];
         resource?: File
+    }
+    // full text索引表
+    export interface FULL_TEXT_INDEX {
+        id: number;
+        index: object;
     }
 }
