@@ -1,10 +1,9 @@
 // 由于embedding过于占内存，只好将storageDoc抽出来
-import { embedding, constant, LSHIndex, IndexDBStore, tf } from '@extension/shared';
+import { embedding, constant, LSHIndex, IndexDBStore, tf, fullTextIndex } from '@extension/shared';
 import type { DB, langchainDocuments } from '@extension/shared'
 import workerpool from 'workerpool';
 // @ts-ignore
 import WorkerURL from './embedding?url&worker'
-import lunr from 'lunr';
 
 
 const embeddingWorkerPool = workerpool.pool(WorkerURL, {
@@ -159,22 +158,23 @@ const storageBigChunkToFullTextIndex = async (textChunkList: DB.TEXT_CHUNK[]) =>
     const store = new IndexDBStore();
     await store.connect(constant.DEFAULT_INDEXDB_NAME);
 
-    const fullTextIndex = lunr(function () {
-        this.ref('id')
-        this.field('text')
-
-        textChunkList.forEach((item) => {
-            this.add({
-                id: item.id,
-                text: item.text
-            })
-        })
-    })
+    await fullTextIndex.loadLunr()
+    const fields = [{
+        field: 'text'
+    }]
+    const data = textChunkList.map(item => {
+        return {
+            id: item.id!,
+            text: item.text
+        }
+    }
+    )
+    const lunrIndex = fullTextIndex.add(fields, data)
 
     const fullTextIndexId = await store.add({
         storeName: constant.FULL_TEXT_INDEX_STORE_NAME,
         data: {
-            index: fullTextIndex.toJSON()
+            index: lunrIndex.toJSON()
         }
     });
 

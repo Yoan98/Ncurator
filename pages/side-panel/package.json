@@ -22,7 +22,9 @@
         "@extension/shared": "workspace:*",
         "@extension/storage": "workspace:*",
         "@types/lunr": "^2.3.7",
+        "jieba-wasm": "^2.2.0",
         "lunr": "^2.3.9",
+        "lunr-languages": "^1.14.0",
         "tesseract.js": "^5.1.1",
         "workerpool": "^9.2.0"
     },

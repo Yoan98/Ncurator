@@ -208,6 +208,15 @@ importers:
       axios:
         specifier: ^1.7.7
         version: 1.7.7
+      jieba-wasm:
+        specifier: ^2.2.0
+        version: 2.2.0
+      lunr:
+        specifier: ^2.3.9
+        version: 2.3.9
+      lunr-languages:
+        specifier: ^1.14.0
+        version: 1.14.0
       mammoth:
         specifier: ^1.8.0
         version: 1.8.0
@@ -349,62 +358,6 @@ importers:
         specifier: ^7.0.3
         version: 7.0.3
 
-  pages/options:
-    dependencies:
-      '@extension/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
-      '@extension/storage':
-        specifier: workspace:*
-        version: link:../../packages/storage
-      '@extension/ui':
-        specifier: workspace:*
-        version: link:../../packages/ui
-    devDependencies:
-      '@extension/tailwindcss-config':
-        specifier: workspace:*
-        version: link:../../packages/tailwind-config
-      '@extension/tsconfig':
-        specifier: workspace:*
-        version: link:../../packages/tsconfig
-      '@extension/vite-config':
-        specifier: workspace:*
-        version: link:../../packages/vite-config
-      cross-env:
-        specifier: ^7.0.3
-        version: 7.0.3
-      postcss-load-config:
-        specifier: ^6.0.1
-        version: 6.0.1(jiti@1.21.6)(postcss@8.4.47)(tsx@4.19.1)(yaml@2.5.1)
-
-  pages/popup:
-    dependencies:
-      '@extension/content-runtime-script':
-        specifier: workspace:*
-        version: link:../content-runtime
-      '@extension/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
-      '@extension/storage':
-        specifier: workspace:*
-        version: link:../../packages/storage
-    devDependencies:
-      '@extension/tailwindcss-config':
-        specifier: workspace:*
-        version: link:../../packages/tailwind-config
-      '@extension/tsconfig':
-        specifier: workspace:*
-        version: link:../../packages/tsconfig
-      '@extension/vite-config':
-        specifier: workspace:*
-        version: link:../../packages/vite-config
-      cross-env:
-        specifier: ^7.0.3
-        version: 7.0.3
-      postcss-load-config:
-        specifier: ^6.0.1
-        version: 6.0.1(jiti@1.21.6)(postcss@8.4.47)(tsx@4.19.1)(yaml@2.5.1)
-
   pages/side-panel:
     dependencies:
       '@extension/shared':
@@ -416,9 +369,15 @@ importers:
       '@types/lunr':
         specifier: ^2.3.7
         version: 2.3.7
+      jieba-wasm:
+        specifier: ^2.2.0
+        version: 2.2.0
       lunr:
         specifier: ^2.3.9
         version: 2.3.9
+      lunr-languages:
+        specifier: ^1.14.0
+        version: 1.14.0
       tesseract.js:
         specifier: ^5.1.1
         version: 5.1.1
@@ -3608,6 +3567,9 @@ packages:
     resolution: {integrity: sha512-7vuh85V5cdDofPyxn58nrPjBktZo0u9x1g8WtjQol+jZDaE+fhN+cIvTj11GndBnMnyfrUOG1sZQxCdjKh+DKg==}
     engines: {node: '>= 10.13.0'}
 
+  jieba-wasm@2.2.0:
+    resolution: {integrity: sha512-IwxgUf+EMutjLair3k41i0ApM33qeHNY9EFBKlI5/XtHcISkGt5YPmUvpDJe3hUflwRYhy9g29ZzTetGZw6XgQ==}
+
   jiti@1.21.6:
     resolution: {integrity: sha512-2yTgeWTWzMWkHu6Jp9NKgePDaYHbntiwvYuuJLbbN9vl7DC9DvXKOB2BC3ZZ92D3cvV/aflH0osDfwpHepQ53w==}
     hasBin: true
@@ -3870,6 +3832,9 @@ packages:
   lru-cache@7.18.3:
     resolution: {integrity: sha512-jumlc0BIUrS3qJGgIkWZsyfAM7NCWiBcCDhnd+3NNM5KbBmLTgHVfWBcg6W+rLUsIpzpERPsvwUP7CckAQSOoA==}
     engines: {node: '>=12'}
+
+  lunr-languages@1.14.0:
+    resolution: {integrity: sha512-hWUAb2KqM3L7J5bcrngszzISY4BxrXn/Xhbb9TTCJYEGqlR1nG67/M14sp09+PTIRklobrn57IAxcdcO/ZFyNA==}
 
   lunr@2.3.9:
     resolution: {integrity: sha512-zTU3DaZaF3Rt9rhN3uBMGQD3dD2/vFQqnvZCDv4dl5iOzq2IZQqTxu90r4E5J+nP70J3ilqVCrbho2eWaeW8Ow==}
@@ -8562,6 +8527,8 @@ snapshots:
       merge-stream: 2.0.0
       supports-color: 8.1.1
 
+  jieba-wasm@2.2.0: {}
+
   jiti@1.21.6: {}
 
   js-tiktoken@1.0.15:
@@ -8808,6 +8775,8 @@ snapshots:
   lru-cache@11.0.1: {}
 
   lru-cache@7.18.3: {}
+
+  lunr-languages@1.14.0: {}
 
   lunr@2.3.9: {}
 

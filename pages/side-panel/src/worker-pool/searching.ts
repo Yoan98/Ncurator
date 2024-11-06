@@ -1,5 +1,5 @@
 import workerpool from 'workerpool';
-import { constant, LSHIndex, IndexDBStore, tf } from '@extension/shared';
+import { constant, LSHIndex, tf, fullTextIndex } from '@extension/shared';
 import type { DB } from '@extension/shared'
 import lunr from 'lunr';
 import type { SearchedLshItem } from './searchDoc'
@@ -28,9 +28,11 @@ const searchLshIndex = async (queryVectorData: Float32Array, lshIndexStoreList: 
 const searchFullTextIndex = async (question: string, fullTextIndexStoreList: DB.FULL_TEXT_INDEX[]) => {
 
     const searchedRes: lunr.Index.Result[] = []
-    for (const fullTextIndex of fullTextIndexStoreList) {
-        const lurIndex = lunr.Index.load(fullTextIndex.index)
-        const res = lurIndex.search(question)
+    await fullTextIndex.loadLunr()
+
+    for (const fullTextIndexStore of fullTextIndexStoreList) {
+        fullTextIndex.loadSerializer(fullTextIndexStore.index)
+        const res = fullTextIndex.search(question)
 
         searchedRes.push(...res)
     }

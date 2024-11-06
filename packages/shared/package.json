@@ -27,6 +27,9 @@
         "@langchain/textsplitters": "^0.1.0",
         "@tensorflow/tfjs": "^4.22.0",
         "axios": "^1.7.7",
+        "jieba-wasm": "^2.2.0",
+        "lunr": "^2.3.9",
+        "lunr-languages": "^1.14.0",
         "mammoth": "^1.8.0",
         "pdfjs-dist": "^4.7.76"
     },

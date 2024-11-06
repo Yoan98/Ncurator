@@ -57,7 +57,6 @@ const searchDocument = async (question: string) => {
                 storeName: constant.FULL_TEXT_INDEX_STORE_NAME,
             });
 
-
             const fullTextIndexRes: lunr.Index.Result[] = await searchingWorkerPool.exec('searchFullTextIndex', [question, fullTextIndexStoreList])
 
             resolve(fullTextIndexRes)

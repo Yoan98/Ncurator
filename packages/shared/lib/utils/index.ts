@@ -1,6 +1,7 @@
 export * from './shared-types';
 export * from './Embedding';
 export * from './IndexDBStore';
+export * from './FullTextIndex';
 export * from './VectorIndex';
 export * from './Request';
 export * as math from './math';

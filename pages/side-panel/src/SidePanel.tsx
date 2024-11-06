@@ -1,5 +1,5 @@
 import '@src/SidePanel.css';
-import { useStorage, withErrorBoundary, withSuspense, Connector } from '@extension/shared';
+import { useStorage, withErrorBoundary, withSuspense, Connector, fullTextIndex } from '@extension/shared';
 import { exampleThemeStorage } from '@extension/storage';
 import type { ComponentPropsWithoutRef } from 'react';
 import { useRef, useEffect, useState } from 'react';
@@ -9,7 +9,6 @@ import type { Pool } from 'workerpool';
 import storageWorkerURL from './worker-pool/storageDoc?url&worker'
 //@ts-ignore
 import searchWorkerURL from './worker-pool/searchDoc?url&worker'
-
 
 const SidePanel = () => {
 
@@ -58,6 +57,25 @@ const SidePanel = () => {
         console.log('similarity result', res);
     }
 
+    const hdTestFullText = async () => {
+        await fullTextIndex.loadLunr();
+
+        fullTextIndex.add([{
+            field: 'text'
+        }], [{
+            id: 1,
+            text: '中华人民共和国的长江大桥'
+        }, {
+            id: 2,
+            text: 'vue and react is great'
+        }])
+
+
+        console.log('lunrIndex', fullTextIndex.lunrIndex);
+        const res1 = fullTextIndex.search('中华人民共和国 react and vue what its is')
+        console.log('search result1', res1);
+    }
+
 
 
     useEffect(() => {
@@ -97,6 +115,10 @@ const SidePanel = () => {
                 }} />
 
                 <button id="submit" onClick={hdTestSimilarity}>Submit</button>
+            </div>
+
+            <div>
+                <button onClick={hdTestFullText}>test full text</button>
             </div>
 
 
