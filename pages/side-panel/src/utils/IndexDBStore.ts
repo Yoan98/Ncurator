@@ -131,7 +131,7 @@ export class IndexDBStore {
     // 查询单个数据
     get({ storeName, key, indexName }: {
         storeName: string;
-        key: string | number;
+        key: IDBValidKey | IDBKeyRange;
         indexName?: string;
     }): Promise<any> {
         if (!this.db) throw new Error('Database not initialized');
@@ -152,10 +152,11 @@ export class IndexDBStore {
             request.onerror = () => reject(request.error);
         });
     }
-    // 查询所有数据
-    getAll({ storeName, indexName }: {
+    // 查询连续范围数据,或者全部数据
+    getAll({ storeName, indexName, key }: {
         storeName: string;
         indexName?: string;
+        key?: IDBKeyRange
     }): Promise<any> {
         if (!this.db) throw new Error('Database not initialized');
 
@@ -166,15 +167,45 @@ export class IndexDBStore {
             let request: IDBRequest;
             if (indexName) {
                 const index = store.index(indexName);
-                request = index.getAll();
+                request = index.getAll(key);
             } else {
-                request = store.getAll();
+                request = store.getAll(key);
             }
 
             request.onsuccess = () => resolve(request.result);
             request.onerror = () => reject(request.error);
         });
     }
+    // 查询非连续范围数据
+    // 先只使用get,遍历取,后面再优化范围查询
+    getBatch({ storeName, indexName, keys }: {
+        storeName: string;
+        indexName?: string;
+        keys: number[]
+    }): Promise<any> {
+        if (!this.db) throw new Error('Database not initialized');
+        if (!keys.length) return Promise.resolve([]);
 
+        return new Promise((resolve, reject) => {
+            const transaction = this.db!.transaction(storeName, 'readonly');
+            const store = transaction.objectStore(storeName);
 
+            let proxyStore = indexName ? store.index(indexName) : store;
+
+            const res: any[] = []
+            for (const key of keys) {
+                const request = proxyStore.get(key);
+                request.onsuccess = () => {
+                    res.push(request.result)
+
+                    if (res.length === keys.length) {
+                        resolve(res)
+                    }
+                }
+
+                request.onerror = () => reject(request.error);
+            }
+
+        });
+    }
 }

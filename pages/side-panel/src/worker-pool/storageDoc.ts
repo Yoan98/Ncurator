@@ -4,7 +4,6 @@ import { embedding } from '@src/utils/Embedding';
 import { LSHIndex } from '@src/utils/VectorIndex';
 import { fullTextIndex } from '@src/utils/FullTextIndex';
 import * as constant from '@src/utils/constant';
-import type { DB } from '@src/types/db'
 import type * as langchain from "@langchain/core/documents";
 import { IndexDBStore } from '@src/utils/IndexDBStore';
 import workerpool from 'workerpool';
@@ -188,8 +187,31 @@ const storageBigChunkToFullTextIndex = async (textChunkList: DB.TEXT_CHUNK[]) =>
 }
 
 // 存储文档
-const storageDocument = async (bigChunks: langchain.Document[], miniChunks: langchain.Document[], resource?: File) => {
+const storageDocument = async ({ bigChunks, miniChunks, resource, connectionId, documentName }: {
+    bigChunks: langchain.Document[],
+    miniChunks: langchain.Document[],
+    resource?: File,
+    connectionId: number,
+    documentName: string
+}) => {
     let [textChunkList, pureTextList, perWorkerHandleTextSize] = transToTextList(bigChunks.concat(miniChunks))
+
+    // 存入document表数据
+    const store = new IndexDBStore();
+    await store.connect(constant.DEFAULT_INDEXDB_NAME);
+    const document: DB.DOCUMENT = {
+        name: documentName,
+        text_chunk_id_range: {
+            from: 0,
+            to: 0
+        },
+        lsh_index_id: 0,
+        full_text_index_id: 0,
+        connection_id: connectionId,
+        resource,
+    }
+
+
 
     // 将数据存入indexDB的text chunk表
     textChunkList = await storageDataToTextChunk(textChunkList)

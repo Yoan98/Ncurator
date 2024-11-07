@@ -1,15 +1,6 @@
 import * as math from './math';
 import * as tf from '@tensorflow/tfjs';
 
-interface HashBucket {
-    id: string; // 哈希签名即桶ID
-    vectors: {
-        id: number;
-        vector: Float32Array;
-    }[];  // 向量集合
-}
-
-export type LSHTables = Map<string, HashBucket>[]
 
 interface LSHIndexConstructor {
     dimensions: number;
@@ -17,7 +8,7 @@ interface LSHIndexConstructor {
     numHashesPerTable?: number;
     similarityThreshold?: number;
     localProjections?: number[][];
-    tables?: LSHTables;
+    tables?: DB.LSHTables;
 }
 /**
  * LSH (Locality-Sensitive Hashing) 实现
@@ -39,7 +30,7 @@ export class LSHIndex {
     // 向量维度(一维向量的数量)
     private dimensions: number;
     // 所有的哈希表
-    public tables: LSHTables;
+    public tables: DB.LSHTables;
     // 随机投影向量, 用于计算哈希签名
     public projections: number[][];
     // 相似度阈值,目前jinaai/jina-embeddings-v2-base-zh测试的感觉,超过0.5的相似度就是相似的
@@ -108,7 +99,7 @@ export class LSHIndex {
      * @param vectors
      * @returns
      */
-    async addVectors(vectors: { id: number, vector: tf.Tensor1D }[]): Promise<LSHTables> {
+    async addVectors(vectors: { id: number, vector: tf.Tensor1D }[]): Promise<DB.LSHTables> {
         for (let i = 0; i < vectors.length; i++) {
             const { id, vector } = vectors[i];
             await this.addVector(id, vector);
@@ -117,14 +108,14 @@ export class LSHIndex {
         return this.tables;
     }
 
-    initialTables(tables?: LSHTables) {
+    initialTables(tables?: DB.LSHTables) {
         this.tables = tables ? tables : Array(this.numTables).fill(null).map(() => new Map());
     }
 
     // 查找相似向量
     findSimilar({ queryVector, tables = this.tables }: {
         queryVector: tf.Tensor1D,
-        tables?: LSHTables
+        tables?: DB.LSHTables
     }): { id: number, similarity: number }[] {
         const candidate: { id: number, similarity: number }[] = []
 
