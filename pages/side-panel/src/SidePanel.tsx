@@ -1,6 +1,7 @@
 import '@src/SidePanel.css';
-import { useStorage, withErrorBoundary, withSuspense, Connector, fullTextIndex } from '@extension/shared';
+import { useStorage, withErrorBoundary, withSuspense } from '@extension/shared';
 import { exampleThemeStorage } from '@extension/storage';
+import { FileConnector } from '@src/utils/Connector';
 import type { ComponentPropsWithoutRef } from 'react';
 import { useRef, useEffect, useState } from 'react';
 import workerpool from 'workerpool';
@@ -30,7 +31,7 @@ const SidePanel = () => {
         //     throw new Error('Too many files selected');
         // }
 
-        const fileConnector = new Connector.FileConnector();
+        const fileConnector = new FileConnector();
         for (const file of files) {
             const { bigChunks, miniChunks } = await fileConnector.getChunks(file);
 
@@ -58,22 +59,6 @@ const SidePanel = () => {
     }
 
     const hdTestFullText = async () => {
-        await fullTextIndex.loadLunr();
-
-        fullTextIndex.add([{
-            field: 'text'
-        }], [{
-            id: 1,
-            text: '中华人民共和国的长江大桥'
-        }, {
-            id: 2,
-            text: 'vue and react is great'
-        }])
-
-
-        console.log('lunrIndex', fullTextIndex.lunrIndex);
-        const res1 = fullTextIndex.search('中华人民共和国 react and vue what its is')
-        console.log('search result1', res1);
     }
 
 

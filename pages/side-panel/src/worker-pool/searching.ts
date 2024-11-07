@@ -1,6 +1,9 @@
 import workerpool from 'workerpool';
-import { constant, LSHIndex, tf, fullTextIndex } from '@extension/shared';
-import type { DB } from '@extension/shared'
+import * as tf from '@tensorflow/tfjs';
+import { LSHIndex } from '@src/utils/VectorIndex';
+import { fullTextIndex } from '@src/utils/FullTextIndex';
+import * as constant from '@src/utils/constant';
+import type { DB } from '@src/types/db'
 import lunr from 'lunr';
 import type { SearchedLshItem } from './searchDoc'
 

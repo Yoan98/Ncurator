@@ -1,7 +1,9 @@
 // 由于embedding过于占内存，只好将searchDoc抽出来
-import { embedding, constant, IndexDBStore } from '@extension/shared';
+import { embedding } from '@src/utils/Embedding';
+import * as constant from '@src/utils/constant';
+import { IndexDBStore } from '@src/utils/IndexDBStore';
 import workerpool from 'workerpool';
-import type { DB } from '@extension/shared'
+import type { DB } from '@src/types/db'
 // @ts-ignore
 import WorkerURL from './searching?url&worker'
 

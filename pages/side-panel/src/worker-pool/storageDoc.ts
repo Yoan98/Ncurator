@@ -1,6 +1,12 @@
 // 由于embedding过于占内存，只好将storageDoc抽出来
-import { embedding, constant, LSHIndex, IndexDBStore, tf, fullTextIndex } from '@extension/shared';
-import type { DB, langchainDocuments } from '@extension/shared'
+import * as tf from '@tensorflow/tfjs';
+import { embedding } from '@src/utils/Embedding';
+import { LSHIndex } from '@src/utils/VectorIndex';
+import { fullTextIndex } from '@src/utils/FullTextIndex';
+import * as constant from '@src/utils/constant';
+import type { DB } from '@src/types/db'
+import type * as langchain from "@langchain/core/documents";
+import { IndexDBStore } from '@src/utils/IndexDBStore';
 import workerpool from 'workerpool';
 // @ts-ignore
 import WorkerURL from './embedding?url&worker'
@@ -16,7 +22,7 @@ interface EmbeddingOutput {
 }
 
 // 提取要保存到数据库的chunk和要embedding的纯文本
-const transToTextList = (chunks: langchainDocuments.Document[]): [DB.TEXT_CHUNK[], string[][], number] => {
+const transToTextList = (chunks: langchain.Document[]): [DB.TEXT_CHUNK[], string[][], number] => {
 
     let perWorkerHandleTextSize = Math.floor(chunks.length / constant.MAX_EMBEDDING_WORKER_NUM)
     console.log('perWorkerHandleTextSize', perWorkerHandleTextSize);
@@ -182,7 +188,7 @@ const storageBigChunkToFullTextIndex = async (textChunkList: DB.TEXT_CHUNK[]) =>
 }
 
 // 存储文档
-const storageDocument = async (bigChunks: langchainDocuments.Document[], miniChunks: langchainDocuments.Document[], resource?: File) => {
+const storageDocument = async (bigChunks: langchain.Document[], miniChunks: langchain.Document[], resource?: File) => {
     let [textChunkList, pureTextList, perWorkerHandleTextSize] = transToTextList(bigChunks.concat(miniChunks))
 
     // 将数据存入indexDB的text chunk表

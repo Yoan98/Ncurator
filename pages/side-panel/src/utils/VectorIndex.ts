@@ -1,7 +1,5 @@
 import * as math from './math';
-import * as constant from './constant';
 import * as tf from '@tensorflow/tfjs';
-
 
 interface HashBucket {
     id: string; // 哈希签名即桶ID

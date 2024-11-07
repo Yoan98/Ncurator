@@ -1,5 +1,5 @@
 import workerpool from 'workerpool';
-import { embedding } from '@extension/shared';
+import { embedding } from '@src/utils/Embedding';
 
 // 这个文件的线程池只用于embedding相关的计算
 
