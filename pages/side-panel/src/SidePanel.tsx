@@ -6,6 +6,8 @@ import type { ComponentPropsWithoutRef } from 'react';
 import { useRef, useEffect, useState } from 'react';
 import workerpool from 'workerpool';
 import type { Pool } from 'workerpool';
+import { IndexDBStore } from '@src/utils/IndexDBStore';
+import * as constant from '@src/utils/constant';
 //@ts-ignore
 import storageWorkerURL from './worker-pool/storageDoc?url&worker'
 //@ts-ignore
@@ -32,12 +34,22 @@ const SidePanel = () => {
         // }
 
         const fileConnector = new FileConnector();
+
+        // 获取file connection数据
+        const store = new IndexDBStore();
+        await store.connect(constant.DEFAULT_INDEXDB_NAME);
+        const connections = await store.getAll({
+            storeName: constant.CONNECTION_STORE_NAME,
+        }) as DB.CONNECTION[];
+        const fileConnection = connections.find(item => item.connector === constant.Connector.File);
+
+
         for (const file of files) {
             const { bigChunks, miniChunks } = await fileConnector.getChunks(file);
 
             console.log('start storageDocument');
             console.time('storageDocument');
-            await storagePoolRef.current?.exec('storageDocument', [bigChunks, miniChunks, file]);
+            await storagePoolRef.current?.exec('storageDocument', [{ bigChunks, miniChunks, file, documentName: file.name, connection: fileConnection }]);
             console.timeEnd('storageDocument');
             console.log('end storageDocument');
         }
@@ -45,11 +57,17 @@ const SidePanel = () => {
     };
 
     const hdQuestionSubmit = async () => {
-        console.log('start searchDocument');
-        console.time('searchDocument');
-        const res = await searchPoolRef.current?.exec('searchDocument', [question])
-        console.timeEnd('searchDocument');
-        console.log('end searchDocument');
+        console.log('start search');
+        console.time('search');
+        const store = new IndexDBStore();
+        await store.connect(constant.DEFAULT_INDEXDB_NAME);
+        const connections = await store.getAll({
+            storeName: constant.CONNECTION_STORE_NAME,
+        }) as DB.CONNECTION[];
+
+        const res = await searchPoolRef.current?.exec('search', [question, connections])
+        console.timeEnd('search');
+        console.log('end search');
         console.log('search result', res);
     }
 
@@ -59,6 +77,35 @@ const SidePanel = () => {
     }
 
     const hdTestFullText = async () => {
+        const store = new IndexDBStore();
+        await store.connect(constant.DEFAULT_INDEXDB_NAME);
+
+        const transaction = store.startTransaction([constant.DOCUMENT_STORE_NAME, constant.CONNECTION_STORE_NAME], 'readwrite');
+
+
+        try {
+            await store.add({
+                storeName: constant.DOCUMENT_STORE_NAME,
+                data: {
+                    test: 11
+                },
+                transaction
+            })
+
+            console.log('add success');
+
+            await store.addBatch({
+                storeName: constant.CONNECTION_STORE_NAME,
+                data: [{ a: 1, b: 2 }, { a: 1, b: 2 }, { a: 1, b: 2 }],
+                transaction
+            })
+
+            console.log('add success');
+        } catch (error) {
+            console.log('error', error);
+        }
+
+
     }
 
 

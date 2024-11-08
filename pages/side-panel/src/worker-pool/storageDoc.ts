@@ -6,6 +6,7 @@ import { fullTextIndex } from '@src/utils/FullTextIndex';
 import * as constant from '@src/utils/constant';
 import type * as langchain from "@langchain/core/documents";
 import { IndexDBStore } from '@src/utils/IndexDBStore';
+import { getIndexStoreName } from '@src/utils/tool';
 import workerpool from 'workerpool';
 // @ts-ignore
 import WorkerURL from './embedding?url&worker'
@@ -21,10 +22,9 @@ interface EmbeddingOutput {
 }
 
 // 提取要保存到数据库的chunk和要embedding的纯文本
-const transToTextList = (chunks: langchain.Document[]): [DB.TEXT_CHUNK[], string[][], number] => {
+const transToTextList = (chunks: langchain.Document[], documentId: number): [DB.TEXT_CHUNK[], string[][], number] => {
 
     let perWorkerHandleTextSize = Math.floor(chunks.length / constant.MAX_EMBEDDING_WORKER_NUM)
-    console.log('perWorkerHandleTextSize', perWorkerHandleTextSize);
 
     const pureTextList: string[][] = []
     const textChunkList: DB.TEXT_CHUNK[] = []
@@ -42,7 +42,7 @@ const transToTextList = (chunks: langchain.Document[]): [DB.TEXT_CHUNK[], string
 
         // 保存textChunkList
         const chunk = chunks[i]
-        textChunkList.push({
+        const textChunk: DB.TEXT_CHUNK = {
             text: chunk.pageContent,
             metadata: {
                 loc: {
@@ -52,8 +52,10 @@ const transToTextList = (chunks: langchain.Document[]): [DB.TEXT_CHUNK[], string
                     },
                     pageNumber: chunk.metadata.loc.pageNumber
                 }
-            }
-        })
+            },
+            document_id: documentId
+        }
+        textChunkList.push(textChunk)
     }
     if (temp.length) {
         pureTextList.push(temp)
@@ -61,44 +63,16 @@ const transToTextList = (chunks: langchain.Document[]): [DB.TEXT_CHUNK[], string
 
     return [textChunkList, pureTextList, perWorkerHandleTextSize]
 }
-// 将数据存入connection表
-const storageDataToConnection = async ({ textChunkList, lshIndexId, resource, fullTextIndexId }: {
-    textChunkList: DB.TEXT_CHUNK[],
-    lshIndexId: number,
-    resource?: File,
-    fullTextIndexId: number
-}) => {
-    const store = new IndexDBStore();
-    await store.connect(constant.DEFAULT_INDEXDB_NAME);
-
-    const connection: DB.CONNECTION = {
-        connector_type: 'file',
-        text_chunk_ids: textChunkList.map(item => item.id!),
-        lsh_index_ids: [lshIndexId],
-        resource,
-        full_text_index_ids: [fullTextIndexId]
-    }
-    await store.add({
-        storeName: constant.CONNECTION_STORE_NAME,
-        data: connection
-    });
-
-}
-// 将数据存入indexDB的text chunk表
-const storageDataToTextChunk = async (textChunkList: DB.TEXT_CHUNK[]): Promise<DB.TEXT_CHUNK[]> => {
-    const store = new IndexDBStore();
-    await store.connect(constant.DEFAULT_INDEXDB_NAME);
-
-    // 会自动添加id到textChunk里
-    textChunkList = await store.addBatch<DB.TEXT_CHUNK>({
-        storeName: constant.TEXT_CHUNK_STORE_NAME,
-        data: textChunkList
-    });
-
-    return textChunkList;
-}
 // 将数据存入indexDB的LSH索引表
-const storageTextChunkToLSH = async (textChunkList: DB.TEXT_CHUNK[], pureTextList: string[][], perWorkerHandleTextSize: number) => {
+const storageTextChunkToLSH = async ({ textChunkList, pureTextList, perWorkerHandleTextSize, store,
+    connection
+}: {
+    textChunkList: DB.TEXT_CHUNK[],
+    pureTextList: string[][],
+    perWorkerHandleTextSize: number,
+    store: IndexDBStore,
+    connection: DB.CONNECTION
+}) => {
     // 多线程向量化句子
     console.time('embedding encode');
     console.log('pureTextList', pureTextList);
@@ -129,11 +103,9 @@ const storageTextChunkToLSH = async (textChunkList: DB.TEXT_CHUNK[], pureTextLis
 
     // * 构建索引
     // 获取库中是否已有LSH随机向量
-    const store = new IndexDBStore();
-    await store.connect(constant.DEFAULT_INDEXDB_NAME);
     const localProjections: DB.LSH_PROJECTION | undefined = await store.get({
         storeName: constant.LSH_PROJECTION_DB_STORE_NAME,
-        key: constant.LSH_PROJECTION_KEY_VALUE
+        key: constant.LSH_PROJECTION_KEY_VALUE,
     })
     // 初始化LSH索引
     const lshIndex = new LSHIndex({ dimensions: constant.EMBEDDING_HIDDEN_SIZE, localProjections: localProjections?.data, });
@@ -143,25 +115,27 @@ const storageTextChunkToLSH = async (textChunkList: DB.TEXT_CHUNK[], pureTextLis
             storeName: constant.LSH_PROJECTION_DB_STORE_NAME,
             data: {
                 [constant.LSH_PROJECTION_DATA_NAME]: lshIndex.projections
-            }
+            },
         });
     }
 
     // 将LSH索引存储到indexDB
     const LSHTables = await lshIndex.addVectors(vectors);
     const lshIndexId = await store.add({
-        storeName: constant.LSH_INDEX_STORE_NAME,
+        storeName: getIndexStoreName(connection.connector, connection.id!, constant.LSH_INDEX_STORE_NAME),
         data: {
             lsh_table: LSHTables
-        }
+        },
     });
 
     return lshIndexId as number
 }
 // 将大chunk数据构建全文搜索索引，并存储到indexDB
-const storageBigChunkToFullTextIndex = async (textChunkList: DB.TEXT_CHUNK[]) => {
-    const store = new IndexDBStore();
-    await store.connect(constant.DEFAULT_INDEXDB_NAME);
+const storageBigChunkToFullTextIndex = async ({ textChunkList, store, connection }: {
+    textChunkList: DB.TEXT_CHUNK[],
+    store: IndexDBStore,
+    connection: DB.CONNECTION
+}) => {
 
     await fullTextIndex.loadLunr()
     const fields = [{
@@ -177,29 +151,37 @@ const storageBigChunkToFullTextIndex = async (textChunkList: DB.TEXT_CHUNK[]) =>
     const lunrIndex = fullTextIndex.add(fields, data)
 
     const fullTextIndexId = await store.add({
-        storeName: constant.FULL_TEXT_INDEX_STORE_NAME,
+        storeName: getIndexStoreName(connection.connector, connection.id!, constant.FULL_TEXT_INDEX_STORE_NAME),
         data: {
             index: lunrIndex.toJSON()
-        }
+        },
     });
 
     return fullTextIndexId as number
 }
 
 // 存储文档
-const storageDocument = async ({ bigChunks, miniChunks, resource, connectionId, documentName }: {
+const storageDocument = async ({ bigChunks, miniChunks, resource, documentName, connection }: {
     bigChunks: langchain.Document[],
     miniChunks: langchain.Document[],
     resource?: File,
-    connectionId: number,
-    documentName: string
+    documentName: string,
+    connection: DB.CONNECTION
 }) => {
-    let [textChunkList, pureTextList, perWorkerHandleTextSize] = transToTextList(bigChunks.concat(miniChunks))
-
-    // 存入document表数据
+    if (!bigChunks.length && !miniChunks.length) {
+        throw new Error('no document content')
+    }
+    if (!documentName) {
+        throw new Error('no document name')
+    }
+    if (!connection) {
+        throw new Error('no connection')
+    }
     const store = new IndexDBStore();
     await store.connect(constant.DEFAULT_INDEXDB_NAME);
-    const document: DB.DOCUMENT = {
+
+    // 存入document表数据
+    let document: DB.DOCUMENT = {
         name: documentName,
         text_chunk_id_range: {
             from: 0,
@@ -207,26 +189,56 @@ const storageDocument = async ({ bigChunks, miniChunks, resource, connectionId, 
         },
         lsh_index_id: 0,
         full_text_index_id: 0,
-        connection_id: connectionId,
         resource,
     }
+    let documentId = await store.add({
+        storeName: constant.DOCUMENT_STORE_NAME,
+        data: document,
+    });
 
-
+    // 提取要保存到数据库的chunk和要embedding的纯文本
+    let [textChunkList, pureTextList, perWorkerHandleTextSize] = transToTextList(bigChunks.concat(miniChunks), documentId)
 
     // 将数据存入indexDB的text chunk表
-    textChunkList = await storageDataToTextChunk(textChunkList)
+    // 存入标后,会自动添加id到textChunkList里
+    textChunkList = await store.addBatch<DB.TEXT_CHUNK>({
+        storeName: getIndexStoreName(connection.connector, connection.id!, constant.TEXT_CHUNK_STORE_NAME),
+        data: textChunkList,
+    });
 
     // 将文本向量化后存入indexDB的LSH索引表
-    const lshIndexId = await storageTextChunkToLSH(textChunkList, pureTextList, perWorkerHandleTextSize);
+    const lshIndexId = await storageTextChunkToLSH({ textChunkList, pureTextList, perWorkerHandleTextSize, store, connection });
 
     // 将大chunk数据构建全文搜索索引，并存储到indexDB
     const bigTextChunkList = textChunkList.slice(0, bigChunks.length)
-    const fullTextIndexId = await storageBigChunkToFullTextIndex(bigTextChunkList)
+    const fullTextIndexId = await storageBigChunkToFullTextIndex({ textChunkList: bigTextChunkList, store, connection })
 
-    // 将数据存入connection表
-    await storageDataToConnection({
-        textChunkList, lshIndexId, resource, fullTextIndexId
-    })
+    // 修改document表相应的索引与文本位置字段
+    document = {
+        ...document,
+        id: documentId,
+        text_chunk_id_range: {
+            from: textChunkList[0].id!,
+            to: textChunkList[textChunkList.length - 1].id!
+        },
+        lsh_index_id: lshIndexId,
+        full_text_index_id: fullTextIndexId
+    }
+    await store.put({
+        storeName: constant.DOCUMENT_STORE_NAME,
+        data: document,
+    });
+
+    // 将document数据添加到connection表
+    await store.put({
+        storeName: constant.CONNECTION_STORE_NAME,
+        data: {
+            ...connection,
+            id: connection.id,
+            documents: connection.documents.concat({ id: documentId, name: documentName })
+        },
+    });
+
 }
 
 // 测试相似度

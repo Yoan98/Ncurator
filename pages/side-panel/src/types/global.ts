@@ -1,11 +1,6 @@
 
 type ValueOf<T> = T[keyof T]
-
-enum Connector {
-    File,
-    Notion
-}
-type ConnectorUnion = ValueOf<Connector>
+type ConnectorUnion = 0 | 1
 
 namespace DB {
     // chunk表
@@ -45,7 +40,6 @@ namespace DB {
     export interface DOCUMENT {
         id?: number;
         name: string;
-        connection_id: number
         text_chunk_id_range: {
             from: number;
             to: number;
@@ -56,9 +50,10 @@ namespace DB {
     }
     // connection表 记录相关配置,以及document的关联等
     export interface CONNECTION {
-        id: number;
+        id?: number;
         name: string;
         documents: { id: number, name: string }[];
+        connector: ConnectorUnion; // 参考constant.ts的Connector
         // 相关配置等,如gmail,notion等
     }
     // full text索引表

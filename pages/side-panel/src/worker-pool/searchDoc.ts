@@ -5,6 +5,7 @@ import { IndexDBStore } from '@src/utils/IndexDBStore';
 import workerpool from 'workerpool';
 // @ts-ignore
 import WorkerURL from './searching?url&worker'
+import { getIndexStoreName } from '@src/utils/tool';
 
 const searchingWorkerPool = workerpool.pool(WorkerURL);
 
@@ -12,9 +13,9 @@ export interface SearchedLshItem {
     id: number,
     similarity: number
 }
-//* doucment的定义为一个文件或notion的一个文档
 // 搜索文档
-const searchDocument = async (question: string) => {
+// todo 目前先只支持，connection范围搜，后面可细化到选择document搜
+const search = async (question: string, connections: DB.CONNECTION[]) => {
     // 向量化句子
     await embedding.load()
     const embeddingOutput = await embedding.encode([question]);
@@ -24,68 +25,134 @@ const searchDocument = async (question: string) => {
     const store = new IndexDBStore();
     await store.connect(constant.DEFAULT_INDEXDB_NAME);
 
-    // 搜索向量索引表
-    const searchLshIndex = () => {
-        return new Promise(async (resolve, reject) => {
-            const [lshIndexStoreList, localProjections] = await Promise.all([
-                store.getAll({
-                    storeName: constant.LSH_INDEX_STORE_NAME,
-                }),
-                store.get({
-                    storeName: constant.LSH_PROJECTION_DB_STORE_NAME,
-                    key: constant.LSH_PROJECTION_KEY_VALUE
-                })
-            ])
-            if (!lshIndexStoreList.length) {
-                // LSH索引表为空
-                resolve([])
-                return
+    // 随机向量数据
+    const localProjections = await store.get({
+        storeName: constant.LSH_PROJECTION_DB_STORE_NAME,
+        key: constant.LSH_PROJECTION_KEY_VALUE
+    })
+
+    // 并行搜索
+    const searchParallel = async ({ storeName, workerMethod, question, connections, extraWorkerParam = [], maxGetStoreItemSize = 500 }: {
+        storeName: string,
+        workerMethod: string,
+        question: string | Float32Array,
+        connections: DB.CONNECTION[],
+        extraWorkerParam?: any[],
+        // 每次次从表里取出的最大数据条数（避免数据过多，撑爆内存）
+        maxGetStoreItemSize?: number
+    }) => {
+        let curConnectionIndex = 0
+
+        // 搜索结果汇总
+        const searchedRes: any[] = []
+        // 循环根据connection搜索(一个connection一个store)
+        while (curConnectionIndex < connections.length) {
+            // 读取索引表相关数据
+            const connection = connections[curConnectionIndex]
+            // todo 待选择document搜索后，根据document的from和to来限制搜索范围
+
+            // 按照id范围搜索，避免取数据超出最大限制，待这一批搜索完结果，再取下一批数据搜索
+            let hasRestData = true
+            const keyRange = [0, maxGetStoreItemSize]
+            while (hasRestData) {
+                const indexStoreName = getIndexStoreName(connection.connector, connection.id!, storeName)
+                const storeList: (DB.LSH_INDEX | DB.FULL_TEXT_INDEX)[] = await store.getAll({
+                    storeName: indexStoreName,
+                    key: IDBKeyRange.bound(keyRange[0], keyRange[1], false, true)
+                });
+
+                if (!storeList.length) {
+                    hasRestData = false
+                    break
+                }
+
+                // 按cpu核数，分割出worker执行任务
+                const searchTasks: workerpool.Promise<any, Error>[] = []
+                // 一个worker执行的最大数量
+                // 除2的原因，是因为会同时搜索向量索引表和全文索引表
+                const cpuCore = navigator.hardwareConcurrency / 2
+                const workerExecuteSize = Math.max(1, Math.floor(storeList.length / (cpuCore - 1)))
+                for (let i = 0; i < storeList.length; i += workerExecuteSize) {
+                    const workerHandleData = storeList.slice(i, i + workerExecuteSize)
+                    searchTasks.push(searchingWorkerPool.exec(workerMethod, [question, workerHandleData, ...extraWorkerParam]))
+                }
+
+                // 等待所有worker执行完,并汇总结果
+                const multipleSearchRes: any[][] = await Promise.all(searchTasks)
+                const curSearchRes = multipleSearchRes.flat()
+                searchedRes.push(...(curSearchRes.map((item) => {
+                    item.connection = connection
+                    return item
+                })))
+
+                // 清空
+                storeList.length = 0
+
+                // 更新keyRange
+                keyRange[0] = keyRange[1]
+                keyRange[1] += maxGetStoreItemSize
             }
 
-            // 多线程搜索LSH索引表
-            //todo 后期可将数据拆分,然后多线程执行
-            const searchRes: SearchedLshItem[] = await searchingWorkerPool.exec('searchLshIndex', [queryVectorData, lshIndexStoreList, localProjections.data])
-            resolve(searchRes)
+
+            curConnectionIndex++
+        }
+
+        return searchedRes
+    }
+
+    // 搜索向量索引表
+    const searchLshIndex = async () => {
+        const lshRes: SearchedLshItem[] = await searchParallel({
+            storeName: constant.LSH_INDEX_STORE_NAME,
+            workerMethod: 'searchLshIndex',
+            question: queryVectorData,
+            connections,
+            extraWorkerParam: [localProjections.data]
         })
+
+        return lshRes
+
     }
 
     // 搜索全本索引表
-    const searchFullTextIndex = () => {
-        return new Promise(async (resolve, reject) => {
-            // 读取全文索引表相关数据
-            const fullTextIndexStoreList: DB.FULL_TEXT_INDEX[] = await store.getAll({
-                storeName: constant.FULL_TEXT_INDEX_STORE_NAME,
-            });
-
-            const fullTextIndexRes: lunr.Index.Result[] = await searchingWorkerPool.exec('searchFullTextIndex', [question, fullTextIndexStoreList])
-
-            resolve(fullTextIndexRes)
+    const searchFullTextIndex = async () => {
+        const fullTextIndexRes: lunr.Index.Result[] = await searchParallel({
+            storeName: constant.FULL_TEXT_INDEX_STORE_NAME,
+            workerMethod: 'searchFullTextIndex',
+            question,
+            connections,
         })
+
+        return fullTextIndexRes
     }
 
     // 同时搜索向量索引表和全文索引表
     const [lshRes, fullIndexRes] = await Promise.all([
         searchLshIndex(),
         searchFullTextIndex(),
-    ]) as [SearchedLshItem[], lunr.Index.Result[]]
+    ]) as [(SearchedLshItem & { connection: DB.CONNECTION })[], (lunr.Index.Result & { connection: DB.CONNECTION })[]]
+
 
     // 根据权重计算最终排序结果
-    let finalRes: { id: number, score: number }[] = []
+    let finalRes: { id: number, score: number, connection: DB.CONNECTION }[] = []
     const alreadyFullIndexIds: number[] = []
     const vectorWeight = 0.8
     const fullTextWeight = 0.2
     lshRes.forEach((item) => {
         const sameIndex = fullIndexRes.findIndex((fullItem) => Number(fullItem.ref) === item.id)
         if (sameIndex === -1) {
+            // 只有向量索引
             finalRes.push({
                 id: item.id,
-                score: item.similarity * vectorWeight
+                score: item.similarity * vectorWeight,
+                connection: item.connection
             })
         } else {
-            // 存在全文索引表中
+            // 向量索引与全文索引同一个text_chunk id
             finalRes.push({
                 id: item.id,
-                score: (item.similarity * vectorWeight) + (fullTextWeight * fullIndexRes[sameIndex].score)
+                score: (item.similarity * vectorWeight) + (fullTextWeight * fullIndexRes[sameIndex].score),
+                connection: item.connection
             })
             alreadyFullIndexIds.push(item.id)
         }
@@ -96,17 +163,32 @@ const searchDocument = async (question: string) => {
         }
         finalRes.push({
             id: Number(item.ref),
-            score: item.score * fullTextWeight
+            score: item.score * fullTextWeight,
+            connection: item.connection
         })
     })
     finalRes = finalRes.sort((a, b) => b.score - a.score)
 
+    // 按照storeName分组
+    const groupByStoreName = finalRes.reduce((acc, cur) => {
+        const storeName = getIndexStoreName(cur.connection.connector, cur.connection.id!, constant.TEXT_CHUNK_STORE_NAME)
+        if (!acc[storeName]) {
+            acc[storeName] = []
+        }
+        acc[storeName].push(cur.id)
+        return acc
+    }, {} as Record<string, number[]>)
+
+
     // text_chunk表查询结果
-    const ids = finalRes.map((item) => item.id)
-    const textChunkRes = await store.getBatch({
-        storeName: constant.TEXT_CHUNK_STORE_NAME,
-        keys: ids
-    })
+    const textChunkRes: DB.TEXT_CHUNK[] = []
+    for (const storeName in groupByStoreName) {
+        const res = await store.getBatch({
+            storeName,
+            keys: groupByStoreName[storeName]
+        })
+        textChunkRes.push(...res)
+    }
 
     return {
         lshRes,
@@ -118,5 +200,5 @@ const searchDocument = async (question: string) => {
 
 
 workerpool.worker({
-    searchDocument,
+    search,
 });
