@@ -24,7 +24,7 @@ interface EmbeddingOutput {
 // 提取要保存到数据库的chunk和要embedding的纯文本
 const transToTextList = (chunks: langchain.Document[], documentId: number): [DB.TEXT_CHUNK[], string[][], number] => {
 
-    let perWorkerHandleTextSize = Math.floor(chunks.length / constant.MAX_EMBEDDING_WORKER_NUM)
+    let perWorkerHandleTextSize = Math.max(1, Math.floor(chunks.length / constant.MAX_EMBEDDING_WORKER_NUM))
 
     const pureTextList: string[][] = []
     const textChunkList: DB.TEXT_CHUNK[] = []

@@ -44,15 +44,22 @@ const SidePanel = () => {
         const fileConnection = connections.find(item => item.connector === constant.Connector.File);
 
 
-        for (const file of files) {
-            const { bigChunks, miniChunks } = await fileConnector.getChunks(file);
+        let curFile
+        try {
+            for (const file of files) {
+                curFile = file;
+                const { bigChunks, miniChunks } = await fileConnector.getChunks(file);
 
-            console.log('start storageDocument');
-            console.time('storageDocument');
-            await storagePoolRef.current?.exec('storageDocument', [{ bigChunks, miniChunks, file, documentName: file.name, connection: fileConnection }]);
-            console.timeEnd('storageDocument');
-            console.log('end storageDocument');
+                console.log('start storageDocument');
+                console.time('storageDocument');
+                await storagePoolRef.current?.exec('storageDocument', [{ bigChunks, miniChunks, file, documentName: file.name, connection: fileConnection }]);
+                console.timeEnd('storageDocument');
+                console.log('end storageDocument');
+            }
+        } catch (error) {
+            console.log('error', error, curFile);
         }
+        storagePoolRef.current?.terminate();
 
     };
 

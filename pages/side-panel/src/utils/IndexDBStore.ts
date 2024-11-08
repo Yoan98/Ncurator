@@ -26,8 +26,6 @@ export class IndexDBStore {
             };
 
             request.onsuccess = () => {
-                console.log('Database connected');
-
                 this.db = request.result;
                 resolve(this.db);
             };
