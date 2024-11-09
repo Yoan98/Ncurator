@@ -30,6 +30,7 @@ const SidePanel = () => {
         }
         console.log('file change');
 
+
         // if (files.length > 5) {
         //     throw new Error('Too many files selected');
         // }
@@ -43,7 +44,6 @@ const SidePanel = () => {
             storeName: constant.CONNECTION_STORE_NAME,
         }) as DB.CONNECTION[];
         const fileConnection = connections.find(item => item.connector === constant.Connector.File);
-
 
         let curFile
         try {
@@ -126,7 +126,6 @@ const SidePanel = () => {
         storagePoolRef.current = workerpool.pool(storageWorkerURL, {
             maxWorkers: 1,
         });
-        storagePoolRef.current?.exec('initialEmbeddingWorkerPool', [workerNumber]);
 
         searchPoolRef.current = workerpool.pool(searchWorkerURL, {
             maxWorkers: 1,

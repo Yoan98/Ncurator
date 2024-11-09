@@ -159,6 +159,13 @@ const storageBigChunkToFullTextIndex = async ({ textChunkList, store, connection
     return fullTextIndexId as number
 }
 
+const setWorkerPool = (workerNumber = 1) => {
+    embeddingWorkerNumber = workerNumber
+    embeddingWorkerPool = workerpool.pool(WorkerURL, {
+        maxWorkers: workerNumber,
+    });
+}
+
 // 存储文档
 // 后期如果碰到大文档,导致内存占用过高,可以考虑将文档分块存入indexDB,对于索引则要保证多个块依然存在同一条索引中
 const storageDocument = async ({ bigChunks, miniChunks, resource, documentName, connection }: {
@@ -168,6 +175,9 @@ const storageDocument = async ({ bigChunks, miniChunks, resource, documentName, 
     documentName: string,
     connection: DB.CONNECTION
 }) => {
+    if (!embeddingWorkerPool) {
+        setWorkerPool(1)
+    }
     if (!bigChunks.length && !miniChunks.length) {
         throw new Error('no document content')
     }
@@ -246,10 +256,7 @@ const initialEmbeddingWorkerPool = async (workerNumber) => {
         embeddingWorkerPool.terminate()
     }
 
-    embeddingWorkerNumber = workerNumber
-    embeddingWorkerPool = workerpool.pool(WorkerURL, {
-        maxWorkers: workerNumber || 1,
-    });
+    setWorkerPool(workerNumber)
 }
 
 
