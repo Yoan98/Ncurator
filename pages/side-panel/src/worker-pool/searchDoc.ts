@@ -7,7 +7,11 @@ import workerpool from 'workerpool';
 import WorkerURL from './searching?url&worker'
 import { getIndexStoreName } from '@src/utils/tool';
 
-const searchingWorkerPool = workerpool.pool(WorkerURL);
+// 最多开一半的cpu核数,避免内存过大
+const maxWorkers = Math.max(1, Math.floor(navigator.hardwareConcurrency / 2))
+const searchingWorkerPool = workerpool.pool(WorkerURL, {
+    maxWorkers,
+});
 
 export interface SearchedLshItem {
     id: number,
@@ -32,7 +36,7 @@ const search = async (question: string, connections: DB.CONNECTION[]) => {
     })
 
     // 并行搜索
-    const searchParallel = async ({ storeName, workerMethod, question, connections, extraWorkerParam = [], maxGetStoreItemSize = 500 }: {
+    const searchParallel = async ({ storeName, workerMethod, question, connections, extraWorkerParam = [], maxGetStoreItemSize = 100 }: {
         storeName: string,
         workerMethod: string,
         question: string | Float32Array,
@@ -70,8 +74,9 @@ const search = async (question: string, connections: DB.CONNECTION[]) => {
                 const searchTasks: workerpool.Promise<any, Error>[] = []
                 // 一个worker执行的最大数量
                 // 除2的原因，是因为会同时搜索向量索引表和全文索引表
-                const cpuCore = navigator.hardwareConcurrency / 2
-                const workerExecuteSize = Math.max(1, Math.floor(storeList.length / (cpuCore - 1)))
+                const cpuCore = Math.max(1, Math.floor(maxWorkers / 2))
+                const workerExecuteSize = Math.max(1, Math.floor(storeList.length / cpuCore))
+
                 for (let i = 0; i < storeList.length; i += workerExecuteSize) {
                     const workerHandleData = storeList.slice(i, i + workerExecuteSize)
                     searchTasks.push(searchingWorkerPool.exec(workerMethod, [question, workerHandleData, ...extraWorkerParam]))
@@ -136,8 +141,8 @@ const search = async (question: string, connections: DB.CONNECTION[]) => {
     // 根据权重计算最终排序结果
     let finalRes: { id: number, score: number, connection: DB.CONNECTION }[] = []
     const alreadyFullIndexIds: number[] = []
-    const vectorWeight = 0.8
-    const fullTextWeight = 0.2
+    const vectorWeight = 0.9
+    const fullTextWeight = 0.1
     lshRes.forEach((item) => {
         const sameIndex = fullIndexRes.findIndex((fullItem) => Number(fullItem.ref) === item.id)
         if (sameIndex === -1) {

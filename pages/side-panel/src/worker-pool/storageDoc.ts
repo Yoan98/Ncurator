@@ -12,9 +12,8 @@ import workerpool from 'workerpool';
 import WorkerURL from './embedding?url&worker'
 
 
-const embeddingWorkerPool = workerpool.pool(WorkerURL, {
-    maxWorkers: constant.MAX_EMBEDDING_WORKER_NUM,
-});
+let embeddingWorkerPool;
+let embeddingWorkerNumber = 1
 
 interface EmbeddingOutput {
     embeddedSentences: Float32Array,
@@ -24,7 +23,7 @@ interface EmbeddingOutput {
 // 提取要保存到数据库的chunk和要embedding的纯文本
 const transToTextList = (chunks: langchain.Document[], documentId: number): [DB.TEXT_CHUNK[], string[][], number] => {
 
-    let perWorkerHandleTextSize = Math.max(1, Math.floor(chunks.length / constant.MAX_EMBEDDING_WORKER_NUM))
+    let perWorkerHandleTextSize = Math.max(1, Math.floor(chunks.length / embeddingWorkerNumber))
 
     const pureTextList: string[][] = []
     const textChunkList: DB.TEXT_CHUNK[] = []
@@ -161,6 +160,7 @@ const storageBigChunkToFullTextIndex = async ({ textChunkList, store, connection
 }
 
 // 存储文档
+// 后期如果碰到大文档,导致内存占用过高,可以考虑将文档分块存入indexDB,对于索引则要保证多个块依然存在同一条索引中
 const storageDocument = async ({ bigChunks, miniChunks, resource, documentName, connection }: {
     bigChunks: langchain.Document[],
     miniChunks: langchain.Document[],
@@ -241,6 +241,18 @@ const storageDocument = async ({ bigChunks, miniChunks, resource, documentName, 
 
 }
 
+const initialEmbeddingWorkerPool = async (workerNumber) => {
+    if (embeddingWorkerPool) {
+        embeddingWorkerPool.terminate()
+    }
+
+    embeddingWorkerNumber = workerNumber
+    embeddingWorkerPool = workerpool.pool(WorkerURL, {
+        maxWorkers: workerNumber || 1,
+    });
+}
+
+
 // 测试相似度
 const testSimilarity = async (text1, text2) => {
     await embedding.load()
@@ -250,5 +262,6 @@ const testSimilarity = async (text1, text2) => {
 
 workerpool.worker({
     storageDocument,
+    initialEmbeddingWorkerPool,
     testSimilarity
 });

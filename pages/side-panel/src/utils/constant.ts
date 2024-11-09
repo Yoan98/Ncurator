@@ -17,7 +17,7 @@ export const SPLITTER_MINI_CHUNK_SIZE = 150; // 分割小文本的字符数
 export const SPLITTER_MINI_CHUNK_OVERLAP = 30; // 分割小文本的重叠字符数
 export const SPLITTER_SEPARATORS = ["\n\n", "\n", "。", ";", ",", " ", ""]
 // 最大的embedding worker数量,后期做成动态的，让用户自己设置，默认为一，以加快storage的速度
-//! 注意，一个embedding的worker内存占用近1G
+//! 注意，一个embedding的worker内存占用近1G(少量数据情况下)
 export const MAX_EMBEDDING_WORKER_NUM = 4;
 
 export const enum Connector {

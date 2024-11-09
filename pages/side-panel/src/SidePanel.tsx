@@ -21,6 +21,7 @@ const SidePanel = () => {
     const [question, setQuestion] = useState<string>('');
     const [text1, setText1] = useState<string>('');
     const [text2, setText2] = useState<string>('');
+    const [workerNumber, setWorkerNumber] = useState<number>(1);
 
     const handleFileChange = async (event) => {
         const files = event.target.files;
@@ -115,16 +116,23 @@ const SidePanel = () => {
 
     }
 
+    const hdInitialEmbeddingWorkerPool = async () => {
+        storagePoolRef.current?.exec('initialEmbeddingWorkerPool', [workerNumber]);
+    }
+
 
 
     useEffect(() => {
         storagePoolRef.current = workerpool.pool(storageWorkerURL, {
             maxWorkers: 1,
         });
+        storagePoolRef.current?.exec('initialEmbeddingWorkerPool', [workerNumber]);
 
         searchPoolRef.current = workerpool.pool(searchWorkerURL, {
             maxWorkers: 1,
         });
+
+
 
     }, []);
 
@@ -158,6 +166,14 @@ const SidePanel = () => {
 
             <div>
                 <button onClick={hdTestFullText}>test full text</button>
+            </div>
+
+            <div className="flex items-center justify-center">
+                <input type="text" id="input" placeholder='worker number' onInput={(e) => {
+                    setWorkerNumber(Number(e.currentTarget.value));
+                }} />
+
+                <button id="submit" onClick={hdInitialEmbeddingWorkerPool}>Submit</button>
             </div>
 
 
