@@ -17,9 +17,13 @@ export interface SearchedLshItem {
     id: number,
     similarity: number
 }
+interface TempConnection {
+    connector: ConnectorUnion,
+    id: number
+}
 // 搜索文档
 // todo 目前先只支持，connection范围搜，后面可细化到选择document搜
-const search = async (question: string, connections: DB.CONNECTION[]) => {
+const search = async (question: string, connections: DB.CONNECTION[], k: number = 10) => {
     // 向量化句子
     await embedding.load()
     const embeddingOutput = await embedding.encode([question]);
@@ -86,7 +90,10 @@ const search = async (question: string, connections: DB.CONNECTION[]) => {
                 const multipleSearchRes: any[][] = await Promise.all(searchTasks)
                 const curSearchRes = multipleSearchRes.flat()
                 searchedRes.push(...(curSearchRes.map((item) => {
-                    item.connection = connection
+                    item.connection = {
+                        connector: connection.connector,
+                        id: connection.id
+                    }
                     return item
                 })))
 
@@ -132,17 +139,24 @@ const search = async (question: string, connections: DB.CONNECTION[]) => {
     }
 
     // 同时搜索向量索引表和全文索引表
-    const [lshRes, fullIndexRes] = await Promise.all([
+    let [lshRes, fullIndexRes] = await Promise.all([
         searchLshIndex(),
         searchFullTextIndex(),
-    ]) as [(SearchedLshItem & { connection: DB.CONNECTION })[], (lunr.Index.Result & { connection: DB.CONNECTION })[]]
+    ]) as [(SearchedLshItem & { connection: TempConnection })[], (lunr.Index.Result & { connection: TempConnection })[]]
 
 
+    // 将全文索引排序，然后使用max归一化
+    fullIndexRes = fullIndexRes.sort((a, b) => b.score - a.score)
+    const maxScore = fullIndexRes[0].score
+    fullIndexRes = fullIndexRes.map((item) => {
+        item.score = item.score / maxScore
+        return item
+    })
     // 根据权重计算最终排序结果
-    let finalRes: { id: number, score: number, connection: DB.CONNECTION }[] = []
+    let finalRes: { id: number, score: number, connection: TempConnection }[] = []
     const alreadyFullIndexIds: number[] = []
-    const vectorWeight = 0.9
-    const fullTextWeight = 0.1
+    const vectorWeight = 0.8
+    const fullTextWeight = 0.2
     lshRes.forEach((item) => {
         const sameIndex = fullIndexRes.findIndex((fullItem) => Number(fullItem.ref) === item.id)
         if (sameIndex === -1) {
@@ -186,7 +200,7 @@ const search = async (question: string, connections: DB.CONNECTION[]) => {
 
 
     // text_chunk表查询结果
-    const textChunkRes: DB.TEXT_CHUNK[] = []
+    let textChunkRes: DB.TEXT_CHUNK[] = []
     for (const storeName in groupByStoreName) {
         const res = await store.getBatch({
             storeName,
@@ -194,11 +208,34 @@ const search = async (question: string, connections: DB.CONNECTION[]) => {
         })
         textChunkRes.push(...res)
     }
+    textChunkRes = textChunkRes.slice(0, k)
 
-    return {
+    // 读取document表数据，并拼凑
+    const documentRes: DB.DOCUMENT[] = []
+    for (const item of textChunkRes) {
+        const document = await store.get({
+            storeName: constant.DOCUMENT_STORE_NAME,
+            key: item.document_id
+        })
+        documentRes.push(document)
+    }
+    textChunkRes = textChunkRes.map((item) => {
+        const document = documentRes.find((doc) => doc.id === item.document_id)
+        return {
+            ...item,
+            document
+        }
+    })
+
+
+    console.log('Res', {
         lshRes,
         fullIndexRes,
         finalRes,
+        textChunkRes,
+    })
+
+    return {
         textChunkRes
     }
 }

@@ -76,7 +76,6 @@ const SidePanel = () => {
         const res = await searchPoolRef.current?.exec('search', [question, connections])
         console.timeEnd('search');
         console.log('end search');
-        console.log('search result', res);
     }
 
     const hdTestSimilarity = async () => {
