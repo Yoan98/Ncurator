@@ -72,6 +72,10 @@ const storageTextChunkToLSH = async ({ textChunkList, pureTextList, perWorkerHan
     store: IndexDBStore,
     connection: DB.CONNECTION
 }) => {
+    if (!embeddingWorkerPool) {
+        setWorkerPool(1)
+    }
+
     // 多线程向量化句子
     console.time('embedding encode');
     console.log('pureTextList', pureTextList);
@@ -175,9 +179,6 @@ const storageDocument = async ({ bigChunks, miniChunks, resource, documentName, 
     documentName: string,
     connection: DB.CONNECTION
 }) => {
-    if (!embeddingWorkerPool) {
-        setWorkerPool(1)
-    }
     if (!bigChunks.length && !miniChunks.length) {
         throw new Error('no document content')
     }
