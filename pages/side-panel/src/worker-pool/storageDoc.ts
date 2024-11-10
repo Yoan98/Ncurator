@@ -13,8 +13,8 @@ import WorkerURL from './embedding?url&worker'
 
 
 let embeddingWorkerPool;
-let embeddingWorkerNumber = 1
-let maxEmbeddingBatchSize = 30
+let embeddingWorkerNumber = constant.DEFAULT_EMBEDDING_WORKER_NUM
+let maxEmbeddingBatchSize = constant.DEFAULT_MAX_EMBEDDING_BATCH_SIZE
 let isSupportWebGPU = false
 
 interface EmbeddingOutput {
@@ -256,7 +256,7 @@ const storageDocument = async ({ bigChunks, miniChunks, resource, documentName, 
 
 }
 
-const initialEmbeddingWorkerPool = async (workerNumber = 1, maxEmbeddingBatchSize = 50) => {
+const initialEmbeddingWorkerPool = async (workerNumber = constant.DEFAULT_EMBEDDING_WORKER_NUM, maxEmbeddingBatchSize = constant.DEFAULT_MAX_EMBEDDING_BATCH_SIZE) => {
     if (embeddingWorkerPool) {
         embeddingWorkerPool.terminate()
     }

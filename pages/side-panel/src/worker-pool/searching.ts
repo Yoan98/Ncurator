@@ -16,12 +16,10 @@ const searchLshIndex = async (queryVectorData: Float32Array, lshIndexStoreList: 
     for (const lshIndexData of lshIndexStoreList) {
         const lshIndex = new LSHIndex({ dimensions: constant.EMBEDDING_HIDDEN_SIZE, localProjections, tables: lshIndexData.lsh_table });
 
-        console.time('searching findSimilar per doc')
         // 查找相似句子
         const res = lshIndex.findSimilar({
             queryVector: queryVectorTensor,
         })
-        console.timeEnd('searching findSimilar per doc')
         searchedRes.push(...res)
     }
 

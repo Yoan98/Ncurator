@@ -24,3 +24,6 @@ export const enum Connector {
     File,
     Notion
 }
+
+export const DEFAULT_EMBEDDING_WORKER_NUM = 1; // 默认的最大embedding worker数量
+export const DEFAULT_MAX_EMBEDDING_BATCH_SIZE = 10; // 默认的embedding 一批最大的数据量
