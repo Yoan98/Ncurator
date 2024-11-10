@@ -60,7 +60,7 @@ const SidePanel = () => {
         } catch (error) {
             console.log('error', error, curFile);
         }
-        // storagePoolRef.current?.terminate();
+        storagePoolRef.current?.terminate();
 
     };
 
