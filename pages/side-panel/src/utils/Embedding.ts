@@ -1,6 +1,7 @@
 import { AutoModel, AutoTokenizer, env } from '@huggingface/transformers';
 import { cosineSimilarity } from './math';
 import * as tf from '@tensorflow/tfjs';
+import { checkWebGPU } from '@src/utils/tool';
 
 // @ts-ignore
 // 配置本地wasm文件路径
@@ -31,11 +32,16 @@ export class Embedding {
         if (this.model && this.tokenizer) {
             return;
         }
+
+        const isSupportWebGPU = await checkWebGPU();
+
         // 初始化模型和分词器
         [this.model, this.tokenizer] = await Promise.all([
             AutoModel.from_pretrained('jina-embeddings-v2-base-zh', {
                 dtype: 'fp16',
                 local_files_only: true,
+                device: isSupportWebGPU ? 'webgpu' : undefined
+
             }),
             AutoTokenizer.from_pretrained('jina-embeddings-v2-base-zh', {
                 local_files_only: true,
