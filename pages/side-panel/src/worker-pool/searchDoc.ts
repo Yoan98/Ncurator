@@ -114,6 +114,7 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
 
     // 搜索向量索引表
     const searchLshIndex = async () => {
+        console.time('searchLshIndex')
         const lshRes: SearchedLshItem[] = await searchParallel({
             storeName: constant.LSH_INDEX_STORE_NAME,
             workerMethod: 'searchLshIndex',
@@ -121,6 +122,7 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
             connections,
             extraWorkerParam: [localProjections.data]
         })
+        console.timeEnd('searchLshIndex')
 
         return lshRes
 
@@ -138,11 +140,13 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
         return fullTextIndexRes
     }
 
+    console.time('search table')
     // 同时搜索向量索引表和全文索引表
     let [lshRes, fullIndexRes] = await Promise.all([
         searchLshIndex(),
         searchFullTextIndex(),
     ]) as [(SearchedLshItem & { connection: TempConnection })[], (lunr.Index.Result & { connection: TempConnection })[]]
+    console.timeEnd('search table')
 
 
     // 将全文索引排序，然后使用max归一化
@@ -226,6 +230,7 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
             document
         }
     })
+
 
 
     console.log('Res', {

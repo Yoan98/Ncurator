@@ -45,7 +45,6 @@ export class IndexDBStore {
         const connectionRes = connectionStore.add(connection);
 
         connectionRes.onsuccess = () => {
-            console.log('file connection initialized');
             const fileConnectionId = connectionRes.result as number;
             // 初始话file connection相关的索引表
             // 创建text_chunk存储表

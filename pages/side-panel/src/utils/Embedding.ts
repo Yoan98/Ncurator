@@ -1,4 +1,5 @@
-import { AutoModel, AutoTokenizer, env } from '@huggingface/transformers';
+import { AutoModel, AutoTokenizer, env, pipeline } from '@huggingface/transformers';
+import type { PreTrainedTokenizer, PreTrainedModel } from '@huggingface/transformers';
 import { cosineSimilarity } from './math';
 import * as tf from '@tensorflow/tfjs';
 import { checkWebGPU } from '@src/utils/tool';
@@ -17,8 +18,8 @@ env.localModelPath = '../models';
 
 
 export class Embedding {
-    private model: any;
-    private tokenizer: any;
+    private model: PreTrainedModel | null;
+    private tokenizer: PreTrainedTokenizer | null;
 
     constructor() {
     }
@@ -38,7 +39,8 @@ export class Embedding {
         // 初始化模型和分词器
         [this.model, this.tokenizer] = await Promise.all([
             AutoModel.from_pretrained('jina-embeddings-v2-base-zh', {
-                dtype: 'fp16',
+                // 该模型在webpgu下,如果使用fp16会有精度问题,一些数据在向量化时会出现nan
+                dtype: 'fp32',
                 local_files_only: true,
                 device: isSupportWebGPU ? 'webgpu' : undefined
 
@@ -50,6 +52,23 @@ export class Embedding {
 
         console.log('Model and tokenizer initialized');
     }
+
+    // async newLoad() {
+    //     if (this.model && this.tokenizer) {
+    //         return;
+    //     }
+
+    //     const isSupportWebGPU = await checkWebGPU();
+
+    //     // 初始化模型和分词器
+    //     this.extractor = await pipeline("feature-extraction", "jina-embeddings-v2-base-zh", {
+    //         dtype: 'fp32',
+    //         device: isSupportWebGPU ? 'webgpu' : undefined,
+    //         local_files_only: true
+    //     });
+
+    //     console.log('Model and tokenizer initialized');
+    // }
 
     /**
      * 计算平均值池化
@@ -104,8 +123,7 @@ export class Embedding {
             truncation: true,
             // 如果句子分词后的token超过2048，将被截断,也意味着信息丢失,精确度降低,但是速度会更快
             // jina-embeddings-v2-base-zh模型所能支持的最大长度为8192
-            maxLength: 2048,
-            return_tensors: 'pt',
+            max_length: 2048,
         });
 
         // 获取模型输出
@@ -123,6 +141,7 @@ export class Embedding {
         return meanRes
 
     }
+
 
     async computeSimilarity(text1: string, text2: string): Promise<number> {
         let embeddings: tf.Tensor2D | null = null;

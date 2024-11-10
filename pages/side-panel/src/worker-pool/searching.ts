@@ -10,19 +10,23 @@ import type { SearchedLshItem } from './searchDoc'
 // 搜索向量索引表
 const searchLshIndex = async (queryVectorData: Float32Array, lshIndexStoreList: DB.LSH_INDEX[], localProjections: DB.LSH_PROJECTION['data']) => {
 
+
     const searchedRes: SearchedLshItem[] = []
     const queryVectorTensor = tf.tensor1d(queryVectorData) as tf.Tensor1D
     for (const lshIndexData of lshIndexStoreList) {
         const lshIndex = new LSHIndex({ dimensions: constant.EMBEDDING_HIDDEN_SIZE, localProjections, tables: lshIndexData.lsh_table });
 
+        console.time('searching findSimilar per doc')
         // 查找相似句子
         const res = lshIndex.findSimilar({
             queryVector: queryVectorTensor,
         })
+        console.timeEnd('searching findSimilar per doc')
         searchedRes.push(...res)
     }
 
     queryVectorTensor.dispose()
+
 
     return searchedRes
 }

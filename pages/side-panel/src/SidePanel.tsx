@@ -12,6 +12,7 @@ import * as constant from '@src/utils/constant';
 import storageWorkerURL from './worker-pool/storageDoc?url&worker'
 //@ts-ignore
 import searchWorkerURL from './worker-pool/searchDoc?url&worker'
+import { embedding } from '@src/utils/Embedding';
 
 const SidePanel = () => {
 
@@ -51,16 +52,30 @@ const SidePanel = () => {
                 curFile = file;
                 const { bigChunks, miniChunks } = await fileConnector.getChunks(file);
 
+                if (!bigChunks.length && !miniChunks.length) {
+                    console.error(`${file.name}没有内容`);
+                    continue;
+                }
+
+
                 console.log('start storageDocument');
                 console.time('storageDocument');
-                await storagePoolRef.current?.exec('storageDocument', [{ bigChunks, miniChunks, file, documentName: file.name, connection: fileConnection }]);
+
+                try {
+                    await storagePoolRef.current?.exec('storageDocument', [{ bigChunks, miniChunks, resource: file, documentName: file.name, connection: fileConnection }]);
+                } catch (error) {
+                    console.error(`${file.name}存储失败`, error, curFile);
+                }
+
+
                 console.timeEnd('storageDocument');
                 console.log('end storageDocument');
             }
         } catch (error) {
-            console.log('error', error, curFile);
+            console.error('未知错误', error, curFile);
         }
-        storagePoolRef.current?.terminate();
+
+        // storagePoolRef.current?.terminate();
 
     };
 
@@ -119,6 +134,10 @@ const SidePanel = () => {
         storagePoolRef.current?.exec('initialEmbeddingWorkerPool', [workerNumber]);
     }
 
+    const hdTestEncode = async () => {
+        await storagePoolRef.current?.exec('testEmbedding', [text1]);
+    }
+
 
 
     useEffect(() => {
@@ -162,6 +181,10 @@ const SidePanel = () => {
                 <button id="submit" onClick={hdTestSimilarity}>Submit</button>
             </div>
 
+
+            <div>
+                <button onClick={hdTestEncode}>test encode</button>
+            </div>
             <div>
                 <button onClick={hdTestFullText}>test full text</button>
             </div>

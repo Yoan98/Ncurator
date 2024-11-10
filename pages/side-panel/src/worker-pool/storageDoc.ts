@@ -14,7 +14,7 @@ import WorkerURL from './embedding?url&worker'
 
 let embeddingWorkerPool;
 let embeddingWorkerNumber = 1
-let maxEmbeddingBatchSize = 50
+let maxEmbeddingBatchSize = 30
 let isSupportWebGPU = false
 
 interface EmbeddingOutput {
@@ -279,9 +279,19 @@ const testSimilarity = async (text1, text2) => {
     const similarity = await embedding.computeSimilarity(text1, text2)
     return similarity
 }
+// 测试encode
+const testEmbedding = async (texts: string[] | string) => {
+    await embedding.load()
+    const embeddingOutput = await embedding.encode(texts);
+
+    const data = embeddingOutput.arraySync();
+
+    console.log(data)
+}
 
 workerpool.worker({
     storageDocument,
     initialEmbeddingWorkerPool,
-    testSimilarity
+    testSimilarity,
+    testEmbedding
 });
