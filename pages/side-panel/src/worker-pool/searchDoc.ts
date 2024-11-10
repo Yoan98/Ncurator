@@ -130,12 +130,14 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
 
     // 搜索全本索引表
     const searchFullTextIndex = async () => {
+        console.time('searchFullTextIndex')
         const fullTextIndexRes: lunr.Index.Result[] = await searchParallel({
             storeName: constant.FULL_TEXT_INDEX_STORE_NAME,
             workerMethod: 'searchFullTextIndex',
             question,
             connections,
         })
+        console.timeEnd('searchFullTextIndex')
 
         return fullTextIndexRes
     }

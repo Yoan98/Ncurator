@@ -75,7 +75,7 @@ const SidePanel = () => {
             console.error('未知错误', error, curFile);
         }
 
-        // storagePoolRef.current?.terminate();
+        storagePoolRef.current?.terminate();
 
     };
 
