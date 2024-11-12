@@ -5,15 +5,17 @@ import * as tf from '@tensorflow/tfjs';
 import { checkWebGPU } from '@src/utils/tool';
 
 // @ts-ignore
-// 配置本地wasm文件路径
+// 配置本地wasm文件路径,避免国内网请求失败
 // embedding被用于worker线程中,所以被打包到assest中了,而wasm文件在public中,被打包到外层了,所以这里这里路径是../
 env.backends.onnx.wasm.wasmPaths = '../';
-// 使用本地模型
+
+// 使用本地模型的配置
 env.allowRemoteModels = false;
 env.allowLocalModels = true;
-env.localModelPath = '../models';
-// 这里可以配置远程服务器地址，加载模型将走这个地址，避免有些人没发翻墙，无法加载模型
-// env.remoteHost = 'http://localhost:3000';
+env.localModelPath = '../';
+
+// 配置远程服务器地址，加载模型将走这个地址，避免有些人没发翻墙，无法加载模型
+// env.remoteHost = 'http://www.hongbanbangbang.cn/';
 // console.log('env', env)
 
 
@@ -38,14 +40,14 @@ export class Embedding {
 
         // 初始化模型和分词器
         [this.model, this.tokenizer] = await Promise.all([
-            AutoModel.from_pretrained('jina-embeddings-v2-base-zh', {
+            AutoModel.from_pretrained('jinaai/jina-embeddings-v2-base-zh', {
                 // 该模型在webpgu下,如果使用fp16会有精度问题,一些数据在向量化时会出现nan
                 dtype: 'fp32',
                 local_files_only: true,
                 device: isSupportWebGPU ? 'webgpu' : undefined
 
             }),
-            AutoTokenizer.from_pretrained('jina-embeddings-v2-base-zh', {
+            AutoTokenizer.from_pretrained('jinaai/jina-embeddings-v2-base-zh', {
                 local_files_only: true,
             }),
         ]);

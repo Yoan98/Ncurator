@@ -10,7 +10,7 @@ export class IndexDBStore {
     }
 
     // 连接数据库
-    connect(dbName: string): Promise<IDBDatabase> {
+    connect(dbName: string, initialStoreCb?: (db: IDBDatabase) => void): Promise<IDBDatabase> {
 
         return new Promise((resolve, reject) => {
             const request = indexedDB.open(dbName, 1);
@@ -22,7 +22,11 @@ export class IndexDBStore {
             request.onupgradeneeded = (event) => {
                 const db = (event.target as IDBOpenDBRequest).result;
 
-                this.initialStore(db);
+                if (dbName === constant.DEFAULT_INDEXDB_NAME) {
+                    this.initialRAGStore(db);
+                } else {
+                    initialStoreCb && initialStoreCb(db)
+                }
             };
 
             request.onsuccess = () => {
@@ -33,7 +37,7 @@ export class IndexDBStore {
     }
 
     // 初始化表与索引
-    private async initialStore(db: IDBDatabase) {
+    private async initialRAGStore(db: IDBDatabase) {
         // 创建document表
         db.createObjectStore(constant.DOCUMENT_STORE_NAME, { keyPath: 'id', autoIncrement: true });
         // 创建LSH随机向量表

@@ -337,13 +337,16 @@ importers:
         version: 3.0.0
       '@langchain/community':
         specifier: ^0.3.11
-        version: 0.3.11(@ibm-cloud/watsonx-ai@1.1.2)(@langchain/core@0.3.16(openai@4.69.0(zod@3.23.8)))(@tensorflow/tfjs-converter@4.22.0(@tensorflow/tfjs-core@4.22.0))(@tensorflow/tfjs-core@4.22.0)(axios@1.7.7)(cheerio@1.0.0)(ibm-cloud-sdk-core@5.1.0)(ignore@5.3.2)(jsonwebtoken@9.0.2)(lodash@4.17.21)(mammoth@1.8.0)(openai@4.69.0(zod@3.23.8))(pdf-parse@1.1.1)(ws@8.18.0)
+        version: 0.3.11(@ibm-cloud/watsonx-ai@1.1.2)(@langchain/core@0.3.16(openai@4.69.0(zod@3.23.8)))(@mlc-ai/web-llm@0.2.74)(@tensorflow/tfjs-converter@4.22.0(@tensorflow/tfjs-core@4.22.0))(@tensorflow/tfjs-core@4.22.0)(axios@1.7.7)(cheerio@1.0.0)(ibm-cloud-sdk-core@5.1.0)(ignore@5.3.2)(jsonwebtoken@9.0.2)(lodash@4.17.21)(mammoth@1.8.0)(openai@4.69.0(zod@3.23.8))(pdf-parse@1.1.1)(ws@8.18.0)
       '@langchain/core':
         specifier: ^0.3.16
         version: 0.3.16(openai@4.69.0(zod@3.23.8))
       '@langchain/textsplitters':
         specifier: ^0.1.0
         version: 0.1.0(@langchain/core@0.3.16(openai@4.69.0(zod@3.23.8)))
+      '@mlc-ai/web-llm':
+        specifier: ^0.2.74
+        version: 0.2.74
       '@tensorflow/tfjs':
         specifier: ^4.22.0
         version: 4.22.0(seedrandom@3.0.5)
@@ -1365,6 +1368,9 @@ packages:
   '@mapbox/node-pre-gyp@1.0.11':
     resolution: {integrity: sha512-Yhlar6v9WQgUp/He7BdgzOz8lqMQ8sU+jkCq7Wx8Myc5YFJLbEe7lgui/V7G1qB1DJykHSGwreceSaD60Y0PUQ==}
     hasBin: true
+
+  '@mlc-ai/web-llm@0.2.74':
+    resolution: {integrity: sha512-DqqQNrkHmfGOuuT0ZDRKxtRrU6CpcmjtBwn7QJDMRi0OyY357rEjiswf/9jxVS8AuGPdTIRwQsC3jLU8JxXE9w==}
 
   '@nodelib/fs.scandir@2.1.5':
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}
@@ -5807,7 +5813,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.0
 
-  '@langchain/community@0.3.11(@ibm-cloud/watsonx-ai@1.1.2)(@langchain/core@0.3.16(openai@4.69.0(zod@3.23.8)))(@tensorflow/tfjs-converter@4.22.0(@tensorflow/tfjs-core@4.22.0))(@tensorflow/tfjs-core@4.22.0)(axios@1.7.7)(cheerio@1.0.0)(ibm-cloud-sdk-core@5.1.0)(ignore@5.3.2)(jsonwebtoken@9.0.2)(lodash@4.17.21)(mammoth@1.8.0)(openai@4.69.0(zod@3.23.8))(pdf-parse@1.1.1)(ws@8.18.0)':
+  '@langchain/community@0.3.11(@ibm-cloud/watsonx-ai@1.1.2)(@langchain/core@0.3.16(openai@4.69.0(zod@3.23.8)))(@mlc-ai/web-llm@0.2.74)(@tensorflow/tfjs-converter@4.22.0(@tensorflow/tfjs-core@4.22.0))(@tensorflow/tfjs-core@4.22.0)(axios@1.7.7)(cheerio@1.0.0)(ibm-cloud-sdk-core@5.1.0)(ignore@5.3.2)(jsonwebtoken@9.0.2)(lodash@4.17.21)(mammoth@1.8.0)(openai@4.69.0(zod@3.23.8))(pdf-parse@1.1.1)(ws@8.18.0)':
     dependencies:
       '@ibm-cloud/watsonx-ai': 1.1.2
       '@langchain/core': 0.3.16(openai@4.69.0(zod@3.23.8))
@@ -5823,6 +5829,7 @@ snapshots:
       zod: 3.23.8
       zod-to-json-schema: 3.23.5(zod@3.23.8)
     optionalDependencies:
+      '@mlc-ai/web-llm': 0.2.74
       '@tensorflow/tfjs-converter': 4.22.0(@tensorflow/tfjs-core@4.22.0)
       '@tensorflow/tfjs-core': 4.22.0
       cheerio: 1.0.0
@@ -5901,6 +5908,10 @@ snapshots:
       - encoding
       - supports-color
     optional: true
+
+  '@mlc-ai/web-llm@0.2.74':
+    dependencies:
+      loglevel: 1.9.2
 
   '@nodelib/fs.scandir@2.1.5':
     dependencies:

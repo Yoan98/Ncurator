@@ -7,6 +7,7 @@ lunrSupport(lunr)
 lunrZH(lunr, jieba)
 lunrMulti(lunr)
 
+//@ts-ignore
 const useMultiLanguageFn = lunr.multiLanguage('en', 'zh')
 export class FullTextIndex {
     public lunrIndex: lunr.Index;
@@ -33,7 +34,9 @@ export class FullTextIndex {
         this.lunrIndex = lunr(function () {
             this.ref('id')
             this.use(useMultiLanguageFn);
+            //@ts-ignore
             this.tokenizer = function (x) {
+                //@ts-ignore
                 return lunr.tokenizer(x).concat(lunr.zh.tokenizer(x));
             };
 

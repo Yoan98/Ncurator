@@ -21,20 +21,21 @@
     "dependencies": {
         "@extension/shared": "workspace:*",
         "@extension/storage": "workspace:*",
-        "tesseract.js": "^5.1.1",
-        "workerpool": "^9.2.0",
         "@huggingface/transformers": "^3.0.0",
         "@langchain/community": "^0.3.11",
         "@langchain/core": "^0.3.16",
         "@langchain/textsplitters": "^0.1.0",
+        "@mlc-ai/web-llm": "^0.2.74",
         "@tensorflow/tfjs": "^4.22.0",
+        "@types/lunr": "^2.3.7",
         "axios": "^1.7.7",
         "jieba-wasm": "^2.2.0",
-        "@types/lunr": "^2.3.7",
         "lunr": "^2.3.9",
         "lunr-languages": "^1.14.0",
         "mammoth": "^1.8.0",
-        "pdfjs-dist": "^4.7.76"
+        "pdfjs-dist": "^4.7.76",
+        "tesseract.js": "^5.1.1",
+        "workerpool": "^9.2.0"
     },
     "devDependencies": {
         "@extension/tailwindcss-config": "workspace:*",

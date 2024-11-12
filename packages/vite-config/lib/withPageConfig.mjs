@@ -8,7 +8,7 @@ export const watchOption = isDev ? {
   buildDelay: 100,
   chokidar: {
     ignored:[
-      /\/packages\/.*\.(ts|tsx|map)$/,
+      /\/packages\/.*\.(ts|tsx|map)$/
     ]
   }
 }: undefined;

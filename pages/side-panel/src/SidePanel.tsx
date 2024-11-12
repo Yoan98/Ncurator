@@ -8,11 +8,12 @@ import workerpool from 'workerpool';
 import type { Pool } from 'workerpool';
 import { IndexDBStore } from '@src/utils/IndexDBStore';
 import * as constant from '@src/utils/constant';
-//@ts-ignore
-import storageWorkerURL from './worker-pool/storageDoc?url&worker'
-//@ts-ignore
-import searchWorkerURL from './worker-pool/searchDoc?url&worker'
-import { embedding } from '@src/utils/Embedding';
+import { CreateWebWorkerMLCEngine, modelVersion, modelLibURLPrefix, prebuiltAppConfig } from "@mlc-ai/web-llm";
+import type { InitProgressReport } from "@mlc-ai/web-llm";
+// //@ts-ignore
+// import storageWorkerURL from './worker-pool/storageDoc?url&worker'
+// //@ts-ignore
+// import searchWorkerURL from './worker-pool/searchDoc?url&worker'
 
 const SidePanel = () => {
 
@@ -23,6 +24,7 @@ const SidePanel = () => {
     const [text1, setText1] = useState<string>('');
     const [text2, setText2] = useState<string>('');
     const [workerNumber, setWorkerNumber] = useState<number>(1);
+    const [selectModel, setSelectModal] = useState<string>('Llama-3.2-1B-Instruct-q4f32_1-MLC');
 
     const handleFileChange = async (event) => {
         const files = event.target.files;
@@ -75,10 +77,9 @@ const SidePanel = () => {
             console.error('未知错误', error, curFile);
         }
 
-        storagePoolRef.current?.terminate();
+        // storagePoolRef.current?.terminate();
 
     };
-
     const hdQuestionSubmit = async () => {
         console.log('start search');
         console.time('search');
@@ -92,12 +93,10 @@ const SidePanel = () => {
         console.timeEnd('search');
         console.log('end search');
     }
-
     const hdTestSimilarity = async () => {
         const res = await storagePoolRef.current?.exec('testSimilarity', [text1, text2])
         console.log('similarity result', res);
     }
-
     const hdTestFullText = async () => {
         const store = new IndexDBStore();
         await store.connect(constant.DEFAULT_INDEXDB_NAME);
@@ -129,27 +128,120 @@ const SidePanel = () => {
 
 
     }
-
     const hdInitialEmbeddingWorkerPool = async () => {
         storagePoolRef.current?.exec('initialEmbeddingWorkerPool', [workerNumber]);
     }
-
     const hdTestEncode = async () => {
         await storagePoolRef.current?.exec('testEmbedding', [text1]);
     }
+    const loadLlm = async () => {
+        const initProgressCallback = (progress: InitProgressReport) => {
+            console.log("init progress", progress);
+        }
 
+        const engine = await CreateWebWorkerMLCEngine(
+            new Worker(
+                new URL("./worker-pool/llm.ts", import.meta.url),
+                {
+                    type: "module",
+                }
+            ),
+            selectModel,
+            {
+                initProgressCallback,
+                appConfig: {
+                    ...prebuiltAppConfig,
+                    useIndexedDBCache: true
+                }
+            },
+        );
+
+        const messages = [
+            { role: "system", content: "You are a helpful AI assistant." },
+            { role: "user", content: "Hello!" },
+        ]
+
+        const reply = await engine.chat.completions.create({
+            //@ts-ignore
+            messages,
+        });
+
+        console.log('reply', reply);
+    }
+    const hdLoadLlm = async () => {
+        loadLlm()
+    }
+    const hdUploadModal = async (event) => {
+        if (!selectModel) {
+            throw new Error('not chose model')
+        }
+
+        function getFileType(file: File) {
+            if (file.name.includes("wasm")) {
+                return "webllm/wasm";
+            } else if (
+                file.name.includes(".bin") ||
+                file.name.includes("ndarray-cache.json") ||
+                file.name.includes("tokenizer.json")
+            ) {
+                return "webllm/model";
+            } else if (file.name.includes("mlc-chat-config.json")) {
+                return "webllm/config";
+            } else {
+                return "file-cache";
+            }
+        }
+        async function cacheModel(file: File) {
+            const indexDB = new IndexDBStore()
+            await indexDB.connect(getFileType(file), (db) => {
+                if (!db.objectStoreNames.contains("urls")) {
+                    db.createObjectStore("urls", { keyPath: "url" });
+                }
+            })
+
+            let fileContent
+            if (
+                file.name.includes("mlc-chat-config.json") ||
+                file.name.includes("ndarray-cache.json")
+            ) {
+                fileContent = await file.text()
+                fileContent = JSON.parse(fileContent)
+            } else {
+                fileContent = await file.arrayBuffer()
+            }
+
+            let urlPrefix = file.name.includes('wasm') ? `${modelLibURLPrefix}${modelVersion}/` : `https://huggingface.co/mlc-ai/${selectModel}/resolve/main/`
+
+            await indexDB.add({
+                storeName: "urls",
+                data: {
+                    url: `${urlPrefix}${file.name}`,
+                    data: fileContent,
+                },
+            })
+
+        }
+
+        const files = event.target.files;
+        if (!files || files.length === 0) {
+            throw new Error('No file selected');
+        }
+        for (const file of files) {
+            cacheModel(file);
+        }
+    }
 
 
     useEffect(() => {
-        storagePoolRef.current = workerpool.pool(storageWorkerURL, {
-            maxWorkers: 1,
-        });
+        // storagePoolRef.current = workerpool.pool(storageWorkerURL, {
+        //     maxWorkers: 1,
+        // });
 
-        searchPoolRef.current = workerpool.pool(searchWorkerURL, {
-            maxWorkers: 1,
-        });
+        // searchPoolRef.current = workerpool.pool(searchWorkerURL, {
+        //     maxWorkers: 1,
+        // });
 
-
+        // loadLlm()
 
     }, []);
 
@@ -195,6 +287,18 @@ const SidePanel = () => {
                 }} />
 
                 <button id="submit" onClick={hdInitialEmbeddingWorkerPool}>Submit</button>
+            </div>
+
+            <div className='flex items-center justify-center'>
+                {/* 上传文件 */}
+                <div>
+                    上传模型文件
+                </div>
+                <input type="file" multiple onChange={hdUploadModal} />
+            </div>
+
+            <div>
+                <button onClick={hdLoadLlm}>load llm</button>
             </div>
 
 
