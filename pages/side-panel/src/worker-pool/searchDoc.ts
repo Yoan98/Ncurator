@@ -22,7 +22,6 @@ interface TempConnection {
     id: number
 }
 // 搜索文档
-// todo 目前先只支持，connection范围搜，后面可细化到选择document搜
 const search = async (question: string, connections: DB.CONNECTION[], k: number = 10) => {
     // 向量化句子
     await embedding.load()
