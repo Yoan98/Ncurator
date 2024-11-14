@@ -1,0 +1,100 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    :root {
+        --text-50: #fafafa;
+        /* neutral-50 - Very light gray */
+        --text-100: #f5f5f5;
+        /* neutral-100, lighter - Light gray */
+        --text-200: #e5e5e5;
+        /* neutral-200, light - Lighter gray */
+        --text-300: #d4d4d4;
+        /* neutral-300, stronger - Light medium gray */
+        --text-400: #a3a3a3;
+        /* neutral-400, medium - Medium gray */
+        --text-500: #737373;
+        /* neutral-500, darkMedium - Dark medium gray */
+        --text-600: #525252;
+        /* neutral-600, dark - Dark gray */
+        --text-700: #404040;
+        /* neutral-700, solid - Very dark gray */
+        --text-800: #262626;
+        /* neutral-800, solidDark - Nearly black */
+        --text-900: #111827;
+        /* neutral-900 - Very dark, almost black */
+        --text-950: #0a0a0a;
+        /* solidDark - Nearly pure black */
+
+        --background: #fafafa;
+        /* 50 - Almost white */
+        --background-100: #f5f5f5;
+        /* neutral-100 - Very light gray */
+        --background-125: #f1f2f4;
+        /* gray-125 - Light grayish */
+        --background-150: #eaeaea;
+        /* gray-150 - Light gray */
+        --background-200: #e5e5e5;
+        /* neutral-200 - Light medium gray */
+        --background-300: #d4d4d4;
+        /* neutral-300 - Medium light gray */
+        --background-400: #a3a3a3;
+        /* neutral-400 - Medium gray */
+        --background-500: #737373;
+        /* neutral-500 - Medium dark gray */
+        --background-600: #525252;
+        /* neutral-600 - Dark gray */
+        --background-700: #404040;
+        /* neutral-700 - Very dark gray */
+        --background-800: #262626;
+        /* neutral-800 - Nearly black */
+        --background-900: #111827;
+        /* gray-900 - Very dark, almost black */
+        --background-inverted: #000000;
+        /* black - Pure black */
+
+
+
+
+
+        --scrollbar-track: #f9fafb;
+        /* Very light gray for scrollbar track */
+        --scrollbar-thumb: #e5e7eb;
+        /* Light gray for scrollbar thumb */
+        --scrollbar-thumb-hover: #d1d5db;
+        /* Medium light gray for scrollbar thumb on hover */
+        --scrollbar-dark-thumb: #989a9c;
+        /* Medium gray for dark scrollbar thumb */
+        --scrollbar-dark-thumb-hover: #c7cdd2;
+        /* Light medium gray for dark scrollbar thumb on hover */
+
+
+    }
+
+    .loading-text {
+        display: inline-block;
+        color: #e5e5e5;
+
+        background: linear-gradient(-90deg,
+                #a3a3a3 0%,
+                #000000 5%,
+                #a3a3a3 10%,
+                #a3a3a3 100%);
+        background-size: 200% 100%;
+        background-clip: text;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        animation: shimmerTransition 1.5s ease-out infinite;
+    }
+
+    @keyframes shimmerTransition {
+        0% {
+            background-position: 100% 0;
+        }
+
+        100% {
+            background-position: -100% 0;
+        }
+    }
+}
