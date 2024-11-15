@@ -2,6 +2,10 @@
 type ValueOf<T> = T[keyof T]
 type ConnectorUnion = 0 | 1
 
+namespace Search {
+    export type TextItemRes = (DB.TEXT_CHUNK & { document: DB.DOCUMENT })
+}
+
 namespace DB {
     // chunk表
     export interface TEXT_CHUNK {

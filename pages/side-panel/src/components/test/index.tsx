@@ -212,7 +212,7 @@ const SidePanel = () => {
 
             let urlPrefix = file.name.includes('wasm') ? `${modelLibURLPrefix}${modelVersion}/` : `https://huggingface.co/mlc-ai/${selectModel}/resolve/main/`
 
-            await indexDB.add({
+            await indexDB.put({
                 storeName: "urls",
                 data: {
                     url: `${urlPrefix}${file.name}`,

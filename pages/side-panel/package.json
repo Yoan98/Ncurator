@@ -28,6 +28,7 @@
         "@mlc-ai/web-llm": "^0.2.74",
         "@tensorflow/tfjs": "^4.22.0",
         "@types/lunr": "^2.3.7",
+        "animate.css": "^4.1.1",
         "antd": "^5.22.1",
         "axios": "^1.7.7",
         "dayjs": "^1.11.13",

@@ -27,6 +27,13 @@
         --text-950: #0a0a0a;
         /* solidDark - Nearly pure black */
 
+        --text-error: #ff4d4f;
+        /* error - Red */
+        --text-warning: #faad14;
+        /* warning - Yellow */
+        --text-success: #52c41a;
+        /* success - Green */
+
         --background: #fafafa;
         /* 50 - Almost white */
         --background-100: #f5f5f5;

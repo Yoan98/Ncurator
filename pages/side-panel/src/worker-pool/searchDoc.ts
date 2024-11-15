@@ -23,6 +23,12 @@ interface TempConnection {
 }
 // 搜索文档
 const search = async (question: string, connections: DB.CONNECTION[], k: number = 10) => {
+    if (!question || !connections.length) {
+        return {
+            searchedRes: []
+        }
+    }
+
     // 向量化句子
     await embedding.load()
     const embeddingOutput = await embedding.encode([question]);
@@ -150,30 +156,32 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
     console.timeEnd('search table')
 
 
-    // 将全文索引排序，然后使用max归一化
-    fullIndexRes = fullIndexRes.sort((a, b) => b.score - a.score)
-    const maxScore = fullIndexRes[0].score
-    fullIndexRes = fullIndexRes.map((item) => {
-        item.score = item.score / maxScore
-        return item
-    })
-    // 根据权重计算最终排序结果
-    let finalRes: { id: number, score: number, connection: TempConnection }[] = []
+    if (fullIndexRes.length) {
+        // 将全文索引排序，然后使用max归一化
+        fullIndexRes = fullIndexRes.sort((a, b) => b.score - a.score)
+        const maxScore = fullIndexRes[0].score
+        fullIndexRes = fullIndexRes.map((item) => {
+            item.score = item.score / maxScore
+            return item
+        })
+    }
+    // 根据权重计算混合排序结果
+    let mixRes: { id: number, score: number, connection: TempConnection }[] = []
     const alreadyFullIndexIds: number[] = []
-    const vectorWeight = 0.8
-    const fullTextWeight = 0.2
+    const vectorWeight = constant.SEARCHED_VECTOR_WEIGHT
+    const fullTextWeight = constant.SEARCHED_FULL_TEXT_WEIGHT
     lshRes.forEach((item) => {
         const sameIndex = fullIndexRes.findIndex((fullItem) => Number(fullItem.ref) === item.id)
         if (sameIndex === -1) {
             // 只有向量索引
-            finalRes.push({
+            mixRes.push({
                 id: item.id,
                 score: item.similarity * vectorWeight,
                 connection: item.connection
             })
         } else {
             // 向量索引与全文索引同一个text_chunk id
-            finalRes.push({
+            mixRes.push({
                 id: item.id,
                 score: (item.similarity * vectorWeight) + (fullTextWeight * fullIndexRes[sameIndex].score),
                 connection: item.connection
@@ -185,16 +193,16 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
         if (alreadyFullIndexIds.includes(Number(item.ref))) {
             return
         }
-        finalRes.push({
+        mixRes.push({
             id: Number(item.ref),
             score: item.score * fullTextWeight,
             connection: item.connection
         })
     })
-    finalRes = finalRes.sort((a, b) => b.score - a.score)
+    mixRes = mixRes.sort((a, b) => b.score - a.score)
 
     // 按照storeName分组
-    const groupByStoreName = finalRes.reduce((acc, cur) => {
+    const groupByStoreName = mixRes.reduce((acc, cur) => {
         const storeName = getIndexStoreName(cur.connection.connector, cur.connection.id!, constant.TEXT_CHUNK_STORE_NAME)
         if (!acc[storeName]) {
             acc[storeName] = []
@@ -224,7 +232,7 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
         })
         documentRes.push(document)
     }
-    textChunkRes = textChunkRes.map((item) => {
+    const searchedRes = textChunkRes.map((item) => {
         const document = documentRes.find((doc) => doc.id === item.document_id)
         return {
             ...item,
@@ -232,17 +240,15 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
         }
     })
 
-
-
     console.log('Res', {
         lshRes,
         fullIndexRes,
-        finalRes,
-        textChunkRes,
+        mixRes,
+        searchedRes,
     })
 
     return {
-        textChunkRes
+        searchedRes
     }
 }
 

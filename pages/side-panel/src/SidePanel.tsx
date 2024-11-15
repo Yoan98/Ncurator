@@ -1,6 +1,6 @@
 import { withErrorBoundary, withSuspense } from '@extension/shared';
-import type { DrawerProps } from 'antd';
-import { Button, ConfigProvider, ConfigProviderProps, Dropdown, MenuProps, Drawer } from 'antd';
+import type { ProgressProps } from 'antd';
+import { Button, ConfigProvider, ConfigProviderProps, Dropdown, MenuProps, Drawer, Progress } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import enUS from 'antd/lib/locale/en_US';
 import 'dayjs/locale/zh-cn';
@@ -12,6 +12,9 @@ import { IoDocumentAttachOutline } from "react-icons/io5";
 import { FaRocketchat } from "react-icons/fa";
 import { CiSearch } from "react-icons/ci";
 import SearchSection from '@src/components/search/index';
+import type { InitProgressReport, WebWorkerMLCEngine } from "@mlc-ai/web-llm";
+import { CreateWebWorkerMLCEngine, modelVersion, modelLibURLPrefix, prebuiltAppConfig } from "@mlc-ai/web-llm";
+import * as constant from '@src/utils/constant';
 
 type Locale = ConfigProviderProps['locale'];
 dayjs.locale('en');
@@ -92,12 +95,49 @@ const ToggleSwitch = ({
     );
 };
 
+const LlmLoaderProgress = ({ progress, status, onReloadClick }: { progress: number, status: ProgressProps['status'], onReloadClick: () => void }) => {
+    let ProgressTipEle
+    if (status === 'active') {
+        ProgressTipEle = <div className="text-text-400">Loading LLM Model ...</div>
+    } else if (status === 'exception') {
+        ProgressTipEle = <div className='text-text-error cursor-pointer' onClick={onReloadClick}>Load LLM Model Error, click try again</div>
+    } else {
+        ProgressTipEle = <div className="text-text-success">Load LLM Model Success</div>
+    }
+
+
+    return (
+        <div className={`llm-load-status p-1 animate__animated  ${progress == 100 ? 'animate__backOutRight animate__delay-2s' : 'animate__backInRight'}`}>
+            {
+                !status
+                    ?
+                    <div className='text-text-error cursor-pointer'>Haven't find your LLM model,please go to set up.</div>
+                    :
+                    <div className='flex flex-col items-end'>
+                        <Progress percent={progress} status={status} type="circle" size={30} />
+
+                        {ProgressTipEle}
+                    </div>
+
+            }
+        </div>
+    );
+}
+
 const SidePanel = () => {
 
     const [historyOpen, setHistoryOpen] = useState(false);
-    const [activeTab, setActiveTab] = useState<Tab>('search');
     const [historyTitle, setHistoryTitle] = useState<string>('');
+
+    const [activeTab, setActiveTab] = useState<Tab>('search');
+
     const [locale, setLocal] = useState<Locale>(enUS);
+
+    const [selectModel, setSelectModal] = useState<string>('');
+    const [llmEngine, setLlmEngine] = useState<WebWorkerMLCEngine | null>(null);
+    const [llmEngineLoadPercent, setLlmEngineLoadPercent] = useState<number>(0);
+    const [llmEngineLoadStatus, setLlmEngineLoadStatus] = useState<ProgressProps['status']>('active');
+
 
     const initLang = () => {
         const curLang = navigator.language || 'en';
@@ -106,13 +146,64 @@ const SidePanel = () => {
             dayjs.locale('zh-cn');
         }
     }
-
     const setHistoryTitleByTab = (tab: Tab) => {
         if (tab === 'search') {
             setHistoryTitle('Search History');
         } else {
             setHistoryTitle('Chat History');
         }
+    }
+    const loadLlm = async (selectModel) => {
+        if (selectModel === 'default') {
+            // 检查本地模型
+            const defaultModal = localStorage.getItem('defaultModal');
+            if (!defaultModal) {
+                setLlmEngineLoadStatus(undefined);
+                return
+            }
+
+            selectModel = defaultModal;
+        }
+
+
+        try {
+
+            const initProgressCallback = (progress: InitProgressReport) => {
+                setLlmEngineLoadPercent((prePercent) => {
+                    if (progress.progress === 1) {
+                        setLlmEngineLoadStatus('success');
+                        return 100;
+                    }
+                    return prePercent < 99 ? ++prePercent : 99;
+
+                });
+            }
+            const engine = await CreateWebWorkerMLCEngine(
+                new Worker(
+                    new URL("./worker-pool/llm.ts", import.meta.url),
+                    {
+                        type: "module",
+                    }
+                ),
+                selectModel,
+                {
+                    initProgressCallback,
+                    appConfig: {
+                        ...prebuiltAppConfig,
+                        useIndexedDBCache: true
+                    }
+                },
+            );
+
+
+            setLlmEngine(engine);
+            setSelectModal(selectModel!);
+        } catch (error) {
+
+            console.error("load llm error", error);
+            setLlmEngineLoadStatus('exception');
+        }
+
     }
 
     useLayoutEffect(() => {
@@ -122,6 +213,10 @@ const SidePanel = () => {
     useEffect(() => {
         const tab = localStorage.getItem("activeTab") as Tab;
         setActiveTab(tab || 'search');
+
+        // load llm model
+        localStorage.setItem('defaultModal', 'Llama-3.2-1B-Instruct-q4f32_1-MLC');
+        loadLlm('default');
     }, [])
 
     useEffect(() => {
@@ -133,11 +228,17 @@ const SidePanel = () => {
             locale={locale}
             theme={{
                 token: {
-                    colorPrimary: '#404040',
+                    colorPrimary: constant.THEME_COLOR,
                 },
+                components: {
+                    Progress: {
+                        defaultColor: constant.THEME_COLOR
+                    }
+                }
             }}
         >
             <div className='App bg-background min-h-screen px-2 py-3'>
+
                 <div className="header flex items-center justify-between">
                     <div className="header-left flex items-center gap-2" onClick={() => { setHistoryOpen(true) }}>
                         <FiSidebar cursor='pointer' size={20} />
@@ -158,7 +259,7 @@ const SidePanel = () => {
                 </div>
 
                 <div className="content-wrap mt-5">
-                    <SearchSection></SearchSection>
+                    <SearchSection llmEngine={llmEngine}></SearchSection>
                 </div>
 
                 <Drawer
@@ -184,6 +285,13 @@ const SidePanel = () => {
                     </div>
                 </Drawer>
 
+                <div className="fixed right-0 bottom-0">
+                    <LlmLoaderProgress progress={llmEngineLoadPercent} status={llmEngineLoadStatus} onReloadClick={() => {
+                        setLlmEngineLoadPercent(0);
+                        setLlmEngineLoadStatus('active');
+                        loadLlm('default');
+                    }} />
+                </div>
             </div>
         </ConfigProvider>
 

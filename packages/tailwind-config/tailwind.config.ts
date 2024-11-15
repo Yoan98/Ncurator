@@ -35,6 +35,11 @@ export default {
                 "text-900": "var(--text-900)",
                 "text-950": "var(--text-950)",
 
+                "text-error": "var(--text-error)",
+                "text-warning": "var(--text-warning)",
+                "text-success": "var(--text-success)",
+
+
 
                 // scrollbar
                 scrollbar: {
