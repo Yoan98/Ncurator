@@ -1,5 +1,4 @@
 import * as constant from './constant';
-import { getIndexStoreName } from './tool'
 
 // 主存储类
 export class IndexDBStore {
@@ -42,28 +41,14 @@ export class IndexDBStore {
         db.createObjectStore(constant.DOCUMENT_STORE_NAME, { keyPath: 'id', autoIncrement: true });
         // 创建LSH随机向量表
         db.createObjectStore(constant.LSH_PROJECTION_DB_STORE_NAME, { keyPath: 'id', autoIncrement: true });
-
-        // 创建connection表,并写入一个默认的file connection
-        const connectionStore = db.createObjectStore(constant.CONNECTION_STORE_NAME, { keyPath: 'id', autoIncrement: true });
-        const connection: DB.CONNECTION = { name: 'File', documents: [], connector: constant.Connector.File }
-        const connectionRes = connectionStore.add(connection);
-
-        connectionRes.onsuccess = () => {
-            const fileConnectionId = connectionRes.result as number;
-            // 初始话file connection相关的索引表
-            // 创建text_chunk存储表
-            db.createObjectStore(getIndexStoreName(constant.Connector.File, fileConnectionId, constant.TEXT_CHUNK_STORE_NAME), { keyPath: 'id', autoIncrement: true });
-            // 创建LSH索引表
-            db.createObjectStore(getIndexStoreName(constant.Connector.File, fileConnectionId, constant.LSH_INDEX_STORE_NAME), { keyPath: 'id', autoIncrement: true });
-            // 创建full text索引表
-            db.createObjectStore(getIndexStoreName(constant.Connector.File, fileConnectionId, constant.FULL_TEXT_INDEX_STORE_NAME), { keyPath: 'id', autoIncrement: true });
-
-            console.log('IndexDB Store initialized');
-        }
-        connectionRes.onerror = () => {
-            throw new Error('file connection store initialized failed');
-        }
-
+        // 创建connection表
+        db.createObjectStore(constant.CONNECTION_STORE_NAME, { keyPath: 'id', autoIncrement: true });
+        // 创建text chunk表
+        this.db!.createObjectStore(constant.TEXT_CHUNK_STORE_NAME, { keyPath: 'id', autoIncrement: true });
+        // 创建LSH索引表
+        this.db!.createObjectStore(constant.LSH_INDEX_STORE_NAME, { keyPath: 'id', autoIncrement: true });
+        // 创建full text索引表
+        this.db!.createObjectStore(constant.FULL_TEXT_INDEX_STORE_NAME, { keyPath: 'id', autoIncrement: true });
 
     }
     startTransaction(storeName: string | string[], mode: IDBTransactionMode): IDBTransaction {
@@ -71,6 +56,7 @@ export class IndexDBStore {
 
         return this.db.transaction(storeName, mode);
     }
+    // 创建connection
     // 插入数据
     add({ storeName, data, transaction }: {
         storeName: string;

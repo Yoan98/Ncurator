@@ -5,6 +5,13 @@ type ConnectorUnion = 0 | 1
 namespace Search {
     export type TextItemRes = (DB.TEXT_CHUNK & { document: DB.DOCUMENT })
 }
+namespace Storage {
+    export interface DocItemRes {
+        status: 1 | 2 | 3
+        document: DB.DOCUMENT
+        error?: any
+    }
+}
 
 namespace DB {
     // chunk表
@@ -51,12 +58,20 @@ namespace DB {
         lsh_index_id: number;
         full_text_index_id: number;
         resource?: File
+        created_at: Date
+        status: 1 | 2 | 3 // 1: uploading 2: fail 3: success
+        connection: {
+            id: number
+            name: string
+        }
     }
     // connection表 记录相关配置,以及document的关联等
     export interface CONNECTION {
         id?: number;
         name: string;
         documents: { id: number, name: string }[];
+        lsh_index_ids: number[];
+        full_text_index_ids: number[];
         connector: ConnectorUnion; // 参考constant.ts的Connector
         // 相关配置等,如gmail,notion等
     }

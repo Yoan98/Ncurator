@@ -12,6 +12,7 @@ import { IoDocumentAttachOutline } from "react-icons/io5";
 import { FaRocketchat } from "react-icons/fa";
 import { CiSearch } from "react-icons/ci";
 import SearchSection from '@src/components/search/index';
+import Resource from '@src/components/resource/index';
 import type { InitProgressReport, WebWorkerMLCEngine } from "@mlc-ai/web-llm";
 import { CreateWebWorkerMLCEngine, modelVersion, modelLibURLPrefix, prebuiltAppConfig } from "@mlc-ai/web-llm";
 import * as constant from '@src/utils/constant';
@@ -19,10 +20,11 @@ import * as constant from '@src/utils/constant';
 type Locale = ConfigProviderProps['locale'];
 dayjs.locale('en');
 
+// 设置项dropdown菜单
 const settingItems: MenuProps['items'] = [
     {
         key: '1',
-        label: 'Document',
+        label: 'Resource',
         icon: <IoDocumentAttachOutline />,
     },
     {
@@ -32,6 +34,7 @@ const settingItems: MenuProps['items'] = [
     }
 ];
 
+// tab切换组件
 type Tab = 'search' | 'chat';
 const ToggleSwitch = ({
     initialTab,
@@ -95,6 +98,7 @@ const ToggleSwitch = ({
     );
 };
 
+// LLM加载进度组件
 const LlmLoaderProgress = ({ progress, status, onReloadClick }: { progress: number, status: ProgressProps['status'], onReloadClick: () => void }) => {
     let ProgressTipEle
     if (status === 'active') {
@@ -124,6 +128,8 @@ const LlmLoaderProgress = ({ progress, status, onReloadClick }: { progress: numb
     );
 }
 
+const pageList = ['/main', '/resource', '/llm-set'];
+
 const SidePanel = () => {
 
     const [historyOpen, setHistoryOpen] = useState(false);
@@ -137,6 +143,8 @@ const SidePanel = () => {
     const [llmEngine, setLlmEngine] = useState<WebWorkerMLCEngine | null>(null);
     const [llmEngineLoadPercent, setLlmEngineLoadPercent] = useState<number>(0);
     const [llmEngineLoadStatus, setLlmEngineLoadStatus] = useState<ProgressProps['status']>('active');
+
+    const [pagePath, setPagePath] = useState<string>('/resource');
 
 
     const initLang = () => {
@@ -195,7 +203,6 @@ const SidePanel = () => {
                 },
             );
 
-
             setLlmEngine(engine);
             setSelectModal(selectModel!);
         } catch (error) {
@@ -222,6 +229,9 @@ const SidePanel = () => {
     useEffect(() => {
         setHistoryTitleByTab(activeTab);
     }, [activeTab])
+
+    let contentEle
+
 
     return (
         <ConfigProvider
@@ -250,18 +260,26 @@ const SidePanel = () => {
                     </div>
                 </div>
 
-                <div className="toggle-wrap h-[30px]">
-                    <div className="toggle  fixed top-6 left-1/2 transform -translate-x-1/2">
-                        <ToggleSwitch initialTab='search' onToggleSwitch={(tab) =>
-                            setActiveTab(tab)
-                        } />
-                    </div>
-                </div>
 
-                <div className="content-wrap mt-5">
+                {/* main content */}
+                <div className={`main-content-wrap mt-5 ${pagePath === '/main' ? 'block' : 'hidden'}`}>
+                    <div className="toggle-wrap h-[30px]">
+                        <div className="toggle  fixed top-6 left-1/2 transform -translate-x-1/2">
+                            <ToggleSwitch initialTab='search' onToggleSwitch={(tab) =>
+                                setActiveTab(tab)
+                            } />
+                        </div>
+                    </div>
                     <SearchSection llmEngine={llmEngine}></SearchSection>
                 </div>
 
+                {/* resource content */}
+                <div className={`resource-content ${pagePath === '/resource' ? 'block' : 'hidden'}`}>
+                    <Resource></Resource>
+                </div>
+
+
+                {/* history side */}
                 <Drawer
                     width={200}
                     title={historyTitle}
@@ -285,6 +303,7 @@ const SidePanel = () => {
                     </div>
                 </Drawer>
 
+                {/* llm load loading */}
                 <div className="fixed right-0 bottom-0">
                     <LlmLoaderProgress progress={llmEngineLoadPercent} status={llmEngineLoadStatus} onReloadClick={() => {
                         setLlmEngineLoadPercent(0);

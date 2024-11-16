@@ -5,7 +5,6 @@ import { IndexDBStore } from '@src/utils/IndexDBStore';
 import workerpool from 'workerpool';
 // @ts-ignore
 import WorkerURL from './searching?url&worker'
-import { getIndexStoreName } from '@src/utils/tool';
 
 // 最多开一半的cpu核数,避免内存过大
 const maxWorkers = Math.max(1, Math.floor(navigator.hardwareConcurrency / 2))
@@ -62,15 +61,13 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
         while (curConnectionIndex < connections.length) {
             // 读取索引表相关数据
             const connection = connections[curConnectionIndex]
-            // todo 待选择document搜索后，根据document的from和to来限制搜索范围
 
             // 按照id范围搜索，避免取数据超出最大限制，待这一批搜索完结果，再取下一批数据搜索
             let hasRestData = true
             const keyRange = [0, maxGetStoreItemSize]
             while (hasRestData) {
-                const indexStoreName = getIndexStoreName(connection.connector, connection.id!, storeName)
                 const storeList: (DB.LSH_INDEX | DB.FULL_TEXT_INDEX)[] = await store.getAll({
-                    storeName: indexStoreName,
+                    storeName,
                     key: IDBKeyRange.bound(keyRange[0], keyRange[1], false, true)
                 });
 
@@ -203,7 +200,7 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
 
     // 按照storeName分组
     const groupByStoreName = mixRes.reduce((acc, cur) => {
-        const storeName = getIndexStoreName(cur.connection.connector, cur.connection.id!, constant.TEXT_CHUNK_STORE_NAME)
+        const storeName = constant.TEXT_CHUNK_STORE_NAME
         if (!acc[storeName]) {
             acc[storeName] = []
         }

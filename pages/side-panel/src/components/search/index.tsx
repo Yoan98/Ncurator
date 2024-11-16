@@ -18,8 +18,8 @@ const SearchSection = ({
     llmEngine: WebWorkerMLCEngine | null
 }) => {
     const [questionValue, setQuestionValue] = useState('');
-    const [resource, setResource] = useState<{ label: string, value: number }[]>([]);
-    const [selectedResource, setSelectedResource] = useState<number[]>([]);
+    const [connection, setConnection] = useState<{ label: string, value: number }[]>([]);
+    const [selectedConnection, setSelectedConnection] = useState<number[]>([]);
     const [searchTextRes, setSearchTextRes] = useState<Search.TextItemRes[]>([]);
     const [searchLoading, setSearchLoading] = useState(false);
     const [askAiLoading, setAskAiLoading] = useState(false);
@@ -34,11 +34,11 @@ const SearchSection = ({
         const connections = await store.getAll({
             storeName: constant.CONNECTION_STORE_NAME,
         }) as DB.CONNECTION[];
-        const resource = connections.map((connection) => ({ label: connection.name, value: connection.id! }));
+        const connection = connections.map((connection) => ({ label: connection.name, value: connection.id! }));
 
         connectionsRef.current = connections;
 
-        setResource(resource);
+        setConnection(connection);
     }
     const askAI = async (searchTextRes: Search.TextItemRes[]) => {
         if (!llmEngine) {
@@ -70,7 +70,7 @@ const SearchSection = ({
         // 搜索数据库的数据
         try {
             setSearchLoading(true);
-            const connections = connectionsRef.current.filter((connection) => selectedResource.includes(connection.id!));
+            const connections = connectionsRef.current.filter((connection) => selectedConnection.includes(connection.id!));
             const res = await searchPoolRef.current?.exec('search', [questionValue, connections]) as {
                 searchedRes: Search.TextItemRes[]
             }
@@ -117,8 +117,8 @@ const SearchSection = ({
                     placeholder="All Resources"
                     variant="borderless"
                     style={{ maxWidth: '250px', minWidth: '120px' }}
-                    options={resource}
-                    onChange={(value) => setSelectedResource(value)}
+                    options={connection}
+                    onChange={(value) => setSelectedConnection(value)}
                 />
 
                 <Button loading={searchLoading} type="primary" shape='circle' size="small" className='hover:scale-110 transition-transform' onClick={handleSearchClick}>Go</Button>
@@ -132,7 +132,7 @@ const SearchSection = ({
 
             <div className="pt-1 h-auto border-t border-border w-full min-h-[100px]">
                 {
-                    askAiLoading ? <div className='text-sm loading-text'>Searching...</div> : <div>{aiAnswerText}</div>
+                    askAiLoading ? <div className='text-base loading-text'>Searching...</div> : <div className="text-sm">{aiAnswerText}</div>
 
                 }
 
@@ -140,20 +140,20 @@ const SearchSection = ({
         </div>
 
         <div className="result">
-            <div className="font-bold flex justify-between text-emphasis border-b mb-3 pb-1 border-border text-lg"><p>Results</p></div>
+            <div className="font-bold flex justify-between text-emphasis border-b mb-3 pb-1 text-lg"><p>Results</p></div>
             <div className="res-list">
                 {
                     searchLoading ? <div className='text-sm loading-text'>Searching...</div> :
                         searchTextRes.length === 0 ? <Empty /> :
                             searchTextRes.map((item) => {
                                 return (
-                                    <div key={item.id} className="res-item text-sm border-b border-border transition-all duration-500 pt-3 relative" >
+                                    <div key={item.id} className="res-item text-sm border-b transition-all duration-500 pt-3 relative" >
                                         <div className="flex relative items-center gap-1 cursor-pointer">
                                             <IoDocumentAttachOutline size={20} />
                                             <p className="truncate text-wrap break-all my-auto line-clamp-1 text-base max-w-full font-bold text-blue-500">{item.document.name}</p>
                                         </div>
                                         <div className='pl-1 pt-2 pb-3'>
-                                            <p className="text-text-500 line-clamp-4" >{item.text}</p>
+                                            <p className="text-text-500 line-clamp-4 text-sm" >{item.text}</p>
                                         </div>
                                     </div>
                                 )
