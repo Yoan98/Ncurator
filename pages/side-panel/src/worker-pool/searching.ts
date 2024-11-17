@@ -4,14 +4,14 @@ import { LSHIndex } from '@src/utils/VectorIndex';
 import { fullTextIndex } from '@src/utils/FullTextIndex';
 import * as constant from '@src/utils/constant';
 import lunr from 'lunr';
-import type { SearchedLshItem } from './searchDoc'
+import type { SearchedLshItemRes } from './searchDoc'
 
 
 // 搜索向量索引表
 const searchLshIndex = async (queryVectorData: Float32Array, lshIndexStoreList: DB.LSH_INDEX[], localProjections: DB.LSH_PROJECTION['data']) => {
 
 
-    const searchedRes: SearchedLshItem[] = []
+    const searchedRes: SearchedLshItemRes[] = []
     const queryVectorTensor = tf.tensor1d(queryVectorData) as tf.Tensor1D
     for (const lshIndexData of lshIndexStoreList) {
         const lshIndex = new LSHIndex({ dimensions: constant.EMBEDDING_HIDDEN_SIZE, localProjections, tables: lshIndexData.lsh_table });

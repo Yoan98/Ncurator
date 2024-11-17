@@ -7,7 +7,7 @@ namespace Search {
 }
 namespace Storage {
     export interface DocItemRes {
-        status: 1 | 2 | 3
+        status: 'Success' | 'Fail'
         document: DB.DOCUMENT
         error?: any
     }
@@ -59,7 +59,7 @@ namespace DB {
         full_text_index_id: number;
         resource?: File
         created_at: Date
-        status: 1 | 2 | 3 // 1: uploading 2: fail 3: success
+        status: 1 | 2 | 3 // 1: building 2: fail 3: success
         connection: {
             id: number
             name: string
@@ -75,6 +75,7 @@ namespace DB {
         connector: ConnectorUnion; // 参考constant.ts的Connector
         // 相关配置等,如gmail,notion等
     }
+    export type ConnectionDocUnion = DB.CONNECTION & { documentList: DB.DOCUMENT[] }
     // full text索引表
     export interface FULL_TEXT_INDEX {
         id: number;

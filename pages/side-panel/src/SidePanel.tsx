@@ -131,7 +131,6 @@ const LlmLoaderProgress = ({ progress, status, onReloadClick }: { progress: numb
 const pageList = ['/main', '/resource', '/llm-set'];
 
 const SidePanel = () => {
-
     const [historyOpen, setHistoryOpen] = useState(false);
     const [historyTitle, setHistoryTitle] = useState<string>('');
 
@@ -247,7 +246,7 @@ const SidePanel = () => {
                 }
             }}
         >
-            <div className='App bg-background min-h-screen px-2 py-3'>
+            <div className='App bg-background min-h-screen px-2 py-3 flex flex-col'>
 
                 <div className="header flex items-center justify-between">
                     <div className="header-left flex items-center gap-2" onClick={() => { setHistoryOpen(true) }}>
@@ -274,7 +273,7 @@ const SidePanel = () => {
                 </div>
 
                 {/* resource content */}
-                <div className={`resource-content ${pagePath === '/resource' ? 'block' : 'hidden'}`}>
+                <div className={`resource-content flex-1 flex flex-col ${pagePath === '/resource' ? 'block' : 'hidden'}`}>
                     <Resource></Resource>
                 </div>
 

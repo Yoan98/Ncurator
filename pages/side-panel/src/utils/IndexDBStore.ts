@@ -44,11 +44,11 @@ export class IndexDBStore {
         // 创建connection表
         db.createObjectStore(constant.CONNECTION_STORE_NAME, { keyPath: 'id', autoIncrement: true });
         // 创建text chunk表
-        this.db!.createObjectStore(constant.TEXT_CHUNK_STORE_NAME, { keyPath: 'id', autoIncrement: true });
+        db.createObjectStore(constant.TEXT_CHUNK_STORE_NAME, { keyPath: 'id', autoIncrement: true });
         // 创建LSH索引表
-        this.db!.createObjectStore(constant.LSH_INDEX_STORE_NAME, { keyPath: 'id', autoIncrement: true });
+        db.createObjectStore(constant.LSH_INDEX_STORE_NAME, { keyPath: 'id', autoIncrement: true });
         // 创建full text索引表
-        this.db!.createObjectStore(constant.FULL_TEXT_INDEX_STORE_NAME, { keyPath: 'id', autoIncrement: true });
+        db.createObjectStore(constant.FULL_TEXT_INDEX_STORE_NAME, { keyPath: 'id', autoIncrement: true });
 
     }
     startTransaction(storeName: string | string[], mode: IDBTransactionMode): IDBTransaction {
@@ -89,7 +89,7 @@ export class IndexDBStore {
         storeName: string;
         data: T[];
         transaction?: IDBTransaction
-    }): Promise<(T & { id: IDBValidKey })[]> {
+    }): Promise<(T & { id: number })[]> {
         if (!this.db) throw new Error('Database not initialized');
 
         return new Promise((resolve, reject) => {
@@ -98,13 +98,13 @@ export class IndexDBStore {
             }
             const store = transaction.objectStore(storeName);
 
-            const res: (T & { id: IDBValidKey })[] = [];
+            const res: (T & { id: number })[] = [];
             data.forEach((item, index) => {
                 const addRes = store!.add(item);
                 addRes.onsuccess = () => {
                     const item = {
                         ...data[index],
-                        id: addRes.result
+                        id: addRes.result as number
                     }
                     res.push(item);
 
@@ -151,20 +151,62 @@ export class IndexDBStore {
         });
     }
     // 删除数据
-    delete({ storeName, key }: {
+    delete({ storeName, key, transaction }: {
         storeName: string;
-        key: string | number;
+        key: IDBValidKey | IDBKeyRange;
+        transaction?: IDBTransaction
     }): Promise<void> {
         if (!this.db) throw new Error('Database not initialized');
 
         return new Promise((resolve, reject) => {
-            const transaction = this.db!.transaction(storeName, 'readwrite');
+            if (!transaction) {
+                transaction = this.db!.transaction(storeName, 'readwrite');
+            }
+
             const store = transaction.objectStore(storeName);
 
-            store.delete(key);
+            const delRes = store.delete(key);
 
-            transaction.oncomplete = () => resolve();
-            transaction.onerror = () => reject(transaction.error);
+            delRes.onsuccess = () => resolve();
+            delRes.onerror = () => {
+                transaction!.abort();
+                reject(delRes.error);
+            };
+        });
+    }
+
+    // 删除多个数据
+    deleteBatch({ storeName, keys, transaction }: {
+        storeName: string;
+        keys: number[];
+        transaction?: IDBTransaction
+    }): Promise<void> {
+        if (!this.db) throw new Error('Database not initialized');
+
+        return new Promise((resolve, reject) => {
+            if (!transaction) {
+                transaction = this.db!.transaction(storeName, 'readwrite');
+            }
+
+            const store = transaction.objectStore(storeName);
+
+            const res: any[] = [];
+            keys.forEach(key => {
+                const delRes = store.delete(key);
+                delRes.onsuccess = () => {
+                    res.push(key);
+
+                    if (res.length === keys.length) {
+                        resolve();
+                    }
+                };
+
+                delRes.onerror = () => {
+                    transaction!.abort();
+                    reject(delRes.error);
+                };
+            });
+
         });
     }
     // 查询单个数据
@@ -244,7 +286,7 @@ export class IndexDBStore {
                     res.push(request.result)
 
                     if (res.length === keys.length) {
-                        resolve(res)
+                        resolve(res.filter(item => item));
                     }
                 }
 

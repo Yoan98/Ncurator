@@ -1,0 +1,4 @@
+.ant-upload-list {
+    max-height: 400px !important;
+    overflow-y: auto;
+}

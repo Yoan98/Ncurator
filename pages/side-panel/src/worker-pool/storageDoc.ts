@@ -220,13 +220,14 @@ const storageDocument = async ({ bigChunks, miniChunks, document, connection }: 
             data: document,
         });
 
-        // 将document数据添加到connection表
+        // 将索引信息添加到connection表
         await store.put({
             storeName: constant.CONNECTION_STORE_NAME,
             data: {
                 ...connection,
                 id: connection.id,
-                documents: connection.documents.concat({ id: document.id!, name: document.name })
+                lsh_index_ids: connection.lsh_index_ids.concat(lshIndexId),
+                full_text_index_ids: connection.full_text_index_ids.concat(fullTextIndexId)
             },
         });
 

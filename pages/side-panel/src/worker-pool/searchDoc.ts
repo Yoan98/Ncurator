@@ -12,13 +12,9 @@ const searchingWorkerPool = workerpool.pool(WorkerURL, {
     maxWorkers,
 });
 
-export interface SearchedLshItem {
+export interface SearchedLshItemRes {
     id: number,
     similarity: number
-}
-interface TempConnection {
-    connector: ConnectorUnion,
-    id: number
 }
 // 搜索文档
 const search = async (question: string, connections: DB.CONNECTION[], k: number = 10) => {
@@ -53,63 +49,52 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
         // 每次次从表里取出的最大数据条数（避免数据过多，撑爆内存）
         maxGetStoreItemSize?: number
     }) => {
-        let curConnectionIndex = 0
 
         // 搜索结果汇总
         const searchedRes: any[] = []
-        // 循环根据connection搜索(一个connection一个store)
-        while (curConnectionIndex < connections.length) {
-            // 读取索引表相关数据
-            const connection = connections[curConnectionIndex]
+        // 按照id范围搜索，避免取数据超出最大限制，待这一批搜索完结果，再取下一批数据搜索
+        let hasRestData = true
+        const indexKeyIds = workerMethod == 'searchLshIndex' ? connections.map((item) => item.lsh_index_ids).flat() : connections.map((item) => item.full_text_index_ids).flat()
+        let startEndIndex = [0, maxGetStoreItemSize]
+        while (hasRestData) {
+            const sliceIndexKeyIds = indexKeyIds.slice(startEndIndex[0], startEndIndex[1])
 
-            // 按照id范围搜索，避免取数据超出最大限制，待这一批搜索完结果，再取下一批数据搜索
-            let hasRestData = true
-            const keyRange = [0, maxGetStoreItemSize]
-            while (hasRestData) {
-                const storeList: (DB.LSH_INDEX | DB.FULL_TEXT_INDEX)[] = await store.getAll({
-                    storeName,
-                    key: IDBKeyRange.bound(keyRange[0], keyRange[1], false, true)
-                });
+            const storeList: (DB.LSH_INDEX | DB.FULL_TEXT_INDEX)[] = await store.getBatch({
+                storeName,
+                keys: sliceIndexKeyIds
+            });
 
-                if (!storeList.length) {
-                    hasRestData = false
-                    break
-                }
-
-                // 按cpu核数，分割出worker执行任务
-                const searchTasks: workerpool.Promise<any, Error>[] = []
-                // 一个worker执行的最大数量
-                // 除2的原因，是因为会同时搜索向量索引表和全文索引表
-                const cpuCore = Math.max(1, Math.floor(maxWorkers / 2))
-                const workerExecuteSize = Math.max(1, Math.floor(storeList.length / cpuCore))
-
-                for (let i = 0; i < storeList.length; i += workerExecuteSize) {
-                    const workerHandleData = storeList.slice(i, i + workerExecuteSize)
-                    searchTasks.push(searchingWorkerPool.exec(workerMethod, [question, workerHandleData, ...extraWorkerParam]))
-                }
-
-                // 等待所有worker执行完,并汇总结果
-                const multipleSearchRes: any[][] = await Promise.all(searchTasks)
-                const curSearchRes = multipleSearchRes.flat()
-                searchedRes.push(...(curSearchRes.map((item) => {
-                    item.connection = {
-                        connector: connection.connector,
-                        id: connection.id
-                    }
-                    return item
-                })))
-
-                // 清空
-                storeList.length = 0
-
-                // 更新keyRange
-                keyRange[0] = keyRange[1]
-                keyRange[1] += maxGetStoreItemSize
+            if (!storeList.length) {
+                hasRestData = false
+                break
             }
 
+            // 按cpu核数，分割出worker执行任务
+            const searchTasks: workerpool.Promise<any, Error>[] = []
+            // 一个worker执行的最大数量
+            // 除2的原因，是因为会同时搜索向量索引表和全文索引表
+            const cpuCore = Math.max(1, Math.floor(maxWorkers / 2))
+            const workerExecuteSize = Math.max(1, Math.floor(storeList.length / cpuCore))
 
-            curConnectionIndex++
+            for (let i = 0; i < storeList.length; i += workerExecuteSize) {
+                const workerHandleData = storeList.slice(i, i + workerExecuteSize)
+                searchTasks.push(searchingWorkerPool.exec(workerMethod, [question, workerHandleData, ...extraWorkerParam]))
+            }
+
+            // 等待所有worker执行完,并汇总结果
+            const multipleSearchRes: (SearchedLshItemRes | lunr.Index.Result)[][] = await Promise.all(searchTasks)
+            const curSearchRes = multipleSearchRes.flat()
+            searchedRes.push(...curSearchRes)
+
+            // 清空
+            storeList.length = 0
+
+            // 下一批数据
+            startEndIndex[0] = startEndIndex[1]
+            startEndIndex[1] = startEndIndex[1] + maxGetStoreItemSize
         }
+
+
 
         return searchedRes
     }
@@ -117,7 +102,7 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
     // 搜索向量索引表
     const searchLshIndex = async () => {
         console.time('searchLshIndex')
-        const lshRes: SearchedLshItem[] = await searchParallel({
+        const lshRes: SearchedLshItemRes[] = await searchParallel({
             storeName: constant.LSH_INDEX_STORE_NAME,
             workerMethod: 'searchLshIndex',
             question: queryVectorData,
@@ -149,7 +134,7 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
     let [lshRes, fullIndexRes] = await Promise.all([
         searchLshIndex(),
         searchFullTextIndex(),
-    ]) as [(SearchedLshItem & { connection: TempConnection })[], (lunr.Index.Result & { connection: TempConnection })[]]
+    ]) as [SearchedLshItemRes[], lunr.Index.Result[]]
     console.timeEnd('search table')
 
 
@@ -163,7 +148,7 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
         })
     }
     // 根据权重计算混合排序结果
-    let mixRes: { id: number, score: number, connection: TempConnection }[] = []
+    let mixRes: { id: number, score: number }[] = []
     const alreadyFullIndexIds: number[] = []
     const vectorWeight = constant.SEARCHED_VECTOR_WEIGHT
     const fullTextWeight = constant.SEARCHED_FULL_TEXT_WEIGHT
@@ -174,14 +159,12 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
             mixRes.push({
                 id: item.id,
                 score: item.similarity * vectorWeight,
-                connection: item.connection
             })
         } else {
             // 向量索引与全文索引同一个text_chunk id
             mixRes.push({
                 id: item.id,
                 score: (item.similarity * vectorWeight) + (fullTextWeight * fullIndexRes[sameIndex].score),
-                connection: item.connection
             })
             alreadyFullIndexIds.push(item.id)
         }
@@ -193,7 +176,6 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
         mixRes.push({
             id: Number(item.ref),
             score: item.score * fullTextWeight,
-            connection: item.connection
         })
     })
     mixRes = mixRes.sort((a, b) => b.score - a.score)
