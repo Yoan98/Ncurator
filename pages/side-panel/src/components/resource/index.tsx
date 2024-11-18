@@ -276,6 +276,8 @@ const Resource = () => {
             }
         }
 
+        storagePoolRef.current?.terminate();
+
         fetchConnectionList();
 
     }

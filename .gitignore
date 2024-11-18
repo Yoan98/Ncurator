@@ -26,3 +26,4 @@ chrome-extension/public/manifest.json
 **/vite.config.mts.timestamp-*
 
 **/public/jinaai
+**/public/nomic-ai

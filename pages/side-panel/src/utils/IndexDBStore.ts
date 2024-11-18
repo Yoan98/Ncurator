@@ -138,16 +138,15 @@ export class IndexDBStore {
 
 
             const putRes = store.put(data);
-            let putId: number;
-            putRes.onsuccess = () => {
-                putId = putRes.result as number;
-                resolve(putId);
-            };
 
-            putRes.onerror = () => {
-                transaction!.abort();
-                reject(putRes.error)
-            };
+            transaction.oncomplete = () => {
+                console.log('put complete', putRes.result);
+                resolve(putRes.result as number);
+            }
+
+            transaction.onerror = () => {
+                reject(putRes.error);
+            }
         });
     }
     // 删除数据

@@ -1,6 +1,4 @@
-import '@src/SidePanel.css';
 import { useStorage, withErrorBoundary, withSuspense } from '@extension/shared';
-import { exampleThemeStorage } from '@extension/storage';
 import { FileConnector } from '@src/utils/Connector';
 import type { ComponentPropsWithoutRef } from 'react';
 import { useRef, useEffect, useState } from 'react';
@@ -10,8 +8,9 @@ import { IndexDBStore } from '@src/utils/IndexDBStore';
 import * as constant from '@src/utils/constant';
 import { CreateWebWorkerMLCEngine, modelVersion, modelLibURLPrefix, prebuiltAppConfig } from "@mlc-ai/web-llm";
 import type { InitProgressReport } from "@mlc-ai/web-llm";
-// //@ts-ignore
-// import storageWorkerURL from './worker-pool/storageDoc?url&worker'
+
+//@ts-ignore
+import storageWorkerURL from '@src/worker-pool/buildIndex?url&worker'
 // //@ts-ignore
 // import searchWorkerURL from './worker-pool/searchDoc?url&worker'
 
@@ -141,7 +140,7 @@ const SidePanel = () => {
 
         const engine = await CreateWebWorkerMLCEngine(
             new Worker(
-                new URL("./worker-pool/llm.ts", import.meta.url),
+                new URL("@src/worker-pool/llm.ts", import.meta.url),
                 {
                     type: "module",
                 }
@@ -233,9 +232,9 @@ const SidePanel = () => {
 
 
     useEffect(() => {
-        // storagePoolRef.current = workerpool.pool(storageWorkerURL, {
-        //     maxWorkers: 1,
-        // });
+        storagePoolRef.current = workerpool.pool(storageWorkerURL, {
+            maxWorkers: 1,
+        });
 
         // searchPoolRef.current = workerpool.pool(searchWorkerURL, {
         //     maxWorkers: 1,
@@ -246,7 +245,7 @@ const SidePanel = () => {
     }, []);
 
     return (
-        <div className='App bg-gray-400  flex-col content-center justify-center space-y-4'>
+        <div className='App bg-gray-400  flex-col content-center justify-center space-y-4 h-screen'>
 
             <div className='flex items-center justify-center'>
                 {/* 上传文件 */}
