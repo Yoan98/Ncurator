@@ -7,11 +7,12 @@ import { IndexDBStore } from '@src/utils/IndexDBStore';
 import * as constant from '@src/utils/constant';
 import dayjs from 'dayjs';
 //@ts-ignore
-// import storageWorkerURL from '@src/worker-pool/buildIndex?url&worker';
+import storageWorkerURL from '@src/worker-pool/buildIndex?url&worker';
 import type { Pool } from 'workerpool';
 import workerpool from 'workerpool';
 import { FileConnector } from '@src/utils/Connector';
 import { IoSettingsOutline, IoReload } from "react-icons/io5";
+import { useGlobalContext } from '@src/provider/global';
 
 const { Search } = Input;
 const { Dragger } = Upload;
@@ -63,7 +64,7 @@ const Resource = () => {
     const addedFileListRef = useRef<UploadFile[]>([]);
     const removedFileListRef = useRef<UploadFile[]>([]);
 
-    const [connectionList, setConnectionList] = useState<DB.ConnectionDocUnion[]>([]);
+    const { connectionList, setConnectionList } = useGlobalContext()
     const [displayConnectionList, setDisplayConnectionList] = useState<DB.ConnectionDocUnion[]>([]);
     const [connectionListLoading, setConnectionListLoading] = useState(false);
     const [collapseActiveKey, setCollapseActiveKey] = useState<number[]>([]);
@@ -242,6 +243,8 @@ const Resource = () => {
     // 构建某一个connection下的新文档的索引
     const buildDocsIndexInConnection = async (store: IndexDBStore, docs: DB.DOCUMENT[], connection: DB.CONNECTION) => {
         const fileConnector = new FileConnector();
+
+        let updatedConnection = connection;
         for (let doc of docs) {
             const { bigChunks, miniChunks } = await fileConnector.getChunks(doc.resource!);
 
@@ -259,11 +262,12 @@ const Resource = () => {
             }
 
             // 向量化,并存储索引
-            const buildDocIndexRes = await storagePoolRef.current?.exec('buildDocIndex', [{ bigChunks, miniChunks, document: doc, connection }]) as Storage.DocItemRes
+            const buildDocIndexRes = await storagePoolRef.current?.exec('buildDocIndex', [{ bigChunks, miniChunks, document: doc, connection: updatedConnection }]) as Storage.DocItemRes
 
             // 提示结果
             if (buildDocIndexRes.status == 'Success') {
                 message.success(`${doc.name} Storage Success`);
+                updatedConnection = buildDocIndexRes.connectionAfterIndexBuild!;
             } else if (buildDocIndexRes.status == 'Fail') {
                 console.error('buildDocIndex error', buildDocIndexRes.error)
                 message.error(`${doc.name} Storage Fail`);
@@ -493,9 +497,9 @@ const Resource = () => {
     useEffect(() => {
         fetchConnectionList();
 
-        // storagePoolRef.current = workerpool.pool(storageWorkerURL, {
-        //     maxWorkers: 1,
-        // });
+        storagePoolRef.current = workerpool.pool(storageWorkerURL, {
+            maxWorkers: 1,
+        });
     }, [])
 
     useEffect(() => {
@@ -523,12 +527,12 @@ const Resource = () => {
                 </div>
             </div>
 
-            <div className="search pt-5 pb-1 mb-2">
+            <div className="search pt-5  my-1">
                 <Search className='text-base' placeholder="Search file name..." onSearch={handleSearch} onChange={(e) => {
                     setSearchValue(e.target.value);
                 }} enterButton size="large" />
                 {
-                    <div className={`text-right text-xs text-text-error ${checkHasBuildingDoc() ? 'visible' : 'invisible'}`}>Document is building, please don't close App before finish</div>
+                    <div className={`text-right text-xs text-text-500 ${checkHasBuildingDoc() ? 'visible' : 'invisible'}`}>Document is building, please don't close App before finish</div>
                 }
             </div>
 

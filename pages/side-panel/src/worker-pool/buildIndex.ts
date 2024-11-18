@@ -220,20 +220,22 @@ const buildDocIndex = async ({ bigChunks, miniChunks, document, connection }: {
             data: document,
         });
 
+        const connectionAfterIndexBuild = {
+            ...connection,
+            id: connection.id,
+            lsh_index_ids: connection.lsh_index_ids.concat(lshIndexId),
+            full_text_index_ids: connection.full_text_index_ids.concat(fullTextIndexId)
+        }
         // 将索引信息添加到connection表
         await store.put({
             storeName: constant.CONNECTION_STORE_NAME,
-            data: {
-                ...connection,
-                id: connection.id,
-                lsh_index_ids: connection.lsh_index_ids.concat(lshIndexId),
-                full_text_index_ids: connection.full_text_index_ids.concat(fullTextIndexId)
-            },
+            data: connectionAfterIndexBuild,
         });
 
         return {
             status: 'Success',
-            document
+            document,
+            connectionAfterIndexBuild
         }
     } catch (error) {
         // 如果出错,则将document状态改为fail

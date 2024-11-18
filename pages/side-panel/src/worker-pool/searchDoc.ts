@@ -56,6 +56,7 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
         let hasRestData = true
         const indexKeyIds = workerMethod == 'searchLshIndex' ? connections.map((item) => item.lsh_index_ids).flat() : connections.map((item) => item.full_text_index_ids).flat()
         let startEndIndex = [0, maxGetStoreItemSize]
+
         while (hasRestData) {
             const sliceIndexKeyIds = indexKeyIds.slice(startEndIndex[0], startEndIndex[1])
 
@@ -63,6 +64,7 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
                 storeName,
                 keys: sliceIndexKeyIds
             });
+
 
             if (!storeList.length) {
                 hasRestData = false
@@ -83,6 +85,7 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
 
             // 等待所有worker执行完,并汇总结果
             const multipleSearchRes: (SearchedLshItemRes | lunr.Index.Result)[][] = await Promise.all(searchTasks)
+
             const curSearchRes = multipleSearchRes.flat()
             searchedRes.push(...curSearchRes)
 
@@ -129,13 +132,13 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
         return fullTextIndexRes
     }
 
-    console.time('search table')
+    console.time('search index total')
     // 同时搜索向量索引表和全文索引表
     let [lshRes, fullIndexRes] = await Promise.all([
         searchLshIndex(),
         searchFullTextIndex(),
     ]) as [SearchedLshItemRes[], lunr.Index.Result[]]
-    console.timeEnd('search table')
+    console.timeEnd('search index total')
 
 
     if (fullIndexRes.length) {
@@ -231,7 +234,13 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
     }
 }
 
+// 用于提前加载embedding模型
+const loadEmbedding = async () => {
+    await embedding.load()
+
+}
 
 workerpool.worker({
     search,
+    loadEmbedding
 });

@@ -15,7 +15,9 @@ import SearchSection from '@src/components/search/index';
 import Resource from '@src/components/resource/index';
 import type { InitProgressReport, WebWorkerMLCEngine } from "@mlc-ai/web-llm";
 import { CreateWebWorkerMLCEngine, modelVersion, modelLibURLPrefix, prebuiltAppConfig } from "@mlc-ai/web-llm";
+import { IoIosArrowRoundBack } from "react-icons/io";
 import * as constant from '@src/utils/constant';
+import { GlobalProvider } from '@src/provider/global';
 
 type Locale = ConfigProviderProps['locale'];
 dayjs.locale('en');
@@ -23,12 +25,12 @@ dayjs.locale('en');
 // 设置项dropdown菜单
 const settingItems: MenuProps['items'] = [
     {
-        key: '1',
+        key: 1,
         label: 'Resource',
         icon: <IoDocumentAttachOutline />,
     },
     {
-        key: '2',
+        key: 2,
         label: 'LLM Model',
         icon: <RiRobot2Line />,
     }
@@ -174,7 +176,6 @@ const SidePanel = () => {
 
 
         try {
-
             const initProgressCallback = (progress: InitProgressReport) => {
                 setLlmEngineLoadPercent((prePercent) => {
                     if (progress.progress === 1) {
@@ -212,6 +213,14 @@ const SidePanel = () => {
 
     }
 
+    const handleMenuItemClick = ({ key }) => {
+        if (key == 1) {
+            setPagePath('/resource');
+        } else if (key == 2) {
+            setPagePath('/llm-set');
+        }
+    }
+
     useLayoutEffect(() => {
         initLang();
     }, []);
@@ -229,90 +238,91 @@ const SidePanel = () => {
         setHistoryTitleByTab(activeTab);
     }, [activeTab])
 
-    let contentEle
-
 
     return (
-        <ConfigProvider
-            locale={locale}
-            theme={{
-                token: {
-                    colorPrimary: constant.THEME_COLOR,
-                },
-                components: {
-                    Progress: {
-                        defaultColor: constant.THEME_COLOR
+        <GlobalProvider>
+            <ConfigProvider
+                locale={locale}
+                theme={{
+                    token: {
+                        colorPrimary: constant.THEME_COLOR,
+                    },
+                    components: {
+                        Progress: {
+                            defaultColor: constant.THEME_COLOR
+                        }
                     }
-                }
-            }}
-        >
-            <div className='App bg-background min-h-screen px-2 py-3 flex flex-col'>
+                }}
+            >
+                <div className='App bg-background min-h-screen px-2 py-3 flex flex-col'>
 
-                <div className="header flex items-center justify-between">
-                    <div className="header-left flex items-center gap-2" onClick={() => { setHistoryOpen(true) }}>
-                        <FiSidebar cursor='pointer' size={20} />
-                    </div>
-                    <div className="header-right">
-                        <Dropdown menu={{ items: settingItems }} placement="bottomRight">
-                            <Button size="small">S</Button>
-                        </Dropdown>
-                    </div>
-                </div>
-
-
-                {/* main content */}
-                <div className={`main-content-wrap mt-5 ${pagePath === '/main' ? 'block' : 'hidden'}`}>
-                    <div className="toggle-wrap h-[30px]">
-                        <div className="toggle  fixed top-6 left-1/2 transform -translate-x-1/2">
-                            <ToggleSwitch initialTab='search' onToggleSwitch={(tab) =>
-                                setActiveTab(tab)
-                            } />
+                    <div className="header flex items-center justify-between">
+                        <div className="header-left flex items-center gap-2">
+                            {
+                                pagePath === '/main' ? <FiSidebar cursor='pointer' size={20} onClick={() => { setHistoryOpen(true) }} /> : <IoIosArrowRoundBack cursor='pointer' size={25} onClick={() => { setPagePath('/main') }} />
+                            }
+                        </div>
+                        <div className="header-right">
+                            <Dropdown menu={{ items: settingItems, onClick: handleMenuItemClick }} placement="bottomRight">
+                                <Button size="small">S</Button>
+                            </Dropdown>
                         </div>
                     </div>
-                    <SearchSection llmEngine={llmEngine}></SearchSection>
-                </div>
-
-                {/* resource content */}
-                <div className={`resource-content flex-1 flex flex-col ${pagePath === '/resource' ? 'block' : 'hidden'}`}>
-                    <Resource></Resource>
-                </div>
 
 
-                {/* history side */}
-                <Drawer
-                    width={200}
-                    title={historyTitle}
-                    placement='left'
-                    closable={true}
-                    onClose={() => setHistoryOpen(false)}
-                    open={historyOpen}
-                    key='left'
-                >
-                    <div className='space-y-2'>
-                        <div className="time">
-                            <p className='text-xs text-text-400 mb-1'>Today</p>
-                            <div className="history-title space-y-1">
-
-                                <Button type='text' className='text-sm text-text-500' size="small">
-                                    图形学是什么
-                                </Button>
+                    {/* main content */}
+                    <div className={`main-content-wrap mt-5 ${pagePath === '/main' ? 'block' : 'hidden'}`}>
+                        <div className="toggle-wrap h-[30px]">
+                            <div className="toggle  fixed top-6 left-1/2 transform -translate-x-1/2">
+                                <ToggleSwitch initialTab='search' onToggleSwitch={(tab) =>
+                                    setActiveTab(tab)
+                                } />
                             </div>
                         </div>
-
+                        <SearchSection llmEngine={llmEngine}></SearchSection>
                     </div>
-                </Drawer>
 
-                {/* llm load loading */}
-                <div className="fixed right-0 bottom-0 px-1">
-                    <LlmLoaderProgress progress={llmEngineLoadPercent} status={llmEngineLoadStatus} onReloadClick={() => {
-                        setLlmEngineLoadPercent(0);
-                        setLlmEngineLoadStatus('active');
-                        loadLlm('default');
-                    }} />
+                    {/* resource content */}
+                    <div className={`resource-content flex-1 flex flex-col ${pagePath === '/resource' ? 'block' : 'hidden'}`}>
+                        <Resource></Resource>
+                    </div>
+
+
+                    {/* history side */}
+                    <Drawer
+                        width={200}
+                        title={historyTitle}
+                        placement='left'
+                        closable={true}
+                        onClose={() => setHistoryOpen(false)}
+                        open={historyOpen}
+                        key='left'
+                    >
+                        <div className='space-y-2'>
+                            <div className="time">
+                                <p className='text-xs text-text-400 mb-1'>Today</p>
+                                <div className="history-title space-y-1">
+
+                                    <Button type='text' className='text-sm text-text-500' size="small">
+                                        图形学是什么
+                                    </Button>
+                                </div>
+                            </div>
+
+                        </div>
+                    </Drawer>
+
+                    {/* llm load loading */}
+                    <div className="fixed right-0 bottom-0 px-1">
+                        <LlmLoaderProgress progress={llmEngineLoadPercent} status={llmEngineLoadStatus} onReloadClick={() => {
+                            setLlmEngineLoadPercent(0);
+                            setLlmEngineLoadStatus('active');
+                            loadLlm('default');
+                        }} />
+                    </div>
                 </div>
-            </div>
-        </ConfigProvider>
-
+            </ConfigProvider>
+        </GlobalProvider>
     );
 };
 

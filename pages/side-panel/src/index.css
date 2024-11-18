@@ -6,3 +6,7 @@
 .resource-list {
     max-height: calc(100vh - 220px) !important;
 }
+
+.search-res-list {
+    max-height: calc(100vh - 460px) !important;
+}

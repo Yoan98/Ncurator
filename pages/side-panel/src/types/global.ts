@@ -11,6 +11,7 @@ namespace Storage {
         status: 'Success' | 'Fail'
         document: DB.DOCUMENT
         error?: any
+        connectionAfterIndexBuild?: DB.CONNECTION
     }
 }
 
