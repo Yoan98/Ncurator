@@ -230,7 +230,6 @@ const SidePanel = () => {
         setActiveTab(tab || 'search');
 
         // load llm model
-        localStorage.setItem('defaultModal', 'Llama-3.2-1B-Instruct-q4f32_1-MLC');
         loadLlm('default');
     }, [])
 

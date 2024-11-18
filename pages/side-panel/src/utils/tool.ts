@@ -1,3 +1,4 @@
+import init, * as jieba from 'jieba-wasm';
 
 // 检测WebGPU是否可用
 export async function checkWebGPU() {
@@ -35,5 +36,17 @@ export function formatFileSize(file: File): string {
         return `${(size / MB).toFixed(2)} MB`; // 小于 1 GB 显示为 MB，保留两位小数
     } else {
         return `${(size / GB).toFixed(2)} GB`; // 1 GB 及以上显示为 GB，保留两位小数
+    }
+}
+
+// 分割关键词,英文按照空格,中文按照jieba分词
+export async function splitKeywords(keywords: string) {
+    //@ts-ignore
+    await init()
+    const reg = new RegExp("[\\u4E00-\\u9FFF]+");
+    if (reg.test(keywords)) {
+        return jieba.cut(keywords) as string[];
+    } else {
+        return keywords.split(' ');
     }
 }

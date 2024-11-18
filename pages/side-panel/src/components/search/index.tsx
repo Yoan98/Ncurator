@@ -3,6 +3,7 @@ import { Select, Button, Input, message, Empty, Tooltip } from 'antd';
 import { IoDocumentAttachOutline } from "react-icons/io5";
 import { IndexDBStore } from '@src/utils/IndexDBStore';
 import * as constant from '@src/utils/constant';
+import { splitKeywords } from '@src/utils/tool';
 import type { Pool } from 'workerpool';
 import workerpool from 'workerpool';
 //@ts-ignore
@@ -10,6 +11,9 @@ import searchWorkerURL from '@src/worker-pool/searchDoc?url&worker'
 import type { WebWorkerMLCEngine } from '@mlc-ai/web-llm';
 import { useGlobalContext } from '@src/provider/global';
 import TextHighlighter from '@src/components/highlighter';
+import type {
+    ChatCompletionMessageParam,
+} from "@mlc-ai/web-llm";
 
 const { TextArea } = Input;
 
@@ -20,6 +24,7 @@ const SearchSection = ({
     llmEngine: WebWorkerMLCEngine | null
 }) => {
     const [questionValue, setQuestionValue] = useState('');
+    const [questionKeywords, setQuestionKeywords] = useState<string[]>([]);
 
     const [connectionOption, setConnectionOption] = useState<{ label: string, value: number }[]>([]);
     const { connectionList } = useGlobalContext()
@@ -40,22 +45,42 @@ const SearchSection = ({
             return;
         }
 
+        const context = searchTextRes.map((item) => item.text).join('\n');
 
-        const messages = [
-            { role: "system", content: "You are a helpful AI assistant." },
-            { role: "user", content: "Hello!" },
+        const inp =
+            "Use only the following context when answering the question at the end. Don't use any other knowledge.\n" +
+            context +
+            "\n\nQuestion: " +
+            questionValue +
+            "\n\nHelpful Answer: ";
+
+        const messages: ChatCompletionMessageParam[] = [
+            {
+                role: "system", content: "You are a helpful AI assistant.I will provide you with some relevant documents to help answer the question."
+            },
+            { role: "user", content: inp },
         ]
-        console.log('ask Ai')
+        console.log('ask Ai', messages)
+
+        let curMessage = "";
         const reply = await llmEngine.chat.completions.create({
-            //@ts-ignore
+            stream: true,
             messages,
         });
-        console.log('reply', reply)
 
-        const replyText = reply.choices[0].message.content;
+        for await (const chunk of reply) {
+            const curDelta = chunk.choices[0].delta.content;
+            if (curDelta) {
+                curMessage += curDelta;
+            }
 
-        setAiAnswerText(replyText || 'Error in AI answer');
+            setAiAnswerText(curMessage);
+        }
+
+
     }
+
+
     const handleSearchClick = async () => {
         if (!questionValue) {
             message.warning('Please input the search content')
@@ -64,6 +89,7 @@ const SearchSection = ({
 
         setAskAiLoading(true);
         setSearchLoading(true);
+        let searchTextRes
         // 搜索数据库的数据
         try {
             const connections = connectionList.filter((connection) => !selectedConnection.length ? true : selectedConnection.includes(connection.id!));
@@ -71,7 +97,8 @@ const SearchSection = ({
             const res = await searchPoolRef.current?.exec('search', [questionValue, connections]) as {
                 searchedRes: Search.TextItemRes[]
             }
-            setSearchTextRes(res.searchedRes || []);
+            searchTextRes = res.searchedRes || [];
+            setSearchTextRes(searchTextRes);
         } catch (error) {
             console.error(error);
             message.error('Error in search');
@@ -113,6 +140,18 @@ const SearchSection = ({
         setConnectionOption(connectionOption);
     }, [connectionList])
 
+    // 更新关键词
+    useEffect(() => {
+        if (!questionValue) {
+            setQuestionKeywords([]);
+            return;
+        }
+
+        splitKeywords(questionValue).then((keywords) => {
+            setQuestionKeywords(keywords);
+        })
+    }, [questionValue])
+
     return (<div className='search-section'>
         <div className="input bg-background-100 flex   flex-col   border   border-border-medium rounded-lg p-1">
             <TextArea
@@ -122,6 +161,7 @@ const SearchSection = ({
                 autoSize={{ minRows: 2 }}
                 variant='borderless'
                 className='text-base'
+                onPressEnter={handleSearchClick}
             />
 
             <div className="input-filter flex items-center justify-between  pr-2 pl-1 py-2">
@@ -170,7 +210,7 @@ const SearchSection = ({
                                             </Tooltip>
                                         </div>
                                         <div className='pl-1 pt-2 pb-3'>
-                                            <TextHighlighter className="text-text-500 line-clamp-4 text-sm" text={item.text} keyword={questionValue} />
+                                            <TextHighlighter className="text-text-500 line-clamp-4 text-sm" text={item.text} keywords={questionKeywords} />
                                         </div>
                                     </div>
                                 )

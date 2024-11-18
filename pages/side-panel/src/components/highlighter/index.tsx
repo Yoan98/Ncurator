@@ -1,20 +1,24 @@
 import React, { useEffect, useRef } from 'react';
 import Mark from 'mark.js';
 
-const TextHighlighter = ({ text, keyword, className }: {
+const TextHighlighter = ({ text, keywords, className }: {
     text: string;
-    keyword: string;
+    keywords: string[];  // 修改为数组，支持多个关键词
     className?: string;
 }) => {
     const contentRef = useRef(null);
 
     useEffect(() => {
-        if (contentRef.current && keyword) {
+        if (contentRef.current && keywords.length > 0) {
             const instance = new Mark(contentRef.current);
             instance.unmark();  // 清除之前的高亮
-            instance.mark(keyword); // 高亮匹配的关键字
+
+            // 遍历每个关键词，逐个高亮
+            keywords.forEach((keyword) => {
+                instance.mark(keyword); // 高亮匹配的每个关键词
+            });
         }
-    }, [keyword, text]);  // 依赖关键字和文本内容
+    }, [keywords, text]);  // 依赖 keywords 和 text
 
     return (
         <p ref={contentRef} className={className}>{text}</p>

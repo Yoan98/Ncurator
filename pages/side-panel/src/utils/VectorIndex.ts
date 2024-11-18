@@ -113,9 +113,10 @@ export class LSHIndex {
     }
 
     // 查找相似向量
-    findSimilar({ queryVector, tables = this.tables }: {
+    findSimilar({ queryVector, tables = this.tables, similarityThreshold = this.similarityThreshold }: {
         queryVector: tf.Tensor1D,
         tables?: DB.LSHTables
+        similarityThreshold?: number
     }): { id: number, similarity: number }[] {
         const candidate: { id: number, similarity: number }[] = []
 
@@ -131,7 +132,7 @@ export class LSHIndex {
                     const similarity = math.cosineSimilarity(queryVector, storageVector);
                     storageVector.dispose();
 
-                    if (similarity > this.similarityThreshold) {
+                    if (similarity > similarityThreshold) {
                         if (!candidate.some(item => item.id === id)) {
                             candidate.push({
                                 id,

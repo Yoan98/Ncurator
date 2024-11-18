@@ -24,6 +24,7 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
         }
     }
 
+    console.time('total search')
     // 向量化句子
     await embedding.load()
     const embeddingOutput = await embedding.encode([question]);
@@ -183,26 +184,18 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
     })
     mixRes = mixRes.sort((a, b) => b.score - a.score)
 
-    // 按照storeName分组
-    const groupByStoreName = mixRes.reduce((acc, cur) => {
-        const storeName = constant.TEXT_CHUNK_STORE_NAME
-        if (!acc[storeName]) {
-            acc[storeName] = []
-        }
-        acc[storeName].push(cur.id)
-        return acc
-    }, {} as Record<string, number[]>)
-
 
     // text_chunk表查询结果
-    let textChunkRes: DB.TEXT_CHUNK[] = []
-    for (const storeName in groupByStoreName) {
-        const res = await store.getBatch({
-            storeName,
-            keys: groupByStoreName[storeName]
-        })
-        textChunkRes.push(...res)
-    }
+    let textChunkRes: DB.TEXT_CHUNK[] = await store.getBatch({
+        storeName: constant.TEXT_CHUNK_STORE_NAME,
+        keys: mixRes.map((item) => item.id)
+    })
+    // 过滤掉相同的文本,因为大小chunk的原因,导致有些小文本会重复
+    textChunkRes = textChunkRes.filter((item, index, self) =>
+        index === self.findIndex((t) => (
+            t.text === item.text
+        ))
+    )
     textChunkRes = textChunkRes.slice(0, k)
 
     // 读取document表数据，并拼凑
@@ -221,6 +214,8 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
             document
         }
     })
+
+    console.timeEnd('total search')
 
     console.log('Res', {
         lshRes,
