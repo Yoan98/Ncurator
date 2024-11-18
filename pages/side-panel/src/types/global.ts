@@ -1,6 +1,7 @@
 
 type ValueOf<T> = T[keyof T]
 type ConnectorUnion = 0 | 1
+type DocumentStatusUnion = 1 | 2 | 3
 
 namespace Search {
     export type TextItemRes = (DB.TEXT_CHUNK & { document: DB.DOCUMENT })
@@ -59,7 +60,7 @@ namespace DB {
         full_text_index_id: number;
         resource?: File
         created_at: Date
-        status: 1 | 2 | 3 // 1: building 2: fail 3: success
+        status: DocumentStatusUnion // 1: building 2: fail 3: success
         connection: {
             id: number
             name: string

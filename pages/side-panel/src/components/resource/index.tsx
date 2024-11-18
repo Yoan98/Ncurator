@@ -7,7 +7,7 @@ import { IndexDBStore } from '@src/utils/IndexDBStore';
 import * as constant from '@src/utils/constant';
 import dayjs from 'dayjs';
 //@ts-ignore
-import storageWorkerURL from '@src/worker-pool/storageDoc?url&worker'
+// import storageWorkerURL from '@src/worker-pool/buildIndex?url&worker';
 import type { Pool } from 'workerpool';
 import workerpool from 'workerpool';
 import { FileConnector } from '@src/utils/Connector';
@@ -22,13 +22,13 @@ const DocumentItem = ({ data, onDeleteClick }: {
         name: string,
         size: string,
         created_at: string,
-        status: 1 | 2 | 3,
+        status: DocumentStatusUnion,
         delLoading?: boolean
     },
     onDeleteClick: () => void
 }) => {
-    const statusText = data.status == 2 ? 'Fail' : data.status == 3 ? 'Success' : 'Building...';
-    const statusClass = data.status == 2 ? 'text-text-error' : data.status == 3 ? 'text-text-success' : '';
+    const statusText = data.status == constant.DocumentStatus.Fail ? 'Fail' : data.status == constant.DocumentStatus.Success ? 'Success' : 'Building...';
+    const statusClass = data.status == constant.DocumentStatus.Fail ? 'text-text-error' : data.status == constant.DocumentStatus.Success ? 'text-text-success' : '';
     return (
         <div className='flex gap-2 text-center items-center'>
             <Tooltip placement="top" title={data.name} >
@@ -78,19 +78,23 @@ const Resource = () => {
 
     const [searchValue, setSearchValue] = useState('');
 
-    const genExtra = (connectionId) => (
-        <IoSettingsOutline
-            title='Setting file'
-            size={20}
-            onClick={(event) => {
-                handleEditResource(event, connectionId);
-            }}
-        />
+    const genExtra = (connectionId, count) => (
+
+        <div className='flex items-center gap-2'>
+            <div className='text-sm'>Count: {count}</div>
+            <IoSettingsOutline
+                title='Setting file'
+                size={20}
+                onClick={(event) => {
+                    handleEditResource(event, connectionId);
+                }}
+            />
+        </div>
     );
     const CollapseItems: CollapseProps['items'] = displayConnectionList.map((item) => {
         return {
             key: item.id,
-            extra: genExtra(item.id),
+            extra: genExtra(item.id, item.documentList.length),
             label: item.name,
             children: item.documentList.map((doc) => {
                 const size = formatFileSize(doc.resource!);
@@ -119,9 +123,13 @@ const Resource = () => {
                     // 不存在,则这次手动操作的是新增的文件,需要删除掉,避免最终添加到数据库
                     addedFileListRef.current = addedFileListRef.current.filter((item) => item.uid != info.file.uid);
                 }
-            } else if (info.file.status === 'done') {
+            } else {
                 // 每次手动添加的,都理解为是需要添加到数据库的文件
-                addedFileListRef.current.push(info.file);
+                // 由于beforeUpload返回false,所以无法用status为done来判断是否上传成功,且会没有originFileObj,但fileList中有
+                // 所以为了保持类型一致,从fileList取一遍
+                // 所以除了删除的文件,其他的都是手动添加的文件
+                const addFile = info.fileList.find((file) => file.uid == info.file.uid)!;
+                addedFileListRef.current.push(addFile);
             }
 
             setUploadFileList([...info.fileList]);
@@ -172,6 +180,9 @@ const Resource = () => {
         }).filter((connection) => connection.documentList.length);
         const collapseActiveKey = disPlayConnectionList.length ? disPlayConnectionList.map(item => item.id!) : [];
         return { disPlayConnectionList, collapseActiveKey };
+    }
+    const checkHasBuildingDoc = () => {
+        return connectionList.some((connection) => connection.documentList.some((doc) => doc.status == constant.DocumentStatus.Building))
     }
 
     // 删除某一个connection下的文档数据
@@ -241,25 +252,27 @@ const Resource = () => {
                     storeName: constant.DOCUMENT_STORE_NAME,
                     data: {
                         ...doc,
-                        status: 2
+                        status: constant.DocumentStatus.Fail
                     }
                 });
                 continue;
             }
 
             // 向量化,并存储索引
-            const storageDocRes = await storagePoolRef.current?.exec('storageDocument', [{ bigChunks, miniChunks, document: doc, connection }]) as Storage.DocItemRes
+            const buildDocIndexRes = await storagePoolRef.current?.exec('buildDocIndex', [{ bigChunks, miniChunks, document: doc, connection }]) as Storage.DocItemRes
 
             // 提示结果
-            if (storageDocRes.status == 'Success') {
+            if (buildDocIndexRes.status == 'Success') {
                 message.success(`${doc.name} Storage Success`);
-            } else if (storageDocRes.status == 'Fail') {
-                console.error('storageDocument error', storageDocRes.error)
+            } else if (buildDocIndexRes.status == 'Fail') {
+                console.error('buildDocIndex error', buildDocIndexRes.error)
                 message.error(`${doc.name} Storage Fail`);
             } else {
                 message.error(`${doc.name} Unknown Status`);
             }
         }
+
+        fetchConnectionList();
 
     }
     // 新增某一个connection下文档数据到数据库
@@ -277,7 +290,7 @@ const Resource = () => {
                 full_text_index_id: 0,
                 resource: file,
                 created_at: new Date(),
-                status: 1,
+                status: constant.DocumentStatus.Building,
                 connection: {
                     id: connection.id!,
                     name: connection.name
@@ -426,7 +439,7 @@ const Resource = () => {
             key: docId
         }) as DB.DOCUMENT;
         // 判断文档的创建时间,当状态为building时,只有超过半小时才能删除
-        if (document.status == 1) {
+        if (document.status == constant.DocumentStatus.Building) {
             const now = dayjs();
             const created_at = dayjs(document.created_at);
             const diff = now.diff(created_at, 'minute');
@@ -453,7 +466,7 @@ const Resource = () => {
 
         // 判断当前的connections是否存在build中的document,存在则不允许编辑
         const connection = connectionList.find((item) => item.id == connectionId)!;
-        const hasBuildDoc = connection.documentList.some((doc) => doc.status == 1);
+        const hasBuildDoc = connection.documentList.some((doc) => doc.status == constant.DocumentStatus.Building);
         if (hasBuildDoc) {
             message.warning('Please wait for the document to build, or hover over the document status to delete');
             return;
@@ -480,9 +493,9 @@ const Resource = () => {
     useEffect(() => {
         fetchConnectionList();
 
-        storagePoolRef.current = workerpool.pool(storageWorkerURL, {
-            maxWorkers: 1,
-        });
+        // storagePoolRef.current = workerpool.pool(storageWorkerURL, {
+        //     maxWorkers: 1,
+        // });
     }, [])
 
     useEffect(() => {
@@ -510,14 +523,18 @@ const Resource = () => {
                 </div>
             </div>
 
-            <div className="search py-5 ">
+            <div className="search pt-5 pb-1 mb-2">
                 <Search className='text-base' placeholder="Search file name..." onSearch={handleSearch} onChange={(e) => {
                     setSearchValue(e.target.value);
                 }} enterButton size="large" />
+                {
+                    <div className={`text-right text-xs text-text-error ${checkHasBuildingDoc() ? 'visible' : 'invisible'}`}>Document is building, please don't close App before finish</div>
+                }
             </div>
 
 
-            <div className="list flex-1 flex flex-col overflow-y-auto">
+            <div className="resource-list flex-1 flex flex-col overflow-y-auto">
+
                 {
                     !displayConnectionList.length ? <div className='flex flex-1 flex-col justify-center'> <Empty description='No resource yet' /></div> : <Collapse
                         activeKey={collapseActiveKey}

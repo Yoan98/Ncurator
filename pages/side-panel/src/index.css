@@ -2,3 +2,7 @@
     max-height: 400px !important;
     overflow-y: auto;
 }
+
+.resource-list {
+    max-height: calc(100vh - 220px) !important;
+}

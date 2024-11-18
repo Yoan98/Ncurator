@@ -169,9 +169,9 @@ const storageBigChunkToFullTextIndex = async ({ textChunkList, store }: {
 }
 
 
-// 存储文档
+// 构建索引并存储
 // 后期如果碰到大文档,导致内存占用过高,可以考虑将文档分块存入indexDB,对于索引则要保证多个块依然存在同一条索引中
-const storageDocument = async ({ bigChunks, miniChunks, document, connection }: {
+const buildDocIndex = async ({ bigChunks, miniChunks, document, connection }: {
     bigChunks: langchain.Document[],
     miniChunks: langchain.Document[],
     connection: DB.CONNECTION,
@@ -213,7 +213,7 @@ const storageDocument = async ({ bigChunks, miniChunks, document, connection }: 
             },
             lsh_index_id: lshIndexId,
             full_text_index_id: fullTextIndexId,
-            status: 3
+            status: constant.DocumentStatus.Success
         }
         await store.put({
             storeName: constant.DOCUMENT_STORE_NAME,
@@ -241,7 +241,7 @@ const storageDocument = async ({ bigChunks, miniChunks, document, connection }: 
             storeName: constant.DOCUMENT_STORE_NAME,
             data: {
                 ...document,
-                status: 2
+                status: constant.DocumentStatus.Fail
             },
         });
         return {
@@ -288,7 +288,7 @@ const testEmbedding = async (texts: string[] | string) => {
 }
 
 workerpool.worker({
-    storageDocument,
+    buildDocIndex,
     initialEmbeddingWorkerPool,
     testSimilarity,
     testEmbedding

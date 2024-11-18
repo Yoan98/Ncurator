@@ -111,7 +111,7 @@ const LlmLoaderProgress = ({ progress, status, onReloadClick }: { progress: numb
 
 
     return (
-        <div className={`llm-load-status p-1 animate__animated  ${progress == 100 ? 'animate__backOutRight animate__delay-2s' : 'animate__backInRight'}`}>
+        <div className={`llm-load-status bg-white rounded-lg py-1 px-2 animate__animated shadow-md  ${progress == 100 ? 'animate__backOutRight animate__delay-2s' : 'animate__backInRight'}`}>
             {
                 !status
                     ?
@@ -143,7 +143,7 @@ const SidePanel = () => {
     const [llmEngineLoadPercent, setLlmEngineLoadPercent] = useState<number>(0);
     const [llmEngineLoadStatus, setLlmEngineLoadStatus] = useState<ProgressProps['status']>('active');
 
-    const [pagePath, setPagePath] = useState<string>('/resource');
+    const [pagePath, setPagePath] = useState<string>('/main');
 
 
     const initLang = () => {
@@ -303,7 +303,7 @@ const SidePanel = () => {
                 </Drawer>
 
                 {/* llm load loading */}
-                <div className="fixed right-0 bottom-0">
+                <div className="fixed right-0 bottom-0 px-1">
                     <LlmLoaderProgress progress={llmEngineLoadPercent} status={llmEngineLoadStatus} onReloadClick={() => {
                         setLlmEngineLoadPercent(0);
                         setLlmEngineLoadStatus('active');
