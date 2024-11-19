@@ -1,14 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import { Select, Button, Input, message, Empty, Tooltip } from 'antd';
 import { IoDocumentAttachOutline } from "react-icons/io5";
-import { IndexDBStore } from '@src/utils/IndexDBStore';
-import * as constant from '@src/utils/constant';
 import { splitKeywords } from '@src/utils/tool';
 import type { Pool } from 'workerpool';
 import workerpool from 'workerpool';
 //@ts-ignore
 import searchWorkerURL from '@src/worker-pool/searchDoc?url&worker'
-import type { WebWorkerMLCEngine } from '@mlc-ai/web-llm';
 import { useGlobalContext } from '@src/provider/global';
 import TextHighlighter from '@src/components/highlighter';
 import type {

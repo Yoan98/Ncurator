@@ -3,7 +3,7 @@ import type { InitProgressReport, WebWorkerMLCEngine } from "@mlc-ai/web-llm";
 import * as constant from '@src/utils/constant';
 import type { ProgressProps } from 'antd';
 import { Progress } from 'antd';
-import { CreateWebWorkerMLCEngine, modelVersion, modelLibURLPrefix, prebuiltAppConfig } from "@mlc-ai/web-llm";
+import { CreateWebWorkerMLCEngine, prebuiltAppConfig } from "@mlc-ai/web-llm";
 
 const pageList = ['/main', '/resource', '/llm-set'];
 
@@ -28,7 +28,7 @@ const defaultContextValue: GlobalContextValue = {
     llmEngine: null,
     loadLlmEngine: async () => { },
 
-    pagePath: '/llm-set',
+    pagePath: '/main',
     setPagePath: () => { },
 };
 
@@ -70,7 +70,7 @@ export const GlobalProvider = ({ children }) => {
     const [llmEngineLoadPercent, setLlmEngineLoadPercent] = useState<number>(0);
     const [llmEngineLoadStatus, setLlmEngineLoadStatus] = useState<ProgressProps['status']>('active');
 
-    const [pagePath, setPagePath] = useState<string>('/llm-set');
+    const [pagePath, setPagePath] = useState<string>('/main');
 
     // 加载LLM模型
     const loadLlmEngine = async (selectModel) => {

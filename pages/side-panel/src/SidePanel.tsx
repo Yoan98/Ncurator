@@ -1,7 +1,7 @@
 import { withErrorBoundary, withSuspense } from '@extension/shared';
-import { Button, ConfigProvider, ConfigProviderProps, Dropdown, MenuProps, Drawer } from 'antd';
+import { Button, Dropdown, MenuProps, Drawer } from 'antd';
 
-import React, { useState, useLayoutEffect, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { FiSidebar } from "react-icons/fi";
 import { RiRobot2Line } from "react-icons/ri";
 import { IoDocumentAttachOutline } from "react-icons/io5";
@@ -10,10 +10,7 @@ import { CiSearch } from "react-icons/ci";
 import SearchSection from '@src/components/search/index';
 import Resource from '@src/components/resource/index';
 import LlmSetup from '@src/components/llmSetup/index';
-import type { InitProgressReport, WebWorkerMLCEngine } from "@mlc-ai/web-llm";
-import { CreateWebWorkerMLCEngine, modelVersion, modelLibURLPrefix, prebuiltAppConfig } from "@mlc-ai/web-llm";
 import { IoIosArrowRoundBack } from "react-icons/io";
-import * as constant from '@src/utils/constant';
 
 import { useGlobalContext } from '@src/provider/global';
 
@@ -154,21 +151,21 @@ const SidePanel = () => {
 
 
             {/* main content */}
-            {/* <div className={`main-content-wrap mt-5 ${pagePath === '/main' ? 'block' : 'hidden'}`}>
-                        <div className="toggle-wrap h-[30px]">
-                            <div className="toggle  fixed top-6 left-1/2 transform -translate-x-1/2">
-                                <ToggleSwitch initialTab='search' onToggleSwitch={(tab) =>
-                                    setActiveTab(tab)
-                                } />
-                            </div>
-                        </div>
-                        <SearchSection></SearchSection>
-                    </div> */}
+            <div className={`main-content-wrap mt-5 ${pagePath === '/main' ? 'block' : 'hidden'}`}>
+                <div className="toggle-wrap h-[30px]">
+                    <div className="toggle  fixed top-6 left-1/2 transform -translate-x-1/2">
+                        <ToggleSwitch initialTab='search' onToggleSwitch={(tab) =>
+                            setActiveTab(tab)
+                        } />
+                    </div>
+                </div>
+                <SearchSection></SearchSection>
+            </div>
 
             {/* resource content */}
-            {/* <div className={`resource-content flex-1 flex flex-col ${pagePath === '/resource' ? 'block' : 'hidden'}`}>
-                        <Resource></Resource>
-                    </div> */}
+            <div className={`resource-content flex-1 flex flex-col ${pagePath === '/resource' ? 'block' : 'hidden'}`}>
+                <Resource></Resource>
+            </div>
 
             {/* llm setup content */}
             <div className={`llm-setup-content flex-1 flex flex-col ${pagePath === '/llm-set' ? 'block' : 'hidden'}`}>

@@ -5,8 +5,8 @@ import { CiSquareQuestion } from "react-icons/ci";
 import { Tag, Button, Tooltip, Empty, message, Progress } from 'antd';
 import type { ProgressProps } from 'antd';
 import * as constant from '@src/utils/constant';
-import type { InitProgressReport, WebWorkerMLCEngine } from "@mlc-ai/web-llm";
-import { CreateMLCEngine, modelVersion, modelLibURLPrefix, prebuiltAppConfig } from "@mlc-ai/web-llm";
+import type { InitProgressReport } from "@mlc-ai/web-llm";
+import { CreateMLCEngine, prebuiltAppConfig } from "@mlc-ai/web-llm";
 import { IndexDBStore } from '@src/utils/IndexDBStore';
 import { useGlobalContext } from '@src/provider/global';
 
