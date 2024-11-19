@@ -18,16 +18,13 @@ import type {
 const { TextArea } = Input;
 
 
-const SearchSection = ({
-    llmEngine,
-}: {
-    llmEngine: WebWorkerMLCEngine | null
-}) => {
+const SearchSection = () => {
+    const { connectionList, llmEngine } = useGlobalContext()
+
     const [questionValue, setQuestionValue] = useState('');
     const [questionKeywords, setQuestionKeywords] = useState<string[]>([]);
 
     const [connectionOption, setConnectionOption] = useState<{ label: string, value: number }[]>([]);
-    const { connectionList } = useGlobalContext()
     const [selectedConnection, setSelectedConnection] = useState<number[]>([]);
 
     const [searchTextRes, setSearchTextRes] = useState<Search.TextItemRes[]>([]);

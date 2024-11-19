@@ -58,13 +58,13 @@ const DocumentItem = ({ data, onDeleteClick }: {
 
 
 const Resource = () => {
+    const { connectionList, setConnectionList } = useGlobalContext()
 
     const storagePoolRef = useRef<Pool>();
 
     const addedFileListRef = useRef<UploadFile[]>([]);
     const removedFileListRef = useRef<UploadFile[]>([]);
 
-    const { connectionList, setConnectionList } = useGlobalContext()
     const [displayConnectionList, setDisplayConnectionList] = useState<DB.ConnectionDocUnion[]>([]);
     const [connectionListLoading, setConnectionListLoading] = useState(false);
     const [collapseActiveKey, setCollapseActiveKey] = useState<number[]>([]);

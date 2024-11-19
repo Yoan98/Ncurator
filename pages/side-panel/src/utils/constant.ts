@@ -40,3 +40,6 @@ export const enum EncodePrefix {
     SearchQuery = 'search_query'
 }
 export const DEFAULT_EMBEDDING_MODEL = 'jinaai/jina-embeddings-v2-base-zh'
+export const WEBLLM_CONFIG_INDEXDB_NAME = 'webllm/config'; // webllm配置的indexdb名称
+export const WEBLLM_CONFIG_STORE_NAME = 'urls'; // webllm配置的store名称
+export const DEFAULT_MODEL_ID_NAME = 'defaultModelId'; // 默认模型id的名称

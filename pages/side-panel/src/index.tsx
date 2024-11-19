@@ -1,7 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import '@extension/tailwindcss-config/input.css'
 import '@src/index.css';
-import SidePanel from '@src/SidePanel';
+import App from '@src/App';
 // import SidePanel from '@src/components/test';
 import 'animate.css';
 
@@ -11,7 +11,7 @@ function init() {
         throw new Error('Can not find #app-container');
     }
     const root = createRoot(appContainer);
-    root.render(<SidePanel />);
+    root.render(<App />);
 }
 
 init();
