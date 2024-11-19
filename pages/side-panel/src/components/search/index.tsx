@@ -45,10 +45,10 @@ const SearchSection = ({
             return;
         }
 
-        const context = searchTextRes.map((item) => item.text).join('\n');
+        const context = searchTextRes.map((item, index) => `Document${index + 1}: ${item.text}`).join('\n');
 
         const inp =
-            "Use only the following context when answering the question at the end. Don't use any other knowledge.\n" +
+            "Use only the following context when answering the question at the end. Don't use any other knowledge. The documents below have been retrieved and sorted by relevance. Please use them in the order they are presented, with the most relevant ones first.\n" +
             context +
             "\n\nQuestion: " +
             questionValue +
@@ -86,6 +86,10 @@ const SearchSection = ({
             message.warning('Please input the search content')
             return;
         };
+
+        splitKeywords(questionValue).then((keywords) => {
+            setQuestionKeywords(keywords);
+        })
 
         setAskAiLoading(true);
         setSearchLoading(true);
@@ -147,9 +151,6 @@ const SearchSection = ({
             return;
         }
 
-        splitKeywords(questionValue).then((keywords) => {
-            setQuestionKeywords(keywords);
-        })
     }, [questionValue])
 
     return (<div className='search-section'>

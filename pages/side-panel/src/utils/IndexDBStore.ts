@@ -72,16 +72,14 @@ export class IndexDBStore {
             const store = transaction.objectStore(storeName);
 
             const addRes = store.add(data);
-            let addId: number;
-            addRes.onsuccess = () => {
-                addId = addRes.result as number;
-                resolve(addId);
-            };
 
-            addRes.onerror = () => {
-                transaction!.abort();
-                reject(addRes.error)
-            };
+            transaction.oncomplete = () => {
+                resolve(addRes.result as number);
+            }
+
+            transaction.onerror = () => {
+                reject(addRes.error);
+            }
         });
     }
     // 批量插入数据,返回插入后的数据包含id
@@ -99,6 +97,7 @@ export class IndexDBStore {
             const store = transaction.objectStore(storeName);
 
             const res: (T & { id: number })[] = [];
+            const errorList: DOMException[] = []
             data.forEach((item, index) => {
                 const addRes = store!.add(item);
                 addRes.onsuccess = () => {
@@ -107,17 +106,20 @@ export class IndexDBStore {
                         id: addRes.result as number
                     }
                     res.push(item);
-
-                    if (res.length === data.length) {
-                        resolve(res);
-                    }
                 };
 
                 addRes.onerror = () => {
-                    transaction!.abort();
-                    reject(addRes.error)
+                    errorList.push(addRes.error!);
                 };
             });
+
+            transaction.oncomplete = () => {
+                resolve(res);
+            }
+
+            transaction.onerror = () => {
+                reject(errorList)
+            }
 
         });
     }
@@ -140,7 +142,6 @@ export class IndexDBStore {
             const putRes = store.put(data);
 
             transaction.oncomplete = () => {
-                console.log('put complete', putRes.result);
                 resolve(putRes.result as number);
             }
 
@@ -166,11 +167,13 @@ export class IndexDBStore {
 
             const delRes = store.delete(key);
 
-            delRes.onsuccess = () => resolve();
-            delRes.onerror = () => {
-                transaction!.abort();
+            transaction.oncomplete = () => {
+                resolve();
+            }
+
+            transaction.onerror = () => {
                 reject(delRes.error);
-            };
+            }
         });
     }
 
@@ -179,7 +182,7 @@ export class IndexDBStore {
         storeName: string;
         keys: number[];
         transaction?: IDBTransaction
-    }): Promise<void> {
+    }): Promise<number[]> {
         if (!this.db) throw new Error('Database not initialized');
 
         return new Promise((resolve, reject) => {
@@ -189,22 +192,26 @@ export class IndexDBStore {
 
             const store = transaction.objectStore(storeName);
 
-            const res: any[] = [];
+            const res: number[] = [];
+            const errorList: DOMException[] = []
             keys.forEach(key => {
                 const delRes = store.delete(key);
                 delRes.onsuccess = () => {
                     res.push(key);
-
-                    if (res.length === keys.length) {
-                        resolve();
-                    }
                 };
 
                 delRes.onerror = () => {
-                    transaction!.abort();
-                    reject(delRes.error);
+                    errorList.push(delRes.error!);
                 };
             });
+
+            transaction.oncomplete = () => {
+                resolve(res);
+            }
+
+            transaction.onerror = () => {
+                reject(errorList);
+            }
 
         });
     }
@@ -231,11 +238,13 @@ export class IndexDBStore {
                 request = store.get(key);
             }
 
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => {
-                transaction!.abort();
+            transaction.oncomplete = () => {
+                resolve(request.result);
+            }
+
+            transaction.onerror = () => {
                 reject(request.error);
-            };
+            }
         });
     }
     // 查询连续范围数据,或者全部数据
@@ -258,8 +267,13 @@ export class IndexDBStore {
                 request = store.getAll(key);
             }
 
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
+            transaction.oncomplete = () => {
+                resolve(request.result);
+            }
+
+            transaction.onerror = () => {
+                reject(request.error);
+            }
         });
     }
     // 查询非连续范围数据
@@ -279,17 +293,24 @@ export class IndexDBStore {
             let proxyStore = indexName ? store.index(indexName) : store;
 
             const res: any[] = []
+            const errorList: DOMException[] = []
             for (const key of keys) {
                 const request = proxyStore.get(key);
                 request.onsuccess = () => {
                     res.push(request.result)
-
-                    if (res.length === keys.length) {
-                        resolve(res.filter(item => item));
-                    }
                 }
 
-                request.onerror = () => reject(request.error);
+                request.onerror = () => {
+                    errorList.push(request.error!);
+                };
+            }
+
+            transaction.oncomplete = () => {
+                resolve(res.filter(item => item));
+            }
+
+            transaction.onerror = () => {
+                reject(errorList);
             }
 
         });

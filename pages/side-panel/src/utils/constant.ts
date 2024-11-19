@@ -34,3 +34,9 @@ export const DEFAULT_MAX_EMBEDDING_BATCH_SIZE = 10; // 默认的embedding 一批
 export const SEARCHED_VECTOR_WEIGHT = 0.8; // 向量的权重
 export const SEARCHED_FULL_TEXT_WEIGHT = 0.2; // 全文索引的权重
 export const THEME_COLOR = '#404040'; // 主题色
+
+export const enum EncodePrefix {
+    SearchDocument = 'search_document',
+    SearchQuery = 'search_query'
+}
+export const DEFAULT_EMBEDDING_MODEL = 'jinaai/jina-embeddings-v2-base-zh'

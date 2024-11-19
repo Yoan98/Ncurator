@@ -2,6 +2,7 @@
 type ValueOf<T> = T[keyof T]
 type ConnectorUnion = 0 | 1
 type DocumentStatusUnion = 1 | 2 | 3
+type EncodePrefixUnion = 'search_document' | 'search_query'
 
 namespace Search {
     export type TextItemRes = (DB.TEXT_CHUNK & { document: DB.DOCUMENT })

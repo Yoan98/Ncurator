@@ -87,7 +87,7 @@ const storageTextChunkToLSH = async ({ textChunkList, pureTextList, embeddingBat
     console.log('pureTextList', pureTextList);
 
     const execTasks = pureTextList.map(item => {
-        return embeddingWorkerPool.exec('embeddingText', [item])
+        return embeddingWorkerPool.exec('embeddingText', [item, constant.EncodePrefix.SearchDocument])
     })
     const embeddingOutput: EmbeddingOutput[] = await Promise.all(execTasks)
     console.timeEnd('embedding encode');

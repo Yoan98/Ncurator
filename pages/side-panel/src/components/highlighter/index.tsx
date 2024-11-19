@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import Mark from 'mark.js';
+import { Tooltip } from 'antd';
 
 const TextHighlighter = ({ text, keywords, className }: {
     text: string;
@@ -21,7 +22,9 @@ const TextHighlighter = ({ text, keywords, className }: {
     }, [keywords, text]);  // 依赖 keywords 和 text
 
     return (
-        <p ref={contentRef} className={className}>{text}</p>
+        <Tooltip placement="top" title={text} >
+            <p ref={contentRef} className={className}>{text}</p>
+        </Tooltip>
     );
 };
 

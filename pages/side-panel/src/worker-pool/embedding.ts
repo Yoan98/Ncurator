@@ -3,10 +3,10 @@ import { embedding } from '@src/utils/Embedding';
 
 // 这个文件的线程池只用于embedding相关的计算
 
-// 向量化文本
-const embeddingText = async (texts: string[] | string) => {
+// 向量化document文本
+const embeddingText = async (texts: string[] | string, prefix?: EncodePrefixUnion) => {
     await embedding.load()
-    const embeddingOutput = await embedding.encode(texts);
+    const embeddingOutput = await embedding.encode(texts, prefix);
 
     const data = embeddingOutput.dataSync();
     embeddingOutput.dispose();

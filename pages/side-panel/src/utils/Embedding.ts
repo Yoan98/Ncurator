@@ -3,6 +3,7 @@ import type { PreTrainedTokenizer, PreTrainedModel, AllTasks } from '@huggingfac
 import { cosineSimilarity } from './math';
 import * as tf from '@tensorflow/tfjs';
 import { checkWebGPU } from '@src/utils/tool';
+import { DEFAULT_EMBEDDING_MODEL } from './constant';
 
 
 //* 使用本地模型的配置
@@ -19,11 +20,12 @@ env.localModelPath = '../';
 // env.remoteHost = 'http://www.hongbanbangbang.cn/';
 // console.log('env', env)
 
-
+type EmbeddingModel = 'nomic-ai/nomic-embed-text-v1' | 'jinaai/jina-embeddings-v2-base-zh'
 export class Embedding {
     // private model: PreTrainedModel | null;
     // private tokenizer: PreTrainedTokenizer | null;
     private extractor: AllTasks['feature-extraction'] | null;
+    model: EmbeddingModel
 
     constructor() {
     }
@@ -133,17 +135,20 @@ export class Embedding {
     /**
      * 加载模型和分词器
      * !注意:该方法执行后,内存会占用较多(fp16为近1G,在不算数据的情况下)尤其注意多线程的使用
+     * !一定要以单例化的形式调用，重复load会导致内存占用一直累加
      * @returns
      */
-    async load() {
+    async load(model: EmbeddingModel = DEFAULT_EMBEDDING_MODEL) {
         if (this.extractor) {
             return;
         }
 
+        this.model = model;
+
         const isSupportWebGPU = await checkWebGPU();
 
         // 初始化模型和分词器
-        this.extractor = await pipeline("feature-extraction", "nomic-ai/nomic-embed-text-v1", {
+        this.extractor = await pipeline("feature-extraction", this.model, {
             dtype: 'fp32',
             device: isSupportWebGPU ? 'webgpu' : undefined,
             local_files_only: true
@@ -151,12 +156,18 @@ export class Embedding {
 
         console.log('Model and tokenizer initialized');
     }
-
-    async encode(texts: string | string[]): Promise<tf.Tensor2D> {
+    async encode(texts: string | string[], prefix?: EncodePrefixUnion): Promise<tf.Tensor2D> {
         if (!this.extractor) {
             throw new Error('Model or tokenizer not initialized');
         }
-        const inputTexts = Array.isArray(texts) ? texts : [texts];
+
+        let inputTexts = Array.isArray(texts) ? texts : [texts];
+
+        if (this.model === 'nomic-ai/nomic-embed-text-v1' && prefix) {
+            inputTexts = inputTexts.map(text => {
+                return `${prefix}: ${text}`
+            })
+        }
 
         const output = await this.extractor(inputTexts, { pooling: 'mean', normalize: true });
 

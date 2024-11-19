@@ -27,7 +27,7 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
     console.time('total search')
     // 向量化句子
     await embedding.load()
-    const embeddingOutput = await embedding.encode([question]);
+    const embeddingOutput = await embedding.encode(question, constant.EncodePrefix.SearchQuery);
     const queryVectorData = embeddingOutput.dataSync() as Float32Array
     embeddingOutput.dispose()
 
