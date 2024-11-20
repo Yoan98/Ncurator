@@ -1,16 +1,16 @@
 // 由于embedding过于占内存，只好将searchDoc抽出来
 import { embedding } from '@src/utils/Embedding';
 import * as constant from '@src/utils/constant';
-import * as config from '@src//config';
+import * as config from '@src/config';
 import { IndexDBStore } from '@src/utils/IndexDBStore';
 import workerpool from 'workerpool';
 // @ts-ignore
 import WorkerURL from './searching?url&worker'
 
-// 最多开一半的cpu核数,避免内存过大
-const maxWorkers = Math.max(1, Math.floor(navigator.hardwareConcurrency / 2))
+
+// const maxWorkers = Math.max(1, Math.floor(navigator.hardwareConcurrency / 2))
 const searchingWorkerPool = workerpool.pool(WorkerURL, {
-    maxWorkers,
+    maxWorkers: config.SEARCH_WORKER_NUM,
 });
 
 export interface SearchedLshItemRes {
@@ -42,7 +42,7 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
     })
 
     // 并行搜索
-    const searchParallel = async ({ storeName, workerMethod, question, connections, extraWorkerParam = [], maxGetStoreItemSize = 100 }: {
+    const searchParallel = async ({ storeName, workerMethod, question, connections, extraWorkerParam = [], maxGetStoreItemSize = config.SEARCH_INDEX_BATCH_SIZE }: {
         storeName: string,
         workerMethod: string,
         question: string | Float32Array,
@@ -77,7 +77,7 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
             const searchTasks: workerpool.Promise<any, Error>[] = []
             // 一个worker执行的最大数量
             // 除2的原因，是因为会同时搜索向量索引表和全文索引表
-            const cpuCore = Math.max(1, Math.floor(maxWorkers / 2))
+            const cpuCore = Math.max(1, Math.floor(config.SEARCH_WORKER_NUM / 2))
             const workerExecuteSize = Math.max(1, Math.floor(indexList.length / cpuCore))
 
             for (let i = 0; i < indexList.length; i += workerExecuteSize) {

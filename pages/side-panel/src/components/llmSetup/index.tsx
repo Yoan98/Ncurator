@@ -28,17 +28,30 @@ const DEFAULT_META_DATA = {
     loadingPercent: 0
 }
 const DEFAULT_MODEL_LIST: ModelItem[] = [{
-    name: 'Llama-3.1',
+    name: 'Llama-3.1-8B',
     modeSizeType: 'Bigger',
-    modelId: 'Llama-3.1-8B-Instruct-q4f32_1-MLC',
-    vram_required_MB: 6101,
+    modelId: 'Llama-3.1-8B-Instruct-q4f16_1-MLC',
+    vram_required_MB: 5001,
     ...DEFAULT_META_DATA
 
 }, {
-    name: 'Qian Wen',
+    name: 'Llama-3.2-3B',
+    modeSizeType: 'Smaller',
+    modelId: 'Llama-3.2-3B-Instruct-q4f32_1-MLC',
+    vram_required_MB: 2951,
+    ...DEFAULT_META_DATA
+
+}, {
+    name: 'Qwen2.5-7B',
     modeSizeType: 'Bigger',
-    modelId: 'Qwen2.5-7B-Instruct-q4f32_1-MLC',
-    vram_required_MB: 5900,
+    modelId: 'Qwen2.5-7B-Instruct-q4f16_1-MLC',
+    vram_required_MB: 5106,
+    ...DEFAULT_META_DATA
+}, {
+    name: 'Qwen2.5-3B',
+    modeSizeType: 'Smaller',
+    modelId: 'Qwen2.5-3B-Instruct-q4f32_1-MLC',
+    vram_required_MB: 2893,
     ...DEFAULT_META_DATA
 }]
 
