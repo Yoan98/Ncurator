@@ -41,7 +41,7 @@ const LlmLoaderProgress = ({ progress, status, onReloadClick, onGoToSetupCLick }
         ProgressTipEle = <div className="text-text-400">Loading LLM Model ...</div>
     } else if (status === 'exception') {
         ProgressTipEle = <div className='text-text-error cursor-pointer' onClick={onReloadClick}>Load LLM Model Error, click try again</div>
-    } else {
+    } else if (status === 'success') {
         ProgressTipEle = <div className="text-text-success">Load LLM Model Success</div>
     }
 
@@ -68,7 +68,7 @@ export const GlobalProvider = ({ children }) => {
 
     const [llmEngine, setLlmEngine] = useState<WebWorkerMLCEngine | null>(null);
     const [llmEngineLoadPercent, setLlmEngineLoadPercent] = useState<number>(0);
-    const [llmEngineLoadStatus, setLlmEngineLoadStatus] = useState<ProgressProps['status']>('active');
+    const [llmEngineLoadStatus, setLlmEngineLoadStatus] = useState<ProgressProps['status']>('normal');
 
     const [pagePath, setPagePath] = useState<string>('/main');
 
@@ -76,15 +76,16 @@ export const GlobalProvider = ({ children }) => {
     const loadLlmEngine = async (selectModel) => {
         if (selectModel === 'default') {
             // 检查本地模型
-            const defaultModal = localStorage.getItem(constant.DEFAULT_MODEL_ID_NAME);
+            const defaultModal = localStorage.getItem(constant.STORAGE_DEFAULT_MODEL_ID);
 
             if (!defaultModal) {
                 setLlmEngineLoadStatus(undefined);
                 return
             }
-
             selectModel = defaultModal;
         }
+
+        setLlmEngineLoadStatus('active');
 
         try {
             const initProgressCallback = (progress: InitProgressReport) => {
@@ -128,7 +129,7 @@ export const GlobalProvider = ({ children }) => {
             {children}
 
             {/* llm load loading */}
-            <div className="fixed right-0 bottom-0 px-1">
+            <div className="fixed right-0 bottom-2 px-1">
                 <LlmLoaderProgress progress={llmEngineLoadPercent} status={llmEngineLoadStatus} onReloadClick={() => {
                     setLlmEngineLoadPercent(0);
                     setLlmEngineLoadStatus('active');

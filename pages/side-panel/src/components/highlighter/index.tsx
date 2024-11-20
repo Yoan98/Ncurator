@@ -4,22 +4,22 @@ import { Tooltip } from 'antd';
 
 const TextHighlighter = ({ text, keywords, className }: {
     text: string;
-    keywords: string[];  // 修改为数组，支持多个关键词
+    keywords: string[];
     className?: string;
 }) => {
     const contentRef = useRef(null);
 
     useEffect(() => {
-        if (contentRef.current && keywords.length > 0) {
-            const instance = new Mark(contentRef.current);
-            instance.unmark();  // 清除之前的高亮
+        if (!contentRef.current || keywords.length === 0) return;
+        const mark = new Mark(contentRef.current)
+        mark.mark(keywords, {
+            separateWordSearch: false,
+        });
 
-            // 遍历每个关键词，逐个高亮
-            keywords.forEach((keyword) => {
-                instance.mark(keyword); // 高亮匹配的每个关键词
-            });
+        return () => {
+            mark.unmark();
         }
-    }, [keywords, text]);  // 依赖 keywords 和 text
+    }, [keywords, text]);
 
     return (
         <Tooltip placement="top" title={text} >

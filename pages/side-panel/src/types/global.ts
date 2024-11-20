@@ -58,8 +58,8 @@ namespace DB {
             from: number;
             to: number;
         };
-        lsh_index_id: number;
-        full_text_index_id: number;
+        lsh_index_ids: number[];
+        full_text_index_ids: number[];
         resource?: File
         created_at: Date
         status: DocumentStatusUnion // 1: building 2: fail 3: success

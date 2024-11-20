@@ -70,7 +70,6 @@ const LlmSetup = () => {
 
         try {
             const initProgressCallback = (progress: InitProgressReport) => {
-                console.log("load progress", progress);
                 // 更新load percent
                 setAllLlmModels((preModels) => {
                     return preModels.map((item) => {
@@ -129,7 +128,7 @@ const LlmSetup = () => {
 
     }
     const handleSetDefaultClick = (model: ModelItem) => {
-        localStorage.setItem(constant.DEFAULT_MODEL_ID_NAME, model.modelId);
+        localStorage.setItem(constant.STORAGE_DEFAULT_MODEL_ID, model.modelId);
         setAllLlmModels((preModels) => {
             return preModels.map((item) => {
                 if (item.modelId === model.modelId) {
@@ -157,7 +156,7 @@ const LlmSetup = () => {
 
                 {
                     model.isDefault ?
-                        <Tag color={`orange`} className='text-base'>Default</Tag>
+                        <Tag color={`orange`} className='text-sm'>Default</Tag>
                         : <Button type="primary" size="small" onClick={() => { handleSetDefaultClick(model) }}>Set Default</Button>
                 }
             </div>
@@ -193,18 +192,11 @@ const LlmSetup = () => {
     ))
 
     const fetchAllModels = async () => {
-        const indexDB = new IndexDBStore();
-        await indexDB.connect(constant.WEBLLM_CONFIG_INDEXDB_NAME);
-
-        // 获取所有的模型
-        const localModelConfigs = await indexDB.getAll({
-            storeName: constant.WEBLLM_CONFIG_STORE_NAME
-        }) as { url: string }[];
-
-        let defaultModelId = localStorage.getItem(constant.DEFAULT_MODEL_ID_NAME);
+        const localLoadedModelIds = localStorage.getItem(constant.STORAGE_LOADED_MODEL_IDS);
+        let defaultModelId = localStorage.getItem(constant.STORAGE_DEFAULT_MODEL_ID);
 
         let newLlmModels = allLlmModels.map((allModel) => {
-            const isLoaded = localModelConfigs.some((localModel) => localModel.url.includes(allModel.modelId));
+            const isLoaded = localLoadedModelIds?.split(',').includes(allModel.modelId) || false;
             return {
                 ...allModel,
                 isLoaded,
@@ -218,6 +210,14 @@ const LlmSetup = () => {
     useEffect(() => {
         fetchAllModels();
     }, [])
+
+    useEffect(() => {
+        if (!allLlmModels.length) return
+        // 检查是否有下载好的模型,更新到localstorage
+        const loadedModelIds = allLlmModels.filter((model) => model.isLoaded).map((model) => model.modelId);
+        localStorage.setItem(constant.STORAGE_LOADED_MODEL_IDS, loadedModelIds.join(','));
+
+    }, [allLlmModels])
 
     return (
         <div className='llm-setup pt-2 flex flex-col flex-1'>

@@ -191,8 +191,12 @@ const Resource = () => {
         if (!removeDocList.length) { return { connectionAfterDel: connection } }
 
         // 删除document的索引id
-        let delLshIndexIds = removeDocList.map((doc) => doc.lsh_index_id)
-        let delFullTextIndexIds = removeDocList.map((doc) => doc.full_text_index_id)
+        let delLshIndexIds: number[] = []
+        let delFullTextIndexIds: number[] = []
+        removeDocList.forEach((doc) => {
+            delLshIndexIds = delLshIndexIds.concat(doc.lsh_index_ids);
+            delFullTextIndexIds = delFullTextIndexIds.concat(doc.full_text_index_ids);
+        })
 
         // 删除connection中的document
         const newConnection: DB.CONNECTION = {
@@ -292,8 +296,8 @@ const Resource = () => {
                     from: 0,
                     to: 0
                 },
-                lsh_index_id: 0,
-                full_text_index_id: 0,
+                lsh_index_ids: [],
+                full_text_index_ids: [],
                 resource: file,
                 created_at: new Date(),
                 status: constant.DocumentStatus.Building,

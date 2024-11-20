@@ -3,7 +3,7 @@ import type { PreTrainedTokenizer, PreTrainedModel, AllTasks } from '@huggingfac
 import { cosineSimilarity } from './math';
 import * as tf from '@tensorflow/tfjs';
 import { checkWebGPU } from '@src/utils/tool';
-import { DEFAULT_EMBEDDING_MODEL } from './constant';
+import { DEFAULT_EMBEDDING_MODEL } from '@src/config';
 
 
 //* 使用本地模型的配置

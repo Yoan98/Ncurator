@@ -4,7 +4,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = './pdf.worker.min.mjs';
 import { WebPDFLoader } from "@langchain/community/document_loaders/web/pdf";
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters"
 import { Document } from "@langchain/core/documents";
-import { SPLITTER_BIG_CHUNK_SIZE, SPLITTER_BIG_CHUNK_OVERLAP, SPLITTER_MINI_CHUNK_SIZE, SPLITTER_MINI_CHUNK_OVERLAP, SPLITTER_SEPARATORS } from './constant'
+import { SPLITTER_BIG_CHUNK_SIZE, SPLITTER_BIG_CHUNK_OVERLAP, SPLITTER_MINI_CHUNK_SIZE, SPLITTER_MINI_CHUNK_OVERLAP, SPLITTER_SEPARATORS } from '@src/config'
 
 // 文件连接器,读取上传文件的内容数据
 export class FileConnector {

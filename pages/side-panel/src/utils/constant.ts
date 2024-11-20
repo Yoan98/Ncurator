@@ -1,4 +1,4 @@
-export const EMBEDDING_HIDDEN_SIZE = 768; // 目前使用的jina-embeddings-v2-base-zh模型的隐藏层大小
+
 export const DEFAULT_INDEXDB_NAME = 'YCURATOR'; // 默认的IndexDB数据库名称
 // 表名
 export const LSH_PROJECTION_DB_STORE_NAME = 'lsh_projection';
@@ -10,12 +10,7 @@ export const DOCUMENT_STORE_NAME = 'document';
 
 export const LSH_PROJECTION_DATA_NAME = 'data'; // 本地存储LSH随机向量数据属性名
 export const LSH_PROJECTION_KEY_VALUE = 1; // 本地存储LSH随机向量的key值,因为只有一条数据,所以key值为1
-export const SPLITTER_BIG_CHUNK_SIZE = 1000; // 分割大文本的字符数
-export const SPLITTER_BIG_CHUNK_OVERLAP = 200; // 分割大文本的重叠字符数
 
-export const SPLITTER_MINI_CHUNK_SIZE = 150; // 分割小文本的字符数
-export const SPLITTER_MINI_CHUNK_OVERLAP = 30; // 分割小文本的重叠字符数
-export const SPLITTER_SEPARATORS = ["\n\n", "\n", "。", ";", ",", " ", ""]
 // 最大的embedding worker数量,后期做成动态的，让用户自己设置，默认为一，以加快storage的速度
 //! 注意，一个embedding的worker内存占用近1G(少量数据情况下)
 export const MAX_EMBEDDING_WORKER_NUM = 4;
@@ -29,17 +24,11 @@ export const enum DocumentStatus {
     Fail,
     Success
 }
-export const DEFAULT_EMBEDDING_WORKER_NUM = 1; // 默认的最大embedding worker数量
-export const DEFAULT_MAX_EMBEDDING_BATCH_SIZE = 10; // 默认的embedding 一批最大的数据量
-export const SEARCHED_VECTOR_WEIGHT = 0.8; // 向量的权重
-export const SEARCHED_FULL_TEXT_WEIGHT = 0.2; // 全文索引的权重
-export const THEME_COLOR = '#404040'; // 主题色
-
 export const enum EncodePrefix {
     SearchDocument = 'search_document',
     SearchQuery = 'search_query'
 }
-export const DEFAULT_EMBEDDING_MODEL = 'jinaai/jina-embeddings-v2-base-zh'
 export const WEBLLM_CONFIG_INDEXDB_NAME = 'webllm/config'; // webllm配置的indexdb名称
 export const WEBLLM_CONFIG_STORE_NAME = 'urls'; // webllm配置的store名称
-export const DEFAULT_MODEL_ID_NAME = 'defaultModelId'; // 默认模型id的名称
+export const STORAGE_DEFAULT_MODEL_ID = 'defaultModelId'; // localStorage中默认模型id的名称
+export const STORAGE_LOADED_MODEL_IDS = 'loadedModelIds'; // localStorage中

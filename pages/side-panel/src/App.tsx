@@ -1,7 +1,7 @@
 import { Button, ConfigProvider, ConfigProviderProps, Dropdown, MenuProps, Drawer } from 'antd';
 import React, { useState, useLayoutEffect, useEffect } from 'react';
 import { GlobalProvider } from '@src/provider/global';
-import * as constant from '@src/utils/constant';
+import * as config from '@src/config';
 import SidePanel from '@src/SidePanel';
 
 import dayjs from 'dayjs';
@@ -34,11 +34,11 @@ const App = () => {
             locale={locale}
             theme={{
                 token: {
-                    colorPrimary: constant.THEME_COLOR,
+                    colorPrimary: config.THEME_COLOR,
                 },
                 components: {
                     Progress: {
-                        defaultColor: constant.THEME_COLOR
+                        defaultColor: config.THEME_COLOR
                     }
                 }
             }}

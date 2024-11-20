@@ -1,6 +1,7 @@
 // 由于embedding过于占内存，只好将searchDoc抽出来
 import { embedding } from '@src/utils/Embedding';
 import * as constant from '@src/utils/constant';
+import * as config from '@src//config';
 import { IndexDBStore } from '@src/utils/IndexDBStore';
 import workerpool from 'workerpool';
 // @ts-ignore
@@ -61,13 +62,13 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
         while (hasRestData) {
             const sliceIndexKeyIds = indexKeyIds.slice(startEndIndex[0], startEndIndex[1])
 
-            const storeList: (DB.LSH_INDEX | DB.FULL_TEXT_INDEX)[] = await store.getBatch({
+            const indexList: (DB.LSH_INDEX | DB.FULL_TEXT_INDEX)[] = await store.getBatch({
                 storeName,
                 keys: sliceIndexKeyIds
             });
 
 
-            if (!storeList.length) {
+            if (!indexList.length) {
                 hasRestData = false
                 break
             }
@@ -77,10 +78,10 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
             // 一个worker执行的最大数量
             // 除2的原因，是因为会同时搜索向量索引表和全文索引表
             const cpuCore = Math.max(1, Math.floor(maxWorkers / 2))
-            const workerExecuteSize = Math.max(1, Math.floor(storeList.length / cpuCore))
+            const workerExecuteSize = Math.max(1, Math.floor(indexList.length / cpuCore))
 
-            for (let i = 0; i < storeList.length; i += workerExecuteSize) {
-                const workerHandleData = storeList.slice(i, i + workerExecuteSize)
+            for (let i = 0; i < indexList.length; i += workerExecuteSize) {
+                const workerHandleData = indexList.slice(i, i + workerExecuteSize)
                 searchTasks.push(searchingWorkerPool.exec(workerMethod, [question, workerHandleData, ...extraWorkerParam]))
             }
 
@@ -91,7 +92,7 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
             searchedRes.push(...curSearchRes)
 
             // 清空
-            storeList.length = 0
+            indexList.length = 0
 
             // 下一批数据
             startEndIndex[0] = startEndIndex[1]
@@ -154,8 +155,8 @@ const search = async (question: string, connections: DB.CONNECTION[], k: number 
     // 根据权重计算混合排序结果
     let mixRes: { id: number, score: number }[] = []
     const alreadyFullIndexIds: number[] = []
-    const vectorWeight = constant.SEARCHED_VECTOR_WEIGHT
-    const fullTextWeight = constant.SEARCHED_FULL_TEXT_WEIGHT
+    const vectorWeight = config.SEARCHED_VECTOR_WEIGHT
+    const fullTextWeight = config.SEARCHED_FULL_TEXT_WEIGHT
     lshRes.forEach((item) => {
         const sameIndex = fullIndexRes.findIndex((fullItem) => Number(fullItem.ref) === item.id)
         if (sameIndex === -1) {

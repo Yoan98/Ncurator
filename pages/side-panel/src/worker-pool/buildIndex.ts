@@ -4,6 +4,7 @@ import { embedding } from '@src/utils/Embedding';
 import { LSHIndex } from '@src/utils/VectorIndex';
 import { fullTextIndex } from '@src/utils/FullTextIndex';
 import * as constant from '@src/utils/constant';
+import * as config from '@src/config';
 import type * as langchain from "@langchain/core/documents";
 import { IndexDBStore } from '@src/utils/IndexDBStore';
 import { checkWebGPU } from '@src/utils/tool';
@@ -12,10 +13,10 @@ import workerpool from 'workerpool';
 import WorkerURL from './embedding?url&worker'
 
 
-let embeddingWorkerPool;
-let embeddingWorkerNumber = constant.DEFAULT_EMBEDDING_WORKER_NUM
-let maxEmbeddingBatchSize = constant.DEFAULT_MAX_EMBEDDING_BATCH_SIZE
-let isSupportWebGPU = false
+let gEmbeddingWorkerPool;
+let gEmbeddingWorkerNumber = config.BUILD_INDEX_EMBEDDING_WORKER_NUM
+let gEmbeddingBatchSize = config.BUILD_INDEX_EMBEDDING_BATCH_SIZE
+let gIsSupportWebGPU = false
 
 interface EmbeddingOutput {
     embeddedSentences: Float32Array,
@@ -24,15 +25,15 @@ interface EmbeddingOutput {
 
 // 提取要保存到数据库的chunk和要embedding的纯文本
 const transToTextList = (chunks: langchain.Document[], documentId: number): [DB.TEXT_CHUNK[], string[][], number] => {
-    let cpuBatchSize = Math.max(1, Math.floor(chunks.length / embeddingWorkerNumber))
+    let cpuBatchSize = Math.max(1, Math.floor(chunks.length / gEmbeddingWorkerNumber))
 
     // 限制embeddingBatchSize大小
     // 如果cpuBatchSize小于maxEmbeddingBatchSize,则使用cpuBatchSize(尽可能提高在cpu上的并行度)
-    let embeddingBatchSize = isSupportWebGPU ?
-        maxEmbeddingBatchSize : cpuBatchSize < maxEmbeddingBatchSize
-            ? cpuBatchSize : maxEmbeddingBatchSize
+    let embeddingBatchSize = gIsSupportWebGPU ?
+        gEmbeddingBatchSize : cpuBatchSize < gEmbeddingBatchSize
+            ? cpuBatchSize : gEmbeddingBatchSize
 
-    const pureTextList: string[][] = []
+    const batchEmbeddingTextList: string[][] = []
     const textChunkList: DB.TEXT_CHUNK[] = []
     // 将数据拆平均分成多份
     let temp: string[] = []
@@ -42,7 +43,7 @@ const transToTextList = (chunks: langchain.Document[], documentId: number): [DB.
             pageContent
         )
         if (temp.length === embeddingBatchSize) {
-            pureTextList.push(temp)
+            batchEmbeddingTextList.push(temp)
             temp = []
         }
 
@@ -64,30 +65,26 @@ const transToTextList = (chunks: langchain.Document[], documentId: number): [DB.
         textChunkList.push(textChunk)
     }
     if (temp.length) {
-        pureTextList.push(temp)
+        batchEmbeddingTextList.push(temp)
     }
 
-    return [textChunkList, pureTextList, embeddingBatchSize]
+    return [textChunkList, batchEmbeddingTextList, embeddingBatchSize]
 }
 // 将数据存入indexDB的LSH索引表
-const storageTextChunkToLSH = async ({ textChunkList, pureTextList, embeddingBatchSize, store,
+const storageTextChunkToLSH = async ({ textChunkList, batchEmbeddingTextList, embeddingBatchSize, store,
 }: {
     textChunkList: DB.TEXT_CHUNK[],
-    pureTextList: string[][],
+    batchEmbeddingTextList: string[][],
     embeddingBatchSize: number,
     store: IndexDBStore,
 }) => {
 
-    if (!embeddingWorkerPool) {
-        await initialEmbeddingWorkerPool()
-    }
-
     // 多线程向量化句子
     console.time('embedding encode');
-    console.log('pureTextList', pureTextList);
+    console.log('batchEmbeddingTextList', batchEmbeddingTextList);
 
-    const execTasks = pureTextList.map(item => {
-        return embeddingWorkerPool.exec('embeddingText', [item, constant.EncodePrefix.SearchDocument])
+    const execTasks = batchEmbeddingTextList.map(item => {
+        return gEmbeddingWorkerPool.exec('embeddingText', [item, constant.EncodePrefix.SearchDocument])
     })
     const embeddingOutput: EmbeddingOutput[] = await Promise.all(execTasks)
     console.timeEnd('embedding encode');
@@ -117,7 +114,7 @@ const storageTextChunkToLSH = async ({ textChunkList, pureTextList, embeddingBat
         key: constant.LSH_PROJECTION_KEY_VALUE,
     })
     // 初始化LSH索引
-    const lshIndex = new LSHIndex({ dimensions: constant.EMBEDDING_HIDDEN_SIZE, localProjections: localProjections?.data, });
+    const lshIndex = new LSHIndex({ dimensions: config.EMBEDDING_HIDDEN_SIZE, localProjections: localProjections?.data, });
     // 如果库中没有LSH随机向量，则将其存储到库中
     if (!localProjections) {
         await store.add({
@@ -168,9 +165,81 @@ const storageBigChunkToFullTextIndex = async ({ textChunkList, store }: {
     return fullTextIndexId as number
 }
 
+// 分块构建索引,避免大文本高内存
+const buildIndexSplit = async ({ bigChunks, miniChunks, document, batchSize = config.BUILD_INDEX_CHUNKS_BATCH_SIZE, store }: {
+    bigChunks: langchain.Document[],
+    miniChunks: langchain.Document[],
+    document: DB.DOCUMENT,
+    batchSize?: number,
+    store: IndexDBStore
+}) => {
 
-// 构建索引并存储
-// 后期如果碰到大文档,导致内存占用过高,可以考虑将文档分块存入indexDB,对于索引则要保证多个块依然存在同一条索引中
+    const starEndIndex = [0, batchSize]
+    let hasEnd = false
+
+    let lshIndexIds: number[] = []
+    let fullIndexIds: number[] = []
+
+    // 所有批次的最小与最大text_chunk id
+    let minMaxTextChunkIds: number[] = []
+
+    let chunks = bigChunks.concat(miniChunks)
+    let bigChunksMaxIndex = bigChunks.length - 1
+    while (!hasEnd) {
+        const curBatchChunks = chunks.slice(starEndIndex[0], starEndIndex[1])
+
+        if (!curBatchChunks.length) {
+            hasEnd = true
+            break
+        }
+
+        // 提取要保存到数据库的chunk和要embedding的纯文本
+        let [textChunkList, batchEmbeddingTextList, embeddingBatchSize] = transToTextList(curBatchChunks, document.id!)
+        curBatchChunks.length = 0
+
+        // 将数据存入indexDB的text chunk表
+        // 存入标后,会自动添加id到textChunkList里
+        textChunkList = await store.addBatch<DB.TEXT_CHUNK>({
+            storeName: constant.TEXT_CHUNK_STORE_NAME,
+            data: textChunkList,
+        });
+
+        // 将文本向量化后存入indexDB的LSH索引表
+        const lshIndexId = await storageTextChunkToLSH({ textChunkList, batchEmbeddingTextList, embeddingBatchSize, store });
+        lshIndexIds.push(lshIndexId)
+        batchEmbeddingTextList.length = 0
+
+        // 将大chunk数据构建全文搜索索引，并存储到indexDB
+        if (starEndIndex[1] - 1 <= bigChunksMaxIndex) {
+            // 当前处理的批次,还在大chunk范围内
+            const fullTextIndexId = await storageBigChunkToFullTextIndex({ textChunkList, store })
+            fullIndexIds.push(fullTextIndexId)
+        } else if (starEndIndex[0] <= bigChunksMaxIndex && starEndIndex[1] - 1 > bigChunksMaxIndex) {
+            // 当前处理的批次,左边是大chunk，右边是小chunk,即过了大小chunk的边界
+            const textChunkListBigPart = textChunkList.slice(0, bigChunksMaxIndex - starEndIndex[0] + 1)
+            const fullTextIndexId = await storageBigChunkToFullTextIndex({ textChunkList: textChunkListBigPart, store })
+            fullIndexIds.push(fullTextIndexId)
+        }
+
+        starEndIndex[0] = starEndIndex[1]
+        starEndIndex[1] = starEndIndex[1] + batchSize
+
+        const curBatchTextChunkRangeIds = [textChunkList[0].id!, textChunkList[textChunkList.length - 1].id!]
+        minMaxTextChunkIds = minMaxTextChunkIds.concat(curBatchTextChunkRangeIds)
+
+        textChunkList.length = 0
+    }
+
+    return {
+        lshIndexIds,
+        fullIndexIds,
+        minMaxTextChunkIds
+    }
+}
+
+
+
+// 构建document的索引并存储
 const buildDocIndex = async ({ bigChunks, miniChunks, document, connection }: {
     bigChunks: langchain.Document[],
     miniChunks: langchain.Document[],
@@ -183,36 +252,28 @@ const buildDocIndex = async ({ bigChunks, miniChunks, document, connection }: {
     if (!connection) {
         throw new Error('no connection')
     }
+    if (!gEmbeddingWorkerPool) {
+        await initialEmbeddingWorkerPool()
+    }
 
     const store = new IndexDBStore();
     await store.connect(constant.DEFAULT_INDEXDB_NAME);
 
     try {
-        // 提取要保存到数据库的chunk和要embedding的纯文本
-        let [textChunkList, pureTextList, embeddingBatchSize] = transToTextList(bigChunks.concat(miniChunks), document.id!)
 
-        // 将数据存入indexDB的text chunk表
-        // 存入标后,会自动添加id到textChunkList里
-        textChunkList = await store.addBatch<DB.TEXT_CHUNK>({
-            storeName: constant.TEXT_CHUNK_STORE_NAME,
-            data: textChunkList,
-        });
-
-        // 将文本向量化后存入indexDB的LSH索引表
-        const lshIndexId = await storageTextChunkToLSH({ textChunkList, pureTextList, embeddingBatchSize, store });
-        // 将大chunk数据构建全文搜索索引，并存储到indexDB
-        const bigTextChunkList = textChunkList.slice(0, bigChunks.length)
-        const fullTextIndexId = await storageBigChunkToFullTextIndex({ textChunkList: bigTextChunkList, store })
+        // 构建chunk索引
+        const chunkIndexRes = await buildIndexSplit({ bigChunks, miniChunks, document, store })
 
         // 修改document表相应的索引与文本位置字段
+        const textChunkIdRange = chunkIndexRes.minMaxTextChunkIds
         document = {
             ...document,
             text_chunk_id_range: {
-                from: textChunkList[0].id!,
-                to: textChunkList[textChunkList.length - 1].id!
+                from: textChunkIdRange[0],
+                to: textChunkIdRange[textChunkIdRange.length - 1]!
             },
-            lsh_index_id: lshIndexId,
-            full_text_index_id: fullTextIndexId,
+            lsh_index_ids: chunkIndexRes.lshIndexIds,
+            full_text_index_ids: chunkIndexRes.fullIndexIds,
             status: constant.DocumentStatus.Success
         }
         await store.put({
@@ -223,8 +284,8 @@ const buildDocIndex = async ({ bigChunks, miniChunks, document, connection }: {
         const connectionAfterIndexBuild = {
             ...connection,
             id: connection.id,
-            lsh_index_ids: connection.lsh_index_ids.concat(lshIndexId),
-            full_text_index_ids: connection.full_text_index_ids.concat(fullTextIndexId)
+            lsh_index_ids: connection.lsh_index_ids.concat(chunkIndexRes.lshIndexIds),
+            full_text_index_ids: connection.full_text_index_ids.concat(chunkIndexRes.fullIndexIds)
         }
         // 将索引信息添加到connection表
         await store.put({
@@ -256,16 +317,16 @@ const buildDocIndex = async ({ bigChunks, miniChunks, document, connection }: {
 
 }
 
-const initialEmbeddingWorkerPool = async (workerNumber = constant.DEFAULT_EMBEDDING_WORKER_NUM, maxEmbeddingBatchSize = constant.DEFAULT_MAX_EMBEDDING_BATCH_SIZE) => {
-    if (embeddingWorkerPool) {
-        embeddingWorkerPool.terminate()
+const initialEmbeddingWorkerPool = async (workerNumber = config.BUILD_INDEX_EMBEDDING_WORKER_NUM, gEmbeddingBatchSize = config.BUILD_INDEX_EMBEDDING_BATCH_SIZE) => {
+    if (gEmbeddingWorkerPool) {
+        gEmbeddingWorkerPool.terminate()
     }
     // 检测是否支持WebGPU
-    isSupportWebGPU = await checkWebGPU()
+    gIsSupportWebGPU = await checkWebGPU()
 
-    embeddingWorkerNumber = isSupportWebGPU ? 1 : workerNumber
-    maxEmbeddingBatchSize = maxEmbeddingBatchSize
-    embeddingWorkerPool = workerpool.pool(WorkerURL, {
+    gEmbeddingWorkerNumber = gIsSupportWebGPU ? 1 : workerNumber
+    gEmbeddingBatchSize = gEmbeddingBatchSize
+    gEmbeddingWorkerPool = workerpool.pool(WorkerURL, {
         maxWorkers: workerNumber,
     });
 
