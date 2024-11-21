@@ -48,7 +48,6 @@ export class EmbedTaskManage {
 
         setInterval(() => {
             if (this.searchTaskQueue.length) {
-                console.log('searchTaskQueue', this.searchTaskQueue.length)
                 const searchTask = this.searchTaskQueue.shift() as EmbedTask
                 this.workerPool.exec('embeddingText', [searchTask.text, searchTask.prefix]).then((res: EmbeddingOutput) => {
                     searchTask.resolve(res)
@@ -56,7 +55,6 @@ export class EmbedTaskManage {
                     searchTask.reject(error)
                 })
             } else if (this.buildTaskQueue.length) {
-                console.log('buildTaskQueue', this.buildTaskQueue.length)
                 const buildTask = this.buildTaskQueue.shift() as EmbedTask
                 this.workerPool.exec('embeddingText', [buildTask.text, buildTask.prefix]).then((res: EmbeddingOutput) => {
                     buildTask.resolve(res)
