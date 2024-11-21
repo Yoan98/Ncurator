@@ -4,8 +4,16 @@ type ConnectorUnion = 0 | 1
 type DocumentStatusUnion = 1 | 2 | 3
 type EncodePrefixUnion = 'search_document' | 'search_query'
 
+interface Window {
+    gIsSupportWebGPU: boolean
+}
+
 namespace Search {
     export type TextItemRes = (DB.TEXT_CHUNK & { document: DB.DOCUMENT })
+    export interface LshItemRes {
+        id: number,
+        similarity: number
+    }
 }
 namespace Storage {
     export interface DocItemRes {

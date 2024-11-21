@@ -380,6 +380,9 @@ importers:
       mark.js:
         specifier: ^8.11.1
         version: 8.11.1
+      mathjs:
+        specifier: ^14.0.0
+        version: 14.0.0
       pdfjs-dist:
         specifier: ^4.7.76
         version: 4.7.76
@@ -2540,6 +2543,9 @@ packages:
     resolution: {integrity: sha512-KRs7WVDKg86PWiuAqhDrAQnTXZKraVcCc6vFdL14qrZ/DcWwuRo7VoiYXalXO7S5GKpqYiVEwCbgFDfxNHKJBQ==}
     engines: {node: ^12.20.0 || >=14}
 
+  complex.js@2.4.2:
+    resolution: {integrity: sha512-qtx7HRhPGSCBtGiST4/WGHuW+zeaND/6Ld+db6PbrulIB1i2Ev/2UPiqcmpQNPSyfBKraC0EOvOKCB5dGZKt3g==}
+
   compress-commons@6.0.2:
     resolution: {integrity: sha512-6FqVXeETqWPoGcfzrXb37E50NP0LXT8kAMu5ooZayhWWdgEY4lBEEcbQNXtkuKQsGduxiIcI4gOTsxTmuq/bSg==}
     engines: {node: '>= 14'}
@@ -2669,6 +2675,9 @@ packages:
   decamelize@6.0.0:
     resolution: {integrity: sha512-Fv96DCsdOgB6mdGl67MT5JaTNKRzrzill5OH5s8bjYJXVlcXyPYGyPsUkWyGV5p1TXI5esYIYMMeDJL0hEIwaA==}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
+
+  decimal.js@10.4.3:
+    resolution: {integrity: sha512-VBBaLc1MgL5XpzgIP7ny5Z6Nx3UrRkIViUkPUdtl9aya5amy3De1gsUUSB1g3+3sExYNjCAsAznmukyxCb1GRA==}
 
   decompress-response@4.2.1:
     resolution: {integrity: sha512-jOSne2qbyE+/r8G1VU+G/82LBs2Fs4LAsTiLSHOCOMZQl2OKZ6i8i4IyHemTe+/yIXOtTcRQMzPcgyhoFlqPkw==}
@@ -2877,6 +2886,9 @@ packages:
   escalade@3.2.0:
     resolution: {integrity: sha512-WUj2qlxaQtO4g6Pq5c29GTcWGDyd8itL8zTlipgECz3JesAiiOKotd8JU6otB3PACgG6xkJUyVhboMS+bje/jA==}
     engines: {node: '>=6'}
+
+  escape-latex@1.2.0:
+    resolution: {integrity: sha512-nV5aVWW1K0wEiUIEdZ4erkGGH8mDxGyxSeqPzRNtWP7ataw+/olFObw7hujFWlVjNsaDFw5VZ5NzVSIqRgfTiw==}
 
   escape-string-regexp@1.0.5:
     resolution: {integrity: sha512-vbRorB5FUQWvla16U8R/qgaFIya2qGzwDrNmCZuYKrbdSUMG6I1ZCGQRefkRVhuOkIGVne7BQ35DSfo1qvJqFg==}
@@ -3207,6 +3219,10 @@ packages:
 
   fraction.js@4.3.7:
     resolution: {integrity: sha512-ZsDfxO51wGAXREY55a7la9LScWpwv9RxIrYABrlvOFBlH/ShPnrtsXeuUIfXKKOVicNxQ+o8JTbJvjS4M89yew==}
+
+  fraction.js@5.2.1:
+    resolution: {integrity: sha512-Ah6t/7YCYjrPUFUFsOsRLMXAdnYM+aQwmojD2Ayb/Ezr82SwES0vuyQ8qZ3QO8n9j7W14VJuVZZet8U3bhSdQQ==}
+    engines: {node: '>= 12'}
 
   fs-extra@11.2.0:
     resolution: {integrity: sha512-PmDi3uwK5nFuXh7XDTlVnS17xJS7vW36is2+w3xcv8SVxiB4NyATf4ctkVY5bkSjX0Y4nbvZCq1/EjtEyr9ktw==}
@@ -3679,6 +3695,9 @@ packages:
     engines: {node: '>=10'}
     hasBin: true
 
+  javascript-natural-sort@0.7.1:
+    resolution: {integrity: sha512-nO6jcEfZWQXDhOiBtG2KvKyEptz7RVbpGP4vTD2hLBdmNQSsCiicO2Ioinv6UI4y9ukqnBpy+XZ9H6uLNgJTlw==}
+
   jest-diff@29.7.0:
     resolution: {integrity: sha512-LMIgiIrhigmPrs03JHpxUh2yISK3vLFPkAodPeo0+BuF7wA2FoQbkEg1u8gBYBThncu7e1oEDUfIXVuTqLRUjw==}
     engines: {node: ^14.15.0 || ^16.10.0 || >=18.0.0}
@@ -3995,6 +4014,11 @@ packages:
 
   mark.js@8.11.1:
     resolution: {integrity: sha512-1I+1qpDt4idfgLQG+BNWmrqku+7/2bi5nLf4YwF8y8zXvmfiTBY3PV3ZibfrjBueCByROpuBjLLFCajqkgYoLQ==}
+
+  mathjs@14.0.0:
+    resolution: {integrity: sha512-MR3me92c6pKBqzUXosqL5KMIZDrb1x0MGOy+Ss6fQllD1zhAFloG6DJnG6X5b0VYAMA9sgGfAR2tYi5HPNNQBQ==}
+    engines: {node: '>= 18'}
+    hasBin: true
 
   merge-stream@2.0.0:
     resolution: {integrity: sha512-abv/qOcuPfk3URPfDzmZU1LKmuw8kT+0nIHvKrKgFrwifol/doWcdA4ZqsWQ8ENrFKkd67Mfpo/LovbIUsbt3w==}
@@ -5300,6 +5324,9 @@ packages:
   through@2.3.8:
     resolution: {integrity: sha512-w89qg7PI8wAdvX60bMDP+bFoD5Dvhm9oLheFp5O4a2QF0cSBGsBX4qZmadPMvVqlLJBBci+WqGGOAPvcDeNSVg==}
 
+  tiny-emitter@2.1.0:
+    resolution: {integrity: sha512-NB6Dk1A9xgQPMoGqC5CVXn123gWyte215ONT5Pp5a0yt4nlEoO1ZWeCwpncaekPHXO60i47ihFnZPiRPjRMq4Q==}
+
   tinyrainbow@1.2.0:
     resolution: {integrity: sha512-weEDEq7Z5eTHPDh4xjX789+fHfF+P8boiFB+0vbWzpbnbsEr/GRaohi/uMKxg8RZMXnl1ItAi/IUHWMsjDV7kQ==}
     engines: {node: '>=14.0.0'}
@@ -5452,6 +5479,10 @@ packages:
   typed-array-length@1.0.6:
     resolution: {integrity: sha512-/OxDN6OtAk5KBpGb28T+HZc2M+ADtvRxXrKKbUwtsLgdoxgX13hyy7ek6bFRl5+aBs2yZzB0c4CnQfAtVypW/g==}
     engines: {node: '>= 0.4'}
+
+  typed-function@4.2.1:
+    resolution: {integrity: sha512-EGjWssW7Tsk4DGfE+5yluuljS1OGYWiI1J6e8puZz9nTMM51Oug8CD5Zo4gWMsOhq5BI+1bF+rWTm4Vbj3ivRA==}
+    engines: {node: '>= 18'}
 
   typescript@5.5.4:
     resolution: {integrity: sha512-Mtq29sKDAEYP7aljRgtPOpTvOfbwRWlS6dPRzwjdE+C0R4brX/GUyhHSecbHMFLNBLcJIPt9nl9yG5TZ1weH+Q==}
@@ -7702,6 +7733,8 @@ snapshots:
 
   commander@9.5.0: {}
 
+  complex.js@2.4.2: {}
+
   compress-commons@6.0.2:
     dependencies:
       crc-32: 1.2.2
@@ -7819,6 +7852,8 @@ snapshots:
   decamelize@4.0.0: {}
 
   decamelize@6.0.0: {}
+
+  decimal.js@10.4.3: {}
 
   decompress-response@4.2.1:
     dependencies:
@@ -8153,6 +8188,8 @@ snapshots:
       '@esbuild/win32-x64': 0.23.1
 
   escalade@3.2.0: {}
+
+  escape-latex@1.2.0: {}
 
   escape-string-regexp@1.0.5: {}
 
@@ -8570,6 +8607,8 @@ snapshots:
       fetch-blob: 3.2.0
 
   fraction.js@4.3.7: {}
+
+  fraction.js@5.2.1: {}
 
   fs-extra@11.2.0:
     dependencies:
@@ -9084,6 +9123,8 @@ snapshots:
       filelist: 1.0.4
       minimatch: 3.1.2
 
+  javascript-natural-sort@0.7.1: {}
+
   jest-diff@29.7.0:
     dependencies:
       chalk: 4.1.2
@@ -9409,6 +9450,18 @@ snapshots:
       xmlbuilder: 10.1.1
 
   mark.js@8.11.1: {}
+
+  mathjs@14.0.0:
+    dependencies:
+      '@babel/runtime': 7.26.0
+      complex.js: 2.4.2
+      decimal.js: 10.4.3
+      escape-latex: 1.2.0
+      fraction.js: 5.2.1
+      javascript-natural-sort: 0.7.1
+      seedrandom: 3.0.5
+      tiny-emitter: 2.1.0
+      typed-function: 4.2.1
 
   merge-stream@2.0.0: {}
 
@@ -10931,6 +10984,8 @@ snapshots:
 
   through@2.3.8: {}
 
+  tiny-emitter@2.1.0: {}
+
   tinyrainbow@1.2.0: {}
 
   tmp@0.0.33:
@@ -11115,6 +11170,8 @@ snapshots:
       has-proto: 1.0.3
       is-typed-array: 1.1.13
       possible-typed-array-names: 1.0.0
+
+  typed-function@4.2.1: {}
 
   typescript@5.5.4: {}
 

@@ -6,16 +6,449 @@ import { formatFileSize } from '@src/utils/tool';
 import { IndexDBStore } from '@src/utils/IndexDBStore';
 import * as constant from '@src/utils/constant';
 import dayjs from 'dayjs';
-//@ts-ignore
-import storageWorkerURL from '@src/worker-pool/buildIndex?url&worker';
 import type { Pool } from 'workerpool';
 import workerpool from 'workerpool';
 import { FileConnector } from '@src/utils/Connector';
 import { IoSettingsOutline, IoReload } from "react-icons/io5";
 import { useGlobalContext } from '@src/provider/global';
+import type * as LangChain from "@langchain/core/documents";
+import * as config from '@src/config';
+import { fullTextIndex } from '@src/utils/FullTextIndex';
+import { LSHIndex } from '@src/utils/VectorIndex';
+import * as tf from '@tensorflow/tfjs';
+import { EmbedTaskManage } from '@src/utils/EmbedTask'
+import type { EmbedTask } from '@src/utils/EmbedTask'
 
 const { Search } = Input;
 const { Dragger } = Upload;
+
+interface EmbeddingOutput {
+    data: Float32Array,
+    dims: [number, number]
+}
+
+
+// 提取要保存到数据库的chunk和要embedding的纯文本
+const transToTextList = (chunks: LangChain.Document[], documentId: number): [DB.TEXT_CHUNK[], string[][], number] => {
+    // 限制embeddingBatchSize大小
+    let embeddingBatchSize = config.BUILD_INDEX_EMBEDDING_BATCH_SIZE
+
+    const batchEmbeddingTextList: string[][] = []
+    const textChunkList: DB.TEXT_CHUNK[] = []
+    // 将数据拆平均分成多份
+    let temp: string[] = []
+    for (let i = 0; i < chunks.length; i++) {
+        // 截取纯文本,方便后续多worker并行处理
+        temp.push(chunks[i].
+            pageContent
+        )
+        if (temp.length === embeddingBatchSize) {
+            batchEmbeddingTextList.push(temp)
+            temp = []
+        }
+
+        // 保存textChunkList
+        const chunk = chunks[i]
+        const textChunk: DB.TEXT_CHUNK = {
+            text: chunk.pageContent,
+            metadata: {
+                loc: {
+                    lines: {
+                        from: chunk.metadata.loc.lines.from,
+                        to: chunk.metadata.loc.lines.to
+                    },
+                    pageNumber: chunk.metadata.loc.pageNumber
+                }
+            },
+            document_id: documentId
+        }
+        textChunkList.push(textChunk)
+    }
+    if (temp.length) {
+        batchEmbeddingTextList.push(temp)
+    }
+
+    return [textChunkList, batchEmbeddingTextList, embeddingBatchSize]
+}
+// 将数据存入indexDB的LSH索引表
+const storageTextChunkToLSH = async ({ textChunkList, batchEmbeddingTextList, embeddingBatchSize, store,
+}: {
+    textChunkList: DB.TEXT_CHUNK[],
+    batchEmbeddingTextList: string[][],
+    embeddingBatchSize: number,
+    store: IndexDBStore,
+}) => {
+
+    // 多线程向量化句子
+    console.time('embedding encode');
+    console.log('batchEmbeddingTextList', batchEmbeddingTextList);
+    const execTasks = batchEmbeddingTextList.map(item => {
+        return new Promise((resolve: EmbedTask['resolve'], reject) => {
+            EmbedTaskManage.subscribe({
+                text: item,
+                prefix: constant.EncodePrefix.SearchDocument,
+                resolve,
+                reject
+            }, 'build')
+        })
+    })
+
+    const embeddingOutput: EmbeddingOutput[] = await Promise.all(execTasks)
+    console.timeEnd('embedding encode');
+    console.log('embeddingOutput', embeddingOutput);
+
+    // 生成向量数组
+    const vectors = textChunkList.map((chunk, index) => {
+        const embeddingOutputIndex = Math.floor(index / embeddingBatchSize)
+        const curVectorIndex = index % embeddingBatchSize
+
+        const embeddingBlock = embeddingOutput[embeddingOutputIndex]
+        const embeddingTensor = tf.tensor(embeddingBlock.data, embeddingBlock.dims) as tf.Tensor2D
+
+        const vector = embeddingTensor.slice([curVectorIndex, 0], [1, -1]).reshape([-1]) as tf.Tensor1D
+        embeddingTensor.dispose()
+
+        return {
+            id: chunk.id!,
+            vector: vector,
+        }
+    });
+
+    // * 构建索引
+    // 获取库中是否已有LSH随机向量
+    const localProjections: DB.LSH_PROJECTION | undefined = await store.get({
+        storeName: constant.LSH_PROJECTION_DB_STORE_NAME,
+        key: constant.LSH_PROJECTION_KEY_VALUE,
+    })
+    // 初始化LSH索引
+    const lshIndex = new LSHIndex({ dimensions: config.EMBEDDING_HIDDEN_SIZE, localProjections: localProjections?.data, });
+    // 如果库中没有LSH随机向量，则将其存储到库中
+    if (!localProjections) {
+        await store.add({
+            storeName: constant.LSH_PROJECTION_DB_STORE_NAME,
+            data: {
+                [constant.LSH_PROJECTION_DATA_NAME]: lshIndex.projections
+            },
+        });
+    }
+
+    // 将LSH索引存储到indexDB
+    const LSHTables = await lshIndex.addVectors(vectors);
+    const lshIndexId = await store.add({
+        storeName: constant.LSH_INDEX_STORE_NAME,
+        data: {
+            lsh_table: LSHTables
+        },
+    });
+
+    return lshIndexId as number
+}
+// 将大chunk数据构建全文搜索索引，并存储到indexDB
+const storageBigChunkToFullTextIndex = async ({ textChunkList, store }: {
+    textChunkList: DB.TEXT_CHUNK[],
+    store: IndexDBStore,
+}) => {
+
+    await fullTextIndex.loadLunr()
+    const fields = [{
+        field: 'text'
+    }]
+    const data = textChunkList.map(item => {
+        return {
+            id: item.id!,
+            text: item.text
+        }
+    }
+    )
+    const lunrIndex = fullTextIndex.add(fields, data)
+
+    const fullTextIndexId = await store.add({
+        storeName: constant.FULL_TEXT_INDEX_STORE_NAME,
+        data: {
+            index: lunrIndex.toJSON()
+        },
+    });
+
+    return fullTextIndexId as number
+}
+
+// 分块构建索引,避免大文本高内存
+const buildIndexSplit = async ({ bigChunks, miniChunks, document, batchSize = config.BUILD_INDEX_CHUNKS_BATCH_SIZE, store }: {
+    bigChunks: LangChain.Document[],
+    miniChunks: LangChain.Document[],
+    document: DB.DOCUMENT,
+    batchSize?: number,
+    store: IndexDBStore
+}) => {
+
+    const starEndIndex = [0, batchSize]
+    let hasEnd = false
+
+    let lshIndexIds: number[] = []
+    let fullIndexIds: number[] = []
+
+    // 所有批次的最小与最大text_chunk id
+    let minMaxTextChunkIds: number[] = []
+
+    let chunks = bigChunks.concat(miniChunks)
+    let bigChunksMaxIndex = bigChunks.length - 1
+    while (!hasEnd) {
+        const curBatchChunks = chunks.slice(starEndIndex[0], starEndIndex[1])
+
+        if (!curBatchChunks.length) {
+            hasEnd = true
+            break
+        }
+
+        // 提取要保存到数据库的chunk和要embedding的纯文本
+        let [textChunkList, batchEmbeddingTextList, embeddingBatchSize] = transToTextList(curBatchChunks, document.id!)
+        curBatchChunks.length = 0
+
+        // 将数据存入indexDB的text chunk表
+        // 存入标后,会自动添加id到textChunkList里
+        textChunkList = await store.addBatch<DB.TEXT_CHUNK>({
+            storeName: constant.TEXT_CHUNK_STORE_NAME,
+            data: textChunkList,
+        });
+
+        // 将文本向量化后存入indexDB的LSH索引表
+        const lshIndexId = await storageTextChunkToLSH({ textChunkList, batchEmbeddingTextList, embeddingBatchSize, store });
+        lshIndexIds.push(lshIndexId)
+        batchEmbeddingTextList.length = 0
+
+        // 将大chunk数据构建全文搜索索引，并存储到indexDB
+        if (starEndIndex[1] - 1 <= bigChunksMaxIndex) {
+            // 当前处理的批次,还在大chunk范围内
+            const fullTextIndexId = await storageBigChunkToFullTextIndex({ textChunkList, store })
+            fullIndexIds.push(fullTextIndexId)
+        } else if (starEndIndex[0] <= bigChunksMaxIndex && starEndIndex[1] - 1 > bigChunksMaxIndex) {
+            // 当前处理的批次,左边是大chunk，右边是小chunk,即过了大小chunk的边界
+            const textChunkListBigPart = textChunkList.slice(0, bigChunksMaxIndex - starEndIndex[0] + 1)
+            const fullTextIndexId = await storageBigChunkToFullTextIndex({ textChunkList: textChunkListBigPart, store })
+            fullIndexIds.push(fullTextIndexId)
+        }
+
+        starEndIndex[0] = starEndIndex[1]
+        starEndIndex[1] = starEndIndex[1] + batchSize
+
+        const curBatchTextChunkRangeIds = [textChunkList[0].id!, textChunkList[textChunkList.length - 1].id!]
+        minMaxTextChunkIds = minMaxTextChunkIds.concat(curBatchTextChunkRangeIds)
+
+        textChunkList.length = 0
+    }
+
+    return {
+        lshIndexIds,
+        fullIndexIds,
+        minMaxTextChunkIds
+    }
+}
+
+// 构建document的索引并存储
+const buildDocIndex = async ({ store, bigChunks, miniChunks, document, connection }: {
+    store: IndexDBStore,
+    bigChunks: LangChain.Document[],
+    miniChunks: LangChain.Document[],
+    connection: DB.CONNECTION,
+    document: DB.DOCUMENT,
+}) => {
+    if (!bigChunks.length && !miniChunks.length) {
+        throw new Error('no document content')
+    }
+    if (!connection) {
+        throw new Error('no connection')
+    }
+
+    try {
+        // 分批构建索引
+        const chunkIndexRes = await buildIndexSplit({ bigChunks, miniChunks, document, store })
+
+        // 修改document表相应的索引与文本位置字段
+        const textChunkIdRange = chunkIndexRes.minMaxTextChunkIds
+        document = {
+            ...document,
+            text_chunk_id_range: {
+                from: textChunkIdRange[0],
+                to: textChunkIdRange[textChunkIdRange.length - 1]!
+            },
+            lsh_index_ids: chunkIndexRes.lshIndexIds,
+            full_text_index_ids: chunkIndexRes.fullIndexIds,
+            status: constant.DocumentStatus.Success
+        }
+        await store.put({
+            storeName: constant.DOCUMENT_STORE_NAME,
+            data: document,
+        });
+
+        const connectionAfterIndexBuild = {
+            ...connection,
+            id: connection.id,
+            lsh_index_ids: connection.lsh_index_ids.concat(chunkIndexRes.lshIndexIds),
+            full_text_index_ids: connection.full_text_index_ids.concat(chunkIndexRes.fullIndexIds)
+        }
+        // 将索引信息添加到connection表
+        await store.put({
+            storeName: constant.CONNECTION_STORE_NAME,
+            data: connectionAfterIndexBuild,
+        });
+
+        return {
+            status: 'Success',
+            document,
+            connectionAfterIndexBuild
+        }
+    } catch (error) {
+        // 如果出错,则将document状态改为fail
+        await store.put({
+            storeName: constant.DOCUMENT_STORE_NAME,
+            data: {
+                ...document,
+                status: constant.DocumentStatus.Fail
+            },
+        });
+        return {
+            status: 'Fail',
+            document,
+            error
+        }
+
+    }
+
+}
+// 删除某一个connection下的文档数据
+const removeDocumentsInConnection = async (store: IndexDBStore, removeDocList: DB.DOCUMENT[], connection: DB.CONNECTION) => {
+    if (!removeDocList.length) { return { connectionAfterDel: connection } }
+
+    // 删除document的索引id
+    let delLshIndexIds: number[] = []
+    let delFullTextIndexIds: number[] = []
+    removeDocList.forEach((doc) => {
+        delLshIndexIds = delLshIndexIds.concat(doc.lsh_index_ids);
+        delFullTextIndexIds = delFullTextIndexIds.concat(doc.full_text_index_ids);
+    })
+
+    // 删除connection中的document
+    const newConnection: DB.CONNECTION = {
+        ...connection,
+        id: connection.id!,
+        documents: connection.documents.filter((oldDoc) => !removeDocList.some((doc) => oldDoc.id == doc.id)),
+        lsh_index_ids: connection.lsh_index_ids.filter((id) => !delLshIndexIds.includes(id)),
+        full_text_index_ids: connection.full_text_index_ids.filter((id) => !delFullTextIndexIds.includes(id))
+    }
+    await store.put({
+        storeName: constant.CONNECTION_STORE_NAME,
+        data: newConnection,
+    });
+    // 删除document
+    await store.deleteBatch({
+        storeName: constant.DOCUMENT_STORE_NAME,
+        keys: removeDocList.map((doc) => doc.id!)
+    });
+    // 删除索引
+    if (delLshIndexIds.length) {
+        // 删除document的索引
+        await store.deleteBatch({
+            storeName: constant.LSH_INDEX_STORE_NAME,
+            keys: delLshIndexIds
+        });
+    }
+    if (delFullTextIndexIds.length) {
+        // 删除document的索引
+        await store.deleteBatch({
+            storeName: constant.FULL_TEXT_INDEX_STORE_NAME,
+            keys: delFullTextIndexIds
+        });
+    }
+    // 删除text chunk
+
+    for (let doc of removeDocList) {
+        const range = IDBKeyRange.bound(doc.text_chunk_id_range.from, doc.text_chunk_id_range.to);
+        await store.delete({
+            storeName: constant.TEXT_CHUNK_STORE_NAME,
+            key: range
+        });
+    }
+
+    return {
+        connectionAfterDel: newConnection
+    }
+}
+// 构建某一个connection下的新文档的索引
+const buildDocsIndexInConnection = async (store: IndexDBStore, docs: DB.DOCUMENT[], connection: DB.CONNECTION) => {
+    const fileConnector = new FileConnector();
+
+    let updatedConnection = connection;
+    for (let doc of docs) {
+        const { bigChunks, miniChunks } = await fileConnector.getChunks(doc.resource!);
+
+        if (!bigChunks.length && !miniChunks.length) {
+            message.warning(`${doc.name} no content`);
+            // 将该document状态置为fail
+            await store.put({
+                storeName: constant.DOCUMENT_STORE_NAME,
+                data: {
+                    ...doc,
+                    status: constant.DocumentStatus.Fail
+                }
+            });
+            continue;
+        }
+
+        // 向量化,并存储索引
+        const buildDocIndexRes = await buildDocIndex({ store, bigChunks, miniChunks, document: doc, connection: updatedConnection }) as Storage.DocItemRes
+
+        // 提示结果
+        if (buildDocIndexRes.status == 'Success') {
+            message.success(`${doc.name} Storage Success`);
+            updatedConnection = buildDocIndexRes.connectionAfterIndexBuild!;
+        } else if (buildDocIndexRes.status == 'Fail') {
+            console.error('buildDocIndex error', buildDocIndexRes.error)
+            message.error(`${doc.name} Storage Fail`);
+        } else {
+            message.error(`${doc.name} Unknown Status`);
+        }
+    }
+}
+// 新增某一个connection下文档数据到数据库
+const addDocumentsInConnection = async (store: IndexDBStore, addFileList: File[], connection: DB.CONNECTION) => {
+    // 遍历文件,存储文档
+    const docList = addFileList.map((file) => {
+        // 存储最基础的document
+        let document: DB.DOCUMENT = {
+            name: file.name,
+            text_chunk_id_range: {
+                from: 0,
+                to: 0
+            },
+            lsh_index_ids: [],
+            full_text_index_ids: [],
+            resource: file,
+            created_at: new Date(),
+            status: constant.DocumentStatus.Building,
+            connection: {
+                id: connection.id!,
+                name: connection.name
+            }
+        }
+        return document;
+    })
+    const addDocRes = await store.addBatch({
+        storeName: constant.DOCUMENT_STORE_NAME,
+        data: docList
+    });
+    let newConnection = {
+        ...connection,
+        documents: connection.documents.concat(addDocRes.map((doc) => ({ id: doc.id!, name: doc.name }))
+        )
+    }
+    // 将document数据添加到connection表
+    await store.put({
+        storeName: constant.CONNECTION_STORE_NAME,
+        data: newConnection,
+    });
+
+    return { docs: addDocRes, connectionAfterAdd: newConnection };
+}
 
 
 const DocumentItem = ({ data, onDeleteClick }: {
@@ -56,11 +489,8 @@ const DocumentItem = ({ data, onDeleteClick }: {
     )
 }
 
-
 const Resource = () => {
     const { connectionList, setConnectionList } = useGlobalContext()
-
-    const storagePoolRef = useRef<Pool>();
 
     const addedFileListRef = useRef<UploadFile[]>([]);
     const removedFileListRef = useRef<UploadFile[]>([]);
@@ -186,145 +616,6 @@ const Resource = () => {
         return connectionList.some((connection) => connection.documentList.some((doc) => doc.status == constant.DocumentStatus.Building))
     }
 
-    // 删除某一个connection下的文档数据
-    const removeDocumentsInConnection = async (store: IndexDBStore, removeDocList: DB.DOCUMENT[], connection: DB.CONNECTION) => {
-        if (!removeDocList.length) { return { connectionAfterDel: connection } }
-
-        // 删除document的索引id
-        let delLshIndexIds: number[] = []
-        let delFullTextIndexIds: number[] = []
-        removeDocList.forEach((doc) => {
-            delLshIndexIds = delLshIndexIds.concat(doc.lsh_index_ids);
-            delFullTextIndexIds = delFullTextIndexIds.concat(doc.full_text_index_ids);
-        })
-
-        // 删除connection中的document
-        const newConnection: DB.CONNECTION = {
-            ...connection,
-            id: connection.id!,
-            documents: connection.documents.filter((oldDoc) => !removeDocList.some((doc) => oldDoc.id == doc.id)),
-            lsh_index_ids: connection.lsh_index_ids.filter((id) => !delLshIndexIds.includes(id)),
-            full_text_index_ids: connection.full_text_index_ids.filter((id) => !delFullTextIndexIds.includes(id))
-        }
-        await store.put({
-            storeName: constant.CONNECTION_STORE_NAME,
-            data: newConnection,
-        });
-        // 删除document
-        await store.deleteBatch({
-            storeName: constant.DOCUMENT_STORE_NAME,
-            keys: removeDocList.map((doc) => doc.id!)
-        });
-        // 删除索引
-        if (delLshIndexIds.length) {
-            // 删除document的索引
-            await store.deleteBatch({
-                storeName: constant.LSH_INDEX_STORE_NAME,
-                keys: delLshIndexIds
-            });
-        }
-        if (delFullTextIndexIds.length) {
-            // 删除document的索引
-            await store.deleteBatch({
-                storeName: constant.FULL_TEXT_INDEX_STORE_NAME,
-                keys: delFullTextIndexIds
-            });
-        }
-        // 删除text chunk
-
-        for (let doc of removeDocList) {
-            const range = IDBKeyRange.bound(doc.text_chunk_id_range.from, doc.text_chunk_id_range.to);
-            await store.delete({
-                storeName: constant.TEXT_CHUNK_STORE_NAME,
-                key: range
-            });
-        }
-
-        return {
-            connectionAfterDel: newConnection
-        }
-    }
-    // 构建某一个connection下的新文档的索引
-    const buildDocsIndexInConnection = async (store: IndexDBStore, docs: DB.DOCUMENT[], connection: DB.CONNECTION) => {
-        const fileConnector = new FileConnector();
-
-        let updatedConnection = connection;
-        for (let doc of docs) {
-            const { bigChunks, miniChunks } = await fileConnector.getChunks(doc.resource!);
-
-            if (!bigChunks.length && !miniChunks.length) {
-                message.warning(`${doc.name} no content`);
-                // 将该document状态置为fail
-                await store.put({
-                    storeName: constant.DOCUMENT_STORE_NAME,
-                    data: {
-                        ...doc,
-                        status: constant.DocumentStatus.Fail
-                    }
-                });
-                continue;
-            }
-
-            // 向量化,并存储索引
-            const buildDocIndexRes = await storagePoolRef.current?.exec('buildDocIndex', [{ bigChunks, miniChunks, document: doc, connection: updatedConnection }]) as Storage.DocItemRes
-
-            // 提示结果
-            if (buildDocIndexRes.status == 'Success') {
-                message.success(`${doc.name} Storage Success`);
-                updatedConnection = buildDocIndexRes.connectionAfterIndexBuild!;
-            } else if (buildDocIndexRes.status == 'Fail') {
-                console.error('buildDocIndex error', buildDocIndexRes.error)
-                message.error(`${doc.name} Storage Fail`);
-            } else {
-                message.error(`${doc.name} Unknown Status`);
-            }
-        }
-
-        storagePoolRef.current?.terminate();
-
-        fetchConnectionList();
-
-    }
-    // 新增某一个connection下文档数据到数据库
-    const addDocumentsInConnection = async (store: IndexDBStore, addFileList: File[], connection: DB.CONNECTION) => {
-        // 遍历文件,存储文档
-        const docList = addFileList.map((file) => {
-            // 存储最基础的document
-            let document: DB.DOCUMENT = {
-                name: file.name,
-                text_chunk_id_range: {
-                    from: 0,
-                    to: 0
-                },
-                lsh_index_ids: [],
-                full_text_index_ids: [],
-                resource: file,
-                created_at: new Date(),
-                status: constant.DocumentStatus.Building,
-                connection: {
-                    id: connection.id!,
-                    name: connection.name
-                }
-            }
-            return document;
-        })
-        const addDocRes = await store.addBatch({
-            storeName: constant.DOCUMENT_STORE_NAME,
-            data: docList
-        });
-        let newConnection = {
-            ...connection,
-            documents: connection.documents.concat(addDocRes.map((doc) => ({ id: doc.id!, name: doc.name }))
-            )
-        }
-        // 将document数据添加到connection表
-        await store.put({
-            storeName: constant.CONNECTION_STORE_NAME,
-            data: newConnection,
-        });
-
-        return { docs: addDocRes, connectionAfterAdd: newConnection };
-    }
 
     const handleCollapseChange = (key: string[]) => {
         setCollapseActiveKey(key.map((item) => Number(item)));
@@ -337,7 +628,6 @@ const Resource = () => {
         setUploadLoading(true);
 
         try {
-            // 获取file connection数据
             const store = new IndexDBStore();
             await store.connect(constant.DEFAULT_INDEXDB_NAME);
 
@@ -360,7 +650,9 @@ const Resource = () => {
 
                 const { docs, connectionAfterAdd } = await addDocumentsInConnection(store, fileList, connectionData);
                 // 单独worker构建文档索引
-                buildDocsIndexInConnection(store, docs, connectionAfterAdd);
+                buildDocsIndexInConnection(store, docs, connectionAfterAdd).then(() => {
+                    fetchConnectionList();
+                });
 
             } else {
                 // 编辑connection
@@ -394,7 +686,9 @@ const Resource = () => {
                     newConnection = connectionAfterAdd;
 
                     // 单独worker构建文档索引
-                    buildDocsIndexInConnection(store, docs, connectionAfterAdd);
+                    buildDocsIndexInConnection(store, docs, connectionAfterAdd).then(() => {
+                        fetchConnectionList();
+                    });
                 }
 
             }
@@ -502,10 +796,6 @@ const Resource = () => {
 
     useEffect(() => {
         fetchConnectionList();
-
-        storagePoolRef.current = workerpool.pool(storageWorkerURL, {
-            maxWorkers: 1,
-        });
     }, [])
 
     useEffect(() => {

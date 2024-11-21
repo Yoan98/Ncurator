@@ -1,7 +1,5 @@
 import { AutoModel, AutoTokenizer, env, pipeline } from '@huggingface/transformers';
 import type { PreTrainedTokenizer, PreTrainedModel, AllTasks } from '@huggingface/transformers';
-import { cosineSimilarity } from './math';
-import * as tf from '@tensorflow/tfjs';
 import { checkWebGPU } from '@src/utils/tool';
 import { DEFAULT_EMBEDDING_MODEL } from '@src/config';
 
@@ -20,12 +18,12 @@ env.localModelPath = '../';
 // env.remoteHost = 'http://www.hongbanbangbang.cn/';
 // console.log('env', env)
 
-type EmbeddingModel = 'nomic-ai/nomic-embed-text-v1' | 'jinaai/jina-embeddings-v2-base-zh'
+type EmbeddingModelId = 'nomic-ai/nomic-embed-text-v1' | 'jinaai/jina-embeddings-v2-base-zh'
 export class Embedding {
-    // private model: PreTrainedModel | null;
+    // private modelId: PreTrainedModel | null;
     // private tokenizer: PreTrainedTokenizer | null;
-    private extractor: AllTasks['feature-extraction'] | null;
-    model: EmbeddingModel
+    static extractor: AllTasks['feature-extraction'] | null;
+    static modelId: EmbeddingModelId
 
     constructor() {
     }
@@ -36,14 +34,14 @@ export class Embedding {
      * @returns
      */
     // async load() {
-    //     if (this.model && this.tokenizer) {
+    //     if (this.modelId && this.tokenizer) {
     //         return;
     //     }
 
     //     const isSupportWebGPU = await checkWebGPU();
 
     //     // 初始化模型和分词器
-    //     [this.model, this.tokenizer] = await Promise.all([
+    //     [this.modelId, this.tokenizer] = await Promise.all([
     //         AutoModel.from_pretrained('jinaai/jina-embeddings-v2-base-zh', {
     //             // 该模型在webpgu下,如果使用fp16会有精度问题,一些数据在向量化时会出现nan
     //             // dtype: 'fp32',
@@ -101,7 +99,7 @@ export class Embedding {
      * @returns
      */
     // async encode(texts: string | string[]): Promise<tf.Tensor2D> {
-    //     if (!this.model || !this.tokenizer) {
+    //     if (!this.modelId || !this.tokenizer) {
     //         throw new Error('Model or tokenizer not initialized');
     //     }
     //     const inputTexts = Array.isArray(texts) ? texts : [texts];
@@ -118,7 +116,7 @@ export class Embedding {
 
     //     // 获取模型输出
     //     // 此处耗时最久,model大概占了整个encode的93%,加载43个句子的情况,句子越多占比越大
-    //     const output = await this.model(encoded);
+    //     const output = await this.modelId(encoded);
 
     //     // 计算平均值池化
     //     // 此处耗时可忽略不计
@@ -138,32 +136,34 @@ export class Embedding {
      * !一定要以单例化的形式调用，重复load会导致内存占用一直累加
      * @returns
      */
-    async load(model: EmbeddingModel = DEFAULT_EMBEDDING_MODEL) {
+    static async load(modelId: EmbeddingModelId = DEFAULT_EMBEDDING_MODEL) {
         if (this.extractor) {
-            return;
+            return this.extractor;
         }
 
-        this.model = model;
+        this.modelId = modelId;
 
         const isSupportWebGPU = await checkWebGPU();
 
         // 初始化模型和分词器
-        this.extractor = await pipeline("feature-extraction", this.model, {
+        this.extractor = await pipeline("feature-extraction", this.modelId, {
             dtype: 'fp32',
             device: isSupportWebGPU ? 'webgpu' : undefined,
             local_files_only: true
         });
 
         console.log('Model and tokenizer initialized');
+
+        return this.extractor;
     }
-    async encode(texts: string | string[], prefix?: EncodePrefixUnion): Promise<tf.Tensor2D> {
+    static async encode(texts: string | string[], prefix?: EncodePrefixUnion) {
         if (!this.extractor) {
             throw new Error('Model or tokenizer not initialized');
         }
 
         let inputTexts = Array.isArray(texts) ? texts : [texts];
 
-        if (this.model === 'nomic-ai/nomic-embed-text-v1' && prefix) {
+        if (this.modelId === 'nomic-ai/nomic-embed-text-v1' && prefix) {
             inputTexts = inputTexts.map(text => {
                 return `${prefix}: ${text}`
             })
@@ -173,34 +173,12 @@ export class Embedding {
 
         const data = output.data as Float32Array;
         const dims = output.dims as [number, number];
-        const meanRes = tf.tensor(data, dims) as tf.Tensor2D;
+        // const meanRes = tf.tensor(data, dims) as tf.Tensor2D;
 
-        return meanRes
-    }
-
-
-    async computeSimilarity(text1: string, text2: string): Promise<number> {
-        let embeddings: tf.Tensor2D | null = null;
-
-        try {
-            // 批量获取嵌入
-            embeddings = await this.encode([text1, text2]);
-
-            const embedding1 = embeddings.slice([0, 0], [1, -1]).reshape([-1]) as tf.Tensor1D;
-            const embedding2 = embeddings.slice([1, 0], [1, -1]).reshape([-1]) as tf.Tensor1D;
-
-            // 计算余弦相似度
-            const similarity = cosineSimilarity(
-                embedding1,
-                embedding2
-            );
-
-            return similarity;
-
-        } finally {
-            if (embeddings) embeddings.dispose();
+        return {
+            data,
+            dims
         }
     }
 }
 
-export const embedding = new Embedding()
