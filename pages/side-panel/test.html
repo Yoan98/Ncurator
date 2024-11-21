@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Document</title>
+    </head>
+
+    <body>
+    </body>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.js"></script>
+    <script>
+        // const embeddingBlock = {
+        //     data: new Float32Array(7680),
+        //     dims: [10, 768],
+        // }
+        // console.log(embeddingBlock);
+
+        // const reshapedMatrix = math.reshape(Array.from(embeddingBlock.data), embeddingBlock.dims);
+        // console.log(reshapedMatrix);
+
+        function cosineSimilarity(a, b) {
+            // 计算点积
+            const dotProduct = math.dot(a, b);
+
+            // 计算向量范数（模长）
+            const normA = math.norm(a)
+            const normB = math.norm(b)
+
+            // 避免除以零，保证分母最小值为 1e-9
+            const denominator = Math.max(normA * normB, 1e-9);
+
+            // 计算余弦相似度
+            return math.divide(dotProduct, denominator) || 0;
+        }
+
+        function testCosineSimilarity() {
+            // 测试用例1：完全相同的向量
+            const vector1 = [1, 2, 3];
+            const vector2 = [1, 2, 3];
+            console.log('完全相同向量的相似度:', cosineSimilarity(vector1, vector2));
+            // 预期输出：1
+
+            // 测试用例2：正交向量
+            const vector3 = [1, 0, 0];
+            const vector4 = [0, 1, 0];
+            console.log('正交向量的相似度:', cosineSimilarity(vector3, vector4));
+            // 预期输出：0
+
+            // 测试用例3：反向向量
+            const vector5 = [1, 2, 3];
+            const vector6 = [-1, -2, -3];
+            console.log('反向向量的相似度:', cosineSimilarity(vector5, vector6));
+            // 预期输出：-1
+
+            // 测试用例4：不同长度的向量
+            const vector7 = [1, 1];
+            const vector8 = [1, 1, 1];
+            try {
+                console.log('不同长度向量的相似度:', cosineSimilarity(vector7, vector8));
+            } catch (error) {
+                console.error('向量长度不同，无法计算相似度');
+            }
+        }
+
+        testCosineSimilarity();
+    </script>
+
+</html>

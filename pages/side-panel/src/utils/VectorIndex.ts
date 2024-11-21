@@ -1,6 +1,5 @@
-import * as math from './math';
-import * as tf from '@tensorflow/tfjs';
-
+import { cosineSimilarity } from './math';
+import * as math from 'mathjs';
 
 interface LSHIndexConstructor {
     dimensions: number;
@@ -64,33 +63,30 @@ export class LSHIndex {
 
     // 计算向量的LSH签名
     // 相对于数据量增加,时间复杂度O(1),因为投影向量是固定的
-    private computeHash(vector: tf.Tensor1D, tableIndex: number): string {
+    private computeHash(vector: number[], tableIndex: number): string {
         const signature: number[] = [];
         for (let i = 0; i < this.numHashesPerTable; i++) {
             const projIndex = tableIndex * this.numHashesPerTable + i;
             const projection = this.projections[projIndex];
 
-            const projectionTensor = tf.tensor1d(projection);
             // 计算向量点积
-            const dotProduct = vector.dot(projectionTensor) as tf.Scalar;
+            const dotProduct = math.dot(vector, projection);
 
             // 使用符号作为hash位
-            signature.push(dotProduct.dataSync()[0] > 0 ? 1 : 0);
+            signature.push(dotProduct > 0 ? 1 : 0);
 
-            dotProduct.dispose();
-            projectionTensor.dispose();
         }
         return signature.join('');
     }
 
     // 添加向量到索引
-    async addVector(id: number, vector: tf.Tensor1D): Promise<void> {
+    async addVector(id: number, vector: number[]): Promise<void> {
         for (let i = 0; i < this.numTables; i++) {
             const hash = this.computeHash(vector, i);
             if (!this.tables[i].has(hash)) {
                 this.tables[i].set(hash, { id: hash, vectors: [] });
             }
-            this.tables[i].get(hash)!.vectors.push({ id, vector: vector.dataSync() as Float32Array });
+            this.tables[i].get(hash)!.vectors.push({ id, vector: new Float32Array(vector) });
         }
     }
 
@@ -99,7 +95,7 @@ export class LSHIndex {
      * @param vectors
      * @returns
      */
-    async addVectors(vectors: { id: number, vector: tf.Tensor1D }[]): Promise<DB.LSHTables> {
+    async addVectors(vectors: { id: number, vector: number[] }[]): Promise<DB.LSHTables> {
         for (let i = 0; i < vectors.length; i++) {
             const { id, vector } = vectors[i];
             await this.addVector(id, vector);
@@ -114,7 +110,7 @@ export class LSHIndex {
 
     // 查找相似向量
     findSimilar({ queryVector, tables = this.tables, similarityThreshold = this.similarityThreshold }: {
-        queryVector: tf.Tensor1D,
+        queryVector: number[],
         tables?: DB.LSHTables
         similarityThreshold?: number
     }): { id: number, similarity: number }[] {
@@ -128,9 +124,7 @@ export class LSHIndex {
             if (bucket) {
                 for (const { id, vector } of bucket.vectors) {
                     // 计算余弦相似度
-                    const storageVector = tf.tensor1d(vector);
-                    const similarity = math.cosineSimilarity(queryVector, storageVector);
-                    storageVector.dispose();
+                    const similarity = cosineSimilarity(queryVector, Array.from(vector));
 
                     if (similarity > similarityThreshold) {
                         if (!candidate.some(item => item.id === id)) {

@@ -6,8 +6,6 @@ import { formatFileSize } from '@src/utils/tool';
 import { IndexDBStore } from '@src/utils/IndexDBStore';
 import * as constant from '@src/utils/constant';
 import dayjs from 'dayjs';
-import type { Pool } from 'workerpool';
-import workerpool from 'workerpool';
 import { FileConnector } from '@src/utils/Connector';
 import { IoSettingsOutline, IoReload } from "react-icons/io5";
 import { useGlobalContext } from '@src/provider/global';
@@ -15,9 +13,9 @@ import type * as LangChain from "@langchain/core/documents";
 import * as config from '@src/config';
 import { fullTextIndex } from '@src/utils/FullTextIndex';
 import { LSHIndex } from '@src/utils/VectorIndex';
-import * as tf from '@tensorflow/tfjs';
 import { EmbedTaskManage } from '@src/utils/EmbedTask'
 import type { EmbedTask } from '@src/utils/EmbedTask'
+import * as math from 'mathjs';
 
 const { Search } = Input;
 const { Dragger } = Upload;
@@ -38,7 +36,7 @@ const transToTextList = (chunks: LangChain.Document[], documentId: number): [DB.
     // 将数据拆平均分成多份
     let temp: string[] = []
     for (let i = 0; i < chunks.length; i++) {
-        // 截取纯文本,方便后续多worker并行处理
+        // 截取纯文本,方便后续embedding分片处理
         temp.push(chunks[i].
             pageContent
         )
@@ -102,17 +100,23 @@ const storageTextChunkToLSH = async ({ textChunkList, batchEmbeddingTextList, em
         const embeddingOutputIndex = Math.floor(index / embeddingBatchSize)
         const curVectorIndex = index % embeddingBatchSize
 
-        const embeddingBlock = embeddingOutput[embeddingOutputIndex]
-        const embeddingTensor = tf.tensor(embeddingBlock.data, embeddingBlock.dims) as tf.Tensor2D
+        let embeddingBlock = embeddingOutput[embeddingOutputIndex]
 
-        const vector = embeddingTensor.slice([curVectorIndex, 0], [1, -1]).reshape([-1]) as tf.Tensor1D
-        embeddingTensor.dispose()
+        // 重塑矩阵的维度
+        //@ts-ignore 这里mathjs的类型检查有问题
+        const reshapedMatrix = math.reshape(Array.from(embeddingBlock.data), embeddingBlock.dims) as number[][]
+        const vector = reshapedMatrix[curVectorIndex]
+
+        //@ts-ignore
+        embeddingBlock = null
+
 
         return {
             id: chunk.id!,
             vector: vector,
         }
     });
+    embeddingOutput.length = 0
 
     // * 构建索引
     // 获取库中是否已有LSH随机向量
