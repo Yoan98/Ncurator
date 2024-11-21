@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState } from 'react';
 import type { InitProgressReport, WebWorkerMLCEngine } from "@mlc-ai/web-llm";
 import * as constant from '@src/utils/constant';
 import type { ProgressProps } from 'antd';
-import { Progress } from 'antd';
+import { Progress, message } from 'antd';
 import { CreateWebWorkerMLCEngine, prebuiltAppConfig } from "@mlc-ai/web-llm";
 
 const pageList = ['/main', '/resource', '/llm-set'];
@@ -14,11 +14,17 @@ interface GlobalContextValue {
 
     // 全局使用的LLM模型
     llmEngine: WebWorkerMLCEngine | null;
-    loadLlmEngine: (modelId: string) => void;
+    loadLlmEngine: (modelId: string) => Promise<LoadLlmEngineReturn>;
 
     // pagePath
     pagePath: string;
     setPagePath: React.Dispatch<React.SetStateAction<string>>;
+}
+
+interface LoadLlmEngineReturn {
+    status: 'Success' | 'Fail',
+    message: string,
+    engine: WebWorkerMLCEngine | null
 }
 
 const defaultContextValue: GlobalContextValue = {
@@ -26,7 +32,13 @@ const defaultContextValue: GlobalContextValue = {
     setConnectionList: () => { },
 
     llmEngine: null,
-    loadLlmEngine: async () => { },
+    loadLlmEngine: async () => {
+        return {
+            status: 'Fail',
+            message: 'Haven\'t start load LLM model',
+            engine: null
+        }
+    },
 
     pagePath: '/main',
     setPagePath: () => { },
@@ -73,19 +85,37 @@ export const GlobalProvider = ({ children }) => {
     const [pagePath, setPagePath] = useState<string>('/main');
 
     // 加载LLM模型
-    const loadLlmEngine = async (selectModel) => {
+    const loadLlmEngine = async (selectModel): Promise<LoadLlmEngineReturn> => {
+        if (llmEngineLoadStatus === 'active') {
+            return {
+                status: 'Fail',
+                message: 'LLM is loading, please wait a moment',
+                engine: null
+            }
+        }
+
+        // 检查本地模型
         if (selectModel === 'default') {
-            // 检查本地模型
             const defaultModal = localStorage.getItem(constant.STORAGE_DEFAULT_MODEL_ID);
 
             if (!defaultModal) {
                 setLlmEngineLoadStatus(undefined);
-                return
+                return {
+                    status: 'Fail',
+                    message: 'Haven\'t find default model',
+                    engine: null
+                }
             }
             selectModel = defaultModal;
         }
 
         setLlmEngineLoadStatus('active');
+        setLlmEngineLoadPercent(0);
+        if (llmEngine) {
+            await llmEngine.unload();
+            setLlmEngine(null);
+        }
+
 
         try {
             const initProgressCallback = (progress: InitProgressReport) => {
@@ -116,9 +146,20 @@ export const GlobalProvider = ({ children }) => {
             );
 
             setLlmEngine(engine);
+
+            return {
+                status: 'Success',
+                message: 'Load LLM model success',
+                engine: engine
+            };
         } catch (error) {
             console.error("load llm error", error);
             setLlmEngineLoadStatus('exception');
+            return {
+                status: 'Fail',
+                message: 'Load LLM model error',
+                engine: null
+            }
         }
 
     }

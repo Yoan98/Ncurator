@@ -465,15 +465,15 @@ const DocumentItem = ({ data, onDeleteClick }: {
     },
     onDeleteClick: () => void
 }) => {
-    const statusText = data.status == constant.DocumentStatus.Fail ? 'Fail' : data.status == constant.DocumentStatus.Success ? 'Success' : 'Building...';
+    const statusText = data.status == constant.DocumentStatus.Fail ? 'Fail' : data.status == constant.DocumentStatus.Success ? 'Success' : 'Building';
     const statusClass = data.status == constant.DocumentStatus.Fail ? 'text-text-error' : data.status == constant.DocumentStatus.Success ? 'text-text-success' : '';
     return (
-        <div className='flex gap-2 text-center items-center'>
+        <div className='flex gap-1 text-center items-center'>
             <Tooltip placement="top" title={data.name} >
-                <div className='truncate cursor-pointer font-bold w-[60%]'>{data.name}</div>
+                <div className='truncate cursor-pointer font-bold w-[50%]'>{data.name}</div>
             </Tooltip>
             <Tooltip placement="top" title={`Create Time: ${data.created_at}`}>
-                <div className='text-text-500 cursor-pointer w-1/4'>{data.size}</div>
+                <div className='text-text-500 cursor-pointer w-[25%]'>{data.size}</div>
             </Tooltip>
             <Popconfirm
                 title="Delete the document"
@@ -484,7 +484,7 @@ const DocumentItem = ({ data, onDeleteClick }: {
                 placement='bottom'
             >
                 <Tooltip placement="top" title='Click to delete' >
-                    <Button loading={data.delLoading} type="text" className={`${statusClass}`} >
+                    <Button loading={data.delLoading} type="text" className={`w-[25%] ${statusClass}`} >
                         {statusText}
                     </Button>
                 </Tooltip>

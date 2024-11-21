@@ -60,6 +60,7 @@ const LlmSetup = () => {
 
     const [allLlmModels, setAllLlmModels] = useState<ModelItem[]>(DEFAULT_MODEL_LIST)
 
+    //todo 下载模型会把模型给加载一遍,内存彪高,需要优化
     const handleDownLoadLlm = async (model: ModelItem) => {
         if (allLlmModels.some((item) => item.loadingStatus === 'active')) {
             message.warning('There is another model loading, please wait for it to finish');
@@ -140,7 +141,19 @@ const LlmSetup = () => {
         }
 
     }
-    const handleSetDefaultClick = (model: ModelItem) => {
+    const handleSetDefaultClick = async (model: ModelItem) => {
+        message.loading('Loading model, please wait a moment');
+
+        const loadRes = await loadLlmEngine(model.modelId);
+        if (loadRes.status === 'Fail') {
+            message.warning(loadRes.message);
+            return;
+        }
+
+        if (loadRes.status === 'Success') {
+            message.success(loadRes.message);
+        }
+
         localStorage.setItem(constant.STORAGE_DEFAULT_MODEL_ID, model.modelId);
         setAllLlmModels((preModels) => {
             return preModels.map((item) => {
@@ -156,8 +169,6 @@ const LlmSetup = () => {
                 }
             })
         })
-
-        loadLlmEngine(model.modelId);
     }
 
     const loadedModels = allLlmModels.filter((model) => model.isLoaded).map((model) => (
