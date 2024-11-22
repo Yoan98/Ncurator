@@ -208,6 +208,9 @@ const LlmSetup = () => {
 
         setDefaultModel(model);
     }
+    const handleUploadClick = async (model: ModelItem) => {
+
+    }
     const setDefaultModel = (model: ModelItem) => {
         localStorage.setItem(constant.STORAGE_DEFAULT_MODEL_ID, model.modelId);
         setAllLlmModels((preModels) => {
@@ -257,7 +260,7 @@ const LlmSetup = () => {
                             handleCancelLlm(model)
                         }}>Cancel</Button>
                         : <div className="flex items-center gap-2">
-                            <Button size="small">Upload</Button>
+                            <Button size="small" onClick={() => handleUploadClick(model)}>Upload</Button>
                             <Button type="primary" size="small" onClick={() => handleDownLoadLlm(model)}>Download</Button>
                         </div>
                 }

@@ -10,7 +10,7 @@ import { CreateWebWorkerMLCEngine, modelVersion, modelLibURLPrefix, prebuiltAppC
 import type { InitProgressReport } from "@mlc-ai/web-llm";
 
 //@ts-ignore
-import storageWorkerURL from '@src/worker-pool/buildIndex?url&worker'
+// import storageWorkerURL from '@src/worker-pool/buildIndex?url&worker'
 // //@ts-ignore
 // import searchWorkerURL from './worker-pool/searchDoc?url&worker'
 
@@ -150,7 +150,7 @@ const SidePanel = () => {
                 initProgressCallback,
                 appConfig: {
                     ...prebuiltAppConfig,
-                    useIndexedDBCache: true
+                    // useIndexedDBCache: true
                 }
             },
         );
@@ -175,6 +175,12 @@ const SidePanel = () => {
             throw new Error('not chose model')
         }
 
+
+        await uploadByCacheFiles(event.target.files);
+
+    }
+
+    async function uploadByCacheFiles(files: File[]): Promise<void> {
         function getFileType(file: File) {
             if (file.name.includes("wasm")) {
                 return "webllm/wasm";
@@ -187,54 +193,109 @@ const SidePanel = () => {
             } else if (file.name.includes("mlc-chat-config.json")) {
                 return "webllm/config";
             } else {
+                console.log("No model file suffix found");
                 return "file-cache";
             }
         }
-        async function cacheModel(file: File) {
-            const indexDB = new IndexDBStore()
-            await indexDB.connect(getFileType(file), (db) => {
-                if (!db.objectStoreNames.contains("urls")) {
-                    db.createObjectStore("urls", { keyPath: "url" });
-                }
-            })
+        async function cacheFile(file: File, response: Response) {
+            try {
+                const cache = await caches.open(getFileType(file)); // Ensure getFileType is a synchronous function or awaited if async
+                console.log("Put response into cache:", response);
 
+                let urlPrefix = file.name.includes('wasm') ? `${modelLibURLPrefix}${modelVersion}/` : `https://huggingface.co/mlc-ai/${selectModel}/resolve/main/`
+
+                const url = `${urlPrefix}${file.name}`;
+                await cache.put(url, response);
+            } catch (error) {
+                console.error("Failed to cache the file:", error);
+            }
+        }
+
+        for (const file of files) {
             let fileContent
             if (
                 file.name.includes("mlc-chat-config.json") ||
                 file.name.includes("ndarray-cache.json")
             ) {
                 fileContent = await file.text()
-                fileContent = JSON.parse(fileContent)
             } else {
                 fileContent = await file.arrayBuffer()
             }
 
-            let urlPrefix = file.name.includes('wasm') ? `${modelLibURLPrefix}${modelVersion}/` : `https://huggingface.co/mlc-ai/${selectModel}/resolve/main/`
-
-            await indexDB.put({
-                storeName: "urls",
-                data: {
-                    url: `${urlPrefix}${file.name}`,
-                    data: fileContent,
+            const response = new Response(fileContent, {
+                status: 200,
+                statusText: "OK",
+                headers: {
+                    "Content-Type": "application/octet-stream",
+                    "Content-Length": typeof fileContent === "string" ? fileContent.length : fileContent.byteLength,
                 },
-            })
+            });
+            await cacheFile(file, response);
+        }
+    }
 
-        }
+    async function uploadByIndexDB(files: File[]): Promise<void> {
+        // function getFileType(file: File) {
+        //     if (file.name.includes("wasm")) {
+        //         return "webllm/wasm";
+        //     } else if (
+        //         file.name.includes(".bin") ||
+        //         file.name.includes("ndarray-cache.json") ||
+        //         file.name.includes("tokenizer.json")
+        //     ) {
+        //         return "webllm/model";
+        //     } else if (file.name.includes("mlc-chat-config.json")) {
+        //         return "webllm/config";
+        //     } else {
+        //         return "file-cache";
+        //     }
+        // }
+        // async function cacheModel(file: File) {
+        //     const indexDB = new IndexDBStore()
+        //     await indexDB.connect(getFileType(file), (db) => {
+        //         if (!db.objectStoreNames.contains("urls")) {
+        //             db.createObjectStore("urls", { keyPath: "url" });
+        //         }
+        //     })
 
-        const files = event.target.files;
-        if (!files || files.length === 0) {
-            throw new Error('No file selected');
-        }
-        for (const file of files) {
-            cacheModel(file);
-        }
+        //     let fileContent
+        //     if (
+        //         file.name.includes("mlc-chat-config.json") ||
+        //         file.name.includes("ndarray-cache.json")
+        //     ) {
+        //         fileContent = await file.text()
+        //         fileContent = JSON.parse(fileContent)
+        //     } else {
+        //         fileContent = await file.arrayBuffer()
+        //     }
+
+        //     let urlPrefix = file.name.includes('wasm') ? `${modelLibURLPrefix}${modelVersion}/` : `https://huggingface.co/mlc-ai/${selectModel}/resolve/main/`
+
+        //     await indexDB.put({
+        //         storeName: "urls",
+        //         data: {
+        //             url: `${urlPrefix}${file.name}`,
+        //             data: fileContent,
+        //         },
+        //     })
+
+        // }
+
+        // const files = event.target.files;
+        // if (!files || files.length === 0) {
+        //     throw new Error('No file selected');
+        // }
+        // for (const file of files) {
+        //     cacheModel(file);
+        // }
+
     }
 
 
     useEffect(() => {
-        storagePoolRef.current = workerpool.pool(storageWorkerURL, {
-            maxWorkers: 1,
-        });
+        // storagePoolRef.current = workerpool.pool(storageWorkerURL, {
+        //     maxWorkers: 1,
+        // });
 
         // searchPoolRef.current = workerpool.pool(searchWorkerURL, {
         //     maxWorkers: 1,
