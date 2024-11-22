@@ -2,17 +2,19 @@
 import React, { useState, useEffect } from 'react';
 import { RiRobot2Line } from "react-icons/ri";
 import { CiSquareQuestion } from "react-icons/ci";
-import { Tag, Button, Tooltip, Empty, message, Progress } from 'antd';
-import type { ProgressProps } from 'antd';
+import { Tag, Button, Tooltip, Empty, message, Progress, Upload, Modal } from 'antd';
+import type { ProgressProps, UploadFile, UploadProps } from 'antd';
 import * as constant from '@src/utils/constant';
 import type { InitProgressReport } from "@mlc-ai/web-llm";
-import { CreateMLCEngine, prebuiltAppConfig } from "@mlc-ai/web-llm";
+import { CreateMLCEngine, prebuiltAppConfig, modelLibURLPrefix, modelVersion } from "@mlc-ai/web-llm";
 import { IndexDBStore } from '@src/utils/IndexDBStore';
 import { useGlobalContext } from '@src/provider/global';
+import { downloadLlmModelFiles, uploadByCacheFiles } from '@src/utils/tool';
 
 interface ModelItem {
     name: string,
     modelId: string,
+    wasmFileName: string,
     isDefault: boolean,
     isLoaded: boolean,
     loadingStatus: ProgressProps['status'],
@@ -31,6 +33,7 @@ const DEFAULT_MODEL_LIST: ModelItem[] = [{
     name: 'Llama-3.1-8B',
     modeSizeType: 'Bigger',
     modelId: 'Llama-3.1-8B-Instruct-q4f16_1-MLC',
+    wasmFileName: 'Llama-3_1-8B-Instruct-q4f16_1-ctx4k_cs1k-webgpu.wasm',
     vram_required_MB: 5001,
     ...DEFAULT_META_DATA
 
@@ -38,32 +41,61 @@ const DEFAULT_MODEL_LIST: ModelItem[] = [{
     name: 'Llama-3.2-3B',
     modeSizeType: 'Smaller',
     modelId: 'Llama-3.2-3B-Instruct-q4f32_1-MLC',
+    wasmFileName: 'Llama-3.2-3B-Instruct-q4f32_1-ctx4k_cs1k-webgpu.wasm',
     vram_required_MB: 2951,
+    ...DEFAULT_META_DATA
+
+}, {
+    name: 'Llama-3.2-1B',
+    modeSizeType: 'Smaller',
+    modelId: 'Llama-3.2-1B-Instruct-q4f32_1-MLC',
+    wasmFileName: 'Llama-3.2-1B-Instruct-q4f32_1-ctx4k_cs1k-webgpu.wasm',
+    vram_required_MB: 1128,
     ...DEFAULT_META_DATA
 
 }, {
     name: 'Qwen2.5-7B',
     modeSizeType: 'Bigger',
     modelId: 'Qwen2.5-7B-Instruct-q4f16_1-MLC',
+    wasmFileName: 'Qwen2-7B-Instruct-q4f16_1-ctx4k_cs1k-webgpu.wasm',
     vram_required_MB: 5106,
     ...DEFAULT_META_DATA
 }, {
     name: 'Qwen2.5-3B',
     modeSizeType: 'Smaller',
     modelId: 'Qwen2.5-3B-Instruct-q4f32_1-MLC',
+    wasmFileName: 'Qwen2.5-3B-Instruct-q4f32_1-ctx4k_cs1k-webgpu.wasm',
     vram_required_MB: 2893,
     ...DEFAULT_META_DATA
 }]
 
+const { Dragger } = Upload;
+
 const LlmSetup = () => {
-    const { loadLlmEngine } = useGlobalContext()
+    const { llmEngineLoadStatus, reloadLlmModal } = useGlobalContext()
 
     const [allLlmModels, setAllLlmModels] = useState<ModelItem[]>(DEFAULT_MODEL_LIST)
 
-    //todo 下载模型会把模型给加载一遍,内存彪高,需要优化
+    const [uploadModalOpen, setUploadModalOpen] = useState(false);
+    const [uploadFileList, setUploadFileList] = useState<UploadFile[]>([]); // 每个resource操作上传时的,最终上传文件列表
+    const [uploadLoading, setUploadLoading] = useState(false);
+    const [curUploadModal, setCurUploadModal] = useState<ModelItem | null>(null);
+
+
+    const uploadProps: UploadProps = {
+        multiple: true,
+        accept: '.wasm,.bin,.json',
+        beforeUpload: (file) => {
+            return false
+        },
+        onChange(info) {
+            setUploadFileList([...info.fileList]);
+        },
+    };
+
     const handleDownLoadLlm = async (model: ModelItem) => {
         if (allLlmModels.some((item) => item.loadingStatus === 'active')) {
-            message.warning('There is another model loading, please wait for it to finish');
+            message.warning('A model is downloading. Please wait a moment');
             return;
         }
 
@@ -81,15 +113,14 @@ const LlmSetup = () => {
             })
         })
 
-
         try {
-            const initProgressCallback = (progress: InitProgressReport) => {
+            const initProgressCallback = (progress: number) => {
                 // 更新load percent
                 setAllLlmModels((preModels) => {
                     return preModels.map((item) => {
                         if (item.modelId === model.modelId) {
                             // 加载完成
-                            if (progress.progress === 1) {
+                            if (progress === 1) {
                                 return {
                                     ...item,
                                     loadingPercent: 100,
@@ -101,7 +132,7 @@ const LlmSetup = () => {
                             // 动态percent
                             return {
                                 ...item,
-                                loadingPercent: Math.floor(progress.progress * 100),
+                                loadingPercent: Math.floor(progress * 100),
                             }
                         }
                         return item;
@@ -109,20 +140,13 @@ const LlmSetup = () => {
 
                 });
             }
-            await CreateMLCEngine(
-                model.modelId,
-                {
-                    initProgressCallback,
-                    appConfig: {
-                        ...prebuiltAppConfig,
-                        useIndexedDBCache: true
-                    }
-                },
-            );
 
+            await downloadLlmModelFiles(model.modelId, modelLibURLPrefix, modelVersion, model.wasmFileName, initProgressCallback);
+
+            message.success('Download model success');
         } catch (error) {
             console.error("load llm error", error);
-            message.error('Load model failed');
+            message.error('Load model failed ' + error.message);
 
             // 更新loading状态
             setAllLlmModels((preModels) => {
@@ -131,7 +155,7 @@ const LlmSetup = () => {
                         return {
                             ...item,
                             loadingPercent: 0,
-                            loadingStatus: 'exception',
+                            loadingStatus: 'normal',
                             loaded: false
                         }
                     }
@@ -142,11 +166,16 @@ const LlmSetup = () => {
 
     }
     const handleSetDefaultClick = async (model: ModelItem) => {
-        message.loading('Loading model, please wait a moment');
+        if (llmEngineLoadStatus === 'active') {
+            message.warning('LLM model is loading, please wait a moment');
+            return;
+        }
 
-        const loadRes = await loadLlmEngine(model.modelId);
+        message.loading('Setting default model');
+
+        const loadRes = await reloadLlmModal(model.modelId);
         if (loadRes.status === 'Fail') {
-            message.warning(loadRes.message);
+            message.error(loadRes.message);
             return;
         }
 
@@ -157,8 +186,51 @@ const LlmSetup = () => {
         setDefaultModel(model);
     }
     const handleUploadClick = async (model: ModelItem) => {
+        setUploadModalOpen(true);
+
+        // 重置状态
+        setCurUploadModal(model);
+        setUploadFileList([]);
 
     }
+    const handleUploadConfirm = async () => {
+        if (!curUploadModal) return;
+        if (!uploadFileList.length) {
+            message.warning('Please upload model file');
+            return;
+        }
+
+        try {
+            setUploadLoading(true);
+
+            const files = uploadFileList.map((file) => file.originFileObj!);
+            await uploadByCacheFiles(curUploadModal.modelId, files, modelLibURLPrefix, modelVersion)
+
+            message.success('Upload model success');
+            setUploadModalOpen(false);
+
+            setAllLlmModels((preModels) => {
+                return preModels.map((item) => {
+                    if (item.modelId === curUploadModal.modelId) {
+                        // 加载完成
+                        return {
+                            ...item,
+                            isLoaded: true,
+                        }
+                    }
+                    return item;
+                })
+
+            });
+
+        } catch (error) {
+            console.error("upload model error", error);
+            message.error('Upload model failed ' + error.message);
+        }
+
+        setUploadLoading(false);
+    }
+
     const setDefaultModel = (model: ModelItem) => {
         localStorage.setItem(constant.STORAGE_DEFAULT_MODEL_ID, model.modelId);
         setAllLlmModels((preModels) => {
@@ -204,7 +276,7 @@ const LlmSetup = () => {
                 </div>
                 {
                     model.loadingStatus !== 'active' && <div className="flex items-center gap-2">
-                        <Button size="small">Upload</Button>
+                        <Button size="small" onClick={() => handleUploadClick(model)}>Upload</Button>
                         <Button type="primary" size="small" onClick={() => handleDownLoadLlm(model)}>Download</Button>
                     </div>
                 }
@@ -277,6 +349,15 @@ const LlmSetup = () => {
                     !unloadedModels.length ? <Empty description="No unloaded model" /> : unloadedModels
                 }
             </div>
+
+            <Modal confirmLoading={uploadLoading} cancelButtonProps={{ loading: uploadLoading }} maskClosable={false} centered title='Upload model file' open={uploadModalOpen} onOk={handleUploadConfirm} onCancel={() => { setUploadModalOpen(false) }}>
+                <Dragger  {...uploadProps} fileList={uploadFileList} >
+                    <p className="ant-upload-text">Click or drag model file to this area</p>
+                    <p className="ant-upload-hint">
+                        All the data will be storage in your local database
+                    </p>
+                </Dragger>
+            </Modal>
         </div>
     );
 }

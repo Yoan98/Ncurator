@@ -1,9 +1,9 @@
-import React, { createContext, useContext, useState } from 'react';
-import type { InitProgressReport, WebWorkerMLCEngine } from "@mlc-ai/web-llm";
+import React, { createContext, useContext, useState, useRef } from 'react';
+import type { InitProgressReport } from "@mlc-ai/web-llm";
 import * as constant from '@src/utils/constant';
 import type { ProgressProps } from 'antd';
 import { Progress, message } from 'antd';
-import { CreateWebWorkerMLCEngine, prebuiltAppConfig } from "@mlc-ai/web-llm";
+import { WebWorkerMLCEngine } from "@mlc-ai/web-llm";
 
 const pageList = ['/main', '/resource', '/llm-set'];
 
@@ -12,16 +12,18 @@ interface GlobalContextValue {
     connectionList: DB.ConnectionDocUnion[];
     setConnectionList: React.Dispatch<React.SetStateAction<DB.ConnectionDocUnion[]>>;
 
-    // 全局使用的LLM模型
-    llmEngine: WebWorkerMLCEngine | null;
-    loadLlmEngine: (modelId: string) => Promise<LoadLlmEngineReturn>;
+    llmEngineLoadStatus: ProgressProps['status'];
+    // 全局使用的LLM引擎
+    llmEngine: React.MutableRefObject<WebWorkerMLCEngine | null>
+    loadLlmEngine: (modelId: string) => Promise<LoadLlmReturn>;
+    reloadLlmModal: (modelId: string) => Promise<LoadLlmReturn>;
 
     // pagePath
     pagePath: string;
     setPagePath: React.Dispatch<React.SetStateAction<string>>;
 }
 
-interface LoadLlmEngineReturn {
+interface LoadLlmReturn {
     status: 'Success' | 'Fail',
     message: string,
     engine: WebWorkerMLCEngine | null
@@ -31,11 +33,19 @@ const defaultContextValue: GlobalContextValue = {
     connectionList: [],
     setConnectionList: () => { },
 
-    llmEngine: null,
+    llmEngineLoadStatus: 'normal',
+    llmEngine: { current: null },
     loadLlmEngine: async () => {
         return {
             status: 'Fail',
-            message: 'Haven\'t start load LLM model',
+            message: 'Haven\'t start load LLM engine',
+            engine: null
+        }
+    },
+    reloadLlmModal: async () => {
+        return {
+            status: 'Fail',
+            message: 'Haven\'t start reload LLM model',
             engine: null
         }
     },
@@ -76,16 +86,28 @@ const LlmLoaderProgress = ({ progress, status, onReloadClick, onGoToSetupCLick }
 }
 
 export const GlobalProvider = ({ children }) => {
+
+    const llmEngine = useRef<WebWorkerMLCEngine | null>(null);
+
     const [connectionList, setConnectionList] = useState<DB.ConnectionDocUnion[]>([]);
 
-    const [llmEngine, setLlmEngine] = useState<WebWorkerMLCEngine | null>(null);
     const [llmEngineLoadPercent, setLlmEngineLoadPercent] = useState<number>(0);
     const [llmEngineLoadStatus, setLlmEngineLoadStatus] = useState<ProgressProps['status']>('normal');
 
     const [pagePath, setPagePath] = useState<string>('/main');
 
-    // 加载LLM模型
-    const loadLlmEngine = async (selectModel): Promise<LoadLlmEngineReturn> => {
+    const initProgressCallback = (progress: InitProgressReport) => {
+        setLlmEngineLoadPercent((prePercent) => {
+            if (progress.progress === 1) {
+                setLlmEngineLoadStatus('success');
+                return 100;
+            }
+            return prePercent < 99 ? ++prePercent : 99;
+
+        });
+    }
+    // 加载LLM引擎
+    const loadLlmEngine = async (selectModel: string): Promise<LoadLlmReturn> => {
         if (llmEngineLoadStatus === 'active') {
             return {
                 status: 'Fail',
@@ -93,6 +115,14 @@ export const GlobalProvider = ({ children }) => {
                 engine: null
             }
         }
+
+        setLlmEngineLoadStatus('active');
+        setLlmEngineLoadPercent(0);
+        if (llmEngine.current) {
+            await llmEngine.current.unload();
+            llmEngine.current = null;
+        }
+
 
         // 检查本地模型
         if (selectModel === 'default') {
@@ -109,43 +139,19 @@ export const GlobalProvider = ({ children }) => {
             selectModel = defaultModal;
         }
 
-        setLlmEngineLoadStatus('active');
-        setLlmEngineLoadPercent(0);
-        if (llmEngine) {
-            await llmEngine.unload();
-            setLlmEngine(null);
-        }
-
 
         try {
-            const initProgressCallback = (progress: InitProgressReport) => {
-                setLlmEngineLoadPercent((prePercent) => {
-                    if (progress.progress === 1) {
-                        setLlmEngineLoadStatus('success');
-                        return 100;
-                    }
-                    return prePercent < 99 ? ++prePercent : 99;
-
-                });
-            }
-            const engine = await CreateWebWorkerMLCEngine(
-                new Worker(
-                    new URL("@src/worker-pool/llm.ts", import.meta.url),
-                    {
-                        type: "module",
-                    }
-                ),
-                selectModel,
+            const engine = new WebWorkerMLCEngine(new Worker(
+                new URL("@src/worker-pool/llm.ts", import.meta.url),
+                {
+                    type: "module",
+                }),
                 {
                     initProgressCallback,
-                    appConfig: {
-                        ...prebuiltAppConfig,
-                        useIndexedDBCache: true
-                    }
-                },
-            );
+                })
+            llmEngine.current = engine
 
-            setLlmEngine(engine);
+            await engine.reload(selectModel);
 
             return {
                 status: 'Success',
@@ -164,9 +170,39 @@ export const GlobalProvider = ({ children }) => {
 
     }
 
+    // 重载模型
+    const reloadLlmModal = async (selectModel: string): Promise<LoadLlmReturn> => {
+        if (llmEngineLoadStatus === 'active') {
+            return {
+                status: 'Fail',
+                message: 'LLM is loading, please wait a moment',
+                engine: null
+            }
+        }
+        if (!llmEngine.current) {
+            const res = await loadLlmEngine(selectModel);
+            return res;
+        }
+
+        llmEngine.current.setInitProgressCallback(initProgressCallback);
+
+        setLlmEngineLoadPercent(0);
+        setLlmEngineLoadStatus('active');
+
+        await llmEngine.current.reload(selectModel);
+
+        return {
+            status: 'Success',
+            message: 'Reload LLM model success',
+            engine: llmEngine.current
+        };
+
+    }
+
+
 
     return (
-        <GlobalContext.Provider value={{ connectionList, setConnectionList, llmEngine, loadLlmEngine, pagePath, setPagePath }}>
+        <GlobalContext.Provider value={{ connectionList, setConnectionList, llmEngine, loadLlmEngine, llmEngineLoadStatus, reloadLlmModal, pagePath, setPagePath }}>
             {children}
 
             {/* llm load loading */}

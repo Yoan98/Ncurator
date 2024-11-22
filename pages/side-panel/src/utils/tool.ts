@@ -2,11 +2,13 @@ import init, * as jieba from 'jieba-wasm';
 
 // 检测WebGPU是否可用
 export async function checkWebGPU() {
+    //@ts-ignore
     if (!navigator.gpu) {
         console.log("WebGPU is not supported.");
         return false;
     }
     try {
+        //@ts-ignore
         const adapter = await navigator.gpu.requestAdapter();
         if (adapter) {
             console.log("WebGPU is available and the adapter was successfully created.");
@@ -56,5 +58,158 @@ export async function splitKeywords(keywords: string) {
         const words = segments.map(segment => segment.segment).filter(word => !enStopWords.includes(word.toLowerCase()));
 
         return words;
+    }
+}
+
+
+export function getWebLlmCacheType(fileName: string) {
+    if (fileName.includes(".wasm")) {
+        return "webllm/wasm";
+    } else if (
+        fileName.includes(".bin") ||
+        fileName.includes("ndarray-cache.json") ||
+        fileName.includes("tokenizer.json")
+    ) {
+        return "webllm/model";
+    } else if (fileName.includes("mlc-chat-config.json")) {
+        return "webllm/config";
+    } else {
+        console.log("No model file suffix found");
+        return "file-cache";
+    }
+}
+// 下载LLM模型文件
+export async function downloadLlmModelFiles(
+    modelId: string,
+    modelLibURLPrefix: string,
+    modelVersion: string,
+    wasmFileName: string,
+    onProgress: (progressPercent: number) => void
+): Promise<void> {
+    // 构建基础URL
+    const huggingfaceBaseUrl = `https://huggingface.co/mlc-ai/${modelId}/resolve/main`;
+    const wasmBaseUrl = `${modelLibURLPrefix}${modelVersion}`;
+
+    // 工具函数：获取文件内容
+    async function fetchFile(url: string) {
+        const cache = await caches.open(getWebLlmCacheType(url));
+        const cachedResponse = await cache.match(url);
+        if (cachedResponse) {
+            return cachedResponse;
+        }
+
+        const response = await fetch(url, {
+            headers: {
+                "Content-Type": "application/octet-stream"
+            }
+        });
+        if (!response.ok) {
+            throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+        }
+        return response;
+    }
+
+
+    // 先获取 ndarray-cache.json
+    const ndarrayResponse = await fetchFile(`${huggingfaceBaseUrl}/ndarray-cache.json`)
+    const clonedResponse = ndarrayResponse.clone();
+    // 解析 ndarray-cache.json 获取需要下载的文件列表
+    const ndarrayContent = await ndarrayResponse.json();
+    const records: {
+        dataPath: string;
+        nbytes: number;
+    }[] = ndarrayContent.records;
+
+    const cache = await caches.open(getWebLlmCacheType('ndarray-cache.json'));
+    await cache.put(`${huggingfaceBaseUrl}/ndarray-cache.json`, clonedResponse);
+
+
+    // 收集所有需要下载的文件
+    interface DownloadFile {
+        name: string;
+        url: string;
+        type: 'text' | 'arraybuffer';
+        size: number;
+    }
+
+    const filesToDownload: DownloadFile[] = [
+        // 必需的JSON文件
+        {
+            name: 'mlc-chat-config.json',
+            url: `${huggingfaceBaseUrl}/mlc-chat-config.json`,
+            type: 'text',
+            size: 0,
+        },
+        {
+            name: 'tokenizer.json',
+            url: `${huggingfaceBaseUrl}/tokenizer.json`,
+            type: 'arraybuffer',
+            size: 0,
+        },
+        // WASM文件
+        {
+            name: `${wasmFileName}`,
+            url: `${wasmBaseUrl}/${wasmFileName}`,
+            type: 'arraybuffer',
+            size: 0,
+        }
+    ];
+
+    // 添加从ndarray-cache中解析出的bin文件
+    records.forEach(record => {
+        if (record.dataPath.endsWith('.bin')) {
+            filesToDownload.push({
+                name: record.dataPath,
+                url: `${huggingfaceBaseUrl}/${record.dataPath}`,
+                type: 'arraybuffer',
+                size: record.nbytes
+            });
+        }
+    });
+
+    // 计算总大小用于进度计算
+    const binFileTotalSize = filesToDownload.filter(file => file.url.endsWith('.bin')).reduce((acc, file) => acc + file.size, 0);
+    let downloadedSize = 0;
+    let progressPercent = 0;
+
+    // 依次下载所有文件
+    for (const file of filesToDownload) {
+        try {
+            const response = await fetchFile(file.url);
+            const cache = await caches.open(getWebLlmCacheType(file.name));
+            await cache.put(file.url, response);
+
+            // 更新进度
+            downloadedSize += file.size || 0;
+            progressPercent = downloadedSize / binFileTotalSize
+            onProgress(progressPercent);
+        } catch (error) {
+            console.error(`Error downloading ${file.name}:`, error);
+            throw new Error(`Failed to download ${file.name}: ${error.message}`);
+        }
+    }
+}
+// 上传模型文件
+export async function uploadByCacheFiles(modelId: string, files: File[], modelLibURLPrefix, modelVersion): Promise<void> {
+    async function cacheFile(file: File, response: Response) {
+        const cache = await caches.open(getWebLlmCacheType(file.name)); // Ensure getFileType is a synchronous function or awaited if async
+
+        let urlPrefix = file.name.includes('wasm') ? `${modelLibURLPrefix}${modelVersion}/` : `https://huggingface.co/mlc-ai/${modelId}/resolve/main/`
+
+        const url = `${urlPrefix}${file.name}`;
+        await cache.put(url, response);
+    }
+    for (const file of files) {
+        let fileContent = await file.arrayBuffer()
+
+        const response = new Response(fileContent, {
+            status: 200,
+            statusText: "OK",
+            headers: {
+                "Content-Type": "application/octet-stream",
+                "Content-Length": fileContent.byteLength.toString(),
+            },
+        });
+        await cacheFile(file, response);
     }
 }

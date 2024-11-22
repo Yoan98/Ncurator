@@ -260,7 +260,7 @@ const SearchSection = () => {
     const [aiAnswerText, setAiAnswerText] = useState<string>('');
 
     const askAI = async (searchTextRes: Search.TextItemRes[]) => {
-        if (!llmEngine) {
+        if (!llmEngine.current) {
             setAiAnswerText('AI engine is not ready,please setup your LLM Model');
             return;
         }
@@ -272,7 +272,7 @@ const SearchSection = () => {
             context +
             "\n\nQuestion: " +
             questionValue +
-            "\n\nHelpful Answer: ";
+            "\n\nHelpful Answer(in the same language as the question): ";
 
         const messages: ChatCompletionMessageParam[] = [
             {
@@ -283,7 +283,7 @@ const SearchSection = () => {
         console.log('ask Ai', messages)
 
         let curMessage = "";
-        const reply = await llmEngine.chat.completions.create({
+        const reply = await llmEngine.current.chat.completions.create({
             stream: true,
             messages,
         });

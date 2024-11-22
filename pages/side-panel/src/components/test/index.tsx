@@ -212,22 +212,14 @@ const SidePanel = () => {
         }
 
         for (const file of files) {
-            let fileContent
-            if (
-                file.name.includes("mlc-chat-config.json") ||
-                file.name.includes("ndarray-cache.json")
-            ) {
-                fileContent = await file.text()
-            } else {
-                fileContent = await file.arrayBuffer()
-            }
+            let fileContent = await file.arrayBuffer()
 
             const response = new Response(fileContent, {
                 status: 200,
                 statusText: "OK",
                 headers: {
                     "Content-Type": "application/octet-stream",
-                    "Content-Length": typeof fileContent === "string" ? fileContent.length : fileContent.byteLength,
+                    "Content-Length": fileContent.byteLength.toString(),
                 },
             });
             await cacheFile(file, response);
