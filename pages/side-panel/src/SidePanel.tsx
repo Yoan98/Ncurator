@@ -126,9 +126,7 @@ const SidePanel = () => {
         setActiveTab(tab || 'search');
 
         // load llm model
-        loadLlmEngine({
-            modelId: 'default'
-        });
+        loadLlmEngine('default');
     }, [])
 
     useEffect(() => {

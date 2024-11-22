@@ -6,7 +6,8 @@ import { Tag, Button, Tooltip, Empty, message, Progress } from 'antd';
 import type { ProgressProps } from 'antd';
 import * as constant from '@src/utils/constant';
 import type { InitProgressReport } from "@mlc-ai/web-llm";
-import { MLCEngine, prebuiltAppConfig } from "@mlc-ai/web-llm";
+import { CreateMLCEngine, prebuiltAppConfig } from "@mlc-ai/web-llm";
+import { IndexDBStore } from '@src/utils/IndexDBStore';
 import { useGlobalContext } from '@src/provider/global';
 
 interface ModelItem {
@@ -41,13 +42,6 @@ const DEFAULT_MODEL_LIST: ModelItem[] = [{
     ...DEFAULT_META_DATA
 
 }, {
-    name: 'Llama-3.2-1B',
-    modeSizeType: 'Smaller',
-    modelId: 'Llama-3.2-1B-Instruct-q4f32_1-MLC',
-    vram_required_MB: 1128,
-    ...DEFAULT_META_DATA
-
-}, {
     name: 'Qwen2.5-7B',
     modeSizeType: 'Bigger',
     modelId: 'Qwen2.5-7B-Instruct-q4f16_1-MLC',
@@ -66,44 +60,21 @@ const LlmSetup = () => {
 
     const [allLlmModels, setAllLlmModels] = useState<ModelItem[]>(DEFAULT_MODEL_LIST)
 
-    const handleCancelLlm = async (model: ModelItem) => {
-        // 将更新状态重置为正常
-        setAllLlmModels((preModels) => {
-            return preModels.map((item) => {
-                if (item.modelId === model.modelId) {
-                    return {
-                        ...item,
-                        loadingPercent: 0,
-                        loadingStatus: 'normal',
-                        loaded: false
-                    }
-                }
-                return item;
-            })
-        })
-        // 重新加载default模型
-        await loadLlmEngine({ modelId: 'default', isForcedLoad: true });
-
-        const hasLocalDefaultModel = localStorage.getItem(constant.STORAGE_DEFAULT_MODEL_ID);
-        // 避免没模型时,点击下载和取消时,设置了默认模型,致使下次重新进来直接下载模型
-        if (hasLocalDefaultModel) {
-            setDefaultModel(model);
-        }
-    }
+    //todo 下载模型会把模型给加载一遍,内存彪高,需要优化
     const handleDownLoadLlm = async (model: ModelItem) => {
         if (allLlmModels.some((item) => item.loadingStatus === 'active')) {
             message.warning('There is another model loading, please wait for it to finish');
             return;
         }
 
-        // 更新loading状态为active
+        // 更新状态为加载中
         setAllLlmModels((preModels) => {
             return preModels.map((item) => {
                 if (item.modelId === model.modelId) {
                     return {
                         ...item,
-                        loadingPercent: 0,
-                        loadingStatus: 'active'
+                        loadingStatus: 'active',
+                        loadingPercent: 0
                     }
                 }
                 return item;
@@ -131,7 +102,6 @@ const LlmSetup = () => {
                             return {
                                 ...item,
                                 loadingPercent: Math.floor(progress.progress * 100),
-                                loadingStatus: 'active'
                             }
                         }
                         return item;
@@ -139,49 +109,29 @@ const LlmSetup = () => {
 
                 });
             }
+            await CreateMLCEngine(
+                model.modelId,
+                {
+                    initProgressCallback,
+                    appConfig: {
+                        ...prebuiltAppConfig,
+                        useIndexedDBCache: true
+                    }
+                },
+            );
 
-            // 由于webllm没提供preload之类只下载模型的方法,同时加载两个webllm模型,内存会占用很大
-            // 只好先临时全局只加载一个llm模型
-            const loadRes = await loadLlmEngine({
-                modelId: model.modelId,
-                extProgressCallback: initProgressCallback
-            });
-            if (loadRes.status === 'Fail') {
-                message.warning(loadRes.message);
-                // 更新loading状态为正常
-                setAllLlmModels((preModels) => {
-                    return preModels.map((item) => {
-                        if (item.modelId === model.modelId) {
-                            return {
-                                ...item,
-                                loadingPercent: 0,
-                                loadingStatus: 'normal',
-                                loaded: false
-                            }
-                        }
-                        return item;
-                    })
-                })
-                return;
-            }
-
-            const hasLocalDefaultModel = localStorage.getItem(constant.STORAGE_DEFAULT_MODEL_ID);
-            // 避免没模型时,点击下载和取消时,设置了默认模型,致使下次重新进来直接下载模型
-            if (hasLocalDefaultModel) {
-                setDefaultModel(model);
-            }
         } catch (error) {
             console.error("load llm error", error);
             message.error('Load model failed');
 
-            // 更新loading状态为正常
+            // 更新loading状态
             setAllLlmModels((preModels) => {
                 return preModels.map((item) => {
                     if (item.modelId === model.modelId) {
                         return {
                             ...item,
                             loadingPercent: 0,
-                            loadingStatus: 'normal',
+                            loadingStatus: 'exception',
                             loaded: false
                         }
                     }
@@ -194,9 +144,7 @@ const LlmSetup = () => {
     const handleSetDefaultClick = async (model: ModelItem) => {
         message.loading('Loading model, please wait a moment');
 
-        const loadRes = await loadLlmEngine({
-            modelId: model.modelId,
-        });
+        const loadRes = await loadLlmEngine(model.modelId);
         if (loadRes.status === 'Fail') {
             message.warning(loadRes.message);
             return;
@@ -255,14 +203,10 @@ const LlmSetup = () => {
                     <div className="model-name text-base">{model.name}</div>
                 </div>
                 {
-                    model.loadingStatus === 'active' ?
-                        <Button size="small" onClick={() => {
-                            handleCancelLlm(model)
-                        }}>Cancel</Button>
-                        : <div className="flex items-center gap-2">
-                            <Button size="small" onClick={() => handleUploadClick(model)}>Upload</Button>
-                            <Button type="primary" size="small" onClick={() => handleDownLoadLlm(model)}>Download</Button>
-                        </div>
+                    model.loadingStatus !== 'active' && <div className="flex items-center gap-2">
+                        <Button size="small">Upload</Button>
+                        <Button type="primary" size="small" onClick={() => handleDownLoadLlm(model)}>Download</Button>
+                    </div>
                 }
             </div>
             <div className="tag  flex items-center ">
