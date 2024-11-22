@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useState } from 'react';
-import type { InitProgressReport, WebWorkerMLCEngine } from "@mlc-ai/web-llm";
+import type { InitProgressReport } from "@mlc-ai/web-llm";
 import * as constant from '@src/utils/constant';
 import type { ProgressProps } from 'antd';
 import { Progress, message } from 'antd';
-import { CreateWebWorkerMLCEngine, prebuiltAppConfig } from "@mlc-ai/web-llm";
+import { CreateWebWorkerMLCEngine, prebuiltAppConfig, WebWorkerMLCEngine } from "@mlc-ai/web-llm";
 
 const pageList = ['/main', '/resource', '/llm-set'];
 
@@ -14,8 +14,7 @@ interface GlobalContextValue {
 
     // 全局使用的LLM模型
     llmEngine: WebWorkerMLCEngine | null;
-    loadLlmEngine: (modelId: string) => Promise<LoadLlmEngineReturn>;
-
+    loadLlmEngine: (param: LoadLlmEngineParams) => Promise<LoadLlmEngineReturn>;
     // pagePath
     pagePath: string;
     setPagePath: React.Dispatch<React.SetStateAction<string>>;
@@ -25,6 +24,11 @@ interface LoadLlmEngineReturn {
     status: 'Success' | 'Fail',
     message: string,
     engine: WebWorkerMLCEngine | null
+}
+interface LoadLlmEngineParams {
+    modelId: string,
+    isForcedLoad?: boolean,
+    extProgressCallback?: (progress: InitProgressReport) => void
 }
 
 const defaultContextValue: GlobalContextValue = {
@@ -42,6 +46,7 @@ const defaultContextValue: GlobalContextValue = {
 
     pagePath: '/main',
     setPagePath: () => { },
+
 };
 
 const GlobalContext = createContext(defaultContextValue);
@@ -85,8 +90,8 @@ export const GlobalProvider = ({ children }) => {
     const [pagePath, setPagePath] = useState<string>('/main');
 
     // 加载LLM模型
-    const loadLlmEngine = async (selectModel): Promise<LoadLlmEngineReturn> => {
-        if (llmEngineLoadStatus === 'active') {
+    const loadLlmEngine: GlobalContextValue['loadLlmEngine'] = async ({ modelId, isForcedLoad = false, extProgressCallback }): Promise<LoadLlmEngineReturn> => {
+        if (llmEngineLoadStatus === 'active' && !isForcedLoad) {
             return {
                 status: 'Fail',
                 message: 'LLM is loading, please wait a moment',
@@ -94,8 +99,16 @@ export const GlobalProvider = ({ children }) => {
             }
         }
 
+        // 初始化重置
+        setLlmEngineLoadStatus('active');
+        setLlmEngineLoadPercent(0);
+        if (llmEngine) {
+            await llmEngine.unload();
+            setLlmEngine(null);
+        }
+
         // 检查本地模型
-        if (selectModel === 'default') {
+        if (modelId === 'default') {
             const defaultModal = localStorage.getItem(constant.STORAGE_DEFAULT_MODEL_ID);
 
             if (!defaultModal) {
@@ -106,46 +119,48 @@ export const GlobalProvider = ({ children }) => {
                     engine: null
                 }
             }
-            selectModel = defaultModal;
+            modelId = defaultModal;
         }
-
-        setLlmEngineLoadStatus('active');
-        setLlmEngineLoadPercent(0);
-        if (llmEngine) {
-            await llmEngine.unload();
-            setLlmEngine(null);
-        }
-
 
         try {
-            const initProgressCallback = (progress: InitProgressReport) => {
+            const selfProgressCallback = (progress: InitProgressReport) => {
                 setLlmEngineLoadPercent((prePercent) => {
                     if (progress.progress === 1) {
                         setLlmEngineLoadStatus('success');
                         return 100;
                     }
+                    if (progress.progress > 0 && progress.progress < 1) {
+                        // 代表是下载模型,会有进度
+                        return Math.floor(progress.progress * 100);
+                    }
                     return prePercent < 99 ? ++prePercent : 99;
 
                 });
             }
-            const engine = await CreateWebWorkerMLCEngine(
+            const initProgressCallback = (progress: InitProgressReport) => {
+                console.log('initProgressCallback', progress);
+                selfProgressCallback(progress);
+                extProgressCallback && extProgressCallback?.(progress);
+            }
+
+            const engine = new WebWorkerMLCEngine(
                 new Worker(
                     new URL("@src/worker-pool/llm.ts", import.meta.url),
                     {
                         type: "module",
                     }
                 ),
-                selectModel,
                 {
                     initProgressCallback,
                     appConfig: {
                         ...prebuiltAppConfig,
                         useIndexedDBCache: true
                     }
-                },
-            );
-
+                }
+            )
             setLlmEngine(engine);
+
+            await engine.reload(modelId);
 
             return {
                 status: 'Success',
@@ -174,7 +189,10 @@ export const GlobalProvider = ({ children }) => {
                 <LlmLoaderProgress progress={llmEngineLoadPercent} status={llmEngineLoadStatus} onReloadClick={() => {
                     setLlmEngineLoadPercent(0);
                     setLlmEngineLoadStatus('active');
-                    loadLlmEngine('default');
+                    loadLlmEngine({
+                        modelId: 'default',
+                        isForcedLoad: true,
+                    });
                 }}
                     onGoToSetupCLick={() => {
                         setPagePath('/llm-set');
