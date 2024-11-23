@@ -26,3 +26,6 @@ export const EMBEDDING_HIDDEN_SIZE = 768; // 目前使用的两个模型都是76
 
 // other
 export const THEME_COLOR = '#404040'; // 主题色
+
+// prompt
+export const CHAT_SYSTEM_PROMPT = 'You are a helpful AI assistant.';

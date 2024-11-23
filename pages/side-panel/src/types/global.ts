@@ -9,7 +9,7 @@ interface Window {
 }
 
 namespace Search {
-    export type TextItemRes = (DB.TEXT_CHUNK & { document: DB.DOCUMENT })
+    export type TextItemRes = (DB.TEXT_CHUNK & { document: DB.DOCUMENT, score: number })
     export interface LshItemRes {
         id: number,
         similarity: number
