@@ -8,6 +8,7 @@ import { IoDocumentAttachOutline } from "react-icons/io5";
 import { FaRocketchat } from "react-icons/fa";
 import { CiSearch } from "react-icons/ci";
 import SearchSection from '@src/components/search/index';
+import ChatSection from '@src/components/chat/index';
 import Resource from '@src/components/resource/index';
 import LlmSetup from '@src/components/llmSetup/index';
 import { IoIosArrowRoundBack } from "react-icons/io";
@@ -21,12 +22,12 @@ const settingItems: MenuProps['items'] = [
     {
         key: 1,
         label: 'Resource',
-        icon: <IoDocumentAttachOutline />,
+        icon: <IoDocumentAttachOutline size={18} />,
     },
     {
         key: 2,
         label: 'LLM Model',
-        icon: <RiRobot2Line />,
+        icon: <RiRobot2Line size={18} />,
     }
 ];
 
@@ -135,11 +136,16 @@ const SidePanel = () => {
 
 
     return (
-        <div className='App bg-background min-h-screen px-2 py-3 flex flex-col'>
+        <div className='App bg-background h-screen overflow-hidden px-2 py-3 flex flex-col'>
             <div className="header flex items-center justify-between">
                 <div className="header-left flex items-center gap-2">
                     {
-                        pagePath === '/main' ? <FiSidebar cursor='pointer' size={20} onClick={() => { setHistoryOpen(true) }} /> : <IoIosArrowRoundBack cursor='pointer' size={25} onClick={() => { setPagePath('/main') }} />
+                        pagePath === '/main' ?
+                            activeTab === 'search' ?
+                                <FiSidebar cursor='pointer' size={20} onClick={() => { setHistoryOpen(true) }} />
+                                : <></>
+                            :
+                            <IoIosArrowRoundBack cursor='pointer' size={25} onClick={() => { setPagePath('/main') }} />
                     }
                 </div>
                 <div className="header-right">
@@ -151,7 +157,7 @@ const SidePanel = () => {
 
 
             {/* main content */}
-            <div className={`main-content-wrap mt-5 ${pagePath === '/main' ? 'block' : 'hidden'}`}>
+            <div className={`main-content-wrap flex-1 flex flex-col mt-5 ${pagePath === '/main' ? 'block' : 'hidden'}`}>
                 <div className="toggle-wrap h-[30px]">
                     <div className="toggle  fixed top-6 left-1/2 transform -translate-x-1/2">
                         <ToggleSwitch initialTab='search' onToggleSwitch={(tab) =>
@@ -159,7 +165,12 @@ const SidePanel = () => {
                         } />
                     </div>
                 </div>
-                <SearchSection></SearchSection>
+
+                <div className="main-content flex-1 flex flex-col">
+                    {
+                        activeTab === 'search' ? <SearchSection></SearchSection> : <ChatSection></ChatSection>
+                    }
+                </div>
             </div>
 
             {/* resource content */}

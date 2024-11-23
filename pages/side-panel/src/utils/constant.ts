@@ -32,3 +32,5 @@ export const WEBLLM_CONFIG_INDEXDB_NAME = 'webllm/config'; // webllm配置的ind
 export const WEBLLM_CONFIG_STORE_NAME = 'urls'; // webllm配置的store名称
 export const STORAGE_DEFAULT_MODEL_ID = 'defaultModelId'; // localStorage中默认模型id的名称
 export const STORAGE_LOADED_MODEL_IDS = 'loadedModelIds'; // localStorage中
+
+export const APP_NAME = 'YCurator'; // app名称

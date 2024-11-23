@@ -69,7 +69,7 @@ const LlmLoaderProgress = ({ progress, status, onReloadClick, onGoToSetupCLick }
 
 
     return (
-        <div className={`llm-load-status bg-white rounded-lg py-1 px-2 animate__animated shadow-md  ${progress == 100 ? 'animate__backOutRight animate__delay-2s' : 'animate__backInRight'}`}>
+        <div className={`llm-load-status fixed right-0 bottom-2 bg-white rounded-lg py-1 px-2 animate__animated shadow-md  ${progress == 100 ? 'animate__backOutRight animate__delay-2s' : 'animate__backInRight'}`}>
             {
                 !status
                     ?
@@ -206,17 +206,15 @@ export const GlobalProvider = ({ children }) => {
             {children}
 
             {/* llm load loading */}
-            <div className="fixed right-0 bottom-2 px-1">
-                <LlmLoaderProgress progress={llmEngineLoadPercent} status={llmEngineLoadStatus} onReloadClick={() => {
-                    setLlmEngineLoadPercent(0);
-                    setLlmEngineLoadStatus('active');
-                    loadLlmEngine('default');
+            <LlmLoaderProgress progress={llmEngineLoadPercent} status={llmEngineLoadStatus} onReloadClick={() => {
+                setLlmEngineLoadPercent(0);
+                setLlmEngineLoadStatus('active');
+                loadLlmEngine('default');
+            }}
+                onGoToSetupCLick={() => {
+                    setPagePath('/llm-set');
                 }}
-                    onGoToSetupCLick={() => {
-                        setPagePath('/llm-set');
-                    }}
-                />
-            </div>
+            />
         </GlobalContext.Provider>
     );
 };

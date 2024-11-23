@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Select, Button, Input, message, Dropdown, Empty, Tooltip, MenuProps } from 'antd';
-import { RiRobot2Line } from "react-icons/ri";
 import { IoDocumentAttachOutline } from "react-icons/io5";
 import dayjs from 'dayjs';
 import { useGlobalContext } from '@src/provider/global';
@@ -9,6 +8,8 @@ import type {
     ChatCompletionMessageParam,
 } from "@mlc-ai/web-llm";
 import { CHAT_SYSTEM_PROMPT } from '@src/config'
+import { IoBookOutline, IoChatbubblesOutline } from "react-icons/io5";
+import { APP_NAME } from '@src/utils/constant';
 
 enum MessageType {
     USER = 'user',
@@ -25,27 +26,27 @@ interface ChatUiMessage {
 // 设置项dropdown菜单
 const aiOptions = [
     {
-        value: 1,
-        label: 'ai-assistant',
-        icon: <RiRobot2Line />,
+        key: 1,
+        label: 'Knowledge',
+        icon: <IoBookOutline size={18} />,
     },
     {
-        value: 2,
-        label: 'ai-knowledge',
-        icon: <IoDocumentAttachOutline />,
-    },
+        key: 2,
+        label: 'Chat',
+        icon: <IoChatbubblesOutline size={18} />,
+    }
 
 ];
 
 
 const { TextArea } = Input;
 
-const ChatInterface = ({
+const ChatSection = ({
     chatHistory = null,
 }: {
     chatHistory?: ChatUiMessage[] | null;
 }) => {
-    const { connectionList, llmEngine } = useGlobalContext()
+    const { connectionList, llmEngine, llmEngineLoadStatus } = useGlobalContext()
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const llmMessages = useRef<ChatCompletionMessageParam[]>([
@@ -72,8 +73,9 @@ const ChatInterface = ({
     const handleSend = async () => {
         if (!question) {
             message.warning('Please input the question');
+            return
         };
-        if (!llmEngine.current) {
+        if (!llmEngine.current || llmEngineLoadStatus !== 'success') {
             message.warning('AI engine is not ready,please setup your LLM Model');
             return;
         }
@@ -89,7 +91,7 @@ const ChatInterface = ({
 
         let searchTextRes: Search.TextItemRes[] = []
         // 搜索数据库的数据
-        if (selectedAiOption.value === 2) {
+        if (selectedAiOption.key === 1) {
             try {
                 const connections = connectionList.filter((connection) => !selectedConnection.length ? true : selectedConnection.includes(connection.id!));
 
@@ -105,7 +107,7 @@ const ChatInterface = ({
 
         // AI 问答
         try {
-            const prompt = getUserPrompt(selectedAiOption.value == 1 ? 'chat' : 'knowledge', question, searchTextRes);
+            const prompt = getUserPrompt(selectedAiOption.key == 1 ? 'knowledge' : 'chat', question, searchTextRes);
             // 生成llm的消息
             llmMessages.current.push({ role: "user", content: prompt });
             // 调用AI,处理返回
@@ -117,6 +119,7 @@ const ChatInterface = ({
             const replyTime = dayjs().toISOString();
             for await (const chunk of reply) {
                 const curDelta = chunk.choices[0].delta.content;
+                console.log(chunk)
                 if (curDelta) {
                     curMessage += curDelta;
                 }
@@ -124,10 +127,8 @@ const ChatInterface = ({
                 setChatUiMessages((prev) => {
                     const oldReplyMes = prev.find((item) => item.timestamp === replyTime && item.type === MessageType.ASSISTANT);
                     if (oldReplyMes) {
-                        return {
-                            ...prev,
-                            content: curMessage
-                        }
+                        oldReplyMes.content = curMessage;
+                        return [...prev];
                     } else {
                         const newChatUiMes: ChatUiMessage = {
                             type: MessageType.ASSISTANT,
@@ -135,7 +136,7 @@ const ChatInterface = ({
                             timestamp: replyTime,
                         }
 
-                        if (selectedAiOption.value === 2) {
+                        if (selectedAiOption.key === 1) {
                             newChatUiMes.relateTextChunks = searchTextRes
                         }
 
@@ -149,6 +150,9 @@ const ChatInterface = ({
             }
             // 更新llm消息
             llmMessages.current.push({ role: "assistant", content: curMessage });
+
+            console.log('llmMessages', llmMessages.current);
+            console.log('chatUiMessage', chatUiMessage);
         } catch (error) {
             console.error('Error sending message:', error);
             message.error('Error in chat ' + error.message);
@@ -156,12 +160,23 @@ const ChatInterface = ({
 
         setAskLoading(false);
     };
-
     const handleEnterPress = (e) => {
+        // 避免shift+enter换行
+        if (e.shiftKey) {
+            return;
+        }
         handleSend();
     };
+    const handleAiOptionClick = ({ key }) => {
+        const selectedOption = aiOptions.find((option) => option.key == key);
+        setSelectedAiOption(selectedOption!);
+    }
 
     useEffect(() => {
+        if (!chatUiMessage.length) {
+            return;
+        }
+
         scrollToBottom();
     }, [chatUiMessage]);
     useEffect(() => {
@@ -185,7 +200,7 @@ const ChatInterface = ({
 
 
     return (
-        <div className="flex flex-col h-screen bg-[#fafafa]">
+        <div className="chat-section flex flex-col flex-1">
             {/* Chat Messages */}
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
                 {chatUiMessage.map((message, index) => (
@@ -217,7 +232,7 @@ const ChatInterface = ({
                             </div>
                         ) : (
                             <div
-                                className={`max-w-[80%] p-3 rounded-lg ${message.type === MessageType.USER
+                                className={`max-w-[80%] px-2 py-1 rounded-lg text-base ${message.type === MessageType.USER
                                     ? 'bg-[#404040] text-white'
                                     : 'bg-white text-gray-800 shadow-sm'
                                     }`}
@@ -231,14 +246,14 @@ const ChatInterface = ({
             </div>
 
             {/* Input Area */}
-            <div className="px-4 pb-4">
+            <div className="pb-4">
                 <div className="max-w-4xl mx-auto bg-[#f5f5f5] rounded-lg border border-gray-200 overflow-hidden">
                     {/* Text Input */}
                     <TextArea
                         value={question}
-                        onChange={(e) => setQuestion(e.target.value?.trim() || '')}
-                        placeholder="Search something based on the resource..."
-                        autoSize={{ minRows: 2 }}
+                        onChange={(e) => setQuestion(e.target.value)}
+                        placeholder={selectedAiOption.key === 1 ? `Ask ${APP_NAME} based on your resource` : `Message with ${APP_NAME}`}
+                        autoSize={{ minRows: 2, maxRows: 4 }}
                         variant='borderless'
                         className='text-base'
                         onPressEnter={handleEnterPress}
@@ -246,29 +261,21 @@ const ChatInterface = ({
 
 
                     {/* Controls */}
-                    <div className="flex items-center justify-between px-3 py-2">
+                    <div className="flex items-center justify-between pr-3 pl-1 py-2">
 
-                        <div className="ai-option flex items-center gap-2">
-                            <Select
-                                suffixIcon={selectedAiOption.icon}
-                                defaultValue={[]}
-                                variant="borderless"
-                                style={{ maxWidth: '250px', minWidth: '120px' }}
-                                options={aiOptions}
-                                onChange={(value) => {
-                                    const selectedOption = aiOptions.find((option) => option.value[0] === value);
-                                    setSelectedAiOption(selectedOption!);
-                                }}
-                            />
+                        <div className="ai-option flex items-center ">
+                            <Dropdown menu={{ items: aiOptions, onClick: handleAiOptionClick }} placement="topLeft">
+                                <Button type="text" size="small" className='!pr-0'>{selectedAiOption.icon}</Button>
+                            </Dropdown>
 
                             {/* resource */}
                             {
-                                selectedAiOption.value === 2 && <Select
+                                selectedAiOption.key === 1 && <Select
                                     mode="multiple"
-                                    defaultValue={[2]}
+                                    defaultValue={[]}
                                     placeholder="All Resources"
                                     variant="borderless"
-                                    style={{ maxWidth: '250px', minWidth: '120px' }}
+                                    style={{ minWidth: '120px' }}
                                     options={connectionOption}
                                     onChange={(value) => setSelectedConnection(value)}
                                 />
@@ -278,6 +285,7 @@ const ChatInterface = ({
 
 
                         <Button loading={askLoading} type="primary" shape='circle' size="small" className='hover:scale-110 transition-transform' onClick={handleSend}>Go</Button>
+
                     </div>
                 </div>
             </div>
@@ -285,4 +293,4 @@ const ChatInterface = ({
     );
 };
 
-export default ChatInterface;
+export default ChatSection;

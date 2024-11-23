@@ -133,9 +133,9 @@ const SearchSection = () => {
         <div className="input bg-background-100 flex   flex-col   border   border-border-medium rounded-lg p-1">
             <TextArea
                 value={questionValue}
-                onChange={(e) => setQuestionValue(e.target.value?.trim() || '')}
+                onChange={(e) => setQuestionValue(e.target.value || '')}
                 placeholder="Search something based on the resource..."
-                autoSize={{ minRows: 2 }}
+                autoSize={{ minRows: 2, maxRows: 4 }}
                 variant='borderless'
                 className='text-base'
                 onPressEnter={handleSearchClick}
