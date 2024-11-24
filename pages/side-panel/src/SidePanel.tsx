@@ -101,7 +101,7 @@ const SidePanel = () => {
     const [historyOpen, setHistoryOpen] = useState(false);
     const [historyTitle, setHistoryTitle] = useState<string>('');
 
-    const [activeTab, setActiveTab] = useState<Tab>('search');
+    const [activeTab, setActiveTab] = useState<Tab>('chat');
 
 
     const setHistoryTitleByTab = (tab: Tab) => {
@@ -141,7 +141,7 @@ const SidePanel = () => {
                 <div className="header-left flex items-center gap-2">
                     {
                         pagePath === '/main' ?
-                            activeTab === 'search' ?
+                            activeTab === 'chat' ?
                                 <FiSidebar cursor='pointer' size={20} onClick={() => { setHistoryOpen(true) }} />
                                 : <></>
                             :
@@ -167,9 +167,13 @@ const SidePanel = () => {
                 </div>
 
                 <div className="main-content flex-1 flex flex-col">
-                    {
-                        activeTab === 'search' ? <SearchSection></SearchSection> : <ChatSection></ChatSection>
-                    }
+
+                    <div className={`flex-1 flex flex-col ${activeTab === 'search' ? 'block' : 'hidden'}`}>
+                        <SearchSection></SearchSection>
+                    </div>
+                    <div className={`flex-1 flex flex-col ${activeTab === 'chat' ? 'block' : 'hidden'}`}>
+                        <ChatSection></ChatSection>
+                    </div>
                 </div>
             </div>
 

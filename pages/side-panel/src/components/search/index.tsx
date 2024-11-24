@@ -1,18 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { Select, Button, Input, message, Empty, Tooltip } from 'antd';
 import { IoDocumentAttachOutline } from "react-icons/io5";
-import { splitKeywords, searchDoc, getUserPrompt } from '@src/utils/tool';
+import { splitKeywords, searchDoc } from '@src/utils/tool';
 import { useGlobalContext } from '@src/provider/global';
 import TextHighlighter from '@src/components/highlighter';
-import type {
-    ChatCompletionMessageParam,
-} from "@mlc-ai/web-llm";
-import { CHAT_SYSTEM_PROMPT } from '@src/config'
-
+import { ChatLlmMessage } from '@src/utils/ChatLlmMessage';
+import { VscSend } from "react-icons/vsc";
 const { TextArea } = Input;
 
 const SearchSection = () => {
-    const { connectionList, llmEngine } = useGlobalContext()
+    const { connectionList, llmEngine, llmEngineLoadStatus } = useGlobalContext()
 
     const [questionValue, setQuestionValue] = useState('');
     const [questionKeywords, setQuestionKeywords] = useState<string[]>([]);
@@ -28,36 +25,24 @@ const SearchSection = () => {
     const [aiAnswerText, setAiAnswerText] = useState<string>('');
 
     const askAI = async (searchTextRes: Search.TextItemRes[]) => {
-        if (!llmEngine.current) {
+        if (!llmEngine.current || llmEngineLoadStatus !== 'success') {
             setAiAnswerText('AI engine is not ready,please setup your LLM Model');
             return;
         }
 
-        const prompt = getUserPrompt('knowledge', questionValue, searchTextRes);
-
-        const messages: ChatCompletionMessageParam[] = [
-            {
-                role: "system", content: CHAT_SYSTEM_PROMPT
-            },
-            { role: "user", content: prompt },
-        ]
-
-        let curMessage = "";
-        const reply = await llmEngine.current.chat.completions.create({
-            stream: true,
-            messages,
+        const chat = new ChatLlmMessage({
+            responseStyle: 'text'
         });
 
-        for await (const chunk of reply) {
-            const curDelta = chunk.choices[0].delta.content;
-            if (curDelta) {
-                curMessage += curDelta;
-            }
-
-            setAiAnswerText(curMessage);
-        }
-
-
+        chat.sendMsg({
+            prompt: questionValue,
+            type: 'knowledge',
+            searchTextRes,
+            streamCb: (msg, chunk) => {
+                setAiAnswerText(msg);
+            },
+            llmEngine: llmEngine.current
+        })
     }
 
 
@@ -85,7 +70,7 @@ const SearchSection = () => {
             setSearchTextRes(searchTextRes);
         } catch (error) {
             console.error(error);
-            message.error('Error in search');
+            message.error('Error in search' + error);
         }
         setSearchLoading(false);
 
@@ -102,10 +87,15 @@ const SearchSection = () => {
         setAskAiLoading(false);
 
     }
+    const handleEnterPress = (e) => {
+        // 避免shift+enter换行
+        if (e.shiftKey) {
+            return;
+        }
+        e.preventDefault();
+        handleSearchClick();
+    };
 
-    useEffect(() => {
-
-    }, []);
 
     useEffect(() => {
         if (!connectionList.length) {
@@ -135,10 +125,10 @@ const SearchSection = () => {
                 value={questionValue}
                 onChange={(e) => setQuestionValue(e.target.value || '')}
                 placeholder="Search something based on the resource..."
-                autoSize={{ minRows: 2, maxRows: 4 }}
+                autoSize={{ minRows: 2, maxRows: 2 }}
                 variant='borderless'
                 className='text-base'
-                onPressEnter={handleSearchClick}
+                onPressEnter={handleEnterPress}
             />
 
             <div className="input-filter flex items-center justify-between  pr-2 pl-1 py-2">
@@ -153,7 +143,7 @@ const SearchSection = () => {
                     onChange={(value) => setSelectedConnection(value)}
                 />
 
-                <Button loading={searchLoading} type="primary" shape='circle' size="small" className='hover:scale-110 transition-transform' onClick={handleSearchClick}>Go</Button>
+                <Button loading={searchLoading} icon={<VscSend size={20} />} type="primary" shape='circle' className='hover:scale-110 transition-transform' onClick={handleSearchClick}></Button>
             </div>
         </div>
 

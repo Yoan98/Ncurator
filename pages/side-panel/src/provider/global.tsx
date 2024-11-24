@@ -200,7 +200,6 @@ export const GlobalProvider = ({ children }) => {
     }
 
 
-
     return (
         <GlobalContext.Provider value={{ connectionList, setConnectionList, llmEngine, loadLlmEngine, llmEngineLoadStatus, reloadLlmModal, pagePath, setPagePath }}>
             {children}

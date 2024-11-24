@@ -29,3 +29,45 @@ export const THEME_COLOR = '#404040'; // 主题色
 
 // prompt
 export const CHAT_SYSTEM_PROMPT = 'You are a helpful AI assistant.';
+
+// llm
+export const LLM_GENERATE_MAX_TOKENS = 300;
+export const LLM_MODEL_LIST = [{
+    name: 'Llama-3.1-8B',
+    modelSizeType: 'Bigger',
+    modelId: 'Llama-3.1-8B-Instruct-q4f16_1-MLC',
+    wasmFileName: 'Llama-3_1-8B-Instruct-q4f16_1-ctx4k_cs1k-webgpu.wasm',
+    vramRequiredMB: 5001,
+    contextWindowSize: 4096
+
+}, {
+    name: 'Llama-3.2-3B',
+    modelSizeType: 'Smaller',
+    modelId: 'Llama-3.2-3B-Instruct-q4f32_1-MLC',
+    wasmFileName: 'Llama-3.2-3B-Instruct-q4f32_1-ctx4k_cs1k-webgpu.wasm',
+    vramRequiredMB: 2951,
+    contextWindowSize: 4096
+
+}, {
+    name: 'Llama-3.2-1B',
+    modelSizeType: 'Smaller',
+    modelId: 'Llama-3.2-1B-Instruct-q4f32_1-MLC',
+    wasmFileName: 'Llama-3.2-1B-Instruct-q4f32_1-ctx4k_cs1k-webgpu.wasm',
+    vramRequiredMB: 1128,
+    contextWindowSize: 4096
+
+}, {
+    name: 'Qwen2.5-7B',
+    modelSizeType: 'Bigger',
+    modelId: 'Qwen2.5-7B-Instruct-q4f16_1-MLC',
+    wasmFileName: 'Qwen2-7B-Instruct-q4f16_1-ctx4k_cs1k-webgpu.wasm',
+    vramRequiredMB: 5106,
+    contextWindowSize: 4096,
+}, {
+    name: 'Qwen2.5-3B',
+    modelSizeType: 'Smaller',
+    modelId: 'Qwen2.5-3B-Instruct-q4f32_1-MLC',
+    wasmFileName: 'Qwen2.5-3B-Instruct-q4f32_1-ctx4k_cs1k-webgpu.wasm',
+    vramRequiredMB: 2893,
+    contextWindowSize: 4096,
+}]

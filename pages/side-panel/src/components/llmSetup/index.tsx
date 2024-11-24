@@ -5,11 +5,10 @@ import { CiSquareQuestion } from "react-icons/ci";
 import { Tag, Button, Tooltip, Empty, message, Progress, Upload, Modal } from 'antd';
 import type { ProgressProps, UploadFile, UploadProps } from 'antd';
 import * as constant from '@src/utils/constant';
-import type { InitProgressReport } from "@mlc-ai/web-llm";
-import { CreateMLCEngine, prebuiltAppConfig, modelLibURLPrefix, modelVersion } from "@mlc-ai/web-llm";
-import { IndexDBStore } from '@src/utils/IndexDBStore';
 import { useGlobalContext } from '@src/provider/global';
 import { downloadLlmModelFiles, uploadByCacheFiles } from '@src/utils/tool';
+import { LLM_MODEL_LIST } from '@src/config';
+import { modelLibURLPrefix, modelVersion } from "@mlc-ai/web-llm";
 
 interface ModelItem {
     name: string,
@@ -19,8 +18,8 @@ interface ModelItem {
     isLoaded: boolean,
     loadingStatus: ProgressProps['status'],
     loadingPercent: number
-    vram_required_MB: number
-    modeSizeType: 'Bigger' | 'Smaller'
+    vramRequiredMB: number
+    modelSizeType: 'Bigger' | 'Smaller'
 }
 
 const DEFAULT_META_DATA = {
@@ -29,45 +28,14 @@ const DEFAULT_META_DATA = {
     loadingStatus: 'normal' as ProgressProps['status'],
     loadingPercent: 0
 }
-const DEFAULT_MODEL_LIST: ModelItem[] = [{
-    name: 'Llama-3.1-8B',
-    modeSizeType: 'Bigger',
-    modelId: 'Llama-3.1-8B-Instruct-q4f16_1-MLC',
-    wasmFileName: 'Llama-3_1-8B-Instruct-q4f16_1-ctx4k_cs1k-webgpu.wasm',
-    vram_required_MB: 5001,
-    ...DEFAULT_META_DATA
-
-}, {
-    name: 'Llama-3.2-3B',
-    modeSizeType: 'Smaller',
-    modelId: 'Llama-3.2-3B-Instruct-q4f32_1-MLC',
-    wasmFileName: 'Llama-3.2-3B-Instruct-q4f32_1-ctx4k_cs1k-webgpu.wasm',
-    vram_required_MB: 2951,
-    ...DEFAULT_META_DATA
-
-}, {
-    name: 'Llama-3.2-1B',
-    modeSizeType: 'Smaller',
-    modelId: 'Llama-3.2-1B-Instruct-q4f32_1-MLC',
-    wasmFileName: 'Llama-3.2-1B-Instruct-q4f32_1-ctx4k_cs1k-webgpu.wasm',
-    vram_required_MB: 1128,
-    ...DEFAULT_META_DATA
-
-}, {
-    name: 'Qwen2.5-7B',
-    modeSizeType: 'Bigger',
-    modelId: 'Qwen2.5-7B-Instruct-q4f16_1-MLC',
-    wasmFileName: 'Qwen2-7B-Instruct-q4f16_1-ctx4k_cs1k-webgpu.wasm',
-    vram_required_MB: 5106,
-    ...DEFAULT_META_DATA
-}, {
-    name: 'Qwen2.5-3B',
-    modeSizeType: 'Smaller',
-    modelId: 'Qwen2.5-3B-Instruct-q4f32_1-MLC',
-    wasmFileName: 'Qwen2.5-3B-Instruct-q4f32_1-ctx4k_cs1k-webgpu.wasm',
-    vram_required_MB: 2893,
-    ...DEFAULT_META_DATA
-}]
+const DEFAULT_MODEL_LIST: ModelItem[] = LLM_MODEL_LIST.map((model) => {
+    return {
+        ...model,
+        modelSizeType: model.modelSizeType as 'Bigger' | 'Smaller',
+        ...DEFAULT_META_DATA
+    }
+}
+)
 
 const { Dragger } = Upload;
 
@@ -263,8 +231,8 @@ const LlmSetup = () => {
                 }
             </div>
             <div className="tag  flex items-center ">
-                <Tag color='gold' className='text-xs'>{model.modeSizeType}</Tag>
-                <Tag color='gold' className='text-xs'>VRAM: {(model.vram_required_MB / 1024).toFixed(2)}G</Tag>
+                <Tag color='gold' className='text-xs'>{model.modelSizeType}</Tag>
+                <Tag color='gold' className='text-xs'>VRAM: {(model.vramRequiredMB / 1024).toFixed(2)}G</Tag>
             </div>
         </div >
     ))
@@ -282,8 +250,8 @@ const LlmSetup = () => {
                 }
             </div>
             <div className="tag  flex items-center ">
-                <Tag color='gold' className='text-xs'>{model.modeSizeType}</Tag>
-                <Tag color='gold' className='text-xs'>VRAM: {(model.vram_required_MB / 1024).toFixed(2)}G</Tag>
+                <Tag color='gold' className='text-xs'>{model.modelSizeType}</Tag>
+                <Tag color='gold' className='text-xs'>VRAM: {(model.vramRequiredMB / 1024).toFixed(2)}G</Tag>
             </div>
 
             {

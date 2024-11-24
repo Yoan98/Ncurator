@@ -7,10 +7,6 @@ import workerpool from 'workerpool';
 import * as config from '@src/config';
 // @ts-ignore
 import searchWorkerURL from '@src/worker-pool/search?url&worker'
-import type {
-    ChatCompletionMessageParam,
-    WebWorkerMLCEngine
-} from "@mlc-ai/web-llm";
 
 const searchingWorkerPool = workerpool.pool(searchWorkerURL, {
     maxWorkers: config.SEARCH_WORKER_NUM,
@@ -448,24 +444,5 @@ export const searchDoc = async (question: string, connections: DB.CONNECTION[], 
 
     return {
         searchedRes
-    }
-}
-
-export const getUserPrompt = (type: 'chat' | 'knowledge', question: string, searchTextRes: Search.TextItemRes[]) => {
-    if (type === 'knowledge') {
-        const context = searchTextRes.map((item, index) => `Document${index + 1}: ${item.text}`).join('\n');
-
-        const inp =
-            "Use the following context and the previous chat history when answering the question at the end. Don't use any other knowledge. The documents below have been retrieved and sorted by relevance. Please use them in the order they are presented, with the most relevant ones first.\n" +
-            context +
-            "\n\nQuestion: " +
-            question +
-            "\n\nHelpful Answer(in the same language as the question): ";
-
-        return inp
-    } else if (type === 'chat') {
-        return question
-    } else {
-        throw new Error('Unknown type')
     }
 }

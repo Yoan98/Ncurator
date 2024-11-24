@@ -1,24 +1,26 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Select, Button, Input, message, Dropdown, Empty, Tooltip, MenuProps } from 'antd';
+import { Select, Button, Input, message, Dropdown, Empty, Tooltip } from 'antd';
 import { IoDocumentAttachOutline } from "react-icons/io5";
 import dayjs from 'dayjs';
 import { useGlobalContext } from '@src/provider/global';
-import { searchDoc, getUserPrompt } from '@src/utils/tool';
-import type {
-    ChatCompletionMessageParam,
-} from "@mlc-ai/web-llm";
-import { CHAT_SYSTEM_PROMPT } from '@src/config'
+import { searchDoc } from '@src/utils/tool';
 import { IoBookOutline, IoChatbubblesOutline } from "react-icons/io5";
 import { APP_NAME } from '@src/utils/constant';
+import { ChatLlmMessage } from '@src/utils/ChatLlmMessage';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm'
+import { VscSend } from "react-icons/vsc";
+import { CiPause1 } from "react-icons/ci";
+import { TbDatabaseSearch } from "react-icons/tb";
+import Logo from '@src/components/logo';
 
 enum MessageType {
     USER = 'user',
     ASSISTANT = 'assistant',
-    DOCUMENTS = 'documents'
 };
 interface ChatUiMessage {
     type: MessageType;
-    content?: string;
+    content: string;
     timestamp: string;
     relateTextChunks?: Search.TextItemRes[];
 }
@@ -49,9 +51,7 @@ const ChatSection = ({
     const { connectionList, llmEngine, llmEngineLoadStatus } = useGlobalContext()
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const llmMessages = useRef<ChatCompletionMessageParam[]>([
-        { role: "system", content: CHAT_SYSTEM_PROMPT }
-    ]);
+    const chatLlmMessageRef = useRef<ChatLlmMessage | null>(null);
 
     const [chatUiMessage, setChatUiMessages] = useState<ChatUiMessage[]>([]);
     const [connectionOption, setConnectionOption] = useState<{ label: string, value: number }[]>([]);
@@ -61,6 +61,7 @@ const ChatSection = ({
     const [selectedAiOption, setSelectedAiOption] = useState(aiOptions[0]);
 
     const [askLoading, setAskLoading] = useState(false);
+    const [searchLoading, setSearchLoading] = useState(false);
 
 
     const scrollToBottom = () => {
@@ -71,100 +72,105 @@ const ChatSection = ({
     const handleTextChunkClick = (doc: Search.TextItemRes) => { }
 
     const handleSend = async () => {
-        if (!question) {
-            message.warning('Please input the question');
-            return
-        };
         if (!llmEngine.current || llmEngineLoadStatus !== 'success') {
             message.warning('AI engine is not ready,please setup your LLM Model');
             return;
         }
 
-        const userMessage = {
+        if (askLoading) {
+            if (searchLoading) {
+                return
+            }
+
+            llmEngine.current!.interruptGenerate()
+            setAskLoading(false);
+            return;
+        }
+        if (!question) {
+            message.warning('Please input the question');
+            return
+        };
+
+        // 重置状态
+        setQuestion("");
+        setAskLoading(true);
+
+        const uiUserMessage = {
             type: MessageType.USER,
             content: question.trim(),
             timestamp: dayjs().toISOString(),
         };
-        setChatUiMessages(prev => [...prev, userMessage]);
-        setQuestion("");
-        setAskLoading(true);
+        const uiAssistantMessage: ChatUiMessage = {
+            type: MessageType.ASSISTANT,
+            content: '⚫',
+            timestamp: dayjs().toISOString(),
+        }
+        setChatUiMessages(prev => [...prev, uiUserMessage, uiAssistantMessage]);
 
         let searchTextRes: Search.TextItemRes[] = []
         // 搜索数据库的数据
         if (selectedAiOption.key === 1) {
             try {
+                setSearchLoading(true);
+
                 const connections = connectionList.filter((connection) => !selectedConnection.length ? true : selectedConnection.includes(connection.id!));
 
-                const res = await searchDoc(question, connections) as {
+                const res = await searchDoc(question, connections, 5) as {
                     searchedRes: Search.TextItemRes[]
                 }
                 searchTextRes = res.searchedRes;
+
+                uiAssistantMessage.relateTextChunks = searchTextRes;
+
             } catch (error) {
                 console.error(error);
                 message.error('Error in search ' + error.message);
             }
+
+            setSearchLoading(false);
         }
 
-        // AI 问答
+        // AI处理
         try {
-            const prompt = getUserPrompt(selectedAiOption.key == 1 ? 'knowledge' : 'chat', question, searchTextRes);
-            // 生成llm的消息
-            llmMessages.current.push({ role: "user", content: prompt });
-            // 调用AI,处理返回
-            let curMessage = "";
-            const reply = await llmEngine.current.chat.completions.create({
-                stream: true,
-                messages: llmMessages.current,
-            });
-            const replyTime = dayjs().toISOString();
-            for await (const chunk of reply) {
-                const curDelta = chunk.choices[0].delta.content;
-                console.log(chunk)
-                if (curDelta) {
-                    curMessage += curDelta;
-                }
+            const handleStreamCb = (msg: string, chunk) => {
                 // 更新ui
                 setChatUiMessages((prev) => {
-                    const oldReplyMes = prev.find((item) => item.timestamp === replyTime && item.type === MessageType.ASSISTANT);
-                    if (oldReplyMes) {
-                        oldReplyMes.content = curMessage;
-                        return [...prev];
-                    } else {
-                        const newChatUiMes: ChatUiMessage = {
-                            type: MessageType.ASSISTANT,
-                            content: curMessage,
-                            timestamp: replyTime,
-                        }
+                    // 更新assistant消息
+                    const oldReplyMes = prev.find((item) => item.timestamp === uiAssistantMessage.timestamp && item.type === MessageType.ASSISTANT);
+                    oldReplyMes!.content = msg + '⚫';
 
-                        if (selectedAiOption.key === 1) {
-                            newChatUiMes.relateTextChunks = searchTextRes
-                        }
-
-                        return [
-                            ...prev,
-                            newChatUiMes
-                        ]
-
+                    if (chunk.choices[0]?.finish_reason == 'stop') {
+                        oldReplyMes!.content = msg;
                     }
+                    return [...prev];
                 });
             }
-            // 更新llm消息
-            llmMessages.current.push({ role: "assistant", content: curMessage });
 
-            console.log('llmMessages', llmMessages.current);
-            console.log('chatUiMessage', chatUiMessage);
+            await chatLlmMessageRef.current!.sendMsg({
+                prompt: question,
+                type: selectedAiOption.key == 1 ? 'knowledge' : 'chat',
+                searchTextRes,
+                llmEngine: llmEngine.current,
+                streamCb: handleStreamCb
+            })
+
+
         } catch (error) {
             console.error('Error sending message:', error);
-            message.error('Error in chat ' + error.message);
+            message.error('Error in chat ' + error);
         }
 
         setAskLoading(false);
     };
     const handleEnterPress = (e) => {
+        if (askLoading) {
+            return;
+        }
         // 避免shift+enter换行
         if (e.shiftKey) {
             return;
         }
+        e.preventDefault();
         handleSend();
     };
     const handleAiOptionClick = ({ key }) => {
@@ -173,12 +179,13 @@ const ChatSection = ({
     }
 
     useEffect(() => {
-        if (!chatUiMessage.length) {
-            return;
-        }
+        const chatLlmMessage = new ChatLlmMessage({
+            responseStyle: 'markdown'
+        });
 
-        scrollToBottom();
-    }, [chatUiMessage]);
+        chatLlmMessageRef.current = chatLlmMessage;
+    }, []);
+
     useEffect(() => {
         if (chatHistory) {
             setChatUiMessages(chatHistory);
@@ -202,58 +209,77 @@ const ChatSection = ({
     return (
         <div className="chat-section flex flex-col flex-1">
             {/* Chat Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {chatUiMessage.map((message, index) => (
-                    <div
-                        key={index}
-                        className={`flex ${message.type === MessageType.USER ? 'justify-end' : 'justify-start'
-                            }`}
-                    >
-                        {message.type === MessageType.DOCUMENTS ? (
-                            <div className="w-full bg-white rounded-lg p-3 shadow-sm">
-                                <h3 className="text-sm font-medium mb-2 text-gray-600">相关文档:</h3>
-                                <div className="flex space-x-3 overflow-x-auto pb-2">
-                                    {message.relateTextChunks!.map((textChunk, idx) => (
-                                        <button
-                                            key={idx}
-                                            onClick={() => handleTextChunkClick(textChunk)}
-                                            className="flex-shrink-0 bg-[#f5f5f5] rounded-lg p-3 hover:bg-gray-100 transition-colors w-44"
-                                        >
-                                            <div className="flex items-center space-x-2 mb-2">
-                                                <IoDocumentAttachOutline size={25} />
-                                                <span className="text-gray-700 truncate">{textChunk.document.name}</span>
-                                            </div>
-                                            <div className="text-sm text-gray-500">
-                                                相关度: {(textChunk.score * 100).toFixed(0)}%
-                                            </div>
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        ) : (
+            <div className="chat-content flex-1 overflow-y-auto space-y-3 relative">
+                {
+                    chatUiMessage.length === 0 ? <div className='flex flex-col items-center gap-1 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2'>
+                        <Logo size={40} />
+                        <div className='text-lg font-bold'>Start AI Chat</div>
+                    </div>
+                        : chatUiMessage.map((message, index) => (
                             <div
-                                className={`max-w-[80%] px-2 py-1 rounded-lg text-base ${message.type === MessageType.USER
-                                    ? 'bg-[#404040] text-white'
-                                    : 'bg-white text-gray-800 shadow-sm'
+                                key={index}
+                                className={`flex ${message.type === MessageType.USER ? 'justify-end' : 'justify-start'
                                     }`}
                             >
-                                {message.content}
+                                <div className="msg-wrap flex gap-1 max-w-[90%]">
+                                    {
+                                        message.type === MessageType.ASSISTANT && <Logo />
+                                    }
+                                    <div className="msg-content  max-w-full">
+                                        {
+                                            message.type === MessageType.USER && <div className="mb-2 px-5 py-2.5 rounded-3xl  bg-[#404040] text-sm text-white">{message.content}</div>
+                                        }
+                                        {
+                                            message.type === MessageType.ASSISTANT && <div
+                                                className={`mb-2  chat-markdown  text-gray-800 `}
+                                            >
+                                                <ReactMarkdown children={message.content} remarkPlugins={[remarkGfm]} />
+                                            </div>
+                                        }
+
+                                        {message.type === MessageType.ASSISTANT && message.relateTextChunks && (
+                                            <div className="w-full bg-white rounded-lg p-3 shadow-sm">
+                                                <h3 className="text-base font-medium mb-2 ">相关文档:</h3>
+                                                <div className="flex space-x-3 overflow-x-auto pb-2">
+                                                    {!message.relateTextChunks.length ?
+
+                                                        <Empty description="No related documents" />
+                                                        : message.relateTextChunks!.map((textChunk, idx) => (
+                                                            <button
+                                                                key={idx}
+                                                                onClick={() => handleTextChunkClick(textChunk)}
+                                                                className="flex-shrink-0 bg-[#f5f5f5] rounded-lg p-3 hover:bg-gray-100 transition-colors w-44"
+                                                            >
+                                                                <Tooltip placement="top" title={textChunk.document.name} >
+                                                                    <div className="flex items-center space-x-2 mb-2">
+                                                                        <span className="text-sm text-blue-500 truncate">{textChunk.document.name}</span>
+                                                                    </div>
+                                                                </Tooltip>
+                                                                <div className="text-sm ">
+                                                                    相关度: {(textChunk.score * 100).toFixed(0)}%
+                                                                </div>
+                                                            </button>
+                                                        ))}
+                                                </div>
+                                            </div>)
+                                        }
+                                    </div>
+
+                                </div>
                             </div>
-                        )}
-                    </div>
-                ))}
+                        ))}
                 <div ref={messagesEndRef} />
             </div>
 
             {/* Input Area */}
-            <div className="pb-4">
+            <div className="input-area">
                 <div className="max-w-4xl mx-auto bg-[#f5f5f5] rounded-lg border border-gray-200 overflow-hidden">
                     {/* Text Input */}
                     <TextArea
                         value={question}
                         onChange={(e) => setQuestion(e.target.value)}
                         placeholder={selectedAiOption.key === 1 ? `Ask ${APP_NAME} based on your resource` : `Message with ${APP_NAME}`}
-                        autoSize={{ minRows: 2, maxRows: 4 }}
+                        autoSize={{ minRows: 2, maxRows: 2 }}
                         variant='borderless'
                         className='text-base'
                         onPressEnter={handleEnterPress}
@@ -284,7 +310,15 @@ const ChatSection = ({
                         </div>
 
 
-                        <Button loading={askLoading} type="primary" shape='circle' size="small" className='hover:scale-110 transition-transform' onClick={handleSend}>Go</Button>
+                        <Button type="primary" shape='circle' className={`hover:scale-110 transition-transform cursor-pointer ${askLoading && 'opacity-65'}`}
+                            onClick={handleSend}>
+                            {
+                                askLoading ?
+                                    searchLoading ? <TbDatabaseSearch size={20} /> : <CiPause1 size={20} />
+                                    :
+                                    <VscSend size={20} />
+                            }
+                        </Button>
 
                     </div>
                 </div>
