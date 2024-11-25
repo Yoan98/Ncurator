@@ -7,6 +7,8 @@ export default {
                 'xxs': '10px',
             },
             colors: {
+                // theme
+                primary: "var(--primary)",
                 // background
                 background: "var(--background)",
                 "background-100": "var(--background-100)",
@@ -41,20 +43,6 @@ export default {
                 "text-error": "var(--text-error)",
                 "text-warning": "var(--text-warning)",
                 "text-success": "var(--text-success)",
-
-
-
-                // scrollbar
-                scrollbar: {
-                    track: "var(--scrollbar-track)",
-                    thumb: "var(--scrollbar-thumb)",
-                    "thumb-hover": "var(--scrollbar-thumb-hover)",
-
-                    dark: {
-                        thumb: "var(--scrollbar-dark-thumb)",
-                        "thumb-hover": "var(--scrollbar-dark-thumb-hover)",
-                    },
-                },
 
             },
         },

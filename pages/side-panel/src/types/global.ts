@@ -8,6 +8,26 @@ interface Window {
     gIsSupportWebGPU: boolean
 }
 
+namespace Chat {
+    type UiMessageType = 'user' | 'assistant'
+    type LlmRole = 'user' | 'assistant' | 'system'
+    export interface LlmMessage {
+        role: LlmRole;
+        content
+    }
+    export interface UiMessage {
+        type: UiMessageType;
+        content: string;
+        timestamp: string;
+        relateTextChunks?: Search.TextItemRes[];
+    }
+    export interface LocalHistory {
+        historyId: number
+        uiMessages: UiMessage[]
+        llmMessages: { role: LlmRole, content: string }[]
+    }
+}
+
 namespace Search {
     export type TextItemRes = (DB.TEXT_CHUNK & { document: DB.DOCUMENT, score: number })
     export interface LshItemRes {

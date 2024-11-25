@@ -4,6 +4,8 @@
 
 @layer base {
     :root {
+        --primary: #404040;
+
         --text-50: #fafafa;
         /* neutral-50 - Very light gray */
         --text-100: #f5f5f5;

@@ -18,12 +18,7 @@ enum MessageType {
     USER = 'user',
     ASSISTANT = 'assistant',
 };
-interface ChatUiMessage {
-    type: MessageType;
-    content: string;
-    timestamp: string;
-    relateTextChunks?: Search.TextItemRes[];
-}
+
 
 // 设置项dropdown菜单
 const aiOptions = [
@@ -44,16 +39,19 @@ const aiOptions = [
 const { TextArea } = Input;
 
 const ChatSection = ({
-    chatHistory = null,
+    chatHistoryId,
+    onHistoryUpdate
 }: {
-    chatHistory?: ChatUiMessage[] | null;
+    chatHistoryId: number;
+    onHistoryUpdate: (localChatHistory: Chat.LocalHistory[]) => void;
 }) => {
     const { connectionList, llmEngine, llmEngineLoadStatus } = useGlobalContext()
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const chatLlmMessageRef = useRef<ChatLlmMessage | null>(null);
 
-    const [chatUiMessage, setChatUiMessages] = useState<ChatUiMessage[]>([]);
+    const [chatUiMessages, setChatUiMessages] = useState<Chat.UiMessage[]>([]);
+
     const [connectionOption, setConnectionOption] = useState<{ label: string, value: number }[]>([]);
     const [selectedConnection, setSelectedConnection] = useState<number[]>([]);
 
@@ -100,7 +98,7 @@ const ChatSection = ({
             content: question.trim(),
             timestamp: dayjs().toISOString(),
         };
-        const uiAssistantMessage: ChatUiMessage = {
+        const uiAssistantMessage: Chat.UiMessage = {
             type: MessageType.ASSISTANT,
             content: '⚫',
             timestamp: dayjs().toISOString(),
@@ -132,6 +130,7 @@ const ChatSection = ({
 
         // AI处理
         try {
+            let temptChatUiMessages: Chat.UiMessage[] = [];
             const handleStreamCb = (msg: string, chunk) => {
                 // 更新ui
                 setChatUiMessages((prev) => {
@@ -139,10 +138,12 @@ const ChatSection = ({
                     const oldReplyMes = prev.find((item) => item.timestamp === uiAssistantMessage.timestamp && item.type === MessageType.ASSISTANT);
                     oldReplyMes!.content = msg + '⚫';
 
+                    console.log('chunk', chunk)
                     if (chunk.choices[0]?.finish_reason == 'stop') {
                         oldReplyMes!.content = msg;
                     }
-                    return [...prev];
+                    temptChatUiMessages = [...prev];
+                    return temptChatUiMessages;
                 });
             }
 
@@ -154,6 +155,8 @@ const ChatSection = ({
                 streamCb: handleStreamCb
             })
 
+            // 存储聊天记录
+            storageChatHistory(temptChatUiMessages, chatLlmMessageRef.current!.getChatHistory(), chatHistoryId)
 
         } catch (error) {
             console.error('Error sending message:', error);
@@ -177,20 +180,56 @@ const ChatSection = ({
         const selectedOption = aiOptions.find((option) => option.key == key);
         setSelectedAiOption(selectedOption!);
     }
-
-    useEffect(() => {
-        const chatLlmMessage = new ChatLlmMessage({
-            responseStyle: 'markdown'
-        });
-
-        chatLlmMessageRef.current = chatLlmMessage;
-    }, []);
-
-    useEffect(() => {
-        if (chatHistory) {
-            setChatUiMessages(chatHistory);
+    const storageChatHistory = (chatUiMessages: Chat.UiMessage[], chatLlmMessages: Chat.LlmMessage[], historyId: number) => {
+        if (!chatUiMessages.length) {
+            throw new Error('chatUiMessages is empty');
         }
-    }, [chatHistory]);
+
+        // 将ui消息与llm的历史消息存入localstorage
+        let chatHistoryStr = localStorage.getItem('chatLocalHistory');
+        const chatLocalHistory: Chat.LocalHistory[] = chatHistoryStr ? JSON.parse(chatHistoryStr) : [];
+
+
+        //查找是否有该历史记录
+        const sameHistoryIndex = chatLocalHistory.findIndex((item) => item.historyId === historyId);
+        if (sameHistoryIndex > -1) {
+            chatLocalHistory[sameHistoryIndex].uiMessages = chatUiMessages;
+            chatLocalHistory[sameHistoryIndex].llmMessages = chatLlmMessages
+        } else {
+            chatLocalHistory.push({
+                historyId: historyId,
+                uiMessages: chatUiMessages,
+                llmMessages: chatLlmMessages,
+            });
+        }
+
+        localStorage.setItem('chatLocalHistory', JSON.stringify(chatLocalHistory));
+
+        onHistoryUpdate(chatLocalHistory);
+    }
+
+    const fetchChatMessages = (historyId: number) => {
+        let chatHistoryStr = localStorage.getItem('chatLocalHistory');
+        const chatLocalHistory: Chat.LocalHistory[] = chatHistoryStr ? JSON.parse(chatHistoryStr) : [];
+
+        const history = chatLocalHistory.find((item) => item.historyId === historyId);
+
+        setChatUiMessages(history?.uiMessages || []);
+
+        const chatLlmMessage = new ChatLlmMessage({
+            responseStyle: 'markdown',
+            chatHistory: history?.llmMessages || []
+        });
+        chatLlmMessageRef.current = chatLlmMessage;
+    }
+
+    useEffect(() => {
+        if (!chatHistoryId) return
+
+        fetchChatMessages(chatHistoryId);
+        scrollToBottom();
+    }, [chatHistoryId]);
+
     useEffect(() => {
         if (!connectionList.length) {
             return
@@ -211,11 +250,11 @@ const ChatSection = ({
             {/* Chat Messages */}
             <div className="chat-content flex-1 overflow-y-auto space-y-3 relative">
                 {
-                    chatUiMessage.length === 0 ? <div className='flex flex-col items-center gap-1 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2'>
+                    chatUiMessages.length === 0 ? <div className='flex flex-col items-center gap-1 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2'>
                         <Logo size={40} />
-                        <div className='text-lg font-bold'>Start AI Chat</div>
+                        <div className='text-lg font-bold'>Start Chat</div>
                     </div>
-                        : chatUiMessage.map((message, index) => (
+                        : chatUiMessages.map((message, index) => (
                             <div
                                 key={index}
                                 className={`flex ${message.type === MessageType.USER ? 'justify-end' : 'justify-start'

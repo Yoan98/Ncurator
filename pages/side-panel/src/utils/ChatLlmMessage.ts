@@ -1,6 +1,3 @@
-import type {
-    ChatCompletionMessageParam,
-} from "@mlc-ai/web-llm";
 import { CHAT_SYSTEM_PROMPT } from '@src/config';
 import { WebWorkerMLCEngine } from "@mlc-ai/web-llm";
 import type { ChatCompletionChunk } from "@mlc-ai/web-llm";
@@ -8,12 +5,12 @@ import { LLM_GENERATE_MAX_TOKENS, LLM_MODEL_LIST } from '@src/config'
 
 interface ConstructorParams {
     responseStyle: 'text' | 'markdown'
-    chatHistory?: ChatCompletionMessageParam[]
+    chatHistory?: Chat.LlmMessage[]
 }
 
 // 消息管理
 export class ChatLlmMessage {
-    private chatHistory: ChatCompletionMessageParam[]
+    private chatHistory: Chat.LlmMessage[]
 
     constructor({ responseStyle = 'text', chatHistory }: ConstructorParams) {
         this.chatHistory = [
@@ -55,7 +52,7 @@ export class ChatLlmMessage {
         }
     }
 
-    private calculateTokens(messages: ChatCompletionMessageParam[]): number {
+    private calculateTokens(messages: Chat.LlmMessage[]): number {
         // 计算消息中的令牌数量
         // 这里假设每个字符代表一个令牌，你可以根据实际情况调整
         return messages.reduce((acc, message) => acc + message.content!.length, 0);
@@ -91,7 +88,7 @@ export class ChatLlmMessage {
         const reply = await llmEngine.chat.completions.create({
             stream: true,
             messages: this.chatHistory,
-            max_tokens: LLM_GENERATE_MAX_TOKENS,
+            // max_tokens: LLM_GENERATE_MAX_TOKENS,
             // stream_options: {
             //     include_usage: true
             // }
