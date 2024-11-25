@@ -33,50 +33,10 @@ const SidePanel = () => {
         console.log('file change');
 
 
-        // if (files.length > 5) {
-        //     throw new Error('Too many files selected');
-        // }
-
         const fileConnector = new FileConnector();
+        const { bigChunks, miniChunks } = await fileConnector.getChunks(files[0]);
+        console.log('bigChunks', bigChunks);
 
-        // 获取file connection数据
-        const store = new IndexDBStore();
-        await store.connect(constant.DEFAULT_INDEXDB_NAME);
-        const connections = await store.getAll({
-            storeName: constant.CONNECTION_STORE_NAME,
-        }) as DB.CONNECTION[];
-        const fileConnection = connections.find(item => item.connector === constant.Connector.File);
-
-        let curFile
-        try {
-            for (const file of files) {
-                curFile = file;
-                const { bigChunks, miniChunks } = await fileConnector.getChunks(file);
-
-                if (!bigChunks.length && !miniChunks.length) {
-                    console.error(`${file.name}没有内容`);
-                    continue;
-                }
-
-
-                console.log('start storageDocument');
-                console.time('storageDocument');
-
-                try {
-                    await storagePoolRef.current?.exec('storageDocument', [{ bigChunks, miniChunks, resource: file, documentName: file.name, connection: fileConnection }]);
-                } catch (error) {
-                    console.error(`${file.name}存储失败`, error, curFile);
-                }
-
-
-                console.timeEnd('storageDocument');
-                console.log('end storageDocument');
-            }
-        } catch (error) {
-            console.error('未知错误', error, curFile);
-        }
-
-        // storagePoolRef.current?.terminate();
 
     };
     const hdQuestionSubmit = async () => {
@@ -302,7 +262,7 @@ const SidePanel = () => {
 
             <div className='flex items-center justify-center'>
                 {/* 上传文件 */}
-                <input type="file" accept=".pdf, .docx" multiple onChange={handleFileChange} />
+                <input type="file" accept="*" multiple onChange={handleFileChange} />
             </div>
 
             <div className='flex items-center justify-center'>
