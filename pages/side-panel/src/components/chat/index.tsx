@@ -196,7 +196,7 @@ const ChatSection = ({
             chatLocalHistory[sameHistoryIndex].uiMessages = chatUiMessages;
             chatLocalHistory[sameHistoryIndex].llmMessages = chatLlmMessages
         } else {
-            chatLocalHistory.push({
+            chatLocalHistory.unshift({
                 historyId: historyId,
                 uiMessages: chatUiMessages,
                 llmMessages: chatLlmMessages,

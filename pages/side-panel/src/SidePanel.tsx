@@ -209,9 +209,9 @@ const SidePanel = () => {
 
         // 初始话chat history
         const chatLocalHistoryStr = localStorage.getItem('chatLocalHistory');
-        const chatLocalHistory = chatLocalHistoryStr ? JSON.parse(chatLocalHistoryStr) : [];
+        const chatLocalHistory: Chat.LocalHistory[] = chatLocalHistoryStr ? JSON.parse(chatLocalHistoryStr) : [];
 
-        const curChatHistoryId = chatLocalHistory.length || 1;
+        const curChatHistoryId = chatLocalHistory[0]?.historyId || 1;
         const groupedChatHistory = groupChatHistory(chatLocalHistory);
 
         setCurChatHistoryId(curChatHistoryId);
