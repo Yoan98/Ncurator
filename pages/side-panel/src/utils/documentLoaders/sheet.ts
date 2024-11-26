@@ -20,7 +20,6 @@ export class SheetLoader extends BaseDocumentLoader {
 
         const workbook = XLSX.read(fileBuffer, { type: 'array' });
         const sheetNames = workbook.SheetNames;
-        console.log('sheetNames', sheetNames);
         const documents: Document[] = [];
 
         sheetNames.forEach((sheetName, index) => {

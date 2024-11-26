@@ -45,7 +45,7 @@ export class FileConnector {
         }
         const { bigSplitter, miniSplitter } = this.getRecursiveSplitter();
 
-        console.log('file.type', file.type)
+        console.log('file', file)
         if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
             // word文档处理
             const docxLoader = new DocxLoader(file)
@@ -111,6 +111,33 @@ export class FileConnector {
                 miniChunks
             }
 
+        } else if (file.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') {
+            // pptx文档处理
+            throw new Error('pptx unimplemented')
+        } else if (file.name.endsWith('.md')) {
+            // markdown文档处理
+            const fileContent = await file.text();
+
+            const mdBigSplitter = RecursiveCharacterTextSplitter.fromLanguage("markdown", {
+                chunkSize: SPLITTER_BIG_CHUNK_SIZE,
+                chunkOverlap: SPLITTER_BIG_CHUNK_OVERLAP,
+            });
+
+            const mdMiniSplitter = RecursiveCharacterTextSplitter.fromLanguage("markdown", {
+                chunkSize: SPLITTER_MINI_CHUNK_SIZE,
+                chunkOverlap: SPLITTER_MINI_CHUNK_OVERLAP,
+            });
+
+            // 分割大文档
+            const bigChunks = await mdBigSplitter.createDocuments([fileContent]);
+
+            // 分割小文档
+            const miniChunks = await mdMiniSplitter.createDocuments([fileContent]);
+
+            return {
+                bigChunks,
+                miniChunks
+            }
         }
         else {
             throw new Error('file type not supported')
