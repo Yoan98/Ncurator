@@ -468,7 +468,7 @@ const DocumentItem = ({ data, onDeleteClick }: {
     const statusText = data.status == constant.DocumentStatus.Fail ? 'Fail' : data.status == constant.DocumentStatus.Success ? 'Success' : 'Building';
     const statusClass = data.status == constant.DocumentStatus.Fail ? 'text-text-error' : data.status == constant.DocumentStatus.Success ? 'text-text-success' : '';
     return (
-        <div className='flex gap-1 text-center items-center'>
+        <div className='flex gap-1 items-center'>
             <Tooltip placement="top" title={data.name} >
                 <div className='truncate cursor-pointer font-bold w-[50%]'>{data.name}</div>
             </Tooltip>

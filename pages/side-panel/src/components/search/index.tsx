@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Select, Button, Input, message, Empty, Tooltip } from 'antd';
+import { Select, Button, Input, message, Empty } from 'antd';
 import { IoDocumentAttachOutline } from "react-icons/io5";
 import { splitKeywords, searchDoc } from '@src/utils/tool';
 import { useGlobalContext } from '@src/provider/global';
@@ -172,9 +172,7 @@ const SearchSection = () => {
                                     <div key={item.id} className="res-item text-sm border-b transition-all duration-500 pt-3 relative" >
                                         <div className="flex relative items-center gap-1 cursor-pointer">
                                             <IoDocumentAttachOutline size={25} />
-                                            <Tooltip placement="top" title={item.document.name} >
-                                                <p className="truncate text-wrap break-all my-auto line-clamp-1 text-base max-w-full font-bold text-blue-500">{item.document.name}</p>
-                                            </Tooltip>
+                                            <p className="truncate text-wrap break-all my-auto line-clamp-1 text-base max-w-full font-bold text-blue-500">{item.document.name}</p>
                                         </div>
                                         <div className='pl-1 pt-2 pb-3'>
                                             <TextHighlighter className="text-text-500 line-clamp-4 text-sm" text={item.text} keywords={questionKeywords} />

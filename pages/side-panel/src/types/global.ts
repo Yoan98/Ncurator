@@ -19,7 +19,7 @@ namespace Chat {
         type: UiMessageType;
         content: string;
         timestamp: string;
-        relateTextChunks?: Search.TextItemRes[];
+        relateDocs?: Search.TextItemRes[];
     }
     export interface LocalHistory {
         historyId: number

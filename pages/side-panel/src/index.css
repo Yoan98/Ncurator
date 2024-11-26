@@ -68,13 +68,15 @@
     /* 列表 ul 和 ol */
     ul,
     ol {
-        margin-left: .275em;
+        margin-left: .675em;
         /* 左侧缩进 */
     }
 
     /* 列表项 li */
     li {
         line-height: 1.25;
+        margin-top: 0.35rem;
+        margin-bottom: 0.35rem;
     }
 
     /* 引用块quote */

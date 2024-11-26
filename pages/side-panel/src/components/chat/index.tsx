@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Select, Button, Input, message, Dropdown, Empty, Tooltip } from 'antd';
-import { IoDocumentAttachOutline } from "react-icons/io5";
+import { Select, Button, Input, message, Dropdown, Empty } from 'antd';
 import dayjs from 'dayjs';
 import { useGlobalContext } from '@src/provider/global';
 import { searchDoc } from '@src/utils/tool';
@@ -13,7 +12,7 @@ import { VscSend } from "react-icons/vsc";
 import { CiPause1 } from "react-icons/ci";
 import { TbDatabaseSearch } from "react-icons/tb";
 import Logo from '@src/components/logo';
-
+import { Tab } from '@src/SidePanel';
 enum MessageType {
     USER = 'user',
     ASSISTANT = 'assistant',
@@ -40,8 +39,10 @@ const { TextArea } = Input;
 
 const ChatSection = ({
     chatHistoryId,
+    activeTab,
     onHistoryUpdate
 }: {
+    activeTab: Tab;
     chatHistoryId: number;
     onHistoryUpdate: (localChatHistory: Chat.LocalHistory[]) => void;
 }) => {
@@ -113,12 +114,18 @@ const ChatSection = ({
 
                 const connections = connectionList.filter((connection) => !selectedConnection.length ? true : selectedConnection.includes(connection.id!));
 
-                const res = await searchDoc(question, connections, 5) as {
+                const res = await searchDoc(question, connections) as {
                     searchedRes: Search.TextItemRes[]
                 }
                 searchTextRes = res.searchedRes;
+                // 去重文档数据
+                const relateDocs = searchTextRes.filter((item, index, self) =>
+                    index === self.findIndex((t) => (
+                        t.document.id === item.document.id
+                    ))
+                )
 
-                uiAssistantMessage.relateTextChunks = searchTextRes;
+                uiAssistantMessage.relateDocs = relateDocs;
 
             } catch (error) {
                 console.error(error);
@@ -138,7 +145,6 @@ const ChatSection = ({
                     const oldReplyMes = prev.find((item) => item.timestamp === uiAssistantMessage.timestamp && item.type === MessageType.ASSISTANT);
                     oldReplyMes!.content = msg + '⚫';
 
-                    console.log('chunk', chunk)
                     if (chunk.choices[0]?.finish_reason == 'stop') {
                         oldReplyMes!.content = msg;
                     }
@@ -227,8 +233,17 @@ const ChatSection = ({
         if (!chatHistoryId) return
 
         fetchChatMessages(chatHistoryId);
-        scrollToBottom();
+        setTimeout(() => {
+            scrollToBottom();
+        });
     }, [chatHistoryId]);
+
+    useEffect(() => {
+        if (activeTab === 'chat') {
+            scrollToBottom();
+        }
+    }, [activeTab])
+
 
     useEffect(() => {
         if (!connectionList.length) {
@@ -276,28 +291,15 @@ const ChatSection = ({
                                             </div>
                                         }
 
-                                        {message.type === MessageType.ASSISTANT && message.relateTextChunks && (
-                                            <div className="w-full bg-white rounded-lg p-3 shadow-sm">
-                                                <h3 className="text-base font-medium mb-2 ">相关文档:</h3>
-                                                <div className="flex space-x-3 overflow-x-auto pb-2">
-                                                    {!message.relateTextChunks.length ?
+                                        {message.type === MessageType.ASSISTANT && message.relateDocs && (
+                                            <div className="p-2 bg-white rounded-sm shadow-sm">
+                                                <h3 className="text-sm font-medium mb-1 ">相关文档:</h3>
+                                                <div className='space-y-1'>
+                                                    {!message.relateDocs.length ?
 
                                                         <Empty description="No related documents" />
-                                                        : message.relateTextChunks!.map((textChunk, idx) => (
-                                                            <button
-                                                                key={idx}
-                                                                onClick={() => handleTextChunkClick(textChunk)}
-                                                                className="flex-shrink-0 bg-[#f5f5f5] rounded-lg p-3 hover:bg-gray-100 transition-colors w-44"
-                                                            >
-                                                                <Tooltip placement="top" title={textChunk.document.name} >
-                                                                    <div className="flex items-center space-x-2 mb-2">
-                                                                        <span className="text-sm text-blue-500 truncate">{textChunk.document.name}</span>
-                                                                    </div>
-                                                                </Tooltip>
-                                                                <div className="text-sm ">
-                                                                    相关度: {(textChunk.score * 100).toFixed(0)}%
-                                                                </div>
-                                                            </button>
+                                                        : message.relateDocs!.map((textChunk, idx) => (
+                                                            <div key={idx} className="text-sm cursor-pointer text-blue-500 truncate" onClick={() => handleTextChunkClick(textChunk)}>{textChunk.document.name}</div>
                                                         ))}
                                                 </div>
                                             </div>)
@@ -306,7 +308,8 @@ const ChatSection = ({
 
                                 </div>
                             </div>
-                        ))}
+                        ))
+                }
                 <div ref={messagesEndRef} />
             </div>
 

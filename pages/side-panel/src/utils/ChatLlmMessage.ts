@@ -67,7 +67,6 @@ export class ChatLlmMessage {
         while (totalTokens > modelInfo.contextWindowSize && this.chatHistory.length > 1) {
             this.chatHistory.shift(); // 移除最早的消息
             totalTokens = this.calculateTokens(this.chatHistory);
-            console.log('totalTokens', totalTokens)
         }
     }
 

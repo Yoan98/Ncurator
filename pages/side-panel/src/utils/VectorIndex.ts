@@ -1,5 +1,6 @@
 import { cosineSimilarity } from './math';
 import * as math from 'mathjs';
+import { DEFAULT_VECTOR_SIMILARITY_THRESHOLD } from '@src/config';
 
 interface LSHIndexConstructor {
     dimensions: number;
@@ -35,7 +36,7 @@ export class LSHIndex {
     // 相似度阈值,目前jinaai/jina-embeddings-v2-base-zh测试的感觉,超过0.5的相似度就是相似的
     private similarityThreshold: number;
 
-    constructor({ dimensions, numTables = 10, numHashesPerTable = 4, similarityThreshold = 0.5, localProjections, tables }: LSHIndexConstructor) {
+    constructor({ dimensions, numTables = 10, numHashesPerTable = 4, similarityThreshold = DEFAULT_VECTOR_SIMILARITY_THRESHOLD, localProjections, tables }: LSHIndexConstructor) {
         this.dimensions = dimensions;
         this.numTables = numTables;
         this.numHashesPerTable = numHashesPerTable;

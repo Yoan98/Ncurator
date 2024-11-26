@@ -38,7 +38,7 @@ const settingItems: MenuProps['items'] = [
 ];
 
 // tab切换组件
-type Tab = 'search' | 'chat';
+export type Tab = 'search' | 'chat';
 const ToggleSwitch = ({
     initialTab,
     onToggleSwitch
@@ -263,6 +263,7 @@ const SidePanel = () => {
                     <div className={`flex-1 flex flex-col ${activeTab === 'chat' ? 'block' : 'hidden'}`}>
                         <ChatSection
                             chatHistoryId={curChatHistoryId}
+                            activeTab={activeTab}
                             onHistoryUpdate={handleChatHistoryUpdate}
                         ></ChatSection>
                     </div>

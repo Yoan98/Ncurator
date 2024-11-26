@@ -399,15 +399,14 @@ export const searchDoc = async (question: string, connections: DB.CONNECTION[], 
             score: item.score * fullTextWeight,
         })
     })
-    mixIndexSearchedRes = mixIndexSearchedRes.sort((a, b) => b.score - a.score)
-
+    mixIndexSearchedRes = mixIndexSearchedRes.sort((a, b) => b.score - a.score).filter(item => item.score > config.SEARCH_SCORE_THRESHOLD)
 
     // text_chunk表查询结果
     let textChunkRes: DB.TEXT_CHUNK[] = await store.getBatch({
         storeName: constant.TEXT_CHUNK_STORE_NAME,
         keys: mixIndexSearchedRes.map((item) => item.id)
     })
-    // 过滤掉相同的文本,因为大小chunk的原因,导致有些小文本会重复
+    // 过滤掉相同的文本,因为大小chunk的原因,导致有些大小chunk会重复(大chunk按页划分,且一页内容很少时,会重复)
     textChunkRes = textChunkRes.filter((item, index, self) =>
         index === self.findIndex((t) => (
             t.text === item.text

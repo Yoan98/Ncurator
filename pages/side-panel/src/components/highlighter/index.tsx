@@ -1,6 +1,5 @@
 import React, { useEffect, useRef } from 'react';
 import Mark from 'mark.js';
-import { Tooltip } from 'antd';
 
 const TextHighlighter = ({ text, keywords, className }: {
     text: string;
@@ -22,9 +21,7 @@ const TextHighlighter = ({ text, keywords, className }: {
     }, [keywords, text]);
 
     return (
-        <Tooltip placement="top" title={text} >
-            <p ref={contentRef} className={className}>{text}</p>
-        </Tooltip>
+        <p ref={contentRef} className={className}>{text}</p>
     );
 };
 

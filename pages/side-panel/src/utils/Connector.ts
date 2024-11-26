@@ -15,7 +15,7 @@ export class FileConnector {
     constructor() {
     }
 
-    private getRecursiveSplitter() {
+    private getBaseTextRecursiveSplitter() {
         const bigSplitter = new RecursiveCharacterTextSplitter({
             chunkSize: SPLITTER_BIG_CHUNK_SIZE,
             chunkOverlap: SPLITTER_BIG_CHUNK_OVERLAP,
@@ -43,9 +43,8 @@ export class FileConnector {
         if (!fileBuffer) {
             throw new Error('read file error')
         }
-        const { bigSplitter, miniSplitter } = this.getRecursiveSplitter();
+        const { bigSplitter, miniSplitter } = this.getBaseTextRecursiveSplitter();
 
-        console.log('file', file)
         if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
             // word文档处理
             const docxLoader = new DocxLoader(file)
@@ -97,18 +96,28 @@ export class FileConnector {
 
         } else if (file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' || file.type === 'text/csv') {
             // 表格文档处理
+            /**
+             * TODO 需要重新设计对excel这里数据型的架构,目前架构只适合文章型的文档
+             * 1. 构思如何存储表格数据,肯定是不能使用倒排索引的
+             * 2. 搜索时还需考虑匹配到准确的数据,过滤无效数据,并且还需要尽可能匹配所有数据,不像文章型文档那样只匹配头部固定数据
+             * 3. 还需要解决大量数据传递给AI时的超出context_window_size的问题
+             * 想法,做成总结版的助手,有别于knowledge
+             * */
             const sheetLoader = new SheetLoader(file)
             const docs = await sheetLoader.load();
+
+            const bigSplitter = new RecursiveCharacterTextSplitter({
+                chunkSize: SPLITTER_BIG_CHUNK_SIZE,
+                chunkOverlap: 0,
+                separators: SPLITTER_SEPARATORS
+            });
 
             // 分割大文档
             const bigChunks = await bigSplitter.splitDocuments(docs);
 
-            // 分割小文档
-            const miniChunks = await miniSplitter.splitDocuments(docs);
-
             return {
                 bigChunks,
-                miniChunks
+                miniChunks: []
             }
 
         } else if (file.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') {

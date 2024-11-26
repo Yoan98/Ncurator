@@ -10,7 +10,8 @@ export const SEARCHED_FULL_TEXT_WEIGHT = 0.2; // 全文索引的权重
 // export const SEARCH_WORKER_NUM = Math.max(1, Math.floor(navigator.hardwareConcurrency / 2)) || 2; // 搜索时开启的worker数量
 export const SEARCH_WORKER_NUM = 2; // 搜索时开启的worker数量,不能小于2
 export const SEARCH_INDEX_BATCH_SIZE = 50; // 搜索索引表时,每次取的索引数据的数量
-
+export const DEFAULT_VECTOR_SIMILARITY_THRESHOLD = 0.5; // 默认的向量相似度阈值
+export const SEARCH_SCORE_THRESHOLD = 0.5; // 搜索结果的分数阈值
 
 // split chunk relate
 export const SPLITTER_BIG_CHUNK_SIZE = 1000; // 分割大文本的字符数
