@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Select, Button, Input, message, Dropdown, Empty } from 'antd';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Select, Button, Input, message, Dropdown, Empty, Modal } from 'antd';
 import dayjs from 'dayjs';
 import { useGlobalContext } from '@src/provider/global';
 import { searchDoc } from '@src/utils/tool';
@@ -13,6 +13,11 @@ import { CiPause1 } from "react-icons/ci";
 import { TbDatabaseSearch } from "react-icons/tb";
 import Logo from '@src/components/logo';
 import { Tab } from '@src/SidePanel';
+import FileRender from '@src/components/fileRenders';
+import { IndexDBStore } from '@src/utils/IndexDBStore';
+import { DEFAULT_INDEXDB_NAME, RESOURCE_STORE_NAME } from '@src/utils/constant';
+import { FileRenderDocument } from '@src/components/fileRenders/index'
+
 enum MessageType {
     USER = 'user',
     ASSISTANT = 'assistant',
@@ -50,6 +55,7 @@ const ChatSection = ({
 
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const chatLlmMessageRef = useRef<ChatLlmMessage | null>(null);
+    const indexDBRef = useRef<IndexDBStore | null>(null);
 
     const [chatUiMessages, setChatUiMessages] = useState<Chat.UiMessage[]>([]);
 
@@ -62,13 +68,33 @@ const ChatSection = ({
     const [askLoading, setAskLoading] = useState(false);
     const [searchLoading, setSearchLoading] = useState(false);
 
+    const [fileViewerOpen, setFileViewerOpen] = useState(false);
+    const [fileRenderDocs, setFileRenderDocs] = useState<FileRenderDocument[]>([]);
+
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     };
 
 
-    const handleTextChunkClick = (doc: Search.TextItemRes) => { }
+    const handleTextChunkClick = async (textChunk: Search.TextItemRes) => {
+        // resource表读取文件
+        const docResource: DB.RESOURCE = await indexDBRef.current!.get({
+            storeName: RESOURCE_STORE_NAME,
+            key: textChunk.document.resource!.id
+        })
+        const fileUrl = URL.createObjectURL(docResource.file);
+        setFileViewerOpen(true);
+        setFileRenderDocs([{
+            uri: fileUrl,
+            fileType: docResource.type,
+            fileName: docResource.name,
+            metadata: {
+                pageNumber: textChunk.metadata?.loc.pageNumber || 1
+            },
+            file: docResource.file
+        }]);
+    }
 
     const handleSend = async () => {
         if (!llmEngine.current || llmEngineLoadStatus !== 'success') {
@@ -229,6 +255,21 @@ const ChatSection = ({
         chatLlmMessageRef.current = chatLlmMessage;
     }
 
+    const handleCancel = useCallback(() => {
+        setFileViewerOpen(false)
+    }
+        , [])
+
+    useEffect(() => {
+        async function initIndexDB() {
+            const store = new IndexDBStore();
+            await store.connect(DEFAULT_INDEXDB_NAME);
+            indexDBRef.current = store;
+        }
+
+        initIndexDB();
+    }, []);
+
     useEffect(() => {
         if (!chatHistoryId) return
 
@@ -292,7 +333,7 @@ const ChatSection = ({
                                         }
 
                                         {message.type === MessageType.ASSISTANT && message.relateDocs && (
-                                            <div className="p-2 bg-white rounded-sm shadow-sm">
+                                            <div className="p-3  bg-white rounded-lg shadow-sm ">
                                                 <h3 className="text-sm font-medium mb-1 ">相关文档:</h3>
                                                 <div className='space-y-1'>
                                                     {!message.relateDocs.length ?
@@ -365,6 +406,8 @@ const ChatSection = ({
                     </div>
                 </div>
             </div>
+
+            <FileRender open={fileViewerOpen} documents={fileRenderDocs} onCancel={handleCancel} />
         </div>
     );
 };

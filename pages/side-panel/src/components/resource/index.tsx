@@ -383,7 +383,13 @@ const buildDocsIndexInConnection = async (store: IndexDBStore, docs: DB.DOCUMENT
 
     let updatedConnection = connection;
     for (let doc of docs) {
-        const { bigChunks, miniChunks } = await fileConnector.getChunks(doc.resource!);
+        // resource表读取文件
+        const docResource = await store.get({
+            storeName: constant.RESOURCE_STORE_NAME,
+            key: doc.resource!.id
+        })
+
+        const { bigChunks, miniChunks } = await fileConnector.getChunks(docResource.file);
 
         if (!bigChunks.length && !miniChunks.length) {
             message.warning(`${doc.name} no content`);
@@ -416,9 +422,23 @@ const buildDocsIndexInConnection = async (store: IndexDBStore, docs: DB.DOCUMENT
 // 新增某一个connection下文档数据到数据库
 const addDocumentsInConnection = async (store: IndexDBStore, addFileList: File[], connection: DB.CONNECTION) => {
     // 遍历文件,存储文档
-    const docList = addFileList.map((file) => {
+    const docList: DB.DOCUMENT[] = [];
+    for (let file of addFileList) {
+        // 存储文件,并获得文件id
+        const docResource: DB.RESOURCE = {
+            file: file,
+            name: file.name,
+            type: file.name.split('.').pop()!.toLowerCase() || '',
+            size: file.size,
+            created_at: dayjs().toISOString()
+        }
+        const docResourceId = await store.add({
+            storeName: constant.RESOURCE_STORE_NAME,
+            data: docResource
+        });
+
         // 存储最基础的document
-        let document: DB.DOCUMENT = {
+        const doc: DB.DOCUMENT = {
             name: file.name,
             text_chunk_id_range: {
                 from: 0,
@@ -426,16 +446,21 @@ const addDocumentsInConnection = async (store: IndexDBStore, addFileList: File[]
             },
             lsh_index_ids: [],
             full_text_index_ids: [],
-            resource: file,
-            created_at: new Date(),
+            resource: {
+                id: docResourceId,
+                size: docResource.size,
+                type: docResource.type,
+            },
+            created_at: dayjs().toISOString(),
             status: constant.DocumentStatus.Building,
             connection: {
                 id: connection.id!,
                 name: connection.name
             }
         }
-        return document;
-    })
+        docList.push(doc);
+    }
+
     const addDocRes = await store.addBatch({
         storeName: constant.DOCUMENT_STORE_NAME,
         data: docList
@@ -532,7 +557,7 @@ const Resource = () => {
             extra: genExtra(item.id, item.documentList.length),
             label: item.name,
             children: item.documentList.map((doc) => {
-                const size = formatFileSize(doc.resource!);
+                const size = formatFileSize(doc.resource!.size);
                 const created_at = dayjs(doc.created_at).format('YYYY-MM-DD');
                 return <DocumentItem key={doc.id} data={{ name: doc.name, size, created_at, status: doc.status }} onDeleteClick={() => { handleDocDelClick(item.id!, doc.id!) }} />
             }),

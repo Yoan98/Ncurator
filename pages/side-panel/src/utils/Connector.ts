@@ -1,6 +1,8 @@
-import mammoth from 'mammoth'
 import * as pdfjsLib from 'pdfjs-dist'
-pdfjsLib.GlobalWorkerOptions.workerSrc = './pdf.worker.min.mjs';
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+    'pdfjs-dist/build/pdf.worker.min.mjs',
+    import.meta.url,
+).toString();
 import { WebPDFLoader } from "@langchain/community/document_loaders/web/pdf";
 import { DocxLoader } from '@src/utils/documentLoaders/docx'
 import { TextLoader } from '@src/utils/documentLoaders/text'

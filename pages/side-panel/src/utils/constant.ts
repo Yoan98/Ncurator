@@ -7,6 +7,7 @@ export const TEXT_CHUNK_STORE_NAME = 'text_chunk_index';
 export const CONNECTION_STORE_NAME = 'connection';
 export const FULL_TEXT_INDEX_STORE_NAME = 'full_text_index';
 export const DOCUMENT_STORE_NAME = 'document';
+export const RESOURCE_STORE_NAME = 'resource';
 
 export const LSH_PROJECTION_DATA_NAME = 'data'; // 本地存储LSH随机向量数据属性名
 export const LSH_PROJECTION_KEY_VALUE = 1; // 本地存储LSH随机向量的key值,因为只有一条数据,所以key值为1

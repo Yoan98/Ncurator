@@ -88,13 +88,26 @@ namespace DB {
         };
         lsh_index_ids: number[];
         full_text_index_ids: number[];
-        resource?: File
-        created_at: Date
+        resource?: {
+            id: number
+            size: number
+            type: string
+        }
+        created_at: string // iso string
         status: DocumentStatusUnion // 1: building 2: fail 3: success
         connection: {
             id: number
             name: string
         }
+    }
+    // resource表,存储相关文件信息
+    export interface RESOURCE {
+        id?: number;
+        name: string;
+        type: string;
+        created_at: string;
+        file: File;
+        size: number;
     }
     // connection表 记录相关配置,以及document的关联等
     export interface CONNECTION {

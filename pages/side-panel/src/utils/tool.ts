@@ -40,8 +40,7 @@ export async function checkWebGPU() {
  * @param file - File 对象
  * @returns 文件大小的字符串表示（带单位）
  */
-export function formatFileSize(file: File): string {
-    const size = file.size; // 获取文件大小（单位：字节）
+export function formatFileSize(size: number): string {
     const KB = 1024;
     const MB = KB * 1024;
     const GB = MB * 1024;
@@ -399,7 +398,7 @@ export const searchDoc = async (question: string, connections: DB.CONNECTION[], 
             score: item.score * fullTextWeight,
         })
     })
-    mixIndexSearchedRes = mixIndexSearchedRes.sort((a, b) => b.score - a.score).filter(item => item.score > config.SEARCH_SCORE_THRESHOLD)
+    mixIndexSearchedRes = mixIndexSearchedRes.sort((a, b) => b.score - a.score)
 
     // text_chunk表查询结果
     let textChunkRes: DB.TEXT_CHUNK[] = await store.getBatch({

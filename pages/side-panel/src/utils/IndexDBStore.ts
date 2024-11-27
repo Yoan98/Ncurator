@@ -49,6 +49,8 @@ export class IndexDBStore {
         db.createObjectStore(constant.LSH_INDEX_STORE_NAME, { keyPath: 'id', autoIncrement: true });
         // 创建full text索引表
         db.createObjectStore(constant.FULL_TEXT_INDEX_STORE_NAME, { keyPath: 'id', autoIncrement: true });
+        // 创建resource表
+        db.createObjectStore(constant.RESOURCE_STORE_NAME, { keyPath: 'id', autoIncrement: true });
 
     }
     startTransaction(storeName: string | string[], mode: IDBTransactionMode): IDBTransaction {

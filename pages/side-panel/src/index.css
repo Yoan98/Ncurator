@@ -26,6 +26,7 @@
         font-weight: bold;
         margin-top: 0.75rem;
         margin-bottom: 0.35rem;
+        font-weight: bold;
         /* 标题下方的间距 */
         /* 设置标题颜色 */
     }
@@ -37,6 +38,7 @@
         font-weight: bold;
         margin-top: 0.75rem;
         margin-bottom: 0.35rem;
+        font-weight: bold;
     }
 
     /* 标题 h3 */
@@ -45,6 +47,7 @@
         font-weight: bold;
         margin-top: 0.75rem;
         margin-bottom: 0.35rem;
+        font-weight: bold;
     }
 
     /* 段落 p */
@@ -70,6 +73,14 @@
     ol {
         margin-left: .675em;
         /* 左侧缩进 */
+    }
+
+    ul {
+        list-style: disc;
+    }
+
+    ol {
+        list-style: decimal;
     }
 
     /* 列表项 li */
