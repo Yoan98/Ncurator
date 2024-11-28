@@ -169,9 +169,8 @@ export const searchDoc = async (question: string, connections: DB.CONNECTION[], 
         // 重新排序归一化
         newFullIndexRes = newFullIndexRes.sort((a, b) => b.score - a.score)
         const maxScore = newFullIndexRes[0].score
-        const minScore = newFullIndexRes[newFullIndexRes.length - 1].score
         reRankFullIndexRes = newFullIndexRes.map((item) => {
-            item.score = (item.score - minScore) / (maxScore - minScore)
+            item.score = item.score / maxScore
             return item
         })
     }
