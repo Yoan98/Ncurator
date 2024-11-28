@@ -177,18 +177,18 @@ export const searchDoc = async (question: string, connections: DB.CONNECTION[], 
     // 根据权重计算混合排序结果
     let mixIndexSearchedRes: { id: number, score: number }[] = []
     const alreadyFullIndexIds: number[] = []
-    const vectorWeight = reRankFullIndexRes.length ? config.SEARCHED_VECTOR_WEIGHT : 1
-    const fullTextWeight = lshRes.length ? config.SEARCHED_FULL_TEXT_WEIGHT : 1
+    const vectorWeight = config.SEARCHED_VECTOR_WEIGHT
+    const fullTextWeight = config.SEARCHED_FULL_TEXT_WEIGHT
     lshRes.forEach((lshItem) => {
         const sameIndex = reRankFullIndexRes.findIndex((fullItem) => Number(fullItem.ref) === lshItem.id)
         if (sameIndex === -1) {
-            // 只有向量索引
+            // 只有向量索引,不需要权重
             mixIndexSearchedRes.push({
                 id: lshItem.id,
-                score: lshItem.similarity * vectorWeight,
+                score: lshItem.similarity,
             })
         } else {
-            // 向量索引与全文索引同一个text_chunk id
+            // 向量索引与全文索引同一个text_chunk id,权重相加
             mixIndexSearchedRes.push({
                 id: lshItem.id,
                 score: (lshItem.similarity * vectorWeight) + (fullTextWeight * reRankFullIndexRes[sameIndex].score),
@@ -200,9 +200,11 @@ export const searchDoc = async (question: string, connections: DB.CONNECTION[], 
         if (alreadyFullIndexIds.includes(Number(item.ref))) {
             return
         }
+        // 这里都是没有与向量索引重复的全文索引结果
         mixIndexSearchedRes.push({
             id: Number(item.ref),
-            score: item.score * fullTextWeight,
+            // 考虑到向量都没匹配中时,全文索引的重要性应该提高
+            score: lshRes.length ? item.score * fullTextWeight : item.score,
         })
     })
     mixIndexSearchedRes = mixIndexSearchedRes.sort((a, b) => b.score - a.score).filter((item) => item.score > config.SEARCH_SCORE_THRESHOLD)
