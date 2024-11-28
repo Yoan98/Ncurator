@@ -4,6 +4,7 @@ import type { EmbedTask } from '@src/utils/EmbedTask'
 import workerpool from 'workerpool';
 import * as config from '@src/config';
 import * as constant from '@src/utils/constant';
+import { FullTextIndex } from '@src/utils/FullTextIndex';
 
 // @ts-ignore
 import searchWorkerURL from '@src/worker-pool/search?url&worker'
@@ -137,29 +138,50 @@ export const searchDoc = async (question: string, connections: DB.CONNECTION[], 
     }
     console.time('search index total')
     // 同时搜索向量索引表和全文索引表
-    let [lshRes, fullIndexRes] = await Promise.all([
+    let [lshRes, fullIndexResFromDB] = await Promise.all([
         searchLshIndex(),
         searchFullTextIndex(),
     ]) as [Search.LshItemRes[], lunr.Index.Result[]]
     console.timeEnd('search index total')
 
 
-    // 将全文索引排序，然后使用max归一化
-    if (fullIndexRes.length) {
-        fullIndexRes = fullIndexRes.sort((a, b) => b.score - a.score)
-        const maxScore = fullIndexRes[0].score
-        fullIndexRes = fullIndexRes.map((item) => {
-            item.score = item.score / maxScore
+    // 将全文索结果根据现有结果重新打分,再排序，然后归一化
+    let reRankFullIndexRes: lunr.Index.Result[] = []
+    if (fullIndexResFromDB.length) {
+        // 重新打分
+        await FullTextIndex.loadJieBa()
+        let fullIndexFromDBTextChunkRes: DB.TEXT_CHUNK[] = await store.getBatch({
+            storeName: constant.TEXT_CHUNK_STORE_NAME,
+            keys: fullIndexResFromDB.map((item) => Number(item.ref))
+        })
+        const fields = [{
+            field: 'text'
+        }]
+        const data = fullIndexFromDBTextChunkRes.map((item) => {
+            return {
+                id: item.id,
+                text: item.text
+            }
+        })
+        FullTextIndex.add(fields, data)
+        let newFullIndexRes = FullTextIndex.search(question)
+
+        // 重新排序归一化
+        newFullIndexRes = newFullIndexRes.sort((a, b) => b.score - a.score)
+        const maxScore = newFullIndexRes[0].score
+        const minScore = newFullIndexRes[newFullIndexRes.length - 1].score
+        reRankFullIndexRes = newFullIndexRes.map((item) => {
+            item.score = (item.score - minScore) / (maxScore - minScore)
             return item
         })
     }
     // 根据权重计算混合排序结果
     let mixIndexSearchedRes: { id: number, score: number }[] = []
     const alreadyFullIndexIds: number[] = []
-    const vectorWeight = fullIndexRes.length ? config.SEARCHED_VECTOR_WEIGHT : 1
+    const vectorWeight = reRankFullIndexRes.length ? config.SEARCHED_VECTOR_WEIGHT : 1
     const fullTextWeight = lshRes.length ? config.SEARCHED_FULL_TEXT_WEIGHT : 1
     lshRes.forEach((lshItem) => {
-        const sameIndex = fullIndexRes.findIndex((fullItem) => Number(fullItem.ref) === lshItem.id)
+        const sameIndex = reRankFullIndexRes.findIndex((fullItem) => Number(fullItem.ref) === lshItem.id)
         if (sameIndex === -1) {
             // 只有向量索引
             mixIndexSearchedRes.push({
@@ -170,12 +192,12 @@ export const searchDoc = async (question: string, connections: DB.CONNECTION[], 
             // 向量索引与全文索引同一个text_chunk id
             mixIndexSearchedRes.push({
                 id: lshItem.id,
-                score: (lshItem.similarity * vectorWeight) + (fullTextWeight * fullIndexRes[sameIndex].score),
+                score: (lshItem.similarity * vectorWeight) + (fullTextWeight * reRankFullIndexRes[sameIndex].score),
             })
             alreadyFullIndexIds.push(lshItem.id)
         }
     })
-    fullIndexRes.forEach((item) => {
+    reRankFullIndexRes.forEach((item) => {
         if (alreadyFullIndexIds.includes(Number(item.ref))) {
             return
         }
@@ -221,7 +243,8 @@ export const searchDoc = async (question: string, connections: DB.CONNECTION[], 
 
     console.log('Res', {
         lshRes,
-        fullIndexRes,
+        fullIndexResFromDB: fullIndexResFromDB.sort((a, b) => b.score - a.score),
+        reRankFullIndexRes,
         mixIndexSearchedRes,
         searchedRes,
     })

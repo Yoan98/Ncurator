@@ -11,22 +11,23 @@ lunrMulti(lunr)
 //@ts-ignore
 const useMultiLanguageFn = lunr.multiLanguage('en', 'zh')
 export class FullTextIndex {
-    public lunrIndex: lunr.Index;
+    static lunrIndex: lunr.Index;
 
     constructor() {
     }
 
-    async loadLunr() {
+    // 中文一定要先调用这个
+    static async loadJieBa() {
         //@ts-ignore
         await init()
     }
 
-    loadSerializer(data) {
+    static loadSerializer(data) {
         this.lunrIndex = lunr.Index.load(data)
         return this.lunrIndex
     }
 
-    add(fields: {
+    static add(fields: {
         field: string, attributes?: {
             boost?: number | undefined;
             extractor?: ((doc: object) => string | object | object[]) | undefined;
@@ -54,7 +55,7 @@ export class FullTextIndex {
         return this.lunrIndex
     }
 
-    search(question: string) {
+    static search(question: string) {
         if (!this.lunrIndex) {
             throw new Error('lunr index not initialized')
         }
@@ -70,5 +71,3 @@ export class FullTextIndex {
         return this.lunrIndex.search(question)
     }
 }
-
-export const fullTextIndex = new FullTextIndex();

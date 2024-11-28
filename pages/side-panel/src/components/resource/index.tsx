@@ -11,7 +11,7 @@ import { IoSettingsOutline, IoReload } from "react-icons/io5";
 import { useGlobalContext } from '@src/provider/global';
 import type * as LangChain from "@langchain/core/documents";
 import * as config from '@src/config';
-import { fullTextIndex } from '@src/utils/FullTextIndex';
+import { FullTextIndex } from '@src/utils/FullTextIndex';
 import { LSHIndex } from '@src/utils/VectorIndex';
 import { EmbedTaskManage } from '@src/utils/EmbedTask'
 import type { EmbedTask } from '@src/utils/EmbedTask'
@@ -153,7 +153,7 @@ const storageBigChunkToFullTextIndex = async ({ textChunkList, store }: {
     store: IndexDBStore,
 }) => {
 
-    await fullTextIndex.loadLunr()
+    await FullTextIndex.loadJieBa()
     const fields = [{
         field: 'text'
     }]
@@ -164,7 +164,7 @@ const storageBigChunkToFullTextIndex = async ({ textChunkList, store }: {
         }
     }
     )
-    const lunrIndex = fullTextIndex.add(fields, data)
+    const lunrIndex = FullTextIndex.add(fields, data)
 
     const fullTextIndexId = await store.add({
         storeName: constant.FULL_TEXT_INDEX_STORE_NAME,

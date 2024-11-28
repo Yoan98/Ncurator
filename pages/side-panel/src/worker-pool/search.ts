@@ -1,6 +1,6 @@
 import workerpool from 'workerpool';
 import { LSHIndex } from '@src/utils/VectorIndex';
-import { fullTextIndex } from '@src/utils/FullTextIndex';
+import { FullTextIndex } from '@src/utils/FullTextIndex';
 import * as config from '@src/config';
 import lunr from 'lunr';
 
@@ -24,11 +24,11 @@ const searchLshIndex = async (queryVectorData: Float32Array, lshIndexStoreList: 
 const searchFullTextIndex = async (question: string, fullTextIndexStoreList: DB.FULL_TEXT_INDEX[]) => {
 
     const searchedRes: lunr.Index.Result[] = []
-    await fullTextIndex.loadLunr()
+    await FullTextIndex.loadJieBa()
 
     for (const fullTextIndexStore of fullTextIndexStoreList) {
-        fullTextIndex.loadSerializer(fullTextIndexStore.index)
-        const res = fullTextIndex.search(question)
+        FullTextIndex.loadSerializer(fullTextIndexStore.index)
+        const res = FullTextIndex.search(question)
 
         searchedRes.push(...res)
     }
