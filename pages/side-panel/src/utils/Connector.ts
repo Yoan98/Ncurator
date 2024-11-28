@@ -10,6 +10,7 @@ import { SheetLoader } from '@src/utils/documentLoaders/sheet'
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters"
 import { Document } from "@langchain/core/documents";
 import { SPLITTER_BIG_CHUNK_SIZE, SPLITTER_BIG_CHUNK_OVERLAP, SPLITTER_MINI_CHUNK_SIZE, SPLITTER_MINI_CHUNK_OVERLAP, SPLITTER_SEPARATORS } from '@src/config'
+import { getFileName } from '@src/utils/tool'
 
 // 文件连接器,读取上传文件的内容数据
 export class FileConnector {
@@ -127,7 +128,8 @@ export class FileConnector {
             throw new Error('pptx unimplemented')
         } else if (file.name.endsWith('.md')) {
             // markdown文档处理
-            const fileContent = await file.text();
+            let fileContent = await file.text();
+            fileContent = getFileName(file.name) + '\n' + fileContent
 
             const mdBigSplitter = RecursiveCharacterTextSplitter.fromLanguage("markdown", {
                 chunkSize: SPLITTER_BIG_CHUNK_SIZE,

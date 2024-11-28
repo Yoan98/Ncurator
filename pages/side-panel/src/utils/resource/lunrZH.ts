@@ -50,7 +50,7 @@ export default function (lunr, jiebaWasm) {
         var str = obj.toString().trim().toLowerCase();
         var tokens = [];
 
-        jiebaWasm.cut_for_search(str, true).forEach(function (seg) {
+        jiebaWasm.cut(str, true).forEach(function (seg) {
             tokens = tokens.concat(seg.split(' '))
         })
 

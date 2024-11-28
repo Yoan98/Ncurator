@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Select, Button, Input, message, Dropdown, Empty, Modal } from 'antd';
 import dayjs from 'dayjs';
 import { useGlobalContext } from '@src/provider/global';
-import { searchDoc } from '@src/utils/tool';
+import { searchDoc } from '@src/utils/search';
 import { IoBookOutline, IoChatbubblesOutline } from "react-icons/io5";
 import { APP_NAME } from '@src/utils/constant';
 import { ChatLlmMessage } from '@src/utils/ChatLlmMessage';
@@ -16,7 +16,7 @@ import { Tab } from '@src/SidePanel';
 import FileRender from '@src/components/fileRenders';
 import { IndexDBStore } from '@src/utils/IndexDBStore';
 import { DEFAULT_INDEXDB_NAME, RESOURCE_STORE_NAME } from '@src/utils/constant';
-import { FileRenderDocument } from '@src/components/fileRenders/index'
+import type { FileRenderDocument } from '@src/components/fileRenders/index'
 
 enum MessageType {
     USER = 'user',

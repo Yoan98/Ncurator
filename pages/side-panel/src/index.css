@@ -21,7 +21,7 @@
 
     /* 标题 h1 */
     h1 {
-        font-size: 1.3rem;
+        font-size: 1.4rem;
         /* 比较大的字体 */
         font-weight: bold;
         margin-top: 0.75rem;
@@ -33,7 +33,7 @@
 
     /* 标题 h2 */
     h2 {
-        font-size: 1.2rem;
+        font-size: 1.3rem;
         /* 次级标题大小 */
         font-weight: bold;
         margin-top: 0.75rem;
@@ -43,12 +43,22 @@
 
     /* 标题 h3 */
     h3 {
+        font-size: 1.2rem;
+        font-weight: bold;
+        margin-top: 0.75rem;
+        margin-bottom: 0.35rem;
+        font-weight: bold;
+    }
+
+    /* 标题 h4 */
+    h4 {
         font-size: 1.1rem;
         font-weight: bold;
         margin-top: 0.75rem;
         margin-bottom: 0.35rem;
         font-weight: bold;
     }
+
 
     /* 段落 p */
     p {
@@ -71,7 +81,7 @@
     /* 列表 ul 和 ol */
     ul,
     ol {
-        margin-left: .675em;
+        margin-left: 1.5rem;
         /* 左侧缩进 */
     }
 
@@ -92,7 +102,7 @@
 
     /* 引用块quote */
     blockquote {
-        font-size: 1.125rem;
+        font-size: 1rem;
         font-style: italic;
         color: #7f8c8d;
         border-left: 4px solid #ccc;

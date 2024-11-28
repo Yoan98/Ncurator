@@ -3,6 +3,7 @@ import init, * as jieba from 'jieba-wasm';
 import lunr from 'lunr';
 import lunrSupport from 'lunr-languages/lunr.stemmer.support'
 import lunrMulti from 'lunr-languages/lunr.multi.js'
+import { ZH_STOP_WORDS } from '@src/utils/constant'
 lunrSupport(lunr)
 lunrZH(lunr, jieba)
 lunrMulti(lunr)
@@ -57,11 +58,11 @@ export class FullTextIndex {
         if (!this.lunrIndex) {
             throw new Error('lunr index not initialized')
         }
-        // 判断是否有中文
+        // 判断是否有中文,中文还是需要手动分词
         const reg = new RegExp("[\\u4E00-\\u9FFF]+");
         if (reg.test(question)) {
             // 只要有一个中文，就代表是中文问题，需要分词
-            const words = jieba.cut_for_search(question)
+            const words = jieba.cut(question).filter(word => !ZH_STOP_WORDS.includes(word))
 
             question = words.join(' ')
         }

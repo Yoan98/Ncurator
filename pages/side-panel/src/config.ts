@@ -11,7 +11,7 @@ export const SEARCHED_FULL_TEXT_WEIGHT = 0.2; // 全文索引的权重
 export const SEARCH_WORKER_NUM = 2; // 搜索时开启的worker数量,不能小于2
 export const SEARCH_INDEX_BATCH_SIZE = 50; // 搜索索引表时,每次取的索引数据的数量
 export const DEFAULT_VECTOR_SIMILARITY_THRESHOLD = 0.5; // 默认的向量相似度阈值
-export const SEARCH_SCORE_THRESHOLD = 0.5; // 搜索结果的分数阈值
+export const SEARCH_SCORE_THRESHOLD = 0.5; // 搜索结果的阈值
 
 // split chunk relate
 export const SPLITTER_BIG_CHUNK_SIZE = 1000; // 分割大文本的字符数
@@ -29,7 +29,7 @@ export const EMBEDDING_HIDDEN_SIZE = 768; // 目前使用的两个模型都是76
 export const THEME_COLOR = '#404040'; // 主题色
 
 // prompt
-export const CHAT_SYSTEM_PROMPT = 'You are a helpful AI assistant.';
+export const CHAT_SYSTEM_PROMPT = 'You are a helpful AI assistant.' + `\n\nAnswer in the same language as the Question`;
 
 // llm
 export const LLM_GENERATE_MAX_TOKENS = 300;

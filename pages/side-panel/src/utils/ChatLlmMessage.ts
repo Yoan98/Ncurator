@@ -35,14 +35,14 @@ export class ChatLlmMessage {
     }
     private getUserPrompt(type: 'chat' | 'knowledge', question: string, searchTextRes?: Search.TextItemRes[]) {
         if (type === 'knowledge') {
-            const context = searchTextRes!.map((item, index) => `Document${index + 1}: ${item.text}`).join('\n');
+            const context = searchTextRes!.map((item, index) => `Document_index ${index}: ${item.text}`).join('\n');
 
             const inp =
                 "Use the following context when answering the question at the end. Don't use any other knowledge. The documents below have been retrieved and sorted by relevance. Please use them in the order they are presented, with the most relevant ones first.\n" +
                 context +
                 "\n\nQuestion: " +
                 question +
-                "\n\nHelpful Answer(in the same language as the question): ";
+                "\n\nHelpful Answer: ";
 
             return inp
         } else if (type === 'chat') {

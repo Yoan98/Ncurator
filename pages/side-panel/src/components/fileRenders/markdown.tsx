@@ -21,7 +21,7 @@ const CustomMarkdownRenderer = ({ mainState }) => {
     }, [currentDocument]);
 
     return (
-        <div id="my-markdown-renderer chat-markdown">
+        <div id="my-markdown-renderer" className='chat-markdown'>
             <ReactMarkdown children={markdownText} remarkPlugins={[remarkGfm]}>
             </ReactMarkdown>
         </div>

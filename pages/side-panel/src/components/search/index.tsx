@@ -1,15 +1,22 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Select, Button, Input, message, Empty } from 'antd';
 import { IoDocumentAttachOutline } from "react-icons/io5";
-import { splitKeywords, searchDoc } from '@src/utils/tool';
+import { splitKeywords } from '@src/utils/tool';
+import { searchDoc } from '@src/utils/search';
 import { useGlobalContext } from '@src/provider/global';
 import TextHighlighter from '@src/components/highlighter';
 import { ChatLlmMessage } from '@src/utils/ChatLlmMessage';
 import { VscSend } from "react-icons/vsc";
+import FileRender from '@src/components/fileRenders';
+import type { FileRenderDocument } from '@src/components/fileRenders/index'
+import { IndexDBStore } from '@src/utils/IndexDBStore';
+import { RESOURCE_STORE_NAME } from '@src/utils/constant';
 const { TextArea } = Input;
 
 const SearchSection = () => {
     const { connectionList, llmEngine, llmEngineLoadStatus } = useGlobalContext()
+
+    const indexDBRef = useRef<IndexDBStore | null>(null);
 
     const [questionValue, setQuestionValue] = useState('');
     const [questionKeywords, setQuestionKeywords] = useState<string[]>([]);
@@ -23,6 +30,9 @@ const SearchSection = () => {
     const [askAiLoading, setAskAiLoading] = useState(false);
 
     const [aiAnswerText, setAiAnswerText] = useState<string>('');
+
+    const [fileViewerOpen, setFileViewerOpen] = useState(false);
+    const [fileRenderDocs, setFileRenderDocs] = useState<FileRenderDocument[]>([]);
 
     const askAI = async (searchTextRes: Search.TextItemRes[]) => {
         if (!llmEngine.current || llmEngineLoadStatus !== 'success') {
@@ -45,7 +55,24 @@ const SearchSection = () => {
         })
     }
 
-
+    const handleTextChunkClick = async (textChunk: Search.TextItemRes) => {
+        // resource表读取文件
+        const docResource: DB.RESOURCE = await indexDBRef.current!.get({
+            storeName: RESOURCE_STORE_NAME,
+            key: textChunk.document.resource!.id
+        })
+        const fileUrl = URL.createObjectURL(docResource.file);
+        setFileViewerOpen(true);
+        setFileRenderDocs([{
+            uri: fileUrl,
+            fileType: docResource.type,
+            fileName: docResource.name,
+            metadata: {
+                pageNumber: textChunk.metadata?.loc.pageNumber || 1
+            },
+            file: docResource.file
+        }]);
+    }
     const handleSearchClick = async () => {
         if (!questionValue) {
             message.warning('Please input the search content')
@@ -95,6 +122,10 @@ const SearchSection = () => {
         e.preventDefault();
         handleSearchClick();
     };
+    const handleCancel = useCallback(() => {
+        setFileViewerOpen(false)
+    }
+        , [])
 
 
     useEffect(() => {
@@ -170,7 +201,7 @@ const SearchSection = () => {
                             searchTextRes.map((item) => {
                                 return (
                                     <div key={item.id} className="res-item text-sm border-b transition-all duration-500 pt-3 relative" >
-                                        <div className="flex relative items-center gap-1 cursor-pointer">
+                                        <div className="flex relative items-center gap-1 cursor-pointer" onClick={() => handleTextChunkClick(item)}>
                                             <IoDocumentAttachOutline size={25} />
                                             <p className="truncate text-wrap break-all my-auto line-clamp-1 text-base max-w-full font-bold text-blue-500">{item.document.name}</p>
                                         </div>
@@ -183,6 +214,8 @@ const SearchSection = () => {
                 }
             </div>
         </div>
+
+        <FileRender open={fileViewerOpen} documents={fileRenderDocs} onCancel={handleCancel} />
     </div>);
 }
 
