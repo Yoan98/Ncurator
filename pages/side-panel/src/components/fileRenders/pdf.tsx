@@ -40,7 +40,7 @@ const CustomPDFRenderer = ({ mainState }) => {
             >
                 <Page pageNumber={pageNumber}
                 />
-                <div className='absolute bottom-[30px] left-1/2 -translate-x-1/2 min-w-[200px] z-10 opacity-20 hover:opacity-100 transition-opacity duration-300'>
+                <div className='absolute bottom-[60px] left-1/2 -translate-x-1/2 min-w-[200px] z-10 opacity-20 hover:opacity-100 transition-opacity duration-300'>
                     <Pagination
                         current={pageNumber}
                         total={numPages}

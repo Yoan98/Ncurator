@@ -203,7 +203,11 @@ export const searchDoc = async (question: string, connections: DB.CONNECTION[], 
         // 这里都是没有与向量索引重复的全文索引结果
         mixIndexSearchedRes.push({
             id: Number(item.ref),
-            // 考虑到向量都没匹配中时,全文索引的重要性应该提高
+            // 考虑到向量全都没匹配中时,全文索引的重要性应该提高
+            // 好处:尽可能会根据关键词匹配到相关的文本
+            // 坏处:可能会匹配到不相关的文本
+            // 但是,引进全文搜索的目的就是补全向量搜索的不足
+            // todo 后期可增加精准搜索按钮来控制是否匹配全文索引
             score: lshRes.length ? item.score * fullTextWeight : item.score,
         })
     })

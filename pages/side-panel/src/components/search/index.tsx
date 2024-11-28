@@ -10,7 +10,7 @@ import { VscSend } from "react-icons/vsc";
 import FileRender from '@src/components/fileRenders';
 import type { FileRenderDocument } from '@src/components/fileRenders/index'
 import { IndexDBStore } from '@src/utils/IndexDBStore';
-import { RESOURCE_STORE_NAME } from '@src/utils/constant';
+import { RESOURCE_STORE_NAME, DEFAULT_INDEXDB_NAME } from '@src/utils/constant';
 const { TextArea } = Input;
 
 const SearchSection = () => {
@@ -127,6 +127,15 @@ const SearchSection = () => {
     }
         , [])
 
+    useEffect(() => {
+        async function initIndexDB() {
+            const store = new IndexDBStore();
+            await store.connect(DEFAULT_INDEXDB_NAME);
+            indexDBRef.current = store;
+        }
+
+        initIndexDB();
+    }, []);
 
     useEffect(() => {
         if (!connectionList.length) {
