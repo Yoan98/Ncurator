@@ -22,6 +22,7 @@
         "@extension/shared": "workspace:*",
         "@extension/storage": "workspace:*",
         "@huggingface/transformers": "^3.0.0",
+        "@js-preview/docx": "^1.6.2",
         "@langchain/community": "^0.3.11",
         "@langchain/core": "^0.3.16",
         "@langchain/textsplitters": "^0.1.0",

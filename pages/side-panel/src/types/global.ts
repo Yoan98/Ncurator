@@ -20,6 +20,7 @@ namespace Chat {
         content: string;
         timestamp: string;
         relateDocs?: Search.TextItemRes[];
+        isOpenRelateDocs?: boolean;
     }
     export interface LocalHistory {
         historyId: number

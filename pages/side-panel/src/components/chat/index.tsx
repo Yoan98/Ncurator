@@ -17,7 +17,7 @@ import FileRender from '@src/components/fileRenders';
 import { IndexDBStore } from '@src/utils/IndexDBStore';
 import { DEFAULT_INDEXDB_NAME, RESOURCE_STORE_NAME } from '@src/utils/constant';
 import type { FileRenderDocument } from '@src/components/fileRenders/index'
-
+import { IoIosArrowDown, IoIosArrowUp } from "react-icons/io";
 enum MessageType {
     USER = 'user',
     ASSISTANT = 'assistant',
@@ -333,14 +333,23 @@ const ChatSection = ({
                                         }
 
                                         {message.type === MessageType.ASSISTANT && message.relateDocs && (
-                                            <div className="p-3  bg-white rounded-lg shadow-sm ">
-                                                <h3 className="text-sm font-medium mb-1 ">相关文档:</h3>
-                                                <div className='space-y-1'>
+                                            <div className="p-2  bg-white rounded-lg shadow-sm ">
+                                                <div className="cursor-pointer text-sm mb-1 flex items-center gap-1" onClick={() => {
+                                                    message.isOpenRelateDocs = !message.isOpenRelateDocs;
+                                                    setChatUiMessages([...chatUiMessages])
+                                                }}>
+                                                    <span>
+                                                        Relate Documents
+                                                    </span>
+                                                    {
+                                                        message.isOpenRelateDocs ? <IoIosArrowUp /> : <IoIosArrowDown />
+                                                    }
+                                                </div>
+                                                <div className={`space-y-1 ${message.isOpenRelateDocs ? '' : 'hidden'}`}>
                                                     {!message.relateDocs.length ?
-
                                                         <Empty description="No related documents" />
                                                         : message.relateDocs!.map((textChunk, idx) => (
-                                                            <div key={idx} className="text-sm cursor-pointer text-blue-500 truncate" onClick={() => handleTextChunkClick(textChunk)}>{textChunk.document.name}</div>
+                                                            <div key={idx} className="text-sm cursor-pointer text-blue-500" onClick={() => handleTextChunkClick(textChunk)}>{textChunk.document.name}</div>
                                                         ))}
                                                 </div>
                                             </div>)

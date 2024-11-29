@@ -1,23 +1,20 @@
 import React, { useEffect, useState } from 'react';
-import mammoth from 'mammoth';
-import DOMPurify from 'dompurify';
+import jsPreviewDocx from "@js-preview/docx";
+import '@js-preview/docx/lib/index.css'
+import './index.css';
 
 const CustomDocxRenderer = ({ mainState }) => {
     const { currentDocument } = mainState;
     if (!currentDocument || currentDocument.fileData === undefined) return null;
 
-    const [htmlContent, setHtmlContent] = useState('');
 
     const initHtmlContent = async (file) => {
-        const arrayBuffer = await file.arrayBuffer();
-        mammoth.convertToHtml({ arrayBuffer })
-            .then((result) => {
-                const cleanHtml = DOMPurify.sanitize(result.value);
-                setHtmlContent(cleanHtml);
-            })
-            .catch((error) => {
-                console.error(error);
-            });
+
+        const docxEle = document.getElementById('my-docx-renderer');
+        if (!docxEle) return;
+        const myDocxPreviewer = jsPreviewDocx.init(docxEle);
+
+        myDocxPreviewer.preview(file);
     };
 
     useEffect(() => {
@@ -27,7 +24,7 @@ const CustomDocxRenderer = ({ mainState }) => {
     }, [currentDocument]);
 
     return (
-        <div id="my-docx-renderer" className="docx-content" dangerouslySetInnerHTML={{ __html: htmlContent }}>
+        <div id="my-docx-renderer" className="docx-content">
         </div>
     );
 };
