@@ -18,6 +18,7 @@ import { IndexDBStore } from '@src/utils/IndexDBStore';
 import { DEFAULT_INDEXDB_NAME, RESOURCE_STORE_NAME } from '@src/utils/constant';
 import type { FileRenderDocument } from '@src/components/fileRenders/index'
 import { IoIosArrowDown, IoIosArrowUp } from "react-icons/io";
+import { getSearchResMaxTextSize } from '@src/utils/tool';
 enum MessageType {
     USER = 'user',
     ASSISTANT = 'assistant',
@@ -98,7 +99,7 @@ const ChatSection = ({
 
     const handleSend = async () => {
         if (!llmEngine.current || llmEngineLoadStatus !== 'success') {
-            message.warning('AI engine is not ready,please setup your LLM Model');
+            message.warning('AI engine is not ready.');
             return;
         }
 
@@ -140,7 +141,13 @@ const ChatSection = ({
 
                 const connections = connectionList.filter((connection) => !selectedConnection.length ? true : selectedConnection.includes(connection.id!));
 
-                const res = await searchDoc(question, connections) as {
+                const maxResTextSize = getSearchResMaxTextSize(llmEngine.current!)
+
+                const res = await searchDoc({
+                    question,
+                    connections,
+                    maxResTextSize
+                }) as {
                     searchedRes: Search.TextItemRes[]
                 }
                 searchTextRes = res.searchedRes;

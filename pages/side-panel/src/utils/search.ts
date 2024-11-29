@@ -75,7 +75,12 @@ export const searchParallel = async ({ store, storeName, workerMethod, question,
     return searchedRes
 }
 // 搜索文档
-export const searchDoc = async (question: string, connections: DB.CONNECTION[], k: number = 10): Promise<{
+export const searchDoc = async ({ question, connections, maxResTextSize, k = 10 }: {
+    question: string,
+    connections: DB.CONNECTION[],
+    maxResTextSize?: number, // maxResTextSize和k只能二选一
+    k?: number
+}): Promise<{
     searchedRes: Search.TextItemRes[]
 }> => {
     if (!question || !connections.length) {
@@ -203,19 +208,19 @@ export const searchDoc = async (question: string, connections: DB.CONNECTION[], 
             alreadyFullIndexIds.push(lshItem.id)
         }
     })
+    // 这里都是没有与向量索引重复的全文索引结果
+    // 根据权重比例替换lsh尾部数据为全文索引数据,目的是为了让全文索引按照权重比率提高重要性
+    const lshTailStartIndex = Math.ceil(vectorWeight * lshRes.length);
+    const lshTailData = lshRes.slice(lshTailStartIndex)
+    const lshTailMaxScore = lshRes.length === 1 ? lshRes[0].similarity :
+        lshTailData.length ? lshTailData[0].similarity : 1
     reRankFullIndexRes.forEach((item) => {
         if (alreadyFullIndexIds.includes(Number(item.ref))) {
             return
         }
-        // 这里都是没有与向量索引重复的全文索引结果
         mixIndexSearchedRes.push({
             id: Number(item.ref),
-            // 考虑到向量全都没匹配中时,全文索引的重要性应该提高
-            // 好处:尽可能会根据关键词匹配到相关的文本
-            // 坏处:可能会匹配到不相关的文本
-            // 但是,引进全文搜索的目的就是补全向量搜索的不足
-            // todo 后期可增加精准搜索按钮来控制是否匹配全文索引
-            score: lshRes.length ? item.score * fullTextWeight : item.score,
+            score: item.score * lshTailMaxScore,
         })
     })
     mixIndexSearchedRes = mixIndexSearchedRes.sort((a, b) => b.score - a.score).filter((item) => item.score > config.SEARCH_SCORE_THRESHOLD)
@@ -232,7 +237,21 @@ export const searchDoc = async (question: string, connections: DB.CONNECTION[], 
             t.text === item.text
         ))
     )
-    textChunkRes = textChunkRes.slice(0, k)
+
+    // 限制返回的文本结果的数量
+    if (maxResTextSize) {
+        // 计算text的文字数量,尽可能提高返回数量,供llm模型分析
+        while (textChunkRes.length) {
+            const textLen = textChunkRes.reduce((acc, textChunk) => acc + textChunk.text.length, 0);
+            if (textLen < maxResTextSize) {
+                break
+            }
+            textChunkRes.pop()
+        }
+    } else {
+        textChunkRes = textChunkRes.slice(0, k)
+    }
+
 
     // 读取document表数据，并拼凑
     const documentRes: DB.DOCUMENT[] = []

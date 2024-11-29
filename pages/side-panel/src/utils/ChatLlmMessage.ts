@@ -1,7 +1,8 @@
 import { CHAT_SYSTEM_PROMPT } from '@src/config';
 import { WebWorkerMLCEngine } from "@mlc-ai/web-llm";
 import type { ChatCompletionChunk } from "@mlc-ai/web-llm";
-import { LLM_GENERATE_MAX_TOKENS, LLM_MODEL_LIST } from '@src/config'
+import { KNOWLEDGE_USER_PROMPT } from '@src/config'
+import { getModelContextWindowSize } from '@src/utils/tool';
 
 interface ConstructorParams {
     responseStyle: 'text' | 'markdown'
@@ -35,10 +36,11 @@ export class ChatLlmMessage {
     }
     private getUserPrompt(type: 'chat' | 'knowledge', question: string, searchTextRes?: Search.TextItemRes[]) {
         if (type === 'knowledge') {
-            const context = searchTextRes!.map((item, index) => `Document ${index + 1}: ${item.text}`).join('\n');
+            const context = searchTextRes!.map((item, index) => `${item.text}`).join('\n');
 
             const inp =
-                "Use the following context when answering the question at the end. Don't use any other knowledge. The documents below have been retrieved and sorted by relevance. Please use them in the order they are presented, with the most relevant ones first.If the document is not match question, ignore them.\n" +
+                KNOWLEDGE_USER_PROMPT +
+                "\n" +
                 context +
                 "\n\nQuestion: " +
                 question +
@@ -57,14 +59,11 @@ export class ChatLlmMessage {
         // 这里假设每个字符代表一个令牌，你可以根据实际情况调整
         return messages.reduce((acc, message) => acc + message.content!.length, 0);
     }
-    private truncateChatHistory(modelInfo: typeof LLM_MODEL_LIST[0]) {
-        if (!modelInfo) {
-            throw new Error('Truncating, Model not found')
-        }
+    private truncateChatHistory(contextWindowSize: number) {
         let totalTokens = this.calculateTokens(this.chatHistory);
 
         // 长度大于2是因为至少要保留一个系统消息和一个用户消息
-        while (totalTokens > modelInfo.contextWindowSize && this.chatHistory.length > 2) {
+        while (totalTokens > contextWindowSize && this.chatHistory.length > 2) {
             const firstUserOrAssistantMsgIndex = this.chatHistory.findIndex((msg) => msg.role === 'user' || msg.role === 'assistant');
             this.chatHistory.splice(firstUserOrAssistantMsgIndex, 1);
             totalTokens = this.calculateTokens(this.chatHistory);
@@ -78,10 +77,7 @@ export class ChatLlmMessage {
         streamCb?: (msg: string, chunk: ChatCompletionChunk) => void,
         llmEngine: WebWorkerMLCEngine
     }) {
-        const modelInfo = LLM_MODEL_LIST.find((item) => item.modelId === llmEngine.modelId![0])
-        if (!modelInfo) {
-            throw new Error('Model not found')
-        }
+        const contextWindowSize = getModelContextWindowSize(llmEngine)
 
         const userMsg = {
             role: "user" as 'user',
@@ -89,14 +85,14 @@ export class ChatLlmMessage {
         }
         const systemMsg = this.chatHistory[0]
         const defaultMsgLen = this.calculateTokens([systemMsg, userMsg])
-        if (defaultMsgLen > modelInfo!.contextWindowSize) {
-            throw new Error(`User prompt or relate text over model context window size(${modelInfo!.contextWindowSize})`)
+        if (defaultMsgLen > contextWindowSize) {
+            throw new Error(`User prompt or relate text over model context window size(${contextWindowSize}, current: ${defaultMsgLen})`)
         }
 
         this.chatHistory.push(userMsg)
 
         // 截断 chatHistory 以确保不会超过上下文窗口大小
-        this.truncateChatHistory(modelInfo);
+        this.truncateChatHistory(contextWindowSize);
 
         let curMessage = "";
         const reply = await llmEngine.chat.completions.create({

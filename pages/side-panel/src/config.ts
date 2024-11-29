@@ -12,7 +12,7 @@ export const SEARCH_WORKER_NUM = Math.max(2, Math.floor(navigator.hardwareConcur
 export const SEARCH_INDEX_BATCH_SIZE = 50; // 搜索索引表时,每次取的索引数据的数量
 export const DEFAULT_VECTOR_SIMILARITY_THRESHOLD = 0.5; // 默认的向量相似度阈值
 export const SEARCH_SCORE_THRESHOLD = 0.5; // 搜索结果的阈值
-export const SEARCH_RESULT_HEADER_SLICE_SIZE = 50; // 搜索结果的头部结果截取数量
+export const SEARCH_RESULT_HEADER_SLICE_SIZE = 100; // 搜索结果的头部结果截取数量
 
 // split chunk relate
 export const SPLITTER_BIG_CHUNK_SIZE = 1000; // 分割大文本的字符数
@@ -31,7 +31,7 @@ export const THEME_COLOR = '#404040'; // 主题色
 
 // prompt
 export const CHAT_SYSTEM_PROMPT = 'You are a helpful AI assistant.' + `\n\nAnswer in the same language as the Question`;
-
+export const KNOWLEDGE_USER_PROMPT = "Use the following context when answering the question at the end. Don't use any other knowledge. The documents below have been retrieved and sorted by relevance. Please use them in the order they are presented, with the most relevant ones first.If the document is not match question, ignore them."
 // llm
 export const LLM_GENERATE_MAX_TOKENS = 300;
 export const LLM_MODEL_LIST = [{

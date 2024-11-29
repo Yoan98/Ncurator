@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Select, Button, Input, message, Empty } from 'antd';
 import { IoDocumentAttachOutline } from "react-icons/io5";
-import { splitKeywords } from '@src/utils/tool';
+import { splitKeywords, getSearchResMaxTextSize } from '@src/utils/tool';
 import { searchDoc } from '@src/utils/search';
 import { useGlobalContext } from '@src/provider/global';
 import TextHighlighter from '@src/components/highlighter';
@@ -11,6 +11,7 @@ import FileRender from '@src/components/fileRenders';
 import type { FileRenderDocument } from '@src/components/fileRenders/index'
 import { IndexDBStore } from '@src/utils/IndexDBStore';
 import { RESOURCE_STORE_NAME, DEFAULT_INDEXDB_NAME } from '@src/utils/constant';
+
 const { TextArea } = Input;
 
 const SearchSection = () => {
@@ -36,7 +37,7 @@ const SearchSection = () => {
 
     const askAI = async (searchTextRes: Search.TextItemRes[]) => {
         if (!llmEngine.current || llmEngineLoadStatus !== 'success') {
-            setAiAnswerText('AI engine is not ready,please setup your LLM Model');
+            message.warning('AI engine is not ready.');
             return;
         }
 
@@ -44,7 +45,7 @@ const SearchSection = () => {
             responseStyle: 'text'
         });
 
-        chat.sendMsg({
+        await chat.sendMsg({
             prompt: questionValue,
             type: 'knowledge',
             searchTextRes,
@@ -83,6 +84,10 @@ const SearchSection = () => {
             message.warning('Please input the search content')
             return;
         };
+        if (!llmEngine.current || llmEngineLoadStatus !== 'success') {
+            message.warning('AI engine is not ready.');
+            return;
+        }
 
         splitKeywords(questionValue).then((keywords) => {
             setQuestionKeywords(keywords);
@@ -96,7 +101,13 @@ const SearchSection = () => {
         try {
             const connections = connectionList.filter((connection) => !selectedConnection.length ? true : selectedConnection.includes(connection.id!));
 
-            const res = await searchDoc(questionValue, connections) as {
+            const maxResTextSize = getSearchResMaxTextSize(llmEngine.current!)
+
+            const res = await searchDoc({
+                question: questionValue,
+                connections,
+                maxResTextSize
+            }) as {
                 searchedRes: Search.TextItemRes[]
             }
             searchTextRes = res.searchedRes || [];
@@ -114,7 +125,7 @@ const SearchSection = () => {
 
         } catch (error) {
             console.error(error);
-            message.error('Error in AI answer');
+            message.error('Error in AI answer' + error);
         }
 
         setAskAiLoading(false);
