@@ -49,7 +49,12 @@ const SearchSection = () => {
             type: 'knowledge',
             searchTextRes,
             streamCb: (msg, chunk) => {
-                setAiAnswerText(msg);
+
+                let text = msg + '⚫';
+                if (chunk.choices[0]?.finish_reason == 'stop') {
+                    text = msg;
+                }
+                setAiAnswerText(text);
             },
             llmEngine: llmEngine.current
         })
@@ -83,6 +88,7 @@ const SearchSection = () => {
             setQuestionKeywords(keywords);
         })
 
+        setAiAnswerText('⚫');
         setAskAiLoading(true);
         setSearchLoading(true);
         let searchTextRes

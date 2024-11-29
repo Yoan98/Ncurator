@@ -119,7 +119,6 @@ export const searchDoc = async (question: string, connections: DB.CONNECTION[], 
         console.timeEnd('searchLshIndex')
 
         return lshRes
-
     }
 
     // 搜索全文索引表
@@ -144,6 +143,13 @@ export const searchDoc = async (question: string, connections: DB.CONNECTION[], 
     ]) as [Search.LshItemRes[], lunr.Index.Result[]]
     console.timeEnd('search index total')
 
+    // 排序,然后取前部分条数据
+    // 因为当文本量大时,这里可能会匹配出上百上万条数据
+    lshRes = lshRes.sort((a, b) => b.similarity - a.similarity).slice(0, config.SEARCH_RESULT_HEADER_SLICE_SIZE)
+    fullIndexResFromDB = fullIndexResFromDB.sort((a, b) => b.score - a.score).slice(0, config.SEARCH_RESULT_HEADER_SLICE_SIZE)
+
+    console.log('lshRes', lshRes)
+    console.log('fullIndexResFromDB', fullIndexResFromDB)
 
     // 将全文索结果根据现有结果重新打分,再排序，然后归一化
     let reRankFullIndexRes: lunr.Index.Result[] = []
@@ -174,6 +180,7 @@ export const searchDoc = async (question: string, connections: DB.CONNECTION[], 
             return item
         })
     }
+
     // 根据权重计算混合排序结果
     let mixIndexSearchedRes: { id: number, score: number }[] = []
     const alreadyFullIndexIds: number[] = []
@@ -218,6 +225,7 @@ export const searchDoc = async (question: string, connections: DB.CONNECTION[], 
         storeName: constant.TEXT_CHUNK_STORE_NAME,
         keys: mixIndexSearchedRes.map((item) => item.id)
     })
+
     // 过滤掉相同的文本,因为大小chunk的原因,导致有些大小chunk会重复(大chunk按页划分,且一页内容很少时,会重复)
     textChunkRes = textChunkRes.filter((item, index, self) =>
         index === self.findIndex((t) => (

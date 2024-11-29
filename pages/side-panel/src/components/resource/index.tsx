@@ -197,9 +197,12 @@ const buildIndexSplit = async ({ bigChunks, miniChunks, document, batchSize = co
     let chunks = bigChunks.concat(miniChunks)
     let bigChunksMaxIndex = bigChunks.length - 1
     while (!hasEnd) {
+        console.log('total chunks', chunks.length);
+        console.log('starEndIndex', starEndIndex);
         const curBatchChunks = chunks.slice(starEndIndex[0], starEndIndex[1])
 
         if (!curBatchChunks.length) {
+            console.log('no curBatchChunks');
             hasEnd = true
             break
         }
@@ -267,6 +270,7 @@ const buildDocIndex = async ({ store, bigChunks, miniChunks, document, connectio
         // 分批构建索引
         const chunkIndexRes = await buildIndexSplit({ bigChunks, miniChunks, document, store })
 
+        // TODO:将对应索引数据保存操作都放入分片处理中,尽量降低中途阻断后去删除时,部分数据无法删除
         // 修改document表相应的索引与文本位置字段
         const textChunkIdRange = chunkIndexRes.minMaxTextChunkIds
         document = {

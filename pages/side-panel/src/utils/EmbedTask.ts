@@ -23,6 +23,7 @@ export class EmbedTaskManage {
         if (this.workerPool) {
             return;
         }
+        //TODO 兼容只有gpu时固定workerNumber为1,cpu时由配置项决定
         this.workerPool = workerpool.pool(embeddingWorkerURL, {
             maxWorkers: workerNumber,
         });
