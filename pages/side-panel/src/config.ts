@@ -7,7 +7,7 @@ export const BUILD_INDEX_EMBEDDING_BATCH_SIZE = 10; // 每次embedding的chunk�
 export const SEARCHED_VECTOR_WEIGHT = 0.8; // 向量的权重
 export const SEARCHED_FULL_TEXT_WEIGHT = 0.2; // 全文索引的权重
 // 最多开一半的cpu核数,避免内存过大
-export const SEARCH_WORKER_NUM = Math.max(1, Math.floor(navigator.hardwareConcurrency / 2)) || 2; // 搜索时开启的worker数量
+export const SEARCH_WORKER_NUM = Math.max(2, Math.floor(navigator.hardwareConcurrency / 2)); // 搜索时开启的worker数量
 // export const SEARCH_WORKER_NUM = 2; // 搜索时开启的worker数量,不能小于2
 export const SEARCH_INDEX_BATCH_SIZE = 50; // 搜索索引表时,每次取的索引数据的数量
 export const DEFAULT_VECTOR_SIMILARITY_THRESHOLD = 0.5; // 默认的向量相似度阈值
