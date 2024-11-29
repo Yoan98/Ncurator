@@ -153,9 +153,6 @@ export const searchDoc = async ({ question, connections, maxResTextSize, k = 10 
     lshRes = lshRes.sort((a, b) => b.similarity - a.similarity).slice(0, config.SEARCH_RESULT_HEADER_SLICE_SIZE)
     fullIndexResFromDB = fullIndexResFromDB.sort((a, b) => b.score - a.score).slice(0, config.SEARCH_RESULT_HEADER_SLICE_SIZE)
 
-    console.log('lshRes', lshRes)
-    console.log('fullIndexResFromDB', fullIndexResFromDB)
-
     // 将全文索结果根据现有结果重新打分,再排序，然后归一化
     let reRankFullIndexRes: lunr.Index.Result[] = []
     if (fullIndexResFromDB.length) {

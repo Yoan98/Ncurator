@@ -50,7 +50,7 @@ const SearchSection = () => {
             type: 'knowledge',
             searchTextRes,
             streamCb: (msg, chunk) => {
-
+                setAskAiLoading(false);
                 let text = msg + '⚫';
                 if (chunk.choices[0]?.finish_reason == 'stop') {
                     text = msg;
@@ -127,8 +127,6 @@ const SearchSection = () => {
             console.error(error);
             message.error('Error in AI answer' + error);
         }
-
-        setAskAiLoading(false);
 
     }
     const handleEnterPress = (e) => {
@@ -209,7 +207,7 @@ const SearchSection = () => {
                 <h2 className="text-emphasis font-bold my-auto mb-1 text-base">AI Answer</h2>
             </div>
 
-            <div className="pt-1 border-t border-border w-full min-h-[100px] max-h-[100px] overflow-y-auto">
+            <div className="pt-1 border-t border-border w-full min-h-[150px] max-h-[100px] overflow-y-auto">
                 {
                     askAiLoading ? <div className='text-sm loading-text'>Searching...</div> : <div className="text-sm">{aiAnswerText}</div>
 
