@@ -383,8 +383,6 @@ const removeDocumentsInConnection = async (store: IndexDBStore, removeDocList: D
 }
 // 构建某一个connection下的新文档的索引
 const buildDocsIndexInConnection = async (store: IndexDBStore, docs: DB.DOCUMENT[], connection: DB.CONNECTION) => {
-    const fileConnector = new FileConnector();
-
     let updatedConnection = connection;
     for (let doc of docs) {
         // resource表读取文件
@@ -393,7 +391,7 @@ const buildDocsIndexInConnection = async (store: IndexDBStore, docs: DB.DOCUMENT
             key: doc.resource!.id
         })
 
-        const { bigChunks, miniChunks } = await fileConnector.getChunks(docResource.file);
+        const { bigChunks, miniChunks } = await FileConnector.getChunks(docResource.file);
 
         if (!bigChunks.length && !miniChunks.length) {
             message.warning(`${doc.name} no content`);

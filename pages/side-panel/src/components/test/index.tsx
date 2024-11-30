@@ -1,5 +1,5 @@
 import { useStorage, withErrorBoundary, withSuspense } from '@extension/shared';
-import { FileConnector } from '@src/utils/Connector';
+import { FileConnector, CrawlerConnector } from '@src/utils/Connector';
 import type { ComponentPropsWithoutRef } from 'react';
 import { useRef, useEffect, useState } from 'react';
 import workerpool from 'workerpool';
@@ -25,6 +25,8 @@ const SidePanel = () => {
     const [workerNumber, setWorkerNumber] = useState<number>(1);
     const [selectModel, setSelectModal] = useState<string>('Llama-3.2-1B-Instruct-q4f32_1-MLC');
 
+    const [websiteUrl, setWebsiteUrl] = useState<string>('');
+
     const handleFileChange = async (event) => {
         const files = event.target.files;
         if (!files || files.length === 0) {
@@ -33,8 +35,7 @@ const SidePanel = () => {
         console.log('file change');
 
 
-        const fileConnector = new FileConnector();
-        const { bigChunks, miniChunks } = await fileConnector.getChunks(files[0]);
+        const { bigChunks, miniChunks } = await FileConnector.getChunks(files[0]);
         console.log('bigChunks', bigChunks);
 
 
@@ -243,6 +244,11 @@ const SidePanel = () => {
 
     }
 
+    async function hdScrapy() {
+        const data = await CrawlerConnector.getChunks(websiteUrl)
+        console.log('data', data);
+    }
+
 
     useEffect(() => {
         // storagePoolRef.current = workerpool.pool(storageWorkerURL, {
@@ -311,6 +317,12 @@ const SidePanel = () => {
 
             <div>
                 <button onClick={hdLoadLlm}>load llm</button>
+            </div>
+            <div>
+                <input type="text" id="input" onInput={(e) => {
+                    setWebsiteUrl(e.currentTarget.value);
+                }} />
+                <button onClick={hdScrapy}>scrapy</button>
             </div>
 
 

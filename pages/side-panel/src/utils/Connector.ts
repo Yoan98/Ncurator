@@ -11,6 +11,29 @@ import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters"
 import { Document } from "@langchain/core/documents";
 import { SPLITTER_BIG_CHUNK_SIZE, SPLITTER_BIG_CHUNK_OVERLAP, SPLITTER_MINI_CHUNK_SIZE, SPLITTER_MINI_CHUNK_OVERLAP, SPLITTER_SEPARATORS } from '@src/config'
 import { getFileName } from '@src/utils/tool'
+import { CheerioWebBaseLoader } from "@langchain/community/document_loaders/web/cheerio";
+import type { WebBaseLoaderParams } from "@langchain/community/document_loaders/web/cheerio";
+
+
+const getBaseTextRecursiveSplitter = () => {
+    const bigSplitter = new RecursiveCharacterTextSplitter({
+        chunkSize: SPLITTER_BIG_CHUNK_SIZE,
+        chunkOverlap: SPLITTER_BIG_CHUNK_OVERLAP,
+        separators: SPLITTER_SEPARATORS
+    });
+
+    const miniSplitter = new RecursiveCharacterTextSplitter({
+        chunkSize: SPLITTER_MINI_CHUNK_SIZE,
+        chunkOverlap: SPLITTER_MINI_CHUNK_OVERLAP,
+        separators: SPLITTER_SEPARATORS
+    });
+
+    return {
+        bigSplitter,
+        miniSplitter
+    }
+
+}
 
 // 文件连接器,读取上传文件的内容数据
 export class FileConnector {
@@ -18,26 +41,7 @@ export class FileConnector {
     constructor() {
     }
 
-    private getBaseTextRecursiveSplitter() {
-        const bigSplitter = new RecursiveCharacterTextSplitter({
-            chunkSize: SPLITTER_BIG_CHUNK_SIZE,
-            chunkOverlap: SPLITTER_BIG_CHUNK_OVERLAP,
-            separators: SPLITTER_SEPARATORS
-        });
-
-        const miniSplitter = new RecursiveCharacterTextSplitter({
-            chunkSize: SPLITTER_MINI_CHUNK_SIZE,
-            chunkOverlap: SPLITTER_MINI_CHUNK_OVERLAP,
-            separators: SPLITTER_SEPARATORS
-        });
-
-        return {
-            bigSplitter,
-            miniSplitter
-        }
-
-    }
-    async getChunks(file: File): Promise<{
+    static async getChunks(file: File): Promise<{
         bigChunks: Document[],
         miniChunks: Document[]
     }> {
@@ -46,7 +50,7 @@ export class FileConnector {
         if (!fileBuffer) {
             throw new Error('read file error')
         }
-        const { bigSplitter, miniSplitter } = this.getBaseTextRecursiveSplitter();
+        const { bigSplitter, miniSplitter } = getBaseTextRecursiveSplitter();
 
         if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
             // word文档处理
@@ -160,3 +164,48 @@ export class FileConnector {
 
 }
 
+// 爬虫连接器,读取网页内容数据
+export class CrawlerConnector {
+    constructor() {
+    }
+
+    static async getChunks(url: string, options?: WebBaseLoaderParams): Promise<{
+        bigChunks: Document[],
+        miniChunks: Document[]
+    }> {
+        const cheerio = new CheerioWebBaseLoader(
+            url,
+            {
+                ...options,
+
+            }
+        );
+
+        const $ = await cheerio.scrape();
+        const bodyContent = $('body');
+        // 清除非文本内容
+        const unTextTagList = ['script', 'style', 'svg', 'img', 'canvas', 'audio', 'video', 'object', 'embed', 'applet', 'map', 'area']
+        unTextTagList.forEach(tag => {
+            bodyContent.find(tag).remove();
+        });
+        const text = bodyContent.text();
+        const metadata = { url: url };
+
+        const docs = [new Document({ pageContent: text, metadata })];
+
+
+        const { bigSplitter, miniSplitter } = getBaseTextRecursiveSplitter();
+
+        // 分割大文档
+        const bigChunks = await bigSplitter.splitDocuments(docs);
+
+        // 分割小文档
+        const miniChunks = await miniSplitter.splitDocuments(docs);
+
+        return {
+            bigChunks,
+            miniChunks
+        }
+
+    }
+}
