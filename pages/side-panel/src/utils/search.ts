@@ -150,17 +150,19 @@ export const searchDoc = async ({ question, connections, maxResTextSize, k = 10 
 
     // 排序,然后取前部分条数据
     // 因为当文本量大时,这里可能会匹配出上百上万条数据
-    lshRes = lshRes.sort((a, b) => b.similarity - a.similarity).slice(0, config.SEARCH_RESULT_HEADER_SLICE_SIZE)
-    fullIndexResFromDB = fullIndexResFromDB.sort((a, b) => b.score - a.score).slice(0, config.SEARCH_RESULT_HEADER_SLICE_SIZE)
+    const sortedLshRes = lshRes.sort((a, b) => b.similarity - a.similarity).slice(0, config.SEARCH_RESULT_HEADER_SLICE_SIZE)
+    lshRes.length = 0
+    const sortedFullIndexResFromDB = fullIndexResFromDB.sort((a, b) => b.score - a.score).slice(0, config.SEARCH_RESULT_HEADER_SLICE_SIZE)
+    fullIndexResFromDB.length = 0
 
     // 将全文索结果根据现有结果重新打分,再排序，然后归一化
     let reRankFullIndexRes: lunr.Index.Result[] = []
-    if (fullIndexResFromDB.length) {
+    if (sortedFullIndexResFromDB.length) {
         // 重新打分
         await FullTextIndex.loadJieBa()
         let fullIndexFromDBTextChunkRes: DB.TEXT_CHUNK[] = await store.getBatch({
             storeName: constant.TEXT_CHUNK_STORE_NAME,
-            keys: fullIndexResFromDB.map((item) => Number(item.ref))
+            keys: sortedFullIndexResFromDB.map((item) => Number(item.ref))
         })
         const fields = [{
             field: 'text'
@@ -185,10 +187,10 @@ export const searchDoc = async ({ question, connections, maxResTextSize, k = 10 
 
     // 根据权重计算混合排序结果
     let mixIndexSearchedRes: { id: number, score: number }[] = []
-    const alreadyFullIndexIds: number[] = []
+    const alreadyFullIndexTextChunkIds: number[] = []
     const vectorWeight = config.SEARCHED_VECTOR_WEIGHT
     const fullTextWeight = config.SEARCHED_FULL_TEXT_WEIGHT
-    lshRes.forEach((lshItem) => {
+    sortedLshRes.forEach((lshItem) => {
         const sameIndex = reRankFullIndexRes.findIndex((fullItem) => Number(fullItem.ref) === lshItem.id)
         if (sameIndex === -1) {
             // 只有向量索引,不需要权重
@@ -202,16 +204,16 @@ export const searchDoc = async ({ question, connections, maxResTextSize, k = 10 
                 id: lshItem.id,
                 score: (lshItem.similarity * vectorWeight) + (fullTextWeight * reRankFullIndexRes[sameIndex].score),
             })
-            alreadyFullIndexIds.push(lshItem.id)
+            alreadyFullIndexTextChunkIds.push(lshItem.id)
         }
     })
     // 这里都是没有与向量索引重复的全文索引结果
     // 根据权重比例替换lsh尾部数据为全文索引数据,目的是为了让全文索引按照权重比率提高重要性
-    const lshTailStartIndex = Math.floor(vectorWeight * lshRes.length);
-    const lshTailData = lshRes.slice(lshTailStartIndex)
+    const lshTailStartIndex = Math.floor(vectorWeight * sortedLshRes.length);
+    const lshTailData = sortedLshRes.slice(lshTailStartIndex)
     const lshTailMaxScore = lshTailData.length ? lshTailData[0].similarity : 1
     reRankFullIndexRes.forEach((item) => {
-        if (alreadyFullIndexIds.includes(Number(item.ref))) {
+        if (alreadyFullIndexTextChunkIds.includes(Number(item.ref))) {
             return
         }
         mixIndexSearchedRes.push({
@@ -270,8 +272,7 @@ export const searchDoc = async ({ question, connections, maxResTextSize, k = 10 
     console.timeEnd('total search')
 
     console.log('Res', {
-        lshRes,
-        fullIndexResFromDB: fullIndexResFromDB.sort((a, b) => b.score - a.score),
+        sortedLshRes,
         reRankFullIndexRes,
         mixIndexSearchedRes,
         searchedRes,
