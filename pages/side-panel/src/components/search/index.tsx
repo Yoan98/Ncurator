@@ -10,7 +10,7 @@ import { VscSend } from "react-icons/vsc";
 import FileRender from '@src/components/fileRenders';
 import type { FileRenderDocument } from '@src/components/fileRenders/index'
 import { IndexDBStore } from '@src/utils/IndexDBStore';
-import { RESOURCE_STORE_NAME, DEFAULT_INDEXDB_NAME } from '@src/utils/constant';
+import { RESOURCE_STORE_NAME, DEFAULT_INDEXDB_NAME, Connector } from '@src/utils/constant';
 
 const { TextArea } = Input;
 
@@ -62,6 +62,13 @@ const SearchSection = () => {
     }
 
     const handleTextChunkClick = async (textChunk: Search.TextItemRes) => {
+        const connector = textChunk.document.connection.connector;
+        if (connector === Connector.Crawl) {
+            window.open(textChunk.document.link, '_blank');
+            return
+        }
+
+        // file
         // resource表读取文件
         const docResource: DB.RESOURCE = await indexDBRef.current!.get({
             storeName: RESOURCE_STORE_NAME,

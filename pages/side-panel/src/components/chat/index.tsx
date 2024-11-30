@@ -15,7 +15,7 @@ import Logo from '@src/components/logo';
 import { Tab } from '@src/SidePanel';
 import FileRender from '@src/components/fileRenders';
 import { IndexDBStore } from '@src/utils/IndexDBStore';
-import { DEFAULT_INDEXDB_NAME, RESOURCE_STORE_NAME } from '@src/utils/constant';
+import { DEFAULT_INDEXDB_NAME, RESOURCE_STORE_NAME, Connector } from '@src/utils/constant';
 import type { FileRenderDocument } from '@src/components/fileRenders/index'
 import { IoIosArrowDown, IoIosArrowUp } from "react-icons/io";
 import { getSearchResMaxTextSize } from '@src/utils/tool';
@@ -79,6 +79,11 @@ const ChatSection = ({
 
 
     const handleTextChunkClick = async (textChunk: Search.TextItemRes) => {
+        const connector = textChunk.document.connection.connector;
+        if (connector === Connector.Crawl) {
+            window.open(textChunk.document.link, '_blank');
+            return
+        }
         // resource表读取文件
         const docResource: DB.RESOURCE = await indexDBRef.current!.get({
             storeName: RESOURCE_STORE_NAME,

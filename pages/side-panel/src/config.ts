@@ -2,6 +2,7 @@
 export const BUILD_INDEX_EMBEDDING_MAX_WORKER_NUM = 1; // embedding 开启worker数量(只有使用cpu时才有用,还未兼容,先统一设为1)
 export const BUILD_INDEX_CHUNKS_BATCH_SIZE = 100; // 分批构建索引时,每批处理的chunk数量,该值控制整体构建索引时,消化chunk的速度,每一批chunk也就对应一个lsh和全文索引块,这意味着该值越大,对后续的搜索会有提升,但构建时内存占比也会越大
 export const BUILD_INDEX_EMBEDDING_BATCH_SIZE = 10; // 每次embedding的chunk数量,该值控制增GPU或CPU(多worker)每次embedding处理数据的大小,这意味着该值越大,embedding的速度也会相对越快,但显存和内存占比也会越大,造成页面卡顿
+export const MAX_BUILDING_MINUTES = 60; // 最大构建时间,超过该时间则认为构建出问题,可让用户继续操作
 
 // search relate
 export const SEARCHED_VECTOR_WEIGHT = 0.8; // 向量的权重

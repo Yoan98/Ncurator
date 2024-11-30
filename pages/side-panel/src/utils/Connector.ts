@@ -14,6 +14,7 @@ import { getFileName } from '@src/utils/tool'
 import { CheerioWebBaseLoader } from "@langchain/community/document_loaders/web/cheerio";
 import type { WebBaseLoaderParams } from "@langchain/community/document_loaders/web/cheerio";
 
+export type ConnectorClassUnion = typeof FileConnector | typeof CrawlerConnector
 
 const getBaseTextRecursiveSplitter = () => {
     const bigSplitter = new RecursiveCharacterTextSplitter({
@@ -209,3 +210,4 @@ export class CrawlerConnector {
 
     }
 }
+

@@ -1,8 +1,8 @@
 import { createRoot } from 'react-dom/client';
 import '@extension/tailwindcss-config/input.css'
 import '@src/index.css';
-// import App from '@src/App';
-import App from '@src/components/test';
+import App from '@src/App';
+// import App from '@src/components/test';
 import 'animate.css';
 
 function init() {

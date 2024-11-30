@@ -1,6 +1,6 @@
 
 type ValueOf<T> = T[keyof T]
-type ConnectorUnion = 0 | 1
+type ConnectorUnion = 1 | 2 // 1: File, 2: Crawl
 type DocumentStatusUnion = 1 | 2 | 3
 type EncodePrefixUnion = 'search_document' | 'search_query'
 
@@ -94,11 +94,13 @@ namespace DB {
             size: number
             type: string
         }
+        link?: string // Crawl的链接
         created_at: string // iso string
         status: DocumentStatusUnion // 1: building 2: fail 3: success
         connection: {
             id: number
             name: string
+            connector: ConnectorUnion
         }
     }
     // resource表,存储相关文件信息
