@@ -207,10 +207,9 @@ export const searchDoc = async ({ question, connections, maxResTextSize, k = 10 
     })
     // 这里都是没有与向量索引重复的全文索引结果
     // 根据权重比例替换lsh尾部数据为全文索引数据,目的是为了让全文索引按照权重比率提高重要性
-    const lshTailStartIndex = Math.ceil(vectorWeight * lshRes.length);
+    const lshTailStartIndex = Math.floor(vectorWeight * lshRes.length);
     const lshTailData = lshRes.slice(lshTailStartIndex)
-    const lshTailMaxScore = lshRes.length === 1 ? lshRes[0].similarity :
-        lshTailData.length ? lshTailData[0].similarity : 1
+    const lshTailMaxScore = lshTailData.length ? lshTailData[0].similarity : 1
     reRankFullIndexRes.forEach((item) => {
         if (alreadyFullIndexIds.includes(Number(item.ref))) {
             return
