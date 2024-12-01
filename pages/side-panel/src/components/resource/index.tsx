@@ -16,7 +16,7 @@ import { removeDocumentsInConnection, addFilesInConnection, buildDocsIndexInConn
 const { Search } = Input;
 const { Dragger } = Upload;
 const { Option } = Select;
-const { SHOW_PARENT } = TreeSelect;
+const { SHOW_CHILD } = TreeSelect;
 
 interface DataType {
     key: React.Key;
@@ -24,6 +24,10 @@ interface DataType {
     created_at: string;
     status_text: string,
     status: DocumentStatusUnion,
+    text_chunk_id_range: {
+        from: number
+        to: number
+    }
 }
 
 const columns: TableColumnsType<DataType> = [
@@ -31,12 +35,19 @@ const columns: TableColumnsType<DataType> = [
         title: 'Name', dataIndex: 'name', ellipsis: {
             showTitle: true
         },
+        render: (text, record) => {
+            const chunkLen = record.text_chunk_id_range.to - record.text_chunk_id_range.from + 1;
+            const isErrorChunk = chunkLen < 10 && record.status == constant.DocumentStatus.Success;
+            return (
+                <span className={`${isErrorChunk && 'text-text-500'} `} title={`${isErrorChunk ? 'The text of this document too less, may be problem' : record.name}`}>{record.name}</span>
+            )
+        },
         width: '65%'
     },
     {
         title: 'Status', dataIndex: 'status', width: '35%', render: (text, record) => {
 
-            const color = record.status == constant.DocumentStatus.Fail ? constant.ERROR_COLOR : record.status == constant.DocumentStatus.Success ? constant.SUCCESS_COLOR : 'gray';
+            const color = record.status == constant.DocumentStatus.Fail ? constant.ERROR_COLOR : record.status == constant.DocumentStatus.Success ? constant.SUCCESS_COLOR : 'text-text-500';
             return <Badge color={color} text={record.status_text} />
         }
     },
@@ -56,9 +67,13 @@ export interface CrawlForm {
 }
 export interface FavoriteTreeNode {
     title: string
-    url: string
     key: string
     value: string
+    outData: {
+        url: string
+        label: string
+        value: string
+    }
     children: FavoriteTreeNode[]
     isLeaf: boolean
 }
@@ -98,8 +113,8 @@ const Resource = () => {
     const [operateResourceLoading, setOperateResourceLoading] = useState(false);
     const [operateResourceModalOpen, setOperateResourceModalOpen] = useState(false);
 
-    //collect tree select
-    const [selectFavoriteIds, setSelectFavoriteIds] = useState([]);
+    //favorite tree select
+    const [selectFavoriteData, setSelectFavoriteData] = useState<(FavoriteTreeNode['outData'])[]>([]);
     const [favoriteTreeData, setFavoriteTreeData] = useState<FavoriteTreeNode[]>([]);
     const [selectFavoriteVisible, setSelectFavoriteVisible] = useState(false);
 
@@ -175,7 +190,8 @@ const Resource = () => {
                 name: doc.name,
                 created_at: dayjs(doc.created_at).format('YYYY-MM-DD'),
                 status: doc.status,
-                status_text: statusText
+                status_text: statusText,
+                text_chunk_id_range: doc.text_chunk_id_range
             }
         })
         return {
@@ -212,13 +228,15 @@ const Resource = () => {
 
     const tProps = {
         treeData: favoriteTreeData,
-        value: selectFavoriteIds,
-        onChange: (value, label, extra) => {
-            console.log(value, extra)
-            setSelectFavoriteIds(value);
+        value: selectFavoriteData,
+        onChange: (value) => {
+            setSelectFavoriteData(value.map((item) => item.label));
         },
+        treeNodeFilterProp: 'title',
         treeCheckable: true,
-        showCheckedStrategy: SHOW_PARENT,
+        showCheckedStrategy: SHOW_CHILD,
+        labelInValue: true,
+        treeNodeLabelProp: 'outData',
         placeholder: 'Please select favorite',
         style: {
             width: '100%',
@@ -494,17 +512,21 @@ const Resource = () => {
         setOperateResourceModalOpen(false);
     }
 
-    // collect tree select
-    const handleImportCollectClick = async () => {
+    // favorite tree select
+    const handleImportFavoriteClick = async () => {
         function convertBookmarksToTreeData(bookmarks: chrome.bookmarks.BookmarkTreeNode[], parentKey = '') {
             return bookmarks.map((bookmark) => {
                 // 为每个节点生成一个唯一的 key 和 value
                 const key = parentKey ? `${parentKey}-${bookmark.id}` : `${bookmark.id}`;
                 const node: FavoriteTreeNode = {
                     title: bookmark.title,
-                    url: '',
                     key: key,
                     value: key,
+                    outData: {
+                        url: '',
+                        label: bookmark.title,
+                        value: key
+                    },
                     children: [] as any[],
                     isLeaf: false,
                 };
@@ -515,7 +537,7 @@ const Resource = () => {
                 } else if (bookmark.url) {
                     // 如果是书签项，且有 URL，设置为叶子节点
                     node.isLeaf = true;
-                    node.url = bookmark.url; // 可以额外存储 URL 供跳转使用
+                    node.outData.url = bookmark.url;
                 }
 
                 return node;
@@ -526,11 +548,29 @@ const Resource = () => {
 
         const bookmarks = (await chrome.bookmarks.getTree())[0].children!
 
-        console.log('bookmarks', bookmarks)
         const treeData = convertBookmarksToTreeData(bookmarks)
 
-        console.log('treeData', treeData)
         setFavoriteTreeData(treeData);
+    }
+    const handleImportConfirm = async () => {
+        const maxCrawlNum = 30;
+        if (selectFavoriteData.length > 30) {
+            message.warning(`It's better not exceed ${maxCrawlNum}`);
+            return;
+        }
+        if (selectFavoriteData.length == 0) {
+            message.warning('Please select favorite');
+            return;
+        }
+        const crawlList = selectFavoriteData.map((item) => {
+            return {
+                name: item!.label,
+                link: item!.url
+            }
+        })
+
+        crawlForm.setFieldsValue({ crawlList });
+
     }
 
     useEffect(() => {
@@ -638,11 +678,11 @@ const Resource = () => {
                             <TreeSelect {...tProps} />
 
                             <div className='flex items-center gap-1 justify-end'>
-                                <Button type='primary' size='small'>Import</Button>
+                                <Button type='primary' size='small' onClick={handleImportConfirm}>Import</Button>
                                 <Button size='small' onClick={() => { setSelectFavoriteVisible(false) }}>Cancel</Button>
                             </div>
                         </div> :
-                        <div className='text-right text-sm text-blue-500 cursor-pointer mb-2' onClick={handleImportCollectClick}>Import Collect Web?</div>
+                        <div className='text-right text-sm text-blue-500 cursor-pointer mb-2' onClick={handleImportFavoriteClick}>Import Your Browser Bookmark?</div>
                 }
                 <Form
                     form={crawlForm}
@@ -681,7 +721,7 @@ const Resource = () => {
                                     ))
                                 }
 
-                                < Button type="dashed" onClick={() => add()} block>+ Add Item</Button>
+                                < Button type="dashed" onClick={() => add()} block>+ Add Crawl</Button>
                             </div>
                         )}
                     </Form.List>
