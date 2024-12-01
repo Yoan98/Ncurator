@@ -15,7 +15,7 @@ import { IoIosArrowRoundBack } from "react-icons/io";
 import { CiEdit } from "react-icons/ci";
 
 import { useGlobalContext } from '@src/provider/global';
-import dayjs from 'dayjs';
+import dayjs from '@src/utils/dayjsGlobal';
 
 
 interface GroupedChatHistory {

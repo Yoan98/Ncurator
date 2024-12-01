@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Select, Button, Input, message, Dropdown, Empty, Modal } from 'antd';
-import dayjs from 'dayjs';
+import dayjs from '@src/utils/dayjsGlobal';
 import { useGlobalContext } from '@src/provider/global';
 import { searchDoc } from '@src/utils/search';
 import { IoBookOutline, IoChatbubblesOutline } from "react-icons/io5";

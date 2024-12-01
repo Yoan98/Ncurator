@@ -170,7 +170,13 @@ export class CrawlerConnector {
     constructor() {
     }
 
-    static async getChunks(url: string, options?: WebBaseLoaderParams): Promise<{
+    static async getChunks({
+        url, options, docName
+    }: {
+        url: string,
+        options?: WebBaseLoaderParams
+        docName: string
+    }): Promise<{
         bigChunks: Document[],
         miniChunks: Document[]
     }> {
@@ -189,7 +195,7 @@ export class CrawlerConnector {
         unTextTagList.forEach(tag => {
             bodyContent.find(tag).remove();
         });
-        const text = bodyContent.text();
+        const text = docName + '\n' + bodyContent.text();
         const metadata = { url: url };
 
         const docs = [new Document({ pageContent: text, metadata })];

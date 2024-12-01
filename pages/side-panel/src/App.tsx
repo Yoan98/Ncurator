@@ -4,24 +4,23 @@ import { GlobalProvider } from '@src/provider/global';
 import * as config from '@src/config';
 import SidePanel from '@src/SidePanel';
 import { checkWebGPU } from '@src/utils/tool';
-import dayjs from 'dayjs';
+import { setDayjsLocale } from '@src/utils/dayjsGlobal';
 import zhCN from 'antd/locale/zh_CN';
 import enUS from 'antd/lib/locale/en_US';
-import 'dayjs/locale/zh-cn';
+
 import { EmbedTaskManage } from '@src/utils/EmbedTask';
 
 type Locale = ConfigProviderProps['locale'];
-dayjs.locale('en');
 
 
 const App = () => {
-    const [locale, setLocal] = useState<Locale>(enUS);
+    const [antDLocale, setAntDLocal] = useState<Locale>(enUS);
 
     const initLang = () => {
         const curLang = navigator.language || 'en';
         if (curLang.startsWith('zh')) {
-            setLocal(zhCN);
-            dayjs.locale('zh-cn');
+            setAntDLocal(zhCN);
+            setDayjsLocale('zh-cn');
         }
     }
 
@@ -37,7 +36,7 @@ const App = () => {
 
     return (
         <ConfigProvider
-            locale={locale}
+            locale={antDLocale}
             theme={{
                 token: {
                     colorPrimary: config.THEME_COLOR,
