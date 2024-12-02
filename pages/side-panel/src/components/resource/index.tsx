@@ -39,7 +39,7 @@ const columns: TableColumnsType<DataType> = [
             const chunkLen = record.text_chunk_id_range.to - record.text_chunk_id_range.from + 1;
             const isErrorChunk = chunkLen < 10 && record.status == constant.DocumentStatus.Success;
             return (
-                <span className={`${isErrorChunk && 'text-text-500'} `} title={`${isErrorChunk ? 'The text of this document too less, may be problem' : record.name}`}>{record.name}</span>
+                <span className={`${isErrorChunk && 'text-[gray]'} `} title={`${isErrorChunk ? 'The text of this document too less, may be problem' : record.name}`}>{record.name}</span>
             )
         },
         width: '65%'
@@ -47,7 +47,7 @@ const columns: TableColumnsType<DataType> = [
     {
         title: 'Status', dataIndex: 'status', width: '35%', render: (text, record) => {
 
-            const color = record.status == constant.DocumentStatus.Fail ? constant.ERROR_COLOR : record.status == constant.DocumentStatus.Success ? constant.SUCCESS_COLOR : 'text-text-500';
+            const color = record.status == constant.DocumentStatus.Fail ? constant.ERROR_COLOR : record.status == constant.DocumentStatus.Success ? constant.SUCCESS_COLOR : 'gray';
             return <Badge color={color} text={record.status_text} />
         }
     },
@@ -424,6 +424,9 @@ const Resource = () => {
 
             buildDocsIndexInConnection(store, docs, connectionAfterAddDoc).then(() => {
                 fetchConnectionList();
+            }).catch((error) => {
+                fetchConnectionList();
+                throw error;
             });
 
             // 更新页面resource列表
@@ -688,6 +691,7 @@ const Resource = () => {
                     form={crawlForm}
                     name="crawl form"
                     initialValues={{ crawlList: [{}] }}
+                    labelCol={{ span: 4 }}
                 >
                     <Form.List name="crawlList">
                         {(fields, { add, remove }) => (
@@ -711,7 +715,7 @@ const Resource = () => {
                                             <Form.Item
                                                 label="Url"
                                                 name={[field.name, 'link']}
-                                                rules={[{ required: true }]}
+                                                rules={[{ required: true }, { type: 'url' }]}
                                             >
                                                 <Input placeholder='The web url you want to crawl' />
                                             </Form.Item>

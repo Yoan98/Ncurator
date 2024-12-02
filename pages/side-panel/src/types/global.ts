@@ -7,6 +7,9 @@ type EncodePrefixUnion = 'search_document' | 'search_query'
 interface Window {
     gIsSupportWebGPU: boolean
 }
+interface Result {
+    status: 'Success' | 'Fail'
+}
 
 namespace Chat {
     type UiMessageType = 'user' | 'assistant'

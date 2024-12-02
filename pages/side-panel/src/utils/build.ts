@@ -10,6 +10,7 @@ import { IndexDBStore } from '@src/utils/IndexDBStore';
 import * as constant from '@src/utils/constant';
 import dayjs from '@src/utils/dayjsGlobal';
 import { message } from 'antd';
+import type { GetChunksReturn } from '@src/utils/Connector'
 
 interface EmbeddingOutput {
     data: Float32Array,
@@ -241,14 +242,19 @@ export const buildIndexSplit = async ({ bigChunks, miniChunks, document, batchSi
     }
 }
 
+
 // 构建document的索引并存储
+interface BuildDocIndexReturn extends Result {
+    connectionAfterIndexBuild?: DB.CONNECTION
+    error?: Error
+}
 export const buildDocIndex = async ({ store, bigChunks, miniChunks, document, connection }: {
     store: IndexDBStore,
     bigChunks: LangChain.Document[],
     miniChunks: LangChain.Document[],
     connection: DB.CONNECTION,
     document: DB.DOCUMENT,
-}) => {
+}): Promise<BuildDocIndexReturn> => {
     if (!bigChunks.length && !miniChunks.length) {
         throw new Error('no document content')
     }
@@ -292,7 +298,6 @@ export const buildDocIndex = async ({ store, bigChunks, miniChunks, document, co
 
         return {
             status: 'Success',
-            document,
             connectionAfterIndexBuild
         }
     } catch (error) {
@@ -306,7 +311,6 @@ export const buildDocIndex = async ({ store, bigChunks, miniChunks, document, co
         });
         return {
             status: 'Fail',
-            document,
             error
         }
 
@@ -391,29 +395,30 @@ export const buildDocsIndexInConnection = async (store: IndexDBStore, docs: DB.D
         // 获取chunk数据
         let bigChunks: LangChain.Document[] = []
         let miniChunks: LangChain.Document[] = []
+        let getChunkRes: GetChunksReturn
         if (connection.connector == constant.Connector.Crawl) {
             // 爬取网页数据生成chunk
-            const chunks = await CrawlerConnector.getChunks({
+            getChunkRes = await CrawlerConnector.getChunks({
                 url: doc.link!,
                 docName: doc.name
             });
-            bigChunks = chunks.bigChunks;
-            miniChunks = chunks.miniChunks
         } else if (connection.connector == constant.Connector.File) {
             // resource表读取文件,将文件转成chunk
             const docResource = await store.get({
                 storeName: constant.RESOURCE_STORE_NAME,
                 key: doc.resource!.id
             })
-            const chunks = await FileConnector.getChunks(docResource.file);
-            bigChunks = chunks.bigChunks;
-            miniChunks = chunks.miniChunks;
+            getChunkRes = await FileConnector.getChunks(docResource.file);
         } else {
-            throw new Error('connector error')
+            message.warning(`${doc.name} connector not supported`);
+            console.error(`${doc.name} connector not supported, connector: ${connection.connector}`);
+            continue;
         }
 
-        if (!bigChunks.length && !miniChunks.length) {
-            message.warning(`${doc.name} no content`);
+        if (getChunkRes.status == 'Fail') {
+            console.error('getChunkRes error', getChunkRes.error)
+            message.error(`${doc.name} Build Fail`);
+
             // 将该document状态置为fail
             await store.put({
                 storeName: constant.DOCUMENT_STORE_NAME,
@@ -421,20 +426,23 @@ export const buildDocsIndexInConnection = async (store: IndexDBStore, docs: DB.D
                     ...doc,
                     status: constant.DocumentStatus.Fail
                 }
-            });
+            })
             continue;
         }
+
+        bigChunks = getChunkRes.bigChunks!
+        miniChunks = getChunkRes.miniChunks!
 
         // 向量化,并存储索引
         const buildDocIndexRes = await buildDocIndex({ store, bigChunks, miniChunks, document: doc, connection: updatedConnection }) as Storage.DocItemRes
 
         // 提示结果
         if (buildDocIndexRes.status == 'Success') {
-            message.success(`${doc.name} Storage Success`);
+            message.success(`${doc.name} Build Success`);
             updatedConnection = buildDocIndexRes.connectionAfterIndexBuild!;
         } else if (buildDocIndexRes.status == 'Fail') {
             console.error('buildDocIndex error', buildDocIndexRes.error)
-            message.error(`${doc.name} Storage Fail`);
+            message.error(`${doc.name} Build Fail`);
         } else {
             message.error(`${doc.name} Unknown Status`);
         }
