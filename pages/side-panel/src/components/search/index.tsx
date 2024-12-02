@@ -216,7 +216,7 @@ const SearchSection = () => {
 
             <div className="pt-1 border-t border-border w-full min-h-[150px] max-h-[100px] overflow-y-auto">
                 {
-                    askAiLoading ? <div className='text-sm loading-text'>Searching...</div> : <div className="text-sm">{aiAnswerText}</div>
+                    askAiLoading ? <div className='text-sm loading-text'>Searching...</div> : <div className="text-base">{aiAnswerText}</div>
 
                 }
 

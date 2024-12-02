@@ -52,14 +52,6 @@ export const LLM_MODEL_LIST = [{
     contextWindowSize: 4096
 
 }, {
-    name: 'Llama-3.2-1B',
-    modelSizeType: 'Smaller',
-    modelId: 'Llama-3.2-1B-Instruct-q4f32_1-MLC',
-    wasmFileName: 'Llama-3.2-1B-Instruct-q4f32_1-ctx4k_cs1k-webgpu.wasm',
-    vramRequiredMB: 1128,
-    contextWindowSize: 4096
-
-}, {
     name: 'Qwen2.5-7B',
     modelSizeType: 'Bigger',
     modelId: 'Qwen2.5-7B-Instruct-q4f16_1-MLC',
