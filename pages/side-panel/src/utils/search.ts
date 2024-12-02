@@ -95,7 +95,7 @@ export const searchDoc = async ({ question, connections, maxResTextSize, k = 10 
     const embeddingOutput = await new Promise((resolve: EmbedTask['resolve'], reject) => {
         EmbedTaskManage.subscribe({
             text: [question],
-            prefix: constant.EncodePrefix.SearchDocument,
+            prefix: constant.EncodePrefix.SearchQuery,
             resolve,
             reject
         }, 'search')
