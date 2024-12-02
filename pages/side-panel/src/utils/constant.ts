@@ -29,6 +29,10 @@ export const enum EncodePrefix {
     SearchDocument = 'search_document',
     SearchQuery = 'search_query'
 }
+export enum MessageType {
+    USER = 'user',
+    ASSISTANT = 'assistant',
+};
 export const WEBLLM_CONFIG_INDEXDB_NAME = 'webllm/config'; // webllm配置的indexdb名称
 export const WEBLLM_CONFIG_STORE_NAME = 'urls'; // webllm配置的store名称
 export const STORAGE_DEFAULT_MODEL_ID = 'defaultModelId'; // localStorage中默认模型id的名称

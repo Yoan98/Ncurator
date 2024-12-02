@@ -233,5 +233,38 @@ export function getModelContextWindowSize(llmEngine: WebWorkerMLCEngine) {
 
 export function getSearchResMaxTextSize(llmEngine: WebWorkerMLCEngine) {
     const contextWindowSize = llmEngine ? getModelContextWindowSize(llmEngine) : 4096
-    return contextWindowSize - CHAT_SYSTEM_PROMPT.length - KNOWLEDGE_USER_PROMPT.length - 100
+    const promoteTokenSize = calculateTokens([CHAT_SYSTEM_PROMPT, KNOWLEDGE_USER_PROMPT])
+
+    return contextWindowSize - promoteTokenSize - 100
+}
+
+
+export function calculateTokens(content: string[]): number {
+    // 判断是否包含中文的正则
+    const chineseRegex = /[\u4e00-\u9fa5]/;
+    // 匹配英文单词和标点的正则
+    const englishRegex = /\w+|[^\w\s]/g;
+
+    let totalTokens = 0;
+
+    content.forEach((msg) => {
+        if (chineseRegex.test(msg)) {
+            // 如果包含中文，则直接按字符数估算
+            totalTokens += msg.length;
+        } else {
+            // 如果是英文，按照单词和标点分割
+            const matches = msg.match(englishRegex) || [];
+            matches.forEach((match) => {
+                if (/\w+/.test(match)) {
+                    // 长单词按每 4 个字符算一个 token
+                    totalTokens += Math.ceil(match.length / 8);
+                } else {
+                    // 标点符号单独算一个 token
+                    totalTokens += 1;
+                }
+            });
+        }
+    });
+
+    return totalTokens;
 }

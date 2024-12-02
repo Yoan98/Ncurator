@@ -2,7 +2,7 @@ import { CHAT_SYSTEM_PROMPT } from '@src/config';
 import { WebWorkerMLCEngine } from "@mlc-ai/web-llm";
 import type { ChatCompletionChunk } from "@mlc-ai/web-llm";
 import { KNOWLEDGE_USER_PROMPT } from '@src/config'
-import { getModelContextWindowSize } from '@src/utils/tool';
+import { getModelContextWindowSize, calculateTokens } from '@src/utils/tool';
 
 interface ConstructorParams {
     responseStyle: 'text' | 'markdown'
@@ -54,19 +54,15 @@ export class ChatLlmMessage {
         }
     }
 
-    private calculateTokens(messages: Chat.LlmMessage[]): number {
-        // 计算消息中的令牌数量
-        // 这里假设每个字符代表一个令牌，你可以根据实际情况调整
-        return messages.reduce((acc, message) => acc + message.content!.length, 0);
-    }
     private truncateChatHistory(contextWindowSize: number) {
-        let totalTokens = this.calculateTokens(this.chatHistory);
+        let totalTokens = calculateTokens(this.chatHistory.map((msg) => msg.content));
 
         // 长度大于2是因为至少要保留一个系统消息和一个用户消息
         while (totalTokens > contextWindowSize && this.chatHistory.length > 2) {
             const firstUserOrAssistantMsgIndex = this.chatHistory.findIndex((msg) => msg.role === 'user' || msg.role === 'assistant');
             this.chatHistory.splice(firstUserOrAssistantMsgIndex, 1);
-            totalTokens = this.calculateTokens(this.chatHistory);
+            totalTokens = calculateTokens(this.chatHistory.map((msg) => msg.content));
+            console.log('truncateChatHistory', totalTokens, contextWindowSize)
         }
     }
 
@@ -84,7 +80,7 @@ export class ChatLlmMessage {
             content: this.getUserPrompt(type, prompt, searchTextRes)
         }
         const systemMsg = this.chatHistory[0]
-        const defaultMsgLen = this.calculateTokens([systemMsg, userMsg])
+        const defaultMsgLen = calculateTokens([systemMsg.content, userMsg.content]);
         if (defaultMsgLen > contextWindowSize) {
             throw new Error(`User prompt or relate text over model context window size(${contextWindowSize}, current: ${defaultMsgLen})`)
         }

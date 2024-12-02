@@ -5,6 +5,7 @@ import workerpool from 'workerpool';
 import * as config from '@src/config';
 import * as constant from '@src/utils/constant';
 import { FullTextIndex } from '@src/utils/FullTextIndex';
+import { calculateTokens } from '@src/utils/tool'
 
 // @ts-ignore
 import searchWorkerURL from '@src/worker-pool/search?url&worker'
@@ -240,7 +241,8 @@ export const searchDoc = async ({ question, connections, maxResTextSize, k = 10 
     if (maxResTextSize) {
         // 计算text的文字数量,尽可能提高返回数量,供llm模型分析
         while (textChunkRes.length) {
-            const textLen = textChunkRes.reduce((acc, textChunk) => acc + textChunk.text.length, 0);
+            const textLen = calculateTokens(textChunkRes.map((item) => item.text))
+            console.log('search text len', textLen, maxResTextSize)
             if (textLen < maxResTextSize) {
                 break
             }

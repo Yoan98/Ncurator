@@ -6,8 +6,6 @@ import { searchDoc } from '@src/utils/search';
 import { IoBookOutline, IoChatbubblesOutline } from "react-icons/io5";
 import { APP_NAME } from '@src/utils/constant';
 import { ChatLlmMessage } from '@src/utils/ChatLlmMessage';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm'
 import { VscSend } from "react-icons/vsc";
 import { CiPause1 } from "react-icons/ci";
 import { TbDatabaseSearch } from "react-icons/tb";
@@ -15,14 +13,12 @@ import Logo from '@src/components/logo';
 import { Tab } from '@src/SidePanel';
 import FileRender from '@src/components/fileRenders';
 import { IndexDBStore } from '@src/utils/IndexDBStore';
-import { DEFAULT_INDEXDB_NAME, RESOURCE_STORE_NAME, Connector } from '@src/utils/constant';
+import { DEFAULT_INDEXDB_NAME, RESOURCE_STORE_NAME, Connector, MessageType } from '@src/utils/constant';
 import type { FileRenderDocument } from '@src/components/fileRenders/index'
-import { IoIosArrowDown, IoIosArrowUp } from "react-icons/io";
 import { getSearchResMaxTextSize } from '@src/utils/tool';
-enum MessageType {
-    USER = 'user',
-    ASSISTANT = 'assistant',
-};
+import MessageList from '@src/components/chat/MessageList';
+
+
 
 
 // 设置项dropdown菜单
@@ -42,6 +38,7 @@ const aiOptions = [
 
 
 const { TextArea } = Input;
+
 
 const ChatSection = ({
     chatHistoryId,
@@ -76,31 +73,6 @@ const ChatSection = ({
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     };
-
-
-    const handleTextChunkClick = async (textChunk: Search.TextItemRes) => {
-        const connector = textChunk.document.connection.connector;
-        if (connector === Connector.Crawl) {
-            window.open(textChunk.document.link, '_blank');
-            return
-        }
-        // resource表读取文件
-        const docResource: DB.RESOURCE = await indexDBRef.current!.get({
-            storeName: RESOURCE_STORE_NAME,
-            key: textChunk.document.resource!.id
-        })
-        const fileUrl = URL.createObjectURL(docResource.file);
-        setFileViewerOpen(true);
-        setFileRenderDocs([{
-            uri: fileUrl,
-            fileType: docResource.type,
-            fileName: docResource.name,
-            metadata: {
-                pageNumber: textChunk.metadata?.loc.pageNumber || 1
-            },
-            file: docResource.file
-        }]);
-    }
 
     const handleSend = async () => {
         if (!llmEngine.current || llmEngineLoadStatus !== 'success') {
@@ -269,8 +241,37 @@ const ChatSection = ({
 
     const handleCancel = useCallback(() => {
         setFileViewerOpen(false)
-    }
-        , [])
+    }, [fileViewerOpen])
+
+    // message doc relate
+    const handleRelateDocExpandClick = useCallback((message: Chat.UiMessage) => {
+        message.isOpenRelateDocs = !message.isOpenRelateDocs;
+        setChatUiMessages([...chatUiMessages]);
+    }, [chatUiMessages])
+    const handleTextChunkClick = useCallback(async (textChunk: Search.TextItemRes) => {
+        const connector = textChunk.document.connection.connector;
+        if (connector === Connector.Crawl) {
+            window.open(textChunk.document.link, '_blank');
+            return
+        }
+        // resource表读取文件
+        const docResource: DB.RESOURCE = await indexDBRef.current!.get({
+            storeName: RESOURCE_STORE_NAME,
+            key: textChunk.document.resource!.id
+        })
+        const fileUrl = URL.createObjectURL(docResource.file);
+        setFileViewerOpen(true);
+        setFileRenderDocs([{
+            uri: fileUrl,
+            fileType: docResource.type,
+            fileName: docResource.name,
+            metadata: {
+                pageNumber: textChunk.metadata?.loc.pageNumber || 1
+            },
+            file: docResource.file
+        }]);
+    }, [chatUiMessages])
+
 
     useEffect(() => {
         async function initIndexDB() {
@@ -322,55 +323,15 @@ const ChatSection = ({
                         <Logo size={40} />
                         <div className='text-lg font-bold'>Start Chat</div>
                     </div>
-                        : chatUiMessages.map((message, index) => (
-                            <div
-                                key={index}
-                                className={`flex ${message.type === MessageType.USER ? 'justify-end' : 'justify-start'
-                                    }`}
-                            >
-                                <div className="msg-wrap flex gap-1 max-w-[90%]">
-                                    {
-                                        message.type === MessageType.ASSISTANT && <Logo />
-                                    }
-                                    <div className="msg-content  max-w-full">
-                                        {
-                                            message.type === MessageType.USER && <div className="mb-2 px-5 py-2.5 rounded-3xl  bg-[#404040] text-sm text-white">{message.content}</div>
-                                        }
-                                        {
-                                            message.type === MessageType.ASSISTANT && <div
-                                                className={`mb-2  chat-markdown  text-gray-800 `}
-                                            >
-                                                <ReactMarkdown children={message.content} remarkPlugins={[remarkGfm]} />
-                                            </div>
-                                        }
-
-                                        {message.type === MessageType.ASSISTANT && message.relateDocs && (
-                                            <div className="p-2  bg-white rounded-lg shadow-sm ">
-                                                <div className="cursor-pointer text-sm mb-1 flex items-center gap-1" onClick={() => {
-                                                    message.isOpenRelateDocs = !message.isOpenRelateDocs;
-                                                    setChatUiMessages([...chatUiMessages])
-                                                }}>
-                                                    <span>
-                                                        Relate Documents
-                                                    </span>
-                                                    {
-                                                        message.isOpenRelateDocs ? <IoIosArrowUp /> : <IoIosArrowDown />
-                                                    }
-                                                </div>
-                                                <div className={`space-y-1 ${message.isOpenRelateDocs ? '' : 'hidden'}`}>
-                                                    {!message.relateDocs.length ?
-                                                        <Empty description="No related documents" />
-                                                        : message.relateDocs!.map((textChunk, idx) => (
-                                                            <div key={idx} className="text-sm cursor-pointer text-blue-500" onClick={() => handleTextChunkClick(textChunk)}>{textChunk.document.name}</div>
-                                                        ))}
-                                                </div>
-                                            </div>)
-                                        }
-                                    </div>
-
-                                </div>
-                            </div>
-                        ))
+                        : <MessageList
+                            chatUiMessages={chatUiMessages}
+                            onExpandClick={
+                                handleRelateDocExpandClick
+                            }
+                            onTextChunkClick={
+                                handleTextChunkClick
+                            }
+                        ></MessageList>
                 }
                 <div ref={messagesEndRef} />
             </div>
