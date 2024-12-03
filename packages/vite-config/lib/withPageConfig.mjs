@@ -25,9 +25,7 @@ export function withPageConfig(config) {
       {
         base: '',
         plugins: [react(), isDev && watchRebuildPlugin({ refresh: true }), isProduction && removeConsole({
-            // 只移除 console.log() 和 debugger，保留其他 console 语句
-            removeConsole: ['log','time','timeEnd'],
-            removeDebugger: true,
+            includes: ['log','time','timeEnd'],
           })],
         build: {
           sourcemap: isDev,
@@ -38,6 +36,9 @@ export function withPageConfig(config) {
           rollupOptions: {
             external: ['chrome'],
           }
+        },
+        esbuild:{
+            drop: isProduction ? ['debugger'] : [],
         },
         define: {
           'process.env.NODE_ENV': isDev ? `"development"` : `"production"`,

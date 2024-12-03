@@ -113,7 +113,6 @@ const SidePanel = () => {
     const [groupedChatHistory, setGroupedChatHistory] = useState<GroupedChatHistory[]>([]);
     const [curChatHistoryId, setCurChatHistoryId] = useState<number>(1);
 
-
     const setHistoryTitleByTab = (tab: Tab) => {
         if (tab === 'search') {
             setHistoryTitle('Search History');

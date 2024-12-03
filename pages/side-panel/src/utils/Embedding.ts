@@ -152,8 +152,6 @@ export class Embedding {
             local_files_only: true
         });
 
-        console.log('Model and tokenizer initialized');
-
         return this.extractor;
     }
     static async encode(texts: string | string[], prefix?: EncodePrefixUnion) {
