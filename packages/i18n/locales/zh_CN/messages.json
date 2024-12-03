@@ -1,10 +1,14 @@
 {
     "extensionDescription": {
-        "description": "Extension description",
-        "message": "开发中"
+        "message": "本地采集数据（文件、网页等），本地存储与智能搜索，通过本地 AI + 您的问题 + 您的本地数据，实现智能分析回答，确保数据安全，提升工作效率"
     },
     "extensionName": {
-        "description": "Extension name",
-        "message": "YCurator"
+        "message": "BeCurator: Privacy-Focused AI Assistant with Your Data "
+    },
+    "Resource": {
+        "message": "数据"
+    },
+    "LLMModel": {
+        "message": "AI模型"
     }
 }

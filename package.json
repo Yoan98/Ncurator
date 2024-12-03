@@ -1,12 +1,7 @@
 {
-    "name": "chrome-extension-boilerplate-react-vite",
-    "version": "0.3.3",
-    "description": "chrome extension boilerplate",
-    "license": "MIT",
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/Jonghakseo/chrome-extension-boilerplate-react-vite.git"
-    },
+    "name": "BeCurator",
+    "version": "0.1.0",
+    "description": "BeCurator: Privacy-Focused AI Assistant with Your Data",
     "type": "module",
     "scripts": {
         "clean:bundle": "rimraf dist && rimraf dist-zip && turbo clean:bundle",

@@ -8,17 +8,16 @@ import { CHAT_SYSTEM_PROMPT, KNOWLEDGE_USER_PROMPT } from '@src/config'
 export async function checkWebGPU() {
     //@ts-ignore
     if (!navigator.gpu) {
-        console.log("WebGPU is not supported.");
+        console.error("WebGPU is not supported.");
         return false;
     }
     try {
         //@ts-ignore
         const adapter = await navigator.gpu.requestAdapter();
         if (adapter) {
-            console.log("WebGPU is available and the adapter was successfully created.");
             return true;
         } else {
-            console.log("WebGPU is supported but no suitable adapter was found.");
+            console.error("WebGPU is supported but no suitable adapter was found.");
             return false;
         }
     } catch (error) {

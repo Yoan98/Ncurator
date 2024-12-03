@@ -219,6 +219,10 @@ const ChatSection = ({
             });
         }
 
+        // 最多只保留30条历史记录
+        if (chatLocalHistory.length > 30) {
+            chatLocalHistory.splice(30);
+        }
         localStorage.setItem('chatLocalHistory', JSON.stringify(chatLocalHistory));
 
         onHistoryUpdate(chatLocalHistory);

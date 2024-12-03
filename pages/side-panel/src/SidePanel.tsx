@@ -16,6 +16,7 @@ import { CiEdit } from "react-icons/ci";
 
 import { useGlobalContext } from '@src/provider/global';
 import dayjs from '@src/utils/dayjsGlobal';
+import { t } from '@extension/i18n';
 
 
 interface GroupedChatHistory {
@@ -27,12 +28,12 @@ interface GroupedChatHistory {
 const settingItems: MenuProps['items'] = [
     {
         key: 1,
-        label: 'Resource',
+        label: t('Resource'),
         icon: <IoDocumentAttachOutline size={18} />,
     },
     {
         key: 2,
-        label: 'LLM Model',
+        label: t('LLMModel'),
         icon: <RiRobot2Line size={18} />,
     }
 ];

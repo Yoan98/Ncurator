@@ -129,11 +129,12 @@ export const storageTextChunkToLSH = async ({ textChunkList, batchEmbeddingTextL
 
     // 将LSH索引存储到indexDB
     const LSHTables = await lshIndex.addVectors(vectors);
+    const lshIndexData: DB.LSH_INDEX = {
+        table: LSHTables
+    }
     const lshIndexId = await store.add({
         storeName: constant.LSH_INDEX_STORE_NAME,
-        data: {
-            lsh_table: LSHTables
-        },
+        data: lshIndexData,
     });
 
     return lshIndexId as number

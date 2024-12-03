@@ -14,5 +14,8 @@
     "@extension/tsconfig": "workspace:*",
     "@vitejs/plugin-react-swc": "^3.6.0",
     "deepmerge": "^4.3.1"
+  },
+  "dependencies": {
+    "vite-plugin-remove-console": "^2.2.0"
   }
 }

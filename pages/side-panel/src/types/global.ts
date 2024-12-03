@@ -79,8 +79,8 @@ namespace DB {
         }[];  // 向量集合
     }
     export interface LSH_INDEX {
-        id: number;
-        lsh_table: LSHTables;
+        id?: number;
+        table: LSHTables;
     }
     // document表
     export interface DOCUMENT {

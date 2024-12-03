@@ -9,7 +9,7 @@ import lunr from 'lunr';
 const searchLshIndex = async (queryVectorData: Float32Array, lshIndexStoreList: DB.LSH_INDEX[], localProjections: DB.LSH_PROJECTION['data']) => {
     const searchedRes: Search.LshItemRes[] = []
     for (const lshIndexData of lshIndexStoreList) {
-        const lshIndex = new LSHIndex({ dimensions: config.EMBEDDING_HIDDEN_SIZE, localProjections, tables: lshIndexData.lsh_table });
+        const lshIndex = new LSHIndex({ dimensions: config.EMBEDDING_HIDDEN_SIZE, localProjections, tables: lshIndexData.table });
 
         // 查找相似句子
         const res = lshIndex.findSimilar({

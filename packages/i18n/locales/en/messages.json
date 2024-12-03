@@ -1,13 +1,17 @@
 {
     "extensionDescription": {
-        "description": "Extension description",
-        "message": "developing"
+        "message": "Collect data locally (files, webpages, etc.), store and search locally, and use local AI + your questions + your local data to provide smart analysis and answers, ensuring data security and improving work efficiency"
     },
     "extensionName": {
-        "description": "YCurator",
-        "message": "Chrome extension"
+        "message": "BeCurator: Privacy-Focused AI Assistant with Your Data"
     },
     "loading": {
         "message": "Loading..."
+    },
+    "Resource": {
+        "message": "Resource"
+    },
+    "LLMModel": {
+        "message": "LLM Model"
     }
 }
