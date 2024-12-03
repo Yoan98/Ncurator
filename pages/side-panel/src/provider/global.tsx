@@ -4,7 +4,7 @@ import * as constant from '@src/utils/constant';
 import type { ProgressProps } from 'antd';
 import { Progress, message } from 'antd';
 import { WebWorkerMLCEngine } from "@mlc-ai/web-llm";
-
+import { t } from '@extension/i18n';
 const pageList = ['/main', '/resource', '/llm-set'];
 
 interface GlobalContextValue {
@@ -60,11 +60,11 @@ const GlobalContext = createContext(defaultContextValue);
 const LlmLoaderProgress = ({ progress, status, onReloadClick, onGoToSetupCLick }: { progress: number, status: ProgressProps['status'], onReloadClick: () => void, onGoToSetupCLick: () => void }) => {
     let ProgressTipEle
     if (status === 'active') {
-        ProgressTipEle = <div className="text-text-400">Loading LLM Model ...</div>
+        ProgressTipEle = <div className="text-text-400">{t('loading_llm_model')} ...</div>
     } else if (status === 'exception') {
-        ProgressTipEle = <div className='text-text-error cursor-pointer' onClick={onReloadClick}>Load LLM Model Error, click try again</div>
+        ProgressTipEle = <div className='text-text-error cursor-pointer' onClick={onReloadClick}>{t('load_llm_model_error')}, {t('click_try_again')}</div>
     } else if (status === 'success') {
-        ProgressTipEle = <div className="text-text-success">Load LLM Model Success</div>
+        ProgressTipEle = <div className="text-text-success">{t('load_llm_model_success')}</div>
     }
 
 
@@ -73,7 +73,7 @@ const LlmLoaderProgress = ({ progress, status, onReloadClick, onGoToSetupCLick }
             {
                 !status
                     ?
-                    <div className='text-text-error cursor-pointer' onClick={onGoToSetupCLick}>Haven't find your LLM model,click to set up.</div>
+                    <div className='text-text-error cursor-pointer' onClick={onGoToSetupCLick}>{t('not_found_llm_model')},{t('click_to_setup')}.</div>
                     :
                     <div className='flex flex-col items-end'>
                         <Progress percent={progress} status={status} type="circle" size={30} />
@@ -111,7 +111,7 @@ export const GlobalProvider = ({ children }) => {
         if (llmEngineLoadStatus === 'active') {
             return {
                 status: 'Fail',
-                message: 'LLM is loading, please wait a moment',
+                message: t('llm_loading_warning'),
                 engine: null
             }
         }
@@ -132,7 +132,7 @@ export const GlobalProvider = ({ children }) => {
                 setLlmEngineLoadStatus(undefined);
                 return {
                     status: 'Fail',
-                    message: 'Haven\'t find default model',
+                    message: t('not_found_llm_model'),
                     engine: null
                 }
             }
@@ -155,7 +155,7 @@ export const GlobalProvider = ({ children }) => {
 
             return {
                 status: 'Success',
-                message: 'Load LLM model success',
+                message: t('load_llm_model_success'),
                 engine: engine
             };
         } catch (error) {
@@ -163,7 +163,7 @@ export const GlobalProvider = ({ children }) => {
             setLlmEngineLoadStatus('exception');
             return {
                 status: 'Fail',
-                message: 'Load LLM model error',
+                message: t('load_llm_model_error'),
                 engine: null
             }
         }
@@ -175,7 +175,7 @@ export const GlobalProvider = ({ children }) => {
         if (llmEngineLoadStatus === 'active') {
             return {
                 status: 'Fail',
-                message: 'LLM is loading, please wait a moment',
+                message: t('llm_loading_warning'),
                 engine: null
             }
         }
@@ -193,7 +193,7 @@ export const GlobalProvider = ({ children }) => {
 
         return {
             status: 'Success',
-            message: 'Reload LLM model success',
+            message: t('load_llm_model_success'),
             engine: llmEngine.current
         };
 

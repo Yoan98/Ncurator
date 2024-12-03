@@ -7,6 +7,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import remarkGfm from 'remark-gfm';
 import { Empty } from 'antd';
 import { MessageType } from '@src/utils/constant';
+import { t } from '@extension/i18n';
 
 interface MessageListProps {
     chatUiMessages: Chat.UiMessage[];
@@ -68,7 +69,7 @@ const MessageList: React.FC<MessageListProps> = React.memo(({
                                             onExpandClick(message);
                                         }}
                                     >
-                                        <span>Relate Documents</span>
+                                        <span>{t('component.chat.message_list.relate_document')}</span>
                                         {message.isOpenRelateDocs ? (
                                             <IoIosArrowUp />
                                         ) : (

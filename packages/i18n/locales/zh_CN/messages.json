@@ -10,5 +10,200 @@
     },
     "LLMModel": {
         "message": "AI模型"
+    },
+    "searchTab": {
+        "message": "搜索"
+    },
+    "chatTab": {
+        "message": "聊天"
+    },
+    "component.search.textarea.placeholder": {
+        "message": "基于您的数据搜索..."
+    },
+    "component.search.select.placeholder": {
+        "message": "全部数据"
+    },
+    "component.search.select.ai_answer": {
+        "message": "AI 回答"
+    },
+    "component.search.searching": {
+        "message": "搜索..."
+    },
+    "component.search.select.results": {
+        "message": "搜索结果"
+    },
+    "component.search.message.ai_engine_not_ready": {
+        "message": "AI引擎还未加载完毕"
+    },
+    "component.search.message.please_input_search": {
+        "message": "请输入搜索内容"
+    },
+    "component.chat.start_chat": {
+        "message": "快问我,快"
+    },
+    "component.chat.textarea.knowledge.placeholder": {
+        "message": "基于您的数据,询问$1问题"
+    },
+    "component.chat.textarea.chat.placeholder": {
+        "message": "快给$1发消息"
+    },
+    "component.chat.select.placeholder": {
+        "message": "全部数据"
+    },
+    "component.chat.knowledge": {
+        "message": "知识库"
+    },
+    "component.chat.chat": {
+        "message": "聊天"
+    },
+    "component.chat.message.ai_engine_not_ready": {
+        "message": "AI引擎还未加载完毕"
+    },
+    "component.chat.message.please_input_question": {
+        "message": "请输入问题"
+    },
+    "component.chat.message_list.relate_document": {
+        "message": "相关文档"
+    },
+    "component.resource.problem_document": {
+        "message": "该文档内容太少,可能有问题"
+    },
+    "component.resource.setting.building_wait": {
+        "message": "正在构建文档,请稍等"
+    },
+    "component.resource.setting.edit_resource": {
+        "message": "编辑该数据"
+    },
+    "component.resource.setting.del_data": {
+        "message": "批量删除数据"
+    },
+    "component.resource.setting.select_data": {
+        "message": "请先选择数据"
+    },
+    "fail": {
+        "message": "失败"
+    },
+    "success": {
+        "message": "成功"
+    },
+    "building": {
+        "message": "构建中"
+    },
+    "please_select_bookmarks": {
+        "message": "请选择浏览器的书签"
+    },
+    "please_select_file": {
+        "message": "请选择文件"
+    },
+    "resource": {
+        "message": "数据"
+    },
+    "add_resource": {
+        "message": "新增数据"
+    },
+    "document_building_tip": {
+        "message": "文档构建中,请勿关闭页面"
+    },
+    "click_drag_file_tip": {
+        "message": "点击或拖拽文件到此处"
+    },
+    "operation_data_safe_tip": {
+        "message": "所有数据与操作都您本地进行"
+    },
+    "resource_type": {
+        "message": "数据类型"
+    },
+    "please_select_resource_type": {
+        "message": "请选择数据类型"
+    },
+    "file": {
+        "message": "文件"
+    },
+    "web_crawl": {
+        "message": "网页爬取"
+    },
+    "import": {
+        "message": "导入"
+    },
+    "cancel": {
+        "message": "取消"
+    },
+    "import_your_browser_bookmark": {
+        "message": "导入您的浏览器书签"
+    },
+    "web_url_placeholder": {
+        "message": "请输入网址"
+    },
+    "add_crawl": {
+        "message": "新增爬取"
+    },
+    "delete_confirm": {
+        "message": "确认删除这些数据吗"
+    },
+    "wait_document_build_warning": {
+        "message": "请等待web页面构建完成"
+    },
+    "delete_success": {
+        "message": "删除成功"
+    },
+    "add_resource_success": {
+        "message": "添加数据成功"
+    },
+    "edit_resource_success": {
+        "message": "编辑数据成功"
+    },
+    "better_not_exceed": {
+        "message": "最好别超过"
+    },
+    "loaded_model": {
+        "message": "已加载模型"
+    },
+    "unloaded_model": {
+        "message": "未加载模型"
+    },
+    "no_unloaded_model": {
+        "message": "无未加载模型"
+    },
+    "no_loaded_model": {
+        "message": "无已加载模型"
+    },
+    "llm_setup": {
+        "message": "语言模型配置"
+    },
+    "llm_desc": {
+        "message": "语言模型是一个能够理解你的文本和生成文本的一项技术，不同模型的理解与生成质量会有不同"
+    },
+    "download_model_again_wanning": {
+        "message": "已有模型正在下载中,请稍后再试"
+    },
+    "download_model_success": {
+        "message": "下载模型成功"
+    },
+    "llm_loading_warning": {
+        "message": "有模型正在加载中,请稍后再试"
+    },
+    "setting_default_model": {
+        "message": "设置默认模型"
+    },
+    "upload_model_success": {
+        "message": "上传模型成功"
+    },
+    "loading_llm_model": {
+        "message": "加载语言模型中"
+    },
+    "load_llm_model_error": {
+        "message": "加载语言模型失败"
+    },
+    "click_try_again": {
+        "message": "点击重试"
+    },
+    "load_llm_model_success": {
+        "message": "加载语言模型成功"
+    },
+    "not_found_llm_model": {
+        "message": "未找到语言模型"
+    },
+    "click_to_setup": {
+        "message": "点击设置"
     }
 }

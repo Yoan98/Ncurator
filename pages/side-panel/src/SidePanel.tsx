@@ -83,7 +83,7 @@ const ToggleSwitch = ({
             >
                 <CiSearch size={16} className="mr-2" />
                 <div className="flex  items-center">
-                    Search
+                    {t('searchTab')}
                 </div>
             </button>
             <button
@@ -95,7 +95,7 @@ const ToggleSwitch = ({
             >
                 <FaRocketchat size={16} className="mr-2" />
                 <div className="items-end flex">
-                    Chat
+                    {t('chatTab')}
                 </div>
             </button>
         </div>

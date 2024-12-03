@@ -9,6 +9,7 @@ import { useGlobalContext } from '@src/provider/global';
 import { downloadLlmModelFiles, uploadByCacheFiles } from '@src/utils/tool';
 import { LLM_MODEL_LIST } from '@src/config';
 import { modelLibURLPrefix, modelVersion } from "@mlc-ai/web-llm";
+import { t } from '@extension/i18n';
 
 interface ModelItem {
     name: string,
@@ -63,7 +64,7 @@ const LlmSetup = () => {
 
     const handleDownLoadLlm = async (model: ModelItem) => {
         if (allLlmModels.some((item) => item.loadingStatus === 'active')) {
-            message.warning('A model is downloading. Please wait a moment');
+            message.warning(t('download_model_again_wanning'));
             return;
         }
 
@@ -111,7 +112,7 @@ const LlmSetup = () => {
 
             await downloadLlmModelFiles(model.modelId, modelLibURLPrefix, modelVersion, model.wasmFileName, initProgressCallback);
 
-            message.success('Download model success');
+            message.success(t('download_model_success'));
         } catch (error) {
             console.error("load llm error", error);
             message.error('Load model failed ' + error.message);
@@ -135,11 +136,11 @@ const LlmSetup = () => {
     }
     const handleSetDefaultClick = async (model: ModelItem) => {
         if (llmEngineLoadStatus === 'active') {
-            message.warning('LLM model is loading, please wait a moment');
+            message.warning(t('llm_loading_warning'));
             return;
         }
 
-        message.loading('Setting default model');
+        message.loading(t('setting_default_model'));
 
         const loadRes = await reloadLlmModal(model.modelId);
         if (loadRes.status === 'Fail') {
@@ -164,7 +165,7 @@ const LlmSetup = () => {
     const handleUploadConfirm = async () => {
         if (!curUploadModal) return;
         if (!uploadFileList.length) {
-            message.warning('Please upload model file');
+            message.warning(t('please_select_file'));
             return;
         }
 
@@ -174,7 +175,7 @@ const LlmSetup = () => {
             const files = uploadFileList.map((file) => file.originFileObj!);
             await uploadByCacheFiles(curUploadModal.modelId, files, modelLibURLPrefix, modelVersion)
 
-            message.success('Upload model success');
+            message.success(t('upload_model_success'));
             setUploadModalOpen(false);
 
             setAllLlmModels((preModels) => {
@@ -294,35 +295,35 @@ const LlmSetup = () => {
             <div className="title flex border-b py-5 items-end gap-1 mb-4">
                 <div className='flex items-center gap-1 '>
                     <RiRobot2Line size={25} />
-                    <span className='text-lg font-bold'>LLM Setup</span>
+                    <span className='text-lg font-bold'>{t('llm_setup')}</span>
                 </div>
-                <Tooltip placement="top" title='语言模型是一个能够理解你的文本和生成文本的一项技术，不同模型的理解与生成质量会有不同' >
+                <Tooltip placement="top" title={t('llm_desc')} >
                     <span>
                         <CiSquareQuestion size={20} className='cursor-pointer' />
                     </span>
                 </Tooltip>
             </div>
 
-            <div className='text-base font-bold mb-2 '>Loaded Model</div>
+            <div className='text-base font-bold mb-2 '>{t('loaded_model')}</div>
             <div className="loaded-models mb-3 space-y-2">
                 {
-                    !loadedModels.length ? <Empty description="No loaded model" /> : loadedModels
+                    !loadedModels.length ? <Empty description={t('no_loaded_model')} /> : loadedModels
                 }
             </div>
 
-            <div className='text-base font-bold mt-4'>Unloaded Model</div>
-            <div className="text-xs text-text-500 mb-2">模型默认将从huggingface下载，如网速受限，可查看此链接步骤，下载模型到本地再上传</div>
+            <div className='text-base font-bold mt-4'>{t('unloaded_model')}</div>
+            {/* <div className="text-xs text-text-500 mb-2">模型默认将从huggingface下载，如网速受限，可查看此链接步骤，下载模型到本地再上传</div> */}
             <div className="unloaded-models mb-3 space-y-2">
                 {
-                    !unloadedModels.length ? <Empty description="No unloaded model" /> : unloadedModels
+                    !unloadedModels.length ? <Empty description={t('no_unloaded_model')} /> : unloadedModels
                 }
             </div>
 
             <Modal confirmLoading={uploadLoading} cancelButtonProps={{ loading: uploadLoading }} maskClosable={false} centered title='Upload model file' open={uploadModalOpen} onOk={handleUploadConfirm} onCancel={() => { setUploadModalOpen(false) }}>
                 <Dragger  {...uploadProps} fileList={uploadFileList} >
-                    <p className="ant-upload-text">Click or drag model file to this area</p>
+                    <p className="ant-upload-text">{t('click_drag_file_tip')}</p>
                     <p className="ant-upload-hint">
-                        All the data will be storage in your local database
+                        {t('operation_data_safe_tip')}
                     </p>
                 </Dragger>
             </Modal>

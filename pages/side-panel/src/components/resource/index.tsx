@@ -11,7 +11,7 @@ import * as config from '@src/config';
 import { IoAdd, IoClose } from "react-icons/io5";
 import { MdDeleteOutline } from "react-icons/md";
 import { removeDocumentsInConnection, addFilesInConnection, buildDocsIndexInConnection, addCrawlInConnection } from '@src/utils/build'
-
+import { t } from '@extension/i18n';
 
 const { Search } = Input;
 const { Dragger } = Upload;
@@ -39,7 +39,7 @@ const columns: TableColumnsType<DataType> = [
             const chunkLen = record.text_chunk_id_range.to - record.text_chunk_id_range.from + 1;
             const isErrorChunk = chunkLen < 10 && record.status == constant.DocumentStatus.Success;
             return (
-                <span className={`${isErrorChunk && 'text-[gray]'} `} title={`${isErrorChunk ? 'The text of this document too less, may be problem' : record.name}`}>{record.name}</span>
+                <span className={`${isErrorChunk && 'text-[gray]'} `} title={`${isErrorChunk ? t('component.resource.problem_document') : record.name}`}>{record.name}</span>
             )
         },
         width: '65%'
@@ -151,8 +151,8 @@ const Resource = () => {
                     }}></IoAdd>
                 <span>
                     <MdDeleteOutline className={`${(!displayConnection.selectedRowKeys.length || hasBuildingDoc) && 'opacity-20'}`} size={20} title={
-                        hasBuildingDoc ? 'Building document, please wait' :
-                            displayConnection.selectedRowKeys.length ? 'Delete batch data' : 'Please select data first'}
+                        hasBuildingDoc ? t('component.resource.setting.building_wait') :
+                            displayConnection.selectedRowKeys.length ? t('component.resource.setting.del_data') : t('component.resource.setting.select_data')}
                         onClick={(event) => {
                             event.stopPropagation();
                             if (!displayConnection.selectedRowKeys.length || hasBuildingDoc) {
@@ -168,7 +168,7 @@ const Resource = () => {
 
                 <IoSettingsOutline
                     className={`${hasBuildingDoc && 'opacity-20'}`}
-                    title={hasBuildingDoc ? 'Building document, please wait' : 'Edit Resource'}
+                    title={hasBuildingDoc ? t('component.resource.setting.building_wait') : t('component.resource.setting.edit_resource')}
                     size={20}
                     onClick={(event) => {
                         event.stopPropagation();
@@ -184,7 +184,7 @@ const Resource = () => {
     }
     const CollapseItems: CollapseProps['items'] = displayConnectionList.map((item) => {
         const documentTableList = item.documentList.map((doc) => {
-            const statusText = doc.status == constant.DocumentStatus.Fail ? 'Fail' : doc.status == constant.DocumentStatus.Success ? 'Success' : 'Building';
+            const statusText = doc.status == constant.DocumentStatus.Fail ? t('fail') : doc.status == constant.DocumentStatus.Success ? t('success') : t('building');
             return {
                 key: doc.id!,
                 name: doc.name,
@@ -237,7 +237,7 @@ const Resource = () => {
         showCheckedStrategy: SHOW_CHILD,
         labelInValue: true,
         treeNodeLabelProp: 'outData',
-        placeholder: 'Please select favorite',
+        placeholder: t('please_select_bookmarks'),
         style: {
             width: '100%',
         },
@@ -328,7 +328,7 @@ const Resource = () => {
     const handleDocDelConfirm = async (event) => {
         const hasBuildDoc = checkHasBuildingDocInConnection(curConnection!.id!);
         if (hasBuildDoc) {
-            message.warning('Please wait for the document builded.');
+            message.warning(t('wait_document_build_warning'));
             return;
         }
 
@@ -342,7 +342,7 @@ const Resource = () => {
 
             await fetchConnectionList();
 
-            message.success('Delete Success');
+            message.success(t('delete_success'));
         } catch (error) {
             console.error('handleDocDelConfirm error', error)
             message.error('Delete Error' + error);
@@ -356,7 +356,7 @@ const Resource = () => {
         // 因为indexdb更新数据整体更新,没办法只更新某一个字段
         const hasBuildDoc = checkHasBuildingDocInConnection(connectionId);
         if (hasBuildDoc) {
-            message.warning('Please wait for the document builded.');
+            message.warning(t('wait_document_build_warning'));
             return;
         }
 
@@ -380,7 +380,7 @@ const Resource = () => {
     }
     const handleUploadConfirm = async () => {
         if (!uploadFileList.length) {
-            message.warning('Please upload file');
+            message.warning(t('please_select_file'));
             return;
         }
         setUploadLoading(true);
@@ -402,7 +402,7 @@ const Resource = () => {
             await fetchConnectionList();
         } catch (error) {
             console.error('handleUploadConfirm error', error)
-            message.error('Upload Error' + error);
+            message.error('Build Error' + error);
         }
 
 
@@ -452,7 +452,7 @@ const Resource = () => {
         // 因为indexdb更新数据整体更新,没办法只更新某一个字段
         const hasBuildDoc = checkHasBuildingDocInConnection(connectionId);
         if (hasBuildDoc) {
-            message.warning('Please wait for the document builded.');
+            message.warning(t('wait_document_build_warning'));
             return;
         }
 
@@ -505,7 +505,7 @@ const Resource = () => {
             }
 
             await fetchConnectionList();
-            message.success(resourceScene === 'add' ? 'Add Resource Success' : 'Edit Resource Success');
+            message.success(resourceScene === 'add' ? t('add_resource_success') : t('edit_resource_success'));
         } catch (error) {
             console.error('handleOperateResourceConfirm error', error)
             message.error('Operation Error' + error);
@@ -558,11 +558,11 @@ const Resource = () => {
     const handleImportConfirm = async () => {
         const maxCrawlNum = 30;
         if (selectFavoriteData.length > 30) {
-            message.warning(`It's better not exceed ${maxCrawlNum}`);
+            message.warning(`${t('better_not_exceed')} ${maxCrawlNum}`);
             return;
         }
         if (selectFavoriteData.length == 0) {
-            message.warning('Please select favorite');
+            message.warning(t('please_select_bookmarks'));
             return;
         }
         const crawlList = selectFavoriteData.map((item) => {
@@ -605,13 +605,13 @@ const Resource = () => {
             <div className="title flex items-center justify-between border-b">
                 <div className='flex items-center  gap-1 py-5'>
                     <IoDocumentAttachOutline size={25} />
-                    <span className='text-lg font-bold'>Resource</span>
+                    <span className='text-lg font-bold'>{t('resource')}</span>
 
                 </div>
 
                 <div className="flex items-center gap-3">
                     <IoReload size={18} className={`cursor-pointer ${connectionListLoading ? 'animate-spin' : ''} `} onClick={fetchConnectionList} />
-                    <Button type="primary" onClick={handleAddResource}>Add Resource</Button>
+                    <Button type="primary" onClick={handleAddResource}>{t('add_resource')}</Button>
                 </div>
             </div>
 
@@ -620,7 +620,7 @@ const Resource = () => {
                     setSearchValue(e.target.value);
                 }} enterButton size="large" />
                 {
-                    <div className={`text-right text-xs text-text-500 ${checkHasBuildingDoc() ? 'visible' : 'invisible'}`}>Document is building, please don't close App before finish</div>
+                    <div className={`text-right text-xs text-text-500 ${checkHasBuildingDoc() ? 'visible' : 'invisible'}`}>{t('document_building_tip')}</div>
                 }
             </div>
 
@@ -641,9 +641,9 @@ const Resource = () => {
             <Modal confirmLoading={uploadLoading} cancelButtonProps={{ loading: uploadLoading }} maskClosable={false} centered title='Upload File' open={uploadModalOpen} onOk={handleUploadConfirm} onCancel={() => { setUploadModalOpen(false) }}>
 
                 <Dragger  {...uploadProps} fileList={uploadFileList} >
-                    <p className="ant-upload-text">Click or drag file to this area</p>
+                    <p className="ant-upload-text">{t('click_drag_file_tip')}</p>
                     <p className="ant-upload-hint">
-                        All the data will be storage in your local database
+                        {t('operation_data_safe_tip')}
                     </p>
                 </Dragger>
             </Modal>
@@ -660,13 +660,13 @@ const Resource = () => {
                     </Form.Item>
                     <Form.Item
                         layout="vertical"
-                        label="Resource Type"
+                        label={t('resource_type')}
                         name="connector"
                         rules={[{ required: true }]}
                     >
-                        <Select disabled={resourceScene === 'edit'} placeholder="Select resource type">
-                            <Option value={1}>File</Option>
-                            <Option value={2}>Web Crawl</Option>
+                        <Select disabled={resourceScene === 'edit'} placeholder={t('please_select_resource_type')}>
+                            <Option value={1}>{t('file')}</Option>
+                            <Option value={2}>{t('web_crawl')}</Option>
                         </Select>
                     </Form.Item>
                 </Form>
@@ -681,11 +681,11 @@ const Resource = () => {
                             <TreeSelect {...tProps} />
 
                             <div className='flex items-center gap-1 justify-end'>
-                                <Button type='primary' size='small' onClick={handleImportConfirm}>Import</Button>
-                                <Button size='small' onClick={() => { setSelectFavoriteVisible(false) }}>Cancel</Button>
+                                <Button type='primary' size='small' onClick={handleImportConfirm}>{t('import')}</Button>
+                                <Button size='small' onClick={() => { setSelectFavoriteVisible(false) }}>{t('cancel')}</Button>
                             </div>
                         </div> :
-                        <div className='text-right text-sm text-blue-500 cursor-pointer mb-2' onClick={handleImportFavoriteClick}>Import Your Browser Bookmark?</div>
+                        <div className='text-right text-sm text-blue-500 cursor-pointer mb-2' onClick={handleImportFavoriteClick}>{t('import_your_browser_bookmark')}?</div>
                 }
                 <Form
                     form={crawlForm}
@@ -717,7 +717,7 @@ const Resource = () => {
                                                 name={[field.name, 'link']}
                                                 rules={[{ required: true }, { type: 'url' }]}
                                             >
-                                                <Input placeholder='The web url you want to crawl' />
+                                                <Input placeholder={t('web_url_placeholder')} />
                                             </Form.Item>
 
                                         </Card>
@@ -725,7 +725,7 @@ const Resource = () => {
                                     ))
                                 }
 
-                                < Button type="dashed" onClick={() => add()} block>+ Add Crawl</Button>
+                                < Button type="dashed" onClick={() => add()} block>+ {t('add_crawl')}</Button>
                             </div>
                         )}
                     </Form.List>
@@ -742,7 +742,7 @@ const Resource = () => {
                 onCancel={() => { setDelConfirmModalOpen(false) }}
 
             >
-                <p>Are you sure to delete these items?</p>
+                <p>{t('delete_confirm')}?</p>
 
             </Modal>
         </div >

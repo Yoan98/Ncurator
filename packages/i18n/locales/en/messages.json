@@ -13,5 +13,200 @@
     },
     "LLMModel": {
         "message": "LLM Model"
+    },
+    "searchTab": {
+        "message": "Search"
+    },
+    "chatTab": {
+        "message": "Chat"
+    },
+    "component.search.textarea.placeholder": {
+        "message": "Search something based on the resource..."
+    },
+    "component.search.select.placeholder": {
+        "message": "All Resources"
+    },
+    "component.search.select.ai_answer": {
+        "message": "AI Answer"
+    },
+    "component.search.searching": {
+        "message": "Searching..."
+    },
+    "component.search.select.results": {
+        "message": "Results"
+    },
+    "component.search.message.ai_engine_not_ready": {
+        "message": "AI engine is not ready"
+    },
+    "component.search.message.please_input_search": {
+        "message": "Please input the search content"
+    },
+    "component.chat.start_chat": {
+        "message": "Start Chat"
+    },
+    "component.chat.textarea.knowledge.placeholder": {
+        "message": "Ask $1 based on your resource"
+    },
+    "component.chat.textarea.chat.placeholder": {
+        "message": "Message with $1"
+    },
+    "component.chat.select.placeholder": {
+        "message": "All Resources"
+    },
+    "component.chat.knowledge": {
+        "message": "Knowledge"
+    },
+    "component.chat.chat": {
+        "message": "Chat"
+    },
+    "component.chat.message.ai_engine_not_ready": {
+        "message": "AI engine is not ready"
+    },
+    "component.chat.message.please_input_question": {
+        "message": "Please input the question"
+    },
+    "component.chat.message_list.relate_document": {
+        "message": "Relate Documents"
+    },
+    "component.resource.problem_document": {
+        "message": "The text of this document too less, may be problem"
+    },
+    "component.resource.setting.building_wait": {
+        "message": "Building document, please wait"
+    },
+    "component.resource.setting.edit_resource": {
+        "message": "Edit Resource"
+    },
+    "component.resource.setting.del_data": {
+        "message": "Delete batch data"
+    },
+    "component.resource.setting.select_data": {
+        "message": "Please select data first"
+    },
+    "fail": {
+        "message": "Fail"
+    },
+    "success": {
+        "message": "Success"
+    },
+    "building": {
+        "message": "Building"
+    },
+    "please_select_bookmarks": {
+        "message": "Please select browser bookmarks"
+    },
+    "please_select_file": {
+        "message": "Please select file"
+    },
+    "resource": {
+        "message": "Resource"
+    },
+    "add_resource": {
+        "message": "Add Resource"
+    },
+    "document_building_tip": {
+        "message": "Document is building, please don't close App before finish"
+    },
+    "click_drag_file_tip": {
+        "message": "Click or drag file to this area"
+    },
+    "operation_data_safe_tip": {
+        "message": "All the data and operation only in your local device"
+    },
+    "resource_type": {
+        "message": "Resource Type"
+    },
+    "please_select_resource_type": {
+        "message": "Please select resource Type"
+    },
+    "file": {
+        "message": "File"
+    },
+    "web_crawl": {
+        "message": "Web Crawl"
+    },
+    "import": {
+        "message": "Import"
+    },
+    "cancel": {
+        "message": "Cancel"
+    },
+    "import_your_browser_bookmark": {
+        "message": "import_your_browser_bookmark"
+    },
+    "web_url_placeholder": {
+        "message": "The web url you want to crawl"
+    },
+    "add_crawl": {
+        "message": "Add Crawl"
+    },
+    "delete_confirm": {
+        "message": "Are you sure to delete these items"
+    },
+    "wait_document_build_warning": {
+        "message": "Please wait for the document builded"
+    },
+    "delete_success": {
+        "message": "Delete Success"
+    },
+    "add_resource_success": {
+        "message": "Add Resource Success"
+    },
+    "edit_resource_success": {
+        "message": "Edit Resource Success"
+    },
+    "better_not_exceed": {
+        "message": "Better not exceed"
+    },
+    "loaded_model": {
+        "message": "Loaded Model"
+    },
+    "unloaded_model": {
+        "message": "Unloaded Model"
+    },
+    "no_unloaded_model": {
+        "message": "No unloaded model"
+    },
+    "no_loaded_model": {
+        "message": "No loaded model"
+    },
+    "llm_setup": {
+        "message": "LLM Setup"
+    },
+    "llm_desc": {
+        "message": "LLM is a technology that can understand and generate text, and the quality of understanding and generation may vary across different models"
+    },
+    "download_model_again_wanning": {
+        "message": "A model is downloading. Please wait a moment"
+    },
+    "download_model_success": {
+        "message": "Download Model Success"
+    },
+    "llm_loading_warning": {
+        "message": "LLM model is loading, please wait a moment"
+    },
+    "setting_default_model": {
+        "message": "setting default model"
+    },
+    "upload_model_success": {
+        "message": "Download Model Success"
+    },
+    "loading_llm_model": {
+        "message": "Loading LLM Model"
+    },
+    "load_llm_model_error": {
+        "message": "Load LLM Model Error"
+    },
+    "load_llm_model_success": {
+        "message": "Load LLM Model Success"
+    },
+    "click_try_again": {
+        "message": "Click to try again"
+    },
+    "not_found_llm_model": {
+        "message": "Not found LLM Model"
+    },
+    "click_to_setup": {
+        "message": "Click to setup"
     }
 }
