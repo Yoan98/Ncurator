@@ -20,7 +20,7 @@ interface ModelItem {
     loadingStatus: ProgressProps['status'],
     loadingPercent: number
     vramRequiredMB: number
-    modelSizeType: 'Bigger' | 'Smaller'
+    modelSizeType: 1 | 2
 }
 
 const DEFAULT_META_DATA = {
@@ -32,7 +32,7 @@ const DEFAULT_META_DATA = {
 const DEFAULT_MODEL_LIST: ModelItem[] = LLM_MODEL_LIST.map((model) => {
     return {
         ...model,
-        modelSizeType: model.modelSizeType as 'Bigger' | 'Smaller',
+        modelSizeType: model.modelSizeType as 1 | 2,
         ...DEFAULT_META_DATA
     }
 }
@@ -218,6 +218,14 @@ const LlmSetup = () => {
         })
     }
 
+    const getModelSizeText = (modelSizeType: 1 | 2) => {
+        if (modelSizeType === 1) {
+            return t('large');
+        } else {
+            return t('medium');
+        }
+    }
+
     const loadedModels = allLlmModels.filter((model) => model.isLoaded).map((model) => (
         <div className="model-item bg-white rounded-md shadow py-3 px-2 space-y-2" key={model.modelId}>
             <div className="model-item-top flex items-center justify-between">
@@ -227,12 +235,12 @@ const LlmSetup = () => {
 
                 {
                     model.isDefault ?
-                        <Tag color={`orange`} className='text-sm'>Default</Tag>
-                        : <Button type="primary" size="small" onClick={() => { handleSetDefaultClick(model) }}>Set Default</Button>
+                        <Tag color={`orange`} className='text-sm'>{t('default')}</Tag>
+                        : <Button type="primary" size="small" onClick={() => { handleSetDefaultClick(model) }}>{t('set_default')}</Button>
                 }
             </div>
             <div className="tag  flex items-center ">
-                <Tag color='gold' className='text-xs'>{model.modelSizeType}</Tag>
+                <Tag color='gold' className='text-xs'>{getModelSizeText(model.modelSizeType)}</Tag>
                 <Tag color='gold' className='text-xs'>VRAM: {(model.vramRequiredMB / 1024).toFixed(2)}G</Tag>
             </div>
         </div >
@@ -245,13 +253,13 @@ const LlmSetup = () => {
                 </div>
                 {
                     model.loadingStatus !== 'active' && <div className="flex items-center gap-2">
-                        <Button size="small" onClick={() => handleUploadClick(model)}>Upload</Button>
-                        <Button type="primary" size="small" onClick={() => handleDownLoadLlm(model)}>Download</Button>
+                        <Button size="small" onClick={() => handleUploadClick(model)}>{t('upload')}</Button>
+                        <Button type="primary" size="small" onClick={() => handleDownLoadLlm(model)}>{t('download')}</Button>
                     </div>
                 }
             </div>
             <div className="tag  flex items-center ">
-                <Tag color='gold' className='text-xs'>{model.modelSizeType}</Tag>
+                <Tag color='gold' className='text-xs'>{getModelSizeText(model.modelSizeType)}</Tag>
                 <Tag color='gold' className='text-xs'>VRAM: {(model.vramRequiredMB / 1024).toFixed(2)}G</Tag>
             </div>
 
@@ -319,7 +327,7 @@ const LlmSetup = () => {
                 }
             </div>
 
-            <Modal confirmLoading={uploadLoading} cancelButtonProps={{ loading: uploadLoading }} maskClosable={false} centered title='Upload model file' open={uploadModalOpen} onOk={handleUploadConfirm} onCancel={() => { setUploadModalOpen(false) }}>
+            <Modal confirmLoading={uploadLoading} cancelButtonProps={{ loading: uploadLoading }} maskClosable={false} centered title={t('upload_model_file')} open={uploadModalOpen} onOk={handleUploadConfirm} onCancel={() => { setUploadModalOpen(false) }}>
                 <Dragger  {...uploadProps} fileList={uploadFileList} >
                     <p className="ant-upload-text">{t('click_drag_file_tip')}</p>
                     <p className="ant-upload-hint">

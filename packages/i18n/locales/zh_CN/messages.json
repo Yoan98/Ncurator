@@ -6,10 +6,10 @@
         "message": "BeCurator: Privacy-Focused AI Assistant with Your Data "
     },
     "Resource": {
-        "message": "数据"
+        "message": "资源"
     },
     "LLMModel": {
-        "message": "AI模型"
+        "message": "LLM模型"
     },
     "searchTab": {
         "message": "搜索"
@@ -17,67 +17,73 @@
     "chatTab": {
         "message": "聊天"
     },
-    "component.search.textarea.placeholder": {
-        "message": "基于您的数据搜索..."
+    "search_placeholder": {
+        "message": "基于您的资源搜索..."
     },
-    "component.search.select.placeholder": {
-        "message": "全部数据"
-    },
-    "component.search.select.ai_answer": {
+    "all_answer": {
         "message": "AI 回答"
     },
-    "component.search.searching": {
+    "searching": {
         "message": "搜索..."
     },
-    "component.search.select.results": {
+    "results": {
         "message": "搜索结果"
     },
-    "component.search.message.ai_engine_not_ready": {
-        "message": "AI引擎还未加载完毕"
-    },
-    "component.search.message.please_input_search": {
+    "please_input_search": {
         "message": "请输入搜索内容"
     },
-    "component.chat.start_chat": {
+    "start_chat": {
         "message": "快问我,快"
     },
-    "component.chat.textarea.knowledge.placeholder": {
-        "message": "基于您的数据,询问$1问题"
+    "ask_placeholder": {
+        "message": "基于您的资源,询问$1问题"
     },
-    "component.chat.textarea.chat.placeholder": {
+    "message_placeholder": {
         "message": "快给$1发消息"
     },
-    "component.chat.select.placeholder": {
-        "message": "全部数据"
+    "all_resource": {
+        "message": "全部资源"
     },
-    "component.chat.knowledge": {
+    "knowledge": {
         "message": "知识库"
     },
-    "component.chat.chat": {
+    "chat": {
         "message": "聊天"
     },
-    "component.chat.message.ai_engine_not_ready": {
-        "message": "AI引擎还未加载完毕"
+    "ai_engine_not_ready": {
+        "message": "LLM引擎还未加载完毕"
     },
-    "component.chat.message.please_input_question": {
+    "please_input_question": {
         "message": "请输入问题"
     },
-    "component.chat.message_list.relate_document": {
+    "relate_document": {
         "message": "相关文档"
     },
-    "component.resource.problem_document": {
+    "problem_document": {
         "message": "该文档内容太少,可能有问题"
     },
-    "component.resource.setting.building_wait": {
+    "building_document_wait": {
         "message": "正在构建文档,请稍等"
     },
-    "component.resource.setting.edit_resource": {
-        "message": "编辑该数据"
+    "search_resource_name": {
+        "message": "请输入名称"
     },
-    "component.resource.setting.del_data": {
+    "empty_data": {
+        "message": "暂无数据"
+    },
+    "edit_resource": {
+        "message": "编辑该资源"
+    },
+    "resource_name": {
+        "message": "资源名称"
+    },
+    "resource_name_placeholder": {
+        "message": "请输入名称"
+    },
+    "del_batch_data": {
         "message": "批量删除数据"
     },
-    "component.resource.setting.select_data": {
+    "select_data_first": {
         "message": "请先选择数据"
     },
     "fail": {
@@ -96,10 +102,10 @@
         "message": "请选择文件"
     },
     "resource": {
-        "message": "数据"
+        "message": "资源"
     },
     "add_resource": {
-        "message": "新增数据"
+        "message": "新增资源"
     },
     "document_building_tip": {
         "message": "文档构建中,请勿关闭页面"
@@ -108,7 +114,7 @@
         "message": "点击或拖拽文件到此处"
     },
     "operation_data_safe_tip": {
-        "message": "所有数据与操作都您本地进行"
+        "message": "所有数据与操作都您本地进行,以确保数据安全"
     },
     "resource_type": {
         "message": "数据类型"
@@ -147,10 +153,10 @@
         "message": "删除成功"
     },
     "add_resource_success": {
-        "message": "添加数据成功"
+        "message": "添加资源成功"
     },
     "edit_resource_success": {
-        "message": "编辑数据成功"
+        "message": "编辑资源成功"
     },
     "better_not_exceed": {
         "message": "最好别超过"
@@ -168,10 +174,10 @@
         "message": "无已加载模型"
     },
     "llm_setup": {
-        "message": "语言模型配置"
+        "message": "LLM模型配置"
     },
     "llm_desc": {
-        "message": "语言模型是一个能够理解你的文本和生成文本的一项技术，不同模型的理解与生成质量会有不同"
+        "message": "LLM模型是一个能够理解你的文本和生成文本的一项技术，不同模型的理解与生成质量会有不同"
     },
     "download_model_again_wanning": {
         "message": "已有模型正在下载中,请稍后再试"
@@ -205,5 +211,62 @@
     },
     "click_to_setup": {
         "message": "点击设置"
+    },
+    "import_file": {
+        "message": "导入文件"
+    },
+    "name": {
+        "message": "名称"
+    },
+    "status": {
+        "message": "状态"
+    },
+    "add_document": {
+        "message": "新增文档"
+    },
+    "web_name_placeholder": {
+        "message": "请输入网站名称"
+    },
+    "web_url": {
+        "message": "网址"
+    },
+    "default": {
+        "message": "默认"
+    },
+    "set_default": {
+        "message": "设为默认"
+    },
+    "large": {
+        "message": "大"
+    },
+    "medium": {
+        "message": "中"
+    },
+    "build": {
+        "message": "构建"
+    },
+    "new_chat": {
+        "message": "开启新对话"
+    },
+    "download": {
+        "message": "下载"
+    },
+    "upload": {
+        "message": "上传"
+    },
+    "today": {
+        "message": "今天"
+    },
+    "yesterday": {
+        "message": "昨天"
+    },
+    "last_7_days": {
+        "message": "近7天"
+    },
+    "earlier": {
+        "message": "更早"
+    },
+    "upload_model_file": {
+        "message": "上传模型文件"
     }
 }

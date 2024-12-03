@@ -25,12 +25,12 @@ import { t } from '@extension/i18n';
 const aiOptions = [
     {
         key: 1,
-        label: t('component.chat.knowledge'),
+        label: t('knowledge'),
         icon: <IoBookOutline size={18} />,
     },
     {
         key: 2,
-        label: t('component.chat.chat'),
+        label: t('chat'),
         icon: <IoChatbubblesOutline size={18} />,
     }
 
@@ -76,7 +76,7 @@ const ChatSection = ({
 
     const handleSend = async () => {
         if (!llmEngine.current || llmEngineLoadStatus !== 'success') {
-            message.warning(t('component.chat.message.ai_engine_not_ready'));
+            message.warning(t('ai_engine_not_ready'));
             return;
         }
 
@@ -90,7 +90,7 @@ const ChatSection = ({
             return;
         }
         if (!question) {
-            message.warning(t('component.chat.message.please_input_question'));
+            message.warning(t('please_input_question'));
             return
         };
 
@@ -325,7 +325,7 @@ const ChatSection = ({
                 {
                     chatUiMessages.length === 0 ? <div className='flex flex-col items-center gap-1 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2'>
                         <Logo size={40} />
-                        <div className='text-lg font-bold'>{t('component.chat.start_chat')}</div>
+                        <div className='text-lg font-bold'>{t('start_chat')}</div>
                     </div>
                         : <MessageList
                             chatUiMessages={chatUiMessages}
@@ -347,7 +347,7 @@ const ChatSection = ({
                     <TextArea
                         value={question}
                         onChange={(e) => setQuestion(e.target.value)}
-                        placeholder={selectedAiOption.key === 1 ? t('component.chat.textarea.knowledge.placeholder', APP_NAME) : t('component.chat.textarea.chat.placeholder', APP_NAME)}
+                        placeholder={selectedAiOption.key === 1 ? t('ask_placeholder', APP_NAME) : t('message_placeholder', APP_NAME)}
                         autoSize={{ minRows: 2, maxRows: 2 }}
                         variant='borderless'
                         className='text-base'
@@ -368,7 +368,7 @@ const ChatSection = ({
                                 selectedAiOption.key === 1 && <Select
                                     mode="multiple"
                                     defaultValue={[]}
-                                    placeholder={t('component.chat.select.placeholder')}
+                                    placeholder={t('all_resource')}
                                     variant="borderless"
                                     style={{ minWidth: '120px' }}
                                     options={connectionOption}

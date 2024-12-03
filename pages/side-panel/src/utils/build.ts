@@ -11,6 +11,7 @@ import * as constant from '@src/utils/constant';
 import dayjs from '@src/utils/dayjsGlobal';
 import { message } from 'antd';
 import type { GetChunksReturn } from '@src/utils/Connector'
+import { t } from '@extension/i18n';
 
 interface EmbeddingOutput {
     data: Float32Array,
@@ -439,11 +440,11 @@ export const buildDocsIndexInConnection = async (store: IndexDBStore, docs: DB.D
 
         // 提示结果
         if (buildDocIndexRes.status == 'Success') {
-            message.success(`${doc.name} Build Success`);
+            message.success(`${doc.name} ${t('build')} ${t('success')}`);
             updatedConnection = buildDocIndexRes.connectionAfterIndexBuild!;
         } else if (buildDocIndexRes.status == 'Fail') {
             console.error('buildDocIndex error', buildDocIndexRes.error)
-            message.error(`${doc.name} Build Fail`);
+            message.error(`${doc.name} ${t('build')} ${t('success')}`);
         } else {
             message.error(`${doc.name} Unknown Status`);
         }

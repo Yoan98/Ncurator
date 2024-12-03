@@ -20,67 +20,76 @@
     "chatTab": {
         "message": "Chat"
     },
-    "component.search.textarea.placeholder": {
+    "search_placeholder": {
         "message": "Search something based on the resource..."
     },
-    "component.search.select.placeholder": {
+    "all_resource": {
         "message": "All Resources"
     },
-    "component.search.select.ai_answer": {
+    "all_answer": {
         "message": "AI Answer"
     },
-    "component.search.searching": {
+    "searching": {
         "message": "Searching..."
     },
-    "component.search.select.results": {
+    "results": {
         "message": "Results"
     },
-    "component.search.message.ai_engine_not_ready": {
+    "ai_engine_not_ready": {
         "message": "AI engine is not ready"
     },
-    "component.search.message.please_input_search": {
+    "please_input_search": {
         "message": "Please input the search content"
     },
-    "component.chat.start_chat": {
-        "message": "Start Chat"
+    "start_chat": {
+        "message": "start_chat"
     },
-    "component.chat.textarea.knowledge.placeholder": {
+    "ask_placeholder": {
         "message": "Ask $1 based on your resource"
     },
-    "component.chat.textarea.chat.placeholder": {
+    "message_placeholder": {
         "message": "Message with $1"
     },
-    "component.chat.select.placeholder": {
-        "message": "All Resources"
-    },
-    "component.chat.knowledge": {
+    "knowledge": {
         "message": "Knowledge"
     },
-    "component.chat.chat": {
+    "chat": {
         "message": "Chat"
     },
-    "component.chat.message.ai_engine_not_ready": {
-        "message": "AI engine is not ready"
-    },
-    "component.chat.message.please_input_question": {
+    "please_input_question": {
         "message": "Please input the question"
     },
-    "component.chat.message_list.relate_document": {
+    "relate_document": {
         "message": "Relate Documents"
     },
-    "component.resource.problem_document": {
+    "problem_document": {
         "message": "The text of this document too less, may be problem"
     },
-    "component.resource.setting.building_wait": {
+    "building_document_wait": {
         "message": "Building document, please wait"
     },
-    "component.resource.setting.edit_resource": {
+    "search_resource_name": {
+        "message": "Input the resource name"
+    },
+    "empty_data": {
+        "message": "Empty Data"
+    },
+    "edit_resource": {
         "message": "Edit Resource"
     },
-    "component.resource.setting.del_data": {
+    "resource_name": {
+        "message": "Resource Name"
+    },
+    "resource_name_placeholder": {
+        "message": "A descriptive name for the resource"
+    },
+    "web_name_placeholder": {
+        "message": "A descriptive name for the web"
+    },
+    "del_batch_data": {
         "message": "Delete batch data"
     },
-    "component.resource.setting.select_data": {
+    "select_data_first": {
         "message": "Please select data first"
     },
     "fail": {
@@ -91,6 +100,9 @@
     },
     "building": {
         "message": "Building"
+    },
+    "build": {
+        "message": "Build"
     },
     "please_select_bookmarks": {
         "message": "Please select browser bookmarks"
@@ -132,7 +144,7 @@
         "message": "Cancel"
     },
     "import_your_browser_bookmark": {
-        "message": "import_your_browser_bookmark"
+        "message": "Import your browser bookmark"
     },
     "web_url_placeholder": {
         "message": "The web url you want to crawl"
@@ -208,5 +220,56 @@
     },
     "click_to_setup": {
         "message": "Click to setup"
+    },
+    "import_file": {
+        "message": "Import File"
+    },
+    "name": {
+        "message": "Name"
+    },
+    "status": {
+        "message": "Status"
+    },
+    "add_document": {
+        "message": "Add Document"
+    },
+    "web_url": {
+        "message": "Web Url"
+    },
+    "default": {
+        "message": "Default"
+    },
+    "set_default": {
+        "message": "Set Default"
+    },
+    "large": {
+        "message": "Large"
+    },
+    "medium": {
+        "message": "Medium"
+    },
+    "new_chat": {
+        "message": "New Chat"
+    },
+    "download": {
+        "message": "Download"
+    },
+    "upload": {
+        "message": "Upload"
+    },
+    "today": {
+        "message": "Today"
+    },
+    "yesterday": {
+        "message": "Yesterday"
+    },
+    "last_7_days": {
+        "message": "Last 7 days"
+    },
+    "earlier": {
+        "message": "earlier"
+    },
+    "upload_model_file": {
+        "message": "Upload model file"
     }
 }

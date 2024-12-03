@@ -38,7 +38,7 @@ const SearchSection = () => {
 
     const askAI = async (searchTextRes: Search.TextItemRes[]) => {
         if (!llmEngine.current || llmEngineLoadStatus !== 'success') {
-            message.warning(t('component.search.message.ai_engine_not_ready'));
+            message.warning(t('ai_engine_not_ready'));
             return;
         }
 
@@ -89,11 +89,11 @@ const SearchSection = () => {
     }
     const handleSearchClick = async () => {
         if (!questionValue) {
-            message.warning(t('component.search.message.please_input_search'))
+            message.warning(t('please_input_search'))
             return;
         };
         if (!llmEngine.current || llmEngineLoadStatus !== 'success') {
-            message.warning(t('component.search.message.ai_engine_not_ready'));
+            message.warning(t('ai_engine_not_ready'));
             return;
         }
 
@@ -187,7 +187,7 @@ const SearchSection = () => {
             <TextArea
                 value={questionValue}
                 onChange={(e) => setQuestionValue(e.target.value || '')}
-                placeholder={t('component.search.textarea.placeholder')}
+                placeholder={t('search_placeholder')}
                 autoSize={{ minRows: 2, maxRows: 2 }}
                 variant='borderless'
                 className='text-base'
@@ -199,7 +199,7 @@ const SearchSection = () => {
                 <Select
                     mode="multiple"
                     defaultValue={[]}
-                    placeholder={t('component.search.select.placeholder')}
+                    placeholder={t('all_resource')}
                     variant="borderless"
                     style={{ maxWidth: '250px', minWidth: '120px' }}
                     options={connectionOption}
@@ -212,12 +212,12 @@ const SearchSection = () => {
 
         <div className="ai-answer my-4 p-4 border-2 border-border rounded-lg relative">
             <div className="flex gap-x-2">
-                <h2 className="text-emphasis font-bold my-auto mb-1 text-base">{t('component.search.select.ai_answer')}</h2>
+                <h2 className="text-emphasis font-bold my-auto mb-1 text-base">{t('all_answer')}</h2>
             </div>
 
             <div className="pt-1 border-t border-border w-full min-h-[150px] max-h-[100px] overflow-y-auto">
                 {
-                    askAiLoading ? <div className='text-sm loading-text'>{t('component.search.searching')}</div> : <div className="text-base">{aiAnswerText}</div>
+                    askAiLoading ? <div className='text-sm loading-text'>{t('searching')}</div> : <div className="text-base">{aiAnswerText}</div>
 
                 }
 
@@ -225,10 +225,10 @@ const SearchSection = () => {
         </div>
 
         <div className="result">
-            <div className="font-bold flex justify-between text-emphasis border-b mb-3 pb-1 text-lg"><p>{t('component.search.select.results')}</p></div>
+            <div className="font-bold flex justify-between text-emphasis border-b mb-3 pb-1 text-lg"><p>{t('results')}</p></div>
             <div className="search-res-list overflow-y-auto ">
                 {
-                    searchLoading ? <div className='text-sm loading-text'>{t('component.search.searching')}</div> :
+                    searchLoading ? <div className='text-sm loading-text'>{t('searching')}</div> :
                         searchTextRes.length === 0 ? <Empty /> :
                             searchTextRes.map((item) => {
                                 return (

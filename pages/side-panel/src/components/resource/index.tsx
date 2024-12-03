@@ -32,20 +32,20 @@ interface DataType {
 
 const columns: TableColumnsType<DataType> = [
     {
-        title: 'Name', dataIndex: 'name', ellipsis: {
+        title: t('name'), dataIndex: 'name', ellipsis: {
             showTitle: true
         },
         render: (text, record) => {
             const chunkLen = record.text_chunk_id_range.to - record.text_chunk_id_range.from + 1;
             const isErrorChunk = chunkLen < 10 && record.status == constant.DocumentStatus.Success;
             return (
-                <span className={`${isErrorChunk && 'text-[gray]'} `} title={`${isErrorChunk ? t('component.resource.problem_document') : record.name}`}>{record.name}</span>
+                <span className={`${isErrorChunk && 'text-[gray]'} `} title={`${isErrorChunk ? t('problem_document') : record.name}`}>{record.name}</span>
             )
         },
         width: '65%'
     },
     {
-        title: 'Status', dataIndex: 'status', width: '35%', render: (text, record) => {
+        title: t('status'), dataIndex: 'status', width: '35%', render: (text, record) => {
 
             const color = record.status == constant.DocumentStatus.Fail ? constant.ERROR_COLOR : record.status == constant.DocumentStatus.Success ? constant.SUCCESS_COLOR : 'gray';
             return <Badge color={color} text={record.status_text} />
@@ -140,7 +140,7 @@ const Resource = () => {
 
         return <div className='flex items-center'>
             <div className="flex items-center gap-3">
-                <IoAdd size={20} title={hasBuildingDoc ? 'Building document, please wait' : 'Add document'}
+                <IoAdd size={20} title={hasBuildingDoc ? t('building_document_wait') : t('add_document')}
                     className={`${hasBuildingDoc && 'opacity-20'}`}
                     onClick={(event) => {
                         event.stopPropagation();
@@ -151,8 +151,8 @@ const Resource = () => {
                     }}></IoAdd>
                 <span>
                     <MdDeleteOutline className={`${(!displayConnection.selectedRowKeys.length || hasBuildingDoc) && 'opacity-20'}`} size={20} title={
-                        hasBuildingDoc ? t('component.resource.setting.building_wait') :
-                            displayConnection.selectedRowKeys.length ? t('component.resource.setting.del_data') : t('component.resource.setting.select_data')}
+                        hasBuildingDoc ? t('building_document_wait') :
+                            displayConnection.selectedRowKeys.length ? t('del_batch_data') : t('select_data_first')}
                         onClick={(event) => {
                             event.stopPropagation();
                             if (!displayConnection.selectedRowKeys.length || hasBuildingDoc) {
@@ -168,7 +168,7 @@ const Resource = () => {
 
                 <IoSettingsOutline
                     className={`${hasBuildingDoc && 'opacity-20'}`}
-                    title={hasBuildingDoc ? t('component.resource.setting.building_wait') : t('component.resource.setting.edit_resource')}
+                    title={hasBuildingDoc ? t('building_document_wait') : t('edit_resource')}
                     size={20}
                     onClick={(event) => {
                         event.stopPropagation();
@@ -199,7 +199,11 @@ const Resource = () => {
             extra: genExtra(item),
             label: item.name,
             children:
-                <Table<DataType> pagination={false} rowSelection={{
+                <Table<DataType> pagination={
+                    {
+                        pageSize: 5,
+                    }
+                } rowSelection={{
                     selectedRowKeys: item.selectedRowKeys,
                     onChange: (selectedRowKeys) => {
                         item.selectedRowKeys = selectedRowKeys;
@@ -616,7 +620,7 @@ const Resource = () => {
             </div>
 
             <div className="search pt-5  my-1">
-                <Search className='text-base' placeholder="Search file name..." onSearch={handleSearch} onChange={(e) => {
+                <Search className='text-base' placeholder={t('search_resource_name')} onSearch={handleSearch} onChange={(e) => {
                     setSearchValue(e.target.value);
                 }} enterButton size="large" />
                 {
@@ -628,7 +632,7 @@ const Resource = () => {
             <div className="resource-list flex-1 flex flex-col overflow-y-auto">
 
                 {
-                    !displayConnectionList.length ? <div className='flex flex-1 flex-col justify-center'> <Empty description='No resource yet' /></div> : <Collapse
+                    !displayConnectionList.length ? <div className='flex flex-1 flex-col justify-center'> <Empty /></div> : <Collapse
                         activeKey={collapseActiveKey}
                         onChange={handleCollapseChange}
                         expandIconPosition='start'
@@ -638,7 +642,7 @@ const Resource = () => {
             </div>
 
             {/* File add */}
-            <Modal confirmLoading={uploadLoading} cancelButtonProps={{ loading: uploadLoading }} maskClosable={false} centered title='Upload File' open={uploadModalOpen} onOk={handleUploadConfirm} onCancel={() => { setUploadModalOpen(false) }}>
+            <Modal confirmLoading={uploadLoading} cancelButtonProps={{ loading: uploadLoading }} maskClosable={false} centered title={t('import_file')} open={uploadModalOpen} onOk={handleUploadConfirm} onCancel={() => { setUploadModalOpen(false) }}>
 
                 <Dragger  {...uploadProps} fileList={uploadFileList} >
                     <p className="ant-upload-text">{t('click_drag_file_tip')}</p>
@@ -649,14 +653,14 @@ const Resource = () => {
             </Modal>
 
             {/* resource add/edit */}
-            <Modal confirmLoading={operateResourceLoading} cancelButtonProps={{ loading: operateResourceLoading }} maskClosable={false} centered title={resourceScene == 'add' ? 'Add Resource' : 'Edit Resource'} open={operateResourceModalOpen} onOk={handleOperateResourceConfirm} onCancel={() => { setOperateResourceModalOpen(false) }}>
+            <Modal confirmLoading={operateResourceLoading} cancelButtonProps={{ loading: operateResourceLoading }} maskClosable={false} centered title={resourceScene == 'add' ? t('add_resource') : t('edit_resource')} open={operateResourceModalOpen} onOk={handleOperateResourceConfirm} onCancel={() => { setOperateResourceModalOpen(false) }}>
                 <Form
                     form={resourceForm}
                     name="resource"
                     layout="vertical"
                 >
-                    <Form.Item label="Resource Name" name="name" rules={[{ required: true }]}>
-                        <Input placeholder='A descriptive name for the resource.' />
+                    <Form.Item label={t('resource_name')} name="name" rules={[{ required: true }]}>
+                        <Input placeholder={t('resource_name_placeholder')} />
                     </Form.Item>
                     <Form.Item
                         layout="vertical"
@@ -709,11 +713,11 @@ const Resource = () => {
                                                 }} />
                                             }
                                         >
-                                            <Form.Item label="Name" name={[field.name, 'name']} rules={[{ required: true }]}>
-                                                <Input placeholder='A descriptive name for the web.' />
+                                            <Form.Item label={t('name')} name={[field.name, 'name']} rules={[{ required: true }]}>
+                                                <Input placeholder={t('web_name_placeholder')} />
                                             </Form.Item>
                                             <Form.Item
-                                                label="Url"
+                                                label={t('web_url')}
                                                 name={[field.name, 'link']}
                                                 rules={[{ required: true }, { type: 'url' }]}
                                             >

@@ -177,13 +177,13 @@ const SidePanel = () => {
         const getTitle = (key: string) => {
             switch (key) {
                 case 'today':
-                    return 'Today';
+                    return t('today');
                 case 'yesterday':
-                    return 'Yesterday';
+                    return t('yesterday');
                 case 'sevenDays':
-                    return 'Last 7 days';
+                    return t('last_7_days');
                 case 'earlier':
-                    return 'Earlier';
+                    return t('earlier');
                 default:
                     return '';
             }
@@ -290,7 +290,7 @@ const SidePanel = () => {
                 open={historyOpen}
                 key='left'
                 extra={
-                    <Tooltip placement="bottom" title='New Chat' >
+                    <Tooltip placement="bottom" title={t('new_chat')} >
                         <Button size="small" icon={<CiEdit></CiEdit>} onClick={handleNewChatClick}></Button>
                     </Tooltip>
                 }
@@ -308,7 +308,7 @@ const SidePanel = () => {
                                                     setCurChatHistoryId(history.historyId);
                                                     setHistoryOpen(false);
                                                 }}>
-                                                    {history.uiMessages[0].content || 'New Chat'}
+                                                    {history.uiMessages[0].content || t('new_chat')}
                                                 </div>
                                             ))
                                         }

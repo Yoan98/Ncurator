@@ -69,7 +69,7 @@ const MessageList: React.FC<MessageListProps> = React.memo(({
                                             onExpandClick(message);
                                         }}
                                     >
-                                        <span>{t('component.chat.message_list.relate_document')}</span>
+                                        <span>{t('relate_document')}</span>
                                         {message.isOpenRelateDocs ? (
                                             <IoIosArrowUp />
                                         ) : (
