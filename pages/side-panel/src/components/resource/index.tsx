@@ -77,11 +77,13 @@ export interface FavoriteTreeNode {
     children: FavoriteTreeNode[]
     isLeaf: boolean
 }
+const acceptFileType = '.pdf,.doc,.docx,.txt,.md';
 
 const Resource = () => {
     const { connectionList, setConnectionList } = useGlobalContext()
 
     const indexDBRef = useRef<IndexDBStore | null>(null);
+
 
     // connection relate
     const [displayConnectionList, setDisplayConnectionList] = useState<DisplayConnection[]>([]);
@@ -220,7 +222,7 @@ const Resource = () => {
 
     const uploadProps: UploadProps = {
         multiple: true,
-        accept: '.pdf,.doc,.docx,.txt,.md',
+        accept: acceptFileType,
         beforeUpload: (file) => {
             return false
         },
@@ -648,6 +650,9 @@ const Resource = () => {
                     <p className="ant-upload-text">{t('click_drag_file_tip')}</p>
                     <p className="ant-upload-hint">
                         {t('operation_data_safe_tip')}
+                    </p>
+                    <p className="ant-upload-hint">
+                        {acceptFileType}
                     </p>
                 </Dragger>
             </Modal>

@@ -25,8 +25,9 @@ const App = () => {
     }
 
     useLayoutEffect(() => {
-        initLang();
+        chrome.runtime.connect({ name: 'mySidepanel' });
 
+        initLang();
         checkWebGPU().then((isSupport) => {
             window.gIsSupportWebGPU = isSupport;
         });

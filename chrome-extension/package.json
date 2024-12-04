@@ -21,6 +21,7 @@
         "@extension/storage": "workspace:*"
     },
     "devDependencies": {
+        "@extension/shared": "workspace:*",
         "@extension/dev-utils": "workspace:*",
         "@extension/hmr": "workspace:*",
         "@extension/tsconfig": "workspace:*",

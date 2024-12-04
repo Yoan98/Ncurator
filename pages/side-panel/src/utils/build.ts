@@ -211,6 +211,7 @@ export const buildIndexSplit = async ({ bigChunks, miniChunks, document, batchSi
             data: textChunkList,
         });
 
+        //todo embedding完后,会有一些ui卡顿,可能是这一块之后的执行时间过长,可考虑优化
         // 将文本向量化后存入indexDB的LSH索引表
         const lshIndexId = await storageTextChunkToLSH({ textChunkList, batchEmbeddingTextList, embeddingBatchSize, store });
         lshIndexIds.push(lshIndexId)

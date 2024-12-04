@@ -1,4 +1,5 @@
 import esbuild from 'esbuild';
+import { isDev} from '@extension/vite-config';
 
 /**
  * @type { import('esbuild').BuildOptions }
@@ -10,6 +11,9 @@ const buildOptions = {
   target: 'es6',
   outdir: './dist',
   sourcemap: true,
+  define: {
+    'process.env.NODE_ENV': isDev ? `"development"` : `"production"`,
+},
 };
 
 await esbuild.build(buildOptions);

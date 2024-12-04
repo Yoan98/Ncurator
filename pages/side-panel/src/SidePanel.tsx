@@ -216,6 +216,7 @@ const SidePanel = () => {
 
         setCurChatHistoryId(curChatHistoryId);
         setGroupedChatHistory(groupedChatHistory);
+
     }, [])
 
     useEffect(() => {

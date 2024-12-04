@@ -10,38 +10,41 @@ const srcDir = resolve(rootDir, 'src');
 
 const outDir = resolve(rootDir, '..', 'dist');
 export default defineConfig({
-  resolve: {
-    alias: {
-      '@root': rootDir,
-      '@src': srcDir,
-      '@assets': resolve(srcDir, 'assets'),
+    resolve: {
+        alias: {
+            '@root': rootDir,
+            '@src': srcDir,
+            '@assets': resolve(srcDir, 'assets'),
+        },
     },
-  },
-  plugins: [
-    libAssetsPlugin({
-      outputPath: outDir,
-    }) as PluginOption,
-    watchPublicPlugin(),
-    makeManifestPlugin({ outDir }),
-    isDev && watchRebuildPlugin({ reload: true }),
-  ],
-  publicDir: resolve(rootDir, 'public'),
-  build: {
-    lib: {
-      formats: ['iife'],
-      entry: resolve(__dirname, 'src/background/index.ts'),
-      name: 'BackgroundScript',
-      fileName: 'background',
+    plugins: [
+        libAssetsPlugin({
+            outputPath: outDir,
+        }) as PluginOption,
+        watchPublicPlugin(),
+        makeManifestPlugin({ outDir }),
+        isDev && watchRebuildPlugin({ reload: true }),
+    ],
+    publicDir: resolve(rootDir, 'public'),
+    build: {
+        lib: {
+            formats: ['iife'],
+            entry: resolve(__dirname, 'src/background/index.ts'),
+            name: 'BackgroundScript',
+            fileName: 'background',
+        },
+        outDir,
+        emptyOutDir: false,
+        sourcemap: isDev,
+        minify: isProduction,
+        reportCompressedSize: isProduction,
+        watch: watchOption,
+        rollupOptions: {
+            external: ['chrome'],
+        },
     },
-    outDir,
-    emptyOutDir: false,
-    sourcemap: isDev,
-    minify: isProduction,
-    reportCompressedSize: isProduction,
-    watch: watchOption,
-    rollupOptions: {
-      external: ['chrome'],
+    define: {
+        'process.env.NODE_ENV': isDev ? `"development"` : `"production"`,
     },
-  },
-  envDir: '../',
+    envDir: '../',
 });

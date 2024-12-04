@@ -1,18 +1,14 @@
+import { globalConstant } from '@extension/shared';
 
-export const DEFAULT_INDEXDB_NAME = 'MAIN_DB'; // 默认的IndexDB数据库名称
+export const DEFAULT_INDEXDB_NAME = globalConstant.DEFAULT_INDEXDB_NAME; // 默认的IndexDB数据库名称
 // 表名
-let counter = 1;
-const isDevelopment = process.env.NODE_ENV === 'development';
-function getStoreName(name: string): string {
-    return isDevelopment ? name : `$_${counter++}`;
-}
-export const LSH_PROJECTION_DB_STORE_NAME = getStoreName('lsh_projection');
-export const LSH_INDEX_STORE_NAME = getStoreName('lsh_index');
-export const TEXT_CHUNK_STORE_NAME = getStoreName('text_chunk_index');
-export const CONNECTION_STORE_NAME = getStoreName('connection');
-export const FULL_TEXT_INDEX_STORE_NAME = getStoreName('full_text_index');
-export const DOCUMENT_STORE_NAME = getStoreName('document');
-export const RESOURCE_STORE_NAME = getStoreName('resource');
+export const LSH_PROJECTION_DB_STORE_NAME = globalConstant.LSH_PROJECTION_DB_STORE_NAME;
+export const LSH_INDEX_STORE_NAME = globalConstant.LSH_INDEX_STORE_NAME;
+export const TEXT_CHUNK_STORE_NAME = globalConstant.TEXT_CHUNK_STORE_NAME;
+export const CONNECTION_STORE_NAME = globalConstant.CONNECTION_STORE_NAME;
+export const FULL_TEXT_INDEX_STORE_NAME = globalConstant.FULL_TEXT_INDEX_STORE_NAME;
+export const DOCUMENT_STORE_NAME = globalConstant.DOCUMENT_STORE_NAME;
+export const RESOURCE_STORE_NAME = globalConstant.RESOURCE_STORE_NAME;
 
 export const LSH_PROJECTION_DATA_NAME = 'data'; // 本地存储LSH随机向量数据属性名
 export const LSH_PROJECTION_KEY_VALUE = 1; // 本地存储LSH随机向量的key值,因为只有一条数据,所以key值为1
@@ -25,11 +21,7 @@ export const enum Connector {
     File = 1,
     Crawl
 }
-export const enum DocumentStatus {
-    Building = 1,
-    Fail,
-    Success
-}
+export const DocumentStatus = globalConstant.DocumentStatus
 export const enum EncodePrefix {
     SearchDocument = 'search_document',
     SearchQuery = 'search_query'
