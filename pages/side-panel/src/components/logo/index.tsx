@@ -4,7 +4,7 @@ const Logo = ({ className, size = 25 }: {
 }) => {
     return (
         <img
-            src={chrome.runtime.getURL('side-panel/logo_vertical.svg')} className={`${className} bg-white rounded-full`}
+            src={chrome.runtime.getURL('side-panel/logo.jpg')} className={`${className} bg-white rounded-full`}
             style={{ width: size + 'px', height: size + 'px' }}
             alt="logo" />
     )
