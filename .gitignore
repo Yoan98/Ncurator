@@ -27,3 +27,4 @@ chrome-extension/public/manifest.json
 
 **/public/jinaai
 **/public/nomic-ai
+**.crx
