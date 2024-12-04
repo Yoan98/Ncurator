@@ -9,7 +9,7 @@ export class IndexDBStore {
     }
 
     // 连接数据库
-    connect(dbName: string, initialStoreCb?: (db: IDBDatabase) => void): Promise<IDBDatabase> {
+    connect(dbName: string, dbCb?: (db: IDBDatabase) => void): Promise<IDBDatabase> {
         return new Promise((resolve, reject) => {
             const request = indexedDB.open(dbName, 1);
 
@@ -20,10 +20,10 @@ export class IndexDBStore {
             request.onupgradeneeded = (event) => {
                 const db = (event.target as IDBOpenDBRequest).result;
 
-                if (dbName === constant.DEFAULT_INDEXDB_NAME) {
+                if (dbName === constant.DEFAULT_INDEXDB_NAME && !dbCb) {
                     this.initialRAGStore(db);
                 } else {
-                    initialStoreCb && initialStoreCb(db)
+                    dbCb && dbCb(db)
                 }
             };
 
@@ -36,7 +36,6 @@ export class IndexDBStore {
 
     // 初始化表与索引
     private async initialRAGStore(db: IDBDatabase) {
-        console.log('initialRAGStore', constant.DOCUMENT_STORE_NAME);
         // 创建document表
         db.createObjectStore(constant.DOCUMENT_STORE_NAME, { keyPath: 'id', autoIncrement: true });
         // 创建LSH随机向量表
@@ -78,7 +77,6 @@ export class IndexDBStore {
         if (!this.db) throw new Error('Database not initialized');
 
         return new Promise((resolve, reject) => {
-            console.log('startCursor', storeName);
             const transaction = this.db!.transaction(storeName, transactionMode);
             const store = transaction.objectStore(storeName);
             let cursorRequest: IDBRequest<IDBCursorWithValue | null>
@@ -304,7 +302,6 @@ export class IndexDBStore {
     }): Promise<any> {
         if (!this.db) throw new Error('Database not initialized');
 
-        console.log('getall', storeName)
         return new Promise((resolve, reject) => {
             const transaction = this.db!.transaction(storeName, 'readonly');
             const store = transaction.objectStore(storeName);
