@@ -196,9 +196,6 @@ importers:
       '@extension/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
-      '@extension/vite-config':
-        specifier: workspace:*
-        version: link:../vite-config
 
   packages/storage:
     devDependencies:
@@ -330,6 +327,40 @@ importers:
       cross-env:
         specifier: ^7.0.3
         version: 7.0.3
+
+  pages/new-tab:
+    dependencies:
+      '@extension/i18n':
+        specifier: workspace:*
+        version: link:../../packages/i18n
+      '@extension/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      '@extension/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
+      '@extension/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+    devDependencies:
+      '@extension/tailwindcss-config':
+        specifier: workspace:*
+        version: link:../../packages/tailwind-config
+      '@extension/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
+      '@extension/vite-config':
+        specifier: workspace:*
+        version: link:../../packages/vite-config
+      cross-env:
+        specifier: ^7.0.3
+        version: 7.0.3
+      postcss-load-config:
+        specifier: ^6.0.1
+        version: 6.0.1(jiti@1.21.6)(postcss@8.4.47)(tsx@4.19.1)(yaml@2.5.1)
+      sass:
+        specifier: 1.79.4
+        version: 1.79.4
 
   pages/side-panel:
     dependencies:
@@ -10531,8 +10562,7 @@ snapshots:
 
   immediate@3.0.6: {}
 
-  immutable@4.3.7:
-    optional: true
+  immutable@4.3.7: {}
 
   import-fresh@3.3.0:
     dependencies:
@@ -12954,7 +12984,6 @@ snapshots:
       chokidar: 4.0.1
       immutable: 4.3.7
       source-map-js: 1.2.1
-    optional: true
 
   sax@1.4.1: {}
 

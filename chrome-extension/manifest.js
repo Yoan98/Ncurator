@@ -33,6 +33,9 @@ const manifest = deepmerge(
         content_security_policy: {
             "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
         },
+        chrome_url_overrides: {
+            newtab: 'new-tab/index.html',
+          },
         background: {
             service_worker: 'background.iife.js',
             type: 'module',

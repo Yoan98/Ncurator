@@ -42,7 +42,7 @@
         "message": "Please input the search content"
     },
     "start_chat": {
-        "message": "start_chat"
+        "message": "Start Chat"
     },
     "ask_placeholder": {
         "message": "Ask $1 based on your resource"
