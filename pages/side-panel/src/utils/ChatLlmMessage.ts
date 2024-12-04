@@ -36,7 +36,7 @@ export class ChatLlmMessage {
     }
     private getUserPrompt(type: 'chat' | 'knowledge', question: string, searchTextRes?: Search.TextItemRes[]) {
         if (type === 'knowledge') {
-            const context = searchTextRes!.map((item, index) => `${item.text}`).join('\n');
+            const context = searchTextRes!.map((item, index) => `${index + 1}.${item.text}`).join('\n');
 
             const inp =
                 KNOWLEDGE_USER_PROMPT +

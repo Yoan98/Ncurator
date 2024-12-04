@@ -51,7 +51,6 @@ const SearchSection = () => {
             type: 'knowledge',
             searchTextRes,
             streamCb: (msg, chunk) => {
-                setAskAiLoading(false);
                 let text = msg + '⚫';
                 if (chunk.choices[0]?.finish_reason == 'stop') {
                     text = msg;
@@ -60,6 +59,7 @@ const SearchSection = () => {
             },
             llmEngine: llmEngine.current
         })
+
     }
 
     const handleTextChunkClick = async (textChunk: Search.TextItemRes) => {
@@ -136,6 +136,7 @@ const SearchSection = () => {
             message.error('Error in AI answer' + error);
         }
 
+        setAskAiLoading(false);
     }
     const handleEnterPress = (e) => {
         // 避免shift+enter换行
@@ -206,7 +207,7 @@ const SearchSection = () => {
                     onChange={(value) => setSelectedConnection(value)}
                 />
 
-                <Button loading={searchLoading} icon={<VscSend size={20} />} type="primary" shape='circle' className='hover:scale-110 transition-transform' onClick={handleSearchClick}></Button>
+                <Button loading={askAiLoading} icon={<VscSend size={20} />} type="primary" shape='circle' className='hover:scale-110 transition-transform' onClick={handleSearchClick}></Button>
             </div>
         </div>
 
@@ -217,7 +218,7 @@ const SearchSection = () => {
 
             <div className="pt-1 border-t border-border w-full min-h-[150px] max-h-[100px] overflow-y-auto">
                 {
-                    askAiLoading ? <div className='text-sm loading-text'>{t('searching')}</div> : <div className="text-base">{aiAnswerText}</div>
+                    searchLoading ? <div className='text-sm loading-text'>{t('searching')}</div> : <div className="text-base">{aiAnswerText}</div>
 
                 }
 

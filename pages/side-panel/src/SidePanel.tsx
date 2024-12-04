@@ -138,8 +138,10 @@ const SidePanel = () => {
         if (!localChatHistory.length) {
             return;
         }
-
-        const newChatHistoryId = localChatHistory.length + 1;
+        const maxHistoryId = localChatHistory.reduce((acc, item) => {
+            return Math.max(acc, item.historyId);
+        }, 0);
+        const newChatHistoryId = maxHistoryId + 1;
 
         setCurChatHistoryId(newChatHistoryId);
         setHistoryOpen(false);
