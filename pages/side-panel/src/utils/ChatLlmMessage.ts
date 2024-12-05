@@ -29,7 +29,7 @@ export class ChatLlmMessage {
         if (responseStyle === 'markdown') {
             return CHAT_SYSTEM_PROMPT + '\n' + "Please format your response in Markdown."
         } else if (responseStyle === 'text') {
-            return CHAT_SYSTEM_PROMPT + '\n' + "Please responsed in Markdown logically, but not Markdown format."
+            return CHAT_SYSTEM_PROMPT + '\n' + "Please respond in Markdown logically, but not Markdown format."
         } else {
             throw new Error('Unknown type')
         }
