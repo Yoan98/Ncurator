@@ -27,9 +27,9 @@ export class ChatLlmMessage {
 
     private getSystemPrompt(responseStyle: 'text' | 'markdown' = 'text') {
         if (responseStyle === 'markdown') {
-            return CHAT_SYSTEM_PROMPT + "\n\nPlease format your response in Markdown."
+            return CHAT_SYSTEM_PROMPT + '\n' + "Please format your response in Markdown."
         } else if (responseStyle === 'text') {
-            return CHAT_SYSTEM_PROMPT
+            return CHAT_SYSTEM_PROMPT + '\n' + "Please responsed in Markdown logically, but not Markdown format."
         } else {
             throw new Error('Unknown type')
         }
@@ -40,7 +40,7 @@ export class ChatLlmMessage {
 
             const inp =
                 KNOWLEDGE_USER_PROMPT +
-                "\n\n" +
+                "\n" +
                 context +
                 "\n\nQuestion: " +
                 question +
@@ -48,7 +48,10 @@ export class ChatLlmMessage {
 
             return inp
         } else if (type === 'chat') {
-            return question
+            const inp = "Use all the knowledege you have to answer the flowing question: " +
+                "\n\nQuestion: " +
+                question
+            return inp
         } else {
             throw new Error('Unknown type')
         }

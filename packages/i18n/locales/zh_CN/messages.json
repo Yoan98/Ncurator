@@ -195,19 +195,19 @@
         "message": "上传模型成功"
     },
     "loading_llm_model": {
-        "message": "加载语言模型中"
+        "message": "加载LLM模型中"
     },
     "load_llm_model_error": {
-        "message": "加载语言模型失败"
+        "message": "加载LLM模型失败"
     },
     "click_try_again": {
         "message": "点击重试"
     },
     "load_llm_model_success": {
-        "message": "加载语言模型成功"
+        "message": "加载LLM模型成功"
     },
     "not_found_llm_model": {
-        "message": "未找到语言模型"
+        "message": "未找到LLM模型"
     },
     "click_to_setup": {
         "message": "点击设置"

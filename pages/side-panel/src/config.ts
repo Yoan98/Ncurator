@@ -31,7 +31,9 @@ export const EMBEDDING_HIDDEN_SIZE = 768; // 目前使用的两个模型都是76
 export const THEME_COLOR = '#404040'; // 主题色
 
 // prompt
-export const CHAT_SYSTEM_PROMPT = `You are a helpful AI assistant.` + `\n\nAnswer in the same language as the Question`;
+export const CHAT_SYSTEM_PROMPT =
+    `You are a helpful AI assistant.` + '\n' +
+    `Please answer the Question in the same language, where "language" refers specifically to distinct human languages (such as English, Mandarin, Spanish, etc.), not the broader concept of communication.`
 export const KNOWLEDGE_USER_PROMPT = "Use the following context when answering the question at the end. Don't use any other knowledge. The documents below have been retrieved and sorted by relevance. Please use them in the order they are presented, with the most relevant ones first.If the document is not match question, ignore them."
 // llm
 export const LLM_GENERATE_MAX_TOKENS = 300;
