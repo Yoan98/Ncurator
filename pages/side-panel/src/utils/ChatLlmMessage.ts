@@ -40,7 +40,7 @@ export class ChatLlmMessage {
 
             const inp =
                 KNOWLEDGE_USER_PROMPT +
-                "\n" +
+                "\n\n" +
                 context +
                 "\n\nQuestion: " +
                 question +
