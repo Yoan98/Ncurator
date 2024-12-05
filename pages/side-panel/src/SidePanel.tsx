@@ -13,6 +13,7 @@ import Resource from '@src/components/resource/index';
 import LlmSetup from '@src/components/llmSetup/index';
 import { IoIosArrowRoundBack } from "react-icons/io";
 import { CiEdit } from "react-icons/ci";
+import { IoIosHelpCircleOutline } from "react-icons/io";
 
 import { useGlobalContext } from '@src/provider/global';
 import dayjs from '@src/utils/dayjsGlobal';
@@ -35,6 +36,11 @@ const settingItems: MenuProps['items'] = [
         key: 2,
         label: t('LLMModel'),
         icon: <RiRobot2Line size={18} />,
+    },
+    {
+        key: 3,
+        label: t('help'),
+        icon: <IoIosHelpCircleOutline size={18} />,
     }
 ];
 
@@ -126,6 +132,9 @@ const SidePanel = () => {
             setPagePath('/resource');
         } else if (key == 2) {
             setPagePath('/llm-set');
+        } else if (key == 3) {
+            //打开tab页
+            chrome.tabs.create({ url: chrome.runtime.getURL('new-tab/index.html') });
         }
     }
     const handleChatHistoryUpdate = (localChatHistory: Chat.LocalHistory[]) => {

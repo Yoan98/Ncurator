@@ -3,7 +3,7 @@
         "message": "Collect data locally (files, webpages, etc.), store and search locally, and use local AI + your questions + your local data to provide smart analysis and answers, ensuring data security and improving work efficiency"
     },
     "extensionName": {
-        "message": "BeCurator: Privacy-Focused AI Assistant with Your Data"
+        "message": "BeCurator: Privacy-Focused AI Assistant With Your Data"
     },
     "loading": {
         "message": "Loading..."
@@ -271,5 +271,11 @@
     },
     "upload_model_file": {
         "message": "Upload model file"
+    },
+    "help": {
+        "message": "Help"
+    },
+    "what_it_is": {
+        "message": "What it is"
     }
 }

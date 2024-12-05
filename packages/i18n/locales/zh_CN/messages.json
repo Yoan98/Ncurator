@@ -268,5 +268,11 @@
     },
     "upload_model_file": {
         "message": "上传模型文件"
+    },
+    "help": {
+        "message": "帮助"
+    },
+    "what_it_is": {
+        "message": "它是什么"
     }
 }
