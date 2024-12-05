@@ -262,14 +262,14 @@ const BeCuratorLandingPage = () => {
                         textAlign: 'center'
                     }}>
                         <Title level={2}>产品演示</Title>
-                        <div className="flex gap-10 justify-center h-[800px] overflow-hidden">
+                        <div className="flex flex-col gap-10">
                             <div className='flex flex-col items-center gap-2'>
-                                <div className="text-lg font-bold">搜索</div>
-                                <video src={'./video/search.mp4'} autoPlay muted loop />
+                                <div className="text-lg font-bold">搜索模式</div>
+                                <video src={'./video/search.mp4'} style={{ width: '900px' }} autoPlay muted loop />
                             </div>
                             <div className='flex flex-col items-center gap-2'>
-                                <div className="text-lg font-bold">聊天</div>
-                                <video src={'./video/chat.mp4'} autoPlay muted loop />
+                                <div className="text-lg font-bold">聊天模式</div>
+                                <video src={'./video/chat.mp4'} style={{ width: '900px' }} autoPlay muted loop />
                             </div>
                         </div>
                     </section>
@@ -360,7 +360,7 @@ const BeCuratorLandingPage = () => {
                                     <List
                                         itemLayout="horizontal"
                                         dataSource={[
-                                            '如果初次搜索结果不满意，可尝试调整您的询问语句。',
+                                            '如果初次搜索结果不满意，可尝试调整您的询问语句,或者重新生成回答。',
                                             '使用更精确的关键词或相近的语义词，避免过于宽泛或模糊的表述。',
                                             '必要时可以尝试使用不同的表达方式或同义词。'
                                         ]}
