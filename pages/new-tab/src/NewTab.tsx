@@ -266,7 +266,7 @@ const BeCuratorLandingPage = () => {
                             { key: 'what', label: t('what_it_is') + '?', children: tabContents.what },
                             { key: 'why', label: t('why_use_it') + '?', children: tabContents.why },
                             { key: 'how', label: t('how_to_use_it') + '?', children: tabContents.how },
-                            { key: 'help', label: t('need_help'), children: tabContents.help },
+                            { key: 'help', label: t('need_help') + '?', children: tabContents.help },
                             { key: 'features', label: t('next_stage_features'), children: tabContents.features }
                         ]}
                     />
