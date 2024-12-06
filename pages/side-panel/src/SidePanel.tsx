@@ -134,7 +134,7 @@ const SidePanel = () => {
             setPagePath('/llm-set');
         } else if (key == 3) {
             //打开tab页
-            chrome.tabs.create({ url: chrome.runtime.getURL('new-tab/index.html') });
+            window.open('https://yoan98.github.io/BeCuratorIntroduce/')
         }
     }
     const handleChatHistoryUpdate = (localChatHistory: Chat.LocalHistory[]) => {
