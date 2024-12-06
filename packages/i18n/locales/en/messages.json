@@ -318,7 +318,7 @@
         "message": "Configure LLM Model"
     },
     "choose_appropriate_model": {
-        "message": "Choose the appropriate model. Note that the larger the model, the more memory it consumes. Based on testing, the 3B model meets basic requirements, while the 8B model performs better."
+        "message": "Choose the appropriate model. Note that the larger the model, the more memory it consumes. Based on testing, the 3B model meets basic requirements,but a little fool"
     },
     "import_resources": {
         "message": "Import Resources"
