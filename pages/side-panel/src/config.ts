@@ -37,34 +37,38 @@ export const CHAT_SYSTEM_PROMPT =
 export const KNOWLEDGE_USER_PROMPT = "Use the following context when answering the question at the end. Don't use any other knowledge. The documents below have been retrieved and sorted by relevance. Please use them in the order they are presented, with the most relevant ones first.If the document is not match question, ignore them."
 // llm
 export const LLM_GENERATE_MAX_TOKENS = 300;
-export const LLM_MODEL_LIST = [{
-    name: 'Llama-3.1-8B',
-    modelSizeType: 1,
-    modelId: 'Llama-3.1-8B-Instruct-q4f16_1-MLC',
-    wasmFileName: 'Llama-3_1-8B-Instruct-q4f16_1-ctx4k_cs1k-webgpu.wasm',
-    vramRequiredMB: 5001,
-    contextWindowSize: 4096
+export const LLM_MODEL_LIST = [
+    {
+        name: 'Qwen2.5-3B',
+        modelSizeType: 2,
+        modelId: 'Qwen2.5-3B-Instruct-q4f32_1-MLC',
+        wasmFileName: 'Qwen2.5-3B-Instruct-q4f32_1-ctx4k_cs1k-webgpu.wasm',
+        vramRequiredMB: 2893,
+        contextWindowSize: 4096,
+    },
+    {
+        name: 'Qwen2.5-7B',
+        modelSizeType: 1,
+        modelId: 'Qwen2.5-7B-Instruct-q4f16_1-MLC',
+        wasmFileName: 'Qwen2-7B-Instruct-q4f16_1-ctx4k_cs1k-webgpu.wasm',
+        vramRequiredMB: 5106,
+        contextWindowSize: 4096,
+    },
+    {
+        name: 'Llama-3.2-3B',
+        modelSizeType: 2,
+        modelId: 'Llama-3.2-3B-Instruct-q4f32_1-MLC',
+        wasmFileName: 'Llama-3.2-3B-Instruct-q4f32_1-ctx4k_cs1k-webgpu.wasm',
+        vramRequiredMB: 2951,
+        contextWindowSize: 4096
 
-}, {
-    name: 'Llama-3.2-3B',
-    modelSizeType: 2,
-    modelId: 'Llama-3.2-3B-Instruct-q4f32_1-MLC',
-    wasmFileName: 'Llama-3.2-3B-Instruct-q4f32_1-ctx4k_cs1k-webgpu.wasm',
-    vramRequiredMB: 2951,
-    contextWindowSize: 4096
+    },
+    {
+        name: 'Llama-3.1-8B',
+        modelSizeType: 1,
+        modelId: 'Llama-3.1-8B-Instruct-q4f16_1-MLC',
+        wasmFileName: 'Llama-3_1-8B-Instruct-q4f16_1-ctx4k_cs1k-webgpu.wasm',
+        vramRequiredMB: 5001,
+        contextWindowSize: 4096
 
-}, {
-    name: 'Qwen2.5-7B',
-    modelSizeType: 1,
-    modelId: 'Qwen2.5-7B-Instruct-q4f16_1-MLC',
-    wasmFileName: 'Qwen2-7B-Instruct-q4f16_1-ctx4k_cs1k-webgpu.wasm',
-    vramRequiredMB: 5106,
-    contextWindowSize: 4096,
-}, {
-    name: 'Qwen2.5-3B',
-    modelSizeType: 2,
-    modelId: 'Qwen2.5-3B-Instruct-q4f32_1-MLC',
-    wasmFileName: 'Qwen2.5-3B-Instruct-q4f32_1-ctx4k_cs1k-webgpu.wasm',
-    vramRequiredMB: 2893,
-    contextWindowSize: 4096,
-}]
+    },]

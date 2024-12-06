@@ -312,19 +312,21 @@ const LlmSetup = () => {
                 </Tooltip>
             </div>
 
-            <div className='text-base font-bold mb-2 '>{t('loaded_model')}</div>
-            <div className="loaded-models mb-3 space-y-2">
-                {
-                    !loadedModels.length ? <Empty description={t('no_loaded_model')} /> : loadedModels
-                }
-            </div>
+            <div className='flex-1 overflow-y-auto model-list'>
+                <div className='text-base font-bold mb-2 '>{t('loaded_model')}</div>
+                <div className="loaded-models mb-3 space-y-2">
+                    {
+                        !loadedModels.length ? <Empty description={t('no_loaded_model')} /> : loadedModels
+                    }
+                </div>
 
-            <div className='text-base font-bold mt-4'>{t('unloaded_model')}</div>
-            <div className="text-xs text-text-500 mb-2">{t('download_model_tip')}</div>
-            <div className="unloaded-models mb-3 space-y-2">
-                {
-                    !unloadedModels.length ? <Empty description={t('no_unloaded_model')} /> : unloadedModels
-                }
+                <div className='text-base font-bold mt-4'>{t('unloaded_model')}</div>
+                <div className="text-xs text-text-500 mb-2">{t('download_model_tip')}</div>
+                <div className="unloaded-models mb-3 space-y-2">
+                    {
+                        !unloadedModels.length ? <Empty description={t('no_unloaded_model')} /> : unloadedModels
+                    }
+                </div>
             </div>
 
             <Modal confirmLoading={uploadLoading} cancelButtonProps={{ loading: uploadLoading }} maskClosable={false} centered title={t('upload_model_file')} open={uploadModalOpen} onOk={handleUploadConfirm} onCancel={() => { setUploadModalOpen(false) }}>

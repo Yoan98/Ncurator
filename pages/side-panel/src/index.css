@@ -15,6 +15,10 @@
     max-height: calc(100vh - 204px) !important;
 }
 
+.model-list {
+    max-height: calc(100vh - 150px) !important;
+}
+
 .chat-markdown {
 
     font-size: 1rem;
