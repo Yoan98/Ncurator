@@ -272,6 +272,9 @@
     "help": {
         "message": "帮助"
     },
+    "download_model_tip": {
+        "message": "模型默认将从huggingface下载，如网速受限，可邮箱作者，从其他渠道下载模型到本地再上传"
+    },
     "what_it_is": {
         "message": "它是什么"
     },

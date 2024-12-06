@@ -320,7 +320,7 @@ const LlmSetup = () => {
             </div>
 
             <div className='text-base font-bold mt-4'>{t('unloaded_model')}</div>
-            {/* <div className="text-xs text-text-500 mb-2">模型默认将从huggingface下载，如网速受限，可查看此链接步骤，下载模型到本地再上传</div> */}
+            <div className="text-xs text-text-500 mb-2">{t('download_model_tip')}</div>
             <div className="unloaded-models mb-3 space-y-2">
                 {
                     !unloadedModels.length ? <Empty description={t('no_unloaded_model')} /> : unloadedModels

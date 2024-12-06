@@ -21,7 +21,6 @@ import {
 import { AiFillSafetyCertificate } from "react-icons/ai";
 import { CiCircleCheck, CiFileOn, CiDatabase, CiSearch } from "react-icons/ci";
 import { AiOutlineInfoCircle } from "react-icons/ai";
-import { t } from '@extension/i18n';
 import { FiCheckCircle } from "react-icons/fi";
 
 const { Title, Paragraph, Text } = Typography;

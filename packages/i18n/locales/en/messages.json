@@ -320,6 +320,9 @@
     "choose_appropriate_model": {
         "message": "Choose the appropriate model. Note that the larger the model, the more memory it consumes. Based on testing, the 3B model meets basic requirements"
     },
+    "download_model_tip": {
+        "message": "The model is by default downloaded from Hugging Face. If the internet speed is limited, you can email the author to download the model from other sources and upload it locally"
+    },
     "import_resources": {
         "message": "Import Resources"
     },
