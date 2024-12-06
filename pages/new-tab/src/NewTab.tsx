@@ -101,7 +101,7 @@ const BeCuratorLandingPage = () => {
                     itemLayout="vertical"
                     dataSource={[
                         { step: '下载安装', desc: '去谷歌应用商店下载BeCurator' },
-                        { step: '配置LLM模型', desc: '选择合适的模型,中文推荐QianWen,英文推荐Llama', imgList: ['./img/setup_llm.png'] },
+                        { step: '配置LLM模型', desc: '选择合适的模型,注意模型大小,越大模型占用内存越高,经测试3B模型满足最基本诉求,8B更好', imgList: ['./img/llm_setup/1.png', './img/llm_setup/2.png', './img/llm_setup/3.png',] },
                         { step: '导入资源', desc: '上传文档、网页链接', imgList: ['./img/add_resource/1.png', './img/add_resource/2.png', './img/add_resource/3.png', './img/add_resource/4.png', './img/add_resource/5.png'] },
                         { step: '智能搜索', desc: '使用自然语言查询', imgList: ['./img/search.png'] },
                     ]}
@@ -143,6 +143,14 @@ const BeCuratorLandingPage = () => {
                     </Col>
                 ))}
             </Row>
+        ),
+        help: (
+            <div className='flex justify-center'>
+                <div>
+                    <div className='font-bold text-lg text-center mb-2'>xiaoyuan9816@gmail.com</div>
+                    <div className='text-center'>作者(Yoan)邮箱,欢迎反馈各类问题来毒打作者(＞﹏＜)</div>
+                </div>
+            </div>
         )
     };
 
@@ -252,7 +260,8 @@ const BeCuratorLandingPage = () => {
                             { key: 'what', label: t('what_it_is') + '?', children: tabContents.what },
                             { key: 'why', label: '为什么使用它?', children: tabContents.why },
                             { key: 'how', label: '如何使用它?', children: tabContents.how },
-                            { key: 'features', label: '即将上线功能', children: tabContents.features }
+                            { key: 'help', label: '需要帮助?', children: tabContents.help },
+                            { key: 'features', label: '下一阶段功能', children: tabContents.features }
                         ]}
                     />
 
@@ -265,11 +274,11 @@ const BeCuratorLandingPage = () => {
                         <div className="flex flex-col gap-10">
                             <div className='flex flex-col items-center gap-2'>
                                 <div className="text-lg font-bold">搜索模式</div>
-                                <video src={'./video/search.mp4'} style={{ width: '900px' }} autoPlay muted loop />
+                                <video src={'./video/search.mp4'} className='rounded-lg' style={{ maxWidth: '1000px', boxShadow: `rgba(0, 0, 0, 0.1) 0px 4px 6px` }} autoPlay muted loop />
                             </div>
                             <div className='flex flex-col items-center gap-2'>
                                 <div className="text-lg font-bold">聊天模式</div>
-                                <video src={'./video/chat.mp4'} style={{ width: '900px' }} autoPlay muted loop />
+                                <video src={'./video/chat.mp4'} className='rounded-lg' style={{ maxWidth: '1000px', boxShadow: `rgba(0, 0, 0, 0.1) 0px 4px 6px` }} autoPlay muted loop />
                             </div>
                         </div>
                     </section>
@@ -282,7 +291,7 @@ const BeCuratorLandingPage = () => {
                     }}>
                         <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
                             <Title level={2} style={{ textAlign: 'center', marginBottom: '32px' }}>
-                                配置要求
+                                配置建议
                             </Title>
                             <Row gutter={[24, 24]}>
                                 <Col xs={24} md={12}>
@@ -346,13 +355,13 @@ const BeCuratorLandingPage = () => {
                             }}
                         >
                             <Title level={2} style={{ textAlign: 'center', marginBottom: '32px' }}>
-                                如何更好地使用系统
+                                如何更好地使用BeCurator
                             </Title>
                             <Space direction="vertical" size="large">
                                 <div>
-                                    <Title level={4}>系统工作原理</Title>
+                                    <Title level={4}>BeCurator工作原理</Title>
                                     <Paragraph>
-                                        BeCurator 基于语义和关键词匹配技术。当您输入问题时，系统会智能地分析您的查询，并从知识库中检索最相关的信息。
+                                        BeCurator 基于语义和关键词匹配技术。当您输入问题时，BeCurator会智能地分析您的查询，并从您的知识库中检索最相关的信息。
                                     </Paragraph>
                                 </div>
                                 <div>
@@ -384,10 +393,10 @@ const BeCuratorLandingPage = () => {
                 }}>
                     <div className="text-lg text-center mb-[14px]">作者感言</div>
                     <Paragraph style={{ textAlign: 'center', color: '#666' }}>
-                        开发该系统的想法,来自于DAnswer,从很多设计与功能上都有借鉴,感谢DAnswer团队的开源精神
+                        BeCurator有很多地方的想法与架构设计,都来自于Danswer,感谢Danswer团队的开源精神
                     </Paragraph>
                     <Paragraph style={{ textAlign: 'center', color: '#666' }}>
-                        <a href='https://www.danswer.ai/'>DAnswer官网</a>
+                        <a href='https://www.danswer.ai/'>Danswer官网</a>
                     </Paragraph>
 
                 </footer>
