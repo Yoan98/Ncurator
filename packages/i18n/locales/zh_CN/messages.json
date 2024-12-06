@@ -315,7 +315,7 @@
         "message": "配置LLM模型"
     },
     "choose_appropriate_model": {
-        "message": "选择合适的模型,注意模型大小,越大模型占用内存越高,经测试3B模型能满足最基本诉求,但有点勺"
+        "message": "选择合适的模型,注意模型大小,越大模型占用内存越高,经测试3B模型能满足最基本诉求"
     },
     "import_resources": {
         "message": "导入资源"
