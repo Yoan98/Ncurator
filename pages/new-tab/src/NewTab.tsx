@@ -16,9 +16,9 @@ import zhCN from 'antd/locale/zh_CN';
 import enUS from 'antd/lib/locale/en_US';
 import {
     FaSearch,
-    FaBolt,
-    FaCloud
+    FaBrain,
 } from 'react-icons/fa';
+import { AiFillSafetyCertificate } from "react-icons/ai";
 import { CiCircleCheck, CiFileOn, CiDatabase, CiSearch } from "react-icons/ci";
 import { AiOutlineInfoCircle } from "react-icons/ai";
 import { t } from '@extension/i18n';
@@ -32,16 +32,17 @@ const BeCuratorLandingPage = () => {
 
     const tabContents = {
         what: (
-            <Row gutter={[24, 24]} align="middle" justify="center">
-                <Title level={2}>它是什么?</Title>
-                <Paragraph className='px-[40px]'>
-                    BeCurator 是一款注重数据安全的本地知识管理工具，支持本地采集各种数据（如文件、网页等），并通过本地存储和智能搜索功能进行高效管理。同时借助本地 AI 技术，结合您的问题和本地数据，BeCurator 能提供智能分析与精准回答，保障数据安全的同时，显著提升工作效率。
+            <div className='flex flex-col gap-[24px] items-center'>
+                <Title level={2}>{t('what_it_is')}?</Title>
+                <Paragraph className='max-w-[1000px] text-base'>
+                    <span className='font-bold'>BeCurator</span> {t('BeCurator_desc')}
                 </Paragraph>
+
                 <Space direction="vertical">
                     {[
-                        { icon: <CiFileOn size={30} />, text: '多源文件导入' },
-                        { icon: <CiDatabase size={30} />, text: '本地数据存储' },
-                        { icon: <CiSearch size={30} />, text: '智能语义搜索' }
+                        { icon: <CiFileOn size={30} />, text: t('multi_source_file_import') },
+                        { icon: <CiDatabase size={30} />, text: t('local_data_storage') },
+                        { icon: <CiSearch size={30} />, text: t('intelligent_semantic_search') }
                     ].map((item, index) => (
                         <Space key={index} align="center">
                             <Text style={{ fontSize: '1.5em', color: '#555' }}>{item.icon}</Text>
@@ -49,25 +50,25 @@ const BeCuratorLandingPage = () => {
                         </Space>
                     ))}
                 </Space>
-            </Row>
+            </div>
         ),
         why: (
             <Row gutter={[24, 24]}>
                 {[
                     {
-                        icon: <FaBolt />,
-                        title: '精准检索',
-                        desc: '利用向量搜索技术，可精准定位您需要的信息'
-                    },
-                    {
-                        icon: <FaCloud />,
-                        title: '数据安全',
-                        desc: '数据与AI计算只在您的电脑完成，不涉及外网，保护您的隐私和数据安全'
-                    },
-                    {
                         icon: <FaSearch />,
-                        title: '智能分析',
-                        desc: 'AI驱动的深度分析，将零散知识转化为洞见'
+                        title: t('accurate_search'),
+                        desc: t('vector_search_technology')
+                    },
+                    {
+                        icon: <AiFillSafetyCertificate />,
+                        title: t('data_security'),
+                        desc: t('data_and_ai_computation')
+                    },
+                    {
+                        icon: <FaBrain />,
+                        title: t('intelligent_analysis'),
+                        desc: t('ai_driven_deep_analysis')
                     }
                 ].map((item, index) => (
                     <Col xs={24} md={8} key={index}>
@@ -98,17 +99,18 @@ const BeCuratorLandingPage = () => {
         how: (
             <Row gutter={[24, 24]} align="middle" justify="center">
                 <List
+                    className='max-w-[600px]'
                     itemLayout="vertical"
                     dataSource={[
-                        { step: '下载安装', desc: '去谷歌应用商店下载BeCurator' },
-                        { step: '配置LLM模型', desc: '选择合适的模型,注意模型大小,越大模型占用内存越高,经测试3B模型满足最基本诉求,8B更好', imgList: ['./img/llm_setup/1.png', './img/llm_setup/2.png', './img/llm_setup/3.png',] },
-                        { step: '导入资源', desc: '上传文档、网页链接', imgList: ['./img/add_resource/1.png', './img/add_resource/2.png', './img/add_resource/3.png', './img/add_resource/4.png', './img/add_resource/5.png'] },
-                        { step: '智能搜索', desc: '使用自然语言查询', imgList: ['./img/search.png'] },
+                        { step: t('download_and_install'), desc: t('download_becurator_from_google_play') },
+                        { step: t('configure_llm_model'), desc: t('choose_appropriate_model'), imgList: ['./img/llm_setup/1.png', './img/llm_setup/2.png', './img/llm_setup/3.png',] },
+                        { step: t('import_resources'), desc: t('upload_documents_and_links'), imgList: ['./img/add_resource/1.png', './img/add_resource/2.png', './img/add_resource/3.png', './img/add_resource/4.png', './img/add_resource/5.png'] },
+                        { step: t('intelligent_search'), desc: t('use_natural_language_query'), imgList: ['./img/search.png'] },
                     ]}
                     renderItem={(item, index) => (
                         <List.Item key={index}>
                             <Title level={4}>{item.step}</Title>
-                            <Paragraph>{item.desc}</Paragraph>
+                            <Paragraph className='max-w-[400px]'>{item.desc}</Paragraph>
                             {
                                 item.imgList &&
                                 <Image.PreviewGroup >
@@ -125,10 +127,13 @@ const BeCuratorLandingPage = () => {
         features: (
             <Row gutter={[24, 24]}>
                 {[
-                    { title: 'gpt4等模型兼容', desc: '打通第三方大模型的调用能力' },
-                    { title: '邮箱扩展', desc: '满足需要分析与检索邮箱信息的用户' },
-                    { title: '知识库扩展', desc: '打通第三方知识库数据获取,如notion等' },
-                    { title: '数据分析', desc: '支持各类表格等数据分析' }
+                    {
+                        title: t('gpt4_compatible_models')
+                        , desc: t('integrate_third_party_models')
+                    },
+                    { title: t('email_extension'), desc: t('meet_user_needs_for_email_analysis_and_search') },
+                    { title: t('knowledge_base_extension'), desc: t('integrate_third_party_knowledge_base_data') },
+                    { title: t('data_analysis'), desc: t('support_table_data_analysis') }
                 ].map((item, index) => (
                     <Col xs={24} md={6} key={index}>
                         <Card
@@ -148,7 +153,7 @@ const BeCuratorLandingPage = () => {
             <div className='flex justify-center'>
                 <div>
                     <div className='font-bold text-lg text-center mb-2'>xiaoyuan9816@gmail.com</div>
-                    <div className='text-center'>作者(Yoan)邮箱,欢迎反馈各类问题来毒打作者(＞﹏＜)</div>
+                    <div className='text-center'>{t('author_email_feedback')}</div>
                 </div>
             </div>
         )
@@ -222,7 +227,7 @@ const BeCuratorLandingPage = () => {
                                 {/* <Button type="text">功能</Button> */}
                                 {/* <Button type="text">文档</Button> */}
                                 <Button type="primary" style={{ backgroundColor: '#404040' }}>
-                                    立即下载
+                                    {t('free_download')}
                                 </Button>
                             </Space>
                         </Col>
@@ -233,20 +238,21 @@ const BeCuratorLandingPage = () => {
                 <main style={{ padding: '48px 24px' }}>
                     {/* Hero Section */}
                     <section style={{ textAlign: 'center', marginBottom: '64px' }}>
-                        <Title level={1}>BeCurator: 个人知识管理的革命性工具</Title>
+                        <Title level={1}>BeCurator: {t('revolutionary_personal_knowledge_management_tool')}</Title>
                         <Paragraph style={{
                             maxWidth: '800px',
                             margin: '0 auto 32px',
                             color: '#666'
                         }}>
-                            一站式知识收集、本地存储、本地AI计算和智能检索，将您的知识转化为可即时访问的个人智能助理。
+                            {t('one_stop_knowledge_collection_local_storage_ai_computation_and_intelligent_search')
+                            }
                         </Paragraph>
                         <Space>
                             <Button
                                 type="primary"
                                 size="large"
                             >
-                                免费下载
+                                {t('free_download')}
                             </Button>
                         </Space>
                     </section>
@@ -258,10 +264,10 @@ const BeCuratorLandingPage = () => {
                         size="large"
                         items={[
                             { key: 'what', label: t('what_it_is') + '?', children: tabContents.what },
-                            { key: 'why', label: '为什么使用它?', children: tabContents.why },
-                            { key: 'how', label: '如何使用它?', children: tabContents.how },
-                            { key: 'help', label: '需要帮助?', children: tabContents.help },
-                            { key: 'features', label: '下一阶段功能', children: tabContents.features }
+                            { key: 'why', label: t('why_use_it') + '?', children: tabContents.why },
+                            { key: 'how', label: t('how_to_use_it') + '?', children: tabContents.how },
+                            { key: 'help', label: t('need_help'), children: tabContents.help },
+                            { key: 'features', label: t('next_stage_features'), children: tabContents.features }
                         ]}
                     />
 
@@ -270,14 +276,14 @@ const BeCuratorLandingPage = () => {
                         marginTop: '64px',
                         textAlign: 'center'
                     }}>
-                        <Title level={2}>产品演示</Title>
+                        <Title level={2}>{t('demo')}</Title>
                         <div className="flex flex-col gap-10">
                             <div className='flex flex-col items-center gap-2'>
-                                <div className="text-lg font-bold">搜索模式</div>
+                                <div className="text-lg font-bold">{t('search_mode')}</div>
                                 <video src={'./video/search.mp4'} className='rounded-lg' style={{ maxWidth: '1000px', boxShadow: `rgba(0, 0, 0, 0.1) 0px 4px 6px` }} autoPlay muted loop />
                             </div>
                             <div className='flex flex-col items-center gap-2'>
-                                <div className="text-lg font-bold">聊天模式</div>
+                                <div className="text-lg font-bold">{t('chat_mode')}</div>
                                 <video src={'./video/chat.mp4'} className='rounded-lg' style={{ maxWidth: '1000px', boxShadow: `rgba(0, 0, 0, 0.1) 0px 4px 6px` }} autoPlay muted loop />
                             </div>
                         </div>
@@ -291,7 +297,7 @@ const BeCuratorLandingPage = () => {
                     }}>
                         <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
                             <Title level={2} style={{ textAlign: 'center', marginBottom: '32px' }}>
-                                配置建议
+                                {t('configuration_recommendations')}
                             </Title>
                             <Row gutter={[24, 24]}>
                                 <Col xs={24} md={12}>
@@ -300,17 +306,17 @@ const BeCuratorLandingPage = () => {
                                             <Title level={4} className='flex items-center gap-2'>
                                                 <FiCheckCircle size={24} color='green' />
                                                 <span>
-                                                    电脑配置
+                                                    {t('computer_configuration')}
                                                 </span>
                                             </Title>
                                             <div>
-                                                <Text strong>浏览器：</Text>Chrome 浏览器
+                                                <Text strong>{t('browser')}：</Text>Chrome
                                                 <Text type="secondary" style={{ marginLeft: '8px' }}>
-                                                    (版本 113 及以上)
+                                                    {t('version_113_and_above')}
                                                 </Text>
                                             </div>
                                             <div>
-                                                <Text strong>推荐内存：</Text>16G+
+                                                <Text strong>{t('recommended_memory')}：</Text>16G+
                                             </div>
                                         </Space>
                                     </Card>
@@ -320,7 +326,7 @@ const BeCuratorLandingPage = () => {
                                         <Title level={4} className='gap-2 flex items-center'>
                                             <AiOutlineInfoCircle size={26} color='blue' />
                                             <span>
-                                                WebGPU 支持
+                                                {t('webgpu_support')}
                                             </span>
                                         </Title>
                                         {isWebGPUSupported ? (
@@ -330,11 +336,11 @@ const BeCuratorLandingPage = () => {
                                                     marginTop: '16px'
                                                 }}
                                             >
-                                                ✓ 您的浏览器支持 WebGPU
+                                                {t('browser_supports_webgpu')}
                                             </Paragraph>
                                         ) : (
                                             <Paragraph style={{ color: 'red', marginTop: '16px' }}>
-                                                × 您的浏览器不支持 WebGPU，建议升级 Chrome 浏览器
+                                                {t('browser_does_not_support_webgpu')}
                                             </Paragraph>
                                         )
 
@@ -355,23 +361,23 @@ const BeCuratorLandingPage = () => {
                             }}
                         >
                             <Title level={2} style={{ textAlign: 'center', marginBottom: '32px' }}>
-                                如何更好地使用BeCurator
+                                {t('how_to_use_becurator_better')}
                             </Title>
                             <Space direction="vertical" size="large">
                                 <div>
-                                    <Title level={4}>BeCurator工作原理</Title>
+                                    <Title level={4}>{t('becurator_working_principle')}</Title>
                                     <Paragraph>
-                                        BeCurator 基于语义和关键词匹配技术。当您输入问题时，BeCurator会智能地分析您的查询，并从您的知识库中检索最相关的信息。
+                                        {t('becurator_working_principle_description')}
                                     </Paragraph>
                                 </div>
                                 <div>
-                                    <Title level={4}>优化搜索建议</Title>
+                                    <Title level={4}>{t('optimize_search_suggestions')}</Title>
                                     <List
                                         itemLayout="horizontal"
                                         dataSource={[
-                                            '如果初次搜索结果不满意，可尝试调整您的询问语句,或者重新生成回答。',
-                                            '使用更精确的关键词或相近的语义词，避免过于宽泛或模糊的表述。',
-                                            '必要时可以尝试使用不同的表达方式或同义词。'
+                                            t('adjust_query_for_better_results'),
+                                            t('use_precise_keywords_or_synonyms'),
+                                            t('try_different_phrases_or_synonyms_if_needed')
                                         ]}
                                         renderItem={(item) => (
                                             <List.Item>
@@ -391,12 +397,12 @@ const BeCuratorLandingPage = () => {
                     padding: '32px 0',
                     borderTop: '1px solid #f0f0f0'
                 }}>
-                    <div className="text-lg text-center mb-[14px]">作者感言</div>
+                    <div className="text-lg text-center mb-[14px]">{t('author_message')}</div>
                     <Paragraph style={{ textAlign: 'center', color: '#666' }}>
-                        BeCurator有很多地方的想法与架构设计,都来自于Danswer,感谢Danswer团队的开源精神
+                        {t('acknowledgment_to_danswer_team')}
                     </Paragraph>
                     <Paragraph style={{ textAlign: 'center', color: '#666' }}>
-                        <a href='https://www.danswer.ai/'>Danswer官网</a>
+                        <a href='https://www.danswer.ai/'>Danswer WebSite</a>
                     </Paragraph>
 
                 </footer>

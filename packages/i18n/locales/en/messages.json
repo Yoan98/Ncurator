@@ -276,6 +276,171 @@
         "message": "Help"
     },
     "what_it_is": {
-        "message": "What it is"
+        "message": "What is it"
+    },
+    "BeCurator_desc": {
+        "message": "is a local knowledge management tool focused on data security. It supports the local collection of various types of data (such as files, web pages, etc.), and efficiently manages them through local storage and intelligent search features. Leveraging local AI technology, BeCurator combines your queries with local data to provide intelligent analysis and accurate answers, ensuring data security while significantly boosting work efficiency."
+    },
+    "multi_source_file_import": {
+        "message": "Multi-source File Import"
+    },
+    "local_data_storage": {
+        "message": "Local Data Storage"
+    },
+    "intelligent_semantic_search": {
+        "message": "Intelligent Semantic Search"
+    },
+    "accurate_search": {
+        "message": "Accurate Search"
+    },
+    "vector_search_technology": {
+        "message": "By using vector search technology, you can accurately locate the information you need"
+    },
+    "data_security": {
+        "message": "Data Security"
+    },
+    "data_and_ai_computation": {
+        "message": "Data and AI computation are performed solely on your computer, without involving the internet, protecting your privacy and data security"
+    },
+    "intelligent_analysis": {
+        "message": "Intelligent Analysis"
+    },
+    "ai_driven_deep_analysis": {
+        "message": "AI-driven deep analysis transforms fragmented knowledge into insights."
+    },
+    "download_and_install": {
+        "message": "Download and Install"
+    },
+    "download_becurator_from_google_play": {
+        "message": "Download BeCurator from Google Play."
+    },
+    "configure_llm_model": {
+        "message": "Configure LLM Model"
+    },
+    "choose_appropriate_model": {
+        "message": "Choose the appropriate model. Note that the larger the model, the more memory it consumes. Based on testing, the 3B model meets basic requirements, while the 8B model performs better."
+    },
+    "import_resources": {
+        "message": "Import Resources"
+    },
+    "upload_documents_and_links": {
+        "message": "Upload Documents or Setup Web Links.This step will involve BeCurator building text vectors, which can be time-consuming. Reference data: With a 3060Ti GPU, it takes approximately 2 hours to process 1680 chapters of a novel."
+    },
+    "intelligent_search": {
+        "message": "Intelligent Search"
+    },
+    "use_natural_language_query": {
+        "message": "Use Natural Language Query."
+    },
+    "gpt4_compatible_models": {
+        "message": "GPT-4 and other models compatible"
+    },
+    "integrate_third_party_models": {
+        "message": "Integrate third-party large model invocation capabilities"
+    },
+    "email_extension": {
+        "message": "Email Extension"
+    },
+    "meet_user_needs_for_email_analysis_and_search": {
+        "message": "Meet the needs of users who require email analysis and search"
+    },
+    "knowledge_base_extension": {
+        "message": "Knowledge Base Extension"
+    },
+    "integrate_third_party_knowledge_base_data": {
+        "message": "Integrate third-party knowledge base data retrieval, such as Notion"
+    },
+    "data_analysis": {
+        "message": "Data Analysis"
+    },
+    "support_table_data_analysis": {
+        "message": "Support various types of table data analysis"
+    },
+    "author_email_feedback": {
+        "message": "Author (Yoan) email, feel free to provide feedback or issues (＞﹏＜)"
+    },
+    "download_now": {
+        "message": "Download"
+    },
+    "revolutionary_personal_knowledge_management_tool": {
+        "message": "Revolutionary Personal Knowledge Management Tool"
+    },
+    "one_stop_knowledge_collection_local_storage_ai_computation_and_intelligent_search": {
+        "message": "One-stop knowledge collection, local storage, local AI computation, and intelligent search, transforming your knowledge into an instantly accessible personal intelligent assistant"
+    },
+    "free_download": {
+        "message": "Free Download"
+    },
+    "why_use_it": {
+        "message": "Why Use It"
+    },
+    "how_to_use_it": {
+        "message": "How to Use It"
+    },
+    "need_help": {
+        "message": "Need Help"
+    },
+    "next_stage_features": {
+        "message": "Next Stage Features"
+    },
+    "demo": {
+        "message": "Demo"
+    },
+    "search_mode": {
+        "message": "Search Mode"
+    },
+    "chat_mode": {
+        "message": "Chat Mode"
+    },
+    "configuration_recommendations": {
+        "message": "Configuration Recommendations"
+    },
+    "computer_configuration": {
+        "message": "Computer Configuration"
+    },
+    "browser": {
+        "message": "Browser"
+    },
+    "version_113_and_above": {
+        "message": "(Version 113 and above)"
+    },
+    "recommended_memory": {
+        "message": "Recommended Memory"
+    },
+    "webgpu_support": {
+        "message": "WebGPU Support"
+    },
+    "browser_supports_webgpu": {
+        "message": "✓ Your browser supports WebGPU"
+    },
+    "browser_does_not_support_webgpu": {
+        "message": "× Your browser does not support WebGPU, it is recommended to upgrade Chrome browser"
+    },
+    "how_to_use_becurator_better": {
+        "message": "How to Use BeCurator Better"
+    },
+    "becurator_working_principle": {
+        "message": "BeCurator Working Principle"
+    },
+    "becurator_working_principle_description": {
+        "message": "BeCurator is based on semantic and keyword matching technology. When you input a query, BeCurator intelligently analyzes your query and retrieves the most relevant information from your knowledge base."
+    },
+    "optimize_search_suggestions": {
+        "message": "Optimize Search Suggestions"
+    },
+    "adjust_query_for_better_results": {
+        "message": "If the initial search results are unsatisfactory, try adjusting your query or regenerate the answer"
+    },
+    "use_precise_keywords_or_synonyms": {
+        "message": "Use more precise keywords or related synonyms, and avoid overly broad or vague expressions"
+    },
+    "try_different_phrases_or_synonyms_if_needed": {
+        "message": "If necessary, try using different expressions or synonyms"
+    },
+    "author_message": {
+        "message": "Author's Message"
+    },
+    "acknowledgment_to_danswer_team": {
+        "message": "Many of BeCurator's ideas and architectural designs come from Danswer. Thanks to the Danswer team for their open-source spirit"
     }
 }
