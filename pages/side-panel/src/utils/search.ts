@@ -106,10 +106,15 @@ export const searchDoc = async ({ question, connections, maxResTextSize, k = 10 
     await store.connect(constant.DEFAULT_INDEXDB_NAME);
 
     // 随机向量数据
-    const localProjections = await store.get({
+    const localProjections: DB.LSH_PROJECTION | undefined = await store.get({
         storeName: constant.LSH_PROJECTION_DB_STORE_NAME,
         key: constant.LSH_PROJECTION_KEY_VALUE
     })
+    if (!localProjections || !localProjections.data) {
+        return {
+            searchedRes: []
+        }
+    }
 
     // 搜索向量索引表
     const searchLshIndex = async () => {
