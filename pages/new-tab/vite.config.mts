@@ -5,13 +5,17 @@ const rootDir = resolve(__dirname);
 const srcDir = resolve(rootDir, 'src');
 
 export default withPageConfig({
-  resolve: {
-    alias: {
-      '@src': srcDir,
+    resolve: {
+        alias: {
+            '@src': srcDir,
+        },
     },
-  },
-  publicDir: resolve(rootDir, 'public'),
-  build: {
-    outDir: resolve(rootDir, '..', '..', 'dist', 'new-tab'),
-  },
+    publicDir: resolve(rootDir, 'public'),
+    build: {
+        outDir: resolve(rootDir, '..', '..', 'githubpage', 'docs'),
+        sourcemap: false,
+        minify: true,
+        reportCompressedSize: true,
+        emptyOutDir: true,
+    },
 });
