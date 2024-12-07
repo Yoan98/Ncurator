@@ -8,7 +8,7 @@
 }
 
 .search-res-list {
-    max-height: calc(100vh - 460px) !important;
+    max-height: calc(100vh - 500px) !important;
 }
 
 .chat-content {
