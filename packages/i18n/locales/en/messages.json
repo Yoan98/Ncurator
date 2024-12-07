@@ -312,7 +312,7 @@
         "message": "Download and Install"
     },
     "download_becurator_from_google_play": {
-        "message": "Download BeCurator from Google Play."
+        "message": "Download BeCurator from Google Web Store"
     },
     "configure_llm_model": {
         "message": "Configure LLM Model"
