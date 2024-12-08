@@ -30,6 +30,10 @@ export enum MessageType {
     USER = 'user',
     ASSISTANT = 'assistant',
 };
+export enum ModelSort {
+    Api = 1,
+    Webllm
+}
 export const STORAGE_DEFAULT_MODEL_ID = 'defaultModelId'; // localStorage中默认模型id的名称
 export const STORAGE_LOADED_MODEL_IDS = 'loadedModelIds'; // localStorage中
 

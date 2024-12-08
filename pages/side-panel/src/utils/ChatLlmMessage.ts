@@ -1,13 +1,17 @@
 import { CHAT_SYSTEM_PROMPT } from '@src/config';
-import { WebWorkerMLCEngine } from "@mlc-ai/web-llm";
+import type { WebWorkerMLCEngine } from "@mlc-ai/web-llm";
 import type { ChatCompletionChunk } from "@mlc-ai/web-llm";
 import { KNOWLEDGE_USER_PROMPT } from '@src/config'
-import { getModelContextWindowSize, calculateTokens } from '@src/utils/tool';
+import { calculateTokens } from '@src/utils/tool';
+import type { LlmEngineController } from '@src/utils/LlmEngineController'
+import { ModelSort } from '@src/utils/constant';
+import type { OpenAI } from 'openai';
 
 interface ConstructorParams {
     responseStyle: 'text' | 'markdown'
     chatHistory?: Chat.LlmMessage[]
 }
+type StreamCb = (msg: string, finish_reason: string | null) => void
 
 // 消息管理
 export class ChatLlmMessage {
@@ -69,14 +73,15 @@ export class ChatLlmMessage {
         }
     }
 
-    async sendMsg({ prompt, type, searchTextRes, streamCb, llmEngine }: {
+    async sendMsg({ prompt, type, searchTextRes, streamCb, llmEngine, abortSignal }: {
         prompt: string,
         type: 'chat' | 'knowledge',
         searchTextRes?: Search.TextItemRes[],
-        streamCb?: (msg: string, chunk: ChatCompletionChunk) => void,
-        llmEngine: WebWorkerMLCEngine
+        streamCb?: (msg: string, finish_reason: string | null) => void,
+        llmEngine: LlmEngineController,
+        abortSignal?: AbortSignal
     }) {
-        const contextWindowSize = getModelContextWindowSize(llmEngine)
+        const contextWindowSize = llmEngine.modelInfo.contextWindowSize
 
         const userMsg = {
             role: "user" as 'user',
@@ -93,15 +98,78 @@ export class ChatLlmMessage {
         // 截断 chatHistory 以确保不会超过上下文窗口大小
         this.truncateChatHistory(contextWindowSize);
 
-        let curMessage = "";
-        const reply = await llmEngine.chat.completions.create({
+        let assistantMsg = ''
+        // 判断llm类型
+        if (llmEngine.modelInfo.sort === ModelSort.Webllm) {
+            assistantMsg = await this.webllmCompletionsCreate({
+                llmEngine,
+                streamCb,
+                messages: this.chatHistory
+            })
+        } else if (llmEngine.modelInfo.sort === ModelSort.Api) {
+            assistantMsg = await this.openaiCompletionsCreate({
+                llmEngine,
+                messages: this.chatHistory,
+                streamCb,
+                abortSignal
+            })
+        } else {
+            throw new Error('Unknown modelSort to sendMsg')
+        }
+
+        this.chatHistory.push({ role: "assistant", content: assistantMsg })
+
+        console.log('chatHistory', this.chatHistory)
+
+        return assistantMsg
+    }
+
+    private async webllmCompletionsCreate({
+        llmEngine,
+        streamCb,
+        messages,
+    }: {
+        llmEngine: LlmEngineController,
+        streamCb?: StreamCb,
+        messages: Chat.LlmMessage[],
+
+    }) {
+        const engine = llmEngine.engine as WebWorkerMLCEngine
+        const reply = await engine.chat.completions.create({
             stream: true,
-            messages: this.chatHistory,
-            // max_tokens: LLM_GENERATE_MAX_TOKENS,
-            // stream_options: {
-            //     include_usage: true
-            // }
+            messages,
         });
+
+        let curMessage = await this.openAiStyleStreamChunkToMessage(reply, streamCb)
+        return curMessage
+    }
+
+    private async openaiCompletionsCreate({
+        llmEngine,
+        messages,
+        streamCb,
+        abortSignal
+    }: {
+        llmEngine: LlmEngineController
+        messages: Chat.LlmMessage[]
+        streamCb?: StreamCb
+        abortSignal?: AbortSignal
+    }) {
+        const engine = llmEngine.engine as OpenAI
+        const reply = await engine.chat.completions.create({
+            model: llmEngine.modelInfo.modelId,
+            messages: messages,
+            stream: true,
+        }, {
+            signal: abortSignal
+        });
+
+        let curMessage = await this.openAiStyleStreamChunkToMessage(reply, streamCb)
+        return curMessage
+    }
+
+    private async openAiStyleStreamChunkToMessage(reply, streamCb?: StreamCb) {
+        let curMessage = "";
         for await (const chunk of reply) {
             const curDelta = chunk.choices[0]?.delta?.content;
             if (curDelta) {
@@ -109,20 +177,12 @@ export class ChatLlmMessage {
             }
 
             if (streamCb) {
-                streamCb(curMessage, chunk)
+                streamCb(curMessage, chunk.choices[0]?.finish_reason)
             }
-
-            // if (chunk.usage) {
-            //     usage = chunk.usage
-            // }
         }
-        this.chatHistory.push({ role: "assistant", content: curMessage })
-
-        console.log('chatHistory', this.chatHistory)
-
         return curMessage
-    }
 
+    }
     getChatHistory() {
         return this.chatHistory
     }

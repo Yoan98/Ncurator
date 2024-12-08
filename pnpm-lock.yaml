@@ -387,13 +387,13 @@ importers:
         version: 1.6.2
       '@langchain/community':
         specifier: ^0.3.11
-        version: 0.3.11(@ibm-cloud/watsonx-ai@1.1.2)(@langchain/core@0.3.16(openai@4.69.0(zod@3.23.8)))(@mlc-ai/web-llm@0.2.74)(@tensorflow/tfjs-converter@4.22.0(@tensorflow/tfjs-core@4.22.0))(@tensorflow/tfjs-core@4.22.0)(axios@1.7.7)(cheerio@1.0.0)(ibm-cloud-sdk-core@5.1.0)(ignore@5.3.2)(jsdom@16.7.0(canvas@2.11.2))(jsonwebtoken@9.0.2)(lodash@4.17.21)(mammoth@1.8.0)(openai@4.69.0(zod@3.23.8))(pdf-parse@1.1.1)(ws@8.18.0)
+        version: 0.3.11(@ibm-cloud/watsonx-ai@1.1.2)(@langchain/core@0.3.16(openai@4.76.0(zod@3.23.8)))(@mlc-ai/web-llm@0.2.74)(@tensorflow/tfjs-converter@4.22.0(@tensorflow/tfjs-core@4.22.0))(@tensorflow/tfjs-core@4.22.0)(axios@1.7.7)(cheerio@1.0.0)(ibm-cloud-sdk-core@5.1.0)(ignore@5.3.2)(jsdom@16.7.0(canvas@2.11.2))(jsonwebtoken@9.0.2)(lodash@4.17.21)(mammoth@1.8.0)(openai@4.76.0(zod@3.23.8))(pdf-parse@1.1.1)(ws@8.18.0)
       '@langchain/core':
         specifier: ^0.3.16
-        version: 0.3.16(openai@4.69.0(zod@3.23.8))
+        version: 0.3.16(openai@4.76.0(zod@3.23.8))
       '@langchain/textsplitters':
         specifier: ^0.1.0
-        version: 0.1.0(@langchain/core@0.3.16(openai@4.69.0(zod@3.23.8)))
+        version: 0.1.0(@langchain/core@0.3.16(openai@4.76.0(zod@3.23.8)))
       '@mlc-ai/web-llm':
         specifier: ^0.2.74
         version: 0.2.74
@@ -433,6 +433,9 @@ importers:
       mathjs:
         specifier: ^14.0.0
         version: 14.0.0
+      openai:
+        specifier: ^4.76.0
+        version: 4.76.0(zod@3.23.8)
       pdfjs-dist:
         specifier: ^4.4.168
         version: 4.4.168
@@ -5044,8 +5047,8 @@ packages:
   onnxruntime-web@1.20.0-dev.20241016-2b8fc5529b:
     resolution: {integrity: sha512-1XovqtgqeEFtupuyzdDQo7Tqj4GRyNHzOoXjapCEo4rfH3JrXok5VtqucWfRXHPsOI5qoNxMQ9VE+drDIp6woQ==}
 
-  openai@4.69.0:
-    resolution: {integrity: sha512-S3hOHSkk609KqwgH+7dwFrSvO3Gm3Nk0YWGyPHNscoMH/Y2tH1qunMi7gtZnLbUv4/N1elqCp6bDior2401kCQ==}
+  openai@4.76.0:
+    resolution: {integrity: sha512-QBGIetjX1C9xDp5XGa/3mPnfKI9BgAe2xHQX6PmO98wuW9qQaurBaumcYptQWc9LHZZq7cH/Y1Rjnsr6uUDdVw==}
     hasBin: true
     peerDependencies:
       zod: ^3.23.8
@@ -7618,18 +7621,18 @@ snapshots:
 
   '@js-preview/docx@1.6.2': {}
 
-  '@langchain/community@0.3.11(@ibm-cloud/watsonx-ai@1.1.2)(@langchain/core@0.3.16(openai@4.69.0(zod@3.23.8)))(@mlc-ai/web-llm@0.2.74)(@tensorflow/tfjs-converter@4.22.0(@tensorflow/tfjs-core@4.22.0))(@tensorflow/tfjs-core@4.22.0)(axios@1.7.7)(cheerio@1.0.0)(ibm-cloud-sdk-core@5.1.0)(ignore@5.3.2)(jsdom@16.7.0(canvas@2.11.2))(jsonwebtoken@9.0.2)(lodash@4.17.21)(mammoth@1.8.0)(openai@4.69.0(zod@3.23.8))(pdf-parse@1.1.1)(ws@8.18.0)':
+  '@langchain/community@0.3.11(@ibm-cloud/watsonx-ai@1.1.2)(@langchain/core@0.3.16(openai@4.76.0(zod@3.23.8)))(@mlc-ai/web-llm@0.2.74)(@tensorflow/tfjs-converter@4.22.0(@tensorflow/tfjs-core@4.22.0))(@tensorflow/tfjs-core@4.22.0)(axios@1.7.7)(cheerio@1.0.0)(ibm-cloud-sdk-core@5.1.0)(ignore@5.3.2)(jsdom@16.7.0(canvas@2.11.2))(jsonwebtoken@9.0.2)(lodash@4.17.21)(mammoth@1.8.0)(openai@4.76.0(zod@3.23.8))(pdf-parse@1.1.1)(ws@8.18.0)':
     dependencies:
       '@ibm-cloud/watsonx-ai': 1.1.2
-      '@langchain/core': 0.3.16(openai@4.69.0(zod@3.23.8))
-      '@langchain/openai': 0.3.11(@langchain/core@0.3.16(openai@4.69.0(zod@3.23.8)))
+      '@langchain/core': 0.3.16(openai@4.76.0(zod@3.23.8))
+      '@langchain/openai': 0.3.11(@langchain/core@0.3.16(openai@4.76.0(zod@3.23.8)))
       binary-extensions: 2.3.0
       expr-eval: 2.0.2
       flat: 5.0.2
       ibm-cloud-sdk-core: 5.1.0
       js-yaml: 4.1.0
-      langchain: 0.3.5(@langchain/core@0.3.16(openai@4.69.0(zod@3.23.8)))(axios@1.7.7)(cheerio@1.0.0)(openai@4.69.0(zod@3.23.8))
-      langsmith: 0.2.3(openai@4.69.0(zod@3.23.8))
+      langchain: 0.3.5(@langchain/core@0.3.16(openai@4.76.0(zod@3.23.8)))(axios@1.7.7)(cheerio@1.0.0)(openai@4.76.0(zod@3.23.8))
+      langsmith: 0.2.3(openai@4.76.0(zod@3.23.8))
       uuid: 10.0.0
       zod: 3.23.8
       zod-to-json-schema: 3.23.5(zod@3.23.8)
@@ -7660,13 +7663,13 @@ snapshots:
       - openai
       - peggy
 
-  '@langchain/core@0.3.16(openai@4.69.0(zod@3.23.8))':
+  '@langchain/core@0.3.16(openai@4.76.0(zod@3.23.8))':
     dependencies:
       ansi-styles: 5.2.0
       camelcase: 6.3.0
       decamelize: 1.2.0
       js-tiktoken: 1.0.15
-      langsmith: 0.2.3(openai@4.69.0(zod@3.23.8))
+      langsmith: 0.2.3(openai@4.76.0(zod@3.23.8))
       mustache: 4.2.0
       p-queue: 6.6.2
       p-retry: 4.6.2
@@ -7676,19 +7679,19 @@ snapshots:
     transitivePeerDependencies:
       - openai
 
-  '@langchain/openai@0.3.11(@langchain/core@0.3.16(openai@4.69.0(zod@3.23.8)))':
+  '@langchain/openai@0.3.11(@langchain/core@0.3.16(openai@4.76.0(zod@3.23.8)))':
     dependencies:
-      '@langchain/core': 0.3.16(openai@4.69.0(zod@3.23.8))
+      '@langchain/core': 0.3.16(openai@4.76.0(zod@3.23.8))
       js-tiktoken: 1.0.15
-      openai: 4.69.0(zod@3.23.8)
+      openai: 4.76.0(zod@3.23.8)
       zod: 3.23.8
       zod-to-json-schema: 3.23.5(zod@3.23.8)
     transitivePeerDependencies:
       - encoding
 
-  '@langchain/textsplitters@0.1.0(@langchain/core@0.3.16(openai@4.69.0(zod@3.23.8)))':
+  '@langchain/textsplitters@0.1.0(@langchain/core@0.3.16(openai@4.76.0(zod@3.23.8)))':
     dependencies:
-      '@langchain/core': 0.3.16(openai@4.69.0(zod@3.23.8))
+      '@langchain/core': 0.3.16(openai@4.76.0(zod@3.23.8))
       js-tiktoken: 1.0.15
 
   '@laynezh/vite-plugin-lib-assets@0.5.24(vite@5.4.9(@types/node@22.7.4)(sass@1.79.4)(terser@5.34.1))':
@@ -11015,15 +11018,15 @@ snapshots:
     dependencies:
       is-buffer: 1.1.6
 
-  langchain@0.3.5(@langchain/core@0.3.16(openai@4.69.0(zod@3.23.8)))(axios@1.7.7)(cheerio@1.0.0)(openai@4.69.0(zod@3.23.8)):
+  langchain@0.3.5(@langchain/core@0.3.16(openai@4.76.0(zod@3.23.8)))(axios@1.7.7)(cheerio@1.0.0)(openai@4.76.0(zod@3.23.8)):
     dependencies:
-      '@langchain/core': 0.3.16(openai@4.69.0(zod@3.23.8))
-      '@langchain/openai': 0.3.11(@langchain/core@0.3.16(openai@4.69.0(zod@3.23.8)))
-      '@langchain/textsplitters': 0.1.0(@langchain/core@0.3.16(openai@4.69.0(zod@3.23.8)))
+      '@langchain/core': 0.3.16(openai@4.76.0(zod@3.23.8))
+      '@langchain/openai': 0.3.11(@langchain/core@0.3.16(openai@4.76.0(zod@3.23.8)))
+      '@langchain/textsplitters': 0.1.0(@langchain/core@0.3.16(openai@4.76.0(zod@3.23.8)))
       js-tiktoken: 1.0.15
       js-yaml: 4.1.0
       jsonpointer: 5.0.1
-      langsmith: 0.2.3(openai@4.69.0(zod@3.23.8))
+      langsmith: 0.2.3(openai@4.76.0(zod@3.23.8))
       openapi-types: 12.1.3
       p-retry: 4.6.2
       uuid: 10.0.0
@@ -11037,7 +11040,7 @@ snapshots:
       - encoding
       - openai
 
-  langsmith@0.2.3(openai@4.69.0(zod@3.23.8)):
+  langsmith@0.2.3(openai@4.76.0(zod@3.23.8)):
     dependencies:
       '@types/uuid': 10.0.0
       commander: 10.0.1
@@ -11046,7 +11049,7 @@ snapshots:
       semver: 7.6.3
       uuid: 10.0.0
     optionalDependencies:
-      openai: 4.69.0(zod@3.23.8)
+      openai: 4.76.0(zod@3.23.8)
 
   language-subtag-registry@0.3.23: {}
 
@@ -11886,7 +11889,7 @@ snapshots:
       platform: 1.3.6
       protobufjs: 7.4.0
 
-  openai@4.69.0(zod@3.23.8):
+  openai@4.76.0(zod@3.23.8):
     dependencies:
       '@types/node': 18.19.63
       '@types/node-fetch': 2.6.11

@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { RiRobot2Line } from "react-icons/ri";
-import { CiSquareQuestion } from "react-icons/ci";
+import { CiSquareQuestion, CiCircleInfo } from "react-icons/ci";
 import { Tag, Button, Tooltip, Empty, message, Progress, Upload, Modal } from 'antd';
 import type { ProgressProps, UploadFile, UploadProps } from 'antd';
 import * as constant from '@src/utils/constant';
@@ -14,13 +14,19 @@ import { t } from '@extension/i18n';
 interface ModelItem {
     name: string,
     modelId: string,
-    wasmFileName: string,
     isDefault: boolean,
     isLoaded: boolean,
     loadingStatus: ProgressProps['status'],
     loadingPercent: number
-    vramRequiredMB: number
-    modelSizeType: 1 | 2
+    contextWindowSize: number,
+    sort: ModelSortUnion
+
+    // api类型的属性
+    apiKey?: string,
+    baseUrl?: string,
+    // webllm类型的属性
+    modelSizeType?: 1 | 2
+    wasmFileName?: string,
 }
 
 const DEFAULT_META_DATA = {
@@ -32,8 +38,8 @@ const DEFAULT_META_DATA = {
 const DEFAULT_MODEL_LIST: ModelItem[] = LLM_MODEL_LIST.map((model) => {
     return {
         ...model,
-        modelSizeType: model.modelSizeType as 1 | 2,
-        ...DEFAULT_META_DATA
+        modelSizeType: model.modelSizeType as 1 | 2 | undefined,
+        ...DEFAULT_META_DATA,
     }
 }
 )
@@ -110,7 +116,7 @@ const LlmSetup = () => {
                 });
             }
 
-            await downloadLlmModelFiles(model.modelId, modelLibURLPrefix, modelVersion, model.wasmFileName, initProgressCallback);
+            await downloadLlmModelFiles(model.modelId, modelLibURLPrefix, modelVersion, model.wasmFileName!, initProgressCallback);
 
             message.success(t('download_model_success'));
         } catch (error) {
@@ -140,7 +146,9 @@ const LlmSetup = () => {
             return;
         }
 
-        message.loading(t('setting_default_model'));
+        if (model.sort === constant.ModelSort.Webllm) {
+            message.loading(t('setting_default_model'));
+        }
 
         const loadRes = await reloadLlmModal(model.modelId);
         if (loadRes.status === 'Fail') {
@@ -225,6 +233,15 @@ const LlmSetup = () => {
             return t('medium');
         }
     }
+    const getModelSortText = (sort: ModelSortUnion) => {
+        if (sort === constant.ModelSort.Api) {
+            return t('external');
+        } else if (sort === constant.ModelSort.Webllm) {
+            return t('internal');
+        } else {
+            return 'unknown'
+        }
+    }
 
     const loadedModels = allLlmModels.filter((model) => model.isLoaded).map((model) => (
         <div className="model-item bg-white rounded-md shadow py-3 px-2 space-y-2" key={model.modelId}>
@@ -240,8 +257,10 @@ const LlmSetup = () => {
                 }
             </div>
             <div className="tag  flex items-center ">
-                <Tag color='gold' className='text-xs'>{getModelSizeText(model.modelSizeType)}</Tag>
-                <Tag color='gold' className='text-xs'>VRAM: {(model.vramRequiredMB / 1024).toFixed(2)}G</Tag>
+                <Tag color={model.sort === constant.ModelSort.Api ? 'blue' : 'green'} className='text-xs'>{getModelSortText(model.sort)}</Tag>
+                {
+                    model.sort === constant.ModelSort.Webllm && <Tag color='gold' className='text-xs'>{getModelSizeText(model.modelSizeType!)}</Tag>
+                }
             </div>
         </div >
     ))
@@ -249,7 +268,9 @@ const LlmSetup = () => {
         <div className="model-item bg-white rounded-md shadow py-3 px-2 space-y-2" key={model.modelId}>
             <div className="model-top flex items-center justify-between">
                 <div className="model-item-left flex items-center gap-2">
-                    <div className="model-name text-base">{model.name}</div>
+                    <div className="model-name text-base">
+                        {model.name}
+                    </div>
                 </div>
                 {
                     model.loadingStatus !== 'active' && <div className="flex items-center gap-2">
@@ -259,8 +280,10 @@ const LlmSetup = () => {
                 }
             </div>
             <div className="tag  flex items-center ">
-                <Tag color='gold' className='text-xs'>{getModelSizeText(model.modelSizeType)}</Tag>
-                <Tag color='gold' className='text-xs'>VRAM: {(model.vramRequiredMB / 1024).toFixed(2)}G</Tag>
+                <Tag color={model.sort === constant.ModelSort.Api ? 'blue' : 'green'} className='text-xs'>{getModelSortText(model.sort)}</Tag>
+                {
+                    model.sort === constant.ModelSort.Webllm && <Tag color='gold' className='text-xs'>{getModelSizeText(model.modelSizeType!)}</Tag>
+                }
             </div>
 
             {
@@ -274,12 +297,12 @@ const LlmSetup = () => {
         const localLoadedModelIds = localStorage.getItem(constant.STORAGE_LOADED_MODEL_IDS);
         let defaultModelId = localStorage.getItem(constant.STORAGE_DEFAULT_MODEL_ID);
 
-        let newLlmModels = allLlmModels.map((allModel) => {
-            const isLoaded = localLoadedModelIds?.split(',').includes(allModel.modelId) || false;
+        let newLlmModels = allLlmModels.map((model) => {
+            const isLoaded = localLoadedModelIds?.split(',').includes(model.modelId) || false;
             return {
-                ...allModel,
-                isLoaded,
-                isDefault: allModel.modelId === defaultModelId
+                ...model,
+                isLoaded: model.sort === constant.ModelSort.Api ? true : isLoaded,// api默认理解为已加载的
+                isDefault: model.modelId === defaultModelId
             };
         })
 
@@ -313,14 +336,33 @@ const LlmSetup = () => {
             </div>
 
             <div className='flex-1 overflow-y-auto model-list'>
-                <div className='text-base font-bold mb-2 '>{t('loaded_model')}</div>
+                <div className='text-base font-bold mb-2 flex items-center gap-1'>
+                    <span>
+                        {t('loaded_model')}
+                    </span>
+                    <Tooltip placement="top" title={t('ex_internal_desc')} >
+                        <span>
+                            <CiCircleInfo size={20} className='cursor-pointer' />
+                        </span>
+                    </Tooltip>
+                </div>
                 <div className="loaded-models mb-3 space-y-2">
                     {
                         !loadedModels.length ? <Empty description={t('no_loaded_model')} /> : loadedModels
                     }
                 </div>
 
-                <div className='text-base font-bold mt-4'>{t('unloaded_model')}</div>
+                <div className='text-base font-bold mt-4 flex items-center gap-1'>
+                    <span>
+                        {t('unloaded_model')}
+                    </span>
+
+                    <Tooltip placement="top" title={t('ex_internal_desc')} >
+                        <span>
+                            <CiCircleInfo size={20} className='cursor-pointer' />
+                        </span>
+                    </Tooltip>
+                </div>
                 <div className="text-xs text-text-500 mb-2">{t('download_model_tip')}</div>
                 <div className="unloaded-models mb-3 space-y-2">
                     {

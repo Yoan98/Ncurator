@@ -13,7 +13,7 @@ import Logo from '@src/components/logo';
 import { Tab } from '@src/SidePanel';
 import FileRender from '@src/components/fileRenders';
 import { IndexDBStore } from '@src/utils/IndexDBStore';
-import { DEFAULT_INDEXDB_NAME, RESOURCE_STORE_NAME, Connector, MessageType } from '@src/utils/constant';
+import { DEFAULT_INDEXDB_NAME, RESOURCE_STORE_NAME, Connector, MessageType, ModelSort } from '@src/utils/constant';
 import type { FileRenderDocument } from '@src/components/fileRenders/index'
 import { getSearchResMaxTextSize } from '@src/utils/tool';
 import MessageList from '@src/components/chat/MessageList';
@@ -54,6 +54,7 @@ const ChatSection = ({
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const chatLlmMessageRef = useRef<ChatLlmMessage | null>(null);
     const indexDBRef = useRef<IndexDBStore | null>(null);
+    const curApiChatAbortController = useRef<AbortController | undefined>(undefined);
 
     const [chatUiMessages, setChatUiMessages] = useState<Chat.UiMessage[]>([]);
 
@@ -85,7 +86,8 @@ const ChatSection = ({
                 return
             }
 
-            llmEngine.current!.interruptGenerate()
+            llmEngine.current.interruptGenerate(curApiChatAbortController.current);
+
             setAskLoading(false);
             return;
         }
@@ -118,7 +120,7 @@ const ChatSection = ({
 
                 const connections = connectionList.filter((connection) => !selectedConnection.length ? true : selectedConnection.includes(connection.id!));
 
-                const maxResTextSize = getSearchResMaxTextSize(llmEngine.current!)
+                const maxResTextSize = getSearchResMaxTextSize(llmEngine.current)
 
                 const res = await searchDoc({
                     question,
@@ -148,14 +150,14 @@ const ChatSection = ({
         // AI处理
         try {
             let temptChatUiMessages: Chat.UiMessage[] = [];
-            const handleStreamCb = (msg: string, chunk) => {
+            const handleStreamCb = (msg: string, finish_reason) => {
                 // 更新ui
                 setChatUiMessages((prev) => {
                     // 更新assistant消息
                     const oldReplyMes = prev.find((item) => item.timestamp === uiAssistantMessage.timestamp && item.type === MessageType.ASSISTANT);
                     oldReplyMes!.content = msg + '⚫';
 
-                    if (chunk.choices[0]?.finish_reason == 'stop') {
+                    if (finish_reason == 'stop') {
                         oldReplyMes!.content = msg;
                     }
                     temptChatUiMessages = [...prev];
@@ -163,20 +165,25 @@ const ChatSection = ({
                 });
             }
 
+            curApiChatAbortController.current = llmEngine.current.modelInfo.sort === ModelSort.Api ? new AbortController() : undefined;
+
             await chatLlmMessageRef.current!.sendMsg({
                 prompt: question,
                 type: selectedAiOption.key == 1 ? 'knowledge' : 'chat',
                 searchTextRes,
                 llmEngine: llmEngine.current,
-                streamCb: handleStreamCb
+                streamCb: handleStreamCb,
+                abortSignal: curApiChatAbortController.current?.signal
             })
 
             // 存储聊天记录
             storageChatHistory(temptChatUiMessages, chatLlmMessageRef.current!.getChatHistory(), chatHistoryId)
 
         } catch (error) {
-            console.error('Error sending message:', error);
-            message.error('Error in chat ' + error);
+            if (!error.message.includes('Request was aborted')) {
+                console.error('Error sending message:', error);
+                message.error('Error in chat ' + error);
+            }
         }
 
         setAskLoading(false);

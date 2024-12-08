@@ -109,7 +109,7 @@ const ToggleSwitch = ({
 };
 
 const SidePanel = () => {
-    const { pagePath, setPagePath, loadLlmEngine } = useGlobalContext()
+    const { pagePath, setPagePath, initLlmEngine } = useGlobalContext()
 
     const [historyOpen, setHistoryOpen] = useState(false);
     const [historyTitle, setHistoryTitle] = useState<string>('');
@@ -216,7 +216,7 @@ const SidePanel = () => {
         setActiveTab(tab || 'search');
 
         // load llm model
-        loadLlmEngine('default');
+        initLlmEngine('default');
 
         // 初始话chat history
         const chatLocalHistoryStr = localStorage.getItem('chatLocalHistory');

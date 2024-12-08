@@ -18,9 +18,9 @@
         "type-check": "tsc --noEmit"
     },
     "dependencies": {
+        "@extension/i18n": "workspace:*",
         "@extension/shared": "workspace:*",
         "@extension/storage": "workspace:*",
-        "@extension/i18n": "workspace:*",
         "@huggingface/transformers": "^3.0.0",
         "@js-preview/docx": "^1.6.2",
         "@langchain/community": "^0.3.11",
@@ -39,6 +39,7 @@
         "mammoth": "^1.8.0",
         "mark.js": "^8.11.1",
         "mathjs": "^14.0.0",
+        "openai": "^4.76.0",
         "pdfjs-dist": "^4.4.168",
         "pptx-parser": "1.1.6",
         "react-doc-viewer": "^0.1.14",

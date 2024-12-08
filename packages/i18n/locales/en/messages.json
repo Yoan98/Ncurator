@@ -201,7 +201,7 @@
         "message": "setting default model"
     },
     "upload_model_success": {
-        "message": "Download Model Success"
+        "message": "Upload Model Success"
     },
     "loading_llm_model": {
         "message": "Loading LLM Model"
@@ -445,5 +445,14 @@
     },
     "acknowledgment_to_danswer_team": {
         "message": "Many of BeCurator's ideas and architectural designs come from Danswer. Thanks to the Danswer team for their open-source spirit"
+    },
+    "external": {
+        "message": "External"
+    },
+    "internal": {
+        "message": "Internal"
+    },
+    "ex_internal_desc": {
+        "message": "External means it will request third part service to get LLM support. Internal means it will only use your device to get LLM support."
     }
 }

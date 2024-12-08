@@ -442,5 +442,14 @@
     },
     "acknowledgment_to_danswer_team": {
         "message": "BeCurator有很多地方的想法与架构设计，都来自于Danswer，感谢Danswer团队的开源精神"
+    },
+    "external": {
+        "message": "外部"
+    },
+    "internal": {
+        "message": "内部"
+    },
+    "ex_internal_desc": {
+        "message": "外部意味着将会使用第三方云服务来获取LLM能力支持;内部意味着将只会使用你的设备来获得LLM能力支持"
     }
 }

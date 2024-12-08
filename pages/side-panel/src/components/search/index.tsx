@@ -50,9 +50,9 @@ const SearchSection = () => {
             prompt: questionValue,
             type: 'knowledge',
             searchTextRes,
-            streamCb: (msg, chunk) => {
+            streamCb: (msg, finish_reason) => {
                 let text = msg + '⚫';
-                if (chunk.choices[0]?.finish_reason == 'stop') {
+                if (finish_reason == 'stop') {
                     text = msg;
                 }
                 setAiAnswerText(text);

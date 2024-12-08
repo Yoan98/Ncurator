@@ -1,8 +1,8 @@
 import init, * as jieba from 'jieba-wasm';
 import * as constant from '@src/utils/constant';
-import { LLM_MODEL_LIST } from '@src/config'
 import type { WebWorkerMLCEngine } from "@mlc-ai/web-llm";
 import { CHAT_SYSTEM_PROMPT, KNOWLEDGE_USER_PROMPT } from '@src/config'
+import type { LlmEngineController } from '@src/utils/LlmEngineController'
 
 // 检测WebGPU是否可用
 export async function checkWebGPU() {
@@ -219,19 +219,9 @@ export function getFileName(fileName: string) {
     return fileName.substring(0, dotIndex);
 }
 
-export function getModelContextWindowSize(llmEngine: WebWorkerMLCEngine) {
-    if (!llmEngine.modelId) {
-        throw new Error('Model ID not found')
-    }
-    const modelInfo = LLM_MODEL_LIST.find((item) => item.modelId === llmEngine.modelId![0])
-    if (!modelInfo) {
-        throw new Error('Model not found')
-    }
-    return modelInfo.contextWindowSize
-}
 
-export function getSearchResMaxTextSize(llmEngine: WebWorkerMLCEngine) {
-    const contextWindowSize = llmEngine ? getModelContextWindowSize(llmEngine) : 4096
+export function getSearchResMaxTextSize(llmEngine: LlmEngineController) {
+    const contextWindowSize = llmEngine.modelInfo.contextWindowSize;
     const promoteTokenSize = calculateTokens([CHAT_SYSTEM_PROMPT, KNOWLEDGE_USER_PROMPT])
 
     return contextWindowSize - promoteTokenSize - 100

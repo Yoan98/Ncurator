@@ -3,7 +3,7 @@ type ValueOf<T> = T[keyof T]
 type ConnectorUnion = 1 | 2 // 1: File, 2: Crawl
 type DocumentStatusUnion = 1 | 2 | 3
 type EncodePrefixUnion = 'search_document' | 'search_query'
-
+type ModelSortUnion = 1 | 2
 interface Window {
     gIsSupportWebGPU: boolean
 }
