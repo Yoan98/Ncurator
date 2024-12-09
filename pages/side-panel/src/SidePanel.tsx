@@ -134,7 +134,7 @@ const SidePanel = () => {
             setPagePath('/llm-set');
         } else if (key == 3) {
             //打开tab页
-            window.open('https://yoan98.github.io/BeCuratorIntroduce')
+            window.open('https://be-curator-introduce.vercel.app')
         }
     }
     const handleChatHistoryUpdate = (localChatHistory: Chat.LocalHistory[]) => {
