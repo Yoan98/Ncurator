@@ -318,7 +318,7 @@
         "message": "Configure LLM Model"
     },
     "choose_appropriate_model": {
-        "message": "Choose the appropriate model. Note that the larger the model, the more memory it consumes. Based on testing, the 3B model meets basic requirements"
+        "message": "Choose the appropriate model. Note that the larger the model, the more memory it consumes if you choose Local model. Based on testing, the 3B model meets basic requirements"
     },
     "download_model_tip": {
         "message": "The model is by default downloaded from Hugging Face. If the internet speed is limited, you can email the author to download the model from other sources and upload it locally"
@@ -407,8 +407,8 @@
     "version_113_and_above": {
         "message": "(Version 113 and above)"
     },
-    "recommended_memory": {
-        "message": "Recommended Memory"
+    "minimum_memory": {
+        "message": "Minimum Memory"
     },
     "webgpu_support": {
         "message": "WebGPU Support"
@@ -446,13 +446,13 @@
     "acknowledgment_to_danswer_team": {
         "message": "Many of BeCurator's ideas and architectural designs come from Danswer. Thanks to the Danswer team for their open-source spirit"
     },
-    "external": {
-        "message": "External"
+    "cloud": {
+        "message": "Cloud"
     },
-    "internal": {
-        "message": "Internal"
+    "local": {
+        "message": "Local"
     },
-    "ex_internal_desc": {
-        "message": "External means it will request third part service to get LLM support. Internal means it will only use your device to get LLM support."
+    "local_cloud_desc": {
+        "message": "Cloud means it will request third part service to get LLM support(Result Better). Local means it will only use your device to get LLM support(Strong Privacy)."
     }
 }

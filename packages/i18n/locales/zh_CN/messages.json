@@ -318,7 +318,7 @@
         "message": "配置LLM模型"
     },
     "choose_appropriate_model": {
-        "message": "选择合适的模型,注意模型大小,越大模型占用内存越高,经测试3B模型能满足最基本诉求"
+        "message": "选择合适的模型,注意模型大小,越大模型占用内存越高(如果你选的是本地模型),经测试3B模型能满足最基本诉求"
     },
     "import_resources": {
         "message": "导入资源"
@@ -404,8 +404,8 @@
     "version_113_and_above": {
         "message": "(版本 113 及以上)"
     },
-    "recommended_memory": {
-        "message": "推荐内存"
+    "minimum_memory": {
+        "message": "最低内存"
     },
     "webgpu_support": {
         "message": "WebGPU 支持"
@@ -443,13 +443,13 @@
     "acknowledgment_to_danswer_team": {
         "message": "BeCurator有很多地方的想法与架构设计，都来自于Danswer，感谢Danswer团队的开源精神"
     },
-    "external": {
-        "message": "外部"
+    "cloud": {
+        "message": "云端"
     },
-    "internal": {
-        "message": "内部"
+    "local": {
+        "message": "本地"
     },
-    "ex_internal_desc": {
-        "message": "外部意味着将会使用第三方云服务来获取LLM能力支持;内部意味着将只会使用你的设备来获得LLM能力支持"
+    "local_cloud_desc": {
+        "message": "云端意味着将会使用第三方云服务来获取LLM能力支持(分析的效果更好); 本地意味着将只会使用你的设备来获得LLM能力支持(隐私性更好)"
     }
 }

@@ -235,9 +235,9 @@ const LlmSetup = () => {
     }
     const getModelSortText = (sort: ModelSortUnion) => {
         if (sort === constant.ModelSort.Api) {
-            return t('external');
+            return t('cloud');
         } else if (sort === constant.ModelSort.Webllm) {
-            return t('internal');
+            return t('local');
         } else {
             return 'unknown'
         }
@@ -340,7 +340,7 @@ const LlmSetup = () => {
                     <span>
                         {t('loaded_model')}
                     </span>
-                    <Tooltip placement="top" title={t('ex_internal_desc')} >
+                    <Tooltip placement="top" title={t('local_cloud_desc')} >
                         <span>
                             <CiCircleInfo size={20} className='cursor-pointer' />
                         </span>
@@ -357,7 +357,7 @@ const LlmSetup = () => {
                         {t('unloaded_model')}
                     </span>
 
-                    <Tooltip placement="top" title={t('ex_internal_desc')} >
+                    <Tooltip placement="top" title={t('local_cloud_desc')} >
                         <span>
                             <CiCircleInfo size={20} className='cursor-pointer' />
                         </span>

@@ -153,6 +153,7 @@ const BeCuratorLandingPage = () => {
             <div className='flex justify-center'>
                 <div>
                     <div className='font-bold text-lg text-center mb-2'>xiaoyuan9816@gmail.com</div>
+                    <div className='font-bold text-lg text-center mb-2'>QQ反馈群: 891209383</div>
                     <div className='text-center'>{t('author_email_feedback')}</div>
                 </div>
             </div>
@@ -316,7 +317,7 @@ const BeCuratorLandingPage = () => {
                                                 </Text>
                                             </div>
                                             <div>
-                                                <Text strong>{t('recommended_memory')}：</Text>16G+
+                                                <Text strong>{t('minimum_memory')}：</Text>8GB ({t('cloud')} LLM), 16GB ({t('local')} LLM)
                                             </div>
                                         </Space>
                                     </Card>
