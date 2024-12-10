@@ -451,5 +451,11 @@
     },
     "local_cloud_desc": {
         "message": "云端意味着将会使用第三方云服务来获取LLM能力支持(分析的效果更好); 本地意味着将只会使用你的设备来获得LLM能力支持(隐私性更好)"
+    },
+    "author": {
+        "message": "作者"
+    },
+    "contact_author": {
+        "message": "联系作者"
     }
 }

@@ -443,6 +443,12 @@
     "author_message": {
         "message": "Author's Message"
     },
+    "contact_author": {
+        "message": "Contact the author"
+    },
+    "author": {
+        "message": "Author"
+    },
     "acknowledgment_to_danswer_team": {
         "message": "Many of BeCurator's ideas and architectural designs come from Danswer. Thanks to the Danswer team for their open-source spirit"
     },

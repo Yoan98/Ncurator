@@ -1,5 +1,5 @@
 import { withErrorBoundary, withSuspense } from '@extension/shared';
-import { Button, Dropdown, MenuProps, Drawer, Tooltip } from 'antd';
+import { Button, Dropdown, MenuProps, Drawer, Tooltip, Modal, notification } from 'antd';
 
 import { useState, useEffect } from 'react';
 import { FiSidebar } from "react-icons/fi";
@@ -14,7 +14,7 @@ import LlmSetup from '@src/components/llmSetup/index';
 import { IoIosArrowRoundBack } from "react-icons/io";
 import { CiEdit } from "react-icons/ci";
 import { IoIosHelpCircleOutline } from "react-icons/io";
-
+import { MdAlternateEmail } from "react-icons/md";
 import { useGlobalContext } from '@src/provider/global';
 import dayjs from '@src/utils/dayjsGlobal';
 import { t } from '@extension/i18n';
@@ -24,7 +24,7 @@ interface GroupedChatHistory {
     title: string;
     history: Chat.LocalHistory[];
 }
-
+const { confirm } = Modal;
 // 设置项dropdown菜单
 const settingItems: MenuProps['items'] = [
     {
@@ -41,6 +41,11 @@ const settingItems: MenuProps['items'] = [
         key: 3,
         label: t('help'),
         icon: <IoIosHelpCircleOutline size={18} />,
+    },
+    {
+        key: 4,
+        label: t('author') + ' Yoan',
+        icon: <MdAlternateEmail size={18} />,
     }
 ];
 
@@ -134,7 +139,13 @@ const SidePanel = () => {
             setPagePath('/llm-set');
         } else if (key == 3) {
             //打开tab页
-            window.open('https://yoan98.github.io/BeCuratorIntroduce')
+            window.open('https://bc.ahelpi.cn')
+        } else if (key == 4) {
+            notification.open({
+                message: t('contact_author'),
+                description:
+                    'Email: xiaoyuan9816@gmail.com',
+            });
         }
     }
     const handleChatHistoryUpdate = (localChatHistory: Chat.LocalHistory[]) => {
