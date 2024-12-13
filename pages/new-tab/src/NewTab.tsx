@@ -392,21 +392,6 @@ const BeCuratorLandingPage = () => {
                     </section>
                 </main>
 
-                {/* Footer */}
-                <footer style={{
-                    backgroundColor: 'white',
-                    padding: '32px 0',
-                    borderTop: '1px solid #f0f0f0'
-                }}>
-                    <div className="text-lg text-center mb-[14px]">{t('author_message')}</div>
-                    <Paragraph style={{ textAlign: 'center', color: '#666' }}>
-                        {t('acknowledgment_to_danswer_team')}
-                    </Paragraph>
-                    <Paragraph style={{ textAlign: 'center', color: '#666' }}>
-                        <a href='https://www.danswer.ai/'>Danswer WebSite</a>
-                    </Paragraph>
-
-                </footer>
             </div>
         </ConfigProvider>
     );
