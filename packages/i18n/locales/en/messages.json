@@ -311,8 +311,26 @@
     "download_and_install": {
         "message": "Download and Install"
     },
+    "download_from_web_store": {
+        "message": "Download from the Chrome Web Store"
+    },
     "download_install_becurator": {
-        "message": "Download and Install BeCurator"
+        "message": "Click Download Button and Install BeCurator from Google Web Store"
+    },
+    "manual_download": {
+        "message": "Download Manually"
+    },
+    "manual_download_1": {
+        "message": "1.If you cannot access the Google Play Store, please join the QQ group: 891209383 to download"
+    },
+    "manual_download_2": {
+        "message": "2.Type chrome://extensions/ in the Chrome browser's address bar to open the Chrome Extensions management page"
+    },
+    "manual_download_3": {
+        "message": "3.Make sure the 'Developer mode' in the top right corner of the page is enabled"
+    },
+    "manual_download_4": {
+        "message": "4.Drag and drop the downloaded CRX file onto the browser's extensions page to complete the installation"
     },
     "configure_llm_model": {
         "message": "Configure LLM Model"
@@ -360,7 +378,7 @@
         "message": "Support various types of table data analysis"
     },
     "author_email_feedback": {
-        "message": "Author (Yoan) email, feel free to provide feedback or issues (＞﹏＜)"
+        "message": "Author (Yoan), feel free to provide feedback or issues (＞﹏＜)"
     },
     "download_now": {
         "message": "Download"
@@ -463,5 +481,8 @@
     },
     "qq_feedback_group": {
         "message": "QQ Feedback Group"
+    },
+    "download_tips": {
+        "message": "If you are unable to download, you can join the QQ group: 891209383 to download"
     }
 }

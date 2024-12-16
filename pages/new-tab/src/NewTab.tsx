@@ -99,18 +99,29 @@ const BeCuratorLandingPage = () => {
         how: (
             <Row gutter={[24, 24]} align="middle" justify="center">
                 <List
-                    className='max-w-[600px]'
+                    className='max-w-[500px]'
                     itemLayout="vertical"
                     dataSource={[
-                        { step: t('download_and_install'), desc: t('download_install_becurator') },
-                        { step: t('configure_llm_model'), desc: t('choose_appropriate_model'), imgList: ['./img/llm_setup/1.png', './img/llm_setup/2.png', './img/llm_setup/3.png',] },
-                        { step: t('import_resources'), desc: t('upload_documents_and_links'), imgList: ['./img/add_resource/1.png', './img/add_resource/2.png', './img/add_resource/3.png', './img/add_resource/4.png', './img/add_resource/5.png'] },
-                        { step: t('intelligent_search'), desc: t('use_natural_language_query'), imgList: ['./img/search.png'] },
+                        { id: 1, step: t('download_and_install') },
+                        { id: 2, step: t('configure_llm_model'), desc: t('choose_appropriate_model'), imgList: ['./img/llm_setup/1.png', './img/llm_setup/2.png', './img/llm_setup/3.png',] },
+                        { id: 3, step: t('import_resources'), desc: t('upload_documents_and_links'), imgList: ['./img/add_resource/1.png', './img/add_resource/2.png', './img/add_resource/3.png', './img/add_resource/4.png', './img/add_resource/5.png'] },
+                        { id: 4, step: t('intelligent_search'), desc: t('use_natural_language_query'), imgList: ['./img/search.png'] },
                     ]}
                     renderItem={(item, index) => (
                         <List.Item key={index}>
                             <Title level={4}>{item.step}</Title>
-                            <Paragraph className='max-w-[400px]'>{item.desc}</Paragraph>
+                            {
+                                item.id === 1 ? <>
+                                    <Title level={5}>{t('download_from_web_store')}</Title>
+                                    <Paragraph>{t('download_install_becurator')}</Paragraph>
+                                    <Title level={5}>{t('manual_download')}</Title>
+                                    <Paragraph>{t('manual_download_1')}</Paragraph>
+                                    <Paragraph>{t('manual_download_2')}</Paragraph>
+                                    <Paragraph>{t('manual_download_3')}</Paragraph>
+                                    <Paragraph>{t('manual_download_4')}</Paragraph>
+
+                                </> : <Paragraph className='max-w-[400px]'>{item.desc}</Paragraph>
+                            }
                             {
                                 item.imgList &&
                                 <Image.PreviewGroup >
@@ -224,13 +235,14 @@ const BeCuratorLandingPage = () => {
                             <Title level={3} style={{ margin: 0, color: '#333' }}>BeCurator</Title>
                         </Col>
                         <Col>
-                            <Space>
-                                {/* <Button type="text">功能</Button> */}
-                                {/* <Button type="text">文档</Button> */}
+                            {/* <Button type="text">功能</Button> */}
+                            {/* <Button type="text">文档</Button> */}
+                            <div className="flex flex-col items-end gap-2">
                                 <Button type="primary" style={{ backgroundColor: '#404040' }}>
                                     {t('free_download')}
                                 </Button>
-                            </Space>
+                                <div className="text-xs text-right text-[#666]">{t('download_tips')}</div>
+                            </div>
                         </Col>
                     </Row>
                 </header>

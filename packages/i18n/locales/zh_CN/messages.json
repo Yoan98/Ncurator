@@ -311,11 +311,29 @@
     "download_and_install": {
         "message": "下载安装"
     },
+    "download_from_web_store": {
+        "message": "谷歌应用商店下载安装"
+    },
     "download_install_becurator": {
-        "message": "下载并安装BeCurator"
+        "message": "点击上方按钮跳转到谷歌应用商店下载并安装"
     },
     "configure_llm_model": {
         "message": "配置LLM模型"
+    },
+    "manual_download": {
+        "message": "手动下载安装"
+    },
+    "manual_download_1": {
+        "message": "1.如果无法进入谷歌应用商店,请进QQ群:891209383下载"
+    },
+    "manual_download_2": {
+        "message": "2.在Chrome浏览器地址栏内输入 chrome://extensions/ 即可打开Chrome的Extensions管理界面"
+    },
+    "manual_download_3": {
+        "message": "3.确保页面右上角的Developer mode处于打开模式"
+    },
+    "manual_download_4": {
+        "message": "4.将下载到的crx文件拖放到浏览器的扩展程序页面上，即可安装完成"
     },
     "choose_appropriate_model": {
         "message": "选择合适的模型,注意模型大小,越大模型占用内存越高(如果你选的是本地模型),经测试3B模型能满足最基本诉求"
@@ -357,7 +375,7 @@
         "message": "支持各类表格等数据分析"
     },
     "author_email_feedback": {
-        "message": "作者(Yoan)邮箱,欢迎反馈各类问题来毒打作者(＞﹏＜)"
+        "message": "作者(Yoan),欢迎反馈各类问题来毒打作者(＞﹏＜)"
     },
     "download_now": {
         "message": "立即下载"
@@ -460,5 +478,8 @@
     },
     "qq_feedback_group": {
         "message": "QQ反馈群"
+    },
+    "download_tips": {
+        "message": "如果无法下载,可进QQ群:891209383下载"
     }
 }
