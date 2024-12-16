@@ -311,8 +311,8 @@
     "download_and_install": {
         "message": "下载安装"
     },
-    "download_becurator_from_google_play": {
-        "message": "去谷歌应用商店下载BeCurator"
+    "download_install_becurator": {
+        "message": "下载并安装BeCurator"
     },
     "configure_llm_model": {
         "message": "配置LLM模型"
@@ -457,5 +457,8 @@
     },
     "contact_author": {
         "message": "联系作者"
+    },
+    "qq_feedback_group": {
+        "message": "QQ反馈群"
     }
 }

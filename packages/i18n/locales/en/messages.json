@@ -311,8 +311,8 @@
     "download_and_install": {
         "message": "Download and Install"
     },
-    "download_becurator_from_google_play": {
-        "message": "Download BeCurator from Google Web Store"
+    "download_install_becurator": {
+        "message": "Download and Install BeCurator"
     },
     "configure_llm_model": {
         "message": "Configure LLM Model"
@@ -460,5 +460,8 @@
     },
     "local_cloud_desc": {
         "message": "Cloud means it will request third part service to get LLM support(Result Better). Local means it will only use your device to get LLM support(Strong Privacy)."
+    },
+    "qq_feedback_group": {
+        "message": "QQ Feedback Group"
     }
 }

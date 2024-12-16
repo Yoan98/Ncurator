@@ -102,7 +102,7 @@ const BeCuratorLandingPage = () => {
                     className='max-w-[600px]'
                     itemLayout="vertical"
                     dataSource={[
-                        { step: t('download_and_install'), desc: t('download_becurator_from_google_play') },
+                        { step: t('download_and_install'), desc: t('download_install_becurator') },
                         { step: t('configure_llm_model'), desc: t('choose_appropriate_model'), imgList: ['./img/llm_setup/1.png', './img/llm_setup/2.png', './img/llm_setup/3.png',] },
                         { step: t('import_resources'), desc: t('upload_documents_and_links'), imgList: ['./img/add_resource/1.png', './img/add_resource/2.png', './img/add_resource/3.png', './img/add_resource/4.png', './img/add_resource/5.png'] },
                         { step: t('intelligent_search'), desc: t('use_natural_language_query'), imgList: ['./img/search.png'] },
@@ -153,7 +153,7 @@ const BeCuratorLandingPage = () => {
             <div className='flex justify-center'>
                 <div>
                     <div className='font-bold text-lg text-center mb-2'>xiaoyuan9816@gmail.com</div>
-                    <div className='font-bold text-lg text-center mb-2'>QQ反馈群: 891209383</div>
+                    <div className='font-bold text-lg text-center mb-2'>{t('qq_feedback_group')}: 891209383</div>
                     <div className='text-center'>{t('author_email_feedback')}</div>
                 </div>
             </div>
