@@ -200,6 +200,10 @@ const BeCuratorLandingPage = () => {
         }
     }
 
+    const handleDownload = () => {
+        window.open('https://chromewebstore.google.com/detail/becurator-privacy-focused/jdlfflbeekclkgcckcfombmfojmcdeio?hl=zh-CN&authuser=0')
+    }
+
     useLayoutEffect(() => {
         initLang();
 
@@ -238,7 +242,7 @@ const BeCuratorLandingPage = () => {
                             {/* <Button type="text">功能</Button> */}
                             {/* <Button type="text">文档</Button> */}
                             <div className="flex flex-col items-end gap-2">
-                                <Button type="primary" style={{ backgroundColor: '#404040' }}>
+                                <Button type="primary" style={{ backgroundColor: '#404040' }} onClick={handleDownload}>
                                     {t('free_download')}
                                 </Button>
                                 <div className="text-xs text-right text-[#666]">{t('download_tips')}</div>
@@ -264,6 +268,7 @@ const BeCuratorLandingPage = () => {
                             <Button
                                 type="primary"
                                 size="large"
+                                onClick={handleDownload}
                             >
                                 {t('free_download')}
                             </Button>
