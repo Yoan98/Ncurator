@@ -1,9 +1,9 @@
 {
     "extensionDescription": {
-        "message": "本地采集数据（文件、网页等），本地存储与智能搜索，通过本地 AI + 您的问题 + 您的本地数据，实现智能分析回答，确保数据安全，提升工作效率"
+        "message": "想想,如果你的所有资料,都由一个AI机器人(馆长)来帮你管理,你只需要输入你的问题,它就能帮你找到答案并整理,这是多么爽的事情"
     },
     "extensionName": {
-        "message": "BeCurator: Privacy-Focused AI Assistant with Your Data "
+        "message": "馆长: 你的本地知识库AI助手"
     },
     "Resource": {
         "message": "资源"
@@ -143,6 +143,9 @@
     "add_crawl": {
         "message": "新增爬取"
     },
+    "new_crawl": {
+        "message": "新建爬取"
+    },
     "delete_confirm": {
         "message": "确认删除这些数据吗"
     },
@@ -275,192 +278,6 @@
     "download_model_tip": {
         "message": "模型默认将从huggingface下载，如网速受限，可邮箱作者，从其他渠道下载模型到本地再上传"
     },
-    "what_it_is": {
-        "message": "它是什么"
-    },
-    "BeCurator_desc": {
-        "message": "是一款注重数据安全的本地知识管理工具，支持本地采集各种数据（如文件、网页等），并通过本地存储和智能搜索功能进行高效管理。同时借助本地 AI 技术，结合您的问题和本地数据，BeCurator 能提供智能分析与精准回答，保障数据安全的同时，显著提升工作效率。"
-    },
-    "multi_source_file_import": {
-        "message": "多源文件导入"
-    },
-    "local_data_storage": {
-        "message": "本地数据存储"
-    },
-    "intelligent_semantic_search": {
-        "message": "智能语义搜索"
-    },
-    "accurate_search": {
-        "message": "精准检索"
-    },
-    "data_security": {
-        "message": "数据安全"
-    },
-    "data_and_ai_computation": {
-        "message": "数据与AI计算只在您的电脑完成，不涉及外网，保护您的隐私和数据安全"
-    },
-    "intelligent_analysis": {
-        "message": "智能分析"
-    },
-    "ai_driven_deep_analysis": {
-        "message": "AI驱动的深度分析，将零散知识转化为洞见"
-    },
-    "vector_search_technology": {
-        "message": "通过使用向量搜索技术，您可以准确定位所需信息"
-    },
-    "download_and_install": {
-        "message": "下载安装"
-    },
-    "download_from_web_store": {
-        "message": "谷歌应用商店下载安装"
-    },
-    "download_install_becurator": {
-        "message": "点击上方按钮跳转到谷歌应用商店下载并安装"
-    },
-    "configure_llm_model": {
-        "message": "配置LLM模型"
-    },
-    "manual_download": {
-        "message": "手动下载安装"
-    },
-    "manual_download_1": {
-        "message": "1.如果无法进入谷歌应用商店,请进QQ群:891209383下载"
-    },
-    "manual_download_2": {
-        "message": "2.在Chrome浏览器地址栏内输入 chrome://extensions/ 即可打开Chrome的Extensions管理界面"
-    },
-    "manual_download_3": {
-        "message": "3.确保页面右上角的Developer mode处于打开模式"
-    },
-    "manual_download_4": {
-        "message": "4.将下载到的crx文件拖放到浏览器的扩展程序页面上，即可安装完成"
-    },
-    "choose_appropriate_model": {
-        "message": "选择合适的模型,注意模型大小,越大模型占用内存越高(如果你选的是本地模型),经测试3B模型能满足最基本诉求"
-    },
-    "import_resources": {
-        "message": "导入资源"
-    },
-    "upload_documents_and_links": {
-        "message": "上传文档或配置网页链接.这一步BeCurator会构建文本向量,比较耗时,参考数据:3060Ti显卡,1680章小说(斗破苍穹),构建约2小时"
-    },
-    "intelligent_search": {
-        "message": "智能搜索"
-    },
-    "use_natural_language_query": {
-        "message": "使用自然语言查询"
-    },
-    "gpt4_compatible_models": {
-        "message": "GPT-4等模型兼容"
-    },
-    "integrate_third_party_models": {
-        "message": "打通第三方大模型的调用能力"
-    },
-    "email_extension": {
-        "message": "邮箱扩展"
-    },
-    "meet_user_needs_for_email_analysis_and_search": {
-        "message": "满足需要分析与检索邮箱信息的用户"
-    },
-    "knowledge_base_extension": {
-        "message": "知识库扩展"
-    },
-    "integrate_third_party_knowledge_base_data": {
-        "message": "打通第三方知识库数据,如notion等"
-    },
-    "data_analysis": {
-        "message": "数据分析"
-    },
-    "support_table_data_analysis": {
-        "message": "支持各类表格等数据分析"
-    },
-    "author_email_feedback": {
-        "message": "作者(Yoan),欢迎反馈各类问题来毒打作者(＞﹏＜)"
-    },
-    "download_now": {
-        "message": "立即下载"
-    },
-    "revolutionary_personal_knowledge_management_tool": {
-        "message": "个人知识管理的革命性工具"
-    },
-    "one_stop_knowledge_collection_local_storage_ai_computation_and_intelligent_search": {
-        "message": "一站式知识收集、本地存储、本地AI计算和智能检索，将您的知识转化为可即时访问的个人智能助理"
-    },
-    "free_download": {
-        "message": "免费下载"
-    },
-    "why_use_it": {
-        "message": "为什么使用它"
-    },
-    "how_to_use_it": {
-        "message": "如何使用它"
-    },
-    "need_help": {
-        "message": "需要帮助"
-    },
-    "next_stage_features": {
-        "message": "下一阶段功能"
-    },
-    "demo": {
-        "message": "演示"
-    },
-    "search_mode": {
-        "message": "搜索模式"
-    },
-    "chat_mode": {
-        "message": "聊天模式"
-    },
-    "configuration_recommendations": {
-        "message": "配置建议"
-    },
-    "computer_configuration": {
-        "message": "电脑配置"
-    },
-    "browser": {
-        "message": "浏览器"
-    },
-    "version_113_and_above": {
-        "message": "(版本 113 及以上)"
-    },
-    "minimum_memory": {
-        "message": "最低内存"
-    },
-    "webgpu_support": {
-        "message": "WebGPU 支持"
-    },
-    "browser_supports_webgpu": {
-        "message": "✓ 您的浏览器支持 WebGPU"
-    },
-    "browser_does_not_support_webgpu": {
-        "message": "× 您的浏览器不支持 WebGPU，建议升级 Chrome 浏览器"
-    },
-    "how_to_use_becurator_better": {
-        "message": "如何更好地使用BeCurator"
-    },
-    "becurator_working_principle": {
-        "message": "BeCurator工作原理"
-    },
-    "becurator_working_principle_description": {
-        "message": "BeCurator 基于语义和关键词匹配技术。当您输入问题时，BeCurator会智能地分析您的查询，并从您的知识库中检索最相关的信息"
-    },
-    "optimize_search_suggestions": {
-        "message": "优化搜索建议"
-    },
-    "adjust_query_for_better_results": {
-        "message": "如果初次搜索结果不满意，可尝试调整您的询问语句，或者重新生成回答"
-    },
-    "use_precise_keywords_or_synonyms": {
-        "message": "使用更精确的关键词或相近的语义词，避免过于宽泛或模糊的表述"
-    },
-    "try_different_phrases_or_synonyms_if_needed": {
-        "message": "必要时可以尝试使用不同的表达方式或同义词"
-    },
-    "author_message": {
-        "message": "作者感言"
-    },
-    "acknowledgment_to_danswer_team": {
-        "message": "BeCurator有很多地方的想法与架构设计，都来自于Danswer，感谢Danswer团队的开源精神"
-    },
     "cloud": {
         "message": "云端"
     },
@@ -476,10 +293,10 @@
     "contact_author": {
         "message": "联系作者"
     },
-    "qq_feedback_group": {
-        "message": "QQ反馈群"
+    "APP_NAME": {
+        "message": "馆长"
     },
-    "download_tips": {
-        "message": "如果无法下载,可进QQ群:891209383下载"
+    "spider": {
+        "message": "爬虫"
     }
 }

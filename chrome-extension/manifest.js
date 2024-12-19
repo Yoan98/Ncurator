@@ -28,7 +28,7 @@ const manifest = deepmerge(
         version: packageJson.version,
         description: '__MSG_extensionDescription__',
         host_permissions: ['<all_urls>'],
-        permissions: ['storage', 'tabs','bookmarks'],
+        permissions: ['storage', 'bookmarks'],
         // options_page: 'options/index.html',
         content_security_policy: {
             "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
@@ -55,7 +55,6 @@ const manifest = deepmerge(
         //         css: ['content.css'], // public folder
         //     },
         // ],
-        // devtools_page: 'devtools/index.html',
         web_accessible_resources: [
             {
                 resources: ['*.js', '*.css', '*.svg','icon-32.png', 'icon-128.png'],

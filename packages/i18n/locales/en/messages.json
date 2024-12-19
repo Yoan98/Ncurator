@@ -1,9 +1,9 @@
 {
     "extensionDescription": {
-        "message": "Locally collect, store files, webpages, and use AI for smart analysis and answers, ensuring data security and improving efficiency"
+        "message": "Imagine if all your information was managed by an AI robot (BeCurator). You just need to input your questions, and it will find and organize the answers for you. How amazing would that be?"
     },
     "extensionName": {
-        "message": "BeCurator: Privacy-Focused AI Assistant With Your Data"
+        "message": "BeCurator: Your Local Knowledge Base AI Assistant"
     },
     "loading": {
         "message": "Loading..."
@@ -152,6 +152,9 @@
     "add_crawl": {
         "message": "Add Crawl"
     },
+    "spider": {
+        "message": "Spider"
+    },
     "delete_confirm": {
         "message": "Are you sure to delete these items"
     },
@@ -275,189 +278,6 @@
     "help": {
         "message": "Help"
     },
-    "what_it_is": {
-        "message": "What is it"
-    },
-    "BeCurator_desc": {
-        "message": "is a local knowledge management tool focused on data security. It supports the local collection of various types of data (such as files, web pages, etc.), and efficiently manages them through local storage and intelligent search features. Leveraging local AI technology, BeCurator combines your queries with local data to provide intelligent analysis and accurate answers, ensuring data security while significantly boosting work efficiency."
-    },
-    "multi_source_file_import": {
-        "message": "Multi-source File Import"
-    },
-    "local_data_storage": {
-        "message": "Local Data Storage"
-    },
-    "intelligent_semantic_search": {
-        "message": "Intelligent Semantic Search"
-    },
-    "accurate_search": {
-        "message": "Accurate Search"
-    },
-    "vector_search_technology": {
-        "message": "By using vector search technology, you can accurately locate the information you need"
-    },
-    "data_security": {
-        "message": "Data Security"
-    },
-    "data_and_ai_computation": {
-        "message": "Data and AI computation are performed solely on your computer, without involving the internet, protecting your privacy and data security"
-    },
-    "intelligent_analysis": {
-        "message": "Intelligent Analysis"
-    },
-    "ai_driven_deep_analysis": {
-        "message": "AI-driven deep analysis transforms fragmented knowledge into insights."
-    },
-    "download_and_install": {
-        "message": "Download and Install"
-    },
-    "download_from_web_store": {
-        "message": "Download from the Chrome Web Store"
-    },
-    "download_install_becurator": {
-        "message": "Click Download Button and Install BeCurator from Google Web Store"
-    },
-    "manual_download": {
-        "message": "Download Manually"
-    },
-    "manual_download_1": {
-        "message": "1.If you cannot access the Google Play Store, please join the QQ group: 891209383 to download"
-    },
-    "manual_download_2": {
-        "message": "2.Type chrome://extensions/ in the Chrome browser's address bar to open the Chrome Extensions management page"
-    },
-    "manual_download_3": {
-        "message": "3.Make sure the 'Developer mode' in the top right corner of the page is enabled"
-    },
-    "manual_download_4": {
-        "message": "4.Drag and drop the downloaded CRX file onto the browser's extensions page to complete the installation"
-    },
-    "configure_llm_model": {
-        "message": "Configure LLM Model"
-    },
-    "choose_appropriate_model": {
-        "message": "Choose the appropriate model. Note that the larger the model, the more memory it consumes if you choose Local model. Based on testing, the 3B model meets basic requirements"
-    },
-    "download_model_tip": {
-        "message": "The model is by default downloaded from Hugging Face. If the internet speed is limited, you can email the author to download the model from other sources and upload it locally"
-    },
-    "import_resources": {
-        "message": "Import Resources"
-    },
-    "upload_documents_and_links": {
-        "message": "Upload Documents or Setup Web Links.This step will involve BeCurator building text vectors, which can be time-consuming. Reference data: With a 3060Ti GPU, it takes approximately 2 hours to process 1680 chapters of a novel."
-    },
-    "intelligent_search": {
-        "message": "Intelligent Search"
-    },
-    "use_natural_language_query": {
-        "message": "Use Natural Language Query."
-    },
-    "gpt4_compatible_models": {
-        "message": "GPT-4 and other models compatible"
-    },
-    "integrate_third_party_models": {
-        "message": "Integrate third-party large model invocation capabilities"
-    },
-    "email_extension": {
-        "message": "Email Extension"
-    },
-    "meet_user_needs_for_email_analysis_and_search": {
-        "message": "Meet the needs of users who require email analysis and search"
-    },
-    "knowledge_base_extension": {
-        "message": "Knowledge Base Extension"
-    },
-    "integrate_third_party_knowledge_base_data": {
-        "message": "Integrate third-party knowledge base data retrieval, such as Notion"
-    },
-    "data_analysis": {
-        "message": "Data Analysis"
-    },
-    "support_table_data_analysis": {
-        "message": "Support various types of table data analysis"
-    },
-    "author_email_feedback": {
-        "message": "Author (Yoan), feel free to provide feedback or issues (＞﹏＜)"
-    },
-    "download_now": {
-        "message": "Download"
-    },
-    "revolutionary_personal_knowledge_management_tool": {
-        "message": "Revolutionary Personal Knowledge Management Tool"
-    },
-    "one_stop_knowledge_collection_local_storage_ai_computation_and_intelligent_search": {
-        "message": "One-stop knowledge collection, local storage, local AI computation, and intelligent search, transforming your knowledge into an instantly accessible personal intelligent assistant"
-    },
-    "free_download": {
-        "message": "Free Download"
-    },
-    "why_use_it": {
-        "message": "Why Use It"
-    },
-    "how_to_use_it": {
-        "message": "How to Use It"
-    },
-    "need_help": {
-        "message": "Need Help"
-    },
-    "next_stage_features": {
-        "message": "Next Stage Features"
-    },
-    "demo": {
-        "message": "Demo"
-    },
-    "search_mode": {
-        "message": "Search Mode"
-    },
-    "chat_mode": {
-        "message": "Chat Mode"
-    },
-    "configuration_recommendations": {
-        "message": "Configuration Recommendations"
-    },
-    "computer_configuration": {
-        "message": "Computer Configuration"
-    },
-    "browser": {
-        "message": "Browser"
-    },
-    "version_113_and_above": {
-        "message": "(Version 113 and above)"
-    },
-    "minimum_memory": {
-        "message": "Minimum Memory"
-    },
-    "webgpu_support": {
-        "message": "WebGPU Support"
-    },
-    "browser_supports_webgpu": {
-        "message": "✓ Your browser supports WebGPU"
-    },
-    "browser_does_not_support_webgpu": {
-        "message": "× Your browser does not support WebGPU, it is recommended to upgrade Chrome browser"
-    },
-    "how_to_use_becurator_better": {
-        "message": "How to Use BeCurator Better"
-    },
-    "becurator_working_principle": {
-        "message": "BeCurator Working Principle"
-    },
-    "becurator_working_principle_description": {
-        "message": "BeCurator is based on semantic and keyword matching technology. When you input a query, BeCurator intelligently analyzes your query and retrieves the most relevant information from your knowledge base."
-    },
-    "optimize_search_suggestions": {
-        "message": "Optimize Search Suggestions"
-    },
-    "adjust_query_for_better_results": {
-        "message": "If the initial search results are unsatisfactory, try adjusting your query or regenerate the answer"
-    },
-    "use_precise_keywords_or_synonyms": {
-        "message": "Use more precise keywords or related synonyms, and avoid overly broad or vague expressions"
-    },
-    "try_different_phrases_or_synonyms_if_needed": {
-        "message": "If necessary, try using different expressions or synonyms"
-    },
     "author_message": {
         "message": "Author's Message"
     },
@@ -479,10 +299,10 @@
     "local_cloud_desc": {
         "message": "Cloud means it will request third part service to get LLM support(Result Better). Local means it will only use your device to get LLM support(Strong Privacy)."
     },
-    "qq_feedback_group": {
-        "message": "QQ Feedback Group"
+    "APP_NAME": {
+        "message": "BeCurator"
     },
-    "download_tips": {
-        "message": "If you are unable to download, you can join the QQ group: 891209383 to download"
+    "new_crawl": {
+        "message": "New Crawl"
     }
 }

@@ -682,7 +682,7 @@ const Resource = () => {
             </Modal>
 
             {/* crawl add/edit */}
-            <Modal confirmLoading={crawlLoading} cancelButtonProps={{ loading: crawlLoading }} maskClosable={false} centered title='Add Web Crawl' open={crawlModalOpen} onOk={handleCrawlConfirm} onCancel={() => { setCrawlModalOpen(false) }}>
+            <Modal confirmLoading={crawlLoading} cancelButtonProps={{ loading: crawlLoading }} maskClosable={false} centered title={t('new_crawl')} open={crawlModalOpen} onOk={handleCrawlConfirm} onCancel={() => { setCrawlModalOpen(false) }}>
                 {
                     selectFavoriteVisible ?
                         <div className='mb-2 flex flex-col gap-2'>
@@ -710,7 +710,7 @@ const Resource = () => {
 
                                         <Card
                                             size="small"
-                                            title={`Crawl ${field.name + 1}`}
+                                            title={`${t('spider')} ${field.name + 1}`}
                                             key={field.key}
                                             extra={
                                                 <IoClose className='cursor-pointer' onClick={() => {
