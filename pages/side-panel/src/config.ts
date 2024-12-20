@@ -90,3 +90,5 @@ export const LLM_MODEL_LIST = [
         contextWindowSize: 4096
 
     },]
+
+export const OFFICIAL_WEBSITE = 'https://www.guanzhangai.cn'

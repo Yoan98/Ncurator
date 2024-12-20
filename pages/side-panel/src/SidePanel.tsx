@@ -18,6 +18,7 @@ import { MdAlternateEmail } from "react-icons/md";
 import { useGlobalContext } from '@src/provider/global';
 import dayjs from '@src/utils/dayjsGlobal';
 import { t } from '@extension/i18n';
+import { OFFICIAL_WEBSITE } from '@src/config';
 
 
 interface GroupedChatHistory {
@@ -139,7 +140,7 @@ const SidePanel = () => {
             setPagePath('/llm-set');
         } else if (key == 3) {
             //打开tab页
-            window.open('https://bc.ahelpi.cn')
+            window.open(OFFICIAL_WEBSITE)
         } else if (key == 4) {
             notification.open({
                 message: t('contact_author'),
