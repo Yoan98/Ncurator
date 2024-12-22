@@ -45,7 +45,7 @@ const settingItems: MenuProps['items'] = [
     },
     {
         key: 4,
-        label: t('author') + ' Yoan',
+        label: t('author'),
         icon: <MdAlternateEmail size={18} />,
     }
 ];
@@ -143,7 +143,7 @@ const SidePanel = () => {
             window.open(OFFICIAL_WEBSITE)
         } else if (key == 4) {
             notification.open({
-                message: t('contact_author'),
+                message: t('contact_author') + ' 豆浆机要榨果汁',
                 description:
                     'Email: xiaoyuan9816@gmail.com',
             });
