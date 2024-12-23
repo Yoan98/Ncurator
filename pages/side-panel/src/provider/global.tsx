@@ -9,7 +9,7 @@ import { LlmEngineController } from '@src/utils/LlmEngineController'
 
 
 
-const pageList = ['/main', '/resource', '/llm-set'];
+const pageList = ['/main', '/resource', '/llm-set', '/embedding-set'];
 
 interface GlobalContextValue {
     // resource的数据

@@ -25,8 +25,7 @@ export const SPLITTER_MINI_CHUNK_OVERLAP = 30; // 分割小文本的重叠字符
 export const SPLITTER_SEPARATORS = ["\n\n", "\n", "。", ";", ",", " ", ""]
 
 // embedding model relate
-export const DEFAULT_EMBEDDING_MODEL = 'jinaai/jina-embeddings-v2-base-zh'
-// export const DEFAULT_EMBEDDING_MODEL = 'nomic-ai/nomic-embed-text-v1'
+export const DEFAULT_EMBEDDING_MODEL = 'nomic-ai/nomic-embed-text-v1'
 export const EMBEDDING_HIDDEN_SIZE = 768; // 目前使用的两个模型都是768维的向量
 
 // other

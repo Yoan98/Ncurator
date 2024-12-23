@@ -11,6 +11,7 @@ import SearchSection from '@src/components/search/index';
 import ChatSection from '@src/components/chat/index';
 import Resource from '@src/components/resource/index';
 import LlmSetup from '@src/components/llmSetup/index';
+import EmbeddingSetup from '@src/components/embeddingSetup';
 import { IoIosArrowRoundBack } from "react-icons/io";
 import { CiEdit } from "react-icons/ci";
 import { IoIosHelpCircleOutline } from "react-icons/io";
@@ -19,13 +20,12 @@ import { useGlobalContext } from '@src/provider/global';
 import dayjs from '@src/utils/dayjsGlobal';
 import { t } from '@extension/i18n';
 import { OFFICIAL_WEBSITE } from '@src/config';
-
+import { SlVector } from "react-icons/sl";
 
 interface GroupedChatHistory {
     title: string;
     history: Chat.LocalHistory[];
 }
-const { confirm } = Modal;
 // 设置项dropdown菜单
 const settingItems: MenuProps['items'] = [
     {
@@ -39,13 +39,18 @@ const settingItems: MenuProps['items'] = [
         icon: <RiRobot2Line size={18} />,
     },
     {
+        key: 5,
+        label: 'Advance Set',
+        icon: <SlVector size={18} />,
+    },
+    {
         key: 3,
         label: t('help'),
         icon: <IoIosHelpCircleOutline size={18} />,
     },
     {
         key: 4,
-        label: t('author'),
+        label: t('author') + ' Yoan',
         icon: <MdAlternateEmail size={18} />,
     }
 ];
@@ -143,10 +148,12 @@ const SidePanel = () => {
             window.open(OFFICIAL_WEBSITE)
         } else if (key == 4) {
             notification.open({
-                message: t('contact_author') + ' 豆浆机要榨果汁',
+                message: t('contact_author'),
                 description:
                     'Email: xiaoyuan9816@gmail.com',
             });
+        } else if (key == 5) {
+            setPagePath('/embedding-set');
         }
     }
     const handleChatHistoryUpdate = (localChatHistory: Chat.LocalHistory[]) => {
@@ -302,6 +309,11 @@ const SidePanel = () => {
             {/* llm setup content */}
             <div className={`llm-setup-content flex-1 flex flex-col ${pagePath === '/llm-set' ? 'block' : 'hidden'}`}>
                 <LlmSetup></LlmSetup>
+            </div>
+
+            {/* embedding setup content */}
+            <div className={`embedding-setup-content flex-1 flex flex-col ${pagePath === '/embedding-set' ? 'block' : 'hidden'}`}>
+                <EmbeddingSetup></EmbeddingSetup>
             </div>
 
             {/* history side */}

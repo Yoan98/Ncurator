@@ -19,7 +19,7 @@ const sidePanelConfig = {
 const manifest = deepmerge(
     {
         manifest_version: 3,
-        default_locale: 'zh_CN',
+        default_locale: 'en',
         /**
          * if you want to support multiple languages, you can use the following reference
          * https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/Internationalization

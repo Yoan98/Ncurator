@@ -304,5 +304,8 @@
     },
     "new_crawl": {
         "message": "New Crawl"
+    },
+    "download_model_tip": {
+        "message": "The model will be downloaded from huggingface by default. If the network speed is limited, you can email the author to download the model from other channels to the local and then upload it"
     }
 }

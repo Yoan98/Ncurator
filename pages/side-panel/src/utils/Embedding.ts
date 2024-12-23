@@ -1,5 +1,5 @@
 import { AutoModel, AutoTokenizer, env, pipeline } from '@huggingface/transformers';
-import type { PreTrainedTokenizer, PreTrainedModel, AllTasks } from '@huggingface/transformers';
+import type { AllTasks } from '@huggingface/transformers';
 import { checkWebGPU } from '@src/utils/tool';
 import { DEFAULT_EMBEDDING_MODEL } from '@src/config';
 
@@ -136,7 +136,9 @@ export class Embedding {
      * !一定要以单例化的形式调用，重复load会导致内存占用一直累加
      * @returns
      */
-    static async load(modelId: EmbeddingModelId = DEFAULT_EMBEDDING_MODEL) {
+    static async load(modelId: EmbeddingModelId = DEFAULT_EMBEDDING_MODEL, pretrainedModelOptions: {
+        progress_callback?: (progress: number) => void;
+    } = {}) {
         if (this.extractor) {
             return this.extractor;
         }
@@ -149,7 +151,8 @@ export class Embedding {
         this.extractor = await pipeline("feature-extraction", this.modelId, {
             dtype: 'fp32',
             device: isSupportWebGPU ? 'webgpu' : undefined,
-            local_files_only: true
+            local_files_only: true,
+            ...pretrainedModelOptions
         });
 
         return this.extractor;
