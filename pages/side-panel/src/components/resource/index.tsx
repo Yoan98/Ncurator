@@ -80,7 +80,7 @@ export interface FavoriteTreeNode {
 const acceptFileType = '.pdf,.doc,.docx,.txt,.md';
 
 const Resource = () => {
-    const { connectionList, setConnectionList } = useGlobalContext()
+    const { defaultEmbeddingModelId, connectionList, setConnectionList } = useGlobalContext()
 
     const indexDBRef = useRef<IndexDBStore | null>(null);
 
@@ -448,6 +448,11 @@ const Resource = () => {
 
     // resource add/edit
     const handleAddResource = () => {
+        if (!defaultEmbeddingModelId) {
+            message.warning('please setup embedding model first');
+            return;
+        }
+
         clearOldResourceOperate();
 
         setOperateResourceModalOpen(true);

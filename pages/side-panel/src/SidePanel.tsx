@@ -120,7 +120,7 @@ const ToggleSwitch = ({
 };
 
 const SidePanel = () => {
-    const { pagePath, setPagePath, initLlmEngine } = useGlobalContext()
+    const { pagePath, setPagePath, initLlmEngine, setDefaultEmbeddingModelId } = useGlobalContext()
 
     const [historyOpen, setHistoryOpen] = useState(false);
     const [historyTitle, setHistoryTitle] = useState<string>('');
@@ -246,6 +246,10 @@ const SidePanel = () => {
 
         setCurChatHistoryId(curChatHistoryId);
         setGroupedChatHistory(groupedChatHistory);
+
+        // 初始化默认embedding model
+        const defaultEmbeddingModelId = localStorage.getItem('defaultEmbeddingModelId') || undefined;
+        setDefaultEmbeddingModelId(defaultEmbeddingModelId);
 
     }, [])
 

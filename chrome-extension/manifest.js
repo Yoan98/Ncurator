@@ -28,7 +28,7 @@ const manifest = deepmerge(
         version: packageJson.version,
         description: '__MSG_extensionDescription__',
         host_permissions: ['<all_urls>'],
-        permissions: ['storage', 'bookmarks'],
+        permissions: ['bookmarks'],
         // options_page: 'options/index.html',
         content_security_policy: {
             "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"

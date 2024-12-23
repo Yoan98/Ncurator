@@ -25,6 +25,10 @@ interface GlobalContextValue {
     // pagePath
     pagePath: string;
     setPagePath: React.Dispatch<React.SetStateAction<string>>;
+
+    // 默认的embedding模型
+    defaultEmbeddingModelId: string | undefined;
+    setDefaultEmbeddingModelId: React.Dispatch<React.SetStateAction<string | undefined>>;
 }
 
 interface InitLlmReturn {
@@ -56,6 +60,9 @@ const defaultContextValue: GlobalContextValue = {
 
     pagePath: '/main',
     setPagePath: () => { },
+
+    defaultEmbeddingModelId: undefined,
+    setDefaultEmbeddingModelId: () => { }
 };
 
 const GlobalContext = createContext(defaultContextValue);
@@ -89,6 +96,16 @@ const LlmLoaderProgress = ({ progress, status, onReloadClick, onGoToSetupCLick }
     );
 }
 
+
+// embedding model tip
+const EmbeddingModelTip = ({ visible, onGoToSetupCLick }) => {
+    return (
+        <div className={`llm-load-status fixed right-0 bottom-10 bg-white rounded-lg py-1 px-2 animate__animated shadow-md  ${!visible ? 'animate__backOutRight' : 'animate__backInRight'}`}>
+            <div className='text-text-error cursor-pointer' onClick={onGoToSetupCLick}>Not Found Embedding Model, Click go to setup.</div>
+        </div>
+    )
+}
+
 export const GlobalProvider = ({ children }) => {
 
     const llmEngine = useRef<LlmEngineController | null>(null);
@@ -99,6 +116,8 @@ export const GlobalProvider = ({ children }) => {
     const [llmEngineLoadStatus, setLlmEngineLoadStatus] = useState<ProgressProps['status']>('normal');
 
     const [pagePath, setPagePath] = useState<string>('/main');
+
+    const [defaultEmbeddingModelId, setDefaultEmbeddingModelId] = useState<string>();
 
     const initProgressCallback = (progress: { progress: number }) => {
         setLlmEngineLoadPercent((prePercent) => {
@@ -218,8 +237,13 @@ export const GlobalProvider = ({ children }) => {
 
 
     return (
-        <GlobalContext.Provider value={{ connectionList, setConnectionList, llmEngine, initLlmEngine, llmEngineLoadStatus, reloadLlmModal, pagePath, setPagePath }}>
+        <GlobalContext.Provider value={{ connectionList, setConnectionList, llmEngine, initLlmEngine, llmEngineLoadStatus, reloadLlmModal, pagePath, setPagePath, defaultEmbeddingModelId, setDefaultEmbeddingModelId }}>
             {children}
+
+            {/* embedding model loading */}
+            <EmbeddingModelTip visible={!defaultEmbeddingModelId} onGoToSetupCLick={() => {
+                setPagePath('/embedding-set');
+            }} />
 
             {/* llm load loading */}
             <LlmLoaderProgress progress={llmEngineLoadPercent} status={llmEngineLoadStatus} onReloadClick={() => {

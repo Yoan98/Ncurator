@@ -11,6 +11,7 @@ interface EmbeddingOutput {
 export interface EmbedTask {
     text: string[];
     prefix?: EncodePrefixUnion;
+    embedModelId: EmbeddingModelIdUnion
     resolve: (data: EmbeddingOutput) => void;
     reject: (error: any) => void;
 }
@@ -50,14 +51,14 @@ export class EmbedTaskManage {
         setInterval(() => {
             if (this.searchTaskQueue.length) {
                 const searchTask = this.searchTaskQueue.shift() as EmbedTask
-                this.workerPool.exec('embeddingText', [searchTask.text, searchTask.prefix]).then((res: EmbeddingOutput) => {
+                this.workerPool.exec('embeddingText', [searchTask.text, searchTask.embedModelId, searchTask.prefix]).then((res: EmbeddingOutput) => {
                     searchTask.resolve(res)
                 }).catch((error) => {
                     searchTask.reject(error)
                 })
             } else if (this.buildTaskQueue.length) {
                 const buildTask = this.buildTaskQueue.shift() as EmbedTask
-                this.workerPool.exec('embeddingText', [buildTask.text, buildTask.prefix]).then((res: EmbeddingOutput) => {
+                this.workerPool.exec('embeddingText', [buildTask.text, buildTask.embedModelId, buildTask.prefix]).then((res: EmbeddingOutput) => {
                     buildTask.resolve(res)
                 }).catch((error) => {
                     buildTask.reject(error)

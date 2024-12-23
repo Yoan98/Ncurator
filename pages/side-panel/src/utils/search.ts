@@ -96,6 +96,7 @@ export const searchDoc = async ({ question, connections, maxResTextSize, k = 10 
         EmbedTaskManage.subscribe({
             text: [question],
             prefix: constant.EncodePrefix.SearchQuery,
+            embedModelId: localStorage.getItem('defaultEmbeddingModelId') as EmbeddingModelIdUnion,
             resolve,
             reject
         }, 'search')

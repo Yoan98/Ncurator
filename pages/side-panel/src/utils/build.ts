@@ -77,6 +77,7 @@ export const storageTextChunkToLSH = async ({ textChunkList, batchEmbeddingTextL
             EmbedTaskManage.subscribe({
                 text: item,
                 prefix: constant.EncodePrefix.SearchDocument,
+                embedModelId: localStorage.getItem('defaultEmbeddingModelId') as EmbeddingModelIdUnion,
                 resolve,
                 reject
             }, 'build')
@@ -445,7 +446,7 @@ export const buildDocsIndexInConnection = async (store: IndexDBStore, docs: DB.D
             updatedConnection = buildDocIndexRes.connectionAfterIndexBuild!;
         } else if (buildDocIndexRes.status == 'Fail') {
             console.error('buildDocIndex error', buildDocIndexRes.error)
-            message.error(`${doc.name} ${t('build')} ${t('success')}`);
+            message.error(`${doc.name} ${t('build')} ${t('fail')}`);
         } else {
             message.error(`${doc.name} Unknown Status`);
         }

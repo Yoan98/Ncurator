@@ -4,6 +4,8 @@ type ConnectorUnion = 1 | 2 // 1: File, 2: Crawl
 type DocumentStatusUnion = 1 | 2 | 3
 type EncodePrefixUnion = 'search_document' | 'search_query'
 type ModelSortUnion = 1 | 2
+
+type EmbeddingModelIdUnion = 'nomic-ai/nomic-embed-text-v1' | 'jinaai/jina-embeddings-v2-base-zh'
 interface Window {
     gIsSupportWebGPU: boolean
 }

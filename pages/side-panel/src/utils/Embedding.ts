@@ -5,25 +5,20 @@ import { DEFAULT_EMBEDDING_MODEL } from '@src/config';
 
 
 //* 使用本地模型的配置
-// 配置本地wasm文件路径,避免国内网请求失败
-// embedding被用于worker线程中,所以被打包到assest中了,而wasm文件在public中,被打包到外层了,所以这里这里路径是../
-// @ts-ignore
-env.backends.onnx.wasm.wasmPaths = '../';
-env.allowRemoteModels = false;
-env.allowLocalModels = true;
-env.localModelPath = '../';
+// env.localModelPath = '../';
+// env.allowRemoteModels = false;
+// env.allowLocalModels = true;
 
 
 // 配置远程服务器地址，加载模型将走这个地址，避免有些人没发翻墙，无法加载模型
 // env.remoteHost = 'http://www.hongbanbangbang.cn/';
 // console.log('env', env)
 
-type EmbeddingModelId = 'nomic-ai/nomic-embed-text-v1' | 'jinaai/jina-embeddings-v2-base-zh'
 export class Embedding {
     // private modelId: PreTrainedModel | null;
     // private tokenizer: PreTrainedTokenizer | null;
     static extractor: AllTasks['feature-extraction'] | null;
-    static modelId: EmbeddingModelId
+    static modelId: EmbeddingModelIdUnion
 
     constructor() {
     }
@@ -136,11 +131,25 @@ export class Embedding {
      * !一定要以单例化的形式调用，重复load会导致内存占用一直累加
      * @returns
      */
-    static async load(modelId: EmbeddingModelId = DEFAULT_EMBEDDING_MODEL, pretrainedModelOptions: {
+    static async load(modelId: EmbeddingModelIdUnion, pretrainedModelOptions: {
         progress_callback?: (progress: number) => void;
-    } = {}) {
-        if (this.extractor) {
+        wasmPath?: string;
+    } = { wasmPath: '../' }) {
+        console.log('select modelId', modelId)
+
+        if (!modelId) {
+            throw new Error('ModelId is required');
+        }
+
+        if (this.extractor && this.modelId === modelId) {
             return this.extractor;
+        }
+
+        if (pretrainedModelOptions.wasmPath) {
+            // 配置本地ort-wasm-simd-threaded.jsep.wasm文件路径,避免内网请求失败
+            // 在worker中加载模型的路径必须是'../'
+            // @ts-ignore
+            env.backends.onnx.wasm.wasmPaths = pretrainedModelOptions.wasmPath;
         }
 
         this.modelId = modelId;
@@ -151,7 +160,6 @@ export class Embedding {
         this.extractor = await pipeline("feature-extraction", this.modelId, {
             dtype: 'fp32',
             device: isSupportWebGPU ? 'webgpu' : undefined,
-            local_files_only: true,
             ...pretrainedModelOptions
         });
 
