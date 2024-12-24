@@ -22,7 +22,7 @@ const EMBEDDING_MODEL_LIST: EmbeddingModel[] = [
         isDefault: false,
         loadingStatus: 'normal',
         loadingPercent: 0,
-        tag: 'Recommend Global Language'
+        tag: 'Recommend English or Most Languages'
     },
     {
         modelId: 'jinaai/jina-embeddings-v2-base-zh',
@@ -153,7 +153,7 @@ const EmbeddingSetup = () => {
                     <SlVector size={25} />
                     <span className='text-lg font-bold'>Embedding Model Setup</span>
                 </div>
-                <Tooltip placement="top" title='All data will be processed using the default embedding model. Changing it may cause some previous data to become unmatched.' >
+                <Tooltip placement="top" title='All data will be processed using the default embedding model. You should choose the model that best suits the language of your data. Avoid to change it after you add resource.' >
                     <span>
                         <CiSquareQuestion size={20} className='cursor-pointer' />
                     </span>
