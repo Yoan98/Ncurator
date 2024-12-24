@@ -45,10 +45,10 @@
         "message": "Start Chat"
     },
     "ask_placeholder": {
-        "message": "Ask $1 based on your resource"
+        "message": "Ask question based on your resource"
     },
     "message_placeholder": {
-        "message": "Message with $1"
+        "message": "Message with it"
     },
     "knowledge": {
         "message": "Knowledge"
@@ -298,9 +298,6 @@
     },
     "local_cloud_desc": {
         "message": "Cloud means it will request third part service to get LLM support(Result Better). Local means it will only use your device to get LLM support(Strong Privacy)."
-    },
-    "APP_NAME": {
-        "message": "BeCurator"
     },
     "new_crawl": {
         "message": "New Crawl"

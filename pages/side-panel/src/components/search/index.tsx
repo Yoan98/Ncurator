@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Select, Button, Input, message, Empty } from 'antd';
 import { IoDocumentAttachOutline } from "react-icons/io5";
-import { splitKeywords, getSearchResMaxTextSize } from '@src/utils/tool';
+import { getSearchResMaxTextSize } from '@src/utils/tool';
 import { searchDoc } from '@src/utils/search';
 import { useGlobalContext } from '@src/provider/global';
 import TextHighlighter from '@src/components/highlighter';
@@ -12,6 +12,26 @@ import type { FileRenderDocument } from '@src/components/fileRenders/index'
 import { IndexDBStore } from '@src/utils/IndexDBStore';
 import { RESOURCE_STORE_NAME, DEFAULT_INDEXDB_NAME, Connector } from '@src/utils/constant';
 import { t } from '@extension/i18n';
+import init, * as jieba from 'jieba-wasm';
+import { ZH_STOP_WORDS, EN_STOP_WORDS } from '@src/utils/constant';
+
+
+
+// 分割关键词,英文按照空格,中文按照jieba分词
+async function splitKeywords(keywords: string) {
+    //@ts-ignore
+    await init()
+    const reg = new RegExp("[\\u4E00-\\u9FFF]+");
+    if (reg.test(keywords)) {
+        return jieba.cut_for_search(keywords).filter(word => !ZH_STOP_WORDS.includes(word)) as string[];
+    } else {
+        const segmenter = new Intl.Segmenter('en', { granularity: 'word' });
+        const segments = Array.from(segmenter.segment(keywords));
+        const words = segments.map(segment => segment.segment).filter(word => !EN_STOP_WORDS.includes(word.toLowerCase()));
+
+        return words;
+    }
+}
 
 const { TextArea } = Input;
 

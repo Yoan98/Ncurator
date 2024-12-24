@@ -4,7 +4,6 @@ import dayjs from '@src/utils/dayjsGlobal';
 import { useGlobalContext } from '@src/provider/global';
 import { searchDoc } from '@src/utils/search';
 import { IoBookOutline, IoChatbubblesOutline } from "react-icons/io5";
-import { APP_NAME } from '@src/utils/constant';
 import { ChatLlmMessage } from '@src/utils/ChatLlmMessage';
 import { VscSend } from "react-icons/vsc";
 import { CiPause1 } from "react-icons/ci";
@@ -354,7 +353,7 @@ const ChatSection = ({
                     <TextArea
                         value={question}
                         onChange={(e) => setQuestion(e.target.value)}
-                        placeholder={selectedAiOption.key === 1 ? t('ask_placeholder', APP_NAME) : t('message_placeholder', APP_NAME)}
+                        placeholder={selectedAiOption.key === 1 ? t('ask_placeholder') : t('message_placeholder')}
                         autoSize={{ minRows: 2, maxRows: 2 }}
                         variant='borderless'
                         className='text-base'

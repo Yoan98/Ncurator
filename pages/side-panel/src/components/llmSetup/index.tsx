@@ -7,7 +7,6 @@ import type { ProgressProps, UploadFile, UploadProps } from 'antd';
 import * as constant from '@src/utils/constant';
 import { useGlobalContext } from '@src/provider/global';
 import { downloadLlmModelFiles, uploadByCacheFiles } from '@src/utils/tool';
-import { LLM_MODEL_LIST } from '@src/config';
 import { modelLibURLPrefix, modelVersion } from "@mlc-ai/web-llm";
 import { t } from '@extension/i18n';
 
@@ -35,7 +34,7 @@ const DEFAULT_META_DATA = {
     loadingStatus: 'normal' as ProgressProps['status'],
     loadingPercent: 0
 }
-const DEFAULT_MODEL_LIST: ModelItem[] = LLM_MODEL_LIST.map((model) => {
+const DEFAULT_MODEL_LIST: ModelItem[] = constant.LLM_MODEL_LIST.map((model) => {
     return {
         ...model,
         modelSizeType: model.modelSizeType as 1 | 2 | undefined,

@@ -1,6 +1,3 @@
-import init, * as jieba from 'jieba-wasm';
-import * as constant from '@src/utils/constant';
-import type { WebWorkerMLCEngine } from "@mlc-ai/web-llm";
 import { CHAT_SYSTEM_PROMPT, KNOWLEDGE_USER_PROMPT } from '@src/config'
 import type { LlmEngineController } from '@src/utils/LlmEngineController'
 
@@ -44,21 +41,6 @@ export function formatFileSize(size: number): string {
 }
 
 
-// 分割关键词,英文按照空格,中文按照jieba分词
-export async function splitKeywords(keywords: string) {
-    //@ts-ignore
-    await init()
-    const reg = new RegExp("[\\u4E00-\\u9FFF]+");
-    if (reg.test(keywords)) {
-        return jieba.cut_for_search(keywords).filter(word => !constant.ZH_STOP_WORDS.includes(word)) as string[];
-    } else {
-        const segmenter = new Intl.Segmenter('en', { granularity: 'word' });
-        const segments = Array.from(segmenter.segment(keywords));
-        const words = segments.map(segment => segment.segment).filter(word => !constant.EN_STOP_WORDS.includes(word.toLowerCase()));
-
-        return words;
-    }
-}
 
 
 export function getWebLlmCacheType(fileName: string) {

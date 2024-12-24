@@ -1,5 +1,3 @@
-import { ModelSort } from "@src/utils/constant";
-
 // build lsh(embedding) index relate
 export const BUILD_INDEX_EMBEDDING_MAX_WORKER_NUM = 1; // embedding 开启worker数量(只有使用cpu时才有用,还未兼容,先统一设为1)
 export const BUILD_INDEX_CHUNKS_BATCH_SIZE = 100; // 分批构建索引时,每批处理的chunk数量,该值控制整体构建索引时,消化chunk的速度,每一批chunk也就对应一个lsh和全文索引块,这意味着该值越大,对后续的搜索会有提升,但构建时内存占比也会越大
@@ -25,7 +23,6 @@ export const SPLITTER_MINI_CHUNK_OVERLAP = 30; // 分割小文本的重叠字符
 export const SPLITTER_SEPARATORS = ["\n\n", "\n", "。", ";", ",", " ", ""]
 
 // embedding model relate
-export const DEFAULT_EMBEDDING_MODEL = 'nomic-ai/nomic-embed-text-v1'
 export const EMBEDDING_HIDDEN_SIZE = 768; // 目前使用的两个模型都是768维的向量
 
 // other
@@ -38,56 +35,5 @@ export const CHAT_SYSTEM_PROMPT =
 export const KNOWLEDGE_USER_PROMPT = "Use the following context when answering the question at the end. Don't use any other knowledge. The documents below have been retrieved and sorted by relevance. Please use them in the order they are presented, with the most relevant ones first.If the document is not match question, ignore them."
 // llm
 export const LLM_GENERATE_MAX_TOKENS = 300;
-
-export const LLM_MODEL_LIST = [
-    // API 模型
-    {
-        sort: ModelSort.Api,
-        apiKey: 'sk-da34773d39e948129436839cae2bea4d',
-        baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-        name: 'Qwen-Turbo',
-        modelId: 'qwen-turbo-latest',
-        contextWindowSize: 12800,
-    },
-
-    // WebLLM 模型
-    {
-        sort: ModelSort.Webllm,
-        name: 'Qwen2.5-3B',
-        modelSizeType: 2,
-        modelId: 'Qwen2.5-3B-Instruct-q4f32_1-MLC',
-        wasmFileName: 'Qwen2.5-3B-Instruct-q4f32_1-ctx4k_cs1k-webgpu.wasm',
-        vramRequiredMB: 2893,
-        contextWindowSize: 4096,
-    },
-    {
-        sort: ModelSort.Webllm,
-        name: 'Qwen2.5-7B',
-        modelSizeType: 1,
-        modelId: 'Qwen2.5-7B-Instruct-q4f16_1-MLC',
-        wasmFileName: 'Qwen2-7B-Instruct-q4f16_1-ctx4k_cs1k-webgpu.wasm',
-        vramRequiredMB: 5106,
-        contextWindowSize: 4096,
-    },
-    {
-        sort: ModelSort.Webllm,
-        name: 'Llama-3.2-3B',
-        modelSizeType: 2,
-        modelId: 'Llama-3.2-3B-Instruct-q4f32_1-MLC',
-        wasmFileName: 'Llama-3.2-3B-Instruct-q4f32_1-ctx4k_cs1k-webgpu.wasm',
-        vramRequiredMB: 2951,
-        contextWindowSize: 4096
-
-    },
-    {
-        sort: ModelSort.Webllm,
-        name: 'Llama-3.1-8B',
-        modelSizeType: 1,
-        modelId: 'Llama-3.1-8B-Instruct-q4f16_1-MLC',
-        wasmFileName: 'Llama-3_1-8B-Instruct-q4f16_1-ctx4k_cs1k-webgpu.wasm',
-        vramRequiredMB: 5001,
-        contextWindowSize: 4096
-
-    },]
 
 export const OFFICIAL_WEBSITE = 'https://www.guanzhangai.cn'

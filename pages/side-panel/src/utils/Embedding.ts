@@ -1,7 +1,6 @@
-import { AutoModel, AutoTokenizer, env, pipeline } from '@huggingface/transformers';
+import { env, pipeline } from '@huggingface/transformers';
 import type { AllTasks } from '@huggingface/transformers';
 import { checkWebGPU } from '@src/utils/tool';
-import { DEFAULT_EMBEDDING_MODEL } from '@src/config';
 
 
 //* 使用本地模型的配置
@@ -147,7 +146,7 @@ export class Embedding {
 
         if (pretrainedModelOptions.wasmPath) {
             // 配置本地ort-wasm-simd-threaded.jsep.wasm文件路径,避免内网请求失败
-            // 在worker中加载模型的路径必须是'../'
+            // 在worker中加载模型的路径必须是'../',非worker中必须是'./'
             // @ts-ignore
             env.backends.onnx.wasm.wasmPaths = pretrainedModelOptions.wasmPath;
         }

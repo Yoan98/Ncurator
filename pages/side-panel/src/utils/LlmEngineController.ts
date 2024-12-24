@@ -1,7 +1,6 @@
 import OpenAI from "openai";
 import { WebWorkerMLCEngine } from "@mlc-ai/web-llm";
-import type { MLCEngineConfig } from "@mlc-ai/web-llm";
-import { LLM_MODEL_LIST } from '@src/config';
+import { LLM_MODEL_LIST } from '@src/utils/constant';
 import { ModelSort } from '@src/utils/constant';
 
 export class LlmEngineController {
