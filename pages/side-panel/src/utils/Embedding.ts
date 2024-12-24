@@ -134,8 +134,6 @@ export class Embedding {
         progress_callback?: (progress: number) => void;
         wasmPath?: string;
     } = { wasmPath: '../' }) {
-        console.log('select modelId', modelId)
-
         if (!modelId) {
             throw new Error('ModelId is required');
         }
