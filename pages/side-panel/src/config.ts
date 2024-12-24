@@ -36,4 +36,4 @@ export const KNOWLEDGE_USER_PROMPT = "Use the following context when answering t
 // llm
 export const LLM_GENERATE_MAX_TOKENS = 300;
 
-export const OFFICIAL_WEBSITE = 'https://www.guanzhangai.cn'
+export const OFFICIAL_WEBSITE = 'https://www.ncurator.com'
