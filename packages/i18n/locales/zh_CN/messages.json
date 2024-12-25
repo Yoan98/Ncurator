@@ -140,8 +140,8 @@
     "web_url_placeholder": {
         "message": "请输入网址"
     },
-    "add_crawl": {
-        "message": "新增爬取"
+    "add_spider": {
+        "message": "新增爬虫"
     },
     "new_crawl": {
         "message": "新建爬取"

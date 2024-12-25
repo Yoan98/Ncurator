@@ -739,7 +739,7 @@ const Resource = () => {
                                     ))
                                 }
 
-                                < Button type="dashed" onClick={() => add()} block>+ {t('add_crawl')}</Button>
+                                < Button type="dashed" onClick={() => add()} block>+ {t('add_spider')}</Button>
                             </div>
                         )}
                     </Form.List>

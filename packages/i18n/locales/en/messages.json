@@ -149,8 +149,8 @@
     "web_url_placeholder": {
         "message": "The web url you want to crawl"
     },
-    "add_crawl": {
-        "message": "Add Crawl"
+    "add_spider": {
+        "message": "Add Spider"
     },
     "spider": {
         "message": "Spider"
