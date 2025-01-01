@@ -5,6 +5,7 @@ import type { ProgressProps } from 'antd';
 import { Embedding } from '@src/utils/Embedding'
 import { SlVector } from "react-icons/sl";
 import { useGlobalContext } from '@src/provider/global';
+import { t } from '@extension/i18n';
 
 interface EmbeddingModel {
     modelId: string;
@@ -18,19 +19,20 @@ interface EmbeddingModel {
 const EMBEDDING_MODEL_LIST: EmbeddingModel[] = [
     {
         modelId: 'nomic-ai/nomic-embed-text-v1',
-        name: 'Common Embedding',
+        name: t('english_embedding'),
         isDefault: false,
         loadingStatus: 'normal',
         loadingPercent: 0,
-        tag: 'Recommend English or Most Languages'
+        tag: t('applicable_english_languages')
+
     },
     {
         modelId: 'jinaai/jina-embeddings-v2-base-zh',
-        name: 'Chinese Embedding',
+        name: t('chinese_embedding'),
         isDefault: false,
         loadingStatus: 'normal',
         loadingPercent: 0,
-        tag: 'Recommend Chinese Language'
+        tag: t('applicable_chinese_language')
     },
 
 ]
@@ -43,7 +45,7 @@ const EmbeddingSetup = () => {
 
     const handleSetDefaultClick = async (model) => {
         if (embeddingModelList.some(item => item.loadingStatus === 'active')) {
-            message.warning('Model is loading, please wait a moment')
+            message.warning(t('model_is_loading'))
             return;
         }
 
@@ -118,8 +120,17 @@ const EmbeddingSetup = () => {
                     return item;
                 })
             })
-            message.error('Failed to load model, please try again later')
+            message.error(t('failed_to_load_model')
+            )
         }
+    }
+
+    const handleHelpDocClick = () => {
+        const lang = navigator.language || 'en';
+        const enDocUrl = 'https://help.ncurator.com/en/guide/choose-embed-model.html'
+        const zhDocUrl = 'https://help.ncurator.com/zh/guide/choose-embed-model.html'
+        const helpDocUrl = lang.startsWith('zh') ? zhDocUrl : enDocUrl
+        window.open(helpDocUrl)
     }
 
     useEffect(() => {
@@ -151,13 +162,19 @@ const EmbeddingSetup = () => {
             <div className="title flex border-b py-5 items-end gap-1 mb-4">
                 <div className='flex items-center gap-1 '>
                     <SlVector size={25} />
-                    <span className='text-lg font-bold'>Embedding Model Setup</span>
+                    <span className='text-lg font-bold'>{t('embedding_model_setup')
+                    }</span>
                 </div>
-                <Tooltip placement="top" title='All data will be processed using the default embedding model. You should choose the model that best suits the language of your data. Avoid to change it after you add resource.' >
+                <Tooltip placement="top" title={t('all_data_processed_with_default_model')
+                } >
                     <span>
                         <CiSquareQuestion size={20} className='cursor-pointer' />
                     </span>
                 </Tooltip>
+
+                <a onClick={handleHelpDocClick} className='text-blue-500 underline cursor-pointer'>
+                    {t('help_doc')}
+                </a>
             </div>
 
 
@@ -174,8 +191,8 @@ const EmbeddingSetup = () => {
 
                                     {
                                         model.isDefault ?
-                                            <Tag color={`orange`} className='text-sm'>Default</Tag>
-                                            : <Button type="primary" size="small" onClick={() => { handleSetDefaultClick(model) }}>Set Default</Button>
+                                            <Tag color={`orange`} className='text-sm'>{t('default')}</Tag>
+                                            : <Button type="primary" size="small" onClick={() => { handleSetDefaultClick(model) }}>{t('set_default')}</Button>
                                     }
                                 </div>
                                 <div className="tag  flex items-center ">

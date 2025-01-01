@@ -37,3 +37,6 @@ export const KNOWLEDGE_USER_PROMPT = "Use the following context when answering t
 export const LLM_GENERATE_MAX_TOKENS = 300;
 
 export const OFFICIAL_WEBSITE = 'https://www.ncurator.com'
+
+export const EN_HELP_DOC_URL = "https://help.ncurator.com/en/guide/how-to-install.html"
+export const ZH_HELP_DOC_URL = "https://help.ncurator.com/zh/guide/how-to-install.html"

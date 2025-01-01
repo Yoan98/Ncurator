@@ -101,7 +101,8 @@ const LlmLoaderProgress = ({ progress, status, onReloadClick, onGoToSetupCLick }
 const EmbeddingModelTip = ({ visible, onGoToSetupCLick }) => {
     return (
         visible && <div className={`llm-load-status fixed right-0 bottom-10 bg-white rounded-lg py-1 px-2 animate__animated shadow-md  ${!visible ? 'animate__backOutRight' : 'animate__backInRight'}`}>
-            <div className='text-text-error cursor-pointer' onClick={onGoToSetupCLick}>Not Found Embedding Model, Click go to setup.</div>
+            <div className='text-text-error cursor-pointer' onClick={onGoToSetupCLick}>{t('not_found_embedding_model')
+            }</div>
         </div>
 
     )

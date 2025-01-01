@@ -19,7 +19,7 @@ import { MdAlternateEmail } from "react-icons/md";
 import { useGlobalContext } from '@src/provider/global';
 import dayjs from '@src/utils/dayjsGlobal';
 import { t } from '@extension/i18n';
-import { OFFICIAL_WEBSITE } from '@src/config';
+import { EN_HELP_DOC_URL, ZH_HELP_DOC_URL } from '@src/config';
 import { SlVector } from "react-icons/sl";
 
 interface GroupedChatHistory {
@@ -40,7 +40,7 @@ const settingItems: MenuProps['items'] = [
     },
     {
         key: 5,
-        label: 'Advance Set',
+        label: t('advance_set'),
         icon: <SlVector size={18} />,
     },
     {
@@ -145,7 +145,9 @@ const SidePanel = () => {
             setPagePath('/llm-set');
         } else if (key == 3) {
             //打开tab页
-            window.open(OFFICIAL_WEBSITE)
+            const lang = navigator.language || 'en';
+            const helpDocUrl = lang.startsWith('zh') ? ZH_HELP_DOC_URL : EN_HELP_DOC_URL;
+            window.open(helpDocUrl)
         } else if (key == 4) {
             notification.open({
                 message: t('contact_author'),

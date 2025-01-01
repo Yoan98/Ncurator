@@ -158,6 +158,9 @@
     "delete_confirm": {
         "message": "Are you sure to delete these items"
     },
+    "confirm": {
+        "message": "OK"
+    },
     "wait_document_build_warning": {
         "message": "Please wait for the document builded"
     },
@@ -304,5 +307,44 @@
     },
     "download_model_tip": {
         "message": "The model will be downloaded from huggingface by default. If the network speed is limited, you can email the author to download the model from other channels to the local and then upload it"
+    },
+    "not_found_embedding_model": {
+        "message": "Not Found Embedding Model, Click to setup"
+    },
+    "advance_set": {
+        "message": "Advanced Set"
+    },
+    "english_embedding": {
+        "message": "English Model"
+    },
+    "chinese_embedding": {
+        "message": "Chinese Model"
+    },
+    "applicable_english_languages": {
+        "message": "Applicable to English based data"
+    },
+    "applicable_chinese_language": {
+        "message": "Applicable to Chinese based data"
+    },
+    "model_is_loading": {
+        "message": "Model is loading, please wait a moment"
+    },
+    "failed_to_load_model": {
+        "message": "Failed to load model, please try again later"
+    },
+    "embedding_model_setup": {
+        "message": "Embedding Setup"
+    },
+    "all_data_processed_with_default_model": {
+        "message": "All data will be processed using the default embedding model. You should choose the model that best suits the language of your data"
+    },
+    "help_doc": {
+        "message": "Help Doc?"
+    },
+    "delete": {
+        "message": "Delete"
+    },
+    "please_delete_document_first": {
+        "message": "Please delete the document first"
     }
 }

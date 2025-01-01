@@ -134,6 +134,9 @@
     "cancel": {
         "message": "取消"
     },
+    "confirm": {
+        "message": "确认"
+    },
     "import_your_browser_bookmark": {
         "message": "导入您的浏览器书签"
     },
@@ -295,5 +298,44 @@
     },
     "spider": {
         "message": "爬虫"
+    },
+    "not_found_embedding_model": {
+        "message": "未找到嵌入模型，点击前往设置"
+    },
+    "advance_set": {
+        "message": "高级设置"
+    },
+    "english_embedding": {
+        "message": "英文模型"
+    },
+    "chinese_embedding": {
+        "message": "中文模型"
+    },
+    "applicable_english_languages": {
+        "message": "适用于英文为主的数据"
+    },
+    "applicable_chinese_language": {
+        "message": "适用中文为主的数据"
+    },
+    "model_is_loading": {
+        "message": "模型加载中，请稍等"
+    },
+    "failed_to_load_model": {
+        "message": "加载模型失败，请稍后再试"
+    },
+    "embedding_model_setup": {
+        "message": "嵌入模型设置"
+    },
+    "all_data_processed_with_default_model": {
+        "message": "所有数据将使用默认嵌入模型进行处理。你应该选择最适合你资源文本语言的模型。添加资源后避免更改模型"
+    },
+    "help_doc": {
+        "message": "帮助文档?"
+    },
+    "delete": {
+        "message": "删除"
+    },
+    "please_delete_document_first": {
+        "message": "请先删除文档"
     }
 }

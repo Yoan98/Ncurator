@@ -123,7 +123,11 @@ const Resource = () => {
     // 判断当前的connections是否存在build中的document,存在则不允许编辑
     // 因为indexdb更新数据整体更新,没办法只更新某一个字段
     const checkHasBuildingDocInConnection = (connectionId: number) => {
-        const buildDoc = connectionList.find((item) => item.id == connectionId)!.documentList.find((doc) => doc.status == constant.DocumentStatus.Building)
+        if (!connectionId || !connectionList.length) {
+            return false;
+        }
+
+        const buildDoc = connectionList.find((item) => item.id == connectionId)?.documentList.find((doc) => doc.status == constant.DocumentStatus.Building)
 
         if (!buildDoc) {
             return false;
@@ -282,6 +286,8 @@ const Resource = () => {
         })
         )
 
+        console.log('connectionList', connectionList)
+
         setConnectionList(connectionList);
         setTimeout(() => {
             setConnectionListLoading(false);
@@ -296,7 +302,7 @@ const Resource = () => {
         }
         const disPlayConnectionList = connectionList.map((connection) => {
             const newConnection = { ...connection, selectedRowKeys: [], };
-            newConnection.documentList = connection.documentList.filter((doc) => doc.name.includes(value));
+            newConnection.documentList = connection.documentList.filter((doc) => doc.name.toLowerCase().includes(value.toLowerCase()));
             return newConnection;
         }).filter((connection) => connection.documentList.length);
         const collapseActiveKey = disPlayConnectionList.length ? disPlayConnectionList.map(item => item.id!) : [];
@@ -587,6 +593,40 @@ const Resource = () => {
 
     }
 
+    const handleResourceDelClick = async () => {
+        // 检查当前resource是否有building的document
+        const hasBuildDoc = checkHasBuildingDocInConnection(curConnection!.id!);
+        if (hasBuildDoc) {
+            message.warning(t('wait_document_build_warning'));
+            return;
+        }
+
+        // 检查当前resource是否有document
+        if (curConnection!.documentList.length) {
+            message.warning(t('please_delete_document_first'));
+            return;
+        }
+
+        // 删除resource
+        try {
+            setOperateResourceLoading(true);
+            const store = indexDBRef.current!;
+            await store.delete({
+                storeName: constant.CONNECTION_STORE_NAME,
+                key: curConnection!.id!
+            })
+
+            await fetchConnectionList();
+            message.success(t('delete_success'));
+            setOperateResourceModalOpen(false);
+        } catch (error) {
+            console.error('handleResourceDelClick error', error)
+            message.error('Delete Error' + error);
+        }
+        setOperateResourceLoading(false);
+
+    }
+
     useEffect(() => {
         async function initIndexDB() {
             const store = new IndexDBStore();
@@ -602,7 +642,7 @@ const Resource = () => {
     }, [])
 
     useEffect(() => {
-        if (!connectionList.length) {
+        if (!connectionList) {
             return;
         }
 
@@ -663,7 +703,22 @@ const Resource = () => {
             </Modal>
 
             {/* resource add/edit */}
-            <Modal confirmLoading={operateResourceLoading} cancelButtonProps={{ loading: operateResourceLoading }} maskClosable={false} centered title={resourceScene == 'add' ? t('add_resource') : t('edit_resource')} open={operateResourceModalOpen} onOk={handleOperateResourceConfirm} onCancel={() => { setOperateResourceModalOpen(false) }}>
+            <Modal
+                confirmLoading={operateResourceLoading}
+                cancelButtonProps={{ loading: operateResourceLoading }}
+                cancelText={t('cancel')}
+                okText={t('confirm')}
+                maskClosable={false} centered title={resourceScene == 'add' ? t('add_resource') : t('edit_resource')} open={operateResourceModalOpen} onOk={handleOperateResourceConfirm} onCancel={() => { setOperateResourceModalOpen(false) }}
+                footer={(_, { OkBtn, CancelBtn }) => (
+                    <>
+                        {
+                            resourceScene == 'edit' && <Button loading={operateResourceLoading} danger onClick={handleResourceDelClick}>{t('delete')}</Button>
+                        }
+                        <CancelBtn />
+                        <OkBtn />
+                    </>
+                )}
+            >
                 <Form
                     form={resourceForm}
                     name="resource"

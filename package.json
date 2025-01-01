@@ -1,6 +1,6 @@
 {
-    "name": "BeCurator",
-    "version": "0.2.0",
+    "name": "Ncurator",
+    "version": "0.3.0",
     "description": "BeCurator: Privacy-Focused AI Assistant with Your Data",
     "type": "module",
     "scripts": {

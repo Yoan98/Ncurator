@@ -206,6 +206,13 @@ const LlmSetup = () => {
 
         setUploadLoading(false);
     }
+    const handleHelpDocClick = () => {
+        const lang = navigator.language || 'en';
+        const enDocUrl = 'https://help.ncurator.com/en/guide/choose-llm-model.html'
+        const zhDocUrl = 'https://help.ncurator.com/zh/guide/choose-llm-model.html'
+        const helpDocUrl = lang.startsWith('zh') ? zhDocUrl : enDocUrl
+        window.open(helpDocUrl)
+    }
 
     const setDefaultModel = (model: ModelItem) => {
         localStorage.setItem(constant.STORAGE_DEFAULT_MODEL_ID, model.modelId);
@@ -332,6 +339,9 @@ const LlmSetup = () => {
                         <CiSquareQuestion size={20} className='cursor-pointer' />
                     </span>
                 </Tooltip>
+                <a onClick={handleHelpDocClick} className='text-blue-500 underline cursor-pointer'>
+                    {t('help_doc')}
+                </a>
             </div>
 
             <div className='flex-1 overflow-y-auto model-list'>
