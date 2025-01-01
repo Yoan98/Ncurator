@@ -315,7 +315,7 @@
         "message": "适用于英文为主的数据"
     },
     "applicable_chinese_language": {
-        "message": "适用中文为主的数据"
+        "message": "适用于中文为主的数据"
     },
     "model_is_loading": {
         "message": "模型加载中，请稍等"
@@ -335,7 +335,13 @@
     "delete": {
         "message": "删除"
     },
+    "delete_tip": {
+        "message": "删除提示"
+    },
     "please_delete_document_first": {
         "message": "请先删除文档"
+    },
+    "please_setup_embed_first": {
+        "message": "请先设置嵌入模型"
     }
 }

@@ -455,7 +455,7 @@ const Resource = () => {
     // resource add/edit
     const handleAddResource = () => {
         if (!defaultEmbeddingModelId) {
-            message.warning('please setup embedding model first');
+            message.warning(t('please_setup_embed_first'));
             return;
         }
 
@@ -803,7 +803,7 @@ const Resource = () => {
 
             {/* del Modal */}
             <Modal
-                title="Delete Confirm"
+                title={t('delete_tip')}
                 centered
                 open={delConfirmModalOpen}
                 confirmLoading={delDocLoading} cancelButtonProps={{ loading: delDocLoading }}

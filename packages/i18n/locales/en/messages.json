@@ -158,6 +158,9 @@
     "delete_confirm": {
         "message": "Are you sure to delete these items"
     },
+    "delete_tip": {
+        "message": "Delete Tip"
+    },
     "confirm": {
         "message": "OK"
     },
@@ -346,5 +349,8 @@
     },
     "please_delete_document_first": {
         "message": "Please delete the document first"
+    },
+    "please_setup_embed_first": {
+        "message": "Please setup the embedding model first"
     }
 }
