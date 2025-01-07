@@ -14,7 +14,7 @@ interface LSHIndexConstructor {
  * LSH (Locality-Sensitive Hashing) 实现
  * * 使用时需尽量考虑,存入tables的数数量,
  * * 尽可能多存且考虑到内存大小,numTables, numHashesPerTable,计算机性能这几个因素
- * 搜索下的平均情况下的时间复杂度为 n * numTables / 2 ^ numHashesPerTable
+ * 搜索下的平均情况下的时间复杂度为 n / 2 ^ numHashesPerTable * numTables -> n * numTables / 2 ^ numHashesPerTable;
  * todo: 暂时先不考一组tables最大存储数量,等后续摸底实测后来调整
  */
 export class LSHIndex {
