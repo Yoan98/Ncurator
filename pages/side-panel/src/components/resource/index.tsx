@@ -10,7 +10,7 @@ import { useGlobalContext } from '@src/provider/global';
 import * as config from '@src/config';
 import { IoAdd, IoClose } from "react-icons/io5";
 import { MdDeleteOutline } from "react-icons/md";
-import { removeDocumentsInConnection, addFilesInConnection, buildDocsIndexInConnection, addCrawlInConnection } from '@src/utils/build'
+import { removeDocumentsInConnection, addFilesInConnection, buildDocsIndexInConnection, addCrawlInConnection, getConnectionList, getPureConnection } from '@src/utils/build'
 import { t } from '@extension/i18n';
 
 const { Search } = Input;
@@ -272,19 +272,7 @@ const Resource = () => {
         setConnectionListLoading(true);
 
         const store = indexDBRef.current!;
-        await store.connect(constant.DEFAULT_INDEXDB_NAME);
-        const connections = await store.getAll({
-            storeName: constant.CONNECTION_STORE_NAME,
-        }) as DB.CONNECTION[];
-        // 根据connection获取document列表
-        const connectionList: DB.ConnectionDocUnion[] = await Promise.all(connections.map(async (connection) => {
-            const documents = await store.getBatch({
-                storeName: constant.DOCUMENT_STORE_NAME,
-                keys: connection.documents.map((doc) => doc.id!)
-            }) as DB.DOCUMENT[];
-            return { ...connection, documentList: documents }
-        })
-        )
+        const connectionList = await getConnectionList(store)
 
         console.log('connectionList', connectionList)
 
@@ -311,16 +299,7 @@ const Resource = () => {
     const checkHasBuildingDoc = () => {
         return connectionList.some((connection) => connection.documentList.some((doc) => doc.status == constant.DocumentStatus.Building))
     }
-    const getPureConnection = (connection: DB.ConnectionDocUnion): DB.CONNECTION => {
-        return {
-            id: connection.id!,
-            name: connection.name,
-            connector: connection.connector,
-            lsh_index_ids: connection.lsh_index_ids,
-            full_text_index_ids: connection.full_text_index_ids,
-            documents: connection.documents
-        }
-    }
+
 
 
 

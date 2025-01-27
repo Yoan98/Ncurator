@@ -13,6 +13,7 @@ import { SPLITTER_BIG_CHUNK_SIZE, SPLITTER_BIG_CHUNK_OVERLAP, SPLITTER_MINI_CHUN
 import { getFileName } from '@src/utils/tool'
 import { CheerioWebBaseLoader } from "@langchain/community/document_loaders/web/cheerio";
 import type { WebBaseLoaderParams } from "@langchain/community/document_loaders/web/cheerio";
+import * as cheerio from 'cheerio';
 
 export type ConnectorClassUnion = typeof FileConnector | typeof CrawlerConnector
 
@@ -173,24 +174,32 @@ export class CrawlerConnector {
     }
 
     static async getChunks({
-        url, options, docName
+        url, options, docName, rawHtml
     }: {
         url: string,
         options?: WebBaseLoaderParams
         docName: string
+        rawHtml?: string // 整个html元素
     }): Promise<GetChunksReturn> {
 
         try {
             let bigChunks: Document[] = [];
             let miniChunks: Document[] = [];
-            const cheerio = new CheerioWebBaseLoader(
-                url,
-                {
-                    ...options,
 
-                }
-            );
-            const $ = await cheerio.scrape();
+            let $: cheerio.CheerioAPI
+            if (rawHtml) {
+                $ = cheerio.load(rawHtml)
+            } else {
+                const cheerioLangChain = new CheerioWebBaseLoader(
+                    url,
+                    {
+                        ...options,
+
+                    }
+                );
+
+                $ = await cheerioLangChain.scrape();
+            }
             const bodyContent = $('body');
             // 清除非文本内容
             const unTextTagList = ['script', 'style', 'svg', 'img', 'canvas', 'audio', 'video', 'object', 'embed', 'applet', 'map', 'area']

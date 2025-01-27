@@ -1,7 +1,7 @@
 import { withErrorBoundary, withSuspense } from '@extension/shared';
-import { Button, Dropdown, MenuProps, Drawer, Tooltip, Modal, notification } from 'antd';
+import { Button, Dropdown, MenuProps, Drawer, Tooltip, Modal, notification, Select, Empty, message } from 'antd';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { FiSidebar } from "react-icons/fi";
 import { RiRobot2Line } from "react-icons/ri";
 import { IoDocumentAttachOutline } from "react-icons/io5";
@@ -21,6 +21,11 @@ import dayjs from '@src/utils/dayjsGlobal';
 import { t } from '@extension/i18n';
 import { EN_HELP_DOC_URL, ZH_HELP_DOC_URL } from '@src/config';
 import { SlVector } from "react-icons/sl";
+import { TbFileImport } from "react-icons/tb";
+import { Connector } from '@src/utils/constant'
+import { IndexDBStore } from '@src/utils/IndexDBStore';
+import { DEFAULT_INDEXDB_NAME } from '@src/utils/constant';
+import { buildDocsIndexInConnection, addCrawlInConnection, getConnectionList, getPureConnection } from '@src/utils/build'
 
 interface GroupedChatHistory {
     title: string;
@@ -119,8 +124,17 @@ const ToggleSwitch = ({
     );
 };
 
+interface CurTabPageInfo {
+    title: string,
+    url: string,
+    tabId: number | undefined
+    rawHtml: string
+}
 const SidePanel = () => {
-    const { pagePath, setPagePath, initLlmEngine, setDefaultEmbeddingModelId } = useGlobalContext()
+    const { pagePath, setPagePath, initLlmEngine, setDefaultEmbeddingModelId, connectionList, setConnectionList } = useGlobalContext()
+
+    const curTabInfo = useRef<CurTabPageInfo>({ title: '', url: '', tabId: undefined, rawHtml: '' });
+    const indexDBRef = useRef<IndexDBStore | null>(null);
 
     const [historyOpen, setHistoryOpen] = useState(false);
     const [historyTitle, setHistoryTitle] = useState<string>('');
@@ -129,6 +143,15 @@ const SidePanel = () => {
 
     const [groupedChatHistory, setGroupedChatHistory] = useState<GroupedChatHistory[]>([]);
     const [curChatHistoryId, setCurChatHistoryId] = useState<number>(1);
+    const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+
+    const [curSelectedConnectionId, setCurSelectedConnectionId] = useState<number | undefined>(undefined);
+    const webCrawlConnectionSelectList = connectionList.filter((item) => item.connector === Connector.Crawl).map(item => {
+        return {
+            value: item.id,
+            label: item.name
+        }
+    })
 
     const setHistoryTitleByTab = (tab: Tab) => {
         if (tab === 'search') {
@@ -176,6 +199,96 @@ const SidePanel = () => {
         setCurChatHistoryId(newChatHistoryId);
         setHistoryOpen(false);
     }
+
+    //* 导入当前网页为知识库
+    const handleImportWebpageClick = () => {
+        getActiveTabInfo().then((tabInfo: CurTabPageInfo) => {
+            curTabInfo.current = tabInfo;
+            setIsImportModalOpen(true);
+        }
+        ).catch((err) => {
+            console.error(err)
+            message.error('Get Active Tab Info Error -> ' + err);
+        })
+    }
+    const handleImportModalConfirm = async () => {
+        if (!curSelectedConnectionId) {
+            message.error('Please select a resource to import');
+            return;
+        }
+        if (!curTabInfo.current.tabId) {
+            message.error('Not Found Active Tab ID');
+            return
+        }
+        if (!curTabInfo.current.rawHtml) {
+            message.error('Not Found Html');
+            return
+        }
+
+        message.success('Importing...')
+        setIsImportModalOpen(false)
+
+        // 构建与存入数据库
+        try {
+            const store = indexDBRef.current!;
+            const curConnection = connectionList.find(item => item.id === curSelectedConnectionId)
+            const { docs, connectionAfterAddDoc } = await addCrawlInConnection(store, [{
+                name: curTabInfo.current.title,
+                link: curTabInfo.current.url
+            }], getPureConnection(curConnection!));
+
+            const newDocs: (DB.DOCUMENT & { rawHtml?: string })[] = docs
+            newDocs[0].rawHtml = curTabInfo.current.rawHtml
+
+            await buildDocsIndexInConnection(store, newDocs, connectionAfterAddDoc)
+
+            // 更新connection list
+            const newConnectionList = await getConnectionList(store)
+            setConnectionList(newConnectionList);
+        } catch (error) {
+            console.error('handleImportModalConfirm error', error)
+            message.error('Import Error' + error);
+        }
+
+    }
+    const handleImportResourceChange = (value: number) => {
+        setCurSelectedConnectionId(value);
+    }
+    const getActiveTabInfo = () => {
+
+        return new Promise((resolve, reject) => {
+
+            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                const tab = tabs[0];
+
+                if (!tab || !tab.id) {
+                    return reject('No active tab');
+                }
+
+                chrome.scripting.executeScript({
+                    target: { tabId: tab.id },
+                    func: () => {
+                        return document.documentElement.innerHTML;
+                    }
+                }, (result) => {
+                    console.log('result', result)
+                    if (!result || !result[0] || !result[0].result) {
+                        return reject('No tab result');
+                    }
+                    const curTabHtml = result[0].result;
+                    if (!curTabHtml) {
+                        return reject('No tab content');
+                    }
+
+                    resolve({ title: tab.title, url: tab.url, tabId: tab.id, rawHtml: curTabHtml });
+                })
+
+            });
+
+
+        })
+    }
+
     const groupChatHistory = (localChatHistory: Chat.LocalHistory[]) => {
         // 按照当天,昨天,近七天,更早的时间顺序分组
         const history = localChatHistory.reduce((acc, item) => {
@@ -253,6 +366,15 @@ const SidePanel = () => {
         const defaultEmbeddingModelId = localStorage.getItem('defaultEmbeddingModelId') || undefined;
         setDefaultEmbeddingModelId(defaultEmbeddingModelId);
 
+
+        // 初始化indexDB
+        async function initIndexDB() {
+            const store = new IndexDBStore();
+            await store.connect(DEFAULT_INDEXDB_NAME);
+            indexDBRef.current = store;
+        }
+        initIndexDB()
+
     }, [])
 
     useEffect(() => {
@@ -273,7 +395,13 @@ const SidePanel = () => {
                             <IoIosArrowRoundBack cursor='pointer' size={25} onClick={() => { setPagePath('/main') }} />
                     }
                 </div>
-                <div className="header-right">
+                <div className="header-right flex items-center gap-2">
+                    <Tooltip placement="bottom" title='Import current webpage into resource' >
+                        <span>
+
+                            <TbFileImport size={20} className='cursor-pointer' onClick={handleImportWebpageClick} />
+                        </span>
+                    </Tooltip>
                     <Dropdown menu={{ items: settingItems, onClick: handleMenuItemClick }} placement="bottomRight">
                         <Button size="small">S</Button>
                     </Dropdown>
@@ -362,7 +490,38 @@ const SidePanel = () => {
                 </div>
             </Drawer>
 
+            <Modal
+                centered
+                title="导入当前浏览的网页进入资源库" open={isImportModalOpen} onOk={handleImportModalConfirm} onCancel={() => { setIsImportModalOpen(false) }}
+                footer={(_, { OkBtn, CancelBtn }) => (
+                    !webCrawlConnectionSelectList.length ?
+                        <></> :
+                        <><CancelBtn /><OkBtn /></>
 
+                )}
+            >
+                {
+                    !webCrawlConnectionSelectList.length ?
+                        <Empty description='未找到"网页爬取"资源库'>
+                            <Button type='primary' onClick={() => {
+                                setPagePath('/resource')
+                                setIsImportModalOpen(false)
+                            }}>前往创建</Button>
+                        </Empty>
+                        :
+                        <div>
+                            <div className='mb-2'>当前网页: <span className='underline'>{curTabInfo.current.title}</span></div>
+                            <Select
+                                placeholder='选择要导入的资源库'
+                                style={{ minWidth: 120 }}
+                                onChange={handleImportResourceChange}
+                                options={webCrawlConnectionSelectList}
+                            />
+                        </div>
+                }
+
+
+            </Modal>
         </div>
     );
 };

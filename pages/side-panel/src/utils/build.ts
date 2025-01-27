@@ -393,7 +393,7 @@ export const removeDocumentsInConnection = async (store: IndexDBStore, removeDoc
     }
 }
 // 构建某一个connection下的新文档的索引
-export const buildDocsIndexInConnection = async (store: IndexDBStore, docs: DB.DOCUMENT[], connection: DB.CONNECTION) => {
+export const buildDocsIndexInConnection = async (store: IndexDBStore, docs: (DB.DOCUMENT & { rawHtml?: string })[], connection: DB.CONNECTION) => {
     let updatedConnection = connection;
     for (let doc of docs) {
         // 获取chunk数据
@@ -404,7 +404,8 @@ export const buildDocsIndexInConnection = async (store: IndexDBStore, docs: DB.D
             // 爬取网页数据生成chunk
             getChunkRes = await CrawlerConnector.getChunks({
                 url: doc.link!,
-                docName: doc.name
+                docName: doc.name,
+                rawHtml: doc.rawHtml
             });
         } else if (connection.connector == constant.Connector.File) {
             // resource表读取文件,将文件转成chunk
@@ -553,4 +554,34 @@ export const addCrawlInConnection = async (store: IndexDBStore, crawlList: { nam
     });
 
     return { docs: addDocRes, connectionAfterAddDoc: newConnection };
+}
+
+
+export async function getConnectionList(store: IndexDBStore) {
+    await store.connect(constant.DEFAULT_INDEXDB_NAME);
+    const connections = await store.getAll({
+        storeName: constant.CONNECTION_STORE_NAME,
+    }) as DB.CONNECTION[];
+    // 根据connection获取document列表
+    const connectionList: DB.ConnectionDocUnion[] = await Promise.all(connections.map(async (connection) => {
+        const documents = await store.getBatch({
+            storeName: constant.DOCUMENT_STORE_NAME,
+            keys: connection.documents.map((doc) => doc.id!)
+        }) as DB.DOCUMENT[];
+        return { ...connection, documentList: documents }
+    })
+    )
+
+    return connectionList
+}
+
+export const getPureConnection = (connection: DB.ConnectionDocUnion): DB.CONNECTION => {
+    return {
+        id: connection.id!,
+        name: connection.name,
+        connector: connection.connector,
+        lsh_index_ids: connection.lsh_index_ids,
+        full_text_index_ids: connection.full_text_index_ids,
+        documents: connection.documents
+    }
 }
