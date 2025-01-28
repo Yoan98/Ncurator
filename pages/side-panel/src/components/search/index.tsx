@@ -67,7 +67,7 @@ const SearchSection = () => {
         });
 
         await chat.sendMsg({
-            prompt: questionValue,
+            userText: questionValue,
             type: 'knowledge',
             searchTextRes,
             streamCb: (msg, finish_reason) => {

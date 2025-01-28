@@ -13,7 +13,6 @@ import Resource from '@src/components/resource/index';
 import LlmSetup from '@src/components/llmSetup/index';
 import EmbeddingSetup from '@src/components/embeddingSetup';
 import { IoIosArrowRoundBack } from "react-icons/io";
-import { CiEdit } from "react-icons/ci";
 import { IoIosHelpCircleOutline } from "react-icons/io";
 import { MdAlternateEmail } from "react-icons/md";
 import { useGlobalContext } from '@src/provider/global';
@@ -26,6 +25,8 @@ import { Connector } from '@src/utils/constant'
 import { IndexDBStore } from '@src/utils/IndexDBStore';
 import { DEFAULT_INDEXDB_NAME } from '@src/utils/constant';
 import { buildDocsIndexInConnection, addCrawlInConnection, getConnectionList, getPureConnection } from '@src/utils/build'
+import { FiEdit3 } from "react-icons/fi";
+import { getActiveTabInfo } from '@src/utils/tool'
 
 interface GroupedChatHistory {
     title: string;
@@ -124,12 +125,7 @@ const ToggleSwitch = ({
     );
 };
 
-interface CurTabPageInfo {
-    title: string,
-    url: string,
-    tabId: number | undefined
-    rawHtml: string
-}
+
 const SidePanel = () => {
     const { pagePath, setPagePath, initLlmEngine, setDefaultEmbeddingModelId, connectionList, setConnectionList } = useGlobalContext()
 
@@ -254,40 +250,6 @@ const SidePanel = () => {
     const handleImportResourceChange = (value: number) => {
         setCurSelectedConnectionId(value);
     }
-    const getActiveTabInfo = () => {
-
-        return new Promise((resolve, reject) => {
-
-            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-                const tab = tabs[0];
-
-                if (!tab || !tab.id) {
-                    return reject('No active tab');
-                }
-
-                chrome.scripting.executeScript({
-                    target: { tabId: tab.id },
-                    func: () => {
-                        return document.documentElement.innerHTML;
-                    }
-                }, (result) => {
-                    console.log('result', result)
-                    if (!result || !result[0] || !result[0].result) {
-                        return reject('No tab result');
-                    }
-                    const curTabHtml = result[0].result;
-                    if (!curTabHtml) {
-                        return reject('No tab content');
-                    }
-
-                    resolve({ title: tab.title, url: tab.url, tabId: tab.id, rawHtml: curTabHtml });
-                })
-
-            });
-
-
-        })
-    }
 
     const groupChatHistory = (localChatHistory: Chat.LocalHistory[]) => {
         // 按照当天,昨天,近七天,更早的时间顺序分组
@@ -389,8 +351,17 @@ const SidePanel = () => {
                     {
                         pagePath === '/main' ?
                             activeTab === 'chat' ?
-                                <FiSidebar cursor='pointer' size={20} onClick={() => { setHistoryOpen(true) }} />
-                                : <></>
+
+                                <div className='flex items-center gap-2'>
+                                    <FiSidebar cursor='pointer' size={20} onClick={() => { setHistoryOpen(true) }} />
+                                    <Tooltip placement="bottom" title={t('new_chat')} >
+                                        <span>
+                                            <FiEdit3 cursor='pointer' onClick={handleNewChatClick} size={18}></FiEdit3>
+                                        </span>
+                                    </Tooltip>
+                                </div>
+                                :
+                                <></>
                             :
                             <IoIosArrowRoundBack cursor='pointer' size={25} onClick={() => { setPagePath('/main') }} />
                     }
@@ -459,11 +430,6 @@ const SidePanel = () => {
                 onClose={() => setHistoryOpen(false)}
                 open={historyOpen}
                 key='left'
-                extra={
-                    <Tooltip placement="bottom" title={t('new_chat')} >
-                        <Button size="small" icon={<CiEdit></CiEdit>} onClick={handleNewChatClick}></Button>
-                    </Tooltip>
-                }
             >
                 <div className='space-y-2'>
                     {

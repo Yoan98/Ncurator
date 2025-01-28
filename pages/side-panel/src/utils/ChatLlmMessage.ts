@@ -38,7 +38,18 @@ export class ChatLlmMessage {
             throw new Error('Unknown type')
         }
     }
-    private getUserPrompt(type: 'chat' | 'knowledge', question: string, searchTextRes?: Search.TextItemRes[]) {
+    private getUserPrompt(
+        {
+            type,
+            question,
+            searchTextRes,
+            context
+        }: {
+            type: 'chat' | 'knowledge' | 'web',
+            question: string,
+            searchTextRes?: Search.TextItemRes[]
+            context?: string
+        }) {
         if (type === 'knowledge') {
             const context = searchTextRes!.map((item, index) => `${index + 1}.${item.text}`).join('\n');
 
@@ -55,6 +66,15 @@ export class ChatLlmMessage {
             const inp = "Use all the knowledge you have to answer the flowing question: " +
                 "\n\nQuestion: " +
                 question
+            return inp
+        } else if (type === 'web') {
+            const inp =
+                "Use the following context when answering the question at the end. Don't use any other knowledge.The context is from webpage and only extract text information." +
+                "\n" +
+                context +
+                "\n\nQuestion: " +
+                question +
+                "\n\nHelpful Answer: ";
             return inp
         } else {
             throw new Error('Unknown type')
@@ -73,10 +93,11 @@ export class ChatLlmMessage {
         }
     }
 
-    async sendMsg({ prompt, type, searchTextRes, streamCb, llmEngine, abortSignal }: {
-        prompt: string,
-        type: 'chat' | 'knowledge',
+    async sendMsg({ userText, type, searchTextRes, context, streamCb, llmEngine, abortSignal }: {
+        userText: string,
+        type: 'chat' | 'knowledge' | 'web',
         searchTextRes?: Search.TextItemRes[],
+        context?: string,
         streamCb?: (msg: string, finish_reason: string | null) => void,
         llmEngine: LlmEngineController,
         abortSignal?: AbortSignal
@@ -85,7 +106,12 @@ export class ChatLlmMessage {
 
         const userMsg = {
             role: "user" as 'user',
-            content: this.getUserPrompt(type, prompt, searchTextRes)
+            content: this.getUserPrompt({
+                type,
+                question: userText,
+                searchTextRes,
+                context
+            })
         }
         const systemMsg = this.chatHistory[0]
         const defaultMsgLen = calculateTokens([systemMsg.content, userMsg.content]);

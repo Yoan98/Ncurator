@@ -241,7 +241,42 @@ export function calculateTokens(content: string[]): number {
         }
     });
 
+    console.log('msgTokens', totalTokens)
+
     return totalTokens;
 }
 
+// 获取当前激活的标签页信息
+export const getActiveTabInfo = (): Promise<CurTabPageInfo> => {
 
+    return new Promise((resolve, reject) => {
+
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            const tab = tabs[0];
+
+            if (!tab || !tab.id) {
+                return reject('No active tab');
+            }
+
+            chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                func: () => {
+                    return document.documentElement.innerHTML;
+                }
+            }, (result) => {
+                if (!result || !result[0] || !result[0].result) {
+                    return reject('No tab result');
+                }
+                const curTabHtml = result[0].result;
+                if (!curTabHtml) {
+                    return reject('No tab content');
+                }
+
+                resolve({ title: tab.title || '', url: tab.url || '', tabId: tab.id, rawHtml: curTabHtml });
+            })
+
+        });
+
+
+    })
+}

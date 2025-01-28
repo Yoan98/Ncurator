@@ -45,6 +45,7 @@ export const ERROR_COLOR = '#ff4d4f'
 export const WARNING_COLOR = '#faad14'
 export const SUCCESS_COLOR = '#52c41a'
 
+export const UN_TEXT_TAGS = ['script', 'style', 'svg', 'img', 'canvas', 'audio', 'video', 'object', 'embed', 'applet', 'map', 'area']
 
 export const LLM_MODEL_LIST = [
     // API 模型
@@ -52,7 +53,7 @@ export const LLM_MODEL_LIST = [
         sort: ModelSort.Api,
         apiKey: 'sk-da34773d39e948129436839cae2bea4d',
         baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-        name: 'Qwen-Turbo',
+        name: 'Qwen',
         modelId: 'qwen-turbo-latest',
         contextWindowSize: 12800,
     },

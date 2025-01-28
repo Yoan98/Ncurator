@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Select, Button, Input, message, Dropdown, Empty, Modal } from 'antd';
+import { Select, Button, Input, message, Dropdown, Empty, Modal, Tooltip } from 'antd';
 import dayjs from '@src/utils/dayjsGlobal';
 import { useGlobalContext } from '@src/provider/global';
 import { searchDoc } from '@src/utils/search';
@@ -17,8 +17,10 @@ import type { FileRenderDocument } from '@src/components/fileRenders/index'
 import { getSearchResMaxTextSize } from '@src/utils/tool';
 import MessageList from '@src/components/chat/MessageList';
 import { t } from '@extension/i18n';
-
-
+import { MdOutlineWebAsset } from "react-icons/md";
+import { getActiveTabInfo } from '@src/utils/tool'
+import * as cheerio from 'cheerio';
+import { UN_TEXT_TAGS } from '@src/utils/constant'
 
 // 设置项dropdown菜单
 const aiOptions = [
@@ -26,6 +28,11 @@ const aiOptions = [
         key: 1,
         label: t('knowledge'),
         icon: <IoBookOutline size={18} />,
+    },
+    {
+        key: 3,
+        label: 'web',
+        icon: <MdOutlineWebAsset size={20} />,
     },
     {
         key: 2,
@@ -112,6 +119,7 @@ const ChatSection = ({
         setChatUiMessages(prev => [...prev, uiUserMessage, uiAssistantMessage]);
 
         let searchTextRes: Search.TextItemRes[] = []
+        let webContext = '';
         // 搜索数据库的数据
         if (selectedAiOption.key === 1) {
             try {
@@ -144,6 +152,22 @@ const ChatSection = ({
             }
 
             setSearchLoading(false);
+        } else if (selectedAiOption.key === 3) {
+            // 获取当前页面内容
+            try {
+                const activeTabInfo = await getActiveTabInfo();
+                const $ = cheerio.load(activeTabInfo.rawHtml);
+                const bodyContent = $('body');
+                // 清除非文本内容
+                const unTextTagList = UN_TEXT_TAGS
+                unTextTagList.forEach(tag => {
+                    bodyContent.find(tag).remove();
+                });
+                webContext = bodyContent.text();
+            } catch (error) {
+                message.error('Error in load current web page ' + error);
+                console.error('Error in load current web page:', error);
+            }
         }
 
         // AI处理
@@ -166,17 +190,23 @@ const ChatSection = ({
 
             curApiChatAbortController.current = llmEngine.current.modelInfo.sort === ModelSort.Api ? new AbortController() : undefined;
 
+            const msgType = selectedAiOption.key == 1 ? 'knowledge' : selectedAiOption.key == 2 ? 'chat' : 'web';
             await chatLlmMessageRef.current!.sendMsg({
-                prompt: question,
-                type: selectedAiOption.key == 1 ? 'knowledge' : 'chat',
+                userText: question,
+                type: msgType,
                 searchTextRes,
+                context: webContext,
                 llmEngine: llmEngine.current,
                 streamCb: handleStreamCb,
                 abortSignal: curApiChatAbortController.current?.signal
             })
 
-            // 存储聊天记录
-            storageChatHistory(temptChatUiMessages, chatLlmMessageRef.current!.getChatHistory(), chatHistoryId)
+
+            setTimeout(() => {
+                // 存储聊天记录
+                // 因为chatuiMessages是异步更新的，所以需要延迟下载存储,否则可能会丢失一些ui消息
+                storageChatHistory(temptChatUiMessages, chatLlmMessageRef.current!.getChatHistory(), chatHistoryId)
+            }, 100);
 
         } catch (error) {
             if (!error.message.includes('Request was aborted')) {
@@ -283,6 +313,7 @@ const ChatSection = ({
     }, [chatUiMessages])
 
 
+
     useEffect(() => {
         async function initIndexDB() {
             const store = new IndexDBStore();
@@ -323,7 +354,7 @@ const ChatSection = ({
     }, [connectionList])
 
 
-
+    const inputPlaceholder = selectedAiOption.key === 1 ? t('ask_placeholder') : selectedAiOption.key === 2 ? t('message_placeholder') : 'Ask your question based on current web page';
     return (
         <div className="chat-section flex flex-col flex-1">
             {/* Chat Messages */}
@@ -353,7 +384,7 @@ const ChatSection = ({
                     <TextArea
                         value={question}
                         onChange={(e) => setQuestion(e.target.value)}
-                        placeholder={selectedAiOption.key === 1 ? t('ask_placeholder') : t('message_placeholder')}
+                        placeholder={inputPlaceholder}
                         autoSize={{ minRows: 2, maxRows: 2 }}
                         variant='borderless'
                         className='text-base'
@@ -381,7 +412,6 @@ const ChatSection = ({
                                     onChange={(value) => setSelectedConnection(value)}
                                 />
                             }
-
                         </div>
 
 

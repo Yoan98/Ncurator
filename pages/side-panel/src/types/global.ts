@@ -12,7 +12,12 @@ interface Window {
 interface Result {
     status: 'Success' | 'Fail'
 }
-
+interface CurTabPageInfo {
+    title: string,
+    url: string,
+    tabId: number | undefined
+    rawHtml: string
+}
 namespace Chat {
     type UiMessageType = 'user' | 'assistant'
     type LlmRole = 'user' | 'assistant' | 'system'

@@ -14,6 +14,7 @@ import { getFileName } from '@src/utils/tool'
 import { CheerioWebBaseLoader } from "@langchain/community/document_loaders/web/cheerio";
 import type { WebBaseLoaderParams } from "@langchain/community/document_loaders/web/cheerio";
 import * as cheerio from 'cheerio';
+import { UN_TEXT_TAGS } from '@src/utils/constant'
 
 export type ConnectorClassUnion = typeof FileConnector | typeof CrawlerConnector
 
@@ -202,7 +203,7 @@ export class CrawlerConnector {
             }
             const bodyContent = $('body');
             // 清除非文本内容
-            const unTextTagList = ['script', 'style', 'svg', 'img', 'canvas', 'audio', 'video', 'object', 'embed', 'applet', 'map', 'area']
+            const unTextTagList = UN_TEXT_TAGS
             unTextTagList.forEach(tag => {
                 bodyContent.find(tag).remove();
             });
