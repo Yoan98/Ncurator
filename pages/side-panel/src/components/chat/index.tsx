@@ -407,7 +407,7 @@ const ChatSection = ({
                                     defaultValue={[]}
                                     placeholder={t('all_resource')}
                                     variant="borderless"
-                                    style={{ minWidth: '120px' }}
+                                    style={{ minWidth: '130px' }}
                                     options={connectionOption}
                                     onChange={(value) => setSelectedConnection(value)}
                                 />

@@ -222,7 +222,7 @@ const SearchSection = () => {
                     defaultValue={[]}
                     placeholder={t('all_resource')}
                     variant="borderless"
-                    style={{ maxWidth: '250px', minWidth: '120px' }}
+                    style={{ maxWidth: '250px', minWidth: '130px' }}
                     options={connectionOption}
                     onChange={(value) => setSelectedConnection(value)}
                 />

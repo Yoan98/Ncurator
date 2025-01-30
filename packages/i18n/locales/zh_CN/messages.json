@@ -3,7 +3,7 @@
         "message": "LLM模型"
     },
     "Resource": {
-        "message": "资源"
+        "message": "知识库"
     },
     "add_document": {
         "message": "新增文档"
@@ -30,7 +30,7 @@
         "message": "所有数据将使用默认嵌入模型进行处理。你应该选择最适合你资源文本语言的模型。添加资源后避免更改模型"
     },
     "all_resource": {
-        "message": "全部资源"
+        "message": "全部知识库"
     },
     "applicable_chinese_language": {
         "message": "适用于中文为主的数据"
@@ -282,7 +282,7 @@
         "message": "相关文档"
     },
     "resource": {
-        "message": "资源"
+        "message": "知识库"
     },
     "resource_name": {
         "message": "资源名称"

@@ -280,7 +280,7 @@ const LlmSetup = () => {
                 </div>
                 {
                     model.loadingStatus !== 'active' && <div className="flex items-center gap-2">
-                        <Button size="small" onClick={() => handleUploadClick(model)}>{t('upload')}</Button>
+                        {/* <Button size="small" onClick={() => handleUploadClick(model)}>{t('upload')}</Button> */}
                         <Button type="primary" size="small" onClick={() => handleDownLoadLlm(model)}>{t('download')}</Button>
                     </div>
                 }
@@ -372,7 +372,7 @@ const LlmSetup = () => {
                         </span>
                     </Tooltip>
                 </div>
-                <div className="text-xs text-text-500 mb-2">{t('download_model_tip')}</div>
+                {/* <div className="text-xs text-text-500 mb-2">{t('download_model_tip')}</div> */}
                 <div className="unloaded-models mb-3 space-y-2">
                     {
                         !unloadedModels.length ? <Empty description={t('no_unloaded_model')} /> : unloadedModels

@@ -3,16 +3,16 @@
         "message": "LLM Model"
     },
     "Resource": {
-        "message": "Resource"
+        "message": "Knowledge"
     },
     "add_document": {
         "message": "Add Document"
     },
     "add_resource": {
-        "message": "Add Resource"
+        "message": "Add Knowledge"
     },
     "add_resource_success": {
-        "message": "Add Resource Success"
+        "message": "Add Knowledge Success"
     },
     "add_spider": {
         "message": "Add Spider"
@@ -30,7 +30,7 @@
         "message": "All data will be processed using the default embedding model. You should choose the model that best suits the language of your data"
     },
     "all_resource": {
-        "message": "All Resources"
+        "message": "All Knowledge"
     },
     "applicable_chinese_language": {
         "message": "Applicable to Chinese based data"
@@ -135,10 +135,10 @@
         "message": "earlier"
     },
     "edit_resource": {
-        "message": "Edit Resource"
+        "message": "Edit Knowledge"
     },
     "edit_resource_success": {
-        "message": "Edit Resource Success"
+        "message": "Edit Knowledge Success"
     },
     "embedding_model_setup": {
         "message": "Embedding Setup"
@@ -270,7 +270,7 @@
         "message": "Please select file"
     },
     "please_select_resource_type": {
-        "message": "Please select resource Type"
+        "message": "Please select knowledge Type"
     },
     "please_setup_embed_first": {
         "message": "Please setup the embedding model first"
@@ -282,16 +282,16 @@
         "message": "Relate Documents"
     },
     "resource": {
-        "message": "Resource"
+        "message": "Knowledge"
     },
     "resource_name": {
-        "message": "Resource Name"
+        "message": "Knowledge Name"
     },
     "resource_name_placeholder": {
-        "message": "A descriptive name for the resource"
+        "message": "A descriptive name for the knowledge"
     },
     "resource_type": {
-        "message": "Resource Type"
+        "message": "Knowledge Type"
     },
     "results": {
         "message": "Results"
@@ -300,10 +300,10 @@
         "message": "Search"
     },
     "search_placeholder": {
-        "message": "Search something based on the resource..."
+        "message": "Search something based on knowledge base..."
     },
     "search_resource_name": {
-        "message": "Input the resource name"
+        "message": "Input the knowledge name"
     },
     "searching": {
         "message": "Searching..."
