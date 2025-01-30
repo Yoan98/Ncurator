@@ -31,7 +31,7 @@ const aiOptions = [
     },
     {
         key: 3,
-        label: 'web',
+        label: t('web'),
         icon: <MdOutlineWebAsset size={20} />,
     },
     {
@@ -354,7 +354,7 @@ const ChatSection = ({
     }, [connectionList])
 
 
-    const inputPlaceholder = selectedAiOption.key === 1 ? t('ask_placeholder') : selectedAiOption.key === 2 ? t('message_placeholder') : 'Ask your question based on current web page';
+    const inputPlaceholder = selectedAiOption.key === 1 ? t('ask_placeholder') : selectedAiOption.key === 2 ? t('message_placeholder') : t('ask_based_cur_webpage');
     return (
         <div className="chat-section flex flex-col flex-1">
             {/* Chat Messages */}

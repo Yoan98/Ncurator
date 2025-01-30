@@ -1,12 +1,9 @@
 {
 
     "i18n-ally.localesPaths": [
-
-     "packages/i18n/locales",
-     ],
-
-    "i18n-ally.keystyle": "nested",
-
+        "packages/i18n/locales",
+    ],
+     "i18n-ally.keystyle": "nested",
 
      "i18n-ally.enabledParsers": [
 

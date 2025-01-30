@@ -1,201 +1,126 @@
 {
-    "extensionDescription": {
-        "message": "Imagine an AI managing your document, just ask to it, it’ll find and organize the answers for you. How amazing is that?"
-    },
-    "extensionName": {
-        "message": "Ncurator: Your Local Knowledge Base AI Assistant"
-    },
-    "loading": {
-        "message": "Loading..."
+    "LLMModel": {
+        "message": "LLM Model"
     },
     "Resource": {
         "message": "Resource"
     },
-    "LLMModel": {
-        "message": "LLM Model"
-    },
-    "searchTab": {
-        "message": "Search"
-    },
-    "chatTab": {
-        "message": "Chat"
-    },
-    "search_placeholder": {
-        "message": "Search something based on the resource..."
-    },
-    "all_resource": {
-        "message": "All Resources"
-    },
-    "all_answer": {
-        "message": "AI Answer"
-    },
-    "searching": {
-        "message": "Searching..."
-    },
-    "results": {
-        "message": "Results"
-    },
-    "ai_engine_not_ready": {
-        "message": "AI engine is not ready"
-    },
-    "please_input_search": {
-        "message": "Please input the search content"
-    },
-    "start_chat": {
-        "message": "Start Chat"
-    },
-    "ask_placeholder": {
-        "message": "Ask question based on your resource"
-    },
-    "message_placeholder": {
-        "message": "Message with it"
-    },
-    "knowledge": {
-        "message": "Knowledge"
-    },
-    "chat": {
-        "message": "Chat"
-    },
-    "please_input_question": {
-        "message": "Please input the question"
-    },
-    "relate_document": {
-        "message": "Relate Documents"
-    },
-    "problem_document": {
-        "message": "The text of this document too less, may be problem"
-    },
-    "building_document_wait": {
-        "message": "Building document, please wait"
-    },
-    "search_resource_name": {
-        "message": "Input the resource name"
-    },
-    "empty_data": {
-        "message": "Empty Data"
-    },
-    "edit_resource": {
-        "message": "Edit Resource"
-    },
-    "resource_name": {
-        "message": "Resource Name"
-    },
-    "resource_name_placeholder": {
-        "message": "A descriptive name for the resource"
-    },
-    "web_name_placeholder": {
-        "message": "A descriptive name for the web"
-    },
-    "del_batch_data": {
-        "message": "Delete batch data"
-    },
-    "select_data_first": {
-        "message": "Please select data first"
-    },
-    "fail": {
-        "message": "Fail"
-    },
-    "success": {
-        "message": "Success"
-    },
-    "building": {
-        "message": "Building"
-    },
-    "build": {
-        "message": "Build"
-    },
-    "please_select_bookmarks": {
-        "message": "Please select browser bookmarks"
-    },
-    "please_select_file": {
-        "message": "Please select file"
-    },
-    "resource": {
-        "message": "Resource"
+    "add_document": {
+        "message": "Add Document"
     },
     "add_resource": {
         "message": "Add Resource"
     },
-    "document_building_tip": {
-        "message": "Document is building, please don't close App before finish"
-    },
-    "click_drag_file_tip": {
-        "message": "Click or drag file to this area"
-    },
-    "operation_data_safe_tip": {
-        "message": "All the data and operation only in your local device"
-    },
-    "resource_type": {
-        "message": "Resource Type"
-    },
-    "please_select_resource_type": {
-        "message": "Please select resource Type"
-    },
-    "file": {
-        "message": "File"
-    },
-    "web_crawl": {
-        "message": "Web Crawl"
-    },
-    "import": {
-        "message": "Import"
-    },
-    "cancel": {
-        "message": "Cancel"
-    },
-    "import_your_browser_bookmark": {
-        "message": "Import your browser bookmark"
-    },
-    "web_url_placeholder": {
-        "message": "The web url you want to crawl"
+    "add_resource_success": {
+        "message": "Add Resource Success"
     },
     "add_spider": {
         "message": "Add Spider"
     },
-    "spider": {
-        "message": "Spider"
+    "advance_set": {
+        "message": "Advanced Set"
     },
-    "delete_confirm": {
-        "message": "Are you sure to delete these items"
+    "ai_engine_not_ready": {
+        "message": "AI engine is not ready"
     },
-    "delete_tip": {
-        "message": "Delete Tip"
+    "all_answer": {
+        "message": "AI Answer"
     },
-    "confirm": {
-        "message": "OK"
+    "all_data_processed_with_default_model": {
+        "message": "All data will be processed using the default embedding model. You should choose the model that best suits the language of your data"
     },
-    "wait_document_build_warning": {
-        "message": "Please wait for the document builded"
+    "all_resource": {
+        "message": "All Resources"
     },
-    "delete_success": {
-        "message": "Delete Success"
+    "applicable_chinese_language": {
+        "message": "Applicable to Chinese based data"
     },
-    "add_resource_success": {
-        "message": "Add Resource Success"
+    "applicable_english_languages": {
+        "message": "Applicable to English based data"
     },
-    "edit_resource_success": {
-        "message": "Edit Resource Success"
+    "ask_based_cur_webpage": {
+        "message": "Ask your question based on current web page"
+    },
+    "ask_placeholder": {
+        "message": "Ask question based on your knowledge"
+    },
+    "author": {
+        "message": "Author"
     },
     "better_not_exceed": {
         "message": "Better not exceed"
     },
-    "loaded_model": {
-        "message": "Loaded Model"
+    "build": {
+        "message": "Build"
     },
-    "unloaded_model": {
-        "message": "Unloaded Model"
+    "building": {
+        "message": "Building"
     },
-    "no_unloaded_model": {
-        "message": "No unloaded model"
+    "building_document_wait": {
+        "message": "Building document, please wait"
     },
-    "no_loaded_model": {
-        "message": "No loaded model"
+    "cancel": {
+        "message": "Cancel"
     },
-    "llm_setup": {
-        "message": "LLM Setup"
+    "chat": {
+        "message": "Chat"
     },
-    "llm_desc": {
-        "message": "LLM is a technology that can understand and generate text, and the quality of understanding and generation may vary across different models"
+    "chatTab": {
+        "message": "Chat"
+    },
+    "chinese_embedding": {
+        "message": "Chinese Model"
+    },
+    "click_drag_file_tip": {
+        "message": "Click or drag file to this area"
+    },
+    "click_to_setup": {
+        "message": "Click to setup"
+    },
+    "click_try_again": {
+        "message": "Click to try again"
+    },
+    "cloud": {
+        "message": "Cloud"
+    },
+    "confirm": {
+        "message": "OK"
+    },
+    "contact_author": {
+        "message": "Contact the author"
+    },
+    "crawl_cur_page_to_knowledge": {
+        "message": "crawl current webpage into knowledge base"
+    },
+    "crawl_to_resource": {
+        "message": "Crawl current webpage"
+    },
+    "cur_web_page": {
+        "message": "current webpage"
+    },
+    "default": {
+        "message": "Default"
+    },
+    "del_batch_data": {
+        "message": "Delete batch data"
+    },
+    "delete": {
+        "message": "Delete"
+    },
+    "delete_confirm": {
+        "message": "Are you sure to delete these items"
+    },
+    "delete_success": {
+        "message": "Delete Success"
+    },
+    "delete_tip": {
+        "message": "Delete Tip"
+    },
+    "document_building_tip": {
+        "message": "Document is building, please don't close App before finish"
+    },
+    "download": {
+        "message": "Download"
     },
     "download_model_again_wanning": {
         "message": "A model is downloading. Please wait a moment"
@@ -203,17 +128,77 @@
     "download_model_success": {
         "message": "Download Model Success"
     },
+    "download_model_tip": {
+        "message": "The model will be downloaded from huggingface by default. If the network speed is limited, you can email the author to download the model from other channels to the local and then upload it"
+    },
+    "earlier": {
+        "message": "earlier"
+    },
+    "edit_resource": {
+        "message": "Edit Resource"
+    },
+    "edit_resource_success": {
+        "message": "Edit Resource Success"
+    },
+    "embedding_model_setup": {
+        "message": "Embedding Setup"
+    },
+    "empty_data": {
+        "message": "Empty Data"
+    },
+    "english_embedding": {
+        "message": "English Model"
+    },
+    "extensionDescription": {
+        "message": "Imagine an AI managing your document, just ask to it, it’ll find and organize the answers for you. How amazing is that?"
+    },
+    "extensionName": {
+        "message": "Ncurator: Your Local Knowledge Base AI Assistant"
+    },
+    "fail": {
+        "message": "Fail"
+    },
+    "failed_to_load_model": {
+        "message": "Failed to load model, please try again later"
+    },
+    "file": {
+        "message": "File"
+    },
+    "go_to_create": {
+        "message": "Go to create"
+    },
+    "help": {
+        "message": "Help"
+    },
+    "help_doc": {
+        "message": "Help Doc?"
+    },
+    "import": {
+        "message": "Import"
+    },
+    "import_file": {
+        "message": "Import File"
+    },
+    "import_your_browser_bookmark": {
+        "message": "Import your browser bookmark"
+    },
+    "knowledge": {
+        "message": "Knowledge"
+    },
+    "large": {
+        "message": "Large"
+    },
+    "last_7_days": {
+        "message": "Last 7 days"
+    },
+    "llm_desc": {
+        "message": "LLM is a technology that can understand and generate text, and the quality of understanding and generation may vary across different models"
+    },
     "llm_loading_warning": {
         "message": "LLM model is loading, please wait a moment"
     },
-    "setting_default_model": {
-        "message": "setting default model"
-    },
-    "upload_model_success": {
-        "message": "Upload Model Success"
-    },
-    "loading_llm_model": {
-        "message": "Loading LLM Model"
+    "llm_setup": {
+        "message": "LLM Setup"
     },
     "load_llm_model_error": {
         "message": "Load LLM Model Error"
@@ -221,83 +206,11 @@
     "load_llm_model_success": {
         "message": "Load LLM Model Success"
     },
-    "click_try_again": {
-        "message": "Click to try again"
+    "loaded_model": {
+        "message": "Loaded Model"
     },
-    "not_found_llm_model": {
-        "message": "Not found LLM Model"
-    },
-    "click_to_setup": {
-        "message": "Click to setup"
-    },
-    "import_file": {
-        "message": "Import File"
-    },
-    "name": {
-        "message": "Name"
-    },
-    "status": {
-        "message": "Status"
-    },
-    "add_document": {
-        "message": "Add Document"
-    },
-    "web_url": {
-        "message": "Web Url"
-    },
-    "default": {
-        "message": "Default"
-    },
-    "set_default": {
-        "message": "Set Default"
-    },
-    "large": {
-        "message": "Large"
-    },
-    "medium": {
-        "message": "Medium"
-    },
-    "new_chat": {
-        "message": "New Chat"
-    },
-    "download": {
-        "message": "Download"
-    },
-    "upload": {
-        "message": "Upload"
-    },
-    "today": {
-        "message": "Today"
-    },
-    "yesterday": {
-        "message": "Yesterday"
-    },
-    "last_7_days": {
-        "message": "Last 7 days"
-    },
-    "earlier": {
-        "message": "earlier"
-    },
-    "upload_model_file": {
-        "message": "Upload model file"
-    },
-    "help": {
-        "message": "Help"
-    },
-    "author_message": {
-        "message": "Author's Message"
-    },
-    "contact_author": {
-        "message": "Contact the author"
-    },
-    "author": {
-        "message": "Author"
-    },
-    "acknowledgment_to_danswer_team": {
-        "message": "Many of BeCurator's ideas and architectural designs come from Danswer. Thanks to the Danswer team for their open-source spirit"
-    },
-    "cloud": {
-        "message": "Cloud"
+    "loading_llm_model": {
+        "message": "Loading LLM Model"
     },
     "local": {
         "message": "Local"
@@ -305,52 +218,154 @@
     "local_cloud_desc": {
         "message": "Cloud means it will request third part service to get LLM support(Result Better). Local means it will only use your device to get LLM support(Strong Privacy)."
     },
-    "new_crawl": {
-        "message": "New Crawl"
+    "medium": {
+        "message": "Medium"
     },
-    "download_model_tip": {
-        "message": "The model will be downloaded from huggingface by default. If the network speed is limited, you can email the author to download the model from other channels to the local and then upload it"
-    },
-    "not_found_embedding_model": {
-        "message": "Not Found Embedding Model, Click to setup"
-    },
-    "advance_set": {
-        "message": "Advanced Set"
-    },
-    "english_embedding": {
-        "message": "English Model"
-    },
-    "chinese_embedding": {
-        "message": "Chinese Model"
-    },
-    "applicable_english_languages": {
-        "message": "Applicable to English based data"
-    },
-    "applicable_chinese_language": {
-        "message": "Applicable to Chinese based data"
+    "message_placeholder": {
+        "message": "Message with it"
     },
     "model_is_loading": {
         "message": "Model is loading, please wait a moment"
     },
-    "failed_to_load_model": {
-        "message": "Failed to load model, please try again later"
+    "name": {
+        "message": "Name"
     },
-    "embedding_model_setup": {
-        "message": "Embedding Setup"
+    "new_chat": {
+        "message": "New Chat"
     },
-    "all_data_processed_with_default_model": {
-        "message": "All data will be processed using the default embedding model. You should choose the model that best suits the language of your data"
+    "new_crawl": {
+        "message": "New Crawl"
     },
-    "help_doc": {
-        "message": "Help Doc?"
+    "no_loaded_model": {
+        "message": "No loaded model"
     },
-    "delete": {
-        "message": "Delete"
+    "no_unloaded_model": {
+        "message": "No unloaded model"
+    },
+    "not_found_crawl_knowledge": {
+        "message": "Not found 'Web Crawl' knowledge"
+    },
+    "not_found_embedding_model": {
+        "message": "Not Found Embedding Model, Click to setup"
+    },
+    "not_found_llm_model": {
+        "message": "Not found LLM Model"
+    },
+    "operation_data_safe_tip": {
+        "message": "All the data and operation only in your local device"
     },
     "please_delete_document_first": {
         "message": "Please delete the document first"
     },
+    "please_input_question": {
+        "message": "Please input the question"
+    },
+    "please_input_search": {
+        "message": "Please input the search content"
+    },
+    "please_select_bookmarks": {
+        "message": "Please select browser bookmarks"
+    },
+    "please_select_file": {
+        "message": "Please select file"
+    },
+    "please_select_resource_type": {
+        "message": "Please select resource Type"
+    },
     "please_setup_embed_first": {
         "message": "Please setup the embedding model first"
+    },
+    "problem_document": {
+        "message": "The text of this document too less, may be problem"
+    },
+    "relate_document": {
+        "message": "Relate Documents"
+    },
+    "resource": {
+        "message": "Resource"
+    },
+    "resource_name": {
+        "message": "Resource Name"
+    },
+    "resource_name_placeholder": {
+        "message": "A descriptive name for the resource"
+    },
+    "resource_type": {
+        "message": "Resource Type"
+    },
+    "results": {
+        "message": "Results"
+    },
+    "searchTab": {
+        "message": "Search"
+    },
+    "search_placeholder": {
+        "message": "Search something based on the resource..."
+    },
+    "search_resource_name": {
+        "message": "Input the resource name"
+    },
+    "searching": {
+        "message": "Searching..."
+    },
+    "select_data_first": {
+        "message": "Please select data first"
+    },
+    "select_import_knowledge": {
+        "message": "select knowledge base"
+    },
+    "set_default": {
+        "message": "Set Default"
+    },
+    "setting_default_model": {
+        "message": "setting default model"
+    },
+    "spider": {
+        "message": "Spider"
+    },
+    "start_chat": {
+        "message": "Start Chat"
+    },
+    "status": {
+        "message": "Status"
+    },
+    "success": {
+        "message": "Success"
+    },
+    "today": {
+        "message": "Today"
+    },
+    "unloaded_model": {
+        "message": "Unloaded Model"
+    },
+    "upload": {
+        "message": "Upload"
+    },
+    "upload_model_file": {
+        "message": "Upload model file"
+    },
+    "upload_model_success": {
+        "message": "Upload Model Success"
+    },
+    "wait_document_build_warning": {
+        "message": "Please wait for the document builded"
+    },
+    "web": {
+        "message": "Web"
+    },
+    "web_crawl": {
+        "message": "Web Crawl"
+    },
+    "web_name_placeholder": {
+        "message": "A descriptive name for the web"
+    },
+    "web_url": {
+        "message": "Web Url"
+    },
+    "web_url_placeholder": {
+        "message": "The web url you want to crawl"
+    },
+    "yesterday": {
+        "message": "Yesterday"
     }
 }

@@ -367,7 +367,7 @@ const SidePanel = () => {
                     }
                 </div>
                 <div className="header-right flex items-center gap-2">
-                    <Tooltip placement="bottom" title='Import current webpage into resource' >
+                    <Tooltip placement="bottom" title={t('crawl_cur_page_to_knowledge')} >
                         <span>
 
                             <TbFileImport size={20} className='cursor-pointer' onClick={handleImportWebpageClick} />
@@ -458,7 +458,7 @@ const SidePanel = () => {
 
             <Modal
                 centered
-                title="导入当前浏览的网页进入资源库" open={isImportModalOpen} onOk={handleImportModalConfirm} onCancel={() => { setIsImportModalOpen(false) }}
+                title={t('crawl_to_resource')} open={isImportModalOpen} onOk={handleImportModalConfirm} onCancel={() => { setIsImportModalOpen(false) }}
                 footer={(_, { OkBtn, CancelBtn }) => (
                     !webCrawlConnectionSelectList.length ?
                         <></> :
@@ -468,17 +468,17 @@ const SidePanel = () => {
             >
                 {
                     !webCrawlConnectionSelectList.length ?
-                        <Empty description='未找到"网页爬取"资源库'>
+                        <Empty description={t('not_found_crawl_knowledge')}>
                             <Button type='primary' onClick={() => {
                                 setPagePath('/resource')
                                 setIsImportModalOpen(false)
-                            }}>前往创建</Button>
+                            }}>{t('go_to_create')}</Button>
                         </Empty>
                         :
                         <div>
-                            <div className='mb-2'>当前网页: <span className='underline'>{curTabInfo.current.title}</span></div>
+                            <div className='mb-2'>{t('cur_web_page')}: <span className='underline'>{curTabInfo.current.title}</span></div>
                             <Select
-                                placeholder='选择要导入的资源库'
+                                placeholder={t('select_import_knowledge')}
                                 style={{ minWidth: 120 }}
                                 onChange={handleImportResourceChange}
                                 options={webCrawlConnectionSelectList}
