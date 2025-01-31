@@ -9,10 +9,10 @@
         "message": "新增文档"
     },
     "add_resource": {
-        "message": "新增资源"
+        "message": "新增知识库"
     },
     "add_resource_success": {
-        "message": "添加资源成功"
+        "message": "添加知识库成功"
     },
     "add_spider": {
         "message": "新增爬虫"
@@ -138,10 +138,10 @@
         "message": "更早"
     },
     "edit_resource": {
-        "message": "编辑该资源"
+        "message": "编辑该知识库"
     },
     "edit_resource_success": {
-        "message": "编辑资源成功"
+        "message": "编辑知识库成功"
     },
     "embedding_model_setup": {
         "message": "嵌入模型设置"
@@ -294,7 +294,7 @@
         "message": "知识库"
     },
     "resource_name": {
-        "message": "资源名称"
+        "message": "知识库名称"
     },
     "resource_name_placeholder": {
         "message": "请输入名称"
