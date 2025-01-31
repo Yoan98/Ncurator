@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { WebWorkerMLCEngine } from "@mlc-ai/web-llm";
 import { LLM_MODEL_LIST } from '@src/utils/constant';
-import { ModelSort } from '@src/utils/constant';
+import { ModelSort, STORAGE_DEPPSEEK_API_KEY } from '@src/utils/constant';
 
 export class LlmEngineController {
 
@@ -91,12 +91,16 @@ export class LlmEngineController {
         return webllmEngine
     }
     private getOpenAIEngine(modelInfo: typeof LLM_MODEL_LIST[number]) {
+        let customApiKey = ''
+        if (modelInfo.isCustom) {
+            customApiKey = localStorage.getItem(STORAGE_DEPPSEEK_API_KEY) || ''
+        }
         const engine = new OpenAI(
             {
                 // 若没有配置环境变量，请用百炼API Key将下行替换为：apiKey: "sk-xxx",
-                apiKey: modelInfo.apiKey,
+                apiKey: modelInfo.isCustom ? customApiKey : modelInfo.apiKey,
                 baseURL: modelInfo.baseUrl,
-                dangerouslyAllowBrowser: true
+                dangerouslyAllowBrowser: true,
             }
         )
         return engine

@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { RiRobot2Line } from "react-icons/ri";
 import { CiSquareQuestion, CiCircleInfo } from "react-icons/ci";
-import { Tag, Button, Tooltip, Empty, message, Progress, Upload, Modal } from 'antd';
+import { Tag, Button, Tooltip, Empty, message, Progress, Upload, Modal, Form, Input } from 'antd';
 import type { ProgressProps, UploadFile, UploadProps } from 'antd';
 import * as constant from '@src/utils/constant';
 import { useGlobalContext } from '@src/provider/global';
@@ -14,6 +14,7 @@ interface ModelItem {
     name: string,
     modelId: string,
     isDefault: boolean,
+    isCustom?: boolean,
     isLoaded: boolean,
     loadingStatus: ProgressProps['status'],
     loadingPercent: number
@@ -26,6 +27,12 @@ interface ModelItem {
     // webllm类型的属性
     modelSizeType?: 1 | 2
     wasmFileName?: string,
+}
+
+interface ApiKeyForm {
+    baseUrl: string
+    apiKey: string
+    modelId: string
 }
 
 const DEFAULT_META_DATA = {
@@ -54,7 +61,8 @@ const LlmSetup = () => {
     const [uploadFileList, setUploadFileList] = useState<UploadFile[]>([]); // 每个resource操作上传时的,最终上传文件列表
     const [uploadLoading, setUploadLoading] = useState(false);
     const [curUploadModal, setCurUploadModal] = useState<ModelItem | null>(null);
-
+    const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
+    const [apiKeyForm] = Form.useForm<ApiKeyForm>();
 
     const uploadProps: UploadProps = {
         multiple: true,
@@ -143,6 +151,12 @@ const LlmSetup = () => {
         if (llmEngineLoadStatus === 'active') {
             message.warning(t('llm_loading_warning'));
             return;
+        }
+        if (model.isCustom) {
+            const apiKey = localStorage.getItem(constant.STORAGE_DEPPSEEK_API_KEY);
+            if (!apiKey) {
+                return message.warning(t('please_set_api_key'));
+            }
         }
 
         if (model.sort === constant.ModelSort.Webllm) {
@@ -249,6 +263,27 @@ const LlmSetup = () => {
         }
     }
 
+    // apikey
+    const handleSetApiKeyConfirm = () => {
+        const { apiKey } = apiKeyForm.getFieldsValue() as ApiKeyForm;
+        localStorage.setItem(constant.STORAGE_DEPPSEEK_API_KEY, apiKey || '');
+
+        setApiKeyModalOpen(false);
+    }
+    const handleSetApiKeyClick = (model: ModelItem) => {
+        // 去loacalstorage中取出apikey
+        const apiKey = localStorage.getItem(constant.STORAGE_DEPPSEEK_API_KEY);
+
+        // 设置form的值
+        apiKeyForm.setFieldsValue({
+            apiKey: apiKey || '',
+            baseUrl: model.baseUrl,
+            modelId: model.modelId
+        })
+
+        setApiKeyModalOpen(true);
+    }
+
     const loadedModels = allLlmModels.filter((model) => model.isLoaded).map((model) => (
         <div className="model-item bg-white rounded-md shadow py-3 px-2 space-y-2" key={model.modelId}>
             <div className="model-item-top flex items-center justify-between">
@@ -256,16 +291,28 @@ const LlmSetup = () => {
                     <div className="model-name text-base">{model.name}</div>
                 </div>
 
-                {
-                    model.isDefault ?
-                        <Tag color={`orange`} className='text-sm'>{t('default')}</Tag>
-                        : <Button type="primary" size="small" onClick={() => { handleSetDefaultClick(model) }}>{t('set_default')}</Button>
-                }
+
+                <div className='flex items-center gap-2'>
+                    {
+                        model.isCustom && <Button size="small" onClick={() => {
+                            handleSetApiKeyClick(model)
+                        }}>{t('set_api_key')}</Button>
+                    }
+                    {
+                        model.isDefault ?
+                            <Tag color={`orange`} className='text-sm'>{t('default')}</Tag>
+                            :
+                            <Button type="primary" size="small" onClick={() => { handleSetDefaultClick(model) }}>{t('set_default')}</Button>
+                    }
+                </div>
             </div>
             <div className="tag  flex items-center ">
                 <Tag color={model.sort === constant.ModelSort.Api ? 'blue' : 'green'} className='text-xs'>{getModelSortText(model.sort)}</Tag>
                 {
                     model.sort === constant.ModelSort.Webllm && <Tag color='gold' className='text-xs'>{getModelSizeText(model.modelSizeType!)}</Tag>
+                }
+                {
+                    model.isCustom && <Tag color='magenta' className='text-xs'>{t('custom')}</Tag>
                 }
             </div>
         </div >
@@ -387,6 +434,29 @@ const LlmSetup = () => {
                         {t('operation_data_safe_tip')}
                     </p>
                 </Dragger>
+            </Modal>
+
+            {/* 配置DeepSeek的apikey的modal */}
+            <Modal
+                cancelText={t('cancel')}
+                okText={t('confirm')}
+                maskClosable={false} centered title={t('set_api_key')} open={apiKeyModalOpen} onOk={handleSetApiKeyConfirm} onCancel={() => { setApiKeyModalOpen(false) }}
+            >
+                <Form
+                    form={apiKeyForm}
+                    name="apiKeySet"
+                    layout="vertical"
+                >
+                    <Form.Item label='URL' name="baseUrl" rules={[{ required: true }]} >
+                        <Input disabled />
+                    </Form.Item>
+                    <Form.Item label='Key' name="apiKey" rules={[{ required: true }]}>
+                        <Input placeholder={t('enter_api_key')} />
+                    </Form.Item>
+                    <Form.Item label='Model' name="modelId" rules={[{ required: true }]}>
+                        <Input disabled />
+                    </Form.Item>
+                </Form>
             </Modal>
         </div>
     );
