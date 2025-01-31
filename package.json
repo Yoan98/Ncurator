@@ -1,7 +1,7 @@
 {
     "name": "Ncurator",
-    "version": "0.3.0",
-    "description": "BeCurator: Privacy-Focused AI Assistant with Your Document",
+    "version": "0.4.0",
+    "description": "Ncurator: Privacy-Focused AI Assistant with Your Document",
     "type": "module",
     "scripts": {
         "clean:bundle": "rimraf dist && rimraf dist-zip && turbo clean:bundle",
