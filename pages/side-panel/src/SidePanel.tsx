@@ -221,7 +221,7 @@ const SidePanel = () => {
             return
         }
 
-        message.success('Importing...')
+        message.success(t('crawling'))
         setIsImportModalOpen(false)
 
         // 构建与存入数据库

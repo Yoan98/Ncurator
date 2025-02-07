@@ -1,7 +1,8 @@
 import OpenAI from "openai";
 import { WebWorkerMLCEngine } from "@mlc-ai/web-llm";
 import { LLM_MODEL_LIST } from '@src/utils/constant';
-import { ModelSort, STORAGE_DEPPSEEK_API_KEY } from '@src/utils/constant';
+import { ModelSort } from '@src/utils/constant';
+import { getLlmModelStorageKey } from '@src/utils/tool';
 
 export class LlmEngineController {
 
@@ -9,8 +10,8 @@ export class LlmEngineController {
     webllmEngine: WebWorkerMLCEngine | null
     openaiEngine: OpenAI | null
     modelInfo: typeof LLM_MODEL_LIST[number]
-    constructor({ modelId }: { modelId: string }) {
-        this.updateModelInfo(modelId)
+    constructor({ selfModelId }: { selfModelId: string }) {
+        this.updateModelInfo(selfModelId)
 
         if (this.modelInfo.sort === ModelSort.Api) {
             this.openaiEngine = this.getOpenAIEngine(this.modelInfo)
@@ -48,23 +49,23 @@ export class LlmEngineController {
     }
 
     async reload({
-        modelId,
+        selfModelId,
         initProgressCallback
     }: {
-        modelId: string,
+        selfModelId: string,
         initProgressCallback: (progress: { progress: number }) => void
     }) {
         // 卸载旧的引擎
         await this.unload()
 
         // 更新新的模型信息
-        this.updateModelInfo(modelId)
+        this.updateModelInfo(selfModelId)
 
         if (this.modelInfo.sort === ModelSort.Webllm) {
             this.webllmEngine = this.getWebWorkerMLCEngine()
             this.engine = this.webllmEngine
             this.engine.setInitProgressCallback(initProgressCallback)
-            await this.engine.reload(modelId)
+            await this.engine.reload(this.modelInfo.modelId)
 
         } else if (this.modelInfo.sort === ModelSort.Api) {
             this.openaiEngine = this.getOpenAIEngine(this.modelInfo)
@@ -76,8 +77,28 @@ export class LlmEngineController {
         }
     }
 
-    private updateModelInfo(modelId: string) {
-        this.modelInfo = LLM_MODEL_LIST.find((item) => item.modelId === modelId)!;
+    private updateModelInfo(selfModelId: string) {
+        let modelInfo = LLM_MODEL_LIST.find((item) => item.id === selfModelId);
+        if (!modelInfo) {
+            throw new Error('modelId not found')
+        }
+
+        // 如果是自定义模型，合并自定义模型信息
+        if (modelInfo.isCustom) {
+            const customModelApiInfoStr = localStorage.getItem(getLlmModelStorageKey(modelInfo.id))
+            if (!customModelApiInfoStr) {
+                throw new Error('customApiInfo not found')
+            }
+            const customModelApiInfo: CustomLLMModelApiInfo = JSON.parse(customModelApiInfoStr)
+
+            modelInfo = {
+                ...modelInfo,
+                ...customModelApiInfo
+            }
+        }
+
+        this.modelInfo = modelInfo
+
     }
     private getWebWorkerMLCEngine() {
         if (this.webllmEngine) {
@@ -91,14 +112,10 @@ export class LlmEngineController {
         return webllmEngine
     }
     private getOpenAIEngine(modelInfo: typeof LLM_MODEL_LIST[number]) {
-        let customApiKey = ''
-        if (modelInfo.isCustom) {
-            customApiKey = localStorage.getItem(STORAGE_DEPPSEEK_API_KEY) || ''
-        }
         const engine = new OpenAI(
             {
                 // 若没有配置环境变量，请用百炼API Key将下行替换为：apiKey: "sk-xxx",
-                apiKey: modelInfo.isCustom ? customApiKey : modelInfo.apiKey,
+                apiKey: modelInfo.apiKey,
                 baseURL: modelInfo.baseUrl,
                 dangerouslyAllowBrowser: true,
             }

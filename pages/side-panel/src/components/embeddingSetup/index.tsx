@@ -159,23 +159,30 @@ const EmbeddingSetup = () => {
 
     return (
         <div className='embedding-setup pt-2 flex flex-col flex-1'>
-            <div className="title flex border-b py-5 items-end gap-1 mb-4">
-                <div className='flex items-center gap-1 '>
-                    <SlVector size={25} />
-                    <span className='text-lg font-bold'>{t('embedding_model_setup')
-                    }</span>
-                </div>
-                <Tooltip placement="top" title={t('all_data_processed_with_default_model')
-                } >
-                    <span>
-                        <CiSquareQuestion size={20} className='cursor-pointer' />
-                    </span>
-                </Tooltip>
+            <div className='border-b pt-5 mb-5'>
+                <div className="title flex items-end gap-1">
+                    <div className='flex items-center gap-1 '>
+                        <SlVector size={25} />
+                        <span className='text-lg font-bold'>{t('embedding_model_setup')
+                        }</span>
+                    </div>
+                    <Tooltip placement="top" title={t('all_data_processed_with_default_model')
+                    } >
+                        <span>
+                            <CiSquareQuestion size={20} className='cursor-pointer' />
+                        </span>
+                    </Tooltip>
 
-                <a onClick={handleHelpDocClick} className='text-blue-500 underline cursor-pointer'>
-                    {t('help_doc')}
-                </a>
+                    <a onClick={handleHelpDocClick} className='text-blue-500 underline cursor-pointer'>
+                        {t('help_doc')}
+                    </a>
+                </div>
+
+                <div className='text-xs text-text-400 mt-1'>
+                    {t('embedding_model_setup_desc')}
+                </div>
             </div>
+
 
 
             <div className="model-list space-y-2">

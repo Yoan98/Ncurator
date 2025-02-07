@@ -6,6 +6,10 @@ type EncodePrefixUnion = 'search_document' | 'search_query'
 type ModelSortUnion = 1 | 2
 
 type EmbeddingModelIdUnion = 'nomic-ai/nomic-embed-text-v1' | 'jinaai/jina-embeddings-v2-base-zh'
+interface CustomLLMModelApiInfo {
+    apiKey: string
+    modelId: string
+}
 interface Window {
     gIsSupportWebGPU: boolean
 }

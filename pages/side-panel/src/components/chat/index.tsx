@@ -18,7 +18,7 @@ import { getSearchResMaxTextSize } from '@src/utils/tool';
 import MessageList from '@src/components/chat/MessageList';
 import { t } from '@extension/i18n';
 import { MdOutlineWebAsset } from "react-icons/md";
-import { getActiveTabInfo } from '@src/utils/tool'
+import { getActiveTabInfo, sleep } from '@src/utils/tool'
 import * as cheerio from 'cheerio';
 import { UN_TEXT_TAGS } from '@src/utils/constant'
 
@@ -202,11 +202,11 @@ const ChatSection = ({
             })
 
 
-            setTimeout(() => {
-                // 存储聊天记录
-                // 因为chatuiMessages是异步更新的，所以需要延迟下载存储,否则可能会丢失一些ui消息
-                storageChatHistory(temptChatUiMessages, chatLlmMessageRef.current!.getChatHistory(), chatHistoryId)
-            }, 100);
+            await sleep(100);
+
+            // 存储聊天记录
+            // 因为chatuiMessages是异步更新的，所以需要延迟下载存储,否则可能会丢失一些ui消息
+            storageChatHistory(temptChatUiMessages, chatLlmMessageRef.current!.getChatHistory(), chatHistoryId)
 
         } catch (error) {
             if (!error.message.includes('Request was aborted')) {

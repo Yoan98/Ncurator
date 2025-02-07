@@ -7,10 +7,6 @@
     max-height: calc(100vh - 220px) !important;
 }
 
-.search-res-list {
-    max-height: calc(100vh - 500px) !important;
-}
-
 .chat-content {
     max-height: calc(100vh - 204px) !important;
 }

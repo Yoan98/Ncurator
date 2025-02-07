@@ -36,7 +36,7 @@ export enum ModelSort {
 }
 export const STORAGE_DEFAULT_MODEL_ID = 'defaultModelId'; // localStorage中默认模型id的名称
 export const STORAGE_LOADED_MODEL_IDS = 'loadedModelIds'; // localStorage中
-export const STORAGE_DEPPSEEK_API_KEY = 'deepseekApiKey'; // localStorage中deepseek的apiKey
+export const STORAGE_DEPPSEEK_API_INFO = 'deepseekApiInfo'; // localStorage中deepseek的apiKey
 
 
 export const ZH_STOP_WORDS = '的 一 不 在 人 有 是 为 為 以 于 於 上 他 而 后 後 之 来 來 及 了 因 下 可 到 由 这 這 与 與 也 此 但 并 並 个 個 其 已 无 無 小 我 们 們 起 最 再 今 去 好 只 又 或 很 亦 某 把 那 你 乃 它 吧 被 比 别 趁 当 當 从 從 得 打 凡 儿 兒 尔 爾 该 該 各 给 給 跟 和 何 还 還 即 几 幾 既 看 据 據 距 靠 啦 另 么 麽 每 嘛 拿 哪 您 凭 憑 且 却 卻 让 讓 仍 啥 如 若 使 谁 誰 虽 雖 随 隨 同 所 她 哇 嗡 往 些 向 沿 哟 喲 用 咱 则 則 怎 曾 至 致 着 著 诸 諸 自'.split(' ')
@@ -51,23 +51,17 @@ export const UN_TEXT_TAGS = ['script', 'style', 'svg', 'img', 'canvas', 'audio',
 export const LLM_MODEL_LIST = [
     // API 模型
     {
+        id: 'deepseek', // 自定义的,必须唯一
         sort: ModelSort.Api,
         isCustom: true,
         apiKey: '',
         baseUrl: 'https://api.deepseek.com',
         name: 'DeepSeek',
-        modelId: 'deepseek-chat',
+        modelId: '',
         contextWindowSize: 60000,
     },
     {
-        sort: ModelSort.Api,
-        apiKey: 'sk-da34773d39e948129436839cae2bea4d',
-        baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-        name: 'Qwen-Turbo',
-        modelId: 'qwen-turbo-latest',
-        contextWindowSize: 60000,
-    },
-    {
+        id: 'qwenmax',
         sort: ModelSort.Api,
         apiKey: 'sk-da34773d39e948129436839cae2bea4d',
         baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
@@ -75,8 +69,18 @@ export const LLM_MODEL_LIST = [
         modelId: 'qwen-max-latest',
         contextWindowSize: 30000,
     },
+    {
+        id: 'qwenturbo',
+        sort: ModelSort.Api,
+        apiKey: 'sk-da34773d39e948129436839cae2bea4d',
+        baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+        name: 'Qwen-Turbo',
+        modelId: 'qwen-turbo-latest',
+        contextWindowSize: 60000,
+    },
     // WebLLM 模型
     {
+        id: 'qwen2.5-3b',
         sort: ModelSort.Webllm,
         name: 'Qwen2.5-3B',
         modelSizeType: 2,
@@ -86,6 +90,7 @@ export const LLM_MODEL_LIST = [
         contextWindowSize: 4096,
     },
     {
+        id: 'qwen2.5-7b',
         sort: ModelSort.Webllm,
         name: 'Qwen2.5-7B',
         modelSizeType: 1,
@@ -95,6 +100,7 @@ export const LLM_MODEL_LIST = [
         contextWindowSize: 4096,
     },
     {
+        id: 'lama-3.2-3b',
         sort: ModelSort.Webllm,
         name: 'Llama-3.2-3B',
         modelSizeType: 2,
@@ -105,6 +111,7 @@ export const LLM_MODEL_LIST = [
 
     },
     {
+        id: 'llama-3.1-8b',
         sort: ModelSort.Webllm,
         name: 'Llama-3.1-8B',
         modelSizeType: 1,
@@ -114,3 +121,14 @@ export const LLM_MODEL_LIST = [
         contextWindowSize: 4096
 
     },]
+
+export const DEEP_SEEK_MODEL_LIST = [
+    {
+        label: 'deepseek-chat',
+        value: 'deepseek-chat',
+    },
+    {
+        label: 'deepseek-reasoner',
+        value: 'deepseek-reasoner',
+    }
+]

@@ -1,11 +1,10 @@
 import React, { createContext, useContext, useState, useRef } from 'react';
-import type { InitProgressReport } from "@mlc-ai/web-llm";
 import * as constant from '@src/utils/constant';
 import type { ProgressProps } from 'antd';
 import { Progress, message } from 'antd';
-import { WebWorkerMLCEngine } from "@mlc-ai/web-llm";
 import { t } from '@extension/i18n';
 import { LlmEngineController } from '@src/utils/LlmEngineController'
+import { LLM_MODEL_LIST } from '@src/utils/constant';
 
 
 
@@ -19,8 +18,8 @@ interface GlobalContextValue {
     llmEngineLoadStatus: ProgressProps['status'];
     // 全局使用的LLM引擎
     llmEngine: React.MutableRefObject<LlmEngineController | null>
-    initLlmEngine: (modelId: string) => Promise<InitLlmReturn>;
-    reloadLlmModal: (modelId: string) => Promise<InitLlmReturn>;
+    initLlmEngine: (selfModelId: string) => Promise<InitLlmReturn>;
+    reloadLlmModal: (selfModelId: string) => Promise<InitLlmReturn>;
 
     // pagePath
     pagePath: string;
@@ -149,7 +148,9 @@ export const GlobalProvider = ({ children }) => {
         if (selectModel === 'default') {
             const defaultModal = localStorage.getItem(constant.STORAGE_DEFAULT_MODEL_ID);
 
-            if (!defaultModal) {
+            const modelInfo = defaultModal ? LLM_MODEL_LIST.find((item) => item.id === defaultModal) : null;
+
+            if (!defaultModal || !modelInfo) {
                 setLlmEngineLoadStatus(undefined);
                 return {
                     status: 'Fail',
@@ -157,10 +158,11 @@ export const GlobalProvider = ({ children }) => {
                     engine: null
                 }
             }
+
             selectModel = defaultModal;
         }
 
-        const newLlmEngine = new LlmEngineController({ modelId: selectModel });
+        const newLlmEngine = new LlmEngineController({ selfModelId: selectModel });
         // 判断模型种类
         // api的模型
         if (newLlmEngine.modelInfo.sort === constant.ModelSort.Api) {
@@ -183,7 +185,7 @@ export const GlobalProvider = ({ children }) => {
                 llmEngine.current = null;
             }
 
-            await newLlmEngine.reload({ modelId: selectModel, initProgressCallback });
+            await newLlmEngine.reload({ selfModelId: selectModel, initProgressCallback });
 
             llmEngine.current = newLlmEngine;
 
@@ -214,7 +216,6 @@ export const GlobalProvider = ({ children }) => {
                 engine: null
             }
         }
-        // 如果上一个是api模型，则需重新加载webllm才行
         if (!llmEngine.current) {
             const res = await initLlmEngine(selectModel);
             return res;
@@ -225,7 +226,7 @@ export const GlobalProvider = ({ children }) => {
         setLlmEngineLoadStatus('active');
 
         await llmEngine.current.reload({
-            modelId: selectModel,
+            selfModelId: selectModel,
             initProgressCallback
         });
 

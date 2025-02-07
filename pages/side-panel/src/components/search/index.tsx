@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Select, Button, Input, message, Empty } from 'antd';
+import { Select, Button, Input, message, Empty, Switch } from 'antd';
 import { IoDocumentAttachOutline } from "react-icons/io5";
 import { getSearchResMaxTextSize } from '@src/utils/tool';
 import { searchDoc } from '@src/utils/search';
@@ -55,6 +55,8 @@ const SearchSection = () => {
 
     const [fileViewerOpen, setFileViewerOpen] = useState(false);
     const [fileRenderDocs, setFileRenderDocs] = useState<FileRenderDocument[]>([]);
+
+    const [enableAiAnswer, setEnableAiAnswer] = useState(false);
 
     const askAI = async (searchTextRes: Search.TextItemRes[]) => {
         if (!llmEngine.current || llmEngineLoadStatus !== 'success') {
@@ -122,7 +124,6 @@ const SearchSection = () => {
         })
 
         setAiAnswerText('⚫');
-        setAskAiLoading(true);
         setSearchLoading(true);
         let searchTextRes
         // 搜索数据库的数据
@@ -148,15 +149,17 @@ const SearchSection = () => {
 
 
         // 搜索AI的数据
-        try {
-            await askAI(searchTextRes);
+        if (enableAiAnswer) {
+            setAskAiLoading(true);
+            try {
+                await askAI(searchTextRes);
 
-        } catch (error) {
-            console.error(error);
-            message.error('Error in AI answer' + error);
+            } catch (error) {
+                console.error(error);
+                message.error('Error in AI answer' + error);
+            }
+            setAskAiLoading(false);
         }
-
-        setAskAiLoading(false);
     }
     const handleEnterPress = (e) => {
         // 避免shift+enter换行
@@ -227,19 +230,30 @@ const SearchSection = () => {
                     onChange={(value) => setSelectedConnection(value)}
                 />
 
-                <Button loading={askAiLoading} icon={<VscSend size={20} />} type="primary" shape='circle' className='hover:scale-110 transition-transform' onClick={handleSearchClick}></Button>
+                <Button loading={enableAiAnswer ? askAiLoading : searchLoading} icon={<VscSend size={20} />} type="primary" shape='circle' className='hover:scale-110 transition-transform' onClick={handleSearchClick}></Button>
             </div>
         </div>
 
-        <div className="ai-answer my-4 p-4 border-2 border-border rounded-lg relative">
-            <div className="flex gap-x-2">
+        <div className="ai-answer my-4 p-2 border-2 border-border rounded-lg relative">
+            <div className="flex justify-between">
                 <h2 className="text-emphasis font-bold my-auto mb-1 text-base">{t('all_answer')}</h2>
+                <Switch defaultChecked={enableAiAnswer} onChange={
+                    (checked) => {
+                        setEnableAiAnswer(checked);
+                        if (checked) {
+                            setAiAnswerText(t('please_search_again'));
+                        } else {
+                            setAiAnswerText('');
+                        }
+                    }
+                } />
             </div>
 
-            <div className="pt-1 border-t border-border w-full min-h-[150px] max-h-[100px] overflow-y-auto">
+            <div className="pt-1 border-t border-border w-full overflow-y-auto" style={{
+                height: enableAiAnswer ? '100px' : '0px',
+            }}>
                 {
                     searchLoading ? <div className='text-sm loading-text'>{t('searching')}</div> : <div className="text-base">{aiAnswerText}</div>
-
                 }
 
             </div>
@@ -247,7 +261,9 @@ const SearchSection = () => {
 
         <div className="result">
             <div className="font-bold flex justify-between text-emphasis border-b mb-3 pb-1 text-lg"><p>{t('results')}</p></div>
-            <div className="search-res-list overflow-y-auto ">
+            <div className="search-res-list overflow-y-auto " style={{
+                maxHeight: enableAiAnswer ? 'calc(100vh - 450px)' : 'calc(100vh - 350px)',
+            }}>
                 {
                     searchLoading ? <div className='text-sm loading-text'>{t('searching')}</div> :
                         searchTextRes.length === 0 ? <Empty /> :

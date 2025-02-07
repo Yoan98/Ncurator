@@ -2,15 +2,17 @@
 import React, { useState, useEffect } from 'react';
 import { RiRobot2Line } from "react-icons/ri";
 import { CiSquareQuestion, CiCircleInfo } from "react-icons/ci";
-import { Tag, Button, Tooltip, Empty, message, Progress, Upload, Modal, Form, Input } from 'antd';
+import { Tag, Button, Tooltip, Empty, message, Progress, Upload, Modal, Form, Input, Select } from 'antd';
 import type { ProgressProps, UploadFile, UploadProps } from 'antd';
 import * as constant from '@src/utils/constant';
 import { useGlobalContext } from '@src/provider/global';
 import { downloadLlmModelFiles, uploadByCacheFiles } from '@src/utils/tool';
 import { modelLibURLPrefix, modelVersion } from "@mlc-ai/web-llm";
 import { t } from '@extension/i18n';
+import { getLlmModelStorageKey } from '@src/utils/tool'
 
 interface ModelItem {
+    id: string
     name: string,
     modelId: string,
     isDefault: boolean,
@@ -55,6 +57,8 @@ const { Dragger } = Upload;
 const LlmSetup = () => {
     const { llmEngineLoadStatus, reloadLlmModal } = useGlobalContext()
 
+    const curCustomModelRef = React.useRef<ModelItem | null>(null);
+
     const [allLlmModels, setAllLlmModels] = useState<ModelItem[]>(DEFAULT_MODEL_LIST)
 
     const [uploadModalOpen, setUploadModalOpen] = useState(false);
@@ -84,7 +88,7 @@ const LlmSetup = () => {
         // 更新状态为加载中
         setAllLlmModels((preModels) => {
             return preModels.map((item) => {
-                if (item.modelId === model.modelId) {
+                if (item.id === model.id) {
                     return {
                         ...item,
                         loadingStatus: 'active',
@@ -100,7 +104,7 @@ const LlmSetup = () => {
                 // 更新load percent
                 setAllLlmModels((preModels) => {
                     return preModels.map((item) => {
-                        if (item.modelId === model.modelId) {
+                        if (item.id === model.id) {
                             // 加载完成
                             if (progress === 1) {
                                 return {
@@ -133,7 +137,7 @@ const LlmSetup = () => {
             // 更新loading状态
             setAllLlmModels((preModels) => {
                 return preModels.map((item) => {
-                    if (item.modelId === model.modelId) {
+                    if (item.id === model.id) {
                         return {
                             ...item,
                             loadingPercent: 0,
@@ -153,8 +157,9 @@ const LlmSetup = () => {
             return;
         }
         if (model.isCustom) {
-            const apiKey = localStorage.getItem(constant.STORAGE_DEPPSEEK_API_KEY);
-            if (!apiKey) {
+            const customModelApiInfoStr = localStorage.getItem(getLlmModelStorageKey(model.id));
+            const customModelApiInfo: CustomLLMModelApiInfo = customModelApiInfoStr ? JSON.parse(customModelApiInfoStr) : {}
+            if (!customModelApiInfo.apiKey || !customModelApiInfo.modelId) {
                 return message.warning(t('please_set_api_key'));
             }
         }
@@ -163,7 +168,7 @@ const LlmSetup = () => {
             message.loading(t('setting_default_model'));
         }
 
-        const loadRes = await reloadLlmModal(model.modelId);
+        const loadRes = await reloadLlmModal(model.id);
         if (loadRes.status === 'Fail') {
             message.error(loadRes.message);
             return;
@@ -173,7 +178,22 @@ const LlmSetup = () => {
             message.success(loadRes.message);
         }
 
-        setDefaultModel(model);
+        // 更新本地模型标记
+        localStorage.setItem(constant.STORAGE_DEFAULT_MODEL_ID, model.id);
+        setAllLlmModels((preModels) => {
+            return preModels.map((item) => {
+                if (item.id === model.id) {
+                    return {
+                        ...item,
+                        isDefault: true
+                    }
+                }
+                return {
+                    ...item,
+                    isDefault: false
+                }
+            })
+        })
     }
     const handleUploadClick = async (model: ModelItem) => {
         setUploadModalOpen(true);
@@ -228,24 +248,6 @@ const LlmSetup = () => {
         window.open(helpDocUrl)
     }
 
-    const setDefaultModel = (model: ModelItem) => {
-        localStorage.setItem(constant.STORAGE_DEFAULT_MODEL_ID, model.modelId);
-        setAllLlmModels((preModels) => {
-            return preModels.map((item) => {
-                if (item.modelId === model.modelId) {
-                    return {
-                        ...item,
-                        isDefault: true
-                    }
-                }
-                return {
-                    ...item,
-                    isDefault: false
-                }
-            })
-        })
-    }
-
     const getModelSizeText = (modelSizeType: 1 | 2) => {
         if (modelSizeType === 1) {
             return t('large');
@@ -264,22 +266,49 @@ const LlmSetup = () => {
     }
 
     // apikey
-    const handleSetApiKeyConfirm = () => {
-        const { apiKey } = apiKeyForm.getFieldsValue() as ApiKeyForm;
-        localStorage.setItem(constant.STORAGE_DEPPSEEK_API_KEY, apiKey || '');
+    const handleSetApiKeyConfirm = async () => {
+        const validRes = await apiKeyForm.validateFields()
+        if (!validRes) {
+            return;
+        }
 
+        const { apiKey, modelId } = apiKeyForm.getFieldsValue() as ApiKeyForm;
+
+        const customModelApiInfo: CustomLLMModelApiInfo = {
+            apiKey,
+            modelId
+        }
+
+        const curModel = curCustomModelRef.current;
+
+
+        // 必须要先保存到本地,再去重新加载模型
+        // 因为reloadLlmModal会去读取本地的customModelApiInfo
+        localStorage.setItem(getLlmModelStorageKey(curModel!.id), JSON.stringify(customModelApiInfo));
+
+        if (curModel?.isDefault) {
+            const loadRes = await reloadLlmModal(curModel!.id);
+            if (loadRes.status === 'Fail') {
+                message.error(loadRes.message);
+                return;
+            }
+        }
+        message.success(t('set_api_key_success'));
         setApiKeyModalOpen(false);
     }
     const handleSetApiKeyClick = (model: ModelItem) => {
         // 去loacalstorage中取出apikey
-        const apiKey = localStorage.getItem(constant.STORAGE_DEPPSEEK_API_KEY);
+        const customModelApiInfoStr = localStorage.getItem(getLlmModelStorageKey(model.id));
+        const customModelApiInfo: CustomLLMModelApiInfo = customModelApiInfoStr ? JSON.parse(customModelApiInfoStr) : {}
 
         // 设置form的值
         apiKeyForm.setFieldsValue({
-            apiKey: apiKey || '',
+            apiKey: customModelApiInfo.apiKey || '',
             baseUrl: model.baseUrl,
-            modelId: model.modelId
+            modelId: customModelApiInfo.modelId || constant.DEEP_SEEK_MODEL_LIST[0].value,
         })
+
+        curCustomModelRef.current = model;
 
         setApiKeyModalOpen(true);
     }
@@ -355,7 +384,7 @@ const LlmSetup = () => {
             return {
                 ...model,
                 isLoaded: model.sort === constant.ModelSort.Api ? true : isLoaded,// api默认理解为已加载的
-                isDefault: model.modelId === defaultModelId
+                isDefault: model.id === defaultModelId
             };
         })
 
@@ -454,7 +483,9 @@ const LlmSetup = () => {
                         <Input placeholder={t('enter_api_key')} />
                     </Form.Item>
                     <Form.Item label='Model' name="modelId" rules={[{ required: true }]}>
-                        <Input disabled />
+                        <Select
+                            options={constant.DEEP_SEEK_MODEL_LIST}
+                        />
                     </Form.Item>
                 </Form>
             </Modal>

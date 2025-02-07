@@ -1,5 +1,6 @@
 import { CHAT_SYSTEM_PROMPT, KNOWLEDGE_USER_PROMPT } from '@src/config'
 import type { LlmEngineController } from '@src/utils/LlmEngineController'
+import { STORAGE_DEPPSEEK_API_INFO } from '@src/utils/constant'
 
 // 检测WebGPU是否可用
 export async function checkWebGPU() {
@@ -279,4 +280,18 @@ export const getActiveTabInfo = (): Promise<CurTabPageInfo> => {
 
 
     })
+}
+
+// 根据模型名称获取localstorage的key
+export const getLlmModelStorageKey = (id: string): string => {
+    const LLM_CUSTOM_STORAGE_KEY_MAP = {
+        'deepseek': STORAGE_DEPPSEEK_API_INFO
+    }
+
+    return LLM_CUSTOM_STORAGE_KEY_MAP[id]
+}
+
+// sleep函数
+export const sleep = (ms: number = 100) => {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
