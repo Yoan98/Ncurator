@@ -1,395 +1,395 @@
 {
-  "LLMModel": {
-    "message": "LLM模型"
-  },
-  "Resource": {
-    "message": "知识库"
-  },
-  "add_document": {
-    "message": "新增文档"
-  },
-  "add_resource": {
-    "message": "新增知识库"
-  },
-  "add_resource_success": {
-    "message": "添加知识库成功"
-  },
-  "add_spider": {
-    "message": "新增爬虫"
-  },
-  "advance_set": {
-    "message": "高级设置"
-  },
-  "ai_engine_not_ready": {
-    "message": "LLM引擎还未加载完毕"
-  },
-  "all_answer": {
-    "message": "AI 回答"
-  },
-  "all_data_processed_with_default_model": {
-    "message": "所有数据将使用默认嵌入模型进行处理。你应该选择最适合你资源文本语言的模型。添加资源后避免更改模型"
-  },
-  "all_resource": {
-    "message": "全部知识库"
-  },
-  "applicable_chinese_language": {
-    "message": "适用于中文为主的数据"
-  },
-  "applicable_english_languages": {
-    "message": "适用于英文为主的数据"
-  },
-  "ask_based_cur_webpage": {
-    "message": "基于当前网页,询问问题"
-  },
-  "ask_placeholder": {
-    "message": "基于你的知识库,询问问题"
-  },
-  "author": {
-    "message": "作者"
-  },
-  "better_not_exceed": {
-    "message": "最好别超过"
-  },
-  "build": {
-    "message": "构建"
-  },
-  "building": {
-    "message": "构建中"
-  },
-  "building_document_wait": {
-    "message": "正在构建文档,请稍等"
-  },
-  "cancel": {
-    "message": "取消"
-  },
-  "chat": {
-    "message": "聊天"
-  },
-  "chatTab": {
-    "message": "聊天"
-  },
-  "chinese_embedding": {
-    "message": "中文模型"
-  },
-  "click_drag_file_tip": {
-    "message": "点击或拖拽文件到此处"
-  },
-  "click_to_setup": {
-    "message": "点击设置"
-  },
-  "click_try_again": {
-    "message": "点击重试"
-  },
-  "cloud": {
-    "message": "云端"
-  },
-  "confirm": {
-    "message": "确认"
-  },
-  "contact_author": {
-    "message": "联系作者"
-  },
-  "crawl_cur_page_to_knowledge": {
-    "message": "爬取当前网页存入知识库"
-  },
-  "crawl_to_resource": {
-    "message": "爬取当前浏览的网页"
-  },
-  "crawling": {
-    "message": "爬取中"
-  },
-  "cur_web_page": {
-    "message": "当前网页"
-  },
-  "custom": {
-    "message": "自定义"
-  },
-  "default": {
-    "message": "默认"
-  },
-  "del_batch_data": {
-    "message": "批量删除数据"
-  },
-  "delete": {
-    "message": "删除"
-  },
-  "delete_confirm": {
-    "message": "确认删除这些数据吗"
-  },
-  "delete_success": {
-    "message": "删除成功"
-  },
-  "delete_tip": {
-    "message": "删除提示"
-  },
-  "document_building_tip": {
-    "message": "文档构建中,请勿关闭页面"
-  },
-  "download": {
-    "message": "下载"
-  },
-  "download_model_again_wanning": {
-    "message": "已有模型正在下载中,请稍后再试"
-  },
-  "download_model_success": {
-    "message": "下载模型成功"
-  },
-  "download_model_tip": {
-    "message": "模型默认将从huggingface下载，如网速受限，可邮箱作者，从其他渠道下载模型到本地再上传"
-  },
-  "earlier": {
-    "message": "更早"
-  },
-  "edit_resource": {
-    "message": "编辑该知识库"
-  },
-  "edit_resource_success": {
-    "message": "编辑知识库成功"
-  },
-  "embedding_model_setup": {
-    "message": "嵌入模型设置"
-  },
-  "embedding_model_setup_desc": {
-    "message": "如果无法下载,请尝试使用VPN🪜,尤其是中国"
-  },
-  "empty_data": {
-    "message": "暂无数据"
-  },
-  "english_embedding": {
-    "message": "英文模型"
-  },
-  "enter_api_key": {
-    "message": "输入包含'sk'的api key"
-  },
-  "extensionDescription": {
-    "message": "让AI帮助你整理与分析知识"
-  },
-  "extensionName": {
-    "message": "馆长: 知识库AI问答助手"
-  },
-  "fail": {
-    "message": "失败"
-  },
-  "failed_to_load_model": {
-    "message": "加载模型失败，请稍后再试"
-  },
-  "file": {
-    "message": "文件"
-  },
-  "go_to_create": {
-    "message": "前往创建"
-  },
-  "help": {
-    "message": "帮助"
-  },
-  "help_doc": {
-    "message": "帮助文档?"
-  },
-  "import": {
-    "message": "导入"
-  },
-  "import_file": {
-    "message": "导入文件"
-  },
-  "import_your_browser_bookmark": {
-    "message": "导入您的浏览器书签"
-  },
-  "knowledge": {
-    "message": "知识库"
-  },
-  "large": {
-    "message": "大"
-  },
-  "last_7_days": {
-    "message": "近7天"
-  },
-  "llm_desc": {
-    "message": "LLM模型是一个能够理解你的文本和生成文本的一项技术，不同模型的理解与生成质量会有不同"
-  },
-  "llm_loading_warning": {
-    "message": "有模型正在加载中,请稍后再试"
-  },
-  "llm_setup": {
-    "message": "LLM模型配置"
-  },
-  "load_llm_model_error": {
-    "message": "加载LLM模型失败"
-  },
-  "load_llm_model_success": {
-    "message": "加载LLM模型成功"
-  },
-  "loaded_model": {
-    "message": "已加载模型"
-  },
-  "loading_llm_model": {
-    "message": "加载LLM模型中"
-  },
-  "local": {
-    "message": "本地"
-  },
-  "local_cloud_desc": {
-    "message": "云端意味着将会使用第三方云服务来获取LLM能力支持(分析的效果更好); 本地意味着将只会使用你的设备来获得LLM能力支持(隐私性更好)"
-  },
-  "medium": {
-    "message": "中"
-  },
-  "message_placeholder": {
-    "message": "与它聊天"
-  },
-  "model_is_loading": {
-    "message": "模型加载中，请稍等"
-  },
-  "name": {
-    "message": "名称"
-  },
-  "new_chat": {
-    "message": "开启新对话"
-  },
-  "new_crawl": {
-    "message": "新建爬取"
-  },
-  "no_loaded_model": {
-    "message": "无已加载模型"
-  },
-  "no_unloaded_model": {
-    "message": "无未加载模型"
-  },
-  "not_found_crawl_knowledge": {
-    "message": "没有找到'网页爬取'知识库"
-  },
-  "not_found_embedding_model": {
-    "message": "未找到嵌入模型，点击前往设置"
-  },
-  "not_found_llm_model": {
-    "message": "未找到LLM模型"
-  },
-  "operation_data_safe_tip": {
-    "message": "所有数据与操作都在您本地进行,以确保数据安全"
-  },
-  "please_delete_document_first": {
-    "message": "请先删除文档"
-  },
-  "please_input_question": {
-    "message": "请输入问题"
-  },
-  "please_input_search": {
-    "message": "请输入搜索内容"
-  },
-  "please_search_again": {
-    "message": "请重新搜索来生成AI回答"
-  },
-  "please_select_bookmarks": {
-    "message": "请选择浏览器的书签"
-  },
-  "please_select_file": {
-    "message": "请选择文件"
-  },
-  "please_select_resource_type": {
-    "message": "请选择数据类型"
-  },
-  "please_set_api_key": {
-    "message": "请先设置api key"
-  },
-  "please_setup_embed_first": {
-    "message": "请先设置嵌入模型"
-  },
-  "problem_document": {
-    "message": "该文档内容太少,可能有问题"
-  },
-  "relate_document": {
-    "message": "相关文档"
-  },
-  "resource": {
-    "message": "知识库"
-  },
-  "resource_name": {
-    "message": "知识库名称"
-  },
-  "resource_name_placeholder": {
-    "message": "请输入名称"
-  },
-  "resource_type": {
-    "message": "数据类型"
-  },
-  "results": {
-    "message": "搜索结果"
-  },
-  "searchTab": {
-    "message": "搜索"
-  },
-  "search_placeholder": {
-    "message": "基于您的资源搜索..."
-  },
-  "search_resource_name": {
-    "message": "请输入名称"
-  },
-  "searching": {
-    "message": "搜索..."
-  },
-  "select_data_first": {
-    "message": "请先选择数据"
-  },
-  "select_import_knowledge": {
-    "message": "选择知识库"
-  },
-  "set_api_key": {
-    "message": "配置API-Key"
-  },
-  "set_api_key_success": {
-    "message": "设置API-Key成功"
-  },
-  "set_default": {
-    "message": "设为默认"
-  },
-  "setting_default_model": {
-    "message": "设置默认模型"
-  },
-  "spider": {
-    "message": "爬虫"
-  },
-  "start_chat": {
-    "message": "快问我,快"
-  },
-  "status": {
-    "message": "状态"
-  },
-  "success": {
-    "message": "成功"
-  },
-  "today": {
-    "message": "今天"
-  },
-  "unloaded_model": {
-    "message": "未加载模型"
-  },
-  "upload": {
-    "message": "上传"
-  },
-  "upload_model_file": {
-    "message": "上传模型文件"
-  },
-  "upload_model_success": {
-    "message": "上传模型成功"
-  },
-  "wait_document_build_warning": {
-    "message": "请等待web页面构建完成"
-  },
-  "web": {
-    "message": "网页"
-  },
-  "web_crawl": {
-    "message": "网页爬取"
-  },
-  "web_name_placeholder": {
-    "message": "请输入网站名称"
-  },
-  "web_url": {
-    "message": "网址"
-  },
-  "web_url_placeholder": {
-    "message": "请输入网址"
-  },
-  "yesterday": {
-    "message": "昨天"
-  }
+    "LLMModel": {
+        "message": "LLM模型"
+    },
+    "Resource": {
+        "message": "知识库"
+    },
+    "add_document": {
+        "message": "新增文档"
+    },
+    "add_resource": {
+        "message": "新增知识库"
+    },
+    "add_resource_success": {
+        "message": "添加知识库成功"
+    },
+    "add_spider": {
+        "message": "新增爬虫"
+    },
+    "advance_set": {
+        "message": "高级设置"
+    },
+    "ai_engine_not_ready": {
+        "message": "LLM引擎还未加载完毕"
+    },
+    "all_answer": {
+        "message": "AI 回答"
+    },
+    "all_data_processed_with_default_model": {
+        "message": "所有数据将使用默认嵌入模型进行处理。你应该选择最适合你资源文本语言的模型。添加资源后避免更改模型"
+    },
+    "all_resource": {
+        "message": "全部知识库"
+    },
+    "applicable_chinese_language": {
+        "message": "适用于中文为主的数据"
+    },
+    "applicable_english_languages": {
+        "message": "适用于英文为主的数据"
+    },
+    "ask_based_cur_webpage": {
+        "message": "基于当前网页,询问问题"
+    },
+    "ask_placeholder": {
+        "message": "基于你的知识库,询问问题"
+    },
+    "author": {
+        "message": "作者"
+    },
+    "better_not_exceed": {
+        "message": "最好别超过"
+    },
+    "build": {
+        "message": "构建"
+    },
+    "building": {
+        "message": "构建中"
+    },
+    "building_document_wait": {
+        "message": "正在构建文档,请稍等"
+    },
+    "cancel": {
+        "message": "取消"
+    },
+    "chat": {
+        "message": "聊天"
+    },
+    "chatTab": {
+        "message": "聊天"
+    },
+    "chinese_embedding": {
+        "message": "中文模型"
+    },
+    "click_drag_file_tip": {
+        "message": "点击或拖拽文件到此处"
+    },
+    "click_to_setup": {
+        "message": "点击设置"
+    },
+    "click_try_again": {
+        "message": "点击重试"
+    },
+    "cloud": {
+        "message": "云端"
+    },
+    "confirm": {
+        "message": "确认"
+    },
+    "contact_author": {
+        "message": "联系作者"
+    },
+    "crawl_cur_page_to_knowledge": {
+        "message": "爬取当前网页存入知识库"
+    },
+    "crawl_to_resource": {
+        "message": "爬取当前浏览的网页"
+    },
+    "crawling": {
+        "message": "爬取中"
+    },
+    "cur_web_page": {
+        "message": "当前网页"
+    },
+    "custom": {
+        "message": "自定义"
+    },
+    "default": {
+        "message": "默认"
+    },
+    "del_batch_data": {
+        "message": "批量删除数据"
+    },
+    "delete": {
+        "message": "删除"
+    },
+    "delete_confirm": {
+        "message": "确认删除这些数据吗"
+    },
+    "delete_success": {
+        "message": "删除成功"
+    },
+    "delete_tip": {
+        "message": "删除提示"
+    },
+    "document_building_tip": {
+        "message": "文档构建中,请勿关闭页面"
+    },
+    "download": {
+        "message": "下载"
+    },
+    "download_model_again_wanning": {
+        "message": "已有模型正在下载中,请稍后再试"
+    },
+    "download_model_success": {
+        "message": "下载模型成功"
+    },
+    "download_model_tip": {
+        "message": "模型默认将从huggingface下载，如网速受限，可邮箱作者，从其他渠道下载模型到本地再上传"
+    },
+    "earlier": {
+        "message": "更早"
+    },
+    "edit_resource": {
+        "message": "编辑该知识库"
+    },
+    "edit_resource_success": {
+        "message": "编辑知识库成功"
+    },
+    "embedding_model_setup": {
+        "message": "嵌入模型设置"
+    },
+    "embedding_model_setup_desc": {
+        "message": "如果无法下载,请尝试使用VPN🪜"
+    },
+    "empty_data": {
+        "message": "暂无数据"
+    },
+    "english_embedding": {
+        "message": "英文模型"
+    },
+    "enter_api_key": {
+        "message": "输入包含'sk'的api key"
+    },
+    "extensionDescription": {
+        "message": "让AI帮助你整理与分析知识"
+    },
+    "extensionName": {
+        "message": "馆长: 知识库AI问答助手"
+    },
+    "fail": {
+        "message": "失败"
+    },
+    "failed_to_load_model": {
+        "message": "加载模型失败，请稍后再试"
+    },
+    "file": {
+        "message": "文件"
+    },
+    "go_to_create": {
+        "message": "前往创建"
+    },
+    "help": {
+        "message": "帮助"
+    },
+    "help_doc": {
+        "message": "帮助文档?"
+    },
+    "import": {
+        "message": "导入"
+    },
+    "import_file": {
+        "message": "导入文件"
+    },
+    "import_your_browser_bookmark": {
+        "message": "导入您的浏览器书签"
+    },
+    "knowledge": {
+        "message": "知识库"
+    },
+    "large": {
+        "message": "大"
+    },
+    "last_7_days": {
+        "message": "近7天"
+    },
+    "llm_desc": {
+        "message": "LLM模型是一个能够理解你的文本和生成文本的一项技术，不同模型的理解与生成质量会有不同"
+    },
+    "llm_loading_warning": {
+        "message": "有模型正在加载中,请稍后再试"
+    },
+    "llm_setup": {
+        "message": "LLM模型配置"
+    },
+    "load_llm_model_error": {
+        "message": "加载LLM模型失败"
+    },
+    "load_llm_model_success": {
+        "message": "加载LLM模型成功"
+    },
+    "loaded_model": {
+        "message": "已加载模型"
+    },
+    "loading_llm_model": {
+        "message": "加载LLM模型中"
+    },
+    "local": {
+        "message": "本地"
+    },
+    "local_cloud_desc": {
+        "message": "云端意味着将会使用第三方云服务来获取LLM能力支持(分析的效果更好); 本地意味着将只会使用你的设备来获得LLM能力支持(隐私性更好)"
+    },
+    "medium": {
+        "message": "中"
+    },
+    "message_placeholder": {
+        "message": "与它聊天"
+    },
+    "model_is_loading": {
+        "message": "模型加载中，请稍等"
+    },
+    "name": {
+        "message": "名称"
+    },
+    "new_chat": {
+        "message": "开启新对话"
+    },
+    "new_crawl": {
+        "message": "新建爬取"
+    },
+    "no_loaded_model": {
+        "message": "无已加载模型"
+    },
+    "no_unloaded_model": {
+        "message": "无未加载模型"
+    },
+    "not_found_crawl_knowledge": {
+        "message": "没有找到'网页爬取'知识库"
+    },
+    "not_found_embedding_model": {
+        "message": "未找到嵌入模型，点击前往设置"
+    },
+    "not_found_llm_model": {
+        "message": "未找到LLM模型"
+    },
+    "operation_data_safe_tip": {
+        "message": "所有数据与操作都在您本地进行,以确保数据安全"
+    },
+    "please_delete_document_first": {
+        "message": "请先删除文档"
+    },
+    "please_input_question": {
+        "message": "请输入问题"
+    },
+    "please_input_search": {
+        "message": "请输入搜索内容"
+    },
+    "please_search_again": {
+        "message": "请重新搜索来生成AI回答"
+    },
+    "please_select_bookmarks": {
+        "message": "请选择浏览器的书签"
+    },
+    "please_select_file": {
+        "message": "请选择文件"
+    },
+    "please_select_resource_type": {
+        "message": "请选择数据类型"
+    },
+    "please_set_api_key": {
+        "message": "请先设置api key"
+    },
+    "please_setup_embed_first": {
+        "message": "请先设置嵌入模型"
+    },
+    "problem_document": {
+        "message": "该文档内容太少,可能有问题"
+    },
+    "relate_document": {
+        "message": "相关文档"
+    },
+    "resource": {
+        "message": "知识库"
+    },
+    "resource_name": {
+        "message": "知识库名称"
+    },
+    "resource_name_placeholder": {
+        "message": "请输入名称"
+    },
+    "resource_type": {
+        "message": "数据类型"
+    },
+    "results": {
+        "message": "搜索结果"
+    },
+    "searchTab": {
+        "message": "搜索"
+    },
+    "search_placeholder": {
+        "message": "基于您的资源搜索..."
+    },
+    "search_resource_name": {
+        "message": "请输入名称"
+    },
+    "searching": {
+        "message": "搜索..."
+    },
+    "select_data_first": {
+        "message": "请先选择数据"
+    },
+    "select_import_knowledge": {
+        "message": "选择知识库"
+    },
+    "set_api_key": {
+        "message": "配置API-Key"
+    },
+    "set_api_key_success": {
+        "message": "设置API-Key成功"
+    },
+    "set_default": {
+        "message": "设为默认"
+    },
+    "setting_default_model": {
+        "message": "设置默认模型"
+    },
+    "spider": {
+        "message": "爬虫"
+    },
+    "start_chat": {
+        "message": "快问我,快"
+    },
+    "status": {
+        "message": "状态"
+    },
+    "success": {
+        "message": "成功"
+    },
+    "today": {
+        "message": "今天"
+    },
+    "unloaded_model": {
+        "message": "未加载模型"
+    },
+    "upload": {
+        "message": "上传"
+    },
+    "upload_model_file": {
+        "message": "上传模型文件"
+    },
+    "upload_model_success": {
+        "message": "上传模型成功"
+    },
+    "wait_document_build_warning": {
+        "message": "请等待web页面构建完成"
+    },
+    "web": {
+        "message": "网页"
+    },
+    "web_crawl": {
+        "message": "网页爬取"
+    },
+    "web_name_placeholder": {
+        "message": "请输入网站名称"
+    },
+    "web_url": {
+        "message": "网址"
+    },
+    "web_url_placeholder": {
+        "message": "请输入网址"
+    },
+    "yesterday": {
+        "message": "昨天"
+    }
 }
