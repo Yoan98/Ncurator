@@ -391,5 +391,11 @@
   },
   "yesterday": {
     "message": "Yesterday"
+  },
+  "enter_model_id": {
+    "message": "Enter Model Id"
+  },
+  "enter_base_url": {
+    "message": "Enter Base Url, not include /chat/completions"
   }
 }

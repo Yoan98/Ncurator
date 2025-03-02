@@ -18,25 +18,26 @@ export const LSH_PROJECTION_KEY_VALUE = 1; // 本地存储LSH随机向量的key�
 export const MAX_EMBEDDING_WORKER_NUM = 4;
 
 export const enum Connector {
-    File = 1,
-    Crawl
+  File = 1,
+  Crawl
 }
 export const DocumentStatus = globalConstant.DocumentStatus
 export const enum EncodePrefix {
-    SearchDocument = 'search_document',
-    SearchQuery = 'search_query'
+  SearchDocument = 'search_document',
+  SearchQuery = 'search_query'
 }
 export enum MessageType {
-    USER = 'user',
-    ASSISTANT = 'assistant',
+  USER = 'user',
+  ASSISTANT = 'assistant',
 };
 export enum ModelSort {
-    Api = 1,
-    Webllm
+  Api = 1,
+  Webllm
 }
 export const STORAGE_DEFAULT_MODEL_ID = 'defaultModelId'; // localStorage中默认模型id的名称
 export const STORAGE_LOADED_MODEL_IDS = 'loadedModelIds'; // localStorage中
 export const STORAGE_DEPPSEEK_API_INFO = 'deepseekApiInfo'; // localStorage中deepseek的apiKey
+export const STORAGE_USER_PROVIDER_KEY_LIST_NAME = 'userProviderKeyList'; // 用户自定义的providerKey列表的名称
 
 
 export const ZH_STOP_WORDS = '的 一 不 在 人 有 是 为 為 以 于 於 上 他 而 后 後 之 来 來 及 了 因 下 可 到 由 这 這 与 與 也 此 但 并 並 个 個 其 已 无 無 小 我 们 們 起 最 再 今 去 好 只 又 或 很 亦 某 把 那 你 乃 它 吧 被 比 别 趁 当 當 从 從 得 打 凡 儿 兒 尔 爾 该 該 各 给 給 跟 和 何 还 還 即 几 幾 既 看 据 據 距 靠 啦 另 么 麽 每 嘛 拿 哪 您 凭 憑 且 却 卻 让 讓 仍 啥 如 若 使 谁 誰 虽 雖 随 隨 同 所 她 哇 嗡 往 些 向 沿 哟 喲 用 咱 则 則 怎 曾 至 致 着 著 诸 諸 自'.split(' ')
@@ -49,86 +50,159 @@ export const SUCCESS_COLOR = '#52c41a'
 export const UN_TEXT_TAGS = ['script', 'style', 'svg', 'img', 'canvas', 'audio', 'video', 'object', 'embed', 'applet', 'map', 'area']
 
 export const LLM_MODEL_LIST = [
-    // API 模型
-    {
-        id: 'deepseek', // 自定义的,必须唯一
-        sort: ModelSort.Api,
-        isCustom: true,
-        apiKey: '',
-        baseUrl: 'https://api.deepseek.com',
-        name: 'DeepSeek',
-        modelId: '',
-        contextWindowSize: 60000,
-    },
-    {
-        id: 'qwenmax',
-        sort: ModelSort.Api,
-        apiKey: 'sk-da34773d39e948129436839cae2bea4d',
-        baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-        name: 'Qwen-Max',
-        modelId: 'qwen-max-latest',
-        contextWindowSize: 30000,
-    },
-    {
-        id: 'qwenturbo',
-        sort: ModelSort.Api,
-        apiKey: 'sk-da34773d39e948129436839cae2bea4d',
-        baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-        name: 'Qwen-Turbo',
-        modelId: 'qwen-turbo-latest',
-        contextWindowSize: 60000,
-    },
-    // WebLLM 模型
-    {
-        id: 'qwen2.5-3b',
-        sort: ModelSort.Webllm,
-        name: 'Qwen2.5-3B',
-        modelSizeType: 2,
-        modelId: 'Qwen2.5-3B-Instruct-q4f32_1-MLC',
-        wasmFileName: 'Qwen2.5-3B-Instruct-q4f32_1-ctx4k_cs1k-webgpu.wasm',
-        vramRequiredMB: 2893,
-        contextWindowSize: 4096,
-    },
-    {
-        id: 'qwen2.5-7b',
-        sort: ModelSort.Webllm,
-        name: 'Qwen2.5-7B',
-        modelSizeType: 1,
-        modelId: 'Qwen2.5-7B-Instruct-q4f16_1-MLC',
-        wasmFileName: 'Qwen2-7B-Instruct-q4f16_1-ctx4k_cs1k-webgpu.wasm',
-        vramRequiredMB: 5106,
-        contextWindowSize: 4096,
-    },
-    {
-        id: 'lama-3.2-3b',
-        sort: ModelSort.Webllm,
-        name: 'Llama-3.2-3B',
-        modelSizeType: 2,
-        modelId: 'Llama-3.2-3B-Instruct-q4f32_1-MLC',
-        wasmFileName: 'Llama-3.2-3B-Instruct-q4f32_1-ctx4k_cs1k-webgpu.wasm',
-        vramRequiredMB: 2951,
-        contextWindowSize: 4096
+  // API Provider
+  {
+    id: 'deepseek', // 自定义的,必须唯一
+    sort: ModelSort.Api,
+    isCustom: true,
+    apiKey: '',
+    baseUrl: 'https://api.deepseek.com',
+    name: 'DeepSeek',
+    modelId: '',
+    contextWindowSize: 60000,
+    modelList: [
+      {
+        id: 'deepseek-chat',
+        name: 'deepseek-chat',
+      },
+      {
+        id: 'deepseek-reasoner',
+        name: 'deepseek-reasoner',
+      }
+    ]
+  },
+  {
+    id: 'aliyunbailian',
+    sort: ModelSort.Api,
+    isCustom: true,
+    apiKey: '',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    name: 'AliYun',
+    modelId: '',
+    contextWindowSize: 60000,
+    modelList: [
+      {
+        id: 'qwen-max-latest',
+        name: 'qwen-max-latest',
+      },
+      {
+        id: 'qwen-turbo-latest',
+        name: 'qwen-turbo-latest',
+      }
+    ]
+  },
+  {
+    id: 'siliconflow',
+    sort: ModelSort.Api,
+    isCustom: true,
+    apiKey: '',
+    baseUrl: 'https://api.siliconflow.cn/v1',
+    name: 'SiliconFlow',
+    modelId: '',
+    contextWindowSize: 60000,
+    modelList: [
+      {
+        id: 'deepseek-ai/DeepSeek-R1',
+        name: 'deepseek-ai/DeepSeek-R1',
+      },
+      {
+        id: 'deepseek-ai/DeepSeek-V3',
+        name: 'deepseek-ai/DeepSeek-V3',
+      }
+    ]
+  },
+  {
+    id: 'openai',
+    sort: ModelSort.Api,
+    isCustom: true,
+    apiKey: '',
+    baseUrl: 'https://api.openai.com/v1',
+    name: 'OpenAI',
+    modelId: '',
+    contextWindowSize: 60000,
+    modelList: [
+      {
+        id: 'gpt-4',
+        name: 'gpt-4',
+      },
+      {
+        id: 'gpt-4o',
+        name: 'gpt-4o',
+      },
+      {
+        id: 'gpt-4o-mini',
+        name: 'gpt-4o-mini',
+      },
+      {
+        id: 'gpt-3.5-turbo',
+        name: 'gpt-3.5-turbo',
+      },
 
-    },
-    {
-        id: 'llama-3.1-8b',
-        sort: ModelSort.Webllm,
-        name: 'Llama-3.1-8B',
-        modelSizeType: 1,
-        modelId: 'Llama-3.1-8B-Instruct-q4f16_1-MLC',
-        wasmFileName: 'Llama-3_1-8B-Instruct-q4f16_1-ctx4k_cs1k-webgpu.wasm',
-        vramRequiredMB: 5001,
-        contextWindowSize: 4096
+    ]
+  },
+  {
+    id: 'user-custom',
+    sort: ModelSort.Api,
+    isCustom: true,
+    apiKey: '',
+    baseUrl: '',
+    name: 'Custom',
+    modelId: '',
+    contextWindowSize: 60000,
+    modelList: [
+    ]
+  },
+  // WebLLM 模型
+  {
+    id: 'qwen2.5-3b',
+    sort: ModelSort.Webllm,
+    name: 'Qwen2.5-3B',
+    modelSizeType: 2,
+    modelId: 'Qwen2.5-3B-Instruct-q4f32_1-MLC',
+    wasmFileName: 'Qwen2.5-3B-Instruct-q4f32_1-ctx4k_cs1k-webgpu.wasm',
+    vramRequiredMB: 2893,
+    contextWindowSize: 4096,
+  },
+  {
+    id: 'qwen2.5-7b',
+    sort: ModelSort.Webllm,
+    name: 'Qwen2.5-7B',
+    modelSizeType: 1,
+    modelId: 'Qwen2.5-7B-Instruct-q4f16_1-MLC',
+    wasmFileName: 'Qwen2-7B-Instruct-q4f16_1-ctx4k_cs1k-webgpu.wasm',
+    vramRequiredMB: 5106,
+    contextWindowSize: 4096,
+  },
+  {
+    id: 'lama-3.2-3b',
+    sort: ModelSort.Webllm,
+    name: 'Llama-3.2-3B',
+    modelSizeType: 2,
+    modelId: 'Llama-3.2-3B-Instruct-q4f32_1-MLC',
+    wasmFileName: 'Llama-3.2-3B-Instruct-q4f32_1-ctx4k_cs1k-webgpu.wasm',
+    vramRequiredMB: 2951,
+    contextWindowSize: 4096
 
-    },]
+  },
+  {
+    id: 'llama-3.1-8b',
+    sort: ModelSort.Webllm,
+    name: 'Llama-3.1-8B',
+    modelSizeType: 1,
+    modelId: 'Llama-3.1-8B-Instruct-q4f16_1-MLC',
+    wasmFileName: 'Llama-3_1-8B-Instruct-q4f16_1-ctx4k_cs1k-webgpu.wasm',
+    vramRequiredMB: 5001,
+    contextWindowSize: 4096
+
+  },]
 
 export const DEEP_SEEK_MODEL_LIST = [
-    {
-        label: 'deepseek-chat',
-        value: 'deepseek-chat',
-    },
-    {
-        label: 'deepseek-reasoner',
-        value: 'deepseek-reasoner',
-    }
+  {
+    label: 'deepseek-chat',
+    value: 'deepseek-chat',
+  },
+  {
+    label: 'deepseek-reasoner',
+    value: 'deepseek-reasoner',
+  }
 ]

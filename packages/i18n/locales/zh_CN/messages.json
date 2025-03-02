@@ -391,5 +391,11 @@
     },
     "yesterday": {
         "message": "昨天"
+    },
+    "enter_model_id": {
+        "message": "输入模型ID"
+    },
+    "enter_base_url": {
+        "message": "输入url, 不包含/chat/completions"
     }
 }

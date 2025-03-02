@@ -162,7 +162,7 @@ const SearchSection = () => {
         }
     }
     const handleEnterPress = (e) => {
-        // 避免shift+enter换行
+        // shift+enter换行
         if (e.shiftKey) {
             return;
         }
