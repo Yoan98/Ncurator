@@ -306,6 +306,7 @@ export const saveUserProviderKeyInfo = (userProviderKeyInfo: UserProviderKeyInfo
   if (existUserProviderKeyInfo) {
     existUserProviderKeyInfo.apiKey = userProviderKeyInfo.apiKey
     existUserProviderKeyInfo.selectModelId = userProviderKeyInfo.selectModelId
+    existUserProviderKeyInfo.baseUrl = userProviderKeyInfo.baseUrl
   } else {
     userProviderKeyList.push(userProviderKeyInfo)
   }

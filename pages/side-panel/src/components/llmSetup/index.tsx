@@ -275,7 +275,6 @@ const LlmSetup = () => {
 
     const { apiKey, modelId, baseUrl } = apiKeyForm.getFieldsValue() as ApiKeyForm;
 
-
     const userProviderKeyInfo: UserProviderKeyInfo = {
       apiKey,
       selectModelId: modelId,
