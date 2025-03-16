@@ -318,7 +318,7 @@ const LlmSetup = () => {
   }
 
   const loadedModels = allLlmModels.filter((model) => model.isLoaded).map((model) => (
-    <div className="model-item bg-white rounded-md shadow py-3 px-2 space-y-2" key={model.modelId}>
+    <div className="model-item bg-white rounded-md shadow py-3 px-2 space-y-2" key={model.id}>
       <div className="model-item-top flex items-center justify-between">
         <div className="model-item-left flex items-center gap-2">
           <div className="model-name text-base">{model.name}</div>
@@ -351,7 +351,7 @@ const LlmSetup = () => {
     </div >
   ))
   const unloadedModels = allLlmModels.filter((model) => !model.isLoaded).map((model) => (
-    <div className="model-item bg-white rounded-md shadow py-3 px-2 space-y-2" key={model.modelId}>
+    <div className="model-item bg-white rounded-md shadow py-3 px-2 space-y-2" key={model.id}>
       <div className="model-top flex items-center justify-between">
         <div className="model-item-left flex items-center gap-2">
           <div className="model-name text-base">
