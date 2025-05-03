@@ -147,4 +147,4 @@ Made with ❤️ by [Yoan]
 
 *   作者邮箱: xiaoyuan9816@gmail.com
 *   QQ: 891209383
-*   X: [@Yoan98](https://x.com/Yoan_Huang)
+*   X: [Yoan_Huang](https://x.com/Yoan_Huang)
