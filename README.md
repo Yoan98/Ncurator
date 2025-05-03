@@ -61,7 +61,7 @@ Ncurator 的诞生离不开以下优秀开源项目的支持和启发：
 
 1.  **克隆仓库:**
     ```bash
-    git clone https://github.com/your-username/ncurator.git # 请替换为你的仓库地址
+    git clone https://github.com/Yoan98/Ncurator.git
     cd ncurator
     ```
 
@@ -129,3 +129,9 @@ Ncurator 的诞生离不开以下优秀开源项目的支持和启发：
 ---
 
 Made with ❤️ by [Yoan]
+
+## 联系方式
+
+*   作者邮箱: xiaoyuan9816@gmail.com
+*   QQ: 891209383
+*   X: [@Yoan98](https://x.com/Yoan_Huang)

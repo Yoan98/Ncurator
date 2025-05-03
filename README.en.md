@@ -59,7 +59,7 @@ Used to share memory under multi-worker embedding to avoid memory explosion
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/your-username/ncurator.git # Replace with your repository URL
+    git clone https://github.com/Yoan98/Ncurator.git
     cd ncurator
     ```
 
@@ -126,3 +126,9 @@ Please ensure you follow the project's code style and contribution guidelines (i
 ---
 
 Made with ❤️ by Yoan Huang
+
+## Contact
+
+*   Author Email: xiaoyuan9816@gmail.com
+*   QQ: 891209383
+*   X: [@Yoan98](https://x.com/Yoan_Huang)
