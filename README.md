@@ -4,10 +4,23 @@
 [![Documentation](https://img.shields.io/badge/Docs-help.ncurator.com-green)](https://help.ncurator.com/zh/)
 [![English README](./README.en.md)](./README.en.md)
 
-**Ncurator (馆长)** 是一款注重隐私的本地知识库 AI 问答助手，以浏览器插件的形式存在.专注于打造个人知识库且与网页结合的方向。它允许你导入文档、爬取网页,浏览器书签导入等方式，构建属于你自己的知识库。随后，你可以通过 AI 与你的知识进行对话、搜索和分析。所有数据均保存在本地，确保隐私安全。
+**Ncurator (馆长)** 是一款注重隐私的本地知识库 AI 问答助手,以浏览器插件的形式存在,专注于打造个人知识库且与网页结合的方向。
 
-官网：[https://www.ncurator.com/zh](https://www.ncurator.com/zh)
-文档：[https://help.ncurator.com/zh/](https://help.ncurator.com/zh/)
+它允许你导入文档、爬取网页,浏览器书签导入等方式，构建属于你自己的知识库。随后，你可以通过 AI 与你的知识进行对话、搜索和分析。
+
+所有数据均保存在本地，确保隐私安全。
+
+**官网**：[https://www.ncurator.com/zh](https://www.ncurator.com/zh)
+
+**文档**：[https://help.ncurator.com/zh](https://help.ncurator.com/zh)
+
+**Chrome 插件下载**：[https://chromewebstore.google.com/detail/ncurator-your-local-knowl/jdlfflbeekclkgcckcfombmfojmcdeio?hl=zh-CN&utm_source=ext_sidebar](https://chromewebstore.google.com/detail/ncurator-your-local-knowl/jdlfflbeekclkgcckcfombmfojmcdeio?hl=zh-CN&utm_source=ext_sidebar)
+
+**Edge 插件下载**：[https://microsoftedge.microsoft.com/addons/detail/hkdfdbpkmkpooopbkdghecbaipeoijpj](https://microsoftedge.microsoft.com/addons/detail/hkdfdbpkmkpooopbkdghecbaipeoijpj)
+
+**网页版体验**：[https://ai.ncurator.com/](https://ai.ncurator.com/)
+
+**网页版仓库**：[https://github.com/Yoan98/ncurator-web](https://github.com/Yoan98/ncurator-web)
 
 ## 🙏 致谢
 

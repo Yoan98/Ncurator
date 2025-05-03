@@ -6,15 +6,25 @@
 
 **Ncurator** is a privacy-focused local knowledge base AI Q&A assistant, designed as a browser extension. It focuses on building personal knowledge bases and integrating with web pages. It allows you to import documents, crawl webpages, import browser bookmarks, etc., to build your own knowledge base. You can then interact with your knowledge through AI for Q&A, search, and analysis. All data is stored locally, ensuring privacy.
 
-Website: [https://www.ncurator.com/en](https://www.ncurator.com/en)
-Documentation: [https://help.ncurator.com/en/](https://help.ncurator.com/en/)
+**Website**：[https://www.ncurator.com/en](https://www.ncurator.com/en)
+
+**Documentation**：[https://help.ncurator.com/en/](https://help.ncurator.com/en/)
+
+**Chrome Extension Download**：[https://chromewebstore.google.com/detail/ncurator-your-local-knowl/jdlfflbeekclkgcckcfombmfojmcdeio?hl=en](https://chromewebstore.google.com/detail/ncurator-your-local-knowl/jdlfflbeekclkgcckcfombmfojmcdeio?hl=en)
+
+**Edge Extension Download**：[https://microsoftedge.microsoft.com/addons/detail/hkdfdbpkmkpooopbkdghecbaipeoijpj](https://microsoftedge.microsoft.com/addons/detail/hkdfdbpkmkpooopbkdghecbaipeoijpj)
+
+**Web Version Experience**：[https://ai.ncurator.com/](https://ai.ncurator.com/)
+
+**Web Version Repository**：[https://github.com/Yoan98/ncurator-web](https://github.com/Yoan98/ncurator-web)
+
 
 ## 🙏 Acknowledgements
 
 Ncurator's development was made possible and inspired by these excellent open-source projects:
 
 *   **Chrome Extension Framework**: [Jonghakseo/chrome-extension-boilerplate-react-vite](https://github.com/Jonghakseo/chrome-extension-boilerplate-react-vite?tab=readme-ov-file) - An outstanding browser extension template using React + Vite + TypeScript.
-*   **Web LLM**: [mlc-ai/web-llm](https://github.com/mlc-ai/web-llm) - An innovative project bringing LLMs to the browser.
+*   **Web LLM**: [mlc-ai/web-llm](https://github.com/mlc-ai/web-llm) - A new project bringing LLMs to the browser.
 *   **LangChainJS**: [langchain-ai/langchainjs](https://github.com/langchain-ai/langchainjs) - A library for rapidly developing applications like knowledge bases.
 *   **Danswer**: [danswer-ai/danswer](https://github.com/danswer-ai/danswer) - An awesome open-source knowledge base project.
 
@@ -109,7 +119,7 @@ Used to share memory under multi-worker embedding to avoid memory explosion
 
 (The author has been a bit lazy recently, wondering if any developers are interested in contributing. Many thanks!)
 
-## �� Contributing
+## 🤝 Contributing
 
 Contributions of all kinds are welcome! You can:
 
