@@ -27,12 +27,10 @@
 **网页版仓库**：[https://github.com/Yoan98/ncurator-web](https://github.com/Yoan98/ncurator-web)
 
 ## 🎬 Demo 演示
-<p align="center">
-  <video controls width="80%">
-    <source src="./assets/search_demo_zh.mp4" type="video/mp4">
-    抱歉，你的浏览器不支持嵌入式视频。
-  </video>
-</p>
+
+https://github.com/user-attachments/assets/b78a96ff-0925-44e8-a1c4-d405d0eb3bf1
+
+
 
 ## 🙏 致谢
 
