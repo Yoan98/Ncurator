@@ -29,7 +29,7 @@
 ## 🎬 Demo 演示
 <p align="center">
   <video controls width="80%">
-    <source src="./assets/search_demo_zh.webm" type="video/webm">
+    <source src="./assets/search_demo_zh.mp4" type="video/mp4">
     抱歉，你的浏览器不支持嵌入式视频。
   </video>
 </p>
