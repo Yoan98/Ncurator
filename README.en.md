@@ -24,12 +24,9 @@
 
 ## 🎬 Demo
 
-<p align="center">
-  <video controls width="80%">
-    <source src="./assets/search_demo.mp4" type="video/mp4">
-    Sorry, your browser doesn't support embedded videos.
-  </video>
-</p>
+https://github.com/user-attachments/assets/8aec537e-18b9-46bb-bdc3-86c1b51a778d
+
+
 
 ## 🙏 Acknowledgements
 
