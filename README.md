@@ -1,12 +1,16 @@
 # Ncurator (馆长)
 
+<p align="center">
+  <img src="./assets/logo.png" alt="Ncurator Logo" width="150"/>
+</p>
+
 [![Website](https://img.shields.io/badge/Website-ncurator.com-blue)](https://www.ncurator.com/zh)
 [![Documentation](https://img.shields.io/badge/Docs-help.ncurator.com-green)](https://help.ncurator.com/zh/)
-[![English README](./README.en.md)](./README.en.md)
+[![English README](https://img.shields.io/badge/English-README-red)](./README.en.md)
 
 **Ncurator (馆长)** 是一款注重隐私的本地知识库 AI 问答助手,以浏览器插件的形式存在,专注于打造个人知识库且与网页结合的方向。
 
-它允许你导入文档、爬取网页,浏览器书签导入等方式，构建属于你自己的知识库。随后，你可以通过 AI 与你的知识进行对话、搜索和分析。
+它允许你导入文档、爬取网页、浏览器书签导入等方式，构建属于你自己的知识库。随后，你可以通过 AI 与你的知识进行对话、搜索和分析。
 
 所有数据均保存在本地，确保隐私安全。
 
@@ -21,6 +25,14 @@
 **网页版体验**：[https://ai.ncurator.com/](https://ai.ncurator.com/)
 
 **网页版仓库**：[https://github.com/Yoan98/ncurator-web](https://github.com/Yoan98/ncurator-web)
+
+## 🎬 Demo 演示
+<p align="center">
+  <video controls width="80%">
+    <source src="./assets/search_demo_zh.webm" type="video/webm">
+    抱歉，你的浏览器不支持嵌入式视频。
+  </video>
+</p>
 
 ## 🙏 致谢
 
@@ -45,6 +57,11 @@ Ncurator 的诞生离不开以下优秀开源项目的支持和启发：
 *   **离线使用**: 下载模型后可完全离线使用。
 *   **多源导入**: 支持 PDF, DOCX, 网页爬取, 浏览器书签等。
 *   **智能问答**: 基于语义和关键词搜索，智能理解问题并从知识库检索信息。
+
+## 💻 设备配置建议
+
+*   **基本要求**: 8GB 内存或以上即可流畅运行 Ncurator。
+*   **本地大模型 (Local LLM)**: 若需使用本地大语言模型进行 AI 问答，强烈建议你的设备配备独立显卡 (GPU)，以获得更好的性能体验。内存建议 16GB 或以上。
 
 ## 🏗️ 架构图
 
@@ -112,7 +129,7 @@ Ncurator 的诞生离不开以下优秀开源项目的支持和启发：
 └── turbo.json           # Turborepo 配置
 ```
 
-## 下一步
+## 📝 下一步
 - 本地模型支持删除,重新下载
 - 增加豆包，kimi的key，加强配置api key的文档
 - 上传embedding模型功能,让国内用户(没梯子的用户)能用
@@ -141,9 +158,9 @@ Ncurator 的诞生离不开以下优秀开源项目的支持和启发：
 
 ---
 
-Made with ❤️ by [Yoan]
+Made with ❤️ by [Yoan](https://github.com/Yoan98)
 
-## 联系方式
+## 📞 联系方式
 
 *   作者邮箱: xiaoyuan9816@gmail.com
 *   QQ: 891209383

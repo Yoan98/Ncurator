@@ -1,8 +1,12 @@
 # Ncurator
 
+<p align="center">
+  <img src="./assets/logo.png" alt="Ncurator Logo" width="150"/>
+</p>
+
 [![Website](https://img.shields.io/badge/Website-ncurator.com-blue)](https://www.ncurator.com/en)
 [![Documentation](https://img.shields.io/badge/Docs-help.ncurator.com-green)](https://help.ncurator.com/en/)
-[![中文 README](./README.md)](./README.md)
+[![中文 README](https://img.shields.io/badge/中文-README-red)](./README.md)
 
 **Ncurator** is a privacy-focused local knowledge base AI Q&A assistant, designed as a browser extension. It focuses on building personal knowledge bases and integrating with web pages. It allows you to import documents, crawl webpages, import browser bookmarks, etc., to build your own knowledge base. You can then interact with your knowledge through AI for Q&A, search, and analysis. All data is stored locally, ensuring privacy.
 
@@ -18,6 +22,14 @@
 
 **Web Version Repository**：[https://github.com/Yoan98/ncurator-web](https://github.com/Yoan98/ncurator-web)
 
+## 🎬 Demo
+
+<p align="center">
+  <video controls width="80%">
+    <source src="./assets/search_demo.webm" type="video/webm">
+    Sorry, your browser doesn't support embedded videos.
+  </video>
+</p>
 
 ## 🙏 Acknowledgements
 
@@ -40,6 +52,11 @@ Special thanks to the developers and contributors of these projects!
 *   **Offline Use**: Can be used completely offline after downloading the model.
 *   **Multi-source Import**: Supports PDF, DOCX, web crawling, browser bookmarks, Notion, Gmail, Google Drive, etc.
 *   **Intelligent Q&A**: Based on semantic and keyword search, intelligently understands questions and retrieves information from the knowledge base.
+
+## 💻 System Requirements
+
+*   **Basic Requirements**: 8GB of RAM or more is sufficient to smoothly run Ncurator.
+*   **Local LLM**: If you intend to use local large language models for AI Q&A, it is highly recommended that your device has a dedicated graphics card (GPU) for a better performance experience. 16GB of RAM or more is recommended.
 
 ## 🏗️ Architecture Diagram
 
@@ -106,7 +123,7 @@ Used to share memory under multi-worker embedding to avoid memory explosion
 └── turbo.json           # Turborepo config
 ```
 
-## Next Steps
+## 📝 Next Steps
 - Support deleting and re-downloading local models.
 - Add API keys for Doubao (Chinese LLM) and Kimi AI, improve documentation for configuring API keys.
 - Add functionality to upload embedding models, enabling users in China (without VPNs) to use them.
@@ -135,9 +152,9 @@ Please ensure you follow the project's code style and contribution guidelines (i
 
 ---
 
-Made with ❤️ by Yoan Huang
+Made with ❤️ by [Yoan](https://github.com/Yoan98)
 
-## Contact
+## 📞 Contact
 
 *   Author Email: xiaoyuan9816@gmail.com
 *   QQ: 891209383
