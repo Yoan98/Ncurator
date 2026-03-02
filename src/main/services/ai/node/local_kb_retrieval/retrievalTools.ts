@@ -1,8 +1,8 @@
 import { tool } from '@langchain/core/tools'
 import { z } from 'zod/v4'
 import { v4 as uuidv4 } from 'uuid'
-import type { AiRunContext } from '../types'
-import { normalizeForIpc } from '../../../utils/serialization'
+import type { AiRunContext } from '../../types'
+import { normalizeForIpc } from '../../../../utils/serialization'
 
 const MAX_RETRIEVAL_LIMIT = 50
 const MAX_LIST_PAGE_SIZE = 50

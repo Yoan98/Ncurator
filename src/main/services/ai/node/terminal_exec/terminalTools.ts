@@ -3,8 +3,8 @@ import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { tool } from '@langchain/core/tools'
 import { z } from 'zod/v4'
-import type { AiFileArtifactOperation, AiTaskResultCode } from '../../../../shared/types'
-import type { AiRunContext } from '../types'
+import type { AiFileArtifactOperation, AiTaskResultCode } from '../../../../../shared/types'
+import type { AiRunContext } from '../../types'
 import { runTerminalCommand } from './terminalExec'
 import {
   checkWorkspaceBoundary,
@@ -12,7 +12,7 @@ import {
   collectTerminalArtifactCandidates,
   resolveWorkspacePath
 } from './terminalPolicy'
-import { emitFileArtifactEvent } from './fileArtifacts'
+import { emitFileArtifactEvent } from '../../../../utils/fileArtifacts'
 
 type EmitActivityInput = {
   actionType: string
@@ -39,7 +39,9 @@ export type TerminalToolFinishState = {
 }
 
 export type TerminalCapabilityToolsRuntimeState = {
+  /** 已执行命令的步数，用于事件 stepIndex 与回合统计。 */
   stepIndex: number
+  /** terminal_finish 调用后写入的完成态。 */
   finish: TerminalToolFinishState
 }
 

@@ -3,8 +3,8 @@ import { randomUUID } from 'node:crypto'
 import type {
   AiFileArtifactCapability,
   AiFileArtifactOperation
-} from '../../../../shared/types'
-import type { AiRunContext } from '../types'
+} from '../../../../../shared/types'
+import type { AiRunContext } from '../../types'
 
 type EmitFileArtifactEventInput = {
   ctx: AiRunContext

@@ -3,10 +3,10 @@ import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { tool } from '@langchain/core/tools'
 import { z } from 'zod/v4'
-import type { AiTaskResultCode } from '../../../../shared/types'
-import type { AiRunContext } from '../types'
-import { emitFileArtifactEvent } from './fileArtifacts'
-import { resolveWorkspacePath } from './terminalPolicy'
+import type { AiTaskResultCode } from '../../../../../shared/types'
+import type { AiRunContext } from '../../types'
+import { emitFileArtifactEvent } from '../../../../utils/fileArtifacts'
+import { resolveWorkspacePath } from '../terminal_exec/terminalPolicy'
 import { applyDocxEdits, inspectDocx, saveDocxFromText } from './docxAdapters'
 
 type EmitActivityInput = {
@@ -32,9 +32,13 @@ export type DocxToolFinishState = {
 }
 
 export type DocxCapabilityToolsRuntimeState = {
+  /** docx_finish 调用后的完成状态。 */
   finish: DocxToolFinishState
+  /** 当前加载并可编辑的源文件路径（workspace 内绝对路径）。 */
   sourcePath?: string
+  /** 当前内存编辑文本快照。 */
   workingText?: string
+  /** 最近一次成功保存的输出路径。 */
   outputPath?: string
 }
 

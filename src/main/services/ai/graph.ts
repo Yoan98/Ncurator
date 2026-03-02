@@ -5,12 +5,12 @@ import { z } from 'zod/v4'
 import type { AiPlanTask, AiRunContext, AiRunState, AiTaskKind } from './types'
 import { createChatModel } from '../llm/chatModel'
 import { AIMessage, BaseMessage, HumanMessage, SystemMessage } from '@langchain/core/messages'
-import type { AiTaskResultCode, JsonObject } from '../../../shared/types'
-import { asRecord, toString } from '../../utils/decoder'
-import { buildRetrievalTools } from './tools/retrievalTools'
-import { buildTerminalCapabilityTools } from './tools/terminalCapabilityTools'
-import { buildDocxCapabilityTools } from './tools/docxCapabilityTools'
-import { runBoundedLoop } from './tools/boundedLoop'
+import type { AiTaskResultCode, AiTaskToolInput, JsonObject, JsonValue } from '../../../shared/types'
+import { toString } from '../../utils/decoder'
+import { buildRetrievalTools } from './nodes/local_kb_retrieval/retrievalTools'
+import { buildTerminalCapabilityTools } from './nodes/terminal_exec/terminalTools'
+import { buildDocxCapabilityTools } from './nodes/docx/docxTools'
+import { runBoundedLoop } from '../../utils/boundedLoop'
 
 const CAPABILITY_KINDS: AiTaskKind[] = ['local_kb_retrieval', 'terminal_exec', 'docx']
 const MAX_RETRIEVAL_DISPATCH_STEPS = 3
@@ -25,40 +25,47 @@ const MAX_DOCX_STEPS = 8
 const DOCX_LOOP_TIMEOUT_MS = 90000
 const DOCX_SAFE_PREVIEW_CHARS = 1400
 
-type ChatContentChunk = { text?: string }
-
-const getCarrierContent = (value: unknown): unknown => asRecord(value).content
-
-const getCarrierToolCalls = (value: unknown): unknown[] => {
-  const raw = asRecord(value).tool_calls
-  return Array.isArray(raw) ? raw : []
+type MessageContent = BaseMessage['content'] | undefined
+type PlannerTaskEnvelope = { tasks?: JsonValue }
+type ToolNodeInvokeResult = { messages?: BaseMessage[] }
+type PlannerTaskRaw = {
+  id?: string
+  title?: string
+  kind?: string
+  input?: string
+  objective?: string
+  preferredCwd?: string
+  sourcePath?: string
+  outputPath?: string
 }
+type PlannerTaskResult = { satisfied?: boolean; note?: string }
 
-const getToolNodeMessages = (value: unknown): BaseMessage[] => {
-  const raw = asRecord(value).messages
+const getToolNodeMessages = (value: ToolNodeInvokeResult): BaseMessage[] => {
+  const raw = value.messages
   if (!Array.isArray(raw)) return []
   return raw.filter((item): item is BaseMessage => item instanceof BaseMessage)
 }
 
-const toPlannedTask = (value: unknown, index: number): AiPlanTask => {
-  const raw = asRecord(value)
-  const kind = normalizePlannedKind(raw.kind)
-  const normalizedInput = raw.input == null ? undefined : toString(raw.input).trim()
-  const objective = normalizedInput || toString(raw.objective || raw.title || '').trim() || undefined
+const toPlannedTask = (value: PlannerTaskRaw, index: number): AiPlanTask => {
+  const kind = normalizePlannedKind(value.kind)
+  const normalizedInput = value.input == null ? undefined : toString(value.input).trim()
+  const objective = normalizedInput || toString(value.objective || value.title || '').trim() || undefined
   const toolInput =
     objective && kind === 'terminal_exec'
       ? {
           kind: 'terminal_exec' as const,
           objective,
           preferredCwd:
-            raw.preferredCwd == null ? undefined : toString(raw.preferredCwd).trim() || undefined
+            value.preferredCwd == null ? undefined : toString(value.preferredCwd).trim() || undefined
         }
       : objective && kind === 'docx'
         ? {
             kind: 'docx' as const,
             objective,
-            sourcePath: raw.sourcePath == null ? undefined : toString(raw.sourcePath).trim() || undefined,
-            outputPath: raw.outputPath == null ? undefined : toString(raw.outputPath).trim() || undefined
+            sourcePath:
+              value.sourcePath == null ? undefined : toString(value.sourcePath).trim() || undefined,
+            outputPath:
+              value.outputPath == null ? undefined : toString(value.outputPath).trim() || undefined
           }
         : objective && kind === 'local_kb_retrieval'
           ? {
@@ -68,8 +75,8 @@ const toPlannedTask = (value: unknown, index: number): AiPlanTask => {
           : undefined
 
   return {
-    id: toString(raw.id || `task-${index + 1}`),
-    title: toString(raw.title || 'Task'),
+    id: toString(value.id || `task-${index + 1}`),
+    title: toString(value.title || 'Task'),
     kind,
     input: normalizedInput,
     toolInput,
@@ -94,25 +101,33 @@ const parseJsonObject = <T extends JsonObject>(text: string): T => {
   throw new Error('无法解析 JSON 输出')
 }
 
-const getMessageText = (content: unknown): string => {
+const getMessageText = (content: MessageContent): string => {
   if (typeof content === 'string') return content
   if (!Array.isArray(content)) return String(content ?? '')
 
   return content
     .map((chunk) => {
       if (typeof chunk === 'string') return chunk
-      const c = asRecord(chunk) as ChatContentChunk
-      if (typeof c?.text === 'string') return c.text
+      if ('text' in chunk && typeof chunk.text === 'string') return chunk.text
       return ''
     })
     .join('\n')
+}
+
+const getToolCalls = (message: AIMessage) => {
+  return Array.isArray(message.tool_calls) ? message.tool_calls : []
+}
+
+const isJsonObject = (value: JsonValue | undefined): value is JsonObject => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  return true
 }
 
 const isKnownCapabilityKind = (kind: string): kind is AiTaskKind => {
   return CAPABILITY_KINDS.includes(kind as AiTaskKind)
 }
 
-const normalizePlannedKind = (kind: unknown): string => {
+const normalizePlannedKind = (kind?: string): string => {
   const value = String(kind || '').trim()
   if (!value) return 'local_kb_retrieval'
   if (isKnownCapabilityKind(value)) return value
@@ -130,6 +145,37 @@ const inferHeuristicKind = (input: string): AiTaskKind => {
   return 'local_kb_retrieval'
 }
 
+const taskToolInputSchema: z.ZodType<AiTaskToolInput> = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('local_kb_retrieval'),
+    objective: z.string()
+  }),
+  z.object({
+    kind: z.literal('terminal_exec'),
+    objective: z.string(),
+    preferredCwd: z.string().optional()
+  }),
+  z.object({
+    kind: z.literal('docx'),
+    objective: z.string(),
+    sourcePath: z.string().optional(),
+    outputPath: z.string().optional()
+  })
+])
+
+const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(jsonValueSchema),
+    z.record(z.string(), jsonValueSchema)
+  ])
+)
+
+const jsonObjectSchema: z.ZodType<JsonObject> = z.record(z.string(), jsonValueSchema)
+
 const createAiRunStateSchema = () =>
   // Keep state schema permissive enough for graph transitions while maintaining task shape.
   new StateSchema({
@@ -144,7 +190,7 @@ const createAiRunStateSchema = () =>
           title: z.string(),
           kind: z.string(),
           input: z.string().optional(),
-          toolInput: z.any().optional(),
+          toolInput: taskToolInputSchema.optional(),
           status: z.enum(['pending', 'running', 'completed', 'failed']),
           attempts: z.number(),
           error: z.string().optional(),
@@ -159,7 +205,7 @@ const createAiRunStateSchema = () =>
             ])
             .optional(),
           resultMessage: z.string().optional(),
-          resultData: z.any().optional()
+          resultData: jsonObjectSchema.optional()
         })
       )
       .default(() => []),
@@ -199,7 +245,7 @@ const ensurePlan = async (ctx: AiRunContext, state: AiRunState): Promise<AiPlanT
 
   try {
     const history = await ctx.loadHistory()
-    const json = await ctx.chatJson({
+    const json = await ctx.chatJson<PlannerTaskEnvelope>({
       system: [
         'You are a planning host for a desktop AI runtime.',
         'Output JSON only as: {"tasks":[{"id":"...","title":"...","kind":"local_kb_retrieval"|"terminal_exec"|"docx","input":"task objective text","objective":"optional richer objective","sourcePath":"optional .docx source","outputPath":"optional .docx output"}]}.',
@@ -210,10 +256,12 @@ const ensurePlan = async (ctx: AiRunContext, state: AiRunState): Promise<AiPlanT
       temperature: 0.1
     })
 
-    if (!Array.isArray(json?.tasks)) return heuristic
+    const rawTasks = Array.isArray(json.tasks) ? json.tasks : []
+    if (rawTasks.length === 0) return heuristic
 
-    const mapped: AiPlanTask[] = json.tasks
-      .map((task, i) => toPlannedTask(task, i))
+    const mapped: AiPlanTask[] = rawTasks
+      .filter(isJsonObject)
+      .map((task, i) => toPlannedTask(task as PlannerTaskRaw, i))
       .filter((t) => Boolean(t.id && t.title))
 
     return mapped
@@ -240,9 +288,9 @@ const buildHostFinalAnswer = async (ctx: AiRunContext, state: AiRunState): Promi
         `用户输入:\n${state.input}\n\n计划执行情况:\n${planText || '无计划任务'}\n\n已知结论:\n${String(state.outputText || '').trim() || '无'}\n\n请直接给最终答复。`
       )
     ])
-    const text = getMessageText(getCarrierContent(res)).trim()
+    const text = getMessageText(res.content).trim()
     if (text) return text
-  } catch (e: unknown) {
+  } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     if (msg.toLowerCase().includes('cancel')) throw e
   }
@@ -446,17 +494,17 @@ const executeLocalKbRetrieval: CapabilityExecutor = async (ctx, state, task) => 
     lastAi = ai
     messages.push(ai)
 
-    const toolCalls = getCarrierToolCalls(ai)
+    const toolCalls = getToolCalls(ai)
     if (toolCalls.length > 0) {
-      const out = await toolNode.invoke({ messages: [ai] })
+      const out = (await toolNode.invoke({ messages: [ai] })) as ToolNodeInvokeResult
       const toolMessages = getToolNodeMessages(out)
       messages.push(...toolMessages)
       continue
     }
 
-    const content = getMessageText(getCarrierContent(ai))
+    const content = getMessageText(ai.content)
     try {
-      const json = parseJsonObject<{ satisfied?: boolean; note?: string }>(content)
+      const json = parseJsonObject<PlannerTaskResult>(content)
       satisfied = Boolean(json?.satisfied)
       note = String(json?.note || '')
     } catch (e) {
@@ -501,7 +549,7 @@ const executeLocalKbRetrieval: CapabilityExecutor = async (ctx, state, task) => 
   return {
     plan,
     activeTaskId: undefined,
-    outputText: note || getMessageText(getCarrierContent(lastAi)) || state.outputText
+    outputText: note || getMessageText(lastAi?.content) || state.outputText
   }
 }
 
@@ -583,9 +631,9 @@ const executeTerminalExec: CapabilityExecutor = async (ctx, state, task) => {
       ctx.checkCancelled()
       const ai = (await model.invoke(messages)) as AIMessage
       messages.push(ai)
-      const toolCalls = getCarrierToolCalls(ai)
+      const toolCalls = getToolCalls(ai)
       if (toolCalls.length === 0) {
-        const rawText = getMessageText(getCarrierContent(ai)).trim()
+        const rawText = getMessageText(ai.content).trim()
         return {
           done: true as const,
           value: {
@@ -596,7 +644,7 @@ const executeTerminalExec: CapabilityExecutor = async (ctx, state, task) => {
         }
       }
 
-      const out = await toolNode.invoke({ messages: [ai] })
+      const out = (await toolNode.invoke({ messages: [ai] })) as ToolNodeInvokeResult
       const toolMessages = getToolNodeMessages(out)
       messages.push(...toolMessages)
 
@@ -769,9 +817,9 @@ const executeDocxCapability: CapabilityExecutor = async (ctx, state, task) => {
       ctx.checkCancelled()
       const ai = (await model.invoke(messages)) as AIMessage
       messages.push(ai)
-      const toolCalls = getCarrierToolCalls(ai)
+      const toolCalls = getToolCalls(ai)
       if (toolCalls.length === 0) {
-        const rawText = getMessageText(getCarrierContent(ai)).trim()
+        const rawText = getMessageText(ai.content).trim()
         return {
           done: true as const,
           value: {
@@ -782,7 +830,7 @@ const executeDocxCapability: CapabilityExecutor = async (ctx, state, task) => {
         }
       }
 
-      const out = await toolNode.invoke({ messages: [ai] })
+      const out = (await toolNode.invoke({ messages: [ai] })) as ToolNodeInvokeResult
       const toolMessages = getToolNodeMessages(out)
       messages.push(...toolMessages)
 
