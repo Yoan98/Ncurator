@@ -18,5 +18,5 @@ schema: spec-driven
 #     tasks:
 #       - Break tasks into chunks of max 2 hours
 context: |
-  language: english
-  all documents related content should be written in english.
+  language: Chinese(simplified)
+  all documents related content should be written in Chinese(simplified).
