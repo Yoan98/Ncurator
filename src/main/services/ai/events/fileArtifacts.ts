@@ -1,10 +1,7 @@
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
-import type {
-  AiFileArtifactCapability,
-  AiFileArtifactOperation
-} from '../../../../../shared/types'
-import type { AiRunContext } from '../../types'
+import type { AiFileArtifactCapability, AiFileArtifactOperation } from '../../../../shared/types'
+import type { AiRunContext } from '../types'
 
 type EmitFileArtifactEventInput = {
   ctx: AiRunContext

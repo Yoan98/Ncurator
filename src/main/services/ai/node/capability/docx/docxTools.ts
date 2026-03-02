@@ -3,9 +3,9 @@ import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { tool } from '@langchain/core/tools'
 import { z } from 'zod/v4'
-import type { AiTaskResultCode } from '../../../../../shared/types'
-import type { AiRunContext } from '../../types'
-import { emitFileArtifactEvent } from '../../../../utils/fileArtifacts'
+import type { AiTaskResultCode } from '../../../../../../shared/types'
+import type { AiRunContext } from '../../../types'
+import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
 import { resolveWorkspacePath } from '../terminal_exec/terminalPolicy'
 import { applyDocxEdits, inspectDocx, saveDocxFromText } from './docxAdapters'
 
@@ -122,7 +122,12 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
     return toolCallId
   }
 
-  const emitResult = (toolName: string, toolCallId: string, outputPreview: unknown, error?: string) => {
+  const emitResult = (
+    toolName: string,
+    toolCallId: string,
+    outputPreview: unknown,
+    error?: string
+  ) => {
     input.ctx.sendEvent({
       type: 'tool_call_result',
       runId: input.runId,

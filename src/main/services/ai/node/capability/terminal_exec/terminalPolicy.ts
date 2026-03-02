@@ -1,5 +1,5 @@
 import path from 'node:path'
-import type { AiFileArtifactOperation } from '../../../../../shared/types'
+import type { AiFileArtifactOperation } from '../../../../../../shared/types'
 
 export const isPathInsideRoot = (candidatePath: string, rootPath: string) => {
   const root = path.resolve(rootPath)
@@ -154,9 +154,11 @@ const detectSegmentArtifacts = (segment: string): TerminalArtifactCandidate[] =>
   if (tokens.length === 0) return []
 
   const first = String(tokens[0] || '').toLowerCase()
-  const candidates: TerminalArtifactCandidate[] = extractRedirectionPaths(tokens).map((rawPath) => ({
-    rawPath
-  }))
+  const candidates: TerminalArtifactCandidate[] = extractRedirectionPaths(tokens).map(
+    (rawPath) => ({
+      rawPath
+    })
+  )
   const args = pickNonOptionArgs(tokens)
 
   if (first === 'touch' || first === 'mkdir') {

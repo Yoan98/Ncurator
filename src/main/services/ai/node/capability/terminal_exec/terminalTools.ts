@@ -3,8 +3,8 @@ import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { tool } from '@langchain/core/tools'
 import { z } from 'zod/v4'
-import type { AiFileArtifactOperation, AiTaskResultCode } from '../../../../../shared/types'
-import type { AiRunContext } from '../../types'
+import type { AiFileArtifactOperation, AiTaskResultCode } from '../../../../../../shared/types'
+import type { AiRunContext } from '../../../types'
 import { runTerminalCommand } from './terminalExec'
 import {
   checkWorkspaceBoundary,
@@ -12,7 +12,7 @@ import {
   collectTerminalArtifactCandidates,
   resolveWorkspacePath
 } from './terminalPolicy'
-import { emitFileArtifactEvent } from '../../../../utils/fileArtifacts'
+import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
 
 type EmitActivityInput = {
   actionType: string
@@ -123,16 +123,14 @@ const mergeArtifactCandidates = (input: {
 
   return Array.from(merged.entries()).map(([resolvedPath, meta]) => ({
     resolvedPath,
-    summary: meta.summary || `terminal command produced/updated file: ${path.basename(resolvedPath)}`,
+    summary:
+      meta.summary || `terminal command produced/updated file: ${path.basename(resolvedPath)}`,
     requestedOperation: meta.requestedOperation,
     existedBefore: fs.existsSync(resolvedPath)
   }))
 }
 
-const resolveCwd = (input: {
-  workspaceRootPath: string
-  requestedCwd?: string
-}): string | null => {
+const resolveCwd = (input: { workspaceRootPath: string; requestedCwd?: string }): string | null => {
   const root = path.resolve(input.workspaceRootPath)
   const requested = String(input.requestedCwd || '').trim()
   if (!requested) return root
@@ -166,7 +164,12 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
     return toolCallId
   }
 
-  const emitResult = (toolName: string, toolCallId: string, outputPreview: unknown, error?: string) => {
+  const emitResult = (
+    toolName: string,
+    toolCallId: string,
+    outputPreview: unknown,
+    error?: string
+  ) => {
     input.ctx.sendEvent({
       type: 'tool_call_result',
       runId: input.runId,
@@ -324,7 +327,8 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
         const artifacts: Array<{ path: string; operation: AiFileArtifactOperation }> = []
         for (const artifact of artifactCandidates) {
           if (!fs.existsSync(artifact.resolvedPath)) continue
-          const operation = artifact.requestedOperation || (artifact.existedBefore ? 'updated' : 'created')
+          const operation =
+            artifact.requestedOperation || (artifact.existedBefore ? 'updated' : 'created')
           const emitted = emitFileArtifactEvent({
             ctx: input.ctx,
             runId: input.runId,

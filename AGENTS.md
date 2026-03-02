@@ -45,6 +45,7 @@
 当涉及到数据库时，请阅读 `doc/database.md`
 当涉及到 AI 架构（LangGraph 运行图、能力节点、事件流、工作区沙箱）时，请阅读 `doc/ai-architecture.md`
 当涉及到 UI 样式时，请阅读 `doc/ui-style.md`
+当涉及到目录规范、文件归位、模块分层时，请阅读 `doc/project-structure.md`
 
 ### 数据库操作约束（Main Process）
 
@@ -68,7 +69,6 @@
 ## 5. TypeScript `any` / `unknown` 使用规范
 
 - 禁止使用 `any` 与 `unknown`
-
 
 ## 6. UI/UX 注意事项
 

@@ -36,7 +36,10 @@ const splitParagraphs = (text: string): string[] => {
     .filter(Boolean)
 }
 
-export const inspectDocx = async (sourcePath: string, previewChars = 1800): Promise<DocxInspection> => {
+export const inspectDocx = async (
+  sourcePath: string,
+  previewChars = 1800
+): Promise<DocxInspection> => {
   const result = await mammoth.extractRawText({ path: sourcePath })
   const text = String(result.value || '')
   const paragraphs = splitParagraphs(text)
@@ -114,7 +117,9 @@ export const saveDocxFromText = async (input: {
     sections: [
       {
         children:
-          paragraphs.length > 0 ? paragraphs.map((line) => new Paragraph(line)) : [new Paragraph('')]
+          paragraphs.length > 0
+            ? paragraphs.map((line) => new Paragraph(line))
+            : [new Paragraph('')]
       }
     ]
   })

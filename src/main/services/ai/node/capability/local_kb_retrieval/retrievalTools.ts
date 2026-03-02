@@ -1,8 +1,8 @@
 import { tool } from '@langchain/core/tools'
 import { z } from 'zod/v4'
 import { v4 as uuidv4 } from 'uuid'
-import type { AiRunContext } from '../../types'
-import { normalizeForIpc } from '../../../../utils/serialization'
+import type { AiRunContext } from '../../../types'
+import { normalizeForIpc } from '../../../../../utils/serialization'
 
 const MAX_RETRIEVAL_LIMIT = 50
 const MAX_LIST_PAGE_SIZE = 50
@@ -14,7 +14,10 @@ const previewArray = <T>(rows: T[], max = 3): T[] => {
 
 const toStringIdList = (value: unknown): string[] => {
   if (!Array.isArray(value)) return []
-  return value.map(String).map((v) => v.trim()).filter(Boolean)
+  return value
+    .map(String)
+    .map((v) => v.trim())
+    .filter(Boolean)
 }
 
 const resolveScopedDocumentIds = (
@@ -81,8 +84,12 @@ export const buildRetrievalTools = (input: {
         ctx.checkCancelled()
         const queryText = String(args.queryText || '').trim()
         const limit = Math.max(1, Math.min(MAX_RETRIEVAL_LIMIT, Number(args.limit ?? 10)))
-        const filter = args.sourceType && args.sourceType !== 'all' ? String(args.sourceType) : undefined
-        const scopedDocumentIds = resolveScopedDocumentIds(ctx.selectedDocumentIds, args.documentIds)
+        const filter =
+          args.sourceType && args.sourceType !== 'all' ? String(args.sourceType) : undefined
+        const scopedDocumentIds = resolveScopedDocumentIds(
+          ctx.selectedDocumentIds,
+          args.documentIds
+        )
         if (Array.isArray(scopedDocumentIds) && scopedDocumentIds.length === 0) {
           emitResult(toolName, toolCallId, [])
           return []
@@ -125,8 +132,12 @@ export const buildRetrievalTools = (input: {
         ctx.checkCancelled()
         const queryText = String(args.queryText || '').trim()
         const limit = Math.max(1, Math.min(MAX_RETRIEVAL_LIMIT, Number(args.limit ?? 10)))
-        const filter = args.sourceType && args.sourceType !== 'all' ? String(args.sourceType) : undefined
-        const scopedDocumentIds = resolveScopedDocumentIds(ctx.selectedDocumentIds, args.documentIds)
+        const filter =
+          args.sourceType && args.sourceType !== 'all' ? String(args.sourceType) : undefined
+        const scopedDocumentIds = resolveScopedDocumentIds(
+          ctx.selectedDocumentIds,
+          args.documentIds
+        )
         if (Array.isArray(scopedDocumentIds) && scopedDocumentIds.length === 0) {
           emitResult(toolName, toolCallId, [])
           return []
@@ -168,8 +179,12 @@ export const buildRetrievalTools = (input: {
         ctx.checkCancelled()
         const queryText = String(args.queryText || '').trim()
         const limit = Math.max(1, Math.min(MAX_RETRIEVAL_LIMIT, Number(args.limit ?? 10)))
-        const filter = args.sourceType && args.sourceType !== 'all' ? String(args.sourceType) : undefined
-        const scopedDocumentIds = resolveScopedDocumentIds(ctx.selectedDocumentIds, args.documentIds)
+        const filter =
+          args.sourceType && args.sourceType !== 'all' ? String(args.sourceType) : undefined
+        const scopedDocumentIds = resolveScopedDocumentIds(
+          ctx.selectedDocumentIds,
+          args.documentIds
+        )
         if (Array.isArray(scopedDocumentIds) && scopedDocumentIds.length === 0) {
           emitResult(toolName, toolCallId, [])
           return []
@@ -211,7 +226,10 @@ export const buildRetrievalTools = (input: {
         const keyword = String(args.keyword || '').trim() || undefined
         const page = Math.max(1, Number(args.page ?? 1))
         const pageSize = Math.max(1, Math.min(MAX_LIST_PAGE_SIZE, Number(args.pageSize ?? 20)))
-        const scopedDocumentIds = resolveScopedDocumentIds(ctx.selectedDocumentIds, args.documentIds)
+        const scopedDocumentIds = resolveScopedDocumentIds(
+          ctx.selectedDocumentIds,
+          args.documentIds
+        )
 
         if (Array.isArray(scopedDocumentIds) && scopedDocumentIds.length === 0) {
           const empty = { items: [], total: 0 }
