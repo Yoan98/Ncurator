@@ -3,7 +3,7 @@ import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { tool } from '@langchain/core/tools'
 import { z } from 'zod/v4'
-import type { AiTaskResultCode } from '../../../../../../shared/types'
+import type { AiTaskResultCode, IpcJsonObject, IpcJsonValue } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
 import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
 import { resolveWorkspacePath } from '../terminal_exec/terminalPolicy'
@@ -108,7 +108,7 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
 
   const workspaceRootPath = path.resolve(input.workspaceRootPath)
 
-  const emitStarted = (toolName: string, args: unknown) => {
+  const emitStarted = (toolName: string, args: IpcJsonObject) => {
     const toolCallId = randomUUID()
     input.ctx.sendEvent({
       type: 'tool_call_started',
@@ -125,7 +125,7 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
   const emitResult = (
     toolName: string,
     toolCallId: string,
-    outputPreview: unknown,
+    outputPreview: IpcJsonValue,
     error?: string
   ) => {
     input.ctx.sendEvent({
@@ -195,7 +195,7 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
           summary: `文档解析完成: ${inspection.paragraphCount} 段`
         })
         return out
-      } catch (error: unknown) {
+      } catch (error) {
         const msg = error instanceof Error ? error.message : String(error)
         emitResult(toolName, toolCallId, { ok: false, code: 'failed', error: msg }, msg)
         input.emitActivity({
@@ -279,7 +279,7 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
           summary: `文档编辑完成: ${applied.appliedCount} 条已应用`
         })
         return out
-      } catch (error: unknown) {
+      } catch (error) {
         const msg = error instanceof Error ? error.message : String(error)
         emitResult(toolName, toolCallId, { ok: false, code: 'failed', error: msg }, msg)
         input.emitActivity({
@@ -403,7 +403,7 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
           summary: `保存完成: ${path.basename(outputPath)}`
         })
         return out
-      } catch (error: unknown) {
+      } catch (error) {
         const msg = error instanceof Error ? error.message : String(error)
         emitResult(toolName, toolCallId, { ok: false, code: 'failed', error: msg }, msg)
         input.emitActivity({

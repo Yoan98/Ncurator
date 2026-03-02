@@ -3,7 +3,12 @@ import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { tool } from '@langchain/core/tools'
 import { z } from 'zod/v4'
-import type { AiFileArtifactOperation, AiTaskResultCode } from '../../../../../../shared/types'
+import type {
+  AiFileArtifactOperation,
+  AiTaskResultCode,
+  IpcJsonObject,
+  IpcJsonValue
+} from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
 import { runTerminalCommand } from './terminalExec'
 import {
@@ -150,7 +155,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
     }
   }
 
-  const emitStarted = (toolName: string, args: unknown) => {
+  const emitStarted = (toolName: string, args: IpcJsonObject) => {
     const toolCallId = randomUUID()
     input.ctx.sendEvent({
       type: 'tool_call_started',
@@ -167,7 +172,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
   const emitResult = (
     toolName: string,
     toolCallId: string,
-    outputPreview: unknown,
+    outputPreview: IpcJsonValue,
     error?: string
   ) => {
     input.ctx.sendEvent({
@@ -372,7 +377,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
         }
         emitResult(toolName, toolCallId, output, stepError)
         return output
-      } catch (error: unknown) {
+      } catch (error) {
         const msg = error instanceof Error ? error.message : String(error)
         emitResult(toolName, toolCallId, { ok: false, code: 'failed', error: msg }, msg)
         throw error

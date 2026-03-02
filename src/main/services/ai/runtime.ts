@@ -52,9 +52,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     return cfg
   }
 
-  const chatJson: AiRunContext['chatJson'] = async <T extends JsonObject>(
-    input
-  ): Promise<T> => {
+  const chatJson: AiRunContext['chatJson'] = async <T extends JsonObject>(input): Promise<T> => {
     checkCancelled()
     const { system, user, temperature } = input
     const cfg = await getActiveConfig()

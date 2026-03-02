@@ -5,6 +5,10 @@ export type JsonPrimitive = string | number | boolean | null
 export type JsonValue = JsonPrimitive | JsonObject | JsonArray
 export type JsonObject = { [key: string]: JsonValue }
 export type JsonArray = JsonValue[]
+export type IpcJsonPrimitive = JsonPrimitive
+export type IpcJsonObject = object
+export type IpcJsonArray = IpcJsonValue[]
+export type IpcJsonValue = IpcJsonPrimitive | IpcJsonObject | IpcJsonArray
 
 export interface WebIngestPayload {
   url: string
@@ -224,7 +228,7 @@ export type AiRunEvent =
       taskId?: string
       toolCallId: string
       toolName: string
-      input: unknown
+      input: IpcJsonObject
       createdAt: number
     }
   | {
@@ -233,7 +237,7 @@ export type AiRunEvent =
       taskId?: string
       toolCallId: string
       toolName: string
-      outputPreview: unknown
+      outputPreview: IpcJsonValue
       completedAt: number
       error?: string
     }

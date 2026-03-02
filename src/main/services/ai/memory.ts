@@ -1,5 +1,5 @@
 import { HumanMessage, SystemMessage } from '@langchain/core/messages'
-import type { ChatSessionMemory, JsonObject } from '../../types/store'
+import type { ChatSessionMemory, JsonObject, JsonValue } from '../../types/store'
 import type { ChatStore } from '../storage/domains/ChatStore'
 import type { LlmConfigStore } from '../storage/domains/LlmConfigStore'
 import { createChatModel } from '../llm/chatModel'
@@ -20,10 +20,11 @@ const parseJsonObject = <T extends JsonObject>(text: string): T => {
   throw new Error('无法解析 JSON 输出')
 }
 
-const normalizeMemory = (input: unknown): ChatSessionMemory => {
-  const obj: Record<string, unknown> = input && typeof input === 'object' ? (input as Record<string, unknown>) : {}
-  const toList = (v: unknown) =>
-    (Array.isArray(v) ? v : []).map((x) => String(x || '').trim()).filter(Boolean)
+const toList = (value: JsonValue | undefined): string[] =>
+  (Array.isArray(value) ? value : []).map((item) => String(item || '').trim()).filter(Boolean)
+
+const normalizeMemory = (input: JsonValue | undefined): ChatSessionMemory => {
+  const obj: JsonObject = input && typeof input === 'object' && !Array.isArray(input) ? input : {}
   return {
     summary: String(obj.summary || '').trim(),
     openTasks: toList(obj.openTasks).slice(0, 20),

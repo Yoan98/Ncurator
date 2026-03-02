@@ -31,7 +31,7 @@ export const emitFileArtifactEvent = (input: EmitFileArtifactEventInput): boolea
       createdAt: Date.now()
     })
     return true
-  } catch (error: unknown) {
+  } catch (error) {
     const msg = error instanceof Error ? error.message : String(error)
     input.onNonFatalError?.(`artifact event failed: ${msg}`)
     return false

@@ -1,6 +1,7 @@
 import { tool } from '@langchain/core/tools'
 import { z } from 'zod/v4'
 import { v4 as uuidv4 } from 'uuid'
+import type { IpcJsonObject, IpcJsonValue } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
 import { normalizeForIpc } from '../../../../../utils/serialization'
 
@@ -12,17 +13,14 @@ const previewArray = <T>(rows: T[], max = 3): T[] => {
   return list.slice(0, Math.max(0, max))
 }
 
-const toStringIdList = (value: unknown): string[] => {
+const toStringIdList = (value: string[] | undefined): string[] => {
   if (!Array.isArray(value)) return []
-  return value
-    .map(String)
-    .map((v) => v.trim())
-    .filter(Boolean)
+  return value.map((item) => String(item).trim()).filter(Boolean)
 }
 
 const resolveScopedDocumentIds = (
-  runScopedIds: unknown,
-  requestedIds: unknown
+  runScopedIds: string[] | undefined,
+  requestedIds: string[] | undefined
 ): string[] | null => {
   const runScope = toStringIdList(runScopedIds)
   const requested = toStringIdList(requestedIds)
@@ -44,7 +42,7 @@ export const buildRetrievalTools = (input: {
 }) => {
   const { ctx, runId, taskId } = input
 
-  const emitStarted = (toolName: string, args: unknown) => {
+  const emitStarted = (toolName: string, args: IpcJsonObject) => {
     const toolCallId = uuidv4()
     ctx.sendEvent({
       type: 'tool_call_started',
@@ -61,7 +59,7 @@ export const buildRetrievalTools = (input: {
   const emitResult = (
     toolName: string,
     toolCallId: string,
-    outputPreview: unknown,
+    outputPreview: IpcJsonValue,
     error?: string
   ) => {
     ctx.sendEvent({
@@ -106,7 +104,7 @@ export const buildRetrievalTools = (input: {
         const normalized = rows.map(normalizeForIpc)
         emitResult(toolName, toolCallId, previewArray(normalized))
         return normalized
-      } catch (e: unknown) {
+      } catch (e) {
         const msg = e instanceof Error ? e.message : String(e)
         emitResult(toolName, toolCallId, [], msg)
         throw e
@@ -153,7 +151,7 @@ export const buildRetrievalTools = (input: {
         const normalized = rows.map(normalizeForIpc)
         emitResult(toolName, toolCallId, previewArray(normalized))
         return normalized
-      } catch (e: unknown) {
+      } catch (e) {
         const msg = e instanceof Error ? e.message : String(e)
         emitResult(toolName, toolCallId, [], msg)
         throw e
@@ -199,7 +197,7 @@ export const buildRetrievalTools = (input: {
         const normalized = rows.map(normalizeForIpc)
         emitResult(toolName, toolCallId, previewArray(normalized))
         return normalized
-      } catch (e: unknown) {
+      } catch (e) {
         const msg = e instanceof Error ? e.message : String(e)
         emitResult(toolName, toolCallId, [], msg)
         throw e
@@ -248,7 +246,7 @@ export const buildRetrievalTools = (input: {
         const normalized = { items, total: items.length }
         emitResult(toolName, toolCallId, previewArray(items))
         return normalized
-      } catch (e: unknown) {
+      } catch (e) {
         const msg = e instanceof Error ? e.message : String(e)
         emitResult(toolName, toolCallId, { items: [], total: 0 }, msg)
         throw e

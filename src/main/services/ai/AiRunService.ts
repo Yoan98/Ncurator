@@ -26,7 +26,7 @@ export class AiRunService {
         plan: []
       } as AiRunState)
       return res as AiRunState
-    } catch (e: unknown) {
+    } catch (e) {
       const err = e as { code?: string; message?: string }
       if (
         err.code === 'CANCELLED' ||
