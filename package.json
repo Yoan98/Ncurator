@@ -22,11 +22,6 @@
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
-    "@blocknote/core": "^0.29.0",
-    "@blocknote/mantine": "^0.29.0",
-    "@blocknote/react": "^0.29.0",
-    "@blocknote/xl-docx-exporter": "^0.29.0",
-    "@blocknote/xl-pdf-exporter": "^0.29.0",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@huggingface/transformers": "^3.8.1",

@@ -1,6 +1,6 @@
-# NCurator-Desktop（Codex 项目规则）
+# NCurator-Desktop（AI 项目规则）
 
-> 说明：本文件用于让 Codex 在后续生成/修改代码时遵循本项目的约束与约定。
+> 说明：本文件用于让 AI在后续生成/修改代码时遵循本项目的约束与约定。
 
 ## 1. 技术栈与版本
 
@@ -42,8 +42,8 @@
 
 ## 3. 文档引用
 
-当涉及到数据库时，请阅读 `doc/database.md`  
-当涉及到 AI 架构（LangGraph 运行图、能力节点、事件流、工作区沙箱）时，请阅读 `doc/ai-architecture.md`  
+当涉及到数据库时，请阅读 `doc/database.md`
+当涉及到 AI 架构（LangGraph 运行图、能力节点、事件流、工作区沙箱）时，请阅读 `doc/ai-architecture.md`
 当涉及到 UI 样式时，请阅读 `doc/ui-style.md`
 
 ### 数据库操作约束（Main Process）
@@ -67,15 +67,8 @@
 
 ## 5. TypeScript `any` / `unknown` 使用规范
 
-- 默认禁止使用 `any`；优先使用明确接口、联合类型、泛型、`unknown + type guard`、zod/decoder 收敛。
-- `unknown` 只允许出现在边界层入参：
-  - IPC 边界、外部库动态数据、数据库原始行、`JSON.parse`、`catch`。
-- `unknown` 必须在同一适配函数内完成窄化，禁止透传到业务层/领域层。
-- 仅当**确实无法定义类型**时才允许局部 `any`，且必须同时满足：
-  1. 作用域最小化（仅限单个适配函数/局部变量）。
-  2. 在同一代码块内完成显式窄化，不得扩散到业务层。
-  3. 添加简短注释说明：为何无法定义、临时方案、后续替换方向。
-- 禁止无注释的 `as unknown as` 双重断言；如必须使用，需附原因注释并在同文件内给出替代计划。
+- 禁止使用 `any` 与 `unknown`
+
 
 ## 6. UI/UX 注意事项
 
