@@ -23,7 +23,11 @@ export class AiRunService {
         sessionId: payload.sessionId,
         status: 'running',
         input: String(payload.input || ''),
-        plan: []
+        plan: [],
+        hostLoopStartedAt: Date.now(),
+        hostDecisionRounds: 0,
+        contextEnrichmentRounds: 0,
+        contextEvidence: []
       } as AiRunState)
       return res as AiRunState
     } catch (e) {
@@ -40,6 +44,10 @@ export class AiRunService {
           status: 'cancelled',
           input: payload.input,
           plan: [],
+          hostLoopStartedAt: Date.now(),
+          hostDecisionRounds: 0,
+          contextEnrichmentRounds: 0,
+          contextEvidence: [],
           error: 'cancelled',
           outputText: '已取消。'
         }
@@ -51,6 +59,10 @@ export class AiRunService {
         status: 'failed',
         input: payload.input,
         plan: [],
+        hostLoopStartedAt: Date.now(),
+        hostDecisionRounds: 0,
+        contextEnrichmentRounds: 0,
+        contextEvidence: [],
         error: msg,
         outputText: `失败：${msg}`
       }

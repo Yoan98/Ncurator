@@ -657,7 +657,9 @@ export function registerHandlers(services: {
                   command: request.command,
                   riskLevel: request.riskLevel,
                   reason: request.reason,
-                  createdAt: Date.now()
+                  createdAt: Date.now(),
+                  internal: request.internal,
+                  stage: request.stage
                 })
 
                 return await new Promise<{ approved: boolean; reason?: string }>((resolve) => {
@@ -670,7 +672,9 @@ export function registerHandlers(services: {
                       approvalId,
                       approved: false,
                       reason: 'approval timeout',
-                      decidedAt: Date.now()
+                      decidedAt: Date.now(),
+                      internal: request.internal,
+                      stage: request.stage
                     })
                     resolve({ approved: false, reason: 'approval timeout' })
                   }, 60_000)
@@ -687,7 +691,9 @@ export function registerHandlers(services: {
                         approvalId,
                         approved: Boolean(decision.approved),
                         reason: decision.reason,
-                        decidedAt: Date.now()
+                        decidedAt: Date.now(),
+                        internal: request.internal,
+                        stage: request.stage
                       })
                       resolve({
                         approved: Boolean(decision.approved),

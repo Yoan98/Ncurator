@@ -253,11 +253,13 @@ const ChatPage: React.FC = () => {
       }
 
       if (evt.type === 'plan_created') {
+        if (evt.internal) return
         setAiPlan(evt.plan)
         return
       }
 
       if (evt.type === 'task_started') {
+        if (evt.internal) return
         setAiPlan((prev) =>
           prev.map((t) => (t.id === evt.taskId ? { ...t, status: 'running' } : t))
         )
@@ -265,6 +267,7 @@ const ChatPage: React.FC = () => {
       }
 
       if (evt.type === 'task_completed') {
+        if (evt.internal) return
         setAiPlan((prev) =>
           prev.map((t) => (t.id === evt.taskId ? { ...t, status: 'completed' } : t))
         )
@@ -272,6 +275,7 @@ const ChatPage: React.FC = () => {
       }
 
       if (evt.type === 'task_result') {
+        if (evt.internal) return
         setAiPlan((prev) =>
           prev.map((t) =>
             t.id === evt.taskId
@@ -283,6 +287,7 @@ const ChatPage: React.FC = () => {
       }
 
       if (evt.type === 'task_failed') {
+        if (evt.internal) return
         setAiPlan((prev) =>
           prev.map((t) => (t.id === evt.taskId ? { ...t, status: 'failed', error: evt.error } : t))
         )
@@ -290,8 +295,10 @@ const ChatPage: React.FC = () => {
       }
 
       if (evt.type === 'workspace_required') {
-        setLoading(false)
-        message.warning(evt.reason || '执行任务需要先绑定工作区')
+        if (!evt.internal) {
+          setLoading(false)
+          message.warning(evt.reason || '执行任务需要先绑定工作区')
+        }
         setRightPanel({
           title: '工作区要求',
           kind: 'json',
@@ -301,7 +308,9 @@ const ChatPage: React.FC = () => {
       }
 
       if (evt.type === 'approval_required') {
-        message.info(`命令需要审批：${evt.command}`)
+        if (!evt.internal) {
+          message.info(`命令需要审批：${evt.command}`)
+        }
         setRightPanel({
           title: '审批请求',
           kind: 'json',
@@ -311,6 +320,7 @@ const ChatPage: React.FC = () => {
       }
 
       if (evt.type === 'approval_decision') {
+        if (evt.internal) return
         if (evt.approved) {
           message.success('审批已通过')
         } else {

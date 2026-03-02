@@ -109,6 +109,7 @@ export interface ChatSession {
 export type AiTaskKind = 'local_kb_retrieval' | 'terminal_exec' | 'docx'
 export type AiTaskStatus = 'pending' | 'running' | 'completed' | 'failed'
 export type AiRunStatus = 'running' | 'completed' | 'failed' | 'cancelled'
+export type AiRunEventStage = 'context_enrichment' | 'plan_execution' | 'finalization'
 export type AiTaskResultCode =
   | 'ok'
   | 'failed'
@@ -185,7 +186,7 @@ export type AiRunApprovalDecisionResponse = {
   error?: string
 }
 
-export type AiRunEvent =
+type AiRunEventPayload =
   | {
       type: 'run_started'
       runId: string
@@ -348,6 +349,11 @@ export type AiRunEvent =
       type: 'run_cancelled'
       runId: string
     }
+
+export type AiRunEvent = AiRunEventPayload & {
+  internal?: boolean
+  stage?: AiRunEventStage
+}
 
 export type ChatSessionMemory = {
   summary: string
