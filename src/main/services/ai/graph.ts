@@ -7,9 +7,9 @@ import { createChatModel } from '../llm/chatModel'
 import { AIMessage, BaseMessage, HumanMessage, SystemMessage } from '@langchain/core/messages'
 import type { AiTaskResultCode, AiTaskToolInput, JsonObject, JsonValue } from '../../../shared/types'
 import { toString } from '../../utils/decoder'
-import { buildRetrievalTools } from './nodes/local_kb_retrieval/retrievalTools'
-import { buildTerminalCapabilityTools } from './nodes/terminal_exec/terminalTools'
-import { buildDocxCapabilityTools } from './nodes/docx/docxTools'
+import { buildRetrievalTools } from './node/local_kb_retrieval/retrievalTools'
+import { buildTerminalCapabilityTools } from './node/terminal_exec/terminalTools'
+import { buildDocxCapabilityTools } from './node/docx/docxTools'
 import { runBoundedLoop } from '../../utils/boundedLoop'
 
 const CAPABILITY_KINDS: AiTaskKind[] = ['local_kb_retrieval', 'terminal_exec', 'docx']
