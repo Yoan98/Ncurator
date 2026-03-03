@@ -13,6 +13,7 @@ export const createMainContextDispatchNode = (input: {
 
     const contextTaskId = `context-${state.contextRounds + 1}`
     const slotState = state.taskSlots[contextTaskId]
+    const objective = String(state.contextTaskObjective || '').trim() || state.input
 
     // 上下文补充也走 human 子图，保持与 dispatch 一致的执行语义。
     const output = await runHumanTask({
@@ -21,8 +22,7 @@ export const createMainContextDispatchNode = (input: {
       mode: 'context',
       taskId: contextTaskId,
       title: 'Context Enrichment',
-      objective: state.input,
-      kindHint: 'local_kb_retrieval',
+      objective,
       selectedDocumentIds: ctx.selectedDocumentIds,
       workspace: ctx.workspace,
       slotState: slotState && typeof slotState === 'object' ? (slotState as JsonObject) : {},
@@ -39,6 +39,7 @@ export const createMainContextDispatchNode = (input: {
       },
       slotArtifacts: output.slotArtifacts,
       humanStepIndex: output.steps,
+      contextTaskObjective: undefined,
       mainStage: 'main_context_gate'
     }
   }

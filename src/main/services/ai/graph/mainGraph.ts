@@ -40,6 +40,7 @@ const createMainStateSchema = () => {
       .default('main_context_gate'),
     contextRounds: z.number().default(0),
     contextDecision: z.enum(['need_context', 'to_plan', 'direct_finalize']).optional(),
+    contextTaskObjective: z.string().optional(),
     contextEvidence: z.array(z.string()).default(() => []),
     directAnswerDraft: z.string().optional(),
     plan: z

@@ -40,6 +40,7 @@ export type AiRunState = {
   mainStage: AiMainStage
   contextRounds: number
   contextDecision?: AiContextDecision
+  contextTaskObjective?: string
   contextEvidence: string[]
   directAnswerDraft?: string
   plan: AiPlanTask[]

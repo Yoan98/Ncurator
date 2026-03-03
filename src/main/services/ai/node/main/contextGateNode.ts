@@ -22,6 +22,7 @@ export const createMainContextGateNode = (input: {
     if (state.contextRounds >= maxContextRounds) {
       return {
         contextDecision: 'to_plan',
+        contextTaskObjective: undefined,
         mainStage: 'main_plan'
       }
     }
@@ -56,6 +57,7 @@ export const createMainContextGateNode = (input: {
     if (!parsed.success) {
       return {
         contextDecision: 'to_plan',
+        contextTaskObjective: undefined,
         mainStage: 'main_plan'
       }
     }
@@ -65,11 +67,15 @@ export const createMainContextGateNode = (input: {
       if (state.contextRounds >= maxContextRounds) {
         return {
           contextDecision: 'to_plan',
+          contextTaskObjective: undefined,
           mainStage: 'main_plan'
         }
       }
+      const contextTaskObjective = String(decision.reason || '').trim() || state.input
       return {
         contextDecision: 'need_context',
+        // 把 gate 判定理由转成可执行目标，交给 context_dispatch 调 human。
+        contextTaskObjective,
         mainStage: 'main_context_dispatch',
         // 将 gate 的理由写入 evidence，方便后续 plan/finalize 使用。
         contextEvidence: decision.reason
@@ -82,6 +88,7 @@ export const createMainContextGateNode = (input: {
       const answer = String(decision.answer || '').trim()
       return {
         contextDecision: 'direct_finalize',
+        contextTaskObjective: undefined,
         directAnswerDraft: answer,
         outputText: answer || state.outputText,
         contextEvidence: decision.reason
@@ -93,6 +100,7 @@ export const createMainContextGateNode = (input: {
 
     return {
       contextDecision: 'to_plan',
+      contextTaskObjective: undefined,
       contextEvidence: decision.reason
         ? appendContextEvidence(state, `gate: to_plan (${decision.reason})`)
         : state.contextEvidence,
