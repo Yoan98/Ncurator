@@ -1,8 +1,5 @@
-import type { AIMessage, BaseMessage } from '@langchain/core/messages'
-import type { StructuredToolInterface } from '@langchain/core/tools'
-import { END, START, StateGraph, StateSchema } from '@langchain/langgraph'
-import { z } from 'zod/v4'
-import type { JsonObject, JsonValue, HumanTaskInput, HumanTaskOutput } from '../../../../shared/types'
+import { END, START, StateGraph } from '@langchain/langgraph'
+import type { JsonObject, HumanTaskInput, HumanTaskOutput } from '../../../../shared/types'
 import type { AiRunContext } from '../types'
 import { createHumanInitNode } from '../node/human/initNode'
 import { createHumanBrainNode } from '../node/human/brainNode'
@@ -10,87 +7,7 @@ import { createHumanToolExecNode } from '../node/human/toolExecNode'
 import { createHumanSlotCommitNode } from '../node/human/slotCommitNode'
 import { createHumanExitNode } from '../node/human/exitNode'
 import type { HumanRunState } from '../node/human/types'
-
-const createHumanStateSchema = () => {
-  // Human subgraph 的状态仅服务当前 task，结束后由 Main 回收结果。
-  const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
-    z.union([
-      z.string(),
-      z.number(),
-      z.boolean(),
-      z.null(),
-      z.array(jsonValueSchema),
-      z.record(z.string(), jsonValueSchema)
-    ])
-  )
-
-  const jsonObjectSchema: z.ZodType<JsonObject> = z.record(z.string(), jsonValueSchema)
-  const humanTaskInputSchema: z.ZodType<HumanTaskInput> = z.object({
-    runId: z.string(),
-    sessionId: z.string(),
-    taskId: z.string(),
-    mode: z.enum(['context', 'dispatch']),
-    title: z.string(),
-    objective: z.string(),
-    kindHint: z.enum(['local_kb_retrieval', 'terminal_exec', 'docx']).optional(),
-    selectedDocumentIds: z.array(z.string()).optional(),
-    workspace: z
-      .object({
-        workspaceId: z.string(),
-        rootPath: z.string(),
-        policyProfile: z.string().optional()
-      })
-      .optional(),
-    slotState: jsonObjectSchema,
-    slotArtifacts: z.record(z.string(), jsonObjectSchema).optional()
-  })
-
-  return new StateSchema({
-    runId: z.string(),
-    sessionId: z.string(),
-    input: humanTaskInputSchema,
-    phase: z.enum(['brain', 'tool_exec', 'slot_commit', 'exit']).default('brain'),
-    terminalState: z.enum(['running', 'completed', 'blocked']).default('running'),
-    steps: z.number().default(0),
-    maxSteps: z.number().default(6),
-    messages: z
-      .array(z.custom<BaseMessage>((value) => typeof value === 'object' && value !== null))
-      .default(() => []),
-    activeTools: z
-      .array(z.custom<StructuredToolInterface>((value) => typeof value === 'object' && value !== null))
-      .default(() => []),
-    capabilityByTool: z
-      .record(z.string(), z.enum(['local_kb_retrieval', 'terminal_exec', 'docx']))
-      .default(() => ({})),
-    lastAiMessage: z
-      .custom<AIMessage>((value) => typeof value === 'object' && value !== null)
-      .optional(),
-    lastToolMessages: z
-      .array(z.custom<BaseMessage>((value) => typeof value === 'object' && value !== null))
-      .default(() => []),
-    lastToolName: z.string().optional(),
-    lastToolArgs: jsonObjectSchema.optional(),
-    consume: z.array(z.templateLiteral(['slot:', z.string().min(1)])).default(() => []),
-    produce: z.array(z.templateLiteral(['slot:', z.string().min(1)])).default(() => []),
-    expect: z.array(z.templateLiteral(['slot:', z.string().min(1)])).default(() => []),
-    pendingPayload: jsonObjectSchema.optional(),
-    slotState: z.record(z.string(), jsonValueSchema).default(() => ({})),
-    slotArtifacts: z.record(z.string(), jsonObjectSchema).default(() => ({})),
-    slotDelta: jsonObjectSchema.default(() => ({})),
-    summary: z.string().default(''),
-    resultCode: z
-      .enum([
-        'ok',
-        'failed',
-        'workspace_required',
-        'approval_denied',
-        'bounded_loop_error',
-        'invalid_input'
-      ])
-      .default('failed'),
-    resultData: jsonObjectSchema.optional()
-  })
-}
+import { createHumanRunStateSchema } from '../state/stateSchemas'
 
 export const createHumanGraphRunner = (input: {
   ctx: AiRunContext
@@ -98,7 +15,7 @@ export const createHumanGraphRunner = (input: {
 }) => {
   const { ctx } = input
   const maxSteps = Math.max(1, Number(input.maxSteps || 6))
-  const State = createHumanStateSchema()
+  const State = createHumanRunStateSchema()
 
   const initNode = createHumanInitNode()
   const brainNode = createHumanBrainNode({ ctx })

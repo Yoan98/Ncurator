@@ -1,5 +1,5 @@
 import path from 'node:path'
-import type { AiFileArtifactOperation } from '../../../../../../shared/types'
+import type { AiFileArtifactOperation } from '../../../../../shared/types'
 
 export const isPathInsideRoot = (candidatePath: string, rootPath: string) => {
   const root = path.resolve(rootPath)

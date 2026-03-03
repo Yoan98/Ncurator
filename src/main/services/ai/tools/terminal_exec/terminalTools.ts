@@ -8,8 +8,8 @@ import type {
   AiTaskResultCode,
   IpcJsonObject,
   IpcJsonValue
-} from '../../../../../../shared/types'
-import type { AiRunContext } from '../../../types'
+} from '../../../../../shared/types'
+import type { AiRunContext } from '../../types'
 import { runTerminalCommand } from './terminalExec'
 import {
   checkWorkspaceBoundary,
@@ -17,7 +17,7 @@ import {
   collectTerminalArtifactCandidates,
   resolveWorkspacePath
 } from './terminalPolicy'
-import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
+import { emitFileArtifactEvent } from '../../events/fileArtifacts'
 
 type EmitActivityInput = {
   actionType: string

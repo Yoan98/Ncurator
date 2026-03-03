@@ -172,20 +172,34 @@ export type CapabilityResult = {
 }
 
 export type HumanTaskInput = {
+  // 当前运行实例 ID（来自 ai-run-start）。
   runId: string
+  // 会话 ID，用于读取历史与事件关联。
   sessionId: string
+  // main 分配的任务 ID（run 内唯一）。
   taskId: string
+  // 任务模式：context=补充上下文，dispatch=执行计划任务。
   mode: 'context' | 'dispatch'
+  // 任务标题（面向日志/UI）。
   title: string
+  // 任务目标（human 实际执行依据）。
   objective: string
+  // 可选能力提示，不做硬路由。
   kindHint?: AiTaskKind
+  // 可选文档范围限制（仅允许在这些文档内检索）。
   selectedDocumentIds?: string[]
+  // 可选工作区绑定（terminal/docx 等能力的执行边界）。
   workspace?: {
+    // 工作区唯一标识。
     workspaceId: string
+    // 工作区根目录绝对路径。
     rootPath: string
+    // 可选策略配置名（审批/边界策略可按 profile 差异化）。
     policyProfile?: string
   }
+  // 当前任务可读写的 slot 快照（key 为 `slot:xxx`）。
   slotState: JsonObject
+  // 大对象引用仓（slot 中可仅保存 ref + summary）。
   slotArtifacts?: Record<string, JsonObject>
 }
 

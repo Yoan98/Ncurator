@@ -11,7 +11,7 @@
 
 - Main Graph：系统编排层，负责阶段推进与最终收敛。
 - Human Subgraph：单任务执行层，负责逐步工具调用与状态提交。
-- Capability Registry：工具聚合层，按 capability 目录维护、运行时平铺暴露。
+- Capability Registry：工具聚合层，按 `tools/<capability>` 目录维护、运行时平铺暴露。
 
 边界约束：
 
@@ -135,9 +135,11 @@ stateDiagram-v2
 
 - Main 图入口：`src/main/services/ai/graph/mainGraph.ts`
 - Human 子图：`src/main/services/ai/graph/humanGraph.ts`
+- 状态 Schema：`src/main/services/ai/state/stateSchemas.ts`
 - Main 节点：`src/main/services/ai/node/main/*`
 - Human 节点：`src/main/services/ai/node/human/*`
-- Capability 聚合：`src/main/services/ai/capability/registry.ts`
+- Tool 聚合：`src/main/services/ai/tools/registry.ts`
+- Tool 分组：`src/main/services/ai/tools/<capability>/*`
 
 ## 10. 安全边界
 

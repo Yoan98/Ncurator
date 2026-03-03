@@ -1,5 +1,5 @@
 import type { CapabilityToolFamily } from '../types'
-import { buildRetrievalTools } from './tools/retrievalTools'
+import { buildRetrievalTools } from './retrievalTools'
 
 export const localKbRetrievalCapability: CapabilityToolFamily = {
   capability: 'local_kb_retrieval',

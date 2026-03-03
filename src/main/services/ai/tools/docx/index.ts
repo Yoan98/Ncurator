@@ -2,7 +2,7 @@ import { tool } from '@langchain/core/tools'
 import { z } from 'zod/v4'
 import { emitActivity } from '../../../../utils/aiCapabilityUtils'
 import type { CapabilityToolFamily } from '../types'
-import { buildDocxCapabilityTools } from './tools/docxTools'
+import { buildDocxCapabilityTools } from './docxTools'
 
 const jsonValueSchema = z.lazy(() =>
   z.union([

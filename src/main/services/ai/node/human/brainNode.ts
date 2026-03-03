@@ -3,7 +3,7 @@ import { createChatModel } from '../../../llm/chatModel'
 import { getToolCalls } from '../../../../utils/aiCapabilityUtils'
 import type { AiSlotRef, JsonObject, JsonValue } from '../../../../../shared/types'
 import type { AiRunContext } from '../../types'
-import { buildCapabilityToolRegistry } from '../../capability/registry'
+import { buildCapabilityToolRegistry } from '../../tools/registry'
 import { buildHumanControlTools } from './controlTools'
 import type { HumanRunState } from './types'
 

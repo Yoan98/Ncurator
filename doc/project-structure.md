@@ -41,8 +41,9 @@ doc/                     # 项目规则/架构文档
 
 ### 3.3 AI 能力目录
 
-- 能力工具实现放在 `src/main/services/ai/node/capability/<capability>/`。
-- Graph 编排放在 `src/main/services/ai/graph.ts`，不内嵌 capability 具体执行细节。
+- Tool 实现按能力分组放在 `src/main/services/ai/tools/<capability>/`。
+- Graph 编排放在 `src/main/services/ai/graph/**`，不内嵌 capability 具体执行细节。
+- 运行态 State Schema 统一放在 `src/main/services/ai/state/stateSchemas.ts`。
 - 能力间共享且可复用的辅助逻辑，优先抽到 `src/main/utils`。
 - AI 运行时事件封装（如 `file_artifact` 事件）放在 `src/main/services/ai/events/**`。
 - 纯控制流工具（如 `boundedLoop`）放在 `src/main/utils/**`。
