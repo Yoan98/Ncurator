@@ -4,74 +4,50 @@ import type { LlmConfigStore } from '../storage/domains/LlmConfigStore'
 import type { EmbeddingService } from '../vector/EmbeddingService'
 import type {
   AiPlanTask,
-  AiTaskKind,
-  AiTaskStatus,
   AiRunEvent,
-  AiRunStatus,
   AiRunEventStage,
+  AiRunStatus,
+  AiSlotRef,
+  AiTaskStatus,
+  BrainStepAction,
+  CapabilityResult,
+  HumanTaskInput,
+  HumanTaskOutput,
   JsonObject,
+  JsonValue,
   LLMConfig
 } from '../../../shared/types'
 
-export type { AiTaskKind, AiTaskStatus, AiRunStatus, AiPlanTask }
+export type { AiTaskStatus, AiRunStatus, AiPlanTask }
+export type { BrainStepAction, CapabilityResult, HumanTaskInput, HumanTaskOutput }
 
-export type AiHostActionName = 'retrieve_context' | 'create_plan' | 'final_answer'
+export type AiMainStage =
+  | 'main_context_gate'
+  | 'main_context_dispatch'
+  | 'main_plan'
+  | 'main_dispatch'
+  | 'main_finalize'
 
-export type AiHostCreatePlanTaskInput = {
-  id?: string
-  title?: string
-  kind?: string
-  input?: string
-  objective?: string
-  preferredCwd?: string
-  sourcePath?: string
-  outputPath?: string
-}
+export type AiContextDecision = 'need_context' | 'to_plan' | 'direct_finalize'
 
-export type AiHostAction =
-  | {
-      action: 'retrieve_context'
-      capabilityKind: AiTaskKind
-      objective: string
-      preferredCwd?: string
-      sourcePath?: string
-      outputPath?: string
-    }
-  | {
-      action: 'create_plan'
-      tasks: AiHostCreatePlanTaskInput[]
-    }
-  | {
-      action: 'final_answer'
-      answer?: string
-    }
+export type AiTaskSlotState = Record<AiSlotRef, JsonValue>
 
 export type AiRunState = {
-  /** 当前 run 的唯一标识，用于事件流与状态回写关联。 */
   runId: string
-  /** 当前会话 ID，用于读取历史消息与记忆。 */
   sessionId: string
-  /** 整体运行状态（执行中/完成/失败/取消）。 */
   status: AiRunStatus
-  /** 用户本次输入原文。 */
   input: string
-  /** host 规划出的任务列表及其执行状态。 */
-  plan: AiPlanTask[]
-  /** 当前正在执行的任务 ID；为空表示等待 host 继续调度。 */
-  activeTaskId?: string
-  /** host 决策循环启动时间戳（毫秒）。 */
-  hostLoopStartedAt: number
-  /** host 决策循环轮次。 */
-  hostDecisionRounds: number
-  /** 上下文补充动作轮次。 */
-  contextEnrichmentRounds: number
-  /** host 已获得的上下文证据摘要。 */
+  mainStage: AiMainStage
+  contextRounds: number
+  contextDecision?: AiContextDecision
   contextEvidence: string[]
-  /** host 最近一次动作。 */
-  lastHostAction?: AiHostActionName
-  /** 运行级错误信息（通常来自失败任务或调度异常）。 */
+  directAnswerDraft?: string
+  plan: AiPlanTask[]
+  dispatchCursor: number
+  taskSlots: Record<string, AiTaskSlotState>
+  slotArtifacts: Record<string, JsonObject>
+  humanStepIndex: number
   error?: string
-  /** 当前已汇总的输出文本（用于最终回答兜底）。 */
   outputText?: string
 }
 

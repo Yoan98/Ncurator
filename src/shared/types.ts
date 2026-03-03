@@ -109,7 +109,17 @@ export interface ChatSession {
 export type AiTaskKind = 'local_kb_retrieval' | 'terminal_exec' | 'docx'
 export type AiTaskStatus = 'pending' | 'running' | 'completed' | 'failed'
 export type AiRunStatus = 'running' | 'completed' | 'failed' | 'cancelled'
-export type AiRunEventStage = 'context_enrichment' | 'plan_execution' | 'finalization'
+export type AiRunEventStage =
+  | 'main_context_gate'
+  | 'main_context_dispatch'
+  | 'main_plan'
+  | 'main_dispatch'
+  | 'main_finalize'
+  | 'human_init'
+  | 'human_brain'
+  | 'human_tool_exec'
+  | 'human_slot_commit'
+  | 'human_exit'
 export type AiTaskResultCode =
   | 'ok'
   | 'failed'
@@ -118,22 +128,78 @@ export type AiTaskResultCode =
   | 'bounded_loop_error'
   | 'invalid_input'
 
-export type AiTaskToolInput =
-  | {
-      kind: 'local_kb_retrieval'
-      objective: string
-    }
-  | {
-      kind: 'terminal_exec'
-      objective: string
-      preferredCwd?: string
-    }
-  | {
-      kind: 'docx'
-      objective: string
-      sourcePath?: string
-      outputPath?: string
-    }
+export type AiSlotRef = `slot:${string}`
+
+export type AiStepExpect = {
+  requiredOutputs: AiSlotRef[]
+}
+
+export type BrainInvokeToolAction = {
+  action: 'invoke_tool'
+  toolName: string
+  args?: JsonObject
+  consume?: AiSlotRef[]
+  produce?: AiSlotRef[]
+  expect?: AiStepExpect
+}
+
+export type BrainCompleteTaskAction = {
+  action: 'complete_task'
+  summary: string
+  outputs?: JsonObject
+}
+
+export type BrainBlockTaskAction = {
+  action: 'block_task'
+  reason: string
+  details?: string
+}
+
+export type BrainStepAction =
+  | BrainInvokeToolAction
+  | BrainCompleteTaskAction
+  | BrainBlockTaskAction
+
+export type CapabilityResult = {
+  toolName: string
+  capability?: AiTaskKind
+  success: boolean
+  code: AiTaskResultCode
+  summary: string
+  data?: JsonObject
+  consume?: AiSlotRef[]
+  produce?: AiSlotRef[]
+}
+
+export type HumanTaskInput = {
+  runId: string
+  sessionId: string
+  taskId: string
+  mode: 'context' | 'dispatch'
+  title: string
+  objective: string
+  kindHint?: AiTaskKind
+  selectedDocumentIds?: string[]
+  workspace?: {
+    workspaceId: string
+    rootPath: string
+    policyProfile?: string
+  }
+  slotState: JsonObject
+  slotArtifacts?: Record<string, JsonObject>
+}
+
+export type HumanTaskOutput = {
+  taskId: string
+  terminalState: 'completed' | 'blocked'
+  steps: number
+  summary: string
+  resultCode: AiTaskResultCode
+  resultData?: JsonObject
+  slotDelta: JsonObject
+  slotState: JsonObject
+  slotArtifacts: Record<string, JsonObject>
+}
 
 export type AiFileArtifactCapability = 'terminal_exec' | 'docx'
 export type AiFileArtifactOperation = 'created' | 'updated'
@@ -141,9 +207,8 @@ export type AiFileArtifactOperation = 'created' | 'updated'
 export type AiPlanTask = {
   id: string
   title: string
-  kind: AiTaskKind | string
-  input?: string
-  toolInput?: AiTaskToolInput
+  objective: string
+  kindHint?: AiTaskKind
   status: AiTaskStatus
   attempts: number
   error?: string
@@ -284,6 +349,27 @@ type AiRunEventPayload =
       actionType: string
       status: 'started' | 'completed' | 'failed'
       summary: string
+      createdAt: number
+    }
+  | {
+      type: 'human_step'
+      runId: string
+      taskId: string
+      stepIndex: number
+      action: BrainStepAction['action']
+      toolName?: string
+      summary: string
+      createdAt: number
+    }
+  | {
+      type: 'slot_commit'
+      runId: string
+      taskId: string
+      stepIndex: number
+      consume: AiSlotRef[]
+      produce: AiSlotRef[]
+      success: boolean
+      message: string
       createdAt: number
     }
   | {

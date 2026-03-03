@@ -8,7 +8,9 @@ import type {
   DocumentRecord,
   SearchResult,
   ChatSession,
-  ChatMessage
+  ChatMessage,
+  JsonValue,
+  IpcJsonValue
 } from '../../../shared/types'
 import { groupArtifactEventsByTask } from '../../../shared/aiRunEventUtils'
 import { parseIpcResult } from '../utils/serialization'
@@ -38,7 +40,7 @@ type RightPanelState =
   | {
       title: string
       kind: 'json'
-      data: unknown
+      data: AiRunEvent | JsonValue | IpcJsonValue
     }
   | {
       title: string
@@ -53,15 +55,15 @@ type TerminalEvent = Extract<
 >
 type ActivityEvent = Extract<AiRunEvent, { type: 'activity' }>
 type ArtifactEvent = Extract<AiRunEvent, { type: 'file_artifact' }>
+type HumanStepTraceEvent = Extract<AiRunEvent, { type: 'human_step' | 'slot_commit' }>
 
 const getPageNumberFromMetadata = (metadata: SearchResult['metadata']): number => {
   if (!metadata) return 1
   if (typeof metadata === 'string') {
     try {
-      const parsed = JSON.parse(metadata) as { page?: unknown }
+      const parsed = JSON.parse(metadata) as { page?: number }
       return typeof parsed.page === 'number' ? parsed.page : 1
-    } catch (e) {
-      void e
+    } catch {
       return 1
     }
   }
@@ -183,8 +185,8 @@ const ChatPage: React.FC = () => {
         pageSize: 20
       })
       setMentionOptions(res.items || [])
-    } catch (e: unknown) {
-      void e
+    } catch {
+      // ignore
     }
   }
 
@@ -234,6 +236,15 @@ const ChatPage: React.FC = () => {
           title: `终端步骤 · ${evt.type}`,
           kind: 'json',
           data: evt
+        })
+        return
+      }
+
+      if (evt.type === 'human_step' || evt.type === 'slot_commit') {
+        setRightPanel({
+          title: `Human 步骤追踪 · ${evt.type}`,
+          kind: 'json',
+          data: evt as HumanStepTraceEvent
         })
         return
       }
@@ -499,7 +510,7 @@ const ChatPage: React.FC = () => {
     try {
       const res = await window.api.aiRunCancel(aiRunId)
       if (!res.success) message.error(res.error || '取消失败')
-    } catch (e: unknown) {
+    } catch (e) {
       message.error(e instanceof Error ? e.message : '取消失败')
     }
   }
@@ -549,7 +560,7 @@ const ChatPage: React.FC = () => {
             <div className="flex items-center justify-between w-full">
               <div className="flex items-center gap-2">
                 <span className="text-sm text-[#1F1F1F]">{t.title}</span>
-                <span className="text-xs text-[#999999]">{t.kind}</span>
+                <span className="text-xs text-[#999999]">{t.kindHint || '-'}</span>
                 {t.resultCode ? <span className="text-xs text-[#999999]">{t.resultCode}</span> : null}
                 {t.status === 'running' ? (
                   <span className="text-[10px] px-2 py-[2px] rounded bg-[#FBF5F2] text-[#D97757]">
