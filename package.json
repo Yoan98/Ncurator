@@ -35,11 +35,13 @@
     "@langchain/textsplitters": "^1.0.1",
     "@node-rs/jieba": "^2.0.1",
     "@react-pdf/renderer": "^4.1.0",
+    "@xmldom/xmldom": "^0.8.11",
     "antd": "5.22.1",
     "apache-arrow": "^17.0.0",
     "cheerio": "^1.2.0",
     "docx": "^9.5.1",
     "electron-updater": "^6.3.9",
+    "jszip": "^3.10.1",
     "katex": "^0.16.28",
     "mammoth": "^1.11.0",
     "mark.js": "^8.11.1",
@@ -55,6 +57,7 @@
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
     "uuid": "^13.0.0",
+    "xpath": "^0.0.34",
     "zod": "^4.3.6"
   },
   "devDependencies": {

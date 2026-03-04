@@ -89,6 +89,10 @@ const ChatPage: React.FC = () => {
   // Preview state
   const [previewVisible, setPreviewVisible] = useState(false)
   const [currentPreviewDoc, setCurrentPreviewDoc] = useState<SearchResult | null>(null)
+  const [currentPreviewFile, setCurrentPreviewFile] = useState<{
+    filePath: string
+    fileName: string
+  } | null>(null)
 
   const scrollToBottom = () => {
     if (scrollRef.current) {
@@ -660,6 +664,12 @@ const ChatPage: React.FC = () => {
                       <div className="flex items-center gap-2 mt-2">
                         <Button
                           size="small"
+                          onClick={() => openArtifactPreview(evt)}
+                        >
+                          预览
+                        </Button>
+                        <Button
+                          size="small"
                           onClick={async () => {
                             const res = await window.api.openPath(evt.path)
                             if (!res.success) message.error(res.error || '打开失败')
@@ -815,6 +825,12 @@ const ChatPage: React.FC = () => {
                       <div className="flex items-center gap-1 mt-2">
                         <Button
                           size="small"
+                          onClick={() => openArtifactPreview(evt)}
+                        >
+                          预览
+                        </Button>
+                        <Button
+                          size="small"
                           onClick={async () => {
                             const res = await window.api.openPath(evt.path)
                             if (!res.success) message.error(res.error || '打开失败')
@@ -898,6 +914,16 @@ const ChatPage: React.FC = () => {
 
   const openPreview = (item: SearchResult) => {
     setCurrentPreviewDoc(item)
+    setCurrentPreviewFile(null)
+    setPreviewVisible(true)
+  }
+
+  const openArtifactPreview = (item: ArtifactEvent) => {
+    setCurrentPreviewDoc(null)
+    setCurrentPreviewFile({
+      filePath: item.path,
+      fileName: item.fileName
+    })
     setPreviewVisible(true)
   }
 
@@ -980,8 +1006,15 @@ const ChatPage: React.FC = () => {
     )
   }
 
-  const previewDocuments: FileRenderDocument[] =
-    currentPreviewDoc && currentPreviewDoc.document?.file_path
+  const previewDocuments: FileRenderDocument[] = currentPreviewFile
+    ? [
+        {
+          uri: '',
+          filePath: currentPreviewFile.filePath,
+          fileName: currentPreviewFile.fileName
+        }
+      ]
+    : currentPreviewDoc && currentPreviewDoc.document?.file_path
       ? [
           {
             uri: '', // Will be generated from filePath

@@ -3,11 +3,17 @@ import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { tool } from '@langchain/core/tools'
 import { z } from 'zod/v4'
-import type { IpcJsonObject, IpcJsonValue } from '../../../../../shared/types'
+import type {
+  AiFileArtifactOperation,
+  IpcJsonObject,
+  IpcJsonValue
+} from '../../../../../shared/types'
 import type { AiRunContext } from '../../types'
 import { emitFileArtifactEvent } from '../../events/fileArtifacts'
 import { resolveWorkspacePath } from '../terminal_exec/terminalPolicy'
-import { applyDocxEdits, inspectDocx, saveDocxFromText } from './docxAdapters'
+import type { DocxOp } from './types'
+import { getDocxWorkerClient } from './worker/docxWorkerClient'
+import type { DocxWorkerRequest } from './worker/protocol'
 
 type EmitActivityInput = {
   actionType: string
@@ -25,12 +31,8 @@ type DocxCapabilityToolsInput = {
 }
 
 export type DocxCapabilityToolsRuntimeState = {
-  /** 当前加载并可编辑的源文件路径（workspace 内绝对路径）。 */
-  sourcePath?: string
-  /** 当前内存编辑文本快照。 */
-  workingText?: string
-  /** 最近一次成功保存的输出路径。 */
-  outputPath?: string
+  lastDocId?: string
+  sourcePathByDocId: Map<string, string>
 }
 
 const clipText = (text: string, maxChars: number) => {
@@ -54,35 +56,136 @@ const resolveDocxPath = (input: {
   return resolved
 }
 
-const docxEditSchema = z.discriminatedUnion('type', [
+const runSpecSchema = z.object({
+  text: z.string(),
+  bold: z.boolean().optional(),
+  italic: z.boolean().optional(),
+  underline: z.boolean().optional(),
+  color: z.string().optional()
+})
+
+const paragraphSpecSchema = z.object({
+  kind: z.literal('paragraph'),
+  style: z.string().optional(),
+  runs: z.array(runSpecSchema).min(1)
+})
+
+const tableCellSpecSchema = z.object({
+  paragraphs: z.array(paragraphSpecSchema).min(1)
+})
+
+const tableSpecSchema = z.object({
+  kind: z.literal('table'),
+  rows: z.array(z.array(tableCellSpecSchema).min(1)).min(1)
+})
+
+const blockSpecSchema = z.union([paragraphSpecSchema, tableSpecSchema])
+
+const docOpSchema = z.discriminatedUnion('type', [
   z.object({
-    type: z.literal('replace_text'),
-    find: z.string(),
-    replace: z.string(),
-    replaceAll: z.boolean().optional()
+    type: z.literal('replace_block'),
+    blockId: z.string().min(1),
+    content: blockSpecSchema
   }),
   z.object({
-    type: z.literal('append_paragraph'),
-    text: z.string()
+    type: z.literal('insert_after'),
+    anchorBlockId: z.string().min(1),
+    content: z.array(blockSpecSchema).min(1)
+  }),
+  z.object({
+    type: z.literal('insert_before'),
+    anchorBlockId: z.string().min(1),
+    content: z.array(blockSpecSchema).min(1)
+  }),
+  z.object({
+    type: z.literal('delete_block'),
+    blockId: z.string().min(1)
+  }),
+  z.object({
+    type: z.literal('update_table_cell'),
+    blockId: z.string().min(1),
+    content: z.array(paragraphSpecSchema).min(1)
+  }),
+  z.object({
+    type: z.literal('replace_text'),
+    query: z.string().min(1),
+    replace: z.string(),
+    replaceAll: z.boolean().optional(),
+    blockIds: z.array(z.string().min(1)).optional()
   })
 ])
 
-const docxInspectSchema = z.object({
-  sourcePath: z.string()
+const openSchema = z.object({
+  sourcePath: z.string().min(1)
 })
 
-const docxApplySchema = z.object({
-  sourcePath: z.string().optional(),
-  edits: z.array(docxEditSchema).min(1)
+const outlineSchema = z.object({
+  docId: z.string().min(1),
+  maxBlocks: z.number().int().min(1).max(2000).optional(),
+  includeTables: z.boolean().optional(),
+  includeCells: z.boolean().optional()
 })
 
-const docxSaveSchema = z.object({
-  outputPath: z.string(),
+const getBlockSchema = z.object({
+  docId: z.string().min(1),
+  blockId: z.string().min(1)
+})
+
+const searchSchema = z.object({
+  docId: z.string().min(1),
+  query: z.string().min(1),
+  mode: z.enum(['literal', 'regex', 'semantic']),
+  scope: z
+    .object({
+      blockIds: z.array(z.string().min(1)).optional()
+    })
+    .optional()
+})
+
+const applyOpsSchema = z.object({
+  docId: z.string().min(1),
+  ops: z.array(docOpSchema).min(1)
+})
+
+const renderPreviewSchema = z.object({
+  docId: z.string().min(1),
+  format: z.enum(['html', 'png', 'pdf']),
+  range: z
+    .object({
+      fromBlockId: z.string().optional(),
+      toBlockId: z.string().optional()
+    })
+    .optional()
+})
+
+const saveSchema = z.object({
+  docId: z.string().min(1),
+  outPath: z.string().min(1),
   overwrite: z.boolean().optional()
 })
 
+const validateSchema = z.object({
+  docId: z.string().min(1)
+})
+
+const toFailure = (input: {
+  code: 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
+  error: string
+  warnings?: string[]
+}) => {
+  return {
+    ok: false,
+    code: input.code,
+    summary: input.error,
+    error: input.error,
+    warnings: input.warnings || []
+  }
+}
+
 export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
-  const state: DocxCapabilityToolsRuntimeState = {}
+  const state: DocxCapabilityToolsRuntimeState = {
+    sourcePathByDocId: new Map()
+  }
 
   const workspaceRootPath = path.resolve(input.workspaceRootPath)
 
@@ -118,9 +221,17 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
     })
   }
 
-  const docxInspectTool = tool(
+  const callWorker = async (request: Omit<DocxWorkerRequest, 'requestId' | 'runId'>) => {
+    const client = getDocxWorkerClient()
+    return await client.call({
+      ...request,
+      runId: input.runId
+    } as DocxWorkerRequest, 45_000)
+  }
+
+  const docxOpenTool = tool(
     async (args) => {
-      const toolName = 'docx_inspect'
+      const toolName = 'docx_open'
       const toolCallId = emitStarted(toolName, args)
       try {
         input.ctx.checkCancelled()
@@ -130,278 +241,632 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
           rawPath: args.sourcePath
         })
         if (!sourcePath) {
-          const out = {
-            ok: false,
-            code: 'invalid_input' as const,
+          const out = toFailure({
+            code: 'invalid_input',
             error: 'sourcePath must be a workspace-bound .docx path'
-          }
+          })
           emitResult(toolName, toolCallId, out, out.error)
           return out
         }
         if (!fs.existsSync(sourcePath)) {
-          const out = {
-            ok: false,
-            code: 'invalid_input' as const,
+          const out = toFailure({
+            code: 'invalid_input',
             error: 'sourcePath not found'
-          }
+          })
           emitResult(toolName, toolCallId, out, out.error)
           return out
         }
 
         input.emitActivity({
-          actionType: 'docx_inspect',
+          actionType: 'docx_open',
           status: 'started',
-          summary: `检查文档: ${sourcePath}`
+          summary: `打开文档: ${sourcePath}`
         })
 
-        const inspection = await inspectDocx(sourcePath, input.safePreviewChars)
-        state.sourcePath = sourcePath
-        state.workingText = inspection.text
+        const workerResponse = await callWorker({
+          action: 'open',
+          payload: {
+            sourcePath
+          }
+        })
+        if (!workerResponse.ok) {
+          const out = toFailure({
+            code: workerResponse.code,
+            error: workerResponse.error,
+            warnings: workerResponse.warnings
+          })
+          emitResult(toolName, toolCallId, out, out.error)
+          input.emitActivity({
+            actionType: 'docx_open',
+            status: 'failed',
+            summary: `文档打开失败: ${workerResponse.error}`
+          })
+          return out
+        }
 
+        if (workerResponse.payload.action !== 'open') {
+          const out = toFailure({
+            code: 'failed',
+            error: 'worker protocol mismatch (open)'
+          })
+          emitResult(toolName, toolCallId, out, out.error)
+          return out
+        }
+
+        state.lastDocId = workerResponse.payload.docId
+        state.sourcePathByDocId.set(workerResponse.payload.docId, sourcePath)
         const out = {
           ok: true,
-          sourcePath: inspection.sourcePath,
-          charCount: inspection.charCount,
-          paragraphCount: inspection.paragraphCount,
-          preview: inspection.preview,
-          truncated: inspection.preview.length < inspection.text.length
+          code: 'ok' as const,
+          summary: `doc opened: ${path.basename(sourcePath)}`,
+          docId: workerResponse.payload.docId,
+          meta: workerResponse.payload.meta,
+          stats: workerResponse.payload.stats
         }
         emitResult(toolName, toolCallId, out)
         input.emitActivity({
-          actionType: 'docx_inspect',
+          actionType: 'docx_open',
           status: 'completed',
-          summary: `文档解析完成: ${inspection.paragraphCount} 段`
+          summary: `文档已打开: ${path.basename(sourcePath)}`
         })
         return out
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error)
-        emitResult(toolName, toolCallId, { ok: false, code: 'failed', error: msg }, msg)
+        const out = toFailure({
+          code: 'failed',
+          error: msg
+        })
+        emitResult(toolName, toolCallId, out, out.error)
         input.emitActivity({
-          actionType: 'docx_inspect',
+          actionType: 'docx_open',
           status: 'failed',
-          summary: `文档解析失败: ${msg}`
+          summary: `文档打开异常: ${msg}`
         })
         throw error
       }
     },
     {
-      name: 'docx_inspect',
-      description:
-        'Inspect a workspace-bound .docx file and load deterministic editable text representation for subsequent edits.',
-      schema: docxInspectSchema
+      name: 'docx_open',
+      description: 'Open a workspace-bound docx file and register a docId for subsequent operations.',
+      schema: openSchema
     }
   )
 
-  const docxApplyEditsTool = tool(
+  const docxOutlineTool = tool(
     async (args) => {
-      const toolName = 'docx_apply_edits'
+      const toolName = 'docx_outline'
       const toolCallId = emitStarted(toolName, args)
       try {
         input.ctx.checkCancelled()
+        input.emitActivity({
+          actionType: 'docx_outline',
+          status: 'started',
+          summary: `提取结构: ${args.docId}`
+        })
+        const workerResponse = await callWorker({
+          action: 'outline',
+          payload: {
+            docId: args.docId,
+            maxBlocks: Number(args.maxBlocks || 200),
+            includeTables: Boolean(args.includeTables ?? true),
+            includeCells: Boolean(args.includeCells ?? true)
+          }
+        })
 
-        if (!state.workingText || !state.sourcePath) {
-          const sourcePath = String(args.sourcePath || '').trim()
-          if (!sourcePath) {
-            const out = {
-              ok: false,
-              code: 'invalid_input' as const,
-              error: 'docx_inspect must run before docx_apply_edits'
-            }
-            emitResult(toolName, toolCallId, out, out.error)
-            return out
-          }
-          const resolved = resolveDocxPath({
-            workspaceRootPath,
-            cwd: workspaceRootPath,
-            rawPath: sourcePath
+        if (!workerResponse.ok) {
+          const out = toFailure({
+            code: workerResponse.code,
+            error: workerResponse.error,
+            warnings: workerResponse.warnings
           })
-          if (!resolved || !fs.existsSync(resolved)) {
-            const out = {
-              ok: false,
-              code: 'invalid_input' as const,
-              error: 'sourcePath not found or outside workspace'
-            }
-            emitResult(toolName, toolCallId, out, out.error)
-            return out
-          }
-          const inspection = await inspectDocx(resolved, input.safePreviewChars)
-          state.sourcePath = inspection.sourcePath
-          state.workingText = inspection.text
+          emitResult(toolName, toolCallId, out, out.error)
+          input.emitActivity({
+            actionType: 'docx_outline',
+            status: 'failed',
+            summary: out.summary
+          })
+          return out
         }
 
-        input.emitActivity({
-          actionType: 'docx_apply_edits',
-          status: 'started',
-          summary: `应用编辑指令: ${args.edits.length} 条`
-        })
-
-        const applied = applyDocxEdits({
-          currentText: state.workingText || '',
-          edits: args.edits
-        })
-        state.workingText = applied.updatedText
+        if (workerResponse.payload.action !== 'outline') {
+          const out = toFailure({
+            code: 'failed',
+            error: 'worker protocol mismatch (outline)'
+          })
+          emitResult(toolName, toolCallId, out, out.error)
+          return out
+        }
 
         const out = {
           ok: true,
-          appliedCount: applied.appliedCount,
-          warningCount: applied.warnings.length,
-          warnings: applied.warnings,
-          charCount: applied.updatedText.length,
-          preview: clipText(applied.updatedText, input.safePreviewChars),
-          truncated: applied.updatedText.length > input.safePreviewChars
+          code: 'ok' as const,
+          summary: `outline ready (${workerResponse.payload.blocks.length} blocks)`,
+          blocks: workerResponse.payload.blocks,
+          truncated: workerResponse.payload.truncated
         }
-        emitResult(toolName, toolCallId, out)
+        emitResult(toolName, toolCallId, {
+          ok: out.ok,
+          code: out.code,
+          summary: out.summary,
+          blockCount: out.blocks.length,
+          truncated: out.truncated
+        })
         input.emitActivity({
-          actionType: 'docx_apply_edits',
+          actionType: 'docx_outline',
           status: 'completed',
-          summary: `文档编辑完成: ${applied.appliedCount} 条已应用`
+          summary: `结构提取完成: ${out.blocks.length} blocks`
         })
         return out
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error)
-        emitResult(toolName, toolCallId, { ok: false, code: 'failed', error: msg }, msg)
+        const out = toFailure({ code: 'failed', error: msg })
+        emitResult(toolName, toolCallId, out, out.error)
+        throw error
+      }
+    },
+    {
+      name: 'docx_outline',
+      description:
+        'Extract a deterministic block outline for a previously opened doc (paragraph/table/table_cell).',
+      schema: outlineSchema
+    }
+  )
+
+  const docxGetBlockTool = tool(
+    async (args) => {
+      const toolName = 'docx_get_block'
+      const toolCallId = emitStarted(toolName, args)
+      try {
+        const workerResponse = await callWorker({
+          action: 'get_block',
+          payload: {
+            docId: args.docId,
+            blockId: args.blockId
+          }
+        })
+        if (!workerResponse.ok) {
+          const out = toFailure({
+            code: workerResponse.code,
+            error: workerResponse.error,
+            warnings: workerResponse.warnings
+          })
+          emitResult(toolName, toolCallId, out, out.error)
+          return out
+        }
+        if (workerResponse.payload.action !== 'get_block') {
+          const out = toFailure({
+            code: 'failed',
+            error: 'worker protocol mismatch (get_block)'
+          })
+          emitResult(toolName, toolCallId, out, out.error)
+          return out
+        }
+        const out = {
+          ok: true,
+          code: 'ok' as const,
+          summary: `block loaded: ${args.blockId}`,
+          block: workerResponse.payload.block
+        }
+        emitResult(toolName, toolCallId, {
+          ok: out.ok,
+          code: out.code,
+          summary: out.summary,
+          blockType: out.block.type
+        })
+        return out
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error)
+        const out = toFailure({ code: 'failed', error: msg })
+        emitResult(toolName, toolCallId, out, out.error)
+        throw error
+      }
+    },
+    {
+      name: 'docx_get_block',
+      description: 'Get one block by blockId with detailed structure.',
+      schema: getBlockSchema
+    }
+  )
+
+  const docxSearchTool = tool(
+    async (args) => {
+      const toolName = 'docx_search'
+      const toolCallId = emitStarted(toolName, args)
+      try {
+        const workerResponse = await callWorker({
+          action: 'search',
+          payload: {
+            docId: args.docId,
+            query: args.query,
+            mode: args.mode,
+            scopeBlockIds: args.scope?.blockIds || []
+          }
+        })
+        if (!workerResponse.ok) {
+          const out = toFailure({
+            code: workerResponse.code,
+            error: workerResponse.error,
+            warnings: workerResponse.warnings
+          })
+          emitResult(toolName, toolCallId, out, out.error)
+          return out
+        }
+        if (workerResponse.payload.action !== 'search') {
+          const out = toFailure({
+            code: 'failed',
+            error: 'worker protocol mismatch (search)'
+          })
+          emitResult(toolName, toolCallId, out, out.error)
+          return out
+        }
+        const out = {
+          ok: true,
+          code: 'ok' as const,
+          summary: `search done (${workerResponse.payload.matches.length} matches)`,
+          matches: workerResponse.payload.matches,
+          warnings: workerResponse.payload.warnings
+        }
+        emitResult(toolName, toolCallId, {
+          ok: out.ok,
+          code: out.code,
+          summary: out.summary,
+          matchCount: out.matches.length,
+          warnings: out.warnings
+        })
+        return out
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error)
+        const out = toFailure({ code: 'failed', error: msg })
+        emitResult(toolName, toolCallId, out, out.error)
+        throw error
+      }
+    },
+    {
+      name: 'docx_search',
+      description: 'Search blocks in a doc using literal/regex mode (semantic reserved for future release).',
+      schema: searchSchema
+    }
+  )
+
+  const docxApplyOpsTool = tool(
+    async (args) => {
+      const toolName = 'docx_apply_ops'
+      const toolCallId = emitStarted(toolName, args)
+      try {
         input.emitActivity({
-          actionType: 'docx_apply_edits',
+          actionType: 'docx_apply_ops',
+          status: 'started',
+          summary: `应用操作: ${args.ops.length} 条`
+        })
+        const workerResponse = await callWorker({
+          action: 'apply_ops',
+          payload: {
+            docId: args.docId,
+            ops: args.ops as DocxOp[]
+          }
+        })
+
+        if (!workerResponse.ok) {
+          const out = toFailure({
+            code: workerResponse.code,
+            error: workerResponse.error,
+            warnings: workerResponse.warnings
+          })
+          emitResult(toolName, toolCallId, out, out.error)
+          input.emitActivity({
+            actionType: 'docx_apply_ops',
+            status: 'failed',
+            summary: out.summary
+          })
+          return out
+        }
+
+        if (workerResponse.payload.action !== 'apply_ops') {
+          const out = toFailure({
+            code: 'failed',
+            error: 'worker protocol mismatch (apply_ops)'
+          })
+          emitResult(toolName, toolCallId, out, out.error)
+          return out
+        }
+
+        state.lastDocId = workerResponse.payload.newDocId
+        const sourcePath = state.sourcePathByDocId.get(args.docId)
+        if (sourcePath) state.sourcePathByDocId.set(workerResponse.payload.newDocId, sourcePath)
+        const out = {
+          ok: true,
+          code: 'ok' as const,
+          summary: `ops applied (${workerResponse.payload.changedBlocks.length} changes)`,
+          newDocId: workerResponse.payload.newDocId,
+          changedBlocks: workerResponse.payload.changedBlocks,
+          warnings: workerResponse.payload.warnings
+        }
+        emitResult(toolName, toolCallId, {
+          ok: out.ok,
+          code: out.code,
+          summary: out.summary,
+          newDocId: out.newDocId,
+          changedCount: out.changedBlocks.length,
+          warnings: out.warnings
+        })
+        input.emitActivity({
+          actionType: 'docx_apply_ops',
+          status: 'completed',
+          summary: `编辑完成: ${out.changedBlocks.length} 处变更`
+        })
+        return out
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error)
+        const out = toFailure({ code: 'failed', error: msg })
+        emitResult(toolName, toolCallId, out, out.error)
+        input.emitActivity({
+          actionType: 'docx_apply_ops',
           status: 'failed',
-          summary: `文档编辑失败: ${msg}`
+          summary: `编辑失败: ${msg}`
         })
         throw error
       }
     },
     {
-      name: 'docx_apply_edits',
+      name: 'docx_apply_ops',
       description:
-        'Apply deterministic edit operations to the in-memory docx text state (replace_text and append_paragraph).',
-      schema: docxApplySchema
+        'Apply structured docx operations and return a new immutable docId snapshot with changed blocks.',
+      schema: applyOpsSchema
     }
   )
 
-  const docxSaveOutputTool = tool(
+  const docxRenderPreviewTool = tool(
     async (args) => {
-      const toolName = 'docx_save_output'
+      const toolName = 'docx_render_preview'
       const toolCallId = emitStarted(toolName, args)
       try {
-        input.ctx.checkCancelled()
-        if (!state.workingText || !state.sourcePath) {
-          const out = {
-            ok: false,
-            code: 'invalid_input' as const,
-            error: 'docx_inspect/docx_apply_edits must run before save'
+        const previewDir = path.join(workspaceRootPath, '.ncurator', 'docx-previews')
+        const previewPath = path.join(
+          previewDir,
+          `${input.runId}-${args.docId}-${Date.now().toString(36)}.docx`
+        )
+        const existsBefore = fs.existsSync(previewPath)
+        const workerResponse = await callWorker({
+          action: 'render_preview',
+          payload: {
+            docId: args.docId,
+            format: args.format,
+            previewPath
           }
-          emitResult(toolName, toolCallId, out, out.error)
-          return out
-        }
-
-        const outputPath = resolveDocxPath({
-          workspaceRootPath,
-          cwd: path.dirname(state.sourcePath),
-          rawPath: args.outputPath
         })
-        if (!outputPath) {
-          const out = {
-            ok: false,
-            code: 'invalid_input' as const,
-            error: 'outputPath must be a workspace-bound .docx path'
-          }
-          emitResult(toolName, toolCallId, out, out.error)
-          return out
-        }
-
-        const existsBefore = fs.existsSync(outputPath)
-        const overwriteRequested = Boolean(args.overwrite)
-        if (existsBefore && !overwriteRequested) {
-          const out = {
-            ok: false,
-            code: 'invalid_input' as const,
-            error: 'outputPath already exists, pass overwrite=true or use another path'
-          }
-          emitResult(toolName, toolCallId, out, out.error)
-          return out
-        }
-
-        if (existsBefore || outputPath === state.sourcePath) {
-          const decision = await input.ctx.requestApproval({
-            runId: input.runId,
-            taskId: input.taskId,
-            command: `docx overwrite ${outputPath}`,
-            riskLevel: 'medium',
-            reason: 'docx save operation may overwrite existing content'
+        if (!workerResponse.ok) {
+          const out = toFailure({
+            code: workerResponse.code,
+            error: workerResponse.error,
+            warnings: workerResponse.warnings
           })
-          if (!decision.approved) {
-            const denied = {
-              ok: false,
-              code: 'approval_denied' as const,
-              error: decision.reason || 'approval denied for docx overwrite'
-            }
-            emitResult(toolName, toolCallId, denied, denied.error)
-            return denied
-          }
+          emitResult(toolName, toolCallId, out, out.error)
+          return out
+        }
+        if (workerResponse.payload.action !== 'render_preview') {
+          const out = toFailure({
+            code: 'failed',
+            error: 'worker protocol mismatch (render_preview)'
+          })
+          emitResult(toolName, toolCallId, out, out.error)
+          return out
         }
 
-        input.emitActivity({
-          actionType: 'docx_save_output',
-          status: 'started',
-          summary: `保存文档: ${outputPath}`
-        })
-
-        const saved = await saveDocxFromText({
-          outputPath,
-          text: state.workingText
-        })
-        state.outputPath = outputPath
-
-        const operation = existsBefore ? 'updated' : 'created'
+        const operation: AiFileArtifactOperation = existsBefore ? 'updated' : 'created'
         emitFileArtifactEvent({
           ctx: input.ctx,
           runId: input.runId,
           taskId: input.taskId,
           capability: 'docx',
-          artifactPath: outputPath,
+          artifactPath: workerResponse.payload.previewPath,
           operation,
-          summary: `docx output saved (${operation})`,
-          onNonFatalError: (reason) => {
-            input.emitActivity({
-              actionType: 'file_artifact',
-              status: 'failed',
-              summary: reason
-            })
-          }
+          summary: `docx preview generated (${workerResponse.payload.renderer})`
         })
 
         const out = {
           ok: true,
-          outputPath,
-          byteSize: saved.byteSize,
-          operation
+          code: 'ok' as const,
+          summary: `preview generated (${workerResponse.payload.format})`,
+          format: workerResponse.payload.format,
+          previewPath: workerResponse.payload.previewPath,
+          renderer: workerResponse.payload.renderer
         }
         emitResult(toolName, toolCallId, out)
-        input.emitActivity({
-          actionType: 'docx_save_output',
-          status: 'completed',
-          summary: `保存完成: ${path.basename(outputPath)}`
-        })
         return out
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error)
-        emitResult(toolName, toolCallId, { ok: false, code: 'failed', error: msg }, msg)
-        input.emitActivity({
-          actionType: 'docx_save_output',
-          status: 'failed',
-          summary: `文档保存失败: ${msg}`
-        })
+        const out = toFailure({ code: 'failed', error: msg })
+        emitResult(toolName, toolCallId, out, out.error)
         throw error
       }
     },
     {
-      name: 'docx_save_output',
+      name: 'docx_render_preview',
       description:
-        'Save current edited docx text into a workspace-bound output .docx file with overwrite approval gating.',
-      schema: docxSaveSchema
+        'Render preview artifact for the current doc snapshot. html returns a preview docx artifact path for renderer.',
+      schema: renderPreviewSchema
+    }
+  )
+
+  const docxSaveTool = tool(
+    async (args) => {
+      const toolName = 'docx_save'
+      const toolCallId = emitStarted(toolName, args)
+      try {
+        const sourcePath = state.sourcePathByDocId.get(args.docId)
+        const cwd = sourcePath ? path.dirname(sourcePath) : workspaceRootPath
+        const outPath = resolveDocxPath({
+          workspaceRootPath,
+          cwd,
+          rawPath: args.outPath
+        })
+        if (!outPath) {
+          const out = toFailure({
+            code: 'invalid_input',
+            error: 'outPath must be a workspace-bound .docx path'
+          })
+          emitResult(toolName, toolCallId, out, out.error)
+          return out
+        }
+
+        const existsBefore = fs.existsSync(outPath)
+        if (existsBefore && !args.overwrite) {
+          const out = toFailure({
+            code: 'invalid_input',
+            error: 'outPath already exists, pass overwrite=true or use another path'
+          })
+          emitResult(toolName, toolCallId, out, out.error)
+          return out
+        }
+
+        if (existsBefore) {
+          const decision = await input.ctx.requestApproval({
+            runId: input.runId,
+            taskId: input.taskId,
+            command: `docx overwrite ${outPath}`,
+            riskLevel: 'medium',
+            reason: 'docx save may overwrite an existing file'
+          })
+          if (!decision.approved) {
+            const out = toFailure({
+              code: 'approval_denied',
+              error: decision.reason || 'approval denied for overwrite'
+            })
+            emitResult(toolName, toolCallId, out, out.error)
+            return out
+          }
+        }
+
+        const workerResponse = await callWorker({
+          action: 'save',
+          payload: {
+            docId: args.docId,
+            outPath
+          }
+        })
+        if (!workerResponse.ok) {
+          const out = toFailure({
+            code: workerResponse.code,
+            error: workerResponse.error,
+            warnings: workerResponse.warnings
+          })
+          emitResult(toolName, toolCallId, out, out.error)
+          return out
+        }
+        if (workerResponse.payload.action !== 'save') {
+          const out = toFailure({
+            code: 'failed',
+            error: 'worker protocol mismatch (save)'
+          })
+          emitResult(toolName, toolCallId, out, out.error)
+          return out
+        }
+
+        const operation: AiFileArtifactOperation = existsBefore ? 'updated' : 'created'
+        emitFileArtifactEvent({
+          ctx: input.ctx,
+          runId: input.runId,
+          taskId: input.taskId,
+          capability: 'docx',
+          artifactPath: outPath,
+          operation,
+          summary: `docx saved (${operation})`
+        })
+
+        const out = {
+          ok: true,
+          code: 'ok' as const,
+          summary: `doc saved: ${path.basename(outPath)}`,
+          outPath,
+          checksum: workerResponse.payload.checksum,
+          operation,
+          byteSize: workerResponse.payload.byteSize
+        }
+        emitResult(toolName, toolCallId, out)
+        return out
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error)
+        const out = toFailure({ code: 'failed', error: msg })
+        emitResult(toolName, toolCallId, out, out.error)
+        throw error
+      }
+    },
+    {
+      name: 'docx_save',
+      description: 'Save doc snapshot to a workspace docx path with overwrite approval guard.',
+      schema: saveSchema
+    }
+  )
+
+  const docxValidateTool = tool(
+    async (args) => {
+      const toolName = 'docx_validate'
+      const toolCallId = emitStarted(toolName, args)
+      try {
+        const workerResponse = await callWorker({
+          action: 'validate',
+          payload: {
+            docId: args.docId
+          }
+        })
+        if (!workerResponse.ok) {
+          const out = toFailure({
+            code: workerResponse.code,
+            error: workerResponse.error,
+            warnings: workerResponse.warnings
+          })
+          emitResult(toolName, toolCallId, out, out.error)
+          return out
+        }
+        if (workerResponse.payload.action !== 'validate') {
+          const out = toFailure({
+            code: 'failed',
+            error: 'worker protocol mismatch (validate)'
+          })
+          emitResult(toolName, toolCallId, out, out.error)
+          return out
+        }
+        const out = {
+          ok: true,
+          code: 'ok' as const,
+          summary:
+            workerResponse.payload.problems.length === 0
+              ? 'docx validate ok'
+              : `docx validate with ${workerResponse.payload.problems.length} problems`,
+          problems: workerResponse.payload.problems
+        }
+        emitResult(toolName, toolCallId, {
+          ok: out.ok,
+          code: out.code,
+          summary: out.summary,
+          problemsPreview: clipText(JSON.stringify(out.problems), input.safePreviewChars)
+        })
+        return out
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error)
+        const out = toFailure({ code: 'failed', error: msg })
+        emitResult(toolName, toolCallId, out, out.error)
+        throw error
+      }
+    },
+    {
+      name: 'docx_validate',
+      description: 'Validate current doc snapshot structure and relationship consistency.',
+      schema: validateSchema
     }
   )
 
   return {
-    tools: [docxInspectTool, docxApplyEditsTool, docxSaveOutputTool],
+    tools: [
+      docxOpenTool,
+      docxOutlineTool,
+      docxGetBlockTool,
+      docxSearchTool,
+      docxApplyOpsTool,
+      docxRenderPreviewTool,
+      docxSaveTool,
+      docxValidateTool
+    ],
     state
   }
 }

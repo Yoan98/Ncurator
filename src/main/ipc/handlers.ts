@@ -5,6 +5,7 @@ import { StorageService } from '../services/storage/StorageService'
 import { ModelService } from '../services/model/ModelService'
 import { AiRunService } from '../services/ai/AiRunService'
 import { updateSessionMemoryAfterRun } from '../services/ai/memory'
+import { releaseDocxRunSession } from '../services/ai/tools/docx/worker/docxWorkerClient'
 import { v4 as uuidv4 } from 'uuid'
 import type {
   SearchResult,
@@ -741,6 +742,7 @@ export function registerHandlers(services: {
           const msg = e instanceof Error ? getErrorMessage(e) : String(e)
           sendEvent({ type: 'run_failed', runId, error: msg })
         } finally {
+          await releaseDocxRunSession(runId)
           const approvals = activeAiApprovals.get(runId)
           if (approvals) {
             for (const [approvalId, pending] of approvals.entries()) {
