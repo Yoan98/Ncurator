@@ -4,56 +4,64 @@
 TBD - created by archiving change langgraph-chat-ai-architecture. Update Purpose after archive.
 ## Requirements
 ### Requirement: Orchestrate host-led loops with explicit capabilities
-The system MUST orchestrate runs with host-led control and capability nodes including `local_kb_retrieval`, `terminal_exec`, and extensible future capabilities, and MUST exclude legacy writing-workflow task models from active dispatch.
+系统 MUST 以双层模型编排运行：`main graph` 负责系统阶段控制，`human graph` 负责单任务执行；运行时 MUST 继续使用能力节点（如 `local_kb_retrieval`、`terminal_exec`、`docx`）并排除 legacy writing-workflow 调度模型。
 
-#### Scenario: Host loops over retrieval
-- **WHEN** host determines context is insufficient
-- **THEN** it dispatches `local_kb_retrieval` and re-enters analysis until stop conditions are met
+#### Scenario: Main graph orchestrates system stages
+- **WHEN** 新 run 启动
+- **THEN** main graph 按 `probe -> context -> plan -> dispatch -> finalize` 阶段推进
 
-#### Scenario: Legacy writing task shape appears in plan
-- **WHEN** plan parsing encounters legacy writing-workflow task kind or payload shape
-- **THEN** runtime rejects the task as unsupported legacy capability and continues only with valid capability-based tasks
+#### Scenario: Human graph executes one task objective
+- **WHEN** main graph 派发单个计划任务
+- **THEN** human graph 仅围绕该任务执行步骤循环并返回任务级结果
+
+#### Scenario: Legacy writing task shape appears
+- **WHEN** 计划中出现 legacy writing-workflow 任务形态
+- **THEN** runtime 以不支持能力类型处理并拒绝调度
 
 ### Requirement: Let host choose direct response vs execution plan
-The host MUST decide whether to answer directly or create an execution plan after retrieval context is sufficient.
+系统 MUST 在 main 层完成“直接答复或生成执行计划”的分流决策，并在需要执行时将计划任务拆分为独立任务交给 human 执行。
 
-#### Scenario: Informational request
-- **WHEN** no executable action is needed
-- **THEN** host streams direct response without dispatching execution capabilities
+#### Scenario: Direct answer path
+- **WHEN** probe/context 判定无需执行动作
+- **THEN** main 直接进入 finalization 并输出最终答复
 
-#### Scenario: Action request
-- **WHEN** local actions are needed
-- **THEN** host emits plan tasks and dispatches capability execution
+#### Scenario: Plan execution path
+- **WHEN** 需要执行本地动作
+- **THEN** main 生成计划并逐个任务派发到独立 human 运行
 
 ### Requirement: Require workspace binding for executable runs
-The runtime MUST require valid workspace context before executing `terminal_exec` or file-action capabilities and MUST keep this gate independent from any legacy writing-workflow state.
+运行时 MUST 在执行 workspace-bound 工具前校验 workspace 绑定，并将该门禁规则应用于 human 步骤级工具执行。
 
-#### Scenario: Missing workspace for action request
-- **WHEN** host attempts to dispatch executable capability without workspace binding
-- **THEN** runtime blocks execution and emits explicit workspace-required signal
+#### Scenario: Missing workspace during human step
+- **WHEN** brain 选择执行需要 workspace 的工具且绑定信息缺失
+- **THEN** 运行时阻断该步骤并返回明确的 workspace-required 结果
 
 ### Requirement: Use capability registry dispatch and fail fast on unknown kinds
-Task dispatch MUST resolve through capability registry, unknown capability kinds MUST fail with explicit errors, and deprecated legacy writing kinds MUST be treated as unsupported.
+任务与步骤执行 MUST 通过 capability registry 与工具元数据完成路由；未知 capability 或未知工具 MUST 快速失败并给出结构化错误。
 
-#### Scenario: Unknown task kind
-- **WHEN** a plan task references unregistered capability kind
-- **THEN** runtime marks task failed with unsupported-capability reason
+#### Scenario: Unknown capability in task dispatch
+- **WHEN** 计划任务引用未注册 capability
+- **THEN** runtime 标记任务失败并返回 unsupported-capability 原因
 
-#### Scenario: Deprecated writer kind
-- **WHEN** a plan task references legacy writer-oriented kind
-- **THEN** runtime marks task failed with unsupported-legacy-capability reason and does not invoke writing-domain runtime paths
+#### Scenario: Unknown tool in human step
+- **WHEN** brain 发起不在当前 active tools 集合内的工具调用
+- **THEN** runtime 拒绝执行并返回结构化步骤错误
 
 ### Requirement: Host owns final response streaming
-The runtime MUST stream final user-facing output from host finalization logic.
+最终用户答复 MUST 在 main finalization 阶段统一收敛和流式输出，且不得由 capability 或 human 子步骤直接结束整个 run。
 
-#### Scenario: Run completion
-- **WHEN** run reaches terminal state
-- **THEN** host emits ordered response tokens and response completion event
+#### Scenario: Finalization after human tasks
+- **WHEN** main 收到任务完成或阻塞后的汇总状态
+- **THEN** 由 finalization 统一产出响应 token 与完成信号
 
 ### Requirement: Support cancellation and fail-fast routing
-The runtime MUST stop further execution on cancellation or unrecoverable task failure.
+运行时 MUST 在 main/human 双层都支持取消与失败快速收敛，取消或不可恢复失败发生后 MUST 停止后续步骤和任务派发。
 
-#### Scenario: User cancels active run
-- **WHEN** cancel signal arrives during retrieval or capability execution
-- **THEN** runtime stops remaining work and emits run-cancelled event
+#### Scenario: Cancel during human step loop
+- **WHEN** human 执行过程中收到取消信号
+- **THEN** 当前步骤立即停止并上报取消，main 停止后续调度
+
+#### Scenario: Unrecoverable task block
+- **WHEN** human 返回不可恢复的 `block_task`
+- **THEN** main 按失败收敛策略结束或终止 run，且不继续盲目推进后续步骤
 
