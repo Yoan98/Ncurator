@@ -76,7 +76,7 @@ export const buildHumanControlTools = (input: {
       })
       const summary = String(args.summary || '').trim()
       const result = {
-        terminalState: 'completed' as const,
+        status: 'completed' as const,
         summary,
         outputs: args.outputs
       }
@@ -112,7 +112,7 @@ export const buildHumanControlTools = (input: {
       })
       const reason = String(args.reason || '').trim()
       const result = {
-        terminalState: 'blocked' as const,
+        status: 'blocked' as const,
         reason,
         details: args.details
       }

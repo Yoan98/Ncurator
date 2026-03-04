@@ -113,7 +113,7 @@ export type AiRunEventStage =
   | 'main_intent'
   | 'main_context_enrich'
   | 'main_plan'
-  | 'main_dispatch'
+  | 'main_plan_exec'
   | 'main_finalize'
   | 'human_brain'
   | 'human_tool_exec'
@@ -164,13 +164,11 @@ export type HumanTaskInput = {
   mode: 'context' | 'dispatch'
   // 任务目标（human 实际执行依据）。
   objective: string
-  // 可选能力提示，不做硬路由。
-  kindHint?: AiTaskKind
 }
 
 export type HumanTaskOutput = {
   taskId: string
-  terminalState: 'completed' | 'blocked'
+  status: 'completed' | 'blocked'
   summary: string
   resultCode: AiTaskResultCode
   resultData?: JsonObject
@@ -183,7 +181,6 @@ export type AiPlanTask = {
   id: string
   title: string
   objective: string
-  kindHint?: AiTaskKind
   status: AiTaskStatus
   attempts: number
   error?: string

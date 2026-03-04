@@ -8,7 +8,7 @@ TBD - created by archiving change langgraph-chat-ai-architecture. Update Purpose
 
 #### Scenario: Main graph orchestrates system stages
 - **WHEN** 新 run 启动
-- **THEN** main graph 按 `intent -> context_enrich -> plan -> dispatch -> finalize` 阶段推进
+- **THEN** main graph 按 `intent -> context_enrich -> plan -> main_plan_exec -> finalize` 阶段推进
 
 #### Scenario: Human graph executes one task objective
 - **WHEN** main graph 派发单个计划任务

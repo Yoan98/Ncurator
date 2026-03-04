@@ -19,8 +19,7 @@ const buildBaseMessages = (state: HumanRunState) => {
     new HumanMessage(
       [
         `任务模式: ${state.input.mode}`,
-        `任务目标: ${state.input.objective}`,
-        `任务类型提示: ${state.input.kindHint || 'none'}`
+        `任务目标: ${state.input.objective}`
       ].join('\n')
     )
   ]
@@ -32,7 +31,7 @@ export const createHumanBrainNode = (input: {
   const { ctx } = input
 
   return async (state: HumanRunState): Promise<Partial<HumanRunState>> => {
-    if (state.terminalState !== 'running') {
+    if (state.status !== 'running') {
       return {}
     }
 
@@ -49,7 +48,7 @@ export const createHumanBrainNode = (input: {
         stage: 'human_brain'
       })
       return {
-        terminalState: 'blocked',
+        status: 'blocked',
         summary,
         resultCode: 'bounded_loop_error'
       }
@@ -90,7 +89,7 @@ export const createHumanBrainNode = (input: {
         activeTools,
         messages: [...baseMessages, ai],
         steps: nextStep,
-        terminalState: 'blocked',
+        status: 'blocked',
         summary,
         resultCode: 'invalid_input'
       }
@@ -115,7 +114,7 @@ export const createHumanBrainNode = (input: {
         activeTools,
         messages: [...baseMessages, ai],
         steps: nextStep,
-        terminalState: 'blocked',
+        status: 'blocked',
         summary,
         resultCode: 'invalid_input'
       }

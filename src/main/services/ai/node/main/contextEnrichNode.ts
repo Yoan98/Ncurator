@@ -2,7 +2,7 @@ import type { HumanTaskInput } from '../../../../../shared/types'
 import type { AiRunContext, AiRunState } from '../../types'
 import { appendContextEvidence } from './helpers'
 
-export const createMainContextDispatchNode = (input: {
+export const createContextEnrichNode = (input: {
   ctx: AiRunContext
   runHumanTask: (taskInput: HumanTaskInput) => Promise<import('../../../../../shared/types').HumanTaskOutput>
 }) => {
@@ -17,8 +17,7 @@ export const createMainContextDispatchNode = (input: {
     const output = await runHumanTask({
       mode: 'context',
       taskId: contextTaskId,
-      objective,
-      kindHint: 'local_kb_retrieval'
+      objective
     })
 
     return {

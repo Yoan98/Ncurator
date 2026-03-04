@@ -560,7 +560,6 @@ const ChatPage: React.FC = () => {
             <div className="flex items-center justify-between w-full">
               <div className="flex items-center gap-2">
                 <span className="text-sm text-[#1F1F1F]">{t.title}</span>
-                <span className="text-xs text-[#999999]">{t.kindHint || '-'}</span>
                 {t.resultCode ? <span className="text-xs text-[#999999]">{t.resultCode}</span> : null}
                 {t.status === 'running' ? (
                   <span className="text-[10px] px-2 py-[2px] rounded bg-[#FBF5F2] text-[#D97757]">

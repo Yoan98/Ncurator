@@ -1,7 +1,7 @@
 import type { AiRunContext, AiRunState } from '../../types'
 import { appendContextEvidence, contextDecisionSchema, DEFAULT_MAX_CONTEXT_ROUNDS } from './helpers'
 
-export const createMainIntentNode = (input: {
+export const createIntentNode = (input: {
   ctx: AiRunContext
   maxContextRounds?: number
 }) => {
@@ -30,7 +30,7 @@ export const createMainIntentNode = (input: {
 
     const raw = await ctx.chatJson({
       system: [
-        '你是 main_intent_node。',
+        '你是 intent_node。',
         '你要在三种模式中选择一种：need_context / to_plan / direct_finalize。',
         '只输出 JSON，格式: {"mode":"...","reason":"...","answer":"..."}。',
         '当 mode=direct_finalize 时，必须提供 answer。'

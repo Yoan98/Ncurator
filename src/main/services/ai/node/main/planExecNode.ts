@@ -2,7 +2,7 @@ import type { HumanTaskInput } from '../../../../../shared/types'
 import type { AiRunContext, AiRunState } from '../../types'
 import { pickPendingTaskIndex } from './helpers'
 
-export const createMainDispatchNode = (input: {
+export const createPlanExecNode = (input: {
   ctx: AiRunContext
   runHumanTask: (taskInput: HumanTaskInput) => Promise<import('../../../../../shared/types').HumanTaskOutput>
 }) => {
@@ -28,18 +28,17 @@ export const createMainDispatchNode = (input: {
       type: 'task_started',
       runId: state.runId,
       taskId: task.id,
-      stage: 'main_dispatch'
+      stage: 'main_plan_exec'
     })
 
     const output = await runHumanTask({
       mode: 'dispatch',
       taskId: task.id,
-      objective: task.objective,
-      kindHint: task.kindHint
+      objective: task.objective
     })
 
     // 当前策略为 fail-fast：单任务 blocked 会直接触发主流程收敛。
-    const blocked = output.terminalState === 'blocked'
+    const blocked = output.status === 'blocked'
 
     const nextPlan = runningPlan.map((item, index) => {
       if (index !== taskIndex) return item
@@ -71,14 +70,14 @@ export const createMainDispatchNode = (input: {
         runId: state.runId,
         taskId: task.id,
         error: output.summary,
-        stage: 'main_dispatch'
+        stage: 'main_plan_exec'
       })
     } else {
       ctx.sendEvent({
         type: 'task_completed',
         runId: state.runId,
         taskId: task.id,
-        stage: 'main_dispatch'
+        stage: 'main_plan_exec'
       })
     }
 
@@ -89,7 +88,7 @@ export const createMainDispatchNode = (input: {
       code: output.resultCode,
       message: output.summary,
       data: output.resultData,
-      stage: 'main_dispatch'
+      stage: 'main_plan_exec'
     })
 
     const hasPending = nextPlan.some((item) => item.status === 'pending')
@@ -100,7 +99,7 @@ export const createMainDispatchNode = (input: {
       status: blocked ? 'failed' : state.status,
       error: blocked ? output.summary : state.error,
       outputText: output.summary,
-      mainStage: blocked ? 'main_finalize' : hasPending ? 'main_dispatch' : 'main_finalize'
+      mainStage: blocked ? 'main_finalize' : hasPending ? 'main_plan_exec' : 'main_finalize'
     }
   }
 }

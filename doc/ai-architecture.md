@@ -31,7 +31,7 @@ flowchart TD
   M0 -->|direct_finalize| M4["Main: finalize"]
   M1 --> HCTX["Human Subgraph (mode=context)"]
   HCTX --> M0
-  M2 --> M3["Main: dispatch(serial)"]
+  M2 --> M3["Main: main_plan_exec(serial)"]
   M3 --> HDIS["Human Subgraph (mode=dispatch)"]
   HDIS --> M3
   M3 -->|all done or blocked| M4
@@ -45,7 +45,7 @@ flowchart TD
 1. `main_intent_node`
 2. `main_context_enrich_node`
 3. `main_plan_node`
-4. `main_dispatch_node`
+4. `main_plan_exec_node`
 5. `main_finalize_node`
 
 ```mermaid
@@ -55,9 +55,9 @@ stateDiagram-v2
   main_intent_node --> main_plan_node: to_plan
   main_intent_node --> main_finalize_node: direct_finalize
   main_context_enrich_node --> main_intent_node: round+1
-  main_plan_node --> main_dispatch_node: plan_ready
-  main_dispatch_node --> main_dispatch_node: has_pending
-  main_dispatch_node --> main_finalize_node: done_or_blocked
+  main_plan_node --> main_plan_exec_node: plan_ready
+  main_plan_exec_node --> main_plan_exec_node: has_pending
+  main_plan_exec_node --> main_finalize_node: done_or_blocked
   main_finalize_node --> [*]
 ```
 
@@ -94,7 +94,7 @@ stateDiagram-v2
 ## 6. 任务输出模型
 
 - 移除 slot memory/slot commit 机制。
-- human 结果统一收敛为：`terminalState + summary + resultCode + resultData`。
+- human 结果统一收敛为：`status + summary + resultCode + resultData`。
 - 任务间状态不共享隐式运行态，main 仅聚合任务级结果。
 
 ## 7. 运行时类型核心
@@ -102,8 +102,8 @@ stateDiagram-v2
 - `AiRunState.mainStage`：Main 路由唯一来源。
 - `AiRunState.contextRounds/contextObjective/contextEvidence`：上下文补充控制。
 - `AiRunState.dispatchCursor`：串行调度游标。
-- `HumanTaskInput`：最小任务输入（`taskId/mode/objective/kindHint`）。
-- `HumanTaskOutput`：最小任务输出（`terminalState/summary/resultCode/resultData`）。
+- `HumanTaskInput`：最小任务输入（`taskId/mode/objective`）。
+- `HumanTaskOutput`：最小任务输出（`status/summary/resultCode/resultData`）。
 
 ## 8. 事件模型
 

@@ -12,7 +12,7 @@
 - **THEN** runtime 直接执行并根据 tool 结果继续循环或收敛，无需 slot 校验
 
 ### Requirement: Keep deterministic task-level outputs
-系统 MUST 将 human 执行结果收敛为任务级输出（`terminalState/summary/resultCode/resultData`），并由 main 聚合结果。
+系统 MUST 将 human 执行结果收敛为任务级输出（`status/summary/resultCode/resultData`），并由 main 聚合结果。
 
 #### Scenario: Capability execution succeeds
 - **WHEN** capability 返回成功结果

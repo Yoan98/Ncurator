@@ -9,7 +9,7 @@ TBD - created by archiving change main-human-brain-architecture. Update Purpose 
 
 #### Scenario: One task one human run
 - **WHEN** main graph 派发一个待执行任务到 human
-- **THEN** runtime 为该任务创建独立 human 运行上下文并开始 brain 步骤循环
+- **THEN** runtime 为该任务创建独立 human 运行上下文并开始 brain 步骤循环，最终以 `status/summary/resultCode/resultData` 返回任务结果
 
 #### Scenario: Task isolation across plan items
 - **WHEN** plan 中存在多个任务

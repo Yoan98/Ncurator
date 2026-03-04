@@ -15,7 +15,7 @@ TBD - created by archiving change langgraph-chat-ai-architecture. Update Purpose
 
 #### Scenario: Plan tasks dispatched to human runs
 - **WHEN** main 生成计划并派发任务
-- **THEN** 事件流包含 plan 创建、任务派发与任务终态事件
+- **THEN** 事件流在 `main_plan_exec` 阶段包含 plan 创建、任务派发与任务终态事件
 
 #### Scenario: Human step execution does not masquerade as new plan
 - **WHEN** human 在单任务内执行多步工具调用

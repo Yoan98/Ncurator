@@ -8,7 +8,7 @@ export type HumanRunState = {
   runId: string
   input: HumanTaskInput
   phase: HumanPhase
-  terminalState: 'running' | 'completed' | 'blocked'
+  status: 'running' | 'completed' | 'blocked'
   steps: number
   maxSteps: number
   messages: BaseMessage[]

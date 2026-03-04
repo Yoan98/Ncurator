@@ -64,7 +64,7 @@ export const createHumanToolExecNode = (input: {
         stage: 'human_tool_exec'
       })
       return {
-        terminalState: 'blocked',
+        status: 'blocked',
         summary,
         resultCode: 'invalid_input'
       }
@@ -92,7 +92,7 @@ export const createHumanToolExecNode = (input: {
       })
       return {
         messages: mergedMessages,
-        terminalState: 'completed',
+        status: 'completed',
         summary,
         resultCode: 'ok',
         resultData: isJsonObject(payload.outputs as JsonValue | undefined)
@@ -116,7 +116,7 @@ export const createHumanToolExecNode = (input: {
       })
       return {
         messages: mergedMessages,
-        terminalState: 'blocked',
+        status: 'blocked',
         summary,
         resultCode: 'failed',
         resultData:
@@ -149,7 +149,7 @@ export const createHumanToolExecNode = (input: {
     if (!ok) {
       return {
         messages: mergedMessages,
-        terminalState: 'blocked',
+        status: 'blocked',
         summary,
         resultCode: code,
         resultData: payload

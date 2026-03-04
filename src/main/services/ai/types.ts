@@ -23,21 +23,33 @@ export type AiMainStage =
   | 'main_intent'
   | 'main_context_enrich'
   | 'main_plan'
-  | 'main_dispatch'
+  | 'main_plan_exec'
   | 'main_finalize'
 
 export type AiRunState = {
+  // 当前 run 的唯一标识，与事件流 runId 对齐。
   runId: string
+  // 对话会话 ID，用于历史与消息写回。
   sessionId: string
+  // run 生命周期状态（main 全局状态）。
   status: AiRunStatus
+  // 用户本轮输入。
   input: string
+  // main graph 路由阶段唯一来源。
   mainStage: AiMainStage
+  // 已执行的上下文补充轮次。
   contextRounds: number
+  // 本轮需要补充上下文时的人类可执行目标。
   contextObjective?: string
+  // gate/context 过程沉淀的证据摘要。
   contextEvidence: string[]
+  // main_plan 产出的任务列表。
   plan: AiPlanTask[]
+  // main_plan_exec 串行游标。
   dispatchCursor: number
+  // run 级错误原因（失败时填充）。
   error?: string
+  // 最终答复文本（finalize 输出）。
   outputText?: string
 }
 

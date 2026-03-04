@@ -1,7 +1,7 @@
 import type { AiRunContext, AiRunState } from '../../types'
 import { planDecisionSchema, toPlanTasks } from './helpers'
 
-export const createMainPlanNode = (input: {
+export const createPlanNode = (input: {
   ctx: AiRunContext
 }) => {
   const { ctx } = input
@@ -17,9 +17,8 @@ export const createMainPlanNode = (input: {
 
     const raw = await ctx.chatJson({
       system: [
-        '你是 main_plan_node。',
-        '只输出 JSON: {"tasks":[{"id","title","objective","kindHint"}]}',
-        'kindHint 可选，仅允许 local_kb_retrieval / terminal_exec / docx。',
+        '你是 plan_node。',
+        '只输出 JSON: {"tasks":[{"id","title","objective"}]}',
         '请把任务拆成可独立执行的单任务。'
       ].join('\n'),
       user: [
@@ -32,17 +31,23 @@ export const createMainPlanNode = (input: {
     })
 
     const parsed = planDecisionSchema.safeParse(raw)
-    // 计划生成失败时回退到最小可执行任务，保证主流程可继续推进。
-    const plan = parsed.success
-      ? toPlanTasks(parsed.data.tasks)
-      : toPlanTasks([
-          {
-            id: 'task-1',
-            title: '默认检索任务',
-            objective: state.input,
-            kindHint: 'local_kb_retrieval'
-          }
-        ])
+    if (!parsed.success) {
+      const parseReason = parsed.error.issues
+        .map((issue) => {
+          const path = issue.path.length > 0 ? issue.path.join('.') : 'root'
+          return `${path}: ${issue.message}`
+        })
+        .join('; ')
+
+      return {
+        status: 'failed',
+        error: `plan_generation_failed: ${parseReason || 'invalid planner output'}`,
+        outputText: '计划生成失败：模型输出不符合任务结构要求。',
+        mainStage: 'main_finalize'
+      }
+    }
+
+    const plan = toPlanTasks(parsed.data.tasks)
 
     ctx.sendEvent({
       type: 'plan_created',
@@ -54,7 +59,7 @@ export const createMainPlanNode = (input: {
     return {
       plan,
       dispatchCursor: 0,
-      mainStage: 'main_dispatch'
+      mainStage: 'main_plan_exec'
     }
   }
 }

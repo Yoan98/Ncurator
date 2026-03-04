@@ -19,12 +19,12 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext; maxSteps?: nu
     .addNode('human_tool_exec_node', (state: HumanRunState) => toolExecNode(state))
     .addEdge(START, 'human_brain_node')
     .addConditionalEdges('human_brain_node', (state: HumanRunState) => {
-      if (state.terminalState !== 'running') return END
+      if (state.status !== 'running') return END
       if (state.phase === 'tool_exec') return 'human_tool_exec_node'
       return END
     })
     .addConditionalEdges('human_tool_exec_node', (state: HumanRunState) => {
-      if (state.terminalState !== 'running') return END
+      if (state.status !== 'running') return END
       return 'human_brain_node'
     })
     .compile()
@@ -34,7 +34,7 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext; maxSteps?: nu
       runId: ctx.runId,
       input: taskInput,
       phase: 'brain',
-      terminalState: 'running',
+      status: 'running',
       steps: 0,
       maxSteps,
       messages: [],
@@ -45,7 +45,7 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext; maxSteps?: nu
 
     return {
       taskId: taskInput.taskId,
-      terminalState: output.terminalState === 'completed' ? 'completed' : 'blocked',
+      status: output.status === 'completed' ? 'completed' : 'blocked',
       summary: output.summary,
       resultCode: output.resultCode,
       resultData: output.resultData
