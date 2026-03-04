@@ -54,8 +54,8 @@ export const pickPendingTaskIndex = (plan: AiPlanTask[], cursor = 0): number => 
 }
 
 export const buildFinalAnswer = async (ctx: AiRunContext, state: AiRunState): Promise<string> => {
-  if (state.directAnswerDraft && !state.error) {
-    return state.directAnswerDraft
+  if (state.outputText && !state.error && state.plan.length === 0) {
+    return state.outputText
   }
 
   const taskSummary = state.plan

@@ -1,7 +1,7 @@
 import { HumanMessage, SystemMessage } from '@langchain/core/messages'
 import type { AiRunContext, AiRunDeps, AiRunStartPayload } from './types'
 import { createChatModel } from '../llm/chatModel'
-import type { ChatMessage, ChatSessionMemory, JsonObject } from '../../types/store'
+import type { ChatMessage, JsonObject } from '../../types/store'
 
 type CancelledError = Error & { code: 'CANCELLED' }
 
@@ -35,45 +35,6 @@ const formatTurns = (messages: ChatMessage[]) => {
       return `${role}: ${content}`
     })
     .join('\n')
-}
-
-const pushInstruction = (bucket: string[], text: string, maxChars: number) => {
-  const normalized = String(text || '').replace(/\s+/g, ' ').trim()
-  if (!normalized) return
-  const clipped = normalized.slice(0, Math.max(1, maxChars))
-  if (bucket.includes(clipped)) return
-  bucket.push(clipped)
-}
-
-const buildLocalInstructions = (input: {
-  memory: ChatSessionMemory | null
-  workspacePolicyProfile?: string
-  maxItems: number
-  maxChars: number
-}): string[] => {
-  const items: string[] = []
-  const maxItems = Math.max(1, input.maxItems)
-  const maxChars = Math.max(20, input.maxChars)
-  const policy = String(input.workspacePolicyProfile || '').trim()
-  const memory = input.memory
-
-  if (policy) {
-    pushInstruction(items, `workspace-policy: ${policy}`, maxChars)
-  }
-
-  const pinnedFacts = Array.isArray(memory?.pinnedFacts) ? memory?.pinnedFacts : []
-  for (const fact of pinnedFacts) {
-    pushInstruction(items, `pinned-fact: ${String(fact || '').trim()}`, maxChars)
-    if (items.length >= maxItems) return items
-  }
-
-  const userPrefs = Array.isArray(memory?.userPrefs) ? memory?.userPrefs : []
-  for (const pref of userPrefs) {
-    pushInstruction(items, `user-pref: ${String(pref || '').trim()}`, maxChars)
-    if (items.length >= maxItems) return items
-  }
-
-  return items.slice(0, maxItems)
 }
 
 export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps): AiRunContext => {
@@ -110,30 +71,14 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
       Math.min(20000, Number(limits?.maxRecentTurnsChars ?? 6000))
     )
     const maxSummaryChars = Math.max(200, Math.min(8000, Number(limits?.maxSummaryChars ?? 1200)))
-    const maxLocalInstructionItems = Math.max(
-      1,
-      Math.min(50, Number(limits?.maxLocalInstructionItems ?? 20))
-    )
-    const maxLocalInstructionChars = Math.max(
-      20,
-      Math.min(500, Number(limits?.maxLocalInstructionChars ?? 120))
-    )
 
     const messages = await deps.chatStore.getRecentChatMessages(payload.sessionId, recentTurns)
     const recentTurnsText = clipText(formatTurns(messages), maxRecentTurnsChars)
 
     const memory = await deps.chatStore.getSessionMemory(payload.sessionId)
     const sessionSummaryText = clipText(String(memory?.summary || ''), maxSummaryChars)
-    const localInstructions = buildLocalInstructions({
-      memory,
-      workspacePolicyProfile: payload.workspace?.policyProfile
-        ? String(payload.workspace.policyProfile)
-        : undefined,
-      maxItems: maxLocalInstructionItems,
-      maxChars: maxLocalInstructionChars
-    })
 
-    return { recentTurnsText, sessionSummaryText, localInstructions }
+    return { recentTurnsText, sessionSummaryText }
   }
 
   return {

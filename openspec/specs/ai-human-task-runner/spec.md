@@ -2,9 +2,10 @@
 
 ## Purpose
 TBD - created by archiving change main-human-brain-architecture. Update Purpose after archive.
+
 ## Requirements
 ### Requirement: Execute single-task human graph with brain-driven loop
-系统 MUST 为每个 plan 任务启动独立 human 运行实例，并在该实例内以 `brain -> tool -> observe` 的步骤循环推进，直到 `complete_task` 或 `block_task` 终止。
+系统 MUST 为每个 plan 任务启动独立 human 运行实例，并在该实例内以 `brain -> tool_exec -> brain` 的步骤循环推进，直到 `complete_task` 或 `block_task` 终止。
 
 #### Scenario: One task one human run
 - **WHEN** main graph 派发一个待执行任务到 human
@@ -26,11 +27,11 @@ TBD - created by archiving change main-human-brain-architecture. Update Purpose 
 - **THEN** capability 仅执行原子逻辑并返回结构化结果，不再运行内部 AI 决策循环
 
 ### Requirement: Enforce canonical step actions
-brain 每一步输出 MUST 仅允许 `invoke_capability`、`complete_task`、`block_task` 三类动作之一，且动作载荷 MUST 满足结构化 schema 校验。
+brain 每一步输出 MUST 仅允许 `invoke_tool`、`complete_task`、`block_task` 三类动作之一，且动作载荷 MUST 满足结构化 schema 校验。
 
-#### Scenario: Invoke capability action
+#### Scenario: Invoke tool action
 - **WHEN** brain 判断需要执行外部能力
-- **THEN** 输出 `invoke_capability`，并包含 capability 标识、参数和步骤依赖声明
+- **THEN** 输出 `invoke_tool`，并包含工具名与参数
 
 #### Scenario: Block task on unrecoverable condition
 - **WHEN** brain 判断任务在当前约束下无法继续
@@ -46,4 +47,3 @@ human 步骤循环 MUST 受最大步数、总耗时、取消信号约束，并�
 #### Scenario: Cancellation during human execution
 - **WHEN** 运行过程中收到取消信号
 - **THEN** human 立即停止后续步骤并向 main 报告取消终态
-

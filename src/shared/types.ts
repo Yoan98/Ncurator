@@ -110,16 +110,13 @@ export type AiTaskKind = 'local_kb_retrieval' | 'terminal_exec' | 'docx'
 export type AiTaskStatus = 'pending' | 'running' | 'completed' | 'failed'
 export type AiRunStatus = 'running' | 'completed' | 'failed' | 'cancelled'
 export type AiRunEventStage =
-  | 'main_context_gate'
-  | 'main_context_dispatch'
+  | 'main_intent'
+  | 'main_context_enrich'
   | 'main_plan'
   | 'main_dispatch'
   | 'main_finalize'
-  | 'human_init'
   | 'human_brain'
   | 'human_tool_exec'
-  | 'human_slot_commit'
-  | 'human_exit'
 export type AiTaskResultCode =
   | 'ok'
   | 'failed'
@@ -128,19 +125,10 @@ export type AiTaskResultCode =
   | 'bounded_loop_error'
   | 'invalid_input'
 
-export type AiSlotRef = `slot:${string}`
-
-export type AiStepExpect = {
-  requiredOutputs: AiSlotRef[]
-}
-
 export type BrainInvokeToolAction = {
   action: 'invoke_tool'
   toolName: string
   args?: JsonObject
-  consume?: AiSlotRef[]
-  produce?: AiSlotRef[]
-  expect?: AiStepExpect
 }
 
 export type BrainCompleteTaskAction = {
@@ -167,52 +155,25 @@ export type CapabilityResult = {
   code: AiTaskResultCode
   summary: string
   data?: JsonObject
-  consume?: AiSlotRef[]
-  produce?: AiSlotRef[]
 }
 
 export type HumanTaskInput = {
-  // 当前运行实例 ID（来自 ai-run-start）。
-  runId: string
-  // 会话 ID，用于读取历史与事件关联。
-  sessionId: string
   // main 分配的任务 ID（run 内唯一）。
   taskId: string
   // 任务模式：context=补充上下文，dispatch=执行计划任务。
   mode: 'context' | 'dispatch'
-  // 任务标题（面向日志/UI）。
-  title: string
   // 任务目标（human 实际执行依据）。
   objective: string
   // 可选能力提示，不做硬路由。
   kindHint?: AiTaskKind
-  // 可选文档范围限制（仅允许在这些文档内检索）。
-  selectedDocumentIds?: string[]
-  // 可选工作区绑定（terminal/docx 等能力的执行边界）。
-  workspace?: {
-    // 工作区唯一标识。
-    workspaceId: string
-    // 工作区根目录绝对路径。
-    rootPath: string
-    // 可选策略配置名（审批/边界策略可按 profile 差异化）。
-    policyProfile?: string
-  }
-  // 当前任务可读写的 slot 快照（key 为 `slot:xxx`）。
-  slotState: JsonObject
-  // 大对象引用仓（slot 中可仅保存 ref + summary）。
-  slotArtifacts?: Record<string, JsonObject>
 }
 
 export type HumanTaskOutput = {
   taskId: string
   terminalState: 'completed' | 'blocked'
-  steps: number
   summary: string
   resultCode: AiTaskResultCode
   resultData?: JsonObject
-  slotDelta: JsonObject
-  slotState: JsonObject
-  slotArtifacts: Record<string, JsonObject>
 }
 
 export type AiFileArtifactCapability = 'terminal_exec' | 'docx'
@@ -373,17 +334,6 @@ type AiRunEventPayload =
       action: BrainStepAction['action']
       toolName?: string
       summary: string
-      createdAt: number
-    }
-  | {
-      type: 'slot_commit'
-      runId: string
-      taskId: string
-      stepIndex: number
-      consume: AiSlotRef[]
-      produce: AiSlotRef[]
-      success: boolean
-      message: string
       createdAt: number
     }
   | {

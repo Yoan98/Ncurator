@@ -12,9 +12,7 @@ export const createMainPlanNode = (input: {
     const history = await ctx.loadHistory({
       recentTurns: 12,
       maxRecentTurnsChars: 4000,
-      maxSummaryChars: 1000,
-      maxLocalInstructionItems: 20,
-      maxLocalInstructionChars: 120
+      maxSummaryChars: 1000
     })
 
     const raw = await ctx.chatJson({

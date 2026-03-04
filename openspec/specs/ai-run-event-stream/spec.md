@@ -63,10 +63,9 @@ TBD - created by archiving change langgraph-chat-ai-architecture. Update Purpose
 - **WHEN** 系统回放混合事件流
 - **THEN** 可基于关联字段稳定重建执行轨迹而无需启发式猜测
 
-### Requirement: Emit broker and slot-commit observability events
-系统 MUST 发出 Tool Broker 与 slot 提交相关可观测事件，至少覆盖 active tools 计算结果、被拒绝原因、slot 提交成功/失败。
+### Requirement: Keep human-step observability without slot events
+系统 MUST 通过 `human_step` 持续表达 human 内部推进状态，且 MUST 不再依赖 `slot_commit` 事件。
 
-#### Scenario: Broker and slot visibility
-- **WHEN** human 完成一步工具执行并提交 slot
-- **THEN** 事件流包含 broker 筛选快照与 slot 提交结果信息
-
+#### Scenario: Human step visibility in simplified runtime
+- **WHEN** human 完成一步工具执行
+- **THEN** 事件流包含可关联 task 的 `human_step` 信息，并省略 slot 提交事件

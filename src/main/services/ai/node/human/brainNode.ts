@@ -1,22 +1,29 @@
-import type { AIMessage } from '@langchain/core/messages'
+import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages'
 import { createChatModel } from '../../../llm/chatModel'
 import { getToolCalls } from '../../../../utils/aiCapabilityUtils'
-import type { AiSlotRef, JsonObject, JsonValue } from '../../../../../shared/types'
 import type { AiRunContext } from '../../types'
 import { buildCapabilityToolRegistry } from '../../tools/registry'
 import { buildHumanControlTools } from './controlTools'
 import type { HumanRunState } from './types'
 
-const toSlotRefList = (value: JsonValue | undefined): AiSlotRef[] => {
-  if (!Array.isArray(value)) return []
-  return value
-    .filter((item): item is string => typeof item === 'string' && item.startsWith('slot:'))
-    .map((item) => item as AiSlotRef)
-}
-
-const readObject = (value: JsonValue | undefined): JsonObject | undefined => {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
-  return value
+const buildBaseMessages = (state: HumanRunState) => {
+  return [
+    new SystemMessage(
+      [
+        '你是 human graph 的 brain。',
+        '你每一步必须使用 tool call。',
+        '可用工具包含 capability tools 与控制工具 complete_task/block_task。',
+        '禁止直接输出自然语言结论，不允许无工具步骤。'
+      ].join('\n')
+    ),
+    new HumanMessage(
+      [
+        `任务模式: ${state.input.mode}`,
+        `任务目标: ${state.input.objective}`,
+        `任务类型提示: ${state.input.kindHint || 'none'}`
+      ].join('\n')
+    )
+  ]
 }
 
 export const createHumanBrainNode = (input: {
@@ -26,12 +33,9 @@ export const createHumanBrainNode = (input: {
 
   return async (state: HumanRunState): Promise<Partial<HumanRunState>> => {
     if (state.terminalState !== 'running') {
-      return {
-        phase: 'exit'
-      }
+      return {}
     }
 
-    // 回合上限是 human 的硬保护，防止脑循环在工具层面失控。
     if (state.steps >= state.maxSteps) {
       const summary = `human exceeded max steps (${state.maxSteps})`
       ctx.sendEvent({
@@ -46,7 +50,6 @@ export const createHumanBrainNode = (input: {
       })
       return {
         terminalState: 'blocked',
-        phase: 'exit',
         summary,
         resultCode: 'bounded_loop_error'
       }
@@ -62,16 +65,15 @@ export const createHumanBrainNode = (input: {
       runId: state.runId,
       taskId: state.input.taskId
     })
-    // 当前策略不做 tool 筛选：每步暴露全量 capability tools + control tools。
     const activeTools = [...capabilityRegistry.allTools, ...controlTools]
 
+    const baseMessages = state.messages.length === 0 ? buildBaseMessages(state) : state.messages
     const cfg = await ctx.getModelConfig()
     const model = createChatModel(cfg, { temperature: 0.1 }).bindTools(activeTools)
-    const ai = (await model.invoke(state.messages)) as AIMessage
+    const ai = (await model.invoke(baseMessages)) as AIMessage
     const toolCalls = getToolCalls(ai)
     const nextStep = state.steps + 1
 
-    // strict tool-call only：无 tool call 视为无效输入并阻断任务。
     if (toolCalls.length === 0) {
       const summary = 'brain produced no tool call'
       ctx.sendEvent({
@@ -85,10 +87,10 @@ export const createHumanBrainNode = (input: {
         stage: 'human_brain'
       })
       return {
-        messages: [...state.messages, ai],
+        activeTools,
+        messages: [...baseMessages, ai],
         steps: nextStep,
         terminalState: 'blocked',
-        phase: 'exit',
         summary,
         resultCode: 'invalid_input'
       }
@@ -97,7 +99,6 @@ export const createHumanBrainNode = (input: {
     const first = toolCalls[0]
     const toolName = String(first.name || '').trim()
     const allowed = new Set(activeTools.map((toolItem) => String(toolItem.name || '')))
-    // 模型幻觉到未注册 tool 时立即阻断，避免进入不确定执行分支。
     if (!allowed.has(toolName)) {
       const summary = `unknown tool call: ${toolName}`
       ctx.sendEvent({
@@ -111,30 +112,20 @@ export const createHumanBrainNode = (input: {
         stage: 'human_brain'
       })
       return {
-        messages: [...state.messages, ai],
+        activeTools,
+        messages: [...baseMessages, ai],
         steps: nextStep,
         terminalState: 'blocked',
-        phase: 'exit',
         summary,
         resultCode: 'invalid_input'
       }
     }
 
-    const args = readObject(first.args as JsonValue | undefined)
-    const consume = toSlotRefList(args?.consume)
-    const produce = toSlotRefList(args?.produce)
-    const expect = toSlotRefList(readObject(args?.expect)?.requiredOutputs)
-
     return {
       activeTools,
-      capabilityByTool: capabilityRegistry.toolToCapability,
-      messages: [...state.messages, ai],
+      messages: [...baseMessages, ai],
       lastAiMessage: ai,
       lastToolName: toolName,
-      lastToolArgs: args || {},
-      consume,
-      produce,
-      expect,
       steps: nextStep,
       phase: 'tool_exec'
     }

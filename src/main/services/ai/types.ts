@@ -7,14 +7,12 @@ import type {
   AiRunEvent,
   AiRunEventStage,
   AiRunStatus,
-  AiSlotRef,
   AiTaskStatus,
   BrainStepAction,
   CapabilityResult,
   HumanTaskInput,
   HumanTaskOutput,
   JsonObject,
-  JsonValue,
   LLMConfig
 } from '../../../shared/types'
 
@@ -22,15 +20,11 @@ export type { AiTaskStatus, AiRunStatus, AiPlanTask }
 export type { BrainStepAction, CapabilityResult, HumanTaskInput, HumanTaskOutput }
 
 export type AiMainStage =
-  | 'main_context_gate'
-  | 'main_context_dispatch'
+  | 'main_intent'
+  | 'main_context_enrich'
   | 'main_plan'
   | 'main_dispatch'
   | 'main_finalize'
-
-export type AiContextDecision = 'need_context' | 'to_plan' | 'direct_finalize'
-
-export type AiTaskSlotState = Record<AiSlotRef, JsonValue>
 
 export type AiRunState = {
   runId: string
@@ -39,15 +33,10 @@ export type AiRunState = {
   input: string
   mainStage: AiMainStage
   contextRounds: number
-  contextDecision?: AiContextDecision
-  contextTaskObjective?: string
+  contextObjective?: string
   contextEvidence: string[]
-  directAnswerDraft?: string
   plan: AiPlanTask[]
   dispatchCursor: number
-  taskSlots: Record<string, AiTaskSlotState>
-  slotArtifacts: Record<string, JsonObject>
-  humanStepIndex: number
   error?: string
   outputText?: string
 }
@@ -110,9 +99,7 @@ export type AiRunContext = {
     recentTurns?: number
     maxRecentTurnsChars?: number
     maxSummaryChars?: number
-    maxLocalInstructionItems?: number
-    maxLocalInstructionChars?: number
-  }) => Promise<{ recentTurnsText: string; sessionSummaryText: string; localInstructions: string[] }>
+  }) => Promise<{ recentTurnsText: string; sessionSummaryText: string }>
   getModelConfig: () => Promise<LLMConfig>
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService

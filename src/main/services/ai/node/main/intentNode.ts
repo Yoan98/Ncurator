@@ -1,7 +1,7 @@
 import type { AiRunContext, AiRunState } from '../../types'
 import { appendContextEvidence, contextDecisionSchema, DEFAULT_MAX_CONTEXT_ROUNDS } from './helpers'
 
-export const createMainContextGateNode = (input: {
+export const createMainIntentNode = (input: {
   ctx: AiRunContext
   maxContextRounds?: number
 }) => {
@@ -11,18 +11,13 @@ export const createMainContextGateNode = (input: {
   return async (state: AiRunState): Promise<Partial<AiRunState>> => {
     ctx.checkCancelled()
 
-    // 运行已进入终态时，不再做判定，直接走 finalize 收敛出口。
     if (state.status === 'failed' || state.status === 'cancelled' || state.status === 'completed') {
-      return {
-        mainStage: 'main_finalize'
-      }
+      return { mainStage: 'main_finalize' }
     }
 
-    // 上下文补充达到上限后强制降级到 plan，避免 gate/context 死循环。
     if (state.contextRounds >= maxContextRounds) {
       return {
-        contextDecision: 'to_plan',
-        contextTaskObjective: undefined,
+        contextObjective: undefined,
         mainStage: 'main_plan'
       }
     }
@@ -30,14 +25,12 @@ export const createMainContextGateNode = (input: {
     const history = await ctx.loadHistory({
       recentTurns: 12,
       maxRecentTurnsChars: 4000,
-      maxSummaryChars: 1000,
-      maxLocalInstructionItems: 20,
-      maxLocalInstructionChars: 120
+      maxSummaryChars: 1000
     })
 
     const raw = await ctx.chatJson({
       system: [
-        '你是 main_context_gate_node。',
+        '你是 main_intent_node。',
         '你要在三种模式中选择一种：need_context / to_plan / direct_finalize。',
         '只输出 JSON，格式: {"mode":"...","reason":"...","answer":"..."}。',
         '当 mode=direct_finalize 时，必须提供 answer。'
@@ -53,33 +46,21 @@ export const createMainContextGateNode = (input: {
     })
 
     const parsed = contextDecisionSchema.safeParse(raw)
-    // gate 输出异常时采用保守路径：进入 plan，而不是直接失败。
     if (!parsed.success) {
       return {
-        contextDecision: 'to_plan',
-        contextTaskObjective: undefined,
+        contextObjective: undefined,
         mainStage: 'main_plan'
       }
     }
 
     const decision = parsed.data
     if (decision.mode === 'need_context') {
-      if (state.contextRounds >= maxContextRounds) {
-        return {
-          contextDecision: 'to_plan',
-          contextTaskObjective: undefined,
-          mainStage: 'main_plan'
-        }
-      }
-      const contextTaskObjective = String(decision.reason || '').trim() || state.input
+      const contextObjective = String(decision.reason || '').trim() || state.input
       return {
-        contextDecision: 'need_context',
-        // 把 gate 判定理由转成可执行目标，交给 context_dispatch 调 human。
-        contextTaskObjective,
-        mainStage: 'main_context_dispatch',
-        // 将 gate 的理由写入 evidence，方便后续 plan/finalize 使用。
+        contextObjective,
+        mainStage: 'main_context_enrich',
         contextEvidence: decision.reason
-          ? appendContextEvidence(state, `gate: need_context (${decision.reason})`)
+          ? appendContextEvidence(state, `intent: need_context (${decision.reason})`)
           : state.contextEvidence
       }
     }
@@ -87,22 +68,19 @@ export const createMainContextGateNode = (input: {
     if (decision.mode === 'direct_finalize') {
       const answer = String(decision.answer || '').trim()
       return {
-        contextDecision: 'direct_finalize',
-        contextTaskObjective: undefined,
-        directAnswerDraft: answer,
+        contextObjective: undefined,
         outputText: answer || state.outputText,
         contextEvidence: decision.reason
-          ? appendContextEvidence(state, `gate: direct_finalize (${decision.reason})`)
+          ? appendContextEvidence(state, `intent: direct_finalize (${decision.reason})`)
           : state.contextEvidence,
         mainStage: 'main_finalize'
       }
     }
 
     return {
-      contextDecision: 'to_plan',
-      contextTaskObjective: undefined,
+      contextObjective: undefined,
       contextEvidence: decision.reason
-        ? appendContextEvidence(state, `gate: to_plan (${decision.reason})`)
+        ? appendContextEvidence(state, `intent: to_plan (${decision.reason})`)
         : state.contextEvidence,
       mainStage: 'main_plan'
     }

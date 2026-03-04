@@ -8,7 +8,7 @@ TBD - created by archiving change langgraph-chat-ai-architecture. Update Purpose
 
 #### Scenario: Main graph orchestrates system stages
 - **WHEN** 新 run 启动
-- **THEN** main graph 按 `probe -> context -> plan -> dispatch -> finalize` 阶段推进
+- **THEN** main graph 按 `intent -> context_enrich -> plan -> dispatch -> finalize` 阶段推进
 
 #### Scenario: Human graph executes one task objective
 - **WHEN** main graph 派发单个计划任务
@@ -22,7 +22,7 @@ TBD - created by archiving change langgraph-chat-ai-architecture. Update Purpose
 系统 MUST 在 main 层完成“直接答复或生成执行计划”的分流决策，并在需要执行时将计划任务拆分为独立任务交给 human 执行。
 
 #### Scenario: Direct answer path
-- **WHEN** probe/context 判定无需执行动作
+- **WHEN** intent/context_enrich 判定无需执行动作
 - **THEN** main 直接进入 finalization 并输出最终答复
 
 #### Scenario: Plan execution path
@@ -64,4 +64,3 @@ TBD - created by archiving change langgraph-chat-ai-architecture. Update Purpose
 #### Scenario: Unrecoverable task block
 - **WHEN** human 返回不可恢复的 `block_task`
 - **THEN** main 按失败收敛策略结束或终止 run，且不继续盲目推进后续步骤
-

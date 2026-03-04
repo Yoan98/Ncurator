@@ -3,12 +3,7 @@ import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { tool } from '@langchain/core/tools'
 import { z } from 'zod/v4'
-import type {
-  AiFileArtifactOperation,
-  AiTaskResultCode,
-  IpcJsonObject,
-  IpcJsonValue
-} from '../../../../../shared/types'
+import type { AiFileArtifactOperation, IpcJsonObject, IpcJsonValue } from '../../../../../shared/types'
 import type { AiRunContext } from '../../types'
 import { runTerminalCommand } from './terminalExec'
 import {
@@ -36,18 +31,9 @@ type TerminalCapabilityToolsInput = {
   emitActivity: (input: EmitActivityInput) => void
 }
 
-export type TerminalToolFinishState = {
-  done: boolean
-  success: boolean
-  summary?: string
-  resultCode?: AiTaskResultCode
-}
-
 export type TerminalCapabilityToolsRuntimeState = {
   /** 已执行命令的步数，用于事件 stepIndex 与回合统计。 */
   stepIndex: number
-  /** terminal_finish 调用后写入的完成态。 */
-  finish: TerminalToolFinishState
 }
 
 type ArtifactCandidate = {
@@ -73,14 +59,6 @@ const terminalRunCommandSchema = z.object({
   command: z.string().min(1),
   cwd: z.string().optional(),
   expectedArtifacts: z.array(artifactHintSchema).optional()
-})
-
-const terminalFinishSchema = z.object({
-  success: z.boolean(),
-  summary: z.string().optional(),
-  resultCode: z
-    .enum(['ok', 'failed', 'approval_denied', 'bounded_loop_error', 'invalid_input'])
-    .optional()
 })
 
 const mergeArtifactCandidates = (input: {
@@ -148,11 +126,7 @@ const resolveCwd = (input: { workspaceRootPath: string; requestedCwd?: string })
 
 export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput) => {
   const state: TerminalCapabilityToolsRuntimeState = {
-    stepIndex: 0,
-    finish: {
-      done: false,
-      success: false
-    }
+    stepIndex: 0
   }
 
   const emitStarted = (toolName: string, args: IpcJsonObject) => {
@@ -391,36 +365,8 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
     }
   )
 
-  const terminalFinish = tool(
-    async (args) => {
-      const toolName = 'terminal_finish'
-      const toolCallId = emitStarted(toolName, args)
-      const summary = String(args.summary || '').trim()
-      state.finish = {
-        done: true,
-        success: Boolean(args.success),
-        summary: summary || undefined,
-        resultCode: args.resultCode
-      }
-      const result = {
-        done: true,
-        success: state.finish.success,
-        summary: state.finish.summary,
-        resultCode: state.finish.resultCode
-      }
-      emitResult(toolName, toolCallId, result)
-      return result
-    },
-    {
-      name: 'terminal_finish',
-      description:
-        'Mark terminal capability as finished. Must be called when objective is completed or cannot continue safely.',
-      schema: terminalFinishSchema
-    }
-  )
-
   return {
-    tools: [terminalRunCommand, terminalFinish],
+    tools: [terminalRunCommand],
     state
   }
 }

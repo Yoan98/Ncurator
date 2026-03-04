@@ -23,14 +23,11 @@ export class AiRunService {
         sessionId: payload.sessionId,
         status: 'running',
         input: String(payload.input || ''),
-        mainStage: 'main_context_gate',
+        mainStage: 'main_intent',
         plan: [],
         contextRounds: 0,
         contextEvidence: [],
-        dispatchCursor: 0,
-        taskSlots: {},
-        slotArtifacts: {},
-        humanStepIndex: 0
+        dispatchCursor: 0
       } as AiRunState)
       return res as AiRunState
     } catch (e) {
@@ -51,9 +48,6 @@ export class AiRunService {
           contextRounds: 0,
           contextEvidence: [],
           dispatchCursor: 0,
-          taskSlots: {},
-          slotArtifacts: {},
-          humanStepIndex: 0,
           error: 'cancelled',
           outputText: '已取消。'
         }
@@ -69,9 +63,6 @@ export class AiRunService {
         contextRounds: 0,
         contextEvidence: [],
         dispatchCursor: 0,
-        taskSlots: {},
-        slotArtifacts: {},
-        humanStepIndex: 0,
         error: msg,
         outputText: `失败：${msg}`
       }

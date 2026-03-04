@@ -65,7 +65,6 @@ export const createHumanToolExecNode = (input: {
       })
       return {
         terminalState: 'blocked',
-        phase: 'exit',
         summary,
         resultCode: 'invalid_input'
       }
@@ -75,13 +74,11 @@ export const createHumanToolExecNode = (input: {
     const toolMessages = getToolNodeMessages(out)
     const mergedMessages = [...state.messages, ...toolMessages]
     const lastToolMessage = toolMessages.at(-1)
-    // 工具层返回格式不完全可控，统一在此归一为 JsonObject。
     const payload = parseJsonObject(getMessageText(lastToolMessage?.content)) || {}
     const toolName = state.lastToolName
 
-    // control tool 直接决定任务终态，不再进入 slot 提交阶段。
     if (toolName === 'complete_task') {
-      const summary = String(payload.summary || state.lastToolArgs?.summary || 'task completed').trim()
+      const summary = String(payload.summary || 'task completed').trim()
       ctx.sendEvent({
         type: 'human_step',
         runId: state.runId,
@@ -95,9 +92,7 @@ export const createHumanToolExecNode = (input: {
       })
       return {
         messages: mergedMessages,
-        lastToolMessages: toolMessages,
         terminalState: 'completed',
-        phase: 'exit',
         summary,
         resultCode: 'ok',
         resultData: isJsonObject(payload.outputs as JsonValue | undefined)
@@ -107,7 +102,7 @@ export const createHumanToolExecNode = (input: {
     }
 
     if (toolName === 'block_task') {
-      const summary = String(payload.reason || state.lastToolArgs?.reason || 'task blocked').trim()
+      const summary = String(payload.reason || 'task blocked').trim()
       ctx.sendEvent({
         type: 'human_step',
         runId: state.runId,
@@ -121,9 +116,7 @@ export const createHumanToolExecNode = (input: {
       })
       return {
         messages: mergedMessages,
-        lastToolMessages: toolMessages,
         terminalState: 'blocked',
-        phase: 'exit',
         summary,
         resultCode: 'failed',
         resultData:
@@ -154,30 +147,18 @@ export const createHumanToolExecNode = (input: {
     })
 
     if (!ok) {
-      // capability 执行失败时直接阻断，交由 main 的 fail-fast 策略收敛。
       return {
         messages: mergedMessages,
-        lastToolMessages: toolMessages,
         terminalState: 'blocked',
-        phase: 'exit',
         summary,
         resultCode: code,
         resultData: payload
       }
     }
 
-    // 仅成功执行的 capability 结果允许进入 slot_commit。
     return {
       messages: mergedMessages,
-      lastToolMessages: toolMessages,
-      pendingPayload: {
-        toolName,
-        capability: state.capabilityByTool[toolName],
-        code,
-        summary,
-        data: payload
-      },
-      phase: 'slot_commit'
+      phase: 'brain'
     }
   }
 }

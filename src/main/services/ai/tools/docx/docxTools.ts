@@ -3,7 +3,7 @@ import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { tool } from '@langchain/core/tools'
 import { z } from 'zod/v4'
-import type { AiTaskResultCode, IpcJsonObject, IpcJsonValue } from '../../../../../shared/types'
+import type { IpcJsonObject, IpcJsonValue } from '../../../../../shared/types'
 import type { AiRunContext } from '../../types'
 import { emitFileArtifactEvent } from '../../events/fileArtifacts'
 import { resolveWorkspacePath } from '../terminal_exec/terminalPolicy'
@@ -24,16 +24,7 @@ type DocxCapabilityToolsInput = {
   emitActivity: (input: EmitActivityInput) => void
 }
 
-export type DocxToolFinishState = {
-  done: boolean
-  success: boolean
-  summary?: string
-  resultCode?: AiTaskResultCode
-}
-
 export type DocxCapabilityToolsRuntimeState = {
-  /** docx_finish 调用后的完成状态。 */
-  finish: DocxToolFinishState
   /** 当前加载并可编辑的源文件路径（workspace 内绝对路径）。 */
   sourcePath?: string
   /** 当前内存编辑文本快照。 */
@@ -90,21 +81,8 @@ const docxSaveSchema = z.object({
   overwrite: z.boolean().optional()
 })
 
-const docxFinishSchema = z.object({
-  success: z.boolean(),
-  summary: z.string().optional(),
-  resultCode: z
-    .enum(['ok', 'failed', 'approval_denied', 'bounded_loop_error', 'invalid_input'])
-    .optional()
-})
-
 export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
-  const state: DocxCapabilityToolsRuntimeState = {
-    finish: {
-      done: false,
-      success: false
-    }
-  }
+  const state: DocxCapabilityToolsRuntimeState = {}
 
   const workspaceRootPath = path.resolve(input.workspaceRootPath)
 
@@ -422,37 +400,8 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
     }
   )
 
-  const docxFinishTool = tool(
-    async (args) => {
-      const toolName = 'docx_finish'
-      const toolCallId = emitStarted(toolName, args)
-      const summary = String(args.summary || '').trim()
-      state.finish = {
-        done: true,
-        success: Boolean(args.success),
-        summary: summary || undefined,
-        resultCode: args.resultCode
-      }
-      const result = {
-        done: true,
-        success: state.finish.success,
-        summary: state.finish.summary,
-        resultCode: state.finish.resultCode,
-        outputPath: state.outputPath
-      }
-      emitResult(toolName, toolCallId, result)
-      return result
-    },
-    {
-      name: 'docx_finish',
-      description:
-        'Mark docx capability as finished after inspect/apply/save loop reaches goal or cannot continue.',
-      schema: docxFinishSchema
-    }
-  )
-
   return {
-    tools: [docxInspectTool, docxApplyEditsTool, docxSaveOutputTool, docxFinishTool],
+    tools: [docxInspectTool, docxApplyEditsTool, docxSaveOutputTool],
     state
   }
 }

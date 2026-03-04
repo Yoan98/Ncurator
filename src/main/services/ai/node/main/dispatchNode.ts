@@ -1,4 +1,4 @@
-import type { HumanTaskInput, JsonObject } from '../../../../../shared/types'
+import type { HumanTaskInput } from '../../../../../shared/types'
 import type { AiRunContext, AiRunState } from '../../types'
 import { pickPendingTaskIndex } from './helpers'
 
@@ -31,19 +31,11 @@ export const createMainDispatchNode = (input: {
       stage: 'main_dispatch'
     })
 
-    const taskSlotState = state.taskSlots[task.id]
     const output = await runHumanTask({
-      runId: state.runId,
-      sessionId: state.sessionId,
       mode: 'dispatch',
       taskId: task.id,
-      title: task.title,
       objective: task.objective,
-      kindHint: task.kindHint,
-      selectedDocumentIds: ctx.selectedDocumentIds,
-      workspace: ctx.workspace,
-      slotState: taskSlotState && typeof taskSlotState === 'object' ? (taskSlotState as JsonObject) : {},
-      slotArtifacts: state.slotArtifacts
+      kindHint: task.kindHint
     })
 
     // 当前策略为 fail-fast：单任务 blocked 会直接触发主流程收敛。
@@ -105,16 +97,9 @@ export const createMainDispatchNode = (input: {
     return {
       plan: nextPlan,
       dispatchCursor: taskIndex + 1,
-      taskSlots: {
-        ...state.taskSlots,
-        [task.id]: output.slotState
-      },
-      slotArtifacts: output.slotArtifacts,
-      humanStepIndex: output.steps,
       status: blocked ? 'failed' : state.status,
       error: blocked ? output.summary : state.error,
       outputText: output.summary,
-      // 成功则继续 dispatch，自然跑完 pending；失败则立即 finalize。
       mainStage: blocked ? 'main_finalize' : hasPending ? 'main_dispatch' : 'main_finalize'
     }
   }

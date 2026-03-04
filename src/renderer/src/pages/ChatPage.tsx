@@ -55,7 +55,7 @@ type TerminalEvent = Extract<
 >
 type ActivityEvent = Extract<AiRunEvent, { type: 'activity' }>
 type ArtifactEvent = Extract<AiRunEvent, { type: 'file_artifact' }>
-type HumanStepTraceEvent = Extract<AiRunEvent, { type: 'human_step' | 'slot_commit' }>
+type HumanStepTraceEvent = Extract<AiRunEvent, { type: 'human_step' }>
 
 const getPageNumberFromMetadata = (metadata: SearchResult['metadata']): number => {
   if (!metadata) return 1
@@ -240,7 +240,7 @@ const ChatPage: React.FC = () => {
         return
       }
 
-      if (evt.type === 'human_step' || evt.type === 'slot_commit') {
+      if (evt.type === 'human_step') {
         setRightPanel({
           title: `Human 步骤追踪 · ${evt.type}`,
           kind: 'json',
