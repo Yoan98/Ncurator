@@ -143,10 +143,7 @@ export type BrainBlockTaskAction = {
   details?: string
 }
 
-export type BrainStepAction =
-  | BrainInvokeToolAction
-  | BrainCompleteTaskAction
-  | BrainBlockTaskAction
+export type BrainStepAction = BrainInvokeToolAction | BrainCompleteTaskAction | BrainBlockTaskAction
 
 export type CapabilityResult = {
   toolName: string
@@ -160,8 +157,6 @@ export type CapabilityResult = {
 export type HumanTaskInput = {
   // main 分配的任务 ID（run 内唯一）。
   taskId: string
-  // 任务模式：context=补充上下文，dispatch=执行计划任务。
-  mode: 'context' | 'dispatch'
   // 任务目标（human 实际执行依据）。
   objective: string
 }

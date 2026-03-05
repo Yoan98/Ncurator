@@ -45,9 +45,7 @@ const resolveCode = (value: JsonValue | undefined, fallback: AiTaskResultCode = 
   return fallback
 }
 
-export const createHumanToolExecNode = (input: {
-  ctx: AiRunContext
-}) => {
+export const createHumanToolExecNode = (input: { ctx: AiRunContext }) => {
   const { ctx } = input
 
   return async (state: HumanRunState): Promise<Partial<HumanRunState>> => {
@@ -131,8 +129,9 @@ export const createHumanToolExecNode = (input: {
     const ok = payload.ok !== false && payload.success !== false
     const code = resolveCode(payload.code, ok ? 'ok' : 'failed')
     const summary =
-      String(payload.summary || payload.message || payload.error || `${toolName} executed`).trim() ||
-      `${toolName} executed`
+      String(
+        payload.summary || payload.message || payload.error || `${toolName} executed`
+      ).trim() || `${toolName} executed`
 
     ctx.sendEvent({
       type: 'human_step',
@@ -147,6 +146,16 @@ export const createHumanToolExecNode = (input: {
     })
 
     if (!ok) {
+      const shouldBlock = code === 'workspace_required' || code === 'approval_denied'
+      if (!shouldBlock) {
+        return {
+          messages: mergedMessages,
+          phase: 'brain',
+          summary,
+          resultCode: code,
+          resultData: payload
+        }
+      }
       return {
         messages: mergedMessages,
         status: 'blocked',

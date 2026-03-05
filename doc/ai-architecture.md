@@ -29,10 +29,10 @@ flowchart TD
   M0 -->|need_context| M1["Main: context_enrich"]
   M0 -->|to_plan| M2["Main: plan"]
   M0 -->|direct_finalize| M4["Main: finalize"]
-  M1 --> HCTX["Human Subgraph (mode=context)"]
+  M1 --> HCTX["Human Subgraph"]
   HCTX --> M0
   M2 --> M3["Main: main_plan_exec(serial)"]
-  M3 --> HDIS["Human Subgraph (mode=dispatch)"]
+  M3 --> HDIS["Human Subgraph"]
   HDIS --> M3
   M3 -->|all done or blocked| M4
   M4 --> OUT["answer_token / answer_completed / run_completed"]
@@ -88,6 +88,8 @@ stateDiagram-v2
 
 - 每步必须是 tool call（strict tool-call only）。
 - 工具集合固定为「全量 capability tools + control tools」。
+- 可恢复失败（`failed`、`invalid_input`）回到 brain 继续探索，不立即结束任务。
+- 不可恢复失败（`workspace_required`、`approval_denied`）应收敛为 `block_task`。
 - 无 tool call / 未知 tool / 上下文缺失均触发 `block_task`。
 - `maxSteps` 超限触发 `bounded_loop_error`。
 
@@ -102,7 +104,7 @@ stateDiagram-v2
 - `AiRunState.mainStage`：Main 路由唯一来源。
 - `AiRunState.contextRounds/contextObjective/contextEvidence`：上下文补充控制。
 - `AiRunState.dispatchCursor`：串行调度游标。
-- `HumanTaskInput`：最小任务输入（`taskId/mode/objective`）。
+- `HumanTaskInput`：最小任务输入（`taskId/objective`）。
 - `HumanTaskOutput`：最小任务输出（`status/summary/resultCode/resultData`）。
 
 ## 8. 事件模型
@@ -127,6 +129,7 @@ stateDiagram-v2
 - 状态 Schema：`src/main/services/ai/state/stateSchemas.ts`
 - Main 节点：`src/main/services/ai/node/main/*`
 - Human 节点：`src/main/services/ai/node/human/*`
+- Prompt Registry：`src/main/services/ai/prompts/*`
 - Tool 聚合：`src/main/services/ai/tools/registry.ts`
 - Tool 分组：`src/main/services/ai/tools/<capability>/*`
 

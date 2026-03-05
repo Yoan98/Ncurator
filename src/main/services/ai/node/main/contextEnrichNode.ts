@@ -4,7 +4,9 @@ import { appendContextEvidence } from './helpers'
 
 export const createContextEnrichNode = (input: {
   ctx: AiRunContext
-  runHumanTask: (taskInput: HumanTaskInput) => Promise<import('../../../../../shared/types').HumanTaskOutput>
+  runHumanTask: (
+    taskInput: HumanTaskInput
+  ) => Promise<import('../../../../../shared/types').HumanTaskOutput>
 }) => {
   const { ctx, runHumanTask } = input
 
@@ -15,7 +17,6 @@ export const createContextEnrichNode = (input: {
     const objective = String(state.contextObjective || '').trim() || state.input
 
     const output = await runHumanTask({
-      mode: 'context',
       taskId: contextTaskId,
       objective
     })

@@ -5,29 +5,18 @@ import type { AiRunContext } from '../../types'
 import { buildCapabilityToolRegistry } from '../../tools/registry'
 import { buildHumanControlTools } from './controlTools'
 import type { HumanRunState } from './types'
+import { buildHumanBrainPrompt } from '../../prompts/human/brain'
 
 const buildBaseMessages = (state: HumanRunState) => {
-  return [
-    new SystemMessage(
-      [
-        '你是 human graph 的 brain。',
-        '你每一步必须使用 tool call。',
-        '可用工具包含 capability tools 与控制工具 complete_task/block_task。',
-        '禁止直接输出自然语言结论，不允许无工具步骤。'
-      ].join('\n')
-    ),
-    new HumanMessage(
-      [
-        `任务模式: ${state.input.mode}`,
-        `任务目标: ${state.input.objective}`
-      ].join('\n')
-    )
-  ]
+  const prompt = buildHumanBrainPrompt({
+    objective: state.input.objective,
+    stepIndex: state.steps + 1,
+    maxSteps: state.maxSteps
+  })
+  return [new SystemMessage(prompt.system), new HumanMessage(prompt.user)]
 }
 
-export const createHumanBrainNode = (input: {
-  ctx: AiRunContext
-}) => {
+export const createHumanBrainNode = (input: { ctx: AiRunContext }) => {
   const { ctx } = input
 
   return async (state: HumanRunState): Promise<Partial<HumanRunState>> => {

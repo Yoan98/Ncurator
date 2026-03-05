@@ -3,6 +3,7 @@ import type { ChatSessionMemory, JsonObject, JsonValue } from '../../types/store
 import type { ChatStore } from '../storage/domains/ChatStore'
 import type { LlmConfigStore } from '../storage/domains/LlmConfigStore'
 import { createChatModel } from '../llm/chatModel'
+import { buildSessionMemoryPrompt } from './prompts/memory/sessionMemory'
 
 const parseJsonObject = <T extends JsonObject>(text: string): T => {
   const trimmed = String(text || '').trim()
@@ -57,16 +58,7 @@ export const updateSessionMemoryAfterRun = async (input: {
 
   const model = createChatModel(cfg, { temperature: 0.2 })
   const res = await model.invoke([
-    new SystemMessage(
-      [
-        'You update session memory for a desktop chat assistant.',
-        'Return JSON only with keys:',
-        'summary, openTasks, userPrefs, pinnedFacts, linkedDocumentIds.',
-        'Do not include secrets or credentials.',
-        'Keep summary concise.',
-        'Use arrays of short strings.'
-      ].join('\n')
-    ),
+    new SystemMessage(buildSessionMemoryPrompt()),
     new HumanMessage(
       JSON.stringify({
         previousMemory: prev,

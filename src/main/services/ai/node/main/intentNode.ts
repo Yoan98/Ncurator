@@ -1,10 +1,8 @@
 import type { AiRunContext, AiRunState } from '../../types'
 import { appendContextEvidence, contextDecisionSchema, DEFAULT_MAX_CONTEXT_ROUNDS } from './helpers'
+import { buildIntentPrompt } from '../../prompts/main/intent'
 
-export const createIntentNode = (input: {
-  ctx: AiRunContext
-  maxContextRounds?: number
-}) => {
+export const createIntentNode = (input: { ctx: AiRunContext; maxContextRounds?: number }) => {
   const { ctx } = input
   const maxContextRounds = Math.max(1, Number(input.maxContextRounds || DEFAULT_MAX_CONTEXT_ROUNDS))
 
@@ -28,20 +26,18 @@ export const createIntentNode = (input: {
       maxSummaryChars: 1000
     })
 
+    const prompt = buildIntentPrompt({
+      userInput: state.input,
+      sessionSummaryText: history.sessionSummaryText,
+      recentTurnsText: history.recentTurnsText,
+      contextEvidence: state.contextEvidence,
+      contextRounds: state.contextRounds,
+      maxContextRounds
+    })
+
     const raw = await ctx.chatJson({
-      system: [
-        '你是 intent_node。',
-        '你要在三种模式中选择一种：need_context / to_plan / direct_finalize。',
-        '只输出 JSON，格式: {"mode":"...","reason":"...","answer":"..."}。',
-        '当 mode=direct_finalize 时，必须提供 answer。'
-      ].join('\n'),
-      user: [
-        `用户输入:\n${state.input}`,
-        `会话摘要:\n${history.sessionSummaryText || '(none)'}`,
-        `最近对话:\n${history.recentTurnsText || '(none)'}`,
-        `上下文证据:\n${state.contextEvidence.join('\n') || '(none)'}`,
-        `当前 context rounds: ${state.contextRounds}/${maxContextRounds}`
-      ].join('\n\n'),
+      system: prompt.system,
+      user: prompt.user,
       temperature: 0.1
     })
 

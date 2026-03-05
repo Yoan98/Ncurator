@@ -94,8 +94,6 @@ export const createHumanRunStateSchema = () => {
   const humanTaskInputSchema: z.ZodType<HumanTaskInput> = z.object({
     // 当前任务 ID。
     taskId: z.string(),
-    // 子任务模式（context/dispatch）。
-    mode: z.enum(['context', 'dispatch']),
     // 当前任务执行目标。
     objective: z.string()
   })

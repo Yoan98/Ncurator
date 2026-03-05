@@ -4,7 +4,9 @@ import { pickPendingTaskIndex } from './helpers'
 
 export const createPlanExecNode = (input: {
   ctx: AiRunContext
-  runHumanTask: (taskInput: HumanTaskInput) => Promise<import('../../../../../shared/types').HumanTaskOutput>
+  runHumanTask: (
+    taskInput: HumanTaskInput
+  ) => Promise<import('../../../../../shared/types').HumanTaskOutput>
 }) => {
   const { ctx, runHumanTask } = input
 
@@ -32,7 +34,6 @@ export const createPlanExecNode = (input: {
     })
 
     const output = await runHumanTask({
-      mode: 'dispatch',
       taskId: task.id,
       objective: task.objective
     })
