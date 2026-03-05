@@ -33,7 +33,6 @@
 - **新增表/索引的入口**：
   1. 在 `LanceDbCore.ts` 的 `LANCE_TABLES` 与 `getTableConfigs()` 增加配置
   2. 在 `domains/` 新增或扩展 store，对外提供领域方法
-  3. 通过 `StorageService` 暴露给调用方（如 IPC handlers）
 
 ## 表定义
 
@@ -111,8 +110,3 @@
 | model_name | Utf8    | 模型名称                                   |
 | api_key    | Utf8    | API Key                                    |
 | is_active  | Boolean | 是否为当前激活配置（通常只有一个为 True）  |
-
-## Legacy Note
-
-- 历史版本中的 `writing_*` 表（如 `writing_folder` / `writing_document` / `writing_workflow_run`）已从当前 `LanceDbCore.getTableConfigs()` 移除，不再属于 active runtime schema。
-- 当前 Chat AI 架构不会读写这些表；若用户本地仍存在旧表数据，应通过发布说明提供的迁移策略执行导出与清理。

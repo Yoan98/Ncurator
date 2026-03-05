@@ -7,10 +7,17 @@ const ensureDir = async (target: string): Promise<void> => {
   await mkdir(target, { recursive: true })
 }
 
+const pad2 = (value: number): string => String(value).padStart(2, '0')
+
 const toTimestamp = (ms: number): string => {
   const date = new Date(ms)
-  const iso = date.toISOString().replace(/[:.]/g, '-')
-  return iso
+  const year = date.getFullYear()
+  const month = pad2(date.getMonth() + 1)
+  const day = pad2(date.getDate())
+  const hour = pad2(date.getHours())
+  const minute = pad2(date.getMinutes())
+  const second = pad2(date.getSeconds())
+  return `${year}-${month}-${day}_${hour}:${minute}:${second}`
 }
 
 const toJsonLines = (events: AiRunEvent[]): string => {
@@ -64,8 +71,8 @@ const buildSummaryMarkdown = (input: {
 export const writeCaseReport = async (input: CaseReportInput): Promise<string> => {
   const reportRoot = path.resolve(
     process.cwd(),
-    'artifacts',
-    'ai-test-results',
+    'tests',
+    'report',
     input.suite,
     input.caseId,
     toTimestamp(input.startedAt)

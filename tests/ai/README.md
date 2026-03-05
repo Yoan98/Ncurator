@@ -33,7 +33,9 @@
 
 每个用例都会落盘到：
 
-`artifacts/ai-test-results/<suite>/<case>/<timestamp>/`
+`tests/report/<suite>/<case>/<timestamp>/`
+
+`timestamp` 格式为：`YYYY-MM-DD_HH:mm:ss`（本地时间，可直接读出时分秒）
 
 包含：
 - `events.jsonl`

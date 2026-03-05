@@ -33,7 +33,7 @@ tests/ai/
   suites/
     capability/                 # tool 级用例
     human-live/                 # human live 用例
-artifacts/ai-test-results/      # 每次执行的结构化报告
+tests/report/                   # 每次执行的结构化报告
 .env                            # 本地 live 配置（不入库）
 .env-example                    # live 配置模板（入库）
 ```
@@ -69,7 +69,9 @@ human-live 使用根目录 `.env` 配置：
 
 每个 case 都输出到：
 
-`artifacts/ai-test-results/<suite>/<case>/<timestamp>/`
+`tests/report/<suite>/<case>/<timestamp>/`
+
+`timestamp` 格式：`YYYY-MM-DD_HH:mm:ss`（本地时间，便于人工阅读）
 
 固定文件：
 - `events.jsonl`

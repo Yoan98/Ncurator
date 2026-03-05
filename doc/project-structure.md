@@ -25,7 +25,6 @@ src/
 doc/                     # 项目规则/架构文档
 .codex/skills/           # 技能定义
 tests/                   # 自动化测试（AI 测试等）
-artifacts/               # 测试与运行产物输出
 .env                     # 本地环境变量（不入库）
 .env-example             # 环境变量模板（入库）
 ```
@@ -57,5 +56,5 @@ artifacts/               # 测试与运行产物输出
 - AI 测试统一放在 `tests/ai/**`，并按 `fixtures / harness / suites` 分层。
 - capability 用例放在 `tests/ai/suites/capability/**`。
 - human-live 用例放在 `tests/ai/suites/human-live/**`。
-- 结构化测试报告统一输出到 `artifacts/ai-test-results/**`。
+- 结构化测试报告统一输出到 `tests/report/**`。
 - 测试环境变量模板放根目录 `.env-example`，本地实际配置放根目录 `.env`。

@@ -51,7 +51,7 @@ const readEvents = async (filePath: string): Promise<AiRunEvent[]> => {
 }
 
 const latestReportDir = async (suite: string, caseId: string): Promise<string> => {
-  const root = path.resolve(process.cwd(), 'artifacts', 'ai-test-results', suite, caseId)
+  const root = path.resolve(process.cwd(), 'tests', 'report', suite, caseId)
   const entries = await readdir(root, { withFileTypes: true })
   const latest = entries
     .filter((entry) => entry.isDirectory())
