@@ -1,0 +1,69 @@
+# AI 测试说明（Script-first）
+
+本目录用于运行两类测试：
+- `capability`：按 tool 粒度验证生产能力（一个 tool 一个用例）。
+- `human-live`：仅验证 human 子图在真实模型下完成任务的效果（不经 main graph）。
+
+## 执行命令
+
+- 全量：`pnpm test:ai`
+- 仅 capability：`pnpm test:ai:capability`
+- 仅 human-live：`pnpm test:ai:human-live`
+- 指定单文件：`pnpm test:ai -- tests/ai/suites/capability/<case>.test.ts`
+
+## 执行前你需要准备什么
+
+### 1) capability/docx 用例前置文件
+
+- 默认已内置示例文件：`tests/ai/fixtures/docx/sample-edit.docx`
+- 你也可以替换该文件；内容中至少包含文本 `Hello`（当前首个用例会执行 `replace_text: Hello -> Hi`）。
+
+### 2) human-live 模型配置（环境变量）
+
+- `AI_LIVE_ENABLE=1`
+- `AI_LIVE_BASE_URL=<你的模型网关地址>`
+- `AI_LIVE_MODEL_NAME=<模型名>`
+- `AI_LIVE_API_KEY=<你的 key>`
+
+可复制模板：`tests/ai/.env.live.example`
+
+未设置时，human-live 用例会跳过；若启用但缺字段，会 fail-fast 并输出缺失项。
+
+## 报告输出
+
+每个用例都会落盘到：
+
+`artifacts/ai-test-results/<suite>/<case>/<timestamp>/`
+
+包含：
+- `events.jsonl`
+- `assertions.json`
+- `metrics.json`
+- `summary.md`
+
+报告中固定包含 AI 分析键：
+- `failure_category`
+- `suspected_root_cause`
+- `optimization_hints`
+
+## 如何新增一个 tool 测试用例（最小步骤）
+
+1. 在 `tests/ai/suites/capability/` 新增一个 `*.test.ts` 文件。
+2. 复用 `runCapabilityCase(...)`，填写：
+- `caseId`
+- `requiredFixtures`
+- `fixtureCopies`
+- `execute`
+- `assert`
+3. 运行 `pnpm test:ai:capability -- <new-file-path>` 验证。
+
+## 如何新增一个 human-live 用例（最小步骤）
+
+1. 在 `tests/ai/suites/human-live/` 新增一个 `*.live.test.ts` 文件。
+2. 复用 `runHumanLiveCase(...)`，填写：
+- `objective`
+- `requiredFixtures`
+- `fixtureCopies`
+- `approvalPolicy`
+- `assert`
+3. 设置 live 环境变量后运行 `pnpm test:ai:human-live -- <new-file-path>`。

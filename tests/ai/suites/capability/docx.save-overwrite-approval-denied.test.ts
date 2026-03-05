@@ -1,0 +1,98 @@
+import path from 'node:path'
+import { describe, expect, test } from 'vitest'
+import { buildDocxCapabilityTools } from '../../../../src/main/services/ai/tools/docx/docxTools'
+import { recordAssertion } from '../../harness/assertions'
+import { runCapabilityCase } from '../../harness/capabilityCase'
+import { readLatestCaseReportArtifacts } from '../../harness/reportInspector'
+
+const CASE_ID = 'docx-save-overwrite-approval-denied'
+const FIXTURE_SOURCE = path.resolve(process.cwd(), 'tests/ai/fixtures/docx/sample-edit.docx')
+
+type JsonRecord = Record<string, string | number | boolean | null | JsonRecord | JsonRecord[]>
+
+const asRecord = (value: object | null): JsonRecord => {
+  if (!value) return {}
+  return value as JsonRecord
+}
+
+const asString = (value: string | number | boolean | null | JsonRecord | JsonRecord[]): string => {
+  return String(value || '')
+}
+
+describe('capability/docx', () => {
+  test('docx_save overwrite 在审批拒绝时应输出可定位证据', async () => {
+    await runCapabilityCase({
+      caseId: CASE_ID,
+      description: '验证 docx 覆盖保存在审批拒绝时的失败路径输出。',
+      requiredFixtures: [FIXTURE_SOURCE],
+      fixtureCopies: [
+        { from: FIXTURE_SOURCE, to: 'input.docx' },
+        { from: FIXTURE_SOURCE, to: 'output.docx' }
+      ],
+      approvalPolicy: 'deny-medium-high',
+      execute: async (runtime) => {
+        const built = buildDocxCapabilityTools({
+          ctx: runtime.ctx,
+          runId: runtime.runId,
+          taskId: runtime.taskId,
+          workspaceRootPath: runtime.workspaceRoot,
+          safePreviewChars: 1400,
+          emitActivity: (activity) => {
+            runtime.ctx.sendEvent({
+              type: 'activity',
+              runId: runtime.runId,
+              taskId: runtime.taskId,
+              activityId: `activity-${Date.now().toString(36)}`,
+              actionType: activity.actionType,
+              status: activity.status,
+              summary: activity.summary,
+              createdAt: Date.now()
+            })
+          }
+        })
+
+        const openTool = built.tools.find((item) => String(item.name) === 'docx_open')
+        const saveTool = built.tools.find((item) => String(item.name) === 'docx_save')
+        if (!openTool || !saveTool) {
+          throw new Error('docx_open/docx_save tool is missing')
+        }
+
+        const openResult = asRecord(
+          (await openTool.invoke({ sourcePath: 'input.docx' })) as JsonRecord
+        )
+        const docId = asString(openResult.docId as JsonRecord[keyof JsonRecord])
+        const saveResult = asRecord(
+          (await saveTool.invoke({
+            docId,
+            outPath: 'output.docx',
+            overwrite: true
+          })) as JsonRecord
+        )
+
+        return {
+          saveResult
+        }
+      },
+      assert: async (result, runtime) => {
+        const code = asString(result.saveResult.code as JsonRecord[keyof JsonRecord])
+        recordAssertion(runtime.assertions, {
+          id: 'save.approval-denied',
+          pass: code === 'approval_denied',
+          details: `code=${code}, error=${asString(result.saveResult.error as JsonRecord[keyof JsonRecord])}`
+        })
+      }
+    })
+
+    const report = await readLatestCaseReportArtifacts('capability', CASE_ID)
+    const denied = report.events.some(
+      (event) =>
+        event.type === 'approval_decision' &&
+        event.approved === false &&
+        String(event.taskId || '').includes(CASE_ID)
+    )
+
+    expect(report.assertions.status).toBe('passed')
+    expect(denied).toBe(true)
+    expect(report.summary).toContain('审批拒绝')
+  })
+})

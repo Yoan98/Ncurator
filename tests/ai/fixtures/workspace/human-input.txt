@@ -1,0 +1,2 @@
+Hello from human live fixture.
+This line is used for workspace read validation.
