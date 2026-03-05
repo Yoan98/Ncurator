@@ -24,6 +24,10 @@ src/
   shared/                # 跨进程共享契约与类型
 doc/                     # 项目规则/架构文档
 .codex/skills/           # 技能定义
+tests/                   # 自动化测试（AI 测试等）
+artifacts/               # 测试与运行产物输出
+.env                     # 本地环境变量（不入库）
+.env-example             # 环境变量模板（入库）
 ```
 
 ## 3. Main 目录放置规则
@@ -47,3 +51,11 @@ doc/                     # 项目规则/架构文档
 - 能力间共享且可复用的辅助逻辑，优先抽到 `src/main/utils`。
 - AI 运行时事件封装（如 `file_artifact` 事件）放在 `src/main/services/ai/events/**`。
 - 纯控制流工具（如 `boundedLoop`）放在 `src/main/utils/**`。
+
+## 4. 测试目录放置规则
+
+- AI 测试统一放在 `tests/ai/**`，并按 `fixtures / harness / suites` 分层。
+- capability 用例放在 `tests/ai/suites/capability/**`。
+- human-live 用例放在 `tests/ai/suites/human-live/**`。
+- 结构化测试报告统一输出到 `artifacts/ai-test-results/**`。
+- 测试环境变量模板放根目录 `.env-example`，本地实际配置放根目录 `.env`。

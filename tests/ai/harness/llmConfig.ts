@@ -1,6 +1,10 @@
 import type { LiveLlmConfig } from './types'
+import { loadRootEnvOnce } from './rootEnv'
 
-const readEnv = (name: string): string => String(process.env[name] || '').trim()
+const readEnv = (name: string): string => {
+  loadRootEnvOnce()
+  return String(process.env[name] || '').trim()
+}
 
 export const isLiveSuiteEnabled = (): boolean => {
   return readEnv('AI_LIVE_ENABLE') === '1'

@@ -46,11 +46,23 @@
 当涉及到 AI 架构（LangGraph 运行图、能力节点、事件流、工作区沙箱）时，请阅读 `doc/ai-architecture.md`
 当涉及到 UI 样式时，请阅读 `doc/ui-style.md`
 当涉及到目录规范、文件归位、模块分层时，请阅读 `doc/project-structure.md`
+当涉及到测试架构、测试脚本、测试报告与测试扩展时，请阅读 `doc/testing.md`
+
+### 测试 Skill
+
+- 测试相关任务优先使用：`.codex/skills/testing/SKILL.md`
 
 ### 数据库操作约束（Main Process）
 
 - 数据库表结构与索引以 `src/main/services/storage/core/LanceDbCore.ts` 的 `getTableConfigs()` 为准
 - 业务代码不要直接操作 LanceDB 连接/表；新增/修改数据库行为优先通过 `src/main/services/storage/StorageService.ts` 暴露的各 `*Store`
+
+### 测试架构约束（AI Test）
+
+- 测试分层与报告契约以 `doc/testing.md` 为准。
+- capability 用例必须调用生产入口（如 `src/main/services/ai/tools/**`），禁止复刻业务逻辑。
+- human-live 用例必须只调用 human 子图 runner，不经 main graph。
+- human-live 配置统一使用项目根目录 `.env`（模板为 `.env-example`）。
 
 ## 4. Type 分类与存放位置
 

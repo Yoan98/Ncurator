@@ -8,11 +8,13 @@ const FIXTURE_SOURCE = path.resolve(process.cwd(), 'tests/ai/fixtures/workspace/
 
 const withClearedLiveEnv = async (run: () => Promise<void>): Promise<void> => {
   const backup = {
+    AI_TEST_DISABLE_DOTENV: process.env.AI_TEST_DISABLE_DOTENV,
     AI_LIVE_BASE_URL: process.env.AI_LIVE_BASE_URL,
     AI_LIVE_MODEL_NAME: process.env.AI_LIVE_MODEL_NAME,
     AI_LIVE_API_KEY: process.env.AI_LIVE_API_KEY
   }
 
+  process.env.AI_TEST_DISABLE_DOTENV = '1'
   delete process.env.AI_LIVE_BASE_URL
   delete process.env.AI_LIVE_MODEL_NAME
   delete process.env.AI_LIVE_API_KEY
@@ -20,6 +22,8 @@ const withClearedLiveEnv = async (run: () => Promise<void>): Promise<void> => {
   try {
     await run()
   } finally {
+    if (backup.AI_TEST_DISABLE_DOTENV === undefined) delete process.env.AI_TEST_DISABLE_DOTENV
+    else process.env.AI_TEST_DISABLE_DOTENV = backup.AI_TEST_DISABLE_DOTENV
     if (backup.AI_LIVE_BASE_URL === undefined) delete process.env.AI_LIVE_BASE_URL
     else process.env.AI_LIVE_BASE_URL = backup.AI_LIVE_BASE_URL
     if (backup.AI_LIVE_MODEL_NAME === undefined) delete process.env.AI_LIVE_MODEL_NAME

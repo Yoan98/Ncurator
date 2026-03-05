@@ -25,9 +25,9 @@
 - `AI_LIVE_MODEL_NAME=<模型名>`
 - `AI_LIVE_API_KEY=<你的 key>`
 
-可复制模板：`tests/ai/.env.live.example`
+可复制模板：项目根目录 `.env-example`，并保存为根目录 `.env`
 
-未设置时，human-live 用例会跳过；若启用但缺字段，会 fail-fast 并输出缺失项。
+测试运行器会自动读取根目录 `.env`；未设置时，human-live 用例会跳过；若启用但缺字段，会 fail-fast 并输出缺失项。
 
 ## 报告输出
 

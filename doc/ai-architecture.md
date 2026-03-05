@@ -138,3 +138,11 @@ stateDiagram-v2
 - `terminal_exec` / `docx` 未绑定 workspace 时必须拒绝执行。
 - 命中审批策略时必须先走 `approval_required -> approval_decision`。
 - 审批拒绝返回结构化失败，不进入隐式重试循环。
+
+## 11. AI 测试架构边界（Script-first）
+
+- capability 测试必须直连生产 tool 入口（`src/main/services/ai/tools/**`），验证真实链路行为。
+- human-live 测试必须直连 `humanGraph` runner，只验证 human 子图，不通过 main graph。
+- 测试上下文通过 harness 注入 workspace、审批策略与事件采集，避免侵入生产实现。
+- 所有 case 必须输出标准化报告（`events.jsonl/assertions.json/metrics.json/summary.md`），供后续 AI 诊断与优化建议使用。
+- live 配置统一从根目录 `.env` 读取（模板 `.env-example`），缺失时 fail-fast 并输出可定位信息。
