@@ -4,7 +4,7 @@
 TBD - created by archiving change langgraph-chat-ai-architecture. Update Purpose after archive.
 ## Requirements
 ### Requirement: Orchestrate host-led loops with explicit capabilities
-系统 MUST 以双层模型编排运行：`main graph` 负责系统阶段控制，`human graph` 负责单任务执行；运行时 MUST 继续使用能力节点（如 `local_kb_retrieval`、`terminal_exec`、`docx`）并排除 legacy writing-workflow 调度模型，同时 main 到 human 的任务派发契约 MUST 不再依赖 `mode` 字段。
+系统 MUST 以双层模型编排运行：`main graph` 负责系统阶段控制，`human graph` 负责单任务执行；运行时 MUST 继续使用能力节点（如 `local_kb_retrieval`、`terminal_exec`、`docx`）作为 skill loader 的真实工具来源，并排除 legacy writing-workflow 调度模型，同时 main 到 human 的任务派发契约 MUST 不再依赖 `mode` 字段。
 
 #### Scenario: Main graph orchestrates system stages
 - **WHEN** 新 run 启动
@@ -12,7 +12,7 @@ TBD - created by archiving change langgraph-chat-ai-architecture. Update Purpose
 
 #### Scenario: Human graph executes one task objective
 - **WHEN** main graph 派发单个计划任务
-- **THEN** human graph MUST 仅围绕该任务目标执行步骤循环，并以最小任务输入契约执行任务
+- **THEN** human graph MUST 仅围绕该任务目标执行 skill-aware 步骤循环，并以最小任务输入契约执行任务
 
 #### Scenario: Legacy writing task shape appears
 - **WHEN** 计划中出现 legacy writing-workflow 任务形态
@@ -75,4 +75,3 @@ TBD - created by archiving change langgraph-chat-ai-architecture. Update Purpose
 #### Scenario: Human and memory prompt resolution
 - **WHEN** human brain 或会话记忆更新触发模型调用
 - **THEN** 相关模块 MUST 复用 registry 提供的提示词构建入口，并共享统一约束文本风格
-

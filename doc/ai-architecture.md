@@ -12,7 +12,8 @@
 
 - Main Graph：系统编排层，负责阶段推进与最终收敛。
 - Human Subgraph：单任务执行层，负责工具决策与执行循环。
-- Capability Registry：工具聚合层，按 `tools/<capability>` 目录维护、运行时平铺暴露。
+- Capability Registry：工具聚合层，按 `tools/<capability>` 目录维护真实执行工具。
+- Human Skill Catalog：能力加载层，向 brain 暴露轻量 skill cards，并在运行时按需展开 skill 内容与工具。
 
 边界约束：
 
@@ -73,24 +74,30 @@ stateDiagram-v2
 节点：
 
 1. `human_brain_node`
-2. `human_tool_exec_node`
+2. `human_skill_loader_node`
+3. `human_tool_exec_node`
 
 ```mermaid
 stateDiagram-v2
   [*] --> human_brain_node
+  human_brain_node --> human_skill_loader_node: load_skill
   human_brain_node --> human_tool_exec_node: invoke_tool
   human_brain_node --> [*]: complete_task / block_task / invalid_step
+  human_skill_loader_node --> human_brain_node: skill_loaded
+  human_skill_loader_node --> [*]: invalid_step
   human_tool_exec_node --> human_brain_node: tool_ok
-  human_tool_exec_node --> [*]: complete_task / block_task / tool_failed
+  human_tool_exec_node --> [*]: block_task / invalid_step
 ```
 
 关键规则：
 
-- 每步必须是 tool call（strict tool-call only）。
-- 工具集合固定为「全量 capability tools + control tools」。
+- brain 每步输出结构化决策：`load_skill | invoke_tool | complete_task | block_task`。
+- brain 常驻只看 `availableSkillCards`；skill 内容与工具只在 `load_skill` 后进入运行态。
+- `activeTools` 仅来自当前 `activeSkillIds`，默认最多保留 2 个 active skills。
+- `load_skill` 对已加载 skill 视为幂等，允许仅更新 active skills 顺序。
 - 可恢复失败（`failed`、`invalid_input`）回到 brain 继续探索，不立即结束任务。
 - 不可恢复失败（`workspace_required`、`approval_denied`）应收敛为 `block_task`。
-- 无 tool call / 未知 tool / 上下文缺失均触发 `block_task`。
+- 无效 decision / 未知 tool / 上下文缺失均触发 `block_task`。
 - `maxSteps` 超限触发 `bounded_loop_error`。
 
 ## 6. 任务输出模型
@@ -106,6 +113,8 @@ stateDiagram-v2
 - `AiRunState.dispatchCursor`：串行调度游标。
 - `HumanTaskInput`：最小任务输入（`taskId/objective`）。
 - `HumanTaskOutput`：最小任务输出（`status/summary/resultCode/resultData`）。
+- `HumanRunState.availableSkillCards/loadedSkills/activeSkillIds/activeTools`：human 渐进式能力加载核心状态。
+- `HumanRunState.lastDecision/lastObservation/stepHistory`：brain 决策、执行观察与步骤回放核心状态。
 
 ## 8. 事件模型
 
@@ -113,13 +122,15 @@ stateDiagram-v2
 
 - 运行级：`run_started/run_completed/run_failed/run_cancelled`
 - 计划级：`plan_created/task_started/task_completed/task_failed/task_result`
-- 步骤级：`tool_call_started/tool_call_result/human_step`
+- 步骤级：`tool_call_started/tool_call_result/human_step/human_diagnostic`
 - 审批级：`workspace_required/approval_required/approval_decision`
 - 答复级：`answer_token/answer_completed`
 
 约束：
 
 - 移除 `broker_decision` 与 `slot_commit`。
+- `human_step` 面向 UI/用户可读性，必须包含 `publicNarrative`、active skills、active tools 与步骤结果状态。
+- `human_diagnostic` 仅供内部调试，记录 rationale、skill/tool 选择与 observation 摘要。
 - `answer_token/answer_completed` 仅在 finalize 结果流出后发送。
 
 ## 9. 代码落点

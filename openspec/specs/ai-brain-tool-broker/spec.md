@@ -3,42 +3,37 @@
 ## Purpose
 TBD - created by archiving change main-human-brain-architecture. Update Purpose after archive.
 ## Requirements
-### Requirement: Build step-scoped active tools from full registry
-系统 MUST 维护全量工具注册表，并在 human 的每一步基于当前任务状态生成步骤级 `activeTools` 子集供 brain 使用。
+### Requirement: Expose lightweight skill cards to brain
+系统 MUST 向 human brain 常驻暴露轻量 `SkillCard` 目录，而不是直接暴露全量工具集合。
 
-#### Scenario: Step-level toolset generation
+#### Scenario: Brain reviews available skills before deciding
 - **WHEN** human 进入新的一步决策
-- **THEN** Tool Broker 从全量 registry 计算并返回该步骤的 `activeTools`
+- **THEN** brain 收到可用 `SkillCard` 列表，并基于当前状态自行决定是否 `load_skill`
 
-### Requirement: Apply deterministic broker filtering rules
-Tool Broker MUST 采用确定性规则进行筛选，至少包含 capability 白名单、前置条件门禁、slot 可用性校验、策略约束与目标匹配。
+### Requirement: Materialize active tools only from loaded skills
+运行时 MUST 仅根据当前 `activeSkillIds` 生成 `activeTools`，并在 `load_skill` 后把对应 skill 内容与工具加入运行态。
 
-#### Scenario: Filter out unavailable tools
-- **WHEN** 某工具前置条件不满足（如缺 workspace、缺输入 slot）
-- **THEN** Broker 将该工具从 `activeTools` 中剔除
+#### Scenario: Load skill to activate tools
+- **WHEN** brain 输出 `load_skill`
+- **THEN** runtime 读取该 skill 的内容、资源索引与工具定义，并更新 `loadedSkills`、`activeSkillIds`、`activeTools`
 
-### Requirement: Constrain active toolset size
-Broker 输出的 `activeTools` MUST 受数量上限约束，默认目标范围为 3~6；当候选不足时 MUST 触发定义好的兜底策略。
+### Requirement: Keep active skill set bounded
+运行时 MUST 对 `activeSkillIds` 设置数量上限，默认最多保留 2 个 active skills，避免再次退化为全量工具暴露。
 
-#### Scenario: Too many candidate tools
-- **WHEN** Broker 得到超过上限的候选工具
-- **THEN** 按排序规则截断为上限数量并输出
+#### Scenario: Activate a new skill after two skills are already active
+- **WHEN** brain 加载第 3 个无关 skill
+- **THEN** runtime 按既定替换策略裁剪旧的 active skill，并只保留上限数量的 `activeSkillIds`
 
-#### Scenario: Too few candidate tools
-- **WHEN** Broker 过滤后候选数量低于下限
-- **THEN** 触发兜底放宽规则或返回显式不可继续信号
+### Requirement: Keep ToolNode execution scoped to active tools
+每一步中 `ToolNode` 执行的工具集合 MUST 与当前 `activeTools` 保持一致，brain 不得调用未激活的工具。
 
-### Requirement: Keep bindTools and ToolNode sets consistent per step
-每一步中用于 `bindTools` 的工具集合与用于 `ToolNode` 执行的工具集合 MUST 保持一致，并 SHOULD 通过 `activeToolSetId` 进行关联。
+#### Scenario: Brain invokes a tool outside the active skill set
+- **WHEN** brain 输出不在 `activeTools` 内的 `toolName`
+- **THEN** runtime MUST 拒绝执行并返回结构化步骤错误
 
-#### Scenario: Step toolset consistency
-- **WHEN** brain 生成了工具调用
-- **THEN** 执行器使用与该步骤相同的 `activeTools` 集合执行该调用
+### Requirement: Expose skill activation reasoning for observability
+系统 MUST 记录并可观测每一步的公开 narrative 与内部诊断信息，至少包含 action、active skills、active tools 以及 rationale。
 
-### Requirement: Expose broker reasoning for observability
-系统 MUST 记录并可观测 Broker 的筛选结果与理由，至少包含候选集合、最终 active 集合、被拒绝原因。
-
-#### Scenario: Broker decision trace
-- **WHEN** 一步工具筛选完成
-- **THEN** 运行时记录该步筛选快照与关键决策理由用于回放与调试
-
+#### Scenario: Skill activation trace
+- **WHEN** brain 完成一步决策或 runtime 完成一次 skill 加载
+- **THEN** 运行时记录 `human_step` 与内部诊断信息用于回放与调试

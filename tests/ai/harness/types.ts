@@ -1,5 +1,10 @@
 import type { AiApprovalDecision, AiApprovalRequest } from '../../../src/main/services/ai/types'
-import type { AiRunEvent, BrainStepAction, LLMConfig } from '../../../src/shared/types'
+import type {
+  AiRunEvent,
+  HumanStepAction,
+  LLMConfig,
+  RuntimeSkillId
+} from '../../../src/shared/types'
 
 export type ApprovalPolicy = 'auto-approve' | 'deny-medium-high' | 'deny-all'
 
@@ -50,6 +55,7 @@ export type CaseRuntimeMetrics = {
 export type ToolCounts = Record<string, number>
 export type ToolResultCodeCounts = Record<string, Record<string, number>>
 export type ArtifactOperationCounts = Record<'created' | 'updated', number>
+export type StepActionCounts = Record<HumanStepAction, number>
 
 export type CaseAssertionsReport = {
   suite: CaseSuite
@@ -87,9 +93,12 @@ export type CaseSignalsReport = {
   toolSequence: string[]
   toolCounts: ToolCounts
   toolResultCodeCounts: ToolResultCodeCounts
+  stepActionSequence: HumanStepAction[]
+  stepActionCounts: StepActionCounts
+  skillActivationSequence: RuntimeSkillId[]
   failedAssertionIds: string[]
   artifactOperationCounts: ArtifactOperationCounts
-  finalHumanAction?: BrainStepAction['action']
+  finalHumanAction?: HumanStepAction
   executionSummary?: string
 }
 

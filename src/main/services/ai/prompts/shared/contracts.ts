@@ -10,11 +10,14 @@ export const JSON_ONLY_PLAN_CONTRACT = [
   '规则：tasks 至少 1 项；每个 objective 必须是单一任务目标，且可执行、可验证。'
 ].join('\n')
 
-export const HUMAN_TOOL_ONLY_CONTRACT = [
-  '你每一步必须且只能发起一次工具调用（一次 tool call）。',
-  '你只能调用当前已绑定工具（业务工具 + complete_task + block_task）。',
-  '禁止直接输出自然语言结论。',
-  '目标完成时调用 complete_task；无法继续时调用 block_task。'
+export const HUMAN_DECISION_JSON_CONTRACT = [
+  '只输出 JSON，不得输出任何额外文字。',
+  '格式：{"action":"load_skill|invoke_tool|complete_task|block_task", ...}。',
+  '当 action=load_skill 时，必须输出 skillId、rationale、publicNarrative。',
+  '当 action=invoke_tool 时，必须输出 toolName、args、rationale、publicNarrative；args 必须是对象。',
+  '当 action=complete_task 时，必须输出 summary、rationale、publicNarrative，可选 resultData。',
+  '当 action=block_task 时，必须输出 reason、rationale、publicNarrative，可选 details。',
+  'skillId 只能来自当前 available skill cards；toolName 只能来自当前 active tools。'
 ].join('\n')
 
 export const FINALIZE_OUTPUT_CONTRACT = [

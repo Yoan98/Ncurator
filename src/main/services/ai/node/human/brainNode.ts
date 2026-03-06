@@ -1,19 +1,238 @@
-import { AIMessage, HumanMessage, SystemMessage } from '@langchain/core/messages'
-import { createChatModel } from '../../../llm/chatModel'
-import { getToolCalls } from '../../../../utils/aiCapabilityUtils'
+import type {
+  AiTaskResultCode,
+  HumanStepDecision,
+  JsonObject,
+  JsonValue,
+  RuntimeSkillId
+} from '../../../../../shared/types'
+import { isJsonObject } from '../../../../utils/aiCapabilityUtils'
 import type { AiRunContext } from '../../types'
-import { buildCapabilityToolRegistry } from '../../tools/registry'
-import { buildHumanControlTools } from './controlTools'
-import type { HumanRunState } from './types'
 import { buildHumanBrainPrompt } from '../../prompts/human/brain'
+import { decodeHumanStepDecision } from './decisionCodec'
+import { appendHumanStepRecord, emitHumanDiagnostic, emitHumanStep } from './events'
+import type { HumanObservation, HumanRunState, LoadedSkill } from './types'
 
-const buildBaseMessages = (state: HumanRunState) => {
+const MAX_HISTORY_ITEMS = 6
+
+const toTrimmedText = (value: string, fallback: string): string => {
+  const text = String(value || '').trim()
+  return text || fallback
+}
+
+const toJsonText = (value: JsonValue | undefined, fallback = 'none'): string => {
+  if (value === undefined) return fallback
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return fallback
+  }
+}
+
+const normalizeDecision = (decision: HumanStepDecision): HumanStepDecision => {
+  if (decision.action === 'load_skill') {
+    return {
+      ...decision,
+      skillId: decision.skillId as RuntimeSkillId,
+      rationale: toTrimmedText(decision.rationale, '需要加载新的能力。'),
+      publicNarrative: toTrimmedText(decision.publicNarrative, '我先加载所需能力，再继续执行任务。')
+    }
+  }
+
+  if (decision.action === 'invoke_tool') {
+    return {
+      ...decision,
+      toolName: toTrimmedText(decision.toolName, ''),
+      args: decision.args || {},
+      rationale: toTrimmedText(decision.rationale, '我需要调用当前可用工具来推进任务。'),
+      publicNarrative: toTrimmedText(decision.publicNarrative, '我会使用当前工具继续获取证据。')
+    }
+  }
+
+  if (decision.action === 'complete_task') {
+    return {
+      ...decision,
+      summary: toTrimmedText(decision.summary, '任务已完成。'),
+      rationale: toTrimmedText(decision.rationale, '任务目标已经满足。'),
+      publicNarrative: toTrimmedText(decision.publicNarrative, '我已经得到足够证据，可以完成任务。')
+    }
+  }
+
+  return {
+    ...decision,
+    reason: toTrimmedText(decision.reason, '当前任务无法继续。'),
+    rationale: toTrimmedText(decision.rationale, '当前约束下无法继续推进任务。'),
+    publicNarrative: toTrimmedText(decision.publicNarrative, '当前缺少继续执行所需条件，因此需要阻塞任务。')
+  }
+}
+
+const getActiveToolNames = (state: HumanRunState): string[] => {
+  return state.activeTools
+    .map((tool) => toTrimmedText(String(tool.name || ''), ''))
+    .filter(Boolean)
+}
+
+const serializeLoadedSkills = (state: HumanRunState): string => {
+  const orderedIds: RuntimeSkillId[] = []
+  const seen = new Set<string>()
+
+  for (const skillId of state.activeSkillIds) {
+    if (seen.has(skillId)) continue
+    seen.add(skillId)
+    orderedIds.push(skillId)
+  }
+
+  for (const [skillId, loadedSkill] of Object.entries(state.loadedSkills)) {
+    if (!loadedSkill || seen.has(skillId)) continue
+    seen.add(skillId)
+    orderedIds.push(skillId as RuntimeSkillId)
+  }
+
+  const rows = orderedIds
+    .map((skillId) => state.loadedSkills[skillId])
+    .filter((item): item is LoadedSkill => item !== undefined)
+    .map((skill) => ({
+      skillId: skill.skillId,
+      active: state.activeSkillIds.includes(skill.skillId),
+      toolNames: skill.toolNames,
+      referencedAssets: skill.referencedAssets,
+      skillContent: skill.skillContent
+    }))
+
+  return rows.length > 0 ? toJsonText(rows) : 'none'
+}
+
+const serializeActiveTools = (state: HumanRunState): string => {
+  const rows = state.activeTools
+    .map((tool) => ({
+      name: toTrimmedText(String(tool.name || ''), ''),
+      description: toTrimmedText(String(tool.description || ''), '(no description)')
+    }))
+    .filter((tool) => tool.name)
+  return rows.length > 0 ? toJsonText(rows) : 'none'
+}
+
+const resolveBlockedResultCode = (
+  observation: HumanObservation | undefined,
+  fallback: AiTaskResultCode
+): AiTaskResultCode => {
+  if (!observation) return fallback
+  if (observation.kind === 'tool_result' || observation.kind === 'terminal') {
+    return observation.code === 'ok' ? fallback : observation.code
+  }
+  return fallback
+}
+
+const toResultData = (value: JsonValue | undefined, key: string): JsonObject | undefined => {
+  if (value === undefined) return undefined
+  if (isJsonObject(value)) return value
+  return { [key]: value }
+}
+
+const buildDecisionPrompt = (state: HumanRunState) => {
   const prompt = buildHumanBrainPrompt({
     objective: state.input.objective,
     stepIndex: state.steps + 1,
-    maxSteps: state.maxSteps
+    maxSteps: state.maxSteps,
+    availableSkillCardsText: toJsonText(state.availableSkillCards),
+    loadedSkillsText: serializeLoadedSkills(state),
+    activeToolsText: serializeActiveTools(state),
+    lastObservationText: state.lastObservation ? toJsonText(state.lastObservation) : 'none',
+    stepHistoryText:
+      state.stepHistory.length > 0
+        ? toJsonText(state.stepHistory.slice(-MAX_HISTORY_ITEMS))
+        : 'none'
   })
-  return [new SystemMessage(prompt.system), new HumanMessage(prompt.user)]
+
+  return prompt
+}
+
+const createBlockState = (input: {
+  ctx: AiRunContext
+  state: HumanRunState
+  stepIndex: number
+  summary: string
+  publicNarrative: string
+  resultCode: AiTaskResultCode
+  details?: JsonValue
+}) => {
+  const activeToolNames = getActiveToolNames(input.state)
+  const nextHistory = appendHumanStepRecord({
+    history: input.state.stepHistory,
+    step: input.stepIndex,
+    action: 'block_task',
+    publicNarrative: input.publicNarrative,
+    activeSkillIds: input.state.activeSkillIds,
+    activeToolNames,
+    resultStatus: 'blocked',
+    summary: input.summary
+  })
+
+  emitHumanStep({
+    ctx: input.ctx,
+    runId: input.state.runId,
+    taskId: input.state.input.taskId,
+    stepIndex: input.stepIndex,
+    action: 'block_task',
+    publicNarrative: input.publicNarrative,
+    activeSkillIds: input.state.activeSkillIds,
+    activeToolNames,
+    summary: input.summary,
+    resultStatus: 'blocked',
+    stage: 'human_brain'
+  })
+
+  return {
+    phase: 'brain' as const,
+    status: 'blocked' as const,
+    steps: Math.max(input.state.steps, input.stepIndex),
+    lastDecision: {
+      action: 'block_task' as const,
+      reason: input.summary,
+      rationale: input.summary,
+      publicNarrative: input.publicNarrative,
+      details: input.details
+    },
+    lastObservation: {
+      kind: 'terminal' as const,
+      status: 'blocked' as const,
+      code: input.resultCode,
+      summary: input.summary,
+      data: input.details
+    },
+    stepHistory: nextHistory,
+    summary: input.summary,
+    resultCode: input.resultCode,
+    resultData: toResultData(input.details, 'details')
+  }
+}
+
+const createDiagnosticTrace = (
+  decision: HumanStepDecision,
+  observation: HumanObservation | undefined
+) => {
+  const observationSummary = observation ? observation.summary : undefined
+
+  if (decision.action === 'load_skill') {
+    return {
+      rationale: decision.rationale,
+      selectedSkillId: decision.skillId,
+      observationSummary
+    }
+  }
+
+  if (decision.action === 'invoke_tool') {
+    return {
+      rationale: decision.rationale,
+      selectedToolName: decision.toolName,
+      args: decision.args,
+      observationSummary
+    }
+  }
+
+  return {
+    rationale: decision.rationale,
+    observationSummary
+  }
 }
 
 export const createHumanBrainNode = (input: { ctx: AiRunContext }) => {
@@ -24,98 +243,198 @@ export const createHumanBrainNode = (input: { ctx: AiRunContext }) => {
       return {}
     }
 
+    ctx.checkCancelled()
+
     if (state.steps >= state.maxSteps) {
       const summary = `human exceeded max steps (${state.maxSteps})`
-      ctx.sendEvent({
-        type: 'human_step',
+      emitHumanDiagnostic({
+        ctx,
         runId: state.runId,
         taskId: state.input.taskId,
-        stepIndex: state.steps,
+        stepIndex: state.steps + 1,
         action: 'block_task',
-        summary,
-        createdAt: Date.now(),
+        trace: {
+          rationale: summary,
+          observationSummary: state.lastObservation?.summary
+        },
         stage: 'human_brain'
       })
-      return {
-        status: 'blocked',
+      return createBlockState({
+        ctx,
+        state,
+        stepIndex: state.steps + 1,
         summary,
+        publicNarrative: '当前步数预算已经耗尽，我无法继续安全推进任务。',
         resultCode: 'bounded_loop_error'
-      }
+      })
     }
 
-    const capabilityRegistry = buildCapabilityToolRegistry({
-      ctx,
-      runId: state.runId,
-      taskId: state.input.taskId
-    })
-    const controlTools = buildHumanControlTools({
-      ctx,
-      runId: state.runId,
-      taskId: state.input.taskId
-    })
-    const activeTools = [...capabilityRegistry.allTools, ...controlTools]
+    const prompt = buildDecisionPrompt(state)
+    let rawDecision: JsonObject
 
-    const baseMessages = state.messages.length === 0 ? buildBaseMessages(state) : state.messages
-    const cfg = await ctx.getModelConfig()
-    const model = createChatModel(cfg, { temperature: 0.1 }).bindTools(activeTools)
-    const ai = (await model.invoke(baseMessages)) as AIMessage
-    const toolCalls = getToolCalls(ai)
+    try {
+      rawDecision = await ctx.chatJson<JsonObject>({
+        system: prompt.system,
+        user: prompt.user,
+        temperature: 0.1
+      })
+    } catch (error) {
+      const summary = error instanceof Error ? error.message : 'brain decision failed'
+      emitHumanDiagnostic({
+        ctx,
+        runId: state.runId,
+        taskId: state.input.taskId,
+        stepIndex: state.steps + 1,
+        action: 'block_task',
+        trace: {
+          rationale: summary,
+          observationSummary: state.lastObservation?.summary
+        },
+        stage: 'human_brain'
+      })
+      return createBlockState({
+        ctx,
+        state,
+        stepIndex: state.steps + 1,
+        summary,
+        publicNarrative: '当前无法生成有效决策，因此需要阻塞任务。',
+        resultCode: 'invalid_input',
+        details: { error: summary }
+      })
+    }
+
+    const decoded = decodeHumanStepDecision(rawDecision)
+    if (!decoded) {
+      const summary = 'brain produced invalid decision payload'
+      emitHumanDiagnostic({
+        ctx,
+        runId: state.runId,
+        taskId: state.input.taskId,
+        stepIndex: state.steps + 1,
+        action: 'block_task',
+        trace: {
+          rationale: summary,
+          observationSummary: toJsonText(rawDecision)
+        },
+        stage: 'human_brain'
+      })
+      return createBlockState({
+        ctx,
+        state,
+        stepIndex: state.steps + 1,
+        summary,
+        publicNarrative: '当前决策结果不符合执行契约，因此无法继续任务。',
+        resultCode: 'invalid_input',
+        details: rawDecision
+      })
+    }
+
+    const decision = normalizeDecision(decoded)
     const nextStep = state.steps + 1
 
-    if (toolCalls.length === 0) {
-      const summary = 'brain produced no tool call'
-      ctx.sendEvent({
-        type: 'human_step',
+    emitHumanDiagnostic({
+      ctx,
+      runId: state.runId,
+      taskId: state.input.taskId,
+      stepIndex: nextStep,
+      action: decision.action,
+      trace: createDiagnosticTrace(decision, state.lastObservation),
+      stage: 'human_brain'
+    })
+
+    if (
+      decision.action === 'load_skill' &&
+      !state.availableSkillCards.some((card) => card.id === decision.skillId)
+    ) {
+      return createBlockState({
+        ctx,
+        state,
+        stepIndex: nextStep,
+        summary: `unknown skill decision: ${decision.skillId}`,
+        publicNarrative: '当前选择了不存在的能力包，因此无法继续任务。',
+        resultCode: 'invalid_input',
+        details: { skillId: decision.skillId }
+      })
+    }
+
+    if (
+      decision.action === 'invoke_tool' &&
+      !getActiveToolNames(state).includes(decision.toolName)
+    ) {
+      return createBlockState({
+        ctx,
+        state,
+        stepIndex: nextStep,
+        summary: `inactive tool decision: ${decision.toolName}`,
+        publicNarrative: '当前选择了未激活的工具，因此无法继续任务。',
+        resultCode: 'invalid_input',
+        details: { toolName: decision.toolName, args: decision.args }
+      })
+    }
+
+    if (decision.action === 'complete_task') {
+      const activeToolNames = getActiveToolNames(state)
+      const nextHistory = appendHumanStepRecord({
+        history: state.stepHistory,
+        step: nextStep,
+        action: 'complete_task',
+        publicNarrative: decision.publicNarrative,
+        activeSkillIds: state.activeSkillIds,
+        activeToolNames,
+        resultStatus: 'ok',
+        summary: decision.summary
+      })
+
+      emitHumanStep({
+        ctx,
         runId: state.runId,
         taskId: state.input.taskId,
         stepIndex: nextStep,
-        action: 'block_task',
-        summary,
-        createdAt: Date.now(),
+        action: 'complete_task',
+        publicNarrative: decision.publicNarrative,
+        activeSkillIds: state.activeSkillIds,
+        activeToolNames,
+        summary: decision.summary,
+        resultStatus: 'ok',
         stage: 'human_brain'
       })
+
       return {
-        activeTools,
-        messages: [...baseMessages, ai],
+        phase: 'brain',
+        status: 'completed',
         steps: nextStep,
-        status: 'blocked',
-        summary,
-        resultCode: 'invalid_input'
+        lastDecision: decision,
+        lastObservation: {
+          kind: 'terminal',
+          status: 'completed',
+          code: 'ok',
+          summary: decision.summary,
+          data: decision.resultData
+        },
+        stepHistory: nextHistory,
+        summary: decision.summary,
+        resultCode: 'ok',
+        resultData: decision.resultData
       }
     }
 
-    const first = toolCalls[0]
-    const toolName = String(first.name || '').trim()
-    const allowed = new Set(activeTools.map((toolItem) => String(toolItem.name || '')))
-    if (!allowed.has(toolName)) {
-      const summary = `unknown tool call: ${toolName}`
-      ctx.sendEvent({
-        type: 'human_step',
-        runId: state.runId,
-        taskId: state.input.taskId,
+    if (decision.action === 'block_task') {
+      const blockedCode = resolveBlockedResultCode(state.lastObservation, 'failed')
+      return createBlockState({
+        ctx,
+        state,
         stepIndex: nextStep,
-        action: 'block_task',
-        summary,
-        createdAt: Date.now(),
-        stage: 'human_brain'
+        summary: decision.reason,
+        publicNarrative: decision.publicNarrative,
+        resultCode: blockedCode,
+        details: decision.details
       })
-      return {
-        activeTools,
-        messages: [...baseMessages, ai],
-        steps: nextStep,
-        status: 'blocked',
-        summary,
-        resultCode: 'invalid_input'
-      }
     }
 
     return {
-      activeTools,
-      messages: [...baseMessages, ai],
-      lastAiMessage: ai,
-      lastToolName: toolName,
       steps: nextStep,
-      phase: 'tool_exec'
+      phase: decision.action === 'load_skill' ? 'skill_loader' : 'tool_exec',
+      lastDecision: decision
     }
   }
 }

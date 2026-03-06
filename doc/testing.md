@@ -84,7 +84,7 @@ human-live 使用根目录 `.env` 配置：
 - `events.jsonl`：原始事件流，作为可回放证据。
 - `assertions.json`：结构化断言结果，包含 `caseStatus`、失败断言 ID 与断言明细。
 - `metrics.json`：统一标量指标，至少包含 `caseStatus`、`caseErrorCode`、`executionStatus`、`executionResultCode` 及步骤、审批、产物计数。
-- `signals.json`：结构化信号，至少包含 `toolSequence`、`toolCounts`、`toolResultCodeCounts`、`failedAssertionIds`，并在适用时补充 `expectedOutcome`、`scenarioTags`、`finalHumanAction`。
+- `signals.json`：结构化信号，至少包含 `toolSequence`、`toolCounts`、`toolResultCodeCounts`、`stepActionSequence`、`skillActivationSequence`、`failedAssertionIds`，并在适用时补充 `expectedOutcome`、`scenarioTags`、`finalHumanAction`。
 - `summary.md`：事实性摘要，只转写上述结构化数据，不包含固定根因或优化建议。
 
 ## 7. 扩展规则

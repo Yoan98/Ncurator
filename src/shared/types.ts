@@ -109,6 +109,14 @@ export interface ChatSession {
 export type AiTaskKind = 'local_kb_retrieval' | 'terminal_exec' | 'docx'
 export type AiTaskStatus = 'pending' | 'running' | 'completed' | 'failed'
 export type AiRunStatus = 'running' | 'completed' | 'failed' | 'cancelled'
+export const RUNTIME_SKILL_IDS = [
+  'workspace-shell',
+  'docx-editing',
+  'local-kb-retrieval'
+] as const
+export type RuntimeSkillId = (typeof RUNTIME_SKILL_IDS)[number]
+export const RUNTIME_SKILL_REQUIREMENTS = ['workspace', 'approval', 'document_scope'] as const
+export type RuntimeSkillRequirement = (typeof RUNTIME_SKILL_REQUIREMENTS)[number]
 export type AiRunEventStage =
   | 'main_intent'
   | 'main_context_enrich'
@@ -116,6 +124,7 @@ export type AiRunEventStage =
   | 'main_plan_exec'
   | 'main_finalize'
   | 'human_brain'
+  | 'human_skill_loader'
   | 'human_tool_exec'
 export type AiTaskResultCode =
   | 'ok'
@@ -124,26 +133,82 @@ export type AiTaskResultCode =
   | 'approval_denied'
   | 'bounded_loop_error'
   | 'invalid_input'
+export const HUMAN_STEP_ACTIONS = [
+  'load_skill',
+  'invoke_tool',
+  'complete_task',
+  'block_task'
+] as const
+export type HumanStepAction = (typeof HUMAN_STEP_ACTIONS)[number]
+export const HUMAN_STEP_RESULT_STATUSES = ['ok', 'error', 'blocked'] as const
+export type HumanStepResultStatus = (typeof HUMAN_STEP_RESULT_STATUSES)[number]
 
-export type BrainInvokeToolAction = {
+export type SkillCard = {
+  id: RuntimeSkillId
+  name: string
+  summary: string
+  whenToUse: string
+  unlocks: string[]
+  requires?: RuntimeSkillRequirement[]
+}
+
+export type HumanLoadSkillDecision = {
+  action: 'load_skill'
+  skillId: RuntimeSkillId
+  rationale: string
+  publicNarrative: string
+}
+
+export type HumanInvokeToolDecision = {
   action: 'invoke_tool'
   toolName: string
-  args?: JsonObject
+  args: JsonObject
+  rationale: string
+  publicNarrative: string
 }
 
-export type BrainCompleteTaskAction = {
+export type HumanCompleteTaskDecision = {
   action: 'complete_task'
   summary: string
-  outputs?: JsonObject
+  rationale: string
+  publicNarrative: string
+  resultData?: JsonObject
 }
 
-export type BrainBlockTaskAction = {
+export type HumanBlockTaskDecision = {
   action: 'block_task'
   reason: string
-  details?: string
+  rationale: string
+  publicNarrative: string
+  details?: JsonValue
 }
 
-export type BrainStepAction = BrainInvokeToolAction | BrainCompleteTaskAction | BrainBlockTaskAction
+export type HumanStepDecision =
+  | HumanLoadSkillDecision
+  | HumanInvokeToolDecision
+  | HumanCompleteTaskDecision
+  | HumanBlockTaskDecision
+
+export type HumanStepRecord = {
+  step: number
+  action: HumanStepAction
+  publicNarrative: string
+  activeSkillIds: RuntimeSkillId[]
+  activeToolNames: string[]
+  resultStatus?: HumanStepResultStatus
+  skillId?: RuntimeSkillId
+  toolName?: string
+  summary?: string
+}
+
+export type DiagnosticTrace = {
+  rationale: string
+  selectedSkillId?: RuntimeSkillId
+  selectedToolName?: string
+  args?: JsonObject
+  observationSummary?: string
+  switchReason?: string
+}
 
 export type CapabilityResult = {
   toolName: string
@@ -323,9 +388,23 @@ type AiRunEventPayload =
       runId: string
       taskId: string
       stepIndex: number
-      action: BrainStepAction['action']
+      action: HumanStepAction
+      skillId?: RuntimeSkillId
       toolName?: string
+      publicNarrative: string
+      activeSkillIds: RuntimeSkillId[]
+      activeToolNames: string[]
+      resultStatus?: HumanStepResultStatus
       summary: string
+      createdAt: number
+    }
+  | {
+      type: 'human_diagnostic'
+      runId: string
+      taskId: string
+      stepIndex: number
+      action: HumanStepAction
+      trace: DiagnosticTrace
       createdAt: number
     }
   | {

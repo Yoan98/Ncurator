@@ -59,7 +59,7 @@ human live 测试报告 MUST 将测试 case 自身是否通过与 human 实际�
 - **THEN** 报告 MUST 将 `caseStatus` 记录为 `failed`、`caseErrorCode` 记录为 `live_config_missing`，并将 `executionStatus` 记录为 `not_run`
 
 ### Requirement: Human live 报告 MUST 输出结构化步骤信号供后续分析
-human live 测试结果 MUST 输出适合后续分析器消费的结构化步骤信号，至少包含 `toolSequence`、失败断言 ID、最终 human 动作，以及与完成或阻塞结果相关的关键执行信号。
+human live 测试结果 MUST 输出适合后续分析器消费的结构化步骤信号，至少包含 `toolSequence`、`stepActionSequence`、`skillActivationSequence`、失败断言 ID、最终 human 动作，以及与完成或阻塞结果相关的关键执行信号。
 
 #### Scenario: 任务完成并调用 complete_task
 - **WHEN** human live 用例通过若干工具步骤完成目标
@@ -68,4 +68,3 @@ human live 测试结果 MUST 输出适合后续分析器消费的结构化步骤
 #### Scenario: 任务阻塞并调用 block_task
 - **WHEN** human live 用例在审批、工作区或其他不可恢复条件下阻塞
 - **THEN** `signals.json` MUST 包含最终 human 动作 `block_task` 以及与阻塞结果相关的步骤信号
-

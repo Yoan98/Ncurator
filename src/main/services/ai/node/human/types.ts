@@ -1,8 +1,53 @@
-import type { AIMessage, BaseMessage } from '@langchain/core/messages'
 import type { StructuredToolInterface } from '@langchain/core/tools'
-import type { AiTaskResultCode, HumanTaskInput, JsonObject } from '../../../../../shared/types'
+import type {
+  AiTaskResultCode,
+  HumanStepDecision,
+  HumanStepRecord,
+  HumanTaskInput,
+  JsonValue,
+  RuntimeSkillId,
+  SkillCard
+} from '../../../../../shared/types'
 
-export type HumanPhase = 'brain' | 'tool_exec'
+export type HumanPhase = 'brain' | 'skill_loader' | 'tool_exec'
+
+export type LoadedSkill = {
+  skillId: RuntimeSkillId
+  skillContent: string
+  referencedAssets: string[]
+  toolNames: string[]
+  loadedAtStep: number
+}
+
+export type HumanSkillLoadObservation = {
+  kind: 'skill_loaded'
+  skillId: RuntimeSkillId
+  summary: string
+  activeSkillIds: RuntimeSkillId[]
+  activeToolNames: string[]
+}
+
+export type HumanToolObservation = {
+  kind: 'tool_result'
+  toolName: string
+  ok: boolean
+  code: AiTaskResultCode
+  summary: string
+  data?: JsonValue
+}
+
+export type HumanTerminalObservation = {
+  kind: 'terminal'
+  status: 'completed' | 'blocked'
+  code: AiTaskResultCode
+  summary: string
+  data?: JsonValue
+}
+
+export type HumanObservation =
+  | HumanSkillLoadObservation
+  | HumanToolObservation
+  | HumanTerminalObservation
 
 export type HumanRunState = {
   runId: string
@@ -11,11 +56,15 @@ export type HumanRunState = {
   status: 'running' | 'completed' | 'blocked'
   steps: number
   maxSteps: number
-  messages: BaseMessage[]
+  availableSkillCards: SkillCard[]
+  loadedSkills: Partial<Record<RuntimeSkillId, LoadedSkill>>
+  loadedToolsets: Partial<Record<RuntimeSkillId, StructuredToolInterface[]>>
+  activeSkillIds: RuntimeSkillId[]
   activeTools: StructuredToolInterface[]
-  lastAiMessage?: AIMessage
-  lastToolName?: string
+  lastObservation?: HumanObservation
+  lastDecision?: HumanStepDecision
+  stepHistory: HumanStepRecord[]
   summary: string
   resultCode: AiTaskResultCode
-  resultData?: JsonObject
+  resultData?: Record<string, JsonValue>
 }

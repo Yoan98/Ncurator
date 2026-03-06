@@ -14,7 +14,7 @@ describe('human-live', () => {
       caseId: CASE_ID,
       description: '验证 human 子图在真实模型下通过 terminal 工具读取文件并完成任务。',
       objective:
-        '请在当前 workspace 中读取 input.txt 的第一行，并调用 complete_task 结束任务；outputs 必须包含 first_line 字段。',
+        '请在当前 workspace 中读取 input.txt 的第一行。你可以按需加载能力；完成任务时 resultData 必须包含 first_line 字段。',
       expectedOutcome: 'success',
       scenarioTags: ['human-live', 'workspace-read', 'success-path'],
       requiredFixtures: [FIXTURE_SOURCE],
@@ -23,6 +23,19 @@ describe('human-live', () => {
       maxSteps: 8,
       assert: async (result, runtime) => {
         const events = runtime.eventCollector.snapshot()
+        const skillLoadIndex = events.findIndex(
+          (event) =>
+            event.type === 'human_step' &&
+            event.action === 'load_skill' &&
+            event.skillId === 'workspace-shell' &&
+            String(event.taskId || '') === runtime.taskId
+        )
+        const firstToolCallIndex = events.findIndex(
+          (event) =>
+            event.type === 'tool_call_started' &&
+            event.toolName === 'terminal_run_command' &&
+            String(event.taskId || '') === runtime.taskId
+        )
         const hasToolCall = events.some((event) => event.type === 'tool_call_started')
         const hasCompleteStep = events.some(
           (event) =>
@@ -35,6 +48,11 @@ describe('human-live', () => {
           id: 'human.status.completed',
           pass: result.status === 'completed',
           details: `status=${result.status}, resultCode=${result.resultCode}, summary=${result.summary}`
+        })
+        recordAssertion(runtime.assertions, {
+          id: 'human.skills.workspace-shell-loaded-first',
+          pass: skillLoadIndex >= 0 && firstToolCallIndex > skillLoadIndex,
+          details: `skillLoadIndex=${skillLoadIndex}, firstToolCallIndex=${firstToolCallIndex}`
         })
         recordAssertion(runtime.assertions, {
           id: 'human.events.tool-call',
@@ -52,5 +70,6 @@ describe('human-live', () => {
     const report = await readLatestCaseReportArtifacts('human-live', CASE_ID)
     expect(report.metrics.executionStatus).toBe('completed')
     expect(report.signals.finalHumanAction).toBe('complete_task')
+    expect(report.signals.skillActivationSequence[0]).toBe('workspace-shell')
   })
 })

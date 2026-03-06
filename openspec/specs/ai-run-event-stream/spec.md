@@ -22,11 +22,11 @@ TBD - created by archiving change langgraph-chat-ai-architecture. Update Purpose
 - **THEN** 事件流表达为同一任务下的步骤推进，而非重复创建计划事件
 
 ### Requirement: Emit tool and terminal step events
-系统 MUST 发出步骤级工具事件，并在动态 active tools 模式下记录该步骤工具集合上下文以支持回放与审计。
+系统 MUST 发出步骤级工具事件，并在 skill activation 模式下记录该步骤的 active skills / active tools 上下文以支持回放与审计。
 
 #### Scenario: Dynamic tool step execution
 - **WHEN** brain 在某一步调用 active tools 中的工具
-- **THEN** 事件流包含工具调用开始、结果、以及该步骤 active toolset 关联信息
+- **THEN** 事件流包含工具调用开始、结果、以及该步骤 active skills / active tools 关联信息
 
 ### Requirement: Emit UI-friendly activity events
 系统 MUST 发出可供 UI 渲染的 activity 事件，并覆盖 main 阶段与 human 步骤的关键动作。
@@ -64,8 +64,8 @@ TBD - created by archiving change langgraph-chat-ai-architecture. Update Purpose
 - **THEN** 可基于关联字段稳定重建执行轨迹而无需启发式猜测
 
 ### Requirement: Keep human-step observability without slot events
-系统 MUST 通过 `human_step` 持续表达 human 内部推进状态，且 MUST 不再依赖 `slot_commit` 事件。
+系统 MUST 通过 `human_step` 持续表达 human 内部推进状态，并通过内部诊断事件保留 rationale 级调试信息，且 MUST 不再依赖 `slot_commit` 事件。
 
 #### Scenario: Human step visibility in simplified runtime
 - **WHEN** human 完成一步工具执行
-- **THEN** 事件流包含可关联 task 的 `human_step` 信息，并省略 slot 提交事件
+- **THEN** 事件流包含可关联 task 的 `human_step` 信息（含 `publicNarrative`、active skills、active tools、步骤结果），并省略 slot 提交事件

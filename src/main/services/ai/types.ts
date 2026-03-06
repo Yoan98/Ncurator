@@ -8,16 +8,17 @@ import type {
   AiRunEventStage,
   AiRunStatus,
   AiTaskStatus,
-  BrainStepAction,
   CapabilityResult,
   HumanTaskInput,
+  HumanStepAction,
+  HumanStepDecision,
   HumanTaskOutput,
   JsonObject,
   LLMConfig
 } from '../../../shared/types'
 
 export type { AiTaskStatus, AiRunStatus, AiPlanTask }
-export type { BrainStepAction, CapabilityResult, HumanTaskInput, HumanTaskOutput }
+export type { HumanStepAction, HumanStepDecision, CapabilityResult, HumanTaskInput, HumanTaskOutput }
 
 export type AiMainStage =
   | 'main_intent'

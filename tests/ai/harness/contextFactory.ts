@@ -1,4 +1,6 @@
+import { HumanMessage, SystemMessage } from '@langchain/core/messages'
 import { randomUUID } from 'node:crypto'
+import { createChatModel } from '../../../src/main/services/llm/chatModel'
 import type { AiRunContext } from '../../../src/main/services/ai/types'
 import type { AiApprovalDecision, AiApprovalRequest } from '../../../src/main/services/ai/types'
 import type { JsonObject } from '../../../src/shared/types'
@@ -31,6 +33,20 @@ const buildEmbeddingServiceStub = () => ({
     dims: [1, 768] as [number, number]
   })
 })
+
+const parseJsonObject = <T extends JsonObject>(text: string): T => {
+  const trimmed = String(text || '').trim()
+  try {
+    return JSON.parse(trimmed) as T
+  } catch {
+    const start = trimmed.indexOf('{')
+    const end = trimmed.lastIndexOf('}')
+    if (start >= 0 && end > start) {
+      return JSON.parse(trimmed.slice(start, end + 1)) as T
+    }
+  }
+  throw new Error('无法解析 JSON 输出')
+}
 
 export const createTestAiRunContext = (input: {
   runId?: string
@@ -85,8 +101,20 @@ export const createTestAiRunContext = (input: {
       rootPath: input.workspaceRootPath
     },
     checkCancelled: () => undefined,
-    chatJson: async <T extends JsonObject>(): Promise<T> => {
-      throw new Error('chatJson is not available in this test harness context')
+    chatJson: async <T extends JsonObject>(payload): Promise<T> => {
+      if (!input.liveModelConfig) {
+        throw new Error('chatJson is not available in this test harness context')
+      }
+      const model = createChatModel(input.liveModelConfig, {
+        temperature: payload.temperature ?? 0.2
+      })
+      const res = await model.invoke([
+        new SystemMessage(payload.system),
+        new HumanMessage(payload.user)
+      ])
+      const text = typeof res?.content === 'string' ? res.content : String(res?.content ?? '')
+      if (!text) throw new Error('大模型返回为空')
+      return parseJsonObject<T>(text)
     },
     sendEvent: (event: Parameters<AiRunContext['sendEvent']>[0]) => {
       input.eventCollector.add(event)

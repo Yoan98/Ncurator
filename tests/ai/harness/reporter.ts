@@ -1,6 +1,11 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import type { AiRunEvent, IpcJsonValue } from '../../../src/shared/types'
+import {
+  HUMAN_STEP_ACTIONS,
+  type AiRunEvent,
+  type IpcJsonValue,
+  type RuntimeSkillId
+} from '../../../src/shared/types'
 import type {
   ArtifactOperationCounts,
   CaseAssertionsReport,
@@ -8,6 +13,7 @@ import type {
   CaseReportInput,
   CaseRuntimeMetrics,
   CaseSignalsReport,
+  StepActionCounts,
   ToolCounts,
   ToolResultCodeCounts
 } from './types'
@@ -74,6 +80,17 @@ const inspectEvents = (events: AiRunEvent[]) => {
   const toolSequence: string[] = []
   const toolCounts: ToolCounts = {}
   const toolResultCodeCounts: ToolResultCodeCounts = {}
+  const stepActionSequence: CaseSignalsReport['stepActionSequence'] = []
+  const stepActionCounts = HUMAN_STEP_ACTIONS.reduce<StepActionCounts>(
+    (counts, action) => ({ ...counts, [action]: 0 }),
+    {
+      load_skill: 0,
+      invoke_tool: 0,
+      complete_task: 0,
+      block_task: 0
+    }
+  )
+  const skillActivationSequence: RuntimeSkillId[] = []
   const artifactOperationCounts: ArtifactOperationCounts = {
     created: 0,
     updated: 0
@@ -120,6 +137,11 @@ const inspectEvents = (events: AiRunEvent[]) => {
     }
 
     if (event.type === 'human_step') {
+      stepActionSequence.push(event.action)
+      stepActionCounts[event.action] += 1
+      if (event.action === 'load_skill' && event.skillId) {
+        skillActivationSequence.push(event.skillId)
+      }
       finalHumanAction = event.action
     }
   }
@@ -128,6 +150,9 @@ const inspectEvents = (events: AiRunEvent[]) => {
     toolSequence,
     toolCounts,
     toolResultCodeCounts,
+    stepActionSequence,
+    stepActionCounts,
+    skillActivationSequence,
     artifactOperationCounts,
     warningCount,
     approvalRequiredCount,
@@ -219,6 +244,9 @@ const buildSignalsReport = (input: {
     toolSequence: inspected.toolSequence,
     toolCounts: inspected.toolCounts,
     toolResultCodeCounts: inspected.toolResultCodeCounts,
+    stepActionSequence: inspected.stepActionSequence,
+    stepActionCounts: inspected.stepActionCounts,
+    skillActivationSequence: inspected.skillActivationSequence,
     failedAssertionIds: input.assertions.failedAssertionIds,
     artifactOperationCounts: inspected.artifactOperationCounts,
     finalHumanAction: resolveFinalHumanAction({
@@ -239,6 +267,8 @@ const buildSummaryMarkdown = (input: {
   const { report, assertions, metrics, signals } = input
   const toolSequenceText =
     signals.toolSequence.length > 0 ? signals.toolSequence.join(' -> ') : 'none'
+  const skillActivationText =
+    signals.skillActivationSequence.length > 0 ? signals.skillActivationSequence.join(' -> ') : 'none'
   const failedAssertionText =
     assertions.failedAssertionIds.length > 0 ? assertions.failedAssertionIds.join(', ') : 'none'
   const scenarioTagText = signals.scenarioTags.length > 0 ? signals.scenarioTags.join(', ') : 'none'
@@ -256,6 +286,7 @@ const buildSummaryMarkdown = (input: {
     `- assertions: ${assertions.assertionPassed}/${assertions.assertionTotal}`,
     `- failedAssertionIds: ${failedAssertionText}`,
     `- toolSequence: ${toolSequenceText}`,
+    `- skillActivationSequence: ${skillActivationText}`,
     `- scenarioTags: ${scenarioTagText}`,
     `- approvalDeniedCount: ${metrics.approvalDeniedCount}`,
     `- warningCount: ${metrics.warningCount}`,

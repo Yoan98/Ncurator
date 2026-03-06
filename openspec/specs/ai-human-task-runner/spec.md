@@ -4,7 +4,7 @@
 TBD - created by archiving change main-human-brain-architecture. Update Purpose after archive.
 ## Requirements
 ### Requirement: Execute single-task human graph with brain-driven loop
-系统 MUST 为每个 plan 任务启动独立 human 运行实例，并在该实例内以 `brain -> tool_exec -> brain` 的步骤循环推进；human 最小输入契约 MUST 为 `taskId` 与 `objective`，不得依赖 `mode` 字段。
+系统 MUST 为每个 plan 任务启动独立 human 运行实例，并在该实例内以 `brain -> (skill_loader | tool_exec) -> brain` 的步骤循环推进；human 最小输入契约 MUST 为 `taskId` 与 `objective`，不得依赖 `mode` 字段。
 
 #### Scenario: One task one human run
 - **WHEN** main graph 派发一个待执行任务到 human
@@ -18,23 +18,31 @@ TBD - created by archiving change main-human-brain-architecture. Update Purpose 
 - **WHEN** plan 中存在多个任务
 - **THEN** 每个任务在独立 human 实例中执行且不共享隐式运行态
 
-### Requirement: Use brain as the only tool caller via LangGraph tools
-在 human 运行中，brain MUST 成为唯一工具调用入口，并 MUST 通过 LangGraph tool 机制（`bindTools` 与 `ToolNode`）发起和执行工具调用。
+### Requirement: Use brain as the only step decision maker
+在 human 运行中，brain MUST 成为唯一的步骤决策入口，并 MUST 基于 `availableSkillCards`、已加载 skill 与最近 observation 输出结构化步骤决策。
 
-#### Scenario: Brain calls active tool
-- **WHEN** 本步骤 active tools 已确定
-- **THEN** brain 仅可在该集合中发起 tool call，执行端通过对应 `ToolNode` 执行
+#### Scenario: Brain loads a missing skill first
+- **WHEN** brain 判断当前缺少完成任务所需能力
+- **THEN** 输出 MUST 为 `load_skill`，并引用存在于 `availableSkillCards` 中的 `skillId`
+
+#### Scenario: Brain invokes an active tool
+- **WHEN** brain 判断当前 active skill 已足以推进任务
+- **THEN** 输出 MUST 为 `invoke_tool`，并由 runtime 通过对应 `ToolNode(activeTools)` 执行
 
 #### Scenario: Capability internal AI loop is disallowed
-- **WHEN** capability 被 brain 调用
+- **WHEN** capability 工具被 brain 选中并执行
 - **THEN** capability 仅执行原子逻辑并返回结构化结果，不再运行内部 AI 决策循环
 
 ### Requirement: Enforce canonical step actions
-brain 每一步输出 MUST 仅允许 `invoke_tool`、`complete_task`、`block_task` 三类动作之一，且动作载荷 MUST 满足结构化 schema 校验；`complete_task` MUST 基于已满足目标的证据，`block_task` MUST 提供明确阻塞原因。
+brain 每一步输出 MUST 仅允许 `load_skill`、`invoke_tool`、`complete_task`、`block_task` 四类动作之一，且动作载荷 MUST 满足结构化 schema 校验；`complete_task` MUST 基于已满足目标的证据，`block_task` MUST 提供明确阻塞原因。
+
+#### Scenario: Load skill action
+- **WHEN** brain 判断当前缺少能力包
+- **THEN** 输出 MUST 为 `load_skill`，并包含 `skillId`、`rationale`、`publicNarrative`
 
 #### Scenario: Invoke tool action
 - **WHEN** brain 判断需要执行外部能力
-- **THEN** 输出 MUST 为 `invoke_tool`，并包含工具名与参数
+- **THEN** 输出 MUST 为 `invoke_tool`，并包含工具名、参数、`rationale` 与 `publicNarrative`
 
 #### Scenario: Complete task with objective evidence
 - **WHEN** brain 判定任务目标已完成
@@ -54,4 +62,3 @@ human 步骤循环 MUST 受最大步数、总耗时、取消信号约束，并�
 #### Scenario: Cancellation during human execution
 - **WHEN** 运行过程中收到取消信号
 - **THEN** human 立即停止后续步骤并向 main 报告取消终态
-
