@@ -1,3 +1,10 @@
+import {
+  HUMAN_STEP_ACTIONS,
+  HUMAN_STEP_RESULT_STATUSES,
+  RUNTIME_SKILL_IDS,
+  RUNTIME_SKILL_REQUIREMENTS
+} from './constants'
+
 export type DocumentSourceType = 'file' | 'web'
 export type DocumentImportStatus = 1 | 2 | 3
 export type SearchSourceFilter = 'all' | DocumentSourceType
@@ -109,13 +116,7 @@ export interface ChatSession {
 export type AiTaskKind = 'local_kb_retrieval' | 'terminal_exec' | 'docx'
 export type AiTaskStatus = 'pending' | 'running' | 'completed' | 'failed'
 export type AiRunStatus = 'running' | 'completed' | 'failed' | 'cancelled'
-export const RUNTIME_SKILL_IDS = [
-  'workspace-shell',
-  'docx-editing',
-  'local-kb-retrieval'
-] as const
 export type RuntimeSkillId = (typeof RUNTIME_SKILL_IDS)[number]
-export const RUNTIME_SKILL_REQUIREMENTS = ['workspace', 'approval', 'document_scope'] as const
 export type RuntimeSkillRequirement = (typeof RUNTIME_SKILL_REQUIREMENTS)[number]
 export type AiRunEventStage =
   | 'main_intent'
@@ -133,14 +134,7 @@ export type AiTaskResultCode =
   | 'approval_denied'
   | 'bounded_loop_error'
   | 'invalid_input'
-export const HUMAN_STEP_ACTIONS = [
-  'load_skill',
-  'invoke_tool',
-  'complete_task',
-  'block_task'
-] as const
 export type HumanStepAction = (typeof HUMAN_STEP_ACTIONS)[number]
-export const HUMAN_STEP_RESULT_STATUSES = ['ok', 'error', 'blocked'] as const
 export type HumanStepResultStatus = (typeof HUMAN_STEP_RESULT_STATUSES)[number]
 
 export type SkillCard = {

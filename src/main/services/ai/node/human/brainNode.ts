@@ -1,3 +1,4 @@
+import { HumanMessage, SystemMessage } from '@langchain/core/messages'
 import type {
   AiTaskResultCode,
   HumanStepDecision,
@@ -6,9 +7,10 @@ import type {
   RuntimeSkillId
 } from '../../../../../shared/types'
 import { isJsonObject } from '../../../../utils/aiCapabilityUtils'
+import { createChatModel } from '../../../llm/chatModel'
 import type { AiRunContext } from '../../types'
 import { buildHumanBrainPrompt } from '../../prompts/human/brain'
-import { decodeHumanStepDecision } from './decisionCodec'
+import { humanStepDecisionSchema } from './decisionCodec'
 import { appendHumanStepRecord, emitHumanDiagnostic, emitHumanStep } from './events'
 import type { HumanObservation, HumanRunState, LoadedSkill } from './types'
 
@@ -146,6 +148,22 @@ const buildDecisionPrompt = (state: HumanRunState) => {
   return prompt
 }
 
+const invokeStructuredDecision = async (input: {
+  ctx: AiRunContext
+  prompt: ReturnType<typeof buildDecisionPrompt>
+}): Promise<HumanStepDecision> => {
+  const cfg = await input.ctx.getModelConfig()
+  const model = createChatModel(cfg, { temperature: 0.1 }).withStructuredOutput<HumanStepDecision>(
+    humanStepDecisionSchema,
+    {
+      name: 'human_step_decision',
+      method: 'jsonMode'
+    }
+  )
+
+  return model.invoke([new SystemMessage(input.prompt.system), new HumanMessage(input.prompt.user)])
+}
+
 const createBlockState = (input: {
   ctx: AiRunContext
   state: HumanRunState
@@ -270,14 +288,15 @@ export const createHumanBrainNode = (input: { ctx: AiRunContext }) => {
     }
 
     const prompt = buildDecisionPrompt(state)
-    let rawDecision: JsonObject
+    let decision: HumanStepDecision
 
     try {
-      rawDecision = await ctx.chatJson<JsonObject>({
-        system: prompt.system,
-        user: prompt.user,
-        temperature: 0.1
-      })
+      decision = normalizeDecision(
+        await invokeStructuredDecision({
+          ctx,
+          prompt
+        })
+      )
     } catch (error) {
       const summary = error instanceof Error ? error.message : 'brain decision failed'
       emitHumanDiagnostic({
@@ -302,34 +321,6 @@ export const createHumanBrainNode = (input: { ctx: AiRunContext }) => {
         details: { error: summary }
       })
     }
-
-    const decoded = decodeHumanStepDecision(rawDecision)
-    if (!decoded) {
-      const summary = 'brain produced invalid decision payload'
-      emitHumanDiagnostic({
-        ctx,
-        runId: state.runId,
-        taskId: state.input.taskId,
-        stepIndex: state.steps + 1,
-        action: 'block_task',
-        trace: {
-          rationale: summary,
-          observationSummary: toJsonText(rawDecision)
-        },
-        stage: 'human_brain'
-      })
-      return createBlockState({
-        ctx,
-        state,
-        stepIndex: state.steps + 1,
-        summary,
-        publicNarrative: '当前决策结果不符合执行契约，因此无法继续任务。',
-        resultCode: 'invalid_input',
-        details: rawDecision
-      })
-    }
-
-    const decision = normalizeDecision(decoded)
     const nextStep = state.steps + 1
 
     emitHumanDiagnostic({

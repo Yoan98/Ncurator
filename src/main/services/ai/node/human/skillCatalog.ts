@@ -1,6 +1,6 @@
 import type { StructuredToolInterface } from '@langchain/core/tools'
+import { RUNTIME_SKILL_IDS } from '../../../../../shared/constants'
 import {
-  RUNTIME_SKILL_IDS,
   type RuntimeSkillId,
   type SkillCard
 } from '../../../../../shared/types'

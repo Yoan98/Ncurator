@@ -1,10 +1,6 @@
 import { z } from 'zod/v4'
-import {
-  RUNTIME_SKILL_IDS,
-  type HumanStepDecision,
-  type JsonObject,
-  type JsonValue
-} from '../../../../../shared/types'
+import { RUNTIME_SKILL_IDS } from '../../../../../shared/constants'
+import { type JsonObject, type JsonValue } from '../../../../../shared/types'
 
 const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
   z.union([
@@ -48,8 +44,3 @@ export const humanStepDecisionSchema = z.discriminatedUnion('action', [
     details: jsonValueSchema.optional()
   })
 ])
-
-export const decodeHumanStepDecision = (raw: JsonObject): HumanStepDecision | null => {
-  const parsed = humanStepDecisionSchema.safeParse(raw)
-  return parsed.success ? parsed.data : null
-}

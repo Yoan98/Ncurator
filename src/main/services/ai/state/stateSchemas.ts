@@ -5,7 +5,9 @@ import {
   HUMAN_STEP_ACTIONS,
   HUMAN_STEP_RESULT_STATUSES,
   RUNTIME_SKILL_IDS,
-  RUNTIME_SKILL_REQUIREMENTS,
+  RUNTIME_SKILL_REQUIREMENTS
+} from '../../../../shared/constants'
+import {
   type HumanTaskInput,
   type JsonObject,
   type JsonValue

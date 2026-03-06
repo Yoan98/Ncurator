@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import { HUMAN_STEP_ACTIONS } from '../../../src/shared/constants'
 import {
-  HUMAN_STEP_ACTIONS,
   type AiRunEvent,
   type IpcJsonValue,
   type RuntimeSkillId
