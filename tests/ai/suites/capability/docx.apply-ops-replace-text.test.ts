@@ -27,8 +27,22 @@ describe('capability/docx', () => {
       caseId: 'docx-apply-ops-replace-text',
       description:
         '验证 docx 打开、搜索、replace_text、保存、校验的组合链路，并输出结构化报告。',
+      expectedOutcome: 'success',
+      scenarioTags: ['docx', 'edit-flow', 'replace-text'],
       requiredFixtures: [FIXTURE_SOURCE],
       fixtureCopies: [{ from: FIXTURE_SOURCE, to: 'input.docx' }],
+      buildExecutionOutcome: (result) => {
+        const save = asRecord(result.saveResult)
+        const validate = asRecord(result.validateResult)
+        const validateCode = asString(validate.code)
+        const saveCode = asString(save.code)
+        const resultCode = validateCode || saveCode || 'unknown'
+        return {
+          status: resultCode === 'ok' ? 'completed' : 'failed',
+          resultCode,
+          summary: `save=${saveCode || 'unknown'}, validate=${validateCode || 'unknown'}`
+        }
+      },
       execute: async (runtime) => {
         const built = buildDocxCapabilityTools({
           ctx: runtime.ctx,

@@ -24,12 +24,22 @@ describe('capability/docx', () => {
     await runCapabilityCase({
       caseId: CASE_ID,
       description: '验证 docx 覆盖保存在审批拒绝时的失败路径输出。',
+      expectedOutcome: 'blocked',
+      scenarioTags: ['docx', 'safe-save', 'negative-path'],
       requiredFixtures: [FIXTURE_SOURCE],
       fixtureCopies: [
         { from: FIXTURE_SOURCE, to: 'input.docx' },
         { from: FIXTURE_SOURCE, to: 'output.docx' }
       ],
       approvalPolicy: 'deny-medium-high',
+      buildExecutionOutcome: (result) => {
+        const code = asString(result.saveResult.code as JsonRecord[keyof JsonRecord]) || 'unknown'
+        return {
+          status: code === 'approval_denied' ? 'blocked' : code === 'ok' ? 'completed' : 'failed',
+          resultCode: code,
+          summary: asString(result.saveResult.error as JsonRecord[keyof JsonRecord]) || undefined
+        }
+      },
       execute: async (runtime) => {
         const built = buildDocxCapabilityTools({
           ctx: runtime.ctx,
@@ -91,8 +101,12 @@ describe('capability/docx', () => {
         String(event.taskId || '').includes(CASE_ID)
     )
 
-    expect(report.assertions.status).toBe('passed')
+    expect(report.assertions.caseStatus).toBe('passed')
+    expect(report.metrics.executionStatus).toBe('blocked')
+    expect(report.metrics.executionResultCode).toBe('approval_denied')
+    expect(report.signals.expectedOutcome).toBe('blocked')
+    expect(report.signals.scenarioTags).toContain('safe-save')
     expect(denied).toBe(true)
-    expect(report.summary).toContain('审批拒绝')
+    expect(report.summary).toContain('executionResultCode: approval_denied')
   })
 })

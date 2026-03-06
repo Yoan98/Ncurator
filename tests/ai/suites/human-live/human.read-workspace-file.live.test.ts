@@ -1,18 +1,22 @@
 import path from 'node:path'
-import { describe, test } from 'vitest'
+import { describe, expect, test } from 'vitest'
 import { isLiveSuiteEnabled } from '../../harness/llmConfig'
 import { recordAssertion } from '../../harness/assertions'
 import { runHumanLiveCase } from '../../harness/humanLiveCase'
+import { readLatestCaseReportArtifacts } from '../../harness/reportInspector'
 
 const FIXTURE_SOURCE = path.resolve(process.cwd(), 'tests/ai/fixtures/workspace/human-input.txt')
+const CASE_ID = 'human-read-workspace-file'
 
 describe('human-live', () => {
   test.skipIf(!isLiveSuiteEnabled())('human 应能读取 workspace 文件并完成任务', async () => {
     await runHumanLiveCase({
-      caseId: 'human-read-workspace-file',
+      caseId: CASE_ID,
       description: '验证 human 子图在真实模型下通过 terminal 工具读取文件并完成任务。',
       objective:
         '请在当前 workspace 中读取 input.txt 的第一行，并调用 complete_task 结束任务；outputs 必须包含 first_line 字段。',
+      expectedOutcome: 'success',
+      scenarioTags: ['human-live', 'workspace-read', 'success-path'],
       requiredFixtures: [FIXTURE_SOURCE],
       fixtureCopies: [{ from: FIXTURE_SOURCE, to: 'input.txt' }],
       approvalPolicy: 'auto-approve',
@@ -44,5 +48,9 @@ describe('human-live', () => {
         })
       }
     })
+
+    const report = await readLatestCaseReportArtifacts('human-live', CASE_ID)
+    expect(report.metrics.executionStatus).toBe('completed')
+    expect(report.signals.finalHumanAction).toBe('complete_task')
   })
 })

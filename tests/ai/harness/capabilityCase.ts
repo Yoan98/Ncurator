@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import type { AiRunContext } from '../../../src/main/services/ai/types'
-import type { CaseAssertion } from './types'
+import { fallbackExecutionOutcome, resolveCaseErrorCode } from './caseErrorCodes'
+import type {
+  CaseAssertion,
+  CaseErrorCode,
+  CaseExecutionOutcome,
+  CaseExpectedOutcome
+} from './types'
 import { EventCollector } from './eventCollector'
 import { assertRequiredFixtures } from './fixtureGuard'
 import { createTestAiRunContext } from './contextFactory'
@@ -27,6 +33,12 @@ export const runCapabilityCase = async <TResult>(input: {
   requiredFixtures: string[]
   fixtureCopies: FixtureCopy[]
   approvalPolicy?: 'auto-approve' | 'deny-medium-high' | 'deny-all'
+  expectedOutcome?: CaseExpectedOutcome
+  scenarioTags?: string[]
+  buildExecutionOutcome?: (
+    result: TResult,
+    runtime: CapabilityCaseRuntime
+  ) => CaseExecutionOutcome
   execute: (runtime: CapabilityCaseRuntime) => Promise<TResult>
   assert: (result: TResult, runtime: CapabilityCaseRuntime) => Promise<void>
 }): Promise<void> => {
@@ -37,7 +49,12 @@ export const runCapabilityCase = async <TResult>(input: {
   const assertions: CaseAssertion[] = []
   const eventCollector = new EventCollector()
   let workspaceRoot = ''
-  let status: 'passed' | 'failed' = 'passed'
+  let caseStatus: 'passed' | 'failed' = 'passed'
+  let caseErrorCode: CaseErrorCode = 'none'
+  let execution: CaseExecutionOutcome = {
+    status: 'unknown',
+    resultCode: 'unknown'
+  }
   let reportDir = ''
 
   try {
@@ -60,10 +77,20 @@ export const runCapabilityCase = async <TResult>(input: {
     }
 
     const result = await input.execute(runtime)
+    execution = input.buildExecutionOutcome
+      ? input.buildExecutionOutcome(result, runtime)
+      : execution
     await input.assert(result, runtime)
   } catch (error) {
-    status = 'failed'
-    notes.push(error instanceof Error ? error.message : String(error))
+    caseStatus = 'failed'
+    const message = error instanceof Error ? error.message : String(error)
+    caseErrorCode = resolveCaseErrorCode(message)
+    execution = fallbackExecutionOutcome({
+      current: execution,
+      caseErrorCode,
+      hadEvents: eventCollector.snapshot().length > 0
+    })
+    notes.push(message)
     throw error
   } finally {
     const finishedAt = Date.now()
@@ -74,20 +101,15 @@ export const runCapabilityCase = async <TResult>(input: {
       taskId,
       startedAt,
       finishedAt,
-      status,
+      caseStatus,
+      caseErrorCode,
+      execution,
+      signalOverrides: {
+        expectedOutcome: input.expectedOutcome,
+        scenarioTags: input.scenarioTags
+      },
       assertions,
       events: eventCollector.snapshot(),
-      analysis: {
-        failure_category: status === 'passed' ? 'none' : 'capability_execution_error',
-        suspected_root_cause:
-          status === 'passed'
-            ? 'none'
-            : '检查 assertions.json 与 events.jsonl 中的失败断言和事件链路',
-        optimization_hints:
-          status === 'passed'
-            ? ['增加更多边界输入覆盖以持续提升稳定性']
-            : ['检查前置 fixture 是否正确', '检查 tool 返回码与错误摘要', '检查事件流是否出现 workspace 或 approval 阻塞']
-      },
       notes
     })
     notes.push(`report: ${reportDir}`)

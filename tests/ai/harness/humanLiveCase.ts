@@ -2,7 +2,13 @@ import { randomUUID } from 'node:crypto'
 import type { HumanTaskOutput } from '../../../src/shared/types'
 import type { AiRunContext } from '../../../src/main/services/ai/types'
 import { createHumanGraphRunner } from '../../../src/main/services/ai/graph/humanGraph'
-import type { CaseAssertion } from './types'
+import { fallbackExecutionOutcome, resolveCaseErrorCode } from './caseErrorCodes'
+import type {
+  CaseAssertion,
+  CaseErrorCode,
+  CaseExecutionOutcome,
+  CaseExpectedOutcome
+} from './types'
 import { EventCollector } from './eventCollector'
 import { assertRequiredFixtures } from './fixtureGuard'
 import { createTestAiRunContext } from './contextFactory'
@@ -32,6 +38,8 @@ export const runHumanLiveCase = async (input: {
   fixtureCopies: FixtureCopy[]
   approvalPolicy?: 'auto-approve' | 'deny-medium-high' | 'deny-all'
   maxSteps?: number
+  expectedOutcome?: CaseExpectedOutcome
+  scenarioTags?: string[]
   assert: (result: HumanTaskOutput, runtime: HumanLiveRuntime) => Promise<void>
 }): Promise<void> => {
   const runId = randomUUID()
@@ -41,7 +49,12 @@ export const runHumanLiveCase = async (input: {
   const assertions: CaseAssertion[] = []
   const eventCollector = new EventCollector()
   let workspaceRoot = ''
-  let status: 'passed' | 'failed' = 'passed'
+  let caseStatus: 'passed' | 'failed' = 'passed'
+  let caseErrorCode: CaseErrorCode = 'none'
+  let execution: CaseExecutionOutcome = {
+    status: 'unknown',
+    resultCode: 'unknown'
+  }
 
   try {
     await assertRequiredFixtures(input.requiredFixtures)
@@ -74,10 +87,23 @@ export const runHumanLiveCase = async (input: {
       objective: input.objective
     })
 
+    execution = {
+      status: result.status === 'completed' ? 'completed' : 'blocked',
+      resultCode: result.resultCode,
+      summary: result.summary
+    }
+
     await input.assert(result, runtime)
   } catch (error) {
-    status = 'failed'
-    notes.push(error instanceof Error ? error.message : String(error))
+    caseStatus = 'failed'
+    const message = error instanceof Error ? error.message : String(error)
+    caseErrorCode = resolveCaseErrorCode(message)
+    execution = fallbackExecutionOutcome({
+      current: execution,
+      caseErrorCode,
+      hadEvents: eventCollector.snapshot().length > 0
+    })
+    notes.push(message)
     throw error
   } finally {
     const finishedAt = Date.now()
@@ -88,20 +114,15 @@ export const runHumanLiveCase = async (input: {
       taskId,
       startedAt,
       finishedAt,
-      status,
+      caseStatus,
+      caseErrorCode,
+      execution,
+      signalOverrides: {
+        expectedOutcome: input.expectedOutcome,
+        scenarioTags: input.scenarioTags
+      },
       assertions,
       events: eventCollector.snapshot(),
-      analysis: {
-        failure_category: status === 'passed' ? 'none' : 'human_live_execution_error',
-        suspected_root_cause:
-          status === 'passed'
-            ? 'none'
-            : '检查 human_step、tool_call_result 与 approval 事件序列',
-        optimization_hints:
-          status === 'passed'
-            ? ['增加复杂目标以持续验证渐进式求解能力']
-            : ['检查 LLM 配置与网络可用性', '检查 objective 是否明确可执行', '检查审批策略是否阻断关键步骤']
-      },
       notes
     })
     if (workspaceRoot) {

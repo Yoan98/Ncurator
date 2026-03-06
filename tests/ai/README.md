@@ -41,12 +41,15 @@
 - `events.jsonl`
 - `assertions.json`
 - `metrics.json`
+- `signals.json`
 - `summary.md`
 
-报告中固定包含 AI 分析键：
-- `failure_category`
-- `suspected_root_cause`
-- `optimization_hints`
+推荐消费方式：
+- `events.jsonl`：读取原始执行事件，适合回放与定位。
+- `assertions.json`：读取 `caseStatus`、断言总数、失败断言 ID 与断言明细。
+- `metrics.json`：读取统一标量指标，重点关注 `caseErrorCode`、`executionStatus`、`executionResultCode`。
+- `signals.json`：读取 `toolSequence`、`toolCounts`、`toolResultCodeCounts`、`expectedOutcome`、`scenarioTags`、`finalHumanAction` 等结构化信号。
+- `summary.md`：仅用于人工快速浏览，不承担根因分析或优化建议输出。
 
 ## 如何新增一个 tool 测试用例（最小步骤）
 

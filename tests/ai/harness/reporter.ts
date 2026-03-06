@@ -1,7 +1,16 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import type { AiRunEvent } from '../../../src/shared/types'
-import type { CaseReportInput, CaseRuntimeMetrics } from './types'
+import type { AiRunEvent, IpcJsonValue } from '../../../src/shared/types'
+import type {
+  ArtifactOperationCounts,
+  CaseAssertionsReport,
+  CaseMetricsReport,
+  CaseReportInput,
+  CaseRuntimeMetrics,
+  CaseSignalsReport,
+  ToolCounts,
+  ToolResultCodeCounts
+} from './types'
 
 const ensureDir = async (target: string): Promise<void> => {
   await mkdir(target, { recursive: true })
@@ -24,44 +33,232 @@ const toJsonLines = (events: AiRunEvent[]): string => {
   return events.map((event) => JSON.stringify(event)).join('\n')
 }
 
-const buildMetrics = (input: {
-  startedAt: number
-  finishedAt: number
-  events: AiRunEvent[]
-}): CaseRuntimeMetrics => {
-  const events = input.events
+const isJsonRecord = (value: IpcJsonValue): value is Record<string, IpcJsonValue> => {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+const isStringArray = (value: IpcJsonValue | undefined): value is string[] => {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string')
+}
+
+const incrementCount = (counts: Record<string, number>, key: string): void => {
+  counts[key] = (counts[key] || 0) + 1
+}
+
+const incrementNestedCount = (
+  counts: ToolResultCodeCounts,
+  toolName: string,
+  resultCode: string
+): void => {
+  const current = counts[toolName] || {}
+  current[resultCode] = (current[resultCode] || 0) + 1
+  counts[toolName] = current
+}
+
+const extractToolResultCode = (event: Extract<AiRunEvent, { type: 'tool_call_result' }>): string => {
+  if (isJsonRecord(event.outputPreview)) {
+    const code = event.outputPreview.code
+    if (typeof code === 'string' && code.trim()) return code
+  }
+  if (event.error) return 'error'
+  return 'unknown'
+}
+
+const extractWarnings = (event: Extract<AiRunEvent, { type: 'tool_call_result' }>): string[] => {
+  if (!isJsonRecord(event.outputPreview)) return []
+  const warnings = event.outputPreview.warnings
+  return isStringArray(warnings) ? warnings : []
+}
+
+const inspectEvents = (events: AiRunEvent[]) => {
+  const toolSequence: string[] = []
+  const toolCounts: ToolCounts = {}
+  const toolResultCodeCounts: ToolResultCodeCounts = {}
+  const artifactOperationCounts: ArtifactOperationCounts = {
+    created: 0,
+    updated: 0
+  }
+  let warningCount = 0
+  let approvalRequiredCount = 0
+  let approvalApprovedCount = 0
+  let approvalDeniedCount = 0
+  let workspaceRequiredCount = 0
+  let finalHumanAction: CaseSignalsReport['finalHumanAction']
+
+  for (const event of events) {
+    if (event.type === 'tool_call_started') {
+      toolSequence.push(event.toolName)
+      incrementCount(toolCounts, event.toolName)
+      continue
+    }
+
+    if (event.type === 'tool_call_result') {
+      incrementNestedCount(toolResultCodeCounts, event.toolName, extractToolResultCode(event))
+      warningCount += extractWarnings(event).length
+      continue
+    }
+
+    if (event.type === 'file_artifact') {
+      artifactOperationCounts[event.operation] += 1
+      continue
+    }
+
+    if (event.type === 'approval_required') {
+      approvalRequiredCount += 1
+      continue
+    }
+
+    if (event.type === 'approval_decision') {
+      if (event.approved) approvalApprovedCount += 1
+      else approvalDeniedCount += 1
+      continue
+    }
+
+    if (event.type === 'workspace_required') {
+      workspaceRequiredCount += 1
+      continue
+    }
+
+    if (event.type === 'human_step') {
+      finalHumanAction = event.action
+    }
+  }
+
   return {
-    durationMs: Math.max(0, input.finishedAt - input.startedAt),
+    toolSequence,
+    toolCounts,
+    toolResultCodeCounts,
+    artifactOperationCounts,
+    warningCount,
+    approvalRequiredCount,
+    approvalApprovedCount,
+    approvalDeniedCount,
+    workspaceRequiredCount,
+    finalHumanAction
+  }
+}
+
+const resolveFinalHumanAction = (input: {
+  suite: CaseReportInput['suite']
+  observedAction: CaseSignalsReport['finalHumanAction']
+  executionStatus: CaseReportInput['execution']['status']
+}): CaseSignalsReport['finalHumanAction'] => {
+  if (input.suite !== 'human-live') return input.observedAction
+  if (input.executionStatus === 'completed') return 'complete_task'
+  if (input.executionStatus === 'blocked') return 'block_task'
+  return input.observedAction
+}
+
+const buildMetrics = (input: { report: CaseReportInput }): CaseRuntimeMetrics => {
+  const events = input.report.events
+  const inspected = inspectEvents(events)
+  return {
+    durationMs: Math.max(0, input.report.finishedAt - input.report.startedAt),
     eventCount: events.length,
     toolCallCount: events.filter((event) => event.type === 'tool_call_started').length,
     humanStepCount: events.filter((event) => event.type === 'human_step').length,
     terminalStepCount: events.filter((event) => event.type.startsWith('terminal_step_')).length,
-    fileArtifactCount: events.filter((event) => event.type === 'file_artifact').length
+    fileArtifactCount: events.filter((event) => event.type === 'file_artifact').length,
+    approvalRequiredCount: inspected.approvalRequiredCount,
+    approvalApprovedCount: inspected.approvalApprovedCount,
+    approvalDeniedCount: inspected.approvalDeniedCount,
+    workspaceRequiredCount: inspected.workspaceRequiredCount,
+    warningCount: inspected.warningCount
+  }
+}
+
+const buildAssertionsReport = (input: CaseReportInput): CaseAssertionsReport => {
+  const assertionTotal = input.assertions.length
+  const failedAssertionIds = input.assertions.filter((item) => !item.pass).map((item) => item.id)
+  const assertionFailed = failedAssertionIds.length
+  return {
+    suite: input.suite,
+    caseId: input.caseId,
+    runId: input.runId,
+    taskId: input.taskId,
+    caseStatus: input.caseStatus,
+    assertionTotal,
+    assertionPassed: assertionTotal - assertionFailed,
+    assertionFailed,
+    failedAssertionIds,
+    assertions: input.assertions
+  }
+}
+
+const buildMetricsReport = (input: {
+  report: CaseReportInput
+  metrics: CaseRuntimeMetrics
+}): CaseMetricsReport => {
+  return {
+    suite: input.report.suite,
+    caseId: input.report.caseId,
+    runId: input.report.runId,
+    taskId: input.report.taskId,
+    startedAt: input.report.startedAt,
+    finishedAt: input.report.finishedAt,
+    caseStatus: input.report.caseStatus,
+    caseErrorCode: input.report.caseErrorCode,
+    executionStatus: input.report.execution.status,
+    executionResultCode: input.report.execution.resultCode,
+    ...input.metrics
+  }
+}
+
+const buildSignalsReport = (input: {
+  report: CaseReportInput
+  assertions: CaseAssertionsReport
+}): CaseSignalsReport => {
+  const inspected = inspectEvents(input.report.events)
+  return {
+    suite: input.report.suite,
+    caseId: input.report.caseId,
+    runId: input.report.runId,
+    taskId: input.report.taskId,
+    expectedOutcome: input.report.signalOverrides?.expectedOutcome,
+    scenarioTags: input.report.signalOverrides?.scenarioTags || [],
+    toolSequence: inspected.toolSequence,
+    toolCounts: inspected.toolCounts,
+    toolResultCodeCounts: inspected.toolResultCodeCounts,
+    failedAssertionIds: input.assertions.failedAssertionIds,
+    artifactOperationCounts: inspected.artifactOperationCounts,
+    finalHumanAction: resolveFinalHumanAction({
+      suite: input.report.suite,
+      observedAction: inspected.finalHumanAction,
+      executionStatus: input.report.execution.status
+    }),
+    executionSummary: input.report.execution.summary
   }
 }
 
 const buildSummaryMarkdown = (input: {
   report: CaseReportInput
-  metrics: CaseRuntimeMetrics
+  assertions: CaseAssertionsReport
+  metrics: CaseMetricsReport
+  signals: CaseSignalsReport
 }): string => {
-  const { report, metrics } = input
-  const assertionPassed = report.assertions.filter((item) => item.pass).length
-  const assertionTotal = report.assertions.length
+  const { report, assertions, metrics, signals } = input
+  const toolSequenceText =
+    signals.toolSequence.length > 0 ? signals.toolSequence.join(' -> ') : 'none'
+  const failedAssertionText =
+    assertions.failedAssertionIds.length > 0 ? assertions.failedAssertionIds.join(', ') : 'none'
+  const scenarioTagText = signals.scenarioTags.length > 0 ? signals.scenarioTags.join(', ') : 'none'
   return [
     `# ${report.caseId}`,
     '',
     `- suite: ${report.suite}`,
-    `- status: ${report.status}`,
+    `- caseStatus: ${report.caseStatus}`,
+    `- caseErrorCode: ${report.caseErrorCode}`,
+    `- executionStatus: ${report.execution.status}`,
+    `- executionResultCode: ${report.execution.resultCode}`,
     `- runId: ${report.runId}`,
     `- taskId: ${report.taskId}`,
     `- durationMs: ${metrics.durationMs}`,
-    `- assertions: ${assertionPassed}/${assertionTotal}`,
-    '',
-    '## Analysis',
-    `- failure_category: ${report.analysis.failure_category}`,
-    `- suspected_root_cause: ${report.analysis.suspected_root_cause}`,
-    '- optimization_hints:',
-    ...report.analysis.optimization_hints.map((hint) => `  - ${hint}`),
+    `- assertions: ${assertions.assertionPassed}/${assertions.assertionTotal}`,
+    `- failedAssertionIds: ${failedAssertionText}`,
+    `- toolSequence: ${toolSequenceText}`,
+    `- scenarioTags: ${scenarioTagText}`,
+    `- approvalDeniedCount: ${metrics.approvalDeniedCount}`,
+    `- warningCount: ${metrics.warningCount}`,
     '',
     '## Notes',
     ...report.notes.map((note) => `- ${note}`)
@@ -79,46 +276,34 @@ export const writeCaseReport = async (input: CaseReportInput): Promise<string> =
   )
   await ensureDir(reportRoot)
 
-  const metrics = buildMetrics({
-    startedAt: input.startedAt,
-    finishedAt: input.finishedAt,
-    events: input.events
+  const metrics = buildMetrics({ report: input })
+  const assertions = buildAssertionsReport(input)
+  const metricsReport = buildMetricsReport({
+    report: input,
+    metrics
+  })
+  const signals = buildSignalsReport({
+    report: input,
+    assertions
   })
 
   const assertionsPath = path.join(reportRoot, 'assertions.json')
   const eventsPath = path.join(reportRoot, 'events.jsonl')
   const metricsPath = path.join(reportRoot, 'metrics.json')
+  const signalsPath = path.join(reportRoot, 'signals.json')
   const summaryPath = path.join(reportRoot, 'summary.md')
 
-  const assertionsPayload = JSON.stringify(
-    {
-      runId: input.runId,
-      taskId: input.taskId,
-      status: input.status,
-      assertions: input.assertions
-    },
-    null,
-    2
-  )
-  const metricsPayload = JSON.stringify(
-    {
-      runId: input.runId,
-      taskId: input.taskId,
-      ...metrics,
-      ...input.analysis
-    },
-    null,
-    2
-  )
-
   await writeFile(eventsPath, toJsonLines(input.events), 'utf8')
-  await writeFile(assertionsPath, assertionsPayload, 'utf8')
-  await writeFile(metricsPath, metricsPayload, 'utf8')
+  await writeFile(assertionsPath, JSON.stringify(assertions, null, 2), 'utf8')
+  await writeFile(metricsPath, JSON.stringify(metricsReport, null, 2), 'utf8')
+  await writeFile(signalsPath, JSON.stringify(signals, null, 2), 'utf8')
   await writeFile(
     summaryPath,
     buildSummaryMarkdown({
       report: input,
-      metrics
+      assertions,
+      metrics: metricsReport,
+      signals
     }),
     'utf8'
   )

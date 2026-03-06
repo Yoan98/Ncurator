@@ -1,39 +1,13 @@
 import { readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { AiRunEvent } from '../../../src/shared/types'
-
-type CaseAssertionsReport = {
-  runId: string
-  taskId: string
-  status: 'passed' | 'failed'
-  assertions: Array<{
-    id: string
-    pass: boolean
-    details?: string
-  }>
-}
-
-type CaseMetricsReport = {
-  runId: string
-  taskId: string
-  durationMs: number
-  eventCount: number
-  toolCallCount: number
-  humanStepCount: number
-  terminalStepCount: number
-  fileArtifactCount: number
-  failure_category: string
-  suspected_root_cause: string
-  optimization_hints: string[]
-}
-
-export type CaseReportArtifacts = {
-  reportDir: string
-  summary: string
-  assertions: CaseAssertionsReport
-  metrics: CaseMetricsReport
-  events: AiRunEvent[]
-}
+import type {
+  CaseAssertionsReport,
+  CaseMetricsReport,
+  CaseReportArtifacts,
+  CaseSuite,
+  CaseSignalsReport
+} from './types'
 
 const readJson = async <T>(filePath: string): Promise<T> => {
   const raw = await readFile(filePath, 'utf8')
@@ -65,14 +39,15 @@ const latestReportDir = async (suite: string, caseId: string): Promise<string> =
 }
 
 export const readLatestCaseReportArtifacts = async (
-  suite: string,
+  suite: CaseSuite,
   caseId: string
 ): Promise<CaseReportArtifacts> => {
   const reportDir = await latestReportDir(suite, caseId)
-  const [summary, assertions, metrics, events] = await Promise.all([
+  const [summary, assertions, metrics, signals, events] = await Promise.all([
     readFile(path.join(reportDir, 'summary.md'), 'utf8'),
     readJson<CaseAssertionsReport>(path.join(reportDir, 'assertions.json')),
     readJson<CaseMetricsReport>(path.join(reportDir, 'metrics.json')),
+    readJson<CaseSignalsReport>(path.join(reportDir, 'signals.json')),
     readEvents(path.join(reportDir, 'events.jsonl'))
   ])
 
@@ -81,6 +56,7 @@ export const readLatestCaseReportArtifacts = async (
     summary,
     assertions,
     metrics,
+    signals,
     events
   }
 }

@@ -25,8 +25,9 @@ describe('capability/regression', () => {
     ).rejects.toThrow('缺少测试前置文件')
 
     const report = await readLatestCaseReportArtifacts('capability', CASE_ID)
-    expect(report.assertions.status).toBe('failed')
-    expect(report.metrics.failure_category).toBe('capability_execution_error')
+    expect(report.assertions.caseStatus).toBe('failed')
+    expect(report.metrics.caseErrorCode).toBe('fixture_missing')
+    expect(report.metrics.executionStatus).toBe('not_run')
     expect(report.summary).toContain('缺少测试前置文件')
     expect(report.summary).toContain(MISSING_FIXTURE)
   })
