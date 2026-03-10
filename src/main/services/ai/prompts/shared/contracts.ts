@@ -21,9 +21,12 @@ export const HUMAN_DECISION_JSON_CONTRACT = [
 ].join('\n')
 
 export const FINALIZE_OUTPUT_CONTRACT = [
-  '输出中文最终答复，顺序固定：结论 -> 已完成项 -> 关键依据 -> 未完成/待确认 -> 下一步建议（可选）。',
-  '不得编造事实；证据不足时必须明确标注“待确认”。',
-  '禁止暴露内部实现术语（如 graph/node/tool_call 等）。'
+  '只输出 JSON，不得输出额外文字。',
+  '格式：{"mode":"answer|request_non_local_permission","answer":"string","localSourceStatus":"used|not_used|insufficient","localSourceSummary":"string"}。',
+  '规则：answer 必填；localSourceSummary 必填。',
+  '当 mode=request_non_local_permission 时，answer 必须明确说明当前本地资料不足，并询问用户是否允许继续使用非本地信息。',
+  '当 mode=answer 时，answer 必须是中文最终答复，顺序固定：结论 -> 已完成项 -> 关键依据 -> 未完成/待确认 -> 下一步建议（可选）。',
+  '不得编造事实；证据不足时必须明确标注“待确认”；禁止暴露内部实现术语（如 graph/node/tool_call 等）。'
 ].join('\n')
 
 export const SESSION_MEMORY_OUTPUT_CONTRACT = [

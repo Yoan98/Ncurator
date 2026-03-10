@@ -18,11 +18,14 @@
   - 表结构与索引“代码层真相来源”：`getTableConfigs()`
 - **领域表操作（Domains）**: `src/main/services/storage/domains/*Store.ts`
   - `DocumentsStore`：`document` / `chunk`（导入、分页、混合检索、删除）
+  - `WebSourceStore`：`web_source`（网页资料来源 identity、抓取状态与来源级元数据）
+  - `WorkspaceStore`：`workspace_source` / `workspace_node`（工作空间、目录树快照、准备状态与节点绑定）
   - `ChatStore`：`chat_session` / `chat_message`（会话与消息 CRUD）
   - `LlmConfigStore`：`llm_config`（配置 CRUD 与激活态切换）
 - **组合根（Facade）**: `src/main/services/storage/StorageService.ts`
   - 统一持有 `core` 与各 domain store
   - 应用启动时在 `src/main/index.ts` 调用 `await storageService.initialize()`
+  - 初始化阶段会执行一次旧本地导入清理迁移：保留网页资料，清理未绑定 `workspace_node.document_id` 的历史本地 file documents
 
 ### 约束与最佳实践
 
@@ -73,6 +76,71 @@
 - 1: 导入中
 - 2: 导入成功
 - 3: 导入失败
+
+说明：
+- `source_type='file'` 的 document 仅表示“已准备的本地文件索引文档”，其真相来源必须可由 `workspace_node.document_id` 反向找到。
+- `source_type='web'` 的 document 由 `web_source.document_id` 绑定到网页资料来源。
+
+### 表: web_source（网页资料来源表）
+
+存储网页资料的来源 identity、抓取状态和范围选择元数据。
+
+| 字段名                 | 类型             | 描述                                      |
+| :--------------------- | :--------------- | :---------------------------------------- |
+| id                     | Utf8             | 网页来源唯一标识                          |
+| identity_kind          | Utf8             | 当前固定为 `normalized_url`               |
+| normalized_url         | Utf8             | URL 规范化后的 identity                   |
+| url                    | Utf8             | 原始/最新 URL                             |
+| title                  | Utf8（Nullable） | 最近一次抓取到的标题                      |
+| document_id            | Utf8（Nullable） | 关联的已准备 document                     |
+| import_status          | Int32            | 抓取状态（1 导入中，2 成功，3 失败）      |
+| include_selectors_json | Utf8（Nullable） | 抓取 include selectors 的 JSON 字符串     |
+| exclude_selectors_json | Utf8（Nullable） | 抓取 exclude selectors 的 JSON 字符串     |
+| fetched_at             | Int64（Nullable）| 最近抓取完成时间                          |
+| last_error             | Utf8（Nullable） | 最近一次抓取错误                          |
+| created_at             | Int64            | 创建时间戳                                |
+| updated_at             | Int64            | 更新时间戳                                |
+
+### 表: workspace_source（工作空间来源表）
+
+存储用户配置的本地工作空间及其最近扫描/准备状态。
+
+| 字段名          | 类型             | 描述                                   |
+| :-------------- | :--------------- | :------------------------------------- |
+| id              | Utf8             | 工作空间唯一标识                       |
+| name            | Utf8             | 显示名称                               |
+| root_path       | Utf8             | 规范化后的工作空间根路径               |
+| status          | Utf8             | 工作空间状态                           |
+| last_scan_at    | Int64（Nullable）| 最近扫描时间                           |
+| last_prepare_at | Int64（Nullable）| 最近准备时间                           |
+| last_error      | Utf8（Nullable） | 最近一次扫描/准备错误                  |
+| created_at      | Int64            | 创建时间戳                             |
+| updated_at      | Int64            | 更新时间戳                             |
+
+### 表: workspace_node（工作空间节点快照表）
+
+存储目录树快照中的目录/文件节点，以及文件节点与已准备 document 的绑定关系。
+
+| 字段名           | 类型             | 描述                                           |
+| :--------------- | :--------------- | :--------------------------------------------- |
+| id               | Utf8             | 节点唯一标识                                   |
+| workspace_id     | Utf8             | 所属工作空间                                   |
+| parent_id        | Utf8（Nullable） | 父目录节点 ID                                  |
+| kind             | Utf8             | `directory` 或 `file`                          |
+| name             | Utf8             | 节点名称                                       |
+| relative_path    | Utf8             | 相对工作空间根路径                             |
+| absolute_path    | Utf8             | 当前扫描到的绝对路径                           |
+| file_ext         | Utf8（Nullable） | 文件扩展名（仅文件节点）                       |
+| exists           | Bool             | 当前扫描快照中是否存在                         |
+| size             | Int64（Nullable）| 文件大小                                       |
+| mtime_ms         | Int64（Nullable）| 文件修改时间                                   |
+| content_hash     | Utf8（Nullable） | 内容哈希，用于差异检测与准备状态同步           |
+| prepare_status   | Utf8             | `not_prepared/preparing/prepared/stale/failed/missing` |
+| document_id      | Utf8（Nullable） | 关联的已准备 document ID                       |
+| last_prepared_at | Int64（Nullable）| 最近一次准备完成时间                           |
+| last_error       | Utf8（Nullable） | 最近一次节点级错误                             |
+| created_at       | Int64            | 创建时间戳                                     |
+| updated_at       | Int64            | 更新时间戳                                     |
 
 ### 表: chat_session（对话会话表）
 

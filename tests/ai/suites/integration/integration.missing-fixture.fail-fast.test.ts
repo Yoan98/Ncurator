@@ -1,20 +1,20 @@
 import path from 'node:path'
 import { describe, expect, test } from 'vitest'
-import { runCapabilityCase } from '../../harness/capabilityCase'
+import { runIntegrationCase } from '../../harness/capabilityCase'
 import { readLatestCaseReportArtifacts } from '../../harness/reportInspector'
 
-const CASE_ID = 'capability-missing-fixture-fail-fast'
+const CASE_ID = 'integration-missing-fixture-fail-fast'
 const MISSING_FIXTURE = path.resolve(
   process.cwd(),
   'tests/ai/fixtures/docx/not-exists-for-fail-fast.docx'
 )
 
-describe('capability/regression', () => {
+describe('integration/regression', () => {
   test('缺失 fixture 时应 fail-fast 且报告可定位', async () => {
     await expect(
-      runCapabilityCase({
+      runIntegrationCase({
         caseId: CASE_ID,
-        description: '验证 capability 在 fixture 缺失时 fail-fast，并输出可定位报告。',
+        description: '验证 integration suite 在 fixture 缺失时 fail-fast，并输出可定位报告。',
         requiredFixtures: [MISSING_FIXTURE],
         fixtureCopies: [],
         execute: async () => {
@@ -24,7 +24,7 @@ describe('capability/regression', () => {
       })
     ).rejects.toThrow('缺少测试前置文件')
 
-    const report = await readLatestCaseReportArtifacts('capability', CASE_ID)
+    const report = await readLatestCaseReportArtifacts('integration', CASE_ID)
     expect(report.assertions.caseStatus).toBe('failed')
     expect(report.metrics.caseErrorCode).toBe('fixture_missing')
     expect(report.metrics.executionStatus).toBe('not_run')

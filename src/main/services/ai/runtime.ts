@@ -1,5 +1,6 @@
 import { HumanMessage, SystemMessage } from '@langchain/core/messages'
 import type { AiRunContext, AiRunDeps, AiRunStartPayload } from './types'
+import type { SourceScopeSelection } from '../../../shared/types'
 import { createChatModel } from '../llm/chatModel'
 import type { ChatMessage, JsonObject } from '../../types/store'
 
@@ -27,6 +28,32 @@ const clipText = (text: string, maxChars: number) => {
   return t.slice(0, maxChars)
 }
 
+const collectScopedDocumentIds = (scopes: SourceScopeSelection[] | undefined): string[] => {
+  if (!Array.isArray(scopes)) return []
+  return Array.from(
+    new Set(scopes.flatMap((scope) => (Array.isArray(scope.documentIds) ? scope.documentIds : [])))
+  )
+    .map((item) => String(item).trim())
+    .filter(Boolean)
+}
+
+const buildScopeSummary = (scopes: SourceScopeSelection[] | undefined): string => {
+  if (!Array.isArray(scopes) || scopes.length === 0) {
+    return '未选择任何资料范围；仅在需要时使用默认本地资料。'
+  }
+
+  return scopes
+    .map((scope, index) => {
+      const preparedCount = Number(scope.preparedDocumentCount ?? scope.documentIds.length)
+      const unpreparedCount = Number(scope.unpreparedFileCount ?? 0)
+      const workspaceText = scope.workspace
+        ? ` | workspace=${scope.workspace.workspaceId}`
+        : ''
+      return `${index + 1}. ${scope.scopeType}:${scope.label}${scope.relativePath ? ` (${scope.relativePath})` : ''} | prepared=${preparedCount} | unprepared=${unpreparedCount}${workspaceText}`
+    })
+    .join('\n')
+}
+
 const formatTurns = (messages: ChatMessage[]) => {
   return messages
     .map((m) => {
@@ -45,6 +72,39 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
       throw e
     }
   }
+
+  const normalizedScopes = Array.isArray(payload.selectedSourceScopes)
+    ? payload.selectedSourceScopes
+        .map((scope) => ({
+          ...scope,
+          sourceId: String(scope.sourceId || '').trim(),
+          nodeId: scope.nodeId ? String(scope.nodeId).trim() : undefined,
+          label: String(scope.label || '').trim(),
+          absolutePath: scope.absolutePath ? String(scope.absolutePath).trim() : undefined,
+          relativePath: scope.relativePath ? String(scope.relativePath).trim() : undefined,
+          documentIds: Array.isArray(scope.documentIds)
+            ? scope.documentIds.map(String).filter(Boolean)
+            : [],
+          workspace:
+            scope.workspace &&
+            String(scope.workspace.workspaceId || '').trim() &&
+            String(scope.workspace.rootPath || '').trim()
+              ? {
+                  workspaceId: String(scope.workspace.workspaceId).trim(),
+                  rootPath: String(scope.workspace.rootPath).trim(),
+                  policyProfile: scope.workspace.policyProfile
+                    ? String(scope.workspace.policyProfile)
+                    : undefined
+                }
+              : undefined
+        }))
+        .filter((scope) => scope.sourceId && scope.label)
+    : undefined
+  const scopedDocumentIds = collectScopedDocumentIds(normalizedScopes)
+  const explicitDocumentIds = Array.isArray(payload.selectedDocumentIds)
+    ? payload.selectedDocumentIds.map(String).filter(Boolean)
+    : []
+  const effectiveDocumentIds = Array.from(new Set([...explicitDocumentIds, ...scopedDocumentIds]))
 
   const getActiveConfig = async () => {
     const cfg = await deps.llmStore.getActive()
@@ -84,9 +144,12 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
   return {
     runId: payload.runId,
     sessionId: payload.sessionId,
-    selectedDocumentIds: Array.isArray(payload.selectedDocumentIds)
-      ? payload.selectedDocumentIds.map(String).filter(Boolean)
-      : undefined,
+    selectedDocumentIds: effectiveDocumentIds.length > 0 ? effectiveDocumentIds : undefined,
+    selectedSourceScopes: normalizedScopes,
+    selectedScopeSummary: `${buildScopeSummary(normalizedScopes)}\n允许非本地信息: ${
+      payload.allowNonLocal ? '是' : '否'
+    }`,
+    allowNonLocal: Boolean(payload.allowNonLocal),
     workspace: payload.workspace
       ? {
           workspaceId: String(payload.workspace.workspaceId || '').trim(),

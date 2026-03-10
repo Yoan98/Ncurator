@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react'
 import type { SearchResult, DocumentRecord, ChunkListItem } from '../../../shared/types'
 import {
+  Alert,
   Input,
   Button,
-  Upload,
   message,
   List,
   Card,
@@ -13,7 +13,7 @@ import {
   Modal,
   Tag
 } from 'antd'
-import { HiArrowUpTray, HiMagnifyingGlass, HiDocumentText, HiCube } from 'react-icons/hi2'
+import { HiMagnifyingGlass, HiDocumentText, HiCube } from 'react-icons/hi2'
 import { parseIpcResult } from '../utils/serialization'
 
 const { Paragraph } = Typography
@@ -47,10 +47,6 @@ function TestPage(): React.JSX.Element {
 
   const [dropOpen, setDropOpen] = useState<boolean>(false)
   const [dropLoading, setDropLoading] = useState<boolean>(false)
-
-  const handleDropDocuments = () => {
-    setDropOpen(true)
-  }
 
   const handleConfirmDrop = async () => {
     setDropLoading(true)
@@ -103,30 +99,6 @@ function TestPage(): React.JSX.Element {
     }
   }
 
-  const handleUpload = async (file: File) => {
-    if (!file) {
-      message.error('Could not get file path')
-      return Upload.LIST_IGNORE
-    }
-
-    try {
-      message.loading({ content: 'Ingesting file...', key: 'ingest', duration: 0 })
-      const result = await window.api.ingestFile(file)
-      if (result.success) {
-        message.success({ content: `Ingested ${result.count} chunks`, key: 'ingest' })
-        // Refresh lists if active
-        if (view === 'docs') loadDocuments()
-        if (view === 'chunks') loadChunks()
-      } else {
-        message.error({ content: `Ingestion failed: ${result.error}`, key: 'ingest' })
-      }
-    } catch (error) {
-      console.error(error)
-      message.error({ content: 'Ingestion error', key: 'ingest' })
-    }
-    return Upload.LIST_IGNORE // Prevent upload
-  }
-
   const loadDocuments = async (page = docPage, pageSize = docPageSize, keyword = docKeyword) => {
     setDocLoading(true)
     try {
@@ -172,11 +144,15 @@ function TestPage(): React.JSX.Element {
     <div className="p-8 max-w-7xl mx-auto min-h-full flex flex-col font-sans">
       <h1 className="text-2xl font-bold mb-6 text-[#1F1F1F]">NCurator Debug Console</h1>
 
-      <div className="flex gap-4 mb-6 flex-wrap">
-        <Upload beforeUpload={handleUpload} showUploadList={false}>
-          <Button icon={<HiArrowUpTray />}>Upload File</Button>
-        </Upload>
+      <Alert
+        className="mb-6 rounded-xl border-[#F4E5DF] bg-[#FBF5F2]"
+        message="本地文件导入已迁移"
+        description="本地资料现在通过“资料来源”页的工作空间管理。实验室仅保留检索、文档和 chunk 调试能力。"
+        type="info"
+        showIcon
+      />
 
+      <div className="flex gap-4 mb-6 flex-wrap">
         <Segmented
           options={[
             { label: 'Search', value: 'search', icon: <HiMagnifyingGlass className="mr-1" /> },
@@ -203,7 +179,7 @@ function TestPage(): React.JSX.Element {
 
         <div className="flex-1" />
 
-        <Button danger onClick={handleDropDocuments}>
+        <Button danger onClick={() => setDropOpen(true)}>
           Reset DB
         </Button>
       </div>

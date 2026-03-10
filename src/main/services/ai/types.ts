@@ -14,7 +14,9 @@ import type {
   HumanStepDecision,
   HumanTaskOutput,
   JsonObject,
-  LLMConfig
+  LocalSourceUsageStatus,
+  LLMConfig,
+  SourceScopeSelection
 } from '../../../shared/types'
 
 export type { AiTaskStatus, AiRunStatus, AiPlanTask }
@@ -52,6 +54,10 @@ export type AiRunState = {
   error?: string
   // 最终答复文本（finalize 输出）。
   outputText?: string
+  // 本地资料使用状态。
+  localSourceStatus?: LocalSourceUsageStatus
+  // 本地资料使用或不足说明。
+  localSourceSummary?: string
 }
 
 export type AiRunStartPayload = {
@@ -59,6 +65,8 @@ export type AiRunStartPayload = {
   sessionId: string
   input: string
   selectedDocumentIds?: string[]
+  selectedSourceScopes?: SourceScopeSelection[]
+  allowNonLocal?: boolean
   workspace?: {
     workspaceId: string
     rootPath: string
@@ -95,6 +103,9 @@ export type AiRunContext = {
   runId: string
   sessionId: string
   selectedDocumentIds?: string[]
+  selectedSourceScopes?: SourceScopeSelection[]
+  selectedScopeSummary: string
+  allowNonLocal: boolean
   workspace?: {
     workspaceId: string
     rootPath: string

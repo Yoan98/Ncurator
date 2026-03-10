@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Input, Button, Card, message, Collapse, Avatar, Tooltip, Space, Select, Progress } from 'antd'
+import { Input, Button, Card, message, Collapse, Avatar, Tooltip, Space, Progress } from 'antd'
 import { HiArrowUp, HiPlus, HiTrash, HiUser, HiSparkles, HiBookOpen } from 'react-icons/hi2'
 import { LoadingOutlined } from '@ant-design/icons'
 import type {
@@ -10,12 +10,14 @@ import type {
   ChatSession,
   ChatMessage,
   JsonValue,
-  IpcJsonValue
+  IpcJsonValue,
+  SourceScopeSelection
 } from '../../../shared/types'
 import { groupArtifactEventsByTask } from '../../../shared/aiRunEventUtils'
 import { parseIpcResult } from '../utils/serialization'
 import FileRender, { FileRenderDocument } from '../components/fileRenders'
 import MarkdownRenderer from '../components/MarkdownRenderer'
+import SourceScopeSelect from '../components/SourceScopeSelect'
 
 const { TextArea } = Input
 const { Panel } = Collapse
@@ -79,11 +81,20 @@ const ChatPage: React.FC = () => {
   const [aiRunId, setAiRunId] = useState<string | null>(null)
   const [aiEvents, setAiEvents] = useState<AiRunEvent[]>([])
   const [aiPlan, setAiPlan] = useState<AiPlanTask[]>([])
-  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([])
-  const [mentionOptions, setMentionOptions] = useState<DocumentRecord[]>([])
-  const [workspaceRootPath, setWorkspaceRootPath] = useState('')
+  const [selectedSourceScopes, setSelectedSourceScopes] = useState<SourceScopeSelection[]>([])
+  const [localSourceStatus, setLocalSourceStatus] = useState<{
+    status: 'used' | 'not_used' | 'insufficient'
+    summary: string
+  } | null>(null)
+  const [pendingNonLocalRequest, setPendingNonLocalRequest] = useState<{
+    input: string
+    scopes: SourceScopeSelection[]
+    reason: string
+  } | null>(null)
   const [rightPanel, setRightPanel] = useState<RightPanelState | null>(null)
   const assistantMsgIdRef = useRef<string | null>(null)
+  const lastSubmittedInputRef = useRef('')
+  const lastSubmittedScopesRef = useRef<SourceScopeSelection[]>([])
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // Preview state
@@ -152,9 +163,9 @@ const ChatPage: React.FC = () => {
       setAiRunId(null)
       setAiEvents([])
       setAiPlan([])
-      setSelectedDocumentIds([])
-      setMentionOptions([])
-      setWorkspaceRootPath('')
+      setSelectedSourceScopes([])
+      setLocalSourceStatus(null)
+      setPendingNonLocalRequest(null)
       setRightPanel(null)
     } else {
       setCurrentMessages([])
@@ -176,21 +187,6 @@ const ChatPage: React.FC = () => {
     } catch (err) {
       console.error(err)
       message.error('删除会话失败')
-    }
-  }
-
-  const searchMentionDocs = async (keyword: string) => {
-    const raw = String(keyword || '').trim()
-    const k = raw.startsWith('@') ? raw.slice(1) : raw
-    try {
-      const res = await window.api.listDocuments({
-        keyword: k || undefined,
-        page: 1,
-        pageSize: 20
-      })
-      setMentionOptions(res.items || [])
-    } catch {
-      // ignore
     }
   }
 
@@ -322,6 +318,29 @@ const ChatPage: React.FC = () => {
         return
       }
 
+      if (evt.type === 'runtime_issue') {
+        if (!evt.internal) {
+          setLoading(false)
+          const issueMessage =
+            evt.code === 'workspace_missing'
+              ? '所选工作空间已不存在，请重新选择。'
+              : evt.code === 'workspace_path_unavailable'
+                ? '所选工作空间路径不可用，请重新扫描或重新配置。'
+                : evt.code === 'scope_unavailable'
+                  ? '所选资料范围当前不可用，请重新选择。'
+                  : evt.code === 'approval_denied'
+                    ? '审批未通过，相关操作已停止。'
+                    : '当前范围缺少工作空间上下文，请重新选择本地资料范围。'
+          message.warning(evt.message || issueMessage)
+        }
+        setRightPanel({
+          title: '运行阻塞原因',
+          kind: 'json',
+          data: evt
+        })
+        return
+      }
+
       if (evt.type === 'approval_required') {
         if (!evt.internal) {
           message.info(`命令需要审批：${evt.command}`)
@@ -340,6 +359,26 @@ const ChatPage: React.FC = () => {
           message.success('审批已通过')
         } else {
           message.warning(evt.reason || '审批未通过')
+        }
+        return
+      }
+
+      if (evt.type === 'local_sources_status') {
+        if (!evt.internal) {
+          setLocalSourceStatus({ status: evt.status, summary: evt.summary })
+        }
+        return
+      }
+
+      if (evt.type === 'non_local_permission_requested') {
+        if (!evt.internal) {
+          setPendingNonLocalRequest({
+            input: lastSubmittedInputRef.current,
+            scopes: lastSubmittedScopesRef.current,
+            reason: evt.reason
+          })
+          message.warning('本地资料不足，需要你决定是否允许继续使用非本地信息')
+          setLoading(false)
         }
         return
       }
@@ -409,9 +448,9 @@ const ChatPage: React.FC = () => {
     const likelyExecutable =
       /\b(cmd|bash|shell|terminal|command|run)\b/i.test(userQuery) ||
       /终端|命令|脚本|执行|创建文件|删除文件|修改文件/.test(userQuery)
-    const normalizedWorkspaceRoot = workspaceRootPath.trim()
-    if (likelyExecutable && !normalizedWorkspaceRoot) {
-      message.warning('该请求可能触发本地执行，请先填写工作区根路径')
+    const hasWorkspaceBinding = selectedSourceScopes.some((scope) => scope.workspace?.rootPath)
+    if (likelyExecutable && !hasWorkspaceBinding) {
+      message.warning('该请求可能触发本地执行，请先通过 @ 选择工作空间、目录或文件范围')
       return
     }
 
@@ -419,8 +458,12 @@ const ChatPage: React.FC = () => {
     setLoading(true)
     setAiEvents([])
     setAiPlan([])
+    setLocalSourceStatus(null)
+    setPendingNonLocalRequest(null)
     setRightPanel(null)
     assistantMsgIdRef.current = null
+    lastSubmittedInputRef.current = userQuery
+    lastSubmittedScopesRef.current = selectedSourceScopes
 
     // 1. Create User Message
     const timestamp = new Date().getTime()
@@ -461,21 +504,11 @@ const ChatPage: React.FC = () => {
       }
       setCurrentMessages((prev) => [...prev, assistantMsg])
 
-      const workspace =
-        normalizedWorkspaceRoot.length > 0
-          ? {
-              workspaceId:
-                normalizedWorkspaceRoot.split(/[\\/]/).filter(Boolean).pop() ||
-                normalizedWorkspaceRoot,
-              rootPath: normalizedWorkspaceRoot,
-              policyProfile: 'default'
-            }
-          : undefined
       const res = await window.api.aiRunStart({
         sessionId: currentSessionId,
         input: userQuery,
-        selectedDocumentIds: selectedDocumentIds.length ? selectedDocumentIds : undefined,
-        workspace
+        selectedSourceScopes: selectedSourceScopes.length > 0 ? selectedSourceScopes : undefined,
+        allowNonLocal: false
       })
       if (!res.success || !res.runId) {
         setLoading(false)
@@ -517,6 +550,79 @@ const ChatPage: React.FC = () => {
     } catch (e) {
       message.error(e instanceof Error ? e.message : '取消失败')
     }
+  }
+
+  const handleAllowNonLocalContinue = async () => {
+    if (!pendingNonLocalRequest || !currentSessionId || loading) return
+
+    const permissionMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      session_id: currentSessionId,
+      role: 'user',
+      content: '允许使用非本地信息继续处理上一条请求。',
+      timestamp: Date.now()
+    }
+    setCurrentMessages((prev) => [...prev, permissionMessage])
+    window.api.chatMessageSave(permissionMessage).catch(console.error)
+
+    setLoading(true)
+    setAiEvents([])
+    setAiPlan([])
+    setLocalSourceStatus(null)
+    setRightPanel(null)
+    assistantMsgIdRef.current = null
+    lastSubmittedInputRef.current = pendingNonLocalRequest.input
+    lastSubmittedScopesRef.current = pendingNonLocalRequest.scopes
+
+    try {
+      const assistantMsgId = crypto.randomUUID()
+      assistantMsgIdRef.current = assistantMsgId
+      setCurrentMessages((prev) => [
+        ...prev,
+        {
+          id: assistantMsgId,
+          session_id: currentSessionId,
+          role: 'assistant',
+          content: '',
+          timestamp: Date.now()
+        }
+      ])
+
+      const res = await window.api.aiRunStart({
+        sessionId: currentSessionId,
+        input: pendingNonLocalRequest.input,
+        selectedSourceScopes:
+          pendingNonLocalRequest.scopes.length > 0 ? pendingNonLocalRequest.scopes : undefined,
+        allowNonLocal: true
+      })
+      if (!res.success || !res.runId) {
+        setLoading(false)
+        message.error(res.error || '继续运行失败')
+        return
+      }
+      setPendingNonLocalRequest(null)
+      setAiRunId(res.runId)
+    } catch (error) {
+      console.error(error)
+      setLoading(false)
+      message.error('继续运行失败')
+    }
+  }
+
+  const handleDeclineNonLocalContinue = async () => {
+    if (!pendingNonLocalRequest || !currentSessionId) return
+    const messageRecord: ChatMessage = {
+      id: crypto.randomUUID(),
+      session_id: currentSessionId,
+      role: 'user',
+      content: '仅保留基于本地资料的结论，不继续使用非本地信息。',
+      timestamp: Date.now()
+    }
+    setCurrentMessages((prev) => [...prev, messageRecord])
+    window.api.chatMessageSave(messageRecord).catch(console.error)
+    setLocalSourceStatus(null)
+    setPendingNonLocalRequest(null)
+    setLoading(false)
   }
 
   const renderTrace = () => {
@@ -1113,26 +1219,47 @@ const ChatPage: React.FC = () => {
               }}
             />
             <div className="grid grid-cols-12 gap-2 mb-2">
-              <div className="col-span-7">
-                <Select
-                  mode="multiple"
-                  value={selectedDocumentIds}
-                  onChange={(vals) => setSelectedDocumentIds(vals)}
-                  onSearch={searchMentionDocs}
-                  filterOption={false}
-                  options={mentionOptions.map((d) => ({ label: d.name, value: d.id }))}
-                  placeholder="输入 @ 搜索导入文档范围（可选）"
+              <div className="col-span-12">
+                <SourceScopeSelect
+                  mode="chat"
+                  value={selectedSourceScopes}
+                  onChange={setSelectedSourceScopes}
+                  placeholder="输入 @ 选择优先参考的工作空间、目录、文件或网页资料（可选）"
                   className="w-full"
                 />
               </div>
-              <div className="col-span-5">
-                <Input
-                  value={workspaceRootPath}
-                  onChange={(e) => setWorkspaceRootPath(e.target.value)}
-                  placeholder="工作区根路径（执行任务必填）"
-                />
-              </div>
             </div>
+            {(localSourceStatus || pendingNonLocalRequest) && (
+              <div
+                className={`mb-3 rounded-2xl border px-3 py-3 text-sm ${
+                  pendingNonLocalRequest
+                    ? 'border-[#FDECC8] bg-[#FFF9ED] text-[#8A6510]'
+                    : localSourceStatus?.status === 'used'
+                      ? 'border-[#DCEBD7] bg-[#F3FAF0] text-[#4F7A46]'
+                      : 'border-[#E5E5E4] bg-[#F8F8F7] text-[#666666]'
+                }`}
+              >
+                {localSourceStatus && <div>{localSourceStatus.summary}</div>}
+                {pendingNonLocalRequest && (
+                  <div className="mt-2 flex flex-col gap-3">
+                    <div>{pendingNonLocalRequest.reason}</div>
+                    <div className="flex gap-2">
+                      <Button type="primary" onClick={handleAllowNonLocalContinue} loading={loading}>
+                        允许继续
+                      </Button>
+                      <Button onClick={handleDeclineNonLocalContinue}>仅保留本地结果</Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            {selectedSourceScopes.some(
+              (scope) => scope.sourceType === 'workspace' && scope.hasUnpreparedFiles
+            ) && (
+              <div className="mb-3 rounded-2xl border border-[#FDECC8] bg-[#FFF9ED] px-3 py-2 text-sm text-[#8A6510]">
+                已选范围包含未准备的本地文件。AI 可能直接读取原文件，耗时更长，并增加 token 消耗。
+              </div>
+            )}
             <div className="flex justify-between items-center">
               <div className="text-xs text-[#999999] flex items-center gap-2">
                 <Tooltip title="由主进程执行计划并返回事件流">
@@ -1141,6 +1268,14 @@ const ChatPage: React.FC = () => {
                     <span>AI Runner</span>
                   </span>
                 </Tooltip>
+                <Tooltip title="@ 只是在告诉 AI 优先参考哪些资料，不代表回答只能来自这些资料。">
+                  <span className="rounded-full bg-[#F5F5F4] px-2 py-1 text-[#666666]">优先参考范围</span>
+                </Tooltip>
+                {selectedSourceScopes.length > 0 && (
+                  <span className="rounded-full bg-[#FBF5F2] px-2 py-1 text-[#D97757]">
+                    已选 {selectedSourceScopes.length} 个参考范围
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 {loading && aiRunId && (

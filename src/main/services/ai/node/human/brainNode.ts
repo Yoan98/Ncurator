@@ -135,6 +135,7 @@ const buildDecisionPrompt = (state: HumanRunState) => {
     objective: state.input.objective,
     stepIndex: state.steps + 1,
     maxSteps: state.maxSteps,
+    selectedScopeSummary: input.ctx.selectedScopeSummary,
     availableSkillCardsText: toJsonText(state.availableSkillCards),
     loadedSkillsText: serializeLoadedSkills(state),
     activeToolsText: serializeActiveTools(state),

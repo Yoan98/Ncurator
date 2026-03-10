@@ -14,6 +14,7 @@
     "test:ai": "vitest --config vitest.ai.config.mts run",
     "test:ai:watch": "vitest --config vitest.ai.config.mts",
     "test:ai:capability": "vitest --config vitest.ai.config.mts run tests/ai/suites/capability",
+    "test:ai:integration": "vitest --config vitest.ai.config.mts run tests/ai/suites/integration",
     "test:ai:human-live": "vitest --config vitest.ai.config.mts run tests/ai/suites/human-live",
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
@@ -86,6 +87,7 @@
     "react-dom": "^19.2.1",
     "tailwindcss": "^4.1.18",
     "typescript": "^5.9.3",
-    "vite": "^7.2.6"
+    "vite": "^7.2.6",
+    "vitest": "^4.0.18"
   }
 }

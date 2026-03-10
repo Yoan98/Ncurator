@@ -14,6 +14,9 @@ export enum LanceDbCoreStatus {
 export const LANCE_TABLES = {
   CHUNK: 'chunk',
   DOCUMENT: 'document',
+  WEB_SOURCE: 'web_source',
+  WORKSPACE_SOURCE: 'workspace_source',
+  WORKSPACE_NODE: 'workspace_node',
   CHAT_SESSION: 'chat_session',
   CHAT_MESSAGE: 'chat_message',
   CHAT_SESSION_MEMORY: 'chat_session_memory',
@@ -181,6 +184,61 @@ export class LanceDbCore {
           new arrow.Field('file_path', new arrow.Utf8(), true),
           new arrow.Field('created_at', new arrow.Int64()),
           new arrow.Field('import_status', new arrow.Int32())
+        ])
+      },
+      {
+        name: LANCE_TABLES.WEB_SOURCE,
+        schema: new arrow.Schema([
+          new arrow.Field('id', new arrow.Utf8()),
+          new arrow.Field('identity_kind', new arrow.Utf8()),
+          new arrow.Field('normalized_url', new arrow.Utf8()),
+          new arrow.Field('url', new arrow.Utf8()),
+          new arrow.Field('title', new arrow.Utf8(), true),
+          new arrow.Field('document_id', new arrow.Utf8(), true),
+          new arrow.Field('import_status', new arrow.Int32()),
+          new arrow.Field('include_selectors_json', new arrow.Utf8(), true),
+          new arrow.Field('exclude_selectors_json', new arrow.Utf8(), true),
+          new arrow.Field('fetched_at', new arrow.Int64(), true),
+          new arrow.Field('last_error', new arrow.Utf8(), true),
+          new arrow.Field('created_at', new arrow.Int64()),
+          new arrow.Field('updated_at', new arrow.Int64())
+        ])
+      },
+      {
+        name: LANCE_TABLES.WORKSPACE_SOURCE,
+        schema: new arrow.Schema([
+          new arrow.Field('id', new arrow.Utf8()),
+          new arrow.Field('name', new arrow.Utf8()),
+          new arrow.Field('root_path', new arrow.Utf8()),
+          new arrow.Field('status', new arrow.Utf8()),
+          new arrow.Field('last_scan_at', new arrow.Int64(), true),
+          new arrow.Field('last_prepare_at', new arrow.Int64(), true),
+          new arrow.Field('last_error', new arrow.Utf8(), true),
+          new arrow.Field('created_at', new arrow.Int64()),
+          new arrow.Field('updated_at', new arrow.Int64())
+        ])
+      },
+      {
+        name: LANCE_TABLES.WORKSPACE_NODE,
+        schema: new arrow.Schema([
+          new arrow.Field('id', new arrow.Utf8()),
+          new arrow.Field('workspace_id', new arrow.Utf8()),
+          new arrow.Field('parent_id', new arrow.Utf8(), true),
+          new arrow.Field('kind', new arrow.Utf8()),
+          new arrow.Field('name', new arrow.Utf8()),
+          new arrow.Field('relative_path', new arrow.Utf8()),
+          new arrow.Field('absolute_path', new arrow.Utf8()),
+          new arrow.Field('file_ext', new arrow.Utf8(), true),
+          new arrow.Field('exists', new arrow.Bool()),
+          new arrow.Field('size', new arrow.Int64(), true),
+          new arrow.Field('mtime_ms', new arrow.Int64(), true),
+          new arrow.Field('content_hash', new arrow.Utf8(), true),
+          new arrow.Field('prepare_status', new arrow.Utf8()),
+          new arrow.Field('document_id', new arrow.Utf8(), true),
+          new arrow.Field('last_prepared_at', new arrow.Int64(), true),
+          new arrow.Field('last_error', new arrow.Utf8(), true),
+          new arrow.Field('created_at', new arrow.Int64()),
+          new arrow.Field('updated_at', new arrow.Int64())
         ])
       },
       {

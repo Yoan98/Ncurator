@@ -111,6 +111,10 @@ stateDiagram-v2
 - `AiRunState.mainStage`：Main 路由唯一来源。
 - `AiRunState.contextRounds/contextObjective/contextEvidence`：上下文补充控制。
 - `AiRunState.dispatchCursor`：串行调度游标。
+- `AiRunContext.selectedDocumentIds`：已准备 document 的严格检索范围。
+- `AiRunContext.selectedSourceScopes`：用户通过 `@` 显式选择的资料范围，保留工作空间/目录/文件/网页资料类型信息。
+- `AiRunContext.selectedScopeSummary`：传给 prompt 的可读范围摘要，说明哪些范围已准备、哪些仍未准备。
+- `AiRunContext.allowNonLocal`：用户是否已明确允许在本地不足时继续使用非本地信息。
 - `HumanTaskInput`：最小任务输入（`taskId/objective`）。
 - `HumanTaskOutput`：最小任务输出（`status/summary/resultCode/resultData`）。
 - `HumanRunState.availableSkillCards/loadedSkills/activeSkillIds/activeTools`：human 渐进式能力加载核心状态。
@@ -124,6 +128,7 @@ stateDiagram-v2
 - 计划级：`plan_created/task_started/task_completed/task_failed/task_result`
 - 步骤级：`tool_call_started/tool_call_result/human_step/human_diagnostic`
 - 审批级：`workspace_required/approval_required/approval_decision`
+- 来源级：`local_sources_status/non_local_permission_requested/runtime_issue`
 - 答复级：`answer_token/answer_completed`
 
 约束：
@@ -147,12 +152,15 @@ stateDiagram-v2
 ## 10. 安全边界
 
 - `terminal_exec` / `docx` 未绑定 workspace 时必须拒绝执行。
+- 聊天模式下，`@` 只是 AI 的优先参考范围，不是强制工具选择器；已准备内容优先走本地知识库检索，未准备本地文件可在工作空间边界内按需读取。
+- 本地资料不足时不得直接混入非本地信息，必须先通过 `non_local_permission_requested` 收敛并等待用户同意。
 - 命中审批策略时必须先走 `approval_required -> approval_decision`。
 - 审批拒绝返回结构化失败，不进入隐式重试循环。
 
 ## 11. AI 测试架构边界（Script-first）
 
 - capability 测试必须直连生产 tool 入口（`src/main/services/ai/tools/**`），验证真实链路行为。
+- integration 测试用于验证跨模块运行时契约、scope 语义、迁移与 prompt contract，不以单一 capability 为边界。
 - human-live 测试必须直连 `humanGraph` runner，只验证 human 子图，不通过 main graph。
 - 测试上下文通过 harness 注入 workspace、审批策略与事件采集，避免侵入生产实现。
 - 所有 case 必须输出标准化报告（`events.jsonl/assertions.json/metrics.json/summary.md`），供后续 AI 诊断与优化建议使用。

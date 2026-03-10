@@ -1,15 +1,32 @@
 # AI 测试说明（Script-first）
 
-本目录用于运行两类测试：
-- `capability`：按 tool 粒度验证生产能力（一个 tool 一个用例）。
+本目录用于运行三类测试：
+- `capability`：按 AI 已配置能力/tool 粒度验证生产能力。
+- `integration`：验证跨模块产品链路，如 workspace/source-scope/runtime/migration/prompt contract。
 - `human-live`：仅验证 human 子图在真实模型下完成任务的效果（不经 main graph）。
 
 ## 执行命令
 
 - 全量：`pnpm test:ai`
 - 仅 capability：`pnpm test:ai:capability`
+- 仅 integration：`pnpm test:ai:integration`
 - 仅 human-live：`pnpm test:ai:human-live`
 - 指定单文件：`pnpm test:ai -- tests/ai/suites/capability/<case>.test.ts`
+
+## 当前 capability 覆盖
+
+- `docx.apply-ops-replace-text.test.ts`：验证 docx 打开、搜索、替换、保存、校验链路
+- `docx.save-overwrite-approval-denied.test.ts`：验证覆盖保存时的审批拒绝路径
+- `retrieval.scope-filter.test.ts`：验证 local KB retrieval 只允许命中运行时 scope 内的 document ids
+
+## 当前 integration 覆盖
+
+- `workspace.scan-diff-scope-selection.test.ts`：验证工作空间扫描、差异模式与统一范围装配
+- `runtime.scope-validation.test.ts`：验证运行时 scope 校验、网页范围可用性与结构化阻塞事件
+- `migration.legacy-local-import-cleanup.test.ts`：验证旧本地导入迁移仅删除未绑定工作空间的 file documents
+- `source-scope.explicit-preserve.test.ts`：验证父子范围显式保留、底层 document ids 去重
+- `prompt.local-first-contract.test.ts`：验证 finalize / human prompt 保持 local-first 与非本地权限约束
+- `integration.missing-fixture.fail-fast.test.ts`：验证 fixture 缺失时的 suite 级 fail-fast 行为
 
 ## 执行前你需要准备什么
 
@@ -61,6 +78,22 @@
 - `execute`
 - `assert`
 3. 运行 `pnpm test:ai:capability -- <new-file-path>` 验证。
+
+补充建议：
+- capability suite 只放 `src/main/services/ai/tools/**` 直接能力测试。
+- 跨模块验收、迁移、运行时契约、prompt contract 不要放进 capability，应放进 `tests/ai/suites/integration/`。
+- 若后续补 GUI 级回归，建议独立增加 renderer/e2e harness，不要把 DOM 行为塞进现有 node-only capability/integration suite。
+
+## 如何新增一个 integration 用例（最小步骤）
+
+1. 在 `tests/ai/suites/integration/` 新增一个 `*.test.ts` 文件。
+2. 复用 `runIntegrationCase(...)`，填写：
+- `caseId`
+- `requiredFixtures`
+- `fixtureCopies`
+- `execute`
+- `assert`
+3. 运行 `pnpm test:ai:integration -- <new-file-path>` 验证。
 
 ## 如何新增一个 human-live 用例（最小步骤）
 

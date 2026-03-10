@@ -5,6 +5,7 @@ export type HumanBrainPromptInput = {
   objective: string
   stepIndex: number
   maxSteps: number
+  selectedScopeSummary: string
   availableSkillCardsText: string
   loadedSkillsText: string
   activeToolsText: string
@@ -19,7 +20,9 @@ export const buildHumanBrainPrompt = (input: HumanBrainPromptInput) => {
     '【完成标准】仅当任务目标已满足且证据充分时才 complete_task；summary 必须写清结论与关键证据。',
     '【阻塞标准】workspace_required/approval_denied 等不可恢复条件必须 block_task。',
     '【反循环】最近一步没有带来新信息时，禁止重复相同 toolName + args；应切换 skill、调整参数或收敛。',
-    '【publicNarrative】必须写成给用户看的单句说明，描述你当前这一步要做什么或已经确认了什么。'
+    '【publicNarrative】必须写成给用户看的单句说明，描述你当前这一步要做什么或已经确认了什么。',
+    '【local-first】若已选资料范围包含本地资料，优先使用本地知识库检索或工作空间内文件能力；不要主动扩大到未选中的本地资料。',
+    '【范围不足】若本地范围和本地能力不足以可靠完成任务，应先收敛并说明本地不足，而不是假装已用范围外信息完成。'
   ].join('\n')
 
   return {
@@ -35,6 +38,7 @@ export const buildHumanBrainPrompt = (input: HumanBrainPromptInput) => {
     user: renderPromptSections([
       { label: '任务目标', value: input.objective },
       { label: '当前步数预算', value: `${input.stepIndex}/${input.maxSteps}` },
+      { label: '已选资料范围', value: input.selectedScopeSummary },
       { label: 'Available Skill Cards', value: input.availableSkillCardsText },
       { label: 'Loaded Skills', value: input.loadedSkillsText },
       { label: 'Active Tools', value: input.activeToolsText },

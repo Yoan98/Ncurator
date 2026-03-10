@@ -6,6 +6,7 @@ export type PlanPromptInput = {
   sessionSummaryText: string
   recentTurnsText: string
   contextEvidence: string[]
+  selectedScopeSummary: string
 }
 
 export const buildPlanPrompt = (input: PlanPromptInput) => {
@@ -14,6 +15,7 @@ export const buildPlanPrompt = (input: PlanPromptInput) => {
       '【角色】你是任务规划器。',
       '【目标】把用户请求拆成可独立执行的任务列表。',
       '【背景】执行层是本地工具执行模式，典型能力包括知识库检索、终端执行、docx 处理。',
+      '【范围】若已选择资料范围，任务规划必须优先围绕这些本地范围取证；不要默认扩大到未选中的本地资料。',
       '【流程】先识别最终交付物，再拆分最小可行任务，最后检查任务是否可执行可验证。',
       '【约束】每个 objective 必须包含“动作 + 对象 + 完成判据”；禁止空泛任务。',
       '【输出】',
@@ -25,6 +27,7 @@ export const buildPlanPrompt = (input: PlanPromptInput) => {
       { label: '用户输入', value: input.userInput },
       { label: '会话摘要', value: input.sessionSummaryText },
       { label: '最近对话', value: input.recentTurnsText },
+      { label: '已选资料范围', value: input.selectedScopeSummary },
       {
         label: '上下文证据',
         value: renderEvidenceLines(input.contextEvidence)

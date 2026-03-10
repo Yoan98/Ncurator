@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { Input, List, Card, Empty, Typography, Button, Switch, Segmented, message } from 'antd'
 import { HiArrowUp, HiOutlineDocumentText } from 'react-icons/hi2'
-import type { SearchResult, SearchSourceFilter } from '../../../shared/types'
+import type { SearchResult, SearchSourceFilter, SourceScopeSelection } from '../../../shared/types'
 import TextHighlighter from '../components/TextHighlighter'
 import { parseIpcResult } from '../utils/serialization'
 import FileRender, { FileRenderDocument } from '../components/fileRenders'
 import { getActiveConfig, streamCompletion, ChatMessage } from '../services/llmService'
 import MarkdownRenderer from '../components/MarkdownRenderer'
+import SourceScopeSelect from '../components/SourceScopeSelect'
 
 const { TextArea } = Input
 const getMetadataPageNumber = (metadata: SearchResult['metadata']): number => {
@@ -34,6 +35,19 @@ const SearchPage: React.FC = () => {
   const [aiAnswer, setAiAnswer] = useState<string>('')
   const [aiGenerating, setAiGenerating] = useState(false)
   const [sourceFilter, setSourceFilter] = useState<SearchSourceFilter>('all')
+  const [selectedScopes, setSelectedScopes] = useState<SourceScopeSelection[]>([])
+
+  const selectedDocumentIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          selectedScopes.flatMap((scope) =>
+            Array.isArray(scope.documentIds) ? scope.documentIds.map((item) => String(item)) : []
+          )
+        )
+      ).filter(Boolean),
+    [selectedScopes]
+  )
 
   useEffect(() => {
     // Check if model is ready when component mounts
@@ -107,7 +121,11 @@ ${contextText}`
     setAiAnswer('')
 
     try {
-      const response = await window.api.search(value, sourceFilter)
+      const response = await window.api.search(
+        value,
+        sourceFilter,
+        selectedDocumentIds.length > 0 ? selectedDocumentIds : undefined
+      )
       const parsedResults = response.results.map(parseIpcResult)
       console.log('Search results:', parsedResults)
       setResults(parsedResults)
@@ -218,6 +236,21 @@ ${contextText}`
               loading={loading}
               disabled={!searchValue.trim()}
             />
+          </div>
+        </div>
+
+        <div className="mb-6 rounded-2xl border border-[#E5E5E4] bg-white p-4 shadow-sm">
+          <div className="mb-2 text-sm font-medium text-[#1F1F1F]">搜索范围</div>
+          <SourceScopeSelect
+            mode="search"
+            value={selectedScopes}
+            onChange={setSelectedScopes}
+            placeholder="可选：仅搜索已准备的工作空间、目录、文件或网页资料"
+            className="w-full"
+          />
+          <div className="mt-2 text-xs text-[#999999]">
+            搜索模式仅允许已准备范围；未准备的本地资料不会进入候选列表。
+            {selectedScopes.length > 0 ? ` 当前已锁定 ${selectedScopes.length} 个范围。` : ''}
           </div>
         </div>
 

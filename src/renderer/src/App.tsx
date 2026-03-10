@@ -118,7 +118,7 @@ const MainLayout: React.FC = () => {
             placement="bottomRight"
             menu={{
               items: [
-                { key: 'kb', label: '知识库管理', icon: <HiOutlineBookOpen className="w-4 h-4" /> },
+                { key: 'kb', label: '资料来源', icon: <HiOutlineBookOpen className="w-4 h-4" /> },
                 {
                   key: 'settings',
                   label: '大模型配置',

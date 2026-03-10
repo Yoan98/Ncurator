@@ -84,7 +84,11 @@ export const createMainRunStateSchema = () => {
     // run 级错误文本。
     error: z.string().optional(),
     // finalize 产出的最终文本。
-    outputText: z.string().optional()
+    outputText: z.string().optional(),
+    // 本地资料使用状态。
+    localSourceStatus: z.enum(['used', 'not_used', 'insufficient']).optional(),
+    // 本地资料使用或不足说明。
+    localSourceSummary: z.string().optional()
   })
 }
 

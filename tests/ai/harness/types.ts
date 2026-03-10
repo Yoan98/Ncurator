@@ -16,7 +16,7 @@ export type CaseAssertion = {
   details?: string
 }
 
-export type CaseSuite = 'capability' | 'human-live'
+export type CaseSuite = 'capability' | 'integration' | 'human-live'
 export type CaseStatus = 'passed' | 'failed'
 export type CaseErrorCode =
   | 'none'

@@ -3,8 +3,10 @@
 ## 1. 目标
 
 - 测试必须优先覆盖生产链路，避免“复制一套逻辑再测试自己”。
+- 测试运行器统一使用 `vitest`。
 - 支持两类核心验证：
-  - capability：按 tool 粒度验证能力正确性。
+  - capability：按 AI 已配置能力/tool 粒度验证能力正确性。
+  - integration：验证跨模块运行时契约、范围语义、迁移与产品级验收链路。
   - human-live：在真实模型下验证 human 子图完成任务的效果。
 - 输出结构化报告，便于 AI 二次分析并给出优化建议。
 
@@ -16,8 +18,24 @@
 - 入口：`runCapabilityCase(...)`
 - 必须直连生产能力入口（如 `src/main/services/ai/tools/**`），禁止在测试中重写业务实现。
 - 每个 tool 或一组明确操作链路对应一个独立用例。
+- 当前已覆盖：
+  - `docx` 编辑与审批拒绝链路
+  - local KB retrieval 的范围约束
 
-### 2.2 human-live suite
+### 2.2 integration suite
+
+- 用例目录：`tests/ai/suites/integration/*.test.ts`
+- 入口：`runIntegrationCase(...)`
+- 用于验证不属于单一 capability 的产品级链路，包括 workspace/source-scope/runtime/migration/prompt contract 等跨模块行为。
+- 当前已覆盖：
+  - 工作空间扫描 / diff / 范围装配
+  - 运行时 scope 校验与结构化 `runtime_issue`
+  - 旧本地导入迁移清理边界
+  - local-first prompt / finalize 契约
+  - 父子范围显式保留与底层 document id 去重
+  - fixture 缺失时的 suite 级 fail-fast
+
+### 2.3 human-live suite
 
 - 用例目录：`tests/ai/suites/human-live/*.live.test.ts`
 - 入口：`runHumanLiveCase(...)`
@@ -31,7 +49,8 @@ tests/ai/
   fixtures/                     # 测试输入（docx、workspace 文件）
   harness/                      # 运行器、上下文工厂、报告写入、env 加载
   suites/
-    capability/                 # tool 级用例
+    capability/                 # AI 能力/tool 级用例
+    integration/                # 跨模块集成与产品语义验收
     human-live/                 # human live 用例
 tests/report/                   # 每次执行的结构化报告
 .env                            # 本地 live 配置（不入库）
@@ -40,6 +59,7 @@ tests/report/                   # 每次执行的结构化报告
 
 命名建议：
 - capability: `<capability>.<case>.test.ts`
+- integration: `<domain>.<case>.test.ts`
 - human-live: `human.<case>.live.test.ts`
 
 ## 4. 环境变量约定（根目录）
@@ -94,6 +114,11 @@ human-live 使用根目录 `.env` 配置：
 2. 复用 `runCapabilityCase`
 3. 调用生产 tool 入口并断言结果
 
+新增 integration 用例时：
+1. 新建 `tests/ai/suites/integration/*.test.ts`
+2. 复用 `runIntegrationCase`
+3. 直接调用生产运行时/存储/迁移/范围装配入口，验证跨模块行为
+
 新增 human-live 用例时：
 1. 新建 `tests/ai/suites/human-live/*.live.test.ts`
 2. 复用 `runHumanLiveCase`
@@ -103,4 +128,9 @@ human-live 使用根目录 `.env` 配置：
 
 - `pnpm test:ai`
 - `pnpm test:ai:capability`
+- `pnpm test:ai:integration`
 - `pnpm test:ai:human-live`
+
+补充说明：
+- 未配置 live 环境变量时，`human-live` 用例会按既定策略跳过；这不影响 capability suite 的通过判定。
+- 当前仓库已把 `workspace-web-source-scope` 相关的核心验收面沉淀进 integration suite；GUI 级端到端回归仍需单独执行人工检查或独立 e2e harness。

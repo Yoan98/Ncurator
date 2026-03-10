@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, webUtils } from 'electron'
+import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type {
   AiRunEvent,
@@ -8,13 +8,6 @@ import type { DesktopApi } from './api'
 
 // Custom APIs for renderer
 const api: DesktopApi = {
-  ingestFile: (file: File): Promise<{ success: boolean; count?: number; error?: string }> =>
-    ipcRenderer.invoke('ingest-file', webUtils.getPathForFile(file), file.name),
-  ingestFiles: (files: File[]): Promise<{ success: boolean; created?: number; error?: string }> =>
-    ipcRenderer.invoke(
-      'ingest-files',
-      files.map((f) => ({ path: webUtils.getPathForFile(f), name: f.name }))
-    ),
   ingestWeb: (payload): Promise<{ success: boolean; count?: number; error?: string }> =>
     ipcRenderer.invoke('ingest-web', payload),
   ingestWebs: (payload): Promise<{ success: boolean; created?: number; error?: string }> =>
@@ -27,16 +20,28 @@ const api: DesktopApi = {
     ipcRenderer.invoke('reveal-path', filePath),
   search: (
     query: string,
-    sourceType?: SearchSourceFilter
+    sourceType?: SearchSourceFilter,
+    documentIds?: string[]
   ) =>
-    ipcRenderer.invoke('search', query, sourceType),
-  ftsSearch: (query: string, sourceType?: SearchSourceFilter) =>
-    ipcRenderer.invoke('fts-search', query, sourceType),
-  vectorSearch: (query: string, sourceType?: SearchSourceFilter) =>
-    ipcRenderer.invoke('vector-search', query, sourceType),
-  hybridSearch: (query: string, sourceType?: SearchSourceFilter) =>
-    ipcRenderer.invoke('hybrid-search', query, sourceType),
+    ipcRenderer.invoke('search', query, sourceType, documentIds),
+  ftsSearch: (query: string, sourceType?: SearchSourceFilter, documentIds?: string[]) =>
+    ipcRenderer.invoke('fts-search', query, sourceType, documentIds),
+  vectorSearch: (query: string, sourceType?: SearchSourceFilter, documentIds?: string[]) =>
+    ipcRenderer.invoke('vector-search', query, sourceType, documentIds),
+  hybridSearch: (query: string, sourceType?: SearchSourceFilter, documentIds?: string[]) =>
+    ipcRenderer.invoke('hybrid-search', query, sourceType, documentIds),
   listDocuments: (payload) => ipcRenderer.invoke('list-documents', payload),
+  workspaceList: () => ipcRenderer.invoke('workspace-list'),
+  workspaceCreate: (payload) => ipcRenderer.invoke('workspace-create', payload),
+  workspaceDelete: (workspaceId: string) => ipcRenderer.invoke('workspace-delete', workspaceId),
+  workspaceNodes: (payload) => ipcRenderer.invoke('workspace-nodes', payload),
+  workspaceScan: (payload) => ipcRenderer.invoke('workspace-scan', payload),
+  workspacePrepare: (payload) => ipcRenderer.invoke('workspace-prepare', payload),
+  sourceScopeList: (payload) => ipcRenderer.invoke('source-scope-list', payload),
+  webSourceList: () => ipcRenderer.invoke('web-source-list'),
+  webSourceRefresh: (payload) => ipcRenderer.invoke('web-source-refresh', payload),
+  webSourceDelete: (webSourceId: string) => ipcRenderer.invoke('web-source-delete', webSourceId),
+  legacyLocalImportMigrationStatus: () => ipcRenderer.invoke('legacy-local-import-migration-status'),
   listChunks: (payload) => ipcRenderer.invoke('list-chunks', payload),
   deleteDocuments: (
     ids: string[]
@@ -44,8 +49,8 @@ const api: DesktopApi = {
     ipcRenderer.invoke('delete-documents', ids),
   dropDocumentsTable: (): Promise<{ success: boolean; existed?: boolean; error?: string }> =>
     ipcRenderer.invoke('drop-documents-table'),
-  documentListRefresh: (cb: () => void) => ipcRenderer.on('document-list-refresh', () => cb()),
-  removeDocumentListRefreshListeners: () => ipcRenderer.removeAllListeners('document-list-refresh'),
+  sourceListRefresh: (cb: () => void) => ipcRenderer.on('source-list-refresh', () => cb()),
+  removeSourceListRefreshListeners: () => ipcRenderer.removeAllListeners('source-list-refresh'),
   downloadModel: (repoId: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('download-model', repoId),
   onDownloadProgress: (cb) => ipcRenderer.on('download-progress', (_event, data) => cb(data)),

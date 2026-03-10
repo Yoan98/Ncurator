@@ -5,7 +5,8 @@ import type {
   CaseAssertion,
   CaseErrorCode,
   CaseExecutionOutcome,
-  CaseExpectedOutcome
+  CaseExpectedOutcome,
+  CaseSuite
 } from './types'
 import { EventCollector } from './eventCollector'
 import { assertRequiredFixtures } from './fixtureGuard'
@@ -27,7 +28,7 @@ type CapabilityCaseRuntime = {
   assertions: CaseAssertion[]
 }
 
-export const runCapabilityCase = async <TResult>(input: {
+type StructuredCaseInput<TResult> = {
   caseId: string
   description: string
   requiredFixtures: string[]
@@ -41,7 +42,12 @@ export const runCapabilityCase = async <TResult>(input: {
   ) => CaseExecutionOutcome
   execute: (runtime: CapabilityCaseRuntime) => Promise<TResult>
   assert: (result: TResult, runtime: CapabilityCaseRuntime) => Promise<void>
-}): Promise<void> => {
+}
+
+const runStructuredCase = async <TResult>(
+  suite: CaseSuite,
+  input: StructuredCaseInput<TResult>
+): Promise<void> => {
   const runId = randomUUID()
   const taskId = `task-${input.caseId}`
   const startedAt = Date.now()
@@ -95,7 +101,7 @@ export const runCapabilityCase = async <TResult>(input: {
   } finally {
     const finishedAt = Date.now()
     reportDir = await writeCaseReport({
-      suite: 'capability',
+      suite,
       caseId: input.caseId,
       runId,
       taskId,
@@ -118,3 +124,11 @@ export const runCapabilityCase = async <TResult>(input: {
     }
   }
 }
+
+export const runCapabilityCase = async <TResult>(
+  input: StructuredCaseInput<TResult>
+): Promise<void> => runStructuredCase('capability', input)
+
+export const runIntegrationCase = async <TResult>(
+  input: StructuredCaseInput<TResult>
+): Promise<void> => runStructuredCase('integration', input)

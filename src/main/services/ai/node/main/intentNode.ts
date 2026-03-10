@@ -32,7 +32,8 @@ export const createIntentNode = (input: { ctx: AiRunContext; maxContextRounds?: 
       recentTurnsText: history.recentTurnsText,
       contextEvidence: state.contextEvidence,
       contextRounds: state.contextRounds,
-      maxContextRounds
+      maxContextRounds,
+      selectedScopeSummary: ctx.selectedScopeSummary
     })
 
     const raw = await ctx.chatJson({

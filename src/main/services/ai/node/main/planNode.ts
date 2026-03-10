@@ -18,7 +18,8 @@ export const createPlanNode = (input: { ctx: AiRunContext }) => {
       userInput: state.input,
       sessionSummaryText: history.sessionSummaryText,
       recentTurnsText: history.recentTurnsText,
-      contextEvidence: state.contextEvidence
+      contextEvidence: state.contextEvidence,
+      selectedScopeSummary: ctx.selectedScopeSummary
     })
 
     const raw = await ctx.chatJson({

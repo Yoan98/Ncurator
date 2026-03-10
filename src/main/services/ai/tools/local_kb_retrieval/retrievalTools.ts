@@ -18,7 +18,7 @@ const toStringIdList = (value: string[] | undefined): string[] => {
   return value.map((item) => String(item).trim()).filter(Boolean)
 }
 
-const resolveScopedDocumentIds = (
+export const resolveScopedDocumentIds = (
   runScopedIds: string[] | undefined,
   requestedIds: string[] | undefined
 ): string[] | null => {

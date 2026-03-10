@@ -8,12 +8,27 @@ import type {
   ChatMessage,
   ChatSession,
   ChunkListResponse,
+  CreateWorkspaceSourceRequest,
+  DeleteWebSourceResponse,
+  DeleteWorkspaceSourceResponse,
   DocumentRecord,
+  LegacyLocalImportMigrationStatus,
+  ListSourceScopesRequest,
+  ListWorkspaceNodesRequest,
   LLMConfig,
+  PrepareWorkspaceRequest,
+  RefreshWebSourceRequest,
   SearchResponse,
   SearchResult,
   SearchSourceFilter,
-  WebIngestPayload
+  SourceScopeListResponse,
+  WebSourceListResponse,
+  WebSourceMutationResponse,
+  WebIngestPayload,
+  WorkspaceJobResponse,
+  WorkspaceListResponse,
+  WorkspaceMutationResponse,
+  WorkspaceNodeListResponse
 } from '../shared/types'
 
 export type ModelInfo = {
@@ -35,8 +50,6 @@ export type DownloadProgress = {
 }
 
 export type DesktopApi = {
-  ingestFile: (file: File) => Promise<{ success: boolean; count?: number; error?: string }>
-  ingestFiles: (files: File[]) => Promise<{ success: boolean; created?: number; error?: string }>
   ingestWeb: (payload: WebIngestPayload) => Promise<{ success: boolean; count?: number; error?: string }>
   ingestWebs: (
     payload: WebIngestPayload[]
@@ -44,15 +57,38 @@ export type DesktopApi = {
   openExternal: (url: string) => Promise<{ success: boolean; error?: string }>
   openPath: (filePath: string) => Promise<{ success: boolean; error?: string }>
   revealPath: (filePath: string) => Promise<{ success: boolean; error?: string }>
-  search: (query: string, sourceType?: SearchSourceFilter) => Promise<SearchResponse>
-  ftsSearch: (query: string, sourceType?: SearchSourceFilter) => Promise<SearchResult[]>
-  vectorSearch: (query: string, sourceType?: SearchSourceFilter) => Promise<SearchResult[]>
-  hybridSearch: (query: string, sourceType?: SearchSourceFilter) => Promise<SearchResult[]>
+  search: (
+    query: string,
+    sourceType?: SearchSourceFilter,
+    documentIds?: string[]
+  ) => Promise<SearchResponse>
+  ftsSearch: (query: string, sourceType?: SearchSourceFilter, documentIds?: string[]) => Promise<SearchResult[]>
+  vectorSearch: (
+    query: string,
+    sourceType?: SearchSourceFilter,
+    documentIds?: string[]
+  ) => Promise<SearchResult[]>
+  hybridSearch: (
+    query: string,
+    sourceType?: SearchSourceFilter,
+    documentIds?: string[]
+  ) => Promise<SearchResult[]>
   listDocuments: (payload: {
     keyword?: string
     page: number
     pageSize: number
   }) => Promise<{ items: DocumentRecord[]; total: number }>
+  workspaceList: () => Promise<WorkspaceListResponse>
+  workspaceCreate: (payload: CreateWorkspaceSourceRequest) => Promise<WorkspaceMutationResponse>
+  workspaceDelete: (workspaceId: string) => Promise<DeleteWorkspaceSourceResponse>
+  workspaceNodes: (payload: ListWorkspaceNodesRequest) => Promise<WorkspaceNodeListResponse>
+  workspaceScan: (payload: { workspaceId: string }) => Promise<WorkspaceJobResponse>
+  workspacePrepare: (payload: PrepareWorkspaceRequest) => Promise<WorkspaceJobResponse>
+  sourceScopeList: (payload: ListSourceScopesRequest) => Promise<SourceScopeListResponse>
+  webSourceList: () => Promise<WebSourceListResponse>
+  webSourceRefresh: (payload: RefreshWebSourceRequest) => Promise<WebSourceMutationResponse>
+  webSourceDelete: (webSourceId: string) => Promise<DeleteWebSourceResponse>
+  legacyLocalImportMigrationStatus: () => Promise<LegacyLocalImportMigrationStatus | null>
   listChunks: (payload: {
     keyword?: string
     page: number
@@ -62,8 +98,8 @@ export type DesktopApi = {
     ids: string[]
   ) => Promise<{ success: boolean; deletedDocs?: number; deletedChunks?: number; error?: string }>
   dropDocumentsTable: () => Promise<{ success: boolean; existed?: boolean; error?: string }>
-  documentListRefresh: (cb: () => void) => void
-  removeDocumentListRefreshListeners: () => void
+  sourceListRefresh: (cb: () => void) => void
+  removeSourceListRefreshListeners: () => void
   downloadModel: (repoId: string) => Promise<{ success: boolean; error?: string }>
   onDownloadProgress: (cb: (progressData: DownloadProgress) => void) => void
   removeDownloadProgressListeners: () => void

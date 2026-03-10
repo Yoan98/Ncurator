@@ -8,6 +8,26 @@ import {
 export type DocumentSourceType = 'file' | 'web'
 export type DocumentImportStatus = 1 | 2 | 3
 export type SearchSourceFilter = 'all' | DocumentSourceType
+export type WebSourceIdentityKind = 'normalized_url'
+export type WorkspaceSourceStatus =
+  | 'not_prepared'
+  | 'scanning'
+  | 'preparing'
+  | 'prepared'
+  | 'stale'
+  | 'failed'
+  | 'unavailable'
+export type WorkspaceNodeKind = 'directory' | 'file'
+export type WorkspacePrepareStatus =
+  | 'not_prepared'
+  | 'preparing'
+  | 'prepared'
+  | 'stale'
+  | 'failed'
+  | 'missing'
+export type WorkspacePrepareMode = 'full' | 'presence_only' | 'changes_only'
+export type SourceScopeType = 'workspace' | 'directory' | 'file' | 'web'
+export type SourceScopeSourceType = 'workspace' | 'web'
 export type JsonPrimitive = string | number | boolean | null
 export type JsonValue = JsonPrimitive | JsonObject | JsonArray
 export type JsonObject = { [key: string]: JsonValue }
@@ -30,6 +50,190 @@ export interface DocumentRecord {
   file_path?: string
   created_at: number
   import_status: DocumentImportStatus
+  source_id?: string
+  source_url?: string
+  source_title?: string
+  normalized_source_url?: string
+  fetched_at?: number
+  updated_at?: number
+  last_error?: string
+}
+
+export interface WebSourceRecord {
+  id: string
+  identity_kind: WebSourceIdentityKind
+  normalized_url: string
+  url: string
+  title?: string
+  document_id?: string
+  import_status: DocumentImportStatus
+  include_selectors?: string[]
+  exclude_selectors?: string[]
+  fetched_at?: number
+  last_error?: string
+  created_at: number
+  updated_at: number
+}
+
+export interface WorkspaceSource {
+  id: string
+  name: string
+  root_path: string
+  status: WorkspaceSourceStatus
+  last_scan_at?: number
+  last_prepare_at?: number
+  last_error?: string
+  created_at: number
+  updated_at: number
+}
+
+export interface WorkspaceNode {
+  id: string
+  workspace_id: string
+  parent_id?: string
+  kind: WorkspaceNodeKind
+  name: string
+  relative_path: string
+  absolute_path: string
+  file_ext?: string
+  exists: boolean
+  size?: number
+  mtime_ms?: number
+  content_hash?: string
+  prepare_status: WorkspacePrepareStatus
+  document_id?: string
+  last_prepared_at?: number
+  last_error?: string
+  created_at: number
+  updated_at: number
+}
+
+export interface WorkspaceRuntimeBinding {
+  workspaceId: string
+  rootPath: string
+  policyProfile?: string
+}
+
+export interface SourceScopeSelection {
+  scopeType: SourceScopeType
+  sourceType: SourceScopeSourceType
+  sourceId: string
+  nodeId?: string
+  label: string
+  absolutePath?: string
+  relativePath?: string
+  documentIds: string[]
+  hasUnpreparedFiles: boolean
+  preparedDocumentCount?: number
+  unpreparedFileCount?: number
+  workspace?: WorkspaceRuntimeBinding
+}
+
+export interface WorkspaceSyncProgress {
+  workspace_id: string
+  mode?: WorkspacePrepareMode
+  phase: 'scan' | 'diff' | 'prepare' | 'complete'
+  total: number
+  completed: number
+  added?: number
+  updated?: number
+  removed?: number
+  failed?: number
+  message?: string
+}
+
+export interface WorkspaceListResponse {
+  items: WorkspaceSource[]
+  total: number
+}
+
+export interface WorkspaceNodeListResponse {
+  items: WorkspaceNode[]
+  total: number
+}
+
+export interface SourceScopeListResponse {
+  items: SourceScopeSelection[]
+  total: number
+}
+
+export interface WebSourceListResponse {
+  items: WebSourceRecord[]
+  total: number
+}
+
+export interface LegacyLocalImportMigrationStatus {
+  hasLegacyLocalImports: boolean
+  removedDocumentCount: number
+  removedChunkCount: number
+  migratedAt?: number
+}
+
+export interface CreateWorkspaceSourceRequest {
+  rootPath: string
+  name?: string
+}
+
+export interface UpdateWorkspaceSourceRequest {
+  workspaceId: string
+  name?: string
+  status?: WorkspaceSourceStatus
+  lastError?: string
+}
+
+export interface WorkspaceMutationResponse {
+  success: boolean
+  workspace?: WorkspaceSource
+  error?: string
+}
+
+export interface DeleteWorkspaceSourceResponse {
+  success: boolean
+  deletedWorkspaceId?: string
+  error?: string
+}
+
+export interface ListWorkspaceNodesRequest {
+  workspaceId: string
+  parentId?: string
+  kind?: WorkspaceNodeKind
+}
+
+export interface ScanWorkspaceRequest {
+  workspaceId: string
+}
+
+export interface PrepareWorkspaceRequest {
+  workspaceId: string
+  mode: WorkspacePrepareMode
+}
+
+export interface WorkspaceJobResponse {
+  success: boolean
+  workspaceId?: string
+  progress?: WorkspaceSyncProgress
+  error?: string
+}
+
+export interface RefreshWebSourceRequest {
+  webSourceId: string
+}
+
+export interface WebSourceMutationResponse {
+  success: boolean
+  source?: WebSourceRecord
+  error?: string
+}
+
+export interface DeleteWebSourceResponse {
+  success: boolean
+  deletedWebSourceId?: string
+  error?: string
+}
+
+export interface ListSourceScopesRequest {
+  query?: string
+  mode: 'chat' | 'search'
 }
 
 export interface SearchResult {
@@ -116,6 +320,13 @@ export interface ChatSession {
 export type AiTaskKind = 'local_kb_retrieval' | 'terminal_exec' | 'docx'
 export type AiTaskStatus = 'pending' | 'running' | 'completed' | 'failed'
 export type AiRunStatus = 'running' | 'completed' | 'failed' | 'cancelled'
+export type LocalSourceUsageStatus = 'used' | 'not_used' | 'insufficient'
+export type RuntimeIssueCode =
+  | 'workspace_binding_missing'
+  | 'workspace_missing'
+  | 'workspace_path_unavailable'
+  | 'scope_unavailable'
+  | 'approval_denied'
 export type RuntimeSkillId = (typeof RUNTIME_SKILL_IDS)[number]
 export type RuntimeSkillRequirement = (typeof RUNTIME_SKILL_REQUIREMENTS)[number]
 export type AiRunEventStage =
@@ -247,11 +458,9 @@ export type AiRunStartRequest = {
   sessionId: string
   input: string
   selectedDocumentIds?: string[]
-  workspace?: {
-    workspaceId: string
-    rootPath: string
-    policyProfile?: string
-  }
+  selectedSourceScopes?: SourceScopeSelection[]
+  workspace?: WorkspaceRuntimeBinding
+  allowNonLocal?: boolean
 }
 
 export type AiRunStartResponse = {
@@ -450,6 +659,27 @@ type AiRunEventPayload =
       type: 'answer_completed'
       runId: string
       text: string
+    }
+  | {
+      type: 'local_sources_status'
+      runId: string
+      status: LocalSourceUsageStatus
+      summary: string
+    }
+  | {
+      type: 'non_local_permission_requested'
+      runId: string
+      reason: string
+    }
+  | {
+      type: 'runtime_issue'
+      runId: string
+      code: RuntimeIssueCode
+      message: string
+      taskId?: string
+      workspaceId?: string
+      scopeSourceId?: string
+      createdAt: number
     }
   | {
       type: 'run_completed'

@@ -3,8 +3,10 @@ import type {
   ChunkInput,
   ChunkListResponse,
   DocumentListResponse,
+  DocumentSourceType,
   DocumentRecord,
-  SearchResult
+  SearchResult,
+  WebSourceRecord
 } from '../../../types/store'
 import { LanceDbCore, LANCE_TABLES } from '../core/LanceDbCore'
 import { asRecord, toNumber, toNumberArray, toOptionalNumber, toOptionalString, toString } from '../../../utils/decoder'
@@ -69,6 +71,38 @@ const toSearchResult = (value: unknown): SearchResult => {
   }
 }
 
+type WebSourceRow = Record<string, unknown> & {
+  id?: unknown
+  normalized_url?: unknown
+  url?: unknown
+  title?: unknown
+  document_id?: unknown
+  import_status?: unknown
+  fetched_at?: unknown
+  last_error?: unknown
+  created_at?: unknown
+  updated_at?: unknown
+}
+
+const toWebSourceRecord = (value: unknown): WebSourceRecord => {
+  const row = asRecord(value) as WebSourceRow
+  const status = toNumber(row.import_status, 2)
+  const importStatus = (status === 1 ? 1 : status === 3 ? 3 : 2) as 1 | 2 | 3
+  return {
+    id: toString(row.id),
+    identity_kind: 'normalized_url',
+    normalized_url: toString(row.normalized_url),
+    url: toString(row.url),
+    title: toOptionalString(row.title),
+    document_id: toOptionalString(row.document_id),
+    import_status: importStatus,
+    fetched_at: toOptionalNumber(row.fetched_at),
+    last_error: toOptionalString(row.last_error),
+    created_at: toNumber(row.created_at, 0),
+    updated_at: toNumber(row.updated_at, 0)
+  }
+}
+
 export class DocumentsStore {
   private reranker: lancedb.rerankers.RRFReranker | null = null
 
@@ -108,6 +142,27 @@ export class DocumentsStore {
   ): Promise<void> {
     const table = await this.core.openTable(LANCE_TABLES.DOCUMENT)
     await table.update({ where: `id = '${this.core.escapeSqlString(id)}'`, values })
+  }
+
+  public async getDocumentById(id: string): Promise<DocumentRecord | null> {
+    const table = await this.core.openTable(LANCE_TABLES.DOCUMENT)
+    const rows = await table
+      .query()
+      .where(`id = '${this.core.escapeSqlString(id)}'`)
+      .limit(1)
+      .toArray()
+    const row = rows[0]
+    if (!row) return null
+    const [document] = await this.attachWebSourceMetadata([toDocumentRecord(row)])
+    return document || null
+  }
+
+  public async deleteChunksByDocumentIds(ids: string[]): Promise<void> {
+    if (ids.length === 0) return
+    const table = await this.core.openTable(LANCE_TABLES.CHUNK)
+    const where = this.core.buildInClause('document_id', ids)
+    if (!where) return
+    await table.delete(where)
   }
 
   public async addChunks(params: { vectors: Float32Array[]; chunks: ChunkInput[] }): Promise<void> {
@@ -212,9 +267,12 @@ export class DocumentsStore {
       })
     )
 
+    const hydratedDocuments = await this.attachWebSourceMetadata(Array.from(docMap.values()))
+    const hydratedMap = new Map(hydratedDocuments.map((document) => [document.id, document] as const))
+
     return results.map((item) => ({
       ...item,
-      document: item.document_id ? docMap.get(item.document_id) : undefined
+      document: item.document_id ? hydratedMap.get(item.document_id) : undefined
     }))
   }
 
@@ -239,9 +297,58 @@ export class DocumentsStore {
     if (where) query.where(where)
     const rows = await query.limit(pageSize).offset(skip).toArray()
 
-    const items = rows.map(toDocumentRecord)
+    const items = await this.attachWebSourceMetadata(rows.map(toDocumentRecord))
 
     return { items, total }
+  }
+
+  public async listDocumentsBySourceType(sourceType: DocumentSourceType): Promise<DocumentRecord[]> {
+    const table = await this.core.openTable(LANCE_TABLES.DOCUMENT)
+    const rows = await table
+      .query()
+      .where(`source_type = '${this.core.escapeSqlString(sourceType)}'`)
+      .toArray()
+    return await this.attachWebSourceMetadata(rows.map(toDocumentRecord))
+  }
+
+  public async listLegacyLocalDocuments(boundDocumentIds: string[]): Promise<DocumentRecord[]> {
+    const fileDocuments = await this.listDocumentsBySourceType('file')
+    const boundIds = new Set(boundDocumentIds.map((id) => String(id).trim()).filter(Boolean))
+    return fileDocuments.filter((document) => !boundIds.has(document.id))
+  }
+
+  private async attachWebSourceMetadata(documents: DocumentRecord[]): Promise<DocumentRecord[]> {
+    const webDocumentIds = documents
+      .filter((document) => document.source_type === 'web')
+      .map((document) => document.id)
+    if (webDocumentIds.length === 0) return documents
+
+    const table = await this.core.openTable(LANCE_TABLES.WEB_SOURCE)
+    const where = this.core.buildInClause('document_id', webDocumentIds)
+    if (!where) return documents
+    const rows = await table.query().where(where).toArray()
+    const webSourceMap = new Map(
+      rows.map((row) => {
+        const source = toWebSourceRecord(row)
+        return [source.document_id || '', source] as const
+      })
+    )
+
+    return documents.map((document) => {
+      if (document.source_type !== 'web') return document
+      const source = webSourceMap.get(document.id)
+      if (!source) return document
+      return {
+        ...document,
+        source_id: source.id,
+        source_url: source.url,
+        source_title: source.title,
+        normalized_source_url: source.normalized_url,
+        fetched_at: source.fetched_at,
+        updated_at: source.updated_at,
+        last_error: source.last_error
+      }
+    })
   }
 
   public async listChunks(params: {
@@ -287,21 +394,48 @@ export class DocumentsStore {
     return { existed: existedChunk || existedDoc }
   }
 
-  public async deleteDocumentsByIds(ids: string[]): Promise<{ success: boolean; msg?: string }> {
+  public async countChunksByDocumentIds(ids: string[]): Promise<number> {
+    if (ids.length === 0) return 0
+    const table = await this.core.openTable(LANCE_TABLES.CHUNK)
+    const where = this.core.buildInClause('document_id', ids)
+    if (!where) return 0
+    return await table.countRows(where)
+  }
+
+  public async deleteDocumentsByIds(ids: string[]): Promise<{
+    success: boolean
+    msg?: string
+    error?: string
+    deletedDocs?: number
+    deletedChunks?: number
+  }> {
     if (!ids || ids.length === 0) {
       return { success: false, msg: 'No document IDs provided' }
     }
     try {
       const chunkTable = await this.core.openTable(LANCE_TABLES.CHUNK)
       const docTable = await this.core.openTable(LANCE_TABLES.DOCUMENT)
+      let deletedChunks = 0
+      let deletedDocs = 0
       for (const id of ids) {
         const safeId = this.core.escapeSqlString(id)
+        deletedChunks += await chunkTable.countRows(`document_id = "${safeId}"`)
+        deletedDocs += await docTable.countRows(`id = "${safeId}"`)
         await chunkTable.delete(`document_id = "${safeId}"`)
         await docTable.delete(`id = "${safeId}"`)
       }
+      return {
+        success: true,
+        msg: 'Documents deleted successfully',
+        deletedDocs,
+        deletedChunks
+      }
     } catch (error: unknown) {
-      return { success: false, msg: error instanceof Error ? error.message : String(error) }
+      return {
+        success: false,
+        msg: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? error.message : String(error)
+      }
     }
-    return { success: true, msg: 'Documents deleted successfully' }
   }
 }

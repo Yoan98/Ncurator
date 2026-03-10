@@ -8,6 +8,7 @@ export type IntentPromptInput = {
   contextEvidence: string[]
   contextRounds: number
   maxContextRounds: number
+  selectedScopeSummary: string
 }
 
 export const buildIntentPrompt = (input: IntentPromptInput) => {
@@ -17,6 +18,7 @@ export const buildIntentPrompt = (input: IntentPromptInput) => {
       '【目标】在 need_context / to_plan / direct_finalize 三者中选择唯一模式。',
       '【背景】你只能依据当前输入字段判断，不得使用未提供信息。',
       '【流程】先判断信息是否不足，再判断是否需要本地工具执行，最后给出结构化决策。',
+      '【范围】若用户已选择资料范围，默认视为优先参考范围；涉及本地资料时优先走本地能力，不要忽略这些范围。',
       '【约束】不得编造上下文；reason 必须说明判定依据。',
       '【输出】',
       JSON_ONLY_INTENT_CONTRACT,
@@ -28,6 +30,7 @@ export const buildIntentPrompt = (input: IntentPromptInput) => {
       { label: '用户输入', value: input.userInput },
       { label: '会话摘要', value: input.sessionSummaryText },
       { label: '最近对话', value: input.recentTurnsText },
+      { label: '已选资料范围', value: input.selectedScopeSummary },
       {
         label: '上下文证据',
         value: renderEvidenceLines(input.contextEvidence)
