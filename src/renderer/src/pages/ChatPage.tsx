@@ -18,6 +18,7 @@ import { parseIpcResult } from '../utils/serialization'
 import FileRender, { FileRenderDocument } from '../components/fileRenders'
 import MarkdownRenderer from '../components/MarkdownRenderer'
 import SourceScopeSelect from '../components/SourceScopeSelect'
+import { chatSelectors } from '../testing/selectors'
 
 const { TextArea } = Input
 const { Panel } = Collapse
@@ -58,6 +59,8 @@ type TerminalEvent = Extract<
 type ActivityEvent = Extract<AiRunEvent, { type: 'activity' }>
 type ArtifactEvent = Extract<AiRunEvent, { type: 'file_artifact' }>
 type HumanStepTraceEvent = Extract<AiRunEvent, { type: 'human_step' }>
+type ApprovalRequiredEvent = Extract<AiRunEvent, { type: 'approval_required' }>
+type WorkspaceRequiredEvent = Extract<AiRunEvent, { type: 'workspace_required' }>
 
 const getPageNumberFromMetadata = (metadata: SearchResult['metadata']): number => {
   if (!metadata) return 1
@@ -86,10 +89,20 @@ const ChatPage: React.FC = () => {
     status: 'used' | 'not_used' | 'insufficient'
     summary: string
   } | null>(null)
+  const [pendingApprovalRequest, setPendingApprovalRequest] = useState<ApprovalRequiredEvent | null>(
+    null
+  )
+  const [approvalSubmitting, setApprovalSubmitting] = useState(false)
   const [pendingNonLocalRequest, setPendingNonLocalRequest] = useState<{
     input: string
     scopes: SourceScopeSelection[]
     reason: string
+  } | null>(null)
+  const [pendingWorkspaceRequest, setPendingWorkspaceRequest] = useState<{
+    input: string
+    scopes: SourceScopeSelection[]
+    reason: string
+    request: WorkspaceRequiredEvent
   } | null>(null)
   const [rightPanel, setRightPanel] = useState<RightPanelState | null>(null)
   const assistantMsgIdRef = useRef<string | null>(null)
@@ -165,7 +178,10 @@ const ChatPage: React.FC = () => {
       setAiPlan([])
       setSelectedSourceScopes([])
       setLocalSourceStatus(null)
+      setPendingApprovalRequest(null)
+      setApprovalSubmitting(false)
       setPendingNonLocalRequest(null)
+      setPendingWorkspaceRequest(null)
       setRightPanel(null)
     } else {
       setCurrentMessages([])
@@ -308,6 +324,12 @@ const ChatPage: React.FC = () => {
       if (evt.type === 'workspace_required') {
         if (!evt.internal) {
           setLoading(false)
+          setPendingWorkspaceRequest({
+            input: lastSubmittedInputRef.current,
+            scopes: lastSubmittedScopesRef.current,
+            reason: evt.reason,
+            request: evt
+          })
           message.warning(evt.reason || '执行任务需要先绑定工作区')
         }
         setRightPanel({
@@ -321,6 +343,10 @@ const ChatPage: React.FC = () => {
       if (evt.type === 'runtime_issue') {
         if (!evt.internal) {
           setLoading(false)
+          if (evt.code === 'approval_denied') {
+            setPendingApprovalRequest(null)
+            setApprovalSubmitting(false)
+          }
           const issueMessage =
             evt.code === 'workspace_missing'
               ? '所选工作空间已不存在，请重新选择。'
@@ -343,6 +369,9 @@ const ChatPage: React.FC = () => {
 
       if (evt.type === 'approval_required') {
         if (!evt.internal) {
+          setLoading(false)
+          setApprovalSubmitting(false)
+          setPendingApprovalRequest(evt)
           message.info(`命令需要审批：${evt.command}`)
         }
         setRightPanel({
@@ -355,9 +384,13 @@ const ChatPage: React.FC = () => {
 
       if (evt.type === 'approval_decision') {
         if (evt.internal) return
+        setApprovalSubmitting(false)
+        setPendingApprovalRequest(null)
         if (evt.approved) {
+          setLoading(true)
           message.success('审批已通过')
         } else {
+          setLoading(false)
           message.warning(evt.reason || '审批未通过')
         }
         return
@@ -412,6 +445,8 @@ const ChatPage: React.FC = () => {
 
       if (evt.type === 'run_failed') {
         setLoading(false)
+        setPendingApprovalRequest(null)
+        setApprovalSubmitting(false)
         const msgId = assistantMsgIdRef.current
         if (msgId) {
           setCurrentMessages((prev) =>
@@ -428,12 +463,16 @@ const ChatPage: React.FC = () => {
 
       if (evt.type === 'run_cancelled') {
         setLoading(false)
+        setPendingApprovalRequest(null)
+        setApprovalSubmitting(false)
         message.info('已取消')
         return
       }
 
       if (evt.type === 'run_completed') {
         setLoading(false)
+        setPendingApprovalRequest(null)
+        setApprovalSubmitting(false)
       }
     })
     return () => {
@@ -459,7 +498,10 @@ const ChatPage: React.FC = () => {
     setAiEvents([])
     setAiPlan([])
     setLocalSourceStatus(null)
+    setPendingApprovalRequest(null)
+    setApprovalSubmitting(false)
     setPendingNonLocalRequest(null)
+    setPendingWorkspaceRequest(null)
     setRightPanel(null)
     assistantMsgIdRef.current = null
     lastSubmittedInputRef.current = userQuery
@@ -552,6 +594,32 @@ const ChatPage: React.FC = () => {
     }
   }
 
+  const handleApprovalDecision = async (approved: boolean) => {
+    if (!pendingApprovalRequest || approvalSubmitting) return
+    setApprovalSubmitting(true)
+    try {
+      const res = await window.api.aiRunApprovalDecide({
+        runId: pendingApprovalRequest.runId,
+        approvalId: pendingApprovalRequest.approvalId,
+        approved,
+        reason: approved ? 'approved_in_chat_ui' : 'denied_in_chat_ui'
+      })
+      if (!res.success) {
+        setApprovalSubmitting(false)
+        message.error(res.error || '审批提交失败')
+        return
+      }
+      if (approved) {
+        setLoading(true)
+      } else {
+        setLoading(false)
+      }
+    } catch (error) {
+      setApprovalSubmitting(false)
+      message.error(error instanceof Error ? error.message : '审批提交失败')
+    }
+  }
+
   const handleAllowNonLocalContinue = async () => {
     if (!pendingNonLocalRequest || !currentSessionId || loading) return
 
@@ -569,6 +637,8 @@ const ChatPage: React.FC = () => {
     setAiEvents([])
     setAiPlan([])
     setLocalSourceStatus(null)
+    setPendingApprovalRequest(null)
+    setApprovalSubmitting(false)
     setRightPanel(null)
     assistantMsgIdRef.current = null
     lastSubmittedInputRef.current = pendingNonLocalRequest.input
@@ -623,6 +693,70 @@ const ChatPage: React.FC = () => {
     setLocalSourceStatus(null)
     setPendingNonLocalRequest(null)
     setLoading(false)
+  }
+
+  const handleContinueWithWorkspace = async () => {
+    if (!pendingWorkspaceRequest || !currentSessionId || loading) return
+    const hasWorkspaceBinding = selectedSourceScopes.some((scope) => scope.workspace?.rootPath)
+    if (!hasWorkspaceBinding) {
+      message.warning('请先通过 @ 选择工作空间、目录或文件范围后再继续')
+      return
+    }
+
+    const continueMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      session_id: currentSessionId,
+      role: 'user',
+      content: '已补充工作区上下文，请继续处理上一条请求。',
+      timestamp: Date.now()
+    }
+    setCurrentMessages((prev) => [...prev, continueMessage])
+    window.api.chatMessageSave(continueMessage).catch(console.error)
+
+    setLoading(true)
+    setAiEvents([])
+    setAiPlan([])
+    setLocalSourceStatus(null)
+    setPendingApprovalRequest(null)
+    setApprovalSubmitting(false)
+    setPendingNonLocalRequest(null)
+    setRightPanel(null)
+    assistantMsgIdRef.current = null
+    lastSubmittedInputRef.current = pendingWorkspaceRequest.input
+    lastSubmittedScopesRef.current = selectedSourceScopes
+
+    try {
+      const assistantMsgId = crypto.randomUUID()
+      assistantMsgIdRef.current = assistantMsgId
+      setCurrentMessages((prev) => [
+        ...prev,
+        {
+          id: assistantMsgId,
+          session_id: currentSessionId,
+          role: 'assistant',
+          content: '',
+          timestamp: Date.now()
+        }
+      ])
+
+      const res = await window.api.aiRunStart({
+        sessionId: currentSessionId,
+        input: pendingWorkspaceRequest.input,
+        selectedSourceScopes: selectedSourceScopes.length > 0 ? selectedSourceScopes : undefined,
+        allowNonLocal: false
+      })
+      if (!res.success || !res.runId) {
+        setLoading(false)
+        message.error(res.error || '继续运行失败')
+        return
+      }
+      setPendingWorkspaceRequest(null)
+      setAiRunId(res.runId)
+    } catch (error) {
+      console.error(error)
+      setLoading(false)
+      message.error('继续运行失败')
+    }
   }
 
   const renderTrace = () => {
@@ -809,6 +943,7 @@ const ChatPage: React.FC = () => {
           defaultActiveKey={['plan']}
           size="small"
           className="bg-white border border-[#E5E5E4] rounded-xl overflow-hidden"
+          data-testid={chatSelectors.tracePanel}
         >
           <Panel
             header={
@@ -867,14 +1002,20 @@ const ChatPage: React.FC = () => {
 
   const renderRightPanel = () => {
     return (
-      <div className="w-[380px] border-l border-[#E5E5E4] bg-[#F5F5F4] flex flex-col h-full">
+      <div
+        className="w-[380px] border-l border-[#E5E5E4] bg-[#F5F5F4] flex flex-col h-full"
+        data-testid={chatSelectors.rightPanel}
+      >
         <div className="p-4">
           <Card
             className="bg-white border border-[#E5E5E4] rounded-xl shadow-sm"
             styles={{ body: { padding: 0 } }}
           >
             <div className="px-4 py-3 border-b border-[#E5E5E4] flex items-center justify-between">
-              <div className="text-sm font-medium text-[#1F1F1F] truncate">
+              <div
+                className="text-sm font-medium text-[#1F1F1F] truncate"
+                data-testid={chatSelectors.rightPanelTitle}
+              >
                 {rightPanel?.title || '右侧面板'}
               </div>
               <div className="text-xs text-[#999999]">{aiRunId ? aiRunId.slice(0, 8) : ''}</div>
@@ -883,7 +1024,7 @@ const ChatPage: React.FC = () => {
               {!rightPanel ? (
                 <div className="text-sm text-[#999999]">等待工具输出…</div>
               ) : rightPanel.kind === 'chunks' ? (
-                <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-3" data-testid={chatSelectors.rightPanelChunks}>
                   {(rightPanel.data as SearchResult[]).map((r, idx) => (
                     <div
                       key={`${r.id || idx}`}
@@ -900,7 +1041,7 @@ const ChatPage: React.FC = () => {
                   ))}
                 </div>
               ) : rightPanel.kind === 'docs' ? (
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-2" data-testid={chatSelectors.rightPanelDocs}>
                   {(rightPanel.data as DocumentRecord[]).map((d, idx) => (
                     <div
                       key={`${d.id || idx}`}
@@ -914,7 +1055,7 @@ const ChatPage: React.FC = () => {
                   ))}
                 </div>
               ) : rightPanel.kind === 'artifacts' ? (
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-2" data-testid={chatSelectors.rightPanelArtifacts}>
                   {(rightPanel.data as ArtifactEvent[]).map((evt, idx) => (
                     <div
                       key={`${evt.artifactId || idx}-${idx}`}
@@ -958,7 +1099,7 @@ const ChatPage: React.FC = () => {
                   ))}
                 </div>
               ) : (
-                <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-3" data-testid={chatSelectors.rightPanelJson}>
                   <div className="text-xs text-[#666666] whitespace-pre-wrap">
                     {JSON.stringify(rightPanel.data)}
                   </div>
@@ -1134,7 +1275,7 @@ const ChatPage: React.FC = () => {
       : []
 
   return (
-    <div className="flex h-full bg-[#F5F5F4]">
+    <div className="flex h-full bg-[#F5F5F4]" data-testid={chatSelectors.page}>
       {/* Sidebar */}
       <div className="w-64 bg-white border-r border-[#E5E5E4] flex flex-col h-[calc(100vh-64px)]">
         <div className="p-4 border-b border-[#E5E5E4] flex items-center justify-between">
@@ -1146,7 +1287,7 @@ const ChatPage: React.FC = () => {
             onClick={createNewSession}
           />
         </div>
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto" data-testid={chatSelectors.sessionsList}>
           {sessions.map((session) => (
             <div
               key={session.id}
@@ -1211,6 +1352,7 @@ const ChatPage: React.FC = () => {
               autoSize={{ minRows: 1, maxRows: 6 }}
               bordered={false}
               className="text-[15px] mb-2"
+              data-testid={chatSelectors.input}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault()
@@ -1219,7 +1361,7 @@ const ChatPage: React.FC = () => {
               }}
             />
             <div className="grid grid-cols-12 gap-2 mb-2">
-              <div className="col-span-12">
+              <div className="col-span-12" data-testid={chatSelectors.sourceScopeField}>
                 <SourceScopeSelect
                   mode="chat"
                   value={selectedSourceScopes}
@@ -1229,25 +1371,91 @@ const ChatPage: React.FC = () => {
                 />
               </div>
             </div>
-            {(localSourceStatus || pendingNonLocalRequest) && (
+            {(localSourceStatus ||
+              pendingApprovalRequest ||
+              pendingWorkspaceRequest ||
+              pendingNonLocalRequest) && (
               <div
                 className={`mb-3 rounded-2xl border px-3 py-3 text-sm ${
-                  pendingNonLocalRequest
+                  pendingApprovalRequest || pendingWorkspaceRequest || pendingNonLocalRequest
                     ? 'border-[#FDECC8] bg-[#FFF9ED] text-[#8A6510]'
                     : localSourceStatus?.status === 'used'
                       ? 'border-[#DCEBD7] bg-[#F3FAF0] text-[#4F7A46]'
                       : 'border-[#E5E5E4] bg-[#F8F8F7] text-[#666666]'
                 }`}
+                data-testid={
+                  pendingApprovalRequest
+                    ? chatSelectors.approvalBanner
+                    : pendingWorkspaceRequest
+                      ? chatSelectors.workspaceBanner
+                      : pendingNonLocalRequest
+                        ? chatSelectors.nonLocalBanner
+                        : chatSelectors.localSourceStatus
+                }
               >
                 {localSourceStatus && <div>{localSourceStatus.summary}</div>}
+                {pendingApprovalRequest && (
+                  <div className="mt-2 flex flex-col gap-3">
+                    <div>{pendingApprovalRequest.reason}</div>
+                    <div className="text-xs text-[#8A6510]">
+                      风险级别：{pendingApprovalRequest.riskLevel} · {pendingApprovalRequest.command}
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        type="primary"
+                        onClick={() => void handleApprovalDecision(true)}
+                        loading={approvalSubmitting}
+                        data-testid={chatSelectors.approvalApproveButton}
+                      >
+                        批准执行
+                      </Button>
+                      <Button
+                        onClick={() => void handleApprovalDecision(false)}
+                        disabled={approvalSubmitting}
+                        data-testid={chatSelectors.approvalDenyButton}
+                      >
+                        拒绝执行
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                {pendingWorkspaceRequest && (
+                  <div className="mt-2 flex flex-col gap-3">
+                    <div>{pendingWorkspaceRequest.reason}</div>
+                    <div className="text-xs text-[#8A6510]">
+                      请先通过 @ 选择工作空间、目录或文件范围，再继续运行。
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        type="primary"
+                        onClick={() => void handleContinueWithWorkspace()}
+                        loading={loading}
+                        disabled={!selectedSourceScopes.some((scope) => scope.workspace?.rootPath)}
+                        data-testid={chatSelectors.workspaceContinueButton}
+                      >
+                        继续运行
+                      </Button>
+                    </div>
+                  </div>
+                )}
                 {pendingNonLocalRequest && (
                   <div className="mt-2 flex flex-col gap-3">
                     <div>{pendingNonLocalRequest.reason}</div>
                     <div className="flex gap-2">
-                      <Button type="primary" onClick={handleAllowNonLocalContinue} loading={loading}>
+                      <Button
+                        type="primary"
+                        onClick={handleAllowNonLocalContinue}
+                        loading={loading}
+                        data-testid={chatSelectors.nonLocalAllowButton}
+                      >
                         允许继续
                       </Button>
-                      <Button onClick={handleDeclineNonLocalContinue}>仅保留本地结果</Button>
+                      <Button
+                        onClick={handleDeclineNonLocalContinue}
+                        data-testid={chatSelectors.nonLocalDeclineButton}
+                      >
+                        仅保留本地结果
+                      </Button>
                     </div>
                   </div>
                 )}
@@ -1279,7 +1487,11 @@ const ChatPage: React.FC = () => {
               </div>
               <div className="flex items-center gap-2">
                 {loading && aiRunId && (
-                  <Button onClick={handleCancel} className="border-[#E5E5E4]">
+                  <Button
+                    onClick={handleCancel}
+                    className="border-[#E5E5E4]"
+                    data-testid={chatSelectors.cancelButton}
+                  >
                     取消
                   </Button>
                 )}
@@ -1291,6 +1503,7 @@ const ChatPage: React.FC = () => {
                   disabled={!input.trim() || loading}
                   loading={loading}
                   className={`${input.trim() ? '!bg-[#D97757]' : '!bg-[#E5E5E4] !text-white'} border-none shadow-none`}
+                  data-testid={chatSelectors.sendButton}
                 />
               </div>
             </div>

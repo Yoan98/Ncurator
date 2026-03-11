@@ -9,9 +9,6 @@ import { releaseDocxRunSession } from '../services/ai/tools/docx/worker/docxWork
 import {
   buildWebScopeSelection,
   buildWorkspaceScopeSelections,
-  collectScopeDocumentIds,
-  collectUnpreparedFileCount,
-  collectPreparedDocumentIds,
   getWorkspaceScopeKey,
   scopeMatchesQuery,
   shouldIncludeScopeInSearch
@@ -56,6 +53,19 @@ import { WEB_INGEST_CONCURRENCY } from '../utils/constant'
 import { Jieba } from '@node-rs/jieba'
 import { dict } from '@node-rs/jieba/dict'
 import { normalizeForIpc } from '../utils/serialization'
+import {
+  buildE2EChatPlan,
+  createE2EFixtureWorkspace,
+  getE2EFixtureSearchResponse,
+  getE2EFixtureWorkspaceList,
+  getE2EFixtureWorkspaceNodes,
+  getE2EFixtureSourceScopes,
+  hasE2EWorkspaceBinding,
+  isE2EFixtureModeEnabled,
+  matchE2EChatScenario,
+  prepareE2EFixtureWorkspace,
+  scanE2EFixtureWorkspace
+} from '../testing/e2eFixtures'
 
 const jieba = Jieba.withDict(dict)
 const getErrorMessage = (error: unknown): string =>
@@ -167,6 +177,251 @@ export function registerHandlers(services: {
 
   const emitSourceListRefresh = (sender: Electron.WebContents) => {
     sender.send('source-list-refresh')
+  }
+
+  const pauseForE2EFixture = async (): Promise<void> => {
+    await new Promise<void>((resolve) => setTimeout(resolve, 30))
+  }
+
+  const emitE2EChatPlanAndArtifact = async (input: {
+    runId: string
+    sendEvent: (event: AiRunEvent) => void
+  }): Promise<void> => {
+    const plan = buildE2EChatPlan()
+    input.sendEvent({
+      type: 'plan_created',
+      runId: input.runId,
+      plan
+    })
+    await pauseForE2EFixture()
+
+    input.sendEvent({
+      type: 'task_started',
+      runId: input.runId,
+      taskId: plan[0].id
+    })
+    await pauseForE2EFixture()
+
+    input.sendEvent({
+      type: 'tool_call_started',
+      runId: input.runId,
+      taskId: plan[0].id,
+      toolCallId: 'tool-e2e-search',
+      toolName: 'kb_hybrid_search_chunks',
+      input: {
+        query: 'e2e fixture search'
+      },
+      createdAt: Date.now()
+    })
+    await pauseForE2EFixture()
+
+    input.sendEvent({
+      type: 'tool_call_result',
+      runId: input.runId,
+      taskId: plan[0].id,
+      toolCallId: 'tool-e2e-search',
+      toolName: 'kb_hybrid_search_chunks',
+      outputPreview: [
+        {
+          id: 'chunk-e2e-1',
+          text: 'E2E 检索命中内容',
+          document_name: 'E2E 文档'
+        }
+      ],
+      completedAt: Date.now()
+    })
+    await pauseForE2EFixture()
+
+    input.sendEvent({
+      type: 'task_completed',
+      runId: input.runId,
+      taskId: plan[0].id
+    })
+    await pauseForE2EFixture()
+
+    input.sendEvent({
+      type: 'task_started',
+      runId: input.runId,
+      taskId: plan[1].id
+    })
+    await pauseForE2EFixture()
+
+    input.sendEvent({
+      type: 'file_artifact',
+      runId: input.runId,
+      taskId: plan[1].id,
+      artifactId: 'artifact-e2e-1',
+      capability: 'docx',
+      path: '/tmp/ncurator-e2e-result.docx',
+      fileName: 'ncurator-e2e-result.docx',
+      operation: 'created',
+      summary: 'E2E 生成测试文档',
+      createdAt: Date.now()
+    })
+    await pauseForE2EFixture()
+
+    input.sendEvent({
+      type: 'task_completed',
+      runId: input.runId,
+      taskId: plan[1].id
+    })
+  }
+
+  const waitForE2EApprovalDecision = async (input: {
+    runId: string
+    taskId: string
+    sendEvent: (event: AiRunEvent) => void
+  }): Promise<boolean> => {
+    const approvals = activeAiApprovals.get(input.runId)
+    if (!approvals) return false
+
+    const approvalId = 'approval-e2e-1'
+
+    input.sendEvent({
+      type: 'approval_required',
+      runId: input.runId,
+      taskId: input.taskId,
+      approvalId,
+      command: 'rm -rf /tmp/ncurator-e2e',
+      riskLevel: 'high',
+      reason: 'E2E fixture 需要审批才能继续',
+      createdAt: Date.now()
+    })
+
+    return await new Promise<boolean>((resolve) => {
+      const timeout = setTimeout(() => {
+        approvals.delete(approvalId)
+        input.sendEvent({
+          type: 'approval_decision',
+          runId: input.runId,
+          taskId: input.taskId,
+          approvalId,
+          approved: false,
+          reason: 'e2e_fixture_timeout',
+          decidedAt: Date.now()
+        })
+        resolve(false)
+      }, 10_000)
+
+      approvals.set(approvalId, {
+        taskId: input.taskId,
+        resolve: (decision) => {
+          clearTimeout(timeout)
+          approvals.delete(approvalId)
+          input.sendEvent({
+            type: 'approval_decision',
+            runId: input.runId,
+            taskId: input.taskId,
+            approvalId,
+            approved: Boolean(decision.approved),
+            reason: decision.reason,
+            decidedAt: Date.now()
+          })
+          resolve(Boolean(decision.approved))
+        }
+      })
+    })
+  }
+
+  const maybeHandleE2EFixtureRun = async (input: {
+    runId: string
+    inputText: string
+    selectedSourceScopes: SourceScopeSelection[] | undefined
+    sendEvent: (event: AiRunEvent) => void
+  }): Promise<boolean> => {
+    if (!isE2EFixtureModeEnabled()) return false
+
+    const scenario = matchE2EChatScenario(input.inputText)
+    if (!scenario) return false
+
+    const approvalTaskId = 'task-e2e-approval'
+
+    if (scenario === 'chat-plan-artifact') {
+      await emitE2EChatPlanAndArtifact({
+        runId: input.runId,
+        sendEvent: input.sendEvent
+      })
+      input.sendEvent({
+        type: 'answer_completed',
+        runId: input.runId,
+        text: 'E2E fixture 已生成计划与文件产物。'
+      })
+      input.sendEvent({
+        type: 'run_completed',
+        runId: input.runId
+      })
+      return true
+    }
+
+    if (scenario === 'chat-approval') {
+      const approved = await waitForE2EApprovalDecision({
+        runId: input.runId,
+        taskId: approvalTaskId,
+        sendEvent: input.sendEvent
+      })
+
+      if (!approved) {
+        input.sendEvent({
+          type: 'runtime_issue',
+          runId: input.runId,
+          code: 'approval_denied',
+          message: 'E2E fixture 审批被拒绝',
+          taskId: approvalTaskId,
+          createdAt: Date.now()
+        })
+        input.sendEvent({
+          type: 'run_completed',
+          runId: input.runId
+        })
+        return true
+      }
+
+      await emitE2EChatPlanAndArtifact({
+        runId: input.runId,
+        sendEvent: input.sendEvent
+      })
+      input.sendEvent({
+        type: 'answer_completed',
+        runId: input.runId,
+        text: '审批通过，E2E fixture 已继续执行。'
+      })
+      input.sendEvent({
+        type: 'run_completed',
+        runId: input.runId
+      })
+      return true
+    }
+
+    if (scenario === 'chat-workspace') {
+      if (!hasE2EWorkspaceBinding(input.selectedSourceScopes)) {
+        input.sendEvent({
+          type: 'workspace_required',
+          runId: input.runId,
+          taskId: 'task-e2e-workspace',
+          reason: 'E2E fixture 需要工作区上下文才能继续',
+          requiredFields: ['workspaceId', 'rootPath'],
+          createdAt: Date.now()
+        })
+        return true
+      }
+
+      await emitE2EChatPlanAndArtifact({
+        runId: input.runId,
+        sendEvent: input.sendEvent
+      })
+      input.sendEvent({
+        type: 'answer_completed',
+        runId: input.runId,
+        text: '工作区已补充，E2E fixture 已继续执行。'
+      })
+      input.sendEvent({
+        type: 'run_completed',
+        runId: input.runId
+      })
+      return true
+    }
+
+    return false
   }
 
   const ensureWebSourcesHydrated = async (): Promise<void> => {
@@ -487,6 +742,8 @@ export function registerHandlers(services: {
 
   ipcMain.handle('workspace-list', async (): Promise<WorkspaceListResponse> => {
     try {
+      const fixtureList = getE2EFixtureWorkspaceList()
+      if (fixtureList) return fixtureList
       const items = await workspaceStore.listWorkspaces()
       return { items, total: items.length }
     } catch (error: unknown) {
@@ -499,6 +756,11 @@ export function registerHandlers(services: {
     'workspace-create',
     async (_event, payload: CreateWorkspaceSourceRequest): Promise<WorkspaceMutationResponse> => {
       try {
+        const fixtureCreate = createE2EFixtureWorkspace({
+          rootPath: payload.rootPath,
+          name: payload.name
+        })
+        if (fixtureCreate) return fixtureCreate
         const existingWorkspaces = await workspaceStore.listWorkspaces()
         await workspaceService.assertNoNestedWorkspace(
           payload.rootPath,
@@ -538,6 +800,8 @@ export function registerHandlers(services: {
     'workspace-nodes',
     async (_event, payload: ListWorkspaceNodesRequest): Promise<WorkspaceNodeListResponse> => {
       try {
+        const fixtureNodes = getE2EFixtureWorkspaceNodes(String(payload.workspaceId || '').trim())
+        if (fixtureNodes) return fixtureNodes
         const items = await workspaceStore.listWorkspaceNodes({
           workspaceId: String(payload.workspaceId || '').trim(),
           parentId: payload.parentId ? String(payload.parentId).trim() : undefined,
@@ -555,6 +819,8 @@ export function registerHandlers(services: {
     'workspace-scan',
     async (_event, payload: { workspaceId: string }): Promise<WorkspaceJobResponse> => {
       try {
+        const fixtureResponse = scanE2EFixtureWorkspace(String(payload.workspaceId || '').trim())
+        if (fixtureResponse) return fixtureResponse
         const workspaceId = String(payload.workspaceId || '').trim()
         const currentWorkspace = await workspaceStore.getWorkspaceById(workspaceId)
         if (!currentWorkspace) {
@@ -628,6 +894,12 @@ export function registerHandlers(services: {
       if (!workspaceId) return { success: false, error: 'workspaceId is required' }
       if (activeWorkspacePrepareJobs.has(workspaceId)) {
         return { success: false, error: 'workspace prepare already running' }
+      }
+
+      const fixtureResponse = prepareE2EFixtureWorkspace(workspaceId, mode)
+      if (fixtureResponse) {
+        emitSourceListRefresh(event.sender)
+        return fixtureResponse
       }
 
       activeWorkspacePrepareJobs.add(workspaceId)
@@ -902,6 +1174,11 @@ export function registerHandlers(services: {
     'source-scope-list',
     async (_event, payload: ListSourceScopesRequest): Promise<SourceScopeListResponse> => {
       try {
+        const e2eScopes = getE2EFixtureSourceScopes(payload)
+        if (e2eScopes) {
+          return e2eScopes
+        }
+
         await ensureWebSourcesHydrated()
         const workspaceItems = await workspaceStore.listWorkspaces()
         const localScopes: SourceScopeSelection[] = []
@@ -935,6 +1212,10 @@ export function registerHandlers(services: {
       documentIds?: string[]
     ) => {
     try {
+      const fixtureSearch = getE2EFixtureSearchResponse(query, documentIds)
+      if (fixtureSearch) {
+        return fixtureSearch
+      }
       const { data: queryVector } = await embeddingService.embed(query)
       const filter = sourceType && sourceType !== 'all' ? sourceType : undefined
       const results = await documentsStore.search(queryVector, query, 5, filter, documentIds)
@@ -1145,6 +1426,8 @@ export function registerHandlers(services: {
               }
           : undefined
       const allowNonLocal = Boolean(payload?.allowNonLocal)
+      const e2eFixtureScenario =
+        isE2EFixtureModeEnabled() ? matchE2EChatScenario(input) : null
       if (!sessionId) return { success: false, error: 'sessionId is required' }
       if (!input) return { success: false, error: 'input is required' }
 
@@ -1157,21 +1440,33 @@ export function registerHandlers(services: {
         event.sender.send('ai-run-event', evt)
       }
 
-      const validation = await validateSelectedScopesForRun({
-        scopes: selectedSourceScopes,
-        workspaceStore,
-        webSourceStore,
-        sendEvent,
-        runId
-      })
-      if (!validation.ok) {
-        activeAiApprovals.delete(runId)
-        activeAiRuns.delete(runId)
-        return { success: false, error: validation.error }
+      if (!e2eFixtureScenario) {
+        const validation = await validateSelectedScopesForRun({
+          scopes: selectedSourceScopes,
+          workspaceStore,
+          webSourceStore,
+          sendEvent,
+          runId
+        })
+        if (!validation.ok) {
+          activeAiApprovals.delete(runId)
+          activeAiRuns.delete(runId)
+          return { success: false, error: validation.error }
+        }
       }
 
       sendEvent({ type: 'run_started', runId, sessionId, createdAt: Date.now(), input })
       ;(async () => {
+        const handledByE2EFixture = await maybeHandleE2EFixtureRun({
+          runId,
+          inputText: input,
+          selectedSourceScopes,
+          sendEvent
+        })
+        if (handledByE2EFixture) {
+          return
+        }
+
         const streamText = async (text: string) => {
           const raw = String(text || '')
           if (!raw) return

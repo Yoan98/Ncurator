@@ -8,6 +8,7 @@ import FileRender, { FileRenderDocument } from '../components/fileRenders'
 import { getActiveConfig, streamCompletion, ChatMessage } from '../services/llmService'
 import MarkdownRenderer from '../components/MarkdownRenderer'
 import SourceScopeSelect from '../components/SourceScopeSelect'
+import { searchSelectors } from '../testing/selectors'
 
 const { TextArea } = Input
 const getMetadataPageNumber = (metadata: SearchResult['metadata']): number => {
@@ -187,7 +188,7 @@ ${contextText}`
       : []
 
   return (
-    <div className="min-h-full p-6 font-sans max-w-4xl mx-auto">
+    <div className="min-h-full p-6 font-sans max-w-4xl mx-auto" data-testid={searchSelectors.page}>
       <div className="pt-8">
         {/* Search Box */}
         <div className="bg-white border border-[#E5E5E4] rounded-2xl p-3 shadow-sm mb-6 focus-within:ring-4 focus-within:ring-[#F4E5DF] focus-within:border-[#D97757] transition-all duration-300 relative group">
@@ -199,6 +200,7 @@ ${contextText}`
             style={{ resize: 'none' }}
             value={searchValue}
             onChange={(e) => setSearchValue(e.target.value)}
+            data-testid={searchSelectors.input}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault()
@@ -235,11 +237,15 @@ ${contextText}`
               onClick={() => handleSearch(searchValue)}
               loading={loading}
               disabled={!searchValue.trim()}
+              data-testid={searchSelectors.submitButton}
             />
           </div>
         </div>
 
-        <div className="mb-6 rounded-2xl border border-[#E5E5E4] bg-white p-4 shadow-sm">
+        <div
+          className="mb-6 rounded-2xl border border-[#E5E5E4] bg-white p-4 shadow-sm"
+          data-testid={searchSelectors.sourceScopeField}
+        >
           <div className="mb-2 text-sm font-medium text-[#1F1F1F]">搜索范围</div>
           <SourceScopeSelect
             mode="search"
@@ -290,7 +296,7 @@ ${contextText}`
 
         {/* Results */}
         <div>
-          <div className="min-h-[200px]">
+          <div className="min-h-[200px]" data-testid={searchSelectors.resultsList}>
             {results.length > 0 ? (
               <List
                 grid={{ gutter: 16, column: 1 }}
@@ -302,6 +308,7 @@ ${contextText}`
                     <Card
                       hoverable
                       bordered={false}
+                      data-testid={`${searchSelectors.resultCardPrefix}-${item.id}`}
                       className="group bg-white border border-[#E5E5E4] shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 rounded-xl overflow-hidden"
                       bodyStyle={{ padding: '20px' }}
                       onClick={() => openPreview(item)}

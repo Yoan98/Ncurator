@@ -35,6 +35,7 @@ import {
   HiOutlineWindow,
   HiSparkles
 } from 'react-icons/hi2'
+import { importSelectors } from '../testing/selectors'
 
 const { Title, Text, Paragraph, Link } = Typography
 
@@ -559,7 +560,7 @@ const ImportPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-full bg-[#F5F5F4] px-6 py-8">
+    <div className="min-h-full bg-[#F5F5F4] px-6 py-8" data-testid={importSelectors.page}>
       <div className="mx-auto flex max-w-6xl flex-col gap-8">
         <div className="rounded-[28px] border border-[#E5E5E4] bg-[radial-gradient(circle_at_top_left,_#FBF5F2,_#F5F5F4_58%)] px-8 py-8 shadow-[0_4px_16px_rgba(0,0,0,0.06)]">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
@@ -583,6 +584,7 @@ const ImportPage: React.FC = () => {
                 size="large"
                 icon={<HiOutlineFolderPlus className="w-4 h-4" />}
                 onClick={() => setCreateVisible(true)}
+                data-testid={importSelectors.createWorkspaceButton}
               >
                 添加工作空间
               </Button>
@@ -661,7 +663,7 @@ const ImportPage: React.FC = () => {
               </div>
             ) : (
               <div className="grid gap-4 lg:grid-cols-[0.92fr_1.08fr]">
-                <div className="space-y-4">
+                <div className="space-y-4" data-testid={importSelectors.workspaceList}>
                   {workspaces.map((workspace) => {
                     const stats = getWorkspaceStats(workspaceNodes[workspace.id] || [])
                     const statusMeta = getWorkspaceStatusMeta(workspace.status)
@@ -673,6 +675,7 @@ const ImportPage: React.FC = () => {
                         key={workspace.id}
                         type="button"
                         onClick={() => setSelectedWorkspaceId(workspace.id)}
+                        data-testid={`${importSelectors.workspaceCardPrefix}-${workspace.id}`}
                         className={`w-full rounded-2xl border p-5 text-left transition-all duration-200 ${
                           isSelected
                             ? 'border-[#D97757] bg-[#FBF5F2] shadow-[0_4px_16px_rgba(217,119,87,0.12)]'
@@ -771,7 +774,10 @@ const ImportPage: React.FC = () => {
                   })}
                 </div>
 
-                <div className="rounded-2xl border border-[#E5E5E4] bg-[#FAFAF9] p-5">
+                <div
+                  className="rounded-2xl border border-[#E5E5E4] bg-[#FAFAF9] p-5"
+                  data-testid={importSelectors.workspaceDetail}
+                >
                   {selectedWorkspace ? (
                     <div className="flex h-full flex-col">
                       <div className="mb-5 flex flex-col gap-4 border-b border-[#E5E5E4] pb-5">
@@ -781,7 +787,10 @@ const ImportPage: React.FC = () => {
                               <Text strong className="!text-[#1F1F1F]">
                                 {selectedWorkspace.name}
                               </Text>
-                              <Tag className={`!mr-0 rounded-full ${getWorkspaceStatusMeta(selectedWorkspace.status).className}`}>
+                              <Tag
+                                className={`!mr-0 rounded-full ${getWorkspaceStatusMeta(selectedWorkspace.status).className}`}
+                                data-testid={importSelectors.workspaceStatus}
+                              >
                                 {getWorkspaceStatusMeta(selectedWorkspace.status).label}
                               </Tag>
                             </div>
@@ -860,6 +869,7 @@ const ImportPage: React.FC = () => {
                                 onClick={() => void handleWorkspaceScan(selectedWorkspace)}
                                 loading={workspaceActions[selectedWorkspace.id] === 'scan'}
                                 className="border-[#E5E5E4] bg-white text-[#1F1F1F]"
+                                data-testid={importSelectors.workspaceQuickScanButton}
                               >
                                 先扫描
                               </Button>
@@ -869,6 +879,7 @@ const ImportPage: React.FC = () => {
                                 icon={<HiSparkles className="w-4 h-4" />}
                                 onClick={() => void handleWorkspacePrepare(selectedWorkspace)}
                                 loading={workspaceActions[selectedWorkspace.id] === 'prepare'}
+                                data-testid={importSelectors.workspaceQuickPrepareButton}
                               >
                                 开始准备
                               </Button>
@@ -936,7 +947,10 @@ const ImportPage: React.FC = () => {
                         </Button>
                       </div>
 
-                      <div className="min-h-[380px] flex-1 overflow-auto rounded-2xl border border-[#E5E5E4] bg-white p-3">
+                      <div
+                        className="min-h-[380px] flex-1 overflow-auto rounded-2xl border border-[#E5E5E4] bg-white p-3"
+                        data-testid={importSelectors.workspaceTree}
+                      >
                         {selectedWorkspaceNodes.length > 0 ? (
                           <Tree
                             blockNode
@@ -1091,6 +1105,9 @@ const ImportPage: React.FC = () => {
         onOk={handleCreateWorkspace}
         okText="保存"
         cancelText="取消"
+        okButtonProps={{ 'data-testid': importSelectors.createWorkspaceConfirmButton }}
+        cancelButtonProps={{ 'data-testid': importSelectors.createWorkspaceCancelButton }}
+        data-testid={importSelectors.createWorkspaceModal}
       >
         <div className="space-y-4 pt-2">
           <div>
@@ -1100,6 +1117,7 @@ const ImportPage: React.FC = () => {
               value={createRootPath}
               onChange={(event) => setCreateRootPath(event.target.value)}
               placeholder="/absolute/path/to/workspace"
+              data-testid={importSelectors.createWorkspaceRootInput}
             />
             <div className="mt-2 text-[12px] text-[#999999]">
               请输入本机上的绝对路径。系统会基于真实路径做重复和嵌套校验。
@@ -1112,6 +1130,7 @@ const ImportPage: React.FC = () => {
               value={createName}
               onChange={(event) => setCreateName(event.target.value)}
               placeholder="可选，默认取目录名"
+              data-testid={importSelectors.createWorkspaceNameInput}
             />
           </div>
         </div>
