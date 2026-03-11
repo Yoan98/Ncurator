@@ -1,69 +1,48 @@
 # 测试文档索引
 
-本目录用于统一承载测试相关文档，避免测试规范、阶段结论和扩展说明散落在 `doc/` 根目录。
+本目录用于把“测试架构设计”“AI 阶段化测试计划”“AI 测试结果汇总”彻底拆开，避免混写在一篇文档里。
 
-推荐阅读顺序：
+## 1. 目录与职责
 
-1. 先读 [architecture.md](/Users/test/work-space/NCurator-Desktop/doc/test/architecture.md)
-2. 再按当前阶段读对应专题文档
-
-## 1. 分类设计
-
-当前采用“入口索引 + 按主题拆分”的结构：
+```text
+doc/test/
+  README.md                 # 总入口
+  architecture.md           # 测试架构设计（稳定规则）
+  ai-phased-plan.md         # AI阶段化测试计划（推进顺序）
+  ai-upgrade-journal.md     # 每轮AI测试汇总 + 阶段专题结论（持续追加）
+```
 
 - [README.md](/Users/test/work-space/NCurator-Desktop/doc/test/README.md)
-  - 测试文档总入口
-  - 说明当前有哪些测试文档、分别解决什么问题
+  - 总入口与阅读路线
 - [architecture.md](/Users/test/work-space/NCurator-Desktop/doc/test/architecture.md)
-  - 测试架构总规范
-  - 覆盖分层、目录约定、harness、报告契约、命令、阶段化测试顺序
-- [tool-capability.md](/Users/test/work-space/NCurator-Desktop/doc/test/tool-capability.md)
-  - 当前 `tool capability` 阶段的能力结论
-  - 覆盖面、边界、显式缺口、是否建议进入下一阶段
+  - 测试架构设计与工程规则
+  - 覆盖：分层、目录约定、harness、报告契约、命令、扩展规则
+- [ai-phased-plan.md](/Users/test/work-space/NCurator-Desktop/doc/test/ai-phased-plan.md)
+  - AI 阶段化测试计划（阶段顺序、门禁条件、推进规则）
+- [ai-upgrade-journal.md](/Users/test/work-space/NCurator-Desktop/doc/test/ai-upgrade-journal.md)
+  - AI 能力测试的持续汇总总文档（每轮测试完成后追加）
+  - 包含各阶段专题结论（`tool capability` 已并入）
 
-后续建议继续按主题扩展，而不是把所有内容堆回一篇总文档：
+## 2. 推荐阅读顺序
 
-- `human-*.md`
-  - human 单任务验证
-- `main-*.md`
-  - main graph 的 context / plan / runtime 相关验证
-- `renderer-*.md`
-  - renderer contract 与确认交互测试
-- `e2e-*.md`
-  - 端到端链路验证
+1. 先读 [architecture.md](/Users/test/work-space/NCurator-Desktop/doc/test/architecture.md) 了解测试架构与边界。
+2. 再读 [ai-phased-plan.md](/Users/test/work-space/NCurator-Desktop/doc/test/ai-phased-plan.md) 确认当前阶段计划与门禁。
+3. 查看 [ai-upgrade-journal.md](/Users/test/work-space/NCurator-Desktop/doc/test/ai-upgrade-journal.md) 的最新阶段记录与专题结论，确认风险与推进决策。
 
-## 2. AI 阅读规则
+## 3. 维护规则
 
-为了降低 AI 理解成本，建议按下面的入口读取：
+- 新增或调整测试分层、harness、报告契约：只改 `architecture.md`。
+- 调整 AI 阶段顺序、进入/退出门槛：只改 `ai-phased-plan.md`。
+- 阶段专项结论（例如 `tool capability` 能力边界）：统一写入 `ai-upgrade-journal.md` 对应阶段记录。
+- 每次完成 AI 相关测试后，必须追加到 `ai-upgrade-journal.md`，作为后续 AI 继续升级的统一输入。
 
-### 2.1 当任务涉及测试架构
+## 4. 追加汇总的最小要求
 
-先读：
+每次追加至少包含：
 
-- [architecture.md](/Users/test/work-space/NCurator-Desktop/doc/test/architecture.md)
-
-适用任务：
-
-- 新增测试套件
-- 调整目录分层
-- 修改 harness
-- 修改报告契约
-- 增加测试命令
-
-### 2.2 当任务涉及当前 tool 阶段结论
-
-再读：
-
-- [tool-capability.md](/Users/test/work-space/NCurator-Desktop/doc/test/tool-capability.md)
-
-适用任务：
-
-- 判断 tool 是否已经可交给 AI 调用
-- 判断当前 docx / terminal / retrieval 是否需要继续优化
-- 决定是否进入 human / main / plan / e2e 阶段
-
-## 3. 当前建议
-
-涉及测试任务时，默认入口改为：
-
-- `doc/test/README.md`
+1. 日期与阶段
+2. 执行命令与报告路径
+3. 通过率/失败面
+4. 关键边界或显式缺口
+5. 是否允许进入下一阶段
+6. 下一轮优先级

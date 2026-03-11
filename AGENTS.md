@@ -46,7 +46,7 @@
 当涉及到 AI 架构（LangGraph 运行图、能力节点、事件流、工作区沙箱）时，请阅读 `doc/ai-architecture.md`
 当涉及到 UI 样式时，请阅读 `doc/ui-style.md`
 当涉及到目录规范、文件归位、模块分层时，请阅读 `doc/project-structure.md`
-当涉及到测试架构、测试脚本、测试报告与测试扩展时，请先阅读 `doc/test/README.md`
+当涉及到测试架构、测试脚本、测试报告与测试扩展时，请先阅读 `doc/test/README.md`，再按索引进入 `doc/test/architecture.md`、`doc/test/ai-phased-plan.md` 与 `doc/test/ai-upgrade-journal.md`
 
 ## 4. Type 分类与存放位置
 
