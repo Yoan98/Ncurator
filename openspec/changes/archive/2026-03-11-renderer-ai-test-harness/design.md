@@ -341,13 +341,13 @@ tests/
 
 本次变更完成后，至少需要同步以下文档：
 
-- `doc/testing.md`
+- `doc/test/architecture.md`
   - 补 `tests/main/**`、`tests/renderer/**`、`tests/e2e/**` 分层与执行命令
   - 补 main / renderer / e2e 三层职责边界
   - 补 UI 证据文件说明与 AI 使用建议
 - `doc/project-structure.md`
   - 将 `tests/main/**`、`tests/renderer/**`、`tests/e2e/**` 纳入顶层测试目录规范
   - 说明 `tests/main/**`、`tests/renderer/**`、`tests/e2e/**` 与报告命名、脚本入口的映射
-- `doc/testing.md`
+- `doc/test/architecture.md`
   - 作为唯一测试规范真相来源，补充当前目录如何映射到未来 `tests/main/ai/**`
   - 合并整体测试目录说明、main/renderer/e2e 边界、技术选型与迁移说明

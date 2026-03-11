@@ -5,6 +5,7 @@ import path from 'node:path'
 const SUITE = 'main-ai-capability'
 const REPORT_ROOT = path.resolve(process.cwd(), 'tests', 'report', SUITE)
 const OUTPUT_FILE = path.join(REPORT_ROOT, 'tool-capability-assessment.md')
+const TEST_ROOT = path.resolve(process.cwd(), 'tests', 'main', 'ai', 'capability')
 
 const EXPECTED_TOOLS = {
   docx: [
@@ -13,6 +14,8 @@ const EXPECTED_TOOLS = {
     'docx_get_block',
     'docx_search',
     'docx_apply_ops',
+    'docx_get_history',
+    'docx_rollback',
     'docx_render_preview',
     'docx_save',
     'docx_validate'
@@ -34,6 +37,48 @@ const readJson = async (filePath) => {
 const listDirectories = async (target) => {
   const entries = await readdir(target, { withFileTypes: true })
   return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)
+}
+
+const listFiles = async (target) => {
+  const entries = await readdir(target, { withFileTypes: true })
+  return entries.filter((entry) => entry.isFile()).map((entry) => path.join(target, entry.name))
+}
+
+const extractCaseIdsFromTestSource = (source) => {
+  const constantMap = new Map()
+  for (const match of source.matchAll(/const\s+([A-Z0-9_]+)\s*=\s*'([^']+)'/g)) {
+    constantMap.set(match[1], match[2])
+  }
+
+  const caseIds = new Set()
+  for (const match of source.matchAll(/caseId:\s*('([^']+)'|([A-Z0-9_]+))/g)) {
+    const literalValue = match[2]
+    const constantName = match[3]
+    if (literalValue) {
+      caseIds.add(literalValue)
+      continue
+    }
+    if (constantName && constantMap.has(constantName)) {
+      caseIds.add(constantMap.get(constantName))
+    }
+  }
+
+  return Array.from(caseIds)
+}
+
+const resolveCurrentCaseIds = async () => {
+  const files = await listFiles(TEST_ROOT)
+  const caseIds = new Set()
+
+  for (const filePath of files) {
+    if (!filePath.endsWith('.test.ts')) continue
+    const source = await readFile(filePath, 'utf8')
+    for (const caseId of extractCaseIdsFromTestSource(source)) {
+      caseIds.add(caseId)
+    }
+  }
+
+  return Array.from(caseIds).sort()
 }
 
 const latestCaseDir = async (caseRoot) => {
@@ -209,9 +254,9 @@ const toMarkdown = (input) => {
 const main = async () => {
   let caseIds = []
   try {
-    caseIds = await listDirectories(REPORT_ROOT)
+    caseIds = await resolveCurrentCaseIds()
   } catch {
-    console.error(`report root not found: ${REPORT_ROOT}`)
+    console.error(`failed to resolve current capability cases from: ${TEST_ROOT}`)
     process.exitCode = 1
     return
   }

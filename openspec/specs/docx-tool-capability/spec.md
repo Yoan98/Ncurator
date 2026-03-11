@@ -31,6 +31,13 @@ The `docx` capability MUST require workspace binding for file actions and MUST g
 - **WHEN** capability receives an in-place overwrite operation
 - **THEN** runtime requests approval before write and defaults to save-as behavior when overwrite is not approved
 
+### Requirement: Preserve draft snapshots before save
+The `docx` capability MUST keep immutable draft snapshots during edit flows, expose snapshot history for inspection, and allow rollback to an ancestor snapshot before any file write happens.
+
+#### Scenario: User needs to confirm or undo edits before save
+- **WHEN** docx tools have produced one or more edited snapshots through `apply_ops`
+- **THEN** runtime can inspect the current snapshot lineage and switch back to an ancestor snapshot without overwriting files
+
 ### Requirement: Run bounded internal tool loops and finish explicitly
 The `docx` capability MUST run an internal tool loop to satisfy the task objective, MUST enforce bounded loop limits (for example max-step and timeout), and MUST terminate with explicit success or failure state.
 
@@ -41,4 +48,3 @@ The `docx` capability MUST run an internal tool loop to satisfy the task objecti
 #### Scenario: Docx loop exceeds configured bounds
 - **WHEN** the capability reaches max-step or timeout limit before completion
 - **THEN** the task is marked failed with a bounded-loop error and no further docx tool calls are executed
-

@@ -22,6 +22,8 @@ const createWorkspaceGuardTool = (input: {
     | 'docx_get_block'
     | 'docx_search'
     | 'docx_apply_ops'
+    | 'docx_get_history'
+    | 'docx_rollback'
     | 'docx_render_preview'
     | 'docx_save'
     | 'docx_validate'
@@ -65,6 +67,8 @@ export const docxCapability: CapabilityToolFamily = {
         createWorkspaceGuardTool({ name: 'docx_get_block', runId, taskId, ctx }),
         createWorkspaceGuardTool({ name: 'docx_search', runId, taskId, ctx }),
         createWorkspaceGuardTool({ name: 'docx_apply_ops', runId, taskId, ctx }),
+        createWorkspaceGuardTool({ name: 'docx_get_history', runId, taskId, ctx }),
+        createWorkspaceGuardTool({ name: 'docx_rollback', runId, taskId, ctx }),
         createWorkspaceGuardTool({ name: 'docx_render_preview', runId, taskId, ctx }),
         createWorkspaceGuardTool({ name: 'docx_save', runId, taskId, ctx }),
         createWorkspaceGuardTool({ name: 'docx_validate', runId, taskId, ctx })
@@ -96,6 +100,8 @@ export const docxCapability: CapabilityToolFamily = {
         toolItem.name === 'docx_get_block' ||
         toolItem.name === 'docx_search' ||
         toolItem.name === 'docx_apply_ops' ||
+        toolItem.name === 'docx_get_history' ||
+        toolItem.name === 'docx_rollback' ||
         toolItem.name === 'docx_render_preview' ||
         toolItem.name === 'docx_save' ||
         toolItem.name === 'docx_validate'

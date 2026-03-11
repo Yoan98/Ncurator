@@ -144,7 +144,7 @@
 迁移方式：
 
 - 更新 harness 类型、落盘逻辑、读取逻辑与依赖旧字段的测试。
-- 更新 `doc/testing.md`、`tests/ai/README.md` 与对应 specs。
+- 更新 `doc/test/architecture.md`、`tests/ai/README.md` 与对应 specs。
 - 历史报告目录不迁移，作为旧契约产物保留。
 
 选择该方案的原因：
@@ -170,7 +170,7 @@
 2. 重写 `reporter.ts` 的落盘逻辑，新增 `signals.json`，并将 `summary.md` 改为事实摘要模板。
 3. 在 `runCapabilityCase` 与 `runHumanLiveCase` 中接入新的 `caseErrorCode` 与 `executionOutcome` 采集逻辑。
 4. 更新 `reportInspector.ts` 与依赖旧字段的回归测试，改为断言新 schema。
-5. 更新 `doc/testing.md`、`tests/ai/README.md` 与相关 OpenSpec specs，使文档与实现口径一致。
+5. 更新 `doc/test/architecture.md`、`tests/ai/README.md` 与相关 OpenSpec specs，使文档与实现口径一致。
 6. 不迁移历史 `tests/report/**` 目录；新执行生成的新报告自然使用新格式。
 7. 如需回滚，只需回退 harness 与文档变更并重新执行测试，无需做数据回滚。
 

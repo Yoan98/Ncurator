@@ -8,7 +8,7 @@ import { readLatestCaseReportArtifacts } from '../../../harness/main/reportInspe
 
 const FIXTURE_SOURCE = path.resolve(process.cwd(), 'tests/fixtures/main/docx/sample-edit.docx')
 
-const SEMANTIC_CASE_ID = 'docx-search-semantic-explicit-gap'
+const SEMANTIC_CASE_ID = 'docx-search-semantic-cached'
 const PREVIEW_CASE_ID = 'docx-preview-format-explicit-gap'
 
 type JsonScalar = string | number | boolean | null
@@ -37,6 +37,11 @@ const asStringArray = (value: JsonValue | undefined): string[] => {
   return value.filter((item) => typeof item === 'string').map((item) => String(item))
 }
 
+const asRecordArray = (value: JsonValue | undefined): JsonRecord[] => {
+  if (!Array.isArray(value)) return []
+  return value.filter((item) => item && typeof item === 'object' && !Array.isArray(item)) as JsonRecord[]
+}
+
 const getToolByName = (tools: StructuredToolInterface[], name: string): StructuredToolInterface => {
   const found = tools.find((item) => String(item.name) === name)
   if (!found) throw new Error(`tool not found: ${name}`)
@@ -44,12 +49,12 @@ const getToolByName = (tools: StructuredToolInterface[], name: string): Structur
 }
 
 describe('capability/docx explicit gap', () => {
-  test('docx_search semantic mode should be tracked as explicit capability gap', async () => {
+  test('docx_search semantic mode should use cached block embeddings and return scoped matches', async () => {
     await runCapabilityCase({
       caseId: SEMANTIC_CASE_ID,
-      description: '验证 docx_search semantic 模式未实现时输出显式能力缺口证据。',
-      expectedOutcome: 'explicit_gap',
-      scenarioTags: ['docx', 'explicit-gap', 'semantic-search'],
+      description: '验证 docx_search semantic 模式按 block 建立缓存索引，并在重复查询时复用缓存。',
+      expectedOutcome: 'success',
+      scenarioTags: ['docx', 'semantic-search', 'cached-index'],
       requiredFixtures: [FIXTURE_SOURCE],
       fixtureCopies: [{ from: FIXTURE_SOURCE, to: 'input.docx' }],
       buildExecutionOutcome: (result) => {
@@ -61,14 +66,39 @@ describe('capability/docx explicit gap', () => {
         }
       },
       execute: async (runtime) => {
+        let embedCallCount = 0
+        const ctx = {
+          ...runtime.ctx,
+          embeddingService: {
+            embed: async (texts: string | string[]) => {
+              embedCallCount += 1
+              const list = Array.isArray(texts) ? texts : [texts]
+              const rows = list.map((text) => {
+                const raw = String(text || '').toLowerCase()
+                if (raw.includes('hello') || raw.includes('fixture')) {
+                  return [1, 0, 0, 0]
+                }
+                if (raw.includes('summary') || raw.includes('overview')) {
+                  return [0, 1, 0, 0]
+                }
+                return [0, 0, 1, 0]
+              })
+              return {
+                data: Float32Array.from(rows.flat()),
+                dims: [rows.length, 4] as [number, number]
+              }
+            }
+          }
+        }
+
         const built = buildDocxCapabilityTools({
-          ctx: runtime.ctx,
+          ctx,
           runId: runtime.runId,
           taskId: runtime.taskId,
           workspaceRootPath: runtime.workspaceRoot,
           safePreviewChars: 1400,
           emitActivity: (activity) => {
-            runtime.ctx.sendEvent({
+            ctx.sendEvent({
               type: 'activity',
               runId: runtime.runId,
               taskId: runtime.taskId,
@@ -89,33 +119,61 @@ describe('capability/docx explicit gap', () => {
         const semanticSearchResult = asRecord(
           (await searchTool.invoke({
             docId,
-            query: 'semantic test',
+            query: 'greeting fixture text',
             mode: 'semantic'
+          })) as JsonValue
+        )
+        const scopedSemanticSearchResult = asRecord(
+          (await searchTool.invoke({
+            docId,
+            query: 'greeting fixture text',
+            mode: 'semantic',
+            scope: {
+              blockIds: [asString(asRecordArray(asRecord(semanticSearchResult).matches)[0]?.blockId)]
+            }
           })) as JsonValue
         )
 
         return {
           openResult,
-          semanticSearchResult
+          semanticSearchResult,
+          scopedSemanticSearchResult,
+          embedCallCount
         }
       },
       assert: async (result, runtime) => {
         const warnings = asStringArray(asRecord(result.semanticSearchResult).warnings)
+        const matches = asRecordArray(asRecord(result.semanticSearchResult).matches)
+        const scopedMatches = asRecordArray(asRecord(result.scopedSemanticSearchResult).matches)
         recordAssertion(runtime.assertions, {
           id: 'docx.semantic.open-ok',
           pass: asBoolean(asRecord(result.openResult).ok),
           details: asString(asRecord(result.openResult).error)
         })
         recordAssertion(runtime.assertions, {
-          id: 'docx.semantic.mode-invalid-input',
+          id: 'docx.semantic.mode-ok',
           pass:
-            asBoolean(asRecord(result.semanticSearchResult).ok) === false &&
-            asString(asRecord(result.semanticSearchResult).code) === 'invalid_input',
+            asBoolean(asRecord(result.semanticSearchResult).ok) &&
+            asString(asRecord(result.semanticSearchResult).code) === 'ok' &&
+            matches.length > 0 &&
+            matches.some((match) => asString(match.text).includes('Hello from fixture')),
           details: JSON.stringify(asRecord(result.semanticSearchResult))
         })
         recordAssertion(runtime.assertions, {
-          id: 'docx.semantic.mode-warning-present',
-          pass: warnings.some((warning) => warning.includes('future release')),
+          id: 'docx.semantic.scope-applied',
+          pass:
+            scopedMatches.length === 1 &&
+            asString(scopedMatches[0].text).includes('Hello from fixture'),
+          details: JSON.stringify(asRecord(result.scopedSemanticSearchResult))
+        })
+        recordAssertion(runtime.assertions, {
+          id: 'docx.semantic.cache-reused',
+          pass: Number(result.embedCallCount) === 3,
+          details: `embedCallCount=${String(result.embedCallCount)}`
+        })
+        recordAssertion(runtime.assertions, {
+          id: 'docx.semantic.no-gap-warning',
+          pass: warnings.length === 0,
           details: warnings.join('; ')
         })
       }
@@ -123,9 +181,9 @@ describe('capability/docx explicit gap', () => {
 
     const report = await readLatestCaseReportArtifacts('main-ai-capability', SEMANTIC_CASE_ID)
     expect(report.assertions.caseStatus).toBe('passed')
-    expect(report.metrics.executionStatus).toBe('failed')
-    expect(report.metrics.executionResultCode).toBe('invalid_input')
-    expect(report.signals.expectedOutcome).toBe('explicit_gap')
+    expect(report.metrics.executionStatus).toBe('completed')
+    expect(report.metrics.executionResultCode).toBe('ok')
+    expect(report.signals.expectedOutcome).toBe('success')
   })
 
   test('docx_render_preview png/pdf should be tracked as explicit capability gap', async () => {

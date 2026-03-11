@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { XMLSerializer } from '@xmldom/xmldom'
 import {
   Paragraph,
   patchDocument,
@@ -12,8 +13,8 @@ import {
 import { injectPatchTag } from './anchorInjector'
 import {
   buildBlockIndex,
-  extractBlockText,
   loadDocxBundle,
+  extractBlockText,
   paragraphNodeToSpec,
   type BlockIndex,
   type IndexedNode
@@ -34,6 +35,35 @@ type ApplyOpsResult = {
 
 const isElementNode = (value: Node | null): value is Element => {
   return value !== null && value.nodeType === 1
+}
+
+const collectNodeText = (node: Element): string => {
+  let text = ''
+  const stack: Node[] = [node]
+  while (stack.length > 0) {
+    const current = stack.pop()
+    if (!current) continue
+    if (current.nodeType === 3) {
+      text += current.nodeValue || ''
+      continue
+    }
+    if (!isElementNode(current)) continue
+    const name = current.localName
+    if (name === 'tab') {
+      text += '\t'
+      continue
+    }
+    if (name === 'br' || name === 'cr') {
+      text += '\n'
+      continue
+    }
+    const children = current.childNodes
+    for (let index = children.length - 1; index >= 0; index -= 1) {
+      const child = children.item(index)
+      if (child) stack.push(child)
+    }
+  }
+  return text
 }
 
 const childElements = (node: Element, localName?: string): Element[] => {
@@ -170,6 +200,101 @@ const loadIndex = async (buffer: Buffer): Promise<BlockIndex> => {
   return buildBlockIndex(bundle.documentDom)
 }
 
+const writeDocumentXml = async (input: { zip: import('jszip').default; doc: Document }): Promise<Buffer> => {
+  const xml = new XMLSerializer().serializeToString(input.doc)
+  input.zip.file('word/document.xml', xml)
+  return await input.zip.generateAsync({
+    type: 'nodebuffer',
+    compression: 'DEFLATE'
+  })
+}
+
+const textElementsInNode = (node: Element): Element[] => {
+  const out: Element[] = []
+  const stack: Node[] = [node]
+  while (stack.length > 0) {
+    const current = stack.pop()
+    if (!current || !isElementNode(current)) continue
+    if (current.localName === 't') {
+      out.push(current)
+      continue
+    }
+    const children = current.childNodes
+    for (let index = children.length - 1; index >= 0; index -= 1) {
+      const child = children.item(index)
+      if (child) stack.push(child)
+    }
+  }
+  return out
+}
+
+const textElementValue = (node: Element): string => {
+  return node.textContent || ''
+}
+
+const setTextElementValue = (node: Element, value: string) => {
+  while (node.firstChild) {
+    node.removeChild(node.firstChild)
+  }
+  node.appendChild(node.ownerDocument.createTextNode(value))
+}
+
+const replaceSingleOccurrenceInTextElements = (
+  textElements: Element[],
+  query: string,
+  replacement: string,
+  fromIndex: number
+): number => {
+  const combined = textElements.map((node) => textElementValue(node)).join('')
+  const start = combined.indexOf(query, Math.max(0, fromIndex))
+  if (start < 0) return -1
+
+  const end = start + query.length
+  let cursor = 0
+  let inserted = false
+
+  for (const textElement of textElements) {
+    const text = textElementValue(textElement)
+    const nodeStart = cursor
+    const nodeEnd = cursor + text.length
+    cursor = nodeEnd
+
+    if (nodeEnd <= start || nodeStart >= end) continue
+
+    const beforePart = nodeStart < start ? text.slice(0, start - nodeStart) : ''
+    const afterPart = nodeEnd > end ? text.slice(end - nodeStart) : ''
+    const nextText = `${beforePart}${inserted ? '' : replacement}${afterPart}`
+    setTextElementValue(textElement, nextText)
+    inserted = true
+  }
+
+  return start
+}
+
+const replaceTextInParagraphNode = (
+  paragraph: Element,
+  query: string,
+  replacement: string,
+  replaceAll: boolean
+): boolean => {
+  let changed = false
+  let searchFrom = 0
+  while (true) {
+    const textElements = textElementsInNode(paragraph)
+    if (textElements.length === 0) return changed
+    const replacedAt = replaceSingleOccurrenceInTextElements(
+      textElements,
+      query,
+      replacement,
+      searchFrom
+    )
+    if (replacedAt < 0) return changed
+    changed = true
+    if (!replaceAll) return changed
+    searchFrom = replacedAt + replacement.length
+  }
+}
+
 const applyStructuralOp = async (input: {
   buffer: Buffer
   op:
@@ -287,62 +412,87 @@ const applyStructuralOp = async (input: {
   }
 }
 
-const buildReplaceTextOps = async (
+const structuralOpTargetRank = (
+  index: BlockIndex,
+  op:
+    | Extract<DocxOp, { type: 'replace_block' }>
+    | Extract<DocxOp, { type: 'insert_after' | 'insert_before' }>
+    | Extract<DocxOp, { type: 'delete_block' }>
+    | Extract<DocxOp, { type: 'update_table_cell' }>
+): number => {
+  if (op.type === 'insert_after' || op.type === 'insert_before') {
+    const node = index.nodesById.get(op.anchorBlockId)
+    return typeof node?.bodyIndex === 'number' ? node.bodyIndex : -1
+  }
+  const node = index.nodesById.get(op.blockId)
+  return typeof node?.bodyIndex === 'number' ? node.bodyIndex : -1
+}
+
+const applyReplaceTextOp = async (
   buffer: Buffer,
   op: Extract<DocxOp, { type: 'replace_text' }>
-): Promise<{ ops: DocxOp[]; warnings: string[] }> => {
-  const index = await loadIndex(buffer)
+): Promise<{ buffer: Buffer; changedBlocks: DocxChangedBlock[]; warnings: string[] }> => {
+  const bundle = await loadDocxBundle(buffer)
+  const index = buildBlockIndex(bundle.documentDom)
   const warnings: string[] = []
   const selected = Array.isArray(op.blockIds) && op.blockIds.length > 0 ? op.blockIds : index.outline.map((item) => item.blockId)
-  const out: DocxOp[] = []
+  const changedBlocks: DocxChangedBlock[] = []
 
   for (const blockId of selected) {
     const node = index.nodesById.get(blockId)
     if (!node) continue
 
     if (node.kind === 'paragraph') {
-      const current = extractBlockText(index, blockId)
-      const replaced = replaceLiteral(current, op.query, op.replace, Boolean(op.replaceAll))
-      if (current === replaced) continue
-      const spec = paragraphNodeToSpec(node.node)
-      out.push({
-        type: 'replace_block',
+      const beforeText = extractBlockText(index, blockId)
+      const changed = replaceTextInParagraphNode(
+        node.node,
+        op.query,
+        op.replace,
+        Boolean(op.replaceAll)
+      )
+      if (!changed) continue
+      const afterText = collectNodeText(node.node)
+      changedBlocks.push({
+        action: 'replace_text',
         blockId,
-        content: {
-          kind: 'paragraph',
-          style: spec.style,
-          runs: [{ text: replaced }]
-        }
+        beforeText,
+        afterText
       })
       continue
     }
 
     if (node.kind === 'table_cell') {
       const paragraphs = childElements(node.node, 'p')
-      const updated = paragraphs.map((paragraph) => {
-        const spec = paragraphNodeToSpec(paragraph)
-        const current = spec.runs.map((run) => run.text).join('')
-        const replaced = replaceLiteral(current, op.query, op.replace, Boolean(op.replaceAll))
-        return {
-          ...spec,
-          runs: [{ text: replaced }]
-        }
-      })
       const before = extractBlockText(index, blockId)
-      const after = updated.map((paragraph) => paragraph.runs.map((run) => run.text).join('')).join('\n')
-      if (before === after) continue
-      out.push({
-        type: 'update_table_cell',
+      let changed = false
+      for (const paragraph of paragraphs) {
+        const paragraphChanged = replaceTextInParagraphNode(
+          paragraph,
+          op.query,
+          op.replace,
+          Boolean(op.replaceAll)
+        )
+        if (paragraphChanged) changed = true
+      }
+      if (!changed) continue
+      const after = collectNodeText(node.node)
+      changedBlocks.push({
+        action: 'replace_text',
         blockId,
-        content: updated
+        beforeText: before,
+        afterText: after
       })
     }
   }
 
-  if (out.length === 0) {
+  if (changedBlocks.length === 0) {
     warnings.push(`replace_text not found: ${op.query}`)
   }
-  return { ops: out, warnings }
+  return {
+    buffer: await writeDocumentXml({ zip: bundle.zip, doc: bundle.documentDom }),
+    changedBlocks,
+    warnings
+  }
 }
 
 export const applyDocxOps = async (input: {
@@ -352,21 +502,49 @@ export const applyDocxOps = async (input: {
   let workingBuffer = input.buffer
   const changedBlocks: DocxChangedBlock[] = []
   const warnings: string[] = []
+  const originalIndex = await loadIndex(input.buffer)
+  const orderedOps: DocxOp[] = []
+  let segment: Array<{
+    op:
+      | Extract<DocxOp, { type: 'replace_block' }>
+      | Extract<DocxOp, { type: 'insert_after' | 'insert_before' }>
+      | Extract<DocxOp, { type: 'delete_block' }>
+      | Extract<DocxOp, { type: 'update_table_cell' }>
+    inputOrder: number
+  }> = []
 
-  for (const op of input.ops) {
+  const flushStructuralSegment = () => {
+    if (segment.length === 0) return
+    segment
+      .slice()
+      .sort((left, right) => {
+        const leftRank = structuralOpTargetRank(originalIndex, left.op)
+        const rightRank = structuralOpTargetRank(originalIndex, right.op)
+        if (leftRank !== rightRank) return rightRank - leftRank
+        return left.inputOrder - right.inputOrder
+      })
+      .forEach((entry) => {
+        orderedOps.push(entry.op)
+      })
+    segment = []
+  }
+
+  input.ops.forEach((op, inputOrder) => {
     if (op.type === 'replace_text') {
-      const generated = await buildReplaceTextOps(workingBuffer, op)
-      warnings.push(...generated.warnings)
-      for (const generatedOp of generated.ops) {
-        if (generatedOp.type === 'replace_text') continue
-        const applied = await applyStructuralOp({
-          buffer: workingBuffer,
-          op: generatedOp
-        })
-        workingBuffer = applied.buffer
-        if (applied.changed) changedBlocks.push(applied.changed)
-        if (applied.warning) warnings.push(applied.warning)
-      }
+      flushStructuralSegment()
+      orderedOps.push(op)
+      return
+    }
+    segment.push({ op, inputOrder })
+  })
+  flushStructuralSegment()
+
+  for (const op of orderedOps) {
+    if (op.type === 'replace_text') {
+      const replaced = await applyReplaceTextOp(workingBuffer, op)
+      workingBuffer = replaced.buffer
+      changedBlocks.push(...replaced.changedBlocks)
+      warnings.push(...replaced.warnings)
       continue
     }
 

@@ -25,5 +25,5 @@
 ## Impact
 
 - 受影响代码：`tests/ai/harness/*` 报告类型、写入逻辑、读取逻辑与回归测试；相关 suite 用例的断言与报告消费方式。
-- 受影响文档与规格：`doc/testing.md`、`tests/ai/README.md`、现有 OpenSpec 测试报告与测试套件相关 specs。
+- 受影响文档与规格：`doc/test/architecture.md`、`tests/ai/README.md`、现有 OpenSpec 测试报告与测试套件相关 specs。
 - 受影响系统：后续基于测试报告做聚合分析、优化建议生成或自动化诊断的 Codex/AI 流程。

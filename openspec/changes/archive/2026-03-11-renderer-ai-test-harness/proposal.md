@@ -29,7 +29,7 @@
   - `e2e` 与 `ai-live` 使用 `Playwright (Electron)`
 - 扩展测试报告契约，使 renderer suite 也输出统一的 `events/assertions/metrics/signals/summary`，并允许附带截图、trace、console、DOM 快照等 UI 证据。
 - 为 chat execution UI 增加可自动化约束：关键交互点、状态面板和阻塞交互必须具备稳定 automation selector 或等价可定位契约。
-- 补充 `doc/testing.md` 与 `doc/project-structure.md`，使目录、suite 分类、命令、报告与 AI 使用方式保持一致。
+- 补充 `doc/test/architecture.md` 与 `doc/project-structure.md`，使目录、suite 分类、命令、报告与 AI 使用方式保持一致。
 
 ## Capabilities
 

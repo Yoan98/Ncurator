@@ -11,7 +11,7 @@ import type {
 import type { AiRunContext } from '../../types'
 import { emitFileArtifactEvent } from '../../events/fileArtifacts'
 import { resolveWorkspacePath } from '../terminal_exec/terminalPolicy'
-import type { DocxOp } from './types'
+import type { DocxOp, DocxOutlineBlock, DocxSearchMatch } from './types'
 import { getDocxWorkerClient } from './worker/docxWorkerClient'
 import type { DocxWorkerRequest } from './worker/protocol'
 
@@ -33,12 +33,97 @@ type DocxCapabilityToolsInput = {
 export type DocxCapabilityToolsRuntimeState = {
   lastDocId?: string
   sourcePathByDocId: Map<string, string>
+  semanticIndexByDocId: Map<string, SemanticDocIndex>
+  snapshotEntryByDocId: Map<string, DocxSnapshotLineageEntry>
+}
+
+type SemanticDocIndexEntry = {
+  blockId: string
+  text: string
+  embedding: Float32Array
+}
+
+type SemanticDocIndex = {
+  entries: SemanticDocIndexEntry[]
+}
+
+type DocxSnapshotLineageEntry = {
+  docId: string
+  parentDocId?: string
+  createdAt: number
 }
 
 const clipText = (text: string, maxChars: number) => {
   const raw = String(text || '')
   if (raw.length <= maxChars) return raw
   return raw.slice(0, maxChars)
+}
+
+const isSemanticSearchableBlock = (
+  block: DocxOutlineBlock
+): block is Extract<DocxOutlineBlock, { type: 'paragraph' | 'table_cell' }> => {
+  return block.type === 'paragraph' || block.type === 'table_cell'
+}
+
+const splitEmbeddingRows = (data: Float32Array, dims: [number, number]): Float32Array[] => {
+  const rowCount = Math.max(0, Number(dims[0] || 0))
+  const colCount = Math.max(0, Number(dims[1] || 0))
+  if (rowCount <= 0 || colCount <= 0) return []
+
+  const rows: Float32Array[] = []
+  for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+    const start = rowIndex * colCount
+    const end = start + colCount
+    rows.push(data.slice(start, end))
+  }
+  return rows
+}
+
+const dotProduct = (left: Float32Array, right: Float32Array): number => {
+  const size = Math.min(left.length, right.length)
+  let total = 0
+  for (let index = 0; index < size; index += 1) {
+    total += left[index] * right[index]
+  }
+  return total
+}
+
+const buildSemanticMatches = (input: {
+  entries: SemanticDocIndexEntry[]
+  queryEmbedding: Float32Array
+  scopeBlockIds: string[]
+  queryText: string
+}): DocxSearchMatch[] => {
+  const scope = input.scopeBlockIds.length > 0 ? new Set(input.scopeBlockIds) : null
+  const normalizedQuery = input.queryText.trim().toLowerCase()
+  const scored = input.entries
+    .filter((entry) => (scope ? scope.has(entry.blockId) : true))
+    .map((entry) => {
+      const text = entry.text.trim()
+      const textLower = text.toLowerCase()
+      const tokenBoost =
+        normalizedQuery && textLower.includes(normalizedQuery)
+          ? 0.35
+          : normalizedQuery
+            ? normalizedQuery
+                .split(/\s+/)
+                .filter(Boolean)
+                .reduce((score, token) => (textLower.includes(token) ? score + 0.12 : score), 0)
+            : 0
+      return {
+        blockId: entry.blockId,
+        text: entry.text,
+        score: dotProduct(entry.embedding, input.queryEmbedding) + tokenBoost
+      }
+    })
+    .filter((item) => item.text.trim().length > 0)
+    .sort((a, b) => b.score - a.score)
+
+  return scored.slice(0, 8).map((item) => ({
+    blockId: item.blockId,
+    text: item.text,
+    offsets: []
+  }))
 }
 
 const resolveDocxPath = (input: {
@@ -147,6 +232,17 @@ const applyOpsSchema = z.object({
   ops: z.array(docOpSchema).min(1)
 })
 
+const historySchema = z.object({
+  docId: z.string().min(1),
+  maxDepth: z.number().int().min(1).max(100).optional()
+})
+
+const rollbackSchema = z.object({
+  docId: z.string().min(1),
+  targetDocId: z.string().min(1).optional(),
+  steps: z.number().int().min(1).max(50).optional()
+})
+
 const renderPreviewSchema = z.object({
   docId: z.string().min(1),
   format: z.enum(['html', 'png', 'pdf']),
@@ -184,7 +280,9 @@ const toFailure = (input: {
 
 export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
   const state: DocxCapabilityToolsRuntimeState = {
-    sourcePathByDocId: new Map()
+    sourcePathByDocId: new Map(),
+    semanticIndexByDocId: new Map(),
+    snapshotEntryByDocId: new Map()
   }
 
   const workspaceRootPath = path.resolve(input.workspaceRootPath)
@@ -227,6 +325,135 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
       ...request,
       runId: input.runId
     } as DocxWorkerRequest, 45_000)
+  }
+
+  const buildSemanticDocIndex = async (docId: string): Promise<SemanticDocIndex> => {
+    const cached = state.semanticIndexByDocId.get(docId)
+    if (cached) return cached
+
+    const outlineResponse = await callWorker({
+      action: 'outline',
+      payload: {
+        docId,
+        maxBlocks: 2000,
+        includeTables: true,
+        includeCells: true
+      }
+    })
+    if (!outlineResponse.ok) {
+      throw new Error(outlineResponse.error)
+    }
+    if (outlineResponse.payload.action !== 'outline') {
+      throw new Error('worker protocol mismatch (semantic outline)')
+    }
+
+    const searchableBlocks = outlineResponse.payload.blocks.filter(isSemanticSearchableBlock)
+    const texts = searchableBlocks.map((block) => block.text.trim()).filter(Boolean)
+    const blocks = searchableBlocks.filter((block) => block.text.trim().length > 0)
+
+    if (blocks.length === 0) {
+      const emptyIndex = { entries: [] }
+      state.semanticIndexByDocId.set(docId, emptyIndex)
+      return emptyIndex
+    }
+
+    const embeddings = await input.ctx.embeddingService.embed(texts)
+    const rows = splitEmbeddingRows(embeddings.data, embeddings.dims)
+    if (rows.length !== blocks.length) {
+      throw new Error(
+        `semantic index row mismatch: blocks=${String(blocks.length)}, rows=${String(rows.length)}`
+      )
+    }
+
+    const index: SemanticDocIndex = {
+      entries: blocks.map((block, indexRow) => ({
+        blockId: block.blockId,
+        text: block.text,
+        embedding: rows[indexRow]
+      }))
+    }
+    state.semanticIndexByDocId.set(docId, index)
+    return index
+  }
+
+  const registerSnapshot = (docId: string, parentDocId?: string) => {
+    state.snapshotEntryByDocId.set(docId, {
+      docId,
+      parentDocId,
+      createdAt: Date.now()
+    })
+  }
+
+  const buildSnapshotHistory = (docId: string, maxDepth: number): DocxSnapshotLineageEntry[] => {
+    const entries: DocxSnapshotLineageEntry[] = []
+    let currentDocId = docId
+    let traversed = 0
+
+    while (currentDocId && traversed < maxDepth) {
+      const entry = state.snapshotEntryByDocId.get(currentDocId)
+      if (!entry) break
+      entries.push(entry)
+      currentDocId = entry.parentDocId || ''
+      traversed += 1
+    }
+
+    return entries
+  }
+
+  const resolveRollbackTarget = (
+    docId: string,
+    targetDocId?: string,
+    steps?: number
+  ): { ok: true; targetDocId: string; stepsApplied: number } | { ok: false; error: string } => {
+    const currentEntry = state.snapshotEntryByDocId.get(docId)
+    if (!currentEntry) {
+      return {
+        ok: false,
+        error: 'docId is not tracked in current docx snapshot history'
+      }
+    }
+
+    if (targetDocId) {
+      let cursor = docId
+      let stepsApplied = 0
+      while (cursor) {
+        if (cursor === targetDocId) {
+          return {
+            ok: true,
+            targetDocId,
+            stepsApplied
+          }
+        }
+        const entry = state.snapshotEntryByDocId.get(cursor)
+        if (!entry?.parentDocId) break
+        cursor = entry.parentDocId
+        stepsApplied += 1
+      }
+      return {
+        ok: false,
+        error: 'targetDocId must be the current snapshot or one of its ancestors'
+      }
+    }
+
+    let cursor = docId
+    const targetSteps = Math.max(1, Number(steps || 1))
+    let stepsApplied = 0
+    while (stepsApplied < targetSteps) {
+      const entry = state.snapshotEntryByDocId.get(cursor)
+      if (!entry?.parentDocId) {
+        return {
+          ok: false,
+          error: 'rollback target exceeds available parent snapshots'
+        }
+      }
+      cursor = entry.parentDocId
+      stepsApplied += 1
+    }
+    return {
+      ok: true,
+      targetDocId: cursor,
+      stepsApplied
+    }
   }
 
   const docxOpenTool = tool(
@@ -295,6 +522,7 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
 
         state.lastDocId = workerResponse.payload.docId
         state.sourcePathByDocId.set(workerResponse.payload.docId, sourcePath)
+        registerSnapshot(workerResponse.payload.docId)
         const out = {
           ok: true,
           code: 'ok' as const,
@@ -473,6 +701,50 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
       const toolName = 'docx_search'
       const toolCallId = emitStarted(toolName, args)
       try {
+        if (args.mode === 'semantic') {
+          const semanticIndex = await buildSemanticDocIndex(args.docId)
+          const queryEmbeddingResponse = await input.ctx.embeddingService.embed(args.query)
+          const queryEmbeddingRows = splitEmbeddingRows(
+            queryEmbeddingResponse.data,
+            queryEmbeddingResponse.dims
+          )
+          const queryEmbedding = queryEmbeddingRows[0]
+          if (!queryEmbedding || queryEmbedding.length === 0) {
+            const out = toFailure({
+              code: 'failed',
+              error: 'semantic query embedding is empty'
+            })
+            emitResult(toolName, toolCallId, out, out.error)
+            return out
+          }
+
+          const matches = buildSemanticMatches({
+            entries: semanticIndex.entries,
+            queryEmbedding,
+            scopeBlockIds: args.scope?.blockIds || [],
+            queryText: args.query
+          })
+          const warnings =
+            semanticIndex.entries.length === 0
+              ? ['no searchable paragraph or table cell blocks found for semantic search']
+              : []
+          const out = {
+            ok: true,
+            code: 'ok' as const,
+            summary: `semantic search done (${matches.length} matches)`,
+            matches,
+            warnings
+          }
+          emitResult(toolName, toolCallId, {
+            ok: out.ok,
+            code: out.code,
+            summary: out.summary,
+            matchCount: out.matches.length,
+            warnings: out.warnings
+          })
+          return out
+        }
+
         const workerResponse = await callWorker({
           action: 'search',
           payload: {
@@ -523,7 +795,8 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
     },
     {
       name: 'docx_search',
-      description: 'Search blocks in a doc using literal/regex mode (semantic reserved for future release).',
+      description:
+        'Search blocks in a doc using literal/regex mode, or semantic block retrieval with cached embeddings.',
       schema: searchSchema
     }
   )
@@ -573,6 +846,7 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
         state.lastDocId = workerResponse.payload.newDocId
         const sourcePath = state.sourcePathByDocId.get(args.docId)
         if (sourcePath) state.sourcePathByDocId.set(workerResponse.payload.newDocId, sourcePath)
+        registerSnapshot(workerResponse.payload.newDocId, args.docId)
         const out = {
           ok: true,
           code: 'ok' as const,
@@ -612,6 +886,117 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
       description:
         'Apply structured docx operations and return a new immutable docId snapshot with changed blocks.',
       schema: applyOpsSchema
+    }
+  )
+
+  const docxGetHistoryTool = tool(
+    async (args) => {
+      const toolName = 'docx_get_history'
+      const toolCallId = emitStarted(toolName, args)
+      try {
+        const history = buildSnapshotHistory(args.docId, Number(args.maxDepth || 10))
+        if (history.length === 0) {
+          const out = toFailure({
+            code: 'invalid_input',
+            error: 'docId is not tracked in current docx snapshot history'
+          })
+          emitResult(toolName, toolCallId, out, out.error)
+          return out
+        }
+
+        const out = {
+          ok: true,
+          code: 'ok' as const,
+          summary: `snapshot history loaded (${history.length} items)`,
+          currentDocId: args.docId,
+          snapshots: history
+        }
+        emitResult(toolName, toolCallId, {
+          ok: out.ok,
+          code: out.code,
+          summary: out.summary,
+          snapshotCount: out.snapshots.length
+        })
+        return out
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error)
+        const out = toFailure({ code: 'failed', error: msg })
+        emitResult(toolName, toolCallId, out, out.error)
+        throw error
+      }
+    },
+    {
+      name: 'docx_get_history',
+      description:
+        'Inspect the immutable docx snapshot lineage for the current run. Useful for confirm/rollback flows before save.',
+      schema: historySchema
+    }
+  )
+
+  const docxRollbackTool = tool(
+    async (args) => {
+      const toolName = 'docx_rollback'
+      const toolCallId = emitStarted(toolName, args)
+      try {
+        input.emitActivity({
+          actionType: 'docx_rollback',
+          status: 'started',
+          summary: `准备回滚文档快照: ${args.docId}`
+        })
+
+        const resolved = resolveRollbackTarget(args.docId, args.targetDocId, args.steps)
+        if (!resolved.ok) {
+          const out = toFailure({
+            code: 'invalid_input',
+            error: resolved.error
+          })
+          emitResult(toolName, toolCallId, out, out.error)
+          input.emitActivity({
+            actionType: 'docx_rollback',
+            status: 'failed',
+            summary: out.summary
+          })
+          return out
+        }
+
+        state.lastDocId = resolved.targetDocId
+        const sourcePath = state.sourcePathByDocId.get(args.docId)
+        if (sourcePath && !state.sourcePathByDocId.has(resolved.targetDocId)) {
+          state.sourcePathByDocId.set(resolved.targetDocId, sourcePath)
+        }
+
+        const out = {
+          ok: true,
+          code: 'ok' as const,
+          summary: `rollback ready (${resolved.stepsApplied} step${resolved.stepsApplied === 1 ? '' : 's'}, not saved)`,
+          docId: resolved.targetDocId,
+          previousDocId: args.docId,
+          stepsApplied: resolved.stepsApplied
+        }
+        emitResult(toolName, toolCallId, out)
+        input.emitActivity({
+          actionType: 'docx_rollback',
+          status: 'completed',
+          summary: `已切回草稿快照: ${resolved.targetDocId}`
+        })
+        return out
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error)
+        const out = toFailure({ code: 'failed', error: msg })
+        emitResult(toolName, toolCallId, out, out.error)
+        input.emitActivity({
+          actionType: 'docx_rollback',
+          status: 'failed',
+          summary: `回滚失败: ${msg}`
+        })
+        throw error
+      }
+    },
+    {
+      name: 'docx_rollback',
+      description:
+        'Move back to an ancestor docx snapshot in the current run without writing files. Use before user confirmation.',
+      schema: rollbackSchema
     }
   )
 
@@ -863,6 +1248,8 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
       docxGetBlockTool,
       docxSearchTool,
       docxApplyOpsTool,
+      docxGetHistoryTool,
+      docxRollbackTool,
       docxRenderPreviewTool,
       docxSaveTool,
       docxValidateTool

@@ -43,9 +43,9 @@
 
 ## 7. 文档与规范同步
 
-- [x] 7.1 更新 `doc/testing.md`，加入 `main / renderer / e2e` 分层、命令、目录与报告说明
+- [x] 7.1 更新 `doc/test/architecture.md`，加入 `main / renderer / e2e` 分层、命令、目录与报告说明
 - [x] 7.2 更新 `doc/project-structure.md`，补充 `tests/main/**`、`tests/renderer/**`、`tests/e2e/**` 的放置规则
-- [x] 7.3 将原 `tests/**` README 内容统一收敛到 `doc/testing.md`，避免多份文档漂移
+- [x] 7.3 将原 `tests/**` README 内容统一收敛到 `doc/test/architecture.md`，避免多份文档漂移
 
 ## 8. 验证策略
 

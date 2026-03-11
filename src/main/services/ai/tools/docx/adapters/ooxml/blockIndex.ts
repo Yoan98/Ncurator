@@ -79,6 +79,29 @@ const childElements = (node: Element, localName?: string): Element[] => {
   return out
 }
 
+const descendantElements = (node: Element, localName: string): Element[] => {
+  const out: Element[] = []
+  const stack: Node[] = []
+  const children = node.childNodes
+  for (let index = children.length - 1; index >= 0; index -= 1) {
+    const child = children.item(index)
+    if (child) stack.push(child)
+  }
+
+  while (stack.length > 0) {
+    const current = stack.pop()
+    if (!current || !isElementNode(current)) continue
+    if (current.localName === localName) out.push(current)
+    const currentChildren = current.childNodes
+    for (let index = currentChildren.length - 1; index >= 0; index -= 1) {
+      const child = currentChildren.item(index)
+      if (child) stack.push(child)
+    }
+  }
+
+  return out
+}
+
 const firstChildElement = (node: Element, localName: string): Element | null => {
   const children = node.childNodes
   for (let i = 0; i < children.length; i += 1) {
@@ -138,7 +161,7 @@ const paragraphStyle = (paragraph: Element): string => {
 
 const paragraphTextRuns = (paragraph: Element): DocxTextRunSpec[] => {
   const runs: DocxTextRunSpec[] = []
-  const runNodes = childElements(paragraph, 'r')
+  const runNodes = descendantElements(paragraph, 'r')
   for (const runNode of runNodes) {
     const text = collectText(runNode)
     if (!text) continue
