@@ -262,7 +262,27 @@ AI 消费 renderer / e2e 报告时，最小输入集合建议为：
 4. 最后按 `artifacts.json` 打开 DOM、console、截图、trace 做精确定位。
 5. 修复后优先回归同一 case，再回归同 suite 的相邻关键流。
 
-## 8. 扩展规则（目标目录口径）
+## 8. AI阶段化测试顺序（能力先行）
+
+推荐按以下顺序逐层放大测试半径：
+
+1. `tool capability`
+   - 先验证工具本身是否具备可用能力（正确性、边界、安全、显式缺口）。
+   - 当前阶段门禁默认只看 `tests/main/ai/capability/**`。
+2. `human 单任务`
+   - 在 tool 已可用后，再验证 human 子图能否完成单任务与阻塞收敛。
+3. `main context`
+   - 验证 main graph 的上下文收集、scope 语义与阻塞契约。
+4. `plan 质量`
+   - 验证计划拆解是否合理、任务粒度与收敛策略是否稳定。
+5. `端到端 AI`
+   - 最后验证完整 `renderer -> preload -> main -> renderer` 闭环质量。
+
+说明：
+- 若某阶段存在稳定性问题，应优先在该阶段收敛后再进入下一阶段。
+- `explicit_gap` 属于“能力现状显式标注”，不应混淆为 harness 失败。
+
+## 9. 扩展规则（目标目录口径）
 
 新增 main AI capability 用例时：
 1. 新建 `tests/main/ai/capability/*.test.ts`
@@ -296,11 +316,12 @@ AI 消费 renderer / e2e 报告时，最小输入集合建议为：
 4. 缺少 `AI_LIVE_ENABLE=1` 时默认 skip，不污染主门禁
 5. 让 AI 在带目标约束的真实 UI 上探索，并输出可修复证据
 
-## 9. 执行命令（目标口径）
+## 10. 执行命令（目标口径）
 
 - 当前仓库已实现的命令：
   - `pnpm test:main`
   - `pnpm test:main:ai:capability`
+  - `pnpm test:main:ai:capability:analyze`
   - `pnpm test:main:ai:runtime`
   - `pnpm test:main:ai:human-live`
   - `pnpm test:main:workspace:service`

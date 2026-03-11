@@ -65,9 +65,18 @@ const extractToolResultCode = (event: Extract<AiRunEvent, { type: 'tool_call_res
   if (isJsonRecord(event.outputPreview)) {
     const code = event.outputPreview.code
     if (typeof code === 'string' && code.trim()) return code
+
+    const ok = event.outputPreview.ok
+    if (ok === true) return 'ok'
+    if (ok === false) return event.error ? 'error' : 'failed'
   }
+
+  if (Array.isArray(event.outputPreview)) {
+    return event.error ? 'error' : 'ok'
+  }
+
   if (event.error) return 'error'
-  return 'unknown'
+  return 'ok'
 }
 
 const extractWarnings = (event: Extract<AiRunEvent, { type: 'tool_call_result' }>): string[] => {
