@@ -14,6 +14,8 @@
 - **WHEN** 一个网页 URL 导入成功并产生文档记录
 - **THEN** 文档元数据 MUST 包含 url、sourceType=web、fetchedAt 与对应的网页资料来源标识，以便 UI 展示、后续刷新与 `@` 范围选择复用
 
+## ADDED Requirements
+
 ### Requirement: 网页资料来源必须具备稳定 identity 规则
 系统 MUST 为网页资料来源定义稳定的 identity 规则，用于判定重复导入、后续刷新与范围引用；同一规范化 URL 在同一工作区上下文中 MUST 复用既有网页资料来源，而不是重复创建多个等价来源。
 
@@ -24,8 +26,6 @@
 #### Scenario: URL 仅存在无关差异
 - **WHEN** 用户导入的 URL 与现有来源仅在大小写、尾部斜杠或不影响页面身份的等价表示上不同
 - **THEN** 系统 MUST 依据规范化结果将其识别为同一网页资料来源
-
-## ADDED Requirements
 
 ### Requirement: 网页资料来源可在统一范围选择中被引用
 系统 MUST 将导入成功的网页资料来源暴露给统一范围选择模型，使其能够在聊天 `@` 与搜索范围选择中作为独立来源被引用。

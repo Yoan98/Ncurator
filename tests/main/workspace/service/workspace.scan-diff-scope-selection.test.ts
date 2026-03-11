@@ -1,7 +1,12 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, test } from 'vitest'
-import { buildWorkspaceScopeSelections } from '../../../../src/main/services/sourceScope/selection'
+import {
+  buildWorkspaceScopeSelections,
+  collectScopeDocumentIds,
+  scopeMatchesQuery,
+  shouldIncludeScopeInSearch
+} from '../../../../src/main/services/sourceScope/selection'
 import { WorkspaceSourceService } from '../../../../src/main/services/workspace/WorkspaceSourceService'
 import type { WorkspaceNode } from '../../../../src/shared/types'
 import { recordAssertion } from '../../../harness/main/assertions'
@@ -114,6 +119,16 @@ describe('main/workspace/service', () => {
         const alphaFileScope = result.scopes.find(
           (scope) => scope.scopeType === 'file' && scope.relativePath === 'reports/alpha.docx'
         )
+        const searchableScopeKeys = result.scopes
+          .filter((scope) => shouldIncludeScopeInSearch(scope))
+          .map((scope) => [scope.scopeType, scope.relativePath || 'root'].join(':'))
+        const reportsQueryMatches = result.scopes
+          .filter((scope) => scopeMatchesQuery(scope, 'reports'))
+          .map((scope) => scope.relativePath || scope.absolutePath || scope.label)
+        const explicitDocIds =
+          workspaceScope && alphaFileScope
+            ? collectScopeDocumentIds([workspaceScope, alphaFileScope])
+            : []
 
         recordAssertion(runtime.assertions, {
           id: 'scan.only-supported-files',
@@ -148,6 +163,37 @@ describe('main/workspace/service', () => {
           pass:
             alphaFileScope?.documentIds.length === 1 && alphaFileScope.documentIds[0] === 'doc-alpha',
           details: JSON.stringify(alphaFileScope)
+        })
+        recordAssertion(runtime.assertions, {
+          id: 'scope.search-mode-blocks-unprepared-workspace-scope',
+          pass:
+            Boolean(workspaceScope) &&
+            shouldIncludeScopeInSearch(workspaceScope) === false &&
+            workspaceScope?.hasUnpreparedFiles === true,
+          details: JSON.stringify(workspaceScope)
+        })
+        recordAssertion(runtime.assertions, {
+          id: 'scope.search-mode-allows-prepared-file-scope',
+          pass:
+            Boolean(alphaFileScope) &&
+            shouldIncludeScopeInSearch(alphaFileScope) === true &&
+            searchableScopeKeys.includes('file:reports/alpha.docx'),
+          details: JSON.stringify({
+            searchableScopeKeys,
+            alphaFileScope
+          })
+        })
+        recordAssertion(runtime.assertions, {
+          id: 'scope.query-filter-matches-label-or-path',
+          pass:
+            reportsQueryMatches.includes('reports') &&
+            reportsQueryMatches.includes('reports/alpha.docx'),
+          details: JSON.stringify(reportsQueryMatches)
+        })
+        recordAssertion(runtime.assertions, {
+          id: 'scope.collect-document-ids-dedupes-parent-child-overlap',
+          pass: explicitDocIds.length === 1 && explicitDocIds[0] === 'doc-alpha',
+          details: JSON.stringify(explicitDocIds)
         })
         recordAssertion(runtime.assertions, {
           id: 'diff.full-detects-add-remove-change',

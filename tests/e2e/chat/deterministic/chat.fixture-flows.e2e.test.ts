@@ -284,6 +284,7 @@ describe('chat.fixture-flows.e2e', () => {
       await app.page.getByTestId(chatSelectors.sourceScopeField).locator('.ant-select-selector').click()
       await app.page.locator('.ant-select-item-option-content').filter({ hasText: 'E2E 测试工作区' }).click()
       userActionSequence.push('select:e2e-workspace-scope')
+      await app.page.keyboard.press('Escape')
       await app.page.getByTestId(chatSelectors.workspaceContinueButton).click()
       userActionSequence.push('click:chat-workspace-continue-button')
 

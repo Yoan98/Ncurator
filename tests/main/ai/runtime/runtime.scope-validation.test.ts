@@ -59,6 +59,12 @@ describe('main/ai/runtime', () => {
                   import_status: 2,
                   document_id: 'doc-web'
                 }
+              : id === 'web-pending'
+                ? {
+                    id,
+                    import_status: 1,
+                    document_id: 'doc-web-pending'
+                  }
               : null
         }
 
@@ -101,6 +107,24 @@ describe('main/ai/runtime', () => {
           runId: runtime.runId
         })
 
+        const workspacePathUnavailableValidation = await validateSelectedScopesForRun({
+          scopes: [validScope],
+          workspaceStore,
+          webSourceStore,
+          sendEvent: (event) => emittedEvents.push(event),
+          runId: runtime.runId,
+          pathExists: (targetPath) => targetPath !== runtime.workspaceRoot
+        })
+
+        const localScopeUnavailableValidation = await validateSelectedScopesForRun({
+          scopes: [validScope],
+          workspaceStore,
+          webSourceStore,
+          sendEvent: (event) => emittedEvents.push(event),
+          runId: runtime.runId,
+          pathExists: (targetPath) => targetPath === runtime.workspaceRoot
+        })
+
         const unavailableWebValidation = await validateSelectedScopesForRun({
           scopes: [
             {
@@ -110,6 +134,26 @@ describe('main/ai/runtime', () => {
               label: 'missing web source',
               absolutePath: 'https://example.com/missing',
               documentIds: ['doc-missing'],
+              hasUnpreparedFiles: false,
+              preparedDocumentCount: 1,
+              unpreparedFileCount: 0
+            }
+          ],
+          workspaceStore,
+          webSourceStore,
+          sendEvent: (event) => emittedEvents.push(event),
+          runId: runtime.runId
+        })
+
+        const pendingWebValidation = await validateSelectedScopesForRun({
+          scopes: [
+            {
+              scopeType: 'web',
+              sourceType: 'web',
+              sourceId: 'web-pending',
+              label: 'pending web source',
+              absolutePath: 'https://example.com/pending',
+              documentIds: ['doc-web-pending'],
               hasUnpreparedFiles: false,
               preparedDocumentCount: 1,
               unpreparedFileCount: 0
@@ -146,9 +190,13 @@ describe('main/ai/runtime', () => {
           okValidation,
           missingWorkspaceValidation,
           missingBindingValidation,
+          workspacePathUnavailableValidation,
+          localScopeUnavailableValidation,
           unavailableWebValidation,
+          pendingWebValidation,
           emittedEvents,
           webScope,
+          validFilePath,
           readyWebAllowedInSearch: webScope ? shouldIncludeScopeInSearch(webScope) : false,
           localUnpreparedAllowedInSearch: shouldIncludeScopeInSearch(localUnpreparedScope)
         }
@@ -179,12 +227,44 @@ describe('main/ai/runtime', () => {
           details: JSON.stringify(runtimeIssues)
         })
         recordAssertion(runtime.assertions, {
+          id: 'runtime.workspace-path-unavailable-event',
+          pass:
+            result.workspacePathUnavailableValidation.ok === false &&
+            runtimeIssues.some(
+              (event) =>
+                event.code === 'workspace_path_unavailable' && event.workspaceId === 'workspace-1'
+            ),
+          details: JSON.stringify(runtimeIssues)
+        })
+        recordAssertion(runtime.assertions, {
+          id: 'runtime.local-scope-unavailable-event',
+          pass:
+            result.localScopeUnavailableValidation.ok === false &&
+            runtimeIssues.some(
+              (event) =>
+                event.code === 'scope_unavailable' &&
+                event.scopeSourceId === 'workspace-1' &&
+                event.message.includes(result.validFilePath)
+            ),
+          details: JSON.stringify(runtimeIssues)
+        })
+        recordAssertion(runtime.assertions, {
           id: 'runtime.web-scope-unavailable-event',
           pass:
             result.unavailableWebValidation.ok === false &&
             runtimeIssues.some(
               (event) =>
                 event.code === 'scope_unavailable' && event.scopeSourceId === 'web-missing'
+            ),
+          details: JSON.stringify(runtimeIssues)
+        })
+        recordAssertion(runtime.assertions, {
+          id: 'runtime.web-scope-pending-event',
+          pass:
+            result.pendingWebValidation.ok === false &&
+            runtimeIssues.some(
+              (event) =>
+                event.code === 'scope_unavailable' && event.scopeSourceId === 'web-pending'
             ),
           details: JSON.stringify(runtimeIssues)
         })
