@@ -69,3 +69,25 @@ TBD - created by archiving change langgraph-chat-ai-architecture. Update Purpose
 #### Scenario: Human step visibility in simplified runtime
 - **WHEN** human 完成一步工具执行
 - **THEN** 事件流包含可关联 task 的 `human_step` 信息（含 `publicNarrative`、active skills、active tools、步骤结果），并省略 slot 提交事件
+
+### Requirement: 编辑运行的审阅就绪信号 MUST 在全部编辑任务完成后发出
+系统在一次运行产生可审阅草稿时 MUST 仅在全部可编辑任务完成后暴露审阅就绪信号或审阅引用信息，并 MUST NOT 在运行中途发出逐块确认请求来打断当前执行。
+
+#### Scenario: 多个编辑任务完成后统一进入审阅
+- **WHEN** 一次运行内包含多个可编辑任务，且这些任务都已完成
+- **THEN** 系统 MUST 只在最后一个相关任务完成后暴露统一的审阅就绪信息
+
+### Requirement: 涉及可编辑文档的步骤事件 MUST 关联最新工作草稿身份
+当某个能力在运行中对可编辑文档产生新的草稿快照后，后续与该文档相关的读取、搜索、预览和继续编辑步骤 MUST 关联最新工作草稿身份，而不是继续只关联原始源文件身份。
+
+#### Scenario: 第二次读取看到第一次修改后的内容
+- **WHEN** 文档先完成一次草稿编辑，再在同一运行中执行后续读取或搜索步骤
+- **THEN** 后续步骤 MUST 能稳定关联到最新草稿快照，使 UI 和运行逻辑都能基于编辑后的内容继续工作
+
+### Requirement: 用户可见步骤叙事 MUST 与内部诊断信息分离
+系统 MUST 继续将用户可见的步骤叙事与内部诊断信息分离：用户界面使用的步骤事件 MUST 提供面向用户的 `publicNarrative`，而内部诊断细节 MUST 继续保留在独立的内部调试通道中。
+
+#### Scenario: UI 展示步骤说明时不暴露内部推理
+- **WHEN** Renderer 渲染一次运行的步骤时间线
+- **THEN** UI MUST 使用用户可见叙事字段展示步骤说明，而不会依赖或暴露内部诊断内容
+

@@ -18,25 +18,33 @@ The `docx` capability implementation MUST run with Node.js-compatible dependenci
 - **THEN** capability operation succeeds without requiring Python or system package installation by end users
 
 ### Requirement: Provide structured docx tool set
-The `docx` capability MUST expose structured tools for inspect, edit planning, applying edits, saving outputs, and explicit completion.
+`docx` capability MUST 提供结构化工具以完成文档检查、内容检索、编辑应用、草稿预览生成、审阅交接和显式完成；在 AI 运行阶段，直接把修改写回用户真实文件 MUST NOT 作为默认完成路径。
 
-#### Scenario: Capability applies a user-requested edit
-- **WHEN** user asks to modify an existing `.docx`
-- **THEN** the capability performs inspect/plan/apply/save steps through typed tool calls before returning completion
+#### Scenario: docx 编辑运行返回待审阅草稿
+- **WHEN** 用户要求修改一个现有 `.docx`
+- **THEN** capability MUST 通过结构化工具完成 inspect/search/apply/preview 等步骤，并在运行结束时返回可审阅的草稿结果，而不是直接覆盖源文件
 
 ### Requirement: Enforce workspace and write-safety policies for docx operations
-The `docx` capability MUST require workspace binding for file actions and MUST gate destructive write operations behind approval.
+`docx` capability MUST 要求文件操作具备工作空间边界；在 AI 运行阶段，capability MUST NOT 直接覆盖用户真实文档；当用户在最终提交阶段选择写入已存在路径时，系统 MUST 先经过显式审批或确认后再执行覆盖。
 
-#### Scenario: Request attempts to overwrite source docx file
-- **WHEN** capability receives an in-place overwrite operation
-- **THEN** runtime requests approval before write and defaults to save-as behavior when overwrite is not approved
+#### Scenario: 运行完成时真实文件保持不变
+- **WHEN** 一次 docx 编辑运行已经完成，但用户尚未完成草稿审阅与最终提交
+- **THEN** capability MUST 保持源 docx 文件未被改写
+
+#### Scenario: 提交到已存在路径需要审批
+- **WHEN** 用户确认提交并选择覆盖一个已存在的目标 docx 路径
+- **THEN** 系统 MUST 在真正写盘前请求相应审批或确认
 
 ### Requirement: Preserve draft snapshots before save
-The `docx` capability MUST keep immutable draft snapshots during edit flows, expose snapshot history for inspection, and allow rollback to an ancestor snapshot before any file write happens.
+`docx` capability MUST 在编辑流程中保留不可变草稿快照，并允许在保存前查看快照历史和回滚到祖先快照；在同一运行内，后续 inspect/search/apply 操作 MUST 默认基于当前最新草稿快照继续执行，而不是回退到原始源文件内容。
 
-#### Scenario: User needs to confirm or undo edits before save
-- **WHEN** docx tools have produced one or more edited snapshots through `apply_ops`
-- **THEN** runtime can inspect the current snapshot lineage and switch back to an ancestor snapshot without overwriting files
+#### Scenario: 后续读取基于最新草稿继续执行
+- **WHEN** 文档已经生成一个新的草稿快照，随后在同一运行中再次执行 docx 搜索或读取
+- **THEN** capability MUST 基于该最新草稿快照返回结果，使 AI 能读到先前编辑后的文本信息
+
+#### Scenario: 用户或系统需要回滚到旧草稿
+- **WHEN** 当前草稿快照不再适合继续编辑，且存在可用祖先快照
+- **THEN** capability MUST 能在不写盘的前提下回滚到某个祖先快照继续处理
 
 ### Requirement: Run bounded internal tool loops and finish explicitly
 The `docx` capability MUST run an internal tool loop to satisfy the task objective, MUST enforce bounded loop limits (for example max-step and timeout), and MUST terminate with explicit success or failure state.
@@ -48,3 +56,11 @@ The `docx` capability MUST run an internal tool loop to satisfy the task objecti
 #### Scenario: Docx loop exceeds configured bounds
 - **WHEN** the capability reaches max-step or timeout limit before completion
 - **THEN** the task is marked failed with a bounded-loop error and no further docx tool calls are executed
+
+### Requirement: Defer user confirmation until run completion
+`docx` capability MUST 在一次编辑运行中自行完成全部内部编辑步骤，并 MUST NOT 因单个块级修改而暂停运行请求用户逐块确认；若本次运行产生可提交修改，capability MUST 在全部 docx 编辑步骤完成后再交付统一的审阅集合。
+
+#### Scenario: 多个块级编辑在一次运行中连续完成
+- **WHEN** capability 在一次运行中连续完成多个块或多个位置的 docx 修改
+- **THEN** 系统 MUST 允许这些修改在草稿快照链上连续完成，并在运行结束后才进入统一审阅阶段
+
