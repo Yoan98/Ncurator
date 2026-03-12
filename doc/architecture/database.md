@@ -21,6 +21,7 @@
   - `WebSourceStore`：`web_source`（网页资料来源 identity、抓取状态与来源级元数据）
   - `WorkspaceStore`：`workspace_source` / `workspace_node`（工作空间、目录树快照、准备状态与节点绑定）
   - `ChatStore`：`chat_session` / `chat_message`（会话与消息 CRUD）
+  - `DraftReviewStore`：`draft_review` / `draft_review_document` / `draft_review_change` / `draft_commit_job`（草稿审阅、变更确认与提交结果）
   - `LlmConfigStore`：`llm_config`（配置 CRUD 与激活态切换）
 - **组合根（Facade）**: `src/main/services/storage/StorageService.ts`
   - 统一持有 `core` 与各 domain store
@@ -152,6 +153,16 @@
 | title      | Utf8  | 会话标题     |
 | created_at | Int64 | 创建时间戳   |
 
+### 表: chat_session_memory（会话记忆表）
+
+存储会话级摘要记忆，用于运行时补充上下文。
+
+| 字段名      | 类型  | 描述 |
+| :---------- | :---- | :--- |
+| session_id  | Utf8  | 关联的会话 ID |
+| memory_json | Utf8  | 记忆 JSON 字符串 |
+| updated_at  | Int64 | 更新时间戳 |
+
 ### 表: chat_message（对话消息表）
 
 存储会话中的每一条消息记录。
@@ -166,6 +177,88 @@
 | sources    | Utf8（Nullable） | 引用来源（SearchResult[] 的 JSON 字符串） |
 | error      | Boolean（Nullable） | 是否出错                               |
 
+### 表: draft_review（草稿审阅汇总表）
+
+存储一次 AI 运行产生的待审阅结果集合。
+
+| 字段名                | 类型             | 描述 |
+| :-------------------- | :--------------- | :--- |
+| id                    | Utf8             | 审阅 ID |
+| session_id            | Utf8             | 所属会话 |
+| run_id                | Utf8             | 所属运行 |
+| status                | Utf8             | 审阅状态 |
+| title                 | Utf8             | 审阅标题 |
+| document_count        | Int32            | 文档数 |
+| change_count          | Int32            | 变更总数 |
+| pending_change_count  | Int32            | 待决策变更数 |
+| accepted_change_count | Int32            | 已接受变更数 |
+| rejected_change_count | Int32            | 已拒绝变更数 |
+| created_at            | Int64            | 创建时间 |
+| updated_at            | Int64            | 更新时间 |
+| completed_at          | Int64（Nullable）| 审阅完成时间 |
+| committed_at          | Int64（Nullable）| 最终提交时间 |
+| last_error            | Utf8（Nullable） | 最近错误 |
+
+### 表: draft_review_document（草稿审阅文档表）
+
+存储审阅中的单个草稿文档及其源文件版本信息。
+
+| 字段名                  | 类型             | 描述 |
+| :---------------------- | :--------------- | :--- |
+| id                      | Utf8             | 草稿文档 ID |
+| review_id               | Utf8             | 所属审阅 ID |
+| source_document_id      | Utf8（Nullable） | 源 document ID |
+| source_path             | Utf8             | 源文件路径 |
+| source_name             | Utf8             | 源文件名 |
+| format                  | Utf8             | 文档格式 |
+| latest_draft_snapshot_id| Utf8             | 最新草稿快照 |
+| preview_artifact_path   | Utf8（Nullable） | 预览产物路径 |
+| draft_artifact_path     | Utf8（Nullable） | 草稿产物路径 |
+| source_version_json     | Utf8             | 源版本信息 JSON |
+| total_change_count      | Int32            | 变更总数 |
+| pending_change_count    | Int32            | 待决策变更数 |
+| accepted_change_count   | Int32            | 已接受变更数 |
+| rejected_change_count   | Int32            | 已拒绝变更数 |
+| created_at              | Int64            | 创建时间 |
+| updated_at              | Int64            | 更新时间 |
+
+### 表: draft_review_change（草稿审阅变更表）
+
+存储最小审阅单元及其接受/拒绝状态。
+
+| 字段名              | 类型             | 描述 |
+| :------------------ | :--------------- | :--- |
+| id                  | Utf8             | 变更 ID |
+| review_id           | Utf8             | 所属审阅 ID |
+| document_id         | Utf8             | 所属草稿文档 ID |
+| order_index         | Int32            | 排序索引 |
+| change_kind         | Utf8             | 变更类型 |
+| title               | Utf8             | 变更标题 |
+| summary             | Utf8             | 变更摘要 |
+| decision            | Utf8             | `pending / accepted / rejected` |
+| before_text         | Utf8             | 变更前文本 |
+| after_text          | Utf8             | 变更后文本 |
+| locator_json        | Utf8             | 定位信息 JSON |
+| preview_artifact_path| Utf8（Nullable）| 局部预览产物 |
+| metadata_json       | Utf8（Nullable） | 附加元数据 |
+| created_at          | Int64            | 创建时间 |
+| updated_at          | Int64            | 更新时间 |
+
+### 表: draft_commit_job（草稿提交任务表）
+
+存储审阅通过后的最终提交执行结果。
+
+| 字段名        | 类型             | 描述 |
+| :------------ | :--------------- | :--- |
+| id            | Utf8             | 提交任务 ID |
+| review_id     | Utf8             | 所属审阅 ID |
+| status        | Utf8             | 提交状态 |
+| document_count| Int32            | 文档数量 |
+| results_json  | Utf8             | 提交结果 JSON |
+| started_at    | Int64            | 开始时间 |
+| completed_at  | Int64（Nullable）| 完成时间 |
+| error         | Utf8（Nullable） | 错误信息 |
+
 ### 表: llm_config（大模型配置表）
 
 存储用户配置的 LLM API 信息。
@@ -178,3 +271,8 @@
 | model_name | Utf8    | 模型名称                                   |
 | api_key    | Utf8    | API Key                                    |
 | is_active  | Boolean | 是否为当前激活配置（通常只有一个为 True）  |
+
+## 文档与代码冲突时的处理
+
+- 文档未覆盖当前实现时，以 `LanceDbCore` 的 `LANCE_TABLES` / `getTableConfigs()` 和各 `*Store` 为最终真相源。
+- 修复数据库相关实现时，若发现文档缺项，应在同一变更中同步更新本文件。

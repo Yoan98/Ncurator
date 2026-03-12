@@ -1,11 +1,11 @@
 # AI 阶段化测试计划
 
 本文件只定义 AI 测试推进顺序、门禁条件和阶段产物，不承载测试架构细节。  
-阶段结果与能力边界统一沉淀到 `doc/test/ai-upgrade-journal.md`。
+阶段结果与能力边界统一沉淀到 `doc/testing/upgrade-journal.md`。
 
 关联文档：
-- 测试架构规则见 [architecture.md](/Users/test/work-space/NCurator-Desktop/doc/test/architecture.md)
-- 阶段执行结果与专题结论见 [ai-upgrade-journal.md](/Users/test/work-space/NCurator-Desktop/doc/test/ai-upgrade-journal.md)
+- 测试架构规则见 [architecture.md](/Users/test/work-space/NCurator-Desktop/doc/testing/architecture.md)
+- 阶段执行结果与专题结论见 [upgrade-journal.md](/Users/test/work-space/NCurator-Desktop/doc/testing/upgrade-journal.md)
 
 ## 1. 阶段顺序（能力先行）
 
@@ -32,7 +32,7 @@
   - `pnpm test:main:ai:capability:analyze`
 - 阶段产物：
   - `tests/report/main-ai-capability/**`
-  - `doc/test/ai-upgrade-journal.md`（追加 `tool capability` 阶段记录与专题结论）
+  - `doc/testing/upgrade-journal.md`（追加 `tool capability` 阶段记录与专题结论）
 
 ### 2.2 `human 单任务`
 
@@ -44,7 +44,7 @@
   - `pnpm test:main:ai:human`
 - 阶段产物：
   - `tests/report/main-ai-human/**`
-  - `doc/test/ai-upgrade-journal.md` 追加记录
+  - `doc/testing/upgrade-journal.md` 追加记录
 
 ### 2.3 `main context`
 
@@ -56,7 +56,7 @@
   - `pnpm test:main:ai:runtime`
 - 阶段产物：
   - `tests/report/main-ai-runtime/**`
-  - `doc/test/ai-upgrade-journal.md` 追加记录
+  - `doc/testing/upgrade-journal.md` 追加记录
 
 ### 2.4 `plan 质量`
 
@@ -67,7 +67,7 @@
   - 必要时用 `tests/e2e/**` 验证计划对 UI 链路的影响
 - 阶段产物：
   - 对应 suite 报告目录
-  - `doc/test/ai-upgrade-journal.md` 追加记录
+  - `doc/testing/upgrade-journal.md` 追加记录
 
 ### 2.5 `ai 架构验收`
 
@@ -78,7 +78,7 @@
   - `tests/e2e/**` 关键链路
 - 阶段产物：
   - 对应 suite 报告目录
-  - `doc/test/ai-upgrade-journal.md` 追加记录
+  - `doc/testing/upgrade-journal.md` 追加记录
 
 ## 3. 当前阶段状态（2026-03-11）
 
@@ -86,14 +86,14 @@
   - `tool capability` 已达到“可进入下一阶段”的门槛。
 - 依据：
   - `tests/report/main-ai-capability/tool-capability-assessment.md`：`21/21` 通过。
-  - [ai-upgrade-journal.md](/Users/test/work-space/NCurator-Desktop/doc/test/ai-upgrade-journal.md) 中 `2026-03-11 tool capability` 记录：`基本可用（建议继续优化）`。
+  - [upgrade-journal.md](/Users/test/work-space/NCurator-Desktop/doc/testing/upgrade-journal.md) 中 `2026-03-11 tool capability` 记录：`基本可用（建议继续优化）`。
 - 下一阶段：
   - `human 单任务`
 
 ## 4. 每轮测试结束后的固定动作
 
 1. 产出并检查 `tests/report/**` 结构化报告。
-2. 追加更新 [ai-upgrade-journal.md](/Users/test/work-space/NCurator-Desktop/doc/test/ai-upgrade-journal.md)：
+2. 追加更新 [upgrade-journal.md](/Users/test/work-space/NCurator-Desktop/doc/testing/upgrade-journal.md)：
    - 写明阶段、结果、风险、是否推进、下一轮优先级。
    - 在需要时补充该阶段专题结论（能力边界、显式缺口、门槛判定）。
 3. 仅当“允许推进”明确成立时，开始下一阶段测试。

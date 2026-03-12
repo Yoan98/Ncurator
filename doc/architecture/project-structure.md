@@ -23,7 +23,10 @@ src/
     utils/               # 前端工具函数
   shared/                # 跨进程共享契约与类型
 doc/                     # 项目规则/架构文档
-  test/                  # 测试文档索引、测试架构规范、阶段评估
+  architecture/          # 当前架构与系统边界
+  conventions/           # 工程约定、类型治理、UI 规范
+  testing/               # 测试架构、阶段计划与持续汇总
+  reference/             # 阅读路径、canonical source、变更清单
 .codex/skills/           # 技能定义
 tests/                   # 自动化测试（AI 测试等）
 .env                     # 本地环境变量（不入库）
@@ -66,7 +69,7 @@ tests/                   # 自动化测试（AI 测试等）
 - 共享测试输入优先放在 `tests/fixtures/**`，共享 harness 优先放在 `tests/harness/**`。
 - 结构化测试报告统一输出到 `tests/report/**`。
 - 测试环境变量模板放根目录 `.env-example`，本地实际配置放根目录 `.env`。
-- 测试相关文档统一放在 `doc/test/**`，默认入口是 `doc/test/README.md`。
+- 测试相关文档统一放在 `doc/testing/**`，默认入口是 `doc/testing/README.md`。
 
 补充说明：
 - Main/AI 测试现已统一放入 `tests/main/**`。

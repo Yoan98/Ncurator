@@ -42,11 +42,14 @@
 
 ## 3. 文档引用
 
-当涉及到数据库时，请阅读 `doc/database.md`
-当涉及到 AI 架构（LangGraph 运行图、能力节点、事件流、工作区沙箱）时，请阅读 `doc/ai-architecture.md`
-当涉及到 UI 样式时，请阅读 `doc/ui-style.md`
-当涉及到目录规范、文件归位、模块分层时，请阅读 `doc/project-structure.md`
-当涉及到测试架构、测试脚本、测试报告与测试扩展时，请先阅读 `doc/test/README.md`，再按索引进入 `doc/test/architecture.md`、`doc/test/ai-phased-plan.md` 与 `doc/test/ai-upgrade-journal.md`
+默认工程入口：`doc/README.md`
+当涉及到数据库时，请阅读 `doc/architecture/database.md`
+当涉及到 AI 架构（LangGraph 运行图、能力节点、事件流、工作区沙箱、草稿审阅）时，请先阅读 `doc/architecture/ai/README.md`
+当涉及到 UI 样式时，请阅读 `doc/conventions/ui-style.md`
+当涉及到目录规范、文件归位、模块分层时，请阅读 `doc/architecture/project-structure.md`
+当涉及到类型归属、边界解码、跨层类型治理时，请阅读 `doc/conventions/type-governance.md`
+当涉及到测试架构、测试脚本、测试报告与测试扩展时，请先阅读 `doc/testing/README.md`，再按索引进入 `doc/testing/architecture.md`、`doc/testing/phased-plan.md` 与 `doc/testing/upgrade-journal.md`
+当涉及到文档目录、canonical 文档、阅读路径或文档归档时，请阅读 `doc/reference/source-of-truth.md` 与 `doc/reference/change-checklist.md`
 
 ## 4. Type 分类与存放位置
 
@@ -66,7 +69,13 @@
 
 - 禁止使用 `any` 与 `unknown`
 
-## 6. UI/UX 注意事项
+## 6. 文档与 Skill 同步规则
+
+- 当 `doc/` 下的 canonical 文档、阅读路径、目录结构或领域边界发生变化时，必须同步检查并更新相关 `.codex/skills/*/SKILL.md`
+- 若变更影响全局硬约束或默认入口，也必须同步更新 `AGENTS.md`
+- 上述变更必须在同一 change set 中完成，避免文档、skill 与全局规则漂移
+
+## 7. UI/UX 注意事项
 
 - **禁用 Modal.confirm**: 由于兼容性问题，项目中禁止使用 `Modal.confirm`、`Modal.info` 等静态方法。请使用 ContextHolder 方式或者自定义组件替代。
 - **全局提示**: 涉及全局状态（如模型下载提示）的通知，应使用全局组件（如悬浮组件）在 `App.tsx` 或 `MainLayout` 中统一处理，避免在每个页面重复逻辑。

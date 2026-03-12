@@ -1,7 +1,7 @@
 # NCurator-Desktop 测试架构规范（Script-first）
 
 入口说明：
-- 默认先读 `doc/test/README.md`
+- 默认先读 `doc/testing/README.md`
 - 当前文档负责测试架构总规范
 
 ## 1. 目标
@@ -273,9 +273,9 @@ AI 消费 renderer / e2e 报告时，最小输入集合建议为：
 
 该部分已独立到计划文档，避免与架构规范混写：
 
-- 阶段顺序与门禁规则：`doc/test/ai-phased-plan.md`
-- 当前阶段结论与边界：`doc/test/ai-upgrade-journal.md`
-- 每轮测试完成后的持续汇总：`doc/test/ai-upgrade-journal.md`
+- 阶段顺序与门禁规则：`doc/testing/phased-plan.md`
+- 当前阶段结论与边界：`doc/testing/upgrade-journal.md`
+- 每轮测试完成后的持续汇总：`doc/testing/upgrade-journal.md`
 
 补充原则：
 - 架构规则只放本文件。

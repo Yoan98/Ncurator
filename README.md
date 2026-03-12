@@ -1,81 +1,65 @@
 # NCurator-Desktop
 
-**NCurator-Desktop** 是一个本地优先、注重隐私的知识库搜索应用程序。它允许您使用先进的混合搜索技术对 PDF 和 Word 文档进行索引和搜索——所有操作均在本地机器上运行，无需将数据上传到云端。
+**NCurator-Desktop** 是一个本地优先、注重隐私的桌面知识工作台。项目统一承载本地资料准备、混合检索、AI 对话、纯搜索和草稿审阅，不依赖云端文档处理链路。
 
-## 主要功能
+## 当前能力
 
-- **本地处理**: 所有文档解析、向量化和存储都在本地进行。您的数据永远不会离开您的设备。
-- **格式支持**: 支持索引 PDF (`.pdf`) 和 Word (`.docx`) 文档。
-- **混合搜索**: 结合了关键词搜索 (FlexSearch) 的精确性和向量搜索 (LanceDB) 的语义理解能力。
-- **高级排序**: 使用 **RRF (Reciprocal Rank Fusion)** 融合来自不同搜索算法的结果，以获得更高的准确性。
-- **模型选择**: 在不同语言下选择不同的嵌入模型以获得最佳性能。
+- **本地优先**：文档解析、嵌入、检索、索引和数据库存储全部在本机完成。
+- **统一工作台**：同一会话中支持 `AI 对话` 与 `纯搜索` 两种模式。
+- **混合检索**：基于 LanceDB 向量检索与 LanceDB FTS 全文检索，用 RRF 融合结果。
+- **草稿审阅**：AI 编辑默认生成草稿与审阅结果，不在运行阶段直接写回真实文件。
+- **范围约束**：支持 workspace、本地资料和网页资料的显式范围选择与审批边界。
 
 ## 技术栈
 
-本项目使用：
-
-- **核心**: Electron, Node.js
-- **前端**: React, TypeScript, Ant Design, Tailwind CSS
-- **AI & 数据**:
-  - **解析**: LangChain.js
-  - **嵌入**: Transformers.js (`@xenova/transformers`)
-  - **向量数据库**: LanceDB
-  - **关键词搜索**: FlexSearch
-  - **重排序**: RRF 算法 (未来支持 Cross-Encoders)
+- **Runtime**：Electron v39
+- **Frontend**：React 19、React Router DOM 7、Ant Design 5、Tailwind CSS 4、Less
+- **AI Runtime**：LangChain JS、LangGraph JS
+- **Embedding**：`@huggingface/transformers` v3（本地运行）
+- **Storage / Search**：LanceDB v0.23、LanceDB FTS、Apache Arrow
+- **Parsing**：`pdf-parse`、`mammoth`
 
 ## 架构概览
 
-### 数据摄入
+- **Renderer**：负责工作台 UI、时间线、检查器、审阅中心等展示逻辑。
+- **Main**：负责资料准备、数据库访问、AI graph、审批和草稿提交流程。
+- **Shared**：负责 IPC 契约、事件和跨进程共享实体。
+- **Storage**：统一通过 `StorageService`、`LanceDbCore` 和各 `*Store` 访问 LanceDB。
 
-1.  **解析**: 使用 LangChain 提取文件文本。
-2.  **分片**: 将文本分割成语义块。
-3.  **向量化**: 使用本地模型 (`jina-embeddings-v2-base-zh` 或 `nomic-embed-text-v1`) 将文本块转换为向量。
-4.  **存储**: 将向量保存到 LanceDB，并使用 FlexSearch 建立倒排索引。
+## 工程文档入口
 
-### 搜索流程
+默认工程入口是 [doc/README.md](/Users/test/work-space/NCurator-Desktop/doc/README.md)。
 
-1.  **召回**: 从向量搜索和关键词搜索中分别检索前 50 个结果。
-2.  **融合**: 使用倒帕累托等级融合 (RRF) 合并结果。
-3.  **展示**: 向用户展示最相关的文本块。
-    _(未来: 使用 `bge-reranker-base` 对前几名结果进行重排)_
+建议阅读顺序：
+
+1. [doc/README.md](/Users/test/work-space/NCurator-Desktop/doc/README.md)
+2. [doc/architecture/README.md](/Users/test/work-space/NCurator-Desktop/doc/architecture/README.md)
+3. 按任务进入 AI、数据库、目录规范、测试或类型治理文档
 
 ## 快速开始
 
 ### 先决条件
 
-- Node.js (推荐 v18+)
-- pnpm 或 npm
+- Node.js（推荐 v18+）
+- pnpm
 
 ### 安装
 
 ```bash
-# 安装依赖
-npm install
-# 或者
 pnpm install
 ```
 
 ### 开发
 
 ```bash
-# 运行开发模式
-npm run dev
+pnpm dev
 ```
 
 ### 构建
 
 ```bash
-# 构建生产版本
-npm run build
+pnpm build
 ```
-
-## 配置
-
-应用程序支持为不同语言配置不同的模型：
-
-- **中文**: `jinaai/jina-embeddings-v2-base-zh`
-- **英文**: `nomic-ai/nomic-embed-text-v1`
-- **重排序**: `Xenova/bge-reranker-base` (计划中)
 
 ## 许可证
 
