@@ -18,7 +18,7 @@ export const loadLiveLlmConfigFromEnv = (): LiveLlmConfig => {
   if (!baseUrl || !modelName || !apiKey) {
     throw new Error(
       [
-        'human-live 缺少模型配置，请设置环境变量：',
+        'human 缺少模型配置，请设置环境变量：',
         '- AI_LIVE_BASE_URL',
         '- AI_LIVE_MODEL_NAME',
         '- AI_LIVE_API_KEY'

@@ -177,7 +177,7 @@ const resolveFinalHumanAction = (input: {
   observedAction: CaseSignalsReport['finalHumanAction']
   executionStatus: CaseReportInput['execution']['status']
 }): CaseSignalsReport['finalHumanAction'] => {
-  if (input.suite !== 'main-ai-human-live') return input.observedAction
+  if (input.suite !== 'main-ai-human') return input.observedAction
   if (input.executionStatus === 'completed') return 'complete_task'
   if (input.executionStatus === 'blocked') return 'block_task'
   return input.observedAction

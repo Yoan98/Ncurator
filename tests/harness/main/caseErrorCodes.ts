@@ -1,7 +1,7 @@
 import type { CaseErrorCode, CaseExecutionOutcome } from './types'
 
 const FIXTURE_MISSING_PREFIX = '缺少测试前置文件'
-const LIVE_CONFIG_MISSING_PREFIX = 'human-live 缺少模型配置'
+const LIVE_CONFIG_MISSING_PREFIX = 'human 缺少模型配置'
 
 export const resolveCaseErrorCode = (message: string): CaseErrorCode => {
   const normalized = String(message || '').trim()

@@ -4,23 +4,23 @@ import * as mammoth from 'mammoth'
 import { describe, expect, test } from 'vitest'
 import { isLiveSuiteEnabled } from '../../../harness/main/llmConfig'
 import { recordAssertion } from '../../../harness/main/assertions'
-import { runHumanLiveCase } from '../../../harness/main/humanLiveCase'
+import { runHumanCase } from '../../../harness/main/humanCase'
 import { readLatestCaseReportArtifacts } from '../../../harness/main/reportInspector'
 
 const FIXTURE_SOURCE = path.resolve(process.cwd(), 'tests/fixtures/main/docx/sample-edit.docx')
 const CASE_ID = 'human-docx-edit'
 
-describe('human-live', () => {
+describe('human', () => {
   test.skipIf(!isLiveSuiteEnabled())(
     'human 应能渐进式加载 docx skill 并完成编辑保存',
     async () => {
-      await runHumanLiveCase({
+      await runHumanCase({
         caseId: CASE_ID,
         description: '验证 human 子图在真实模型下加载 docx skill 并完成 open/search/apply/save 流程。',
         objective:
           '请修改当前 workspace 中的 input.docx：把文本 Hello 替换为 Hi from human，并保存为 output.docx。你可以按需加载能力；完成任务时 resultData 必须包含 out_path 字段。',
         expectedOutcome: 'success',
-        scenarioTags: ['human-live', 'docx', 'progressive-skill'],
+        scenarioTags: ['human', 'docx', 'progressive-skill'],
         requiredFixtures: [FIXTURE_SOURCE],
         fixtureCopies: [{ from: FIXTURE_SOURCE, to: 'input.docx' }],
         approvalPolicy: 'auto-approve',
@@ -79,7 +79,7 @@ describe('human-live', () => {
         }
       })
 
-      const report = await readLatestCaseReportArtifacts('main-ai-human-live', CASE_ID)
+      const report = await readLatestCaseReportArtifacts('main-ai-human', CASE_ID)
       expect(report.metrics.executionStatus).toBe('completed')
       expect(report.signals.finalHumanAction).toBe('complete_task')
       expect(report.signals.skillActivationSequence).toContain('docx-editing')

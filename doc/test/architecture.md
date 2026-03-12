@@ -41,7 +41,7 @@
 - `tests/main/ai/runtime/**`
   - 验证 AI runtime、prompt contract、scope contract、阻塞语义等。
   - 原先容易被归到 `integration` 的 AI 侧测试，优先落到这里。
-- `tests/main/ai/human-live/**`
+- `tests/main/ai/human/**`
   - 在真实模型下验证 human 子图完成任务的效果。
   - 必须只调 human 子图 runner，不经过 main graph。
 - `tests/main/<domain>/service/**`
@@ -133,7 +133,7 @@ tests/
     ai/
       capability/
       runtime/
-      human-live/
+      human/
     workspace/
       service/
       migration/
@@ -166,14 +166,14 @@ tests/report/                   # 每次执行的结构化报告
 命名建议：
 - main capability: `<capability>.<case>.test.ts`
 - main runtime/service/migration: `<domain>.<case>.test.ts`
-- main human-live: `human.<case>.live.test.ts`
+- main human: `human.<case>.live.test.ts`
 - renderer contract: `<page>.<flow>.test.ts`
 - e2e deterministic: `<page>.<flow>.e2e.test.ts`
 - e2e ai-live: `<page>.<goal>.live.test.ts`
 
 ## 5. 环境变量约定（根目录）
 
-human-live 使用根目录 `.env` 配置：
+human 使用根目录 `.env` 配置：
 
 - `AI_LIVE_ENABLE`
 - `AI_LIVE_BASE_URL`
@@ -206,7 +206,7 @@ human-live 使用根目录 `.env` 配置：
 推荐的 suite 分组命名：
 - `main-ai-capability`
 - `main-ai-runtime`
-- `main-ai-human-live`
+- `main-ai-human`
 - `main-workspace-service`
 - `main-workspace-migration`
 - `renderer-chat-contract`
@@ -291,9 +291,9 @@ AI 消费 renderer / e2e 报告时，最小输入集合建议为：
 2. 复用现有 main harness，或在 `tests/harness/main/**` 中补充最小扩展
 3. 直接调用生产运行时/存储/迁移/范围装配入口，验证跨模块行为
 
-新增 main human-live 用例时：
-1. 新建 `tests/main/ai/human-live/*.live.test.ts`
-2. 复用 `runHumanLiveCase`
+新增 main human 用例时：
+1. 新建 `tests/main/ai/human/*.live.test.ts`
+2. 复用 `runHumanCase`
 3. 明确 `objective`、审批策略和成功/阻塞断言
 
 新增 renderer contract 用例时：
@@ -320,7 +320,7 @@ AI 消费 renderer / e2e 报告时，最小输入集合建议为：
   - `pnpm test:main:ai:capability`
   - `pnpm test:main:ai:capability:analyze`
   - `pnpm test:main:ai:runtime`
-  - `pnpm test:main:ai:human-live`
+  - `pnpm test:main:ai:human`
   - `pnpm test:main:workspace:service`
   - `pnpm test:main:workspace:migration`
   - `pnpm test:renderer`
@@ -329,12 +329,12 @@ AI 消费 renderer / e2e 报告时，最小输入集合建议为：
   - `pnpm test:ai`
   - `pnpm test:ai:capability`
   - `pnpm test:ai:integration`
-  - `pnpm test:ai:human-live`
+  - `pnpm test:ai:human`
   - 指定单文件：`pnpm test:main -- <path-to-test-file>`
 - 当前仓库已实现的命令仍以 `package.json` 中现有脚本为准。
 
 补充说明：
-- 未配置 live 环境变量时，`human-live` 用例会按既定策略跳过；这不影响 capability suite 的通过判定。
+- 未配置 live 环境变量时，`human` 用例会按既定策略跳过；这不影响 capability suite 的通过判定。
 - `e2e ai-live` 默认应作为非阻塞套件，不直接成为主 CI gate；缺少 `AI_LIVE_ENABLE=1` 时应 skip。
 - `pnpm test:ai*` 当前仅作为兼容别名保留，底层已指向 `tests/main/**`。
 - 当前 `tests/main/**` 的已知覆盖包括：
@@ -342,4 +342,4 @@ AI 消费 renderer / e2e 报告时，最小输入集合建议为：
   - `tests/main/ai/runtime/**`：runtime/source-scope/prompt contract 与 fail-fast 路径
   - `tests/main/workspace/service/**`：workspace scan/diff/scope selection
   - `tests/main/workspace/migration/**`：legacy local import cleanup
-  - `tests/main/ai/human-live/**`：human 子图真实模型任务与阻塞路径
+  - `tests/main/ai/human/**`：human 子图真实模型任务与阻塞路径

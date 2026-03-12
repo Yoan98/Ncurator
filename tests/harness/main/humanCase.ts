@@ -21,7 +21,7 @@ import {
 } from './workspaceManager'
 import { writeCaseReport } from './reporter'
 
-type HumanLiveRuntime = {
+type HumanRuntime = {
   runId: string
   taskId: string
   workspaceRoot: string
@@ -30,7 +30,7 @@ type HumanLiveRuntime = {
   assertions: CaseAssertion[]
 }
 
-export const runHumanLiveCase = async (input: {
+export const runHumanCase = async (input: {
   caseId: string
   description: string
   objective: string
@@ -40,7 +40,7 @@ export const runHumanLiveCase = async (input: {
   maxSteps?: number
   expectedOutcome?: CaseExpectedOutcome
   scenarioTags?: string[]
-  assert: (result: HumanTaskOutput, runtime: HumanLiveRuntime) => Promise<void>
+  assert: (result: HumanTaskOutput, runtime: HumanRuntime) => Promise<void>
 }): Promise<void> => {
   const runId = randomUUID()
   const taskId = `task-${input.caseId}`
@@ -69,7 +69,7 @@ export const runHumanLiveCase = async (input: {
       approvalPolicy: input.approvalPolicy || 'auto-approve',
       liveModelConfig: liveConfig
     })
-    const runtime: HumanLiveRuntime = {
+    const runtime: HumanRuntime = {
       runId,
       taskId,
       workspaceRoot,
@@ -108,7 +108,7 @@ export const runHumanLiveCase = async (input: {
   } finally {
     const finishedAt = Date.now()
     await writeCaseReport({
-      suite: 'main-ai-human-live',
+      suite: 'main-ai-human',
       caseId: input.caseId,
       runId,
       taskId,

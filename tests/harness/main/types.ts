@@ -19,7 +19,7 @@ export type CaseAssertion = {
 export type CaseSuite =
   | 'main-ai-capability'
   | 'main-ai-runtime'
-  | 'main-ai-human-live'
+  | 'main-ai-human'
   | 'main-workspace-service'
   | 'main-workspace-migration'
 export type CaseStatus = 'passed' | 'failed'

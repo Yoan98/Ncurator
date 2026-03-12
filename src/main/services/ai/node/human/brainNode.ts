@@ -130,7 +130,8 @@ const toResultData = (value: JsonValue | undefined, key: string): JsonObject | u
   return { [key]: value }
 }
 
-const buildDecisionPrompt = (state: HumanRunState) => {
+const buildDecisionPrompt = (input: { state: HumanRunState; ctx: AiRunContext }) => {
+  const { state } = input
   const prompt = buildHumanBrainPrompt({
     objective: state.input.objective,
     stepIndex: state.steps + 1,
@@ -288,7 +289,7 @@ export const createHumanBrainNode = (input: { ctx: AiRunContext }) => {
       })
     }
 
-    const prompt = buildDecisionPrompt(state)
+    const prompt = buildDecisionPrompt({ state, ctx })
     let decision: HumanStepDecision
 
     try {

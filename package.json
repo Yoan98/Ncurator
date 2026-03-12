@@ -16,7 +16,7 @@
     "test:main:ai:capability": "vitest --config vitest.ai.config.mts run tests/main/ai/capability",
     "test:main:ai:capability:analyze": "node scripts/tool-capability-report-analyzer.mjs",
     "test:main:ai:runtime": "vitest --config vitest.ai.config.mts run tests/main/ai/runtime",
-    "test:main:ai:human-live": "vitest --config vitest.ai.config.mts run tests/main/ai/human-live",
+    "test:main:ai:human": "vitest --config vitest.ai.config.mts run tests/main/ai/human",
     "test:main:workspace:service": "vitest --config vitest.ai.config.mts run tests/main/workspace/service",
     "test:main:workspace:migration": "vitest --config vitest.ai.config.mts run tests/main/workspace/migration",
     "test:ai": "vitest --config vitest.ai.config.mts run",

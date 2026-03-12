@@ -39,11 +39,11 @@
 - 目标：
   - human 子图在真实模型下完成单任务并正确收敛阻塞。
 - 主要用例目录：
-  - `tests/main/ai/human-live/**`
+  - `tests/main/ai/human/**`
 - 主要命令：
-  - `pnpm test:main:ai:human-live`
+  - `pnpm test:main:ai:human`
 - 阶段产物：
-  - `tests/report/main-ai-human-live/**`
+  - `tests/report/main-ai-human/**`
   - `doc/test/ai-upgrade-journal.md` 追加记录
 
 ### 2.3 `main context`

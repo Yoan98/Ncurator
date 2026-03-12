@@ -3,7 +3,6 @@ import type {
   ChunkInput,
   ChunkListResponse,
   DocumentListResponse,
-  DocumentSourceType,
   DocumentRecord,
   SearchResult,
   WebSourceRecord
@@ -302,7 +301,9 @@ export class DocumentsStore {
     return { items, total }
   }
 
-  public async listDocumentsBySourceType(sourceType: DocumentSourceType): Promise<DocumentRecord[]> {
+  public async listDocumentsBySourceType(
+    sourceType: DocumentRecord['source_type']
+  ): Promise<DocumentRecord[]> {
     const table = await this.core.openTable(LANCE_TABLES.DOCUMENT)
     const rows = await table
       .query()

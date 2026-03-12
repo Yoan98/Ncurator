@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { XMLSerializer } from '@xmldom/xmldom'
+import type JSZip from 'jszip'
 import {
   Paragraph,
   patchDocument,
@@ -75,14 +76,6 @@ const childElements = (node: Element, localName?: string): Element[] => {
     if (!localName || child.localName === localName) out.push(child)
   }
   return out
-}
-
-const replaceLiteral = (text: string, query: string, replacement: string, replaceAll: boolean): string => {
-  if (!query) return text
-  if (replaceAll) return text.split(query).join(replacement)
-  const index = text.indexOf(query)
-  if (index < 0) return text
-  return `${text.slice(0, index)}${replacement}${text.slice(index + query.length)}`
 }
 
 const safeColor = (input: string | undefined): string | undefined => {
@@ -200,7 +193,7 @@ const loadIndex = async (buffer: Buffer): Promise<BlockIndex> => {
   return buildBlockIndex(bundle.documentDom)
 }
 
-const writeDocumentXml = async (input: { zip: import('jszip').default; doc: Document }): Promise<Buffer> => {
+const writeDocumentXml = async (input: { zip: JSZip; doc: Document }): Promise<Buffer> => {
   const xml = new XMLSerializer().serializeToString(input.doc)
   input.zip.file('word/document.xml', xml)
   return await input.zip.generateAsync({

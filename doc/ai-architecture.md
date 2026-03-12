@@ -161,7 +161,7 @@ stateDiagram-v2
 
 - capability 测试必须直连生产 tool 入口（`src/main/services/ai/tools/**`），验证真实链路行为。
 - integration 测试用于验证跨模块运行时契约、scope 语义、迁移与 prompt contract，不以单一 capability 为边界。
-- human-live 测试必须直连 `humanGraph` runner，只验证 human 子图，不通过 main graph。
+- human 测试必须直连 `humanGraph` runner，只验证 human 子图，不通过 main graph。
 - 测试上下文通过 harness 注入 workspace、审批策略与事件采集，避免侵入生产实现。
 - 所有 case 必须输出标准化报告（`events.jsonl/assertions.json/metrics.json/summary.md`），供后续 AI 诊断与优化建议使用。
 - live 配置统一从根目录 `.env` 读取（模板 `.env-example`），缺失时 fail-fast 并输出可定位信息。

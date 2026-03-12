@@ -58,7 +58,7 @@ tests/                   # 自动化测试（AI 测试等）
 - `tests/main/**` 用于 Main 进程/服务入口测试；建议继续按业务域细分，如 `ai / workspace / storage / web-source`。
 - `tests/main/ai/capability/**` 放 AI tool/capability 级测试。
 - `tests/main/ai/runtime/**` 放 AI runtime、prompt contract、scope contract 等测试。
-- `tests/main/ai/human-live/**` 放 human 子图真实模型测试。
+- `tests/main/ai/human/**` 放 human 子图真实模型测试。
 - `tests/main/<domain>/service/**` 放真实后端业务服务测试。
 - `tests/main/<domain>/migration/**` 放迁移与清理边界测试。
 - `tests/renderer/**` 放页面/组件 contract 测试，不直接承载完整应用链路。

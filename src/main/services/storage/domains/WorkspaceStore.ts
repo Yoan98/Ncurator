@@ -9,6 +9,8 @@ import { LanceDbCore, LANCE_TABLES } from '../core/LanceDbCore'
 
 type PrimitiveRowValue = string | number | boolean | null | undefined
 
+type WorkspaceWriteRow = Record<string, PrimitiveRowValue>
+
 type WorkspaceSourceRow = {
   id?: PrimitiveRowValue
   name?: PrimitiveRowValue
@@ -149,13 +151,46 @@ const omitUndefined = <T extends Record<string, string | number | boolean | null
   return next
 }
 
+const toWorkspaceSourceWriteRow = (workspace: WorkspaceSource): WorkspaceWriteRow => ({
+  id: workspace.id,
+  name: workspace.name,
+  root_path: workspace.root_path,
+  status: workspace.status,
+  last_scan_at: workspace.last_scan_at,
+  last_prepare_at: workspace.last_prepare_at,
+  last_error: workspace.last_error,
+  created_at: workspace.created_at,
+  updated_at: workspace.updated_at
+})
+
+const toWorkspaceNodeWriteRow = (node: WorkspaceNode): WorkspaceWriteRow => ({
+  id: node.id,
+  workspace_id: node.workspace_id,
+  parent_id: node.parent_id,
+  kind: node.kind,
+  name: node.name,
+  relative_path: node.relative_path,
+  absolute_path: node.absolute_path,
+  file_ext: node.file_ext,
+  exists: node.exists,
+  size: node.size,
+  mtime_ms: node.mtime_ms,
+  content_hash: node.content_hash,
+  prepare_status: node.prepare_status,
+  document_id: node.document_id,
+  last_prepared_at: node.last_prepared_at,
+  last_error: node.last_error,
+  created_at: node.created_at,
+  updated_at: node.updated_at
+})
+
 export class WorkspaceStore {
   public constructor(private readonly core: LanceDbCore) {}
 
   public async saveWorkspace(workspace: WorkspaceSource): Promise<void> {
     const table = await this.core.openTable(LANCE_TABLES.WORKSPACE_SOURCE)
     await table.delete(`id = '${this.core.escapeSqlString(workspace.id)}'`)
-    await table.add([workspace])
+    await table.add([toWorkspaceSourceWriteRow(workspace)])
   }
 
   public async listWorkspaces(): Promise<WorkspaceSource[]> {
@@ -216,7 +251,7 @@ export class WorkspaceStore {
     await this.deleteWorkspaceNodesByWorkspaceId(workspaceId)
     if (nodes.length === 0) return
     const table = await this.core.openTable(LANCE_TABLES.WORKSPACE_NODE)
-    await table.add(nodes)
+    await table.add(nodes.map(toWorkspaceNodeWriteRow))
   }
 
   public async upsertWorkspaceNodes(nodes: WorkspaceNode[]): Promise<void> {
@@ -225,7 +260,7 @@ export class WorkspaceStore {
     for (const node of nodes) {
       await table.delete(`id = '${this.core.escapeSqlString(node.id)}'`)
     }
-    await table.add(nodes)
+    await table.add(nodes.map(toWorkspaceNodeWriteRow))
   }
 
   public async listWorkspaceNodes(params: {

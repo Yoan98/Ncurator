@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { describe, expect, test } from 'vitest'
-import { runHumanLiveCase } from '../../../harness/main/humanLiveCase'
+import { runHumanCase } from '../../../harness/main/humanCase'
 import { readLatestCaseReportArtifacts } from '../../../harness/main/reportInspector'
 
 const CASE_ID = 'human-missing-live-config-fail-fast'
@@ -33,23 +33,23 @@ const withClearedLiveEnv = async (run: () => Promise<void>): Promise<void> => {
   }
 }
 
-describe('human-live/regression', () => {
+describe('human/regression', () => {
   test('缺失 live 配置时应 fail-fast 且报告可定位', async () => {
     await withClearedLiveEnv(async () => {
       await expect(
-        runHumanLiveCase({
+        runHumanCase({
           caseId: CASE_ID,
-          description: '验证 human-live 缺失模型配置时 fail-fast 并输出可定位报告。',
+          description: '验证 human 缺失模型配置时 fail-fast 并输出可定位报告。',
           objective: '读取 input.txt 第一行并完成任务。',
           requiredFixtures: [FIXTURE_SOURCE],
           fixtureCopies: [{ from: FIXTURE_SOURCE, to: 'input.txt' }],
           approvalPolicy: 'auto-approve',
           assert: async () => {}
         })
-      ).rejects.toThrow('human-live 缺少模型配置')
+      ).rejects.toThrow('human 缺少模型配置')
     })
 
-    const report = await readLatestCaseReportArtifacts('main-ai-human-live', CASE_ID)
+    const report = await readLatestCaseReportArtifacts('main-ai-human', CASE_ID)
     expect(report.assertions.caseStatus).toBe('failed')
     expect(report.metrics.caseErrorCode).toBe('live_config_missing')
     expect(report.metrics.executionStatus).toBe('not_run')

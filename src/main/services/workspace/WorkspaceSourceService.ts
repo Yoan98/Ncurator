@@ -1,7 +1,7 @@
 import fs from 'fs/promises'
 import path from 'path'
 import crypto from 'crypto'
-import type { WorkspaceNode, WorkspacePrepareMode, WorkspaceSource } from '../../../shared/types'
+import type { WorkspaceNode, WorkspacePrepareMode } from '../../../shared/types'
 import type { WorkspaceNodeDiff, WorkspaceScanResult, WorkspaceValidationResult } from './types'
 
 const SUPPORTED_FILE_EXTENSIONS = new Set(['.pdf', '.docx'])

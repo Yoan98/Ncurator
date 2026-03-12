@@ -7,7 +7,7 @@ TBD - created by archiving change add-script-first-ai-testing-harness. Update Pu
 每个测试用例执行后 MUST 输出完整事件流与结构化断言结果，确保结果可回放、可审计、可定位；断言结果 MUST 明确包含 `suite`、`caseId`、`runId`、`taskId`、`caseStatus`、断言总数、失败断言 ID 与断言明细。
 
 #### Scenario: 用例执行完成
-- **WHEN** 任一 capability 或 human live 用例结束
+- **WHEN** 任一 capability 或 human 用例结束
 - **THEN** 系统 MUST 产出事件流文件与断言结果文件，且两者可按 `suite/caseId/runId/taskId` 关联
 
 #### Scenario: 用例失败定位
@@ -38,9 +38,9 @@ TBD - created by archiving change add-script-first-ai-testing-harness. Update Pu
 - **WHEN** capability 用例执行结束
 - **THEN** 报告 MUST 写入 `tests/report/<suite>/<case>/<timestamp>/` 下的标准文件集合
 
-#### Scenario: 生成 human live 用例报告
+#### Scenario: 生成 human 用例报告
 
-- **WHEN** human live 用例执行结束
+- **WHEN** human 用例执行结束
 - **THEN** 报告 MUST 与 capability 用例使用同一目录规范并可区分 suite 类型
 
 #### Scenario: 生成 e2e 用例报告
@@ -54,12 +54,12 @@ TBD - created by archiving change add-script-first-ai-testing-harness. Update Pu
 
 #### Scenario: 多工具用例生成结构化信号
 
-- **WHEN** capability 或 human live 用例执行多个工具步骤
+- **WHEN** capability 或 human 用例执行多个工具步骤
 - **THEN** `signals.json` MUST 保留工具调用顺序、按工具聚合的调用次数与结果码统计
 
 #### Scenario: human 阻塞用例生成结构化信号
 
-- **WHEN** human live 用例以阻塞终态收敛
+- **WHEN** human 用例以阻塞终态收敛
 - **THEN** `signals.json` MUST 包含最终 human 动作、阻塞结果码以及相关审批或工作区证据的结构化索引
 
 #### Scenario: renderer contract 或 e2e 测试生成 UI 诊断信号
