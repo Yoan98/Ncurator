@@ -14,6 +14,13 @@ type ToolOutcome = {
   data?: JsonValue
 }
 
+type AiRunContextWithToolOverride = AiRunContext & {
+  resolveToolExecutionOverride?: (input: {
+    toolName: string
+    args: JsonObject
+  }) => ToolOutcome | undefined
+}
+
 const parseJsonValue = (text: string): JsonValue | null => {
   const trimmed = String(text || '').trim()
   if (!trimmed) return null
@@ -124,6 +131,27 @@ const buildToolCallMessage = (toolName: string, args: JsonObject): AIMessage => 
   })
 }
 
+const toInjectedOutputPreview = (outcome: ToolOutcome): JsonValue => {
+  if (isJsonObject(outcome.data)) {
+    return {
+      ...outcome.data,
+      ok: outcome.ok,
+      code: outcome.code,
+      summary: outcome.summary
+    }
+  }
+
+  const preview: JsonObject = {
+    ok: outcome.ok,
+    code: outcome.code,
+    summary: outcome.summary
+  }
+  if (outcome.data !== undefined) {
+    preview.data = outcome.data
+  }
+  return preview
+}
+
 const getActiveToolNames = (state: HumanRunState): string[] => {
   return state.activeTools
     .map((tool) => String(tool.name || '').trim())
@@ -132,6 +160,7 @@ const getActiveToolNames = (state: HumanRunState): string[] => {
 
 export const createHumanToolExecNode = (input: { ctx: AiRunContext }) => {
   const { ctx } = input
+  const ctxWithToolOverride = ctx as AiRunContextWithToolOverride
 
   return async (state: HumanRunState): Promise<Partial<HumanRunState>> => {
     ctx.checkCancelled()
@@ -225,48 +254,90 @@ export const createHumanToolExecNode = (input: { ctx: AiRunContext }) => {
 
     let outcome: ToolOutcome
 
-    try {
-      const aiMessage = buildToolCallMessage(decision.toolName, decision.args)
-      const out = await new ToolNode(state.activeTools).invoke({ messages: [aiMessage] })
-      const toolMessages = getToolNodeMessages(out)
-      if (toolMessages.length === 0) {
-        outcome = {
-          ok: false,
-          code: 'invalid_input',
-          summary: `tool execution produced no result: ${decision.toolName}`,
-          data: { toolName: decision.toolName, args: decision.args }
-        }
-      } else {
-      const lastToolMessage = toolMessages.at(-1)
-        const text = getMessageText(lastToolMessage?.content).trim()
-        if (!text) {
+    const injectedOutcome = ctxWithToolOverride.resolveToolExecutionOverride?.({
+      toolName: decision.toolName,
+      args: decision.args
+    })
+
+    if (injectedOutcome) {
+      const toolCallId = randomUUID()
+      ctx.sendEvent({
+        type: 'tool_call_started',
+        runId: state.runId,
+        taskId: state.input.taskId,
+        toolCallId,
+        toolName: decision.toolName,
+        input: decision.args,
+        createdAt: Date.now(),
+        stage: 'human_tool_exec',
+        internal: true
+      })
+      ctx.sendEvent({
+        type: 'tool_call_result',
+        runId: state.runId,
+        taskId: state.input.taskId,
+        toolCallId,
+        toolName: decision.toolName,
+        outputPreview: toInjectedOutputPreview(injectedOutcome),
+        completedAt: Date.now(),
+        error: injectedOutcome.ok ? undefined : injectedOutcome.summary,
+        stage: 'human_tool_exec',
+        internal: true
+      })
+      outcome = injectedOutcome
+    } else {
+      try {
+        const aiMessage = buildToolCallMessage(decision.toolName, decision.args)
+        const out = await new ToolNode(state.activeTools).invoke({ messages: [aiMessage] })
+        const toolMessages = getToolNodeMessages(out)
+        if (toolMessages.length === 0) {
           outcome = {
             ok: false,
             code: 'invalid_input',
-            summary: `tool execution returned empty content: ${decision.toolName}`,
+            summary: `tool execution produced no result: ${decision.toolName}`,
             data: { toolName: decision.toolName, args: decision.args }
           }
         } else {
-          const payload = parseJsonValue(text)
-          if (payload === null) {
+          const lastToolMessage = toolMessages.at(-1)
+          const text = getMessageText(lastToolMessage?.content).trim()
+          if (!text) {
             outcome = {
               ok: false,
               code: 'invalid_input',
-              summary: `tool execution returned unparseable content: ${decision.toolName}`,
-              data: { raw: text }
+              summary: `tool execution returned empty content: ${decision.toolName}`,
+              data: { toolName: decision.toolName, args: decision.args }
             }
           } else {
-            outcome = extractToolOutcome(decision.toolName, payload)
+            const payload = parseJsonValue(text)
+            if (payload === null) {
+              if (decision.toolName.startsWith('kb_')) {
+                outcome = {
+                  ok: true,
+                  code: 'ok',
+                  summary: `${decision.toolName} returned text evidence`,
+                  data: { raw: text }
+                }
+              } else {
+                outcome = {
+                  ok: false,
+                  code: 'invalid_input',
+                  summary: `tool execution returned unparseable content: ${decision.toolName}`,
+                  data: { raw: text }
+                }
+              }
+            } else {
+              outcome = extractToolOutcome(decision.toolName, payload)
+            }
           }
         }
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      outcome = {
-        ok: false,
-        code: 'failed',
-        summary: message || `${decision.toolName} failed`,
-        data: { error: message }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        outcome = {
+          ok: false,
+          code: 'failed',
+          summary: message || `${decision.toolName} failed`,
+          data: { error: message }
+        }
       }
     }
 

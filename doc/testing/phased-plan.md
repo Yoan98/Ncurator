@@ -38,13 +38,28 @@
 
 - 目标：
   - human 子图在真实模型下完成单任务并正确收敛阻塞。
+  - 产出可比较的质量分级、稳定性与效率数据，为 prompt/skill/tool/model 优化提供输入。
 - 主要用例目录：
   - `tests/main/ai/human/**`
 - 主要命令：
   - `pnpm test:main:ai:human`
+  - `pnpm test:main:ai:human:analyze`
 - 阶段产物：
   - `tests/report/main-ai-human/**`
+  - `tests/report/main-ai-human/human-assessment.md`
   - `doc/testing/upgrade-journal.md` 追加记录
+
+评估分层：
+- `P0` 基线回归：单次执行成功路径、阻塞路径与 fail-fast 门禁。
+- `P1` 覆盖扩展：补齐 local-kb、多 skill、workspace 缺失与恢复能力。
+- `P2` 评估批次：关键 case 执行 `5-10` 轮，检查通过率、软成功比例、工具错误恢复与重复调用。
+- `P3` 升级验证：固定用例集后，对 prompt/skill/tool/model 改动做前后对比。
+
+推进门槛：
+- 成功路径通过率至少 `80%`。
+- 阻塞路径语义正确率至少 `95%`。
+- `unexpected_block` 不应多于 `soft_pass`。
+- assessment 中不得存在未隔离的 `harness_fail` 结论污染。
 
 ### 2.3 `main context`
 
@@ -80,15 +95,10 @@
   - 对应 suite 报告目录
   - `doc/testing/upgrade-journal.md` 追加记录
 
-## 3. 当前阶段状态（2026-03-11）
+## 3. 当前阶段判定来源
 
-- 当前判断：
-  - `tool capability` 已达到“可进入下一阶段”的门槛。
-- 依据：
-  - `tests/report/main-ai-capability/tool-capability-assessment.md`：`21/21` 通过。
-  - [upgrade-journal.md](/Users/test/work-space/NCurator-Desktop/doc/testing/upgrade-journal.md) 中 `2026-03-11 tool capability` 记录：`基本可用（建议继续优化）`。
-- 下一阶段：
-  - `human 单任务`
+- 当前阶段、推进决策、下一阶段目标，以 [upgrade-journal.md](/Users/test/work-space/NCurator-Desktop/doc/testing/upgrade-journal.md) 最新记录为准。
+- 本文件不维护按日期的阶段快照，避免与持续汇总文档发生漂移。
 
 ## 4. 每轮测试结束后的固定动作
 

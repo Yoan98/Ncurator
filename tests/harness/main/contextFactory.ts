@@ -6,7 +6,13 @@ import type { AiRunContext } from '../../../src/main/services/ai/types'
 import type { AiApprovalDecision, AiApprovalRequest } from '../../../src/main/services/ai/types'
 import type { JsonObject } from '../../../src/shared/types'
 import type { EventCollector } from './eventCollector'
-import type { ApprovalPolicy, ApprovalResolver, LiveLlmConfig } from './types'
+import type {
+  ApprovalPolicy,
+  ApprovalResolver,
+  LiveLlmConfig,
+  TestDocumentsStoreOverrides,
+  TestToolExecutionOverride
+} from './types'
 
 const buildApprovalResolver = (
   policy: ApprovalPolicy | ApprovalResolver | undefined
@@ -21,11 +27,16 @@ const buildApprovalResolver = (
   return () => ({ approved: true })
 }
 
-const buildDocumentsStoreStub = () => ({
-  hybridSearch: async () => [],
-  vectorSearch: async () => [],
-  ftsSearch: async () => [],
-  listDocuments: async () => ({ items: [], total: 0 })
+type ToolExecutionOverrideResolver = (input: {
+  toolName: string
+  args: JsonObject
+}) => TestToolExecutionOverride['result'] | undefined
+
+const buildDocumentsStoreStub = (overrides: TestDocumentsStoreOverrides | undefined) => ({
+  hybridSearch: overrides?.hybridSearch || (async () => []),
+  vectorSearch: overrides?.vectorSearch || (async () => []),
+  ftsSearch: overrides?.ftsSearch || (async () => []),
+  listDocuments: overrides?.listDocuments || (async () => ({ items: [], total: 0 }))
 })
 
 const buildEmbeddingServiceStub = () => ({
@@ -34,6 +45,24 @@ const buildEmbeddingServiceStub = () => ({
     dims: [1, 768] as [number, number]
   })
 })
+
+const buildToolExecutionOverrideResolver = (
+  overrides: TestToolExecutionOverride[] | undefined
+): ToolExecutionOverrideResolver | undefined => {
+  if (!overrides || overrides.length === 0) return undefined
+
+  const rules = overrides.map((rule) => ({
+    ...rule,
+    remainingUses: Math.max(1, Number(rule.remainingUses || 1))
+  }))
+
+  return (input) => {
+    const matched = rules.find((rule) => rule.toolName === input.toolName && rule.remainingUses > 0)
+    if (!matched) return undefined
+    matched.remainingUses -= 1
+    return matched.result
+  }
+}
 
 const parseJsonObject = <T extends JsonObject>(text: string): T => {
   const trimmed = String(text || '').trim()
@@ -54,9 +83,12 @@ export const createTestAiRunContext = (input: {
   sessionId?: string
   workspaceRootPath: string
   eventCollector: EventCollector
+  bindWorkspace?: boolean
   selectedDocumentIds?: string[]
   approvalPolicy?: ApprovalPolicy | ApprovalResolver
   liveModelConfig?: LiveLlmConfig
+  documentsStoreOverrides?: TestDocumentsStoreOverrides
+  toolExecutionOverrides?: TestToolExecutionOverride[]
   trackDocxOpen?: (input: { docId: string; sourcePath: string }) => void
   trackDocxChanges?: (input: {
     previousDocId: string
@@ -68,9 +100,11 @@ export const createTestAiRunContext = (input: {
 }): AiRunContext => {
   const runId = input.runId || randomUUID()
   const sessionId = input.sessionId || 'test-session'
+  const bindWorkspace = input.bindWorkspace !== false
   const resolveApproval = buildApprovalResolver(input.approvalPolicy)
-  const documentsStoreStub = buildDocumentsStoreStub()
+  const documentsStoreStub = buildDocumentsStoreStub(input.documentsStoreOverrides)
   const embeddingServiceStub = buildEmbeddingServiceStub()
+  const resolveToolExecutionOverride = buildToolExecutionOverrideResolver(input.toolExecutionOverrides)
 
   const requestApproval = async (request: AiApprovalRequest): Promise<AiApprovalDecision> => {
     const approvalId = randomUUID()
@@ -105,10 +139,18 @@ export const createTestAiRunContext = (input: {
     runId,
     sessionId,
     selectedDocumentIds: input.selectedDocumentIds,
-    workspace: {
-      workspaceId: 'test-workspace',
-      rootPath: input.workspaceRootPath
-    },
+    selectedScopeSummary: bindWorkspace
+      ? `workspace:test-workspace`
+      : input.selectedDocumentIds?.length
+        ? `documents:${input.selectedDocumentIds.join(',')}`
+        : 'workspace:unbound',
+    allowNonLocal: false,
+    workspace: bindWorkspace
+      ? {
+          workspaceId: 'test-workspace',
+          rootPath: input.workspaceRootPath
+        }
+      : undefined,
     checkCancelled: () => undefined,
     chatJson: async <T extends JsonObject>(payload): Promise<T> => {
       if (!input.liveModelConfig) {
@@ -136,6 +178,7 @@ export const createTestAiRunContext = (input: {
     trackDocxOpen: input.trackDocxOpen || (() => undefined),
     trackDocxChanges: input.trackDocxChanges || (() => undefined),
     trackDocxPreview: input.trackDocxPreview || (() => undefined),
+    resolveToolExecutionOverride,
     getModelConfig: async () => {
       if (!input.liveModelConfig) {
         throw new Error('live model config is required for this test case')

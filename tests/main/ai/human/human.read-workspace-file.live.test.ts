@@ -7,6 +7,7 @@ import { readLatestCaseReportArtifacts } from '../../../harness/main/reportInspe
 
 const FIXTURE_SOURCE = path.resolve(process.cwd(), 'tests/fixtures/main/workspace/human-input.txt')
 const CASE_ID = 'human-read-workspace-file'
+const EXPECTED_FIRST_LINE = 'Hello from human fixture.'
 
 describe('human', () => {
   test.skipIf(!isLiveSuiteEnabled())('human 应能读取 workspace 文件并完成任务', async () => {
@@ -50,6 +51,11 @@ describe('human', () => {
           details: `status=${result.status}, resultCode=${result.resultCode}, summary=${result.summary}`
         })
         recordAssertion(runtime.assertions, {
+          id: 'human.result.first-line',
+          pass: result.resultData?.first_line === EXPECTED_FIRST_LINE,
+          details: JSON.stringify(result.resultData)
+        })
+        recordAssertion(runtime.assertions, {
           id: 'human.skills.workspace-shell-loaded-first',
           pass: skillLoadIndex >= 0 && firstToolCallIndex > skillLoadIndex,
           details: `skillLoadIndex=${skillLoadIndex}, firstToolCallIndex=${firstToolCallIndex}`
@@ -71,5 +77,9 @@ describe('human', () => {
     expect(report.metrics.executionStatus).toBe('completed')
     expect(report.signals.finalHumanAction).toBe('complete_task')
     expect(report.signals.skillActivationSequence[0]).toBe('workspace-shell')
+    expect(report.metrics.toolCallCount).toBeLessThanOrEqual(2)
+    expect(report.metrics.stepBudgetUsage ?? 1).toBeLessThanOrEqual(0.75)
+    expect(report.signals.resultDataKeys).toContain('first_line')
+    expect(['hard_pass', 'soft_pass']).toContain(report.metrics.qualityGrade)
   })
 })

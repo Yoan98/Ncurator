@@ -3,6 +3,7 @@ import path from 'node:path'
 import { HUMAN_STEP_ACTIONS } from '../../../src/shared/constants'
 import {
   type AiRunEvent,
+  type AiRunEventStage,
   type IpcJsonValue,
   type RuntimeSkillId
 } from '../../../src/shared/types'
@@ -10,6 +11,7 @@ import type {
   ArtifactOperationCounts,
   CaseAssertionsReport,
   CaseMetricsReport,
+  CaseQualityGrade,
   CaseReportInput,
   CaseRuntimeMetrics,
   CaseSignalsReport,
@@ -45,6 +47,11 @@ const isJsonRecord = (value: IpcJsonValue): value is Record<string, IpcJsonValue
 
 const isStringArray = (value: IpcJsonValue | undefined): value is string[] => {
   return Array.isArray(value) && value.every((item) => typeof item === 'string')
+}
+
+const toJsonObjectKeys = (value: CaseReportInput['execution']['resultData']): string[] => {
+  if (!value) return []
+  return Object.keys(value).sort()
 }
 
 const incrementCount = (counts: Record<string, number>, key: string): void => {
@@ -109,18 +116,31 @@ const inspectEvents = (events: AiRunEvent[]) => {
   let approvalApprovedCount = 0
   let approvalDeniedCount = 0
   let workspaceRequiredCount = 0
+  let toolErrorCount = 0
+  let repeatedToolCallCount = 0
   let finalHumanAction: CaseSignalsReport['finalHumanAction']
+  let firstFailureStage: AiRunEventStage | undefined
+  let previousToolName: string | undefined
 
   for (const event of events) {
     if (event.type === 'tool_call_started') {
       toolSequence.push(event.toolName)
       incrementCount(toolCounts, event.toolName)
+      if (previousToolName === event.toolName) {
+        repeatedToolCallCount += 1
+      }
+      previousToolName = event.toolName
       continue
     }
 
     if (event.type === 'tool_call_result') {
-      incrementNestedCount(toolResultCodeCounts, event.toolName, extractToolResultCode(event))
+      const resultCode = extractToolResultCode(event)
+      incrementNestedCount(toolResultCodeCounts, event.toolName, resultCode)
       warningCount += extractWarnings(event).length
+      if (resultCode !== 'ok') {
+        toolErrorCount += 1
+        firstFailureStage ||= event.stage
+      }
       continue
     }
 
@@ -136,12 +156,16 @@ const inspectEvents = (events: AiRunEvent[]) => {
 
     if (event.type === 'approval_decision') {
       if (event.approved) approvalApprovedCount += 1
-      else approvalDeniedCount += 1
+      else {
+        approvalDeniedCount += 1
+        firstFailureStage ||= event.stage
+      }
       continue
     }
 
     if (event.type === 'workspace_required') {
       workspaceRequiredCount += 1
+      firstFailureStage ||= event.stage
       continue
     }
 
@@ -150,6 +174,9 @@ const inspectEvents = (events: AiRunEvent[]) => {
       stepActionCounts[event.action] += 1
       if (event.action === 'load_skill' && event.skillId) {
         skillActivationSequence.push(event.skillId)
+      }
+      if (event.resultStatus === 'error' || event.resultStatus === 'blocked') {
+        firstFailureStage ||= event.stage
       }
       finalHumanAction = event.action
     }
@@ -168,8 +195,43 @@ const inspectEvents = (events: AiRunEvent[]) => {
     approvalApprovedCount,
     approvalDeniedCount,
     workspaceRequiredCount,
+    toolErrorCount,
+    repeatedToolCallCount,
+    firstFailureStage,
     finalHumanAction
   }
+}
+
+const resolveQualityGrade = (input: {
+  suite: CaseReportInput['suite']
+  caseErrorCode: CaseReportInput['caseErrorCode']
+  executionStatus: CaseReportInput['execution']['status']
+  expectedOutcome?: CaseSignalsReport['expectedOutcome']
+  toolErrorCount: number
+  repeatedToolCallCount: number
+  stepBudgetUsage?: number
+}): CaseQualityGrade => {
+  if (input.suite !== 'main-ai-human') return 'unknown'
+  if (
+    input.caseErrorCode === 'fixture_missing' ||
+    input.caseErrorCode === 'live_config_missing' ||
+    input.executionStatus === 'not_run'
+  ) {
+    return 'harness_fail'
+  }
+  if (input.expectedOutcome === 'blocked') {
+    return input.executionStatus === 'blocked' ? 'expected_block' : 'unknown'
+  }
+  if (input.executionStatus === 'blocked') return 'unexpected_block'
+  if (input.executionStatus !== 'completed') return 'unknown'
+  if (
+    input.toolErrorCount === 0 &&
+    input.repeatedToolCallCount === 0 &&
+    (input.stepBudgetUsage === undefined || input.stepBudgetUsage <= 0.75)
+  ) {
+    return 'hard_pass'
+  }
+  return 'soft_pass'
 }
 
 const resolveFinalHumanAction = (input: {
@@ -186,18 +248,40 @@ const resolveFinalHumanAction = (input: {
 const buildMetrics = (input: { report: CaseReportInput }): CaseRuntimeMetrics => {
   const events = input.report.events
   const inspected = inspectEvents(events)
+  const humanStepCount = events.filter((event) => event.type === 'human_step').length
+  const maxSteps = input.report.signalOverrides?.maxSteps
+  const stepBudgetUsage =
+    input.report.suite === 'main-ai-human' && maxSteps && maxSteps > 0
+      ? Number((humanStepCount / maxSteps).toFixed(4))
+      : undefined
+  const recoveryAfterErrorCount =
+    input.report.execution.status === 'completed' ? inspected.toolErrorCount : 0
+  const qualityGrade = resolveQualityGrade({
+    suite: input.report.suite,
+    caseErrorCode: input.report.caseErrorCode,
+    executionStatus: input.report.execution.status,
+    expectedOutcome: input.report.signalOverrides?.expectedOutcome,
+    toolErrorCount: inspected.toolErrorCount,
+    repeatedToolCallCount: inspected.repeatedToolCallCount,
+    stepBudgetUsage
+  })
   return {
     durationMs: Math.max(0, input.report.finishedAt - input.report.startedAt),
     eventCount: events.length,
     toolCallCount: events.filter((event) => event.type === 'tool_call_started').length,
-    humanStepCount: events.filter((event) => event.type === 'human_step').length,
+    humanStepCount,
     terminalStepCount: events.filter((event) => event.type.startsWith('terminal_step_')).length,
     fileArtifactCount: events.filter((event) => event.type === 'file_artifact').length,
     approvalRequiredCount: inspected.approvalRequiredCount,
     approvalApprovedCount: inspected.approvalApprovedCount,
     approvalDeniedCount: inspected.approvalDeniedCount,
     workspaceRequiredCount: inspected.workspaceRequiredCount,
-    warningCount: inspected.warningCount
+    warningCount: inspected.warningCount,
+    toolErrorCount: inspected.toolErrorCount,
+    recoveryAfterErrorCount,
+    repeatedToolCallCount: inspected.repeatedToolCallCount,
+    stepBudgetUsage,
+    qualityGrade
   }
 }
 
@@ -249,6 +333,10 @@ const buildSignalsReport = (input: {
     runId: input.report.runId,
     taskId: input.report.taskId,
     expectedOutcome: input.report.signalOverrides?.expectedOutcome,
+    taskGoal: input.report.signalOverrides?.taskGoal,
+    maxSteps: input.report.signalOverrides?.maxSteps,
+    approvalPolicy: input.report.signalOverrides?.approvalPolicy,
+    modelName: input.report.signalOverrides?.modelName,
     scenarioTags: input.report.signalOverrides?.scenarioTags || [],
     toolSequence: inspected.toolSequence,
     toolCounts: inspected.toolCounts,
@@ -258,6 +346,8 @@ const buildSignalsReport = (input: {
     skillActivationSequence: inspected.skillActivationSequence,
     failedAssertionIds: input.assertions.failedAssertionIds,
     artifactOperationCounts: inspected.artifactOperationCounts,
+    resultDataKeys: toJsonObjectKeys(input.report.execution.resultData),
+    firstFailureStage: inspected.firstFailureStage,
     finalHumanAction: resolveFinalHumanAction({
       suite: input.report.suite,
       observedAction: inspected.finalHumanAction,
@@ -281,6 +371,7 @@ const buildSummaryMarkdown = (input: {
   const failedAssertionText =
     assertions.failedAssertionIds.length > 0 ? assertions.failedAssertionIds.join(', ') : 'none'
   const scenarioTagText = signals.scenarioTags.length > 0 ? signals.scenarioTags.join(', ') : 'none'
+  const resultDataKeysText = signals.resultDataKeys.length > 0 ? signals.resultDataKeys.join(', ') : 'none'
   return [
     `# ${report.caseId}`,
     '',
@@ -294,10 +385,18 @@ const buildSummaryMarkdown = (input: {
     `- durationMs: ${metrics.durationMs}`,
     `- assertions: ${assertions.assertionPassed}/${assertions.assertionTotal}`,
     `- failedAssertionIds: ${failedAssertionText}`,
+    `- qualityGrade: ${metrics.qualityGrade || 'unknown'}`,
     `- toolSequence: ${toolSequenceText}`,
     `- skillActivationSequence: ${skillActivationText}`,
     `- scenarioTags: ${scenarioTagText}`,
+    `- taskGoal: ${signals.taskGoal || 'none'}`,
+    `- maxSteps: ${signals.maxSteps ?? 'none'}`,
+    `- modelName: ${signals.modelName || 'none'}`,
+    `- resultDataKeys: ${resultDataKeysText}`,
     `- approvalDeniedCount: ${metrics.approvalDeniedCount}`,
+    `- toolErrorCount: ${metrics.toolErrorCount ?? 0}`,
+    `- repeatedToolCallCount: ${metrics.repeatedToolCallCount ?? 0}`,
+    `- stepBudgetUsage: ${metrics.stepBudgetUsage ?? 'none'}`,
     `- warningCount: ${metrics.warningCount}`,
     '',
     '## Notes',

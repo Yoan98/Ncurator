@@ -11,6 +11,9 @@ import { createHumanRunStateSchema } from '../state/stateSchemas'
 export const createHumanGraphRunner = (input: { ctx: AiRunContext; maxSteps?: number }) => {
   const { ctx } = input
   const maxSteps = Math.max(1, Number(input.maxSteps || 6))
+  // Each human step can traverse brain + loader/tool nodes, so LangGraph recursion
+  // must scale with maxSteps instead of relying on the default limit.
+  const recursionLimit = Math.max(32, maxSteps * 4 + 8)
   const State = createHumanRunStateSchema()
 
   const brainNode = createHumanBrainNode({ ctx })
@@ -39,22 +42,27 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext; maxSteps?: nu
     .compile()
 
   return async (taskInput: HumanTaskInput): Promise<HumanTaskOutput> => {
-    const output = (await graph.invoke({
-      runId: ctx.runId,
-      input: taskInput,
-      phase: 'brain',
-      status: 'running',
-      steps: 0,
-      maxSteps,
-      availableSkillCards: buildAvailableSkillCards(),
-      loadedSkills: {},
-      loadedToolsets: {},
-      activeSkillIds: [],
-      activeTools: [],
-      stepHistory: [],
-      summary: '',
-      resultCode: 'failed'
-    } as HumanRunState)) as HumanRunState
+    const output = (await graph.invoke(
+      {
+        runId: ctx.runId,
+        input: taskInput,
+        phase: 'brain',
+        status: 'running',
+        steps: 0,
+        maxSteps,
+        availableSkillCards: buildAvailableSkillCards(),
+        loadedSkills: {},
+        loadedToolsets: {},
+        activeSkillIds: [],
+        activeTools: [],
+        stepHistory: [],
+        summary: '',
+        resultCode: 'failed'
+      } as HumanRunState,
+      {
+        recursionLimit
+      }
+    )) as HumanRunState
 
     return {
       taskId: taskInput.taskId,

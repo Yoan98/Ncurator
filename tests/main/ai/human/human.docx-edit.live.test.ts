@@ -24,7 +24,7 @@ describe('human', () => {
         requiredFixtures: [FIXTURE_SOURCE],
         fixtureCopies: [{ from: FIXTURE_SOURCE, to: 'input.docx' }],
         approvalPolicy: 'auto-approve',
-        maxSteps: 10,
+        maxSteps: 14,
         assert: async (result, runtime) => {
           const events = runtime.eventCollector.snapshot()
           const outputPath = path.join(runtime.workspaceRoot, 'output.docx')
@@ -57,6 +57,11 @@ describe('human', () => {
             details: `status=${result.status}, resultCode=${result.resultCode}, summary=${result.summary}`
           })
           recordAssertion(runtime.assertions, {
+            id: 'human.result.out-path',
+            pass: String(result.resultData?.out_path || '').includes('output.docx'),
+            details: JSON.stringify(result.resultData)
+          })
+          recordAssertion(runtime.assertions, {
             id: 'human.skills.docx-editing-loaded',
             pass: loadedDocxSkill,
             details: 'expected load_skill(docx-editing) before docx tool execution'
@@ -83,6 +88,13 @@ describe('human', () => {
       expect(report.metrics.executionStatus).toBe('completed')
       expect(report.signals.finalHumanAction).toBe('complete_task')
       expect(report.signals.skillActivationSequence).toContain('docx-editing')
+      expect(report.signals.resultDataKeys).toContain('out_path')
+      expect(report.metrics.stepBudgetUsage ?? 1).toBeLessThanOrEqual(1)
+      if ((report.metrics.toolErrorCount || 0) > 0) {
+        expect(report.metrics.qualityGrade).toBe('soft_pass')
+      } else {
+        expect(['hard_pass', 'soft_pass']).toContain(report.metrics.qualityGrade)
+      }
     },
     240000
   )

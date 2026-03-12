@@ -36,6 +36,18 @@ describe('human', () => {
             event.approved === false &&
             String(event.taskId || '') === runtime.taskId
         )
+        const approvalDeniedIndex = events.findIndex(
+          (event) =>
+            event.type === 'approval_decision' &&
+            event.approved === false &&
+            String(event.taskId || '') === runtime.taskId
+        )
+        const toolCallsAfterDenied = events.filter(
+          (event, index) =>
+            index > approvalDeniedIndex &&
+            event.type === 'tool_call_started' &&
+            String(event.taskId || '') === runtime.taskId
+        )
 
         recordAssertion(runtime.assertions, {
           id: 'human.status.blocked',
@@ -57,6 +69,11 @@ describe('human', () => {
           pass: approvalDenied,
           details: 'expected approval_decision with approved=false'
         })
+        recordAssertion(runtime.assertions, {
+          id: 'human.events.no-tool-call-after-denied',
+          pass: toolCallsAfterDenied.length === 0,
+          details: `toolCallsAfterDenied=${toolCallsAfterDenied.length}`
+        })
       }
     })
 
@@ -64,5 +81,7 @@ describe('human', () => {
     expect(report.metrics.executionStatus).toBe('blocked')
     expect(report.signals.finalHumanAction).toBe('block_task')
     expect(report.signals.skillActivationSequence).toContain('workspace-shell')
+    expect(report.metrics.toolCallCount).toBeLessThanOrEqual(1)
+    expect(report.metrics.qualityGrade).toBe('expected_block')
   })
 })

@@ -231,7 +231,9 @@ human 使用根目录 `.env` 配置：
 - `events.jsonl`：原始事件流，作为可回放证据。
 - `assertions.json`：结构化断言结果，包含 `caseStatus`、失败断言 ID 与断言明细。
 - `metrics.json`：统一标量指标，至少包含 `caseStatus`、`caseErrorCode`、`executionStatus`、`executionResultCode` 及步骤、审批、产物计数。
+  - `main-ai-human` 额外要求：`toolErrorCount`、`recoveryAfterErrorCount`、`repeatedToolCallCount`、`stepBudgetUsage`、`qualityGrade`。
 - `signals.json`：结构化信号，至少包含 `toolSequence`、`toolCounts`、`toolResultCodeCounts`、`stepActionSequence`、`skillActivationSequence`、`failedAssertionIds`，并在适用时补充 `expectedOutcome`、`scenarioTags`、`taskGoal`、`finalHumanAction`。
+  - `main-ai-human` 额外要求：`maxSteps`、`approvalPolicy`、`modelName`、`resultDataKeys`、`firstFailureStage`。
 - `summary.md`：事实性摘要，只转写上述结构化数据，不包含固定根因或优化建议。
 
 renderer / e2e 可选附加证据：
@@ -298,6 +300,12 @@ AI 消费 renderer / e2e 报告时，最小输入集合建议为：
 1. 新建 `tests/main/ai/human/*.live.test.ts`
 2. 复用 `runHumanCase`
 3. 明确 `objective`、审批策略和成功/阻塞断言
+4. 同时补充 `resultData`、步数预算、质量分级输入所需断言
+
+main human 评估分层：
+1. 回归层：每个 case 单次运行，目标是快速发现明显退化。
+2. 评估层：关键 case 执行多轮批次，目标是统计 `hard_pass / soft_pass / expected_block / unexpected_block / harness_fail`、稳定性与效率波动。
+3. 聚合层：执行 `pnpm test:main:ai:human:analyze`，生成 `tests/report/main-ai-human/human-assessment.md`。
 
 新增 renderer contract 用例时：
 1. 新建 `tests/renderer/<page>/contract/*.test.ts`
@@ -324,6 +332,7 @@ AI 消费 renderer / e2e 报告时，最小输入集合建议为：
   - `pnpm test:main:ai:capability:analyze`
   - `pnpm test:main:ai:runtime`
   - `pnpm test:main:ai:human`
+  - `pnpm test:main:ai:human:analyze`
   - `pnpm test:main:workspace:service`
   - `pnpm test:main:workspace:migration`
   - `pnpm test:renderer`

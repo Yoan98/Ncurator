@@ -53,6 +53,7 @@ describe('human/regression', () => {
     expect(report.assertions.caseStatus).toBe('failed')
     expect(report.metrics.caseErrorCode).toBe('live_config_missing')
     expect(report.metrics.executionStatus).toBe('not_run')
+    expect(report.metrics.qualityGrade).toBe('harness_fail')
     expect(report.summary).toContain('AI_LIVE_BASE_URL')
     expect(report.summary).toContain('AI_LIVE_MODEL_NAME')
     expect(report.summary).toContain('AI_LIVE_API_KEY')

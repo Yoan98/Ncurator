@@ -46,6 +46,89 @@
 
 ## 3. 历史记录
 
+## [2026-03-12] human 单任务 - P1 覆盖扩展轮次
+
+- 时间：2026-03-12 17:38（本地）
+- 阶段：human 单任务
+- 执行命令：
+  - `pnpm exec vitest --config vitest.ai.config.mts run tests/main/ai/human/human.local-kb-answer.live.test.ts tests/main/ai/human/human.local-kb-empty-result.live.test.ts tests/main/ai/human/human.workspace-missing.live.test.ts tests/main/ai/human/human.multi-skill-kb-then-shell.live.test.ts tests/main/ai/human/human.tool-error-recovery.live.test.ts`
+  - `pnpm test:main:ai:human`
+  - `pnpm exec vitest --config vitest.ai.config.mts run tests/main/ai/human/human.workspace-missing.live.test.ts`
+  - `pnpm test:main:ai:human:analyze`
+- 报告路径：
+  - `tests/report/main-ai-human/**`
+  - `tests/report/main-ai-human/human-assessment.md`
+- 结果摘要：
+  - 当前 human 用例：`12`
+  - assessment 总运行：`42`
+  - latest quality：`hard_pass=4`、`soft_pass=1`、`expected_block=6`、`harness_fail=1`
+  - 新增覆盖：
+    - `local-kb-retrieval`：`human-local-kb-answer`、`human-local-kb-empty-result-block`
+    - `workspace_required`：`human-workspace-missing-block`
+    - 多 skill：`human-multi-skill-kb-then-shell`
+    - 恢复能力：`human-tool-error-recovery`
+- 风险与边界：
+  - `human-docx-edit`、`human-local-kb-answer`、`human-multi-skill-kb-then-shell` 历史成功率仍未到完全稳定，assessment 里分别是 `71.43% / 75.00% / 75.00%`。
+  - `human-tool-error-recovery` 已能稳定完成，但始终属于 `soft_pass`，说明恢复路径成本仍偏高。
+  - 全量 `pnpm test:main:ai:human` 中 `human-workspace-missing-block` 出现过一次 `240s` 超时；同日单独重跑通过，当前更像 live 模型长尾而非用例语义错误。
+- 推进决策：
+  - 允许把 `human 单任务` 阶段推进到“P1 覆盖已具备，后续重点转稳定性与升级验证”。
+- 下一轮优先级：
+  1. 对 `human-docx-edit`、`human-local-kb-answer`、`human-multi-skill-kb-then-shell` 做更系统的 `5-10` 轮批次，确认波动来源。
+  2. 收敛 retrieval 结果在 human 中的结构化消费，减少 `kb_*` 文本证据 fallback。
+  3. 清理 stale 报告目录，避免历史旧 case 干扰结论阅读。
+
+### 阶段专题结论（按需）
+- 覆盖范围：
+  - 三个 skill 都已有正向或阻塞证据。
+  - workspace 缺失、多 skill 协作、单次工具失败恢复均已有 live 报告。
+- 能力边界：
+  - local-kb 在 human 中可用，但对检索结果的结构化消费仍不够稳，当前部分依赖文本证据 fallback。
+  - multi-skill 已可完成 `KB -> shell` 协作，但复杂任务仍存在历史 `unexpected_block` 记录。
+- 门槛判定：
+  - `P1` 覆盖已完成。
+  - 下一阶段重点不再是“有没有 case”，而是“关键 case 的稳定性是否足够支撑升级决策”。
+
+## [2026-03-12] human 单任务 - P0 基线评估轮次
+
+- 时间：2026-03-12 17:09（本地）
+- 阶段：human 单任务
+- 执行命令：
+  - `pnpm test:main:ai:human`
+  - `pnpm exec vitest --config vitest.ai.config.mts run tests/main/ai/human/human.read-workspace-file.live.test.ts tests/main/ai/human/human.approval-denied.live.test.ts tests/main/ai/human/human.docx-edit.live.test.ts`
+  - `pnpm test:main:ai:human:analyze`
+- 报告路径：
+  - `tests/report/main-ai-human/**`
+  - `tests/report/main-ai-human/human-assessment.md`
+- 结果摘要：
+  - P0 基线用例：`7/7`
+  - assessment 当前用例：`7`
+  - assessment 总运行：`21`
+  - latest quality：`hard_pass=2`、`expected_block=4`、`harness_fail=1`
+  - 关键 case 稳定性：`human-read-workspace-file=3/3`、`human-approval-denied-block=3/3`、`human-docx-edit=4/6`
+- 风险与边界：
+  - `human-docx-edit` 已从阻塞恢复为可完成，但仍存在 `soft_pass` 与历史 `unexpected_block`，主要表现为 `docx_save` 参数纠错和额外 `get_history` 绕路。
+  - `human-missing-live-config-fail-fast` 属于 `harness_fail` 门禁，不纳入能力效果判断。
+  - assessment 识别到 stale 报告目录：`human-brain-mock-decision-regression`、`human-missing-config-fail-fast`、`human-missing-fixture-fail-fast`。
+- 推进决策：
+  - 允许将 `human 单任务` 阶段视为已具备 P0 基线评估能力，但仍需留在当前阶段继续补齐 P1 覆盖与 docx 稳定性收敛。
+- 下一轮优先级：
+  1. 为 `local-kb-retrieval` 补齐可注入 `documentsStore` 的 harness，并新增正向/空结果 case。
+  2. 为 workspace 缺失与一次性工具失败注入补充 harness 能力，覆盖多 skill 与恢复路径。
+  3. 继续对 `human-docx-edit` 做多轮评估，确认 `docx_save(outPath)` 路径是否稳定。
+
+### 阶段专题结论（按需）
+- 覆盖范围：
+  - 单 skill 成功：workspace-shell、docx
+  - 负路径阻塞：approval denied、nonexistent file、local evidence insufficient、step budget exhausted
+  - 环境门禁：missing live config
+- 能力边界：
+  - `workspace-shell` 成功与阻塞语义已稳定。
+  - `docx-editing` 需要显式暴露 `docx_save` 且在 skill card 中强调 `outPath` 参数，否则 human 会因保存参数漂移而出现软成功或意外阻塞。
+- 门槛判定：
+  - P0 成功路径与阻塞路径均已形成结构化报告和 assessment。
+  - 当前更像“可以继续扩大覆盖”，而不是“可以结束 human 阶段”。
+
 ## [2026-03-12] unified workbench + draft review - 确认提交流程回归轮次
 
 - 时间：2026-03-12 13:49（本地）

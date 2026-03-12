@@ -31,15 +31,34 @@ export const parseJsonObject = <T extends JsonObject>(text: string): T => {
 
 export const getMessageText = (content: MessageContent): string => {
   if (typeof content === 'string') return content
-  if (!Array.isArray(content)) return String(content ?? '')
+  if (!Array.isArray(content)) {
+    if (content && typeof content === 'object') {
+      try {
+        return JSON.stringify(content)
+      } catch {
+        return ''
+      }
+    }
+    return String(content ?? '')
+  }
 
-  return content
+  const textChunks = content
     .map((chunk) => {
       if (typeof chunk === 'string') return chunk
       if ('text' in chunk && typeof chunk.text === 'string') return chunk.text
       return ''
     })
-    .join('\n')
+    .filter((chunk) => chunk.length > 0)
+
+  if (textChunks.length > 0) {
+    return textChunks.join('\n')
+  }
+
+  try {
+    return JSON.stringify(content)
+  } catch {
+    return ''
+  }
 }
 
 export const getToolCalls = (message: AIMessage) => {

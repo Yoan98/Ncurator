@@ -7,7 +7,9 @@ import type {
   CaseAssertion,
   CaseErrorCode,
   CaseExecutionOutcome,
-  CaseExpectedOutcome
+  CaseExpectedOutcome,
+  TestDocumentsStoreOverrides,
+  TestToolExecutionOverride
 } from './types'
 import { EventCollector } from './eventCollector'
 import { assertRequiredFixtures } from './fixtureGuard'
@@ -28,6 +30,8 @@ type HumanRuntime = {
   ctx: AiRunContext
   eventCollector: EventCollector
   assertions: CaseAssertion[]
+  maxSteps: number
+  approvalPolicy: 'auto-approve' | 'deny-medium-high' | 'deny-all'
 }
 
 export const runHumanCase = async (input: {
@@ -36,6 +40,10 @@ export const runHumanCase = async (input: {
   objective: string
   requiredFixtures: string[]
   fixtureCopies: FixtureCopy[]
+  bindWorkspace?: boolean
+  selectedDocumentIds?: string[]
+  documentsStoreOverrides?: TestDocumentsStoreOverrides
+  toolExecutionOverrides?: TestToolExecutionOverride[]
   approvalPolicy?: 'auto-approve' | 'deny-medium-high' | 'deny-all'
   maxSteps?: number
   expectedOutcome?: CaseExpectedOutcome
@@ -44,11 +52,14 @@ export const runHumanCase = async (input: {
 }): Promise<void> => {
   const runId = randomUUID()
   const taskId = `task-${input.caseId}`
+  const approvalPolicy = input.approvalPolicy || 'auto-approve'
+  const maxSteps = input.maxSteps || 8
   const startedAt = Date.now()
   const notes: string[] = [input.description]
   const assertions: CaseAssertion[] = []
   const eventCollector = new EventCollector()
   let workspaceRoot = ''
+  let modelName: string | undefined
   let caseStatus: 'passed' | 'failed' = 'passed'
   let caseErrorCode: CaseErrorCode = 'none'
   let execution: CaseExecutionOutcome = {
@@ -59,6 +70,7 @@ export const runHumanCase = async (input: {
   try {
     await assertRequiredFixtures(input.requiredFixtures)
     const liveConfig = loadLiveLlmConfigFromEnv()
+    modelName = liveConfig.model_name
     workspaceRoot = await createIsolatedWorkspace(input.caseId)
     await copyFixturesIntoWorkspace(workspaceRoot, input.fixtureCopies)
 
@@ -66,8 +78,12 @@ export const runHumanCase = async (input: {
       runId,
       workspaceRootPath: workspaceRoot,
       eventCollector,
-      approvalPolicy: input.approvalPolicy || 'auto-approve',
-      liveModelConfig: liveConfig
+      bindWorkspace: input.bindWorkspace,
+      selectedDocumentIds: input.selectedDocumentIds,
+      approvalPolicy,
+      liveModelConfig: liveConfig,
+      documentsStoreOverrides: input.documentsStoreOverrides,
+      toolExecutionOverrides: input.toolExecutionOverrides
     })
     const runtime: HumanRuntime = {
       runId,
@@ -75,12 +91,14 @@ export const runHumanCase = async (input: {
       workspaceRoot,
       ctx,
       eventCollector,
-      assertions
+      assertions,
+      maxSteps,
+      approvalPolicy
     }
 
     const runHumanTask = createHumanGraphRunner({
       ctx,
-      maxSteps: input.maxSteps || 8
+      maxSteps
     })
     const result = await runHumanTask({
       taskId,
@@ -90,7 +108,8 @@ export const runHumanCase = async (input: {
     execution = {
       status: result.status === 'completed' ? 'completed' : 'blocked',
       resultCode: result.resultCode,
-      summary: result.summary
+      summary: result.summary,
+      resultData: result.resultData
     }
 
     await input.assert(result, runtime)
@@ -119,7 +138,11 @@ export const runHumanCase = async (input: {
       execution,
       signalOverrides: {
         expectedOutcome: input.expectedOutcome,
-        scenarioTags: input.scenarioTags
+        scenarioTags: input.scenarioTags,
+        taskGoal: input.objective,
+        maxSteps,
+        approvalPolicy,
+        modelName
       },
       assertions,
       events: eventCollector.snapshot(),

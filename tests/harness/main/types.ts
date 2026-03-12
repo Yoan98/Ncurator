@@ -1,7 +1,11 @@
-import type { AiApprovalDecision, AiApprovalRequest } from '../../../src/main/services/ai/types'
+import type { AiApprovalDecision, AiApprovalRequest, AiRunContext } from '../../../src/main/services/ai/types'
 import type {
   AiRunEvent,
+  AiRunEventStage,
+  AiTaskResultCode,
   HumanStepAction,
+  JsonObject,
+  JsonValue,
   LLMConfig,
   RuntimeSkillId
 } from '../../../src/shared/types'
@@ -9,6 +13,21 @@ import type {
 export type ApprovalPolicy = 'auto-approve' | 'deny-medium-high' | 'deny-all'
 
 export type ApprovalResolver = (request: AiApprovalRequest) => AiApprovalDecision
+
+export type TestDocumentsStoreOverrides = Partial<
+  Pick<AiRunContext['documentsStore'], 'hybridSearch' | 'vectorSearch' | 'ftsSearch' | 'listDocuments'>
+>
+
+export type TestToolExecutionOverride = {
+  toolName: string
+  remainingUses?: number
+  result: {
+    ok: boolean
+    code: AiTaskResultCode
+    summary: string
+    data?: JsonValue
+  }
+}
 
 export type CaseAssertion = {
   id: string
@@ -36,11 +55,16 @@ export type CaseExecutionOutcome = {
   status: CaseExecutionStatus
   resultCode: string
   summary?: string
+  resultData?: JsonObject
 }
 
 export type CaseSignalOverrides = {
   scenarioTags?: string[]
   expectedOutcome?: CaseExpectedOutcome
+  taskGoal?: string
+  maxSteps?: number
+  approvalPolicy?: ApprovalPolicy
+  modelName?: string
 }
 
 export type CaseRuntimeMetrics = {
@@ -55,12 +79,24 @@ export type CaseRuntimeMetrics = {
   approvalDeniedCount: number
   workspaceRequiredCount: number
   warningCount: number
+  toolErrorCount?: number
+  recoveryAfterErrorCount?: number
+  repeatedToolCallCount?: number
+  stepBudgetUsage?: number
+  qualityGrade?: CaseQualityGrade
 }
 
 export type ToolCounts = Record<string, number>
 export type ToolResultCodeCounts = Record<string, Record<string, number>>
 export type ArtifactOperationCounts = Record<'created' | 'updated', number>
 export type StepActionCounts = Record<HumanStepAction, number>
+export type CaseQualityGrade =
+  | 'hard_pass'
+  | 'soft_pass'
+  | 'expected_block'
+  | 'unexpected_block'
+  | 'harness_fail'
+  | 'unknown'
 
 export type CaseAssertionsReport = {
   suite: CaseSuite
@@ -94,6 +130,10 @@ export type CaseSignalsReport = {
   runId: string
   taskId: string
   expectedOutcome?: CaseExpectedOutcome
+  taskGoal?: string
+  maxSteps?: number
+  approvalPolicy?: ApprovalPolicy
+  modelName?: string
   scenarioTags: string[]
   toolSequence: string[]
   toolCounts: ToolCounts
@@ -103,6 +143,8 @@ export type CaseSignalsReport = {
   skillActivationSequence: RuntimeSkillId[]
   failedAssertionIds: string[]
   artifactOperationCounts: ArtifactOperationCounts
+  resultDataKeys: string[]
+  firstFailureStage?: AiRunEventStage
   finalHumanAction?: HumanStepAction
   executionSummary?: string
 }
