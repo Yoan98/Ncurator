@@ -14,7 +14,7 @@ import { humanStepDecisionSchema } from './decisionCodec'
 import { appendHumanStepRecord, emitHumanDiagnostic, emitHumanStep } from './events'
 import type { HumanObservation, HumanRunState, LoadedSkill } from './types'
 
-const MAX_HISTORY_ITEMS = 6
+const MAX_HISTORY_ITEMS = 10
 
 const toTrimmedText = (value: string, fallback: string): string => {
   const text = String(value || '').trim()

@@ -79,6 +79,14 @@ describe('main/ai/runtime/prompts', () => {
             result.humanPrompt.system.includes('【范围不足】'),
           details: result.humanPrompt.system
         })
+        recordAssertion(runtime.assertions, {
+          id: 'prompt.human-brain-demands-result-convergence',
+          pass:
+            result.humanPrompt.system.includes('【结果收敛】') &&
+            result.humanPrompt.system.includes('resultData 字段') &&
+            result.humanPrompt.system.includes('不要再做“再次确认”式工具调用'),
+          details: result.humanPrompt.system
+        })
       }
     })
   })

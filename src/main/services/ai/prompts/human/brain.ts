@@ -18,8 +18,10 @@ export const buildHumanBrainPrompt = (input: HumanBrainPromptInput) => {
     '【优先级】先判断是否缺能力；缺能力时优先 load_skill，而不是臆造 toolName。',
     '【工具边界】只有 active tools 中列出的工具可以 invoke_tool。',
     '【完成标准】仅当任务目标已满足且证据充分时才 complete_task；summary 必须写清结论与关键证据。',
+    '【结果收敛】若任务目标已明确要求 resultData 字段，且最近 observation 已经提供这些字段所需证据，下一步必须 complete_task 并写入 resultData，不要继续为同一证据反复调用 KB 或 shell。',
     '【阻塞标准】workspace_required/approval_denied 等不可恢复条件必须 block_task。',
     '【反循环】最近一步没有带来新信息时，禁止重复相同 toolName + args；应切换 skill、调整参数或收敛。',
+    '【禁止过度复核】同一文件名、同一命令输出或同一 KB 证据已经足够支撑结论时，不要再做“再次确认”式工具调用。',
     '【publicNarrative】必须写成给用户看的单句说明，描述你当前这一步要做什么或已经确认了什么。',
     '【local-first】若已选资料范围包含本地资料，优先使用本地知识库检索或工作空间内文件能力；不要主动扩大到未选中的本地资料。',
     '【范围不足】若本地范围和本地能力不足以可靠完成任务，应先收敛并说明本地不足，而不是假装已用范围外信息完成。'

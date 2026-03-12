@@ -46,6 +46,52 @@
 
 ## 3. 历史记录
 
+## [2026-03-12] human 单任务 - P3 baseline 预备轮次（prompt 收敛修正）
+
+- 时间：2026-03-12 19:04（本地）
+- 阶段：human 单任务
+- 执行命令：
+  - `pnpm exec vitest --config vitest.ai.config.mts run tests/main/ai/runtime/prompt.local-first-contract.test.ts`
+  - `pnpm test:main:ai:human:p2 -- --profile custom --case human-multi-skill-kb-then-shell --runs 5 --batch-id p2-2026-03-12-multi-skill-after-prompt-tune`
+  - `pnpm test:main:ai:human:p2 -- --batch-id p2-default-2026-03-12-baseline-v2`
+- 报告路径：
+  - `tests/report/main-ai-human/batches/p2-2026-03-12-multi-skill-after-prompt-tune/batch-summary.md`
+  - `tests/report/main-ai-human/batches/p2-default-2026-03-12-baseline-v2/batch-summary.md`
+  - `tests/report/main-ai-human/human-assessment.md`
+- 结果摘要：
+  - human brain prompt 新增了“拿到 resultData 所需证据后立即 complete_task”与“不要再次确认式重复调用”的约束，同时 recent steps 回看窗口从 `6` 提升到 `10`。
+  - prompt 契约回归 `1/1` 通过。
+  - `human-multi-skill-kb-then-shell` 定向 batch `5/5` 通过，`unexpected_block=0`；此前的 `bounded_loop_error` 未复现。
+  - 新的全量 `p2-default` baseline 仍未生成成功：`human-local-kb-answer` 在第 `4` 轮断言失败，`resultData.document_name` 输出为 `local-knowledge-base`，而不是检索结果中的 `atlas-notes.md` / `doc-atlas`。
+  - latest assessment 当前为：
+    - `human-docx-edit = 20/22 = 90.91%`
+    - `human-local-kb-answer = 16/17 = 94.12%`
+    - `human-multi-skill-kb-then-shell = 16/18 = 88.89%`
+    - `human-tool-error-recovery = 7/8 = 87.50%`
+    - `historicalSuccessfulRunRate = 88.89%`
+    - `latestUnexpectedBlockRate = 0.00%`
+- 风险与边界：
+  - `multi-skill` 的主要问题已经从“步数耗尽导致 unexpected_block”转为“仍有 soft_pass 和长尾时延”，说明 prompt 收敛方向有效，但还没到完全硬通过。
+  - `local-kb-answer` 当前暴露的是结构化结果保真问题，不是检索失败：`kb_hybrid_search_chunks` 的事件预览里包含 `document_name=atlas-notes.md / document_id=doc-atlas`，但 human 在 `complete_task` 时仍把 `document_name` 泛化成了 `local-knowledge-base`。
+  - `p2-default-2026-03-12-baseline-v2` 的 batch summary 只统计到了成功轮次，未把触发断言失败的那一轮写进 case 汇总；因此这份产物不能作为正式 baseline。
+- 推进决策：
+  - `human 单任务` 的 `P2` 门槛结论不回退，但 `P3` 仍不能视为正式开始；当前仍处于“生成干净 baseline 前的最后收口”状态。
+- 下一轮优先级：
+  1. 修复 local-kb 结果在 human observation / complete_task 中的结构化保真，确保 `document_name/document_id` 可稳定写入 `resultData`。
+  2. 修复后重新生成新的全量 `p2-default` batch，替代 `p2-default-2026-03-12-baseline-v2`。
+  3. 只有在拿到干净 baseline 后，才执行下一次 prompt / skill / tool / model 变更后的 `P3 compare`。
+
+### 阶段专题结论（按需）
+- 覆盖范围：
+  - `multi-skill` 的单点回归已具备修复前后对照证据。
+  - `docx` 与 `local-kb-answer` 在新 prompt 下没有出现新的阻塞路径扩散。
+- 能力边界：
+  - human 现在更容易在“证据已足够”时收敛，但 `local-kb` 的结构化引用字段仍可能在最后一步被模型泛化。
+  - 这意味着当前问题已从“是否能完成”进一步收缩为“完成时的字段精度是否足够稳定支撑 compare baseline”。
+- 门槛判定：
+  - `P3` 仍是 `human 单任务` 内部评估的最后一层，但当前仓库还没有生成出一份可正式用于 compare 的干净 baseline。
+  - 因此当前状态应表述为“`P3-ready` 修复中”，而不是“`P3` 已开始”。
+
 ## [2026-03-12] human 单任务 - P2 收口与 recovery 修复
 
 - 时间：2026-03-12 18:46（本地）
