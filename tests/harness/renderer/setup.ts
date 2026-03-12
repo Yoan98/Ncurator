@@ -2,6 +2,7 @@ import { afterEach, vi } from 'vitest'
 import { cleanup } from '@testing-library/react'
 import React from 'react'
 import type { SourceScopeSelection } from '../../../src/shared/types'
+import { shouldSuppressRendererConsoleNoise } from './consoleNoise'
 
 vi.mock('../../../src/renderer/src/components/fileRenders', () => ({
   __esModule: true,
@@ -121,6 +122,19 @@ Object.defineProperty(window, 'scrollTo', {
   writable: true,
   value: () => undefined
 })
+
+const originalConsoleError = console.error.bind(console)
+const originalConsoleWarn = console.warn.bind(console)
+
+console.error = (...args: Array<string | number | boolean | null | undefined | object>) => {
+  if (shouldSuppressRendererConsoleNoise(args)) return
+  originalConsoleError(...args)
+}
+
+console.warn = (...args: Array<string | number | boolean | null | undefined | object>) => {
+  if (shouldSuppressRendererConsoleNoise(args)) return
+  originalConsoleWarn(...args)
+}
 
 afterEach(() => {
   cleanup()

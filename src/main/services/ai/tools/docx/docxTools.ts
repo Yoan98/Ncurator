@@ -11,7 +11,7 @@ import type {
 import type { AiRunContext } from '../../types'
 import { emitFileArtifactEvent } from '../../events/fileArtifacts'
 import { resolveWorkspacePath } from '../terminal_exec/terminalPolicy'
-import type { DocxOp, DocxOutlineBlock, DocxSearchMatch } from './types'
+import type { DocxChangedBlock, DocxOp, DocxOutlineBlock, DocxSearchMatch } from './types'
 import { getDocxWorkerClient } from './worker/docxWorkerClient'
 import type { DocxWorkerRequest } from './worker/protocol'
 
@@ -205,19 +205,19 @@ const openSchema = z.object({
 })
 
 const outlineSchema = z.object({
-  docId: z.string().min(1),
+  docId: z.string().min(1).optional(),
   maxBlocks: z.number().int().min(1).max(2000).optional(),
   includeTables: z.boolean().optional(),
   includeCells: z.boolean().optional()
 })
 
 const getBlockSchema = z.object({
-  docId: z.string().min(1),
+  docId: z.string().min(1).optional(),
   blockId: z.string().min(1)
 })
 
 const searchSchema = z.object({
-  docId: z.string().min(1),
+  docId: z.string().min(1).optional(),
   query: z.string().min(1),
   mode: z.enum(['literal', 'regex', 'semantic']),
   scope: z
@@ -228,23 +228,23 @@ const searchSchema = z.object({
 })
 
 const applyOpsSchema = z.object({
-  docId: z.string().min(1),
+  docId: z.string().min(1).optional(),
   ops: z.array(docOpSchema).min(1)
 })
 
 const historySchema = z.object({
-  docId: z.string().min(1),
+  docId: z.string().min(1).optional(),
   maxDepth: z.number().int().min(1).max(100).optional()
 })
 
 const rollbackSchema = z.object({
-  docId: z.string().min(1),
+  docId: z.string().min(1).optional(),
   targetDocId: z.string().min(1).optional(),
   steps: z.number().int().min(1).max(50).optional()
 })
 
 const renderPreviewSchema = z.object({
-  docId: z.string().min(1),
+  docId: z.string().min(1).optional(),
   format: z.enum(['html', 'png', 'pdf']),
   range: z
     .object({
@@ -261,7 +261,7 @@ const saveSchema = z.object({
 })
 
 const validateSchema = z.object({
-  docId: z.string().min(1)
+  docId: z.string().min(1).optional()
 })
 
 const toFailure = (input: {
@@ -305,8 +305,13 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
     toolName: string,
     toolCallId: string,
     outputPreview: IpcJsonValue,
-    error?: string
+    error?: string,
+    draftDocId?: string
   ) => {
+    const sourcePath =
+      draftDocId && state.sourcePathByDocId.has(draftDocId)
+        ? state.sourcePathByDocId.get(draftDocId)
+        : undefined
     input.ctx.sendEvent({
       type: 'tool_call_result',
       runId: input.runId,
@@ -314,6 +319,13 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
       toolCallId,
       toolName,
       outputPreview,
+      draftRef: draftDocId
+        ? {
+            draftSnapshotId: draftDocId,
+            sourcePath,
+            format: 'docx'
+          }
+        : undefined,
       completedAt: Date.now(),
       error
     })
@@ -325,6 +337,59 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
       ...request,
       runId: input.runId
     } as DocxWorkerRequest, 45_000)
+  }
+
+  const resolveTrackedDocId = (docId?: string): string | null => {
+    const normalized = String(docId || '').trim()
+    if (normalized) return normalized
+    const lastDocId = String(state.lastDocId || '').trim()
+    return lastDocId || null
+  }
+
+  const expandReplaceTextOp = async (
+    docId: string,
+    op: Extract<DocxOp, { type: 'replace_text' }>
+  ): Promise<DocxOp[]> => {
+    if (Array.isArray(op.blockIds) && op.blockIds.length > 0) {
+      return op.blockIds.map((blockId) => ({
+        ...op,
+        blockIds: [blockId]
+      }))
+    }
+
+    const searchResponse = await callWorker({
+      action: 'search',
+      payload: {
+        docId,
+        query: op.query,
+        mode: 'literal',
+        scopeBlockIds: []
+      }
+    })
+    if (!searchResponse.ok) {
+      return [op]
+    }
+    if (searchResponse.payload.action !== 'search') {
+      throw new Error('worker protocol mismatch (replace_text expand search)')
+    }
+    const blockIds = searchResponse.payload.matches.map((match) => match.blockId).filter(Boolean)
+    if (blockIds.length === 0) return [op]
+    return blockIds.map((blockId) => ({
+      ...op,
+      blockIds: [blockId]
+    }))
+  }
+
+  const expandOpsForReview = async (docId: string, ops: DocxOp[]): Promise<DocxOp[]> => {
+    const expanded: DocxOp[] = []
+    for (const op of ops) {
+      if (op.type === 'replace_text') {
+        expanded.push(...(await expandReplaceTextOp(docId, op)))
+        continue
+      }
+      expanded.push(op)
+    }
+    return expanded
   }
 
   const buildSemanticDocIndex = async (docId: string): Promise<SemanticDocIndex> => {
@@ -523,6 +588,10 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
         state.lastDocId = workerResponse.payload.docId
         state.sourcePathByDocId.set(workerResponse.payload.docId, sourcePath)
         registerSnapshot(workerResponse.payload.docId)
+        input.ctx.trackDocxOpen({
+          docId: workerResponse.payload.docId,
+          sourcePath
+        })
         const out = {
           ok: true,
           code: 'ok' as const,
@@ -531,7 +600,7 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
           meta: workerResponse.payload.meta,
           stats: workerResponse.payload.stats
         }
-        emitResult(toolName, toolCallId, out)
+        emitResult(toolName, toolCallId, out, undefined, workerResponse.payload.docId)
         input.emitActivity({
           actionType: 'docx_open',
           status: 'completed',
@@ -566,15 +635,24 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
       const toolCallId = emitStarted(toolName, args)
       try {
         input.ctx.checkCancelled()
+        const docId = resolveTrackedDocId(args.docId)
+        if (!docId) {
+          const out = toFailure({
+            code: 'invalid_input',
+            error: 'docId is required before docx_outline; open a document first'
+          })
+          emitResult(toolName, toolCallId, out, out.error)
+          return out
+        }
         input.emitActivity({
           actionType: 'docx_outline',
           status: 'started',
-          summary: `提取结构: ${args.docId}`
+          summary: `提取结构: ${docId}`
         })
         const workerResponse = await callWorker({
           action: 'outline',
           payload: {
-            docId: args.docId,
+            docId,
             maxBlocks: Number(args.maxBlocks || 200),
             includeTables: Boolean(args.includeTables ?? true),
             includeCells: Boolean(args.includeCells ?? true)
@@ -618,7 +696,7 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
           summary: out.summary,
           blockCount: out.blocks.length,
           truncated: out.truncated
-        })
+        }, undefined, docId)
         input.emitActivity({
           actionType: 'docx_outline',
           status: 'completed',
@@ -645,10 +723,19 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
       const toolName = 'docx_get_block'
       const toolCallId = emitStarted(toolName, args)
       try {
+        const docId = resolveTrackedDocId(args.docId)
+        if (!docId) {
+          const out = toFailure({
+            code: 'invalid_input',
+            error: 'docId is required before docx_get_block; open a document first'
+          })
+          emitResult(toolName, toolCallId, out, out.error)
+          return out
+        }
         const workerResponse = await callWorker({
           action: 'get_block',
           payload: {
-            docId: args.docId,
+            docId,
             blockId: args.blockId
           }
         })
@@ -680,7 +767,7 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
           code: out.code,
           summary: out.summary,
           blockType: out.block.type
-        })
+        }, undefined, docId)
         return out
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error)
@@ -701,8 +788,17 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
       const toolName = 'docx_search'
       const toolCallId = emitStarted(toolName, args)
       try {
+        const docId = resolveTrackedDocId(args.docId)
+        if (!docId) {
+          const out = toFailure({
+            code: 'invalid_input',
+            error: 'docId is required before docx_search; open a document first'
+          })
+          emitResult(toolName, toolCallId, out, out.error)
+          return out
+        }
         if (args.mode === 'semantic') {
-          const semanticIndex = await buildSemanticDocIndex(args.docId)
+          const semanticIndex = await buildSemanticDocIndex(docId)
           const queryEmbeddingResponse = await input.ctx.embeddingService.embed(args.query)
           const queryEmbeddingRows = splitEmbeddingRows(
             queryEmbeddingResponse.data,
@@ -741,14 +837,14 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
             summary: out.summary,
             matchCount: out.matches.length,
             warnings: out.warnings
-          })
+          }, undefined, docId)
           return out
         }
 
         const workerResponse = await callWorker({
           action: 'search',
           payload: {
-            docId: args.docId,
+            docId,
             query: args.query,
             mode: args.mode,
             scopeBlockIds: args.scope?.blockIds || []
@@ -784,7 +880,7 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
           summary: out.summary,
           matchCount: out.matches.length,
           warnings: out.warnings
-        })
+        }, undefined, docId)
         return out
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error)
@@ -806,54 +902,81 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
       const toolName = 'docx_apply_ops'
       const toolCallId = emitStarted(toolName, args)
       try {
+        const initialDocId = resolveTrackedDocId(args.docId)
+        if (!initialDocId) {
+          const out = toFailure({
+            code: 'invalid_input',
+            error: 'docId is required before docx_apply_ops; open a document first'
+          })
+          emitResult(toolName, toolCallId, out, out.error)
+          return out
+        }
+        const expandedOps = await expandOpsForReview(initialDocId, args.ops as DocxOp[])
         input.emitActivity({
           actionType: 'docx_apply_ops',
           status: 'started',
-          summary: `应用操作: ${args.ops.length} 条`
+          summary: `应用操作: ${expandedOps.length} 条`
         })
-        const workerResponse = await callWorker({
-          action: 'apply_ops',
-          payload: {
-            docId: args.docId,
-            ops: args.ops as DocxOp[]
+        let currentDocId = initialDocId
+        const collectedChangedBlocks: DocxChangedBlock[] = []
+        const collectedWarnings: string[] = []
+
+        for (const op of expandedOps) {
+          const workerResponse = await callWorker({
+            action: 'apply_ops',
+            payload: {
+              docId: currentDocId,
+              ops: [op]
+            }
+          })
+
+          if (!workerResponse.ok) {
+            const out = toFailure({
+              code: workerResponse.code,
+              error: workerResponse.error,
+              warnings: workerResponse.warnings
+            })
+            emitResult(toolName, toolCallId, out, out.error, currentDocId)
+            input.emitActivity({
+              actionType: 'docx_apply_ops',
+              status: 'failed',
+              summary: out.summary
+            })
+            return out
           }
-        })
 
-        if (!workerResponse.ok) {
-          const out = toFailure({
-            code: workerResponse.code,
-            error: workerResponse.error,
-            warnings: workerResponse.warnings
+          if (workerResponse.payload.action !== 'apply_ops') {
+            const out = toFailure({
+              code: 'failed',
+              error: 'worker protocol mismatch (apply_ops)'
+            })
+            emitResult(toolName, toolCallId, out, out.error, currentDocId)
+            return out
+          }
+
+          const nextDocId = workerResponse.payload.newDocId
+          const sourcePath = state.sourcePathByDocId.get(currentDocId)
+          if (sourcePath) state.sourcePathByDocId.set(nextDocId, sourcePath)
+          registerSnapshot(nextDocId, currentDocId)
+          input.ctx.trackDocxChanges({
+            previousDocId: currentDocId,
+            nextDocId,
+            op,
+            changedBlocks: workerResponse.payload.changedBlocks
           })
-          emitResult(toolName, toolCallId, out, out.error)
-          input.emitActivity({
-            actionType: 'docx_apply_ops',
-            status: 'failed',
-            summary: out.summary
-          })
-          return out
+          collectedChangedBlocks.push(...workerResponse.payload.changedBlocks)
+          collectedWarnings.push(...workerResponse.payload.warnings)
+          currentDocId = nextDocId
         }
 
-        if (workerResponse.payload.action !== 'apply_ops') {
-          const out = toFailure({
-            code: 'failed',
-            error: 'worker protocol mismatch (apply_ops)'
-          })
-          emitResult(toolName, toolCallId, out, out.error)
-          return out
-        }
-
-        state.lastDocId = workerResponse.payload.newDocId
-        const sourcePath = state.sourcePathByDocId.get(args.docId)
-        if (sourcePath) state.sourcePathByDocId.set(workerResponse.payload.newDocId, sourcePath)
-        registerSnapshot(workerResponse.payload.newDocId, args.docId)
+        state.lastDocId = currentDocId
         const out = {
           ok: true,
           code: 'ok' as const,
-          summary: `ops applied (${workerResponse.payload.changedBlocks.length} changes)`,
-          newDocId: workerResponse.payload.newDocId,
-          changedBlocks: workerResponse.payload.changedBlocks,
-          warnings: workerResponse.payload.warnings
+          summary: `ops applied (${collectedChangedBlocks.length} changes)`,
+          newDocId: currentDocId,
+          changedBlocks: collectedChangedBlocks,
+          warnings: collectedWarnings
         }
         emitResult(toolName, toolCallId, {
           ok: out.ok,
@@ -862,7 +985,7 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
           newDocId: out.newDocId,
           changedCount: out.changedBlocks.length,
           warnings: out.warnings
-        })
+        }, undefined, currentDocId)
         input.emitActivity({
           actionType: 'docx_apply_ops',
           status: 'completed',
@@ -894,7 +1017,16 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
       const toolName = 'docx_get_history'
       const toolCallId = emitStarted(toolName, args)
       try {
-        const history = buildSnapshotHistory(args.docId, Number(args.maxDepth || 10))
+        const docId = resolveTrackedDocId(args.docId)
+        if (!docId) {
+          const out = toFailure({
+            code: 'invalid_input',
+            error: 'docId is required before docx_get_history; open a document first'
+          })
+          emitResult(toolName, toolCallId, out, out.error)
+          return out
+        }
+        const history = buildSnapshotHistory(docId, Number(args.maxDepth || 10))
         if (history.length === 0) {
           const out = toFailure({
             code: 'invalid_input',
@@ -908,7 +1040,7 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
           ok: true,
           code: 'ok' as const,
           summary: `snapshot history loaded (${history.length} items)`,
-          currentDocId: args.docId,
+          currentDocId: docId,
           snapshots: history
         }
         emitResult(toolName, toolCallId, {
@@ -916,7 +1048,7 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
           code: out.code,
           summary: out.summary,
           snapshotCount: out.snapshots.length
-        })
+        }, undefined, docId)
         return out
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error)
@@ -938,13 +1070,22 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
       const toolName = 'docx_rollback'
       const toolCallId = emitStarted(toolName, args)
       try {
+        const docId = resolveTrackedDocId(args.docId)
+        if (!docId) {
+          const out = toFailure({
+            code: 'invalid_input',
+            error: 'docId is required before docx_rollback; open a document first'
+          })
+          emitResult(toolName, toolCallId, out, out.error)
+          return out
+        }
         input.emitActivity({
           actionType: 'docx_rollback',
           status: 'started',
-          summary: `准备回滚文档快照: ${args.docId}`
+          summary: `准备回滚文档快照: ${docId}`
         })
 
-        const resolved = resolveRollbackTarget(args.docId, args.targetDocId, args.steps)
+        const resolved = resolveRollbackTarget(docId, args.targetDocId, args.steps)
         if (!resolved.ok) {
           const out = toFailure({
             code: 'invalid_input',
@@ -960,7 +1101,7 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
         }
 
         state.lastDocId = resolved.targetDocId
-        const sourcePath = state.sourcePathByDocId.get(args.docId)
+        const sourcePath = state.sourcePathByDocId.get(docId)
         if (sourcePath && !state.sourcePathByDocId.has(resolved.targetDocId)) {
           state.sourcePathByDocId.set(resolved.targetDocId, sourcePath)
         }
@@ -970,10 +1111,10 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
           code: 'ok' as const,
           summary: `rollback ready (${resolved.stepsApplied} step${resolved.stepsApplied === 1 ? '' : 's'}, not saved)`,
           docId: resolved.targetDocId,
-          previousDocId: args.docId,
+          previousDocId: docId,
           stepsApplied: resolved.stepsApplied
         }
-        emitResult(toolName, toolCallId, out)
+        emitResult(toolName, toolCallId, out, undefined, resolved.targetDocId)
         input.emitActivity({
           actionType: 'docx_rollback',
           status: 'completed',
@@ -1005,16 +1146,25 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
       const toolName = 'docx_render_preview'
       const toolCallId = emitStarted(toolName, args)
       try {
+        const docId = resolveTrackedDocId(args.docId)
+        if (!docId) {
+          const out = toFailure({
+            code: 'invalid_input',
+            error: 'docId is required before docx_render_preview; open a document first'
+          })
+          emitResult(toolName, toolCallId, out, out.error)
+          return out
+        }
         const previewDir = path.join(workspaceRootPath, '.ncurator', 'docx-previews')
         const previewPath = path.join(
           previewDir,
-          `${input.runId}-${args.docId}-${Date.now().toString(36)}.docx`
+          `${input.runId}-${docId}-${Date.now().toString(36)}.docx`
         )
         const existsBefore = fs.existsSync(previewPath)
         const workerResponse = await callWorker({
           action: 'render_preview',
           payload: {
-            docId: args.docId,
+            docId,
             format: args.format,
             previewPath
           }
@@ -1037,6 +1187,10 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
           return out
         }
 
+        input.ctx.trackDocxPreview({
+          docId,
+          previewPath: workerResponse.payload.previewPath
+        })
         const operation: AiFileArtifactOperation = existsBefore ? 'updated' : 'created'
         emitFileArtifactEvent({
           ctx: input.ctx,
@@ -1045,6 +1199,8 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
           capability: 'docx',
           artifactPath: workerResponse.payload.previewPath,
           operation,
+          artifactRole: 'preview',
+          draftSnapshotId: docId,
           summary: `docx preview generated (${workerResponse.payload.renderer})`
         })
 
@@ -1056,7 +1212,7 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
           previewPath: workerResponse.payload.previewPath,
           renderer: workerResponse.payload.renderer
         }
-        emitResult(toolName, toolCallId, out)
+        emitResult(toolName, toolCallId, out, undefined, docId)
         return out
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error)
@@ -1155,6 +1311,8 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
           capability: 'docx',
           artifactPath: outPath,
           operation,
+          artifactRole: 'committed',
+          draftSnapshotId: args.docId,
           summary: `docx saved (${operation})`
         })
 
@@ -1167,7 +1325,7 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
           operation,
           byteSize: workerResponse.payload.byteSize
         }
-        emitResult(toolName, toolCallId, out)
+        emitResult(toolName, toolCallId, out, undefined, args.docId)
         return out
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error)
@@ -1188,10 +1346,19 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
       const toolName = 'docx_validate'
       const toolCallId = emitStarted(toolName, args)
       try {
+        const docId = resolveTrackedDocId(args.docId)
+        if (!docId) {
+          const out = toFailure({
+            code: 'invalid_input',
+            error: 'docId is required before docx_validate; open a document first'
+          })
+          emitResult(toolName, toolCallId, out, out.error)
+          return out
+        }
         const workerResponse = await callWorker({
           action: 'validate',
           payload: {
-            docId: args.docId
+            docId
           }
         })
         if (!workerResponse.ok) {
@@ -1225,7 +1392,7 @@ export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
           code: out.code,
           summary: out.summary,
           problemsPreview: clipText(JSON.stringify(out.problems), input.safePreviewChars)
-        })
+        }, undefined, docId)
         return out
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error)

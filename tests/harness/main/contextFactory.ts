@@ -1,6 +1,7 @@
 import { HumanMessage, SystemMessage } from '@langchain/core/messages'
 import { randomUUID } from 'node:crypto'
 import { createChatModel } from '../../../src/main/services/llm/chatModel'
+import type { DocxChangedBlock, DocxOp } from '../../../src/main/services/ai/tools/docx/types'
 import type { AiRunContext } from '../../../src/main/services/ai/types'
 import type { AiApprovalDecision, AiApprovalRequest } from '../../../src/main/services/ai/types'
 import type { JsonObject } from '../../../src/shared/types'
@@ -56,6 +57,14 @@ export const createTestAiRunContext = (input: {
   selectedDocumentIds?: string[]
   approvalPolicy?: ApprovalPolicy | ApprovalResolver
   liveModelConfig?: LiveLlmConfig
+  trackDocxOpen?: (input: { docId: string; sourcePath: string }) => void
+  trackDocxChanges?: (input: {
+    previousDocId: string
+    nextDocId: string
+    op: DocxOp
+    changedBlocks: DocxChangedBlock[]
+  }) => void
+  trackDocxPreview?: (input: { docId: string; previewPath: string }) => void
 }): AiRunContext => {
   const runId = input.runId || randomUUID()
   const sessionId = input.sessionId || 'test-session'
@@ -124,6 +133,9 @@ export const createTestAiRunContext = (input: {
       recentTurnsText: '',
       sessionSummaryText: ''
     }),
+    trackDocxOpen: input.trackDocxOpen || (() => undefined),
+    trackDocxChanges: input.trackDocxChanges || (() => undefined),
+    trackDocxPreview: input.trackDocxPreview || (() => undefined),
     getModelConfig: async () => {
       if (!input.liveModelConfig) {
         throw new Error('live model config is required for this test case')

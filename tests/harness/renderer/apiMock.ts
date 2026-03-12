@@ -8,12 +8,19 @@ import type {
   AiRunStartResponse,
   ChatMessage,
   ChatSession,
+  CommitDraftReviewRequest,
+  CommitDraftReviewResponse,
   ChunkListResponse,
   CreateWorkspaceSourceRequest,
   DeleteWebSourceResponse,
   DeleteWorkspaceSourceResponse,
+  DraftReviewDetail,
   DocumentRecord,
+  GetDraftReviewRequest,
+  GetDraftReviewResponse,
   LegacyLocalImportMigrationStatus,
+  ListDraftReviewsRequest,
+  ListDraftReviewsResponse,
   ListSourceScopesRequest,
   ListWorkspaceNodesRequest,
   LLMConfig,
@@ -21,7 +28,11 @@ import type {
   RefreshWebSourceRequest,
   SearchResponse,
   SearchSourceFilter,
+  SetDraftChangeDecisionRequest,
+  SetDraftChangeDecisionResponse,
   SourceScopeListResponse,
+  ValidateDraftCommitRequest,
+  ValidateDraftCommitResponse,
   WebIngestPayload,
   WebSourceListResponse,
   WebSourceMutationResponse,
@@ -43,6 +54,11 @@ type CallRecord = {
   aiRunCancel: string[]
   search: Array<{ query: string; sourceType?: SearchSourceFilter; documentIds?: string[] }>
   sourceScopeList: ListSourceScopesRequest[]
+  draftReviewList: ListDraftReviewsRequest[]
+  draftReviewGet: GetDraftReviewRequest[]
+  draftReviewSetDecision: SetDraftChangeDecisionRequest[]
+  draftReviewValidate: ValidateDraftCommitRequest[]
+  draftReviewCommit: CommitDraftReviewRequest[]
 }
 
 export type DesktopApiMock = {
@@ -70,6 +86,9 @@ type DesktopApiMockOptions = {
   listChunksResponse?: ChunkListResponse
   workspaceListResponse?: WorkspaceListResponse
   webSourceListResponse?: WebSourceListResponse
+  draftReviews?: DraftReviewDetail[]
+  draftCommitValidation?: ValidateDraftCommitResponse
+  draftCommitResponse?: CommitDraftReviewResponse
 }
 
 const defaultWorkspaceListResponse: WorkspaceListResponse = {
@@ -105,7 +124,12 @@ export const createDesktopApiMock = (options: DesktopApiMockOptions = {}): Deskt
     aiRunApprovalDecide: [],
     aiRunCancel: [],
     search: [],
-    sourceScopeList: []
+    sourceScopeList: [],
+    draftReviewList: [],
+    draftReviewGet: [],
+    draftReviewSetDecision: [],
+    draftReviewValidate: [],
+    draftReviewCommit: []
   }
   const callSequence: string[] = []
   const emittedAiRunEvents: AiRunEvent[] = []
@@ -122,6 +146,9 @@ export const createDesktopApiMock = (options: DesktopApiMockOptions = {}): Deskt
   const listChunksResponse = options.listChunksResponse || defaultChunkListResponse
   const workspaceListResponse = options.workspaceListResponse || defaultWorkspaceListResponse
   const webSourceListResponse = options.webSourceListResponse || defaultWebSourceListResponse
+  let draftReviews = options.draftReviews || []
+  let draftCommitValidation = options.draftCommitValidation || { ready: true, issues: [] }
+  const draftCommitResponse = options.draftCommitResponse || { success: true }
 
   const api: DesktopApi = {
     ingestWeb: async (_payload: WebIngestPayload) => ({ success: true, count: 1 }),
@@ -225,6 +252,99 @@ export const createDesktopApiMock = (options: DesktopApiMockOptions = {}): Deskt
       callSequence.push('aiRunApprovalDecide')
       calls.aiRunApprovalDecide.push(payload)
       return aiRunApprovalDecisionResponse
+    },
+    draftReviewList: async (payload?: ListDraftReviewsRequest): Promise<ListDraftReviewsResponse> => {
+      callSequence.push('draftReviewList')
+      calls.draftReviewList.push(payload || {})
+      const filtered = payload?.sessionId
+        ? draftReviews.filter((item) => item.review.session_id === payload.sessionId)
+        : draftReviews
+      return {
+        items: filtered.map((item) => item.review),
+        total: filtered.length
+      }
+    },
+    draftReviewGet: async (payload: GetDraftReviewRequest): Promise<GetDraftReviewResponse> => {
+      callSequence.push('draftReviewGet')
+      calls.draftReviewGet.push(payload)
+      const review = draftReviews.find((item) => item.review.id === payload.reviewId)
+      return review ? { review } : { error: 'review not found' }
+    },
+    draftReviewSetDecision: async (
+      payload: SetDraftChangeDecisionRequest
+    ): Promise<SetDraftChangeDecisionResponse> => {
+      callSequence.push('draftReviewSetDecision')
+      calls.draftReviewSetDecision.push(payload)
+      const review = draftReviews.find((item) => item.review.id === payload.reviewId)
+      if (!review) return { success: false, error: 'review not found' }
+      const change = review.changes.find((item) => item.id === payload.changeId)
+      if (!change) return { success: false, error: 'change not found' }
+      change.decision = payload.decision
+      change.updated_at = Date.now()
+      review.review.pending_change_count = review.changes.filter((item) => item.decision === 'pending').length
+      review.review.accepted_change_count = review.changes.filter((item) => item.decision === 'accepted').length
+      review.review.rejected_change_count = review.changes.filter((item) => item.decision === 'rejected').length
+      review.review.status = review.review.pending_change_count > 0 ? 'review_pending' : 'commit_ready'
+      review.documents = review.documents.map((document) => ({
+        ...document,
+        pending_change_count: review.changes.filter(
+          (item) => item.document_id === document.id && item.decision === 'pending'
+        ).length,
+        accepted_change_count: review.changes.filter(
+          (item) => item.document_id === document.id && item.decision === 'accepted'
+        ).length,
+        rejected_change_count: review.changes.filter(
+          (item) => item.document_id === document.id && item.decision === 'rejected'
+        ).length
+      }))
+      return { success: true, review: review.review, change, document: review.documents.find((item) => item.id === change.document_id) }
+    },
+    draftReviewValidate: async (
+      payload: ValidateDraftCommitRequest
+    ): Promise<ValidateDraftCommitResponse> => {
+      callSequence.push('draftReviewValidate')
+      calls.draftReviewValidate.push(payload)
+      if (!options.draftCommitValidation) {
+        const review = draftReviews.find((item) => item.review.id === payload.reviewId)
+        if (!review) {
+          return {
+            ready: false,
+            issues: [{ code: 'review_not_found', message: 'review not found' }]
+          }
+        }
+        const hasPending = review.changes.some((item) => item.decision === 'pending')
+        return hasPending
+          ? {
+              ready: false,
+              issues: [{ code: 'pending_changes', message: 'pending changes' }]
+            }
+          : { ready: true, issues: [] }
+      }
+      return draftCommitValidation
+    },
+    draftReviewCommit: async (
+      payload: CommitDraftReviewRequest
+    ): Promise<CommitDraftReviewResponse> => {
+      callSequence.push('draftReviewCommit')
+      calls.draftReviewCommit.push(payload)
+      if (draftCommitResponse.success) {
+        draftReviews = draftReviews.map((review) =>
+          review.review.id === payload.reviewId
+            ? {
+                ...review,
+                review: {
+                  ...review.review,
+                  status: 'committed',
+                  committed_at: Date.now()
+                },
+                commit_jobs: draftCommitResponse.job
+                  ? [...review.commit_jobs, draftCommitResponse.job]
+                  : review.commit_jobs
+              }
+            : review
+        )
+      }
+      return draftCommitResponse
     },
     onAiRunEvent: (cb: (event: AiRunEvent) => void) => {
       listeners.aiRunEvent.push(cb)

@@ -7,12 +7,18 @@ import type {
   AiRunStartResponse,
   ChatMessage,
   ChatSession,
+  CommitDraftReviewRequest,
+  CommitDraftReviewResponse,
   ChunkListResponse,
   CreateWorkspaceSourceRequest,
   DeleteWebSourceResponse,
   DeleteWorkspaceSourceResponse,
   DocumentRecord,
+  GetDraftReviewRequest,
+  GetDraftReviewResponse,
   LegacyLocalImportMigrationStatus,
+  ListDraftReviewsRequest,
+  ListDraftReviewsResponse,
   ListSourceScopesRequest,
   ListWorkspaceNodesRequest,
   LLMConfig,
@@ -21,7 +27,11 @@ import type {
   SearchResponse,
   SearchResult,
   SearchSourceFilter,
+  SetDraftChangeDecisionRequest,
+  SetDraftChangeDecisionResponse,
   SourceScopeListResponse,
+  ValidateDraftCommitRequest,
+  ValidateDraftCommitResponse,
   WebSourceListResponse,
   WebSourceMutationResponse,
   WebIngestPayload,
@@ -120,6 +130,15 @@ export type DesktopApi = {
   aiRunApprovalDecide: (
     payload: AiRunApprovalDecisionRequest
   ) => Promise<AiRunApprovalDecisionResponse>
+  draftReviewList: (payload?: ListDraftReviewsRequest) => Promise<ListDraftReviewsResponse>
+  draftReviewGet: (payload: GetDraftReviewRequest) => Promise<GetDraftReviewResponse>
+  draftReviewSetDecision: (
+    payload: SetDraftChangeDecisionRequest
+  ) => Promise<SetDraftChangeDecisionResponse>
+  draftReviewValidate: (
+    payload: ValidateDraftCommitRequest
+  ) => Promise<ValidateDraftCommitResponse>
+  draftReviewCommit: (payload: CommitDraftReviewRequest) => Promise<CommitDraftReviewResponse>
   onAiRunEvent: (cb: (event: AiRunEvent) => void) => void
   removeAiRunEventListeners: () => void
 }

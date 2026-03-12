@@ -1,17 +1,14 @@
 import React from 'react'
-import { HashRouter, Routes, Route, useLocation, useNavigate } from 'react-router-dom'
-import { Layout, ConfigProvider, theme, Button, Dropdown, Segmented } from 'antd'
+import { HashRouter, Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom'
+import { Layout, ConfigProvider, theme, Button, Dropdown } from 'antd'
 import {
   HiOutlineCog6Tooth,
   HiOutlineBookOpen,
   HiOutlineBeaker,
-  HiOutlineMagnifyingGlass,
-  HiOutlineChatBubbleLeftRight,
   HiCloudArrowDown,
   HiOutlineHome
 } from 'react-icons/hi2'
-import SearchPage from './pages/SearchPage'
-import ChatPage from './pages/ChatPage'
+import ConversationWorkbenchPage from './pages/ConversationWorkbenchPage'
 import SettingsPage from './pages/SettingsPage'
 import ImportPage from './pages/ImportPage'
 import TestPage from './pages/TestPage'
@@ -64,9 +61,7 @@ function App(): React.JSX.Element {
 const MainLayout: React.FC = () => {
   const location = useLocation()
   const navigate = useNavigate()
-  const isSearchPage = location.pathname === '/'
-  const isChatPage = location.pathname === '/chat'
-  const isHomeOrChat = isSearchPage || isChatPage
+  const isWorkbenchPage = location.pathname === '/'
 
   return (
     <Layout className="min-h-screen bg-[#F5F5F4]">
@@ -84,32 +79,14 @@ const MainLayout: React.FC = () => {
             </span>
           </div>
 
-          {isHomeOrChat ? (
-            <Segmented
-              options={[
-                {
-                  label: '搜索',
-                  value: '/',
-                  icon: <HiOutlineMagnifyingGlass className="w-4 h-4 inline mr-1" />
-                },
-                {
-                  label: '对话',
-                  value: '/chat',
-                  icon: <HiOutlineChatBubbleLeftRight className="w-4 h-4 inline mr-1" />
-                }
-              ]}
-              value={location.pathname === '/chat' ? '/chat' : '/'}
-              onChange={(val) => navigate(val)}
-              className="ml-4 bg-white shadow-sm border border-[#E5E5E4]"
-            />
-          ) : (
+          {!isWorkbenchPage ? (
             <Button
               type="text"
               icon={<HiOutlineHome className="w-5 h-5" />}
               onClick={() => navigate('/')}
               className="ml-2 text-[#666666] hover:bg-black/5 hover:text-[#1F1F1F]"
             />
-          )}
+          ) : null}
         </div>
 
         <div className="flex items-center gap-3">
@@ -148,8 +125,8 @@ const MainLayout: React.FC = () => {
       </Header>
       <Content className="bg-[#F5F5F4] overflow-auto">
         <Routes>
-          <Route path="/" element={<SearchPage />} />
-          <Route path="/chat" element={<ChatPage />} />
+          <Route path="/" element={<ConversationWorkbenchPage />} />
+          <Route path="/chat" element={<Navigate to="/" replace />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/model-download" element={<ModelDownloadPage />} />
           <Route path="/import" element={<ImportPage />} />

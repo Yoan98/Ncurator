@@ -20,6 +20,10 @@ export const LANCE_TABLES = {
   CHAT_SESSION: 'chat_session',
   CHAT_MESSAGE: 'chat_message',
   CHAT_SESSION_MEMORY: 'chat_session_memory',
+  DRAFT_REVIEW: 'draft_review',
+  DRAFT_REVIEW_DOCUMENT: 'draft_review_document',
+  DRAFT_REVIEW_CHANGE: 'draft_review_change',
+  DRAFT_COMMIT_JOB: 'draft_commit_job',
   LLM_CONFIG: 'llm_config'
 } as const
 
@@ -267,6 +271,80 @@ export class LanceDbCore {
           new arrow.Field('session_id', new arrow.Utf8()),
           new arrow.Field('memory_json', new arrow.Utf8()),
           new arrow.Field('updated_at', new arrow.Int64())
+        ])
+      },
+      {
+        name: LANCE_TABLES.DRAFT_REVIEW,
+        schema: new arrow.Schema([
+          new arrow.Field('id', new arrow.Utf8()),
+          new arrow.Field('session_id', new arrow.Utf8()),
+          new arrow.Field('run_id', new arrow.Utf8()),
+          new arrow.Field('status', new arrow.Utf8()),
+          new arrow.Field('title', new arrow.Utf8()),
+          new arrow.Field('document_count', new arrow.Int32()),
+          new arrow.Field('change_count', new arrow.Int32()),
+          new arrow.Field('pending_change_count', new arrow.Int32()),
+          new arrow.Field('accepted_change_count', new arrow.Int32()),
+          new arrow.Field('rejected_change_count', new arrow.Int32()),
+          new arrow.Field('created_at', new arrow.Int64()),
+          new arrow.Field('updated_at', new arrow.Int64()),
+          new arrow.Field('completed_at', new arrow.Int64(), true),
+          new arrow.Field('committed_at', new arrow.Int64(), true),
+          new arrow.Field('last_error', new arrow.Utf8(), true)
+        ])
+      },
+      {
+        name: LANCE_TABLES.DRAFT_REVIEW_DOCUMENT,
+        schema: new arrow.Schema([
+          new arrow.Field('id', new arrow.Utf8()),
+          new arrow.Field('review_id', new arrow.Utf8()),
+          new arrow.Field('source_document_id', new arrow.Utf8(), true),
+          new arrow.Field('source_path', new arrow.Utf8()),
+          new arrow.Field('source_name', new arrow.Utf8()),
+          new arrow.Field('format', new arrow.Utf8()),
+          new arrow.Field('latest_draft_snapshot_id', new arrow.Utf8()),
+          new arrow.Field('preview_artifact_path', new arrow.Utf8(), true),
+          new arrow.Field('draft_artifact_path', new arrow.Utf8(), true),
+          new arrow.Field('source_version_json', new arrow.Utf8()),
+          new arrow.Field('total_change_count', new arrow.Int32()),
+          new arrow.Field('pending_change_count', new arrow.Int32()),
+          new arrow.Field('accepted_change_count', new arrow.Int32()),
+          new arrow.Field('rejected_change_count', new arrow.Int32()),
+          new arrow.Field('created_at', new arrow.Int64()),
+          new arrow.Field('updated_at', new arrow.Int64())
+        ])
+      },
+      {
+        name: LANCE_TABLES.DRAFT_REVIEW_CHANGE,
+        schema: new arrow.Schema([
+          new arrow.Field('id', new arrow.Utf8()),
+          new arrow.Field('review_id', new arrow.Utf8()),
+          new arrow.Field('document_id', new arrow.Utf8()),
+          new arrow.Field('order_index', new arrow.Int32()),
+          new arrow.Field('change_kind', new arrow.Utf8()),
+          new arrow.Field('title', new arrow.Utf8()),
+          new arrow.Field('summary', new arrow.Utf8()),
+          new arrow.Field('decision', new arrow.Utf8()),
+          new arrow.Field('before_text', new arrow.Utf8()),
+          new arrow.Field('after_text', new arrow.Utf8()),
+          new arrow.Field('locator_json', new arrow.Utf8()),
+          new arrow.Field('preview_artifact_path', new arrow.Utf8(), true),
+          new arrow.Field('metadata_json', new arrow.Utf8(), true),
+          new arrow.Field('created_at', new arrow.Int64()),
+          new arrow.Field('updated_at', new arrow.Int64())
+        ])
+      },
+      {
+        name: LANCE_TABLES.DRAFT_COMMIT_JOB,
+        schema: new arrow.Schema([
+          new arrow.Field('id', new arrow.Utf8()),
+          new arrow.Field('review_id', new arrow.Utf8()),
+          new arrow.Field('status', new arrow.Utf8()),
+          new arrow.Field('document_count', new arrow.Int32()),
+          new arrow.Field('results_json', new arrow.Utf8()),
+          new arrow.Field('started_at', new arrow.Int64()),
+          new arrow.Field('completed_at', new arrow.Int64(), true),
+          new arrow.Field('error', new arrow.Utf8(), true)
         ])
       },
       {

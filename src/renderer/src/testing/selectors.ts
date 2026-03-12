@@ -48,3 +48,33 @@ export const searchSelectors = {
   resultsList: 'search-results-list',
   resultCardPrefix: 'search-result-card'
 } as const
+
+export const workbenchSelectors = {
+  page: 'workbench-page',
+  modeSwitch: 'workbench-mode-switch',
+  sessionsList: 'workbench-sessions-list',
+  input: 'workbench-input',
+  sendButton: 'workbench-send-button',
+  cancelButton: 'workbench-cancel-button',
+  sourceScopeField: 'workbench-source-scope-field',
+  timeline: 'workbench-timeline',
+  timelineItemPrefix: 'workbench-timeline-item',
+  inspector: 'workbench-inspector',
+  inspectorTitle: 'workbench-inspector-title',
+  searchResults: 'workbench-search-results',
+  reviewCenter: 'workbench-review-center',
+  reviewList: 'workbench-review-list',
+  reviewItemPrefix: 'workbench-review-item',
+  reviewDocumentList: 'workbench-review-document-list',
+  reviewDocumentPrefix: 'workbench-review-document',
+  reviewChangeList: 'workbench-review-change-list',
+  reviewChangePrefix: 'workbench-review-change',
+  reviewChangeAcceptPrefix: 'workbench-review-change-accept',
+  reviewChangeRejectPrefix: 'workbench-review-change-reject',
+  reviewAcceptAllButton: 'workbench-review-accept-all-button',
+  reviewRejectAllButton: 'workbench-review-reject-all-button',
+  reviewValidation: 'workbench-review-validation',
+  reviewCommitButton: 'workbench-review-commit-button',
+  reviewCommitResults: 'workbench-review-commit-results',
+  reviewConflict: 'workbench-review-conflict'
+} as const

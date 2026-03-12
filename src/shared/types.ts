@@ -317,6 +317,180 @@ export interface ChatSession {
   created_at: number
 }
 
+export type DraftDocumentFormat = 'docx' | 'pdf' | 'xlsx' | 'pptx' | 'md' | 'txt'
+export type DraftChangeKind =
+  | 'block'
+  | 'text_hunk'
+  | 'table_cell'
+  | 'worksheet_range'
+  | 'slide_object'
+  | 'page_region'
+export type DraftChangeDecision = 'pending' | 'accepted' | 'rejected'
+export type DraftChangeResolution = Exclude<DraftChangeDecision, 'pending'>
+export type DraftReviewStatus =
+  | 'review_pending'
+  | 'commit_ready'
+  | 'committing'
+  | 'committed'
+  | 'conflicted'
+  | 'cancelled'
+  | 'failed'
+export type DraftArtifactRole = 'preview' | 'draft' | 'committed'
+export type DraftCommitJobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'conflicted'
+export type DraftCommitValidationIssueCode =
+  | 'pending_changes'
+  | 'source_changed'
+  | 'review_not_found'
+  | 'review_not_ready'
+
+export interface DraftSourceVersion {
+  mtime_ms?: number
+  byte_size?: number
+  checksum?: string
+  content_hash?: string
+}
+
+export interface DraftReviewSummary {
+  id: string
+  session_id: string
+  run_id: string
+  status: DraftReviewStatus
+  title: string
+  document_count: number
+  change_count: number
+  pending_change_count: number
+  accepted_change_count: number
+  rejected_change_count: number
+  created_at: number
+  updated_at: number
+  completed_at?: number
+  committed_at?: number
+  last_error?: string
+}
+
+export interface DraftReviewDocument {
+  id: string
+  review_id: string
+  source_document_id?: string
+  source_path: string
+  source_name: string
+  format: DraftDocumentFormat
+  latest_draft_snapshot_id: string
+  preview_artifact_path?: string
+  draft_artifact_path?: string
+  source_version: DraftSourceVersion
+  total_change_count: number
+  pending_change_count: number
+  accepted_change_count: number
+  rejected_change_count: number
+  created_at: number
+  updated_at: number
+}
+
+export interface DraftReviewChange {
+  id: string
+  review_id: string
+  document_id: string
+  order_index: number
+  change_kind: DraftChangeKind
+  title: string
+  summary: string
+  decision: DraftChangeDecision
+  before_text: string
+  after_text: string
+  locator: JsonObject
+  preview_artifact_path?: string
+  metadata?: JsonObject
+  created_at: number
+  updated_at: number
+}
+
+export interface DraftCommitResultItem {
+  draft_document_id: string
+  output_path: string
+  operation: AiFileArtifactOperation
+  checksum?: string
+  byte_size?: number
+}
+
+export interface DraftCommitJob {
+  id: string
+  review_id: string
+  status: DraftCommitJobStatus
+  document_count: number
+  results: DraftCommitResultItem[]
+  started_at: number
+  completed_at?: number
+  error?: string
+}
+
+export interface DraftReviewDetail {
+  review: DraftReviewSummary
+  documents: DraftReviewDocument[]
+  changes: DraftReviewChange[]
+  commit_jobs: DraftCommitJob[]
+}
+
+export interface ListDraftReviewsRequest {
+  sessionId?: string
+  status?: DraftReviewStatus
+}
+
+export interface ListDraftReviewsResponse {
+  items: DraftReviewSummary[]
+  total: number
+}
+
+export interface GetDraftReviewRequest {
+  reviewId: string
+}
+
+export interface GetDraftReviewResponse {
+  review?: DraftReviewDetail
+  error?: string
+}
+
+export interface SetDraftChangeDecisionRequest {
+  reviewId: string
+  changeId: string
+  decision: DraftChangeResolution
+}
+
+export interface SetDraftChangeDecisionResponse {
+  success: boolean
+  review?: DraftReviewSummary
+  document?: DraftReviewDocument
+  change?: DraftReviewChange
+  error?: string
+}
+
+export interface DraftCommitValidationIssue {
+  code: DraftCommitValidationIssueCode
+  message: string
+  documentId?: string
+  sourcePath?: string
+}
+
+export interface ValidateDraftCommitRequest {
+  reviewId: string
+}
+
+export interface ValidateDraftCommitResponse {
+  ready: boolean
+  issues: DraftCommitValidationIssue[]
+}
+
+export interface CommitDraftReviewRequest {
+  reviewId: string
+  overwrite?: boolean
+}
+
+export interface CommitDraftReviewResponse {
+  success: boolean
+  job?: DraftCommitJob
+  error?: string
+}
+
 export type AiTaskKind = 'local_kb_retrieval' | 'terminal_exec' | 'docx'
 export type AiTaskStatus = 'pending' | 'running' | 'completed' | 'failed'
 export type AiRunStatus = 'running' | 'completed' | 'failed' | 'cancelled'
@@ -441,6 +615,19 @@ export type HumanTaskOutput = {
 
 export type AiFileArtifactCapability = 'terminal_exec' | 'docx'
 export type AiFileArtifactOperation = 'created' | 'updated'
+export type AiFileArtifactRole = DraftArtifactRole
+export type AiDraftSnapshotRef = {
+  reviewId?: string
+  draftDocumentId?: string
+  draftSnapshotId: string
+  format?: DraftDocumentFormat
+  sourcePath?: string
+}
+export type AiDraftReviewRef = {
+  reviewId: string
+  documentCount: number
+  changeCount: number
+}
 
 export type AiPlanTask = {
   id: string
@@ -539,6 +726,7 @@ type AiRunEventPayload =
       toolCallId: string
       toolName: string
       outputPreview: IpcJsonValue
+      draftRef?: AiDraftSnapshotRef
       completedAt: number
       error?: string
     }
@@ -599,6 +787,7 @@ type AiRunEventPayload =
       activeToolNames: string[]
       resultStatus?: HumanStepResultStatus
       summary: string
+      draftRef?: AiDraftSnapshotRef
       createdAt: number
     }
   | {
@@ -619,8 +808,18 @@ type AiRunEventPayload =
       path: string
       fileName: string
       operation: AiFileArtifactOperation
+      artifactRole?: AiFileArtifactRole
+      reviewId?: string
+      draftDocumentId?: string
+      draftSnapshotId?: string
       summary: string
       stepId?: string
+      createdAt: number
+    }
+  | {
+      type: 'draft_review_ready'
+      runId: string
+      review: AiDraftReviewRef
       createdAt: number
     }
   | {

@@ -137,6 +137,7 @@ stateDiagram-v2
 - `human_step` 面向 UI/用户可读性，必须包含 `publicNarrative`、active skills、active tools 与步骤结果状态。
 - `human_diagnostic` 仅供内部调试，记录 rationale、skill/tool 选择与 observation 摘要。
 - `answer_token/answer_completed` 仅在 finalize 结果流出后发送。
+- 可编辑运行在全部编辑任务完成后，若存在可提交草稿，必须额外发送 `draft_review_ready` 作为统一审阅入口；运行中不得发出逐块确认请求。
 
 ## 9. 代码落点
 
@@ -165,3 +166,12 @@ stateDiagram-v2
 - 测试上下文通过 harness 注入 workspace、审批策略与事件采集，避免侵入生产实现。
 - 所有 case 必须输出标准化报告（`events.jsonl/assertions.json/metrics.json/summary.md`），供后续 AI 诊断与优化建议使用。
 - live 配置统一从根目录 `.env` 读取（模板 `.env-example`），缺失时 fail-fast 并输出可定位信息。
+
+## 12. 统一工作台与草稿审阅语义
+
+- 首页工作台统一承载 `AI 对话` 与 `纯搜索` 两种模式。
+- `纯搜索` 不进入 main/human graph，只复用本地检索能力，并在 Renderer 投影层映射成统一时间线与检查器。
+- AI 编辑运行期间只允许生成草稿快照、预览与审阅引用，不允许直接写回真实文件。
+- `docx_open / outline / get_block / search / apply_ops / rollback / render_preview / validate` 在同一运行内默认基于当前最新草稿快照继续执行；当工具输入省略 `docId` 时，必须解析到最新草稿身份，而不是退回源文件。
+- `draft_review_ready` 只能在整次运行完成后发出；用户逐块接受/拒绝、提交前校验和最终写盘属于独立的草稿审阅 IPC 阶段，不属于运行中断点。
+- 最终提交前必须校验源文件新鲜度；若源文件已变化，审阅阶段必须进入冲突态并阻止写回。

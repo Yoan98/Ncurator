@@ -46,3 +46,16 @@ doc/test/
 4. 关键边界或显式缺口
 5. 是否允许进入下一阶段
 6. 下一轮优先级
+
+## 5. 当前统一工作台相关入口
+
+- Renderer contract：
+  - `pnpm test:renderer`
+  - 重点覆盖统一工作台模式切换、时间线/检查器、草稿审阅恢复与逐块确认
+- Main 关键链路：
+  - `pnpm exec vitest --config vitest.ai.config.mts run tests/main/ai/runtime/docx.draft-review-commit.test.ts`
+  - 重点覆盖最新草稿读取、统一审阅就绪、部分接受后提交、冲突阻止提交与提交后清理
+- Deterministic E2E：
+  - `pnpm exec electron-vite build`
+  - `pnpm exec vitest --config vitest.e2e.config.mts run tests/e2e/**/deterministic`
+  - 重点覆盖 workbench 纯搜索、AI 执行时间线、统一审阅、部分接受后提交与冲突提示

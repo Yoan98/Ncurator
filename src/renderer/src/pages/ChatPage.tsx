@@ -1,33 +1,52 @@
-import React, { useState, useEffect, useRef } from 'react'
-import { Input, Button, Card, message, Collapse, Avatar, Tooltip, Space, Progress } from 'antd'
+import React, { useState, useEffect, useRef, useMemo } from 'react'
+import {
+  App,
+  Input,
+  Button,
+  Card,
+  Collapse,
+  Avatar,
+  Space,
+  Segmented,
+  Tooltip
+} from 'antd'
 import { HiArrowUp, HiPlus, HiTrash, HiUser, HiSparkles, HiBookOpen } from 'react-icons/hi2'
 import { LoadingOutlined } from '@ant-design/icons'
 import type {
   AiPlanTask,
   AiRunEvent,
+  DraftChangeResolution,
+  DraftReviewDetail,
+  DraftReviewSummary,
   DocumentRecord,
   SearchResult,
   ChatSession,
   ChatMessage,
   JsonValue,
   IpcJsonValue,
-  SourceScopeSelection
+  SourceScopeSelection,
+  ValidateDraftCommitResponse
 } from '../../../shared/types'
-import { groupArtifactEventsByTask } from '../../../shared/aiRunEventUtils'
 import { parseIpcResult } from '../utils/serialization'
 import FileRender, { FileRenderDocument } from '../components/fileRenders'
 import MarkdownRenderer from '../components/MarkdownRenderer'
 import SourceScopeSelect from '../components/SourceScopeSelect'
-import { chatSelectors } from '../testing/selectors'
+import AssistantRunCard from '../components/workbench/AssistantRunCard'
+import WorkbenchInspectorPanel from '../components/workbench/WorkbenchInspector'
+import WorkbenchTimeline from '../components/workbench/WorkbenchTimeline'
+import DraftReviewCenter from '../components/draft-review/DraftReviewCenter'
+import { chatSelectors, workbenchSelectors } from '../testing/selectors'
+import type {
+  SearchWorkbenchTurn,
+  WorkbenchInspector as WorkbenchInspectorPayload,
+  WorkbenchMode
+} from '../types/workbench'
+import { projectWorkbenchState } from '../utils/workbenchProjection'
 
 const { TextArea } = Input
 const { Panel } = Collapse
-
-const extractAbsolutePaths = (text: string): string[] => {
-  const matches = String(text || '').match(/\/[^\s"'`;]+/g) || []
-  const unique = Array.from(new Set(matches.map((v) => v.trim()).filter(Boolean)))
-  return unique.slice(0, 5)
-}
+const isJsdomTestEnv =
+  typeof navigator !== 'undefined' && /jsdom/i.test(String(navigator.userAgent || ''))
 
 type RightPanelState =
   | {
@@ -51,14 +70,8 @@ type RightPanelState =
       data: ArtifactEvent[]
     }
 
-type ToolCallEvent = Extract<AiRunEvent, { type: 'tool_call_started' | 'tool_call_result' }>
-type TerminalEvent = Extract<
-  AiRunEvent,
-  { type: 'terminal_step_started' | 'terminal_step_result' | 'terminal_step_error' }
->
 type ActivityEvent = Extract<AiRunEvent, { type: 'activity' }>
 type ArtifactEvent = Extract<AiRunEvent, { type: 'file_artifact' }>
-type HumanStepTraceEvent = Extract<AiRunEvent, { type: 'human_step' }>
 type ApprovalRequiredEvent = Extract<AiRunEvent, { type: 'approval_required' }>
 type WorkspaceRequiredEvent = Extract<AiRunEvent, { type: 'workspace_required' }>
 
@@ -76,15 +89,29 @@ const getPageNumberFromMetadata = (metadata: SearchResult['metadata']): number =
 }
 
 const ChatPage: React.FC = () => {
+  const { message } = App.useApp()
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
   const [currentMessages, setCurrentMessages] = useState<ChatMessage[]>([])
+  const [composerMode, setComposerMode] = useState<WorkbenchMode>('ai')
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [aiRunId, setAiRunId] = useState<string | null>(null)
   const [aiEvents, setAiEvents] = useState<AiRunEvent[]>([])
   const [aiPlan, setAiPlan] = useState<AiPlanTask[]>([])
+  const [searchTurn, setSearchTurn] = useState<SearchWorkbenchTurn | null>(null)
+  const [selectedTimelineId, setSelectedTimelineId] = useState<string | null>(null)
   const [selectedSourceScopes, setSelectedSourceScopes] = useState<SourceScopeSelection[]>([])
+  const [draftReviewSummaries, setDraftReviewSummaries] = useState<DraftReviewSummary[]>([])
+  const [activeDraftReviewId, setActiveDraftReviewId] = useState<string | null>(null)
+  const [activeDraftReview, setActiveDraftReview] = useState<DraftReviewDetail | null>(null)
+  const [draftReviewLoading, setDraftReviewLoading] = useState(false)
+  const [draftCommitValidation, setDraftCommitValidation] =
+    useState<ValidateDraftCommitResponse | null>(null)
+  const [draftValidationLoading, setDraftValidationLoading] = useState(false)
+  const [draftDecisionBusyIds, setDraftDecisionBusyIds] = useState<string[]>([])
+  const [draftBulkApplying, setDraftBulkApplying] = useState(false)
+  const [draftCommitSubmitting, setDraftCommitSubmitting] = useState(false)
   const [localSourceStatus, setLocalSourceStatus] = useState<{
     status: 'used' | 'not_used' | 'insufficient'
     summary: string
@@ -118,10 +145,130 @@ const ChatPage: React.FC = () => {
     fileName: string
   } | null>(null)
 
+  const selectedDocumentIds = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          selectedSourceScopes.flatMap((scope) =>
+            Array.isArray(scope.documentIds) ? scope.documentIds.map((item) => String(item)) : []
+          )
+        )
+      ).filter(Boolean),
+    [selectedSourceScopes]
+  )
+
+  const projection = useMemo(
+    () =>
+      projectWorkbenchState({
+        aiEvents,
+        aiPlan,
+        searchTurn
+      }),
+    [aiEvents, aiPlan, searchTurn]
+  )
+
   const scrollToBottom = () => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
+  }
+
+  const sortDraftReviews = (items: DraftReviewSummary[]): DraftReviewSummary[] => {
+    const priority: Record<DraftReviewSummary['status'], number> = {
+      review_pending: 0,
+      commit_ready: 1,
+      conflicted: 2,
+      failed: 3,
+      committing: 4,
+      committed: 5,
+      cancelled: 6
+    }
+    return [...items].sort((left, right) => {
+      const priorityGap = priority[left.status] - priority[right.status]
+      if (priorityGap !== 0) return priorityGap
+      return right.updated_at - left.updated_at
+    })
+  }
+
+  const resetDraftReviewState = () => {
+    setDraftReviewSummaries([])
+    setActiveDraftReviewId(null)
+    setActiveDraftReview(null)
+    setDraftReviewLoading(false)
+    setDraftCommitValidation(null)
+    setDraftValidationLoading(false)
+    setDraftDecisionBusyIds([])
+    setDraftBulkApplying(false)
+    setDraftCommitSubmitting(false)
+  }
+
+  const loadDraftReviewDetail = async (reviewId: string): Promise<void> => {
+    setDraftReviewLoading(true)
+    try {
+      const [detailResponse, validationResponse] = await Promise.all([
+        window.api.draftReviewGet({ reviewId }),
+        window.api.draftReviewValidate({ reviewId })
+      ])
+      if (!detailResponse.review) {
+        setActiveDraftReview(null)
+        setDraftCommitValidation(validationResponse)
+        return
+      }
+      setActiveDraftReview(detailResponse.review)
+      setActiveDraftReviewId(reviewId)
+      setDraftCommitValidation(validationResponse)
+    } finally {
+      setDraftReviewLoading(false)
+    }
+  }
+
+  const loadDraftReviewsForSession = async (
+    sessionId: string,
+    preferredReviewId?: string | null
+  ): Promise<void> => {
+    setDraftReviewLoading(true)
+    try {
+      const response = await window.api.draftReviewList({ sessionId })
+      const nextItems = sortDraftReviews(response.items)
+      setDraftReviewSummaries(nextItems)
+
+      const currentSelectedId = preferredReviewId || activeDraftReviewId
+      const nextReviewId =
+        nextItems.find((item) => item.id === currentSelectedId)?.id || nextItems[0]?.id || null
+      if (!nextReviewId) {
+        setActiveDraftReviewId(null)
+        setActiveDraftReview(null)
+        setDraftCommitValidation(null)
+        return
+      }
+      await loadDraftReviewDetail(nextReviewId)
+    } catch (error) {
+      console.error('Failed to load draft reviews', error)
+      setActiveDraftReview(null)
+      setDraftCommitValidation(null)
+    } finally {
+      setDraftReviewLoading(false)
+    }
+  }
+
+  const refreshDraftCommitValidation = async (reviewId: string): Promise<void> => {
+    setDraftValidationLoading(true)
+    try {
+      const response = await window.api.draftReviewValidate({ reviewId })
+      setDraftCommitValidation(response)
+    } finally {
+      setDraftValidationLoading(false)
+    }
+  }
+
+  const openPathOrNotify = async (filePath: string): Promise<void> => {
+    const result = await window.api.openPath(filePath)
+    if (!result.success) message.error(result.error || '打开失败')
+  }
+
+  const revealPathOrNotify = async (filePath: string): Promise<void> => {
+    const result = await window.api.revealPath(filePath)
+    if (!result.success) message.error(result.error || '定位失败')
   }
 
   const loadSessions = async () => {
@@ -176,6 +323,8 @@ const ChatPage: React.FC = () => {
       setAiRunId(null)
       setAiEvents([])
       setAiPlan([])
+      setSearchTurn(null)
+      setSelectedTimelineId(null)
       setSelectedSourceScopes([])
       setLocalSourceStatus(null)
       setPendingApprovalRequest(null)
@@ -183,14 +332,32 @@ const ChatPage: React.FC = () => {
       setPendingNonLocalRequest(null)
       setPendingWorkspaceRequest(null)
       setRightPanel(null)
+      resetDraftReviewState()
+      void loadDraftReviewsForSession(currentSessionId)
     } else {
       setCurrentMessages([])
+      resetDraftReviewState()
     }
   }, [currentSessionId])
 
   useEffect(() => {
     scrollToBottom()
   }, [currentMessages])
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('workbench-mode-change', { detail: { mode: composerMode } }))
+  }, [composerMode])
+
+  useEffect(() => {
+    if (projection.timeline.length === 0) {
+      if (selectedTimelineId) setSelectedTimelineId(null)
+      return
+    }
+    const exists = projection.timeline.some((item) => item.id === selectedTimelineId)
+    if (!exists) {
+      setSelectedTimelineId(projection.defaultSelectedId || projection.timeline[0].id)
+    }
+  }, [projection, selectedTimelineId])
 
   const deleteSession = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation()
@@ -260,7 +427,7 @@ const ChatPage: React.FC = () => {
         setRightPanel({
           title: `Human 步骤追踪 · ${evt.type}`,
           kind: 'json',
-          data: evt as HumanStepTraceEvent
+          data: evt
         })
         return
       }
@@ -403,6 +570,14 @@ const ChatPage: React.FC = () => {
         return
       }
 
+      if (evt.type === 'draft_review_ready') {
+        if (!evt.internal && currentSessionId) {
+          message.success(`草稿审阅已准备完成：${evt.review.changeCount} 处修改`)
+          void loadDraftReviewsForSession(currentSessionId, evt.review.reviewId)
+        }
+        return
+      }
+
       if (evt.type === 'non_local_permission_requested') {
         if (!evt.internal) {
           setPendingNonLocalRequest({
@@ -481,6 +656,10 @@ const ChatPage: React.FC = () => {
   }, [aiRunId, currentSessionId])
 
   const handleSend = async () => {
+    if (composerMode === 'search') {
+      await handleSearchSend()
+      return
+    }
     if (!input.trim() || !currentSessionId || loading) return
 
     const userQuery = input.trim()
@@ -495,6 +674,8 @@ const ChatPage: React.FC = () => {
 
     setInput('')
     setLoading(true)
+    setSearchTurn(null)
+    setSelectedTimelineId(null)
     setAiEvents([])
     setAiPlan([])
     setLocalSourceStatus(null)
@@ -524,15 +705,7 @@ const ChatPage: React.FC = () => {
     // Save user message async
     window.api.chatMessageSave(userMsg).catch(console.error)
 
-    // Update session title if first message
-    if (currentMessages.length === 0) {
-      const session = sessions.find((s) => s.id === currentSessionId)
-      if (session) {
-        const newTitle = userQuery.slice(0, 20)
-        await window.api.chatSessionSave({ ...session, title: newTitle })
-        loadSessions() // Refresh sidebar
-      }
-    }
+    await updateSessionTitleIfNeeded(userQuery)
 
     try {
       const assistantMsgId = crypto.randomUUID()
@@ -581,6 +754,90 @@ const ChatPage: React.FC = () => {
       console.error(e)
       setLoading(false)
       message.error('发送失败')
+    }
+  }
+
+  const updateSessionTitleIfNeeded = async (userQuery: string): Promise<void> => {
+    if (!currentSessionId || currentMessages.length !== 0) return
+    const session = sessions.find((item) => item.id === currentSessionId)
+    if (!session) return
+    await window.api.chatSessionSave({ ...session, title: userQuery.slice(0, 20) })
+    await loadSessions()
+  }
+
+  const handleSearchSend = async () => {
+    if (!input.trim() || !currentSessionId || loading) return
+
+    const userQuery = input.trim()
+    const hasStrictScope = selectedSourceScopes.length > 0
+    if (hasStrictScope && selectedDocumentIds.length === 0) {
+      message.warning('当前搜索范围没有已准备完成的本地资料，无法执行纯搜索。')
+      return
+    }
+    setInput('')
+    setLoading(true)
+    setAiRunId(null)
+    setAiEvents([])
+    setAiPlan([])
+    setSearchTurn(null)
+    setSelectedTimelineId(null)
+    setLocalSourceStatus(null)
+    setPendingApprovalRequest(null)
+    setApprovalSubmitting(false)
+    setPendingNonLocalRequest(null)
+    setPendingWorkspaceRequest(null)
+    setRightPanel(null)
+    assistantMsgIdRef.current = null
+
+    const userMsg: ChatMessage = {
+      id: crypto.randomUUID(),
+      session_id: currentSessionId,
+      role: 'user',
+      content: userQuery,
+      timestamp: Date.now()
+    }
+    setCurrentMessages((prev) => [...prev, userMsg])
+    window.api.chatMessageSave(userMsg).catch(console.error)
+
+    try {
+      await updateSessionTitleIfNeeded(userQuery)
+      const response = await window.api.search(
+        userQuery,
+        'all',
+        hasStrictScope ? selectedDocumentIds : undefined
+      )
+      const results = response.results.map(parseIpcResult)
+      const assistantContent =
+        results.length > 0
+          ? `已从本地资料中找到 ${results.length} 条结果，右侧可查看详情。`
+          : '未在当前本地资料范围中找到匹配结果。'
+      const assistantMsg: ChatMessage = {
+        id: crypto.randomUUID(),
+        session_id: currentSessionId,
+        role: 'assistant',
+        content: assistantContent,
+        timestamp: Date.now()
+      }
+      setCurrentMessages((prev) => [...prev, assistantMsg])
+      window.api.chatMessageSave(assistantMsg).catch(console.error)
+
+      const nextTurn: SearchWorkbenchTurn = {
+        query: userQuery,
+        results,
+        tokens: response.tokens,
+        createdAt: Date.now()
+      }
+      setSearchTurn(nextTurn)
+      setRightPanel({
+        title: '搜索结果',
+        kind: 'chunks',
+        data: results
+      })
+    } catch (error) {
+      console.error(error)
+      message.error('搜索失败')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -636,6 +893,8 @@ const ChatPage: React.FC = () => {
     setLoading(true)
     setAiEvents([])
     setAiPlan([])
+    setSearchTurn(null)
+    setSelectedTimelineId(null)
     setLocalSourceStatus(null)
     setPendingApprovalRequest(null)
     setApprovalSubmitting(false)
@@ -716,6 +975,8 @@ const ChatPage: React.FC = () => {
     setLoading(true)
     setAiEvents([])
     setAiPlan([])
+    setSearchTurn(null)
+    setSelectedTimelineId(null)
     setLocalSourceStatus(null)
     setPendingApprovalRequest(null)
     setApprovalSubmitting(false)
@@ -759,225 +1020,129 @@ const ChatPage: React.FC = () => {
     }
   }
 
+  const handleSelectDraftReview = async (reviewId: string): Promise<void> => {
+    try {
+      await loadDraftReviewDetail(reviewId)
+    } catch (error) {
+      console.error(error)
+      message.error('加载草稿审阅失败')
+    }
+  }
+
+  const handleOpenDraftReview = (reviewId: string): void => {
+    void handleSelectDraftReview(reviewId)
+  }
+
+  const handleDraftChangeDecision = async (
+    changeId: string,
+    decision: DraftChangeResolution
+  ): Promise<void> => {
+    if (!activeDraftReview || !currentSessionId) return
+    setDraftDecisionBusyIds((prev) => [...prev, changeId])
+    try {
+      const response = await window.api.draftReviewSetDecision({
+        reviewId: activeDraftReview.review.id,
+        changeId,
+        decision
+      })
+      if (!response.success) {
+        message.error(response.error || '更新草稿决策失败')
+        return
+      }
+      await loadDraftReviewsForSession(currentSessionId, activeDraftReview.review.id)
+    } catch (error) {
+      console.error(error)
+      message.error('更新草稿决策失败')
+    } finally {
+      setDraftDecisionBusyIds((prev) => prev.filter((item) => item !== changeId))
+    }
+  }
+
+  const handleDraftBulkDecision = async (decision: DraftChangeResolution): Promise<void> => {
+    if (!activeDraftReview || !currentSessionId || draftBulkApplying) return
+    const pendingChanges = activeDraftReview.changes.filter((change) => change.decision === 'pending')
+    if (pendingChanges.length === 0) return
+    setDraftBulkApplying(true)
+    try {
+      for (const change of pendingChanges) {
+        const response = await window.api.draftReviewSetDecision({
+          reviewId: activeDraftReview.review.id,
+          changeId: change.id,
+          decision
+        })
+        if (!response.success) {
+          throw new Error(response.error || 'bulk review decision failed')
+        }
+      }
+      await loadDraftReviewsForSession(currentSessionId, activeDraftReview.review.id)
+    } catch (error) {
+      console.error(error)
+      message.error('批量更新草稿决策失败')
+    } finally {
+      setDraftBulkApplying(false)
+    }
+  }
+
+  const handleDraftValidationRefresh = async (): Promise<void> => {
+    if (!activeDraftReview) return
+    try {
+      await refreshDraftCommitValidation(activeDraftReview.review.id)
+    } catch (error) {
+      console.error(error)
+      message.error('刷新提交校验失败')
+    }
+  }
+
+  const handleDraftCommit = async (): Promise<void> => {
+    if (!activeDraftReview || !currentSessionId || draftCommitSubmitting) return
+    setDraftCommitSubmitting(true)
+    try {
+      const validation = await window.api.draftReviewValidate({
+        reviewId: activeDraftReview.review.id
+      })
+      setDraftCommitValidation(validation)
+      if (!validation.ready) {
+        message.warning('提交前仍有未决修改或源文件冲突。')
+        return
+      }
+      const response = await window.api.draftReviewCommit({
+        reviewId: activeDraftReview.review.id,
+        overwrite: true
+      })
+      if (!response.success) {
+        message.error(response.error || '提交失败')
+      } else {
+        message.success('已提交接受的修改到真实文件')
+      }
+      await loadDraftReviewsForSession(currentSessionId, activeDraftReview.review.id)
+    } catch (error) {
+      console.error(error)
+      message.error('提交草稿失败')
+    } finally {
+      setDraftCommitSubmitting(false)
+    }
+  }
+
   const renderTrace = () => {
-    if (!aiRunId) return null
+    return null
+  }
 
-    const toolCalls = aiEvents.filter(
-      (e) => e.type === 'tool_call_started' || e.type === 'tool_call_result'
-    ) as ToolCallEvent[]
-    const terminalSteps = aiEvents.filter(
-      (e) =>
-        e.type === 'terminal_step_started' ||
-        e.type === 'terminal_step_result' ||
-        e.type === 'terminal_step_error'
-    ) as TerminalEvent[]
-
-    const toolCallsByTask: Record<string, ToolCallEvent[]> = {}
-    for (const evt of toolCalls) {
-      const key = String(evt.taskId || '__no_task__')
-      if (!toolCallsByTask[key]) toolCallsByTask[key] = []
-      toolCallsByTask[key].push(evt)
+  const renderAssistantRunCard = () => {
+    if (composerMode !== 'ai' || (!aiRunId && aiPlan.length === 0 && aiEvents.length === 0)) {
+      return null
     }
-
-    const terminalByTask: Record<string, TerminalEvent[]> = {}
-    for (const evt of terminalSteps) {
-      const key = String(evt.taskId || '__no_task__')
-      if (!terminalByTask[key]) terminalByTask[key] = []
-      terminalByTask[key].push(evt)
-    }
-
-    const artifactsByTask = groupArtifactEventsByTask(aiEvents)
-
-    const total = aiPlan.length
-    const completed = aiPlan.filter((t) => t.status === 'completed').length
-    const running = aiPlan.find((t) => t.status === 'running')
-    const percent = total > 0 ? Math.round((completed / total) * 100) : 0
-
-    const taskPanels = aiPlan.map((t) => {
-      const toolItems = toolCallsByTask[t.id] || []
-      const terminalItems = terminalByTask[t.id] || []
-      const artifactItems = artifactsByTask[t.id] || []
-      return (
-        <Panel
-          key={t.id}
-          header={
-            <div className="flex items-center justify-between w-full">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-[#1F1F1F]">{t.title}</span>
-                {t.resultCode ? <span className="text-xs text-[#999999]">{t.resultCode}</span> : null}
-                {t.status === 'running' ? (
-                  <span className="text-[10px] px-2 py-[2px] rounded bg-[#FBF5F2] text-[#D97757]">
-                    active
-                  </span>
-                ) : null}
-              </div>
-              <span className="text-xs text-[#666666]">{t.status}</span>
-            </div>
-          }
-        >
-          <div className="flex flex-col gap-3">
-            {t.resultMessage ? (
-              <div className="text-xs text-[#666666] bg-[#F5F5F4] rounded px-2 py-1">
-                {t.resultMessage}
-              </div>
-            ) : null}
-            <div>
-              <div className="text-xs font-medium text-[#666666] mb-2">Terminal</div>
-              {terminalItems.length === 0 ? (
-                <div className="text-xs text-[#999999]">暂无终端步骤</div>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {terminalItems.map((evt, idx) => (
-                    <div
-                      key={`${evt.stepId || idx}-${idx}`}
-                      className="border border-[#E5E5E4] rounded-lg bg-white px-3 py-2"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="text-xs font-medium text-[#1F1F1F]">{evt.type}</div>
-                        <div className="text-[11px] text-[#999999]">step {evt.stepIndex}</div>
-                      </div>
-                      <div className="text-xs text-[#666666] mt-1 whitespace-pre-wrap">
-                        {evt.command}
-                      </div>
-                      <div className="text-xs text-[#999999] mt-1 whitespace-pre-wrap">
-                        {'error' in evt
-                          ? evt.error
-                          : 'outputPreview' in evt
-                            ? evt.outputPreview
-                            : ''}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div>
-              <div className="text-xs font-medium text-[#666666] mb-2">Tool Calls</div>
-              {toolItems.length === 0 ? (
-                <div className="text-xs text-[#999999]">暂无工具步骤</div>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {toolItems.map((evt, idx) => (
-                    <div
-                      key={`${evt.toolCallId}-${idx}`}
-                      className="border border-[#E5E5E4] rounded-lg bg-white px-3 py-2"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="text-xs font-medium text-[#1F1F1F]">{evt.toolName}</div>
-                        <div className="text-[11px] text-[#999999]">{evt.type}</div>
-                      </div>
-                      {evt.type === 'tool_call_started' ? (
-                        <div className="text-xs text-[#666666] mt-1 whitespace-pre-wrap">
-                          {JSON.stringify(evt.input)}
-                        </div>
-                      ) : (
-                        <div className="text-xs text-[#666666] mt-1 whitespace-pre-wrap">
-                          {evt.error ? `[error] ${evt.error}` : JSON.stringify(evt.outputPreview)}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div>
-              <div className="text-xs font-medium text-[#666666] mb-2">Artifacts</div>
-              {artifactItems.length === 0 ? (
-                <div className="text-xs text-[#999999]">暂无文件产物</div>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {artifactItems.map((evt, idx) => (
-                    <div
-                      key={`${evt.artifactId}-${idx}`}
-                      className="border border-[#E5E5E4] rounded-lg bg-white px-3 py-2"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="text-xs font-medium text-[#1F1F1F] truncate">
-                          {evt.fileName}
-                        </div>
-                        <div className="text-[11px] text-[#999999]">{evt.operation}</div>
-                      </div>
-                      <div className="text-xs text-[#999999] mt-1 truncate">{evt.path}</div>
-                      <div className="text-xs text-[#666666] mt-1">{evt.summary}</div>
-                      <div className="flex items-center gap-2 mt-2">
-                        <Button
-                          size="small"
-                          onClick={() => openArtifactPreview(evt)}
-                        >
-                          预览
-                        </Button>
-                        <Button
-                          size="small"
-                          onClick={async () => {
-                            const res = await window.api.openPath(evt.path)
-                            if (!res.success) message.error(res.error || '打开失败')
-                          }}
-                        >
-                          打开
-                        </Button>
-                        <Button
-                          size="small"
-                          onClick={async () => {
-                            const res = await window.api.revealPath(evt.path)
-                            if (!res.success) message.error(res.error || '定位失败')
-                          }}
-                        >
-                          定位
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </Panel>
-      )
-    })
+    const answerPreview =
+      [...currentMessages].reverse().find((messageItem) => messageItem.role === 'assistant')?.content ||
+      undefined
 
     return (
-      <div className="px-6 pt-4">
-        <Collapse
-          defaultActiveKey={['plan']}
-          size="small"
-          className="bg-white border border-[#E5E5E4] rounded-xl overflow-hidden"
-          data-testid={chatSelectors.tracePanel}
-        >
-          <Panel
-            header={
-              <div className="flex items-center justify-between w-full gap-4">
-                <div className="flex items-center gap-2 min-w-0">
-                  <HiSparkles className="text-[#D97757]" />
-                  <span className="text-sm font-medium text-[#1F1F1F]">执行轨迹</span>
-                  <span className="text-xs text-[#999999]">{completed}/{total}</span>
-                  {running ? (
-                    <span className="text-xs text-[#D97757] truncate">
-                      进行中: {running.title}
-                    </span>
-                  ) : null}
-                </div>
-                <span className="text-xs text-[#999999]">{aiRunId.slice(0, 8)}</span>
-              </div>
-            }
-            key="plan"
-          >
-            {aiPlan.length === 0 ? (
-              <div className="text-xs text-[#999999]">等待计划生成…</div>
-            ) : (
-              <div className="flex flex-col gap-3">
-                <div>
-                  <Progress percent={percent} showInfo={false} size="small" strokeColor="#D97757" />
-                </div>
-                <Collapse ghost size="small">
-                  {taskPanels}
-                </Collapse>
-              </div>
-            )}
-          </Panel>
-        </Collapse>
-      </div>
+      <AssistantRunCard
+        runId={aiRunId}
+        plan={aiPlan}
+        events={aiEvents}
+        answerPreview={answerPreview}
+        onOpenReview={handleOpenDraftReview}
+      />
     )
   }
 
@@ -1000,177 +1165,100 @@ const ChatPage: React.FC = () => {
     )
   }
 
+  const fallbackInspector: WorkbenchInspectorPayload = rightPanel
+    ? rightPanel.kind === 'chunks'
+      ? {
+          kind: 'search_results',
+          title: rightPanel.title,
+          query: rightPanel.title,
+          results: rightPanel.data,
+          tokens: searchTurn?.tokens || []
+        }
+      : rightPanel.kind === 'docs'
+        ? {
+            kind: 'docs',
+            title: rightPanel.title,
+            data: rightPanel.data
+          }
+        : rightPanel.kind === 'artifacts'
+          ? rightPanel.data.length > 0
+            ? {
+                kind: 'artifact',
+                title: rightPanel.title,
+                event: rightPanel.data[rightPanel.data.length - 1],
+                related: rightPanel.data
+              }
+            : {
+                kind: 'empty',
+                title: rightPanel.title,
+                description: '当前没有可展示的文件产物。'
+              }
+          : {
+              kind: 'json',
+              title: rightPanel.title,
+              data: rightPanel.data
+            }
+    : {
+        kind: 'empty',
+        title: '检查器',
+        description:
+          composerMode === 'search'
+            ? '发送一次本地搜索后，在这里查看结果。'
+            : '发送一次 AI 运行后，在这里查看计划、步骤和产物。'
+      }
+
+  const selectedTimelineItem =
+    projection.timeline.find((item) => item.id === selectedTimelineId) || null
+  const activeInspector = selectedTimelineItem?.inspector || fallbackInspector
+
   const renderRightPanel = () => {
     return (
       <div
         className="w-[380px] border-l border-[#E5E5E4] bg-[#F5F5F4] flex flex-col h-full"
-        data-testid={chatSelectors.rightPanel}
       >
-        <div className="p-4">
-          <Card
-            className="bg-white border border-[#E5E5E4] rounded-xl shadow-sm"
-            styles={{ body: { padding: 0 } }}
-          >
-            <div className="px-4 py-3 border-b border-[#E5E5E4] flex items-center justify-between">
-              <div
-                className="text-sm font-medium text-[#1F1F1F] truncate"
-                data-testid={chatSelectors.rightPanelTitle}
-              >
-                {rightPanel?.title || '右侧面板'}
-              </div>
-              <div className="text-xs text-[#999999]">{aiRunId ? aiRunId.slice(0, 8) : ''}</div>
-            </div>
-            <div className="p-4 max-h-[calc(100vh-220px)] overflow-auto">
-              {!rightPanel ? (
-                <div className="text-sm text-[#999999]">等待工具输出…</div>
-              ) : rightPanel.kind === 'chunks' ? (
-                <div className="flex flex-col gap-3" data-testid={chatSelectors.rightPanelChunks}>
-                  {(rightPanel.data as SearchResult[]).map((r, idx) => (
-                    <div
-                      key={`${r.id || idx}`}
-                      className="border border-[#E5E5E4] rounded-xl p-3 bg-white hover:border-[#D97757] transition-colors cursor-pointer"
-                      onClick={() => openPreview(r)}
-                    >
-                      <div className="text-xs font-semibold text-[#1F1F1F] truncate">
-                        {idx + 1}. {r.document_name}
-                      </div>
-                      <div className="text-xs text-[#999999] mt-2 whitespace-pre-wrap line-clamp-5">
-                        {r.text}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : rightPanel.kind === 'docs' ? (
-                <div className="flex flex-col gap-2" data-testid={chatSelectors.rightPanelDocs}>
-                  {(rightPanel.data as DocumentRecord[]).map((d, idx) => (
-                    <div
-                      key={`${d.id || idx}`}
-                      className="border border-[#E5E5E4] rounded-lg px-3 py-2 bg-white"
-                    >
-                      <div className="text-xs font-semibold text-[#1F1F1F] truncate">
-                        {idx + 1}. {d.name}
-                      </div>
-                      <div className="text-[11px] text-[#999999] mt-1 truncate">{d.id}</div>
-                    </div>
-                  ))}
-                </div>
-              ) : rightPanel.kind === 'artifacts' ? (
-                <div className="flex flex-col gap-2" data-testid={chatSelectors.rightPanelArtifacts}>
-                  {(rightPanel.data as ArtifactEvent[]).map((evt, idx) => (
-                    <div
-                      key={`${evt.artifactId || idx}-${idx}`}
-                      className="border border-[#E5E5E4] rounded-lg px-3 py-2 bg-white"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="text-xs font-semibold text-[#1F1F1F] truncate">
-                          {evt.fileName}
-                        </div>
-                        <div className="text-[11px] text-[#999999]">{evt.operation}</div>
-                      </div>
-                      <div className="text-[11px] text-[#999999] mt-1 truncate">{evt.path}</div>
-                      <div className="text-xs text-[#666666] mt-2">{evt.summary}</div>
-                      <div className="flex items-center gap-1 mt-2">
-                        <Button
-                          size="small"
-                          onClick={() => openArtifactPreview(evt)}
-                        >
-                          预览
-                        </Button>
-                        <Button
-                          size="small"
-                          onClick={async () => {
-                            const res = await window.api.openPath(evt.path)
-                            if (!res.success) message.error(res.error || '打开失败')
-                          }}
-                        >
-                          打开
-                        </Button>
-                        <Button
-                          size="small"
-                          onClick={async () => {
-                            const res = await window.api.revealPath(evt.path)
-                            if (!res.success) message.error(res.error || '定位失败')
-                          }}
-                        >
-                          定位
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex flex-col gap-3" data-testid={chatSelectors.rightPanelJson}>
-                  <div className="text-xs text-[#666666] whitespace-pre-wrap">
-                    {JSON.stringify(rightPanel.data)}
-                  </div>
-                  {(() => {
-                    const raw =
-                      typeof rightPanel.data === 'string'
-                        ? rightPanel.data
-                        : JSON.stringify(rightPanel.data)
-                    const paths = extractAbsolutePaths(raw)
-                    if (paths.length === 0) return null
-                    return (
-                      <div className="flex flex-col gap-2">
-                        <div className="text-xs text-[#999999]">检测到可能的产物路径</div>
-                        {paths.map((p) => (
-                          <div
-                            key={p}
-                            className="flex items-center justify-between gap-2 border border-[#E5E5E4] rounded px-2 py-1 bg-white"
-                          >
-                            <div className="text-xs text-[#666666] truncate">{p}</div>
-                            <div className="flex items-center gap-1">
-                              <Button
-                                size="small"
-                                onClick={() => navigator.clipboard.writeText(p).catch(() => {})}
-                              >
-                                复制
-                              </Button>
-                              <Button
-                                size="small"
-                                onClick={async () => {
-                                  const res = await window.api.openPath(p)
-                                  if (!res.success) message.error(res.error || '打开失败')
-                                }}
-                              >
-                                打开
-                              </Button>
-                              <Button
-                                size="small"
-                                onClick={async () => {
-                                  const res = await window.api.revealPath(p)
-                                  if (!res.success) message.error(res.error || '定位失败')
-                                }}
-                              >
-                                定位
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )
-                  })()}
-                </div>
-              )}
-            </div>
-          </Card>
+        <div className="space-y-4 p-4">
+          <WorkbenchTimeline
+            items={projection.timeline}
+            selectedId={selectedTimelineId}
+            mode={composerMode}
+            onSelect={setSelectedTimelineId}
+          />
+          <WorkbenchInspectorPanel
+            inspector={activeInspector}
+            runId={aiRunId}
+            onOpenSearchResult={(result) => void openPreview(result)}
+            onOpenArtifactPreview={(artifactPath, fileName) => {
+              setCurrentPreviewDoc(null)
+              setCurrentPreviewFile({
+                filePath: artifactPath,
+                fileName
+              })
+              setPreviewVisible(true)
+            }}
+            onOpenReview={handleOpenDraftReview}
+            onOpenPath={openPathOrNotify}
+            onRevealPath={revealPathOrNotify}
+          />
         </div>
       </div>
     )
   }
 
-  const openPreview = (item: SearchResult) => {
+  const openPreview = async (item: SearchResult) => {
+    if (item.source_type === 'web') {
+      const url = item.document?.file_path
+      if (!url) {
+        message.warning('未找到网页链接')
+        return
+      }
+      const res = await window.api.openExternal(url)
+      if (!res.success) {
+        message.error(res.error || '打开链接失败')
+      }
+      return
+    }
     setCurrentPreviewDoc(item)
     setCurrentPreviewFile(null)
-    setPreviewVisible(true)
-  }
-
-  const openArtifactPreview = (item: ArtifactEvent) => {
-    setCurrentPreviewDoc(null)
-    setCurrentPreviewFile({
-      filePath: item.path,
-      fileName: item.fileName
-    })
     setPreviewVisible(true)
   }
 
@@ -1275,7 +1363,11 @@ const ChatPage: React.FC = () => {
       : []
 
   return (
-    <div className="flex h-full bg-[#F5F5F4]" data-testid={chatSelectors.page}>
+    <div
+      className="flex h-full bg-[#F5F5F4]"
+      data-testid={workbenchSelectors.page}
+      data-workbench-mode={composerMode}
+    >
       {/* Sidebar */}
       <div className="w-64 bg-white border-r border-[#E5E5E4] flex flex-col h-[calc(100vh-64px)]">
         <div className="p-4 border-b border-[#E5E5E4] flex items-center justify-between">
@@ -1287,7 +1379,7 @@ const ChatPage: React.FC = () => {
             onClick={createNewSession}
           />
         </div>
-        <div className="flex-1 overflow-y-auto" data-testid={chatSelectors.sessionsList}>
+        <div className="flex-1 overflow-y-auto" data-testid={workbenchSelectors.sessionsList}>
           {sessions.map((session) => (
             <div
               key={session.id}
@@ -1318,7 +1410,33 @@ const ChatPage: React.FC = () => {
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col h-[calc(100vh-64px)] relative">
-        {renderTrace()}
+        {renderAssistantRunCard()}
+        {draftReviewSummaries.length > 0 || draftReviewLoading ? (
+          <DraftReviewCenter
+            reviews={draftReviewSummaries}
+            activeReviewId={activeDraftReviewId}
+            activeReview={activeDraftReview}
+            loading={draftReviewLoading}
+            validation={draftCommitValidation}
+            validating={draftValidationLoading}
+            busyChangeIds={draftDecisionBusyIds}
+            bulkApplying={draftBulkApplying}
+            committing={draftCommitSubmitting}
+            onSelectReview={(reviewId) => void handleSelectDraftReview(reviewId)}
+            onSetDecision={(changeId, decision) => void handleDraftChangeDecision(changeId, decision)}
+            onSetAllPending={(decision) => void handleDraftBulkDecision(decision)}
+            onRefreshValidation={() => void handleDraftValidationRefresh()}
+            onCommit={() => void handleDraftCommit()}
+            onOpenPreview={(filePath, fileName) => {
+              setCurrentPreviewDoc(null)
+              setCurrentPreviewFile({ filePath, fileName })
+              setPreviewVisible(true)
+            }}
+            onOpenPath={openPathOrNotify}
+            onRevealPath={revealPathOrNotify}
+          />
+        ) : null}
+        {composerMode === 'ai' ? renderTrace() : null}
 
         <div className="flex-1 min-h-0 flex">
           {/* Messages */}
@@ -1331,7 +1449,11 @@ const ChatPage: React.FC = () => {
                 </div>
                 <div className="text-center">
                   <h3 className="text-lg font-medium text-[#1F1F1F] mb-2">有什么可以帮您？</h3>
-                  <p>你可以直接提问，系统会执行计划并展示过程</p>
+                  <p>
+                    {composerMode === 'search'
+                      ? '纯搜索模式只检索本地资料，不调用大模型。'
+                      : '你可以直接提问，系统会执行计划并展示过程。'}
+                  </p>
                 </div>
               </div>
             ) : (
@@ -1348,11 +1470,15 @@ const ChatPage: React.FC = () => {
             <TextArea
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="输入问题..."
-              autoSize={{ minRows: 1, maxRows: 6 }}
-              bordered={false}
+              placeholder={
+                composerMode === 'search'
+                  ? '输入要搜索的内容...'
+                  : '输入问题，AI 会规划并执行任务...'
+              }
+              autoSize={isJsdomTestEnv ? undefined : { minRows: 1, maxRows: 6 }}
+              variant="borderless"
               className="text-[15px] mb-2"
-              data-testid={chatSelectors.input}
+              data-testid={workbenchSelectors.input}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault()
@@ -1361,20 +1487,40 @@ const ChatPage: React.FC = () => {
               }}
             />
             <div className="grid grid-cols-12 gap-2 mb-2">
-              <div className="col-span-12" data-testid={chatSelectors.sourceScopeField}>
+              <div className="col-span-12 sm:col-span-4">
+                <Segmented
+                  value={composerMode}
+                  onChange={(value) => setComposerMode(value as WorkbenchMode)}
+                  options={[
+                    { label: 'AI 对话', value: 'ai' },
+                    { label: '纯搜索', value: 'search' }
+                  ]}
+                  className="w-full bg-[#F5F5F4]"
+                  data-testid={workbenchSelectors.modeSwitch}
+                />
+              </div>
+              <div
+                className="col-span-12 sm:col-span-8"
+                data-testid={workbenchSelectors.sourceScopeField}
+              >
                 <SourceScopeSelect
-                  mode="chat"
+                  mode={composerMode === 'ai' ? 'chat' : 'search'}
                   value={selectedSourceScopes}
                   onChange={setSelectedSourceScopes}
-                  placeholder="输入 @ 选择优先参考的工作空间、目录、文件或网页资料（可选）"
+                  placeholder={
+                    composerMode === 'ai'
+                      ? '输入 @ 选择优先参考的工作空间、目录、文件或网页资料（可选）'
+                      : '输入 @ 锁定搜索范围，只搜索已准备的本地资料'
+                  }
                   className="w-full"
                 />
               </div>
             </div>
-            {(localSourceStatus ||
-              pendingApprovalRequest ||
-              pendingWorkspaceRequest ||
-              pendingNonLocalRequest) && (
+            {composerMode === 'ai' &&
+              (localSourceStatus ||
+                pendingApprovalRequest ||
+                pendingWorkspaceRequest ||
+                pendingNonLocalRequest) && (
               <div
                 className={`mb-3 rounded-2xl border px-3 py-3 text-sm ${
                   pendingApprovalRequest || pendingWorkspaceRequest || pendingNonLocalRequest
@@ -1461,36 +1607,53 @@ const ChatPage: React.FC = () => {
                 )}
               </div>
             )}
-            {selectedSourceScopes.some(
-              (scope) => scope.sourceType === 'workspace' && scope.hasUnpreparedFiles
-            ) && (
+            {composerMode === 'ai' &&
+              selectedSourceScopes.some(
+                (scope) => scope.sourceType === 'workspace' && scope.hasUnpreparedFiles
+              ) && (
               <div className="mb-3 rounded-2xl border border-[#FDECC8] bg-[#FFF9ED] px-3 py-2 text-sm text-[#8A6510]">
                 已选范围包含未准备的本地文件。AI 可能直接读取原文件，耗时更长，并增加 token 消耗。
               </div>
             )}
+            {composerMode === 'search' &&
+              selectedSourceScopes.some((scope) => scope.hasUnpreparedFiles) && (
+                <div className="mb-3 rounded-2xl border border-[#FDECC8] bg-[#FFF9ED] px-3 py-2 text-sm text-[#8A6510]">
+                  纯搜索只会检索已准备完成的本地资料；未准备文件不会进入候选结果。
+                </div>
+              )}
             <div className="flex justify-between items-center">
               <div className="text-xs text-[#999999] flex items-center gap-2">
-                <Tooltip title="由主进程执行计划并返回事件流">
-                  <span className="flex items-center gap-1 bg-[#F5F5F4] px-2 py-1 rounded cursor-help">
-                    <HiBookOpen className="text-[#D97757]" />
-                    <span>AI Runner</span>
+                {composerMode === 'ai' ? (
+                  <>
+                    <Tooltip title="由主进程执行计划并返回事件流">
+                      <span className="flex items-center gap-1 bg-[#F5F5F4] px-2 py-1 rounded cursor-help">
+                        <HiBookOpen className="text-[#D97757]" />
+                        <span>AI Runner</span>
+                      </span>
+                    </Tooltip>
+                    <Tooltip title="@ 只是在告诉 AI 优先参考哪些资料，不代表回答只能来自这些资料。">
+                      <span className="rounded-full bg-[#F5F5F4] px-2 py-1 text-[#666666]">
+                        优先参考范围
+                      </span>
+                    </Tooltip>
+                  </>
+                ) : (
+                  <span className="rounded-full bg-[#F5F5F4] px-2 py-1 text-[#666666]">
+                    仅搜索本地资料
                   </span>
-                </Tooltip>
-                <Tooltip title="@ 只是在告诉 AI 优先参考哪些资料，不代表回答只能来自这些资料。">
-                  <span className="rounded-full bg-[#F5F5F4] px-2 py-1 text-[#666666]">优先参考范围</span>
-                </Tooltip>
+                )}
                 {selectedSourceScopes.length > 0 && (
                   <span className="rounded-full bg-[#FBF5F2] px-2 py-1 text-[#D97757]">
-                    已选 {selectedSourceScopes.length} 个参考范围
+                    已选 {selectedSourceScopes.length} 个{composerMode === 'ai' ? '参考范围' : '搜索范围'}
                   </span>
                 )}
               </div>
               <div className="flex items-center gap-2">
-                {loading && aiRunId && (
+                {loading && composerMode === 'ai' && aiRunId && (
                   <Button
                     onClick={handleCancel}
                     className="border-[#E5E5E4]"
-                    data-testid={chatSelectors.cancelButton}
+                    data-testid={workbenchSelectors.cancelButton}
                   >
                     取消
                   </Button>
@@ -1503,7 +1666,7 @@ const ChatPage: React.FC = () => {
                   disabled={!input.trim() || loading}
                   loading={loading}
                   className={`${input.trim() ? '!bg-[#D97757]' : '!bg-[#E5E5E4] !text-white'} border-none shadow-none`}
-                  data-testid={chatSelectors.sendButton}
+                  data-testid={workbenchSelectors.sendButton}
                 />
               </div>
             </div>

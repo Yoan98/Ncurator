@@ -164,6 +164,29 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     sendEvent: deps.sendEvent,
     requestApproval: deps.requestApproval,
     loadHistory,
+    trackDocxOpen: ({ docId, sourcePath }) => {
+      deps.draftReviewService.registerDocxOpen({
+        runId: payload.runId,
+        docId,
+        sourcePath
+      })
+    },
+    trackDocxChanges: ({ previousDocId, nextDocId, op, changedBlocks }) => {
+      deps.draftReviewService.registerDocxChanges({
+        runId: payload.runId,
+        previousDocId,
+        nextDocId,
+        op,
+        changedBlocks
+      })
+    },
+    trackDocxPreview: ({ docId, previewPath }) => {
+      deps.draftReviewService.registerDocxPreview({
+        runId: payload.runId,
+        docId,
+        previewPath
+      })
+    },
     getModelConfig: getActiveConfig,
     documentsStore: deps.documentsStore,
     embeddingService: deps.embeddingService

@@ -22,10 +22,11 @@ const NotificationCenter: React.FC = () => {
   const location = useLocation()
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
   const [checkingModel, setCheckingModel] = useState(false)
+  const [workbenchMode, setWorkbenchMode] = useState<'ai' | 'search'>('search')
 
   const isSettingsPage = location.pathname === '/settings'
   const isDownloadPage = location.pathname === '/model-download'
-  const isChatPage = location.pathname === '/chat'
+  const isWorkbenchPage = location.pathname === '/'
 
   // Helper to update notifications
   const updateNotification = (id: string, item: NotificationItem | null) => {
@@ -83,6 +84,22 @@ const NotificationCenter: React.FC = () => {
 
   // 2. Check LLM Config
   useEffect(() => {
+    const handleWorkbenchMode = (event: Event) => {
+      const detail =
+        event instanceof CustomEvent && event.detail && typeof event.detail === 'object'
+          ? event.detail
+          : null
+      const mode = detail && 'mode' in detail ? String(detail.mode || '').trim() : ''
+      setWorkbenchMode(mode === 'ai' ? 'ai' : 'search')
+    }
+
+    window.addEventListener('workbench-mode-change', handleWorkbenchMode)
+    return () => {
+      window.removeEventListener('workbench-mode-change', handleWorkbenchMode)
+    }
+  }, [])
+
+  useEffect(() => {
     if (isSettingsPage) {
       updateNotification('llm-config-missing', null)
       return
@@ -91,7 +108,7 @@ const NotificationCenter: React.FC = () => {
     const checkLLMConfig = async () => {
       const config = await getActiveConfig()
       if (!config) {
-        if (isChatPage) {
+        if (isWorkbenchPage && workbenchMode === 'ai') {
           updateNotification('llm-config-missing', {
             id: 'llm-config-missing',
             title: '未配置大模型 API',
@@ -103,28 +120,7 @@ const NotificationCenter: React.FC = () => {
             }
           })
         } else {
-          // If not chat page, we usually hide it unless triggered manually
-          // But wait, if we are in SearchPage and user triggered it?
-          // We can keep it if it was already visible?
-          // For simplicity, let's follow previous logic: only show on ChatPage automatically.
-          // But we also need to support manual trigger.
-
-          // Let's rely on event listener for manual trigger
-          // If not chat page and not triggered, we hide it.
-          // However, to keep state persistent if user hasn't dismissed it, we might need more complex logic.
-          // For now, let's just stick to "auto show on ChatPage".
-          // If user triggered manually via event, we add it.
-
-          // Actually, if we navigate away from ChatPage, should it disappear?
-          // Previous logic: yes (re-render on location change).
-          // But manual trigger logic: `if (!config) setVisible(true)`.
-
-          // Let's keep it simple:
-          // Auto-check on ChatPage.
-          // Listen to event for other pages.
-          if (!notifications.some((n) => n.id === 'llm-config-missing')) {
-            // If not present, don't add it unless on ChatPage
-          }
+          updateNotification('llm-config-missing', null)
         }
       } else {
         updateNotification('llm-config-missing', null)
@@ -153,7 +149,7 @@ const NotificationCenter: React.FC = () => {
     return () => {
       window.removeEventListener('check-llm-config', handleCheckEvent)
     }
-  }, [location.pathname, isSettingsPage, isChatPage])
+  }, [location.pathname, isSettingsPage, isWorkbenchPage, workbenchMode])
 
   if (notifications.length === 0) return null
 

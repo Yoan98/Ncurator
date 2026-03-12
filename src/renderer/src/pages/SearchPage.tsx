@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react'
-import { Input, List, Card, Empty, Typography, Button, Switch, Segmented, message } from 'antd'
+import { App, Input, List, Card, Empty, Typography, Button, Switch, Segmented } from 'antd'
 import { HiArrowUp, HiOutlineDocumentText } from 'react-icons/hi2'
 import type { SearchResult, SearchSourceFilter, SourceScopeSelection } from '../../../shared/types'
 import TextHighlighter from '../components/TextHighlighter'
@@ -11,6 +11,8 @@ import SourceScopeSelect from '../components/SourceScopeSelect'
 import { searchSelectors } from '../testing/selectors'
 
 const { TextArea } = Input
+const isJsdomTestEnv =
+  typeof navigator !== 'undefined' && /jsdom/i.test(String(navigator.userAgent || ''))
 const getMetadataPageNumber = (metadata: SearchResult['metadata']): number => {
   if (!metadata) return 1
   if (typeof metadata === 'string') {
@@ -26,6 +28,7 @@ const getMetadataPageNumber = (metadata: SearchResult['metadata']): number => {
 }
 
 const SearchPage: React.FC = () => {
+  const { message } = App.useApp()
   const [loading, setLoading] = useState(false)
   const [results, setResults] = useState<SearchResult[]>([])
   const [tokens, setTokens] = useState<string[]>([])
@@ -128,7 +131,6 @@ ${contextText}`
         selectedDocumentIds.length > 0 ? selectedDocumentIds : undefined
       )
       const parsedResults = response.results.map(parseIpcResult)
-      console.log('Search results:', parsedResults)
       setResults(parsedResults)
       setTokens(response.tokens)
 
@@ -194,8 +196,8 @@ ${contextText}`
         <div className="bg-white border border-[#E5E5E4] rounded-2xl p-3 shadow-sm mb-6 focus-within:ring-4 focus-within:ring-[#F4E5DF] focus-within:border-[#D97757] transition-all duration-300 relative group">
           <TextArea
             placeholder="基于您的资源搜索..."
-            autoSize={{ minRows: 2, maxRows: 6 }}
-            bordered={false}
+            autoSize={isJsdomTestEnv ? undefined : { minRows: 2, maxRows: 6 }}
+            variant="borderless"
             className="text-lg bg-transparent mb-2 placeholder:text-[#999999] !px-1 text-[#1F1F1F] min-h-[60px]"
             style={{ resize: 'none' }}
             value={searchValue}
@@ -307,7 +309,6 @@ ${contextText}`
                   <List.Item className="!mb-4">
                     <Card
                       hoverable
-                      bordered={false}
                       data-testid={`${searchSelectors.resultCardPrefix}-${item.id}`}
                       className="group bg-white border border-[#E5E5E4] shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 rounded-xl overflow-hidden"
                       bodyStyle={{ padding: '20px' }}

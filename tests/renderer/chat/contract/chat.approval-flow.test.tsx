@@ -2,11 +2,12 @@ import React from 'react'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import ChatPage from '../../../../src/renderer/src/pages/ChatPage'
-import { chatSelectors } from '../../../../src/renderer/src/testing/selectors'
+import { chatSelectors, workbenchSelectors } from '../../../../src/renderer/src/testing/selectors'
 import type { AiRunEvent, ChatSession } from '../../../../src/shared/types'
 import { createDesktopApiMock } from '../../../harness/renderer/apiMock'
 import type { UiAssertion } from '../../../harness/e2e/reporter'
 import { runRendererCase } from '../../../harness/renderer/case'
+import { replayAiRunEvents } from '../../../harness/renderer/eventPlayer'
 import { renderWithDesktopApi } from '../../../harness/renderer/renderPage'
 
 const session: ChatSession = {
@@ -26,10 +27,10 @@ const renderAndStartRun = async () => {
   })
 
   await screen.findByText('测试会话')
-  fireEvent.change(screen.getByTestId(chatSelectors.input), {
+  fireEvent.change(screen.getByTestId(workbenchSelectors.input), {
     target: { value: '请继续处理这条需要审批的请求' }
   })
-  await user.click(screen.getByTestId(chatSelectors.sendButton))
+  await user.click(screen.getByTestId(workbenchSelectors.sendButton))
 
   await waitFor(() => {
     expect(apiMock.calls.aiRunStart).toHaveLength(1)
@@ -45,7 +46,10 @@ const renderAndStartRun = async () => {
     reason: '高风险命令需要审批',
     createdAt: Date.now()
   }
-  apiMock.emitAiRunEvent(approvalEvent)
+  await replayAiRunEvents({
+    mock: apiMock,
+    events: [approvalEvent]
+  })
 
   await screen.findByTestId(chatSelectors.approvalBanner)
   return { apiMock, user }

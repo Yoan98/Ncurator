@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { DesktopApiMock } from './apiMock'
+import { shouldSuppressRendererConsoleNoise } from './consoleNoise'
 import {
   writeUiCaseReport,
   type UiAssertion,
@@ -47,6 +48,7 @@ export const runRendererCase = async (input: RendererCaseInput): Promise<void> =
   let runtimeError: Error | null = null
 
   console.error = (...args: Array<string | number | boolean | null | undefined | object>) => {
+    if (shouldSuppressRendererConsoleNoise(args)) return
     consoleEntries.push({
       level: 'error',
       text: args.map((item) => String(item)).join(' ')
@@ -55,6 +57,7 @@ export const runRendererCase = async (input: RendererCaseInput): Promise<void> =
   }
 
   console.warn = (...args: Array<string | number | boolean | null | undefined | object>) => {
+    if (shouldSuppressRendererConsoleNoise(args)) return
     consoleEntries.push({
       level: 'warning',
       text: args.map((item) => String(item)).join(' ')

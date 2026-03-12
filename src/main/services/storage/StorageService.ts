@@ -1,5 +1,6 @@
 import { LanceDbCore } from './core/LanceDbCore'
 import { ChatStore } from './domains/ChatStore'
+import { DraftReviewStore } from './domains/DraftReviewStore'
 import { DocumentsStore } from './domains/DocumentsStore'
 import { LlmConfigStore } from './domains/LlmConfigStore'
 import { WebSourceStore } from './domains/WebSourceStore'
@@ -14,6 +15,7 @@ export class StorageService {
   public readonly documents: DocumentsStore
   public readonly webSource: WebSourceStore
   public readonly chat: ChatStore
+  public readonly draftReview: DraftReviewStore
   public readonly llm: LlmConfigStore
   public readonly workspace: WorkspaceStore
   private legacyLocalImportMigrationStatus: LegacyLocalImportMigrationStatus | null = null
@@ -23,6 +25,7 @@ export class StorageService {
     this.documents = new DocumentsStore(this.core)
     this.webSource = new WebSourceStore(this.core)
     this.chat = new ChatStore(this.core)
+    this.draftReview = new DraftReviewStore(this.core)
     this.llm = new LlmConfigStore(this.core)
     this.workspace = new WorkspaceStore(this.core)
   }

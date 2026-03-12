@@ -5,7 +5,11 @@ import { StorageService } from '../services/storage/StorageService'
 import { ModelService } from '../services/model/ModelService'
 import { AiRunService } from '../services/ai/AiRunService'
 import { updateSessionMemoryAfterRun } from '../services/ai/memory'
-import { releaseDocxRunSession } from '../services/ai/tools/docx/worker/docxWorkerClient'
+import { DraftReviewService } from '../services/ai/review/DraftReviewService'
+import {
+  getDocxWorkerClient,
+  releaseDocxRunSession
+} from '../services/ai/tools/docx/worker/docxWorkerClient'
 import {
   buildWebScopeSelection,
   buildWorkspaceScopeSelections,
@@ -30,11 +34,21 @@ import type {
   AiRunCancelResponse,
   AiRunApprovalDecisionRequest,
   AiRunApprovalDecisionResponse,
+  CommitDraftReviewRequest,
+  CommitDraftReviewResponse,
   CreateWorkspaceSourceRequest,
   DeleteWorkspaceSourceResponse,
   ListSourceScopesRequest,
+  ListDraftReviewsRequest,
+  ListDraftReviewsResponse,
   ListWorkspaceNodesRequest,
+  GetDraftReviewRequest,
+  GetDraftReviewResponse,
+  SetDraftChangeDecisionRequest,
+  SetDraftChangeDecisionResponse,
   SourceScopeListResponse,
+  ValidateDraftCommitRequest,
+  ValidateDraftCommitResponse,
   SourceScopeSelection,
   WebSourceListResponse,
   WebSourceMutationResponse,
@@ -172,6 +186,7 @@ export function registerHandlers(services: {
   const llmStore = storageService.llm
   const webSourceStore = storageService.webSource
   const workspaceStore = storageService.workspace
+  const draftReviewService = new DraftReviewService(storageService.draftReview, documentsStore)
   const workspaceService = new WorkspaceSourceService()
   const webSourceService = new WebSourceService()
 
@@ -182,6 +197,15 @@ export function registerHandlers(services: {
   const pauseForE2EFixture = async (): Promise<void> => {
     await new Promise<void>((resolve) => setTimeout(resolve, 30))
   }
+
+  const E2E_REVIEW_FIXTURE_SOURCE = path.resolve(
+    process.cwd(),
+    'tests',
+    'fixtures',
+    'main',
+    'docx',
+    'sample-edit.docx'
+  )
 
   const emitE2EChatPlanAndArtifact = async (input: {
     runId: string
@@ -267,6 +291,269 @@ export function registerHandlers(services: {
     })
   }
 
+  const createE2EDraftReview = async (input: {
+    runId: string
+    draftReviewService: DraftReviewService
+    conflict: boolean
+  }) => {
+    const workspaceRootPath = path.join('/tmp', 'ncurator-e2e-review-workspace', input.runId)
+    const sourcePath = path.join(
+      workspaceRootPath,
+      input.conflict ? 'e2e-review-conflict.docx' : 'e2e-review-source.docx'
+    )
+    await fs.promises.mkdir(workspaceRootPath, { recursive: true })
+    await fs.promises.copyFile(E2E_REVIEW_FIXTURE_SOURCE, sourcePath)
+
+    const client = getDocxWorkerClient()
+    const openResponse = await client.call({
+      runId: input.runId,
+      action: 'open',
+      payload: {
+        sourcePath
+      }
+    })
+    if (!openResponse.ok || openResponse.payload.action !== 'open') {
+      throw new Error(openResponse.ok ? 'e2e review open worker mismatch' : openResponse.error)
+    }
+
+    input.draftReviewService.registerDocxOpen({
+      runId: input.runId,
+      docId: openResponse.payload.docId,
+      sourcePath
+    })
+
+    const acceptedOp = {
+      type: 'replace_text' as const,
+      query: 'Hello',
+      replace: 'E2E accepted paragraph',
+      replaceAll: true
+    }
+    const rejectedOp = {
+      type: 'replace_text' as const,
+      query: 'fixture',
+      replace: 'E2E rejected paragraph',
+      replaceAll: true
+    }
+
+    const applyAcceptedResponse = await client.call({
+      runId: input.runId,
+      action: 'apply_ops',
+      payload: {
+        docId: openResponse.payload.docId,
+        ops: [acceptedOp]
+      }
+    })
+    if (!applyAcceptedResponse.ok || applyAcceptedResponse.payload.action !== 'apply_ops') {
+      throw new Error(
+        applyAcceptedResponse.ok
+          ? 'e2e review apply accepted worker mismatch'
+          : applyAcceptedResponse.error
+      )
+    }
+
+    input.draftReviewService.registerDocxChanges({
+      runId: input.runId,
+      previousDocId: openResponse.payload.docId,
+      nextDocId: applyAcceptedResponse.payload.newDocId,
+      op: acceptedOp,
+      changedBlocks: applyAcceptedResponse.payload.changedBlocks
+    })
+
+    const applyRejectedResponse = await client.call({
+      runId: input.runId,
+      action: 'apply_ops',
+      payload: {
+        docId: applyAcceptedResponse.payload.newDocId,
+        ops: [rejectedOp]
+      }
+    })
+    if (!applyRejectedResponse.ok || applyRejectedResponse.payload.action !== 'apply_ops') {
+      throw new Error(
+        applyRejectedResponse.ok
+          ? 'e2e review apply rejected worker mismatch'
+          : applyRejectedResponse.error
+      )
+    }
+
+    input.draftReviewService.registerDocxChanges({
+      runId: input.runId,
+      previousDocId: applyAcceptedResponse.payload.newDocId,
+      nextDocId: applyRejectedResponse.payload.newDocId,
+      op: rejectedOp,
+      changedBlocks: applyRejectedResponse.payload.changedBlocks
+    })
+
+    const previewResponse = await client.call({
+      runId: input.runId,
+      action: 'render_preview',
+      payload: {
+        docId: applyRejectedResponse.payload.newDocId,
+        format: 'html',
+        previewPath: path.join(
+          workspaceRootPath,
+          '.ncurator',
+          'docx-previews',
+          `${input.runId}-review-preview.docx`
+        )
+      }
+    })
+    if (previewResponse.ok && previewResponse.payload.action === 'render_preview') {
+      input.draftReviewService.registerDocxPreview({
+        runId: input.runId,
+        docId: applyRejectedResponse.payload.newDocId,
+        previewPath: previewResponse.payload.previewPath
+      })
+    }
+
+    const detail = await input.draftReviewService.finalizeRunReview({
+      runId: input.runId,
+      workspaceRootPath
+    })
+    if (!detail) {
+      throw new Error('e2e review detail missing after finalize')
+    }
+
+    if (input.conflict) {
+      const sourceStat = await fs.promises.stat(sourcePath)
+      const nextTime = new Date(sourceStat.mtimeMs + 120_000)
+      await fs.promises.utimes(sourcePath, nextTime, nextTime)
+    }
+
+    return {
+      detail,
+      sourcePath
+    }
+  }
+
+  const emitE2EEditReviewFlow = async (input: {
+    runId: string
+    sendEvent: (event: AiRunEvent) => void
+    draftReviewService: DraftReviewService
+    conflict: boolean
+  }): Promise<void> => {
+    const plan = [
+      {
+        id: 'task-e2e-edit-draft',
+        title: '生成草稿并建立审阅集合',
+        objective: '执行 docx 编辑并生成统一审阅结果',
+        status: 'pending' as const,
+        attempts: 0
+      },
+      {
+        id: 'task-e2e-review-ready',
+        title: '切换到草稿审阅',
+        objective: '向前端暴露可回放的审阅与提交状态',
+        status: 'pending' as const,
+        attempts: 0
+      }
+    ]
+
+    input.sendEvent({
+      type: 'plan_created',
+      runId: input.runId,
+      plan
+    })
+    await pauseForE2EFixture()
+
+    input.sendEvent({
+      type: 'task_started',
+      runId: input.runId,
+      taskId: plan[0].id
+    })
+    await pauseForE2EFixture()
+
+    const { detail } = await createE2EDraftReview({
+      runId: input.runId,
+      draftReviewService: input.draftReviewService,
+      conflict: input.conflict
+    })
+
+    detail.documents.forEach((document) => {
+      if (!document.preview_artifact_path) return
+      input.sendEvent({
+        type: 'file_artifact',
+        runId: input.runId,
+        taskId: plan[0].id,
+        artifactId: uuidv4(),
+        capability: 'docx',
+        path: document.preview_artifact_path,
+        fileName: path.basename(document.preview_artifact_path),
+        operation: 'created',
+        artifactRole: 'preview',
+        reviewId: detail.review.id,
+        draftDocumentId: document.id,
+        draftSnapshotId: document.latest_draft_snapshot_id,
+        summary: `preview ready: ${document.source_name}`,
+        createdAt: Date.now()
+      })
+    })
+    await pauseForE2EFixture()
+
+    input.sendEvent({
+      type: 'task_completed',
+      runId: input.runId,
+      taskId: plan[0].id
+    })
+    await pauseForE2EFixture()
+
+    input.sendEvent({
+      type: 'task_started',
+      runId: input.runId,
+      taskId: plan[1].id
+    })
+    await pauseForE2EFixture()
+
+    input.sendEvent({
+      type: 'draft_review_ready',
+      runId: input.runId,
+      review: {
+        reviewId: detail.review.id,
+        documentCount: detail.review.document_count,
+        changeCount: detail.review.change_count
+      },
+      createdAt: Date.now()
+    })
+    await pauseForE2EFixture()
+
+    detail.documents.forEach((document) => {
+      if (!document.draft_artifact_path) return
+      input.sendEvent({
+        type: 'file_artifact',
+        runId: input.runId,
+        taskId: plan[1].id,
+        artifactId: uuidv4(),
+        capability: 'docx',
+        path: document.draft_artifact_path,
+        fileName: path.basename(document.draft_artifact_path),
+        operation: 'created',
+        artifactRole: 'draft',
+        reviewId: detail.review.id,
+        draftDocumentId: document.id,
+        draftSnapshotId: document.latest_draft_snapshot_id,
+        summary: `draft ready: ${document.source_name}`,
+        createdAt: Date.now()
+      })
+    })
+    await pauseForE2EFixture()
+
+    input.sendEvent({
+      type: 'task_completed',
+      runId: input.runId,
+      taskId: plan[1].id
+    })
+    input.sendEvent({
+      type: 'answer_completed',
+      runId: input.runId,
+      text: input.conflict
+        ? 'E2E fixture 已生成草稿审阅，并在提交前制造了源文件冲突。'
+        : 'E2E fixture 已生成草稿审阅，可继续逐块确认并提交。'
+    })
+    input.sendEvent({
+      type: 'run_completed',
+      runId: input.runId
+    })
+  }
+
   const waitForE2EApprovalDecision = async (input: {
     runId: string
     taskId: string
@@ -328,6 +615,7 @@ export function registerHandlers(services: {
     inputText: string
     selectedSourceScopes: SourceScopeSelection[] | undefined
     sendEvent: (event: AiRunEvent) => void
+    draftReviewService: DraftReviewService
   }): Promise<boolean> => {
     if (!isE2EFixtureModeEnabled()) return false
 
@@ -417,6 +705,26 @@ export function registerHandlers(services: {
       input.sendEvent({
         type: 'run_completed',
         runId: input.runId
+      })
+      return true
+    }
+
+    if (scenario === 'chat-edit-review') {
+      await emitE2EEditReviewFlow({
+        runId: input.runId,
+        sendEvent: input.sendEvent,
+        draftReviewService: input.draftReviewService,
+        conflict: false
+      })
+      return true
+    }
+
+    if (scenario === 'chat-review-conflict') {
+      await emitE2EEditReviewFlow({
+        runId: input.runId,
+        sendEvent: input.sendEvent,
+        draftReviewService: input.draftReviewService,
+        conflict: true
       })
       return true
     }
@@ -1456,12 +1764,18 @@ export function registerHandlers(services: {
       }
 
       sendEvent({ type: 'run_started', runId, sessionId, createdAt: Date.now(), input })
+      draftReviewService.beginRun({
+        runId,
+        sessionId,
+        inputText: input
+      })
       ;(async () => {
         const handledByE2EFixture = await maybeHandleE2EFixtureRun({
           runId,
           inputText: input,
           selectedSourceScopes,
-          sendEvent
+          sendEvent,
+          draftReviewService
         })
         if (handledByE2EFixture) {
           return
@@ -1494,6 +1808,7 @@ export function registerHandlers(services: {
               chatStore,
               documentsStore,
               embeddingService,
+              draftReviewService,
               isCancelled: () => Boolean(activeAiRuns.get(runId)?.cancelled),
               sendEvent,
               requestApproval: async (request) => {
@@ -1581,9 +1896,23 @@ export function registerHandlers(services: {
           )
 
           if (result.status === 'cancelled') {
+            draftReviewService.discardRun(runId)
             sendEvent({ type: 'run_cancelled', runId })
             return
           }
+
+          if (result.status === 'failed') {
+            draftReviewService.discardRun(runId)
+            sendEvent({ type: 'run_failed', runId, error: result.error || 'failed' })
+            return
+          }
+
+          const draftReviewDetail = workspace?.rootPath
+            ? await draftReviewService.finalizeRunReview({
+                runId,
+                workspaceRootPath: workspace.rootPath
+              })
+            : null
 
           if (result.outputText) {
             if (result.localSourceStatus && result.localSourceSummary) {
@@ -1604,9 +1933,36 @@ export function registerHandlers(services: {
             await streamText(result.outputText)
           }
 
-          if (result.status === 'failed') {
-            sendEvent({ type: 'run_failed', runId, error: result.error || 'failed' })
-            return
+          if (draftReviewDetail) {
+            sendEvent({
+              type: 'draft_review_ready',
+              runId,
+              review: {
+                reviewId: draftReviewDetail.review.id,
+                documentCount: draftReviewDetail.review.document_count,
+                changeCount: draftReviewDetail.review.change_count
+              },
+              createdAt: Date.now()
+            })
+            draftReviewDetail.documents.forEach((document) => {
+              if (!document.draft_artifact_path) return
+              sendEvent({
+                type: 'file_artifact',
+                runId,
+                taskId: 'draft-review',
+                artifactId: uuidv4(),
+                capability: 'docx',
+                path: document.draft_artifact_path,
+                fileName: path.basename(document.draft_artifact_path),
+                operation: 'created',
+                artifactRole: 'draft',
+                reviewId: draftReviewDetail.review.id,
+                draftDocumentId: document.id,
+                draftSnapshotId: document.latest_draft_snapshot_id,
+                summary: `draft ready: ${document.source_name}`,
+                createdAt: Date.now()
+              })
+            })
           }
 
           try {
@@ -1623,6 +1979,7 @@ export function registerHandlers(services: {
 
           sendEvent({ type: 'run_completed', runId })
         } catch (e: unknown) {
+          draftReviewService.discardRun(runId)
           if (activeAiRuns.get(runId)?.cancelled) {
             sendEvent({ type: 'run_cancelled', runId })
             return
@@ -1678,6 +2035,80 @@ export function registerHandlers(services: {
       })
 
       return { success: true }
+    }
+  )
+
+  ipcMain.handle(
+    'draft-review-list',
+    async (_event, payload?: ListDraftReviewsRequest): Promise<ListDraftReviewsResponse> => {
+      try {
+        return await draftReviewService.listReviews(payload)
+      } catch (e: unknown) {
+        console.error('[DRAFT-REVIEW-LIST] Error:', e)
+        return { items: [], total: 0 }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'draft-review-get',
+    async (_event, payload: GetDraftReviewRequest): Promise<GetDraftReviewResponse> => {
+      try {
+        return await draftReviewService.getReview(payload)
+      } catch (e: unknown) {
+        console.error('[DRAFT-REVIEW-GET] Error:', e)
+        return { error: getErrorMessage(e) }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'draft-review-set-decision',
+    async (
+      _event,
+      payload: SetDraftChangeDecisionRequest
+    ): Promise<SetDraftChangeDecisionResponse> => {
+      try {
+        return await draftReviewService.setChangeDecision(payload)
+      } catch (e: unknown) {
+        console.error('[DRAFT-REVIEW-SET-DECISION] Error:', e)
+        return { success: false, error: getErrorMessage(e) }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'draft-review-validate',
+    async (
+      _event,
+      payload: ValidateDraftCommitRequest
+    ): Promise<ValidateDraftCommitResponse> => {
+      try {
+        return await draftReviewService.validateCommit(payload)
+      } catch (e: unknown) {
+        console.error('[DRAFT-REVIEW-VALIDATE] Error:', e)
+        return {
+          ready: false,
+          issues: [
+            {
+              code: 'review_not_ready',
+              message: getErrorMessage(e)
+            }
+          ]
+        }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'draft-review-commit',
+    async (_event, payload: CommitDraftReviewRequest): Promise<CommitDraftReviewResponse> => {
+      try {
+        return await draftReviewService.commitReview(payload)
+      } catch (e: unknown) {
+        console.error('[DRAFT-REVIEW-COMMIT] Error:', e)
+        return { success: false, error: getErrorMessage(e) }
+      }
     }
   )
 

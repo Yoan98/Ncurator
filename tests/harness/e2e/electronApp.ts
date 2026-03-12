@@ -89,6 +89,24 @@ const installPageObservers = async (page: Page): Promise<void> => {
       return originalSourceScopeList(payload)
     }
 
+    const originalDraftReviewSetDecision = window.api.draftReviewSetDecision.bind(window.api)
+    window.api.draftReviewSetDecision = (payload) => {
+      currentWindow.__NCURATOR_E2E_OBSERVER__?.ipcInvokeSequence.push('draftReviewSetDecision')
+      return originalDraftReviewSetDecision(payload)
+    }
+
+    const originalDraftReviewValidate = window.api.draftReviewValidate.bind(window.api)
+    window.api.draftReviewValidate = (payload) => {
+      currentWindow.__NCURATOR_E2E_OBSERVER__?.ipcInvokeSequence.push('draftReviewValidate')
+      return originalDraftReviewValidate(payload)
+    }
+
+    const originalDraftReviewCommit = window.api.draftReviewCommit.bind(window.api)
+    window.api.draftReviewCommit = (payload) => {
+      currentWindow.__NCURATOR_E2E_OBSERVER__?.ipcInvokeSequence.push('draftReviewCommit')
+      return originalDraftReviewCommit(payload)
+    }
+
     const originalOnAiRunEvent = window.api.onAiRunEvent.bind(window.api)
     window.api.onAiRunEvent = (cb) => {
       originalOnAiRunEvent((event) => {

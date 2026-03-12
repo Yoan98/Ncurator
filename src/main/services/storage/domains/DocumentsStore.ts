@@ -156,6 +156,21 @@ export class DocumentsStore {
     return document || null
   }
 
+  public async getDocumentByFilePath(filePath: string): Promise<DocumentRecord | null> {
+    const normalized = String(filePath || '').trim()
+    if (!normalized) return null
+    const table = await this.core.openTable(LANCE_TABLES.DOCUMENT)
+    const rows = await table
+      .query()
+      .where(`file_path = '${this.core.escapeSqlString(normalized)}'`)
+      .limit(1)
+      .toArray()
+    const row = rows[0]
+    if (!row) return null
+    const [document] = await this.attachWebSourceMetadata([toDocumentRecord(row)])
+    return document || null
+  }
+
   public async deleteChunksByDocumentIds(ids: string[]): Promise<void> {
     if (ids.length === 0) return
     const table = await this.core.openTable(LANCE_TABLES.CHUNK)

@@ -2,11 +2,12 @@ import React from 'react'
 import { fireEvent, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import ChatPage from '../../../../src/renderer/src/pages/ChatPage'
-import { chatSelectors } from '../../../../src/renderer/src/testing/selectors'
+import { chatSelectors, workbenchSelectors } from '../../../../src/renderer/src/testing/selectors'
 import type { ChatSession, SourceScopeSelection } from '../../../../src/shared/types'
 import type { UiAssertion } from '../../../harness/e2e/reporter'
 import { createDesktopApiMock } from '../../../harness/renderer/apiMock'
 import { runRendererCase } from '../../../harness/renderer/case'
+import { replayAiRunEvents } from '../../../harness/renderer/eventPlayer'
 import { renderWithDesktopApi } from '../../../harness/renderer/renderPage'
 
 const session: ChatSession = {
@@ -48,29 +49,34 @@ describe('chat.workspace-required', () => {
 
     await screen.findByText('测试会话')
 
-    const scopeField = screen.getByTestId(chatSelectors.sourceScopeField)
+    const scopeField = screen.getByTestId(workbenchSelectors.sourceScopeField)
     const scopeSelect = scopeField.querySelector('select')
     expect(scopeSelect).not.toBeNull()
     await user.selectOptions(scopeSelect as HTMLSelectElement, ['workspace:workspace-1:workspace:root'])
     userActionSequence.push('select:workspace:workspace-1')
 
-    fireEvent.change(screen.getByTestId(chatSelectors.input), {
+    fireEvent.change(screen.getByTestId(workbenchSelectors.input), {
       target: { value: '继续处理需要工作区的请求' }
     })
-    await user.click(screen.getByTestId(chatSelectors.sendButton))
+    await user.click(screen.getByTestId(workbenchSelectors.sendButton))
     userActionSequence.push('click:chat-send-button')
 
     await waitFor(() => {
       expect(apiMock.calls.aiRunStart).toHaveLength(1)
     })
 
-    apiMock.emitAiRunEvent({
-      type: 'workspace_required',
-      runId: 'run-test-1',
-      taskId: 'task-workspace',
-      reason: '需要工作区上下文',
-      requiredFields: ['workspaceId', 'rootPath'],
-      createdAt: Date.now()
+    await replayAiRunEvents({
+      mock: apiMock,
+      events: [
+        {
+          type: 'workspace_required',
+          runId: 'run-test-1',
+          taskId: 'task-workspace',
+          reason: '需要工作区上下文',
+          requiredFields: ['workspaceId', 'rootPath'],
+          createdAt: Date.now()
+        }
+      ]
     })
 
     await screen.findByTestId(chatSelectors.workspaceBanner)

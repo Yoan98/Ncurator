@@ -55,20 +55,19 @@ const skillDefinitions: Record<RuntimeSkillId, HumanSkillDefinition> = {
         'docx_search',
         'docx_apply_ops',
         'docx_render_preview',
-        'docx_save',
         'docx_validate'
       ],
       requires: ['workspace']
     },
     skillContent: [
-      '能力说明：处理 workspace 中的 docx 文件，按 open -> inspect/search -> apply -> save/validate 的顺序执行。',
-      '关键参数：docx_open({ sourcePath })；docx_search({ docId, query, mode })；docx_apply_ops({ docId, ops })；docx_save({ docId, outPath })；docx_validate({ docId })。',
+      '能力说明：处理 workspace 中的 docx 文件，按 open -> inspect/search -> apply -> preview/validate 的顺序执行；运行阶段只生成草稿，不直接覆盖真实文件。',
+      '关键参数：docx_open({ sourcePath })；docx_search({ docId?, query, mode })；docx_apply_ops({ docId?, ops })；docx_render_preview({ docId? })；docx_validate({ docId? })。',
       'replace_text 操作示例：{ type: "replace_text", query: "Hello", replace: "Hi", replaceAll: true }。',
-      '工具：docx_open, docx_outline, docx_get_block, docx_search, docx_apply_ops, docx_render_preview, docx_save, docx_validate',
+      '工具：docx_open, docx_outline, docx_get_block, docx_search, docx_apply_ops, docx_render_preview, docx_validate',
       '使用提示：',
-      '- 先 open 获取 docId，再基于 docId 继续搜索、编辑和保存。',
-      '- 执行 apply_ops 后通常会得到新的 docId，后续步骤应使用最新 docId。',
-      '- 保存前优先搜索或预览，保存后优先 validate。'
+      '- 先 open 获取 docId，再基于 docId 继续搜索、编辑和预览。',
+      '- 执行 apply_ops 后通常会得到新的 docId；省略 docId 时默认继续使用当前最新草稿快照。',
+      '- 完成编辑后优先预览和 validate，由系统在运行结束后统一进入审阅与提交。'
     ].join('\n'),
     referencedAssets: [
       'src/main/services/ai/tools/docx',
@@ -81,7 +80,6 @@ const skillDefinitions: Record<RuntimeSkillId, HumanSkillDefinition> = {
       'docx_search',
       'docx_apply_ops',
       'docx_render_preview',
-      'docx_save',
       'docx_validate'
     ],
     buildTools: docxCapability.buildTools

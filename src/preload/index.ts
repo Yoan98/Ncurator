@@ -81,6 +81,11 @@ const api: DesktopApi = {
     ipcRenderer.invoke('ai-run-start', payload),
   aiRunCancel: (runId: string) => ipcRenderer.invoke('ai-run-cancel', runId),
   aiRunApprovalDecide: (payload) => ipcRenderer.invoke('ai-run-approval-decide', payload),
+  draftReviewList: (payload) => ipcRenderer.invoke('draft-review-list', payload),
+  draftReviewGet: (payload) => ipcRenderer.invoke('draft-review-get', payload),
+  draftReviewSetDecision: (payload) => ipcRenderer.invoke('draft-review-set-decision', payload),
+  draftReviewValidate: (payload) => ipcRenderer.invoke('draft-review-validate', payload),
+  draftReviewCommit: (payload) => ipcRenderer.invoke('draft-review-commit', payload),
   onAiRunEvent: (cb: (event: AiRunEvent) => void) =>
     ipcRenderer.on('ai-run-event', (_event, data) => cb(data)),
   removeAiRunEventListeners: () => ipcRenderer.removeAllListeners('ai-run-event')

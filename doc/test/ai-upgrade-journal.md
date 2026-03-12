@@ -46,6 +46,50 @@
 
 ## 3. 历史记录
 
+## [2026-03-12] unified workbench + draft review - 确认提交流程回归轮次
+
+- 时间：2026-03-12 13:49（本地）
+- 阶段：main context / ai 架构验收 / renderer contract / deterministic e2e
+- 执行命令：
+  - `pnpm typecheck`
+  - `pnpm test:renderer`
+  - `pnpm exec vitest --config vitest.ai.config.mts run tests/main/ai/runtime/docx.draft-review-commit.test.ts`
+  - `pnpm exec electron-vite build`
+  - `pnpm exec vitest --config vitest.e2e.config.mts run tests/e2e/**/deterministic`
+- 报告路径：
+  - `tests/report/main-ai-runtime/docx-draft-review-ready/**`
+  - `tests/report/main-ai-runtime/docx-draft-review-partial-commit/**`
+  - `tests/report/main-ai-runtime/docx-draft-review-conflict/**`
+  - `tests/report/renderer-chat-contract/**`
+  - `tests/report/e2e-chat/**`
+  - `tests/report/e2e-search/**`
+  - `tests/report/e2e-import/**`
+- 结果摘要：
+  - 类型检查：`通过`
+  - Renderer contract：`7/7`
+  - Main runtime：`3/3`
+  - Deterministic E2E：`8/8`
+  - 显式缺口：`renderer 侧仍存在 AntD message / React act warning，需要后续清理`
+- 风险与边界：
+  - deterministic e2e 若并发运行会出现 Electron 首窗争抢，当前已通过 `fileParallelism: false` 收敛
+  - 当前完整提交流程只对 `docx` 落地；`md/txt/xlsx/pptx/pdf` 仍停留在适配器接口层
+- 推进决策：
+  - 允许把统一工作台与草稿审阅提交流程视为已通过当前阶段门禁
+- 下一轮优先级：
+  1. 清理 renderer 测试中的 AntD 静态 message 与 React 19 `act(...)` 警告
+  2. 为非 `docx` 格式逐个补充首个审阅/提交能力与对应 deterministic e2e
+
+### 阶段专题结论（按需）
+- 覆盖范围：
+  - 统一工作台 `AI 对话 / 纯搜索`
+  - 右侧时间线与检查器
+  - docx 草稿快照链、统一审阅、部分接受后提交、冲突阻止提交、提交后草稿清理
+- 能力边界：
+  - 运行中不逐块确认、后续读取默认基于最新草稿快照、最终提交前校验源文件新鲜度
+- 门槛判定：
+  - 当前 change 的关键行为已具备 main / renderer / e2e 三层证据
+  - 可进入后续格式扩展或归档前验证阶段
+
 ## [2026-03-11] tool capability - 基线轮次
 
 - 时间：2026-03-11（本地）

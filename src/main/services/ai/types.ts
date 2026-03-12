@@ -2,6 +2,8 @@ import type { ChatStore } from '../storage/domains/ChatStore'
 import type { DocumentsStore } from '../storage/domains/DocumentsStore'
 import type { LlmConfigStore } from '../storage/domains/LlmConfigStore'
 import type { EmbeddingService } from '../vector/EmbeddingService'
+import type { DocxChangedBlock, DocxOp } from './tools/docx/types'
+import type { DraftReviewService } from './review/DraftReviewService'
 import type {
   AiPlanTask,
   AiRunEvent,
@@ -94,6 +96,7 @@ export type AiRunDeps = {
   chatStore: ChatStore
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService
+  draftReviewService: DraftReviewService
   isCancelled: () => boolean
   sendEvent: (event: AiRunEvent) => void
   requestApproval: (request: AiApprovalRequest) => Promise<AiApprovalDecision>
@@ -124,6 +127,14 @@ export type AiRunContext = {
     maxRecentTurnsChars?: number
     maxSummaryChars?: number
   }) => Promise<{ recentTurnsText: string; sessionSummaryText: string }>
+  trackDocxOpen: (input: { docId: string; sourcePath: string }) => void
+  trackDocxChanges: (input: {
+    previousDocId: string
+    nextDocId: string
+    op: DocxOp
+    changedBlocks: DocxChangedBlock[]
+  }) => void
+  trackDocxPreview: (input: { docId: string; previewPath: string }) => void
   getModelConfig: () => Promise<LLMConfig>
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService

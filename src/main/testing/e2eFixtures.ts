@@ -14,13 +14,20 @@ import type {
   WorkspaceListResponse
 } from '../../shared/types'
 
-export type E2EChatScenario = 'chat-plan-artifact' | 'chat-approval' | 'chat-workspace'
+export type E2EChatScenario =
+  | 'chat-plan-artifact'
+  | 'chat-approval'
+  | 'chat-workspace'
+  | 'chat-edit-review'
+  | 'chat-review-conflict'
 export type E2ESearchScenario = 'search-results'
 
 const E2E_CHAT_SCENARIO_PREFIXES: Record<E2EChatScenario, string> = {
   'chat-plan-artifact': '[e2e:chat-plan-artifact]',
   'chat-approval': '[e2e:chat-approval]',
-  'chat-workspace': '[e2e:chat-workspace]'
+  'chat-workspace': '[e2e:chat-workspace]',
+  'chat-edit-review': '[e2e:chat-edit-review]',
+  'chat-review-conflict': '[e2e:chat-review-conflict]'
 }
 
 const E2E_SEARCH_SCENARIO_PREFIXES: Record<E2ESearchScenario, string> = {

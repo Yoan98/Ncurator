@@ -107,6 +107,9 @@
 - 选择原因：
   - 可以直接启动真实 Electron 应用并驱动窗口
   - 原生支持 trace、screenshot 等取证能力，便于 AI 基于失败结果修复
+- 执行约束：
+  - deterministic Electron e2e 必须串行运行，避免多个 Electron 实例并发争抢窗口与用户数据目录导致假失败
+  - `vitest.e2e.config.mts` 需要保持 `fileParallelism: false`
 
 ### 3.4 不作为默认路线的方案
 
