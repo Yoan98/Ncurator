@@ -46,6 +46,94 @@
 
 ## 3. 历史记录
 
+## [2026-03-12] human 单任务 - P2 收口与 recovery 修复
+
+- 时间：2026-03-12 18:46（本地）
+- 阶段：human 单任务
+- 执行命令：
+  - `pnpm exec vitest --config vitest.ai.config.mts run tests/main/ai/capability/terminal.boundary-approval.test.ts`
+  - `pnpm test:main:ai:human:p2 -- --profile custom --case human-tool-error-recovery --runs 3 --batch-id p2-2026-03-12-recovery-fix`
+- 报告路径：
+  - `tests/report/main-ai-human/batches/p2-2026-03-12-recovery-fix/batch-summary.md`
+  - `tests/report/main-ai-human/batches/p2-2026-03-12-recovery-fix/batch-summary.json`
+  - `tests/report/main-ai-human/human-assessment.md`
+- 结果摘要：
+  - terminal capability 回归 `3/3` 通过，新增覆盖了 `workspace root cwd alias -> root` 归一化，以及不存在 `cwd` 的 fail-fast。
+  - `human-tool-error-recovery` 修复后 batch `3/3 soft_pass`，中位耗时从此前长尾 `~122307ms` 收敛到 `8012ms`。
+  - assessment 已更新为：
+    - `human-multi-skill-kb-then-shell = 8/9 = 88.89%`
+    - `human-tool-error-recovery = 7/8 = 87.50%`
+    - `historicalSuccessfulRunRate = 85.48%`
+    - `latestUnexpectedBlockRate = 0.00%`
+  - `P2` 四个关键成功路径当前都已超过 `80%` 门槛：
+    - `human-docx-edit = 83.33%`
+    - `human-local-kb-answer = 87.50%`
+    - `human-multi-skill-kb-then-shell = 88.89%`
+    - `human-tool-error-recovery = 87.50%`
+- 风险与边界：
+  - `human-tool-error-recovery` 仍然是 `soft_pass` 主导样本，`repeatedToolCallCount / recoveryAfterErrorCount` 仍高，这是注入一次失败后的预期恢复成本，不再是阻塞门槛，但仍值得后续优化。
+  - `p2-2026-03-12-followup` 是 batch runner 修复前生成的失败批次，summary 未纳入断言失败那一轮；后续若做正式 compare，不应把它当作基线。
+  - 当前结论成立的关键前提是：`terminal_exec` 已把 `cwd=test-workspace` 这类 workspace 根目录别名归一化到真实 root，并对不存在 `cwd` 提前返回 `invalid_input`，不再把路径错误放大成 `shell_unavailable`。
+- 推进决策：
+  - `human 单任务` 的 `P2` 收敛可以视为完成；后续进入 `P3` 时，应重新生成一份干净的固定 case 集 baseline 再做 compare。
+- 下一轮优先级：
+  1. 生成一份新的全量 `p2-default` batch，作为 `P3` compare 的正式 baseline。
+  2. 在下一次 prompt / skill / tool / model 变更后执行 `pnpm test:main:ai:human:p3:compare -- --before <batchId> --after <batchId>`。
+  3. 若继续做质量优化，重点收敛 `human-tool-error-recovery` 的重复调用成本，而不是再扩充覆盖面。
+
+### 阶段专题结论（按需）
+- 覆盖范围：
+  - `P2` 的四个关键 case 都已有 `5+` 历史样本，且最新 assessment 已不再存在 latest `unexpected_block`。
+  - recovery 路径现在同时有 capability 侧回归证据和 human live batch 证据。
+- 能力边界：
+  - `human` 目前已能稳定完成单任务、多 skill 和一次工具失败后的恢复，但恢复路径仍然倾向于 `soft_pass`，说明“能恢复”不等于“恢复代价低”。
+  - 当前不稳定项已从“任务会不会失败”收敛为“恢复效率和长尾时延是否还要继续优化”。
+- 门槛判定：
+  - `P2` 已完成，不再处于“继续收敛才可推进”的状态。
+  - `P3` compare 工具已具备，但需要一份修复后重新生成的干净 baseline，当前还不能把旧失败 batch 直接拿来做正式前后对比。
+
+## [2026-03-12] human 单任务 - P2 稳定性采样轮次
+
+- 时间：2026-03-12 18:12（本地）
+- 阶段：human 单任务
+- 执行命令：
+  - `pnpm test:main:ai:human:p2 -- --runs 5 --batch-id p2-2026-03-12`
+  - `node scripts/human-report-analyzer.mjs`
+- 报告路径：
+  - `tests/report/main-ai-human/batches/p2-2026-03-12/batch-summary.md`
+  - `tests/report/main-ai-human/batches/p2-2026-03-12/batch-summary.json`
+  - `tests/report/main-ai-human/human-assessment.md`
+- 结果摘要：
+  - `P2` 采样 batch 已落盘：`human-docx-edit=5/5 hard_pass`，`human-local-kb-answer=4/4 hard_pass`，共 `9/9`
+  - `human-docx-edit` 新增 5 轮后，assessment 成功率从 `71.43%` 提升到 `83.33%`
+  - `human-local-kb-answer` 新增 4 轮后，assessment 成功率从 `75.00%` 提升到 `87.50%`
+  - assessment 总运行从 `42` 增长到 `51`，historicalSuccessfulRunRate 从 `80.95%` 提升到 `84.31%`
+  - 采样时延中位数：
+    - `human-docx-edit=74367ms`
+    - `human-local-kb-answer=112291ms`
+- 风险与边界：
+  - `human-docx-edit` 与 `human-local-kb-answer` 本轮都稳定通过，但 live 成本明显偏高，单轮峰值分别到 `95315ms / 127097ms`
+  - `human-multi-skill-kb-then-shell` assessment 仍是 `3/4 = 75.00%`，还没达到 `P2` 成功路径 `80%` 门槛
+  - `human-tool-error-recovery` 仍然只有 `soft_pass`，说明恢复路径虽然可完成，但重复调用/恢复成本尚未收敛
+  - `p2-2026-03-12` batch 因 live 长尾在 `human-local-kb-answer` 第 5 轮前被人工中断；当前 batch 是可复用的 `partial_interrupted` 基线，不是完整四 case 批次
+- 推进决策：
+  - `P2` 已启动并产出首个稳定性采样与可复用 baseline，但 `human 单任务` 阶段仍需留在当前阶段继续收敛
+- 下一轮优先级：
+  1. 对 `human-multi-skill-kb-then-shell` 补齐 `5-10` 轮批次，确认是否能拉过 `80%` 门槛
+  2. 对 `human-tool-error-recovery` 做定向批次，重点看 `soft_pass` 是否能下降、`repeatedToolCallCount` 是否能收敛
+  3. 在下一次 prompt/skill/tool/model 变更后，用 `p2-2026-03-12` 作为 `P3` baseline 跑正式 compare
+
+### 阶段专题结论（按需）
+- 覆盖范围：
+  - `P2` 已经不再停留在文档定义层，当前已有真实 batch 产物和 assessment 增量证据
+  - 高风险成功路径里，`docx` 与 `local-kb` 已新增多轮稳定性样本
+- 能力边界：
+  - 当前主要问题已从“能不能完成任务”转为“高时延下是否还能维持稳定性，以及恢复成本是否过高”
+  - `multi-skill` 仍是 `human` 阶段的主不稳定项，当前不能拿 `docx/local-kb` 的改善代替它的门槛判定
+- 门槛判定：
+  - `P2` 已开始且有实测结果，不能再视为“未开始”
+  - `P3` compare 工具和 baseline 都已具备，但还没有第二个变更后 batch，因此 `P3` 仍未正式执行
+  - `human 单任务` 当前仍未完成整个 `P2` 收敛
 ## [2026-03-12] human 单任务 - P1 覆盖扩展轮次
 
 - 时间：2026-03-12 17:38（本地）

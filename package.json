@@ -18,6 +18,8 @@
     "test:main:ai:runtime": "vitest --config vitest.ai.config.mts run tests/main/ai/runtime",
     "test:main:ai:human": "vitest --config vitest.ai.config.mts run tests/main/ai/human",
     "test:main:ai:human:analyze": "node scripts/human-report-analyzer.mjs",
+    "test:main:ai:human:p2": "node scripts/human-batch-runner.mjs",
+    "test:main:ai:human:p3:compare": "node scripts/human-batch-compare.mjs",
     "test:main:workspace:service": "vitest --config vitest.ai.config.mts run tests/main/workspace/service",
     "test:main:workspace:migration": "vitest --config vitest.ai.config.mts run tests/main/workspace/migration",
     "test:ai": "vitest --config vitest.ai.config.mts run",

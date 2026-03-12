@@ -6,6 +6,7 @@ const SUITE = 'main-ai-human'
 const REPORT_ROOT = path.resolve(process.cwd(), 'tests', 'report', SUITE)
 const OUTPUT_FILE = path.join(REPORT_ROOT, 'human-assessment.md')
 const TEST_ROOT = path.resolve(process.cwd(), 'tests', 'main', 'ai', 'human')
+const REPORT_META_DIRS = new Set(['batches', 'compare'])
 
 const QUALITY_GRADES = [
   'hard_pass',
@@ -418,7 +419,10 @@ const toMarkdown = (input) => {
 const main = async () => {
   const currentCaseIds = await resolveCurrentCaseIds()
   const allReportCaseDirs = (await reportDirExists(REPORT_ROOT)) ? await listDirectories(REPORT_ROOT) : []
-  const staleReportCases = allReportCaseDirs.filter((caseId) => !currentCaseIds.includes(caseId)).sort()
+  const staleReportCases = allReportCaseDirs
+    .filter((caseId) => !REPORT_META_DIRS.has(caseId))
+    .filter((caseId) => !currentCaseIds.includes(caseId))
+    .sort()
 
   const reports = []
   const missingReportCases = []

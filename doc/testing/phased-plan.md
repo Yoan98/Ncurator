@@ -44,9 +44,13 @@
 - 主要命令：
   - `pnpm test:main:ai:human`
   - `pnpm test:main:ai:human:analyze`
+  - `pnpm test:main:ai:human:p2 -- --runs 5`
+  - `pnpm test:main:ai:human:p3:compare -- --before <batchId> --after <batchId>`
 - 阶段产物：
   - `tests/report/main-ai-human/**`
   - `tests/report/main-ai-human/human-assessment.md`
+  - `tests/report/main-ai-human/batches/<batchId>/batch-summary.md`
+  - `tests/report/main-ai-human/compare/<before>-vs-<after>.md`
   - `doc/testing/upgrade-journal.md` 追加记录
 
 评估分层：
@@ -54,6 +58,10 @@
 - `P1` 覆盖扩展：补齐 local-kb、多 skill、workspace 缺失与恢复能力。
 - `P2` 评估批次：关键 case 执行 `5-10` 轮，检查通过率、软成功比例、工具错误恢复与重复调用。
 - `P3` 升级验证：固定用例集后，对 prompt/skill/tool/model 改动做前后对比。
+
+建议口径：
+- `P2` 默认固定 case 集：`human-docx-edit`、`human-local-kb-answer`、`human-multi-skill-kb-then-shell`、`human-tool-error-recovery`。
+- `P3` 以两个独立 batch 为输入，不直接拿全量历史 `human-assessment.md` 做前后对比，避免旧轮次污染成功率。
 
 推进门槛：
 - 成功路径通过率至少 `80%`。

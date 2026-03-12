@@ -227,6 +227,15 @@ human 使用根目录 `.env` 配置：
 - `signals.json`
 - `summary.md`
 
+human 批次评估附加产物：
+- `tests/report/main-ai-human/batches/<batchId>/batch-summary.json`
+- `tests/report/main-ai-human/batches/<batchId>/batch-summary.md`
+- `tests/report/main-ai-human/batches/<batchId>/cases/<caseId>/run-XX/**`
+
+human 升级对比附加产物：
+- `tests/report/main-ai-human/compare/<before>-vs-<after>.json`
+- `tests/report/main-ai-human/compare/<before>-vs-<after>.md`
+
 消费原则：
 - `events.jsonl`：原始事件流，作为可回放证据。
 - `assertions.json`：结构化断言结果，包含 `caseStatus`、失败断言 ID 与断言明细。
@@ -306,6 +315,8 @@ main human 评估分层：
 1. 回归层：每个 case 单次运行，目标是快速发现明显退化。
 2. 评估层：关键 case 执行多轮批次，目标是统计 `hard_pass / soft_pass / expected_block / unexpected_block / harness_fail`、稳定性与效率波动。
 3. 聚合层：执行 `pnpm test:main:ai:human:analyze`，生成 `tests/report/main-ai-human/human-assessment.md`。
+4. 批次层：执行 `pnpm test:main:ai:human:p2 -- --runs 5`，把固定 case 集合复制到独立 batch 目录，避免不同轮次历史互相污染。
+5. 对比层：执行 `pnpm test:main:ai:human:p3:compare -- --before <batchId> --after <batchId>`，对固定 batch 做升级前后对比。
 
 新增 renderer contract 用例时：
 1. 新建 `tests/renderer/<page>/contract/*.test.ts`
@@ -333,6 +344,8 @@ main human 评估分层：
   - `pnpm test:main:ai:runtime`
   - `pnpm test:main:ai:human`
   - `pnpm test:main:ai:human:analyze`
+  - `pnpm test:main:ai:human:p2`
+  - `pnpm test:main:ai:human:p3:compare`
   - `pnpm test:main:workspace:service`
   - `pnpm test:main:workspace:migration`
   - `pnpm test:renderer`

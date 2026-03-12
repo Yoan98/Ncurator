@@ -1,3 +1,4 @@
+import path from 'node:path'
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import { describe, expect, test } from 'vitest'
 import { buildTerminalCapabilityTools } from '../../../../src/main/services/ai/tools/terminal_exec/terminalTools'
@@ -8,6 +9,7 @@ import { readLatestCaseReportArtifacts } from '../../../harness/main/reportInspe
 
 const BOUNDARY_CASE_ID = 'terminal-workspace-boundary-rejected'
 const APPROVAL_DENIED_CASE_ID = 'terminal-risk-approval-denied'
+const CWD_NORMALIZATION_CASE_ID = 'terminal-cwd-normalization'
 
 type JsonScalar = string | number | boolean | null
 
@@ -214,5 +216,96 @@ describe('capability/terminal', () => {
     expect(report.metrics.executionStatus).toBe('blocked')
     expect(report.metrics.executionResultCode).toBe('approval_denied')
     expect(report.metrics.approvalDeniedCount).toBe(1)
+  })
+
+  test('terminal_run_command should normalize workspace-root cwd alias and reject missing cwd before execution', async () => {
+    await runCapabilityCase({
+      caseId: CWD_NORMALIZATION_CASE_ID,
+      description: '验证 terminal 对 workspace 根目录别名 cwd 的归一化，以及对不存在 cwd 的 fail-fast。',
+      expectedOutcome: 'success',
+      scenarioTags: ['terminal', 'cwd', 'normalization', 'negative-path'],
+      requiredFixtures: [],
+      fixtureCopies: [],
+      buildExecutionOutcome: (result) => {
+        const aliasCode = asString(asRecord(result.aliasResult).code)
+        const missingCode = asString(asRecord(result.missingResult).code)
+        const completed = aliasCode === 'ok' && missingCode === 'invalid_input'
+        return {
+          status: completed ? 'completed' : 'failed',
+          resultCode: completed ? 'ok' : missingCode || aliasCode || 'unknown',
+          summary: `alias=${aliasCode}, missing=${missingCode}`
+        }
+      },
+      execute: async (runtime) => {
+        const built = buildTerminalCapabilityTools({
+          ctx: runtime.ctx,
+          runId: runtime.runId,
+          taskId: runtime.taskId,
+          workspaceRootPath: runtime.workspaceRoot,
+          timeoutMs: 8000,
+          maxOutputChars: 8000,
+          safePreviewChars: 600,
+          emitActivity: (activity) => {
+            runtime.ctx.sendEvent({
+              type: 'activity',
+              runId: runtime.runId,
+              taskId: runtime.taskId,
+              activityId: `activity-${Date.now().toString(36)}`,
+              actionType: activity.actionType,
+              status: activity.status,
+              summary: activity.summary,
+              createdAt: Date.now()
+            })
+          }
+        })
+
+        const terminalTool = getToolByName(built.tools, 'terminal_run_command')
+        const workspaceAlias = path.basename(runtime.workspaceRoot)
+        const aliasResult = asRecord(
+          (await terminalTool.invoke({ command: 'pwd', cwd: workspaceAlias })) as JsonValue
+        )
+        const missingResult = asRecord(
+          (await terminalTool.invoke({ command: 'pwd', cwd: 'missing-dir' })) as JsonValue
+        )
+        const events = runtime.eventCollector.snapshot()
+
+        return {
+          aliasResult,
+          missingResult,
+          events,
+          workspaceRoot: runtime.workspaceRoot
+        }
+      },
+      assert: async (result, runtime) => {
+        const events = result.events as AiRunEvent[]
+
+        recordAssertion(runtime.assertions, {
+          id: 'terminal.cwd.alias.normalized-to-root',
+          pass:
+            asBoolean(asRecord(result.aliasResult).ok) &&
+            asString(asRecord(result.aliasResult).code) === 'ok' &&
+            asString(asRecord(result.aliasResult).cwd) === String(result.workspaceRoot),
+          details: JSON.stringify(asRecord(result.aliasResult))
+        })
+        recordAssertion(runtime.assertions, {
+          id: 'terminal.cwd.missing.invalid-input',
+          pass:
+            asBoolean(asRecord(result.missingResult).ok) === false &&
+            asString(asRecord(result.missingResult).code) === 'invalid_input' &&
+            asString(asRecord(result.missingResult).error).includes('cwd does not exist'),
+          details: JSON.stringify(asRecord(result.missingResult))
+        })
+        recordAssertion(runtime.assertions, {
+          id: 'terminal.cwd.missing.no-terminal-step',
+          pass: countEvents(events, 'terminal_step_started') === 1,
+          details: `terminal_step_started=${String(countEvents(events, 'terminal_step_started'))}`
+        })
+      }
+    })
+
+    const report = await readLatestCaseReportArtifacts('main-ai-capability', CWD_NORMALIZATION_CASE_ID)
+    expect(report.assertions.caseStatus).toBe('passed')
+    expect(report.metrics.executionStatus).toBe('completed')
+    expect(report.metrics.executionResultCode).toBe('ok')
   })
 })

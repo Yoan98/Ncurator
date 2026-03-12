@@ -43,6 +43,17 @@ type ArtifactCandidate = {
   existedBefore: boolean
 }
 
+type ResolvedCwd =
+  | {
+      ok: true
+      cwd: string
+    }
+  | {
+      ok: false
+      code: 'workspace_required' | 'invalid_input'
+      error: string
+    }
+
 const clipText = (text: string, maxChars: number) => {
   const raw = String(text || '')
   if (raw.length <= maxChars) return { text: raw, truncated: false }
@@ -113,15 +124,57 @@ const mergeArtifactCandidates = (input: {
   }))
 }
 
-const resolveCwd = (input: { workspaceRootPath: string; requestedCwd?: string }): string | null => {
+const resolveCwd = (input: {
+  workspaceRootPath: string
+  requestedCwd?: string
+}): ResolvedCwd => {
   const root = path.resolve(input.workspaceRootPath)
-  const requested = String(input.requestedCwd || '').trim()
-  if (!requested) return root
-  return resolveWorkspacePath({
+  const requestedRaw = String(input.requestedCwd || '').trim()
+  if (!requestedRaw) {
+    return {
+      ok: true,
+      cwd: root
+    }
+  }
+
+  const normalizedRequested = requestedRaw.replace(/[\\/]+$/g, '')
+  const rootAlias = path.basename(root).replace(/[\\/]+$/g, '')
+  const requested =
+    normalizedRequested === rootAlias || normalizedRequested === path.join('.', rootAlias)
+      ? '.'
+      : requestedRaw
+
+  const resolved = resolveWorkspacePath({
     rawPath: requested,
     cwd: root,
     rootPath: root
   })
+  if (!resolved) {
+    return {
+      ok: false,
+      code: 'workspace_required',
+      error: 'cwd is out of workspace boundary'
+    }
+  }
+  if (!fs.existsSync(resolved)) {
+    return {
+      ok: false,
+      code: 'invalid_input',
+      error: 'cwd does not exist inside workspace'
+    }
+  }
+  if (!fs.statSync(resolved).isDirectory()) {
+    return {
+      ok: false,
+      code: 'invalid_input',
+      error: 'cwd is not a directory'
+    }
+  }
+
+  return {
+    ok: true,
+    cwd: resolved
+  }
 }
 
 export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput) => {
@@ -179,19 +232,20 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
           return emptyResult
         }
 
-        const cwd = resolveCwd({
+        const cwdResult = resolveCwd({
           workspaceRootPath: input.workspaceRootPath,
           requestedCwd: args.cwd
         })
-        if (!cwd) {
+        if (!cwdResult.ok) {
           const cwdError = {
             ok: false,
-            code: 'workspace_required' as const,
-            error: 'cwd is out of workspace boundary'
+            code: cwdResult.code,
+            error: cwdResult.error
           }
           emitResult(toolName, toolCallId, cwdError, cwdError.error)
           return cwdError
         }
+        const cwd = cwdResult.cwd
 
         const boundary = checkWorkspaceBoundary(command, input.workspaceRootPath)
         if (!boundary.ok) {
