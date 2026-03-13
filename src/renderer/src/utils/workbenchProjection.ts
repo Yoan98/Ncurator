@@ -4,6 +4,7 @@ import type {
   WorkbenchArtifactEvent,
   WorkbenchInspector,
   WorkbenchProjection,
+  WorkbenchTaskDeliveryEvent,
   WorkbenchTimelineItem,
   WorkbenchToolResultEvent
 } from '../types/workbench'
@@ -117,6 +118,23 @@ const pushTimelineItem = (
   timeline.push(item)
 }
 
+const resolveDeliveryTitle = (
+  event: WorkbenchTaskDeliveryEvent,
+  plan: AiPlanTask[]
+): { title: string; badge: string } => {
+  if (event.taskId === 'direct-human') {
+    return { title: 'Direct Human 交付', badge: 'final' }
+  }
+  if (event.taskId === 'synthesis-human') {
+    return { title: 'Synthesis 交付', badge: 'synthesis' }
+  }
+  const matched = plan.find((item) => item.id === event.taskId)
+  if (!matched) {
+    return { title: `任务交付 · ${event.taskId}`, badge: 'delivery' }
+  }
+  return { title: `任务交付 · ${matched.title}`, badge: 'delivery' }
+}
+
 export const projectWorkbenchState = (input: {
   aiEvents: AiRunEvent[]
   aiPlan: AiPlanTask[]
@@ -210,6 +228,24 @@ export const projectWorkbenchState = (input: {
         inspector: {
           kind: 'human_step',
           title: '执行步骤',
+          event
+        }
+      })
+      return
+    }
+
+    if (event.type === 'task_delivery_ready') {
+      const deliveryMeta = resolveDeliveryTitle(event, input.aiPlan)
+      pushTimelineItem(timeline, {
+        id: `task-delivery-${event.taskId}-${index}`,
+        kind: 'task_delivery',
+        title: deliveryMeta.title,
+        description: event.summary,
+        badge: deliveryMeta.badge,
+        createdAt: getEventTimestamp(event, fallbackTime),
+        inspector: {
+          kind: 'task_delivery',
+          title: deliveryMeta.title,
           event
         }
       })

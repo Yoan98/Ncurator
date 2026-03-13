@@ -5,11 +5,13 @@ import type {
   HumanStepRecord,
   HumanTaskInput,
   JsonValue,
+  LocalSourceUsageStatus,
   RuntimeSkillId,
   SkillCard
 } from '../../../../../shared/types'
+import type { HumanDeliveryKind } from '../../types'
 
-export type HumanPhase = 'brain' | 'skill_loader' | 'tool_exec'
+export type HumanPhase = 'brain' | 'skill_loader' | 'tool_exec' | 'response'
 
 export type LoadedSkill = {
   skillId: RuntimeSkillId
@@ -54,6 +56,9 @@ export type HumanRunState = {
   input: HumanTaskInput
   phase: HumanPhase
   status: 'running' | 'completed' | 'blocked'
+  deliveryKind: HumanDeliveryKind
+  streamAnswer: boolean
+  internalDelivery: boolean
   steps: number
   maxSteps: number
   availableSkillCards: SkillCard[]
@@ -65,6 +70,9 @@ export type HumanRunState = {
   lastDecision?: HumanStepDecision
   stepHistory: HumanStepRecord[]
   summary: string
+  deliveryMarkdown: string
   resultCode: AiTaskResultCode
   resultData?: Record<string, JsonValue>
+  localSourceStatus?: LocalSourceUsageStatus
+  localSourceSummary?: string
 }

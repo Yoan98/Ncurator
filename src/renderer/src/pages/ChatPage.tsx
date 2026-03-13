@@ -480,6 +480,28 @@ const ChatPage: React.FC = () => {
         return
       }
 
+      if (evt.type === 'task_delivery_ready') {
+        if (!evt.internal) {
+          setAiPlan((prev) =>
+            prev.map((t) =>
+              t.id === evt.taskId
+                ? {
+                    ...t,
+                    resultMessage: evt.summary,
+                    deliveryMarkdown: evt.deliveryMarkdown
+                  }
+                : t
+            )
+          )
+        }
+        setRightPanel({
+          title: `任务交付 · ${evt.taskId}`,
+          kind: 'json',
+          data: evt
+        })
+        return
+      }
+
       if (evt.type === 'task_failed') {
         if (evt.internal) return
         setAiPlan((prev) =>

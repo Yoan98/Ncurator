@@ -505,13 +505,16 @@ export type RuntimeSkillId = (typeof RUNTIME_SKILL_IDS)[number]
 export type RuntimeSkillRequirement = (typeof RUNTIME_SKILL_REQUIREMENTS)[number]
 export type AiRunEventStage =
   | 'main_intent'
-  | 'main_context_enrich'
+  | 'main_context_human'
   | 'main_plan'
   | 'main_plan_exec'
-  | 'main_finalize'
+  | 'main_direct_human_exec'
+  | 'main_synthesis_human'
+  | 'main_complete'
   | 'human_brain'
   | 'human_skill_loader'
   | 'human_tool_exec'
+  | 'human_response'
 export type AiTaskResultCode =
   | 'ok'
   | 'failed'
@@ -609,8 +612,11 @@ export type HumanTaskOutput = {
   taskId: string
   status: 'completed' | 'blocked'
   summary: string
+  deliveryMarkdown: string
   resultCode: AiTaskResultCode
   resultData?: JsonObject
+  localSourceStatus?: LocalSourceUsageStatus
+  localSourceSummary?: string
 }
 
 export type AiFileArtifactCapability = 'terminal_exec' | 'docx'
@@ -638,6 +644,7 @@ export type AiPlanTask = {
   error?: string
   resultCode?: AiTaskResultCode
   resultMessage?: string
+  deliveryMarkdown?: string
   resultData?: JsonObject
 }
 
@@ -703,6 +710,14 @@ type AiRunEventPayload =
       code: AiTaskResultCode
       message?: string
       data?: JsonObject
+    }
+  | {
+      type: 'task_delivery_ready'
+      runId: string
+      taskId: string
+      summary: string
+      deliveryMarkdown: string
+      createdAt: number
     }
   | {
       type: 'task_failed'
@@ -852,11 +867,13 @@ type AiRunEventPayload =
   | {
       type: 'answer_token'
       runId: string
+      taskId?: string
       token: string
     }
   | {
       type: 'answer_completed'
       runId: string
+      taskId?: string
       text: string
     }
   | {

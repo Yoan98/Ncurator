@@ -103,6 +103,8 @@ export const runHumanCase = async (input: {
     const result = await runHumanTask({
       taskId,
       objective: input.objective
+    }, {
+      deliveryKind: 'handoff'
     })
 
     execution = {

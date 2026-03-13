@@ -37,7 +37,15 @@ export const createMainRunStateSchema = () => {
     input: z.string(),
     // main graph 路由阶段唯一来源。
     mainStage: z
-      .enum(['main_intent', 'main_context_enrich', 'main_plan', 'main_plan_exec', 'main_finalize'])
+      .enum([
+        'main_intent',
+        'main_context_human',
+        'main_plan',
+        'main_plan_exec',
+        'main_direct_human_exec',
+        'main_synthesis_human',
+        'main_complete'
+      ])
       .default('main_intent'),
     // 已执行的上下文补充轮次。
     contextRounds: z.number().default(0),
@@ -74,6 +82,8 @@ export const createMainRunStateSchema = () => {
             .optional(),
           // 结果摘要文本。
           resultMessage: z.string().optional(),
+          // 任务正式交付 markdown。
+          deliveryMarkdown: z.string().optional(),
           // 结果结构化数据。
           resultData: jsonObjectSchema.optional()
         })
@@ -83,8 +93,10 @@ export const createMainRunStateSchema = () => {
     dispatchCursor: z.number().default(0),
     // run 级错误文本。
     error: z.string().optional(),
-    // finalize 产出的最终文本。
-    outputText: z.string().optional(),
+    // direct human / synthesis human 产出的最终交付。
+    finalDeliveryMarkdown: z.string().optional(),
+    // 产生最终交付的任务 ID。
+    finalDeliveryTaskId: z.string().optional(),
     // 本地资料使用状态。
     localSourceStatus: z.enum(['used', 'not_used', 'insufficient']).optional(),
     // 本地资料使用或不足说明。
@@ -213,10 +225,16 @@ export const createHumanRunStateSchema = () => {
     runId: z.string(),
     // 当前 human 任务输入契约。
     input: humanTaskInputSchema,
-    // human 内部路由阶段（brain/skill_loader/tool_exec）。
-    phase: z.enum(['brain', 'skill_loader', 'tool_exec']).default('brain'),
+    // human 内部路由阶段（brain/skill_loader/tool_exec/response）。
+    phase: z.enum(['brain', 'skill_loader', 'tool_exec', 'response']).default('brain'),
     // human 执行状态：running/completed/blocked。
     status: z.enum(['running', 'completed', 'blocked']).default('running'),
+    // 当前交付类型：context/handoff/final。
+    deliveryKind: z.enum(['context', 'handoff', 'final']).default('handoff'),
+    // 是否将 response node 输出作为最终答复流式事件发出。
+    streamAnswer: z.boolean().default(false),
+    // 是否将交付事件标记为 internal。
+    internalDelivery: z.boolean().default(false),
     // 当前累计步数。
     steps: z.number().default(0),
     // 最大步数保护阈值。
@@ -250,6 +268,8 @@ export const createHumanRunStateSchema = () => {
     stepHistory: z.array(humanStepRecordSchema).default(() => []),
     // human 收敛摘要。
     summary: z.string().default(''),
+    // human 正式交付 markdown。
+    deliveryMarkdown: z.string().default(''),
     // human 结果码。
     resultCode: z
       .enum([
@@ -262,6 +282,10 @@ export const createHumanRunStateSchema = () => {
       ])
       .default('failed'),
     // human 结构化结果数据。
-    resultData: jsonObjectSchema.optional()
+    resultData: jsonObjectSchema.optional(),
+    // 本地资料使用状态。
+    localSourceStatus: z.enum(['used', 'not_used', 'insufficient']).optional(),
+    // 本地资料使用或不足说明。
+    localSourceSummary: z.string().optional()
   })
 }

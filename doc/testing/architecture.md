@@ -241,8 +241,10 @@ human 升级对比附加产物：
 - `assertions.json`：结构化断言结果，包含 `caseStatus`、失败断言 ID 与断言明细。
 - `metrics.json`：统一标量指标，至少包含 `caseStatus`、`caseErrorCode`、`executionStatus`、`executionResultCode` 及步骤、审批、产物计数。
   - `main-ai-human` 额外要求：`toolErrorCount`、`recoveryAfterErrorCount`、`repeatedToolCallCount`、`stepBudgetUsage`、`qualityGrade`。
+  - `main-ai-runtime` 与 `main-ai-human` 当前都应补充 `taskDeliveryCount` 与 `finalDeliverySource`。
 - `signals.json`：结构化信号，至少包含 `toolSequence`、`toolCounts`、`toolResultCodeCounts`、`stepActionSequence`、`skillActivationSequence`、`failedAssertionIds`，并在适用时补充 `expectedOutcome`、`scenarioTags`、`taskGoal`、`finalHumanAction`。
   - `main-ai-human` 额外要求：`maxSteps`、`approvalPolicy`、`modelName`、`resultDataKeys`、`firstFailureStage`。
+  - 当用例覆盖 human-led delivery runtime 时，`signals.json` 还应记录 `deliveryTaskIds`、`deliverySectionCounts`、`synthesisTriggered` 与 `finalDeliverySource`。
 - `summary.md`：事实性摘要，只转写上述结构化数据，不包含固定根因或优化建议。
 
 renderer / e2e 可选附加证据：

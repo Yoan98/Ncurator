@@ -10,6 +10,7 @@ import {
 import type { AiPlanTask, AiRunEvent } from '../../../../shared/types'
 
 type HumanStepEvent = Extract<AiRunEvent, { type: 'human_step' }>
+type TaskDeliveryEvent = Extract<AiRunEvent, { type: 'task_delivery_ready' }>
 type BlockedEvent = Extract<
   AiRunEvent,
   { type: 'approval_required' | 'workspace_required' | 'runtime_issue' }
@@ -108,12 +109,22 @@ const AssistantRunCard: React.FC<AssistantRunCardProps> = ({
     [...visibleEvents].reverse().find((event) => event.type === 'draft_review_ready') || null
   const answerEvent =
     [...visibleEvents].reverse().find((event) => event.type === 'answer_completed') || null
+  const latestDelivery =
+    [...visibleEvents].reverse().find((event) => event.type === 'task_delivery_ready') || null
   const currentTask = plan.find((item) => item.status === 'running') || null
   const completedCount = plan.filter((item) => item.status === 'completed').length
   const progressPercent = plan.length > 0 ? Math.round((completedCount / plan.length) * 100) : 0
   const runState = getRunState(visibleEvents)
   const blockedCopy = getBlockedCopy(blockedEvent as BlockedEvent | null)
   const answerSummary = getAnswerPreview(answerPreview, answerEvent as AnswerCompletedEvent | null)
+  const deliveryStageLabel =
+    latestDelivery && latestDelivery.type === 'task_delivery_ready'
+      ? latestDelivery.taskId === 'synthesis-human'
+        ? '当前阶段：最终汇总交付'
+        : latestDelivery.taskId === 'direct-human'
+          ? '当前阶段：Direct Human 最终交付'
+          : `最近交付：${latestDelivery.taskId}`
+      : null
 
   if (!runId && plan.length === 0 && visibleEvents.length === 0) return null
 
@@ -125,7 +136,9 @@ const AssistantRunCard: React.FC<AssistantRunCardProps> = ({
             <div>
               <div className="text-sm font-semibold text-[#1F1F1F]">Assistant Run</div>
               <div className="mt-1 text-xs text-[#666666]">
-                {currentTask ? `当前阶段：${currentTask.title}` : '按统一工作台流程执行与回放'}
+                {currentTask
+                  ? `当前阶段：${currentTask.title}`
+                  : deliveryStageLabel || '按统一工作台流程执行与回放'}
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -239,6 +252,17 @@ const AssistantRunCard: React.FC<AssistantRunCardProps> = ({
                 最终回答摘要
               </div>
               <div className="mt-2 text-sm leading-relaxed text-[#1F1F1F]">{answerSummary}</div>
+            </div>
+          ) : null}
+
+          {latestDelivery && latestDelivery.type === 'task_delivery_ready' && !answerSummary ? (
+            <div className="rounded-2xl border border-[#E5E5E4] bg-[#F8F8F7] px-4 py-4">
+              <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">
+                最近任务交付
+              </div>
+              <div className="mt-2 text-sm leading-relaxed text-[#1F1F1F]">
+                {(latestDelivery as TaskDeliveryEvent).summary}
+              </div>
             </div>
           ) : null}
         </div>

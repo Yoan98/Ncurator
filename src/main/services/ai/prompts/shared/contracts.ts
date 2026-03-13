@@ -1,7 +1,7 @@
 export const JSON_ONLY_INTENT_CONTRACT = [
   '只输出 JSON，不得输出任何额外文字。',
-  '格式：{"mode":"need_context|to_plan|direct_finalize","reason":"string","answer":"string"}。',
-  '规则：mode 必填；reason 必填；当 mode=direct_finalize 时 answer 必须为非空字符串；其他模式 answer 必须为空字符串。'
+  '格式：{"mode":"need_context|to_plan|direct_human","reason":"string"}。',
+  '规则：mode 必填；reason 必填。'
 ].join('\n')
 
 export const JSON_ONLY_PLAN_CONTRACT = [
@@ -20,12 +20,19 @@ export const HUMAN_DECISION_JSON_CONTRACT = [
   'skillId 只能来自当前 available skill cards；toolName 只能来自当前 active tools。'
 ].join('\n')
 
-export const FINALIZE_OUTPUT_CONTRACT = [
-  '只输出 JSON，不得输出额外文字。',
-  '格式：{"mode":"answer|request_non_local_permission","answer":"string","localSourceStatus":"used|not_used|insufficient","localSourceSummary":"string"}。',
-  '规则：answer 必填；localSourceSummary 必填。',
-  '当 mode=request_non_local_permission 时，answer 必须明确说明当前本地资料不足，并询问用户是否允许继续使用非本地信息。',
-  '当 mode=answer 时，answer 必须是中文最终答复，顺序固定：结论 -> 已完成项 -> 关键依据 -> 未完成/待确认 -> 下一步建议（可选）。',
+export const HUMAN_HANDOFF_MARKDOWN_CONTRACT = [
+  '输出必须是 markdown，不得包裹 JSON。',
+  '标题建议固定为：# 子任务交付。',
+  '正文至少包含这些二级标题：## 已完成、## 关键发现、## 证据与来源、## 风险与未决、## 建议后续步骤。',
+  '允许段落、列表、表格、链接与图片引用。',
+  '不得编造事实；证据不足时必须明确写出。'
+].join('\n')
+
+export const HUMAN_FINAL_DELIVERY_MARKDOWN_CONTRACT = [
+  '输出必须是 markdown，不得包裹 JSON。',
+  '标题建议固定为：# 最终答复。',
+  '正文至少包含这些二级标题：## 结论、## 已完成内容、## 关键依据、## 未完成或待确认、## 下一步建议。',
+  '若用户尚未允许使用非本地信息，且你判断本地资料不足，必须在答复中明确说明本地资料不足并询问是否允许继续使用非本地信息。',
   '不得编造事实；证据不足时必须明确标注“待确认”；禁止暴露内部实现术语（如 graph/node/tool_call 等）。'
 ].join('\n')
 

@@ -9,6 +9,7 @@ import {
 import type { SearchResult } from '../../../../shared/types'
 import { workbenchSelectors } from '../../testing/selectors'
 import type { WorkbenchInspector } from '../../types/workbench'
+import MarkdownRenderer from '../MarkdownRenderer'
 
 const extractAbsolutePaths = (text: string): string[] => {
   const matches = String(text || '').match(/\/[^^\s"'`;]+/g) || []
@@ -129,6 +130,11 @@ const WorkbenchInspectorPanel: React.FC<WorkbenchInspectorProps> = ({
                 {item.resultMessage ? (
                   <div className="mt-2 text-xs text-[#999999]">{item.resultMessage}</div>
                 ) : null}
+                {item.deliveryMarkdown ? (
+                  <div className="mt-3 rounded-xl border border-white bg-white px-3 py-3">
+                    <MarkdownRenderer content={item.deliveryMarkdown} className="text-sm" />
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>
@@ -153,6 +159,43 @@ const WorkbenchInspectorPanel: React.FC<WorkbenchInspectorProps> = ({
             {inspector.event.draftRef?.draftSnapshotId ? (
               <div className="rounded-xl border border-[#E5E5E4] bg-white px-4 py-3 text-xs text-[#666666]">
                 当前步骤读取的是最新草稿快照：{inspector.event.draftRef.draftSnapshotId}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {inspector.kind === 'task_delivery' ? (
+          <div className="space-y-3">
+            <div className="rounded-xl border border-[#E5E5E4] bg-[#F8F8F7] px-4 py-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-[#1F1F1F]">{inspector.event.taskId}</div>
+                  <div className="mt-1 text-xs text-[#666666]">{inspector.event.summary}</div>
+                </div>
+                <Button
+                  size="small"
+                  icon={<CopyOutlined />}
+                  onClick={() => void copyText(inspector.event.deliveryMarkdown)}
+                >
+                  复制交付
+                </Button>
+              </div>
+            </div>
+            <div className="rounded-xl border border-[#E5E5E4] bg-white px-4 py-4">
+              <MarkdownRenderer content={inspector.event.deliveryMarkdown} className="text-sm" />
+            </div>
+            {extractAbsolutePaths(inspector.event.deliveryMarkdown).length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {extractAbsolutePaths(inspector.event.deliveryMarkdown).map((filePath) => (
+                  <Button
+                    key={filePath}
+                    size="small"
+                    icon={<FolderOpenOutlined />}
+                    onClick={() => void onRevealPath(filePath)}
+                  >
+                    定位路径
+                  </Button>
+                ))}
               </div>
             ) : null}
           </div>

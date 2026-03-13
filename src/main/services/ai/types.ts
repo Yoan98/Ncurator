@@ -26,10 +26,25 @@ export type { HumanStepAction, HumanStepDecision, CapabilityResult, HumanTaskInp
 
 export type AiMainStage =
   | 'main_intent'
-  | 'main_context_enrich'
+  | 'main_context_human'
   | 'main_plan'
   | 'main_plan_exec'
-  | 'main_finalize'
+  | 'main_direct_human_exec'
+  | 'main_synthesis_human'
+  | 'main_complete'
+
+export type HumanDeliveryKind = 'context' | 'handoff' | 'final'
+
+export type HumanRunDispatchOptions = {
+  deliveryKind: HumanDeliveryKind
+  streamAnswer?: boolean
+  internalDelivery?: boolean
+}
+
+export type HumanTaskRunner = (
+  taskInput: HumanTaskInput,
+  options: HumanRunDispatchOptions
+) => Promise<HumanTaskOutput>
 
 export type AiRunState = {
   // 当前 run 的唯一标识，与事件流 runId 对齐。
@@ -54,8 +69,10 @@ export type AiRunState = {
   dispatchCursor: number
   // run 级错误原因（失败时填充）。
   error?: string
-  // 最终答复文本（finalize 输出）。
-  outputText?: string
+  // 最终交付 markdown（direct human / synthesis human 输出）。
+  finalDeliveryMarkdown?: string
+  // 产生最终交付的任务 ID。
+  finalDeliveryTaskId?: string
   // 本地资料使用状态。
   localSourceStatus?: LocalSourceUsageStatus
   // 本地资料使用或不足说明。

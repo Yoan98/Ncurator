@@ -20,6 +20,7 @@ export type SearchWorkbenchTurn = {
 export type WorkbenchToolResultEvent = Extract<AiRunEvent, { type: 'tool_call_result' }>
 export type WorkbenchArtifactEvent = Extract<AiRunEvent, { type: 'file_artifact' }>
 export type WorkbenchHumanStepEvent = Extract<AiRunEvent, { type: 'human_step' }>
+export type WorkbenchTaskDeliveryEvent = Extract<AiRunEvent, { type: 'task_delivery_ready' }>
 export type WorkbenchApprovalEvent = Extract<AiRunEvent, { type: 'approval_required' }>
 export type WorkbenchWorkspaceEvent = Extract<AiRunEvent, { type: 'workspace_required' }>
 export type WorkbenchRuntimeIssueEvent = Extract<AiRunEvent, { type: 'runtime_issue' }>
@@ -56,6 +57,11 @@ export type WorkbenchInspector =
       kind: 'human_step'
       title: string
       event: WorkbenchHumanStepEvent
+    }
+  | {
+      kind: 'task_delivery'
+      title: string
+      event: WorkbenchTaskDeliveryEvent
     }
   | {
       kind: 'artifact'
@@ -96,6 +102,7 @@ export type WorkbenchTimelineItem = {
     | 'plan'
     | 'tool'
     | 'human_step'
+    | 'task_delivery'
     | 'artifact'
     | 'approval'
     | 'workspace'

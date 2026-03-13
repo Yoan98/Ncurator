@@ -48,7 +48,7 @@ export const emitHumanStep = (input: {
   resultStatus?: HumanStepResultStatus
   skillId?: RuntimeSkillId
   toolName?: string
-  stage: 'human_brain' | 'human_skill_loader' | 'human_tool_exec'
+  stage: 'human_brain' | 'human_skill_loader' | 'human_tool_exec' | 'human_response'
 }) => {
   input.ctx.sendEvent({
     type: 'human_step',
@@ -75,7 +75,7 @@ export const emitHumanDiagnostic = (input: {
   stepIndex: number
   action: HumanStepAction
   trace: DiagnosticTrace
-  stage: 'human_brain' | 'human_skill_loader' | 'human_tool_exec'
+  stage: 'human_brain' | 'human_skill_loader' | 'human_tool_exec' | 'human_response'
 }) => {
   input.ctx.sendEvent({
     type: 'human_diagnostic',
@@ -85,7 +85,27 @@ export const emitHumanDiagnostic = (input: {
     action: input.action,
     trace: input.trace,
     createdAt: Date.now(),
-    internal: true,
-    stage: input.stage
+      internal: true,
+      stage: input.stage
+  })
+}
+
+export const emitTaskDelivery = (input: {
+  ctx: AiRunContext
+  runId: string
+  taskId: string
+  summary: string
+  deliveryMarkdown: string
+  internal?: boolean
+}) => {
+  input.ctx.sendEvent({
+    type: 'task_delivery_ready',
+    runId: input.runId,
+    taskId: input.taskId,
+    summary: input.summary,
+    deliveryMarkdown: input.deliveryMarkdown,
+    createdAt: Date.now(),
+    internal: input.internal,
+    stage: 'human_response'
   })
 }

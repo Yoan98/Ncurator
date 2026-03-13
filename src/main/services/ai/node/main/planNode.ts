@@ -40,8 +40,7 @@ export const createPlanNode = (input: { ctx: AiRunContext }) => {
       return {
         status: 'failed',
         error: `plan_generation_failed: ${parseReason || 'invalid planner output'}`,
-        outputText: '计划生成失败：模型输出不符合任务结构要求。',
-        mainStage: 'main_finalize'
+        mainStage: 'main_complete'
       }
     }
 

@@ -1,27 +1,31 @@
-import type { HumanTaskInput } from '../../../../../shared/types'
-import type { AiRunContext, AiRunState } from '../../types'
+import type { AiRunContext, AiRunState, HumanTaskRunner } from '../../types'
+import { buildPlanTaskObjective } from './objectives'
 import { pickPendingTaskIndex } from './helpers'
 
 export const createPlanExecNode = (input: {
   ctx: AiRunContext
-  runHumanTask: (
-    taskInput: HumanTaskInput
-  ) => Promise<import('../../../../../shared/types').HumanTaskOutput>
+  runHumanTask: HumanTaskRunner
 }) => {
   const { ctx, runHumanTask } = input
 
   return async (state: AiRunState): Promise<Partial<AiRunState>> => {
     ctx.checkCancelled()
 
-    // 按 cursor 串行选择 pending task；无任务时进入 finalize。
+    // 按 cursor 串行选择 pending task；无任务时进入 synthesis。
     const taskIndex = pickPendingTaskIndex(state.plan, state.dispatchCursor)
     if (taskIndex < 0) {
       return {
-        mainStage: 'main_finalize'
+        mainStage: 'main_synthesis_human'
       }
     }
 
     const task = state.plan[taskIndex]
+    const objective = buildPlanTaskObjective({
+      userInput: state.input,
+      task,
+      contextEvidence: state.contextEvidence,
+      priorDeliveries: state.plan.slice(0, taskIndex).filter((item) => Boolean(item.deliveryMarkdown))
+    })
     const runningPlan = state.plan.map((item, index) =>
       index === taskIndex ? { ...item, status: 'running' as const } : item
     )
@@ -35,10 +39,12 @@ export const createPlanExecNode = (input: {
 
     const output = await runHumanTask({
       taskId: task.id,
-      objective: task.objective
+      objective
+    }, {
+      deliveryKind: 'handoff'
     })
 
-    // 当前策略为 fail-fast：单任务 blocked 会直接触发主流程收敛。
+    // 当前策略为 stop-dispatch：单任务 blocked 会停止后续业务任务，但保留 synthesis 收口。
     const blocked = output.status === 'blocked'
 
     const nextPlan = runningPlan.map((item, index) => {
@@ -51,6 +57,7 @@ export const createPlanExecNode = (input: {
           error: output.summary,
           resultCode: output.resultCode,
           resultMessage: output.summary,
+          deliveryMarkdown: output.deliveryMarkdown,
           resultData: output.resultData
         }
       }
@@ -61,6 +68,7 @@ export const createPlanExecNode = (input: {
         error: undefined,
         resultCode: output.resultCode,
         resultMessage: output.summary,
+        deliveryMarkdown: output.deliveryMarkdown,
         resultData: output.resultData
       }
     })
@@ -97,10 +105,8 @@ export const createPlanExecNode = (input: {
     return {
       plan: nextPlan,
       dispatchCursor: taskIndex + 1,
-      status: blocked ? 'failed' : state.status,
       error: blocked ? output.summary : state.error,
-      outputText: output.summary,
-      mainStage: blocked ? 'main_finalize' : hasPending ? 'main_plan_exec' : 'main_finalize'
+      mainStage: blocked ? 'main_synthesis_human' : hasPending ? 'main_plan_exec' : 'main_synthesis_human'
     }
   }
 }

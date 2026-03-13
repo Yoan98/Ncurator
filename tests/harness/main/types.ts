@@ -74,6 +74,7 @@ export type CaseRuntimeMetrics = {
   humanStepCount: number
   terminalStepCount: number
   fileArtifactCount: number
+  taskDeliveryCount: number
   approvalRequiredCount: number
   approvalApprovedCount: number
   approvalDeniedCount: number
@@ -84,6 +85,7 @@ export type CaseRuntimeMetrics = {
   repeatedToolCallCount?: number
   stepBudgetUsage?: number
   qualityGrade?: CaseQualityGrade
+  finalDeliverySource?: 'direct_human' | 'synthesis_human' | 'none'
 }
 
 export type ToolCounts = Record<string, number>
@@ -143,6 +145,10 @@ export type CaseSignalsReport = {
   skillActivationSequence: RuntimeSkillId[]
   failedAssertionIds: string[]
   artifactOperationCounts: ArtifactOperationCounts
+  deliveryTaskIds: string[]
+  deliverySectionCounts: Record<string, number>
+  synthesisTriggered: boolean
+  finalDeliverySource: 'direct_human' | 'synthesis_human' | 'none'
   resultDataKeys: string[]
   firstFailureStage?: AiRunEventStage
   finalHumanAction?: HumanStepAction

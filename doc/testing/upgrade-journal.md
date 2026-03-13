@@ -46,6 +46,39 @@
 
 ## 3. 历史记录
 
+## [2026-03-13] ai 架构验收 - human-led delivery 首轮落地
+
+- 时间：2026-03-13 12:14（本地）
+- 阶段：ai 架构验收
+- 执行命令：
+  - `pnpm exec tsc --noEmit -p tsconfig.node.json --composite false`
+  - `pnpm exec tsc --noEmit -p tsconfig.web.json --composite false`
+  - `pnpm exec vitest --config vitest.ai.config.mts run tests/main/ai/runtime`
+  - `pnpm exec vitest --config vitest.renderer.config.mts run tests/renderer/chat/contract`
+- 报告路径：
+  - `tests/report/main-ai-runtime/prompt-local-first-contract/<latest>/summary.md`
+  - `tests/report/main-ai-runtime/runtime-scope-validation/<latest>/summary.md`
+  - `tests/report/main-ai-runtime/source-scope-explicit-preserve/<latest>/summary.md`
+  - `tests/report/main-ai-runtime/human-result-data-enrichment/<latest>/summary.md`
+  - `tests/report/main-ai-runtime/docx-draft-review-ready/<latest>/summary.md`
+  - `tests/report/main-ai-runtime/docx-draft-review-conflict/<latest>/summary.md`
+  - `tests/report/main-ai-runtime/docx-draft-review-partial-commit/<latest>/summary.md`
+- 结果摘要：
+  - `main-ai-runtime` 当前 `8/8` 文件、`13/13` 测试通过；新增 `human-led-orchestration` 与 `human.response-delivery` 单测覆盖了 `direct_human`、plan handoff、blocked 后 synthesis、`task_delivery_ready` 与最终答复流来源。
+  - `renderer chat contract` 当前 `4/4` 文件、`5/5` 测试通过，说明工作台时间线、检查器、审批/工作区阻塞和 draft review 主链路没有被新的 delivery 模型打断。
+  - node/web 双 typecheck 均通过，`main_finalize` 与 `outputText` 的旧收口假设已经从当前实现主链移除。
+  - 测试报告契约已补充 `taskDeliveryCount`、`finalDeliverySource`、`deliveryTaskIds`、`deliverySectionCounts`、`synthesisTriggered` 等新观测字段。
+- 风险与边界：
+  - 新增的 orchestration / response 行为主要通过 Vitest 单测断言，不会像 `runRuntimeCase` 那样自动落完整 case report。
+  - 当前 plan 依赖仍是顺序 handoff 链，不是 DAG；复杂依赖图仍属于后续扩展范围。
+  - `localSourceStatus` 目前来自 human delivery 阶段的启发式归纳，后续如果要更精细区分“使用了哪些本地来源”，还需要单独增强。
+- 推进决策：
+  - human-led delivery runtime 可以作为当前 canonical 架构继续推进；后续功能扩展都应基于 `direct_human + task_delivery_ready + synthesis_human` 这组边界。
+- 下一轮优先级：
+  1. 若继续优化 plan 质量，优先补“更长 handoff 链”和“多资料范围混合”场景。
+  2. 若继续扩展 UI，可增加 task delivery 的 markdown diff / section 导航，而不是回退到 JSON 结果展示。
+  3. 若未来要上复杂依赖，再评估 DAG/显式 `dependsOn`，但保持 `deliveryMarkdown` 仍是第一真相源。
+
 ## [2026-03-12] main context - 首轮 runtime baseline
 
 - 时间：2026-03-12 19:22（本地）

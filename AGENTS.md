@@ -44,7 +44,7 @@
 
 默认工程入口：`doc/README.md`
 当涉及到数据库时，请阅读 `doc/architecture/database.md`
-当涉及到 AI 架构（LangGraph 运行图、能力节点、事件流、工作区沙箱、草稿审阅）时，请先阅读 `doc/architecture/ai/README.md`
+当涉及到 AI 架构（LangGraph 运行图、Main/Human graph、human-led delivery、markdown handoff、事件流、工作区沙箱、草稿审阅）时，请先阅读 `doc/architecture/ai/README.md`
 当涉及到 UI 样式时，请阅读 `doc/conventions/ui-style.md`
 当涉及到目录规范、文件归位、模块分层时，请阅读 `doc/architecture/project-structure.md`
 当涉及到类型归属、边界解码、跨层类型治理时，请阅读 `doc/conventions/type-governance.md`

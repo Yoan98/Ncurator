@@ -1,7 +1,8 @@
 import { END, START, StateGraph } from '@langchain/langgraph'
 import type { HumanTaskInput, HumanTaskOutput } from '../../../../shared/types'
-import type { AiRunContext } from '../types'
+import type { AiRunContext, HumanRunDispatchOptions } from '../types'
 import { createHumanBrainNode } from '../node/human/brainNode'
+import { createHumanResponseNode } from '../node/human/responseNode'
 import { createHumanSkillLoaderNode } from '../node/human/skillLoaderNode'
 import { createHumanToolExecNode } from '../node/human/toolExecNode'
 import { buildAvailableSkillCards } from '../node/human/skillCatalog'
@@ -17,15 +18,18 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext; maxSteps?: nu
   const State = createHumanRunStateSchema()
 
   const brainNode = createHumanBrainNode({ ctx })
+  const responseNode = createHumanResponseNode({ ctx })
   const skillLoaderNode = createHumanSkillLoaderNode({ ctx })
   const toolExecNode = createHumanToolExecNode({ ctx })
 
   const graph = new StateGraph(State)
     .addNode('human_brain_node', (state: HumanRunState) => brainNode(state))
+    .addNode('human_response_node', (state: HumanRunState) => responseNode(state))
     .addNode('human_skill_loader_node', (state: HumanRunState) => skillLoaderNode(state))
     .addNode('human_tool_exec_node', (state: HumanRunState) => toolExecNode(state))
     .addEdge(START, 'human_brain_node')
     .addConditionalEdges('human_brain_node', (state: HumanRunState) => {
+      if (state.phase === 'response') return 'human_response_node'
       if (state.status !== 'running') return END
       if (state.phase === 'skill_loader') return 'human_skill_loader_node'
       if (state.phase === 'tool_exec') return 'human_tool_exec_node'
@@ -39,15 +43,22 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext; maxSteps?: nu
       if (state.status !== 'running') return END
       return 'human_brain_node'
     })
+    .addEdge('human_response_node', END)
     .compile()
 
-  return async (taskInput: HumanTaskInput): Promise<HumanTaskOutput> => {
+  return async (
+    taskInput: HumanTaskInput,
+    options: HumanRunDispatchOptions
+  ): Promise<HumanTaskOutput> => {
     const output = (await graph.invoke(
       {
         runId: ctx.runId,
         input: taskInput,
         phase: 'brain',
         status: 'running',
+        deliveryKind: options.deliveryKind,
+        streamAnswer: Boolean(options.streamAnswer),
+        internalDelivery: Boolean(options.internalDelivery),
         steps: 0,
         maxSteps,
         availableSkillCards: buildAvailableSkillCards(),
@@ -57,6 +68,7 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext; maxSteps?: nu
         activeTools: [],
         stepHistory: [],
         summary: '',
+        deliveryMarkdown: '',
         resultCode: 'failed'
       } as HumanRunState,
       {
@@ -68,8 +80,11 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext; maxSteps?: nu
       taskId: taskInput.taskId,
       status: output.status === 'completed' ? 'completed' : 'blocked',
       summary: output.summary,
+      deliveryMarkdown: output.deliveryMarkdown,
       resultCode: output.resultCode,
-      resultData: output.resultData
+      resultData: output.resultData,
+      localSourceStatus: output.localSourceStatus,
+      localSourceSummary: output.localSourceSummary
     }
   }
 }

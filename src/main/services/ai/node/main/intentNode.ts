@@ -10,7 +10,7 @@ export const createIntentNode = (input: { ctx: AiRunContext; maxContextRounds?: 
     ctx.checkCancelled()
 
     if (state.status === 'failed' || state.status === 'cancelled' || state.status === 'completed') {
-      return { mainStage: 'main_finalize' }
+      return { mainStage: 'main_complete' }
     }
 
     if (state.contextRounds >= maxContextRounds) {
@@ -55,22 +55,20 @@ export const createIntentNode = (input: { ctx: AiRunContext; maxContextRounds?: 
       const contextObjective = String(decision.reason || '').trim() || state.input
       return {
         contextObjective,
-        mainStage: 'main_context_enrich',
+        mainStage: 'main_context_human',
         contextEvidence: decision.reason
           ? appendContextEvidence(state, `intent: need_context (${decision.reason})`)
           : state.contextEvidence
       }
     }
 
-    if (decision.mode === 'direct_finalize') {
-      const answer = String(decision.answer || '').trim()
+    if (decision.mode === 'direct_human') {
       return {
         contextObjective: undefined,
-        outputText: answer || state.outputText,
         contextEvidence: decision.reason
-          ? appendContextEvidence(state, `intent: direct_finalize (${decision.reason})`)
+          ? appendContextEvidence(state, `intent: direct_human (${decision.reason})`)
           : state.contextEvidence,
-        mainStage: 'main_finalize'
+        mainStage: 'main_direct_human_exec'
       }
     }
 

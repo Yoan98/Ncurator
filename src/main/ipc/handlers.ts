@@ -1781,17 +1781,6 @@ export function registerHandlers(services: {
           return
         }
 
-        const streamText = async (text: string) => {
-          const raw = String(text || '')
-          if (!raw) return
-          const chunkSize = 24
-          for (let i = 0; i < raw.length; i += chunkSize) {
-            if (activeAiRuns.get(runId)?.cancelled) break
-            sendEvent({ type: 'answer_token', runId, token: raw.slice(i, i + chunkSize) })
-          }
-          sendEvent({ type: 'answer_completed', runId, text: raw })
-        }
-
         try {
           const result = await AiRunService.getInstance().run(
             {
@@ -1914,23 +1903,20 @@ export function registerHandlers(services: {
               })
             : null
 
-          if (result.outputText) {
-            if (result.localSourceStatus && result.localSourceSummary) {
-              sendEvent({
-                type: 'local_sources_status',
-                runId,
-                status: result.localSourceStatus,
-                summary: result.localSourceSummary
-              })
-            }
-            if (result.localSourceStatus === 'insufficient' && result.localSourceSummary) {
-              sendEvent({
-                type: 'non_local_permission_requested',
-                runId,
-                reason: result.localSourceSummary
-              })
-            }
-            await streamText(result.outputText)
+          if (result.localSourceStatus && result.localSourceSummary) {
+            sendEvent({
+              type: 'local_sources_status',
+              runId,
+              status: result.localSourceStatus,
+              summary: result.localSourceSummary
+            })
+          }
+          if (result.localSourceStatus === 'insufficient' && result.localSourceSummary) {
+            sendEvent({
+              type: 'non_local_permission_requested',
+              runId,
+              reason: result.localSourceSummary
+            })
           }
 
           if (draftReviewDetail) {
@@ -1969,7 +1955,7 @@ export function registerHandlers(services: {
             await updateSessionMemoryAfterRun({
               sessionId,
               userInput: input,
-              assistantOutput: result.outputText || '',
+              assistantOutput: result.finalDeliveryMarkdown || '',
               chatStore,
               llmStore
             })

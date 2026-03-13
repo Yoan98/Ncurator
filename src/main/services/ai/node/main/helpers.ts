@@ -5,9 +5,8 @@ import type { AiRunState } from '../../types'
 export const DEFAULT_MAX_CONTEXT_ROUNDS = 2
 
 export const contextDecisionSchema = z.object({
-  mode: z.enum(['need_context', 'to_plan', 'direct_finalize']),
-  reason: z.string().optional(),
-  answer: z.string().optional()
+  mode: z.enum(['need_context', 'to_plan', 'direct_human']),
+  reason: z.string().optional()
 })
 
 export const plannerTaskSchema = z.object({

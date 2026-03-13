@@ -1,6 +1,6 @@
 ---
 name: AI-Architecture
-description: 当任务涉及 AI 架构、LangGraph、Main/Human graph、tool registry、事件流、workspace/approval、draft review、AI 架构升级或相关文档同步时必须使用；先读 doc/architecture/ai/README.md
+description: 当任务涉及 AI 架构、LangGraph、Main/Human graph、human-led delivery、markdown handoff、tool registry、事件流、workspace/approval、draft review、AI 架构升级或相关文档同步时必须使用；先读 doc/architecture/ai/README.md
 ---
 
 必须先阅读 `doc/architecture/ai/README.md`。
@@ -8,11 +8,11 @@ description: 当任务涉及 AI 架构、LangGraph、Main/Human graph、tool reg
 再按任务需要继续阅读：
 
 - `doc/architecture/ai/runtime.md`
-  - 当前运行边界、状态机、状态字段与代码落点
+  - 当前运行边界、human-led delivery、main/human/synthesis 流程与代码落点
 - `doc/architecture/ai/event-contracts.md`
-  - 事件族、审批语义、审阅语义与共享契约
+  - 事件族、task delivery、最终答复流、审批语义与共享契约
 - `doc/architecture/ai/extension-playbook.md`
-  - 新增 tool / capability / prompt / state / 测试时的扩展步骤
+  - 新增 tool / capability / prompt / delivery / state / 测试时的扩展步骤
 - `doc/architecture/ai/upgrade-playbook.md`
   - 架构升级时必须同步的文档、skills、AGENTS 与测试
 - `references/source-of-truth.md`

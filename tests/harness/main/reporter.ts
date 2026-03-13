@@ -111,6 +111,8 @@ const inspectEvents = (events: AiRunEvent[]) => {
     created: 0,
     updated: 0
   }
+  const deliveryTaskIds: string[] = []
+  const deliverySectionCounts: Record<string, number> = {}
   let warningCount = 0
   let approvalRequiredCount = 0
   let approvalApprovedCount = 0
@@ -118,6 +120,9 @@ const inspectEvents = (events: AiRunEvent[]) => {
   let workspaceRequiredCount = 0
   let toolErrorCount = 0
   let repeatedToolCallCount = 0
+  let taskDeliveryCount = 0
+  let synthesisTriggered = false
+  let finalDeliverySource: CaseSignalsReport['finalDeliverySource'] = 'none'
   let finalHumanAction: CaseSignalsReport['finalHumanAction']
   let firstFailureStage: AiRunEventStage | undefined
   let previousToolName: string | undefined
@@ -146,6 +151,20 @@ const inspectEvents = (events: AiRunEvent[]) => {
 
     if (event.type === 'file_artifact') {
       artifactOperationCounts[event.operation] += 1
+      continue
+    }
+
+    if (event.type === 'task_delivery_ready') {
+      taskDeliveryCount += 1
+      deliveryTaskIds.push(event.taskId)
+      const sections = String(event.deliveryMarkdown || '').match(/^##\s+(.+)$/gm) || []
+      sections.forEach((section) => {
+        const normalized = section.replace(/^##\s+/, '').trim()
+        if (!normalized) return
+        deliverySectionCounts[normalized] = (deliverySectionCounts[normalized] || 0) + 1
+      })
+      if (event.taskId === 'direct-human') finalDeliverySource = 'direct_human'
+      if (event.taskId === 'synthesis-human') finalDeliverySource = 'synthesis_human'
       continue
     }
 
@@ -179,6 +198,14 @@ const inspectEvents = (events: AiRunEvent[]) => {
         firstFailureStage ||= event.stage
       }
       finalHumanAction = event.action
+      continue
+    }
+
+    if (
+      (event.type === 'task_started' || event.type === 'task_completed' || event.type === 'task_result') &&
+      event.taskId === 'synthesis-human'
+    ) {
+      synthesisTriggered = true
     }
   }
 
@@ -190,6 +217,11 @@ const inspectEvents = (events: AiRunEvent[]) => {
     stepActionCounts,
     skillActivationSequence,
     artifactOperationCounts,
+    taskDeliveryCount,
+    deliveryTaskIds,
+    deliverySectionCounts,
+    synthesisTriggered,
+    finalDeliverySource,
     warningCount,
     approvalRequiredCount,
     approvalApprovedCount,
@@ -272,6 +304,7 @@ const buildMetrics = (input: { report: CaseReportInput }): CaseRuntimeMetrics =>
     humanStepCount,
     terminalStepCount: events.filter((event) => event.type.startsWith('terminal_step_')).length,
     fileArtifactCount: events.filter((event) => event.type === 'file_artifact').length,
+    taskDeliveryCount: inspected.taskDeliveryCount,
     approvalRequiredCount: inspected.approvalRequiredCount,
     approvalApprovedCount: inspected.approvalApprovedCount,
     approvalDeniedCount: inspected.approvalDeniedCount,
@@ -281,7 +314,8 @@ const buildMetrics = (input: { report: CaseReportInput }): CaseRuntimeMetrics =>
     recoveryAfterErrorCount,
     repeatedToolCallCount: inspected.repeatedToolCallCount,
     stepBudgetUsage,
-    qualityGrade
+    qualityGrade,
+    finalDeliverySource: inspected.finalDeliverySource
   }
 }
 
@@ -346,6 +380,10 @@ const buildSignalsReport = (input: {
     skillActivationSequence: inspected.skillActivationSequence,
     failedAssertionIds: input.assertions.failedAssertionIds,
     artifactOperationCounts: inspected.artifactOperationCounts,
+    deliveryTaskIds: inspected.deliveryTaskIds,
+    deliverySectionCounts: inspected.deliverySectionCounts,
+    synthesisTriggered: inspected.synthesisTriggered,
+    finalDeliverySource: inspected.finalDeliverySource,
     resultDataKeys: toJsonObjectKeys(input.report.execution.resultData),
     firstFailureStage: inspected.firstFailureStage,
     finalHumanAction: resolveFinalHumanAction({
@@ -393,6 +431,9 @@ const buildSummaryMarkdown = (input: {
     `- maxSteps: ${signals.maxSteps ?? 'none'}`,
     `- modelName: ${signals.modelName || 'none'}`,
     `- resultDataKeys: ${resultDataKeysText}`,
+    `- taskDeliveryCount: ${metrics.taskDeliveryCount}`,
+    `- finalDeliverySource: ${metrics.finalDeliverySource || 'none'}`,
+    `- synthesisTriggered: ${signals.synthesisTriggered}`,
     `- approvalDeniedCount: ${metrics.approvalDeniedCount}`,
     `- toolErrorCount: ${metrics.toolErrorCount ?? 0}`,
     `- repeatedToolCallCount: ${metrics.repeatedToolCallCount ?? 0}`,

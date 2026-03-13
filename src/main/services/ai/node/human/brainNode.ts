@@ -203,7 +203,7 @@ const createBlockState = (input: {
   })
 
   return {
-    phase: 'brain' as const,
+    phase: 'response' as const,
     status: 'blocked' as const,
     steps: Math.max(input.state.steps, input.stepIndex),
     lastDecision: {
@@ -398,7 +398,7 @@ export const createHumanBrainNode = (input: { ctx: AiRunContext }) => {
       })
 
       return {
-        phase: 'brain',
+        phase: 'response',
         status: 'completed',
         steps: nextStep,
         lastDecision: decision,

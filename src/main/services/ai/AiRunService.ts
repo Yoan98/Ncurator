@@ -43,13 +43,12 @@ export class AiRunService {
           sessionId: payload.sessionId,
           status: 'cancelled',
           input: payload.input,
-          mainStage: 'main_finalize',
+          mainStage: 'main_complete',
           plan: [],
           contextRounds: 0,
           contextEvidence: [],
           dispatchCursor: 0,
-          error: 'cancelled',
-          outputText: '已取消。'
+          error: 'cancelled'
         }
       }
       const msg = e instanceof Error ? e.message : String(e)
@@ -58,13 +57,12 @@ export class AiRunService {
         sessionId: payload.sessionId,
         status: 'failed',
         input: payload.input,
-        mainStage: 'main_finalize',
+        mainStage: 'main_complete',
         plan: [],
         contextRounds: 0,
         contextEvidence: [],
         dispatchCursor: 0,
-        error: msg,
-        outputText: `失败：${msg}`
+        error: msg
       }
     }
   }
