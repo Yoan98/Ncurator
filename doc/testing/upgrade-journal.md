@@ -8,6 +8,7 @@
 - 后续不再维护独立的 `tool capability` 专项文档。
 - 当前 active case inventory 统一来自 `tests/catalog/current-cases.json` / `tests/catalog/current-cases.md`。
 - `tests/report/**` 在本文件中只作为历史证据路径引用，不再代表当前 case 集。
+- 历史记录中保留旧的 `human 单任务`、`P0/P1/P2/P3` 标签与旧命令名；当前默认入口统一使用 `pnpm test:human`、`pnpm test:human:analyze`、`pnpm test:human:batch`、`pnpm test:human:compare`。
 
 ## 1. 使用方式
 
@@ -110,7 +111,7 @@
   - `main context` 阶段现已正式启动且首轮 baseline 通过；下一步可继续在该阶段补充更贴近 main graph 的上下文/阻塞场景，或在无新增风险时进入 `plan 质量` 准备。
 - 下一轮优先级：
   1. 盘点 `tests/main/ai/runtime/**` 中是否还缺少 main graph 上下文轮次、scope 降级或阻塞语义的补充 case。
-  2. 若近期继续改 human prompt / tool / skill，使用 `p2-default-2026-03-12-baseline-v3` 执行正式 `P3 compare`，避免把 human 回归带进 main context 阶段。
+  2. 若近期继续改 human prompt / tool / skill，使用 `p2-default-2026-03-12-baseline-v3` 执行正式升级对比，避免把 human 回归带进 main context 阶段。
   3. 若 main context 不再暴露新问题，开始整理 `plan 质量` 阶段的输入用例。
 
 ### 阶段专题结论（按需）
@@ -128,8 +129,8 @@
 - 阶段：human 单任务
 - 执行命令：
   - `pnpm exec vitest --config vitest.ai.config.mts run tests/main/ai/runtime/human.result-data-enrichment.test.ts`
-  - `pnpm test:main:ai:human:p2 -- --profile custom --case human-local-kb-answer --runs 5 --batch-id p2-2026-03-12-local-kb-after-resultdata-fix`
-  - `pnpm test:main:ai:human:p2 -- --batch-id p2-default-2026-03-12-baseline-v3`
+  - `pnpm test:human:batch -- --profile custom --case human-local-kb-answer --runs 5 --batch-id p2-2026-03-12-local-kb-after-resultdata-fix`
+  - `pnpm test:human:batch -- --batch-id p2-default-2026-03-12-baseline-v3`
 - 报告路径：
   - `tests/report/main-ai-human/batches/p2-2026-03-12-local-kb-after-resultdata-fix/batch-summary.md`
   - `tests/report/main-ai-human/batches/p2-default-2026-03-12-baseline-v3/batch-summary.md`
@@ -159,7 +160,7 @@
   - `human 单任务` 当前可视为完成 `P2` 收口并拿到正式 `P3` baseline；允许进入下一阶段测试，同时保留 `p2-default-2026-03-12-baseline-v3` 作为后续 human 变更 compare 的 `before` 输入。
 - 下一轮优先级：
   1. 开始 `main context` 阶段测试，优先运行 `pnpm test:main:ai:runtime`，检查上下文收集、scope 语义与阻塞契约。
-  2. 下一次对 human prompt / skill / tool / model 再做改动后，执行 `pnpm test:main:ai:human:p3:compare -- --before p2-default-2026-03-12-baseline-v3 --after <newBatchId>`。
+  2. 下一次对 human prompt / skill / tool / model 再做改动后，执行 `pnpm test:human:compare -- --before p2-default-2026-03-12-baseline-v3 --after <newBatchId>`。
   3. 若继续优化 human 质量，优先降低 `human-tool-error-recovery` 与 `human-multi-skill-kb-then-shell` 的 `soft_pass` 占比。
 
 ### 阶段专题结论（按需）
@@ -179,8 +180,8 @@
 - 阶段：human 单任务
 - 执行命令：
   - `pnpm exec vitest --config vitest.ai.config.mts run tests/main/ai/runtime/prompt.local-first-contract.test.ts`
-  - `pnpm test:main:ai:human:p2 -- --profile custom --case human-multi-skill-kb-then-shell --runs 5 --batch-id p2-2026-03-12-multi-skill-after-prompt-tune`
-  - `pnpm test:main:ai:human:p2 -- --batch-id p2-default-2026-03-12-baseline-v2`
+  - `pnpm test:human:batch -- --profile custom --case human-multi-skill-kb-then-shell --runs 5 --batch-id p2-2026-03-12-multi-skill-after-prompt-tune`
+  - `pnpm test:human:batch -- --batch-id p2-default-2026-03-12-baseline-v2`
 - 报告路径：
   - `tests/report/main-ai-human/batches/p2-2026-03-12-multi-skill-after-prompt-tune/batch-summary.md`
   - `tests/report/main-ai-human/batches/p2-default-2026-03-12-baseline-v2/batch-summary.md`
@@ -225,7 +226,7 @@
 - 阶段：human 单任务
 - 执行命令：
   - `pnpm exec vitest --config vitest.ai.config.mts run tests/main/ai/capability/terminal.boundary-approval.test.ts`
-  - `pnpm test:main:ai:human:p2 -- --profile custom --case human-tool-error-recovery --runs 3 --batch-id p2-2026-03-12-recovery-fix`
+  - `pnpm test:human:batch -- --profile custom --case human-tool-error-recovery --runs 3 --batch-id p2-2026-03-12-recovery-fix`
 - 报告路径：
   - `tests/report/main-ai-human/batches/p2-2026-03-12-recovery-fix/batch-summary.md`
   - `tests/report/main-ai-human/batches/p2-2026-03-12-recovery-fix/batch-summary.json`
@@ -251,7 +252,7 @@
   - `human 单任务` 的 `P2` 收敛可以视为完成；后续进入 `P3` 时，应重新生成一份干净的固定 case 集 baseline 再做 compare。
 - 下一轮优先级：
   1. 生成一份新的全量 `p2-default` batch，作为 `P3` compare 的正式 baseline。
-  2. 在下一次 prompt / skill / tool / model 变更后执行 `pnpm test:main:ai:human:p3:compare -- --before <batchId> --after <batchId>`。
+  2. 在下一次 prompt / skill / tool / model 变更后执行 `pnpm test:human:compare -- --before <batchId> --after <batchId>`。
   3. 若继续做质量优化，重点收敛 `human-tool-error-recovery` 的重复调用成本，而不是再扩充覆盖面。
 
 ### 阶段专题结论（按需）
@@ -270,7 +271,7 @@
 - 时间：2026-03-12 18:12（本地）
 - 阶段：human 单任务
 - 执行命令：
-  - `pnpm test:main:ai:human:p2 -- --runs 5 --batch-id p2-2026-03-12`
+  - `pnpm test:human:batch -- --runs 5 --batch-id p2-2026-03-12`
   - `node scripts/human-report-analyzer.mjs`
 - 报告路径：
   - `tests/report/main-ai-human/batches/p2-2026-03-12/batch-summary.md`
@@ -313,9 +314,9 @@
 - 阶段：human 单任务
 - 执行命令：
   - `pnpm exec vitest --config vitest.ai.config.mts run tests/main/ai/human/human.local-kb-answer.live.test.ts tests/main/ai/human/human.local-kb-empty-result.live.test.ts tests/main/ai/human/human.workspace-missing.live.test.ts tests/main/ai/human/human.multi-skill-kb-then-shell.live.test.ts tests/main/ai/human/human.tool-error-recovery.live.test.ts`
-  - `pnpm test:main:ai:human`
+  - `pnpm test:human`
   - `pnpm exec vitest --config vitest.ai.config.mts run tests/main/ai/human/human.workspace-missing.live.test.ts`
-  - `pnpm test:main:ai:human:analyze`
+  - `pnpm test:human:analyze`
 - 报告路径：
   - `tests/report/main-ai-human/**`
   - `tests/report/main-ai-human/human-assessment.md`
@@ -331,7 +332,7 @@
 - 风险与边界：
   - `human-docx-edit`、`human-local-kb-answer`、`human-multi-skill-kb-then-shell` 历史成功率仍未到完全稳定，assessment 里分别是 `71.43% / 75.00% / 75.00%`。
   - `human-tool-error-recovery` 已能稳定完成，但始终属于 `soft_pass`，说明恢复路径成本仍偏高。
-  - 全量 `pnpm test:main:ai:human` 中 `human-workspace-missing-block` 出现过一次 `240s` 超时；同日单独重跑通过，当前更像 live 模型长尾而非用例语义错误。
+  - 全量 `pnpm test:human` 中 `human-workspace-missing-block` 出现过一次 `240s` 超时；同日单独重跑通过，当前更像 live 模型长尾而非用例语义错误。
 - 推进决策：
   - 允许把 `human 单任务` 阶段推进到“P1 覆盖已具备，后续重点转稳定性与升级验证”。
 - 下一轮优先级：
@@ -355,9 +356,9 @@
 - 时间：2026-03-12 17:09（本地）
 - 阶段：human 单任务
 - 执行命令：
-  - `pnpm test:main:ai:human`
+  - `pnpm test:human`
   - `pnpm exec vitest --config vitest.ai.config.mts run tests/main/ai/human/human.read-workspace-file.live.test.ts tests/main/ai/human/human.approval-denied.live.test.ts tests/main/ai/human/human.docx-edit.live.test.ts`
-  - `pnpm test:main:ai:human:analyze`
+  - `pnpm test:human:analyze`
 - 报告路径：
   - `tests/report/main-ai-human/**`
   - `tests/report/main-ai-human/human-assessment.md`

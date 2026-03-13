@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'vitest'
-import type { HumanTaskOutput } from '../../../../src/shared/types'
-import { createDirectHumanExecNode } from '../../../../src/main/services/ai/node/main/directHumanExecNode'
-import { createPlanExecNode } from '../../../../src/main/services/ai/node/main/planExecNode'
-import { createSynthesisHumanNode } from '../../../../src/main/services/ai/node/main/synthesisHumanNode'
-import type { AiRunState } from '../../../../src/main/services/ai/types'
-import { createTestAiRunContext } from '../../../harness/main/contextFactory'
-import { EventCollector } from '../../../harness/main/eventCollector'
+import type { HumanTaskOutput } from '../../../../../src/shared/types'
+import { createDirectHumanExecNode } from '../../../../../src/main/services/ai/node/main/directHumanExecNode'
+import { createPlanExecNode } from '../../../../../src/main/services/ai/node/main/planExecNode'
+import { createSynthesisHumanNode } from '../../../../../src/main/services/ai/node/main/synthesisHumanNode'
+import type { AiRunState } from '../../../../../src/main/services/ai/types'
+import { createTestAiRunContext } from '../../../../harness/main/contextFactory'
+import { EventCollector } from '../../../../harness/main/eventCollector'
 
 const createBaseState = (): AiRunState => ({
   runId: 'run-test',

@@ -8,7 +8,7 @@ description: 当任务涉及测试架构、测试脚本、test harness、报告�
 再按任务需要继续阅读：
 
 - `doc/testing/architecture.md`
-  - 测试分层、catalog 真相源、报告消费顺序、执行入口
+  - 测试分层、managed/unit 边界、catalog 真相源、报告消费顺序、执行入口
 - `doc/testing/case-governance.md`
   - metadata、保留层级、生命周期、运行策略与归档规则
 - `doc/testing/phased-plan.md`

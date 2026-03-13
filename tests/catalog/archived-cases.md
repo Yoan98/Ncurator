@@ -1,9 +1,10 @@
 # Archived Test Cases
 
-- generatedAt: 2026-03-13T06:53:27.951Z
+- generatedAt: 2026-03-13T07:46:53.165Z
 
 | Case | Suite | Lifecycle | Replacement | Reason |
 | --- | --- | --- | --- | --- |
+| chat-failure-report-contract | e2e-chat | archived | none | 失败报告结构契约元测试会长期制造 failed/failed 噪音，已退出当前 active case 集。 |
 | chat-approval-required | e2e-chat | archived | workbench-chat-approval-required | 旧 Chat 页面审批路径已由工作台路径覆盖。 |
 | chat-docx-draft-lifecycle-panel | renderer-chat-contract | archived | chat-draft-review-flow | 旧草稿生命周期面板用例已并入新的草稿审阅流 contract 覆盖。 |
 | chat-plan-artifact-rendering | e2e-chat | archived | workbench-chat-plan-artifact-rendering | 旧 Chat 计划渲染路径已收敛到工作台 deterministic 链路。 |

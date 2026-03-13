@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest'
-import type { HumanStepRecord } from '../../../../src/shared/types'
-import { createHumanResponseNode } from '../../../../src/main/services/ai/node/human/responseNode'
-import type { HumanRunState } from '../../../../src/main/services/ai/node/human/types'
-import { createTestAiRunContext } from '../../../harness/main/contextFactory'
-import { EventCollector } from '../../../harness/main/eventCollector'
+import type { HumanStepRecord } from '../../../../../src/shared/types'
+import { createHumanResponseNode } from '../../../../../src/main/services/ai/node/human/responseNode'
+import type { HumanRunState } from '../../../../../src/main/services/ai/node/human/types'
+import { createTestAiRunContext } from '../../../../harness/main/contextFactory'
+import { EventCollector } from '../../../../harness/main/eventCollector'
 
 const invokeMock = vi.fn()
 const streamMock = vi.fn()
 
-vi.mock('../../../../src/main/services/llm/chatModel', () => ({
+vi.mock('../../../../../src/main/services/llm/chatModel', () => ({
   createChatModel: () => ({
     invoke: invokeMock,
     stream: streamMock

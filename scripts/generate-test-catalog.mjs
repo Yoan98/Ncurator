@@ -50,7 +50,13 @@ const listTestFiles = async (root) => {
     for (const entry of entries) {
       const fullPath = path.join(dir, entry.name)
       if (entry.isDirectory()) {
-        if (fullPath === REPORT_ROOT || fullPath === CATALOG_ROOT || fullPath.includes('/harness/') || fullPath.includes('/fixtures/')) {
+        if (
+          fullPath === REPORT_ROOT ||
+          fullPath === CATALOG_ROOT ||
+          fullPath.includes('/harness/') ||
+          fullPath.includes('/fixtures/') ||
+          fullPath.includes('/unit/')
+        ) {
           continue
         }
         await walk(fullPath)

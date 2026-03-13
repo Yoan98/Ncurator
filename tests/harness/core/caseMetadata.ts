@@ -44,7 +44,7 @@ export type UiCaseSuite = (typeof UI_CASE_SUITES)[number]
 
 export type SupportedCaseSuite = MainCaseSuite | UiCaseSuite
 
-export type CatalogProfileId = 'p2-default'
+export type CatalogProfileId = 'human-default'
 
 export type SharedCaseMetadata = {
   caseId: string

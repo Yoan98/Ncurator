@@ -1,5 +1,11 @@
 export const ARCHIVED_CASE_RECORDS = [
   {
+    caseId: 'chat-failure-report-contract',
+    suite: 'e2e-chat',
+    lifecycle: 'archived',
+    reason: '失败报告结构契约元测试会长期制造 failed/failed 噪音，已退出当前 active case 集。'
+  },
+  {
     caseId: 'chat-approval-required',
     suite: 'e2e-chat',
     lifecycle: 'archived',

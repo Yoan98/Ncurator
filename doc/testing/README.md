@@ -4,13 +4,14 @@
 
 当前测试真相链：
 
-1. `tests/**`
+1. `tests/main/**`、`tests/renderer/**`、`tests/e2e/**`
 2. `tests/catalog/current-cases.json`
 3. `tests/report/**`
 
 说明：
 
-- `tests/**` 是可运行 case 与 metadata 的唯一源码真相源。
+- `tests/main/**`、`tests/renderer/**`、`tests/e2e/**` 是 managed case 与 metadata 的唯一源码真相源。
+- `tests/unit/**` 保存非 catalog 的普通单测，不属于 current active case 集。
 - `tests/catalog/current-cases.json` 是 AI、脚本与开发者读取当前 active case 集的统一入口。
 - `tests/catalog/current-cases.md` 是面向人工浏览的投影文件。
 - `tests/report/**` 只保存历史执行证据，不再定义当前 case inventory。
@@ -45,6 +46,7 @@
 ## 4. 维护规则
 
 - 任何需要确认“当前有哪些测试 case”的场景，都先读 `tests/catalog/current-cases.json` 或 `tests/catalog/current-cases.md`。
+- 日常主回归优先跑 `pnpm test:cases:gating`；普通单测单独跑 `pnpm test:unit`。
 - 不把 `tests/report/**` 目录结构当成当前 case 集，也不在 `doc/testing/**` 手工抄写 case 列表。
 - 若调整测试文档入口、catalog 路径或治理规则，必须同步更新：
   - [doc/README.md](/Users/test/work-space/NCurator-Desktop/doc/README.md)
@@ -52,3 +54,22 @@
   - [doc/reference/change-checklist.md](/Users/test/work-space/NCurator-Desktop/doc/reference/change-checklist.md)
   - [AGENTS.md](/Users/test/work-space/NCurator-Desktop/AGENTS.md)
   - [.codex/skills/testing/SKILL.md](/Users/test/work-space/NCurator-Desktop/.codex/skills/testing/SKILL.md)
+
+## 5. 常用运行命令
+
+- 主回归：`pnpm test:cases:gating`
+- 分层检查：`pnpm test:cases:drift`
+- 普通单测：`pnpm test:unit`
+- Main 全量 managed：`pnpm test:main`
+- Capability：`pnpm test:capability`
+- Capability 汇总：`pnpm test:capability:analyze`
+- Runtime：`pnpm test:runtime`
+- Human：`pnpm test:human`
+- Human 汇总：`pnpm test:human:analyze`
+- Human 批次：`pnpm test:human:batch -- --runs 5`
+- Human 对比：`pnpm test:human:compare -- --before <batchId> --after <batchId>`
+- Workspace service：`pnpm test:workspace:service`
+- Workspace migration：`pnpm test:workspace:migration`
+- Renderer：`pnpm test:renderer`
+- E2E deterministic：`pnpm test:e2e`
+- E2E ai-live：`pnpm test:e2e:ai-live`

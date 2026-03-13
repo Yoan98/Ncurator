@@ -49,6 +49,7 @@
 当涉及到目录规范、文件归位、模块分层时，请阅读 `doc/architecture/project-structure.md`
 当涉及到类型归属、边界解码、跨层类型治理时，请阅读 `doc/conventions/type-governance.md`
 当涉及到测试架构、测试脚本、测试报告与测试扩展时，请先阅读 `doc/testing/README.md`，再按索引进入 `doc/testing/architecture.md`、`doc/testing/case-governance.md`、`doc/testing/phased-plan.md` 与 `doc/testing/upgrade-journal.md`；当前 active case 清单以 `tests/catalog/current-cases.json` / `tests/catalog/current-cases.md` 为准，不要从 `tests/report/**` 目录反推
+`tests/main/**`、`tests/renderer/**`、`tests/e2e/**` 只放 managed case；`tests/unit/**` 只放普通单测，不进入 current active case 集
 当涉及到文档目录、canonical 文档、阅读路径或文档归档时，请阅读 `doc/reference/source-of-truth.md` 与 `doc/reference/change-checklist.md`
 
 ## 4. Type 分类与存放位置

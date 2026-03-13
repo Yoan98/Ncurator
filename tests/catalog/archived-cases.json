@@ -1,6 +1,15 @@
 {
-  "generatedAt": "2026-03-13T06:53:27.951Z",
+  "generatedAt": "2026-03-13T07:46:53.165Z",
   "archivedCases": [
+    {
+      "caseId": "chat-failure-report-contract",
+      "suite": "e2e-chat",
+      "lifecycle": "archived",
+      "reason": "失败报告结构契约元测试会长期制造 failed/failed 噪音，已退出当前 active case 集。",
+      "latestReport": null,
+      "latestStatus": null,
+      "latestRunAt": null
+    },
     {
       "caseId": "chat-approval-required",
       "suite": "e2e-chat",

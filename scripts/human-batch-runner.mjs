@@ -17,7 +17,7 @@ const QUALITY_GRADES = [
   'unknown'
 ]
 
-const DEFAULT_PROFILES = ['p2-default']
+const DEFAULT_PROFILES = ['human-default']
 
 const printUsage = () => {
   process.stdout.write(
@@ -25,7 +25,7 @@ const printUsage = () => {
       'Usage: node scripts/human-batch-runner.mjs [options]',
       '',
       'Options:',
-      '  --profile <name>       Case profile to run. Default: p2-default',
+      '  --profile <name>       Case profile to run. Default: human-default',
       '  --case <caseId>        Add one case id manually. Can be repeated.',
       '  --runs <count>         Runs per case. Default: 5',
       '  --batch-id <id>        Output batch id. Default: timestamp',
@@ -124,7 +124,7 @@ const resolveProfileCaseIds = async (profileId) => {
 
 const parseArgs = (argv) => {
   const options = {
-    profile: 'p2-default',
+    profile: 'human-default',
     caseIds: [],
     runs: 5,
     batchId: '',

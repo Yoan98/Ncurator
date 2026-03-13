@@ -2,6 +2,12 @@
 
 本文件定义测试用例如何进入 current catalog、如何长期保留、何时降级以及何时归档。
 
+补充边界：
+
+- 只有 managed case 会进入 current / archived catalog。
+- managed case 只能放在 `tests/main/**`、`tests/renderer/**`、`tests/e2e/**`。
+- `tests/unit/**` 用于普通单测，不参与 current case 治理。
+
 ## 1. 统一 metadata
 
 每个受治理 case 都必须在测试源码里显式声明 metadata。
@@ -135,6 +141,11 @@
 
 - 先标成 `diagnostic` 或 `live-eval`
 - 不要默认升成 `canonical`
+
+如果只是内部节点、prompt builder、纯函数或局部状态转换验证：
+
+- 放到 `tests/unit/**`
+- 不要为了进入 catalog 人为包装成 managed case
 
 ## 7. 晋升与降级
 

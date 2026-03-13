@@ -19,7 +19,7 @@
 | 数据库 / 存储 | `doc/architecture/database.md` | `src/main/services/storage/core/LanceDbCore.ts`、`src/main/services/storage/StorageService.ts`、`src/main/services/storage/domains/*.ts` | 文档未覆盖时以 storage code 为最终真相源 |
 | 类型治理 | `doc/conventions/type-governance.md` | `src/shared/**`、`src/main/**/types.ts`、`src/renderer/src/**/types.ts` | 关注类型归属与边界收敛 |
 | UI 样式 | `doc/conventions/ui-style.md` | `src/renderer/src/**` | 文档规范优先，具体实现以现有 design language 为准 |
-| 测试体系 | `doc/testing/README.md` | `tests/**`、`tests/catalog/current-cases.json`、测试配置文件 | 当前 active case 以 catalog 为准；`tests/report/**` 只保存历史证据 |
+| 测试体系 | `doc/testing/README.md` | `tests/main/**`、`tests/renderer/**`、`tests/e2e/**`、`tests/unit/**`、`tests/catalog/current-cases.json`、测试配置文件 | 当前 active case 以 catalog 为准；`tests/unit/**` 不属于 current case；`tests/report/**` 只保存历史证据 |
 
 ## 3. 冲突处理
 

@@ -19,7 +19,7 @@ const CASE_METADATA = {
   lifecycle: 'active',
   runPolicy: 'batch_only',
   capabilityArea: 'human-live',
-  profiles: ['p2-default']
+  profiles: ['human-default']
 } as const
 
 describe('human', () => {

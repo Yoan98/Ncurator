@@ -1,17 +1,16 @@
 # Current Test Cases
 
-- generatedAt: 2026-03-13T06:53:27.950Z
+- generatedAt: 2026-03-13T07:46:53.163Z
 
 ## e2e-chat
 
 | Case | Retention | Lifecycle | Run Policy | Latest | Source |
 | --- | --- | --- | --- | --- | --- |
-| chat-failure-report-contract | coverage | active | gating | failed/failed | tests/e2e/chat/deterministic/chat.failure-report-contract.test.ts |
-| workbench-chat-approval-required | canonical | active | gating | passed/completed | tests/e2e/chat/deterministic/chat.fixture-flows.e2e.test.ts |
-| workbench-chat-plan-artifact-rendering | canonical | active | gating | passed/completed | tests/e2e/chat/deterministic/chat.fixture-flows.e2e.test.ts |
-| workbench-chat-review-commit-flow | canonical | active | gating | passed/completed | tests/e2e/chat/deterministic/chat.review-flow.e2e.test.ts |
-| workbench-chat-review-conflict-flow | canonical | active | gating | passed/completed | tests/e2e/chat/deterministic/chat.review-flow.e2e.test.ts |
-| workbench-chat-workspace-required | canonical | active | gating | passed/completed | tests/e2e/chat/deterministic/chat.fixture-flows.e2e.test.ts |
+| workbench-chat-approval-required | canonical | active | gating | failed/failed | tests/e2e/chat/deterministic/chat.fixture-flows.e2e.test.ts |
+| workbench-chat-plan-artifact-rendering | canonical | active | gating | failed/failed | tests/e2e/chat/deterministic/chat.fixture-flows.e2e.test.ts |
+| workbench-chat-review-commit-flow | canonical | active | gating | failed/failed | tests/e2e/chat/deterministic/chat.review-flow.e2e.test.ts |
+| workbench-chat-review-conflict-flow | canonical | active | gating | failed/failed | tests/e2e/chat/deterministic/chat.review-flow.e2e.test.ts |
+| workbench-chat-workspace-required | canonical | active | gating | failed/failed | tests/e2e/chat/deterministic/chat.fixture-flows.e2e.test.ts |
 
 ## e2e-chat-ai-live
 
@@ -23,13 +22,13 @@
 
 | Case | Retention | Lifecycle | Run Policy | Latest | Source |
 | --- | --- | --- | --- | --- | --- |
-| import-workspace-create-scan-prepare | canonical | active | gating | passed/completed | tests/e2e/import/deterministic/import.workspace-flow.e2e.test.ts |
+| import-workspace-create-scan-prepare | canonical | active | gating | failed/failed | tests/e2e/import/deterministic/import.workspace-flow.e2e.test.ts |
 
 ## e2e-search
 
 | Case | Retention | Lifecycle | Run Policy | Latest | Source |
 | --- | --- | --- | --- | --- | --- |
-| workbench-search-source-scope-results | canonical | active | gating | passed/completed | tests/e2e/search/deterministic/search.scope-results.e2e.test.ts |
+| workbench-search-source-scope-results | canonical | active | gating | failed/failed | tests/e2e/search/deterministic/search.scope-results.e2e.test.ts |
 
 ## main-ai-capability
 
@@ -38,7 +37,7 @@
 | docx-apply-ops-replace-text | canonical | active | gating | passed/completed | tests/main/ai/capability/docx.apply-ops-replace-text.test.ts |
 | docx-complex-edit-flow | canonical | active | gating | passed/completed | tests/main/ai/capability/docx.complex-edit-flow.test.ts |
 | docx-image-preservation-regression | canonical | active | gating | passed/completed | tests/main/ai/capability/docx.image-preservation-regression.test.ts |
-| docx-large-mixed-regression | canonical | active | gating | passed/completed | tests/main/ai/capability/docx.large-docx-regression.test.ts |
+| docx-large-mixed-regression | canonical | active | gating | failed/completed | tests/main/ai/capability/docx.large-docx-regression.test.ts |
 | docx-open-path-boundary-invalid-input | canonical | active | gating | passed/failed | tests/main/ai/capability/docx.boundary-validation.test.ts |
 | docx-peripheral-structure-regression | canonical | active | gating | passed/completed | tests/main/ai/capability/docx.peripheral-structure-regression.test.ts |
 | docx-preview-format-explicit-gap | coverage | active | non_gating | passed/failed | tests/main/ai/capability/docx.explicit-gap.test.ts |
@@ -48,7 +47,7 @@
 | docx-save-reopen-regression | canonical | active | gating | passed/completed | tests/main/ai/capability/docx.save-reopen-regression.test.ts |
 | docx-search-semantic-cached | coverage | active | non_gating | passed/completed | tests/main/ai/capability/docx.explicit-gap.test.ts |
 | docx-snapshot-history-rollback | canonical | active | gating | passed/completed | tests/main/ai/capability/docx.snapshot-rollback.test.ts |
-| docx-structural-op-invariance | canonical | active | gating | passed/completed | tests/main/ai/capability/docx.structural-op-invariance.test.ts |
+| docx-structural-op-invariance | canonical | active | gating | failed/completed | tests/main/ai/capability/docx.structural-op-invariance.test.ts |
 | docx-target-hyperlink-preservation | canonical | active | gating | passed/completed | tests/main/ai/capability/docx.target-hyperlink-preservation.test.ts |
 | retrieval-all-tools-boundary | canonical | active | gating | passed/completed | tests/main/ai/capability/retrieval.all-tools-boundary.test.ts |
 | retrieval-scope-filter | canonical | active | gating | passed/completed | tests/main/ai/capability/retrieval.scope-filter.test.ts |

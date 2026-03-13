@@ -59,6 +59,7 @@ tests/                   # 自动化测试（AI 测试等）
 
 - 测试顶层优先按运行边界分为 `tests/main/**`、`tests/renderer/**`、`tests/e2e/**`。
 - `tests/main/**` 用于 Main 进程/服务入口测试；建议继续按业务域细分，如 `ai / workspace / storage / web-source`。
+- `tests/main/**`、`tests/renderer/**`、`tests/e2e/**` 只放 managed case；需要进入 current catalog 的测试必须放在这三类目录中。
 - `tests/main/ai/capability/**` 放 AI tool/capability 级测试。
 - `tests/main/ai/runtime/**` 放 AI runtime、prompt contract、scope contract 等测试。
 - `tests/main/ai/human/**` 放 human 子图真实模型测试。
@@ -66,6 +67,7 @@ tests/                   # 自动化测试（AI 测试等）
 - `tests/main/<domain>/migration/**` 放迁移与清理边界测试。
 - `tests/renderer/**` 放页面/组件 contract 测试，不直接承载完整应用链路。
 - `tests/e2e/**` 放完整 Electron 应用链路测试；AI 探索式 UI 测试建议放在 `tests/e2e/<page>/ai-live/**`。
+- `tests/unit/**` 放普通单测，不进入 current catalog，也不写治理报告。
 - 共享测试输入优先放在 `tests/fixtures/**`，共享 harness 优先放在 `tests/harness/**`。
 - 结构化测试报告统一输出到 `tests/report/**`。
 - 测试环境变量模板放根目录 `.env-example`，本地实际配置放根目录 `.env`。

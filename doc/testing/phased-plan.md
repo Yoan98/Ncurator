@@ -12,7 +12,7 @@
 ## 1. 阶段顺序（能力先行）
 
 1. `tool capability`
-2. `human 单任务`
+2. `human`
 3. `main context`
 4. `plan 质量`
 5. `ai 架构验收`
@@ -36,7 +36,7 @@
   - `tests/report/main-ai-capability/**`
   - `doc/testing/upgrade-journal.md`（追加 `tool capability` 阶段记录与专题结论）
 
-### 2.2 `human 单任务`
+### 2.2 `human`
 
 - 目标：
   - human 子图在真实模型下完成单任务并正确收敛阻塞。
@@ -44,10 +44,10 @@
 - 主要用例目录：
   - `tests/main/ai/human/**`
 - 主要命令：
-  - `pnpm test:main:ai:human`
-  - `pnpm test:main:ai:human:analyze`
-  - `pnpm test:main:ai:human:p2 -- --runs 5`
-  - `pnpm test:main:ai:human:p3:compare -- --before <batchId> --after <batchId>`
+  - `pnpm test:human`
+  - `pnpm test:human:analyze`
+  - `pnpm test:human:batch -- --runs 5`
+  - `pnpm test:human:compare -- --before <batchId> --after <batchId>`
 - 阶段产物：
   - `tests/report/main-ai-human/**`
   - `tests/report/main-ai-human/human-assessment.md`
@@ -55,15 +55,15 @@
   - `tests/report/main-ai-human/compare/<before>-vs-<after>.md`
   - `doc/testing/upgrade-journal.md` 追加记录
 
-评估分层：
-- `P0` 基线回归：单次执行成功路径、阻塞路径与 fail-fast 门禁。
-- `P1` 覆盖扩展：补齐 local-kb、多 skill、workspace 缺失与恢复能力。
-- `P2` 评估批次：关键 case 执行 `5-10` 轮，检查通过率、软成功比例、工具错误恢复与重复调用。
-- `P3` 升级验证：固定用例集后，对 prompt/skill/tool/model 改动做前后对比。
+运行分层：
+- 单次回归：成功路径、阻塞路径与 fail-fast 门禁。
+- 覆盖扩展：补齐 local-kb、多 skill、workspace 缺失与恢复能力。
+- 稳定性批次：关键 case 执行 `5-10` 轮，检查通过率、软成功比例、工具错误恢复与重复调用。
+- 升级对比：固定用例集后，对 prompt/skill/tool/model 改动做前后对比。
 
 建议口径：
-- `P2` 默认固定 case 集：`human-docx-edit`、`human-local-kb-answer`、`human-multi-skill-kb-then-shell`、`human-tool-error-recovery`。
-- `P3` 以两个独立 batch 为输入，不直接拿全量历史 `human-assessment.md` 做前后对比，避免旧轮次污染成功率。
+- `human-default` 默认固定 case 集：`human-docx-edit`、`human-local-kb-answer`、`human-multi-skill-kb-then-shell`、`human-tool-error-recovery`。
+- 升级对比以两个独立 batch 为输入，不直接拿全量历史 `human-assessment.md` 做前后对比，避免旧轮次污染成功率。
 
 推进门槛：
 - 成功路径通过率至少 `80%`。

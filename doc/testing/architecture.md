@@ -34,7 +34,7 @@ tests/**                           # 可运行 case 与 metadata 源码
 tests/
   fixtures/                        # 共享输入样本
   harness/                         # suite 运行器、报告写入与辅助工具
-  main/                            # Main 入口测试
+  main/                            # managed Main case
     ai/
       capability/
       runtime/
@@ -42,14 +42,17 @@ tests/
     workspace/
       service/
       migration/
-  renderer/                        # React renderer contract 测试
-  e2e/                             # Electron 端到端测试
+  renderer/                        # managed React renderer contract case
+  e2e/                             # managed Electron 端到端 case
+  unit/                            # 非 catalog 的普通单测
   catalog/                         # 当前 / 归档 case 目录与归档记录
   report/                          # 历史执行证据
 ```
 
 说明：
 
+- `tests/main/**`、`tests/renderer/**`、`tests/e2e/**` 只放 managed case，参与 current catalog 生成。
+- `tests/unit/**` 只放普通单测，不进入 current catalog，也不写治理报告。
 - `tests/main/**` 覆盖 Main 服务入口、AI capability/runtime/human 与 workspace 逻辑。
 - `tests/renderer/**` 覆盖页面 contract，不要求启动完整 Electron。
 - `tests/e2e/**` 覆盖真实 `renderer -> preload -> main -> renderer` 链路。
@@ -87,7 +90,7 @@ Renderer contract 通过 `tests/harness/renderer/**` 统一挂载页面、注入
 
 ## 5. metadata 与 catalog
 
-每个受治理 case 都必须显式声明 metadata。当前最小治理字段包括：
+每个受治理 case 都必须显式声明 metadata，并且只能放在 managed roots（`tests/main/**`、`tests/renderer/**`、`tests/e2e/**`）。当前最小治理字段包括：
 
 - `description`
 - `scenarioTags`
@@ -112,12 +115,18 @@ catalog 清理命令：
 
 - `pnpm test:catalog:clean-reports`
 
+drift 检查命令：
+
+- `pnpm test:cases:drift`
+
 生成失败即视为治理失败，常见原因包括：
 
 - 缺少 metadata 字段
 - 非法枚举值
 - 重复 `caseId`
 - 报告目录存在未归档的 stale case
+- managed roots 中混入未进入 current catalog 的测试文件
+- `tests/unit/**` 中误放 managed metadata
 
 ## 6. 报告契约
 
@@ -166,10 +175,12 @@ catalog 清理命令：
 ## 8. 新增 case 的最小流程
 
 1. 在对应 suite 源码中声明 case 与完整 metadata。
+   - 若只是普通内部逻辑验证，改放 `tests/unit/**`，不要进入 managed roots。
 2. 选择正确的 `retentionTier / lifecycle / runPolicy / capabilityArea`。
 3. 补齐 fixtures、断言和报告信号。
 4. 运行 `pnpm test:catalog:generate`。
-5. 运行对应 suite 命令与相关 analyzer。
+5. 运行 `pnpm test:cases:drift`。
+6. 运行对应 suite 命令与相关 analyzer。
 6. 若影响阶段门禁或阶段结论，再更新：
    - [phased-plan.md](/Users/test/work-space/NCurator-Desktop/doc/testing/phased-plan.md)
    - [upgrade-journal.md](/Users/test/work-space/NCurator-Desktop/doc/testing/upgrade-journal.md)
