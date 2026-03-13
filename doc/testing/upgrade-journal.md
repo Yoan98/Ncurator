@@ -46,6 +46,98 @@
 
 ## 3. 历史记录
 
+## [2026-03-12] main context - 首轮 runtime baseline
+
+- 时间：2026-03-12 19:22（本地）
+- 阶段：main context
+- 执行命令：
+  - `pnpm test:main:ai:runtime`
+- 报告路径：
+  - `tests/report/main-ai-runtime/prompt-local-first-contract/2026-03-12_19:22:12/summary.md`
+  - `tests/report/main-ai-runtime/runtime-scope-validation/2026-03-12_19:22:12/summary.md`
+  - `tests/report/main-ai-runtime/source-scope-explicit-preserve/2026-03-12_19:22:12/summary.md`
+  - `tests/report/main-ai-runtime/runtime-missing-fixture-fail-fast/2026-03-12_19:22:12/summary.md`
+  - `tests/report/main-ai-runtime/human-result-data-enrichment/2026-03-12_19:22:12/summary.md`
+  - `tests/report/main-ai-runtime/docx-draft-review-ready/2026-03-12_19:22:12/summary.md`
+  - `tests/report/main-ai-runtime/docx-draft-review-conflict/2026-03-12_19:22:12/summary.md`
+  - `tests/report/main-ai-runtime/docx-draft-review-partial-commit/2026-03-12_19:22:12/summary.md`
+- 结果摘要：
+  - `main-ai-runtime` 套件首轮基线 `6/6` 文件、`8/8` 测试全部通过，未出现新的 runtime 契约回归。
+  - `runtime-scope-validation` 与 `source-scope-explicit-preserve` 继续通过，说明 main graph 的 context / scope 约束在当前代码下保持稳定。
+  - `prompt-local-first-contract` 与 `human-result-data-enrichment` 一并通过，说明刚完成的 human 收敛修复没有反向污染 runtime 契约。
+  - `runtime-missing-fixture-fail-fast` 继续通过，main context 入口的 fail-fast 门禁没有回退。
+  - `docx-draft-review-ready / conflict / partial-commit` 三条提交路径全部通过，当前 main context 相关 docx review 契约稳定。
+- 风险与边界：
+  - 这轮是 `main context` 的 contract/runtime 首轮基线，不是完整的 `plan 质量` 或端到端架构验收。
+  - 当前通过结果主要说明“上下文收集、scope 语义、fail-fast 门禁、docx draft review 契约”没有回归，不代表 main graph 的所有复杂计划路径都已验证。
+  - `human` 阶段遗留的 `soft_pass` 长尾仍然存在，但已经被隔离在后续 human compare / 质量优化中，不再阻塞 main context 启动。
+- 推进决策：
+  - `main context` 阶段现已正式启动且首轮 baseline 通过；下一步可继续在该阶段补充更贴近 main graph 的上下文/阻塞场景，或在无新增风险时进入 `plan 质量` 准备。
+- 下一轮优先级：
+  1. 盘点 `tests/main/ai/runtime/**` 中是否还缺少 main graph 上下文轮次、scope 降级或阻塞语义的补充 case。
+  2. 若近期继续改 human prompt / tool / skill，使用 `p2-default-2026-03-12-baseline-v3` 执行正式 `P3 compare`，避免把 human 回归带进 main context 阶段。
+  3. 若 main context 不再暴露新问题，开始整理 `plan 质量` 阶段的输入用例。
+
+### 阶段专题结论（按需）
+- 覆盖范围：
+  - 当前 `main context` 的默认 runtime 入口已经有一轮完整 green baseline，覆盖 scope、prompt、fail-fast、resultData 保真与 docx review 提交契约。
+- 能力边界：
+  - 这轮结果能证明 runtime 契约稳定，但还没有直接回答“计划拆解质量是否足够好”，因此不能把它替代 `plan 质量` 阶段。
+- 门槛判定：
+  - `main context` 已从“未开始”进入“已启动且首轮通过”。
+  - 现阶段没有证据表明需要回退到 `human 单任务`；human 后续以 `P3 compare` 作为变更守门即可。
+
+## [2026-03-12] human 单任务 - P3 baseline 就绪轮次（resultData 保真修复）
+
+- 时间：2026-03-12 19:20（本地）
+- 阶段：human 单任务
+- 执行命令：
+  - `pnpm exec vitest --config vitest.ai.config.mts run tests/main/ai/runtime/human.result-data-enrichment.test.ts`
+  - `pnpm test:main:ai:human:p2 -- --profile custom --case human-local-kb-answer --runs 5 --batch-id p2-2026-03-12-local-kb-after-resultdata-fix`
+  - `pnpm test:main:ai:human:p2 -- --batch-id p2-default-2026-03-12-baseline-v3`
+- 报告路径：
+  - `tests/report/main-ai-human/batches/p2-2026-03-12-local-kb-after-resultdata-fix/batch-summary.md`
+  - `tests/report/main-ai-human/batches/p2-default-2026-03-12-baseline-v3/batch-summary.md`
+  - `tests/report/main-ai-human/human-assessment.md`
+- 结果摘要：
+  - human `complete_task` 新增了基于 `lastObservation` 的 `resultData` 保真补偿：当 local-kb 返回唯一文档引用时，系统会回填或纠正 `document_name/document_id`，避免把 `atlas-notes.md / doc-atlas` 泛化成 `local-knowledge-base`。
+  - `human.result-data-enrichment` runtime 回归 `1/1` 通过。
+  - `human-local-kb-answer` 定向 batch `5/5` 全部 `hard_pass`，此前的文档名泛化问题未再复现。
+  - 新的全量 `p2-default-2026-03-12-baseline-v3` 已完整生成并可复用：四个关键 case 共 `20/20` 成功，`unexpected_block=0`、`harness_fail=0`。
+  - baseline-v3 结构如下：
+    - `human-docx-edit = 5/5 hard_pass`
+    - `human-local-kb-answer = 5/5 hard_pass`
+    - `human-multi-skill-kb-then-shell = 5/5`，其中 `hard=3 / soft=2`
+    - `human-tool-error-recovery = 5/5`，全部 `soft_pass`
+  - latest assessment 当前为：
+    - `human-docx-edit = 25/27 = 92.59%`
+    - `human-local-kb-answer = 26/27 = 96.30%`
+    - `human-multi-skill-kb-then-shell = 21/23 = 91.30%`
+    - `human-tool-error-recovery = 12/13 = 92.31%`
+    - `historicalSuccessfulRunRate = 91.30%`
+    - `latestUnexpectedBlockRate = 0.00%`
+- 风险与边界：
+  - `human-multi-skill-kb-then-shell` 虽然已经 `5/5` 成功，但仍存在 `soft_pass`，说明多 skill 收敛效率还没有完全硬化。
+  - `human-tool-error-recovery` 继续保持成功，但恢复成本仍稳定落在 `soft_pass`；`repeatedToolCalls / recoveryAfterError` 仍是后续质量优化重点，不再构成阶段门槛。
+  - `P3 compare` 现在已经具备干净 baseline 输入，但还没有“下一次变更后的 after batch”，因此不能写成“P3 compare 已执行完成”。
+- 推进决策：
+  - `human 单任务` 当前可视为完成 `P2` 收口并拿到正式 `P3` baseline；允许进入下一阶段测试，同时保留 `p2-default-2026-03-12-baseline-v3` 作为后续 human 变更 compare 的 `before` 输入。
+- 下一轮优先级：
+  1. 开始 `main context` 阶段测试，优先运行 `pnpm test:main:ai:runtime`，检查上下文收集、scope 语义与阻塞契约。
+  2. 下一次对 human prompt / skill / tool / model 再做改动后，执行 `pnpm test:main:ai:human:p3:compare -- --before p2-default-2026-03-12-baseline-v3 --after <newBatchId>`。
+  3. 若继续优化 human 质量，优先降低 `human-tool-error-recovery` 与 `human-multi-skill-kb-then-shell` 的 `soft_pass` 占比。
+
+### 阶段专题结论（按需）
+- 覆盖范围：
+  - `P2` 默认四 case 集合现在已有一份完整、干净、可复用的 baseline。
+  - local-kb、docx、多 skill、单次工具失败恢复四类成功路径都已重新在同一 batch 中落盘。
+- 能力边界：
+  - human 单任务的主要问题已经从“是否能完成任务”收缩为“恢复成本和多 skill 收敛成本是否还要继续优化”。
+  - 这意味着当前 human 结果已经足以支撑下一阶段测试，同时也为后续 human 升级保留了稳定的 compare 输入。
+- 门槛判定：
+  - `P3` 仍然是 human 单任务内部的最后一层验证机制。
+  - 截至 2026-03-12 这轮结果，`P3` 的正确表述应是“已具备 compare 前置条件并拿到正式 baseline”，而不是“compare 已执行完成”。
+
 ## [2026-03-12] human 单任务 - P3 baseline 预备轮次（prompt 收敛修正）
 
 - 时间：2026-03-12 19:04（本地）

@@ -12,6 +12,7 @@ import type { AiRunContext } from '../../types'
 import { buildHumanBrainPrompt } from '../../prompts/human/brain'
 import { humanStepDecisionSchema } from './decisionCodec'
 import { appendHumanStepRecord, emitHumanDiagnostic, emitHumanStep } from './events'
+import { enrichCompleteTaskResultData } from './resultData'
 import type { HumanObservation, HumanRunState, LoadedSkill } from './types'
 
 const MAX_HISTORY_ITEMS = 10
@@ -366,6 +367,10 @@ export const createHumanBrainNode = (input: { ctx: AiRunContext }) => {
     }
 
     if (decision.action === 'complete_task') {
+      const resultData = enrichCompleteTaskResultData({
+        resultData: decision.resultData,
+        lastObservation: state.lastObservation
+      })
       const activeToolNames = getActiveToolNames(state)
       const nextHistory = appendHumanStepRecord({
         history: state.stepHistory,
@@ -402,12 +407,12 @@ export const createHumanBrainNode = (input: { ctx: AiRunContext }) => {
           status: 'completed',
           code: 'ok',
           summary: decision.summary,
-          data: decision.resultData
+          data: resultData
         },
         stepHistory: nextHistory,
         summary: decision.summary,
         resultCode: 'ok',
-        resultData: decision.resultData
+        resultData
       }
     }
 
