@@ -18,6 +18,7 @@ import {
   type FixtureCopy
 } from './workspaceManager'
 import { writeCaseReport } from './reporter'
+import type { GovernedCaseMetadata } from '../core/caseMetadata'
 
 type CapabilityCaseRuntime = {
   runId: string
@@ -31,11 +32,12 @@ type CapabilityCaseRuntime = {
 type StructuredCaseInput<TResult> = {
   caseId: string
   description: string
-  requiredFixtures: string[]
+  requiredFixtures: readonly string[]
   fixtureCopies: FixtureCopy[]
+  caseMetadata: GovernedCaseMetadata
   approvalPolicy?: 'auto-approve' | 'deny-medium-high' | 'deny-all'
   expectedOutcome?: CaseExpectedOutcome
-  scenarioTags?: string[]
+  scenarioTags?: readonly string[]
   buildExecutionOutcome?: (
     result: TResult,
     runtime: CapabilityCaseRuntime
@@ -51,7 +53,9 @@ const runStructuredCase = async <TResult>(
   const runId = randomUUID()
   const taskId = `task-${input.caseId}`
   const startedAt = Date.now()
-  const notes: string[] = [input.description]
+  const caseDescription = input.caseMetadata?.description || input.description
+  const requiredFixtures = input.caseMetadata?.requiredFixtures || input.requiredFixtures
+  const notes: string[] = [caseDescription]
   const assertions: CaseAssertion[] = []
   const eventCollector = new EventCollector()
   let workspaceRoot = ''
@@ -64,7 +68,7 @@ const runStructuredCase = async <TResult>(
   let reportDir = ''
 
   try {
-    await assertRequiredFixtures(input.requiredFixtures)
+    await assertRequiredFixtures(requiredFixtures)
     workspaceRoot = await createIsolatedWorkspace(input.caseId)
     await copyFixturesIntoWorkspace(workspaceRoot, input.fixtureCopies)
     const ctx = createTestAiRunContext({
@@ -111,8 +115,16 @@ const runStructuredCase = async <TResult>(
       caseErrorCode,
       execution,
       signalOverrides: {
-        expectedOutcome: input.expectedOutcome,
-        scenarioTags: input.scenarioTags
+        expectedOutcome: input.caseMetadata?.expectedOutcome || input.expectedOutcome,
+        scenarioTags: input.caseMetadata?.scenarioTags || input.scenarioTags,
+        description: caseDescription,
+        requiredFixtures,
+        retentionTier: input.caseMetadata?.retentionTier,
+        lifecycle: input.caseMetadata?.lifecycle,
+        runPolicy: input.caseMetadata?.runPolicy,
+        capabilityArea: input.caseMetadata?.capabilityArea,
+        sourceFile: input.caseMetadata?.sourceFile,
+        profiles: input.caseMetadata?.profiles || []
       },
       assertions,
       events: eventCollector.snapshot(),

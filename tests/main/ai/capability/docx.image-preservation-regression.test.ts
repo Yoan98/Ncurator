@@ -12,6 +12,17 @@ import { readLatestCaseReportArtifacts } from '../../../harness/main/reportInspe
 const CASE_ID = 'docx-image-preservation-regression'
 const IMAGE_PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wn7n6QAAAAASUVORK5CYII='
+const CASE_METADATA = {
+  description:
+    '验证包含图片关系的 docx 在局部文本编辑后保存并重开，图片关系和目标文件仍然保持完整。',
+  expectedOutcome: 'success',
+  scenarioTags: ['docx', 'image-preservation', 'relationships', 'save-reopen'],
+  requiredFixtures: [],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'docx-tooling'
+} as const
 
 type JsonScalar = string | number | boolean | null
 type JsonValue = JsonScalar | JsonRecord | JsonValue[]
@@ -120,11 +131,11 @@ describe('capability/docx image preservation', () => {
   test('local text edits should preserve image relationships after save and reopen', async () => {
     await runCapabilityCase({
       caseId: CASE_ID,
-      description:
-        '验证包含图片关系的 docx 在局部文本编辑后保存并重开，图片关系和目标文件仍然保持完整。',
-      expectedOutcome: 'success',
-      scenarioTags: ['docx', 'image-preservation', 'relationships', 'save-reopen'],
-      requiredFixtures: [],
+      description: CASE_METADATA.description,
+      caseMetadata: CASE_METADATA,
+      expectedOutcome: CASE_METADATA.expectedOutcome,
+      scenarioTags: CASE_METADATA.scenarioTags,
+      requiredFixtures: CASE_METADATA.requiredFixtures,
       fixtureCopies: [],
       buildExecutionOutcome: (result) => {
         const validateResult = asRecord(result.validateResult)

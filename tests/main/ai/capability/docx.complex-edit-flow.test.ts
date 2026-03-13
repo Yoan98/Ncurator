@@ -8,6 +8,17 @@ import { recordAssertion } from '../../../harness/main/assertions'
 import { runCapabilityCase } from '../../../harness/main/capabilityCase'
 
 const FIXTURE_SOURCE = path.resolve(process.cwd(), 'tests/fixtures/main/docx/sample-edit.docx')
+const CASE_METADATA = {
+  description:
+    '验证 docx 复杂编辑链路：open -> outline -> get_block -> apply multi ops -> search -> preview -> save -> validate。',
+  expectedOutcome: 'success',
+  scenarioTags: ['docx', 'complex-edit', 'tool-chain'],
+  requiredFixtures: [FIXTURE_SOURCE],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'docx-tooling'
+} as const
 
 type JsonScalar = string | number | boolean | null
 
@@ -72,11 +83,11 @@ describe('capability/docx', () => {
   test('docx complex edit flow should support multi-op editing and full inspect-save-validate chain', async () => {
     await runCapabilityCase({
       caseId: 'docx-complex-edit-flow',
-      description:
-        '验证 docx 复杂编辑链路：open -> outline -> get_block -> apply multi ops -> search -> preview -> save -> validate。',
-      expectedOutcome: 'success',
-      scenarioTags: ['docx', 'complex-edit', 'tool-chain'],
-      requiredFixtures: [FIXTURE_SOURCE],
+      description: CASE_METADATA.description,
+      caseMetadata: CASE_METADATA,
+      expectedOutcome: CASE_METADATA.expectedOutcome,
+      scenarioTags: CASE_METADATA.scenarioTags,
+      requiredFixtures: CASE_METADATA.requiredFixtures,
       fixtureCopies: [{ from: FIXTURE_SOURCE, to: 'input.docx' }],
       buildExecutionOutcome: (result) => {
         const saveResult = asRecord(result.saveResult)

@@ -7,6 +7,7 @@ import {
   type UiAssertion,
   type UiExpectedOutcome
 } from '../e2e/reporter'
+import type { GovernedCaseMetadata, UiCaseSuite } from '../core/caseMetadata'
 
 type RendererConsoleEntry = {
   level: 'log' | 'warning' | 'error'
@@ -14,7 +15,7 @@ type RendererConsoleEntry = {
 }
 
 type RendererCaseInput = {
-  suite: string
+  suite: UiCaseSuite
   caseId: string
   apiMock: DesktopApiMock
   userActionSequence: string[]
@@ -23,8 +24,9 @@ type RendererCaseInput = {
   notes: string[]
   route?: string
   expectedOutcome?: UiExpectedOutcome
-  scenarioTags?: string[]
+  scenarioTags?: readonly string[]
   taskGoal?: string
+  caseMetadata: GovernedCaseMetadata
   screenshotRefs?: string[]
   traceRef?: string
   domRefs?: string[]
@@ -110,9 +112,17 @@ export const runRendererCase = async (input: RendererCaseInput): Promise<void> =
       screenshotRefs: input.screenshotRefs || [],
       traceRef: input.traceRef,
       domRefs: input.domRefs || ['dom/final.html'],
-      expectedOutcome: input.expectedOutcome,
-      scenarioTags: input.scenarioTags,
-      taskGoal: input.taskGoal
+      expectedOutcome: input.caseMetadata?.expectedOutcome || input.expectedOutcome,
+      scenarioTags: input.caseMetadata?.scenarioTags || input.scenarioTags,
+      taskGoal: input.caseMetadata?.taskGoal || input.taskGoal,
+      description: input.caseMetadata?.description,
+      requiredFixtures: input.caseMetadata?.requiredFixtures || [],
+      retentionTier: input.caseMetadata?.retentionTier,
+      lifecycle: input.caseMetadata?.lifecycle,
+      runPolicy: input.caseMetadata?.runPolicy,
+      capabilityArea: input.caseMetadata?.capabilityArea,
+      sourceFile: input.caseMetadata?.sourceFile,
+      profiles: input.caseMetadata?.profiles || []
     })
   }
 

@@ -16,6 +16,30 @@ const session: ChatSession = {
   created_at: 1
 }
 
+const APPROVE_CASE_METADATA = {
+  description: '验证 Chat 审批横幅在点击通过后会调用正确的 preload 审批接口。',
+  taskGoal: 'Approve an approval_required interruption from the Chat banner and verify the preload call payload.',
+  scenarioTags: ['renderer', 'chat', 'approval', 'approve'],
+  expectedOutcome: 'success',
+  requiredFixtures: [],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'chat-ui'
+} as const
+
+const DENY_CASE_METADATA = {
+  description: '验证 Chat 审批横幅在点击拒绝后会调用正确的 preload 审批接口。',
+  taskGoal: 'Deny an approval_required interruption from the Chat banner and verify the preload call payload.',
+  scenarioTags: ['renderer', 'chat', 'approval', 'deny'],
+  expectedOutcome: 'blocked',
+  requiredFixtures: [],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'chat-ui'
+} as const
+
 const renderAndStartRun = async () => {
   const apiMock = createDesktopApiMock({
     sessions: [session]
@@ -66,15 +90,16 @@ describe('chat.approval-flow', () => {
     await runRendererCase({
       suite: 'renderer-chat-contract',
       caseId: 'chat-approval-approve',
+      caseMetadata: APPROVE_CASE_METADATA,
       apiMock,
       userActionSequence,
       selectorFailures,
       assertions,
       notes,
       route: '#/',
-      expectedOutcome: 'success',
-      scenarioTags: ['renderer', 'chat', 'approval', 'approve'],
-      taskGoal: 'Approve an approval_required interruption from the Chat banner and verify the preload call payload.',
+      expectedOutcome: APPROVE_CASE_METADATA.expectedOutcome,
+      scenarioTags: APPROVE_CASE_METADATA.scenarioTags,
+      taskGoal: APPROVE_CASE_METADATA.taskGoal,
       body: async () => {
         await user.click(screen.getByTestId(chatSelectors.approvalApproveButton))
         userActionSequence.push('click:chat-approval-approve-button')
@@ -103,15 +128,16 @@ describe('chat.approval-flow', () => {
     await runRendererCase({
       suite: 'renderer-chat-contract',
       caseId: 'chat-approval-deny',
+      caseMetadata: DENY_CASE_METADATA,
       apiMock,
       userActionSequence,
       selectorFailures,
       assertions,
       notes,
       route: '#/',
-      expectedOutcome: 'blocked',
-      scenarioTags: ['renderer', 'chat', 'approval', 'deny'],
-      taskGoal: 'Deny an approval_required interruption from the Chat banner and verify the preload call payload.',
+      expectedOutcome: DENY_CASE_METADATA.expectedOutcome,
+      scenarioTags: DENY_CASE_METADATA.scenarioTags,
+      taskGoal: DENY_CASE_METADATA.taskGoal,
       body: async () => {
         await user.click(screen.getByTestId(chatSelectors.approvalDenyButton))
         userActionSequence.push('click:chat-approval-deny-button')

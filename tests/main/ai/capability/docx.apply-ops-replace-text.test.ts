@@ -5,6 +5,19 @@ import { recordAssertion } from '../../../harness/main/assertions'
 import { runCapabilityCase } from '../../../harness/main/capabilityCase'
 
 const FIXTURE_SOURCE = path.resolve(process.cwd(), 'tests/fixtures/main/docx/sample-edit.docx')
+const DOCX_CAPABILITY_BASE_METADATA = {
+  requiredFixtures: [FIXTURE_SOURCE],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'docx-tooling'
+} as const
+const CASE_METADATA = {
+  ...DOCX_CAPABILITY_BASE_METADATA,
+  description: '验证 docx 打开、搜索、replace_text、保存、校验的组合链路，并输出结构化报告。',
+  expectedOutcome: 'success',
+  scenarioTags: ['docx', 'edit-flow', 'replace-text']
+} as const
 
 type JsonRecord = Record<string, unknown>
 
@@ -25,11 +38,11 @@ describe('capability/docx', () => {
   test('docx_apply_ops replace_text should update content', async () => {
     await runCapabilityCase({
       caseId: 'docx-apply-ops-replace-text',
-      description:
-        '验证 docx 打开、搜索、replace_text、保存、校验的组合链路，并输出结构化报告。',
-      expectedOutcome: 'success',
-      scenarioTags: ['docx', 'edit-flow', 'replace-text'],
-      requiredFixtures: [FIXTURE_SOURCE],
+      description: CASE_METADATA.description,
+      caseMetadata: CASE_METADATA,
+      expectedOutcome: CASE_METADATA.expectedOutcome,
+      scenarioTags: CASE_METADATA.scenarioTags,
+      requiredFixtures: CASE_METADATA.requiredFixtures,
       fixtureCopies: [{ from: FIXTURE_SOURCE, to: 'input.docx' }],
       buildExecutionOutcome: (result) => {
         const save = asRecord(result.saveResult)

@@ -7,17 +7,30 @@ import { readLatestCaseReportArtifacts } from '../../../harness/main/reportInspe
 
 const FIXTURE_SOURCE = path.resolve(process.cwd(), 'tests/fixtures/main/workspace/human-input.txt')
 const CASE_ID = 'human-local-evidence-insufficient-block'
+const CASE_METADATA = {
+  description: '验证 human 在 workspace 中没有足够本地证据时阻塞收敛。',
+  taskGoal:
+    '请仅根据当前 workspace 中的本地文件，告诉我 input.txt 的作者姓名。如果本地证据不足，请阻塞并说明原因；不要猜测。只有在确认无误时才完成任务，且 resultData 必须包含 author 字段。',
+  scenarioTags: ['human', 'local-first', 'insufficient-evidence'],
+  expectedOutcome: 'blocked',
+  requiredFixtures: [FIXTURE_SOURCE],
+  retentionTier: 'live-eval',
+  lifecycle: 'active',
+  runPolicy: 'batch_only',
+  capabilityArea: 'human-live',
+  profiles: []
+} as const
 
 describe('human', () => {
   test.skipIf(!isLiveSuiteEnabled())('human 在本地证据不足时应阻塞而非猜测完成', async () => {
     await runHumanCase({
       caseId: CASE_ID,
-      description: '验证 human 在 workspace 中没有足够本地证据时阻塞收敛。',
-      objective:
-        '请仅根据当前 workspace 中的本地文件，告诉我 input.txt 的作者姓名。如果本地证据不足，请阻塞并说明原因；不要猜测。只有在确认无误时才完成任务，且 resultData 必须包含 author 字段。',
-      expectedOutcome: 'blocked',
-      scenarioTags: ['human', 'local-first', 'insufficient-evidence'],
-      requiredFixtures: [FIXTURE_SOURCE],
+      description: CASE_METADATA.description,
+      objective: CASE_METADATA.taskGoal,
+      caseMetadata: CASE_METADATA,
+      expectedOutcome: CASE_METADATA.expectedOutcome,
+      scenarioTags: CASE_METADATA.scenarioTags,
+      requiredFixtures: CASE_METADATA.requiredFixtures,
       fixtureCopies: [{ from: FIXTURE_SOURCE, to: 'input.txt' }],
       approvalPolicy: 'auto-approve',
       maxSteps: 8,

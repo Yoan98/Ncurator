@@ -7,6 +7,45 @@ import {
   type LaunchedElectronApp
 } from '../../../harness/e2e/electronApp'
 
+const PLAN_ARTIFACT_METADATA = {
+  description: '验证统一工作台能从真实 Electron 链路渲染 deterministic plan、时间线与 docx 产物检查器。',
+  taskGoal:
+    'Send an AI workbench request and verify the unified timeline plus artifact inspector render the deterministic fixture plan and docx preview.',
+  scenarioTags: ['e2e', 'chat', 'workbench', 'plan', 'artifact'],
+  expectedOutcome: 'success',
+  requiredFixtures: [],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'chat-ui'
+} as const
+
+const APPROVAL_METADATA = {
+  description: '验证统一工作台在真实 Electron 链路上处理 approval_required 并在批准后恢复执行。',
+  taskGoal:
+    'Trigger an approval-required AI run from the workbench, approve it, and verify the run resumes through the real Electron chain.',
+  scenarioTags: ['e2e', 'chat', 'workbench', 'approval'],
+  expectedOutcome: 'success',
+  requiredFixtures: [],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'chat-ui'
+} as const
+
+const WORKSPACE_METADATA = {
+  description: '验证统一工作台在 workspace_required 阻塞后补充 scope 并恢复 deterministic 执行。',
+  taskGoal:
+    'Trigger a workspace-required AI run, add a workbench scope, then continue the run and verify the deterministic fixture resumes.',
+  scenarioTags: ['e2e', 'chat', 'workbench', 'workspace'],
+  expectedOutcome: 'success',
+  requiredFixtures: [],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'chat-ui'
+} as const
+
 const openWorkbenchPage = async (
   appPage: LaunchedElectronApp['page'],
   userActionSequence: string[]
@@ -47,8 +86,6 @@ describe('chat.fixture-flows.e2e', () => {
     const selectorFailures: string[] = []
     const assertions: UiAssertion[] = []
     const notes: string[] = []
-    const taskGoal =
-      'Send an AI workbench request and verify the unified timeline plus artifact inspector render the deterministic fixture plan and docx preview.'
     let runtimeError: Error | null = null
 
     try {
@@ -85,6 +122,7 @@ describe('chat.fixture-flows.e2e', () => {
       app,
       suite: 'e2e-chat',
       caseId: 'workbench-chat-plan-artifact-rendering',
+      caseMetadata: PLAN_ARTIFACT_METADATA,
       startedAt,
       assertions,
       notes,
@@ -92,9 +130,9 @@ describe('chat.fixture-flows.e2e', () => {
       selectorFailures,
       executionStatus: runtimeError ? 'failed' : 'completed',
       executionResultCode: runtimeError ? 'runtime_exception' : 'ok',
-      expectedOutcome: 'success',
-      scenarioTags: ['e2e', 'chat', 'workbench', 'plan', 'artifact'],
-      taskGoal
+      expectedOutcome: PLAN_ARTIFACT_METADATA.expectedOutcome,
+      scenarioTags: PLAN_ARTIFACT_METADATA.scenarioTags,
+      taskGoal: PLAN_ARTIFACT_METADATA.taskGoal
     })
 
     app = null
@@ -110,8 +148,6 @@ describe('chat.fixture-flows.e2e', () => {
     const selectorFailures: string[] = []
     const assertions: UiAssertion[] = []
     const notes: string[] = []
-    const taskGoal =
-      'Trigger an approval-required AI run from the workbench, approve it, and verify the run resumes through the real Electron chain.'
     let runtimeError: Error | null = null
 
     try {
@@ -147,6 +183,7 @@ describe('chat.fixture-flows.e2e', () => {
       app,
       suite: 'e2e-chat',
       caseId: 'workbench-chat-approval-required',
+      caseMetadata: APPROVAL_METADATA,
       startedAt,
       assertions,
       notes,
@@ -154,9 +191,9 @@ describe('chat.fixture-flows.e2e', () => {
       selectorFailures,
       executionStatus: runtimeError ? 'failed' : 'completed',
       executionResultCode: runtimeError ? 'runtime_exception' : 'ok',
-      expectedOutcome: 'success',
-      scenarioTags: ['e2e', 'chat', 'workbench', 'approval'],
-      taskGoal
+      expectedOutcome: APPROVAL_METADATA.expectedOutcome,
+      scenarioTags: APPROVAL_METADATA.scenarioTags,
+      taskGoal: APPROVAL_METADATA.taskGoal
     })
 
     app = null
@@ -172,8 +209,6 @@ describe('chat.fixture-flows.e2e', () => {
     const selectorFailures: string[] = []
     const assertions: UiAssertion[] = []
     const notes: string[] = []
-    const taskGoal =
-      'Trigger a workspace-required AI run, add a workbench scope, then continue the run and verify the deterministic fixture resumes.'
     let runtimeError: Error | null = null
 
     try {
@@ -216,6 +251,7 @@ describe('chat.fixture-flows.e2e', () => {
       app,
       suite: 'e2e-chat',
       caseId: 'workbench-chat-workspace-required',
+      caseMetadata: WORKSPACE_METADATA,
       startedAt,
       assertions,
       notes,
@@ -223,9 +259,9 @@ describe('chat.fixture-flows.e2e', () => {
       selectorFailures,
       executionStatus: runtimeError ? 'failed' : 'completed',
       executionResultCode: runtimeError ? 'runtime_exception' : 'ok',
-      expectedOutcome: 'success',
-      scenarioTags: ['e2e', 'chat', 'workbench', 'workspace'],
-      taskGoal
+      expectedOutcome: WORKSPACE_METADATA.expectedOutcome,
+      scenarioTags: WORKSPACE_METADATA.scenarioTags,
+      taskGoal: WORKSPACE_METADATA.taskGoal
     })
 
     app = null

@@ -31,6 +31,19 @@ const workspaceScope: SourceScopeSelection = {
   }
 }
 
+const CASE_METADATA = {
+  description: '验证 Chat 在收到 workspace_required 阻塞后，可用已选 workspace scope 重新发起请求。',
+  taskGoal:
+    'Resume a Chat run after workspace_required by selecting a workspace scope and replaying the request.',
+  scenarioTags: ['renderer', 'chat', 'workspace-required'],
+  expectedOutcome: 'success',
+  requiredFixtures: [],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'chat-ui'
+} as const
+
 describe('chat.workspace-required', () => {
   it('restarts the request after a workspace-required interruption when a workspace scope is selected', async () => {
     const userActionSequence: string[] = []
@@ -83,15 +96,16 @@ describe('chat.workspace-required', () => {
     await runRendererCase({
       suite: 'renderer-chat-contract',
       caseId: 'chat-workspace-required',
+      caseMetadata: CASE_METADATA,
       apiMock,
       userActionSequence,
       selectorFailures,
       assertions,
       notes,
       route: '#/',
-      expectedOutcome: 'success',
-      scenarioTags: ['renderer', 'chat', 'workspace-required'],
-      taskGoal: 'Resume a Chat run after workspace_required by selecting a workspace scope and replaying the request.',
+      expectedOutcome: CASE_METADATA.expectedOutcome,
+      scenarioTags: CASE_METADATA.scenarioTags,
+      taskGoal: CASE_METADATA.taskGoal,
       body: async () => {
         await user.click(screen.getByTestId(chatSelectors.workspaceContinueButton))
         userActionSequence.push('click:chat-workspace-continue-button')

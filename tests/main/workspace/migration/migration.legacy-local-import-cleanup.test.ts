@@ -3,14 +3,28 @@ import { LegacyLocalImportMigration } from '../../../../src/main/services/storag
 import { recordAssertion } from '../../../harness/main/assertions'
 import { runWorkspaceMigrationCase } from '../../../harness/main/capabilityCase'
 
+const CASE_METADATA = {
+  description:
+    '验证旧本地导入迁移仅清理未绑定工作空间的 file documents，并保留网页资料与新模型文档。',
+  taskGoal: '确认 legacy local import migration 只删除未绑定 workspace 的旧 file documents，不误删仍在使用的资料。',
+  scenarioTags: ['workspace', 'migration', 'legacy-local-import', 'cleanup'],
+  expectedOutcome: 'success',
+  requiredFixtures: [],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'workspace'
+} as const
+
 describe('main/workspace/migration', () => {
   test('legacy local import migration should only delete unbound file documents', async () => {
     await runWorkspaceMigrationCase({
       caseId: 'migration-legacy-local-import-cleanup',
-      description: '验证旧本地导入迁移仅清理未绑定工作空间的 file documents，并保留网页资料与新模型文档。',
-      expectedOutcome: 'success',
-      scenarioTags: ['migration', 'legacy-local-import', 'cleanup'],
-      requiredFixtures: [],
+      description: CASE_METADATA.description,
+      caseMetadata: CASE_METADATA,
+      expectedOutcome: CASE_METADATA.expectedOutcome,
+      scenarioTags: CASE_METADATA.scenarioTags,
+      requiredFixtures: CASE_METADATA.requiredFixtures,
       fixtureCopies: [],
       buildExecutionOutcome: () => ({
         status: 'completed',

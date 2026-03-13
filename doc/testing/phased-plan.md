@@ -5,6 +5,8 @@
 
 关联文档：
 - 测试架构规则见 [architecture.md](/Users/test/work-space/NCurator-Desktop/doc/testing/architecture.md)
+- 用例治理规则见 [case-governance.md](/Users/test/work-space/NCurator-Desktop/doc/testing/case-governance.md)
+- 当前 active case 清单见 [current-cases.md](/Users/test/work-space/NCurator-Desktop/tests/catalog/current-cases.md)
 - 阶段执行结果与专题结论见 [upgrade-journal.md](/Users/test/work-space/NCurator-Desktop/doc/testing/upgrade-journal.md)
 
 ## 1. 阶段顺序（能力先行）
@@ -106,13 +108,15 @@
 ## 3. 当前阶段判定来源
 
 - 当前阶段、推进决策、下一阶段目标，以 [upgrade-journal.md](/Users/test/work-space/NCurator-Desktop/doc/testing/upgrade-journal.md) 最新记录为准。
+- 当前 active case inventory 以 [current-cases.json](/Users/test/work-space/NCurator-Desktop/tests/catalog/current-cases.json) 为准，不从 `tests/report/**` 目录反推。
 - 本文件不维护按日期的阶段快照，避免与持续汇总文档发生漂移。
 
 ## 4. 每轮测试结束后的固定动作
 
-1. 产出并检查 `tests/report/**` 结构化报告。
-2. 追加更新 [upgrade-journal.md](/Users/test/work-space/NCurator-Desktop/doc/testing/upgrade-journal.md)：
+1. 先运行 `pnpm test:catalog:generate`，确认当前 case catalog、latest report 与 archived 过滤结果有效。
+2. 产出并检查 `tests/report/**` 结构化报告。
+3. 追加更新 [upgrade-journal.md](/Users/test/work-space/NCurator-Desktop/doc/testing/upgrade-journal.md)：
    - 写明阶段、结果、风险、是否推进、下一轮优先级。
    - 在需要时补充该阶段专题结论（能力边界、显式缺口、门槛判定）。
-3. 仅当“允许推进”明确成立时，开始下一阶段测试。
-4. 仅当阶段顺序或门禁发生变化时，更新本文件。
+4. 仅当“允许推进”明确成立时，开始下一阶段测试。
+5. 仅当阶段顺序或门禁发生变化时，更新本文件。

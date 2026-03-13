@@ -8,6 +8,16 @@ import { runCapabilityCase } from '../../../harness/main/capabilityCase'
 import { readLatestCaseReportArtifacts } from '../../../harness/main/reportInspector'
 
 const CASE_ID = 'terminal-execution-trace-artifacts'
+const CASE_METADATA = {
+  description: '验证 terminal 执行成功/失败链路、terminal_step 事件与文件产物事件。',
+  expectedOutcome: 'success',
+  scenarioTags: ['terminal', 'trace', 'artifact', 'mixed-path'],
+  requiredFixtures: [],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'terminal-exec'
+} as const
 
 type JsonScalar = string | number | boolean | null
 
@@ -49,10 +59,11 @@ describe('capability/terminal', () => {
   test('terminal_run_command should expose success/failure traces and file artifact evidence', async () => {
     await runCapabilityCase({
       caseId: CASE_ID,
-      description: '验证 terminal 执行成功/失败链路、terminal_step 事件与文件产物事件。',
-      expectedOutcome: 'success',
-      scenarioTags: ['terminal', 'trace', 'artifact', 'mixed-path'],
-      requiredFixtures: [],
+      description: CASE_METADATA.description,
+      caseMetadata: CASE_METADATA,
+      expectedOutcome: CASE_METADATA.expectedOutcome,
+      scenarioTags: CASE_METADATA.scenarioTags,
+      requiredFixtures: CASE_METADATA.requiredFixtures,
       fixtureCopies: [],
       buildExecutionOutcome: (result) => {
         const okCode = asString(asRecord(result.okResult).code)

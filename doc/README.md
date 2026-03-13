@@ -29,7 +29,7 @@
   - [conventions/ui-style.md](/Users/test/work-space/NCurator-Desktop/doc/conventions/ui-style.md)
 - 类型治理、跨层归属和边界解码：
   - [conventions/type-governance.md](/Users/test/work-space/NCurator-Desktop/doc/conventions/type-governance.md)
-- 测试架构、阶段计划和测试汇总：
+- 测试架构、用例治理、阶段计划和测试汇总：
   - [testing/README.md](/Users/test/work-space/NCurator-Desktop/doc/testing/README.md)
 - 文档治理、canonical source 和变更同步：
   - [reference/source-of-truth.md](/Users/test/work-space/NCurator-Desktop/doc/reference/source-of-truth.md)

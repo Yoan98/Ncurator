@@ -24,6 +24,19 @@ type FailureArtifactsReport = {
   console: string
 }
 
+const CASE_METADATA = {
+  description: '验证 e2e Chat 失败报告能输出足够的结构化证据，供 AI 精准修复并重跑。',
+  taskGoal:
+    'Use this failed chat report to locate a missing right-panel render and rerun the same case after fixing it.',
+  scenarioTags: ['e2e', 'chat', 'failure-contract'],
+  expectedOutcome: 'success',
+  requiredFixtures: [],
+  retentionTier: 'coverage',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'chat-ui'
+} as const
+
 const readJson = async <T>(target: string): Promise<T> => {
   const raw = await readFile(target, 'utf8')
   return JSON.parse(raw) as T
@@ -56,9 +69,16 @@ describe('chat.failure-report-contract', () => {
       screenshotRefs: ['screenshots/failure.png'],
       traceRef: 'trace/trace.zip',
       domRefs: ['dom/final.html'],
-      expectedOutcome: 'success',
-      scenarioTags: ['e2e', 'chat', 'failure-contract'],
-      taskGoal: 'Use this failed chat report to locate a missing right-panel render and rerun the same case after fixing it.'
+      expectedOutcome: CASE_METADATA.expectedOutcome,
+      scenarioTags: CASE_METADATA.scenarioTags,
+      taskGoal: CASE_METADATA.taskGoal,
+      description: CASE_METADATA.description,
+      requiredFixtures: CASE_METADATA.requiredFixtures,
+      retentionTier: CASE_METADATA.retentionTier,
+      lifecycle: CASE_METADATA.lifecycle,
+      runPolicy: CASE_METADATA.runPolicy,
+      capabilityArea: CASE_METADATA.capabilityArea,
+      profiles: []
     })
 
     const [signals, metrics, artifacts, summary] = await Promise.all([

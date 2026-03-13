@@ -11,6 +11,19 @@ const CASE_ID = 'human-multi-skill-kb-then-shell'
 const DOCUMENT_ID = 'doc-workspace-hint'
 const DOCUMENT_NAME = 'input.txt'
 const EXPECTED_FIRST_LINE = 'Hello from human fixture.'
+const CASE_METADATA = {
+  description: '验证 human 在单任务中按 KB 提示切换到 workspace-shell 完成读取。',
+  taskGoal:
+    '我不知道要读取哪个 workspace 文件。请先从当前可访问的本地知识库找出需要读取的文件名，再在当前 workspace 中读取该文件的第一行。不要跳过本地知识库步骤。完成任务时 resultData 必须包含 source_file 和 first_line 字段。',
+  scenarioTags: ['human', 'multi-skill', 'local-kb', 'workspace-shell'],
+  expectedOutcome: 'success',
+  requiredFixtures: [FIXTURE_SOURCE],
+  retentionTier: 'live-eval',
+  lifecycle: 'active',
+  runPolicy: 'batch_only',
+  capabilityArea: 'human-live',
+  profiles: ['p2-default']
+} as const
 
 const buildSearchResult = (): SearchResult[] => [
   {
@@ -41,12 +54,12 @@ describe('human', () => {
   test.skipIf(!isLiveSuiteEnabled())('human 应能先经 local-kb 再用 workspace-shell 完成任务', async () => {
     await runHumanCase({
       caseId: CASE_ID,
-      description: '验证 human 在单任务中按 KB 提示切换到 workspace-shell 完成读取。',
-      objective:
-        '我不知道要读取哪个 workspace 文件。请先从当前可访问的本地知识库找出需要读取的文件名，再在当前 workspace 中读取该文件的第一行。不要跳过本地知识库步骤。完成任务时 resultData 必须包含 source_file 和 first_line 字段。',
-      expectedOutcome: 'success',
-      scenarioTags: ['human', 'multi-skill', 'local-kb', 'workspace-shell'],
-      requiredFixtures: [FIXTURE_SOURCE],
+      description: CASE_METADATA.description,
+      objective: CASE_METADATA.taskGoal,
+      caseMetadata: CASE_METADATA,
+      expectedOutcome: CASE_METADATA.expectedOutcome,
+      scenarioTags: CASE_METADATA.scenarioTags,
+      requiredFixtures: CASE_METADATA.requiredFixtures,
       fixtureCopies: [{ from: FIXTURE_SOURCE, to: 'input.txt' }],
       selectedDocumentIds: [DOCUMENT_ID],
       documentsStoreOverrides: {

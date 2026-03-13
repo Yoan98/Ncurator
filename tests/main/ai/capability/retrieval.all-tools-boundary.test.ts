@@ -18,6 +18,16 @@ type RetrievalCall = {
   sourceType: string
   documentIds: string[]
 }
+const CASE_METADATA = {
+  description: '验证 retrieval 四类工具的 limit/page 边界、sourceType 透传与 scope 交集/短路行为。',
+  expectedOutcome: 'success',
+  scenarioTags: ['retrieval', 'all-tools', 'bounds', 'scope-filter'],
+  requiredFixtures: [],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'local-retrieval'
+} as const
 
 const asSearchResultArray = (value: JsonValue | undefined): SearchResult[] => {
   if (!Array.isArray(value)) return []
@@ -38,10 +48,11 @@ describe('capability/retrieval', () => {
   test('retrieval tools should cover hybrid/vector/fts/list boundaries and strict scope behavior', async () => {
     await runCapabilityCase({
       caseId: 'retrieval-all-tools-boundary',
-      description: '验证 retrieval 四类工具的 limit/page 边界、sourceType 透传与 scope 交集/短路行为。',
-      expectedOutcome: 'success',
-      scenarioTags: ['retrieval', 'all-tools', 'bounds', 'scope-filter'],
-      requiredFixtures: [],
+      description: CASE_METADATA.description,
+      caseMetadata: CASE_METADATA,
+      expectedOutcome: CASE_METADATA.expectedOutcome,
+      scenarioTags: CASE_METADATA.scenarioTags,
+      requiredFixtures: CASE_METADATA.requiredFixtures,
       fixtureCopies: [],
       buildExecutionOutcome: () => ({
         status: 'completed',

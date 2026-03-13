@@ -2,9 +2,9 @@
 import { cp, mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
+import { listActiveCurrentCasesBySuite } from './lib/testCatalog.mjs'
 
 const SUITE = 'main-ai-human'
-const TEST_ROOT = path.resolve(process.cwd(), 'tests', 'main', 'ai', 'human')
 const REPORT_ROOT = path.resolve(process.cwd(), 'tests', 'report', SUITE)
 const BATCH_ROOT = path.join(REPORT_ROOT, 'batches')
 
@@ -17,14 +17,7 @@ const QUALITY_GRADES = [
   'unknown'
 ]
 
-const DEFAULT_PROFILES = {
-  'p2-default': [
-    'human-docx-edit',
-    'human-local-kb-answer',
-    'human-multi-skill-kb-then-shell',
-    'human-tool-error-recovery'
-  ]
-}
+const DEFAULT_PROFILES = ['p2-default']
 
 const printUsage = () => {
   process.stdout.write(
@@ -41,7 +34,7 @@ const printUsage = () => {
       '  --help                 Show this message.',
       '',
       'Built-in profiles:',
-      '  - p2-default'
+      ...DEFAULT_PROFILES.map((profileId) => `  - ${profileId}`)
     ].join('\n')
   )
 }
@@ -104,47 +97,29 @@ const readJson = async (filePath) => {
   return JSON.parse(raw)
 }
 
-const extractCaseIdsFromTestSource = (source) => {
-  const constantMap = new Map()
-  for (const match of source.matchAll(/const\s+([A-Z0-9_]+)\s*=\s*'([^']+)'/g)) {
-    constantMap.set(match[1], match[2])
-  }
-
-  const caseIds = new Set()
-  for (const match of source.matchAll(/caseId:\s*('([^']+)'|([A-Z0-9_]+))/g)) {
-    const literalValue = match[2]
-    const constantName = match[3]
-    if (literalValue) {
-      caseIds.add(literalValue)
-      continue
-    }
-    if (constantName && constantMap.has(constantName)) {
-      caseIds.add(constantMap.get(constantName))
-    }
-  }
-
-  return Array.from(caseIds)
-}
+const resolveCurrentHumanCases = async () => listActiveCurrentCasesBySuite(SUITE)
 
 const resolveCaseFileMap = async () => {
-  const entries = await readdir(TEST_ROOT, { withFileTypes: true })
+  const currentCases = await resolveCurrentHumanCases()
   const mapping = new Map()
 
-  for (const entry of entries) {
-    if (!entry.isFile() || !entry.name.endsWith('.test.ts')) continue
-    const filePath = path.join(TEST_ROOT, entry.name)
-    const source = await readFile(filePath, 'utf8')
-    const caseIds = extractCaseIdsFromTestSource(source)
-
-    for (const caseId of caseIds) {
-      if (mapping.has(caseId)) {
-        throw new Error(`duplicate human caseId mapping detected: ${caseId}`)
-      }
-      mapping.set(caseId, filePath)
+  for (const oneCase of currentCases) {
+    if (mapping.has(oneCase.caseId)) {
+      throw new Error(`duplicate human caseId mapping detected in current catalog: ${oneCase.caseId}`)
     }
+    mapping.set(oneCase.caseId, path.resolve(process.cwd(), oneCase.sourceFile))
   }
 
   return mapping
+}
+
+const resolveProfileCaseIds = async (profileId) => {
+  if (!profileId) return []
+  const currentCases = await resolveCurrentHumanCases()
+  return currentCases
+    .filter((item) => Array.isArray(item.profiles) && item.profiles.includes(profileId))
+    .map((item) => item.caseId)
+    .sort()
 }
 
 const parseArgs = (argv) => {
@@ -402,7 +377,10 @@ const main = async () => {
   }
 
   const caseFileMap = await resolveCaseFileMap()
-  const profileCaseIds = options.profile ? DEFAULT_PROFILES[options.profile] || [] : []
+  const profileCaseIds = await resolveProfileCaseIds(options.profile)
+  if (options.profile && profileCaseIds.length === 0 && options.caseIds.length === 0) {
+    throw new Error(`profile has no active human cases in current catalog: ${options.profile}`)
+  }
   const caseIds = Array.from(new Set([...profileCaseIds, ...options.caseIds])).sort()
 
   if (caseIds.length === 0) {

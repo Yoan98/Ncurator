@@ -367,10 +367,18 @@ const buildSignalsReport = (input: {
     runId: input.report.runId,
     taskId: input.report.taskId,
     expectedOutcome: input.report.signalOverrides?.expectedOutcome,
+    description: input.report.signalOverrides?.description,
     taskGoal: input.report.signalOverrides?.taskGoal,
     maxSteps: input.report.signalOverrides?.maxSteps,
     approvalPolicy: input.report.signalOverrides?.approvalPolicy,
     modelName: input.report.signalOverrides?.modelName,
+    requiredFixtures: input.report.signalOverrides?.requiredFixtures || [],
+    retentionTier: input.report.signalOverrides?.retentionTier,
+    lifecycle: input.report.signalOverrides?.lifecycle,
+    runPolicy: input.report.signalOverrides?.runPolicy,
+    capabilityArea: input.report.signalOverrides?.capabilityArea,
+    sourceFile: input.report.signalOverrides?.sourceFile,
+    profiles: input.report.signalOverrides?.profiles || [],
     scenarioTags: input.report.signalOverrides?.scenarioTags || [],
     toolSequence: inspected.toolSequence,
     toolCounts: inspected.toolCounts,
@@ -410,6 +418,9 @@ const buildSummaryMarkdown = (input: {
     assertions.failedAssertionIds.length > 0 ? assertions.failedAssertionIds.join(', ') : 'none'
   const scenarioTagText = signals.scenarioTags.length > 0 ? signals.scenarioTags.join(', ') : 'none'
   const resultDataKeysText = signals.resultDataKeys.length > 0 ? signals.resultDataKeys.join(', ') : 'none'
+  const requiredFixturesText =
+    signals.requiredFixtures.length > 0 ? signals.requiredFixtures.join(', ') : 'none'
+  const profilesText = signals.profiles.length > 0 ? signals.profiles.join(', ') : 'none'
   return [
     `# ${report.caseId}`,
     '',
@@ -424,10 +435,18 @@ const buildSummaryMarkdown = (input: {
     `- assertions: ${assertions.assertionPassed}/${assertions.assertionTotal}`,
     `- failedAssertionIds: ${failedAssertionText}`,
     `- qualityGrade: ${metrics.qualityGrade || 'unknown'}`,
+    `- description: ${signals.description || 'none'}`,
     `- toolSequence: ${toolSequenceText}`,
     `- skillActivationSequence: ${skillActivationText}`,
     `- scenarioTags: ${scenarioTagText}`,
     `- taskGoal: ${signals.taskGoal || 'none'}`,
+    `- requiredFixtures: ${requiredFixturesText}`,
+    `- retentionTier: ${signals.retentionTier || 'none'}`,
+    `- lifecycle: ${signals.lifecycle || 'none'}`,
+    `- runPolicy: ${signals.runPolicy || 'none'}`,
+    `- capabilityArea: ${signals.capabilityArea || 'none'}`,
+    `- sourceFile: ${signals.sourceFile || 'none'}`,
+    `- profiles: ${profilesText}`,
     `- maxSteps: ${signals.maxSteps ?? 'none'}`,
     `- modelName: ${signals.modelName || 'none'}`,
     `- resultDataKeys: ${resultDataKeysText}`,

@@ -9,6 +9,14 @@ import type {
   LLMConfig,
   RuntimeSkillId
 } from '../../../src/shared/types'
+import type {
+  CaseExpectedOutcome,
+  CaseLifecycle,
+  CaseMetadataSignalFields,
+  CaseRetentionTier,
+  CaseRunPolicy,
+  MainCaseSuite
+} from '../core/caseMetadata'
 
 export type ApprovalPolicy = 'auto-approve' | 'deny-medium-high' | 'deny-all'
 
@@ -35,12 +43,7 @@ export type CaseAssertion = {
   details?: string
 }
 
-export type CaseSuite =
-  | 'main-ai-capability'
-  | 'main-ai-runtime'
-  | 'main-ai-human'
-  | 'main-workspace-service'
-  | 'main-workspace-migration'
+export type CaseSuite = MainCaseSuite
 export type CaseStatus = 'passed' | 'failed'
 export type CaseErrorCode =
   | 'none'
@@ -49,7 +52,6 @@ export type CaseErrorCode =
   | 'assertion_failed'
   | 'runtime_exception'
 export type CaseExecutionStatus = 'completed' | 'blocked' | 'failed' | 'not_run' | 'unknown'
-export type CaseExpectedOutcome = 'success' | 'blocked' | 'explicit_gap' | 'failure'
 
 export type CaseExecutionOutcome = {
   status: CaseExecutionStatus
@@ -59,12 +61,20 @@ export type CaseExecutionOutcome = {
 }
 
 export type CaseSignalOverrides = {
-  scenarioTags?: string[]
+  scenarioTags?: readonly string[]
   expectedOutcome?: CaseExpectedOutcome
   taskGoal?: string
   maxSteps?: number
   approvalPolicy?: ApprovalPolicy
   modelName?: string
+  description?: string
+  requiredFixtures?: readonly string[]
+  retentionTier?: CaseRetentionTier
+  lifecycle?: CaseLifecycle
+  runPolicy?: CaseRunPolicy
+  capabilityArea?: string
+  sourceFile?: string
+  profiles?: CaseMetadataSignalFields['profiles']
 }
 
 export type CaseRuntimeMetrics = {
@@ -136,7 +146,15 @@ export type CaseSignalsReport = {
   maxSteps?: number
   approvalPolicy?: ApprovalPolicy
   modelName?: string
-  scenarioTags: string[]
+  description?: string
+  requiredFixtures: readonly string[]
+  retentionTier?: CaseRetentionTier
+  lifecycle?: CaseLifecycle
+  runPolicy?: CaseRunPolicy
+  capabilityArea?: string
+  sourceFile?: string
+  profiles: CaseMetadataSignalFields['profiles']
+  scenarioTags: readonly string[]
   toolSequence: string[]
   toolCounts: ToolCounts
   toolResultCodeCounts: ToolResultCodeCounts

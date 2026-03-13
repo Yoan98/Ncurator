@@ -16,6 +16,19 @@ const session: ChatSession = {
   created_at: 1
 }
 
+const CASE_METADATA = {
+  description: '验证统一工作台时间线和检查器能正确映射 plan、检索、产物和草稿审阅事件。',
+  taskGoal:
+    'Validate the unified workbench timeline and inspector mappings for plan, retrieval, artifact, and draft review events.',
+  scenarioTags: ['renderer', 'chat', 'workbench', 'timeline'],
+  expectedOutcome: 'success',
+  requiredFixtures: [],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'chat-ui'
+} as const
+
 const startRun = async (): Promise<ReturnType<typeof createDesktopApiMock>> => {
   const apiMock = createDesktopApiMock({
     sessions: [session]
@@ -101,16 +114,16 @@ describe('chat.right-panel-events', () => {
     await runRendererCase({
       suite: 'renderer-chat-contract',
       caseId: 'chat-right-panel-events',
+      caseMetadata: CASE_METADATA,
       apiMock,
       userActionSequence,
       selectorFailures,
       assertions,
       notes,
       route: '#/',
-      expectedOutcome: 'success',
-      scenarioTags: ['renderer', 'chat', 'workbench', 'timeline'],
-      taskGoal:
-        'Validate the unified workbench timeline and inspector mappings for plan, retrieval, artifact, and draft review events.',
+      expectedOutcome: CASE_METADATA.expectedOutcome,
+      scenarioTags: CASE_METADATA.scenarioTags,
+      taskGoal: CASE_METADATA.taskGoal,
       body: async () => {
         await replayAiRunEvents({
           mock: apiMock,

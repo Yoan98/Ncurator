@@ -6,6 +6,8 @@
 说明：
 - 原 `tool capability` 专项文档已并入本文件（2026-03-11）。
 - 后续不再维护独立的 `tool capability` 专项文档。
+- 当前 active case inventory 统一来自 `tests/catalog/current-cases.json` / `tests/catalog/current-cases.md`。
+- `tests/report/**` 在本文件中只作为历史证据路径引用，不再代表当前 case 集。
 
 ## 1. 使用方式
 

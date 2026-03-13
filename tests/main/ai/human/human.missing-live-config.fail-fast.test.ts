@@ -5,6 +5,18 @@ import { readLatestCaseReportArtifacts } from '../../../harness/main/reportInspe
 
 const CASE_ID = 'human-missing-live-config-fail-fast'
 const FIXTURE_SOURCE = path.resolve(process.cwd(), 'tests/fixtures/main/workspace/human-input.txt')
+const CASE_METADATA = {
+  description: '验证 human 缺失模型配置时 fail-fast 并输出可定位报告。',
+  taskGoal: '读取 input.txt 第一行并完成任务。',
+  scenarioTags: ['human', 'live-config', 'fail-fast'],
+  expectedOutcome: 'failure',
+  requiredFixtures: [FIXTURE_SOURCE],
+  retentionTier: 'coverage',
+  lifecycle: 'active',
+  runPolicy: 'manual',
+  capabilityArea: 'human-live',
+  profiles: []
+} as const
 
 const withClearedLiveEnv = async (run: () => Promise<void>): Promise<void> => {
   const backup = {
@@ -39,9 +51,12 @@ describe('human/regression', () => {
       await expect(
         runHumanCase({
           caseId: CASE_ID,
-          description: '验证 human 缺失模型配置时 fail-fast 并输出可定位报告。',
-          objective: '读取 input.txt 第一行并完成任务。',
-          requiredFixtures: [FIXTURE_SOURCE],
+          description: CASE_METADATA.description,
+          objective: CASE_METADATA.taskGoal,
+          caseMetadata: CASE_METADATA,
+          expectedOutcome: CASE_METADATA.expectedOutcome,
+          scenarioTags: CASE_METADATA.scenarioTags,
+          requiredFixtures: CASE_METADATA.requiredFixtures,
           fixtureCopies: [{ from: FIXTURE_SOURCE, to: 'input.txt' }],
           approvalPolicy: 'auto-approve',
           assert: async () => {}

@@ -8,17 +8,30 @@ import { readLatestCaseReportArtifacts } from '../../../harness/main/reportInspe
 const FIXTURE_SOURCE = path.resolve(process.cwd(), 'tests/fixtures/main/workspace/human-input.txt')
 const CASE_ID = 'human-tool-error-recovery'
 const EXPECTED_FIRST_LINE = 'Hello from human fixture.'
+const CASE_METADATA = {
+  description: '验证 human 在第一次 terminal 工具失败后能够恢复并完成任务。',
+  taskGoal:
+    '请在当前 workspace 中读取 input.txt 的第一行。若工具第一次执行失败，请根据错误继续恢复并完成任务；不要直接放弃。完成任务时 resultData 必须包含 first_line 字段。',
+  scenarioTags: ['human', 'recovery', 'tool-error'],
+  expectedOutcome: 'success',
+  requiredFixtures: [FIXTURE_SOURCE],
+  retentionTier: 'live-eval',
+  lifecycle: 'active',
+  runPolicy: 'batch_only',
+  capabilityArea: 'human-live',
+  profiles: ['p2-default']
+} as const
 
 describe('human', () => {
   test.skipIf(!isLiveSuiteEnabled())('human 在单次工具失败后应恢复完成任务', async () => {
     await runHumanCase({
       caseId: CASE_ID,
-      description: '验证 human 在第一次 terminal 工具失败后能够恢复并完成任务。',
-      objective:
-        '请在当前 workspace 中读取 input.txt 的第一行。若工具第一次执行失败，请根据错误继续恢复并完成任务；不要直接放弃。完成任务时 resultData 必须包含 first_line 字段。',
-      expectedOutcome: 'success',
-      scenarioTags: ['human', 'recovery', 'tool-error'],
-      requiredFixtures: [FIXTURE_SOURCE],
+      description: CASE_METADATA.description,
+      objective: CASE_METADATA.taskGoal,
+      caseMetadata: CASE_METADATA,
+      expectedOutcome: CASE_METADATA.expectedOutcome,
+      scenarioTags: CASE_METADATA.scenarioTags,
+      requiredFixtures: CASE_METADATA.requiredFixtures,
       fixtureCopies: [{ from: FIXTURE_SOURCE, to: 'input.txt' }],
       toolExecutionOverrides: [
         {

@@ -40,6 +40,30 @@ const webScope: SourceScopeSelection = {
   unpreparedFileCount: 0
 }
 
+const SEARCH_DEDUPED_METADATA = {
+  description: '验证 Search 页面加载 scope 候选后，会在发起搜索前去重选中范围的 documentIds。',
+  taskGoal: 'Load search scope candidates and verify selected scope documentIds are deduped before search invoke.',
+  scenarioTags: ['renderer', 'search', 'scope-selection'],
+  expectedOutcome: 'success',
+  requiredFixtures: [],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'search-ui'
+} as const
+
+const SEARCH_EMPTY_METADATA = {
+  description: '验证 Search 页面在未选择范围时发起查询，不会额外携带 documentIds。',
+  taskGoal: 'Submit search without selecting scope and verify documentIds are omitted.',
+  scenarioTags: ['renderer', 'search', 'scope-selection'],
+  expectedOutcome: 'success',
+  requiredFixtures: [],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'search-ui'
+} as const
+
 describe('search.scope-selection', () => {
   it('loads search-mode scopes and submits deduped document ids', async () => {
     const userActionSequence: string[] = []
@@ -59,15 +83,16 @@ describe('search.scope-selection', () => {
     await runRendererCase({
       suite: 'renderer-search-contract',
       caseId: 'search-scope-selection-deduped-documents',
+      caseMetadata: SEARCH_DEDUPED_METADATA,
       apiMock,
       userActionSequence,
       selectorFailures,
       assertions,
       notes,
       route: '#/',
-      expectedOutcome: 'success',
-      scenarioTags: ['renderer', 'search', 'scope-selection'],
-      taskGoal: 'Load search scope candidates and verify selected scope documentIds are deduped before search invoke.',
+      expectedOutcome: SEARCH_DEDUPED_METADATA.expectedOutcome,
+      scenarioTags: SEARCH_DEDUPED_METADATA.scenarioTags,
+      taskGoal: SEARCH_DEDUPED_METADATA.taskGoal,
       body: async () => {
         await waitFor(() => {
           expect(apiMock.calls.sourceScopeList.length).toBeGreaterThan(0)
@@ -125,15 +150,16 @@ describe('search.scope-selection', () => {
     await runRendererCase({
       suite: 'renderer-search-contract',
       caseId: 'search-scope-selection-empty-documents',
+      caseMetadata: SEARCH_EMPTY_METADATA,
       apiMock,
       userActionSequence,
       selectorFailures,
       assertions,
       notes,
       route: '#/',
-      expectedOutcome: 'success',
-      scenarioTags: ['renderer', 'search', 'scope-selection'],
-      taskGoal: 'Submit search without selecting scope and verify documentIds are omitted.',
+      expectedOutcome: SEARCH_EMPTY_METADATA.expectedOutcome,
+      scenarioTags: SEARCH_EMPTY_METADATA.scenarioTags,
+      taskGoal: SEARCH_EMPTY_METADATA.taskGoal,
       body: async () => {
         await waitFor(() => {
           expect(apiMock.calls.sourceScopeList.length).toBeGreaterThan(0)

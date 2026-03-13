@@ -6,6 +6,16 @@ import { recordAssertion } from '../../../harness/main/assertions'
 import { runCapabilityCase } from '../../../harness/main/capabilityCase'
 
 const FIXTURE_SOURCE = path.resolve(process.cwd(), 'tests/fixtures/main/docx/sample-edit.docx')
+const CASE_METADATA = {
+  description: '直接通过 capability registry 组合调用 retrieval/terminal/docx，验证跨能力协作证据。',
+  expectedOutcome: 'success',
+  scenarioTags: ['combo', 'manual-orchestration', 'tool-registry'],
+  requiredFixtures: [FIXTURE_SOURCE],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'tool-registry'
+} as const
 
 type JsonScalar = string | number | boolean | null
 
@@ -32,10 +42,11 @@ describe('capability/tool-registry combo', () => {
   test('manual orchestration across retrieval + terminal + docx should keep end-to-end tool evidence', async () => {
     await runCapabilityCase({
       caseId: 'tool-registry-manual-combo',
-      description: '直接通过 capability registry 组合调用 retrieval/terminal/docx，验证跨能力协作证据。',
-      expectedOutcome: 'success',
-      scenarioTags: ['combo', 'manual-orchestration', 'tool-registry'],
-      requiredFixtures: [FIXTURE_SOURCE],
+      description: CASE_METADATA.description,
+      caseMetadata: CASE_METADATA,
+      expectedOutcome: CASE_METADATA.expectedOutcome,
+      scenarioTags: CASE_METADATA.scenarioTags,
+      requiredFixtures: CASE_METADATA.requiredFixtures,
       fixtureCopies: [{ from: FIXTURE_SOURCE, to: 'input.docx' }],
       buildExecutionOutcome: (result) => {
         const retrievalCount = Number(result.retrievalCount || 0)

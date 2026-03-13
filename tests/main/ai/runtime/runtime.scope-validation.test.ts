@@ -10,14 +10,27 @@ import type { AiRunEvent, SourceScopeSelection, WebSourceRecord } from '../../..
 import { recordAssertion } from '../../../harness/main/assertions'
 import { runRuntimeCase } from '../../../harness/main/capabilityCase'
 
+const CASE_METADATA = {
+  description: '验证运行时范围校验、网页范围搜索限制和结构化阻塞事件。',
+  taskGoal: '确认 main runtime 在 scope 校验失败、网页资料未就绪和 workspace 绑定缺失时输出稳定的结构化问题信号。',
+  scenarioTags: ['runtime', 'scope-validation', 'web-scope'],
+  expectedOutcome: 'success',
+  requiredFixtures: [],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'ai-runtime'
+} as const
+
 describe('main/ai/runtime', () => {
   test('runtime scope validation should emit structured issues and keep web search scope strict', async () => {
     await runRuntimeCase({
       caseId: 'runtime-scope-validation',
-      description: '验证运行时范围校验、网页范围搜索限制和结构化阻塞事件。',
-      expectedOutcome: 'success',
-      scenarioTags: ['runtime', 'scope-validation', 'web-scope'],
-      requiredFixtures: [],
+      description: CASE_METADATA.description,
+      caseMetadata: CASE_METADATA,
+      expectedOutcome: CASE_METADATA.expectedOutcome,
+      scenarioTags: CASE_METADATA.scenarioTags,
+      requiredFixtures: CASE_METADATA.requiredFixtures,
       fixtureCopies: [],
       buildExecutionOutcome: () => ({
         status: 'completed',

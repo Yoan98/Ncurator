@@ -22,6 +22,7 @@ import {
   type FixtureCopy
 } from './workspaceManager'
 import { writeCaseReport } from './reporter'
+import type { GovernedCaseMetadata } from '../core/caseMetadata'
 
 type HumanRuntime = {
   runId: string
@@ -38,8 +39,9 @@ export const runHumanCase = async (input: {
   caseId: string
   description: string
   objective: string
-  requiredFixtures: string[]
+  requiredFixtures: readonly string[]
   fixtureCopies: FixtureCopy[]
+  caseMetadata: GovernedCaseMetadata
   bindWorkspace?: boolean
   selectedDocumentIds?: string[]
   documentsStoreOverrides?: TestDocumentsStoreOverrides
@@ -47,7 +49,7 @@ export const runHumanCase = async (input: {
   approvalPolicy?: 'auto-approve' | 'deny-medium-high' | 'deny-all'
   maxSteps?: number
   expectedOutcome?: CaseExpectedOutcome
-  scenarioTags?: string[]
+  scenarioTags?: readonly string[]
   assert: (result: HumanTaskOutput, runtime: HumanRuntime) => Promise<void>
 }): Promise<void> => {
   const runId = randomUUID()
@@ -55,7 +57,10 @@ export const runHumanCase = async (input: {
   const approvalPolicy = input.approvalPolicy || 'auto-approve'
   const maxSteps = input.maxSteps || 8
   const startedAt = Date.now()
-  const notes: string[] = [input.description]
+  const caseDescription = input.caseMetadata?.description || input.description
+  const taskGoal = input.caseMetadata?.taskGoal || input.objective
+  const requiredFixtures = input.caseMetadata?.requiredFixtures || input.requiredFixtures
+  const notes: string[] = [caseDescription]
   const assertions: CaseAssertion[] = []
   const eventCollector = new EventCollector()
   let workspaceRoot = ''
@@ -68,7 +73,7 @@ export const runHumanCase = async (input: {
   }
 
   try {
-    await assertRequiredFixtures(input.requiredFixtures)
+    await assertRequiredFixtures(requiredFixtures)
     const liveConfig = loadLiveLlmConfigFromEnv()
     modelName = liveConfig.model_name
     workspaceRoot = await createIsolatedWorkspace(input.caseId)
@@ -102,7 +107,7 @@ export const runHumanCase = async (input: {
     })
     const result = await runHumanTask({
       taskId,
-      objective: input.objective
+      objective: taskGoal
     }, {
       deliveryKind: 'handoff'
     })
@@ -139,12 +144,20 @@ export const runHumanCase = async (input: {
       caseErrorCode,
       execution,
       signalOverrides: {
-        expectedOutcome: input.expectedOutcome,
-        scenarioTags: input.scenarioTags,
-        taskGoal: input.objective,
+        expectedOutcome: input.caseMetadata?.expectedOutcome || input.expectedOutcome,
+        scenarioTags: input.caseMetadata?.scenarioTags || input.scenarioTags,
+        taskGoal,
         maxSteps,
         approvalPolicy,
-        modelName
+        modelName,
+        description: caseDescription,
+        requiredFixtures,
+        retentionTier: input.caseMetadata?.retentionTier,
+        lifecycle: input.caseMetadata?.lifecycle,
+        runPolicy: input.caseMetadata?.runPolicy,
+        capabilityArea: input.caseMetadata?.capabilityArea,
+        sourceFile: input.caseMetadata?.sourceFile,
+        profiles: input.caseMetadata?.profiles || []
       },
       assertions,
       events: eventCollector.snapshot(),

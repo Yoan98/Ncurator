@@ -9,6 +9,19 @@ import { readLatestCaseReportArtifacts } from '../../../harness/main/reportInspe
 
 const FIXTURE_SOURCE = path.resolve(process.cwd(), 'tests/fixtures/main/docx/sample-edit.docx')
 const CASE_ID = 'human-docx-edit'
+const CASE_METADATA = {
+  description: '验证 human 子图在真实模型下加载 docx skill 并完成 open/search/apply/save 流程。',
+  taskGoal:
+    '请修改当前 workspace 中的 input.docx：把文本 Hello 替换为 Hi from human，并保存为 output.docx。你可以按需加载能力；完成任务时 resultData 必须包含 out_path 字段。',
+  scenarioTags: ['human', 'docx', 'progressive-skill'],
+  expectedOutcome: 'success',
+  requiredFixtures: [FIXTURE_SOURCE],
+  retentionTier: 'live-eval',
+  lifecycle: 'active',
+  runPolicy: 'batch_only',
+  capabilityArea: 'human-live',
+  profiles: ['p2-default']
+} as const
 
 describe('human', () => {
   test.skipIf(!isLiveSuiteEnabled())(
@@ -16,12 +29,12 @@ describe('human', () => {
     async () => {
       await runHumanCase({
         caseId: CASE_ID,
-        description: '验证 human 子图在真实模型下加载 docx skill 并完成 open/search/apply/save 流程。',
-        objective:
-          '请修改当前 workspace 中的 input.docx：把文本 Hello 替换为 Hi from human，并保存为 output.docx。你可以按需加载能力；完成任务时 resultData 必须包含 out_path 字段。',
-        expectedOutcome: 'success',
-        scenarioTags: ['human', 'docx', 'progressive-skill'],
-        requiredFixtures: [FIXTURE_SOURCE],
+        description: CASE_METADATA.description,
+        objective: CASE_METADATA.taskGoal,
+        caseMetadata: CASE_METADATA,
+        expectedOutcome: CASE_METADATA.expectedOutcome,
+        scenarioTags: CASE_METADATA.scenarioTags,
+        requiredFixtures: CASE_METADATA.requiredFixtures,
         fixtureCopies: [{ from: FIXTURE_SOURCE, to: 'input.docx' }],
         approvalPolicy: 'auto-approve',
         maxSteps: 14,

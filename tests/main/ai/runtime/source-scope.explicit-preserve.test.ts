@@ -7,14 +7,27 @@ import type { WorkspaceNode, WorkspaceSource } from '../../../../src/shared/type
 import { recordAssertion } from '../../../harness/main/assertions'
 import { runRuntimeCase } from '../../../harness/main/capabilityCase'
 
+const CASE_METADATA = {
+  description: '验证 workspace 与子文件同时被选中时，显式范围保留，底层 document ids 去重。',
+  taskGoal: '确认 source scope 在父子节点同时显式选中时仍保留用户选择，并只收敛唯一 document id 集合。',
+  scenarioTags: ['runtime', 'source-scope', 'explicit-selection', 'dedupe'],
+  expectedOutcome: 'success',
+  requiredFixtures: [],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'ai-runtime'
+} as const
+
 describe('main/ai/runtime/source-scope', () => {
   test('explicit parent-child selections should be preserved while document ids are deduped', async () => {
     await runRuntimeCase({
       caseId: 'source-scope-explicit-preserve',
-      description: '验证 workspace 与子文件同时被选中时，显式范围保留，底层 document ids 去重。',
-      expectedOutcome: 'success',
-      scenarioTags: ['source-scope', 'explicit-selection', 'dedupe'],
-      requiredFixtures: [],
+      description: CASE_METADATA.description,
+      caseMetadata: CASE_METADATA,
+      expectedOutcome: CASE_METADATA.expectedOutcome,
+      scenarioTags: CASE_METADATA.scenarioTags,
+      requiredFixtures: CASE_METADATA.requiredFixtures,
       fixtureCopies: [],
       buildExecutionOutcome: () => ({
         status: 'completed',

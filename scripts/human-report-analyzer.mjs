@@ -1,11 +1,14 @@
 #!/usr/bin/env node
 import { access, readdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import {
+  listActiveCurrentCasesBySuite,
+  readArchivedCaseCatalog
+} from './lib/testCatalog.mjs'
 
 const SUITE = 'main-ai-human'
 const REPORT_ROOT = path.resolve(process.cwd(), 'tests', 'report', SUITE)
 const OUTPUT_FILE = path.join(REPORT_ROOT, 'human-assessment.md')
-const TEST_ROOT = path.resolve(process.cwd(), 'tests', 'main', 'ai', 'human')
 const REPORT_META_DIRS = new Set(['batches', 'compare'])
 
 const QUALITY_GRADES = [
@@ -27,46 +30,9 @@ const listDirectories = async (target) => {
   return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name)
 }
 
-const listFiles = async (target) => {
-  const entries = await readdir(target, { withFileTypes: true })
-  return entries.filter((entry) => entry.isFile()).map((entry) => path.join(target, entry.name))
-}
-
-const extractCaseIdsFromTestSource = (source) => {
-  const constantMap = new Map()
-  for (const match of source.matchAll(/const\s+([A-Z0-9_]+)\s*=\s*'([^']+)'/g)) {
-    constantMap.set(match[1], match[2])
-  }
-
-  const caseIds = new Set()
-  for (const match of source.matchAll(/caseId:\s*('([^']+)'|([A-Z0-9_]+))/g)) {
-    const literalValue = match[2]
-    const constantName = match[3]
-    if (literalValue) {
-      caseIds.add(literalValue)
-      continue
-    }
-    if (constantName && constantMap.has(constantName)) {
-      caseIds.add(constantMap.get(constantName))
-    }
-  }
-
-  return Array.from(caseIds)
-}
-
 const resolveCurrentCaseIds = async () => {
-  const files = await listFiles(TEST_ROOT)
-  const caseIds = new Set()
-
-  for (const filePath of files) {
-    if (!filePath.endsWith('.test.ts')) continue
-    const source = await readFile(filePath, 'utf8')
-    for (const caseId of extractCaseIdsFromTestSource(source)) {
-      caseIds.add(caseId)
-    }
-  }
-
-  return Array.from(caseIds).sort()
+  const currentCases = await listActiveCurrentCasesBySuite(SUITE)
+  return currentCases.map((item) => item.caseId).sort()
 }
 
 const reportDirExists = async (target) => {
@@ -418,10 +384,13 @@ const toMarkdown = (input) => {
 
 const main = async () => {
   const currentCaseIds = await resolveCurrentCaseIds()
+  const archivedCatalog = await readArchivedCaseCatalog()
+  const archivedCaseIds = new Set(archivedCatalog.archivedCases.map((item) => item.caseId))
   const allReportCaseDirs = (await reportDirExists(REPORT_ROOT)) ? await listDirectories(REPORT_ROOT) : []
   const staleReportCases = allReportCaseDirs
     .filter((caseId) => !REPORT_META_DIRS.has(caseId))
     .filter((caseId) => !currentCaseIds.includes(caseId))
+    .filter((caseId) => !archivedCaseIds.has(caseId))
     .sort()
 
   const reports = []

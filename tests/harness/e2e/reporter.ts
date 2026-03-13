@@ -2,6 +2,13 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { AiRunEvent } from '../../../src/shared/types'
 import type { E2EConsoleEntry } from './electronApp'
+import type {
+  CaseExpectedOutcome,
+  CaseLifecycle,
+  CaseRetentionTier,
+  CaseRunPolicy,
+  UiCaseSuite
+} from '../core/caseMetadata'
 
 export type UiAssertion = {
   id: string
@@ -12,7 +19,7 @@ export type UiAssertion = {
 export type UiExecutionStatus = 'completed' | 'blocked' | 'failed'
 export type UiCaseStatus = 'passed' | 'failed'
 export type UiCaseErrorCode = 'none' | 'assertion_failed' | 'runtime_exception'
-export type UiExpectedOutcome = 'success' | 'blocked' | 'explicit_gap' | 'failure'
+export type UiExpectedOutcome = CaseExpectedOutcome
 
 export type UiArtifactsReport = {
   screenshots: string[]
@@ -22,7 +29,7 @@ export type UiArtifactsReport = {
 }
 
 export type UiReportInput = {
-  suite: string
+  suite: UiCaseSuite
   caseId: string
   startedAt: number
   finishedAt: number
@@ -41,8 +48,16 @@ export type UiReportInput = {
   traceRef?: string
   domRefs: string[]
   expectedOutcome?: UiExpectedOutcome
-  scenarioTags?: string[]
+  scenarioTags?: readonly string[]
   taskGoal?: string
+  description?: string
+  requiredFixtures?: readonly string[]
+  retentionTier?: CaseRetentionTier
+  lifecycle?: CaseLifecycle
+  runPolicy?: CaseRunPolicy
+  capabilityArea?: string
+  sourceFile?: string
+  profiles?: readonly string[]
 }
 
 const ensureDir = async (target: string): Promise<void> => {
@@ -174,6 +189,14 @@ export const writeUiCaseReport = async (input: UiReportInput): Promise<string> =
       .map((event) => event.skillId),
     failedAssertionIds,
     expectedOutcome: input.expectedOutcome,
+    description: input.description,
+    requiredFixtures: input.requiredFixtures || [],
+    retentionTier: input.retentionTier,
+    lifecycle: input.lifecycle,
+    runPolicy: input.runPolicy,
+    capabilityArea: input.capabilityArea,
+    sourceFile: input.sourceFile,
+    profiles: input.profiles || [],
     scenarioTags: input.scenarioTags || [],
     taskGoal: input.taskGoal,
     artifactOperationCounts: {

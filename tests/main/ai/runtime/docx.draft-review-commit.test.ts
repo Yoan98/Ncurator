@@ -26,6 +26,34 @@ import { runRuntimeCase } from '../../../harness/main/capabilityCase'
 import { createTestAiRunContext } from '../../../harness/main/contextFactory'
 
 const FIXTURE_SOURCE = path.resolve(process.cwd(), 'tests/fixtures/main/docx/sample-edit.docx')
+const RUNTIME_DOCX_REVIEW_BASE_METADATA = {
+  requiredFixtures: [FIXTURE_SOURCE],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'ai-runtime'
+} as const
+const REVIEW_READY_METADATA = {
+  ...RUNTIME_DOCX_REVIEW_BASE_METADATA,
+  description:
+    '验证 docx 编辑运行在不落盘源文件的前提下，后续读取默认基于最新草稿快照，并在运行结束时统一生成可恢复的草稿审阅集合。',
+  expectedOutcome: 'success',
+  scenarioTags: ['docx', 'draft-review', 'latest-snapshot', 'review-ready']
+} as const
+const PARTIAL_COMMIT_METADATA = {
+  ...RUNTIME_DOCX_REVIEW_BASE_METADATA,
+  description:
+    '验证草稿审阅支持部分接受后提交，真实文件只写入被接受的修改，并在提交完成后清理草稿与预览产物。',
+  expectedOutcome: 'success',
+  scenarioTags: ['docx', 'draft-review', 'partial-accept', 'commit-cleanup']
+} as const
+const CONFLICT_METADATA = {
+  ...RUNTIME_DOCX_REVIEW_BASE_METADATA,
+  description:
+    '验证草稿审阅在源文件版本变化后会阻止提交，并把尝试中的提交记录为冲突状态。',
+  expectedOutcome: 'success',
+  scenarioTags: ['docx', 'draft-review', 'conflict', 'freshness-check']
+} as const
 
 type JsonScalar = string | number | boolean | null
 type JsonValue = JsonScalar | JsonRecord | JsonValue[]
@@ -315,11 +343,11 @@ describe('runtime/docx draft review commit', () => {
   test('latest draft snapshot is readable during run and finalize produces a persisted review', async () => {
     await runRuntimeCase({
       caseId: 'docx-draft-review-ready',
-      description:
-        '验证 docx 编辑运行在不落盘源文件的前提下，后续读取默认基于最新草稿快照，并在运行结束时统一生成可恢复的草稿审阅集合。',
-      expectedOutcome: 'success',
-      scenarioTags: ['docx', 'draft-review', 'latest-snapshot', 'review-ready'],
-      requiredFixtures: [FIXTURE_SOURCE],
+      description: REVIEW_READY_METADATA.description,
+      caseMetadata: REVIEW_READY_METADATA,
+      expectedOutcome: REVIEW_READY_METADATA.expectedOutcome,
+      scenarioTags: REVIEW_READY_METADATA.scenarioTags,
+      requiredFixtures: REVIEW_READY_METADATA.requiredFixtures,
       fixtureCopies: [{ from: FIXTURE_SOURCE, to: 'input.docx' }],
       buildExecutionOutcome: (result) => {
         const finalizeResult = result.reviewDetail ? 'ok' : 'failed'
@@ -473,11 +501,11 @@ describe('runtime/docx draft review commit', () => {
   test('partial accept commits only accepted changes and archives draft artifacts after success', async () => {
     await runRuntimeCase({
       caseId: 'docx-draft-review-partial-commit',
-      description:
-        '验证草稿审阅支持部分接受后提交，真实文件只写入被接受的修改，并在提交完成后清理草稿与预览产物。',
-      expectedOutcome: 'success',
-      scenarioTags: ['docx', 'draft-review', 'partial-accept', 'commit-cleanup'],
-      requiredFixtures: [FIXTURE_SOURCE],
+      description: PARTIAL_COMMIT_METADATA.description,
+      caseMetadata: PARTIAL_COMMIT_METADATA,
+      expectedOutcome: PARTIAL_COMMIT_METADATA.expectedOutcome,
+      scenarioTags: PARTIAL_COMMIT_METADATA.scenarioTags,
+      requiredFixtures: PARTIAL_COMMIT_METADATA.requiredFixtures,
       fixtureCopies: [{ from: FIXTURE_SOURCE, to: 'input.docx' }],
       buildExecutionOutcome: (result) => ({
         status: result.commitResponse.success ? 'completed' : 'failed',
@@ -691,11 +719,11 @@ describe('runtime/docx draft review commit', () => {
   test('source freshness conflicts block commit and record conflicted commit status', async () => {
     await runRuntimeCase({
       caseId: 'docx-draft-review-conflict',
-      description:
-        '验证草稿审阅在源文件版本变化后会阻止提交，并把尝试中的提交记录为冲突状态。',
-      expectedOutcome: 'success',
-      scenarioTags: ['docx', 'draft-review', 'conflict', 'freshness-check'],
-      requiredFixtures: [FIXTURE_SOURCE],
+      description: CONFLICT_METADATA.description,
+      caseMetadata: CONFLICT_METADATA,
+      expectedOutcome: CONFLICT_METADATA.expectedOutcome,
+      scenarioTags: CONFLICT_METADATA.scenarioTags,
+      requiredFixtures: CONFLICT_METADATA.requiredFixtures,
       fixtureCopies: [{ from: FIXTURE_SOURCE, to: 'input.docx' }],
       buildExecutionOutcome: (result) => ({
         status:

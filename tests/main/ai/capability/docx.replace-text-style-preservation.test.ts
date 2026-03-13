@@ -9,6 +9,17 @@ import { runCapabilityCase } from '../../../harness/main/capabilityCase'
 import { readLatestCaseReportArtifacts } from '../../../harness/main/reportInspector'
 
 const CASE_ID = 'docx-replace-text-style-preservation'
+const CASE_METADATA = {
+  description:
+    '验证 replace_text 对命中 run 做原位替换，保留目标 block 内样式并且不影响未命中 block。',
+  expectedOutcome: 'success',
+  scenarioTags: ['docx', 'replace-text', 'style-preservation', 'local-edit-safety'],
+  requiredFixtures: [],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'docx-tooling'
+} as const
 
 type JsonScalar = string | number | boolean | null
 type JsonValue = JsonScalar | JsonRecord | JsonValue[]
@@ -66,11 +77,11 @@ describe('capability/docx replace_text style preservation', () => {
   test('docx replace_text should preserve target run styles and leave untouched blocks unchanged', async () => {
     await runCapabilityCase({
       caseId: CASE_ID,
-      description:
-        '验证 replace_text 对命中 run 做原位替换，保留目标 block 内样式并且不影响未命中 block。',
-      expectedOutcome: 'success',
-      scenarioTags: ['docx', 'replace-text', 'style-preservation', 'local-edit-safety'],
-      requiredFixtures: [],
+      description: CASE_METADATA.description,
+      caseMetadata: CASE_METADATA,
+      expectedOutcome: CASE_METADATA.expectedOutcome,
+      scenarioTags: CASE_METADATA.scenarioTags,
+      requiredFixtures: CASE_METADATA.requiredFixtures,
       fixtureCopies: [],
       buildExecutionOutcome: (result) => {
         const validateResult = asRecord(result.validateResult)

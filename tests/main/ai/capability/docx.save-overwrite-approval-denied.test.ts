@@ -7,6 +7,16 @@ import { readLatestCaseReportArtifacts } from '../../../harness/main/reportInspe
 
 const CASE_ID = 'docx-save-overwrite-approval-denied'
 const FIXTURE_SOURCE = path.resolve(process.cwd(), 'tests/fixtures/main/docx/sample-edit.docx')
+const CASE_METADATA = {
+  description: '验证 docx 覆盖保存在审批拒绝时的失败路径输出。',
+  expectedOutcome: 'blocked',
+  scenarioTags: ['docx', 'safe-save', 'negative-path'],
+  requiredFixtures: [FIXTURE_SOURCE],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'docx-tooling'
+} as const
 
 type JsonRecord = Record<string, string | number | boolean | null | JsonRecord | JsonRecord[]>
 
@@ -23,10 +33,11 @@ describe('capability/docx', () => {
   test('docx_save overwrite 在审批拒绝时应输出可定位证据', async () => {
     await runCapabilityCase({
       caseId: CASE_ID,
-      description: '验证 docx 覆盖保存在审批拒绝时的失败路径输出。',
-      expectedOutcome: 'blocked',
-      scenarioTags: ['docx', 'safe-save', 'negative-path'],
-      requiredFixtures: [FIXTURE_SOURCE],
+      description: CASE_METADATA.description,
+      caseMetadata: CASE_METADATA,
+      expectedOutcome: CASE_METADATA.expectedOutcome,
+      scenarioTags: CASE_METADATA.scenarioTags,
+      requiredFixtures: CASE_METADATA.requiredFixtures,
       fixtureCopies: [
         { from: FIXTURE_SOURCE, to: 'input.docx' },
         { from: FIXTURE_SOURCE, to: 'output.docx' }

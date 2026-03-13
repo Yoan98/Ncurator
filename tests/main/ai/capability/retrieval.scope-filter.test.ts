@@ -5,6 +5,16 @@ import { recordAssertion } from '../../../harness/main/assertions'
 import { runCapabilityCase } from '../../../harness/main/capabilityCase'
 
 type JsonRecord = Record<string, unknown>
+const CASE_METADATA = {
+  description: '验证 local kb retrieval tools 只允许命中运行时 scope 内的 document ids。',
+  expectedOutcome: 'success',
+  scenarioTags: ['retrieval', 'scope-filter', 'local-kb'],
+  requiredFixtures: [],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'local-retrieval'
+} as const
 
 const asSearchResultArray = (value: unknown): SearchResult[] => {
   if (!Array.isArray(value)) return []
@@ -31,10 +41,11 @@ describe('capability/retrieval', () => {
   test('retrieval tools should intersect requested document ids with run scope', async () => {
     await runCapabilityCase({
       caseId: 'retrieval-scope-filter',
-      description: '验证 local kb retrieval tools 只允许命中运行时 scope 内的 document ids。',
-      expectedOutcome: 'success',
-      scenarioTags: ['retrieval', 'scope-filter', 'local-kb'],
-      requiredFixtures: [],
+      description: CASE_METADATA.description,
+      caseMetadata: CASE_METADATA,
+      expectedOutcome: CASE_METADATA.expectedOutcome,
+      scenarioTags: CASE_METADATA.scenarioTags,
+      requiredFixtures: CASE_METADATA.requiredFixtures,
       fixtureCopies: [],
       buildExecutionOutcome: () => ({
         status: 'completed',

@@ -10,6 +10,27 @@ const FIXTURE_SOURCE = path.resolve(process.cwd(), 'tests/fixtures/main/docx/sam
 
 const SEMANTIC_CASE_ID = 'docx-search-semantic-cached'
 const PREVIEW_CASE_ID = 'docx-preview-format-explicit-gap'
+const DOCX_EXPLICIT_GAP_BASE_METADATA = {
+  requiredFixtures: [FIXTURE_SOURCE],
+  lifecycle: 'active',
+  capabilityArea: 'docx-tooling'
+} as const
+const SEMANTIC_CASE_METADATA = {
+  ...DOCX_EXPLICIT_GAP_BASE_METADATA,
+  description: '验证 docx_search semantic 模式按 block 建立缓存索引，并在重复查询时复用缓存。',
+  expectedOutcome: 'success',
+  scenarioTags: ['docx', 'semantic-search', 'cached-index'],
+  retentionTier: 'coverage',
+  runPolicy: 'non_gating'
+} as const
+const PREVIEW_CASE_METADATA = {
+  ...DOCX_EXPLICIT_GAP_BASE_METADATA,
+  description: '验证 docx_render_preview 对 png/pdf 的受限行为，并标记显式能力缺口。',
+  expectedOutcome: 'explicit_gap',
+  scenarioTags: ['docx', 'explicit-gap', 'preview-format'],
+  retentionTier: 'coverage',
+  runPolicy: 'non_gating'
+} as const
 
 type JsonScalar = string | number | boolean | null
 
@@ -52,10 +73,11 @@ describe('capability/docx explicit gap', () => {
   test('docx_search semantic mode should use cached block embeddings and return scoped matches', async () => {
     await runCapabilityCase({
       caseId: SEMANTIC_CASE_ID,
-      description: '验证 docx_search semantic 模式按 block 建立缓存索引，并在重复查询时复用缓存。',
-      expectedOutcome: 'success',
-      scenarioTags: ['docx', 'semantic-search', 'cached-index'],
-      requiredFixtures: [FIXTURE_SOURCE],
+      description: SEMANTIC_CASE_METADATA.description,
+      caseMetadata: SEMANTIC_CASE_METADATA,
+      expectedOutcome: SEMANTIC_CASE_METADATA.expectedOutcome,
+      scenarioTags: SEMANTIC_CASE_METADATA.scenarioTags,
+      requiredFixtures: SEMANTIC_CASE_METADATA.requiredFixtures,
       fixtureCopies: [{ from: FIXTURE_SOURCE, to: 'input.docx' }],
       buildExecutionOutcome: (result) => {
         const code = asString(asRecord(result.semanticSearchResult).code) || 'unknown'
@@ -189,10 +211,11 @@ describe('capability/docx explicit gap', () => {
   test('docx_render_preview png/pdf should be tracked as explicit capability gap', async () => {
     await runCapabilityCase({
       caseId: PREVIEW_CASE_ID,
-      description: '验证 docx_render_preview 对 png/pdf 的受限行为，并标记显式能力缺口。',
-      expectedOutcome: 'explicit_gap',
-      scenarioTags: ['docx', 'explicit-gap', 'preview-format'],
-      requiredFixtures: [FIXTURE_SOURCE],
+      description: PREVIEW_CASE_METADATA.description,
+      caseMetadata: PREVIEW_CASE_METADATA,
+      expectedOutcome: PREVIEW_CASE_METADATA.expectedOutcome,
+      scenarioTags: PREVIEW_CASE_METADATA.scenarioTags,
+      requiredFixtures: PREVIEW_CASE_METADATA.requiredFixtures,
       fixtureCopies: [{ from: FIXTURE_SOURCE, to: 'input.docx' }],
       buildExecutionOutcome: (result) => {
         const pngCode = asString(asRecord(result.pngPreviewResult).code) || 'unknown'

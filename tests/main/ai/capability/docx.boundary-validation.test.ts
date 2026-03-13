@@ -9,6 +9,26 @@ import { readLatestCaseReportArtifacts } from '../../../harness/main/reportInspe
 const FIXTURE_SOURCE = path.resolve(process.cwd(), 'tests/fixtures/main/docx/sample-edit.docx')
 const INVALID_PATH_CASE_ID = 'docx-open-path-boundary-invalid-input'
 const SAVE_NO_OVERWRITE_CASE_ID = 'docx-save-existing-without-overwrite'
+const DOCX_BOUNDARY_BASE_METADATA = {
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'docx-tooling'
+} as const
+const INVALID_PATH_CASE_METADATA = {
+  ...DOCX_BOUNDARY_BASE_METADATA,
+  description: '验证 docx_open 对非法路径、越界路径、非 docx 路径的拒绝行为。',
+  expectedOutcome: 'failure',
+  scenarioTags: ['docx', 'boundary', 'negative-path'],
+  requiredFixtures: []
+} as const
+const SAVE_NO_OVERWRITE_CASE_METADATA = {
+  ...DOCX_BOUNDARY_BASE_METADATA,
+  description: '验证 docx_save 在目标文件已存在且 overwrite=false 时直接失败，不触发审批。',
+  expectedOutcome: 'failure',
+  scenarioTags: ['docx', 'safe-save', 'negative-path'],
+  requiredFixtures: [FIXTURE_SOURCE]
+} as const
 
 type JsonScalar = string | number | boolean | null
 
@@ -41,10 +61,11 @@ describe('capability/docx boundary', () => {
   test('docx_open should reject invalid and out-of-workspace paths', async () => {
     await runCapabilityCase({
       caseId: INVALID_PATH_CASE_ID,
-      description: '验证 docx_open 对非法路径、越界路径、非 docx 路径的拒绝行为。',
-      expectedOutcome: 'failure',
-      scenarioTags: ['docx', 'boundary', 'negative-path'],
-      requiredFixtures: [],
+      description: INVALID_PATH_CASE_METADATA.description,
+      caseMetadata: INVALID_PATH_CASE_METADATA,
+      expectedOutcome: INVALID_PATH_CASE_METADATA.expectedOutcome,
+      scenarioTags: INVALID_PATH_CASE_METADATA.scenarioTags,
+      requiredFixtures: INVALID_PATH_CASE_METADATA.requiredFixtures,
       fixtureCopies: [],
       buildExecutionOutcome: (result) => {
         const code = asString(asRecord(result.escapePathResult).code) || 'unknown'
@@ -124,10 +145,11 @@ describe('capability/docx boundary', () => {
   test('docx_save should reject existing output without overwrite flag and avoid approval requests', async () => {
     await runCapabilityCase({
       caseId: SAVE_NO_OVERWRITE_CASE_ID,
-      description: '验证 docx_save 在目标文件已存在且 overwrite=false 时直接失败，不触发审批。',
-      expectedOutcome: 'failure',
-      scenarioTags: ['docx', 'safe-save', 'negative-path'],
-      requiredFixtures: [FIXTURE_SOURCE],
+      description: SAVE_NO_OVERWRITE_CASE_METADATA.description,
+      caseMetadata: SAVE_NO_OVERWRITE_CASE_METADATA,
+      expectedOutcome: SAVE_NO_OVERWRITE_CASE_METADATA.expectedOutcome,
+      scenarioTags: SAVE_NO_OVERWRITE_CASE_METADATA.scenarioTags,
+      requiredFixtures: SAVE_NO_OVERWRITE_CASE_METADATA.requiredFixtures,
       fixtureCopies: [
         { from: FIXTURE_SOURCE, to: 'input.docx' },
         { from: FIXTURE_SOURCE, to: 'output.docx' }

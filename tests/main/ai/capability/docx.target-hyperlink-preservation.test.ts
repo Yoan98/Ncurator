@@ -18,6 +18,17 @@ import { readLatestCaseReportArtifacts } from '../../../harness/main/reportInspe
 
 const CASE_ID = 'docx-target-hyperlink-preservation'
 const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+const CASE_METADATA = {
+  description:
+    '验证目标段落内的超链接文本被 replace_text 修改后，链接关系和链接节点仍保持完整。',
+  expectedOutcome: 'success',
+  scenarioTags: ['docx', 'hyperlink', 'replace-text', 'save-reopen'],
+  requiredFixtures: [],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'docx-tooling'
+} as const
 
 type JsonScalar = string | number | boolean | null
 type JsonValue = JsonScalar | JsonRecord | JsonValue[]
@@ -138,11 +149,11 @@ describe('capability/docx target hyperlink preservation', () => {
   test('replace_text should preserve hyperlink structure when the edited text is inside the hyperlink', async () => {
     await runCapabilityCase({
       caseId: CASE_ID,
-      description:
-        '验证目标段落内的超链接文本被 replace_text 修改后，链接关系和链接节点仍保持完整。',
-      expectedOutcome: 'success',
-      scenarioTags: ['docx', 'hyperlink', 'replace-text', 'save-reopen'],
-      requiredFixtures: [],
+      description: CASE_METADATA.description,
+      caseMetadata: CASE_METADATA,
+      expectedOutcome: CASE_METADATA.expectedOutcome,
+      scenarioTags: CASE_METADATA.scenarioTags,
+      requiredFixtures: CASE_METADATA.requiredFixtures,
       fixtureCopies: [],
       buildExecutionOutcome: (result) => {
         const validateResult = asRecord(result.validateResult)

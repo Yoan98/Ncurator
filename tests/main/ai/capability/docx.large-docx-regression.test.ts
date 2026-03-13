@@ -23,6 +23,17 @@ import { readLatestCaseReportArtifacts } from '../../../harness/main/reportInspe
 
 const CASE_ID = 'docx-large-mixed-regression'
 const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+const CASE_METADATA = {
+  description:
+    '验证包含编号、样式、表格与插入/删除混合编辑的大型 docx，在保存重开后仍保持结构稳定。',
+  expectedOutcome: 'success',
+  scenarioTags: ['docx', 'large-docx', 'mixed-regression', 'save-reopen'],
+  requiredFixtures: [],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'docx-tooling'
+} as const
 
 type JsonScalar = string | number | boolean | null
 type JsonValue = JsonScalar | JsonRecord | JsonValue[]
@@ -282,11 +293,11 @@ describe('capability/docx large regression', () => {
   test('large mixed docx regression should preserve numbering and untouched structures after local edits', async () => {
     await runCapabilityCase({
       caseId: CASE_ID,
-      description:
-        '验证大文档混合场景：编号段落、复杂表格、样式 run 共存时，局部编辑后未命中结构保持稳定。',
-      expectedOutcome: 'success',
-      scenarioTags: ['docx', 'large-regression', 'numbering', 'style-preservation', 'local-edit-safety'],
-      requiredFixtures: [],
+      description: CASE_METADATA.description,
+      caseMetadata: CASE_METADATA,
+      expectedOutcome: CASE_METADATA.expectedOutcome,
+      scenarioTags: CASE_METADATA.scenarioTags,
+      requiredFixtures: CASE_METADATA.requiredFixtures,
       fixtureCopies: [],
       buildExecutionOutcome: (result) => {
         const validateResult = asRecord(result.validateResult)

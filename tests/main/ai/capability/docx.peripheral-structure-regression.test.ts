@@ -21,6 +21,17 @@ import { readLatestCaseReportArtifacts } from '../../../harness/main/reportInspe
 
 const CASE_ID = 'docx-peripheral-structure-regression'
 const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+const CASE_METADATA = {
+  description:
+    '验证正文局部编辑后保存并重开，页眉页脚、外部链接和分页符等外围结构仍保持完整。',
+  expectedOutcome: 'success',
+  scenarioTags: ['docx', 'peripheral-structure', 'header-footer', 'hyperlink', 'page-break'],
+  requiredFixtures: [],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'docx-tooling'
+} as const
 
 type JsonScalar = string | number | boolean | null
 type JsonValue = JsonScalar | JsonRecord | JsonValue[]
@@ -181,11 +192,11 @@ describe('capability/docx peripheral structures', () => {
   test('body-local edits should preserve header footer hyperlink and page-break structures', async () => {
     await runCapabilityCase({
       caseId: CASE_ID,
-      description:
-        '验证正文局部编辑后保存并重开，页眉页脚、外部链接和分页符等外围结构仍保持完整。',
-      expectedOutcome: 'success',
-      scenarioTags: ['docx', 'peripheral-structure', 'header-footer', 'hyperlink', 'page-break'],
-      requiredFixtures: [],
+      description: CASE_METADATA.description,
+      caseMetadata: CASE_METADATA,
+      expectedOutcome: CASE_METADATA.expectedOutcome,
+      scenarioTags: CASE_METADATA.scenarioTags,
+      requiredFixtures: CASE_METADATA.requiredFixtures,
       fixtureCopies: [],
       buildExecutionOutcome: (result) => {
         const validateResult = asRecord(result.validateResult)

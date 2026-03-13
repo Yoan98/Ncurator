@@ -18,6 +18,17 @@ import { runCapabilityCase } from '../../../harness/main/capabilityCase'
 import { readLatestCaseReportArtifacts } from '../../../harness/main/reportInspector'
 
 const CASE_ID = 'docx-structural-op-invariance'
+const CASE_METADATA = {
+  description:
+    '验证 replace_block / insert_before / insert_after / update_table_cell / delete_block 在复杂文档里不会污染未命中 block。',
+  expectedOutcome: 'success',
+  scenarioTags: ['docx', 'structural-ops', 'invariance', 'local-edit-safety'],
+  requiredFixtures: [],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'docx-tooling'
+} as const
 
 type JsonScalar = string | number | boolean | null
 type JsonValue = JsonScalar | JsonRecord | JsonValue[]
@@ -189,11 +200,11 @@ describe('capability/docx structural op invariance', () => {
   test('structural operations should keep non-target blocks unchanged in a multi-block docx', async () => {
     await runCapabilityCase({
       caseId: CASE_ID,
-      description:
-        '验证 replace_block / insert_before / insert_after / update_table_cell / delete_block 在复杂文档里不会污染未命中 block。',
-      expectedOutcome: 'success',
-      scenarioTags: ['docx', 'structural-ops', 'invariance', 'local-edit-safety'],
-      requiredFixtures: [],
+      description: CASE_METADATA.description,
+      caseMetadata: CASE_METADATA,
+      expectedOutcome: CASE_METADATA.expectedOutcome,
+      scenarioTags: CASE_METADATA.scenarioTags,
+      requiredFixtures: CASE_METADATA.requiredFixtures,
       fixtureCopies: [],
       buildExecutionOutcome: (result) => {
         const validateResult = asRecord(result.validateResult)

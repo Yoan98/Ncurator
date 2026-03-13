@@ -3,6 +3,7 @@ import path from 'node:path'
 import type { UiAssertion, UiExpectedOutcome } from './reporter'
 import { writeUiCaseReport } from './reporter'
 import type { LaunchedElectronApp } from './electronApp'
+import type { GovernedCaseMetadata, UiCaseSuite } from '../core/caseMetadata'
 
 type CaseArtifacts = {
   reportRoot: string
@@ -21,7 +22,7 @@ const toTimestamp = (ms: number): string => {
 }
 
 export const createUiCaseArtifacts = async (
-  suite: string,
+  suite: UiCaseSuite,
   caseId: string,
   startedAt: number
 ): Promise<CaseArtifacts> => {
@@ -51,7 +52,7 @@ export const createUiCaseArtifacts = async (
 
 export const finalizeElectronUiCase = async (input: {
   app: LaunchedElectronApp | null
-  suite: string
+  suite: UiCaseSuite
   caseId: string
   startedAt: number
   assertions: UiAssertion[]
@@ -61,8 +62,9 @@ export const finalizeElectronUiCase = async (input: {
   executionStatus: 'completed' | 'failed'
   executionResultCode: string
   expectedOutcome: UiExpectedOutcome
-  scenarioTags: string[]
+  scenarioTags: readonly string[]
   taskGoal: string
+  caseMetadata: GovernedCaseMetadata
 }): Promise<void> => {
   const artifacts = await createUiCaseArtifacts(input.suite, input.caseId, input.startedAt)
   const runtimeSignals = input.app
@@ -104,8 +106,16 @@ export const finalizeElectronUiCase = async (input: {
     screenshotRefs: ['screenshots/final.png'],
     traceRef: 'trace/trace.zip',
     domRefs: ['dom/final.html'],
-    expectedOutcome: input.expectedOutcome,
-    scenarioTags: input.scenarioTags,
-    taskGoal: input.taskGoal
+    expectedOutcome: input.caseMetadata?.expectedOutcome || input.expectedOutcome,
+    scenarioTags: input.caseMetadata?.scenarioTags || input.scenarioTags,
+    taskGoal: input.caseMetadata?.taskGoal || input.taskGoal,
+    description: input.caseMetadata?.description,
+    requiredFixtures: input.caseMetadata?.requiredFixtures || [],
+    retentionTier: input.caseMetadata?.retentionTier,
+    lifecycle: input.caseMetadata?.lifecycle,
+    runPolicy: input.caseMetadata?.runPolicy,
+    capabilityArea: input.caseMetadata?.capabilityArea,
+    sourceFile: input.caseMetadata?.sourceFile,
+    profiles: input.caseMetadata?.profiles || []
   })
 }

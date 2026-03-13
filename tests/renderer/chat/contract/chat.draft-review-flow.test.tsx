@@ -86,6 +86,19 @@ const draftReview: DraftReviewDetail = {
   commit_jobs: []
 }
 
+const CASE_METADATA = {
+  description: '验证统一工作台恢复草稿审阅状态、批量接受修改并成功提交审阅结果。',
+  taskGoal:
+    'Restore draft review state, bulk-accept pending changes, and commit the accepted blocks from the unified workbench.',
+  scenarioTags: ['renderer', 'chat', 'draft-review'],
+  expectedOutcome: 'success',
+  requiredFixtures: [],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'chat-ui'
+} as const
+
 describe('chat.draft-review-flow', () => {
   it('restores a persisted draft review, supports bulk accept, and commits after validation', async () => {
     const userActionSequence: string[] = []
@@ -124,16 +137,16 @@ describe('chat.draft-review-flow', () => {
     await runRendererCase({
       suite: 'renderer-chat-contract',
       caseId: 'chat-draft-review-flow',
+      caseMetadata: CASE_METADATA,
       apiMock,
       userActionSequence,
       selectorFailures,
       assertions,
       notes,
       route: '#/',
-      expectedOutcome: 'success',
-      scenarioTags: ['renderer', 'chat', 'draft-review'],
-      taskGoal:
-        'Restore draft review state, bulk-accept pending changes, and commit the accepted blocks from the unified workbench.',
+      expectedOutcome: CASE_METADATA.expectedOutcome,
+      scenarioTags: CASE_METADATA.scenarioTags,
+      taskGoal: CASE_METADATA.taskGoal,
       body: async () => {
         await screen.findByTestId(workbenchSelectors.reviewCenter)
         const validationNode = await screen.findByTestId(workbenchSelectors.reviewValidation)

@@ -1,6 +1,6 @@
 import { access } from 'node:fs/promises'
 
-export const findMissingFixtures = async (paths: string[]): Promise<string[]> => {
+export const findMissingFixtures = async (paths: readonly string[]): Promise<string[]> => {
   const missing: string[] = []
   for (const item of paths) {
     try {
@@ -12,7 +12,7 @@ export const findMissingFixtures = async (paths: string[]): Promise<string[]> =>
   return missing
 }
 
-export const assertRequiredFixtures = async (paths: string[]): Promise<void> => {
+export const assertRequiredFixtures = async (paths: readonly string[]): Promise<void> => {
   const missing = await findMissingFixtures(paths)
   if (missing.length === 0) return
 

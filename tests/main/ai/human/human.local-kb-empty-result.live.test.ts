@@ -6,17 +6,30 @@ import { readLatestCaseReportArtifacts } from '../../../harness/main/reportInspe
 
 const CASE_ID = 'human-local-kb-empty-result-block'
 const DOCUMENT_ID = 'doc-empty'
+const CASE_METADATA = {
+  description: '验证 human 在 local-kb 为空时会阻塞收敛，而不是猜测答案。',
+  taskGoal:
+    '请只使用当前可访问的本地知识库，不要读取 workspace 文件。回答 “Project Atlas 的负责人是谁？”。如果本地知识库没有明确证据，请阻塞并说明原因；不要猜测。只有在确认无误时才完成任务，且 resultData 必须包含 answer 字段。',
+  scenarioTags: ['human', 'local-kb', 'empty-result', 'negative-path'],
+  expectedOutcome: 'blocked',
+  requiredFixtures: [],
+  retentionTier: 'live-eval',
+  lifecycle: 'active',
+  runPolicy: 'batch_only',
+  capabilityArea: 'human-live',
+  profiles: []
+} as const
 
 describe('human', () => {
   test.skipIf(!isLiveSuiteEnabled())('human 在 local-kb 空结果时应阻塞而非猜测完成', async () => {
     await runHumanCase({
       caseId: CASE_ID,
-      description: '验证 human 在 local-kb 为空时会阻塞收敛，而不是猜测答案。',
-      objective:
-        '请只使用当前可访问的本地知识库，不要读取 workspace 文件。回答 “Project Atlas 的负责人是谁？”。如果本地知识库没有明确证据，请阻塞并说明原因；不要猜测。只有在确认无误时才完成任务，且 resultData 必须包含 answer 字段。',
-      expectedOutcome: 'blocked',
-      scenarioTags: ['human', 'local-kb', 'empty-result', 'negative-path'],
-      requiredFixtures: [],
+      description: CASE_METADATA.description,
+      objective: CASE_METADATA.taskGoal,
+      caseMetadata: CASE_METADATA,
+      expectedOutcome: CASE_METADATA.expectedOutcome,
+      scenarioTags: CASE_METADATA.scenarioTags,
+      requiredFixtures: CASE_METADATA.requiredFixtures,
       fixtureCopies: [],
       bindWorkspace: false,
       selectedDocumentIds: [DOCUMENT_ID],

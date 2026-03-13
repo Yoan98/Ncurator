@@ -9,6 +9,19 @@ const CASE_ID = 'human-local-kb-answer'
 const DOCUMENT_ID = 'doc-atlas'
 const DOCUMENT_NAME = 'atlas-notes.md'
 const EXPECTED_ANSWER = 'Ada Lovelace'
+const CASE_METADATA = {
+  description: '验证 human 在仅依赖本地知识库时能够加载 local-kb skill 并完成问答。',
+  taskGoal:
+    '请只使用当前可访问的本地知识库，不要读取 workspace 文件。回答 “Project Atlas 的负责人是谁？”。只有在本地证据明确时才完成任务；完成任务时 resultData 必须包含 answer 和 document_name 字段。',
+  scenarioTags: ['human', 'local-kb', 'success-path'],
+  expectedOutcome: 'success',
+  requiredFixtures: [],
+  retentionTier: 'live-eval',
+  lifecycle: 'active',
+  runPolicy: 'batch_only',
+  capabilityArea: 'human-live',
+  profiles: ['p2-default']
+} as const
 
 const buildSearchResult = (): SearchResult[] => [
   {
@@ -39,12 +52,12 @@ describe('human', () => {
   test.skipIf(!isLiveSuiteEnabled())('human 应能通过 local-kb skill 回答知识库问题', async () => {
     await runHumanCase({
       caseId: CASE_ID,
-      description: '验证 human 在仅依赖本地知识库时能够加载 local-kb skill 并完成问答。',
-      objective:
-        '请只使用当前可访问的本地知识库，不要读取 workspace 文件。回答 “Project Atlas 的负责人是谁？”。只有在本地证据明确时才完成任务；完成任务时 resultData 必须包含 answer 和 document_name 字段。',
-      expectedOutcome: 'success',
-      scenarioTags: ['human', 'local-kb', 'success-path'],
-      requiredFixtures: [],
+      description: CASE_METADATA.description,
+      objective: CASE_METADATA.taskGoal,
+      caseMetadata: CASE_METADATA,
+      expectedOutcome: CASE_METADATA.expectedOutcome,
+      scenarioTags: CASE_METADATA.scenarioTags,
+      requiredFixtures: CASE_METADATA.requiredFixtures,
       fixtureCopies: [],
       bindWorkspace: false,
       selectedDocumentIds: [DOCUMENT_ID],

@@ -7,6 +7,32 @@ import {
   type LaunchedElectronApp
 } from '../../../harness/e2e/electronApp'
 
+const REVIEW_COMMIT_METADATA = {
+  description: '验证统一工作台在真实 Electron 链路中进入 draft review、逐条决策并完成部分提交。',
+  taskGoal:
+    'Trigger an AI edit run, wait for unified draft review, accept and reject individual changes, then submit the accepted changes through the real Electron chain.',
+  scenarioTags: ['e2e', 'chat', 'workbench', 'draft-review', 'partial-commit'],
+  expectedOutcome: 'success',
+  requiredFixtures: [],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'chat-ui'
+} as const
+
+const REVIEW_CONFLICT_METADATA = {
+  description: '验证统一工作台在源文档变更导致提交冲突时，会稳定展示冲突反馈并阻止 commit。',
+  taskGoal:
+    'Trigger an AI edit run whose source changes before commit, and verify the unified review center surfaces the source-changed conflict deterministically.',
+  scenarioTags: ['e2e', 'chat', 'workbench', 'draft-review', 'conflict'],
+  expectedOutcome: 'success',
+  requiredFixtures: [],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'chat-ui'
+} as const
+
 const openWorkbenchPage = async (
   appPage: LaunchedElectronApp['page'],
   userActionSequence: string[]
@@ -47,8 +73,6 @@ describe('chat.review-flow.e2e', () => {
     const selectorFailures: string[] = []
     const assertions: UiAssertion[] = []
     const notes: string[] = []
-    const taskGoal =
-      'Trigger an AI edit run, wait for unified draft review, accept and reject individual changes, then submit the accepted changes through the real Electron chain.'
     let runtimeError: Error | null = null
 
     try {
@@ -111,6 +135,7 @@ describe('chat.review-flow.e2e', () => {
       app,
       suite: 'e2e-chat',
       caseId: 'workbench-chat-review-commit-flow',
+      caseMetadata: REVIEW_COMMIT_METADATA,
       startedAt,
       assertions,
       notes,
@@ -118,9 +143,9 @@ describe('chat.review-flow.e2e', () => {
       selectorFailures,
       executionStatus: runtimeError ? 'failed' : 'completed',
       executionResultCode: runtimeError ? 'runtime_exception' : 'ok',
-      expectedOutcome: 'success',
-      scenarioTags: ['e2e', 'chat', 'workbench', 'draft-review', 'partial-commit'],
-      taskGoal
+      expectedOutcome: REVIEW_COMMIT_METADATA.expectedOutcome,
+      scenarioTags: REVIEW_COMMIT_METADATA.scenarioTags,
+      taskGoal: REVIEW_COMMIT_METADATA.taskGoal
     })
 
     app = null
@@ -136,8 +161,6 @@ describe('chat.review-flow.e2e', () => {
     const selectorFailures: string[] = []
     const assertions: UiAssertion[] = []
     const notes: string[] = []
-    const taskGoal =
-      'Trigger an AI edit run whose source changes before commit, and verify the unified review center surfaces the source-changed conflict deterministically.'
     let runtimeError: Error | null = null
 
     try {
@@ -182,6 +205,7 @@ describe('chat.review-flow.e2e', () => {
       app,
       suite: 'e2e-chat',
       caseId: 'workbench-chat-review-conflict-flow',
+      caseMetadata: REVIEW_CONFLICT_METADATA,
       startedAt,
       assertions,
       notes,
@@ -189,9 +213,9 @@ describe('chat.review-flow.e2e', () => {
       selectorFailures,
       executionStatus: runtimeError ? 'failed' : 'completed',
       executionResultCode: runtimeError ? 'runtime_exception' : 'ok',
-      expectedOutcome: 'success',
-      scenarioTags: ['e2e', 'chat', 'workbench', 'draft-review', 'conflict'],
-      taskGoal
+      expectedOutcome: REVIEW_CONFLICT_METADATA.expectedOutcome,
+      scenarioTags: REVIEW_CONFLICT_METADATA.scenarioTags,
+      taskGoal: REVIEW_CONFLICT_METADATA.taskGoal
     })
 
     app = null

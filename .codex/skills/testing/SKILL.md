@@ -8,11 +8,17 @@ description: 当任务涉及测试架构、测试脚本、test harness、报告�
 再按任务需要继续阅读：
 
 - `doc/testing/architecture.md`
-  - 测试分层、生产入口直连、报告契约、环境变量规则
+  - 测试分层、catalog 真相源、报告消费顺序、执行入口
+- `doc/testing/case-governance.md`
+  - metadata、保留层级、生命周期、运行策略与归档规则
 - `doc/testing/phased-plan.md`
   - AI 阶段化测试顺序、门禁与推进规则
 - `doc/testing/upgrade-journal.md`
   - 每轮 AI 测试汇总与阶段专题结论（含 tool capability 已并入内容）
+- `tests/catalog/current-cases.json`
+  - 当前 active case 的 machine-readable 真相源
+- `tests/catalog/current-cases.md`
+  - 当前 active case 的人工浏览投影
 - `references/source-of-truth.md`
   - 测试文档与实际测试目录的真相源
 - `references/change-checklist.md`

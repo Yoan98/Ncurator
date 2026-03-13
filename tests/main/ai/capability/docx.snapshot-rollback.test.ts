@@ -9,6 +9,17 @@ import { readLatestCaseReportArtifacts } from '../../../harness/main/reportInspe
 
 const FIXTURE_SOURCE = path.resolve(process.cwd(), 'tests/fixtures/main/docx/sample-edit.docx')
 const CASE_ID = 'docx-snapshot-history-rollback'
+const CASE_METADATA = {
+  description:
+    '验证 docx 草稿快照链与回滚能力：多次 apply 形成版本链，rollback 仅切换 docId，不落盘文件。',
+  expectedOutcome: 'success',
+  scenarioTags: ['docx', 'snapshot-history', 'rollback', 'confirm-before-save'],
+  requiredFixtures: [FIXTURE_SOURCE],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'docx-tooling'
+} as const
 
 type JsonScalar = string | number | boolean | null
 type JsonValue = JsonScalar | JsonRecord | JsonValue[]
@@ -52,11 +63,11 @@ describe('capability/docx snapshot rollback', () => {
   test('docx snapshot history and rollback should support confirm-before-save flows', async () => {
     await runCapabilityCase({
       caseId: CASE_ID,
-      description:
-        '验证 docx 草稿快照链与回滚能力：多次 apply 形成版本链，rollback 仅切换 docId，不落盘文件。',
-      expectedOutcome: 'success',
-      scenarioTags: ['docx', 'snapshot-history', 'rollback', 'confirm-before-save'],
-      requiredFixtures: [FIXTURE_SOURCE],
+      description: CASE_METADATA.description,
+      caseMetadata: CASE_METADATA,
+      expectedOutcome: CASE_METADATA.expectedOutcome,
+      scenarioTags: CASE_METADATA.scenarioTags,
+      requiredFixtures: CASE_METADATA.requiredFixtures,
       fixtureCopies: [{ from: FIXTURE_SOURCE, to: 'input.docx' }],
       buildExecutionOutcome: (result) => {
         const rollbackResult = asRecord(result.rollbackResult)

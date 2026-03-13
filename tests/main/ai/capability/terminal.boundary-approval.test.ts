@@ -10,6 +10,31 @@ import { readLatestCaseReportArtifacts } from '../../../harness/main/reportInspe
 const BOUNDARY_CASE_ID = 'terminal-workspace-boundary-rejected'
 const APPROVAL_DENIED_CASE_ID = 'terminal-risk-approval-denied'
 const CWD_NORMALIZATION_CASE_ID = 'terminal-cwd-normalization'
+const TERMINAL_BOUNDARY_BASE_METADATA = {
+  requiredFixtures: [],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'terminal-exec'
+} as const
+const BOUNDARY_CASE_METADATA = {
+  ...TERMINAL_BOUNDARY_BASE_METADATA,
+  description: '验证 terminal_run_command 对 ../ 与越界绝对路径的 workspace 拒绝行为。',
+  expectedOutcome: 'blocked',
+  scenarioTags: ['terminal', 'boundary', 'negative-path']
+} as const
+const APPROVAL_DENIED_CASE_METADATA = {
+  ...TERMINAL_BOUNDARY_BASE_METADATA,
+  description: '验证 terminal 中风险命令在 deny-medium-high 策略下返回 approval_denied。',
+  expectedOutcome: 'blocked',
+  scenarioTags: ['terminal', 'approval', 'negative-path']
+} as const
+const CWD_NORMALIZATION_CASE_METADATA = {
+  ...TERMINAL_BOUNDARY_BASE_METADATA,
+  description: '验证 terminal 对 workspace 根目录别名 cwd 的归一化，以及对不存在 cwd 的 fail-fast。',
+  expectedOutcome: 'success',
+  scenarioTags: ['terminal', 'cwd', 'normalization', 'negative-path']
+} as const
 
 type JsonScalar = string | number | boolean | null
 
@@ -46,10 +71,11 @@ describe('capability/terminal', () => {
   test('terminal_run_command should reject workspace boundary escapes before execution', async () => {
     await runCapabilityCase({
       caseId: BOUNDARY_CASE_ID,
-      description: '验证 terminal_run_command 对 ../ 与越界绝对路径的 workspace 拒绝行为。',
-      expectedOutcome: 'blocked',
-      scenarioTags: ['terminal', 'boundary', 'negative-path'],
-      requiredFixtures: [],
+      description: BOUNDARY_CASE_METADATA.description,
+      caseMetadata: BOUNDARY_CASE_METADATA,
+      expectedOutcome: BOUNDARY_CASE_METADATA.expectedOutcome,
+      scenarioTags: BOUNDARY_CASE_METADATA.scenarioTags,
+      requiredFixtures: BOUNDARY_CASE_METADATA.requiredFixtures,
       fixtureCopies: [],
       buildExecutionOutcome: (result) => {
         const code = asString(asRecord(result.escapeResult).code) || 'unknown'
@@ -137,10 +163,11 @@ describe('capability/terminal', () => {
   test('terminal_run_command should block medium-risk command when approval is denied', async () => {
     await runCapabilityCase({
       caseId: APPROVAL_DENIED_CASE_ID,
-      description: '验证 terminal 中风险命令在 deny-medium-high 策略下返回 approval_denied。',
-      expectedOutcome: 'blocked',
-      scenarioTags: ['terminal', 'approval', 'negative-path'],
-      requiredFixtures: [],
+      description: APPROVAL_DENIED_CASE_METADATA.description,
+      caseMetadata: APPROVAL_DENIED_CASE_METADATA,
+      expectedOutcome: APPROVAL_DENIED_CASE_METADATA.expectedOutcome,
+      scenarioTags: APPROVAL_DENIED_CASE_METADATA.scenarioTags,
+      requiredFixtures: APPROVAL_DENIED_CASE_METADATA.requiredFixtures,
       fixtureCopies: [],
       approvalPolicy: 'deny-medium-high',
       buildExecutionOutcome: (result) => {
@@ -221,10 +248,11 @@ describe('capability/terminal', () => {
   test('terminal_run_command should normalize workspace-root cwd alias and reject missing cwd before execution', async () => {
     await runCapabilityCase({
       caseId: CWD_NORMALIZATION_CASE_ID,
-      description: '验证 terminal 对 workspace 根目录别名 cwd 的归一化，以及对不存在 cwd 的 fail-fast。',
-      expectedOutcome: 'success',
-      scenarioTags: ['terminal', 'cwd', 'normalization', 'negative-path'],
-      requiredFixtures: [],
+      description: CWD_NORMALIZATION_CASE_METADATA.description,
+      caseMetadata: CWD_NORMALIZATION_CASE_METADATA,
+      expectedOutcome: CWD_NORMALIZATION_CASE_METADATA.expectedOutcome,
+      scenarioTags: CWD_NORMALIZATION_CASE_METADATA.scenarioTags,
+      requiredFixtures: CWD_NORMALIZATION_CASE_METADATA.requiredFixtures,
       fixtureCopies: [],
       buildExecutionOutcome: (result) => {
         const aliasCode = asString(asRecord(result.aliasResult).code)

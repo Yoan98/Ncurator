@@ -4,6 +4,19 @@ import type { UiAssertion } from '../../../harness/e2e/reporter'
 import { launchElectronApp, type LaunchedElectronApp } from '../../../harness/e2e/electronApp'
 import { finalizeElectronUiCase } from '../../../harness/e2e/uiCase'
 
+const CASE_METADATA = {
+  description: '验证统一工作台纯搜索模式会带着所选 source scope 渲染 deterministic 本地搜索结果。',
+  taskGoal:
+    'Switch the unified workbench into pure search mode, scope the query, and verify the deterministic local result renders without LLM.',
+  scenarioTags: ['e2e', 'search', 'workbench', 'scope-selection', 'deterministic'],
+  expectedOutcome: 'success',
+  requiredFixtures: [],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'search-ui'
+} as const
+
 const openWorkbenchPage = async (
   appPage: LaunchedElectronApp['page'],
   userActionSequence: string[]
@@ -33,8 +46,6 @@ describe('search.scope-results.e2e', () => {
     const selectorFailures: string[] = []
     const assertions: UiAssertion[] = []
     const notes: string[] = []
-    const taskGoal =
-      'Switch the unified workbench into pure search mode, scope the query, and verify the deterministic local result renders without LLM.'
     let runtimeError: Error | null = null
 
     try {
@@ -80,6 +91,7 @@ describe('search.scope-results.e2e', () => {
       app,
       suite: 'e2e-search',
       caseId: 'workbench-search-source-scope-results',
+      caseMetadata: CASE_METADATA,
       startedAt,
       assertions,
       notes,
@@ -87,9 +99,9 @@ describe('search.scope-results.e2e', () => {
       selectorFailures,
       executionStatus: runtimeError ? 'failed' : 'completed',
       executionResultCode: runtimeError ? 'runtime_exception' : 'ok',
-      expectedOutcome: 'success',
-      scenarioTags: ['e2e', 'search', 'workbench', 'scope-selection', 'deterministic'],
-      taskGoal
+      expectedOutcome: CASE_METADATA.expectedOutcome,
+      scenarioTags: CASE_METADATA.scenarioTags,
+      taskGoal: CASE_METADATA.taskGoal
     })
 
     app = null

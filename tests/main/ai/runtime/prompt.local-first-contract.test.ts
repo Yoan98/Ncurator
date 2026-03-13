@@ -4,14 +4,27 @@ import { buildHumanResponsePrompt } from '../../../../src/main/services/ai/promp
 import { recordAssertion } from '../../../harness/main/assertions'
 import { runRuntimeCase } from '../../../harness/main/capabilityCase'
 
+const CASE_METADATA = {
+  description: '验证 human brain/response prompt 持续携带 local-first 与非本地权限约束。',
+  taskGoal: '确认 human brain 与 response prompt 继续要求 local-first，并正确表达非本地信息权限边界。',
+  scenarioTags: ['runtime', 'prompt', 'local-first', 'contract'],
+  expectedOutcome: 'success',
+  requiredFixtures: [],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'ai-runtime'
+} as const
+
 describe('main/ai/runtime/prompts', () => {
   test('prompt contracts should keep local-first and non-local permission constraints', async () => {
     await runRuntimeCase({
       caseId: 'prompt-local-first-contract',
-      description: '验证 human brain/response prompt 持续携带 local-first 与非本地权限约束。',
-      expectedOutcome: 'success',
-      scenarioTags: ['prompt', 'local-first', 'contract'],
-      requiredFixtures: [],
+      description: CASE_METADATA.description,
+      caseMetadata: CASE_METADATA,
+      expectedOutcome: CASE_METADATA.expectedOutcome,
+      scenarioTags: CASE_METADATA.scenarioTags,
+      requiredFixtures: CASE_METADATA.requiredFixtures,
       fixtureCopies: [],
       buildExecutionOutcome: () => ({
         status: 'completed',

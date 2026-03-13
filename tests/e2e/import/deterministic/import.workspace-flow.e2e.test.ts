@@ -4,6 +4,18 @@ import type { UiAssertion } from '../../../harness/e2e/reporter'
 import { launchElectronApp, type LaunchedElectronApp } from '../../../harness/e2e/electronApp'
 import { finalizeElectronUiCase } from '../../../harness/e2e/uiCase'
 
+const CASE_METADATA = {
+  description: '验证 Import 页面通过真实 Electron 链路创建、扫描并准备工作区。',
+  taskGoal: 'Create an import workspace, run scan, then run prepare and verify prepared state is rendered.',
+  scenarioTags: ['e2e', 'import', 'workspace', 'deterministic'],
+  expectedOutcome: 'success',
+  requiredFixtures: [],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'import-ui'
+} as const
+
 const openImportPage = async (appPage: LaunchedElectronApp['page'], userActionSequence: string[]) => {
   await appPage.evaluate(() => {
     window.location.hash = '#/import'
@@ -30,7 +42,6 @@ describe('import.workspace-flow.e2e', () => {
     const selectorFailures: string[] = []
     const assertions: UiAssertion[] = []
     const notes: string[] = []
-    const taskGoal = 'Create an import workspace, run scan, then run prepare and verify prepared state is rendered.'
     let runtimeError: Error | null = null
 
     try {
@@ -84,6 +95,7 @@ describe('import.workspace-flow.e2e', () => {
       app,
       suite: 'e2e-import',
       caseId: 'import-workspace-create-scan-prepare',
+      caseMetadata: CASE_METADATA,
       startedAt,
       assertions,
       notes,
@@ -91,9 +103,9 @@ describe('import.workspace-flow.e2e', () => {
       selectorFailures,
       executionStatus: runtimeError ? 'failed' : 'completed',
       executionResultCode: runtimeError ? 'runtime_exception' : 'ok',
-      expectedOutcome: 'success',
-      scenarioTags: ['e2e', 'import', 'workspace', 'deterministic'],
-      taskGoal
+      expectedOutcome: CASE_METADATA.expectedOutcome,
+      scenarioTags: CASE_METADATA.scenarioTags,
+      taskGoal: CASE_METADATA.taskGoal
     })
 
     app = null

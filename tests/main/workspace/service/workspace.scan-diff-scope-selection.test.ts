@@ -12,14 +12,27 @@ import type { WorkspaceNode } from '../../../../src/shared/types'
 import { recordAssertion } from '../../../harness/main/assertions'
 import { runWorkspaceServiceCase } from '../../../harness/main/capabilityCase'
 
+const CASE_METADATA = {
+  description: '验证工作空间扫描、差异模式和统一范围选择装配的主流程。',
+  taskGoal: '确认 workspace scan、diff 与 source scope 组装保持支持文件过滤、范围聚合和文档去重语义。',
+  scenarioTags: ['workspace', 'scan', 'diff', 'source-scope'],
+  expectedOutcome: 'success',
+  requiredFixtures: [],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'workspace'
+} as const
+
 describe('main/workspace/service', () => {
   test('workspace scan/diff/scope selection should honor supported files and range semantics', async () => {
     await runWorkspaceServiceCase({
       caseId: 'workspace-scan-diff-scope-selection',
-      description: '验证工作空间扫描、差异模式和统一范围选择装配的主流程。',
-      expectedOutcome: 'success',
-      scenarioTags: ['workspace', 'scan', 'diff', 'source-scope'],
-      requiredFixtures: [],
+      description: CASE_METADATA.description,
+      caseMetadata: CASE_METADATA,
+      expectedOutcome: CASE_METADATA.expectedOutcome,
+      scenarioTags: CASE_METADATA.scenarioTags,
+      requiredFixtures: CASE_METADATA.requiredFixtures,
       fixtureCopies: [],
       buildExecutionOutcome: () => ({
         status: 'completed',

@@ -9,6 +9,7 @@
 - 是否替换了现有 canonical 文档
 - 是否需要同步 `doc/README.md`
 - 是否需要同步 `doc/reference/source-of-truth.md`
+- 若变更涉及测试治理或当前 case 读取入口，是否需要同步 `tests/catalog/**` 的说明与链接
 
 ## 2. Skill 层
 
@@ -33,3 +34,4 @@
 - 旧路径不再作为默认入口
 - `doc`、skill、AGENTS 三方表述一致
 - 新增文档能在 `doc/README.md` 中被找到
+- 若主题是测试体系，确认 AI 读取当前 case 时会先到 `tests/catalog/current-cases.json`，而不是 `tests/report/**`

@@ -9,6 +9,17 @@ import { runCapabilityCase } from '../../../harness/main/capabilityCase'
 import { readLatestCaseReportArtifacts } from '../../../harness/main/reportInspector'
 
 const CASE_ID = 'docx-save-reopen-regression'
+const CASE_METADATA = {
+  description:
+    '验证 docx 编辑结果保存后可再次打开，重复命中替换与多段 cell 结构在重开后仍保持正确。',
+  expectedOutcome: 'success',
+  scenarioTags: ['docx', 'save-reopen', 'replace-text', 'table-cell', 'regression'],
+  requiredFixtures: [],
+  retentionTier: 'canonical',
+  lifecycle: 'active',
+  runPolicy: 'gating',
+  capabilityArea: 'docx-tooling'
+} as const
 
 type JsonScalar = string | number | boolean | null
 type JsonValue = JsonScalar | JsonRecord | JsonValue[]
@@ -95,11 +106,11 @@ describe('capability/docx save reopen regression', () => {
   test('saved docx should reopen with repeated replacements and multi-paragraph cell structure intact', async () => {
     await runCapabilityCase({
       caseId: CASE_ID,
-      description:
-        '验证 docx 编辑结果保存后可再次打开，重复命中替换与多段 cell 结构在重开后仍保持正确。',
-      expectedOutcome: 'success',
-      scenarioTags: ['docx', 'save-reopen', 'replace-text', 'table-cell', 'regression'],
-      requiredFixtures: [],
+      description: CASE_METADATA.description,
+      caseMetadata: CASE_METADATA,
+      expectedOutcome: CASE_METADATA.expectedOutcome,
+      scenarioTags: CASE_METADATA.scenarioTags,
+      requiredFixtures: CASE_METADATA.requiredFixtures,
       fixtureCopies: [],
       buildExecutionOutcome: (result) => {
         const saveResult = asRecord(result.saveResult)
