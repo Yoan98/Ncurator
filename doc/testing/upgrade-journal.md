@@ -49,6 +49,53 @@
 
 ## 3. 历史记录
 
+## [2026-03-13] human 单任务 - post-iteration rerun 与 compare 口径收敛
+
+- 时间：2026-03-13 16:56（本地）
+- 阶段：human 单任务
+- 执行命令：
+  - `pnpm test:human`
+  - `pnpm test:human:analyze`
+  - `pnpm test:human:batch -- --profile human-default --runs 5 --batch-id human-default-2026-03-13-post-iteration-v4`
+  - `pnpm test:human:compare -- --before p2-default-2026-03-12-baseline-v3 --after human-default-2026-03-13-post-iteration-v4`
+- 报告路径：
+  - `tests/report/main-ai-human/human-assessment.md`
+  - `tests/report/main-ai-human/batches/human-default-2026-03-13-post-iteration-v4/batch-summary.md`
+  - `tests/report/main-ai-human/compare/p2-default-2026-03-12-baseline-v3-vs-human-default-2026-03-13-post-iteration-v4.md`
+- 结果摘要：
+  - `pnpm test:human` 当前 `12/12` 通过；`human-step-budget-exhausted-block` 已改成零预算 deterministic 路径，不再依赖默认超时或模型首步决策。
+  - `human-assessment.md` 最新门禁为 `ready`：成功路径 latest `5/5`、阻塞路径 latest `6/6`、`latest unexpected_block=0`、无未隔离 `harness_fail`、无 latest assertion failure。
+  - `human-default-2026-03-13-post-iteration-v4` fresh batch `20/20` 成功：
+    - `human-docx-edit = 5/5 hard_pass`
+    - `human-local-kb-answer = 5/5 hard_pass`
+    - `human-multi-skill-kb-then-shell = 5/5`，其中 `hard=2 / soft=3`
+    - `human-tool-error-recovery = 5/5 soft_pass`
+  - compare 结果为 `blocked`：总体成功率没有回退，但 `human-multi-skill-kb-then-shell` 相比 `p2-default-2026-03-12-baseline-v3` 出现 `hardPass -1 / softPass +1 / repeatedToolCalls +1`，全局 `totalRepeatedToolCallsDelta=+1`。
+  - 本轮还补齐了测试治理与观测能力：
+    - `human-report-analyzer` 现在会输出 `softPassReasons`、latest stage gate，并把 latest assertion failure 纳入 gate。
+    - `human-batch-compare` 现在会输出 `gateStatus`、逐 case 检查项与 regression 清单。
+    - `human-local-kb-answer` 已增加更强的 `document_name` 补偿路径；单文档本地知识库问答不再因空占位值或测试 stub 漏项而随机丢字段。
+- 风险与边界：
+  - `human-multi-skill-kb-then-shell` 没有失败，但 compare 明确显示 soft_pass 占比和 repeated tool calls 比 baseline 更差，说明多 skill 收敛效率仍未恢复到之前水平。
+  - `human-tool-error-recovery` 仍是成功但高成本样本，本轮 5 次恢复耗时长尾仍落在 `84s-157s`。
+  - `human-local-kb-answer` 本轮已收敛为 `5/5 hard_pass`，但此前确实暴露过 `document_name` 漂移长尾，后续 compare 仍需继续观察。
+- 推进决策：
+  - `human` 当前 latest 阶段门禁可视为通过。
+  - 这次迭代的 `compare` 仍不能记为 green；若按“是否还能继续主线阶段验证”判断，可继续基于当前 human runtime 推进；若按“本次迭代是否正式不低于 baseline 放行”判断，仍应留在 human 质量收敛。
+- 下一轮优先级：
+  1. 优先收敛 `human-multi-skill-kb-then-shell` 的重复调用与 soft_pass 占比，目标是不弱于 `baseline-v3`。
+  2. 继续压低 `human-tool-error-recovery` 的恢复成本，尤其是 `84s+` 的长尾轮次。
+  3. 完成上述两项后，重新执行 `human-default` fresh batch 与 compare，替换本轮 `blocked` compare 结论。
+
+### 阶段专题结论（按需）
+- 覆盖范围：
+  - 本轮已经把“latest stage gate”与“post-iteration compare”拆成两条独立口径，并都落到了脚本与报告中。
+- 能力边界：
+  - 当前 human 子图没有新的阻塞语义回退；主要问题已经收缩为多 skill 收敛效率和恢复成本，而不是“无法完成任务”。
+- 门槛判定：
+  - `human-assessment = ready` 只能说明当前 latest 仍满足 human 阶段门禁。
+  - `human batch compare = blocked` 说明本次迭代相对既有 baseline 仍有质量回退，不能直接写成“本轮 human compare 已通过”。
+
 ## [2026-03-13] main context - deterministic roundtrip 扩展与 live 样本脚手架
 
 - 时间：2026-03-13 16:37（本地）

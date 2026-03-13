@@ -65,12 +65,23 @@
 建议口径：
 - `human-default` 默认固定 case 集：`human-docx-edit`、`human-local-kb-answer`、`human-multi-skill-kb-then-shell`、`human-tool-error-recovery`。
 - 升级对比以两个独立 batch 为输入，不直接拿全量历史 `human-assessment.md` 做前后对比，避免旧轮次污染成功率。
+- 若迭代触及 `brain/prompt/resultData/main-human graph/response delivery`，先跑：
+  - `pnpm test:human`
+  - `pnpm test:human:analyze`
+  - `pnpm test:human:batch -- --profile human-default --runs 5 --batch-id <newBatchId>`
+  - `pnpm test:human:compare -- --before <baselineBatchId> --after <newBatchId>`
+- `human-missing-live-config-fail-fast` 只作为环境门禁，不纳入 human 能力结论。
 
 推进门槛：
 - 成功路径通过率至少 `80%`。
 - 阻塞路径语义正确率至少 `95%`。
 - `unexpected_block` 不应多于 `soft_pass`。
 - assessment 中不得存在未隔离的 `harness_fail` 结论污染。
+
+判定口径：
+- `human-assessment.md` 回答“当前 latest 是否仍满足阶段门禁”。
+- `human batch compare` 回答“这次迭代是否不低于既有 baseline”。
+- 若 assessment `ready` 但 compare `blocked`，说明阶段门禁未失守，但本次迭代仍有质量回退；此时不要把“post-iteration compare 已通过”写成 green 结论。
 
 ### 2.3 `main intent`
 
