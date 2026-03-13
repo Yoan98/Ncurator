@@ -11,7 +11,7 @@ import { createHumanRunStateSchema } from '../state/stateSchemas'
 
 export const createHumanGraphRunner = (input: { ctx: AiRunContext; maxSteps?: number }) => {
   const { ctx } = input
-  const maxSteps = Math.max(1, Number(input.maxSteps || 6))
+  const maxSteps = Math.max(0, Number(input.maxSteps ?? 6))
   // Each human step can traverse brain + loader/tool nodes, so LangGraph recursion
   // must scale with maxSteps instead of relying on the default limit.
   const recursionLimit = Math.max(32, maxSteps * 4 + 8)

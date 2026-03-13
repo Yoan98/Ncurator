@@ -1,5 +1,5 @@
 import { END, START, StateGraph } from '@langchain/langgraph'
-import type { AiRunContext, AiRunState } from '../types'
+import type { AiRunContext, AiRunState, HumanTaskRunner } from '../types'
 import { createHumanGraphRunner } from './humanGraph'
 import { createIntentNode } from '../node/main/intentNode'
 import { createContextEnrichNode } from '../node/main/contextEnrichNode'
@@ -11,11 +11,15 @@ import { createCompleteNode } from '../node/main/completeNode'
 import { DEFAULT_MAX_CONTEXT_ROUNDS } from '../node/main/helpers'
 import { createMainRunStateSchema } from '../state/stateSchemas'
 
-export const buildMainGraph = (input: { ctx: AiRunContext; maxContextRounds?: number }) => {
+export const buildMainGraph = (input: {
+  ctx: AiRunContext
+  maxContextRounds?: number
+  runHumanTask?: HumanTaskRunner
+}) => {
   const { ctx } = input
   const maxContextRounds = Math.max(1, Number(input.maxContextRounds || DEFAULT_MAX_CONTEXT_ROUNDS))
   const State = createMainRunStateSchema()
-  const runHumanTask = createHumanGraphRunner({ ctx })
+  const runHumanTask = input.runHumanTask || createHumanGraphRunner({ ctx })
 
   const intentNode = createIntentNode({ ctx, maxContextRounds })
   const contextEnrichNode = createContextEnrichNode({ ctx, runHumanTask })

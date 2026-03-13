@@ -6,6 +6,7 @@ import type {
   CaseErrorCode,
   CaseExecutionOutcome,
   CaseExpectedOutcome,
+  CaseSignalOverrides,
   CaseSuite
 } from './types'
 import { EventCollector } from './eventCollector'
@@ -42,6 +43,10 @@ type StructuredCaseInput<TResult> = {
     result: TResult,
     runtime: CapabilityCaseRuntime
   ) => CaseExecutionOutcome
+  buildSignalOverrides?: (
+    result: TResult,
+    runtime: CapabilityCaseRuntime
+  ) => Partial<CaseSignalOverrides>
   execute: (runtime: CapabilityCaseRuntime) => Promise<TResult>
   assert: (result: TResult, runtime: CapabilityCaseRuntime) => Promise<void>
 }
@@ -65,6 +70,7 @@ const runStructuredCase = async <TResult>(
     status: 'unknown',
     resultCode: 'unknown'
   }
+  let signalOverrides: Partial<CaseSignalOverrides> | undefined
   let reportDir = ''
 
   try {
@@ -90,6 +96,9 @@ const runStructuredCase = async <TResult>(
     execution = input.buildExecutionOutcome
       ? input.buildExecutionOutcome(result, runtime)
       : execution
+    signalOverrides = input.buildSignalOverrides
+      ? input.buildSignalOverrides(result, runtime)
+      : undefined
     await input.assert(result, runtime)
   } catch (error) {
     caseStatus = 'failed'
@@ -124,7 +133,8 @@ const runStructuredCase = async <TResult>(
         runPolicy: input.caseMetadata?.runPolicy,
         capabilityArea: input.caseMetadata?.capabilityArea,
         sourceFile: input.caseMetadata?.sourceFile,
-        profiles: input.caseMetadata?.profiles || []
+        profiles: input.caseMetadata?.profiles || [],
+        ...signalOverrides
       },
       assertions,
       events: eventCollector.snapshot(),

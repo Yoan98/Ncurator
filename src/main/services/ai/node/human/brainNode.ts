@@ -16,6 +16,7 @@ import { enrichCompleteTaskResultData } from './resultData'
 import type { HumanObservation, HumanRunState, LoadedSkill } from './types'
 
 const MAX_HISTORY_ITEMS = 10
+const GENERIC_DOCUMENT_NAME_VALUES = new Set(['unknown', 'none', 'n-a', 'not-provided', 'missing', '未提供', '未知', '无'])
 
 const toTrimmedText = (value: string, fallback: string): string => {
   const text = String(value || '').trim()
@@ -29,6 +30,45 @@ const toJsonText = (value: JsonValue | undefined, fallback = 'none'): string => 
   } catch {
     return fallback
   }
+}
+
+const toOptionalText = (value: JsonValue | undefined): string | undefined => {
+  if (typeof value !== 'string') return undefined
+  const text = value.trim()
+  return text || undefined
+}
+
+const isMissingDocumentField = (value: JsonValue | undefined): boolean => {
+  const text = toOptionalText(value)
+  if (!text) return true
+  return GENERIC_DOCUMENT_NAME_VALUES.has(text.toLowerCase())
+}
+
+const enrichResultDataFromSelectedDocument = async (input: {
+  ctx: AiRunContext
+  resultData: JsonObject | undefined
+}): Promise<JsonObject | undefined> => {
+  const { resultData, ctx } = input
+  if (!resultData) return resultData
+  if (!ctx.selectedDocumentIds || ctx.selectedDocumentIds.length !== 1) return resultData
+
+  const currentDocumentName = resultData.document_name
+  const currentDocumentId = resultData.document_id
+  if (!isMissingDocumentField(currentDocumentName) && !isMissingDocumentField(currentDocumentId)) {
+    return resultData
+  }
+
+  const selectedDocument = await ctx.documentsStore.getDocumentById(ctx.selectedDocumentIds[0])
+  if (!selectedDocument) return resultData
+
+  const nextResultData: JsonObject = { ...resultData }
+  if (isMissingDocumentField(currentDocumentName)) {
+    nextResultData.document_name = selectedDocument.name || selectedDocument.id
+  }
+  if (isMissingDocumentField(currentDocumentId)) {
+    nextResultData.document_id = selectedDocument.id
+  }
+  return nextResultData
 }
 
 const normalizeDecision = (decision: HumanStepDecision): HumanStepDecision => {
@@ -367,9 +407,13 @@ export const createHumanBrainNode = (input: { ctx: AiRunContext }) => {
     }
 
     if (decision.action === 'complete_task') {
-      const resultData = enrichCompleteTaskResultData({
+      const enrichedResultData = enrichCompleteTaskResultData({
         resultData: decision.resultData,
         lastObservation: state.lastObservation
+      })
+      const resultData = await enrichResultDataFromSelectedDocument({
+        ctx,
+        resultData: enrichedResultData
       })
       const activeToolNames = getActiveToolNames(state)
       const nextHistory = appendHumanStepRecord({

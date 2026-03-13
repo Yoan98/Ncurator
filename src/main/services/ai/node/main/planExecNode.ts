@@ -23,6 +23,7 @@ export const createPlanExecNode = (input: {
     const objective = buildPlanTaskObjective({
       userInput: state.input,
       task,
+      selectedScopeSummary: ctx.selectedScopeSummary,
       contextEvidence: state.contextEvidence,
       priorDeliveries: state.plan.slice(0, taskIndex).filter((item) => Boolean(item.deliveryMarkdown))
     })

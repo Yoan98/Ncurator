@@ -73,12 +73,43 @@ const toResultData = (value: JsonValue | undefined, key: string): JsonObject | u
   return { [key]: value }
 }
 
+const toTrimmedString = (value: JsonValue | undefined): string | undefined => {
+  if (typeof value !== 'string') return undefined
+  const text = value.trim()
+  return text || undefined
+}
+
+const extractDocumentHint = (value: JsonValue): string | undefined => {
+  if (!isJsonObject(value)) return undefined
+  const documentName = toTrimmedString(value.document_name) || toTrimmedString(value.name)
+  const documentId = toTrimmedString(value.document_id) || toTrimmedString(value.id)
+  if (documentName && documentId) return `${documentName} (${documentId})`
+  return documentName || documentId
+}
+
+const extractTextHint = (value: JsonValue): string | undefined => {
+  if (!isJsonObject(value)) return undefined
+  const text = toTrimmedString(value.text)
+  if (!text) return undefined
+  return text.length > 120 ? `${text.slice(0, 117)}...` : text
+}
+
+const summarizeArrayPayload = (toolName: string, payload: JsonValue[]): string => {
+  const countText = `${toolName} returned ${payload.length} item(s)`
+  const firstDocumentHint = payload.map((item) => extractDocumentHint(item)).find(Boolean)
+  const firstTextHint = payload.map((item) => extractTextHint(item)).find(Boolean)
+  const details: string[] = []
+  if (firstDocumentHint) details.push(`document=${firstDocumentHint}`)
+  if (firstTextHint) details.push(`text=${firstTextHint}`)
+  return details.length > 0 ? `${countText}; ${details.join('; ')}` : countText
+}
+
 const extractToolOutcome = (toolName: string, payload: JsonValue): ToolOutcome => {
   if (Array.isArray(payload)) {
     return {
       ok: true,
       code: 'ok',
-      summary: `${toolName} returned ${payload.length} item(s)`,
+      summary: summarizeArrayPayload(toolName, payload),
       data: payload
     }
   }

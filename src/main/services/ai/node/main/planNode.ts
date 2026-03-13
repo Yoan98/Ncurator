@@ -1,5 +1,5 @@
 import type { AiRunContext, AiRunState } from '../../types'
-import { planDecisionSchema, toPlanTasks } from './helpers'
+import { planDecisionSchema, toPlanTasks, validatePlannerTasks } from './helpers'
 import { buildPlanPrompt } from '../../prompts/main/plan'
 
 export const createPlanNode = (input: { ctx: AiRunContext }) => {
@@ -40,6 +40,15 @@ export const createPlanNode = (input: { ctx: AiRunContext }) => {
       return {
         status: 'failed',
         error: `plan_generation_failed: ${parseReason || 'invalid planner output'}`,
+        mainStage: 'main_complete'
+      }
+    }
+
+    const validationError = validatePlannerTasks(parsed.data.tasks)
+    if (validationError) {
+      return {
+        status: 'failed',
+        error: `plan_generation_failed: ${validationError}`,
         mainStage: 'main_complete'
       }
     }

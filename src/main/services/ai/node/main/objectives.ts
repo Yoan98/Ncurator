@@ -73,6 +73,7 @@ export const buildPlanTaskObjective = (input: {
   task: AiPlanTask
   contextEvidence: string[]
   priorDeliveries: AiPlanTask[]
+  selectedScopeSummary: string
 }): string => {
   return [
     '# 计划子任务',
@@ -83,6 +84,7 @@ export const buildPlanTaskObjective = (input: {
     renderSections([
       { label: '总体目标', value: input.userInput },
       { label: '当前子任务', value: `${input.task.title}\n${input.task.objective}` },
+      { label: '已选资料范围', value: input.selectedScopeSummary },
       { label: '上下文证据', value: renderContextEvidence(input.contextEvidence) },
       { label: '前序任务交付', value: renderDeliveries(input.priorDeliveries) }
     ])
@@ -93,6 +95,7 @@ export const buildSynthesisHumanObjective = (input: {
   userInput: string
   contextEvidence: string[]
   plan: AiPlanTask[]
+  selectedScopeSummary: string
 }): string => {
   return [
     '# 汇总交付任务',
@@ -102,6 +105,7 @@ export const buildSynthesisHumanObjective = (input: {
     '',
     renderSections([
       { label: '原始用户请求', value: input.userInput },
+      { label: '已选资料范围', value: input.selectedScopeSummary },
       { label: '上下文证据', value: renderContextEvidence(input.contextEvidence) },
       { label: '全部任务交付', value: renderDeliveries(input.plan) }
     ])

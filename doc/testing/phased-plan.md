@@ -13,9 +13,10 @@
 
 1. `tool capability`
 2. `human`
-3. `main context`
-4. `plan 质量`
-5. `ai 架构验收`
+3. `main intent`
+4. `main context`
+5. `plan 质量`
+6. `ai 架构验收`
 
 推进原则：
 - 必须先在当前阶段收敛主要不稳定项，再进入下一阶段。
@@ -71,7 +72,23 @@
 - `unexpected_block` 不应多于 `soft_pass`。
 - assessment 中不得存在未隔离的 `harness_fail` 结论污染。
 
-### 2.3 `main context`
+### 2.3 `main intent`
+
+- 目标：
+  - `main_intent` 的三路分流（`need_context | direct_human | to_plan`）稳定。
+  - context round-trip、`contextRounds` 上限降级与 local-first intent 契约可验证。
+- 主要输入：
+  - `tests/unit/main/ai/runtime/human-led-orchestration.test.ts`
+  - `tests/main/ai/runtime/prompt.local-first-contract.test.ts`
+- 主要命令：
+  - `pnpm exec vitest --config vitest.ai.config.mts run tests/unit/main/ai/runtime/human-led-orchestration.test.ts`
+  - `pnpm exec vitest --config vitest.ai.config.mts run tests/main/ai/runtime/prompt.local-first-contract.test.ts`
+- 阶段产物：
+  - `tests/report/main-ai-runtime/prompt-local-first-contract/**`
+  - `Vitest` 单测结果（`tests/unit/main/ai/runtime/human-led-orchestration.test.ts`）
+  - `doc/testing/upgrade-journal.md` 追加记录（包含 `main_intent` 分流、fallback 与证据写回结论）
+
+### 2.4 `main context`
 
 - 目标：
   - main graph 上下文收集、scope 语义、阻塞契约稳定。
@@ -83,18 +100,30 @@
   - `tests/report/main-ai-runtime/**`
   - `doc/testing/upgrade-journal.md` 追加记录
 
-### 2.4 `plan 质量`
+### 2.5 `plan 质量`
 
 - 目标：
   - 计划拆解合理、任务粒度稳定、收敛路径可解释。
 - 主要输入：
   - `tests/main/ai/runtime/**` + 定向补充计划质量用例
+  - planner contract：`plan-contract-validation`、`plan-prompt-scope-preserve`
+  - runtime quality：`plan-handoff-chain-3-step`、`plan-blocked-midway-still-synthesizes`、`plan-mixed-scope-objective-preserve`
+  - live sampling：`plan-live-long-handoff-quality`
   - 必要时用 `tests/e2e/**` 验证计划对 UI 链路的影响
+- 主要命令：
+  - `pnpm test:runtime`
+  - `pnpm exec vitest --config vitest.ai.config.mts run tests/main/ai/runtime/plan.contract.test.ts tests/main/ai/runtime/plan.runtime-quality.test.ts`
+  - `pnpm exec vitest --config vitest.ai.config.mts run tests/main/ai/runtime/plan.live-quality.test.ts`
 - 阶段产物：
   - 对应 suite 报告目录
   - `doc/testing/upgrade-journal.md` 追加记录
 
-### 2.5 `ai 架构验收`
+运行分层：
+- deterministic gating：先锁定 planner contract、长 handoff 链、阻塞后 synthesis 与 mixed-scope objective preserve。
+- live sampling：首轮只补 planner 生成质量样本，默认保持 `live-eval + batch_only`，避免直接污染主门禁。
+- 链路补充：仅当 deterministic / live 结果提示 UI 投影有风险时，再补 e2e plan 链路验证。
+
+### 2.6 `ai 架构验收`
 
 - 目标：
   - 给定真实用户需求，验证当前 AI 架构端到端效果是否达标。

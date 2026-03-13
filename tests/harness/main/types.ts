@@ -1,4 +1,9 @@
-import type { AiApprovalDecision, AiApprovalRequest, AiRunContext } from '../../../src/main/services/ai/types'
+import type {
+  AiApprovalDecision,
+  AiApprovalRequest,
+  AiMainStage,
+  AiRunContext
+} from '../../../src/main/services/ai/types'
 import type {
   AiRunEvent,
   AiRunEventStage,
@@ -23,7 +28,10 @@ export type ApprovalPolicy = 'auto-approve' | 'deny-medium-high' | 'deny-all'
 export type ApprovalResolver = (request: AiApprovalRequest) => AiApprovalDecision
 
 export type TestDocumentsStoreOverrides = Partial<
-  Pick<AiRunContext['documentsStore'], 'hybridSearch' | 'vectorSearch' | 'ftsSearch' | 'listDocuments'>
+  Pick<
+    AiRunContext['documentsStore'],
+    'hybridSearch' | 'vectorSearch' | 'ftsSearch' | 'listDocuments' | 'getDocumentById'
+  >
 >
 
 export type TestToolExecutionOverride = {
@@ -75,6 +83,16 @@ export type CaseSignalOverrides = {
   capabilityArea?: string
   sourceFile?: string
   profiles?: CaseMetadataSignalFields['profiles']
+  contextRoundCount?: number
+  contextEvidenceCount?: number
+  internalContextDeliveryCount?: number
+  contextFinalRoute?: AiMainStage
+  fellBackByRoundCap?: boolean
+  contextDecisionSequence?: string[]
+  internalContextTaskIds?: string[]
+  contextEvidenceItems?: string[]
+  effectiveContextEvidenceAdded?: boolean
+  contextResolutionStatus?: ContextResolutionStatus
 }
 
 export type CaseRuntimeMetrics = {
@@ -95,8 +113,25 @@ export type CaseRuntimeMetrics = {
   repeatedToolCallCount?: number
   stepBudgetUsage?: number
   qualityGrade?: CaseQualityGrade
+  softPassReasonCount?: number
   finalDeliverySource?: 'direct_human' | 'synthesis_human' | 'none'
+  contextRoundCount?: number
+  contextEvidenceCount?: number
+  internalContextDeliveryCount?: number
+  contextFinalRoute?: AiMainStage
+  fellBackByRoundCap?: boolean
 }
+
+export type SoftPassReason =
+  | 'tool_error_recovery'
+  | 'repeated_tool_calls'
+  | 'high_step_budget_usage'
+
+export type ContextResolutionStatus =
+  | 'resolved'
+  | 'fallback_to_plan'
+  | 'unresolved'
+  | 'not_applicable'
 
 export type ToolCounts = Record<string, number>
 export type ToolResultCodeCounts = Record<string, Record<string, number>>
@@ -171,6 +206,12 @@ export type CaseSignalsReport = {
   firstFailureStage?: AiRunEventStage
   finalHumanAction?: HumanStepAction
   executionSummary?: string
+  softPassReasons: SoftPassReason[]
+  contextDecisionSequence: string[]
+  internalContextTaskIds: string[]
+  contextEvidenceItems: string[]
+  effectiveContextEvidenceAdded?: boolean
+  contextResolutionStatus?: ContextResolutionStatus
 }
 
 export type CaseReportInput = {

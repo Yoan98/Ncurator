@@ -23,7 +23,7 @@
 ## [YYYY-MM-DD] <阶段名> - <轮次/标签>
 
 - 时间：YYYY-MM-DD HH:mm（本地时间）
-- 阶段：tool capability / human 单任务 / main context / plan 质量 / ai 架构验收
+- 阶段：tool capability / human 单任务 / main intent / main context / plan 质量 / ai 架构验收
 - 执行命令：
   - `...`
   - `...`
@@ -48,6 +48,84 @@
 ```
 
 ## 3. 历史记录
+
+## [2026-03-13] main context - deterministic roundtrip 扩展与 live 样本脚手架
+
+- 时间：2026-03-13 16:37（本地）
+- 阶段：main context
+- 执行命令：
+  - `pnpm exec vitest --config vitest.ai.config.mts run tests/main/ai/runtime/context.main-graph.test.ts`
+  - `pnpm exec vitest --config vitest.ai.config.mts list tests/main/ai/runtime/context.live.test.ts`
+  - `pnpm test:catalog:generate`
+- 报告路径：
+  - `tests/report/main-ai-runtime/context-roundtrip-resolves-reference/2026-03-13_16:34:54/summary.md`
+  - `tests/report/main-ai-runtime/context-max-rounds-falls-back-to-plan/2026-03-13_16:34:54/summary.md`
+- 结果摘要：
+  - 新增 `2` 条 canonical gating runtime case：`context-roundtrip-resolves-reference` 与 `context-max-rounds-falls-back-to-plan`，均通过，说明 `need_context -> contextEvidence -> 再决策` 与 round cap fallback 主链路已经有 deterministic graph-level 覆盖。
+  - runtime 报告契约已补充 context 专属字段，`metrics.json` / `signals.json` 现在可表达 `contextRoundCount`、`contextEvidenceCount`、`internalContextDeliveryCount`、`contextDecisionSequence`、`contextFinalRoute` 与 `fellBackByRoundCap`。
+  - 已新增 `context-anaphora-followup` 与 `context-local-evidence-insufficient` 两条 `live-eval/batch_only` 样本，并确认测试收集正常；本轮未在当前环境启用 live 执行。
+  - `test catalog` 已更新，新增 runtime case 现已进入 `current-cases.json` / `current-cases.md`。
+- 风险与边界：
+  - 当前 context 专属信号通过 test harness/report override 落盘，不是新的生产事件契约；其目标是支撑测试分析，而不是扩展 UI 回放协议。
+  - live runtime 样本本轮只完成 scaffold 和 catalog 落位，尚未形成实际 batch 结论；是否需要调整 prompt/objective 仍需在启用 `AI_LIVE_ENABLE` 后采样判断。
+- 推进决策：
+  - `main context` 阶段继续留在当前阶段推进，但从“只有 contract baseline”提升到了“已有 deterministic roundtrip + live sample scaffolding”。
+- 下一轮优先级：
+  1. 在启用 live 环境后对两条 context live 样本做 `3-5` 轮采样，观察 context 轮次、假澄清和范围漂移是否出现。
+  2. 若 live 结果暴露重复 ask-context 或证据无增量，再决定是否调整 `intent` / `context human` prompt，而不是先动状态机。
+  3. 视 live 采样结果决定是否补 `main-ai-runtime` 的 context compare/analyzer。
+
+### 阶段专题结论（按需）
+- 覆盖范围：
+  - deterministic：单轮 context 解歧义、连续 need_context 命中上限后 fallback 到 plan。
+  - reporting：context 轮次、证据条数、internal context delivery、决策序列与 fallback 标记。
+  - live scaffolding：指代 follow-up、本地证据不足两条 batch-only 样本。
+- 能力边界：
+  - 这轮结果已经能回答“main context 主链路是否按状态机契约收敛”，但还不能单独回答“真实模型下 context prompt 是否已经足够好”。
+- 门槛判定：
+  - `main context` 仍处于进行中，但当前没有证据要求回退到 `human` 或 `main intent` 阶段。
+
+## [2026-03-13] plan 质量 - 首轮 baseline 落地
+
+- 时间：2026-03-13 16:29（本地）
+- 阶段：plan 质量
+- 执行命令：
+  - `pnpm exec tsc --noEmit -p tsconfig.node.json --composite false`
+  - `pnpm test:runtime`
+  - `pnpm test:catalog:generate`
+- 报告路径：
+  - `tests/report/main-ai-runtime/plan-contract-validation/2026-03-13_16:29:15/summary.md`
+  - `tests/report/main-ai-runtime/plan-prompt-scope-preserve/2026-03-13_16:29:15/summary.md`
+  - `tests/report/main-ai-runtime/plan-handoff-chain-3-step/2026-03-13_16:29:14/summary.md`
+  - `tests/report/main-ai-runtime/plan-blocked-midway-still-synthesizes/2026-03-13_16:29:14/summary.md`
+  - `tests/report/main-ai-runtime/plan-mixed-scope-objective-preserve/2026-03-13_16:29:14/summary.md`
+  - `tests/report/main-ai-runtime/plan-live-long-handoff-quality/2026-03-13_16:29:14/summary.md`
+- 结果摘要：
+  - `main-ai-runtime` 当前 `9/9` 文件、`15/15` 测试通过；新增 `5` 个 canonical gating plan quality case 与 `1` 个 `live-eval/batch_only` case，覆盖 planner contract、长 handoff 链、阻塞后 synthesis、mixed-scope objective preserve 与首个 live planner 质量样本。
+  - planner 现在会拒绝明显的 final-summary task 和空泛 objective；`plan-contract-validation` 已验证 `plan_generation_failed` 会稳定暴露这些结构性问题。
+  - `plan task objective` 与 `synthesis objective` 已新增 `selectedScopeSummary` 编译；`plan-mixed-scope-objective-preserve` 证明 mixed-scope 范围语义不会在 runtime handoff 中静默丢失。
+  - 首个 live case `plan-live-long-handoff-quality` 本轮实际执行通过，生成了多步计划，且未出现 summary-task leakage。
+- 风险与边界：
+  - 当前 planner objective 校验是启发式防线，主要拦截“最终答复/最终总结”类任务与明显空泛 objective，还不是完整语义评分器。
+  - 首轮 live coverage 只覆盖 planner 生成质量，没有把完整的 live `plan -> human -> synthesis` 主链一起纳入评估。
+  - 本轮仍复用现有 report 信号，没有新增专门的 planner quality analyzer；阶段结论主要依赖 case 设计与结构化断言。
+- 推进决策：
+  - `plan 质量` 阶段已正式启动且首轮 baseline 通过，但当前更适合继续留在本阶段补充 live 样本与更长链路，而不是立即视为已完成。
+- 下一轮优先级：
+  1. 为 `plan-live-long-handoff-quality` 增加 `3-5` 轮采样，观察 task 粒度与 summary-task leakage 是否稳定。
+  2. 继续补更长 handoff 链和更复杂的 mixed-scope live case，确认 deterministic 通过不只是单轮偶然结果。
+  3. 若后续发现“过度拆分/欠拆分”仍难从现有 signals 稳定判断，再评估是否补充 planner quality 专项信号或 analyzer。
+
+### 阶段专题结论（按需）
+- 覆盖范围：
+  - planner contract：final-summary task 泄漏、空泛 objective、selected scope prompt preserve、parse fail-fast。
+  - runtime quality：三步 handoff 链、中途阻塞后 synthesis、mixed-scope objective preserve。
+  - live quality：首个多步 planner 生成样本。
+- 能力边界：
+  - 这轮结果已经能回答“planner 输出结构是否可信”和“runtime 是否保住了 handoff/scope 语义”，但还不能单独回答“真实模型下 plan 质量是否已足够稳定进入下一阶段”。
+- 门槛判定：
+  - `plan 质量` 已从“准备中”进入“已启动且首轮 baseline 通过”。
+  - 当前没有证据要求回退到 `main context` 或 `human` 阶段，但也没有足够证据直接宣布 `plan 质量` 收口完成。
 
 ## [2026-03-13] ai 架构验收 - human-led delivery 首轮落地
 

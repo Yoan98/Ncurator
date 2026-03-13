@@ -1,6 +1,6 @@
 # Current Test Cases
 
-- generatedAt: 2026-03-13T07:46:53.163Z
+- generatedAt: 2026-03-13T08:36:34.836Z
 
 ## e2e-chat
 
@@ -64,7 +64,7 @@
 | human-approval-denied-block | live-eval | active | batch_only | passed/blocked | tests/main/ai/human/human.approval-denied.live.test.ts |
 | human-docx-edit | live-eval | active | batch_only | passed/completed | tests/main/ai/human/human.docx-edit.live.test.ts |
 | human-local-evidence-insufficient-block | live-eval | active | batch_only | passed/blocked | tests/main/ai/human/human.local-evidence-insufficient.live.test.ts |
-| human-local-kb-answer | live-eval | active | batch_only | passed/completed | tests/main/ai/human/human.local-kb-answer.live.test.ts |
+| human-local-kb-answer | live-eval | active | batch_only | failed/completed | tests/main/ai/human/human.local-kb-answer.live.test.ts |
 | human-local-kb-empty-result-block | live-eval | active | batch_only | passed/blocked | tests/main/ai/human/human.local-kb-empty-result.live.test.ts |
 | human-missing-live-config-fail-fast | coverage | active | manual | failed/not_run | tests/main/ai/human/human.missing-live-config.fail-fast.test.ts |
 | human-multi-skill-kb-then-shell | live-eval | active | batch_only | passed/completed | tests/main/ai/human/human.multi-skill-kb-then-shell.live.test.ts |
@@ -78,10 +78,20 @@
 
 | Case | Retention | Lifecycle | Run Policy | Latest | Source |
 | --- | --- | --- | --- | --- | --- |
+| context-anaphora-followup | live-eval | active | batch_only | passed/completed | tests/main/ai/runtime/context.live.test.ts |
+| context-local-evidence-insufficient | live-eval | active | batch_only | none | tests/main/ai/runtime/context.live.test.ts |
+| context-max-rounds-falls-back-to-plan | canonical | active | gating | passed/completed | tests/main/ai/runtime/context.main-graph.test.ts |
+| context-roundtrip-resolves-reference | canonical | active | gating | passed/completed | tests/main/ai/runtime/context.main-graph.test.ts |
 | docx-draft-review-conflict | canonical | active | gating | passed/completed | tests/main/ai/runtime/docx.draft-review-commit.test.ts |
 | docx-draft-review-partial-commit | canonical | active | gating | passed/completed | tests/main/ai/runtime/docx.draft-review-commit.test.ts |
 | docx-draft-review-ready | canonical | active | gating | passed/completed | tests/main/ai/runtime/docx.draft-review-commit.test.ts |
 | human-result-data-enrichment | canonical | active | gating | passed/completed | tests/main/ai/runtime/human.result-data-enrichment.test.ts |
+| plan-blocked-midway-still-synthesizes | canonical | active | gating | passed/completed | tests/main/ai/runtime/plan.runtime-quality.test.ts |
+| plan-contract-validation | canonical | active | gating | passed/completed | tests/main/ai/runtime/plan.contract.test.ts |
+| plan-handoff-chain-3-step | canonical | active | gating | passed/completed | tests/main/ai/runtime/plan.runtime-quality.test.ts |
+| plan-live-long-handoff-quality | live-eval | active | batch_only | passed/completed | tests/main/ai/runtime/plan.live-quality.test.ts |
+| plan-mixed-scope-objective-preserve | canonical | active | gating | passed/completed | tests/main/ai/runtime/plan.runtime-quality.test.ts |
+| plan-prompt-scope-preserve | canonical | active | gating | passed/completed | tests/main/ai/runtime/plan.contract.test.ts |
 | prompt-local-first-contract | canonical | active | gating | passed/completed | tests/main/ai/runtime/prompt.local-first-contract.test.ts |
 | runtime-missing-fixture-fail-fast | coverage | active | gating | failed/not_run | tests/main/ai/runtime/runtime.missing-fixture.fail-fast.test.ts |
 | runtime-scope-validation | canonical | active | gating | passed/completed | tests/main/ai/runtime/runtime.scope-validation.test.ts |

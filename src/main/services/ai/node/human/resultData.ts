@@ -13,7 +13,15 @@ const GENERIC_DOCUMENT_NAME_VALUES = new Set([
   'local-kb',
   'local kb',
   'local-knowledge-base',
-  'local knowledge base'
+  'local knowledge base',
+  'unknown',
+  'none',
+  'n-a',
+  'not-provided',
+  'missing',
+  '未提供',
+  '未知',
+  '无'
 ])
 
 const toTrimmedString = (value: JsonValue | undefined): string | undefined => {
@@ -53,6 +61,34 @@ const extractDocumentRefFromRecord = (value: JsonObject): RetrievalDocumentRef |
   return null
 }
 
+const parseJsonValueText = (value: string): JsonValue | undefined => {
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  try {
+    return JSON.parse(trimmed) as JsonValue
+  } catch {
+    const arrayStart = trimmed.indexOf('[')
+    const arrayEnd = trimmed.lastIndexOf(']')
+    if (arrayStart >= 0 && arrayEnd > arrayStart) {
+      try {
+        return JSON.parse(trimmed.slice(arrayStart, arrayEnd + 1)) as JsonValue
+      } catch {
+        return undefined
+      }
+    }
+    const objectStart = trimmed.indexOf('{')
+    const objectEnd = trimmed.lastIndexOf('}')
+    if (objectStart >= 0 && objectEnd > objectStart) {
+      try {
+        return JSON.parse(trimmed.slice(objectStart, objectEnd + 1)) as JsonValue
+      } catch {
+        return undefined
+      }
+    }
+  }
+  return undefined
+}
+
 const extractDocumentRefsFromValue = (value: JsonValue | undefined): RetrievalDocumentRef[] => {
   if (Array.isArray(value)) {
     return value.flatMap((item) => extractDocumentRefsFromValue(item))
@@ -63,6 +99,11 @@ const extractDocumentRefsFromValue = (value: JsonValue | undefined): RetrievalDo
   const refs: RetrievalDocumentRef[] = []
   const directRef = extractDocumentRefFromRecord(value)
   if (directRef) refs.push(directRef)
+
+  const rawValue = toTrimmedString(value.raw)
+  if (rawValue) {
+    refs.push(...extractDocumentRefsFromValue(parseJsonValueText(rawValue)))
+  }
 
   const nestedItems = value.items
   if (Array.isArray(nestedItems)) {
@@ -87,10 +128,35 @@ const dedupeDocumentRefs = (refs: RetrievalDocumentRef[]): RetrievalDocumentRef[
   return unique
 }
 
-const resolveUniqueDocumentRef = (value: JsonValue | undefined): RetrievalDocumentRef | undefined => {
+const extractDocumentRefFromSummary = (summary: string | undefined): RetrievalDocumentRef | undefined => {
+  const text = String(summary || '').trim()
+  if (!text) return undefined
+
+  const pairMatch = text.match(/document=([^;()]+?)\s*\(([^()]+)\)/i)
+  if (pairMatch) {
+    return {
+      documentName: pairMatch[1]?.trim() || undefined,
+      documentId: pairMatch[2]?.trim() || undefined
+    }
+  }
+
+  const singleMatch = text.match(/document=([^;]+)/i)
+  if (!singleMatch) return undefined
+  const raw = singleMatch[1]?.trim()
+  if (!raw) return undefined
+  return {
+    documentName: raw
+  }
+}
+
+const resolveUniqueDocumentRef = (
+  value: JsonValue | undefined,
+  summary?: string
+): RetrievalDocumentRef | undefined => {
   const refs = dedupeDocumentRefs(extractDocumentRefsFromValue(value))
-  if (refs.length !== 1) return undefined
-  return refs[0]
+  if (refs.length === 1) return refs[0]
+  if (refs.length === 0) return extractDocumentRefFromSummary(summary)
+  return undefined
 }
 
 const matchesDocumentRef = (value: string | undefined, ref: RetrievalDocumentRef): boolean => {
@@ -110,7 +176,10 @@ export const enrichCompleteTaskResultData = (input: {
     return input.resultData
   }
 
-  const uniqueRef = resolveUniqueDocumentRef(input.lastObservation.data)
+  const uniqueRef = resolveUniqueDocumentRef(
+    input.lastObservation.data,
+    input.lastObservation.summary
+  )
   if (!uniqueRef) return input.resultData
 
   const nextResultData: JsonObject = { ...input.resultData }

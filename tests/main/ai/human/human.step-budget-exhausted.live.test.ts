@@ -33,7 +33,7 @@ describe('human', () => {
       requiredFixtures: CASE_METADATA.requiredFixtures,
       fixtureCopies: [{ from: FIXTURE_SOURCE, to: 'input.txt' }],
       approvalPolicy: 'auto-approve',
-      maxSteps: 1,
+      maxSteps: 0,
       assert: async (result, runtime) => {
         const events = runtime.eventCollector.snapshot()
         const toolCallCount = events.filter((event) => event.type === 'tool_call_started').length
@@ -72,5 +72,5 @@ describe('human', () => {
     expect(report.metrics.executionResultCode).toBe('bounded_loop_error')
     expect(report.signals.finalHumanAction).toBe('block_task')
     expect(report.metrics.qualityGrade).toBe('expected_block')
-  })
+  }, 240000)
 })

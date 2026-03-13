@@ -24,6 +24,7 @@ export const createSynthesisHumanNode = (input: {
         taskId: SYNTHESIS_TASK_ID,
         objective: buildSynthesisHumanObjective({
           userInput: state.input,
+          selectedScopeSummary: ctx.selectedScopeSummary,
           contextEvidence: state.contextEvidence,
           plan: state.plan
         })

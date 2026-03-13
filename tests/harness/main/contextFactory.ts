@@ -36,7 +36,16 @@ const buildDocumentsStoreStub = (overrides: TestDocumentsStoreOverrides | undefi
   hybridSearch: overrides?.hybridSearch || (async () => []),
   vectorSearch: overrides?.vectorSearch || (async () => []),
   ftsSearch: overrides?.ftsSearch || (async () => []),
-  listDocuments: overrides?.listDocuments || (async () => ({ items: [], total: 0 }))
+  listDocuments: overrides?.listDocuments || (async () => ({ items: [], total: 0 })),
+  getDocumentById:
+    overrides?.getDocumentById ||
+    (async (id: string) => {
+      const response = await (overrides?.listDocuments || (async () => ({ items: [], total: 0 })))({
+        page: 1,
+        pageSize: 100
+      })
+      return response.items.find((item) => item.id === id) || null
+    })
 })
 
 const buildEmbeddingServiceStub = () => ({
@@ -87,6 +96,15 @@ export const createTestAiRunContext = (input: {
   selectedDocumentIds?: string[]
   approvalPolicy?: ApprovalPolicy | ApprovalResolver
   liveModelConfig?: LiveLlmConfig
+  chatJsonOverride?: <T extends JsonObject>(input: {
+    system: string
+    user: string
+    temperature?: number
+  }) => Promise<T>
+  historyOverride?: {
+    recentTurnsText: string
+    sessionSummaryText: string
+  }
   documentsStoreOverrides?: TestDocumentsStoreOverrides
   toolExecutionOverrides?: TestToolExecutionOverride[]
   trackDocxOpen?: (input: { docId: string; sourcePath: string }) => void
@@ -153,6 +171,9 @@ export const createTestAiRunContext = (input: {
       : undefined,
     checkCancelled: () => undefined,
     chatJson: async <T extends JsonObject>(payload): Promise<T> => {
+      if (input.chatJsonOverride) {
+        return input.chatJsonOverride<T>(payload)
+      }
       if (!input.liveModelConfig) {
         throw new Error('chatJson is not available in this test harness context')
       }
@@ -171,10 +192,11 @@ export const createTestAiRunContext = (input: {
       input.eventCollector.add(event)
     },
     requestApproval,
-    loadHistory: async () => ({
-      recentTurnsText: '',
-      sessionSummaryText: ''
-    }),
+    loadHistory: async () =>
+      input.historyOverride || {
+        recentTurnsText: '',
+        sessionSummaryText: ''
+      },
     trackDocxOpen: input.trackDocxOpen || (() => undefined),
     trackDocxChanges: input.trackDocxChanges || (() => undefined),
     trackDocxPreview: input.trackDocxPreview || (() => undefined),

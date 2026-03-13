@@ -19,6 +19,7 @@ export const buildHumanBrainPrompt = (input: HumanBrainPromptInput) => {
     '【工具边界】只有 active tools 中列出的工具可以 invoke_tool。',
     '【完成标准】仅当任务目标已满足且证据充分时才 complete_task；summary 必须写清结论与关键证据。',
     '【结果收敛】若任务目标已明确要求 resultData 字段，且最近 observation 已经提供这些字段所需证据，下一步必须 complete_task 并写入 resultData，不要继续为同一证据反复调用 KB 或 shell。',
+    '【KB 收敛】若 kb_hybrid_search_chunks 的 observation 已经出现唯一的 document_name/document_id，或首条文本已经直接给出答案，不要再调用 kb_list_documents / 再次搜索来“确认同一证据”；应直接 complete_task。',
     '【阻塞标准】workspace_required/approval_denied 等不可恢复条件必须 block_task。',
     '【反循环】最近一步没有带来新信息时，禁止重复相同 toolName + args；应切换 skill、调整参数或收敛。',
     '【禁止过度复核】同一文件名、同一命令输出或同一 KB 证据已经足够支撑结论时，不要再做“再次确认”式工具调用。',

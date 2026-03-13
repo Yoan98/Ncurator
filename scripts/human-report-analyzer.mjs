@@ -20,6 +20,9 @@ const QUALITY_GRADES = [
   'unknown'
 ]
 
+const STAGE_GATE_SUCCESS_THRESHOLD = 0.8
+const STAGE_GATE_BLOCKED_THRESHOLD = 0.95
+
 const readJson = async (filePath) => {
   const raw = await readFile(filePath, 'utf8')
   return JSON.parse(raw)
@@ -33,6 +36,11 @@ const listDirectories = async (target) => {
 const resolveCurrentCaseIds = async () => {
   const currentCases = await listActiveCurrentCasesBySuite(SUITE)
   return currentCases.map((item) => item.caseId).sort()
+}
+
+const resolveCurrentCaseMap = async () => {
+  const currentCases = await listActiveCurrentCasesBySuite(SUITE)
+  return new Map(currentCases.map((item) => [item.caseId, item]))
 }
 
 const reportDirExists = async (target) => {
@@ -168,8 +176,25 @@ const collectRunTotals = (reports) => {
   }
 }
 
-const summarizeCases = (reports) => {
+const collectSoftPassReasonTotals = (reports) => {
+  const totals = new Map()
+
+  for (const report of reports) {
+    for (const run of report.runs) {
+      if (!isModernAssessmentRun(run)) continue
+      const reasons = Array.isArray(run.signals.softPassReasons) ? run.signals.softPassReasons : []
+      for (const reason of reasons) {
+        totals.set(reason, (totals.get(reason) || 0) + 1)
+      }
+    }
+  }
+
+  return Array.from(totals.entries()).sort((left, right) => right[1] - left[1])
+}
+
+const summarizeCases = (reports, currentCaseMap) => {
   return reports.map((report) => {
+    const currentCase = currentCaseMap.get(report.caseId) || null
     const assessmentRuns = report.runs.filter(isModernAssessmentRun)
     const qualityCounts = createQualityCounts()
     const durations = []
@@ -200,6 +225,8 @@ const summarizeCases = (reports) => {
     return {
       caseId: report.caseId,
       latest: report.latest,
+      expectedOutcome: currentCase?.expectedOutcome || report.latest?.signals?.expectedOutcome || null,
+      runPolicy: currentCase?.runPolicy || report.latest?.signals?.runPolicy || null,
       runCount: assessmentRuns.length,
       successfulRuns,
       successRate: assessmentRuns.length > 0 ? successfulRuns / assessmentRuns.length : 0,
@@ -212,7 +239,10 @@ const summarizeCases = (reports) => {
       medianStepBudgetUsage: median(stepBudgetUsage),
       totalToolErrors,
       totalRepeatedToolCalls,
-      totalRecoveryAfterError
+      totalRecoveryAfterError,
+      latestSoftPassReasons: Array.isArray(report.latest?.signals?.softPassReasons)
+        ? report.latest.signals.softPassReasons
+        : []
     }
   })
 }
@@ -241,6 +271,73 @@ const collectFailureModes = (reports) => {
   }
 }
 
+const evaluateStageGate = (caseSummaries, failedCases) => {
+  const successCases = caseSummaries.filter(
+    (summary) => summary.expectedOutcome === 'success' && summary.runPolicy !== 'manual'
+  )
+  const blockedCases = caseSummaries.filter(
+    (summary) => summary.expectedOutcome === 'blocked' && summary.runPolicy !== 'manual'
+  )
+
+  const successReadyCount = successCases.filter((summary) => {
+    const grade = summary.latest?.metrics?.qualityGrade || 'unknown'
+    return grade === 'hard_pass' || grade === 'soft_pass'
+  }).length
+  const blockedReadyCount = blockedCases.filter(
+    (summary) => (summary.latest?.metrics?.qualityGrade || 'unknown') === 'expected_block'
+  ).length
+
+  const successRate = successCases.length === 0 ? 0 : successReadyCount / successCases.length
+  const blockedRate = blockedCases.length === 0 ? 1 : blockedReadyCount / blockedCases.length
+  const unexpectedBlockCases = successCases
+    .filter((summary) => (summary.latest?.metrics?.qualityGrade || 'unknown') === 'unexpected_block')
+    .map((summary) => summary.caseId)
+  const unisolatedHarnessFailCases = caseSummaries
+    .filter(
+      (summary) =>
+        (summary.latest?.metrics?.qualityGrade || 'unknown') === 'harness_fail' &&
+        summary.runPolicy !== 'manual'
+    )
+    .map((summary) => summary.caseId)
+
+  const checks = [
+    {
+      label: `success-path latest readiness >= ${Math.round(STAGE_GATE_SUCCESS_THRESHOLD * 100)}%`,
+      pass: successRate >= STAGE_GATE_SUCCESS_THRESHOLD,
+      details: `${successReadyCount}/${successCases.length}`
+    },
+    {
+      label: `blocked-path semantic correctness >= ${Math.round(STAGE_GATE_BLOCKED_THRESHOLD * 100)}%`,
+      pass: blockedRate >= STAGE_GATE_BLOCKED_THRESHOLD,
+      details: `${blockedReadyCount}/${blockedCases.length}`
+    },
+    {
+      label: 'latest unexpected_block == 0',
+      pass: unexpectedBlockCases.length === 0,
+      details: unexpectedBlockCases.length === 0 ? 'none' : unexpectedBlockCases.join(', ')
+    },
+    {
+      label: 'latest assertion failures == 0',
+      pass: failedCases.length === 0,
+      details: failedCases.length === 0 ? 'none' : failedCases.join(', ')
+    },
+    {
+      label: 'no unisolated harness_fail in active gate',
+      pass: unisolatedHarnessFailCases.length === 0,
+      details: unisolatedHarnessFailCases.length === 0 ? 'none' : unisolatedHarnessFailCases.join(', ')
+    }
+  ]
+
+  return {
+    status: checks.every((check) => check.pass) ? 'ready' : 'blocked',
+    successRate,
+    blockedRate,
+    unexpectedBlockCases,
+    unisolatedHarnessFailCases,
+    checks
+  }
+}
+
 const buildRecommendations = (input) => {
   const items = []
 
@@ -258,6 +355,11 @@ const buildRecommendations = (input) => {
   }
   if (input.softPassCases.length > 0) {
     items.push(`重点优化软成功用例的重复调用或恢复成本：${input.softPassCases.join(', ')}`)
+  }
+  if (input.softPassReasonTotals.length > 0) {
+    items.push(
+      `soft_pass 主要来源：${input.softPassReasonTotals.map(([reason, count]) => `${reason}=${count}`).join(', ')}`
+    )
   }
   if (input.harnessFailCases.length > 0) {
     items.push(`harness_fail 仅作环境门禁，不纳入能力结论：${input.harnessFailCases.join(', ')}`)
@@ -292,6 +394,7 @@ const toMarkdown = (input) => {
   lines.push(
     `- historicalSuccessfulRunRate: ${toPercent(input.historicalSuccessfulRuns, input.runTotals.totalRuns)}`
   )
+  lines.push(`- stageGateStatus: ${input.stageGate.status}`)
   lines.push('')
   lines.push('## Current Cases')
   lines.push('| Case | Latest Quality | Latest Execution | Runs | Success Rate | Median Duration | Median Steps |')
@@ -319,6 +422,20 @@ const toMarkdown = (input) => {
       lines.push(
         `- ${summary.caseId}: success=${summary.successfulRuns}/${summary.runCount}, softPass=${summary.softPassRuns}, unexpectedBlock=${summary.unexpectedBlockRuns}, harnessFail=${summary.harnessFailRuns}, toolErrors=${summary.totalToolErrors}, repeatedToolCalls=${summary.totalRepeatedToolCalls}, recoveryAfterError=${summary.totalRecoveryAfterError}`
       )
+    }
+  }
+
+  lines.push('')
+  lines.push('## Soft Pass Reasons')
+  if (input.softPassReasonTotals.length === 0) {
+    lines.push('- none')
+  } else {
+    for (const [reason, count] of input.softPassReasonTotals) {
+      lines.push(`- ${reason}: ${count}`)
+    }
+    for (const summary of input.caseSummaries) {
+      if (summary.latestSoftPassReasons.length === 0) continue
+      lines.push(`- ${summary.caseId} latest: ${summary.latestSoftPassReasons.join(', ')}`)
     }
   }
 
@@ -358,6 +475,15 @@ const toMarkdown = (input) => {
   lines.push(`- totalRecoveryAfterError: ${input.runTotals.totalRecoveryAfterError}`)
 
   lines.push('')
+  lines.push('## Stage Gate')
+  lines.push(`- status: ${input.stageGate.status}`)
+  lines.push(`- successPathLatestRate: ${toPercent(input.stageGate.successRate, 1)}`)
+  lines.push(`- blockedPathLatestRate: ${toPercent(input.stageGate.blockedRate, 1)}`)
+  for (const check of input.stageGate.checks) {
+    lines.push(`- ${check.pass ? 'pass' : 'fail'}: ${check.label} (${check.details})`)
+  }
+
+  lines.push('')
   lines.push('## Historical Quality Counts')
   for (const grade of QUALITY_GRADES) {
     lines.push(`- ${grade}: ${input.historicalQualityCounts[grade] || 0}`)
@@ -384,6 +510,7 @@ const toMarkdown = (input) => {
 
 const main = async () => {
   const currentCaseIds = await resolveCurrentCaseIds()
+  const currentCaseMap = await resolveCurrentCaseMap()
   const archivedCatalog = await readArchivedCaseCatalog()
   const archivedCaseIds = new Set(archivedCatalog.archivedCases.map((item) => item.caseId))
   const allReportCaseDirs = (await reportDirExists(REPORT_ROOT)) ? await listDirectories(REPORT_ROOT) : []
@@ -413,8 +540,9 @@ const main = async () => {
   const latestQualityCounts = summarizeLatestQualityCounts(reports)
   const historicalQualityCounts = summarizeHistoricalQualityCounts(reports)
   const runTotals = collectRunTotals(reports)
+  const softPassReasonTotals = collectSoftPassReasonTotals(reports)
   const skillCoverage = buildSkillCoverage(reports)
-  const caseSummaries = summarizeCases(reports)
+  const caseSummaries = summarizeCases(reports, currentCaseMap)
   const failureModes = collectFailureModes(reports)
   const failedCases = reports
     .filter(
@@ -423,6 +551,7 @@ const main = async () => {
         report.latest.metrics.qualityGrade !== 'harness_fail'
     )
     .map((report) => report.caseId)
+  const stageGate = evaluateStageGate(caseSummaries, failedCases)
   const harnessFailCases = caseSummaries
     .filter((summary) => summary.latest.metrics.qualityGrade === 'harness_fail')
     .map((summary) => summary.caseId)
@@ -452,7 +581,8 @@ const main = async () => {
     lowStabilityCases,
     softPassCases,
     staleReportCases,
-    harnessFailCases
+    harnessFailCases,
+    softPassReasonTotals
   })
 
   const markdown = toMarkdown({
@@ -464,10 +594,12 @@ const main = async () => {
     historicalQualityCounts,
     historicalSuccessfulRuns,
     runTotals,
+    softPassReasonTotals,
     skillCoverage,
     caseSummaries,
     failureModes,
-    recommendations
+    recommendations,
+    stageGate
   })
 
   await writeFile(OUTPUT_FILE, markdown, 'utf8')

@@ -15,10 +15,14 @@ import type {
   CaseReportInput,
   CaseRuntimeMetrics,
   CaseSignalsReport,
+  ContextResolutionStatus,
+  SoftPassReason,
   StepActionCounts,
   ToolCounts,
   ToolResultCodeCounts
 } from './types'
+
+const SOFT_PASS_STEP_BUDGET_THRESHOLD = 0.75
 
 const ensureDir = async (target: string): Promise<void> => {
   await mkdir(target, { recursive: true })
@@ -112,6 +116,7 @@ const inspectEvents = (events: AiRunEvent[]) => {
     updated: 0
   }
   const deliveryTaskIds: string[] = []
+  const internalContextTaskIds: string[] = []
   const deliverySectionCounts: Record<string, number> = {}
   let warningCount = 0
   let approvalRequiredCount = 0
@@ -157,6 +162,9 @@ const inspectEvents = (events: AiRunEvent[]) => {
     if (event.type === 'task_delivery_ready') {
       taskDeliveryCount += 1
       deliveryTaskIds.push(event.taskId)
+      if (event.taskId.startsWith('context-')) {
+        internalContextTaskIds.push(event.taskId)
+      }
       const sections = String(event.deliveryMarkdown || '').match(/^##\s+(.+)$/gm) || []
       sections.forEach((section) => {
         const normalized = section.replace(/^##\s+/, '').trim()
@@ -219,6 +227,7 @@ const inspectEvents = (events: AiRunEvent[]) => {
     artifactOperationCounts,
     taskDeliveryCount,
     deliveryTaskIds,
+    internalContextTaskIds,
     deliverySectionCounts,
     synthesisTriggered,
     finalDeliverySource,
@@ -232,6 +241,21 @@ const inspectEvents = (events: AiRunEvent[]) => {
     firstFailureStage,
     finalHumanAction
   }
+}
+
+const resolveContextResolutionStatus = (input: {
+  contextResolutionStatus?: ContextResolutionStatus
+  contextDecisionSequence?: string[]
+  fellBackByRoundCap?: boolean
+}): ContextResolutionStatus | undefined => {
+  if (input.contextResolutionStatus) return input.contextResolutionStatus
+  if (input.fellBackByRoundCap) return 'fallback_to_plan'
+  const sequence = input.contextDecisionSequence || []
+  if (sequence.length === 0) return undefined
+  const last = sequence[sequence.length - 1]
+  if (last === 'direct_human' || last === 'to_plan') return 'resolved'
+  if (last === 'need_context') return 'unresolved'
+  return undefined
 }
 
 const resolveQualityGrade = (input: {
@@ -259,11 +283,28 @@ const resolveQualityGrade = (input: {
   if (
     input.toolErrorCount === 0 &&
     input.repeatedToolCallCount === 0 &&
-    (input.stepBudgetUsage === undefined || input.stepBudgetUsage <= 0.75)
+    (input.stepBudgetUsage === undefined || input.stepBudgetUsage <= SOFT_PASS_STEP_BUDGET_THRESHOLD)
   ) {
     return 'hard_pass'
   }
   return 'soft_pass'
+}
+
+const resolveSoftPassReasons = (input: {
+  qualityGrade?: CaseQualityGrade
+  toolErrorCount?: number
+  repeatedToolCallCount?: number
+  stepBudgetUsage?: number
+}): SoftPassReason[] => {
+  if (input.qualityGrade !== 'soft_pass') return []
+
+  const reasons: SoftPassReason[] = []
+  if ((input.toolErrorCount || 0) > 0) reasons.push('tool_error_recovery')
+  if ((input.repeatedToolCallCount || 0) > 0) reasons.push('repeated_tool_calls')
+  if ((input.stepBudgetUsage || 0) > SOFT_PASS_STEP_BUDGET_THRESHOLD) {
+    reasons.push('high_step_budget_usage')
+  }
+  return reasons
 }
 
 const resolveFinalHumanAction = (input: {
@@ -297,6 +338,12 @@ const buildMetrics = (input: { report: CaseReportInput }): CaseRuntimeMetrics =>
     repeatedToolCallCount: inspected.repeatedToolCallCount,
     stepBudgetUsage
   })
+  const softPassReasons = resolveSoftPassReasons({
+    qualityGrade,
+    toolErrorCount: inspected.toolErrorCount,
+    repeatedToolCallCount: inspected.repeatedToolCallCount,
+    stepBudgetUsage
+  })
   return {
     durationMs: Math.max(0, input.report.finishedAt - input.report.startedAt),
     eventCount: events.length,
@@ -315,7 +362,16 @@ const buildMetrics = (input: { report: CaseReportInput }): CaseRuntimeMetrics =>
     repeatedToolCallCount: inspected.repeatedToolCallCount,
     stepBudgetUsage,
     qualityGrade,
-    finalDeliverySource: inspected.finalDeliverySource
+    softPassReasonCount: softPassReasons.length,
+    finalDeliverySource: inspected.finalDeliverySource,
+    contextRoundCount:
+      input.report.signalOverrides?.contextRoundCount ?? inspected.internalContextTaskIds.length,
+    contextEvidenceCount: input.report.signalOverrides?.contextEvidenceCount,
+    internalContextDeliveryCount:
+      input.report.signalOverrides?.internalContextDeliveryCount ??
+      inspected.internalContextTaskIds.length,
+    contextFinalRoute: input.report.signalOverrides?.contextFinalRoute,
+    fellBackByRoundCap: input.report.signalOverrides?.fellBackByRoundCap
   }
 }
 
@@ -359,8 +415,15 @@ const buildMetricsReport = (input: {
 const buildSignalsReport = (input: {
   report: CaseReportInput
   assertions: CaseAssertionsReport
+  metrics: CaseMetricsReport
 }): CaseSignalsReport => {
   const inspected = inspectEvents(input.report.events)
+  const softPassReasons = resolveSoftPassReasons({
+    qualityGrade: input.metrics.qualityGrade,
+    toolErrorCount: input.metrics.toolErrorCount,
+    repeatedToolCallCount: input.metrics.repeatedToolCallCount,
+    stepBudgetUsage: input.metrics.stepBudgetUsage
+  })
   return {
     suite: input.report.suite,
     caseId: input.report.caseId,
@@ -399,7 +462,18 @@ const buildSignalsReport = (input: {
       observedAction: inspected.finalHumanAction,
       executionStatus: input.report.execution.status
     }),
-    executionSummary: input.report.execution.summary
+    executionSummary: input.report.execution.summary,
+    softPassReasons,
+    contextDecisionSequence: input.report.signalOverrides?.contextDecisionSequence || [],
+    internalContextTaskIds:
+      input.report.signalOverrides?.internalContextTaskIds || inspected.internalContextTaskIds,
+    contextEvidenceItems: input.report.signalOverrides?.contextEvidenceItems || [],
+    effectiveContextEvidenceAdded: input.report.signalOverrides?.effectiveContextEvidenceAdded,
+    contextResolutionStatus: resolveContextResolutionStatus({
+      contextResolutionStatus: input.report.signalOverrides?.contextResolutionStatus,
+      contextDecisionSequence: input.report.signalOverrides?.contextDecisionSequence,
+      fellBackByRoundCap: input.report.signalOverrides?.fellBackByRoundCap
+    })
   }
 }
 
@@ -418,6 +492,14 @@ const buildSummaryMarkdown = (input: {
     assertions.failedAssertionIds.length > 0 ? assertions.failedAssertionIds.join(', ') : 'none'
   const scenarioTagText = signals.scenarioTags.length > 0 ? signals.scenarioTags.join(', ') : 'none'
   const resultDataKeysText = signals.resultDataKeys.length > 0 ? signals.resultDataKeys.join(', ') : 'none'
+  const contextDecisionSequenceText =
+    signals.contextDecisionSequence.length > 0 ? signals.contextDecisionSequence.join(' -> ') : 'none'
+  const contextTaskIdsText =
+    signals.internalContextTaskIds.length > 0 ? signals.internalContextTaskIds.join(', ') : 'none'
+  const contextEvidenceText =
+    signals.contextEvidenceItems.length > 0 ? signals.contextEvidenceItems.join(' | ') : 'none'
+  const softPassReasonsText =
+    signals.softPassReasons.length > 0 ? signals.softPassReasons.join(', ') : 'none'
   const requiredFixturesText =
     signals.requiredFixtures.length > 0 ? signals.requiredFixtures.join(', ') : 'none'
   const profilesText = signals.profiles.length > 0 ? signals.profiles.join(', ') : 'none'
@@ -435,6 +517,7 @@ const buildSummaryMarkdown = (input: {
     `- assertions: ${assertions.assertionPassed}/${assertions.assertionTotal}`,
     `- failedAssertionIds: ${failedAssertionText}`,
     `- qualityGrade: ${metrics.qualityGrade || 'unknown'}`,
+    `- softPassReasons: ${softPassReasonsText}`,
     `- description: ${signals.description || 'none'}`,
     `- toolSequence: ${toolSequenceText}`,
     `- skillActivationSequence: ${skillActivationText}`,
@@ -450,6 +533,15 @@ const buildSummaryMarkdown = (input: {
     `- maxSteps: ${signals.maxSteps ?? 'none'}`,
     `- modelName: ${signals.modelName || 'none'}`,
     `- resultDataKeys: ${resultDataKeysText}`,
+    `- contextDecisionSequence: ${contextDecisionSequenceText}`,
+    `- internalContextTaskIds: ${contextTaskIdsText}`,
+    `- contextEvidenceItems: ${contextEvidenceText}`,
+    `- contextRoundCount: ${metrics.contextRoundCount ?? 'none'}`,
+    `- contextEvidenceCount: ${metrics.contextEvidenceCount ?? 'none'}`,
+    `- internalContextDeliveryCount: ${metrics.internalContextDeliveryCount ?? 'none'}`,
+    `- contextFinalRoute: ${metrics.contextFinalRoute ?? 'none'}`,
+    `- contextResolutionStatus: ${signals.contextResolutionStatus || 'none'}`,
+    `- fellBackByRoundCap: ${metrics.fellBackByRoundCap ?? 'none'}`,
     `- taskDeliveryCount: ${metrics.taskDeliveryCount}`,
     `- finalDeliverySource: ${metrics.finalDeliverySource || 'none'}`,
     `- synthesisTriggered: ${signals.synthesisTriggered}`,
@@ -483,7 +575,8 @@ export const writeCaseReport = async (input: CaseReportInput): Promise<string> =
   })
   const signals = buildSignalsReport({
     report: input,
-    assertions
+    assertions,
+    metrics: metricsReport
   })
 
   const assertionsPath = path.join(reportRoot, 'assertions.json')
