@@ -11,15 +11,31 @@ import type { AiRunEvent } from '../../../src/shared/types'
 
 type E2EConsoleLevel = 'log' | 'warning' | 'error'
 
+export type E2ERouteEntry = {
+  ts: string
+  route: string
+}
+
+export type E2EIpcInvokeEntry = {
+  ts: string
+  name: string
+}
+
+export type E2EAiRunEventEntry = {
+  ts: string
+  event: AiRunEvent
+}
+
 export type E2EConsoleEntry = {
+  ts: string
   level: E2EConsoleLevel
   text: string
 }
 
 type E2EObserverState = {
-  routeSequence: string[]
-  ipcInvokeSequence: string[]
-  aiRunEvents: AiRunEvent[]
+  routeEntries: E2ERouteEntry[]
+  ipcInvokeEntries: E2EIpcInvokeEntry[]
+  aiRunEventEntries: E2EAiRunEventEntry[]
 }
 
 type E2EWindow = Window & {
@@ -27,9 +43,9 @@ type E2EWindow = Window & {
 }
 
 export type E2ERuntimeSignals = {
-  routeSequence: string[]
-  ipcInvokeSequence: string[]
-  aiRunEvents: AiRunEvent[]
+  routeEntries: E2ERouteEntry[]
+  ipcInvokeEntries: E2EIpcInvokeEntry[]
+  aiRunEventEntries: E2EAiRunEventEntry[]
   consoleEntries: E2EConsoleEntry[]
 }
 
@@ -57,63 +73,39 @@ const installPageObservers = async (page: Page): Promise<void> => {
 
   await page.evaluate(() => {
     const currentWindow = window as E2EWindow
-    const routeSequence = [window.location.hash || '#/']
-    const ipcInvokeSequence: string[] = []
-    const aiRunEvents: AiRunEvent[] = []
+    const now = (): string => new Date().toISOString()
+    const routeEntries: E2ERouteEntry[] = [{ ts: now(), route: window.location.hash || '#/' }]
+    const ipcInvokeEntries: E2EIpcInvokeEntry[] = []
+    const aiRunEventEntries: E2EAiRunEventEntry[] = []
 
     currentWindow.__NCURATOR_E2E_OBSERVER__ = {
-      routeSequence,
-      ipcInvokeSequence,
-      aiRunEvents
+      routeEntries,
+      ipcInvokeEntries,
+      aiRunEventEntries
     }
 
     window.addEventListener('hashchange', () => {
-      currentWindow.__NCURATOR_E2E_OBSERVER__?.routeSequence.push(window.location.hash || '#/')
+      currentWindow.__NCURATOR_E2E_OBSERVER__?.routeEntries.push({
+        ts: now(),
+        route: window.location.hash || '#/'
+      })
     })
 
-    const originalAiRunStart = window.api.aiRunStart.bind(window.api)
-    window.api.aiRunStart = (payload) => {
-      currentWindow.__NCURATOR_E2E_OBSERVER__?.ipcInvokeSequence.push('aiRunStart')
-      return originalAiRunStart(payload)
-    }
-
-    const originalAiRunApprovalDecide = window.api.aiRunApprovalDecide.bind(window.api)
-    window.api.aiRunApprovalDecide = (payload) => {
-      currentWindow.__NCURATOR_E2E_OBSERVER__?.ipcInvokeSequence.push('aiRunApprovalDecide')
-      return originalAiRunApprovalDecide(payload)
-    }
-
-    const originalSourceScopeList = window.api.sourceScopeList.bind(window.api)
-    window.api.sourceScopeList = (payload) => {
-      currentWindow.__NCURATOR_E2E_OBSERVER__?.ipcInvokeSequence.push('sourceScopeList')
-      return originalSourceScopeList(payload)
-    }
-
-    const originalDraftReviewSetDecision = window.api.draftReviewSetDecision.bind(window.api)
-    window.api.draftReviewSetDecision = (payload) => {
-      currentWindow.__NCURATOR_E2E_OBSERVER__?.ipcInvokeSequence.push('draftReviewSetDecision')
-      return originalDraftReviewSetDecision(payload)
-    }
-
-    const originalDraftReviewValidate = window.api.draftReviewValidate.bind(window.api)
-    window.api.draftReviewValidate = (payload) => {
-      currentWindow.__NCURATOR_E2E_OBSERVER__?.ipcInvokeSequence.push('draftReviewValidate')
-      return originalDraftReviewValidate(payload)
-    }
-
-    const originalDraftReviewCommit = window.api.draftReviewCommit.bind(window.api)
-    window.api.draftReviewCommit = (payload) => {
-      currentWindow.__NCURATOR_E2E_OBSERVER__?.ipcInvokeSequence.push('draftReviewCommit')
-      return originalDraftReviewCommit(payload)
-    }
-
-    const originalOnAiRunEvent = window.api.onAiRunEvent.bind(window.api)
-    window.api.onAiRunEvent = (cb) => {
-      originalOnAiRunEvent((event) => {
-        currentWindow.__NCURATOR_E2E_OBSERVER__?.aiRunEvents.push(event)
-        cb(event)
+    window.addEventListener('ncurator-e2e-ipc-call', (event) => {
+      const detail = (event as CustomEvent<{ name: string }>).detail
+      currentWindow.__NCURATOR_E2E_OBSERVER__?.ipcInvokeEntries.push({
+        ts: now(),
+        name: detail.name
       })
-    }
+    })
+
+    window.addEventListener('ncurator-e2e-ai-run-event', (event) => {
+      const detail = (event as CustomEvent<AiRunEvent>).detail
+      currentWindow.__NCURATOR_E2E_OBSERVER__?.aiRunEventEntries.push({
+        ts: now(),
+        event: detail
+      })
+    })
   })
 }
 
@@ -139,6 +131,7 @@ export const launchElectronApp = async (): Promise<LaunchedElectronApp> => {
 
   page.on('console', (message) => {
     consoleEntries.push({
+      ts: new Date().toISOString(),
       level: toConsoleLevel(message),
       text: message.text()
     })
@@ -155,9 +148,9 @@ export const launchElectronApp = async (): Promise<LaunchedElectronApp> => {
         const currentWindow = window as E2EWindow
         return (
           currentWindow.__NCURATOR_E2E_OBSERVER__ || {
-            routeSequence: [],
-            ipcInvokeSequence: [],
-            aiRunEvents: []
+            routeEntries: [],
+            ipcInvokeEntries: [],
+            aiRunEventEntries: []
           }
         )
       })

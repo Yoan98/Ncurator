@@ -6,10 +6,18 @@ import type {
 import type {
   AiTaskResultCode,
   JsonObject,
-  JsonValue,
   LLMConfig
 } from '../../../src/shared/types'
+import type { JsonValue } from '../../../src/shared/types'
 import type { EventCollector } from '../core/eventCollector'
+import type {
+  TestDomain,
+  TestLayer,
+  TestLogEvent,
+  TestRunMeta
+} from '../core/report-contract'
+
+export type { TestDomain, TestLayer, TestLogEvent, TestRunMeta } from '../core/report-contract'
 
 export type ApprovalPolicy = 'auto-approve' | 'deny-medium-high' | 'deny-all'
 
@@ -39,36 +47,8 @@ export type LiveLlmConfig = Pick<LLMConfig, 'base_url' | 'model_name' | 'api_key
   is_active: true
 }
 
-export type TestDomain = 'ai' | 'kb-search' | 'other'
-export type TestLayer = 'backend' | 'e2e'
 export type TestCaseType = 'basic' | 'scenario'
 export type TestRunMode = 'single' | 'repeatable'
-export type TestRunStatus = 'passed' | 'failed'
-export type TestLogStatus = 'info' | 'ok' | 'failed' | 'skipped'
-
-export type TestLogEvent = {
-  ts: string
-  kind: string
-  status: TestLogStatus
-  message: string
-  detail?: JsonValue
-}
-
-export type TestRunMeta = {
-  runId: string
-  caseId: string
-  scope: string
-  domain: TestDomain
-  layer: TestLayer
-  suite: string
-  capability: string | null
-  startedAt: string
-  finishedAt: string
-  durationMs: number
-  status: TestRunStatus
-  modelName: string | null
-  fixtures: string[]
-}
 
 export type FixtureBinding = {
   sourcePath: string
@@ -100,7 +80,7 @@ export type BackendTestRuntime = {
   fixtureBindings: FixtureBinding[]
   eventCollector: EventCollector
   recordEvent: (input: Omit<TestLogEvent, 'ts'>) => void
-  assertThat: (condition: boolean, message: string, detail?: JsonValue) => void
+  assertThat: (condition: boolean, input: { name: string; message: string; data?: JsonValue }) => void
   getFixtureWorkspacePath: (sourcePath: string) => string
   createAiRunContext: (input?: CreateAiRunContextInput) => AiRunContext
 }

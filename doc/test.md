@@ -5,6 +5,10 @@
   - 原始日志：`tests/logs/**`
   - 事实汇总稿：`tests/report/<domain>/facts/**`
   - Codex 后置分析文档：`tests/report/<domain>/report.md` 与 `tests/report/<domain>/current-summary.md`
+- 原始日志契约统一使用 v2 三件套：
+  - `meta.json`
+  - `timeline.jsonl`
+  - `artifacts.json`
 - 测试样例只能记录事实，不能分析失败原因。
 
 ## 2. 目录结构
@@ -70,7 +74,7 @@ runner 不负责：
 - 更新正式 `report.md`
 - 更新 `current-summary.md`
 
-## 4. 原始日志契约
+## 4. 原始日志契约 v2
 
 每个 run 固定目录：
 
@@ -78,60 +82,55 @@ runner 不负责：
 tests/logs/<domain>/<layer>/<suite>/<capability?>/<caseId>/<runId>/
   meta.json
   timeline.jsonl
+  artifacts.json
   artifacts/
 ```
 
-### 目录与文件命名规则
+其中：
 
-- `<domain>`
-  - 业务域目录名。
-  - 当前例子：`ai`。
-- `<layer>`
-  - 测试层级目录名。
-  - 当前例子：`backend`。
-- `<suite>`
-  - suite 目录名。
-  - 当前例子：`capability`。
-- `<capability?>`
-  - 可选能力目录。
-  - 当前例子：`terminal`。
-- `<caseId>`
-  - 对应用例唯一标识。
-  - 当前例子：`terminal-basic-command`。
-- `<runId>`
-  - 单次执行唯一标识。
-  - 当前格式：`YYYYMMDD-HHmmss-SSS`，例如 `20260314-132107-700`。
-  - 含义是“本次执行开始时间”，用于区分同一 case 的多次运行。
 - `meta.json`
-  - 单次运行的摘要索引。
-  - 用来回答“这次 run 是谁、何时跑的、结果是什么”。
+  - 单次 run 的摘要索引。
+  - 用来回答“本次 run 是谁、结果是什么、统计值是什么”。
 - `timeline.jsonl`
-  - 单次运行的时间线事实流。
-  - 用来回答“这次 run 具体按什么顺序发生了什么”。
+  - 单次 run 的事实事件流。
+  - 用来回答“本次 run 按顺序发生了什么”。
+- `artifacts.json`
+  - 单次 run 的附件索引。
+  - 用来回答“本次 run 产生了哪些可回看的附件”。
 - `artifacts/`
   - 可选目录。
-  - 只在需要额外保存附件、输出文件或截图时创建。
+  - 只有确实生成 trace、截图、HTML 诊断页等二进制或大文本附件时才创建。
+
+### 目录与命名规则
+
+- `<domain>/<layer>/<suite>/<capability?>`
+  - 目录层级仍然体现业务域和测试层。
+  - 当前 runner 通过目录过滤测试范围。
+- `<caseId>`
+  - 对应用例稳定标识。
+- `<runId>`
+  - 单次执行唯一标识。
+  - 当前格式：`YYYYMMDD-HHmmss-SSS`。
 
 ### `meta.json`
 
 固定字段：
 
+- `schemaVersion`
 - `runId`
 - `caseId`
 - `scope`
-- `domain`
-- `layer`
-- `suite`
-- `capability`
+- `status`
 - `startedAt`
 - `finishedAt`
-- `durationMs`
-- `status`
-- `modelName`
-- `fixtures`
+- `stats`
+- `runtime`
 
 字段含义：
 
+- `schemaVersion`
+  - 当前原始日志契约版本。
+  - v2 固定为 `2`。
 - `runId`
   - 本次执行唯一标识，对应目录名。
 - `caseId`
@@ -139,86 +138,162 @@ tests/logs/<domain>/<layer>/<suite>/<capability?>/<caseId>/<runId>/
 - `scope`
   - 说明这次 run 属于哪个稳定测试范围。
   - 格式为 `<domain>/<layer>/<suite>/<capability?>`，不包含 `caseId`。
-- `domain`
-  - 说明这次 run 属于哪个业务域。
-- `layer`
-  - 说明这次 run 属于 `backend` 还是 `e2e`。
-- `suite`
-  - 说明这次 run 属于哪一个测试分类。
-- `capability`
-  - 说明这次 run 是否进一步归属于某项能力；无则为 `null`。
+- `status`
+  - 本次 run 的最终结果。
+  - 当前值域是 `passed` / `failed`。
 - `startedAt`
   - 本次 run 的开始时间。
 - `finishedAt`
   - 本次 run 的结束时间。
-- `durationMs`
-  - 本次 run 的总持续时间，单位毫秒。
-  - 用于避免后续分析再从开始/结束时间自行推算时长。
-- `status`
-  - 本次 run 的最终结果。
-  - 当前值域是 `passed` / `failed`。
-- `modelName`
-  - 测试执行过程中真正使用的模型名。
-  - 当前 terminal sample 不需要模型，所以是 `null`。
-- `fixtures`
-  - 本次 run 声明依赖的 fixture 列表。
+- `stats`
+  - 本次 run 的结构化统计。
+  - 当前固定字段：
+    - `durationMs`
+    - `steps`
+    - `assertions`
+    - `errors`
+    - `artifacts`
+- `runtime`
+  - 本次 run 的运行时摘要。
+  - 当前固定字段：
+    - `driver`
+    - `target`
+    - `modelName`
+
+约束：
+
+- 不再在 `meta.json` 顶层保留 `domain`、`layer`、`suite`、`capability`、`durationMs`、`modelName`、`fixtures`。
+- 如果测试确实需要保留 fixture 依赖信息，应写在 `timeline.jsonl` 的 `run/start` 事件 `data` 中，而不是回退到 `meta.json` 顶层扩字段。
 
 ### `timeline.jsonl`
 
 固定字段：
 
 - `ts`
-- `kind`
+- `type`
+- `name`
 - `status`
+- `id`
 - `message`
-- `detail`
+- `data`
 
 字段含义：
 
 - `ts`
-  - 当前事件的发生时间。
-- `kind`
-  - 当前事件是什么类型。
-  - 当前常见值：`run_start`、`tool_call`、`tool_result`、`assertion`、`run_end`、`error`。
+  - 当前事件发生时间。
+- `type`
+  - 事件大类。
+  - 当前值域：
+    - `run`
+    - `step`
+    - `assertion`
+    - `artifact`
+    - `signal`
+    - `error`
+- `name`
+  - 事件的稳定语义名。
+  - 例如：
+    - `start`
+    - `terminal-command-start`
+    - `terminal-stdout-match`
+    - `route-change`
+    - `ipc-call`
+    - `execution-failed`
 - `status`
   - 当前事件状态。
-  - 当前常见值：`info`、`ok`、`failed`、`skipped`。
+  - 当前值域：
+    - `info`
+    - `ok`
+    - `failed`
+    - `skipped`
+- `id`
+  - 可选稳定事件标识。
+  - 当前主要用于 `step` 和 `assertion`，便于关联截图等附件。
 - `message`
   - 当前事件的一句事实性自然语言。
-  - 只回答“发生了什么”，不回答“为什么发生”。
-- `detail`
+- `data`
   - 结构化补充信息，可空。
-  - 例如命令、cwd、退出码、stdout、stderr、risk level。
 
 约束：
 
-- `message` 只能写事实性自然语言。
-- 允许写“调用了什么、返回了什么、断言通过还是失败”。
+- `timeline.jsonl` 只记录高价值语义事件，不记录底层噪音。
+- 允许写“开始执行、点击按钮、断言通过、路由变化、保存 trace”。
 - 禁止写“为什么失败、应该如何优化、模型能力不足”。
+- e2e 下不把所有 Playwright 底层调用逐条倾倒进 timeline；底层重放依赖 `trace.zip`，timeline 只保留语义 step / assertion / signal。
 
-## 5. facts 文档契约
+### `artifacts.json`
+
+固定字段：
+
+- `schemaVersion`
+- `items`
+
+其中 `items` 每项固定字段：
+
+- `id`
+- `kind`
+- `path`
+- `refs`
+
+字段含义：
+
+- `schemaVersion`
+  - 当前附件索引契约版本。
+  - v2 固定为 `2`。
+- `id`
+  - 单个附件的稳定标识。
+- `kind`
+  - 附件类型。
+  - 当前值域：
+    - `trace`
+    - `screenshot`
+    - `video`
+    - `playwright-report`
+    - `jsonl`
+    - `other`
+- `path`
+  - 相对当前 run 根目录的稳定路径。
+- `refs`
+  - 可选关联索引。
+  - 当前字段：
+    - `stepId`
+    - `assertionId`
+
+约束：
+
+- `artifacts.json` 必须始终写出，即使 `items` 为空数组。
+- `artifacts/` 目录只有在确实存在实体附件文件时才创建。
+
+## 5. backend 与 e2e 的统一约束
+
+- backend 和 e2e 共用同一份 `meta.json` / `timeline.jsonl` / `artifacts.json` 基础契约。
+- backend 与 e2e 的差异只体现在：
+  - `meta.runtime.driver`
+  - `meta.runtime.target`
+  - `artifacts.json.items[].kind`
+  - `timeline.jsonl` 中出现的语义事件名
+
+### e2e 默认附件策略
+
+- 成功 run：
+  - 始终保留 Playwright trace。
+  - 只有测试或 runtime 显式要求保留的关键截图才写入。
+  - 默认不生成 Playwright HTML 诊断页。
+- 失败 run：
+  - 始终保留 Playwright trace。
+  - 始终生成失败截图，并通过 `refs.assertionId` 或 `refs.stepId` 绑定。
+  - 生成位于 `artifacts/playwright/report/index.html` 的 HTML 诊断页。
+- v1 默认不保留 video。
+
+## 6. facts 文档契约
 
 facts 文档由 runner 自动生成，位置在 `tests/report/<domain>/facts/**`。
 
-### 目录与文件命名规则
-
-facts 路径规则：
+路径规则：
 
 ```text
 tests/report/<domain>/facts/<layer>/<suite>/<capability?>/<caseId>.md
 ```
-
-含义：
-
-- `<domain>`
-  - 业务域，例如 `ai`。
-- `facts`
-  - 明确表示这里放的是 runner 自动整理的事实稿，不是最终分析报告。
-- `<layer>/<suite>/<capability?>`
-  - 与 log 的业务范围对齐，方便从 facts 反查 logs。
-- `<caseId>.md`
-  - 以稳定 caseId 命名。
-  - 一个 case 对应一份当前 facts 文档；后续同 case 再运行时由 runner 覆盖为最新事实稿。
 
 固定章节：
 
@@ -237,16 +312,18 @@ tests/report/<domain>/facts/<layer>/<suite>/<capability?>/<caseId>.md
   - 说明当前事实窗口内的通过数、失败数和成功率。
 - `Run List`
   - 列出当前事实窗口纳入统计的 run。
+  - 必须显示 `meta.json`、`timeline.jsonl`、`artifacts.json` 引用。
 - `Failed Runs`
   - 列出失败 run 的直接事实，不做原因判断。
+  - 必须展示失败 assertion / error 事实以及相关 artifact 引用。
 - `Artifact References`
-  - 给出应回看的 logs 或后续 report / summary 目标路径。
+  - 给出应回看的附件路径，例如 trace、截图、HTML 诊断页。
 - `Pending Codex Analysis`
   - 提示 Codex 后续必须做的动作。
 
 facts 文档只做事实整理，不做结论。
 
-## 6. 正式 report 与 current summary 的目录、文件名和含义
+## 7. 正式 report 与 current summary
 
 当前正式分析文档固定放在：
 
@@ -268,45 +345,34 @@ tests/report/<domain>/
 ### `report.md` 固定章节
 
 - `Overview`
-  - 说明本次分析覆盖的范围和直接结论。
 - `Success Rate`
-  - 说明本次分析所依据的成功率和样本范围。
 - `Failed Samples`
-  - 列出失败样例及其直接现象。
 - `Failure Analysis`
-  - 基于 facts 和 raw logs 写出的失败原因分析。
 - `Success Samples`
-  - 列出可复用的成功路径或成功模式。
 - `Optimization Decision`
-  - 判断当前是否需要优化、优化方向是什么。
 - `Next Suggestions`
-  - 给出下一步应补的测试、应修的能力或应推进的层级。
 
 ### `current-summary.md` 固定章节
 
 - `Current Status`
-  - 当前业务域总体状态。
 - `Stable Points`
-  - 当前已较稳定的能力或路径。
 - `Unstable Points`
-  - 当前高风险或覆盖不足的点。
 - `Current Priority`
-  - 当前最应优先处理的事项。
 - `Recent Changes`
-  - 最近一次重构、补测或能力变化的摘要。
 
-## 7. Codex 后置分析工作流
+## 8. Codex 后置分析工作流
 
 当用户要求 Codex 跑测试并继续分析时，Codex 必须按以下顺序执行：
 
 1. 运行目标测试命令。
 2. 读取对应 facts 文档。
-3. 必要时回看失败 run 的 `meta.json` 和 `timeline.jsonl`。
+3. 必要时回看失败 run 的 `meta.json`、`timeline.jsonl` 与 `artifacts.json`。
 4. 更新 `tests/report/<domain>/report.md`。
 5. 更新 `tests/report/<domain>/current-summary.md`。
 
-## 8. 明确禁止
+## 9. 明确禁止
 
 - 测试样例直接输出失败原因分析。
 - runner 自动调用测试所用 AI 模型生成 report / summary。
 - report / summary 写入没有日志依据的推断。
+- 为单个 runner 或单种工具单独再设计一套平行 raw log 契约。

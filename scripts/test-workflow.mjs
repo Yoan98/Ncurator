@@ -7,7 +7,10 @@ const TESTS_ROOT = path.join(ROOT, 'tests')
 const LOGS_ROOT = path.join(TESTS_ROOT, 'logs')
 const REPORT_ROOT = path.join(TESTS_ROOT, 'report')
 const FACTS_ROOT = path.join(REPORT_ROOT, 'ai', 'facts')
-const PNPM_BIN = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
+const resolveLocalBin = (name) =>
+  path.join(ROOT, 'node_modules', '.bin', process.platform === 'win32' ? `${name}.cmd` : name)
+const VITEST_BIN = resolveLocalBin('vitest')
+const ELECTRON_VITE_BIN = resolveLocalBin('electron-vite')
 
 const parseArgs = (argv) => {
   const parsed = {
@@ -96,8 +99,8 @@ const findTestFiles = async (input) => {
 }
 
 const runVitest = (input) => {
-  const commandArgs = ['exec', 'vitest', '--config', input.configPath, 'run', ...input.testFiles]
-  const result = spawnSync(PNPM_BIN, commandArgs, {
+  const commandArgs = ['--config', input.configPath, 'run', ...input.testFiles]
+  const result = spawnSync(VITEST_BIN, commandArgs, {
     cwd: ROOT,
     stdio: 'inherit'
   })
@@ -107,7 +110,7 @@ const runVitest = (input) => {
 }
 
 const buildE2EApp = () => {
-  const result = spawnSync(PNPM_BIN, ['exec', 'electron-vite', 'build'], {
+  const result = spawnSync(ELECTRON_VITE_BIN, ['build'], {
     cwd: ROOT,
     stdio: 'inherit'
   })
@@ -127,6 +130,17 @@ const readTimeline = async (filePath) => {
     .map((line) => JSON.parse(line))
 }
 
+const readArtifacts = async (filePath) => {
+  try {
+    return await readJson(filePath)
+  } catch {
+    return {
+      schemaVersion: 2,
+      items: []
+    }
+  }
+}
+
 const collectMetaFiles = async (target) => {
   try {
     const entries = await walk(target)
@@ -141,25 +155,49 @@ const buildFactsMarkdown = (input) => {
   const runLines = input.runs.map((run) => {
     const relativeMeta = path.relative(ROOT, run.metaPath)
     const relativeTimeline = path.relative(ROOT, run.timelinePath)
-    const durationText =
-      typeof run.meta.durationMs === 'number' ? ` | durationMs=${run.meta.durationMs}` : ''
-    return `- ${run.meta.runId}: ${run.meta.status} | startedAt=${run.meta.startedAt}${durationText} | meta=${relativeMeta} | timeline=${relativeTimeline}`
+    const relativeArtifacts = path.relative(ROOT, run.artifactsPath)
+    const durationMs = run.meta.stats && typeof run.meta.stats.durationMs === 'number' ? run.meta.stats.durationMs : null
+    const durationText = durationMs !== null ? ` | durationMs=${durationMs}` : ''
+    const artifactCount = Array.isArray(run.artifacts.items) ? run.artifacts.items.length : 0
+    return `- ${run.meta.runId}: ${run.meta.status} | startedAt=${run.meta.startedAt}${durationText} | artifactCount=${artifactCount} | meta=${relativeMeta} | timeline=${relativeTimeline} | artifacts=${relativeArtifacts}`
   })
 
   const failedLines = input.runs
     .filter((run) => run.meta.status === 'failed')
     .flatMap((run) => {
       const relativeTimeline = path.relative(ROOT, run.timelinePath)
+      const relativeArtifacts = path.relative(ROOT, run.artifactsPath)
       const failureMessages = run.timeline
+        .filter((event) => event.type === 'assertion' || event.type === 'error')
         .filter((event) => event.status === 'failed')
         .map((event) => `  - ${event.message}`)
+      const artifactLines = Array.isArray(run.artifacts.items)
+        ? run.artifacts.items.map((artifact) => `  - ${artifact.kind}: ${artifact.path}`)
+        : []
 
       if (failureMessages.length === 0) {
-        return [`- ${run.meta.runId}: no explicit failed event found | timeline=${relativeTimeline}`]
+        return [
+          `- ${run.meta.runId}: no explicit failed assertion or error found | timeline=${relativeTimeline} | artifacts=${relativeArtifacts}`,
+          ...(artifactLines.length > 0 ? artifactLines : [])
+        ]
       }
 
-      return [`- ${run.meta.runId} | timeline=${relativeTimeline}`, ...failureMessages]
+      return [
+        `- ${run.meta.runId} | timeline=${relativeTimeline} | artifacts=${relativeArtifacts}`,
+        ...failureMessages,
+        ...artifactLines
+      ]
     })
+
+  const artifactReferenceLines = input.runs.flatMap((run) => {
+    if (!Array.isArray(run.artifacts.items) || run.artifacts.items.length === 0) {
+      return []
+    }
+
+    return run.artifacts.items.map(
+      (artifact) => `- ${run.meta.runId} | ${artifact.kind} | ${artifact.path}`
+    )
+  })
 
   return [
     `# Facts: ${input.caseId}`,
@@ -183,12 +221,13 @@ const buildFactsMarkdown = (input) => {
     '',
     '## Artifact References',
     `- logsRoot: ${path.relative(ROOT, input.logsRoot)}`,
+    ...(artifactReferenceLines.length > 0 ? artifactReferenceLines : ['- none']),
     `- codexReportTarget: tests/report/${input.domain}/report.md`,
     `- codexSummaryTarget: tests/report/${input.domain}/current-summary.md`,
     '',
     '## Pending Codex Analysis',
     '- 读取本 facts 文档。',
-    '- 必要时回看失败 run 的 meta.json 与 timeline.jsonl。',
+    '- 必要时回看失败 run 的 meta.json、timeline.jsonl 与 artifacts.json。',
     '- 产出或更新该业务域的 report.md。',
     '- 更新 current-summary.md。',
     '- 不得写入没有事实依据的失败原因或优化建议。'
@@ -222,12 +261,16 @@ const generateFacts = async (input) => {
     if (Number.isNaN(startedAtMs) || startedAtMs < input.sessionStart) continue
     if (input.caseId && meta.caseId !== input.caseId) continue
     const timelinePath = path.join(path.dirname(metaPath), 'timeline.jsonl')
+    const artifactsPath = path.join(path.dirname(metaPath), 'artifacts.json')
     const timeline = await readTimeline(timelinePath)
+    const artifacts = await readArtifacts(artifactsPath)
     records.push({
       meta,
       metaPath,
       timelinePath,
-      timeline
+      timeline,
+      artifactsPath,
+      artifacts
     })
   }
 

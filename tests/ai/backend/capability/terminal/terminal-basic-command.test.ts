@@ -26,19 +26,27 @@ describe('terminal basic command', () => {
         const riskLevel = classifyCommandRisk(command)
 
         runtime.recordEvent({
-          kind: 'tool_call',
+          type: 'step',
+          name: 'terminal-command-start',
           status: 'info',
           message: `准备执行 terminal 命令：${command}`,
-          detail: {
+          data: {
             command,
             cwd,
             riskLevel
           }
         })
 
-        runtime.assertThat(boundary.ok, 'workspace boundary check 通过')
-        runtime.assertThat(riskLevel === 'low', 'terminal risk classification 为 low', {
-          riskLevel
+        runtime.assertThat(boundary.ok, {
+          name: 'workspace-boundary-check',
+          message: 'workspace boundary check 通过'
+        })
+        runtime.assertThat(riskLevel === 'low', {
+          name: 'terminal-risk-low',
+          message: 'terminal risk classification 为 low',
+          data: {
+            riskLevel
+          }
         })
 
         const result = await runTerminalCommand({
@@ -49,13 +57,14 @@ describe('terminal basic command', () => {
         })
 
         runtime.recordEvent({
-          kind: 'tool_result',
+          type: 'step',
+          name: 'terminal-command-result',
           status: result.exitCode === 0 && !result.timedOut ? 'ok' : 'failed',
           message:
             result.exitCode === 0 && !result.timedOut
               ? 'terminal 命令执行成功'
               : 'terminal 命令执行失败',
-          detail: {
+          data: {
             command: result.command,
             exitCode: result.exitCode,
             timedOut: result.timedOut,
@@ -67,12 +76,23 @@ describe('terminal basic command', () => {
         return result
       },
       assert: async (result, runtime) => {
-        runtime.assertThat(result.exitCode === 0, 'terminal 命令退出码为 0', {
-          exitCode: result.exitCode
+        runtime.assertThat(result.exitCode === 0, {
+          name: 'terminal-exit-code-zero',
+          message: 'terminal 命令退出码为 0',
+          data: {
+            exitCode: result.exitCode
+          }
         })
-        runtime.assertThat(result.timedOut === false, 'terminal 命令未超时')
-        runtime.assertThat(result.stdout.trim() === 'terminal capability ok', 'terminal 输出符合预期', {
-          stdout: result.stdout.trim()
+        runtime.assertThat(result.timedOut === false, {
+          name: 'terminal-not-timed-out',
+          message: 'terminal 命令未超时'
+        })
+        runtime.assertThat(result.stdout.trim() === 'terminal capability ok', {
+          name: 'terminal-stdout-match',
+          message: 'terminal 输出符合预期',
+          data: {
+            stdout: result.stdout.trim()
+          }
         })
       }
     })

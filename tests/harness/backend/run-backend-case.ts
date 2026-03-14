@@ -4,14 +4,20 @@ import { assertRequiredFixtures } from './fixtureGuard'
 import type {
   BackendTestRuntime,
   FixtureBinding,
-  TestCaseDefinition,
-  TestLogEvent,
-  TestRunMeta,
-  TestRunStatus
+  TestCaseDefinition
 } from './test-types'
 import { writeRunLog, createRunId } from './write-run-log'
 import { cleanupWorkspace, copyFixturesIntoWorkspace, createIsolatedWorkspace } from './workspaceManager'
 import { EventCollector } from '../core/eventCollector'
+import {
+  TEST_LOG_SCHEMA_VERSION,
+  type TestArtifact,
+  type TestDomain,
+  type TestLayer,
+  type TestLogEvent,
+  type TestRunMeta,
+  type TestRunStatus
+} from '../core/report-contract'
 
 const fixturesRoot = path.resolve(process.cwd(), 'tests', 'fixtures')
 
@@ -33,13 +39,31 @@ const buildFixtureBindings = (fixturePaths: readonly string[], workspaceRoot: st
 const toRelativeWorkspaceTarget = (workspaceRoot: string, absoluteWorkspacePath: string): string =>
   path.relative(workspaceRoot, absoluteWorkspacePath)
 
-const buildRunScope = (input: Pick<TestRunMeta, 'domain' | 'layer' | 'suite' | 'capability'>): string => {
+const buildRunScope = (input: {
+  domain: TestDomain
+  layer: TestLayer
+  suite: string
+  capability: string | null
+}): string => {
   const parts = [input.domain, input.layer, input.suite]
   if (input.capability) {
     parts.push(input.capability)
   }
   return parts.join('/')
 }
+
+const buildStats = (
+  startedAtMs: number,
+  finishedAtMs: number,
+  events: readonly TestLogEvent[],
+  artifacts: readonly TestArtifact[]
+): TestRunMeta['stats'] => ({
+  durationMs: finishedAtMs - startedAtMs,
+  steps: events.filter((event) => event.type === 'step').length,
+  assertions: events.filter((event) => event.type === 'assertion').length,
+  errors: events.filter((event) => event.type === 'error').length,
+  artifacts: artifacts.length
+})
 
 export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TResult>): Promise<void> => {
   const startedAtMs = Date.now()
@@ -53,6 +77,7 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
   const taskId = `${definition.suite}-${definition.caseId}`
   const eventCollector = new EventCollector()
   const events: TestLogEvent[] = []
+  const artifacts: TestArtifact[] = []
   let workspaceRoot = ''
   let fixtureBindings: FixtureBinding[] = []
   let status: TestRunStatus = 'failed'
@@ -65,9 +90,15 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
   }
 
   recordEvent({
-    kind: 'run_start',
+    type: 'run',
+    name: 'start',
     status: 'info',
-    message: `开始执行 ${scope}/${definition.caseId}`
+    message: `开始执行 ${scope}/${definition.caseId}`,
+    data: {
+      description: definition.description,
+      fixtures: definition.fixtures.map((fixturePath) => path.resolve(fixturePath)),
+      runMode: definition.runMode
+    }
   })
 
   try {
@@ -89,15 +120,16 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
       fixtureBindings,
       eventCollector,
       recordEvent,
-      assertThat: (condition, message, detail) => {
+      assertThat: (condition, input) => {
         recordEvent({
-          kind: 'assertion',
+          type: 'assertion',
+          name: input.name,
           status: condition ? 'ok' : 'failed',
-          message,
-          detail
+          message: input.message,
+          data: input.data
         })
         if (!condition) {
-          throw new Error(message)
+          throw new Error(input.message)
         }
       },
       getFixtureWorkspacePath: (sourcePath: string) => {
@@ -123,38 +155,41 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     recordEvent({
-      kind: 'error',
+      type: 'error',
+      name: 'execution-failed',
       status: 'failed',
       message: `测试失败：${message}`
     })
     throw error
   } finally {
     recordEvent({
-      kind: 'run_end',
+      type: 'run',
+      name: 'end',
       status: status === 'passed' ? 'ok' : 'failed',
       message: status === 'passed' ? '本次测试执行完成' : '本次测试执行失败'
     })
 
     const finishedAt = new Date()
     const meta: TestRunMeta = {
+      schemaVersion: TEST_LOG_SCHEMA_VERSION,
       runId,
       caseId: definition.caseId,
       scope,
-      domain: definition.domain,
-      layer: definition.layer,
-      suite: definition.suite,
-      capability: definition.capability || null,
       startedAt: new Date(startedAtMs).toISOString(),
       finishedAt: finishedAt.toISOString(),
-      durationMs: finishedAt.getTime() - startedAtMs,
       status,
-      modelName: null,
-      fixtures: definition.fixtures.map((fixturePath) => path.resolve(fixturePath))
+      stats: buildStats(startedAtMs, finishedAt.getTime(), events, artifacts),
+      runtime: {
+        driver: 'backend',
+        target: 'node',
+        modelName: null
+      }
     }
 
     await writeRunLog({
       meta,
-      events
+      events,
+      artifacts
     })
 
     if (workspaceRoot) {

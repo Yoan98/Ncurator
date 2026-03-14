@@ -6,6 +6,28 @@ import type {
 } from '../shared/types'
 import type { DesktopApi } from './api'
 
+const isE2EObserverEnabled = process.env.NCURATOR_E2E_MODE === '1'
+
+const emitE2EIpcCall = (name: string): void => {
+  if (!isE2EObserverEnabled) return
+  window.dispatchEvent(
+    new CustomEvent('ncurator-e2e-ipc-call', {
+      detail: {
+        name
+      }
+    })
+  )
+}
+
+const emitE2EAiRunEvent = (event: AiRunEvent): void => {
+  if (!isE2EObserverEnabled) return
+  window.dispatchEvent(
+    new CustomEvent<AiRunEvent>('ncurator-e2e-ai-run-event', {
+      detail: event
+    })
+  )
+}
+
 // Custom APIs for renderer
 const api: DesktopApi = {
   ingestWeb: (payload): Promise<{ success: boolean; count?: number; error?: string }> =>
@@ -37,7 +59,10 @@ const api: DesktopApi = {
   workspaceNodes: (payload) => ipcRenderer.invoke('workspace-nodes', payload),
   workspaceScan: (payload) => ipcRenderer.invoke('workspace-scan', payload),
   workspacePrepare: (payload) => ipcRenderer.invoke('workspace-prepare', payload),
-  sourceScopeList: (payload) => ipcRenderer.invoke('source-scope-list', payload),
+  sourceScopeList: (payload) => {
+    emitE2EIpcCall('sourceScopeList')
+    return ipcRenderer.invoke('source-scope-list', payload)
+  },
   webSourceList: () => ipcRenderer.invoke('web-source-list'),
   webSourceRefresh: (payload) => ipcRenderer.invoke('web-source-refresh', payload),
   webSourceDelete: (webSourceId: string) => ipcRenderer.invoke('web-source-delete', webSourceId),
@@ -77,17 +102,34 @@ const api: DesktopApi = {
   llmConfigSetActive: (id: string) =>
     ipcRenderer.invoke('llm-config-set-active', id),
 
-  aiRunStart: (payload) =>
-    ipcRenderer.invoke('ai-run-start', payload),
+  aiRunStart: (payload) => {
+    emitE2EIpcCall('aiRunStart')
+    return ipcRenderer.invoke('ai-run-start', payload)
+  },
   aiRunCancel: (runId: string) => ipcRenderer.invoke('ai-run-cancel', runId),
-  aiRunApprovalDecide: (payload) => ipcRenderer.invoke('ai-run-approval-decide', payload),
+  aiRunApprovalDecide: (payload) => {
+    emitE2EIpcCall('aiRunApprovalDecide')
+    return ipcRenderer.invoke('ai-run-approval-decide', payload)
+  },
   draftReviewList: (payload) => ipcRenderer.invoke('draft-review-list', payload),
   draftReviewGet: (payload) => ipcRenderer.invoke('draft-review-get', payload),
-  draftReviewSetDecision: (payload) => ipcRenderer.invoke('draft-review-set-decision', payload),
-  draftReviewValidate: (payload) => ipcRenderer.invoke('draft-review-validate', payload),
-  draftReviewCommit: (payload) => ipcRenderer.invoke('draft-review-commit', payload),
+  draftReviewSetDecision: (payload) => {
+    emitE2EIpcCall('draftReviewSetDecision')
+    return ipcRenderer.invoke('draft-review-set-decision', payload)
+  },
+  draftReviewValidate: (payload) => {
+    emitE2EIpcCall('draftReviewValidate')
+    return ipcRenderer.invoke('draft-review-validate', payload)
+  },
+  draftReviewCommit: (payload) => {
+    emitE2EIpcCall('draftReviewCommit')
+    return ipcRenderer.invoke('draft-review-commit', payload)
+  },
   onAiRunEvent: (cb: (event: AiRunEvent) => void) =>
-    ipcRenderer.on('ai-run-event', (_event, data) => cb(data)),
+    ipcRenderer.on('ai-run-event', (_event, data) => {
+      emitE2EAiRunEvent(data)
+      cb(data)
+    }),
   removeAiRunEventListeners: () => ipcRenderer.removeAllListeners('ai-run-event')
 }
 
