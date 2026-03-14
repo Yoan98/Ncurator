@@ -6,7 +6,7 @@
 
 - 当前 AI 测试新架构已可在 `backend/capability/terminal` 这一条样例上跑通。
 - 原始日志、facts 文档和正式 report 的边界已经建立，Codex 后置分析流程已具备落点。
-- 最新一次样例 run 为 `20260314-134635-249`，结果为 `passed`，对应代码状态 `f495142`。
+- 最新一次样例 run 为 `20260314-143053-465`，结果为 `passed`。
 
 ## Stable Points
 
@@ -31,4 +31,4 @@
 
 - 已移除旧测试体系、旧 catalog 和旧 report/analyzer 依赖。
 - 已重建新的 tests 目录、统一 runner、raw logs 契约和 facts 文档。
-- 已基于最新 run `20260314-134635-249` 刷新 `terminal-basic-command` 的正式 report 与 current summary。
+- 已基于最新 run `20260314-143053-465` 刷新 `terminal-basic-command` 的正式 report 与 current summary。

@@ -118,14 +118,15 @@ tests/logs/<domain>/<layer>/<suite>/<capability?>/<caseId>/<runId>/
 
 - `runId`
 - `caseId`
+- `scope`
 - `domain`
 - `layer`
 - `suite`
 - `capability`
 - `startedAt`
 - `finishedAt`
+- `durationMs`
 - `status`
-- `gitSha`
 - `modelName`
 - `fixtures`
 
@@ -135,6 +136,9 @@ tests/logs/<domain>/<layer>/<suite>/<capability?>/<caseId>/<runId>/
   - 本次执行唯一标识，对应目录名。
 - `caseId`
   - 说明这次 run 属于哪条用例。
+- `scope`
+  - 说明这次 run 属于哪个稳定测试范围。
+  - 格式为 `<domain>/<layer>/<suite>/<capability?>`，不包含 `caseId`。
 - `domain`
   - 说明这次 run 属于哪个业务域。
 - `layer`
@@ -147,12 +151,12 @@ tests/logs/<domain>/<layer>/<suite>/<capability?>/<caseId>/<runId>/
   - 本次 run 的开始时间。
 - `finishedAt`
   - 本次 run 的结束时间。
+- `durationMs`
+  - 本次 run 的总持续时间，单位毫秒。
+  - 用于避免后续分析再从开始/结束时间自行推算时长。
 - `status`
   - 本次 run 的最终结果。
   - 当前值域是 `passed` / `failed`。
-- `gitSha`
-  - 运行代码对应的 git 提交短哈希。
-  - 用来帮助判断“这次结果对应哪个代码状态”。
 - `modelName`
   - 测试执行过程中真正使用的模型名。
   - 当前 terminal sample 不需要模型，所以是 `null`。

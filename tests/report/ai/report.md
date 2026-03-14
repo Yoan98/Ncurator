@@ -6,9 +6,8 @@
 
 - scope: `ai/backend/capability/terminal`
 - analyzedCase: `terminal-basic-command`
-- latestRunId: `20260314-134635-249`
+- latestRunId: `20260314-143053-465`
 - latestRunStatus: `passed`
-- latestGitSha: `f495142`
 - currentAssessment: 当前新测试架构下的 backend terminal capability 首个样例可稳定执行，runner、raw logs 与 facts 链路已打通。
 
 ## Success Rate
@@ -32,7 +31,7 @@
 
 ## Success Samples
 
-- 最新成功 run `20260314-134635-249` 先完成 workspace boundary check，再确认 risk classification 为 `low`，然后执行低风险 terminal 命令 `printf 'terminal capability ok'`。
+- 最新成功 run `20260314-143053-465` 先完成 workspace boundary check，再确认 risk classification 为 `low`，然后执行低风险 terminal 命令 `printf 'terminal capability ok'`。
 - 命令执行后，样例继续验证 `exitCode`、`timedOut` 和 `stdout`，说明当前 terminal capability 的基础成功链路完整。
 - raw logs 与 facts 同步生成，说明测试结果已经能够进入后续 Codex 分析闭环。
 

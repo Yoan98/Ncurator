@@ -1,4 +1,3 @@
-import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import { createTestAiRunContext } from './contextFactory'
 import { assertRequiredFixtures } from './fixtureGuard'
@@ -13,17 +12,6 @@ import type {
 import { writeRunLog, createRunId } from './write-run-log'
 import { cleanupWorkspace, copyFixturesIntoWorkspace, createIsolatedWorkspace } from './workspaceManager'
 import { EventCollector } from '../core/eventCollector'
-
-const resolveGitSha = (): string => {
-  try {
-    return execFileSync('git', ['rev-parse', '--short', 'HEAD'], {
-      cwd: process.cwd(),
-      encoding: 'utf8'
-    }).trim()
-  } catch {
-    return 'unknown'
-  }
-}
 
 const fixturesRoot = path.resolve(process.cwd(), 'tests', 'fixtures')
 
@@ -45,9 +33,23 @@ const buildFixtureBindings = (fixturePaths: readonly string[], workspaceRoot: st
 const toRelativeWorkspaceTarget = (workspaceRoot: string, absoluteWorkspacePath: string): string =>
   path.relative(workspaceRoot, absoluteWorkspacePath)
 
+const buildRunScope = (input: Pick<TestRunMeta, 'domain' | 'layer' | 'suite' | 'capability'>): string => {
+  const parts = [input.domain, input.layer, input.suite]
+  if (input.capability) {
+    parts.push(input.capability)
+  }
+  return parts.join('/')
+}
+
 export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TResult>): Promise<void> => {
   const startedAtMs = Date.now()
   const runId = createRunId(startedAtMs)
+  const scope = buildRunScope({
+    domain: definition.domain,
+    layer: definition.layer,
+    suite: definition.suite,
+    capability: definition.capability || null
+  })
   const taskId = `${definition.suite}-${definition.caseId}`
   const eventCollector = new EventCollector()
   const events: TestLogEvent[] = []
@@ -65,7 +67,7 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
   recordEvent({
     kind: 'run_start',
     status: 'info',
-    message: `开始执行 ${definition.domain}/${definition.layer}/${definition.suite}/${definition.caseId}`
+    message: `开始执行 ${scope}/${definition.caseId}`
   })
 
   try {
@@ -133,17 +135,19 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
       message: status === 'passed' ? '本次测试执行完成' : '本次测试执行失败'
     })
 
+    const finishedAt = new Date()
     const meta: TestRunMeta = {
       runId,
       caseId: definition.caseId,
+      scope,
       domain: definition.domain,
       layer: definition.layer,
       suite: definition.suite,
       capability: definition.capability || null,
       startedAt: new Date(startedAtMs).toISOString(),
-      finishedAt: new Date().toISOString(),
+      finishedAt: finishedAt.toISOString(),
+      durationMs: finishedAt.getTime() - startedAtMs,
       status,
-      gitSha: resolveGitSha(),
       modelName: null,
       fixtures: definition.fixtures.map((fixturePath) => path.resolve(fixturePath))
     }

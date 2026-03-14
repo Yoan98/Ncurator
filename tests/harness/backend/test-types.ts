@@ -57,14 +57,15 @@ export type TestLogEvent = {
 export type TestRunMeta = {
   runId: string
   caseId: string
+  scope: string
   domain: TestDomain
   layer: TestLayer
   suite: string
   capability: string | null
   startedAt: string
   finishedAt: string
+  durationMs: number
   status: TestRunStatus
-  gitSha: string
   modelName: string | null
   fixtures: string[]
 }

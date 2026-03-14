@@ -63,36 +63,6 @@ The chat execution surface MUST not expose legacy writing-workflow actions, butt
 - **WHEN** user opens chat execution UI
 - **THEN** only active capability-based controls are shown and no legacy writing workflow action is available
 
-### Requirement: Chat 执行界面 MUST 暴露稳定的自动化定位契约
-聊天执行界面的关键交互点与关键状态区域 MUST 暴露稳定的自动化定位契约，以支撑 renderer contract 与 renderer e2e 测试；这些定位契约 MUST 覆盖发送入口、模式切换、计划区、时间线列表、审批交互、工作区阻塞交互、右侧检查器、草稿审阅区、逐块确认入口与最终提交入口。
-
-#### Scenario: 自动化定位模式切换与时间线
-- **WHEN** 测试在统一工作台中切换 `AI 对话` 与 `纯搜索` 模式，并展开一次运行的时间线
-- **THEN** 自动化框架 MUST 能稳定定位模式切换控件、时间线列表和当前选中步骤
-
-#### Scenario: 自动化定位审批与工作区阻塞交互
-- **WHEN** 运行时发出 `approval_required` 或 `workspace_required`
-- **THEN** 自动化框架 MUST 能稳定定位审批按钮、继续运行入口和阻塞原因区域，而不依赖脆弱的 AntD 内部 DOM 结构
-
-#### Scenario: 自动化定位草稿审阅交互
-- **WHEN** 运行完成并进入草稿审阅阶段
-- **THEN** 自动化框架 MUST 能稳定定位审阅入口、文档列表、变更单元操作和最终提交按钮
-
-### Requirement: Chat 执行界面 MUST 对关键运行时状态提供确定性测试可观测性
-聊天执行界面对模式切换、计划、时间线、右侧检查器、草稿审阅和最终提交的关键状态切换 MUST 具备确定性的测试可观测性，避免测试只能依赖模糊文案猜测界面状态。
-
-#### Scenario: 搜索模式结果与检查器更新
-- **WHEN** 用户在 `纯搜索` 模式提交查询并获得结果
-- **THEN** 自动化测试 MUST 能确定性判断当前回合处于搜索模式、结果列表已生成且右侧检查器可查看对应结果
-
-#### Scenario: 运行完成进入审阅状态
-- **WHEN** 一次 AI 编辑运行结束并产生待确认的草稿修改
-- **THEN** 自动化测试 MUST 能确定性判断该回合已从执行态切换到审阅待处理态
-
-#### Scenario: 最终提交结果可观测
-- **WHEN** 用户触发最终提交且提交成功或失败
-- **THEN** 自动化测试 MUST 能确定性观察到提交结果状态，而不是依赖瞬时消息提示猜测提交是否完成
-
 ### Requirement: 聊天输入区明确提示 `@` 的参考语义
 聊天 UI MUST 通过文案、提示或帮助信息向用户明确：`@` 用于告诉 AI 本次应优先参考哪些资料，而不是保证回答只来自这些资料。
 
@@ -180,4 +150,3 @@ The chat execution surface MUST not expose legacy writing-workflow actions, butt
 #### Scenario: 用户查看中间任务 handoff
 - **WHEN** 某个计划中的业务任务已生成交付文档
 - **THEN** UI MUST 提供稳定入口查看该 handoff markdown，并允许用户在不同任务交付之间切换回看
-

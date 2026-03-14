@@ -45,15 +45,3 @@ TBD - created by archiving change refactor-conversation-workbench. Update Purpos
 #### Scenario: docx 草稿返回块级差异信息
 - **WHEN** 系统生成一个 docx 草稿文档的审阅结果
 - **THEN** 每个变更单元 MUST 提供可用于块级对比的 before/after 内容、块标识和文档格式信息
-
-### Requirement: 草稿审阅界面 MUST 暴露稳定的自动化定位契约
-草稿审阅界面的关键区域 MUST 暴露稳定的自动化定位契约，以支撑 renderer contract 与 e2e 测试；这些定位契约 MUST 至少覆盖文档列表、变更单元列表、接受按钮、拒绝按钮、提交按钮和冲突提示区域。
-
-#### Scenario: 自动化定位逐块审阅交互
-- **WHEN** 自动化测试进入某个待审阅文档的变更列表
-- **THEN** 测试框架 MUST 能稳定定位每个变更单元及其接受/拒绝操作，而不依赖脆弱的样式或文案匹配
-
-#### Scenario: 自动化定位提交阻塞状态
-- **WHEN** 存在未决变更或源文件冲突导致无法提交
-- **THEN** 测试框架 MUST 能确定性观察到提交按钮的阻塞状态与对应原因提示
-

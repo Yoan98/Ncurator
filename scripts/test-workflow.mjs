@@ -141,7 +141,9 @@ const buildFactsMarkdown = (input) => {
   const runLines = input.runs.map((run) => {
     const relativeMeta = path.relative(ROOT, run.metaPath)
     const relativeTimeline = path.relative(ROOT, run.timelinePath)
-    return `- ${run.meta.runId}: ${run.meta.status} | startedAt=${run.meta.startedAt} | meta=${relativeMeta} | timeline=${relativeTimeline}`
+    const durationText =
+      typeof run.meta.durationMs === 'number' ? ` | durationMs=${run.meta.durationMs}` : ''
+    return `- ${run.meta.runId}: ${run.meta.status} | startedAt=${run.meta.startedAt}${durationText} | meta=${relativeMeta} | timeline=${relativeTimeline}`
   })
 
   const failedLines = input.runs
@@ -244,7 +246,7 @@ const generateFacts = async (input) => {
       suite: input.suite,
       capability: input.capability,
       caseId,
-      scope: [input.domain, input.layer, input.suite, input.capability, caseId].filter(Boolean).join('/'),
+      scope: [input.domain, input.layer, input.suite, input.capability].filter(Boolean).join('/'),
       totalRuns: runs.length,
       passedRuns,
       failedRuns: runs.length - passedRuns,
