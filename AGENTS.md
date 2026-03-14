@@ -8,7 +8,7 @@
 - 当涉及数据库、LanceDB、表职责、存储分层或检索存储实现时，请阅读 `doc/database.md`
 - 当涉及目录规范、文件归位、模块边界或工程结构时，请阅读 `doc/project-structure.md`
 - 当涉及 UI 风格、布局规范或组件交互约束时，请阅读 `doc/ui-style.md`
-- 当涉及测试相关内容时，请阅读 `doc/test.md`；
+- 当涉及测试相关内容时，请阅读 `doc/test.md`；其中约定了测试目录、日志/report 产物规则与 Codex 后置分析流程
 ## 2. 注意事项
 
 - 禁止使用 `any` 与 `unknown`
@@ -16,9 +16,3 @@
 - 禁止使用 `Modal.confirm`、`Modal.info` 等静态方法
 - 全局状态提示应统一放在 `App.tsx` 或 `MainLayout` 级别处理
 - 文档入口或文档变更时，需同步更新 `doc/README.md` 与 `AGENTS.md`
-
-## 3. 测试工作流补充
-
-- 测试样例只负责输出原始日志与事实汇总稿，不负责输出失败原因分析或优化建议。
-- 当 Codex 跑完测试相关命令后，默认需要继续阅读 `doc/test.md` 指定的 facts 文档与 raw logs，再更新 `tests/report/<domain>/report.md` 与 `tests/report/<domain>/current-summary.md`
-- 禁止 runner 或测试样例自动调用测试所用 AI 模型写 report / summary；这一步只能由 Codex 后置执行。
