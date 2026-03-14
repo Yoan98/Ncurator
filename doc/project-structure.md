@@ -59,11 +59,15 @@ tests/                   # 自动化测试
 
 ## 6. 测试目录规则
 
-
+- `tests/harness/**` 只放可复用的测试基础设施，不承载旧 suite 治理逻辑或旧 report 契约。
+- `tests/fixtures/**` 只放长期复用的输入样本，不混入运行产物。
+- `tests/ai/**` 按 `backend` / `e2e` 和能力域拆分，是当前 AI 测试的主目录。
+- `tests/kb-search/**` 预留给检索链路测试；`tests/other/**` 仅放临时或待定用例。
+- `tests/logs/**` 只放每次运行的原始日志；`tests/report/**` 放事实汇总稿与 Codex 后置分析文档。
+- 测试目录统一使用 kebab-case，运行产物不得反向成为测试发现入口。
 
 ## 7. 文档目录规则
 
 - `doc/` 下的所有文档都直接放在根目录，不再使用子目录嵌套。
 - `doc/README.md` 是默认阅读入口。
 - canonical 文档、阅读路径和同步清单都在 `doc/` 根目录维护。
-

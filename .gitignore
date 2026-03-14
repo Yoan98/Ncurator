@@ -5,5 +5,6 @@ out
 .DS_Store
 .eslintcache
 *.log*
-tests/report
+tests/logs
+tests/report/ai/facts
 artifacts/ai-test-results

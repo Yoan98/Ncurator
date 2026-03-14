@@ -11,4 +11,4 @@
 - [ui-style.md](/Users/huangyuan/work-space/Ncurator-Desktop/doc/ui-style.md)
   - 说明界面设计风格、布局规则和组件使用规范。
 - [test.md](/Users/huangyuan/work-space/Ncurator-Desktop/doc/test.md)
-  - 测试相关文档入口，预留给后续重新设计。
+  - 说明新的测试目录、runner、日志事实稿和 Codex 后置分析工作流。
