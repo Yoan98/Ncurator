@@ -8,7 +8,7 @@
 - analyzedCases: `terminal-basic-command`, `workbench-plan-artifact-smoke`
 - latestBackendRunId: `20260314-152003-312`
 - latestE2ERunId: `20260314-153210-722`
-- currentAssessment: v2 原始日志契约已经切换完成，backend sample 与 workbench e2e smoke 都能稳定产出 `meta.json`、`timeline.jsonl`、`artifacts.json`，其中 e2e 已验证 trace 附件链路。
+- currentAssessment: 当前原始日志契约下，backend sample 与 workbench e2e smoke 都能稳定产出 `meta.json`、`timeline.jsonl`、`artifacts.json`，其中 e2e 已验证 trace 附件链路。
 
 ## Success Rate
 
@@ -16,7 +16,7 @@
 - passedRunsInFacts: 2
 - failedRunsInFacts: 0
 - successRate: 100.0%
-- note: 当前正式 report 依据最新 facts 窗口；仓库内样例 raw logs 已刷新为 v2 结构，只保留最新通过样例。
+- note: 当前正式 report 依据最新 facts 窗口；仓库内样例 raw logs 使用统一的 `meta.json`、`timeline.jsonl`、`artifacts.json` 结构，只保留最新通过样例。
 
 ## Failed Samples
 
@@ -34,7 +34,7 @@
 
 - backend 成功 run `20260314-152003-312` 先完成 workspace boundary check，再确认 risk classification 为 `low`，随后执行 terminal 命令并完成 `exitCode`、`timedOut`、`stdout` 断言。
 - e2e 成功 run `20260314-153210-722` 已验证 workbench 页面加载、输入提交、AI 事件接收、时间线渲染，以及 trace 附件落盘。
-- backend 与 e2e 两层都已进入 facts 闭环，说明 v2 raw logs 已可供后续 Codex 分析直接消费。
+- backend 与 e2e 两层都已进入 facts 闭环，说明当前 raw logs 已可供后续 Codex 分析直接消费。
 
 ## Optimization Decision
 

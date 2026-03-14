@@ -11,4 +11,4 @@
 - [ui-style.md](/Users/huangyuan/work-space/Ncurator-Desktop/doc/ui-style.md)
   - 说明界面设计风格、布局规则和组件使用规范。
 - [test.md](/Users/huangyuan/work-space/Ncurator-Desktop/doc/test.md)
-  - 说明测试目录、基于 `meta.json` / `timeline.jsonl` / `artifacts.json` 的 v2 raw log 契约、报告命名规则和 Codex 后置分析工作流。
+  - 说明测试目录、基于 `meta.json` / `timeline.jsonl` / `artifacts.json` 的 raw log 契约、报告命名规则和 Codex 后置分析工作流。

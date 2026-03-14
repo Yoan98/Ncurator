@@ -5,7 +5,7 @@
   - 原始日志：`tests/logs/**`
   - 事实汇总稿：`tests/report/<domain>/facts/**`
   - Codex 后置分析文档：`tests/report/<domain>/report.md` 与 `tests/report/<domain>/current-summary.md`
-- 原始日志契约统一使用 v2 三件套：
+- 原始日志统一由三类文件组成：
   - `meta.json`
   - `timeline.jsonl`
   - `artifacts.json`
@@ -74,7 +74,7 @@ runner 不负责：
 - 更新正式 `report.md`
 - 更新 `current-summary.md`
 
-## 4. 原始日志契约 v2
+## 4. 原始日志契约
 
 每个 run 固定目录：
 
@@ -129,8 +129,8 @@ tests/logs/<domain>/<layer>/<suite>/<capability?>/<caseId>/<runId>/
 字段含义：
 
 - `schemaVersion`
-  - 当前原始日志契约版本。
-  - v2 固定为 `2`。
+  - 日志 schema 版本号。
+  - 固定值为 `2`。
 - `runId`
   - 本次执行唯一标识，对应目录名。
 - `caseId`
@@ -162,8 +162,8 @@ tests/logs/<domain>/<layer>/<suite>/<capability?>/<caseId>/<runId>/
 
 约束：
 
-- 不再在 `meta.json` 顶层保留 `domain`、`layer`、`suite`、`capability`、`durationMs`、`modelName`、`fixtures`。
-- 如果测试确实需要保留 fixture 依赖信息，应写在 `timeline.jsonl` 的 `run/start` 事件 `data` 中，而不是回退到 `meta.json` 顶层扩字段。
+- `meta.json` 顶层只保留上述固定字段。
+- 如果测试需要保留 fixture 依赖信息，应写在 `timeline.jsonl` 的 `run/start` 事件 `data` 中。
 
 ### `timeline.jsonl`
 
@@ -238,8 +238,8 @@ tests/logs/<domain>/<layer>/<suite>/<capability?>/<caseId>/<runId>/
 字段含义：
 
 - `schemaVersion`
-  - 当前附件索引契约版本。
-  - v2 固定为 `2`。
+  - 附件索引 schema 版本号。
+  - 固定值为 `2`。
 - `id`
   - 单个附件的稳定标识。
 - `kind`
@@ -283,7 +283,7 @@ tests/logs/<domain>/<layer>/<suite>/<capability?>/<caseId>/<runId>/
   - 始终保留 Playwright trace。
   - 始终生成失败截图，并通过 `refs.assertionId` 或 `refs.stepId` 绑定。
   - 生成位于 `artifacts/playwright/report/index.html` 的 HTML 诊断页。
-- v1 默认不保留 video。
+- 默认不保留 video。
 
 ## 6. facts 文档契约
 

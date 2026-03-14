@@ -11,7 +11,7 @@
 ## Stable Points
 
 - `pnpm test:ai:sample` 可以稳定执行单样例。
-- `tests/logs/**` 能生成 v2 契约下的 `meta.json`、`timeline.jsonl` 与 `artifacts.json`。
+- `tests/logs/**` 能生成 `meta.json`、`timeline.jsonl` 与 `artifacts.json`。
 - `tests/report/ai/facts/**` 能生成对应 facts Markdown。
 - terminal 基础成功路径当前可用。
 - workbench e2e smoke 当前可用，且已验证 trace 附件写盘。
@@ -30,7 +30,6 @@
 
 ## Recent Changes
 
-- 已移除旧测试体系、旧 catalog 和旧 report/analyzer 依赖。
-- 已将 raw logs 契约切到 v2，统一为 `meta.json`、`timeline.jsonl`、`artifacts.json` 三件套。
-- 已补齐 e2e runtime、preload 事件桥和 workbench smoke case，并验证 trace artifact 写盘。
-- 已基于最新 backend / e2e run 刷新 facts、正式 report 与 current summary。
+- 当前测试体系使用统一 runner、统一 raw logs 契约和 facts 文档。
+- 当前 e2e runtime、preload 事件桥和 workbench smoke case 已可用，并已验证 trace artifact 写盘。
+- 当前 backend / e2e 样例与 facts、正式 report、current summary 保持一致。
