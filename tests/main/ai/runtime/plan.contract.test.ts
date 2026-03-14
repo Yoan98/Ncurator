@@ -86,7 +86,7 @@ describe('main/ai/runtime/plan contract', () => {
               {
                 id: 'task-plan-1',
                 title: '提取现有约束',
-                objective: '读取 doc/testing/phased-plan.md 并列出 3 条需要纳入 plan quality baseline 的约束'
+                objective: '读取 doc/test.md，并结合当前 tests/catalog 约束列出 3 条需要纳入 plan quality baseline 的约束'
               },
               {
                 id: 'task-plan-2',

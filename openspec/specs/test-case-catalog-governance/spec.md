@@ -30,13 +30,12 @@ TBD - created by archiving change refactor-test-catalog-governance. Update Purpo
 - **THEN** 系统 MUST 以确定性错误终止，并指出缺失字段与对应源码位置
 
 ### Requirement: 测试文档与 catalog MUST 明确分层并保持同步
-`doc/testing/**` MUST 只承担测试规则、治理规则、阶段计划与历史记录，不得手工维护当前 case 清单；当前 case 清单 MUST 来自 catalog 生成结果。若测试文档入口、canonical 文档或治理规则发生变化，系统 MUST 在同一 change set 中同步更新测试文档入口、source-of-truth 文档、skill 路由与 agent 规则。
+`doc/test.md` 当前作为测试主题入口占位文件，不得手工维护当前 case 清单；当前 case 清单 MUST 来自 catalog 生成结果。若测试文档入口或治理规则发生变化，系统 MUST 在同一 change set 中同步更新测试文档入口与 agent 规则。
 
 #### Scenario: 阅读当前有哪些测试 case
 - **WHEN** AI 或开发者需要确认当前有效测试用例
-- **THEN** 其读取入口 MUST 指向生成后的 catalog，而不是 `doc/testing/**` 中的手工列表或 `tests/report/**` 的目录结构
+- **THEN** 其读取入口 MUST 指向生成后的 catalog，而不是 `doc/test.md` 中的手工列表或 `tests/report/**` 的目录结构
 
 #### Scenario: 调整测试文档 canonical 入口
 - **WHEN** 测试治理文档新增、重命名或改变默认阅读入口
-- **THEN** 系统 MUST 同步更新 `doc/README.md`、`doc/reference/source-of-truth.md`、`doc/reference/change-checklist.md`、`AGENTS.md` 与测试 skill
-
+- **THEN** 系统 MUST 同步更新 `doc/README.md`、`AGENTS.md` 与相关测试入口说明

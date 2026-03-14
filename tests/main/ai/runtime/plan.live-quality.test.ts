@@ -57,7 +57,7 @@ describe('main/ai/runtime/plan live quality', () => {
             liveModelConfig: liveConfig
           }),
           selectedScopeSummary: [
-            '1. workspace:AI 测试规范 (doc/testing) | prepared=2 | unprepared=0 | workspace=test-workspace',
+            '1. workspace:AI 测试规范 (doc/test) | prepared=2 | unprepared=0 | workspace=test-workspace',
             '2. web:OpenSpec 工作流说明 | prepared=1 | unprepared=0',
             '允许非本地信息: 否'
           ].join('\n')
