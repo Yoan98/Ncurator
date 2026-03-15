@@ -91,7 +91,7 @@ export type TestCaseDefinition<TResult> = {
   domain: Extract<TestDomain, 'ai' | 'kb-search' | 'other'>
   layer: Extract<TestLayer, 'backend'>
   suite: string
-  capability?: string
+  groups?: readonly string[]
   description: string
   fixtures: readonly string[]
   runMode: TestRunMode

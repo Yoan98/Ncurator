@@ -17,7 +17,7 @@ const waitForAiEvent = async (runtime: E2ETestRuntime, eventType: string): Promi
 }
 
 describe('workbench plan artifact smoke', () => {
-  it('runs the e2e fixture workflow and writes v2 logs', async () => {
+  it('runs the e2e fixture workflow and writes v3 logs', async () => {
     await runE2ECase({
       caseId: 'workbench-plan-artifact-smoke',
       caseType: 'basic',

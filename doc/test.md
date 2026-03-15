@@ -1,15 +1,15 @@
 # NCurator-Desktop 测试架构
 
 ## 1. 目标
-- 测试架构分成三层：
+
+- 测试体系收敛为两层产物：
   - 原始日志：`tests/logs/**`
-  - 事实汇总稿：`tests/report/<domain>/facts/**`
-  - Codex 后置分析文档：`tests/report/<domain>/report.md` 与 `tests/report/<domain>/current-summary.md`
+  - 正式分析文档：`tests/report/<domain>/report.md`
 - 原始日志统一由三类文件组成：
   - `meta.json`
   - `timeline.jsonl`
   - `artifacts.json`
-- 测试样例只能记录事实，不能分析失败原因。
+- 测试样例只记录事实，不直接写失败原因分析、优化建议或能力判断。
 
 ## 2. 目录结构
 
@@ -19,7 +19,7 @@ tests/
   fixtures/
   ai/
     backend/
-      capability/
+      tools/
         terminal/
         docx/
         kb/
@@ -37,16 +37,15 @@ tests/
   logs/
   report/
     ai/
-      facts/
       report.md
-      current-summary.md
 ```
 
 规则：
 
 - 目录统一使用 kebab-case。
-- `backend` 先于 `e2e`。
-- `other/` 默认不参与 gating，也不参与 summary 汇总。
+- 测试发现目录使用通用树形结构：`tests/<domain>/<layer>/<suite>/<groups...>/<case>.test.ts`。
+- `suite` 是第一层稳定分类；`groups...` 是 suite 下可选的任意深度子目录。
+- `other/` 默认不参与 gating，也不参与正式 report 汇总。
 
 ## 3. runner 与命令
 
@@ -56,30 +55,38 @@ tests/
 
 - `pnpm test:ai`
 - `pnpm test:ai:backend`
-- `pnpm test:ai:backend:capability`
+- `pnpm test:ai:backend:tools`
 - `pnpm test:ai:e2e`
 - `pnpm test:ai:sample`
 
-runner 的职责只有四件事：
+runner 支持的过滤参数：
+
+- `--domain`
+- `--layer`
+- `--suite`
+- `--group`，可重复传入
+- `--case`
+- `--runs`
+
+runner 的职责只有三件事：
 
 1. 找到目标测试文件并执行。
 2. 落原始日志到 `tests/logs/**`。
-3. 读取本次运行日志，生成 facts Markdown 到 `tests/report/<domain>/facts/**`。
-4. 在 e2e 请求下先执行同域 backend。
+3. 在 e2e 请求下先执行同域 backend。
 
 runner 不负责：
 
+- 写事实汇总稿
 - 写失败原因分析
 - 写优化建议
 - 更新正式 `report.md`
-- 更新 `current-summary.md`
 
 ## 4. 原始日志契约
 
 每个 run 固定目录：
 
 ```text
-tests/logs/<domain>/<layer>/<suite>/<capability?>/<caseId>/<runId>/
+tests/logs/<domain>/<layer>/<suite>/<groups...>/<caseId>/<runId>/
   meta.json
   timeline.jsonl
   artifacts.json
@@ -99,15 +106,16 @@ tests/logs/<domain>/<layer>/<suite>/<capability?>/<caseId>/<runId>/
   - 用来回答“本次 run 产生了哪些可回看的附件”。
 - `artifacts/`
   - 可选目录。
-  - 只有确实生成 trace、截图、HTML 诊断页等二进制或大文本附件时才创建。
+  - 只有确实生成 trace、截图、HTML 诊断页等实体附件时才创建。
 
 ### 目录与命名规则
 
-- `<domain>/<layer>/<suite>/<capability?>`
-  - 目录层级仍然体现业务域和测试层。
+- `<domain>/<layer>/<suite>/<groups...>`
+  - 目录层级体现业务域、测试层和 suite 树。
   - 当前 runner 通过目录过滤测试范围。
 - `<caseId>`
   - 对应用例稳定标识。
+  - 通常与测试文件名一致。
 - `<runId>`
   - 单次执行唯一标识。
   - 当前格式：`YYYYMMDD-HHmmss-SSS`。
@@ -130,14 +138,14 @@ tests/logs/<domain>/<layer>/<suite>/<capability?>/<caseId>/<runId>/
 
 - `schemaVersion`
   - 日志 schema 版本号。
-  - 固定值为 `2`。
+  - 固定值为 `3`。
 - `runId`
   - 本次执行唯一标识，对应目录名。
 - `caseId`
   - 说明这次 run 属于哪条用例。
 - `scope`
   - 说明这次 run 属于哪个稳定测试范围。
-  - 格式为 `<domain>/<layer>/<suite>/<capability?>`，不包含 `caseId`。
+  - 格式为 `<domain>/<layer>/<suite>/<groups...>`，不包含 `caseId`。
 - `status`
   - 本次 run 的最终结果。
   - 当前值域是 `passed` / `failed`。
@@ -191,14 +199,8 @@ tests/logs/<domain>/<layer>/<suite>/<capability?>/<caseId>/<runId>/
     - `signal`
     - `error`
 - `name`
-  - 事件的稳定语义名。
-  - 例如：
-    - `start`
-    - `terminal-command-start`
-    - `terminal-stdout-match`
-    - `route-change`
-    - `ipc-call`
-    - `execution-failed`
+  - 事件的稳定语义名，不是脚本名。
+  - 同类事实在不同 run、不同 case 中应尽量复用同一命名。
 - `status`
   - 当前事件状态。
   - 当前值域：
@@ -211,14 +213,16 @@ tests/logs/<domain>/<layer>/<suite>/<capability?>/<caseId>/<runId>/
   - 当前主要用于 `step` 和 `assertion`，便于关联截图等附件。
 - `message`
   - 当前事件的一句事实性自然语言。
+  - 只写“发生了什么”，不写失败原因、优化建议或能力判断。
 - `data`
   - 结构化补充信息，可空。
+  - 只放按需原始观测值，不要求统一业务 schema。
 
 约束：
 
 - `timeline.jsonl` 只记录高价值语义事件，不记录底层噪音。
-- 允许写“开始执行、点击按钮、断言通过、路由变化、保存 trace”。
-- 禁止写“为什么失败、应该如何优化、模型能力不足”。
+- `signal` 用于记录可观察到的外部信号，例如路由变化、IPC 调用、AI 事件。
+- 当失败事件存在明确证据时，优先把证据放进 `data` 或 artifact，不要在 `message` 中写大段解释。
 - e2e 下不把所有 Playwright 底层调用逐条倾倒进 timeline；底层重放依赖 `trace.zip`，timeline 只保留语义 step / assertion / signal。
 
 ### `artifacts.json`
@@ -239,7 +243,7 @@ tests/logs/<domain>/<layer>/<suite>/<capability?>/<caseId>/<runId>/
 
 - `schemaVersion`
   - 附件索引 schema 版本号。
-  - 固定值为 `2`。
+  - 固定值为 `3`。
 - `id`
   - 单个附件的稳定标识。
 - `kind`
@@ -271,7 +275,7 @@ tests/logs/<domain>/<layer>/<suite>/<capability?>/<caseId>/<runId>/
   - `meta.runtime.driver`
   - `meta.runtime.target`
   - `artifacts.json.items[].kind`
-  - `timeline.jsonl` 中出现的语义事件名
+  - `timeline.jsonl` 中出现的语义事件名与信号类型
 
 ### e2e 默认附件策略
 
@@ -285,94 +289,144 @@ tests/logs/<domain>/<layer>/<suite>/<capability?>/<caseId>/<runId>/
   - 生成位于 `artifacts/playwright/report/index.html` 的 HTML 诊断页。
 - 默认不保留 video。
 
-## 6. facts 文档契约
-
-facts 文档由 runner 自动生成，位置在 `tests/report/<domain>/facts/**`。
-
-路径规则：
-
-```text
-tests/report/<domain>/facts/<layer>/<suite>/<capability?>/<caseId>.md
-```
-
-固定章节：
-
-- `Overview`
-- `Success Rate`
-- `Run List`
-- `Failed Runs`
-- `Artifact References`
-- `Pending Codex Analysis`
-
-章节含义：
-
-- `Overview`
-  - 说明当前 facts 覆盖的是哪条 case、哪个范围、何时生成。
-- `Success Rate`
-  - 说明当前事实窗口内的通过数、失败数和成功率。
-- `Run List`
-  - 列出当前事实窗口纳入统计的 run。
-  - 必须显示 `meta.json`、`timeline.jsonl`、`artifacts.json` 引用。
-- `Failed Runs`
-  - 列出失败 run 的直接事实，不做原因判断。
-  - 必须展示失败 assertion / error 事实以及相关 artifact 引用。
-- `Artifact References`
-  - 给出应回看的附件路径，例如 trace、截图、HTML 诊断页。
-- `Pending Codex Analysis`
-  - 提示 Codex 后续必须做的动作。
-
-facts 文档只做事实整理，不做结论。
-
-## 7. 正式 report 与 current summary
+## 6. 正式 report
 
 当前正式分析文档固定放在：
 
 ```text
 tests/report/<domain>/
   report.md
-  current-summary.md
 ```
 
-命名规则与含义：
+含义：
 
 - `report.md`
-  - 当前业务域最近一次正式分析报告。
-  - 是基于某次 facts 与 raw logs 写出的“本轮分析结果”。
-- `current-summary.md`
-  - 当前业务域的现状总览。
-  - 不是单次运行报告，而是“截至现在，这个业务域整体处于什么状态”。
+  - 当前业务域唯一正式分析报告。
+  - 是基于 `tests/logs/<domain>/**` 写出的当前现状分析。
 
-### `report.md` 固定章节
+### `report.md` 建议结构
 
-- `Overview`
-- `Success Rate`
-- `Failed Samples`
-- `Failure Analysis`
-- `Success Samples`
-- `Optimization Decision`
-- `Next Suggestions`
+- `Domain Overview`
+- 按 `backend` / `e2e` 展开
+- 每个 layer / suite / groups 节点按需要继续下钻
+- 每个节点至少包含：
+  - `Evidence`
+  - `Pass Rate`
+  - `Failure Analysis`
+  - `Current Assessment`
+  - `Next Suggestions`
 
-### `current-summary.md` 固定章节
+### `report.md` 格式约束
 
-- `Current Status`
-- `Stable Points`
-- `Unstable Points`
-- `Current Priority`
-- `Recent Changes`
+- 顶层标题使用 `# <Domain> Domain Report`。
+- 顶层必须先有 `## Domain Overview`。
+- `Domain Overview` 之后按 domain 下实际存在的 layer 展开，当前通常是 `## backend` 与 `## e2e`。
+- layer 之下按目录树继续展开：
+  - suite 使用 `###`
+  - suite 下第一层 group 使用 `####`
+  - 更深层 group 继续按 Markdown 标题层级递增
+- 每个实际分析节点都必须包含以下固定小节，顺序保持一致：
+  - `Evidence`
+  - `Pass Rate`
+  - `Failure Analysis`
+  - `Current Assessment`
+  - `Next Suggestions`
+- `Evidence` 必须列出对应 run 的 `meta.json`、`timeline.jsonl`、`artifacts.json` 路径；如果有关键附件，也应一并列出。
+- `Pass Rate` 只写当前节点覆盖范围内的统计，不混入其他节点数据。
+- `Failure Analysis` 在没有 failed run 时应明确写“当前没有 failed run，因此无法给出失败模式结论”。
+- `Current Assessment` 负责总结当前状态和主要不足。
+- `Next Suggestions` 只写基于现有证据能支撑的下一步建议。
 
-## 8. Codex 后置分析工作流
+### `report.md` 最小示例
+
+```md
+# AI Domain Report
+
+## Domain Overview
+
+- analysisWindow: 当前仓库内 `tests/logs/ai/**` 的 raw logs
+- analyzedScopes: `ai/backend/tools/terminal`、`ai/e2e/workbench`
+- overallAssessment: 当前 backend sample 与 e2e smoke 已跑通，但失败路径覆盖仍不足。
+
+## backend
+
+### tools
+
+#### terminal
+
+##### Evidence
+
+- `20260315-101530-112` | passed | `tests/logs/ai/backend/tools/terminal/terminal-basic-command/20260315-101530-112/meta.json` | `tests/logs/ai/backend/tools/terminal/terminal-basic-command/20260315-101530-112/timeline.jsonl` | `tests/logs/ai/backend/tools/terminal/terminal-basic-command/20260315-101530-112/artifacts.json`
+
+##### Pass Rate
+
+- totalRuns: 1
+- passedRuns: 1
+- failedRuns: 0
+- successRate: 100.0%
+
+##### Failure Analysis
+
+- 当前没有 failed run，因此无法给出失败模式结论。
+
+##### Current Assessment
+
+- terminal happy path 已稳定产出 raw logs。
+- 当前不足是还没有正式纳入失败/阻塞样例。
+
+##### Next Suggestions
+
+- 增加 `workspace-boundary-rejected`
+- 增加 `approval-denied`
+
+## e2e
+
+### workbench
+
+##### Evidence
+
+- `20260315-103002-008` | passed | `tests/logs/ai/e2e/workbench/workbench-plan-artifact-smoke/20260315-103002-008/meta.json` | `tests/logs/ai/e2e/workbench/workbench-plan-artifact-smoke/20260315-103002-008/timeline.jsonl` | `tests/logs/ai/e2e/workbench/workbench-plan-artifact-smoke/20260315-103002-008/artifacts.json`
+- artifact references: `tests/logs/ai/e2e/workbench/workbench-plan-artifact-smoke/20260315-103002-008/artifacts/trace/playwright-trace.zip`
+
+##### Pass Rate
+
+- totalRuns: 1
+- passedRuns: 1
+- failedRuns: 0
+- successRate: 100.0%
+
+##### Failure Analysis
+
+- 当前没有 failed run，因此无法给出失败模式结论。
+
+##### Current Assessment
+
+- workbench smoke 主链路已可用。
+- 当前不足是 approval、workspace required、review 等真实路径尚未纳入。
+
+##### Next Suggestions
+
+- 补充 approval 路径
+- 补充 workspace required 场景
+```
+
+约束：
+
+- report 只引用 raw logs 与 artifacts 作为证据来源。
+- report 可以做分析与建议，但不得写入没有日志依据的推断。
+
+## 7. Codex 后置分析工作流
 
 当用户要求 Codex 跑测试并继续分析时，Codex 必须按以下顺序执行：
 
 1. 运行目标测试命令。
-2. 读取对应 facts 文档。
+2. 读取对应 domain 下的 raw logs。
 3. 必要时回看失败 run 的 `meta.json`、`timeline.jsonl` 与 `artifacts.json`。
 4. 更新 `tests/report/<domain>/report.md`。
-5. 更新 `tests/report/<domain>/current-summary.md`。
 
-## 9. 明确禁止
+## 8. 明确禁止
 
 - 测试样例直接输出失败原因分析。
-- runner 自动调用测试所用 AI 模型生成 report / summary。
-- report / summary 写入没有日志依据的推断。
+- runner 自动调用测试所用 AI 模型生成 report。
+- report 写入没有日志依据的推断。
 - 为单个 runner 或单种工具单独再设计一套平行 raw log 契约。

@@ -1,6 +1,6 @@
 import type { JsonValue } from '../../../src/shared/types'
 
-export const TEST_LOG_SCHEMA_VERSION = 2 as const
+export const TEST_LOG_SCHEMA_VERSION = 3 as const
 
 export type TestDomain = 'ai' | 'kb-search' | 'other'
 export type TestLayer = 'backend' | 'e2e'

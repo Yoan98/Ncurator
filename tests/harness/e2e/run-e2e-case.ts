@@ -68,7 +68,7 @@ export type E2ETestCaseDefinition<TResult> = {
   domain: Extract<TestDomain, 'ai' | 'kb-search' | 'other'>
   layer: Extract<TestLayer, 'e2e'>
   suite: string
-  capability?: string
+  groups?: readonly string[]
   description: string
   fixtures: readonly string[]
   runMode: E2ETestRunMode
@@ -80,14 +80,18 @@ const buildRunScope = (input: {
   domain: TestDomain
   layer: TestLayer
   suite: string
-  capability: string | null
+  groups: readonly string[]
 }): string => {
   const parts = [input.domain, input.layer, input.suite]
-  if (input.capability) {
-    parts.push(input.capability)
-  }
+  parts.push(...input.groups)
   return parts.join('/')
 }
+
+const buildTaskId = (input: {
+  suite: string
+  groups: readonly string[]
+  caseId: string
+}): string => [input.suite, ...input.groups, input.caseId].join('-')
 
 const buildStats = (
   startedAtMs: number,
@@ -177,9 +181,13 @@ export const runE2ECase = async <TResult>(definition: E2ETestCaseDefinition<TRes
     domain: definition.domain,
     layer: definition.layer,
     suite: definition.suite,
-    capability: definition.capability || null
+    groups: definition.groups || []
   })
-  const taskId = `${definition.suite}-${definition.caseId}`
+  const taskId = buildTaskId({
+    suite: definition.suite,
+    groups: definition.groups || [],
+    caseId: definition.caseId
+  })
   const events: TestLogEvent[] = []
   const artifacts: TestArtifact[] = []
   const logDirArtifacts = resolveRunArtifactsDir({
