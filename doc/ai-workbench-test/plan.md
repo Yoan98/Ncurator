@@ -81,6 +81,64 @@ AI workbench 测试文档统一放在 `doc/ai-workbench-test/`。
 - 长周期记忆质量
 - 与当前主流程无关的泛化 Agent 能力
 
+### 4.3 模型对比策略
+
+AI 测试里要引入一组固定的“常用模型 + 强模型”对照，因为有些失败来自工程问题，有些失败确实来自模型能力上限。如果没有对比组，很多 case 很难判断该优先优化哪一层。
+
+#### 推荐模型组合
+
+| 角色 | 推荐模型 | 用途 | 选择理由 |
+| --- | --- | --- | --- |
+| 常用模型 | `gpt-5.2-2025-12-11` | 默认测试模型，承担大多数 backend / e2e 主跑 | 同一代 GPT-5 系列里能力、成本、可用性的平衡更好；描述里也明确更适合大多数 API 用法 |
+| 强模型 | `gpt-5.4-2026-03-05` | 对比模型，用于关键样例复跑和疑难 case 复核 | 同系列更强版本，适合判断“是不是模型能力限制”而不是工程缺陷 |
+
+#### 为什么推荐这组而不是别的
+
+- 选同一家族的两个固定快照，更容易把变量收敛到“能力强弱”，而不是“模型风格差异”。
+- `gpt-5.2-2025-12-11` 比 `gpt-5.4-2026-03-05` 更便宜，适合做主跑。
+- `gpt-5.4-2026-03-05` 比 `gpt-5.2-pro` 这类模型更适合作为常规强对照，因为价格和时延都更可控。
+
+#### 如何融入测试流程
+
+- 阶段 1：只固化模型对比策略与记录字段，不要求所有 tool case 都双跑。
+- 阶段 2：`human` 关键样例全部用常用模型主跑；失败样例和 `golden cases` 用强模型复跑。
+- 阶段 3：`intent / context / plan` 的关键路由 case 做双模型对比。
+- 阶段 4：`S01 ~ S04` 的 e2e 用常用模型全跑；完成度低于 `2` 的 case，必须再用强模型复跑。
+- 阶段 5：`S05 ~ S08` 与 UI 相关场景沿用同样规则。
+
+#### 双模型结果怎么记录
+
+先不做问题分类，只记录双模型差异。
+
+这里有一个硬约束：不改现有测试架构，不改 `meta.json / timeline.jsonl / artifacts.json` 的固定契约。
+
+落地方式如下：
+
+- `raw log` 层
+  - 继续沿用现有 schema。
+  - 每次 run 只记录一个真实执行模型。
+  - 模型名仍然只通过现有的 `meta.runtime.modelName` 表达。
+- 双模型对比层
+  - 通过“同一 case 跑两次或多次 run”完成，而不是给单次 run 增加新顶层字段。
+  - 对比结果写入 `tests/report/ai/report.md`，而不是改 `meta.json` 顶层。
+- 如果个别 case 需要在原始日志里补充轻量上下文
+  - 只放进现有 `timeline.jsonl` 事件的 `data` 中。
+  - 不引入新的 raw log schema。
+
+因此下面这些记录项，默认都是 report 层概念，不是要求给 raw log 新增字段。
+
+每条需要双跑的 case 建议记录：
+
+- `primaryModel`
+- `strongModel`
+- `runMode`
+  - `single`
+  - `pair`
+- `primaryScore`
+- `strongScore`
+- `deltaSummary`
+  - 例如：`strong model completed same task with score 3 while primary scored 1`
+
 ## 5. 真实用户场景池
 
 测试必须围绕真实诉求，而不是只围绕单个函数或事件。
@@ -536,6 +594,7 @@ tests/
 产出：
 
 - backend raw logs
+- 已确认的常用模型 / 强模型组合
 - 一份阶段完成情况
 - 下一阶段 `todolist`
 
@@ -612,13 +671,34 @@ tests/
 
 问题先不预设分类。每轮跑完后，只记录真实结果和下一步。
 
-### 每条 case 至少记录这些内容
+### `raw log` 层
+
+不改现有架构设计，继续遵守 [test.md](/Users/test/work-space/NCurator-Desktop/doc/test.md) 的固定契约：
+
+- `meta.json`
+- `timeline.jsonl`
+- `artifacts.json`
+
+其中：
+
+- 模型名继续使用现有的 `meta.runtime.modelName`
+- 如需保留 fixture 或补充观测值，继续放进 `timeline.jsonl` 事件的 `data`
+- 不新增 `meta.json` 顶层字段
+
+### `report` 层
+
+每条 case 至少记录这些内容：
 
 - `caseId / scenarioId`
+- `primaryModel`
+- `strongModel`
+- `runMode`
 - 用户输入
 - 预期结果
 - 实际结果
 - 完成度分值：`0 / 1 / 2 / 3`
+- `primaryScore`
+- `strongScore`
 - 最终产物路径、回答摘要或审阅结果
 - raw log 路径
 - 下一步建议
@@ -627,7 +707,7 @@ tests/
 
 1. 先落 raw logs 到 `tests/logs/ai/**`
 2. 再更新 `tests/report/ai/report.md`
-3. 在 report 中记录当前阶段完成情况
+3. 在 report 中记录当前阶段完成情况与双模型对比结果
 4. 最后给出“下一阶段 `todolist`”
 
 ## 10. Golden Cases
