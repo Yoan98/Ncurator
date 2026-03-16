@@ -24,8 +24,8 @@
   - 目标目录：`tests/ai/backend/tools/kb/`
 
 - [ ] 固化模型对比基线与记录字段
-  - 常用模型：`gpt-5.2-2025-12-11`
-  - 强模型：`gpt-5.4-2026-03-05`
+  - 常用模型：`gpt-5-mini`
+  - 强模型：`gpt-5.2`
   - 明确后续 report / case 记录中的 `primaryModel / strongModel / runMode / primaryScore / strongScore`
 
 - [ ] 跑完阶段 1 的 backend 测试并更新报告
