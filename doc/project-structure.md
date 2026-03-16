@@ -14,7 +14,7 @@ src/
   preload/               # 预加载层
   renderer/src/          # React 渲染层
   shared/                # 跨进程共享契约与类型
-doc/                     # 项目当前文档，全部平铺在根目录
+doc/                     # 项目当前文档，canonical 文档默认放在根目录
 .codex/skills/           # 技能定义
 tests/                   # 自动化测试
 .env                     # 本地环境变量（不入库）
@@ -68,6 +68,10 @@ tests/                   # 自动化测试
 
 ## 7. 文档目录规则
 
-- `doc/` 下的所有文档都直接放在根目录，不再使用子目录嵌套。
+- `doc/` 下的 canonical 文档默认直接放在根目录。
 - `doc/README.md` 是默认阅读入口。
 - canonical 文档、阅读路径和同步清单都在 `doc/` 根目录维护。
+- 当前唯一允许的阶段性子目录是 `doc/ai-workbench-test/`。
+- `doc/ai-workbench-test/` 只用于 AI workbench 测试计划与分阶段 todo 管理。
+- 该目录初始化时只保留 `plan.md` 与当前阶段 todo 文件。
+- 后续 `todo-stage-N.md` 只有在前一轮 todo 全部完成后才能创建。
