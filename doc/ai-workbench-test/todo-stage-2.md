@@ -27,15 +27,19 @@
   - 目标目录：`tests/ai/backend/human/`
 
 - [ ] 按模型对比基线复跑关键 `human` 样例并记录差异
-  - 常用模型：`gpt-5-mini`
+  - 常用模型：`gpt-5`
   - 强模型：`gpt-5.2`
+  - pair baseline 支持通过 `AI_LIVE_PRIMARY_MODEL_NAME / AI_LIVE_STRONG_MODEL_NAME` 切换；测试侧运行时显式选择 `primary` 或 `strong`
   - 对失败样例与 `golden cases` 记录 `primaryModel / strongModel / runMode / primaryScore / strongScore`
+  - 当前进展：`human-single-step-kb-answer` 的 `gpt-5` 探针 `20260317-140339-612` 与 `gpt-5.2` 探针 `20260317-140645-949` 都已通过
+  - 当前状态：pair baseline 已从“外部阻塞”进入“部分完成”，剩余关键 `human` 样例尚未补跑
 
 - [ ] 跑完阶段 2 的 backend 测试并更新报告
   - 更新 `tests/report/ai/report.md`
   - 记录本阶段完成情况
   - 明确下一阶段进入 `intent / context / plan`
   - 输出下一阶段建议 `todolist`
+  - 当前进展：mock backend 已于 `2026-03-17` 全量跑通，单步 KB 的 `gpt-5 / gpt-5.2` live pair 探针也已补齐；但阶段 2 仍未跑完剩余关键 `human` pair case
 
 ## 当前阶段完成标准
 
@@ -53,6 +57,16 @@
   - `human-approval-denied`
   - `human-self-correction-after-tool-failure`
   - `human-docx-iterative-edit`
+- 已补齐：
+  - backend live raw log 现已记录真实 `meta.runtime.modelName`
+  - 关键 `human` case 已支持 `mock / live` 双模式
+  - live 配置可用时默认直连模型
+  - 阶段 2 mock backend 已重新全量跑通并刷新 raw logs
+  - bare-origin 的 OpenAI 兼容 base URL 现已自动规范到 `.../v1`
+  - 默认 pair baseline 已更新为 `gpt-5 / gpt-5.2`
+  - `human-single-step-kb-answer` 已完成 `gpt-5 / gpt-5.2` live 双探针
+- 当前阻塞：
+  - 当前没有新的外部配置阻塞，但在双模型对比证据不足前，仍不能创建 `todo-stage-3.md`
 - 当前仍待补：
-  - 双模型对比记录
-  - 阶段 2 完成态报告与下一阶段 todolist
+  - 补跑 `human-docx-iterative-edit`、`human-terminal-docx-handoff`、`human-blocked-on-workspace` 的 `gpt-5 / gpt-5.2` 对比记录
+  - 满足阶段 2 完成标准后，再输出正式的下一阶段 todolist

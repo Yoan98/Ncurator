@@ -24,8 +24,9 @@
   - 目标目录：`tests/ai/backend/tools/kb/`
 
 - [x] 固化模型对比基线与记录字段
-  - 常用模型：`gpt-5-mini`
+  - 常用模型：`gpt-5`
   - 强模型：`gpt-5.2`
+  - 支持通过 `AI_LIVE_PRIMARY_MODEL_NAME / AI_LIVE_STRONG_MODEL_NAME` 切换 pair baseline
   - 明确后续 report / case 记录中的 `primaryModel / strongModel / runMode / primaryScore / strongScore`
 
 - [x] 跑完阶段 1 的 backend 测试并更新报告

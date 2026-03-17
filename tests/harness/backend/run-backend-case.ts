@@ -190,7 +190,7 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
       runtime: {
         driver: 'backend',
         target: 'node',
-        modelName: null
+        modelName: definition.runtimeModelName || null
       }
     }
 

@@ -7,7 +7,7 @@
 - [ai-workbench-test/plan.md](/Users/test/work-space/NCurator-Desktop/doc/ai-workbench-test/plan.md)
   - 说明 AI workbench 的专项测试总计划，包括七层覆盖、真实场景池、阶段推进规则与完成度记录方式。
 - [ai-workbench-test/todo-stage-2.md](/Users/test/work-space/NCurator-Desktop/doc/ai-workbench-test/todo-stage-2.md)
-  - 当前阶段的执行 todo。`todo-stage-1.md` 已完成，后续 `todo-stage-N.md` 只有在前一轮 todo 全部完成后才能创建。
+  - 当前阶段的执行 todo。`todo-stage-1.md` 已完成；当前仍停留在 stage 2，并记录了 `/v1` 兼容性修复、默认 pair baseline `gpt-5 / gpt-5.2` 与首个 live pair 探针通过，后续 `todo-stage-N.md` 只有在前一轮 todo 全部完成后才能创建。
 - [database.md](/Users/test/work-space/NCurator-Desktop/doc/database.md)
   - 说明数据库与存储层设计，包括 LanceDB 的分层和表职责。
 - [project-structure.md](/Users/test/work-space/NCurator-Desktop/doc/project-structure.md)

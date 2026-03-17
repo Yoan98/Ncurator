@@ -1,18 +1,11 @@
 import { ChatOpenAI } from '@langchain/openai'
 import type { LLMConfig } from '../../types/store'
+import { normalizeOpenAIBaseUrl } from '../../../shared/llmBaseUrl'
 
 export type ChatModelFactoryOptions = {
   temperature?: number
   maxRetries?: number
   timeout?: number
-}
-
-const normalizeBaseURL = (baseURL: string) => {
-  let url = String(baseURL || '').trim()
-  if (url.endsWith('/chat/completions')) url = url.replace(/\/chat\/completions\/?$/, '')
-  if (url.endsWith('/v1/chat/completions')) url = url.replace(/\/chat\/completions\/?$/, '')
-  url = url.replace(/\/$/, '')
-  return url
 }
 
 export const createChatModel = (cfg: LLMConfig, opts?: ChatModelFactoryOptions) => {
@@ -23,7 +16,7 @@ export const createChatModel = (cfg: LLMConfig, opts?: ChatModelFactoryOptions) 
     maxRetries: opts?.maxRetries ?? 2,
     timeout: opts?.timeout,
     configuration: {
-      baseURL: normalizeBaseURL(cfg.base_url)
+      baseURL: normalizeOpenAIBaseUrl(cfg.base_url)
     }
   })
 }

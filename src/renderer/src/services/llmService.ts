@@ -1,5 +1,6 @@
 import OpenAI from 'openai'
 import type { ChatMessage, LLMConfig } from '../../../shared/types'
+import { normalizeOpenAIBaseUrl } from '../../../shared/llmBaseUrl'
 
 export type { ChatMessage, LLMConfig }
 
@@ -22,21 +23,7 @@ export const streamCompletion = async (
   onFinish: () => void
 ): Promise<void> => {
   try {
-    let baseURL = config.base_url
-    // OpenAI SDK appends /chat/completions automatically, so we need to strip it if present
-    if (baseURL.endsWith('/chat/completions')) {
-      baseURL = baseURL.replace(/\/chat\/completions\/?$/, '')
-    } else if (baseURL.endsWith('/v1/chat/completions')) {
-      // Some users might paste the full URL including /v1...
-      // Ideally we want the base that includes /v1 if the provider expects it,
-      // but OpenAI SDK expects the base URL to be where /chat/completions is appended.
-      // E.g. https://api.openai.com/v1 -> https://api.openai.com/v1/chat/completions
-      // So if user provided .../v1/chat/completions, we want .../v1
-      baseURL = baseURL.replace(/\/chat\/completions\/?$/, '')
-    }
-
-    // Ensure no trailing slash
-    baseURL = baseURL.replace(/\/$/, '')
+    const baseURL = normalizeOpenAIBaseUrl(config.base_url)
 
     const client = new OpenAI({
       baseURL,

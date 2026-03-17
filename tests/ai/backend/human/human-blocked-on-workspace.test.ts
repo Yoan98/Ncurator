@@ -2,9 +2,14 @@ import { describe, it } from 'vitest'
 import type { AiRunEvent } from '../../../../src/shared/types'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
+import { hasLiveLlmConfigInEnv, loadLiveLlmConfigFromEnv } from '../../../harness/backend/llmConfig'
+
+const liveModelConfig = hasLiveLlmConfigInEnv() ? loadLiveLlmConfigFromEnv() : null
 
 describe('human blocked on workspace', () => {
   it('surfaces workspace-required blocking instead of continuing to hallucinate', async () => {
+    const isLiveMode = liveModelConfig !== null
+
     await runBackendCase({
       caseId: 'human-blocked-on-workspace',
       caseType: 'scenario',
@@ -15,35 +20,49 @@ describe('human blocked on workspace', () => {
       description: '验证 human 在缺少 workspace 绑定时会正确阻塞，而不是继续执行 shell 任务',
       fixtures: [],
       runMode: 'single',
+      runtimeModelName: liveModelConfig?.model_name || null,
       execute: async (runtime) => {
         const runner = createHumanTestRunner(
           runtime,
           {
             bindWorkspace: false,
-            humanDecisionOverrides: [
-              {
-                decision: {
-                  action: 'load_skill',
-                  skillId: 'workspace-shell',
-                  rationale: '需要先获得 workspace shell 能力。',
-                  publicNarrative: '我先加载工作区 shell 能力。'
-                }
-              },
-              {
-                decision: {
-                  action: 'invoke_tool',
-                  toolName: 'terminal_run_command',
-                  args: {
-                    command: 'cat notes.txt'
+            liveModelConfig: liveModelConfig || undefined,
+            humanDecisionOverrides: isLiveMode
+              ? undefined
+              : [
+                  {
+                    decision: {
+                      action: 'load_skill',
+                      skillId: 'workspace-shell',
+                      rationale: '需要先获得 workspace shell 能力。',
+                      publicNarrative: '我先加载工作区 shell 能力。'
+                    }
                   },
-                  rationale: '需要读取工作区里的文件内容。',
-                  publicNarrative: '我尝试读取工作区里的材料。'
-                }
-              }
-            ]
+                  {
+                    decision: {
+                      action: 'invoke_tool',
+                      toolName: 'terminal_run_command',
+                      args: {
+                        command: 'cat notes.txt'
+                      },
+                      rationale: '需要读取工作区里的文件内容。',
+                      publicNarrative: '我尝试读取工作区里的材料。'
+                    }
+                  }
+                ],
+            humanDeliveryOverride: () =>
+              [
+                '# 子任务交付',
+                '',
+                '## 已完成',
+                '当前未读取到工作区文件。',
+                '',
+                '## 风险与未决',
+                '缺少 workspace 绑定，无法继续读取本地材料。'
+              ].join('\n')
           },
           {
-            maxSteps: 3
+            maxSteps: isLiveMode ? 5 : 3
           }
         )
 
@@ -109,8 +128,8 @@ describe('human blocked on workspace', () => {
         )
 
         runtime.assertThat(
-          workspaceRequiredEvents.length === 1 &&
-            blockedHumanSteps.length === 1 &&
+          (isLiveMode ? workspaceRequiredEvents.length >= 1 : workspaceRequiredEvents.length === 1) &&
+            (isLiveMode ? blockedHumanSteps.length >= 1 : blockedHumanSteps.length === 1) &&
             taskDelivery.length === 1,
           {
             name: 'human-workspace-blocked-events',

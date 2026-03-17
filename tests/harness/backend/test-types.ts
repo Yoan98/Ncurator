@@ -109,6 +109,7 @@ export type TestCaseDefinition<TResult> = {
   description: string
   fixtures: readonly string[]
   runMode: TestRunMode
+  runtimeModelName?: string | null
   execute: (runtime: BackendTestRuntime) => Promise<TResult>
   assert: (result: TResult, runtime: BackendTestRuntime) => Promise<void>
 }

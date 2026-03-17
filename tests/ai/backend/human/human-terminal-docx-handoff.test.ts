@@ -6,6 +6,9 @@ import { isJsonObject } from '../../../../src/main/utils/aiCapabilityUtils'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import { createDocxToolHarness, writeWorkbenchSampleDocx } from '../../../harness/backend/aiToolHarness'
 import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
+import { hasLiveLlmConfigInEnv, loadLiveLlmConfigFromEnv } from '../../../harness/backend/llmConfig'
+
+const liveModelConfig = hasLiveLlmConfigInEnv() ? loadLiveLlmConfigFromEnv() : null
 
 type DocxSearchResult = {
   ok: boolean
@@ -30,6 +33,8 @@ const getToolResultPayload = (
 
 describe('human terminal docx handoff', () => {
   it('chains workspace shell output into a docx editing flow and keeps the draft usable', async () => {
+    const isLiveMode = liveModelConfig !== null
+
     await runBackendCase({
       caseId: 'human-terminal-docx-handoff',
       caseType: 'scenario',
@@ -40,6 +45,7 @@ describe('human terminal docx handoff', () => {
       description: '验证 human 能串联 terminal 与 docx 工具完成多步任务',
       fixtures: [],
       runMode: 'single',
+      runtimeModelName: liveModelConfig?.model_name || null,
       execute: async (runtime) => {
         const docxPath = await writeWorkbenchSampleDocx(runtime.workspaceRoot, 'handoff-source.docx')
         const notesPath = path.join(runtime.workspaceRoot, 'notes.txt')
@@ -51,94 +57,108 @@ describe('human terminal docx handoff', () => {
         const runner = createHumanTestRunner(
           runtime,
           {
-            humanDecisionOverrides: [
-              {
-                decision: {
-                  action: 'load_skill',
-                  skillId: 'workspace-shell',
-                  rationale: '需要先读取工作区里的输入材料。',
-                  publicNarrative: '我先读取工作区里的说明。'
-                }
-              },
-              {
-                decision: {
-                  action: 'invoke_tool',
-                  toolName: 'terminal_run_command',
-                  args: {
-                    command: 'cat notes.txt'
+            liveModelConfig: liveModelConfig || undefined,
+            humanDecisionOverrides: isLiveMode
+              ? undefined
+              : [
+                  {
+                    decision: {
+                      action: 'load_skill',
+                      skillId: 'workspace-shell',
+                      rationale: '需要先读取工作区里的输入材料。',
+                      publicNarrative: '我先读取工作区里的说明。'
+                    }
                   },
-                  rationale: '先读取 notes.txt 中的修改要求。',
-                  publicNarrative: '我先看一下工作区里的说明内容。'
-                }
-              },
-              {
-                decision: {
-                  action: 'load_skill',
-                  skillId: 'docx-editing',
-                  rationale: '拿到要求后再切到 docx 编辑能力。',
-                  publicNarrative: '我切到文档编辑能力继续处理。'
-                }
-              },
-              {
-                decision: {
-                  action: 'invoke_tool',
-                  toolName: 'docx_open',
-                  args: {
-                    sourcePath: path.relative(runtime.workspaceRoot, docxPath)
-                  },
-                  rationale: '需要先打开目标文档。',
-                  publicNarrative: '我先打开目标文档。'
-                }
-              },
-              {
-                decision: {
-                  action: 'invoke_tool',
-                  toolName: 'docx_apply_ops',
-                  args: {
-                    ops: [
-                      {
-                        type: 'replace_text',
-                        query: 'Hello',
-                        replace: 'Hi'
+                  {
+                    decision: {
+                      action: 'invoke_tool',
+                      toolName: 'terminal_run_command',
+                      args: {
+                        command: 'cat notes.txt'
                       },
-                      {
-                        type: 'replace_text',
-                        query: 'Risk summary: monitor integration edge cases.',
-                        replace:
-                          'Risk summary: monitor integration edge cases. Conclusion: local-first retrieval remains the primary path.'
-                      }
-                    ]
+                      rationale: '先读取 notes.txt 中的修改要求。',
+                      publicNarrative: '我先看一下工作区里的说明内容。'
+                    }
                   },
-                  rationale: '根据说明修改开头措辞，并补一段结论。',
-                  publicNarrative: '我开始把要求落实到文档草稿里。'
-                }
-              },
-              {
-                decision: {
-                  action: 'complete_task',
-                  summary: '已根据工作区说明完成文档草稿修改。',
-                  rationale: 'terminal 读取和 docx 编辑都已完成。',
-                  publicNarrative: '文档草稿已经改好，可以交付当前结果。',
-                  resultData: {
-                    sourcePath: path.relative(runtime.workspaceRoot, docxPath),
-                    note: 'draft updated'
+                  {
+                    decision: {
+                      action: 'load_skill',
+                      skillId: 'docx-editing',
+                      rationale: '拿到要求后再切到 docx 编辑能力。',
+                      publicNarrative: '我切到文档编辑能力继续处理。'
+                    }
+                  },
+                  {
+                    decision: {
+                      action: 'invoke_tool',
+                      toolName: 'docx_open',
+                      args: {
+                        sourcePath: path.relative(runtime.workspaceRoot, docxPath)
+                      },
+                      rationale: '需要先打开目标文档。',
+                      publicNarrative: '我先打开目标文档。'
+                    }
+                  },
+                  {
+                    decision: {
+                      action: 'invoke_tool',
+                      toolName: 'docx_apply_ops',
+                      args: {
+                        ops: [
+                          {
+                            type: 'replace_text',
+                            query: 'Hello',
+                            replace: 'Hi'
+                          },
+                          {
+                            type: 'replace_text',
+                            query: 'Risk summary: monitor integration edge cases.',
+                            replace:
+                              'Risk summary: monitor integration edge cases. Conclusion: local-first retrieval remains the primary path.'
+                          }
+                        ]
+                      },
+                      rationale: '根据说明修改开头措辞，并补一段结论。',
+                      publicNarrative: '我开始把要求落实到文档草稿里。'
+                    }
+                  },
+                  {
+                    decision: {
+                      action: 'complete_task',
+                      summary: '已根据工作区说明完成文档草稿修改。',
+                      rationale: 'terminal 读取和 docx 编辑都已完成。',
+                      publicNarrative: '文档草稿已经改好，可以交付当前结果。',
+                      resultData: {
+                        sourcePath: path.relative(runtime.workspaceRoot, docxPath),
+                        note: 'draft updated'
+                      }
+                    }
                   }
-                }
-              }
-            ],
-            humanDeliveryOverride: () =>
-              [
-                '# 子任务交付',
-                '',
-                '## 已完成',
-                '已读取 notes.txt，并把要求落实到 docx 草稿中。',
-                '',
-                '## 关键发现',
-                '已将开头措辞改为 Hi，并补入结论段。'
-              ].join('\n')
+                ],
+            humanDeliveryOverride: isLiveMode
+              ? () =>
+                  [
+                    '# 子任务交付',
+                    '',
+                    '## 已完成',
+                    '已读取 notes.txt，并把要求落实到文档草稿中。',
+                    '',
+                    '## 关键发现',
+                    '文档已根据工作区说明完成更新。'
+                  ].join('\n')
+              : () =>
+                  [
+                    '# 子任务交付',
+                    '',
+                    '## 已完成',
+                    '已读取 notes.txt，并把要求落实到 docx 草稿中。',
+                    '',
+                    '## 关键发现',
+                    '已将开头措辞改为 Hi，并补入结论段。'
+                  ].join('\n')
           },
           {
-            maxSteps: 8
+            maxSteps: isLiveMode ? 10 : 8
           }
         )
 
@@ -232,7 +252,9 @@ describe('human terminal docx handoff', () => {
         )
 
         runtime.assertThat(
-          humanSteps.length === 6 && terminalResults.length === 1 && docxApplyResults.length === 1,
+          isLiveMode
+            ? humanSteps.length >= 4 && terminalResults.length >= 1 && docxApplyResults.length >= 1
+            : humanSteps.length === 6 && terminalResults.length === 1 && docxApplyResults.length === 1,
           {
             name: 'human-terminal-docx-handoff-events',
             message: '多工具串联所需的 human_step 与关键 tool 事件都已记录',
