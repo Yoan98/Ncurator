@@ -2,15 +2,15 @@
 
 ## 1. 目标
 
-本计划用于验证 `workbench` 页面上的 AI 是否真的能“接住用户诉求并把事情做成”，而不是只返回一段看起来合理的回答。
+本计划用于验证 `workbench` 页面上的 AI 是否真的能接住用户诉求，并在本地优先约束下把事情做成，而不是只返回一段看起来合理的回答。
 
-当前阶段的主目标聚焦三类真实诉求：
+当前测试主轴聚焦三类真实诉求：
 
 - 帮用户编辑或编写 `.docx` 文档
 - 回答本地知识库问题
 - 在必要时结合 `terminal` 读取工作区文件、生成中间材料或辅助完成前两类任务
 
-这份计划按七个层次展开：
+测试按七个层次展开：
 
 1. `tool`
 2. `human`
@@ -18,27 +18,26 @@
 4. `intent`
 5. `plan`
 6. `entire`
-7. `workbench ui`
+7. `workbench`
 
-目标不是一次性做完所有自动化，而是先形成一版可以持续推进的专项测试基线，为下一步测试和优化提供统一框架。
+目标不是一次性做完所有自动化，而是先建立一版能持续推进的专项测试基线，为后续实现、诊断和优化提供统一框架。
 
 ## 2. 文档组织规则
 
 AI workbench 测试文档统一放在 `doc/ai-workbench-test/`。
 
-当前目录只允许存在两个工作文件：
+任一时刻，该目录只保留两个工作文件：
 
 1. `plan.md`
-2. `todo-stage-1.md`
-
-后续 `todo-stage-2.md`、`todo-stage-3.md` 等文件，只有在上一轮 todo 全部完成并打勾后，才能创建。
+2. 当前阶段唯一的 `todo-stage-N.md`
 
 规则如下：
 
-- `plan.md` 负责保留完整测试方案
+- `plan.md` 负责保留完整测试方案、阶段定义和用例信息列表
 - `todo-stage-N.md` 只负责当前阶段执行项
 - 不在 `plan.md` 中维护当前阶段复选框
-- 不在上一轮 todo 未完成时预建下一轮 todo
+- 不在入口文档中写死当前所处 stage 编号
+- 只有当前阶段完成并验收后，才能创建下一阶段的 `todo-stage-N.md`
 
 ## 3. 当前基线
 
@@ -55,11 +54,11 @@ AI workbench 测试文档统一放在 `doc/ai-workbench-test/`。
   - 中间会话与 `Assistant Run`
   - 右侧时间线与检查器
   - 底部统一输入区、模式切换与范围选择
-- 当前测试覆盖仍很薄：
-  - backend 只有少量 tool happy path
+- 当前测试覆盖仍然偏薄：
+  - backend 只有少量基础样例
   - e2e 只有基础 smoke
 
-因此这轮测试计划的核心不是“补一点零散 case”，而是建立完整的专项覆盖树。
+因此这轮计划的重点不是补少量零散 case，而是建立完整的专项覆盖树，并把阶段推进、日志沉淀和诊断方式统一下来。
 
 ## 4. 测试范围
 
@@ -72,7 +71,7 @@ AI workbench 测试文档统一放在 `doc/ai-workbench-test/`。
 - `terminal` 的工作区边界、审批、命令执行与产物发现能力
 - 本地知识库检索能力
 - `draft review` 审阅中心链路
-- `workbench` 页面可用性、布局与关键交互体验
+- `workbench` 页面下的最终完成 e2e、可用性、布局与关键交互体验
 
 ### 4.2 本轮暂不作为核心目标
 
@@ -81,84 +80,53 @@ AI workbench 测试文档统一放在 `doc/ai-workbench-test/`。
 - 长周期记忆质量
 - 与当前主流程无关的泛化 Agent 能力
 
-### 4.3 模型对比策略
+### 4.3 模型诊断策略
 
-AI 测试里要引入一组固定的“常用模型 + 强模型”对照，因为有些失败来自工程问题，有些失败确实来自模型能力上限。如果没有对比组，很多 case 很难判断该优先优化哪一层。
+测试默认只用基础模型主跑。更强模型不是固定对照组，而是诊断工具。
 
-#### 默认模型组合
+#### 默认规则
 
-| 角色 | 推荐模型 | 用途 | 选择理由 |
-| --- | --- | --- | --- |
-| 常用模型 | `gpt-5` | 默认测试模型，承担大多数 backend / e2e 主跑 | 与当前主验证链路保持一致，适合作为日常基线 |
-| 强模型 | `gpt-5.2` | 对比模型，用于关键样例复跑和疑难 case 复核 | 作为更强档位的同族模型，适合判断问题更偏工程还是能力上限 |
+- 所有 case 先只用基础模型执行
+- 同一 case 必须在相同 fixture、相同输入、相同运行前提下重复执行
+- 当基础模型连续 `3` 次都未完成目标，且失败不像是确定性的工程阻塞时，才补跑 `1` 次更强模型
 
-#### 为什么推荐这组而不是别的
+#### 不触发更强模型的情况
 
-- 选同一家族的两个模型，更容易把变量收敛到“能力强弱”，而不是“模型风格差异”。
-- `gpt-5` 作为默认主跑，可以直接反映当前主模型配置下的真实完成度。
-- `gpt-5.2` 作为强对照，更适合留给关键失败样例、`golden cases` 和最终完成度复核。
-- 相比跨家族切换模型，这组组合更容易把结论收敛到“同族不同能力档位”的差异。
-- 相比 `deepseek-r1` 这类第三方推理模型，`gpt-5.2` 更适合作为主强对照，因为行为风格更接近主模型族。
+下列情况优先按工程问题处理，不把它们当成“需要换模型诊断”的信号：
+
+- 工作区未绑定
+- 审批被拒绝
+- fixture 缺失或路径错误
+- 工具本身返回明确错误
+- 明确的边界拦截，例如工作区外路径逃逸
+
+#### 触发更强模型诊断的目的
+
+- 判断失败是否主要来自模型能力上限
+- 判断是否是上下文组织、任务拆解或提示结构不足
+- 判断“换模型就能解决”是否值得反向推动工程改造
+- 为后续优化提供证据，而不是直接把更强模型当成默认方案
 
 #### 配置方式
 
 - `AI_LIVE_PRIMARY_MODEL_NAME`
-  - 控制默认 `primaryModel`，当前默认值是 `gpt-5`。
+  - 控制基础模型，当前默认值是 `gpt-5`
 - `AI_LIVE_STRONG_MODEL_NAME`
-  - 控制默认 `strongModel`，当前默认值是 `gpt-5.2`。
-- 只要 live 配置可用，测试就默认直连模型；若要退回纯 mock，可禁用 `.env` 加载或显式清空 live 配置。
+  - 控制诊断用更强模型，当前默认值是 `gpt-5.2`
+- live 配置可用时，测试默认直连 live 模型；若要退回纯 mock，可禁用 `.env` 加载或显式清空 live 配置
 
-基于你现在能用的模型，我的推荐是：
+#### 诊断产出要求
 
-- 日常常用模型：`gpt-5`
-- 更强对比模型：`gpt-5.2`
+补跑更强模型后，需要明确记录：
 
-如果后面需要换 pair baseline，优先只改上述环境变量；测试侧在运行时显式选择 `primary` 或 `strong`，不再额外增加第三个模型开关，也不改 report 字段和 raw log 契约。
-
-#### 如何融入测试流程
-
-- 阶段 1：只固化模型对比策略与记录字段，不要求所有 tool case 都双跑。
-- 阶段 2：`human` 关键样例全部用常用模型主跑；失败样例和 `golden cases` 用强模型复跑。
-- 阶段 3：`intent / context / plan` 的关键路由 case 做双模型对比。
-- 阶段 4：`S01 ~ S04` 的 e2e 用常用模型全跑；完成度低于 `2` 的 case，必须再用强模型复跑。
-- 阶段 5：`S05 ~ S08` 与 UI 相关场景沿用同样规则。
-
-#### 双模型结果怎么记录
-
-先不做问题分类，只记录双模型差异。
-
-这里有一个硬约束：不改现有测试架构，不改 `meta.json / timeline.jsonl / artifacts.json` 的固定契约。
-
-落地方式如下：
-
-- `raw log` 层
-  - 继续沿用现有 schema。
-  - 每次 run 只记录一个真实执行模型。
-  - 模型名仍然只通过现有的 `meta.runtime.modelName` 表达。
-- 双模型对比层
-  - 通过“同一 case 跑两次或多次 run”完成，而不是给单次 run 增加新顶层字段。
-  - 对比结果写入 `tests/report/ai/report.md`，而不是改 `meta.json` 顶层。
-- 如果个别 case 需要在原始日志里补充轻量上下文
-  - 只放进现有 `timeline.jsonl` 事件的 `data` 中。
-  - 不引入新的 raw log schema。
-
-因此下面这些记录项，默认都是 report 层概念，不是要求给 raw log 新增字段。
-
-每条需要双跑的 case 建议记录：
-
-- `primaryModel`
-- `strongModel`
-- `runMode`
-  - `single`
-  - `pair`
-- `primaryScore`
-- `strongScore`
-- `deltaSummary`
-  - 例如：`strong model completed same task with score 3 while primary scored 1`
+- 更强模型是否完成了基础模型连续失败的同一任务
+- 完成质量是否明显高于基础模型
+- 差异更像能力差异、上下文差异，还是工程链路问题
+- 该结论是否值得反向指导 prompt、编排或工具链改造
 
 ## 5. 真实用户场景池
 
-测试必须围绕真实诉求，而不是只围绕单个函数或事件。
+测试必须围绕真实诉求，而不是只围绕单个函数或单条事件。
 
 | 场景 ID | 用户诉求示例 | 涉及能力 | 预期结果 |
 | --- | --- | --- | --- |
@@ -166,12 +134,18 @@ AI 测试里要引入一组固定的“常用模型 + 强模型”对照，因�
 | `S02` | “根据 `notes.txt` 和 `todo.md`，帮我写一版项目周报 docx。” | `terminal` + `docx` + `plan` | AI 先读取工作区材料，再生成结构化 docx |
 | `S03` | “知识库里有没有关于 LanceDB 分层设计的说明？给我结论并引用依据。” | `local_kb_retrieval` + `human` | 返回基于本地资料的答案，证据可回看 |
 | `S04` | “先从知识库里找数据库规范，再把 `模板.docx` 里的数据库章节改掉。” | `kb` + `docx` + `plan` | 先检索，再编辑文档，最终进入可预览或可审阅结果 |
-| `S05` | “继续刚才第二步，把风险部分写得更保守一点。” | `context` + `intent` | AI 正确判断上下文不足或正确接续前文，而不是误做新任务 |
+| `S05` | “继续刚才第二步，把风险部分写得更保守一点。” | `context` + `intent` | AI 正确接续前文或先补上下文，而不是误做新任务 |
 | `S06` | “去工作区里找最新日报，整理成一版发给领导的汇报。” | `terminal` + `context` + `plan` | AI 先找文件，再读取内容，再生成最终交付 |
 | `S07` | “帮我执行一个命令把产物导出来。” | `terminal` + `approval` | AI 给出审批请求，等待用户决策，不越权执行 |
 | `S08` | “根据 AI 改写结果，我只接受其中 2 处修改，其他拒绝。” | `draft review` + `ui` | 审阅中心可完成逐条接受、拒绝并提交 |
+| `S09` | “对比 `上周周报.docx` 和 `本周草稿.docx`，生成变更摘要并补到最终版开头。” | `docx` + `human` + `plan` | AI 能读取两份文档、归纳变更点并写回最终文档或生成审阅结果 |
+| `S10` | “先从知识库找数据库规范，再去工作区找现有实现说明，最后生成一版技术方案 docx。” | `kb` + `terminal` + `docx` + `plan` | AI 能跨知识库与工作区收集证据，再输出结构化文档 |
+| `S11` | “工作区里有三份日报和一个风险清单，帮我合并成领导汇报，并把风险部分写得更保守。” | `terminal` + `docx` + `human` | AI 能发现多份材料、归并要点并完成定向改写 |
+| `S12` | “如果知识库里证据不足，就明确告诉我还缺什么，并先给我一版可继续完善的初稿。” | `kb` + `human` + `plan` | AI 能在证据不足时安全收敛，而不是编造结论 |
+| `S13` | “根据会议纪要、todo、上周周报和知识库规范，连续处理并生成正式周报，再进入审阅。” | `terminal` + `kb` + `docx` + `human` + `plan` | AI 能完成长任务、多源材料融合和最终审阅收敛 |
+| `S14` | “先执行导出命令拿到数据，再把关键指标写进现有周报模板，并保留原表格结构。” | `terminal` + `approval` + `docx` + `human` | AI 能完成审批、产物读取、结构化写回和表格保持 |
 
-这 8 类场景足以覆盖当前阶段最重要的真实使用路径。
+这 `14` 类场景覆盖了当前阶段最重要的真实使用路径，也能更完整地支撑 `tool`、`human`、`entire` 与 `workbench` 的专项测试。
 
 ## 6. 七层测试策略
 
@@ -195,24 +169,22 @@ AI 测试里要引入一组固定的“常用模型 + 强模型”对照，因�
   - 多段连续修改
   - 标题、正文、表格混合修改
   - 长文档局部范围修改
+  - 行内文本与表格单元格的混合改写
+  - 保持标题层级、段落顺序与表格结构
 - 结果收敛
   - 保存文档：`docx_save`
   - 预览渲染：`docx_render_preview`
   - 校验：`docx_validate`
   - 历史回看：`docx_get_history`
   - 回滚：`docx_rollback`
+  - 保存冲突、覆盖与另存为策略
 - 异常与边界
   - 无效 `blockId`
   - 搜索命中歧义
   - 表格单元格更新失败
   - 多轮编辑后的 lineage 正确性
   - 保存路径冲突与 `overwrite` 行为
-
-复杂诉求要按“用户真的会怎么提”来测，而不是只测单个 API。例如：
-
-- “把第二章整体改写成适配当前项目的版本，保留原来的标题层级，再把风险表最后一列更新成新的负责人。”
-- “根据知识库结论，在模板里插入一段新章节，并删除过时段落。”
-- “先改三处，再给我渲染预览，如果不对就回滚到上一个版本。”
+  - 多文档并行打开后的目标文档识别
 
 ##### `terminal`
 
@@ -220,56 +192,36 @@ AI 测试里要引入一组固定的“常用模型 + 强模型”对照，因�
   - 在工作区内 `find / rg / ls / cat / sed` 读取材料
   - 多层目录发现文件
   - 相对路径与绝对路径解析
+  - 批量发现多个候选文件并汇总关键信息
 - 复杂命令能力
   - 多段命令
   - 管道与重定向
   - 产物识别与 `file_artifact` 事件
   - 输出截断后的摘要可用性
+  - 先生成产物、再回读产物的连续链路
 - 安全与阻塞
   - 工作区边界检查
   - 高中低风险分类
   - 审批请求触发
   - 审批通过 / 拒绝后的后续行为
+  - 审批拒绝后的安全收敛与替代回复
 - 异常与边界
   - 命令失败
   - 长输出
   - 取消执行
   - 工作区外路径逃逸
   - 读写混合命令
-
-复杂诉求要覆盖“terminal 不是独立玩具，而是任务链一部分”的情况。例如：
-
-- “去工作区里把最近三份日报找出来，拼成一份汇报素材。”
-- “先看看 `notes/` 目录里有哪些材料，再把关键结论整理进 docx。”
-- “执行一个会生成中间文件的命令，然后把生成结果写回文档。”
+  - 相对路径跳转与软链接式逃逸尝试
 
 ##### `kb`
 
-- `hybrid` / `vector` / `fts` 检索
+- `hybrid / vector / fts` 检索
 - `list documents`
 - `source scope` 过滤
 - 无结果返回
 - 已选范围为空时的表现
-
-#### 建议新增用例
-
-- `tests/ai/backend/tools/docx/docx-open-outline-search.test.ts`
-- `tests/ai/backend/tools/docx/docx-complex-structural-edit.test.ts`
-- `tests/ai/backend/tools/docx/docx-table-and-mixed-ops.test.ts`
-- `tests/ai/backend/tools/docx/docx-save-preview-validate.test.ts`
-- `tests/ai/backend/tools/docx/docx-history-rollback-multi-round.test.ts`
-- `tests/ai/backend/tools/docx/docx-invalid-op-and-ambiguous-search.test.ts`
-- `tests/ai/backend/tools/terminal/terminal-read-workspace-materials.test.ts`
-- `tests/ai/backend/tools/terminal/terminal-relative-and-absolute-paths.test.ts`
-- `tests/ai/backend/tools/terminal/terminal-multi-segment-artifacts.test.ts`
-- `tests/ai/backend/tools/terminal/terminal-workspace-boundary-rejected.test.ts`
-- `tests/ai/backend/tools/terminal/terminal-approval-required.test.ts`
-- `tests/ai/backend/tools/terminal/terminal-approval-denied-followup.test.ts`
-- `tests/ai/backend/tools/terminal/terminal-command-failed.test.ts`
-- `tests/ai/backend/tools/terminal/terminal-cancel-or-timeout.test.ts`
-- `tests/ai/backend/tools/kb/kb-hybrid-search-basic.test.ts`
-- `tests/ai/backend/tools/kb/kb-source-scope-filter.test.ts`
-- `tests/ai/backend/tools/kb/kb-no-result.test.ts`
+- 先列文档再限定检索范围
+- 多来源结果的引用与区分
 
 #### 通过标准
 
@@ -281,7 +233,7 @@ AI 测试里要引入一组固定的“常用模型 + 强模型”对照，因�
 
 #### 目标
 
-验证 `human` 是否具备“自主推进任务”的能力，而不是只会机械调用单个工具。
+验证 `human` 是否具备自主推进任务的能力，而不是只会机械调用单个工具。
 
 #### 重点问题
 
@@ -293,32 +245,25 @@ AI 测试里要引入一组固定的“常用模型 + 强模型”对照，因�
 - 是否能把复杂诉求拆成多个有依赖关系的动作
 - 是否能在 `kb / terminal / docx` 之间切换，而不是只会单工具闭环
 - 是否能在多轮修改后保持目标不漂移
-- 是否能在做不完时给出“部分完成但可继续”的交付
+- 是否能在做不完时给出部分完成但可继续的交付
+- 是否能在长任务里保持步骤连贯、证据可追溯、阶段目标不丢失
 
-#### 建议场景
+#### 覆盖重点
 
-- 简单任务单步闭环：直接读取知识库并回答
-- 多步工具串联：先找文档，再定位块，再修改，再保存
-- 工具失败纠偏：搜索不到块后改用 `outline + get_block`
-- 阻塞收敛：发现缺工作区后请求补充，而不是继续空跑
-- 审阅收敛：有文档修改时输出 `draft_review_ready`
-- 复杂文档改写：多个章节、多种块类型、多轮编辑
-- 混合任务：`terminal -> kb/docx`
-- 多轮会话：上一轮已有中间结果，这一轮继续精修
-- 局部失败：某一步失败后仍能保留已有进展并安全收敛
-
-#### 建议新增用例
-
-- `tests/ai/backend/human/human-single-step-kb-answer.test.ts`
-- `tests/ai/backend/human/human-docx-iterative-edit.test.ts`
-- `tests/ai/backend/human/human-terminal-docx-handoff.test.ts`
-- `tests/ai/backend/human/human-blocked-on-workspace.test.ts`
-- `tests/ai/backend/human/human-self-correction-after-tool-failure.test.ts`
-- `tests/ai/backend/human/human-complex-docx-rewrite.test.ts`
-- `tests/ai/backend/human/human-kb-docx-bridge.test.ts`
-- `tests/ai/backend/human/human-multi-turn-refinement.test.ts`
-- `tests/ai/backend/human/human-partial-delivery-when-blocked.test.ts`
-- `tests/ai/backend/human/human-step-budget-exhaustion.test.ts`
+- 单步闭环任务
+- 单工具 `docx` 直接完成任务
+- 多工具串联任务
+- 工具失败后的自纠偏
+- 工作区缺失、审批阻塞等中断点
+- 文档修改后的审阅收敛
+- 混合任务中的跨工具切换
+- 多源材料归并后的统一交付
+- 证据不足时的安全停止与继续建议
+- 多轮 follow-up 续做
+- 长任务中的多步依赖推进
+- 长任务中途加入约束后的重规划
+- 长任务中的审批分支切换
+- 预算耗尽或部分阻塞时的安全收敛
 
 #### 通过标准
 
@@ -327,6 +272,7 @@ AI 测试里要引入一组固定的“常用模型 + 强模型”对照，因�
 - 遇阻塞时不乱答、不越权、不丢状态
 - 复杂任务能拆出清晰的行动链，而不是一上来就输出空泛答案
 - 工具失败后能切换策略，不重复死循环
+- 长任务中能维持稳定目标，不因中间步骤变多而明显漂移
 
 ### 6.3 `context`
 
@@ -340,19 +286,6 @@ AI 测试里要引入一组固定的“常用模型 + 强模型”对照，因�
 - 前文任务续做时能否正确接住会话上下文
 - 工作区未准备文件能否纳入上下文判断
 - 混合来源任务中能否先收集证据再规划
-
-#### 典型场景
-
-- “继续第二步”
-- “按刚才那份文档的格式改这个”
-- “根据工作区里最新日报继续写”
-- “你先看一下当前目录下有哪些材料，再决定怎么做”
-
-#### 建议新增用例
-
-- `tests/ai/backend/main-context/context-follow-up-reference-resolution.test.ts`
-- `tests/ai/backend/main-context/context-workspace-file-discovery.test.ts`
-- `tests/ai/backend/main-context/context-hybrid-evidence-collection.test.ts`
 
 #### 通过标准
 
@@ -382,13 +315,6 @@ AI 测试里要引入一组固定的“常用模型 + 强模型”对照，因�
 | 上下文不足 | “继续刚才第二段” | `need_context` |
 | 混合任务 | “先去看工作区材料，再帮我写一版文档” | `to_plan` |
 
-#### 建议新增用例
-
-- `tests/ai/backend/main-intent/intent-direct-human.test.ts`
-- `tests/ai/backend/main-intent/intent-to-plan-docx-task.test.ts`
-- `tests/ai/backend/main-intent/intent-need-context-follow-up.test.ts`
-- `tests/ai/backend/main-intent/intent-hybrid-task-routing.test.ts`
-
 #### 通过标准
 
 - 简单 / 复杂 / 缺上下文三类任务都有稳定判别
@@ -403,7 +329,7 @@ AI 测试里要引入一组固定的“常用模型 + 强模型”对照，因�
 #### 重点问题
 
 - 任务拆解是否缺步或错序
-- 是否把“最终总结”错误塞进业务计划
+- 是否把最终总结错误塞进业务计划
 - 是否把证据收集、文档编辑、保存、审阅等关键阶段拆出来
 - 任务失败或阻塞后是否能以当前结果收敛
 
@@ -415,13 +341,6 @@ AI 测试里要引入一组固定的“常用模型 + 强模型”对照，因�
 - 不创建无意义的重复任务
 - 任务结果能支撑 `synthesis`
 
-#### 建议新增用例
-
-- `tests/ai/backend/main-plan/plan-docx-edit-workflow.test.ts`
-- `tests/ai/backend/main-plan/plan-kb-docx-hybrid-workflow.test.ts`
-- `tests/ai/backend/main-plan/plan-terminal-assisted-docx-workflow.test.ts`
-- `tests/ai/backend/main-plan/plan-blocked-task-synthesis.test.ts`
-
 #### 通过标准
 
 - 计划具有可执行性
@@ -432,13 +351,13 @@ AI 测试里要引入一组固定的“常用模型 + 强模型”对照，因�
 
 #### 目标
 
-验证从用户输入到最终交付的完整闭环是否成立，这一层直接对应用户真实感受。
+验证从用户输入到最终交付的后端完整闭环是否成立。
 
-这一层的最终形态不是 backend 集成，而是基于真实用户场景池的 `workbench e2e` 完成度测试。
+这一层只归属 `backend`，用于验证 `main / human / tools` 在不依赖真实 UI 交互时能否完成完整任务链。`workbench` 下的真实交互与最终完成验收，统一放到第 `6.7` 节。
 
 #### 总体场景完成度判定
 
-每个真实用户场景都要按“完成度”而不是只按 `pass/fail` 评估。
+每个真实用户场景都按完成度而不是单纯 `pass / fail` 评估。
 
 | 分值 | 含义 |
 | --- | --- |
@@ -447,63 +366,27 @@ AI 测试里要引入一组固定的“常用模型 + 强模型”对照，因�
 | `1` | 只完成部分步骤，有中间产物，但没真正完成诉求 |
 | `0` | 失败或阻塞，用户诉求未完成 |
 
-#### 总体 e2e 场景套件
-
-最终要按第 5 节的真实用户场景池逐条落地 e2e：
-
-| 场景 | e2e 关注点 | 完成度判定关键点 |
-| --- | --- | --- |
-| `S01` | 编辑现有 docx | 是否成功读文档、修改、产出审阅或文件 |
-| `S02` | 工作区材料生成 docx | 是否成功读材料、组织结构、生成文档 |
-| `S03` | 知识库问答 | 是否给出答案且依据可回看 |
-| `S04` | 知识库 + docx 混合任务 | 是否先检索再改文档，链路顺序正确 |
-| `S05` | 多轮续做 | 是否正确接续前文，而不是重新跑偏 |
-| `S06` | terminal 读工作区后再交付 | 是否先发现材料再完成最终产物 |
-| `S07` | terminal 审批流 | 是否正确停下等待审批，并在批准或拒绝后收敛 |
-| `S08` | 审阅中心部分接受后提交 | 是否能真实完成审阅提交闭环 |
-
-#### 优先覆盖的完整任务
-
-- `E01` 编辑现有 docx 并进入审阅
-- `E02` 从工作区文本生成 docx
-- `E03` 基于知识库回答问题并给出依据
-- `E04` 先检索知识库，再修改 docx
-- `E05` 触发 terminal 审批并完成批准 / 拒绝分支
-- `E06` 工作区未绑定时请求用户补充后继续
-- `E07` 审阅中心接受部分修改并提交
-- `E08` 多轮 follow-up 任务连续完成
-
-#### 建议新增用例
-
-- backend 快速集成：
-  - `tests/ai/backend/entire/entire-docx-edit-review-ready.test.ts`
-  - `tests/ai/backend/entire/entire-workspace-to-docx.test.ts`
-  - `tests/ai/backend/entire/entire-kb-question-answer.test.ts`
-  - `tests/ai/backend/entire/entire-kb-docx-mixed-task.test.ts`
-  - `tests/ai/backend/entire/entire-terminal-approval-flow.test.ts`
-- 最终总体 e2e：
-  - `tests/ai/e2e/workbench/scenarios/scenario-s01-docx-rewrite.test.ts`
-  - `tests/ai/e2e/workbench/scenarios/scenario-s02-workspace-to-docx.test.ts`
-  - `tests/ai/e2e/workbench/scenarios/scenario-s03-kb-answer.test.ts`
-  - `tests/ai/e2e/workbench/scenarios/scenario-s04-kb-docx-hybrid.test.ts`
-  - `tests/ai/e2e/workbench/scenarios/scenario-s05-follow-up-context.test.ts`
-  - `tests/ai/e2e/workbench/scenarios/scenario-s06-terminal-materials-to-delivery.test.ts`
-  - `tests/ai/e2e/workbench/scenarios/scenario-s07-terminal-approval.test.ts`
-  - `tests/ai/e2e/workbench/scenarios/scenario-s08-review-partial-commit.test.ts`
-
 #### 通过标准
 
 - 不是只看到事件跑过，而是场景本身达到目标
 - 每个场景都有完成度记录
 - 用户最终拿到可消费结果，而不是一堆中间事件
 - 事实链完整，日志可复盘
-- e2e 才是这一层的最终验收
+- backend harness 下能稳定复现成功、部分完成与阻塞三类结果
 
-### 6.7 `workbench ui`
+### 6.7 `workbench`
 
 #### 目标
 
-保证工作台至少是“可用”的，避免出现布局溢出、信息不可见、按钮难点、状态难理解等问题。
+验证 `workbench` 真实交互下的最终完成能力与 UI 可用性，避免出现“backend 能跑通，但用户在界面里做不成”的情况。
+
+#### 最终完成 e2e 关注点
+
+- 用户从输入到最终交付的整链路是否真的跑通
+- follow-up 任务是否能接住上一轮产物继续完成
+- 审批流、工作区流、审阅流是否能在界面里闭环
+- 最终产物、引用依据、审阅结果、打开路径等是否可被用户消费
+- 长任务在真实界面中是否仍能稳定完成，而不是只在 backend harness 中成立
 
 #### 当前阶段的核心判断
 
@@ -534,25 +417,17 @@ AI 测试里要引入一组固定的“常用模型 + 强模型”对照，因�
 - 审阅中心逐条接受 / 拒绝 / 全部接受 / 提交
 - 预览 / 打开 / 定位路径
 
-#### 建议新增 e2e 用例
-
-- `tests/ai/e2e/workbench/workbench-kb-search-answer.test.ts`
-- `tests/ai/e2e/workbench/workbench-workspace-required-flow.test.ts`
-- `tests/ai/e2e/workbench/workbench-approval-banner-flow.test.ts`
-- `tests/ai/e2e/workbench/workbench-draft-review-flow.test.ts`
-- `tests/ai/e2e/workbench/workbench-small-window-layout.test.ts`
-- `tests/ai/e2e/workbench/workbench-search-mode-scope-filter.test.ts`
-
 #### UI 通过标准
 
 - 无阻塞级布局问题
 - 无关键状态缺失
 - 无明显滚动冲突
 - 关键链路可在目标窗口尺寸下完成
+- 最终完成 e2e 中，用户能在界面里拿到可消费结果，而不是只看到事件流
 
 ## 7. 测试分层落位
 
-建议继续沿用 `doc/test.md` 里已经约定的目录树：
+继续沿用 [test.md](/Users/test/work-space/NCurator-Desktop/doc/test.md) 中约定的目录树：
 
 ```text
 tests/
@@ -569,7 +444,8 @@ tests/
       entire/
     e2e/
       workbench/
-        scenarios/
+        final-completion/
+        ui/
 ```
 
 对应关系如下：
@@ -581,10 +457,10 @@ tests/
 | `context` | backend | 验证上下文补全 |
 | `intent` | backend | 验证路由判断 |
 | `plan` | backend | 验证计划拆解与执行顺序 |
-| `entire` | backend + e2e | backend 做快速集成，e2e 做真实场景完成度验收 |
-| `workbench ui` | e2e | 验证真实交互与可用性 |
+| `entire` | backend | 验证后端完整任务闭环 |
+| `workbench` | e2e | 验证真实交互下的最终完成与 UI 可用性 |
 
-## 8. 执行节奏
+## 8. 执行节奏与阶段用例信息列表
 
 建议按五个阶段推进，而不是一次铺满全部 case。
 
@@ -597,21 +473,42 @@ tests/
   - 一份阶段完成情况
   - 下一阶段 `todolist`
 - 不要一上来把全部场景、全部 UI、全部回归一次铺开
+- 下表中的测试用例名称同时作为 stable case name；落地文件时按 suite 目录使用同名 kebab-case
 
 ### 阶段 1：能力打底
 
-目标：先把 `tool` 层补齐，并把复杂 `docx / terminal` 场景打透。
+目标：先把 `tool` 层补齐，并把复杂 `docx / terminal / kb` 场景打透。
 
 优先级：
 
 1. `docx`
-2. `terminal` 阻塞与失败
+2. `terminal`
 3. `kb`
+
+#### 测试用例信息列表
+
+| 测试用例名称 | 目标 | 描述 |
+| --- | --- | --- |
+| `T1-docx-structure-read` | 验证文档打开、结构识别、块定位、搜索闭环 | 针对带标题、正文、表格的样例文档完成 `open -> outline -> search -> get_block` |
+| `T1-docx-block-targeting-and-ambiguous-search` | 验证块定位与歧义消解 | 多个相似标题或相似段落同时命中时，仍能稳定定位目标块 |
+| `T1-docx-mixed-structural-edit` | 验证复杂结构改写 | 同一 case 内完成章节改写、插入新段、删除旧段、更新表格负责人 |
+| `T1-docx-table-and-inline-rewrite` | 验证表格与行内文本混合改写 | 同一轮操作中修改表格单元格、段落正文和局部文本替换 |
+| `T1-docx-save-conflict-and-overwrite-policy` | 验证保存边界 | 覆盖保存、另存为、路径冲突和 `overwrite` 行为都能被正确处理 |
+| `T1-docx-preview-validate-rollback` | 验证结果收敛能力 | 多轮编辑后执行保存、预览、校验、历史回看与回滚 |
+| `T1-terminal-workspace-material-discovery` | 验证读取型 terminal 链路 | 在多层目录里找到最新材料并提取可复用内容 |
+| `T1-terminal-relative-and-absolute-path-resolution` | 验证路径解析 | 混用相对路径、绝对路径和目录切换时仍能稳定定位文件 |
+| `T1-terminal-batch-material-summary` | 验证批量材料发现与归并 | 一次发现多份日报、会议纪要或风险清单，并提取可复用摘要 |
+| `T1-terminal-artifact-producing-command` | 验证复杂命令与产物识别 | 执行会生成中间文件的命令，检查摘要、产物识别与回读链路 |
+| `T1-terminal-approval-and-boundary` | 验证高风险命令审批与工作区边界 | 覆盖审批请求、批准、拒绝、路径逃逸阻断 |
+| `T1-terminal-approval-denied-follow-up` | 验证审批拒绝后的收敛 | 用户拒绝后，系统能停止执行并给出安全后续 |
+| `T1-terminal-failure-and-long-output` | 验证失败路径可解释 | 覆盖命令失败、长输出截断、取消执行后的收敛 |
+| `T1-kb-hybrid-retrieval` | 验证 `hybrid / vector / fts` 检索基线 | 在限定 source scope 下返回可引用结果 |
+| `T1-kb-list-documents-and-scope-filter` | 验证文档枚举与范围过滤 | 先列出文档，再按 source scope 限定检索范围 |
+| `T1-kb-empty-scope-and-no-result` | 验证知识库边界表现 | 覆盖空范围、无结果和返回理由清晰性 |
 
 产出：
 
 - backend raw logs
-- 已确认的常用模型 / 强模型组合
 - 一份阶段完成情况
 - 下一阶段 `todolist`
 
@@ -625,7 +522,29 @@ tests/
 2. 多工具串联
 3. 工具失败纠偏
 4. 多轮 refinement
-5. 阻塞后的部分交付
+5. 审阅与阻塞收敛
+6. 长任务工程能力
+7. 阻塞后的部分交付
+
+#### 测试用例信息列表
+
+| 测试用例名称 | 目标 | 描述 |
+| --- | --- | --- |
+| `T2-human-direct-kb-answer` | 验证单步自主完成 | 直接读取知识库并交付可引用答案 |
+| `T2-human-direct-docx-edit` | 验证单工具文档任务闭环 | 直接读取指定文档、完成局部修改并交付可审阅结果 |
+| `T2-human-tool-failure-recovery` | 验证失败后换路 | 块搜索失败后改走 `outline + get_block`，继续推进任务 |
+| `T2-human-workspace-blocked-recovery` | 验证阻塞上抛 | 缺工作区或缺审批时请求补充，而不是空跑或乱答 |
+| `T2-human-approval-blocked-recovery` | 验证审批阻塞收敛 | 需要执行命令但未获批准时，能停在正确节点并给出继续条件 |
+| `T2-human-terminal-docx-handoff` | 验证跨工具协作 | 先在工作区找材料，再写入 docx 并形成可审阅交付 |
+| `T2-human-kb-docx-bridge` | 验证知识到文档的转换 | 先检索本地规范，再据此修改模板文档 |
+| `T2-human-multi-source-merge-delivery` | 验证多源材料归并 | 汇总多份日报、纪要或风险清单后输出统一交付 |
+| `T2-human-evidence-insufficient-safe-stop` | 验证证据不足时的安全行为 | 找不到足够依据时明确说明缺口，并交付可继续的初稿或后续建议 |
+| `T2-human-review-ready-delivery` | 验证审阅收敛能力 | 文档修改完成后能稳定输出 `draft_review_ready` 类结果而不是松散文本 |
+| `T2-human-multi-turn-refinement` | 验证多轮目标保持 | 上一轮已有中间产物，本轮继续保守化或局部精修 |
+| `T2-human-long-task-project-brief` | 验证长任务工程能力 | 至少 `6` 个依赖步骤串联完成“找材料、抽结论、写周报、补风险、生成审阅结果”的整链路 |
+| `T2-human-long-task-with-corrections` | 验证长任务中的纠偏稳定性 | 长任务中途加入新约束或局部失败后，仍能保持目标不漂移 |
+| `T2-human-long-task-approval-branch` | 验证长任务中的审批分支 | 长任务中途需要审批时，能在批准与拒绝两条分支上都安全推进或收敛 |
+| `T2-human-partial-delivery-on-budget-limit` | 验证做不完时的安全收敛 | 步骤预算耗尽或审批未过时，保留已有进展并给出可继续交付 |
 
 产出：
 
@@ -643,40 +562,78 @@ tests/
 2. `context`
 3. `plan`
 
+#### 测试用例信息列表
+
+| 测试用例名称 | 目标 | 描述 |
+| --- | --- | --- |
+| `T3-intent-direct-vs-plan-routing` | 验证简单任务不过度规划 | 区分直接回答与进入计划链路 |
+| `T3-intent-need-context-follow-up` | 验证续做场景路由 | 像“继续第二步”这类输入必须先补上下文 |
+| `T3-context-workspace-evidence-collection` | 验证规划前证据收集 | 先看工作区材料，再决定任务方案 |
+| `T3-context-follow-up-reference-resolution` | 验证指代解析 | 正确接住“刚才那份文档”“上一版风险段”之类引用 |
+| `T3-plan-docx-workflow-ordering` | 验证计划顺序正确 | 文档类任务必须先取证、后编辑、再保存或审阅 |
+| `T3-plan-blocked-task-convergence` | 验证阻塞时计划可收敛 | 出现审批或缺文件时仍能产出明确后续 |
+
 产出：
 
 - backend raw logs
 - 一份阶段完成情况
 - 下一阶段 `todolist`
 
-### 阶段 4：完整任务闭环
+### 阶段 4：`backend/entire` 完整任务闭环
 
-目标：把真实用户场景池的第一批 e2e 串起来，开始看场景完成度。
+目标：用 backend harness 先把高价值真实任务闭环跑通，验证 `entire` 层是否能在不依赖 UI 的情况下稳定完成。
 
 优先级：
 
-1. `S01`
-2. `S02`
-3. `S03`
-4. `S04`
+1. 文档闭环
+2. 混合检索与文档闭环
+3. 证据不足收敛
+4. 长任务闭环
+
+#### 测试用例信息列表
+
+| 测试用例名称 | 目标 | 描述 |
+| --- | --- | --- |
+| `E01-backend-docx-rewrite-review-ready` | 验证现有 docx 改写闭环 | 对应 `S01`，读取、修改并进入审阅结果 |
+| `E02-backend-workspace-to-docx` | 验证工作区材料生成文档 | 对应 `S02`，从 `notes / todo` 提炼内容并生成结构化 docx |
+| `E03-backend-kb-answer-with-citation` | 验证知识库问答闭环 | 对应 `S03`，答案必须可回看依据 |
+| `E04-backend-kb-to-docx-hybrid` | 验证混合链路 | 对应 `S04`，先查规范，再改模板文档，顺序正确且结果可消费 |
+| `E05-backend-follow-up-continuation` | 验证多轮续做闭环 | 对应 `S05`，接续前文后继续完成修改 |
+| `E06-backend-terminal-materials-to-delivery` | 验证工作区材料到最终交付 | 对应 `S06`，先找材料，再生成最终汇报 |
+| `E07-backend-evidence-insufficient-safe-stop` | 验证证据不足时的完整收敛 | 对应 `S12`，依据不足时仍能给出明确缺口和可继续交付 |
+| `E08-backend-long-task-weekly-brief` | 验证长任务闭环 | 对应 `S13`，多源材料、多步依赖和审阅收敛都能成立 |
 
 产出：
 
-- e2e raw logs
+- backend raw logs
 - 场景完成度表
 - 一份阶段完成情况
 
-### 阶段 5：第二批场景与 UI 可用性
+### 阶段 5：`e2e/workbench` 最终完成与 UI 验收
 
-目标：补第二批真实场景 e2e，并集中处理 UI 可用性。
+目标：在真实 `workbench` 交互下验证最终完成能力与 UI 可用性，不再单独拆 `scenarios` 子目录。
 
 优先级：
 
-1. `S05`
-2. `S06`
-3. `S07`
-4. `S08`
-5. 小窗口布局与右侧面板稳定性
+1. 最终完成 e2e
+2. 审批与审阅链路
+3. follow-up 与长任务稳定性
+4. 小窗口布局与右侧面板稳定性
+
+#### 测试用例信息列表
+
+| 测试用例名称 | 目标 | 描述 |
+| --- | --- | --- |
+| `W01-workbench-docx-rewrite-final-completion` | 验证文档类最终完成 | 对应 `S01`，用户在界面中能完成输入、等待执行并拿到可消费结果 |
+| `W02-workbench-kb-answer-final-completion` | 验证知识库问答最终完成 | 对应 `S03`，答案、依据与引用展示都可被用户消费 |
+| `W03-workbench-kb-docx-hybrid-final-completion` | 验证混合任务最终完成 | 对应 `S04`，先检索后改文档的链路能在界面中完整跑通 |
+| `W04-workbench-follow-up-continuation` | 验证多轮续做 | 对应 `S05`，接续上轮中间结果完成后续修改 |
+| `W05-workbench-terminal-approval-final-completion` | 验证审批分支 | 对应 `S07`，覆盖等待审批、批准继续、拒绝收敛 |
+| `W06-workbench-review-partial-acceptance` | 验证审阅中心部分接受 | 对应 `S08`，逐条接受或拒绝后提交最终结果 |
+| `W07-workbench-long-task-stability` | 验证长任务真实交互稳定性 | 对应 `S13`，长任务在界面里仍能保持步骤连贯并最终收敛 |
+| `W08-workbench-small-window-and-overflow` | 验证可用性 | 小窗口、长路径、长 JSON、右侧面板滚动都不失控 |
+| `W09-workbench-inspector-and-run-linkage` | 验证工作台核心联动 | 时间线、检查器、审批条、审阅中心之间状态一致 |
+| `W10-workbench-workspace-and-banner-flow` | 验证工作区与提示条链路 | 工作区缺失、补充后继续运行，以及各类 banner 状态都清晰可操作 |
 
 产出：
 
@@ -707,27 +664,29 @@ tests/
 每条 case 至少记录这些内容：
 
 - `caseId / scenarioId`
-- `primaryModel`
-- `strongModel`
-- `runMode`
+- `baselineModel`
+- `baselineAttempts`
+- `diagnosticTriggered`
+- `diagnosticModel`
+- `diagnosticReason`
+- `diagnosticObservation`
+- `diagnosticConclusion`
 - 用户输入
 - 预期结果
 - 实际结果
 - 完成度分值：`0 / 1 / 2 / 3`
-- `primaryScore`
-- `strongScore`
 - 最终产物路径、回答摘要或审阅结果
-- raw log 路径
+- `rawLogPath`
 - 下一步建议
 
 ### 跑完后的沉淀方式
 
 1. 先落 raw logs 到 `tests/logs/ai/**`
 2. 再更新 `tests/report/ai/report.md`
-3. 在 report 中记录当前阶段完成情况与双模型对比结果
-4. 最后给出“下一阶段 `todolist`”
+3. 在 report 中记录当前阶段完成情况与强模型诊断结论
+4. 最后给出下一阶段 `todolist`
 
-## 10. Golden Cases
+## 10. 高价值回归样例
 
 这些样例作为每次优化后的回归主样例：
 
@@ -738,11 +697,15 @@ tests/
 - `G05` terminal 命令审批通过后继续完成任务
 - `G06` terminal 命令审批拒绝后给出安全收敛
 - `G07` 工作区缺失时提示补充并可继续
-- `G08` 小窗口下完整跑通一次 AI 对话链路
+- `G08` 多份工作区材料合并成领导汇报
+- `G09` 证据不足时明确说明缺口并交付可继续初稿
+- `G10` 长任务下完成周报生成并进入审阅
+- `G11` workbench 中审批、审阅与最终产物链路完整跑通
+- `G12` 小窗口下完整跑通一次 AI 对话链路
 
 ## 11. 阶段验收标准
 
-建议把“当下测试计划”的验收标准定成以下四条：
+本计划的阶段性验收标准如下：
 
 - 已建立完整测试树，不再只有 smoke case
 - 七层能力都有对应 case 设计与落位目录
@@ -751,15 +714,15 @@ tests/
 
 如果要进入下一阶段实现，优先顺序建议是：
 
-1. 补 `tool` 层缺口，尤其是 `docx` 与 `kb`
+1. 补 `tool` 层缺口，尤其是 `docx / terminal / kb`
 2. 单独验证 `human` 核心能力
-3. 补 `intent / plan / context`
+3. 补 `intent / context / plan`
 4. 补高价值 `entire` 场景
-5. 集中整治 `workbench ui` 可用性问题
+5. 集中补 `workbench` 最终完成与 UI 可用性问题
 
 ## 12. 本计划对应的输出物
 
-按这份计划推进后，建议每轮测试固定产出以下内容：
+按这份计划推进后，每轮测试固定产出以下内容：
 
 - 新增或更新的测试用例
 - `tests/logs/ai/**` 原始日志

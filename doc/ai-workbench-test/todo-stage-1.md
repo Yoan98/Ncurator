@@ -3,19 +3,30 @@
 ## Current Goal
 
 - 当前阶段聚焦 `backend/tools`
-- 目标是按 `基本调用`、`边界测试`、`实际场景` 三类视角重新建立 `docx`、`terminal`、`kb` 的测试基线
+- 目标是基于 `plan.md` 中新的 Stage 1 用例表，按 `基本调用`、`边界测试`、`真实任务链路` 三类视角重建 `docx`、`terminal`、`kb` 的测试基线，并显著扩宽 `tool` 覆盖面
 
 ## Done
 
-- [x] `plan.md` 已按阶段补齐 Stage 1 用例清单
-- [x] 阶段文档口径已收敛为纯 todolist
-- [x] `report.md` 已重置为等待新基线结果
+- [ ] 待开始
 
 ## In Progress
 
-- [ ] 重新设计并落地 `docx` 的三类视角测试
-- [ ] 重新设计并落地 `terminal` 的三类视角测试
-- [ ] 重新设计并落地 `kb` 的三类视角测试
+- [ ] 落地 `T1-docx-structure-read`
+- [ ] 落地 `T1-docx-block-targeting-and-ambiguous-search`
+- [ ] 落地 `T1-docx-mixed-structural-edit`
+- [ ] 落地 `T1-docx-table-and-inline-rewrite`
+- [ ] 落地 `T1-docx-save-conflict-and-overwrite-policy`
+- [ ] 落地 `T1-docx-preview-validate-rollback`
+- [ ] 落地 `T1-terminal-workspace-material-discovery`
+- [ ] 落地 `T1-terminal-relative-and-absolute-path-resolution`
+- [ ] 落地 `T1-terminal-batch-material-summary`
+- [ ] 落地 `T1-terminal-artifact-producing-command`
+- [ ] 落地 `T1-terminal-approval-and-boundary`
+- [ ] 落地 `T1-terminal-approval-denied-follow-up`
+- [ ] 落地 `T1-terminal-failure-and-long-output`
+- [ ] 落地 `T1-kb-hybrid-retrieval`
+- [ ] 落地 `T1-kb-list-documents-and-scope-filter`
+- [ ] 落地 `T1-kb-empty-scope-and-no-result`
 - [ ] 跑完 Stage 1 backend 测试并刷新 `tests/logs/ai/**`
 - [ ] 基于新 logs 更新 `tests/report/ai/report.md`
 
@@ -33,4 +44,4 @@
 - Stage 1 的 `tools` 用例已按新计划实现
 - 新 backend raw logs 已产出到 `tests/logs/ai/**`
 - `tests/report/ai/report.md` 已基于新 logs 更新
-- 可以明确进入 `todo-stage-2.md`
+- 允许按计划创建下一阶段 `todo-stage-N.md`
