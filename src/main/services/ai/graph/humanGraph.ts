@@ -36,10 +36,12 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext; maxSteps?: nu
       return END
     })
     .addConditionalEdges('human_skill_loader_node', (state: HumanRunState) => {
+      if (state.phase === 'response') return 'human_response_node'
       if (state.status !== 'running') return END
       return 'human_brain_node'
     })
     .addConditionalEdges('human_tool_exec_node', (state: HumanRunState) => {
+      if (state.phase === 'response') return 'human_response_node'
       if (state.status !== 'running') return END
       return 'human_brain_node'
     })

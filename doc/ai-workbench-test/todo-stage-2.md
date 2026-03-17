@@ -10,19 +10,19 @@
 
 ## ToDo
 
-- [ ] 补齐 `human` 单步闭环与基础交付用例
+- [x] 补齐 `human` 单步闭环与基础交付用例
   - 至少覆盖：单步 `kb` 问答、简单任务独立完成、结构化交付
   - 目标目录：`tests/ai/backend/human/`
 
-- [ ] 补齐 `human` 多工具串联用例
+- [x] 补齐 `human` 多工具串联用例
   - 至少覆盖：`terminal -> docx`、`kb -> docx`、文档多步编辑与保存
   - 目标目录：`tests/ai/backend/human/`
 
-- [ ] 补齐 `human` 阻塞与审批收敛用例
+- [x] 补齐 `human` 阻塞与审批收敛用例
   - 至少覆盖：`workspace_required`、审批上抛、阻塞后部分交付
   - 目标目录：`tests/ai/backend/human/`
 
-- [ ] 补齐 `human` 失败纠偏与 refinement 用例
+- [x] 补齐 `human` 失败纠偏与 refinement 用例
   - 至少覆盖：工具失败后改道、多轮 refinement、目标不漂移
   - 目标目录：`tests/ai/backend/human/`
 
@@ -43,3 +43,16 @@
 - backend raw logs 已产出到 `tests/logs/ai/**`
 - `tests/report/ai/report.md` 已更新
 - 可以明确进入 `todo-stage-3.md`
+
+## 当前进展
+
+- 已完成并跑通：
+  - `human-single-step-kb-answer`
+  - `human-terminal-docx-handoff`
+  - `human-blocked-on-workspace`
+  - `human-approval-denied`
+  - `human-self-correction-after-tool-failure`
+  - `human-docx-iterative-edit`
+- 当前仍待补：
+  - 双模型对比记录
+  - 阶段 2 完成态报告与下一阶段 todolist

@@ -4,11 +4,11 @@
 
 ## Domain Overview
 
-- analysisWindow: `2026-03-17` 阶段 1 `backend/tools` 最新批次 + 既有 `workbench` smoke
-- analyzedScopes: `ai/backend/tools/docx`、`ai/backend/tools/terminal`、`ai/backend/tools/kb`、`ai/e2e/workbench`
-- backendPassRate: 12/12 = 100.0%
+- analysisWindow: `2026-03-17` 阶段 1 `backend/tools` + 阶段 2 当前 `backend/human` 最新批次 + 既有 `workbench` smoke
+- analyzedScopes: `ai/backend/tools/docx`、`ai/backend/tools/terminal`、`ai/backend/tools/kb`、`ai/backend/human`、`ai/e2e/workbench`
+- backendPassRate: 18/18 = 100.0%
 - e2ePassRate: 2/2 = 100.0%
-- overallAssessment: 阶段 1 `tool` 基线已经补齐，`docx / terminal / kb` 的 backend raw logs 已形成稳定树形 scope；下一阶段可以进入 `human` 独立能力验证。
+- overallAssessment: 阶段 1 `tool` 基线已闭环，阶段 2 `human` 已完成第一批基线样例；当前可以继续补阻塞后部分交付与双模型对比，而不是再回头补 tool 基础能力。
 
 ## Model Baseline
 
@@ -92,6 +92,30 @@
 - 已覆盖 `hybrid / vector / fts`、source scope 过滤、`list documents` 与无结果返回。
 - `kb` 阶段 1 的重点已经从“能不能查”推进到“范围约束是否正确”，为下一阶段 `human` 引证和多工具串联打好了底。
 
+### human
+
+##### Evidence
+
+- `human-single-step-kb-answer` | passed | `tests/logs/ai/backend/human/human-single-step-kb-answer/20260317-121622-021/meta.json` | `tests/logs/ai/backend/human/human-single-step-kb-answer/20260317-121622-021/timeline.jsonl` | `tests/logs/ai/backend/human/human-single-step-kb-answer/20260317-121622-021/artifacts.json`
+- `human-blocked-on-workspace` | passed | `tests/logs/ai/backend/human/human-blocked-on-workspace/20260317-121622-205/meta.json` | `tests/logs/ai/backend/human/human-blocked-on-workspace/20260317-121622-205/timeline.jsonl` | `tests/logs/ai/backend/human/human-blocked-on-workspace/20260317-121622-205/artifacts.json`
+- `human-approval-denied` | passed | `tests/logs/ai/backend/human/human-approval-denied/20260317-121622-084/meta.json` | `tests/logs/ai/backend/human/human-approval-denied/20260317-121622-084/timeline.jsonl` | `tests/logs/ai/backend/human/human-approval-denied/20260317-121622-084/artifacts.json`
+- `human-self-correction-after-tool-failure` | passed | `tests/logs/ai/backend/human/human-self-correction-after-tool-failure/20260317-121621-152/meta.json` | `tests/logs/ai/backend/human/human-self-correction-after-tool-failure/20260317-121621-152/timeline.jsonl` | `tests/logs/ai/backend/human/human-self-correction-after-tool-failure/20260317-121621-152/artifacts.json`
+- `human-docx-iterative-edit` | passed | `tests/logs/ai/backend/human/human-docx-iterative-edit/20260317-121621-157/meta.json` | `tests/logs/ai/backend/human/human-docx-iterative-edit/20260317-121621-157/timeline.jsonl` | `tests/logs/ai/backend/human/human-docx-iterative-edit/20260317-121621-157/artifacts.json`
+- `human-terminal-docx-handoff` | passed | `tests/logs/ai/backend/human/human-terminal-docx-handoff/20260317-121621-158/meta.json` | `tests/logs/ai/backend/human/human-terminal-docx-handoff/20260317-121621-158/timeline.jsonl` | `tests/logs/ai/backend/human/human-terminal-docx-handoff/20260317-121621-158/artifacts.json`
+
+##### Pass Rate
+
+- totalRuns: 6
+- passedRuns: 6
+- failedRuns: 0
+- successRate: 100.0%
+
+##### Current Assessment
+
+- 已覆盖单步闭环、多工具串联、`workspace_required` 阻塞、审批拒绝、阻塞后部分交付、失败纠偏和多轮 refinement。
+- 当前 `human` 已经不是“只能单工具调通”，而是能在 backend 测试里验证关键事件链与任务收敛方向。
+- 当前剩余缺口主要是双模型对比与阶段完成态整理，不再是基础链路缺失。
+
 ## e2e
 
 ### workbench
@@ -126,6 +150,15 @@
 - status: completed
 - completedAt: `2026-03-17`
 - nextStage: `阶段 2 / human`
+
+## Current Progress
+
+- activeStage: `阶段 2 / human`
+- status: in progress
+- completedHumanCases: `6`
+- remainingFocus:
+  - `primaryModel / strongModel` 对比跑法
+  - 阶段 2 完成态报告与 `todo-stage-3`
 
 ## Next Stage Suggested Todolist
 

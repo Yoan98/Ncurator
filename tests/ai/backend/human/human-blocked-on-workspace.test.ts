@@ -82,10 +82,11 @@ describe('human blocked on workspace', () => {
         runtime.assertThat(
           result.output.status === 'blocked' &&
             result.output.resultCode === 'workspace_required' &&
-            result.output.summary.includes('workspace'),
+            result.output.summary.includes('workspace') &&
+            result.output.deliveryMarkdown.includes('子任务交付'),
           {
             name: 'human-workspace-blocked',
-            message: 'human 缺少 workspace 时会返回 blocked/workspace_required',
+            message: 'human 缺少 workspace 时会返回 blocked/workspace_required，并保留部分交付',
             data: {
               status: result.output.status,
               resultCode: result.output.resultCode,
@@ -93,10 +94,6 @@ describe('human blocked on workspace', () => {
             }
           }
         )
-        runtime.assertThat(result.output.deliveryMarkdown.trim() === '', {
-          name: 'human-workspace-blocked-no-delivery',
-          message: '当前实现下，workspace_required 阻塞不会生成误导性的正式交付'
-        })
 
         const workspaceRequiredEvents = result.aiEvents.filter(
           (event: AiRunEvent) => event.type === 'workspace_required'
@@ -114,10 +111,10 @@ describe('human blocked on workspace', () => {
         runtime.assertThat(
           workspaceRequiredEvents.length === 1 &&
             blockedHumanSteps.length === 1 &&
-            taskDelivery.length === 0,
+            taskDelivery.length === 1,
           {
             name: 'human-workspace-blocked-events',
-            message: 'workspace_required 与 blocked human_step 已记录，且没有错误生成 task_delivery_ready',
+            message: 'workspace_required、blocked human_step 与部分交付事件都已记录',
             data: {
               workspaceRequired: workspaceRequiredEvents.length,
               blockedHumanSteps: blockedHumanSteps.length,

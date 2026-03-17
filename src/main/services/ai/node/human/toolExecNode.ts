@@ -413,6 +413,7 @@ export const createHumanToolExecNode = (input: { ctx: AiRunContext }) => {
 
     if (blocking) {
       return {
+        phase: 'response',
         status: 'blocked',
         lastObservation: {
           kind: 'terminal',
