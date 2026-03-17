@@ -296,8 +296,13 @@ const createDiagnosticTrace = (
   }
 }
 
+type AiRunContextWithHumanDecisionOverride = AiRunContext & {
+  resolveHumanDecisionOverride?: () => HumanStepDecision | undefined
+}
+
 export const createHumanBrainNode = (input: { ctx: AiRunContext }) => {
   const { ctx } = input
+  const ctxWithDecisionOverride = ctx as AiRunContextWithHumanDecisionOverride
 
   return async (state: HumanRunState): Promise<Partial<HumanRunState>> => {
     if (state.status !== 'running') {
@@ -334,11 +339,13 @@ export const createHumanBrainNode = (input: { ctx: AiRunContext }) => {
     let decision: HumanStepDecision
 
     try {
+      const overriddenDecision = ctxWithDecisionOverride.resolveHumanDecisionOverride?.()
       decision = normalizeDecision(
-        await invokeStructuredDecision({
-          ctx,
-          prompt
-        })
+        overriddenDecision ||
+          (await invokeStructuredDecision({
+            ctx,
+            prompt
+          }))
       )
     } catch (error) {
       const summary = error instanceof Error ? error.message : 'brain decision failed'

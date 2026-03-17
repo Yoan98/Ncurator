@@ -1,5 +1,10 @@
 import { HumanMessage, SystemMessage } from '@langchain/core/messages'
-import type { HumanStepRecord, LocalSourceUsageStatus } from '../../../../../shared/types'
+import type {
+  AiTaskResultCode,
+  HumanStepRecord,
+  JsonObject,
+  LocalSourceUsageStatus
+} from '../../../../../shared/types'
 import { createChatModel } from '../../../llm/chatModel'
 import { buildHumanResponsePrompt } from '../../prompts/human/response'
 import type { AiRunContext } from '../../types'
@@ -180,8 +185,18 @@ const invokeDeliveryModel = async (input: {
   return normalizeText(text, '')
 }
 
+type AiRunContextWithHumanDeliveryOverride = AiRunContext & {
+  resolveHumanDeliveryOverride?: (input: {
+    objective: string
+    summary: string
+    resultCode: AiTaskResultCode
+    resultData?: JsonObject
+  }) => string
+}
+
 export const createHumanResponseNode = (input: { ctx: AiRunContext }) => {
   const { ctx } = input
+  const ctxWithDeliveryOverride = ctx as AiRunContextWithHumanDeliveryOverride
 
   return async (state: HumanRunState): Promise<Partial<HumanRunState>> => {
     if (state.phase !== 'response') {
@@ -193,11 +208,19 @@ export const createHumanResponseNode = (input: { ctx: AiRunContext }) => {
     let deliveryMarkdown = ''
 
     try {
-      deliveryMarkdown = await invokeDeliveryModel({
-        ctx,
-        state,
-        streamAnswer: state.streamAnswer
+      const overriddenDelivery = ctxWithDeliveryOverride.resolveHumanDeliveryOverride?.({
+        objective: state.input.objective,
+        summary: state.summary,
+        resultCode: state.resultCode,
+        resultData: state.resultData
       })
+      deliveryMarkdown =
+        overriddenDelivery ||
+        (await invokeDeliveryModel({
+          ctx,
+          state,
+          streamAnswer: state.streamAnswer
+        }))
     } catch (error) {
       const message = error instanceof Error ? error.message : 'human response generation failed'
       emitHumanDiagnostic({

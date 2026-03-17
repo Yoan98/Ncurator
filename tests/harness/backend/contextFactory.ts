@@ -4,7 +4,7 @@ import { createChatModel } from '../../../src/main/services/llm/chatModel'
 import type { DocxChangedBlock, DocxOp } from '../../../src/main/services/ai/tools/docx/types'
 import type { AiRunContext } from '../../../src/main/services/ai/types'
 import type { AiApprovalDecision, AiApprovalRequest } from '../../../src/main/services/ai/types'
-import type { JsonObject } from '../../../src/shared/types'
+import type { HumanStepDecision, JsonObject } from '../../../src/shared/types'
 import type { EventCollector } from '../core/eventCollector'
 import type {
   ApprovalPolicy,
@@ -74,6 +74,26 @@ const buildToolExecutionOverrideResolver = (
   }
 }
 
+const buildHumanDecisionOverrideResolver = (
+  overrides: CreateAiRunContextInput['humanDecisionOverrides']
+):
+  | (() => HumanStepDecision | undefined)
+  | undefined => {
+  if (!overrides || overrides.length === 0) return undefined
+
+  const rules = overrides.map((rule) => ({
+    ...rule,
+    remainingUses: Math.max(1, Number(rule.remainingUses || 1))
+  }))
+
+  return () => {
+    const matched = rules.find((rule) => rule.remainingUses > 0)
+    if (!matched) return undefined
+    matched.remainingUses -= 1
+    return matched.decision
+  }
+}
+
 const parseJsonObject = <T extends JsonObject>(text: string): T => {
   const trimmed = String(text || '').trim()
   try {
@@ -111,6 +131,7 @@ export const createTestAiRunContext = (input: CreateTestAiRunContextInput): AiRu
   const documentsStoreStub = buildDocumentsStoreStub(input.documentsStoreOverrides)
   const embeddingServiceStub = buildEmbeddingServiceStub()
   const resolveToolExecutionOverride = buildToolExecutionOverrideResolver(input.toolExecutionOverrides)
+  const resolveHumanDecisionOverride = buildHumanDecisionOverrideResolver(input.humanDecisionOverrides)
 
   const requestApproval = async (request: AiApprovalRequest): Promise<AiApprovalDecision> => {
     const approvalId = randomUUID()
@@ -157,7 +178,7 @@ export const createTestAiRunContext = (input: CreateTestAiRunContextInput): AiRu
           rootPath: input.workspaceRootPath
         }
       : undefined,
-    checkCancelled: () => undefined,
+    checkCancelled: input.checkCancelledOverride || (() => undefined),
     chatJson: async <T extends JsonObject>(payload): Promise<T> => {
       if (input.chatJsonOverride) {
         return input.chatJsonOverride<T>(payload)
@@ -189,6 +210,8 @@ export const createTestAiRunContext = (input: CreateTestAiRunContextInput): AiRu
     trackDocxChanges: input.trackDocxChanges || (() => undefined),
     trackDocxPreview: input.trackDocxPreview || (() => undefined),
     resolveToolExecutionOverride,
+    resolveHumanDecisionOverride,
+    resolveHumanDeliveryOverride: input.humanDeliveryOverride,
     getModelConfig: async () => {
       if (!input.liveModelConfig) {
         throw new Error('live model config is required for this test case')

@@ -5,6 +5,7 @@ import type {
 } from '../../../src/main/services/ai/types'
 import type {
   AiTaskResultCode,
+  HumanStepDecision,
   JsonObject,
   LLMConfig
 } from '../../../src/shared/types'
@@ -41,6 +42,11 @@ export type TestToolExecutionOverride = {
   }
 }
 
+export type TestHumanDecisionOverride = {
+  remainingUses?: number
+  decision: HumanStepDecision
+}
+
 export type LiveLlmConfig = Pick<LLMConfig, 'base_url' | 'model_name' | 'api_key'> & {
   id: string
   name: string
@@ -59,6 +65,14 @@ export type CreateAiRunContextInput = {
   bindWorkspace?: boolean
   selectedDocumentIds?: string[]
   approvalPolicy?: ApprovalPolicy | ApprovalResolver
+  checkCancelledOverride?: () => void
+  humanDecisionOverrides?: TestHumanDecisionOverride[]
+  humanDeliveryOverride?: (input: {
+    objective: string
+    summary: string
+    resultCode: AiTaskResultCode
+    resultData?: JsonObject
+  }) => string
   liveModelConfig?: LiveLlmConfig
   chatJsonOverride?: <T extends JsonObject>(input: {
     system: string

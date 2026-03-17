@@ -6,7 +6,7 @@
 - 当涉及技术栈、整体架构、进程边界、本地优先约束或混合检索链路时，请阅读 `doc/architecture.md`
 - 当涉及 AI 设计、Main/Human 工作流、context/plan 机制、LangGraph 节点流转或草稿审阅运行过程时，请阅读 `doc/ai-design.md`
 - 当涉及 AI workbench 测试方案、能力分层覆盖、真实用户场景、测试推进节奏或阶段执行时，请先阅读 `doc/ai-workbench-test/plan.md`
-- 当涉及 AI workbench 当前阶段执行项时，请阅读当前 todo 文件 `doc/ai-workbench-test/todo-stage-1.md`
+- 当涉及 AI workbench 当前阶段执行项时，请阅读当前 todo 文件 `doc/ai-workbench-test/todo-stage-2.md`
 - `doc/ai-workbench-test/` 下的后续 `todo-stage-N.md` 只有在前一轮 todo 全部完成后才能创建
 - 当涉及数据库、LanceDB、表职责、存储分层或检索存储实现时，请阅读 `doc/database.md`
 - 当涉及目录规范、文件归位、模块边界或工程结构时，请阅读 `doc/project-structure.md`
