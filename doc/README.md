@@ -5,7 +5,7 @@
 - [ai-design.md](/Users/test/work-space/NCurator-Desktop/doc/ai-design.md)
   - 说明 AI 设计、`main`/`human` 分工，以及当前实际工作流。
 - [ai-workbench-test/plan.md](/Users/test/work-space/NCurator-Desktop/doc/ai-workbench-test/plan.md)
-  - 说明 AI workbench 的专项测试总计划，包括七层覆盖、真实场景池、阶段推进规则、阶段用例信息列表与完成度记录方式。
+  - 说明 AI workbench 的专项测试计划，聚焦总体目标、模型使用与诊断、八个阶段与阶段用例矩阵；测试用例设计准则、raw log 与 report 规则统一以 `test.md` 为准。
 - `doc/ai-workbench-test/`
 - [database.md](/Users/test/work-space/NCurator-Desktop/doc/database.md)
   - 说明数据库与存储层设计，包括 LanceDB 的分层和表职责。
@@ -14,4 +14,4 @@
 - [ui-style.md](/Users/test/work-space/NCurator-Desktop/doc/ui-style.md)
   - 说明界面设计风格、布局规则和组件使用规范。
 - [test.md](/Users/test/work-space/NCurator-Desktop/doc/test.md)
-  - 说明测试目录、基于 `meta.json` / `timeline.jsonl` / `artifacts.json` 的 raw log 契约、单 domain report 规则、report 示例和 Codex 后置分析工作流。
+  - 说明测试目录、测试用例设计准则、基于 `meta.json` / `timeline.jsonl` / `artifacts.json` 的 raw log 契约、单 domain report 规则、report 示例和 Codex 后置分析工作流。

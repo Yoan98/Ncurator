@@ -3,7 +3,7 @@
 ## Current Goal
 
 - 当前阶段聚焦 `backend/tools`
-- 目标是基于 `plan.md` 中新的 Stage 1 用例表，按 `基本调用`、`边界测试`、`真实任务链路` 三类视角重建 `docx`、`terminal`、`kb` 的测试基线，并显著扩宽 `tool` 覆盖面
+- 目标是基于 `plan.md` 中新的 `tool` 阶段用例表，并按 `test.md` 中的测试用例设计准则组织 `docx`、`terminal`、`kb` 的测试基线
 
 ## Done
 
@@ -11,22 +11,26 @@
 
 ## In Progress
 
-- [ ] 落地 `T1-docx-structure-read`
-- [ ] 落地 `T1-docx-block-targeting-and-ambiguous-search`
-- [ ] 落地 `T1-docx-mixed-structural-edit`
-- [ ] 落地 `T1-docx-table-and-inline-rewrite`
-- [ ] 落地 `T1-docx-save-conflict-and-overwrite-policy`
-- [ ] 落地 `T1-docx-preview-validate-rollback`
-- [ ] 落地 `T1-terminal-workspace-material-discovery`
-- [ ] 落地 `T1-terminal-relative-and-absolute-path-resolution`
-- [ ] 落地 `T1-terminal-batch-material-summary`
-- [ ] 落地 `T1-terminal-artifact-producing-command`
-- [ ] 落地 `T1-terminal-approval-and-boundary`
-- [ ] 落地 `T1-terminal-approval-denied-follow-up`
-- [ ] 落地 `T1-terminal-failure-and-long-output`
-- [ ] 落地 `T1-kb-hybrid-retrieval`
-- [ ] 落地 `T1-kb-list-documents-and-scope-filter`
-- [ ] 落地 `T1-kb-empty-scope-and-no-result`
+- [ ] 落地 `tool-docx-structure-read`
+- [ ] 落地 `tool-docx-targeting-and-ambiguous-search`
+- [ ] 落地 `tool-docx-search-modes-and-scope`
+- [ ] 落地 `tool-docx-mixed-structural-edit`
+- [ ] 落地 `tool-docx-table-and-inline-rewrite`
+- [ ] 落地 `tool-docx-save-conflict-and-overwrite`
+- [ ] 落地 `tool-docx-preview-validate-rollback`
+- [ ] 落地 `tool-docx-multi-document-session-isolation`
+- [ ] 落地 `tool-terminal-workspace-material-discovery`
+- [ ] 落地 `tool-terminal-path-resolution`
+- [ ] 落地 `tool-terminal-batch-material-summary`
+- [ ] 落地 `tool-terminal-artifact-producing-command`
+- [ ] 落地 `tool-terminal-approval-and-boundary`
+- [ ] 落地 `tool-terminal-approval-denied-follow-up`
+- [ ] 落地 `tool-terminal-failure-and-long-output`
+- [ ] 落地 `tool-kb-hybrid-search`
+- [ ] 落地 `tool-kb-vector-search`
+- [ ] 落地 `tool-kb-fts-search`
+- [ ] 落地 `tool-kb-list-documents-and-scope-filter`
+- [ ] 落地 `tool-kb-empty-scope-and-no-result`
 - [ ] 跑完 Stage 1 backend 测试并刷新 `tests/logs/ai/**`
 - [ ] 基于新 logs 更新 `tests/report/ai/report.md`
 

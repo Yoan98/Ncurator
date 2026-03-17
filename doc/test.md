@@ -47,7 +47,26 @@ tests/
 - `suite` 是第一层稳定分类；`groups...` 是 suite 下可选的任意深度子目录。
 - `other/` 默认不参与 gating，也不参与正式 report 汇总。
 
-## 3. runner 与命令
+## 3. 测试用例设计策略
+
+### 3.1 基础case
+- 这类case要保证基础能力能正常使用。
+- case 尽量短、输入尽量单一、断言聚焦核心结果。
+
+### 3.2 边界case
+- 这类case要覆盖失败、阻塞、歧义、安全限制、空结果、超时等边界情况的处理。
+
+### 3.3 实际场景case
+- 这类case是核心，要能直接对应真实用户诉求。
+
+### 3.5 长期价值
+- 设计每个case时需考虑它的长期性，适合后续重复回归。
+
+### 3.6 临时case
+- 一次性排查或待定样例统一放在 `tests/other/**`。
+- 不要把临时用例混入正式 domain 目录。
+
+## 4. runner 与命令
 
 统一入口是 `scripts/test-workflow.mjs`。
 
@@ -81,7 +100,7 @@ runner 不负责：
 - 写优化建议
 - 更新正式 `report.md`
 
-## 4. 原始日志契约
+## 5. 原始日志契约
 
 每个 run 固定目录：
 
@@ -268,7 +287,7 @@ tests/logs/<domain>/<layer>/<suite>/<groups...>/<caseId>/<runId>/
 - `artifacts.json` 必须始终写出，即使 `items` 为空数组。
 - `artifacts/` 目录只有在确实存在实体附件文件时才创建。
 
-## 5. backend 与 e2e 的统一约束
+## 6. backend 与 e2e 的统一约束
 
 - backend 和 e2e 共用同一份 `meta.json` / `timeline.jsonl` / `artifacts.json` 基础契约。
 - backend 与 e2e 的差异只体现在：
@@ -289,7 +308,7 @@ tests/logs/<domain>/<layer>/<suite>/<groups...>/<caseId>/<runId>/
   - 生成位于 `artifacts/playwright/report/index.html` 的 HTML 诊断页。
 - 默认不保留 video。
 
-## 6. 正式 report
+## 7. 正式 report
 
 当前正式分析文档固定放在：
 
@@ -415,7 +434,7 @@ tests/report/<domain>/
 - report 只引用 raw logs 与 artifacts 作为证据来源。
 - report 可以做分析与建议，但不得写入没有日志依据的推断。
 
-## 7. Codex 后置分析工作流
+## 8. Codex 后置分析工作流
 
 当用户要求 Codex 跑测试并继续分析时，Codex 必须按以下顺序执行：
 
@@ -424,7 +443,7 @@ tests/report/<domain>/
 3. 必要时回看失败 run 的 `meta.json`、`timeline.jsonl` 与 `artifacts.json`。
 4. 更新 `tests/report/<domain>/report.md`。
 
-## 8. 明确禁止
+## 9. 明确禁止
 
 - 测试样例直接输出失败原因分析。
 - runner 自动调用测试所用 AI 模型生成 report。
