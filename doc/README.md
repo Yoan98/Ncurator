@@ -8,6 +8,8 @@
   - 说明 AI workbench 的专项测试计划，聚焦总体目标、模型使用与诊断、八个阶段与阶段用例矩阵；测试用例设计准则、raw log 与 report 规则统一以 `test.md` 为准。
 - [ai-workbench-test/todo-stage-1.md](/Users/test/work-space/NCurator-Desktop/doc/ai-workbench-test/todo-stage-1.md)
   - 说明当前 Stage 1 `backend/tools` 的推进状态、完成证据与退出条件。
+- [ai-workbench-test/todo-stage-2.md](/Users/test/work-space/NCurator-Desktop/doc/ai-workbench-test/todo-stage-2.md)
+  - 说明当前 Stage 2 `backend/human` 的推进状态，以及 review-handoff、safe-stop、no-redundant 等基线证据与后续落点。
 - `doc/ai-workbench-test/`
 - [database.md](/Users/test/work-space/NCurator-Desktop/doc/database.md)
   - 说明数据库与存储层设计，包括 LanceDB 的分层和表职责。
@@ -16,4 +18,4 @@
 - [ui-style.md](/Users/test/work-space/NCurator-Desktop/doc/ui-style.md)
   - 说明界面设计风格、布局规则和组件使用规范。
 - [test.md](/Users/test/work-space/NCurator-Desktop/doc/test.md)
-  - 说明测试目录、测试用例设计准则。
+  - 说明测试目录、测试用例设计准则，以及 report 中历史总数据 / 最新总数据的统计口径。

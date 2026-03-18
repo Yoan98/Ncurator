@@ -32,7 +32,7 @@
 
 ## In Progress
 
-- [ ] 待下一阶段创建 `todo-stage-2.md`
+- [x] 已创建 `todo-stage-2.md`
 
 ## Blocked
 

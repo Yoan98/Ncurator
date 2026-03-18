@@ -347,6 +347,9 @@ tests/report/<domain>/
   - `### 分析范围`
   - `### 总体结论`
   - `### 下一阶段建议`
+- `总体结论` 中的统计口径固定拆成两类：
+  - `历史总数据`：基于当前 analysis window 内全部 raw runs 统计
+  - `最新总数据`：每个 case 只看最新一轮 run 的修复后统计
 - `总览` 之后按 domain 下实际存在的 layer 展开，当前通常是 `## backend` 与 `## e2e`。
 - layer 之下按目录树继续展开：
   - suite 使用 `###`
@@ -360,6 +363,10 @@ tests/report/<domain>/
   - `下一步建议`
 - `证据` 必须列出对应 run 的 `meta.json`、`timeline.jsonl`、`artifacts.json` 路径；如果有关键附件，也应一并列出。
 - `通过率` 只写当前节点覆盖范围内的统计，不混入其他节点数据。
+- `通过率` 固定拆成两组：
+  - `历史总数据`：`totalRuns`、`passedRuns`、`failedRuns`、`historicalSuccessRate`
+  - `最新总数据`：`latestCaseCount`、`latestPassedCases`、`latestFailedCases`、`latestSuccessRate`
+- `历史总数据` 与 `最新总数据` 不得混写成同一个 successRate 口径。
 - `失败分析` 在没有 failed run 时应明确写“当前没有 failed run，因此无法给出失败模式结论”。
 - `当前评估` 负责总结当前状态和主要不足。
 - `下一步建议` 只写基于现有证据能支撑的下一步建议。
@@ -378,7 +385,8 @@ tests/report/<domain>/
 
 ### 总体结论
 
-- 累计运行: `2`
+- 历史总数据: `2` 次 raw runs，其中 `2` 次 passed、`0` 次 failed，historicalSuccessRate=`100.0%`
+- 最新总数据: `2 / 2` 个 case 的最新一轮 run 为 passed，latestSuccessRate=`100.0%`
 - 当前结论: 当前 backend sample 与 e2e smoke 已跑通，但失败路径覆盖仍不足。
 
 ### 下一阶段建议
@@ -398,10 +406,16 @@ tests/report/<domain>/
 
 ##### 通过率
 
-- totalRuns: 1
-- passedRuns: 1
-- failedRuns: 0
-- successRate: 100.0%
+- 历史总数据:
+  - totalRuns: 1
+  - passedRuns: 1
+  - failedRuns: 0
+  - historicalSuccessRate: 100.0%
+- 最新总数据:
+  - latestCaseCount: 1
+  - latestPassedCases: 1
+  - latestFailedCases: 0
+  - latestSuccessRate: 100.0%
 
 ##### 失败分析
 
@@ -428,10 +442,16 @@ tests/report/<domain>/
 
 ##### 通过率
 
-- totalRuns: 1
-- passedRuns: 1
-- failedRuns: 0
-- successRate: 100.0%
+- 历史总数据:
+  - totalRuns: 1
+  - passedRuns: 1
+  - failedRuns: 0
+  - historicalSuccessRate: 100.0%
+- 最新总数据:
+  - latestCaseCount: 1
+  - latestPassedCases: 1
+  - latestFailedCases: 0
+  - latestSuccessRate: 100.0%
 
 ##### 失败分析
 
