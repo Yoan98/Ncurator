@@ -124,55 +124,102 @@ export const createRetrievalToolHarness = (
   }
 }
 
-export const writeWorkbenchSampleDocx = async (
+export type TestDocxHeadingLevel = 1 | 2 | 3
+
+export type TestDocxBlock =
+  | {
+      type: 'heading'
+      text: string
+      level?: TestDocxHeadingLevel
+    }
+  | {
+      type: 'paragraph'
+      text: string
+    }
+  | {
+      type: 'table'
+      rows: string[][]
+    }
+
+const toHeadingLevel = (level: TestDocxHeadingLevel | undefined): HeadingLevel => {
+  if (level === 2) return HeadingLevel.HEADING_2
+  if (level === 3) return HeadingLevel.HEADING_3
+  return HeadingLevel.HEADING_1
+}
+
+export const writeTestDocxFile = async (
   workspaceRoot: string,
-  fileName: string
+  relativePath: string,
+  blocks: readonly TestDocxBlock[]
 ): Promise<string> => {
-  const filePath = path.join(workspaceRoot, fileName)
+  const filePath = path.join(workspaceRoot, relativePath)
+  const children = blocks.map((block) => {
+    if (block.type === 'heading') {
+      return new Paragraph({
+        text: block.text,
+        heading: toHeadingLevel(block.level)
+      })
+    }
+
+    if (block.type === 'paragraph') {
+      return new Paragraph(block.text)
+    }
+
+    return new Table({
+      width: {
+        size: 100,
+        type: WidthType.PERCENTAGE
+      },
+      rows: block.rows.map((row) => {
+        return new TableRow({
+          children: row.map((cellText) => {
+            return new TableCell({
+              children: [new Paragraph(cellText)]
+            })
+          })
+        })
+      })
+    })
+  })
+
   const document = new Document({
     sections: [
       {
-        children: [
-          new Paragraph({
-            text: 'NCurator Weekly Report',
-            heading: HeadingLevel.HEADING_1
-          }),
-          new Paragraph('Hello team. Project status is on track.'),
-          new Paragraph('Risk summary: monitor integration edge cases.'),
-          new Table({
-            width: {
-              size: 100,
-              type: WidthType.PERCENTAGE
-            },
-            rows: [
-              new TableRow({
-                children: [
-                  new TableCell({
-                    children: [new Paragraph('Topic')]
-                  }),
-                  new TableCell({
-                    children: [new Paragraph('Owner')]
-                  })
-                ]
-              }),
-              new TableRow({
-                children: [
-                  new TableCell({
-                    children: [new Paragraph('Risk')]
-                  }),
-                  new TableCell({
-                    children: [new Paragraph('Alice')]
-                  })
-                ]
-              })
-            ]
-          })
-        ]
+        children
       }
     ]
   })
 
   const buffer = await Packer.toBuffer(document)
+  await fs.mkdir(path.dirname(filePath), { recursive: true })
   await fs.writeFile(filePath, buffer)
   return filePath
+}
+
+export const writeWorkbenchSampleDocx = async (
+  workspaceRoot: string,
+  fileName: string
+): Promise<string> => {
+  return await writeTestDocxFile(workspaceRoot, fileName, [
+    {
+      type: 'heading',
+      text: 'NCurator Weekly Report',
+      level: 1
+    },
+    {
+      type: 'paragraph',
+      text: 'Hello team. Project status is on track.'
+    },
+    {
+      type: 'paragraph',
+      text: 'Risk summary: monitor integration edge cases.'
+    },
+    {
+      type: 'table',
+      rows: [
+        ['Topic', 'Owner'],
+        ['Risk', 'Alice']
+      ]
+    }
+  ])
 }

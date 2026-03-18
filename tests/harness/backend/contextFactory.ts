@@ -50,10 +50,13 @@ const buildDocumentsStoreStub = (overrides: TestDocumentsStoreOverrides | undefi
 })
 
 const buildEmbeddingServiceStub = () => ({
-  embed: async () => ({
-    data: new Float32Array(768),
-    dims: [1, 768] as [number, number]
-  })
+  embed: async (input: string | string[]) => {
+    const rowCount = Array.isArray(input) ? Math.max(1, input.length) : 1
+    return {
+      data: new Float32Array(rowCount * 768),
+      dims: [rowCount, 768] as [number, number]
+    }
+  }
 })
 
 const buildToolExecutionOverrideResolver = (

@@ -7,32 +7,32 @@
 
 ## Done
 
-- [ ] 待开始
+- [x] 落地 `tool-docx-structure-read`
+- [x] 落地 `tool-docx-targeting-and-ambiguous-search`
+- [x] 落地 `tool-docx-search-modes-and-scope`
+- [x] 落地 `tool-docx-mixed-structural-edit`
+- [x] 落地 `tool-docx-table-and-inline-rewrite`
+- [x] 落地 `tool-docx-save-conflict-and-overwrite`
+- [x] 落地 `tool-docx-preview-validate-rollback`
+- [x] 落地 `tool-docx-multi-document-session-isolation`
+- [x] 落地 `tool-terminal-workspace-material-discovery`
+- [x] 落地 `tool-terminal-path-resolution`
+- [x] 落地 `tool-terminal-batch-material-summary`
+- [x] 落地 `tool-terminal-artifact-producing-command`
+- [x] 落地 `tool-terminal-approval-and-boundary`
+- [x] 落地 `tool-terminal-approval-denied-follow-up`
+- [x] 落地 `tool-terminal-failure-and-long-output`
+- [x] 落地 `tool-kb-hybrid-search`
+- [x] 落地 `tool-kb-vector-search`
+- [x] 落地 `tool-kb-fts-search`
+- [x] 落地 `tool-kb-list-documents-and-scope-filter`
+- [x] 落地 `tool-kb-empty-scope-and-no-result`
+- [x] 跑完 Stage 1 backend 测试并刷新 `tests/logs/ai/**`
+- [x] 基于新 logs 更新 `tests/report/ai/report.md`
 
 ## In Progress
 
-- [ ] 落地 `tool-docx-structure-read`
-- [ ] 落地 `tool-docx-targeting-and-ambiguous-search`
-- [ ] 落地 `tool-docx-search-modes-and-scope`
-- [ ] 落地 `tool-docx-mixed-structural-edit`
-- [ ] 落地 `tool-docx-table-and-inline-rewrite`
-- [ ] 落地 `tool-docx-save-conflict-and-overwrite`
-- [ ] 落地 `tool-docx-preview-validate-rollback`
-- [ ] 落地 `tool-docx-multi-document-session-isolation`
-- [ ] 落地 `tool-terminal-workspace-material-discovery`
-- [ ] 落地 `tool-terminal-path-resolution`
-- [ ] 落地 `tool-terminal-batch-material-summary`
-- [ ] 落地 `tool-terminal-artifact-producing-command`
-- [ ] 落地 `tool-terminal-approval-and-boundary`
-- [ ] 落地 `tool-terminal-approval-denied-follow-up`
-- [ ] 落地 `tool-terminal-failure-and-long-output`
-- [ ] 落地 `tool-kb-hybrid-search`
-- [ ] 落地 `tool-kb-vector-search`
-- [ ] 落地 `tool-kb-fts-search`
-- [ ] 落地 `tool-kb-list-documents-and-scope-filter`
-- [ ] 落地 `tool-kb-empty-scope-and-no-result`
-- [ ] 跑完 Stage 1 backend 测试并刷新 `tests/logs/ai/**`
-- [ ] 基于新 logs 更新 `tests/report/ai/report.md`
+- [ ] 待下一阶段创建 `todo-stage-2.md`
 
 ## Blocked
 
@@ -42,6 +42,7 @@
 
 - `doc/ai-workbench-test/plan.md`
 - `tests/report/ai/report.md`
+- `tests/logs/ai/backend/tools/**`
 
 ## Exit Criteria
 
