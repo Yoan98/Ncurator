@@ -6,20 +6,20 @@
 
 - raw logs 范围: 当前仓库内 `tests/logs/ai/backend/tools/**`、`tests/logs/ai/backend/human/**`
 - 已分析 scope: `ai/backend/tools/docx/basic`、`ai/backend/tools/docx/boundary`、`ai/backend/tools/docx/scenario`、`ai/backend/tools/terminal/basic`、`ai/backend/tools/terminal/boundary`、`ai/backend/tools/terminal/scenario`、`ai/backend/tools/kb/basic`、`ai/backend/tools/kb/boundary`、`ai/backend/tools/kb/scenario`、`ai/backend/human/basic`、`ai/backend/human/boundary`、`ai/backend/human/scenario`、`ai/backend/human/live`
-- 说明: 当前 `ai/backend/human/live` analysis window 只包含本轮补跑并已落日志的 `human-live-direct-kb-answer`、`human-live-evidence-insufficient-safe-stop`、`human-live-kb-docx-bridge`；此前已实现的 `human-live-direct-docx-edit`、`human-live-terminal-docx-handoff`、`human-live-long-task-project-brief` 未在本轮重跑，因此不计入当前 `human/live` 的 latestCaseCount
+- 说明: 当前 `ai/backend/human/live` analysis window 包含仓库内已存在 raw log 的 `human-live-direct-docx-edit`、`human-live-direct-kb-answer`、`human-live-evidence-insufficient-safe-stop`、`human-live-kb-docx-bridge`、`human-live-terminal-docx-handoff`；`human-live-long-task-project-brief` 虽已实现测试文件，但当前 `tests/logs/ai/backend/human/live` 下没有对应 raw log，因此不计入当前 `human/live` 的 latestCaseCount
 - 未纳入本次分析: 旧版 flat scope `ai/backend/tools/docx`、`ai/backend/tools/terminal`、`ai/backend/tools/kb`
 
 ### 总体结论
 
-- 历史总数据: `156` 次 raw runs，其中 `143` 次 passed、`13` 次 failed，historicalSuccessRate=`91.7%`
-- 最新总数据: `40` 个 case 中有 `39` 个 case 的最新一轮 run 为 passed，latestSuccessRate=`97.5%`
-- 当前结论: Stage 1 `backend/tools` 已形成 `21 / 21 latest passed` 的三层基线；Stage 2 `backend/human` 的 `basic / boundary / scenario` 最新口径为 `16 / 16 passed`，但当前 `live` analysis window 仅 `2 / 3 passed`，`human-live-kb-docx-bridge` 仍未形成稳定 live 交付。
-- 解释: `historicalSuccessRate` 已包含 2026-03-18 为诊断 `human-live-kb-docx-bridge` 所做的多轮 live 补跑，因此阶段判断应优先看 latest 口径，而不是把这些诊断性失败等同于稳定回归失败。
+- 历史总数据: `180` 次 raw runs，其中 `165` 次 passed、`15` 次 failed，historicalSuccessRate=`91.7%`
+- 最新总数据: `42` 个 case 中有 `42` 个 case 的最新一轮 run 为 passed，latestSuccessRate=`100.0%`
+- 当前结论: Stage 1 `backend/tools` 已形成 `21 / 21 latest passed` 的三层基线；Stage 2 `backend/human` 的 `basic / boundary / scenario` 最新口径为 `16 / 16 passed`，当前 `live` analysis window 也已经达到 `5 / 5 passed`，其中 `human-live-kb-docx-bridge` 在 2026-03-18 的最新 `gpt-5` 补跑中已形成稳定通过态。
+- 解释: `historicalSuccessRate` 仍包含 2026-03-18 为诊断 `human-live-kb-docx-bridge` 所做的多轮 live 失败 run，因此阶段判断应优先看 latest 口径，同时把这些历史失败保留为诊断证据。
 
 ### 下一阶段建议
 
 - 保持当前 Stage 1 `tools` 三层目录和 Stage 2 `human` non-live 基线稳定。
-- 下一步优先修复 `human-live-kb-docx-bridge` 的 live 收敛与跨工具 handoff，再补跑本轮未覆盖的其他 `human live` case，之后再进入 `context` 阶段。
+- 下一步优先补跑 `human-live-long-task-project-brief` 并落 raw log，补齐第 6 条 `human/live` 证据；完成后即可更有把握进入 `context` 阶段。
 
 ## backend
 
@@ -147,34 +147,34 @@
 ##### 通过率
 
 - 历史总数据:
-  - totalRuns: 95
-  - passedRuns: 82
-  - failedRuns: 13
-  - historicalSuccessRate: 86.3%
+  - totalRuns: 119
+  - passedRuns: 104
+  - failedRuns: 15
+  - historicalSuccessRate: 87.4%
 - 最新总数据:
-  - latestCaseCount: 19
-  - latestPassedCases: 18
-  - latestFailedCases: 1
-  - latestSuccessRate: 94.7%
+  - latestCaseCount: 21
+  - latestPassedCases: 21
+  - latestFailedCases: 0
+  - latestSuccessRate: 100.0%
 
 ##### 分层统计
 
-- `basic`: `10` 次 raw runs，最新 `2 / 2 passed`
-- `boundary`: `30` 次 raw runs，最新 `6 / 6 passed`
-- `scenario`: `41` 次 raw runs，最新 `8 / 8 passed`
-- `live`: `14` 次 raw runs，最新 `2 / 3 passed`
+- `basic`: `14` 次 raw runs，最新 `2 / 2 passed`
+- `boundary`: `37` 次 raw runs，最新 `6 / 6 passed`
+- `scenario`: `46` 次 raw runs，最新 `8 / 8 passed`
+- `live`: `22` 次 raw runs，最新 `5 / 5 passed`
 
 ##### 证据
 
-- `human-direct-docx-edit` | run=`20260318-155901-484` | status=`passed`
+- `human-direct-docx-edit` | run=`20260318-182758-938` | status=`passed`
 - `human-direct-kb-answer` | run=`20260318-155902-184` | status=`passed`
-- `human-approval-blocked-recovery` | run=`20260318-155902-156` | status=`passed`
+- `human-approval-blocked-recovery` | run=`20260318-182806-634` | status=`passed`
 - `human-evidence-insufficient-safe-stop` | run=`20260318-155902-197` | status=`passed`
-- `human-no-redundant-recheck` | run=`20260318-155902-231` | status=`passed`
+- `human-no-redundant-recheck` | run=`20260318-182758-937` | status=`passed`
 - `human-partial-delivery-on-budget-limit` | run=`20260318-155902-188` | status=`passed`
-- `human-tool-failure-recovery` | run=`20260318-155901-486` | status=`passed`
-- `human-workspace-blocked-recovery` | run=`20260318-155902-148` | status=`passed`
-- `human-kb-docx-bridge` | run=`20260318-155901-485` | status=`passed`
+- `human-tool-failure-recovery` | run=`20260318-182806-635` | status=`passed`
+- `human-workspace-blocked-recovery` | run=`20260318-182806-634` | status=`passed`
+- `human-kb-docx-bridge` | run=`20260318-182758-936` | status=`passed`
 - `human-long-task-approval-branch` | run=`20260318-155902-137` | status=`passed`
 - `human-long-task-project-brief` | run=`20260318-155901-487` | status=`passed`
 - `human-long-task-with-corrections` | run=`20260318-155901-487` | status=`passed`
@@ -182,21 +182,23 @@
 - `human-multi-turn-refinement` | run=`20260318-155901-486` | status=`passed`
 - `human-review-handoff-structured-delivery` | run=`20260318-155901-487` | status=`passed`
 - `human-terminal-docx-handoff` | run=`20260318-155901-486` | status=`passed`
+- `human-live-direct-docx-edit` | run=`20260318-170540-431` | status=`passed`
 - `human-live-direct-kb-answer` | run=`20260318-155931-482` | status=`passed`
 - `human-live-evidence-insufficient-safe-stop` | run=`20260318-160515-299` | status=`passed`
-- `human-live-kb-docx-bridge` | run=`20260318-151207-536` | status=`failed`
+- `human-live-kb-docx-bridge` | run=`20260318-183145-326` | status=`passed`
+- `human-live-terminal-docx-handoff` | run=`20260318-183730-563` | status=`passed`
 
 ##### 失败分析
 
-- 当前 latest 口径下唯一 failed case 是 `human-live-kb-docx-bridge`。
 - 2026-03-18 的 primary `gpt-5` 最新诊断 run `20260318-150310-015` 返回 `invalid_input`，summary=`524 status code (no body)`，事件只留下两次 `kb_hybrid_search_chunks`，说明链路在 live 模型侧已出现上游不稳定。
 - 2026-03-18 的 stronger `gpt-5.2` 诊断 run `20260318-150906-789` 没有触发 524，但在 `kb_hybrid_search_chunks -> kb_list_documents` 后直接判定步数不足，未进入 `docx-editing` handoff。
 - 2026-03-18 的更收敛 objective 诊断 run `20260318-151207-536` 仍然失败，表现为 `bounded_loop_error`，工具轨迹错误转入四次 `terminal_run_command` 加一次 `kb_hybrid_search_chunks`，没有产出 preview artifact。
-- 因此，当前 bridge 失败同时暴露两类问题：一是 primary live 服务侧不稳定；二是 human 在 `KB -> DOCX` 这类跨工具任务上的 live 路由和收敛仍不稳定。
+- 2026-03-18 的最新 primary `gpt-5` 补跑 `20260318-183145-326` 已通过，工具链路收敛为一次 `kb_hybrid_search_chunks`、一次 `docx_open`、一次 `docx_apply_ops`，并在 preview 阶段最多发生一次 `docx_render_preview` 回退；没有再走 `kb_list_documents` 或 `terminal_run_command`。
+- 2026-03-18 的最新 primary `gpt-5` `human-live-terminal-docx-handoff` 补跑 `20260318-183730-563` 也已通过，主链路收敛为 `terminal_run_command -> docx_open -> docx_apply_ops`，随后在 PDF preview 不可用时自动追加一次 HTML preview 回退。
 
 ##### 当前评估
 
 - `basic / boundary / scenario` 当前 latest 全通过，说明 Stage 2 的脚本化回归基线已经稳定。
-- 新增补齐的 `human-live-direct-kb-answer` 与 `human-live-evidence-insufficient-safe-stop` 已形成 live 正向证据，其中前者还促成了 `KB` 收敛提示和 `localSourceStatus` 判定逻辑的修正。
-- 当前 `human/live` latestCaseCount 只有 `3`，因为本轮没有重跑此前已实现的 `human-live-direct-docx-edit`、`human-live-terminal-docx-handoff`、`human-live-long-task-project-brief`；因此 Stage 2 live 结论目前仍只能算“部分补齐 + 明确暴露 bridge 缺口”。
-- 在 `human-live-kb-docx-bridge` 稳定前，不建议把 Stage 2 视为可关闭阶段。
+- 当前 5 条有 raw log 的 `human/live` case 最新口径全部通过，说明 `direct docx`、`direct kb`、`evidence insufficient`、`KB -> DOCX`、`terminal -> DOCX` 这几条核心 live 路径都已具备正向证据。
+- 最新两条补跑尤其关键：`human-live-kb-docx-bridge` 与 `human-live-terminal-docx-handoff` 都表现出更短、更专注的工具序列，说明近期对 `human` prompt、tool spec 和运行态状态收口的调整已经开始反映到 live 执行质量上。
+- 当前 Stage 2 剩余的证据缺口不是 latest failure，而是 `human-live-long-task-project-brief` 还没有 raw log；若要按计划表把第 6 条 live case 也补齐，还需要再跑一轮该 case。
