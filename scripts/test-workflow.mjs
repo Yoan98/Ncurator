@@ -92,6 +92,11 @@ const findTestFiles = async (input) => {
   return allFiles
     .filter((filePath) => filePath.endsWith('.test.ts'))
     .filter((filePath) => {
+      if (input.caseId || input.groups.length > 0) return true
+      const segments = filePath.split(path.sep)
+      return !segments.includes('live')
+    })
+    .filter((filePath) => {
       if (!input.caseId) return true
       return path.basename(filePath, '.test.ts') === input.caseId
     })

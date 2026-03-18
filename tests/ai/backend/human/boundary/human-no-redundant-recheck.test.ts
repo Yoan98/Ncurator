@@ -1,11 +1,11 @@
-import type { SearchResult } from '../../../../src/shared/types'
-import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
-import { defineAiHumanCase, getEventsByType } from './helpers'
+import type { SearchResult } from '../../../../../src/shared/types'
+import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
+import { defineAiHumanCase, getEventsByType } from '../helpers'
 
 defineAiHumanCase({
   caseId: 'human-no-redundant-recheck',
-  caseType: 'scenario',
-  groups: [],
+  caseType: 'boundary',
+  groups: ['boundary'],
   description: '同一证据已足够时，human 不应再做重复确认。',
   fixtures: [],
   runMode: 'repeatable',

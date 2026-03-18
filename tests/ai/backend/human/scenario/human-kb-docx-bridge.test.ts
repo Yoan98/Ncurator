@@ -1,8 +1,8 @@
 import fs from 'node:fs/promises'
-import type { JsonValue, SearchResult } from '../../../../src/shared/types'
-import { createDocxToolHarness, writeTestDocxFile } from '../../../harness/backend/aiToolHarness'
-import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
-import { defineAiHumanCase, getEventsByType } from './helpers'
+import type { JsonValue, SearchResult } from '../../../../../src/shared/types'
+import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
+import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
+import { defineAiHumanCase, getEventsByType } from '../helpers'
 
 const fileExists = async (filePath: string): Promise<boolean> => {
   try {
@@ -29,7 +29,7 @@ const getFirstPreviewRecord = (
 defineAiHumanCase({
   caseId: 'human-kb-docx-bridge',
   caseType: 'scenario',
-  groups: [],
+  groups: ['scenario'],
   description: 'human 先检索本地规范，再把规范要求写入 docx 预览并形成交付。',
   fixtures: [],
   runMode: 'repeatable',

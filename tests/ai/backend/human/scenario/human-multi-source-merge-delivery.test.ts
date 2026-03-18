@@ -1,6 +1,6 @@
-import type { AiRunEvent, JsonObject } from '../../../../src/shared/types'
-import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
-import { defineAiHumanCase, getEventsByType } from './helpers'
+import type { AiRunEvent, JsonObject } from '../../../../../src/shared/types'
+import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
+import { defineAiHumanCase, getEventsByType } from '../helpers'
 
 const getToolOutputPreview = (event: Extract<AiRunEvent, { type: 'tool_call_result' }>): JsonObject | null => {
   const value = event.outputPreview
@@ -11,7 +11,7 @@ const getToolOutputPreview = (event: Extract<AiRunEvent, { type: 'tool_call_resu
 defineAiHumanCase({
   caseId: 'human-multi-source-merge-delivery',
   caseType: 'scenario',
-  groups: [],
+  groups: ['scenario'],
   description: 'human 汇总多份 workspace 材料并输出统一交付。',
   fixtures: [
     'tests/fixtures/ai/workspace/materials/batch/day-1.txt',

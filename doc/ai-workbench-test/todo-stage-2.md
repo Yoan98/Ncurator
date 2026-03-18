@@ -3,7 +3,7 @@
 ## Current Goal
 
 - 当前阶段聚焦 `backend/human`
-- 目标是基于 `plan.md` 中的 `human` 阶段用例表，先落一批直接复用 Stage 1 `tools` 基线的 human case，验证 `human` 能自主调用工具并完成交付
+- 目标是基于 `plan.md` 中的 `human` 阶段用例表，先建立 `basic / boundary / scenario` contract 基线，再补 `live` 基线，避免只用脚本化 case 判断 `human` 能力成立
 
 ## Done
 
@@ -18,14 +18,16 @@
 - [x] 落地 `human-review-handoff-structured-delivery`
 - [x] 落地 `human-evidence-insufficient-safe-stop`
 - [x] 落地 `human-no-redundant-recheck`
-- [x] 跑完当前 Stage 2 backend `human` 测试并刷新 `tests/logs/ai/backend/human/**`
-- [x] 基于新 logs 更新 `tests/report/ai/report.md`
+- [x] 将 `tests/ai/backend/human/**` 重排为 `basic / boundary / scenario / live`
+- [x] 落地首批 `human/live` baseline：`human-live-direct-docx-edit`、`human-live-terminal-docx-handoff`、`human-live-long-task-project-brief`
 
 ## In Progress
 
 - [ ] 继续落地 `human-multi-turn-refinement`
-- [ ] 继续落地 `human-long-task-project-brief`
+- [ ] 继续补齐 `human/live` 对应覆盖，尤其是 KB 与安全收敛路径
+- [ ] 继续落地 `human-long-task-project-brief` 的 contract/非 live 基线
 - [ ] 继续落地 `human-partial-delivery-on-budget-limit`
+- [ ] 基于新 scope 刷新 `tests/report/ai/report.md`
 
 ## Blocked
 
@@ -34,13 +36,13 @@
 ## Evidence
 
 - `doc/ai-workbench-test/plan.md`
-- `tests/ai/backend/human/*.test.ts`
+- `tests/ai/backend/human/{basic,boundary,scenario,live}/*.test.ts`
 - `tests/logs/ai/backend/human/**`
 - `tests/report/ai/report.md`
 
 ## Exit Criteria
 
-- Stage 2 `human` 用例按计划持续落地，并优先覆盖 direct、failure recovery、blocked、bridge 这几类核心路径
+- Stage 2 `human` 用例按计划持续落地，且 `basic / boundary / scenario / live` 四类基线都已形成稳定目录与样例
 - 新 backend raw logs 已持续产出到 `tests/logs/ai/backend/human/**`
-- `tests/report/ai/report.md` 已基于最新 `human` logs 同步更新
-- 当前阶段的 review-handoff、safe-stop 与 no-redundant 基线已经稳定后，再继续推进 refinement 与 long-task 收敛类 case
+- `tests/report/ai/report.md` 已能区分非 live 与 live 证据口径
+- 当前阶段在 direct、blocked、handoff、bridge、merge 等 contract 基线稳定后，还需补出能支撑结论的 live 基线，再继续推进 refinement 与 long-task 收敛类 case

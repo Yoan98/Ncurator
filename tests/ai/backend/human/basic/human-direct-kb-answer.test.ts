@@ -1,6 +1,6 @@
-import type { JsonValue, SearchResult } from '../../../../src/shared/types'
-import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
-import { defineAiHumanCase, getEventsByType } from './helpers'
+import type { JsonValue, SearchResult } from '../../../../../src/shared/types'
+import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
+import { defineAiHumanCase, getEventsByType } from '../helpers'
 
 const readString = (value: JsonValue | undefined, fallback: string): string => {
   return typeof value === 'string' && value.trim() ? value.trim() : fallback
@@ -9,7 +9,7 @@ const readString = (value: JsonValue | undefined, fallback: string): string => {
 defineAiHumanCase({
   caseId: 'human-direct-kb-answer',
   caseType: 'basic',
-  groups: [],
+  groups: ['basic'],
   description: 'human 直接使用本地知识库检索并交付带依据的答案。',
   fixtures: [],
   runMode: 'repeatable',

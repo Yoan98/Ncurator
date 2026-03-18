@@ -21,18 +21,62 @@ tests/
     backend/
       tools/
         terminal/
+          basic/
+          boundary/
+          scenario/
+          live/
         docx/
+          basic/
+          boundary/
+          scenario/
+          live/
         kb/
+          basic/
+          boundary/
+          scenario/
+          live/
       human/
+        basic/
+        boundary/
+        scenario/
+        live/
       main-intent/
+        basic/
+        boundary/
+        scenario/
+        live/
       main-context/
+        basic/
+        boundary/
+        scenario/
+        live/
       main-plan/
+        basic/
+        boundary/
+        scenario/
+        live/
       entire/
+        basic/
+        boundary/
+        scenario/
+        live/
     e2e/
       workbench/
+        basic/
+        boundary/
+        scenario/
+        live/
   kb-search/
     backend/
+      basic/
+      boundary/
+      scenario/
+      live/
     e2e/
+      basic/
+      boundary/
+      scenario/
+      live/
   other/
   logs/
   report/
@@ -45,6 +89,9 @@ tests/
 - 目录统一使用 kebab-case。
 - 测试发现目录使用通用树形结构：`tests/<domain>/<layer>/<suite>/<groups...>/<case>.test.ts`。
 - `suite` 是第一层稳定分类；`groups...` 是 suite 下可选的任意深度子目录。
+- 正式测试目录默认优先使用四类稳定分组：`basic`、`boundary`、`scenario`、`live`。
+- `basic / boundary / scenario` 用于组织稳定回归基线；`live` 用于组织真实模型路径验证。
+- 只要某个正式测试范围涉及模型参与，就必须在该范围下维护 `live/` 目录和对应的 live case。
 - `other/` 默认不参与 gating，也不参与正式 report 汇总。
 
 ## 3. 测试用例设计策略
@@ -59,12 +106,22 @@ tests/
 ### 3.3 实际场景case
 - 这类case是核心，要能直接对应真实用户诉求。
 
+### 3.4 Live case
+- 这类case用于验证真实模型参与下的正式执行路径。
+- 只要生产路径中存在模型参与，就不能只靠 `basic / boundary / scenario` 得出能力成立结论。
+- `live` case 应优先依赖真实 fixture、真实流程和正式交付，而不是只验证脚本化骨架。
+- 对 `human`、长任务、端到端任务这类能力，`live` 是主结论来源；非 live case 主要用于稳定回归与诊断。
+
 ### 3.5 长期价值
 - 设计每个case时需考虑它的长期性，适合后续重复回归。
+- 进入正式 domain 目录的 case 默认都应具备长期回归价值。
+- 长期 case 应有稳定目标、稳定输入、稳定验收口径。
+- 对涉及模型的长期 case，应规划对应的 `live` 验证，不把“脚本化通过”当作最终完成。
 
 ### 3.6 临时case
 - 一次性排查或待定样例统一放在 `tests/other/**`。
 - 不要把临时用例混入正式 domain 目录。
+- 临时 case 不参与正式 report，也不作为阶段完成依据。
 
 ## 4. runner 与命令
 
@@ -86,6 +143,11 @@ runner 支持的过滤参数：
 - `--group`，可重复传入
 - `--case`
 - `--runs`
+
+补充规则：
+
+- 默认按 `suite` 运行时，runner 只收集非 `live/` 正式 case，避免把稳定回归和 live 验证混在同一批执行里。
+- `live` case 应通过显式 `--group live` 或显式 `--case` 运行。
 
 runner 的职责只有三件事：
 

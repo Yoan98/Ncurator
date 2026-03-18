@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
-import { createDocxToolHarness, writeTestDocxFile } from '../../../harness/backend/aiToolHarness'
-import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
-import { defineAiHumanCase, getEventsByType } from './helpers'
+import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
+import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
+import { defineAiHumanCase, getEventsByType } from '../helpers'
 
 const fileExists = async (filePath: string): Promise<boolean> => {
   try {
@@ -14,8 +14,8 @@ const fileExists = async (filePath: string): Promise<boolean> => {
 
 defineAiHumanCase({
   caseId: 'human-direct-docx-edit',
-  caseType: 'scenario',
-  groups: [],
+  caseType: 'basic',
+  groups: ['basic'],
   description: 'human 直接完成 docx 打开、改写、预览、校验和保存闭环。',
   fixtures: [],
   runMode: 'repeatable',

@@ -1,12 +1,12 @@
-import { releaseDocxRunSession } from '../../../../src/main/services/ai/tools/docx/worker/docxWorkerClient'
-import { writeTestDocxFile } from '../../../harness/backend/aiToolHarness'
-import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
-import { defineAiHumanCase, getEventsByType } from './helpers'
+import { releaseDocxRunSession } from '../../../../../src/main/services/ai/tools/docx/worker/docxWorkerClient'
+import { writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
+import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
+import { defineAiHumanCase, getEventsByType } from '../helpers'
 
 defineAiHumanCase({
   caseId: 'human-tool-failure-recovery',
-  caseType: 'scenario',
-  groups: [],
+  caseType: 'boundary',
+  groups: ['boundary'],
   description: 'human 在首次工具失败后改走 outline + get_block 并继续完成任务。',
   fixtures: [],
   runMode: 'repeatable',

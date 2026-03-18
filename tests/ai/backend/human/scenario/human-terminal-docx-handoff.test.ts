@@ -1,8 +1,8 @@
 import fs from 'node:fs/promises'
-import type { AiRunEvent, JsonObject } from '../../../../src/shared/types'
-import { createDocxToolHarness, writeTestDocxFile } from '../../../harness/backend/aiToolHarness'
-import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
-import { defineAiHumanCase, getEventsByType } from './helpers'
+import type { AiRunEvent, JsonObject } from '../../../../../src/shared/types'
+import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
+import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
+import { defineAiHumanCase, getEventsByType } from '../helpers'
 
 const fileExists = async (filePath: string): Promise<boolean> => {
   try {
@@ -22,7 +22,7 @@ const getToolOutputPreview = (event: Extract<AiRunEvent, { type: 'tool_call_resu
 defineAiHumanCase({
   caseId: 'human-terminal-docx-handoff',
   caseType: 'scenario',
-  groups: [],
+  groups: ['scenario'],
   description: 'human 先在 workspace 取材，再写入 docx 预览并形成可审阅交付。',
   fixtures: ['tests/fixtures/ai/workspace/materials/daily/2026-03-16-note.md'],
   runMode: 'repeatable',

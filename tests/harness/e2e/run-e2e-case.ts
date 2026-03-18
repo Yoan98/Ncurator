@@ -17,7 +17,7 @@ import {
 import { createRunId, resolveRunArtifactsDir, writeRunLog } from '../core/write-run-log'
 import { launchElectronApp, type E2ERuntimeSignals } from './electronApp'
 
-export type E2ETestCaseType = 'basic' | 'scenario'
+export type E2ETestCaseType = 'basic' | 'boundary' | 'scenario' | 'live'
 export type E2ETestRunMode = 'single' | 'repeatable'
 
 type E2EAssertionInput = {

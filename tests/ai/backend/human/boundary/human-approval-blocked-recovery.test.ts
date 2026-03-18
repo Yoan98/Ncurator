@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises'
-import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
-import { defineAiHumanCase, getEventsByType } from './helpers'
+import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
+import { defineAiHumanCase, getEventsByType } from '../helpers'
 
 const exists = async (filePath: string): Promise<boolean> => {
   try {
@@ -13,8 +13,8 @@ const exists = async (filePath: string): Promise<boolean> => {
 
 defineAiHumanCase({
   caseId: 'human-approval-blocked-recovery',
-  caseType: 'scenario',
-  groups: [],
+  caseType: 'boundary',
+  groups: ['boundary'],
   description: '遇到审批拒绝时，human 应停在正确节点，并说明继续条件。',
   fixtures: [],
   runMode: 'repeatable',

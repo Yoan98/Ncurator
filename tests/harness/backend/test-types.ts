@@ -53,7 +53,7 @@ export type LiveLlmConfig = Pick<LLMConfig, 'base_url' | 'model_name' | 'api_key
   is_active: true
 }
 
-export type TestCaseType = 'basic' | 'scenario'
+export type TestCaseType = 'basic' | 'boundary' | 'scenario' | 'live'
 export type TestRunMode = 'single' | 'repeatable'
 
 export type FixtureBinding = {

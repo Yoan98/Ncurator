@@ -1,10 +1,10 @@
-import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
-import { defineAiHumanCase, getEventsByType } from './helpers'
+import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
+import { defineAiHumanCase, getEventsByType } from '../helpers'
 
 defineAiHumanCase({
   caseId: 'human-workspace-blocked-recovery',
-  caseType: 'scenario',
-  groups: [],
+  caseType: 'boundary',
+  groups: ['boundary'],
   description: '缺少 workspace 绑定时，human 应上抛 workspace_required 并给出继续条件。',
   fixtures: [],
   runMode: 'repeatable',

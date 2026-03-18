@@ -1,10 +1,10 @@
-import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
-import { defineAiHumanCase, getEventsByType } from './helpers'
+import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
+import { defineAiHumanCase, getEventsByType } from '../helpers'
 
 defineAiHumanCase({
   caseId: 'human-evidence-insufficient-safe-stop',
-  caseType: 'scenario',
-  groups: [],
+  caseType: 'boundary',
+  groups: ['boundary'],
   description: '证据不足时，human 应明确说明缺口，并以安全方式收敛。',
   fixtures: [],
   runMode: 'repeatable',

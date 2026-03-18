@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
-import { createDocxToolHarness, writeTestDocxFile } from '../../../harness/backend/aiToolHarness'
-import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
-import { defineAiHumanCase, getEventsByType } from './helpers'
+import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
+import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
+import { defineAiHumanCase, getEventsByType } from '../helpers'
 
 const fileExists = async (filePath: string): Promise<boolean> => {
   try {
@@ -15,7 +15,7 @@ const fileExists = async (filePath: string): Promise<boolean> => {
 defineAiHumanCase({
   caseId: 'human-review-handoff-structured-delivery',
   caseType: 'scenario',
-  groups: [],
+  groups: ['scenario'],
   description: '文档修改完成后，human 应输出稳定的 review handoff 结构化交付。',
   fixtures: [],
   runMode: 'repeatable',
