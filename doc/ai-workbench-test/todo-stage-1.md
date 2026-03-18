@@ -29,12 +29,12 @@
 - [x] 落地 `tool-kb-empty-scope-and-no-result`
 - [x] 将 `tests/ai/backend/tools/**` 重排为 `docx / terminal / kb` 下的 `basic / boundary / scenario`
 - [x] 跑完 Stage 1 backend 测试并刷新 `tests/logs/ai/**`
-- [ ] 基于新 logs 更新 `tests/report/ai/report.md`
+- [x] 基于新 logs 更新 `tests/report/ai/report.md`
 
 ## In Progress
 
 - [x] 已创建 `todo-stage-2.md`
-- [ ] 按 `docx / terminal / kb` 下的 `basic / boundary / scenario` 新 scope 刷新 `tests/report/ai/report.md`
+- [x] 按 `docx / terminal / kb` 下的 `basic / boundary / scenario` 新 scope 刷新 `tests/report/ai/report.md`
 
 ## Blocked
 
