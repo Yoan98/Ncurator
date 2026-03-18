@@ -14,8 +14,17 @@ import { buildHumanBrainPrompt } from '../../prompts/human/brain'
 import { humanStepDecisionSchema } from './decisionCodec'
 import { appendHumanStepRecord, emitHumanDiagnostic, emitHumanStep } from './events'
 import { enrichCompleteTaskResultData } from './resultData'
+import {
+  deriveActiveTools,
+  deriveActiveToolNames
+} from './runtimeState'
 import { getToolPromptSpec } from './toolPromptCatalog'
-import type { HumanObservation, HumanRunState, LoadedSkill } from './types'
+import {
+  buildAvailableSkillCards,
+  getSkillDefinition,
+  hasSkillDefinition
+} from './skillCatalog'
+import type { HumanObservation, HumanRunState } from './types'
 
 const MAX_HISTORY_ITEMS = 10
 const GENERIC_DOCUMENT_NAME_VALUES = new Set(['unknown', 'none', 'n-a', 'not-provided', 'missing', '未提供', '未知', '无'])
@@ -110,14 +119,8 @@ const normalizeDecision = (decision: HumanStepDecision): HumanStepDecision => {
   }
 }
 
-const getActiveToolNames = (state: HumanRunState): string[] => {
-  return state.activeTools
-    .map((tool) => toTrimmedText(String(tool.name || ''), ''))
-    .filter(Boolean)
-}
-
-const serializeAvailableSkillCards = (state: HumanRunState): string => {
-  const rows = state.availableSkillCards.map((card) => ({
+const serializeAvailableSkillCards = (): string => {
+  const rows = buildAvailableSkillCards().map((card) => ({
     id: card.id,
     name: card.name,
     summary: card.summary,
@@ -141,24 +144,25 @@ const serializeLoadedSkills = (state: HumanRunState): string => {
     orderedIds.push(skillId)
   }
 
-  for (const [skillId, loadedSkill] of Object.entries(state.loadedSkills)) {
-    if (!loadedSkill || seen.has(skillId)) continue
+  for (const skillId of state.loadedSkillIds) {
+    if (seen.has(skillId)) continue
     seen.add(skillId)
-    orderedIds.push(skillId as RuntimeSkillId)
+    orderedIds.push(skillId)
   }
 
   const rows = orderedIds
-    .map((skillId) => state.loadedSkills[skillId])
-    .filter((item): item is LoadedSkill => item !== undefined)
-    .map((skill) => ({
-      skillId: skill.skillId,
-      name: skill.name,
-      active: state.activeSkillIds.includes(skill.skillId),
-      summary: skill.summary,
-      workflow: skill.workflow,
-      decisionHints: skill.decisionHints,
-      toolNames: skill.toolNames
-    }))
+    .map((skillId) => {
+      const definition = getSkillDefinition(skillId)
+      return {
+        skillId,
+        name: definition.card.name,
+        active: state.activeSkillIds.includes(skillId),
+        summary: definition.guide.summary,
+        workflow: definition.guide.workflow,
+        decisionHints: definition.guide.decisionHints,
+        toolNames: definition.card.toolNames
+      }
+    })
 
   return rows.length > 0 ? toJsonText(rows) : 'none'
 }
@@ -166,7 +170,7 @@ const serializeLoadedSkills = (state: HumanRunState): string => {
 const serializeActiveTools = (state: HumanRunState): string => {
   const rows: ToolPromptSpec[] = []
 
-  for (const tool of state.activeTools) {
+  for (const tool of deriveActiveTools(state)) {
     const toolName = toTrimmedText(String(tool.name || ''), '')
     if (!toolName) continue
     const structured = getToolPromptSpec(toolName)
@@ -395,8 +399,9 @@ const buildDecisionStateText = (input: { state: HumanRunState; ctx: AiRunContext
     lastObservationSignals = {
       kind: 'skill_loaded',
       skillId: state.lastObservation.skillId,
-      activeSkillIds: state.lastObservation.activeSkillIds,
-      activeToolNames: state.lastObservation.activeToolNames
+      summary: clipText(state.lastObservation.summary),
+      activeSkillIds: state.activeSkillIds,
+      activeToolNames: deriveActiveToolNames(state)
     }
   } else if (state.lastObservation?.kind === 'terminal') {
     lastObservationSignals = {
@@ -440,7 +445,7 @@ const buildDecisionStateText = (input: { state: HumanRunState; ctx: AiRunContext
     },
     progressSignals: {
       activeSkillCount: state.activeSkillIds.length,
-      activeToolCount: state.activeTools.length,
+      activeToolCount: deriveActiveTools(state).length,
       recentToolCalls: recentToolRows,
       trailingSameToolCount: countTrailingSameToolName(recentToolRows),
       trailingSameToolFamilyCount: countTrailingSameToolFamily(recentToolRows),
@@ -458,7 +463,7 @@ const buildDecisionPrompt = (input: { state: HumanRunState; ctx: AiRunContext })
     stepIndex: state.steps + 1,
     maxSteps: state.maxSteps,
     selectedScopeSummary: input.ctx.selectedScopeSummary,
-    availableSkillCardsText: serializeAvailableSkillCards(state),
+    availableSkillCardsText: serializeAvailableSkillCards(),
     loadedSkillsText: serializeLoadedSkills(state),
     activeToolsText: serializeActiveTools(state),
     decisionStateText: buildDecisionStateText(input),
@@ -497,14 +502,12 @@ const createBlockState = (input: {
   resultCode: AiTaskResultCode
   details?: JsonValue
 }) => {
-  const activeToolNames = getActiveToolNames(input.state)
+  const activeToolNames = deriveActiveToolNames(input.state)
   const nextHistory = appendHumanStepRecord({
     history: input.state.stepHistory,
     step: input.stepIndex,
     action: 'block_task',
     publicNarrative: input.publicNarrative,
-    activeSkillIds: input.state.activeSkillIds,
-    activeToolNames,
     resultStatus: 'blocked',
     summary: input.summary
   })
@@ -524,8 +527,7 @@ const createBlockState = (input: {
   })
 
   return {
-    phase: 'response' as const,
-    status: 'blocked' as const,
+    status: 'response' as const,
     steps: Math.max(input.state.steps, input.stepIndex),
     lastDecision: {
       action: 'block_task' as const,
@@ -586,7 +588,7 @@ export const createHumanBrainNode = (input: { ctx: AiRunContext }) => {
   const ctxWithDecisionOverride = ctx as AiRunContextWithHumanDecisionOverride
 
   return async (state: HumanRunState): Promise<Partial<HumanRunState>> => {
-    if (state.status !== 'running') {
+    if (state.status !== 'brain') {
       return {}
     }
 
@@ -666,7 +668,7 @@ export const createHumanBrainNode = (input: { ctx: AiRunContext }) => {
 
     if (
       decision.action === 'load_skill' &&
-      !state.availableSkillCards.some((card) => card.id === decision.skillId)
+      !hasSkillDefinition(decision.skillId)
     ) {
       return createBlockState({
         ctx,
@@ -681,7 +683,7 @@ export const createHumanBrainNode = (input: { ctx: AiRunContext }) => {
 
     if (
       decision.action === 'invoke_tool' &&
-      !getActiveToolNames(state).includes(decision.toolName)
+      !deriveActiveToolNames(state).includes(decision.toolName)
     ) {
       return createBlockState({
         ctx,
@@ -703,14 +705,12 @@ export const createHumanBrainNode = (input: { ctx: AiRunContext }) => {
         ctx,
         resultData: enrichedResultData
       })
-      const activeToolNames = getActiveToolNames(state)
+      const activeToolNames = deriveActiveToolNames(state)
       const nextHistory = appendHumanStepRecord({
         history: state.stepHistory,
         step: nextStep,
         action: 'complete_task',
         publicNarrative: decision.publicNarrative,
-        activeSkillIds: state.activeSkillIds,
-        activeToolNames,
         resultStatus: 'ok',
         summary: decision.summary
       })
@@ -730,8 +730,7 @@ export const createHumanBrainNode = (input: { ctx: AiRunContext }) => {
       })
 
       return {
-        phase: 'response',
-        status: 'completed',
+        status: 'response',
         steps: nextStep,
         lastDecision: decision,
         lastObservation: {
@@ -763,7 +762,7 @@ export const createHumanBrainNode = (input: { ctx: AiRunContext }) => {
 
     return {
       steps: nextStep,
-      phase: decision.action === 'load_skill' ? 'skill_loader' : 'tool_exec',
+      status: decision.action === 'load_skill' ? 'skill_loader' : 'tool_exec',
       lastDecision: decision
     }
   }

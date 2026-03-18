@@ -608,8 +608,6 @@ export type HumanStepRecord = {
   step: number
   action: HumanStepAction
   publicNarrative: string
-  activeSkillIds: RuntimeSkillId[]
-  activeToolNames: string[]
   resultStatus?: HumanStepResultStatus
   skillId?: RuntimeSkillId
   toolName?: string

@@ -12,8 +12,6 @@ export const appendHumanStepRecord = (input: {
   step: number
   action: HumanStepAction
   publicNarrative: string
-  activeSkillIds: RuntimeSkillId[]
-  activeToolNames: string[]
   resultStatus?: HumanStepResultStatus
   skillId?: RuntimeSkillId
   toolName?: string
@@ -25,8 +23,6 @@ export const appendHumanStepRecord = (input: {
       step: input.step,
       action: input.action,
       publicNarrative: input.publicNarrative,
-      activeSkillIds: [...input.activeSkillIds],
-      activeToolNames: [...input.activeToolNames],
       resultStatus: input.resultStatus,
       skillId: input.skillId,
       toolName: input.toolName,

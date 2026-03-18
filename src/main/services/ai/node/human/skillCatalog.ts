@@ -5,7 +5,6 @@ import { docxCapability } from '../../tools/docx'
 import { localKbRetrievalCapability } from '../../tools/local_kb_retrieval'
 import { terminalExecCapability } from '../../tools/terminal_exec'
 import type { CapabilityToolBuildInput } from '../../tools/types'
-import type { LoadedSkill } from './types'
 
 type HumanSkillGuide = {
   summary: string
@@ -152,17 +151,8 @@ export const getSkillDefinition = (skillId: RuntimeSkillId): HumanSkillDefinitio
   return skillDefinitions[skillId]
 }
 
-export const buildLoadedSkill = (skillId: RuntimeSkillId, step: number): LoadedSkill => {
-  const definition = getSkillDefinition(skillId)
-  return {
-    skillId,
-    name: definition.card.name,
-    summary: definition.guide.summary,
-    workflow: [...definition.guide.workflow],
-    decisionHints: [...definition.guide.decisionHints],
-    toolNames: [...definition.card.toolNames],
-    loadedAtStep: step
-  }
+export const hasSkillDefinition = (skillId: RuntimeSkillId): boolean => {
+  return skillDefinitions[skillId] !== undefined
 }
 
 export const buildSkillTools = (

@@ -3,9 +3,9 @@ import type { HumanTaskInput, HumanTaskOutput } from '../../../../shared/types'
 import type { AiRunContext, HumanRunDispatchOptions } from '../types'
 import { createHumanBrainNode } from '../node/human/brainNode'
 import { createHumanResponseNode } from '../node/human/responseNode'
+import { isHumanTerminalStatus } from '../node/human/runtimeState'
 import { createHumanSkillLoaderNode } from '../node/human/skillLoaderNode'
 import { createHumanToolExecNode } from '../node/human/toolExecNode'
-import { buildAvailableSkillCards } from '../node/human/skillCatalog'
 import type { HumanRunState } from '../node/human/types'
 import { createHumanRunStateSchema } from '../state/stateSchemas'
 
@@ -29,21 +29,23 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext; maxSteps?: nu
     .addNode('human_tool_exec_node', (state: HumanRunState) => toolExecNode(state))
     .addEdge(START, 'human_brain_node')
     .addConditionalEdges('human_brain_node', (state: HumanRunState) => {
-      if (state.phase === 'response') return 'human_response_node'
-      if (state.status !== 'running') return END
-      if (state.phase === 'skill_loader') return 'human_skill_loader_node'
-      if (state.phase === 'tool_exec') return 'human_tool_exec_node'
+      if (state.status === 'response') return 'human_response_node'
+      if (state.status === 'skill_loader') return 'human_skill_loader_node'
+      if (state.status === 'tool_exec') return 'human_tool_exec_node'
+      if (isHumanTerminalStatus(state.status)) return END
       return END
     })
     .addConditionalEdges('human_skill_loader_node', (state: HumanRunState) => {
-      if (state.phase === 'response') return 'human_response_node'
-      if (state.status !== 'running') return END
-      return 'human_brain_node'
+      if (state.status === 'response') return 'human_response_node'
+      if (state.status === 'brain') return 'human_brain_node'
+      if (isHumanTerminalStatus(state.status)) return END
+      return END
     })
     .addConditionalEdges('human_tool_exec_node', (state: HumanRunState) => {
-      if (state.phase === 'response') return 'human_response_node'
-      if (state.status !== 'running') return END
-      return 'human_brain_node'
+      if (state.status === 'response') return 'human_response_node'
+      if (state.status === 'brain') return 'human_brain_node'
+      if (isHumanTerminalStatus(state.status)) return END
+      return END
     })
     .addEdge('human_response_node', END)
     .compile()
@@ -56,18 +58,15 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext; maxSteps?: nu
       {
         runId: ctx.runId,
         input: taskInput,
-        phase: 'brain',
-        status: 'running',
+        status: 'brain',
         deliveryKind: options.deliveryKind,
         streamAnswer: Boolean(options.streamAnswer),
         internalDelivery: Boolean(options.internalDelivery),
         steps: 0,
         maxSteps,
-        availableSkillCards: buildAvailableSkillCards(),
-        loadedSkills: {},
+        loadedSkillIds: [],
         loadedToolsets: {},
         activeSkillIds: [],
-        activeTools: [],
         stepHistory: [],
         summary: '',
         deliveryMarkdown: '',

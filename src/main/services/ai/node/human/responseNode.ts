@@ -9,6 +9,7 @@ import { createChatModel } from '../../../llm/chatModel'
 import { buildHumanResponsePrompt } from '../../prompts/human/response'
 import type { AiRunContext } from '../../types'
 import { emitHumanDiagnostic, emitTaskDelivery } from './events'
+import { resolveHumanTerminalStatus } from './runtimeState'
 import type { HumanRunState } from './types'
 
 const MAX_HISTORY_ITEMS = 12
@@ -52,6 +53,8 @@ const renderLastObservation = (state: HumanRunState): string => {
 }
 
 const buildFallbackDeliveryMarkdown = (state: HumanRunState): string => {
+  const terminalStatus = resolveHumanTerminalStatus(state)
+
   if (state.deliveryKind === 'final') {
     return [
       '# 最终答复',
@@ -66,10 +69,12 @@ const buildFallbackDeliveryMarkdown = (state: HumanRunState): string => {
       normalizeText(state.lastObservation?.summary || '', '待确认'),
       '',
       '## 未完成或待确认',
-      state.status === 'blocked' ? normalizeText(state.summary, '待确认') : '无',
+      terminalStatus === 'blocked' ? normalizeText(state.summary, '待确认') : '无',
       '',
       '## 下一步建议',
-      state.status === 'blocked' ? '请根据上面的阻塞说明补充条件后重试。' : '如需继续扩展，可基于以上结论追加要求。'
+      terminalStatus === 'blocked'
+        ? '请根据上面的阻塞说明补充条件后重试。'
+        : '如需继续扩展，可基于以上结论追加要求。'
     ].join('\n')
   }
 
@@ -86,10 +91,10 @@ const buildFallbackDeliveryMarkdown = (state: HumanRunState): string => {
     '请结合 step history 和 tool 结果继续回放；本次自动回退交付未能展开更多证据。',
     '',
     '## 风险与未决',
-    state.status === 'blocked' ? normalizeText(state.summary, '待确认') : '无',
+    terminalStatus === 'blocked' ? normalizeText(state.summary, '待确认') : '无',
     '',
     '## 建议后续步骤',
-    state.status === 'blocked' ? '优先解决当前阻塞项后再继续执行。' : '后续任务可基于本交付继续推进。'
+    terminalStatus === 'blocked' ? '优先解决当前阻塞项后再继续执行。' : '后续任务可基于本交付继续推进。'
   ].join('\n')
 }
 
@@ -203,11 +208,12 @@ export const createHumanResponseNode = (input: { ctx: AiRunContext }) => {
   const ctxWithDeliveryOverride = ctx as AiRunContextWithHumanDeliveryOverride
 
   return async (state: HumanRunState): Promise<Partial<HumanRunState>> => {
-    if (state.phase !== 'response') {
+    if (state.status !== 'response') {
       return {}
     }
 
     ctx.checkCancelled()
+    const terminalStatus = resolveHumanTerminalStatus(state)
 
     let deliveryMarkdown = ''
 
@@ -232,7 +238,7 @@ export const createHumanResponseNode = (input: { ctx: AiRunContext }) => {
         runId: state.runId,
         taskId: state.input.taskId,
         stepIndex: state.steps,
-        action: state.status === 'blocked' ? 'block_task' : 'complete_task',
+        action: terminalStatus === 'blocked' ? 'block_task' : 'complete_task',
         trace: {
           rationale: message,
           observationSummary: state.lastObservation?.summary
@@ -267,6 +273,7 @@ export const createHumanResponseNode = (input: { ctx: AiRunContext }) => {
     })
 
     return {
+      status: terminalStatus,
       deliveryMarkdown: finalDelivery,
       localSourceStatus: localSource.status,
       localSourceSummary: localSource.summary

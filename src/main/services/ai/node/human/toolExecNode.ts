@@ -5,6 +5,7 @@ import type { AiTaskResultCode, JsonObject, JsonValue } from '../../../../../sha
 import { getMessageText, getToolNodeMessages, isJsonObject } from '../../../../utils/aiCapabilityUtils'
 import type { AiRunContext } from '../../types'
 import { appendHumanStepRecord, emitHumanStep } from './events'
+import { deriveActiveToolNames, deriveActiveTools } from './runtimeState'
 import type { HumanRunState } from './types'
 
 type ToolOutcome = {
@@ -183,12 +184,6 @@ const toInjectedOutputPreview = (outcome: ToolOutcome): JsonValue => {
   return preview
 }
 
-const getActiveToolNames = (state: HumanRunState): string[] => {
-  return state.activeTools
-    .map((tool) => String(tool.name || '').trim())
-    .filter(Boolean)
-}
-
 export const createHumanToolExecNode = (input: { ctx: AiRunContext }) => {
   const { ctx } = input
   const ctxWithToolOverride = ctx as AiRunContextWithToolOverride
@@ -197,7 +192,7 @@ export const createHumanToolExecNode = (input: { ctx: AiRunContext }) => {
     ctx.checkCancelled()
 
     const decision = state.lastDecision
-    const activeToolNames = getActiveToolNames(state)
+    const activeToolNames = deriveActiveToolNames(state)
 
     if (!decision || decision.action !== 'invoke_tool') {
       const summary = 'missing tool execution decision'
@@ -206,8 +201,6 @@ export const createHumanToolExecNode = (input: { ctx: AiRunContext }) => {
         step: state.steps,
         action: 'block_task',
         publicNarrative: '当前缺少可执行的工具决策，因此任务被阻塞。',
-        activeSkillIds: state.activeSkillIds,
-        activeToolNames,
         resultStatus: 'blocked',
         summary
       })
@@ -247,8 +240,6 @@ export const createHumanToolExecNode = (input: { ctx: AiRunContext }) => {
         step: state.steps,
         action: 'block_task',
         publicNarrative: '当前工具未处于激活状态，因此任务被阻塞。',
-        activeSkillIds: state.activeSkillIds,
-        activeToolNames,
         resultStatus: 'blocked',
         summary
       })
@@ -319,7 +310,7 @@ export const createHumanToolExecNode = (input: { ctx: AiRunContext }) => {
     } else {
       try {
         const aiMessage = buildToolCallMessage(decision.toolName, decision.args)
-        const out = await new ToolNode(state.activeTools).invoke({ messages: [aiMessage] })
+        const out = await new ToolNode(deriveActiveTools(state)).invoke({ messages: [aiMessage] })
         const toolMessages = getToolNodeMessages(out)
         if (toolMessages.length === 0) {
           outcome = {
@@ -389,8 +380,6 @@ export const createHumanToolExecNode = (input: { ctx: AiRunContext }) => {
       step: state.steps,
       action: 'invoke_tool',
       publicNarrative: decision.publicNarrative,
-      activeSkillIds: state.activeSkillIds,
-      activeToolNames,
       resultStatus,
       toolName: decision.toolName,
       summary: outcome.summary
@@ -413,8 +402,7 @@ export const createHumanToolExecNode = (input: { ctx: AiRunContext }) => {
 
     if (blocking) {
       return {
-        phase: 'response',
-        status: 'blocked',
+        status: 'response',
         lastObservation: {
           kind: 'terminal',
           status: 'blocked',
@@ -431,7 +419,7 @@ export const createHumanToolExecNode = (input: { ctx: AiRunContext }) => {
 
     if (!outcome.ok) {
       return {
-        phase: 'brain',
+        status: 'brain',
         lastObservation,
         stepHistory: nextHistory,
         summary: outcome.summary,
@@ -441,7 +429,7 @@ export const createHumanToolExecNode = (input: { ctx: AiRunContext }) => {
     }
 
     return {
-      phase: 'brain',
+      status: 'brain',
       lastObservation,
       stepHistory: nextHistory
     }

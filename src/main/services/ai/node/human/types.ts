@@ -6,29 +6,22 @@ import type {
   HumanTaskInput,
   JsonValue,
   LocalSourceUsageStatus,
-  RuntimeSkillId,
-  SkillCard
+  RuntimeSkillId
 } from '../../../../../shared/types'
 import type { HumanDeliveryKind } from '../../types'
 
-export type HumanPhase = 'brain' | 'skill_loader' | 'tool_exec' | 'response'
-
-export type LoadedSkill = {
-  skillId: RuntimeSkillId
-  name: string
-  summary: string
-  workflow: string[]
-  decisionHints: string[]
-  toolNames: string[]
-  loadedAtStep: number
-}
+export type HumanStatus =
+  | 'brain'
+  | 'skill_loader'
+  | 'tool_exec'
+  | 'response'
+  | 'completed'
+  | 'blocked'
 
 export type HumanSkillLoadObservation = {
   kind: 'skill_loaded'
   skillId: RuntimeSkillId
   summary: string
-  activeSkillIds: RuntimeSkillId[]
-  activeToolNames: string[]
 }
 
 export type HumanToolObservation = {
@@ -56,18 +49,15 @@ export type HumanObservation =
 export type HumanRunState = {
   runId: string
   input: HumanTaskInput
-  phase: HumanPhase
-  status: 'running' | 'completed' | 'blocked'
+  status: HumanStatus
   deliveryKind: HumanDeliveryKind
   streamAnswer: boolean
   internalDelivery: boolean
   steps: number
   maxSteps: number
-  availableSkillCards: SkillCard[]
-  loadedSkills: Partial<Record<RuntimeSkillId, LoadedSkill>>
+  loadedSkillIds: RuntimeSkillId[]
   loadedToolsets: Partial<Record<RuntimeSkillId, StructuredToolInterface[]>>
   activeSkillIds: RuntimeSkillId[]
-  activeTools: StructuredToolInterface[]
   lastObservation?: HumanObservation
   lastDecision?: HumanStepDecision
   stepHistory: HumanStepRecord[]

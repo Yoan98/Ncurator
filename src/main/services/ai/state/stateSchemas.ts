@@ -4,8 +4,7 @@ import { z } from 'zod/v4'
 import {
   HUMAN_STEP_ACTIONS,
   HUMAN_STEP_RESULT_STATUSES,
-  RUNTIME_SKILL_IDS,
-  RUNTIME_SKILL_REQUIREMENTS
+  RUNTIME_SKILL_IDS
 } from '../../../../shared/constants'
 import {
   type HumanTaskInput,
@@ -123,28 +122,8 @@ export const createHumanRunStateSchema = () => {
     objective: z.string()
   })
   const runtimeSkillIdSchema = z.enum(RUNTIME_SKILL_IDS)
-  const runtimeSkillRequirementSchema = z.enum(RUNTIME_SKILL_REQUIREMENTS)
   const humanStepActionSchema = z.enum(HUMAN_STEP_ACTIONS)
   const humanStepResultStatusSchema = z.enum(HUMAN_STEP_RESULT_STATUSES)
-  const skillCardSchema = z.object({
-    id: runtimeSkillIdSchema,
-    name: z.string(),
-    summary: z.string(),
-    whenToLoad: z.string(),
-    workflow: z.array(z.string()),
-    avoidWhen: z.array(z.string()).optional(),
-    toolNames: z.array(z.string()),
-    requires: z.array(runtimeSkillRequirementSchema).optional()
-  })
-  const loadedSkillSchema = z.object({
-    skillId: runtimeSkillIdSchema,
-    name: z.string(),
-    summary: z.string(),
-    workflow: z.array(z.string()),
-    decisionHints: z.array(z.string()),
-    toolNames: z.array(z.string()),
-    loadedAtStep: z.number()
-  })
   const humanStepDecisionSchema = z.discriminatedUnion('action', [
     z.object({
       action: z.literal('load_skill'),
@@ -178,8 +157,6 @@ export const createHumanRunStateSchema = () => {
     step: z.number(),
     action: humanStepActionSchema,
     publicNarrative: z.string(),
-    activeSkillIds: z.array(runtimeSkillIdSchema),
-    activeToolNames: z.array(z.string()),
     resultStatus: humanStepResultStatusSchema.optional(),
     skillId: runtimeSkillIdSchema.optional(),
     toolName: z.string().optional(),
@@ -189,9 +166,7 @@ export const createHumanRunStateSchema = () => {
     z.object({
       kind: z.literal('skill_loaded'),
       skillId: runtimeSkillIdSchema,
-      summary: z.string(),
-      activeSkillIds: z.array(runtimeSkillIdSchema),
-      activeToolNames: z.array(z.string())
+      summary: z.string()
     }),
     z.object({
       kind: z.literal('tool_result'),
@@ -229,10 +204,10 @@ export const createHumanRunStateSchema = () => {
     runId: z.string(),
     // 当前 human 任务输入契约。
     input: humanTaskInputSchema,
-    // human 内部路由阶段（brain/skill_loader/tool_exec/response）。
-    phase: z.enum(['brain', 'skill_loader', 'tool_exec', 'response']).default('brain'),
-    // human 执行状态：running/completed/blocked。
-    status: z.enum(['running', 'completed', 'blocked']).default('running'),
+    // human 单一状态字段，同时承担内部路由与终态标记。
+    status: z
+      .enum(['brain', 'skill_loader', 'tool_exec', 'response', 'completed', 'blocked'])
+      .default('brain'),
     // 当前交付类型：context/handoff/final。
     deliveryKind: z.enum(['context', 'handoff', 'final']).default('handoff'),
     // 是否将 response node 输出作为最终答复流式事件发出。
@@ -243,10 +218,8 @@ export const createHumanRunStateSchema = () => {
     steps: z.number().default(0),
     // 最大步数保护阈值。
     maxSteps: z.number().default(6),
-    // brain 常驻可见的技能路由卡片。
-    availableSkillCards: z.array(skillCardSchema).default(() => []),
-    // 已加载 skill 的结构化 guide 与资源元数据缓存。
-    loadedSkills: z.record(z.string(), loadedSkillSchema).default(() => ({})),
+    // 已加载的 skill id 列表。
+    loadedSkillIds: z.array(runtimeSkillIdSchema).default(() => []),
     // 已加载 skill 对应的运行态工具集缓存。
     loadedToolsets: z
       .record(
@@ -258,12 +231,6 @@ export const createHumanRunStateSchema = () => {
       .default(() => ({})),
     // 当前激活中的 skill 列表（MRU 顺序）。
     activeSkillIds: z.array(runtimeSkillIdSchema).default(() => []),
-    // 当前激活 skill 派生的工具集合。
-    activeTools: z
-      .array(
-        z.custom<StructuredToolInterface>((value) => typeof value === 'object' && value !== null)
-      )
-      .default(() => []),
     // 最近一次执行观察。
     lastObservation: humanObservationSchema.optional(),
     // 最近一步 brain 决策。
