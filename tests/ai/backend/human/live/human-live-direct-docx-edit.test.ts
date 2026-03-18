@@ -42,14 +42,14 @@ defineAiHumanLiveCase({
       {
         liveModelConfig: loadPrimaryLiveHumanConfig()
       },
-      { maxSteps: 8 }
+      { maxSteps: 10 }
     )
 
     const output = await runner.run(
       {
         taskId: runtime.taskId,
         objective:
-          '请打开 weekly-report.docx，把 Risk summary 改成 “Risk summary: integration regression is assigned to Bob for daily follow-up.”，并把表格里 Risk 的 Owner 改成 Bob。完成后生成可审阅 preview，并用 handoff 形式交付。'
+          '请直接打开 weekly-report.docx，不要使用 terminal，也不需要 save。然后完成两处精确修改：1）把 “Risk summary: monitor integration edge cases.” 替换成 “Risk summary: integration regression is assigned to Bob for daily follow-up.”；2）把表格里 Risk 对应的 Owner 从 Alice 改成 Bob。完成后生成可审阅 preview，并用 handoff 形式交付。'
       },
       {
         deliveryKind: 'handoff'
@@ -60,6 +60,19 @@ defineAiHumanLiveCase({
     const previewArtifact = fileArtifacts.find((event) => event.artifactRole === 'preview')
     const previewPath = previewArtifact?.path || ''
     const previewExists = previewPath ? await fileExists(previewPath) : false
+
+    if (!previewExists) {
+      return {
+        output,
+        previewExists,
+        previewPath,
+        riskSearch: { ok: false, matches: [] },
+        ownerSearch: { ok: false, matches: [] },
+        fileArtifacts,
+        toolCalls: getEventsByType(runtime, 'tool_call_started')
+      }
+    }
+
     const inspectionHarness = createDocxToolHarness(runtime)
 
     try {
@@ -89,6 +102,7 @@ defineAiHumanLiveCase({
       return {
         output,
         previewExists,
+        previewPath,
         riskSearch,
         ownerSearch,
         fileArtifacts,
@@ -116,7 +130,18 @@ defineAiHumanLiveCase({
         result.ownerSearch.matches.length >= 1,
       {
         name: 'human-live-docx-edit-preview',
-        message: 'live human 改写后的 preview 应包含新的风险摘要与负责人'
+        message: 'live human 改写后的 preview 应包含新的风险摘要与负责人',
+        data: {
+          previewExists: result.previewExists,
+          previewPath: result.previewPath,
+          riskSearchOk: result.riskSearch.ok,
+          riskMatchCount: result.riskSearch.matches.length,
+          ownerSearchOk: result.ownerSearch.ok,
+          ownerMatchCount: result.ownerSearch.matches.length,
+          toolNames: result.toolCalls.map((event) => event.toolName),
+          summary: result.output.summary,
+          resultData: result.output.resultData
+        }
       }
     )
     runtime.assertThat(

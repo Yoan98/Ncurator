@@ -104,14 +104,14 @@ defineAiHumanLiveCase({
           getDocumentById: async (id: string) => (id === 'doc-policy' ? releasePolicyDocument : null)
         }
       },
-      { maxSteps: 8 }
+      { maxSteps: 12 }
     )
 
     const output = await runner.run(
       {
         taskId: runtime.taskId,
         objective:
-          '请先做一次当前本地发布规范检索，从 release-policy.md 提炼要求后直接修改 release-check.docx。拿到条款后不要再列文档或重复检索，也不需要 save；只需把摘要段改成包含 “approval-denied coverage and terminal artifact assertion before sign-off”，生成可审阅 preview，并以 handoff 形式交付，在交付里说明来源文档。'
+          '请仅在当前已选本地文档范围内做一次发布规范检索，来源就是 release-policy.md。拿到条款后不要再列文档、不要重复检索、不要使用 terminal，也不需要 save。随后直接打开 release-check.docx，把 “Checklist summary: pending policy sync.” 替换成 “Checklist summary: Mention approval-denied coverage and terminal artifact assertion before sign-off.”，生成可审阅 preview，并以 handoff 形式交付，在交付里说明来源文档 release-policy.md。'
       },
       {
         deliveryKind: 'handoff'

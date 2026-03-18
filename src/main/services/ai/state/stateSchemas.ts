@@ -130,14 +130,18 @@ export const createHumanRunStateSchema = () => {
     id: runtimeSkillIdSchema,
     name: z.string(),
     summary: z.string(),
-    whenToUse: z.string(),
-    unlocks: z.array(z.string()),
+    whenToLoad: z.string(),
+    workflow: z.array(z.string()),
+    avoidWhen: z.array(z.string()).optional(),
+    toolNames: z.array(z.string()),
     requires: z.array(runtimeSkillRequirementSchema).optional()
   })
   const loadedSkillSchema = z.object({
     skillId: runtimeSkillIdSchema,
-    skillContent: z.string(),
-    referencedAssets: z.array(z.string()),
+    name: z.string(),
+    summary: z.string(),
+    workflow: z.array(z.string()),
+    decisionHints: z.array(z.string()),
     toolNames: z.array(z.string()),
     loadedAtStep: z.number()
   })
@@ -239,9 +243,9 @@ export const createHumanRunStateSchema = () => {
     steps: z.number().default(0),
     // 最大步数保护阈值。
     maxSteps: z.number().default(6),
-    // brain 常驻可见的轻量 skill 卡片。
+    // brain 常驻可见的技能路由卡片。
     availableSkillCards: z.array(skillCardSchema).default(() => []),
-    // 已加载 skill 的文本与资源元数据缓存。
+    // 已加载 skill 的结构化 guide 与资源元数据缓存。
     loadedSkills: z.record(z.string(), loadedSkillSchema).default(() => ({})),
     // 已加载 skill 对应的运行态工具集缓存。
     loadedToolsets: z

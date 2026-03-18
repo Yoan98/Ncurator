@@ -525,12 +525,45 @@ export type AiTaskResultCode =
 export type HumanStepAction = (typeof HUMAN_STEP_ACTIONS)[number]
 export type HumanStepResultStatus = (typeof HUMAN_STEP_RESULT_STATUSES)[number]
 
+export type ToolPromptArgSpec = {
+  name: string
+  type: string
+  required: boolean
+  description: string
+  enumValues?: string[]
+  defaultValue?: string
+}
+
+export type ToolPromptReturnSpec = {
+  name: string
+  type: string
+  description: string
+}
+
+export type ToolPromptExample = {
+  goal: string
+  args: JsonObject
+}
+
+export type ToolPromptSpec = {
+  name: string
+  purpose: string
+  whenToUse: string
+  preconditions?: string[]
+  args: ToolPromptArgSpec[]
+  returns: ToolPromptReturnSpec[]
+  commonMistakes?: string[]
+  examples?: ToolPromptExample[]
+}
+
 export type SkillCard = {
   id: RuntimeSkillId
   name: string
   summary: string
-  whenToUse: string
-  unlocks: string[]
+  whenToLoad: string
+  workflow: string[]
+  avoidWhen?: string[]
+  toolNames: string[]
   requires?: RuntimeSkillRequirement[]
 }
 

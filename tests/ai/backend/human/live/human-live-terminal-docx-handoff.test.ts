@@ -44,14 +44,14 @@ defineAiHumanLiveCase({
       {
         liveModelConfig: loadPrimaryLiveHumanConfig()
       },
-      { maxSteps: 10 }
+      { maxSteps: 12 }
     )
 
     const output = await runner.run(
       {
         taskId: runtime.taskId,
         objective:
-          '请先读取 ai/workspace/materials/daily/2026-03-16-note.md，再把其中的结论写入 weekly-brief.docx。最终摘要里必须包含 “Integration review completed” 和 “approval flow still needs regression coverage”，并生成可审阅 preview。'
+          '请先读取 ai/workspace/materials/daily/2026-03-16-note.md，不要读取其他材料。拿到结论后不要使用 KB，也不需要 save；直接打开 weekly-brief.docx，把 “Summary: pending material import.” 替换成 “Summary: Integration review completed. approval flow still needs regression coverage.”，生成可审阅 preview，并用 handoff 形式交付。'
       },
       {
         deliveryKind: 'handoff'
@@ -63,6 +63,19 @@ defineAiHumanLiveCase({
     const previewArtifact = fileArtifacts.find((event) => event.artifactRole === 'preview')
     const previewPath = previewArtifact?.path || ''
     const previewExists = previewPath ? await fileExists(previewPath) : false
+
+    if (!previewExists) {
+      return {
+        output,
+        previewExists,
+        previewPath,
+        summarySearch: { ok: false, matches: [] },
+        fileArtifacts,
+        toolCalls: getEventsByType(runtime, 'tool_call_started'),
+        toolResults
+      }
+    }
+
     const inspectionHarness = createDocxToolHarness(runtime)
 
     try {
@@ -84,6 +97,7 @@ defineAiHumanLiveCase({
       return {
         output,
         previewExists,
+        previewPath,
         summarySearch,
         fileArtifacts,
         toolCalls: getEventsByType(runtime, 'tool_call_started'),
@@ -116,7 +130,17 @@ defineAiHumanLiveCase({
         result.summarySearch.matches.length >= 1,
       {
         name: 'human-live-terminal-docx-preview',
-        message: 'live human 应先读取 workspace 材料，再把结论写入 preview'
+        message: 'live human 应先读取 workspace 材料，再把结论写入 preview',
+        data: {
+          previewExists: result.previewExists,
+          previewPath: result.previewPath,
+          summarySearchOk: result.summarySearch.ok,
+          summaryMatchCount: result.summarySearch.matches.length,
+          terminalPreviewTexts,
+          toolNames: result.toolCalls.map((event) => event.toolName),
+          summary: result.output.summary,
+          resultData: result.output.resultData
+        }
       }
     )
     runtime.assertThat(

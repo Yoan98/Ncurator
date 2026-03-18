@@ -4,7 +4,8 @@ import type {
   HumanStepDecision,
   JsonObject,
   JsonValue,
-  RuntimeSkillId
+  RuntimeSkillId,
+  ToolPromptSpec
 } from '../../../../../shared/types'
 import { isJsonObject } from '../../../../utils/aiCapabilityUtils'
 import { createChatModel } from '../../../llm/chatModel'
@@ -13,6 +14,7 @@ import { buildHumanBrainPrompt } from '../../prompts/human/brain'
 import { humanStepDecisionSchema } from './decisionCodec'
 import { appendHumanStepRecord, emitHumanDiagnostic, emitHumanStep } from './events'
 import { enrichCompleteTaskResultData } from './resultData'
+import { getToolPromptSpec } from './toolPromptCatalog'
 import type { HumanObservation, HumanRunState, LoadedSkill } from './types'
 
 const MAX_HISTORY_ITEMS = 10
@@ -114,6 +116,21 @@ const getActiveToolNames = (state: HumanRunState): string[] => {
     .filter(Boolean)
 }
 
+const serializeAvailableSkillCards = (state: HumanRunState): string => {
+  const rows = state.availableSkillCards.map((card) => ({
+    id: card.id,
+    name: card.name,
+    summary: card.summary,
+    whenToLoad: card.whenToLoad,
+    workflow: card.workflow,
+    avoidWhen: card.avoidWhen || [],
+    toolNames: card.toolNames,
+    requires: card.requires || []
+  }))
+
+  return rows.length > 0 ? toJsonText(rows) : 'none'
+}
+
 const serializeLoadedSkills = (state: HumanRunState): string => {
   const orderedIds: RuntimeSkillId[] = []
   const seen = new Set<string>()
@@ -135,22 +152,30 @@ const serializeLoadedSkills = (state: HumanRunState): string => {
     .filter((item): item is LoadedSkill => item !== undefined)
     .map((skill) => ({
       skillId: skill.skillId,
+      name: skill.name,
       active: state.activeSkillIds.includes(skill.skillId),
-      toolNames: skill.toolNames,
-      referencedAssets: skill.referencedAssets,
-      skillContent: skill.skillContent
+      summary: skill.summary,
+      workflow: skill.workflow,
+      decisionHints: skill.decisionHints,
+      toolNames: skill.toolNames
     }))
 
   return rows.length > 0 ? toJsonText(rows) : 'none'
 }
 
 const serializeActiveTools = (state: HumanRunState): string => {
-  const rows = state.activeTools
-    .map((tool) => ({
-      name: toTrimmedText(String(tool.name || ''), ''),
-      description: toTrimmedText(String(tool.description || ''), '(no description)')
-    }))
-    .filter((tool) => tool.name)
+  const rows: ToolPromptSpec[] = []
+
+  for (const tool of state.activeTools) {
+    const toolName = toTrimmedText(String(tool.name || ''), '')
+    if (!toolName) continue
+    const structured = getToolPromptSpec(toolName)
+    if (!structured) {
+      throw new Error(`missing tool prompt spec for active tool: ${toolName}`)
+    }
+    rows.push(structured)
+  }
+
   return rows.length > 0 ? toJsonText(rows) : 'none'
 }
 
@@ -433,7 +458,7 @@ const buildDecisionPrompt = (input: { state: HumanRunState; ctx: AiRunContext })
     stepIndex: state.steps + 1,
     maxSteps: state.maxSteps,
     selectedScopeSummary: input.ctx.selectedScopeSummary,
-    availableSkillCardsText: toJsonText(state.availableSkillCards),
+    availableSkillCardsText: serializeAvailableSkillCards(state),
     loadedSkillsText: serializeLoadedSkills(state),
     activeToolsText: serializeActiveTools(state),
     decisionStateText: buildDecisionStateText(input),
@@ -591,10 +616,10 @@ export const createHumanBrainNode = (input: { ctx: AiRunContext }) => {
       })
     }
 
-    const prompt = buildDecisionPrompt({ state, ctx })
     let decision: HumanStepDecision
 
     try {
+      const prompt = buildDecisionPrompt({ state, ctx })
       const overriddenDecision = ctxWithDecisionOverride.resolveHumanDecisionOverride?.()
       decision = normalizeDecision(
         overriddenDecision ||

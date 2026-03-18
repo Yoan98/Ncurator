@@ -15,8 +15,10 @@ export type HumanPhase = 'brain' | 'skill_loader' | 'tool_exec' | 'response'
 
 export type LoadedSkill = {
   skillId: RuntimeSkillId
-  skillContent: string
-  referencedAssets: string[]
+  name: string
+  summary: string
+  workflow: string[]
+  decisionHints: string[]
   toolNames: string[]
   loadedAtStep: number
 }
