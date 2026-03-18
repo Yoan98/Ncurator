@@ -4,6 +4,7 @@ import { hasLiveLlmConfigInEnv, loadLiveLlmConfigFromEnv } from '../../../harnes
 import type { BackendTestRuntime, TestCaseDefinition } from '../../../harness/backend/test-types'
 
 type AiHumanCaseDefinition<TResult> = Omit<TestCaseDefinition<TResult>, 'domain' | 'layer' | 'suite'>
+const HUMAN_LIVE_TEST_TIMEOUT_MS = 300_000
 
 export const defineAiHumanCase = <TResult>(definition: AiHumanCaseDefinition<TResult>): void => {
   it(definition.caseId, async () => {
@@ -25,15 +26,19 @@ export const defineAiHumanLiveCase = <TResult>(definition: AiHumanCaseDefinition
 
   const runtimeModelName = loadLiveLlmConfigFromEnv('primary').model_name
 
-  it(definition.caseId, async () => {
-    await runBackendCase({
-      ...definition,
-      domain: 'ai',
-      layer: 'backend',
-      suite: 'human',
-      runtimeModelName
-    })
-  })
+  it(
+    definition.caseId,
+    async () => {
+      await runBackendCase({
+        ...definition,
+        domain: 'ai',
+        layer: 'backend',
+        suite: 'human',
+        runtimeModelName
+      })
+    },
+    HUMAN_LIVE_TEST_TIMEOUT_MS
+  )
 }
 
 export const loadPrimaryLiveHumanConfig = () => loadLiveLlmConfigFromEnv('primary')

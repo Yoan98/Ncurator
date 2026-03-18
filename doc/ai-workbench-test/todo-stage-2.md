@@ -24,20 +24,24 @@
 - [x] 落地 `human-long-task-with-corrections`
 - [x] 落地 `human-long-task-approval-branch`
 - [x] 落地 `human-live-direct-docx-edit`
+- [x] 落地 `human-live-direct-kb-answer`
+- [x] 落地 `human-live-evidence-insufficient-safe-stop`
 - [x] 落地 `human-live-terminal-docx-handoff`
 - [x] 落地 `human-live-long-task-project-brief`
+- [x] 跑完 Stage 2 `backend/human` non-live 测试并刷新 `tests/logs/ai/backend/human/{basic,boundary,scenario}/**`
 
 ## In Progress
 
-- [ ] 落地 `human-live-direct-kb-answer`
 - [ ] 落地 `human-live-kb-docx-bridge`
-- [ ] 落地 `human-live-evidence-insufficient-safe-stop`
-- [ ] 跑完 Stage 2 backend/human 测试并刷新 `tests/logs/ai/**`
-- [ ] 基于新的 human logs 更新 `tests/report/ai/report.md`
+- [x] 基于新的 human logs 更新 `tests/report/ai/report.md`
 
 ## Blocked
 
-- 当前无新增外部阻塞
+- `human-live-kb-docx-bridge` 在 2026-03-18 的 primary `gpt-5` live 运行里仍未形成稳定交付：
+  - `20260318-150310-015`：`invalid_input`，summary=`524 status code (no body)`，只留下两次 `kb_hybrid_search_chunks`
+- 为区分模型/服务问题与编排问题，已在 2026-03-18 补跑 stronger `gpt-5.2`：
+  - `20260318-150906-789`：在 `kb_hybrid_search_chunks -> kb_list_documents` 后判断剩余步数不足，未进入 docx handoff
+  - `20260318-151207-536`：`bounded_loop_error`，错误转入多次 `terminal_run_command`，仍未产出 preview artifact
 - `human` 阶段 live 结论仍不完整，Stage 2 尚不能仅凭 non-live case 视为完成
 
 ## Evidence
@@ -45,6 +49,11 @@
 - `doc/ai-workbench-test/plan.md`
 - `tests/ai/backend/human/{basic,boundary,scenario,live}/*.test.ts`
 - `tests/logs/ai/backend/human/**`
+- `tests/logs/ai/backend/human/live/human-live-direct-kb-answer/20260318-145113-697/*`
+- `tests/logs/ai/backend/human/live/human-live-evidence-insufficient-safe-stop/20260318-150735-678/*`
+- `tests/logs/ai/backend/human/live/human-live-kb-docx-bridge/20260318-150310-015/*`
+- `tests/logs/ai/backend/human/live/human-live-kb-docx-bridge/20260318-150906-789/*`
+- `tests/logs/ai/backend/human/live/human-live-kb-docx-bridge/20260318-151207-536/*`
 
 ## Exit Criteria
 

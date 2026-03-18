@@ -423,7 +423,9 @@ tests/report/<domain>/
   - `失败分析`
   - `当前评估`
   - `下一步建议`
-- `证据` 必须列出对应 run 的 `meta.json`、`timeline.jsonl`、`artifacts.json` 路径；如果有关键附件，也应一并列出。
+- `证据` 默认只列出能定位该条证据的最小信息，例如 `caseId`、`runId`、`status`。
+- 不要在 report 正文里机械展开 `meta.json`、`timeline.jsonl`、`artifacts.json` 这些文件名。
+- 只有当失败分析或结论明确依赖某个关键附件时，才额外补充附件名称或用途说明。
 - `通过率` 只写当前节点覆盖范围内的统计，不混入其他节点数据。
 - `通过率` 固定拆成两组：
   - `历史总数据`：`totalRuns`、`passedRuns`、`failedRuns`、`historicalSuccessRate`
@@ -464,7 +466,7 @@ tests/report/<domain>/
 
 ##### 证据
 
-- `20260315-101530-112` | passed | `tests/logs/ai/backend/tools/terminal/terminal-basic-command/20260315-101530-112/meta.json` | `tests/logs/ai/backend/tools/terminal/terminal-basic-command/20260315-101530-112/timeline.jsonl` | `tests/logs/ai/backend/tools/terminal/terminal-basic-command/20260315-101530-112/artifacts.json`
+- `terminal-basic-command` | run=`20260315-101530-112` | status=`passed`
 
 ##### 通过率
 
@@ -499,8 +501,8 @@ tests/report/<domain>/
 
 ##### 证据
 
-- `20260315-103002-008` | passed | `tests/logs/ai/e2e/workbench/workbench-plan-artifact-smoke/20260315-103002-008/meta.json` | `tests/logs/ai/e2e/workbench/workbench-plan-artifact-smoke/20260315-103002-008/timeline.jsonl` | `tests/logs/ai/e2e/workbench/workbench-plan-artifact-smoke/20260315-103002-008/artifacts.json`
-- artifact references: `tests/logs/ai/e2e/workbench/workbench-plan-artifact-smoke/20260315-103002-008/artifacts/trace/playwright-trace.zip`
+- `workbench-plan-artifact-smoke` | run=`20260315-103002-008` | status=`passed`
+- 关键附件: playwright trace
 
 ##### 通过率
 

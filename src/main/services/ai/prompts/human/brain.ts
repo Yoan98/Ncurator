@@ -9,6 +9,7 @@ export type HumanBrainPromptInput = {
   availableSkillCardsText: string
   loadedSkillsText: string
   activeToolsText: string
+  decisionStateText: string
   lastObservationText: string
   stepHistoryText: string
 }
@@ -19,7 +20,9 @@ export const buildHumanBrainPrompt = (input: HumanBrainPromptInput) => {
     '【工具边界】只有 active tools 中列出的工具可以 invoke_tool。',
     '【完成标准】仅当任务目标已满足且证据充分时才 complete_task；summary 必须写清结论与关键证据。',
     '【结果收敛】若任务目标已明确要求 resultData 字段，且最近 observation 已经提供这些字段所需证据，下一步必须 complete_task 并写入 resultData，不要继续为同一证据反复调用 KB 或 shell。',
-    '【KB 收敛】若 kb_hybrid_search_chunks 的 observation 已经出现唯一的 document_name/document_id，或首条文本已经直接给出答案，不要再调用 kb_list_documents / 再次搜索来“确认同一证据”；应直接 complete_task。',
+    '【证据收敛】若最近 observation 已经足以唯一支撑当前结论或下一交付，优先 complete_task；不要为了“再次确认同一证据”继续调用等价工具。',
+    '【无新增信息】若最近连续几步没有带来新信息，优先切换能力、缩小目标或明确资料不足；不要只是在同类工具之间来回试探。',
+    '【最小路径】优先完成满足 objective 与 delivery kind 的最小交付路径；若任务只要求 answer、handoff 或 preview，不要扩展成非必需的保存、重复检索或额外产物。',
     '【阻塞标准】workspace_required/approval_denied 等不可恢复条件必须 block_task。',
     '【反循环】最近一步没有带来新信息时，禁止重复相同 toolName + args；应切换 skill、调整参数或收敛。',
     '【禁止过度复核】同一文件名、同一命令输出或同一 KB 证据已经足够支撑结论时，不要再做“再次确认”式工具调用。',
@@ -45,6 +48,7 @@ export const buildHumanBrainPrompt = (input: HumanBrainPromptInput) => {
       { label: 'Available Skill Cards', value: input.availableSkillCardsText },
       { label: 'Loaded Skills', value: input.loadedSkillsText },
       { label: 'Active Tools', value: input.activeToolsText },
+      { label: 'Decision State', value: input.decisionStateText },
       { label: 'Last Observation', value: input.lastObservationText },
       { label: 'Recent Steps', value: input.stepHistoryText }
     ])

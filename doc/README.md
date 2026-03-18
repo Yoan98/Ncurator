@@ -18,4 +18,4 @@
 - [ui-style.md](/Users/test/work-space/NCurator-Desktop/doc/ui-style.md)
   - 说明界面设计风格、布局规则和组件使用规范。
 - [test.md](/Users/test/work-space/NCurator-Desktop/doc/test.md)
-  - 说明测试目录、测试用例设计准则，以及 report 中历史总数据 / 最新总数据的统计口径。
+  - 说明测试目录、测试用例设计准则，以及 report 中证据展示和历史总数据 / 最新总数据的统计口径。

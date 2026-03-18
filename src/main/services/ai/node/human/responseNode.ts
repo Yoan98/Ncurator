@@ -98,10 +98,14 @@ const deriveLocalSourceStatus = (state: HumanRunState): {
   summary: string
 } => {
   const joined = [state.summary, state.deliveryMarkdown].join('\n')
-  const mentionsInsufficient =
-    joined.includes('本地资料不足') ||
-    joined.includes('是否允许继续使用非本地信息') ||
-    joined.includes('非本地信息')
+  const insufficientMarkers = [
+    '本地资料不足',
+    '本地证据不足',
+    '当前本地资料不足',
+    '当前本地证据不足',
+    '本地范围不足'
+  ]
+  const mentionsInsufficient = insufficientMarkers.some((marker) => joined.includes(marker))
   if (mentionsInsufficient) {
     return {
       status: 'insufficient',
