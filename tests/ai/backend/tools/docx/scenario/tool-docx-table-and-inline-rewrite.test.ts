@@ -1,11 +1,11 @@
-import { writeTestDocxFile, createDocxToolHarness } from '../../../../harness/backend/aiToolHarness'
-import { defineAiToolCase, findCellBlockContaining } from '../helpers'
-import type { DocxOutlineBlock } from '../../../../../src/main/services/ai/tools/docx/types'
+import { writeTestDocxFile, createDocxToolHarness } from '../../../../../harness/backend/aiToolHarness'
+import { defineAiToolCase, findCellBlockContaining } from '../../helpers'
+import type { DocxOutlineBlock } from '../../../../../../src/main/services/ai/tools/docx/types'
 
 defineAiToolCase({
   caseId: 'tool-docx-table-and-inline-rewrite',
   caseType: 'scenario',
-  groups: ['docx'],
+  groups: ['docx', 'scenario'],
   description: '同一轮操作中同时修改表格单元格与正文中的局部文本。',
   fixtures: [],
   runMode: 'repeatable',

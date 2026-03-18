@@ -1,10 +1,10 @@
-import { createTerminalToolHarness } from '../../../../harness/backend/aiToolHarness'
-import { defineAiToolCase } from '../helpers'
+import { createTerminalToolHarness } from '../../../../../harness/backend/aiToolHarness'
+import { defineAiToolCase } from '../../helpers'
 
 defineAiToolCase({
   caseId: 'tool-terminal-workspace-material-discovery',
   caseType: 'basic',
-  groups: ['terminal'],
+  groups: ['terminal', 'basic'],
   description: '在多层目录里发现材料，并读取最新日报中的可复用内容。',
   fixtures: [
     'tests/fixtures/ai/workspace/materials/daily/2026-03-14-note.md',

@@ -1,10 +1,10 @@
-import { createTerminalToolHarness } from '../../../../harness/backend/aiToolHarness'
-import { defineAiToolCase, getEventsByType } from '../helpers'
+import { createTerminalToolHarness } from '../../../../../harness/backend/aiToolHarness'
+import { defineAiToolCase, getEventsByType } from '../../helpers'
 
 defineAiToolCase({
   caseId: 'tool-terminal-failure-and-long-output',
-  caseType: 'scenario',
-  groups: ['terminal'],
+  caseType: 'boundary',
+  groups: ['terminal', 'boundary'],
   description: '覆盖命令失败、长输出截断与错误事件收敛。',
   fixtures: [],
   runMode: 'repeatable',

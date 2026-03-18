@@ -1,10 +1,10 @@
-import { createTerminalToolHarness } from '../../../../harness/backend/aiToolHarness'
-import { defineAiToolCase, getEventsByType } from '../helpers'
+import { createTerminalToolHarness } from '../../../../../harness/backend/aiToolHarness'
+import { defineAiToolCase, getEventsByType } from '../../helpers'
 
 defineAiToolCase({
   caseId: 'tool-terminal-approval-and-boundary',
-  caseType: 'scenario',
-  groups: ['terminal'],
+  caseType: 'boundary',
+  groups: ['terminal', 'boundary'],
   description: '覆盖需要审批的写操作，以及越界路径在执行前被阻断。',
   fixtures: [],
   runMode: 'repeatable',

@@ -1,12 +1,12 @@
 import fs from 'node:fs/promises'
-import type { DocxOutlineBlock } from '../../../../../src/main/services/ai/tools/docx/types'
-import { writeTestDocxFile, createDocxToolHarness } from '../../../../harness/backend/aiToolHarness'
-import { defineAiToolCase, findParagraphBlockContaining } from '../helpers'
+import type { DocxOutlineBlock } from '../../../../../../src/main/services/ai/tools/docx/types'
+import { writeTestDocxFile, createDocxToolHarness } from '../../../../../harness/backend/aiToolHarness'
+import { defineAiToolCase, findParagraphBlockContaining } from '../../helpers'
 
 defineAiToolCase({
   caseId: 'tool-docx-preview-validate-rollback',
-  caseType: 'scenario',
-  groups: ['docx'],
+  caseType: 'boundary',
+  groups: ['docx', 'boundary'],
   description: '多轮编辑后执行 preview、validate、history 与 rollback 收敛。',
   fixtures: [],
   runMode: 'repeatable',

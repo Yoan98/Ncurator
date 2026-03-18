@@ -43,6 +43,24 @@
 - `tool / human / context / intent / plan / entire` 属于 `backend`
 - `ui / final` 属于 `e2e`
 
+### 3.0 阶段内统一分层
+
+每个阶段内部的正式 case 统一按四层组织：
+
+- `basic`
+  - 验证最小能力闭环，输入和断言都尽量收敛。
+- `boundary`
+  - 验证失败、阻塞、空结果、安全限制和预算收敛等边界行为。
+- `scenario`
+  - 验证真实任务链路，强调多步协作和真实交付。
+- `live`
+  - 验证真实模型参与下的正式执行路径。
+
+补充约束：
+
+- 纯工具阶段如果不涉及模型参与，可以暂时没有 `live` case。
+- 只要阶段执行路径里有模型参与，就不能只靠 `basic / boundary / scenario` 得出能力成立结论，还需要 `live` 证据。
+
 ### 3.1 `tool`
 
 做什么：验证 `docx`、`terminal`、`kb` 三类核心工具的基本调用、复杂操作和边界收敛。
@@ -51,28 +69,44 @@
 
 怎么做：先覆盖基础读写与检索，再覆盖复杂链路，最后覆盖阻塞、失败和安全边界。
 
+#### basic
+
 | 用例名称 | 目标 | 描述 | 为什么 |
 | --- | --- | --- | --- |
 | `tool-docx-structure-read` | 验证文档读取基线 | 对带标题、正文、表格的样例文档完成 `open -> outline -> search -> get_block` | 所有文档任务都依赖这条基础链路 |
 | `tool-docx-targeting-and-ambiguous-search` | 验证块定位与歧义消解 | 多个相似标题或相似段落同时命中时，仍能稳定定位目标块 | 不解决歧义，后续编辑容易改错位置 |
 | `tool-docx-search-modes-and-scope` | 验证搜索模式与局部范围控制 | 覆盖 `literal / regex / semantic` 三种搜索方式，以及 `scope.blockIds` 的局部搜索 | 真实文档编辑常常需要先缩小范围再修改 |
-| `tool-docx-mixed-structural-edit` | 验证复杂结构改写 | 同一 case 内完成章节改写、插入新段、删除旧段、更新表格负责人 | 真实文档修改通常不是单一操作 |
-| `tool-docx-table-and-inline-rewrite` | 验证表格与行内文本混合改写 | 同一轮操作中修改表格单元格、段落正文和局部文本替换 | 周报、纪要、方案文档经常同时涉及表格和正文 |
-| `tool-docx-save-conflict-and-overwrite` | 验证保存边界 | 覆盖保存、另存为、路径冲突和 `overwrite` 行为 | 结果交付必须安全，不能在保存阶段失控 |
-| `tool-docx-preview-validate-rollback` | 验证结果收敛能力 | 多轮编辑后执行保存、预览、校验、历史回看与回滚 | 工具不只要能改，还要能收敛和回退 |
-| `tool-docx-multi-document-session-isolation` | 验证多文档会话隔离 | 同一 run 中并行打开两份文档后，后续 `search / apply / save` 不会串到错误文档 | 多文档任务是后续高价值场景的基础 |
 | `tool-terminal-workspace-material-discovery` | 验证读取型 terminal 链路 | 在多层目录里找到最新材料并提取可复用内容 | 很多任务第一步就是先找材料 |
 | `tool-terminal-path-resolution` | 验证路径解析 | 混用相对路径、绝对路径和目录切换时仍能稳定定位文件 | 路径解析错误会直接破坏后续任务 |
-| `tool-terminal-batch-material-summary` | 验证批量材料发现与归并 | 一次发现多份日报、会议纪要或风险清单，并提取可复用摘要 | 真实工作区任务很少只有一份输入材料 |
-| `tool-terminal-artifact-producing-command` | 验证复杂命令与产物识别 | 执行会生成中间文件的命令，检查摘要、产物识别与回读链路 | `terminal` 不只是看输出，还要能接住产物 |
-| `tool-terminal-approval-and-boundary` | 验证审批与工作区边界 | 覆盖审批请求、批准、拒绝、路径逃逸阻断 | 本地优先和安全约束是这条链路的前提 |
-| `tool-terminal-approval-denied-follow-up` | 验证审批拒绝后的收敛 | 用户拒绝后，系统能停止执行并给出安全后续 | 审批拒绝是常见分支，不能当异常遗漏 |
-| `tool-terminal-failure-and-long-output` | 验证失败路径可解释 | 覆盖命令失败、长输出截断、超时终止后的收敛 | 失败不可避免，但必须可回看、可理解 |
 | `tool-kb-hybrid-search` | 验证 `hybrid` 检索基线 | 在限定 source scope 下返回可引用结果，并与已选范围保持一致 | `hybrid` 是本地检索的主路径之一 |
 | `tool-kb-vector-search` | 验证 `vector` 检索基线 | 在相同 fixture 下验证纯向量检索的返回质量、空结果和范围收敛 | 需要单独确认语义检索能力边界 |
 | `tool-kb-fts-search` | 验证 `fts` 检索基线 | 在相同 fixture 下验证关键词检索、精确命中和空结果边界 | 关键词检索是最容易被用户感知的基线 |
 | `tool-kb-list-documents-and-scope-filter` | 验证文档枚举与范围过滤 | 先列出文档，再按 source scope 限定检索范围 | 很多问题会先找资料范围，再做检索 |
+
+#### boundary
+
+| 用例名称 | 目标 | 描述 | 为什么 |
+| --- | --- | --- | --- |
+| `tool-docx-save-conflict-and-overwrite` | 验证保存边界 | 覆盖保存、另存为、路径冲突和 `overwrite` 行为 | 结果交付必须安全，不能在保存阶段失控 |
+| `tool-docx-preview-validate-rollback` | 验证结果收敛能力 | 多轮编辑后执行保存、预览、校验、历史回看与回滚 | 工具不只要能改，还要能收敛和回退 |
+| `tool-terminal-approval-and-boundary` | 验证审批与工作区边界 | 覆盖审批请求、批准、拒绝、路径逃逸阻断 | 本地优先和安全约束是这条链路的前提 |
+| `tool-terminal-approval-denied-follow-up` | 验证审批拒绝后的收敛 | 用户拒绝后，系统能停止执行并给出安全后续 | 审批拒绝是常见分支，不能当异常遗漏 |
+| `tool-terminal-failure-and-long-output` | 验证失败路径可解释 | 覆盖命令失败、长输出截断、超时终止后的收敛 | 失败不可避免，但必须可回看、可理解 |
 | `tool-kb-empty-scope-and-no-result` | 验证知识库边界表现 | 覆盖空范围、无结果和返回理由清晰性 | 证据不足时必须安全收敛，而不是胡编 |
+
+#### scenario
+
+| 用例名称 | 目标 | 描述 | 为什么 |
+| --- | --- | --- | --- |
+| `tool-docx-mixed-structural-edit` | 验证复杂结构改写 | 同一 case 内完成章节改写、插入新段、删除旧段、更新表格负责人 | 真实文档修改通常不是单一操作 |
+| `tool-docx-table-and-inline-rewrite` | 验证表格与行内文本混合改写 | 同一轮操作中修改表格单元格、段落正文和局部文本替换 | 周报、纪要、方案文档经常同时涉及表格和正文 |
+| `tool-docx-multi-document-session-isolation` | 验证多文档会话隔离 | 同一 run 中并行打开两份文档后，后续 `search / apply / save` 不会串到错误文档 | 多文档任务是后续高价值场景的基础 |
+| `tool-terminal-batch-material-summary` | 验证批量材料发现与归并 | 一次发现多份日报、会议纪要或风险清单，并提取可复用摘要 | 真实工作区任务很少只有一份输入材料 |
+| `tool-terminal-artifact-producing-command` | 验证复杂命令与产物识别 | 执行会生成中间文件的命令，检查摘要、产物识别与回读链路 | `terminal` 不只是看输出，还要能接住产物 |
+
+#### live
+
+- 当前 `tool` 阶段以纯工具链验证为主，不强制单独维护 `live` case；后续只有在工具路径真实引入模型参与时，才补对应 `live` 目录和 case。
 
 ### 3.2 `human`
 
@@ -82,24 +116,47 @@
 
 怎么做：从单步闭环开始，再覆盖多工具协作、失败纠偏、多轮续做、长任务和部分完成场景。
 
+#### basic
+
 | 用例名称 | 目标 | 描述 | 为什么 |
 | --- | --- | --- | --- |
 | `human-direct-kb-answer` | 验证单步自主完成 | 直接读取知识库并交付可引用答案 | 最简单的单步任务必须先独立成立 |
 | `human-direct-docx-edit` | 验证单工具文档闭环 | 直接读取指定文档、完成局部修改并交付可审阅结果 | 这是最常见的文档类基础任务 |
+
+#### boundary
+
+| 用例名称 | 目标 | 描述 | 为什么 |
+| --- | --- | --- | --- |
 | `human-tool-failure-recovery` | 验证失败后换路 | 块搜索失败后改走 `outline + get_block`，继续推进任务 | 自主纠偏能力是 `human` 的核心价值 |
 | `human-workspace-blocked-recovery` | 验证工作区阻塞上抛 | 缺工作区绑定时，请求补充 workspace，而不是空跑或乱答 | 本地优先场景里最常见的阻塞之一 |
 | `human-approval-blocked-recovery` | 验证审批阻塞收敛 | 需要执行命令或覆盖保存但未获批准时，能停在正确节点并给出继续条件 | 阻塞时的行为质量直接决定用户体验 |
+| `human-evidence-insufficient-safe-stop` | 验证证据不足时的安全行为 | 找不到足够依据时明确说明缺口，并交付可继续的初稿或后续建议 | 不能把“查不到”变成“编出来” |
+| `human-no-redundant-recheck` | 验证证据足够后的主动收敛 | 同一证据已足够时，不再重复调用同一工具做“再次确认” | 避免无意义循环是工程可用性的关键 |
+| `human-partial-delivery-on-budget-limit` | 验证做不完时的安全收敛 | 在受限步数预算下保留已有进展并给出可继续交付 | “没完全做完”不应等同于“什么都没有” |
+
+#### scenario
+
+| 用例名称 | 目标 | 描述 | 为什么 |
+| --- | --- | --- | --- |
 | `human-terminal-docx-handoff` | 验证跨工具协作 | 先在工作区找材料，再写入 docx 并形成可审阅交付 | 真实任务常常需要先取材再落文档 |
 | `human-kb-docx-bridge` | 验证知识到文档的转换 | 先检索本地规范，再据此修改模板文档 | 能不能把“查到的信息”变成“可交付产物”很关键 |
 | `human-multi-source-merge-delivery` | 验证多源材料归并 | 汇总多份日报、纪要或风险清单后输出统一交付 | 多源归并是高价值真实场景的代表能力 |
-| `human-evidence-insufficient-safe-stop` | 验证证据不足时的安全行为 | 找不到足够依据时明确说明缺口，并交付可继续的初稿或后续建议 | 不能把“查不到”变成“编出来” |
 | `human-review-handoff-structured-delivery` | 验证审阅前结构化交付 | 文档修改完成后，输出稳定的 review handoff 交付，供后续进入 `draft_review_ready` | 文档类任务的真正落点不是一句话，而是可继续处理的结构化结果 |
-| `human-no-redundant-recheck` | 验证证据足够后的主动收敛 | 同一证据已足够时，不再重复调用同一工具做“再次确认” | 避免无意义循环是工程可用性的关键 |
 | `human-multi-turn-refinement` | 验证多轮目标保持 | 上一轮已有中间产物，本轮继续保守化或局部精修 | 用户真实使用里 follow-up 很常见 |
 | `human-long-task-project-brief` | 验证长任务工程能力 | 在较高步数预算下，串联完成“找材料、抽结论、写周报、补风险、生成审阅结果” | 复杂任务是否能真正完成，是 AI 价值上限所在 |
 | `human-long-task-with-corrections` | 验证长任务中的纠偏稳定性 | 长任务中途加入新约束或局部失败后，仍能保持目标不漂移 | 长任务不是一次规划后就不会变化 |
 | `human-long-task-approval-branch` | 验证长任务中的审批分支 | 长任务中途需要审批时，能在批准与拒绝两条分支上都安全推进或收敛 | 真正的复杂任务经常包含安全分支 |
-| `human-partial-delivery-on-budget-limit` | 验证做不完时的安全收敛 | 在受限步数预算下保留已有进展并给出可继续交付 | “没完全做完”不应等同于“什么都没有” |
+
+#### live
+
+| 用例名称 | 目标 | 描述 | 为什么 |
+| --- | --- | --- | --- |
+| `human-live-direct-kb-answer` | 验证 live 单步知识问答 | 在真实模型下直接读取知识库并交付答案 | `human` 的最小 live 自主闭环必须成立 |
+| `human-live-direct-docx-edit` | 验证 live 单工具文档闭环 | 在真实模型下完成 docx 改写与 preview 交付 | 文档类 live 基线不能只靠脚本化决策 |
+| `human-live-terminal-docx-handoff` | 验证 live 跨工具 handoff | 在真实模型下先读 workspace，再写入 docx | 这是最小 live 跨工具能力证明 |
+| `human-live-kb-docx-bridge` | 验证 live 知识到文档转换 | 在真实模型下先查规范，再改模板文档 | 需要证明 KB 结果能被真实转成产物 |
+| `human-live-evidence-insufficient-safe-stop` | 验证 live 安全收敛 | 在真实模型下证据不足时不编造答案 | 安全行为不能只在 contract case 中成立 |
+| `human-live-long-task-project-brief` | 验证 live 长任务工程能力 | 在真实模型下完成多材料归并到 brief 交付 | 长任务是否成立，只看 live 才有意义 |
 
 ### 3.3 `context`
 
@@ -108,6 +165,7 @@
 为什么：上下文质量直接决定 `intent` 判断是否稳定、`plan` 是否靠谱、`human` 能否在 follow-up 场景里接住任务。
 
 怎么做：围绕续做、证据收集、缺失材料识别、多源信息整理和部分完成续接来设计 case。
+落地规则：实现时仍按 `basic / boundary / scenario / live` 分组；凡是依赖真实模型理解上下文的路径，都要补对应 `live` case。
 
 | 用例名称 | 目标 | 描述 | 为什么 |
 | --- | --- | --- | --- |
@@ -125,6 +183,7 @@
 为什么：路由错了，后面即使工具和 `human` 都能工作，也会在入口就走偏。
 
 怎么做：用简单任务、复杂任务、上下文不足任务、纯搜索任务和混合任务来压路由判断。
+落地规则：实现时按 `basic / boundary / scenario / live` 分组；路由判断如果依赖真实模型判别，最终仍需 `live` 证据。
 
 | 用例名称 | 目标 | 描述 | 为什么 |
 | --- | --- | --- | --- |
@@ -142,6 +201,7 @@
 为什么：`plan` 不是展示思路，而是给后续执行用的任务骨架；拆错一步，后面会整条链路失真。
 
 怎么做：围绕任务拆解、依赖顺序、阻塞收敛、续做重规划和长任务依赖链来设计 case。
+落地规则：实现时按 `basic / boundary / scenario / live` 分组；计划质量的最终结论应基于真实模型下的 `live` case。
 
 | 用例名称 | 目标 | 描述 | 为什么 |
 | --- | --- | --- | --- |
@@ -161,6 +221,7 @@
 为什么：这一层用于确认 `main + human + tools` 在 backend harness 下已经能把真实任务做完，而不是只验证零散节点。
 
 怎么做：围绕真实用户任务做端到端 backend case，并用完成度判断任务是否真正达成。完成度建议采用 `0-3`：`0` 失败或阻塞、`1` 部分完成、`2` 主目标完成但仍需人工修补、`3` 完整完成。
+落地规则：实现时按 `basic / boundary / scenario / live` 分组；`entire` 的主结论默认以 `live` 为准。
 
 | 用例名称 | 目标 | 描述 | 为什么 |
 | --- | --- | --- | --- |
@@ -181,6 +242,7 @@
 为什么：backend 能跑通不代表用户在页面里能做成；UI 问题会直接让正确能力无法被使用。
 
 怎么做：单独覆盖三栏布局、输入区、模式切换、时间线与检查器联动、审批条、工作区条、审阅中心、小窗口和长内容滚动。
+落地规则：实现时至少按 `basic / boundary / scenario` 分组；只有在 UI 用例直接依赖真实模型执行时才补 `live` case。
 
 | 用例名称 | 目标 | 描述 | 为什么 |
 | --- | --- | --- | --- |
@@ -200,6 +262,7 @@
 为什么：这是最终验收层，判断标准不是某一层是否通过，而是用户是否真的在页面上解决了问题。
 
 怎么做：围绕高价值真实任务做完整 e2e，并继续使用完成度判断最终结果是否可消费。
+落地规则：实现时按 `basic / boundary / scenario / live` 分组；`final` 阶段的完成判断以真实模型下的 `live` e2e 为准。
 
 | 用例名称 | 目标 | 描述 | 为什么 |
 | --- | --- | --- | --- |

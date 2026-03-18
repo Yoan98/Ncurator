@@ -1,10 +1,10 @@
-import { createRetrievalToolHarness } from '../../../../harness/backend/aiToolHarness'
-import { defineAiToolCase, createSearchResult } from '../helpers'
+import { createRetrievalToolHarness } from '../../../../../harness/backend/aiToolHarness'
+import { defineAiToolCase, createSearchResult } from '../../helpers'
 
 defineAiToolCase({
   caseId: 'tool-kb-hybrid-search',
   caseType: 'basic',
-  groups: ['kb'],
+  groups: ['kb', 'basic'],
   description: '验证 hybrid 检索会按 source scope 做 documentIds 交集并返回可引用结果。',
   fixtures: [],
   runMode: 'repeatable',

@@ -1,10 +1,10 @@
-import { createTerminalToolHarness } from '../../../../harness/backend/aiToolHarness'
-import { defineAiToolCase } from '../helpers'
+import { createTerminalToolHarness } from '../../../../../harness/backend/aiToolHarness'
+import { defineAiToolCase } from '../../helpers'
 
 defineAiToolCase({
   caseId: 'tool-terminal-batch-material-summary',
   caseType: 'scenario',
-  groups: ['terminal'],
+  groups: ['terminal', 'scenario'],
   description: '一次读取多份材料并归并提炼出关键事实。',
   fixtures: [
     'tests/fixtures/ai/workspace/materials/batch/day-1.txt',

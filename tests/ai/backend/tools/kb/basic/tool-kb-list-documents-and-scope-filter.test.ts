@@ -1,10 +1,10 @@
-import { createRetrievalToolHarness } from '../../../../harness/backend/aiToolHarness'
-import { defineAiToolCase, createDocumentRecord } from '../helpers'
+import { createRetrievalToolHarness } from '../../../../../harness/backend/aiToolHarness'
+import { defineAiToolCase, createDocumentRecord } from '../../helpers'
 
 defineAiToolCase({
   caseId: 'tool-kb-list-documents-and-scope-filter',
   caseType: 'basic',
-  groups: ['kb'],
+  groups: ['kb', 'basic'],
   description: '先列出文档，再验证 documentIds scope 交集只保留允许的文档。',
   fixtures: [],
   runMode: 'repeatable',

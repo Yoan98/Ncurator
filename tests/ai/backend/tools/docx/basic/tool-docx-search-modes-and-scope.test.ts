@@ -1,11 +1,11 @@
-import type { DocxOutlineBlock } from '../../../../../src/main/services/ai/tools/docx/types'
-import { writeTestDocxFile, createDocxToolHarness } from '../../../../harness/backend/aiToolHarness'
-import { defineAiToolCase, findParagraphBlockContaining } from '../helpers'
+import type { DocxOutlineBlock } from '../../../../../../src/main/services/ai/tools/docx/types'
+import { writeTestDocxFile, createDocxToolHarness } from '../../../../../harness/backend/aiToolHarness'
+import { defineAiToolCase, findParagraphBlockContaining } from '../../helpers'
 
 defineAiToolCase({
   caseId: 'tool-docx-search-modes-and-scope',
   caseType: 'basic',
-  groups: ['docx'],
+  groups: ['docx', 'basic'],
   description: '覆盖 literal/regex/semantic 搜索以及 block scope 局部收敛。',
   fixtures: [],
   runMode: 'repeatable',

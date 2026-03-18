@@ -1,11 +1,11 @@
 import fs from 'node:fs/promises'
-import { writeTestDocxFile, createDocxToolHarness } from '../../../../harness/backend/aiToolHarness'
-import { defineAiToolCase } from '../helpers'
+import { writeTestDocxFile, createDocxToolHarness } from '../../../../../harness/backend/aiToolHarness'
+import { defineAiToolCase } from '../../helpers'
 
 defineAiToolCase({
   caseId: 'tool-docx-multi-document-session-isolation',
   caseType: 'scenario',
-  groups: ['docx'],
+  groups: ['docx', 'scenario'],
   description: '同一 run 打开多份文档后，显式 docId 操作不会串到其他文档。',
   fixtures: [],
   runMode: 'repeatable',

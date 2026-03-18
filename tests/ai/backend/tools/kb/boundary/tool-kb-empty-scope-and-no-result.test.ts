@@ -1,10 +1,10 @@
-import { createRetrievalToolHarness } from '../../../../harness/backend/aiToolHarness'
-import { defineAiToolCase } from '../helpers'
+import { createRetrievalToolHarness } from '../../../../../harness/backend/aiToolHarness'
+import { defineAiToolCase } from '../../helpers'
 
 defineAiToolCase({
   caseId: 'tool-kb-empty-scope-and-no-result',
-  caseType: 'basic',
-  groups: ['kb'],
+  caseType: 'boundary',
+  groups: ['kb', 'boundary'],
   description: '覆盖空 scope 时的短路返回，以及合法 scope 下无结果时的空数组收敛。',
   fixtures: [],
   runMode: 'repeatable',

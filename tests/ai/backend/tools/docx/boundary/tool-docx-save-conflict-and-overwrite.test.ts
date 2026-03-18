@@ -1,11 +1,11 @@
 import fs from 'node:fs/promises'
-import { createDocxToolHarness, writeWorkbenchSampleDocx } from '../../../../harness/backend/aiToolHarness'
-import { defineAiToolCase, getEventsByType } from '../helpers'
+import { createDocxToolHarness, writeWorkbenchSampleDocx } from '../../../../../harness/backend/aiToolHarness'
+import { defineAiToolCase, getEventsByType } from '../../helpers'
 
 defineAiToolCase({
   caseId: 'tool-docx-save-conflict-and-overwrite',
-  caseType: 'scenario',
-  groups: ['docx'],
+  caseType: 'boundary',
+  groups: ['docx', 'boundary'],
   description: '覆盖首次保存、冲突保存和 overwrite 审批后的再次保存。',
   fixtures: [],
   runMode: 'repeatable',

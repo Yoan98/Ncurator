@@ -1,15 +1,15 @@
-import type { DocxOutlineBlock } from '../../../../../src/main/services/ai/tools/docx/types'
-import { writeTestDocxFile, createDocxToolHarness } from '../../../../harness/backend/aiToolHarness'
+import type { DocxOutlineBlock } from '../../../../../../src/main/services/ai/tools/docx/types'
+import { writeTestDocxFile, createDocxToolHarness } from '../../../../../harness/backend/aiToolHarness'
 import {
   defineAiToolCase,
   findCellBlockContaining,
   findParagraphBlockContaining
-} from '../helpers'
+} from '../../helpers'
 
 defineAiToolCase({
   caseId: 'tool-docx-mixed-structural-edit',
   caseType: 'scenario',
-  groups: ['docx'],
+  groups: ['docx', 'scenario'],
   description: '同一轮中完成 replace/insert/delete/update_table_cell 的结构化改写。',
   fixtures: [],
   runMode: 'repeatable',

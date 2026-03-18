@@ -1,15 +1,15 @@
-import type { DocxOutlineBlock } from '../../../../../src/main/services/ai/tools/docx/types'
-import { writeTestDocxFile, createDocxToolHarness } from '../../../../harness/backend/aiToolHarness'
+import type { DocxOutlineBlock } from '../../../../../../src/main/services/ai/tools/docx/types'
+import { writeTestDocxFile, createDocxToolHarness } from '../../../../../harness/backend/aiToolHarness'
 import {
   defineAiToolCase,
   findOutlineBlockContaining,
   getEventsByType
-} from '../helpers'
+} from '../../helpers'
 
 defineAiToolCase({
   caseId: 'tool-docx-structure-read',
   caseType: 'basic',
-  groups: ['docx'],
+  groups: ['docx', 'basic'],
   description: '读取带标题、正文和表格的文档，并完成 open/outline/search/get_block 基线校验。',
   fixtures: [],
   runMode: 'repeatable',

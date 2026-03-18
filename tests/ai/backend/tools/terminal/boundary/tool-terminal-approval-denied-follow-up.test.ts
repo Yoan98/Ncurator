@@ -1,11 +1,11 @@
 import fs from 'node:fs/promises'
-import { createTerminalToolHarness } from '../../../../harness/backend/aiToolHarness'
-import { defineAiToolCase } from '../helpers'
+import { createTerminalToolHarness } from '../../../../../harness/backend/aiToolHarness'
+import { defineAiToolCase } from '../../helpers'
 
 defineAiToolCase({
   caseId: 'tool-terminal-approval-denied-follow-up',
-  caseType: 'scenario',
-  groups: ['terminal'],
+  caseType: 'boundary',
+  groups: ['terminal', 'boundary'],
   description: '审批拒绝后，系统停止写操作，但仍能继续执行后续安全读取命令。',
   fixtures: ['tests/fixtures/ai/workspace/human-input.txt'],
   runMode: 'repeatable',

@@ -1,10 +1,10 @@
-import { createRetrievalToolHarness } from '../../../../harness/backend/aiToolHarness'
-import { defineAiToolCase, createSearchResult } from '../helpers'
+import { createRetrievalToolHarness } from '../../../../../harness/backend/aiToolHarness'
+import { defineAiToolCase, createSearchResult } from '../../helpers'
 
 defineAiToolCase({
   caseId: 'tool-kb-vector-search',
   caseType: 'basic',
-  groups: ['kb'],
+  groups: ['kb', 'basic'],
   description: '验证 vector-only 检索的基础返回质量与参数透传。',
   fixtures: [],
   runMode: 'repeatable',

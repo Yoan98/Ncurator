@@ -1,11 +1,11 @@
 import fs from 'node:fs/promises'
-import { createTerminalToolHarness } from '../../../../harness/backend/aiToolHarness'
-import { defineAiToolCase, getEventsByType } from '../helpers'
+import { createTerminalToolHarness } from '../../../../../harness/backend/aiToolHarness'
+import { defineAiToolCase, getEventsByType } from '../../helpers'
 
 defineAiToolCase({
   caseId: 'tool-terminal-artifact-producing-command',
   caseType: 'scenario',
-  groups: ['terminal'],
+  groups: ['terminal', 'scenario'],
   description: '执行会生成中间文件的命令，并验证产物识别与回读链路。',
   fixtures: [],
   runMode: 'repeatable',

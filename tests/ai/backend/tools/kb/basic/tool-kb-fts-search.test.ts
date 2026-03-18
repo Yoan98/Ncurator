@@ -1,10 +1,10 @@
-import { createRetrievalToolHarness } from '../../../../harness/backend/aiToolHarness'
-import { defineAiToolCase, createSearchResult } from '../helpers'
+import { createRetrievalToolHarness } from '../../../../../harness/backend/aiToolHarness'
+import { defineAiToolCase, createSearchResult } from '../../helpers'
 
 defineAiToolCase({
   caseId: 'tool-kb-fts-search',
   caseType: 'basic',
-  groups: ['kb'],
+  groups: ['kb', 'basic'],
   description: '验证 FTS 检索能返回关键词精确命中结果并携带文档信息。',
   fixtures: [],
   runMode: 'repeatable',

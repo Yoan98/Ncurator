@@ -1,13 +1,13 @@
 import path from 'node:path'
-import { createTerminalToolHarness } from '../../../../harness/backend/aiToolHarness'
-import { defineAiToolCase } from '../helpers'
+import { createTerminalToolHarness } from '../../../../../harness/backend/aiToolHarness'
+import { defineAiToolCase } from '../../helpers'
 
 const HUMAN_INPUT_FIXTURE = path.resolve('tests/fixtures/ai/workspace/human-input.txt')
 
 defineAiToolCase({
   caseId: 'tool-terminal-path-resolution',
   caseType: 'basic',
-  groups: ['terminal'],
+  groups: ['terminal', 'basic'],
   description: '混用相对 cwd、绝对 cwd 和根目录别名时仍能稳定读取工作区文件。',
   fixtures: ['tests/fixtures/ai/workspace/human-input.txt'],
   runMode: 'repeatable',

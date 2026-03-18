@@ -1,11 +1,11 @@
-import type { DocxOutlineBlock } from '../../../../../src/main/services/ai/tools/docx/types'
-import { writeTestDocxFile, createDocxToolHarness } from '../../../../harness/backend/aiToolHarness'
-import { defineAiToolCase, findParagraphBlockContaining } from '../helpers'
+import type { DocxOutlineBlock } from '../../../../../../src/main/services/ai/tools/docx/types'
+import { writeTestDocxFile, createDocxToolHarness } from '../../../../../harness/backend/aiToolHarness'
+import { defineAiToolCase, findParagraphBlockContaining } from '../../helpers'
 
 defineAiToolCase({
   caseId: 'tool-docx-targeting-and-ambiguous-search',
   caseType: 'basic',
-  groups: ['docx'],
+  groups: ['docx', 'basic'],
   description: '相似标题与相似段落同时命中时，仍能借助 blockId 稳定定位目标块。',
   fixtures: [],
   runMode: 'repeatable',
