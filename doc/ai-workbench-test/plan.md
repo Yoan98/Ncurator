@@ -167,14 +167,35 @@
 怎么做：围绕续做、证据收集、缺失材料识别、多源信息整理和部分完成续接来设计 case。
 落地规则：实现时仍按 `basic / boundary / scenario / live` 分组；凡是依赖真实模型理解上下文的路径，都要补对应 `live` case。
 
+#### basic
+
+| 用例名称 | 目标 | 描述 | 为什么 |
+| --- | --- | --- | --- |
+| `context-workspace-evidence-collection` | 验证工作区证据收集 | 在规划前先读取工作区材料，沉淀后续执行需要的事实 | 很多任务不是缺能力，而是缺前置材料 |
+| `context-kb-evidence-collection` | 验证知识证据收集 | 在回答或规划前先把相关 KB 证据聚合出来 | 先有证据，再做判断，能明显降低误判 |
+
+#### boundary
+
+| 用例名称 | 目标 | 描述 | 为什么 |
+| --- | --- | --- | --- |
+| `context-missing-material-detection` | 验证缺失输入识别 | 识别关键文件、工作区或资料不存在，并明确说明缺什么 | 缺上下文时如果继续执行，后面一定漂移 |
+
+#### scenario
+
 | 用例名称 | 目标 | 描述 | 为什么 |
 | --- | --- | --- | --- |
 | `context-follow-up-reference-resolution` | 验证续做指代解析 | 正确接住“继续刚才第二段”“把上一版风险部分改保守一点”这类输入 | follow-up 场景首先卡在能不能知道用户在说什么 |
-| `context-workspace-evidence-collection` | 验证工作区证据收集 | 在规划前先读取工作区材料，沉淀后续执行需要的事实 | 很多任务不是缺能力，而是缺前置材料 |
-| `context-kb-evidence-collection` | 验证知识证据收集 | 在回答或规划前先把相关 KB 证据聚合出来 | 先有证据，再做判断，能明显降低误判 |
-| `context-missing-material-detection` | 验证缺失输入识别 | 识别关键文件、工作区或资料不存在，并明确说明缺什么 | 缺上下文时如果继续执行，后面一定漂移 |
 | `context-multi-source-evidence-assembly` | 验证多源上下文组装 | 同时从知识库和工作区收集关键信息，为后续计划提供输入 | 混合任务的关键不是单一证据，而是证据组装能力 |
 | `context-continue-after-partial-delivery` | 验证部分完成后的续接 | 上一轮只完成一部分时，本轮能基于已有产物继续推进 | 真实任务往往不是一轮就结束 |
+
+#### live
+
+| 用例名称 | 目标 | 描述 | 为什么 |
+| --- | --- | --- | --- |
+| `context-live-follow-up-reference-resolution` | 验证 live 续做指代解析 | 在真实模型下正确接住“继续上一版第二段”这类 follow-up 输入 | 续做理解是否成立，不能只靠脚本化上下文 |
+| `context-live-workspace-evidence-collection` | 验证 live 工作区证据收集 | 在真实模型下先从 workspace 收集事实，再交给后续链路使用 | 工作区上下文是本地优先路径的关键前提 |
+| `context-live-multi-source-evidence-assembly` | 验证 live 多源上下文组装 | 在真实模型下同时组装 KB 与 workspace 证据 | 混合任务最容易暴露上下文收集质量问题 |
+| `context-live-continue-after-partial-delivery` | 验证 live 部分完成续接 | 在真实模型下基于上一轮中间产物继续推进，而不是重新开始 | 上下文续接是否稳定，最终要靠 live 证明 |
 
 ### 3.4 `intent`
 
@@ -185,14 +206,36 @@
 怎么做：用简单任务、复杂任务、上下文不足任务、纯搜索任务和混合任务来压路由判断。
 落地规则：实现时按 `basic / boundary / scenario / live` 分组；路由判断如果依赖真实模型判别，最终仍需 `live` 证据。
 
+#### basic
+
 | 用例名称 | 目标 | 描述 | 为什么 |
 | --- | --- | --- | --- |
 | `intent-direct-human-routing` | 验证简单任务不过度规划 | 对简单知识问答或单步改写任务，直接进入 `direct_human` | 简单任务被过度规划会显著拖慢体验 |
-| `intent-to-plan-routing` | 验证复杂任务进入计划链路 | 对多步文档生成或多工具任务，正确进入 `to_plan` | 复杂任务如果误判成单步，通常做不完 |
+| `intent-docx-task-routing` | 验证文档编辑任务路由 | 对明确要求读取、修改、保存文档的任务，进入多步链路 | 文档任务天然带依赖顺序，不能当普通问答处理 |
+
+#### boundary
+
+| 用例名称 | 目标 | 描述 | 为什么 |
+| --- | --- | --- | --- |
 | `intent-need-context-routing` | 验证上下文不足先补上下文 | 对“继续刚才那个”“改第二段”这类输入，先进入 `need_context` | follow-up 最怕直接误执行 |
 | `intent-search-mode-routing` | 验证纯搜索模式路由 | 在 `纯搜索` 模式下优先走检索与展示，不误入完整任务执行链 | 模式错路由会让 UI 与实际行为脱节 |
-| `intent-docx-task-routing` | 验证文档编辑任务路由 | 对明确要求读取、修改、保存文档的任务，进入多步链路 | 文档任务天然带依赖顺序，不能当普通问答处理 |
+
+#### scenario
+
+| 用例名称 | 目标 | 描述 | 为什么 |
+| --- | --- | --- | --- |
+| `intent-to-plan-routing` | 验证复杂任务进入计划链路 | 对多步文档生成或多工具任务，正确进入 `to_plan` | 复杂任务如果误判成单步，通常做不完 |
 | `intent-mixed-task-routing` | 验证混合任务路由 | 对“先查 KB，再看工作区，再改文档”这类输入，稳定进入 `to_plan` | 混合任务是最容易被低估复杂度的一类 |
+
+#### live
+
+| 用例名称 | 目标 | 描述 | 为什么 |
+| --- | --- | --- | --- |
+| `intent-live-direct-human-routing` | 验证 live 简单任务直达 | 在真实模型下，简单任务仍直接进入 `direct_human` | 入口提速能力不能只靠静态规则判断 |
+| `intent-live-need-context-routing` | 验证 live 上下文缺失路由 | 在真实模型下，follow-up 输入稳定进入 `need_context` | 续做场景的误路由风险最高 |
+| `intent-live-to-plan-routing` | 验证 live 复杂任务入计划链路 | 在真实模型下，多步任务稳定进入 `to_plan` | 复杂任务是否被正确识别，决定整条链路能否完成 |
+| `intent-live-search-mode-routing` | 验证 live 纯搜索模式路由 | 在真实模型下，`纯搜索` 不误入完整任务执行链 | 模式理解是页面行为一致性的关键 |
+| `intent-live-mixed-task-routing` | 验证 live 混合任务路由 | 在真实模型下，混合任务稳定进入 `to_plan` | 混合任务最容易暴露复杂度判断失真 |
 
 ### 3.5 `plan`
 
@@ -203,16 +246,38 @@
 怎么做：围绕任务拆解、依赖顺序、阻塞收敛、续做重规划和长任务依赖链来设计 case。
 落地规则：实现时按 `basic / boundary / scenario / live` 分组；计划质量的最终结论应基于真实模型下的 `live` case。
 
+#### basic
+
 | 用例名称 | 目标 | 描述 | 为什么 |
 | --- | --- | --- | --- |
 | `plan-docx-workflow-ordering` | 验证文档类计划顺序 | 文档任务必须先取证、后编辑、再保存或进入审阅 | 这是最基础也最容易写错顺序的一类计划 |
 | `plan-kb-to-docx-task-breakdown` | 验证检索到文档的任务拆解 | 先查规范、再确认改写目标、最后落到文档修改 | 混合链路的关键在于拆解是否完整 |
 | `plan-terminal-to-docx-task-breakdown` | 验证工作区到文档的任务拆解 | 先找文件、再读材料、再提炼内容、最后生成文档 | 很多真实任务都是这类链路 |
-| `plan-follow-up-refinement-breakdown` | 验证续做任务重规划 | 已有中间产物时，计划能围绕“继续完善”而不是重新做一遍 | follow-up 如果不能重用上下文，体验会很差 |
+
+#### boundary
+
+| 用例名称 | 目标 | 描述 | 为什么 |
+| --- | --- | --- | --- |
 | `plan-blocked-task-convergence` | 验证阻塞时计划可收敛 | 出现审批、缺文件或资料不足时，仍能产出明确后续 | 复杂任务不一定每次都能完整完成，但必须能收住 |
 | `plan-no-redundant-task` | 验证无意义重复任务控制 | 不生成重复取证、重复确认、重复总结的任务 | 冗余计划会放大模型成本和失败概率 |
-| `plan-long-task-dependency-chain` | 验证长任务依赖链 | 长任务下每个 task 都有清晰 objective 和依赖关系 | 长任务稳定性首先取决于依赖顺序是否合理 |
 | `plan-partial-delivery-convergence` | 验证部分完成时的计划收尾 | 在预算不足或局部阻塞时，计划仍能保留已有成果并给出下一步 | 复杂任务需要可继续的收尾，而不是硬失败 |
+
+#### scenario
+
+| 用例名称 | 目标 | 描述 | 为什么 |
+| --- | --- | --- | --- |
+| `plan-follow-up-refinement-breakdown` | 验证续做任务重规划 | 已有中间产物时，计划能围绕“继续完善”而不是重新做一遍 | follow-up 如果不能重用上下文，体验会很差 |
+| `plan-long-task-dependency-chain` | 验证长任务依赖链 | 长任务下每个 task 都有清晰 objective 和依赖关系 | 长任务稳定性首先取决于依赖顺序是否合理 |
+
+#### live
+
+| 用例名称 | 目标 | 描述 | 为什么 |
+| --- | --- | --- | --- |
+| `plan-live-docx-workflow-ordering` | 验证 live 文档类计划顺序 | 在真实模型下，文档任务仍保持先取证后编辑再审阅的顺序 | 计划顺序错误会直接污染后续执行 |
+| `plan-live-kb-to-docx-task-breakdown` | 验证 live 检索到文档拆解 | 在真实模型下，混合链路拆解仍完整可执行 | 混合任务最考验计划粒度 |
+| `plan-live-follow-up-refinement-breakdown` | 验证 live 续做重规划 | 在真实模型下，已有产物时计划仍围绕 refinement 展开 | follow-up 计划最容易被重新开题取代 |
+| `plan-live-long-task-dependency-chain` | 验证 live 长任务依赖链 | 在真实模型下，长任务仍保持清晰依赖顺序 | 长任务计划是否靠谱，只看 live 才有意义 |
+| `plan-live-blocked-task-convergence` | 验证 live 阻塞计划收敛 | 在真实模型下，阻塞后仍能产出明确下一步 | 计划层的安全收尾不能只在静态 case 成立 |
 
 ### 3.6 `entire`
 
@@ -223,17 +288,40 @@
 怎么做：围绕真实用户任务做端到端 backend case，并用完成度判断任务是否真正达成。完成度建议采用 `0-3`：`0` 失败或阻塞、`1` 部分完成、`2` 主目标完成但仍需人工修补、`3` 完整完成。
 落地规则：实现时按 `basic / boundary / scenario / live` 分组；`entire` 的主结论默认以 `live` 为准。
 
+#### basic
+
 | 用例名称 | 目标 | 描述 | 为什么 |
 | --- | --- | --- | --- |
 | `entire-docx-rewrite-review-ready` | 验证现有 docx 改写闭环 | 读取、修改文档并进入可审阅结果 | 这是文档类任务的核心主路径 |
-| `entire-workspace-to-docx` | 验证工作区材料生成文档闭环 | 从 `notes / todo` 提炼内容并生成结构化 docx | 能把工作区材料变成成品，是高价值能力 |
 | `entire-kb-answer-with-citation` | 验证知识库问答闭环 | 回答本地知识问题，并给出可回看依据 | 用户问答不能只给结论，不给证据 |
+
+#### boundary
+
+| 用例名称 | 目标 | 描述 | 为什么 |
+| --- | --- | --- | --- |
+| `entire-evidence-insufficient-safe-stop` | 验证证据不足时的完整收敛 | 依据不足时给出明确缺口和可继续交付 | 安全收敛本身也是完整结果的一部分 |
+| `entire-terminal-approval-to-docx-update` | 验证审批分支下的文档闭环 | 先通过审批执行命令拿到产物，再写回现有周报模板 | 审批分支必须和业务目标最终接上 |
+
+#### scenario
+
+| 用例名称 | 目标 | 描述 | 为什么 |
+| --- | --- | --- | --- |
+| `entire-workspace-to-docx` | 验证工作区材料生成文档闭环 | 从 `notes / todo` 提炼内容并生成结构化 docx | 能把工作区材料变成成品，是高价值能力 |
 | `entire-kb-to-docx-hybrid` | 验证检索到文档的完整链路 | 先查规范，再改模板文档，结果可消费 | 这是典型的混合任务闭环 |
 | `entire-follow-up-continuation` | 验证多轮续做闭环 | 接续前文后继续完成修改或补写 | backend 也必须证明 follow-up 能成立 |
 | `entire-terminal-materials-to-delivery` | 验证工作区材料到最终交付 | 先找材料，再生成最终汇报或周报 | 多源工作区任务是实际使用重心之一 |
-| `entire-evidence-insufficient-safe-stop` | 验证证据不足时的完整收敛 | 依据不足时给出明确缺口和可继续交付 | 安全收敛本身也是完整结果的一部分 |
-| `entire-terminal-approval-to-docx-update` | 验证审批分支下的文档闭环 | 先通过审批执行命令拿到产物，再写回现有周报模板 | 审批分支必须和业务目标最终接上 |
 | `entire-long-task-weekly-brief` | 验证长任务完整闭环 | 多源材料、多步依赖和审阅收敛都能成立 | 这是 backend 综合能力的最高压测点 |
+
+#### live
+
+| 用例名称 | 目标 | 描述 | 为什么 |
+| --- | --- | --- | --- |
+| `entire-live-docx-rewrite-review-ready` | 验证 live 文档改写闭环 | 在真实模型下完成 docx 改写并进入可审阅结果 | backend 最小完整交付必须在 live 成立 |
+| `entire-live-kb-answer-with-citation` | 验证 live 知识问答闭环 | 在真实模型下回答本地知识问题并给出依据 | 问答类完整闭环不能只靠 contract case |
+| `entire-live-kb-to-docx-hybrid` | 验证 live 混合任务闭环 | 在真实模型下先检索再改文档并形成可消费结果 | 混合闭环是 backend 能力连贯性的关键证明 |
+| `entire-live-terminal-materials-to-delivery` | 验证 live 工作区材料到交付 | 在真实模型下从 workspace 材料生成最终交付 | 本地工作区任务是高价值真实路径 |
+| `entire-live-evidence-insufficient-safe-stop` | 验证 live 安全收敛闭环 | 在真实模型下证据不足时仍完整收敛 | 安全闭环本身就是最终验收的一部分 |
+| `entire-live-long-task-weekly-brief` | 验证 live 长任务完整闭环 | 在真实模型下完成多源材料与审阅收敛的完整 backend 任务 | 这是 `entire` 阶段最关键的 live 压测点 |
 
 ### 3.7 `ui`
 
@@ -244,16 +332,36 @@
 怎么做：单独覆盖三栏布局、输入区、模式切换、时间线与检查器联动、审批条、工作区条、审阅中心、小窗口和长内容滚动。
 落地规则：实现时至少按 `basic / boundary / scenario` 分组；只有在 UI 用例直接依赖真实模型执行时才补 `live` case。
 
+#### basic
+
 | 用例名称 | 目标 | 描述 | 为什么 |
 | --- | --- | --- | --- |
 | `ui-three-pane-layout-baseline` | 验证基础布局稳定 | 左侧会话、中间对话与 `Assistant Run`、右侧时间线与检查器稳定呈现 | 三栏模型是整个 workbench 的基础结构 |
 | `ui-input-and-send-stability` | 验证输入区稳定性 | 输入区可见、可输入、可回车发送、可按钮发送、运行中可取消 | 用户的第一接触点就是输入区 |
 | `ui-mode-and-scope-switching` | 验证模式与范围切换 | `AI 对话 / 纯搜索`、范围选择切换稳定，状态显示一致 | 模式与范围是任务行为的重要前提 |
-| `ui-run-timeline-inspector-linkage` | 验证运行态联动 | 时间线点击、检查器详情、运行态信息能够保持同步 | workbench 的核心价值之一就是可观察性 |
+
+#### boundary
+
+| 用例名称 | 目标 | 描述 | 为什么 |
+| --- | --- | --- | --- |
 | `ui-approval-and-workspace-banner-flow` | 验证提示条与交互流 | 审批请求、工作区缺失、继续运行等 banner 状态清晰可操作 | 阻塞交互如果不清晰，用户无法完成流程 |
-| `ui-draft-review-center-operations` | 验证审阅中心操作 | 支持逐条接受、拒绝、全部接受和提交，状态无错乱 | 文档类任务最后常常收敛在审阅中心 |
 | `ui-small-window-and-overflow` | 验证小窗口布局与溢出 | 在 `1440x900`、`1280x800`、`1024x768`、`900x700` 下不出现布局断裂 | 小窗口问题会直接影响日常使用 |
 | `ui-long-content-scroll-stability` | 验证长内容滚动稳定性 | 长路径、长 JSON、长时间线、长审阅列表下滚动不冲突、不遮挡 | workbench 天然会承载长内容，必须提前防守 |
+
+#### scenario
+
+| 用例名称 | 目标 | 描述 | 为什么 |
+| --- | --- | --- | --- |
+| `ui-run-timeline-inspector-linkage` | 验证运行态联动 | 时间线点击、检查器详情、运行态信息能够保持同步 | workbench 的核心价值之一就是可观察性 |
+| `ui-draft-review-center-operations` | 验证审阅中心操作 | 支持逐条接受、拒绝、全部接受和提交，状态无错乱 | 文档类任务最后常常收敛在审阅中心 |
+
+#### live
+
+| 用例名称 | 目标 | 描述 | 为什么 |
+| --- | --- | --- | --- |
+| `ui-live-run-timeline-inspector-linkage` | 验证 live 运行态联动 | 在真实模型执行时，时间线和检查器仍保持同步 | 真实运行会放大 UI 状态联动问题 |
+| `ui-live-approval-and-workspace-banner-flow` | 验证 live 阻塞提示流 | 在真实模型执行时，审批与 workspace banner 仍清晰可恢复 | 阻塞交互必须在真实链路里可用 |
+| `ui-live-draft-review-center-operations` | 验证 live 审阅中心操作 | 在真实模型产出审阅结果后，审阅中心操作仍稳定 | 审阅中心是真实文档任务的最终 UI 落点 |
 
 ### 3.8 `final`
 
@@ -264,13 +372,38 @@
 怎么做：围绕高价值真实任务做完整 e2e，并继续使用完成度判断最终结果是否可消费。
 落地规则：实现时按 `basic / boundary / scenario / live` 分组；`final` 阶段的完成判断以真实模型下的 `live` e2e 为准。
 
+#### basic
+
 | 用例名称 | 目标 | 描述 | 为什么 |
 | --- | --- | --- | --- |
 | `final-docx-rewrite-completion` | 验证文档类最终完成 | 用户在界面中输入改写诉求，最终拿到可消费结果或审阅结果 | 这是最核心的页面级主任务 |
 | `final-kb-answer-completion` | 验证知识库问答最终完成 | 用户在页面中提问，最终拿到答案和依据展示 | 问答是最直接、最可感知的完成标准 |
+
+#### boundary
+
+| 用例名称 | 目标 | 描述 | 为什么 |
+| --- | --- | --- | --- |
+| `final-terminal-approval-completion` | 验证审批分支最终完成 | 覆盖等待审批、批准继续、拒绝收敛，并最终回到用户目标 | 审批链路必须在真实交互里验证 |
+| `final-workspace-required-and-resume` | 验证工作区补充后的恢复能力 | 工作区缺失时提示补充，补充后继续运行并完成目标 | 本地优先链路必须证明可以中断后恢复 |
+
+#### scenario
+
+| 用例名称 | 目标 | 描述 | 为什么 |
+| --- | --- | --- | --- |
 | `final-kb-docx-hybrid-completion` | 验证混合任务最终完成 | 先检索后改文档的链路在界面中完整跑通 | 混合任务最能体现整套架构是否连贯 |
 | `final-follow-up-continuation` | 验证多轮续做最终完成 | 接续上一轮产物继续修改，并让用户拿到更新后的结果 | 连续对话是 workbench 的核心使用方式 |
-| `final-terminal-approval-completion` | 验证审批分支最终完成 | 覆盖等待审批、批准继续、拒绝收敛，并最终回到用户目标 | 审批链路必须在真实交互里验证 |
 | `final-review-partial-acceptance` | 验证审阅中心部分接受闭环 | 用户只接受部分修改、拒绝其余修改后提交最终结果 | 文档任务不能只做到“给出建议”，还要支持选择性收敛 |
 | `final-long-task-stability` | 验证长任务真实交互稳定性 | 长任务在界面里仍能保持步骤连贯并最终收敛 | backend 成立不代表真实页面长任务也稳定 |
-| `final-workspace-required-and-resume` | 验证工作区补充后的恢复能力 | 工作区缺失时提示补充，补充后继续运行并完成目标 | 本地优先链路必须证明可以中断后恢复 |
+
+#### live
+
+| 用例名称 | 目标 | 描述 | 为什么 |
+| --- | --- | --- | --- |
+| `final-live-docx-rewrite-completion` | 验证 live 文档类最终完成 | 在真实模型下，用户通过界面拿到可消费文档结果或审阅结果 | 页面主路径必须以 live 为准 |
+| `final-live-kb-answer-completion` | 验证 live 知识问答最终完成 | 在真实模型下，界面中问答能稳定返回答案和依据展示 | 最直观的用户价值必须在真实模型下成立 |
+| `final-live-kb-docx-hybrid-completion` | 验证 live 混合任务最终完成 | 在真实模型下，先检索再改文档的页面链路完整跑通 | 混合任务是最终验收层的重要能力证明 |
+| `final-live-follow-up-continuation` | 验证 live 多轮续做最终完成 | 在真实模型下，用户接续上一轮产物继续修改并拿到结果 | 连续对话稳定性只能靠 live e2e 判断 |
+| `final-live-terminal-approval-completion` | 验证 live 审批分支最终完成 | 在真实模型下，审批等待、批准继续、拒绝收敛都能回到用户目标 | 审批链路必须在真实交互里被验证 |
+| `final-live-review-partial-acceptance` | 验证 live 审阅中心部分接受闭环 | 在真实模型下，用户部分接受修改后仍能提交最终结果 | 选择性收敛是真实文档任务的重要落点 |
+| `final-live-long-task-stability` | 验证 live 长任务真实交互稳定性 | 在真实模型下，长任务在页面里仍能保持连贯并收敛 | 最终验收层的长任务结论只能来自 live |
+| `final-live-workspace-required-and-resume` | 验证 live 工作区补充后的恢复能力 | 在真实模型下，工作区缺失后补充并继续运行仍能完成目标 | 本地优先恢复链路必须用真实交互证明 |
