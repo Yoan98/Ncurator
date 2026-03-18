@@ -7,7 +7,7 @@
 - [ai-workbench-test/plan.md](/Users/test/work-space/NCurator-Desktop/doc/ai-workbench-test/plan.md)
   - 当需要查看 AI workbench 的阶段划分，以及各阶段按 `basic / boundary / scenario / live` 组织的用例规划时，阅读这个文档。
 - [ai-workbench-test/todo-stage-1.md](/Users/test/work-space/NCurator-Desktop/doc/ai-workbench-test/todo-stage-1.md)
-  - 说明当前 Stage 1 `backend/tools` 的推进状态、完成证据与退出条件。
+  - 说明当前 Stage 1 `backend/tools` 三层覆盖的推进状态、完成证据与退出条件。
 - [ai-workbench-test/todo-stage-2.md](/Users/test/work-space/NCurator-Desktop/doc/ai-workbench-test/todo-stage-2.md)
   - 说明当前 Stage 2 `backend/human` 的推进状态，以及 basic、boundary、scenario、live 四类基线与后续落点。
 - `doc/ai-workbench-test/`

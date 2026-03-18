@@ -103,6 +103,7 @@
 | `tool-docx-multi-document-session-isolation` | 验证多文档会话隔离 | 同一 run 中并行打开两份文档后，后续 `search / apply / save` 不会串到错误文档 | 多文档任务是后续高价值场景的基础 |
 | `tool-terminal-batch-material-summary` | 验证批量材料发现与归并 | 一次发现多份日报、会议纪要或风险清单，并提取可复用摘要 | 真实工作区任务很少只有一份输入材料 |
 | `tool-terminal-artifact-producing-command` | 验证复杂命令与产物识别 | 执行会生成中间文件的命令，检查摘要、产物识别与回读链路 | `terminal` 不只是看输出，还要能接住产物 |
+| `tool-kb-document-discovery-to-targeted-search` | 验证从文档发现到定向检索的多步链路 | 先列出候选文档，再把缩小后的 document scope 传给 `hybrid / fts`，确保结果稳定收敛到同一份资料 | 真实知识任务往往要先找范围，再确认精确证据，不能跨文档串证据 |
 
 #### live
 

@@ -5,20 +5,20 @@
 ### 分析范围
 
 - raw logs 范围: 当前仓库内 `tests/logs/ai/backend/tools/**`、`tests/logs/ai/backend/human/**`
-- 已分析 scope: `ai/backend/tools/docx/basic`、`ai/backend/tools/docx/boundary`、`ai/backend/tools/docx/scenario`、`ai/backend/tools/terminal/basic`、`ai/backend/tools/terminal/boundary`、`ai/backend/tools/terminal/scenario`、`ai/backend/tools/kb/basic`、`ai/backend/tools/kb/boundary`、`ai/backend/human/basic`、`ai/backend/human/boundary`、`ai/backend/human/scenario`、`ai/backend/human/live`
+- 已分析 scope: `ai/backend/tools/docx/basic`、`ai/backend/tools/docx/boundary`、`ai/backend/tools/docx/scenario`、`ai/backend/tools/terminal/basic`、`ai/backend/tools/terminal/boundary`、`ai/backend/tools/terminal/scenario`、`ai/backend/tools/kb/basic`、`ai/backend/tools/kb/boundary`、`ai/backend/tools/kb/scenario`、`ai/backend/human/basic`、`ai/backend/human/boundary`、`ai/backend/human/scenario`、`ai/backend/human/live`
 - 说明: 当前 `ai/backend/human/live` analysis window 只包含本轮补跑并已落日志的 `human-live-direct-kb-answer`、`human-live-evidence-insufficient-safe-stop`、`human-live-kb-docx-bridge`；此前已实现的 `human-live-direct-docx-edit`、`human-live-terminal-docx-handoff`、`human-live-long-task-project-brief` 未在本轮重跑，因此不计入当前 `human/live` 的 latestCaseCount
 - 未纳入本次分析: 旧版 flat scope `ai/backend/tools/docx`、`ai/backend/tools/terminal`、`ai/backend/tools/kb`
 
 ### 总体结论
 
-- 历史总数据: `168` 次 raw runs，其中 `147` 次 passed、`21` 次 failed，historicalSuccessRate=`87.5%`
-- 最新总数据: `39` 个 case 中有 `38` 个 case 的最新一轮 run 为 passed，latestSuccessRate=`97.4%`
-- 当前结论: Stage 1 `backend/tools` 仍保持 `20 / 20 latest passed`；Stage 2 `backend/human` 的 `basic / boundary / scenario` 最新口径为 `16 / 16 passed`，但当前 `live` analysis window 仅 `2 / 3 passed`，`human-live-kb-docx-bridge` 仍未形成稳定 live 交付。
+- 历史总数据: `156` 次 raw runs，其中 `143` 次 passed、`13` 次 failed，historicalSuccessRate=`91.7%`
+- 最新总数据: `40` 个 case 中有 `39` 个 case 的最新一轮 run 为 passed，latestSuccessRate=`97.5%`
+- 当前结论: Stage 1 `backend/tools` 已形成 `21 / 21 latest passed` 的三层基线；Stage 2 `backend/human` 的 `basic / boundary / scenario` 最新口径为 `16 / 16 passed`，但当前 `live` analysis window 仅 `2 / 3 passed`，`human-live-kb-docx-bridge` 仍未形成稳定 live 交付。
 - 解释: `historicalSuccessRate` 已包含 2026-03-18 为诊断 `human-live-kb-docx-bridge` 所做的多轮 live 补跑，因此阶段判断应优先看 latest 口径，而不是把这些诊断性失败等同于稳定回归失败。
 
 ### 下一阶段建议
 
-- 保持当前 Stage 1 `tools` 分层目录和 Stage 2 `human` non-live 基线稳定。
+- 保持当前 Stage 1 `tools` 三层目录和 Stage 2 `human` non-live 基线稳定。
 - 下一步优先修复 `human-live-kb-docx-bridge` 的 live 收敛与跨工具 handoff，再补跑本轮未覆盖的其他 `human live` case，之后再进入 `context` 阶段。
 
 ## backend
@@ -30,8 +30,8 @@
 ##### 通过率
 
 - 历史总数据:
-  - totalRuns: 16
-  - passedRuns: 16
+  - totalRuns: 24
+  - passedRuns: 24
   - failedRuns: 0
   - historicalSuccessRate: 100.0%
 - 最新总数据:
@@ -42,20 +42,20 @@
 
 ##### 分层统计
 
-- `basic`: `6` 次 raw runs，最新 `3 / 3 passed`
-- `boundary`: `4` 次 raw runs，最新 `2 / 2 passed`
-- `scenario`: `6` 次 raw runs，最新 `3 / 3 passed`
+- `basic`: `9` 次 raw runs，最新 `3 / 3 passed`
+- `boundary`: `6` 次 raw runs，最新 `2 / 2 passed`
+- `scenario`: `9` 次 raw runs，最新 `3 / 3 passed`
 
 ##### 证据
 
-- `tool-docx-search-modes-and-scope` | run=`20260318-131740-749` | status=`passed`
-- `tool-docx-structure-read` | run=`20260318-131740-748` | status=`passed`
-- `tool-docx-targeting-and-ambiguous-search` | run=`20260318-131740-749` | status=`passed`
-- `tool-docx-preview-validate-rollback` | run=`20260318-131740-749` | status=`passed`
-- `tool-docx-save-conflict-and-overwrite` | run=`20260318-131740-749` | status=`passed`
-- `tool-docx-mixed-structural-edit` | run=`20260318-131740-763` | status=`passed`
-- `tool-docx-multi-document-session-isolation` | run=`20260318-131740-749` | status=`passed`
-- `tool-docx-table-and-inline-rewrite` | run=`20260318-131740-770` | status=`passed`
+- `tool-docx-search-modes-and-scope` | run=`20260318-164200-630` | status=`passed`
+- `tool-docx-structure-read` | run=`20260318-164200-631` | status=`passed`
+- `tool-docx-targeting-and-ambiguous-search` | run=`20260318-164200-633` | status=`passed`
+- `tool-docx-preview-validate-rollback` | run=`20260318-164200-631` | status=`passed`
+- `tool-docx-save-conflict-and-overwrite` | run=`20260318-164201-623` | status=`passed`
+- `tool-docx-mixed-structural-edit` | run=`20260318-164200-637` | status=`passed`
+- `tool-docx-multi-document-session-isolation` | run=`20260318-164200-631` | status=`passed`
+- `tool-docx-table-and-inline-rewrite` | run=`20260318-164200-635` | status=`passed`
 
 ##### 失败分析
 
@@ -70,8 +70,8 @@
 ##### 通过率
 
 - 历史总数据:
-  - totalRuns: 14
-  - passedRuns: 14
+  - totalRuns: 21
+  - passedRuns: 21
   - failedRuns: 0
   - historicalSuccessRate: 100.0%
 - 最新总数据:
@@ -82,19 +82,19 @@
 
 ##### 分层统计
 
-- `basic`: `4` 次 raw runs，最新 `2 / 2 passed`
-- `boundary`: `6` 次 raw runs，最新 `3 / 3 passed`
-- `scenario`: `4` 次 raw runs，最新 `2 / 2 passed`
+- `basic`: `6` 次 raw runs，最新 `2 / 2 passed`
+- `boundary`: `9` 次 raw runs，最新 `3 / 3 passed`
+- `scenario`: `6` 次 raw runs，最新 `2 / 2 passed`
 
 ##### 证据
 
-- `tool-terminal-path-resolution` | run=`20260318-131741-370` | status=`passed`
-- `tool-terminal-workspace-material-discovery` | run=`20260318-131741-389` | status=`passed`
-- `tool-terminal-approval-and-boundary` | run=`20260318-131741-430` | status=`passed`
-- `tool-terminal-approval-denied-follow-up` | run=`20260318-131741-505` | status=`passed`
-- `tool-terminal-failure-and-long-output` | run=`20260318-131740-773` | status=`passed`
-- `tool-terminal-artifact-producing-command` | run=`20260318-131741-439` | status=`passed`
-- `tool-terminal-batch-material-summary` | run=`20260318-131741-439` | status=`passed`
+- `tool-terminal-path-resolution` | run=`20260318-164201-600` | status=`passed`
+- `tool-terminal-workspace-material-discovery` | run=`20260318-164201-623` | status=`passed`
+- `tool-terminal-approval-and-boundary` | run=`20260318-164201-720` | status=`passed`
+- `tool-terminal-approval-denied-follow-up` | run=`20260318-164201-601` | status=`passed`
+- `tool-terminal-failure-and-long-output` | run=`20260318-164200-632` | status=`passed`
+- `tool-terminal-artifact-producing-command` | run=`20260318-164201-848` | status=`passed`
+- `tool-terminal-batch-material-summary` | run=`20260318-164201-205` | status=`passed`
 
 ##### 失败分析
 
@@ -109,28 +109,30 @@
 ##### 通过率
 
 - 历史总数据:
-  - totalRuns: 10
-  - passedRuns: 10
+  - totalRuns: 16
+  - passedRuns: 16
   - failedRuns: 0
   - historicalSuccessRate: 100.0%
 - 最新总数据:
-  - latestCaseCount: 5
-  - latestPassedCases: 5
+  - latestCaseCount: 6
+  - latestPassedCases: 6
   - latestFailedCases: 0
   - latestSuccessRate: 100.0%
 
 ##### 分层统计
 
-- `basic`: `8` 次 raw runs，最新 `4 / 4 passed`
-- `boundary`: `2` 次 raw runs，最新 `1 / 1 passed`
+- `basic`: `12` 次 raw runs，最新 `4 / 4 passed`
+- `boundary`: `3` 次 raw runs，最新 `1 / 1 passed`
+- `scenario`: `1` 次 raw runs，最新 `1 / 1 passed`
 
 ##### 证据
 
-- `tool-kb-fts-search` | run=`20260318-131741-574` | status=`passed`
-- `tool-kb-hybrid-search` | run=`20260318-131741-664` | status=`passed`
-- `tool-kb-list-documents-and-scope-filter` | run=`20260318-131741-814` | status=`passed`
-- `tool-kb-vector-search` | run=`20260318-131741-823` | status=`passed`
-- `tool-kb-empty-scope-and-no-result` | run=`20260318-131741-542` | status=`passed`
+- `tool-kb-fts-search` | run=`20260318-164202-127` | status=`passed`
+- `tool-kb-hybrid-search` | run=`20260318-164202-075` | status=`passed`
+- `tool-kb-list-documents-and-scope-filter` | run=`20260318-164201-878` | status=`passed`
+- `tool-kb-vector-search` | run=`20260318-164202-101` | status=`passed`
+- `tool-kb-empty-scope-and-no-result` | run=`20260318-164201-983` | status=`passed`
+- `tool-kb-document-discovery-to-targeted-search` | run=`20260318-164200-643` | status=`passed`
 
 ##### 失败分析
 
@@ -138,17 +140,17 @@
 
 ##### 当前评估
 
-- `kb` 已覆盖 `hybrid / vector / fts / list_documents` 与 `empty scope / no-result`，且当前最新口径为 `5 / 5 passed`。
+- `kb` 已覆盖 `hybrid / vector / fts / list_documents`、`empty scope / no-result`，以及“先发现文档、再定向检索、再精确确认”的 scenario 链路，且当前最新口径为 `6 / 6 passed`。
 
 ### human
 
 ##### 通过率
 
 - 历史总数据:
-  - totalRuns: 128
-  - passedRuns: 107
-  - failedRuns: 21
-  - historicalSuccessRate: 83.6%
+  - totalRuns: 95
+  - passedRuns: 82
+  - failedRuns: 13
+  - historicalSuccessRate: 86.3%
 - 最新总数据:
   - latestCaseCount: 19
   - latestPassedCases: 18
@@ -157,31 +159,31 @@
 
 ##### 分层统计
 
-- `basic`: `8` 次 raw runs，最新 `2 / 2 passed`
-- `boundary`: `24` 次 raw runs，最新 `6 / 6 passed`
-- `scenario`: `33` 次 raw runs，最新 `8 / 8 passed`
-- `live`: `11` 次 raw runs，最新 `2 / 3 passed`
+- `basic`: `10` 次 raw runs，最新 `2 / 2 passed`
+- `boundary`: `30` 次 raw runs，最新 `6 / 6 passed`
+- `scenario`: `41` 次 raw runs，最新 `8 / 8 passed`
+- `live`: `14` 次 raw runs，最新 `2 / 3 passed`
 
 ##### 证据
 
-- `human-direct-docx-edit` | run=`20260318-151550-605` | status=`passed`
-- `human-direct-kb-answer` | run=`20260318-151551-706` | status=`passed`
-- `human-approval-blocked-recovery` | run=`20260318-151551-755` | status=`passed`
-- `human-evidence-insufficient-safe-stop` | run=`20260318-151551-710` | status=`passed`
-- `human-no-redundant-recheck` | run=`20260318-151551-803` | status=`passed`
-- `human-partial-delivery-on-budget-limit` | run=`20260318-151551-723` | status=`passed`
-- `human-tool-failure-recovery` | run=`20260318-151550-618` | status=`passed`
-- `human-workspace-blocked-recovery` | run=`20260318-151551-679` | status=`passed`
-- `human-kb-docx-bridge` | run=`20260318-151550-641` | status=`passed`
-- `human-long-task-approval-branch` | run=`20260318-151551-710` | status=`passed`
-- `human-long-task-project-brief` | run=`20260318-151550-604` | status=`passed`
-- `human-long-task-with-corrections` | run=`20260318-151550-604` | status=`passed`
-- `human-multi-source-merge-delivery` | run=`20260318-151550-604` | status=`passed`
-- `human-multi-turn-refinement` | run=`20260318-151550-605` | status=`passed`
-- `human-review-handoff-structured-delivery` | run=`20260318-151550-605` | status=`passed`
-- `human-terminal-docx-handoff` | run=`20260318-151550-606` | status=`passed`
-- `human-live-direct-kb-answer` | run=`20260318-145113-697` | status=`passed`
-- `human-live-evidence-insufficient-safe-stop` | run=`20260318-150735-678` | status=`passed`
+- `human-direct-docx-edit` | run=`20260318-155901-484` | status=`passed`
+- `human-direct-kb-answer` | run=`20260318-155902-184` | status=`passed`
+- `human-approval-blocked-recovery` | run=`20260318-155902-156` | status=`passed`
+- `human-evidence-insufficient-safe-stop` | run=`20260318-155902-197` | status=`passed`
+- `human-no-redundant-recheck` | run=`20260318-155902-231` | status=`passed`
+- `human-partial-delivery-on-budget-limit` | run=`20260318-155902-188` | status=`passed`
+- `human-tool-failure-recovery` | run=`20260318-155901-486` | status=`passed`
+- `human-workspace-blocked-recovery` | run=`20260318-155902-148` | status=`passed`
+- `human-kb-docx-bridge` | run=`20260318-155901-485` | status=`passed`
+- `human-long-task-approval-branch` | run=`20260318-155902-137` | status=`passed`
+- `human-long-task-project-brief` | run=`20260318-155901-487` | status=`passed`
+- `human-long-task-with-corrections` | run=`20260318-155901-487` | status=`passed`
+- `human-multi-source-merge-delivery` | run=`20260318-155901-484` | status=`passed`
+- `human-multi-turn-refinement` | run=`20260318-155901-486` | status=`passed`
+- `human-review-handoff-structured-delivery` | run=`20260318-155901-487` | status=`passed`
+- `human-terminal-docx-handoff` | run=`20260318-155901-486` | status=`passed`
+- `human-live-direct-kb-answer` | run=`20260318-155931-482` | status=`passed`
+- `human-live-evidence-insufficient-safe-stop` | run=`20260318-160515-299` | status=`passed`
 - `human-live-kb-docx-bridge` | run=`20260318-151207-536` | status=`failed`
 
 ##### 失败分析

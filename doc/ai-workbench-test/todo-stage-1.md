@@ -27,6 +27,7 @@
 - [x] 落地 `tool-kb-fts-search`
 - [x] 落地 `tool-kb-list-documents-and-scope-filter`
 - [x] 落地 `tool-kb-empty-scope-and-no-result`
+- [x] 落地 `tool-kb-document-discovery-to-targeted-search`
 - [x] 将 `tests/ai/backend/tools/**` 重排为 `docx / terminal / kb` 下的 `basic / boundary / scenario`
 - [x] 跑完 Stage 1 backend 测试并刷新 `tests/logs/ai/**`
 - [x] 基于新 logs 更新 `tests/report/ai/report.md`
