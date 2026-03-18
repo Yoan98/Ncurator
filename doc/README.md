@@ -16,4 +16,4 @@
 - [ui-style.md](/Users/test/work-space/NCurator-Desktop/doc/ui-style.md)
   - 说明界面设计风格、布局规则和组件使用规范。
 - [test.md](/Users/test/work-space/NCurator-Desktop/doc/test.md)
-  - 说明测试目录、测试用例设计准则、基于 `meta.json` / `timeline.jsonl` / `artifacts.json` 的 raw log 契约、单 domain report 规则、report 示例和 Codex 后置分析工作流。
+  - 说明测试目录、测试用例设计准则。

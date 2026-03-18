@@ -325,47 +325,66 @@ tests/report/<domain>/
 
 ### `report.md` 建议结构
 
-- `Domain Overview`
+- `总览`
+- `总览` 至少包含：
+  - `分析范围`
+  - `总体结论`
+  - `下一阶段建议`
 - 按 `backend` / `e2e` 展开
 - 每个 layer / suite / groups 节点按需要继续下钻
 - 每个节点至少包含：
-  - `Evidence`
-  - `Pass Rate`
-  - `Failure Analysis`
-  - `Current Assessment`
-  - `Next Suggestions`
+  - `证据`
+  - `通过率`
+  - `失败分析`
+  - `当前评估`
+  - `下一步建议`
 
 ### `report.md` 格式约束
 
-- 顶层标题使用 `# <Domain> Domain Report`。
-- 顶层必须先有 `## Domain Overview`。
-- `Domain Overview` 之后按 domain 下实际存在的 layer 展开，当前通常是 `## backend` 与 `## e2e`。
+- 顶层标题使用 `# <Domain> 域测试报告`。
+- 顶层必须先有 `## 总览`。
+- `总览` 下必须先包含以下固定小节，顺序保持一致：
+  - `### 分析范围`
+  - `### 总体结论`
+  - `### 下一阶段建议`
+- `总览` 之后按 domain 下实际存在的 layer 展开，当前通常是 `## backend` 与 `## e2e`。
 - layer 之下按目录树继续展开：
   - suite 使用 `###`
   - suite 下第一层 group 使用 `####`
   - 更深层 group 继续按 Markdown 标题层级递增
 - 每个实际分析节点都必须包含以下固定小节，顺序保持一致：
-  - `Evidence`
-  - `Pass Rate`
-  - `Failure Analysis`
-  - `Current Assessment`
-  - `Next Suggestions`
-- `Evidence` 必须列出对应 run 的 `meta.json`、`timeline.jsonl`、`artifacts.json` 路径；如果有关键附件，也应一并列出。
-- `Pass Rate` 只写当前节点覆盖范围内的统计，不混入其他节点数据。
-- `Failure Analysis` 在没有 failed run 时应明确写“当前没有 failed run，因此无法给出失败模式结论”。
-- `Current Assessment` 负责总结当前状态和主要不足。
-- `Next Suggestions` 只写基于现有证据能支撑的下一步建议。
+  - `证据`
+  - `通过率`
+  - `失败分析`
+  - `当前评估`
+  - `下一步建议`
+- `证据` 必须列出对应 run 的 `meta.json`、`timeline.jsonl`、`artifacts.json` 路径；如果有关键附件，也应一并列出。
+- `通过率` 只写当前节点覆盖范围内的统计，不混入其他节点数据。
+- `失败分析` 在没有 failed run 时应明确写“当前没有 failed run，因此无法给出失败模式结论”。
+- `当前评估` 负责总结当前状态和主要不足。
+- `下一步建议` 只写基于现有证据能支撑的下一步建议。
 
 ### `report.md` 最小示例
 
 ```md
-# AI Domain Report
+# AI 域测试报告
 
-## Domain Overview
+## 总览
 
-- analysisWindow: 当前仓库内 `tests/logs/ai/**` 的 raw logs
-- analyzedScopes: `ai/backend/tools/terminal`、`ai/e2e/workbench`
-- overallAssessment: 当前 backend sample 与 e2e smoke 已跑通，但失败路径覆盖仍不足。
+### 分析范围
+
+- raw logs 范围: 当前仓库内 `tests/logs/ai/**`
+- 已分析 scope: `ai/backend/tools/terminal`、`ai/e2e/workbench`
+
+### 总体结论
+
+- 累计运行: `2`
+- 当前结论: 当前 backend sample 与 e2e smoke 已跑通，但失败路径覆盖仍不足。
+
+### 下一阶段建议
+
+- 先补 `backend/tools/terminal` 的失败路径
+- 再补 `e2e/workbench` 的阻塞分支
 
 ## backend
 
@@ -373,27 +392,27 @@ tests/report/<domain>/
 
 #### terminal
 
-##### Evidence
+##### 证据
 
 - `20260315-101530-112` | passed | `tests/logs/ai/backend/tools/terminal/terminal-basic-command/20260315-101530-112/meta.json` | `tests/logs/ai/backend/tools/terminal/terminal-basic-command/20260315-101530-112/timeline.jsonl` | `tests/logs/ai/backend/tools/terminal/terminal-basic-command/20260315-101530-112/artifacts.json`
 
-##### Pass Rate
+##### 通过率
 
 - totalRuns: 1
 - passedRuns: 1
 - failedRuns: 0
 - successRate: 100.0%
 
-##### Failure Analysis
+##### 失败分析
 
 - 当前没有 failed run，因此无法给出失败模式结论。
 
-##### Current Assessment
+##### 当前评估
 
 - terminal happy path 已稳定产出 raw logs。
 - 当前不足是还没有正式纳入失败/阻塞样例。
 
-##### Next Suggestions
+##### 下一步建议
 
 - 增加 `workspace-boundary-rejected`
 - 增加 `approval-denied`
@@ -402,28 +421,28 @@ tests/report/<domain>/
 
 ### workbench
 
-##### Evidence
+##### 证据
 
 - `20260315-103002-008` | passed | `tests/logs/ai/e2e/workbench/workbench-plan-artifact-smoke/20260315-103002-008/meta.json` | `tests/logs/ai/e2e/workbench/workbench-plan-artifact-smoke/20260315-103002-008/timeline.jsonl` | `tests/logs/ai/e2e/workbench/workbench-plan-artifact-smoke/20260315-103002-008/artifacts.json`
 - artifact references: `tests/logs/ai/e2e/workbench/workbench-plan-artifact-smoke/20260315-103002-008/artifacts/trace/playwright-trace.zip`
 
-##### Pass Rate
+##### 通过率
 
 - totalRuns: 1
 - passedRuns: 1
 - failedRuns: 0
 - successRate: 100.0%
 
-##### Failure Analysis
+##### 失败分析
 
 - 当前没有 failed run，因此无法给出失败模式结论。
 
-##### Current Assessment
+##### 当前评估
 
 - workbench smoke 主链路已可用。
 - 当前不足是 approval、workspace required、review 等真实路径尚未纳入。
 
-##### Next Suggestions
+##### 下一步建议
 
 - 补充 approval 路径
 - 补充 workspace required 场景
