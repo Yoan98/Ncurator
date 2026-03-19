@@ -37,9 +37,12 @@ tests/                   # 自动化测试
 
 - Graph 编排放在 `src/main/services/ai/graph/**`。
 - Main 节点放在 `src/main/services/ai/node/main/**`。
-- Human 节点放在 `src/main/services/ai/node/human/**`，并按 `shared / registry / reason / execute / finalize` 收口目录职责。
+- Human 节点放在 `src/main/services/ai/node/human/**`，并按 `shared / registry / brain / learning / hand / mouth` 收口目录职责。
 - `shared/**` 只放 Human 跨阶段共享逻辑；`registry/**` 只放静态目录。
-- `reason/**`、`execute/**`、`finalize/**` 分别对应 Human 三段执行阶段。
+- `brain/**` 放推理、contract、prompt 组装和 memory reducer。
+- `learning/**` 放 skill 详情加载与外部记忆更新。
+- `hand/**` 放工具调用执行与结果适配。
+- `mouth/**` 放最终交付生成与结果收口。
 - Tool 实现按能力分组放在 `src/main/services/ai/tools/<capability>/**`。
 - 运行态 state schema 统一放在 `src/main/services/ai/state/stateSchemas.ts`。
 
@@ -73,7 +76,7 @@ tests/                   # 自动化测试
 - `doc/` 下的 canonical 文档默认直接放在根目录。
 - `doc/README.md` 是默认阅读入口。
 - canonical 文档、阅读路径和同步清单都在 `doc/` 根目录维护。
-- 当前唯一允许的阶段性子目录是 `doc/ai-workbench-test/`。
-- `doc/ai-workbench-test/` 只用于 AI workbench 测试计划与分阶段 todo 管理。
+- `doc/ai-design/` 用于 AI 架构设计、数据定义与流转图，以及 AI 新架构重构计划。
+- `doc/ai-workbench-test/` 用于 AI workbench 测试计划与分阶段 todo 管理。
 - 该目录初始化时只保留 `plan.md` 与当前阶段 todo 文件。
 - 后续 `todo-stage-N.md` 只有在前一轮 todo 全部完成后才能创建。
