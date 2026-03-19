@@ -115,7 +115,14 @@
 
 为什么：工具只是能力零件，真正决定“能不能把事做成”的是 `human`。
 
-怎么做：从单步闭环开始，再覆盖多工具协作、失败纠偏、多轮续做、长任务和部分完成场景。
+怎么做：从单步闭环开始，再覆盖多工具协作、失败纠偏、多轮续做、长任务、watchdog 收敛和部分完成场景。
+
+当前实现前提：
+
+- `human` 已切换为 `reason -> execute -> finalize` 的结构化 ReAct 内核
+- 测试 override 以 `HumanReasoningOutput` 为主，不再以旧 `HumanStepDecision` 作为正式契约
+- 运行上限通过 hidden watchdog `hardActionLimit` 控制，而不是旧 graph state 中的 `maxSteps`
+- 交付差异通过 `objective` 表达，不再以 `deliveryKind` 作为测试主契约
 
 #### basic
 
@@ -123,6 +130,7 @@
 | --- | --- | --- | --- |
 | `human-direct-kb-answer` | 验证单步自主完成 | 直接读取知识库并交付可引用答案 | 最简单的单步任务必须先独立成立 |
 | `human-direct-docx-edit` | 验证单工具文档闭环 | 直接读取指定文档、完成局部修改并交付可审阅结果 | 这是最常见的文档类基础任务 |
+| `human-watchdog-projection` | 验证 watchdog 时间线投影 | `watchdog_signal` 能被正确投影为 workbench 时间线项 | watchdog 不只是后台信号，也必须能被可视化回看 |
 
 #### boundary
 
@@ -133,7 +141,10 @@
 | `human-approval-blocked-recovery` | 验证审批阻塞收敛 | 需要执行命令或覆盖保存但未获批准时，能停在正确节点并给出继续条件 | 阻塞时的行为质量直接决定用户体验 |
 | `human-evidence-insufficient-safe-stop` | 验证证据不足时的安全行为 | 找不到足够依据时明确说明缺口，并交付可继续的初稿或后续建议 | 不能把“查不到”变成“编出来” |
 | `human-no-redundant-recheck` | 验证证据足够后的主动收敛 | 同一证据已足够时，不再重复调用同一工具做“再次确认” | 避免无意义循环是工程可用性的关键 |
-| `human-partial-delivery-on-budget-limit` | 验证做不完时的安全收敛 | 在受限步数预算下保留已有进展并给出可继续交付 | “没完全做完”不应等同于“什么都没有” |
+| `human-partial-delivery-on-budget-limit` | 验证做不完时的安全收敛 | 在 watchdog `hardActionLimit` 受限时保留已有进展并给出可继续交付 | “没完全做完”不应等同于“什么都没有” |
+| `human-invalid-execution-batch` | 验证非法 batch 被拒绝 | 混合读写或不满足并行约束的 batch plan 会被 executor 拒绝并回到收敛 | 保守并行是这次 human 重构的重要安全边界 |
+| `human-watchdog-soft-warn` | 验证 watchdog 软监督 | 高重复、低增益的推进会触发 `warn` 级 watchdog 信号，但最终仍由 `human_reason` 自主收敛 | watchdog 不能直接接管决策，但必须能及时提示 |
+| `human-watchdog-hard-fuse` | 验证 watchdog 硬保险丝 | 长时间空转或重复推进后，hard fuse 会强制最后一次收敛，并在无法收敛时合成 blocked | 必须防止真实运行进入无界循环 |
 
 #### scenario
 
@@ -144,7 +155,7 @@
 | `human-multi-source-merge-delivery` | 验证多源材料归并 | 汇总多份日报、纪要或风险清单后输出统一交付 | 多源归并是高价值真实场景的代表能力 |
 | `human-review-handoff-structured-delivery` | 验证审阅前结构化交付 | 文档修改完成后，输出稳定的 review handoff 交付，供后续进入 `draft_review_ready` | 文档类任务的真正落点不是一句话，而是可继续处理的结构化结果 |
 | `human-multi-turn-refinement` | 验证多轮目标保持 | 上一轮已有中间产物，本轮继续保守化或局部精修 | 用户真实使用里 follow-up 很常见 |
-| `human-long-task-project-brief` | 验证长任务工程能力 | 在较高步数预算下，串联完成“找材料、抽结论、写周报、补风险、生成审阅结果” | 复杂任务是否能真正完成，是 AI 价值上限所在 |
+| `human-long-task-project-brief` | 验证长任务工程能力 | 在较高执行上限下，串联完成“找材料、抽结论、写周报、补风险、生成审阅结果” | 复杂任务是否能真正完成，是 AI 价值上限所在 |
 | `human-long-task-with-corrections` | 验证长任务中的纠偏稳定性 | 长任务中途加入新约束或局部失败后，仍能保持目标不漂移 | 长任务不是一次规划后就不会变化 |
 | `human-long-task-approval-branch` | 验证长任务中的审批分支 | 长任务中途需要审批时，能在批准与拒绝两条分支上都安全推进或收敛 | 真正的复杂任务经常包含安全分支 |
 

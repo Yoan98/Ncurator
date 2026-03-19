@@ -3,18 +3,22 @@
 ## Current Goal
 
 - 当前阶段聚焦 `backend/human`
-- 目标是基于 `plan.md` 中的 `human` 阶段用例表，按 `basic / boundary / scenario / live` 四层组织单步闭环、多工具协作、阻塞收敛、长任务和 live 验证基线
+- 目标是基于 `plan.md` 中的 `human` 阶段用例表，按 `basic / boundary / scenario / live` 四层组织单步闭环、多工具协作、阻塞收敛、watchdog/并行边界、长任务和 live 验证基线
 
 ## Done
 
 - [x] 落地 `human-direct-kb-answer`
 - [x] 落地 `human-direct-docx-edit`
+- [x] 落地 `human-watchdog-projection`
 - [x] 落地 `human-tool-failure-recovery`
 - [x] 落地 `human-workspace-blocked-recovery`
 - [x] 落地 `human-approval-blocked-recovery`
 - [x] 落地 `human-evidence-insufficient-safe-stop`
 - [x] 落地 `human-no-redundant-recheck`
 - [x] 落地 `human-partial-delivery-on-budget-limit`
+- [x] 落地 `human-invalid-execution-batch`
+- [x] 落地 `human-watchdog-soft-warn`
+- [x] 落地 `human-watchdog-hard-fuse`
 - [x] 落地 `human-terminal-docx-handoff`
 - [x] 落地 `human-kb-docx-bridge`
 - [x] 落地 `human-multi-source-merge-delivery`
@@ -29,12 +33,14 @@
 - [x] 落地 `human-live-terminal-docx-handoff`
 - [x] 落地 `human-live-kb-docx-bridge`
 - [x] 落地 `human-live-long-task-project-brief`
+- [x] 测试 harness 已切换到 `humanReasonOverrides + hardActionLimit`
 - [x] 跑完 Stage 2 `backend/human` non-live 测试并刷新 `tests/logs/ai/backend/human/{basic,boundary,scenario}/**`
 
 ## In Progress
 
 - [ ] 补跑 `human-live-long-task-project-brief` 并补齐 `tests/logs/ai/backend/human/live/**` raw log
 - [x] 基于新的 human logs 更新 `tests/report/ai/report.md`
+- [x] 基于新的 structured ReAct 内核更新测试契约，移除 `deliveryKind / maxSteps / HumanStepDecision` 作为正式测试入口
 
 ## Blocked
 
@@ -47,6 +53,7 @@
 
 - `doc/ai-workbench-test/plan.md`
 - `tests/ai/backend/human/{basic,boundary,scenario,live}/*.test.ts`
+- `tests/harness/backend/{humanHarness.ts,test-types.ts,contextFactory.ts}`
 - `tests/logs/ai/backend/human/**`
 - `tests/logs/ai/backend/human/live/human-live-direct-docx-edit/20260318-170540-431/*`
 - `tests/logs/ai/backend/human/live/human-live-direct-kb-answer/20260318-155931-482/*`
@@ -60,6 +67,7 @@
 ## Exit Criteria
 
 - Stage 2 的 `human` 用例按计划落到 `basic / boundary / scenario / live`
+- 新的 `human` 测试契约已经对齐 `reason -> execute -> finalize` 与 watchdog 语义
 - `human` 阶段剩余 live case 已补齐
 - 新的 backend/human raw logs 已产出到 `tests/logs/ai/**`
 - `tests/report/ai/report.md` 已基于新的 human logs 更新

@@ -29,9 +29,9 @@ defineAiHumanCase({
     const runner = createHumanTestRunner(
       runtime,
       {
-        humanDecisionOverrides: [
+        humanReasonOverrides: [
           {
-            decision: {
+            output: {
               action: 'load_skill',
               skillId: 'docx-editing',
               rationale: '先加载文档编辑能力。',
@@ -39,7 +39,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_open',
               args: {
@@ -50,7 +50,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_apply_ops',
               args: {
@@ -67,7 +67,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_render_preview',
               args: {
@@ -78,7 +78,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_validate',
               args: {},
@@ -87,7 +87,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'complete_task',
               summary: '文档改写已完成，当前交付已具备 review handoff 条件。',
               rationale: '预览和校验都已完成，可以进入结构化 handoff。',
@@ -130,16 +130,13 @@ defineAiHumanCase({
           ].join('\n')
         }
       },
-      { maxSteps: 8 }
+      { hardActionLimit: 8 }
     )
 
     const output = await runner.run(
       {
         taskId: runtime.taskId,
         objective: '修改文档后给出可继续进入审阅的结构化 handoff。'
-      },
-      {
-        deliveryKind: 'handoff'
       }
     )
 

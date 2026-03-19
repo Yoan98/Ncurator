@@ -1,3 +1,4 @@
+import { AiRuntimeSettingsStore } from './domains/AiRuntimeSettingsStore'
 import { LanceDbCore } from './core/LanceDbCore'
 import { ChatStore } from './domains/ChatStore'
 import { DraftReviewStore } from './domains/DraftReviewStore'
@@ -17,6 +18,7 @@ export class StorageService {
   public readonly chat: ChatStore
   public readonly draftReview: DraftReviewStore
   public readonly llm: LlmConfigStore
+  public readonly aiRuntimeSettings: AiRuntimeSettingsStore
   public readonly workspace: WorkspaceStore
   private legacyLocalImportMigrationStatus: LegacyLocalImportMigrationStatus | null = null
 
@@ -27,6 +29,7 @@ export class StorageService {
     this.chat = new ChatStore(this.core)
     this.draftReview = new DraftReviewStore(this.core)
     this.llm = new LlmConfigStore(this.core)
+    this.aiRuntimeSettings = new AiRuntimeSettingsStore(this.core)
     this.workspace = new WorkspaceStore(this.core)
   }
 

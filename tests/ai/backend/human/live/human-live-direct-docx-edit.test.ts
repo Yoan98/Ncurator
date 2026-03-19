@@ -42,7 +42,7 @@ defineAiHumanLiveCase({
       {
         liveModelConfig: loadPrimaryLiveHumanConfig()
       },
-      { maxSteps: 10 }
+      { hardActionLimit: 10 }
     )
 
     const output = await runner.run(
@@ -50,9 +50,6 @@ defineAiHumanLiveCase({
         taskId: runtime.taskId,
         objective:
           '请直接打开 weekly-report.docx，不要使用 terminal，也不需要 save。然后完成两处精确修改：1）把 “Risk summary: monitor integration edge cases.” 替换成 “Risk summary: integration regression is assigned to Bob for daily follow-up.”；2）把表格里 Risk 对应的 Owner 从 Alice 改成 Bob。完成后生成可审阅 preview，并用 handoff 形式交付。'
-      },
-      {
-        deliveryKind: 'handoff'
       }
     )
 

@@ -24,7 +24,8 @@ export const LANCE_TABLES = {
   DRAFT_REVIEW_DOCUMENT: 'draft_review_document',
   DRAFT_REVIEW_CHANGE: 'draft_review_change',
   DRAFT_COMMIT_JOB: 'draft_commit_job',
-  LLM_CONFIG: 'llm_config'
+  LLM_CONFIG: 'llm_config',
+  AI_RUNTIME_SETTINGS: 'ai_runtime_settings'
 } as const
 
 export type LanceTableName = (typeof LANCE_TABLES)[keyof typeof LANCE_TABLES]
@@ -356,6 +357,14 @@ export class LanceDbCore {
           new arrow.Field('model_name', new arrow.Utf8()),
           new arrow.Field('api_key', new arrow.Utf8()),
           new arrow.Field('is_active', new arrow.Bool())
+        ])
+      },
+      {
+        name: LANCE_TABLES.AI_RUNTIME_SETTINGS,
+        schema: new arrow.Schema([
+          new arrow.Field('id', new arrow.Utf8()),
+          new arrow.Field('watchdog_mode', new arrow.Utf8()),
+          new arrow.Field('updated_at', new arrow.Int64())
         ])
       }
     ]

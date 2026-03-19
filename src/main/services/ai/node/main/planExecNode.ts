@@ -41,8 +41,6 @@ export const createPlanExecNode = (input: {
     const output = await runHumanTask({
       taskId: task.id,
       objective
-    }, {
-      deliveryKind: 'handoff'
     })
 
     // 当前策略为 stop-dispatch：单任务 blocked 会停止后续业务任务，但保留 synthesis 收口。

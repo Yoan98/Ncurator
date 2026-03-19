@@ -36,9 +36,9 @@ defineAiHumanCase({
     const runner = createHumanTestRunner(
       runtime,
       {
-        humanDecisionOverrides: [
+        humanReasonOverrides: [
           {
-            decision: {
+            output: {
               action: 'load_skill',
               skillId: 'workspace-shell',
               rationale: '先从 workspace 材料里抽取事实。',
@@ -46,7 +46,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'terminal_run_command',
               args: {
@@ -57,7 +57,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'load_skill',
               skillId: 'docx-editing',
               rationale: '取材后切换到 docx 编辑。',
@@ -65,7 +65,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_open',
               args: {
@@ -76,7 +76,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_apply_ops',
               args: {
@@ -94,7 +94,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_render_preview',
               args: {
@@ -105,7 +105,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_validate',
               args: {},
@@ -114,7 +114,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'complete_task',
               summary: '已从 workspace 材料提炼结论并写入周报预览。',
               rationale: 'terminal 取材与 docx handoff 已完成。',
@@ -136,16 +136,13 @@ defineAiHumanCase({
             `交付形式：${typeof resultData?.artifact_role === 'string' ? resultData.artifact_role : 'preview'}`
           ].join('\n')
       },
-      { maxSteps: 9 }
+      { hardActionLimit: 9 }
     )
 
     const output = await runner.run(
       {
         taskId: runtime.taskId,
         objective: '先读取 workspace 日报，再把结论写进周报 docx。'
-      },
-      {
-        deliveryKind: 'handoff'
       }
     )
 

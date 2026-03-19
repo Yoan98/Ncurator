@@ -40,7 +40,7 @@ defineAiHumanLiveCase({
       {
         liveModelConfig: loadPrimaryLiveHumanConfig()
       },
-      { maxSteps: 14 }
+      { hardActionLimit: 14 }
     )
 
     const output = await runner.run(
@@ -48,9 +48,6 @@ defineAiHumanLiveCase({
         taskId: runtime.taskId,
         objective:
           '请读取 ai/workspace/materials/batch/day-1.txt、day-2.txt、day-3.txt 和 ai/workspace/materials/weekly/risk-summary.txt，整理成 project-brief.docx 的可审阅 preview。摘要需要概括 workspace scan baseline、KB retrieval baseline、docx review handoff baseline，风险部分需要提到 approval branch requires explicit denial coverage。'
-      },
-      {
-        deliveryKind: 'handoff'
       }
     )
 

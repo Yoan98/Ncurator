@@ -66,9 +66,9 @@ defineAiHumanCase({
             return []
           }
         },
-        humanDecisionOverrides: [
+        humanReasonOverrides: [
           {
-            decision: {
+            output: {
               action: 'load_skill',
               skillId: 'local-kb-retrieval',
               rationale: '先检索本地规范。',
@@ -76,7 +76,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'kb_hybrid_search_chunks',
               args: {
@@ -88,7 +88,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'load_skill',
               skillId: 'docx-editing',
               rationale: '拿到规范后切换到 docx 编辑。',
@@ -96,7 +96,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_open',
               args: {
@@ -107,7 +107,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_apply_ops',
               args: {
@@ -125,7 +125,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_render_preview',
               args: {
@@ -136,7 +136,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_validate',
               args: {},
@@ -145,7 +145,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'complete_task',
               summary: '已把本地发布规范写入 release checklist 预览。',
               rationale: 'KB -> DOCX 的 bridge 已完成。',
@@ -168,16 +168,13 @@ defineAiHumanCase({
             `交付形式：${typeof resultData?.artifact_role === 'string' ? resultData.artifact_role : 'preview'}`
           ].join('\n')
       },
-      { maxSteps: 9 }
+      { hardActionLimit: 9 }
     )
 
     const output = await runner.run(
       {
         taskId: runtime.taskId,
         objective: '先检索本地发布规范，再按规范修改 release checklist 模板。'
-      },
-      {
-        deliveryKind: 'handoff'
       }
     )
 

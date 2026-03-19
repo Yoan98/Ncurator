@@ -116,6 +116,35 @@ export const classifyCommandRisk = (command: string): 'low' | 'medium' | 'high' 
   return 'low'
 }
 
+export const classifyCommandMode = (command: string): 'read_only' | 'mutating' | 'unknown' => {
+  const text = String(command || '').trim().toLowerCase()
+  if (!text) return 'unknown'
+
+  if (
+    /\brm\b/.test(text) ||
+    /\bmv\b/.test(text) ||
+    /\bcp\b/.test(text) ||
+    /\bmkdir\b/.test(text) ||
+    /\btouch\b/.test(text) ||
+    /\bchmod\b/.test(text) ||
+    /\bgit\s+(add|commit|push|apply|am)\b/.test(text) ||
+    /\btee\b/.test(text) ||
+    />/.test(text)
+  ) {
+    return 'mutating'
+  }
+
+  if (
+    /^\s*(cat|sed|head|tail|rg|grep|find|ls|pwd|stat|wc|git\s+status|git\s+diff|git\s+show|python\s+.*-c|python3\s+.*-c|node\s+.*-e)\b/.test(
+      text
+    )
+  ) {
+    return 'read_only'
+  }
+
+  return 'unknown'
+}
+
 export type TerminalArtifactCandidate = {
   rawPath: string
   operation?: AiFileArtifactOperation

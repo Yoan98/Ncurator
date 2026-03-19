@@ -30,7 +30,6 @@ export const createSynthesisHumanNode = (input: {
         })
       },
       {
-        deliveryKind: 'final',
         streamAnswer: true
       }
     )

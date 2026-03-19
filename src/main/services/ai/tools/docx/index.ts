@@ -40,7 +40,7 @@ const createWorkspaceGuardTool = (input: {
         reason: 'docx capability requires workspace binding before execution',
         requiredFields: ['workspaceId', 'rootPath'],
         createdAt: Date.now(),
-        stage: 'human_tool_exec'
+        stage: 'human_execute'
       })
       return {
         ok: false,

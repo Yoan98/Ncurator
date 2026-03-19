@@ -38,9 +38,9 @@ defineAiHumanCase({
             return rows
           }
         },
-        humanDecisionOverrides: [
+        humanReasonOverrides: [
           {
-            decision: {
+            output: {
               action: 'load_skill',
               skillId: 'local-kb-retrieval',
               rationale: '先加载本地知识检索能力。',
@@ -48,7 +48,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'kb_hybrid_search_chunks',
               args: {
@@ -60,7 +60,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'complete_task',
               summary: '发布前仍需补齐 approval flow 的 regression coverage。',
               rationale: '检索结果已经给出直接证据。',
@@ -85,16 +85,13 @@ defineAiHumanCase({
           ].join('\n')
         }
       },
-      { maxSteps: 4 }
+      { hardActionLimit: 4 }
     )
 
     const output = await runner.run(
       {
         taskId: runtime.taskId,
         objective: '从本地知识库回答 approval flow regression coverage 是否已经完成。'
-      },
-      {
-        deliveryKind: 'final'
       }
     )
 

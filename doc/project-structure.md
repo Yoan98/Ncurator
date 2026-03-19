@@ -37,7 +37,9 @@ tests/                   # 自动化测试
 
 - Graph 编排放在 `src/main/services/ai/graph/**`。
 - Main 节点放在 `src/main/services/ai/node/main/**`。
-- Human 节点放在 `src/main/services/ai/node/human/**`。
+- Human 节点放在 `src/main/services/ai/node/human/**`，并按 `shared / registry / reason / execute / finalize` 收口目录职责。
+- `shared/**` 只放 Human 跨阶段共享逻辑；`registry/**` 只放静态目录。
+- `reason/**`、`execute/**`、`finalize/**` 分别对应 Human 三段执行阶段。
 - Tool 实现按能力分组放在 `src/main/services/ai/tools/<capability>/**`。
 - 运行态 state schema 统一放在 `src/main/services/ai/state/stateSchemas.ts`。
 

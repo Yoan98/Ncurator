@@ -18,13 +18,15 @@ export const createContextEnrichNode = (input: {
       contextEvidence: state.contextEvidence
     })
 
-    const output = await runHumanTask({
-      taskId: contextTaskId,
-      objective
-    }, {
-      deliveryKind: 'context',
-      internalDelivery: true
-    })
+    const output = await runHumanTask(
+      {
+        taskId: contextTaskId,
+        objective
+      },
+      {
+        internalDelivery: true
+      }
+    )
 
     return {
       contextRounds: state.contextRounds + 1,

@@ -303,6 +303,23 @@ export const projectWorkbenchState = (input: {
       return
     }
 
+    if (event.type === 'watchdog_signal') {
+      pushTimelineItem(timeline, {
+        id: `watchdog-${event.level}-${index}`,
+        kind: 'watchdog',
+        title: 'Watchdog 提示',
+        description: event.summary,
+        badge: event.level,
+        createdAt: getEventTimestamp(event, fallbackTime),
+        inspector: {
+          kind: 'watchdog',
+          title: 'Watchdog 监督',
+          event
+        }
+      })
+      return
+    }
+
     if (event.type === 'draft_review_ready') {
       pushTimelineItem(timeline, {
         id: `draft-review-${event.review.reviewId}`,

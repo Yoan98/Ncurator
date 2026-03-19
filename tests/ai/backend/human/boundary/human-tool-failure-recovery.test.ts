@@ -20,9 +20,9 @@ defineAiHumanCase({
     const runner = createHumanTestRunner(
       runtime,
       {
-        humanDecisionOverrides: [
+        humanReasonOverrides: [
           {
-            decision: {
+            output: {
               action: 'load_skill',
               skillId: 'docx-editing',
               rationale: '需要读取 docx 里的具体段落。',
@@ -30,7 +30,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_open',
               args: {
@@ -41,7 +41,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_search',
               args: {
@@ -53,7 +53,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_outline',
               args: {
@@ -66,7 +66,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_get_block',
               args: {
@@ -77,7 +77,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'complete_task',
               summary: '已通过 outline + get_block 找到 fallback owner：Alice。',
               rationale: '虽然首次搜索失败，但后续回退路径已经拿到明确证据。',
@@ -100,7 +100,7 @@ defineAiHumanCase({
           ].join('\n')
         }
       },
-      { maxSteps: 6 }
+      { hardActionLimit: 6 }
     )
 
     try {
@@ -108,11 +108,8 @@ defineAiHumanCase({
         {
           taskId: runtime.taskId,
           objective: '定位 recovery.docx 中 fallback owner 对应的段落，即使首次搜索失败也要继续完成。'
-        },
-        {
-          deliveryKind: 'handoff'
         }
-      )
+    )
 
       return {
         output,

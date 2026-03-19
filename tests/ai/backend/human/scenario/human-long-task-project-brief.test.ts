@@ -34,9 +34,9 @@ defineAiHumanCase({
     const runner = createHumanTestRunner(
       runtime,
       {
-        humanDecisionOverrides: [
+        humanReasonOverrides: [
           {
-            decision: {
+            output: {
               action: 'load_skill',
               skillId: 'workspace-shell',
               rationale: '长任务先做材料归并。',
@@ -44,7 +44,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'terminal_run_command',
               args: {
@@ -55,7 +55,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'terminal_run_command',
               args: {
@@ -66,7 +66,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'terminal_run_command',
               args: {
@@ -77,7 +77,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'terminal_run_command',
               args: {
@@ -88,7 +88,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'load_skill',
               skillId: 'docx-editing',
               rationale: '材料齐全后转成 brief。',
@@ -96,7 +96,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_open',
               args: {
@@ -107,7 +107,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_apply_ops',
               args: {
@@ -131,7 +131,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_render_preview',
               args: {
@@ -142,7 +142,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_validate',
               args: {},
@@ -151,7 +151,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'complete_task',
               summary: '已完成多材料归并、风险补充，并交付 project brief 预览。',
               rationale: '长任务所需的材料读取、归并、写入与交付都已完成。',
@@ -173,7 +173,7 @@ defineAiHumanCase({
             `交付形式：${typeof resultData?.artifact_role === 'string' ? resultData.artifact_role : 'preview'}`
           ].join('\n')
       },
-      { maxSteps: 12 }
+      { hardActionLimit: 12 }
     )
 
     const output = await runner.run(
@@ -181,9 +181,6 @@ defineAiHumanCase({
         taskId: runtime.taskId,
         objective:
           '请读取 batch/day-1.txt、day-2.txt、day-3.txt 和 weekly/risk-summary.txt，整理成 project-brief.docx 的可审阅 preview。'
-      },
-      {
-        deliveryKind: 'handoff'
       }
     )
 

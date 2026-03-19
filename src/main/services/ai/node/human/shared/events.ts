@@ -1,24 +1,24 @@
 import type {
-  DiagnosticTrace,
   HumanStepAction,
-  HumanStepRecord,
   HumanStepResultStatus,
-  RuntimeSkillId
-} from '../../../../../shared/types'
-import type { AiRunContext } from '../../types'
+  HumanTraceStep,
+  RuntimeSkillId,
+  WatchdogSignalLevel
+} from '../../../../../../shared/types'
+import type { AiRunContext } from '../../../types'
 
-export const appendHumanStepRecord = (input: {
-  history: HumanStepRecord[]
+export const appendHumanTraceStep = (input: {
+  steps: HumanTraceStep[]
   step: number
   action: HumanStepAction
   publicNarrative: string
   resultStatus?: HumanStepResultStatus
   skillId?: RuntimeSkillId
   toolName?: string
-  summary?: string
-}): HumanStepRecord[] => {
+  summary: string
+}): HumanTraceStep[] => {
   return [
-    ...input.history,
+    ...input.steps,
     {
       step: input.step,
       action: input.action,
@@ -44,7 +44,7 @@ export const emitHumanStep = (input: {
   resultStatus?: HumanStepResultStatus
   skillId?: RuntimeSkillId
   toolName?: string
-  stage: 'human_brain' | 'human_skill_loader' | 'human_tool_exec' | 'human_response'
+  stage: 'human_reason' | 'human_execute' | 'human_finalize'
 }) => {
   input.ctx.sendEvent({
     type: 'human_step',
@@ -64,28 +64,6 @@ export const emitHumanStep = (input: {
   })
 }
 
-export const emitHumanDiagnostic = (input: {
-  ctx: AiRunContext
-  runId: string
-  taskId: string
-  stepIndex: number
-  action: HumanStepAction
-  trace: DiagnosticTrace
-  stage: 'human_brain' | 'human_skill_loader' | 'human_tool_exec' | 'human_response'
-}) => {
-  input.ctx.sendEvent({
-    type: 'human_diagnostic',
-    runId: input.runId,
-    taskId: input.taskId,
-    stepIndex: input.stepIndex,
-    action: input.action,
-    trace: input.trace,
-    createdAt: Date.now(),
-      internal: true,
-      stage: input.stage
-  })
-}
-
 export const emitTaskDelivery = (input: {
   ctx: AiRunContext
   runId: string
@@ -102,6 +80,26 @@ export const emitTaskDelivery = (input: {
     deliveryMarkdown: input.deliveryMarkdown,
     createdAt: Date.now(),
     internal: input.internal,
-    stage: 'human_response'
+    stage: 'human_finalize'
+  })
+}
+
+export const emitWatchdogSignal = (input: {
+  ctx: AiRunContext
+  runId: string
+  taskId?: string
+  level: WatchdogSignalLevel
+  summary: string
+  signs: string[]
+}) => {
+  input.ctx.sendEvent({
+    type: 'watchdog_signal',
+    runId: input.runId,
+    taskId: input.taskId,
+    level: input.level,
+    summary: input.summary,
+    signs: [...input.signs],
+    createdAt: Date.now(),
+    stage: 'human_reason'
   })
 }

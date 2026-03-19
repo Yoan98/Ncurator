@@ -1,4 +1,4 @@
-import type { JsonObject, ToolPromptSpec } from '../../../../../shared/types'
+import type { JsonObject, ToolPromptSpec } from '../../../../../../shared/types'
 
 const DOCX_REPLACE_TEXT_EXAMPLE: JsonObject = {
   ops: [

@@ -1,4 +1,10 @@
-import type { AiRunEvent } from '../../../../src/shared/types'
+import type {
+  AiRunEvent,
+  HumanActionSpec,
+  HumanReasoningOutput,
+  JsonObject,
+  RuntimeSkillId
+} from '../../../../src/shared/types'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import { hasLiveLlmConfigInEnv, loadLiveLlmConfigFromEnv } from '../../../harness/backend/llmConfig'
 import type { BackendTestRuntime, TestCaseDefinition } from '../../../harness/backend/test-types'
@@ -54,3 +60,120 @@ export const getEventsByType = <TType extends AiRunEvent['type']>(
     Extract<AiRunEvent, { type: TType }>
   >
 }
+
+type ReasonOutputInput = {
+  summary: string
+  focusCurrent?: string | null
+}
+
+const createReasonEnvelope = (input: ReasonOutputInput): Pick<
+  HumanReasoningOutput,
+  'memoryPatch' | 'analysis'
+> => ({
+  memoryPatch:
+    input.focusCurrent === undefined
+      ? {}
+      : {
+          focus: {
+            current: input.focusCurrent
+          }
+        },
+  analysis: {
+    summary: input.summary
+  }
+})
+
+export const reasonActivateCapability = (input: {
+  skillId: RuntimeSkillId
+  rationale: string
+  publicNarrative: string
+  focusCurrent?: string | null
+}): HumanReasoningOutput => ({
+  ...createReasonEnvelope({
+    summary: input.rationale,
+    focusCurrent: input.focusCurrent === undefined ? input.skillId : input.focusCurrent
+  }),
+  actionBatch: {
+    summary: input.rationale,
+    actions: [
+      {
+        type: 'activate_capability',
+        skillId: input.skillId,
+        rationale: input.rationale,
+        publicNarrative: input.publicNarrative
+      }
+    ]
+  }
+})
+
+export const reasonInvokeTool = (input: {
+  toolName: string
+  args: JsonObject
+  rationale: string
+  publicNarrative: string
+  focusCurrent?: string | null
+}): HumanReasoningOutput => ({
+  ...createReasonEnvelope({
+    summary: input.rationale,
+    focusCurrent: input.focusCurrent === undefined ? input.toolName : input.focusCurrent
+  }),
+  actionBatch: {
+    summary: input.rationale,
+    actions: [
+      {
+        type: 'invoke_tool',
+        toolName: input.toolName,
+        args: input.args,
+        rationale: input.rationale,
+        publicNarrative: input.publicNarrative
+      }
+    ]
+  }
+})
+
+export const reasonActionBatch = (input: {
+  summary: string
+  focusCurrent?: string | null
+  actions: HumanActionSpec[]
+}): HumanReasoningOutput => ({
+  ...createReasonEnvelope({
+    summary: input.summary,
+    focusCurrent: input.focusCurrent
+  }),
+  actionBatch: {
+    summary: input.summary,
+    actions: input.actions
+  }
+})
+
+export const reasonComplete = (input: {
+  summary: string
+  rationale: string
+  payload?: JsonObject
+}): HumanReasoningOutput => ({
+  memoryPatch: {},
+  analysis: {
+    summary: input.rationale
+  },
+  outcome: {
+    status: 'completed',
+    summary: input.summary,
+    payload: input.payload
+  }
+})
+
+export const reasonBlocked = (input: {
+  summary: string
+  rationale: string
+  payload?: JsonObject
+}): HumanReasoningOutput => ({
+  memoryPatch: {},
+  analysis: {
+    summary: input.rationale
+  },
+  outcome: {
+    status: 'blocked',
+    summary: input.summary,
+    payload: input.payload
+  }
+})

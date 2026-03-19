@@ -23,9 +23,9 @@ defineAiHumanCase({
       runtime,
       {
         approvalPolicy: 'deny-all',
-        humanDecisionOverrides: [
+        humanReasonOverrides: [
           {
-            decision: {
+            output: {
               action: 'load_skill',
               skillId: 'workspace-shell',
               rationale: '需要写入工作区产物。',
@@ -33,7 +33,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'terminal_run_command',
               args: {
@@ -53,16 +53,13 @@ defineAiHumanCase({
             '继续条件：请批准写操作后再继续执行。'
           ].join('\n')
       },
-      { maxSteps: 3 }
+      { hardActionLimit: 3 }
     )
 
     const output = await runner.run(
       {
         taskId: runtime.taskId,
         objective: '在 workspace 中生成一个目标文件。'
-      },
-      {
-        deliveryKind: 'handoff'
       }
     )
 

@@ -30,7 +30,7 @@ defineAiHumanLiveCase({
           getDocumentById: async () => null
         }
       },
-      { maxSteps: 6 }
+      { hardActionLimit: 6 }
     )
 
     const output = await runner.run(
@@ -38,9 +38,6 @@ defineAiHumanLiveCase({
         taskId: runtime.taskId,
         objective:
           '请仅使用当前本地资料范围确认 final owner 与 timeline。如果当前本地资料不足，不要猜测，也不要继续重复检索；请直接给出最终答复，答复中必须包含“本地资料不足”和“是否允许继续使用非本地信息”，并在 resultData 中保留 gap_summary 与 next_step。'
-      },
-      {
-        deliveryKind: 'final'
       }
     )
 

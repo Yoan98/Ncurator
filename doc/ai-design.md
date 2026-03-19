@@ -63,30 +63,36 @@ flowchart TD
 
 ## 5. Human 的核心设计
 
-`human` 是整个 AI 架构设计的核心。它的设计初衷不是“完成某一个固定节点动作”，而是“像真正的执行者一样，把用户诉求做成”。
+当前 `human` 已经从“prompt 驱动的弱结构化循环”重构成“显式记忆 + durable focus + 结构化 ReAct”的执行内核。
 
-它必须具备以下能力：
+它的目标不是只判断“下一个工具是什么”，而是持续维护：
 
-- 自主分析任务，而不是只按既定脚本机械执行。
-- 逐步解决问题，把复杂目标拆成当前可执行的动作。
-- 主动发现问题，包括目标理解偏差、证据不足、工具结果异常、执行路径错误。
-- 主动修正问题，而不是把错误一直带到最后。
-- 在每一步之后重新判断当前状态，再决定下一步怎么做。
+- 当前任务到底要完成什么
+- 已经确认了哪些事实
+- 当前焦点是什么
+- 下一轮是继续执行、收敛完成，还是明确阻塞
 
-可以把 `human` 理解成一个持续循环的执行体：
+这版 `human` 的核心原则是：
+
+- `human` 只有一个真正的思考节点，不把认知过程切碎成过多子节点
+- 不提前写很长的固定子任务链，只维护 durable focus
+- 显式记录 `memory`，不再把 `trace` 当主要推理记忆
+- 支持保守并行读取，但只允许只读动作小批量并行
+- `human_reason` 输出强约束 contract，统一收敛为 `actionBatch | outcome`
+- 通过 watchdog 监督空转、重复 action batch 和长时间无新增事实
+
+可以把它理解成下面这个循环：
 
 ```mermaid
 flowchart TD
-    A["理解当前目标"] --> B["选择动作"]
-    B --> C["执行 / 读取 / 调用工具"]
-    C --> D["检查结果"]
-    D -->|正常| E["继续下一步"]
-    D -->|发现问题| F["修正理解或路径"]
-    E --> A
-    F --> A
+    A["吸收最新 observation"] --> B["更新 memory 与当前焦点"]
+    B --> C["产出 ActionBatch 或 Outcome"]
+    C -->|继续执行| D["执行能力激活 / 工具调用"]
+    C -->|完成或阻塞| E["生成最终交付"]
+    D --> A
 ```
 
-这个循环决定了它即使前面走错了，后面也可以随着每一步分析继续修正，而不是整轮失败。
+这个循环的关键不是“多调用一次模型”，而是每一轮都把状态明确写回 `memory / turn / outcome`，让下一轮判断建立在显式状态上，而不是重新从历史日志里猜。
 
 ## 6. 当前实际主工作流
 
@@ -132,32 +138,102 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    A["START"] --> B["human_brain"]
-    B -->|phase=skill_loader| C["human_skill_loader"]
-    B -->|phase=tool_exec| D["human_tool_exec"]
-    B -->|phase=response| E["human_response"]
-    B -->|status!=running| F["END"]
-    C -->|status=running| B
-    C -->|status!=running| F
-    D -->|status=running| B
-    D -->|status!=running| F
-    E --> F
+    A["START"] --> B["human_reason"]
+    B -->|phase=executing| C["human_execute"]
+    B -->|phase=finalizing| D["human_finalize"]
+    C --> B
+    D --> E["END"]
 ```
 
 ### Human 的实际循环
 
-1. `human_brain` 判断下一步要做什么
-2. 需要加载 skill 时进入 `human_skill_loader`
-3. 需要调用工具时进入 `human_tool_exec`
-4. 需要正式交付时进入 `human_response`
-5. 每次加载 skill 或执行工具后都会回到 `human_brain` 重新判断
+1. `human_reason`
+   - 读取 `task / memory / turn.incoming / trace`
+   - 吸收最新 observation
+   - 更新显式 memory
+   - 决定输出 `actionBatch` 还是终态 `Outcome`
+2. `human_execute`
+   - 执行 `activate_capability` 或 `invoke_tool`
+   - 把单次或批量执行结果汇总成 `ObservationBatch`
+   - 记录 `trace.steps`
+3. `human_finalize`
+   - 基于 `outcome + memory + trace` 生成最终 markdown 交付
+   - 补齐本地资料使用说明
+
+### Human 的目录分层
+
+- `src/main/services/ai/node/human/index.ts`
+  - Human 内部统一入口，供 graph 组装阶段节点与共享能力
+- `shared/`
+  - 放 `state / runtime / events / watchdog` 这类跨阶段共享逻辑
+- `registry/`
+  - 放 skill 定义与 tool prompt 目录这类静态注册表
+- `reason/`
+  - 放 observation 吸收、contract 校验与 memory/state 变换
+- `execute/`
+  - 放 action batch 校验、能力激活和工具调用执行逻辑
+- `finalize/`
+  - 放最终交付生成与 provenance 补齐
+
+### Human 的状态模型
+
+当前 human graph state 统一收敛为六层：
+
+- `task`
+  - 当前任务契约，只包含 `taskId` 与 `objective`
+- `progress`
+  - 图内部路由状态，当前只使用 `phase=reasoning|executing|finalizing`
+- `memory`
+  - human 的显式记忆，包含 `constraints / facts / evidence / openQuestions / focus / capabilityFocus`
+- `turn`
+  - 当前一轮的输入输出缓冲，包含 `incoming / analysis / actionBatch / watchdogHint`
+- `outcome`
+  - 终态结果，只保留 `completed | blocked`
+- `trace`
+  - 执行轨迹，仅用于审计、时间线和复盘
+
+其中：
+
+- `focus.current`
+  - durable 的当前执行焦点，只保留一个
+- `analysis.summary`
+  - 当前轮的审计摘要，不承担路由状态职责
+- `actionBatch`
+  - 当前轮待执行动作批次；只能是单能力激活、单工具动作，或最多 2 个只读并行工具动作
+- `Observation.id`
+  - 当前 run 内唯一的 observation 锚点，供 `facts.evidenceIds` 与 `memory.evidence` 显式引用
+
+### 受约束并行
+
+当前 `human_execute` 支持小批量并行，但只允许保守并行：
+
+- 同一批次默认最多 `2` 个动作
+- 只允许 `read_only && parallelSafe` 的动作进入同一 batch
+- `docx_apply_ops / save / rollback / render_preview` 这类写动作必须串行
+- terminal 命令只有在 `low risk + read_only + 无 artifact candidate` 时才允许并行
+
+并行的目标是减少无意义的串行读取，不是让执行器替 planner 做重排和猜测。
+
+### Watchdog 侧车
+
+当前 watchdog 不在主 graph 内，而是作为 `human_reason` 前的监督侧车：
+
+- 硬保险丝始终开启，防止无限循环和长时间空转
+- 模型 watchdog 由设置控制：`off / auto / aggressive`
+- 只有风险升高时才触发模型 watchdog，不是每轮都调用
+- watchdog 只提供 `watchdogHint`，最终是否继续或 blocked 仍由 `human_reason` 决定
+
+对应实现同时在主进程存储和设置页中暴露 `watchdogMode`，并把 `watchdog_signal` 投影到 workbench 时间线。
 
 ## 8. 设计原则
 
 - `main` 负责编排，`human` 负责解决问题
-- `human` 不是一次性执行器，而是持续分析和纠偏的执行体
-- 前面判断出错后，可以在后续步骤中重新修正
+- `human` 不是一次性执行器，而是带显式记忆和 durable focus 的执行体
+- 前面判断出错后，可以在后续 observation 中重新修正
 - 复杂任务通过上下文补充和计划拆解降低执行风险
+- 交付风格通过 `objective` 表达，不再依赖独立的 `deliveryKind`
+- `human_reason` 必须满足强 contract；非法输出统一 fail-closed 为 blocked
+- watchdog 负责监督空转风险，但不接管最终业务判断
 
 ## 9. 代码真相源
 
@@ -167,5 +243,8 @@ flowchart TD
 2. `src/main/services/ai/graph/humanGraph.ts`
 3. `src/main/services/ai/node/main/*`
 4. `src/main/services/ai/node/human/*`
-5. `src/main/services/ai/state/stateSchemas.ts`
-6. `src/shared/types.ts`
+5. `src/main/services/ai/node/human/{shared,registry,reason,execute,finalize}/**`
+6. `src/main/services/ai/state/stateSchemas.ts`
+7. `src/shared/types.ts`
+8. `src/main/services/storage/domains/AiRuntimeSettingsStore.ts`
+9. `src/renderer/src/utils/workbenchProjection.ts`

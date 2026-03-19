@@ -32,9 +32,9 @@ defineAiHumanCase({
             return rows
           }
         },
-        humanDecisionOverrides: [
+        humanReasonOverrides: [
           {
-            decision: {
+            output: {
               action: 'load_skill',
               skillId: 'local-kb-retrieval',
               rationale: '先检索本地规范。',
@@ -42,7 +42,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'kb_hybrid_search_chunks',
               args: {
@@ -54,7 +54,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'complete_task',
               summary: '本地规范已明确要求 approval denial coverage，无需再次确认。',
               rationale: '当前证据已经唯一且直接，不需要重复调用 KB 或 list_documents。',
@@ -75,16 +75,13 @@ defineAiHumanCase({
             `依据：${typeof resultData?.document_name === 'string' ? resultData.document_name : 'release-policy.md'}`
           ].join('\n')
       },
-      { maxSteps: 4 }
+      { hardActionLimit: 4 }
     )
 
     const output = await runner.run(
       {
         taskId: runtime.taskId,
         objective: '确认 approval denial coverage 是否是发布规范要求，并避免重复确认。'
-      },
-      {
-        deliveryKind: 'final'
       }
     )
 

@@ -1,5 +1,5 @@
 export { buildIntentPrompt } from './main/intent'
 export { buildPlanPrompt } from './main/plan'
-export { buildHumanBrainPrompt } from './human/brain'
-export { buildHumanResponsePrompt } from './human/response'
+export { buildHumanReasonPrompt } from './human/reason'
+export { buildHumanFinalizePrompt } from './human/finalize'
 export { buildSessionMemoryPrompt } from './memory/sessionMemory'

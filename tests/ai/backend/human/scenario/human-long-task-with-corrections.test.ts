@@ -43,9 +43,9 @@ defineAiHumanCase({
     const runner = createHumanTestRunner(
       runtime,
       {
-        humanDecisionOverrides: [
+        humanReasonOverrides: [
           {
-            decision: {
+            output: {
               action: 'load_skill',
               skillId: 'workspace-shell',
               rationale: '长任务先读取已有进展。',
@@ -53,7 +53,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'terminal_run_command',
               args: {
@@ -64,7 +64,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'terminal_run_command',
               args: {
@@ -75,7 +75,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'terminal_run_command',
               args: {
@@ -86,7 +86,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'load_skill',
               skillId: 'docx-editing',
               rationale: '先根据已有基线起草初版摘要。',
@@ -94,7 +94,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_open',
               args: {
@@ -105,7 +105,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_apply_ops',
               args: {
@@ -122,7 +122,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'load_skill',
               skillId: 'workspace-shell',
               rationale: '中途补读风险约束，确认是否需要修正已有草稿。',
@@ -130,7 +130,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'terminal_run_command',
               args: {
@@ -141,7 +141,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'load_skill',
               skillId: 'docx-editing',
               rationale: '拿到新约束后回到文档修正已有草稿。',
@@ -149,7 +149,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_apply_ops',
               args: {
@@ -173,7 +173,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_render_preview',
               args: {
@@ -184,7 +184,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_validate',
               args: {},
@@ -193,7 +193,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'complete_task',
               summary: '已在长任务中途纳入新约束，并修正 correction brief 交付。',
               rationale: '任务目标没有漂移，已有草稿已被收敛到新的风险约束。',
@@ -215,16 +215,13 @@ defineAiHumanCase({
             '说明：本轮先写入初稿，再根据新增风险约束回到原文做纠偏，不是重新起一个新方向。'
           ].join('\n')
       },
-      { maxSteps: 16 }
+      { hardActionLimit: 16 }
     )
 
     const output = await runner.run(
       {
         taskId: runtime.taskId,
         objective: '先整理阶段基线，再补读风险汇总；如果中途发现新约束，要修正已有 brief，而不是重新做一份。'
-      },
-      {
-        deliveryKind: 'handoff'
       }
     )
 

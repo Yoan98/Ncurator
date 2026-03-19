@@ -29,9 +29,9 @@ defineAiHumanCase({
     const runner = createHumanTestRunner(
       runtime,
       {
-        humanDecisionOverrides: [
+        humanReasonOverrides: [
           {
-            decision: {
+            output: {
               action: 'load_skill',
               skillId: 'docx-editing',
               rationale: '这是上一轮已经产出的中间稿，本轮只做局部 refinement。',
@@ -39,7 +39,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_open',
               args: {
@@ -50,7 +50,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_apply_ops',
               args: {
@@ -68,7 +68,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_render_preview',
               args: {
@@ -79,7 +79,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_validate',
               args: {},
@@ -88,7 +88,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'complete_task',
               summary: '已基于上一轮中间稿完成局部 refinement，并生成新的预览。',
               rationale: 'follow-up 任务已经围绕已有版本完成保守化更新。',
@@ -110,16 +110,13 @@ defineAiHumanCase({
             '说明：本轮沿用上一版文档，只对风险表述做了局部保守化处理。'
           ].join('\n')
       },
-      { maxSteps: 8 }
+      { hardActionLimit: 8 }
     )
 
     const output = await runner.run(
       {
         taskId: runtime.taskId,
         objective: '继续刚才那版 weekly brief，把风险部分改得更保守一点，不要整份重写。'
-      },
-      {
-        deliveryKind: 'handoff'
       }
     )
 

@@ -1,10 +1,10 @@
 import type { StructuredToolInterface } from '@langchain/core/tools'
-import { RUNTIME_SKILL_IDS } from '../../../../../shared/constants'
-import type { RuntimeSkillId, SkillCard } from '../../../../../shared/types'
-import { docxCapability } from '../../tools/docx'
-import { localKbRetrievalCapability } from '../../tools/local_kb_retrieval'
-import { terminalExecCapability } from '../../tools/terminal_exec'
-import type { CapabilityToolBuildInput } from '../../tools/types'
+import { RUNTIME_SKILL_IDS } from '../../../../../../shared/constants'
+import type { RuntimeSkillId, SkillCard } from '../../../../../../shared/types'
+import { docxCapability } from '../../../tools/docx'
+import { localKbRetrievalCapability } from '../../../tools/local_kb_retrieval'
+import { terminalExecCapability } from '../../../tools/terminal_exec'
+import type { CapabilityToolBuildInput } from '../../../tools/types'
 
 type HumanSkillGuide = {
   summary: string

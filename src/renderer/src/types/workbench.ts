@@ -24,6 +24,7 @@ export type WorkbenchTaskDeliveryEvent = Extract<AiRunEvent, { type: 'task_deliv
 export type WorkbenchApprovalEvent = Extract<AiRunEvent, { type: 'approval_required' }>
 export type WorkbenchWorkspaceEvent = Extract<AiRunEvent, { type: 'workspace_required' }>
 export type WorkbenchRuntimeIssueEvent = Extract<AiRunEvent, { type: 'runtime_issue' }>
+export type WorkbenchWatchdogEvent = Extract<AiRunEvent, { type: 'watchdog_signal' }>
 
 export type WorkbenchInspector =
   | {
@@ -85,6 +86,11 @@ export type WorkbenchInspector =
       event: WorkbenchRuntimeIssueEvent
     }
   | {
+      kind: 'watchdog'
+      title: string
+      event: WorkbenchWatchdogEvent
+    }
+  | {
       kind: 'draft_review'
       title: string
       review: AiDraftReviewRef
@@ -107,6 +113,7 @@ export type WorkbenchTimelineItem = {
     | 'approval'
     | 'workspace'
     | 'runtime_issue'
+    | 'watchdog'
     | 'draft_review'
     | 'local_status'
   title: string

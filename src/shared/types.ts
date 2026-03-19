@@ -511,10 +511,9 @@ export type AiRunEventStage =
   | 'main_direct_human_exec'
   | 'main_synthesis_human'
   | 'main_complete'
-  | 'human_brain'
-  | 'human_skill_loader'
-  | 'human_tool_exec'
-  | 'human_response'
+  | 'human_reason'
+  | 'human_execute'
+  | 'human_finalize'
 export type AiTaskResultCode =
   | 'ok'
   | 'failed'
@@ -524,6 +523,12 @@ export type AiTaskResultCode =
   | 'invalid_input'
 export type HumanStepAction = (typeof HUMAN_STEP_ACTIONS)[number]
 export type HumanStepResultStatus = (typeof HUMAN_STEP_RESULT_STATUSES)[number]
+export type AiRuntimeWatchdogMode = 'off' | 'auto' | 'aggressive'
+export type WatchdogSignalLevel = 'warn' | 'stop'
+
+export type AiRuntimeSettings = {
+  watchdogMode: AiRuntimeWatchdogMode
+}
 
 export type ToolPromptArgSpec = {
   name: string
@@ -567,70 +572,136 @@ export type SkillCard = {
   requires?: RuntimeSkillRequirement[]
 }
 
-export type HumanLoadSkillDecision = {
-  action: 'load_skill'
+export type HumanFact = {
+  id: string
+  summary: string
+  evidenceIds: string[]
+}
+
+export type EvidenceRef = {
+  id: string
+  kind: 'tool_result' | 'user_input' | 'prior_delivery'
+  summary: string
+  toolName?: string
+  sourceRef?: string
+}
+
+export type HumanFocus = {
+  current?: string
+}
+
+export type HumanMemory = {
+  constraints: string[]
+  facts: HumanFact[]
+  evidence: EvidenceRef[]
+  openQuestions: string[]
+  focus: HumanFocus
+  capabilityFocus: {
+    activeStack: RuntimeSkillId[]
+  }
+}
+
+export type HumanMemoryPatch = {
+  constraints?: string[]
+  facts?: HumanFact[]
+  evidence?: EvidenceRef[]
+  openQuestions?: string[]
+  focus?: {
+    current?: string | null
+  }
+  capabilityFocus?: {
+    activeStack?: RuntimeSkillId[]
+  }
+}
+
+export type HumanActivateCapabilityAction = {
+  type: 'activate_capability'
   skillId: RuntimeSkillId
   rationale: string
   publicNarrative: string
 }
 
-export type HumanInvokeToolDecision = {
-  action: 'invoke_tool'
+export type HumanInvokeToolAction = {
+  type: 'invoke_tool'
   toolName: string
   args: JsonObject
   rationale: string
   publicNarrative: string
 }
 
-export type HumanCompleteTaskDecision = {
-  action: 'complete_task'
+export type HumanActionSpec = HumanActivateCapabilityAction | HumanInvokeToolAction
+
+export type HumanActionBatch = {
   summary: string
-  rationale: string
-  publicNarrative: string
-  resultData?: JsonObject
+  actions: HumanActionSpec[]
 }
 
-export type HumanBlockTaskDecision = {
-  action: 'block_task'
-  reason: string
-  rationale: string
-  publicNarrative: string
-  details?: JsonValue
+export type HumanCapabilityActivatedObservation = {
+  id: string
+  kind: 'capability_activated'
+  skillId: RuntimeSkillId
+  summary: string
 }
 
-export type HumanStepDecision =
-  | HumanLoadSkillDecision
-  | HumanInvokeToolDecision
-  | HumanCompleteTaskDecision
-  | HumanBlockTaskDecision
+export type HumanToolResultObservation = {
+  id: string
+  kind: 'tool_result'
+  toolName: string
+  ok: boolean
+  code: AiTaskResultCode
+  summary: string
+  data?: JsonValue
+}
 
-export type HumanStepRecord = {
+export type HumanObservation = HumanCapabilityActivatedObservation | HumanToolResultObservation
+
+export type ObservationBatch = {
+  summary: string
+  observations: HumanObservation[]
+}
+
+export type ReasonAnalysis = {
+  summary: string
+}
+
+export type WatchdogHint = {
+  level: WatchdogSignalLevel
+  summary: string
+  signs: string[]
+  shouldConverge: boolean
+}
+
+export type HumanOutcome = {
+  status: 'completed' | 'blocked'
+  summary: string
+  payload?: JsonObject
+  presentation?: {
+    markdown: string
+  }
+  provenance?: {
+    localSourceStatus?: LocalSourceUsageStatus
+    localSourceSummary?: string
+  }
+}
+
+export type HumanReasoningOutput = {
+  memoryPatch: HumanMemoryPatch
+  analysis: ReasonAnalysis
+  actionBatch?: HumanActionBatch
+  outcome?: HumanOutcome
+}
+
+export type HumanTraceStep = {
   step: number
   action: HumanStepAction
   publicNarrative: string
   resultStatus?: HumanStepResultStatus
   skillId?: RuntimeSkillId
   toolName?: string
-  summary?: string
-}
-
-export type DiagnosticTrace = {
-  rationale: string
-  selectedSkillId?: RuntimeSkillId
-  selectedToolName?: string
-  args?: JsonObject
-  observationSummary?: string
-  switchReason?: string
-}
-
-export type CapabilityResult = {
-  toolName: string
-  capability?: AiTaskKind
-  success: boolean
-  code: AiTaskResultCode
   summary: string
-  data?: JsonObject
 }
+
+export type HumanStepRecord = HumanTraceStep
 
 export type HumanTaskInput = {
   // main 分配的任务 ID（run 内唯一）。
@@ -837,12 +908,12 @@ type AiRunEventPayload =
       createdAt: number
     }
   | {
-      type: 'human_diagnostic'
+      type: 'watchdog_signal'
       runId: string
-      taskId: string
-      stepIndex: number
-      action: HumanStepAction
-      trace: DiagnosticTrace
+      taskId?: string
+      level: WatchdogSignalLevel
+      summary: string
+      signs: string[]
       createdAt: number
     }
   | {

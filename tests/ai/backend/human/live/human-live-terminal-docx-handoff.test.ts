@@ -44,7 +44,7 @@ defineAiHumanLiveCase({
       {
         liveModelConfig: loadPrimaryLiveHumanConfig()
       },
-      { maxSteps: 12 }
+      { hardActionLimit: 12 }
     )
 
     const output = await runner.run(
@@ -52,9 +52,6 @@ defineAiHumanLiveCase({
         taskId: runtime.taskId,
         objective:
           '请先读取 ai/workspace/materials/daily/2026-03-16-note.md，不要读取其他材料。拿到结论后不要使用 KB，也不需要 save；直接打开 weekly-brief.docx，把 “Summary: pending material import.” 替换成 “Summary: Integration review completed. approval flow still needs regression coverage.”，生成可审阅 preview，并用 handoff 形式交付。'
-      },
-      {
-        deliveryKind: 'handoff'
       }
     )
 

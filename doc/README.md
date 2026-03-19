@@ -3,18 +3,18 @@
 - [architecture.md](/Users/test/work-space/NCurator-Desktop/doc/architecture.md)
   - 说明技术栈、整体架构、核心模块和系统主链路。
 - [ai-design.md](/Users/test/work-space/NCurator-Desktop/doc/ai-design.md)
-  - 说明 AI 设计、`main`/`human` 分工，以及当前实际工作流。
+  - 说明 AI 设计、`main`/`human` 分工、structured ReAct 的 `human` 内核、`focus/actionBatch` 状态契约、human 内部目录分层，以及当前实际节点流转。
 - [ai-workbench-test/plan.md](/Users/test/work-space/NCurator-Desktop/doc/ai-workbench-test/plan.md)
-  - 当需要查看 AI workbench 的阶段划分，以及各阶段按 `basic / boundary / scenario / live` 组织的用例规划时，阅读这个文档。
+  - 当需要查看 AI workbench 的阶段划分，以及各阶段按 `basic / boundary / scenario / live` 组织的用例规划、watchdog/并行边界时，阅读这个文档。
 - [ai-workbench-test/todo-stage-1.md](/Users/test/work-space/NCurator-Desktop/doc/ai-workbench-test/todo-stage-1.md)
   - 说明当前 Stage 1 `backend/tools` 三层覆盖的推进状态、完成证据与退出条件。
 - [ai-workbench-test/todo-stage-2.md](/Users/test/work-space/NCurator-Desktop/doc/ai-workbench-test/todo-stage-2.md)
-  - 说明当前 Stage 2 `backend/human` 的推进状态，以及 basic、boundary、scenario、live 四类基线与后续落点。
+  - 说明当前 Stage 2 `backend/human` 的推进状态，以及 structured ReAct、watchdog 与 human 测试契约迁移后的覆盖情况。
 - `doc/ai-workbench-test/`
 - [database.md](/Users/test/work-space/NCurator-Desktop/doc/database.md)
   - 说明数据库与存储层设计，包括 LanceDB 的分层和表职责。
 - [project-structure.md](/Users/test/work-space/NCurator-Desktop/doc/project-structure.md)
-  - 说明项目目录结构、模块边界和文件放置规则。
+  - 说明项目目录结构、模块边界、human 子目录归位和文件放置规则。
 - [ui-style.md](/Users/test/work-space/NCurator-Desktop/doc/ui-style.md)
   - 说明界面设计风格、布局规则和组件使用规范。
 - [test.md](/Users/test/work-space/NCurator-Desktop/doc/test.md)

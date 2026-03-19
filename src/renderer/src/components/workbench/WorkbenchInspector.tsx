@@ -295,6 +295,22 @@ const WorkbenchInspectorPanel: React.FC<WorkbenchInspectorProps> = ({
           </div>
         ) : null}
 
+        {inspector.kind === 'watchdog' ? (
+          <div className="rounded-xl border border-[#FDECC8] bg-[#FFF9ED] px-4 py-4 text-sm text-[#8A6510]">
+            <div className="font-semibold text-[#1F1F1F]">Watchdog 监督</div>
+            <div className="mt-2">{inspector.event.summary}</div>
+            {inspector.event.signs.length > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {inspector.event.signs.map((sign) => (
+                  <span key={sign} className="rounded-full bg-white px-2 py-1 text-[11px] text-[#666666]">
+                    {sign}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
         {inspector.kind === 'draft_review' ? (
           <div className="rounded-xl border border-[#F4E5DF] bg-[#FBF5F2] px-4 py-4">
             <div className="flex items-center justify-between gap-3">

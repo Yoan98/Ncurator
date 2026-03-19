@@ -24,9 +24,9 @@ defineAiHumanCase({
     const runner = createHumanTestRunner(
       runtime,
       {
-        humanDecisionOverrides: [
+        humanReasonOverrides: [
           {
-            decision: {
+            output: {
               action: 'load_skill',
               skillId: 'workspace-shell',
               rationale: '先读取多份 workspace 材料。',
@@ -34,7 +34,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'terminal_run_command',
               args: {
@@ -45,7 +45,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'terminal_run_command',
               args: {
@@ -56,7 +56,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'terminal_run_command',
               args: {
@@ -67,7 +67,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'terminal_run_command',
               args: {
@@ -78,7 +78,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'complete_task',
               summary: '已汇总多份材料并形成统一交付。',
               rationale: '多源材料已经足够支撑合并交付。',
@@ -119,16 +119,13 @@ defineAiHumanCase({
           ].join('\n')
         }
       },
-      { maxSteps: 7 }
+      { hardActionLimit: 7 }
     )
 
     const output = await runner.run(
       {
         taskId: runtime.taskId,
         objective: '汇总多份日报与风险清单，输出统一交付。'
-      },
-      {
-        deliveryKind: 'final'
       }
     )
 

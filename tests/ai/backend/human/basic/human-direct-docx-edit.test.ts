@@ -36,9 +36,9 @@ defineAiHumanCase({
     const runner = createHumanTestRunner(
       runtime,
       {
-        humanDecisionOverrides: [
+        humanReasonOverrides: [
           {
-            decision: {
+            output: {
               action: 'load_skill',
               skillId: 'docx-editing',
               rationale: '先加载文档编辑能力。',
@@ -46,7 +46,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_open',
               args: {
@@ -57,7 +57,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_apply_ops',
               args: {
@@ -84,7 +84,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_render_preview',
               args: {
@@ -95,7 +95,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'docx_validate',
               args: {},
@@ -104,7 +104,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'complete_task',
               summary: '周报中的风险摘要与负责人已更新，并已生成可审阅预览。',
               rationale: '文档已完成改写、预览和校验。',
@@ -126,16 +126,13 @@ defineAiHumanCase({
           ].join('\n')
         }
       },
-      { maxSteps: 8 }
+      { hardActionLimit: 8 }
     )
 
     const output = await runner.run(
       {
         taskId: runtime.taskId,
         objective: '更新周报中的风险摘要和负责人，并给出可审阅的 docx 结果。'
-      },
-      {
-        deliveryKind: 'handoff'
       }
     )
 

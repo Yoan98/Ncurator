@@ -1,4 +1,5 @@
 import type {
+  AiRuntimeSettings,
   AiRunApprovalDecisionRequest,
   AiRunApprovalDecisionResponse,
   AiRunCancelResponse,
@@ -125,6 +126,10 @@ export type DesktopApi = {
   llmConfigSave: (config: LLMConfig) => Promise<{ success: boolean; error?: string }>
   llmConfigDelete: (id: string) => Promise<{ success: boolean; error?: string }>
   llmConfigSetActive: (id: string) => Promise<{ success: boolean; error?: string }>
+  aiRuntimeSettingsGet: () => Promise<AiRuntimeSettings>
+  aiRuntimeSettingsSave: (
+    settings: AiRuntimeSettings
+  ) => Promise<{ success: boolean; error?: string }>
   aiRunStart: (payload: AiRunStartRequest) => Promise<AiRunStartResponse>
   aiRunCancel: (runId: string) => Promise<AiRunCancelResponse>
   aiRunApprovalDecide: (

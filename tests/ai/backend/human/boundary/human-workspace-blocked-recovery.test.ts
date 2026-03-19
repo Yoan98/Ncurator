@@ -13,9 +13,9 @@ defineAiHumanCase({
       runtime,
       {
         bindWorkspace: false,
-        humanDecisionOverrides: [
+        humanReasonOverrides: [
           {
-            decision: {
+            output: {
               action: 'load_skill',
               skillId: 'workspace-shell',
               rationale: '需要读取本地工作区材料。',
@@ -23,7 +23,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'terminal_run_command',
               args: {
@@ -43,16 +43,13 @@ defineAiHumanCase({
             '继续条件：请先绑定 workspace，再继续执行本地读取任务。'
           ].join('\n')
       },
-      { maxSteps: 3 }
+      { hardActionLimit: 3 }
     )
 
     const output = await runner.run(
       {
         taskId: runtime.taskId,
         objective: '读取当前 workspace 里的本地材料。'
-      },
-      {
-        deliveryKind: 'handoff'
       }
     )
 

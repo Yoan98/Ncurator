@@ -10,10 +10,11 @@ import {
   Typography,
   Tag,
   Space,
-  Popconfirm
+  Popconfirm,
+  Select
 } from 'antd'
 import { HiPlus, HiPencil, HiTrash, HiCheckCircle, HiCog6Tooth } from 'react-icons/hi2'
-import type { LLMConfig } from '../../../shared/types'
+import type { AiRuntimeSettings, LLMConfig } from '../../../shared/types'
 
 import openaiLogo from '../assets/img/openai.png'
 import qianwenLogo from '../assets/img/qianwen.png'
@@ -106,6 +107,10 @@ type GroupedModelOption = { label: string; options: FlatModelOption[] }
 const SettingsPage: React.FC = () => {
   const [configs, setConfigs] = useState<LLMConfig[]>([])
   const [loading, setLoading] = useState(false)
+  const [runtimeSettings, setRuntimeSettings] = useState<AiRuntimeSettings>({
+    watchdogMode: 'auto'
+  })
+  const [runtimeSaving, setRuntimeSaving] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingConfig, setEditingConfig] = useState<LLMConfig | null>(null)
   const [form] = Form.useForm()
@@ -114,8 +119,12 @@ const SettingsPage: React.FC = () => {
   const loadConfigs = async () => {
     setLoading(true)
     try {
-      const list = await window.api.llmConfigList()
+      const [list, nextRuntimeSettings] = await Promise.all([
+        window.api.llmConfigList(),
+        window.api.aiRuntimeSettingsGet()
+      ])
       setConfigs(list)
+      setRuntimeSettings(nextRuntimeSettings)
     } catch (error) {
       console.error('Failed to load configs', error)
       message.error('加载配置失败')
@@ -204,6 +213,21 @@ const SettingsPage: React.FC = () => {
     } catch (e) {
       // Validation failed or save failed
       console.error(e)
+    }
+  }
+
+  const handleWatchdogModeChange = async (watchdogMode: AiRuntimeSettings['watchdogMode']) => {
+    const nextSettings: AiRuntimeSettings = { watchdogMode }
+    setRuntimeSaving(true)
+    try {
+      await window.api.aiRuntimeSettingsSave(nextSettings)
+      setRuntimeSettings(nextSettings)
+      message.success('AI Runtime 设置已更新')
+    } catch (error) {
+      console.error(error)
+      message.error('保存 AI Runtime 设置失败')
+    } finally {
+      setRuntimeSaving(false)
     }
   }
 
@@ -306,6 +330,36 @@ const SettingsPage: React.FC = () => {
           size="middle"
           className="[&_.ant-table-thead_th]:!bg-[#F5F5F4] [&_.ant-table-thead_th]:!text-[#666666] [&_.ant-table-thead_th]:!font-medium [&_.ant-table-tbody_td]:!py-4"
         />
+      </div>
+
+      <div className="bg-white rounded-2xl border border-[#E5E5E4] shadow-sm p-6 mt-6">
+        <div className="mb-4">
+          <Title level={4} className="!mb-1 !text-[#1F1F1F]">
+            AI Runtime
+          </Title>
+          <p className="text-[#999999] text-sm mb-0">
+            控制 watchdog 的监督强度。系统硬保险丝始终开启；这里仅决定是否额外启用模型 watchdog。
+          </p>
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <div className="text-[#1F1F1F] font-medium mb-1">Watchdog 模式</div>
+            <div className="text-[#999999] text-sm">
+              `Off` 只保留硬保险丝，`Auto` 仅在高风险时触发，`Aggressive` 会更积极地介入长任务。
+            </div>
+          </div>
+          <Select<AiRuntimeSettings['watchdogMode']>
+            value={runtimeSettings.watchdogMode}
+            onChange={handleWatchdogModeChange}
+            loading={runtimeSaving}
+            className="min-w-[220px]"
+            options={[
+              { value: 'off', label: 'Off' },
+              { value: 'auto', label: 'Auto' },
+              { value: 'aggressive', label: 'Aggressive' }
+            ]}
+          />
+        </div>
       </div>
 
       <Modal

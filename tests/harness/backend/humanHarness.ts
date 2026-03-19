@@ -9,17 +9,20 @@ import type { BackendTestRuntime, CreateAiRunContextInput } from './test-types'
 export const createHumanTestRunner = (
   runtime: BackendTestRuntime,
   contextInput: CreateAiRunContextInput = {},
-  options: { maxSteps?: number } = {}
+  options: { hardActionLimit?: number } = {}
 ) => {
-  const ctx = runtime.createAiRunContext(contextInput)
-  const run = createHumanGraphRunner({
-    ctx,
-    maxSteps: options.maxSteps
+  const ctx = runtime.createAiRunContext({
+    ...contextInput,
+    humanRuntimeOverrides: {
+      ...contextInput.humanRuntimeOverrides,
+      hardActionLimit: options.hardActionLimit ?? contextInput.humanRuntimeOverrides?.hardActionLimit
+    }
   })
+  const run = createHumanGraphRunner({ ctx })
 
   return {
     ctx,
-    run: async (taskInput: HumanTaskInput, dispatchOptions: HumanRunDispatchOptions) =>
+    run: async (taskInput: HumanTaskInput, dispatchOptions?: HumanRunDispatchOptions) =>
       await run(taskInput, dispatchOptions) as HumanTaskOutput
   }
 }

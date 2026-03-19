@@ -26,9 +26,9 @@ defineAiHumanCase({
     const runner = createHumanTestRunner(
       runtime,
       {
-        humanDecisionOverrides: [
+        humanReasonOverrides: [
           {
-            decision: {
+            output: {
               action: 'load_skill',
               skillId: 'workspace-shell',
               rationale: '先读取已有材料，尽量在预算内保留可用进展。',
@@ -36,7 +36,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'terminal_run_command',
               args: {
@@ -47,7 +47,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'terminal_run_command',
               args: {
@@ -58,7 +58,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'terminal_run_command',
               args: {
@@ -90,16 +90,13 @@ defineAiHumanCase({
             '- 基于已收集进展生成最终 brief 或 handoff'
           ].join('\n')
       },
-      { maxSteps: 4 }
+      { hardActionLimit: 4 }
     )
 
     const output = await runner.run(
       {
         taskId: runtime.taskId,
         objective: '在有限步数内尽量汇总阶段进展；如果做不完，也要保留部分交付并给出下一步。'
-      },
-      {
-        deliveryKind: 'handoff'
       }
     )
 

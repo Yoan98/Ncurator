@@ -1,91 +1,104 @@
 import { END, START, StateGraph } from '@langchain/langgraph'
-import type { HumanTaskInput, HumanTaskOutput } from '../../../../shared/types'
+import type {
+  AiTaskResultCode,
+  HumanTaskInput,
+  HumanTaskOutput
+} from '../../../../shared/types'
 import type { AiRunContext, HumanRunDispatchOptions } from '../types'
-import { createHumanBrainNode } from '../node/human/brainNode'
-import { createHumanResponseNode } from '../node/human/responseNode'
-import { isHumanTerminalStatus } from '../node/human/runtimeState'
-import { createHumanSkillLoaderNode } from '../node/human/skillLoaderNode'
-import { createHumanToolExecNode } from '../node/human/toolExecNode'
-import type { HumanRunState } from '../node/human/types'
+import {
+  createHumanExecuteNode,
+  createHumanFinalizeNode,
+  createHumanRuntimeCache,
+  createHumanReasonNode,
+  createInitialHumanState,
+  createWatchdogSidecar,
+  type HumanState
+} from '../node/human'
 import { createHumanRunStateSchema } from '../state/stateSchemas'
 
-export const createHumanGraphRunner = (input: { ctx: AiRunContext; maxSteps?: number }) => {
+const RECURSION_LIMIT = 96
+
+const resolveOutputCode = (input: {
+  state: HumanState
+  forcedByWatchdog: boolean
+}): AiTaskResultCode => {
+  const { state, forcedByWatchdog } = input
+  if (state.outcome?.status === 'completed') return 'ok'
+  const lastObservation = state.turn.incoming?.observations.at(-1)
+  if (lastObservation && lastObservation.kind === 'tool_result' && lastObservation.code !== 'ok') {
+    return lastObservation.code
+  }
+  if (forcedByWatchdog) return 'bounded_loop_error'
+  return 'failed'
+}
+
+export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
   const { ctx } = input
-  const maxSteps = Math.max(0, Number(input.maxSteps ?? 6))
-  // Each human step can traverse brain + loader/tool nodes, so LangGraph recursion
-  // must scale with maxSteps instead of relying on the default limit.
-  const recursionLimit = Math.max(32, maxSteps * 4 + 8)
   const State = createHumanRunStateSchema()
-
-  const brainNode = createHumanBrainNode({ ctx })
-  const responseNode = createHumanResponseNode({ ctx })
-  const skillLoaderNode = createHumanSkillLoaderNode({ ctx })
-  const toolExecNode = createHumanToolExecNode({ ctx })
-
-  const graph = new StateGraph(State)
-    .addNode('human_brain_node', (state: HumanRunState) => brainNode(state))
-    .addNode('human_response_node', (state: HumanRunState) => responseNode(state))
-    .addNode('human_skill_loader_node', (state: HumanRunState) => skillLoaderNode(state))
-    .addNode('human_tool_exec_node', (state: HumanRunState) => toolExecNode(state))
-    .addEdge(START, 'human_brain_node')
-    .addConditionalEdges('human_brain_node', (state: HumanRunState) => {
-      if (state.status === 'response') return 'human_response_node'
-      if (state.status === 'skill_loader') return 'human_skill_loader_node'
-      if (state.status === 'tool_exec') return 'human_tool_exec_node'
-      if (isHumanTerminalStatus(state.status)) return END
-      return END
-    })
-    .addConditionalEdges('human_skill_loader_node', (state: HumanRunState) => {
-      if (state.status === 'response') return 'human_response_node'
-      if (state.status === 'brain') return 'human_brain_node'
-      if (isHumanTerminalStatus(state.status)) return END
-      return END
-    })
-    .addConditionalEdges('human_tool_exec_node', (state: HumanRunState) => {
-      if (state.status === 'response') return 'human_response_node'
-      if (state.status === 'brain') return 'human_brain_node'
-      if (isHumanTerminalStatus(state.status)) return END
-      return END
-    })
-    .addEdge('human_response_node', END)
-    .compile()
 
   return async (
     taskInput: HumanTaskInput,
-    options: HumanRunDispatchOptions
+    options: HumanRunDispatchOptions = {}
   ): Promise<HumanTaskOutput> => {
+    const cache = createHumanRuntimeCache()
+    const watchdog = createWatchdogSidecar({
+      ctx,
+      taskId: taskInput.taskId,
+      hardActionLimit: Math.max(1, Number(ctx.humanRuntimeOverrides?.hardActionLimit ?? 12))
+    })
+
+    const reasonNode = createHumanReasonNode({
+      ctx,
+      cache,
+      watchdog
+    })
+    const executeNode = createHumanExecuteNode({
+      ctx,
+      cache
+    })
+    const finalizeNode = createHumanFinalizeNode({
+      ctx,
+      streamAnswer: Boolean(options.streamAnswer),
+      internalDelivery: Boolean(options.internalDelivery),
+      wasForcedByWatchdog: () => watchdog.wasHardRequested()
+    })
+
+    const graph = new StateGraph(State)
+      .addNode('human_reason_node', (state: HumanState) => reasonNode(state))
+      .addNode('human_execute_node', (state: HumanState) => executeNode(state))
+      .addNode('human_finalize_node', (state: HumanState) => finalizeNode(state))
+      .addEdge(START, 'human_reason_node')
+      .addConditionalEdges('human_reason_node', (state: HumanState) => {
+        if (state.progress.phase === 'executing') return 'human_execute_node'
+        if (state.progress.phase === 'finalizing') return 'human_finalize_node'
+        return END
+      })
+      .addEdge('human_execute_node', 'human_reason_node')
+      .addEdge('human_finalize_node', END)
+      .compile()
+
     const output = (await graph.invoke(
+      createInitialHumanState({
+        task: taskInput,
+        allowNonLocal: ctx.allowNonLocal
+      }) as HumanState,
       {
-        runId: ctx.runId,
-        input: taskInput,
-        status: 'brain',
-        deliveryKind: options.deliveryKind,
-        streamAnswer: Boolean(options.streamAnswer),
-        internalDelivery: Boolean(options.internalDelivery),
-        steps: 0,
-        maxSteps,
-        loadedSkillIds: [],
-        loadedToolsets: {},
-        activeSkillIds: [],
-        stepHistory: [],
-        summary: '',
-        deliveryMarkdown: '',
-        resultCode: 'failed'
-      } as HumanRunState,
-      {
-        recursionLimit
+        recursionLimit: RECURSION_LIMIT
       }
-    )) as HumanRunState
+    )) as HumanState
 
     return {
       taskId: taskInput.taskId,
-      status: output.status === 'completed' ? 'completed' : 'blocked',
-      summary: output.summary,
-      deliveryMarkdown: output.deliveryMarkdown,
-      resultCode: output.resultCode,
-      resultData: output.resultData,
-      localSourceStatus: output.localSourceStatus,
-      localSourceSummary: output.localSourceSummary
+      status: output.outcome?.status || 'blocked',
+      summary: output.outcome?.summary || '任务未产出终态结果。',
+      deliveryMarkdown: output.outcome?.presentation?.markdown || '',
+      resultCode: resolveOutputCode({
+        state: output,
+        forcedByWatchdog: watchdog.wasHardRequested()
+      }),
+      resultData: output.outcome?.payload,
+      localSourceStatus: output.outcome?.provenance?.localSourceStatus,
+      localSourceSummary: output.outcome?.provenance?.localSourceSummary
     }
   }
 }

@@ -150,6 +150,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
       payload.allowNonLocal ? '是' : '否'
     }`,
     allowNonLocal: Boolean(payload.allowNonLocal),
+    runtimeSettings: deps.runtimeSettings,
     workspace: payload.workspace
       ? {
           workspaceId: String(payload.workspace.workspaceId || '').trim(),

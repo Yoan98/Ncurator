@@ -432,6 +432,15 @@ const ChatPage: React.FC = () => {
         return
       }
 
+      if (evt.type === 'watchdog_signal') {
+        setRightPanel({
+          title: 'Watchdog 监督',
+          kind: 'json',
+          data: evt
+        })
+        return
+      }
+
       if (evt.type === 'file_artifact') {
         setRightPanel((prev) => {
           const current =

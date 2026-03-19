@@ -4,12 +4,13 @@ import { createChatModel } from '../../../src/main/services/llm/chatModel'
 import type { DocxChangedBlock, DocxOp } from '../../../src/main/services/ai/tools/docx/types'
 import type { AiRunContext } from '../../../src/main/services/ai/types'
 import type { AiApprovalDecision, AiApprovalRequest } from '../../../src/main/services/ai/types'
-import type { HumanStepDecision, JsonObject } from '../../../src/shared/types'
+import type { HumanReasoningOutput, JsonObject } from '../../../src/shared/types'
 import type { EventCollector } from '../core/eventCollector'
 import type {
   ApprovalPolicy,
   ApprovalResolver,
   CreateAiRunContextInput,
+  LegacyTestHumanReasonOutput,
   LiveLlmConfig,
   TestDocumentsStoreOverrides,
   TestToolExecutionOverride
@@ -77,10 +78,10 @@ const buildToolExecutionOverrideResolver = (
   }
 }
 
-const buildHumanDecisionOverrideResolver = (
-  overrides: CreateAiRunContextInput['humanDecisionOverrides']
+const buildHumanReasonOverrideResolver = (
+  overrides: CreateAiRunContextInput['humanReasonOverrides']
 ):
-  | (() => HumanStepDecision | undefined)
+  | (() => HumanReasoningOutput | undefined)
   | undefined => {
   if (!overrides || overrides.length === 0) return undefined
 
@@ -93,7 +94,94 @@ const buildHumanDecisionOverrideResolver = (
     const matched = rules.find((rule) => rule.remainingUses > 0)
     if (!matched) return undefined
     matched.remainingUses -= 1
-    return matched.decision
+    if ('action' in matched.output) {
+      return translateLegacyReasonOutput(matched.output)
+    }
+    return matched.output
+  }
+}
+
+const translateLegacyReasonOutput = (
+  output: LegacyTestHumanReasonOutput
+): HumanReasoningOutput => {
+  if (output.action === 'load_skill') {
+    return {
+      memoryPatch: {
+        focus: {
+          current: output.skillId
+        }
+      },
+      analysis: {
+        summary: output.rationale
+      },
+      actionBatch: {
+        summary: output.rationale,
+        actions: [
+          {
+            type: 'activate_capability',
+            skillId: output.skillId,
+            rationale: output.rationale,
+            publicNarrative: output.publicNarrative
+          }
+        ]
+      }
+    }
+  }
+
+  if (output.action === 'invoke_tool') {
+    return {
+      memoryPatch: {
+        focus: {
+          current: output.toolName
+        }
+      },
+      analysis: {
+        summary: output.rationale
+      },
+      actionBatch: {
+        summary: output.rationale,
+        actions: [
+          {
+            type: 'invoke_tool',
+            toolName: output.toolName,
+            args: output.args,
+            rationale: output.rationale,
+            publicNarrative: output.publicNarrative
+          }
+        ]
+      }
+    }
+  }
+
+  if (output.action === 'complete_task') {
+    return {
+      memoryPatch: {},
+      analysis: {
+        summary: output.rationale
+      },
+      outcome: {
+        status: 'completed',
+        summary: output.summary,
+        payload: output.resultData
+      }
+    }
+  }
+
+  return {
+    memoryPatch: {},
+    analysis: {
+      summary: output.rationale
+    },
+    outcome: {
+      status: 'blocked',
+      summary: output.reason,
+      payload:
+        output.details &&
+        typeof output.details === 'object' &&
+        !Array.isArray(output.details)
+          ? output.details
+          : undefined
+    }
   }
 }
 
@@ -134,7 +222,10 @@ export const createTestAiRunContext = (input: CreateTestAiRunContextInput): AiRu
   const documentsStoreStub = buildDocumentsStoreStub(input.documentsStoreOverrides)
   const embeddingServiceStub = buildEmbeddingServiceStub()
   const resolveToolExecutionOverride = buildToolExecutionOverrideResolver(input.toolExecutionOverrides)
-  const resolveHumanDecisionOverride = buildHumanDecisionOverrideResolver(input.humanDecisionOverrides)
+  const resolveHumanReasonOverride = buildHumanReasonOverrideResolver(input.humanReasonOverrides)
+  const runtimeSettings = {
+    watchdogMode: input.runtimeSettingsOverride?.watchdogMode || 'auto'
+  }
 
   const requestApproval = async (request: AiApprovalRequest): Promise<AiApprovalDecision> => {
     const approvalId = randomUUID()
@@ -175,6 +266,8 @@ export const createTestAiRunContext = (input: CreateTestAiRunContextInput): AiRu
         ? `documents:${input.selectedDocumentIds.join(',')}`
         : 'workspace:unbound',
     allowNonLocal: false,
+    runtimeSettings,
+    humanRuntimeOverrides: input.humanRuntimeOverrides,
     workspace: bindWorkspace
       ? {
           workspaceId: 'test-workspace',
@@ -213,7 +306,7 @@ export const createTestAiRunContext = (input: CreateTestAiRunContextInput): AiRu
     trackDocxChanges: input.trackDocxChanges || (() => undefined),
     trackDocxPreview: input.trackDocxPreview || (() => undefined),
     resolveToolExecutionOverride,
-    resolveHumanDecisionOverride,
+    resolveHumanReasonOverride,
     resolveHumanDeliveryOverride: input.humanDeliveryOverride,
     getModelConfig: async () => {
       if (!input.liveModelConfig) {

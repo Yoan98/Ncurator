@@ -39,9 +39,9 @@ defineAiHumanCase({
       runtime,
       {
         approvalPolicy: 'auto-approve',
-        humanDecisionOverrides: [
+        humanReasonOverrides: [
           {
-            decision: {
+            output: {
               action: 'load_skill',
               skillId: 'workspace-shell',
               rationale: '先收集长任务需要的本地事实。',
@@ -49,7 +49,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'terminal_run_command',
               args: {
@@ -60,7 +60,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'terminal_run_command',
               args: {
@@ -71,7 +71,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'terminal_run_command',
               args: {
@@ -83,7 +83,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'complete_task',
               summary: '审批已通过，长任务导出文件已生成。',
               rationale: '批准分支已成功推进到产物落地。',
@@ -104,16 +104,16 @@ defineAiHumanCase({
             `导出文件：${typeof resultData?.export_path === 'string' ? resultData.export_path : 'approved-branch.txt'}`
           ].join('\n')
       },
-      { maxSteps: 6 }
+      { hardActionLimit: 6 }
     )
 
     const deniedRunner = createHumanTestRunner(
       runtime,
       {
         approvalPolicy: 'deny-all',
-        humanDecisionOverrides: [
+        humanReasonOverrides: [
           {
-            decision: {
+            output: {
               action: 'load_skill',
               skillId: 'workspace-shell',
               rationale: '先读取长任务所需的本地事实。',
@@ -121,7 +121,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'terminal_run_command',
               args: {
@@ -132,7 +132,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'terminal_run_command',
               args: {
@@ -143,7 +143,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'terminal_run_command',
               args: {
@@ -165,16 +165,13 @@ defineAiHumanCase({
             '继续条件：请批准导出写入操作后再继续生成 denied-branch.txt。'
           ].join('\n')
       },
-      { maxSteps: 5 }
+      { hardActionLimit: 5 }
     )
 
     const approvedOutput = await approvedRunner.run(
       {
         taskId: approvedTaskId,
         objective: '读取本地材料并导出长任务 brief；如果审批通过，就生成 approved-branch.txt。'
-      },
-      {
-        deliveryKind: 'handoff'
       }
     )
 
@@ -182,9 +179,6 @@ defineAiHumanCase({
       {
         taskId: deniedTaskId,
         objective: '读取本地材料并导出长任务 brief；如果审批被拒绝，就安全收敛。'
-      },
-      {
-        deliveryKind: 'handoff'
       }
     )
 

@@ -16,9 +16,9 @@ defineAiHumanCase({
         documentsStoreOverrides: {
           hybridSearch: async () => []
         },
-        humanDecisionOverrides: [
+        humanReasonOverrides: [
           {
-            decision: {
+            output: {
               action: 'load_skill',
               skillId: 'local-kb-retrieval',
               rationale: '先在本地知识库里查证。',
@@ -26,7 +26,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'invoke_tool',
               toolName: 'kb_hybrid_search_chunks',
               args: {
@@ -38,7 +38,7 @@ defineAiHumanCase({
             }
           },
           {
-            decision: {
+            output: {
               action: 'complete_task',
               summary: '本地资料不足，暂时无法确认最终 owner 与 timeline。',
               rationale: '当前检索没有返回足够证据，应该安全收敛而不是编造答案。',
@@ -60,16 +60,13 @@ defineAiHumanCase({
             '说明：当前本地资料不足，是否允许继续使用非本地信息？'
           ].join('\n')
       },
-      { maxSteps: 4 }
+      { hardActionLimit: 4 }
     )
 
     const output = await runner.run(
       {
         taskId: runtime.taskId,
         objective: '确认 final owner 与 timeline，如证据不足则安全收敛。'
-      },
-      {
-        deliveryKind: 'final'
       }
     )
 

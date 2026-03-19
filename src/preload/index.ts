@@ -101,6 +101,8 @@ const api: DesktopApi = {
     ipcRenderer.invoke('llm-config-delete', id),
   llmConfigSetActive: (id: string) =>
     ipcRenderer.invoke('llm-config-set-active', id),
+  aiRuntimeSettingsGet: () => ipcRenderer.invoke('ai-runtime-settings-get'),
+  aiRuntimeSettingsSave: (settings) => ipcRenderer.invoke('ai-runtime-settings-save', settings),
 
   aiRunStart: (payload) => {
     emitE2EIpcCall('aiRunStart')

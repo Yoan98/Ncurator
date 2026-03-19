@@ -4,12 +4,14 @@ import type {
   AiRunContext
 } from '../../../src/main/services/ai/types'
 import type {
+  AiRuntimeSettings,
   AiTaskResultCode,
-  HumanStepDecision,
+  HumanReasoningOutput,
   JsonObject,
-  LLMConfig
+  JsonValue,
+  LLMConfig,
+  RuntimeSkillId
 } from '../../../src/shared/types'
-import type { JsonValue } from '../../../src/shared/types'
 import type { EventCollector } from '../core/eventCollector'
 import type {
   TestDomain,
@@ -42,9 +44,38 @@ export type TestToolExecutionOverride = {
   }
 }
 
-export type TestHumanDecisionOverride = {
+export type LegacyTestHumanReasonOutput =
+  | {
+      action: 'load_skill'
+      skillId: RuntimeSkillId
+      rationale: string
+      publicNarrative: string
+    }
+  | {
+      action: 'invoke_tool'
+      toolName: string
+      args: JsonObject
+      rationale: string
+      publicNarrative: string
+    }
+  | {
+      action: 'complete_task'
+      summary: string
+      rationale: string
+      publicNarrative: string
+      resultData?: JsonObject
+    }
+  | {
+      action: 'block_task'
+      reason: string
+      rationale: string
+      publicNarrative: string
+      details?: JsonValue
+    }
+
+export type TestHumanReasonOverride = {
   remainingUses?: number
-  decision: HumanStepDecision
+  output: HumanReasoningOutput | LegacyTestHumanReasonOutput
 }
 
 export type LiveLlmConfig = Pick<LLMConfig, 'base_url' | 'model_name' | 'api_key'> & {
@@ -66,7 +97,7 @@ export type CreateAiRunContextInput = {
   selectedDocumentIds?: string[]
   approvalPolicy?: ApprovalPolicy | ApprovalResolver
   checkCancelledOverride?: () => void
-  humanDecisionOverrides?: TestHumanDecisionOverride[]
+  humanReasonOverrides?: TestHumanReasonOverride[]
   humanDeliveryOverride?: (input: {
     objective: string
     summary: string
@@ -82,6 +113,10 @@ export type CreateAiRunContextInput = {
   historyOverride?: {
     recentTurnsText: string
     sessionSummaryText: string
+  }
+  runtimeSettingsOverride?: Partial<AiRuntimeSettings>
+  humanRuntimeOverrides?: {
+    hardActionLimit?: number
   }
   documentsStoreOverrides?: TestDocumentsStoreOverrides
   toolExecutionOverrides?: TestToolExecutionOverride[]

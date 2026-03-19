@@ -27,6 +27,7 @@ import type {
   ChunkListResponse,
   ChatSession,
   ChatMessage,
+  AiRuntimeSettings,
   LLMConfig,
   AiRunEvent,
   AiRunStartRequest,
@@ -184,6 +185,7 @@ export function registerHandlers(services: {
   const documentsStore = storageService.documents
   const chatStore = storageService.chat
   const llmStore = storageService.llm
+  const aiRuntimeSettingsStore = storageService.aiRuntimeSettings
   const webSourceStore = storageService.webSource
   const workspaceStore = storageService.workspace
   const draftReviewService = new DraftReviewService(storageService.draftReview, documentsStore)
@@ -1782,6 +1784,7 @@ export function registerHandlers(services: {
         }
 
         try {
+          const runtimeSettings = await aiRuntimeSettingsStore.get()
           const result = await AiRunService.getInstance().run(
             {
               runId,
@@ -1793,6 +1796,7 @@ export function registerHandlers(services: {
               workspace
             },
             {
+              runtimeSettings,
               llmStore,
               chatStore,
               documentsStore,
@@ -2183,6 +2187,25 @@ export function registerHandlers(services: {
       return { success: true }
     } catch (e: unknown) {
       console.error('[LLM-CONFIG-SET-ACTIVE] Error:', e)
+      return { success: false, error: getErrorMessage(e) }
+    }
+  })
+
+  ipcMain.handle('ai-runtime-settings-get', async () => {
+    try {
+      return await aiRuntimeSettingsStore.get()
+    } catch (e: unknown) {
+      console.error('[AI-RUNTIME-SETTINGS-GET] Error:', e)
+      return { watchdogMode: 'auto' as const }
+    }
+  })
+
+  ipcMain.handle('ai-runtime-settings-save', async (_event, settings: AiRuntimeSettings) => {
+    try {
+      await aiRuntimeSettingsStore.save(settings)
+      return { success: true }
+    } catch (e: unknown) {
+      console.error('[AI-RUNTIME-SETTINGS-SAVE] Error:', e)
       return { success: false, error: getErrorMessage(e) }
     }
   })

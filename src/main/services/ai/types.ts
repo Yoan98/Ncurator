@@ -5,15 +5,14 @@ import type { EmbeddingService } from '../vector/EmbeddingService'
 import type { DocxChangedBlock, DocxOp } from './tools/docx/types'
 import type { DraftReviewService } from './review/DraftReviewService'
 import type {
+  AiRuntimeSettings,
   AiPlanTask,
   AiRunEvent,
   AiRunEventStage,
   AiRunStatus,
   AiTaskStatus,
-  CapabilityResult,
   HumanTaskInput,
   HumanStepAction,
-  HumanStepDecision,
   HumanTaskOutput,
   JsonObject,
   LocalSourceUsageStatus,
@@ -22,7 +21,7 @@ import type {
 } from '../../../shared/types'
 
 export type { AiTaskStatus, AiRunStatus, AiPlanTask }
-export type { HumanStepAction, HumanStepDecision, CapabilityResult, HumanTaskInput, HumanTaskOutput }
+export type { HumanStepAction, HumanTaskInput, HumanTaskOutput }
 
 export type AiMainStage =
   | 'main_intent'
@@ -33,17 +32,14 @@ export type AiMainStage =
   | 'main_synthesis_human'
   | 'main_complete'
 
-export type HumanDeliveryKind = 'context' | 'handoff' | 'final'
-
 export type HumanRunDispatchOptions = {
-  deliveryKind: HumanDeliveryKind
   streamAnswer?: boolean
   internalDelivery?: boolean
 }
 
 export type HumanTaskRunner = (
   taskInput: HumanTaskInput,
-  options: HumanRunDispatchOptions
+  options?: HumanRunDispatchOptions
 ) => Promise<HumanTaskOutput>
 
 export type AiRunState = {
@@ -109,6 +105,7 @@ export type AiApprovalDecision = {
 }
 
 export type AiRunDeps = {
+  runtimeSettings: AiRuntimeSettings
   llmStore: LlmConfigStore
   chatStore: ChatStore
   documentsStore: DocumentsStore
@@ -126,6 +123,10 @@ export type AiRunContext = {
   selectedSourceScopes?: SourceScopeSelection[]
   selectedScopeSummary: string
   allowNonLocal: boolean
+  runtimeSettings: AiRuntimeSettings
+  humanRuntimeOverrides?: {
+    hardActionLimit?: number
+  }
   workspace?: {
     workspaceId: string
     rootPath: string
