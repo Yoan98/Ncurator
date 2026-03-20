@@ -19,6 +19,9 @@
 - skill 不能过大，否则 learning 的说明噪音太高。
 - skill 也不能过碎，否则 `brain` 会反复学习过多小 skill。
 - `skillCatalog` 只保留摘要信息；完整 skill 说明在 `brain` prompt 拼装时按 `learnedSkillIds` 动态展开。
+- skill 是决策与学习边界，不等于文件系统边界。
+- tools 的代码实现按实现域归位即可，一个实现域可以同时服务多个 skill。
+- `skillCatalog` / `skillRegistry` 负责维护 `skill -> toolNames / whenToUse / detail` 的映射，不要求为每个 skill 单独建立实现目录。
 
 ## 4. 当前目标 Skill 集合
 
@@ -68,3 +71,4 @@
 - `skillCatalog` 存的是以上 skill 的摘要信息。
 - `learnedSkillIds` 存的是当前已经学习过的 skill id。
 - `learning` 只负责把 skill 标记为已学习，不负责额外引入旧 `activate_capability` 语义。
+- tool 的选择、过滤和装配可以放在 `skillRegistry` / `skillLoader`，不要求放进 skill 同名目录。

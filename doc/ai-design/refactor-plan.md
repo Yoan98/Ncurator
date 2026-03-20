@@ -1,5 +1,16 @@
 # NCurator-Desktop AI 新架构重构计划
 
+## 0. 需要补充完善的地方
+
+以下内容是当前重构在进入“已完成”前，仍需补充完善和对齐的部分：
+
+- `brain` prompt 需要继续补齐，实际实现应继续向本文件第 6 章的专项 prompt 设计靠拢，而不是只停留在简化版骨架。
+- `buildBrainPromptContext` 需要按需组织输入：保持“易理解信息组织”为主，但对记忆快照、最近工具结果、动作参数等强结构化输入，允许保留精简后的原始对象或 JSON 视图，需要严格参照refactor-plan的提示词。
+- `mouth` 不需要读取最近决策历史；`brain` 需要读取最近决策历史摘要，这个边界必须在实现和文档中保持一致。
+- `tools` 目录需要进一步从“按 skill 建目录”收敛为“按实现域归位”，skill 只保留在 `skillCatalog` / `skillRegistry` / `skillLoader` 的映射与装配层。
+- 运行时结构化输出能力需要补上，逐步从仅依赖 `chatJson + JSON.parse` 的方式，收敛到 schema 驱动的 structured output 封装。
+- `memoryReducer` 需要修复 `memoryOps` 的顺序敏感问题：同一轮 `memoryOps` 中，`facts[].evidenceIds` 对“本轮新增 evidence”的引用不应因为数组顺序不同而被误判为非法。
+
 ## 1. 目标
 
 - `human` 实现直接对齐当前 AI 设计文档，不兼容旧 `reason -> execute -> finalize`、旧 `watchdog` 与旧任务结果附加字段。
@@ -195,6 +206,7 @@ type BrainMemoryOp =
   - `add` / `edit` 必须提供 `value`
   - `edit` / `remove` 必须提供合法 `index`
   - `facts[].evidenceIds` 只能引用当前已存在或本轮新增的 evidence id
+  - 对“本轮新增 evidence id”的引用校验必须与 `memoryOps` 数组顺序无关；不能因为先 add fact、后 add evidence，就把该 fact 误判为非法
 
 ### 4.4 `watchHint`
 
@@ -254,6 +266,7 @@ interface MainPlanTask {
 - 输出本轮 `LastBrainDecision`，并同步沉淀一条 `BrainDecisionRecord`。
 - 只通过 `memoryOps` 更新 `brainMemory.inside`。
 - 通过 `memoryReducer` 对非法 `memoryOps` 做安全处理；如果修改失败，则写入 `watchHint` 并返回下一轮 `brain`。
+- `memoryReducer` 对 evidence 引用的校验必须支持“当前已存在 + 本轮新增”两类 evidence id，且这一判断不依赖 `memoryOps` 数组顺序。
 - 不直接加载 skill，不直接执行工具，不直接生成最终交付。
 
 这里的“最近决策历史摘要”只保留：
@@ -268,7 +281,8 @@ interface MainPlanTask {
 - 准备进入什么动作
 - 这些动作发生在什么时间顺序上
 
-而不是把原始状态对象原样重新喂回去。
+而不是不加筛选地把整个运行态对象原样重新喂回去。
+如果某段输入本身强依赖结构细节，例如记忆快照、最近工具结果、`nextAction` 载荷，那么可以保留这些关键字段的结构化原貌。
 
 ### 5.2 `learningNode`
 
@@ -289,7 +303,7 @@ interface MainPlanTask {
 ### 5.4 `mouthNode`
 
 - 只在 `nextAction.action='mouth'` 时执行。
-- 读取 `lastBrainDecision.nextAction.status`、最近决策历史、`brainMemory.inside` 和必要的工具结果。
+- 读取 `lastBrainDecision.nextAction.status`、最后一次正式决策、`brainMemory.inside` 和必要的工具结果。
 - 调用模型对已有信息做最终整理，生成 `summary` 与 `deliveryMarkdown`。
 - 不补编新事实，只负责把已有结论整理成可交付结果。
 
@@ -626,6 +640,7 @@ interface MainPlanTask {
   - 最后一次正式决策的自然语言说明
   - 已确认事实
   - 关键证据
+  - 必要时附带最近一轮关键工具结果
 - 输出规则中直接给 JSON 结构和字段解释
 
 草稿文本：
