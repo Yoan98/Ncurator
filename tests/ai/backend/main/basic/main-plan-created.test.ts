@@ -23,7 +23,7 @@ defineAiMainCase({
   runMode: 'repeatable',
   execute: async (runtime) => {
     const ctx = runtime.createAiRunContext({
-      chatJsonOverride: async () => ({
+      chatStructuredOverride: async () => ({
         tasks: [
           {
             id: 'task-1',

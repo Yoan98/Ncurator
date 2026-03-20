@@ -1,47 +1,38 @@
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { AiRunContext } from '../../../types'
+import type { AiToolFamilyId, ToolFamilyBuildInput } from '../../tools/types'
+import { docxToolFamily } from '../../tools/docx'
+import { kbToolFamily } from '../../tools/kb'
+import { terminalToolFamily } from '../../tools/terminal'
 import type { HumanRuntimeCache, RuntimeSkillId } from '../../types'
-import { buildSkillTools } from './skillRegistry'
-import { docxCapability } from '../../tools/docx'
+import { getSkillDefinition } from './skillRegistry'
 
-const DOCX_READ_TOOL_NAMES = new Set([
-  'docx_open',
-  'docx_outline',
-  'docx_get_block',
-  'docx_search',
-  'docx_get_history'
-])
-const DOCX_WRITE_TOOL_NAMES = new Set(['docx_apply_ops', 'docx_rollback'])
-const DOCX_DELIVERY_TOOL_NAMES = new Set(['docx_validate', 'docx_render_preview', 'docx_save'])
+const TOOL_FAMILY_BUILDERS: Record<
+  AiToolFamilyId,
+  (input: ToolFamilyBuildInput) => StructuredToolInterface[]
+> = {
+  terminal: terminalToolFamily.buildTools,
+  kb: kbToolFamily.buildTools,
+  docx: docxToolFamily.buildTools
+}
 
-const ensureDocxToolsets = (input: {
+const ensureFamilyTools = (input: {
   cache: HumanRuntimeCache
   ctx: AiRunContext
   runId: string
   taskId: string
-}): void => {
-  if (
-    input.cache.toolsets['docx-read'] &&
-    input.cache.toolsets['docx-write'] &&
-    input.cache.toolsets['docx-delivery']
-  ) {
-    return
-  }
+  familyId: AiToolFamilyId
+}): StructuredToolInterface[] => {
+  const cached = input.cache.familyToolsets[input.familyId]
+  if (cached) return cached
 
-  const tools = docxCapability.buildTools({
+  const built = TOOL_FAMILY_BUILDERS[input.familyId]({
     ctx: input.ctx,
     runId: input.runId,
     taskId: input.taskId
   })
-  input.cache.toolsets['docx-read'] = tools.filter((tool) =>
-    DOCX_READ_TOOL_NAMES.has(String(tool.name || ''))
-  )
-  input.cache.toolsets['docx-write'] = tools.filter((tool) =>
-    DOCX_WRITE_TOOL_NAMES.has(String(tool.name || ''))
-  )
-  input.cache.toolsets['docx-delivery'] = tools.filter((tool) =>
-    DOCX_DELIVERY_TOOL_NAMES.has(String(tool.name || ''))
-  )
+  input.cache.familyToolsets[input.familyId] = built
+  return built
 }
 
 export const ensureSkillTools = (input: {
@@ -51,23 +42,20 @@ export const ensureSkillTools = (input: {
   taskId: string
   skillId: RuntimeSkillId
 }): StructuredToolInterface[] => {
-  if (
-    input.skillId === 'docx-read' ||
-    input.skillId === 'docx-write' ||
-    input.skillId === 'docx-delivery'
-  ) {
-    ensureDocxToolsets(input)
-    return input.cache.toolsets[input.skillId] || []
-  }
-
-  const cached = input.cache.toolsets[input.skillId]
+  const cached = input.cache.skillToolsets[input.skillId]
   if (cached) return cached
-  const built = buildSkillTools(input.skillId, {
+
+  const definition = getSkillDefinition(input.skillId)
+  const familyTools = ensureFamilyTools({
+    cache: input.cache,
     ctx: input.ctx,
     runId: input.runId,
-    taskId: input.taskId
+    taskId: input.taskId,
+    familyId: definition.familyId
   })
-  input.cache.toolsets[input.skillId] = built
+  const allowedToolNames = new Set(definition.toolNames)
+  const built = familyTools.filter((tool) => allowedToolNames.has(String(tool.name || '').trim()))
+  input.cache.skillToolsets[input.skillId] = built
   return built
 }
 
@@ -77,7 +65,7 @@ export const getAvailableToolNames = (input: {
 }): string[] => {
   const toolNames = new Set<string>()
   input.learnedSkillIds.forEach((skillId) => {
-    ;(input.cache.toolsets[skillId] || []).forEach((tool) => {
+    ;(input.cache.skillToolsets[skillId] || []).forEach((tool) => {
       const toolName = String(tool.name || '').trim()
       if (toolName) toolNames.add(toolName)
     })

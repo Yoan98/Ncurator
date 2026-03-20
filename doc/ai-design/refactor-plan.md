@@ -5,10 +5,10 @@
 以下内容是当前重构在进入“已完成”前，仍需补充完善和对齐的部分：
 
 - `brain` prompt 需要继续补齐，实际实现应继续向本文件第 6 章的专项 prompt 设计靠拢，而不是只停留在简化版骨架。
-- `buildBrainPromptContext` 需要按需组织输入：保持“易理解信息组织”为主，但对记忆快照、最近工具结果、动作参数等强结构化输入，允许保留精简后的原始对象或 JSON 视图，需要严格参照refactor-plan的提示词。
+- `buildBrainPromptContext` 需要严格按本文件第 6.2 节的提示词模板组织输入：记忆快照、最近工具结果、skill 说明等统一转成稳定文本；只有最近决策历史中的 `nextAction数据` 可以按示例保留结构化载荷。
 - `mouth` 不需要读取最近决策历史；`brain` 需要读取最近决策历史摘要，这个边界必须在实现和文档中保持一致。
 - `tools` 目录需要进一步从“按 skill 建目录”收敛为“按实现域归位”，skill 只保留在 `skillCatalog` / `skillRegistry` / `skillLoader` 的映射与装配层。
-- 运行时结构化输出能力需要直接重构为 schema 驱动的 structured output 封装，不再兼容旧 `chatJson + JSON.parse` 路径；LangChain 侧统一使用 `withStructuredOutput`，并优先采用可稳定工作的 `jsonSchema` ，可以封装一下该方法，使得更好用方案。
+- 运行时结构化输出能力需要直接重构为 schema 驱动的 structured output 封装，不再兼容旧 `chatJson + JSON.parse` 路径；LangChain 侧统一使用 `withStructuredOutput`，默认优先 `jsonSchema`，并按 `jsonSchema -> functionCalling -> jsonMode` 的固定顺序自动回退。
 - `memoryReducer` 需要修复 `memoryOps` 的顺序敏感问题：同一轮 `memoryOps` 中，`facts[].evidenceIds` 对“本轮新增 evidence”的引用不应因为数组顺序不同而被误判为非法。
 
 ## 1. 目标

@@ -1,24 +1,7 @@
-import { HumanMessage, SystemMessage } from '@langchain/core/messages'
 import type { AiRunContext, AiRunDeps, AiRunStartPayload, CancelledError } from './types'
 import type { SourceScopeSelection } from '../../../shared/types'
-import { createChatModel } from '../llm/chatModel'
-import type { ChatMessage, JsonObject } from '../../types/store'
-
-const parseJsonObject = <T extends JsonObject>(text: string): T => {
-  const trimmed = String(text || '').trim()
-  try {
-    return JSON.parse(trimmed) as T
-  } catch (err) {
-    void err
-  }
-  const start = trimmed.indexOf('{')
-  const end = trimmed.lastIndexOf('}')
-  if (start >= 0 && end > start) {
-    const slice = trimmed.slice(start, end + 1)
-    return JSON.parse(slice) as T
-  }
-  throw new Error('无法解析 JSON 输出')
-}
+import type { ChatMessage } from '../../types/store'
+import { invokeStructuredChat } from './structuredOutput'
 
 const clipText = (text: string, maxChars: number) => {
   const t = String(text || '')
@@ -110,15 +93,20 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     return cfg
   }
 
-  const chatJson: AiRunContext['chatJson'] = async <T extends JsonObject>(input): Promise<T> => {
+  const chatStructured: AiRunContext['chatStructured'] = async <T extends Record<string, unknown>>(
+    input
+  ): Promise<T> => {
     checkCancelled()
-    const { system, user, temperature } = input
     const cfg = await getActiveConfig()
-    const model = createChatModel(cfg, { temperature: temperature ?? 0.2 })
-    const res = await model.invoke([new SystemMessage(system), new HumanMessage(user)])
-    const text = typeof res?.content === 'string' ? res.content : String(res?.content ?? '')
-    if (!text) throw new Error('大模型返回为空')
-    return parseJsonObject<T>(text)
+    return invokeStructuredChat({
+      caller: input.caller,
+      cfg,
+      schema: input.schema,
+      schemaName: input.schemaName,
+      system: input.system,
+      user: input.user,
+      temperature: input.temperature
+    })
   }
 
   const loadHistory: AiRunContext['loadHistory'] = async (limits) => {
@@ -159,7 +147,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
         }
       : undefined,
     checkCancelled,
-    chatJson,
+    chatStructured,
     sendEvent: deps.sendEvent,
     requestApproval: deps.requestApproval,
     loadHistory,

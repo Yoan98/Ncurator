@@ -3,35 +3,62 @@ import { getToolPromptSpec } from '../../prompts/toolPrompts'
 import { getSkillDefinition } from '../learningNode/skillRegistry'
 import type { HumanState } from '../../types'
 
-const toJsonText = (value: object | undefined, fallback = 'none'): string => {
-  if (!value) return fallback
-  try {
-    return JSON.stringify(value, null, 2)
-  } catch {
-    return fallback
-  }
+const formatList = (items: string[]): string => (items.length > 0 ? items.join('\n') : 'none')
+
+const buildMemorySnapshotText = (state: HumanState): string => {
+  const factsText =
+    state.brainMemory.inside.facts.length > 0
+      ? state.brainMemory.inside.facts
+          .map(
+            (fact) =>
+              `- fact(${fact.id})：${fact.summary}；evidenceIds=[${fact.evidenceIds.join(', ')}]`
+          )
+          .join('\n')
+      : 'none'
+  const evidencesText =
+    state.brainMemory.inside.evidences.length > 0
+      ? state.brainMemory.inside.evidences
+          .map(
+            (evidence) =>
+              `- evidence(${evidence.id})：toolName=${evidence.toolName}；summary=${evidence.summary}${evidence.rawRef ? `；rawRef=${evidence.rawRef}` : ''}`
+          )
+          .join('\n')
+      : 'none'
+  const openQuestionsText =
+    state.brainMemory.inside.openQuestions.length > 0
+      ? state.brainMemory.inside.openQuestions.map((question) => `- ${question}`).join('\n')
+      : 'none'
+
+  return [
+    'facts:',
+    factsText,
+    '',
+    'evidences:',
+    evidencesText,
+    '',
+    'openQuestions:',
+    openQuestionsText
+  ].join('\n')
 }
 
 const buildSkillContextText = (state: HumanState): string => {
-  const catalogText =
+  const catalogLines =
     state.brainMemory.outside.skillCatalog.length > 0
       ? state.brainMemory.outside.skillCatalog
           .map(
             (item) =>
               `- ${item.skillId}: ${item.summary}; tools=[${item.toolNames.join(', ')}]; whenToUse=${item.whenToUse}`
           )
-          .join('\n')
-      : 'none'
-  const learnedDetailText =
+      : ['none']
+  const learnedDetailLines =
     state.brainMemory.outside.learnedSkillIds.length > 0
       ? state.brainMemory.outside.learnedSkillIds
           .map((skillId) => {
             const definition = getSkillDefinition(skillId)
             return `- ${definition.skillId}: ${definition.detail}`
           })
-          .join('\n')
-      : 'none'
-  const learnedToolSpecText =
+      : ['none']
+  const learnedToolSpecLines =
     state.brainMemory.outside.learnedSkillIds.length > 0
       ? state.brainMemory.outside.learnedSkillIds
           .flatMap((skillId) => getSkillDefinition(skillId).toolNames)
@@ -43,18 +70,32 @@ const buildSkillContextText = (state: HumanState): string => {
               .map((arg) => `${arg.name}:${arg.type}`)
               .join(', ')
             const example = spec.examples?.[0]
-              ? `example=${JSON.stringify(spec.examples[0].args)}`
+              ? `exampleGoal=${spec.examples[0].goal}; exampleArgs=${Object.keys(spec.examples[0].args).join(', ') || 'none'}`
               : 'example=none'
             return `- ${spec.name}: whenToUse=${spec.whenToUse}; requiredArgs=[${requiredArgs || 'none'}]; ${example}`
           })
-          .join('\n')
-      : 'none'
+      : ['none']
 
   return [
-    `<catalog>\n${catalogText}\n</catalog>`,
-    `<learned>\n${learnedDetailText}\n</learned>`,
-    `<learned_tool_specs>\n${learnedToolSpecText}\n</learned_tool_specs>`
+    'catalog:',
+    formatList(catalogLines),
+    '',
+    'learned skills:',
+    formatList(learnedDetailLines),
+    '',
+    'tool specs:',
+    formatList(learnedToolSpecLines)
   ].join('\n')
+}
+
+const buildRecentToolResultsText = (state: HumanState): string => {
+  if (!state.lastParallelCallToolResults || state.lastParallelCallToolResults.length === 0) return 'none'
+  return state.lastParallelCallToolResults
+    .map(
+      (result, index) =>
+        `- 第${index + 1}项：toolName=${result.toolName}；ok=${result.ok ? 'true' : 'false'}；code=${result.code}；summary=${result.summary}`
+    )
+    .join('\n')
 }
 
 const buildRecentDecisionHistoryText = (state: HumanState): string => {
@@ -65,7 +106,7 @@ const buildRecentDecisionHistoryText = (state: HumanState): string => {
       const action = record.nextAction.action
       const nextActionPayload =
         action === 'learning'
-          ? `wantLearnSkillIds=${record.nextAction.wantLearnSkillIds.join(',')}`
+          ? `wantLearnSkillIds=[${record.nextAction.wantLearnSkillIds.join(',')}]`
           : action === 'hand'
             ? `parallelCallToolParam=${JSON.stringify(record.nextAction.parallelCallToolParam)}`
             : `status=${record.nextAction.status}`
@@ -78,9 +119,9 @@ const buildRecentDecisionHistoryText = (state: HumanState): string => {
 export const buildBrainPromptContext = (state: HumanState) =>
   buildHumanBrainPrompt({
     userInput: state.task.userInput,
-    memorySnapshotText: toJsonText(state.brainMemory.inside),
+    memorySnapshotText: buildMemorySnapshotText(state),
     skillContextText: buildSkillContextText(state),
-    recentToolResultsText: toJsonText(state.lastParallelCallToolResults, 'none'),
+    recentToolResultsText: buildRecentToolResultsText(state),
     recentDecisionHistoryText: buildRecentDecisionHistoryText(state),
     watchHintText: state.watchHint || 'none'
   })

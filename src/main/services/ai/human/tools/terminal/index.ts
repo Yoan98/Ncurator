@@ -1,7 +1,7 @@
 import { tool } from '@langchain/core/tools'
 import { z } from 'zod/v4'
 import { emitActivity } from '../../../../../utils/aiCapabilityUtils'
-import type { CapabilityToolFamily } from '../types'
+import type { ToolFamilyDefinition } from '../types'
 import { buildTerminalCapabilityTools } from './terminalTools'
 
 const jsonValueSchema = z.lazy(() =>
@@ -21,8 +21,8 @@ const workspaceRequiredResult = {
   error: 'workspace is required for terminal_exec'
 }
 
-export const terminalExecCapability: CapabilityToolFamily = {
-  capability: 'terminal_exec',
+export const terminalToolFamily: ToolFamilyDefinition = {
+  familyId: 'terminal',
   buildTools: ({ ctx, runId, taskId }) => {
     const workspaceRootPath = String(ctx.workspace?.rootPath || '').trim()
     if (!workspaceRootPath) {

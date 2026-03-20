@@ -1,6 +1,7 @@
 import type { HumanRuntimeCache } from '../../types'
 
 export const createHumanRuntimeCache = (): HumanRuntimeCache => ({
-  toolsets: {},
+  familyToolsets: {},
+  skillToolsets: {},
   toolCallCount: 0
 })

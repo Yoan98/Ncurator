@@ -1,7 +1,7 @@
 import { tool } from '@langchain/core/tools'
 import { z } from 'zod/v4'
 import { emitActivity } from '../../../../../utils/aiCapabilityUtils'
-import type { CapabilityToolFamily } from '../types'
+import type { ToolFamilyDefinition } from '../types'
 import { buildDocxCapabilityTools } from './docxTools'
 
 const jsonValueSchema = z.lazy(() =>
@@ -29,7 +29,7 @@ const createWorkspaceGuardTool = (input: {
     | 'docx_validate'
   runId: string
   taskId: string
-  ctx: Parameters<CapabilityToolFamily['buildTools']>[0]['ctx']
+  ctx: Parameters<ToolFamilyDefinition['buildTools']>[0]['ctx']
 }) => {
   return tool(
     async () => {
@@ -56,8 +56,8 @@ const createWorkspaceGuardTool = (input: {
   )
 }
 
-export const docxCapability: CapabilityToolFamily = {
-  capability: 'docx',
+export const docxToolFamily: ToolFamilyDefinition = {
+  familyId: 'docx',
   buildTools: ({ ctx, runId, taskId }) => {
     const workspaceRootPath = String(ctx.workspace?.rootPath || '').trim()
     if (!workspaceRootPath) {

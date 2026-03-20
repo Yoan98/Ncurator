@@ -1,5 +1,6 @@
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { JsonObject, JsonValue } from '../../../../shared/types'
+import type { AiToolFamilyId } from './tools/types'
 import {
   HUMAN_STEP_ACTIONS,
   HUMAN_STEP_RESULT_STATUSES,
@@ -45,6 +46,7 @@ export type ToolPromptSpec = {
 
 export type SkillCatalogItem = {
   skillId: RuntimeSkillId
+  familyId: AiToolFamilyId
   title: string
   summary: string
   toolNames: string[]
@@ -208,6 +210,7 @@ export type HumanState = {
 }
 
 export type HumanRuntimeCache = {
-  toolsets: Partial<Record<RuntimeSkillId, StructuredToolInterface[]>>
+  familyToolsets: Partial<Record<AiToolFamilyId, StructuredToolInterface[]>>
+  skillToolsets: Partial<Record<RuntimeSkillId, StructuredToolInterface[]>>
   toolCallCount: number
 }

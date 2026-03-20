@@ -22,29 +22,16 @@ export const createPlanNode = (input: { ctx: AiRunContext }) => {
       selectedScopeSummary: ctx.selectedScopeSummary
     })
 
-    const raw = await ctx.chatJson({
+    const decision = await ctx.chatStructured({
+      caller: 'main.plan',
       system: prompt.system,
       user: prompt.user,
+      schema: planDecisionSchema,
+      schemaName: 'main_plan_decision',
       temperature: 0.1
     })
 
-    const parsed = planDecisionSchema.safeParse(raw)
-    if (!parsed.success) {
-      const parseReason = parsed.error.issues
-        .map((issue) => {
-          const path = issue.path.length > 0 ? issue.path.join('.') : 'root'
-          return `${path}: ${issue.message}`
-        })
-        .join('; ')
-
-      return {
-        status: 'failed',
-        error: `plan_generation_failed: ${parseReason || 'invalid planner output'}`,
-        mainStage: 'main_complete'
-      }
-    }
-
-    const validationError = validatePlannerTasks(parsed.data.tasks)
+    const validationError = validatePlannerTasks(decision.tasks)
     if (validationError) {
       return {
         status: 'failed',
@@ -53,7 +40,7 @@ export const createPlanNode = (input: { ctx: AiRunContext }) => {
       }
     }
 
-    const plan = toPlanTasks(parsed.data.tasks)
+    const plan = toPlanTasks(decision.tasks)
 
     ctx.sendEvent({
       type: 'plan_created',

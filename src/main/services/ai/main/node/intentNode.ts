@@ -36,21 +36,14 @@ export const createIntentNode = (input: { ctx: AiRunContext; maxContextRounds?: 
       selectedScopeSummary: ctx.selectedScopeSummary
     })
 
-    const raw = await ctx.chatJson({
+    const decision = await ctx.chatStructured({
+      caller: 'main.intent',
       system: prompt.system,
       user: prompt.user,
+      schema: contextDecisionSchema,
+      schemaName: 'main_intent_decision',
       temperature: 0.1
     })
-
-    const parsed = contextDecisionSchema.safeParse(raw)
-    if (!parsed.success) {
-      return {
-        contextObjective: undefined,
-        mainStage: 'main_plan'
-      }
-    }
-
-    const decision = parsed.data
     if (decision.mode === 'need_context') {
       const contextObjective = String(decision.reason || '').trim() || state.input
       return {

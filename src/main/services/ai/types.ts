@@ -4,6 +4,7 @@ import type { LlmConfigStore } from '../storage/domains/LlmConfigStore'
 import type { EmbeddingService } from '../vector/EmbeddingService'
 import type { DocxChangedBlock, DocxOp } from './human/tools/docx/types'
 import type { DraftReviewService } from './human/tools/docx/review/DraftReviewService'
+import type { z } from 'zod/v4'
 import type {
   AiRuntimeSettings,
   AiPlanTask,
@@ -11,7 +12,6 @@ import type {
   AiRunEventStage,
   AiRunStatus,
   AiTaskStatus,
-  JsonObject,
   LLMConfig,
   SourceScopeSelection
 } from '../../../shared/types'
@@ -126,9 +126,12 @@ export type AiRunContext = {
     policyProfile?: string
   }
   checkCancelled: () => void
-  chatJson: <T extends JsonObject = JsonObject>(input: {
+  chatStructured: <T extends Record<string, unknown>>(input: {
+    caller: string
     system: string
     user: string
+    schema: z.ZodType<T>
+    schemaName: string
     temperature?: number
   }) => Promise<T>
   sendEvent: (event: AiRunEvent) => void

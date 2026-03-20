@@ -1,16 +1,9 @@
-import type { StructuredToolInterface } from '@langchain/core/tools'
-import type { CapabilityToolBuildInput } from '../../tools/types'
 import type { RuntimeSkillId, SkillCatalogItem, SkillDefinition } from '../../types'
-import { buildDocxDeliveryTools } from '../../tools/docx-delivery'
-import { buildDocxReadTools } from '../../tools/docx-read'
-import { buildDocxWriteTools } from '../../tools/docx-write'
-import { buildKbDocumentDiscoveryTools } from '../../tools/kb-document-discovery'
-import { buildKbEvidenceQueryTools } from '../../tools/kb-evidence-query'
-import { buildWorkspaceCliTools } from '../../tools/workspace-cli'
 
 const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
   'workspace-cli': {
     skillId: 'workspace-cli',
+    familyId: 'terminal',
     title: 'workspace-cli',
     summary: '读取 workspace 文件、检查环境、执行单条 CLI 命令。',
     toolNames: ['terminal_run_command'],
@@ -20,6 +13,7 @@ const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
   },
   'docx-read': {
     skillId: 'docx-read',
+    familyId: 'docx',
     title: 'docx-read',
     summary: '打开 docx、定位结构、查找内容、查看历史。',
     toolNames: ['docx_open', 'docx_outline', 'docx_get_block', 'docx_search', 'docx_get_history'],
@@ -29,6 +23,7 @@ const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
   },
   'docx-write': {
     skillId: 'docx-write',
+    familyId: 'docx',
     title: 'docx-write',
     summary: '修改 docx 内容，或基于历史快照回滚。',
     toolNames: ['docx_apply_ops', 'docx_rollback'],
@@ -37,6 +32,7 @@ const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
   },
   'docx-delivery': {
     skillId: 'docx-delivery',
+    familyId: 'docx',
     title: 'docx-delivery',
     summary: '做文档校验、生成预览、按需落盘。',
     toolNames: ['docx_validate', 'docx_render_preview', 'docx_save'],
@@ -45,6 +41,7 @@ const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
   },
   'kb-document-discovery': {
     skillId: 'kb-document-discovery',
+    familyId: 'kb',
     title: 'kb-document-discovery',
     summary: '先确定应该查哪份知识文档。',
     toolNames: ['kb_list_documents'],
@@ -53,6 +50,7 @@ const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
   },
   'kb-evidence-query': {
     skillId: 'kb-evidence-query',
+    familyId: 'kb',
     title: 'kb-evidence-query',
     summary: '直接查询 chunk 证据并收敛事实依据。',
     toolNames: ['kb_hybrid_search_chunks', 'kb_vector_search_chunks', 'kb_fts_search_chunks'],
@@ -61,21 +59,10 @@ const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
   }
 }
 
-const SKILL_TOOL_BUILDERS: Record<
-  RuntimeSkillId,
-  (input: CapabilityToolBuildInput) => StructuredToolInterface[]
-> = {
-  'workspace-cli': buildWorkspaceCliTools,
-  'docx-read': buildDocxReadTools,
-  'docx-write': buildDocxWriteTools,
-  'docx-delivery': buildDocxDeliveryTools,
-  'kb-document-discovery': buildKbDocumentDiscoveryTools,
-  'kb-evidence-query': buildKbEvidenceQueryTools
-}
-
 export const buildSkillCatalog = (): SkillCatalogItem[] =>
   Object.values(SKILL_DEFINITIONS).map((definition) => ({
     skillId: definition.skillId,
+    familyId: definition.familyId,
     title: definition.title,
     summary: definition.summary,
     toolNames: [...definition.toolNames],
@@ -86,8 +73,3 @@ export const getSkillDefinition = (skillId: RuntimeSkillId): SkillDefinition => 
 
 export const hasSkillDefinition = (skillId: string): skillId is RuntimeSkillId =>
   skillId in SKILL_DEFINITIONS
-
-export const buildSkillTools = (
-  skillId: RuntimeSkillId,
-  input: CapabilityToolBuildInput
-): StructuredToolInterface[] => SKILL_TOOL_BUILDERS[skillId](input)

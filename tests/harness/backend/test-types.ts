@@ -12,10 +12,10 @@ import type {
 import type {
   AiRuntimeSettings,
   AiTaskResultCode,
-  JsonObject,
   JsonValue,
   LLMConfig
 } from '../../../src/shared/types'
+import type { z } from 'zod/v4'
 import type { EventCollector } from '../core/eventCollector'
 import type {
   TestDomain,
@@ -109,9 +109,12 @@ export type CreateAiRunContextInput = {
     state: HumanState
   }) => string | HumanResult
   liveModelConfig?: LiveLlmConfig
-  chatJsonOverride?: <T extends JsonObject>(input: {
+  chatStructuredOverride?: <T extends Record<string, unknown>>(input: {
+    caller: string
     system: string
     user: string
+    schema: z.ZodType<T>
+    schemaName: string
     temperature?: number
   }) => Promise<T>
   historyOverride?: {

@@ -72,7 +72,7 @@ const findTool = (input: {
   cache: HumanRuntimeCache
 }): StructuredToolInterface | undefined => {
   for (const skillId of input.learnedSkillIds) {
-    const matched = (input.cache.toolsets[skillId] || []).find(
+    const matched = (input.cache.skillToolsets[skillId] || []).find(
       (tool) => String(tool.name || '').trim() === input.toolName
     )
     if (matched) return matched

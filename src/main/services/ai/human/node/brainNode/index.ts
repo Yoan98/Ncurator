@@ -4,7 +4,7 @@ import type { HumanRuntimeCache, HumanState } from '../../types'
 import { appendHumanTraceStep, emitHumanStep, emitWatchHint } from '../utils/events'
 import { getAvailableToolNames } from '../learningNode/skillLoader'
 import { buildBrainPromptContext } from './promptContext'
-import { parseBrainDecisionOutput } from './decisionContract'
+import { brainDecisionOutputSchema, parseBrainDecisionOutput } from './decisionContract'
 import { reduceBrainMemory } from './memoryReducer'
 import type { AiRunContextWithBrainOverride } from './types'
 
@@ -17,8 +17,11 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
     const overriddenDecision = ctxWithOverride.resolveBrainDecisionOverride?.()
     const rawOutput = overriddenDecision
       ? overriddenDecision
-      : await input.ctx.chatJson({
+      : await input.ctx.chatStructured({
+          caller: 'human.brain',
           ...buildBrainPromptContext(state),
+          schema: brainDecisionOutputSchema,
+          schemaName: 'human_brain_decision',
           temperature: 0.1
         })
     const parsedDecision = parseBrainDecisionOutput(rawOutput)

@@ -1,31 +1,23 @@
-import { HumanMessage, SystemMessage } from '@langchain/core/messages'
-import type { ChatSessionMemory, JsonObject, JsonValue } from '../../../types/store'
+import { z } from 'zod/v4'
+import type { ChatSessionMemory, JsonValue } from '../../../types/store'
 import type { ChatStore } from '../../storage/domains/ChatStore'
 import type { LlmConfigStore } from '../../storage/domains/LlmConfigStore'
-import { createChatModel } from '../../llm/chatModel'
+import { invokeStructuredChat } from '../structuredOutput'
 import { buildSessionMemoryPrompt } from './prompts/session'
 
-const parseJsonObject = <T extends JsonObject>(text: string): T => {
-  const trimmed = String(text || '').trim()
-  try {
-    return JSON.parse(trimmed) as T
-  } catch (err) {
-    void err
-  }
-  const start = trimmed.indexOf('{')
-  const end = trimmed.lastIndexOf('}')
-  if (start >= 0 && end > start) {
-    const slice = trimmed.slice(start, end + 1)
-    return JSON.parse(slice) as T
-  }
-  throw new Error('无法解析 JSON 输出')
-}
+const sessionMemorySchema: z.ZodType<ChatSessionMemory> = z.object({
+  summary: z.string(),
+  openTasks: z.array(z.string()),
+  userPrefs: z.array(z.string()),
+  pinnedFacts: z.array(z.string()),
+  linkedDocumentIds: z.array(z.string())
+})
 
 const toList = (value: JsonValue | undefined): string[] =>
   (Array.isArray(value) ? value : []).map((item) => String(item || '').trim()).filter(Boolean)
 
 const normalizeMemory = (input: JsonValue | undefined): ChatSessionMemory => {
-  const obj: JsonObject = input && typeof input === 'object' && !Array.isArray(input) ? input : {}
+  const obj = input && typeof input === 'object' && !Array.isArray(input) ? input : {}
   return {
     summary: String(obj.summary || '').trim(),
     openTasks: toList(obj.openTasks).slice(0, 20),
@@ -56,22 +48,22 @@ export const updateSessionMemoryAfterRun = async (input: {
   const cfg = await input.llmStore.getActive()
   if (!cfg) return
 
-  const model = createChatModel(cfg, { temperature: 0.2 })
-  const res = await model.invoke([
-    new SystemMessage(buildSessionMemoryPrompt()),
-    new HumanMessage(
-      JSON.stringify({
+  const memory = normalizeMemory(
+    await invokeStructuredChat({
+      caller: 'session.memory',
+      cfg,
+      schema: sessionMemorySchema,
+      schemaName: 'session_memory',
+      system: buildSessionMemoryPrompt(),
+      user: JSON.stringify({
         previousMemory: prev,
         newExchange: {
           user: String(input.userInput || ''),
           assistant: String(input.assistantOutput || '')
         }
-      })
-    )
-  ])
-  const text = typeof res?.content === 'string' ? res.content : String(res?.content ?? '')
-  if (!text) return
-  const json = parseJsonObject<JsonObject>(text)
-  const memory = normalizeMemory(json)
+      }),
+      temperature: 0.2
+    })
+  )
   await input.chatStore.saveSessionMemory(sessionId, memory)
 }

@@ -2,7 +2,7 @@ import {
   classifyCommandMode,
   classifyCommandRisk,
   collectTerminalArtifactCandidates
-} from '../../tools/terminal_exec/terminalPolicy'
+} from '../../tools/terminal/terminalPolicy'
 import type { JsonObject } from '../../../../../../shared/types'
 
 type ToolExecutionMeta = {

@@ -4,11 +4,10 @@ const INVALID_MEMORY_OP_HINT =
   'memoryReducer 检测到非法记忆编辑，已忽略对应操作，请重新判断下一步。'
 
 const hasEvidenceIds = (
-  evidences: HumanState['brainMemory']['inside']['evidences'],
+  evidenceIdsInScope: Set<string>,
   evidenceIds: string[]
 ): boolean => {
-  const evidenceSet = new Set(evidences.map((item) => item.id))
-  return evidenceIds.every((evidenceId) => evidenceSet.has(evidenceId))
+  return evidenceIds.every((evidenceId) => evidenceIdsInScope.has(evidenceId))
 }
 
 const updateAtIndex = <T>(list: T[], index: number, value: T): T[] => {
@@ -23,9 +22,10 @@ const removeAtIndex = <T>(list: T[], index: number): T[] => {
 
 const applyFactOp = (
   inside: HumanState['brainMemory']['inside'],
-  op: Extract<BrainMemoryOp, { field: 'facts' }>
+  op: Extract<BrainMemoryOp, { field: 'facts' }>,
+  validEvidenceIds: Set<string>
 ) => {
-  if (!hasEvidenceIds(inside.evidences, op.value.evidenceIds)) {
+  if (!hasEvidenceIds(validEvidenceIds, op.value.evidenceIds)) {
     return { inside, invalid: true }
   }
 
@@ -79,6 +79,36 @@ const applyEvidenceOp = (
   }
 }
 
+const computeFinalEvidenceIds = (input: {
+  inside: HumanState['brainMemory']['inside']
+  memoryOps: BrainMemoryOp[]
+}): Set<string> => {
+  let evidences = input.inside.evidences
+
+  input.memoryOps.forEach((op) => {
+    if (op.field !== 'evidences') return
+
+    if (op.op === 'remove') {
+      if (op.index < 0 || op.index >= evidences.length) return
+      evidences = removeAtIndex(evidences, op.index)
+      return
+    }
+
+    const outcome = applyEvidenceOp(
+      {
+        ...input.inside,
+        evidences
+      },
+      op
+    )
+    if (!outcome.invalid) {
+      evidences = outcome.inside.evidences
+    }
+  })
+
+  return new Set(evidences.map((item) => item.id))
+}
+
 const applyOpenQuestionOp = (
   inside: HumanState['brainMemory']['inside'],
   op: Extract<BrainMemoryOp, { field: 'openQuestions' }>
@@ -115,6 +145,7 @@ export const reduceBrainMemory = (input: {
 } => {
   let nextInside = input.inside
   let hasInvalidOp = false
+  const finalEvidenceIds = computeFinalEvidenceIds(input)
 
   input.memoryOps.forEach((op) => {
     if (op.op === 'remove') {
@@ -153,7 +184,7 @@ export const reduceBrainMemory = (input: {
 
     const outcome =
       op.field === 'facts'
-        ? applyFactOp(nextInside, op)
+        ? applyFactOp(nextInside, op, finalEvidenceIds)
         : op.field === 'evidences'
           ? applyEvidenceOp(nextInside, op)
           : applyOpenQuestionOp(nextInside, op)

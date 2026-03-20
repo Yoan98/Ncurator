@@ -40,7 +40,136 @@ export const buildHumanBrainPrompt = (input: HumanBrainPromptInput) => {
         | { "action": "hand", "parallelCallToolParam": [{ "toolName": "tool_name", "args": {} }] }
         | { "action": "mouth", "status": "completed" | "blocked" }
     }
+
+    字段解释：
+    - memoryOps：数组。表示本轮对内部记忆的增量操作；没有要修改的内容时输出空数组。
+    - memoryOps[].op：字符串枚举。只能是 add、edit、remove。
+    - memoryOps[].field：字符串枚举。只能是 facts、evidences、openQuestions。
+    - memoryOps[].index：数字。仅在 edit、remove 时出现，表示要修改或删除的目标索引。
+    - memoryOps[].value：仅在 add、edit 时出现。
+    - memoryOps[].value（facts）：对象，结构为 { id, summary, evidenceIds }。
+    - memoryOps[].value.id：字符串。该 fact 或 evidence 的稳定标识。
+    - memoryOps[].value.summary：字符串。该 fact 或 evidence 的简洁摘要。
+    - memoryOps[].value.evidenceIds：字符串数组。仅 facts 使用，表示支撑该 fact 的 evidence id 列表。
+    - memoryOps[].value.toolName：字符串。仅 evidences 使用，表示 evidence 对应的工具名。
+    - memoryOps[].value.sourceType：字符串常量。仅 evidences 使用，当前固定为 tool_result。
+    - memoryOps[].value.rawRef：可选字符串。仅 evidences 使用，表示原始结果引用位置。
+    - memoryOps[].value（openQuestions）：字符串。表示仍未解决的问题描述。
+    - decision：对象。表示本轮正式判断。
+    - decision.summary：字符串。简洁说明这轮决定做什么。
+    - decision.reason：字符串。说明为什么做这个决定。
+    - decision.expectedOutcome：字符串。说明期望这一步带来什么结果。
+    - nextAction：对象。表示下一跳动作，且只能输出 learning、hand、mouth 三种结构之一。
+    - nextAction.action：字符串枚举。只能是 learning、hand、mouth。
+    - nextAction.wantLearnSkillIds：字符串数组。仅在 action=learning 时出现，表示本轮要学习的 skill id 列表。
+    - nextAction.parallelCallToolParam：数组。仅在 action=hand 时出现，表示本轮要执行的工具调用列表。
+    - nextAction.parallelCallToolParam[].toolName：字符串。要调用的工具名。
+    - nextAction.parallelCallToolParam[].args：对象。对应工具的调用参数。
+    - nextAction.status：字符串枚举。仅在 action=mouth 时出现，只能是 completed 或 blocked。
   </output_rules>
+
+  <output_principles>
+    - 当你已经有足够依据交付结果时，优先输出 mouth。
+    - 当你缺的主要是“如何使用某个 skill”的信息时，输出 learning。
+    - 当你已经明确知道要执行哪些工具动作时，输出 hand。
+    - 不要编造工具结果、技能内容、事实或证据。
+    - 不要输出 markdown。
+  </output_principles>
+
+  <output_examples>
+    <example_memory_ops>
+      {
+        "memoryOps": [
+          {
+            "op": "add",
+            "field": "evidences",
+            "value": {
+              "id": "evidence-kb-risk-1",
+              "toolName": "kb_hybrid_search_chunks",
+              "summary": "知识库结果显示项目风险控制要求包含上线前复核。",
+              "sourceType": "tool_result",
+              "rawRef": "tool_result#1"
+            }
+          },
+          {
+            "op": "add",
+            "field": "facts",
+            "value": {
+              "id": "fact-risk-review-1",
+              "summary": "项目上线前需要执行复核。",
+              "evidenceIds": ["evidence-kb-risk-1"]
+            }
+          },
+          {
+            "op": "remove",
+            "field": "openQuestions",
+            "index": 0
+          }
+        ],
+        "decision": {
+          "summary": "已经得到关键依据，准备结束任务",
+          "reason": "当前事实已经有足够证据支撑，不需要继续检索。",
+          "expectedOutcome": "进入最终整理并输出结果。"
+        },
+        "nextAction": {
+          "action": "mouth",
+          "status": "completed"
+        }
+      }
+    </example_memory_ops>
+
+    <example_learning>
+      {
+        "memoryOps": [],
+        "decision": {
+          "summary": "先补充当前所需的技能说明",
+          "reason": "我已经知道任务要继续推进，但还缺少相关 skill 的使用细节，继续猜测风险较高。",
+          "expectedOutcome": "获得足够的技能说明后，我可以决定是否调用工具。"
+        },
+        "nextAction": {
+          "action": "learning",
+          "wantLearnSkillIds": ["docx-read"]
+        }
+      }
+    </example_learning>
+
+    <example_hand>
+      {
+        "memoryOps": [],
+        "decision": {
+          "summary": "调用工具获取完成任务所需的直接证据",
+          "reason": "当前缺的是可验证的结果，而不是额外的解释。",
+          "expectedOutcome": "拿到新的工具结果后，我可以更新记忆并判断是否收敛。"
+        },
+        "nextAction": {
+          "action": "hand",
+          "parallelCallToolParam": [
+            {
+              "toolName": "kb_hybrid_search_chunks",
+              "args": {
+                "query": "项目风险控制要求"
+              }
+            }
+          ]
+        }
+      }
+    </example_hand>
+
+    <example_mouth>
+      {
+        "memoryOps": [],
+        "decision": {
+          "summary": "当前已经可以结束任务",
+          "reason": "现有证据已经足够支持最终结论，没有必要继续扩展动作。",
+          "expectedOutcome": "由后续表达节点整理出最终结果。"
+        },
+        "nextAction": {
+          "action": "mouth",
+          "status": "completed"
+        }
+      }
+    </example_mouth>
+  </output_examples>
 </system>
 `.trim(),
     user: `

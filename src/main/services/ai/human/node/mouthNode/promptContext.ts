@@ -20,7 +20,7 @@ export const buildMouthPromptContext = (input: {
   finalStatus: 'completed' | 'blocked'
 }) => {
   const finalDecision = input.state.lastBrainDecision
-    ? `最终决定：“${input.state.lastBrainDecision.decision.summary}”；原因：${input.state.lastBrainDecision.decision.reason}；预期结果：${input.state.lastBrainDecision.decision.expectedOutcome}`
+    ? `最终决定：“${input.state.lastBrainDecision.decision.summary}”；原因：${input.state.lastBrainDecision.decision.reason}；预期结果：${input.state.lastBrainDecision.decision.expectedOutcome}；结束状态${input.finalStatus}`
     : 'none'
 
   return buildHumanMouthPrompt({

@@ -16,6 +16,7 @@ export const createHumanRunStateSchema = () => {
     ])
   )
   const runtimeSkillIdSchema = z.enum(RUNTIME_SKILL_IDS)
+  const toolFamilyIdSchema = z.enum(['terminal', 'kb', 'docx'])
   const toolCallResultCodeSchema = z.enum(TOOL_CALL_RESULT_CODES)
   const humanTaskInputSchema: z.ZodType<HumanTaskInput> = z.object({
     taskId: z.string(),
@@ -75,6 +76,7 @@ export const createHumanRunStateSchema = () => {
               .array(
                 z.object({
                   skillId: runtimeSkillIdSchema,
+                  familyId: toolFamilyIdSchema,
                   title: z.string(),
                   summary: z.string(),
                   toolNames: z.array(z.string()),

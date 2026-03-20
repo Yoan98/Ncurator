@@ -9,7 +9,7 @@ import type {
   IpcJsonValue
 } from '../../../../../../shared/types'
 import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
-import { resolveWorkspacePath } from '../terminal_exec/terminalPolicy'
+import { resolveWorkspacePath } from '../terminal/terminalPolicy'
 import type {
   DocxCapabilityToolsInput,
   DocxCapabilityToolsRuntimeState,

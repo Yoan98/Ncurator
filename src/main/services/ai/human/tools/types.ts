@@ -1,25 +1,30 @@
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { AiRunContext } from '../../types'
+import type { RuntimeSkillId } from '../types'
 
-export type AiToolCapability = 'local_kb_retrieval' | 'terminal_exec' | 'docx'
+export type AiToolFamilyId = 'terminal' | 'kb' | 'docx'
 
-export type CapabilityToolBuildInput = {
+export type ToolFamilyBuildInput = {
   ctx: AiRunContext
   runId: string
   taskId: string
 }
 
-export type CapabilityToolBuilder = (
-  input: CapabilityToolBuildInput
-) => StructuredToolInterface[]
+export type ToolFamilyBuilder = (input: ToolFamilyBuildInput) => StructuredToolInterface[]
 
-export type CapabilityToolFamily = {
-  capability: AiToolCapability
-  buildTools: CapabilityToolBuilder
+export type ToolFamilyDefinition = {
+  familyId: AiToolFamilyId
+  buildTools: ToolFamilyBuilder
 }
 
-export type CapabilityToolRegistry = {
-  families: CapabilityToolFamily[]
+export type SkillToolBinding = {
+  skillId: RuntimeSkillId
+  familyId: AiToolFamilyId
+  toolNames: string[]
+}
+
+export type ToolFamilyRegistry = {
+  families: ToolFamilyDefinition[]
   allTools: StructuredToolInterface[]
-  toolToCapability: Record<string, AiToolCapability>
+  toolToFamily: Record<string, AiToolFamilyId>
 }

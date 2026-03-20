@@ -1,11 +1,9 @@
-import { HumanMessage, SystemMessage } from '@langchain/core/messages'
 import { randomUUID } from 'node:crypto'
-import { createChatModel } from '../../../src/main/services/llm/chatModel'
+import { invokeStructuredChat } from '../../../src/main/services/ai/structuredOutput'
 import type { DocxChangedBlock, DocxOp } from '../../../src/main/services/ai/human/tools/docx/types'
 import type { LastBrainDecision } from '../../../src/main/services/ai/human/types'
 import type { AiRunContext } from '../../../src/main/services/ai/types'
 import type { AiApprovalDecision, AiApprovalRequest } from '../../../src/main/services/ai/types'
-import type { JsonObject } from '../../../src/shared/types'
 import type { EventCollector } from '../core/eventCollector'
 import type {
   ApprovalPolicy,
@@ -32,7 +30,7 @@ const buildApprovalResolver = (
 
 type ToolExecutionOverrideResolver = (input: {
   toolName: string
-  args: JsonObject
+  args: Record<string, unknown>
 }) => TestToolExecutionOverride['result'] | undefined
 
 const buildDocumentsStoreStub = (overrides: TestDocumentsStoreOverrides | undefined) => ({
@@ -172,20 +170,6 @@ const translateTestReasonShortcut = (output: TestHumanReasonShortcut): LastBrain
   }
 }
 
-const parseJsonObject = <T extends JsonObject>(text: string): T => {
-  const trimmed = String(text || '').trim()
-  try {
-    return JSON.parse(trimmed) as T
-  } catch {
-    const start = trimmed.indexOf('{')
-    const end = trimmed.lastIndexOf('}')
-    if (start >= 0 && end > start) {
-      return JSON.parse(trimmed.slice(start, end + 1)) as T
-    }
-  }
-  throw new Error('无法解析 JSON 输出')
-}
-
 type CreateTestAiRunContextInput = CreateAiRunContextInput & {
   runId?: string
   sessionId?: string
@@ -260,23 +244,22 @@ export const createTestAiRunContext = (input: CreateTestAiRunContextInput): AiRu
         }
       : undefined,
     checkCancelled: input.checkCancelledOverride || (() => undefined),
-    chatJson: async <T extends JsonObject>(payload): Promise<T> => {
-      if (input.chatJsonOverride) {
-        return input.chatJsonOverride<T>(payload)
+    chatStructured: async <T extends Record<string, unknown>>(payload): Promise<T> => {
+      if (input.chatStructuredOverride) {
+        return input.chatStructuredOverride<T>(payload)
       }
       if (!input.liveModelConfig) {
-        throw new Error('chatJson is not available in this test harness context')
+        throw new Error('chatStructured is not available in this test harness context')
       }
-      const model = createChatModel(input.liveModelConfig, {
-        temperature: payload.temperature ?? 0.2
+      return invokeStructuredChat({
+        caller: payload.caller,
+        cfg: input.liveModelConfig,
+        schema: payload.schema,
+        schemaName: payload.schemaName,
+        system: payload.system,
+        user: payload.user,
+        temperature: payload.temperature
       })
-      const res = await model.invoke([
-        new SystemMessage(payload.system),
-        new HumanMessage(payload.user)
-      ])
-      const text = typeof res?.content === 'string' ? res.content : String(res?.content ?? '')
-      if (!text) throw new Error('大模型返回为空')
-      return parseJsonObject<T>(text)
     },
     sendEvent: (event: Parameters<AiRunContext['sendEvent']>[0]) => {
       input.eventCollector.add(event)
