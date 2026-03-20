@@ -48,12 +48,6 @@ interface MainState {
   error?: string
   // main 最终对用户输出的 markdown。
   finalDeliveryMarkdown?: string
-  // 最终交付主要来自哪个 task。
-  finalDeliveryTaskId?: string
-  // 本地资料使用状态。
-  localSourceStatus?: 'used' | 'not_used' | 'insufficient'
-  // 本地资料使用情况说明。
-  localSourceSummary?: string
 }
 
 interface MainPlanTask {
@@ -64,23 +58,10 @@ interface MainPlanTask {
   // 派发给 human 的任务输入。
   userInput: string
   // 任务状态。
-  status: 'pending' | 'running' | 'completed' | 'failed'
-  // 当前任务已尝试次数。
-  attempts: number
-  // 任务结果码。
-  resultCode?:
-    | 'ok'
-    | 'failed'
-    | 'workspace_required'
-    | 'approval_denied'
-    | 'bounded_loop_error'
-    | 'invalid_input'
-  // 任务结果摘要。
-  resultMessage?: string
+  // ready 表示尚未派发；blocked 表示已经派发但最终阻塞。
+  status: 'ready' | 'running' | 'completed' | 'blocked'
   // 该任务的正式交付内容。
   deliveryMarkdown?: string
-  // 该任务的结构化结果。
-  resultData?: JsonObject
 }
 ```
 
@@ -123,22 +104,18 @@ interface HumanState {
       // 技能目录，只放少量摘要信息，供 brain 判断要不要学习。
       skillCatalog: SkillCatalogItem[]
       // 由 learning / runner 更新。
-      // 最近加载过的 skill 栈，最多保留少量项，先进后出。
+      // 已学习的 skill 列表。
       learnedSkillIds: string[]
-      // 由 learning 更新。
-      // 已加载技能详情的字符串聚合，按 skill 分段拼接。
-      learnedSkills: string
       // 由 brain 输出后原样推进写入，供回看和审计。
       brainDecisions: BrainDecisionRecord[]
     }
   }
   // 最近一次 hand 并行工具调用后的结果数组。
   lastParallelCallToolResults?: ToolCallResult[]
-  // 最近一次 brain 输出的完整决策对象。
-  // brain 在下一轮加载时不会直接读取整个对象，
-  // 而是只读取其中的 decision + nextAction 作为回看信息。
+  // 最近一次 brain 输出的当前决策快照。
+  // learning / hand / mouth 通过它读取当前 nextAction。
   lastBrainDecision?: LastBrainDecision
-  // 调用保险提示；当 hand 次数超过临时上限后写入，提醒 brain 优先收敛。
+  // 收敛或纠偏提示；例如手部调用超限、重复学习已学 skill、记忆编辑失败。
   watchHint?: string
   // 最终任务结果，只由 mouth 写入。
   result?: HumanResult
@@ -192,7 +169,8 @@ interface SkillCatalogItem {
 }
 ```
 
-### `lastBrainDecision`
+
+### `lastBrainDecision` 与 `brainDecisions`
 
 ```ts
 interface LastBrainDecision {
@@ -205,11 +183,9 @@ interface LastBrainDecision {
   nextAction: BrainNextAction
 }
 
-interface PreviousBrainDecisionContext {
-  // 上一轮做出的正式判断。
-  decision: BrainDecision
-  // 上一轮决定进入的下一步动作，以及该动作的关键信息。
-  nextAction: BrainNextAction
+interface BrainDecisionRecord extends LastBrainDecision {
+  // 本条历史 brain 决策的写入时间。
+  createdAt: number
 }
 
 type BrainNextAction =
@@ -294,12 +270,10 @@ interface ToolCallParam {
   // 工具调用参数。
   args: JsonObject
 }
-
-interface BrainDecisionRecord extends LastBrainDecision {
-  // 本条历史 brain 决策的写入时间。
-  createdAt: number
-}
 ```
+
+
+
 
 ### `lastParallelCallToolResults` 与 `result`
 
@@ -327,8 +301,6 @@ interface HumanResult {
   status: 'completed' | 'blocked'
   // 最终结果摘要。
   summary: string
-  // 最终结构化结果。
-  payload?: JsonObject
   // 最终对用户交付的 markdown。
   deliveryMarkdown?: string
 }
@@ -369,16 +341,16 @@ flowchart LR
     ME["main_plan_exec"]
     H["human 输出结果"]
     MS["main_synthesis_human"]
-    S4[("MainState.finalDeliveryMarkdown / finalDeliveryTaskId / localSourceStatus / localSourceSummary")]
+    S4[("MainState.finalDeliveryMarkdown")]
     MX["main_complete"]
     S5[("MainState.status / error")]
 
     S3 -->|读取当前游标任务| ME
     ME -->|派发 taskId + userInput| H
-    H -->|返回 status + resultCode + resultMessage + deliveryMarkdown + resultData| ME
+    H -->|返回 status + summary + deliveryMarkdown| ME
     ME -->|回写当前任务结果 + 更新 dispatchCursor| S3
     S3 -->|全部完成或阻塞后读取所有任务结果| MS
-    MS -->|写入最终交付和本地资料说明| S4
+    MS -->|写入最终交付| S4
     S4 -->|进入收尾| MX
     MX -->|写入 run 终态| S5
 ```
@@ -391,6 +363,7 @@ flowchart LR
     BM[("brainMemory")]
     LTR[("lastParallelCallToolResults")]
     LBD[("lastBrainDecision")]
+    BD[("brainMemory.outside.brainDecisions")]
     WH[("watchHint")]
     B["brain"]
     TR[("trace.steps")]
@@ -398,10 +371,11 @@ flowchart LR
     T -->|读取 taskId + userInput| B
     BM -->|读取 inside + outside| B
     LTR -->|读取最近一轮并行工具结果数组| B
-    LBD -->|读取上一轮 decision + nextAction| B
+    BD -->|读取最近决策历史摘要| B
     WH -->|存在时读取收敛提示| B
     B -->|通过 memoryOps 回写 inside| BM
-    B -->|写入新的 lastBrainDecision 对象| LBD
+    B -->|写入新的当前决策快照| LBD
+    B -->|追加新的 BrainDecisionRecord| BD
     B -->|追加 brain 执行轨迹| TR
 ```
 
@@ -411,13 +385,14 @@ flowchart LR
 flowchart LR
     LBD[("lastBrainDecision.nextAction.wantLearnSkillIds")]
     L["learning"]
-    BM[("brainMemory.outside.learnedSkillIds / learnedSkills / skillCatalog")]
+    BM[("brainMemory.outside.learnedSkillIds / skillCatalog")]
+    WH[("watchHint")]
     TR[("trace.steps")]
     B["brain"]
 
     LBD -->|读取 wantLearnSkillIds| L
-    L -->|写回 learnedSkillIds + learnedSkills| BM
-    L -->|必要时补充 skillCatalog 摘要| BM
+    L -->|首次学习时写回 learnedSkillIds| BM
+    L -->|重复学习或学习失败时写入| WH
     L -->|追加 learning 执行轨迹| TR
     L -->|返回下一轮 brain| B
 ```
@@ -435,7 +410,7 @@ flowchart LR
 
     LBD -->|读取并行工具调用参数数组| H
     H -->|写入本轮并行工具结果数组| LTR
-    H -->|超过 hand 次数临时上限时写入| WH
+    H -->|超过累计工具调用临时上限时写入| WH
     H -->|追加 hand 执行轨迹| TR
     H -->|返回下一轮 brain| B
 ```
@@ -448,6 +423,7 @@ flowchart LR
     BM[("brainMemory")]
     LTR[("lastParallelCallToolResults")]
     LBD[("lastBrainDecision")]
+    BD[("brainMemory.outside.brainDecisions")]
     M["mouth"]
     R[("result")]
     TR[("trace.steps")]
@@ -455,7 +431,8 @@ flowchart LR
     T -->|读取 taskId + userInput| M
     BM -->|读取 brainMemory| M
     LTR -->|读取最近一轮并行工具结果数组| M
-    LBD -->|读取 decision + nextAction.status| M
-    M -->|写入 status + summary + payload + deliveryMarkdown| R
+    LBD -->|读取当前 nextAction.status| M
+    BD -->|读取最近决策历史| M
+    M -->|写入 status + summary + deliveryMarkdown| R
     M -->|追加 mouth 执行轨迹| TR
 ```

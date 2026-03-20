@@ -57,22 +57,24 @@ human设计核心
 
 - `brain`
   - 唯一推理节点。
-  - 常规输入只包括 `task / brainMemory / lastParallelCallToolResults / 上一轮决策回看信息`。
-  - 上一轮决策回看信息只保留 `decision + nextAction`，用于让 `brain` 知道自己上一次做了什么判断、准备进入什么动作，以及该动作携带的关键信息。
-  - 当 `hand` 调用次数超过临时上限后，额外接收 `watchHint`，用于提醒本轮优先收敛。
-  - 输出新的 `lastBrainDecision` 对象，其中 `nextAction` 为对象结构，并只通过 `memoryOps` 更新 `brainMemory.inside`。
+  - 常规输入只包括 `task / brainMemory / lastParallelCallToolResults / 最近决策历史摘要 / watchHint`。
+  - 最近决策历史摘要只读取 `decision + nextAction + createdAt`，用于让 `brain` 知道最近几轮做过什么判断，以及这些判断的时间顺序。
+  - 输出新的 `lastBrainDecision`，并同步把该决策追加到 `brainDecisions` 历史中。
+  - 只通过 `memoryOps` 更新 `brainMemory.inside`。
 - `learning`
-  - 只负责加载 skill 详细信息。
+  - 只负责按 `wantLearnSkillIds` 维护学习状态。
+  - `skillCatalog` 在 run 开始时已注入，供 `brain` 先判断要不要学习某个 skill。
   - 读取 `lastBrainDecision.nextAction.wantLearnSkillIds`。
-  - 更新 `brainMemory.outside.skillCatalog / learnedSkillIds / learnedSkills`。
+  - 更新 `brainMemory.outside.learnedSkillIds`；skill 详细说明在 prompt 拼装阶段按 id 动态展开，不持久化到 state。
+  - 如果请求的是已学习过的 skill，则写入 `watchHint` 并返回 `brain` 重决策。
 - `hand`
   - 只负责执行工具调用，可以承接一个或多个并行工具调用参数。
   - 读取 `lastBrainDecision.nextAction.parallelCallToolParam`。
   - 写入 `lastParallelCallToolResults`。
-  - 由 `human` 内部统计 `hand` 触发次数；超过临时上限后写入 `watchHint`，下一轮交给 `brain` 判断是否收敛。
+  - 由 `human` 内部统计工具调用次数；超过临时上限后写入 `watchHint`，下一轮交给 `brain` 判断是否收敛。
 - `mouth`
-  - 读取 `lastBrainDecision.nextAction.status`。
-  - 只负责生成最终 `deliveryMarkdown` 和结果摘要。
+  - 读取 `lastBrainDecision.nextAction.status`、最近决策历史和已确认事实/证据。
+  - 调用模型整理最终 `deliveryMarkdown` 和结果摘要。
 
 ```mermaid
 flowchart TD
@@ -90,9 +92,18 @@ flowchart TD
 - `brain` 是唯一认知节点，不把思考分散到 `learning / hand / mouth`。
 - `brainMemory.inside` 与 `brainMemory.outside` 的写权限必须明确。
 - 工具原始大结果不直接堆进 `brainMemory`，只保留提炼后的 `evidences` 和可复用的 `facts`。
-- `lastBrainDecision` 是最近一次 brain 决策快照，`brainDecisions` 是历史决策日志，二者职责必须分离。
-- `human` 内部仍保留一个简单的调用保险机制：当 `hand` 触发次数超过临时上限时，写入 `watchHint` 并要求 `brain` 优先考虑收敛。
-- `watchHint` 不是独立 watchdog 子系统，而是当前 `human` 内部的轻量收敛提示。
+- `lastBrainDecision` 是当前分发快照，`brainDecisions` 是历史决策日志，二者职责必须分离。
+- `brain` 回看时读取的是格式化后的 `brainDecisions` 历史摘要，而不是直接读取 `lastBrainDecision`。
+- `skillCatalog` 是预注入目录摘要，`learnedSkillIds` 是已学习 skill 集合，二者职责必须分离。
+- `human` 内部只保留一个简单的调用保险机制：当工具调用次数超过临时上限、重复学习已学 skill、或记忆编辑失败时，写入 `watchHint` 并要求 `brain` 优先考虑收敛或纠偏。
+- `watchHint` 是当前 `human` 内部统一的轻量收敛提示，不再存在独立 `watchdog` 子系统。
+
+### 5.实现细节补充
+- `brain` prompt 在拼装时根据 `learnedSkillIds` 动态展开技能详情。
+- `brainDecisions` 最多保留最近 10 条。
+- `brain` 每轮都会更新 `lastBrainDecision`，供 `learning / hand / mouth` 读取当前 `nextAction`。
+- `brain` 每轮也会向 `brainDecisions` 追加一条带 `createdAt` 的历史记录。
+- `brain` 在下一轮加载时读取的是最近决策历史的精简摘要文本，只保留 `decision`、`nextAction`、`createdAt`，而不是直接读取 `lastBrainDecision`。
 
 ## 6. 代码真相源
 

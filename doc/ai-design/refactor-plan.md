@@ -2,14 +2,15 @@
 
 ## 1. 目标
 
-- `human` 实现直接对齐当前 AI 设计文档，不兼容旧 `reason -> execute -> finalize` 逻辑。
+- `human` 实现直接对齐当前 AI 设计文档，不兼容旧 `reason -> execute -> finalize`、旧 `watchdog` 与旧任务结果附加字段。
 - 本次重构以“直接替换”为原则，不保留旧状态结构、旧 prompt 契约和旧中间动作模型。
+- `main` 的编排职责不变，但会同步收紧 `main` 与 `human` 的任务输入/结果数据契约。
 - 目录重构以“节点主线清晰、附属逻辑就近归位、跨节点公共逻辑少量下沉”为原则。
 - `brain` 与 `mouth` 的提示词同步重写，并单独沉淀 prompt 设计文档。
 
 ## 2. 重构边界
 
-本次只重构 `human` 内部执行闭环，`main` 的编排职责不变：
+本次以重构 `human` 执行闭环为主，同时同步调整 `main` 与 `human` 的任务输入/结果字段；`main` 的编排职责不变：
 
 - `main` 继续负责路由、计划、派发和最终汇总。
 - `human` 继续负责单任务闭环执行。
@@ -18,13 +19,16 @@
   - `learning`
   - `hand`
   - `mouth`
+- `main` 的计划任务与最终汇总字段同步收紧，统一以 `deliveryMarkdown` 作为正式信息载体。
 
 明确不做的事：
 
 - 不兼容旧 `HumanReasoningOutput`
 - 不保留旧 `activate_capability` 中间语义
 - 不保留旧 `progress / memory / turn / outcome` 结构
+- 不保留旧 `watchdog` sidecar
 - 不保留旧 prompt 中围绕 `memoryPatch + actionBatch/outcome` 的输出契约
+- 不保留旧 `resultCode / resultMessage / resultData / attempts / localSourceStatus / localSourceSummary / finalDeliveryTaskId`
 
 ## 3. 目标目录
 
@@ -61,13 +65,11 @@ src/main/services/ai/human/
     mouthNode/
       index.ts
       promptContext.ts
-      provenance.ts
       types.ts
     utils/
       events.ts
       initialState.ts
       runtimeCache.ts
-      resultCode.ts
   constants.ts
   types.ts
 ```
@@ -81,15 +83,38 @@ src/main/services/ai/human/
 
 ## 4. 数据契约调整
 
-### 4.1 `lastBrainDecision`
+### 4.1 `task`
 
-`lastBrainDecision` 保留为 brain 最近一次正式决策快照，`nextAction` 为对象结构：
+`human` 输入统一使用 `taskId + userInput`：
+
+```ts
+interface HumanTaskInput {
+  taskId: string
+  userInput: string
+}
+```
+
+### 4.2 `brainMemory`
+
+- `brainMemory.inside` 仍只允许 `brain` 通过 `memoryOps` 改动。
+- `brainMemory.outside.skillCatalog` 在 run 开始时预注入，供 `brain` 判断下一步要不要学习某个 skill。
+- `brainMemory.outside.learnedSkillIds` 由 `learning` 维护，表示已经学习并可供后续 prompt 展开的 skill 集合。
+- 不再持久化 `learnedSkills` 字符串；`brain` prompt 在运行时根据 `learnedSkillIds` 动态拼接已学习技能详情。
+- `brainMemory.outside.brainDecisions` 保留最近决策历史，最多保留 10 条。
+
+### 4.3 `lastBrainDecision` 与 `brainDecisions`
+
+`lastBrainDecision` 仍保留为当前决策快照，供 `learning / hand / mouth` 读取本轮 `nextAction`；同时继续追加 `brainDecisions` 作为历史回看来源：
 
 ```ts
 interface LastBrainDecision {
   memoryOps: BrainMemoryOp[]
   decision: BrainDecision
   nextAction: BrainNextAction
+}
+
+interface BrainDecisionRecord extends LastBrainDecision {
+  createdAt: number
 }
 
 type BrainNextAction =
@@ -107,25 +132,55 @@ type BrainNextAction =
     };
 ```
 
+约束：
 
-### 4.2 `brainMemory`
+- `brain` 每轮都会写入新的 `lastBrainDecision`，并向 `brainDecisions` 追加一条新记录。
+- `learning / hand / mouth` 只读取 `lastBrainDecision.nextAction` 作为当前分发依据。
+- `brain` 自身不直接读取 `lastBrainDecision`，prompt 侧只读取最近决策历史的易读摘要字符串。
 
-- `brainMemory.inside` 仍只允许 `brain` 通过 `memoryOps` 改动。
-- `brainMemory.outside` 仍由 `learning / hand / runner` 维护。
-- `brainDecisions` 继续保留在 `brainMemory.outside` 中，作为最近决策历史。
+### 4.4 `watchHint`
 
-### 4.3 `result`
+`watchHint` 是 `human` 内部统一的轻量收敛/纠偏提示，不再存在独立 `watchdog` 子系统。
 
-`mouth` 仍是唯一写入 `result` 的节点，结构保持：
+典型来源：
+
+- `hand` 工具调用次数超过临时上限（默认先设为 50 次）
+- `learning` 收到已学习过的 skill 请求
+- `memoryReducer` 处理非法 `edit/remove` 操作
+
+这些情况不直接破坏当前 state，而是写入 `watchHint` 并返回 `brain` 重新决策。
+
+### 4.5 `result`
+
+`mouth` 仍是唯一写入 `result` 的节点，结构收紧为：
 
 ```ts
 interface HumanResult {
   status: 'completed' | 'blocked'
   summary: string
-  payload?: JsonObject
   deliveryMarkdown?: string
 }
 ```
+
+### 4.6 `main` 任务结果契约
+
+`main` 的任务结果字段同步收紧：
+
+```ts
+interface MainPlanTask {
+  id: string
+  title: string
+  userInput: string
+  status: 'ready' | 'running' | 'completed' | 'blocked'
+  deliveryMarkdown?: string
+}
+```
+
+补充约束：
+
+- 计划任务初始状态统一为 `ready`，不再使用 `pending`。
+- `blocked` 表示任务已派发给 `human` 且最终阻塞，不与“尚未执行”混用。
+- `main` 最终只保留 `finalDeliveryMarkdown` 作为正式交付。
 
 ## 5. 节点职责
 
@@ -136,47 +191,49 @@ interface HumanResult {
   - 用户的要求
   - 当前记忆数据
   - 最近一次工具结果
-  - 上一轮决策回看信息
+  - 最近决策历史摘要
   - 收敛提醒
-- 输出 `LastBrainDecision`。
+- 输出本轮 `LastBrainDecision`，并同步沉淀一条 `BrainDecisionRecord`。
 - 只通过 `memoryOps` 更新 `brainMemory.inside`。
+- 通过 `memoryReducer` 对非法 `memoryOps` 做安全处理；如果修改失败，则写入 `watchHint` 并返回下一轮 `brain`。
 - 不直接加载 skill，不直接执行工具，不直接生成最终交付。
 
-这里的“上一轮决策回看信息”只保留：
+这里的“最近决策历史摘要”只保留：
 
-- 上一轮的 `decision`
-- 上一轮的 `nextAction`
+- `decision`
+- `nextAction`
+- `createdAt`
 
-这样做的目的，是让模型知道自己上一次：
+这样做的目的，是让模型知道最近几轮：
 
 - 做了什么判断
 - 准备进入什么动作
-- 那个动作携带了什么关键信息
+- 这些动作发生在什么时间顺序上
 
-而不是把整个 `lastBrainDecision` 原样重新喂回去。
+而不是把原始状态对象原样重新喂回去。
 
 ### 5.2 `learningNode`
 
 - 只在 `nextAction.action='learning'` 时执行。
-- 读取 `nextAction.wantLearnSkillIds`。
-- 加载 skill 详细说明，更新：
-  - `brainMemory.outside.learnedSkillIds`
-  - `brainMemory.outside.learnedSkills`
-  - 必要时刷新 `brainMemory.outside.skillCatalog`
+- 读取 `lastBrainDecision.nextAction.wantLearnSkillIds`。
+- `skillCatalog` 在 run 开始时已注入，这里不负责懒加载目录摘要。
+- 对未学习过的 skill，更新 `brainMemory.outside.learnedSkillIds`。
+- 对已学习过的 skill，不重复执行，而是写入 `watchHint` 并返回 `brain` 重新决策。
+- skill 详细说明不写回 state，而是在 `brain` prompt 拼装阶段根据 `learnedSkillIds` 动态生成。
 
 ### 5.3 `handNode`
 
 - 只在 `nextAction.action='hand'` 时执行。
-- 读取 `nextAction.parallelCallToolParam`。
+- 读取 `lastBrainDecision.nextAction.parallelCallToolParam`。
 - 执行一个或多个工具调用，写入 `lastParallelCallToolResults`。
-- 超过临时动作上限时写入 `watchHint`，由下一轮 `brain` 判断是否收敛。
+- 统计累计工具调用次数；超过临时动作上限（默认先设为 50）时写入 `watchHint`，由下一轮 `brain` 判断是否收敛。
 
 ### 5.4 `mouthNode`
 
 - 只在 `nextAction.action='mouth'` 时执行。
-- 读取 `nextAction.status`、`decision` 和 `brainMemory.inside`。
-- 生成最终 `summary` 与 `deliveryMarkdown`。
-- 不再承担额外推理，只负责把已有结论整理成可交付结果。
+- 读取 `lastBrainDecision.nextAction.status`、最近决策历史、`brainMemory.inside` 和必要的工具结果。
+- 调用模型对已有信息做最终整理，生成 `summary` 与 `deliveryMarkdown`。
+- 不补编新事实，只负责把已有结论整理成可交付结果。
 
 ## 6. Prompt 重设计方向
 
@@ -195,7 +252,7 @@ interface HumanResult {
 - 让模型扮演“负责分析情况、整理记忆、决定下一步”的角色。
 - 强化判断顺序：先判断是否可以结束，再判断是否需要补技能说明，最后才判断是否要调用工具。
 - 让模型把高价值信息沉淀为事实、证据和未解决问题，而不是堆原始过程信息。
-- 最终输出稳定映射到 `LastBrainDecision`。
+- 最终输出稳定映射到 `LastBrainDecision`，并可直接追加为 `BrainDecisionRecord`。
 
 设计要点：
 
@@ -203,11 +260,11 @@ interface HumanResult {
 - 输入部分用自然语言组织：
   - 用户的要求
   - 你之前沉淀下来的记忆
-  - 当前可用和已学习的技能信息
+  - 当前可用技能目录、已学习 skill id，以及根据这些 id 动态拼装出的技能说明
   - 最近一轮工具结果
-  - 上一轮决策回看信息
+  - 最近决策历史摘要
   - 当前收敛提醒
-- 上一轮决策回看信息只给 `decision + nextAction`，不把整个 `lastBrainDecision` 原样塞回去。
+- 最近决策历史摘要只给 `decision + nextAction + createdAt`，不把原始 state 对象原样塞回去。
 - 输出规则中再明确：
   - `memoryOps`
   - `decision`
@@ -351,16 +408,16 @@ interface HumanResult {
   </memory_snapshot>
 
   <skill_context>
-    {当前可用的技能目录、最近学过的技能以及已加载的技能说明}
+    {当前可用的技能目录、已学习的 skill id，以及根据这些 id 动态生成的技能说明}
   </skill_context>
 
   <recent_tool_results>
     {最近一轮工具调用带回来的结果；如果没有，则写 none}
   </recent_tool_results>
 
-  <previous_decision_review>
-    {上一轮正式决策，以及当时决定进入的下一步动作和该动作的关键信息；如果没有，则写 none}
-  </previous_decision_review>
+  <recent_decision_history>
+    {最近几轮正式决策的摘要文本，包含 decision、nextAction、createdAt；如果没有，则写 none}
+  </recent_decision_history>
 
   <converge_hint>
     {当前是否有收敛提醒；如果没有，则写 none}
@@ -464,4 +521,3 @@ interface HumanResult {
   </evidences>
 </user_context>
 ```
-

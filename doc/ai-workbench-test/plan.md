@@ -115,14 +115,14 @@
 
 为什么：工具只是能力零件，真正决定“能不能把事做成”的是 `human`。
 
-怎么做：从单步闭环开始，再覆盖多工具协作、失败纠偏、多轮续做、长任务、watchdog 收敛和部分完成场景。
+怎么做：从单步闭环开始，再覆盖多工具协作、失败纠偏、多轮续做、长任务、`watchHint` 收敛和部分完成场景。
 
 当前实现前提：
 
-- `human` 已切换为 `reason -> execute -> finalize` 的结构化 ReAct 内核
-- 测试 override 以 `HumanReasoningOutput` 为主，不再以旧 `HumanStepDecision` 作为正式契约
-- 运行上限通过 hidden watchdog `hardActionLimit` 控制，而不是旧 graph state 中的 `maxSteps`
-- 交付差异通过 `objective` 表达，不再以 `deliveryKind` 作为测试主契约
+- `human` 已切换为 `brain -> learning -> hand -> mouth` 的四节点内核
+- 测试 override 以 `memoryOps + decision + nextAction` 契约为主，不再以旧 `HumanReasoningOutput` 或 `HumanStepDecision` 作为正式契约
+- 收敛上限通过 `hand` 工具调用次数与 `watchHint` 控制，而不是旧 `watchdog` 或 graph state 中的 `maxSteps`
+- 交付差异通过 `userInput` 表达，不再以 `objective` 或 `deliveryKind` 作为测试主契约
 
 #### basic
 
@@ -130,7 +130,7 @@
 | --- | --- | --- | --- |
 | `human-direct-kb-answer` | 验证单步自主完成 | 直接读取知识库并交付可引用答案 | 最简单的单步任务必须先独立成立 |
 | `human-direct-docx-edit` | 验证单工具文档闭环 | 直接读取指定文档、完成局部修改并交付可审阅结果 | 这是最常见的文档类基础任务 |
-| `human-watchdog-projection` | 验证 watchdog 时间线投影 | `watchdog_signal` 能被正确投影为 workbench 时间线项 | watchdog 不只是后台信号，也必须能被可视化回看 |
+| `human-watchhint-projection` | 验证 `watchHint` 时间线投影 | `watchHint` 能被正确投影为 workbench 时间线项 | 收敛提示不只是内部状态，也必须能被可视化回看 |
 
 #### boundary
 
@@ -141,10 +141,10 @@
 | `human-approval-blocked-recovery` | 验证审批阻塞收敛 | 需要执行命令或覆盖保存但未获批准时，能停在正确节点并给出继续条件 | 阻塞时的行为质量直接决定用户体验 |
 | `human-evidence-insufficient-safe-stop` | 验证证据不足时的安全行为 | 找不到足够依据时明确说明缺口，并交付可继续的初稿或后续建议 | 不能把“查不到”变成“编出来” |
 | `human-no-redundant-recheck` | 验证证据足够后的主动收敛 | 同一证据已足够时，不再重复调用同一工具做“再次确认” | 避免无意义循环是工程可用性的关键 |
-| `human-partial-delivery-on-budget-limit` | 验证做不完时的安全收敛 | 在 watchdog `hardActionLimit` 受限时保留已有进展并给出可继续交付 | “没完全做完”不应等同于“什么都没有” |
+| `human-partial-delivery-on-tool-limit` | 验证做不完时的安全收敛 | 在工具调用上限触发 `watchHint` 时保留已有进展并给出可继续交付 | “没完全做完”不应等同于“什么都没有” |
 | `human-invalid-execution-batch` | 验证非法 batch 被拒绝 | 混合读写或不满足并行约束的 batch plan 会被 executor 拒绝并回到收敛 | 保守并行是这次 human 重构的重要安全边界 |
-| `human-watchdog-soft-warn` | 验证 watchdog 软监督 | 高重复、低增益的推进会触发 `warn` 级 watchdog 信号，但最终仍由 `human_reason` 自主收敛 | watchdog 不能直接接管决策，但必须能及时提示 |
-| `human-watchdog-hard-fuse` | 验证 watchdog 硬保险丝 | 长时间空转或重复推进后，hard fuse 会强制最后一次收敛，并在无法收敛时合成 blocked | 必须防止真实运行进入无界循环 |
+| `human-repeated-skill-learning-redirect` | 验证重复学习的回退 | `brain` 请求已学习过的 skill 时，`learning` 不重复执行，而是写入 `watchHint` 并回到 `brain` | 需要防止学习路径空转 |
+| `human-invalid-memory-op-recovery` | 验证非法记忆编辑的回退 | 非法 `memoryOps` 不直接破坏 state，而是转成 `watchHint` 交回 `brain` 重决策 | 记忆编辑必须是安全、可恢复的 |
 
 #### scenario
 
@@ -279,7 +279,7 @@
 | 用例名称 | 目标 | 描述 | 为什么 |
 | --- | --- | --- | --- |
 | `plan-follow-up-refinement-breakdown` | 验证续做任务重规划 | 已有中间产物时，计划能围绕“继续完善”而不是重新做一遍 | follow-up 如果不能重用上下文，体验会很差 |
-| `plan-long-task-dependency-chain` | 验证长任务依赖链 | 长任务下每个 task 都有清晰 objective 和依赖关系 | 长任务稳定性首先取决于依赖顺序是否合理 |
+| `plan-long-task-dependency-chain` | 验证长任务依赖链 | 长任务下每个 task 都有清晰 `userInput` 和依赖关系 | 长任务稳定性首先取决于依赖顺序是否合理 |
 
 #### live
 

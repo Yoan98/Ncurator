@@ -7,13 +7,14 @@
 - 当涉及 `main`/`human` 状态字段、数据契约、Main/Human 流转关系或流转图时，请阅读 `doc/ai-design/data-definition-and-flow.md`
 - 当涉及 AI 新架构重构范围、阶段划分、目录重构方向或后续补充计划时，请阅读 `doc/ai-design/refactor-plan.md`
 - 当涉及 AI 提示词设计准则、prompt 结构、标签组织、字段示例或提示词编排原则时，请阅读 `doc/ai-design/prompt-design.md`
-- 当涉及 AI workbench 测试方案、阶段划分、阶段目标、各阶段 `basic / boundary / scenario / live` 用例规划、watchdog/并行边界、模型使用或 backend / e2e 测试边界时，请先阅读 `doc/ai-workbench-test/plan.md`；
-- 当涉及 AI workbench 当前阶段推进、完成度、证据、覆盖缺口、structured ReAct 测试契约迁移或下一阶段准入时，请同步阅读对应阶段的 todo 文档；当前至少包括 `doc/ai-workbench-test/todo-stage-1.md` 与 `doc/ai-workbench-test/todo-stage-2.md`
+- 当涉及 AI workbench 测试方案、阶段划分、阶段目标、各阶段 `basic / boundary / scenario / live` 用例规划、`watchHint`/并行边界、模型使用或 backend / e2e 测试边界时，请先阅读 `doc/ai-workbench-test/plan.md`；
+- 当涉及 AI workbench 当前阶段推进、完成度、证据、覆盖缺口、四节点 `human` 测试契约迁移或下一阶段准入时，请阅读 `doc/ai-workbench-test/` 下当前阶段 todo 文档；如果阶段 todo 尚未重新建立，则以 `doc/ai-workbench-test/plan.md` 为准
 - 当涉及数据库、LanceDB、表职责、存储分层或检索存储实现时，请阅读 `doc/database.md`
 - 当涉及目录规范、文件归位、human 子目录归位、模块边界或工程结构时，请阅读 `doc/project-structure.md`
 - 当涉及 UI 风格、布局规范或组件交互约束时，请阅读 `doc/ui-style.md`
 - 当涉及测试相关内容，包括测试目录、raw log、report 规则、证据展示方式或历史总数据 / 最新总数据口径时，请阅读 `doc/test.md`；
-## 2. 注意事项
+
+## 2. 必须遵守的规则
 ### 代码相关
 - 代码的实现必须要简洁，可维护性，良好的可读性，合理的注释
 - 禁止使用 `Modal.confirm`、`Modal.info` 等静态方法
