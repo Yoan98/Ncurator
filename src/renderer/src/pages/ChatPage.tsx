@@ -112,19 +112,10 @@ const ChatPage: React.FC = () => {
   const [draftDecisionBusyIds, setDraftDecisionBusyIds] = useState<string[]>([])
   const [draftBulkApplying, setDraftBulkApplying] = useState(false)
   const [draftCommitSubmitting, setDraftCommitSubmitting] = useState(false)
-  const [localSourceStatus, setLocalSourceStatus] = useState<{
-    status: 'used' | 'not_used' | 'insufficient'
-    summary: string
-  } | null>(null)
   const [pendingApprovalRequest, setPendingApprovalRequest] = useState<ApprovalRequiredEvent | null>(
     null
   )
   const [approvalSubmitting, setApprovalSubmitting] = useState(false)
-  const [pendingNonLocalRequest, setPendingNonLocalRequest] = useState<{
-    input: string
-    scopes: SourceScopeSelection[]
-    reason: string
-  } | null>(null)
   const [pendingWorkspaceRequest, setPendingWorkspaceRequest] = useState<{
     input: string
     scopes: SourceScopeSelection[]
@@ -326,10 +317,8 @@ const ChatPage: React.FC = () => {
       setSearchTurn(null)
       setSelectedTimelineId(null)
       setSelectedSourceScopes([])
-      setLocalSourceStatus(null)
       setPendingApprovalRequest(null)
       setApprovalSubmitting(false)
-      setPendingNonLocalRequest(null)
       setPendingWorkspaceRequest(null)
       setRightPanel(null)
       resetDraftReviewState()
@@ -432,9 +421,9 @@ const ChatPage: React.FC = () => {
         return
       }
 
-      if (evt.type === 'watchdog_signal') {
+      if (evt.type === 'watch_hint') {
         setRightPanel({
-          title: 'Watchdog 监督',
+          title: 'Watch Hint',
           kind: 'json',
           data: evt
         })
@@ -477,18 +466,6 @@ const ChatPage: React.FC = () => {
         return
       }
 
-      if (evt.type === 'task_result') {
-        if (evt.internal) return
-        setAiPlan((prev) =>
-          prev.map((t) =>
-            t.id === evt.taskId
-              ? { ...t, resultCode: evt.code, resultMessage: evt.message }
-              : t
-          )
-        )
-        return
-      }
-
       if (evt.type === 'task_delivery_ready') {
         if (!evt.internal) {
           setAiPlan((prev) =>
@@ -496,7 +473,6 @@ const ChatPage: React.FC = () => {
               t.id === evt.taskId
                 ? {
                     ...t,
-                    resultMessage: evt.summary,
                     deliveryMarkdown: evt.deliveryMarkdown
                   }
                 : t
@@ -511,10 +487,10 @@ const ChatPage: React.FC = () => {
         return
       }
 
-      if (evt.type === 'task_failed') {
+      if (evt.type === 'task_blocked') {
         if (evt.internal) return
         setAiPlan((prev) =>
-          prev.map((t) => (t.id === evt.taskId ? { ...t, status: 'failed', error: evt.error } : t))
+          prev.map((t) => (t.id === evt.taskId ? { ...t, status: 'blocked' } : t))
         )
         return
       }
@@ -594,30 +570,10 @@ const ChatPage: React.FC = () => {
         return
       }
 
-      if (evt.type === 'local_sources_status') {
-        if (!evt.internal) {
-          setLocalSourceStatus({ status: evt.status, summary: evt.summary })
-        }
-        return
-      }
-
       if (evt.type === 'draft_review_ready') {
         if (!evt.internal && currentSessionId) {
           message.success(`草稿审阅已准备完成：${evt.review.changeCount} 处修改`)
           void loadDraftReviewsForSession(currentSessionId, evt.review.reviewId)
-        }
-        return
-      }
-
-      if (evt.type === 'non_local_permission_requested') {
-        if (!evt.internal) {
-          setPendingNonLocalRequest({
-            input: lastSubmittedInputRef.current,
-            scopes: lastSubmittedScopesRef.current,
-            reason: evt.reason
-          })
-          message.warning('本地资料不足，需要你决定是否允许继续使用非本地信息')
-          setLoading(false)
         }
         return
       }
@@ -709,10 +665,8 @@ const ChatPage: React.FC = () => {
     setSelectedTimelineId(null)
     setAiEvents([])
     setAiPlan([])
-    setLocalSourceStatus(null)
     setPendingApprovalRequest(null)
     setApprovalSubmitting(false)
-    setPendingNonLocalRequest(null)
     setPendingWorkspaceRequest(null)
     setRightPanel(null)
     assistantMsgIdRef.current = null
@@ -812,10 +766,8 @@ const ChatPage: React.FC = () => {
     setAiPlan([])
     setSearchTurn(null)
     setSelectedTimelineId(null)
-    setLocalSourceStatus(null)
     setPendingApprovalRequest(null)
     setApprovalSubmitting(false)
-    setPendingNonLocalRequest(null)
     setPendingWorkspaceRequest(null)
     setRightPanel(null)
     assistantMsgIdRef.current = null
@@ -908,83 +860,6 @@ const ChatPage: React.FC = () => {
     }
   }
 
-  const handleAllowNonLocalContinue = async () => {
-    if (!pendingNonLocalRequest || !currentSessionId || loading) return
-
-    const permissionMessage: ChatMessage = {
-      id: crypto.randomUUID(),
-      session_id: currentSessionId,
-      role: 'user',
-      content: '允许使用非本地信息继续处理上一条请求。',
-      timestamp: Date.now()
-    }
-    setCurrentMessages((prev) => [...prev, permissionMessage])
-    window.api.chatMessageSave(permissionMessage).catch(console.error)
-
-    setLoading(true)
-    setAiEvents([])
-    setAiPlan([])
-    setSearchTurn(null)
-    setSelectedTimelineId(null)
-    setLocalSourceStatus(null)
-    setPendingApprovalRequest(null)
-    setApprovalSubmitting(false)
-    setRightPanel(null)
-    assistantMsgIdRef.current = null
-    lastSubmittedInputRef.current = pendingNonLocalRequest.input
-    lastSubmittedScopesRef.current = pendingNonLocalRequest.scopes
-
-    try {
-      const assistantMsgId = crypto.randomUUID()
-      assistantMsgIdRef.current = assistantMsgId
-      setCurrentMessages((prev) => [
-        ...prev,
-        {
-          id: assistantMsgId,
-          session_id: currentSessionId,
-          role: 'assistant',
-          content: '',
-          timestamp: Date.now()
-        }
-      ])
-
-      const res = await window.api.aiRunStart({
-        sessionId: currentSessionId,
-        input: pendingNonLocalRequest.input,
-        selectedSourceScopes:
-          pendingNonLocalRequest.scopes.length > 0 ? pendingNonLocalRequest.scopes : undefined,
-        allowNonLocal: true
-      })
-      if (!res.success || !res.runId) {
-        setLoading(false)
-        message.error(res.error || '继续运行失败')
-        return
-      }
-      setPendingNonLocalRequest(null)
-      setAiRunId(res.runId)
-    } catch (error) {
-      console.error(error)
-      setLoading(false)
-      message.error('继续运行失败')
-    }
-  }
-
-  const handleDeclineNonLocalContinue = async () => {
-    if (!pendingNonLocalRequest || !currentSessionId) return
-    const messageRecord: ChatMessage = {
-      id: crypto.randomUUID(),
-      session_id: currentSessionId,
-      role: 'user',
-      content: '仅保留基于本地资料的结论，不继续使用非本地信息。',
-      timestamp: Date.now()
-    }
-    setCurrentMessages((prev) => [...prev, messageRecord])
-    window.api.chatMessageSave(messageRecord).catch(console.error)
-    setLocalSourceStatus(null)
-    setPendingNonLocalRequest(null)
-    setLoading(false)
-  }
-
   const handleContinueWithWorkspace = async () => {
     if (!pendingWorkspaceRequest || !currentSessionId || loading) return
     const hasWorkspaceBinding = selectedSourceScopes.some((scope) => scope.workspace?.rootPath)
@@ -1008,10 +883,8 @@ const ChatPage: React.FC = () => {
     setAiPlan([])
     setSearchTurn(null)
     setSelectedTimelineId(null)
-    setLocalSourceStatus(null)
     setPendingApprovalRequest(null)
     setApprovalSubmitting(false)
-    setPendingNonLocalRequest(null)
     setRightPanel(null)
     assistantMsgIdRef.current = null
     lastSubmittedInputRef.current = pendingWorkspaceRequest.input
@@ -1548,29 +1421,22 @@ const ChatPage: React.FC = () => {
               </div>
             </div>
             {composerMode === 'ai' &&
-              (localSourceStatus ||
-                pendingApprovalRequest ||
-                pendingWorkspaceRequest ||
-                pendingNonLocalRequest) && (
+              (pendingApprovalRequest ||
+                pendingWorkspaceRequest) && (
               <div
                 className={`mb-3 rounded-2xl border px-3 py-3 text-sm ${
-                  pendingApprovalRequest || pendingWorkspaceRequest || pendingNonLocalRequest
+                  pendingApprovalRequest || pendingWorkspaceRequest
                     ? 'border-[#FDECC8] bg-[#FFF9ED] text-[#8A6510]'
-                    : localSourceStatus?.status === 'used'
-                      ? 'border-[#DCEBD7] bg-[#F3FAF0] text-[#4F7A46]'
-                      : 'border-[#E5E5E4] bg-[#F8F8F7] text-[#666666]'
+                    : 'border-[#E5E5E4] bg-[#F8F8F7] text-[#666666]'
                 }`}
                 data-testid={
                   pendingApprovalRequest
                     ? chatSelectors.approvalBanner
                     : pendingWorkspaceRequest
                       ? chatSelectors.workspaceBanner
-                      : pendingNonLocalRequest
-                        ? chatSelectors.nonLocalBanner
-                        : chatSelectors.localSourceStatus
+                      : chatSelectors.workspaceBanner
                 }
               >
-                {localSourceStatus && <div>{localSourceStatus.summary}</div>}
                 {pendingApprovalRequest && (
                   <div className="mt-2 flex flex-col gap-3">
                     <div>{pendingApprovalRequest.reason}</div>
@@ -1611,27 +1477,6 @@ const ChatPage: React.FC = () => {
                         data-testid={chatSelectors.workspaceContinueButton}
                       >
                         继续运行
-                      </Button>
-                    </div>
-                  </div>
-                )}
-                {pendingNonLocalRequest && (
-                  <div className="mt-2 flex flex-col gap-3">
-                    <div>{pendingNonLocalRequest.reason}</div>
-                    <div className="flex gap-2">
-                      <Button
-                        type="primary"
-                        onClick={handleAllowNonLocalContinue}
-                        loading={loading}
-                        data-testid={chatSelectors.nonLocalAllowButton}
-                      >
-                        允许继续
-                      </Button>
-                      <Button
-                        onClick={handleDeclineNonLocalContinue}
-                        data-testid={chatSelectors.nonLocalDeclineButton}
-                      >
-                        仅保留本地结果
                       </Button>
                     </div>
                   </div>

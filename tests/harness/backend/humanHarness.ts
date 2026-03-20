@@ -1,4 +1,4 @@
-import { createHumanGraphRunner } from '../../../src/main/services/ai/graph/humanGraph'
+import { createHumanGraphRunner } from '../../../src/main/services/ai/human/graph/humanGraph'
 import type {
   HumanRunDispatchOptions,
   HumanTaskInput,

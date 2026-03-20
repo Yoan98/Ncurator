@@ -34,6 +34,8 @@ defineAiHumanCase({
   fixtures: [],
   runMode: 'repeatable',
   execute: async (runtime) => {
+    let trackedPreviewPath = ''
+
     await writeTestDocxFile(runtime.workspaceRoot, 'release-check.docx', [
       { type: 'heading', text: 'Release Checklist', level: 1 },
       { type: 'paragraph', text: 'Checklist summary: pending policy sync.' },
@@ -43,6 +45,9 @@ defineAiHumanCase({
     const runner = createHumanTestRunner(
       runtime,
       {
+        trackDocxPreview: ({ previewPath }) => {
+          trackedPreviewPath = previewPath
+        },
         selectedDocumentIds: ['doc-policy'],
         documentsStoreOverrides: {
           hybridSearch: async (_vector, queryText, _limit, _sourceType, documentIds) => {
@@ -70,7 +75,7 @@ defineAiHumanCase({
           {
             output: {
               action: 'load_skill',
-              skillId: 'local-kb-retrieval',
+              skillIds: ['kb-document-discovery', 'kb-evidence-query'],
               rationale: '先检索本地规范。',
               publicNarrative: '我先读取本地规范要求。'
             }
@@ -90,7 +95,7 @@ defineAiHumanCase({
           {
             output: {
               action: 'load_skill',
-              skillId: 'docx-editing',
+              skillIds: ['docx-read', 'docx-write', 'docx-delivery'],
               rationale: '拿到规范后切换到 docx 编辑。',
               publicNarrative: '我现在把规范要求写进文档模板。'
             }
@@ -149,23 +154,17 @@ defineAiHumanCase({
               action: 'complete_task',
               summary: '已把本地发布规范写入 release checklist 预览。',
               rationale: 'KB -> DOCX 的 bridge 已完成。',
-              publicNarrative: '我已经把查到的规范转成可审阅文档交付。',
-              resultData: {
-                document_name: 'release-check.docx',
-                artifact_role: 'preview',
-                source_document_name: 'release-policy.md',
-                source_document_id: 'doc-policy'
-              }
+              publicNarrative: '我已经把查到的规范转成可审阅文档交付。'
             }
           }
         ],
-        humanDeliveryOverride: ({ resultData, summary }) =>
+        humanDeliveryOverride: ({ summary }) =>
           [
             '# 子任务交付',
             '',
             `已完成：${summary}`,
-            `来源：${typeof resultData?.source_document_name === 'string' ? resultData.source_document_name : 'release-policy.md'}`,
-            `交付形式：${typeof resultData?.artifact_role === 'string' ? resultData.artifact_role : 'preview'}`
+            '来源：release-policy.md',
+            '交付形式：preview'
           ].join('\n')
       },
       { hardActionLimit: 9 }
@@ -174,14 +173,13 @@ defineAiHumanCase({
     const output = await runner.run(
       {
         taskId: runtime.taskId,
-        objective: '先检索本地发布规范，再按规范修改 release checklist 模板。'
+        userInput: '先检索本地发布规范，再按规范修改 release checklist 模板。'
       }
     )
 
     const toolResults = getEventsByType(runtime, 'tool_call_result')
     const fileArtifacts = getEventsByType(runtime, 'file_artifact')
-    const previewArtifact = fileArtifacts.find((event) => event.artifactRole === 'preview')
-    const previewPath = previewArtifact?.path || ''
+    const previewPath = trackedPreviewPath
     const previewExists = previewPath ? await fileExists(previewPath) : false
     const inspectionHarness = createDocxToolHarness(runtime)
 
@@ -220,9 +218,8 @@ defineAiHumanCase({
 
     runtime.assertThat(
       result.output.status === 'completed' &&
-        result.output.resultCode === 'ok' &&
-        result.output.resultData?.source_document_name === 'release-policy.md' &&
-        result.output.resultData?.artifact_role === 'preview',
+        result.output.deliveryMarkdown.includes('release-policy.md') &&
+        result.output.deliveryMarkdown.includes('preview'),
       {
         name: 'human-kb-docx-bridge-completed',
         message: 'kb -> docx bridge 应形成完成态交付'
@@ -264,9 +261,8 @@ defineAiHumanCase({
       }
     )
     runtime.assertThat(
-      result.humanSteps.filter((event) => event.action === 'load_skill').length === 2 &&
-        result.fileArtifacts.some((event) => event.artifactRole === 'preview') &&
-        result.output.localSourceStatus === 'used',
+      result.humanSteps.filter((event) => event.action === 'learn_skill').length >= 5 &&
+        result.fileArtifacts.some((event) => event.artifactRole === 'preview'),
       {
         name: 'human-kb-docx-bridge-events',
         message: '事件流应体现 KB 与 docx 的跨工具 bridge'

@@ -25,6 +25,8 @@ defineAiHumanCase({
   ],
   runMode: 'repeatable',
   execute: async (runtime) => {
+    let trackedPreviewPath = ''
+
     await writeTestDocxFile(runtime.workspaceRoot, 'project-brief.docx', [
       { type: 'heading', text: 'Project Brief', level: 1 },
       { type: 'paragraph', text: 'Summary: pending synthesis.' },
@@ -34,11 +36,14 @@ defineAiHumanCase({
     const runner = createHumanTestRunner(
       runtime,
       {
+        trackDocxPreview: ({ previewPath }) => {
+          trackedPreviewPath = previewPath
+        },
         humanReasonOverrides: [
           {
             output: {
               action: 'load_skill',
-              skillId: 'workspace-shell',
+              skillIds: ['workspace-cli'],
               rationale: '长任务先做材料归并。',
               publicNarrative: '我先收集多份 workspace 材料。'
             }
@@ -90,7 +95,7 @@ defineAiHumanCase({
           {
             output: {
               action: 'load_skill',
-              skillId: 'docx-editing',
+              skillIds: ['docx-read', 'docx-write', 'docx-delivery'],
               rationale: '材料齐全后转成 brief。',
               publicNarrative: '我现在把多份材料整理成 docx brief。'
             }
@@ -155,22 +160,17 @@ defineAiHumanCase({
               action: 'complete_task',
               summary: '已完成多材料归并、风险补充，并交付 project brief 预览。',
               rationale: '长任务所需的材料读取、归并、写入与交付都已完成。',
-              publicNarrative: '我已经完成长任务 brief 交付。',
-              resultData: {
-                document_name: 'project-brief.docx',
-                artifact_role: 'preview',
-                source_count: 4
-              }
+              publicNarrative: '我已经完成长任务 brief 交付。'
             }
           }
         ],
-        humanDeliveryOverride: ({ summary, resultData }) =>
+        humanDeliveryOverride: ({ summary }) =>
           [
             '# 子任务交付',
             '',
             `已完成：${summary}`,
-            `来源材料数：${typeof resultData?.source_count === 'number' ? String(resultData.source_count) : '4'}`,
-            `交付形式：${typeof resultData?.artifact_role === 'string' ? resultData.artifact_role : 'preview'}`
+            '来源材料数：4',
+            '交付形式：preview'
           ].join('\n')
       },
       { hardActionLimit: 12 }
@@ -179,14 +179,13 @@ defineAiHumanCase({
     const output = await runner.run(
       {
         taskId: runtime.taskId,
-        objective:
+        userInput:
           '请读取 batch/day-1.txt、day-2.txt、day-3.txt 和 weekly/risk-summary.txt，整理成 project-brief.docx 的可审阅 preview。'
       }
     )
 
     const fileArtifacts = getEventsByType(runtime, 'file_artifact')
-    const previewArtifact = fileArtifacts.find((event) => event.artifactRole === 'preview')
-    const previewPath = previewArtifact?.path || ''
+    const previewPath = trackedPreviewPath
     const previewExists = previewPath ? await fileExists(previewPath) : false
     const inspectionHarness = createDocxToolHarness(runtime)
 
@@ -231,8 +230,7 @@ defineAiHumanCase({
   assert: async (result, runtime) => {
     runtime.assertThat(
       result.output.status === 'completed' &&
-        result.output.resultCode === 'ok' &&
-        result.output.resultData?.source_count === 4,
+        result.output.deliveryMarkdown.includes('来源材料数：4'),
       {
         name: 'human-long-task-project-brief-completed',
         message: '长任务 project brief 应形成完成态交付'
@@ -271,9 +269,8 @@ defineAiHumanCase({
     )
     runtime.assertThat(
       result.terminalSteps.length === 4 &&
-        result.humanSteps.filter((event) => event.action === 'load_skill').length === 2 &&
-        result.fileArtifacts.some((event) => event.artifactRole === 'preview') &&
-        result.output.localSourceStatus === 'used',
+        result.humanSteps.filter((event) => event.action === 'learn_skill').length >= 4 &&
+        result.fileArtifacts.some((event) => event.artifactRole === 'preview'),
       {
         name: 'human-long-task-project-brief-events',
         message: '长任务应留下多次材料读取与 preview 交付证据'

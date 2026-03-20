@@ -42,7 +42,7 @@ defineAiHumanCase({
           {
             output: {
               action: 'load_skill',
-              skillId: 'local-kb-retrieval',
+              skillIds: ['kb-evidence-query'],
               rationale: '先加载本地知识检索能力。',
               publicNarrative: '我先读取本地知识库证据。'
             }
@@ -64,24 +64,17 @@ defineAiHumanCase({
               action: 'complete_task',
               summary: '发布前仍需补齐 approval flow 的 regression coverage。',
               rationale: '检索结果已经给出直接证据。',
-              publicNarrative: '我已经拿到足够的本地证据，可以直接回答。',
-              resultData: {
-                answer: '发布前仍需补齐 approval flow 的 regression coverage。',
-                document_name: 'release-checklist.md',
-                document_id: 'doc-beta'
-              }
+              publicNarrative: '我已经拿到足够的本地证据，可以直接回答。'
             }
           }
         ],
-        humanDeliveryOverride: ({ resultData, summary }) => {
-          const answer = readString(resultData?.answer, summary)
-          const documentName = readString(resultData?.document_name, '未提供文档名')
-          const documentId = readString(resultData?.document_id, '未提供文档 ID')
+        humanDeliveryOverride: ({ summary }) => {
+          const answer = readString(summary, summary)
           return [
             '# 最终答复',
             '',
             `结论：${answer}`,
-            `依据：${documentName} (${documentId})`
+            '依据：release-checklist.md (doc-beta)'
           ].join('\n')
         }
       },
@@ -91,7 +84,7 @@ defineAiHumanCase({
     const output = await runner.run(
       {
         taskId: runtime.taskId,
-        objective: '从本地知识库回答 approval flow regression coverage 是否已经完成。'
+        userInput: '从本地知识库回答 approval flow regression coverage 是否已经完成。'
       }
     )
 
@@ -105,7 +98,7 @@ defineAiHumanCase({
     }
   },
   assert: async (result, runtime) => {
-    runtime.assertThat(result.output.status === 'completed' && result.output.resultCode === 'ok', {
+    runtime.assertThat(result.output.status === 'completed', {
       name: 'human-kb-answer-completed',
       message: 'human 应完成直接知识问答'
     })
@@ -118,24 +111,17 @@ defineAiHumanCase({
       }
     )
     runtime.assertThat(
-      result.output.resultData?.document_name === 'release-checklist.md' &&
-        result.output.resultData?.document_id === 'doc-beta',
-      {
-        name: 'human-kb-answer-citation',
-        message: '最终答案应保留可回看的文档引用'
-      }
-    )
-    runtime.assertThat(
       result.output.deliveryMarkdown.includes('regression coverage') &&
         result.output.deliveryMarkdown.includes('release-checklist.md'),
       {
-        name: 'human-kb-answer-delivery',
-        message: '最终交付应包含答案与依据文档'
+        name: 'human-kb-answer-citation',
+        message: '最终交付应保留可回看的文档引用'
       }
     )
     runtime.assertThat(
-      result.output.localSourceStatus === 'used' &&
-        result.humanSteps.length === 3 &&
+      result.humanSteps.some((event) => event.action === 'learn_skill') &&
+        result.humanSteps.some((event) => event.action === 'call_tool') &&
+        result.humanSteps.some((event) => event.action === 'deliver_result') &&
         result.toolCalls.length === 1 &&
         result.toolCalls[0]?.toolName === 'kb_hybrid_search_chunks' &&
         result.deliveries.length === 1,

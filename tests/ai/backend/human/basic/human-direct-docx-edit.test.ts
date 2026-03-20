@@ -20,6 +20,8 @@ defineAiHumanCase({
   fixtures: [],
   runMode: 'repeatable',
   execute: async (runtime) => {
+    let trackedPreviewPath = ''
+
     await writeTestDocxFile(runtime.workspaceRoot, 'weekly-report.docx', [
       { type: 'heading', text: 'NCurator Weekly Report', level: 1 },
       { type: 'paragraph', text: 'Project status is on track.' },
@@ -36,11 +38,14 @@ defineAiHumanCase({
     const runner = createHumanTestRunner(
       runtime,
       {
+        trackDocxPreview: ({ previewPath }) => {
+          trackedPreviewPath = previewPath
+        },
         humanReasonOverrides: [
           {
             output: {
               action: 'load_skill',
-              skillId: 'docx-editing',
+              skillIds: ['docx-read', 'docx-write', 'docx-delivery'],
               rationale: '先加载文档编辑能力。',
               publicNarrative: '我先打开并检查文档。'
             }
@@ -108,21 +113,16 @@ defineAiHumanCase({
               action: 'complete_task',
               summary: '周报中的风险摘要与负责人已更新，并已生成可审阅预览。',
               rationale: '文档已完成改写、预览和校验。',
-              publicNarrative: '我已经完成文档修改并生成了交付结果。',
-              resultData: {
-                document_name: 'weekly-report.docx',
-                artifact_role: 'preview',
-                change_summary: '风险摘要改为 Bob 跟进，表格负责人同步更新为 Bob。'
-              }
+              publicNarrative: '我已经完成文档修改并生成了交付结果。'
             }
           }
         ],
-        humanDeliveryOverride: ({ resultData, summary }) => {
+        humanDeliveryOverride: ({ summary }) => {
           return [
             '# 子任务交付',
             '',
             `已完成：${summary}`,
-            `交付形式：${typeof resultData?.artifact_role === 'string' ? resultData.artifact_role : 'preview'}`
+            '交付形式：preview'
           ].join('\n')
         }
       },
@@ -132,13 +132,12 @@ defineAiHumanCase({
     const output = await runner.run(
       {
         taskId: runtime.taskId,
-        objective: '更新周报中的风险摘要和负责人，并给出可审阅的 docx 结果。'
+        userInput: '更新周报中的风险摘要和负责人，并给出可审阅的 docx 结果。'
       }
     )
 
     const fileArtifacts = getEventsByType(runtime, 'file_artifact')
-    const previewArtifact = fileArtifacts.find((event) => event.artifactRole === 'preview')
-    const previewPath = previewArtifact?.path || ''
+    const previewPath = trackedPreviewPath
     const previewExists = previewPath ? await fileExists(previewPath) : false
     const inspectionHarness = createDocxToolHarness(runtime)
 
@@ -201,9 +200,7 @@ defineAiHumanCase({
     const ownerMatchCount = Array.isArray(result.ownerSearch.matches) ? result.ownerSearch.matches.length : 0
 
     runtime.assertThat(
-      result.output.status === 'completed' &&
-        result.output.resultCode === 'ok' &&
-        result.output.localSourceStatus === 'used',
+      result.output.status === 'completed',
       {
         name: 'human-docx-edit-completed',
         message: 'human 应完成 docx 编辑闭环'
@@ -229,9 +226,8 @@ defineAiHumanCase({
       }
     )
     runtime.assertThat(
-      result.output.resultData?.document_name === 'weekly-report.docx' &&
-        result.output.resultData?.artifact_role === 'preview' &&
-        result.output.deliveryMarkdown.includes('preview'),
+      result.output.deliveryMarkdown.includes('preview') &&
+        result.output.deliveryMarkdown.includes('周报中的风险摘要与负责人已更新'),
       {
         name: 'human-docx-edit-delivery',
         message: '交付结果应明确这是可审阅预览而不是最终落盘文件'
@@ -249,7 +245,9 @@ defineAiHumanCase({
     )
     runtime.assertThat(
       result.fileArtifacts.length >= 1 &&
-        result.humanSteps.length === 6 &&
+        result.humanSteps.some((event) => event.action === 'learn_skill') &&
+        result.humanSteps.filter((event) => event.action === 'call_tool').length >= 4 &&
+        result.humanSteps.some((event) => event.action === 'deliver_result') &&
         result.fileArtifacts.some((event) => event.artifactRole === 'preview') &&
         result.toolResults.every((event) => !event.error),
       {

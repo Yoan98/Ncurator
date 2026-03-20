@@ -126,10 +126,7 @@ const WorkbenchInspectorPanel: React.FC<WorkbenchInspectorProps> = ({
                   </div>
                   <span className="rounded-full bg-white px-2 py-1 text-[11px] text-[#666666]">{item.status}</span>
                 </div>
-                <div className="mt-2 text-xs leading-relaxed text-[#666666]">{item.objective}</div>
-                {item.resultMessage ? (
-                  <div className="mt-2 text-xs text-[#999999]">{item.resultMessage}</div>
-                ) : null}
+                <div className="mt-2 text-xs leading-relaxed text-[#666666]">{item.userInput}</div>
                 {item.deliveryMarkdown ? (
                   <div className="mt-3 rounded-xl border border-white bg-white px-3 py-3">
                     <MarkdownRenderer content={item.deliveryMarkdown} className="text-sm" />
@@ -295,19 +292,11 @@ const WorkbenchInspectorPanel: React.FC<WorkbenchInspectorProps> = ({
           </div>
         ) : null}
 
-        {inspector.kind === 'watchdog' ? (
+        {inspector.kind === 'watch_hint' ? (
           <div className="rounded-xl border border-[#FDECC8] bg-[#FFF9ED] px-4 py-4 text-sm text-[#8A6510]">
-            <div className="font-semibold text-[#1F1F1F]">Watchdog 监督</div>
+            <div className="font-semibold text-[#1F1F1F]">Watch Hint</div>
             <div className="mt-2">{inspector.event.summary}</div>
-            {inspector.event.signs.length > 0 ? (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {inspector.event.signs.map((sign) => (
-                  <span key={sign} className="rounded-full bg-white px-2 py-1 text-[11px] text-[#666666]">
-                    {sign}
-                  </span>
-                ))}
-              </div>
-            ) : null}
+            <div className="mt-3 text-xs text-[#999999]">{inspector.event.source}</div>
           </div>
         ) : null}
 

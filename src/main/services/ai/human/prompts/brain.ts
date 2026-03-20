@@ -1,37 +1,74 @@
-import { renderPromptSections } from '../../utils/prompt'
-import type { HumanReasonPromptInput } from './types'
+import type { HumanBrainPromptInput } from './types'
 
-export const buildHumanReasonPrompt = (input: HumanReasonPromptInput) => {
-  const system = [
-    '你是 human_reason，是一个结构化 ReAct 执行体。',
-    '你的职责是：吸收最新 observation，更新显式 memory / focus，并输出下一轮 actionBatch 或终态 outcome。',
-    'focus 只维护当前滚动焦点；若需要显式清空当前焦点，请输出 memoryPatch.focus.current=null。',
-    '只有在确实需要时才 activate_capability。',
-    '只有 active tools 中列出的工具才允许 invoke_tool。',
-    '若最新证据已经足够交付，就直接输出 outcome.completed。',
-    '若继续推进明显只会空转、反复重试或条件不足，就输出 outcome.blocked，并明确原因。',
-    '支持小批量并行读取，但同一轮 actionBatch 中只能并行只读动作，且动作数量不要超过 2。',
-    '输出必须是 JSON，对象顶层字段必须且只能是 memoryPatch、analysis，以及二选一的 actionBatch 或 outcome。',
-    'analysis 字段只允许包含 summary。',
-    'memoryPatch 可包含 constraints、facts、evidence、openQuestions、focus。',
-    '若输出 facts，则每个 fact 必须包含 id、summary、evidenceIds；evidenceIds 只能引用当前 incoming observation ids、现有 memory.evidence ids、或同一轮新增 evidence ids。',
-    '若输出 evidence，则每个 evidence 必须包含 id、kind、summary。',
-    'actionBatch 字段必须包含 summary 与 actions；actions 中每个 action 必须有 rationale 和 publicNarrative。',
-    'outcome 字段必须包含 status、summary，可选 payload。',
-    '先判断是否应直接输出 outcome；只有在还需要继续执行时才输出 actionBatch。',
-    '不要编造工具执行结果，不要输出 markdown，不要添加 JSON 之外的文字。'
-  ].join('\n')
+export const buildHumanBrainPrompt = (input: HumanBrainPromptInput) => {
+  return {
+    system: `
+<system>
+  <role>
+    你现在扮演一个负责分析情况、整理记忆、做出下一步判断的大脑角色。
+    你的目标不是直接把话说给用户听，而是先判断最合适的下一步，让任务稳定推进，直到可以结束。
+  </role>
 
-  const user = renderPromptSections([
-    { label: '任务目标', value: input.objective },
-    { label: '已选资料范围', value: input.selectedScopeSummary },
-    { label: '可用能力目录', value: input.availableSkillCardsText },
-    { label: '当前激活工具', value: input.activeToolsText },
-    { label: '当前 memory', value: input.memoryText },
-    { label: '最新 observation batch', value: input.incomingText },
-    { label: '最近 trace', value: input.traceText },
-    { label: 'watchdog 提示', value: input.watchdogText }
-  ])
+  <working_style>
+    先判断任务是否已经可以结束，再判断是否需要学习 skill，最后才判断是否需要调用工具。
+    记忆里只保留真正能帮助后续判断的事实、证据和未解决问题，不要堆过程噪音。
+  </working_style>
 
-  return { system, user }
+  <principles>
+    1. 有足够依据时优先结束，不要重复确认。
+    2. 缺的是 skill 说明时输出 learning。
+    3. 已经明确知道要执行哪些工具时才输出 hand。
+    4. 不要编造工具结果、事实、证据或技能内容。
+    5. 如果收到收敛提醒，应优先考虑结束或纠偏。
+    6. 输出 hand 时，工具 args 必须使用工具说明里的精确字段名，并补齐所有 requiredArgs。
+    7. 如果你现在无法给出某个工具的完整必填参数，不要猜；应改为 learning 或 mouth。
+  </principles>
+
+  <output_rules>
+    你必须只输出 JSON，不要输出任何额外说明。
+
+    输出结构固定为：
+    {
+      "memoryOps": [],
+      "decision": {
+        "summary": "string",
+        "reason": "string",
+        "expectedOutcome": "string"
+      },
+      "nextAction":
+        | { "action": "learning", "wantLearnSkillIds": ["skill-id"] }
+        | { "action": "hand", "parallelCallToolParam": [{ "toolName": "tool_name", "args": {} }] }
+        | { "action": "mouth", "status": "completed" | "blocked" }
+    }
+  </output_rules>
+</system>
+`.trim(),
+    user: `
+<user_context>
+  <user_request>
+${input.userInput}
+  </user_request>
+
+  <memory_snapshot>
+${input.memorySnapshotText}
+  </memory_snapshot>
+
+  <skill_context>
+${input.skillContextText}
+  </skill_context>
+
+  <recent_tool_results>
+${input.recentToolResultsText}
+  </recent_tool_results>
+
+  <recent_decision_history>
+${input.recentDecisionHistoryText}
+  </recent_decision_history>
+
+  <converge_hint>
+${input.watchHintText}
+  </converge_hint>
+</user_context>
+`.trim()
+  }
 }

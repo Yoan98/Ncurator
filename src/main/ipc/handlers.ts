@@ -437,16 +437,14 @@ export function registerHandlers(services: {
       {
         id: 'task-e2e-edit-draft',
         title: '生成草稿并建立审阅集合',
-        objective: '执行 docx 编辑并生成统一审阅结果',
-        status: 'pending' as const,
-        attempts: 0
+        userInput: '执行 docx 编辑并生成统一审阅结果',
+        status: 'ready' as const
       },
       {
         id: 'task-e2e-review-ready',
         title: '切换到草稿审阅',
-        objective: '向前端暴露可回放的审阅与提交状态',
-        status: 'pending' as const,
-        attempts: 0
+        userInput: '向前端暴露可回放的审阅与提交状态',
+        status: 'ready' as const
       }
     ]
 
@@ -1907,22 +1905,6 @@ export function registerHandlers(services: {
               })
             : null
 
-          if (result.localSourceStatus && result.localSourceSummary) {
-            sendEvent({
-              type: 'local_sources_status',
-              runId,
-              status: result.localSourceStatus,
-              summary: result.localSourceSummary
-            })
-          }
-          if (result.localSourceStatus === 'insufficient' && result.localSourceSummary) {
-            sendEvent({
-              type: 'non_local_permission_requested',
-              runId,
-              reason: result.localSourceSummary
-            })
-          }
-
           if (draftReviewDetail) {
             sendEvent({
               type: 'draft_review_ready',
@@ -2196,7 +2178,7 @@ export function registerHandlers(services: {
       return await aiRuntimeSettingsStore.get()
     } catch (e: unknown) {
       console.error('[AI-RUNTIME-SETTINGS-GET] Error:', e)
-      return { watchdogMode: 'auto' as const }
+      return {}
     }
   })
 

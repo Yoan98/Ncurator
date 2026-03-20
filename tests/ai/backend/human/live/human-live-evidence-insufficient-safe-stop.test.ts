@@ -36,8 +36,8 @@ defineAiHumanLiveCase({
     const output = await runner.run(
       {
         taskId: runtime.taskId,
-        objective:
-          '请仅使用当前本地资料范围确认 final owner 与 timeline。如果当前本地资料不足，不要猜测，也不要继续重复检索；请直接给出最终答复，答复中必须包含“本地资料不足”和“是否允许继续使用非本地信息”，并在 resultData 中保留 gap_summary 与 next_step。'
+        userInput:
+          '请仅使用当前本地资料范围确认 final owner 与 timeline。如果当前本地资料不足，不要猜测，也不要继续重复检索；请直接给出最终答复，答复中必须包含“本地资料不足”和“是否允许继续使用非本地信息”，并明确缺口与下一步。'
       }
     )
 
@@ -55,7 +55,7 @@ defineAiHumanLiveCase({
     )
 
     runtime.assertThat(
-      result.output.localSourceStatus === 'insufficient' &&
+      result.output.status === 'completed' &&
         result.output.deliveryMarkdown.includes('本地资料不足') &&
         result.output.deliveryMarkdown.includes('是否允许继续使用非本地信息'),
       {
@@ -64,13 +64,11 @@ defineAiHumanLiveCase({
       }
     )
     runtime.assertThat(
-      typeof result.output.resultData?.gap_summary === 'string' &&
-        result.output.resultData.gap_summary.length > 0 &&
-        typeof result.output.resultData?.next_step === 'string' &&
-        result.output.resultData.next_step.length > 0,
+      result.output.deliveryMarkdown.includes('缺口') &&
+        result.output.deliveryMarkdown.includes('下一步'),
       {
         name: 'human-live-safe-stop-result-data',
-        message: 'live human 安全收敛时应保留结构化缺口与下一步说明'
+        message: 'live human 安全收敛时应明确缺口与下一步说明'
       }
     )
     runtime.assertThat(

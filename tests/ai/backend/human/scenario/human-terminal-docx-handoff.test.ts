@@ -27,6 +27,8 @@ defineAiHumanCase({
   fixtures: ['tests/fixtures/ai/workspace/materials/daily/2026-03-16-note.md'],
   runMode: 'repeatable',
   execute: async (runtime) => {
+    let trackedPreviewPath = ''
+
     await writeTestDocxFile(runtime.workspaceRoot, 'weekly-brief.docx', [
       { type: 'heading', text: 'Weekly Brief', level: 1 },
       { type: 'paragraph', text: 'Summary: pending material import.' },
@@ -36,11 +38,14 @@ defineAiHumanCase({
     const runner = createHumanTestRunner(
       runtime,
       {
+        trackDocxPreview: ({ previewPath }) => {
+          trackedPreviewPath = previewPath
+        },
         humanReasonOverrides: [
           {
             output: {
               action: 'load_skill',
-              skillId: 'workspace-shell',
+              skillIds: ['workspace-cli'],
               rationale: '先从 workspace 材料里抽取事实。',
               publicNarrative: '我先读取工作区材料。'
             }
@@ -59,7 +64,7 @@ defineAiHumanCase({
           {
             output: {
               action: 'load_skill',
-              skillId: 'docx-editing',
+              skillIds: ['docx-read', 'docx-write', 'docx-delivery'],
               rationale: '取材后切换到 docx 编辑。',
               publicNarrative: '我现在把材料写入周报文档。'
             }
@@ -118,22 +123,16 @@ defineAiHumanCase({
               action: 'complete_task',
               summary: '已从 workspace 材料提炼结论并写入周报预览。',
               rationale: 'terminal 取材与 docx handoff 已完成。',
-              publicNarrative: '我已经完成取材到文档预览的交付。',
-              resultData: {
-                document_name: 'weekly-brief.docx',
-                artifact_role: 'preview',
-                handoff_summary:
-                  'Integration review completed; approval flow still needs regression coverage.'
-              }
+              publicNarrative: '我已经完成取材到文档预览的交付。'
             }
           }
         ],
-        humanDeliveryOverride: ({ resultData, summary }) =>
+        humanDeliveryOverride: ({ summary }) =>
           [
             '# 子任务交付',
             '',
             `已完成：${summary}`,
-            `交付形式：${typeof resultData?.artifact_role === 'string' ? resultData.artifact_role : 'preview'}`
+            '交付形式：preview'
           ].join('\n')
       },
       { hardActionLimit: 9 }
@@ -142,14 +141,13 @@ defineAiHumanCase({
     const output = await runner.run(
       {
         taskId: runtime.taskId,
-        objective: '先读取 workspace 日报，再把结论写进周报 docx。'
+        userInput: '先读取 workspace 日报，再把结论写进周报 docx。'
       }
     )
 
     const toolResults = getEventsByType(runtime, 'tool_call_result')
     const fileArtifacts = getEventsByType(runtime, 'file_artifact')
-    const previewArtifact = fileArtifacts.find((event) => event.artifactRole === 'preview')
-    const previewPath = previewArtifact?.path || ''
+    const previewPath = trackedPreviewPath
     const previewExists = previewPath ? await fileExists(previewPath) : false
     const inspectionHarness = createDocxToolHarness(runtime)
 
@@ -189,8 +187,7 @@ defineAiHumanCase({
 
     runtime.assertThat(
       result.output.status === 'completed' &&
-        result.output.resultCode === 'ok' &&
-        result.output.resultData?.artifact_role === 'preview',
+        result.output.deliveryMarkdown.includes('preview'),
       {
         name: 'human-terminal-docx-handoff-completed',
         message: 'terminal -> docx handoff 应形成完成态交付'
@@ -232,9 +229,8 @@ defineAiHumanCase({
       }
     )
     runtime.assertThat(
-      result.humanSteps.filter((event) => event.action === 'load_skill').length === 2 &&
-        result.fileArtifacts.some((event) => event.artifactRole === 'preview') &&
-        result.output.localSourceStatus === 'used',
+      result.humanSteps.filter((event) => event.action === 'learn_skill').length >= 4 &&
+        result.fileArtifacts.some((event) => event.artifactRole === 'preview'),
       {
         name: 'human-terminal-docx-handoff-events',
         message: '事件流应体现 terminal 与 docx 的跨工具 handoff'

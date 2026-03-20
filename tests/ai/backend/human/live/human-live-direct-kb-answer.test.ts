@@ -94,7 +94,7 @@ defineAiHumanLiveCase({
     const output = await runner.run(
       {
         taskId: runtime.taskId,
-        objective:
+        userInput:
           '请仅使用当前本地资料范围回答 approval flow regression coverage 是否已经完成。先做本地 KB 检索，一旦拿到直接证据就停止，不要重复确认。最终答复要明确说明是否完成，并引用依据文档；答复里保留短语 "regression coverage"。'
       }
     )
@@ -111,25 +111,16 @@ defineAiHumanLiveCase({
     }
   },
   assert: async (result, runtime) => {
-    const joinedOutputText = [
-      result.output.summary,
-      result.output.deliveryMarkdown,
-      JSON.stringify(result.output.resultData || {})
-    ].join('\n')
+    const joinedOutputText = [result.output.summary, result.output.deliveryMarkdown].join('\n')
 
     runtime.assertThat(
-      result.output.status === 'completed' &&
-        result.output.resultCode === 'ok' &&
-        result.output.localSourceStatus === 'used',
+      result.output.status === 'completed',
       {
         name: 'human-live-kb-answer-completed',
         message: 'live human 应能基于本地 KB 形成完成态问答交付',
         data: {
           status: result.output.status,
-          resultCode: result.output.resultCode,
-          localSourceStatus: result.output.localSourceStatus,
           summary: result.output.summary,
-          resultData: result.output.resultData,
           toolNames: result.toolCalls.map((event) => event.toolName)
         }
       }

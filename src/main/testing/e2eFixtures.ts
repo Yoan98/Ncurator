@@ -365,16 +365,14 @@ export const buildE2EChatPlan = (): AiPlanTask[] => [
   {
     id: 'task-e2e-collect-context',
     title: '收集上下文并执行检索',
-    objective: '读取输入并返回检索结果',
-    status: 'pending',
-    attempts: 0
+    userInput: '读取输入并返回检索结果',
+    status: 'ready'
   },
   {
     id: 'task-e2e-generate-artifact',
     title: '生成测试文档',
-    objective: '生成一个可展示的文件产物',
-    status: 'pending',
-    attempts: 0
+    userInput: '生成一个可展示的文件产物',
+    status: 'ready'
   }
 ]
 

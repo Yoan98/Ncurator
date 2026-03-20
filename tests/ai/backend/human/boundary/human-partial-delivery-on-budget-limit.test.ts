@@ -1,6 +1,6 @@
 import type { AiRunEvent, JsonObject } from '../../../../../src/shared/types'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
-import { defineAiHumanCase, getEventsByType } from '../helpers'
+import { defineAiHumanCase, getEventsByType, reasonBlocked } from '../helpers'
 
 const getToolOutputPreview = (
   event: Extract<AiRunEvent, { type: 'tool_call_result' }>
@@ -30,7 +30,7 @@ defineAiHumanCase({
           {
             output: {
               action: 'load_skill',
-              skillId: 'workspace-shell',
+              skillIds: ['workspace-cli'],
               rationale: '先读取已有材料，尽量在预算内保留可用进展。',
               publicNarrative: '我先读取本地材料，并优先保留已经完成的进展。'
             }
@@ -67,13 +67,19 @@ defineAiHumanCase({
               rationale: '在预算耗尽前尽量补齐第三份阶段进展。',
               publicNarrative: '我正在读取第 3 份进展材料。'
             }
+          },
+          {
+            output: reasonBlocked({
+              summary: '已保留前三份阶段进展，但累计工具调用已超限，当前先输出部分交付。',
+              rationale: 'hand watch hint 已提示超限，适合在当前节点给出部分成果和下一步。'
+            })
           }
         ],
-        humanDeliveryOverride: ({ resultCode, summary }) =>
+        humanDeliveryOverride: ({ summary }) =>
           [
             '# 子任务交付',
             '',
-            `状态：${resultCode}`,
+            '状态：blocked',
             `收敛原因：${summary}`,
             '',
             '## 已完成',
@@ -90,13 +96,13 @@ defineAiHumanCase({
             '- 基于已收集进展生成最终 brief 或 handoff'
           ].join('\n')
       },
-      { hardActionLimit: 4 }
+      { hardActionLimit: 2 }
     )
 
     const output = await runner.run(
       {
         taskId: runtime.taskId,
-        objective: '在有限步数内尽量汇总阶段进展；如果做不完，也要保留部分交付并给出下一步。'
+        userInput: '在有限步数内尽量汇总阶段进展；如果做不完，也要保留部分交付并给出下一步。'
       }
     )
 
@@ -105,7 +111,8 @@ defineAiHumanCase({
       humanSteps: getEventsByType(runtime, 'human_step'),
       toolCalls: getEventsByType(runtime, 'tool_call_started'),
       toolResults: getEventsByType(runtime, 'tool_call_result'),
-      terminalSteps: getEventsByType(runtime, 'terminal_step_started')
+      terminalSteps: getEventsByType(runtime, 'terminal_step_started'),
+      watchHints: getEventsByType(runtime, 'watch_hint')
     }
   },
   assert: async (result, runtime) => {
@@ -115,12 +122,10 @@ defineAiHumanCase({
       .map((item) => String(item.outputPreview || ''))
 
     runtime.assertThat(
-      result.output.status === 'blocked' &&
-        result.output.resultCode === 'bounded_loop_error' &&
-        result.output.localSourceStatus === 'used',
+      result.output.status === 'blocked',
       {
         name: 'human-partial-delivery-budget-status',
-        message: '预算不足时，human 应以 bounded_loop_error 阻塞，并保留本地资料使用状态'
+        message: '预算不足时，human 应阻塞并保留部分交付'
       }
     )
     runtime.assertThat(
@@ -145,8 +150,11 @@ defineAiHumanCase({
     runtime.assertThat(
       result.toolCalls.length === 3 &&
         result.terminalSteps.length === 3 &&
+        result.watchHints.some(
+          (event) => event.source === 'hand' && event.summary.includes('超过临时上限 2')
+        ) &&
         result.humanSteps.some(
-          (event) => event.action === 'block_task' && event.resultStatus === 'blocked'
+          (event) => event.action === 'block_result' && event.resultStatus === 'blocked'
         ),
       {
         name: 'human-partial-delivery-budget-events',

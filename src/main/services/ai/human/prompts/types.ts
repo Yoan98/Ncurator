@@ -1,19 +1,16 @@
-export type HumanReasonPromptInput = {
-  objective: string
-  selectedScopeSummary: string
-  availableSkillCardsText: string
-  activeToolsText: string
-  memoryText: string
-  incomingText: string
-  traceText: string
-  watchdogText: string
+export type HumanBrainPromptInput = {
+  userInput: string
+  memorySnapshotText: string
+  skillContextText: string
+  recentToolResultsText: string
+  recentDecisionHistoryText: string
+  watchHintText: string
 }
 
-export type HumanFinalizePromptInput = {
-  objective: string
-  outcomeSummary: string
-  outcomeStatus: 'completed' | 'blocked'
-  payloadText: string
-  memoryText: string
-  traceText: string
+export type HumanMouthPromptInput = {
+  userInput: string
+  finalStatus: 'completed' | 'blocked'
+  finalDecisionText: string
+  factsText: string
+  evidencesText: string
 }

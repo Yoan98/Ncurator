@@ -303,17 +303,17 @@ export const projectWorkbenchState = (input: {
       return
     }
 
-    if (event.type === 'watchdog_signal') {
+    if (event.type === 'watch_hint') {
       pushTimelineItem(timeline, {
-        id: `watchdog-${event.level}-${index}`,
-        kind: 'watchdog',
-        title: 'Watchdog 提示',
+        id: `watch-hint-${event.source}-${index}`,
+        kind: 'watch_hint',
+        title: 'Watch Hint',
         description: event.summary,
-        badge: event.level,
+        badge: event.source,
         createdAt: getEventTimestamp(event, fallbackTime),
         inspector: {
-          kind: 'watchdog',
-          title: 'Watchdog 监督',
+          kind: 'watch_hint',
+          title: 'Watch Hint',
           event
         }
       })
@@ -337,21 +337,6 @@ export const projectWorkbenchState = (input: {
       return
     }
 
-    if (event.type === 'local_sources_status') {
-      pushTimelineItem(timeline, {
-        id: `local-status-${index}`,
-        kind: 'local_status',
-        title: '本地资料状态',
-        description: event.summary,
-        badge: event.status,
-        createdAt: getEventTimestamp(event, fallbackTime),
-        inspector: {
-          kind: 'json',
-          title: '本地资料状态',
-          data: event
-        }
-      })
-    }
   })
 
   return {

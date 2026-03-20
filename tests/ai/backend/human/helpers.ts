@@ -1,10 +1,8 @@
+import type { AiRunEvent, JsonObject } from '../../../../src/shared/types'
 import type {
-  AiRunEvent,
-  HumanActionSpec,
-  HumanReasoningOutput,
-  JsonObject,
+  LastBrainDecision,
   RuntimeSkillId
-} from '../../../../src/shared/types'
+} from '../../../../src/main/services/ai/human/types'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import { hasLiveLlmConfigInEnv, loadLiveLlmConfigFromEnv } from '../../../harness/backend/llmConfig'
 import type { BackendTestRuntime, TestCaseDefinition } from '../../../harness/backend/test-types'
@@ -61,47 +59,24 @@ export const getEventsByType = <TType extends AiRunEvent['type']>(
   >
 }
 
-type ReasonOutputInput = {
-  summary: string
-  focusCurrent?: string | null
-}
-
-const createReasonEnvelope = (input: ReasonOutputInput): Pick<
-  HumanReasoningOutput,
-  'memoryPatch' | 'analysis'
-> => ({
-  memoryPatch:
-    input.focusCurrent === undefined
-      ? {}
-      : {
-          focus: {
-            current: input.focusCurrent
-          }
-        },
-  analysis: {
-    summary: input.summary
-  }
-})
-
 export const reasonActivateCapability = (input: {
-  skillId: RuntimeSkillId
+  skillId?: RuntimeSkillId
+  skillIds?: Array<RuntimeSkillId>
   rationale: string
   publicNarrative: string
-  focusCurrent?: string | null
-}): HumanReasoningOutput => ({
-  ...createReasonEnvelope({
-    summary: input.rationale,
-    focusCurrent: input.focusCurrent === undefined ? input.skillId : input.focusCurrent
-  }),
-  actionBatch: {
-    summary: input.rationale,
-    actions: [
-      {
-        type: 'activate_capability',
-        skillId: input.skillId,
-        rationale: input.rationale,
-        publicNarrative: input.publicNarrative
-      }
+}): LastBrainDecision => ({
+  memoryOps: [],
+  decision: {
+    summary: input.publicNarrative,
+    reason: input.rationale,
+    expectedOutcome: '学习所需 skill 后继续推进任务。'
+  },
+  nextAction: {
+    action: 'learning',
+    wantLearnSkillIds: [
+      ...new Set(
+        input.skillIds || (input.skillId ? [input.skillId] : [])
+      )
     ]
   }
 })
@@ -111,21 +86,19 @@ export const reasonInvokeTool = (input: {
   args: JsonObject
   rationale: string
   publicNarrative: string
-  focusCurrent?: string | null
-}): HumanReasoningOutput => ({
-  ...createReasonEnvelope({
-    summary: input.rationale,
-    focusCurrent: input.focusCurrent === undefined ? input.toolName : input.focusCurrent
-  }),
-  actionBatch: {
-    summary: input.rationale,
-    actions: [
+}): LastBrainDecision => ({
+  memoryOps: [],
+  decision: {
+    summary: input.publicNarrative,
+    reason: input.rationale,
+    expectedOutcome: '拿到工具结果后继续判断。'
+  },
+  nextAction: {
+    action: 'hand',
+    parallelCallToolParam: [
       {
-        type: 'invoke_tool',
         toolName: input.toolName,
-        args: input.args,
-        rationale: input.rationale,
-        publicNarrative: input.publicNarrative
+        args: input.args
       }
     ]
   }
@@ -133,47 +106,55 @@ export const reasonInvokeTool = (input: {
 
 export const reasonActionBatch = (input: {
   summary: string
-  focusCurrent?: string | null
-  actions: HumanActionSpec[]
-}): HumanReasoningOutput => ({
-  ...createReasonEnvelope({
+  actions: Array<{
+    type: 'invoke_tool'
+    toolName: string
+    args: JsonObject
+  }>
+}): LastBrainDecision => ({
+  memoryOps: [],
+  decision: {
     summary: input.summary,
-    focusCurrent: input.focusCurrent
-  }),
-  actionBatch: {
-    summary: input.summary,
-    actions: input.actions
+    reason: input.summary,
+    expectedOutcome: '执行一批工具调用后继续判断。'
+  },
+  nextAction: {
+    action: 'hand',
+    parallelCallToolParam: input.actions.map((action) => ({
+      toolName: action.toolName,
+      args: action.args
+    }))
   }
 })
 
 export const reasonComplete = (input: {
   summary: string
   rationale: string
-  payload?: JsonObject
-}): HumanReasoningOutput => ({
-  memoryPatch: {},
-  analysis: {
-    summary: input.rationale
-  },
-  outcome: {
-    status: 'completed',
+}): LastBrainDecision => ({
+  memoryOps: [],
+  decision: {
     summary: input.summary,
-    payload: input.payload
+    reason: input.rationale,
+    expectedOutcome: '进入最终输出。'
+  },
+  nextAction: {
+    action: 'mouth',
+    status: 'completed'
   }
 })
 
 export const reasonBlocked = (input: {
   summary: string
   rationale: string
-  payload?: JsonObject
-}): HumanReasoningOutput => ({
-  memoryPatch: {},
-  analysis: {
-    summary: input.rationale
-  },
-  outcome: {
-    status: 'blocked',
+}): LastBrainDecision => ({
+  memoryOps: [],
+  decision: {
     summary: input.summary,
-    payload: input.payload
+    reason: input.rationale,
+    expectedOutcome: '输出阻塞结果。'
+  },
+  nextAction: {
+    action: 'mouth',
+    status: 'blocked'
   }
 })

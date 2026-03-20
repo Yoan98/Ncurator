@@ -19,8 +19,7 @@ export const chatSelectors = {
   workspaceContinueButton: 'chat-workspace-continue-button',
   nonLocalBanner: 'chat-non-local-banner',
   nonLocalAllowButton: 'chat-non-local-allow-button',
-  nonLocalDeclineButton: 'chat-non-local-decline-button',
-  localSourceStatus: 'chat-local-source-status'
+  nonLocalDeclineButton: 'chat-non-local-decline-button'
 } as const
 
 export const importSelectors = {

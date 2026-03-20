@@ -12,7 +12,6 @@ import type {
   AiRunStatus,
   AiTaskStatus,
   JsonObject,
-  LocalSourceUsageStatus,
   LLMConfig,
   SourceScopeSelection
 } from '../../../shared/types'
@@ -67,12 +66,6 @@ export type AiRunState = {
   error?: string
   // 最终交付 markdown（direct human / synthesis human 输出）。
   finalDeliveryMarkdown?: string
-  // 产生最终交付的任务 ID。
-  finalDeliveryTaskId?: string
-  // 本地资料使用状态。
-  localSourceStatus?: LocalSourceUsageStatus
-  // 本地资料使用或不足说明。
-  localSourceSummary?: string
 }
 
 export type AiRunStartPayload = {

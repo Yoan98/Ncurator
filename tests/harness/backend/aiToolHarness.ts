@@ -10,10 +10,10 @@ import {
   TableRow,
   WidthType
 } from 'docx'
-import { buildDocxCapabilityTools } from '../../../src/main/services/ai/tools/docx/docxTools'
-import { releaseDocxRunSession } from '../../../src/main/services/ai/tools/docx/worker/docxWorkerClient'
-import { buildRetrievalTools } from '../../../src/main/services/ai/tools/local_kb_retrieval/retrievalTools'
-import { buildTerminalCapabilityTools } from '../../../src/main/services/ai/tools/terminal_exec/terminalTools'
+import { buildDocxCapabilityTools } from '../../../src/main/services/ai/human/tools/docx/docxTools'
+import { releaseDocxRunSession } from '../../../src/main/services/ai/human/tools/docx/worker/docxWorkerClient'
+import { buildRetrievalTools } from '../../../src/main/services/ai/human/tools/local_kb_retrieval/retrievalTools'
+import { buildTerminalCapabilityTools } from '../../../src/main/services/ai/human/tools/terminal_exec/terminalTools'
 import type { JsonObject, JsonValue } from '../../../src/shared/types'
 import type { BackendTestRuntime, CreateAiRunContextInput } from './test-types'
 

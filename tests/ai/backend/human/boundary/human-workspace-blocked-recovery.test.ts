@@ -1,5 +1,5 @@
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
-import { defineAiHumanCase, getEventsByType } from '../helpers'
+import { defineAiHumanCase, getEventsByType, reasonBlocked } from '../helpers'
 
 defineAiHumanCase({
   caseId: 'human-workspace-blocked-recovery',
@@ -17,7 +17,7 @@ defineAiHumanCase({
           {
             output: {
               action: 'load_skill',
-              skillId: 'workspace-shell',
+              skillIds: ['workspace-cli'],
               rationale: '需要读取本地工作区材料。',
               publicNarrative: '我先尝试读取当前工作区材料。'
             }
@@ -32,13 +32,19 @@ defineAiHumanCase({
               rationale: '直接读取目标材料。',
               publicNarrative: '我正在读取工作区文件。'
             }
+          },
+          {
+            output: reasonBlocked({
+              summary: '当前缺少 workspace 绑定，请先绑定后再继续读取本地文件。',
+              rationale: 'workspace guard 已阻止工具执行，当前应直接阻塞收敛。'
+            })
           }
         ],
-        humanDeliveryOverride: ({ summary, resultCode }) =>
+        humanDeliveryOverride: ({ summary }) =>
           [
             '# 子任务交付',
             '',
-            `状态：${resultCode}`,
+            '状态：blocked',
             `阻塞说明：${summary}`,
             '继续条件：请先绑定 workspace，再继续执行本地读取任务。'
           ].join('\n')
@@ -49,7 +55,7 @@ defineAiHumanCase({
     const output = await runner.run(
       {
         taskId: runtime.taskId,
-        objective: '读取当前 workspace 里的本地材料。'
+        userInput: '读取当前 workspace 里的本地材料。'
       }
     )
 
@@ -65,7 +71,6 @@ defineAiHumanCase({
   assert: async (result, runtime) => {
     runtime.assertThat(
       result.output.status === 'blocked' &&
-        result.output.resultCode === 'workspace_required' &&
         result.output.deliveryMarkdown.includes('绑定 workspace'),
       {
         name: 'human-workspace-blocked-status',

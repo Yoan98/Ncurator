@@ -484,16 +484,21 @@ export interface CommitDraftReviewResponse {
   error?: string
 }
 
-export type AiTaskStatus = 'pending' | 'running' | 'completed' | 'failed'
+export type AiTaskStatus = 'ready' | 'running' | 'completed' | 'blocked'
 export type AiRunStatus = 'running' | 'completed' | 'failed' | 'cancelled'
-export type LocalSourceUsageStatus = 'used' | 'not_used' | 'insufficient'
 export type RuntimeIssueCode =
   | 'workspace_binding_missing'
   | 'workspace_missing'
   | 'workspace_path_unavailable'
   | 'scope_unavailable'
   | 'approval_denied'
-export type RuntimeSkillId = 'workspace-shell' | 'docx-editing' | 'local-kb-retrieval'
+export type RuntimeSkillId =
+  | 'workspace-cli'
+  | 'docx-read'
+  | 'docx-write'
+  | 'docx-delivery'
+  | 'kb-document-discovery'
+  | 'kb-evidence-query'
 export type AiRunEventStage =
   | 'main_intent'
   | 'main_context_human'
@@ -502,24 +507,26 @@ export type AiRunEventStage =
   | 'main_direct_human_exec'
   | 'main_synthesis_human'
   | 'main_complete'
-  | 'human_reason'
-  | 'human_execute'
-  | 'human_finalize'
+  | 'human_brain'
+  | 'human_learning'
+  | 'human_hand'
+  | 'human_mouth'
 export type AiTaskResultCode =
   | 'ok'
   | 'failed'
   | 'workspace_required'
   | 'approval_denied'
-  | 'bounded_loop_error'
   | 'invalid_input'
-export type HumanStepAction = 'load_skill' | 'invoke_tool' | 'complete_task' | 'block_task'
+export type HumanStepAction =
+  | 'brain_decision'
+  | 'learn_skill'
+  | 'call_tool'
+  | 'deliver_result'
+  | 'block_result'
 export type HumanStepResultStatus = 'ok' | 'error' | 'blocked'
-export type AiRuntimeWatchdogMode = 'off' | 'auto' | 'aggressive'
-export type WatchdogSignalLevel = 'warn' | 'stop'
+export type WatchHintSource = 'learning' | 'hand' | 'memory_reducer'
 
-export type AiRuntimeSettings = {
-  watchdogMode: AiRuntimeWatchdogMode
-}
+export type AiRuntimeSettings = Record<string, never>
 
 export type AiFileArtifactCapability = 'terminal_exec' | 'docx'
 export type AiFileArtifactOperation = 'created' | 'updated'
@@ -540,14 +547,9 @@ export type AiDraftReviewRef = {
 export type AiPlanTask = {
   id: string
   title: string
-  objective: string
+  userInput: string
   status: AiTaskStatus
-  attempts: number
-  error?: string
-  resultCode?: AiTaskResultCode
-  resultMessage?: string
   deliveryMarkdown?: string
-  resultData?: JsonObject
 }
 
 export type AiRunStartRequest = {
@@ -606,14 +608,6 @@ type AiRunEventPayload =
       taskId: string
     }
   | {
-      type: 'task_result'
-      runId: string
-      taskId: string
-      code: AiTaskResultCode
-      message?: string
-      data?: JsonObject
-    }
-  | {
       type: 'task_delivery_ready'
       runId: string
       taskId: string
@@ -622,10 +616,10 @@ type AiRunEventPayload =
       createdAt: number
     }
   | {
-      type: 'task_failed'
+      type: 'task_blocked'
       runId: string
       taskId: string
-      error: string
+      summary: string
     }
   | {
       type: 'tool_call_started'
@@ -700,20 +694,19 @@ type AiRunEventPayload =
       skillId?: RuntimeSkillId
       toolName?: string
       publicNarrative: string
-      activeSkillIds: RuntimeSkillId[]
-      activeToolNames: string[]
+      learnedSkillIds: RuntimeSkillId[]
+      availableToolNames: string[]
       resultStatus?: HumanStepResultStatus
       summary: string
       draftRef?: AiDraftSnapshotRef
       createdAt: number
     }
   | {
-      type: 'watchdog_signal'
+      type: 'watch_hint'
       runId: string
       taskId?: string
-      level: WatchdogSignalLevel
+      source: WatchHintSource
       summary: string
-      signs: string[]
       createdAt: number
     }
   | {
@@ -777,17 +770,6 @@ type AiRunEventPayload =
       runId: string
       taskId?: string
       text: string
-    }
-  | {
-      type: 'local_sources_status'
-      runId: string
-      status: LocalSourceUsageStatus
-      summary: string
-    }
-  | {
-      type: 'non_local_permission_requested'
-      runId: string
-      reason: string
     }
   | {
       type: 'runtime_issue'

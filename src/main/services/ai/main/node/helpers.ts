@@ -12,7 +12,7 @@ export const contextDecisionSchema = z.object({
 export const plannerTaskSchema = z.object({
   id: z.string().optional(),
   title: z.string().optional(),
-  objective: z.string().min(1)
+  userInput: z.string().min(1)
 })
 
 export const planDecisionSchema = z.object({
@@ -48,15 +48,15 @@ const GENERIC_OBJECTIVE_PATTERNS = [
 
 const normalizePlannerText = (value: string | undefined): string => String(value || '').trim()
 
-const isFinalSummaryTask = (input: { title?: string; objective: string }): boolean => {
-  const text = [normalizePlannerText(input.title), normalizePlannerText(input.objective)]
+const isFinalSummaryTask = (input: { title?: string; userInput: string }): boolean => {
+  const text = [normalizePlannerText(input.title), normalizePlannerText(input.userInput)]
     .filter(Boolean)
     .join('\n')
   return FINAL_SUMMARY_PATTERNS.some((pattern) => pattern.test(text))
 }
 
-const isGenericObjective = (objective: string): boolean => {
-  const normalized = normalizePlannerText(objective).replace(/\s+/g, '')
+const isGenericUserInput = (userInput: string): boolean => {
+  const normalized = normalizePlannerText(userInput).replace(/\s+/g, '')
   if (!normalized) return true
   if (normalized.length < 8) return true
   return GENERIC_OBJECTIVE_PATTERNS.some((pattern) => pattern.test(normalized))
@@ -68,10 +68,10 @@ export const validatePlannerTasks = (
   for (let index = 0; index < tasks.length; index += 1) {
     const task = tasks[index]
     if (isFinalSummaryTask(task)) {
-      return `tasks.${index}.objective: planner must not create final summary task`
+      return `tasks.${index}.userInput: planner must not create final summary task`
     }
-    if (isGenericObjective(task.objective)) {
-      return `tasks.${index}.objective: objective must be concrete and verifiable`
+    if (isGenericUserInput(task.userInput)) {
+      return `tasks.${index}.userInput: userInput must be concrete and verifiable`
     }
   }
   return undefined
@@ -81,18 +81,17 @@ export const toPlanTasks = (tasks: readonly z.infer<typeof plannerTaskSchema>[])
   return tasks.map((task, index) => ({
     id: String(task.id || `task-${index + 1}`),
     title: String(task.title || `Task ${index + 1}`),
-    objective: task.objective,
-    status: 'pending',
-    attempts: 0
+    userInput: task.userInput,
+    status: 'ready'
   }))
 }
 
 export const pickPendingTaskIndex = (plan: AiPlanTask[], cursor = 0): number => {
   for (let i = Math.max(0, cursor); i < plan.length; i += 1) {
-    if (plan[i].status === 'pending') return i
+    if (plan[i].status === 'ready') return i
   }
   for (let i = 0; i < Math.max(0, cursor); i += 1) {
-    if (plan[i].status === 'pending') return i
+    if (plan[i].status === 'ready') return i
   }
   return -1
 }

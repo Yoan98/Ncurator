@@ -3,10 +3,10 @@ import type { AiRunEvent } from '../../../../../src/shared/types'
 import { defineAiHumanCase } from '../helpers'
 
 defineAiHumanCase({
-  caseId: 'human-watchdog-projection',
+  caseId: 'human-watch-hint-projection',
   caseType: 'basic',
   groups: ['basic'],
-  description: 'workbench projection 应把 watchdog_signal 投影成可见时间线项。',
+  description: 'workbench projection 应把 watch_hint 投影成可见时间线项。',
   fixtures: [],
   runMode: 'repeatable',
   execute: async () => {
@@ -19,14 +19,13 @@ defineAiHumanCase({
         createdAt: 1
       },
       {
-        type: 'watchdog_signal',
+        type: 'watch_hint',
         runId: 'projection-run',
         taskId: 'projection-task',
-        level: 'warn',
-        summary: '最近多轮没有新增事实，建议收敛。',
-        signs: ['repeated_plan'],
+        source: 'hand',
+        summary: '累计工具调用次数已超限，建议优先收敛。',
         createdAt: 2,
-        stage: 'human_reason'
+        stage: 'human_hand'
       }
     ]
 
@@ -40,13 +39,13 @@ defineAiHumanCase({
     runtime.assertThat(
       projection.timeline.some(
         (item) =>
-          item.kind === 'watchdog' &&
-          item.title === 'Watchdog 提示' &&
-          item.badge === 'warn'
+          item.kind === 'watch_hint' &&
+          item.title === 'Watch Hint' &&
+          item.badge === 'hand'
       ),
       {
-        name: 'human-watchdog-projection-visible',
-        message: 'watchdog_signal 应投影为 workbench 时间线项'
+        name: 'human-watch-hint-projection-visible',
+        message: 'watch_hint 应投影为 workbench 时间线项'
       }
     )
   }

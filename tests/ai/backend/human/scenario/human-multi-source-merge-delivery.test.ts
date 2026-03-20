@@ -28,7 +28,7 @@ defineAiHumanCase({
           {
             output: {
               action: 'load_skill',
-              skillId: 'workspace-shell',
+              skillIds: ['workspace-cli'],
               rationale: '先读取多份 workspace 材料。',
               publicNarrative: '我先收集本地材料。'
             }
@@ -82,40 +82,24 @@ defineAiHumanCase({
               action: 'complete_task',
               summary: '已汇总多份材料并形成统一交付。',
               rationale: '多源材料已经足够支撑合并交付。',
-              publicNarrative: '我已经完成多源归并，并整理成统一交付。',
-              resultData: {
-                source_count: 4,
-                completed_items: [
-                  'workspace scan baseline',
-                  'KB retrieval baseline',
-                  'docx review handoff baseline'
-                ],
-                risks: [
-                  'Approval branch requires explicit denial coverage.',
-                  'Terminal artifact recognition needs end-to-end assertion.'
-                ]
-              }
+              publicNarrative: '我已经完成多源归并，并整理成统一交付。'
             }
           }
         ],
-        humanDeliveryOverride: ({ summary, resultData }) => {
-          const completed = Array.isArray(resultData?.completed_items)
-            ? resultData.completed_items.map((item) => `- ${String(item)}`).join('\n')
-            : '- 无'
-          const risks = Array.isArray(resultData?.risks)
-            ? resultData.risks.map((item) => `- ${String(item)}`).join('\n')
-            : '- 无'
-
+        humanDeliveryOverride: ({ summary }) => {
           return [
             '# 最终答复',
             '',
             `结论：${summary}`,
             '',
             '已完成事项：',
-            completed,
+            '- workspace scan baseline',
+            '- KB retrieval baseline',
+            '- docx review handoff baseline',
             '',
             '风险汇总：',
-            risks
+            '- Approval branch requires explicit denial coverage.',
+            '- Terminal artifact recognition needs end-to-end assertion.'
           ].join('\n')
         }
       },
@@ -125,7 +109,7 @@ defineAiHumanCase({
     const output = await runner.run(
       {
         taskId: runtime.taskId,
-        objective: '汇总多份日报与风险清单，输出统一交付。'
+        userInput: '汇总多份日报与风险清单，输出统一交付。'
       }
     )
 
@@ -145,9 +129,7 @@ defineAiHumanCase({
       .map((item) => String(item.outputPreview || ''))
 
     runtime.assertThat(
-      result.output.status === 'completed' &&
-        result.output.resultCode === 'ok' &&
-        result.output.resultData?.source_count === 4,
+      result.output.status === 'completed',
       {
         name: 'human-multi-source-merge-completed',
         message: '多源归并任务应形成完成态交付'
@@ -183,8 +165,8 @@ defineAiHumanCase({
       }
     )
     runtime.assertThat(
-      result.humanSteps.filter((event) => event.action === 'invoke_tool').length === 4 &&
-        result.output.localSourceStatus === 'used',
+      result.humanSteps.filter((event) => event.action === 'call_tool').length === 4 &&
+        result.output.deliveryMarkdown.includes('Terminal artifact recognition needs end-to-end assertion'),
       {
         name: 'human-multi-source-merge-events',
         message: '事件流应记录多次材料读取和最终收敛'

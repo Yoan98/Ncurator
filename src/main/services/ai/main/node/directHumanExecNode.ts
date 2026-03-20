@@ -22,7 +22,7 @@ export const createDirectHumanExecNode = (input: {
     const output = await runHumanTask(
       {
         taskId: DIRECT_TASK_ID,
-        objective: buildDirectHumanObjective({
+        userInput: buildDirectHumanObjective({
           userInput: state.input,
           contextEvidence: state.contextEvidence
         })
@@ -34,10 +34,10 @@ export const createDirectHumanExecNode = (input: {
 
     if (output.status === 'blocked') {
       ctx.sendEvent({
-        type: 'task_failed',
+        type: 'task_blocked',
         runId: state.runId,
         taskId: DIRECT_TASK_ID,
-        error: output.summary,
+        summary: output.summary,
         stage: 'main_direct_human_exec'
       })
     } else {
@@ -49,22 +49,8 @@ export const createDirectHumanExecNode = (input: {
       })
     }
 
-    ctx.sendEvent({
-      type: 'task_result',
-      runId: state.runId,
-      taskId: DIRECT_TASK_ID,
-      code: output.resultCode,
-      message: output.summary,
-      data: output.resultData,
-      stage: 'main_direct_human_exec'
-    })
-
     return {
       finalDeliveryMarkdown: output.deliveryMarkdown,
-      finalDeliveryTaskId: DIRECT_TASK_ID,
-      localSourceStatus: output.localSourceStatus,
-      localSourceSummary: output.localSourceSummary,
-      error: output.status === 'blocked' ? output.summary : state.error,
       mainStage: 'main_complete'
     }
   }

@@ -36,7 +36,7 @@ export const terminalExecCapability: CapabilityToolFamily = {
               reason: 'terminal_exec requires workspace binding before execution',
               requiredFields: ['workspaceId', 'rootPath'],
               createdAt: Date.now(),
-              stage: 'human_execute'
+              stage: 'human_hand'
             })
             return workspaceRequiredResult
           },

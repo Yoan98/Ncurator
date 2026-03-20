@@ -1,22 +1,16 @@
 import type { StructuredToolInterface } from '@langchain/core/tools'
-import type {
-  AiTaskResultCode,
-  JsonObject,
-  JsonValue,
-  LocalSourceUsageStatus,
-  WatchdogSignalLevel
-} from '../../../../shared/types'
+import type { JsonObject, JsonValue } from '../../../../shared/types'
 import {
   HUMAN_STEP_ACTIONS,
   HUMAN_STEP_RESULT_STATUSES,
   RUNTIME_SKILL_IDS,
-  RUNTIME_SKILL_REQUIREMENTS
+  TOOL_CALL_RESULT_CODES
 } from './constants'
 
 export type RuntimeSkillId = (typeof RUNTIME_SKILL_IDS)[number]
-export type RuntimeSkillRequirement = (typeof RUNTIME_SKILL_REQUIREMENTS)[number]
 export type HumanStepAction = (typeof HUMAN_STEP_ACTIONS)[number]
 export type HumanStepResultStatus = (typeof HUMAN_STEP_RESULT_STATUSES)[number]
+export type ToolCallResultCode = (typeof TOOL_CALL_RESULT_CODES)[number]
 
 export type ToolPromptArgSpec = {
   name: string
@@ -49,134 +43,119 @@ export type ToolPromptSpec = {
   examples?: ToolPromptExample[]
 }
 
-export type SkillCard = {
-  id: RuntimeSkillId
-  name: string
+export type SkillCatalogItem = {
+  skillId: RuntimeSkillId
+  title: string
   summary: string
-  whenToLoad: string
-  workflow: string[]
-  avoidWhen?: string[]
   toolNames: string[]
-  requires?: RuntimeSkillRequirement[]
+  whenToUse: string
 }
 
-export type HumanFact = {
+export type SkillDefinition = SkillCatalogItem & {
+  detail: string
+}
+
+export type BrainEvidence = {
+  id: string
+  toolName: string
+  summary: string
+  sourceType: 'tool_result'
+  rawRef?: string
+}
+
+export type BrainFact = {
   id: string
   summary: string
   evidenceIds: string[]
 }
 
-export type EvidenceRef = {
-  id: string
-  kind: 'tool_result' | 'user_input' | 'prior_delivery'
+export type BrainDecision = {
   summary: string
-  toolName?: string
-  sourceRef?: string
+  reason: string
+  expectedOutcome: string
 }
 
-export type HumanFocus = {
-  current?: string
-}
-
-export type HumanMemory = {
-  constraints: string[]
-  facts: HumanFact[]
-  evidence: EvidenceRef[]
-  openQuestions: string[]
-  focus: HumanFocus
-  capabilityFocus: {
-    activeStack: RuntimeSkillId[]
-  }
-}
-
-export type HumanMemoryPatch = {
-  constraints?: string[]
-  facts?: HumanFact[]
-  evidence?: EvidenceRef[]
-  openQuestions?: string[]
-  focus?: {
-    current?: string | null
-  }
-  capabilityFocus?: {
-    activeStack?: RuntimeSkillId[]
-  }
-}
-
-export type HumanActivateCapabilityAction = {
-  type: 'activate_capability'
-  skillId: RuntimeSkillId
-  rationale: string
-  publicNarrative: string
-}
-
-export type HumanInvokeToolAction = {
-  type: 'invoke_tool'
+export type ToolCallParam = {
   toolName: string
   args: JsonObject
-  rationale: string
-  publicNarrative: string
 }
 
-export type HumanActionSpec = HumanActivateCapabilityAction | HumanInvokeToolAction
-
-export type HumanActionBatch = {
-  summary: string
-  actions: HumanActionSpec[]
-}
-
-export type HumanCapabilityActivatedObservation = {
-  id: string
-  kind: 'capability_activated'
-  skillId: RuntimeSkillId
-  summary: string
-}
-
-export type HumanToolResultObservation = {
-  id: string
-  kind: 'tool_result'
+export type ToolCallResult = {
   toolName: string
   ok: boolean
-  code: AiTaskResultCode
+  code: ToolCallResultCode
   summary: string
   data?: JsonValue
 }
 
-export type HumanObservation = HumanCapabilityActivatedObservation | HumanToolResultObservation
+export type BrainMemoryOp =
+  | {
+      op: 'add'
+      field: 'facts'
+      value: BrainFact
+    }
+  | {
+      op: 'edit'
+      field: 'facts'
+      index: number
+      value: BrainFact
+    }
+  | {
+      op: 'add'
+      field: 'evidences'
+      value: BrainEvidence
+    }
+  | {
+      op: 'edit'
+      field: 'evidences'
+      index: number
+      value: BrainEvidence
+    }
+  | {
+      op: 'add'
+      field: 'openQuestions'
+      value: string
+    }
+  | {
+      op: 'edit'
+      field: 'openQuestions'
+      index: number
+      value: string
+    }
+  | {
+      op: 'remove'
+      field: 'facts' | 'evidences' | 'openQuestions'
+      index: number
+    }
 
-export type ObservationBatch = {
-  summary: string
-  observations: HumanObservation[]
+export type BrainNextAction =
+  | {
+      action: 'learning'
+      wantLearnSkillIds: RuntimeSkillId[]
+    }
+  | {
+      action: 'hand'
+      parallelCallToolParam: ToolCallParam[]
+    }
+  | {
+      action: 'mouth'
+      status: 'completed' | 'blocked'
+    }
+
+export type LastBrainDecision = {
+  memoryOps: BrainMemoryOp[]
+  decision: BrainDecision
+  nextAction: BrainNextAction
 }
 
-export type ReasonAnalysis = {
-  summary: string
+export type BrainDecisionRecord = LastBrainDecision & {
+  createdAt: number
 }
 
-export type WatchdogHint = {
-  level: WatchdogSignalLevel
-  summary: string
-  signs: string[]
-  shouldConverge: boolean
-}
-
-export type HumanOutcome = {
+export type HumanResult = {
   status: 'completed' | 'blocked'
   summary: string
-  payload?: JsonObject
-  presentation?: {
-    markdown: string
-  }
-  provenance?: {
-    localSourceStatus?: LocalSourceUsageStatus
-    localSourceSummary?: string
-  }
-}
-
-export type HumanReasoningOutput = {
-  memoryPatch: HumanMemoryPatch
-  analysis: ReasonAnalysis
-  actionBatch?: HumanActionBatch
-  outcome?: HumanOutcome
+  deliveryMarkdown?: string
 }
 
 export type HumanTraceStep = {
@@ -189,38 +168,40 @@ export type HumanTraceStep = {
   summary: string
 }
 
-export type HumanStepRecord = HumanTraceStep
-
 export type HumanTaskInput = {
   taskId: string
-  objective: string
+  userInput: string
 }
 
 export type HumanTaskOutput = {
   taskId: string
   status: 'completed' | 'blocked'
   summary: string
-  deliveryMarkdown: string
-  resultCode: AiTaskResultCode
-  resultData?: JsonObject
-  localSourceStatus?: LocalSourceUsageStatus
-  localSourceSummary?: string
+  deliveryMarkdown?: string
 }
 
 export type HumanState = {
   task: HumanTaskInput
-  progress: {
-    phase: 'reasoning' | 'executing' | 'finalizing'
-    maxParallel: number
+  runtime: {
+    stage: 'brain' | 'learning' | 'hand' | 'mouth'
+    status: 'running' | 'completed' | 'blocked'
   }
-  memory: HumanMemory
-  turn: {
-    incoming?: ObservationBatch
-    analysis?: ReasonAnalysis
-    actionBatch?: HumanActionBatch
-    watchdogHint?: WatchdogHint
+  brainMemory: {
+    inside: {
+      facts: BrainFact[]
+      evidences: BrainEvidence[]
+      openQuestions: string[]
+    }
+    outside: {
+      skillCatalog: SkillCatalogItem[]
+      learnedSkillIds: RuntimeSkillId[]
+      brainDecisions: BrainDecisionRecord[]
+    }
   }
-  outcome?: HumanOutcome
+  lastParallelCallToolResults?: ToolCallResult[]
+  lastBrainDecision?: LastBrainDecision
+  watchHint?: string
+  result?: HumanResult
   trace: {
     steps: HumanTraceStep[]
   }
@@ -228,15 +209,5 @@ export type HumanState = {
 
 export type HumanRuntimeCache = {
   toolsets: Partial<Record<RuntimeSkillId, StructuredToolInterface[]>>
-}
-
-export type ToolExecutionMeta = {
-  mutability: 'read_only' | 'mutating'
-  parallelSafe: boolean
-  resourceKey?: string
-}
-
-export type ExecuteActionResult = {
-  observation: HumanObservation
-  resultCode: AiTaskResultCode
+  toolCallCount: number
 }

@@ -178,7 +178,7 @@ const AssistantRunCard: React.FC<AssistantRunCardProps> = ({
                         ? 'bg-[#F3FAF0] text-[#4F7A46]'
                         : item.status === 'running'
                           ? 'bg-[#FBF5F2] text-[#D97757]'
-                          : item.status === 'failed'
+                          : item.status === 'blocked'
                             ? 'bg-[#FFF1F0] text-[#C2413B]'
                             : 'bg-white text-[#666666]'
                     }`}

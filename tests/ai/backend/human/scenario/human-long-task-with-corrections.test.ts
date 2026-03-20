@@ -34,6 +34,8 @@ defineAiHumanCase({
   ],
   runMode: 'repeatable',
   execute: async (runtime) => {
+    let trackedPreviewPath = ''
+
     await writeTestDocxFile(runtime.workspaceRoot, 'correction-brief.docx', [
       { type: 'heading', text: 'Correction Brief', level: 1 },
       { type: 'paragraph', text: 'Summary: pending synthesis.' },
@@ -43,11 +45,14 @@ defineAiHumanCase({
     const runner = createHumanTestRunner(
       runtime,
       {
+        trackDocxPreview: ({ previewPath }) => {
+          trackedPreviewPath = previewPath
+        },
         humanReasonOverrides: [
           {
             output: {
               action: 'load_skill',
-              skillId: 'workspace-shell',
+              skillIds: ['workspace-cli'],
               rationale: '长任务先读取已有进展。',
               publicNarrative: '我先收集当前阶段进展。'
             }
@@ -88,7 +93,7 @@ defineAiHumanCase({
           {
             output: {
               action: 'load_skill',
-              skillId: 'docx-editing',
+              skillIds: ['docx-read', 'docx-write', 'docx-delivery'],
               rationale: '先根据已有基线起草初版摘要。',
               publicNarrative: '我先写出当前版本的初稿摘要。'
             }
@@ -124,7 +129,7 @@ defineAiHumanCase({
           {
             output: {
               action: 'load_skill',
-              skillId: 'workspace-shell',
+              skillIds: ['workspace-cli'],
               rationale: '中途补读风险约束，确认是否需要修正已有草稿。',
               publicNarrative: '我继续读取新增风险材料，检查是否要修正文案。'
             }
@@ -143,7 +148,7 @@ defineAiHumanCase({
           {
             output: {
               action: 'load_skill',
-              skillId: 'docx-editing',
+              skillIds: ['docx-read', 'docx-write', 'docx-delivery'],
               rationale: '拿到新约束后回到文档修正已有草稿。',
               publicNarrative: '我回到文档里修正已有初稿，避免目标漂移。'
             }
@@ -197,21 +202,16 @@ defineAiHumanCase({
               action: 'complete_task',
               summary: '已在长任务中途纳入新约束，并修正 correction brief 交付。',
               rationale: '任务目标没有漂移，已有草稿已被收敛到新的风险约束。',
-              publicNarrative: '我已经完成基于新约束的长任务纠偏。',
-              resultData: {
-                document_name: 'correction-brief.docx',
-                artifact_role: 'preview',
-                correction_source: 'risk-summary.txt'
-              }
+              publicNarrative: '我已经完成基于新约束的长任务纠偏。'
             }
           }
         ],
-        humanDeliveryOverride: ({ summary, resultData }) =>
+        humanDeliveryOverride: ({ summary }) =>
           [
             '# 子任务交付',
             '',
             `已完成：${summary}`,
-            `纠偏来源：${typeof resultData?.correction_source === 'string' ? resultData.correction_source : 'risk-summary.txt'}`,
+            '纠偏来源：risk-summary.txt',
             '说明：本轮先写入初稿，再根据新增风险约束回到原文做纠偏，不是重新起一个新方向。'
           ].join('\n')
       },
@@ -221,14 +221,13 @@ defineAiHumanCase({
     const output = await runner.run(
       {
         taskId: runtime.taskId,
-        objective: '先整理阶段基线，再补读风险汇总；如果中途发现新约束，要修正已有 brief，而不是重新做一份。'
+        userInput: '先整理阶段基线，再补读风险汇总；如果中途发现新约束，要修正已有 brief，而不是重新做一份。'
       }
     )
 
     const toolResults = getEventsByType(runtime, 'tool_call_result')
     const fileArtifacts = getEventsByType(runtime, 'file_artifact')
-    const previewArtifact = fileArtifacts.find((event) => event.artifactRole === 'preview')
-    const previewPath = previewArtifact?.path || ''
+    const previewPath = trackedPreviewPath
     const previewExists = previewPath ? await fileExists(previewPath) : false
     const inspectionHarness = createDocxToolHarness(runtime)
 
@@ -279,8 +278,7 @@ defineAiHumanCase({
 
     runtime.assertThat(
       result.output.status === 'completed' &&
-        result.output.resultCode === 'ok' &&
-        result.output.resultData?.correction_source === 'risk-summary.txt',
+        result.output.deliveryMarkdown.includes('纠偏来源：risk-summary.txt'),
       {
         name: 'human-long-task-corrections-completed',
         message: '长任务纠偏场景应形成完成态交付'

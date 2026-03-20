@@ -46,6 +46,8 @@ defineAiHumanLiveCase({
   fixtures: [],
   runMode: 'single',
   execute: async (runtime) => {
+    let trackedPreviewPath = ''
+
     await writeTestDocxFile(runtime.workspaceRoot, 'release-check.docx', [
       { type: 'heading', text: 'Release Checklist', level: 1 },
       { type: 'paragraph', text: 'Checklist summary: pending policy sync.' },
@@ -55,6 +57,9 @@ defineAiHumanLiveCase({
     const runner = createHumanTestRunner(
       runtime,
       {
+        trackDocxPreview: ({ previewPath }) => {
+          trackedPreviewPath = previewPath
+        },
         selectedDocumentIds: ['doc-policy'],
         liveModelConfig: loadPrimaryLiveHumanConfig(),
         documentsStoreOverrides: {
@@ -110,7 +115,7 @@ defineAiHumanLiveCase({
     const output = await runner.run(
       {
         taskId: runtime.taskId,
-        objective:
+        userInput:
           '请仅在当前已选本地文档范围内做一次发布规范检索，来源就是 release-policy.md。拿到条款后不要再列文档、不要重复检索、不要使用 terminal，也不需要 save。随后直接打开 release-check.docx，把 “Checklist summary: pending policy sync.” 替换成 “Checklist summary: Mention approval-denied coverage and terminal artifact assertion before sign-off.”，生成可审阅 preview，并以 handoff 形式交付，在交付里说明来源文档 release-policy.md。'
       }
     )
@@ -118,8 +123,7 @@ defineAiHumanLiveCase({
     const toolCalls = getEventsByType(runtime, 'tool_call_started')
     const toolResults = getEventsByType(runtime, 'tool_call_result')
     const fileArtifacts = getEventsByType(runtime, 'file_artifact')
-    const previewArtifact = fileArtifacts.find((event) => event.artifactRole === 'preview')
-    const previewPath = previewArtifact?.path || ''
+    const previewPath = trackedPreviewPath
     const previewExists = previewPath ? await fileExists(previewPath) : false
     const firstKbResult = toolResults.find((event) => event.toolName.startsWith('kb_'))
     const kbPreview = firstKbResult ? getFirstPreviewRecord(firstKbResult.outputPreview) : null
@@ -172,25 +176,16 @@ defineAiHumanLiveCase({
   assert: async (result, runtime) => {
     const kbCallIndex = result.toolCalls.findIndex((event) => event.toolName.startsWith('kb_'))
     const docxApplyIndex = result.toolCalls.findIndex((event) => event.toolName === 'docx_apply_ops')
-    const joinedOutputText = [
-      result.output.summary,
-      result.output.deliveryMarkdown,
-      JSON.stringify(result.output.resultData || {})
-    ].join('\n')
+    const joinedOutputText = [result.output.summary, result.output.deliveryMarkdown].join('\n')
 
     runtime.assertThat(
-        result.output.status === 'completed' &&
-        result.output.resultCode === 'ok' &&
-        result.output.localSourceStatus === 'used',
+        result.output.status === 'completed',
       {
         name: 'human-live-kb-docx-bridge-completed',
         message: 'live human 的 KB -> DOCX bridge 应形成完成态交付',
         data: {
           status: result.output.status,
-          resultCode: result.output.resultCode,
-          localSourceStatus: result.output.localSourceStatus,
           summary: result.output.summary,
-          resultData: result.output.resultData,
           previewExists: result.previewExists,
           previewPath: result.previewPath,
           toolNames: result.toolCalls.map((event) => event.toolName)

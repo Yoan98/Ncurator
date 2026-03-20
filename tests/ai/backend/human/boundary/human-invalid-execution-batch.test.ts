@@ -27,7 +27,7 @@ defineAiHumanCase({
       humanReasonOverrides: [
         {
           output: reasonActivateCapability({
-            skillId: 'docx-editing',
+            skillIds: ['docx-read', 'docx-write', 'docx-delivery'],
             rationale: '先激活 docx 能力。',
             publicNarrative: '我先加载文档编辑能力。'
           })
@@ -86,21 +86,22 @@ defineAiHumanCase({
 
     const output = await runner.run({
       taskId: runtime.taskId,
-      objective: '验证混合读写的 batch plan 会被 executor 拒绝。'
+      userInput: '验证混合读写的 batch plan 会被 executor 拒绝。'
     })
 
     return {
       output,
       humanSteps: getEventsByType(runtime, 'human_step'),
-      toolCalls: getEventsByType(runtime, 'tool_call_started')
+      toolCalls: getEventsByType(runtime, 'tool_call_started'),
+      watchHints: getEventsByType(runtime, 'watch_hint')
     }
   },
   assert: async (result, runtime) => {
     runtime.assertThat(
-      result.output.status === 'blocked' && result.output.resultCode === 'invalid_input',
+      result.output.status === 'blocked',
       {
         name: 'human-invalid-batch-blocked',
-        message: '非法混合 batch 应阻塞并返回 invalid_input'
+        message: '非法混合 batch 应阻塞收敛'
       }
     )
     runtime.assertThat(
@@ -111,7 +112,12 @@ defineAiHumanCase({
       }
     )
     runtime.assertThat(
-      result.humanSteps.some((event) => event.action === 'block_task' && event.resultStatus === 'blocked'),
+      result.watchHints.some(
+        (event) => event.source === 'hand' && event.summary.includes('并行安全要求')
+      ) &&
+        result.humanSteps.some(
+          (event) => event.action === 'block_result' && event.resultStatus === 'blocked'
+        ),
       {
         name: 'human-invalid-batch-events',
         message: '事件流应记录非法 batch 被拒绝后的阻塞收敛'

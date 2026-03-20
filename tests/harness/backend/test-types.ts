@@ -4,13 +4,17 @@ import type {
   AiRunContext
 } from '../../../src/main/services/ai/types'
 import type {
+  HumanResult,
+  LastBrainDecision,
+  HumanState,
+  RuntimeSkillId
+} from '../../../src/main/services/ai/human/types'
+import type {
   AiRuntimeSettings,
   AiTaskResultCode,
-  HumanReasoningOutput,
   JsonObject,
   JsonValue,
-  LLMConfig,
-  RuntimeSkillId
+  LLMConfig
 } from '../../../src/shared/types'
 import type { EventCollector } from '../core/eventCollector'
 import type {
@@ -44,10 +48,11 @@ export type TestToolExecutionOverride = {
   }
 }
 
-export type LegacyTestHumanReasonOutput =
+export type TestHumanReasonShortcut =
   | {
       action: 'load_skill'
-      skillId: RuntimeSkillId
+      skillId?: RuntimeSkillId
+      skillIds?: RuntimeSkillId[]
       rationale: string
       publicNarrative: string
     }
@@ -63,7 +68,6 @@ export type LegacyTestHumanReasonOutput =
       summary: string
       rationale: string
       publicNarrative: string
-      resultData?: JsonObject
     }
   | {
       action: 'block_task'
@@ -75,7 +79,7 @@ export type LegacyTestHumanReasonOutput =
 
 export type TestHumanReasonOverride = {
   remainingUses?: number
-  output: HumanReasoningOutput | LegacyTestHumanReasonOutput
+  output: LastBrainDecision | TestHumanReasonShortcut
 }
 
 export type LiveLlmConfig = Pick<LLMConfig, 'base_url' | 'model_name' | 'api_key'> & {
@@ -99,11 +103,11 @@ export type CreateAiRunContextInput = {
   checkCancelledOverride?: () => void
   humanReasonOverrides?: TestHumanReasonOverride[]
   humanDeliveryOverride?: (input: {
-    objective: string
+    userInput: string
     summary: string
-    resultCode: AiTaskResultCode
-    resultData?: JsonObject
-  }) => string
+    status: 'completed' | 'blocked'
+    state: HumanState
+  }) => string | HumanResult
   liveModelConfig?: LiveLlmConfig
   chatJsonOverride?: <T extends JsonObject>(input: {
     system: string

@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
-import { defineAiHumanCase, getEventsByType } from '../helpers'
+import { defineAiHumanCase, getEventsByType, reasonBlocked } from '../helpers'
 
 const fileExists = async (filePath: string): Promise<boolean> => {
   try {
@@ -43,7 +43,7 @@ defineAiHumanCase({
           {
             output: {
               action: 'load_skill',
-              skillId: 'workspace-shell',
+              skillIds: ['workspace-cli'],
               rationale: '先收集长任务需要的本地事实。',
               publicNarrative: '我先读取本地材料，准备导出交付。'
             }
@@ -87,21 +87,17 @@ defineAiHumanCase({
               action: 'complete_task',
               summary: '审批已通过，长任务导出文件已生成。',
               rationale: '批准分支已成功推进到产物落地。',
-              publicNarrative: '我已经在批准分支完成导出交付。',
-              resultData: {
-                export_path: 'approved-branch.txt',
-                branch: 'approved'
-              }
+              publicNarrative: '我已经在批准分支完成导出交付。'
             }
           }
         ],
-        humanDeliveryOverride: ({ summary, resultData }) =>
+        humanDeliveryOverride: ({ summary }) =>
           [
             '# 子任务交付',
             '',
             `已完成：${summary}`,
-            `审批分支：${typeof resultData?.branch === 'string' ? resultData.branch : 'approved'}`,
-            `导出文件：${typeof resultData?.export_path === 'string' ? resultData.export_path : 'approved-branch.txt'}`
+            '审批分支：approved',
+            '导出文件：approved-branch.txt'
           ].join('\n')
       },
       { hardActionLimit: 6 }
@@ -115,7 +111,7 @@ defineAiHumanCase({
           {
             output: {
               action: 'load_skill',
-              skillId: 'workspace-shell',
+              skillIds: ['workspace-cli'],
               rationale: '先读取长任务所需的本地事实。',
               publicNarrative: '我先读取本地材料，准备尝试导出交付。'
             }
@@ -153,13 +149,19 @@ defineAiHumanCase({
               rationale: '尝试导出最终交付，但这一步需要审批。',
               publicNarrative: '我正在申请导出本轮交付文件。'
             }
+          },
+          {
+            output: reasonBlocked({
+              summary: '导出写入操作被拒绝，请批准后再继续生成 denied-branch.txt。',
+              rationale: '审批已拒绝，当前分支应阻塞并保留已有进展。'
+            })
           }
         ],
-        humanDeliveryOverride: ({ summary, resultCode }) =>
+        humanDeliveryOverride: ({ summary }) =>
           [
             '# 子任务交付',
             '',
-            `状态：${resultCode}`,
+            '状态：blocked',
             `阻塞说明：${summary}`,
             '已保留进展：已读取阶段进展与风险汇总。',
             '继续条件：请批准导出写入操作后再继续生成 denied-branch.txt。'
@@ -171,14 +173,14 @@ defineAiHumanCase({
     const approvedOutput = await approvedRunner.run(
       {
         taskId: approvedTaskId,
-        objective: '读取本地材料并导出长任务 brief；如果审批通过，就生成 approved-branch.txt。'
+        userInput: '读取本地材料并导出长任务 brief；如果审批通过，就生成 approved-branch.txt。'
       }
     )
 
     const deniedOutput = await deniedRunner.run(
       {
         taskId: deniedTaskId,
-        objective: '读取本地材料并导出长任务 brief；如果审批被拒绝，就安全收敛。'
+        userInput: '读取本地材料并导出长任务 brief；如果审批被拒绝，就安全收敛。'
       }
     )
 
@@ -215,8 +217,7 @@ defineAiHumanCase({
 
     runtime.assertThat(
       result.approvedOutput.status === 'completed' &&
-        result.approvedOutput.resultCode === 'ok' &&
-        result.approvedOutput.resultData?.branch === 'approved' &&
+        result.approvedOutput.deliveryMarkdown.includes('approved-branch.txt') &&
         result.approvedExists,
       {
         name: 'human-long-task-approval-branch-approved',
@@ -225,7 +226,6 @@ defineAiHumanCase({
     )
     runtime.assertThat(
       result.deniedOutput.status === 'blocked' &&
-        result.deniedOutput.resultCode === 'approval_denied' &&
         !result.deniedExists &&
         result.deniedOutput.deliveryMarkdown.includes('请批准导出写入操作后再继续'),
       {

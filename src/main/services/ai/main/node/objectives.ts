@@ -25,7 +25,6 @@ const renderDeliveries = (tasks: AiPlanTask[]): string => {
         `### 任务 ${index + 1}: ${normalizeText(task.title, task.id)}`,
         `- taskId: ${task.id}`,
         `- 状态: ${task.status}`,
-        `- 摘要: ${normalizeText(task.resultMessage || task.error || '', '无')}`,
         `- 正式交付:\n${normalizeText(task.deliveryMarkdown || '', '无')}`
       ].join('\n')
     )
@@ -83,7 +82,7 @@ export const buildPlanTaskObjective = (input: {
     '',
     renderSections([
       { label: '总体目标', value: input.userInput },
-      { label: '当前子任务', value: `${input.task.title}\n${input.task.objective}` },
+      { label: '当前子任务', value: `${input.task.title}\n${input.task.userInput}` },
       { label: '已选资料范围', value: input.selectedScopeSummary },
       { label: '上下文证据', value: renderContextEvidence(input.contextEvidence) },
       { label: '前序任务交付', value: renderDeliveries(input.priorDeliveries) }

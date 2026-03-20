@@ -11,11 +11,11 @@ export const buildPlanPrompt = (input: PlanPromptInput) => {
       '【运行时约束】最终总结由 runtime 自动追加 synthesis human 负责，不要把“总结答复”写成计划中的业务任务。',
       '【范围】若已选择资料范围，任务规划必须优先围绕这些本地范围取证；不要默认扩大到未选中的本地资料。',
       '【流程】先识别最终交付物，再拆分最小可行任务，最后检查任务是否可执行可验证。',
-      '【约束】每个 objective 必须包含“动作 + 对象 + 完成判据”；禁止空泛任务。',
+      '【约束】每个 userInput 必须包含“动作 + 对象 + 完成判据”；禁止空泛任务。',
       '【输出】',
       JSON_ONLY_PLAN_CONTRACT,
-      '【样例-正】objective: "读取 /docs/a.docx，提取行动项并输出 owner/due_date/task 字段"。',
-      '【样例-反】objective: "继续优化文档质量"。'
+      '【样例-正】userInput: "读取 /docs/a.docx，提取行动项并输出 owner/due_date/task 字段"。',
+      '【样例-反】userInput: "继续优化文档质量"。'
     ].join('\n'),
     user: renderPromptSections([
       { label: '用户输入', value: input.userInput },

@@ -20,6 +20,8 @@ defineAiHumanCase({
   fixtures: [],
   runMode: 'repeatable',
   execute: async (runtime) => {
+    let trackedPreviewPath = ''
+
     await writeTestDocxFile(runtime.workspaceRoot, 'review-ready.docx', [
       { type: 'heading', text: 'Iteration Review', level: 1 },
       { type: 'paragraph', text: 'Summary: pending review update.' },
@@ -29,11 +31,14 @@ defineAiHumanCase({
     const runner = createHumanTestRunner(
       runtime,
       {
+        trackDocxPreview: ({ previewPath }) => {
+          trackedPreviewPath = previewPath
+        },
         humanReasonOverrides: [
           {
             output: {
               action: 'load_skill',
-              skillId: 'docx-editing',
+              skillIds: ['docx-read', 'docx-write', 'docx-delivery'],
               rationale: '先加载文档编辑能力。',
               publicNarrative: '我先打开文档并整理审阅稿。'
             }
@@ -91,24 +96,11 @@ defineAiHumanCase({
               action: 'complete_task',
               summary: '文档改写已完成，当前交付已具备 review handoff 条件。',
               rationale: '预览和校验都已完成，可以进入结构化 handoff。',
-              publicNarrative: '我已经整理好可继续审阅的交付。',
-              resultData: {
-                document_name: 'review-ready.docx',
-                artifact_role: 'preview',
-                handoff_status: 'review_ready',
-                change_summary: [
-                  '摘要已更新为 draft review handoff ready。',
-                  '文档已生成 preview 并完成 validate。'
-                ]
-              }
+              publicNarrative: '我已经整理好可继续审阅的交付。'
             }
           }
         ],
-        humanDeliveryOverride: ({ summary, resultData }) => {
-          const changes = Array.isArray(resultData?.change_summary)
-            ? resultData.change_summary.map((item) => `- ${String(item)}`).join('\n')
-            : '- 无'
-
+        humanDeliveryOverride: ({ summary }) => {
           return [
             '# 子任务交付',
             '',
@@ -116,11 +108,12 @@ defineAiHumanCase({
             summary,
             '',
             '## 关键发现',
-            changes,
+            '- 摘要已更新为 draft review handoff ready。',
+            '- 文档已生成 preview 并完成 validate。',
             '',
             '## 证据与来源',
-            `- 文档: ${typeof resultData?.document_name === 'string' ? resultData.document_name : 'review-ready.docx'}`,
-            `- 交付形态: ${typeof resultData?.artifact_role === 'string' ? resultData.artifact_role : 'preview'}`,
+            '- 文档: review-ready.docx',
+            '- 交付形态: preview',
             '',
             '## 风险与未决',
             '- 仍需人工进入 draft review 流程做最终接受/拒绝。',
@@ -136,14 +129,13 @@ defineAiHumanCase({
     const output = await runner.run(
       {
         taskId: runtime.taskId,
-        objective: '修改文档后给出可继续进入审阅的结构化 handoff。'
+        userInput: '修改文档后给出可继续进入审阅的结构化 handoff。'
       }
     )
 
     const deliveries = getEventsByType(runtime, 'task_delivery_ready')
     const fileArtifacts = getEventsByType(runtime, 'file_artifact')
-    const previewArtifact = fileArtifacts.find((event) => event.artifactRole === 'preview')
-    const previewPath = previewArtifact?.path || ''
+    const previewPath = trackedPreviewPath
     const previewExists = previewPath ? await fileExists(previewPath) : false
     const inspectionHarness = createDocxToolHarness(runtime)
 
@@ -177,8 +169,7 @@ defineAiHumanCase({
   assert: async (result, runtime) => {
     runtime.assertThat(
       result.output.status === 'completed' &&
-        result.output.resultCode === 'ok' &&
-        result.output.resultData?.handoff_status === 'review_ready',
+        result.output.deliveryMarkdown.includes('draft_review_ready'),
       {
         name: 'human-review-handoff-status',
         message: 'review handoff 应形成完成态并标记为 review_ready'
@@ -206,9 +197,9 @@ defineAiHumanCase({
         message: 'review handoff 应附带可审阅 preview 证据'
       }
     )
-    runtime.assertThat(result.output.localSourceStatus === 'used', {
+    runtime.assertThat(result.output.deliveryMarkdown.includes('## 证据与来源'), {
       name: 'human-review-handoff-local-source',
-      message: 'review handoff 文档交付应保留本地资料使用状态'
+      message: 'review handoff 文档交付应保留来源与证据区块'
     })
   }
 })

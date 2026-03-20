@@ -22,7 +22,7 @@ export const createSynthesisHumanNode = (input: {
     const output = await runHumanTask(
       {
         taskId: SYNTHESIS_TASK_ID,
-        objective: buildSynthesisHumanObjective({
+        userInput: buildSynthesisHumanObjective({
           userInput: state.input,
           selectedScopeSummary: ctx.selectedScopeSummary,
           contextEvidence: state.contextEvidence,
@@ -36,10 +36,10 @@ export const createSynthesisHumanNode = (input: {
 
     if (output.status === 'blocked') {
       ctx.sendEvent({
-        type: 'task_failed',
+        type: 'task_blocked',
         runId: state.runId,
         taskId: SYNTHESIS_TASK_ID,
-        error: output.summary,
+        summary: output.summary,
         stage: 'main_synthesis_human'
       })
     } else {
@@ -51,22 +51,8 @@ export const createSynthesisHumanNode = (input: {
       })
     }
 
-    ctx.sendEvent({
-      type: 'task_result',
-      runId: state.runId,
-      taskId: SYNTHESIS_TASK_ID,
-      code: output.resultCode,
-      message: output.summary,
-      data: output.resultData,
-      stage: 'main_synthesis_human'
-    })
-
     return {
       finalDeliveryMarkdown: output.deliveryMarkdown,
-      finalDeliveryTaskId: SYNTHESIS_TASK_ID,
-      localSourceStatus: output.localSourceStatus,
-      localSourceSummary: output.localSourceSummary,
-      error: output.status === 'blocked' ? output.summary : state.error,
       mainStage: 'main_complete'
     }
   }

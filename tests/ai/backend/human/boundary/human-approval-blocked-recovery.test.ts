@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
-import { defineAiHumanCase, getEventsByType } from '../helpers'
+import { defineAiHumanCase, getEventsByType, reasonBlocked } from '../helpers'
 
 const exists = async (filePath: string): Promise<boolean> => {
   try {
@@ -27,7 +27,7 @@ defineAiHumanCase({
           {
             output: {
               action: 'load_skill',
-              skillId: 'workspace-shell',
+              skillIds: ['workspace-cli'],
               rationale: '需要写入工作区产物。',
               publicNarrative: '我先尝试生成目标文件。'
             }
@@ -42,13 +42,19 @@ defineAiHumanCase({
               rationale: '先执行需要审批的写操作。',
               publicNarrative: '我正在申请执行写入命令。'
             }
+          },
+          {
+            output: reasonBlocked({
+              summary: '写入命令被审批拒绝，请批准后再继续执行。',
+              rationale: 'terminal 工具已返回审批拒绝，当前应阻塞收敛。'
+            })
           }
         ],
-        humanDeliveryOverride: ({ summary, resultCode }) =>
+        humanDeliveryOverride: ({ summary }) =>
           [
             '# 子任务交付',
             '',
-            `状态：${resultCode}`,
+            '状态：blocked',
             `阻塞说明：${summary}`,
             '继续条件：请批准写操作后再继续执行。'
           ].join('\n')
@@ -59,7 +65,7 @@ defineAiHumanCase({
     const output = await runner.run(
       {
         taskId: runtime.taskId,
-        objective: '在 workspace 中生成一个目标文件。'
+        userInput: '在 workspace 中生成一个目标文件。'
       }
     )
 
@@ -74,7 +80,6 @@ defineAiHumanCase({
   assert: async (result, runtime) => {
     runtime.assertThat(
       result.output.status === 'blocked' &&
-        result.output.resultCode === 'approval_denied' &&
         result.output.deliveryMarkdown.includes('批准'),
       {
         name: 'human-approval-blocked-status',

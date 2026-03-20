@@ -12,7 +12,7 @@ export const createContextEnrichNode = (input: {
     ctx.checkCancelled()
 
     const contextTaskId = `context-${state.contextRounds + 1}`
-    const objective = buildContextHumanObjective({
+    const contextUserInput = buildContextHumanObjective({
       userInput: state.input,
       contextObjective: String(state.contextObjective || '').trim() || state.input,
       contextEvidence: state.contextEvidence
@@ -21,7 +21,7 @@ export const createContextEnrichNode = (input: {
     const output = await runHumanTask(
       {
         taskId: contextTaskId,
-        objective
+        userInput: contextUserInput
       },
       {
         internalDelivery: true
@@ -35,7 +35,7 @@ export const createContextEnrichNode = (input: {
           ...state,
           contextEvidence: appendContextEvidence(state, output.summary)
         },
-        output.deliveryMarkdown
+        output.deliveryMarkdown || output.summary
       ),
       contextObjective: undefined,
       mainStage: 'main_intent'

@@ -1,16 +1,17 @@
 import { HumanMessage, SystemMessage } from '@langchain/core/messages'
 import { randomUUID } from 'node:crypto'
 import { createChatModel } from '../../../src/main/services/llm/chatModel'
-import type { DocxChangedBlock, DocxOp } from '../../../src/main/services/ai/tools/docx/types'
+import type { DocxChangedBlock, DocxOp } from '../../../src/main/services/ai/human/tools/docx/types'
+import type { LastBrainDecision } from '../../../src/main/services/ai/human/types'
 import type { AiRunContext } from '../../../src/main/services/ai/types'
 import type { AiApprovalDecision, AiApprovalRequest } from '../../../src/main/services/ai/types'
-import type { HumanReasoningOutput, JsonObject } from '../../../src/shared/types'
+import type { JsonObject } from '../../../src/shared/types'
 import type { EventCollector } from '../core/eventCollector'
 import type {
   ApprovalPolicy,
   ApprovalResolver,
   CreateAiRunContextInput,
-  LegacyTestHumanReasonOutput,
+  TestHumanReasonShortcut,
   LiveLlmConfig,
   TestDocumentsStoreOverrides,
   TestToolExecutionOverride
@@ -81,7 +82,7 @@ const buildToolExecutionOverrideResolver = (
 const buildHumanReasonOverrideResolver = (
   overrides: CreateAiRunContextInput['humanReasonOverrides']
 ):
-  | (() => HumanReasoningOutput | undefined)
+  | (() => LastBrainDecision | undefined)
   | undefined => {
   if (!overrides || overrides.length === 0) return undefined
 
@@ -95,58 +96,47 @@ const buildHumanReasonOverrideResolver = (
     if (!matched) return undefined
     matched.remainingUses -= 1
     if ('action' in matched.output) {
-      return translateLegacyReasonOutput(matched.output)
+      return translateTestReasonShortcut(matched.output)
     }
     return matched.output
   }
 }
 
-const translateLegacyReasonOutput = (
-  output: LegacyTestHumanReasonOutput
-): HumanReasoningOutput => {
+const translateTestReasonShortcut = (output: TestHumanReasonShortcut): LastBrainDecision => {
   if (output.action === 'load_skill') {
+    const skillIds = Array.isArray(output.skillIds)
+      ? output.skillIds
+      : output.skillId
+        ? [output.skillId]
+        : []
     return {
-      memoryPatch: {
-        focus: {
-          current: output.skillId
-        }
+      memoryOps: [],
+      decision: {
+        summary: output.publicNarrative,
+        reason: output.rationale,
+        expectedOutcome: '学习所需 skill 后继续推进任务。'
       },
-      analysis: {
-        summary: output.rationale
-      },
-      actionBatch: {
-        summary: output.rationale,
-        actions: [
-          {
-            type: 'activate_capability',
-            skillId: output.skillId,
-            rationale: output.rationale,
-            publicNarrative: output.publicNarrative
-          }
-        ]
+      nextAction: {
+        action: 'learning',
+        wantLearnSkillIds: skillIds
       }
     }
   }
 
   if (output.action === 'invoke_tool') {
     return {
-      memoryPatch: {
-        focus: {
-          current: output.toolName
-        }
+      memoryOps: [],
+      decision: {
+        summary: output.publicNarrative,
+        reason: output.rationale,
+        expectedOutcome: '执行工具后继续推进任务。'
       },
-      analysis: {
-        summary: output.rationale
-      },
-      actionBatch: {
-        summary: output.rationale,
-        actions: [
+      nextAction: {
+        action: 'hand',
+        parallelCallToolParam: [
           {
-            type: 'invoke_tool',
             toolName: output.toolName,
-            args: output.args,
-            rationale: output.rationale,
-            publicNarrative: output.publicNarrative
+            args: output.args
           }
         ]
       }
@@ -155,32 +145,29 @@ const translateLegacyReasonOutput = (
 
   if (output.action === 'complete_task') {
     return {
-      memoryPatch: {},
-      analysis: {
-        summary: output.rationale
-      },
-      outcome: {
-        status: 'completed',
+      memoryOps: [],
+      decision: {
         summary: output.summary,
-        payload: output.resultData
+        reason: output.rationale,
+        expectedOutcome: '进入最终完成交付。'
+      },
+      nextAction: {
+        action: 'mouth',
+        status: 'completed'
       }
     }
   }
 
   return {
-    memoryPatch: {},
-    analysis: {
-      summary: output.rationale
-    },
-    outcome: {
-      status: 'blocked',
+    memoryOps: [],
+    decision: {
       summary: output.reason,
-      payload:
-        output.details &&
-        typeof output.details === 'object' &&
-        !Array.isArray(output.details)
-          ? output.details
-          : undefined
+      reason: output.rationale,
+      expectedOutcome: '进入最终阻塞交付。'
+    },
+    nextAction: {
+      action: 'mouth',
+      status: 'blocked'
     }
   }
 }
@@ -222,10 +209,8 @@ export const createTestAiRunContext = (input: CreateTestAiRunContextInput): AiRu
   const documentsStoreStub = buildDocumentsStoreStub(input.documentsStoreOverrides)
   const embeddingServiceStub = buildEmbeddingServiceStub()
   const resolveToolExecutionOverride = buildToolExecutionOverrideResolver(input.toolExecutionOverrides)
-  const resolveHumanReasonOverride = buildHumanReasonOverrideResolver(input.humanReasonOverrides)
-  const runtimeSettings = {
-    watchdogMode: input.runtimeSettingsOverride?.watchdogMode || 'auto'
-  }
+  const resolveBrainDecisionOverride = buildHumanReasonOverrideResolver(input.humanReasonOverrides)
+  const runtimeSettings = input.runtimeSettingsOverride || {}
 
   const requestApproval = async (request: AiApprovalRequest): Promise<AiApprovalDecision> => {
     const approvalId = randomUUID()
@@ -306,8 +291,26 @@ export const createTestAiRunContext = (input: CreateTestAiRunContextInput): AiRu
     trackDocxChanges: input.trackDocxChanges || (() => undefined),
     trackDocxPreview: input.trackDocxPreview || (() => undefined),
     resolveToolExecutionOverride,
-    resolveHumanReasonOverride,
-    resolveHumanDeliveryOverride: input.humanDeliveryOverride,
+    resolveBrainDecisionOverride,
+    resolveHumanDeliveryOverride: input.humanDeliveryOverride
+      ? ({ userInput, status, summary, state }) => {
+          const output = input.humanDeliveryOverride?.({
+            userInput,
+            status,
+            summary,
+            state
+          })
+          if (!output) return undefined
+          if (typeof output === 'string') {
+            return {
+              status,
+              summary,
+              deliveryMarkdown: output
+            }
+          }
+          return output
+        }
+      : undefined,
     getModelConfig: async () => {
       if (!input.liveModelConfig) {
         throw new Error('live model config is required for this test case')

@@ -363,7 +363,6 @@ export class LanceDbCore {
         name: LANCE_TABLES.AI_RUNTIME_SETTINGS,
         schema: new arrow.Schema([
           new arrow.Field('id', new arrow.Utf8()),
-          new arrow.Field('watchdog_mode', new arrow.Utf8()),
           new arrow.Field('updated_at', new arrow.Int64())
         ])
       }

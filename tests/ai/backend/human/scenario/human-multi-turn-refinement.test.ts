@@ -20,6 +20,8 @@ defineAiHumanCase({
   fixtures: [],
   runMode: 'repeatable',
   execute: async (runtime) => {
+    let trackedPreviewPath = ''
+
     await writeTestDocxFile(runtime.workspaceRoot, 'followup-brief.docx', [
       { type: 'heading', text: 'Weekly Brief Follow-up', level: 1 },
       { type: 'paragraph', text: 'Summary: Integration review completed.' },
@@ -29,11 +31,14 @@ defineAiHumanCase({
     const runner = createHumanTestRunner(
       runtime,
       {
+        trackDocxPreview: ({ previewPath }) => {
+          trackedPreviewPath = previewPath
+        },
         humanReasonOverrides: [
           {
             output: {
               action: 'load_skill',
-              skillId: 'docx-editing',
+              skillIds: ['docx-read', 'docx-write', 'docx-delivery'],
               rationale: '这是上一轮已经产出的中间稿，本轮只做局部 refinement。',
               publicNarrative: '我先打开已有文档，只修改需要收敛的局部内容。'
             }
@@ -92,21 +97,16 @@ defineAiHumanCase({
               action: 'complete_task',
               summary: '已基于上一轮中间稿完成局部 refinement，并生成新的预览。',
               rationale: 'follow-up 任务已经围绕已有版本完成保守化更新。',
-              publicNarrative: '我已经基于已有版本完成 follow-up refinement。',
-              resultData: {
-                document_name: 'followup-brief.docx',
-                artifact_role: 'preview',
-                refinement_kind: 'follow_up_conservative_update'
-              }
+              publicNarrative: '我已经基于已有版本完成 follow-up refinement。'
             }
           }
         ],
-        humanDeliveryOverride: ({ summary, resultData }) =>
+        humanDeliveryOverride: ({ summary }) =>
           [
             '# 子任务交付',
             '',
             `已完成：${summary}`,
-            `Refinement 类型：${typeof resultData?.refinement_kind === 'string' ? resultData.refinement_kind : 'follow_up_conservative_update'}`,
+            'Refinement 类型：follow_up_conservative_update',
             '说明：本轮沿用上一版文档，只对风险表述做了局部保守化处理。'
           ].join('\n')
       },
@@ -116,13 +116,12 @@ defineAiHumanCase({
     const output = await runner.run(
       {
         taskId: runtime.taskId,
-        objective: '继续刚才那版 weekly brief，把风险部分改得更保守一点，不要整份重写。'
+        userInput: '继续刚才那版 weekly brief，把风险部分改得更保守一点，不要整份重写。'
       }
     )
 
     const fileArtifacts = getEventsByType(runtime, 'file_artifact')
-    const previewArtifact = fileArtifacts.find((event) => event.artifactRole === 'preview')
-    const previewPath = previewArtifact?.path || ''
+    const previewPath = trackedPreviewPath
     const previewExists = previewPath ? await fileExists(previewPath) : false
     const inspectionHarness = createDocxToolHarness(runtime)
 
@@ -166,8 +165,7 @@ defineAiHumanCase({
   assert: async (result, runtime) => {
     runtime.assertThat(
       result.output.status === 'completed' &&
-        result.output.resultCode === 'ok' &&
-        result.output.resultData?.refinement_kind === 'follow_up_conservative_update',
+        result.output.deliveryMarkdown.includes('follow_up_conservative_update'),
       {
         name: 'human-multi-turn-refinement-completed',
         message: 'follow-up refinement 应形成完成态交付'
@@ -196,9 +194,8 @@ defineAiHumanCase({
       }
     )
     runtime.assertThat(
-      result.humanSteps.filter((event) => event.action === 'load_skill').length === 1 &&
-        result.fileArtifacts.some((event) => event.artifactRole === 'preview') &&
-        result.output.localSourceStatus === 'used',
+      result.humanSteps.filter((event) => event.action === 'learn_skill').length >= 3 &&
+        result.fileArtifacts.some((event) => event.artifactRole === 'preview'),
       {
         name: 'human-multi-turn-refinement-events',
         message: '事件流应体现这是围绕已有中间稿的单文档 refinement'
