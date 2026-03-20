@@ -1,5 +1,5 @@
-import { JSON_ONLY_PLAN_CONTRACT } from '../../promptContracts'
-import { renderEvidenceLines, renderPromptSections } from '../../promptUtils'
+import { renderEvidenceLines, renderPromptSections } from '../../utils/prompt'
+import { JSON_ONLY_PLAN_CONTRACT } from './constants'
 import type { PlanPromptInput } from './types'
 
 export const buildPlanPrompt = (input: PlanPromptInput) => {

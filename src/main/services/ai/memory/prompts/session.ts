@@ -1,4 +1,4 @@
-import { SESSION_MEMORY_OUTPUT_CONTRACT } from './promptContracts'
+import { SESSION_MEMORY_OUTPUT_CONTRACT } from './constants'
 
 export const buildSessionMemoryPrompt = () => {
   return [

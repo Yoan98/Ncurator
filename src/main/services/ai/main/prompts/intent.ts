@@ -1,5 +1,5 @@
-import { JSON_ONLY_INTENT_CONTRACT } from '../../promptContracts'
-import { renderEvidenceLines, renderPromptSections } from '../../promptUtils'
+import { renderEvidenceLines, renderPromptSections } from '../../utils/prompt'
+import { JSON_ONLY_INTENT_CONTRACT } from './constants'
 import type { IntentPromptInput } from './types'
 
 export const buildIntentPrompt = (input: IntentPromptInput) => {

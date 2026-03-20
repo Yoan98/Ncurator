@@ -15,14 +15,16 @@
 - 当涉及测试相关内容，包括测试目录、raw log、report 规则、证据展示方式或历史总数据 / 最新总数据口径时，请阅读 `doc/test.md`；
 ## 2. 注意事项
 ### 代码相关
-- 禁止使用 `any` 与 `unknown`
 - 代码的实现必须要简洁，可维护性，良好的可读性，合理的注释
 - 禁止使用 `Modal.confirm`、`Modal.info` 等静态方法
-- `main` 与 `renderer` 共享的类型与常量，统一放在 `src/shared/types.ts` 与 `src/shared/constants.ts`；默认不要新增只给单侧使用的 shared 类型或常量
-- 非共享类型与常量按目录归位：`main` 通用放对应 `main` 目录下的 `types.ts` / `constants.ts`，`ai` 通用放 `src/main/services/ai/types.ts` / `constants.ts`，`human` 通用放 `human/types.ts` / `constants.ts`，更细分的领域继续放各自目录下
-- 默认一个目录只保留一个 `types.ts` 和一个 `constants.ts`，不要把类型拆成过多零散文件；只有明显需要时再额外拆分
-- 默认实现文件中不要直接定义类型；类型统一放在对应目录的 `types.ts` 中，常量统一放在对应目录的 `constants.ts` 中
-- `human` 专用的类型、常量、contract 与内部运行态定义，不要再放入 `src/shared/*`
+
+#### 类型，常量，通用逻辑抽象规则
+- 类型禁止使用 `any` 与 `unknown`
+- 类型应抽到types文件中统一管理，常量应抽入constants统一管理，通用逻辑应按职责设计为单一的文件并放入utils中管理
+- types、constants、utils 统一按目录就近归位，比如main目录下的通用type就放到main目录下的types文件中；
+- 只有 main 与 renderer 共享的内容放 src/shared/**，其余按 ai、main、human 或更细分领域各自收口。
+- 默认每个目录只有一个 types.ts、一个 constants.ts，utils/** 按需创建；
+
 
 ### 文档相关
 - 文档入口或文档变更时，需同步更新 `doc/README.md` 与 `AGENTS.md`

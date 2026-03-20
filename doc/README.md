@@ -19,7 +19,7 @@
 - [database.md](./database.md)
   - 说明数据库与存储层设计，包括 LanceDB 的分层和表职责。
 - [project-structure.md](./project-structure.md)
-  - 说明项目目录结构、模块边界、human 子目录归位和文件放置规则。
+  - 说明项目目录结构、模块边界、human 子目录归位，以及 `types / constants / utils` 的统一归位规则。
 - [ui-style.md](./ui-style.md)
   - 说明界面设计风格、布局规则和组件使用规范。
 - [test.md](./test.md)

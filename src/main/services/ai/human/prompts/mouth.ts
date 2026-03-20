@@ -1,4 +1,4 @@
-import { renderPromptSections } from '../../promptUtils'
+import { renderPromptSections } from '../../utils/prompt'
 import type { HumanFinalizePromptInput } from './types'
 
 export const buildHumanFinalizePrompt = (input: HumanFinalizePromptInput) => {
