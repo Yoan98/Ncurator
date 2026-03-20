@@ -130,6 +130,60 @@ type BrainNextAction =
       action: 'mouth'
       status: 'completed' | 'blocked'
     };
+
+interface BrainFact {
+  id: string
+  summary: string
+  evidenceIds: string[]
+}
+
+interface BrainEvidence {
+  id: string
+  toolName: string
+  summary: string
+  sourceType: 'tool_result'
+  rawRef?: string
+}
+
+type BrainMemoryOp =
+  | {
+      op: 'add'
+      field: 'facts'
+      value: BrainFact
+    }
+  | {
+      op: 'edit'
+      field: 'facts'
+      index: number
+      value: BrainFact
+    }
+  | {
+      op: 'add'
+      field: 'evidences'
+      value: BrainEvidence
+    }
+  | {
+      op: 'edit'
+      field: 'evidences'
+      index: number
+      value: BrainEvidence
+    }
+  | {
+      op: 'add'
+      field: 'openQuestions'
+      value: string
+    }
+  | {
+      op: 'edit'
+      field: 'openQuestions'
+      index: number
+      value: string
+    }
+  | {
+      op: 'remove'
+      field: 'facts' | 'evidences' | 'openQuestions'
+      index: number
+    }
 ```
 
 约束：
@@ -137,6 +191,10 @@ type BrainNextAction =
 - `brain` 每轮都会写入新的 `lastBrainDecision`，并向 `brainDecisions` 追加一条新记录。
 - `learning / hand / mouth` 只读取 `lastBrainDecision.nextAction` 作为当前分发依据。
 - `brain` 自身不直接读取 `lastBrainDecision`，prompt 侧只读取最近决策历史的易读摘要字符串。
+- `memoryOps` 中：
+  - `add` / `edit` 必须提供 `value`
+  - `edit` / `remove` 必须提供合法 `index`
+  - `facts[].evidenceIds` 只能引用当前已存在或本轮新增的 evidence id
 
 ### 4.4 `watchHint`
 
@@ -301,38 +359,118 @@ interface MainPlanTask {
   <output_rules>
     你必须只输出 JSON，不要输出任何额外说明。
 
-    顶层字段固定为：
-    - memoryOps：你对内部记忆的增量操作列表。
-    - decision：你本轮的正式判断。
-      - summary：你决定做什么
-      - reason：你为什么这么决定
-      - expectedOutcome：你希望这一步带来什么结果
-    - nextAction：下一步动作对象。
-
-    nextAction 有三种结构：
-
-    1. 学习技能时：
+    输出结构固定为：
     {
-      "action": "learning",
-      "wantLearnSkillIds": ["skill-a", "skill-b"]
+      "memoryOps": [
+        | {
+            "op": "add",
+            "field": "facts",
+            "value": {
+              "id": "fact-id",
+              "summary": "string",
+              "evidenceIds": ["evidence-id"]
+            }
+          }
+        | {
+            "op": "edit",
+            "field": "facts",
+            "index": 0,
+            "value": {
+              "id": "fact-id",
+              "summary": "string",
+              "evidenceIds": ["evidence-id"]
+            }
+          }
+        | {
+            "op": "add",
+            "field": "evidences",
+            "value": {
+              "id": "evidence-id",
+              "toolName": "tool_name",
+              "summary": "string",
+              "sourceType": "tool_result",
+              "rawRef": "optional-string"
+            }
+          }
+        | {
+            "op": "edit",
+            "field": "evidences",
+            "index": 0,
+            "value": {
+              "id": "evidence-id",
+              "toolName": "tool_name",
+              "summary": "string",
+              "sourceType": "tool_result",
+              "rawRef": "optional-string"
+            }
+          }
+        | {
+            "op": "add",
+            "field": "openQuestions",
+            "value": "string"
+          }
+        | {
+            "op": "edit",
+            "field": "openQuestions",
+            "index": 0,
+            "value": "string"
+          }
+        | {
+            "op": "remove",
+            "field": "facts" | "evidences" | "openQuestions",
+            "index": 0
+          }
+      ],
+      "decision": {
+        "summary": "string",
+        "reason": "string",
+        "expectedOutcome": "string"
+      },
+      "nextAction":
+        | {
+            "action": "learning",
+            "wantLearnSkillIds": ["skill-id"]
+          }
+        | {
+            "action": "hand",
+            "parallelCallToolParam": [
+              {
+                "toolName": "tool_name",
+                "args": {}
+              }
+            ]
+          }
+        | {
+            "action": "mouth",
+            "status": "completed" | "blocked"
+          }
     }
 
-    2. 调用工具时：
-    {
-      "action": "hand",
-      "parallelCallToolParam": [
-        {
-          "toolName": "tool_name",
-          "args": {}
-        }
-      ]
-    }
-
-    3. 结束任务时：
-    {
-      "action": "mouth",
-      "status": "completed" | "blocked"
-    }
+    字段解释：
+    - memoryOps：数组。表示本轮对内部记忆的增量操作；没有要修改的内容时输出空数组。
+    - memoryOps[].op：字符串枚举。只能是 add、edit、remove。
+    - memoryOps[].field：字符串枚举。只能是 facts、evidences、openQuestions。
+    - memoryOps[].index：数字。仅在 edit、remove 时出现，表示要修改或删除的目标索引。
+    - memoryOps[].value：仅在 add、edit 时出现。
+    - memoryOps[].value（facts）：对象，结构为 { id, summary, evidenceIds }。
+    - memoryOps[].value.id：字符串。该 fact 或 evidence 的稳定标识。
+    - memoryOps[].value.summary：字符串。该 fact 或 evidence 的简洁摘要。
+    - memoryOps[].value.evidenceIds：字符串数组。仅 facts 使用，表示支撑该 fact 的 evidence id 列表。
+    - memoryOps[].value.toolName：字符串。仅 evidences 使用，表示 evidence 对应的工具名。
+    - memoryOps[].value.sourceType：字符串常量。仅 evidences 使用，当前固定为 tool_result。
+    - memoryOps[].value.rawRef：可选字符串。仅 evidences 使用，表示原始结果引用位置。
+    - memoryOps[].value（openQuestions）：字符串。表示仍未解决的问题描述。
+    - decision：对象。表示本轮正式判断。
+    - decision.summary：字符串。简洁说明这轮决定做什么。
+    - decision.reason：字符串。说明为什么做这个决定。
+    - decision.expectedOutcome：字符串。说明期望这一步带来什么结果。
+    - nextAction：对象。表示下一跳动作，且只能输出 learning、hand、mouth 三种结构之一。
+    - nextAction.action：字符串枚举。只能是 learning、hand、mouth。
+    - nextAction.wantLearnSkillIds：字符串数组。仅在 action=learning 时出现，表示本轮要学习的 skill id 列表。
+    - nextAction.parallelCallToolParam：数组。仅在 action=hand 时出现，表示本轮要执行的工具调用列表。
+    - nextAction.parallelCallToolParam[].toolName：字符串。要调用的工具名。
+    - nextAction.parallelCallToolParam[].args：对象。对应工具的调用参数。
+    - nextAction.status：字符串枚举。仅在 action=mouth 时出现，只能是 completed 或 blocked。
   </output_rules>
 
   <output_principles>
@@ -344,6 +482,47 @@ interface MainPlanTask {
   </output_principles>
 
   <output_examples>
+    <example_memory_ops>
+      {
+        "memoryOps": [
+          {
+            "op": "add",
+            "field": "evidences",
+            "value": {
+              "id": "evidence-kb-risk-1",
+              "toolName": "kb_hybrid_search_chunks",
+              "summary": "知识库结果显示项目风险控制要求包含上线前复核。",
+              "sourceType": "tool_result",
+              "rawRef": "tool_result#1"
+            }
+          },
+          {
+            "op": "add",
+            "field": "facts",
+            "value": {
+              "id": "fact-risk-review-1",
+              "summary": "项目上线前需要执行复核。",
+              "evidenceIds": ["evidence-kb-risk-1"]
+            }
+          },
+          {
+            "op": "remove",
+            "field": "openQuestions",
+            "index": 0
+          }
+        ],
+        "decision": {
+          "summary": "已经得到关键依据，准备结束任务",
+          "reason": "当前事实已经有足够证据支撑，不需要继续检索。",
+          "expectedOutcome": "进入最终整理并输出结果。"
+        },
+        "nextAction": {
+          "action": "mouth",
+          "status": "completed"
+        }
+      }
+    </example_memory_ops>
+
     <example_learning>
       {
         "memoryOps": [],
@@ -416,7 +595,12 @@ interface MainPlanTask {
   </recent_tool_results>
 
   <recent_decision_history>
-    {最近几轮正式决策的摘要文本，包含 decision、nextAction、createdAt；如果没有，则写 none}
+    {推荐按下面模板逐条拼接：
+    - 第{相对轮次}轮（createdAt={时间戳或相对时间说明}）：决定“{decision.summary}”；原因：{decision.reason}；预期结果：{decision.expectedOutcome}；nextAction.action={nextAction.action}；nextAction数据：{直接写 nextAction 中除 action 之外的字段数据；如果是 learning 则写 wantLearnSkillIds，如果是 hand 则直接写 parallelCallToolParam 原始数组，如果是 mouth 则写 status}
+    示例：
+    - 第2轮（createdAt=1710926400000）：决定“先学习 docx-read”；原因：当前需要先明确 docx 的读取方式；预期结果：获得足够的技能说明后再决定是否调用工具；nextAction.action=learning；nextAction数据：wantLearnSkillIds=[docx-read]
+    - 第3轮（createdAt=1710926460000）：决定“调用 KB 检索获取证据”；原因：当前缺少可引用的直接依据；预期结果：拿到证据后判断是否收敛；nextAction.action=hand；nextAction数据：parallelCallToolParam=[{"toolName":"kb_hybrid_search_chunks","args":{"query":"项目风险控制要求"}}]
+    如果没有，则写 none}
   </recent_decision_history>
 
   <converge_hint>
@@ -439,13 +623,10 @@ interface MainPlanTask {
 - 输入部分聚焦：
   - 用户的要求
   - 最终状态
-  - 最后一次正式决策
+  - 最后一次正式决策的自然语言说明
   - 已确认事实
   - 关键证据
-- 输出规则中只暴露：
-  - `status`
-  - `summary`
-  - `deliveryMarkdown`
+- 输出规则中直接给 JSON 结构和字段解释
 
 草稿文本：
 
@@ -472,15 +653,17 @@ interface MainPlanTask {
   <output_rules>
     你必须只输出 JSON，不要输出任何额外说明。
 
-    顶层字段固定为：
-    - status：最终状态，只能是 completed 或 blocked
-    - summary：一句简洁的结果摘要，面向用户表达
-    - deliveryMarkdown：完整 markdown 正文
+    输出结构固定为：
+    {
+      "status": "completed" | "blocked",
+      "summary": "string",
+      "deliveryMarkdown": "string"
+    }
 
-    字段含义：
-    - status 表示任务最终是已完成还是被阻塞
-    - summary 表示用户一眼能看懂的结果概述
-    - deliveryMarkdown 表示最终正式交付内容
+    字段解释：
+    - status：字符串枚举。表示任务最终状态，只能是 completed 或 blocked。
+    - summary：字符串。面向用户的一句简洁结果摘要。
+    - deliveryMarkdown：字符串。最终正式交付内容，必须是完整 markdown 正文。
   </output_rules>
 
   <output_principles>
@@ -509,7 +692,11 @@ interface MainPlanTask {
   </final_status>
 
   <final_decision>
-    {最后一次正式决策里对本轮结束原因的说明}
+    {推荐按下面模板拼接：
+    - 最终决定：“{decision.summary}”；原因：{decision.reason}；预期结果：{decision.expectedOutcome}；结束状态{nextAction.status}
+    示例：
+    - 最终决定：“当前已经可以结束任务”；原因：现有证据已足够支撑最终结论，没有必要继续扩展动作；预期结果：由表达节点整理出最终结果；结束状态completed
+    如果没有，则写 none}
   </final_decision>
 
   <facts>
