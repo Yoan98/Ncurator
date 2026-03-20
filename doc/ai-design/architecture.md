@@ -91,9 +91,11 @@ flowchart TD
 
 文档与实现不一致时，以以下代码和后续重构结果为准：
 
-1. `src/main/services/ai/graph/mainGraph.ts`
-2. `src/main/services/ai/graph/humanGraph.ts`
-3. `src/main/services/ai/node/main/*`
-4. `src/main/services/ai/node/human/*`
-5. `src/main/services/ai/state/stateSchemas.ts`
-6. `src/shared/types.ts`
+1. `src/main/services/ai/main/graph/mainGraph.ts`
+2. `src/main/services/ai/human/graph/humanGraph.ts`
+3. `src/main/services/ai/main/node/*`
+4. `src/main/services/ai/human/node/*`
+5. `src/main/services/ai/main/state/schema.ts`
+6. `src/main/services/ai/human/state/schema.ts`
+7. `src/main/services/ai/human/types.ts`
+8. `src/shared/types.ts`

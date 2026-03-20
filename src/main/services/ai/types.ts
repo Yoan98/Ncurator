@@ -2,8 +2,8 @@ import type { ChatStore } from '../storage/domains/ChatStore'
 import type { DocumentsStore } from '../storage/domains/DocumentsStore'
 import type { LlmConfigStore } from '../storage/domains/LlmConfigStore'
 import type { EmbeddingService } from '../vector/EmbeddingService'
-import type { DocxChangedBlock, DocxOp } from './tools/docx/types'
-import type { DraftReviewService } from './review/DraftReviewService'
+import type { DocxChangedBlock, DocxOp } from './human/tools/docx/types'
+import type { DraftReviewService } from './human/tools/docx/review/DraftReviewService'
 import type {
   AiRuntimeSettings,
   AiPlanTask,
@@ -11,17 +11,15 @@ import type {
   AiRunEventStage,
   AiRunStatus,
   AiTaskStatus,
-  HumanTaskInput,
-  HumanStepAction,
-  HumanTaskOutput,
   JsonObject,
   LocalSourceUsageStatus,
   LLMConfig,
   SourceScopeSelection
 } from '../../../shared/types'
+import type { HumanTaskInput, HumanTaskOutput } from './human/types'
 
 export type { AiTaskStatus, AiRunStatus, AiPlanTask }
-export type { HumanStepAction, HumanTaskInput, HumanTaskOutput }
+export type { HumanTaskInput, HumanTaskOutput }
 
 export type AiMainStage =
   | 'main_intent'
@@ -36,6 +34,8 @@ export type HumanRunDispatchOptions = {
   streamAnswer?: boolean
   internalDelivery?: boolean
 }
+
+export type CancelledError = Error & { code: 'CANCELLED' }
 
 export type HumanTaskRunner = (
   taskInput: HumanTaskInput,

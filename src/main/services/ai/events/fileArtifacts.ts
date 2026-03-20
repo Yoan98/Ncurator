@@ -1,23 +1,6 @@
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
-import type { AiFileArtifactCapability, AiFileArtifactOperation } from '../../../../shared/types'
-import type { AiRunContext } from '../types'
-
-type EmitFileArtifactEventInput = {
-  ctx: AiRunContext
-  runId: string
-  taskId: string
-  capability: AiFileArtifactCapability
-  artifactPath: string
-  operation: AiFileArtifactOperation
-  artifactRole?: 'preview' | 'draft' | 'committed'
-  reviewId?: string
-  draftDocumentId?: string
-  draftSnapshotId?: string
-  summary: string
-  stepId?: string
-  onNonFatalError?: (reason: string) => void
-}
+import type { EmitFileArtifactEventInput } from './types'
 
 export const emitFileArtifactEvent = (input: EmitFileArtifactEventInput): boolean => {
   try {

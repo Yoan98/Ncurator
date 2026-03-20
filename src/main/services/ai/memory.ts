@@ -3,7 +3,7 @@ import type { ChatSessionMemory, JsonObject, JsonValue } from '../../types/store
 import type { ChatStore } from '../storage/domains/ChatStore'
 import type { LlmConfigStore } from '../storage/domains/LlmConfigStore'
 import { createChatModel } from '../llm/chatModel'
-import { buildSessionMemoryPrompt } from './prompts/memory/sessionMemory'
+import { buildSessionMemoryPrompt } from './memoryPrompt'
 
 const parseJsonObject = <T extends JsonObject>(text: string): T => {
   const trimmed = String(text || '').trim()

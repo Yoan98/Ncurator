@@ -35,16 +35,18 @@ tests/                   # 自动化测试
 
 ### AI 目录
 
-- Graph 编排放在 `src/main/services/ai/graph/**`。
-- Main 节点放在 `src/main/services/ai/node/main/**`。
-- Human 节点放在 `src/main/services/ai/node/human/**`，并按 `shared / registry / brain / learning / hand / mouth` 收口目录职责。
-- `shared/**` 只放 Human 跨阶段共享逻辑；`registry/**` 只放静态目录。
+- AI 运行入口与中性基础设施放在 `src/main/services/ai/*` 根目录。
+- Main graph、node、prompt、state 放在 `src/main/services/ai/main/**`。
+- Human graph、node、prompt、state、tools 放在 `src/main/services/ai/human/**`。
+- `shared/**` 只放 Human 跨阶段共享逻辑。
 - `brain/**` 放推理、contract、prompt 组装和 memory reducer。
 - `learning/**` 放 skill 详情加载与外部记忆更新。
 - `hand/**` 放工具调用执行与结果适配。
 - `mouth/**` 放最终交付生成与结果收口。
-- Tool 实现按能力分组放在 `src/main/services/ai/tools/<capability>/**`。
-- 运行态 state schema 统一放在 `src/main/services/ai/state/stateSchemas.ts`。
+- Tool 实现按能力分组放在 `src/main/services/ai/human/tools/<capability>/**`。
+- Docx 审阅相关服务放在 `src/main/services/ai/human/tools/docx/review/**`。
+- Main 与 Human 的运行态 state schema 分别放在各自目录下的 `state/schema.ts`。
+- 类型与常量默认按目录归位到同级 `types.ts` 与 `constants.ts`；只有 Main 与 Renderer 共享的类型、常量才放进 `src/shared/types.ts` 与 `src/shared/constants.ts`。
 
 ## 4. `src/renderer` 放置规则
 
@@ -61,6 +63,7 @@ tests/                   # 自动化测试
 - 跨进程共享实体
 
 凡是 Main 与 Renderer 都会消费的数据结构，必须从 `src/shared/**` 导出，不能在两侧各自重复维护。
+- 只给 `main`、`ai`、`human` 单侧使用的类型与常量，不要放进 `src/shared/**`。
 
 ## 6. 测试目录规则
 

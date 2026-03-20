@@ -1,10 +1,8 @@
 import { HumanMessage, SystemMessage } from '@langchain/core/messages'
-import type { AiRunContext, AiRunDeps, AiRunStartPayload } from './types'
+import type { AiRunContext, AiRunDeps, AiRunStartPayload, CancelledError } from './types'
 import type { SourceScopeSelection } from '../../../shared/types'
 import { createChatModel } from '../llm/chatModel'
 import type { ChatMessage, JsonObject } from '../../types/store'
-
-type CancelledError = Error & { code: 'CANCELLED' }
 
 const parseJsonObject = <T extends JsonObject>(text: string): T => {
   const trimmed = String(text || '').trim()

@@ -5,11 +5,11 @@ import { StorageService } from '../services/storage/StorageService'
 import { ModelService } from '../services/model/ModelService'
 import { AiRunService } from '../services/ai/AiRunService'
 import { updateSessionMemoryAfterRun } from '../services/ai/memory'
-import { DraftReviewService } from '../services/ai/review/DraftReviewService'
+import { DraftReviewService } from '../services/ai/human/tools/docx/review/DraftReviewService'
 import {
   getDocxWorkerClient,
   releaseDocxRunSession
-} from '../services/ai/tools/docx/worker/docxWorkerClient'
+} from '../services/ai/human/tools/docx/worker/docxWorkerClient'
 import {
   buildWebScopeSelection,
   buildWorkspaceScopeSelections,

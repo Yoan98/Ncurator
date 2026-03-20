@@ -1,4 +1,4 @@
-import { buildAiRunGraph } from './graph'
+import { buildMainGraph } from './main/graph/mainGraph'
 import { createAiRunContext } from './runtime'
 import type { AiRunDeps, AiRunStartPayload, AiRunState } from './types'
 
@@ -16,7 +16,7 @@ export class AiRunService {
 
   public async run(payload: AiRunStartPayload, deps: AiRunDeps): Promise<AiRunState> {
     const ctx = createAiRunContext(payload, deps)
-    const graph = buildAiRunGraph(ctx)
+    const graph = buildMainGraph({ ctx })
     try {
       const res = await graph.invoke({
         runId: payload.runId,

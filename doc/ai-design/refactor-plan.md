@@ -31,8 +31,8 @@
 
 ### 第二阶段：状态与 graph 改造
 
-- 改造 `stateSchemas.ts` 的 human state 定义。
-- 改造 `humanGraph.ts` 的节点路由和状态推进。
+- 改造 `human/state/schema.ts` 的 human state 定义。
+- 改造 `human/graph/humanGraph.ts` 的节点路由和状态推进。
 - 移除旧的 `turn` 和旧 contract 依赖。
 - 将旧 watchdog 侧车替换为 human 内部基于 `hand` 次数上限的 `watchHint` 保险机制。
 
