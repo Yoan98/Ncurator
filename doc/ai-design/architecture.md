@@ -51,7 +51,7 @@ flowchart TD
 ## 4. `human` 新架构
 
 human设计核心
-使用ReAct范式，让human能独立自主的完成任何任务，根据所配置的能力
+使用ReAct范式，让human能独立自主地完成任务，并根据当前所配置的 skill 推进
 
 `human` 子工作流为四个节点：
 

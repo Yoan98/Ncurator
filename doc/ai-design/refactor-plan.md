@@ -24,7 +24,7 @@
 明确不做的事：
 
 - 不兼容旧 `HumanReasoningOutput`
-- 不保留旧 `activate_capability` 中间语义
+- 不保留旧 skill 激活中间语义
 - 不保留旧 `progress / memory / turn / outcome` 结构
 - 不保留旧 `watchdog` sidecar
 - 不保留旧 prompt 中围绕 `memoryPatch + actionBatch/outcome` 的输出契约
@@ -337,7 +337,7 @@ interface MainPlanTask {
 
   <output_principles>
     - 当你已经有足够依据交付结果时，优先输出 mouth。
-    - 当你缺的主要是“如何使用某个能力”的信息时，输出 learning。
+    - 当你缺的主要是“如何使用某个 skill”的信息时，输出 learning。
     - 当你已经明确知道要执行哪些工具动作时，输出 hand。
     - 不要编造工具结果、技能内容、事实或证据。
     - 不要输出 markdown。
@@ -349,12 +349,12 @@ interface MainPlanTask {
         "memoryOps": [],
         "decision": {
           "summary": "先补充当前所需的技能说明",
-          "reason": "我已经知道任务要继续推进，但还缺少相关能力的使用细节，继续猜测风险较高。",
+          "reason": "我已经知道任务要继续推进，但还缺少相关 skill 的使用细节，继续猜测风险较高。",
           "expectedOutcome": "获得足够的技能说明后，我可以决定是否调用工具。"
         },
         "nextAction": {
           "action": "learning",
-          "wantLearnSkillIds": ["docx-editing"]
+          "wantLearnSkillIds": ["docx-read"]
         }
       }
     </example_learning>

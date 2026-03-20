@@ -47,7 +47,7 @@ tests/                   # 自动化测试
 - `node/mouthNode/**` 放最终交付生成与结果收口。
 - `node/utils/**` 只放少量跨 node 共用、且无单一归属的中性逻辑。
 - `prompts/**` 放 `human` 的 `brain` / `mouth` 提示词，以及少量共享 prompt 类型或片段。
-- Tool 实现按能力分组放在 `src/main/services/ai/human/tools/<capability>/**`。
+- Tool 实现按 skill 分组放在 `src/main/services/ai/human/tools/<skill>/**`。
 - Docx 审阅相关服务放在 `src/main/services/ai/human/tools/docx/review/**`。
 - Main 与 Human 的运行态 state schema 分别放在各自目录下的 `state/schema.ts`。
 
