@@ -8,7 +8,7 @@
 - `buildBrainPromptContext` 需要按需组织输入：保持“易理解信息组织”为主，但对记忆快照、最近工具结果、动作参数等强结构化输入，允许保留精简后的原始对象或 JSON 视图，需要严格参照refactor-plan的提示词。
 - `mouth` 不需要读取最近决策历史；`brain` 需要读取最近决策历史摘要，这个边界必须在实现和文档中保持一致。
 - `tools` 目录需要进一步从“按 skill 建目录”收敛为“按实现域归位”，skill 只保留在 `skillCatalog` / `skillRegistry` / `skillLoader` 的映射与装配层。
-- 运行时结构化输出能力需要补上，逐步从仅依赖 `chatJson + JSON.parse` 的方式，收敛到 schema 驱动的 structured output 封装。
+- 运行时结构化输出能力需要直接重构为 schema 驱动的 structured output 封装，不再兼容旧 `chatJson + JSON.parse` 路径；LangChain 侧统一使用 `withStructuredOutput`，并优先采用可稳定工作的 `jsonSchema` ，可以封装一下该方法，使得更好用方案。
 - `memoryReducer` 需要修复 `memoryOps` 的顺序敏感问题：同一轮 `memoryOps` 中，`facts[].evidenceIds` 对“本轮新增 evidence”的引用不应因为数组顺序不同而被误判为非法。
 
 ## 1. 目标
