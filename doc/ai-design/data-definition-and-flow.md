@@ -135,7 +135,8 @@ interface HumanState {
   // 最近一次 hand 并行工具调用后的结果数组。
   lastParallelCallToolResults?: ToolCallResult[]
   // 最近一次 brain 输出的完整决策对象。
-  // brain 在加载时只需要读取其中的 decision。
+  // brain 在下一轮加载时不会直接读取整个对象，
+  // 而是只读取其中的 decision + nextAction 作为回看信息。
   lastBrainDecision?: LastBrainDecision
   // 调用保险提示；当 hand 次数超过临时上限后写入，提醒 brain 优先收敛。
   watchHint?: string
@@ -199,13 +200,37 @@ interface LastBrainDecision {
   memoryOps: BrainMemoryOp[]
   // 本轮 brain 的正式决策内容。
   decision: BrainDecision
-  // 下一跳路由，只能是 learning / hand / mouth 之一。
-  nextAction: 'learning' | 'hand' | 'mouth'
-  // 当 nextAction=hand 时的并行工具调用参数数组。
-  parallelCallToolParam?: ToolCallParam[]
-  // 当 nextAction=learning 时需要加载的 skill 列表。
-  learnSkillIds: string[]
+  // 下一跳动作对象。
+  // action 决定下一跳，附带该动作所需的数据。
+  nextAction: BrainNextAction
 }
+
+interface PreviousBrainDecisionContext {
+  // 上一轮做出的正式判断。
+  decision: BrainDecision
+  // 上一轮决定进入的下一步动作，以及该动作的关键信息。
+  nextAction: BrainNextAction
+}
+
+type BrainNextAction =
+  | {
+      // 进入 learning 节点。
+      action: 'learning'
+      // 本轮希望补充学习的 skill 列表。
+      wantLearnSkillIds: string[]
+    }
+  | {
+      // 进入 hand 节点。
+      action: 'hand'
+      // 本轮需要执行的并行工具调用参数数组。
+      parallelCallToolParam: ToolCallParam[]
+    }
+  | {
+      // 进入 mouth 节点。
+      action: 'mouth'
+      // mouth 节点最终对外输出的状态。
+      status: 'completed' | 'blocked'
+    };
 
 type BrainMemoryOp =
   | {
@@ -373,7 +398,7 @@ flowchart LR
     T -->|读取 taskId + userInput| B
     BM -->|读取 inside + outside| B
     LTR -->|读取最近一轮并行工具结果数组| B
-    LBD -->|读取 lastBrainDecision.decision| B
+    LBD -->|读取上一轮 decision + nextAction| B
     WH -->|存在时读取收敛提示| B
     B -->|通过 memoryOps 回写 inside| BM
     B -->|写入新的 lastBrainDecision 对象| LBD
@@ -384,13 +409,13 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    LBD[("lastBrainDecision.learnSkillIds")]
+    LBD[("lastBrainDecision.nextAction.wantLearnSkillIds")]
     L["learning"]
     BM[("brainMemory.outside.learnedSkillIds / learnedSkills / skillCatalog")]
     TR[("trace.steps")]
     B["brain"]
 
-    LBD -->|读取 learnSkillIds| L
+    LBD -->|读取 wantLearnSkillIds| L
     L -->|写回 learnedSkillIds + learnedSkills| BM
     L -->|必要时补充 skillCatalog 摘要| BM
     L -->|追加 learning 执行轨迹| TR
@@ -401,7 +426,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    LBD[("lastBrainDecision.parallelCallToolParam")]
+    LBD[("lastBrainDecision.nextAction.parallelCallToolParam")]
     H["hand"]
     LTR[("lastParallelCallToolResults")]
     WH[("watchHint")]
@@ -430,7 +455,7 @@ flowchart LR
     T -->|读取 taskId + userInput| M
     BM -->|读取 brainMemory| M
     LTR -->|读取最近一轮并行工具结果数组| M
-    LBD -->|读取 lastBrainDecision.decision| M
+    LBD -->|读取 decision + nextAction.status| M
     M -->|写入 status + summary + payload + deliveryMarkdown| R
     M -->|追加 mouth 执行轨迹| TR
 ```

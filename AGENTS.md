@@ -2,11 +2,11 @@
 
 ## 1. 文档引用
 
-- 默认入口：`doc/README.md`
 - 当涉及技术栈、整体架构、进程边界、本地优先约束或混合检索链路时，请阅读 `doc/architecture.md`
 - 当涉及 AI 总体架构、Main/Human 分工、复杂度路由、`human` 新节点设计或 human 目录分层时，请阅读 `doc/ai-design/architecture.md`
-- 当涉及 `main`/`human` 状态字段、`brainMemory`、`curBrainDecision`、数据契约、Main/Human 流转关系或流转图时，请阅读 `doc/ai-design/data-definition-and-flow.md`
+- 当涉及 `main`/`human` 状态字段、数据契约、Main/Human 流转关系或流转图时，请阅读 `doc/ai-design/data-definition-and-flow.md`
 - 当涉及 AI 新架构重构范围、阶段划分、目录重构方向或后续补充计划时，请阅读 `doc/ai-design/refactor-plan.md`
+- 当涉及 AI 提示词设计准则、prompt 结构、标签组织、字段示例或提示词编排原则时，请阅读 `doc/ai-design/prompt-design.md`
 - 当涉及 AI workbench 测试方案、阶段划分、阶段目标、各阶段 `basic / boundary / scenario / live` 用例规划、watchdog/并行边界、模型使用或 backend / e2e 测试边界时，请先阅读 `doc/ai-workbench-test/plan.md`；
 - 当涉及 AI workbench 当前阶段推进、完成度、证据、覆盖缺口、structured ReAct 测试契约迁移或下一阶段准入时，请同步阅读对应阶段的 todo 文档；当前至少包括 `doc/ai-workbench-test/todo-stage-1.md` 与 `doc/ai-workbench-test/todo-stage-2.md`
 - 当涉及数据库、LanceDB、表职责、存储分层或检索存储实现时，请阅读 `doc/database.md`
@@ -27,5 +27,5 @@
 
 
 ### 文档相关
-- 文档入口或文档变更时，需同步更新 `doc/README.md` 与 `AGENTS.md`
+- 文档入口或文档变更时，需同步更新`AGENTS.md`
 - 编写文档引用相关时，只需要描述什么时候需要读该文档就足够，不要添加很多细节

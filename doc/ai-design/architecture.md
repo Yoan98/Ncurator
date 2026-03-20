@@ -4,7 +4,7 @@
 
 - `main` 只做编排，不直接承担复杂求解和最终业务执行。
 - `human` 是 AI 执行核心，负责独立理解任务、使用技能、调用工具和完成交付。
-- 简单诉求直接走 `direct human`。
+- 普通正常直接走 `direct human`。
 - 复杂诉求走 `context + plan + human + synthesis`。
 - `human` 内部只保留一个真正的思考节点，其他节点都应保持执行型、确定性和可追踪。
 
@@ -50,29 +50,36 @@ flowchart TD
 
 ## 4. `human` 新架构
 
-新的 `human` 子工作流收敛为四个节点：
+human设计核心
+使用ReAct范式，让human能独立自主的完成任何任务，根据所配置的能力
+
+`human` 子工作流为四个节点：
 
 - `brain`
   - 唯一推理节点。
-  - 常规输入只包括 `task / brainMemory / lastParallelCallToolResults / lastBrainDecision.decision`。
+  - 常规输入只包括 `task / brainMemory / lastParallelCallToolResults / 上一轮决策回看信息`。
+  - 上一轮决策回看信息只保留 `decision + nextAction`，用于让 `brain` 知道自己上一次做了什么判断、准备进入什么动作，以及该动作携带的关键信息。
   - 当 `hand` 调用次数超过临时上限后，额外接收 `watchHint`，用于提醒本轮优先收敛。
-  - 输出新的 `lastBrainDecision` 对象，并只通过 `memoryOps` 更新 `brainMemory.inside`。
+  - 输出新的 `lastBrainDecision` 对象，其中 `nextAction` 为对象结构，并只通过 `memoryOps` 更新 `brainMemory.inside`。
 - `learning`
   - 只负责加载 skill 详细信息。
+  - 读取 `lastBrainDecision.nextAction.wantLearnSkillIds`。
   - 更新 `brainMemory.outside.skillCatalog / learnedSkillIds / learnedSkills`。
 - `hand`
   - 只负责执行工具调用，可以承接一个或多个并行工具调用参数。
+  - 读取 `lastBrainDecision.nextAction.parallelCallToolParam`。
   - 写入 `lastParallelCallToolResults`。
   - 由 `human` 内部统计 `hand` 触发次数；超过临时上限后写入 `watchHint`，下一轮交给 `brain` 判断是否收敛。
 - `mouth`
+  - 读取 `lastBrainDecision.nextAction.status`。
   - 只负责生成最终 `deliveryMarkdown` 和结果摘要。
 
 ```mermaid
 flowchart TD
     A["START"] --> B["brain"]
-    B -->|nextAction=learning| C["learning"]
-    B -->|nextAction=hand| D["hand"]
-    B -->|nextAction=mouth| E["mouth"]
+    B -->|nextAction.action=learning| C["learning"]
+    B -->|nextAction.action=hand| D["hand"]
+    B -->|nextAction.action=mouth| E["mouth"]
     C --> B
     D --> B
     E --> F["END"]

@@ -39,12 +39,14 @@ tests/                   # 自动化测试
 - 会话记忆更新逻辑与记忆 prompt 放在 `src/main/services/ai/memory/**`。
 - AI 级别通用 helper 放在 `src/main/services/ai/utils/**`。
 - Main graph、node、prompt、state 放在 `src/main/services/ai/main/**`。
-- Human graph、node、prompt、state、tools 放在 `src/main/services/ai/human/**`。
+- Human graph、node、prompts、state、tools 放在 `src/main/services/ai/human/**`。
 - `shared/**` 只放 Human 跨阶段共享逻辑。
-- `brain/**` 放推理、contract、prompt 组装和 memory reducer。
-- `learning/**` 放 skill 详情加载与外部记忆更新。
-- `hand/**` 放工具调用执行与结果适配。
-- `mouth/**` 放最终交付生成与结果收口。
+- `node/brainNode/**` 放推理、决策 contract、prompt context 和 memory reducer。
+- `node/learningNode/**` 放 skill 详情加载与外部记忆更新。
+- `node/handNode/**` 放工具调用执行、批处理保护与 `watchHint` 生成。
+- `node/mouthNode/**` 放最终交付生成与结果收口。
+- `node/utils/**` 只放少量跨 node 共用、且无单一归属的中性逻辑。
+- `prompts/**` 放 `human` 的 `brain` / `mouth` 提示词，以及少量共享 prompt 类型或片段。
 - Tool 实现按能力分组放在 `src/main/services/ai/human/tools/<capability>/**`。
 - Docx 审阅相关服务放在 `src/main/services/ai/human/tools/docx/review/**`。
 - Main 与 Human 的运行态 state schema 分别放在各自目录下的 `state/schema.ts`。
