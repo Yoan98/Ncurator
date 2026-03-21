@@ -76,7 +76,7 @@ human设计核心
 - `mouth`
   - 读取 `lastBrainDecision.nextAction.status`、最后一次正式决策、已确认事实/证据/未决项。
   - 不读取最近决策历史，也不重新判断最终状态。
-  - 默认不额外引入 hint / digest 文本层；如后续确实需要交付物引用，再单独补充结构化 `artifacts`。
+  - 如后续确实需要交付物引用，再单独补充结构化 `artifacts`。
   - 按 `deliveryMode` 整理 `deliveryMarkdown`，典型模式包括 `user_answer`、`task_handoff`、`context_note`。
 
 ```mermaid

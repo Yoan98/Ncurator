@@ -17,15 +17,18 @@
 - 运行时 structured output 已明确采用 schema 驱动封装，统一走 `withStructuredOutput`，并以 `jsonSchema -> functionCalling -> jsonMode` 顺序自动回退。
 - `memoryReducer` 关于“fact 可以引用本轮新增 evidence，且不依赖 `memoryOps` 顺序”的目标约束已定稿。
 - `mouth` 不读取最近决策历史、`brain` 读取最近决策历史摘要的边界已定稿。
+- `HumanRunDispatchOptions.deliveryMode` 已落地，`main_direct_human_exec / main_synthesis_human / main_plan_exec / main_context_human` 已分别对齐到 `user_answer / user_answer / task_handoff / context_note`。
+- `mouth` 的输出契约已经收口到 `summary + deliveryMarkdown?`，最终 `result.status` 现由 runner 按 `lastBrainDecision.nextAction.status` 统一回写。
+- `task_handoff` 与 `context_note` 已具备固定章节协议，并在模型缺失 `deliveryMarkdown` 时由运行时 fallback 模板补齐最小可用交付。
+- `contextEvidence` 已改为只抽取 `context_note` 中 `## 可复用证据` 的 bullet / numbered line；缺失时 fallback 到 `summary`，不再直接灌整段 `deliveryMarkdown`。
+- `human state schema`、`decisionContract`、`mouth` output contract 已切到共享 schema，`brainDecisions / lastBrainDecision` 不再使用宽松 `record` 容器。
+- 本轮针对 `mouth` 状态归属、`deliveryMode` 传递、`contextEvidence` 抽取、schema 对齐、`main-plan-exec-blocked` 路径的目标测试已补齐并通过。
 
 ### 0.3 当前仍待收口的点
 
 - `brain` prompt 与 `buildBrainPromptContext` 仍需继续向第 6.2 节的目标模板收紧，不应停留在骨架版。
-- `mouth` 的输出契约仍需彻底收口到 `summary + deliveryMarkdown?`，并由 runner 统一回写最终 `status`。
-- `deliveryMarkdown` 仍需从自由 markdown 收敛为稳定交付文档，并按 `user_answer / task_handoff / context_note` 三种模式组织。
-- `contextEvidence` 仍需改成“只抽取 `context_note` 的可复用证据”，不再直接灌整段 `deliveryMarkdown`。
-- `human state schema` 仍需与 `decisionContract`、`mouth` output contract 共用精确 schema。
-- `mouth` 的 prompt 输入仍需收紧到 `finalDecision + facts + evidences + openQuestions` 的最小集合；如果后续确实需要交付物引用，再单独补 `artifacts`，而不是引入额外 hint/digest 文本层。
+- 如果后续确实需要在交付中稳定引用 preview、文件路径、review id 等产物，仍需单独设计结构化 `artifacts`，而不是回退到自由提示文本层。
+- 当前测试已覆盖核心契约与关键路径，但后续仍需继续扩大 live / scenario 覆盖，特别是模型真实产出 `task_handoff / context_note` 时的稳定性验证。
 
 ### 0.4 下一步推进入口
 
@@ -837,41 +840,25 @@ interface MainPlanTask {
 
 ## 7. 下一步推进（未完成 / 待收口）
 
-### 7.1 第一阶段：收紧 `mouth` 契约
+### 7.1 第一阶段：继续收紧 `brain` prompt
 
-- 调整 `mouth` structured output，只保留 `summary + deliveryMarkdown?`
-- runner 改为直接以 `lastBrainDecision.nextAction.status` 写回 `result.status`
-- `mouth` prompt context 收紧到 `finalDecision + facts + evidences + openQuestions`
-- 如后续确实需要交付物引用，再单独补 `artifacts`
+- 继续把 `brain` prompt 与 `buildBrainPromptContext` 向第 6.2 节的目标模板收紧。
+- 避免长期停留在当前“可工作但偏骨架化”的中间形态。
+- 保持最近决策历史、最近工具结果、`watchHint` 的输入语义清晰，不回退到运行态对象直灌。
 
-### 7.2 第二阶段：落地 `deliveryMode`
+### 7.2 第二阶段：按需补 `artifacts`
 
-- 在 `human` 派发参数中引入 `deliveryMode`
-- `main_direct_human_exec` / `main_synthesis_human` 产出 `user_answer`
-- `main_plan_exec` 产出 `task_handoff`
-- `main_context_human` 产出 `context_note`
-- 为 `task_handoff` / `context_note` 建立稳定模板，避免自由发挥
+- 仅当真实业务场景持续需要 preview、输出路径、review id 等产物引用时，再引入结构化 `artifacts`。
+- `artifacts` 只承载交付物引用，不承担新的推理或提示文本职责。
+- 在 `artifacts` 落地前，继续保持 `mouth` 输入最小集合，不重新引入 hint / digest 文本层。
 
-### 7.3 第三阶段：收紧 `contextEvidence`
+### 7.3 第三阶段：扩大回归覆盖
 
-- `context_note` 固定输出 `## 可复用证据`
-- `main` 新增轻量解析器，只抽取这一节的 bullet / numbered line
-- 缺失时 fallback `summary`
-- 停止把整段 `deliveryMarkdown` 直接灌回 `contextEvidence`
+- 在现有 basic 覆盖基础上，继续补 live / scenario 用例，验证模型真实产出的 `task_handoff / context_note` 是否稳定遵守固定章节协议。
+- 继续覆盖更多 blocked、审批拒绝、workspace 缺失、资料不足等真实边界场景，确认 `summary` 与 `deliveryMarkdown` 的收口表现一致。
+- 如果后续再调整交付协议，优先先补测试再改实现。
 
-### 7.4 第四阶段：统一 schema
+### 7.4 第四阶段：后续文档同步收口
 
-- 抽出共享的 `brainMemoryOpSchema`
-- 抽出共享的 `brainNextActionSchema`
-- 抽出共享的 `lastBrainDecisionSchema`
-- 抽出共享的 `brainDecisionRecordSchema`
-- 抽出共享的 `mouthOutputSchema`
-- `decisionContract`、`state/schema`、`mouth` contract 统一复用这套 schema
-
-### 7.5 第五阶段：补测试与文档同步
-
-- 增加 `mouth` 不得改写 `status` 的测试
-- 增加 `task_handoff` / `context_note` 固定结构测试
-- 增加 `contextEvidence` 抽取测试
-- 增加 `state schema` 与 contract 对齐测试
-- 同步更新 `architecture`、`data-definition-and-flow`、`AGENTS.md`
+- 后续若再调整 `brain / mouth / deliveryMarkdown / artifacts` 设计，需要继续同步 `architecture`、`data-definition-and-flow` 与 `AGENTS.md`。
+- 本轮已完成的 `deliveryMode / contextEvidence / shared schema` 文档对齐，应作为后续变更的基线，不再回退到旧描述。
