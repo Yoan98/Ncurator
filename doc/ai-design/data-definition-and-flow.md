@@ -39,6 +39,7 @@ interface MainState {
   // 已经进行过多少轮上下文补充。
   contextRounds: number
   // context 阶段得到的关键证据摘要。
+  // 这些摘要应从 context_note 的“可复用证据”区块提取，而不是直接保存整段交付 markdown。
   contextEvidence: string[]
   // 计划任务列表，每一项都是后续派发给 human 的任务。
   plan: MainPlanTask[]
@@ -61,9 +62,19 @@ interface MainPlanTask {
   // ready 表示尚未派发；blocked 表示已经派发但最终阻塞。
   status: 'ready' | 'running' | 'completed' | 'blocked'
   // 该任务的正式交付内容。
+  // 在 plan 链路中，通常是供后续任务与 synthesis 使用的 task_handoff 文档。
   deliveryMarkdown?: string
 }
 ```
+
+补充说明：
+
+- `main` 派发 `human` 时，还会附带运行时交付模式 `deliveryMode`
+- `deliveryMode` 至少区分：
+  - `user_answer`
+  - `task_handoff`
+  - `context_note`
+- 该元数据只用于约束 `mouth` 的交付组织方式，不要求持久化进 `MainState` 或 `HumanState`
 
 ## 3. `human` 数据定义
 
@@ -296,6 +307,13 @@ interface ToolCallResult {
   data?: JsonValue
 }
 
+interface MouthOutput {
+  // 面向用户或后续任务的一句简洁摘要。
+  summary: string
+  // 正式交付 markdown；允许为空，由 runner 做 fallback。
+  deliveryMarkdown?: string
+}
+
 interface HumanResult {
   // human 最终状态。
   status: 'completed' | 'blocked'
@@ -305,6 +323,13 @@ interface HumanResult {
   deliveryMarkdown?: string
 }
 ```
+
+补充约束：
+
+- `mouth` 的模型输出只包含 `summary + deliveryMarkdown?`
+- `HumanResult.status` 由 runner 按 `lastBrainDecision.nextAction.status` 回写
+- `mouth` 默认只消费 `finalDecision + facts + evidences + openQuestions`
+- 如果后续确实需要在交付中引用 preview、输出路径、review id 等交付物，应单独补充结构化 `artifacts`
 
 ## 4. 数据流转图
 
@@ -423,16 +448,16 @@ flowchart LR
     BM[("brainMemory")]
     LTR[("lastParallelCallToolResults")]
     LBD[("lastBrainDecision")]
-    BD[("brainMemory.outside.brainDecisions")]
+    WH[("watchHint")]
     M["mouth"]
     R[("result")]
     TR[("trace.steps")]
 
     T -->|读取 taskId + userInput| M
-    BM -->|读取 brainMemory| M
-    LTR -->|读取最近一轮并行工具结果数组| M
-    LBD -->|读取当前 nextAction.status| M
-    BD -->|读取最近决策历史| M
-    M -->|写入 status + summary + deliveryMarkdown| R
+    BM -->|读取 facts / evidences / openQuestions| M
+    LTR -->|整理最近工具结果摘要| M
+    LBD -->|读取当前 nextAction.status 与最终决策| M
+    WH -->|必要时整理为交付提示| M
+    M -->|输出 summary + deliveryMarkdown；runner 按 nextAction.status 回写 result| R
     M -->|追加 mouth 执行轨迹| TR
 ```

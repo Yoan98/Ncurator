@@ -15,13 +15,14 @@
 - 判断请求是直接执行还是需要补充上下文与计划。
 - 管理 run 生命周期、计划列表、任务顺序和最终汇总。
 - 把单个任务派发给 `human`，但不代替 `human` 做细粒度推理。
+- 根据当前阶段为 `human` 选择合适的交付模式，例如最终答复、子任务交接文档或上下文补充记录。
 
 ### `human`
 
 - 接收 `taskId + userInput`。
 - 维护 `brainMemory`，并明确区分 `inside` 与 `outside`。
 - 通过 `brain` 决定下一步是加载技能、发起并行工具调用，还是直接输出。
-- 在 `mouth` 节点完成最终面向用户的交付。
+- 在 `mouth` 节点按交付模式整理最终答复、子任务交接文档或上下文补充记录。
 
 ## 3. `main` 总体路径
 
@@ -73,8 +74,10 @@ human设计核心
   - 写入 `lastParallelCallToolResults`。
   - 由 `human` 内部统计工具调用次数；超过临时上限后写入 `watchHint`，下一轮交给 `brain` 判断是否收敛。
 - `mouth`
-  - 读取 `lastBrainDecision.nextAction.status`、最近决策历史和已确认事实/证据。
-  - 调用模型整理最终 `deliveryMarkdown` 和结果摘要。
+  - 读取 `lastBrainDecision.nextAction.status`、最后一次正式决策、已确认事实/证据/未决项。
+  - 不读取最近决策历史，也不重新判断最终状态。
+  - 默认不额外引入 hint / digest 文本层；如后续确实需要交付物引用，再单独补充结构化 `artifacts`。
+  - 按 `deliveryMode` 整理 `deliveryMarkdown`，典型模式包括 `user_answer`、`task_handoff`、`context_note`。
 
 ```mermaid
 flowchart TD
@@ -97,6 +100,8 @@ flowchart TD
 - `skillCatalog` 是预注入目录摘要，`learnedSkillIds` 是已学习 skill 集合，二者职责必须分离。
 - `human` 内部只保留一个简单的调用保险机制：当工具调用次数超过临时上限、重复学习已学 skill、或记忆编辑失败时，写入 `watchHint` 并要求 `brain` 优先考虑收敛或纠偏。
 - `watchHint` 是当前 `human` 内部统一的轻量收敛提示，不再存在独立 `watchdog` 子系统。
+- `deliveryMarkdown` 是正式信息载体；在计划链路中，它还承担串行任务交接文档的角色。
+- `contextEvidence` 应从上下文补充记录中的“可复用证据”提取，而不是直接复用整段交付文档。
 
 ### 5.实现细节补充
 - `brain` prompt 在拼装时根据 `learnedSkillIds` 动态展开技能详情。

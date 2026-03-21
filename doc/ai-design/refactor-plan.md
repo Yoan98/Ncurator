@@ -1,15 +1,35 @@
 # NCurator-Desktop AI 新架构重构计划
 
-## 0. 需要补充完善的地方
+## 0. 当前状态总览
 
-以下内容是当前重构在进入“已完成”前，仍需补充完善和对齐的部分：
+### 0.1 阅读方式
 
-- `brain` prompt 需要继续补齐，实际实现应继续向本文件第 6 章的专项 prompt 设计靠拢，而不是只停留在简化版骨架。
-- `buildBrainPromptContext` 需要严格按本文件第 6.2 节的提示词模板组织输入：记忆快照、最近工具结果、skill 说明等统一转成稳定文本；只有最近决策历史中的 `nextAction数据` 可以按示例保留结构化载荷。
-- `mouth` 不需要读取最近决策历史；`brain` 需要读取最近决策历史摘要，这个边界必须在实现和文档中保持一致。
-- `tools` 目录需要进一步从“按 skill 建目录”收敛为“按实现域归位”，skill 只保留在 `skillCatalog` / `skillRegistry` / `skillLoader` 的映射与装配层。
-- 运行时结构化输出能力需要直接重构为 schema 驱动的 structured output 封装，不再兼容旧 `chatJson + JSON.parse` 路径；LangChain 侧统一使用 `withStructuredOutput`，默认优先 `jsonSchema`，并按 `jsonSchema -> functionCalling -> jsonMode` 的固定顺序自动回退。
-- `memoryReducer` 需要修复 `memoryOps` 的顺序敏感问题：同一轮 `memoryOps` 中，`facts[].evidenceIds` 对“本轮新增 evidence”的引用不应因为数组顺序不同而被误判为非法。
+- 本文件第 1-6 章描述的是当前已经确认的重构目标设计与目标形态，不等于这些内容都还未实现。
+- 本文件第 7 章是下一步推进明细，默认表示尚未完成或尚未完全收口的事项。
+- 如果只想快速判断“现在哪些已经落地、接下来做什么”，优先阅读本章与第 7 章。
+
+### 0.2 已完成或已定稿的主线部分
+
+- `main / human` 分工、`direct human` 与 `context + plan + human + synthesis` 的主链路已确定，并作为当前架构基线。
+- `human` 从旧三段式切换到 `brain / learning / hand / mouth` 四节点形态，已经是当前重构主线。
+- `human` 目录主线、节点目录、`prompts/`、`state/`、`node/utils/` 的重构方向已定稿，并作为当前目标目录基线。
+- `skillCatalog + learnedSkillIds` 的学习模型、skill 命名拆分，以及 tools 按实现域归位的方向已定稿。
+- 运行时 structured output 已明确采用 schema 驱动封装，统一走 `withStructuredOutput`，并以 `jsonSchema -> functionCalling -> jsonMode` 顺序自动回退。
+- `memoryReducer` 关于“fact 可以引用本轮新增 evidence，且不依赖 `memoryOps` 顺序”的目标约束已定稿。
+- `mouth` 不读取最近决策历史、`brain` 读取最近决策历史摘要的边界已定稿。
+
+### 0.3 当前仍待收口的点
+
+- `brain` prompt 与 `buildBrainPromptContext` 仍需继续向第 6.2 节的目标模板收紧，不应停留在骨架版。
+- `mouth` 的输出契约仍需彻底收口到 `summary + deliveryMarkdown?`，并由 runner 统一回写最终 `status`。
+- `deliveryMarkdown` 仍需从自由 markdown 收敛为稳定交付文档，并按 `user_answer / task_handoff / context_note` 三种模式组织。
+- `contextEvidence` 仍需改成“只抽取 `context_note` 的可复用证据”，不再直接灌整段 `deliveryMarkdown`。
+- `human state schema` 仍需与 `decisionContract`、`mouth` output contract 共用精确 schema。
+- `mouth` 的 prompt 输入仍需收紧到 `finalDecision + facts + evidences + openQuestions` 的最小集合；如果后续确实需要交付物引用，再单独补 `artifacts`，而不是引入额外 hint/digest 文本层。
+
+### 0.4 下一步推进入口
+
+- 以上待收口项的实施顺序见第 7 章。
 
 ## 1. 目标
 
@@ -104,6 +124,25 @@ interface HumanTaskInput {
   userInput: string
 }
 ```
+
+### 4.1.1 `deliveryMode`
+
+`human` 的主体任务输入仍保持 `taskId + userInput`；不同 `main` 路径通过运行时派发参数附带交付模式：
+
+```ts
+type HumanDeliveryMode = 'user_answer' | 'task_handoff' | 'context_note'
+
+interface HumanRunDispatchOptions {
+  deliveryMode?: HumanDeliveryMode
+}
+```
+
+约束：
+
+- `main_direct_human_exec` / `main_synthesis_human` 使用 `user_answer`
+- `main_plan_exec` 使用 `task_handoff`
+- `main_context_human` 使用 `context_note`
+- `deliveryMode` 只影响 `mouth` 的交付组织方式，不改变 `brain / learning / hand` 的职责边界
 
 ### 4.2 `brainMemory`
 
@@ -222,15 +261,26 @@ type BrainMemoryOp =
 
 ### 4.5 `result`
 
-`mouth` 仍是唯一写入 `result` 的节点，结构收紧为：
+`mouth` 的结构化输出与最终 `result` 继续分离：
 
 ```ts
+interface MouthOutput {
+  summary: string
+  deliveryMarkdown?: string
+}
+
 interface HumanResult {
   status: 'completed' | 'blocked'
   summary: string
   deliveryMarkdown?: string
 }
 ```
+
+补充约束：
+
+- `mouth` 的模型输出只负责 `summary + deliveryMarkdown?`
+- `result.status` 由 runner 按 `lastBrainDecision.nextAction.status` 回写
+- `mouth` 不再输出或改写最终 `status`
 
 ### 4.6 `main` 任务结果契约
 
@@ -251,6 +301,52 @@ interface MainPlanTask {
 - 计划任务初始状态统一为 `ready`，不再使用 `pending`。
 - `blocked` 表示任务已派发给 `human` 且最终阻塞，不与“尚未执行”混用。
 - `main` 最终只保留 `finalDeliveryMarkdown` 作为正式交付。
+
+### 4.7 `deliveryMarkdown` 模式与交付结构
+
+`deliveryMarkdown` 继续保留为正式信息载体，但不再视为自由 markdown；它需要按 `deliveryMode` 收敛为稳定交付文档：
+
+- `user_answer`
+  - 面向最终用户的直接答复或汇总答复
+- `task_handoff`
+  - 面向后续任务与 `synthesis human` 的串行交接文档
+- `context_note`
+  - 面向 `main` 的上下文补充记录
+
+`task_handoff` 推荐最小结构：
+
+```md
+# 子任务交付
+
+## 任务状态
+## 本任务结论
+## 已完成
+## 关键事实
+## 关键证据
+## 产物与引用
+## 未决与风险
+## 对后续任务的影响
+## 建议下一步
+```
+
+`context_note` 推荐最小结构：
+
+```md
+# 上下文补充结果
+
+## 当前状态
+## 可复用证据
+## 当前边界
+## 未决项
+## 建议补充方向
+```
+
+### 4.8 `contextEvidence` 提取规则
+
+- `main_context_human` 仍可保留完整 `deliveryMarkdown`
+- `main` 写回 `contextEvidence` 时，只从 `context_note` 的 `## 可复用证据` 区块提取 bullet / numbered line
+- 如果没有成功提取到“可复用证据”，再 fallback 到 `output.summary`
+- 不再直接 append 全量 `deliveryMarkdown`
 
 ## 5. 节点职责
 
@@ -303,8 +399,12 @@ interface MainPlanTask {
 ### 5.4 `mouthNode`
 
 - 只在 `nextAction.action='mouth'` 时执行。
-- 读取 `lastBrainDecision.nextAction.status`、最后一次正式决策、`brainMemory.inside` 和必要的工具结果。
-- 调用模型对已有信息做最终整理，生成 `summary` 与 `deliveryMarkdown`。
+- 读取 `lastBrainDecision.nextAction.status`、最后一次正式决策，以及 `brainMemory.inside` 中的 `facts / evidences / openQuestions`。
+- 不读取最近决策历史。
+- 默认不额外引入 hint / digest 文本层。
+- 如后续确实需要在交付中引用 preview、输出路径、review id 等交付物信息，应单独以 `artifacts` 形式补充，而不是把运行时信息预先压成自然语言提示。
+- `mouth` 按 `deliveryMode` 整理 `deliveryMarkdown`；`task_handoff` 与 `context_note` 使用固定章节结构。
+- `mouth` 的模型输出只负责 `summary` 与 `deliveryMarkdown`；最终 `result.status` 由 runner 按 `nextAction.status` 回写。
 - 不补编新事实，只负责把已有结论整理成可交付结果。
 
 ## 6. Prompt 重设计方向
@@ -627,21 +727,26 @@ interface MainPlanTask {
 
 设计目标：
 
-- 让模型扮演“负责对外表达最终结果的人”。
-- 只负责整理和表达，不再引入新的推理。
-- 对 `completed` 和 `blocked` 两种结果都产出稳定、清晰、可直接交付的 markdown。
+- 让模型扮演“负责整理既有结论并按交付模式输出的人”。
+- 只负责整理和表达，不再引入新的推理，也不再输出最终 `status`。
+- 对 `user_answer`、`task_handoff`、`context_note` 三种交付模式都产出稳定、清晰、可直接交付的 markdown。
 
 设计要点：
 
 - 角色描述不写 `mouthNode`，而写“负责对外表达最终结果的人”。
 - 输入部分聚焦：
   - 用户的要求
+  - 当前交付模式 `deliveryMode`
   - 最终状态
   - 最后一次正式决策的自然语言说明
-  - 已确认事实
-  - 关键证据
-  - 必要时附带最近一轮关键工具结果
-- 输出规则中直接给 JSON 结构和字段解释
+  - 已确认事实、关键证据、未决项
+- 默认不增加额外 hint / digest 文本层。
+- 如果后续确实需要交付物引用，再单独补充 `artifacts`。
+- 不输入最近决策历史。
+- 输出规则中只保留：
+  - `summary`
+  - `deliveryMarkdown`
+- 如果当前是 `task_handoff` 或 `context_note`，`deliveryMarkdown` 必须按固定章节结构生成。
 
 草稿文本：
 
@@ -649,7 +754,7 @@ interface MainPlanTask {
 <system>
   <role>
     你现在扮演一个负责对外表达最终结果的人。
-    你的任务是把已经确定下来的判断、事实和证据，整理成用户可以直接阅读和继续使用的结果。
+    你的任务是把已经确定下来的判断、事实和证据，整理成当前交付模式要求的正式结果。
   </role>
 
   <working_style>
@@ -659,10 +764,11 @@ interface MainPlanTask {
   </working_style>
 
   <delivery_principles>
-    1. 如果任务已经完成，先直接给出结论，再给关键依据，再给结果或产物说明。
-    2. 如果任务当前阻塞，先说明已经完成到哪里，再说明阻塞原因，再说明继续需要什么。
-    3. 只使用已经给你的事实、证据和最终判断，不要偷偷补充新的推理。
-    4. 语言要清楚、克制、可执行，不要堆内部过程。
+    1. 只使用已经给你的事实、证据、未决项和最终判断，不要偷偷补充新的推理。
+    2. 如果当前交付模式是 user_answer，就面向最终用户组织结果。
+    3. 如果当前交付模式是 task_handoff，就按固定章节输出串行交接文档。
+    4. 如果当前交付模式是 context_note，就按固定章节输出上下文补充记录。
+    5. 语言要清楚、克制、可执行，不要堆内部过程。
   </delivery_principles>
 
   <output_rules>
@@ -670,29 +776,26 @@ interface MainPlanTask {
 
     输出结构固定为：
     {
-      "status": "completed" | "blocked",
       "summary": "string",
-      "deliveryMarkdown": "string"
+      "deliveryMarkdown": "optional-string"
     }
 
     字段解释：
-    - status：字符串枚举。表示任务最终状态，只能是 completed 或 blocked。
     - summary：字符串。面向用户的一句简洁结果摘要。
-    - deliveryMarkdown：字符串。最终正式交付内容，必须是完整 markdown 正文。
+    - deliveryMarkdown：可选字符串。正式交付内容；缺失时由运行时使用 fallback 模板补足。
   </output_rules>
 
   <output_principles>
     - 不要引入新的事实、依据、步骤或承诺。
     - 不要暴露内部字段名、节点名或系统术语。
     - 如果依据不足，就保持保守表达，不要写成确定结论。
-    - deliveryMarkdown 必须是完整结果，而不是零散句子。
+    - task_handoff 与 context_note 必须按固定章节结构输出。
   </output_principles>
 
   <output_example>
     {
-      "status": "completed",
       "summary": "已完成文档修改，并整理出关键依据。",
-      "deliveryMarkdown": "# 处理结果\n\n已完成本次修改。\n\n## 关键依据\n- 依据一\n- 依据二\n\n## 结果说明\n- 结果一\n- 结果二"
+      "deliveryMarkdown": "# 子任务交付\n\n## 任务状态\ncompleted\n\n## 本任务结论\n已完成文档修改。\n\n## 已完成\n- 完成修改\n\n## 关键事实\n- 事实一\n\n## 关键证据\n- 证据一\n\n## 产物与引用\n- preview.html\n\n## 未决与风险\n- 无\n\n## 对后续任务的影响\n- 后续可以直接继续校验\n\n## 建议下一步\n- 执行最终复核"
     }
   </output_example>
 </system>
@@ -701,6 +804,10 @@ interface MainPlanTask {
   <user_request>
     {用户的要求}
   </user_request>
+
+  <delivery_mode>
+    {当前交付模式 user_answer / task_handoff / context_note}
+  </delivery_mode>
 
   <final_status>
     {最终状态 completed 或 blocked}
@@ -721,5 +828,50 @@ interface MainPlanTask {
   <evidences>
     {支撑这些事实的关键证据列表}
   </evidences>
+
+  <open_questions>
+    {仍未解决的问题列表；如果没有，则写 none}
+  </open_questions>
 </user_context>
 ```
+
+## 7. 下一步推进（未完成 / 待收口）
+
+### 7.1 第一阶段：收紧 `mouth` 契约
+
+- 调整 `mouth` structured output，只保留 `summary + deliveryMarkdown?`
+- runner 改为直接以 `lastBrainDecision.nextAction.status` 写回 `result.status`
+- `mouth` prompt context 收紧到 `finalDecision + facts + evidences + openQuestions`
+- 如后续确实需要交付物引用，再单独补 `artifacts`
+
+### 7.2 第二阶段：落地 `deliveryMode`
+
+- 在 `human` 派发参数中引入 `deliveryMode`
+- `main_direct_human_exec` / `main_synthesis_human` 产出 `user_answer`
+- `main_plan_exec` 产出 `task_handoff`
+- `main_context_human` 产出 `context_note`
+- 为 `task_handoff` / `context_note` 建立稳定模板，避免自由发挥
+
+### 7.3 第三阶段：收紧 `contextEvidence`
+
+- `context_note` 固定输出 `## 可复用证据`
+- `main` 新增轻量解析器，只抽取这一节的 bullet / numbered line
+- 缺失时 fallback `summary`
+- 停止把整段 `deliveryMarkdown` 直接灌回 `contextEvidence`
+
+### 7.4 第四阶段：统一 schema
+
+- 抽出共享的 `brainMemoryOpSchema`
+- 抽出共享的 `brainNextActionSchema`
+- 抽出共享的 `lastBrainDecisionSchema`
+- 抽出共享的 `brainDecisionRecordSchema`
+- 抽出共享的 `mouthOutputSchema`
+- `decisionContract`、`state/schema`、`mouth` contract 统一复用这套 schema
+
+### 7.5 第五阶段：补测试与文档同步
+
+- 增加 `mouth` 不得改写 `status` 的测试
+- 增加 `task_handoff` / `context_note` 固定结构测试
+- 增加 `contextEvidence` 抽取测试
+- 增加 `state schema` 与 contract 对齐测试
+- 同步更新 `architecture`、`data-definition-and-flow`、`AGENTS.md`
