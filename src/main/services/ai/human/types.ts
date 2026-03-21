@@ -2,6 +2,7 @@ import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { JsonObject, JsonValue } from '../../../../shared/types'
 import type { AiToolFamilyId } from './tools/types'
 import {
+  HUMAN_DELIVERY_MODES,
   HUMAN_STEP_ACTIONS,
   HUMAN_STEP_RESULT_STATUSES,
   RUNTIME_SKILL_IDS,
@@ -12,6 +13,7 @@ export type RuntimeSkillId = (typeof RUNTIME_SKILL_IDS)[number]
 export type HumanStepAction = (typeof HUMAN_STEP_ACTIONS)[number]
 export type HumanStepResultStatus = (typeof HUMAN_STEP_RESULT_STATUSES)[number]
 export type ToolCallResultCode = (typeof TOOL_CALL_RESULT_CODES)[number]
+export type HumanDeliveryMode = (typeof HUMAN_DELIVERY_MODES)[number]
 
 export type ToolPromptArgSpec = {
   name: string
@@ -156,6 +158,11 @@ export type BrainDecisionRecord = LastBrainDecision & {
 
 export type HumanResult = {
   status: 'completed' | 'blocked'
+  summary: string
+  deliveryMarkdown?: string
+}
+
+export type MouthOutput = {
   summary: string
   deliveryMarkdown?: string
 }

@@ -1,26 +1,16 @@
 import type { AiRunContext } from '../../../types'
-import type { HumanRuntimeCache, HumanState } from '../../types'
+import type { HumanDeliveryMode, HumanRuntimeCache, HumanState } from '../../types'
 import { appendHumanTraceStep, emitHumanStep, emitTaskDelivery } from '../utils/events'
 import { getAvailableToolNames } from '../learningNode/skillLoader'
+import { buildFallbackDeliveryMarkdown } from './deliveryMarkdown'
 import { buildMouthPromptContext } from './promptContext'
 import { mouthResultSchema } from './contract'
 import type { AiRunContextWithMouthOverride } from './types'
 
-const buildFallbackMarkdown = (state: HumanState, status: 'completed' | 'blocked', summary: string) =>
-  [
-    status === 'completed' ? '# 处理结果' : '# 当前阻塞说明',
-    '',
-    summary,
-    '',
-    '## 已确认事实',
-    state.brainMemory.inside.facts.length > 0
-      ? state.brainMemory.inside.facts.map((fact) => `- ${fact.summary}`).join('\n')
-      : '无'
-  ].join('\n')
-
 export const createMouthNode = (input: {
   ctx: AiRunContext
   cache: HumanRuntimeCache
+  deliveryMode: HumanDeliveryMode
   streamAnswer: boolean
   internalDelivery: boolean
 }) => {
@@ -36,6 +26,7 @@ export const createMouthNode = (input: {
         : 'blocked'
     const override = ctxWithOverride.resolveHumanDeliveryOverride?.({
       userInput: state.task.userInput,
+      deliveryMode: input.deliveryMode,
       status: finalStatus,
       summary: state.lastBrainDecision?.decision.summary || '任务结束',
       state
@@ -45,6 +36,7 @@ export const createMouthNode = (input: {
     if (!result) {
       const prompt = buildMouthPromptContext({
         state,
+        deliveryMode: input.deliveryMode,
         finalStatus
       })
       result = await input.ctx.chatStructured({
@@ -58,11 +50,16 @@ export const createMouthNode = (input: {
     }
 
     const finalResult = {
-      status: result.status,
+      status: finalStatus,
       summary: result.summary,
       deliveryMarkdown:
         String(result.deliveryMarkdown || '').trim() ||
-        buildFallbackMarkdown(state, result.status, result.summary)
+        buildFallbackDeliveryMarkdown({
+          state,
+          deliveryMode: input.deliveryMode,
+          finalStatus,
+          summary: result.summary
+        })
     }
     if (input.streamAnswer) {
       input.ctx.sendEvent({
@@ -82,16 +79,16 @@ export const createMouthNode = (input: {
     })
     const traceSteps = appendHumanTraceStep({
       steps: state.trace.steps,
-      action: finalResult.status === 'completed' ? 'deliver_result' : 'block_result',
+      action: finalStatus === 'completed' ? 'deliver_result' : 'block_result',
       publicNarrative: finalResult.summary,
-      resultStatus: finalResult.status === 'completed' ? 'ok' : 'blocked',
+      resultStatus: finalStatus === 'completed' ? 'ok' : 'blocked',
       summary: finalResult.summary
     })
     const nextState: HumanState = {
       ...state,
       runtime: {
         stage: 'mouth',
-        status: finalResult.status
+        status: finalStatus
       },
       result: finalResult,
       trace: {

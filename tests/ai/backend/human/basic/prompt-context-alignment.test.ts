@@ -115,11 +115,18 @@ describe('prompt context alignment', () => {
   it('builds mouth prompt context without recent decision history', () => {
     const prompt = buildMouthPromptContext({
       state: createBaseState(),
+      deliveryMode: 'task_handoff',
       finalStatus: 'completed'
     })
 
+    expect(prompt.user).toContain('<delivery_mode>')
+    expect(prompt.user).toContain('task_handoff')
     expect(prompt.user).toContain('<final_decision>')
     expect(prompt.user).toContain('结束状态completed')
+    expect(prompt.user).toContain('<open_questions>')
+    expect(prompt.user).toContain('是否需要同步更新周报？')
     expect(prompt.user).not.toContain('<recent_decision_history>')
+    expect(prompt.user).not.toContain('<recent_tool_outcomes>')
+    expect(prompt.user).not.toContain('<delivery_hints>')
   })
 })

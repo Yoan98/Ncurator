@@ -1,4 +1,5 @@
 import type { AiRunEvent } from '../../../../../src/shared/types'
+import { it } from 'vitest'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import type { BackendTestRuntime, TestCaseDefinition } from '../../../../harness/backend/test-types'
 

@@ -1,4 +1,5 @@
 import type { AiRunEvent, JsonObject } from '../../../../src/shared/types'
+import { it } from 'vitest'
 import type {
   LastBrainDecision,
   RuntimeSkillId

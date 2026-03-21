@@ -15,10 +15,10 @@ import type {
   LLMConfig,
   SourceScopeSelection
 } from '../../../shared/types'
-import type { HumanTaskInput, HumanTaskOutput } from './human/types'
+import type { HumanDeliveryMode, HumanTaskInput, HumanTaskOutput } from './human/types'
 
 export type { AiTaskStatus, AiRunStatus, AiPlanTask }
-export type { HumanTaskInput, HumanTaskOutput }
+export type { HumanDeliveryMode, HumanTaskInput, HumanTaskOutput }
 
 export type AiMainStage =
   | 'main_intent'
@@ -30,6 +30,7 @@ export type AiMainStage =
   | 'main_complete'
 
 export type HumanRunDispatchOptions = {
+  deliveryMode?: HumanDeliveryMode
   streamAnswer?: boolean
   internalDelivery?: boolean
 }

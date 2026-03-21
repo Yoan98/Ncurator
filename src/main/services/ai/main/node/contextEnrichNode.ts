@@ -1,5 +1,5 @@
 import type { AiRunContext, AiRunState, HumanTaskRunner } from '../../types'
-import { appendContextEvidence } from './helpers'
+import { appendContextEvidence, extractReusableContextEvidence } from './helpers'
 import { buildContextHumanObjective } from './objectives'
 
 export const createContextEnrichNode = (input: {
@@ -24,19 +24,23 @@ export const createContextEnrichNode = (input: {
         userInput: contextUserInput
       },
       {
+        deliveryMode: 'context_note',
         internalDelivery: true
       }
     )
 
+    const reusableEvidence = extractReusableContextEvidence(output.deliveryMarkdown)
+    const nextContextEvidence =
+      reusableEvidence.length > 0
+        ? reusableEvidence.reduce(
+            (evidences, item) => appendContextEvidence({ ...state, contextEvidence: evidences }, item),
+            state.contextEvidence
+          )
+        : appendContextEvidence(state, output.summary)
+
     return {
       contextRounds: state.contextRounds + 1,
-      contextEvidence: appendContextEvidence(
-        {
-          ...state,
-          contextEvidence: appendContextEvidence(state, output.summary)
-        },
-        output.deliveryMarkdown || output.summary
-      ),
+      contextEvidence: nextContextEvidence,
       contextObjective: undefined,
       mainStage: 'main_intent'
     }

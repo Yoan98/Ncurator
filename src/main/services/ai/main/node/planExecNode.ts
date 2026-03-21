@@ -38,10 +38,15 @@ export const createPlanExecNode = (input: {
       stage: 'main_plan_exec'
     })
 
-    const output = await runHumanTask({
-      taskId: task.id,
-      userInput: taskUserInput
-    })
+    const output = await runHumanTask(
+      {
+        taskId: task.id,
+        userInput: taskUserInput
+      },
+      {
+        deliveryMode: 'task_handoff'
+      }
+    )
 
     // 当前策略为 stop-dispatch：单任务 blocked 会停止后续业务任务，但保留 synthesis 收口。
     const blocked = output.status === 'blocked'

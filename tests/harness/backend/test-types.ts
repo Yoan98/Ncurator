@@ -4,14 +4,16 @@ import type {
   AiRunContext
 } from '../../../src/main/services/ai/types'
 import type {
-  HumanResult,
+  HumanDeliveryMode,
   LastBrainDecision,
+  MouthOutput,
   HumanState,
   RuntimeSkillId
 } from '../../../src/main/services/ai/human/types'
 import type {
   AiRuntimeSettings,
   AiTaskResultCode,
+  JsonObject,
   JsonValue,
   LLMConfig
 } from '../../../src/shared/types'
@@ -104,10 +106,11 @@ export type CreateAiRunContextInput = {
   humanReasonOverrides?: TestHumanReasonOverride[]
   humanDeliveryOverride?: (input: {
     userInput: string
+    deliveryMode: HumanDeliveryMode
     summary: string
     status: 'completed' | 'blocked'
     state: HumanState
-  }) => string | HumanResult
+  }) => string | MouthOutput
   liveModelConfig?: LiveLlmConfig
   chatStructuredOverride?: <T extends Record<string, unknown>>(input: {
     caller: string

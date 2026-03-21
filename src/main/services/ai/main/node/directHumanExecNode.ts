@@ -28,6 +28,7 @@ export const createDirectHumanExecNode = (input: {
         })
       },
       {
+        deliveryMode: 'user_answer',
         streamAnswer: true
       }
     )

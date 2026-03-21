@@ -26,6 +26,7 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
     const mouthNode = createMouthNode({
       ctx,
       cache,
+      deliveryMode: options.deliveryMode || 'user_answer',
       streamAnswer: Boolean(options.streamAnswer),
       internalDelivery: Boolean(options.internalDelivery)
     })

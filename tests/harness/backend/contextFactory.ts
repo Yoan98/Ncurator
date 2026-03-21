@@ -276,9 +276,10 @@ export const createTestAiRunContext = (input: CreateTestAiRunContextInput): AiRu
     resolveToolExecutionOverride,
     resolveBrainDecisionOverride,
     resolveHumanDeliveryOverride: input.humanDeliveryOverride
-      ? ({ userInput, status, summary, state }) => {
+      ? ({ userInput, deliveryMode, status, summary, state }) => {
           const output = input.humanDeliveryOverride?.({
             userInput,
+            deliveryMode,
             status,
             summary,
             state
@@ -286,7 +287,6 @@ export const createTestAiRunContext = (input: CreateTestAiRunContextInput): AiRu
           if (!output) return undefined
           if (typeof output === 'string') {
             return {
-              status,
               summary,
               deliveryMarkdown: output
             }

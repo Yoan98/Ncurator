@@ -1,5 +1,5 @@
 import { buildHumanMouthPrompt } from '../../prompts/mouth'
-import type { HumanState } from '../../types'
+import type { HumanDeliveryMode, HumanState } from '../../types'
 
 const renderFacts = (state: HumanState): string => {
   if (state.brainMemory.inside.facts.length === 0) return 'none'
@@ -15,8 +15,14 @@ const renderEvidences = (state: HumanState): string => {
     .join('\n')
 }
 
+const renderOpenQuestions = (state: HumanState): string => {
+  if (state.brainMemory.inside.openQuestions.length === 0) return 'none'
+  return state.brainMemory.inside.openQuestions.map((question) => `- ${question}`).join('\n')
+}
+
 export const buildMouthPromptContext = (input: {
   state: HumanState
+  deliveryMode: HumanDeliveryMode
   finalStatus: 'completed' | 'blocked'
 }) => {
   const finalDecision = input.state.lastBrainDecision
@@ -24,10 +30,12 @@ export const buildMouthPromptContext = (input: {
     : 'none'
 
   return buildHumanMouthPrompt({
+    deliveryMode: input.deliveryMode,
     userInput: input.state.task.userInput,
     finalStatus: input.finalStatus,
     finalDecisionText: finalDecision,
     factsText: renderFacts(input.state),
-    evidencesText: renderEvidences(input.state)
+    evidencesText: renderEvidences(input.state),
+    openQuestionsText: renderOpenQuestions(input.state)
   })
 }
