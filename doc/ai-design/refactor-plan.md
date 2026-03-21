@@ -5,7 +5,7 @@
 ### 0.1 阅读方式
 
 - 本文件第 1-6 章描述的是当前已经确认的重构目标设计与目标形态，不等于这些内容都还未实现。
-- 本文件第 7 章是下一步推进明细，默认表示尚未完成或尚未完全收口的事项。
+- 本文件第 7 章是下一步推进明细；除显式标记“已完成”的小节外，默认表示尚未完成或尚未完全收口的事项。
 - 如果只想快速判断“现在哪些已经落地、接下来做什么”，优先阅读本章与第 7 章。
 
 ### 0.2 已完成或已定稿的主线部分
@@ -21,12 +21,14 @@
 - `mouth` 的输出契约已经收口到 `summary + deliveryMarkdown?`，最终 `result.status` 现由 runner 按 `lastBrainDecision.nextAction.status` 统一回写。
 - `task_handoff` 与 `context_note` 已具备固定章节协议，并在模型缺失 `deliveryMarkdown` 时由运行时 fallback 模板补齐最小可用交付。
 - `contextEvidence` 已改为只抽取 `context_note` 中 `## 可复用证据` 的 bullet / numbered line；缺失时 fallback 到 `summary`，不再直接灌整段 `deliveryMarkdown`。
+- `intent` 路由理由不再写入 `contextEvidence`；`contextEvidence` 现只承载上下文可复用证据摘要。
+- `memoryReducer` 已补齐 `evidence -> fact` 引用一致性保护；任何会导致悬空 `evidenceIds` 的 evidence 变更都会被视为非法编辑并回退。
+- `brain` prompt 与 `buildBrainPromptContext` 已收口到第 6.2 节要求的语义化输入模板，不再停留在字段味较强的骨架版。
 - `human state schema`、`decisionContract`、`mouth` output contract 已切到共享 schema，`brainDecisions / lastBrainDecision` 不再使用宽松 `record` 容器。
 - 本轮针对 `mouth` 状态归属、`deliveryMode` 传递、`contextEvidence` 抽取、schema 对齐、`main-plan-exec-blocked` 路径的目标测试已补齐并通过。
 
 ### 0.3 当前仍待收口的点
 
-- `brain` prompt 与 `buildBrainPromptContext` 仍需继续向第 6.2 节的目标模板收紧，不应停留在骨架版。
 - 如果后续确实需要在交付中稳定引用 preview、文件路径、review id 等产物，仍需单独设计结构化 `artifacts`，而不是回退到自由提示文本层。
 - 当前测试已覆盖核心契约与关键路径，但后续仍需继续扩大 live / scenario 覆盖，特别是模型真实产出 `task_handoff / context_note` 时的稳定性验证。
 
@@ -350,6 +352,7 @@ interface MainPlanTask {
 - `main` 写回 `contextEvidence` 时，只从 `context_note` 的 `## 可复用证据` 区块提取 bullet / numbered line
 - 如果没有成功提取到“可复用证据”，再 fallback 到 `output.summary`
 - 不再直接 append 全量 `deliveryMarkdown`
+- `intent` 节点的路由理由只做瞬时判断输入，不写入 `contextEvidence`
 
 ## 5. 节点职责
 
@@ -366,6 +369,7 @@ interface MainPlanTask {
 - 只通过 `memoryOps` 更新 `brainMemory.inside`。
 - 通过 `memoryReducer` 对非法 `memoryOps` 做安全处理；如果修改失败，则写入 `watchHint` 并返回下一轮 `brain`。
 - `memoryReducer` 对 evidence 引用的校验必须支持“当前已存在 + 本轮新增”两类 evidence id，且这一判断不依赖 `memoryOps` 数组顺序。
+- 如果某组 `memoryOps` 会因为 evidence 的 `edit/remove` 导致已有 fact 出现悬空 `evidenceIds`，则整组变更视为非法，本轮 state 不更新，只写入 `watchHint`。
 - 不直接加载 skill，不直接执行工具，不直接生成最终交付。
 
 这里的“最近决策历史摘要”只保留：
@@ -840,11 +844,11 @@ interface MainPlanTask {
 
 ## 7. 下一步推进（未完成 / 待收口）
 
-### 7.1 第一阶段：继续收紧 `brain` prompt
+### 7.1 第一阶段：继续收紧 `brain` prompt（已完成）
 
-- 继续把 `brain` prompt 与 `buildBrainPromptContext` 向第 6.2 节的目标模板收紧。
-- 避免长期停留在当前“可工作但偏骨架化”的中间形态。
-- 保持最近决策历史、最近工具结果、`watchHint` 的输入语义清晰，不回退到运行态对象直灌。
+- `brain` prompt 与 `buildBrainPromptContext` 已按第 6.2 节目标模板收口到语义化输入块。
+- 最近决策历史、最近工具结果、`watchHint` 已保持为易理解的文本语义块，不再回退到运行态对象直灌。
+- 对应测试已改为校验语义边界，而不是锁死旧骨架文本形态。
 
 ### 7.2 第二阶段：按需补 `artifacts`
 

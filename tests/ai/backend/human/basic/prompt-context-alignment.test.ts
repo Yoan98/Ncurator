@@ -99,17 +99,24 @@ describe('prompt context alignment', () => {
     const prompt = buildBrainPromptContext(createBaseState())
 
     expect(prompt.user).toContain('<memory_snapshot>')
-    expect(prompt.user).toContain('facts:')
-    expect(prompt.user).toContain('evidences:')
-    expect(prompt.user).toContain('openQuestions:')
+    expect(prompt.user).toContain('下面是你之前沉淀下来的记忆。')
+    expect(prompt.user).toContain('已确认的事实：')
+    expect(prompt.user).toContain('支撑这些事实的关键证据：')
+    expect(prompt.user).toContain('仍未解决的问题：')
+    expect(prompt.user).toContain('当前可用技能目录摘要：')
+    expect(prompt.user).toContain('已学习技能的详细说明：')
     expect(prompt.user).not.toContain('"facts"')
-    expect(prompt.user).toContain('toolName=kb_hybrid_search_chunks；ok=true；code=ok；summary=命中 3 条相关证据。')
+    expect(prompt.user).not.toContain('facts:')
+    expect(prompt.user).not.toContain('evidences:')
+    expect(prompt.user).not.toContain('openQuestions:')
+    expect(prompt.user).not.toContain('catalog:')
+    expect(prompt.user).toContain('工具 kb_hybrid_search_chunks 执行成功（code=ok）；摘要：命中 3 条相关证据。')
     expect(prompt.user).not.toContain('"ok":true')
     expect(prompt.user).toContain(
       'nextAction数据：parallelCallToolParam=[{"toolName":"kb_hybrid_search_chunks","args":{"query":"项目风险控制要求"}}]'
     )
-    expect(prompt.user).toContain('exampleArgs=query')
-    expect(prompt.user).not.toContain('example={"query"')
+    expect(prompt.user).toContain('示例参数键=[queryText, limit]')
+    expect(prompt.user).toContain('如果这里是 none，表示当前没有额外的收敛提醒')
   })
 
   it('builds mouth prompt context without recent decision history', () => {

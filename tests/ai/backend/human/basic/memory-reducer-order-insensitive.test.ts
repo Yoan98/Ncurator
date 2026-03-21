@@ -8,6 +8,25 @@ const baseInside: HumanState['brainMemory']['inside'] = {
   openQuestions: ['当前缺少直接依据。']
 }
 
+const referencedInside: HumanState['brainMemory']['inside'] = {
+  facts: [
+    {
+      id: 'fact-1',
+      summary: '项目上线前需要复核。',
+      evidenceIds: ['evidence-1']
+    }
+  ],
+  evidences: [
+    {
+      id: 'evidence-1',
+      toolName: 'kb_hybrid_search_chunks',
+      summary: '知识库显示上线前需要复核。',
+      sourceType: 'tool_result'
+    }
+  ],
+  openQuestions: []
+}
+
 describe('reduceBrainMemory', () => {
   it('treats same-round fact to new evidence references as order-insensitive', () => {
     const factThenEvidence = reduceBrainMemory({
@@ -101,5 +120,76 @@ describe('reduceBrainMemory', () => {
     expect(result.watchHint).toContain('memoryReducer')
     expect(result.inside.evidences).toEqual([])
     expect(result.inside.facts).toEqual([])
+  })
+
+  it('rejects an evidence removal when an existing fact would become dangling', () => {
+    const result = reduceBrainMemory({
+      inside: referencedInside,
+      memoryOps: [
+        {
+          op: 'remove',
+          field: 'evidences',
+          index: 0
+        }
+      ]
+    })
+
+    expect(result.watchHint).toContain('memoryReducer')
+    expect(result.inside).toEqual(referencedInside)
+  })
+
+  it('rejects an evidence id edit when an existing fact is not updated in the same round', () => {
+    const result = reduceBrainMemory({
+      inside: referencedInside,
+      memoryOps: [
+        {
+          op: 'edit',
+          field: 'evidences',
+          index: 0,
+          value: {
+            id: 'evidence-2',
+            toolName: 'kb_hybrid_search_chunks',
+            summary: '知识库显示上线前需要复核。',
+            sourceType: 'tool_result'
+          }
+        }
+      ]
+    })
+
+    expect(result.watchHint).toContain('memoryReducer')
+    expect(result.inside).toEqual(referencedInside)
+  })
+
+  it('allows same-round evidence replacement when facts are updated to the final evidence ids', () => {
+    const result = reduceBrainMemory({
+      inside: referencedInside,
+      memoryOps: [
+        {
+          op: 'edit',
+          field: 'facts',
+          index: 0,
+          value: {
+            id: 'fact-1',
+            summary: '项目上线前需要复核。',
+            evidenceIds: ['evidence-2']
+          }
+        },
+        {
+          op: 'edit',
+          field: 'evidences',
+          index: 0,
+          value: {
+            id: 'evidence-2',
+            toolName: 'kb_hybrid_search_chunks',
+            summary: '知识库显示上线前需要复核。',
+            sourceType: 'tool_result'
+          }
+        }
+      ]
+    })
+
+    expect(result.watchHint).toBeUndefined()
+    expect(result.inside.facts[0]?.evidenceIds).toEqual(['evidence-2'])
+    expect(result.inside.evidences[0]?.id).toBe('evidence-2')
   })
 })

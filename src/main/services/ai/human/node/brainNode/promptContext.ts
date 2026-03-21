@@ -11,7 +11,7 @@ const buildMemorySnapshotText = (state: HumanState): string => {
       ? state.brainMemory.inside.facts
           .map(
             (fact) =>
-              `- fact(${fact.id})：${fact.summary}；evidenceIds=[${fact.evidenceIds.join(', ')}]`
+              `- 事实 ${fact.id}：${fact.summary}；支持证据=[${fact.evidenceIds.join(', ')}]`
           )
           .join('\n')
       : 'none'
@@ -20,7 +20,7 @@ const buildMemorySnapshotText = (state: HumanState): string => {
       ? state.brainMemory.inside.evidences
           .map(
             (evidence) =>
-              `- evidence(${evidence.id})：toolName=${evidence.toolName}；summary=${evidence.summary}${evidence.rawRef ? `；rawRef=${evidence.rawRef}` : ''}`
+              `- 证据 ${evidence.id}：来源工具 ${evidence.toolName}；摘要：${evidence.summary}${evidence.rawRef ? `；rawRef=${evidence.rawRef}` : ''}`
           )
           .join('\n')
       : 'none'
@@ -30,13 +30,15 @@ const buildMemorySnapshotText = (state: HumanState): string => {
       : 'none'
 
   return [
-    'facts:',
+    '下面是你之前沉淀下来的记忆。这些内容代表当前已经确认、可以直接复用或仍影响推进的信息。',
+    '',
+    '已确认的事实：',
     factsText,
     '',
-    'evidences:',
+    '支撑这些事实的关键证据：',
     evidencesText,
     '',
-    'openQuestions:',
+    '仍未解决的问题：',
     openQuestionsText
   ].join('\n')
 }
@@ -47,15 +49,19 @@ const buildSkillContextText = (state: HumanState): string => {
       ? state.brainMemory.outside.skillCatalog
           .map(
             (item) =>
-              `- ${item.skillId}: ${item.summary}; tools=[${item.toolNames.join(', ')}]; whenToUse=${item.whenToUse}`
+              `- ${item.skillId}：${item.summary}；可提供工具=[${item.toolNames.join(', ')}]；适用场景=${item.whenToUse}`
           )
+      : ['none']
+  const learnedSkillIdLines =
+    state.brainMemory.outside.learnedSkillIds.length > 0
+      ? state.brainMemory.outside.learnedSkillIds.map((skillId) => `- ${skillId}`)
       : ['none']
   const learnedDetailLines =
     state.brainMemory.outside.learnedSkillIds.length > 0
       ? state.brainMemory.outside.learnedSkillIds
           .map((skillId) => {
             const definition = getSkillDefinition(skillId)
-            return `- ${definition.skillId}: ${definition.detail}`
+            return `- ${definition.skillId}：${definition.detail}`
           })
       : ['none']
   const learnedToolSpecLines =
@@ -70,50 +76,71 @@ const buildSkillContextText = (state: HumanState): string => {
               .map((arg) => `${arg.name}:${arg.type}`)
               .join(', ')
             const example = spec.examples?.[0]
-              ? `exampleGoal=${spec.examples[0].goal}; exampleArgs=${Object.keys(spec.examples[0].args).join(', ') || 'none'}`
-              : 'example=none'
-            return `- ${spec.name}: whenToUse=${spec.whenToUse}; requiredArgs=[${requiredArgs || 'none'}]; ${example}`
+              ? `示例目标=${spec.examples[0].goal}；示例参数键=[${Object.keys(spec.examples[0].args).join(', ') || 'none'}]`
+              : '示例=none'
+            return `- 工具 ${spec.name}：适用场景=${spec.whenToUse}；必填参数=[${requiredArgs || 'none'}]；${example}`
           })
       : ['none']
 
   return [
-    'catalog:',
+    '下面是当前可用的技能信息。技能目录摘要只用于判断要不要学习；只有已学习 skill 的详细说明和工具要点，才代表你当前可以直接依赖的能力。',
+    '',
+    '当前可用技能目录摘要：',
     formatList(catalogLines),
     '',
-    'learned skills:',
+    '已经学习的 skill id：',
+    formatList(learnedSkillIdLines),
+    '',
+    '已学习技能的详细说明：',
     formatList(learnedDetailLines),
     '',
-    'tool specs:',
+    '已学习技能对应的工具使用要点：',
     formatList(learnedToolSpecLines)
   ].join('\n')
 }
 
 const buildRecentToolResultsText = (state: HumanState): string => {
-  if (!state.lastParallelCallToolResults || state.lastParallelCallToolResults.length === 0) return 'none'
-  return state.lastParallelCallToolResults
-    .map(
-      (result, index) =>
-        `- 第${index + 1}项：toolName=${result.toolName}；ok=${result.ok ? 'true' : 'false'}；code=${result.code}；summary=${result.summary}`
-    )
-    .join('\n')
+  const resultLines =
+    state.lastParallelCallToolResults && state.lastParallelCallToolResults.length > 0
+      ? state.lastParallelCallToolResults
+          .map(
+            (result, index) =>
+              `- 第${index + 1}项：工具 ${result.toolName} ${result.ok ? '执行成功' : '执行失败'}（code=${result.code}）；摘要：${result.summary}`
+          )
+          .join('\n')
+      : 'none'
+
+  return [
+    '下面是最近一轮工具调用刚带回来的新信息。请把这些结果和已有记忆一起判断，不要重复做同样的动作。',
+    '',
+    resultLines
+  ].join('\n')
 }
 
 const buildRecentDecisionHistoryText = (state: HumanState): string => {
-  if (state.brainMemory.outside.brainDecisions.length === 0) return 'none'
-  return state.brainMemory.outside.brainDecisions
-    .map((record, index) => {
-      const ordinal = index + 1
-      const action = record.nextAction.action
-      const nextActionPayload =
-        action === 'learning'
-          ? `wantLearnSkillIds=[${record.nextAction.wantLearnSkillIds.join(',')}]`
-          : action === 'hand'
-            ? `parallelCallToolParam=${JSON.stringify(record.nextAction.parallelCallToolParam)}`
-            : `status=${record.nextAction.status}`
+  const historyLines =
+    state.brainMemory.outside.brainDecisions.length > 0
+      ? state.brainMemory.outside.brainDecisions
+          .map((record, index) => {
+            const ordinal = index + 1
+            const action = record.nextAction.action
+            const nextActionPayload =
+              action === 'learning'
+                ? `wantLearnSkillIds=[${record.nextAction.wantLearnSkillIds.join(',')}]`
+                : action === 'hand'
+                  ? `parallelCallToolParam=${JSON.stringify(record.nextAction.parallelCallToolParam)}`
+                  : `status=${record.nextAction.status}`
 
-      return `- 第${ordinal}轮（createdAt=${record.createdAt}）：决定“${record.decision.summary}”；原因：${record.decision.reason}；预期结果：${record.decision.expectedOutcome}；nextAction.action=${action}；nextAction数据：${nextActionPayload}`
-    })
-    .join('\n')
+            return `- 第${ordinal}轮（createdAt=${record.createdAt}）：决定“${record.decision.summary}”；原因：${record.decision.reason}；预期结果：${record.decision.expectedOutcome}；nextAction.action=${action}；nextAction数据：${nextActionPayload}`
+          })
+          .join('\n')
+      : 'none'
+
+  return [
+    '下面是最近几轮已经做过的正式判断摘要，只用于帮助你理解时间顺序并避免重复决策。',
+    '',
+    historyLines
+  ].join('\n')
 }
 
 export const buildBrainPromptContext = (state: HumanState) =>
@@ -123,5 +150,9 @@ export const buildBrainPromptContext = (state: HumanState) =>
     skillContextText: buildSkillContextText(state),
     recentToolResultsText: buildRecentToolResultsText(state),
     recentDecisionHistoryText: buildRecentDecisionHistoryText(state),
-    watchHintText: state.watchHint || 'none'
+    watchHintText: [
+      '如果这里是 none，表示当前没有额外的收敛提醒；否则应优先考虑结束任务或纠偏。',
+      '',
+      state.watchHint || 'none'
+    ].join('\n')
   })

@@ -136,6 +136,13 @@ const applyOpenQuestionOp = (
   }
 }
 
+const hasDanglingFactEvidenceReference = (
+  inside: HumanState['brainMemory']['inside']
+): boolean => {
+  const validEvidenceIds = new Set(inside.evidences.map((item) => item.id))
+  return inside.facts.some((fact) => !hasEvidenceIds(validEvidenceIds, fact.evidenceIds))
+}
+
 export const reduceBrainMemory = (input: {
   inside: HumanState['brainMemory']['inside']
   memoryOps: BrainMemoryOp[]
@@ -146,6 +153,7 @@ export const reduceBrainMemory = (input: {
   let nextInside = input.inside
   let hasInvalidOp = false
   const finalEvidenceIds = computeFinalEvidenceIds(input)
+  const touchesEvidenceGraph = input.memoryOps.some((op) => op.field === 'facts' || op.field === 'evidences')
 
   input.memoryOps.forEach((op) => {
     if (op.op === 'remove') {
@@ -192,6 +200,13 @@ export const reduceBrainMemory = (input: {
     nextInside = outcome.inside
     if (outcome.invalid) hasInvalidOp = true
   })
+
+  if (touchesEvidenceGraph && hasDanglingFactEvidenceReference(nextInside)) {
+    return {
+      inside: input.inside,
+      watchHint: INVALID_MEMORY_OP_HINT
+    }
+  }
 
   return {
     inside: nextInside,

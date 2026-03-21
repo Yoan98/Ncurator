@@ -1,5 +1,5 @@
 import type { AiRunContext, AiRunState } from '../../types'
-import { appendContextEvidence, contextDecisionSchema, DEFAULT_MAX_CONTEXT_ROUNDS } from './helpers'
+import { contextDecisionSchema, DEFAULT_MAX_CONTEXT_ROUNDS } from './helpers'
 import { buildIntentPrompt } from '../prompts/intent'
 
 export const createIntentNode = (input: { ctx: AiRunContext; maxContextRounds?: number }) => {
@@ -48,28 +48,19 @@ export const createIntentNode = (input: { ctx: AiRunContext; maxContextRounds?: 
       const contextObjective = String(decision.reason || '').trim() || state.input
       return {
         contextObjective,
-        mainStage: 'main_context_human',
-        contextEvidence: decision.reason
-          ? appendContextEvidence(state, `intent: need_context (${decision.reason})`)
-          : state.contextEvidence
+        mainStage: 'main_context_human'
       }
     }
 
     if (decision.mode === 'direct_human') {
       return {
         contextObjective: undefined,
-        contextEvidence: decision.reason
-          ? appendContextEvidence(state, `intent: direct_human (${decision.reason})`)
-          : state.contextEvidence,
         mainStage: 'main_direct_human_exec'
       }
     }
 
     return {
       contextObjective: undefined,
-      contextEvidence: decision.reason
-        ? appendContextEvidence(state, `intent: to_plan (${decision.reason})`)
-        : state.contextEvidence,
       mainStage: 'main_plan'
     }
   }

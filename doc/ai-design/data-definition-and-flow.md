@@ -40,6 +40,7 @@ interface MainState {
   contextRounds: number
   // context 阶段得到的关键证据摘要。
   // 这些摘要应从 context_note 的“可复用证据”区块提取，而不是直接保存整段交付 markdown。
+  // intent / routing 的判定理由不写入这里。
   contextEvidence: string[]
   // 计划任务列表，每一项都是后续派发给 human 的任务。
   plan: MainPlanTask[]
@@ -162,6 +163,11 @@ interface BrainFact {
   evidenceIds: string[]
 }
 ```
+
+补充约束：
+
+- `brainMemory.inside` 任意时刻都必须满足：`facts[].evidenceIds` 只能引用当前仍存在的 evidence id。
+- 如果某组 `memoryOps` 会因为 evidence 的 `edit/remove` 导致已有 fact 出现悬空 `evidenceIds`，则该组编辑视为非法；`memoryReducer` 只写入 `watchHint` 并放弃本轮变更，不自动级联改写 fact。
 
 ### `brainMemory.outside`
 
