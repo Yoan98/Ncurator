@@ -1,5 +1,6 @@
 import { StateSchema } from '@langchain/langgraph'
 import { z } from 'zod/v4'
+import { aiArtifactRefSchema } from '../../schema'
 import {
   brainDecisionRecordSchema,
   brainEvidenceSchema,
@@ -69,6 +70,7 @@ export const createHumanRunStateSchema = () => {
     lastParallelCallToolResults: z.array(toolCallResultSchema).optional(),
     lastBrainDecision: lastBrainDecisionSchema.optional(),
     watchHint: z.string().optional(),
+    runtimeArtifacts: z.array(aiArtifactRefSchema).default(() => []),
     result: humanResultSchema.optional(),
     trace: z
       .object({

@@ -52,6 +52,7 @@ export const createDirectHumanExecNode = (input: {
 
     return {
       finalDeliveryMarkdown: output.deliveryMarkdown,
+      finalArtifacts: output.artifacts || [],
       mainStage: 'main_complete'
     }
   }

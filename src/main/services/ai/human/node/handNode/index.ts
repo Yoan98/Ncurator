@@ -1,5 +1,6 @@
 import { HUMAN_DEFAULT_TOOL_CALL_LIMIT } from '../../constants'
 import type { AiRunContext } from '../../../types'
+import { extractArtifactRefsFromToolResults, mergeArtifactRefs } from '../../../utils/artifacts'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { appendHumanTraceStep, emitHumanStep, emitWatchHint } from '../utils/events'
 import { validateParallelToolCalls } from './actionBatchGuard'
@@ -84,6 +85,10 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
         summary: watchHint
       })
     }
+    const runtimeArtifacts = mergeArtifactRefs(
+      state.runtimeArtifacts,
+      extractArtifactRefsFromToolResults(results)
+    )
     const nextState: HumanState = {
       ...state,
       runtime: {
@@ -92,6 +97,7 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       },
       lastParallelCallToolResults: results,
       watchHint,
+      runtimeArtifacts,
       trace: {
         steps: traceSteps
       }

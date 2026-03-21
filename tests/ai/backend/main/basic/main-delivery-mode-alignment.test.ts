@@ -42,7 +42,8 @@ const createBaseState = (): AiRunState => ({
       status: 'ready'
     }
   ],
-  dispatchCursor: 0
+  dispatchCursor: 0,
+  finalArtifacts: []
 })
 
 describe('main delivery mode alignment', () => {

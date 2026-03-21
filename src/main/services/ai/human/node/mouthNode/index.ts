@@ -59,7 +59,8 @@ export const createMouthNode = (input: {
           deliveryMode: input.deliveryMode,
           finalStatus,
           summary: result.summary
-        })
+        }),
+      artifacts: state.runtimeArtifacts.length > 0 ? [...state.runtimeArtifacts] : undefined
     }
     if (input.streamAnswer) {
       input.ctx.sendEvent({

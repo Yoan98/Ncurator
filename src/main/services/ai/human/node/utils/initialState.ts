@@ -19,6 +19,7 @@ export const createInitialHumanState = (task: HumanTaskInput): HumanState => ({
       brainDecisions: []
     }
   },
+  runtimeArtifacts: [],
   trace: {
     steps: []
   }

@@ -1,5 +1,5 @@
 import type { StructuredToolInterface } from '@langchain/core/tools'
-import type { JsonObject, JsonValue } from '../../../../shared/types'
+import type { AiArtifactRef, JsonObject, JsonValue } from '../../../../shared/types'
 import type { AiToolFamilyId } from './tools/types'
 import {
   HUMAN_DELIVERY_MODES,
@@ -160,6 +160,7 @@ export type HumanResult = {
   status: 'completed' | 'blocked'
   summary: string
   deliveryMarkdown?: string
+  artifacts?: AiArtifactRef[]
 }
 
 export type MouthOutput = {
@@ -187,6 +188,7 @@ export type HumanTaskOutput = {
   status: 'completed' | 'blocked'
   summary: string
   deliveryMarkdown?: string
+  artifacts?: AiArtifactRef[]
 }
 
 export type HumanState = {
@@ -210,6 +212,7 @@ export type HumanState = {
   lastParallelCallToolResults?: ToolCallResult[]
   lastBrainDecision?: LastBrainDecision
   watchHint?: string
+  runtimeArtifacts: AiArtifactRef[]
   result?: HumanResult
   trace: {
     steps: HumanTraceStep[]

@@ -50,6 +50,8 @@ interface MainState {
   error?: string
   // main 最终对用户输出的 markdown。
   finalDeliveryMarkdown?: string
+  // run 结束时可供系统继续消费的结构化交付物引用。
+  finalArtifacts: AiArtifactRef[]
 }
 
 interface MainPlanTask {
@@ -65,7 +67,32 @@ interface MainPlanTask {
   // 该任务的正式交付内容。
   // 在 plan 链路中，通常是供后续任务与 synthesis 使用的 task_handoff 文档。
   deliveryMarkdown?: string
+  // 该任务已经产生的结构化交付物引用。
+  artifacts?: AiArtifactRef[]
 }
+
+type AiArtifactRef =
+  | {
+      kind: 'file'
+      capability: 'terminal_exec' | 'docx'
+      path: string
+      fileName: string
+      operation: 'created' | 'updated'
+      artifactRole?: 'preview' | 'draft' | 'committed'
+      reviewId?: string
+      draftDocumentId?: string
+      draftSnapshotId?: string
+      summary: string
+    }
+  | {
+      kind: 'draft_review'
+      review: {
+        reviewId: string
+        documentCount: number
+        changeCount: number
+      }
+      summary: string
+    }
 ```
 
 补充说明：
@@ -129,6 +156,8 @@ interface HumanState {
   lastBrainDecision?: LastBrainDecision
   // 收敛或纠偏提示；例如手部调用超限、重复学习已学 skill、记忆编辑失败。
   watchHint?: string
+  // 运行时收集到的结构化交付物引用；由 hand 写入、mouth 透传。
+  runtimeArtifacts: AiArtifactRef[]
   // 最终任务结果，只由 mouth 写入。
   result?: HumanResult
   trace: {
@@ -327,6 +356,8 @@ interface HumanResult {
   summary: string
   // 最终对用户交付的 markdown。
   deliveryMarkdown?: string
+  // 运行时附加的结构化交付物引用。
+  artifacts?: AiArtifactRef[]
 }
 ```
 
@@ -335,7 +366,8 @@ interface HumanResult {
 - `mouth` 的模型输出只包含 `summary + deliveryMarkdown?`
 - `HumanResult.status` 由 runner 按 `lastBrainDecision.nextAction.status` 回写
 - `mouth` 默认只消费 `finalDecision + facts + evidences + openQuestions`
-- 如果后续确实需要在交付中引用 preview、输出路径、review id 等交付物，应单独补充结构化 `artifacts`
+- `artifacts` 由 runtime 直接回写到 `HumanResult / MainPlanTask / MainState.finalArtifacts`，不要求 `mouth` 模型生成或复述路径、`reviewId`
+- `draft_review` 属于 run 级 artifact，只会在 run finalization 后追加到 `MainState.finalArtifacts`
 
 ## 4. 数据流转图
 
@@ -372,7 +404,7 @@ flowchart LR
     ME["main_plan_exec"]
     H["human 输出结果"]
     MS["main_synthesis_human"]
-    S4[("MainState.finalDeliveryMarkdown")]
+    S4[("MainState.finalDeliveryMarkdown / finalArtifacts")]
     MX["main_complete"]
     S5[("MainState.status / error")]
 
@@ -435,12 +467,14 @@ flowchart LR
     LBD[("lastBrainDecision.nextAction.parallelCallToolParam")]
     H["hand"]
     LTR[("lastParallelCallToolResults")]
+    A[("runtimeArtifacts")]
     WH[("watchHint")]
     TR[("trace.steps")]
     B["brain"]
 
     LBD -->|读取并行工具调用参数数组| H
     H -->|写入本轮并行工具结果数组| LTR
+    H -->|从工具结构化输出提取并回写 artifacts| A
     H -->|超过累计工具调用临时上限时写入| WH
     H -->|追加 hand 执行轨迹| TR
     H -->|返回下一轮 brain| B
@@ -454,6 +488,7 @@ flowchart LR
     BM[("brainMemory")]
     LTR[("lastParallelCallToolResults")]
     LBD[("lastBrainDecision")]
+    A[("runtimeArtifacts")]
     WH[("watchHint")]
     M["mouth"]
     R[("result")]
@@ -463,7 +498,8 @@ flowchart LR
     BM -->|读取 facts / evidences / openQuestions| M
     LTR -->|整理最近工具结果摘要| M
     LBD -->|读取当前 nextAction.status 与最终决策| M
+    A -->|读取已收集的结构化 artifacts| M
     WH -->|必要时整理为交付提示| M
-    M -->|输出 summary + deliveryMarkdown；runner 按 nextAction.status 回写 result| R
+    M -->|输出 summary + deliveryMarkdown；runner 按 nextAction.status 回写 result，并透传 artifacts| R
     M -->|追加 mouth 执行轨迹| TR
 ```

@@ -245,6 +245,13 @@ defineAiHumanCase({
     )
     runtime.assertThat(
       result.fileArtifacts.length >= 1 &&
+        Array.isArray(result.output.artifacts) &&
+        result.output.artifacts.some(
+          (artifact) =>
+            artifact.kind === 'file' &&
+            artifact.artifactRole === 'preview' &&
+            artifact.path === result.previewPath
+        ) &&
         result.humanSteps.some((event) => event.action === 'learn_skill') &&
         result.humanSteps.filter((event) => event.action === 'call_tool').length >= 4 &&
         result.humanSteps.some((event) => event.action === 'deliver_result') &&

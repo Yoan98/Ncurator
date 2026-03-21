@@ -21,6 +21,7 @@
 
 - 接收 `taskId + userInput`。
 - 维护 `brainMemory`，并明确区分 `inside` 与 `outside`。
+- 运行时可额外收集结构化 `artifacts`，供后续系统稳定引用交付物。
 - 通过 `brain` 决定下一步是加载技能、发起并行工具调用，还是直接输出。
 - 在 `mouth` 节点按交付模式整理最终答复、子任务交接文档或上下文补充记录。
 
@@ -76,7 +77,7 @@ human设计核心
 - `mouth`
   - 读取 `lastBrainDecision.nextAction.status`、最后一次正式决策、已确认事实/证据/未决项。
   - 不读取最近决策历史，也不重新判断最终状态。
-  - 如后续确实需要交付物引用，再单独补充结构化 `artifacts`。
+  - `mouth` 的模型输出仍只负责 `summary + deliveryMarkdown`；结构化 `artifacts` 由 runtime 透传到最终结果。
   - 按 `deliveryMode` 整理 `deliveryMarkdown`，典型模式包括 `user_answer`、`task_handoff`、`context_note`。
 
 ```mermaid

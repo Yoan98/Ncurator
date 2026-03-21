@@ -27,7 +27,8 @@ export class AiRunService {
         plan: [],
         contextRounds: 0,
         contextEvidence: [],
-        dispatchCursor: 0
+        dispatchCursor: 0,
+        finalArtifacts: []
       } as AiRunState)
       return res as AiRunState
     } catch (e) {
@@ -48,6 +49,7 @@ export class AiRunService {
           contextRounds: 0,
           contextEvidence: [],
           dispatchCursor: 0,
+          finalArtifacts: [],
           error: 'cancelled'
         }
       }
@@ -62,6 +64,7 @@ export class AiRunService {
         contextRounds: 0,
         contextEvidence: [],
         dispatchCursor: 0,
+        finalArtifacts: [],
         error: msg
       }
     }

@@ -18,7 +18,8 @@ const createPlanExecState = (runtime: { runId: string }): AiRunState => ({
       status: 'ready'
     }
   ],
-  dispatchCursor: 0
+  dispatchCursor: 0,
+  finalArtifacts: []
 })
 
 defineAiMainCase({
@@ -34,7 +35,17 @@ defineAiMainCase({
       taskId: 'task-1',
       status: 'blocked',
       summary: '缺少必要权限，当前无法继续执行。',
-      deliveryMarkdown: '# 阻塞说明'
+      deliveryMarkdown: '# 阻塞说明',
+      artifacts: [
+        {
+          kind: 'file',
+          capability: 'terminal_exec',
+          path: '/tmp/blocked-log.txt',
+          fileName: 'blocked-log.txt',
+          operation: 'created',
+          summary: 'blocked task evidence'
+        }
+      ]
     })
     const node = createPlanExecNode({ ctx, runHumanTask })
     const output = await node(createPlanExecState(runtime))
@@ -49,6 +60,7 @@ defineAiMainCase({
     runtime.assertThat(
       plan[0]?.status === 'blocked' &&
         plan[0]?.deliveryMarkdown === '# 阻塞说明' &&
+        plan[0]?.artifacts?.[0]?.kind === 'file' &&
         result.output.mainStage === 'main_synthesis_human',
       {
         name: 'main-plan-exec-blocked-state',

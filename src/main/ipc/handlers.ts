@@ -5,6 +5,10 @@ import { StorageService } from '../services/storage/StorageService'
 import { ModelService } from '../services/model/ModelService'
 import { AiRunService } from '../services/ai/AiRunService'
 import { updateSessionMemoryAfterRun } from '../services/ai/memory'
+import {
+  buildRunArtifactsFromDraftReviewDetail,
+  mergeArtifactRefs
+} from '../services/ai/utils/artifacts'
 import { DraftReviewService } from '../services/ai/human/tools/docx/review/DraftReviewService'
 import {
   getDocxWorkerClient,
@@ -1906,6 +1910,10 @@ export function registerHandlers(services: {
             : null
 
           if (draftReviewDetail) {
+            result.finalArtifacts = mergeArtifactRefs(
+              result.finalArtifacts,
+              buildRunArtifactsFromDraftReviewDetail(draftReviewDetail)
+            )
             sendEvent({
               type: 'draft_review_ready',
               runId,

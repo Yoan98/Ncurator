@@ -17,10 +17,22 @@ const createBaseState = (runtime: { runId: string }): AiRunState => ({
       title: '核对现状',
       userInput: '读取当前 workspace 状态。',
       status: 'completed',
-      deliveryMarkdown: '# 子任务交付'
+      deliveryMarkdown: '# 子任务交付',
+      artifacts: [
+        {
+          kind: 'file',
+          capability: 'docx',
+          path: '/tmp/task-1-preview.docx',
+          fileName: 'task-1-preview.docx',
+          operation: 'created',
+          artifactRole: 'preview',
+          summary: 'task preview generated'
+        }
+      ]
     }
   ],
-  dispatchCursor: 1
+  dispatchCursor: 1,
+  finalArtifacts: []
 })
 
 defineAiMainCase({
@@ -37,13 +49,34 @@ defineAiMainCase({
       taskId: 'direct-human',
       status: 'completed',
       summary: '已给出直接答复。',
-      deliveryMarkdown: '# Direct Delivery'
+      deliveryMarkdown: '# Direct Delivery',
+      artifacts: [
+        {
+          kind: 'file',
+          capability: 'terminal_exec',
+          path: '/tmp/direct-output.txt',
+          fileName: 'direct-output.txt',
+          operation: 'created',
+          summary: 'direct artifact ready'
+        }
+      ]
     })
     const synthesisRunner: HumanTaskRunner = async () => ({
       taskId: 'synthesis-human',
       status: 'completed',
       summary: '已汇总全部任务交付。',
-      deliveryMarkdown: '# Synthesis Delivery'
+      deliveryMarkdown: '# Synthesis Delivery',
+      artifacts: [
+        {
+          kind: 'file',
+          capability: 'docx',
+          path: '/tmp/synthesis-note.docx',
+          fileName: 'synthesis-note.docx',
+          operation: 'created',
+          artifactRole: 'committed',
+          summary: 'synthesis note saved'
+        }
+      ]
     })
     const directNode = createDirectHumanExecNode({ ctx: directCtx, runHumanTask: directRunner })
     const synthesisNode = createSynthesisHumanNode({
@@ -67,11 +100,16 @@ defineAiMainCase({
     runtime.assertThat(
       result.directOutput.finalDeliveryMarkdown === '# Direct Delivery' &&
         result.synthesisOutput.finalDeliveryMarkdown === '# Synthesis Delivery' &&
+        Array.isArray(result.directOutput.finalArtifacts) &&
+        result.directOutput.finalArtifacts.length === 1 &&
+        result.directOutput.finalArtifacts[0]?.kind === 'file' &&
+        Array.isArray(result.synthesisOutput.finalArtifacts) &&
+        result.synthesisOutput.finalArtifacts.length === 2 &&
         !('finalDeliveryTaskId' in result.directOutput) &&
         !('resultCode' in result.directOutput),
       {
         name: 'main-final-delivery-shape',
-        message: 'direct/synthesis 结果应只写 finalDeliveryMarkdown，不再回写旧结果字段'
+        message: 'direct/synthesis 结果应写 finalDeliveryMarkdown + finalArtifacts，不再回写旧结果字段'
       }
     )
     runtime.assertThat(

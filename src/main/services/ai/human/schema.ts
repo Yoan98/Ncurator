@@ -1,5 +1,6 @@
 import { z } from 'zod/v4'
 import type { JsonObject, JsonValue } from '../../../../shared/types'
+import { aiArtifactRefSchema } from '../schema'
 import { HUMAN_DELIVERY_MODES, RUNTIME_SKILL_IDS, TOOL_CALL_RESULT_CODES } from './constants'
 import type {
   BrainDecision,
@@ -160,5 +161,6 @@ export const mouthOutputSchema: z.ZodType<MouthOutput> = z.object({
 export const humanResultSchema: z.ZodType<HumanResult> = z.object({
   status: z.enum(['completed', 'blocked']),
   summary: z.string().min(1),
-  deliveryMarkdown: z.string().min(1).optional()
+  deliveryMarkdown: z.string().min(1).optional(),
+  artifacts: z.array(aiArtifactRefSchema).optional()
 })

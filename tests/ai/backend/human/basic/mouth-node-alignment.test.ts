@@ -56,6 +56,17 @@ const createState = (status: 'completed' | 'blocked'): HumanState => ({
       status
     }
   },
+  runtimeArtifacts: [
+    {
+      kind: 'file',
+      capability: 'docx',
+      path: '/tmp/preview.docx',
+      fileName: 'preview.docx',
+      operation: 'created',
+      artifactRole: 'preview',
+      summary: 'preview generated'
+    }
+  ],
   trace: {
     steps: []
   }
@@ -122,5 +133,38 @@ describe('mouth node alignment', () => {
     expect(deliveryMarkdown).toContain('## 任务状态')
     expect(deliveryMarkdown).toContain('## 关键事实')
     expect(deliveryMarkdown).toContain('## 建议下一步')
+  })
+
+  it('does not inject artifacts into mouth prompt but writes runtime artifacts into result', async () => {
+    let capturedUserPrompt = ''
+    const ctx = createCtx(async (input) => {
+      capturedUserPrompt = input.user
+      return {
+        summary: '已整理最终结果。',
+        deliveryMarkdown: '# 处理结果'
+      }
+    })
+    const node = createMouthNode({
+      ctx,
+      cache: createCache(),
+      deliveryMode: 'user_answer',
+      streamAnswer: false,
+      internalDelivery: false
+    })
+
+    const output = await node(createState('completed'))
+
+    expect(capturedUserPrompt).not.toContain('/tmp/preview.docx')
+    expect(output.result?.artifacts).toEqual([
+      {
+        kind: 'file',
+        capability: 'docx',
+        path: '/tmp/preview.docx',
+        fileName: 'preview.docx',
+        operation: 'created',
+        artifactRole: 'preview',
+        summary: 'preview generated'
+      }
+    ])
   })
 })

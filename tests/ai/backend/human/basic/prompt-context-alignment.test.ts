@@ -89,6 +89,7 @@ const createBaseState = (): HumanState => ({
     }
   },
   watchHint: '请优先考虑结束或纠偏。',
+  runtimeArtifacts: [],
   trace: {
     steps: []
   }

@@ -1,4 +1,5 @@
 import type { AiRunContext, AiRunState, HumanTaskRunner } from '../../types'
+import { mergeArtifactRefs } from '../../utils/artifacts'
 import { buildSynthesisHumanObjective } from './objectives'
 
 const SYNTHESIS_TASK_ID = 'synthesis-human'
@@ -54,6 +55,10 @@ export const createSynthesisHumanNode = (input: {
 
     return {
       finalDeliveryMarkdown: output.deliveryMarkdown,
+      finalArtifacts: mergeArtifactRefs(
+        ...state.plan.map((task) => task.artifacts),
+        output.artifacts
+      ),
       mainStage: 'main_complete'
     }
   }

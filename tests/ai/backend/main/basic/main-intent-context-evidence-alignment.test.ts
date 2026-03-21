@@ -34,7 +34,8 @@ const createBaseState = (): AiRunState => ({
   contextRounds: 0,
   contextEvidence: ['证据一', '证据二'],
   plan: [],
-  dispatchCursor: 0
+  dispatchCursor: 0,
+  finalArtifacts: []
 })
 
 describe('main intent context evidence alignment', () => {

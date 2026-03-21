@@ -11,7 +11,8 @@ const createBaseState = (runtime: { runId: string }): AiRunState => ({
   contextRounds: 0,
   contextEvidence: ['已有上下文：用户需要先核对现状，再输出修复方案。'],
   plan: [],
-  dispatchCursor: 0
+  dispatchCursor: 0,
+  finalArtifacts: []
 })
 
 defineAiMainCase({

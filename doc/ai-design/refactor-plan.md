@@ -24,12 +24,13 @@
 - `intent` 路由理由不再写入 `contextEvidence`；`contextEvidence` 现只承载上下文可复用证据摘要。
 - `memoryReducer` 已补齐 `evidence -> fact` 引用一致性保护；任何会导致悬空 `evidenceIds` 的 evidence 变更都会被视为非法编辑并回退。
 - `brain` prompt 与 `buildBrainPromptContext` 已收口到第 6.2 节要求的语义化输入模板，不再停留在字段味较强的骨架版。
+- `artifacts` 的 backend-only v1 已落地：`hand` 从工具结构化结果收集 artifacts，`mouth` 只透传 runtime artifacts，run finalization 会追加 `draft_review` 与 `draft` file artifacts。
 - `human state schema`、`decisionContract`、`mouth` output contract 已切到共享 schema，`brainDecisions / lastBrainDecision` 不再使用宽松 `record` 容器。
 - 本轮针对 `mouth` 状态归属、`deliveryMode` 传递、`contextEvidence` 抽取、schema 对齐、`main-plan-exec-blocked` 路径的目标测试已补齐并通过。
 
 ### 0.3 当前仍待收口的点
 
-- 如果后续确实需要在交付中稳定引用 preview、文件路径、review id 等产物，仍需单独设计结构化 `artifacts`，而不是回退到自由提示文本层。
+- `artifacts` 当前只完成 backend-only v1；前端消费、以及 markdown 内是否稳定展示这些引用，仍留待后续阶段单独设计。
 - 当前测试已覆盖核心契约与关键路径，但后续仍需继续扩大 live / scenario 覆盖，特别是模型真实产出 `task_handoff / context_note` 时的稳定性验证。
 
 ### 0.4 下一步推进入口
@@ -278,6 +279,7 @@ interface HumanResult {
   status: 'completed' | 'blocked'
   summary: string
   deliveryMarkdown?: string
+  artifacts?: AiArtifactRef[]
 }
 ```
 
@@ -286,6 +288,7 @@ interface HumanResult {
 - `mouth` 的模型输出只负责 `summary + deliveryMarkdown?`
 - `result.status` 由 runner 按 `lastBrainDecision.nextAction.status` 回写
 - `mouth` 不再输出或改写最终 `status`
+- `artifacts` 由 runtime 从工具结构化结果与 run finalization 结果回写，不要求 `mouth` 模型生成
 
 ### 4.6 `main` 任务结果契约
 
@@ -298,6 +301,7 @@ interface MainPlanTask {
   userInput: string
   status: 'ready' | 'running' | 'completed' | 'blocked'
   deliveryMarkdown?: string
+  artifacts?: AiArtifactRef[]
 }
 ```
 
@@ -305,7 +309,7 @@ interface MainPlanTask {
 
 - 计划任务初始状态统一为 `ready`，不再使用 `pending`。
 - `blocked` 表示任务已派发给 `human` 且最终阻塞，不与“尚未执行”混用。
-- `main` 最终只保留 `finalDeliveryMarkdown` 作为正式交付。
+- `main` 最终保留 `finalDeliveryMarkdown + finalArtifacts` 作为正式交付结果。
 
 ### 4.7 `deliveryMarkdown` 模式与交付结构
 
@@ -409,7 +413,7 @@ interface MainPlanTask {
 - 读取 `lastBrainDecision.nextAction.status`、最后一次正式决策，以及 `brainMemory.inside` 中的 `facts / evidences / openQuestions`。
 - 不读取最近决策历史。
 - 默认不额外引入 hint / digest 文本层。
-- 如后续确实需要在交付中引用 preview、输出路径、review id 等交付物信息，应单独以 `artifacts` 形式补充，而不是把运行时信息预先压成自然语言提示。
+- `artifacts` 已按 backend-only v1 落地：`mouth` prompt 不扩张，运行时直接把结构化 artifacts 写入 `result`。
 - `mouth` 按 `deliveryMode` 整理 `deliveryMarkdown`；`task_handoff` 与 `context_note` 使用固定章节结构。
 - `mouth` 的模型输出只负责 `summary` 与 `deliveryMarkdown`；最终 `result.status` 由 runner 按 `nextAction.status` 回写。
 - 不补编新事实，只负责把已有结论整理成可交付结果。
@@ -850,11 +854,11 @@ interface MainPlanTask {
 - 最近决策历史、最近工具结果、`watchHint` 已保持为易理解的文本语义块，不再回退到运行态对象直灌。
 - 对应测试已改为校验语义边界，而不是锁死旧骨架文本形态。
 
-### 7.2 第二阶段：按需补 `artifacts`
+### 7.2 第二阶段：`artifacts` backend-only v1（已完成）
 
-- 仅当真实业务场景持续需要 preview、输出路径、review id 等产物引用时，再引入结构化 `artifacts`。
-- `artifacts` 只承载交付物引用，不承担新的推理或提示文本职责。
-- 在 `artifacts` 落地前，继续保持 `mouth` 输入最小集合，不重新引入 hint / digest 文本层。
+- `artifacts` 已以 backend-only v1 形式落地到 `runtimeArtifacts / HumanResult.artifacts / MainPlanTask.artifacts / MainState.finalArtifacts`。
+- `hand` 只从工具结构化输出提取 artifacts；`draft_review` 与 `draft` file artifacts 在 run finalization 后追加到 `finalArtifacts`。
+- `mouth` prompt 继续保持最小输入集合，不重新引入 hint / digest 文本层；结构化 artifacts 由 runtime 直接透传。
 
 ### 7.3 第三阶段：扩大回归覆盖
 

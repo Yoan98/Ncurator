@@ -1,5 +1,6 @@
 import { StateSchema } from '@langchain/langgraph'
 import { z } from 'zod/v4'
+import { aiArtifactRefSchema, aiPlanTaskSchema } from '../../schema'
 
 export const createMainRunStateSchema = () => {
   return new StateSchema({
@@ -21,19 +22,10 @@ export const createMainRunStateSchema = () => {
     contextRounds: z.number().default(0),
     contextObjective: z.string().optional(),
     contextEvidence: z.array(z.string()).default(() => []),
-    plan: z
-      .array(
-        z.object({
-          id: z.string(),
-          title: z.string(),
-          userInput: z.string(),
-          status: z.enum(['ready', 'running', 'completed', 'blocked']),
-          deliveryMarkdown: z.string().optional()
-        })
-      )
-      .default(() => []),
+    plan: z.array(aiPlanTaskSchema).default(() => []),
     dispatchCursor: z.number().default(0),
     error: z.string().optional(),
-    finalDeliveryMarkdown: z.string().optional()
+    finalDeliveryMarkdown: z.string().optional(),
+    finalArtifacts: z.array(aiArtifactRefSchema).default(() => [])
   })
 }

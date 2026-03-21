@@ -6,6 +6,7 @@ import type { DocxChangedBlock, DocxOp } from './human/tools/docx/types'
 import type { DraftReviewService } from './human/tools/docx/review/DraftReviewService'
 import type { z } from 'zod/v4'
 import type {
+  AiArtifactRef,
   AiRuntimeSettings,
   AiPlanTask,
   AiRunEvent,
@@ -67,6 +68,8 @@ export type AiRunState = {
   error?: string
   // 最终交付 markdown（direct human / synthesis human 输出）。
   finalDeliveryMarkdown?: string
+  // run 结束时可供系统稳定引用的结构化交付物。
+  finalArtifacts: AiArtifactRef[]
 }
 
 export type AiRunStartPayload = {

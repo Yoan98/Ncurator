@@ -531,6 +531,18 @@ export type AiRuntimeSettings = Record<string, never>
 export type AiFileArtifactCapability = 'terminal_exec' | 'docx'
 export type AiFileArtifactOperation = 'created' | 'updated'
 export type AiFileArtifactRole = DraftArtifactRole
+export type AiFileArtifactRef = {
+  kind: 'file'
+  capability: AiFileArtifactCapability
+  path: string
+  fileName: string
+  operation: AiFileArtifactOperation
+  artifactRole?: AiFileArtifactRole
+  reviewId?: string
+  draftDocumentId?: string
+  draftSnapshotId?: string
+  summary: string
+}
 export type AiDraftSnapshotRef = {
   reviewId?: string
   draftDocumentId?: string
@@ -543,6 +555,12 @@ export type AiDraftReviewRef = {
   documentCount: number
   changeCount: number
 }
+export type AiDraftReviewArtifactRef = {
+  kind: 'draft_review'
+  review: AiDraftReviewRef
+  summary: string
+}
+export type AiArtifactRef = AiFileArtifactRef | AiDraftReviewArtifactRef
 
 export type AiPlanTask = {
   id: string
@@ -550,6 +568,7 @@ export type AiPlanTask = {
   userInput: string
   status: AiTaskStatus
   deliveryMarkdown?: string
+  artifacts?: AiArtifactRef[]
 }
 
 export type AiRunStartRequest = {

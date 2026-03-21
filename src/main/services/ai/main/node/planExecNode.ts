@@ -57,13 +57,15 @@ export const createPlanExecNode = (input: {
         return {
           ...item,
           status: 'blocked' as const,
-          deliveryMarkdown: output.deliveryMarkdown
+          deliveryMarkdown: output.deliveryMarkdown,
+          artifacts: output.artifacts
         }
       }
       return {
         ...item,
         status: 'completed' as const,
-        deliveryMarkdown: output.deliveryMarkdown
+        deliveryMarkdown: output.deliveryMarkdown,
+        artifacts: output.artifacts
       }
     })
 
