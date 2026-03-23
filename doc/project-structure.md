@@ -83,7 +83,7 @@ tests/                   # 自动化测试
 - `doc/` 下的 canonical 文档默认直接放在根目录。
 - `doc/README.md` 是默认阅读入口。
 - canonical 文档、阅读路径和同步清单都在 `doc/` 根目录维护。
-- `doc/ai-design/` 用于 AI 架构设计、数据定义与流转图，以及 AI 新架构重构计划。
+- `doc/ai-design/` 用于 AI 总体架构、实现规范、数据契约与数据流转、skill 设计、prompt 设计，以及未来重构规划。
 - `doc/ai-workbench-test/` 用于 AI workbench 测试计划与分阶段 todo 管理。
 - 该目录初始化时只保留 `plan.md` 与当前阶段 todo 文件。
 - 后续 `todo-stage-N.md` 只有在前一轮 todo 全部完成后才能创建。

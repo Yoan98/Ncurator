@@ -1,21 +1,17 @@
 # NCurator-Desktop Human Skill 设计
 
-## 1. 适用范围
+本文定义 `human` 的 skill 集合、skill 拆分边界与 skill 和 tools 的关系，只描述当前基线，不保留历史迁移说明。
 
-- 当涉及 `human` 的 skill 集合、skill 命名或 skill 拆分边界时，阅读本文档。
-- 当涉及 `skillCatalog`、`learnedSkillIds`、learning 节点学习什么 skill 时，阅读本文档。
-- 当需要判断某个旧名称应该如何迁移到新的 skill 命名时，阅读本文档。
-
-## 2. 设计目标
+## 1. 设计目标
 
 - `skill` 是 `human` 可学习的说明单元。
 - `skill` 的命名要让 `brain` 能清楚判断“现在缺不缺这类说明”。
 - `skill` 的拆分要减少 prompt 噪音，让 `learning` 学到的是一组清晰、可用、可收敛的工具说明。
 
-## 3. 设计原则
+## 2. 设计原则
 
-- `skill` 是 `human` 内部的设计概念，统一替代旧 `capability` 叫法。
-- skill 拆分按 `brain` 的决策边界来定，不按历史旧名称强行延续。
+- `skill` 是 `human` 内部统一使用的设计概念。
+- skill 拆分按 `brain` 的决策边界来定，不按历史命名习惯强行延续。
 - skill 不能过大，否则 learning 的说明噪音太高。
 - skill 也不能过碎，否则 `brain` 会反复学习过多小 skill。
 - `skillCatalog` 只保留摘要信息；完整 skill 说明在 `brain` prompt 拼装时按 `learnedSkillIds` 动态展开。
@@ -23,7 +19,7 @@
 - tools 的代码实现按实现域归位即可，一个实现域可以同时服务多个 skill。
 - `skillCatalog` / `skillRegistry` 负责维护 `skill -> toolNames / whenToUse / detail` 的映射，不要求为每个 skill 单独建立实现目录。
 
-## 4. 当前目标 Skill 集合
+## 3. 当前目标 Skill 集合
 
 ### `workspace-cli`
 
@@ -55,20 +51,9 @@
 - 对应工具：`kb_hybrid_search_chunks`、`kb_vector_search_chunks`、`kb_fts_search_chunks`
 - 用途：直接查询 chunk 证据并收敛事实依据。
 
-## 5. 旧名称迁移
-
-- `workspace-shell` 改为 `workspace-cli`
-- `docx-editing` 拆为：
-  - `docx-read`
-  - `docx-write`
-  - `docx-delivery`
-- `local-kb-retrieval` 拆为：
-  - `kb-document-discovery`
-  - `kb-evidence-query`
-
-## 6. 与状态设计的关系
+## 4. 与状态设计的关系
 
 - `skillCatalog` 存的是以上 skill 的摘要信息。
 - `learnedSkillIds` 存的是当前已经学习过的 skill id。
-- `learning` 只负责把 skill 标记为已学习，不负责额外引入旧 `activate_capability` 语义。
+- `learning` 只负责把 skill 标记为已学习，不负责额外引入 `activate_capability` 语义。
 - tool 的选择、过滤和装配可以放在 `skillRegistry` / `skillLoader`，不要求放进 skill 同名目录。

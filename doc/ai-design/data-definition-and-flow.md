@@ -6,12 +6,7 @@
 
 - `main` 负责 run 级编排、计划调度和最终汇总。
 - `human` 负责单任务闭环执行。
-
-阅读建议：
-
-1. 先看 `main` 数据定义与两张 `main` 数据流转图。
-2. 再看 `human` 数据定义。
-3. 最后按 `brain -> learning/hand/mouth` 的顺序看 `human` 数据流转图。
+- 本文只定义状态、契约与数据流转，不展开架构动机与阅读导引。
 
 ## 2. `main` 数据定义
 
@@ -38,9 +33,9 @@ interface MainState {
     | 'main_complete'
   // 已经进行过多少轮上下文补充。
   contextRounds: number
+  // 当前上下文补充阶段派发给 context human 的任务目标。
+  contextObjective?: string
   // context 阶段得到的关键证据摘要。
-  // 这些摘要应从 context_note 的“可复用证据”区块提取，而不是直接保存整段交付 markdown。
-  // intent / routing 的判定理由不写入这里。
   contextEvidence: string[]
   // 计划任务列表，每一项都是后续派发给 human 的任务。
   plan: MainPlanTask[]
@@ -92,17 +87,17 @@ type AiArtifactRef =
         changeCount: number
       }
       summary: string
-    }
+    };
+
+interface HumanTaskInput {
+  taskId: string
+  userInput: string
+}
+
+interface HumanRunDispatchOptions {
+  deliveryMode?: 'user_answer' | 'task_handoff' | 'context_note'
+}
 ```
-
-补充说明：
-
-- `main` 派发 `human` 时，还会附带运行时交付模式 `deliveryMode`
-- `deliveryMode` 至少区分：
-  - `user_answer`
-  - `task_handoff`
-  - `context_note`
-- 该元数据只用于约束 `mouth` 的交付组织方式，不要求持久化进 `MainState` 或 `HumanState`
 
 ## 3. `human` 数据定义
 
@@ -114,12 +109,8 @@ type HumanStatus = 'running' | 'completed' | 'blocked'
 type MemoryOpField = 'facts' | 'evidences' | 'openQuestions'
 
 interface HumanState {
-  task: {
-    // 当前 human 任务 ID。
-    taskId: string
-    // 当前 human 接收到的任务输入。
-    userInput: string
-  }
+  // 当前 human 任务输入。
+  task: HumanTaskInput
   runtime: {
     // 当前 human 所在节点。
     stage: HumanStage
@@ -193,17 +184,14 @@ interface BrainFact {
 }
 ```
 
-补充约束：
-
-- `brainMemory.inside` 任意时刻都必须满足：`facts[].evidenceIds` 只能引用当前仍存在的 evidence id。
-- 如果某组 `memoryOps` 会因为 evidence 的 `edit/remove` 导致已有 fact 出现悬空 `evidenceIds`，则该组编辑视为非法；`memoryReducer` 只写入 `watchHint` 并放弃本轮变更，不自动级联改写 fact。
-
 ### `brainMemory.outside`
 
 ```ts
 interface SkillCatalogItem {
   // skill 唯一标识。
   skillId: string
+  // skill 对应的工具实现域。
+  familyId: 'terminal' | 'kb' | 'docx'
   // skill 标题。
   title: string
   // skill 的简要说明。
@@ -359,19 +347,68 @@ interface HumanResult {
   // 运行时附加的结构化交付物引用。
   artifacts?: AiArtifactRef[]
 }
+
+interface HumanTaskOutput {
+  // 本次 human 执行所对应的任务 ID。
+  taskId: string
+  // 本次任务的最终状态。
+  status: 'completed' | 'blocked'
+  // 任务结果摘要。
+  summary: string
+  // 正式交付 markdown。
+  deliveryMarkdown?: string
+  // 运行时附加的结构化交付物引用。
+  artifacts?: AiArtifactRef[]
+}
+
+interface HumanTraceStep {
+  // 当前步骤编号。
+  step: number
+  // 当前步骤动作类型。
+  action:
+    | 'brain_decision'
+    | 'learn_skill'
+    | 'call_tool'
+    | 'deliver_result'
+    | 'block_result'
+  // 面向外部轨迹的叙述。
+  publicNarrative: string
+  // 当前步骤的结果状态。
+  resultStatus?: 'ok' | 'error' | 'blocked'
+  // 若本步与 skill 有关，则记录 skillId。
+  skillId?: string
+  // 若本步与 tool 有关，则记录 toolName。
+  toolName?: string
+  // 当前步骤摘要。
+  summary: string
+}
 ```
-
-补充约束：
-
-- `mouth` 的模型输出只包含 `summary + deliveryMarkdown?`
-- `HumanResult.status` 由 runner 按 `lastBrainDecision.nextAction.status` 回写
-- `mouth` 默认只消费 `finalDecision + facts + evidences + openQuestions`
-- `artifacts` 由 runtime 直接回写到 `HumanResult / MainPlanTask / MainState.finalArtifacts`，不要求 `mouth` 模型生成或复述路径、`reviewId`
-- `draft_review` 属于 run 级 artifact，只会在 run finalization 后追加到 `MainState.finalArtifacts`
 
 ## 4. 数据流转图
 
 下面的图按阶段拆开，每张图只表达一段数据读写。
+
+### `main` 直接路径：`direct human`
+
+```mermaid
+flowchart LR
+    U["用户输入"]
+    S1[("MainState.input / mainStage")]
+    MI["main_intent"]
+    MD["main_direct_human_exec"]
+    H["human 输出结果"]
+    S2[("MainState.finalDeliveryMarkdown / finalArtifacts")]
+    S3[("MainState.status / error")]
+
+    U -->|写入 input| S1
+    S1 -->|读取 input + mainStage| MI
+    MI -->|回写 mainStage| S1
+    S1 -->|默认路径读取 input| MD
+    MD -->|派发 taskId + userInput + deliveryMode=user_answer| H
+    H -->|返回 taskId + status + summary + deliveryMarkdown + artifacts| MD
+    MD -->|写入最终交付| S2
+    S2 -->|进入收尾| S3
+```
 
 ### `main` 阶段一：输入进入 `context / plan`
 
@@ -380,7 +417,7 @@ flowchart LR
     U["用户输入"]
     S1[("MainState.input / mainStage")]
     MI["main_intent"]
-    S2[("MainState.contextRounds / contextEvidence")]
+    S2[("MainState.contextObjective / contextRounds / contextEvidence")]
     MC["main_context_human"]
     MP["main_plan"]
     S3[("MainState.plan / dispatchCursor")]
@@ -410,7 +447,7 @@ flowchart LR
 
     S3 -->|读取当前游标任务| ME
     ME -->|派发 taskId + userInput| H
-    H -->|返回 status + summary + deliveryMarkdown| ME
+    H -->|返回 taskId + status + summary + deliveryMarkdown + artifacts| ME
     ME -->|回写当前任务结果 + 更新 dispatchCursor| S3
     S3 -->|全部完成或阻塞后读取所有任务结果| MS
     MS -->|写入最终交付| S4
