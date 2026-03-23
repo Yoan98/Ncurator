@@ -1,8 +1,31 @@
-# NCurator-Desktop AI Workbench 测试总计划
+# NCurator-Desktop Core AI 测试计划
+
+## 0. 文档约束
+
+- 本文是 Core AI 测试用例定义的唯一规格来源。
+- AI 新增、修改或补齐测试用例时，必须严格对齐本文对应 case 的 `用例名称 / 实现状态 / What / Why / How / Oracle / Not`。
+- `How` 用于定义 fixture、前置条件、输入、执行路径与运行方式；`Oracle` 用于定义必须成立的断言；`Not` 用于定义禁止扩张的范围。
+- 如果 AI 逻辑变更导致测试用例预期变化，必须先更新本文对应 case，再修改测试代码。
+- 每个 `用例名称` 都必须稳定映射到唯一 `caseId`、唯一测试文件和唯一日志目录。
+
+实现状态取值约定：
+
+- `待检查`
+  - 已在计划中定义，但还未核对代码是否已经实现或与文档一致。
+- `未实现`
+  - 代码中还没有对应测试用例实现。
+- `部分实现`
+  - 已有部分实现，但与本文定义不完全一致，或缺少关键断言 / fixture / 分支覆盖。
+- `已实现`
+  - 代码中的测试用例已与本文定义对齐。
+- `待调整`
+  - 当前代码已有实现，但文档定义或代码实现需要进一步调整后才能对齐。
+- `已废弃`
+  - 该 case 不再作为正式测试目标保留，但保留历史记录。
 
 ## 1. 总体目标
 
-本计划用于验证 `workbench` 页面上的 AI 是否真的能接住用户诉求，并在本地优先约束下把事情做成，而不是只返回一段看起来合理的回答。
+本计划用于验证项目核心 AI 智能系统是否真的能接住用户诉求，并在本地优先约束下把事情做成，而不是只返回一段看起来合理的回答。
 
 当前测试主轴聚焦三类真实诉求：
 
@@ -12,7 +35,7 @@
 
 目标不是一次性做完所有自动化，而是先建立一版能持续推进的专项测试基线，为后续实现、诊断和优化提供统一框架。
 
-本计划只描述这次 AI workbench 专项测试的总体目标、模型使用方式、阶段推进和阶段用例。测试用例设计准则、测试目录、runner、raw log、report 契约统一以 [test.md](/Users/test/work-space/NCurator-Desktop/doc/test.md) 为准，这里不再重复展开。
+本计划只描述这次 Core AI 专项测试的总体目标、模型使用方式、阶段推进和阶段用例。测试用例设计准则、测试目录、runner、raw log、report 契约统一以 [test.md](/Users/test/work-space/NCurator-Desktop/doc/test.md) 为准，这里不再重复展开。
 
 ## 2. 模型使用与诊断
 
@@ -25,7 +48,7 @@
 ## 3. 阶段计划
 
 下面的阶段负责说明“先做哪一批 case、后做哪一批 case”；
-只有每个阶段完成，才能生成下一阶段的todo-stage文档
+测试按阶段顺序推进，原则上上一阶段形成稳定结论后，再进入下一阶段。
 
 本计划按八个阶段推进：
 
@@ -61,6 +84,37 @@
 - 纯工具阶段如果不涉及模型参与，可以暂时没有 `live` case。
 - 只要阶段执行路径里有模型参与，就不能只靠 `basic / boundary / scenario` 得出能力成立结论，还需要 `live` 证据。
 
+### 3.0.1 用例字段定义
+
+每条正式 case 统一使用以下字段：
+
+- `用例名称`
+  - 稳定 `caseId`，用于映射测试文件、日志目录和报告归属。
+- `实现状态`
+  - 用于标记当前代码实现与本文定义的匹配状态；新增 case 默认先写 `待检查`。
+- `What`
+  - 这条 case 到底要验证什么。
+- `Why`
+  - 这条 case 为什么长期存在，解决什么真实风险。
+- `How`
+  - 这条 case 的输入、前置条件、fixture、运行方式和关键执行链路。
+- `Oracle`
+  - 这条 case 必须成立的结果与断言口径。
+- `Not`
+  - 这条 case 明确不验证什么，防止实现时擅自扩张范围。
+
+实现要求：
+
+- AI 编写测试代码时，必须优先对齐 `How + Oracle + Not`，不能只根据 `What` 自行脑补实现。
+- 若 `How` 已明确分支、模式或运行前提，测试实现必须按文档覆盖，不得擅自删减。
+- 若 `Not` 已声明排除范围，测试实现不得把其他阶段职责塞进同一条 case。
+
+示例：
+
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `intent-direct-human-routing` | `待检查` | 验证简单任务不过度规划 | 简单任务被过度规划会显著拖慢体验 | 构造无历史、无 `contextEvidence` 的 run；输入使用单步知识问答或单步 docx 局部修改；执行 `director_intent` 路由判断。 | `directorStage` 进入 `director_direct_human_exec`；不创建 `plan`；只派发 1 个 direct human task。 | 不验证最终答案质量；不覆盖 follow-up；不覆盖多工具复杂任务。 |
+
 ### 3.1 `tool`
 
 做什么：验证 `docx`、`terminal`、`kb` 三类核心工具的基本调用、复杂操作和边界收敛。
@@ -71,39 +125,39 @@
 
 #### basic
 
-| 用例名称 | 目标 | 描述 | 为什么 |
-| --- | --- | --- | --- |
-| `tool-docx-structure-read` | 验证文档读取基线 | 对带标题、正文、表格的样例文档完成 `open -> outline -> search -> get_block` | 所有文档任务都依赖这条基础链路 |
-| `tool-docx-targeting-and-ambiguous-search` | 验证块定位与歧义消解 | 多个相似标题或相似段落同时命中时，仍能稳定定位目标块 | 不解决歧义，后续编辑容易改错位置 |
-| `tool-docx-search-modes-and-scope` | 验证搜索模式与局部范围控制 | 覆盖 `literal / regex / semantic` 三种搜索方式，以及 `scope.blockIds` 的局部搜索 | 真实文档编辑常常需要先缩小范围再修改 |
-| `tool-terminal-workspace-material-discovery` | 验证读取型 terminal 链路 | 在多层目录里找到最新材料并提取可复用内容 | 很多任务第一步就是先找材料 |
-| `tool-terminal-path-resolution` | 验证路径解析 | 混用相对路径、绝对路径和目录切换时仍能稳定定位文件 | 路径解析错误会直接破坏后续任务 |
-| `tool-kb-hybrid-search` | 验证 `hybrid` 检索基线 | 在限定 source scope 下返回可引用结果，并与已选范围保持一致 | `hybrid` 是本地检索的主路径之一 |
-| `tool-kb-vector-search` | 验证 `vector` 检索基线 | 在相同 fixture 下验证纯向量检索的返回质量、空结果和范围收敛 | 需要单独确认语义检索能力边界 |
-| `tool-kb-fts-search` | 验证 `fts` 检索基线 | 在相同 fixture 下验证关键词检索、精确命中和空结果边界 | 关键词检索是最容易被用户感知的基线 |
-| `tool-kb-list-documents-and-scope-filter` | 验证文档枚举与范围过滤 | 先列出文档，再按 source scope 限定检索范围 | 很多问题会先找资料范围，再做检索 |
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `tool-docx-structure-read` | `待检查` | 验证文档读取基线 | 所有文档任务都依赖这条基础链路 | 对带标题、正文、表格的样例文档完成 `open -> outline -> search -> get_block` | 工具调用结果、范围收敛、状态或产物与该用例描述一致。 | 不验证 `human` / `director` 路由和最终用户交付。 |
+| `tool-docx-targeting-and-ambiguous-search` | `待检查` | 验证块定位与歧义消解 | 不解决歧义，后续编辑容易改错位置 | 多个相似标题或相似段落同时命中时，仍能稳定定位目标块 | 工具调用结果、范围收敛、状态或产物与该用例描述一致。 | 不验证 `human` / `director` 路由和最终用户交付。 |
+| `tool-docx-search-modes-and-scope` | `待检查` | 验证搜索模式与局部范围控制 | 真实文档编辑常常需要先缩小范围再修改 | 覆盖 `literal / regex / semantic` 三种搜索方式，以及 `scope.blockIds` 的局部搜索 | 工具调用结果、范围收敛、状态或产物与该用例描述一致。 | 不验证 `human` / `director` 路由和最终用户交付。 |
+| `tool-terminal-workspace-material-discovery` | `待检查` | 验证读取型 terminal 链路 | 很多任务第一步就是先找材料 | 在多层目录里找到最新材料并提取可复用内容 | 工具调用结果、范围收敛、状态或产物与该用例描述一致。 | 不验证 `human` / `director` 路由和最终用户交付。 |
+| `tool-terminal-path-resolution` | `待检查` | 验证路径解析 | 路径解析错误会直接破坏后续任务 | 混用相对路径、绝对路径和目录切换时仍能稳定定位文件 | 工具调用结果、范围收敛、状态或产物与该用例描述一致。 | 不验证 `human` / `director` 路由和最终用户交付。 |
+| `tool-kb-hybrid-search` | `待检查` | 验证 `hybrid` 检索基线 | `hybrid` 是本地检索的主路径之一 | 在限定 source scope 下返回可引用结果，并与已选范围保持一致 | 工具调用结果、范围收敛、状态或产物与该用例描述一致。 | 不验证 `human` / `director` 路由和最终用户交付。 |
+| `tool-kb-vector-search` | `待检查` | 验证 `vector` 检索基线 | 需要单独确认语义检索能力边界 | 在相同 fixture 下验证纯向量检索的返回质量、空结果和范围收敛 | 工具调用结果、范围收敛、状态或产物与该用例描述一致。 | 不验证 `human` / `director` 路由和最终用户交付。 |
+| `tool-kb-fts-search` | `待检查` | 验证 `fts` 检索基线 | 关键词检索是最容易被用户感知的基线 | 在相同 fixture 下验证关键词检索、精确命中和空结果边界 | 工具调用结果、范围收敛、状态或产物与该用例描述一致。 | 不验证 `human` / `director` 路由和最终用户交付。 |
+| `tool-kb-list-documents-and-scope-filter` | `待检查` | 验证文档枚举与范围过滤 | 很多问题会先找资料范围，再做检索 | 先列出文档，再按 source scope 限定检索范围 | 工具调用结果、范围收敛、状态或产物与该用例描述一致。 | 不验证 `human` / `director` 路由和最终用户交付。 |
 
 #### boundary
 
-| 用例名称 | 目标 | 描述 | 为什么 |
-| --- | --- | --- | --- |
-| `tool-docx-save-conflict-and-overwrite` | 验证保存边界 | 覆盖保存、另存为、路径冲突和 `overwrite` 行为 | 结果交付必须安全，不能在保存阶段失控 |
-| `tool-docx-preview-validate-rollback` | 验证结果收敛能力 | 多轮编辑后执行保存、预览、校验、历史回看与回滚 | 工具不只要能改，还要能收敛和回退 |
-| `tool-terminal-approval-and-boundary` | 验证审批与工作区边界 | 覆盖审批请求、批准、拒绝、路径逃逸阻断 | 本地优先和安全约束是这条链路的前提 |
-| `tool-terminal-approval-denied-follow-up` | 验证审批拒绝后的收敛 | 用户拒绝后，系统能停止执行并给出安全后续 | 审批拒绝是常见分支，不能当异常遗漏 |
-| `tool-terminal-failure-and-long-output` | 验证失败路径可解释 | 覆盖命令失败、长输出截断、超时终止后的收敛 | 失败不可避免，但必须可回看、可理解 |
-| `tool-kb-empty-scope-and-no-result` | 验证知识库边界表现 | 覆盖空范围、无结果和返回理由清晰性 | 证据不足时必须安全收敛，而不是胡编 |
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `tool-docx-save-conflict-and-overwrite` | `待检查` | 验证保存边界 | 结果交付必须安全，不能在保存阶段失控 | 覆盖保存、另存为、路径冲突和 `overwrite` 行为 | 工具调用结果、范围收敛、状态或产物与该用例描述一致。 | 不验证 `human` / `director` 路由和最终用户交付。 |
+| `tool-docx-preview-validate-rollback` | `待检查` | 验证结果收敛能力 | 工具不只要能改，还要能收敛和回退 | 多轮编辑后执行保存、预览、校验、历史回看与回滚 | 工具调用结果、范围收敛、状态或产物与该用例描述一致。 | 不验证 `human` / `director` 路由和最终用户交付。 |
+| `tool-terminal-approval-and-boundary` | `待检查` | 验证审批与工作区边界 | 本地优先和安全约束是这条链路的前提 | 覆盖审批请求、批准、拒绝、路径逃逸阻断 | 工具调用结果、范围收敛、状态或产物与该用例描述一致。 | 不验证 `human` / `director` 路由和最终用户交付。 |
+| `tool-terminal-approval-denied-follow-up` | `待检查` | 验证审批拒绝后的收敛 | 审批拒绝是常见分支，不能当异常遗漏 | 用户拒绝后，系统能停止执行并给出安全后续 | 工具调用结果、范围收敛、状态或产物与该用例描述一致。 | 不验证 `human` / `director` 路由和最终用户交付。 |
+| `tool-terminal-failure-and-long-output` | `待检查` | 验证失败路径可解释 | 失败不可避免，但必须可回看、可理解 | 覆盖命令失败、长输出截断、超时终止后的收敛 | 工具调用结果、范围收敛、状态或产物与该用例描述一致。 | 不验证 `human` / `director` 路由和最终用户交付。 |
+| `tool-kb-empty-scope-and-no-result` | `待检查` | 验证知识库边界表现 | 证据不足时必须安全收敛，而不是胡编 | 覆盖空范围、无结果和返回理由清晰性 | 工具调用结果、范围收敛、状态或产物与该用例描述一致。 | 不验证 `human` / `director` 路由和最终用户交付。 |
 
 #### scenario
 
-| 用例名称 | 目标 | 描述 | 为什么 |
-| --- | --- | --- | --- |
-| `tool-docx-mixed-structural-edit` | 验证复杂结构改写 | 同一 case 内完成章节改写、插入新段、删除旧段、更新表格负责人 | 真实文档修改通常不是单一操作 |
-| `tool-docx-table-and-inline-rewrite` | 验证表格与行内文本混合改写 | 同一轮操作中修改表格单元格、段落正文和局部文本替换 | 周报、纪要、方案文档经常同时涉及表格和正文 |
-| `tool-docx-multi-document-session-isolation` | 验证多文档会话隔离 | 同一 run 中并行打开两份文档后，后续 `search / apply / save` 不会串到错误文档 | 多文档任务是后续高价值场景的基础 |
-| `tool-terminal-batch-material-summary` | 验证批量材料发现与归并 | 一次发现多份日报、会议纪要或风险清单，并提取可复用摘要 | 真实工作区任务很少只有一份输入材料 |
-| `tool-terminal-artifact-producing-command` | 验证复杂命令与产物识别 | 执行会生成中间文件的命令，检查摘要、产物识别与回读链路 | `terminal` 不只是看输出，还要能接住产物 |
-| `tool-kb-document-discovery-to-targeted-search` | 验证从文档发现到定向检索的多步链路 | 先列出候选文档，再把缩小后的 document scope 传给 `hybrid / fts`，确保结果稳定收敛到同一份资料 | 真实知识任务往往要先找范围，再确认精确证据，不能跨文档串证据 |
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `tool-docx-mixed-structural-edit` | `待检查` | 验证复杂结构改写 | 真实文档修改通常不是单一操作 | 同一 case 内完成章节改写、插入新段、删除旧段、更新表格负责人 | 工具调用结果、范围收敛、状态或产物与该用例描述一致。 | 不验证 `human` / `director` 路由和最终用户交付。 |
+| `tool-docx-table-and-inline-rewrite` | `待检查` | 验证表格与行内文本混合改写 | 周报、纪要、方案文档经常同时涉及表格和正文 | 同一轮操作中修改表格单元格、段落正文和局部文本替换 | 工具调用结果、范围收敛、状态或产物与该用例描述一致。 | 不验证 `human` / `director` 路由和最终用户交付。 |
+| `tool-docx-multi-document-session-isolation` | `待检查` | 验证多文档会话隔离 | 多文档任务是后续高价值场景的基础 | 同一 run 中并行打开两份文档后，后续 `search / apply / save` 不会串到错误文档 | 工具调用结果、范围收敛、状态或产物与该用例描述一致。 | 不验证 `human` / `director` 路由和最终用户交付。 |
+| `tool-terminal-batch-material-summary` | `待检查` | 验证批量材料发现与归并 | 真实工作区任务很少只有一份输入材料 | 一次发现多份日报、会议纪要或风险清单，并提取可复用摘要 | 工具调用结果、范围收敛、状态或产物与该用例描述一致。 | 不验证 `human` / `director` 路由和最终用户交付。 |
+| `tool-terminal-artifact-producing-command` | `待检查` | 验证复杂命令与产物识别 | `terminal` 不只是看输出，还要能接住产物 | 执行会生成中间文件的命令，检查摘要、产物识别与回读链路 | 工具调用结果、范围收敛、状态或产物与该用例描述一致。 | 不验证 `human` / `director` 路由和最终用户交付。 |
+| `tool-kb-document-discovery-to-targeted-search` | `待检查` | 验证从文档发现到定向检索的多步链路 | 真实知识任务往往要先找范围，再确认精确证据，不能跨文档串证据 | 先列出候选文档，再把缩小后的 document scope 传给 `hybrid / fts`，确保结果稳定收敛到同一份资料 | 工具调用结果、范围收敛、状态或产物与该用例描述一致。 | 不验证 `human` / `director` 路由和最终用户交付。 |
 
 #### live
 
@@ -126,49 +180,49 @@
 
 #### basic
 
-| 用例名称 | 目标 | 描述 | 为什么 |
-| --- | --- | --- | --- |
-| `human-direct-kb-answer` | 验证单步自主完成 | 直接读取知识库并交付可引用答案 | 最简单的单步任务必须先独立成立 |
-| `human-direct-docx-edit` | 验证单工具文档闭环 | 直接读取指定文档、完成局部修改并交付可审阅结果 | 这是最常见的文档类基础任务 |
-| `human-watchhint-projection` | 验证 `watchHint` 时间线投影 | `watchHint` 能被正确投影为 workbench 时间线项 | 收敛提示不只是内部状态，也必须能被可视化回看 |
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `human-direct-kb-answer` | `待检查` | 验证单步自主完成 | 最简单的单步任务必须先独立成立 | 直接读取知识库并交付可引用答案 | `human` 的状态、交付、阻塞或收敛行为与该用例描述一致。 | 不验证 `director` 路由、`plan` 拆解和 UI 呈现。 |
+| `human-direct-docx-edit` | `待检查` | 验证单工具文档闭环 | 这是最常见的文档类基础任务 | 直接读取指定文档、完成局部修改并交付可审阅结果 | `human` 的状态、交付、阻塞或收敛行为与该用例描述一致。 | 不验证 `director` 路由、`plan` 拆解和 UI 呈现。 |
+| `human-watchhint-projection` | `待检查` | 验证 `watchHint` 时间线投影 | 收敛提示不只是内部状态，也必须能被可视化回看 | `watchHint` 能被正确投影为运行时间线项 | `human` 的状态、交付、阻塞或收敛行为与该用例描述一致。 | 不验证 `director` 路由、`plan` 拆解和 UI 呈现。 |
 
 #### boundary
 
-| 用例名称 | 目标 | 描述 | 为什么 |
-| --- | --- | --- | --- |
-| `human-tool-failure-recovery` | 验证失败后换路 | 块搜索失败后改走 `outline + get_block`，继续推进任务 | 自主纠偏能力是 `human` 的核心价值 |
-| `human-workspace-blocked-recovery` | 验证工作区阻塞上抛 | 缺工作区绑定时，请求补充 workspace，而不是空跑或乱答 | 本地优先场景里最常见的阻塞之一 |
-| `human-approval-blocked-recovery` | 验证审批阻塞收敛 | 需要执行命令或覆盖保存但未获批准时，能停在正确节点并给出继续条件 | 阻塞时的行为质量直接决定用户体验 |
-| `human-evidence-insufficient-safe-stop` | 验证证据不足时的安全行为 | 找不到足够依据时明确说明缺口，并交付可继续的初稿或后续建议 | 不能把“查不到”变成“编出来” |
-| `human-no-redundant-recheck` | 验证证据足够后的主动收敛 | 同一证据已足够时，不再重复调用同一工具做“再次确认” | 避免无意义循环是工程可用性的关键 |
-| `human-partial-delivery-on-tool-limit` | 验证做不完时的安全收敛 | 在工具调用上限触发 `watchHint` 时保留已有进展并给出可继续交付 | “没完全做完”不应等同于“什么都没有” |
-| `human-invalid-execution-batch` | 验证非法 batch 被拒绝 | 混合读写或不满足并行约束的 batch plan 会被 executor 拒绝并回到收敛 | 保守并行是这次 human 重构的重要安全边界 |
-| `human-repeated-skill-learning-redirect` | 验证重复学习的回退 | `brain` 请求已学习过的 skill 时，`learning` 不重复执行，而是写入 `watchHint` 并回到 `brain` | 需要防止学习路径空转 |
-| `human-invalid-memory-op-recovery` | 验证非法记忆编辑的回退 | 非法 `memoryOps` 不直接破坏 state，而是转成 `watchHint` 交回 `brain` 重决策 | 记忆编辑必须是安全、可恢复的 |
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `human-tool-failure-recovery` | `待检查` | 验证失败后换路 | 自主纠偏能力是 `human` 的核心价值 | 块搜索失败后改走 `outline + get_block`，继续推进任务 | `human` 的状态、交付、阻塞或收敛行为与该用例描述一致。 | 不验证 `director` 路由、`plan` 拆解和 UI 呈现。 |
+| `human-workspace-blocked-recovery` | `待检查` | 验证工作区阻塞上抛 | 本地优先场景里最常见的阻塞之一 | 缺工作区绑定时，请求补充 workspace，而不是空跑或乱答 | `human` 的状态、交付、阻塞或收敛行为与该用例描述一致。 | 不验证 `director` 路由、`plan` 拆解和 UI 呈现。 |
+| `human-approval-blocked-recovery` | `待检查` | 验证审批阻塞收敛 | 阻塞时的行为质量直接决定用户体验 | 需要执行命令或覆盖保存但未获批准时，能停在正确节点并给出继续条件 | `human` 的状态、交付、阻塞或收敛行为与该用例描述一致。 | 不验证 `director` 路由、`plan` 拆解和 UI 呈现。 |
+| `human-evidence-insufficient-safe-stop` | `待检查` | 验证证据不足时的安全行为 | 不能把“查不到”变成“编出来” | 找不到足够依据时明确说明缺口，并交付可继续的初稿或后续建议 | `human` 的状态、交付、阻塞或收敛行为与该用例描述一致。 | 不验证 `director` 路由、`plan` 拆解和 UI 呈现。 |
+| `human-no-redundant-recheck` | `待检查` | 验证证据足够后的主动收敛 | 避免无意义循环是工程可用性的关键 | 同一证据已足够时，不再重复调用同一工具做“再次确认” | `human` 的状态、交付、阻塞或收敛行为与该用例描述一致。 | 不验证 `director` 路由、`plan` 拆解和 UI 呈现。 |
+| `human-partial-delivery-on-tool-limit` | `待检查` | 验证做不完时的安全收敛 | “没完全做完”不应等同于“什么都没有” | 在工具调用上限触发 `watchHint` 时保留已有进展并给出可继续交付 | `human` 的状态、交付、阻塞或收敛行为与该用例描述一致。 | 不验证 `director` 路由、`plan` 拆解和 UI 呈现。 |
+| `human-invalid-execution-batch` | `待检查` | 验证非法 batch 被拒绝 | 保守并行是这次 human 重构的重要安全边界 | 混合读写或不满足并行约束的 batch plan 会被 executor 拒绝并回到收敛 | `human` 的状态、交付、阻塞或收敛行为与该用例描述一致。 | 不验证 `director` 路由、`plan` 拆解和 UI 呈现。 |
+| `human-repeated-skill-learning-redirect` | `待检查` | 验证重复学习的回退 | 需要防止学习路径空转 | `brain` 请求已学习过的 skill 时，`learning` 不重复执行，而是写入 `watchHint` 并回到 `brain` | `human` 的状态、交付、阻塞或收敛行为与该用例描述一致。 | 不验证 `director` 路由、`plan` 拆解和 UI 呈现。 |
+| `human-invalid-memory-op-recovery` | `待检查` | 验证非法记忆编辑的回退 | 记忆编辑必须是安全、可恢复的 | 非法 `memoryOps` 不直接破坏 state，而是转成 `watchHint` 交回 `brain` 重决策 | `human` 的状态、交付、阻塞或收敛行为与该用例描述一致。 | 不验证 `director` 路由、`plan` 拆解和 UI 呈现。 |
 
 #### scenario
 
-| 用例名称 | 目标 | 描述 | 为什么 |
-| --- | --- | --- | --- |
-| `human-terminal-docx-handoff` | 验证跨工具协作 | 先在工作区找材料，再写入 docx 并形成可审阅交付 | 真实任务常常需要先取材再落文档 |
-| `human-kb-docx-bridge` | 验证知识到文档的转换 | 先检索本地规范，再据此修改模板文档 | 能不能把“查到的信息”变成“可交付产物”很关键 |
-| `human-multi-source-merge-delivery` | 验证多源材料归并 | 汇总多份日报、纪要或风险清单后输出统一交付 | 多源归并是高价值真实场景的代表能力 |
-| `human-review-handoff-structured-delivery` | 验证审阅前结构化交付 | 文档修改完成后，输出稳定的 review handoff 交付，供后续进入 `draft_review_ready` | 文档类任务的真正落点不是一句话，而是可继续处理的结构化结果 |
-| `human-multi-turn-refinement` | 验证多轮目标保持 | 上一轮已有中间产物，本轮继续保守化或局部精修 | 用户真实使用里 follow-up 很常见 |
-| `human-long-task-project-brief` | 验证长任务工程能力 | 在较高执行上限下，串联完成“找材料、抽结论、写周报、补风险、生成审阅结果” | 复杂任务是否能真正完成，是 AI 价值上限所在 |
-| `human-long-task-with-corrections` | 验证长任务中的纠偏稳定性 | 长任务中途加入新约束或局部失败后，仍能保持目标不漂移 | 长任务不是一次规划后就不会变化 |
-| `human-long-task-approval-branch` | 验证长任务中的审批分支 | 长任务中途需要审批时，能在批准与拒绝两条分支上都安全推进或收敛 | 真正的复杂任务经常包含安全分支 |
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `human-terminal-docx-handoff` | `待检查` | 验证跨工具协作 | 真实任务常常需要先取材再落文档 | 先在工作区找材料，再写入 docx 并形成可审阅交付 | `human` 的状态、交付、阻塞或收敛行为与该用例描述一致。 | 不验证 `director` 路由、`plan` 拆解和 UI 呈现。 |
+| `human-kb-docx-bridge` | `待检查` | 验证知识到文档的转换 | 能不能把“查到的信息”变成“可交付产物”很关键 | 先检索本地规范，再据此修改模板文档 | `human` 的状态、交付、阻塞或收敛行为与该用例描述一致。 | 不验证 `director` 路由、`plan` 拆解和 UI 呈现。 |
+| `human-multi-source-merge-delivery` | `待检查` | 验证多源材料归并 | 多源归并是高价值真实场景的代表能力 | 汇总多份日报、纪要或风险清单后输出统一交付 | `human` 的状态、交付、阻塞或收敛行为与该用例描述一致。 | 不验证 `director` 路由、`plan` 拆解和 UI 呈现。 |
+| `human-review-handoff-structured-delivery` | `待检查` | 验证审阅前结构化交付 | 文档类任务的真正落点不是一句话，而是可继续处理的结构化结果 | 文档修改完成后，输出稳定的 review handoff 交付，供后续进入 `draft_review_ready` | `human` 的状态、交付、阻塞或收敛行为与该用例描述一致。 | 不验证 `director` 路由、`plan` 拆解和 UI 呈现。 |
+| `human-multi-turn-refinement` | `待检查` | 验证多轮目标保持 | 用户真实使用里 follow-up 很常见 | 上一轮已有中间产物，本轮继续保守化或局部精修 | `human` 的状态、交付、阻塞或收敛行为与该用例描述一致。 | 不验证 `director` 路由、`plan` 拆解和 UI 呈现。 |
+| `human-long-task-project-brief` | `待检查` | 验证长任务工程能力 | 复杂任务是否能真正完成，是 AI 价值上限所在 | 在较高执行上限下，串联完成“找材料、抽结论、写周报、补风险、生成审阅结果” | `human` 的状态、交付、阻塞或收敛行为与该用例描述一致。 | 不验证 `director` 路由、`plan` 拆解和 UI 呈现。 |
+| `human-long-task-with-corrections` | `待检查` | 验证长任务中的纠偏稳定性 | 长任务不是一次规划后就不会变化 | 长任务中途加入新约束或局部失败后，仍能保持目标不漂移 | `human` 的状态、交付、阻塞或收敛行为与该用例描述一致。 | 不验证 `director` 路由、`plan` 拆解和 UI 呈现。 |
+| `human-long-task-approval-branch` | `待检查` | 验证长任务中的审批分支 | 真正的复杂任务经常包含安全分支 | 长任务中途需要审批时，能在批准与拒绝两条分支上都安全推进或收敛 | `human` 的状态、交付、阻塞或收敛行为与该用例描述一致。 | 不验证 `director` 路由、`plan` 拆解和 UI 呈现。 |
 
 #### live
 
-| 用例名称 | 目标 | 描述 | 为什么 |
-| --- | --- | --- | --- |
-| `human-live-direct-kb-answer` | 验证 live 单步知识问答 | 在真实模型下直接读取知识库并交付答案 | `human` 的最小 live 自主闭环必须成立 |
-| `human-live-direct-docx-edit` | 验证 live 单工具文档闭环 | 在真实模型下完成 docx 改写与 preview 交付 | 文档类 live 基线不能只靠脚本化决策 |
-| `human-live-terminal-docx-handoff` | 验证 live 跨工具 handoff | 在真实模型下先读 workspace，再写入 docx | 这是最小 live 跨工具能力证明 |
-| `human-live-kb-docx-bridge` | 验证 live 知识到文档转换 | 在真实模型下先查规范，再改模板文档 | 需要证明 KB 结果能被真实转成产物 |
-| `human-live-evidence-insufficient-safe-stop` | 验证 live 安全收敛 | 在真实模型下证据不足时不编造答案 | 安全行为不能只在 contract case 中成立 |
-| `human-live-long-task-project-brief` | 验证 live 长任务工程能力 | 在真实模型下完成多材料归并到 brief 交付 | 长任务是否成立，只看 live 才有意义 |
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `human-live-direct-kb-answer` | `待检查` | 验证 live 单步知识问答 | `human` 的最小 live 自主闭环必须成立 | 在真实模型下直接读取知识库并交付答案 | `human` 的状态、交付、阻塞或收敛行为与该用例描述一致。 | 不验证 `director` 路由、`plan` 拆解和 UI 呈现。 |
+| `human-live-direct-docx-edit` | `待检查` | 验证 live 单工具文档闭环 | 文档类 live 基线不能只靠脚本化决策 | 在真实模型下完成 docx 改写与 preview 交付 | `human` 的状态、交付、阻塞或收敛行为与该用例描述一致。 | 不验证 `director` 路由、`plan` 拆解和 UI 呈现。 |
+| `human-live-terminal-docx-handoff` | `待检查` | 验证 live 跨工具 handoff | 这是最小 live 跨工具能力证明 | 在真实模型下先读 workspace，再写入 docx | `human` 的状态、交付、阻塞或收敛行为与该用例描述一致。 | 不验证 `director` 路由、`plan` 拆解和 UI 呈现。 |
+| `human-live-kb-docx-bridge` | `待检查` | 验证 live 知识到文档转换 | 需要证明 KB 结果能被真实转成产物 | 在真实模型下先查规范，再改模板文档 | `human` 的状态、交付、阻塞或收敛行为与该用例描述一致。 | 不验证 `director` 路由、`plan` 拆解和 UI 呈现。 |
+| `human-live-evidence-insufficient-safe-stop` | `待检查` | 验证 live 安全收敛 | 安全行为不能只在 contract case 中成立 | 在真实模型下证据不足时不编造答案 | `human` 的状态、交付、阻塞或收敛行为与该用例描述一致。 | 不验证 `director` 路由、`plan` 拆解和 UI 呈现。 |
+| `human-live-long-task-project-brief` | `待检查` | 验证 live 长任务工程能力 | 长任务是否成立，只看 live 才有意义 | 在真实模型下完成多材料归并到 brief 交付 | `human` 的状态、交付、阻塞或收敛行为与该用例描述一致。 | 不验证 `director` 路由、`plan` 拆解和 UI 呈现。 |
 
 ### 3.3 `context`
 
@@ -181,33 +235,33 @@
 
 #### basic
 
-| 用例名称 | 目标 | 描述 | 为什么 |
-| --- | --- | --- | --- |
-| `context-workspace-evidence-collection` | 验证工作区证据收集 | 在规划前先读取工作区材料，沉淀后续执行需要的事实 | 很多任务不是缺能力，而是缺前置材料 |
-| `context-kb-evidence-collection` | 验证知识证据收集 | 在回答或规划前先把相关 KB 证据聚合出来 | 先有证据，再做判断，能明显降低误判 |
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `context-workspace-evidence-collection` | `待检查` | 验证工作区证据收集 | 很多任务不是缺能力，而是缺前置材料 | 在规划前先读取工作区材料，沉淀后续执行需要的事实 | 上下文收集、指代解析、续接或证据组装结果与该用例描述一致。 | 不验证最终用户答案质量或最终交付文案。 |
+| `context-kb-evidence-collection` | `待检查` | 验证知识证据收集 | 先有证据，再做判断，能明显降低误判 | 在回答或规划前先把相关 KB 证据聚合出来 | 上下文收集、指代解析、续接或证据组装结果与该用例描述一致。 | 不验证最终用户答案质量或最终交付文案。 |
 
 #### boundary
 
-| 用例名称 | 目标 | 描述 | 为什么 |
-| --- | --- | --- | --- |
-| `context-missing-material-detection` | 验证缺失输入识别 | 识别关键文件、工作区或资料不存在，并明确说明缺什么 | 缺上下文时如果继续执行，后面一定漂移 |
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `context-missing-material-detection` | `待检查` | 验证缺失输入识别 | 缺上下文时如果继续执行，后面一定漂移 | 识别关键文件、工作区或资料不存在，并明确说明缺什么 | 上下文收集、指代解析、续接或证据组装结果与该用例描述一致。 | 不验证最终用户答案质量或最终交付文案。 |
 
 #### scenario
 
-| 用例名称 | 目标 | 描述 | 为什么 |
-| --- | --- | --- | --- |
-| `context-follow-up-reference-resolution` | 验证续做指代解析 | 正确接住“继续刚才第二段”“把上一版风险部分改保守一点”这类输入 | follow-up 场景首先卡在能不能知道用户在说什么 |
-| `context-multi-source-evidence-assembly` | 验证多源上下文组装 | 同时从知识库和工作区收集关键信息，为后续计划提供输入 | 混合任务的关键不是单一证据，而是证据组装能力 |
-| `context-continue-after-partial-delivery` | 验证部分完成后的续接 | 上一轮只完成一部分时，本轮能基于已有产物继续推进 | 真实任务往往不是一轮就结束 |
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `context-follow-up-reference-resolution` | `待检查` | 验证续做指代解析 | follow-up 场景首先卡在能不能知道用户在说什么 | 正确接住“继续刚才第二段”“把上一版风险部分改保守一点”这类输入 | 上下文收集、指代解析、续接或证据组装结果与该用例描述一致。 | 不验证最终用户答案质量或最终交付文案。 |
+| `context-multi-source-evidence-assembly` | `待检查` | 验证多源上下文组装 | 混合任务的关键不是单一证据，而是证据组装能力 | 同时从知识库和工作区收集关键信息，为后续计划提供输入 | 上下文收集、指代解析、续接或证据组装结果与该用例描述一致。 | 不验证最终用户答案质量或最终交付文案。 |
+| `context-continue-after-partial-delivery` | `待检查` | 验证部分完成后的续接 | 真实任务往往不是一轮就结束 | 上一轮只完成一部分时，本轮能基于已有产物继续推进 | 上下文收集、指代解析、续接或证据组装结果与该用例描述一致。 | 不验证最终用户答案质量或最终交付文案。 |
 
 #### live
 
-| 用例名称 | 目标 | 描述 | 为什么 |
-| --- | --- | --- | --- |
-| `context-live-follow-up-reference-resolution` | 验证 live 续做指代解析 | 在真实模型下正确接住“继续上一版第二段”这类 follow-up 输入 | 续做理解是否成立，不能只靠脚本化上下文 |
-| `context-live-workspace-evidence-collection` | 验证 live 工作区证据收集 | 在真实模型下先从 workspace 收集事实，再交给后续链路使用 | 工作区上下文是本地优先路径的关键前提 |
-| `context-live-multi-source-evidence-assembly` | 验证 live 多源上下文组装 | 在真实模型下同时组装 KB 与 workspace 证据 | 混合任务最容易暴露上下文收集质量问题 |
-| `context-live-continue-after-partial-delivery` | 验证 live 部分完成续接 | 在真实模型下基于上一轮中间产物继续推进，而不是重新开始 | 上下文续接是否稳定，最终要靠 live 证明 |
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `context-live-follow-up-reference-resolution` | `待检查` | 验证 live 续做指代解析 | 续做理解是否成立，不能只靠脚本化上下文 | 在真实模型下正确接住“继续上一版第二段”这类 follow-up 输入 | 上下文收集、指代解析、续接或证据组装结果与该用例描述一致。 | 不验证最终用户答案质量或最终交付文案。 |
+| `context-live-workspace-evidence-collection` | `待检查` | 验证 live 工作区证据收集 | 工作区上下文是本地优先路径的关键前提 | 在真实模型下先从 workspace 收集事实，再交给后续链路使用 | 上下文收集、指代解析、续接或证据组装结果与该用例描述一致。 | 不验证最终用户答案质量或最终交付文案。 |
+| `context-live-multi-source-evidence-assembly` | `待检查` | 验证 live 多源上下文组装 | 混合任务最容易暴露上下文收集质量问题 | 在真实模型下同时组装 KB 与 workspace 证据 | 上下文收集、指代解析、续接或证据组装结果与该用例描述一致。 | 不验证最终用户答案质量或最终交付文案。 |
+| `context-live-continue-after-partial-delivery` | `待检查` | 验证 live 部分完成续接 | 上下文续接是否稳定，最终要靠 live 证明 | 在真实模型下基于上一轮中间产物继续推进，而不是重新开始 | 上下文收集、指代解析、续接或证据组装结果与该用例描述一致。 | 不验证最终用户答案质量或最终交付文案。 |
 
 ### 3.4 `intent`
 
@@ -220,34 +274,34 @@
 
 #### basic
 
-| 用例名称 | 目标 | 描述 | 为什么 |
-| --- | --- | --- | --- |
-| `intent-direct-human-routing` | 验证简单任务不过度规划 | 对简单知识问答或单步改写任务，直接进入 `direct_human` | 简单任务被过度规划会显著拖慢体验 |
-| `intent-docx-task-routing` | 验证文档编辑任务路由 | 对明确要求读取、修改、保存文档的任务，进入多步链路 | 文档任务天然带依赖顺序，不能当普通问答处理 |
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `intent-direct-human-routing` | `待检查` | 验证简单任务不过度规划 | 简单任务被过度规划会显著拖慢体验 | 对简单知识问答或单步改写任务，直接进入 `direct_human` | 路由结果与该用例预期路径一致。 | 不验证后续执行链路的最终完成质量。 |
+| `intent-docx-task-routing` | `待检查` | 验证多步文档编辑任务路由 | 多步文档任务天然带依赖顺序，不能当普通问答处理 | 对明确要求多步读取、修改、保存或进入审阅的文档任务，进入多步链路 | 路由结果与该用例预期路径一致。 | 不验证后续执行链路的最终完成质量。 |
 
 #### boundary
 
-| 用例名称 | 目标 | 描述 | 为什么 |
-| --- | --- | --- | --- |
-| `intent-need-context-routing` | 验证上下文不足先补上下文 | 对“继续刚才那个”“改第二段”这类输入，先进入 `need_context` | follow-up 最怕直接误执行 |
-| `intent-search-mode-routing` | 验证纯搜索模式路由 | 在 `纯搜索` 模式下优先走检索与展示，不误入完整任务执行链 | 模式错路由会让 UI 与实际行为脱节 |
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `intent-need-context-routing` | `待检查` | 验证上下文不足先补上下文 | follow-up 最怕直接误执行 | 对“继续刚才那个”“改第二段”这类输入，先进入 `need_context` | 路由结果与该用例预期路径一致。 | 不验证后续执行链路的最终完成质量。 |
+| `intent-search-mode-routing` | `待检查` | 验证纯搜索模式路由 | 模式错路由会让 UI 与实际行为脱节 | 在 `纯搜索` 模式下优先走检索与展示，不误入完整任务执行链 | 路由结果与该用例预期路径一致。 | 不验证后续执行链路的最终完成质量。 |
 
 #### scenario
 
-| 用例名称 | 目标 | 描述 | 为什么 |
-| --- | --- | --- | --- |
-| `intent-to-plan-routing` | 验证复杂任务进入计划链路 | 对多步文档生成或多工具任务，正确进入 `to_plan` | 复杂任务如果误判成单步，通常做不完 |
-| `intent-mixed-task-routing` | 验证混合任务路由 | 对“先查 KB，再看工作区，再改文档”这类输入，稳定进入 `to_plan` | 混合任务是最容易被低估复杂度的一类 |
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `intent-to-plan-routing` | `待检查` | 验证复杂任务进入计划链路 | 复杂任务如果误判成单步，通常做不完 | 对多步文档生成或多工具任务，正确进入 `to_plan` | 路由结果与该用例预期路径一致。 | 不验证后续执行链路的最终完成质量。 |
+| `intent-mixed-task-routing` | `待检查` | 验证混合任务路由 | 混合任务是最容易被低估复杂度的一类 | 对“先查 KB，再看工作区，再改文档”这类输入，稳定进入 `to_plan` | 路由结果与该用例预期路径一致。 | 不验证后续执行链路的最终完成质量。 |
 
 #### live
 
-| 用例名称 | 目标 | 描述 | 为什么 |
-| --- | --- | --- | --- |
-| `intent-live-direct-human-routing` | 验证 live 简单任务直达 | 在真实模型下，简单任务仍直接进入 `direct_human` | 入口提速能力不能只靠静态规则判断 |
-| `intent-live-need-context-routing` | 验证 live 上下文缺失路由 | 在真实模型下，follow-up 输入稳定进入 `need_context` | 续做场景的误路由风险最高 |
-| `intent-live-to-plan-routing` | 验证 live 复杂任务入计划链路 | 在真实模型下，多步任务稳定进入 `to_plan` | 复杂任务是否被正确识别，决定整条链路能否完成 |
-| `intent-live-search-mode-routing` | 验证 live 纯搜索模式路由 | 在真实模型下，`纯搜索` 不误入完整任务执行链 | 模式理解是页面行为一致性的关键 |
-| `intent-live-mixed-task-routing` | 验证 live 混合任务路由 | 在真实模型下，混合任务稳定进入 `to_plan` | 混合任务最容易暴露复杂度判断失真 |
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `intent-live-direct-human-routing` | `待检查` | 验证 live 简单任务直达 | 入口提速能力不能只靠静态规则判断 | 在真实模型下，简单任务仍直接进入 `direct_human` | 路由结果与该用例预期路径一致。 | 不验证后续执行链路的最终完成质量。 |
+| `intent-live-need-context-routing` | `待检查` | 验证 live 上下文缺失路由 | 续做场景的误路由风险最高 | 在真实模型下，follow-up 输入稳定进入 `need_context` | 路由结果与该用例预期路径一致。 | 不验证后续执行链路的最终完成质量。 |
+| `intent-live-to-plan-routing` | `待检查` | 验证 live 复杂任务入计划链路 | 复杂任务是否被正确识别，决定整条链路能否完成 | 在真实模型下，多步任务稳定进入 `to_plan` | 路由结果与该用例预期路径一致。 | 不验证后续执行链路的最终完成质量。 |
+| `intent-live-search-mode-routing` | `待检查` | 验证 live 纯搜索模式路由 | 模式理解是页面行为一致性的关键 | 在真实模型下，`纯搜索` 不误入完整任务执行链 | 路由结果与该用例预期路径一致。 | 不验证后续执行链路的最终完成质量。 |
+| `intent-live-mixed-task-routing` | `待检查` | 验证 live 混合任务路由 | 混合任务最容易暴露复杂度判断失真 | 在真实模型下，混合任务稳定进入 `to_plan` | 路由结果与该用例预期路径一致。 | 不验证后续执行链路的最终完成质量。 |
 
 ### 3.5 `plan`
 
@@ -260,36 +314,36 @@
 
 #### basic
 
-| 用例名称 | 目标 | 描述 | 为什么 |
-| --- | --- | --- | --- |
-| `plan-docx-workflow-ordering` | 验证文档类计划顺序 | 文档任务必须先取证、后编辑、再保存或进入审阅 | 这是最基础也最容易写错顺序的一类计划 |
-| `plan-kb-to-docx-task-breakdown` | 验证检索到文档的任务拆解 | 先查规范、再确认改写目标、最后落到文档修改 | 混合链路的关键在于拆解是否完整 |
-| `plan-terminal-to-docx-task-breakdown` | 验证工作区到文档的任务拆解 | 先找文件、再读材料、再提炼内容、最后生成文档 | 很多真实任务都是这类链路 |
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `plan-docx-workflow-ordering` | `待检查` | 验证文档类计划顺序 | 这是最基础也最容易写错顺序的一类计划 | 文档任务必须先取证、后编辑、再保存或进入审阅 | 计划拆解、依赖顺序、阻塞收敛或 handoff 结果与该用例描述一致。 | 不验证具体工具调用实现细节和 UI 呈现。 |
+| `plan-kb-to-docx-task-breakdown` | `待检查` | 验证检索到文档的任务拆解 | 混合链路的关键在于拆解是否完整 | 先查规范、再确认改写目标、最后落到文档修改 | 计划拆解、依赖顺序、阻塞收敛或 handoff 结果与该用例描述一致。 | 不验证具体工具调用实现细节和 UI 呈现。 |
+| `plan-terminal-to-docx-task-breakdown` | `待检查` | 验证工作区到文档的任务拆解 | 很多真实任务都是这类链路 | 先找文件、再读材料、再提炼内容、最后生成文档 | 计划拆解、依赖顺序、阻塞收敛或 handoff 结果与该用例描述一致。 | 不验证具体工具调用实现细节和 UI 呈现。 |
 
 #### boundary
 
-| 用例名称 | 目标 | 描述 | 为什么 |
-| --- | --- | --- | --- |
-| `plan-blocked-task-convergence` | 验证阻塞时计划可收敛 | 出现审批、缺文件或资料不足时，仍能产出明确后续 | 复杂任务不一定每次都能完整完成，但必须能收住 |
-| `plan-no-redundant-task` | 验证无意义重复任务控制 | 不生成重复取证、重复确认、重复总结的任务 | 冗余计划会放大模型成本和失败概率 |
-| `plan-partial-delivery-convergence` | 验证部分完成时的计划收尾 | 在预算不足或局部阻塞时，计划仍能保留已有成果并给出下一步 | 复杂任务需要可继续的收尾，而不是硬失败 |
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `plan-blocked-task-convergence` | `待检查` | 验证阻塞时计划可收敛 | 复杂任务不一定每次都能完整完成，但必须能收住 | 出现审批、缺文件或资料不足时，仍能产出明确后续 | 计划拆解、依赖顺序、阻塞收敛或 handoff 结果与该用例描述一致。 | 不验证具体工具调用实现细节和 UI 呈现。 |
+| `plan-no-redundant-task` | `待检查` | 验证无意义重复任务控制 | 冗余计划会放大模型成本和失败概率 | 不生成重复取证、重复确认、重复总结的任务 | 计划拆解、依赖顺序、阻塞收敛或 handoff 结果与该用例描述一致。 | 不验证具体工具调用实现细节和 UI 呈现。 |
+| `plan-partial-delivery-convergence` | `待检查` | 验证部分完成时的计划收尾 | 复杂任务需要可继续的收尾，而不是硬失败 | 在预算不足或局部阻塞时，计划仍能保留已有成果并给出下一步 | 计划拆解、依赖顺序、阻塞收敛或 handoff 结果与该用例描述一致。 | 不验证具体工具调用实现细节和 UI 呈现。 |
 
 #### scenario
 
-| 用例名称 | 目标 | 描述 | 为什么 |
-| --- | --- | --- | --- |
-| `plan-follow-up-refinement-breakdown` | 验证续做任务重规划 | 已有中间产物时，计划能围绕“继续完善”而不是重新做一遍 | follow-up 如果不能重用上下文，体验会很差 |
-| `plan-long-task-dependency-chain` | 验证长任务依赖链 | 长任务下每个 task 都有清晰 `userInput` 和依赖关系 | 长任务稳定性首先取决于依赖顺序是否合理 |
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `plan-follow-up-refinement-breakdown` | `待检查` | 验证续做任务重规划 | follow-up 如果不能重用上下文，体验会很差 | 已有中间产物时，计划能围绕“继续完善”而不是重新做一遍 | 计划拆解、依赖顺序、阻塞收敛或 handoff 结果与该用例描述一致。 | 不验证具体工具调用实现细节和 UI 呈现。 |
+| `plan-long-task-dependency-chain` | `待检查` | 验证长任务依赖链 | 长任务稳定性首先取决于依赖顺序是否合理 | 长任务下每个 task 都有清晰 `userInput` 和依赖关系 | 计划拆解、依赖顺序、阻塞收敛或 handoff 结果与该用例描述一致。 | 不验证具体工具调用实现细节和 UI 呈现。 |
 
 #### live
 
-| 用例名称 | 目标 | 描述 | 为什么 |
-| --- | --- | --- | --- |
-| `plan-live-docx-workflow-ordering` | 验证 live 文档类计划顺序 | 在真实模型下，文档任务仍保持先取证后编辑再审阅的顺序 | 计划顺序错误会直接污染后续执行 |
-| `plan-live-kb-to-docx-task-breakdown` | 验证 live 检索到文档拆解 | 在真实模型下，混合链路拆解仍完整可执行 | 混合任务最考验计划粒度 |
-| `plan-live-follow-up-refinement-breakdown` | 验证 live 续做重规划 | 在真实模型下，已有产物时计划仍围绕 refinement 展开 | follow-up 计划最容易被重新开题取代 |
-| `plan-live-long-task-dependency-chain` | 验证 live 长任务依赖链 | 在真实模型下，长任务仍保持清晰依赖顺序 | 长任务计划是否靠谱，只看 live 才有意义 |
-| `plan-live-blocked-task-convergence` | 验证 live 阻塞计划收敛 | 在真实模型下，阻塞后仍能产出明确下一步 | 计划层的安全收尾不能只在静态 case 成立 |
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `plan-live-docx-workflow-ordering` | `待检查` | 验证 live 文档类计划顺序 | 计划顺序错误会直接污染后续执行 | 在真实模型下，文档任务仍保持先取证后编辑再审阅的顺序 | 计划拆解、依赖顺序、阻塞收敛或 handoff 结果与该用例描述一致。 | 不验证具体工具调用实现细节和 UI 呈现。 |
+| `plan-live-kb-to-docx-task-breakdown` | `待检查` | 验证 live 检索到文档拆解 | 混合任务最考验计划粒度 | 在真实模型下，混合链路拆解仍完整可执行 | 计划拆解、依赖顺序、阻塞收敛或 handoff 结果与该用例描述一致。 | 不验证具体工具调用实现细节和 UI 呈现。 |
+| `plan-live-follow-up-refinement-breakdown` | `待检查` | 验证 live 续做重规划 | follow-up 计划最容易被重新开题取代 | 在真实模型下，已有产物时计划仍围绕 refinement 展开 | 计划拆解、依赖顺序、阻塞收敛或 handoff 结果与该用例描述一致。 | 不验证具体工具调用实现细节和 UI 呈现。 |
+| `plan-live-long-task-dependency-chain` | `待检查` | 验证 live 长任务依赖链 | 长任务计划是否靠谱，只看 live 才有意义 | 在真实模型下，长任务仍保持清晰依赖顺序 | 计划拆解、依赖顺序、阻塞收敛或 handoff 结果与该用例描述一致。 | 不验证具体工具调用实现细节和 UI 呈现。 |
+| `plan-live-blocked-task-convergence` | `待检查` | 验证 live 阻塞计划收敛 | 计划层的安全收尾不能只在静态 case 成立 | 在真实模型下，阻塞后仍能产出明确下一步 | 计划拆解、依赖顺序、阻塞收敛或 handoff 结果与该用例描述一致。 | 不验证具体工具调用实现细节和 UI 呈现。 |
 
 ### 3.6 `entire`
 
@@ -302,42 +356,42 @@
 
 #### basic
 
-| 用例名称 | 目标 | 描述 | 为什么 |
-| --- | --- | --- | --- |
-| `entire-docx-rewrite-review-ready` | 验证现有 docx 改写闭环 | 读取、修改文档并进入可审阅结果 | 这是文档类任务的核心主路径 |
-| `entire-kb-answer-with-citation` | 验证知识库问答闭环 | 回答本地知识问题，并给出可回看依据 | 用户问答不能只给结论，不给证据 |
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `entire-docx-rewrite-review-ready` | `待检查` | 验证现有 docx 改写闭环 | 这是文档类任务的核心主路径 | 读取、修改文档并进入可审阅结果 | backend 完整链路的最终交付、收敛或完成度与该用例描述一致。 | 不验证页面级布局与交互细节。 |
+| `entire-kb-answer-with-citation` | `待检查` | 验证知识库问答闭环 | 用户问答不能只给结论，不给证据 | 回答本地知识问题，并给出可回看依据 | backend 完整链路的最终交付、收敛或完成度与该用例描述一致。 | 不验证页面级布局与交互细节。 |
 
 #### boundary
 
-| 用例名称 | 目标 | 描述 | 为什么 |
-| --- | --- | --- | --- |
-| `entire-evidence-insufficient-safe-stop` | 验证证据不足时的完整收敛 | 依据不足时给出明确缺口和可继续交付 | 安全收敛本身也是完整结果的一部分 |
-| `entire-terminal-approval-to-docx-update` | 验证审批分支下的文档闭环 | 先通过审批执行命令拿到产物，再写回现有周报模板 | 审批分支必须和业务目标最终接上 |
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `entire-evidence-insufficient-safe-stop` | `待检查` | 验证证据不足时的完整收敛 | 安全收敛本身也是完整结果的一部分 | 依据不足时给出明确缺口和可继续交付 | backend 完整链路的最终交付、收敛或完成度与该用例描述一致。 | 不验证页面级布局与交互细节。 |
+| `entire-terminal-approval-to-docx-update` | `待检查` | 验证审批分支下的文档闭环 | 审批分支必须和业务目标最终接上 | 先通过审批执行命令拿到产物，再写回现有周报模板 | backend 完整链路的最终交付、收敛或完成度与该用例描述一致。 | 不验证页面级布局与交互细节。 |
 
 #### scenario
 
-| 用例名称 | 目标 | 描述 | 为什么 |
-| --- | --- | --- | --- |
-| `entire-workspace-to-docx` | 验证工作区材料生成文档闭环 | 从 `notes / todo` 提炼内容并生成结构化 docx | 能把工作区材料变成成品，是高价值能力 |
-| `entire-kb-to-docx-hybrid` | 验证检索到文档的完整链路 | 先查规范，再改模板文档，结果可消费 | 这是典型的混合任务闭环 |
-| `entire-follow-up-continuation` | 验证多轮续做闭环 | 接续前文后继续完成修改或补写 | backend 也必须证明 follow-up 能成立 |
-| `entire-terminal-materials-to-delivery` | 验证工作区材料到最终交付 | 先找材料，再生成最终汇报或周报 | 多源工作区任务是实际使用重心之一 |
-| `entire-long-task-weekly-brief` | 验证长任务完整闭环 | 多源材料、多步依赖和审阅收敛都能成立 | 这是 backend 综合能力的最高压测点 |
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `entire-workspace-to-docx` | `待检查` | 验证工作区材料生成文档闭环 | 能把工作区材料变成成品，是高价值能力 | 从 `notes / todo` 提炼内容并生成结构化 docx | backend 完整链路的最终交付、收敛或完成度与该用例描述一致。 | 不验证页面级布局与交互细节。 |
+| `entire-kb-to-docx-hybrid` | `待检查` | 验证检索到文档的完整链路 | 这是典型的混合任务闭环 | 先查规范，再改模板文档，结果可消费 | backend 完整链路的最终交付、收敛或完成度与该用例描述一致。 | 不验证页面级布局与交互细节。 |
+| `entire-follow-up-continuation` | `待检查` | 验证多轮续做闭环 | backend 也必须证明 follow-up 能成立 | 接续前文后继续完成修改或补写 | backend 完整链路的最终交付、收敛或完成度与该用例描述一致。 | 不验证页面级布局与交互细节。 |
+| `entire-terminal-materials-to-delivery` | `待检查` | 验证工作区材料到最终交付 | 多源工作区任务是实际使用重心之一 | 先找材料，再生成最终汇报或周报 | backend 完整链路的最终交付、收敛或完成度与该用例描述一致。 | 不验证页面级布局与交互细节。 |
+| `entire-long-task-weekly-brief` | `待检查` | 验证长任务完整闭环 | 这是 backend 综合能力的最高压测点 | 多源材料、多步依赖和审阅收敛都能成立 | backend 完整链路的最终交付、收敛或完成度与该用例描述一致。 | 不验证页面级布局与交互细节。 |
 
 #### live
 
-| 用例名称 | 目标 | 描述 | 为什么 |
-| --- | --- | --- | --- |
-| `entire-live-docx-rewrite-review-ready` | 验证 live 文档改写闭环 | 在真实模型下完成 docx 改写并进入可审阅结果 | backend 最小完整交付必须在 live 成立 |
-| `entire-live-kb-answer-with-citation` | 验证 live 知识问答闭环 | 在真实模型下回答本地知识问题并给出依据 | 问答类完整闭环不能只靠 contract case |
-| `entire-live-kb-to-docx-hybrid` | 验证 live 混合任务闭环 | 在真实模型下先检索再改文档并形成可消费结果 | 混合闭环是 backend 能力连贯性的关键证明 |
-| `entire-live-terminal-materials-to-delivery` | 验证 live 工作区材料到交付 | 在真实模型下从 workspace 材料生成最终交付 | 本地工作区任务是高价值真实路径 |
-| `entire-live-evidence-insufficient-safe-stop` | 验证 live 安全收敛闭环 | 在真实模型下证据不足时仍完整收敛 | 安全闭环本身就是最终验收的一部分 |
-| `entire-live-long-task-weekly-brief` | 验证 live 长任务完整闭环 | 在真实模型下完成多源材料与审阅收敛的完整 backend 任务 | 这是 `entire` 阶段最关键的 live 压测点 |
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `entire-live-docx-rewrite-review-ready` | `待检查` | 验证 live 文档改写闭环 | backend 最小完整交付必须在 live 成立 | 在真实模型下完成 docx 改写并进入可审阅结果 | backend 完整链路的最终交付、收敛或完成度与该用例描述一致。 | 不验证页面级布局与交互细节。 |
+| `entire-live-kb-answer-with-citation` | `待检查` | 验证 live 知识问答闭环 | 问答类完整闭环不能只靠 contract case | 在真实模型下回答本地知识问题并给出依据 | backend 完整链路的最终交付、收敛或完成度与该用例描述一致。 | 不验证页面级布局与交互细节。 |
+| `entire-live-kb-to-docx-hybrid` | `待检查` | 验证 live 混合任务闭环 | 混合闭环是 backend 能力连贯性的关键证明 | 在真实模型下先检索再改文档并形成可消费结果 | backend 完整链路的最终交付、收敛或完成度与该用例描述一致。 | 不验证页面级布局与交互细节。 |
+| `entire-live-terminal-materials-to-delivery` | `待检查` | 验证 live 工作区材料到交付 | 本地工作区任务是高价值真实路径 | 在真实模型下从 workspace 材料生成最终交付 | backend 完整链路的最终交付、收敛或完成度与该用例描述一致。 | 不验证页面级布局与交互细节。 |
+| `entire-live-evidence-insufficient-safe-stop` | `待检查` | 验证 live 安全收敛闭环 | 安全闭环本身就是最终验收的一部分 | 在真实模型下证据不足时仍完整收敛 | backend 完整链路的最终交付、收敛或完成度与该用例描述一致。 | 不验证页面级布局与交互细节。 |
+| `entire-live-long-task-weekly-brief` | `待检查` | 验证 live 长任务完整闭环 | 这是 `entire` 阶段最关键的 live 压测点 | 在真实模型下完成多源材料与审阅收敛的完整 backend 任务 | backend 完整链路的最终交付、收敛或完成度与该用例描述一致。 | 不验证页面级布局与交互细节。 |
 
 ### 3.7 `ui`
 
-做什么：验证 `workbench` 的交互、布局、样式和状态联动是否稳定可用。
+做什么：验证 Core AI 交互界面的交互、布局、样式和状态联动是否稳定可用。
 
 为什么：backend 能跑通不代表用户在页面里能做成；UI 问题会直接让正确能力无法被使用。
 
@@ -346,34 +400,34 @@
 
 #### basic
 
-| 用例名称 | 目标 | 描述 | 为什么 |
-| --- | --- | --- | --- |
-| `ui-three-pane-layout-baseline` | 验证基础布局稳定 | 左侧会话、中间对话与 `Assistant Run`、右侧时间线与检查器稳定呈现 | 三栏模型是整个 workbench 的基础结构 |
-| `ui-input-and-send-stability` | 验证输入区稳定性 | 输入区可见、可输入、可回车发送、可按钮发送、运行中可取消 | 用户的第一接触点就是输入区 |
-| `ui-mode-and-scope-switching` | 验证模式与范围切换 | `AI 对话 / 纯搜索`、范围选择切换稳定，状态显示一致 | 模式与范围是任务行为的重要前提 |
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `ui-three-pane-layout-baseline` | `待检查` | 验证基础布局稳定 | 三栏模型是整个 Core AI 主界面的基础结构 | 左侧会话、中间对话与 `Assistant Run`、右侧时间线与检查器稳定呈现 | 界面状态、联动关系和交互反馈与该用例描述一致。 | 不验证模型推理质量和 backend 内部中间 state 正确性。 |
+| `ui-input-and-send-stability` | `待检查` | 验证输入区稳定性 | 用户的第一接触点就是输入区 | 输入区可见、可输入、可回车发送、可按钮发送、运行中可取消 | 界面状态、联动关系和交互反馈与该用例描述一致。 | 不验证模型推理质量和 backend 内部中间 state 正确性。 |
+| `ui-mode-and-scope-switching` | `待检查` | 验证模式与范围切换 | 模式与范围是任务行为的重要前提 | `AI 对话 / 纯搜索`、范围选择切换稳定，状态显示一致 | 界面状态、联动关系和交互反馈与该用例描述一致。 | 不验证模型推理质量和 backend 内部中间 state 正确性。 |
 
 #### boundary
 
-| 用例名称 | 目标 | 描述 | 为什么 |
-| --- | --- | --- | --- |
-| `ui-approval-and-workspace-banner-flow` | 验证提示条与交互流 | 审批请求、工作区缺失、继续运行等 banner 状态清晰可操作 | 阻塞交互如果不清晰，用户无法完成流程 |
-| `ui-small-window-and-overflow` | 验证小窗口布局与溢出 | 在 `1440x900`、`1280x800`、`1024x768`、`900x700` 下不出现布局断裂 | 小窗口问题会直接影响日常使用 |
-| `ui-long-content-scroll-stability` | 验证长内容滚动稳定性 | 长路径、长 JSON、长时间线、长审阅列表下滚动不冲突、不遮挡 | workbench 天然会承载长内容，必须提前防守 |
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `ui-approval-and-workspace-banner-flow` | `待检查` | 验证提示条与交互流 | 阻塞交互如果不清晰，用户无法完成流程 | 审批请求、工作区缺失、继续运行等 banner 状态清晰可操作 | 界面状态、联动关系和交互反馈与该用例描述一致。 | 不验证模型推理质量和 backend 内部中间 state 正确性。 |
+| `ui-small-window-and-overflow` | `待检查` | 验证小窗口布局与溢出 | 小窗口问题会直接影响日常使用 | 在 `1440x900`、`1280x800`、`1024x768`、`900x700` 下不出现布局断裂 | 界面状态、联动关系和交互反馈与该用例描述一致。 | 不验证模型推理质量和 backend 内部中间 state 正确性。 |
+| `ui-long-content-scroll-stability` | `待检查` | 验证长内容滚动稳定性 | Core AI 交互界面天然会承载长内容，必须提前防守 | 长路径、长 JSON、长时间线、长审阅列表下滚动不冲突、不遮挡 | 界面状态、联动关系和交互反馈与该用例描述一致。 | 不验证模型推理质量和 backend 内部中间 state 正确性。 |
 
 #### scenario
 
-| 用例名称 | 目标 | 描述 | 为什么 |
-| --- | --- | --- | --- |
-| `ui-run-timeline-inspector-linkage` | 验证运行态联动 | 时间线点击、检查器详情、运行态信息能够保持同步 | workbench 的核心价值之一就是可观察性 |
-| `ui-draft-review-center-operations` | 验证审阅中心操作 | 支持逐条接受、拒绝、全部接受和提交，状态无错乱 | 文档类任务最后常常收敛在审阅中心 |
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `ui-run-timeline-inspector-linkage` | `待检查` | 验证运行态联动 | Core AI 界面的关键价值之一就是可观察性 | 时间线点击、检查器详情、运行态信息能够保持同步 | 界面状态、联动关系和交互反馈与该用例描述一致。 | 不验证模型推理质量和 backend 内部中间 state 正确性。 |
+| `ui-draft-review-center-operations` | `待检查` | 验证审阅中心操作 | 文档类任务最后常常收敛在审阅中心 | 支持逐条接受、拒绝、全部接受和提交，状态无错乱 | 界面状态、联动关系和交互反馈与该用例描述一致。 | 不验证模型推理质量和 backend 内部中间 state 正确性。 |
 
 #### live
 
-| 用例名称 | 目标 | 描述 | 为什么 |
-| --- | --- | --- | --- |
-| `ui-live-run-timeline-inspector-linkage` | 验证 live 运行态联动 | 在真实模型执行时，时间线和检查器仍保持同步 | 真实运行会放大 UI 状态联动问题 |
-| `ui-live-approval-and-workspace-banner-flow` | 验证 live 阻塞提示流 | 在真实模型执行时，审批与 workspace banner 仍清晰可恢复 | 阻塞交互必须在真实链路里可用 |
-| `ui-live-draft-review-center-operations` | 验证 live 审阅中心操作 | 在真实模型产出审阅结果后，审阅中心操作仍稳定 | 审阅中心是真实文档任务的最终 UI 落点 |
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `ui-live-run-timeline-inspector-linkage` | `待检查` | 验证 live 运行态联动 | 真实运行会放大 UI 状态联动问题 | 在真实模型执行时，时间线和检查器仍保持同步 | 界面状态、联动关系和交互反馈与该用例描述一致。 | 不验证模型推理质量和 backend 内部中间 state 正确性。 |
+| `ui-live-approval-and-workspace-banner-flow` | `待检查` | 验证 live 阻塞提示流 | 阻塞交互必须在真实链路里可用 | 在真实模型执行时，审批与 workspace banner 仍清晰可恢复 | 界面状态、联动关系和交互反馈与该用例描述一致。 | 不验证模型推理质量和 backend 内部中间 state 正确性。 |
+| `ui-live-draft-review-center-operations` | `待检查` | 验证 live 审阅中心操作 | 审阅中心是真实文档任务的最终 UI 落点 | 在真实模型产出审阅结果后，审阅中心操作仍稳定 | 界面状态、联动关系和交互反馈与该用例描述一致。 | 不验证模型推理质量和 backend 内部中间 state 正确性。 |
 
 ### 3.8 `final`
 
@@ -386,36 +440,36 @@
 
 #### basic
 
-| 用例名称 | 目标 | 描述 | 为什么 |
-| --- | --- | --- | --- |
-| `final-docx-rewrite-completion` | 验证文档类最终完成 | 用户在界面中输入改写诉求，最终拿到可消费结果或审阅结果 | 这是最核心的页面级主任务 |
-| `final-kb-answer-completion` | 验证知识库问答最终完成 | 用户在页面中提问，最终拿到答案和依据展示 | 问答是最直接、最可感知的完成标准 |
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `final-docx-rewrite-completion` | `待检查` | 验证文档类最终完成 | 这是最核心的页面级主任务 | 用户在界面中输入改写诉求，最终拿到可消费结果或审阅结果 | 真实页面交互后的最终结果、恢复流程或完成闭环与该用例描述一致。 | 不验证内部 graph 中间 state 与低层工具实现细节。 |
+| `final-kb-answer-completion` | `待检查` | 验证知识库问答最终完成 | 问答是最直接、最可感知的完成标准 | 用户在页面中提问，最终拿到答案和依据展示 | 真实页面交互后的最终结果、恢复流程或完成闭环与该用例描述一致。 | 不验证内部 graph 中间 state 与低层工具实现细节。 |
 
 #### boundary
 
-| 用例名称 | 目标 | 描述 | 为什么 |
-| --- | --- | --- | --- |
-| `final-terminal-approval-completion` | 验证审批分支最终完成 | 覆盖等待审批、批准继续、拒绝收敛，并最终回到用户目标 | 审批链路必须在真实交互里验证 |
-| `final-workspace-required-and-resume` | 验证工作区补充后的恢复能力 | 工作区缺失时提示补充，补充后继续运行并完成目标 | 本地优先链路必须证明可以中断后恢复 |
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `final-terminal-approval-completion` | `待检查` | 验证审批分支最终完成 | 审批链路必须在真实交互里验证 | 覆盖等待审批、批准继续、拒绝收敛，并最终回到用户目标 | 真实页面交互后的最终结果、恢复流程或完成闭环与该用例描述一致。 | 不验证内部 graph 中间 state 与低层工具实现细节。 |
+| `final-workspace-required-and-resume` | `待检查` | 验证工作区补充后的恢复能力 | 本地优先链路必须证明可以中断后恢复 | 工作区缺失时提示补充，补充后继续运行并完成目标 | 真实页面交互后的最终结果、恢复流程或完成闭环与该用例描述一致。 | 不验证内部 graph 中间 state 与低层工具实现细节。 |
 
 #### scenario
 
-| 用例名称 | 目标 | 描述 | 为什么 |
-| --- | --- | --- | --- |
-| `final-kb-docx-hybrid-completion` | 验证混合任务最终完成 | 先检索后改文档的链路在界面中完整跑通 | 混合任务最能体现整套架构是否连贯 |
-| `final-follow-up-continuation` | 验证多轮续做最终完成 | 接续上一轮产物继续修改，并让用户拿到更新后的结果 | 连续对话是 workbench 的核心使用方式 |
-| `final-review-partial-acceptance` | 验证审阅中心部分接受闭环 | 用户只接受部分修改、拒绝其余修改后提交最终结果 | 文档任务不能只做到“给出建议”，还要支持选择性收敛 |
-| `final-long-task-stability` | 验证长任务真实交互稳定性 | 长任务在界面里仍能保持步骤连贯并最终收敛 | backend 成立不代表真实页面长任务也稳定 |
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `final-kb-docx-hybrid-completion` | `待检查` | 验证混合任务最终完成 | 混合任务最能体现整套架构是否连贯 | 先检索后改文档的链路在界面中完整跑通 | 真实页面交互后的最终结果、恢复流程或完成闭环与该用例描述一致。 | 不验证内部 graph 中间 state 与低层工具实现细节。 |
+| `final-follow-up-continuation` | `待检查` | 验证多轮续做最终完成 | 连续对话是 Core AI 系统的核心使用方式 | 接续上一轮产物继续修改，并让用户拿到更新后的结果 | 真实页面交互后的最终结果、恢复流程或完成闭环与该用例描述一致。 | 不验证内部 graph 中间 state 与低层工具实现细节。 |
+| `final-review-partial-acceptance` | `待检查` | 验证审阅中心部分接受闭环 | 文档任务不能只做到“给出建议”，还要支持选择性收敛 | 用户只接受部分修改、拒绝其余修改后提交最终结果 | 真实页面交互后的最终结果、恢复流程或完成闭环与该用例描述一致。 | 不验证内部 graph 中间 state 与低层工具实现细节。 |
+| `final-long-task-stability` | `待检查` | 验证长任务真实交互稳定性 | backend 成立不代表真实页面长任务也稳定 | 长任务在界面里仍能保持步骤连贯并最终收敛 | 真实页面交互后的最终结果、恢复流程或完成闭环与该用例描述一致。 | 不验证内部 graph 中间 state 与低层工具实现细节。 |
 
 #### live
 
-| 用例名称 | 目标 | 描述 | 为什么 |
-| --- | --- | --- | --- |
-| `final-live-docx-rewrite-completion` | 验证 live 文档类最终完成 | 在真实模型下，用户通过界面拿到可消费文档结果或审阅结果 | 页面主路径必须以 live 为准 |
-| `final-live-kb-answer-completion` | 验证 live 知识问答最终完成 | 在真实模型下，界面中问答能稳定返回答案和依据展示 | 最直观的用户价值必须在真实模型下成立 |
-| `final-live-kb-docx-hybrid-completion` | 验证 live 混合任务最终完成 | 在真实模型下，先检索再改文档的页面链路完整跑通 | 混合任务是最终验收层的重要能力证明 |
-| `final-live-follow-up-continuation` | 验证 live 多轮续做最终完成 | 在真实模型下，用户接续上一轮产物继续修改并拿到结果 | 连续对话稳定性只能靠 live e2e 判断 |
-| `final-live-terminal-approval-completion` | 验证 live 审批分支最终完成 | 在真实模型下，审批等待、批准继续、拒绝收敛都能回到用户目标 | 审批链路必须在真实交互里被验证 |
-| `final-live-review-partial-acceptance` | 验证 live 审阅中心部分接受闭环 | 在真实模型下，用户部分接受修改后仍能提交最终结果 | 选择性收敛是真实文档任务的重要落点 |
-| `final-live-long-task-stability` | 验证 live 长任务真实交互稳定性 | 在真实模型下，长任务在页面里仍能保持连贯并收敛 | 最终验收层的长任务结论只能来自 live |
-| `final-live-workspace-required-and-resume` | 验证 live 工作区补充后的恢复能力 | 在真实模型下，工作区缺失后补充并继续运行仍能完成目标 | 本地优先恢复链路必须用真实交互证明 |
+| 用例名称 | 实现状态 | What | Why | How | Oracle | Not |
+| --- | --- | --- | --- | --- | --- | --- |
+| `final-live-docx-rewrite-completion` | `待检查` | 验证 live 文档类最终完成 | 页面主路径必须以 live 为准 | 在真实模型下，用户通过界面拿到可消费文档结果或审阅结果 | 真实页面交互后的最终结果、恢复流程或完成闭环与该用例描述一致。 | 不验证内部 graph 中间 state 与低层工具实现细节。 |
+| `final-live-kb-answer-completion` | `待检查` | 验证 live 知识问答最终完成 | 最直观的用户价值必须在真实模型下成立 | 在真实模型下，界面中问答能稳定返回答案和依据展示 | 真实页面交互后的最终结果、恢复流程或完成闭环与该用例描述一致。 | 不验证内部 graph 中间 state 与低层工具实现细节。 |
+| `final-live-kb-docx-hybrid-completion` | `待检查` | 验证 live 混合任务最终完成 | 混合任务是最终验收层的重要能力证明 | 在真实模型下，先检索再改文档的页面链路完整跑通 | 真实页面交互后的最终结果、恢复流程或完成闭环与该用例描述一致。 | 不验证内部 graph 中间 state 与低层工具实现细节。 |
+| `final-live-follow-up-continuation` | `待检查` | 验证 live 多轮续做最终完成 | 连续对话稳定性只能靠 live e2e 判断 | 在真实模型下，用户接续上一轮产物继续修改并拿到结果 | 真实页面交互后的最终结果、恢复流程或完成闭环与该用例描述一致。 | 不验证内部 graph 中间 state 与低层工具实现细节。 |
+| `final-live-terminal-approval-completion` | `待检查` | 验证 live 审批分支最终完成 | 审批链路必须在真实交互里被验证 | 在真实模型下，审批等待、批准继续、拒绝收敛都能回到用户目标 | 真实页面交互后的最终结果、恢复流程或完成闭环与该用例描述一致。 | 不验证内部 graph 中间 state 与低层工具实现细节。 |
+| `final-live-review-partial-acceptance` | `待检查` | 验证 live 审阅中心部分接受闭环 | 选择性收敛是真实文档任务的重要落点 | 在真实模型下，用户部分接受修改后仍能提交最终结果 | 真实页面交互后的最终结果、恢复流程或完成闭环与该用例描述一致。 | 不验证内部 graph 中间 state 与低层工具实现细节。 |
+| `final-live-long-task-stability` | `待检查` | 验证 live 长任务真实交互稳定性 | 最终验收层的长任务结论只能来自 live | 在真实模型下，长任务在页面里仍能保持连贯并收敛 | 真实页面交互后的最终结果、恢复流程或完成闭环与该用例描述一致。 | 不验证内部 graph 中间 state 与低层工具实现细节。 |
+| `final-live-workspace-required-and-resume` | `待检查` | 验证 live 工作区补充后的恢复能力 | 本地优先恢复链路必须用真实交互证明 | 在真实模型下，工作区缺失后补充并继续运行仍能完成目标 | 真实页面交互后的最终结果、恢复流程或完成闭环与该用例描述一致。 | 不验证内部 graph 中间 state 与低层工具实现细节。 |

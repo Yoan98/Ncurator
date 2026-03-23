@@ -147,7 +147,7 @@ export type BackendTestRuntime = {
 export type TestCaseDefinition<TResult> = {
   caseId: string
   caseType: TestCaseType
-  domain: Extract<TestDomain, 'ai' | 'kb-search' | 'other'>
+  domain: Extract<TestDomain, 'ai' | 'kb-search' | 'temp'>
   layer: Extract<TestLayer, 'backend'>
   suite: string
   groups?: readonly string[]

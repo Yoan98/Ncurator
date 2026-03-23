@@ -2,7 +2,7 @@ import type { JsonValue } from '../../../src/shared/types'
 
 export const TEST_LOG_SCHEMA_VERSION = 3 as const
 
-export type TestDomain = 'ai' | 'kb-search' | 'other'
+export type TestDomain = 'ai' | 'kb-search' | 'temp'
 export type TestLayer = 'backend' | 'e2e'
 export type TestRunStatus = 'passed' | 'failed'
 export type TestLogStatus = 'info' | 'ok' | 'failed' | 'skipped'

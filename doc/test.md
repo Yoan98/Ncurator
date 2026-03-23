@@ -77,7 +77,7 @@ tests/
       boundary/
       scenario/
       live/
-  other/
+  temp/
   logs/
   report/
     ai/
@@ -92,9 +92,9 @@ tests/
 - 正式测试目录默认优先使用四类稳定分组：`basic`、`boundary`、`scenario`、`live`。
 - `basic / boundary / scenario` 用于组织稳定回归基线；`live` 用于组织真实模型路径验证。
 - 只要某个正式测试范围涉及模型参与，就必须在该范围下维护 `live/` 目录和对应的 live case。
-- `other/` 默认不参与 gating，也不参与正式 report 汇总。
+- `temp/` 默认不参与 gating，也不参与正式 report 汇总。
 
-## 3. 测试用例设计策略
+## 3. 测试用例设计原则
 
 ### 3.1 基础case
 - 这类case要保证基础能力能正常使用。
@@ -117,11 +117,15 @@ tests/
 - 进入正式 domain 目录的 case 默认都应具备长期回归价值。
 - 长期 case 应有稳定目标、稳定输入、稳定验收口径。
 - 对涉及模型的长期 case，应规划对应的 `live` 验证，不把“脚本化通过”当作最终完成。
+- 所有长期维护的正式 case，必须先对齐 `doc/test-plan/**` 下对应测试计划中的用例定义，再实现测试代码。
+- 不允许绕过 `test-plan` 直接新增正式测试用例代码；如果测试计划中还没有对应 case，必须先补文档，再落测试实现。
+- 正式测试代码中的 `caseId`、目录归属、分组层级和核心验收口径，必须与 `test-plan` 中对应 case 保持一致。
 
 ### 3.6 临时case
-- 一次性排查或待定样例统一放在 `tests/other/**`。
+- 一次性排查、临时验证或待定样例统一放在 `tests/temp/**`。
 - 不要把临时用例混入正式 domain 目录。
 - 临时 case 不参与正式 report，也不作为阶段完成依据。
+- 如果某条临时 case 需要转为长期维护 case，必须先补齐 `doc/test-plan/**` 中的正式用例定义，再迁入正式测试目录。
 
 ## 4. runner 与命令
 

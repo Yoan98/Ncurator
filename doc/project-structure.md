@@ -74,7 +74,7 @@ tests/                   # 自动化测试
 - `tests/harness/**` 只放可复用的测试基础设施，不承载旧 suite 治理逻辑或旧 report 契约。
 - `tests/fixtures/**` 只放长期复用的输入样本，不混入运行产物。
 - `tests/ai/**` 按 `backend` / `e2e`、`suite` 与可选子目录拆分，是当前 AI 测试的主目录。
-- `tests/kb-search/**` 预留给检索链路测试；`tests/other/**` 仅放临时或待定用例。
+- `tests/kb-search/**` 预留给检索链路测试；`tests/temp/**` 仅放临时或待定用例。
 - `tests/logs/**` 只放每次运行的原始日志；`tests/report/**` 只放按 domain 维护的正式分析文档。
 - 测试目录统一使用 kebab-case，运行产物不得反向成为测试发现入口。
 
@@ -84,6 +84,6 @@ tests/                   # 自动化测试
 - `doc/README.md` 是默认阅读入口。
 - canonical 文档、阅读路径和同步清单都在 `doc/` 根目录维护。
 - `doc/ai-design/` 用于 AI 总体架构、实现规范、数据契约与数据流转、skill 设计、prompt 设计，以及未来重构规划。
-- `doc/ai-workbench-test/` 用于 AI workbench 测试计划与分阶段 todo 管理。
-- 该目录初始化时只保留 `plan.md` 与当前阶段 todo 文件。
-- 后续 `todo-stage-N.md` 只有在前一轮 todo 全部完成后才能创建。
+- `doc/test-plan/` 用于维护各类测试计划文档。
+- 测试计划按对应诉求或测试域拆分，例如 Core AI 测试计划放在 `doc/test-plan/ai-test.md`。
+- 长期维护的正式测试用例，必须先在 `doc/test-plan/**` 中定义，再落到 `tests/**` 正式目录。
