@@ -9,7 +9,7 @@
 - 当涉及 AI 未来重构规划、迭代方向、未决方案、下一次准备怎么改时，请阅读 `doc/ai-design/refactor-plan.md`
 - 当涉及 `human` 的 skill 集合、skill 命名、skill 拆分边界、`skillCatalog` / `skillRegistry` 或 skill 与 tools 实现边界时，请阅读 `doc/ai-design/human-skill-design.md`
 - 当涉及 AI 提示词设计准则、prompt 结构、标签组织、哪些字段允许保留结构化载荷、structured output 或提示词通用编排原则时，请阅读 `doc/ai-design/prompt-design.md`
-- 当涉及 Core AI 测试方案、阶段顺序、阶段目标、各阶段 `basic / boundary / scenario / live` 用例规划、用例实现状态、`What / Why / How / Oracle / Not` 定义、`watchHint`/并行边界、模型使用或 backend / e2e 测试边界时，请先阅读 `doc/test-plan/ai-test.md`
+- 当涉及 Core AI 测试方案、阶段顺序、各阶段 `basic / boundary / scenario / live` 用例规划、`human` skill 覆盖、backend 完整闭环、用例实现状态、`What / Why / How / Oracle / Not` 定义、`watchHint`/并行边界、模型使用或 backend / e2e 测试边界时，请先阅读 `doc/test-plan/ai-test.md`
 - 当涉及数据库、LanceDB、表职责、存储分层或检索存储实现时，请阅读 `doc/database.md`
 - 当涉及目录规范、文件归位、human 子目录归位、tools 按实现域归位、模块边界或工程结构时，请阅读 `doc/project-structure.md`
 - 当涉及 UI 风格、布局规范或组件交互约束时，请阅读 `doc/ui-style.md`
