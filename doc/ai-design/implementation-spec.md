@@ -397,11 +397,11 @@ mouth -> brain | END
 - 读取：`lastBrainDecision.nextAction.wantLearnSkillIds`、`brainMemory.outside.learnedSkillIds`、skill registry / loader
 - 回写：`brainMemory.outside.learnedSkillIds`、`runtime.stage = brain`、必要时回写 `watchHint`、`trace.steps`
 - 下一跳：`brain`
-实现约束：
-- `learning` 不调用模型。
-- 未知 skill 或重复学习必须写 `watchHint` 并返回 `brain`。
-- `ensureSkillTools` 负责把 skill 对应工具装入 runtime cache。
-- `learning` 只更新已学习 skill 集合，不扩张为新推理节点。
+- 实现约束：
+  - `learning` 不调用模型。
+  - 未知 skill 或重复学习必须写 `watchHint` 并返回 `brain`。
+  - `ensureSkillTools` 负责把 skill 对应工具装入 runtime cache。
+  - `learning` 只更新已学习 skill 集合，不扩张为新推理节点。
 
 **Not**
 
