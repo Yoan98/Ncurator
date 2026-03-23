@@ -4,7 +4,7 @@
 
 - 当涉及技术栈、整体架构、进程边界、本地优先约束或混合检索链路时，请阅读 `doc/architecture.md`
 - 当涉及 AI 总体架构、Main/Human 分工、复杂度路由、主流程或整体协作关系时，请阅读 `doc/ai-design/architecture.md`
-- 当涉及 `main`/`human` 的实现规则、节点行为、关键伪代码、`deliveryMode`、`watchHint`、`artifacts` 责任边界、最近决策历史、`task_handoff` 或 `context_note` 的运行语义时，请阅读 `doc/ai-design/implementation-spec.md`
+- 当涉及 `main`/`human` 的实现规则、节点行为、状态转移、`deliveryMode`、`watchHint`、`artifacts` 责任边界、最近决策历史、`task_handoff` / `context_note` 运行语义，或 `LangGraph`、`chatStructured` 等 AI 技术实现约束时，请阅读 `doc/ai-design/implementation-spec.md`
 - 当涉及 `main`/`human` 状态字段、数据契约、`deliveryMarkdown` 交接结构、`contextEvidence` 提取规则、`fact/evidence` 引用约束、`artifacts` 契约、Main/Human 数据流转或流转图时，请阅读 `doc/ai-design/data-definition-and-flow.md`
 - 当涉及 AI 未来重构规划、迭代方向、未决方案、下一次准备怎么改时，请阅读 `doc/ai-design/refactor-plan.md`
 - 当涉及 `human` 的 skill 集合、skill 命名、skill 拆分边界、`skillCatalog` / `skillRegistry` 或 skill 与 tools 实现边界时，请阅读 `doc/ai-design/human-skill-design.md`
