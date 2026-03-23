@@ -1,25 +1,8 @@
-import { tool } from '@langchain/core/tools'
-import { z } from 'zod/v4'
 import { emitActivity } from '../../../../../utils/aiCapabilityUtils'
+import { jsonObjectSchema } from '../../schema'
 import type { ToolFamilyDefinition } from '../types'
+import { createWorkspaceRequiredGuardTool } from '../utils/workspaceGuards'
 import { buildTerminalCapabilityTools } from './terminalTools'
-
-const jsonValueSchema = z.lazy(() =>
-  z.union([
-    z.string(),
-    z.number(),
-    z.boolean(),
-    z.null(),
-    z.array(jsonValueSchema),
-    z.record(z.string(), jsonValueSchema)
-  ])
-)
-
-const workspaceRequiredResult = {
-  ok: false,
-  code: 'workspace_required',
-  error: 'workspace is required for terminal_exec'
-}
 
 export const terminalToolFamily: ToolFamilyDefinition = {
   familyId: 'terminal',
@@ -27,31 +10,16 @@ export const terminalToolFamily: ToolFamilyDefinition = {
     const workspaceRootPath = String(ctx.workspace?.rootPath || '').trim()
     if (!workspaceRootPath) {
       return [
-        tool(
-          async () => {
-            ctx.sendEvent({
-              type: 'workspace_required',
-              runId,
-              taskId,
-              reason: 'terminal_exec requires workspace binding before execution',
-              requiredFields: ['workspaceId', 'rootPath'],
-              createdAt: Date.now(),
-              stage: 'human_hand'
-            })
-            return workspaceRequiredResult
-          },
-          {
-            name: 'terminal_run_command',
-            description: 'Execute one shell command inside workspace.',
-            schema: z
-              .object({
-                command: z.string().optional(),
-                cwd: z.string().optional(),
-                expectedArtifacts: z.array(z.record(z.string(), jsonValueSchema)).optional()
-              })
-              .passthrough()
-          }
-        )
+        createWorkspaceRequiredGuardTool({
+          name: 'terminal_run_command',
+          description: 'Execute one shell command inside workspace.',
+          schema: jsonObjectSchema.optional(),
+          ctx,
+          runId,
+          taskId,
+          reason: 'terminal_exec requires workspace binding before execution',
+          error: 'workspace is required for terminal_exec'
+        })
       ]
     }
 

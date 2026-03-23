@@ -1,11 +1,6 @@
 import { spawn } from 'node:child_process'
 import type { TerminalCommandInput, TerminalCommandResult } from './types'
-
-const clipText = (text: string, maxChars: number) => {
-  const raw = String(text || '')
-  if (raw.length <= maxChars) return { text: raw, truncated: false }
-  return { text: raw.slice(0, maxChars), truncated: true }
-}
+import { clipTextWithMeta } from '../../../utils/text'
 
 export const runTerminalCommand = async (
   input: TerminalCommandInput
@@ -52,7 +47,7 @@ export const runTerminalCommand = async (
       else stderr += value
 
       if (stdout.length + stderr.length > maxOutputChars) {
-        const clipped = clipText(stdout + stderr, maxOutputChars)
+        const clipped = clipTextWithMeta(stdout + stderr, maxOutputChars)
         stdout = clipped.text
         stderr = ''
         truncated = clipped.truncated

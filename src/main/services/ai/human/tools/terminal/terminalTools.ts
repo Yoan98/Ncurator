@@ -18,12 +18,8 @@ import type {
   TerminalCapabilityToolsInput,
   TerminalCapabilityToolsRuntimeState
 } from './types'
-
-const clipText = (text: string, maxChars: number) => {
-  const raw = String(text || '')
-  if (raw.length <= maxChars) return { text: raw, truncated: false }
-  return { text: raw.slice(0, maxChars), truncated: true }
-}
+import { clipText, clipTextWithMeta } from '../../../utils/text'
+import { createToolEventEmitter } from '../utils/toolEvents'
 
 const artifactHintSchema = z.object({
   path: z.string(),
@@ -146,43 +142,16 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
   const state: TerminalCapabilityToolsRuntimeState = {
     stepIndex: 0
   }
-
-  const emitStarted = (toolName: string, args: IpcJsonObject) => {
-    const toolCallId = randomUUID()
-    input.ctx.sendEvent({
-      type: 'tool_call_started',
-      runId: input.runId,
-      taskId: input.taskId,
-      toolCallId,
-      toolName,
-      input: args,
-      createdAt: Date.now()
-    })
-    return toolCallId
-  }
-
-  const emitResult = (
-    toolName: string,
-    toolCallId: string,
-    outputPreview: IpcJsonValue,
-    error?: string
-  ) => {
-    input.ctx.sendEvent({
-      type: 'tool_call_result',
-      runId: input.runId,
-      taskId: input.taskId,
-      toolCallId,
-      toolName,
-      outputPreview,
-      completedAt: Date.now(),
-      error
-    })
-  }
+  const toolEvents = createToolEventEmitter({
+    ctx: input.ctx,
+    runId: input.runId,
+    taskId: input.taskId
+  })
 
   const terminalRunCommand = tool(
     async (args) => {
       const toolName = 'terminal_run_command'
-      const toolCallId = emitStarted(toolName, args)
+      const toolCallId = toolEvents.emitStarted(toolName, args as IpcJsonObject)
 
       try {
         input.ctx.checkCancelled()
@@ -193,7 +162,12 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             code: 'invalid_input' as const,
             error: 'empty command'
           }
-          emitResult(toolName, toolCallId, emptyResult, emptyResult.error)
+          toolEvents.emitResult({
+            toolName,
+            toolCallId,
+            outputPreview: emptyResult,
+            error: emptyResult.error
+          })
           return emptyResult
         }
 
@@ -207,7 +181,12 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             code: cwdResult.code,
             error: cwdResult.error
           }
-          emitResult(toolName, toolCallId, cwdError, cwdError.error)
+          toolEvents.emitResult({
+            toolName,
+            toolCallId,
+            outputPreview: cwdError,
+            error: cwdError.error
+          })
           return cwdError
         }
         const cwd = cwdResult.cwd
@@ -219,7 +198,12 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             code: 'workspace_required' as const,
             error: `workspace boundary check failed: ${boundary.reason}`
           }
-          emitResult(toolName, toolCallId, boundaryError, boundaryError.error)
+          toolEvents.emitResult({
+            toolName,
+            toolCallId,
+            outputPreview: boundaryError,
+            error: boundaryError.error
+          })
           return boundaryError
         }
 
@@ -238,7 +222,12 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               code: 'approval_denied' as const,
               error: decision.reason || 'approval denied'
             }
-            emitResult(toolName, toolCallId, denied, denied.error)
+            toolEvents.emitResult({
+              toolName,
+              toolCallId,
+              outputPreview: denied,
+              error: denied.error
+            })
             return denied
           }
         }
@@ -276,7 +265,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
         })
 
         const previewSource = [result.stdout, result.stderr].filter(Boolean).join('\n').trim()
-        const preview = clipText(previewSource || '(no output)', input.safePreviewChars)
+        const preview = clipTextWithMeta(previewSource || '(no output)', input.safePreviewChars)
         const stepError =
           result.timedOut || result.exitCode !== 0
             ? result.timedOut
@@ -360,19 +349,29 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
           stepId,
           stepIndex: state.stepIndex,
           outputPreview: preview.text,
-          stdoutPreview: clipText(result.stdout, input.safePreviewChars).text,
-          stderrPreview: clipText(result.stderr, input.safePreviewChars).text,
+          stdoutPreview: clipText(result.stdout, input.safePreviewChars),
+          stderrPreview: clipText(result.stderr, input.safePreviewChars),
           exitCode: result.exitCode,
           timedOut: result.timedOut,
           truncated: result.truncated || preview.truncated,
           artifacts,
           error: stepError
         }
-        emitResult(toolName, toolCallId, output, stepError)
+        toolEvents.emitResult({
+          toolName,
+          toolCallId,
+          outputPreview: output,
+          error: stepError
+        })
         return output
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error)
-        emitResult(toolName, toolCallId, { ok: false, code: 'failed', error: msg }, msg)
+        toolEvents.emitResult({
+          toolName,
+          toolCallId,
+          outputPreview: { ok: false, code: 'failed', error: msg } as IpcJsonValue,
+          error: msg
+        })
         throw error
       }
     },

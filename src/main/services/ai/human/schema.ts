@@ -1,7 +1,12 @@
 import { z } from 'zod/v4'
 import type { JsonObject, JsonValue } from '../../../../shared/types'
 import { aiArtifactRefSchema } from '../schema'
-import { HUMAN_DELIVERY_MODES, RUNTIME_SKILL_IDS, TOOL_CALL_RESULT_CODES } from './constants'
+import {
+  AI_TOOL_FAMILY_IDS,
+  HUMAN_DELIVERY_MODES,
+  RUNTIME_SKILL_IDS,
+  TOOL_CALL_RESULT_CODES
+} from './constants'
 import type {
   BrainDecision,
   BrainDecisionRecord,
@@ -33,7 +38,7 @@ export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
 export const jsonObjectSchema: z.ZodType<JsonObject> = z.record(z.string(), jsonValueSchema)
 
 export const runtimeSkillIdSchema = z.enum(RUNTIME_SKILL_IDS)
-export const toolFamilyIdSchema = z.enum(['terminal', 'kb', 'docx'])
+export const toolFamilyIdSchema = z.enum(AI_TOOL_FAMILY_IDS)
 export const toolCallResultCodeSchema = z.enum(TOOL_CALL_RESULT_CODES)
 export const humanDeliveryModeSchema: z.ZodType<HumanDeliveryMode> = z.enum(HUMAN_DELIVERY_MODES)
 

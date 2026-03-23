@@ -1,70 +1,11 @@
-import { randomUUID } from 'node:crypto'
 import type { StructuredToolInterface } from '@langchain/core/tools'
-import { isJsonObject } from '../../../../../utils/aiCapabilityUtils'
 import type { JsonValue } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
-import type { HumanRuntimeCache, RuntimeSkillId, ToolCallResult, ToolCallResultCode } from '../../types'
+import type { HumanRuntimeCache, RuntimeSkillId, ToolCallResult } from '../../types'
+import { normalizeToolCallResult } from '../../utils/toolResult'
 import { getAvailableToolNames } from '../learningNode/skillLoader'
-import type { AiRunContextWithToolOverride } from './types'
-
-const parseToolOutcome = (toolName: string, payload: JsonValue): ToolCallResult => {
-  if (isJsonObject(payload)) {
-    const codeValue = payload.code
-    const code: ToolCallResultCode =
-      codeValue === 'ok' ||
-      codeValue === 'failed' ||
-      codeValue === 'workspace_required' ||
-      codeValue === 'approval_denied' ||
-      codeValue === 'invalid_input'
-        ? codeValue
-        : payload.ok === false || payload.success === false
-          ? 'failed'
-          : 'ok'
-    const summary =
-      typeof payload.summary === 'string'
-        ? payload.summary
-        : typeof payload.error === 'string'
-          ? payload.error
-          : typeof payload.message === 'string'
-            ? payload.message
-            : `${toolName} executed`
-    return {
-      toolName,
-      ok: payload.ok !== false && payload.success !== false,
-      code,
-      summary,
-      data: payload
-    }
-  }
-
-  if (typeof payload === 'string') {
-    return {
-      toolName,
-      ok: true,
-      code: 'ok',
-      summary: payload.trim() || `${toolName} executed`,
-      data: payload
-    }
-  }
-
-  if (Array.isArray(payload)) {
-    return {
-      toolName,
-      ok: true,
-      code: 'ok',
-      summary: `${toolName} returned ${payload.length} item(s)`,
-      data: payload
-    }
-  }
-
-  return {
-    toolName,
-    ok: true,
-    code: 'ok',
-    summary: `${toolName} executed`,
-    data: payload
-  }
-}
+import type { AiRunContextWithHumanOverrides } from '../types'
+import { emitToolCallResult, emitToolCallStarted } from '../../tools/utils/toolEvents'
 
 const findTool = (input: {
   toolName: string
@@ -88,7 +29,7 @@ export const executeToolCall = async (input: {
   toolName: string
   args: Record<string, JsonValue>
 }): Promise<ToolCallResult> => {
-  const ctxWithOverride = input.ctx as AiRunContextWithToolOverride
+  const ctxWithOverride = input.ctx as AiRunContextWithHumanOverrides
   const tool = findTool({
     toolName: input.toolName,
     learnedSkillIds: input.learnedSkillIds,
@@ -108,26 +49,22 @@ export const executeToolCall = async (input: {
     args: input.args
   })
   if (injected) {
-    const toolCallId = randomUUID()
-    input.ctx.sendEvent({
-      type: 'tool_call_started',
+    const toolCallId = emitToolCallStarted({
+      ctx: input.ctx,
       runId: input.ctx.runId,
       taskId: input.taskId,
-      toolCallId,
       toolName: input.toolName,
-      input: input.args,
-      createdAt: Date.now(),
+      args: input.args,
       stage: 'human_hand'
     })
-    input.ctx.sendEvent({
-      type: 'tool_call_result',
+    emitToolCallResult({
+      ctx: input.ctx,
       runId: input.ctx.runId,
       taskId: input.taskId,
       toolCallId,
       toolName: input.toolName,
       outputPreview: injected.data || injected.summary,
       error: injected.ok ? undefined : injected.summary,
-      completedAt: Date.now(),
       stage: 'human_hand'
     })
     return injected
@@ -135,7 +72,7 @@ export const executeToolCall = async (input: {
 
   try {
     const result = await tool.invoke(input.args)
-    return parseToolOutcome(input.toolName, result as JsonValue)
+    return normalizeToolCallResult(input.toolName, result as JsonValue)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     return {

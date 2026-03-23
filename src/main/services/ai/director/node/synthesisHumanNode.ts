@@ -1,6 +1,7 @@
 import type { AiRunContext, AiRunState, HumanTaskRunner } from '../../types'
 import { mergeArtifactRefs } from '../../utils/artifacts'
 import { buildSynthesisHumanObjective } from './objectives'
+import { runDirectorHumanSubtask } from './humanDispatch'
 
 const SYNTHESIS_TASK_ID = 'synthesis-human'
 
@@ -11,47 +12,23 @@ export const createSynthesisHumanNode = (input: {
   const { ctx, runHumanTask } = input
 
   return async (state: AiRunState): Promise<Partial<AiRunState>> => {
-    ctx.checkCancelled()
-
-    ctx.sendEvent({
-      type: 'task_started',
+    const output = await runDirectorHumanSubtask({
+      ctx,
       runId: state.runId,
       taskId: SYNTHESIS_TASK_ID,
-      stage: 'director_synthesis_human'
-    })
-
-    const output = await runHumanTask(
-      {
-        taskId: SYNTHESIS_TASK_ID,
-        userInput: buildSynthesisHumanObjective({
-          userInput: state.input,
-          selectedScopeSummary: ctx.selectedScopeSummary,
-          contextEvidence: state.contextEvidence,
-          plan: state.plan
-        })
-      },
-      {
+      stage: 'director_synthesis_human',
+      userInput: buildSynthesisHumanObjective({
+        userInput: state.input,
+        selectedScopeSummary: ctx.selectedScopeSummary,
+        contextEvidence: state.contextEvidence,
+        plan: state.plan
+      }),
+      runHumanTask,
+      options: {
         deliveryMode: 'user_answer',
         streamAnswer: true
       }
-    )
-
-    if (output.status === 'blocked') {
-      ctx.sendEvent({
-        type: 'task_blocked',
-        runId: state.runId,
-        taskId: SYNTHESIS_TASK_ID,
-        summary: output.summary,
-        stage: 'director_synthesis_human'
-      })
-    } else {
-      ctx.sendEvent({
-        type: 'task_completed',
-        runId: state.runId,
-        taskId: SYNTHESIS_TASK_ID,
-        stage: 'director_synthesis_human'
-      })
-    }
+    })
 
     return {
       finalDeliveryMarkdown: output.deliveryMarkdown,

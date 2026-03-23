@@ -1,9 +1,9 @@
 import { tool } from '@langchain/core/tools'
 import { z } from 'zod/v4'
-import { v4 as uuidv4 } from 'uuid'
-import type { IpcJsonObject, IpcJsonValue } from '../../../../../../shared/types'
+import type { SearchResult } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
 import { normalizeForIpc } from '../../../../../utils/serialization'
+import { createToolEventEmitter } from '../utils/toolEvents'
 
 const MAX_RETRIEVAL_LIMIT = 50
 const MAX_LIST_PAGE_SIZE = 50
@@ -41,184 +41,120 @@ export const buildRetrievalTools = (input: {
   taskId?: string
 }) => {
   const { ctx, runId, taskId } = input
+  const toolEvents = createToolEventEmitter({
+    ctx,
+    runId,
+    taskId
+  })
 
-  const emitStarted = (toolName: string, args: IpcJsonObject) => {
-    const toolCallId = uuidv4()
-    ctx.sendEvent({
-      type: 'tool_call_started',
-      runId,
-      taskId,
-      toolCallId,
-      toolName,
-      input: args,
-      createdAt: Date.now()
-    })
-    return toolCallId
-  }
+  const resolveSearchArgs = (args: {
+    queryText: string
+    limit?: number
+    sourceType?: 'all' | 'file' | 'web'
+    documentIds?: string[]
+  }) => ({
+    queryText: String(args.queryText || '').trim(),
+    limit: Math.max(1, Math.min(MAX_RETRIEVAL_LIMIT, Number(args.limit ?? 10))),
+    filter: args.sourceType && args.sourceType !== 'all' ? String(args.sourceType) : undefined,
+    scopedDocumentIds: resolveScopedDocumentIds(ctx.selectedDocumentIds, args.documentIds)
+  })
 
-  const emitResult = (
-    toolName: string,
-    toolCallId: string,
-    outputPreview: IpcJsonValue,
-    error?: string
-  ) => {
-    ctx.sendEvent({
-      type: 'tool_call_result',
-      runId,
-      taskId,
-      toolCallId,
-      toolName,
-      outputPreview,
-      completedAt: Date.now(),
-      error
-    })
-  }
+  const createChunkSearchTool = (input: {
+    name: 'kb_hybrid_search_chunks' | 'kb_vector_search_chunks' | 'kb_fts_search_chunks'
+    description: string
+    execute: (args: ReturnType<typeof resolveSearchArgs>) => Promise<SearchResult[]>
+  }) =>
+    tool(
+      async (args) => {
+        const toolCallId = toolEvents.emitStarted(input.name, args)
+        try {
+          ctx.checkCancelled()
+          const prepared = resolveSearchArgs(args)
+          if (Array.isArray(prepared.scopedDocumentIds) && prepared.scopedDocumentIds.length === 0) {
+            toolEvents.emitResult({
+              toolName: input.name,
+              toolCallId,
+              outputPreview: []
+            })
+            return []
+          }
 
-  const kbHybridSearchChunks = tool(
-    async (args) => {
-      const toolName = 'kb_hybrid_search_chunks'
-      const toolCallId = emitStarted(toolName, args)
-      try {
-        ctx.checkCancelled()
-        const queryText = String(args.queryText || '').trim()
-        const limit = Math.max(1, Math.min(MAX_RETRIEVAL_LIMIT, Number(args.limit ?? 10)))
-        const filter =
-          args.sourceType && args.sourceType !== 'all' ? String(args.sourceType) : undefined
-        const scopedDocumentIds = resolveScopedDocumentIds(
-          ctx.selectedDocumentIds,
-          args.documentIds
-        )
-        if (Array.isArray(scopedDocumentIds) && scopedDocumentIds.length === 0) {
-          emitResult(toolName, toolCallId, [])
-          return []
+          const rows = await input.execute(prepared)
+          const normalized = rows.map(normalizeForIpc)
+          toolEvents.emitResult({
+            toolName: input.name,
+            toolCallId,
+            outputPreview: previewArray(normalized)
+          })
+          return normalized
+        } catch (error) {
+          const msg = error instanceof Error ? error.message : String(error)
+          toolEvents.emitResult({
+            toolName: input.name,
+            toolCallId,
+            outputPreview: [],
+            error: msg
+          })
+          throw error
         }
-
-        const { data: vec } = await ctx.embeddingService.embed(queryText)
-        const rows = await ctx.documentsStore.hybridSearch(
-          vec,
-          queryText,
-          limit,
-          filter,
-          scopedDocumentIds || undefined
-        )
-        const normalized = rows.map(normalizeForIpc)
-        emitResult(toolName, toolCallId, previewArray(normalized))
-        return normalized
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e)
-        emitResult(toolName, toolCallId, [], msg)
-        throw e
+      },
+      {
+        name: input.name,
+        description: input.description,
+        schema: z.object({
+          queryText: z.string(),
+          limit: z.number().optional(),
+          sourceType: z.enum(['all', 'file', 'web']).optional(),
+          documentIds: z.array(z.string()).optional()
+        })
       }
-    },
-    {
-      name: 'kb_hybrid_search_chunks',
-      description: 'Hybrid search over local knowledge base chunks (FTS + vector + RRF rerank).',
-      schema: z.object({
-        queryText: z.string(),
-        limit: z.number().optional(),
-        sourceType: z.enum(['all', 'file', 'web']).optional(),
-        documentIds: z.array(z.string()).optional()
-      })
+    )
+
+  const kbHybridSearchChunks = createChunkSearchTool({
+    name: 'kb_hybrid_search_chunks',
+    description: 'Hybrid search over local knowledge base chunks (FTS + vector + RRF rerank).',
+    execute: async (args) => {
+      const { data: vec } = await ctx.embeddingService.embed(args.queryText)
+      return await ctx.documentsStore.hybridSearch(
+        vec,
+        args.queryText,
+        args.limit,
+        args.filter,
+        args.scopedDocumentIds || undefined
+      )
     }
-  )
+  })
 
-  const kbVectorSearchChunks = tool(
-    async (args) => {
-      const toolName = 'kb_vector_search_chunks'
-      const toolCallId = emitStarted(toolName, args)
-      try {
-        ctx.checkCancelled()
-        const queryText = String(args.queryText || '').trim()
-        const limit = Math.max(1, Math.min(MAX_RETRIEVAL_LIMIT, Number(args.limit ?? 10)))
-        const filter =
-          args.sourceType && args.sourceType !== 'all' ? String(args.sourceType) : undefined
-        const scopedDocumentIds = resolveScopedDocumentIds(
-          ctx.selectedDocumentIds,
-          args.documentIds
-        )
-        if (Array.isArray(scopedDocumentIds) && scopedDocumentIds.length === 0) {
-          emitResult(toolName, toolCallId, [])
-          return []
-        }
-
-        const { data: vec } = await ctx.embeddingService.embed(queryText)
-        const rows = await ctx.documentsStore.vectorSearch(
-          vec,
-          limit,
-          filter,
-          scopedDocumentIds || undefined
-        )
-        const normalized = rows.map(normalizeForIpc)
-        emitResult(toolName, toolCallId, previewArray(normalized))
-        return normalized
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e)
-        emitResult(toolName, toolCallId, [], msg)
-        throw e
-      }
-    },
-    {
-      name: 'kb_vector_search_chunks',
-      description: 'Vector-only search over local knowledge base chunks.',
-      schema: z.object({
-        queryText: z.string(),
-        limit: z.number().optional(),
-        sourceType: z.enum(['all', 'file', 'web']).optional(),
-        documentIds: z.array(z.string()).optional()
-      })
+  const kbVectorSearchChunks = createChunkSearchTool({
+    name: 'kb_vector_search_chunks',
+    description: 'Vector-only search over local knowledge base chunks.',
+    execute: async (args) => {
+      const { data: vec } = await ctx.embeddingService.embed(args.queryText)
+      return await ctx.documentsStore.vectorSearch(
+        vec,
+        args.limit,
+        args.filter,
+        args.scopedDocumentIds || undefined
+      )
     }
-  )
+  })
 
-  const kbFtsSearchChunks = tool(
-    async (args) => {
-      const toolName = 'kb_fts_search_chunks'
-      const toolCallId = emitStarted(toolName, args)
-      try {
-        ctx.checkCancelled()
-        const queryText = String(args.queryText || '').trim()
-        const limit = Math.max(1, Math.min(MAX_RETRIEVAL_LIMIT, Number(args.limit ?? 10)))
-        const filter =
-          args.sourceType && args.sourceType !== 'all' ? String(args.sourceType) : undefined
-        const scopedDocumentIds = resolveScopedDocumentIds(
-          ctx.selectedDocumentIds,
-          args.documentIds
-        )
-        if (Array.isArray(scopedDocumentIds) && scopedDocumentIds.length === 0) {
-          emitResult(toolName, toolCallId, [])
-          return []
-        }
-
-        const rows = await ctx.documentsStore.ftsSearch(
-          queryText,
-          limit,
-          filter,
-          scopedDocumentIds || undefined
-        )
-        const normalized = rows.map(normalizeForIpc)
-        emitResult(toolName, toolCallId, previewArray(normalized))
-        return normalized
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e)
-        emitResult(toolName, toolCallId, [], msg)
-        throw e
-      }
-    },
-    {
-      name: 'kb_fts_search_chunks',
-      description: 'FTS-only search over local knowledge base chunks.',
-      schema: z.object({
-        queryText: z.string(),
-        limit: z.number().optional(),
-        sourceType: z.enum(['all', 'file', 'web']).optional(),
-        documentIds: z.array(z.string()).optional()
-      })
-    }
-  )
+  const kbFtsSearchChunks = createChunkSearchTool({
+    name: 'kb_fts_search_chunks',
+    description: 'FTS-only search over local knowledge base chunks.',
+    execute: async (args) =>
+      await ctx.documentsStore.ftsSearch(
+        args.queryText,
+        args.limit,
+        args.filter,
+        args.scopedDocumentIds || undefined
+      )
+  })
 
   const kbListDocuments = tool(
     async (args) => {
       const toolName = 'kb_list_documents'
-      const toolCallId = emitStarted(toolName, args)
+      const toolCallId = toolEvents.emitStarted(toolName, args)
       try {
         ctx.checkCancelled()
         const keyword = String(args.keyword || '').trim() || undefined
@@ -231,25 +167,42 @@ export const buildRetrievalTools = (input: {
 
         if (Array.isArray(scopedDocumentIds) && scopedDocumentIds.length === 0) {
           const empty = { items: [], total: 0 }
-          emitResult(toolName, toolCallId, [])
+          toolEvents.emitResult({
+            toolName,
+            toolCallId,
+            outputPreview: []
+          })
           return empty
         }
 
         const res = await ctx.documentsStore.listDocuments({ keyword, page, pageSize })
         if (!scopedDocumentIds) {
-          emitResult(toolName, toolCallId, previewArray(res.items))
+          toolEvents.emitResult({
+            toolName,
+            toolCallId,
+            outputPreview: previewArray(res.items)
+          })
           return res
         }
 
         const allowed = new Set(scopedDocumentIds)
         const items = res.items.filter((item) => allowed.has(item.id))
         const normalized = { items, total: items.length }
-        emitResult(toolName, toolCallId, previewArray(items))
+        toolEvents.emitResult({
+          toolName,
+          toolCallId,
+          outputPreview: previewArray(items)
+        })
         return normalized
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e)
-        emitResult(toolName, toolCallId, { items: [], total: 0 }, msg)
-        throw e
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error)
+        toolEvents.emitResult({
+          toolName,
+          toolCallId,
+          outputPreview: { items: [], total: 0 },
+          error: msg
+        })
+        throw error
       }
     },
     {

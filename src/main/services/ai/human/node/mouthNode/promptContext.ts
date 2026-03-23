@@ -1,24 +1,10 @@
 import { buildHumanMouthPrompt } from '../../prompts/mouth'
 import type { HumanDeliveryMode, HumanState } from '../../types'
-
-const renderFacts = (state: HumanState): string => {
-  if (state.brainMemory.inside.facts.length === 0) return 'none'
-  return state.brainMemory.inside.facts
-    .map((fact) => `- ${fact.summary} (evidenceIds=[${fact.evidenceIds.join(', ')}])`)
-    .join('\n')
-}
-
-const renderEvidences = (state: HumanState): string => {
-  if (state.brainMemory.inside.evidences.length === 0) return 'none'
-  return state.brainMemory.inside.evidences
-    .map((evidence) => `- ${evidence.toolName}: ${evidence.summary}${evidence.rawRef ? ` (${evidence.rawRef})` : ''}`)
-    .join('\n')
-}
-
-const renderOpenQuestions = (state: HumanState): string => {
-  if (state.brainMemory.inside.openQuestions.length === 0) return 'none'
-  return state.brainMemory.inside.openQuestions.map((question) => `- ${question}`).join('\n')
-}
+import {
+  renderEvidenceLines,
+  renderFactLines,
+  renderOpenQuestionLines
+} from '../../prompts/contextRenderers'
 
 export const buildMouthPromptContext = (input: {
   state: HumanState
@@ -34,8 +20,8 @@ export const buildMouthPromptContext = (input: {
     userInput: input.state.task.userInput,
     finalStatus: input.finalStatus,
     finalDecisionText: finalDecision,
-    factsText: renderFacts(input.state),
-    evidencesText: renderEvidences(input.state),
-    openQuestionsText: renderOpenQuestions(input.state)
+    factsText: renderFactLines(input.state, 'mouth'),
+    evidencesText: renderEvidenceLines(input.state, 'mouth'),
+    openQuestionsText: renderOpenQuestionLines(input.state)
   })
 }

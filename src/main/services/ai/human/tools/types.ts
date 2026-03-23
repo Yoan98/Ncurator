@@ -1,8 +1,9 @@
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { AiRunContext } from '../../types'
+import { AI_TOOL_FAMILY_IDS } from '../constants'
 import type { RuntimeSkillId } from '../types'
 
-export type AiToolFamilyId = 'terminal' | 'kb' | 'docx'
+export type AiToolFamilyId = (typeof AI_TOOL_FAMILY_IDS)[number]
 
 export type ToolFamilyBuildInput = {
   ctx: AiRunContext

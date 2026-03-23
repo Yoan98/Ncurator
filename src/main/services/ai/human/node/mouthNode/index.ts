@@ -5,7 +5,7 @@ import { getAvailableToolNames } from '../learningNode/skillLoader'
 import { buildFallbackDeliveryMarkdown } from './deliveryMarkdown'
 import { buildMouthPromptContext } from './promptContext'
 import { mouthResultSchema } from './contract'
-import type { AiRunContextWithMouthOverride } from './types'
+import type { AiRunContextWithHumanOverrides } from '../types'
 
 export const createMouthNode = (input: {
   ctx: AiRunContext
@@ -14,7 +14,7 @@ export const createMouthNode = (input: {
   streamAnswer: boolean
   internalDelivery: boolean
 }) => {
-  const ctxWithOverride = input.ctx as AiRunContextWithMouthOverride
+  const ctxWithOverride = input.ctx as AiRunContextWithHumanOverrides
 
   return async (state: HumanState): Promise<HumanState> => {
     input.ctx.checkCancelled()

@@ -28,12 +28,7 @@ import type { DraftReviewStore } from '../../../../../storage/domains/DraftRevie
 import type { DocxChangedBlock, DocxOp } from '../types'
 import { getDocxWorkerClient, releaseDocxRunSession } from '../worker/docxWorkerClient'
 import type { RunDraftState } from './types'
-
-const clipText = (text: string, maxChars: number): string => {
-  const raw = String(text || '').trim()
-  if (raw.length <= maxChars) return raw
-  return `${raw.slice(0, maxChars).trim()}...`
-}
+import { clipText } from '../../../../utils/text'
 
 const sanitizeFileName = (value: string): string => {
   const normalized = String(value || '').trim()
@@ -63,7 +58,11 @@ const getDocxChangeKind = (op: DocxOp): DraftReviewChange['change_kind'] => {
 }
 
 const buildDocxChangeTitle = (op: DocxOp, change: DocxChangedBlock): string => {
-  const preview = clipText(change.afterText || change.beforeText, 28)
+  const previewRaw = clipText(String(change.afterText || change.beforeText).trim(), 28).trim()
+  const preview =
+    previewRaw.length < String(change.afterText || change.beforeText).trim().length
+      ? `${previewRaw}...`
+      : previewRaw
   return preview ? `${describeDocxOp(op)}: ${preview}` : describeDocxOp(op)
 }
 

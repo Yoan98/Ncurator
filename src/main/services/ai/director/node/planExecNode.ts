@@ -1,6 +1,7 @@
 import type { AiRunContext, AiRunState, HumanTaskRunner } from '../../types'
 import { buildPlanTaskObjective } from './objectives'
 import { pickPendingTaskIndex } from './helpers'
+import { runDirectorHumanSubtask } from './humanDispatch'
 
 export const createPlanExecNode = (input: {
   ctx: AiRunContext
@@ -9,8 +10,6 @@ export const createPlanExecNode = (input: {
   const { ctx, runHumanTask } = input
 
   return async (state: AiRunState): Promise<Partial<AiRunState>> => {
-    ctx.checkCancelled()
-
     // 按 cursor 串行选择 ready task；无任务时进入 synthesis。
     const taskIndex = pickPendingTaskIndex(state.plan, state.dispatchCursor)
     if (taskIndex < 0) {
@@ -31,22 +30,17 @@ export const createPlanExecNode = (input: {
       index === taskIndex ? { ...item, status: 'running' as const } : item
     )
 
-    ctx.sendEvent({
-      type: 'task_started',
+    const output = await runDirectorHumanSubtask({
+      ctx,
       runId: state.runId,
       taskId: task.id,
-      stage: 'director_plan_exec'
-    })
-
-    const output = await runHumanTask(
-      {
-        taskId: task.id,
-        userInput: taskUserInput
-      },
-      {
+      stage: 'director_plan_exec',
+      userInput: taskUserInput,
+      runHumanTask,
+      options: {
         deliveryMode: 'task_handoff'
       }
-    )
+    })
 
     // 当前策略为 stop-dispatch：单任务 blocked 会停止后续业务任务，但保留 synthesis 收口。
     const blocked = output.status === 'blocked'
@@ -68,23 +62,6 @@ export const createPlanExecNode = (input: {
         artifacts: output.artifacts
       }
     })
-
-    if (blocked) {
-      ctx.sendEvent({
-        type: 'task_blocked',
-        runId: state.runId,
-        taskId: task.id,
-        summary: output.summary,
-        stage: 'director_plan_exec'
-      })
-    } else {
-      ctx.sendEvent({
-        type: 'task_completed',
-        runId: state.runId,
-        taskId: task.id,
-        stage: 'director_plan_exec'
-      })
-    }
 
     const hasPending = nextPlan.some((item) => item.status === 'ready')
 

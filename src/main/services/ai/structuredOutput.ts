@@ -17,27 +17,49 @@ type StructuredOutputInvocationInput<T extends Record<string, unknown>> = {
   temperature?: number
 }
 
-const getErrorText = (error: unknown): string => {
-  if (error instanceof Error && error.message.trim()) return error.message.trim()
-  return String(error || 'unknown structured output error')
+type ErrorResponseData = string | number | boolean | null | object
+
+type ErrorLike =
+  | Error
+  | {
+      message?: string
+      response?: {
+        data?: ErrorResponseData
+      }
+    }
+
+const toErrorLike = (
+  value: object | string | number | boolean | null | undefined
+): ErrorLike => {
+  if (value instanceof Error) return value
+  if (value && typeof value === 'object') {
+    return value as Extract<ErrorLike, object>
+  }
+  return {
+    message: String(value || 'unknown structured output error')
+  }
 }
 
-const getStructuredOutputErrorBody = (error: unknown): string => {
+const getErrorText = (error: ErrorLike): string => {
+  if (error instanceof Error && error.message.trim()) return error.message.trim()
+  if (typeof error.message === 'string' && error.message.trim()) return error.message.trim()
+  return 'unknown structured output error'
+}
+
+const getStructuredOutputErrorBody = (error: ErrorLike): string => {
   const parts = [getErrorText(error)]
-  if (error && typeof error === 'object') {
-    const responseData =
-      'response' in error &&
-      error.response &&
-      typeof error.response === 'object' &&
-      'data' in error.response
-        ? error.response.data
-        : undefined
-    if (responseData !== undefined) {
-      try {
-        parts.push(JSON.stringify(responseData))
-      } catch {
-        parts.push(String(responseData))
-      }
+  const responseData =
+    'response' in error &&
+    error.response &&
+    typeof error.response === 'object' &&
+    'data' in error.response
+      ? error.response.data
+      : undefined
+  if (responseData !== undefined) {
+    try {
+      parts.push(JSON.stringify(responseData))
+    } catch {
+      parts.push(String(responseData))
     }
   }
   return parts.join(' ')
@@ -63,7 +85,7 @@ const matchesUnsupportedSignal = (body: string, markers: string[]): boolean => {
 
 export const isStructuredOutputMethodUnsupportedError = (
   method: StructuredOutputMethod,
-  error: unknown
+  error: ErrorLike
 ): boolean => {
   const body = getStructuredOutputErrorBody(error).toLowerCase()
   if (!body) return false
@@ -123,8 +145,11 @@ export const invokeStructuredChat = async <T extends Record<string, unknown>>(
         new HumanMessage(input.user)
       ])) as T
     } catch (error) {
-      if (isStructuredOutputMethodUnsupportedError(method, error)) {
-        methodErrors.push(`${method}: ${getErrorText(error)}`)
+      const normalizedError = toErrorLike(
+        error as object | string | number | boolean | null | undefined
+      )
+      if (isStructuredOutputMethodUnsupportedError(method, normalizedError)) {
+        methodErrors.push(`${method}: ${getErrorText(normalizedError)}`)
         continue
       }
       throw new Error(
@@ -134,7 +159,7 @@ export const invokeStructuredChat = async <T extends Record<string, unknown>>(
           `schema=${input.schemaName}`,
           `model=${input.cfg.model_name}`,
           `method=${method}`,
-          `reason=${getErrorText(error)}`
+          `reason=${getErrorText(normalizedError)}`
         ].join('; ')
       )
     }

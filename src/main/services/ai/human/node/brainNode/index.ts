@@ -6,10 +6,10 @@ import { getAvailableToolNames } from '../learningNode/skillLoader'
 import { buildBrainPromptContext } from './promptContext'
 import { brainDecisionOutputSchema, parseBrainDecisionOutput } from './decisionContract'
 import { reduceBrainMemory } from './memoryReducer'
-import type { AiRunContextWithBrainOverride } from './types'
+import type { AiRunContextWithHumanOverrides } from '../types'
 
 export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCache }) => {
-  const ctxWithOverride = input.ctx as AiRunContextWithBrainOverride
+  const ctxWithOverride = input.ctx as AiRunContextWithHumanOverrides
 
   return async (state: HumanState): Promise<HumanState> => {
     input.ctx.checkCancelled()

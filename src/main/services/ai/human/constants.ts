@@ -1,3 +1,5 @@
+export const AI_TOOL_FAMILY_IDS = ['terminal', 'kb', 'docx'] as const
+
 export const RUNTIME_SKILL_IDS = [
   'workspace-cli',
   'docx-read',
