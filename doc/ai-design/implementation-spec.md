@@ -65,12 +65,12 @@ main_complete -> END
 - 读取：`MainState.input`、`MainState.contextRounds`、`MainState.contextEvidence`、历史摘要、最近对话、`ctx.selectedScopeSummary`。
 - 回写：`MainState.mainStage`；必要时回写 `MainState.contextObjective`。
 - 下一跳：`main_direct_human_exec`、`main_context_human`、`main_plan`。
-实现约束：
-- 节点入口先执行 `ctx.checkCancelled()`。
-- 超过上下文补充轮次上限时，直接进入 `main_plan`。
-- 模型输出必须通过 `ctx.chatStructured`。
-- prompt 必须通过 `buildIntentPrompt` 组织。
-- 节点返回值保持为 `Partial<AiRunState>`。
+- 实现约束：
+  - 节点入口先执行 `ctx.checkCancelled()`。
+  - 超过上下文补充轮次上限时，直接进入 `main_plan`。
+  - 模型输出必须通过 `ctx.chatStructured`。
+  - prompt 必须通过 `buildIntentPrompt` 组织。
+  - 节点返回值保持为 `Partial<AiRunState>`。
 
 **Not**
 
@@ -103,11 +103,11 @@ main_complete -> END
 - 调用：派发一个 `human` 任务；`deliveryMode = context_note`；`internalDelivery = true`
 - 回写：`MainState.contextRounds += 1`、`MainState.contextEvidence`、`MainState.contextObjective = undefined`、`MainState.mainStage = main_intent`
 - 下一跳：`main_intent`
-实现约束：
-- `taskId` 使用 `context-${contextRounds + 1}` 形式。
-- `userInput` 通过 `buildContextHumanObjective` 生成，不直接把原始输入原样派发。
-- `contextEvidence` 优先从 `context_note` 的“可复用证据”区块提取。
-- 提取结果通过去重/追加逻辑合并进现有 `contextEvidence`。
+- 实现约束：
+  - `taskId` 使用 `context-${contextRounds + 1}` 形式。
+  - `userInput` 通过 `buildContextHumanObjective` 生成，不直接把原始输入原样派发。
+  - `contextEvidence` 优先从 `context_note` 的“可复用证据”区块提取。
+  - 提取结果通过去重/追加逻辑合并进现有 `contextEvidence`。
 
 **Not**
 
@@ -140,10 +140,10 @@ main_complete -> END
 - 调用：派发一个 `human` 任务；`deliveryMode = user_answer`；`streamAnswer = true`
 - 回写：`MainState.finalDeliveryMarkdown`、`MainState.finalArtifacts`、`MainState.mainStage = main_complete`
 - 下一跳：`main_complete`
-实现约束：
-- `taskId` 使用 direct human 专用任务 id。
-- `userInput` 通过 `buildDirectHumanObjective` 生成。
-- `main` 只消费 `HumanTaskOutput`，不直接读取 `human` 内部状态。
+- 实现约束：
+  - `taskId` 使用 direct human 专用任务 id。
+  - `userInput` 通过 `buildDirectHumanObjective` 生成。
+  - `main` 只消费 `HumanTaskOutput`，不直接读取 `human` 内部状态。
 
 **Not**
 
@@ -176,11 +176,11 @@ main_complete -> END
 - 输出：计划任务列表
 - 回写：`MainState.plan`、`MainState.dispatchCursor = 0`、`MainState.mainStage = main_plan_exec`；失败时回写 `MainState.status = failed` 与 `MainState.error`
 - 下一跳：`main_plan_exec` 或 `main_complete`
-实现约束：
-- 模型输出必须通过 `ctx.chatStructured`。
-- prompt 必须通过 `buildPlanPrompt` 组织。
-- 计划结果必须先经过 `validatePlannerTasks` 校验，再转换为 `MainPlanTask`。
-- 每个计划任务都必须能交给单个 `human` 闭环执行。
+- 实现约束：
+  - 模型输出必须通过 `ctx.chatStructured`。
+  - prompt 必须通过 `buildPlanPrompt` 组织。
+  - 计划结果必须先经过 `validatePlannerTasks` 校验，再转换为 `MainPlanTask`。
+  - 每个计划任务都必须能交给单个 `human` 闭环执行。
 
 **Not**
 
@@ -212,12 +212,12 @@ main_complete -> END
 - 调用：按 `dispatchCursor` 串行派发 `human`；`deliveryMode = task_handoff`
 - 回写：当前任务 `status`、`deliveryMarkdown`、`artifacts`，以及 `MainState.dispatchCursor`、`MainState.mainStage`
 - 下一跳：`main_plan_exec` 或 `main_synthesis_human`
-实现约束：
-- 当前策略是串行 `stop-dispatch`。
-- 没有待执行任务时直接进入 `main_synthesis_human`。
-- 任务派发前先把当前任务标记为 `running`。
-- `blocked` 任务会停止后续业务任务，但仍进入 synthesis 收口。
-- 回写时只更新当前已派发任务，不重写其他任务结果。
+- 实现约束：
+  - 当前策略是串行 `stop-dispatch`。
+  - 没有待执行任务时直接进入 `main_synthesis_human`。
+  - 任务派发前先把当前任务标记为 `running`。
+  - `blocked` 任务会停止后续业务任务，但仍进入 synthesis 收口。
+  - 回写时只更新当前已派发任务，不重写其他任务结果。
 
 **Not**
 
@@ -250,10 +250,10 @@ main_complete -> END
 - 调用：派发一个 `human` 任务；`deliveryMode = user_answer`；`streamAnswer = true`
 - 回写：`MainState.finalDeliveryMarkdown`、`MainState.finalArtifacts`、`MainState.mainStage = main_complete`
 - 下一跳：`main_complete`
-实现约束：
-- synthesis 只面向最终用户输出，不再生成新的计划任务。
-- `finalArtifacts` 需要合并计划阶段已有 artifacts 与 synthesis 输出 artifacts。
-- `userInput` 通过 `buildSynthesisHumanObjective` 组织。
+- 实现约束：
+  - synthesis 只面向最终用户输出，不再生成新的计划任务。
+  - `finalArtifacts` 需要合并计划阶段已有 artifacts 与 synthesis 输出 artifacts。
+  - `userInput` 通过 `buildSynthesisHumanObjective` 组织。
 
 **Not**
 
@@ -284,9 +284,9 @@ main_complete -> END
 - 读取：`MainState.status`、`MainState.finalDeliveryMarkdown`、`MainState.finalArtifacts`
 - 回写：正常路径下回写 `MainState.status = completed`，并保持 `MainState.mainStage = main_complete`
 - 下一跳：`END`
-实现约束：
-- `main_complete` 只负责 run 级收尾，不再派发模型节点。
-- 已处于 `failed / cancelled / completed` 的 run 不应被二次覆盖。
+- 实现约束：
+  - `main_complete` 只负责 run 级收尾，不再派发模型节点。
+  - 已处于 `failed / cancelled / completed` 的 run 不应被二次覆盖。
 
 **Not**
 
@@ -359,13 +359,13 @@ mouth -> brain | END
 - 输出：`LastBrainDecision`
 - 回写：`HumanState.brainMemory.inside`、`HumanState.brainMemory.outside.brainDecisions`、`HumanState.lastBrainDecision`、`HumanState.runtime.stage`、`HumanState.watchHint`、`HumanState.trace.steps`
 - 下一跳：`learning`、`hand`、`mouth`；当 memory reducer 产出 `watchHint` 时留在 `brain`
-实现约束：
-- 模型输出必须通过 `ctx.chatStructured`。
-- prompt 必须通过 `buildBrainPromptContext`。
-- 输出必须先经过 `parseBrainDecisionOutput`。
-- `brainMemory.inside` 的修改必须经过 `reduceBrainMemory`。
-- `brainDecisions` 只保留最近 10 条。
-- `brain` 回看历史时只消费摘要，不直接把 `lastBrainDecision` 重新喂回。
+- 实现约束：
+  - 模型输出必须通过 `ctx.chatStructured`。
+  - prompt 必须通过 `buildBrainPromptContext`。
+  - 输出必须先经过 `parseBrainDecisionOutput`。
+  - `brainMemory.inside` 的修改必须经过 `reduceBrainMemory`。
+  - `brainDecisions` 只保留最近 10 条。
+  - `brain` 回看历史时只消费摘要，不直接把 `lastBrainDecision` 重新喂回。
 
 **Not**
 
@@ -432,12 +432,12 @@ mouth -> brain | END
 - 读取：`lastBrainDecision.nextAction.parallelCallToolParam`、`brainMemory.outside.learnedSkillIds`、runtime cache 中已装载的工具
 - 回写：`lastParallelCallToolResults`、`runtimeArtifacts`、`runtime.stage = brain`、必要时回写 `watchHint`、`trace.steps`
 - 下一跳：`brain`
-实现约束：
-- `hand` 不调用模型。
-- 工具批次先经过 `validateParallelToolCalls`。
-- 工具执行通过 `executeToolCall` 并行完成。
-- tool call count 超限时只写 `watchHint`，由下一轮 `brain` 决定是否收敛。
-- `runtimeArtifacts` 只从工具结构化结果提取并合并。
+- 实现约束：
+  - `hand` 不调用模型。
+  - 工具批次先经过 `validateParallelToolCalls`。
+  - 工具执行通过 `executeToolCall` 并行完成。
+  - tool call count 超限时只写 `watchHint`，由下一轮 `brain` 决定是否收敛。
+  - `runtimeArtifacts` 只从工具结构化结果提取并合并。
 
 **Not**
 
@@ -469,12 +469,12 @@ mouth -> brain | END
 - 输出：`MouthOutput`
 - 回写：`HumanState.result`、`HumanState.runtime.status`、`HumanState.runtime.stage = mouth`、`HumanState.trace.steps`
 - 下一跳：当前实现下正常结束；只有 `mouth` 把 `runtime.status` 保持为 `running` 时 graph 才会回到 `brain`
-实现约束：
-- 最终状态由 `lastBrainDecision.nextAction.status` 推导，不由 `mouth` 自行决定。
-- 模型输出必须通过 `ctx.chatStructured`。
-- prompt 必须通过 `buildMouthPromptContext`。
-- `deliveryMarkdown` 为空时，必须使用 fallback builder 补足。
-- `artifacts` 由 runtime 透传到 `result`，不是由 `mouth` 生成。
+- 实现约束：
+  - 最终状态由 `lastBrainDecision.nextAction.status` 推导，不由 `mouth` 自行决定。
+  - 模型输出必须通过 `ctx.chatStructured`。
+  - prompt 必须通过 `buildMouthPromptContext`。
+  - `deliveryMarkdown` 为空时，必须使用 fallback builder 补足。
+  - `artifacts` 由 runtime 透传到 `result`，不是由 `mouth` 生成。
 
 **Not**
 
