@@ -6,6 +6,7 @@ import type {
   AiFileArtifactRef,
   AiPlanTask
 } from '../../../shared/types'
+import { PLAN_TASK_STATUSES } from './constants'
 
 export const aiDraftReviewRefSchema: z.ZodType<AiDraftReviewRef> = z.object({
   reviewId: z.string().min(1),
@@ -41,7 +42,7 @@ export const aiPlanTaskSchema: z.ZodType<AiPlanTask> = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
   userInput: z.string().min(1),
-  status: z.enum(['ready', 'running', 'completed', 'blocked']),
+  status: z.enum(PLAN_TASK_STATUSES),
   deliveryMarkdown: z.string().min(1).optional(),
   artifacts: z.array(aiArtifactRefSchema).optional()
 })

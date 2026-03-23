@@ -1,17 +1,19 @@
 import { emitActivity } from '../../../../../utils/aiCapabilityUtils'
 import { jsonObjectSchema } from '../../schema'
 import type { ToolFamilyDefinition } from '../types'
+import { listToolNamesByFamily } from '../toolCatalog'
 import { createWorkspaceRequiredGuardTool } from '../utils/workspaceGuards'
 import { buildTerminalCapabilityTools } from './terminalTools'
 
 export const terminalToolFamily: ToolFamilyDefinition = {
   familyId: 'terminal',
   buildTools: ({ ctx, runId, taskId }) => {
+    const terminalToolNames = listToolNamesByFamily('terminal')
     const workspaceRootPath = String(ctx.workspace?.rootPath || '').trim()
     if (!workspaceRootPath) {
-      return [
+      return terminalToolNames.map((name) =>
         createWorkspaceRequiredGuardTool({
-          name: 'terminal_run_command',
+          name,
           description: 'Execute one shell command inside workspace.',
           schema: jsonObjectSchema.optional(),
           ctx,
@@ -20,7 +22,7 @@ export const terminalToolFamily: ToolFamilyDefinition = {
           reason: 'terminal_exec requires workspace binding before execution',
           error: 'workspace is required for terminal_exec'
         })
-      ]
+      )
     }
 
     const built = buildTerminalCapabilityTools({
@@ -43,6 +45,9 @@ export const terminalToolFamily: ToolFamilyDefinition = {
       }
     })
 
-    return built.tools.filter((toolItem) => toolItem.name === 'terminal_run_command')
+    const terminalToolNameSet = new Set(terminalToolNames)
+    return built.tools.filter((toolItem) =>
+      terminalToolNameSet.has(String(toolItem.name || '').trim())
+    )
   }
 }

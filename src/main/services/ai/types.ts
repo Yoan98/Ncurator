@@ -5,6 +5,7 @@ import type { EmbeddingService } from '../vector/EmbeddingService'
 import type { DocxChangedBlock, DocxOp } from './human/tools/docx/types'
 import type { DraftReviewService } from './human/tools/docx/review/DraftReviewService'
 import type { z } from 'zod/v4'
+import { AI_DIRECTOR_STAGES, DIRECTOR_STATUSES, PLAN_TASK_STATUSES } from './constants'
 import type {
   AiArtifactRef,
   AiRuntimeSettings,
@@ -21,14 +22,9 @@ import type { HumanDeliveryMode, HumanTaskInput, HumanTaskOutput } from './human
 export type { AiTaskStatus, AiRunStatus, AiPlanTask }
 export type { HumanDeliveryMode, HumanTaskInput, HumanTaskOutput }
 
-export type AiDirectorStage =
-  | 'director_intent'
-  | 'director_context_human'
-  | 'director_plan'
-  | 'director_plan_exec'
-  | 'director_direct_human_exec'
-  | 'director_synthesis_human'
-  | 'director_complete'
+export type DirectorStatus = (typeof DIRECTOR_STATUSES)[number]
+export type AiDirectorStage = (typeof AI_DIRECTOR_STAGES)[number]
+export type PlanTaskStatus = (typeof PLAN_TASK_STATUSES)[number]
 
 export type HumanRunDispatchOptions = {
   deliveryMode?: HumanDeliveryMode
@@ -49,7 +45,7 @@ export type AiRunState = {
   // 对话会话 ID，用于历史与消息写回。
   sessionId: string
   // run 生命周期状态（director 全局状态）。
-  status: AiRunStatus
+  status: DirectorStatus
   // 用户本轮输入。
   input: string
   // director graph 路由阶段唯一来源。

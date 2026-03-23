@@ -5,9 +5,9 @@ import { createBrainNode } from '../node/brainNode'
 import { createLearningNode } from '../node/learningNode'
 import { createHandNode } from '../node/handNode'
 import { createMouthNode } from '../node/mouthNode'
-import { createInitialHumanState } from '../node/utils/initialState'
 import { createHumanRuntimeCache } from '../node/utils/runtimeCache'
 import { createHumanRunStateSchema } from '../state/schema'
+import { createInitialHumanState } from '../utils/state'
 
 const RECURSION_LIMIT = 128
 

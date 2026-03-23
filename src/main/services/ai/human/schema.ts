@@ -4,6 +4,9 @@ import { aiArtifactRefSchema } from '../schema'
 import {
   AI_TOOL_FAMILY_IDS,
   HUMAN_DELIVERY_MODES,
+  HUMAN_FINAL_STATUSES,
+  HUMAN_STAGES,
+  HUMAN_STATUSES,
   RUNTIME_SKILL_IDS,
   TOOL_CALL_RESULT_CODES
 } from './constants'
@@ -40,6 +43,9 @@ export const jsonObjectSchema: z.ZodType<JsonObject> = z.record(z.string(), json
 export const runtimeSkillIdSchema = z.enum(RUNTIME_SKILL_IDS)
 export const toolFamilyIdSchema = z.enum(AI_TOOL_FAMILY_IDS)
 export const toolCallResultCodeSchema = z.enum(TOOL_CALL_RESULT_CODES)
+export const humanStageSchema = z.enum(HUMAN_STAGES)
+export const humanStatusSchema = z.enum(HUMAN_STATUSES)
+export const humanFinalStatusSchema = z.enum(HUMAN_FINAL_STATUSES)
 export const humanDeliveryModeSchema: z.ZodType<HumanDeliveryMode> = z.enum(HUMAN_DELIVERY_MODES)
 
 export const humanTaskInputSchema: z.ZodType<HumanTaskInput> = z.object({
@@ -141,7 +147,7 @@ export const brainNextActionSchema: z.ZodType<BrainNextAction> = z.union([
   }),
   z.object({
     action: z.literal('mouth'),
-    status: z.enum(['completed', 'blocked'])
+    status: humanFinalStatusSchema
   })
 ])
 
@@ -164,7 +170,7 @@ export const mouthOutputSchema: z.ZodType<MouthOutput> = z.object({
 })
 
 export const humanResultSchema: z.ZodType<HumanResult> = z.object({
-  status: z.enum(['completed', 'blocked']),
+  status: humanFinalStatusSchema,
   summary: z.string().min(1),
   deliveryMarkdown: z.string().min(1).optional(),
   artifacts: z.array(aiArtifactRefSchema).optional()

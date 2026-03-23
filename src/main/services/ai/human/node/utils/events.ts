@@ -26,6 +26,31 @@ export const appendHumanTraceStep = (input: {
   ]
 }
 
+export const appendHumanTraceSteps = (input: {
+  steps: HumanTraceStep[]
+  items: Array<{
+    action: HumanTraceStep['action']
+    publicNarrative: string
+    resultStatus?: HumanTraceStep['resultStatus']
+    skillId?: RuntimeSkillId
+    toolName?: string
+    summary: string
+  }>
+}): HumanTraceStep[] =>
+  input.items.reduce(
+    (steps, item) =>
+      appendHumanTraceStep({
+        steps,
+        action: item.action,
+        publicNarrative: item.publicNarrative,
+        resultStatus: item.resultStatus,
+        skillId: item.skillId,
+        toolName: item.toolName,
+        summary: item.summary
+      }),
+    input.steps
+  )
+
 export const emitHumanStep = (input: {
   ctx: AiRunContext
   taskId: string

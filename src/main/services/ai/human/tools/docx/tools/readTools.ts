@@ -1,17 +1,25 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { tool } from '@langchain/core/tools'
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { DocxToolRuntime } from '../runtime'
 import { openSchema, outlineSchema, getBlockSchema, searchSchema, historySchema } from '../schemas'
 import { buildSemanticMatches, splitEmbeddingRows } from '../semanticSearch'
+import { callExpectedWorkerAction, createDocxTool, isDocxToolFailure } from './workerTool'
 
 export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInterface[] => {
-  const docxOpenTool = tool(
-    async (args) => {
-      const toolName = 'docx_open'
-      const toolCallId = runtime.toolEvents.emitStarted(toolName, args)
-      try {
+  const docxOpenTool = createDocxTool({
+    runtime,
+    name: 'docx_open',
+    description: 'Open a workspace-bound docx file and register a docId for subsequent operations.',
+    schema: openSchema,
+    onError: ({ message }) => {
+      runtime.input.emitActivity({
+        actionType: 'docx_open',
+        status: 'failed',
+        summary: `文档打开异常: ${message}`
+      })
+    },
+    execute: async ({ args, toolName, toolCallId }) => {
         runtime.input.ctx.checkCancelled()
         const sourcePath = runtime.resolveDocxPath({
           cwd: runtime.workspaceRootPath,
@@ -40,54 +48,47 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           summary: `打开文档: ${sourcePath}`
         })
 
-        const workerResponse = await runtime.callWorker({
-          action: 'open',
-          payload: {
-            sourcePath
+        const workerPayload = await callExpectedWorkerAction({
+          runtime,
+          toolName,
+          toolCallId,
+          expectedAction: 'open',
+          request: {
+            action: 'open',
+            payload: {
+              sourcePath
+            }
           }
         })
-        if (!workerResponse.ok) {
-          const out = runtime.emitWorkerFailure({
-            toolName,
-            toolCallId,
-            response: workerResponse
-          })
+        if (isDocxToolFailure(workerPayload)) {
           runtime.input.emitActivity({
             actionType: 'docx_open',
             status: 'failed',
-            summary: `文档打开失败: ${workerResponse.error}`
+            summary: `文档打开失败: ${workerPayload.error}`
           })
-          return out
-        }
-        if (workerResponse.payload.action !== 'open') {
-          return runtime.emitFailure({
-            toolName,
-            toolCallId,
-            code: 'failed',
-            error: 'worker protocol mismatch (open)'
-          })
+          return workerPayload
         }
 
-        runtime.state.lastDocId = workerResponse.payload.docId
-        runtime.state.sourcePathByDocId.set(workerResponse.payload.docId, sourcePath)
-        runtime.registerSnapshot(workerResponse.payload.docId)
+        runtime.state.lastDocId = workerPayload.docId
+        runtime.state.sourcePathByDocId.set(workerPayload.docId, sourcePath)
+        runtime.registerSnapshot(workerPayload.docId)
         runtime.input.ctx.trackDocxOpen({
-          docId: workerResponse.payload.docId,
+          docId: workerPayload.docId,
           sourcePath
         })
         const out = {
           ok: true,
           code: 'ok' as const,
           summary: `doc opened: ${path.basename(sourcePath)}`,
-          docId: workerResponse.payload.docId,
-          meta: workerResponse.payload.meta,
-          stats: workerResponse.payload.stats
+          docId: workerPayload.docId,
+          meta: workerPayload.meta,
+          stats: workerPayload.stats
         }
         runtime.toolEvents.emitResult({
           toolName,
           toolCallId,
           outputPreview: out,
-          draftDocId: workerResponse.payload.docId
+          draftDocId: workerPayload.docId
         })
         runtime.input.emitActivity({
           actionType: 'docx_open',
@@ -95,34 +96,23 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           summary: `文档已打开: ${path.basename(sourcePath)}`
         })
         return out
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error)
-        runtime.emitFailure({
-          toolName,
-          toolCallId,
-          code: 'failed',
-          error: msg
-        })
-        runtime.input.emitActivity({
-          actionType: 'docx_open',
-          status: 'failed',
-          summary: `文档打开异常: ${msg}`
-        })
-        throw error
-      }
     },
-    {
-      name: 'docx_open',
-      description: 'Open a workspace-bound docx file and register a docId for subsequent operations.',
-      schema: openSchema
-    }
-  )
+  })
 
-  const docxOutlineTool = tool(
-    async (args) => {
-      const toolName = 'docx_outline'
-      const toolCallId = runtime.toolEvents.emitStarted(toolName, args)
-      try {
+  const docxOutlineTool = createDocxTool({
+    runtime,
+    name: 'docx_outline',
+    description:
+      'Extract a deterministic block outline for a previously opened doc (paragraph/table/table_cell).',
+    schema: outlineSchema,
+    onError: ({ message }) => {
+      runtime.input.emitActivity({
+        actionType: 'docx_outline',
+        status: 'failed',
+        summary: message
+      })
+    },
+    execute: async ({ args, toolName, toolCallId }) => {
         runtime.input.ctx.checkCancelled()
         const docId = runtime.getRequiredDocId({
           toolName,
@@ -139,42 +129,36 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           status: 'started',
           summary: `提取结构: ${docId}`
         })
-        const workerResponse = await runtime.callWorker({
-          action: 'outline',
-          payload: {
-            docId,
-            maxBlocks: Number(args.maxBlocks || 200),
-            includeTables: Boolean(args.includeTables ?? true),
-            includeCells: Boolean(args.includeCells ?? true)
+        const workerPayload = await callExpectedWorkerAction({
+          runtime,
+          toolName,
+          toolCallId,
+          expectedAction: 'outline',
+          draftDocId: docId,
+          request: {
+            action: 'outline',
+            payload: {
+              docId,
+              maxBlocks: Number(args.maxBlocks || 200),
+              includeTables: Boolean(args.includeTables ?? true),
+              includeCells: Boolean(args.includeCells ?? true)
+            }
           }
         })
-        if (!workerResponse.ok) {
-          const out = runtime.emitWorkerFailure({
-            toolName,
-            toolCallId,
-            response: workerResponse
-          })
+        if (isDocxToolFailure(workerPayload)) {
           runtime.input.emitActivity({
             actionType: 'docx_outline',
             status: 'failed',
-            summary: out.summary
+            summary: workerPayload.summary
           })
-          return out
-        }
-        if (workerResponse.payload.action !== 'outline') {
-          return runtime.emitFailure({
-            toolName,
-            toolCallId,
-            code: 'failed',
-            error: 'worker protocol mismatch (outline)'
-          })
+          return workerPayload
         }
         const out = {
           ok: true,
           code: 'ok' as const,
-          summary: `outline ready (${workerResponse.payload.blocks.length} blocks)`,
-          blocks: workerResponse.payload.blocks,
-          truncated: workerResponse.payload.truncated
+          summary: `outline ready (${workerPayload.blocks.length} blocks)`,
+          blocks: workerPayload.blocks,
+          truncated: workerPayload.truncated
         }
         runtime.toolEvents.emitResult({
           toolName,
@@ -194,30 +178,15 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           summary: `结构提取完成: ${out.blocks.length} blocks`
         })
         return out
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error)
-        runtime.emitFailure({
-          toolName,
-          toolCallId,
-          code: 'failed',
-          error: msg
-        })
-        throw error
-      }
     },
-    {
-      name: 'docx_outline',
-      description:
-        'Extract a deterministic block outline for a previously opened doc (paragraph/table/table_cell).',
-      schema: outlineSchema
-    }
-  )
+  })
 
-  const docxGetBlockTool = tool(
-    async (args) => {
-      const toolName = 'docx_get_block'
-      const toolCallId = runtime.toolEvents.emitStarted(toolName, args)
-      try {
+  const docxGetBlockTool = createDocxTool({
+    runtime,
+    name: 'docx_get_block',
+    description: 'Get one block by blockId with detailed structure.',
+    schema: getBlockSchema,
+    execute: async ({ args, toolName, toolCallId }) => {
         const docId = runtime.getRequiredDocId({
           toolName,
           toolCallId,
@@ -228,33 +197,25 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           error: `docId is required before ${toolName}; open a document first`
         })
 
-        const workerResponse = await runtime.callWorker({
-          action: 'get_block',
-          payload: {
-            docId,
-            blockId: args.blockId
+        const workerPayload = await callExpectedWorkerAction({
+          runtime,
+          toolName,
+          toolCallId,
+          expectedAction: 'get_block',
+          request: {
+            action: 'get_block',
+            payload: {
+              docId,
+              blockId: args.blockId
+            }
           }
         })
-        if (!workerResponse.ok) {
-          return runtime.emitWorkerFailure({
-            toolName,
-            toolCallId,
-            response: workerResponse
-          })
-        }
-        if (workerResponse.payload.action !== 'get_block') {
-          return runtime.emitFailure({
-            toolName,
-            toolCallId,
-            code: 'failed',
-            error: 'worker protocol mismatch (get_block)'
-          })
-        }
+        if (isDocxToolFailure(workerPayload)) return workerPayload
         const out = {
           ok: true,
           code: 'ok' as const,
           summary: `block loaded: ${args.blockId}`,
-          block: workerResponse.payload.block
+          block: workerPayload.block
         }
         runtime.toolEvents.emitResult({
           toolName,
@@ -268,29 +229,16 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           draftDocId: docId
         })
         return out
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error)
-        runtime.emitFailure({
-          toolName,
-          toolCallId,
-          code: 'failed',
-          error: msg
-        })
-        throw error
-      }
     },
-    {
-      name: 'docx_get_block',
-      description: 'Get one block by blockId with detailed structure.',
-      schema: getBlockSchema
-    }
-  )
+  })
 
-  const docxSearchTool = tool(
-    async (args) => {
-      const toolName = 'docx_search'
-      const toolCallId = runtime.toolEvents.emitStarted(toolName, args)
-      try {
+  const docxSearchTool = createDocxTool({
+    runtime,
+    name: 'docx_search',
+    description:
+      'Search blocks in a doc using literal/regex mode, or semantic block retrieval with cached embeddings.',
+    schema: searchSchema,
+    execute: async ({ args, toolName, toolCallId }) => {
         const docId = runtime.getRequiredDocId({
           toolName,
           toolCallId,
@@ -350,36 +298,28 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           return out
         }
 
-        const workerResponse = await runtime.callWorker({
-          action: 'search',
-          payload: {
-            docId,
-            query: args.query,
-            mode: args.mode,
-            scopeBlockIds: args.scope?.blockIds || []
+        const workerPayload = await callExpectedWorkerAction({
+          runtime,
+          toolName,
+          toolCallId,
+          expectedAction: 'search',
+          request: {
+            action: 'search',
+            payload: {
+              docId,
+              query: args.query,
+              mode: args.mode,
+              scopeBlockIds: args.scope?.blockIds || []
+            }
           }
         })
-        if (!workerResponse.ok) {
-          return runtime.emitWorkerFailure({
-            toolName,
-            toolCallId,
-            response: workerResponse
-          })
-        }
-        if (workerResponse.payload.action !== 'search') {
-          return runtime.emitFailure({
-            toolName,
-            toolCallId,
-            code: 'failed',
-            error: 'worker protocol mismatch (search)'
-          })
-        }
+        if (isDocxToolFailure(workerPayload)) return workerPayload
         const out = {
           ok: true,
           code: 'ok' as const,
-          summary: `search done (${workerResponse.payload.matches.length} matches)`,
-          matches: workerResponse.payload.matches,
-          warnings: workerResponse.payload.warnings
+          summary: `search done (${workerPayload.matches.length} matches)`,
+          matches: workerPayload.matches,
+          warnings: workerPayload.warnings
         }
         runtime.toolEvents.emitResult({
           toolName,
@@ -394,30 +334,16 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           draftDocId: docId
         })
         return out
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error)
-        runtime.emitFailure({
-          toolName,
-          toolCallId,
-          code: 'failed',
-          error: msg
-        })
-        throw error
-      }
     },
-    {
-      name: 'docx_search',
-      description:
-        'Search blocks in a doc using literal/regex mode, or semantic block retrieval with cached embeddings.',
-      schema: searchSchema
-    }
-  )
+  })
 
-  const docxGetHistoryTool = tool(
-    async (args) => {
-      const toolName = 'docx_get_history'
-      const toolCallId = runtime.toolEvents.emitStarted(toolName, args)
-      try {
+  const docxGetHistoryTool = createDocxTool({
+    runtime,
+    name: 'docx_get_history',
+    description:
+      'Inspect the immutable docx snapshot lineage for the current run. Useful for confirm/rollback flows before save.',
+    schema: historySchema,
+    execute: async ({ args, toolName, toolCallId }) => {
         const docId = runtime.getRequiredDocId({
           toolName,
           toolCallId,
@@ -457,24 +383,8 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           draftDocId: docId
         })
         return out
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error)
-        runtime.emitFailure({
-          toolName,
-          toolCallId,
-          code: 'failed',
-          error: msg
-        })
-        throw error
-      }
-    },
-    {
-      name: 'docx_get_history',
-      description:
-        'Inspect the immutable docx snapshot lineage for the current run. Useful for confirm/rollback flows before save.',
-      schema: historySchema
     }
-  )
+  })
 
   return [
     docxOpenTool,

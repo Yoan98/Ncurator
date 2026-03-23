@@ -1,15 +1,24 @@
-import { tool } from '@langchain/core/tools'
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { DocxChangedBlock, DocxOp } from '../types'
 import type { DocxToolRuntime } from '../runtime'
 import { applyOpsSchema, rollbackSchema } from '../schemas'
+import { callExpectedWorkerAction, createDocxTool, isDocxToolFailure } from './workerTool'
 
 export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInterface[] => {
-  const docxApplyOpsTool = tool(
-    async (args) => {
-      const toolName = 'docx_apply_ops'
-      const toolCallId = runtime.toolEvents.emitStarted(toolName, args)
-      try {
+  const docxApplyOpsTool = createDocxTool({
+    runtime,
+    name: 'docx_apply_ops',
+    description:
+      'Apply structured docx operations and return a new immutable docId snapshot with changed blocks.',
+    schema: applyOpsSchema,
+    onError: ({ message }) => {
+      runtime.input.emitActivity({
+        actionType: 'docx_apply_ops',
+        status: 'failed',
+        summary: `编辑失败: ${message}`
+      })
+    },
+    execute: async ({ args, toolName, toolCallId }) => {
         const initialDocId = runtime.getRequiredDocId({
           toolName,
           toolCallId,
@@ -31,40 +40,30 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         const collectedWarnings: string[] = []
 
         for (const op of expandedOps) {
-          const workerResponse = await runtime.callWorker({
-            action: 'apply_ops',
-            payload: {
-              docId: currentDocId,
-              ops: [op]
+          const workerPayload = await callExpectedWorkerAction({
+            runtime,
+            toolName,
+            toolCallId,
+            expectedAction: 'apply_ops',
+            draftDocId: currentDocId,
+            request: {
+              action: 'apply_ops',
+              payload: {
+                docId: currentDocId,
+                ops: [op]
+              }
             }
           })
-
-          if (!workerResponse.ok) {
-            const out = runtime.emitWorkerFailure({
-              toolName,
-              toolCallId,
-              response: workerResponse,
-              draftDocId: currentDocId
-            })
+          if (isDocxToolFailure(workerPayload)) {
             runtime.input.emitActivity({
               actionType: 'docx_apply_ops',
               status: 'failed',
-              summary: out.summary
+              summary: workerPayload.summary
             })
-            return out
+            return workerPayload
           }
 
-          if (workerResponse.payload.action !== 'apply_ops') {
-            return runtime.emitFailure({
-              toolName,
-              toolCallId,
-              code: 'failed',
-              error: 'worker protocol mismatch (apply_ops)',
-              draftDocId: currentDocId
-            })
-          }
-
-          const nextDocId = workerResponse.payload.newDocId
+          const nextDocId = workerPayload.newDocId
           const sourcePath = runtime.state.sourcePathByDocId.get(currentDocId)
           if (sourcePath) runtime.state.sourcePathByDocId.set(nextDocId, sourcePath)
           runtime.registerSnapshot(nextDocId, currentDocId)
@@ -72,10 +71,10 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
             previousDocId: currentDocId,
             nextDocId,
             op,
-            changedBlocks: workerResponse.payload.changedBlocks
+            changedBlocks: workerPayload.changedBlocks
           })
-          collectedChangedBlocks.push(...workerResponse.payload.changedBlocks)
-          collectedWarnings.push(...workerResponse.payload.warnings)
+          collectedChangedBlocks.push(...workerPayload.changedBlocks)
+          collectedWarnings.push(...workerPayload.warnings)
           currentDocId = nextDocId
         }
 
@@ -107,35 +106,23 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           summary: `编辑完成: ${out.changedBlocks.length} 处变更`
         })
         return out
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error)
-        runtime.emitFailure({
-          toolName,
-          toolCallId,
-          code: 'failed',
-          error: msg
-        })
-        runtime.input.emitActivity({
-          actionType: 'docx_apply_ops',
-          status: 'failed',
-          summary: `编辑失败: ${msg}`
-        })
-        throw error
-      }
     },
-    {
-      name: 'docx_apply_ops',
-      description:
-        'Apply structured docx operations and return a new immutable docId snapshot with changed blocks.',
-      schema: applyOpsSchema
-    }
-  )
+  })
 
-  const docxRollbackTool = tool(
-    async (args) => {
-      const toolName = 'docx_rollback'
-      const toolCallId = runtime.toolEvents.emitStarted(toolName, args)
-      try {
+  const docxRollbackTool = createDocxTool({
+    runtime,
+    name: 'docx_rollback',
+    description:
+      'Move back to an ancestor docx snapshot in the current run without writing files. Use before user confirmation.',
+    schema: rollbackSchema,
+    onError: ({ message }) => {
+      runtime.input.emitActivity({
+        actionType: 'docx_rollback',
+        status: 'failed',
+        summary: `回滚失败: ${message}`
+      })
+    },
+    execute: async ({ args, toolName, toolCallId }) => {
         const docId = runtime.getRequiredDocId({
           toolName,
           toolCallId,
@@ -194,29 +181,8 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           summary: `已切回草稿快照: ${resolved.targetDocId}`
         })
         return out
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error)
-        runtime.emitFailure({
-          toolName,
-          toolCallId,
-          code: 'failed',
-          error: msg
-        })
-        runtime.input.emitActivity({
-          actionType: 'docx_rollback',
-          status: 'failed',
-          summary: `回滚失败: ${msg}`
-        })
-        throw error
-      }
     },
-    {
-      name: 'docx_rollback',
-      description:
-        'Move back to an ancestor docx snapshot in the current run without writing files. Use before user confirmation.',
-      schema: rollbackSchema
-    }
-  )
+  })
 
   return [docxApplyOpsTool, docxRollbackTool]
 }

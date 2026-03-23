@@ -2,10 +2,12 @@ import { HUMAN_DEFAULT_TOOL_CALL_LIMIT } from '../../constants'
 import type { AiRunContext } from '../../../types'
 import { extractArtifactRefsFromToolResults, mergeArtifactRefs } from '../../../utils/artifacts'
 import type { HumanRuntimeCache, HumanState } from '../../types'
-import { appendHumanTraceStep, emitHumanStep, emitWatchHint } from '../utils/events'
+import { appendHumanTraceSteps } from '../utils/events'
 import { validateParallelToolCalls } from './actionBatchGuard'
-import { executeToolCall, getLearnedToolNames } from './toolExecutor'
+import { executeToolCall } from './toolExecutor'
 import { buildInvalidBatchHint, buildToolLimitHint } from './watchHint'
+import { getAvailableToolNames } from '../learningNode/skillLoader'
+import { emitTailHumanSteps, returnToBrain, returnToBrainWithWatchHint } from '../utils/stateTransitions'
 
 export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCache }) => {
   return async (state: HumanState): Promise<HumanState> => {
@@ -14,32 +16,18 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       input.ctx.humanRuntimeOverrides?.hardActionLimit || HUMAN_DEFAULT_TOOL_CALL_LIMIT
 
     if (!state.lastBrainDecision || state.lastBrainDecision.nextAction.action !== 'hand') {
-      return {
-        ...state,
-        runtime: {
-          ...state.runtime,
-          stage: 'brain'
-        }
-      }
+      return returnToBrain(state)
     }
 
     const parallelCallToolParam = state.lastBrainDecision.nextAction.parallelCallToolParam
     if (!validateParallelToolCalls(parallelCallToolParam)) {
       const watchHint = buildInvalidBatchHint()
-      emitWatchHint({
+      return returnToBrainWithWatchHint({
         ctx: input.ctx,
-        taskId: state.task.taskId,
+        state,
         source: 'hand',
-        summary: watchHint
-      })
-      return {
-        ...state,
-        runtime: {
-          ...state.runtime,
-          stage: 'brain'
-        },
         watchHint
-      }
+      })
     }
 
     const learnedSkillIds = state.brainMemory.outside.learnedSkillIds
@@ -57,10 +45,9 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
     )
     input.cache.toolCallCount += results.length
 
-    let traceSteps = state.trace.steps
-    results.forEach((result) => {
-      traceSteps = appendHumanTraceStep({
-        steps: traceSteps,
+    const traceSteps = appendHumanTraceSteps({
+      steps: state.trace.steps,
+      items: results.map((result) => ({
         action: result.code === 'ok' ? 'call_tool' : 'block_result',
         publicNarrative: result.summary,
         resultStatus:
@@ -71,52 +58,49 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
               : 'error',
         toolName: result.toolName,
         summary: result.summary
-      })
+      }))
     })
     const watchHint =
       input.cache.toolCallCount > toolCallLimit
         ? buildToolLimitHint(input.cache.toolCallCount, toolCallLimit)
         : undefined
-    if (watchHint) {
-      emitWatchHint({
-        ctx: input.ctx,
-        taskId: state.task.taskId,
-        source: 'hand',
-        summary: watchHint
-      })
-    }
     const runtimeArtifacts = mergeArtifactRefs(
       state.runtimeArtifacts,
       extractArtifactRefsFromToolResults(results)
     )
-    const nextState: HumanState = {
-      ...state,
-      runtime: {
-        ...state.runtime,
-        stage: 'brain'
-      },
-      lastParallelCallToolResults: results,
-      watchHint,
-      runtimeArtifacts,
-      trace: {
-        steps: traceSteps
-      }
-    }
-    const availableToolNames = getLearnedToolNames({
+    const nextState = watchHint
+      ? returnToBrainWithWatchHint({
+          ctx: input.ctx,
+          state,
+          source: 'hand',
+          watchHint,
+          overrides: {
+            lastParallelCallToolResults: results,
+            runtimeArtifacts,
+            trace: {
+              steps: traceSteps
+            }
+          }
+        })
+      : returnToBrain(state, {
+          lastParallelCallToolResults: results,
+          runtimeArtifacts,
+          trace: {
+            steps: traceSteps
+          }
+        })
+    const availableToolNames = getAvailableToolNames({
       learnedSkillIds,
       cache: input.cache
     })
-    results.forEach((_, index) => {
-      const step = nextState.trace.steps.at(nextState.trace.steps.length - results.length + index)
-      if (!step) return
-      emitHumanStep({
-        ctx: input.ctx,
-        taskId: state.task.taskId,
-        step,
-        learnedSkillIds,
-        availableToolNames,
-        stage: 'human_hand'
-      })
+    emitTailHumanSteps({
+      ctx: input.ctx,
+      taskId: state.task.taskId,
+      steps: nextState.trace.steps,
+      count: results.length,
+      learnedSkillIds,
+      availableToolNames,
+      stage: 'human_hand'
     })
     return nextState
   }

@@ -8,7 +8,10 @@ import type {
 
 type DirectorHumanDispatchStage = Extract<
   AiDirectorStage,
-  'director_plan_exec' | 'director_direct_human_exec' | 'director_synthesis_human'
+  | 'director_context_human'
+  | 'director_plan_exec'
+  | 'director_direct_human_exec'
+  | 'director_synthesis_human'
 >
 
 export const runDirectorHumanSubtask = async (input: {

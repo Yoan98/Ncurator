@@ -1,31 +1,25 @@
 import { StateSchema } from '@langchain/langgraph'
 import { z } from 'zod/v4'
+import { AI_DIRECTOR_STAGES, DIRECTOR_STATUSES } from '../../constants'
 import { aiArtifactRefSchema, aiPlanTaskSchema } from '../../schema'
+import { createDefaultAiRunStateFields } from '../../utils/state'
 
 export const createDirectorRunStateSchema = () => {
+  const defaults = createDefaultAiRunStateFields()
+
   return new StateSchema({
     runId: z.string(),
     sessionId: z.string(),
-    status: z.enum(['running', 'completed', 'failed', 'cancelled']).default('running'),
+    status: z.enum(DIRECTOR_STATUSES).default(defaults.status),
     input: z.string(),
-    directorStage: z
-      .enum([
-        'director_intent',
-        'director_context_human',
-        'director_plan',
-        'director_plan_exec',
-        'director_direct_human_exec',
-        'director_synthesis_human',
-        'director_complete'
-      ])
-      .default('director_intent'),
-    contextRounds: z.number().default(0),
+    directorStage: z.enum(AI_DIRECTOR_STAGES).default(defaults.directorStage),
+    contextRounds: z.number().default(defaults.contextRounds),
     contextObjective: z.string().optional(),
-    contextEvidence: z.array(z.string()).default(() => []),
-    plan: z.array(aiPlanTaskSchema).default(() => []),
-    dispatchCursor: z.number().default(0),
+    contextEvidence: z.array(z.string()).default(() => [...defaults.contextEvidence]),
+    plan: z.array(aiPlanTaskSchema).default(() => [...defaults.plan]),
+    dispatchCursor: z.number().default(defaults.dispatchCursor),
     error: z.string().optional(),
     finalDeliveryMarkdown: z.string().optional(),
-    finalArtifacts: z.array(aiArtifactRefSchema).default(() => [])
+    finalArtifacts: z.array(aiArtifactRefSchema).default(() => [...defaults.finalArtifacts])
   })
 }

@@ -6,22 +6,17 @@ import type {
   AiRunEvent
 } from '../../../../../src/shared/types'
 import type { AiRunState, HumanTaskOutput, HumanTaskRunner } from '../../../../../src/main/services/ai/types'
+import { createInitialAiRunState } from '../../../../../src/main/services/ai/utils/state'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 
 const buildInitialState = (runtime: {
   runId: string
-}): AiRunState => ({
-  runId: runtime.runId,
-  sessionId: 'test-session',
-  status: 'running',
-  input: '整理项目材料并输出最终结论',
-  directorStage: 'director_intent',
-  contextRounds: 0,
-  contextEvidence: [],
-  plan: [],
-  dispatchCursor: 0,
-  finalArtifacts: []
-})
+}): AiRunState =>
+  createInitialAiRunState({
+    runId: runtime.runId,
+    sessionId: 'test-session',
+    input: '整理项目材料并输出最终结论'
+  })
 
 const buildArtifact = (path: string, summary: string): AiArtifactRef => ({
   kind: 'file',
@@ -77,6 +72,64 @@ test('director-human-dispatch', async () => {
       const directState = (await directGraph.invoke(buildInitialState(runtime))) as AiRunState
       const directEvents = runtime.eventCollector.snapshot()
 
+      const contextCalls: string[] = []
+      const contextRunHumanTask: HumanTaskRunner = async (taskInput): Promise<HumanTaskOutput> => {
+        contextCalls.push(taskInput.taskId)
+        if (taskInput.taskId === 'context-1') {
+          return {
+            taskId: taskInput.taskId,
+            status: 'blocked',
+            summary: '当前缺少上一轮指代所需的上下文。'
+          }
+        }
+        if (taskInput.taskId === 'task-after-context') {
+          return {
+            taskId: taskInput.taskId,
+            status: 'completed',
+            summary: '上下文回退后已完成计划子任务。',
+            deliveryMarkdown:
+              '# 子任务交付\n\n## 任务状态\ncompleted\n\n## 本任务结论\n已在缺少上下文时回退到常规计划执行。\n\n## 已完成\n- 已整理可继续执行的事实。\n\n## 关键事实\n- 当前输入可直接进入后续汇总。\n\n## 关键证据\n- context blocked 后未污染 evidence。\n\n## 产物与引用\n无\n\n## 未决与风险\n无\n\n## 对后续任务的影响\n- synthesis 可继续输出。\n\n## 建议下一步\n- 汇总结果。',
+            artifacts: [buildArtifact('/tmp/context-plan-output.docx', 'context fallback artifact')]
+          }
+        }
+        return {
+          taskId: taskInput.taskId,
+          status: 'completed',
+          summary: '上下文回退后的最终汇总完成。',
+          deliveryMarkdown: '# 最终答复\n\ncontext blocked 后已正常进入 plan 并完成汇总。',
+          artifacts: [buildArtifact('/tmp/context-synthesis-output.docx', 'context synthesis artifact')]
+        }
+      }
+      const contextCtx = runtime.createAiRunContext({
+        chatStructuredOverride: async (input) => {
+          if (input.caller === 'director.intent') {
+            return {
+              mode: 'need_context',
+              reason: '当前输入缺少明确指代，需要先尝试补齐上下文。'
+            }
+          }
+          if (input.caller === 'director.plan') {
+            return {
+              tasks: [
+                {
+                  id: 'task-after-context',
+                  title: '上下文回退后继续整理',
+                  userInput: '在 context 无法补齐时，按当前输入整理可继续执行的事实'
+                }
+              ] satisfies AiPlanTask[]
+            }
+          }
+          throw new Error(`unexpected structured call: ${input.caller}`)
+        }
+      })
+      const contextGraph = buildDirectorGraph({
+        ctx: contextCtx,
+        runHumanTask: contextRunHumanTask,
+        maxContextRounds: 1
+      })
+      const contextState = (await contextGraph.invoke(buildInitialState(runtime))) as AiRunState
+      const contextEvents = runtime.eventCollector.snapshot()
+
       const planCalls: string[] = []
       const planRunHumanTask: HumanTaskRunner = async (taskInput): Promise<HumanTaskOutput> => {
         planCalls.push(taskInput.taskId)
@@ -126,13 +179,18 @@ test('director-human-dispatch', async () => {
       })
       const planState = (await planGraph.invoke(buildInitialState(runtime))) as AiRunState
       const allEvents = runtime.eventCollector.snapshot()
+      const planEvents = allEvents.slice(contextEvents.length)
 
       return {
         directState,
+        contextState,
         planState,
         directCalls,
+        contextCalls,
         planCalls,
         directEvents,
+        contextEvents,
+        planEvents,
         allEvents
       }
     },
@@ -167,6 +225,29 @@ test('director-human-dispatch', async () => {
       })
 
       runtime.assertThat(
+        result.contextCalls.join(',') === 'context-1,task-after-context,synthesis-human',
+        {
+          name: 'director-context-fallback-dispatch',
+          message:
+            'blocked context flow should emit the context task first, then fall back to plan task and synthesis-human',
+          data: result.contextCalls
+        }
+      )
+
+      runtime.assertThat(
+        result.contextState.contextRounds === 1 &&
+          result.contextState.contextEvidence.length === 0 &&
+          result.contextState.plan[0]?.status === 'completed' &&
+          result.contextState.finalArtifacts.length === 2,
+        {
+          name: 'director-context-fallback-state',
+          message:
+            'blocked context flow should keep contextEvidence empty, consume one round, and continue through plan + synthesis',
+          data: result.contextState
+        }
+      )
+
+      runtime.assertThat(
         result.planState.plan.length === 1 &&
           result.planState.plan[0]?.status === 'completed' &&
           result.planState.finalArtifacts.length === 2,
@@ -177,11 +258,18 @@ test('director-human-dispatch', async () => {
         }
       )
 
-      const planCreatedEvents = result.allEvents.filter((event) => isEventType(event, 'plan_created'))
-      const planTaskEvents = result.allEvents.filter(
+      const planCreatedEvents = result.planEvents.filter((event) => isEventType(event, 'plan_created'))
+      const planTaskEvents = result.planEvents.filter(
         (event) =>
           (isEventType(event, 'task_started') || isEventType(event, 'task_completed')) &&
           (event.taskId === 'task-collect' || event.taskId === 'synthesis-human')
+      )
+      const contextLifecycleEvents = result.contextEvents.filter(
+        (event) =>
+          (isEventType(event, 'task_started') ||
+            isEventType(event, 'task_blocked') ||
+            isEventType(event, 'task_completed')) &&
+          event.taskId === 'context-1'
       )
 
       runtime.assertThat(planCreatedEvents.length >= 1, {
@@ -195,6 +283,19 @@ test('director-human-dispatch', async () => {
         message: 'plan task and synthesis-human should each emit started/completed lifecycle events',
         data: planTaskEvents
       })
+
+      runtime.assertThat(
+        contextLifecycleEvents.length === 2 &&
+          contextLifecycleEvents.some((event) => isEventType(event, 'task_started')) &&
+          contextLifecycleEvents.some((event) => isEventType(event, 'task_blocked')) &&
+          !contextLifecycleEvents.some((event) => isEventType(event, 'task_completed')),
+        {
+          name: 'director-context-blocked-events',
+          message:
+            'context human dispatch should emit started/blocked lifecycle events and must not emit completed when blocked',
+          data: contextLifecycleEvents
+        }
+      )
     }
   })
 })

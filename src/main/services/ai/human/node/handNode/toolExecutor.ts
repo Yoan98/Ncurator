@@ -3,7 +3,6 @@ import type { JsonValue } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
 import type { HumanRuntimeCache, RuntimeSkillId, ToolCallResult } from '../../types'
 import { normalizeToolCallResult } from '../../utils/toolResult'
-import { getAvailableToolNames } from '../learningNode/skillLoader'
 import type { AiRunContextWithHumanOverrides } from '../types'
 import { emitToolCallResult, emitToolCallStarted } from '../../tools/utils/toolEvents'
 
@@ -83,8 +82,3 @@ export const executeToolCall = async (input: {
     }
   }
 }
-
-export const getLearnedToolNames = (input: {
-  learnedSkillIds: RuntimeSkillId[]
-  cache: HumanRuntimeCache
-}) => getAvailableToolNames(input)

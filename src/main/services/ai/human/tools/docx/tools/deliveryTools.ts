@@ -1,19 +1,21 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { tool } from '@langchain/core/tools'
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { AiFileArtifactOperation } from '../../../../../../../shared/types'
 import { emitFileArtifactEvent } from '../../../../events/fileArtifacts'
 import { clipText } from '../../../../utils/text'
 import type { DocxToolRuntime } from '../runtime'
 import { renderPreviewSchema, saveSchema, validateSchema } from '../schemas'
+import { callExpectedWorkerAction, createDocxTool, isDocxToolFailure } from './workerTool'
 
 export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredToolInterface[] => {
-  const docxRenderPreviewTool = tool(
-    async (args) => {
-      const toolName = 'docx_render_preview'
-      const toolCallId = runtime.toolEvents.emitStarted(toolName, args)
-      try {
+  const docxRenderPreviewTool = createDocxTool({
+    runtime,
+    name: 'docx_render_preview',
+    description:
+      'Render preview artifact for the current doc snapshot. html returns a preview docx artifact path for renderer.',
+    schema: renderPreviewSchema,
+    execute: async ({ args, toolName, toolCallId }) => {
         const docId = runtime.getRequiredDocId({
           toolName,
           toolCallId,
@@ -30,33 +32,25 @@ export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredTool
           `${runtime.input.runId}-${docId}-${Date.now().toString(36)}.docx`
         )
         const existsBefore = fs.existsSync(previewPath)
-        const workerResponse = await runtime.callWorker({
-          action: 'render_preview',
-          payload: {
-            docId,
-            format: args.format,
-            previewPath
+        const workerPayload = await callExpectedWorkerAction({
+          runtime,
+          toolName,
+          toolCallId,
+          expectedAction: 'render_preview',
+          request: {
+            action: 'render_preview',
+            payload: {
+              docId,
+              format: args.format,
+              previewPath
+            }
           }
         })
-        if (!workerResponse.ok) {
-          return runtime.emitWorkerFailure({
-            toolName,
-            toolCallId,
-            response: workerResponse
-          })
-        }
-        if (workerResponse.payload.action !== 'render_preview') {
-          return runtime.emitFailure({
-            toolName,
-            toolCallId,
-            code: 'failed',
-            error: 'worker protocol mismatch (render_preview)'
-          })
-        }
+        if (isDocxToolFailure(workerPayload)) return workerPayload
 
         runtime.input.ctx.trackDocxPreview({
           docId,
-          previewPath: workerResponse.payload.previewPath
+          previewPath: workerPayload.previewPath
         })
         const operation: AiFileArtifactOperation = existsBefore ? 'updated' : 'created'
         emitFileArtifactEvent({
@@ -64,20 +58,20 @@ export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredTool
           runId: runtime.input.runId,
           taskId: runtime.input.taskId,
           capability: 'docx',
-          artifactPath: workerResponse.payload.previewPath,
+          artifactPath: workerPayload.previewPath,
           operation,
           artifactRole: 'preview',
           draftSnapshotId: docId,
-          summary: `docx preview generated (${workerResponse.payload.renderer})`
+          summary: `docx preview generated (${workerPayload.renderer})`
         })
 
         const out = {
           ok: true,
           code: 'ok' as const,
-          summary: `preview generated (${workerResponse.payload.format})`,
-          format: workerResponse.payload.format,
-          previewPath: workerResponse.payload.previewPath,
-          renderer: workerResponse.payload.renderer
+          summary: `preview generated (${workerPayload.format})`,
+          format: workerPayload.format,
+          previewPath: workerPayload.previewPath,
+          renderer: workerPayload.renderer
         }
         runtime.toolEvents.emitResult({
           toolName,
@@ -86,30 +80,15 @@ export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredTool
           draftDocId: docId
         })
         return out
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error)
-        runtime.emitFailure({
-          toolName,
-          toolCallId,
-          code: 'failed',
-          error: msg
-        })
-        throw error
-      }
     },
-    {
-      name: 'docx_render_preview',
-      description:
-        'Render preview artifact for the current doc snapshot. html returns a preview docx artifact path for renderer.',
-      schema: renderPreviewSchema
-    }
-  )
+  })
 
-  const docxSaveTool = tool(
-    async (args) => {
-      const toolName = 'docx_save'
-      const toolCallId = runtime.toolEvents.emitStarted(toolName, args)
-      try {
+  const docxSaveTool = createDocxTool({
+    runtime,
+    name: 'docx_save',
+    description: 'Save doc snapshot to a workspace docx path with overwrite approval guard.',
+    schema: saveSchema,
+    execute: async ({ args, toolName, toolCallId }) => {
         const sourcePath = runtime.state.sourcePathByDocId.get(args.docId)
         const cwd = sourcePath ? path.dirname(sourcePath) : runtime.workspaceRootPath
         const outPath = runtime.resolveDocxPath({
@@ -153,28 +132,20 @@ export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredTool
           }
         }
 
-        const workerResponse = await runtime.callWorker({
-          action: 'save',
-          payload: {
-            docId: args.docId,
-            outPath
+        const workerPayload = await callExpectedWorkerAction({
+          runtime,
+          toolName,
+          toolCallId,
+          expectedAction: 'save',
+          request: {
+            action: 'save',
+            payload: {
+              docId: args.docId,
+              outPath
+            }
           }
         })
-        if (!workerResponse.ok) {
-          return runtime.emitWorkerFailure({
-            toolName,
-            toolCallId,
-            response: workerResponse
-          })
-        }
-        if (workerResponse.payload.action !== 'save') {
-          return runtime.emitFailure({
-            toolName,
-            toolCallId,
-            code: 'failed',
-            error: 'worker protocol mismatch (save)'
-          })
-        }
+        if (isDocxToolFailure(workerPayload)) return workerPayload
 
         const operation: AiFileArtifactOperation = existsBefore ? 'updated' : 'created'
         emitFileArtifactEvent({
@@ -194,9 +165,9 @@ export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredTool
           code: 'ok' as const,
           summary: `doc saved: ${path.basename(outPath)}`,
           outPath,
-          checksum: workerResponse.payload.checksum,
+          checksum: workerPayload.checksum,
           operation,
-          byteSize: workerResponse.payload.byteSize
+          byteSize: workerPayload.byteSize
         }
         runtime.toolEvents.emitResult({
           toolName,
@@ -205,29 +176,15 @@ export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredTool
           draftDocId: args.docId
         })
         return out
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error)
-        runtime.emitFailure({
-          toolName,
-          toolCallId,
-          code: 'failed',
-          error: msg
-        })
-        throw error
-      }
     },
-    {
-      name: 'docx_save',
-      description: 'Save doc snapshot to a workspace docx path with overwrite approval guard.',
-      schema: saveSchema
-    }
-  )
+  })
 
-  const docxValidateTool = tool(
-    async (args) => {
-      const toolName = 'docx_validate'
-      const toolCallId = runtime.toolEvents.emitStarted(toolName, args)
-      try {
+  const docxValidateTool = createDocxTool({
+    runtime,
+    name: 'docx_validate',
+    description: 'Validate current doc snapshot structure and relationship consistency.',
+    schema: validateSchema,
+    execute: async ({ args, toolName, toolCallId }) => {
         const docId = runtime.getRequiredDocId({
           toolName,
           toolCallId,
@@ -238,35 +195,27 @@ export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredTool
           error: `docId is required before ${toolName}; open a document first`
         })
 
-        const workerResponse = await runtime.callWorker({
-          action: 'validate',
-          payload: {
-            docId
+        const workerPayload = await callExpectedWorkerAction({
+          runtime,
+          toolName,
+          toolCallId,
+          expectedAction: 'validate',
+          request: {
+            action: 'validate',
+            payload: {
+              docId
+            }
           }
         })
-        if (!workerResponse.ok) {
-          return runtime.emitWorkerFailure({
-            toolName,
-            toolCallId,
-            response: workerResponse
-          })
-        }
-        if (workerResponse.payload.action !== 'validate') {
-          return runtime.emitFailure({
-            toolName,
-            toolCallId,
-            code: 'failed',
-            error: 'worker protocol mismatch (validate)'
-          })
-        }
+        if (isDocxToolFailure(workerPayload)) return workerPayload
         const out = {
           ok: true,
           code: 'ok' as const,
           summary:
-            workerResponse.payload.problems.length === 0
+            workerPayload.problems.length === 0
               ? 'docx validate ok'
-              : `docx validate with ${workerResponse.payload.problems.length} problems`,
-          problems: workerResponse.payload.problems
+              : `docx validate with ${workerPayload.problems.length} problems`,
+          problems: workerPayload.problems
         }
         runtime.toolEvents.emitResult({
           toolName,
@@ -280,23 +229,8 @@ export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredTool
           draftDocId: docId
         })
         return out
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error)
-        runtime.emitFailure({
-          toolName,
-          toolCallId,
-          code: 'failed',
-          error: msg
-        })
-        throw error
-      }
-    },
-    {
-      name: 'docx_validate',
-      description: 'Validate current doc snapshot structure and relationship consistency.',
-      schema: validateSchema
     }
-  )
+  })
 
   return [docxRenderPreviewTool, docxSaveTool, docxValidateTool]
 }

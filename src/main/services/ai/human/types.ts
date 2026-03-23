@@ -3,6 +3,9 @@ import type { AiArtifactRef, JsonObject, JsonValue } from '../../../../shared/ty
 import type { AiToolFamilyId } from './tools/types'
 import {
   HUMAN_DELIVERY_MODES,
+  HUMAN_FINAL_STATUSES,
+  HUMAN_STAGES,
+  HUMAN_STATUSES,
   HUMAN_STEP_ACTIONS,
   HUMAN_STEP_RESULT_STATUSES,
   RUNTIME_SKILL_IDS,
@@ -10,6 +13,9 @@ import {
 } from './constants'
 
 export type RuntimeSkillId = (typeof RUNTIME_SKILL_IDS)[number]
+export type HumanStage = (typeof HUMAN_STAGES)[number]
+export type HumanStatus = (typeof HUMAN_STATUSES)[number]
+export type HumanFinalStatus = (typeof HUMAN_FINAL_STATUSES)[number]
 export type HumanStepAction = (typeof HUMAN_STEP_ACTIONS)[number]
 export type HumanStepResultStatus = (typeof HUMAN_STEP_RESULT_STATUSES)[number]
 export type ToolCallResultCode = (typeof TOOL_CALL_RESULT_CODES)[number]
@@ -143,7 +149,7 @@ export type BrainNextAction =
     }
   | {
       action: 'mouth'
-      status: 'completed' | 'blocked'
+      status: HumanFinalStatus
     }
 
 export type LastBrainDecision = {
@@ -157,7 +163,7 @@ export type BrainDecisionRecord = LastBrainDecision & {
 }
 
 export type HumanResult = {
-  status: 'completed' | 'blocked'
+  status: HumanFinalStatus
   summary: string
   deliveryMarkdown?: string
   artifacts?: AiArtifactRef[]
@@ -185,7 +191,7 @@ export type HumanTaskInput = {
 
 export type HumanTaskOutput = {
   taskId: string
-  status: 'completed' | 'blocked'
+  status: HumanFinalStatus
   summary: string
   deliveryMarkdown?: string
   artifacts?: AiArtifactRef[]
@@ -194,8 +200,8 @@ export type HumanTaskOutput = {
 export type HumanState = {
   task: HumanTaskInput
   runtime: {
-    stage: 'brain' | 'learning' | 'hand' | 'mouth'
-    status: 'running' | 'completed' | 'blocked'
+    stage: HumanStage
+    status: HumanStatus
   }
   brainMemory: {
     inside: {

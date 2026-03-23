@@ -1,10 +1,13 @@
 import { StateSchema } from '@langchain/langgraph'
 import { z } from 'zod/v4'
 import { aiArtifactRefSchema } from '../../schema'
+import { HUMAN_STEP_ACTIONS, HUMAN_STEP_RESULT_STATUSES } from '../constants'
 import {
   brainDecisionRecordSchema,
   brainEvidenceSchema,
   brainFactSchema,
+  humanStageSchema,
+  humanStatusSchema,
   humanResultSchema,
   humanTaskInputSchema,
   lastBrainDecisionSchema,
@@ -12,24 +15,27 @@ import {
   skillCatalogItemSchema,
   toolCallResultSchema
 } from '../schema'
+import {
+  createDefaultHumanBrainMemory,
+  createDefaultHumanRuntime,
+  createDefaultHumanTrace,
+  createEmptyHumanTaskInput
+} from '../utils/state'
 
 export const createHumanRunStateSchema = () => {
+  const defaultTask = createEmptyHumanTaskInput
+  const defaultRuntime = createDefaultHumanRuntime
+  const defaultBrainMemory = createDefaultHumanBrainMemory
+  const defaultTrace = createDefaultHumanTrace
+
   return new StateSchema({
-    task: z
-      .object({
-        taskId: z.string(),
-        userInput: z.string()
-      })
-      .default(() => humanTaskInputSchema.parse({ taskId: '', userInput: '' })),
+    task: humanTaskInputSchema.default(defaultTask),
     runtime: z
       .object({
-        stage: z.enum(['brain', 'learning', 'hand', 'mouth']).default('brain'),
-        status: z.enum(['running', 'completed', 'blocked']).default('running')
+        stage: humanStageSchema.default(defaultRuntime().stage),
+        status: humanStatusSchema.default(defaultRuntime().status)
       })
-      .default(() => ({
-        stage: 'brain' as const,
-        status: 'running' as const
-      })),
+      .default(defaultRuntime),
     brainMemory: z
       .object({
         inside: z
@@ -38,35 +44,18 @@ export const createHumanRunStateSchema = () => {
             evidences: z.array(brainEvidenceSchema).default(() => []),
             openQuestions: z.array(z.string()).default(() => [])
           })
-          .default(() => ({
-            facts: [],
-            evidences: [],
-            openQuestions: []
-          })),
+          .default(() => defaultBrainMemory().inside),
         outside: z
           .object({
-            skillCatalog: z.array(skillCatalogItemSchema).default(() => []),
+            skillCatalog: z
+              .array(skillCatalogItemSchema)
+              .default(() => defaultBrainMemory().outside.skillCatalog),
             learnedSkillIds: z.array(runtimeSkillIdSchema).default(() => []),
             brainDecisions: z.array(brainDecisionRecordSchema).default(() => [])
           })
-          .default(() => ({
-            skillCatalog: [],
-            learnedSkillIds: [],
-            brainDecisions: []
-          }))
+          .default(() => defaultBrainMemory().outside)
       })
-      .default(() => ({
-        inside: {
-          facts: [],
-          evidences: [],
-          openQuestions: []
-        },
-        outside: {
-          skillCatalog: [],
-          learnedSkillIds: [],
-          brainDecisions: []
-        }
-      })),
+      .default(defaultBrainMemory),
     lastParallelCallToolResults: z.array(toolCallResultSchema).optional(),
     lastBrainDecision: lastBrainDecisionSchema.optional(),
     watchHint: z.string().optional(),
@@ -78,15 +67,9 @@ export const createHumanRunStateSchema = () => {
           .array(
             z.object({
               step: z.number(),
-              action: z.enum([
-                'brain_decision',
-                'learn_skill',
-                'call_tool',
-                'deliver_result',
-                'block_result'
-              ]),
+              action: z.enum(HUMAN_STEP_ACTIONS),
               publicNarrative: z.string(),
-              resultStatus: z.enum(['ok', 'error', 'blocked']).optional(),
+              resultStatus: z.enum(HUMAN_STEP_RESULT_STATUSES).optional(),
               skillId: runtimeSkillIdSchema.optional(),
               toolName: z.string().optional(),
               summary: z.string()
@@ -94,6 +77,6 @@ export const createHumanRunStateSchema = () => {
           )
           .default(() => [])
       })
-      .default(() => ({ steps: [] }))
+      .default(defaultTrace)
   })
 }

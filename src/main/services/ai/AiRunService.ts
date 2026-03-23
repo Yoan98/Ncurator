@@ -1,6 +1,11 @@
 import { buildDirectorGraph } from './director/graph/directorGraph'
 import { createAiRunContext } from './runtime'
 import type { AiRunDeps, AiRunStartPayload, AiRunState } from './types'
+import {
+  createCancelledAiRunState,
+  createFailedAiRunState,
+  createInitialAiRunState
+} from './utils/state'
 
 export class AiRunService {
   private static instance: AiRunService
@@ -18,18 +23,13 @@ export class AiRunService {
     const ctx = createAiRunContext(payload, deps)
     const graph = buildDirectorGraph({ ctx })
     try {
-      const res = await graph.invoke({
-        runId: payload.runId,
-        sessionId: payload.sessionId,
-        status: 'running',
-        input: String(payload.input || ''),
-        directorStage: 'director_intent',
-        plan: [],
-        contextRounds: 0,
-        contextEvidence: [],
-        dispatchCursor: 0,
-        finalArtifacts: []
-      } as AiRunState)
+      const res = await graph.invoke(
+        createInitialAiRunState({
+          runId: payload.runId,
+          sessionId: payload.sessionId,
+          input: String(payload.input || '')
+        }) as AiRunState
+      )
       return res as AiRunState
     } catch (e) {
       const err = e as { code?: string; message?: string }
@@ -39,34 +39,19 @@ export class AiRunService {
           .toLowerCase()
           .includes('cancel')
       ) {
-        return {
+        return createCancelledAiRunState({
           runId: payload.runId,
           sessionId: payload.sessionId,
-          status: 'cancelled',
-          input: payload.input,
-          directorStage: 'director_complete',
-          plan: [],
-          contextRounds: 0,
-          contextEvidence: [],
-          dispatchCursor: 0,
-          finalArtifacts: [],
-          error: 'cancelled'
-        }
+          input: payload.input
+        })
       }
       const msg = e instanceof Error ? e.message : String(e)
-      return {
+      return createFailedAiRunState({
         runId: payload.runId,
         sessionId: payload.sessionId,
-        status: 'failed',
         input: payload.input,
-        directorStage: 'director_complete',
-        plan: [],
-        contextRounds: 0,
-        contextEvidence: [],
-        dispatchCursor: 0,
-        finalArtifacts: [],
         error: msg
-      }
+      })
     }
   }
 }

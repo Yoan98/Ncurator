@@ -9,6 +9,10 @@ export const RUNTIME_SKILL_IDS = [
   'kb-evidence-query'
 ] as const
 
+export const HUMAN_STAGES = ['brain', 'learning', 'hand', 'mouth'] as const
+export const HUMAN_STATUSES = ['running', 'completed', 'blocked'] as const
+export const HUMAN_FINAL_STATUSES = ['completed', 'blocked'] as const
+
 export const HUMAN_STEP_ACTIONS = [
   'brain_decision',
   'learn_skill',

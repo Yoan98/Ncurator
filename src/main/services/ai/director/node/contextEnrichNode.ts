@@ -1,6 +1,7 @@
 import type { AiRunContext, AiRunState, HumanTaskRunner } from '../../types'
 import { appendContextEvidence, extractReusableContextEvidence } from './helpers'
 import { buildContextHumanObjective } from './objectives'
+import { runDirectorHumanSubtask } from './humanDispatch'
 
 export const createContextEnrichNode = (input: {
   ctx: AiRunContext
@@ -18,16 +19,26 @@ export const createContextEnrichNode = (input: {
       contextEvidence: state.contextEvidence
     })
 
-    const output = await runHumanTask(
-      {
-        taskId: contextTaskId,
-        userInput: contextUserInput
-      },
-      {
+    const output = await runDirectorHumanSubtask({
+      ctx,
+      runId: state.runId,
+      taskId: contextTaskId,
+      stage: 'director_context_human',
+      userInput: contextUserInput,
+      runHumanTask,
+      options: {
         deliveryMode: 'context_note',
         internalDelivery: true
       }
-    )
+    })
+
+    if (output.status === 'blocked') {
+      return {
+        contextRounds: state.contextRounds + 1,
+        contextObjective: undefined,
+        directorStage: 'director_intent'
+      }
+    }
 
     const reusableEvidence = extractReusableContextEvidence(output.deliveryMarkdown)
     const nextContextEvidence =

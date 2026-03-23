@@ -1,4 +1,5 @@
 import { tool } from '@langchain/core/tools'
+import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { z } from 'zod/v4'
 import type { AiRunContext } from '../../../types'
 
@@ -17,7 +18,7 @@ export const createWorkspaceRequiredGuardTool = <TSchema extends z.ZodType>(inpu
   taskId: string
   reason: string
   error: string
-}) =>
+}): StructuredToolInterface =>
   tool(
     async () => {
       input.ctx.sendEvent({
