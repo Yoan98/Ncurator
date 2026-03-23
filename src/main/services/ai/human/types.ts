@@ -1,5 +1,6 @@
 import type { StructuredToolInterface } from '@langchain/core/tools'
-import type { AiArtifactRef, JsonObject, JsonValue } from '../../../../shared/types'
+import type { JsonObject } from '../../../../shared/types'
+import type { z } from 'zod/v4'
 import type { AiToolFamilyId } from './tools/types'
 import {
   HUMAN_DELIVERY_MODES,
@@ -11,6 +12,25 @@ import {
   RUNTIME_SKILL_IDS,
   TOOL_CALL_RESULT_CODES
 } from './constants'
+import {
+  brainDecisionRecordSchema,
+  brainDecisionSchema,
+  brainEvidenceSchema,
+  brainFactSchema,
+  brainMemoryOpSchema,
+  brainNextActionSchema,
+  humanDeliveryModeSchema,
+  humanResultSchema,
+  humanStateContractSchema,
+  humanTaskInputSchema,
+  humanTaskOutputSchema,
+  humanTraceStepSchema,
+  lastBrainDecisionSchema,
+  mouthOutputSchema,
+  skillCatalogItemSchema,
+  toolCallParamSchema,
+  toolCallResultSchema
+} from './schema'
 
 export type RuntimeSkillId = (typeof RUNTIME_SKILL_IDS)[number]
 export type HumanStage = (typeof HUMAN_STAGES)[number]
@@ -19,7 +39,7 @@ export type HumanFinalStatus = (typeof HUMAN_FINAL_STATUSES)[number]
 export type HumanStepAction = (typeof HUMAN_STEP_ACTIONS)[number]
 export type HumanStepResultStatus = (typeof HUMAN_STEP_RESULT_STATUSES)[number]
 export type ToolCallResultCode = (typeof TOOL_CALL_RESULT_CODES)[number]
-export type HumanDeliveryMode = (typeof HUMAN_DELIVERY_MODES)[number]
+export type HumanDeliveryMode = z.infer<typeof humanDeliveryModeSchema>
 
 export type ToolPromptArgSpec = {
   name: string
@@ -52,178 +72,41 @@ export type ToolPromptSpec = {
   examples?: ToolPromptExample[]
 }
 
-export type SkillCatalogItem = {
-  skillId: RuntimeSkillId
-  familyId: AiToolFamilyId
-  title: string
-  summary: string
-  toolNames: string[]
-  whenToUse: string
-}
+export type SkillCatalogItem = z.infer<typeof skillCatalogItemSchema>
 
 export type SkillDefinition = SkillCatalogItem & {
   detail: string
 }
 
-export type BrainEvidence = {
-  id: string
-  toolName: string
-  summary: string
-  sourceType: 'tool_result'
-  rawRef?: string
-}
+export type BrainEvidence = z.infer<typeof brainEvidenceSchema>
 
-export type BrainFact = {
-  id: string
-  summary: string
-  evidenceIds: string[]
-}
+export type BrainFact = z.infer<typeof brainFactSchema>
 
-export type BrainDecision = {
-  summary: string
-  reason: string
-  expectedOutcome: string
-}
+export type BrainDecision = z.infer<typeof brainDecisionSchema>
 
-export type ToolCallParam = {
-  toolName: string
-  args: JsonObject
-}
+export type ToolCallParam = z.infer<typeof toolCallParamSchema>
 
-export type ToolCallResult = {
-  toolName: string
-  ok: boolean
-  code: ToolCallResultCode
-  summary: string
-  data?: JsonValue
-}
+export type ToolCallResult = z.infer<typeof toolCallResultSchema>
 
-export type BrainMemoryOp =
-  | {
-      op: 'add'
-      field: 'facts'
-      value: BrainFact
-    }
-  | {
-      op: 'edit'
-      field: 'facts'
-      index: number
-      value: BrainFact
-    }
-  | {
-      op: 'add'
-      field: 'evidences'
-      value: BrainEvidence
-    }
-  | {
-      op: 'edit'
-      field: 'evidences'
-      index: number
-      value: BrainEvidence
-    }
-  | {
-      op: 'add'
-      field: 'openQuestions'
-      value: string
-    }
-  | {
-      op: 'edit'
-      field: 'openQuestions'
-      index: number
-      value: string
-    }
-  | {
-      op: 'remove'
-      field: 'facts' | 'evidences' | 'openQuestions'
-      index: number
-    }
+export type BrainMemoryOp = z.infer<typeof brainMemoryOpSchema>
 
-export type BrainNextAction =
-  | {
-      action: 'learning'
-      wantLearnSkillIds: RuntimeSkillId[]
-    }
-  | {
-      action: 'hand'
-      parallelCallToolParam: ToolCallParam[]
-    }
-  | {
-      action: 'mouth'
-      status: HumanFinalStatus
-    }
+export type BrainNextAction = z.infer<typeof brainNextActionSchema>
 
-export type LastBrainDecision = {
-  memoryOps: BrainMemoryOp[]
-  decision: BrainDecision
-  nextAction: BrainNextAction
-}
+export type LastBrainDecision = z.infer<typeof lastBrainDecisionSchema>
 
-export type BrainDecisionRecord = LastBrainDecision & {
-  createdAt: number
-}
+export type BrainDecisionRecord = z.infer<typeof brainDecisionRecordSchema>
 
-export type HumanResult = {
-  status: HumanFinalStatus
-  summary: string
-  deliveryMarkdown?: string
-  artifacts?: AiArtifactRef[]
-}
+export type HumanResult = z.infer<typeof humanResultSchema>
 
-export type MouthOutput = {
-  summary: string
-  deliveryMarkdown?: string
-}
+export type MouthOutput = z.infer<typeof mouthOutputSchema>
 
-export type HumanTraceStep = {
-  step: number
-  action: HumanStepAction
-  publicNarrative: string
-  resultStatus?: HumanStepResultStatus
-  skillId?: RuntimeSkillId
-  toolName?: string
-  summary: string
-}
+export type HumanTraceStep = z.infer<typeof humanTraceStepSchema>
 
-export type HumanTaskInput = {
-  taskId: string
-  userInput: string
-}
+export type HumanTaskInput = z.infer<typeof humanTaskInputSchema>
 
-export type HumanTaskOutput = {
-  taskId: string
-  status: HumanFinalStatus
-  summary: string
-  deliveryMarkdown?: string
-  artifacts?: AiArtifactRef[]
-}
+export type HumanTaskOutput = z.infer<typeof humanTaskOutputSchema>
 
-export type HumanState = {
-  task: HumanTaskInput
-  runtime: {
-    stage: HumanStage
-    status: HumanStatus
-  }
-  brainMemory: {
-    inside: {
-      facts: BrainFact[]
-      evidences: BrainEvidence[]
-      openQuestions: string[]
-    }
-    outside: {
-      skillCatalog: SkillCatalogItem[]
-      learnedSkillIds: RuntimeSkillId[]
-      brainDecisions: BrainDecisionRecord[]
-    }
-  }
-  lastParallelCallToolResults?: ToolCallResult[]
-  lastBrainDecision?: LastBrainDecision
-  watchHint?: string
-  runtimeArtifacts: AiArtifactRef[]
-  result?: HumanResult
-  trace: {
-    steps: HumanTraceStep[]
-  }
-}
+export type HumanState = z.infer<typeof humanStateContractSchema>
 
 export type HumanRuntimeCache = {
   familyToolsets: Partial<Record<AiToolFamilyId, StructuredToolInterface[]>>

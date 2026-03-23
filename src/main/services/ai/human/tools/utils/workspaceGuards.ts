@@ -38,3 +38,37 @@ export const createWorkspaceRequiredGuardTool = <TSchema extends z.ZodType>(inpu
       schema: input.schema
     }
   )
+
+export const buildWorkspaceBoundGuardedTools = <TSchema extends z.ZodType>(input: {
+  toolNames: string[]
+  workspaceRootPath?: string
+  descriptionForTool: (toolName: string) => string
+  schema: TSchema
+  ctx: AiRunContext
+  runId: string
+  taskId: string
+  reason: string
+  error: string
+  buildWorkspaceTools: (workspaceRootPath: string) => StructuredToolInterface[]
+}): StructuredToolInterface[] => {
+  const workspaceRootPath = String(input.workspaceRootPath || '').trim()
+  if (!workspaceRootPath) {
+    return input.toolNames.map((name) =>
+      createWorkspaceRequiredGuardTool({
+        name,
+        description: input.descriptionForTool(name),
+        schema: input.schema,
+        ctx: input.ctx,
+        runId: input.runId,
+        taskId: input.taskId,
+        reason: input.reason,
+        error: input.error
+      })
+    )
+  }
+
+  const toolNameSet = new Set(input.toolNames)
+  return input
+    .buildWorkspaceTools(workspaceRootPath)
+    .filter((toolItem) => toolNameSet.has(String(toolItem.name || '').trim()))
+}

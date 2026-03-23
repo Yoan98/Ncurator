@@ -2,12 +2,10 @@ import { HUMAN_DEFAULT_TOOL_CALL_LIMIT } from '../../constants'
 import type { AiRunContext } from '../../../types'
 import { extractArtifactRefsFromToolResults, mergeArtifactRefs } from '../../../utils/artifacts'
 import type { HumanRuntimeCache, HumanState } from '../../types'
-import { appendHumanTraceSteps } from '../utils/events'
 import { validateParallelToolCalls } from './actionBatchGuard'
 import { executeToolCall } from './toolExecutor'
 import { buildInvalidBatchHint, buildToolLimitHint } from './watchHint'
-import { getAvailableToolNames } from '../learningNode/skillLoader'
-import { emitTailHumanSteps, returnToBrain, returnToBrainWithWatchHint } from '../utils/stateTransitions'
+import { returnToBrain, returnToBrainAfterTrace, returnToBrainWithWatchHint } from '../utils/stateTransitions'
 
 export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCache }) => {
   return async (state: HumanState): Promise<HumanState> => {
@@ -45,9 +43,20 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
     )
     input.cache.toolCallCount += results.length
 
-    const traceSteps = appendHumanTraceSteps({
-      steps: state.trace.steps,
-      items: results.map((result) => ({
+    const watchHint =
+      input.cache.toolCallCount > toolCallLimit
+        ? buildToolLimitHint(input.cache.toolCallCount, toolCallLimit)
+        : undefined
+    const runtimeArtifacts = mergeArtifactRefs(
+      state.runtimeArtifacts,
+      extractArtifactRefsFromToolResults(results)
+    )
+    const nextState = returnToBrainAfterTrace({
+      ctx: input.ctx,
+      cache: input.cache,
+      state,
+      source: 'hand',
+      traceItems: results.map((result) => ({
         action: result.code === 'ok' ? 'call_tool' : 'block_result',
         publicNarrative: result.summary,
         resultStatus:
@@ -58,49 +67,13 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
               : 'error',
         toolName: result.toolName,
         summary: result.summary
-      }))
-    })
-    const watchHint =
-      input.cache.toolCallCount > toolCallLimit
-        ? buildToolLimitHint(input.cache.toolCallCount, toolCallLimit)
-        : undefined
-    const runtimeArtifacts = mergeArtifactRefs(
-      state.runtimeArtifacts,
-      extractArtifactRefsFromToolResults(results)
-    )
-    const nextState = watchHint
-      ? returnToBrainWithWatchHint({
-          ctx: input.ctx,
-          state,
-          source: 'hand',
-          watchHint,
-          overrides: {
-            lastParallelCallToolResults: results,
-            runtimeArtifacts,
-            trace: {
-              steps: traceSteps
-            }
-          }
-        })
-      : returnToBrain(state, {
-          lastParallelCallToolResults: results,
-          runtimeArtifacts,
-          trace: {
-            steps: traceSteps
-          }
-        })
-    const availableToolNames = getAvailableToolNames({
-      learnedSkillIds,
-      cache: input.cache
-    })
-    emitTailHumanSteps({
-      ctx: input.ctx,
-      taskId: state.task.taskId,
-      steps: nextState.trace.steps,
-      count: results.length,
-      learnedSkillIds,
-      availableToolNames,
-      stage: 'human_hand'
+      })),
+      stage: 'human_hand',
+      watchHint,
+      overrides: {
+        lastParallelCallToolResults: results,
+        runtimeArtifacts
+      }
     })
     return nextState
   }

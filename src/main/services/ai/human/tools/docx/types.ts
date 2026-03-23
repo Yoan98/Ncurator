@@ -1,68 +1,27 @@
 import type { AiTaskResultCode } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
+import type { z } from 'zod/v4'
+import {
+  blockSpecSchema,
+  docOpSchema,
+  docxSearchModeSchema,
+  paragraphSpecSchema,
+  runSpecSchema,
+  tableCellSpecSchema,
+  tableSpecSchema
+} from './schemas'
 
 export type DocxToolResultCode = Extract<
   AiTaskResultCode,
   'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
 >
 
-export type DocxTextRunSpec = {
-  text: string
-  bold?: boolean
-  italic?: boolean
-  underline?: boolean
-  color?: string
-}
-
-export type DocxParagraphSpec = {
-  kind: 'paragraph'
-  style?: string
-  runs: DocxTextRunSpec[]
-}
-
-export type DocxTableCellSpec = {
-  paragraphs: DocxParagraphSpec[]
-}
-
-export type DocxTableSpec = {
-  kind: 'table'
-  rows: DocxTableCellSpec[][]
-}
-
-export type DocxBlockSpec = DocxParagraphSpec | DocxTableSpec
-
-export type DocxOp =
-  | {
-      type: 'replace_block'
-      blockId: string
-      content: DocxBlockSpec
-    }
-  | {
-      type: 'insert_after'
-      anchorBlockId: string
-      content: DocxBlockSpec[]
-    }
-  | {
-      type: 'insert_before'
-      anchorBlockId: string
-      content: DocxBlockSpec[]
-    }
-  | {
-      type: 'delete_block'
-      blockId: string
-    }
-  | {
-      type: 'update_table_cell'
-      blockId: string
-      content: DocxParagraphSpec[]
-    }
-  | {
-      type: 'replace_text'
-      query: string
-      replace: string
-      replaceAll?: boolean
-      blockIds?: string[]
-    }
+export type DocxTextRunSpec = z.infer<typeof runSpecSchema>
+export type DocxParagraphSpec = z.infer<typeof paragraphSpecSchema>
+export type DocxTableCellSpec = z.infer<typeof tableCellSpecSchema>
+export type DocxTableSpec = z.infer<typeof tableSpecSchema>
+export type DocxBlockSpec = z.infer<typeof blockSpecSchema>
+export type DocxOp = z.infer<typeof docOpSchema>
 
 export type DocxOutlineParagraphBlock = {
   blockId: string
@@ -129,7 +88,7 @@ export type DocxDetailedBlock =
   | DocxDetailedTableBlock
   | DocxDetailedCellBlock
 
-export type DocxSearchMode = 'literal' | 'regex' | 'semantic'
+export type DocxSearchMode = z.infer<typeof docxSearchModeSchema>
 
 export type DocxSearchMatch = {
   blockId: string

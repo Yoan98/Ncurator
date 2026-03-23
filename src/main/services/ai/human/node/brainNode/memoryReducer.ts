@@ -3,6 +3,10 @@ import type { HumanState, BrainMemoryOp } from '../../types'
 const INVALID_MEMORY_OP_HINT =
   'memoryReducer 检测到非法记忆编辑，已忽略对应操作，请重新判断下一步。'
 
+type BrainMemoryInside = HumanState['brainMemory']['inside']
+type BrainMemoryField = keyof BrainMemoryInside
+type NonRemoveBrainMemoryOp = Exclude<BrainMemoryOp, { op: 'remove' }>
+
 const hasEvidenceIds = (
   evidenceIdsInScope: Set<string>,
   evidenceIds: string[]
@@ -20,67 +24,116 @@ const removeAtIndex = <T>(list: T[], index: number): T[] => {
   return list.filter((_, currentIndex) => currentIndex !== index)
 }
 
-const applyFactOp = (
-  inside: HumanState['brainMemory']['inside'],
-  op: Extract<BrainMemoryOp, { field: 'facts' }>,
-  validEvidenceIds: Set<string>
-) => {
-  if (!hasEvidenceIds(validEvidenceIds, op.value.evidenceIds)) {
-    return { inside, invalid: true }
-  }
+const setFieldValue = <TField extends BrainMemoryField>(
+  inside: BrainMemoryInside,
+  field: TField,
+  value: BrainMemoryInside[TField]
+): BrainMemoryInside => ({
+  ...inside,
+  [field]: value
+})
 
-  if (op.op === 'add') {
+const applyCollectionOp = <T>(input: {
+  list: T[]
+  op: {
+    op: 'add' | 'edit'
+    index?: number
+    value: T
+  }
+  validate?: (value: T) => boolean
+}): {
+  list: T[]
+  invalid: boolean
+} => {
+  if (input.validate && !input.validate(input.op.value)) {
     return {
-      inside: {
-        ...inside,
-        facts: [...inside.facts, op.value]
-      },
+      list: input.list,
+      invalid: true
+    }
+  }
+  if (input.op.op === 'add') {
+    return {
+      list: [...input.list, input.op.value],
       invalid: false
     }
   }
 
-  if (op.index < 0 || op.index >= inside.facts.length) {
-    return { inside, invalid: true }
+  if (
+    typeof input.op.index !== 'number' ||
+    input.op.index < 0 ||
+    input.op.index >= input.list.length
+  ) {
+    return {
+      list: input.list,
+      invalid: true
+    }
   }
 
   return {
-    inside: {
-      ...inside,
-      facts: updateAtIndex(inside.facts, op.index, op.value)
-    },
+    list: updateAtIndex(input.list, input.op.index, input.op.value),
     invalid: false
   }
 }
 
-const applyEvidenceOp = (
-  inside: HumanState['brainMemory']['inside'],
-  op: Extract<BrainMemoryOp, { field: 'evidences' }>
-) => {
-  if (op.op === 'add') {
+const removeCollectionItem = <T>(list: T[], index: number): { list: T[]; invalid: boolean } => {
+  if (index < 0 || index >= list.length) {
     return {
-      inside: {
-        ...inside,
-        evidences: [...inside.evidences, op.value]
-      },
-      invalid: false
+      list,
+      invalid: true
     }
   }
-
-  if (op.index < 0 || op.index >= inside.evidences.length) {
-    return { inside, invalid: true }
-  }
-
   return {
-    inside: {
-      ...inside,
-      evidences: updateAtIndex(inside.evidences, op.index, op.value)
-    },
+    list: removeAtIndex(list, index),
     invalid: false
+  }
+}
+
+const applyFactsFieldOp = (
+  inside: BrainMemoryInside,
+  op: Extract<NonRemoveBrainMemoryOp, { field: 'facts' }>,
+  validEvidenceIds: Set<string>
+) => {
+  const outcome = applyCollectionOp({
+    list: inside.facts,
+    op,
+    validate: (value) => hasEvidenceIds(validEvidenceIds, value.evidenceIds)
+  })
+  return {
+    inside: setFieldValue(inside, 'facts', outcome.list),
+    invalid: outcome.invalid
+  }
+}
+
+const applyEvidencesFieldOp = (
+  inside: BrainMemoryInside,
+  op: Extract<NonRemoveBrainMemoryOp, { field: 'evidences' }>
+) => {
+  const outcome = applyCollectionOp({
+    list: inside.evidences,
+    op
+  })
+  return {
+    inside: setFieldValue(inside, 'evidences', outcome.list),
+    invalid: outcome.invalid
+  }
+}
+
+const applyOpenQuestionsFieldOp = (
+  inside: BrainMemoryInside,
+  op: Extract<NonRemoveBrainMemoryOp, { field: 'openQuestions' }>
+) => {
+  const outcome = applyCollectionOp({
+    list: inside.openQuestions,
+    op
+  })
+  return {
+    inside: setFieldValue(inside, 'openQuestions', outcome.list),
+    invalid: outcome.invalid
   }
 }
 
 const computeFinalEvidenceIds = (input: {
-  inside: HumanState['brainMemory']['inside']
+  inside: BrainMemoryInside
   memoryOps: BrainMemoryOp[]
 }): Set<string> => {
   let evidences = input.inside.evidences
@@ -89,16 +142,13 @@ const computeFinalEvidenceIds = (input: {
     if (op.field !== 'evidences') return
 
     if (op.op === 'remove') {
-      if (op.index < 0 || op.index >= evidences.length) return
-      evidences = removeAtIndex(evidences, op.index)
+      const outcome = removeCollectionItem(evidences, op.index)
+      if (!outcome.invalid) evidences = outcome.list
       return
     }
 
-    const outcome = applyEvidenceOp(
-      {
-        ...input.inside,
-        evidences
-      },
+    const outcome = applyEvidencesFieldOp(
+      setFieldValue(input.inside, 'evidences', evidences),
       op
     )
     if (!outcome.invalid) {
@@ -109,45 +159,18 @@ const computeFinalEvidenceIds = (input: {
   return new Set(evidences.map((item) => item.id))
 }
 
-const applyOpenQuestionOp = (
-  inside: HumanState['brainMemory']['inside'],
-  op: Extract<BrainMemoryOp, { field: 'openQuestions' }>
-) => {
-  if (op.op === 'add') {
-    return {
-      inside: {
-        ...inside,
-        openQuestions: [...inside.openQuestions, op.value]
-      },
-      invalid: false
-    }
-  }
-
-  if (op.index < 0 || op.index >= inside.openQuestions.length) {
-    return { inside, invalid: true }
-  }
-
-  return {
-    inside: {
-      ...inside,
-      openQuestions: updateAtIndex(inside.openQuestions, op.index, op.value)
-    },
-    invalid: false
-  }
-}
-
 const hasDanglingFactEvidenceReference = (
-  inside: HumanState['brainMemory']['inside']
+  inside: BrainMemoryInside
 ): boolean => {
   const validEvidenceIds = new Set(inside.evidences.map((item) => item.id))
   return inside.facts.some((fact) => !hasEvidenceIds(validEvidenceIds, fact.evidenceIds))
 }
 
 export const reduceBrainMemory = (input: {
-  inside: HumanState['brainMemory']['inside']
+  inside: BrainMemoryInside
   memoryOps: BrainMemoryOp[]
 }): {
-  inside: HumanState['brainMemory']['inside']
+  inside: BrainMemoryInside
   watchHint?: string
 } => {
   let nextInside = input.inside
@@ -157,45 +180,31 @@ export const reduceBrainMemory = (input: {
 
   input.memoryOps.forEach((op) => {
     if (op.op === 'remove') {
-      if (op.field === 'facts') {
-        if (op.index < 0 || op.index >= nextInside.facts.length) {
-          hasInvalidOp = true
-          return
-        }
-        nextInside = {
-          ...nextInside,
-          facts: removeAtIndex(nextInside.facts, op.index)
-        }
-        return
-      }
-      if (op.field === 'evidences') {
-        if (op.index < 0 || op.index >= nextInside.evidences.length) {
-          hasInvalidOp = true
-          return
-        }
-        nextInside = {
-          ...nextInside,
-          evidences: removeAtIndex(nextInside.evidences, op.index)
-        }
-        return
-      }
-      if (op.index < 0 || op.index >= nextInside.openQuestions.length) {
+      const outcome =
+        op.field === 'facts'
+          ? removeCollectionItem(nextInside.facts, op.index)
+          : op.field === 'evidences'
+            ? removeCollectionItem(nextInside.evidences, op.index)
+            : removeCollectionItem(nextInside.openQuestions, op.index)
+      if (outcome.invalid) {
         hasInvalidOp = true
         return
       }
-      nextInside = {
-        ...nextInside,
-        openQuestions: removeAtIndex(nextInside.openQuestions, op.index)
-      }
+      nextInside =
+        op.field === 'facts'
+          ? setFieldValue(nextInside, 'facts', outcome.list)
+          : op.field === 'evidences'
+            ? setFieldValue(nextInside, 'evidences', outcome.list)
+            : setFieldValue(nextInside, 'openQuestions', outcome.list)
       return
     }
 
     const outcome =
       op.field === 'facts'
-        ? applyFactOp(nextInside, op, finalEvidenceIds)
+        ? applyFactsFieldOp(nextInside, op, finalEvidenceIds)
         : op.field === 'evidences'
-          ? applyEvidenceOp(nextInside, op)
-          : applyOpenQuestionOp(nextInside, op)
+          ? applyEvidencesFieldOp(nextInside, op)
+          : applyOpenQuestionsFieldOp(nextInside, op)
 
     nextInside = outcome.inside
     if (outcome.invalid) hasInvalidOp = true

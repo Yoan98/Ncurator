@@ -7,25 +7,11 @@ import {
   HUMAN_FINAL_STATUSES,
   HUMAN_STAGES,
   HUMAN_STATUSES,
+  HUMAN_STEP_ACTIONS,
+  HUMAN_STEP_RESULT_STATUSES,
   RUNTIME_SKILL_IDS,
   TOOL_CALL_RESULT_CODES
 } from './constants'
-import type {
-  BrainDecision,
-  BrainDecisionRecord,
-  BrainEvidence,
-  BrainFact,
-  BrainMemoryOp,
-  BrainNextAction,
-  HumanDeliveryMode,
-  HumanResult,
-  HumanTaskInput,
-  LastBrainDecision,
-  MouthOutput,
-  SkillCatalogItem,
-  ToolCallParam,
-  ToolCallResult
-} from './types'
 
 export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
   z.union([
@@ -46,14 +32,14 @@ export const toolCallResultCodeSchema = z.enum(TOOL_CALL_RESULT_CODES)
 export const humanStageSchema = z.enum(HUMAN_STAGES)
 export const humanStatusSchema = z.enum(HUMAN_STATUSES)
 export const humanFinalStatusSchema = z.enum(HUMAN_FINAL_STATUSES)
-export const humanDeliveryModeSchema: z.ZodType<HumanDeliveryMode> = z.enum(HUMAN_DELIVERY_MODES)
+export const humanDeliveryModeSchema = z.enum(HUMAN_DELIVERY_MODES)
 
-export const humanTaskInputSchema: z.ZodType<HumanTaskInput> = z.object({
+export const humanTaskInputSchema = z.object({
   taskId: z.string(),
   userInput: z.string()
 })
 
-export const skillCatalogItemSchema: z.ZodType<SkillCatalogItem> = z.object({
+export const skillCatalogItemSchema = z.object({
   skillId: runtimeSkillIdSchema,
   familyId: toolFamilyIdSchema,
   title: z.string().min(1),
@@ -62,13 +48,13 @@ export const skillCatalogItemSchema: z.ZodType<SkillCatalogItem> = z.object({
   whenToUse: z.string().min(1)
 })
 
-export const brainFactSchema: z.ZodType<BrainFact> = z.object({
+export const brainFactSchema = z.object({
   id: z.string().min(1),
   summary: z.string().min(1),
   evidenceIds: z.array(z.string().min(1))
 })
 
-export const brainEvidenceSchema: z.ZodType<BrainEvidence> = z.object({
+export const brainEvidenceSchema = z.object({
   id: z.string().min(1),
   toolName: z.string().min(1),
   summary: z.string().min(1),
@@ -76,12 +62,12 @@ export const brainEvidenceSchema: z.ZodType<BrainEvidence> = z.object({
   rawRef: z.string().min(1).optional()
 })
 
-export const toolCallParamSchema: z.ZodType<ToolCallParam> = z.object({
+export const toolCallParamSchema = z.object({
   toolName: z.string().min(1),
   args: jsonObjectSchema
 })
 
-export const toolCallResultSchema: z.ZodType<ToolCallResult> = z.object({
+export const toolCallResultSchema = z.object({
   toolName: z.string().min(1),
   ok: z.boolean(),
   code: toolCallResultCodeSchema,
@@ -89,7 +75,7 @@ export const toolCallResultSchema: z.ZodType<ToolCallResult> = z.object({
   data: jsonValueSchema.optional()
 })
 
-export const brainMemoryOpSchema: z.ZodType<BrainMemoryOp> = z.union([
+export const brainMemoryOpSchema = z.union([
   z.object({
     op: z.literal('add'),
     field: z.literal('facts'),
@@ -130,13 +116,13 @@ export const brainMemoryOpSchema: z.ZodType<BrainMemoryOp> = z.union([
   })
 ])
 
-export const brainDecisionSchema: z.ZodType<BrainDecision> = z.object({
+export const brainDecisionSchema = z.object({
   summary: z.string().min(1),
   reason: z.string().min(1),
   expectedOutcome: z.string().min(1)
 })
 
-export const brainNextActionSchema: z.ZodType<BrainNextAction> = z.union([
+export const brainNextActionSchema = z.union([
   z.object({
     action: z.literal('learning'),
     wantLearnSkillIds: z.array(runtimeSkillIdSchema).min(1)
@@ -151,27 +137,83 @@ export const brainNextActionSchema: z.ZodType<BrainNextAction> = z.union([
   })
 ])
 
-export const lastBrainDecisionSchema: z.ZodType<LastBrainDecision> = z.object({
+export const lastBrainDecisionSchema = z.object({
   memoryOps: z.array(brainMemoryOpSchema),
   decision: brainDecisionSchema,
   nextAction: brainNextActionSchema
 })
 
-export const brainDecisionRecordSchema: z.ZodType<BrainDecisionRecord> = z.object({
+export const brainDecisionRecordSchema = z.object({
   memoryOps: z.array(brainMemoryOpSchema),
   decision: brainDecisionSchema,
   nextAction: brainNextActionSchema,
   createdAt: z.number()
 })
 
-export const mouthOutputSchema: z.ZodType<MouthOutput> = z.object({
+export const mouthOutputSchema = z.object({
   summary: z.string().min(1),
   deliveryMarkdown: z.string().min(1).optional()
 })
 
-export const humanResultSchema: z.ZodType<HumanResult> = z.object({
+export const humanResultSchema = z.object({
   status: humanFinalStatusSchema,
   summary: z.string().min(1),
   deliveryMarkdown: z.string().min(1).optional(),
   artifacts: z.array(aiArtifactRefSchema).optional()
+})
+
+export const humanTaskOutputSchema = z.object({
+  taskId: z.string(),
+  status: humanFinalStatusSchema,
+  summary: z.string().min(1),
+  deliveryMarkdown: z.string().min(1).optional(),
+  artifacts: z.array(aiArtifactRefSchema).optional()
+})
+
+export const humanRuntimeSchema = z.object({
+  stage: humanStageSchema,
+  status: humanStatusSchema
+})
+
+export const humanBrainMemoryInsideSchema = z.object({
+  facts: z.array(brainFactSchema),
+  evidences: z.array(brainEvidenceSchema),
+  openQuestions: z.array(z.string())
+})
+
+export const humanBrainMemoryOutsideSchema = z.object({
+  skillCatalog: z.array(skillCatalogItemSchema),
+  learnedSkillIds: z.array(runtimeSkillIdSchema),
+  brainDecisions: z.array(brainDecisionRecordSchema)
+})
+
+export const humanBrainMemorySchema = z.object({
+  inside: humanBrainMemoryInsideSchema,
+  outside: humanBrainMemoryOutsideSchema
+})
+
+export const humanTraceStepSchema = z.object({
+  step: z.number(),
+  action: z.enum(HUMAN_STEP_ACTIONS),
+  publicNarrative: z.string(),
+  resultStatus: z.enum(HUMAN_STEP_RESULT_STATUSES).optional(),
+  skillId: runtimeSkillIdSchema.optional(),
+  toolName: z.string().optional(),
+  summary: z.string()
+})
+
+export const humanTraceSchema = z.object({
+  steps: z.array(humanTraceStepSchema)
+})
+
+export const humanStateContractSchema = z.object({
+  task: humanTaskInputSchema,
+  runtime: humanRuntimeSchema,
+  brainMemory: humanBrainMemorySchema,
+  lastParallelCallToolResults: z.array(toolCallResultSchema).optional(),
+  lastBrainDecision: lastBrainDecisionSchema.optional(),
+  watchHint: z.string().optional(),
+  runtimeArtifacts: z.array(aiArtifactRefSchema),
+  result: humanResultSchema.optional(),
+  trace: humanTraceSchema
 })

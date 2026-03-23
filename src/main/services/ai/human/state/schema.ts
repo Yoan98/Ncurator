@@ -1,19 +1,14 @@
 import { StateSchema } from '@langchain/langgraph'
-import { z } from 'zod/v4'
-import { aiArtifactRefSchema } from '../../schema'
-import { HUMAN_STEP_ACTIONS, HUMAN_STEP_RESULT_STATUSES } from '../constants'
 import {
-  brainDecisionRecordSchema,
-  brainEvidenceSchema,
-  brainFactSchema,
+  humanBrainMemoryInsideSchema,
+  humanBrainMemoryOutsideSchema,
+  humanBrainMemorySchema,
+  humanRuntimeSchema,
+  humanStateContractSchema,
   humanStageSchema,
   humanStatusSchema,
-  humanResultSchema,
   humanTaskInputSchema,
-  lastBrainDecisionSchema,
-  runtimeSkillIdSchema,
-  skillCatalogItemSchema,
-  toolCallResultSchema
+  humanTraceSchema
 } from '../schema'
 import {
   createDefaultHumanBrainMemory,
@@ -27,56 +22,39 @@ export const createHumanRunStateSchema = () => {
   const defaultRuntime = createDefaultHumanRuntime
   const defaultBrainMemory = createDefaultHumanBrainMemory
   const defaultTrace = createDefaultHumanTrace
+  const runtimeSchema = humanRuntimeSchema.extend({
+    stage: humanStageSchema.default(defaultRuntime().stage),
+    status: humanStatusSchema.default(defaultRuntime().status)
+  })
+  const brainMemoryInsideSchema = humanBrainMemoryInsideSchema.extend({
+    facts: humanBrainMemoryInsideSchema.shape.facts.default(() => []),
+    evidences: humanBrainMemoryInsideSchema.shape.evidences.default(() => []),
+    openQuestions: humanBrainMemoryInsideSchema.shape.openQuestions.default(() => [])
+  })
+  const brainMemoryOutsideSchema = humanBrainMemoryOutsideSchema.extend({
+    skillCatalog: humanBrainMemoryOutsideSchema.shape.skillCatalog.default(
+      () => defaultBrainMemory().outside.skillCatalog
+    ),
+    learnedSkillIds: humanBrainMemoryOutsideSchema.shape.learnedSkillIds.default(() => []),
+    brainDecisions: humanBrainMemoryOutsideSchema.shape.brainDecisions.default(() => [])
+  })
+  const brainMemorySchema = humanBrainMemorySchema.extend({
+    inside: brainMemoryInsideSchema.default(() => defaultBrainMemory().inside),
+    outside: brainMemoryOutsideSchema.default(() => defaultBrainMemory().outside)
+  })
+  const traceSchema = humanTraceSchema.extend({
+    steps: humanTraceSchema.shape.steps.default(() => [])
+  })
 
   return new StateSchema({
     task: humanTaskInputSchema.default(defaultTask),
-    runtime: z
-      .object({
-        stage: humanStageSchema.default(defaultRuntime().stage),
-        status: humanStatusSchema.default(defaultRuntime().status)
-      })
-      .default(defaultRuntime),
-    brainMemory: z
-      .object({
-        inside: z
-          .object({
-            facts: z.array(brainFactSchema).default(() => []),
-            evidences: z.array(brainEvidenceSchema).default(() => []),
-            openQuestions: z.array(z.string()).default(() => [])
-          })
-          .default(() => defaultBrainMemory().inside),
-        outside: z
-          .object({
-            skillCatalog: z
-              .array(skillCatalogItemSchema)
-              .default(() => defaultBrainMemory().outside.skillCatalog),
-            learnedSkillIds: z.array(runtimeSkillIdSchema).default(() => []),
-            brainDecisions: z.array(brainDecisionRecordSchema).default(() => [])
-          })
-          .default(() => defaultBrainMemory().outside)
-      })
-      .default(defaultBrainMemory),
-    lastParallelCallToolResults: z.array(toolCallResultSchema).optional(),
-    lastBrainDecision: lastBrainDecisionSchema.optional(),
-    watchHint: z.string().optional(),
-    runtimeArtifacts: z.array(aiArtifactRefSchema).default(() => []),
-    result: humanResultSchema.optional(),
-    trace: z
-      .object({
-        steps: z
-          .array(
-            z.object({
-              step: z.number(),
-              action: z.enum(HUMAN_STEP_ACTIONS),
-              publicNarrative: z.string(),
-              resultStatus: z.enum(HUMAN_STEP_RESULT_STATUSES).optional(),
-              skillId: runtimeSkillIdSchema.optional(),
-              toolName: z.string().optional(),
-              summary: z.string()
-            })
-          )
-          .default(() => [])
-      })
-      .default(defaultTrace)
+    runtime: runtimeSchema.default(defaultRuntime),
+    brainMemory: brainMemorySchema.default(defaultBrainMemory),
+    lastParallelCallToolResults: humanStateContractSchema.shape.lastParallelCallToolResults,
+    lastBrainDecision: humanStateContractSchema.shape.lastBrainDecision,
+    watchHint: humanStateContractSchema.shape.watchHint,
+    runtimeArtifacts: humanStateContractSchema.shape.runtimeArtifacts.default(() => []),
+    result: humanStateContractSchema.shape.result,
+    trace: traceSchema.default(defaultTrace)
   })
 }

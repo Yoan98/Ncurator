@@ -24,6 +24,7 @@ export const tableSpecSchema = z.object({
 })
 
 export const blockSpecSchema = z.union([paragraphSpecSchema, tableSpecSchema])
+export const docxSearchModeSchema = z.enum(['literal', 'regex', 'semantic'])
 
 export const docOpSchema = z.discriminatedUnion('type', [
   z.object({
@@ -78,7 +79,7 @@ export const getBlockSchema = z.object({
 export const searchSchema = z.object({
   docId: z.string().min(1).optional(),
   query: z.string().min(1),
-  mode: z.enum(['literal', 'regex', 'semantic']),
+  mode: docxSearchModeSchema,
   scope: z
     .object({
       blockIds: z.array(z.string().min(1)).optional()

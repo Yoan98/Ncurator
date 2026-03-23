@@ -1,39 +1,50 @@
 import type { HumanState, ToolPromptSpec } from '../types'
 import { getToolPromptSpec } from './toolPrompts'
 import { getSkillDefinition } from '../node/learningNode/skillRegistry'
+import { renderLineList } from '../../utils/render'
 
-const formatList = (items: string[]): string => (items.length > 0 ? items.join('\n') : 'none')
+const formatList = (items: string[]): string =>
+  renderLineList(items, {
+    fallback: 'none',
+    style: 'plain'
+  })
 
 export const renderFactLines = (state: HumanState, mode: 'brain' | 'mouth'): string => {
-  const facts = state.brainMemory.inside.facts
-  if (facts.length === 0) return 'none'
-
-  return facts
-    .map((fact) =>
+  return renderLineList(
+    state.brainMemory.inside.facts.map((fact) =>
       mode === 'brain'
         ? `- 事实 ${fact.id}：${fact.summary}；支持证据=[${fact.evidenceIds.join(', ')}]`
         : `- ${fact.summary} (evidenceIds=[${fact.evidenceIds.join(', ')}])`
-    )
-    .join('\n')
+    ),
+    {
+      fallback: 'none',
+      style: 'plain'
+    }
+  )
 }
 
 export const renderEvidenceLines = (state: HumanState, mode: 'brain' | 'mouth'): string => {
-  const evidences = state.brainMemory.inside.evidences
-  if (evidences.length === 0) return 'none'
-
-  return evidences
-    .map((evidence) =>
+  return renderLineList(
+    state.brainMemory.inside.evidences.map((evidence) =>
       mode === 'brain'
         ? `- 证据 ${evidence.id}：来源工具 ${evidence.toolName}；摘要：${evidence.summary}${evidence.rawRef ? `；rawRef=${evidence.rawRef}` : ''}`
         : `- ${evidence.toolName}: ${evidence.summary}${evidence.rawRef ? ` (${evidence.rawRef})` : ''}`
-    )
-    .join('\n')
+    ),
+    {
+      fallback: 'none',
+      style: 'plain'
+    }
+  )
 }
 
 export const renderOpenQuestionLines = (state: HumanState): string => {
-  const questions = state.brainMemory.inside.openQuestions
-  if (questions.length === 0) return 'none'
-  return questions.map((question) => `- ${question}`).join('\n')
+  return renderLineList(
+    state.brainMemory.inside.openQuestions.map((question) => `- ${question}`),
+    {
+      fallback: 'none',
+      style: 'plain'
+    }
+  )
 }
 
 const renderLearnedToolSpecLine = (spec: ToolPromptSpec): string => {
@@ -113,15 +124,16 @@ export const buildSkillContextText = (state: HumanState): string => {
 }
 
 export const buildRecentToolResultsText = (state: HumanState): string => {
-  const resultLines =
-    state.lastParallelCallToolResults && state.lastParallelCallToolResults.length > 0
-      ? state.lastParallelCallToolResults
-          .map(
-            (result, index) =>
-              `- 第${index + 1}项：工具 ${result.toolName} ${result.ok ? '执行成功' : '执行失败'}（code=${result.code}）；摘要：${result.summary}`
-          )
-          .join('\n')
-      : 'none'
+  const resultLines = renderLineList(
+    (state.lastParallelCallToolResults || []).map(
+      (result, index) =>
+        `- 第${index + 1}项：工具 ${result.toolName} ${result.ok ? '执行成功' : '执行失败'}（code=${result.code}）；摘要：${result.summary}`
+    ),
+    {
+      fallback: 'none',
+      style: 'plain'
+    }
+  )
 
   return [
     '下面是最近一轮工具调用刚带回来的新信息。请把这些结果和已有记忆一起判断，不要重复做同样的动作。',
@@ -131,23 +143,24 @@ export const buildRecentToolResultsText = (state: HumanState): string => {
 }
 
 export const buildRecentDecisionHistoryText = (state: HumanState): string => {
-  const historyLines =
-    state.brainMemory.outside.brainDecisions.length > 0
-      ? state.brainMemory.outside.brainDecisions
-          .map((record, index) => {
-            const ordinal = index + 1
-            const action = record.nextAction.action
-            const nextActionPayload =
-              action === 'learning'
-                ? `wantLearnSkillIds=[${record.nextAction.wantLearnSkillIds.join(',')}]`
-                : action === 'hand'
-                  ? `parallelCallToolParam=${JSON.stringify(record.nextAction.parallelCallToolParam)}`
-                  : `status=${record.nextAction.status}`
+  const historyLines = renderLineList(
+    state.brainMemory.outside.brainDecisions.map((record, index) => {
+      const ordinal = index + 1
+      const action = record.nextAction.action
+      const nextActionPayload =
+        action === 'learning'
+          ? `wantLearnSkillIds=[${record.nextAction.wantLearnSkillIds.join(',')}]`
+          : action === 'hand'
+            ? `parallelCallToolParam=${JSON.stringify(record.nextAction.parallelCallToolParam)}`
+            : `status=${record.nextAction.status}`
 
-            return `- 第${ordinal}轮（createdAt=${record.createdAt}）：决定“${record.decision.summary}”；原因：${record.decision.reason}；预期结果：${record.decision.expectedOutcome}；nextAction.action=${action}；nextAction数据：${nextActionPayload}`
-          })
-          .join('\n')
-      : 'none'
+      return `- 第${ordinal}轮（createdAt=${record.createdAt}）：决定“${record.decision.summary}”；原因：${record.decision.reason}；预期结果：${record.decision.expectedOutcome}；nextAction.action=${action}；nextAction数据：${nextActionPayload}`
+    }),
+    {
+      fallback: 'none',
+      style: 'plain'
+    }
+  )
 
   return [
     '下面是最近几轮已经做过的正式判断摘要，只用于帮助你理解时间顺序并避免重复决策。',

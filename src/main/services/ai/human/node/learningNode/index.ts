@@ -1,9 +1,8 @@
 import type { AiRunContext } from '../../../types'
 import type { HumanRuntimeCache, HumanState } from '../../types'
-import { ensureSkillTools, getAvailableToolNames } from './skillLoader'
+import { ensureSkillTools } from './skillLoader'
 import { hasSkillDefinition } from './skillRegistry'
-import { appendHumanTraceSteps } from '../utils/events'
-import { emitTailHumanSteps, returnToBrain, returnToBrainWithWatchHint } from '../utils/stateTransitions'
+import { returnToBrain, returnToBrainAfterTrace, returnToBrainWithWatchHint } from '../utils/stateTransitions'
 
 const buildDuplicateLearnHint = (skillId: string) =>
   `learning 请求重复学习 ${skillId}，已忽略本次学习并返回 brain 重新决策。`
@@ -53,45 +52,32 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
         skillId
       })
     })
-    const traceSteps = appendHumanTraceSteps({
-      steps: state.trace.steps,
-      items: requestedSkillIds.map((skillId) => ({
+    const learnedSkillIds = [
+      ...state.brainMemory.outside.learnedSkillIds,
+      ...requestedSkillIds
+    ]
+    const nextState = returnToBrainAfterTrace({
+      ctx: input.ctx,
+      cache: input.cache,
+      state,
+      source: 'learning',
+      traceItems: requestedSkillIds.map((skillId) => ({
         action: 'learn_skill',
         publicNarrative: `已学习 ${skillId}`,
         resultStatus: 'ok',
         skillId,
         summary: `learning 已加载 ${skillId} 的说明与工具。`
-      }))
-    })
-    const learnedSkillIds = [
-      ...state.brainMemory.outside.learnedSkillIds,
-      ...requestedSkillIds
-    ]
-    const nextState = returnToBrain(state, {
-      brainMemory: {
-        ...state.brainMemory,
-        outside: {
-          ...state.brainMemory.outside,
-          learnedSkillIds
+      })),
+      stage: 'human_learning',
+      overrides: {
+        brainMemory: {
+          ...state.brainMemory,
+          outside: {
+            ...state.brainMemory.outside,
+            learnedSkillIds
+          }
         }
-      },
-      watchHint: undefined,
-      trace: {
-        steps: traceSteps
       }
-    })
-    const availableToolNames = getAvailableToolNames({
-      learnedSkillIds,
-      cache: input.cache
-    })
-    emitTailHumanSteps({
-      ctx: input.ctx,
-      taskId: state.task.taskId,
-      steps: nextState.trace.steps,
-      count: requestedSkillIds.length,
-      learnedSkillIds,
-      availableToolNames,
-      stage: 'human_learning'
     })
     return nextState
   }

@@ -6,7 +6,7 @@ import type {
   AiFileArtifactRef,
   AiPlanTask
 } from '../../../shared/types'
-import { PLAN_TASK_STATUSES } from './constants'
+import { AI_DIRECTOR_STAGES, DIRECTOR_STATUSES, PLAN_TASK_STATUSES } from './constants'
 
 export const aiDraftReviewRefSchema: z.ZodType<AiDraftReviewRef> = z.object({
   reviewId: z.string().min(1),
@@ -38,11 +38,33 @@ export const aiArtifactRefSchema: z.ZodType<AiArtifactRef> = z.union([
   aiDraftReviewArtifactRefSchema
 ])
 
+export const directorStatusSchema = z.enum(DIRECTOR_STATUSES)
+export const aiDirectorStageSchema = z.enum(AI_DIRECTOR_STAGES)
+export const planTaskStatusSchema = z.enum(PLAN_TASK_STATUSES)
+
 export const aiPlanTaskSchema: z.ZodType<AiPlanTask> = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
   userInput: z.string().min(1),
-  status: z.enum(PLAN_TASK_STATUSES),
+  status: planTaskStatusSchema,
   deliveryMarkdown: z.string().min(1).optional(),
   artifacts: z.array(aiArtifactRefSchema).optional()
 })
+
+export const aiRunStateFieldSchemas = {
+  runId: z.string(),
+  sessionId: z.string(),
+  status: directorStatusSchema,
+  input: z.string(),
+  directorStage: aiDirectorStageSchema,
+  contextRounds: z.number(),
+  contextObjective: z.string().optional(),
+  contextEvidence: z.array(z.string()),
+  plan: z.array(aiPlanTaskSchema),
+  dispatchCursor: z.number(),
+  error: z.string().optional(),
+  finalDeliveryMarkdown: z.string().optional(),
+  finalArtifacts: z.array(aiArtifactRefSchema)
+}
+
+export const aiRunStateContractSchema = z.object(aiRunStateFieldSchemas)

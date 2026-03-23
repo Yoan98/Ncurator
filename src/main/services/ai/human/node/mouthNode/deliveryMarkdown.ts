@@ -1,10 +1,11 @@
 import type { HumanDeliveryMode, HumanState } from '../../types'
+import { renderLineList } from '../../../utils/render'
 
-const renderBulletLines = (lines: string[]): string => {
-  const normalized = lines.map((line) => String(line || '').trim()).filter(Boolean)
-  if (normalized.length === 0) return '无'
-  return normalized.map((line) => `- ${line}`).join('\n')
-}
+const renderBulletLines = (lines: string[]): string =>
+  renderLineList(lines, {
+    fallback: '无',
+    style: 'bullet'
+  })
 
 const renderFactLines = (state: HumanState): string =>
   renderBulletLines(state.brainMemory.inside.facts.map((fact) => fact.summary))

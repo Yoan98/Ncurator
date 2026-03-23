@@ -1,11 +1,11 @@
 import type { AiRunContext } from '../../../types'
 import type { HumanDeliveryMode, HumanResult, HumanRuntimeCache, HumanState } from '../../types'
-import { appendHumanTraceStep, emitHumanStep, emitTaskDelivery } from '../utils/events'
-import { getAvailableToolNames } from '../learningNode/skillLoader'
+import { appendHumanTraceStep, emitTaskDelivery } from '../utils/events'
 import { buildFallbackDeliveryMarkdown } from './deliveryMarkdown'
 import { buildMouthPromptContext } from './promptContext'
 import { mouthResultSchema } from './contract'
 import type { AiRunContextWithHumanOverrides } from '../types'
+import { emitLatestHumanStepForState } from '../utils/stateTransitions'
 
 export const createMouthNode = (input: {
   ctx: AiRunContext
@@ -98,20 +98,13 @@ export const createMouthNode = (input: {
         steps: traceSteps
       }
     }
-    const step = nextState.trace.steps.at(-1)
-    if (step) {
-      emitHumanStep({
-        ctx: input.ctx,
-        taskId: state.task.taskId,
-        step,
-        learnedSkillIds: nextState.brainMemory.outside.learnedSkillIds,
-        availableToolNames: getAvailableToolNames({
-          learnedSkillIds: nextState.brainMemory.outside.learnedSkillIds,
-          cache: input.cache
-        }),
-        stage: 'human_mouth'
-      })
-    }
+    emitLatestHumanStepForState({
+      ctx: input.ctx,
+      cache: input.cache,
+      taskId: state.task.taskId,
+      state: nextState,
+      stage: 'human_mouth'
+    })
     return nextState
   }
 }
