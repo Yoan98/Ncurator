@@ -24,15 +24,26 @@
 - 条件路由：由 `MainState.mainStage` 与 `MainState.status` 决定，不在 graph 外额外维护控制循环。
 - 状态转移：
 
-```text
-START -> main_intent
-main_intent -> main_direct_human_exec | main_context_human | main_plan | main_plan_exec | main_synthesis_human | main_complete
-main_context_human -> main_intent
-main_direct_human_exec -> main_complete
-main_plan -> main_plan_exec | main_complete
-main_plan_exec -> main_plan_exec | main_synthesis_human
-main_synthesis_human -> main_complete
-main_complete -> END
+```mermaid
+stateDiagram-v2
+    [*] --> main_intent
+
+    main_intent --> main_direct_human_exec: direct_human
+    main_intent --> main_context_human: need_context
+    main_intent --> main_plan: ready_to_plan
+
+    main_context_human --> main_intent: context_done
+
+    main_direct_human_exec --> main_complete
+
+    main_plan --> main_plan_exec: plan_ready
+    main_plan --> main_complete: plan_failed
+
+    main_plan_exec --> main_plan_exec: next_task
+    main_plan_exec --> main_synthesis_human: all_done_or_blocked
+
+    main_synthesis_human --> main_complete
+    main_complete --> [*]
 ```
 
 **Not**
@@ -321,12 +332,20 @@ main_complete -> END
 - 保护：使用固定 recursion limit 防止 graph 漂移。
 - 状态转移：
 
-```text
-START -> brain
-brain -> learning | hand | mouth | brain
-learning -> brain
-hand -> brain
-mouth -> brain | END
+```mermaid
+stateDiagram-v2
+    [*] --> brain
+
+    brain --> learning: nextAction=learning
+    brain --> hand: nextAction=hand
+    brain --> mouth: nextAction=mouth
+    brain --> brain: watchHint / retry
+
+    learning --> brain
+    hand --> brain
+
+    mouth --> brain: status=running (rare)
+    mouth --> [*]: completed / blocked
 ```
 
 **Not**
@@ -363,7 +382,7 @@ mouth -> brain | END
   - 模型输出必须通过 `ctx.chatStructured`。
   - prompt 必须通过 `buildBrainPromptContext`。
   - 输出必须先经过 `parseBrainDecisionOutput`。
-  - `brainMemory.inside` 的修改必须经过 `reduceBrainMemory`。
+  - `brainMemory.inside` 的修改必须经过 `reduceBrainMemory`，它的设计初衷就是这类信息将之用于brain的提示词记忆之中，且由brain进行输出修改。
   - `brainDecisions` 只保留最近 10 条。
   - `brain` 回看历史时只消费摘要，不直接把 `lastBrainDecision` 重新喂回。
 
