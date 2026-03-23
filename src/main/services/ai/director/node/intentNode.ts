@@ -10,13 +10,13 @@ export const createIntentNode = (input: { ctx: AiRunContext; maxContextRounds?: 
     ctx.checkCancelled()
 
     if (state.status === 'failed' || state.status === 'cancelled' || state.status === 'completed') {
-      return { mainStage: 'main_complete' }
+      return { directorStage: 'director_complete' }
     }
 
     if (state.contextRounds >= maxContextRounds) {
       return {
         contextObjective: undefined,
-        mainStage: 'main_plan'
+        directorStage: 'director_plan'
       }
     }
 
@@ -37,31 +37,31 @@ export const createIntentNode = (input: { ctx: AiRunContext; maxContextRounds?: 
     })
 
     const decision = await ctx.chatStructured({
-      caller: 'main.intent',
+      caller: 'director.intent',
       system: prompt.system,
       user: prompt.user,
       schema: contextDecisionSchema,
-      schemaName: 'main_intent_decision',
+      schemaName: 'director_intent_decision',
       temperature: 0.1
     })
     if (decision.mode === 'need_context') {
       const contextObjective = String(decision.reason || '').trim() || state.input
       return {
         contextObjective,
-        mainStage: 'main_context_human'
+        directorStage: 'director_context_human'
       }
     }
 
     if (decision.mode === 'direct_human') {
       return {
         contextObjective: undefined,
-        mainStage: 'main_direct_human_exec'
+        directorStage: 'director_direct_human_exec'
       }
     }
 
     return {
       contextObjective: undefined,
-      mainStage: 'main_plan'
+      directorStage: 'director_plan'
     }
   }
 }

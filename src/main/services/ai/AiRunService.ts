@@ -1,4 +1,4 @@
-import { buildMainGraph } from './main/graph/mainGraph'
+import { buildDirectorGraph } from './director/graph/directorGraph'
 import { createAiRunContext } from './runtime'
 import type { AiRunDeps, AiRunStartPayload, AiRunState } from './types'
 
@@ -16,14 +16,14 @@ export class AiRunService {
 
   public async run(payload: AiRunStartPayload, deps: AiRunDeps): Promise<AiRunState> {
     const ctx = createAiRunContext(payload, deps)
-    const graph = buildMainGraph({ ctx })
+    const graph = buildDirectorGraph({ ctx })
     try {
       const res = await graph.invoke({
         runId: payload.runId,
         sessionId: payload.sessionId,
         status: 'running',
         input: String(payload.input || ''),
-        mainStage: 'main_intent',
+        directorStage: 'director_intent',
         plan: [],
         contextRounds: 0,
         contextEvidence: [],
@@ -44,7 +44,7 @@ export class AiRunService {
           sessionId: payload.sessionId,
           status: 'cancelled',
           input: payload.input,
-          mainStage: 'main_complete',
+          directorStage: 'director_complete',
           plan: [],
           contextRounds: 0,
           contextEvidence: [],
@@ -59,7 +59,7 @@ export class AiRunService {
         sessionId: payload.sessionId,
         status: 'failed',
         input: payload.input,
-        mainStage: 'main_complete',
+        directorStage: 'director_complete',
         plan: [],
         contextRounds: 0,
         contextEvidence: [],

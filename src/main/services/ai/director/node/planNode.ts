@@ -23,11 +23,11 @@ export const createPlanNode = (input: { ctx: AiRunContext }) => {
     })
 
     const decision = await ctx.chatStructured({
-      caller: 'main.plan',
+      caller: 'director.plan',
       system: prompt.system,
       user: prompt.user,
       schema: planDecisionSchema,
-      schemaName: 'main_plan_decision',
+      schemaName: 'director_plan_decision',
       temperature: 0.1
     })
 
@@ -36,7 +36,7 @@ export const createPlanNode = (input: { ctx: AiRunContext }) => {
       return {
         status: 'failed',
         error: `plan_generation_failed: ${validationError}`,
-        mainStage: 'main_complete'
+        directorStage: 'director_complete'
       }
     }
 
@@ -46,13 +46,13 @@ export const createPlanNode = (input: { ctx: AiRunContext }) => {
       type: 'plan_created',
       runId: state.runId,
       plan,
-      stage: 'main_plan'
+      stage: 'director_plan'
     })
 
     return {
       plan,
       dispatchCursor: 0,
-      mainStage: 'main_plan_exec'
+      directorStage: 'director_plan_exec'
     }
   }
 }

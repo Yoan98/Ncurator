@@ -2,36 +2,36 @@
 
 ## 1. 总览
 
-本设计分为 `main` 与 `human` 两层：
+本设计分为 `director` 与 `human` 两层：
 
-- `main` 负责 run 级编排、计划调度和最终汇总。
+- `director` 负责 run 级编排、计划调度和最终汇总。
 - `human` 负责单任务闭环执行。
 - 节点行为、技术实现约束与跨层规则见 `implementation-spec.md`。
 - 本文只定义状态、契约与数据流转，不展开架构动机与阅读导引。
 
-## 2. `main` 数据定义
+## 2. `director` 数据定义
 
-### `MainState`
+### `DirectorState`
 
 ```ts
-interface MainState {
+interface DirectorState {
   // 当前 run 的唯一标识。
   runId: string
   // 当前会话标识，用于关联消息和历史记录。
   sessionId: string
-  // main 层运行状态。
+  // director 层运行状态。
   status: 'running' | 'completed' | 'failed' | 'cancelled'
   // 用户本轮原始输入。
   input: string
-  // main 当前所在节点。
-  mainStage:
-    | 'main_intent'
-    | 'main_context_human'
-    | 'main_plan'
-    | 'main_plan_exec'
-    | 'main_direct_human_exec'
-    | 'main_synthesis_human'
-    | 'main_complete'
+  // director 当前所在节点。
+  directorStage:
+    | 'director_intent'
+    | 'director_context_human'
+    | 'director_plan'
+    | 'director_plan_exec'
+    | 'director_direct_human_exec'
+    | 'director_synthesis_human'
+    | 'director_complete'
   // 已经进行过多少轮上下文补充。
   contextRounds: number
   // 当前上下文补充阶段派发给 context human 的任务目标。
@@ -39,18 +39,18 @@ interface MainState {
   // context 阶段得到的关键证据摘要。
   contextEvidence: string[]
   // 计划任务列表，每一项都是后续派发给 human 的任务。
-  plan: MainPlanTask[]
+  plan: DirectorPlanTask[]
   // 当前指向下一项待派发任务的游标。
   dispatchCursor: number
   // run 级错误信息。
   error?: string
-  // main 最终对用户输出的 markdown。
+  // director 最终对用户输出的 markdown。
   finalDeliveryMarkdown?: string
   // run 结束时可供系统继续消费的结构化交付物引用。
   finalArtifacts: AiArtifactRef[]
 }
 
-interface MainPlanTask {
+interface DirectorPlanTask {
   // 计划任务 ID。
   id: string
   // 任务短标题，主要用于日志和 UI。
@@ -389,21 +389,21 @@ interface HumanTraceStep {
 
 下面的图按阶段拆开，每张图只表达一段数据读写。
 
-### `main` 直接路径：`direct human`
+### `director` 直接路径：`direct human`
 
 ```mermaid
 flowchart LR
     U["用户输入"]
-    S1[("MainState.input / mainStage")]
-    MI["main_intent"]
-    MD["main_direct_human_exec"]
+    S1[("DirectorState.input / directorStage")]
+    MI["director_intent"]
+    MD["director_direct_human_exec"]
     H["human 输出结果"]
-    S2[("MainState.finalDeliveryMarkdown / finalArtifacts")]
-    S3[("MainState.status / error")]
+    S2[("DirectorState.finalDeliveryMarkdown / finalArtifacts")]
+    S3[("DirectorState.status / error")]
 
     U -->|写入 input| S1
-    S1 -->|读取 input + mainStage| MI
-    MI -->|回写 mainStage| S1
+    S1 -->|读取 input + directorStage| MI
+    MI -->|回写 directorStage| S1
     S1 -->|默认路径读取 input| MD
     MD -->|派发 taskId + userInput + deliveryMode=user_answer| H
     H -->|返回 taskId + status + summary + deliveryMarkdown + artifacts| MD
@@ -411,40 +411,40 @@ flowchart LR
     S2 -->|进入收尾| S3
 ```
 
-### `main` 阶段一：输入进入 `context / plan`
+### `director` 阶段一：输入进入 `context / plan`
 
 ```mermaid
 flowchart LR
     U["用户输入"]
-    S1[("MainState.input / mainStage")]
-    MI["main_intent"]
-    S2[("MainState.contextObjective / contextRounds / contextEvidence")]
-    MC["main_context_human"]
-    MP["main_plan"]
-    S3[("MainState.plan / dispatchCursor")]
+    S1[("DirectorState.input / directorStage")]
+    MI["director_intent"]
+    S2[("DirectorState.contextObjective / contextRounds / contextEvidence")]
+    MC["director_context_human"]
+    MP["director_plan"]
+    S3[("DirectorState.plan / dispatchCursor")]
 
     U -->|写入 input| S1
-    S1 -->|读取 input + mainStage| MI
-    MI -->|回写 mainStage| S1
+    S1 -->|读取 input + directorStage| MI
+    MI -->|回写 directorStage| S1
     S1 -->|复杂任务时读取 input| MC
     S2 -->|读取旧 context 状态| MC
-    MC -->|回写 contextRounds + contextEvidence + mainStage| S2
+    MC -->|回写 contextRounds + contextEvidence + directorStage| S2
     S1 -->|读取 input| MP
     S2 -->|读取 contextEvidence| MP
-    MP -->|写入 plan + dispatchCursor + mainStage| S3
+    MP -->|写入 plan + dispatchCursor + directorStage| S3
 ```
 
-### `main` 阶段二：计划派发、结果回写、最终收尾
+### `director` 阶段二：计划派发、结果回写、最终收尾
 
 ```mermaid
 flowchart LR
-    S3[("MainState.plan / dispatchCursor")]
-    ME["main_plan_exec"]
+    S3[("DirectorState.plan / dispatchCursor")]
+    ME["director_plan_exec"]
     H["human 输出结果"]
-    MS["main_synthesis_human"]
-    S4[("MainState.finalDeliveryMarkdown / finalArtifacts")]
-    MX["main_complete"]
-    S5[("MainState.status / error")]
+    MS["director_synthesis_human"]
+    S4[("DirectorState.finalDeliveryMarkdown / finalArtifacts")]
+    MX["director_complete"]
+    S5[("DirectorState.status / error")]
 
     S3 -->|读取当前游标任务| ME
     ME -->|派发 taskId + userInput| H

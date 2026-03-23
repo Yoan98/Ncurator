@@ -1,9 +1,10 @@
 import type { AiRunContext, AiRunState, HumanTaskRunner } from '../../types'
-import { buildDirectHumanObjective } from './objectives'
+import { mergeArtifactRefs } from '../../utils/artifacts'
+import { buildSynthesisHumanObjective } from './objectives'
 
-const DIRECT_TASK_ID = 'direct-human'
+const SYNTHESIS_TASK_ID = 'synthesis-human'
 
-export const createDirectHumanExecNode = (input: {
+export const createSynthesisHumanNode = (input: {
   ctx: AiRunContext
   runHumanTask: HumanTaskRunner
 }) => {
@@ -15,16 +16,18 @@ export const createDirectHumanExecNode = (input: {
     ctx.sendEvent({
       type: 'task_started',
       runId: state.runId,
-      taskId: DIRECT_TASK_ID,
-      stage: 'main_direct_human_exec'
+      taskId: SYNTHESIS_TASK_ID,
+      stage: 'director_synthesis_human'
     })
 
     const output = await runHumanTask(
       {
-        taskId: DIRECT_TASK_ID,
-        userInput: buildDirectHumanObjective({
+        taskId: SYNTHESIS_TASK_ID,
+        userInput: buildSynthesisHumanObjective({
           userInput: state.input,
-          contextEvidence: state.contextEvidence
+          selectedScopeSummary: ctx.selectedScopeSummary,
+          contextEvidence: state.contextEvidence,
+          plan: state.plan
         })
       },
       {
@@ -37,23 +40,26 @@ export const createDirectHumanExecNode = (input: {
       ctx.sendEvent({
         type: 'task_blocked',
         runId: state.runId,
-        taskId: DIRECT_TASK_ID,
+        taskId: SYNTHESIS_TASK_ID,
         summary: output.summary,
-        stage: 'main_direct_human_exec'
+        stage: 'director_synthesis_human'
       })
     } else {
       ctx.sendEvent({
         type: 'task_completed',
         runId: state.runId,
-        taskId: DIRECT_TASK_ID,
-        stage: 'main_direct_human_exec'
+        taskId: SYNTHESIS_TASK_ID,
+        stage: 'director_synthesis_human'
       })
     }
 
     return {
       finalDeliveryMarkdown: output.deliveryMarkdown,
-      finalArtifacts: output.artifacts || [],
-      mainStage: 'main_complete'
+      finalArtifacts: mergeArtifactRefs(
+        ...state.plan.map((task) => task.artifacts),
+        output.artifacts
+      ),
+      directorStage: 'director_complete'
     }
   }
 }

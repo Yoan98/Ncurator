@@ -21,14 +21,14 @@ import type { HumanDeliveryMode, HumanTaskInput, HumanTaskOutput } from './human
 export type { AiTaskStatus, AiRunStatus, AiPlanTask }
 export type { HumanDeliveryMode, HumanTaskInput, HumanTaskOutput }
 
-export type AiMainStage =
-  | 'main_intent'
-  | 'main_context_human'
-  | 'main_plan'
-  | 'main_plan_exec'
-  | 'main_direct_human_exec'
-  | 'main_synthesis_human'
-  | 'main_complete'
+export type AiDirectorStage =
+  | 'director_intent'
+  | 'director_context_human'
+  | 'director_plan'
+  | 'director_plan_exec'
+  | 'director_direct_human_exec'
+  | 'director_synthesis_human'
+  | 'director_complete'
 
 export type HumanRunDispatchOptions = {
   deliveryMode?: HumanDeliveryMode
@@ -48,21 +48,21 @@ export type AiRunState = {
   runId: string
   // 对话会话 ID，用于历史与消息写回。
   sessionId: string
-  // run 生命周期状态（main 全局状态）。
+  // run 生命周期状态（director 全局状态）。
   status: AiRunStatus
   // 用户本轮输入。
   input: string
-  // main graph 路由阶段唯一来源。
-  mainStage: AiMainStage
+  // director graph 路由阶段唯一来源。
+  directorStage: AiDirectorStage
   // 已执行的上下文补充轮次。
   contextRounds: number
   // 本轮需要补充上下文时的人类可执行目标。
   contextObjective?: string
   // gate/context 过程沉淀的证据摘要。
   contextEvidence: string[]
-  // main_plan 产出的任务列表。
+  // director_plan 产出的任务列表。
   plan: AiPlanTask[]
-  // main_plan_exec 串行游标。
+  // director_plan_exec 串行游标。
   dispatchCursor: number
   // run 级错误原因（失败时填充）。
   error?: string

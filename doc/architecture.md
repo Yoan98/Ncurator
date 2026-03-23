@@ -41,7 +41,7 @@
 ## 3. 核心模块
 
 - AI Runtime
-  - 负责 `main` 与 `human` 的协同执行
+  - 负责 `director` 与 `human` 的协同执行
 - Storage
   - 负责 LanceDB 连接、表管理和领域数据访问
 - Retrieval

@@ -1,5 +1,5 @@
 import type { AiRunContext } from '../../../types'
-import type { HumanDeliveryMode, HumanRuntimeCache, HumanState } from '../../types'
+import type { HumanDeliveryMode, HumanResult, HumanRuntimeCache, HumanState } from '../../types'
 import { appendHumanTraceStep, emitHumanStep, emitTaskDelivery } from '../utils/events'
 import { getAvailableToolNames } from '../learningNode/skillLoader'
 import { buildFallbackDeliveryMarkdown } from './deliveryMarkdown'
@@ -49,17 +49,19 @@ export const createMouthNode = (input: {
       })
     }
 
-    const finalResult = {
+    const summary = String(result.summary || '').trim() || '任务结束'
+    const deliveryMarkdown =
+      String(result.deliveryMarkdown || '').trim() ||
+      buildFallbackDeliveryMarkdown({
+        state,
+        deliveryMode: input.deliveryMode,
+        finalStatus,
+        summary
+      })
+    const finalResult: HumanResult = {
       status: finalStatus,
-      summary: result.summary,
-      deliveryMarkdown:
-        String(result.deliveryMarkdown || '').trim() ||
-        buildFallbackDeliveryMarkdown({
-          state,
-          deliveryMode: input.deliveryMode,
-          finalStatus,
-          summary: result.summary
-        }),
+      summary,
+      deliveryMarkdown,
       artifacts: state.runtimeArtifacts.length > 0 ? [...state.runtimeArtifacts] : undefined
     }
     if (input.streamAnswer) {
@@ -67,7 +69,7 @@ export const createMouthNode = (input: {
         type: 'answer_completed',
         runId: input.ctx.runId,
         taskId: state.task.taskId,
-        text: finalResult.deliveryMarkdown,
+        text: deliveryMarkdown,
         stage: 'human_mouth'
       })
     }
@@ -75,7 +77,7 @@ export const createMouthNode = (input: {
       ctx: input.ctx,
       taskId: state.task.taskId,
       summary: finalResult.summary,
-      deliveryMarkdown: finalResult.deliveryMarkdown,
+      deliveryMarkdown,
       internal: input.internalDelivery
     })
     const traceSteps = appendHumanTraceStep({

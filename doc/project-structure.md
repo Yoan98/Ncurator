@@ -38,7 +38,7 @@ tests/                   # 自动化测试
 - AI 运行入口与中性基础设施放在 `src/main/services/ai/*` 根目录。
 - 会话记忆更新逻辑与记忆 prompt 放在 `src/main/services/ai/memory/**`。
 - AI 级别通用 helper 放在 `src/main/services/ai/utils/**`。
-- Main graph、node、prompt、state 放在 `src/main/services/ai/main/**`。
+- Director graph、node、prompt、state 放在 `src/main/services/ai/director/**`。
 - Human graph、node、prompts、state、tools 放在 `src/main/services/ai/human/**`。
 - `shared/**` 只放 Human 跨阶段共享逻辑。
 - `node/brainNode/**` 放推理、决策 contract、prompt context 和 memory reducer。
@@ -50,7 +50,7 @@ tests/                   # 自动化测试
 - Tool 实现按实现域归位放在 `src/main/services/ai/human/tools/**`，例如 `docx/**`、`kb/**`、`terminal/**`。
 - `skillCatalog` / `skillRegistry` 负责维护 skill 与 tool 的映射；skill 级筛选或装配逻辑放在 registry / loader，不要求给每个 skill 单独建目录。
 - Docx 审阅相关服务放在 `src/main/services/ai/human/tools/docx/review/**`。
-- Main 与 Human 的运行态 state schema 分别放在各自目录下的 `state/schema.ts`。
+- Director 与 Human 的运行态 state schema 分别放在各自目录下的 `state/schema.ts`。
 
 ## 4. `src/renderer` 放置规则
 

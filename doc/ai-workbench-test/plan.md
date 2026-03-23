@@ -295,7 +295,7 @@
 
 做什么：在不依赖真实 UI 的前提下，验证从用户输入到最终交付的 backend 完整闭环。
 
-为什么：这一层用于确认 `main + human + tools` 在 backend harness 下已经能把真实任务做完，而不是只验证零散节点。
+为什么：这一层用于确认 `director + human + tools` 在 backend harness 下已经能把真实任务做完，而不是只验证零散节点。
 
 怎么做：围绕真实用户任务做端到端 backend case，并用完成度判断任务是否真正达成。完成度建议采用 `0-3`：`0` 失败或阻塞、`1` 部分完成、`2` 主目标完成但仍需人工修补、`3` 完整完成。
 落地规则：实现时按 `basic / boundary / scenario / live` 分组；`entire` 的主结论默认以 `live` 为准。

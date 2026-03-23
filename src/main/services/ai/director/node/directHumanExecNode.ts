@@ -1,10 +1,9 @@
 import type { AiRunContext, AiRunState, HumanTaskRunner } from '../../types'
-import { mergeArtifactRefs } from '../../utils/artifacts'
-import { buildSynthesisHumanObjective } from './objectives'
+import { buildDirectHumanObjective } from './objectives'
 
-const SYNTHESIS_TASK_ID = 'synthesis-human'
+const DIRECT_TASK_ID = 'direct-human'
 
-export const createSynthesisHumanNode = (input: {
+export const createDirectHumanExecNode = (input: {
   ctx: AiRunContext
   runHumanTask: HumanTaskRunner
 }) => {
@@ -16,18 +15,16 @@ export const createSynthesisHumanNode = (input: {
     ctx.sendEvent({
       type: 'task_started',
       runId: state.runId,
-      taskId: SYNTHESIS_TASK_ID,
-      stage: 'main_synthesis_human'
+      taskId: DIRECT_TASK_ID,
+      stage: 'director_direct_human_exec'
     })
 
     const output = await runHumanTask(
       {
-        taskId: SYNTHESIS_TASK_ID,
-        userInput: buildSynthesisHumanObjective({
+        taskId: DIRECT_TASK_ID,
+        userInput: buildDirectHumanObjective({
           userInput: state.input,
-          selectedScopeSummary: ctx.selectedScopeSummary,
-          contextEvidence: state.contextEvidence,
-          plan: state.plan
+          contextEvidence: state.contextEvidence
         })
       },
       {
@@ -40,26 +37,23 @@ export const createSynthesisHumanNode = (input: {
       ctx.sendEvent({
         type: 'task_blocked',
         runId: state.runId,
-        taskId: SYNTHESIS_TASK_ID,
+        taskId: DIRECT_TASK_ID,
         summary: output.summary,
-        stage: 'main_synthesis_human'
+        stage: 'director_direct_human_exec'
       })
     } else {
       ctx.sendEvent({
         type: 'task_completed',
         runId: state.runId,
-        taskId: SYNTHESIS_TASK_ID,
-        stage: 'main_synthesis_human'
+        taskId: DIRECT_TASK_ID,
+        stage: 'director_direct_human_exec'
       })
     }
 
     return {
       finalDeliveryMarkdown: output.deliveryMarkdown,
-      finalArtifacts: mergeArtifactRefs(
-        ...state.plan.map((task) => task.artifacts),
-        output.artifacts
-      ),
-      mainStage: 'main_complete'
+      finalArtifacts: output.artifacts || [],
+      directorStage: 'director_complete'
     }
   }
 }

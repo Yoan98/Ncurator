@@ -40,17 +40,17 @@ tests/
         boundary/
         scenario/
         live/
-      main-intent/
+      director-intent/
         basic/
         boundary/
         scenario/
         live/
-      main-context/
+      director-context/
         basic/
         boundary/
         scenario/
         live/
-      main-plan/
+      director-plan/
         basic/
         boundary/
         scenario/

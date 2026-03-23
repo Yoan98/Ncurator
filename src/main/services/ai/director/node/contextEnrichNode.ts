@@ -42,7 +42,7 @@ export const createContextEnrichNode = (input: {
       contextRounds: state.contextRounds + 1,
       contextEvidence: nextContextEvidence,
       contextObjective: undefined,
-      mainStage: 'main_intent'
+      directorStage: 'director_intent'
     }
   }
 }

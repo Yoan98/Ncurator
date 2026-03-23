@@ -15,7 +15,7 @@ export const createPlanExecNode = (input: {
     const taskIndex = pickPendingTaskIndex(state.plan, state.dispatchCursor)
     if (taskIndex < 0) {
       return {
-        mainStage: 'main_synthesis_human'
+        directorStage: 'director_synthesis_human'
       }
     }
 
@@ -35,7 +35,7 @@ export const createPlanExecNode = (input: {
       type: 'task_started',
       runId: state.runId,
       taskId: task.id,
-      stage: 'main_plan_exec'
+      stage: 'director_plan_exec'
     })
 
     const output = await runHumanTask(
@@ -75,14 +75,14 @@ export const createPlanExecNode = (input: {
         runId: state.runId,
         taskId: task.id,
         summary: output.summary,
-        stage: 'main_plan_exec'
+        stage: 'director_plan_exec'
       })
     } else {
       ctx.sendEvent({
         type: 'task_completed',
         runId: state.runId,
         taskId: task.id,
-        stage: 'main_plan_exec'
+        stage: 'director_plan_exec'
       })
     }
 
@@ -91,7 +91,7 @@ export const createPlanExecNode = (input: {
     return {
       plan: nextPlan,
       dispatchCursor: taskIndex + 1,
-      mainStage: blocked ? 'main_synthesis_human' : hasPending ? 'main_plan_exec' : 'main_synthesis_human'
+      directorStage: blocked ? 'director_synthesis_human' : hasPending ? 'director_plan_exec' : 'director_synthesis_human'
     }
   }
 }
