@@ -43,12 +43,7 @@ const CustomMarkdownRenderer = ({ mainState }) => {
           code({ className, children, ...props }) {
             const match = /language-(\w+)/.exec(className || '')
             return match ? (
-              <SyntaxHighlighter
-                language={match[1]}
-                PreTag="div"
-                style={oneLight}
-                {...props}
-              >
+              <SyntaxHighlighter language={match[1]} PreTag="div" style={oneLight} {...props}>
                 {String(children).replace(/\n$/, '')}
               </SyntaxHighlighter>
             ) : (

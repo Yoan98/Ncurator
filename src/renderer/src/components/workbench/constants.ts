@@ -13,11 +13,11 @@ export const ASSISTANT_STEP_STATUS_META: Record<
   failed: { label: '失败', className: 'border-[#F7D5D9] bg-[#FFF2F4] text-[#B5455D]' }
 }
 
-export const REVIEW_STATUS_META: Record<
-  DraftReviewStatus,
-  { label: string; className: string }
-> = {
-  review_pending: { label: '待确认修改', className: 'border-[#F4E5DF] bg-[#FBF5F2] text-[#D97757]' },
+export const REVIEW_STATUS_META: Record<DraftReviewStatus, { label: string; className: string }> = {
+  review_pending: {
+    label: '待确认修改',
+    className: 'border-[#F4E5DF] bg-[#FBF5F2] text-[#D97757]'
+  },
   commit_ready: { label: '可提交', className: 'border-[#DCEBD7] bg-[#F3FAF0] text-[#4F7A46]' },
   committing: { label: '提交中', className: 'border-[#FDECC8] bg-[#FFF9ED] text-[#8A6510]' },
   committed: { label: '已提交', className: 'border-[#DCEBD7] bg-[#F3FAF0] text-[#4F7A46]' },

@@ -1,5 +1,4 @@
-import React from 'react'
-import type { WorkspaceSource, WorkspaceNode, WebSourceRecord } from '../../../../shared/types'
+import type { WorkspaceNode, WorkspaceSource, WebSourceRecord } from '../../../../shared/types'
 
 import openaiLogo from '../../assets/img/openai.png'
 import qianwenLogo from '../../assets/img/qianwen.png'

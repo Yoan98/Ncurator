@@ -62,7 +62,9 @@ const registry: Record<DraftDocumentFormat, DraftDiffRendererRegistration> = {
   }
 }
 
-export const getDraftDiffRenderer = (format: DraftDocumentFormat): DraftDiffRendererRegistration => {
+export const getDraftDiffRenderer = (
+  format: DraftDocumentFormat
+): DraftDiffRendererRegistration => {
   return registry[format]
 }
 

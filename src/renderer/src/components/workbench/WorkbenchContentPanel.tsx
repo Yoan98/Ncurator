@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Button, Empty } from 'antd'
 import { HiArrowLeft, HiOutlineMagnifyingGlass, HiOutlineXMark } from 'react-icons/hi2'
-import type { DraftChangeResolution, DraftReviewDetail, ValidateDraftCommitResponse } from '../../../../shared/types'
+import type { DraftChangeResolution, ValidateDraftCommitResponse } from '../../../../shared/types'
 import EmbeddedFileViewer from '../fileRenders/EmbeddedFileViewer'
 import { FILE_ORIGIN_LABELS, REVIEW_STATUS_META } from './constants'
 import WorkbenchReviewPanel from './WorkbenchReviewPanel'
@@ -11,7 +11,6 @@ import type {
   WorkbenchContentPanelState,
   WorkbenchFileRef
 } from './types'
-import { getSearchResultFileRef } from './utils'
 import { workbenchSelectors } from '../../testing/selectors'
 
 type WorkbenchContentPanelProps = {
@@ -67,7 +66,9 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
   }, [selectedSearchIndex, state])
 
   const reviewStatusMeta =
-    state.kind === 'review_session' && state.review ? REVIEW_STATUS_META[state.review.review.status] : null
+    state.kind === 'review_session' && state.review
+      ? REVIEW_STATUS_META[state.review.review.status]
+      : null
 
   return (
     <aside
@@ -78,9 +79,17 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             {state.kind !== 'empty' ? (
-              <Button type="text" size="small" icon={<HiArrowLeft className="h-4 w-4" />} onClick={onClose} />
+              <Button
+                type="text"
+                size="small"
+                icon={<HiArrowLeft className="h-4 w-4" />}
+                onClick={onClose}
+              />
             ) : null}
-            <div className="truncate text-sm font-semibold text-[#1F1F1F]" data-testid={workbenchSelectors.contentPanelTitle}>
+            <div
+              className="truncate text-sm font-semibold text-[#1F1F1F]"
+              data-testid={workbenchSelectors.contentPanelTitle}
+            >
               {state.title}
             </div>
             {state.kind === 'document_view' ? (
@@ -89,7 +98,9 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
               </span>
             ) : null}
             {reviewStatusMeta ? (
-              <span className={`rounded-full border px-2.5 py-1 text-[11px] ${reviewStatusMeta.className}`}>
+              <span
+                className={`rounded-full border px-2.5 py-1 text-[11px] ${reviewStatusMeta.className}`}
+              >
                 {reviewStatusMeta.label}
               </span>
             ) : null}
@@ -105,7 +116,12 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
           </div>
         </div>
         {state.kind !== 'empty' ? (
-          <Button type="text" size="small" icon={<HiOutlineXMark className="h-4 w-4" />} onClick={onClose} />
+          <Button
+            type="text"
+            size="small"
+            icon={<HiOutlineXMark className="h-4 w-4" />}
+            onClick={onClose}
+          />
         ) : null}
       </div>
 
@@ -142,7 +158,9 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
                     }`}
                   >
                     <div className="text-sm font-medium text-[#1F1F1F]">{result.document_name}</div>
-                    <div className="mt-2 line-clamp-3 text-xs leading-relaxed text-[#666666]">{result.text}</div>
+                    <div className="mt-2 line-clamp-3 text-xs leading-relaxed text-[#666666]">
+                      {result.text}
+                    </div>
                   </button>
                 ))}
               </div>
@@ -150,10 +168,14 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
 
             <div className="flex min-h-0 flex-col gap-4">
               <div className="rounded-[24px] border border-[#E5E5E4] bg-white px-4 py-4">
-                <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">命中详情</div>
+                <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">
+                  命中详情
+                </div>
                 {selectedSearchResult ? (
                   <>
-                    <div className="mt-3 text-sm font-medium text-[#1F1F1F]">{selectedSearchResult.document_name}</div>
+                    <div className="mt-3 text-sm font-medium text-[#1F1F1F]">
+                      {selectedSearchResult.document_name}
+                    </div>
                     <div className="mt-3 rounded-2xl bg-[#F8F8F7] px-4 py-4 text-sm leading-relaxed text-[#666666]">
                       {selectedSearchResult.text}
                     </div>

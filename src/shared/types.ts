@@ -538,11 +538,7 @@ export type AiTaskResultCode =
   | 'workspace_required'
   | 'approval_denied'
   | 'invalid_input'
-export type HumanStepAction =
-  | 'brain_decision'
-  | 'learn_skill'
-  | 'call_tool'
-  | 'deliver_result'
+export type HumanStepAction = 'brain_decision' | 'learn_skill' | 'call_tool' | 'deliver_result'
 export type HumanStepResultStatus = 'ok' | 'error'
 export type WatchHintSource = 'learning' | 'hand' | 'memory_reducer'
 

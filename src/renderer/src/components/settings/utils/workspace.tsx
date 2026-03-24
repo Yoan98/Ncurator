@@ -1,4 +1,3 @@
-import React from 'react'
 import { Tag } from 'antd'
 import { HiDocumentText, HiFolder } from 'react-icons/hi2'
 import type { WebSourceRecord, WorkspaceNode, WorkspaceSource } from '../../../../../shared/types'

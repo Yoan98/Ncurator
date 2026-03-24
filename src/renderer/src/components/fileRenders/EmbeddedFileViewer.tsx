@@ -105,7 +105,10 @@ const EmbeddedFileViewer: React.FC<EmbeddedFileViewerProps> = ({
   if (!filePath || !fileName) {
     return (
       <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-[#E5E5E4] bg-[#FAFAF9]">
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span className="text-[#666666]">{emptyText}</span>} />
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={<span className="text-[#666666]">{emptyText}</span>}
+        />
       </div>
     )
   }
@@ -132,7 +135,12 @@ const EmbeddedFileViewer: React.FC<EmbeddedFileViewerProps> = ({
         className="h-full w-full"
         style={{ height: '100%', width: '100%' }}
         documents={[document]}
-        pluginRenderers={[CustomPDFRenderer, CustomMarkdownRenderer, CustomDocxRenderer, ...DocViewerRenderers]}
+        pluginRenderers={[
+          CustomPDFRenderer,
+          CustomMarkdownRenderer,
+          CustomDocxRenderer,
+          ...DocViewerRenderers
+        ]}
         config={{
           header: {
             disableHeader: true,

@@ -125,7 +125,6 @@ const MainLayout: React.FC = () => {
           <Route path="/chat" element={<Navigate to="/" replace />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/model-download" element={<ModelDownloadPage />} />
-          <Route path="/import" element={<Navigate to="/settings?tab=workspace" replace />} />
           <Route path="/test" element={<TestPage />} />
         </Routes>
       </Content>

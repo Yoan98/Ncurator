@@ -44,13 +44,17 @@ const TextDraftDiffRenderer: React.FC<DraftDiffRendererProps> = ({ change }) => 
         <>
           <div className="grid gap-4 xl:grid-cols-2">
             <div className="rounded-2xl border border-[#E5E5E4] bg-white p-4">
-              <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">修改前</div>
+              <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">
+                修改前
+              </div>
               <pre className="mt-3 whitespace-pre-wrap break-words rounded-xl bg-[#F8F8F7] p-4 text-sm leading-relaxed text-[#1F1F1F]">
                 {change.before_text || '该位置原本为空。'}
               </pre>
             </div>
             <div className="rounded-2xl border border-[#F4E5DF] bg-white p-4">
-              <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">修改后</div>
+              <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">
+                修改后
+              </div>
               <pre className="mt-3 whitespace-pre-wrap break-words rounded-xl bg-[#FBF5F2] p-4 text-sm leading-relaxed text-[#1F1F1F]">
                 {change.after_text || '该位置被清空。'}
               </pre>

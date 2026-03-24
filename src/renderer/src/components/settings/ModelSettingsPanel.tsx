@@ -188,7 +188,9 @@ const ModelSettingsPanel: React.FC = () => {
               <HiCog6Tooth className="h-4 w-4" />
               Model
             </div>
-            <h2 className="text-[28px] font-semibold tracking-tight text-[#1F1F1F]">模型与 API 配置</h2>
+            <h2 className="text-[28px] font-semibold tracking-tight text-[#1F1F1F]">
+              模型与 API 配置
+            </h2>
             <p className="mt-3 max-w-2xl text-base leading-relaxed text-[#666666]">
               在这里维护对话与推理使用的模型配置。激活后的配置会立即成为默认执行入口。
             </p>
@@ -248,7 +250,9 @@ const ModelSettingsPanel: React.FC = () => {
                 label: (
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className="flex h-5 w-5 items-center justify-center">{provider.icon}</div>
+                      <div className="flex h-5 w-5 items-center justify-center">
+                        {provider.icon}
+                      </div>
                       <span className="font-medium text-[#1F1F1F]">{provider.label}</span>
                     </div>
                     <span className="text-xs text-[#999999]">{provider.desc}</span>
@@ -276,8 +280,12 @@ const ModelSettingsPanel: React.FC = () => {
               options={modelOptions}
               filterOption={(inputValue, option) => {
                 const normalizedInput = inputValue.toUpperCase()
-                const valueText = typeof option?.value === 'string' ? option.value.toUpperCase() : ''
-                const labelText = typeof option?.label === 'string' ? option.label.toUpperCase() : ''
+                const valueText =
+                  option && 'value' in option && typeof option.value === 'string'
+                    ? option.value.toUpperCase()
+                    : ''
+                const labelText =
+                  typeof option?.label === 'string' ? option.label.toUpperCase() : ''
                 return valueText.includes(normalizedInput) || labelText.includes(normalizedInput)
               }}
             />

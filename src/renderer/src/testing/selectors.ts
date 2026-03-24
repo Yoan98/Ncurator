@@ -76,7 +76,6 @@ export const workbenchSelectors = {
   timelineItemPrefix: 'workbench-timeline-item',
   inspector: 'workbench-inspector',
   inspectorTitle: 'workbench-inspector-title',
-  searchResults: 'workbench-search-results',
   reviewCenter: 'workbench-review-center',
   reviewList: 'workbench-review-list',
   reviewItemPrefix: 'workbench-review-item',

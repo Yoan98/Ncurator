@@ -80,7 +80,9 @@ const WorkspaceSettingsPanel: React.FC = () => {
     [selectedWorkspaceId, workspaces]
   )
 
-  const selectedWorkspaceNodes = selectedWorkspaceId ? workspaceNodes[selectedWorkspaceId] || [] : []
+  const selectedWorkspaceNodes = selectedWorkspaceId
+    ? workspaceNodes[selectedWorkspaceId] || []
+    : []
   const selectedWorkspaceTreeStrategy = useMemo(
     () => getWorkspaceTreeDisplayStrategy(selectedWorkspaceNodes),
     [selectedWorkspaceNodes]
@@ -155,7 +157,10 @@ const WorkspaceSettingsPanel: React.FC = () => {
   }, [loadWebSources])
 
   useEffect(() => {
-    void window.api.legacyLocalImportMigrationStatus().then(setLegacyMigrationStatus).catch(console.error)
+    void window.api
+      .legacyLocalImportMigrationStatus()
+      .then(setLegacyMigrationStatus)
+      .catch(console.error)
   }, [])
 
   useEffect(() => {
@@ -174,7 +179,10 @@ const WorkspaceSettingsPanel: React.FC = () => {
       setSelectedWorkspaceId(null)
       return
     }
-    if (!selectedWorkspaceId || !workspaces.some((workspace) => workspace.id === selectedWorkspaceId)) {
+    if (
+      !selectedWorkspaceId ||
+      !workspaces.some((workspace) => workspace.id === selectedWorkspaceId)
+    ) {
       setSelectedWorkspaceId(workspaces[0].id)
     }
   }, [selectedWorkspaceId, workspaces])
@@ -493,7 +501,9 @@ const WorkspaceSettingsPanel: React.FC = () => {
             <div className="rounded-2xl border border-dashed border-[#D4D4D3] bg-[#FAFAF9] px-6 py-14 text-center">
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={<span className="text-[#666666]">还没有工作空间。先添加一个绝对路径开始。</span>}
+                description={
+                  <span className="text-[#666666]">还没有工作空间。先添加一个绝对路径开始。</span>
+                }
               />
             </div>
           ) : (
@@ -522,7 +532,9 @@ const WorkspaceSettingsPanel: React.FC = () => {
                           <div className="truncate text-base font-semibold text-[#1F1F1F]">
                             {workspace.name}
                           </div>
-                          <div className="truncate text-sm text-[#666666]">{workspace.root_path}</div>
+                          <div className="truncate text-sm text-[#666666]">
+                            {workspace.root_path}
+                          </div>
                         </div>
                         <Tag className={`!mr-0 rounded-full ${statusMeta.className}`}>
                           {statusMeta.label}
@@ -539,7 +551,8 @@ const WorkspaceSettingsPanel: React.FC = () => {
                         <div className="rounded-xl border border-[#E5E5E4] bg-white px-3 py-2">
                           <div className="text-[12px] text-[#999999]">已准备 / 待处理</div>
                           <div className="text-[#1F1F1F]">
-                            {stats.preparedCount} / {stats.unpreparedCount + stats.staleCount + stats.failedCount}
+                            {stats.preparedCount} /{' '}
+                            {stats.unpreparedCount + stats.staleCount + stats.failedCount}
                           </div>
                         </div>
                       </div>
@@ -571,8 +584,8 @@ const WorkspaceSettingsPanel: React.FC = () => {
                             status={action ? 'active' : 'normal'}
                           />
                           <div className="mt-2 text-[12px] text-[#999999]">
-                            新增 {progress.added || 0} · 更新 {progress.updated || 0} · 移除 {progress.removed || 0} ·
-                            失败 {progress.failed || 0}
+                            新增 {progress.added || 0} · 更新 {progress.updated || 0} · 移除{' '}
+                            {progress.removed || 0} · 失败 {progress.failed || 0}
                           </div>
                         </div>
                       ) : null}
@@ -618,7 +631,9 @@ const WorkspaceSettingsPanel: React.FC = () => {
                       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="font-semibold text-[#1F1F1F]">{selectedWorkspace.name}</span>
+                            <span className="font-semibold text-[#1F1F1F]">
+                              {selectedWorkspace.name}
+                            </span>
                             <Tag
                               className={`!mr-0 rounded-full ${getWorkspaceStatusMeta(selectedWorkspace.status).className}`}
                               data-testid={importSelectors.workspaceStatus}
@@ -626,10 +641,14 @@ const WorkspaceSettingsPanel: React.FC = () => {
                               {getWorkspaceStatusMeta(selectedWorkspace.status).label}
                             </Tag>
                           </div>
-                          <p className="mt-2 text-sm leading-relaxed text-[#666666]">{selectedWorkspace.root_path}</p>
+                          <p className="mt-2 text-sm leading-relaxed text-[#666666]">
+                            {selectedWorkspace.root_path}
+                          </p>
                           <div className="flex flex-wrap gap-3 text-[12px] text-[#999999]">
                             <span>最近扫描：{formatDateTime(selectedWorkspace.last_scan_at)}</span>
-                            <span>最近准备：{formatDateTime(selectedWorkspace.last_prepare_at)}</span>
+                            <span>
+                              最近准备：{formatDateTime(selectedWorkspace.last_prepare_at)}
+                            </span>
                           </div>
                           {selectedWorkspace.last_error ? (
                             <div className="mt-2 rounded-xl border border-[#F7D5D9] bg-[#FFF2F4] px-3 py-2 text-[12px] text-[#B5455D]">
@@ -643,7 +662,9 @@ const WorkspaceSettingsPanel: React.FC = () => {
                             className="border-[#E5E5E4] bg-white text-[#1F1F1F]"
                             icon={<HiOutlineWindow className="h-4 w-4" />}
                             onClick={async () => {
-                              const response = await window.api.revealPath(selectedWorkspace.root_path)
+                              const response = await window.api.revealPath(
+                                selectedWorkspace.root_path
+                              )
                               if (!response.success) {
                                 message.error(response.error || '打开路径失败')
                               }
@@ -716,7 +737,9 @@ const WorkspaceSettingsPanel: React.FC = () => {
                     <div className="mb-3 flex items-center justify-between">
                       <div>
                         <span className="font-semibold text-[#1F1F1F]">目录树快照</span>
-                        <div className="text-[12px] text-[#999999]">{selectedWorkspaceTreeStrategy.helperText}</div>
+                        <div className="text-[12px] text-[#999999]">
+                          {selectedWorkspaceTreeStrategy.helperText}
+                        </div>
                       </div>
                       <div className="flex items-center gap-2 text-[12px] text-[#999999]">
                         {selectedWorkspaceTreeStrategy.isLargeTree ? (
@@ -790,7 +813,9 @@ const WorkspaceSettingsPanel: React.FC = () => {
                         <div className="flex h-full items-center justify-center">
                           <Empty
                             image={Empty.PRESENTED_IMAGE_SIMPLE}
-                            description={<span className="text-[#666666]">当前工作空间没有可追踪文件</span>}
+                            description={
+                              <span className="text-[#666666]">当前工作空间没有可追踪文件</span>
+                            }
                           />
                         </div>
                       )}
@@ -800,7 +825,9 @@ const WorkspaceSettingsPanel: React.FC = () => {
                   <div className="flex min-h-[420px] items-center justify-center rounded-2xl border border-dashed border-[#D4D4D3] bg-white">
                     <Empty
                       image={Empty.PRESENTED_IMAGE_SIMPLE}
-                      description={<span className="text-[#666666]">选择一个工作空间查看目录树和准备面板</span>}
+                      description={
+                        <span className="text-[#666666]">选择一个工作空间查看目录树和准备面板</span>
+                      }
                     />
                   </div>
                 )}
@@ -855,7 +882,9 @@ const WorkspaceSettingsPanel: React.FC = () => {
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <HiGlobeAlt className="h-4 w-4 text-[#D97757]" />
-                            <span className="font-semibold text-[#1F1F1F]">{item.title || item.url}</span>
+                            <span className="font-semibold text-[#1F1F1F]">
+                              {item.title || item.url}
+                            </span>
                           </div>
                           <button
                             type="button"
@@ -879,7 +908,9 @@ const WorkspaceSettingsPanel: React.FC = () => {
                             </div>
                           ) : null}
                         </div>
-                        <Tag className={`!mr-0 rounded-full ${statusMeta.className}`}>{statusMeta.label}</Tag>
+                        <Tag className={`!mr-0 rounded-full ${statusMeta.className}`}>
+                          {statusMeta.label}
+                        </Tag>
                       </div>
                       <div className="flex items-center justify-between text-[12px] text-[#999999]">
                         <span>创建于 {formatDateTime(item.created_at)}</span>

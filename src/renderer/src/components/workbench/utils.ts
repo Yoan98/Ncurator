@@ -53,10 +53,15 @@ const readStringField = (value: IpcJsonObject, key: string): string | undefined 
 const readNestedObject = (value: IpcJsonObject, key: string): IpcJsonObject | undefined => {
   const record = value as Record<string, IpcJsonValue>
   const candidate = record[key]
-  return candidate && typeof candidate === 'object' && !Array.isArray(candidate) ? candidate : undefined
+  return candidate && typeof candidate === 'object' && !Array.isArray(candidate)
+    ? candidate
+    : undefined
 }
 
-const createFileRefFromObject = (item: IpcJsonObject, origin: WorkbenchFileRef['origin']): WorkbenchFileRef | null => {
+const createFileRefFromObject = (
+  item: IpcJsonObject,
+  origin: WorkbenchFileRef['origin']
+): WorkbenchFileRef | null => {
   const nestedDocument = readNestedObject(item, 'document')
   const path =
     readStringField(item, 'path') ||
@@ -136,14 +141,16 @@ export const extractSearchResultsFromToolOutput = (output: IpcJsonValue): Search
       const result: SearchResult = {
         id: readStringField(item, 'id') || crypto.randomUUID(),
         text: readStringField(item, 'text') || '',
-        document_name: readStringField(item, 'document_name') || readStringField(item, 'name') || '未命名文档',
+        document_name:
+          readStringField(item, 'document_name') || readStringField(item, 'name') || '未命名文档',
         document_id: readStringField(item, 'document_id'),
         source_type: readStringField(item, 'source_type'),
         document: nestedDocument
           ? {
               id: readStringField(nestedDocument, 'id') || '',
               name: readStringField(nestedDocument, 'name') || '',
-              source_type: readStringField(nestedDocument, 'source_type') === 'web' ? 'web' : 'file',
+              source_type:
+                readStringField(nestedDocument, 'source_type') === 'web' ? 'web' : 'file',
               file_path: readStringField(nestedDocument, 'file_path'),
               created_at: 0,
               import_status: 2
@@ -177,12 +184,20 @@ export const formatLocatorSummary = (change: DraftReviewChange): string => {
   const section = typeof change.locator.section === 'string' ? change.locator.section : null
   const heading = typeof change.locator.heading === 'string' ? change.locator.heading : null
   const paragraphIndex =
-    typeof change.locator.paragraphIndex === 'number' ? `第 ${change.locator.paragraphIndex + 1} 段` : null
-  const rowIndex = typeof change.locator.rowIndex === 'number' ? `第 ${change.locator.rowIndex + 1} 行` : null
+    typeof change.locator.paragraphIndex === 'number'
+      ? `第 ${change.locator.paragraphIndex + 1} 段`
+      : null
+  const rowIndex =
+    typeof change.locator.rowIndex === 'number' ? `第 ${change.locator.rowIndex + 1} 行` : null
   const columnIndex =
-    typeof change.locator.columnIndex === 'number' ? `第 ${change.locator.columnIndex + 1} 列` : null
+    typeof change.locator.columnIndex === 'number'
+      ? `第 ${change.locator.columnIndex + 1} 列`
+      : null
 
-  return [section, heading, paragraphIndex, rowIndex, columnIndex].filter(Boolean).join(' / ') || '定位信息未结构化'
+  return (
+    [section, heading, paragraphIndex, rowIndex, columnIndex].filter(Boolean).join(' / ') ||
+    '定位信息未结构化'
+  )
 }
 
 export const buildFallbackDiffHunks = (change: DraftReviewChange): DraftTextDiffHunk[] => {
@@ -204,6 +219,11 @@ export const buildFallbackDiffHunks = (change: DraftReviewChange): DraftTextDiff
 
 export const buildUnifiedDiffText = (change: DraftReviewChange): string => {
   return buildFallbackDiffHunks(change)
-    .flatMap((hunk) => hunk.lines.map((line) => `${line.type === 'added' ? '+' : line.type === 'removed' ? '-' : ' '}${line.value}`))
+    .flatMap((hunk) =>
+      hunk.lines.map(
+        (line) =>
+          `${line.type === 'added' ? '+' : line.type === 'removed' ? '-' : ' '}${line.value}`
+      )
+    )
     .join('\n')
 }

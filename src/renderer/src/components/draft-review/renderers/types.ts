@@ -1,5 +1,9 @@
 import type { ComponentType } from 'react'
-import type { DraftDocumentFormat, DraftReviewChange, DraftReviewDocument } from '../../../../../shared/types'
+import type {
+  DraftDocumentFormat,
+  DraftReviewChange,
+  DraftReviewDocument
+} from '../../../../../shared/types'
 
 export type DraftDiffRendererProps = {
   document: DraftReviewDocument

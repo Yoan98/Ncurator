@@ -13,22 +13,25 @@
 - 当涉及 Core AI 测试方案、阶段划分、用例规划、`human` skill 覆盖、`watchHint`/并行边界、正式 case 与文档对齐或排查时何时继续查看 `runtime-events.jsonl` 时，请先阅读 `doc/test-plan/ai-test.md`
 - 当涉及数据库、LanceDB、表职责或检索存储实现时，请阅读 `doc/database.md`
 - 当涉及目录规范、模块边界、文件归位或工程结构时，请阅读 `doc/project-structure.md`
-- 当涉及 UI 风格、布局规范或组件交互约束时，请阅读 `doc/ui-style.md`
+- 当涉及 UI 风格、布局规范、组件交互约束或 `Settings -> Workspace` 资料配置入口时，请阅读 `doc/ui-style.md`
 - 当涉及测试架构设计、测试目录、正式/临时 case 准入、raw log、`runtime-events.jsonl`、`timeline` 值域规则、report 生成流程、证据展示方式或测试代码准入约束时，请阅读 `doc/test.md`
 
 ## 2. 必须遵守的规则
+
 ### 代码相关
+
 - 代码的实现必须要简洁，可维护性，良好的可读性，合理的注释
 - 禁止使用 `Modal.confirm`、`Modal.info` 等静态方法
 
 #### 类型，常量，通用逻辑抽象规则
+
 - 类型禁止使用 `any` 与 `unknown`
 - 类型应抽到types文件中统一管理，常量应抽入constants统一管理，通用逻辑应按职责设计为单一的文件并放入utils中管理
 - types、constants、utils 统一按目录就近归位，比如main目录下的通用type就放到main目录下的types文件中；
-- 只有 main 与 renderer 共享的内容放 src/shared/**，其余按 ai、main、human 或更细分领域各自收口。
-- 默认每个目录只有一个 types.ts、一个 constants.ts，utils/** 按需创建；
-
+- 只有 main 与 renderer 共享的内容放 src/shared/\*\*，其余按 ai、main、human 或更细分领域各自收口。
+- 默认每个目录只有一个 types.ts、一个 constants.ts，utils/\*\* 按需创建；
 
 ### 文档相关
+
 - 文档入口或文档变更时，需同步更新`AGENTS.md`
 - 编写文档引用相关时，只需要描述什么时候需要读该文档就足够，不要添加很多细节

@@ -49,8 +49,12 @@ const SettingsPage: React.FC = () => {
               {activeMeta.icon}
               Settings
             </div>
-            <h1 className="text-[30px] font-semibold tracking-tight text-[#1F1F1F]">{activeMeta.title}</h1>
-            <p className="mt-3 text-base leading-relaxed text-[#666666]">{activeMeta.description}</p>
+            <h1 className="text-[30px] font-semibold tracking-tight text-[#1F1F1F]">
+              {activeMeta.title}
+            </h1>
+            <p className="mt-3 text-base leading-relaxed text-[#666666]">
+              {activeMeta.description}
+            </p>
           </div>
 
           <Segmented
@@ -66,9 +70,7 @@ const SettingsPage: React.FC = () => {
           />
         </section>
 
-        <div>
-          {activeTab === 'workspace' ? <WorkspaceSettingsPanel /> : <ModelSettingsPanel />}
-        </div>
+        <div>{activeTab === 'workspace' ? <WorkspaceSettingsPanel /> : <ModelSettingsPanel />}</div>
       </div>
     </div>
   )

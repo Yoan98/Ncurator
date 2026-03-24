@@ -67,7 +67,9 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
       return
     }
     const nextDocumentId =
-      review.documents.find((item) => item.id === selectedDocumentId)?.id || review.documents[0]?.id || null
+      review.documents.find((item) => item.id === selectedDocumentId)?.id ||
+      review.documents[0]?.id ||
+      null
     setSelectedDocumentId(nextDocumentId)
   }, [review, selectedDocumentId])
 
@@ -82,7 +84,9 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
 
   useEffect(() => {
     const nextChangeId =
-      documentChanges.find((item) => item.id === selectedChangeId)?.id || documentChanges[0]?.id || null
+      documentChanges.find((item) => item.id === selectedChangeId)?.id ||
+      documentChanges[0]?.id ||
+      null
     setSelectedChangeId(nextChangeId)
   }, [documentChanges, selectedChangeId])
 
@@ -90,7 +94,11 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
   const selectedIndex = documentChanges.findIndex((item) => item.id === selectedChangeId)
   const previousChange = selectedIndex > 0 ? documentChanges[selectedIndex - 1] : null
   const nextChange = selectedIndex >= 0 ? documentChanges[selectedIndex + 1] || null : null
-  const latestCommitJob = review?.commit_jobs.slice().sort((left, right) => left.started_at - right.started_at).at(-1) || null
+  const latestCommitJob =
+    review?.commit_jobs
+      .slice()
+      .sort((left, right) => left.started_at - right.started_at)
+      .at(-1) || null
   const commitDisabled =
     !review ||
     committing ||
@@ -100,7 +108,9 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
     review.review.status === 'committing'
 
   const reviewStatusMeta = review ? REVIEW_STATUS_META[review.review.status] : null
-  const rendererRegistration = selectedDocument ? getDraftDiffRenderer(selectedDocument.format) : null
+  const rendererRegistration = selectedDocument
+    ? getDraftDiffRenderer(selectedDocument.format)
+    : null
   const RendererComponent = rendererRegistration?.component
 
   const renderBody = (): React.ReactNode => {
@@ -113,12 +123,15 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
     }
 
     if (activeTab === 'preview') {
-      const previewPath = selectedChange?.preview_artifact_path || selectedDocument.preview_artifact_path
+      const previewPath =
+        selectedChange?.preview_artifact_path || selectedDocument.preview_artifact_path
       return (
         <div className="h-full">
           <EmbeddedFileViewer
             filePath={previewPath || selectedDocument.source_path}
-            fileName={previewPath ? `${selectedDocument.source_name}（预览）` : selectedDocument.source_name}
+            fileName={
+              previewPath ? `${selectedDocument.source_name}（预览）` : selectedDocument.source_name
+            }
             emptyText="当前文档还没有可用预览。"
           />
         </div>
@@ -129,14 +142,18 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
       return (
         <div className="space-y-4 overflow-auto pr-1">
           <section className="rounded-2xl border border-[#E5E5E4] bg-white px-4 py-4">
-            <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">来源说明</div>
+            <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">
+              来源说明
+            </div>
             <div className="mt-3 text-sm leading-relaxed text-[#666666]">
               当前修改只在草稿层生效。点击底部确认提交前，真实文件不会被改动。
             </div>
           </section>
 
           <section className="rounded-2xl border border-[#E5E5E4] bg-white px-4 py-4">
-            <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">目标文件</div>
+            <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">
+              目标文件
+            </div>
             <button
               type="button"
               onClick={() =>
@@ -152,10 +169,16 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
               className="mt-3 rounded-xl border border-[#E5E5E4] bg-[#FAFAF9] px-3 py-3 text-left text-sm text-[#1F1F1F] transition-all duration-200 hover:border-[#D97757]"
             >
               <div>{selectedDocument.source_name}</div>
-              <div className="mt-1 text-xs break-all text-[#666666]">{selectedDocument.source_path}</div>
+              <div className="mt-1 text-xs break-all text-[#666666]">
+                {selectedDocument.source_path}
+              </div>
             </button>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button size="small" icon={<FolderOpenOutlined />} onClick={() => void onRevealPath(selectedDocument.source_path)}>
+              <Button
+                size="small"
+                icon={<FolderOpenOutlined />}
+                onClick={() => void onRevealPath(selectedDocument.source_path)}
+              >
                 定位
               </Button>
               <Button size="small" onClick={() => void onOpenPath(selectedDocument.source_path)}>
@@ -166,10 +189,15 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
 
           {turn?.steps.length ? (
             <section className="rounded-2xl border border-[#E5E5E4] bg-white px-4 py-4">
-              <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">相关步骤</div>
+              <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">
+                相关步骤
+              </div>
               <div className="mt-3 space-y-2">
                 {turn.steps.map((step) => (
-                  <div key={step.id} className="rounded-xl border border-[#E5E5E4] bg-[#FAFAF9] px-3 py-3">
+                  <div
+                    key={step.id}
+                    className="rounded-xl border border-[#E5E5E4] bg-[#FAFAF9] px-3 py-3"
+                  >
                     <div className="text-sm font-medium text-[#1F1F1F]">{step.summary}</div>
                     <div className="mt-1 text-xs text-[#666666]">{step.tool}</div>
                   </div>
@@ -180,7 +208,9 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
 
           {turn?.readFiles.length ? (
             <section className="rounded-2xl border border-[#E5E5E4] bg-white px-4 py-4">
-              <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">读取的文件</div>
+              <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">
+                读取的文件
+              </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 {turn.readFiles.map((file) => (
                   <button
@@ -210,8 +240,12 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
     return (
       <div className="space-y-4 overflow-auto pr-1">
         <div className="rounded-2xl border border-[#E5E5E4] bg-white px-4 py-4">
-          <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">影响位置</div>
-          <div className="mt-3 text-sm text-[#1F1F1F]">{selectedChange ? formatLocatorSummary(selectedChange) : '未选中变更'}</div>
+          <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">
+            影响位置
+          </div>
+          <div className="mt-3 text-sm text-[#1F1F1F]">
+            {selectedChange ? formatLocatorSummary(selectedChange) : '未选中变更'}
+          </div>
         </div>
         <RendererComponent
           document={selectedDocument}
@@ -230,7 +264,10 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center" data-testid={workbenchSelectors.reviewPanel}>
+      <div
+        className="flex h-full items-center justify-center"
+        data-testid={workbenchSelectors.reviewPanel}
+      >
         <Spin />
       </div>
     )
@@ -255,14 +292,19 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
             <div className="min-w-0">
               <div className="text-sm font-semibold text-[#1F1F1F]">{review.review.title}</div>
               <div className="mt-2 text-xs text-[#666666]">
-                {selectedDocument?.source_name || '未选择文档'} · {selectedDocument?.source_path || review.review.id}
+                {selectedDocument?.source_name || '未选择文档'} ·{' '}
+                {selectedDocument?.source_path || review.review.id}
               </div>
               {selectedChange ? (
-                <div className="mt-3 text-sm leading-relaxed text-[#666666]">{selectedChange.summary}</div>
+                <div className="mt-3 text-sm leading-relaxed text-[#666666]">
+                  {selectedChange.summary}
+                </div>
               ) : null}
             </div>
             {reviewStatusMeta ? (
-              <span className={`rounded-full border px-3 py-1 text-[11px] ${reviewStatusMeta.className}`}>
+              <span
+                className={`rounded-full border px-3 py-1 text-[11px] ${reviewStatusMeta.className}`}
+              >
                 {reviewStatusMeta.label}
               </span>
             ) : null}
@@ -288,16 +330,28 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
         <div className="rounded-2xl border border-[#E5E5E4] bg-white px-4 py-4">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">变更导航</div>
+              <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">
+                变更导航
+              </div>
               <div className="mt-2 text-sm text-[#1F1F1F]">
-                {selectedIndex >= 0 ? `第 ${selectedIndex + 1} / ${documentChanges.length} 处变更` : '暂无变更'}
+                {selectedIndex >= 0
+                  ? `第 ${selectedIndex + 1} / ${documentChanges.length} 处变更`
+                  : '暂无变更'}
               </div>
             </div>
             <div className="flex gap-2">
-              <Button size="small" disabled={!previousChange} onClick={() => setSelectedChangeId(previousChange?.id || null)}>
+              <Button
+                size="small"
+                disabled={!previousChange}
+                onClick={() => setSelectedChangeId(previousChange?.id || null)}
+              >
                 上一个
               </Button>
-              <Button size="small" disabled={!nextChange} onClick={() => setSelectedChangeId(nextChange?.id || null)}>
+              <Button
+                size="small"
+                disabled={!nextChange}
+                onClick={() => setSelectedChangeId(nextChange?.id || null)}
+              >
                 下一个
               </Button>
             </div>
@@ -317,7 +371,9 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="text-sm font-medium text-[#1F1F1F]">{change.title}</div>
-                    <div className="mt-1 line-clamp-2 text-xs leading-relaxed text-[#666666]">{change.summary}</div>
+                    <div className="mt-1 line-clamp-2 text-xs leading-relaxed text-[#666666]">
+                      {change.summary}
+                    </div>
                   </div>
                   <span className="rounded-full bg-white px-2.5 py-1 text-[11px] text-[#666666]">
                     {change.decision}
@@ -357,10 +413,17 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="text-sm font-semibold text-[#1F1F1F]">提交前校验</div>
-              <div className="mt-1 text-xs text-[#666666]">所有变更都明确决策后，才允许写回真实文件。</div>
+              <div className="mt-1 text-xs text-[#666666]">
+                所有变更都明确决策后，才允许写回真实文件。
+              </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button size="small" icon={<ReloadOutlined />} onClick={onRefreshValidation} loading={validating}>
+              <Button
+                size="small"
+                icon={<ReloadOutlined />}
+                onClick={onRefreshValidation}
+                loading={validating}
+              >
                 重新校验
               </Button>
               <Button
@@ -399,14 +462,22 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
         <div className="flex flex-wrap gap-2">
           <Button
             onClick={() => selectedChange && onSetDecision(selectedChange.id, 'accepted')}
-            disabled={!selectedChange || busyChangeIds.includes(selectedChange.id) || review.review.status === 'committed'}
+            disabled={
+              !selectedChange ||
+              busyChangeIds.includes(selectedChange.id) ||
+              review.review.status === 'committed'
+            }
             icon={<CheckOutlined />}
           >
             接受当前
           </Button>
           <Button
             onClick={() => selectedChange && onSetDecision(selectedChange.id, 'rejected')}
-            disabled={!selectedChange || busyChangeIds.includes(selectedChange.id) || review.review.status === 'committed'}
+            disabled={
+              !selectedChange ||
+              busyChangeIds.includes(selectedChange.id) ||
+              review.review.status === 'committed'
+            }
             icon={<CloseOutlined />}
           >
             拒绝当前
@@ -424,13 +495,21 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
             <div className="text-sm font-semibold text-[#1F1F1F]">最近一次提交结果</div>
             <div className="mt-3 space-y-2">
               {latestCommitJob.results.map((result) => (
-                <div key={`${result.draft_document_id}-${result.output_path}`} className="rounded-xl border border-[#E5E5E4] bg-[#FAFAF9] px-3 py-3">
+                <div
+                  key={`${result.draft_document_id}-${result.output_path}`}
+                  className="rounded-xl border border-[#E5E5E4] bg-[#FAFAF9] px-3 py-3"
+                >
                   <div className="break-all text-sm text-[#1F1F1F]">{result.output_path}</div>
                   <div className="mt-1 text-xs text-[#666666]">
-                    {result.operation} · {result.byte_size ? `${result.byte_size} bytes` : 'size unknown'}
+                    {result.operation} ·{' '}
+                    {result.byte_size ? `${result.byte_size} bytes` : 'size unknown'}
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <Button size="small" icon={<FolderOpenOutlined />} onClick={() => void onRevealPath(result.output_path)}>
+                    <Button
+                      size="small"
+                      icon={<FolderOpenOutlined />}
+                      onClick={() => void onRevealPath(result.output_path)}
+                    >
                       定位
                     </Button>
                     <Button size="small" onClick={() => void onOpenPath(result.output_path)}>

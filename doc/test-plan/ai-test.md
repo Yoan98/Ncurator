@@ -115,6 +115,7 @@
 示例：
 
 `intent-direct-human-routing`
+
 - 实现状态: `待检查`
 - What: 验证简单任务不过度规划
 - Why: 简单任务被过度规划会显著拖慢体验
@@ -136,6 +137,7 @@
 #### basic
 
 `tool-docx-structure-read`
+
 - 实现状态: `待检查`
 - What: 验证文档读取基线
 - Why: 所有文档任务都依赖这条基础链路
@@ -148,6 +150,7 @@
 - Not: 不验证 `human` / `director` 路由和最终用户交付。
 
 `tool-docx-targeting-and-ambiguous-search`
+
 - 实现状态: `待检查`
 - What: 验证块定位与歧义消解
 - Why: 不解决歧义，后续编辑容易改错位置
@@ -159,6 +162,7 @@
 - Not: 不验证 `human` / `director` 路由和最终用户交付。
 
 `tool-docx-search-modes-and-scope`
+
 - 实现状态: `待检查`
 - What: 验证搜索模式与局部范围控制
 - Why: 真实文档编辑常常需要先缩小范围再修改
@@ -170,6 +174,7 @@
 - Not: 不验证 `human` / `director` 路由和最终用户交付。
 
 `tool-terminal-workspace-material-discovery`
+
 - 实现状态: `待检查`
 - What: 验证读取型 terminal 链路
 - Why: 很多任务第一步就是先找材料
@@ -181,6 +186,7 @@
 - Not: 不验证 `human` / `director` 路由和最终用户交付。
 
 `tool-terminal-path-resolution`
+
 - 实现状态: `待检查`
 - What: 验证路径解析
 - Why: 路径解析错误会直接破坏后续任务
@@ -192,6 +198,7 @@
 - Not: 不验证 `human` / `director` 路由和最终用户交付。
 
 `tool-kb-hybrid-search`
+
 - 实现状态: `待检查`
 - What: 验证 `hybrid` 检索基线
 - Why: `hybrid` 是本地检索的主路径之一
@@ -203,6 +210,7 @@
 - Not: 不验证 `human` / `director` 路由和最终用户交付。
 
 `tool-kb-vector-search`
+
 - 实现状态: `待检查`
 - What: 验证 `vector` 检索基线
 - Why: 需要单独确认语义检索能力边界
@@ -214,6 +222,7 @@
 - Not: 不验证 `human` / `director` 路由和最终用户交付。
 
 `tool-kb-fts-search`
+
 - 实现状态: `待检查`
 - What: 验证 `fts` 检索基线
 - Why: 关键词检索是最容易被用户感知的基线
@@ -225,6 +234,7 @@
 - Not: 不验证 `human` / `director` 路由和最终用户交付。
 
 `tool-kb-list-documents-and-scope-filter`
+
 - 实现状态: `待检查`
 - What: 验证文档枚举与范围过滤
 - Why: 很多问题会先找资料范围，再做检索
@@ -238,6 +248,7 @@
 #### boundary
 
 `tool-docx-save-conflict-and-overwrite`
+
 - 实现状态: `待检查`
 - What: 验证保存边界
 - Why: 结果交付必须安全，不能在保存阶段失控
@@ -249,6 +260,7 @@
 - Not: 不验证 `human` / `director` 路由和最终用户交付。
 
 `tool-docx-preview-validate-rollback`
+
 - 实现状态: `待检查`
 - What: 验证结果收敛能力
 - Why: 工具不只要能改，还要能收敛和回退
@@ -260,6 +272,7 @@
 - Not: 不验证 `human` / `director` 路由和最终用户交付。
 
 `tool-terminal-approval-and-boundary`
+
 - 实现状态: `待检查`
 - What: 验证审批与工作区边界
 - Why: 本地优先和安全约束是这条链路的前提
@@ -271,6 +284,7 @@
 - Not: 不验证 `human` / `director` 路由和最终用户交付。
 
 `tool-terminal-approval-denied-follow-up`
+
 - 实现状态: `待检查`
 - What: 验证审批拒绝后的收敛
 - Why: 审批拒绝是常见分支，不能当异常遗漏
@@ -282,6 +296,7 @@
 - Not: 不验证 `human` / `director` 路由和最终用户交付。
 
 `tool-terminal-failure-and-long-output`
+
 - 实现状态: `待检查`
 - What: 验证失败路径可解释
 - Why: 失败不可避免，但必须可回看、可理解
@@ -293,6 +308,7 @@
 - Not: 不验证 `human` / `director` 路由和最终用户交付。
 
 `tool-kb-empty-scope-and-no-result`
+
 - 实现状态: `待检查`
 - What: 验证知识库边界表现
 - Why: 证据不足时必须安全收敛，而不是胡编
@@ -306,6 +322,7 @@
 #### scenario
 
 `tool-docx-mixed-structural-edit`
+
 - 实现状态: `待检查`
 - What: 验证复杂结构改写
 - Why: 真实文档修改通常不是单一操作
@@ -317,6 +334,7 @@
 - Not: 不验证 `human` / `director` 路由和最终用户交付。
 
 `tool-docx-table-and-inline-rewrite`
+
 - 实现状态: `待检查`
 - What: 验证表格与行内文本混合改写
 - Why: 周报、纪要、方案文档经常同时涉及表格和正文
@@ -328,6 +346,7 @@
 - Not: 不验证 `human` / `director` 路由和最终用户交付。
 
 `tool-docx-multi-document-session-isolation`
+
 - 实现状态: `待检查`
 - What: 验证多文档会话隔离
 - Why: 多文档任务是后续高价值场景的基础
@@ -339,6 +358,7 @@
 - Not: 不验证 `human` / `director` 路由和最终用户交付。
 
 `tool-terminal-batch-material-summary`
+
 - 实现状态: `待检查`
 - What: 验证批量材料发现与归并
 - Why: 真实工作区任务很少只有一份输入材料
@@ -350,6 +370,7 @@
 - Not: 不验证 `human` / `director` 路由和最终用户交付。
 
 `tool-terminal-artifact-producing-command`
+
 - 实现状态: `待检查`
 - What: 验证复杂命令与产物识别
 - Why: `terminal` 不只是看输出，还要能接住产物
@@ -361,6 +382,7 @@
 - Not: 不验证 `human` / `director` 路由和最终用户交付。
 
 `tool-kb-document-discovery-to-targeted-search`
+
 - 实现状态: `待检查`
 - What: 验证从文档发现到定向检索的多步链路
 - Why: 真实知识任务往往要先找范围，再确认精确证据，不能跨文档串证据
@@ -394,6 +416,7 @@
 #### basic
 
 `human-direct-kb-answer`
+
 - 实现状态: `待检查`
 - What: 验证单步自主完成
 - Why: 最简单的单步任务必须先独立成立
@@ -405,6 +428,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-direct-docx-edit`
+
 - 实现状态: `待检查`
 - What: 验证单工具文档闭环
 - Why: 这是最常见的文档类基础任务
@@ -416,6 +440,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-skill-workspace-cli`
+
 - 实现状态: `待检查`
 - What: 验证 `workspace-cli` 技能闭环
 - Why: 每个 skill 都需要独立锚点，避免只在混合场景里被动覆盖
@@ -427,6 +452,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-skill-docx-read`
+
 - 实现状态: `待检查`
 - What: 验证 `docx-read` 技能闭环
 - Why: 文档任务不只有写，读和定位也必须稳定成立
@@ -438,6 +464,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-skill-docx-write`
+
 - 实现状态: `待检查`
 - What: 验证 `docx-write` 技能闭环
 - Why: 编辑能力必须能独立验证，不能只靠端到端场景带过
@@ -449,6 +476,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-skill-docx-delivery`
+
 - 实现状态: `待检查`
 - What: 验证 `docx-delivery` 技能闭环
 - Why: 修改完成不等于可交付，校验、预览、落盘必须独立成立
@@ -460,6 +488,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-skill-kb-document-discovery`
+
 - 实现状态: `待检查`
 - What: 验证 `kb-document-discovery` 技能闭环
 - Why: 很多知识任务先要找对文档，不能默认直接命中 chunk
@@ -471,6 +500,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-skill-kb-evidence-query`
+
 - 实现状态: `待检查`
 - What: 验证 `kb-evidence-query` 技能闭环
 - Why: 证据查询是知识回答最基础的能力锚点
@@ -482,6 +512,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-watchhint-projection`
+
 - 实现状态: `待检查`
 - What: 验证 `watchHint` 时间线投影
 - Why: 收敛提示不只是内部状态，也必须能被可视化回看
@@ -495,6 +526,7 @@
 #### boundary
 
 `human-tool-failure-recovery`
+
 - 实现状态: `待检查`
 - What: 验证失败后换路
 - Why: 自主纠偏能力是 `human` 的核心价值
@@ -506,6 +538,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-workspace-restricted-best-effort`
+
 - 实现状态: `待检查`
 - What: 验证工作区受限时的 best-effort 收敛
 - Why: 本地优先场景里最常见的外部约束之一
@@ -517,6 +550,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-approval-restricted-best-effort`
+
 - 实现状态: `待检查`
 - What: 验证审批受限时的 best-effort 收敛
 - Why: 外部约束下的行为质量直接决定用户体验
@@ -528,6 +562,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-evidence-insufficient-safe-stop`
+
 - 实现状态: `待检查`
 - What: 验证证据不足时的安全行为
 - Why: 不能把“查不到”变成“编出来”
@@ -539,6 +574,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-no-redundant-recheck`
+
 - 实现状态: `待检查`
 - What: 验证证据足够后的主动收敛
 - Why: 避免无意义循环是工程可用性的关键
@@ -550,6 +586,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-partial-delivery-on-tool-limit`
+
 - 实现状态: `待检查`
 - What: 验证做不完时的安全收敛
 - Why: “没完全做完”不应等同于“什么都没有”
@@ -561,6 +598,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-invalid-execution-batch`
+
 - 实现状态: `待检查`
 - What: 验证非法 batch 被拒绝
 - Why: 保守并行是这次 human 重构的重要安全边界
@@ -572,6 +610,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-repeated-skill-learning-redirect`
+
 - 实现状态: `待检查`
 - What: 验证重复学习的回退
 - Why: 需要防止学习路径空转
@@ -583,6 +622,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-invalid-memory-op-recovery`
+
 - 实现状态: `待检查`
 - What: 验证非法记忆编辑的回退
 - Why: 记忆编辑必须是安全、可恢复的
@@ -596,6 +636,7 @@
 #### scenario
 
 `human-terminal-docx-handoff`
+
 - 实现状态: `待检查`
 - What: 验证跨工具协作
 - Why: 真实任务常常需要先取材再落文档
@@ -607,6 +648,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-kb-docx-bridge`
+
 - 实现状态: `待检查`
 - What: 验证知识到文档的转换
 - Why: 能不能把“查到的信息”变成“可交付产物”很关键
@@ -618,6 +660,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-multi-source-merge-delivery`
+
 - 实现状态: `待检查`
 - What: 验证多源材料归并
 - Why: 多源归并是高价值真实场景的代表能力
@@ -629,6 +672,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-review-handoff-structured-delivery`
+
 - 实现状态: `待检查`
 - What: 验证审阅前结构化交付
 - Why: 文档类任务的真正落点不是一句话，而是可继续处理的结构化结果
@@ -640,6 +684,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-multi-turn-refinement`
+
 - 实现状态: `待检查`
 - What: 验证多轮目标保持
 - Why: 用户真实使用里 follow-up 很常见
@@ -651,6 +696,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-long-task-project-brief`
+
 - 实现状态: `待检查`
 - What: 验证长任务工程能力
 - Why: 复杂任务是否能真正完成，是 AI 价值上限所在
@@ -662,6 +708,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-long-task-with-corrections`
+
 - 实现状态: `待检查`
 - What: 验证长任务中的纠偏稳定性
 - Why: 长任务不是一次规划后就不会变化
@@ -673,6 +720,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-long-task-approval-branch`
+
 - 实现状态: `待检查`
 - What: 验证长任务中的审批分支
 - Why: 真正的复杂任务经常包含安全分支
@@ -686,6 +734,7 @@
 #### live
 
 `human-live-direct-kb-answer`
+
 - 实现状态: `待检查`
 - What: 验证 live 单步知识问答
 - Why: `human` 的最小 live 自主闭环必须成立
@@ -697,6 +746,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-live-direct-docx-edit`
+
 - 实现状态: `待检查`
 - What: 验证 live 单工具文档闭环
 - Why: 文档类 live 基线不能只靠脚本化决策
@@ -708,6 +758,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-live-skill-workspace-cli`
+
 - 实现状态: `待检查`
 - What: 验证 live `workspace-cli` 技能闭环
 - Why: `workspace-cli` 是本地优先路径的基础入口，必须在真实模型下成立
@@ -719,6 +770,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-live-skill-docx-read`
+
 - 实现状态: `待检查`
 - What: 验证 live `docx-read` 技能闭环
 - Why: 文档定位能力是否可靠，最终要靠真实模型证明
@@ -730,6 +782,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-live-skill-docx-write`
+
 - 实现状态: `待检查`
 - What: 验证 live `docx-write` 技能闭环
 - Why: 文档编辑能力不能只在 override 场景里成立
@@ -741,6 +794,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-live-skill-docx-delivery`
+
 - 实现状态: `待检查`
 - What: 验证 live `docx-delivery` 技能闭环
 - Why: 文档任务最后的校验、预览、落盘在真实模型下也必须稳定
@@ -752,6 +806,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-live-skill-kb-document-discovery`
+
 - 实现状态: `待检查`
 - What: 验证 live `kb-document-discovery` 技能闭环
 - Why: 文档发现是知识任务的重要入口，不能只在静态 case 中验证
@@ -763,6 +818,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-live-skill-kb-evidence-query`
+
 - 实现状态: `待检查`
 - What: 验证 live `kb-evidence-query` 技能闭环
 - Why: 证据查询是 live 知识回答的最小能力锚点
@@ -774,6 +830,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-live-terminal-docx-handoff`
+
 - 实现状态: `待检查`
 - What: 验证 live 跨工具 handoff
 - Why: 这是最小 live 跨工具能力证明
@@ -785,6 +842,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-live-kb-docx-bridge`
+
 - 实现状态: `待检查`
 - What: 验证 live 知识到文档转换
 - Why: 需要证明 KB 结果能被真实转成产物
@@ -796,6 +854,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-live-evidence-insufficient-safe-stop`
+
 - 实现状态: `待检查`
 - What: 验证 live 安全收敛
 - Why: 安全行为不能只在 contract case 中成立
@@ -807,6 +866,7 @@
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-live-long-task-project-brief`
+
 - 实现状态: `待检查`
 - What: 验证 live 长任务工程能力
 - Why: 长任务是否成立，只看 live 才有意义
@@ -829,6 +889,7 @@
 #### basic
 
 `context-workspace-evidence-collection`
+
 - 实现状态: `待检查`
 - What: 验证工作区证据收集
 - Why: 很多任务不是缺能力，而是缺前置材料
@@ -840,6 +901,7 @@
 - Not: 不验证最终用户答案质量或最终交付文案。
 
 `context-kb-evidence-collection`
+
 - 实现状态: `待检查`
 - What: 验证知识证据收集
 - Why: 先有证据，再做判断，能明显降低误判
@@ -851,6 +913,7 @@
 - Not: 不验证最终用户答案质量或最终交付文案。
 
 `context-evidence-dedupe-and-append`
+
 - 实现状态: `待检查`
 - What: 验证上下文证据去重与追加
 - Why: 多轮续做不能把同一 evidence 无限制堆积，否则后续判断会被噪音污染
@@ -864,6 +927,7 @@
 #### boundary
 
 `context-missing-material-detection`
+
 - 实现状态: `待检查`
 - What: 验证缺失输入识别
 - Why: 缺上下文时如果继续执行，后面一定漂移
@@ -875,6 +939,7 @@
 - Not: 不验证最终用户答案质量或最终交付文案。
 
 `context-round-limit-to-plan`
+
 - 实现状态: `待检查`
 - What: 验证补上下文轮次上限
 - Why: `need_context` 不能无限循环，否则任务永远进不到执行
@@ -888,6 +953,7 @@
 #### scenario
 
 `context-follow-up-reference-resolution`
+
 - 实现状态: `待检查`
 - What: 验证续做指代解析
 - Why: follow-up 场景首先卡在能不能知道用户在说什么
@@ -899,6 +965,7 @@
 - Not: 不验证最终用户答案质量或最终交付文案。
 
 `context-multi-source-evidence-assembly`
+
 - 实现状态: `待检查`
 - What: 验证多源上下文组装
 - Why: 混合任务的关键不是单一证据，而是证据组装能力
@@ -910,6 +977,7 @@
 - Not: 不验证最终用户答案质量或最终交付文案。
 
 `context-continue-after-partial-delivery`
+
 - 实现状态: `待检查`
 - What: 验证部分完成后的续接
 - Why: 真实任务往往不是一轮就结束
@@ -923,6 +991,7 @@
 #### live
 
 `context-live-follow-up-reference-resolution`
+
 - 实现状态: `待检查`
 - What: 验证 live 续做指代解析
 - Why: 续做理解是否成立，不能只靠脚本化上下文
@@ -934,6 +1003,7 @@
 - Not: 不验证最终用户答案质量或最终交付文案。
 
 `context-live-workspace-evidence-collection`
+
 - 实现状态: `待检查`
 - What: 验证 live 工作区证据收集
 - Why: 工作区上下文是本地优先路径的关键前提
@@ -945,6 +1015,7 @@
 - Not: 不验证最终用户答案质量或最终交付文案。
 
 `context-live-multi-source-evidence-assembly`
+
 - 实现状态: `待检查`
 - What: 验证 live 多源上下文组装
 - Why: 混合任务最容易暴露上下文收集质量问题
@@ -956,6 +1027,7 @@
 - Not: 不验证最终用户答案质量或最终交付文案。
 
 `context-live-continue-after-partial-delivery`
+
 - 实现状态: `待检查`
 - What: 验证 live 部分完成续接
 - Why: 上下文续接是否稳定，最终要靠 live 证明
@@ -978,6 +1050,7 @@
 #### basic
 
 `intent-direct-human-routing`
+
 - 实现状态: `待检查`
 - What: 验证简单任务不过度规划
 - Why: 简单任务被过度规划会显著拖慢体验
@@ -989,6 +1062,7 @@
 - Not: 不验证后续执行链路的最终完成质量。
 
 `intent-docx-task-routing`
+
 - 实现状态: `待检查`
 - What: 验证多步文档编辑任务路由
 - Why: 多步文档任务天然带依赖顺序，不能当普通问答处理
@@ -1002,6 +1076,7 @@
 #### boundary
 
 `intent-need-context-routing`
+
 - 实现状态: `待检查`
 - What: 验证上下文不足先补上下文
 - Why: follow-up 最怕直接误执行
@@ -1013,6 +1088,7 @@
 - Not: 不验证后续执行链路的最终完成质量。
 
 `intent-search-mode-routing`
+
 - 实现状态: `待检查`
 - What: 验证纯搜索模式路由
 - Why: 模式错路由会让 UI 与实际行为脱节
@@ -1026,6 +1102,7 @@
 #### scenario
 
 `intent-to-plan-routing`
+
 - 实现状态: `待检查`
 - What: 验证复杂任务进入计划链路
 - Why: 复杂任务如果误判成单步，通常做不完
@@ -1037,6 +1114,7 @@
 - Not: 不验证后续执行链路的最终完成质量。
 
 `intent-after-context-routing`
+
 - 实现状态: `待检查`
 - What: 验证补完上下文后的重新路由
 - Why: `need_context` 只是中间态，补完信息后必须重新做正确判断
@@ -1048,6 +1126,7 @@
 - Not: 不验证后续执行链路的最终完成质量。
 
 `intent-mixed-task-routing`
+
 - 实现状态: `待检查`
 - What: 验证混合任务路由
 - Why: 混合任务是最容易被低估复杂度的一类
@@ -1061,6 +1140,7 @@
 #### live
 
 `intent-live-direct-human-routing`
+
 - 实现状态: `待检查`
 - What: 验证 live 简单任务直达
 - Why: 入口提速能力不能只靠静态规则判断
@@ -1072,6 +1152,7 @@
 - Not: 不验证后续执行链路的最终完成质量。
 
 `intent-live-need-context-routing`
+
 - 实现状态: `待检查`
 - What: 验证 live 上下文缺失路由
 - Why: 续做场景的误路由风险最高
@@ -1083,6 +1164,7 @@
 - Not: 不验证后续执行链路的最终完成质量。
 
 `intent-live-to-plan-routing`
+
 - 实现状态: `待检查`
 - What: 验证 live 复杂任务入计划链路
 - Why: 复杂任务是否被正确识别，决定整条链路能否完成
@@ -1094,6 +1176,7 @@
 - Not: 不验证后续执行链路的最终完成质量。
 
 `intent-live-search-mode-routing`
+
 - 实现状态: `待检查`
 - What: 验证 live 纯搜索模式路由
 - Why: 模式理解是页面行为一致性的关键
@@ -1105,6 +1188,7 @@
 - Not: 不验证后续执行链路的最终完成质量。
 
 `intent-live-mixed-task-routing`
+
 - 实现状态: `待检查`
 - What: 验证 live 混合任务路由
 - Why: 混合任务最容易暴露复杂度判断失真
@@ -1127,6 +1211,7 @@
 #### basic
 
 `plan-docx-workflow-ordering`
+
 - 实现状态: `待检查`
 - What: 验证文档类计划顺序
 - Why: 这是最基础也最容易写错顺序的一类计划
@@ -1138,6 +1223,7 @@
 - Not: 不验证具体工具调用实现细节和 UI 呈现。
 
 `plan-kb-to-docx-task-breakdown`
+
 - 实现状态: `待检查`
 - What: 验证检索到文档的任务拆解
 - Why: 混合链路的关键在于拆解是否完整
@@ -1149,6 +1235,7 @@
 - Not: 不验证具体工具调用实现细节和 UI 呈现。
 
 `plan-terminal-to-docx-task-breakdown`
+
 - 实现状态: `待检查`
 - What: 验证工作区到文档的任务拆解
 - Why: 很多真实任务都是这类链路
@@ -1160,6 +1247,7 @@
 - Not: 不验证具体工具调用实现细节和 UI 呈现。
 
 `plan-single-human-executable-task`
+
 - 实现状态: `待检查`
 - What: 验证每个计划任务都可被单个 `human` 执行
 - Why: 如果 task 本身还需要再次拆解，计划就没有落到可执行粒度
@@ -1173,6 +1261,7 @@
 #### boundary
 
 `plan-limited-task-convergence`
+
 - 实现状态: `待检查`
 - What: 验证结果受限时计划可收敛
 - Why: 复杂任务不一定每次都能完整完成，但必须能收住
@@ -1184,6 +1273,7 @@
 - Not: 不验证具体工具调用实现细节和 UI 呈现。
 
 `plan-continue-after-limited-task`
+
 - 实现状态: `待检查`
 - What: 验证受限结果后继续派发任务
 - Why: best-effort 模型下，不应把“结果有限”误当成终止信号
@@ -1195,6 +1285,7 @@
 - Not: 不验证具体工具调用实现细节和 UI 呈现。
 
 `plan-no-redundant-task`
+
 - 实现状态: `待检查`
 - What: 验证无意义重复任务控制
 - Why: 冗余计划会放大模型成本和失败概率
@@ -1206,6 +1297,7 @@
 - Not: 不验证具体工具调用实现细节和 UI 呈现。
 
 `plan-partial-delivery-convergence`
+
 - 实现状态: `待检查`
 - What: 验证部分完成时的计划收尾
 - Why: 复杂任务需要可继续的收尾，而不是硬失败
@@ -1219,6 +1311,7 @@
 #### scenario
 
 `plan-follow-up-refinement-breakdown`
+
 - 实现状态: `待检查`
 - What: 验证续做任务重规划
 - Why: follow-up 如果不能重用上下文，体验会很差
@@ -1230,6 +1323,7 @@
 - Not: 不验证具体工具调用实现细节和 UI 呈现。
 
 `plan-long-task-dependency-chain`
+
 - 实现状态: `待检查`
 - What: 验证长任务依赖链
 - Why: 长任务稳定性首先取决于依赖顺序是否合理
@@ -1243,6 +1337,7 @@
 #### live
 
 `plan-live-docx-workflow-ordering`
+
 - 实现状态: `待检查`
 - What: 验证 live 文档类计划顺序
 - Why: 计划顺序错误会直接污染后续执行
@@ -1254,6 +1349,7 @@
 - Not: 不验证具体工具调用实现细节和 UI 呈现。
 
 `plan-live-kb-to-docx-task-breakdown`
+
 - 实现状态: `待检查`
 - What: 验证 live 检索到文档拆解
 - Why: 混合任务最考验计划粒度
@@ -1265,6 +1361,7 @@
 - Not: 不验证具体工具调用实现细节和 UI 呈现。
 
 `plan-live-follow-up-refinement-breakdown`
+
 - 实现状态: `待检查`
 - What: 验证 live 续做重规划
 - Why: follow-up 计划最容易被重新开题取代
@@ -1276,6 +1373,7 @@
 - Not: 不验证具体工具调用实现细节和 UI 呈现。
 
 `plan-live-long-task-dependency-chain`
+
 - 实现状态: `待检查`
 - What: 验证 live 长任务依赖链
 - Why: 长任务计划是否靠谱，只看 live 才有意义
@@ -1287,6 +1385,7 @@
 - Not: 不验证具体工具调用实现细节和 UI 呈现。
 
 `plan-live-limited-task-convergence`
+
 - 实现状态: `待检查`
 - What: 验证 live 受限结果计划收敛
 - Why: 计划层的安全收尾不能只在静态 case 成立
@@ -1309,6 +1408,7 @@
 #### basic
 
 `entire-docx-rewrite-review-ready`
+
 - 实现状态: `待检查`
 - What: 验证现有 docx 改写闭环
 - Why: 这是文档类任务的核心主路径
@@ -1320,6 +1420,7 @@
 - Not: 不验证页面级布局与交互细节。
 
 `entire-docx-content-answer`
+
 - 实现状态: `待检查`
 - What: 验证文档内容问答闭环
 - Why: 文档类任务不只有改写，定位和解释内容也是基础路径
@@ -1331,6 +1432,7 @@
 - Not: 不验证页面级布局与交互细节。
 
 `entire-kb-answer-with-citation`
+
 - 实现状态: `待检查`
 - What: 验证知识库问答闭环
 - Why: 用户问答不能只给结论，不给证据
@@ -1342,6 +1444,7 @@
 - Not: 不验证页面级布局与交互细节。
 
 `entire-kb-document-discovery-with-citation`
+
 - 实现状态: `待检查`
 - What: 验证先发现文档再回答的知识闭环
 - Why: 不是所有知识问题都能直接命中 chunk，先找文档是核心路径之一
@@ -1353,6 +1456,7 @@
 - Not: 不验证页面级布局与交互细节。
 
 `entire-workspace-material-summary-delivery`
+
 - 实现状态: `待检查`
 - What: 验证工作区材料直达交付闭环
 - Why: 很多真实任务不需要写 docx，但必须能把本地材料直接变成交付
@@ -1366,6 +1470,7 @@
 #### boundary
 
 `entire-evidence-insufficient-safe-stop`
+
 - 实现状态: `待检查`
 - What: 验证证据不足时的完整收敛
 - Why: 安全收敛本身也是完整结果的一部分
@@ -1377,6 +1482,7 @@
 - Not: 不验证页面级布局与交互细节。
 
 `entire-terminal-approval-to-docx-update`
+
 - 实现状态: `待检查`
 - What: 验证审批分支下的文档闭环
 - Why: 审批分支必须和业务目标最终接上
@@ -1390,6 +1496,7 @@
 #### scenario
 
 `entire-workspace-to-docx`
+
 - 实现状态: `待检查`
 - What: 验证工作区材料生成文档闭环
 - Why: 能把工作区材料变成成品，是高价值能力
@@ -1401,6 +1508,7 @@
 - Not: 不验证页面级布局与交互细节。
 
 `entire-kb-to-docx-hybrid`
+
 - 实现状态: `待检查`
 - What: 验证检索到文档的完整链路
 - Why: 这是典型的混合任务闭环
@@ -1412,6 +1520,7 @@
 - Not: 不验证页面级布局与交互细节。
 
 `entire-follow-up-continuation`
+
 - 实现状态: `待检查`
 - What: 验证多轮续做闭环
 - Why: backend 也必须证明 follow-up 能成立
@@ -1423,6 +1532,7 @@
 - Not: 不验证页面级布局与交互细节。
 
 `entire-terminal-materials-to-delivery`
+
 - 实现状态: `待检查`
 - What: 验证工作区材料到最终交付
 - Why: 多源工作区任务是实际使用重心之一
@@ -1434,6 +1544,7 @@
 - Not: 不验证页面级布局与交互细节。
 
 `entire-long-task-weekly-brief`
+
 - 实现状态: `待检查`
 - What: 验证长任务完整闭环
 - Why: 这是 backend 综合能力的最高压测点
@@ -1447,6 +1558,7 @@
 #### live
 
 `entire-live-docx-rewrite-review-ready`
+
 - 实现状态: `待检查`
 - What: 验证 live 文档改写闭环
 - Why: backend 最小完整交付必须在 live 成立
@@ -1458,6 +1570,7 @@
 - Not: 不验证页面级布局与交互细节。
 
 `entire-live-docx-content-answer`
+
 - 实现状态: `待检查`
 - What: 验证 live 文档内容问答闭环
 - Why: 文档读取与定位能力的完整闭环需要真实模型证明
@@ -1469,6 +1582,7 @@
 - Not: 不验证页面级布局与交互细节。
 
 `entire-live-kb-answer-with-citation`
+
 - 实现状态: `待检查`
 - What: 验证 live 知识问答闭环
 - Why: 问答类完整闭环不能只靠 contract case
@@ -1480,6 +1594,7 @@
 - Not: 不验证页面级布局与交互细节。
 
 `entire-live-kb-document-discovery-with-citation`
+
 - 实现状态: `待检查`
 - What: 验证 live 文档发现后回答的知识闭环
 - Why: 真实知识任务经常先要找对资料，再做证据收敛
@@ -1491,6 +1606,7 @@
 - Not: 不验证页面级布局与交互细节。
 
 `entire-live-kb-to-docx-hybrid`
+
 - 实现状态: `待检查`
 - What: 验证 live 混合任务闭环
 - Why: 混合闭环是 backend 能力连贯性的关键证明
@@ -1502,6 +1618,7 @@
 - Not: 不验证页面级布局与交互细节。
 
 `entire-live-terminal-materials-to-delivery`
+
 - 实现状态: `待检查`
 - What: 验证 live 工作区材料到交付
 - Why: 本地工作区任务是高价值真实路径
@@ -1513,6 +1630,7 @@
 - Not: 不验证页面级布局与交互细节。
 
 `entire-live-evidence-insufficient-safe-stop`
+
 - 实现状态: `待检查`
 - What: 验证 live 安全收敛闭环
 - Why: 安全闭环本身就是最终验收的一部分
@@ -1524,6 +1642,7 @@
 - Not: 不验证页面级布局与交互细节。
 
 `entire-live-long-task-weekly-brief`
+
 - 实现状态: `待检查`
 - What: 验证 live 长任务完整闭环
 - Why: 这是 `entire` 阶段最关键的 live 压测点
@@ -1540,23 +1659,25 @@
 
 为什么：backend 能跑通不代表用户在页面里能做成；UI 问题会直接让正确能力无法被使用。
 
-怎么做：单独覆盖三栏布局、输入区、模式切换、时间线与检查器联动、审批条、工作区条、审阅中心、小窗口和长内容滚动。
+怎么做：单独覆盖三栏布局、输入区、模式切换、assistant turn 折叠步骤、右侧内容面板联动、审批条、工作区条、审阅面板、小窗口和长内容滚动。
 落地规则：实现时至少按 `basic / boundary / scenario` 分组；只有在 UI 用例直接依赖真实模型执行时才补 `live` case。
 
 #### basic
 
 `ui-three-pane-layout-baseline`
+
 - 实现状态: `待检查`
 - What: 验证基础布局稳定
 - Why: 三栏模型是整个 Core AI 主界面的基础结构
-- How: 左侧会话、中间对话与 `Assistant Run`、右侧时间线与检查器稳定呈现
+- How: 左侧会话、中间对话与 assistant turn、右侧内容面板稳定呈现
 - Oracle:
-  1. 左侧会话、中间对话与 `Assistant Run`、右侧时间线与检查器三栏都可见且可用。
+  1. 左侧会话、中间对话与右侧内容面板三栏都可见且可用。
   2. 切换 run 或消息后，三栏内容不会互相遮挡或整体塌陷。
   3. 关键主交互区不会因为初始布局错误而不可操作。
 - Not: 不验证模型推理质量和 backend 内部中间 state 正确性。
 
 `ui-input-and-send-stability`
+
 - 实现状态: `待检查`
 - What: 验证输入区稳定性
 - Why: 用户的第一接触点就是输入区
@@ -1568,6 +1689,7 @@
 - Not: 不验证模型推理质量和 backend 内部中间 state 正确性。
 
 `ui-mode-and-scope-switching`
+
 - 实现状态: `待检查`
 - What: 验证模式与范围切换
 - Why: 模式与范围是任务行为的重要前提
@@ -1581,6 +1703,7 @@
 #### boundary
 
 `ui-approval-and-workspace-banner-flow`
+
 - 实现状态: `待检查`
 - What: 验证提示条与交互流
 - Why: 阻塞交互如果不清晰，用户无法完成流程
@@ -1592,6 +1715,7 @@
 - Not: 不验证模型推理质量和 backend 内部中间 state 正确性。
 
 `ui-small-window-and-overflow`
+
 - 实现状态: `待检查`
 - What: 验证小窗口布局与溢出
 - Why: 小窗口问题会直接影响日常使用
@@ -1603,6 +1727,7 @@
 - Not: 不验证模型推理质量和 backend 内部中间 state 正确性。
 
 `ui-long-content-scroll-stability`
+
 - 实现状态: `待检查`
 - What: 验证长内容滚动稳定性
 - Why: Core AI 交互界面天然会承载长内容，必须提前防守
@@ -1616,6 +1741,7 @@
 #### scenario
 
 `ui-run-timeline-inspector-linkage`
+
 - 实现状态: `待检查`
 - What: 验证运行态联动
 - Why: Core AI 界面的关键价值之一就是可观察性
@@ -1627,6 +1753,7 @@
 - Not: 不验证模型推理质量和 backend 内部中间 state 正确性。
 
 `ui-draft-review-center-operations`
+
 - 实现状态: `待检查`
 - What: 验证审阅中心操作
 - Why: 文档类任务最后常常收敛在审阅中心
@@ -1640,6 +1767,7 @@
 #### live
 
 `ui-live-run-timeline-inspector-linkage`
+
 - 实现状态: `待检查`
 - What: 验证 live 运行态联动
 - Why: 真实运行会放大 UI 状态联动问题
@@ -1651,6 +1779,7 @@
 - Not: 不验证模型推理质量和 backend 内部中间 state 正确性。
 
 `ui-live-approval-and-workspace-banner-flow`
+
 - 实现状态: `待检查`
 - What: 验证 live 阻塞提示流
 - Why: 阻塞交互必须在真实链路里可用
@@ -1662,6 +1791,7 @@
 - Not: 不验证模型推理质量和 backend 内部中间 state 正确性。
 
 `ui-live-draft-review-center-operations`
+
 - 实现状态: `待检查`
 - What: 验证 live 审阅中心操作
 - Why: 审阅中心是真实文档任务的最终 UI 落点
@@ -1684,6 +1814,7 @@
 #### basic
 
 `final-docx-rewrite-completion`
+
 - 实现状态: `待检查`
 - What: 验证文档类最终完成
 - Why: 这是最核心的页面级主任务
@@ -1695,6 +1826,7 @@
 - Not: 不验证内部 graph 中间 state 与低层工具实现细节。
 
 `final-kb-answer-completion`
+
 - 实现状态: `待检查`
 - What: 验证知识库问答最终完成
 - Why: 问答是最直接、最可感知的完成标准
@@ -1708,6 +1840,7 @@
 #### boundary
 
 `final-terminal-approval-completion`
+
 - 实现状态: `待检查`
 - What: 验证审批分支最终完成
 - Why: 审批链路必须在真实交互里验证
@@ -1719,6 +1852,7 @@
 - Not: 不验证内部 graph 中间 state 与低层工具实现细节。
 
 `final-workspace-required-and-resume`
+
 - 实现状态: `待检查`
 - What: 验证工作区补充后的恢复能力
 - Why: 本地优先链路必须证明可以中断后恢复
@@ -1732,6 +1866,7 @@
 #### scenario
 
 `final-kb-docx-hybrid-completion`
+
 - 实现状态: `待检查`
 - What: 验证混合任务最终完成
 - Why: 混合任务最能体现整套架构是否连贯
@@ -1743,6 +1878,7 @@
 - Not: 不验证内部 graph 中间 state 与低层工具实现细节。
 
 `final-follow-up-continuation`
+
 - 实现状态: `待检查`
 - What: 验证多轮续做最终完成
 - Why: 连续对话是 Core AI 系统的核心使用方式
@@ -1754,6 +1890,7 @@
 - Not: 不验证内部 graph 中间 state 与低层工具实现细节。
 
 `final-review-partial-acceptance`
+
 - 实现状态: `待检查`
 - What: 验证审阅中心部分接受闭环
 - Why: 文档任务不能只做到“给出建议”，还要支持选择性收敛
@@ -1765,6 +1902,7 @@
 - Not: 不验证内部 graph 中间 state 与低层工具实现细节。
 
 `final-long-task-stability`
+
 - 实现状态: `待检查`
 - What: 验证长任务真实交互稳定性
 - Why: backend 成立不代表真实页面长任务也稳定
@@ -1778,6 +1916,7 @@
 #### live
 
 `final-live-docx-rewrite-completion`
+
 - 实现状态: `待检查`
 - What: 验证 live 文档类最终完成
 - Why: 页面主路径必须以 live 为准
@@ -1789,6 +1928,7 @@
 - Not: 不验证内部 graph 中间 state 与低层工具实现细节。
 
 `final-live-kb-answer-completion`
+
 - 实现状态: `待检查`
 - What: 验证 live 知识问答最终完成
 - Why: 最直观的用户价值必须在真实模型下成立
@@ -1800,6 +1940,7 @@
 - Not: 不验证内部 graph 中间 state 与低层工具实现细节。
 
 `final-live-kb-docx-hybrid-completion`
+
 - 实现状态: `待检查`
 - What: 验证 live 混合任务最终完成
 - Why: 混合任务是最终验收层的重要能力证明
@@ -1811,6 +1952,7 @@
 - Not: 不验证内部 graph 中间 state 与低层工具实现细节。
 
 `final-live-follow-up-continuation`
+
 - 实现状态: `待检查`
 - What: 验证 live 多轮续做最终完成
 - Why: 连续对话稳定性只能靠 live e2e 判断
@@ -1822,6 +1964,7 @@
 - Not: 不验证内部 graph 中间 state 与低层工具实现细节。
 
 `final-live-terminal-approval-completion`
+
 - 实现状态: `待检查`
 - What: 验证 live 审批分支最终完成
 - Why: 审批链路必须在真实交互里被验证
@@ -1833,6 +1976,7 @@
 - Not: 不验证内部 graph 中间 state 与低层工具实现细节。
 
 `final-live-review-partial-acceptance`
+
 - 实现状态: `待检查`
 - What: 验证 live 审阅中心部分接受闭环
 - Why: 选择性收敛是真实文档任务的重要落点
@@ -1844,6 +1988,7 @@
 - Not: 不验证内部 graph 中间 state 与低层工具实现细节。
 
 `final-live-long-task-stability`
+
 - 实现状态: `待检查`
 - What: 验证 live 长任务真实交互稳定性
 - Why: 最终验收层的长任务结论只能来自 live
@@ -1855,6 +2000,7 @@
 - Not: 不验证内部 graph 中间 state 与低层工具实现细节。
 
 `final-live-workspace-required-and-resume`
+
 - 实现状态: `待检查`
 - What: 验证 live 工作区补充后的恢复能力
 - Why: 本地优先恢复链路必须用真实交互证明

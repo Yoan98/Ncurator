@@ -1,6 +1,11 @@
 import React, { useMemo, useState } from 'react'
-import { Button, Tooltip } from 'antd'
-import { HiChevronDown, HiOutlineDocumentText, HiOutlineFolderOpen, HiSparkles } from 'react-icons/hi2'
+import { Tooltip } from 'antd'
+import {
+  HiChevronDown,
+  HiOutlineDocumentText,
+  HiOutlineFolderOpen,
+  HiSparkles
+} from 'react-icons/hi2'
 import { LoadingOutlined } from '@ant-design/icons'
 import MarkdownRenderer from '../MarkdownRenderer'
 import { ASSISTANT_STEP_STATUS_META, REVIEW_STATUS_META } from './constants'
@@ -56,10 +61,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   }, [turn])
 
   return (
-    <div
-      className="flex gap-4"
-      data-testid={`workbench-assistant-turn-${messageId}`}
-    >
+    <div className="flex gap-4" data-testid={`workbench-assistant-turn-${messageId}`}>
       <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-[#FBF5F2] text-[#D97757]">
         <HiSparkles className="h-5 w-5" />
       </div>
@@ -109,7 +111,9 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                         >
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
-                              <div className="text-sm font-medium text-[#1F1F1F]">{step.summary}</div>
+                              <div className="text-sm font-medium text-[#1F1F1F]">
+                                {step.summary}
+                              </div>
                               <div className="mt-2 flex flex-wrap gap-2">
                                 <span className="rounded-full border border-[#E5E5E4] bg-white px-2.5 py-1 text-[11px] text-[#666666]">
                                   {step.tool}
@@ -118,13 +122,17 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                                   <Tooltip key={`${step.id}-${file.path}`} title={file.path}>
                                     <span className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-[11px] text-[#666666]">
                                       <HiOutlineFolderOpen className="h-3 w-3" />
-                                      <span className="max-w-[180px] truncate">{file.fileName}</span>
+                                      <span className="max-w-[180px] truncate">
+                                        {file.fileName}
+                                      </span>
                                     </span>
                                   </Tooltip>
                                 ))}
                               </div>
                             </div>
-                            <span className={`rounded-full border px-2.5 py-1 text-[11px] ${statusMeta.className}`}>
+                            <span
+                              className={`rounded-full border px-2.5 py-1 text-[11px] ${statusMeta.className}`}
+                            >
                               {statusMeta.label}
                             </span>
                           </div>
@@ -174,13 +182,17 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                           >
                             <div className="flex flex-wrap items-start justify-between gap-3">
                               <div>
-                                <div className="text-sm font-medium text-[#1F1F1F]">{review.title}</div>
+                                <div className="text-sm font-medium text-[#1F1F1F]">
+                                  {review.title}
+                                </div>
                                 <div className="mt-1 text-xs text-[#666666]">
                                   {review.documentCount} 个文档 · {review.changeCount} 处修改
                                 </div>
                               </div>
                               {statusMeta ? (
-                                <span className={`rounded-full border px-2.5 py-1 text-[11px] ${statusMeta.className}`}>
+                                <span
+                                  className={`rounded-full border px-2.5 py-1 text-[11px] ${statusMeta.className}`}
+                                >
                                   {statusMeta.label}
                                 </span>
                               ) : null}
@@ -200,7 +212,9 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                         className="rounded-2xl border border-[#FDECC8] bg-[#FFF9ED] px-4 py-3 text-sm text-[#8A6510]"
                       >
                         <div className="font-medium text-[#8A6510]">{blocker.title}</div>
-                        <div className="mt-1 text-xs leading-relaxed text-[#8A6510]">{blocker.description}</div>
+                        <div className="mt-1 text-xs leading-relaxed text-[#8A6510]">
+                          {blocker.description}
+                        </div>
                       </div>
                     ))}
                   </div>
