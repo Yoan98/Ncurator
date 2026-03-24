@@ -11,50 +11,75 @@ import {
   humanTraceSchema
 } from '../schema'
 import {
-  createDefaultHumanBrainMemory,
-  createDefaultHumanRuntime,
-  createDefaultHumanTrace,
-  createEmptyHumanTaskInput
+  createDefaultHumanStateFields
 } from '../utils/state'
 
 export const createHumanRunStateSchema = () => {
-  const defaultTask = createEmptyHumanTaskInput
-  const defaultRuntime = createDefaultHumanRuntime
-  const defaultBrainMemory = createDefaultHumanBrainMemory
-  const defaultTrace = createDefaultHumanTrace
+  const defaults = createDefaultHumanStateFields()
   const runtimeSchema = humanRuntimeSchema.extend({
-    stage: humanStageSchema.default(defaultRuntime().stage),
-    status: humanStatusSchema.default(defaultRuntime().status)
+    stage: humanStageSchema.default(defaults.runtime.stage),
+    status: humanStatusSchema.default(defaults.runtime.status)
   })
   const brainMemoryInsideSchema = humanBrainMemoryInsideSchema.extend({
-    facts: humanBrainMemoryInsideSchema.shape.facts.default(() => []),
-    evidences: humanBrainMemoryInsideSchema.shape.evidences.default(() => []),
-    openQuestions: humanBrainMemoryInsideSchema.shape.openQuestions.default(() => [])
+    facts: humanBrainMemoryInsideSchema.shape.facts.default(() => [...defaults.brainMemory.inside.facts]),
+    evidences: humanBrainMemoryInsideSchema.shape.evidences.default(
+      () => [...defaults.brainMemory.inside.evidences]
+    ),
+    openQuestions: humanBrainMemoryInsideSchema.shape.openQuestions.default(
+      () => [...defaults.brainMemory.inside.openQuestions]
+    )
   })
   const brainMemoryOutsideSchema = humanBrainMemoryOutsideSchema.extend({
     skillCatalog: humanBrainMemoryOutsideSchema.shape.skillCatalog.default(
-      () => defaultBrainMemory().outside.skillCatalog
+      () => [...defaults.brainMemory.outside.skillCatalog]
     ),
-    learnedSkillIds: humanBrainMemoryOutsideSchema.shape.learnedSkillIds.default(() => []),
-    brainDecisions: humanBrainMemoryOutsideSchema.shape.brainDecisions.default(() => [])
+    learnedSkillIds: humanBrainMemoryOutsideSchema.shape.learnedSkillIds.default(
+      () => [...defaults.brainMemory.outside.learnedSkillIds]
+    ),
+    brainDecisions: humanBrainMemoryOutsideSchema.shape.brainDecisions.default(
+      () => [...defaults.brainMemory.outside.brainDecisions]
+    )
   })
   const brainMemorySchema = humanBrainMemorySchema.extend({
-    inside: brainMemoryInsideSchema.default(() => defaultBrainMemory().inside),
-    outside: brainMemoryOutsideSchema.default(() => defaultBrainMemory().outside)
+    inside: brainMemoryInsideSchema.default(() => ({
+      facts: [...defaults.brainMemory.inside.facts],
+      evidences: [...defaults.brainMemory.inside.evidences],
+      openQuestions: [...defaults.brainMemory.inside.openQuestions]
+    })),
+    outside: brainMemoryOutsideSchema.default(() => ({
+      skillCatalog: [...defaults.brainMemory.outside.skillCatalog],
+      learnedSkillIds: [...defaults.brainMemory.outside.learnedSkillIds],
+      brainDecisions: [...defaults.brainMemory.outside.brainDecisions]
+    }))
   })
   const traceSchema = humanTraceSchema.extend({
-    steps: humanTraceSchema.shape.steps.default(() => [])
+    steps: humanTraceSchema.shape.steps.default(() => [...defaults.trace.steps])
   })
 
   return new StateSchema({
-    task: humanTaskInputSchema.default(defaultTask),
-    runtime: runtimeSchema.default(defaultRuntime),
-    brainMemory: brainMemorySchema.default(defaultBrainMemory),
+    task: humanTaskInputSchema.default(() => ({ ...defaults.task })),
+    runtime: runtimeSchema.default(() => ({ ...defaults.runtime })),
+    brainMemory: brainMemorySchema.default(() => ({
+      inside: {
+        facts: [...defaults.brainMemory.inside.facts],
+        evidences: [...defaults.brainMemory.inside.evidences],
+        openQuestions: [...defaults.brainMemory.inside.openQuestions]
+      },
+      outside: {
+        skillCatalog: [...defaults.brainMemory.outside.skillCatalog],
+        learnedSkillIds: [...defaults.brainMemory.outside.learnedSkillIds],
+        brainDecisions: [...defaults.brainMemory.outside.brainDecisions]
+      }
+    })),
     lastParallelCallToolResults: humanStateContractSchema.shape.lastParallelCallToolResults,
     lastBrainDecision: humanStateContractSchema.shape.lastBrainDecision,
     watchHint: humanStateContractSchema.shape.watchHint,
-    runtimeArtifacts: humanStateContractSchema.shape.runtimeArtifacts.default(() => []),
+    runtimeArtifacts: humanStateContractSchema.shape.runtimeArtifacts.default(
+      () => [...defaults.runtimeArtifacts]
+    ),
     result: humanStateContractSchema.shape.result,
-    trace: traceSchema.default(defaultTrace)
+    trace: traceSchema.default(() => ({
+      steps: [...defaults.trace.steps]
+    }))
   })
 }

@@ -1,42 +1,27 @@
-import { emitActivity } from '../../../../../utils/aiCapabilityUtils'
-import { jsonObjectSchema } from '../../schema'
-import type { ToolFamilyDefinition } from '../types'
-import { listToolNamesByFamily } from '../toolCatalog'
-import { buildWorkspaceBoundGuardedTools } from '../utils/workspaceGuards'
+import { createWorkspaceBoundToolFamily } from '../utils/workspaceGuards'
 import { buildDocxCapabilityTools } from './docxTools'
 
-export const docxToolFamily: ToolFamilyDefinition = {
+export const docxToolFamily = createWorkspaceBoundToolFamily({
   familyId: 'docx',
-  buildTools: ({ ctx, runId, taskId }) => {
-    const docxToolNames = listToolNamesByFamily('docx')
-    return buildWorkspaceBoundGuardedTools({
-      toolNames: docxToolNames,
-      workspaceRootPath: ctx.workspace?.rootPath,
-      descriptionForTool: (name) => `docx tool: ${name}`,
-      schema: jsonObjectSchema.optional(),
-      ctx,
+  descriptionForTool: (name) => `docx tool: ${name}`,
+  reason: 'docx capability requires workspace binding before execution',
+  error: 'workspace is required for docx capability',
+  buildWorkspaceTools: ({ ctx, runId, taskId, workspaceRootPath, emitActivity }) =>
+    buildDocxCapabilityTools({
+      ctx: {
+        runId: ctx.runId,
+        checkCancelled: ctx.checkCancelled,
+        sendEvent: ctx.sendEvent,
+        requestApproval: ctx.requestApproval,
+        trackDocxOpen: ctx.trackDocxOpen,
+        trackDocxChanges: ctx.trackDocxChanges,
+        trackDocxPreview: ctx.trackDocxPreview,
+        embeddingService: ctx.embeddingService
+      },
       runId,
       taskId,
-      reason: 'docx capability requires workspace binding before execution',
-      error: 'workspace is required for docx capability',
-      buildWorkspaceTools: (workspaceRootPath) =>
-        buildDocxCapabilityTools({
-          ctx,
-          runId,
-          taskId,
-          workspaceRootPath,
-          safePreviewChars: 1400,
-          emitActivity: (activity) => {
-            emitActivity({
-              ctx,
-              runId,
-              taskId,
-              actionType: activity.actionType,
-              status: activity.status,
-              summary: activity.summary
-            })
-          }
-        }).tools
-    })
-  }
-}
+      workspaceRootPath,
+      emitActivity,
+      safePreviewChars: 1400
+    }).tools
+})

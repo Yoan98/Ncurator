@@ -50,6 +50,208 @@ const resolveTerminalExecutionMeta = (args: JsonObject): ToolExecutionMeta => {
   }
 }
 
+type StaticToolDescriptorInput = {
+  name: string
+  familyId: AiToolFamilyId
+  skillIds: RuntimeSkillId[]
+  requiresWorkspace: boolean
+  promptSpec: ToolDescriptor['promptSpec']
+  executionMeta: Parameters<typeof createStaticExecutionMetaResolver>[0]
+}
+
+const createStaticToolDescriptor = (input: StaticToolDescriptorInput): ToolDescriptor => ({
+  name: input.name,
+  familyId: input.familyId,
+  skillIds: [...input.skillIds],
+  requiresWorkspace: input.requiresWorkspace,
+  promptSpec: input.promptSpec,
+  resolveExecutionMeta: createStaticExecutionMetaResolver(input.executionMeta)
+})
+
+const KB_TOOL_DESCRIPTOR_INPUTS: readonly StaticToolDescriptorInput[] = [
+  {
+    name: 'kb_hybrid_search_chunks',
+    familyId: 'kb',
+    skillIds: ['kb-evidence-query'],
+    requiresWorkspace: false,
+    promptSpec: KB_TOOL_PROMPT_SPECS.kb_hybrid_search_chunks,
+    executionMeta: {
+      mutability: 'read_only',
+      parallelSafe: true,
+      defaultResourceKey: 'local-kb'
+    }
+  },
+  {
+    name: 'kb_vector_search_chunks',
+    familyId: 'kb',
+    skillIds: ['kb-evidence-query'],
+    requiresWorkspace: false,
+    promptSpec: KB_TOOL_PROMPT_SPECS.kb_vector_search_chunks,
+    executionMeta: {
+      mutability: 'read_only',
+      parallelSafe: true,
+      defaultResourceKey: 'local-kb'
+    }
+  },
+  {
+    name: 'kb_fts_search_chunks',
+    familyId: 'kb',
+    skillIds: ['kb-evidence-query'],
+    requiresWorkspace: false,
+    promptSpec: KB_TOOL_PROMPT_SPECS.kb_fts_search_chunks,
+    executionMeta: {
+      mutability: 'read_only',
+      parallelSafe: true,
+      defaultResourceKey: 'local-kb'
+    }
+  },
+  {
+    name: 'kb_list_documents',
+    familyId: 'kb',
+    skillIds: ['kb-document-discovery'],
+    requiresWorkspace: false,
+    promptSpec: KB_TOOL_PROMPT_SPECS.kb_list_documents,
+    executionMeta: {
+      mutability: 'read_only',
+      parallelSafe: true,
+      defaultResourceKey: 'local-kb'
+    }
+  }
+]
+
+const DOCX_TOOL_DESCRIPTOR_INPUTS: readonly StaticToolDescriptorInput[] = [
+  {
+    name: 'docx_open',
+    familyId: 'docx',
+    skillIds: ['docx-read'],
+    requiresWorkspace: true,
+    promptSpec: DOCX_TOOL_PROMPT_SPECS.docx_open,
+    executionMeta: {
+      mutability: 'mutating',
+      parallelSafe: false,
+      getResourceKey: (args) => readStringArg(args, 'sourcePath'),
+      defaultResourceKey: 'docx'
+    }
+  },
+  {
+    name: 'docx_outline',
+    familyId: 'docx',
+    skillIds: ['docx-read'],
+    requiresWorkspace: true,
+    promptSpec: DOCX_TOOL_PROMPT_SPECS.docx_outline,
+    executionMeta: {
+      mutability: 'read_only',
+      parallelSafe: true,
+      getResourceKey: (args) => readStringArg(args, 'docId'),
+      defaultResourceKey: 'docx'
+    }
+  },
+  {
+    name: 'docx_get_block',
+    familyId: 'docx',
+    skillIds: ['docx-read'],
+    requiresWorkspace: true,
+    promptSpec: DOCX_TOOL_PROMPT_SPECS.docx_get_block,
+    executionMeta: {
+      mutability: 'read_only',
+      parallelSafe: true,
+      getResourceKey: (args) => readStringArg(args, 'docId'),
+      defaultResourceKey: 'docx'
+    }
+  },
+  {
+    name: 'docx_search',
+    familyId: 'docx',
+    skillIds: ['docx-read'],
+    requiresWorkspace: true,
+    promptSpec: DOCX_TOOL_PROMPT_SPECS.docx_search,
+    executionMeta: {
+      mutability: 'read_only',
+      parallelSafe: true,
+      getResourceKey: (args) => readStringArg(args, 'docId'),
+      defaultResourceKey: 'docx'
+    }
+  },
+  {
+    name: 'docx_get_history',
+    familyId: 'docx',
+    skillIds: ['docx-read'],
+    requiresWorkspace: true,
+    promptSpec: DOCX_TOOL_PROMPT_SPECS.docx_get_history,
+    executionMeta: {
+      mutability: 'read_only',
+      parallelSafe: true,
+      getResourceKey: (args) => readStringArg(args, 'docId'),
+      defaultResourceKey: 'docx'
+    }
+  },
+  {
+    name: 'docx_apply_ops',
+    familyId: 'docx',
+    skillIds: ['docx-write'],
+    requiresWorkspace: true,
+    promptSpec: DOCX_TOOL_PROMPT_SPECS.docx_apply_ops,
+    executionMeta: {
+      mutability: 'mutating',
+      parallelSafe: false,
+      getResourceKey: (args) => readStringArg(args, 'docId'),
+      defaultResourceKey: 'docx'
+    }
+  },
+  {
+    name: 'docx_rollback',
+    familyId: 'docx',
+    skillIds: ['docx-write'],
+    requiresWorkspace: true,
+    promptSpec: DOCX_TOOL_PROMPT_SPECS.docx_rollback,
+    executionMeta: {
+      mutability: 'mutating',
+      parallelSafe: false,
+      getResourceKey: (args) => readStringArg(args, 'docId') || readStringArg(args, 'targetDocId'),
+      defaultResourceKey: 'docx'
+    }
+  },
+  {
+    name: 'docx_render_preview',
+    familyId: 'docx',
+    skillIds: ['docx-delivery'],
+    requiresWorkspace: true,
+    promptSpec: DOCX_TOOL_PROMPT_SPECS.docx_render_preview,
+    executionMeta: {
+      mutability: 'mutating',
+      parallelSafe: false,
+      getResourceKey: (args) => readStringArg(args, 'docId'),
+      defaultResourceKey: 'docx'
+    }
+  },
+  {
+    name: 'docx_save',
+    familyId: 'docx',
+    skillIds: ['docx-delivery'],
+    requiresWorkspace: true,
+    promptSpec: DOCX_TOOL_PROMPT_SPECS.docx_save,
+    executionMeta: {
+      mutability: 'mutating',
+      parallelSafe: false,
+      getResourceKey: (args) => readStringArg(args, 'outPath') || readStringArg(args, 'docId'),
+      defaultResourceKey: 'docx'
+    }
+  },
+  {
+    name: 'docx_validate',
+    familyId: 'docx',
+    skillIds: ['docx-delivery'],
+    requiresWorkspace: true,
+    promptSpec: DOCX_TOOL_PROMPT_SPECS.docx_validate,
+    executionMeta: {
+      mutability: 'read_only',
+      parallelSafe: true,
+      getResourceKey: (args) => readStringArg(args, 'docId'),
+      defaultResourceKey: 'docx'
+    }
+  }
+]
+
 export const TOOL_CATALOG: readonly ToolDescriptor[] = [
   {
     name: 'terminal_run_command',
@@ -59,184 +261,8 @@ export const TOOL_CATALOG: readonly ToolDescriptor[] = [
     promptSpec: TERMINAL_TOOL_PROMPT_SPECS.terminal_run_command,
     resolveExecutionMeta: resolveTerminalExecutionMeta
   },
-  {
-    name: 'kb_hybrid_search_chunks',
-    familyId: 'kb',
-    skillIds: ['kb-evidence-query'],
-    requiresWorkspace: false,
-    promptSpec: KB_TOOL_PROMPT_SPECS.kb_hybrid_search_chunks,
-    resolveExecutionMeta: createStaticExecutionMetaResolver({
-      mutability: 'read_only',
-      parallelSafe: true,
-      defaultResourceKey: 'local-kb'
-    })
-  },
-  {
-    name: 'kb_vector_search_chunks',
-    familyId: 'kb',
-    skillIds: ['kb-evidence-query'],
-    requiresWorkspace: false,
-    promptSpec: KB_TOOL_PROMPT_SPECS.kb_vector_search_chunks,
-    resolveExecutionMeta: createStaticExecutionMetaResolver({
-      mutability: 'read_only',
-      parallelSafe: true,
-      defaultResourceKey: 'local-kb'
-    })
-  },
-  {
-    name: 'kb_fts_search_chunks',
-    familyId: 'kb',
-    skillIds: ['kb-evidence-query'],
-    requiresWorkspace: false,
-    promptSpec: KB_TOOL_PROMPT_SPECS.kb_fts_search_chunks,
-    resolveExecutionMeta: createStaticExecutionMetaResolver({
-      mutability: 'read_only',
-      parallelSafe: true,
-      defaultResourceKey: 'local-kb'
-    })
-  },
-  {
-    name: 'kb_list_documents',
-    familyId: 'kb',
-    skillIds: ['kb-document-discovery'],
-    requiresWorkspace: false,
-    promptSpec: KB_TOOL_PROMPT_SPECS.kb_list_documents,
-    resolveExecutionMeta: createStaticExecutionMetaResolver({
-      mutability: 'read_only',
-      parallelSafe: true,
-      defaultResourceKey: 'local-kb'
-    })
-  },
-  {
-    name: 'docx_open',
-    familyId: 'docx',
-    skillIds: ['docx-read'],
-    requiresWorkspace: true,
-    promptSpec: DOCX_TOOL_PROMPT_SPECS.docx_open,
-    resolveExecutionMeta: createStaticExecutionMetaResolver({
-      mutability: 'mutating',
-      parallelSafe: false,
-      getResourceKey: (args) => readStringArg(args, 'sourcePath'),
-      defaultResourceKey: 'docx'
-    })
-  },
-  {
-    name: 'docx_outline',
-    familyId: 'docx',
-    skillIds: ['docx-read'],
-    requiresWorkspace: true,
-    promptSpec: DOCX_TOOL_PROMPT_SPECS.docx_outline,
-    resolveExecutionMeta: createStaticExecutionMetaResolver({
-      mutability: 'read_only',
-      parallelSafe: true,
-      getResourceKey: (args) => readStringArg(args, 'docId'),
-      defaultResourceKey: 'docx'
-    })
-  },
-  {
-    name: 'docx_get_block',
-    familyId: 'docx',
-    skillIds: ['docx-read'],
-    requiresWorkspace: true,
-    promptSpec: DOCX_TOOL_PROMPT_SPECS.docx_get_block,
-    resolveExecutionMeta: createStaticExecutionMetaResolver({
-      mutability: 'read_only',
-      parallelSafe: true,
-      getResourceKey: (args) => readStringArg(args, 'docId'),
-      defaultResourceKey: 'docx'
-    })
-  },
-  {
-    name: 'docx_search',
-    familyId: 'docx',
-    skillIds: ['docx-read'],
-    requiresWorkspace: true,
-    promptSpec: DOCX_TOOL_PROMPT_SPECS.docx_search,
-    resolveExecutionMeta: createStaticExecutionMetaResolver({
-      mutability: 'read_only',
-      parallelSafe: true,
-      getResourceKey: (args) => readStringArg(args, 'docId'),
-      defaultResourceKey: 'docx'
-    })
-  },
-  {
-    name: 'docx_get_history',
-    familyId: 'docx',
-    skillIds: ['docx-read'],
-    requiresWorkspace: true,
-    promptSpec: DOCX_TOOL_PROMPT_SPECS.docx_get_history,
-    resolveExecutionMeta: createStaticExecutionMetaResolver({
-      mutability: 'read_only',
-      parallelSafe: true,
-      getResourceKey: (args) => readStringArg(args, 'docId'),
-      defaultResourceKey: 'docx'
-    })
-  },
-  {
-    name: 'docx_apply_ops',
-    familyId: 'docx',
-    skillIds: ['docx-write'],
-    requiresWorkspace: true,
-    promptSpec: DOCX_TOOL_PROMPT_SPECS.docx_apply_ops,
-    resolveExecutionMeta: createStaticExecutionMetaResolver({
-      mutability: 'mutating',
-      parallelSafe: false,
-      getResourceKey: (args) => readStringArg(args, 'docId'),
-      defaultResourceKey: 'docx'
-    })
-  },
-  {
-    name: 'docx_rollback',
-    familyId: 'docx',
-    skillIds: ['docx-write'],
-    requiresWorkspace: true,
-    promptSpec: DOCX_TOOL_PROMPT_SPECS.docx_rollback,
-    resolveExecutionMeta: createStaticExecutionMetaResolver({
-      mutability: 'mutating',
-      parallelSafe: false,
-      getResourceKey: (args) => readStringArg(args, 'docId') || readStringArg(args, 'targetDocId'),
-      defaultResourceKey: 'docx'
-    })
-  },
-  {
-    name: 'docx_render_preview',
-    familyId: 'docx',
-    skillIds: ['docx-delivery'],
-    requiresWorkspace: true,
-    promptSpec: DOCX_TOOL_PROMPT_SPECS.docx_render_preview,
-    resolveExecutionMeta: createStaticExecutionMetaResolver({
-      mutability: 'mutating',
-      parallelSafe: false,
-      getResourceKey: (args) => readStringArg(args, 'docId'),
-      defaultResourceKey: 'docx'
-    })
-  },
-  {
-    name: 'docx_save',
-    familyId: 'docx',
-    skillIds: ['docx-delivery'],
-    requiresWorkspace: true,
-    promptSpec: DOCX_TOOL_PROMPT_SPECS.docx_save,
-    resolveExecutionMeta: createStaticExecutionMetaResolver({
-      mutability: 'mutating',
-      parallelSafe: false,
-      getResourceKey: (args) => readStringArg(args, 'outPath') || readStringArg(args, 'docId'),
-      defaultResourceKey: 'docx'
-    })
-  },
-  {
-    name: 'docx_validate',
-    familyId: 'docx',
-    skillIds: ['docx-delivery'],
-    requiresWorkspace: true,
-    promptSpec: DOCX_TOOL_PROMPT_SPECS.docx_validate,
-    resolveExecutionMeta: createStaticExecutionMetaResolver({
-      mutability: 'read_only',
-      parallelSafe: true,
-      getResourceKey: (args) => readStringArg(args, 'docId'),
-      defaultResourceKey: 'docx'
-    })
-  }
+  ...KB_TOOL_DESCRIPTOR_INPUTS.map((input) => createStaticToolDescriptor(input)),
+  ...DOCX_TOOL_DESCRIPTOR_INPUTS.map((input) => createStaticToolDescriptor(input))
 ]
 
 const TOOL_DESCRIPTOR_BY_NAME = new Map(

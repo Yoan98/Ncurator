@@ -14,7 +14,10 @@ import type {
 } from '../../../../src/main/services/ai/human/tools/docx/types'
 import { humanStateContractSchema } from '../../../../src/main/services/ai/human/schema'
 import type { HumanState } from '../../../../src/main/services/ai/human/types'
-import { createInitialHumanState } from '../../../../src/main/services/ai/human/utils/state'
+import {
+  createDefaultHumanStateFields,
+  createInitialHumanState
+} from '../../../../src/main/services/ai/human/utils/state'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 
 type DirectorSchemaFields = {
@@ -61,6 +64,7 @@ test('contract-alignment', async () => {
         sessionId: 'test-session',
         input: '验证 AI contract 对齐'
       })
+      const humanDefaults = createDefaultHumanStateFields()
       const humanState = createInitialHumanState({
         taskId: runtime.taskId,
         userInput: '验证 human contract 对齐'
@@ -93,6 +97,7 @@ test('contract-alignment', async () => {
           brainMemory: humanSchemaFields.brainMemory.parse(undefined),
           trace: humanSchemaFields.trace.parse(undefined)
         },
+        humanDefaults,
         parsedAiState: aiRunStateContractSchema.parse(aiState),
         parsedHumanState: humanStateContractSchema.parse(humanState),
         parsedParagraph: paragraphSpecSchema.parse(paragraph),
@@ -126,16 +131,21 @@ test('contract-alignment', async () => {
       )
 
       runtime.assertThat(
-        result.humanSchemaDefaults.task.taskId === '' &&
-          result.humanSchemaDefaults.runtime.stage === 'brain' &&
-          result.humanSchemaDefaults.runtime.status === 'running' &&
-          result.humanSchemaDefaults.brainMemory.outside.skillCatalog.length > 0 &&
-          result.humanSchemaDefaults.trace.steps.length === 0,
+        result.humanSchemaDefaults.task.taskId === result.humanDefaults.task.taskId &&
+          result.humanSchemaDefaults.task.userInput === result.humanDefaults.task.userInput &&
+          result.humanSchemaDefaults.runtime.stage === result.humanDefaults.runtime.stage &&
+          result.humanSchemaDefaults.runtime.status === result.humanDefaults.runtime.status &&
+          result.humanSchemaDefaults.brainMemory.outside.skillCatalog.length ===
+            result.humanDefaults.brainMemory.outside.skillCatalog.length &&
+          result.humanSchemaDefaults.trace.steps.length === result.humanDefaults.trace.steps.length,
         {
           name: 'human-contract-defaults',
           message:
-            'human schema defaults should still match the shared initial state shape after schema centralization',
-          data: result.humanSchemaDefaults
+            'human schema defaults should derive from the shared default state factory after state default consolidation',
+          data: {
+            humanSchemaDefaults: result.humanSchemaDefaults,
+            humanDefaults: result.humanDefaults
+          }
         }
       )
 

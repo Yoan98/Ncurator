@@ -1,6 +1,11 @@
 import { test } from 'vitest'
 import { buildFallbackDeliveryMarkdown } from '../../../../src/main/services/ai/human/node/mouthNode/deliveryMarkdown'
 import {
+  buildStructuredDeliveryPromptExample,
+  buildStructuredDeliveryPromptRules,
+  extractContextNoteReusableEvidence
+} from '../../../../src/main/services/ai/human/shared/deliveryContracts'
+import {
   renderEvidenceLines,
   renderFactLines,
   renderOpenQuestionLines
@@ -78,7 +83,17 @@ test('render-output-regression', async () => {
           state,
           deliveryMode: 'context_note',
           summary: '已补充上下文。'
-        })
+        }),
+        taskHandoffRules: buildStructuredDeliveryPromptRules('task_handoff'),
+        contextNoteRules: buildStructuredDeliveryPromptRules('context_note'),
+        contextNoteExample: buildStructuredDeliveryPromptExample('context_note'),
+        extractedReusableEvidence: extractContextNoteReusableEvidence(
+          buildFallbackDeliveryMarkdown({
+            state,
+            deliveryMode: 'context_note',
+            summary: '已补充上下文。'
+          })
+        )
       }
     },
     assert: async (result, runtime) => {
@@ -124,6 +139,36 @@ test('render-output-regression', async () => {
             taskHandoffMarkdown: result.taskHandoffMarkdown,
             contextNoteMarkdown: result.contextNoteMarkdown
           }
+        }
+      )
+
+      runtime.assertThat(
+        result.taskHandoffRules.includes('# 子任务交付') &&
+          result.taskHandoffRules.includes('## 建议下一步') &&
+          result.contextNoteRules.includes('# 上下文补充结果') &&
+          result.contextNoteRules.includes('## 可复用证据') &&
+          result.contextNoteExample.includes('# 上下文补充结果'),
+        {
+          name: 'render-delivery-contract-rules',
+          message:
+            'delivery prompt rules and examples should come from the shared structured delivery contract definitions',
+          data: {
+            taskHandoffRules: result.taskHandoffRules,
+            contextNoteRules: result.contextNoteRules,
+            contextNoteExample: result.contextNoteExample
+          }
+        }
+      )
+
+      runtime.assertThat(
+        result.extractedReusableEvidence.length === 1 &&
+          result.extractedReusableEvidence[0] ===
+            'kb_hybrid_search_chunks: 知识库显示发布前需执行复核。 (tool_result#1)',
+        {
+          name: 'render-context-note-evidence-extraction',
+          message:
+            'context_note evidence extraction should read from the same shared delivery contract headings as fallback markdown',
+          data: result.extractedReusableEvidence
         }
       )
     }

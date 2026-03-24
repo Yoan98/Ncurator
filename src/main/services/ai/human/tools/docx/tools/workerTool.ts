@@ -1,7 +1,7 @@
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import { tool } from '@langchain/core/tools'
 import type { z } from 'zod/v4'
-import type { JsonObject } from '../../../../../../../shared/types'
+import type { IpcJsonValue, JsonObject } from '../../../../../../../shared/types'
 import type { DocxToolFailure, DocxToolRuntime } from '../runtime'
 import type {
   DocxWorkerAction,
@@ -12,6 +12,90 @@ import type {
 export const isDocxToolFailure = (
   value: DocxToolFailure | DocxWorkerSuccessPayload
 ): value is DocxToolFailure => 'ok' in value && value.ok === false
+
+type DocxToolActivityConfig<TResult extends object> = {
+  actionType: string
+  startedSummary?: string
+  buildCompletedSummary?: (result: TResult) => string
+  buildFailedSummary?: (failure: DocxToolFailure) => string
+}
+
+const emitDocxToolStarted = <TResult extends object>(input: {
+  runtime: DocxToolRuntime
+  activity?: DocxToolActivityConfig<TResult>
+}) => {
+  if (!input.activity?.startedSummary) return
+  input.runtime.input.emitActivity({
+    actionType: input.activity.actionType,
+    status: 'started',
+    summary: input.activity.startedSummary
+  })
+}
+
+export const finalizeDocxToolFailure = <TResult extends object>(input: {
+  runtime: DocxToolRuntime
+  failure: DocxToolFailure
+  activity?: DocxToolActivityConfig<TResult>
+}): DocxToolFailure => {
+  if (input.activity) {
+    input.runtime.input.emitActivity({
+      actionType: input.activity.actionType,
+      status: 'failed',
+      summary: input.activity.buildFailedSummary?.(input.failure) || input.failure.summary
+    })
+  }
+  return input.failure
+}
+
+export const finalizeDocxToolSuccess = <TResult extends object>(input: {
+  runtime: DocxToolRuntime
+  toolName: string
+  toolCallId: string
+  result: TResult
+  outputPreview: IpcJsonValue
+  draftDocId?: string
+  activity?: DocxToolActivityConfig<TResult>
+}): TResult => {
+  input.runtime.toolEvents.emitResult({
+    toolName: input.toolName,
+    toolCallId: input.toolCallId,
+    outputPreview: input.outputPreview,
+    draftDocId: input.draftDocId
+  })
+  if (input.activity?.buildCompletedSummary) {
+    input.runtime.input.emitActivity({
+      actionType: input.activity.actionType,
+      status: 'completed',
+      summary: input.activity.buildCompletedSummary(input.result)
+    })
+  }
+  return input.result
+}
+
+export const buildDocxRequiredDocIdError = (toolName: string): string =>
+  `docId is required before ${toolName}; open a document first`
+
+export const requireDocxToolDocId = (input: {
+  runtime: DocxToolRuntime
+  toolName: string
+  toolCallId: string
+  docId?: string
+}): { docId: string } | { failure: DocxToolFailure } => {
+  const docId = input.runtime.getRequiredDocId({
+    toolName: input.toolName,
+    toolCallId: input.toolCallId,
+    docId: input.docId
+  })
+  if (docId) {
+    return { docId }
+  }
+  return {
+    failure: input.runtime.toFailure({
+      code: 'invalid_input',
+      error: buildDocxRequiredDocIdError(input.toolName)
+    })
+  }
+}
 
 export const callExpectedWorkerAction = async <TAction extends DocxWorkerAction>(input: {
   runtime: DocxToolRuntime
@@ -40,6 +124,63 @@ export const callExpectedWorkerAction = async <TAction extends DocxWorkerAction>
     })
   }
   return workerResponse.payload as Extract<DocxWorkerSuccessPayload, { action: TAction }>
+}
+
+export const runDocxWorkerToolAction = async <
+  TAction extends DocxWorkerAction,
+  TResult extends object
+>(input: {
+  runtime: DocxToolRuntime
+  toolName: string
+  toolCallId: string
+  request: Omit<DocxWorkerRequest, 'requestId' | 'runId'>
+  expectedAction: TAction
+  draftDocId?: string
+  activity?: DocxToolActivityConfig<TResult>
+  buildSuccess: (
+    payload: Extract<DocxWorkerSuccessPayload, { action: TAction }>
+  ) =>
+    | {
+        result: TResult
+        outputPreview: IpcJsonValue
+        draftDocId?: string
+      }
+    | Promise<{
+        result: TResult
+        outputPreview: IpcJsonValue
+        draftDocId?: string
+      }>
+}): Promise<TResult | DocxToolFailure> => {
+  emitDocxToolStarted({
+    runtime: input.runtime,
+    activity: input.activity
+  })
+  const workerPayload = await callExpectedWorkerAction({
+    runtime: input.runtime,
+    toolName: input.toolName,
+    toolCallId: input.toolCallId,
+    request: input.request,
+    expectedAction: input.expectedAction,
+    draftDocId: input.draftDocId
+  })
+  if (isDocxToolFailure(workerPayload)) {
+    return finalizeDocxToolFailure({
+      runtime: input.runtime,
+      failure: workerPayload,
+      activity: input.activity
+    })
+  }
+
+  const success = await input.buildSuccess(workerPayload)
+  return finalizeDocxToolSuccess({
+    runtime: input.runtime,
+    toolName: input.toolName,
+    toolCallId: input.toolCallId,
+    result: success.result,
+    outputPreview: success.outputPreview,
+    draftDocId: success.draftDocId,
+    activity: input.activity
+  })
 }
 
 export const createDocxTool = <TSchema extends z.ZodType, TResult extends object>(input: {

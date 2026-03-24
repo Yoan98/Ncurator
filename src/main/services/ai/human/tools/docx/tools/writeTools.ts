@@ -2,7 +2,14 @@ import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { DocxChangedBlock, DocxOp } from '../types'
 import type { DocxToolRuntime } from '../runtime'
 import { applyOpsSchema, rollbackSchema } from '../schemas'
-import { callExpectedWorkerAction, createDocxTool, isDocxToolFailure } from './workerTool'
+import {
+  callExpectedWorkerAction,
+  createDocxTool,
+  finalizeDocxToolFailure,
+  finalizeDocxToolSuccess,
+  isDocxToolFailure,
+  requireDocxToolDocId,
+} from './workerTool'
 
 export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInterface[] => {
   const docxApplyOpsTool = createDocxTool({
@@ -19,93 +26,93 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
       })
     },
     execute: async ({ args, toolName, toolCallId }) => {
-        const initialDocId = runtime.getRequiredDocId({
+      const docIdResult = requireDocxToolDocId({
+        runtime,
+        toolName,
+        toolCallId,
+        docId: args.docId
+      })
+      if ('failure' in docIdResult) return docIdResult.failure
+
+      const expandedOps = await runtime.expandOpsForReview(docIdResult.docId, args.ops as DocxOp[])
+      runtime.input.emitActivity({
+        actionType: 'docx_apply_ops',
+        status: 'started',
+        summary: `应用操作: ${expandedOps.length} 条`
+      })
+      let currentDocId = docIdResult.docId
+      const collectedChangedBlocks: DocxChangedBlock[] = []
+      const collectedWarnings: string[] = []
+
+      for (const op of expandedOps) {
+        const workerPayload = await callExpectedWorkerAction({
+          runtime,
           toolName,
           toolCallId,
-          docId: args.docId
+          expectedAction: 'apply_ops',
+          draftDocId: currentDocId,
+          request: {
+            action: 'apply_ops',
+            payload: {
+              docId: currentDocId,
+              ops: [op]
+            }
+          }
         })
-        if (!initialDocId) return runtime.toFailure({
-          code: 'invalid_input',
-          error: `docId is required before ${toolName}; open a document first`
-        })
-
-        const expandedOps = await runtime.expandOpsForReview(initialDocId, args.ops as DocxOp[])
-        runtime.input.emitActivity({
-          actionType: 'docx_apply_ops',
-          status: 'started',
-          summary: `应用操作: ${expandedOps.length} 条`
-        })
-        let currentDocId = initialDocId
-        const collectedChangedBlocks: DocxChangedBlock[] = []
-        const collectedWarnings: string[] = []
-
-        for (const op of expandedOps) {
-          const workerPayload = await callExpectedWorkerAction({
+        if (isDocxToolFailure(workerPayload)) {
+          return finalizeDocxToolFailure({
             runtime,
-            toolName,
-            toolCallId,
-            expectedAction: 'apply_ops',
-            draftDocId: currentDocId,
-            request: {
-              action: 'apply_ops',
-              payload: {
-                docId: currentDocId,
-                ops: [op]
-              }
+            failure: workerPayload,
+            activity: {
+              actionType: 'docx_apply_ops',
+              buildFailedSummary: (failure) => failure.summary
             }
           })
-          if (isDocxToolFailure(workerPayload)) {
-            runtime.input.emitActivity({
-              actionType: 'docx_apply_ops',
-              status: 'failed',
-              summary: workerPayload.summary
-            })
-            return workerPayload
-          }
-
-          const nextDocId = workerPayload.newDocId
-          const sourcePath = runtime.state.sourcePathByDocId.get(currentDocId)
-          if (sourcePath) runtime.state.sourcePathByDocId.set(nextDocId, sourcePath)
-          runtime.registerSnapshot(nextDocId, currentDocId)
-          runtime.input.ctx.trackDocxChanges({
-            previousDocId: currentDocId,
-            nextDocId,
-            op,
-            changedBlocks: workerPayload.changedBlocks
-          })
-          collectedChangedBlocks.push(...workerPayload.changedBlocks)
-          collectedWarnings.push(...workerPayload.warnings)
-          currentDocId = nextDocId
         }
 
-        runtime.state.lastDocId = currentDocId
-        const out = {
-          ok: true,
-          code: 'ok' as const,
-          summary: `ops applied (${collectedChangedBlocks.length} changes)`,
-          newDocId: currentDocId,
-          changedBlocks: collectedChangedBlocks,
-          warnings: collectedWarnings
-        }
-        runtime.toolEvents.emitResult({
-          toolName,
-          toolCallId,
-          outputPreview: {
-            ok: out.ok,
-            code: out.code,
-            summary: out.summary,
-            newDocId: out.newDocId,
-            changedCount: out.changedBlocks.length,
-            warnings: out.warnings
-          },
-          draftDocId: currentDocId
+        const nextDocId = workerPayload.newDocId
+        const sourcePath = runtime.state.sourcePathByDocId.get(currentDocId)
+        if (sourcePath) runtime.state.sourcePathByDocId.set(nextDocId, sourcePath)
+        runtime.registerSnapshot(nextDocId, currentDocId)
+        runtime.input.ctx.trackDocxChanges({
+          previousDocId: currentDocId,
+          nextDocId,
+          op,
+          changedBlocks: workerPayload.changedBlocks
         })
-        runtime.input.emitActivity({
+        collectedChangedBlocks.push(...workerPayload.changedBlocks)
+        collectedWarnings.push(...workerPayload.warnings)
+        currentDocId = nextDocId
+      }
+
+      runtime.state.lastDocId = currentDocId
+      const result = {
+        ok: true,
+        code: 'ok' as const,
+        summary: `ops applied (${collectedChangedBlocks.length} changes)`,
+        newDocId: currentDocId,
+        changedBlocks: collectedChangedBlocks,
+        warnings: collectedWarnings
+      }
+      return finalizeDocxToolSuccess({
+        runtime,
+        toolName,
+        toolCallId,
+        result,
+        outputPreview: {
+          ok: result.ok,
+          code: result.code,
+          summary: result.summary,
+          newDocId: result.newDocId,
+          changedCount: result.changedBlocks.length,
+          warnings: result.warnings
+        },
+        draftDocId: currentDocId,
+        activity: {
           actionType: 'docx_apply_ops',
-          status: 'completed',
-          summary: `编辑完成: ${out.changedBlocks.length} 处变更`
-        })
-        return out
+          buildCompletedSummary: (output) => `编辑完成: ${String(output.changedBlocks.length)} 处变更`
+        }
+      })
     },
   })
 
@@ -123,64 +130,67 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
       })
     },
     execute: async ({ args, toolName, toolCallId }) => {
-        const docId = runtime.getRequiredDocId({
-          toolName,
-          toolCallId,
-          docId: args.docId
-        })
-        if (!docId) return runtime.toFailure({
-          code: 'invalid_input',
-          error: `docId is required before ${toolName}; open a document first`
-        })
+      const docIdResult = requireDocxToolDocId({
+        runtime,
+        toolName,
+        toolCallId,
+        docId: args.docId
+      })
+      if ('failure' in docIdResult) return docIdResult.failure
 
-        runtime.input.emitActivity({
-          actionType: 'docx_rollback',
-          status: 'started',
-          summary: `准备回滚文档快照: ${docId}`
-        })
+      runtime.input.emitActivity({
+        actionType: 'docx_rollback',
+        status: 'started',
+        summary: `准备回滚文档快照: ${docIdResult.docId}`
+      })
 
-        const resolved = runtime.resolveRollbackTarget(docId, args.targetDocId, args.steps)
-        if (!resolved.ok) {
-          const out = runtime.emitFailure({
+      const resolved = runtime.resolveRollbackTarget(
+        docIdResult.docId,
+        args.targetDocId,
+        args.steps
+      )
+      if (!resolved.ok) {
+        return finalizeDocxToolFailure({
+          runtime,
+          failure: runtime.emitFailure({
             toolName,
             toolCallId,
             code: 'invalid_input',
             error: resolved.error
-          })
-          runtime.input.emitActivity({
+          }),
+          activity: {
             actionType: 'docx_rollback',
-            status: 'failed',
-            summary: out.summary
-          })
-          return out
-        }
-
-        runtime.state.lastDocId = resolved.targetDocId
-        const sourcePath = runtime.state.sourcePathByDocId.get(docId)
-        if (sourcePath && !runtime.state.sourcePathByDocId.has(resolved.targetDocId)) {
-          runtime.state.sourcePathByDocId.set(resolved.targetDocId, sourcePath)
-        }
-
-        const out = {
-          ok: true,
-          code: 'ok' as const,
-          summary: `rollback ready (${resolved.stepsApplied} step${resolved.stepsApplied === 1 ? '' : 's'}, not saved)`,
-          docId: resolved.targetDocId,
-          previousDocId: docId,
-          stepsApplied: resolved.stepsApplied
-        }
-        runtime.toolEvents.emitResult({
-          toolName,
-          toolCallId,
-          outputPreview: out,
-          draftDocId: resolved.targetDocId
+            buildFailedSummary: (failure) => failure.summary
+          }
         })
-        runtime.input.emitActivity({
+      }
+
+      runtime.state.lastDocId = resolved.targetDocId
+      const sourcePath = runtime.state.sourcePathByDocId.get(docIdResult.docId)
+      if (sourcePath && !runtime.state.sourcePathByDocId.has(resolved.targetDocId)) {
+        runtime.state.sourcePathByDocId.set(resolved.targetDocId, sourcePath)
+      }
+
+      const result = {
+        ok: true,
+        code: 'ok' as const,
+        summary: `rollback ready (${resolved.stepsApplied} step${resolved.stepsApplied === 1 ? '' : 's'}, not saved)`,
+        docId: resolved.targetDocId,
+        previousDocId: docIdResult.docId,
+        stepsApplied: resolved.stepsApplied
+      }
+      return finalizeDocxToolSuccess({
+        runtime,
+        toolName,
+        toolCallId,
+        result,
+        outputPreview: result,
+        draftDocId: resolved.targetDocId,
+        activity: {
           actionType: 'docx_rollback',
-          status: 'completed',
-          summary: `已切回草稿快照: ${resolved.targetDocId}`
-        })
-        return out
+          buildCompletedSummary: (output) => `已切回草稿快照: ${output.docId}`
+        }
+      })
     },
   })
 

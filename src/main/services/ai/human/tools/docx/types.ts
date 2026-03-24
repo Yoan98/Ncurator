@@ -1,6 +1,7 @@
 import type { AiTaskResultCode } from '../../../../../../shared/types'
 import type { DocxToolContext } from '../../../types'
 import type { z } from 'zod/v4'
+import type { WorkspaceCapabilityBuildInput } from '../types'
 import {
   blockSpecSchema,
   docOpSchema,
@@ -138,19 +139,8 @@ export type DocxOperationResult<T extends object> = T & {
   summary: string
 }
 
-export type EmitActivityInput = {
-  actionType: string
-  status: 'started' | 'completed' | 'failed'
-  summary: string
-}
-
-export type DocxCapabilityToolsInput = {
-  ctx: DocxToolContext
-  runId: string
-  taskId: string
-  workspaceRootPath: string
+export type DocxCapabilityToolsInput = WorkspaceCapabilityBuildInput<DocxToolContext> & {
   safePreviewChars: number
-  emitActivity: (input: EmitActivityInput) => void
 }
 
 export type SemanticDocIndexEntry = {

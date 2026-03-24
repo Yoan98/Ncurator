@@ -13,6 +13,12 @@ type DocxOpenResult = {
   docId: string
 }
 
+type DocxFailureResult = {
+  ok: boolean
+  code: AiTaskResultCode
+  error?: string
+}
+
 type DocxOutlineResult = {
   ok: boolean
   code: AiTaskResultCode
@@ -82,9 +88,12 @@ test('docx-runtime-behavior', async () => {
     fixtures: [],
     runMode: 'repeatable',
     execute: async (runtime) => {
-      const harness = createDocxToolHarness(runtime)
+      const harness = createDocxToolHarness(runtime, {
+        approvalPolicy: 'deny-medium-high'
+      })
 
       try {
+        const missingDocIdResult = await harness.invoke<DocxFailureResult>('docx_outline', {})
         const sourcePath = await writeWorkbenchSampleDocx(runtime.workspaceRoot, 'docs/sample.docx')
         const openResult = await harness.invoke<DocxOpenResult>('docx_open', {
           sourcePath
@@ -119,8 +128,14 @@ test('docx-runtime-behavior', async () => {
           docId: applyOpsResult.newDocId,
           outPath: 'output.docx'
         })
+        const overwriteDeniedResult = await harness.invoke<DocxFailureResult>('docx_save', {
+          docId: applyOpsResult.newDocId,
+          outPath: sourcePath,
+          overwrite: true
+        })
 
         return {
+          missingDocIdResult,
           sourcePath,
           openResult,
           outlineResult,
@@ -132,6 +147,7 @@ test('docx-runtime-behavior', async () => {
           previewResult,
           validateResult,
           saveResult,
+          overwriteDeniedResult,
           activities: harness.activities,
           events: runtime.eventCollector.snapshot()
         }
@@ -144,6 +160,12 @@ test('docx-runtime-behavior', async () => {
         name: 'docx-open',
         message: 'docx_open should return a tracked docId',
         data: result.openResult
+      })
+
+      runtime.assertThat(result.missingDocIdResult.code === 'invalid_input', {
+        name: 'docx-missing-docid',
+        message: 'docx tools that rely on implicit lastDocId should still fail with invalid_input before open',
+        data: result.missingDocIdResult
       })
 
       runtime.assertThat(result.outlineResult.blocks.length > 0, {
@@ -221,6 +243,12 @@ test('docx-runtime-behavior', async () => {
           data: result.saveResult
         }
       )
+
+      runtime.assertThat(result.overwriteDeniedResult.code === 'approval_denied', {
+        name: 'docx-save-overwrite-denied',
+        message: 'docx_save should still require approval before overwriting an existing workspace file',
+        data: result.overwriteDeniedResult
+      })
 
       const artifactEvents = result.events.filter((event) => isEventType(event, 'file_artifact'))
       runtime.assertThat(artifactEvents.length === 2, {

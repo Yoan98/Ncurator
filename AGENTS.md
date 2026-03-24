@@ -14,7 +14,7 @@
 - 当涉及数据库、LanceDB、表职责或检索存储实现时，请阅读 `doc/database.md`
 - 当涉及目录规范、模块边界、文件归位或工程结构时，请阅读 `doc/project-structure.md`
 - 当涉及 UI 风格、布局规范或组件交互约束时，请阅读 `doc/ui-style.md`
-- 当涉及测试目录、raw log、`runtime-events.jsonl`、`timeline` 值域规则、report 规则、证据展示方式或测试代码准入约束时，请阅读 `doc/test.md`
+- 当涉及测试架构设计、测试目录、正式/临时 case 准入、raw log、`runtime-events.jsonl`、`timeline` 值域规则、report 生成流程、证据展示方式或测试代码准入约束时，请阅读 `doc/test.md`
 
 ## 2. 必须遵守的规则
 ### 代码相关

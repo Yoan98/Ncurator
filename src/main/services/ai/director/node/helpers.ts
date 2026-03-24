@@ -2,6 +2,7 @@ import { z } from 'zod/v4'
 import type { AiPlanTask } from '../../../../../shared/types'
 import { mergeArtifactRefs } from '../../utils/artifacts'
 import type { AiRunState, DirectorNodeContext, HumanTaskOutput } from '../../types'
+import { extractContextNoteReusableEvidence } from '../../human/shared/deliveryContracts'
 
 export const DEFAULT_MAX_CONTEXT_ROUNDS = 2
 const DIRECTOR_HISTORY_LIMITS = {
@@ -33,27 +34,7 @@ export const appendContextEvidence = (state: AiRunState, text: string): string[]
 }
 
 export const extractReusableContextEvidence = (deliveryMarkdown: string | undefined): string[] => {
-  const lines = String(deliveryMarkdown || '').replace(/\r\n/g, '\n').split('\n')
-  const startIndex = lines.findIndex((line) => line.trim() === '## 可复用证据')
-  if (startIndex < 0) return []
-
-  const collected: string[] = []
-  for (let index = startIndex + 1; index < lines.length; index += 1) {
-    const line = lines[index].trim()
-    if (!line) continue
-    if (/^##\s+/.test(line)) break
-
-    const bulletMatch = line.match(/^[-*]\s+(.+)$/)
-    const numberedMatch = line.match(/^\d+\.\s+(.+)$/)
-    const value = bulletMatch?.[1] || numberedMatch?.[1]
-    if (!value) continue
-
-    const normalized = value.replace(/\s+/g, ' ').trim()
-    if (!normalized || normalized === '无' || collected.includes(normalized)) continue
-    collected.push(normalized)
-  }
-
-  return collected
+  return extractContextNoteReusableEvidence(deliveryMarkdown)
 }
 
 export const loadDirectorHistory = (ctx: Pick<DirectorNodeContext, 'loadHistory'>) =>

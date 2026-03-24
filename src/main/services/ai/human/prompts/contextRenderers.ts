@@ -2,6 +2,11 @@ import type { HumanState, ToolPromptSpec } from '../types'
 import { getToolPromptSpec } from './toolPrompts'
 import { getSkillDefinition } from '../node/learningNode/skillRegistry'
 import { renderLineList } from '../../utils/render'
+import {
+  renderHumanEvidenceLines,
+  renderHumanFactLines,
+  renderHumanOpenQuestionLines
+} from '../shared/memoryRenderers'
 
 const formatList = (items: string[]): string =>
   renderLineList(items, {
@@ -25,41 +30,18 @@ type HumanPromptRenderView = {
 }
 
 export const renderFactLines = (state: HumanState, mode: 'brain' | 'mouth'): string => {
-  return renderLineList(
-    state.brainMemory.inside.facts.map((fact) =>
-      mode === 'brain'
-        ? `- 事实 ${fact.id}：${fact.summary}；支持证据=[${fact.evidenceIds.join(', ')}]`
-        : `- ${fact.summary} (evidenceIds=[${fact.evidenceIds.join(', ')}])`
-    ),
-    {
-      fallback: 'none',
-      style: 'plain'
-    }
-  )
+  return renderHumanFactLines(state, mode === 'brain' ? 'brain_prompt' : 'mouth_prompt')
 }
 
 export const renderEvidenceLines = (state: HumanState, mode: 'brain' | 'mouth'): string => {
-  return renderLineList(
-    state.brainMemory.inside.evidences.map((evidence) =>
-      mode === 'brain'
-        ? `- 证据 ${evidence.id}：来源工具 ${evidence.toolName}；摘要：${evidence.summary}${evidence.rawRef ? `；rawRef=${evidence.rawRef}` : ''}`
-        : `- ${evidence.toolName}: ${evidence.summary}${evidence.rawRef ? ` (${evidence.rawRef})` : ''}`
-    ),
-    {
-      fallback: 'none',
-      style: 'plain'
-    }
+  return renderHumanEvidenceLines(
+    state,
+    mode === 'brain' ? 'brain_prompt' : 'mouth_prompt'
   )
 }
 
 export const renderOpenQuestionLines = (state: HumanState): string => {
-  return renderLineList(
-    state.brainMemory.inside.openQuestions.map((question) => `- ${question}`),
-    {
-      fallback: 'none',
-      style: 'plain'
-    }
-  )
+  return renderHumanOpenQuestionLines(state, 'brain_prompt')
 }
 
 const renderLearnedToolSpecLine = (spec: ToolPromptSpec): string => {

@@ -1,35 +1,16 @@
 import type { HumanMouthPromptInput } from './types'
+import {
+  buildStructuredDeliveryPromptExample,
+  buildStructuredDeliveryPromptRules
+} from '../shared/deliveryContracts'
 
 const buildDeliveryModeRules = (deliveryMode: HumanMouthPromptInput['deliveryMode']): string => {
   if (deliveryMode === 'task_handoff') {
-    return [
-      '当前 deliveryMode=task_handoff。',
-      'deliveryMarkdown 必须使用以下固定 markdown 章节，且章节名必须完全一致：',
-      '# 子任务交付',
-      '## 本任务结论',
-      '## 已完成',
-      '## 关键事实',
-      '## 关键证据',
-      '## 产物与引用',
-      '## 未决与风险',
-      '## 对后续任务的影响',
-      '## 建议下一步',
-      '空章节写“无”。'
-    ].join('\n')
+    return buildStructuredDeliveryPromptRules('task_handoff')
   }
 
   if (deliveryMode === 'context_note') {
-    return [
-      '当前 deliveryMode=context_note。',
-      'deliveryMarkdown 必须使用以下固定 markdown 章节，且章节名必须完全一致：',
-      '# 上下文补充结果',
-      '## 本轮结论',
-      '## 可复用证据',
-      '## 当前边界',
-      '## 未决项',
-      '## 建议补充方向',
-      '空章节写“无”。'
-    ].join('\n')
+    return buildStructuredDeliveryPromptRules('context_note')
   }
 
   return [
@@ -40,17 +21,11 @@ const buildDeliveryModeRules = (deliveryMode: HumanMouthPromptInput['deliveryMod
 
 const buildOutputExample = (deliveryMode: HumanMouthPromptInput['deliveryMode']): string => {
   if (deliveryMode === 'task_handoff') {
-    return `{
-  "summary": "已完成本子任务，并整理出可供后续任务承接的关键事实。",
-  "deliveryMarkdown": "# 子任务交付\\n\\n## 本任务结论\\n已完成本子任务。\\n\\n## 已完成\\n- 已完成关键核对。\\n\\n## 关键事实\\n- 事实一\\n\\n## 关键证据\\n- 证据一\\n\\n## 产物与引用\\n无\\n\\n## 未决与风险\\n无\\n\\n## 对后续任务的影响\\n- 后续任务可直接继承以上结论。\\n\\n## 建议下一步\\n- 继续执行下一个任务。"
-}`
+    return buildStructuredDeliveryPromptExample('task_handoff')
   }
 
   if (deliveryMode === 'context_note') {
-    return `{
-  "summary": "已补充当前上下文，并整理出可复用证据。",
-  "deliveryMarkdown": "# 上下文补充结果\\n\\n## 本轮结论\\n已补充当前上下文。\\n\\n## 可复用证据\\n- 证据一\\n\\n## 当前边界\\n- 当前确认范围\\n\\n## 未决项\\n无\\n\\n## 建议补充方向\\n- 如需继续，可补充更多材料。"
-}`
+    return buildStructuredDeliveryPromptExample('context_note')
   }
 
   return `{

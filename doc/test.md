@@ -1,5 +1,12 @@
 # NCurator-Desktop 测试架构
 
+## 0. 适用范围
+
+- 本文用于规定 NCurator-Desktop 的测试架构设计。
+- 本文统一定义测试目录、测试准入、runner 职责、raw log 契约、report 契约，以及从正式 case 规划到 report 更新的标准流程。
+- 本文不定义具体业务域的正式 case 内容；正式 case 的 `用例名称 / What / Why / How / Oracle / Not` 统一以 `doc/test-plan/**` 为准。
+- 当需要判断正式 case 是否可以进入 `tests/**`、日志应如何落盘、report 应如何生成与引用证据时，以本文为准。
+
 ## 1. 目标
 
 - 测试体系收敛为两层产物：
@@ -96,7 +103,10 @@ tests/
 - `temp/` 默认不参与 gating，也不参与正式 report 汇总。
 - 除 `tests/temp/**` 外，`tests/**` 中的正式测试目录只允许放已在 `doc/test-plan/**` 登记的 case，否则需要主动讨论。
 
-## 3. 测试用例设计原则
+## 3. 测试准入与用例编写规范
+
+- 正式 case 与临时 case 的准入路径不同，必须先判断类型，再决定放置位置。
+- 正式长期维护 case 的标准顺序固定为：先补 `doc/test-plan/**`，再写测试代码，再执行 runner，再分析 raw logs，再更新 report。
 
 ### 3.1 基础case
 - 这类case要保证基础能力能正常使用。
@@ -131,7 +141,52 @@ tests/
 - 未在 `test-plan` 定义的验证，不得直接进入正式测试目录；需要先排查时只能放在 `tests/temp/**`。
 - 如果某条临时 case 需要转为长期维护 case，必须先补齐 `doc/test-plan/**` 中的正式用例定义，再迁入正式测试目录。
 
-## 4. runner 与命令
+## 4. 正式测试闭环流程
+
+### 4.1 判断测试类型
+
+- 正式长期回归 case：用于长期维护、参与 gating、进入正式 report，必须走 `doc/test-plan/**` -> `tests/**` -> `tests/logs/**` -> `tests/report/**` 的完整链路。
+- 临时排查 case：只用于一次性排查、验证猜想或临时复现，固定放在 `tests/temp/**`，不参与 gating，也不进入正式 report。
+
+### 4.2 定义或更新正式 case 规格
+
+- 新增、补齐或调整正式 case 时，必须先更新 `doc/test-plan/**` 中对应测试计划。
+- 正式 case 规格至少要明确 `用例名称 / What / Why / How / Oracle / Not`，测试代码必须按这些字段落地，不得自行脑补。
+- `用例名称` 需要稳定映射到唯一 `caseId`、唯一测试文件和唯一日志目录。
+
+### 4.3 放入测试目录
+
+- 正式 case 固定放在 `tests/<domain>/<layer>/<suite>/<groups...>/<case>.test.ts`。
+- 临时 case 固定放在 `tests/temp/**`。
+- 未在 `doc/test-plan/**` 登记的验证，不得进入正式测试目录。
+- 当临时 case 需要转为正式长期 case 时，顺序必须是：先补 `doc/test-plan/**`，再迁入正式目录。
+
+### 4.4 执行与产生日志
+
+- 正式测试统一通过 `scripts/test-workflow.mjs` 执行。
+- runner 只负责收集测试文件、执行测试并落 `tests/logs/**`。
+- e2e 请求下 runner 先执行同域 backend；除此之外不负责失败分析、建议整理或 report 更新。
+
+### 4.5 读取与分析 raw logs
+
+- 默认先读取目标 run 的 `timeline.jsonl`，理解语义步骤、断言事实和失败位置。
+- 如果 `timeline.jsonl` 仍不足以解释结果，再继续读取 `runtime-events.jsonl` 与关键附件。
+- 必要时回看 `meta.json` 与 `artifacts.json`，确认 run 摘要、统计值和附件索引。
+- 所有分析结论都必须可回溯到 raw logs 与 artifacts，不得脱离证据做推断。
+
+### 4.6 更新正式 report
+
+- 正式 report 固定更新 `tests/report/<domain>/report.md`。
+- report 只能基于 `tests/logs/<domain>/**` 及其附件生成；`tests/temp/**` 不进入正式 report。
+- report 负责沉淀当前现状分析、失败模式和下一步建议，但不能替代 raw logs 本身。
+
+### 4.7 结论回流
+
+- 如果问题出在 case 定义、验收口径或阶段边界，必须先改 `doc/test-plan/**`，再改测试代码。
+- 如果只是实现缺陷或回归问题，可在保持 case 规格不变的前提下修实现并重跑。
+- report 中已有结论若被新 run 推翻，应以最新 raw logs 重新分析并更新，不保留无证据的旧判断。
+
+## 5. runner 与命令
 
 统一入口是 `scripts/test-workflow.mjs`。
 
@@ -170,7 +225,7 @@ runner 不负责：
 - 写优化建议
 - 更新正式 `report.md`
 
-## 5. 原始日志契约
+## 6. 原始日志契约
 
 每个 run 固定目录：
 
@@ -379,7 +434,7 @@ tests/logs/<domain>/<layer>/<suite>/<groups...>/<caseId>/<runId>/
 - `artifacts.json` 必须始终写出，即使 `items` 为空数组。
 - `artifacts/` 目录只有在确实存在实体附件文件时才创建。
 
-## 6. backend 与 e2e 的统一约束
+### backend 与 e2e 的统一约束
 
 - backend 和 e2e 共用同一份 `meta.json` / `timeline.jsonl` / `runtime-events.jsonl` / `artifacts.json` 基础契约。
 - backend 与 e2e 的差异只体现在：
@@ -389,7 +444,7 @@ tests/logs/<domain>/<layer>/<suite>/<groups...>/<caseId>/<runId>/
   - `runtime-events.jsonl` 的采集路径
   - `timeline.jsonl` 中出现的语义事件名与信号类型
 
-### e2e 默认附件策略
+#### e2e 默认附件策略
 
 - 成功 run：
   - 始终保留 Playwright trace。
@@ -401,7 +456,9 @@ tests/logs/<domain>/<layer>/<suite>/<groups...>/<caseId>/<runId>/
   - 生成位于 `artifacts/playwright/report/index.html` 的 HTML 诊断页。
 - 默认不保留 video。
 
-## 7. 正式 report
+## 7. 正式 report 契约
+
+- `report` 是正式测试闭环中的最终分析产物；前提是对应 domain 已先生成可回看的 raw logs。
 
 当前正式分析文档固定放在：
 
@@ -568,17 +625,7 @@ tests/report/<domain>/
 - report 只引用 raw logs 与 artifacts 作为证据来源。
 - report 可以做分析与建议，但不得写入没有日志依据的推断。
 
-## 8. Codex 后置分析工作流
-
-当用户要求 Codex 跑测试并继续分析时，Codex 必须按以下顺序执行：
-
-1. 运行目标测试命令。
-2. 读取对应 domain 下的 raw logs。
-3. 先看 `timeline.jsonl`；若信息仍不足，再回看 `runtime-events.jsonl` 与关键附件。
-4. 必要时继续回看失败 run 的 `meta.json` 与 `artifacts.json`。
-5. 更新 `tests/report/<domain>/report.md`。
-
-## 9. 明确禁止
+## 8. 明确禁止
 
 - 测试样例直接输出失败原因分析。
 - runner 自动调用测试所用 AI 模型生成 report。

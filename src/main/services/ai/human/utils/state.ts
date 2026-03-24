@@ -28,10 +28,18 @@ export const createDefaultHumanTrace = (): HumanState['trace'] => ({
   steps: []
 })
 
-export const createInitialHumanState = (task: HumanTaskInput): HumanState => ({
-  task,
+export const createDefaultHumanStateFields = (): Pick<
+  HumanState,
+  'task' | 'runtime' | 'brainMemory' | 'runtimeArtifacts' | 'trace'
+> => ({
+  task: createEmptyHumanTaskInput(),
   runtime: createDefaultHumanRuntime(),
   brainMemory: createDefaultHumanBrainMemory(),
   runtimeArtifacts: [],
   trace: createDefaultHumanTrace()
+})
+
+export const createInitialHumanState = (task: HumanTaskInput): HumanState => ({
+  ...createDefaultHumanStateFields(),
+  task
 })

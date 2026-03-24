@@ -1,5 +1,6 @@
 import type { AiFileArtifactOperation } from '../../../../../../shared/types'
 import type { TerminalToolContext } from '../../../types'
+import type { WorkspaceCapabilityBuildInput } from '../types'
 
 export type TerminalCommandInput = {
   command: string
@@ -25,21 +26,10 @@ export type TerminalArtifactCandidate = {
   operation?: AiFileArtifactOperation
 }
 
-export type EmitActivityInput = {
-  actionType: string
-  status: 'started' | 'completed' | 'failed'
-  summary: string
-}
-
-export type TerminalCapabilityToolsInput = {
-  ctx: TerminalToolContext
-  runId: string
-  taskId: string
-  workspaceRootPath: string
+export type TerminalCapabilityToolsInput = WorkspaceCapabilityBuildInput<TerminalToolContext> & {
   timeoutMs: number
   maxOutputChars: number
   safePreviewChars: number
-  emitActivity: (input: EmitActivityInput) => void
 }
 
 export type TerminalCapabilityToolsRuntimeState = {

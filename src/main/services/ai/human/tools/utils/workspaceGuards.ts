@@ -1,7 +1,16 @@
 import { tool } from '@langchain/core/tools'
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { z } from 'zod/v4'
-import type { AiEventDispatchContext } from '../../../types'
+import { emitActivity } from '../../../../../utils/aiCapabilityUtils'
+import type { AiEventDispatchContext, AiRunContext } from '../../../types'
+import { jsonObjectSchema } from '../../schema'
+import { listToolNamesByFamily } from '../toolCatalog'
+import type {
+  AiToolFamilyId,
+  CapabilityActivityInput,
+  ToolFamilyDefinition,
+  WorkspaceCapabilityBuildInput
+} from '../types'
 
 export const buildWorkspaceRequiredResult = (error: string) => ({
   ok: false,
@@ -72,3 +81,58 @@ export const buildWorkspaceBoundGuardedTools = <TSchema extends z.ZodType>(input
     .buildWorkspaceTools(workspaceRootPath)
     .filter((toolItem) => toolNameSet.has(String(toolItem.name || '').trim()))
 }
+
+export const createWorkspaceCapabilityActivityEmitter = (input: {
+  ctx: AiEventDispatchContext
+  runId: string
+  taskId: string
+}) => {
+  return (activity: CapabilityActivityInput) => {
+    emitActivity({
+      ctx: input.ctx,
+      runId: input.runId,
+      taskId: input.taskId,
+      actionType: activity.actionType,
+      status: activity.status,
+      summary: activity.summary
+    })
+  }
+}
+
+export const createWorkspaceBoundToolFamily = (input: {
+  familyId: AiToolFamilyId
+  descriptionForTool: (toolName: string) => string
+  reason: string
+  error: string
+  buildWorkspaceTools: (
+    buildInput: WorkspaceCapabilityBuildInput<AiRunContext>
+  ) => StructuredToolInterface[]
+}): ToolFamilyDefinition => ({
+  familyId: input.familyId,
+  buildTools: ({ ctx, runId, taskId }) => {
+    const toolNames = listToolNamesByFamily(input.familyId)
+    return buildWorkspaceBoundGuardedTools({
+      toolNames,
+      workspaceRootPath: ctx.workspace?.rootPath,
+      descriptionForTool: input.descriptionForTool,
+      schema: jsonObjectSchema.optional(),
+      ctx,
+      runId,
+      taskId,
+      reason: input.reason,
+      error: input.error,
+      buildWorkspaceTools: (workspaceRootPath) =>
+        input.buildWorkspaceTools({
+          ctx,
+          runId,
+          taskId,
+          workspaceRootPath,
+          emitActivity: createWorkspaceCapabilityActivityEmitter({
+            ctx,
+            runId,
+            taskId
+          })
+        })
+    })
+  }
+})

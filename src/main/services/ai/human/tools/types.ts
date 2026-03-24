@@ -27,6 +27,22 @@ export type ToolExecutionMeta = {
 
 export type ToolExecutionMetaResolver = (args: JsonObject) => ToolExecutionMeta
 
+export type CapabilityActivityStatus = 'started' | 'completed' | 'failed'
+
+export type CapabilityActivityInput = {
+  actionType: string
+  status: CapabilityActivityStatus
+  summary: string
+}
+
+export type WorkspaceCapabilityBuildInput<TContext = AiRunContext> = {
+  ctx: TContext
+  runId: string
+  taskId: string
+  workspaceRootPath: string
+  emitActivity: (input: CapabilityActivityInput) => void
+}
+
 export type ToolDescriptor = {
   name: string
   familyId: AiToolFamilyId
