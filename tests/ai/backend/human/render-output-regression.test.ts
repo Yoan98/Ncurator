@@ -1,8 +1,8 @@
 import { test } from 'vitest'
-import { buildFallbackDeliveryMarkdown } from '../../../../src/main/services/ai/human/node/mouthNode/deliveryMarkdown'
 import {
-  buildStructuredDeliveryPromptExample,
-  buildStructuredDeliveryPromptRules,
+  buildDeliveryModeFallbackMarkdown,
+  buildDeliveryModePromptExample,
+  buildDeliveryModePromptRules,
   extractContextNoteReusableEvidence
 } from '../../../../src/main/services/ai/human/shared/deliveryContracts'
 import {
@@ -74,23 +74,23 @@ test('render-output-regression', async () => {
         factLines: renderHumanFactLines(state, 'brain_prompt'),
         evidenceLines: renderHumanEvidenceLines(state, 'mouth_prompt'),
         questionLines: renderHumanOpenQuestionLines(state, 'brain_prompt'),
-        taskHandoffMarkdown: buildFallbackDeliveryMarkdown({
+        taskHandoffMarkdown: buildDeliveryModeFallbackMarkdown({
           state,
-          deliveryMode: 'task_handoff',
+          mode: 'task_handoff',
           summary: '已整理交付。'
         }),
-        contextNoteMarkdown: buildFallbackDeliveryMarkdown({
+        contextNoteMarkdown: buildDeliveryModeFallbackMarkdown({
           state,
-          deliveryMode: 'context_note',
+          mode: 'context_note',
           summary: '已补充上下文。'
         }),
-        taskHandoffRules: buildStructuredDeliveryPromptRules('task_handoff'),
-        contextNoteRules: buildStructuredDeliveryPromptRules('context_note'),
-        contextNoteExample: buildStructuredDeliveryPromptExample('context_note'),
+        taskHandoffRules: buildDeliveryModePromptRules('task_handoff'),
+        contextNoteRules: buildDeliveryModePromptRules('context_note'),
+        contextNoteExample: buildDeliveryModePromptExample('context_note'),
         extractedReusableEvidence: extractContextNoteReusableEvidence(
-          buildFallbackDeliveryMarkdown({
+          buildDeliveryModeFallbackMarkdown({
             state,
-            deliveryMode: 'context_note',
+            mode: 'context_note',
             summary: '已补充上下文。'
           })
         )

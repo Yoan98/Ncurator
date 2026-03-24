@@ -1,32 +1,21 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import type { StructuredToolInterface } from '@langchain/core/tools'
-import { getToolContract } from '../../toolCatalog'
 import type { DocxToolRuntime } from '../runtime'
 import type { DocxOutlineBlock } from '../types'
 import { buildSemanticMatches, splitEmbeddingRows } from '../semanticSearch'
 import {
+  DOCX_GET_BLOCK_TOOL_SPEC,
+  DOCX_GET_HISTORY_TOOL_SPEC,
+  DOCX_OPEN_TOOL_SPEC,
+  DOCX_OUTLINE_TOOL_SPEC,
+  DOCX_SEARCH_TOOL_SPEC
+} from '../toolSpecs'
+import {
   createDocxTool,
   finalizeDocxToolSuccess,
-  requireDocxToolDocId,
   runDocxWorkerToolAction
 } from './workerTool'
-
-const DOCX_OPEN_CONTRACT = getToolContract('docx_open')
-const DOCX_OUTLINE_CONTRACT = getToolContract('docx_outline')
-const DOCX_GET_BLOCK_CONTRACT = getToolContract('docx_get_block')
-const DOCX_SEARCH_CONTRACT = getToolContract('docx_search')
-const DOCX_GET_HISTORY_CONTRACT = getToolContract('docx_get_history')
-
-if (
-  !DOCX_OPEN_CONTRACT ||
-  !DOCX_OUTLINE_CONTRACT ||
-  !DOCX_GET_BLOCK_CONTRACT ||
-  !DOCX_SEARCH_CONTRACT ||
-  !DOCX_GET_HISTORY_CONTRACT
-) {
-  throw new Error('missing docx read tool contracts')
-}
 
 export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInterface[] => {
   type DocxOutlineResult = {
@@ -39,12 +28,12 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
 
   const docxOpenTool = createDocxTool({
     runtime,
-    name: DOCX_OPEN_CONTRACT.name,
-    description: 'Open a workspace-bound docx file and register a docId for subsequent operations.',
-    schema: DOCX_OPEN_CONTRACT.schema,
+    name: DOCX_OPEN_TOOL_SPEC.name,
+    description: DOCX_OPEN_TOOL_SPEC.description,
+    schema: DOCX_OPEN_TOOL_SPEC.schema,
     onError: ({ message }) => {
       runtime.input.emitActivity({
-        actionType: 'docx_open',
+        actionType: DOCX_OPEN_TOOL_SPEC.activityActionType!,
         status: 'failed',
         summary: `文档打开异常: ${message}`
       })
@@ -76,15 +65,15 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
         runtime,
         toolName,
         toolCallId,
-        expectedAction: 'open',
+        expectedAction: DOCX_OPEN_TOOL_SPEC.workerAction!,
         activity: {
-          actionType: 'docx_open',
+          actionType: DOCX_OPEN_TOOL_SPEC.activityActionType!,
           startedSummary: `打开文档: ${sourcePath}`,
           buildCompletedSummary: () => `文档已打开: ${path.basename(sourcePath)}`,
           buildFailedSummary: (failure) => `文档打开失败: ${failure.error}`
         },
         request: {
-          action: 'open',
+          action: DOCX_OPEN_TOOL_SPEC.workerAction!,
           payload: {
             sourcePath
           }
@@ -117,40 +106,34 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
 
   const docxOutlineTool = createDocxTool({
     runtime,
-    name: DOCX_OUTLINE_CONTRACT.name,
-    description:
-      'Extract a deterministic block outline for a previously opened doc (paragraph/table/table_cell).',
-    schema: DOCX_OUTLINE_CONTRACT.schema,
+    name: DOCX_OUTLINE_TOOL_SPEC.name,
+    description: DOCX_OUTLINE_TOOL_SPEC.description,
+    schema: DOCX_OUTLINE_TOOL_SPEC.schema,
     onError: ({ message }) => {
       runtime.input.emitActivity({
-        actionType: 'docx_outline',
+        actionType: DOCX_OUTLINE_TOOL_SPEC.activityActionType!,
         status: 'failed',
         summary: message
       })
     },
     execute: async ({ args, toolName, toolCallId }) => {
       runtime.input.ctx.checkCancelled()
-      const docIdResult = requireDocxToolDocId({
-        runtime,
-        toolName,
-        toolCallId,
-        docId: args.docId
-      })
+      const docIdResult = runtime.requireDocId({ toolName, toolCallId, docId: args.docId })
       if ('failure' in docIdResult) return docIdResult.failure
 
       return await runDocxWorkerToolAction<'outline', DocxOutlineResult>({
         runtime,
         toolName,
         toolCallId,
-        expectedAction: 'outline',
+        expectedAction: DOCX_OUTLINE_TOOL_SPEC.workerAction!,
         draftDocId: docIdResult.docId,
         activity: {
-          actionType: 'docx_outline',
+          actionType: DOCX_OUTLINE_TOOL_SPEC.activityActionType!,
           startedSummary: `提取结构: ${docIdResult.docId}`,
           buildCompletedSummary: (result) => `结构提取完成: ${String(result.blocks.length)} blocks`
         },
         request: {
-          action: 'outline',
+          action: DOCX_OUTLINE_TOOL_SPEC.workerAction!,
           payload: {
             docId: docIdResult.docId,
             maxBlocks: Number(args.maxBlocks || 200),
@@ -184,25 +167,20 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
 
   const docxGetBlockTool = createDocxTool({
     runtime,
-    name: DOCX_GET_BLOCK_CONTRACT.name,
-    description: 'Get one block by blockId with detailed structure.',
-    schema: DOCX_GET_BLOCK_CONTRACT.schema,
+    name: DOCX_GET_BLOCK_TOOL_SPEC.name,
+    description: DOCX_GET_BLOCK_TOOL_SPEC.description,
+    schema: DOCX_GET_BLOCK_TOOL_SPEC.schema,
     execute: async ({ args, toolName, toolCallId }) => {
-      const docIdResult = requireDocxToolDocId({
-        runtime,
-        toolName,
-        toolCallId,
-        docId: args.docId
-      })
+      const docIdResult = runtime.requireDocId({ toolName, toolCallId, docId: args.docId })
       if ('failure' in docIdResult) return docIdResult.failure
 
       return await runDocxWorkerToolAction({
         runtime,
         toolName,
         toolCallId,
-        expectedAction: 'get_block',
+        expectedAction: DOCX_GET_BLOCK_TOOL_SPEC.workerAction!,
         request: {
-          action: 'get_block',
+          action: DOCX_GET_BLOCK_TOOL_SPEC.workerAction!,
           payload: {
             docId: docIdResult.docId,
             blockId: args.blockId
@@ -232,17 +210,11 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
 
   const docxSearchTool = createDocxTool({
     runtime,
-    name: DOCX_SEARCH_CONTRACT.name,
-    description:
-      'Search blocks in a doc using literal/regex mode, or semantic block retrieval with cached embeddings.',
-    schema: DOCX_SEARCH_CONTRACT.schema,
+    name: DOCX_SEARCH_TOOL_SPEC.name,
+    description: DOCX_SEARCH_TOOL_SPEC.description,
+    schema: DOCX_SEARCH_TOOL_SPEC.schema,
     execute: async ({ args, toolName, toolCallId }) => {
-      const docIdResult = requireDocxToolDocId({
-        runtime,
-        toolName,
-        toolCallId,
-        docId: args.docId
-      })
+      const docIdResult = runtime.requireDocId({ toolName, toolCallId, docId: args.docId })
       if ('failure' in docIdResult) return docIdResult.failure
 
       if (args.mode === 'semantic') {
@@ -299,9 +271,9 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
         runtime,
         toolName,
         toolCallId,
-        expectedAction: 'search',
+        expectedAction: DOCX_SEARCH_TOOL_SPEC.workerAction!,
         request: {
-          action: 'search',
+          action: DOCX_SEARCH_TOOL_SPEC.workerAction!,
           payload: {
             docId: docIdResult.docId,
             query: args.query,
@@ -335,17 +307,11 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
 
   const docxGetHistoryTool = createDocxTool({
     runtime,
-    name: DOCX_GET_HISTORY_CONTRACT.name,
-    description:
-      'Inspect the immutable docx snapshot lineage for the current run. Useful for confirm/rollback flows before save.',
-    schema: DOCX_GET_HISTORY_CONTRACT.schema,
+    name: DOCX_GET_HISTORY_TOOL_SPEC.name,
+    description: DOCX_GET_HISTORY_TOOL_SPEC.description,
+    schema: DOCX_GET_HISTORY_TOOL_SPEC.schema,
     execute: async ({ args, toolName, toolCallId }) => {
-      const docIdResult = requireDocxToolDocId({
-        runtime,
-        toolName,
-        toolCallId,
-        docId: args.docId
-      })
+      const docIdResult = runtime.requireDocId({ toolName, toolCallId, docId: args.docId })
       if ('failure' in docIdResult) return docIdResult.failure
 
       const history = runtime.buildSnapshotHistory(docIdResult.docId, Number(args.maxDepth || 10))

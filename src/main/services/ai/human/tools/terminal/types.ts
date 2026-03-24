@@ -36,6 +36,8 @@ export type TerminalCapabilityToolsRuntimeState = {
   stepIndex: number
 }
 
+export type TerminalCommandApprovalRiskLevel = 'low' | 'medium' | 'high'
+
 export type ArtifactCandidate = {
   resolvedPath: string
   summary: string

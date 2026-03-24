@@ -6,6 +6,7 @@ const ROOT = process.cwd()
 const TESTS_ROOT = path.join(ROOT, 'tests')
 const resolveLocalBin = (name) =>
   path.join(ROOT, 'node_modules', '.bin', process.platform === 'win32' ? `${name}.cmd` : name)
+const PNPM_BIN = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 const VITEST_BIN = resolveLocalBin('vitest')
 const ELECTRON_VITE_BIN = resolveLocalBin('electron-vite')
 
@@ -103,25 +104,50 @@ const findTestFiles = async (input) => {
     .sort()
 }
 
-const runVitest = (input) => {
-  const commandArgs = ['--config', input.configPath, 'run', ...input.testFiles]
-  const result = spawnSync(VITEST_BIN, commandArgs, {
+const runCommandWithFallback = (input) => {
+  const primaryResult = spawnSync(input.primary.bin, input.primary.args, {
     cwd: ROOT,
     stdio: 'inherit'
   })
 
-  if (typeof result.status === 'number') return result.status
+  if (!primaryResult.error) {
+    if (typeof primaryResult.status === 'number') return primaryResult.status
+    return 1
+  }
+
+  const fallbackResult = spawnSync(input.fallback.bin, input.fallback.args, {
+    cwd: ROOT,
+    stdio: 'inherit'
+  })
+  if (typeof fallbackResult.status === 'number') return fallbackResult.status
   return 1
 }
 
-const buildE2EApp = () => {
-  const result = spawnSync(ELECTRON_VITE_BIN, ['build'], {
-    cwd: ROOT,
-    stdio: 'inherit'
+const runVitest = (input) => {
+  const commandArgs = ['--config', input.configPath, 'run', ...input.testFiles]
+  return runCommandWithFallback({
+    primary: {
+      bin: PNPM_BIN,
+      args: ['exec', 'vitest', ...commandArgs]
+    },
+    fallback: {
+      bin: VITEST_BIN,
+      args: commandArgs
+    }
   })
+}
 
-  if (typeof result.status === 'number') return result.status
-  return 1
+const buildE2EApp = () => {
+  return runCommandWithFallback({
+    primary: {
+      bin: PNPM_BIN,
+      args: ['exec', 'electron-vite', 'build']
+    },
+    fallback: {
+      bin: ELECTRON_VITE_BIN,
+      args: ['build']
+    }
+  })
 }
 
 const formatScope = (input) =>

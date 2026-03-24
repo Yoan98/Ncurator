@@ -1,10 +1,16 @@
 import type {
   AiPlanTask,
+  DeleteWorkspaceSourceResponse,
+  DeleteWebSourceResponse,
   ListSourceScopesRequest,
   SearchResponse,
   SearchResult,
   SourceScopeListResponse,
   SourceScopeSelection,
+  WebIngestPayload,
+  WebSourceListResponse,
+  WebSourceMutationResponse,
+  WebSourceRecord,
   WorkspaceJobResponse,
   WorkspaceMutationResponse,
   WorkspaceNode,
@@ -38,6 +44,10 @@ const E2E_IMPORT_WORKSPACE_ID = 'e2e-import-workspace-1'
 const E2E_IMPORT_DOCUMENT_ID = 'e2e-import-doc-1'
 const E2E_SEARCH_DOCUMENT_ID = 'e2e-search-doc-1'
 const E2E_IMPORT_ROOT_PATH = '/tmp/ncurator-e2e-import-workspace'
+const E2E_WORKSPACE_SCAN_ERROR_MARKER = 'scan-fail'
+const E2E_WORKSPACE_PREPARE_ERROR_MARKER = 'prepare-fail'
+
+type E2EWorkspaceFixtureMode = 'normal' | 'scan_error' | 'prepare_error'
 
 export const E2E_CHAT_WORKSPACE_SCOPE: SourceScopeSelection = {
   scopeType: 'workspace',
@@ -72,14 +82,23 @@ export const E2E_SEARCH_SCOPE: SourceScopeSelection = {
 type E2EWorkspaceFixtureState = {
   workspace: WorkspaceSource | null
   nodes: WorkspaceNode[]
+  mode: E2EWorkspaceFixtureMode
 }
 
-const createImportWorkspaceNodes = (input: {
+type E2ECreateImportWorkspaceNodesInput = {
   workspaceId: string
   rootPath: string
   now: number
   prepared: boolean
-}): WorkspaceNode[] => {
+  filePrepareStatus?: WorkspaceNode['prepare_status']
+  fileLastError?: string
+}
+
+type E2EWebSourceFixtureState = {
+  items: WebSourceRecord[]
+}
+
+const createImportWorkspaceNodes = (input: E2ECreateImportWorkspaceNodesInput): WorkspaceNode[] => {
   const directoryNode: WorkspaceNode = {
     id: `${input.workspaceId}-dir-docs`,
     workspace_id: input.workspaceId,
@@ -105,9 +124,10 @@ const createImportWorkspaceNodes = (input: {
     size: 128,
     mtime_ms: input.now,
     content_hash: input.prepared ? 'e2e-import-hash' : undefined,
-    prepare_status: input.prepared ? 'prepared' : 'not_prepared',
+    prepare_status: input.prepared ? 'prepared' : input.filePrepareStatus || 'not_prepared',
     document_id: input.prepared ? E2E_IMPORT_DOCUMENT_ID : undefined,
     last_prepared_at: input.prepared ? input.now : undefined,
+    last_error: input.fileLastError,
     created_at: input.now,
     updated_at: input.now
   }
@@ -115,9 +135,93 @@ const createImportWorkspaceNodes = (input: {
   return [directoryNode, fileNode]
 }
 
+const deriveWorkspaceFixtureMode = (rootPath: string): E2EWorkspaceFixtureMode => {
+  if (rootPath.includes(E2E_WORKSPACE_SCAN_ERROR_MARKER)) return 'scan_error'
+  if (rootPath.includes(E2E_WORKSPACE_PREPARE_ERROR_MARKER)) return 'prepare_error'
+  return 'normal'
+}
+
+const buildFixtureWebTitle = (url: string): string => {
+  const parsed = new URL(url)
+  return `Fixture · ${parsed.hostname}${parsed.pathname === '/' ? '' : parsed.pathname}`
+}
+
+const normalizeFixtureUrl = (rawUrl: string): { url: string; normalizedUrl: string } => {
+  const parsed = new URL(rawUrl)
+  parsed.hash = ''
+  if (parsed.pathname.endsWith('/') && parsed.pathname !== '/') {
+    parsed.pathname = parsed.pathname.slice(0, -1)
+  }
+  const url = parsed.toString()
+  return {
+    url,
+    normalizedUrl: url.toLowerCase()
+  }
+}
+
+const buildFixtureWebSourceSelection = (source: WebSourceRecord): SourceScopeSelection => ({
+  scopeType: 'web',
+  sourceType: 'web',
+  sourceId: source.id,
+  label: source.title || source.url,
+  absolutePath: source.url,
+  documentIds: source.document_id ? [source.document_id] : [],
+  hasUnpreparedFiles: source.import_status !== 2,
+  preparedDocumentCount: source.import_status === 2 && source.document_id ? 1 : 0,
+  unpreparedFileCount: source.import_status === 2 ? 0 : 1
+})
+
+const upsertFixtureWebSource = (input: WebIngestPayload): WebSourceRecord => {
+  const { url, normalizedUrl } = normalizeFixtureUrl(input.url)
+  const now = Date.now()
+  const existing = e2eWebSourceState.items.find((item) => item.normalized_url === normalizedUrl)
+
+  const nextSource: WebSourceRecord = existing
+    ? {
+        ...existing,
+        url,
+        normalized_url: normalizedUrl,
+        title: buildFixtureWebTitle(url),
+        include_selectors: input.includeSelectors,
+        exclude_selectors: input.excludeSelectors,
+        import_status: 2,
+        fetched_at: now,
+        last_error: undefined,
+        updated_at: now
+      }
+    : {
+        id: `e2e-web-source-${e2eWebSourceState.items.length + 1}`,
+        identity_kind: 'normalized_url',
+        normalized_url: normalizedUrl,
+        url,
+        title: buildFixtureWebTitle(url),
+        document_id: `e2e-web-document-${e2eWebSourceState.items.length + 1}`,
+        import_status: 2,
+        include_selectors: input.includeSelectors,
+        exclude_selectors: input.excludeSelectors,
+        fetched_at: now,
+        created_at: now,
+        updated_at: now
+      }
+
+  if (existing) {
+    e2eWebSourceState.items = e2eWebSourceState.items.map((item) =>
+      item.id === nextSource.id ? nextSource : item
+    )
+  } else {
+    e2eWebSourceState.items = [nextSource, ...e2eWebSourceState.items]
+  }
+
+  return nextSource
+}
+
 const e2eWorkspaceState: E2EWorkspaceFixtureState = {
   workspace: null,
-  nodes: []
+  nodes: [],
+  mode: 'normal'
+}
+const e2eWebSourceState: E2EWebSourceFixtureState = {
+  items: []
 }
 
 export const isE2EFixtureModeEnabled = (): boolean => process.env.NCURATOR_E2E_MODE === '1'
@@ -129,23 +233,30 @@ export const getE2EFixtureSourceScopes = (
 
   const query = String(payload.query || '').trim()
   const importWorkspaceScope =
-    e2eWorkspaceState.workspace?.status === 'prepared'
+    e2eWorkspaceState.workspace
       ? {
           scopeType: 'workspace' as const,
           sourceType: 'workspace' as const,
           sourceId: e2eWorkspaceState.workspace.id,
           label: e2eWorkspaceState.workspace.name,
-          documentIds: [E2E_IMPORT_DOCUMENT_ID],
-          hasUnpreparedFiles: false,
-          preparedDocumentCount: 1,
-          unpreparedFileCount: 0,
+          documentIds:
+            e2eWorkspaceState.workspace.status === 'prepared' ? [E2E_IMPORT_DOCUMENT_ID] : [],
+          hasUnpreparedFiles: e2eWorkspaceState.workspace.status !== 'prepared',
+          preparedDocumentCount: e2eWorkspaceState.workspace.status === 'prepared' ? 1 : 0,
+          unpreparedFileCount: e2eWorkspaceState.workspace.status === 'prepared' ? 0 : 1,
           workspace: {
             workspaceId: e2eWorkspaceState.workspace.id,
             rootPath: e2eWorkspaceState.workspace.root_path
           }
         }
       : null
-  const allItems = [E2E_CHAT_WORKSPACE_SCOPE, E2E_SEARCH_SCOPE, importWorkspaceScope].filter(
+  const webScopes = e2eWebSourceState.items.map(buildFixtureWebSourceSelection)
+  const allItems = [
+    E2E_CHAT_WORKSPACE_SCOPE,
+    E2E_SEARCH_SCOPE,
+    ...webScopes,
+    payload.mode === 'chat' || !importWorkspaceScope?.hasUnpreparedFiles ? importWorkspaceScope : null
+  ].filter(
     (scope): scope is SourceScopeSelection => Boolean(scope)
   )
   const items = allItems.filter((scope) => {
@@ -176,16 +287,18 @@ export const createE2EFixtureWorkspace = (input: {
   if (!isE2EFixtureModeEnabled()) return null
 
   const now = Date.now()
+  const rootPath = String(input.rootPath || '').trim() || E2E_IMPORT_ROOT_PATH
   const workspace: WorkspaceSource = {
     id: E2E_IMPORT_WORKSPACE_ID,
     name: String(input.name || '').trim() || 'E2E 导入工作区',
-    root_path: String(input.rootPath || '').trim() || E2E_IMPORT_ROOT_PATH,
+    root_path: rootPath,
     status: 'not_prepared',
     last_scan_at: now,
     created_at: now,
     updated_at: now
   }
   e2eWorkspaceState.workspace = workspace
+  e2eWorkspaceState.mode = deriveWorkspaceFixtureMode(rootPath)
   e2eWorkspaceState.nodes = createImportWorkspaceNodes({
     workspaceId: workspace.id,
     rootPath: workspace.root_path,
@@ -196,6 +309,27 @@ export const createE2EFixtureWorkspace = (input: {
   return {
     success: true,
     workspace
+  }
+}
+
+export const deleteE2EFixtureWorkspace = (
+  workspaceId: string
+): DeleteWorkspaceSourceResponse | null => {
+  if (!isE2EFixtureModeEnabled()) return null
+  if (!e2eWorkspaceState.workspace || e2eWorkspaceState.workspace.id !== workspaceId) {
+    return {
+      success: false,
+      error: 'workspace not found'
+    }
+  }
+
+  e2eWorkspaceState.workspace = null
+  e2eWorkspaceState.nodes = []
+  e2eWorkspaceState.mode = 'normal'
+
+  return {
+    success: true,
+    deletedWorkspaceId: workspaceId
   }
 }
 
@@ -224,6 +358,21 @@ export const scanE2EFixtureWorkspace = (workspaceId: string): WorkspaceJobRespon
   }
 
   const now = Date.now()
+  if (e2eWorkspaceState.mode === 'scan_error') {
+    e2eWorkspaceState.workspace = {
+      ...e2eWorkspaceState.workspace,
+      status: 'failed',
+      last_scan_at: now,
+      updated_at: now,
+      last_error: 'E2E fixture scan failed'
+    }
+    return {
+      success: false,
+      workspaceId,
+      error: 'E2E fixture scan failed'
+    }
+  }
+
   e2eWorkspaceState.workspace = {
     ...e2eWorkspaceState.workspace,
     status: 'stale',
@@ -260,6 +409,30 @@ export const prepareE2EFixtureWorkspace = (
   }
 
   const now = Date.now()
+  if (e2eWorkspaceState.mode === 'prepare_error') {
+    e2eWorkspaceState.workspace = {
+      ...e2eWorkspaceState.workspace,
+      status: 'failed',
+      last_scan_at: e2eWorkspaceState.workspace.last_scan_at || now,
+      last_prepare_at: now,
+      updated_at: now,
+      last_error: 'E2E fixture prepare failed'
+    }
+    e2eWorkspaceState.nodes = createImportWorkspaceNodes({
+      workspaceId,
+      rootPath: e2eWorkspaceState.workspace.root_path,
+      now,
+      prepared: false,
+      filePrepareStatus: 'failed',
+      fileLastError: 'E2E fixture prepare failed'
+    })
+    return {
+      success: false,
+      workspaceId,
+      error: 'E2E fixture prepare failed'
+    }
+  }
+
   e2eWorkspaceState.workspace = {
     ...e2eWorkspaceState.workspace,
     status: 'prepared',
@@ -290,6 +463,102 @@ export const prepareE2EFixtureWorkspace = (
       failed: 0,
       message: 'E2E fixture prepare complete'
     }
+  }
+}
+
+export const ingestE2EFixtureWebSource = (
+  payload: WebIngestPayload
+): { success: boolean; count?: number; source?: WebSourceRecord; error?: string } | null => {
+  if (!isE2EFixtureModeEnabled()) return null
+
+  try {
+    const source = upsertFixtureWebSource(payload)
+    return {
+      success: true,
+      count: 1,
+      source
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
+    }
+  }
+}
+
+export const ingestE2EFixtureWebSources = (
+  payload: WebIngestPayload[]
+): { success: boolean; created?: number; error?: string } | null => {
+  if (!isE2EFixtureModeEnabled()) return null
+
+  try {
+    payload.forEach((item) => {
+      upsertFixtureWebSource(item)
+    })
+    return {
+      success: true,
+      created: payload.length
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
+    }
+  }
+}
+
+export const getE2EFixtureWebSourceList = (): WebSourceListResponse | null => {
+  if (!isE2EFixtureModeEnabled()) return null
+  return {
+    items: e2eWebSourceState.items,
+    total: e2eWebSourceState.items.length
+  }
+}
+
+export const refreshE2EFixtureWebSource = (webSourceId: string): WebSourceMutationResponse | null => {
+  if (!isE2EFixtureModeEnabled()) return null
+
+  const source = e2eWebSourceState.items.find((item) => item.id === webSourceId)
+  if (!source) {
+    return {
+      success: false,
+      error: 'web source not found'
+    }
+  }
+
+  const refreshed: WebSourceRecord = {
+    ...source,
+    title: buildFixtureWebTitle(source.url),
+    import_status: 2,
+    fetched_at: Date.now(),
+    last_error: undefined,
+    updated_at: Date.now()
+  }
+  e2eWebSourceState.items = e2eWebSourceState.items.map((item) =>
+    item.id === refreshed.id ? refreshed : item
+  )
+
+  return {
+    success: true,
+    source: refreshed
+  }
+}
+
+export const deleteE2EFixtureWebSource = (webSourceId: string): DeleteWebSourceResponse | null => {
+  if (!isE2EFixtureModeEnabled()) return null
+
+  const exists = e2eWebSourceState.items.some((item) => item.id === webSourceId)
+  if (!exists) {
+    return {
+      success: false,
+      error: 'web source not found'
+    }
+  }
+
+  e2eWebSourceState.items = e2eWebSourceState.items.filter((item) => item.id !== webSourceId)
+  return {
+    success: true,
+    deletedWebSourceId: webSourceId
   }
 }
 

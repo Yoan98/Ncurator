@@ -1,131 +1,22 @@
-import fs from 'node:fs'
-import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { tool } from '@langchain/core/tools'
-import type { AiFileArtifactOperation, IpcJsonObject, IpcJsonValue } from '../../../../../../shared/types'
+import type { IpcJsonObject, IpcJsonValue } from '../../../../../../shared/types'
 import { TERMINAL_RUN_COMMAND_CONTRACT } from '../catalog/toolDescriptors/terminal'
 import { runTerminalCommand } from './terminalExec'
-import {
-  checkWorkspaceBoundary,
-  classifyCommandRisk,
-  collectTerminalArtifactCandidates,
-  resolveWorkspacePath
-} from './terminalPolicy'
-import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
-import type {
-  ArtifactCandidate,
-  ResolvedCwd,
-  TerminalCapabilityToolsInput,
-  TerminalCapabilityToolsRuntimeState
-} from './types'
+import { checkWorkspaceBoundary, classifyCommandRisk } from './terminalPolicy'
+import type { TerminalCapabilityToolsInput, TerminalCapabilityToolsRuntimeState } from './types'
 import { clipText, clipTextWithMeta } from '../../../utils/text'
 import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
-
-const mergeArtifactCandidates = (input: {
-  command: string
-  expectedArtifacts: Array<{ path: string; operation?: AiFileArtifactOperation; summary?: string }>
-  cwd: string
-  workspaceRootPath: string
-}): ArtifactCandidate[] => {
-  const merged = new Map<
-    string,
-    { requestedOperation?: AiFileArtifactOperation; summary?: string }
-  >()
-
-  const commandCandidates = collectTerminalArtifactCandidates(input.command).map((item) => ({
-    path: item.rawPath,
-    operation: item.operation,
-    summary: undefined
-  }))
-  const explicitCandidates = input.expectedArtifacts.map((item) => ({
-    path: item.path,
-    operation: item.operation,
-    summary: item.summary
-  }))
-
-  for (const item of [...commandCandidates, ...explicitCandidates]) {
-    const resolved = resolveWorkspacePath({
-      rawPath: item.path,
-      cwd: input.cwd,
-      rootPath: input.workspaceRootPath
-    })
-    if (!resolved) continue
-    const prev = merged.get(resolved)
-    if (!prev) {
-      merged.set(resolved, {
-        requestedOperation: item.operation,
-        summary: item.summary
-      })
-      continue
-    }
-    merged.set(resolved, {
-      requestedOperation: prev.requestedOperation || item.operation,
-      summary: prev.summary || item.summary
-    })
-  }
-
-  return Array.from(merged.entries()).map(([resolvedPath, meta]) => ({
-    resolvedPath,
-    summary:
-      meta.summary || `terminal command produced/updated file: ${path.basename(resolvedPath)}`,
-    requestedOperation: meta.requestedOperation,
-    existedBefore: fs.existsSync(resolvedPath)
-  }))
-}
-
-const resolveCwd = (input: {
-  workspaceRootPath: string
-  requestedCwd?: string
-}): ResolvedCwd => {
-  const root = path.resolve(input.workspaceRootPath)
-  const requestedRaw = String(input.requestedCwd || '').trim()
-  if (!requestedRaw) {
-    return {
-      ok: true,
-      cwd: root
-    }
-  }
-
-  const normalizedRequested = requestedRaw.replace(/[\\/]+$/g, '')
-  const rootAlias = path.basename(root).replace(/[\\/]+$/g, '')
-  const requested =
-    normalizedRequested === rootAlias || normalizedRequested === path.join('.', rootAlias)
-      ? '.'
-      : requestedRaw
-
-  const resolved = resolveWorkspacePath({
-    rawPath: requested,
-    cwd: root,
-    rootPath: root
-  })
-  if (!resolved) {
-    return {
-      ok: false,
-      code: 'workspace_required',
-      error: 'cwd is out of workspace boundary'
-    }
-  }
-  if (!fs.existsSync(resolved)) {
-    return {
-      ok: false,
-      code: 'invalid_input',
-      error: 'cwd does not exist inside workspace'
-    }
-  }
-  if (!fs.statSync(resolved).isDirectory()) {
-    return {
-      ok: false,
-      code: 'invalid_input',
-      error: 'cwd is not a directory'
-    }
-  }
-
-  return {
-    ok: true,
-    cwd: resolved
-  }
-}
+import { mergeArtifactCandidates, recordTerminalArtifacts } from './terminalArtifacts'
+import { resolveTerminalCwd } from './terminalCwd'
+import {
+  buildTerminalFailure,
+  buildTerminalStepError,
+  emitTerminalStepCompletion,
+  emitTerminalStepStarted,
+  requestTerminalCommandApproval
+} from './terminalRunHelpers'
 
 export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput) => {
   const state: TerminalCapabilityToolsRuntimeState = {
@@ -147,25 +38,23 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
           input.ctx.checkCancelled()
           const command = String(args.command || '').trim()
           if (!command) {
-            const emptyResult = {
-              ok: false,
-              code: 'invalid_input' as const,
+            const emptyResult = buildTerminalFailure({
+              code: 'invalid_input',
               error: 'empty command'
-            }
+            })
             session.fail(emptyResult, emptyResult.error)
             return emptyResult
           }
 
-          const cwdResult = resolveCwd({
+          const cwdResult = resolveTerminalCwd({
             workspaceRootPath: input.workspaceRootPath,
             requestedCwd: args.cwd
           })
           if (!cwdResult.ok) {
-            const cwdError = {
-              ok: false,
+            const cwdError = buildTerminalFailure({
               code: cwdResult.code,
               error: cwdResult.error
-            }
+            })
             session.fail(cwdError, cwdError.error)
             return cwdError
           }
@@ -173,30 +62,28 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
 
           const boundary = checkWorkspaceBoundary(command, input.workspaceRootPath)
           if (!boundary.ok) {
-            const boundaryError = {
-              ok: false,
-              code: 'workspace_required' as const,
+            const boundaryError = buildTerminalFailure({
+              code: 'workspace_required',
               error: `workspace boundary check failed: ${boundary.reason}`
-            }
+            })
             session.fail(boundaryError, boundaryError.error)
             return boundaryError
           }
 
           const riskLevel = classifyCommandRisk(command)
           if (riskLevel !== 'low') {
-            const decision = await input.ctx.requestApproval({
+            const approval = await requestTerminalCommandApproval({
+              ctx: input.ctx,
               runId: input.runId,
               taskId: input.taskId,
               command,
-              riskLevel,
-              reason: `command classified as ${riskLevel} risk`
+              riskLevel
             })
-            if (!decision.approved) {
-              const denied = {
-                ok: false,
-                code: 'approval_denied' as const,
-                error: decision.reason || 'approval denied'
-              }
+            if (!approval.approved) {
+              const denied = buildTerminalFailure({
+                code: 'approval_denied',
+                error: approval.error
+              })
               session.fail(denied, denied.error)
               return denied
             }
@@ -211,15 +98,14 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
 
           state.stepIndex += 1
           const stepId = randomUUID()
-          input.ctx.sendEvent({
-            type: 'terminal_step_started',
+          emitTerminalStepStarted({
+            ctx: input.ctx,
             runId: input.runId,
             taskId: input.taskId,
             stepId,
             stepIndex: state.stepIndex,
             command,
-            cwd,
-            createdAt: Date.now()
+            cwd
           })
           input.emitActivity({
             actionType: 'terminal_exec',
@@ -236,80 +122,34 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
 
           const previewSource = [result.stdout, result.stderr].filter(Boolean).join('\n').trim()
           const preview = clipTextWithMeta(previewSource || '(no output)', input.safePreviewChars)
-          const stepError =
-            result.timedOut || result.exitCode !== 0
-              ? result.timedOut
-                ? `command timed out after ${input.timeoutMs}ms`
-                : `command exited with code ${String(result.exitCode)}`
-              : undefined
+          const stepError = buildTerminalStepError({
+            exitCode: result.exitCode,
+            timedOut: result.timedOut,
+            timeoutMs: input.timeoutMs
+          })
+          emitTerminalStepCompletion({
+            ctx: input.ctx,
+            runId: input.runId,
+            taskId: input.taskId,
+            stepId,
+            stepIndex: state.stepIndex,
+            command,
+            outputPreview: preview.text,
+            exitCode: result.exitCode,
+            timedOut: result.timedOut,
+            truncated: result.truncated || preview.truncated,
+            stepError,
+            emitActivity: input.emitActivity
+          })
 
-          if (stepError) {
-            input.ctx.sendEvent({
-              type: 'terminal_step_error',
-              runId: input.runId,
-              taskId: input.taskId,
-              stepId,
-              stepIndex: state.stepIndex,
-              command,
-              error: stepError,
-              outputPreview: preview.text,
-              completedAt: Date.now()
-            })
-            input.emitActivity({
-              actionType: 'terminal_exec',
-              status: 'failed',
-              summary: `${command} -> ${stepError}`
-            })
-          } else {
-            input.ctx.sendEvent({
-              type: 'terminal_step_result',
-              runId: input.runId,
-              taskId: input.taskId,
-              stepId,
-              stepIndex: state.stepIndex,
-              command,
-              outputPreview: preview.text,
-              exitCode: result.exitCode,
-              timedOut: result.timedOut,
-              truncated: result.truncated || preview.truncated,
-              completedAt: Date.now()
-            })
-            input.emitActivity({
-              actionType: 'terminal_exec',
-              status: 'completed',
-              summary: `${command} -> success`
-            })
-          }
-
-          const artifacts: Array<{ path: string; operation: AiFileArtifactOperation }> = []
-          for (const artifact of artifactCandidates) {
-            if (!fs.existsSync(artifact.resolvedPath)) continue
-            const operation =
-              artifact.requestedOperation || (artifact.existedBefore ? 'updated' : 'created')
-            const emitted = emitFileArtifactEvent({
-              ctx: input.ctx,
-              runId: input.runId,
-              taskId: input.taskId,
-              capability: 'terminal_exec',
-              artifactPath: artifact.resolvedPath,
-              operation,
-              summary: artifact.summary,
-              stepId,
-              onNonFatalError: (reason) => {
-                input.emitActivity({
-                  actionType: 'file_artifact',
-                  status: 'failed',
-                  summary: reason
-                })
-              }
-            })
-            if (emitted) {
-              artifacts.push({
-                path: artifact.resolvedPath,
-                operation
-              })
-            }
-          }
+          const artifacts = recordTerminalArtifacts({
+            ctx: input.ctx,
+            runId: input.runId,
+            taskId: input.taskId,
+            stepId,
+            candidates: artifactCandidates,
+            emitActivity: input.emitActivity
+          })
 
           const output = {
             ok: !stepError,

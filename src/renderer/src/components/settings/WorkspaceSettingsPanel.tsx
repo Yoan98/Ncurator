@@ -498,7 +498,10 @@ const WorkspaceSettingsPanel: React.FC = () => {
           />
 
           {workspaces.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-[#D4D4D3] bg-[#FAFAF9] px-6 py-14 text-center">
+            <div
+              className="rounded-2xl border border-dashed border-[#D4D4D3] bg-[#FAFAF9] px-6 py-14 text-center"
+              data-testid={importSelectors.workspaceEmptyState}
+            >
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description={
@@ -651,7 +654,10 @@ const WorkspaceSettingsPanel: React.FC = () => {
                             </span>
                           </div>
                           {selectedWorkspace.last_error ? (
-                            <div className="mt-2 rounded-xl border border-[#F7D5D9] bg-[#FFF2F4] px-3 py-2 text-[12px] text-[#B5455D]">
+                            <div
+                              className="mt-2 rounded-xl border border-[#F7D5D9] bg-[#FFF2F4] px-3 py-2 text-[12px] text-[#B5455D]"
+                              data-testid={importSelectors.workspaceLastError}
+                            >
                               {selectedWorkspace.last_error}
                             </div>
                           ) : null}
@@ -836,7 +842,10 @@ const WorkspaceSettingsPanel: React.FC = () => {
           )}
         </section>
 
-        <section className="rounded-[28px] border border-[#E5E5E4] bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+        <section
+          className="rounded-[28px] border border-[#E5E5E4] bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
+          data-testid={importSelectors.webSourceSection}
+        >
           <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <div className="flex items-center gap-2">
@@ -852,6 +861,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
               size="large"
               icon={<HiGlobeAlt className="h-4 w-4" />}
               onClick={() => setWebModalVisible(true)}
+              data-testid={importSelectors.webSourceOpenModalButton}
             >
               添加网页
             </Button>
@@ -864,9 +874,13 @@ const WorkspaceSettingsPanel: React.FC = () => {
             onChange={(event) => setWebKeyword(event.target.value)}
             onSearch={() => void loadWebSources()}
             className="mb-4"
+            data-testid={importSelectors.webSourceSearchInput}
           />
 
-          <div className="min-h-[640px] rounded-2xl border border-[#E5E5E4] bg-[#FAFAF9] p-3">
+          <div
+            className="min-h-[640px] rounded-2xl border border-[#E5E5E4] bg-[#FAFAF9] p-3"
+            data-testid={importSelectors.webSourceList}
+          >
             <List
               loading={webLoading}
               dataSource={webSources}
@@ -877,7 +891,10 @@ const WorkspaceSettingsPanel: React.FC = () => {
                 const statusMeta = getWebStatusMeta(item.import_status)
                 return (
                   <List.Item className="!border-none !px-0 !py-2">
-                    <div className="w-full rounded-2xl border border-[#E5E5E4] bg-white p-4 transition-all duration-200 hover:-translate-y-[1px] hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)]">
+                    <div
+                      className="w-full rounded-2xl border border-[#E5E5E4] bg-white p-4 transition-all duration-200 hover:-translate-y-[1px] hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)]"
+                      data-testid={`${importSelectors.webSourceCardPrefix}-${item.id}`}
+                    >
                       <div className="mb-3 flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
@@ -920,6 +937,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                             icon={<HiArrowPath className="h-4 w-4" />}
                             className="border-[#E5E5E4] bg-white text-[#1F1F1F]"
                             onClick={() => void handleRefreshWebSource(item)}
+                            data-testid={`${importSelectors.webSourceRefreshButtonPrefix}-${item.id}`}
                           >
                             刷新
                           </Button>
@@ -928,6 +946,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                             danger
                             icon={<HiOutlineTrash className="h-4 w-4" />}
                             onClick={() => setDeleteWebSource(item)}
+                            data-testid={`${importSelectors.webSourceDeleteButtonPrefix}-${item.id}`}
                           >
                             删除
                           </Button>
@@ -990,6 +1009,9 @@ const WorkspaceSettingsPanel: React.FC = () => {
         onOk={() => void handleWebImport()}
         okText="提交"
         cancelText="取消"
+        okButtonProps={{ 'data-testid': importSelectors.webSourceConfirmButton }}
+        cancelButtonProps={{ 'data-testid': importSelectors.webSourceCancelButton }}
+        data-testid={importSelectors.webSourceModal}
         className="[&_.ant-modal-content]:!rounded-[24px]"
       >
         <div className="space-y-4 pt-2">
@@ -1000,6 +1022,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
               onChange={(event) => setWebUrlsText(event.target.value)}
               placeholder="每行一个 URL"
               autoSize={{ minRows: 4, maxRows: 8 }}
+              data-testid={importSelectors.webSourceUrlInput}
             />
           </div>
           <div>
@@ -1009,6 +1032,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
               onChange={(event) => setWebIncludeSelectorsText(event.target.value)}
               placeholder="可选，逗号或换行分隔"
               autoSize={{ minRows: 2, maxRows: 4 }}
+              data-testid={importSelectors.webSourceIncludeSelectorsInput}
             />
           </div>
           <div>
@@ -1018,6 +1042,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
               onChange={(event) => setWebExcludeSelectorsText(event.target.value)}
               placeholder="可选，逗号或换行分隔"
               autoSize={{ minRows: 2, maxRows: 4 }}
+              data-testid={importSelectors.webSourceExcludeSelectorsInput}
             />
           </div>
         </div>
@@ -1044,8 +1069,9 @@ const WorkspaceSettingsPanel: React.FC = () => {
         onCancel={() => setDeleteWebSource(null)}
         onOk={() => void handleDeleteWebSource()}
         okText="删除"
-        okButtonProps={{ danger: true }}
+        okButtonProps={{ danger: true, 'data-testid': importSelectors.webSourceDeleteConfirmButton }}
         cancelText="取消"
+        cancelButtonProps={{ 'data-testid': importSelectors.webSourceDeleteCancelButton }}
         className="[&_.ant-modal-content]:!rounded-[24px]"
       >
         <p className="mb-0 text-[#666666]">

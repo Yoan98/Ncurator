@@ -74,7 +74,7 @@
 
 `workspace-source-service-normalize-and-name`
 
-- 实现状态: `未实现`
+- 实现状态: `已实现`
 - What: 验证根路径规范化和默认显示名生成
 - Why: 根路径规范化错误会直接破坏去重、嵌套校验和 UI 展示
 - How: 对真实绝对路径、带尾斜杠路径和自定义名称分别执行规范化与命名
@@ -100,7 +100,7 @@
 
 `workspace-source-service-invalid-root`
 
-- 实现状态: `未实现`
+- 实现状态: `已实现`
 - What: 验证非法根路径输入
 - Why: 非目录、空路径或不存在路径必须尽早失败
 - How: 分别传入空字符串、普通文件路径和不存在目录路径
@@ -114,7 +114,7 @@
 
 `workspace-source-service-large-tree-conservative-scan`
 
-- 实现状态: `未实现`
+- 实现状态: `已实现`
 - What: 验证大型目录扫描后仍能稳定生成完整快照
 - Why: 真正用户目录往往层级深、文件多，不能只在小样例里成立
 - How: 使用较多目录和文件构造大目录 fixture，完成一次完整扫描和 diff
@@ -136,7 +136,7 @@
 
 `workspace-ipc-create-list-delete`
 
-- 实现状态: `未实现`
+- 实现状态: `已实现`
 - What: 验证创建、列出和删除工作空间的最小闭环
 - Why: 这是用户最先接触的主路径
 - How: 通过 IPC 创建工作空间，再查询列表并删除
@@ -148,7 +148,7 @@
 
 `workspace-ipc-scan-and-nodes`
 
-- 实现状态: `未实现`
+- 实现状态: `已实现`
 - What: 验证扫描与节点列表 IPC
 - Why: 设置页目录树依赖这条链路
 - How: 创建工作空间后执行扫描，再通过节点 IPC 获取快照
@@ -162,7 +162,7 @@
 
 `workspace-ipc-duplicate-root-rejected`
 
-- 实现状态: `未实现`
+- 实现状态: `已实现`
 - What: 验证重复或嵌套路径在 IPC 层也会被拒绝
 - Why: 前端最终感知的是 IPC 返回，不是服务内部异常
 - How: 通过 IPC 重复添加同一路径或嵌套路径
@@ -176,7 +176,7 @@
 
 `workspace-ipc-web-source-refresh-and-delete`
 
-- 实现状态: `未实现`
+- 实现状态: `已实现`
 - What: 验证网页资料的刷新与删除闭环
 - Why: Workspace 现在同时负责本地与网页资料，不能只测本地文件
 - How: 先导入网页资料，再执行刷新与删除
@@ -198,7 +198,7 @@
 
 `settings-workspace-tab-only-entry`
 
-- 实现状态: `未实现`
+- 实现状态: `已实现`
 - What: 验证 Workspace 已经成为唯一资料配置入口
 - Why: 旧入口残留会让用户心智分裂
 - How: 从主导航进入设置页，检查 `Workspace` 标签存在且旧资料来源页入口已移除
@@ -212,7 +212,7 @@
 
 `settings-workspace-empty-and-error-state`
 
-- 实现状态: `未实现`
+- 实现状态: `已实现`
 - What: 验证空态与错误态稳定呈现
 - Why: 初次进入和失败恢复都是高频路径
 - How: 在无工作空间、扫描失败或准备失败时打开设置页
@@ -226,7 +226,7 @@
 
 `settings-workspace-create-scan-prepare-flow`
 
-- 实现状态: `未实现`
+- 实现状态: `已实现`
 - What: 验证设置页中的创建、扫描和准备主路径
 - Why: 这是迁移后用户最重要的正式操作链路
 - How: 在设置页新建工作空间，执行扫描、切换准备模式并完成一次准备
@@ -238,7 +238,7 @@
 
 `settings-web-source-management`
 
-- 实现状态: `未实现`
+- 实现状态: `已实现`
 - What: 验证网页资料的添加、过滤、刷新和删除
 - Why: Workspace 入口已经统一接管网页资料，不能漏掉这部分交互
 - How: 通过设置页添加一条网页资料，再执行搜索过滤、刷新和删除
@@ -260,10 +260,10 @@
 
 `workspace-source-scope-bindings-and-warnings`
 
-- 实现状态: `未实现`
+- 实现状态: `已实现`
 - What: 验证工作空间、目录、文件范围进入 source scope 后的状态与提示
 - Why: 范围选择是 Workspace 和对话页之间的核心接口
-- How: 选择已准备与未准备的工作空间 / 目录 / 文件，观察标签、提示和可执行性
+- How: 通过 backend 正式 case 覆盖 source scope 的绑定、prepared/unprepared 区分和 search 模式过滤；再通过 workbench e2e case 覆盖 AI 模式与纯搜索模式下的用户提示文案
 - Oracle:
   1. 已准备和未准备范围会被正确区分。
   2. 纯搜索模式只接受已准备资料。

@@ -5,6 +5,11 @@ import { test } from 'vitest'
 import { buildSkillCatalog } from '../../../../src/main/services/ai/human/node/learningNode/skillRegistry'
 import { getToolExecutionMeta } from '../../../../src/main/services/ai/human/node/handNode/toolExecutionMeta'
 import {
+  DOCX_SAVE_TOOL_SPEC,
+  DOCX_TOOL_SPECS,
+  getDocxToolSpec
+} from '../../../../src/main/services/ai/human/tools/docx/toolSpecs'
+import {
   getToolContract,
   getToolDescriptor,
   getToolPromptSpec,
@@ -12,6 +17,7 @@ import {
   listToolNamesBySkill,
   TOOL_CATALOG
 } from '../../../../src/main/services/ai/human/tools/toolCatalog'
+import { DOCX_TOOL_DEFINITIONS } from '../../../../src/main/services/ai/human/tools/catalog/toolDescriptors/docx'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 
 const sortNames = (values: string[]): string[] =>
@@ -64,11 +70,36 @@ test('tool-catalog-consistency', async () => {
         skillId: item.skillId,
         toolNames: sortNames(item.toolNames)
       }))
+      const docxSaveMetaArgs = {
+        docId: 'doc-save-spec',
+        outPath: 'docs/output.docx'
+      }
 
       return {
         catalogToolNames,
         familyToolNames,
         skillCatalog,
+        docxSpecNames: sortNames(DOCX_TOOL_SPECS.map((spec) => spec.name)),
+        docxDefinitionNames: sortNames(DOCX_TOOL_DEFINITIONS.map((definition) => definition.name)),
+        docxSharedSpecLookups: {
+          save: getDocxToolSpec('docx_save') === DOCX_SAVE_TOOL_SPEC
+        },
+        docxSaveSpecContractAlignment: {
+          schemaShared: getToolContract('docx_save')?.schema === DOCX_SAVE_TOOL_SPEC.schema,
+          promptShared: getToolContract('docx_save')?.promptSpec === DOCX_SAVE_TOOL_SPEC.promptSpec,
+          skillIds: [...DOCX_SAVE_TOOL_SPEC.skillIds],
+          executionMeta: getToolExecutionMeta({
+            toolName: 'docx_save',
+            args: docxSaveMetaArgs
+          }),
+          expectedExecutionMeta: {
+            mutability: DOCX_SAVE_TOOL_SPEC.executionMeta.mutability,
+            parallelSafe: DOCX_SAVE_TOOL_SPEC.executionMeta.parallelSafe,
+            resourceKey:
+              DOCX_SAVE_TOOL_SPEC.executionMeta.getResourceKey?.(docxSaveMetaArgs) ||
+              DOCX_SAVE_TOOL_SPEC.executionMeta.defaultResourceKey
+          }
+        },
         promptLookups: catalogToolNames.map((toolName) => ({
           toolName,
           promptSpec: getToolPromptSpec(toolName)
@@ -146,6 +177,37 @@ test('tool-catalog-consistency', async () => {
           message:
             'every runtime skill should derive its toolNames from the centralized tool catalog after registry refactor',
           data: result.skillCatalog
+        }
+      )
+
+      runtime.assertThat(
+        result.docxSpecNames.join(',') === result.docxDefinitionNames.join(',') &&
+          result.docxDefinitionNames.join(',') === result.docxFamilyTools.join(',') &&
+          result.docxSharedSpecLookups.save,
+        {
+          name: 'tool-catalog-docx-spec-derivation',
+          message:
+            'docx catalog definitions should derive directly from the shared docx tool spec source of truth',
+          data: {
+            docxSpecNames: result.docxSpecNames,
+            docxDefinitionNames: result.docxDefinitionNames,
+            docxFamilyTools: result.docxFamilyTools,
+            docxSharedSpecLookups: result.docxSharedSpecLookups
+          }
+        }
+      )
+
+      runtime.assertThat(
+        result.docxSaveSpecContractAlignment.schemaShared &&
+          result.docxSaveSpecContractAlignment.promptShared &&
+          result.docxSaveSpecContractAlignment.skillIds.join(',') === 'docx-delivery' &&
+          JSON.stringify(result.docxSaveSpecContractAlignment.executionMeta) ===
+            JSON.stringify(result.docxSaveSpecContractAlignment.expectedExecutionMeta),
+        {
+          name: 'tool-catalog-docx-save-spec-alignment',
+          message:
+            'docx_save contract metadata should stay sourced from the shared docx tool spec after the refactor',
+          data: result.docxSaveSpecContractAlignment
         }
       )
 

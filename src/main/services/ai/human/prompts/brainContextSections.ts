@@ -155,15 +155,3 @@ export const buildBrainPromptSections = (state: HumanState): BrainPromptSections
     ].join('\n')
   }
 }
-
-export const buildMemorySnapshotText = (state: HumanState): string =>
-  buildBrainPromptSections(state).memorySnapshotText
-
-export const buildSkillContextText = (state: HumanState): string =>
-  buildBrainPromptSections(state).skillContextText
-
-export const buildRecentToolResultsText = (state: HumanState): string =>
-  buildBrainPromptSections(state).recentToolResultsText
-
-export const buildRecentDecisionHistoryText = (state: HumanState): string =>
-  buildBrainPromptSections(state).recentDecisionHistoryText

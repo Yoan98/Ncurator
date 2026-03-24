@@ -84,10 +84,14 @@ tests/
         basic/
         boundary/
         scenario/
+      scope/
+        scenario/
     e2e/
       settings/
         basic/
         boundary/
+        scenario/
+      scope/
         scenario/
   kb-search/
     backend/
@@ -246,7 +250,12 @@ tests/
 
 ## 5. runner 与命令
 
-统一入口是 `scripts/test-workflow.mjs`。
+统一入口默认是 `scripts/test-workflow.mjs`。
+
+补充说明：
+
+- `workspace` 的完整域回归通过 `scripts/test-workspace.sh` 执行。
+- 原因是当前桌面环境下，Playwright Electron e2e 需要由 shell 直接拉起；backend 仍继续走 `scripts/test-workflow.mjs`。
 
 当前命令面：
 

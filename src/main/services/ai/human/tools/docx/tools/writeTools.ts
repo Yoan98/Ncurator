@@ -1,49 +1,35 @@
 import type { StructuredToolInterface } from '@langchain/core/tools'
-import { getToolContract } from '../../toolCatalog'
 import type { DocxChangedBlock, DocxOp } from '../types'
 import type { DocxToolRuntime } from '../runtime'
+import { DOCX_APPLY_OPS_TOOL_SPEC, DOCX_ROLLBACK_TOOL_SPEC } from '../toolSpecs'
 import {
   callExpectedWorkerAction,
   createDocxTool,
   finalizeDocxToolFailure,
   finalizeDocxToolSuccess,
-  isDocxToolFailure,
-  requireDocxToolDocId,
+  isDocxToolFailure
 } from './workerTool'
-
-const DOCX_APPLY_OPS_CONTRACT = getToolContract('docx_apply_ops')
-const DOCX_ROLLBACK_CONTRACT = getToolContract('docx_rollback')
-
-if (!DOCX_APPLY_OPS_CONTRACT || !DOCX_ROLLBACK_CONTRACT) {
-  throw new Error('missing docx write tool contracts')
-}
 
 export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInterface[] => {
   const docxApplyOpsTool = createDocxTool({
     runtime,
-    name: DOCX_APPLY_OPS_CONTRACT.name,
-    description:
-      'Apply structured docx operations and return a new immutable docId snapshot with changed blocks.',
-    schema: DOCX_APPLY_OPS_CONTRACT.schema,
+    name: DOCX_APPLY_OPS_TOOL_SPEC.name,
+    description: DOCX_APPLY_OPS_TOOL_SPEC.description,
+    schema: DOCX_APPLY_OPS_TOOL_SPEC.schema,
     onError: ({ message }) => {
       runtime.input.emitActivity({
-        actionType: 'docx_apply_ops',
+        actionType: DOCX_APPLY_OPS_TOOL_SPEC.activityActionType!,
         status: 'failed',
         summary: `编辑失败: ${message}`
       })
     },
     execute: async ({ args, toolName, toolCallId }) => {
-      const docIdResult = requireDocxToolDocId({
-        runtime,
-        toolName,
-        toolCallId,
-        docId: args.docId
-      })
+      const docIdResult = runtime.requireDocId({ toolName, toolCallId, docId: args.docId })
       if ('failure' in docIdResult) return docIdResult.failure
 
       const expandedOps = await runtime.expandOpsForReview(docIdResult.docId, args.ops as DocxOp[])
       runtime.input.emitActivity({
-        actionType: 'docx_apply_ops',
+        actionType: DOCX_APPLY_OPS_TOOL_SPEC.activityActionType!,
         status: 'started',
         summary: `应用操作: ${expandedOps.length} 条`
       })
@@ -56,10 +42,10 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           runtime,
           toolName,
           toolCallId,
-          expectedAction: 'apply_ops',
+          expectedAction: DOCX_APPLY_OPS_TOOL_SPEC.workerAction!,
           draftDocId: currentDocId,
           request: {
-            action: 'apply_ops',
+            action: DOCX_APPLY_OPS_TOOL_SPEC.workerAction!,
             payload: {
               docId: currentDocId,
               ops: [op]
@@ -71,7 +57,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
             runtime,
             failure: workerPayload,
             activity: {
-              actionType: 'docx_apply_ops',
+              actionType: DOCX_APPLY_OPS_TOOL_SPEC.activityActionType!,
               buildFailedSummary: (failure) => failure.summary
             }
           })
@@ -116,7 +102,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         },
         draftDocId: currentDocId,
         activity: {
-          actionType: 'docx_apply_ops',
+          actionType: DOCX_APPLY_OPS_TOOL_SPEC.activityActionType!,
           buildCompletedSummary: (output) => `编辑完成: ${String(output.changedBlocks.length)} 处变更`
         }
       })
@@ -125,28 +111,22 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
 
   const docxRollbackTool = createDocxTool({
     runtime,
-    name: DOCX_ROLLBACK_CONTRACT.name,
-    description:
-      'Move back to an ancestor docx snapshot in the current run without writing files. Use before user confirmation.',
-    schema: DOCX_ROLLBACK_CONTRACT.schema,
+    name: DOCX_ROLLBACK_TOOL_SPEC.name,
+    description: DOCX_ROLLBACK_TOOL_SPEC.description,
+    schema: DOCX_ROLLBACK_TOOL_SPEC.schema,
     onError: ({ message }) => {
       runtime.input.emitActivity({
-        actionType: 'docx_rollback',
+        actionType: DOCX_ROLLBACK_TOOL_SPEC.activityActionType!,
         status: 'failed',
         summary: `回滚失败: ${message}`
       })
     },
     execute: async ({ args, toolName, toolCallId }) => {
-      const docIdResult = requireDocxToolDocId({
-        runtime,
-        toolName,
-        toolCallId,
-        docId: args.docId
-      })
+      const docIdResult = runtime.requireDocId({ toolName, toolCallId, docId: args.docId })
       if ('failure' in docIdResult) return docIdResult.failure
 
       runtime.input.emitActivity({
-        actionType: 'docx_rollback',
+        actionType: DOCX_ROLLBACK_TOOL_SPEC.activityActionType!,
         status: 'started',
         summary: `准备回滚文档快照: ${docIdResult.docId}`
       })
@@ -166,7 +146,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
             error: resolved.error
           }),
           activity: {
-            actionType: 'docx_rollback',
+            actionType: DOCX_ROLLBACK_TOOL_SPEC.activityActionType!,
             buildFailedSummary: (failure) => failure.summary
           }
         })
@@ -194,7 +174,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         outputPreview: result,
         draftDocId: resolved.targetDocId,
         activity: {
-          actionType: 'docx_rollback',
+          actionType: DOCX_ROLLBACK_TOOL_SPEC.activityActionType!,
           buildCompletedSummary: (output) => `已切回草稿快照: ${output.docId}`
         }
       })

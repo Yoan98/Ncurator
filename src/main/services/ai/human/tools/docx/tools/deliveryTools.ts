@@ -4,36 +4,25 @@ import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { AiFileArtifactOperation } from '../../../../../../../shared/types'
 import { emitFileArtifactEvent } from '../../../../events/fileArtifacts'
 import { clipText } from '../../../../utils/text'
-import { getToolContract } from '../../toolCatalog'
 import type { DocxToolRuntime } from '../runtime'
 import {
+  DOCX_RENDER_PREVIEW_TOOL_SPEC,
+  DOCX_SAVE_TOOL_SPEC,
+  DOCX_VALIDATE_TOOL_SPEC
+} from '../toolSpecs'
+import {
   createDocxTool,
-  requireDocxToolDocId,
   runDocxWorkerToolAction
 } from './workerTool'
-
-const DOCX_RENDER_PREVIEW_CONTRACT = getToolContract('docx_render_preview')
-const DOCX_SAVE_CONTRACT = getToolContract('docx_save')
-const DOCX_VALIDATE_CONTRACT = getToolContract('docx_validate')
-
-if (!DOCX_RENDER_PREVIEW_CONTRACT || !DOCX_SAVE_CONTRACT || !DOCX_VALIDATE_CONTRACT) {
-  throw new Error('missing docx delivery tool contracts')
-}
 
 export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredToolInterface[] => {
   const docxRenderPreviewTool = createDocxTool({
     runtime,
-    name: DOCX_RENDER_PREVIEW_CONTRACT.name,
-    description:
-      'Render preview artifact for the current doc snapshot. html returns a preview docx artifact path for renderer.',
-    schema: DOCX_RENDER_PREVIEW_CONTRACT.schema,
+    name: DOCX_RENDER_PREVIEW_TOOL_SPEC.name,
+    description: DOCX_RENDER_PREVIEW_TOOL_SPEC.description,
+    schema: DOCX_RENDER_PREVIEW_TOOL_SPEC.schema,
     execute: async ({ args, toolName, toolCallId }) => {
-      const docIdResult = requireDocxToolDocId({
-        runtime,
-        toolName,
-        toolCallId,
-        docId: args.docId
-      })
+      const docIdResult = runtime.requireDocId({ toolName, toolCallId, docId: args.docId })
       if ('failure' in docIdResult) return docIdResult.failure
 
       const previewDir = path.join(runtime.workspaceRootPath, '.ncurator', 'docx-previews')
@@ -47,9 +36,9 @@ export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredTool
         runtime,
         toolName,
         toolCallId,
-        expectedAction: 'render_preview',
+        expectedAction: DOCX_RENDER_PREVIEW_TOOL_SPEC.workerAction!,
         request: {
-          action: 'render_preview',
+          action: DOCX_RENDER_PREVIEW_TOOL_SPEC.workerAction!,
           payload: {
             docId: docIdResult.docId,
             format: args.format,
@@ -94,11 +83,14 @@ export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredTool
 
   const docxSaveTool = createDocxTool({
     runtime,
-    name: DOCX_SAVE_CONTRACT.name,
-    description: 'Save doc snapshot to a workspace docx path with overwrite approval guard.',
-    schema: DOCX_SAVE_CONTRACT.schema,
+    name: DOCX_SAVE_TOOL_SPEC.name,
+    description: DOCX_SAVE_TOOL_SPEC.description,
+    schema: DOCX_SAVE_TOOL_SPEC.schema,
     execute: async ({ args, toolName, toolCallId }) => {
-      const sourcePath = runtime.state.sourcePathByDocId.get(args.docId)
+      const docIdResult = runtime.requireDocId({ toolName, toolCallId, docId: args.docId })
+      if ('failure' in docIdResult) return docIdResult.failure
+
+      const sourcePath = runtime.state.sourcePathByDocId.get(docIdResult.docId)
       const cwd = sourcePath ? path.dirname(sourcePath) : runtime.workspaceRootPath
       const outPath = runtime.resolveDocxPath({
         cwd,
@@ -145,11 +137,11 @@ export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredTool
         runtime,
         toolName,
         toolCallId,
-        expectedAction: 'save',
+        expectedAction: DOCX_SAVE_TOOL_SPEC.workerAction!,
         request: {
-          action: 'save',
+          action: DOCX_SAVE_TOOL_SPEC.workerAction!,
           payload: {
-            docId: args.docId,
+            docId: docIdResult.docId,
             outPath
           }
         },
@@ -163,7 +155,7 @@ export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredTool
             artifactPath: outPath,
             operation,
             artifactRole: 'committed',
-            draftSnapshotId: args.docId,
+            draftSnapshotId: docIdResult.docId,
             summary: `docx saved (${operation})`
           })
 
@@ -179,7 +171,7 @@ export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredTool
           return {
             result,
             outputPreview: result,
-            draftDocId: args.docId
+            draftDocId: docIdResult.docId
           }
         }
       })
@@ -188,25 +180,20 @@ export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredTool
 
   const docxValidateTool = createDocxTool({
     runtime,
-    name: DOCX_VALIDATE_CONTRACT.name,
-    description: 'Validate current doc snapshot structure and relationship consistency.',
-    schema: DOCX_VALIDATE_CONTRACT.schema,
+    name: DOCX_VALIDATE_TOOL_SPEC.name,
+    description: DOCX_VALIDATE_TOOL_SPEC.description,
+    schema: DOCX_VALIDATE_TOOL_SPEC.schema,
     execute: async ({ args, toolName, toolCallId }) => {
-      const docIdResult = requireDocxToolDocId({
-        runtime,
-        toolName,
-        toolCallId,
-        docId: args.docId
-      })
+      const docIdResult = runtime.requireDocId({ toolName, toolCallId, docId: args.docId })
       if ('failure' in docIdResult) return docIdResult.failure
 
       return await runDocxWorkerToolAction({
         runtime,
         toolName,
         toolCallId,
-        expectedAction: 'validate',
+        expectedAction: DOCX_VALIDATE_TOOL_SPEC.workerAction!,
         request: {
-          action: 'validate',
+          action: DOCX_VALIDATE_TOOL_SPEC.workerAction!,
           payload: {
             docId: docIdResult.docId
           }

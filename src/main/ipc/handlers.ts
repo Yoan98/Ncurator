@@ -75,14 +75,20 @@ import { normalizeForIpc } from '../utils/serialization'
 import {
   buildE2EChatPlan,
   createE2EFixtureWorkspace,
+  deleteE2EFixtureWebSource,
+  deleteE2EFixtureWorkspace,
   getE2EFixtureSearchResponse,
+  getE2EFixtureWebSourceList,
   getE2EFixtureWorkspaceList,
   getE2EFixtureWorkspaceNodes,
   getE2EFixtureSourceScopes,
   hasE2EWorkspaceBinding,
+  ingestE2EFixtureWebSource,
+  ingestE2EFixtureWebSources,
   isE2EFixtureModeEnabled,
   matchE2EChatScenario,
   prepareE2EFixtureWorkspace,
+  refreshE2EFixtureWebSource,
   scanE2EFixtureWorkspace
 } from '../testing/e2eFixtures'
 
@@ -896,6 +902,11 @@ export function registerHandlers(services: {
       payload: { url: string; includeSelectors?: string[]; excludeSelectors?: string[] }
     ) => {
       try {
+        const fixtureResponse = ingestE2EFixtureWebSource(payload)
+        if (fixtureResponse) {
+          emitSourceListRefresh(event.sender)
+          return fixtureResponse
+        }
         await ensureWebSourcesHydrated()
         const rawUrl = String(payload?.url || '').trim()
         if (!rawUrl) throw new Error('URL 不能为空')
@@ -948,6 +959,11 @@ export function registerHandlers(services: {
       payload: Array<{ url: string; includeSelectors?: string[]; excludeSelectors?: string[] }>
     ) => {
       try {
+        const fixtureResponse = ingestE2EFixtureWebSources(payload)
+        if (fixtureResponse) {
+          emitSourceListRefresh(event.sender)
+          return fixtureResponse
+        }
         await ensureWebSourcesHydrated()
         const items = Array.isArray(payload) ? payload : []
         const preparedSources: WebSourceRecord[] = []
@@ -1097,8 +1113,13 @@ export function registerHandlers(services: {
 
   ipcMain.handle(
     'workspace-delete',
-    async (_event, workspaceId: string): Promise<DeleteWorkspaceSourceResponse> => {
+    async (event, workspaceId: string): Promise<DeleteWorkspaceSourceResponse> => {
       try {
+        const fixtureResponse = deleteE2EFixtureWorkspace(String(workspaceId || '').trim())
+        if (fixtureResponse) {
+          emitSourceListRefresh(event.sender)
+          return fixtureResponse
+        }
         await workspaceStore.deleteWorkspace(String(workspaceId || '').trim())
         return { success: true, deletedWorkspaceId: String(workspaceId || '').trim() }
       } catch (error: unknown) {
@@ -1129,10 +1150,13 @@ export function registerHandlers(services: {
 
   ipcMain.handle(
     'workspace-scan',
-    async (_event, payload: { workspaceId: string }): Promise<WorkspaceJobResponse> => {
+    async (event, payload: { workspaceId: string }): Promise<WorkspaceJobResponse> => {
       try {
         const fixtureResponse = scanE2EFixtureWorkspace(String(payload.workspaceId || '').trim())
-        if (fixtureResponse) return fixtureResponse
+        if (fixtureResponse) {
+          emitSourceListRefresh(event.sender)
+          return fixtureResponse
+        }
         const workspaceId = String(payload.workspaceId || '').trim()
         const currentWorkspace = await workspaceStore.getWorkspaceById(workspaceId)
         if (!currentWorkspace) {
@@ -1247,7 +1271,9 @@ export function registerHandlers(services: {
         const retryTargets = mergedNodes.filter(
           (node) =>
             node.kind === 'file' &&
-            (node.prepare_status === 'failed' || node.prepare_status === 'stale') &&
+            (node.prepare_status === 'not_prepared' ||
+              node.prepare_status === 'failed' ||
+              node.prepare_status === 'stale') &&
             !basePrepareKeys.has(getWorkspaceScopeKey(node))
         )
         const prepareTargets = [...basePrepareTargets, ...retryTargets]
@@ -1421,6 +1447,8 @@ export function registerHandlers(services: {
 
   ipcMain.handle('web-source-list', async (): Promise<WebSourceListResponse> => {
     try {
+      const fixtureList = getE2EFixtureWebSourceList()
+      if (fixtureList) return fixtureList
       await ensureWebSourcesHydrated()
       const items = await webSourceStore.listWebSources()
       return { items, total: items.length }
@@ -1441,6 +1469,11 @@ export function registerHandlers(services: {
       payload: { webSourceId: string }
     ): Promise<WebSourceMutationResponse> => {
       try {
+        const fixtureResponse = refreshE2EFixtureWebSource(String(payload.webSourceId || '').trim())
+        if (fixtureResponse) {
+          emitSourceListRefresh(event.sender)
+          return fixtureResponse
+        }
         await ensureWebSourcesHydrated()
         const webSourceId = String(payload.webSourceId || '').trim()
         if (!webSourceId) {
@@ -1463,6 +1496,11 @@ export function registerHandlers(services: {
     'web-source-delete',
     async (event, webSourceId: string): Promise<DeleteWebSourceResponse> => {
       try {
+        const fixtureResponse = deleteE2EFixtureWebSource(String(webSourceId || '').trim())
+        if (fixtureResponse) {
+          emitSourceListRefresh(event.sender)
+          return fixtureResponse
+        }
         await ensureWebSourcesHydrated()
         const safeId = String(webSourceId || '').trim()
         const source = await webSourceStore.getWebSourceById(safeId)

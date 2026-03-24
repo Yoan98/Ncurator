@@ -29,6 +29,8 @@ export const importSelectors = {
   workspaceCardPrefix: 'import-workspace-card',
   workspaceDetail: 'import-workspace-detail',
   workspaceStatus: 'import-workspace-status',
+  workspaceEmptyState: 'import-workspace-empty-state',
+  workspaceLastError: 'import-workspace-last-error',
   workspaceQuickScanButton: 'import-workspace-quick-scan-button',
   workspaceQuickPrepareButton: 'import-workspace-quick-prepare-button',
   workspaceTree: 'import-workspace-tree',
@@ -36,7 +38,22 @@ export const importSelectors = {
   createWorkspaceRootInput: 'import-create-workspace-root-input',
   createWorkspaceNameInput: 'import-create-workspace-name-input',
   createWorkspaceConfirmButton: 'import-create-workspace-confirm-button',
-  createWorkspaceCancelButton: 'import-create-workspace-cancel-button'
+  createWorkspaceCancelButton: 'import-create-workspace-cancel-button',
+  webSourceSection: 'import-web-source-section',
+  webSourceSearchInput: 'import-web-source-search-input',
+  webSourceList: 'import-web-source-list',
+  webSourceCardPrefix: 'import-web-source-card',
+  webSourceOpenModalButton: 'import-web-source-open-modal-button',
+  webSourceModal: 'import-web-source-modal',
+  webSourceUrlInput: 'import-web-source-url-input',
+  webSourceIncludeSelectorsInput: 'import-web-source-include-selectors-input',
+  webSourceExcludeSelectorsInput: 'import-web-source-exclude-selectors-input',
+  webSourceConfirmButton: 'import-web-source-confirm-button',
+  webSourceCancelButton: 'import-web-source-cancel-button',
+  webSourceRefreshButtonPrefix: 'import-web-source-refresh-button',
+  webSourceDeleteButtonPrefix: 'import-web-source-delete-button',
+  webSourceDeleteConfirmButton: 'import-web-source-delete-confirm-button',
+  webSourceDeleteCancelButton: 'import-web-source-delete-cancel-button'
 } as const
 
 export const settingsSelectors = {
@@ -90,5 +107,7 @@ export const workbenchSelectors = {
   reviewValidation: 'workbench-review-validation',
   reviewCommitButton: 'workbench-review-commit-button',
   reviewCommitResults: 'workbench-review-commit-results',
-  reviewConflict: 'workbench-review-conflict'
+  reviewConflict: 'workbench-review-conflict',
+  scopeAiWarning: 'workbench-scope-ai-warning',
+  scopeSearchWarning: 'workbench-scope-search-warning'
 } as const

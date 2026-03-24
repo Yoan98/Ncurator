@@ -281,33 +281,7 @@ export const buildDeliveryModeFallbackMarkdown = (input: {
   summary: string
 }): string => getDeliveryModeContract(input.mode).buildFallbackMarkdown(input)
 
-export const extractDeliveryModeReusableEvidence = (
-  mode: HumanDeliveryMode,
-  deliveryMarkdown: string | undefined
-): string[] => getDeliveryModeContract(mode).extractReusableEvidence?.(deliveryMarkdown) || []
-
-export const getStructuredDeliveryContract = (
-  mode: StructuredDeliveryMode
-): StructuredDeliveryContract =>
-  mode === 'task_handoff' ? TASK_HANDOFF_CONTRACT : CONTEXT_NOTE_CONTRACT
-
-export const buildStructuredDeliveryPromptRules = (mode: StructuredDeliveryMode): string =>
-  buildDeliveryModePromptRules(mode)
-
-export const buildStructuredDeliveryPromptExample = (mode: StructuredDeliveryMode): string =>
-  buildDeliveryModePromptExample(mode)
-
-export const buildStructuredDeliveryFallbackMarkdown = (input: {
-  state: HumanState
-  mode: StructuredDeliveryMode
-  summary: string
-}): string =>
-  buildDeliveryModeFallbackMarkdown({
-    state: input.state,
-    mode: input.mode,
-    summary: input.summary
-  })
-
 export const extractContextNoteReusableEvidence = (
   deliveryMarkdown: string | undefined
-): string[] => extractDeliveryModeReusableEvidence('context_note', deliveryMarkdown)
+): string[] =>
+  getDeliveryModeContract('context_note').extractReusableEvidence?.(deliveryMarkdown) || []

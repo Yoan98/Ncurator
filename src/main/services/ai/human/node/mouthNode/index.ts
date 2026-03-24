@@ -1,10 +1,10 @@
 import type { AiRunContext } from '../../../types'
 import type { HumanDeliveryMode, HumanRuntimeCache, HumanState } from '../../types'
-import { buildFallbackDeliveryMarkdown } from './deliveryMarkdown'
 import { buildMouthPromptContext } from './promptContext'
 import { mouthResultSchema } from './contract'
 import type { AiRunContextWithHumanOverrides } from '../types'
 import { completeHumanTask } from '../utils/stateTransitions'
+import { buildDeliveryModeFallbackMarkdown } from '../../shared/deliveryContracts'
 
 export const createMouthNode = (input: {
   ctx: AiRunContext
@@ -44,9 +44,9 @@ export const createMouthNode = (input: {
     const summary = String(result.summary || '').trim() || '任务结束'
     const deliveryMarkdown =
       String(result.deliveryMarkdown || '').trim() ||
-      buildFallbackDeliveryMarkdown({
+      buildDeliveryModeFallbackMarkdown({
         state,
-        deliveryMode: input.deliveryMode,
+        mode: input.deliveryMode,
         summary
       })
 

@@ -1,5 +1,8 @@
 import path from 'node:path'
 import { test } from 'vitest'
+import { createDocxToolRuntime } from '../../../../../src/main/services/ai/human/tools/docx/runtime'
+import { callExpectedWorkerAction } from '../../../../../src/main/services/ai/human/tools/docx/tools/workerTool'
+import type { DocxWorkerResponse } from '../../../../../src/main/services/ai/human/tools/docx/worker/types'
 import type { AiRunEvent, AiTaskResultCode, JsonObject } from '../../../../../src/shared/types'
 import {
   createDocxToolHarness,
@@ -71,6 +74,12 @@ type DocxSaveResult = {
   outPath: string
 }
 
+type DocxWorkerMismatchResult = {
+  ok: boolean
+  code?: AiTaskResultCode
+  error?: string
+}
+
 const isEventType = <TType extends AiRunEvent['type']>(
   event: AiRunEvent,
   type: TType
@@ -95,6 +104,45 @@ test('docx-runtime-behavior', async () => {
       try {
         const missingDocIdResult = await harness.invoke<DocxFailureResult>('docx_outline', {})
         const sourcePath = await writeWorkbenchSampleDocx(runtime.workspaceRoot, 'docs/sample.docx')
+        const workerMismatchCtx = runtime.createAiRunContext()
+        const workerMismatchRuntime = createDocxToolRuntime({
+          ctx: {
+            runId: workerMismatchCtx.runId,
+            checkCancelled: workerMismatchCtx.checkCancelled,
+            sendEvent: workerMismatchCtx.sendEvent,
+            requestApproval: workerMismatchCtx.requestApproval,
+            trackDocxOpen: workerMismatchCtx.trackDocxOpen,
+            trackDocxChanges: workerMismatchCtx.trackDocxChanges,
+            trackDocxPreview: workerMismatchCtx.trackDocxPreview,
+            embeddingService: workerMismatchCtx.embeddingService
+          },
+          runId: runtime.runId,
+          taskId: runtime.taskId,
+          workspaceRootPath: runtime.workspaceRoot,
+          safePreviewChars: 1400,
+          emitActivity: () => undefined
+        })
+        workerMismatchRuntime.callWorker = async () =>
+          ({
+            requestId: 'docx-worker-mismatch',
+            ok: true,
+            payload: {
+              action: 'validate',
+              problems: []
+            }
+          }) satisfies DocxWorkerResponse
+        const workerMismatchResult = (await callExpectedWorkerAction({
+          runtime: workerMismatchRuntime,
+          toolName: 'docx_outline',
+          toolCallId: 'docx-worker-mismatch',
+          request: {
+            action: 'open',
+            payload: {
+              sourcePath
+            }
+          },
+          expectedAction: 'outline'
+        })) as DocxWorkerMismatchResult
         const openResult = await harness.invoke<DocxOpenResult>('docx_open', {
           sourcePath
         })
@@ -136,6 +184,7 @@ test('docx-runtime-behavior', async () => {
 
         return {
           missingDocIdResult,
+          workerMismatchResult,
           sourcePath,
           openResult,
           outlineResult,
@@ -162,11 +211,29 @@ test('docx-runtime-behavior', async () => {
         data: result.openResult
       })
 
-      runtime.assertThat(result.missingDocIdResult.code === 'invalid_input', {
-        name: 'docx-missing-docid',
-        message: 'docx tools that rely on implicit lastDocId should still fail with invalid_input before open',
-        data: result.missingDocIdResult
-      })
+      runtime.assertThat(
+        result.missingDocIdResult.code === 'invalid_input' &&
+          result.missingDocIdResult.error ===
+            'docId is required before docx_outline; open a document first',
+        {
+          name: 'docx-missing-docid',
+          message:
+            'docx tools that rely on implicit lastDocId should still fail with the centralized runtime docId error before open',
+          data: result.missingDocIdResult
+        }
+      )
+
+      runtime.assertThat(
+        result.workerMismatchResult.ok === false &&
+          result.workerMismatchResult.code === 'failed' &&
+          result.workerMismatchResult.error === 'worker protocol mismatch (outline)',
+        {
+          name: 'docx-worker-mismatch',
+          message:
+            'worker action mismatches should still be normalized through the shared runtime failure handling',
+          data: result.workerMismatchResult
+        }
+      )
 
       runtime.assertThat(result.outlineResult.blocks.length > 0, {
         name: 'docx-outline',

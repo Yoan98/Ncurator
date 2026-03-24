@@ -73,31 +73,6 @@ export const finalizeDocxToolSuccess = <TResult extends object>(input: {
   return input.result
 }
 
-export const buildDocxRequiredDocIdError = (toolName: string): string =>
-  `docId is required before ${toolName}; open a document first`
-
-export const requireDocxToolDocId = (input: {
-  runtime: DocxToolRuntime
-  toolName: string
-  toolCallId: string
-  docId?: string
-}): { docId: string } | { failure: DocxToolFailure } => {
-  const docId = input.runtime.getRequiredDocId({
-    toolName: input.toolName,
-    toolCallId: input.toolCallId,
-    docId: input.docId
-  })
-  if (docId) {
-    return { docId }
-  }
-  return {
-    failure: input.runtime.toFailure({
-      code: 'invalid_input',
-      error: buildDocxRequiredDocIdError(input.toolName)
-    })
-  }
-}
-
 export const callExpectedWorkerAction = async <TAction extends DocxWorkerAction>(input: {
   runtime: DocxToolRuntime
   toolName: string

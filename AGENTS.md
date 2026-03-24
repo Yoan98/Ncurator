@@ -11,11 +11,11 @@
 - 当涉及 AI prompt 设计、prompt 结构、标签组织或 structured output 编排时，请阅读 `doc/ai-design/prompt-design.md`
 - 当涉及 AI 后续重构方向、迭代规划或未决方案时，请阅读 `doc/ai-design/refactor-plan.md`
 - 当涉及 Core AI 测试方案、阶段划分、用例规划、`human` skill 覆盖、`watchHint`/并行边界、正式 case 与文档对齐或排查时何时继续查看 `runtime-events.jsonl` 时，请先阅读 `doc/test-plan/ai-test.md`
-- 当涉及 Workspace 测试方案、工作空间扫描/准备、网页资料、`Settings -> Workspace` 交互验证或正式 workspace case 规划时，请先阅读 `doc/test-plan/workspace-test.md`
+- 当涉及 Workspace 测试方案、工作空间扫描/准备、网页资料、`Settings -> Workspace` 空态/错误态、source scope 提示联动或正式 workspace case 规划时，请先阅读 `doc/test-plan/workspace-test.md`
 - 当涉及数据库、LanceDB、表职责或检索存储实现时，请阅读 `doc/database.md`
 - 当涉及目录规范、模块边界、文件归位或工程结构时，请阅读 `doc/project-structure.md`
 - 当涉及 UI 风格、布局规范、组件交互约束或 `Settings -> Workspace` 资料配置入口时，请阅读 `doc/ui-style.md`
-- 当涉及测试架构设计、正式 test-plan 共享约束、实现状态约定、测试目录、正式/临时 case 准入、raw log、`runtime-events.jsonl`、`timeline` 值域规则、report 生成流程、证据展示方式或测试代码准入约束时，请阅读 `doc/test.md`
+- 当涉及测试架构设计、正式 test-plan 共享约束、实现状态约定、测试目录、正式/临时 case 准入、raw log、`runtime-events.jsonl`、`timeline` 值域规则、report 生成流程、证据展示方式、`workspace` shell wrapper 或测试代码准入约束时，请阅读 `doc/test.md`
 
 ## 2. 必须遵守的规则
 

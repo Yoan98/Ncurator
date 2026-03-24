@@ -125,20 +125,6 @@ export type DocxOpenStats = {
   charCount: number
 }
 
-export type DocxSnapshot = {
-  docId: string
-  sourcePath: string
-  createdAt: number
-  parentDocId?: string
-  bufferBase64: string
-}
-
-export type DocxOperationResult<T extends object> = T & {
-  ok: boolean
-  code: DocxToolResultCode
-  summary: string
-}
-
 export type DocxCapabilityToolsInput = WorkspaceCapabilityBuildInput<DocxToolContext> & {
   safePreviewChars: number
 }

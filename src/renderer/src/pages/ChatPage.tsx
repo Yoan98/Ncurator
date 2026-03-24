@@ -1393,14 +1393,20 @@ const ChatPage: React.FC = () => {
               selectedSourceScopes.some(
                 (scope) => scope.sourceType === 'workspace' && scope.hasUnpreparedFiles
               ) ? (
-                <div className="mb-3 rounded-2xl border border-[#FDECC8] bg-[#FFF9ED] px-3 py-2 text-sm text-[#8A6510]">
+                <div
+                  className="mb-3 rounded-2xl border border-[#FDECC8] bg-[#FFF9ED] px-3 py-2 text-sm text-[#8A6510]"
+                  data-testid={workbenchSelectors.scopeAiWarning}
+                >
                   已选范围包含未准备的本地文件。AI 可能直接读取原文件，耗时更长，并增加 token 消耗。
                 </div>
               ) : null}
 
               {composerMode === 'search' &&
               selectedSourceScopes.some((scope) => scope.hasUnpreparedFiles) ? (
-                <div className="mb-3 rounded-2xl border border-[#FDECC8] bg-[#FFF9ED] px-3 py-2 text-sm text-[#8A6510]">
+                <div
+                  className="mb-3 rounded-2xl border border-[#FDECC8] bg-[#FFF9ED] px-3 py-2 text-sm text-[#8A6510]"
+                  data-testid={workbenchSelectors.scopeSearchWarning}
+                >
                   纯搜索只会检索已准备完成的本地资料；未准备文件不会进入候选结果。
                 </div>
               ) : null}

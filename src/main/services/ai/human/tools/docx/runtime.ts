@@ -8,6 +8,7 @@ import { createToolEventEmitter } from '../utils/toolEvents'
 import type { ToolEventEmitter } from '../utils/toolEvents'
 
 type FailedWorkerResponse = Extract<DocxWorkerResponse, { ok: false }>
+type RequireDocIdResult = { docId: string } | { failure: DocxToolFailure }
 
 export type DocxToolFailure = {
   ok: false
@@ -22,11 +23,6 @@ export type DocxToolRuntime = {
   state: DocxCapabilityToolsRuntimeState
   workspaceRootPath: string
   toolEvents: ToolEventEmitter
-  toFailure: (input: {
-    code: DocxToolResultCode
-    error: string
-    warnings?: string[]
-  }) => DocxToolFailure
   emitFailure: (input: {
     toolName: string
     toolCallId: string
@@ -44,11 +40,11 @@ export type DocxToolRuntime = {
   callWorker: (request: Omit<DocxWorkerRequest, 'requestId' | 'runId'>) => Promise<DocxWorkerResponse>
   resolveDocxPath: (input: { cwd: string; rawPath: string }) => string | null
   resolveTrackedDocId: (docId?: string) => string | null
-  getRequiredDocId: (input: {
+  requireDocId: (input: {
     toolName: string
     toolCallId: string
     docId?: string
-  }) => string | undefined
+  }) => RequireDocIdResult
   registerSnapshot: (docId: string, parentDocId?: string) => void
   buildSnapshotHistory: (docId: string, maxDepth: number) => DocxSnapshotLineageEntry[]
   resolveRollbackTarget: (
@@ -69,6 +65,9 @@ const resolveTrackedDocIdFromState = (
   const lastDocId = String(state.lastDocId || '').trim()
   return lastDocId || null
 }
+
+const buildRequiredDocIdError = (toolName: string): string =>
+  `docId is required before ${toolName}; open a document first`
 
 export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxToolRuntime => {
   const state: DocxCapabilityToolsRuntimeState = {
@@ -164,20 +163,21 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
 
   const resolveTrackedDocId = (docId?: string): string | null => resolveTrackedDocIdFromState(state, docId)
 
-  const getRequiredDocId = (params: {
+  const requireDocId = (params: {
     toolName: string
     toolCallId: string
     docId?: string
-  }): string | undefined => {
+  }): RequireDocIdResult => {
     const docId = resolveTrackedDocId(params.docId)
-    if (docId) return docId
-    emitFailure({
-      toolName: params.toolName,
-      toolCallId: params.toolCallId,
-      code: 'invalid_input',
-      error: `docId is required before ${params.toolName}; open a document first`
-    })
-    return undefined
+    if (docId) return { docId }
+    return {
+      failure: emitFailure({
+        toolName: params.toolName,
+        toolCallId: params.toolCallId,
+        code: 'invalid_input',
+        error: buildRequiredDocIdError(params.toolName)
+      })
+    }
   }
 
   const registerSnapshot = (docId: string, parentDocId?: string) => {
@@ -361,13 +361,12 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     state,
     workspaceRootPath,
     toolEvents,
-    toFailure,
     emitFailure,
     emitWorkerFailure,
     callWorker,
     resolveDocxPath,
     resolveTrackedDocId,
-    getRequiredDocId,
+    requireDocId,
     registerSnapshot,
     buildSnapshotHistory,
     resolveRollbackTarget,
