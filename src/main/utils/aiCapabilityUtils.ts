@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { AIMessage, BaseMessage } from '@langchain/core/messages'
-import type { AiRunContext } from '../services/ai/types'
+import type { AiEventDispatchContext } from '../services/ai/types'
 import type { JsonObject, JsonValue } from '../../shared/types'
 
 type MessageContent = BaseMessage['content'] | undefined
@@ -66,7 +66,7 @@ export const getToolCalls = (message: AIMessage) => {
 }
 
 export const emitActivity = (input: {
-  ctx: AiRunContext
+  ctx: AiEventDispatchContext
   runId: string
   taskId?: string
   actionType: string

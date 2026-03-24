@@ -1,7 +1,7 @@
 import { tool } from '@langchain/core/tools'
 import { z } from 'zod/v4'
 import type { SearchResult } from '../../../../../../shared/types'
-import type { AiRunContext } from '../../../types'
+import type { KnowledgeRetrievalContext } from '../../../types'
 import { normalizeForIpc } from '../../../../../utils/serialization'
 import { createToolEventEmitter } from '../utils/toolEvents'
 
@@ -36,7 +36,7 @@ export const resolveScopedDocumentIds = (
 }
 
 export const buildRetrievalTools = (input: {
-  ctx: AiRunContext
+  ctx: KnowledgeRetrievalContext
   runId: string
   taskId?: string
 }) => {

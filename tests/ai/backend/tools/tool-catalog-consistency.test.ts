@@ -6,6 +6,7 @@ import { DOCX_TOOL_PROMPT_SPECS } from '../../../../src/main/services/ai/human/p
 import { KB_TOOL_PROMPT_SPECS } from '../../../../src/main/services/ai/human/prompts/toolPromptSpecs/kb'
 import { TERMINAL_TOOL_PROMPT_SPECS } from '../../../../src/main/services/ai/human/prompts/toolPromptSpecs/terminal'
 import {
+  getToolDescriptor,
   listToolNamesByFamily,
   listToolNamesBySkill,
   TOOL_CATALOG
@@ -47,6 +48,18 @@ test('tool-catalog-consistency', async () => {
           toolName,
           promptSpec: getToolPromptSpec(toolName)
         })),
+        promptCloneIntegrity: (() => {
+          const firstLookup = getToolPromptSpec('kb_hybrid_search_chunks')
+          if (firstLookup) {
+            firstLookup.args[0].name = 'mutated-query'
+          }
+          const secondLookup = getToolPromptSpec('kb_hybrid_search_chunks')
+          const descriptor = getToolDescriptor('kb_hybrid_search_chunks')
+          return {
+            secondLookup,
+            descriptor
+          }
+        })(),
         docxFamilyTools: sortNames(listToolNamesByFamily('docx')),
         terminalReadMeta: getToolExecutionMeta({
           toolName: 'terminal_run_command',
@@ -95,6 +108,17 @@ test('tool-catalog-consistency', async () => {
         message: 'every catalog tool should resolve a prompt spec through the shared lookup helper',
         data: result.promptLookups
       })
+
+      runtime.assertThat(
+        result.promptCloneIntegrity.secondLookup?.args[0]?.name === 'queryText' &&
+          result.promptCloneIntegrity.descriptor?.promptSpec.args[0]?.name === 'queryText',
+        {
+          name: 'tool-catalog-prompt-clone-integrity',
+          message:
+            'prompt lookups should clone from the centralized descriptor without mutating the shared catalog definition',
+          data: result.promptCloneIntegrity
+        }
+      )
 
       runtime.assertThat(
         result.terminalReadMeta.mutability === 'read_only' &&

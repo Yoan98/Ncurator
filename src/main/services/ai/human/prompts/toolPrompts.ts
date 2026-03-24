@@ -1,6 +1,6 @@
 import type { ToolPromptSpec } from '../types'
 import type { JsonObject } from '../../../../../shared/types'
-import { listToolDescriptors } from '../tools/toolCatalog'
+import { getToolDescriptor } from '../tools/toolCatalog'
 
 const cloneJsonObject = (value: JsonObject): JsonObject => ({ ...value })
 
@@ -21,11 +21,7 @@ const cloneToolPromptSpec = (spec: ToolPromptSpec): ToolPromptSpec => ({
     : undefined
 })
 
-const TOOL_PROMPT_SPECS: Record<string, ToolPromptSpec> = Object.fromEntries(
-  listToolDescriptors().map((descriptor) => [descriptor.name, descriptor.promptSpec] as const)
-)
-
 export const getToolPromptSpec = (toolName: string): ToolPromptSpec | null => {
-  const matched = TOOL_PROMPT_SPECS[toolName]
-  return matched ? cloneToolPromptSpec(matched) : null
+  const descriptor = getToolDescriptor(toolName)
+  return descriptor ? cloneToolPromptSpec(descriptor.promptSpec) : null
 }

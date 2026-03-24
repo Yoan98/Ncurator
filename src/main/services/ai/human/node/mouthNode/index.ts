@@ -1,11 +1,10 @@
 import type { AiRunContext } from '../../../types'
-import type { HumanDeliveryMode, HumanResult, HumanRuntimeCache, HumanState } from '../../types'
-import { appendHumanTraceStep, emitTaskDelivery } from '../utils/events'
+import type { HumanDeliveryMode, HumanRuntimeCache, HumanState } from '../../types'
 import { buildFallbackDeliveryMarkdown } from './deliveryMarkdown'
 import { buildMouthPromptContext } from './promptContext'
 import { mouthResultSchema } from './contract'
 import type { AiRunContextWithHumanOverrides } from '../types'
-import { emitLatestHumanStepForState } from '../utils/stateTransitions'
+import { completeHumanTask } from '../utils/stateTransitions'
 
 export const createMouthNode = (input: {
   ctx: AiRunContext
@@ -58,53 +57,16 @@ export const createMouthNode = (input: {
         finalStatus,
         summary
       })
-    const finalResult: HumanResult = {
-      status: finalStatus,
-      summary,
-      deliveryMarkdown,
-      artifacts: state.runtimeArtifacts.length > 0 ? [...state.runtimeArtifacts] : undefined
-    }
-    if (input.streamAnswer) {
-      input.ctx.sendEvent({
-        type: 'answer_completed',
-        runId: input.ctx.runId,
-        taskId: state.task.taskId,
-        text: deliveryMarkdown,
-        stage: 'human_mouth'
-      })
-    }
-    emitTaskDelivery({
-      ctx: input.ctx,
-      taskId: state.task.taskId,
-      summary: finalResult.summary,
-      deliveryMarkdown,
-      internal: input.internalDelivery
-    })
-    const traceSteps = appendHumanTraceStep({
-      steps: state.trace.steps,
-      action: finalStatus === 'completed' ? 'deliver_result' : 'block_result',
-      publicNarrative: finalResult.summary,
-      resultStatus: finalStatus === 'completed' ? 'ok' : 'blocked',
-      summary: finalResult.summary
-    })
-    const nextState: HumanState = {
-      ...state,
-      runtime: {
-        stage: 'mouth',
-        status: finalStatus
-      },
-      result: finalResult,
-      trace: {
-        steps: traceSteps
-      }
-    }
-    emitLatestHumanStepForState({
+
+    return completeHumanTask({
       ctx: input.ctx,
       cache: input.cache,
-      taskId: state.task.taskId,
-      state: nextState,
-      stage: 'human_mouth'
+      state,
+      finalStatus,
+      summary,
+      deliveryMarkdown,
+      streamAnswer: input.streamAnswer,
+      internalDelivery: input.internalDelivery
     })
-    return nextState
   }
 }

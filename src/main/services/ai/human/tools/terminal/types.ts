@@ -1,5 +1,5 @@
 import type { AiFileArtifactOperation } from '../../../../../../shared/types'
-import type { AiRunContext } from '../../../types'
+import type { TerminalToolContext } from '../../../types'
 
 export type TerminalCommandInput = {
   command: string
@@ -32,7 +32,7 @@ export type EmitActivityInput = {
 }
 
 export type TerminalCapabilityToolsInput = {
-  ctx: AiRunContext
+  ctx: TerminalToolContext
   runId: string
   taskId: string
   workspaceRootPath: string

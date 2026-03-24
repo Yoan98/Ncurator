@@ -1,7 +1,7 @@
 import { tool } from '@langchain/core/tools'
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { z } from 'zod/v4'
-import type { AiRunContext } from '../../../types'
+import type { AiEventDispatchContext } from '../../../types'
 
 export const buildWorkspaceRequiredResult = (error: string) => ({
   ok: false,
@@ -13,7 +13,7 @@ export const createWorkspaceRequiredGuardTool = <TSchema extends z.ZodType>(inpu
   name: string
   description: string
   schema: TSchema
-  ctx: AiRunContext
+  ctx: AiEventDispatchContext
   runId: string
   taskId: string
   reason: string
@@ -44,7 +44,7 @@ export const buildWorkspaceBoundGuardedTools = <TSchema extends z.ZodType>(input
   workspaceRootPath?: string
   descriptionForTool: (toolName: string) => string
   schema: TSchema
-  ctx: AiRunContext
+  ctx: AiEventDispatchContext
   runId: string
   taskId: string
   reason: string

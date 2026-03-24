@@ -66,12 +66,8 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
 
   return {
     runId: payload.runId,
-    sessionId: payload.sessionId,
     selectedDocumentIds: effectiveDocumentIds,
-    selectedSourceScopes: normalizedScopes,
     selectedScopeSummary: buildSelectedScopeSummary(normalizedScopes, payload.allowNonLocal),
-    allowNonLocal: Boolean(payload.allowNonLocal),
-    runtimeSettings: deps.runtimeSettings,
     workspace: normalizeWorkspaceBinding(payload.workspace),
     checkCancelled,
     chatStructured,
@@ -101,7 +97,6 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
         previewPath
       })
     },
-    getModelConfig: getActiveConfig,
     documentsStore: deps.documentsStore,
     embeddingService: deps.embeddingService
   }

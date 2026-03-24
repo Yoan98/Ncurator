@@ -1,8 +1,8 @@
-import type { AiRunContext, AiRunState } from '../../types'
-import { contextDecisionSchema, DEFAULT_MAX_CONTEXT_ROUNDS } from './helpers'
+import type { AiRunState, DirectorNodeContext } from '../../types'
+import { contextDecisionSchema, DEFAULT_MAX_CONTEXT_ROUNDS, loadDirectorHistory } from './helpers'
 import { buildIntentPrompt } from '../prompts/intent'
 
-export const createIntentNode = (input: { ctx: AiRunContext; maxContextRounds?: number }) => {
+export const createIntentNode = (input: { ctx: DirectorNodeContext; maxContextRounds?: number }) => {
   const { ctx } = input
   const maxContextRounds = Math.max(1, Number(input.maxContextRounds || DEFAULT_MAX_CONTEXT_ROUNDS))
 
@@ -20,11 +20,7 @@ export const createIntentNode = (input: { ctx: AiRunContext; maxContextRounds?: 
       }
     }
 
-    const history = await ctx.loadHistory({
-      recentTurns: 12,
-      maxRecentTurnsChars: 4000,
-      maxSummaryChars: 1000
-    })
+    const history = await loadDirectorHistory(ctx)
 
     const prompt = buildIntentPrompt({
       userInput: state.input,

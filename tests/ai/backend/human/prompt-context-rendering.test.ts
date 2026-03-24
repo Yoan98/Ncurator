@@ -121,6 +121,17 @@ test('prompt-context-rendering', async () => {
         data: result.brainPrompt
       })
 
+      runtime.assertThat(
+        result.brainPrompt.user.includes('下面是最近一轮工具调用刚带回来的新信息') &&
+          result.brainPrompt.user.includes('检索到 2 条相关证据。'),
+        {
+          name: 'brain-recent-tool-results',
+          message:
+            'brain prompt should still render the recent tool result block after prompt view consolidation',
+          data: result.brainPrompt
+        }
+      )
+
       runtime.assertThat(result.mouthPrompt.user.includes('<facts>'), {
         name: 'mouth-facts-section',
         message: 'mouth prompt should still include the facts section wrapper',

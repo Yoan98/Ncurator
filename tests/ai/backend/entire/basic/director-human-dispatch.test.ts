@@ -181,17 +181,72 @@ test('director-human-dispatch', async () => {
       const allEvents = runtime.eventCollector.snapshot()
       const planEvents = allEvents.slice(contextEvents.length)
 
+      const blockedPlanCalls: string[] = []
+      const blockedPlanRunHumanTask: HumanTaskRunner = async (
+        taskInput
+      ): Promise<HumanTaskOutput> => {
+        blockedPlanCalls.push(taskInput.taskId)
+        if (taskInput.taskId === 'task-blocked') {
+          return {
+            taskId: taskInput.taskId,
+            status: 'blocked',
+            summary: '子任务当前被阻塞。',
+            deliveryMarkdown:
+              '# 子任务交付\n\n## 任务状态\nblocked\n\n## 本任务结论\n当前任务受阻。\n\n## 已完成\n- 已确认阻塞点。\n\n## 关键事实\n- 需要等待补充材料。\n\n## 关键证据\n- 当前上下文不足。\n\n## 产物与引用\n无\n\n## 未决与风险\n- 材料缺失。\n\n## 对后续任务的影响\n- synthesis 只能做部分交付。\n\n## 建议下一步\n- 补充材料后继续。',
+            artifacts: [buildArtifact('/tmp/blocked-task-output.docx', 'blocked task artifact')]
+          }
+        }
+
+        return {
+          taskId: taskInput.taskId,
+          status: 'completed',
+          summary: '阻塞后已汇总当前状态。',
+          deliveryMarkdown: '# 最终答复\n\n任务阻塞，但已完成当前可交付汇总。',
+          artifacts: [buildArtifact('/tmp/blocked-synthesis-output.docx', 'blocked synthesis artifact')]
+        }
+      }
+      const blockedPlanCtx = runtime.createAiRunContext({
+        chatStructuredOverride: async (input) => {
+          if (input.caller === 'director.intent') {
+            return {
+              mode: 'to_plan'
+            }
+          }
+          if (input.caller === 'director.plan') {
+            return {
+              tasks: [
+                {
+                  id: 'task-blocked',
+                  title: '阻塞任务',
+                  userInput: '尝试完成当前任务，但允许在证据不足时阻塞'
+                }
+              ] satisfies AiPlanTask[]
+            }
+          }
+          throw new Error(`unexpected structured call: ${input.caller}`)
+        }
+      })
+      const blockedPlanGraph = buildDirectorGraph({
+        ctx: blockedPlanCtx,
+        runHumanTask: blockedPlanRunHumanTask
+      })
+      const blockedPlanState = (await blockedPlanGraph.invoke(buildInitialState(runtime))) as AiRunState
+      const blockedAllEvents = runtime.eventCollector.snapshot()
+      const blockedPlanEvents = blockedAllEvents.slice(allEvents.length)
+
       return {
         directState,
         contextState,
         planState,
+        blockedPlanState,
         directCalls,
         contextCalls,
         planCalls,
+        blockedPlanCalls,
         directEvents,
         contextEvents,
         planEvents,
-        allEvents
+        blockedPlanEvents
       }
     },
     assert: async (result, runtime) => {
@@ -294,6 +349,47 @@ test('director-human-dispatch', async () => {
           message:
             'context human dispatch should emit started/blocked lifecycle events and must not emit completed when blocked',
           data: contextLifecycleEvents
+        }
+      )
+
+      runtime.assertThat(result.blockedPlanCalls.join(',') === 'task-blocked,synthesis-human', {
+        name: 'director-blocked-plan-dispatch',
+        message:
+          'blocked plan flow should stop additional task dispatch after the blocked task and continue directly to synthesis-human',
+        data: result.blockedPlanCalls
+      })
+
+      runtime.assertThat(
+        result.blockedPlanState.plan.length === 1 &&
+          result.blockedPlanState.plan[0]?.status === 'blocked' &&
+          result.blockedPlanState.finalArtifacts.length === 2,
+        {
+          name: 'director-blocked-plan-state',
+          message:
+            'blocked plan flow should preserve the blocked task status and still merge blocked-task + synthesis artifacts',
+          data: result.blockedPlanState
+        }
+      )
+
+      const blockedLifecycleEvents = result.blockedPlanEvents.filter(
+        (event) =>
+          (isEventType(event, 'task_started') ||
+            isEventType(event, 'task_blocked') ||
+            isEventType(event, 'task_completed')) &&
+          (event.taskId === 'task-blocked' || event.taskId === 'synthesis-human')
+      )
+      runtime.assertThat(
+        blockedLifecycleEvents.some(
+          (event) => isEventType(event, 'task_blocked') && event.taskId === 'task-blocked'
+        ) &&
+          blockedLifecycleEvents.some(
+            (event) => isEventType(event, 'task_completed') && event.taskId === 'synthesis-human'
+          ),
+        {
+          name: 'director-blocked-plan-events',
+          message:
+            'blocked plan flow should emit task_blocked for the blocked task and still emit synthesis completion lifecycle events',
+          data: blockedLifecycleEvents
         }
       )
     }

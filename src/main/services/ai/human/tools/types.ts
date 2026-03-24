@@ -27,12 +27,6 @@ export type ToolExecutionMeta = {
 
 export type ToolExecutionMetaResolver = (args: JsonObject) => ToolExecutionMeta
 
-export type SkillToolBinding = {
-  skillId: RuntimeSkillId
-  familyId: AiToolFamilyId
-  toolNames: string[]
-}
-
 export type ToolDescriptor = {
   name: string
   familyId: AiToolFamilyId
@@ -40,10 +34,4 @@ export type ToolDescriptor = {
   requiresWorkspace: boolean
   promptSpec: ToolPromptSpec
   resolveExecutionMeta: ToolExecutionMetaResolver
-}
-
-export type ToolFamilyRegistry = {
-  families: ToolFamilyDefinition[]
-  allTools: StructuredToolInterface[]
-  toolToFamily: Record<string, AiToolFamilyId>
 }

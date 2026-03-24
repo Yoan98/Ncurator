@@ -1,11 +1,12 @@
-import type { AiRunContext, AiRunState, HumanTaskRunner } from '../../types'
+import type { AiRunState, DirectorNodeContext, HumanTaskRunner } from '../../types'
+import { buildDirectHumanPatch } from './helpers'
 import { buildDirectHumanObjective } from './objectives'
 import { runDirectorHumanSubtask } from './humanDispatch'
 
 const DIRECT_TASK_ID = 'direct-human'
 
 export const createDirectHumanExecNode = (input: {
-  ctx: AiRunContext
+  ctx: DirectorNodeContext
   runHumanTask: HumanTaskRunner
 }) => {
   const { ctx, runHumanTask } = input
@@ -27,10 +28,6 @@ export const createDirectHumanExecNode = (input: {
       }
     })
 
-    return {
-      finalDeliveryMarkdown: output.deliveryMarkdown,
-      finalArtifacts: output.artifacts || [],
-      directorStage: 'director_complete'
-    }
+    return buildDirectHumanPatch(output)
   }
 }

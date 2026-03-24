@@ -1,5 +1,5 @@
 import type { AiTaskResultCode } from '../../../../../../shared/types'
-import type { AiRunContext } from '../../../types'
+import type { DocxToolContext } from '../../../types'
 import type { z } from 'zod/v4'
 import {
   blockSpecSchema,
@@ -145,7 +145,7 @@ export type EmitActivityInput = {
 }
 
 export type DocxCapabilityToolsInput = {
-  ctx: AiRunContext
+  ctx: DocxToolContext
   runId: string
   taskId: string
   workspaceRootPath: string

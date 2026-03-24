@@ -187,14 +187,14 @@ type CreateTestAiRunContextInput = CreateAiRunContextInput & {
 
 export const createTestAiRunContext = (input: CreateTestAiRunContextInput): AiRunContext => {
   const runId = input.runId || randomUUID()
-  const sessionId = input.sessionId || 'test-session'
   const bindWorkspace = input.bindWorkspace !== false
   const resolveApproval = buildApprovalResolver(input.approvalPolicy)
   const documentsStoreStub = buildDocumentsStoreStub(input.documentsStoreOverrides)
   const embeddingServiceStub = buildEmbeddingServiceStub()
   const resolveToolExecutionOverride = buildToolExecutionOverrideResolver(input.toolExecutionOverrides)
   const resolveBrainDecisionOverride = buildHumanReasonOverrideResolver(input.humanReasonOverrides)
-  const runtimeSettings = input.runtimeSettingsOverride || {}
+  void input.sessionId
+  void input.runtimeSettingsOverride
 
   const requestApproval = async (request: AiApprovalRequest): Promise<AiApprovalDecision> => {
     const approvalId = randomUUID()
@@ -227,15 +227,12 @@ export const createTestAiRunContext = (input: CreateTestAiRunContextInput): AiRu
 
   const context = {
     runId,
-    sessionId,
     selectedDocumentIds: input.selectedDocumentIds,
     selectedScopeSummary: bindWorkspace
       ? `workspace:test-workspace`
       : input.selectedDocumentIds?.length
         ? `documents:${input.selectedDocumentIds.join(',')}`
         : 'workspace:unbound',
-    allowNonLocal: false,
-    runtimeSettings,
     humanRuntimeOverrides: input.humanRuntimeOverrides,
     workspace: bindWorkspace
       ? {
@@ -294,12 +291,6 @@ export const createTestAiRunContext = (input: CreateTestAiRunContextInput): AiRu
           return output
         }
       : undefined,
-    getModelConfig: async () => {
-      if (!input.liveModelConfig) {
-        throw new Error('live model config is required for this test case')
-      }
-      return input.liveModelConfig
-    },
     documentsStore: documentsStoreStub,
     embeddingService: embeddingServiceStub
   }

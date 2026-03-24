@@ -150,23 +150,21 @@ export const brainDecisionRecordSchema = z.object({
   createdAt: z.number()
 })
 
-export const mouthOutputSchema = z.object({
+export const humanDeliveryPayloadSchema = z.object({
   summary: z.string().min(1),
   deliveryMarkdown: z.string().min(1).optional()
 })
 
-export const humanResultSchema = z.object({
+export const mouthOutputSchema = humanDeliveryPayloadSchema
+
+export const humanResultSchema = humanDeliveryPayloadSchema.extend({
   status: humanFinalStatusSchema,
-  summary: z.string().min(1),
-  deliveryMarkdown: z.string().min(1).optional(),
   artifacts: z.array(aiArtifactRefSchema).optional()
 })
 
-export const humanTaskOutputSchema = z.object({
+export const humanTaskOutputSchema = humanDeliveryPayloadSchema.extend({
   taskId: z.string(),
   status: humanFinalStatusSchema,
-  summary: z.string().min(1),
-  deliveryMarkdown: z.string().min(1).optional(),
   artifacts: z.array(aiArtifactRefSchema).optional()
 })
 

@@ -132,6 +132,30 @@ const applyOpenQuestionsFieldOp = (
   }
 }
 
+const removeFactsFieldOp = (inside: BrainMemoryInside, index: number) => {
+  const outcome = removeCollectionItem(inside.facts, index)
+  return {
+    inside: setFieldValue(inside, 'facts', outcome.list),
+    invalid: outcome.invalid
+  }
+}
+
+const removeEvidencesFieldOp = (inside: BrainMemoryInside, index: number) => {
+  const outcome = removeCollectionItem(inside.evidences, index)
+  return {
+    inside: setFieldValue(inside, 'evidences', outcome.list),
+    invalid: outcome.invalid
+  }
+}
+
+const removeOpenQuestionsFieldOp = (inside: BrainMemoryInside, index: number) => {
+  const outcome = removeCollectionItem(inside.openQuestions, index)
+  return {
+    inside: setFieldValue(inside, 'openQuestions', outcome.list),
+    invalid: outcome.invalid
+  }
+}
+
 const computeFinalEvidenceIds = (input: {
   inside: BrainMemoryInside
   memoryOps: BrainMemoryOp[]
@@ -182,20 +206,15 @@ export const reduceBrainMemory = (input: {
     if (op.op === 'remove') {
       const outcome =
         op.field === 'facts'
-          ? removeCollectionItem(nextInside.facts, op.index)
+          ? removeFactsFieldOp(nextInside, op.index)
           : op.field === 'evidences'
-            ? removeCollectionItem(nextInside.evidences, op.index)
-            : removeCollectionItem(nextInside.openQuestions, op.index)
+            ? removeEvidencesFieldOp(nextInside, op.index)
+            : removeOpenQuestionsFieldOp(nextInside, op.index)
       if (outcome.invalid) {
         hasInvalidOp = true
         return
       }
-      nextInside =
-        op.field === 'facts'
-          ? setFieldValue(nextInside, 'facts', outcome.list)
-          : op.field === 'evidences'
-            ? setFieldValue(nextInside, 'evidences', outcome.list)
-            : setFieldValue(nextInside, 'openQuestions', outcome.list)
+      nextInside = outcome.inside
       return
     }
 

@@ -1,18 +1,14 @@
-import type { AiRunContext, AiRunState } from '../../types'
-import { planDecisionSchema, toPlanTasks, validatePlannerTasks } from './helpers'
+import type { AiRunState, DirectorNodeContext } from '../../types'
+import { loadDirectorHistory, planDecisionSchema, toPlanTasks, validatePlannerTasks } from './helpers'
 import { buildPlanPrompt } from '../prompts/plan'
 
-export const createPlanNode = (input: { ctx: AiRunContext }) => {
+export const createPlanNode = (input: { ctx: DirectorNodeContext }) => {
   const { ctx } = input
 
   return async (state: AiRunState): Promise<Partial<AiRunState>> => {
     ctx.checkCancelled()
 
-    const history = await ctx.loadHistory({
-      recentTurns: 12,
-      maxRecentTurnsChars: 4000,
-      maxSummaryChars: 1000
-    })
+    const history = await loadDirectorHistory(ctx)
 
     const prompt = buildPlanPrompt({
       userInput: state.input,

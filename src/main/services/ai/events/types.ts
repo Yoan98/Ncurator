@@ -1,8 +1,8 @@
 import type { AiFileArtifactCapability, AiFileArtifactOperation } from '../../../../shared/types'
-import type { AiRunContext } from '../types'
+import type { AiEventDispatchContext } from '../types'
 
 export type EmitFileArtifactEventInput = {
-  ctx: AiRunContext
+  ctx: AiEventDispatchContext
   runId: string
   taskId: string
   capability: AiFileArtifactCapability

@@ -50,7 +50,7 @@ const resolveTerminalExecutionMeta = (args: JsonObject): ToolExecutionMeta => {
   }
 }
 
-const toolCatalog: ToolDescriptor[] = [
+export const TOOL_CATALOG: readonly ToolDescriptor[] = [
   {
     name: 'terminal_run_command',
     familyId: 'terminal',
@@ -239,9 +239,24 @@ const toolCatalog: ToolDescriptor[] = [
   }
 ]
 
-const TOOL_DESCRIPTOR_BY_NAME = new Map(toolCatalog.map((descriptor) => [descriptor.name, descriptor] as const))
+const TOOL_DESCRIPTOR_BY_NAME = new Map(
+  TOOL_CATALOG.map((descriptor) => [descriptor.name, descriptor] as const)
+)
 
-export const TOOL_CATALOG = toolCatalog
+const TOOL_DESCRIPTORS_BY_FAMILY = new Map<AiToolFamilyId, ToolDescriptor[]>()
+const TOOL_DESCRIPTORS_BY_SKILL = new Map<RuntimeSkillId, ToolDescriptor[]>()
+
+TOOL_CATALOG.forEach((descriptor) => {
+  const familyDescriptors = TOOL_DESCRIPTORS_BY_FAMILY.get(descriptor.familyId) || []
+  familyDescriptors.push(descriptor)
+  TOOL_DESCRIPTORS_BY_FAMILY.set(descriptor.familyId, familyDescriptors)
+
+  descriptor.skillIds.forEach((skillId) => {
+    const skillDescriptors = TOOL_DESCRIPTORS_BY_SKILL.get(skillId) || []
+    skillDescriptors.push(descriptor)
+    TOOL_DESCRIPTORS_BY_SKILL.set(skillId, skillDescriptors)
+  })
+})
 
 export const getToolDescriptor = (toolName: string): ToolDescriptor | undefined =>
   TOOL_DESCRIPTOR_BY_NAME.get(toolName)
@@ -249,13 +264,13 @@ export const getToolDescriptor = (toolName: string): ToolDescriptor | undefined 
 export const listToolDescriptors = (): ToolDescriptor[] => [...TOOL_CATALOG]
 
 export const listToolDescriptorsByFamily = (familyId: AiToolFamilyId): ToolDescriptor[] =>
-  TOOL_CATALOG.filter((descriptor) => descriptor.familyId === familyId)
+  [...(TOOL_DESCRIPTORS_BY_FAMILY.get(familyId) || [])]
 
 export const listToolNamesByFamily = (familyId: AiToolFamilyId): string[] =>
   listToolDescriptorsByFamily(familyId).map((descriptor) => descriptor.name)
 
 export const listToolDescriptorsBySkill = (skillId: RuntimeSkillId): ToolDescriptor[] =>
-  TOOL_CATALOG.filter((descriptor) => descriptor.skillIds.includes(skillId))
+  [...(TOOL_DESCRIPTORS_BY_SKILL.get(skillId) || [])]
 
 export const listToolNamesBySkill = (skillId: RuntimeSkillId): string[] =>
   listToolDescriptorsBySkill(skillId).map((descriptor) => descriptor.name)

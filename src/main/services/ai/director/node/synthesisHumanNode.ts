@@ -1,12 +1,12 @@
-import type { AiRunContext, AiRunState, HumanTaskRunner } from '../../types'
-import { mergeArtifactRefs } from '../../utils/artifacts'
+import type { AiRunState, DirectorNodeContext, HumanTaskRunner } from '../../types'
+import { buildSynthesisHumanPatch } from './helpers'
 import { buildSynthesisHumanObjective } from './objectives'
 import { runDirectorHumanSubtask } from './humanDispatch'
 
 const SYNTHESIS_TASK_ID = 'synthesis-human'
 
 export const createSynthesisHumanNode = (input: {
-  ctx: AiRunContext
+  ctx: DirectorNodeContext
   runHumanTask: HumanTaskRunner
 }) => {
   const { ctx, runHumanTask } = input
@@ -30,13 +30,9 @@ export const createSynthesisHumanNode = (input: {
       }
     })
 
-    return {
-      finalDeliveryMarkdown: output.deliveryMarkdown,
-      finalArtifacts: mergeArtifactRefs(
-        ...state.plan.map((task) => task.artifacts),
-        output.artifacts
-      ),
-      directorStage: 'director_complete'
-    }
+    return buildSynthesisHumanPatch({
+      state,
+      output
+    })
   }
 }

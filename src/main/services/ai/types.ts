@@ -6,14 +6,12 @@ import type { DocxChangedBlock, DocxOp } from './human/tools/docx/types'
 import type { DraftReviewService } from './human/tools/docx/review/DraftReviewService'
 import type { z } from 'zod/v4'
 import type {
-  AiArtifactRef,
   AiRuntimeSettings,
   AiPlanTask,
   AiRunEvent,
   AiRunEventStage,
   AiRunStatus,
   AiTaskStatus,
-  LLMConfig,
   SourceScopeSelection
 } from '../../../shared/types'
 import type { HumanDeliveryMode, HumanTaskInput, HumanTaskOutput } from './human/types'
@@ -89,12 +87,8 @@ export type AiRunDeps = {
 
 export type AiRunContext = {
   runId: string
-  sessionId: string
   selectedDocumentIds?: string[]
-  selectedSourceScopes?: SourceScopeSelection[]
   selectedScopeSummary: string
-  allowNonLocal: boolean
-  runtimeSettings: AiRuntimeSettings
   humanRuntimeOverrides?: {
     hardActionLimit?: number
   }
@@ -127,7 +121,35 @@ export type AiRunContext = {
     changedBlocks: DocxChangedBlock[]
   }) => void
   trackDocxPreview: (input: { docId: string; previewPath: string }) => void
-  getModelConfig: () => Promise<LLMConfig>
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService
 }
+
+export type AiEventDispatchContext = Pick<AiRunContext, 'runId' | 'sendEvent'>
+
+export type DirectorNodeContext = Pick<
+  AiRunContext,
+  'runId' | 'checkCancelled' | 'chatStructured' | 'sendEvent' | 'loadHistory' | 'selectedScopeSummary'
+>
+
+export type TerminalToolContext = Pick<
+  AiRunContext,
+  'runId' | 'checkCancelled' | 'sendEvent' | 'requestApproval'
+>
+
+export type KnowledgeRetrievalContext = Pick<
+  AiRunContext,
+  'runId' | 'checkCancelled' | 'sendEvent' | 'selectedDocumentIds' | 'documentsStore' | 'embeddingService'
+>
+
+export type DocxToolContext = Pick<
+  AiRunContext,
+  | 'runId'
+  | 'checkCancelled'
+  | 'sendEvent'
+  | 'requestApproval'
+  | 'trackDocxOpen'
+  | 'trackDocxChanges'
+  | 'trackDocxPreview'
+  | 'embeddingService'
+>

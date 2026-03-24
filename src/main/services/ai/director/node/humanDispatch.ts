@@ -1,6 +1,6 @@
 import type {
   AiDirectorStage,
-  AiRunContext,
+  DirectorNodeContext,
   HumanRunDispatchOptions,
   HumanTaskOutput,
   HumanTaskRunner
@@ -15,7 +15,7 @@ type DirectorHumanDispatchStage = Extract<
 >
 
 export const runDirectorHumanSubtask = async (input: {
-  ctx: AiRunContext
+  ctx: DirectorNodeContext
   runId: string
   taskId: string
   stage: DirectorHumanDispatchStage

@@ -1,10 +1,10 @@
-import type { AiRunContext, AiRunState, HumanTaskRunner } from '../../types'
+import type { AiRunState, DirectorNodeContext, HumanTaskRunner } from '../../types'
 import { buildPlanTaskObjective } from './objectives'
-import { pickPendingTaskIndex } from './helpers'
+import { buildPlanExecPatch, pickPendingTaskIndex } from './helpers'
 import { runDirectorHumanSubtask } from './humanDispatch'
 
 export const createPlanExecNode = (input: {
-  ctx: AiRunContext
+  ctx: DirectorNodeContext
   runHumanTask: HumanTaskRunner
 }) => {
   const { ctx, runHumanTask } = input
@@ -26,10 +26,6 @@ export const createPlanExecNode = (input: {
       contextEvidence: state.contextEvidence,
       priorDeliveries: state.plan.slice(0, taskIndex).filter((item) => Boolean(item.deliveryMarkdown))
     })
-    const runningPlan = state.plan.map((item, index) =>
-      index === taskIndex ? { ...item, status: 'running' as const } : item
-    )
-
     const output = await runDirectorHumanSubtask({
       ctx,
       runId: state.runId,
@@ -42,33 +38,10 @@ export const createPlanExecNode = (input: {
       }
     })
 
-    // 当前策略为 stop-dispatch：单任务 blocked 会停止后续业务任务，但保留 synthesis 收口。
-    const blocked = output.status === 'blocked'
-
-    const nextPlan = runningPlan.map((item, index) => {
-      if (index !== taskIndex) return item
-      if (blocked) {
-        return {
-          ...item,
-          status: 'blocked' as const,
-          deliveryMarkdown: output.deliveryMarkdown,
-          artifacts: output.artifacts
-        }
-      }
-      return {
-        ...item,
-        status: 'completed' as const,
-        deliveryMarkdown: output.deliveryMarkdown,
-        artifacts: output.artifacts
-      }
+    return buildPlanExecPatch({
+      plan: state.plan,
+      taskIndex,
+      output
     })
-
-    const hasPending = nextPlan.some((item) => item.status === 'ready')
-
-    return {
-      plan: nextPlan,
-      dispatchCursor: taskIndex + 1,
-      directorStage: blocked ? 'director_synthesis_human' : hasPending ? 'director_plan_exec' : 'director_synthesis_human'
-    }
   }
 }
