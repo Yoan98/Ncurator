@@ -39,6 +39,12 @@ export const importSelectors = {
   createWorkspaceCancelButton: 'import-create-workspace-cancel-button'
 } as const
 
+export const settingsSelectors = {
+  page: 'settings-page',
+  tabSwitch: 'settings-tab-switch',
+  workspacePanel: 'settings-workspace-panel'
+} as const
+
 export const searchSelectors = {
   page: 'search-page',
   input: 'search-input',
@@ -52,10 +58,20 @@ export const workbenchSelectors = {
   page: 'workbench-page',
   modeSwitch: 'workbench-mode-switch',
   sessionsList: 'workbench-sessions-list',
+  sessionsToggle: 'workbench-sessions-toggle',
   input: 'workbench-input',
   sendButton: 'workbench-send-button',
   cancelButton: 'workbench-cancel-button',
   sourceScopeField: 'workbench-source-scope-field',
+  contentPanel: 'workbench-content-panel',
+  contentPanelTitle: 'workbench-content-panel-title',
+  assistantTurnPrefix: 'workbench-assistant-turn',
+  assistantTurnStepsPrefix: 'workbench-assistant-turn-steps',
+  assistantTurnReviewPrefix: 'workbench-assistant-turn-review',
+  searchResults: 'workbench-search-results',
+  documentView: 'workbench-document-view',
+  reviewPanel: 'workbench-review-panel',
+  reviewTabs: 'workbench-review-tabs',
   timeline: 'workbench-timeline',
   timelineItemPrefix: 'workbench-timeline-item',
   inspector: 'workbench-inspector',

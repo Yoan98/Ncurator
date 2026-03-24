@@ -18,6 +18,7 @@ import {
   extractBlockText,
   paragraphNodeToSpec
 } from './blockIndex'
+import { childElements, collectText, isElementNode } from './dom'
 import type {
   ApplyOpsResult,
   BlockIndex,
@@ -30,50 +31,6 @@ import type {
   DocxParagraphSpec,
   DocxTableSpec
 } from '../../types'
-
-const isElementNode = (value: Node | null): value is Element => {
-  return value !== null && value.nodeType === 1
-}
-
-const collectNodeText = (node: Element): string => {
-  let text = ''
-  const stack: Node[] = [node]
-  while (stack.length > 0) {
-    const current = stack.pop()
-    if (!current) continue
-    if (current.nodeType === 3) {
-      text += current.nodeValue || ''
-      continue
-    }
-    if (!isElementNode(current)) continue
-    const name = current.localName
-    if (name === 'tab') {
-      text += '\t'
-      continue
-    }
-    if (name === 'br' || name === 'cr') {
-      text += '\n'
-      continue
-    }
-    const children = current.childNodes
-    for (let index = children.length - 1; index >= 0; index -= 1) {
-      const child = children.item(index)
-      if (child) stack.push(child)
-    }
-  }
-  return text
-}
-
-const childElements = (node: Element, localName?: string): Element[] => {
-  const out: Element[] = []
-  const children = node.childNodes
-  for (let i = 0; i < children.length; i += 1) {
-    const child = children.item(i)
-    if (!isElementNode(child)) continue
-    if (!localName || child.localName === localName) out.push(child)
-  }
-  return out
-}
 
 const safeColor = (input: string | undefined): string | undefined => {
   const value = String(input || '').trim()
@@ -441,7 +398,7 @@ const applyReplaceTextOp = async (
         Boolean(op.replaceAll)
       )
       if (!changed) continue
-      const afterText = collectNodeText(node.node)
+      const afterText = collectText(node.node)
       changedBlocks.push({
         action: 'replace_text',
         blockId,
@@ -465,7 +422,7 @@ const applyReplaceTextOp = async (
         if (paragraphChanged) changed = true
       }
       if (!changed) continue
-      const after = collectNodeText(node.node)
+      const after = collectText(node.node)
       changedBlocks.push({
         action: 'replace_text',
         blockId,

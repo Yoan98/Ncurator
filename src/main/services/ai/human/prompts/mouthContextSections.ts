@@ -17,4 +17,4 @@ export const buildMouthEvidenceText = (state: HumanState): string =>
   renderHumanEvidenceLines(state, 'mouth_prompt')
 
 export const buildMouthOpenQuestionsText = (state: HumanState): string =>
-  renderHumanOpenQuestionLines(state, 'brain_prompt')
+  renderHumanOpenQuestionLines(state, 'mouth_prompt')

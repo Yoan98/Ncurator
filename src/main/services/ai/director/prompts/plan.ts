@@ -1,6 +1,6 @@
-import { renderEvidenceLines, renderPromptSections } from '../../utils/prompt'
 import { JSON_ONLY_PLAN_CONTRACT } from './constants'
 import type { PlanPromptInput } from './types'
+import { buildDirectorPromptUserContext } from './userContext'
 
 export const buildPlanPrompt = (input: PlanPromptInput) => {
   return {
@@ -17,15 +17,6 @@ export const buildPlanPrompt = (input: PlanPromptInput) => {
       '【样例-正】userInput: "读取 /docs/a.docx，提取行动项并输出 owner/due_date/task 字段"。',
       '【样例-反】userInput: "继续优化文档质量"。'
     ].join('\n'),
-    user: renderPromptSections([
-      { label: '用户输入', value: input.userInput },
-      { label: '会话摘要', value: input.sessionSummaryText },
-      { label: '最近对话', value: input.recentTurnsText },
-      { label: '已选资料范围', value: input.selectedScopeSummary },
-      {
-        label: '上下文证据',
-        value: renderEvidenceLines(input.contextEvidence)
-      }
-    ])
+    user: buildDirectorPromptUserContext(input)
   }
 }

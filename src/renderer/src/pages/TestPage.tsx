@@ -147,7 +147,7 @@ function TestPage(): React.JSX.Element {
       <Alert
         className="mb-6 rounded-xl border-[#F4E5DF] bg-[#FBF5F2]"
         message="本地文件导入已迁移"
-        description="本地资料现在通过“资料来源”页的工作空间管理。实验室仅保留检索、文档和 chunk 调试能力。"
+        description="本地资料现在通过“设置 > Workspace”管理。实验室仅保留检索、文档和 chunk 调试能力。"
         type="info"
         showIcon
       />

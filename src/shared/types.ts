@@ -318,6 +318,12 @@ export type DraftChangeKind =
   | 'worksheet_range'
   | 'slide_object'
   | 'page_region'
+export type DraftReviewRenderKind =
+  | 'docx_block'
+  | 'text_hunk'
+  | 'sheet_range'
+  | 'slide_element'
+  | 'preview_only'
 export type DraftChangeDecision = 'pending' | 'accepted' | 'rejected'
 export type DraftChangeResolution = Exclude<DraftChangeDecision, 'pending'>
 export type DraftReviewStatus =
@@ -368,6 +374,7 @@ export interface DraftReviewDocument {
   source_path: string
   source_name: string
   format: DraftDocumentFormat
+  review_render_kind?: DraftReviewRenderKind
   latest_draft_snapshot_id: string
   preview_artifact_path?: string
   draft_artifact_path?: string
@@ -392,10 +399,24 @@ export interface DraftReviewChange {
   before_text: string
   after_text: string
   locator: JsonObject
+  diff_hunks?: DraftTextDiffHunk[]
+  source_step_ref?: string
   preview_artifact_path?: string
   metadata?: JsonObject
   created_at: number
   updated_at: number
+}
+
+export interface DraftTextDiffHunkLine {
+  type: 'context' | 'added' | 'removed'
+  value: string
+}
+
+export interface DraftTextDiffHunk {
+  id: string
+  title?: string
+  summary?: string
+  lines: DraftTextDiffHunkLine[]
 }
 
 export interface DraftCommitResultItem {

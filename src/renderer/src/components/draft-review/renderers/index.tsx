@@ -2,15 +2,8 @@ import React from 'react'
 import type { DraftDocumentFormat } from '../../../../../shared/types'
 import DocxDraftDiffRenderer from './DocxDraftDiffRenderer'
 import PlaceholderDraftDiffRenderer from './PlaceholderDraftDiffRenderer'
+import TextDraftDiffRenderer from './TextDraftDiffRenderer'
 import type { DraftDiffRendererProps, DraftDiffRendererRegistration } from './types'
-
-const MarkdownDraftDiffRenderer: React.FC<DraftDiffRendererProps> = (props) => (
-  <PlaceholderDraftDiffRenderer
-    {...props}
-    title="Markdown / 文本差异"
-    description="文本类格式会复用统一 hunk 审阅容器，这一轮先预留注册位。"
-  />
-)
 
 const SpreadsheetDraftDiffRenderer: React.FC<DraftDiffRendererProps> = (props) => (
   <PlaceholderDraftDiffRenderer
@@ -45,12 +38,12 @@ const registry: Record<DraftDocumentFormat, DraftDiffRendererRegistration> = {
   md: {
     format: 'md',
     label: 'Markdown',
-    component: MarkdownDraftDiffRenderer
+    component: TextDraftDiffRenderer
   },
   txt: {
     format: 'txt',
     label: '纯文本',
-    component: MarkdownDraftDiffRenderer
+    component: TextDraftDiffRenderer
   },
   xlsx: {
     format: 'xlsx',

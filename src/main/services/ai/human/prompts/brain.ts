@@ -149,7 +149,7 @@ export const buildHumanBrainPrompt = (input: HumanBrainPromptInput) => {
             {
               "toolName": "kb_hybrid_search_chunks",
               "args": {
-                "query": "项目风险控制要求"
+                "queryText": "项目风险控制要求"
               }
             }
           ]

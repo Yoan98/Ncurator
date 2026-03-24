@@ -3,14 +3,12 @@ import { HashRouter, Routes, Route, useLocation, useNavigate, Navigate } from 'r
 import { Layout, ConfigProvider, theme, Button, Dropdown } from 'antd'
 import {
   HiOutlineCog6Tooth,
-  HiOutlineBookOpen,
   HiOutlineBeaker,
   HiCloudArrowDown,
   HiOutlineHome
 } from 'react-icons/hi2'
 import ConversationWorkbenchPage from './pages/ConversationWorkbenchPage'
 import SettingsPage from './pages/SettingsPage'
-import ImportPage from './pages/ImportPage'
 import TestPage from './pages/TestPage'
 import ModelDownloadPage from './pages/ModelDownloadPage'
 import NotificationCenter from './components/NotificationCenter'
@@ -95,10 +93,9 @@ const MainLayout: React.FC = () => {
             placement="bottomRight"
             menu={{
               items: [
-                { key: 'kb', label: '资料来源', icon: <HiOutlineBookOpen className="w-4 h-4" /> },
                 {
                   key: 'settings',
-                  label: '大模型配置',
+                  label: '设置',
                   icon: <HiOutlineCog6Tooth className="w-4 h-4" />
                 },
                 {
@@ -109,7 +106,6 @@ const MainLayout: React.FC = () => {
                 { key: 'test', label: '实验室', icon: <HiOutlineBeaker className="w-4 h-4" /> }
               ],
               onClick: (info) => {
-                if (info.key === 'kb') navigate('/import')
                 if (info.key === 'settings') navigate('/settings')
                 if (info.key === 'model-download') navigate('/model-download')
                 if (info.key === 'test') navigate('/test')
@@ -129,7 +125,7 @@ const MainLayout: React.FC = () => {
           <Route path="/chat" element={<Navigate to="/" replace />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/model-download" element={<ModelDownloadPage />} />
-          <Route path="/import" element={<ImportPage />} />
+          <Route path="/import" element={<Navigate to="/settings?tab=workspace" replace />} />
           <Route path="/test" element={<TestPage />} />
         </Routes>
       </Content>

@@ -1,12 +1,9 @@
 import { test } from 'vitest'
 import { buildSkillCatalog } from '../../../../src/main/services/ai/human/node/learningNode/skillRegistry'
 import { getToolExecutionMeta } from '../../../../src/main/services/ai/human/node/handNode/toolExecutionMeta'
-import { getToolPromptSpec } from '../../../../src/main/services/ai/human/prompts/toolPrompts'
-import { DOCX_TOOL_PROMPT_SPECS } from '../../../../src/main/services/ai/human/prompts/toolPromptSpecs/docx'
-import { KB_TOOL_PROMPT_SPECS } from '../../../../src/main/services/ai/human/prompts/toolPromptSpecs/kb'
-import { TERMINAL_TOOL_PROMPT_SPECS } from '../../../../src/main/services/ai/human/prompts/toolPromptSpecs/terminal'
 import {
   getToolDescriptor,
+  getToolPromptSpec,
   listToolNamesByFamily,
   listToolNamesBySkill,
   TOOL_CATALOG
@@ -30,10 +27,10 @@ test('tool-catalog-consistency', async () => {
     runMode: 'repeatable',
     execute: async () => {
       const catalogToolNames = sortNames(TOOL_CATALOG.map((descriptor) => descriptor.name))
-      const promptToolNames = sortNames([
-        ...Object.keys(DOCX_TOOL_PROMPT_SPECS),
-        ...Object.keys(KB_TOOL_PROMPT_SPECS),
-        ...Object.keys(TERMINAL_TOOL_PROMPT_SPECS)
+      const familyToolNames = sortNames([
+        ...listToolNamesByFamily('terminal'),
+        ...listToolNamesByFamily('kb'),
+        ...listToolNamesByFamily('docx')
       ])
       const skillCatalog = buildSkillCatalog().map((item) => ({
         skillId: item.skillId,
@@ -42,7 +39,7 @@ test('tool-catalog-consistency', async () => {
 
       return {
         catalogToolNames,
-        promptToolNames,
+        familyToolNames,
         skillCatalog,
         promptLookups: catalogToolNames.map((toolName) => ({
           toolName,
@@ -60,6 +57,11 @@ test('tool-catalog-consistency', async () => {
             descriptor
           }
         })(),
+        representativePromptContracts: {
+          kbHybridSearch: getToolPromptSpec('kb_hybrid_search_chunks'),
+          terminalRun: getToolPromptSpec('terminal_run_command'),
+          docxSave: getToolPromptSpec('docx_save')
+        },
         docxFamilyTools: sortNames(listToolNamesByFamily('docx')),
         terminalReadMeta: getToolExecutionMeta({
           toolName: 'terminal_run_command',
@@ -79,15 +81,12 @@ test('tool-catalog-consistency', async () => {
       }
     },
     assert: async (result, runtime) => {
-      runtime.assertThat(
-        result.catalogToolNames.join(',') === result.promptToolNames.join(','),
-        {
-          name: 'tool-catalog-prompt-coverage',
-          message:
-            'catalog tool names and prompt spec tool names should stay fully aligned with no missing or orphan prompt specs',
-          data: result
-        }
-      )
+      runtime.assertThat(result.catalogToolNames.join(',') === result.familyToolNames.join(','), {
+        name: 'tool-catalog-family-coverage',
+        message:
+          'catalog tool names should stay fully aligned with the names exposed through family-level lookups',
+        data: result
+      })
 
       runtime.assertThat(
         result.skillCatalog.every(
@@ -117,6 +116,22 @@ test('tool-catalog-consistency', async () => {
           message:
             'prompt lookups should clone from the centralized descriptor without mutating the shared catalog definition',
           data: result.promptCloneIntegrity
+        }
+      )
+
+      runtime.assertThat(
+        result.representativePromptContracts.kbHybridSearch?.args[0]?.name === 'queryText' &&
+          result.representativePromptContracts.kbHybridSearch?.examples?.[0]?.args.queryText ===
+            'approval denied terminal artifact requirement' &&
+          result.representativePromptContracts.terminalRun?.args[0]?.name === 'command' &&
+          result.representativePromptContracts.docxSave?.args.some(
+            (arg) => arg.name === 'outPath' && arg.required
+          ),
+        {
+          name: 'tool-catalog-prompt-contract-drift',
+          message:
+            'representative prompt specs should keep required args and example payloads aligned with the centralized catalog contract',
+          data: result.representativePromptContracts
         }
       )
 

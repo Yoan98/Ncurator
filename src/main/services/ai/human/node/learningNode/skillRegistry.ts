@@ -1,6 +1,6 @@
 import { RUNTIME_SKILL_IDS } from '../../constants'
 import type { RuntimeSkillId, SkillCatalogItem, SkillDefinition } from '../../types'
-import { CAPABILITY_SKILL_DEFINITIONS } from '../../tools/capabilityRegistry'
+import { getCatalogSkillDefinition } from '../../tools/catalog'
 import { listToolDescriptorsBySkill, listToolNamesBySkill } from '../../tools/toolCatalog'
 
 const buildSkillDefinition = (skillId: RuntimeSkillId): SkillDefinition => {
@@ -14,7 +14,7 @@ const buildSkillDefinition = (skillId: RuntimeSkillId): SkillDefinition => {
     throw new Error(`skill ${skillId} must bind tools from exactly one family`)
   }
 
-  const metadata = CAPABILITY_SKILL_DEFINITIONS[skillId]
+  const metadata = getCatalogSkillDefinition(skillId)
   return {
     skillId,
     familyId: familyIds[0],

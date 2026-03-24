@@ -113,6 +113,18 @@ test('prompt-context-rendering', async () => {
         data: result.brainPrompt
       })
 
+      runtime.assertThat(
+        result.brainPrompt.user.includes('必填参数=[queryText:string]') &&
+          result.brainPrompt.system.includes('"queryText": "项目风险控制要求"') &&
+          !result.brainPrompt.system.includes('"query": "项目风险控制要求"'),
+        {
+          name: 'brain-tool-contract-render',
+          message:
+            'brain prompt should render the current required arg names and keep the built-in KB example aligned with queryText',
+          data: result.brainPrompt
+        }
+      )
+
       runtime.assertThat(result.brainPrompt.user.includes('最近几轮已经做过的正式判断摘要'), {
         name: 'brain-decision-history',
         message: 'brain prompt should keep the recent decision history block',

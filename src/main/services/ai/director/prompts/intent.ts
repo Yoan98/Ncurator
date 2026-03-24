@@ -1,6 +1,6 @@
-import { renderEvidenceLines, renderPromptSections } from '../../utils/prompt'
 import { JSON_ONLY_INTENT_CONTRACT } from './constants'
 import type { IntentPromptInput } from './types'
+import { buildDirectorPromptUserContext } from './userContext'
 
 export const buildIntentPrompt = (input: IntentPromptInput) => {
   return {
@@ -18,19 +18,14 @@ export const buildIntentPrompt = (input: IntentPromptInput) => {
       '【样例-正】当用户问“继续刚才第二步”但缺少指代信息时，输出 mode=need_context。',
       '【样例-反】不要输出“我觉得应该先查一下”这类自然语言。'
     ].join('\n'),
-    user: renderPromptSections([
-      { label: '用户输入', value: input.userInput },
-      { label: '会话摘要', value: input.sessionSummaryText },
-      { label: '最近对话', value: input.recentTurnsText },
-      { label: '已选资料范围', value: input.selectedScopeSummary },
-      {
-        label: '上下文证据',
-        value: renderEvidenceLines(input.contextEvidence)
-      },
-      {
-        label: '当前 context rounds',
-        value: `${input.contextRounds}/${input.maxContextRounds}`
-      }
-    ])
+    user: buildDirectorPromptUserContext({
+      ...input,
+      extraSections: [
+        {
+          label: '当前 context rounds',
+          value: `${input.contextRounds}/${input.maxContextRounds}`
+        }
+      ]
+    })
   }
 }

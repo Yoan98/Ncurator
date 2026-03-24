@@ -68,7 +68,7 @@ const CustomMarkdownRenderer = ({ mainState }) => {
   )
 }
 
-CustomMarkdownRenderer.fileTypes = ['md', 'markdown']
+CustomMarkdownRenderer.fileTypes = ['md', 'markdown', 'txt', 'text/plain']
 CustomMarkdownRenderer.weight = 1
 
 export default CustomMarkdownRenderer
