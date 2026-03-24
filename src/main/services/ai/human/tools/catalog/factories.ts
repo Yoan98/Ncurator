@@ -1,6 +1,11 @@
 import type { JsonObject } from '../../../../../../shared/types'
+import type { z } from 'zod/v4'
 import type { RuntimeSkillId, ToolPromptSpec } from '../../types'
-import type { AiToolFamilyId, ToolDescriptor, ToolExecutionMeta } from '../types'
+import type {
+  AiToolFamilyId,
+  ToolContractDefinition,
+  ToolExecutionMeta
+} from '../types'
 
 export type CapabilitySkillDefinition = {
   skillId: RuntimeSkillId
@@ -17,7 +22,11 @@ export type StaticExecutionMetaConfig = {
   defaultResourceKey?: string
 }
 
-export type CapabilityToolDefinition = ToolDescriptor
+export type CapabilityToolDefinition<
+  TArgs extends JsonObject = JsonObject,
+  TName extends string = string,
+  TSkillId extends RuntimeSkillId = RuntimeSkillId
+> = ToolContractDefinition<TArgs, TName, TSkillId>
 
 export const readStringArg = (args: JsonObject, key: string): string | undefined => {
   const value = args[key]
@@ -32,30 +41,41 @@ const createStaticExecutionMetaResolver = (input: StaticExecutionMetaConfig) => 
   })
 }
 
-export const createCapabilityToolDefinition = (input: {
-  name: string
+export const createCapabilityToolDefinition = <
+  TArgs extends JsonObject,
+  TName extends string,
+  TSkillId extends RuntimeSkillId
+>(input: {
+  name: TName
   familyId: AiToolFamilyId
-  skillIds: RuntimeSkillId[]
+  skillIds: TSkillId[]
   requiresWorkspace: boolean
+  schema: z.ZodType<TArgs>
   promptSpec: ToolPromptSpec
   resolveExecutionMeta: (args: JsonObject) => ToolExecutionMeta
-}): CapabilityToolDefinition => ({
+}): CapabilityToolDefinition<TArgs, TName, TSkillId> => ({
   name: input.name,
   familyId: input.familyId,
   skillIds: [...input.skillIds],
   requiresWorkspace: input.requiresWorkspace,
+  schema: input.schema,
   promptSpec: input.promptSpec,
   resolveExecutionMeta: input.resolveExecutionMeta
 })
 
-export const createStaticCapabilityToolDefinition = (input: {
-  name: string
+export const createStaticCapabilityToolDefinition = <
+  TArgs extends JsonObject,
+  TName extends string,
+  TSkillId extends RuntimeSkillId
+>(input: {
+  name: TName
   familyId: AiToolFamilyId
-  skillIds: RuntimeSkillId[]
+  skillIds: TSkillId[]
   requiresWorkspace: boolean
+  schema: z.ZodType<TArgs>
   promptSpec: ToolPromptSpec
   executionMeta: StaticExecutionMetaConfig
-}): CapabilityToolDefinition =>
+}): CapabilityToolDefinition<TArgs, TName, TSkillId> =>
   createCapabilityToolDefinition({
     ...input,
     resolveExecutionMeta: createStaticExecutionMetaResolver(input.executionMeta)

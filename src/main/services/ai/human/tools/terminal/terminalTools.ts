@@ -2,8 +2,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { tool } from '@langchain/core/tools'
-import { z } from 'zod/v4'
 import type { AiFileArtifactOperation, IpcJsonObject, IpcJsonValue } from '../../../../../../shared/types'
+import { TERMINAL_RUN_COMMAND_CONTRACT } from '../catalog/toolDescriptors/terminal'
 import { runTerminalCommand } from './terminalExec'
 import {
   checkWorkspaceBoundary,
@@ -21,18 +21,6 @@ import type {
 import { clipText, clipTextWithMeta } from '../../../utils/text'
 import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
-
-const artifactHintSchema = z.object({
-  path: z.string(),
-  operation: z.enum(['created', 'updated']).optional(),
-  summary: z.string().optional()
-})
-
-const terminalRunCommandSchema = z.object({
-  command: z.string().min(1),
-  cwd: z.string().optional(),
-  expectedArtifacts: z.array(artifactHintSchema).optional()
-})
 
 const mergeArtifactCandidates = (input: {
   command: string
@@ -351,10 +339,10 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
         }
       }),
     {
-      name: 'terminal_run_command',
+      name: TERMINAL_RUN_COMMAND_CONTRACT.name,
       description:
         'Execute one shell command inside workspace with boundary checks, risk classification, approval gating, and terminal-step events.',
-      schema: terminalRunCommandSchema
+      schema: TERMINAL_RUN_COMMAND_CONTRACT.schema
     }
   )
 

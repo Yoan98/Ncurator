@@ -1,4 +1,4 @@
-import type { HumanState } from '../types'
+import type { HumanDeliveryMode, HumanState } from '../types'
 import { renderLineList } from '../../utils/render'
 import {
   renderHumanEvidenceLines,
@@ -6,12 +6,12 @@ import {
   renderHumanOpenQuestionLines
 } from './memoryRenderers'
 
-type StructuredDeliveryMode = 'task_handoff' | 'context_note'
-
 type DeliverySection = {
   heading: string
   body: string
 }
+
+type StructuredDeliveryMode = Extract<HumanDeliveryMode, 'task_handoff' | 'context_note'>
 
 type StructuredDeliveryContract = {
   mode: StructuredDeliveryMode
@@ -20,6 +20,15 @@ type StructuredDeliveryContract = {
   exampleSummary: string
   exampleDeliveryMarkdown: string
   buildFallbackSections: (input: { state: HumanState; summary: string }) => DeliverySection[]
+  extractReusableEvidence?: (deliveryMarkdown: string | undefined) => string[]
+}
+
+export type DeliveryModeContract = {
+  mode: HumanDeliveryMode
+  buildPromptRules: () => string
+  buildPromptExample: () => string
+  buildFallbackMarkdown: (input: { state: HumanState; summary: string }) => string
+  extractReusableEvidence?: (deliveryMarkdown: string | undefined) => string[]
 }
 
 const buildMarkdownDocument = (input: {
@@ -39,6 +48,73 @@ const renderBulletLines = (lines: Array<string | undefined>): string =>
     fallback: '无',
     style: 'bullet'
   })
+
+const normalizeDeliveryMarkdown = (deliveryMarkdown: string | undefined): string[] =>
+  String(deliveryMarkdown || '')
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+
+const extractSectionListItems = (input: {
+  deliveryMarkdown: string | undefined
+  sectionHeading: string
+}): string[] => {
+  const lines = normalizeDeliveryMarkdown(input.deliveryMarkdown)
+  const startIndex = lines.findIndex((line) => line.trim() === input.sectionHeading)
+  if (startIndex < 0) return []
+
+  const collected: string[] = []
+  for (let index = startIndex + 1; index < lines.length; index += 1) {
+    const line = lines[index].trim()
+    if (!line) continue
+    if (/^##\s+/.test(line)) break
+
+    const bulletMatch = line.match(/^[-*]\s+(.+)$/)
+    const numberedMatch = line.match(/^\d+\.\s+(.+)$/)
+    const value = bulletMatch?.[1] || numberedMatch?.[1]
+    if (!value) continue
+
+    const normalized = value.replace(/\s+/g, ' ').trim()
+    if (!normalized || normalized === '无' || collected.includes(normalized)) continue
+    collected.push(normalized)
+  }
+
+  return collected
+}
+
+const buildStructuredDeliveryPromptRulesInternal = (
+  contract: StructuredDeliveryContract
+): string => {
+  return [
+    `当前 deliveryMode=${contract.mode}。`,
+    'deliveryMarkdown 必须使用以下固定 markdown 章节，且章节名必须完全一致：',
+    contract.title,
+    ...contract.headings,
+    '空章节写“无”。'
+  ].join('\n')
+}
+
+const buildStructuredDeliveryPromptExampleInternal = (
+  contract: StructuredDeliveryContract
+): string => {
+  return `{
+  "summary": "${contract.exampleSummary}",
+  "deliveryMarkdown": "${contract.exampleDeliveryMarkdown.replace(/\n/g, '\\n')}"
+}`
+}
+
+const buildStructuredDeliveryFallbackMarkdownInternal = (input: {
+  contract: StructuredDeliveryContract
+  state: HumanState
+  summary: string
+}): string => {
+  return buildMarkdownDocument({
+    title: input.contract.title,
+    sections: input.contract.buildFallbackSections({
+      state: input.state,
+      summary: input.summary
+    })
+  })
+}
 
 const TASK_HANDOFF_CONTRACT: StructuredDeliveryContract = {
   mode: 'task_handoff',
@@ -133,88 +209,105 @@ const CONTEXT_NOTE_CONTRACT: StructuredDeliveryContract = {
       heading: '## 建议补充方向',
       body: renderBulletLines([state.lastBrainDecision?.decision.expectedOutcome || '无'])
     }
-  ]
+  ],
+  extractReusableEvidence: (deliveryMarkdown) =>
+    extractSectionListItems({
+      deliveryMarkdown,
+      sectionHeading: CONTEXT_NOTE_CONTRACT.headings[1]
+    })
 }
 
-const STRUCTURED_DELIVERY_CONTRACTS: Record<StructuredDeliveryMode, StructuredDeliveryContract> = {
-  task_handoff: TASK_HANDOFF_CONTRACT,
-  context_note: CONTEXT_NOTE_CONTRACT
+const USER_ANSWER_CONTRACT: DeliveryModeContract = {
+  mode: 'user_answer',
+  buildPromptRules: () =>
+    [
+      '当前 deliveryMode=user_answer。',
+      'deliveryMarkdown 面向最终用户，可自然组织为完整 markdown 结果，不要求固定章节。'
+    ].join('\n'),
+  buildPromptExample: () => `{
+  "summary": "已整理出当前任务的最终答复。",
+  "deliveryMarkdown": "# 处理结果\\n\\n已完成本次任务。\\n\\n## 关键依据\\n- 依据一\\n- 依据二"
+}`,
+  buildFallbackMarkdown: ({ state, summary }) =>
+    [
+      '# 处理结果',
+      '',
+      summary,
+      '',
+      '## 已确认事实',
+      renderHumanFactLines(state, 'fallback_markdown'),
+      '',
+      '## 关键证据',
+      renderHumanEvidenceLines(state, 'fallback_markdown'),
+      '',
+      '## 限制与未决项',
+      renderHumanOpenQuestionLines(state, 'fallback_markdown')
+    ].join('\n')
 }
 
-const normalizeDeliveryMarkdown = (deliveryMarkdown: string | undefined): string[] =>
-  String(deliveryMarkdown || '')
-    .replace(/\r\n/g, '\n')
-    .split('\n')
+const toDeliveryModeContract = (
+  contract: StructuredDeliveryContract
+): DeliveryModeContract => ({
+  mode: contract.mode,
+  buildPromptRules: () => buildStructuredDeliveryPromptRulesInternal(contract),
+  buildPromptExample: () => buildStructuredDeliveryPromptExampleInternal(contract),
+  buildFallbackMarkdown: ({ state, summary }) =>
+    buildStructuredDeliveryFallbackMarkdownInternal({
+      contract,
+      state,
+      summary
+    }),
+  extractReusableEvidence: contract.extractReusableEvidence
+})
 
-const extractSectionListItems = (input: {
+const DELIVERY_MODE_CONTRACTS: Record<HumanDeliveryMode, DeliveryModeContract> = {
+  user_answer: USER_ANSWER_CONTRACT,
+  task_handoff: toDeliveryModeContract(TASK_HANDOFF_CONTRACT),
+  context_note: toDeliveryModeContract(CONTEXT_NOTE_CONTRACT)
+}
+
+export const getDeliveryModeContract = (mode: HumanDeliveryMode): DeliveryModeContract =>
+  DELIVERY_MODE_CONTRACTS[mode]
+
+export const buildDeliveryModePromptRules = (mode: HumanDeliveryMode): string =>
+  getDeliveryModeContract(mode).buildPromptRules()
+
+export const buildDeliveryModePromptExample = (mode: HumanDeliveryMode): string =>
+  getDeliveryModeContract(mode).buildPromptExample()
+
+export const buildDeliveryModeFallbackMarkdown = (input: {
+  state: HumanState
+  mode: HumanDeliveryMode
+  summary: string
+}): string => getDeliveryModeContract(input.mode).buildFallbackMarkdown(input)
+
+export const extractDeliveryModeReusableEvidence = (
+  mode: HumanDeliveryMode,
   deliveryMarkdown: string | undefined
-  sectionHeading: string
-}): string[] => {
-  const lines = normalizeDeliveryMarkdown(input.deliveryMarkdown)
-  const startIndex = lines.findIndex((line) => line.trim() === input.sectionHeading)
-  if (startIndex < 0) return []
-
-  const collected: string[] = []
-  for (let index = startIndex + 1; index < lines.length; index += 1) {
-    const line = lines[index].trim()
-    if (!line) continue
-    if (/^##\s+/.test(line)) break
-
-    const bulletMatch = line.match(/^[-*]\s+(.+)$/)
-    const numberedMatch = line.match(/^\d+\.\s+(.+)$/)
-    const value = bulletMatch?.[1] || numberedMatch?.[1]
-    if (!value) continue
-
-    const normalized = value.replace(/\s+/g, ' ').trim()
-    if (!normalized || normalized === '无' || collected.includes(normalized)) continue
-    collected.push(normalized)
-  }
-
-  return collected
-}
+): string[] => getDeliveryModeContract(mode).extractReusableEvidence?.(deliveryMarkdown) || []
 
 export const getStructuredDeliveryContract = (
   mode: StructuredDeliveryMode
-): StructuredDeliveryContract => STRUCTURED_DELIVERY_CONTRACTS[mode]
+): StructuredDeliveryContract =>
+  mode === 'task_handoff' ? TASK_HANDOFF_CONTRACT : CONTEXT_NOTE_CONTRACT
 
-export const buildStructuredDeliveryPromptRules = (mode: StructuredDeliveryMode): string => {
-  const contract = getStructuredDeliveryContract(mode)
-  return [
-    `当前 deliveryMode=${mode}。`,
-    'deliveryMarkdown 必须使用以下固定 markdown 章节，且章节名必须完全一致：',
-    contract.title,
-    ...contract.headings,
-    '空章节写“无”。'
-  ].join('\n')
-}
+export const buildStructuredDeliveryPromptRules = (mode: StructuredDeliveryMode): string =>
+  buildDeliveryModePromptRules(mode)
 
-export const buildStructuredDeliveryPromptExample = (mode: StructuredDeliveryMode): string => {
-  const contract = getStructuredDeliveryContract(mode)
-  return `{
-  "summary": "${contract.exampleSummary}",
-  "deliveryMarkdown": "${contract.exampleDeliveryMarkdown.replace(/\n/g, '\\n')}"
-}`
-}
+export const buildStructuredDeliveryPromptExample = (mode: StructuredDeliveryMode): string =>
+  buildDeliveryModePromptExample(mode)
 
 export const buildStructuredDeliveryFallbackMarkdown = (input: {
   state: HumanState
   mode: StructuredDeliveryMode
   summary: string
-}): string => {
-  const contract = getStructuredDeliveryContract(input.mode)
-  return buildMarkdownDocument({
-    title: contract.title,
-    sections: contract.buildFallbackSections({
-      state: input.state,
-      summary: input.summary
-    })
+}): string =>
+  buildDeliveryModeFallbackMarkdown({
+    state: input.state,
+    mode: input.mode,
+    summary: input.summary
   })
-}
 
 export const extractContextNoteReusableEvidence = (
   deliveryMarkdown: string | undefined
-): string[] =>
-  extractSectionListItems({
-    deliveryMarkdown,
-    sectionHeading: getStructuredDeliveryContract('context_note').headings[1]
-  })
+): string[] => extractDeliveryModeReusableEvidence('context_note', deliveryMarkdown)

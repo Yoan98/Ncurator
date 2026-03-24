@@ -1,7 +1,11 @@
+import { buildRetrievalTools } from '../../../../src/main/services/ai/human/tools/kb/retrievalTools'
+import { docxToolFamily } from '../../../../src/main/services/ai/human/tools/docx'
+import { terminalToolFamily } from '../../../../src/main/services/ai/human/tools/terminal'
 import { test } from 'vitest'
 import { buildSkillCatalog } from '../../../../src/main/services/ai/human/node/learningNode/skillRegistry'
 import { getToolExecutionMeta } from '../../../../src/main/services/ai/human/node/handNode/toolExecutionMeta'
 import {
+  getToolContract,
   getToolDescriptor,
   getToolPromptSpec,
   listToolNamesByFamily,
@@ -25,7 +29,31 @@ test('tool-catalog-consistency', async () => {
       'tool catalog should stay aligned with skill bindings, prompt specs, and execution metadata after catalog centralization.',
     fixtures: [],
     runMode: 'repeatable',
-    execute: async () => {
+    execute: async (runtime) => {
+      const ctx = runtime.createAiRunContext()
+      const terminalTools = terminalToolFamily.buildTools({
+        ctx,
+        runId: runtime.runId,
+        taskId: runtime.taskId
+      })
+      const docxTools = docxToolFamily.buildTools({
+        ctx,
+        runId: runtime.runId,
+        taskId: runtime.taskId
+      })
+      const kbTools = buildRetrievalTools({
+        ctx: {
+          runId: ctx.runId,
+          checkCancelled: ctx.checkCancelled,
+          sendEvent: ctx.sendEvent,
+          selectedDocumentIds: ctx.selectedDocumentIds,
+          documentsStore: ctx.documentsStore,
+          embeddingService: ctx.embeddingService
+        },
+        runId: runtime.runId,
+        taskId: runtime.taskId
+      })
+
       const catalogToolNames = sortNames(TOOL_CATALOG.map((descriptor) => descriptor.name))
       const familyToolNames = sortNames([
         ...listToolNamesByFamily('terminal'),
@@ -61,6 +89,25 @@ test('tool-catalog-consistency', async () => {
           kbHybridSearch: getToolPromptSpec('kb_hybrid_search_chunks'),
           terminalRun: getToolPromptSpec('terminal_run_command'),
           docxSave: getToolPromptSpec('docx_save')
+        },
+        representativeToolContracts: {
+          kbHybridSearch: getToolContract('kb_hybrid_search_chunks'),
+          terminalRun: getToolContract('terminal_run_command'),
+          docxSave: getToolContract('docx_save')
+        },
+        representativeRuntimeSchemas: {
+          kbHybridSearch: Reflect.get(
+            kbTools.find((tool) => String(tool.name || '').trim() === 'kb_hybrid_search_chunks')!,
+            'schema'
+          ),
+          terminalRun: Reflect.get(
+            terminalTools.find((tool) => String(tool.name || '').trim() === 'terminal_run_command')!,
+            'schema'
+          ),
+          docxSave: Reflect.get(
+            docxTools.find((tool) => String(tool.name || '').trim() === 'docx_save')!,
+            'schema'
+          )
         },
         docxFamilyTools: sortNames(listToolNamesByFamily('docx')),
         terminalReadMeta: getToolExecutionMeta({
@@ -132,6 +179,24 @@ test('tool-catalog-consistency', async () => {
           message:
             'representative prompt specs should keep required args and example payloads aligned with the centralized catalog contract',
           data: result.representativePromptContracts
+        }
+      )
+
+      runtime.assertThat(
+        result.representativeToolContracts.kbHybridSearch?.schema ===
+          result.representativeRuntimeSchemas.kbHybridSearch &&
+          result.representativeToolContracts.terminalRun?.schema ===
+            result.representativeRuntimeSchemas.terminalRun &&
+          result.representativeToolContracts.docxSave?.schema ===
+            result.representativeRuntimeSchemas.docxSave,
+        {
+          name: 'tool-catalog-runtime-schema-source',
+          message:
+            'representative runtime tools should expose the same schema objects stored on the centralized tool contracts',
+          data: {
+            representativeToolContracts: result.representativeToolContracts,
+            representativeRuntimeSchemas: result.representativeRuntimeSchemas
+          }
         }
       )
 

@@ -1,5 +1,16 @@
 import type { JsonObject } from '../../../../../../../shared/types'
-import type { CapabilityToolDefinition } from '../factories'
+import {
+  applyOpsSchema,
+  getBlockSchema,
+  historySchema,
+  openSchema,
+  outlineSchema,
+  renderPreviewSchema,
+  rollbackSchema,
+  saveSchema,
+  searchSchema,
+  validateSchema
+} from '../../docx/schemas'
 import { createStaticCapabilityToolDefinition, readStringArg } from '../factories'
 
 const DOCX_REPLACE_TEXT_EXAMPLE: JsonObject = {
@@ -44,12 +55,13 @@ const createDocxMutatingExecutionMeta = (input: {
   defaultResourceKey: 'docx'
 })
 
-export const DOCX_TOOL_DEFINITIONS: readonly CapabilityToolDefinition[] = [
+export const DOCX_TOOL_DEFINITIONS = [
   createStaticCapabilityToolDefinition({
     name: 'docx_open',
     familyId: 'docx',
     skillIds: ['docx-read'],
     requiresWorkspace: true,
+    schema: openSchema,
     promptSpec: {
       name: 'docx_open',
       purpose: '打开 workspace 内的 docx 文件，并注册后续操作使用的 docId。',
@@ -94,6 +106,7 @@ export const DOCX_TOOL_DEFINITIONS: readonly CapabilityToolDefinition[] = [
     familyId: 'docx',
     skillIds: ['docx-read'],
     requiresWorkspace: true,
+    schema: outlineSchema,
     promptSpec: {
       name: 'docx_outline',
       purpose: '提取稳定的 block outline，帮助定位标题、段落、表格和 table cell。',
@@ -146,6 +159,7 @@ export const DOCX_TOOL_DEFINITIONS: readonly CapabilityToolDefinition[] = [
     familyId: 'docx',
     skillIds: ['docx-read'],
     requiresWorkspace: true,
+    schema: getBlockSchema,
     promptSpec: {
       name: 'docx_get_block',
       purpose: '读取单个 block 的详细结构。',
@@ -181,6 +195,7 @@ export const DOCX_TOOL_DEFINITIONS: readonly CapabilityToolDefinition[] = [
     familyId: 'docx',
     skillIds: ['docx-read'],
     requiresWorkspace: true,
+    schema: searchSchema,
     promptSpec: {
       name: 'docx_search',
       purpose: '按 literal / regex / semantic 检索 docx block 文本。',
@@ -232,6 +247,7 @@ export const DOCX_TOOL_DEFINITIONS: readonly CapabilityToolDefinition[] = [
     familyId: 'docx',
     skillIds: ['docx-read'],
     requiresWorkspace: true,
+    schema: historySchema,
     promptSpec: {
       name: 'docx_get_history',
       purpose: '查看当前 run 内的 docx 快照链路。',
@@ -266,6 +282,7 @@ export const DOCX_TOOL_DEFINITIONS: readonly CapabilityToolDefinition[] = [
     familyId: 'docx',
     skillIds: ['docx-write'],
     requiresWorkspace: true,
+    schema: applyOpsSchema,
     promptSpec: {
       name: 'docx_apply_ops',
       purpose: '执行结构化 docx 编辑操作，并返回新的不可变 docId 快照。',
@@ -328,6 +345,7 @@ export const DOCX_TOOL_DEFINITIONS: readonly CapabilityToolDefinition[] = [
     familyId: 'docx',
     skillIds: ['docx-write'],
     requiresWorkspace: true,
+    schema: rollbackSchema,
     promptSpec: {
       name: 'docx_rollback',
       purpose: '回退到当前 run 内的祖先草稿快照，不会写回文件系统。',
@@ -371,6 +389,7 @@ export const DOCX_TOOL_DEFINITIONS: readonly CapabilityToolDefinition[] = [
     familyId: 'docx',
     skillIds: ['docx-delivery'],
     requiresWorkspace: true,
+    schema: renderPreviewSchema,
     promptSpec: {
       name: 'docx_render_preview',
       purpose: '为当前 docx 草稿生成可审阅 preview artifact。',
@@ -420,6 +439,7 @@ export const DOCX_TOOL_DEFINITIONS: readonly CapabilityToolDefinition[] = [
     familyId: 'docx',
     skillIds: ['docx-delivery'],
     requiresWorkspace: true,
+    schema: saveSchema,
     promptSpec: {
       name: 'docx_save',
       purpose: '把当前 docx 草稿快照保存到 workspace 中的 .docx 路径。',
@@ -471,6 +491,7 @@ export const DOCX_TOOL_DEFINITIONS: readonly CapabilityToolDefinition[] = [
     familyId: 'docx',
     skillIds: ['docx-delivery'],
     requiresWorkspace: true,
+    schema: validateSchema,
     promptSpec: {
       name: 'docx_validate',
       purpose: '校验当前 docx 草稿结构与关系是否一致。',

@@ -1,8 +1,14 @@
 import { tool } from '@langchain/core/tools'
-import { z } from 'zod/v4'
 import type { JsonObject, SearchResult } from '../../../../../../shared/types'
 import type { KnowledgeRetrievalContext } from '../../../types'
 import { normalizeForIpc } from '../../../../../utils/serialization'
+import {
+  KB_CHUNK_SEARCH_SCHEMA,
+  KB_FTS_SEARCH_CHUNKS_CONTRACT,
+  KB_HYBRID_SEARCH_CHUNKS_CONTRACT,
+  KB_LIST_DOCUMENTS_CONTRACT,
+  KB_VECTOR_SEARCH_CHUNKS_CONTRACT
+} from '../catalog/toolDescriptors/kb'
 import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
 
@@ -61,7 +67,7 @@ export const buildRetrievalTools = (input: {
   })
 
   const createChunkSearchTool = (input: {
-    name: 'kb_hybrid_search_chunks' | 'kb_vector_search_chunks' | 'kb_fts_search_chunks'
+    name: string
     description: string
     execute: (args: ReturnType<typeof resolveSearchArgs>) => Promise<SearchResult[]>
   }) =>
@@ -91,17 +97,12 @@ export const buildRetrievalTools = (input: {
       {
         name: input.name,
         description: input.description,
-        schema: z.object({
-          queryText: z.string(),
-          limit: z.number().optional(),
-          sourceType: z.enum(['all', 'file', 'web']).optional(),
-          documentIds: z.array(z.string()).optional()
-        })
+        schema: KB_CHUNK_SEARCH_SCHEMA
       }
     )
 
   const kbHybridSearchChunks = createChunkSearchTool({
-    name: 'kb_hybrid_search_chunks',
+    name: KB_HYBRID_SEARCH_CHUNKS_CONTRACT.name,
     description: 'Hybrid search over local knowledge base chunks (FTS + vector + RRF rerank).',
     execute: async (args) => {
       const { data: vec } = await ctx.embeddingService.embed(args.queryText)
@@ -116,7 +117,7 @@ export const buildRetrievalTools = (input: {
   })
 
   const kbVectorSearchChunks = createChunkSearchTool({
-    name: 'kb_vector_search_chunks',
+    name: KB_VECTOR_SEARCH_CHUNKS_CONTRACT.name,
     description: 'Vector-only search over local knowledge base chunks.',
     execute: async (args) => {
       const { data: vec } = await ctx.embeddingService.embed(args.queryText)
@@ -130,7 +131,7 @@ export const buildRetrievalTools = (input: {
   })
 
   const kbFtsSearchChunks = createChunkSearchTool({
-    name: 'kb_fts_search_chunks',
+    name: KB_FTS_SEARCH_CHUNKS_CONTRACT.name,
     description: 'FTS-only search over local knowledge base chunks.',
     execute: async (args) =>
       await ctx.documentsStore.ftsSearch(
@@ -145,7 +146,7 @@ export const buildRetrievalTools = (input: {
     async (args) =>
       await withToolLifecycle({
         emitter: toolEvents,
-        toolName: 'kb_list_documents',
+        toolName: KB_LIST_DOCUMENTS_CONTRACT.name,
         args: args as JsonObject,
         execute: async (session) => {
           ctx.checkCancelled()
@@ -180,14 +181,9 @@ export const buildRetrievalTools = (input: {
         }
       }),
     {
-      name: 'kb_list_documents',
+      name: KB_LIST_DOCUMENTS_CONTRACT.name,
       description: 'List local knowledge base documents by keyword (document table).',
-      schema: z.object({
-        keyword: z.string().optional(),
-        page: z.number().optional(),
-        pageSize: z.number().optional(),
-        documentIds: z.array(z.string()).optional()
-      })
+      schema: KB_LIST_DOCUMENTS_CONTRACT.schema
     }
   )
 

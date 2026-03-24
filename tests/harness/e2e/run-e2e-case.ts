@@ -65,7 +65,7 @@ export type E2ETestRuntime = {
 export type E2ETestCaseDefinition<TResult> = {
   caseId: string
   caseType: E2ETestCaseType
-  domain: Extract<TestDomain, 'ai' | 'kb-search' | 'temp'>
+  domain: Extract<TestDomain, 'ai' | 'workspace' | 'kb-search' | 'temp'>
   layer: Extract<TestLayer, 'e2e'>
   suite: string
   groups?: readonly string[]

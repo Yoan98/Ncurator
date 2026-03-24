@@ -4,21 +4,29 @@ import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { AiFileArtifactOperation } from '../../../../../../../shared/types'
 import { emitFileArtifactEvent } from '../../../../events/fileArtifacts'
 import { clipText } from '../../../../utils/text'
+import { getToolContract } from '../../toolCatalog'
 import type { DocxToolRuntime } from '../runtime'
-import { renderPreviewSchema, saveSchema, validateSchema } from '../schemas'
 import {
   createDocxTool,
   requireDocxToolDocId,
   runDocxWorkerToolAction
 } from './workerTool'
 
+const DOCX_RENDER_PREVIEW_CONTRACT = getToolContract('docx_render_preview')
+const DOCX_SAVE_CONTRACT = getToolContract('docx_save')
+const DOCX_VALIDATE_CONTRACT = getToolContract('docx_validate')
+
+if (!DOCX_RENDER_PREVIEW_CONTRACT || !DOCX_SAVE_CONTRACT || !DOCX_VALIDATE_CONTRACT) {
+  throw new Error('missing docx delivery tool contracts')
+}
+
 export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredToolInterface[] => {
   const docxRenderPreviewTool = createDocxTool({
     runtime,
-    name: 'docx_render_preview',
+    name: DOCX_RENDER_PREVIEW_CONTRACT.name,
     description:
       'Render preview artifact for the current doc snapshot. html returns a preview docx artifact path for renderer.',
-    schema: renderPreviewSchema,
+    schema: DOCX_RENDER_PREVIEW_CONTRACT.schema,
     execute: async ({ args, toolName, toolCallId }) => {
       const docIdResult = requireDocxToolDocId({
         runtime,
@@ -86,9 +94,9 @@ export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredTool
 
   const docxSaveTool = createDocxTool({
     runtime,
-    name: 'docx_save',
+    name: DOCX_SAVE_CONTRACT.name,
     description: 'Save doc snapshot to a workspace docx path with overwrite approval guard.',
-    schema: saveSchema,
+    schema: DOCX_SAVE_CONTRACT.schema,
     execute: async ({ args, toolName, toolCallId }) => {
       const sourcePath = runtime.state.sourcePathByDocId.get(args.docId)
       const cwd = sourcePath ? path.dirname(sourcePath) : runtime.workspaceRootPath
@@ -180,9 +188,9 @@ export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredTool
 
   const docxValidateTool = createDocxTool({
     runtime,
-    name: 'docx_validate',
+    name: DOCX_VALIDATE_CONTRACT.name,
     description: 'Validate current doc snapshot structure and relationship consistency.',
-    schema: validateSchema,
+    schema: DOCX_VALIDATE_CONTRACT.schema,
     execute: async ({ args, toolName, toolCallId }) => {
       const docIdResult = requireDocxToolDocId({
         runtime,

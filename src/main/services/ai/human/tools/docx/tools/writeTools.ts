@@ -1,7 +1,7 @@
 import type { StructuredToolInterface } from '@langchain/core/tools'
+import { getToolContract } from '../../toolCatalog'
 import type { DocxChangedBlock, DocxOp } from '../types'
 import type { DocxToolRuntime } from '../runtime'
-import { applyOpsSchema, rollbackSchema } from '../schemas'
 import {
   callExpectedWorkerAction,
   createDocxTool,
@@ -11,13 +11,20 @@ import {
   requireDocxToolDocId,
 } from './workerTool'
 
+const DOCX_APPLY_OPS_CONTRACT = getToolContract('docx_apply_ops')
+const DOCX_ROLLBACK_CONTRACT = getToolContract('docx_rollback')
+
+if (!DOCX_APPLY_OPS_CONTRACT || !DOCX_ROLLBACK_CONTRACT) {
+  throw new Error('missing docx write tool contracts')
+}
+
 export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInterface[] => {
   const docxApplyOpsTool = createDocxTool({
     runtime,
-    name: 'docx_apply_ops',
+    name: DOCX_APPLY_OPS_CONTRACT.name,
     description:
       'Apply structured docx operations and return a new immutable docId snapshot with changed blocks.',
-    schema: applyOpsSchema,
+    schema: DOCX_APPLY_OPS_CONTRACT.schema,
     onError: ({ message }) => {
       runtime.input.emitActivity({
         actionType: 'docx_apply_ops',
@@ -118,10 +125,10 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
 
   const docxRollbackTool = createDocxTool({
     runtime,
-    name: 'docx_rollback',
+    name: DOCX_ROLLBACK_CONTRACT.name,
     description:
       'Move back to an ancestor docx snapshot in the current run without writing files. Use before user confirmation.',
-    schema: rollbackSchema,
+    schema: DOCX_ROLLBACK_CONTRACT.schema,
     onError: ({ message }) => {
       runtime.input.emitActivity({
         actionType: 'docx_rollback',

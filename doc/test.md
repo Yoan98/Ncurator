@@ -4,7 +4,7 @@
 
 - 本文用于规定 NCurator-Desktop 的测试架构设计。
 - 本文统一定义测试目录、测试准入、runner 职责、raw log 契约、report 契约，以及从正式 case 规划到 report 更新的标准流程。
-- 本文不定义具体业务域的正式 case 内容；正式 case 的 `用例名称 / What / Why / How / Oracle / Not` 统一以 `doc/test-plan/**` 为准。
+- 本文不定义具体业务域的正式 case 内容；正式 case 的 `用例名称 / 实现状态 / What / Why / How / Oracle / Not` 统一以 `doc/test-plan/**` 为准。
 - 当需要判断正式 case 是否可以进入 `tests/**`、日志应如何落盘、report 应如何生成与引用证据时，以本文为准。
 
 ## 1. 目标
@@ -74,6 +74,21 @@ tests/
         boundary/
         scenario/
         live/
+  workspace/
+    backend/
+      source-service/
+        basic/
+        boundary/
+        scenario/
+      ipc/
+        basic/
+        boundary/
+        scenario/
+    e2e/
+      settings/
+        basic/
+        boundary/
+        scenario/
   kb-search/
     backend/
       basic/
@@ -89,6 +104,8 @@ tests/
   logs/
   report/
     ai/
+      report.md
+    workspace/
       report.md
 ```
 
@@ -107,6 +124,47 @@ tests/
 
 - 正式 case 与临时 case 的准入路径不同，必须先判断类型，再决定放置位置。
 - 正式长期维护 case 的标准顺序固定为：先补 `doc/test-plan/**`，再写测试代码，再执行 runner，再分析 raw logs，再更新 report。
+
+### 3.0 正式 test-plan 共享约束
+
+- `doc/test-plan/**` 下每个领域文档，都是该领域正式测试用例定义的唯一规格来源。
+- 新增、修改或补齐正式 case 时，必须严格对齐对应文档中的 `用例名称 / 实现状态 / What / Why / How / Oracle / Not`。
+- `How` 用于定义 fixture、前置条件、输入、执行路径与运行方式；`Oracle` 用于定义必须成立的可断言结果；`Not` 用于定义禁止扩张的范围。
+- 如果实现行为变更导致正式 case 预期变化，必须先更新对应 `doc/test-plan/**`，再修改测试代码。
+- 如果 `tests/**` 非 `temp` 目录里缺少对应正式 case，必须先补 `doc/test-plan/**` 定义，再补测试代码。
+- 每个 `用例名称` 都必须稳定映射到唯一 `caseId`、唯一测试文件和唯一日志目录。
+
+### 3.0.1 实现状态取值约定
+
+- `待检查`
+  - 已在计划中定义，但还未核对代码是否已经实现或与文档一致。
+- `未实现`
+  - 代码中还没有对应测试用例实现。
+- `部分实现`
+  - 已有部分实现，但与文档定义不完全一致，或缺少关键断言 / fixture / 分支覆盖。
+- `已实现`
+  - 代码中的测试用例已与文档定义对齐。
+- `待调整`
+  - 当前代码已有实现，但文档定义或代码实现需要进一步调整后才能对齐。
+- `已废弃`
+  - 该 case 不再作为正式测试目标保留，但保留历史记录。
+
+### 3.0.2 用例字段定义
+
+- `用例名称`
+  - 稳定 `caseId`，用于映射测试文件、日志目录和报告归属。
+- `实现状态`
+  - 用于标记当前代码实现与文档定义的匹配状态；新增 case 默认先写 `待检查`。
+- `What`
+  - 这条 case 到底要验证什么。
+- `Why`
+  - 这条 case 为什么长期存在，解决什么真实风险。
+- `How`
+  - 这条 case 的输入、前置条件、fixture、运行方式和关键执行链路。
+- `Oracle`
+  - 这条 case 必须成立的明确断言集合。
+- `Not`
+  - 这条 case 明确不验证什么，防止实现时擅自扩张范围。
 
 ### 3.1 基础case
 - 这类case要保证基础能力能正常使用。
@@ -130,7 +188,7 @@ tests/
 - 长期 case 应有稳定目标、稳定输入、稳定验收口径。
 - 对涉及模型的长期 case，应规划对应的 `live` 验证，不把“脚本化通过”当作最终完成。
 - 所有长期维护的正式 case，必须先对齐 `doc/test-plan/**` 下对应测试计划中的用例定义，再实现测试代码。
-- 实现正式测试代码时，必须先对齐对应 case 的 `What / Why / How / Oracle / Not`，不能只按目录名、`caseId` 或相邻样例自行脑补。
+- 实现正式测试代码时，必须先对齐对应 case 的 `实现状态 / What / Why / How / Oracle / Not`，不能只按目录名、`caseId` 或相邻样例自行脑补。
 - 不允许绕过 `test-plan` 直接新增正式测试用例代码；如果测试计划中还没有对应 case，必须先补文档，再落测试实现。
 - 正式测试代码中的 `caseId`、目录归属、分组层级、核心验收口径，必须与 `test-plan` 中对应 case 保持一致。
 
@@ -151,7 +209,7 @@ tests/
 ### 4.2 定义或更新正式 case 规格
 
 - 新增、补齐或调整正式 case 时，必须先更新 `doc/test-plan/**` 中对应测试计划。
-- 正式 case 规格至少要明确 `用例名称 / What / Why / How / Oracle / Not`，测试代码必须按这些字段落地，不得自行脑补。
+- 正式 case 规格至少要明确 `用例名称 / 实现状态 / What / Why / How / Oracle / Not`，测试代码必须按这些字段落地，不得自行脑补。
 - `用例名称` 需要稳定映射到唯一 `caseId`、唯一测试文件和唯一日志目录。
 
 ### 4.3 放入测试目录
@@ -197,6 +255,8 @@ tests/
 - `pnpm test:ai:backend:tools`
 - `pnpm test:ai:e2e`
 - `pnpm test:ai:sample`
+- `pnpm test:workspace`
+- `pnpm test:workspace:backend`
 
 runner 支持的过滤参数：
 

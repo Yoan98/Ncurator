@@ -1,38 +1,8 @@
 import type { HumanMouthPromptInput } from './types'
 import {
-  buildStructuredDeliveryPromptExample,
-  buildStructuredDeliveryPromptRules
+  buildDeliveryModePromptExample,
+  buildDeliveryModePromptRules
 } from '../shared/deliveryContracts'
-
-const buildDeliveryModeRules = (deliveryMode: HumanMouthPromptInput['deliveryMode']): string => {
-  if (deliveryMode === 'task_handoff') {
-    return buildStructuredDeliveryPromptRules('task_handoff')
-  }
-
-  if (deliveryMode === 'context_note') {
-    return buildStructuredDeliveryPromptRules('context_note')
-  }
-
-  return [
-    '当前 deliveryMode=user_answer。',
-    'deliveryMarkdown 面向最终用户，可自然组织为完整 markdown 结果，不要求固定章节。'
-  ].join('\n')
-}
-
-const buildOutputExample = (deliveryMode: HumanMouthPromptInput['deliveryMode']): string => {
-  if (deliveryMode === 'task_handoff') {
-    return buildStructuredDeliveryPromptExample('task_handoff')
-  }
-
-  if (deliveryMode === 'context_note') {
-    return buildStructuredDeliveryPromptExample('context_note')
-  }
-
-  return `{
-  "summary": "已整理出当前任务的最终答复。",
-  "deliveryMarkdown": "# 处理结果\\n\\n已完成本次任务。\\n\\n## 关键依据\\n- 依据一\\n- 依据二"
-}`
-}
 
 export const buildHumanMouthPrompt = (input: HumanMouthPromptInput) => {
   return {
@@ -57,7 +27,7 @@ export const buildHumanMouthPrompt = (input: HumanMouthPromptInput) => {
   </delivery_principles>
 
   <delivery_mode_rules>
-${buildDeliveryModeRules(input.deliveryMode)}
+${buildDeliveryModePromptRules(input.deliveryMode)}
   </delivery_mode_rules>
 
   <output_rules>
@@ -83,7 +53,7 @@ ${buildDeliveryModeRules(input.deliveryMode)}
   </output_principles>
 
   <output_example>
-${buildOutputExample(input.deliveryMode)}
+${buildDeliveryModePromptExample(input.deliveryMode)}
   </output_example>
 </system>
 `.trim(),

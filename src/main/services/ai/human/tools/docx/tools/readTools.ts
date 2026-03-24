@@ -1,9 +1,9 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import type { StructuredToolInterface } from '@langchain/core/tools'
+import { getToolContract } from '../../toolCatalog'
 import type { DocxToolRuntime } from '../runtime'
 import type { DocxOutlineBlock } from '../types'
-import { openSchema, outlineSchema, getBlockSchema, searchSchema, historySchema } from '../schemas'
 import { buildSemanticMatches, splitEmbeddingRows } from '../semanticSearch'
 import {
   createDocxTool,
@@ -11,6 +11,22 @@ import {
   requireDocxToolDocId,
   runDocxWorkerToolAction
 } from './workerTool'
+
+const DOCX_OPEN_CONTRACT = getToolContract('docx_open')
+const DOCX_OUTLINE_CONTRACT = getToolContract('docx_outline')
+const DOCX_GET_BLOCK_CONTRACT = getToolContract('docx_get_block')
+const DOCX_SEARCH_CONTRACT = getToolContract('docx_search')
+const DOCX_GET_HISTORY_CONTRACT = getToolContract('docx_get_history')
+
+if (
+  !DOCX_OPEN_CONTRACT ||
+  !DOCX_OUTLINE_CONTRACT ||
+  !DOCX_GET_BLOCK_CONTRACT ||
+  !DOCX_SEARCH_CONTRACT ||
+  !DOCX_GET_HISTORY_CONTRACT
+) {
+  throw new Error('missing docx read tool contracts')
+}
 
 export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInterface[] => {
   type DocxOutlineResult = {
@@ -23,9 +39,9 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
 
   const docxOpenTool = createDocxTool({
     runtime,
-    name: 'docx_open',
+    name: DOCX_OPEN_CONTRACT.name,
     description: 'Open a workspace-bound docx file and register a docId for subsequent operations.',
-    schema: openSchema,
+    schema: DOCX_OPEN_CONTRACT.schema,
     onError: ({ message }) => {
       runtime.input.emitActivity({
         actionType: 'docx_open',
@@ -101,10 +117,10 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
 
   const docxOutlineTool = createDocxTool({
     runtime,
-    name: 'docx_outline',
+    name: DOCX_OUTLINE_CONTRACT.name,
     description:
       'Extract a deterministic block outline for a previously opened doc (paragraph/table/table_cell).',
-    schema: outlineSchema,
+    schema: DOCX_OUTLINE_CONTRACT.schema,
     onError: ({ message }) => {
       runtime.input.emitActivity({
         actionType: 'docx_outline',
@@ -168,9 +184,9 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
 
   const docxGetBlockTool = createDocxTool({
     runtime,
-    name: 'docx_get_block',
+    name: DOCX_GET_BLOCK_CONTRACT.name,
     description: 'Get one block by blockId with detailed structure.',
-    schema: getBlockSchema,
+    schema: DOCX_GET_BLOCK_CONTRACT.schema,
     execute: async ({ args, toolName, toolCallId }) => {
       const docIdResult = requireDocxToolDocId({
         runtime,
@@ -216,10 +232,10 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
 
   const docxSearchTool = createDocxTool({
     runtime,
-    name: 'docx_search',
+    name: DOCX_SEARCH_CONTRACT.name,
     description:
       'Search blocks in a doc using literal/regex mode, or semantic block retrieval with cached embeddings.',
-    schema: searchSchema,
+    schema: DOCX_SEARCH_CONTRACT.schema,
     execute: async ({ args, toolName, toolCallId }) => {
       const docIdResult = requireDocxToolDocId({
         runtime,
@@ -319,10 +335,10 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
 
   const docxGetHistoryTool = createDocxTool({
     runtime,
-    name: 'docx_get_history',
+    name: DOCX_GET_HISTORY_CONTRACT.name,
     description:
       'Inspect the immutable docx snapshot lineage for the current run. Useful for confirm/rollback flows before save.',
-    schema: historySchema,
+    schema: DOCX_GET_HISTORY_CONTRACT.schema,
     execute: async ({ args, toolName, toolCallId }) => {
       const docIdResult = requireDocxToolDocId({
         runtime,

@@ -26,6 +26,13 @@ type BrainPromptRenderView = {
   recentDecisionHistoryLines: string
 }
 
+export type BrainPromptSections = {
+  memorySnapshotText: string
+  skillContextText: string
+  recentToolResultsText: string
+  recentDecisionHistoryText: string
+}
+
 const renderLearnedToolSpecLine = (spec: ToolPromptSpec): string => {
   const requiredArgs = spec.args
     .filter((arg) => arg.required)
@@ -41,10 +48,12 @@ const renderLearnedToolSpecLine = (spec: ToolPromptSpec): string => {
 const buildBrainPromptRenderView = (state: HumanState): BrainPromptRenderView => {
   const learnedSkillIds = state.brainMemory.outside.learnedSkillIds
   const learnedSkillDefinitions = learnedSkillIds.map((skillId) => getSkillDefinition(skillId))
+  const learnedToolNames = Array.from(
+    new Set(learnedSkillDefinitions.flatMap((definition) => definition.toolNames))
+  )
   const learnedToolSpecLines =
-    learnedSkillDefinitions.length > 0
-      ? learnedSkillDefinitions
-          .flatMap((definition) => definition.toolNames)
+    learnedToolNames.length > 0
+      ? learnedToolNames
           .map((toolName) => getToolPromptSpec(toolName))
           .filter((spec): spec is ToolPromptSpec => Boolean(spec))
           .map(renderLearnedToolSpecLine)
@@ -103,59 +112,58 @@ const buildBrainPromptRenderView = (state: HumanState): BrainPromptRenderView =>
   }
 }
 
-export const buildMemorySnapshotText = (state: HumanState): string => {
+export const buildBrainPromptSections = (state: HumanState): BrainPromptSections => {
   const view = buildBrainPromptRenderView(state)
 
-  return [
-    '下面是你之前沉淀下来的记忆。这些内容代表当前已经确认、可以直接复用或仍影响推进的信息。',
-    '',
-    '已确认的事实：',
-    view.factLines,
-    '',
-    '支撑这些事实的关键证据：',
-    view.evidenceLines,
-    '',
-    '仍未解决的问题：',
-    view.openQuestionLines
-  ].join('\n')
+  return {
+    memorySnapshotText: [
+      '下面是你之前沉淀下来的记忆。这些内容代表当前已经确认、可以直接复用或仍影响推进的信息。',
+      '',
+      '已确认的事实：',
+      view.factLines,
+      '',
+      '支撑这些事实的关键证据：',
+      view.evidenceLines,
+      '',
+      '仍未解决的问题：',
+      view.openQuestionLines
+    ].join('\n'),
+    skillContextText: [
+      '下面是当前可用的技能信息。技能目录摘要只用于判断要不要学习；只有已学习 skill 的详细说明和工具要点，才代表你当前可以直接依赖的能力。',
+      '',
+      '当前可用技能目录摘要：',
+      formatList(view.skillCatalogLines),
+      '',
+      '已经学习的 skill id：',
+      formatList(view.learnedSkillIdLines),
+      '',
+      '已学习技能的详细说明：',
+      formatList(view.learnedSkillDetailLines),
+      '',
+      '已学习技能对应的工具使用要点：',
+      formatList(view.learnedToolSpecLines)
+    ].join('\n'),
+    recentToolResultsText: [
+      '下面是最近一轮工具调用刚带回来的新信息。请把这些结果和已有记忆一起判断，不要重复做同样的动作。',
+      '',
+      view.recentToolResultLines
+    ].join('\n'),
+    recentDecisionHistoryText: [
+      '下面是最近几轮已经做过的正式判断摘要，只用于帮助你理解时间顺序并避免重复决策。',
+      '',
+      view.recentDecisionHistoryLines
+    ].join('\n')
+  }
 }
 
-export const buildSkillContextText = (state: HumanState): string => {
-  const view = buildBrainPromptRenderView(state)
+export const buildMemorySnapshotText = (state: HumanState): string =>
+  buildBrainPromptSections(state).memorySnapshotText
 
-  return [
-    '下面是当前可用的技能信息。技能目录摘要只用于判断要不要学习；只有已学习 skill 的详细说明和工具要点，才代表你当前可以直接依赖的能力。',
-    '',
-    '当前可用技能目录摘要：',
-    formatList(view.skillCatalogLines),
-    '',
-    '已经学习的 skill id：',
-    formatList(view.learnedSkillIdLines),
-    '',
-    '已学习技能的详细说明：',
-    formatList(view.learnedSkillDetailLines),
-    '',
-    '已学习技能对应的工具使用要点：',
-    formatList(view.learnedToolSpecLines)
-  ].join('\n')
-}
+export const buildSkillContextText = (state: HumanState): string =>
+  buildBrainPromptSections(state).skillContextText
 
-export const buildRecentToolResultsText = (state: HumanState): string => {
-  const view = buildBrainPromptRenderView(state)
+export const buildRecentToolResultsText = (state: HumanState): string =>
+  buildBrainPromptSections(state).recentToolResultsText
 
-  return [
-    '下面是最近一轮工具调用刚带回来的新信息。请把这些结果和已有记忆一起判断，不要重复做同样的动作。',
-    '',
-    view.recentToolResultLines
-  ].join('\n')
-}
-
-export const buildRecentDecisionHistoryText = (state: HumanState): string => {
-  const view = buildBrainPromptRenderView(state)
-
-  return [
-    '下面是最近几轮已经做过的正式判断摘要，只用于帮助你理解时间顺序并避免重复决策。',
-    '',
-    view.recentDecisionHistoryLines
-  ].join('\n')
-}
+export const buildRecentDecisionHistoryText = (state: HumanState): string =>
+  buildBrainPromptSections(state).recentDecisionHistoryText
