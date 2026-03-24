@@ -80,9 +80,10 @@ const WorkspaceSettingsPanel: React.FC = () => {
     [selectedWorkspaceId, workspaces]
   )
 
-  const selectedWorkspaceNodes = selectedWorkspaceId
-    ? workspaceNodes[selectedWorkspaceId] || []
-    : []
+  const selectedWorkspaceNodes = useMemo(
+    () => (selectedWorkspaceId ? workspaceNodes[selectedWorkspaceId] || [] : []),
+    [selectedWorkspaceId, workspaceNodes]
+  )
   const selectedWorkspaceTreeStrategy = useMemo(
     () => getWorkspaceTreeDisplayStrategy(selectedWorkspaceNodes),
     [selectedWorkspaceNodes]
@@ -408,17 +409,17 @@ const WorkspaceSettingsPanel: React.FC = () => {
 
   return (
     <div className="space-y-6" data-testid={settingsSelectors.workspacePanel}>
-      <section className="rounded-[28px] border border-[#E5E5E4] bg-[radial-gradient(circle_at_top_left,_#FBF5F2,_#F5F5F4_62%)] px-7 py-7 shadow-[0_4px_16px_rgba(0,0,0,0.06)]">
-        <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
+      <section className="rounded-[22px] border border-[#E5E5E4] bg-white px-6 py-5 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+        <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
           <div className="max-w-3xl">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#F4E5DF] bg-white px-3 py-1 text-[12px] font-medium text-[#D97757]">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#F4E5DF] bg-[#FBF5F2] px-3 py-1 text-[11px] font-medium text-[#D97757]">
               <HiOutlineRectangleStack className="h-4 w-4" />
               Workspace
             </div>
-            <h2 className="text-[28px] font-semibold tracking-tight text-[#1F1F1F]">
+            <h2 className="text-[22px] font-semibold tracking-tight text-[#1F1F1F]">
               用工作空间组织本地优先资料
             </h2>
-            <p className="mt-3 text-base leading-relaxed text-[#666666]">
+            <p className="mt-2 text-sm leading-7 text-[#666666]">
               这里是唯一的资料配置入口。先添加工作空间和网页资料，再在对话里通过
               <span className="px-1 font-medium text-[#D97757]">@</span>
               选择范围。
@@ -427,7 +428,6 @@ const WorkspaceSettingsPanel: React.FC = () => {
           <div className="flex flex-wrap gap-3">
             <Button
               type="primary"
-              size="large"
               icon={<HiOutlineFolderPlus className="h-4 w-4" />}
               onClick={() => setCreateVisible(true)}
               data-testid={importSelectors.createWorkspaceButton}
@@ -435,7 +435,6 @@ const WorkspaceSettingsPanel: React.FC = () => {
               添加工作空间
             </Button>
             <Button
-              size="large"
               className="border-[#E5E5E4] bg-white text-[#1F1F1F]"
               icon={<HiGlobeAlt className="h-4 w-4" />}
               onClick={() => setWebModalVisible(true)}
@@ -460,7 +459,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
 
       <div className="grid gap-6 xl:grid-cols-[1.12fr_0.88fr]">
         <section
-          className="rounded-[28px] border border-[#E5E5E4] bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
+          className="rounded-[22px] border border-[#E5E5E4] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
           data-testid={importSelectors.page}
         >
           <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -479,7 +478,6 @@ const WorkspaceSettingsPanel: React.FC = () => {
               </p>
             </div>
             <Button
-              size="large"
               icon={<HiArrowPath className="h-4 w-4" />}
               className="border-[#E5E5E4] bg-white text-[#1F1F1F]"
               onClick={() => void loadWorkspaces()}
@@ -524,18 +522,18 @@ const WorkspaceSettingsPanel: React.FC = () => {
                       type="button"
                       onClick={() => setSelectedWorkspaceId(workspace.id)}
                       data-testid={`${importSelectors.workspaceCardPrefix}-${workspace.id}`}
-                      className={`w-full rounded-2xl border p-5 text-left transition-all duration-200 ${
+                      className={`w-full rounded-[20px] border p-4 text-left transition-all duration-200 ${
                         isSelected
-                          ? 'border-[#D97757] bg-[#FBF5F2] shadow-[0_4px_16px_rgba(217,119,87,0.12)]'
-                          : 'border-[#E5E5E4] bg-white hover:-translate-y-[1px] hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)]'
+                          ? 'border-[#D97757] bg-[#FCFBF8] shadow-[0_4px_16px_rgba(217,119,87,0.10)]'
+                          : 'border-[#E5E5E4] bg-white hover:-translate-y-[1px] hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)]'
                       }`}
                     >
                       <div className="mb-3 flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="truncate text-base font-semibold text-[#1F1F1F]">
+                          <div className="truncate text-[15px] font-semibold text-[#1F1F1F]">
                             {workspace.name}
                           </div>
-                          <div className="truncate text-sm text-[#666666]">
+                          <div className="truncate text-[13px] text-[#666666]">
                             {workspace.root_path}
                           </div>
                         </div>
@@ -544,16 +542,16 @@ const WorkspaceSettingsPanel: React.FC = () => {
                         </Tag>
                       </div>
 
-                      <div className="mb-4 grid grid-cols-2 gap-3 text-sm text-[#666666]">
-                        <div className="rounded-xl border border-[#E5E5E4] bg-white px-3 py-2">
-                          <div className="text-[12px] text-[#999999]">目录 / 文件</div>
-                          <div className="text-[#1F1F1F]">
+                      <div className="mb-4 grid grid-cols-2 gap-x-3 gap-y-2 text-[12px] text-[#666666]">
+                        <div className="rounded-xl bg-[#FAFAF9] px-3 py-2">
+                          目录 / 文件
+                          <div className="mt-1 text-[13px] font-medium text-[#1F1F1F]">
                             {stats.directoryCount} / {stats.fileCount}
                           </div>
                         </div>
-                        <div className="rounded-xl border border-[#E5E5E4] bg-white px-3 py-2">
-                          <div className="text-[12px] text-[#999999]">已准备 / 待处理</div>
-                          <div className="text-[#1F1F1F]">
+                        <div className="rounded-xl bg-[#FAFAF9] px-3 py-2">
+                          已准备 / 待处理
+                          <div className="mt-1 text-[13px] font-medium text-[#1F1F1F]">
                             {stats.preparedCount} /{' '}
                             {stats.unpreparedCount + stats.staleCount + stats.failedCount}
                           </div>
@@ -561,7 +559,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                       </div>
 
                       {progress ? (
-                        <div className="mb-4 rounded-xl border border-[#E5E5E4] bg-white px-3 py-3">
+                        <div className="mb-4 rounded-xl border border-[#E5E5E4] bg-[#FCFBF8] px-3 py-3">
                           <div className="mb-2 flex items-center justify-between text-[12px] text-[#666666]">
                             <span>
                               {progress.phase === 'scan'
@@ -595,7 +593,6 @@ const WorkspaceSettingsPanel: React.FC = () => {
 
                       <div className="grid grid-cols-2 gap-2">
                         <Button
-                          size="large"
                           icon={<HiArrowPath className="h-4 w-4" />}
                           onClick={(event) => {
                             event.stopPropagation()
@@ -608,7 +605,6 @@ const WorkspaceSettingsPanel: React.FC = () => {
                         </Button>
                         <Button
                           type="primary"
-                          size="large"
                           icon={<HiSparkles className="h-4 w-4" />}
                           onClick={(event) => {
                             event.stopPropagation()
@@ -625,7 +621,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
               </div>
 
               <div
-                className="rounded-2xl border border-[#E5E5E4] bg-[#FAFAF9] p-5"
+                className="rounded-[20px] border border-[#E5E5E4] bg-[#FAFAF9] p-5"
                 data-testid={importSelectors.workspaceDetail}
               >
                 {selectedWorkspace ? (
@@ -664,7 +660,6 @@ const WorkspaceSettingsPanel: React.FC = () => {
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <Button
-                            size="large"
                             className="border-[#E5E5E4] bg-white text-[#1F1F1F]"
                             icon={<HiOutlineWindow className="h-4 w-4" />}
                             onClick={async () => {
@@ -679,7 +674,6 @@ const WorkspaceSettingsPanel: React.FC = () => {
                             打开路径
                           </Button>
                           <Button
-                            size="large"
                             danger
                             icon={<HiOutlineTrash className="h-4 w-4" />}
                             onClick={() => setDeleteWorkspaceId(selectedWorkspace.id)}
@@ -689,7 +683,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="rounded-2xl border border-[#E5E5E4] bg-white p-4">
+                      <div className="rounded-[18px] border border-[#E5E5E4] bg-white p-4">
                         <div className="mb-3 flex items-center gap-2">
                           <span className="font-semibold text-[#1F1F1F]">一键准备面板</span>
                           <Tooltip title="全部差异会补齐新增、变更和删除；仅新增删除跳过内容变更检测；仅变更会重准备已有文件。">
@@ -713,10 +707,10 @@ const WorkspaceSettingsPanel: React.FC = () => {
                               { label: '仅变更', value: 'changes_only' }
                             ]}
                             className="bg-[#F5F5F4]"
+                            size="middle"
                           />
                           <div className="flex gap-2">
                             <Button
-                              size="large"
                               icon={<HiArrowPath className="h-4 w-4" />}
                               onClick={() => void handleWorkspaceScan(selectedWorkspace)}
                               loading={workspaceActions[selectedWorkspace.id] === 'scan'}
@@ -727,7 +721,6 @@ const WorkspaceSettingsPanel: React.FC = () => {
                             </Button>
                             <Button
                               type="primary"
-                              size="large"
                               icon={<HiSparkles className="h-4 w-4" />}
                               onClick={() => void handleWorkspacePrepare(selectedWorkspace)}
                               loading={workspaceActions[selectedWorkspace.id] === 'prepare'}
@@ -798,7 +791,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                     </div>
 
                     <div
-                      className="min-h-[420px] flex-1 overflow-auto rounded-2xl border border-[#E5E5E4] bg-white p-3"
+                      className="min-h-[420px] flex-1 overflow-auto rounded-[18px] border border-[#E5E5E4] bg-white p-3"
                       data-testid={importSelectors.workspaceTree}
                     >
                       {selectedWorkspaceNodes.length > 0 ? (
@@ -843,7 +836,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
         </section>
 
         <section
-          className="rounded-[28px] border border-[#E5E5E4] bg-white p-6 shadow-[0_2px_8px_rgba(0,0,0,0.06)]"
+          className="rounded-[22px] border border-[#E5E5E4] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
           data-testid={importSelectors.webSourceSection}
         >
           <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -858,7 +851,6 @@ const WorkspaceSettingsPanel: React.FC = () => {
             </div>
             <Button
               type="primary"
-              size="large"
               icon={<HiGlobeAlt className="h-4 w-4" />}
               onClick={() => setWebModalVisible(true)}
               data-testid={importSelectors.webSourceOpenModalButton}
@@ -869,7 +861,6 @@ const WorkspaceSettingsPanel: React.FC = () => {
 
           <div className="mb-4" data-testid={importSelectors.webSourceSearchInput}>
             <Input.Search
-              size="large"
               placeholder="按标题或 URL 过滤网页资料"
               value={webKeyword}
               onChange={(event) => setWebKeyword(event.target.value)}
@@ -878,7 +869,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
           </div>
 
           <div
-            className="min-h-[640px] rounded-2xl border border-[#E5E5E4] bg-[#FAFAF9] p-3"
+            className="min-h-[640px] rounded-[18px] border border-[#E5E5E4] bg-[#FAFAF9] p-3"
             data-testid={importSelectors.webSourceList}
           >
             <List
@@ -892,7 +883,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                 return (
                   <List.Item className="!border-none !px-0 !py-2">
                     <div
-                      className="w-full rounded-2xl border border-[#E5E5E4] bg-white p-4 transition-all duration-200 hover:-translate-y-[1px] hover:shadow-[0_4px_16px_rgba(0,0,0,0.08)]"
+                      className="w-full rounded-[18px] border border-[#E5E5E4] bg-white p-4 transition-all duration-200 hover:-translate-y-[1px] hover:shadow-[0_4px_16px_rgba(0,0,0,0.06)]"
                       data-testid={`${importSelectors.webSourceCardPrefix}-${item.id}`}
                     >
                       <div className="mb-3 flex items-start justify-between gap-3">
@@ -1069,7 +1060,10 @@ const WorkspaceSettingsPanel: React.FC = () => {
         onCancel={() => setDeleteWebSource(null)}
         onOk={() => void handleDeleteWebSource()}
         okText="删除"
-        okButtonProps={{ danger: true, 'data-testid': importSelectors.webSourceDeleteConfirmButton }}
+        okButtonProps={{
+          danger: true,
+          'data-testid': importSelectors.webSourceDeleteConfirmButton
+        }}
         cancelText="取消"
         cancelButtonProps={{ 'data-testid': importSelectors.webSourceDeleteCancelButton }}
         className="[&_.ant-modal-content]:!rounded-[24px]"

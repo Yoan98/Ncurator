@@ -28,9 +28,15 @@ body {
   background-color: var(--color-bg-primary);
   color: var(--color-text-primary);
   font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    'SF Pro Text', 'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100vh;
 }
 
 /* 滚动条样式优化 */
@@ -70,4 +76,31 @@ mark {
 
 .animate-slide-in-right {
   animation: slideInRight 0.3s ease-out forwards;
+}
+
+.workbench-scope-select.ant-select .ant-select-selector {
+  min-height: 40px !important;
+  border-radius: 16px !important;
+  border-color: #e5e5e4 !important;
+  background: #f8f8f7 !important;
+  box-shadow: none !important;
+  padding: 4px 10px !important;
+}
+
+.workbench-scope-select.ant-select-focused .ant-select-selector,
+.workbench-scope-select.ant-select-open .ant-select-selector {
+  border-color: #d97757 !important;
+  box-shadow: 0 0 0 3px rgba(244, 229, 223, 0.95) !important;
+}
+
+.workbench-scope-select .ant-select-selection-placeholder {
+  color: #999999 !important;
+}
+
+.workbench-scope-select .ant-select-selection-item {
+  border-radius: 999px !important;
+  background: #ffffff !important;
+  border: 1px solid #e5e5e4 !important;
+  color: #666666 !important;
+  padding-inline-end: 8px !important;
 }

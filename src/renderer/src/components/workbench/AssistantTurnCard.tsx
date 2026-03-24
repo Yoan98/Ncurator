@@ -62,26 +62,26 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
 
   return (
     <div className="flex gap-4" data-testid={`workbench-assistant-turn-${messageId}`}>
-      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-[#FBF5F2] text-[#D97757]">
-        <HiSparkles className="h-5 w-5" />
+      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-[#F4E5DF] bg-[#FBF5F2] text-[#D97757]">
+        <HiSparkles className="h-[18px] w-[18px]" />
       </div>
       <div className="min-w-0 flex-1">
-        <div className="rounded-[24px] rounded-bl-[10px] border border-[#F4E5DF] bg-[#FBF5F2] px-5 py-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+        <div className="rounded-[20px] rounded-bl-[10px] border border-[#EAE2DD] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
           <MarkdownRenderer content={content || (isStreaming ? '...' : '')} />
           {isStreaming && !content ? <LoadingOutlined className="mt-2 text-[#D97757]" /> : null}
         </div>
 
         {hasExecutionDetails ? (
-          <div className="mt-3 overflow-hidden rounded-[20px] border border-[#E5E5E4] bg-white">
+          <div className="mt-2.5 overflow-hidden rounded-[18px] border border-[#E5E5E4] bg-[#FCFBF8]">
             <button
               type="button"
-              className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors duration-200 hover:bg-[#F8F8F7]"
+              className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors duration-200 hover:bg-white/70"
               onClick={() => setExpanded((previous) => !previous)}
               data-testid={`workbench-assistant-turn-steps-${messageId}`}
             >
               <div>
-                <div className="text-sm font-medium text-[#1F1F1F]">执行过程</div>
-                <div className="mt-1 text-xs text-[#666666]">
+                <div className="text-[13px] font-medium text-[#1F1F1F]">执行过程</div>
+                <div className="mt-1 text-[12px] text-[#666666]">
                   {turn?.steps.length || 0} 步 · 读取 {turn?.readFiles.length || 0} 个文件 · 修改{' '}
                   {turn?.editedFiles.length || 0} 个文件
                 </div>
@@ -105,13 +105,13 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                           onClick={() => interactive && onOpenStep(step)}
                           className={`w-full rounded-2xl border px-4 py-3 text-left transition-all duration-200 ${
                             interactive
-                              ? 'border-[#E5E5E4] bg-[#FAFAF9] hover:-translate-y-[1px] hover:border-[#D97757]'
-                              : 'border-[#E5E5E4] bg-[#FAFAF9]'
+                              ? 'border-[#E5E5E4] bg-white hover:-translate-y-[1px] hover:border-[#D97757]'
+                              : 'border-[#E5E5E4] bg-white'
                           }`}
                         >
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
-                              <div className="text-sm font-medium text-[#1F1F1F]">
+                              <div className="text-[13px] font-medium text-[#1F1F1F]">
                                 {step.summary}
                               </div>
                               <div className="mt-2 flex flex-wrap gap-2">
@@ -178,11 +178,11 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                             type="button"
                             onClick={() => onOpenReview(review.reviewId)}
                             data-testid={`workbench-assistant-turn-review-${review.reviewId}`}
-                            className="w-full rounded-2xl border border-[#F4E5DF] bg-[#FBF5F2] px-4 py-3 text-left transition-all duration-200 hover:-translate-y-[1px] hover:border-[#D97757]"
+                            className="w-full rounded-2xl border border-[#F4E5DF] bg-white px-4 py-3 text-left transition-all duration-200 hover:-translate-y-[1px] hover:border-[#D97757]"
                           >
                             <div className="flex flex-wrap items-start justify-between gap-3">
                               <div>
-                                <div className="text-sm font-medium text-[#1F1F1F]">
+                                <div className="text-[13px] font-medium text-[#1F1F1F]">
                                   {review.title}
                                 </div>
                                 <div className="mt-1 text-xs text-[#666666]">

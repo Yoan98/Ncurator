@@ -55,10 +55,11 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
   onRevealPath
 }) => {
   const [selectedSearchIndex, setSelectedSearchIndex] = useState(0)
+  const searchResetKey = state.kind === 'search_results' ? state.query : state.kind
 
   useEffect(() => {
     setSelectedSearchIndex(0)
-  }, [state.kind === 'search_results' ? state.query : state.kind])
+  }, [searchResetKey])
 
   const selectedSearchResult = useMemo(() => {
     if (state.kind !== 'search_results') return null
@@ -72,10 +73,10 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
 
   return (
     <aside
-      className="flex h-full flex-col border-l border-[#E5E5E4] bg-[#F5F5F4]"
+      className="flex h-full flex-col border-l border-[#E5E5E4] bg-white"
       data-testid={workbenchSelectors.contentPanel}
     >
-      <div className="flex items-center justify-between gap-3 border-b border-[#E5E5E4] bg-white/80 px-5 py-4 backdrop-blur-sm">
+      <div className="flex items-center justify-between gap-3 border-b border-[#E5E5E4] bg-[#FCFBF8] px-5 py-4">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             {state.kind !== 'empty' ? (
@@ -127,7 +128,7 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
 
       <div className="min-h-0 flex-1 overflow-hidden px-5 py-5">
         {state.kind === 'empty' ? (
-          <div className="flex h-full items-center justify-center rounded-[24px] border border-dashed border-[#E5E5E4] bg-[#FAFAF9]">
+          <div className="flex h-full items-center justify-center rounded-[20px] border border-dashed border-[#E5E5E4] bg-[#FAFAF9]">
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
               description={<span className="text-[#666666]">{state.description}</span>}
@@ -138,7 +139,7 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
         {state.kind === 'search_results' ? (
           <div className="grid h-full gap-4 xl:grid-cols-[0.92fr_1.08fr]">
             <div
-              className="overflow-auto rounded-[24px] border border-[#E5E5E4] bg-white p-3"
+              className="overflow-auto rounded-[20px] border border-[#E5E5E4] bg-[#FAFAF9] p-3"
               data-testid={workbenchSelectors.searchResults}
             >
               <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">
@@ -153,11 +154,13 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
                     onClick={() => setSelectedSearchIndex(index)}
                     className={`w-full rounded-2xl border px-3 py-3 text-left transition-all duration-200 ${
                       index === selectedSearchIndex
-                        ? 'border-[#D97757] bg-[#FBF5F2]'
-                        : 'border-[#E5E5E4] bg-[#FAFAF9] hover:border-[#D97757]'
+                        ? 'border-[#D97757] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
+                        : 'border-[#E5E5E4] bg-white hover:border-[#D97757]'
                     }`}
                   >
-                    <div className="text-sm font-medium text-[#1F1F1F]">{result.document_name}</div>
+                    <div className="text-[13px] font-medium text-[#1F1F1F]">
+                      {result.document_name}
+                    </div>
                     <div className="mt-2 line-clamp-3 text-xs leading-relaxed text-[#666666]">
                       {result.text}
                     </div>
@@ -167,16 +170,16 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
             </div>
 
             <div className="flex min-h-0 flex-col gap-4">
-              <div className="rounded-[24px] border border-[#E5E5E4] bg-white px-4 py-4">
+              <div className="rounded-[20px] border border-[#E5E5E4] bg-[#FCFBF8] px-4 py-4">
                 <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">
                   命中详情
                 </div>
                 {selectedSearchResult ? (
                   <>
-                    <div className="mt-3 text-sm font-medium text-[#1F1F1F]">
+                    <div className="mt-3 text-[13px] font-medium text-[#1F1F1F]">
                       {selectedSearchResult.document_name}
                     </div>
-                    <div className="mt-3 rounded-2xl bg-[#F8F8F7] px-4 py-4 text-sm leading-relaxed text-[#666666]">
+                    <div className="mt-3 rounded-2xl border border-[#E5E5E4] bg-white px-4 py-4 text-sm leading-relaxed text-[#666666]">
                       {selectedSearchResult.text}
                     </div>
                     <div className="mt-4 flex flex-wrap gap-2">
@@ -206,10 +209,12 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
 
         {state.kind === 'document_view' ? (
           <div className="flex h-full flex-col gap-4" data-testid={workbenchSelectors.documentView}>
-            <div className="rounded-[24px] border border-[#E5E5E4] bg-white px-4 py-4">
+            <div className="rounded-[20px] border border-[#E5E5E4] bg-[#FCFBF8] px-4 py-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <div className="text-sm font-semibold text-[#1F1F1F]">{state.file.fileName}</div>
+                  <div className="text-[13px] font-semibold text-[#1F1F1F]">
+                    {state.file.fileName}
+                  </div>
                   <div className="mt-1 break-all text-xs text-[#999999]">{state.file.path}</div>
                 </div>
                 {state.file.reviewId ? (

@@ -14,7 +14,7 @@
 - 当涉及 Workspace 测试方案、工作空间扫描/准备、网页资料、`Settings -> Workspace` 空态/错误态、source scope 提示联动或正式 workspace case 规划时，请先阅读 `doc/test-plan/workspace-test.md`
 - 当涉及数据库、LanceDB、表职责或检索存储实现时，请阅读 `doc/database.md`
 - 当涉及目录规范、模块边界、文件归位或工程结构时，请阅读 `doc/project-structure.md`
-- 当涉及 UI 风格、布局规范、组件交互约束或 `Settings -> Workspace` 资料配置入口时，请阅读 `doc/ui-style.md`
+- 当涉及 UI 风格、workbench / composer 布局、组件交互约束或 `Settings -> Workspace` 资料配置入口时，请阅读 `doc/ui-style.md`
 - 当涉及测试架构设计、正式 test-plan 共享约束、实现状态约定、测试目录、正式/临时 case 准入、raw log、`runtime-events.jsonl`、`timeline` 值域规则、report 生成流程、证据展示方式、`workspace` 直连 shell 测试命令面或测试代码准入约束时，请阅读 `doc/test.md`
 
 ## 2. 必须遵守的规则

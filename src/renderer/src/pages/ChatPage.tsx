@@ -1089,16 +1089,16 @@ const ChatPage: React.FC = () => {
     }
 
     return (
-      <div key={messageItem.id} className="flex flex-row-reverse gap-4">
-        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-white text-[#1F1F1F] shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-          <HiUser className="h-5 w-5" />
+      <div key={messageItem.id} className="flex flex-row-reverse gap-3">
+        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-[#E5E5E4] bg-white text-[#1F1F1F] shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+          <HiUser className="h-[18px] w-[18px]" />
         </div>
-        <div className="max-w-[80%]">
-          <div className="rounded-[24px] rounded-br-[10px] border border-[#E5E5E4] bg-white px-5 py-4 text-[15px] leading-relaxed text-[#1F1F1F] shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+        <div className="max-w-[78%]">
+          <div className="rounded-[20px] rounded-br-[10px] border border-[#E5E5E4] bg-white px-4 py-3.5 text-[14px] leading-7 text-[#1F1F1F] shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
             {messageItem.content}
           </div>
           {sources.length > 0 ? (
-            <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-2.5 flex flex-wrap gap-2">
               {sources.map((source) => {
                 const fileRef = getSearchResultFileRef(source)
                 if (!fileRef) return null
@@ -1107,7 +1107,7 @@ const ChatPage: React.FC = () => {
                     key={`${messageItem.id}-${source.id}`}
                     type="button"
                     onClick={() => void openFile(fileRef)}
-                    className="rounded-full border border-[#E5E5E4] bg-white px-3 py-1.5 text-xs text-[#666666] transition-all duration-200 hover:border-[#D97757] hover:text-[#D97757]"
+                    className="rounded-full border border-[#E5E5E4] bg-white px-3 py-1.5 text-[12px] text-[#666666] transition-all duration-200 hover:border-[#D97757] hover:text-[#D97757]"
                   >
                     {source.document_name}
                   </button>
@@ -1124,11 +1124,11 @@ const ChatPage: React.FC = () => {
     const turn = assistantTurns[messageItem.id]
     if (!turn) {
       return (
-        <div key={messageItem.id} className="flex gap-4">
-          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-2xl bg-[#FBF5F2] text-[#D97757]">
-            <HiBookOpen className="h-5 w-5" />
+        <div key={messageItem.id} className="flex gap-3">
+          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-[#F4E5DF] bg-[#FBF5F2] text-[#D97757]">
+            <HiBookOpen className="h-[18px] w-[18px]" />
           </div>
-          <div className="max-w-[80%] rounded-[24px] rounded-bl-[10px] border border-[#F4E5DF] bg-[#FBF5F2] px-5 py-4 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+          <div className="max-w-[82%] rounded-[20px] rounded-bl-[10px] border border-[#EAE2DD] bg-white px-4 py-3.5 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
             <MarkdownRenderer content={messageItem.content} />
           </div>
         </div>
@@ -1173,11 +1173,11 @@ const ChatPage: React.FC = () => {
       data-workbench-mode={composerMode}
     >
       <aside
-        className={`flex h-[calc(100vh-64px)] flex-col border-r border-[#E5E5E4] bg-white transition-all duration-200 ${
-          sidebarCollapsed ? 'w-14' : 'w-[232px]'
+        className={`flex h-[calc(100vh-64px)] flex-col border-r border-[#E5E5E4] bg-[#F8F6F2] transition-all duration-200 ${
+          sidebarCollapsed ? 'w-14' : 'w-[220px]'
         }`}
       >
-        <div className="flex items-center justify-between border-b border-[#E5E5E4] px-3 py-4">
+        <div className="flex items-center justify-between border-b border-[#E5E5E4] px-3 py-3">
           {!sidebarCollapsed ? (
             <span className="text-sm font-semibold text-[#1F1F1F]">对话</span>
           ) : null}
@@ -1199,14 +1199,17 @@ const ChatPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto" data-testid={workbenchSelectors.sessionsList}>
+        <div
+          className="flex-1 space-y-1 overflow-y-auto px-2 py-2"
+          data-testid={workbenchSelectors.sessionsList}
+        >
           {sessions.map((session) => (
             <div
               key={session.id}
-              className={`group relative cursor-pointer border-b border-[#F5F5F4] transition-colors ${
+              className={`group relative cursor-pointer rounded-2xl border transition-all duration-200 ${
                 currentSessionId === session.id
-                  ? 'bg-[#FBF5F2] border-l-4 border-l-[#D97757]'
-                  : 'border-l-4 border-l-transparent hover:bg-[#F5F5F4]'
+                  ? 'border-[#F4E5DF] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
+                  : 'border-transparent bg-transparent hover:border-[#ECE7DF] hover:bg-white/80'
               } ${sidebarCollapsed ? 'px-2 py-3' : 'px-3 py-3'}`}
               onClick={() => setCurrentSessionId(session.id)}
             >
@@ -1216,10 +1219,10 @@ const ChatPage: React.FC = () => {
                 </div>
               ) : (
                 <>
-                  <div className="truncate pr-6 text-sm font-medium text-[#1F1F1F]">
+                  <div className="truncate pr-6 text-[13px] font-medium text-[#1F1F1F]">
                     {session.title}
                   </div>
-                  <div className="mt-1 text-xs text-[#999999]">
+                  <div className="mt-1 text-[12px] text-[#999999]">
                     {formatSessionDate(session.created_at)}
                   </div>
                   <Button
@@ -1238,16 +1241,16 @@ const ChatPage: React.FC = () => {
 
       <div className="min-w-0 flex-1 border-r border-[#E5E5E4]">
         <div className="relative flex h-[calc(100vh-64px)] flex-col">
-          <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-40 pt-6" ref={scrollRef}>
-            <div className="mx-auto flex max-w-[820px] flex-col gap-6">
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-52 pt-6" ref={scrollRef}>
+            <div className="mx-auto flex max-w-[860px] flex-col gap-5">
               {currentMessages.length === 0 ? (
-                <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 rounded-[28px] border border-dashed border-[#E5E5E4] bg-white/50 px-8 py-10 text-center">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#FBF5F2] text-[#D97757]">
-                    <HiBookOpen className="h-8 w-8" />
+                <div className="flex min-h-[58vh] flex-col items-center justify-center gap-4 rounded-[24px] border border-dashed border-[#E5E5E4] bg-[#FAFAF9]/90 px-8 py-10 text-center">
+                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[#F4E5DF] bg-[#FBF5F2] text-[#D97757]">
+                    <HiBookOpen className="h-7 w-7" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-medium text-[#1F1F1F]">从一个问题开始</h3>
-                    <p className="mt-2 text-sm leading-relaxed text-[#666666]">
+                    <h3 className="text-[20px] font-semibold text-[#1F1F1F]">从一个问题开始</h3>
+                    <p className="mt-2 text-[14px] leading-7 text-[#666666]">
                       {composerMode === 'search'
                         ? '纯搜索模式只检索当前本地资料范围，不调用大模型。'
                         : 'AI 会在当前范围内执行任务，并把步骤、文件和待确认修改整理到右侧。'}
@@ -1265,7 +1268,7 @@ const ChatPage: React.FC = () => {
           </div>
 
           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[#F5F5F4] via-[#F5F5F4] to-transparent px-6 pb-6 pt-12">
-            <div className="mx-auto max-w-[860px] rounded-[28px] border border-[#E5E5E4] bg-white px-4 py-4 shadow-[0_8px_24px_rgba(0,0,0,0.08)] transition-all duration-200 focus-within:border-[#D97757] focus-within:ring-4 focus-within:ring-[#F4E5DF]">
+            <div className="mx-auto max-w-[920px] rounded-[24px] border border-[#E5E5E4] bg-white/96 px-4 py-4 shadow-[0_12px_30px_rgba(31,31,31,0.08)] backdrop-blur-sm transition-all duration-200 focus-within:border-[#D97757] focus-within:ring-4 focus-within:ring-[#F4E5DF]">
               <TextArea
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
@@ -1276,7 +1279,7 @@ const ChatPage: React.FC = () => {
                 }
                 autoSize={isJsdomTestEnv ? undefined : { minRows: 1, maxRows: 6 }}
                 variant="borderless"
-                className="mb-3 text-[15px]"
+                className="text-[15px] leading-7"
                 data-testid={workbenchSelectors.input}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' && !event.shiftKey) {
@@ -1286,8 +1289,8 @@ const ChatPage: React.FC = () => {
                 }}
               />
 
-              <div className="mb-3 grid grid-cols-12 gap-2">
-                <div className="col-span-12 sm:col-span-4">
+              <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-end">
+                <div className="shrink-0">
                   <div
                     className="grid grid-cols-2 rounded-2xl bg-[#F5F5F4] p-1"
                     data-testid={workbenchSelectors.modeSwitch}
@@ -1300,7 +1303,7 @@ const ChatPage: React.FC = () => {
                         key={item.key}
                         type="button"
                         onClick={() => setComposerMode(item.key as WorkbenchMode)}
-                        className={`rounded-xl px-3 py-2 text-sm transition-all duration-200 ${
+                        className={`rounded-xl px-3 py-2 text-[13px] transition-all duration-200 ${
                           composerMode === item.key
                             ? 'bg-white text-[#1F1F1F] shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
                             : 'text-[#666666]'
@@ -1311,27 +1314,60 @@ const ChatPage: React.FC = () => {
                     ))}
                   </div>
                 </div>
-                <div
-                  className="col-span-12 sm:col-span-8"
-                  data-testid={workbenchSelectors.sourceScopeField}
-                >
+
+                <div className="min-w-0 flex-1" data-testid={workbenchSelectors.sourceScopeField}>
+                  <div className="mb-1.5 flex items-center justify-between gap-3 px-1">
+                    <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-[#999999]">
+                      {composerMode === 'ai' ? '参考范围' : '搜索范围'}
+                    </span>
+                    <span className="text-[12px] text-[#999999]">
+                      {selectedSourceScopes.length > 0
+                        ? `已选 ${selectedSourceScopes.length} 项`
+                        : composerMode === 'ai'
+                          ? '可选'
+                          : '建议选择'}
+                    </span>
+                  </div>
                   <SourceScopeSelect
                     mode={composerMode === 'ai' ? 'chat' : 'search'}
                     value={selectedSourceScopes}
                     onChange={setSelectedSourceScopes}
                     placeholder={
                       composerMode === 'ai'
-                        ? '输入 @ 选择优先参考的工作空间、目录、文件或网页资料（可选）'
+                        ? '输入 @ 选择优先参考的工作空间、目录、文件或网页资料'
                         : '输入 @ 锁定搜索范围，只搜索已准备的本地资料'
                     }
                     className="w-full"
                   />
                 </div>
+
+                <div className="flex shrink-0 items-center gap-2 self-end">
+                  {loading && composerMode === 'ai' && aiRunId ? (
+                    <Button
+                      onClick={() => void handleCancel()}
+                      className="border-[#E5E5E4] bg-white"
+                      data-testid={workbenchSelectors.cancelButton}
+                    >
+                      取消
+                    </Button>
+                  ) : null}
+                  <Button
+                    type="primary"
+                    icon={<HiArrowUp className="h-4 w-4" />}
+                    onClick={() => void handleSend()}
+                    disabled={!input.trim() || loading}
+                    loading={loading}
+                    className={`${input.trim() ? '!bg-[#D97757]' : '!bg-[#E5E5E4] !text-white'} !rounded-xl !px-4 border-none shadow-none`}
+                    data-testid={workbenchSelectors.sendButton}
+                  >
+                    发送
+                  </Button>
+                </div>
               </div>
 
               {composerMode === 'ai' && (pendingApprovalRequest || pendingWorkspaceRequest) ? (
                 <div
-                  className="mb-3 rounded-2xl border border-[#FDECC8] bg-[#FFF9ED] px-3 py-3 text-sm text-[#8A6510]"
+                  className="mt-3 rounded-2xl border border-[#FDECC8] bg-[#FFF9ED] px-3 py-3 text-sm text-[#8A6510]"
                   data-testid={
                     pendingApprovalRequest
                       ? chatSelectors.approvalBanner
@@ -1394,7 +1430,7 @@ const ChatPage: React.FC = () => {
                 (scope) => scope.sourceType === 'workspace' && scope.hasUnpreparedFiles
               ) ? (
                 <div
-                  className="mb-3 rounded-2xl border border-[#FDECC8] bg-[#FFF9ED] px-3 py-2 text-sm text-[#8A6510]"
+                  className="mt-3 rounded-2xl border border-[#FDECC8] bg-[#FFF9ED] px-3 py-2.5 text-sm text-[#8A6510]"
                   data-testid={workbenchSelectors.scopeAiWarning}
                 >
                   已选范围包含未准备的本地文件。AI 可能直接读取原文件，耗时更长，并增加 token 消耗。
@@ -1404,60 +1440,38 @@ const ChatPage: React.FC = () => {
               {composerMode === 'search' &&
               selectedSourceScopes.some((scope) => scope.hasUnpreparedFiles) ? (
                 <div
-                  className="mb-3 rounded-2xl border border-[#FDECC8] bg-[#FFF9ED] px-3 py-2 text-sm text-[#8A6510]"
+                  className="mt-3 rounded-2xl border border-[#FDECC8] bg-[#FFF9ED] px-3 py-2.5 text-sm text-[#8A6510]"
                   data-testid={workbenchSelectors.scopeSearchWarning}
                 >
                   纯搜索只会检索已准备完成的本地资料；未准备文件不会进入候选结果。
                 </div>
               ) : null}
 
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-2 text-xs text-[#999999]">
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-2 text-[12px] text-[#999999]">
                   {composerMode === 'ai' ? (
                     <>
                       <Tooltip title="由主进程执行计划并回传步骤、文件与待确认修改。">
-                        <span className="flex items-center gap-1 rounded-full bg-[#F5F5F4] px-2 py-1">
+                        <span className="flex items-center gap-1 rounded-full bg-[#F5F5F4] px-2.5 py-1">
                           <HiBookOpen className="text-[#D97757]" />
                           <span>AI Runner</span>
                         </span>
                       </Tooltip>
-                      <span className="rounded-full bg-[#F5F5F4] px-2 py-1 text-[#666666]">
+                      <span className="rounded-full bg-[#F5F5F4] px-2.5 py-1 text-[#666666]">
                         优先参考范围
                       </span>
                     </>
                   ) : (
-                    <span className="rounded-full bg-[#F5F5F4] px-2 py-1 text-[#666666]">
+                    <span className="rounded-full bg-[#F5F5F4] px-2.5 py-1 text-[#666666]">
                       仅搜索本地资料
                     </span>
                   )}
                   {selectedSourceScopes.length > 0 ? (
-                    <span className="rounded-full bg-[#FBF5F2] px-2 py-1 text-[#D97757]">
+                    <span className="rounded-full bg-[#FBF5F2] px-2.5 py-1 text-[#D97757]">
                       已选 {selectedSourceScopes.length} 个
                       {composerMode === 'ai' ? '参考范围' : '搜索范围'}
                     </span>
                   ) : null}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {loading && composerMode === 'ai' && aiRunId ? (
-                    <Button
-                      onClick={() => void handleCancel()}
-                      className="border-[#E5E5E4]"
-                      data-testid={workbenchSelectors.cancelButton}
-                    >
-                      取消
-                    </Button>
-                  ) : null}
-                  <Button
-                    type="primary"
-                    shape="circle"
-                    icon={<HiArrowUp className="h-4 w-4" />}
-                    onClick={() => void handleSend()}
-                    disabled={!input.trim() || loading}
-                    loading={loading}
-                    className={`${input.trim() ? '!bg-[#D97757]' : '!bg-[#E5E5E4] !text-white'} border-none shadow-none`}
-                    data-testid={workbenchSelectors.sendButton}
-                  />
                 </div>
               </div>
             </div>
@@ -1465,7 +1479,7 @@ const ChatPage: React.FC = () => {
         </div>
       </div>
 
-      <div className={contentPanel.kind === 'review_session' ? 'w-[560px]' : 'w-[460px]'}>
+      <div className={contentPanel.kind === 'review_session' ? 'w-[520px]' : 'w-[430px]'}>
         <WorkbenchContentPanel
           state={
             contentPanel.kind === 'review_session' && activeDraftReview

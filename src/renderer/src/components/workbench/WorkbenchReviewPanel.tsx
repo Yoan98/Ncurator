@@ -116,7 +116,7 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
   const renderBody = (): React.ReactNode => {
     if (!review || !selectedDocument) {
       return (
-        <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-[#E5E5E4] bg-[#FAFAF9] text-sm text-[#999999]">
+        <div className="flex h-full items-center justify-center rounded-[18px] border border-dashed border-[#E5E5E4] bg-[#FAFAF9] text-sm text-[#999999]">
           当前没有可审阅的文档。
         </div>
       )
@@ -141,7 +141,7 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
     if (activeTab === 'source') {
       return (
         <div className="space-y-4 overflow-auto pr-1">
-          <section className="rounded-2xl border border-[#E5E5E4] bg-white px-4 py-4">
+          <section className="rounded-[18px] border border-[#E5E5E4] bg-[#FCFBF8] px-4 py-4">
             <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">
               来源说明
             </div>
@@ -150,7 +150,7 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
             </div>
           </section>
 
-          <section className="rounded-2xl border border-[#E5E5E4] bg-white px-4 py-4">
+          <section className="rounded-[18px] border border-[#E5E5E4] bg-[#FCFBF8] px-4 py-4">
             <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">
               目标文件
             </div>
@@ -166,7 +166,7 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
                   format: selectedDocument.format
                 })
               }
-              className="mt-3 rounded-xl border border-[#E5E5E4] bg-[#FAFAF9] px-3 py-3 text-left text-sm text-[#1F1F1F] transition-all duration-200 hover:border-[#D97757]"
+              className="mt-3 rounded-xl border border-[#E5E5E4] bg-white px-3 py-3 text-left text-sm text-[#1F1F1F] transition-all duration-200 hover:border-[#D97757]"
             >
               <div>{selectedDocument.source_name}</div>
               <div className="mt-1 text-xs break-all text-[#666666]">
@@ -188,7 +188,7 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
           </section>
 
           {turn?.steps.length ? (
-            <section className="rounded-2xl border border-[#E5E5E4] bg-white px-4 py-4">
+            <section className="rounded-[18px] border border-[#E5E5E4] bg-[#FCFBF8] px-4 py-4">
               <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">
                 相关步骤
               </div>
@@ -196,9 +196,9 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
                 {turn.steps.map((step) => (
                   <div
                     key={step.id}
-                    className="rounded-xl border border-[#E5E5E4] bg-[#FAFAF9] px-3 py-3"
+                    className="rounded-xl border border-[#E5E5E4] bg-white px-3 py-3"
                   >
-                    <div className="text-sm font-medium text-[#1F1F1F]">{step.summary}</div>
+                    <div className="text-[13px] font-medium text-[#1F1F1F]">{step.summary}</div>
                     <div className="mt-1 text-xs text-[#666666]">{step.tool}</div>
                   </div>
                 ))}
@@ -207,7 +207,7 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
           ) : null}
 
           {turn?.readFiles.length ? (
-            <section className="rounded-2xl border border-[#E5E5E4] bg-white px-4 py-4">
+            <section className="rounded-[18px] border border-[#E5E5E4] bg-[#FCFBF8] px-4 py-4">
               <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">
                 读取的文件
               </div>
@@ -217,7 +217,7 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
                     key={file.path}
                     type="button"
                     onClick={() => onOpenFile(file)}
-                    className="rounded-full border border-[#E5E5E4] bg-[#FAFAF9] px-3 py-1.5 text-xs text-[#666666] transition-all duration-200 hover:border-[#D97757] hover:text-[#D97757]"
+                    className="rounded-full border border-[#E5E5E4] bg-white px-3 py-1.5 text-xs text-[#666666] transition-all duration-200 hover:border-[#D97757] hover:text-[#D97757]"
                   >
                     {file.fileName}
                   </button>
@@ -231,7 +231,7 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
 
     if (!RendererComponent) {
       return (
-        <div className="rounded-2xl border border-dashed border-[#E5E5E4] bg-[#FAFAF9] px-4 py-8 text-sm text-[#999999]">
+        <div className="rounded-[18px] border border-dashed border-[#E5E5E4] bg-[#FAFAF9] px-4 py-8 text-sm text-[#999999]">
           当前格式暂未提供细化差异渲染器。
         </div>
       )
@@ -239,7 +239,7 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
 
     return (
       <div className="space-y-4 overflow-auto pr-1">
-        <div className="rounded-2xl border border-[#E5E5E4] bg-white px-4 py-4">
+        <div className="rounded-[18px] border border-[#E5E5E4] bg-[#FCFBF8] px-4 py-4">
           <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">
             影响位置
           </div>
@@ -276,7 +276,7 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
   if (!review) {
     return (
       <div
-        className="flex h-full items-center justify-center rounded-2xl border border-dashed border-[#E5E5E4] bg-[#FAFAF9] text-sm text-[#999999]"
+        className="flex h-full items-center justify-center rounded-[18px] border border-dashed border-[#E5E5E4] bg-[#FAFAF9] text-sm text-[#999999]"
         data-testid={workbenchSelectors.reviewPanel}
       >
         当前没有可审阅的修改。
@@ -287,10 +287,10 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
   return (
     <div className="flex h-full flex-col" data-testid={workbenchSelectors.reviewPanel}>
       <div className="space-y-4 border-b border-[#E5E5E4] pb-4">
-        <div className="rounded-2xl border border-[#E5E5E4] bg-[#FBF5F2] px-4 py-4">
+        <div className="rounded-[18px] border border-[#E5E5E4] bg-[#FCFBF8] px-4 py-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="text-sm font-semibold text-[#1F1F1F]">{review.review.title}</div>
+              <div className="text-[13px] font-semibold text-[#1F1F1F]">{review.review.title}</div>
               <div className="mt-2 text-xs text-[#666666]">
                 {selectedDocument?.source_name || '未选择文档'} ·{' '}
                 {selectedDocument?.source_path || review.review.id}
@@ -318,7 +318,7 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
                 className={`rounded-full border px-3 py-1.5 text-xs transition-all duration-200 ${
                   document.id === selectedDocumentId
                     ? 'border-[#D97757] bg-white text-[#D97757]'
-                    : 'border-[#E5E5E4] bg-white text-[#666666] hover:border-[#D97757] hover:text-[#D97757]'
+                    : 'border-[#E5E5E4] bg-[#F8F8F7] text-[#666666] hover:border-[#D97757] hover:text-[#D97757]'
                 }`}
               >
                 {document.source_name}
@@ -327,7 +327,7 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-[#E5E5E4] bg-white px-4 py-4">
+        <div className="rounded-[18px] border border-[#E5E5E4] bg-white px-4 py-4">
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">
@@ -364,13 +364,13 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
                 onClick={() => setSelectedChangeId(change.id)}
                 className={`w-full rounded-2xl border px-3 py-3 text-left transition-all duration-200 ${
                   change.id === selectedChangeId
-                    ? 'border-[#D97757] bg-[#FBF5F2]'
+                    ? 'border-[#D97757] bg-[#FCFBF8]'
                     : 'border-[#E5E5E4] bg-[#FAFAF9] hover:border-[#D97757]'
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <div className="text-sm font-medium text-[#1F1F1F]">{change.title}</div>
+                    <div className="text-[13px] font-medium text-[#1F1F1F]">{change.title}</div>
                     <div className="mt-1 line-clamp-2 text-xs leading-relaxed text-[#666666]">
                       {change.summary}
                     </div>
@@ -396,7 +396,7 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
               onClick={() => setActiveTab(tab.key as ReviewTab)}
               className={`rounded-full border px-3 py-1.5 text-sm transition-all duration-200 ${
                 activeTab === tab.key
-                  ? 'border-[#D97757] bg-[#FBF5F2] text-[#D97757]'
+                  ? 'border-[#D97757] bg-[#FCFBF8] text-[#D97757]'
                   : 'border-[#E5E5E4] bg-white text-[#666666] hover:border-[#D97757] hover:text-[#D97757]'
               }`}
             >
@@ -408,11 +408,11 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
 
       <div className="min-h-0 flex-1 py-4">{renderBody()}</div>
 
-      <div className="space-y-4 border-t border-[#E5E5E4] bg-[#F5F5F4] pt-4">
-        <div className="rounded-2xl border border-[#E5E5E4] bg-white px-4 py-4">
+      <div className="space-y-4 border-t border-[#E5E5E4] bg-white pt-4">
+        <div className="rounded-[18px] border border-[#E5E5E4] bg-[#FCFBF8] px-4 py-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <div className="text-sm font-semibold text-[#1F1F1F]">提交前校验</div>
+              <div className="text-[13px] font-semibold text-[#1F1F1F]">提交前校验</div>
               <div className="mt-1 text-xs text-[#666666]">
                 所有变更都明确决策后，才允许写回真实文件。
               </div>
@@ -491,13 +491,13 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
         </div>
 
         {latestCommitJob ? (
-          <div className="rounded-2xl border border-[#E5E5E4] bg-white px-4 py-4">
-            <div className="text-sm font-semibold text-[#1F1F1F]">最近一次提交结果</div>
+          <div className="rounded-[18px] border border-[#E5E5E4] bg-[#FCFBF8] px-4 py-4">
+            <div className="text-[13px] font-semibold text-[#1F1F1F]">最近一次提交结果</div>
             <div className="mt-3 space-y-2">
               {latestCommitJob.results.map((result) => (
                 <div
                   key={`${result.draft_document_id}-${result.output_path}`}
-                  className="rounded-xl border border-[#E5E5E4] bg-[#FAFAF9] px-3 py-3"
+                  className="rounded-xl border border-[#E5E5E4] bg-white px-3 py-3"
                 >
                   <div className="break-all text-sm text-[#1F1F1F]">{result.output_path}</div>
                   <div className="mt-1 text-xs text-[#666666]">

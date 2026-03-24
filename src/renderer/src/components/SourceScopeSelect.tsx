@@ -1,12 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Select, Spin, Tag } from 'antd'
 import type { SourceScopeSelection } from '../../../shared/types'
-import {
-  HiFolder,
-  HiDocumentText,
-  HiGlobeAlt,
-  HiRectangleStack
-} from 'react-icons/hi2'
+import { HiFolder, HiDocumentText, HiGlobeAlt, HiRectangleStack } from 'react-icons/hi2'
 
 type SourceScopeSelectProps = {
   mode: 'chat' | 'search'
@@ -21,10 +16,11 @@ const getScopeKey = (scope: SourceScopeSelection): string =>
   [scope.sourceType, scope.sourceId, scope.scopeType, scope.nodeId || 'root'].join(':')
 
 const getScopeIcon = (scope: SourceScopeSelection): React.ReactNode => {
-  if (scope.scopeType === 'workspace') return <HiRectangleStack className="w-4 h-4 text-[#D97757]" />
-  if (scope.scopeType === 'directory') return <HiFolder className="w-4 h-4 text-[#D97757]" />
-  if (scope.scopeType === 'file') return <HiDocumentText className="w-4 h-4 text-[#666666]" />
-  return <HiGlobeAlt className="w-4 h-4 text-[#D97757]" />
+  if (scope.scopeType === 'workspace')
+    return <HiRectangleStack className="h-4 w-4 text-[#D97757]" />
+  if (scope.scopeType === 'directory') return <HiFolder className="h-4 w-4 text-[#D97757]" />
+  if (scope.scopeType === 'file') return <HiDocumentText className="h-4 w-4 text-[#666666]" />
+  return <HiGlobeAlt className="h-4 w-4 text-[#D97757]" />
 }
 
 const getScopeTypeLabel = (scope: SourceScopeSelection): string => {
@@ -81,7 +77,7 @@ const SourceScopeSelect: React.FC<SourceScopeSelectProps> = ({
   return (
     <Select
       mode="multiple"
-      size="large"
+      size="middle"
       value={value.map(getScopeKey)}
       disabled={disabled}
       loading={loading}
@@ -89,7 +85,7 @@ const SourceScopeSelect: React.FC<SourceScopeSelectProps> = ({
       filterOption={false}
       allowClear
       maxTagCount="responsive"
-      className={className}
+      className={['workbench-scope-select', className].filter(Boolean).join(' ')}
       placeholder={placeholder}
       notFoundContent={loading ? <Spin size="small" /> : '没有匹配的资料范围'}
       onSearch={(nextQuery) => setQuery(nextQuery)}

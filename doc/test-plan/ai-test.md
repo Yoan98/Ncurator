@@ -1,10 +1,5 @@
 # NCurator-Desktop Core AI 测试计划
 
-## 0. 共享约束
-
-- Core AI 正式测试用例的文档约束、实现状态取值和用例字段定义，统一以 [test.md](/Users/test/work-space/NCurator-Desktop/doc/test.md) 为准。
-- 本文只补充 Core AI 专属的总体目标、模型使用方式、阶段推进和领域用例。
-
 ## 1. 总体目标
 
 本计划用于验证项目核心 AI 智能系统是否真的能接住用户诉求，并在本地优先约束下把事情做成，而不是只返回一段看起来合理的回答。
@@ -44,21 +39,6 @@
 
 - `tool / human / context / intent / plan / entire` 属于 `backend`
 - `ui / final` 属于 `e2e`
-
-### 3.0 阶段内统一分层
-
-每个阶段内部的正式 case 统一按四层组织：
-
-- `basic`
-  - 验证最小能力闭环，输入和断言都尽量收敛。
-- `boundary`
-  - 验证失败、阻塞、空结果、安全限制和预算收敛等边界行为。
-- `scenario`
-  - 验证真实任务链路，强调多步协作和真实交付。
-- `live`
-  - 验证真实模型参与下的正式执行路径。
-
-补充约束：
 
 - 纯工具阶段如果不涉及模型参与，可以暂时没有 `live` case。
 - 只要阶段执行路径里有模型参与，就不能只靠 `basic / boundary / scenario` 得出能力成立结论，还需要 `live` 证据。

@@ -12,8 +12,10 @@ import { globalShortcut } from 'electron'
 function createWindow(): void {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 670,
+    width: 1440,
+    height: 900,
+    minWidth: 1280,
+    minHeight: 820,
     show: false,
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),

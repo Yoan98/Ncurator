@@ -1,9 +1,5 @@
 # NCurator-Desktop Workspace 测试计划
 
-## 0. 共享约束
-
-- Workspace 正式测试用例的文档约束、实现状态取值和用例字段定义，统一以 [test.md](/Users/test/work-space/NCurator-Desktop/doc/test.md) 为准。
-- 本文只补充 Workspace 专属的总体目标、阶段边界、阶段计划和领域用例。
 
 ## 1. 总体目标
 
@@ -37,17 +33,6 @@
 
 - `source-service / ipc` 属于 `backend`
 - `settings / scope` 当前以 `e2e` 为主，必要时可先补 `backend` 辅助 case
-
-### 3.0 阶段内统一分层
-
-每个阶段内部的正式 case 统一按三层组织：
-
-- `basic`
-  - 验证最小能力闭环，输入和断言都尽量收敛。
-- `boundary`
-  - 验证失败、阻塞、空目录、非法路径、重复路径、冲突状态等边界行为。
-- `scenario`
-  - 验证真实用户链路，强调“创建 -> 扫描 -> 准备 -> 管理 -> 对话引用”的连续路径。
 
 ## 3.1 `source-service`
 

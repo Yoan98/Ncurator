@@ -41,20 +41,18 @@ const SettingsPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-full bg-[#F5F5F4] px-6 py-8" data-testid={settingsSelectors.page}>
-      <div className="mx-auto flex max-w-7xl flex-col gap-6">
-        <section className="flex flex-col gap-5 rounded-[28px] border border-[#E5E5E4] bg-white/70 px-7 py-6 shadow-[0_2px_8px_rgba(0,0,0,0.04)] backdrop-blur-sm lg:flex-row lg:items-center lg:justify-between">
+    <div className="min-h-full bg-[#F5F5F4] px-5 py-6" data-testid={settingsSelectors.page}>
+      <div className="mx-auto flex max-w-7xl flex-col gap-5">
+        <section className="flex flex-col gap-4 rounded-[22px] border border-[#E5E5E4] bg-white px-6 py-5 shadow-[0_1px_2px_rgba(0,0,0,0.04)] lg:flex-row lg:items-center lg:justify-between">
           <div className="max-w-2xl">
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#F4E5DF] bg-[#FBF5F2] px-3 py-1 text-[12px] font-medium text-[#D97757]">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#F4E5DF] bg-[#FBF5F2] px-3 py-1 text-[11px] font-medium text-[#D97757]">
               {activeMeta.icon}
               Settings
             </div>
-            <h1 className="text-[30px] font-semibold tracking-tight text-[#1F1F1F]">
+            <h1 className="text-[24px] font-semibold tracking-tight text-[#1F1F1F]">
               {activeMeta.title}
             </h1>
-            <p className="mt-3 text-base leading-relaxed text-[#666666]">
-              {activeMeta.description}
-            </p>
+            <p className="mt-2 text-sm leading-7 text-[#666666]">{activeMeta.description}</p>
           </div>
 
           <Segmented
@@ -65,7 +63,7 @@ const SettingsPage: React.FC = () => {
               value: item.value
             }))}
             className="bg-[#F5F5F4]"
-            size="large"
+            size="middle"
             data-testid={settingsSelectors.tabSwitch}
           />
         </section>
