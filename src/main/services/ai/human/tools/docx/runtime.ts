@@ -5,6 +5,7 @@ import type { DocxWorkerRequest, DocxWorkerResponse } from './worker/types'
 import { resolveWorkspacePath } from '../terminal/terminalPolicy'
 import { isSemanticSearchableBlock, splitEmbeddingRows } from './semanticSearch'
 import { createToolEventEmitter } from '../utils/toolEvents'
+import type { ToolEventEmitter } from '../utils/toolEvents'
 
 type FailedWorkerResponse = Extract<DocxWorkerResponse, { ok: false }>
 
@@ -20,7 +21,7 @@ export type DocxToolRuntime = {
   input: DocxCapabilityToolsInput
   state: DocxCapabilityToolsRuntimeState
   workspaceRootPath: string
-  toolEvents: ReturnType<typeof createToolEventEmitter>
+  toolEvents: ToolEventEmitter
   toFailure: (input: {
     code: DocxToolResultCode
     error: string

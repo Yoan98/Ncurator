@@ -1,13 +1,13 @@
-import { SKILL_METADATA } from './skillMetadata'
-
 export const AI_TOOL_FAMILY_IDS = ['terminal', 'kb', 'docx'] as const
 
-const runtimeSkillIds = Object.keys(SKILL_METADATA) as Array<keyof typeof SKILL_METADATA>
-
-export const RUNTIME_SKILL_IDS = runtimeSkillIds as [
-  keyof typeof SKILL_METADATA,
-  ...(keyof typeof SKILL_METADATA)[]
-]
+export const RUNTIME_SKILL_IDS = [
+  'workspace-cli',
+  'docx-read',
+  'docx-write',
+  'docx-delivery',
+  'kb-document-discovery',
+  'kb-evidence-query'
+] as const
 
 export const HUMAN_STAGES = ['brain', 'learning', 'hand', 'mouth'] as const
 export const HUMAN_STATUSES = ['running', 'completed'] as const

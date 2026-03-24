@@ -666,6 +666,60 @@ patch：
 
 `task-3` 是整个复杂样例里最重要的一段，因为这里既有 docx 修改，也有 artifacts。
 
+先明确一个容易误读的点：
+
+- `plan[].userInput` 保留的是 planner 产出的原始子任务描述，不会被前序任务结果原地改写。
+- 但 `director_plan_exec` 真正派发给这次 `human` 的 `task.userInput`，会通过 `buildPlanTaskObjective()` 重新组织。
+- 重新组织后的输入里，会显式带上 `contextEvidence` 和前序任务的 `deliveryMarkdown`。
+
+也就是说，`task-3` 实际收到的不是只有这一句：
+
+```text
+基于 task-1 的区块清单和 task-2 的规则，修改 docs/prd/Alpha/PRD-Alpha-v7.docx，生成预览，保存到 docs/output/PRD-Alpha-reviewed.docx，并说明仍需人工确认的内容。
+```
+
+而是更接近下面这种 dispatch 输入：
+
+```md
+# 计划子任务
+
+请完成当前子任务，并输出供后续任务继续执行的正式交接文档。
+不要直接给最终用户写总结性答复；你的交付应帮助下一个 human 或 synthesis human 继续工作。
+
+## 总体目标
+请把 Alpha PRD 的最新 docx 按上周评审意见和当前发布模板修好……
+
+## 当前子任务
+修改并产出文档交付物
+基于 task-1 的区块清单和 task-2 的规则，修改 docs/prd/Alpha/PRD-Alpha-v7.docx，生成预览，保存到 docs/output/PRD-Alpha-reviewed.docx，并说明仍需人工确认的内容。
+
+## 已选资料范围
+workspace=/project-alpha
+selected scopes:
+- workspace directory: docs/prd
+- kb document: 品牌术语规范
+- kb document: 发布说明模板
+
+## 上下文证据
+1. 已确认目标 docx 为 docs/prd/Alpha/PRD-Alpha-v7.docx
+2. 已确认评审意见与模板规则来源
+
+## 前序任务交付
+### 任务 1: 确认待改 block
+- taskId: task-1
+- 状态: completed
+- 正式交付:
+  ...task-1 的 deliveryMarkdown...
+
+### 任务 2: 提取执行规则
+- taskId: task-2
+- 状态: completed
+- 正式交付:
+  ...task-2 的 deliveryMarkdown...
+```
+
+所以这里真正跨 task 传递的，不是上一个 `human` 的内部状态，而是前序任务已经落到 `plan[].deliveryMarkdown` 的正式交付文本，再由 `director` 重新包装进下一个任务的 `userInput`。
+
 #### 2.11.1 `task-3` 的 `human` 前半段：先学能力
 
 由于这是新的 `human`，它依然从空的 `learnedSkillIds` 开始。

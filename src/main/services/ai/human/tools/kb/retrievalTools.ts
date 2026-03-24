@@ -1,8 +1,9 @@
 import { tool } from '@langchain/core/tools'
 import { z } from 'zod/v4'
-import type { SearchResult } from '../../../../../../shared/types'
+import type { JsonObject, SearchResult } from '../../../../../../shared/types'
 import type { KnowledgeRetrievalContext } from '../../../types'
 import { normalizeForIpc } from '../../../../../utils/serialization'
+import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
 
 const MAX_RETRIEVAL_LIMIT = 50
@@ -65,39 +66,28 @@ export const buildRetrievalTools = (input: {
     execute: (args: ReturnType<typeof resolveSearchArgs>) => Promise<SearchResult[]>
   }) =>
     tool(
-      async (args) => {
-        const toolCallId = toolEvents.emitStarted(input.name, args)
-        try {
-          ctx.checkCancelled()
-          const prepared = resolveSearchArgs(args)
-          if (Array.isArray(prepared.scopedDocumentIds) && prepared.scopedDocumentIds.length === 0) {
-            toolEvents.emitResult({
-              toolName: input.name,
-              toolCallId,
-              outputPreview: []
-            })
-            return []
-          }
+      async (args) =>
+        await withToolLifecycle({
+          emitter: toolEvents,
+          toolName: input.name,
+          args: args as JsonObject,
+          execute: async (session) => {
+            ctx.checkCancelled()
+            const prepared = resolveSearchArgs(args)
+            if (Array.isArray(prepared.scopedDocumentIds) && prepared.scopedDocumentIds.length === 0) {
+              session.succeed([])
+              return []
+            }
 
-          const rows = await input.execute(prepared)
-          const normalized = rows.map(normalizeForIpc)
-          toolEvents.emitResult({
-            toolName: input.name,
-            toolCallId,
-            outputPreview: previewArray(normalized)
-          })
-          return normalized
-        } catch (error) {
-          const msg = error instanceof Error ? error.message : String(error)
-          toolEvents.emitResult({
-            toolName: input.name,
-            toolCallId,
-            outputPreview: [],
-            error: msg
-          })
-          throw error
-        }
-      },
+            const rows = await input.execute(prepared)
+            const normalized = rows.map(normalizeForIpc)
+            session.succeed(previewArray(normalized))
+            return normalized
+          },
+          onError: (error, session) => {
+            session.fail([], error.message)
+          }
+        }),
       {
         name: input.name,
         description: input.description,
@@ -152,59 +142,43 @@ export const buildRetrievalTools = (input: {
   })
 
   const kbListDocuments = tool(
-    async (args) => {
-      const toolName = 'kb_list_documents'
-      const toolCallId = toolEvents.emitStarted(toolName, args)
-      try {
-        ctx.checkCancelled()
-        const keyword = String(args.keyword || '').trim() || undefined
-        const page = Math.max(1, Number(args.page ?? 1))
-        const pageSize = Math.max(1, Math.min(MAX_LIST_PAGE_SIZE, Number(args.pageSize ?? 20)))
-        const scopedDocumentIds = resolveScopedDocumentIds(
-          ctx.selectedDocumentIds,
-          args.documentIds
-        )
+    async (args) =>
+      await withToolLifecycle({
+        emitter: toolEvents,
+        toolName: 'kb_list_documents',
+        args: args as JsonObject,
+        execute: async (session) => {
+          ctx.checkCancelled()
+          const keyword = String(args.keyword || '').trim() || undefined
+          const page = Math.max(1, Number(args.page ?? 1))
+          const pageSize = Math.max(1, Math.min(MAX_LIST_PAGE_SIZE, Number(args.pageSize ?? 20)))
+          const scopedDocumentIds = resolveScopedDocumentIds(
+            ctx.selectedDocumentIds,
+            args.documentIds
+          )
 
-        if (Array.isArray(scopedDocumentIds) && scopedDocumentIds.length === 0) {
-          const empty = { items: [], total: 0 }
-          toolEvents.emitResult({
-            toolName,
-            toolCallId,
-            outputPreview: []
-          })
-          return empty
+          if (Array.isArray(scopedDocumentIds) && scopedDocumentIds.length === 0) {
+            const empty = { items: [], total: 0 }
+            session.succeed([])
+            return empty
+          }
+
+          const res = await ctx.documentsStore.listDocuments({ keyword, page, pageSize })
+          if (!scopedDocumentIds) {
+            session.succeed(previewArray(res.items))
+            return res
+          }
+
+          const allowed = new Set(scopedDocumentIds)
+          const items = res.items.filter((item) => allowed.has(item.id))
+          const normalized = { items, total: items.length }
+          session.succeed(previewArray(items))
+          return normalized
+        },
+        onError: (error, session) => {
+          session.fail({ items: [], total: 0 }, error.message)
         }
-
-        const res = await ctx.documentsStore.listDocuments({ keyword, page, pageSize })
-        if (!scopedDocumentIds) {
-          toolEvents.emitResult({
-            toolName,
-            toolCallId,
-            outputPreview: previewArray(res.items)
-          })
-          return res
-        }
-
-        const allowed = new Set(scopedDocumentIds)
-        const items = res.items.filter((item) => allowed.has(item.id))
-        const normalized = { items, total: items.length }
-        toolEvents.emitResult({
-          toolName,
-          toolCallId,
-          outputPreview: previewArray(items)
-        })
-        return normalized
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error)
-        toolEvents.emitResult({
-          toolName,
-          toolCallId,
-          outputPreview: { items: [], total: 0 },
-          error: msg
-        })
-        throw error
-      }
-    },
+      }),
     {
       name: 'kb_list_documents',
       description: 'List local knowledge base documents by keyword (document table).',

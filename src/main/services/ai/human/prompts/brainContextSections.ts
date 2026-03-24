@@ -14,12 +14,9 @@ const formatList = (items: string[]): string =>
     style: 'plain'
   })
 
-type HumanPromptRenderView = {
+type BrainPromptRenderView = {
   factLines: string
-  evidenceLines: {
-    brain: string
-    mouth: string
-  }
+  evidenceLines: string
   openQuestionLines: string
   skillCatalogLines: string[]
   learnedSkillIdLines: string[]
@@ -27,21 +24,6 @@ type HumanPromptRenderView = {
   learnedToolSpecLines: string[]
   recentToolResultLines: string
   recentDecisionHistoryLines: string
-}
-
-export const renderFactLines = (state: HumanState, mode: 'brain' | 'mouth'): string => {
-  return renderHumanFactLines(state, mode === 'brain' ? 'brain_prompt' : 'mouth_prompt')
-}
-
-export const renderEvidenceLines = (state: HumanState, mode: 'brain' | 'mouth'): string => {
-  return renderHumanEvidenceLines(
-    state,
-    mode === 'brain' ? 'brain_prompt' : 'mouth_prompt'
-  )
-}
-
-export const renderOpenQuestionLines = (state: HumanState): string => {
-  return renderHumanOpenQuestionLines(state, 'brain_prompt')
 }
 
 const renderLearnedToolSpecLine = (spec: ToolPromptSpec): string => {
@@ -56,7 +38,7 @@ const renderLearnedToolSpecLine = (spec: ToolPromptSpec): string => {
   return `- 工具 ${spec.name}：适用场景=${spec.whenToUse}；必填参数=[${requiredArgs || 'none'}]；${example}`
 }
 
-const buildHumanPromptRenderView = (state: HumanState): HumanPromptRenderView => {
+const buildBrainPromptRenderView = (state: HumanState): BrainPromptRenderView => {
   const learnedSkillIds = state.brainMemory.outside.learnedSkillIds
   const learnedSkillDefinitions = learnedSkillIds.map((skillId) => getSkillDefinition(skillId))
   const learnedToolSpecLines =
@@ -99,12 +81,9 @@ const buildHumanPromptRenderView = (state: HumanState): HumanPromptRenderView =>
   )
 
   return {
-    factLines: renderFactLines(state, 'brain'),
-    evidenceLines: {
-      brain: renderEvidenceLines(state, 'brain'),
-      mouth: renderEvidenceLines(state, 'mouth')
-    },
-    openQuestionLines: renderOpenQuestionLines(state),
+    factLines: renderHumanFactLines(state, 'brain_prompt'),
+    evidenceLines: renderHumanEvidenceLines(state, 'brain_prompt'),
+    openQuestionLines: renderHumanOpenQuestionLines(state, 'brain_prompt'),
     skillCatalogLines:
       state.brainMemory.outside.skillCatalog.length > 0
         ? state.brainMemory.outside.skillCatalog.map(
@@ -125,7 +104,7 @@ const buildHumanPromptRenderView = (state: HumanState): HumanPromptRenderView =>
 }
 
 export const buildMemorySnapshotText = (state: HumanState): string => {
-  const view = buildHumanPromptRenderView(state)
+  const view = buildBrainPromptRenderView(state)
 
   return [
     '下面是你之前沉淀下来的记忆。这些内容代表当前已经确认、可以直接复用或仍影响推进的信息。',
@@ -134,7 +113,7 @@ export const buildMemorySnapshotText = (state: HumanState): string => {
     view.factLines,
     '',
     '支撑这些事实的关键证据：',
-    view.evidenceLines.brain,
+    view.evidenceLines,
     '',
     '仍未解决的问题：',
     view.openQuestionLines
@@ -142,7 +121,7 @@ export const buildMemorySnapshotText = (state: HumanState): string => {
 }
 
 export const buildSkillContextText = (state: HumanState): string => {
-  const view = buildHumanPromptRenderView(state)
+  const view = buildBrainPromptRenderView(state)
 
   return [
     '下面是当前可用的技能信息。技能目录摘要只用于判断要不要学习；只有已学习 skill 的详细说明和工具要点，才代表你当前可以直接依赖的能力。',
@@ -162,7 +141,7 @@ export const buildSkillContextText = (state: HumanState): string => {
 }
 
 export const buildRecentToolResultsText = (state: HumanState): string => {
-  const view = buildHumanPromptRenderView(state)
+  const view = buildBrainPromptRenderView(state)
 
   return [
     '下面是最近一轮工具调用刚带回来的新信息。请把这些结果和已有记忆一起判断，不要重复做同样的动作。',
@@ -172,7 +151,7 @@ export const buildRecentToolResultsText = (state: HumanState): string => {
 }
 
 export const buildRecentDecisionHistoryText = (state: HumanState): string => {
-  const view = buildHumanPromptRenderView(state)
+  const view = buildBrainPromptRenderView(state)
 
   return [
     '下面是最近几轮已经做过的正式判断摘要，只用于帮助你理解时间顺序并避免重复决策。',

@@ -6,7 +6,7 @@
 - 当涉及 AI 总体架构、Director/Human 分工或主流程时，请阅读 `doc/ai-design/architecture.md`
 - 当涉及 AI 节点实现、状态转移、`deliveryMode`、`watchHint`、`task_handoff`、`context_note`、`artifacts` 或 `LangGraph` 运行约束时，请阅读 `doc/ai-design/implementation-spec.md`
 - 当涉及 AI 状态字段、任务契约、`deliveryMarkdown`、`contextEvidence`、`fact/evidence` 约束或数据流转时，请阅读 `doc/ai-design/data-definition-and-flow.md`
-- 当想看 AI 完整跑一遍的真实样例时，请阅读 `doc/ai-design/example.md`
+- 当想看 AI 完整跑一遍的真实样例，或想确认 plan 原始 `userInput` 与实际派发给 human 的输入、前序任务交接如何传递时，请阅读 `doc/ai-design/example.md`
 - 当涉及 `human` 的 skill 集合、skill 命名、skill 边界或 skill 与 tools 的映射时，请阅读 `doc/ai-design/human-skill-design.md`
 - 当涉及 AI prompt 设计、prompt 结构、标签组织或 structured output 编排时，请阅读 `doc/ai-design/prompt-design.md`
 - 当涉及 AI 后续重构方向、迭代规划或未决方案时，请阅读 `doc/ai-design/refactor-plan.md`

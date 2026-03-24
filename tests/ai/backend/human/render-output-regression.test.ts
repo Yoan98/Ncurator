@@ -6,10 +6,10 @@ import {
   extractContextNoteReusableEvidence
 } from '../../../../src/main/services/ai/human/shared/deliveryContracts'
 import {
-  renderEvidenceLines,
-  renderFactLines,
-  renderOpenQuestionLines
-} from '../../../../src/main/services/ai/human/prompts/contextRenderers'
+  renderHumanEvidenceLines,
+  renderHumanFactLines,
+  renderHumanOpenQuestionLines
+} from '../../../../src/main/services/ai/human/shared/memoryRenderers'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/utils/state'
 import { renderLineList, renderNamedSections } from '../../../../src/main/services/ai/utils/render'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
@@ -71,9 +71,9 @@ test('render-output-regression', async () => {
           fallback: '无',
           style: 'bullet'
         }),
-        factLines: renderFactLines(state, 'brain'),
-        evidenceLines: renderEvidenceLines(state, 'mouth'),
-        questionLines: renderOpenQuestionLines(state),
+        factLines: renderHumanFactLines(state, 'brain_prompt'),
+        evidenceLines: renderHumanEvidenceLines(state, 'mouth_prompt'),
+        questionLines: renderHumanOpenQuestionLines(state, 'brain_prompt'),
         taskHandoffMarkdown: buildFallbackDeliveryMarkdown({
           state,
           deliveryMode: 'task_handoff',

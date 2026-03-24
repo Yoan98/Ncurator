@@ -8,6 +8,7 @@ import type {
   DocxWorkerRequest,
   DocxWorkerSuccessPayload
 } from '../worker/types'
+import { withToolLifecycle } from '../../utils/lifecycle'
 
 export const isDocxToolFailure = (
   value: DocxToolFailure | DocxWorkerSuccessPayload
@@ -198,28 +199,29 @@ export const createDocxTool = <TSchema extends z.ZodType, TResult extends object
   tool(
     async (args) => {
       const parsedArgs = args as z.infer<TSchema>
-      const toolName = input.name
-      const toolCallId = input.runtime.toolEvents.emitStarted(toolName, parsedArgs as JsonObject)
-      try {
-        return await input.execute({
-          args: parsedArgs,
-          toolName,
-          toolCallId
-        })
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        input.runtime.emitFailure({
-          toolName,
-          toolCallId,
-          code: 'failed',
-          error: message
-        })
-        input.onError?.({
-          args: parsedArgs,
-          message
-        })
-        throw error
-      }
+      return await withToolLifecycle({
+        emitter: input.runtime.toolEvents,
+        toolName: input.name,
+        args: parsedArgs as JsonObject,
+        execute: async ({ toolName, toolCallId }) =>
+          await input.execute({
+            args: parsedArgs,
+            toolName,
+            toolCallId
+          }),
+        onError: (error, { toolName, toolCallId }) => {
+          input.runtime.emitFailure({
+            toolName,
+            toolCallId,
+            code: 'failed',
+            error: error.message
+          })
+          input.onError?.({
+            args: parsedArgs,
+            message: error.message
+          })
+        }
+      })
     },
     {
       name: input.name,

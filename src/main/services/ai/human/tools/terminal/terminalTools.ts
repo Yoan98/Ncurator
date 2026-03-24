@@ -19,6 +19,7 @@ import type {
   TerminalCapabilityToolsRuntimeState
 } from './types'
 import { clipText, clipTextWithMeta } from '../../../utils/text'
+import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
 
 const artifactHintSchema = z.object({
@@ -149,232 +150,206 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
   })
 
   const terminalRunCommand = tool(
-    async (args) => {
-      const toolName = 'terminal_run_command'
-      const toolCallId = toolEvents.emitStarted(toolName, args as IpcJsonObject)
-
-      try {
-        input.ctx.checkCancelled()
-        const command = String(args.command || '').trim()
-        if (!command) {
-          const emptyResult = {
-            ok: false,
-            code: 'invalid_input' as const,
-            error: 'empty command'
-          }
-          toolEvents.emitResult({
-            toolName,
-            toolCallId,
-            outputPreview: emptyResult,
-            error: emptyResult.error
-          })
-          return emptyResult
-        }
-
-        const cwdResult = resolveCwd({
-          workspaceRootPath: input.workspaceRootPath,
-          requestedCwd: args.cwd
-        })
-        if (!cwdResult.ok) {
-          const cwdError = {
-            ok: false,
-            code: cwdResult.code,
-            error: cwdResult.error
-          }
-          toolEvents.emitResult({
-            toolName,
-            toolCallId,
-            outputPreview: cwdError,
-            error: cwdError.error
-          })
-          return cwdError
-        }
-        const cwd = cwdResult.cwd
-
-        const boundary = checkWorkspaceBoundary(command, input.workspaceRootPath)
-        if (!boundary.ok) {
-          const boundaryError = {
-            ok: false,
-            code: 'workspace_required' as const,
-            error: `workspace boundary check failed: ${boundary.reason}`
-          }
-          toolEvents.emitResult({
-            toolName,
-            toolCallId,
-            outputPreview: boundaryError,
-            error: boundaryError.error
-          })
-          return boundaryError
-        }
-
-        const riskLevel = classifyCommandRisk(command)
-        if (riskLevel !== 'low') {
-          const decision = await input.ctx.requestApproval({
-            runId: input.runId,
-            taskId: input.taskId,
-            command,
-            riskLevel,
-            reason: `command classified as ${riskLevel} risk`
-          })
-          if (!decision.approved) {
-            const denied = {
+    async (args) =>
+      await withToolLifecycle({
+        emitter: toolEvents,
+        toolName: 'terminal_run_command',
+        args: args as IpcJsonObject,
+        execute: async (session) => {
+          input.ctx.checkCancelled()
+          const command = String(args.command || '').trim()
+          if (!command) {
+            const emptyResult = {
               ok: false,
-              code: 'approval_denied' as const,
-              error: decision.reason || 'approval denied'
+              code: 'invalid_input' as const,
+              error: 'empty command'
             }
-            toolEvents.emitResult({
-              toolName,
-              toolCallId,
-              outputPreview: denied,
-              error: denied.error
-            })
-            return denied
+            session.fail(emptyResult, emptyResult.error)
+            return emptyResult
           }
-        }
 
-        const artifactCandidates = mergeArtifactCandidates({
-          command,
-          expectedArtifacts: Array.isArray(args.expectedArtifacts) ? args.expectedArtifacts : [],
-          cwd,
-          workspaceRootPath: input.workspaceRootPath
-        })
+          const cwdResult = resolveCwd({
+            workspaceRootPath: input.workspaceRootPath,
+            requestedCwd: args.cwd
+          })
+          if (!cwdResult.ok) {
+            const cwdError = {
+              ok: false,
+              code: cwdResult.code,
+              error: cwdResult.error
+            }
+            session.fail(cwdError, cwdError.error)
+            return cwdError
+          }
+          const cwd = cwdResult.cwd
 
-        state.stepIndex += 1
-        const stepId = randomUUID()
-        input.ctx.sendEvent({
-          type: 'terminal_step_started',
-          runId: input.runId,
-          taskId: input.taskId,
-          stepId,
-          stepIndex: state.stepIndex,
-          command,
-          cwd,
-          createdAt: Date.now()
-        })
-        input.emitActivity({
-          actionType: 'terminal_exec',
-          status: 'started',
-          summary: `执行命令: ${command}`
-        })
+          const boundary = checkWorkspaceBoundary(command, input.workspaceRootPath)
+          if (!boundary.ok) {
+            const boundaryError = {
+              ok: false,
+              code: 'workspace_required' as const,
+              error: `workspace boundary check failed: ${boundary.reason}`
+            }
+            session.fail(boundaryError, boundaryError.error)
+            return boundaryError
+          }
 
-        const result = await runTerminalCommand({
-          command,
-          cwd,
-          timeoutMs: input.timeoutMs,
-          maxOutputChars: input.maxOutputChars
-        })
+          const riskLevel = classifyCommandRisk(command)
+          if (riskLevel !== 'low') {
+            const decision = await input.ctx.requestApproval({
+              runId: input.runId,
+              taskId: input.taskId,
+              command,
+              riskLevel,
+              reason: `command classified as ${riskLevel} risk`
+            })
+            if (!decision.approved) {
+              const denied = {
+                ok: false,
+                code: 'approval_denied' as const,
+                error: decision.reason || 'approval denied'
+              }
+              session.fail(denied, denied.error)
+              return denied
+            }
+          }
 
-        const previewSource = [result.stdout, result.stderr].filter(Boolean).join('\n').trim()
-        const preview = clipTextWithMeta(previewSource || '(no output)', input.safePreviewChars)
-        const stepError =
-          result.timedOut || result.exitCode !== 0
-            ? result.timedOut
-              ? `command timed out after ${input.timeoutMs}ms`
-              : `command exited with code ${String(result.exitCode)}`
-            : undefined
+          const artifactCandidates = mergeArtifactCandidates({
+            command,
+            expectedArtifacts: Array.isArray(args.expectedArtifacts) ? args.expectedArtifacts : [],
+            cwd,
+            workspaceRootPath: input.workspaceRootPath
+          })
 
-        if (stepError) {
+          state.stepIndex += 1
+          const stepId = randomUUID()
           input.ctx.sendEvent({
-            type: 'terminal_step_error',
+            type: 'terminal_step_started',
             runId: input.runId,
             taskId: input.taskId,
             stepId,
             stepIndex: state.stepIndex,
             command,
-            error: stepError,
-            outputPreview: preview.text,
-            completedAt: Date.now()
+            cwd,
+            createdAt: Date.now()
           })
           input.emitActivity({
             actionType: 'terminal_exec',
-            status: 'failed',
-            summary: `${command} -> ${stepError}`
+            status: 'started',
+            summary: `执行命令: ${command}`
           })
-        } else {
-          input.ctx.sendEvent({
-            type: 'terminal_step_result',
-            runId: input.runId,
-            taskId: input.taskId,
+
+          const result = await runTerminalCommand({
+            command,
+            cwd,
+            timeoutMs: input.timeoutMs,
+            maxOutputChars: input.maxOutputChars
+          })
+
+          const previewSource = [result.stdout, result.stderr].filter(Boolean).join('\n').trim()
+          const preview = clipTextWithMeta(previewSource || '(no output)', input.safePreviewChars)
+          const stepError =
+            result.timedOut || result.exitCode !== 0
+              ? result.timedOut
+                ? `command timed out after ${input.timeoutMs}ms`
+                : `command exited with code ${String(result.exitCode)}`
+              : undefined
+
+          if (stepError) {
+            input.ctx.sendEvent({
+              type: 'terminal_step_error',
+              runId: input.runId,
+              taskId: input.taskId,
+              stepId,
+              stepIndex: state.stepIndex,
+              command,
+              error: stepError,
+              outputPreview: preview.text,
+              completedAt: Date.now()
+            })
+            input.emitActivity({
+              actionType: 'terminal_exec',
+              status: 'failed',
+              summary: `${command} -> ${stepError}`
+            })
+          } else {
+            input.ctx.sendEvent({
+              type: 'terminal_step_result',
+              runId: input.runId,
+              taskId: input.taskId,
+              stepId,
+              stepIndex: state.stepIndex,
+              command,
+              outputPreview: preview.text,
+              exitCode: result.exitCode,
+              timedOut: result.timedOut,
+              truncated: result.truncated || preview.truncated,
+              completedAt: Date.now()
+            })
+            input.emitActivity({
+              actionType: 'terminal_exec',
+              status: 'completed',
+              summary: `${command} -> success`
+            })
+          }
+
+          const artifacts: Array<{ path: string; operation: AiFileArtifactOperation }> = []
+          for (const artifact of artifactCandidates) {
+            if (!fs.existsSync(artifact.resolvedPath)) continue
+            const operation =
+              artifact.requestedOperation || (artifact.existedBefore ? 'updated' : 'created')
+            const emitted = emitFileArtifactEvent({
+              ctx: input.ctx,
+              runId: input.runId,
+              taskId: input.taskId,
+              capability: 'terminal_exec',
+              artifactPath: artifact.resolvedPath,
+              operation,
+              summary: artifact.summary,
+              stepId,
+              onNonFatalError: (reason) => {
+                input.emitActivity({
+                  actionType: 'file_artifact',
+                  status: 'failed',
+                  summary: reason
+                })
+              }
+            })
+            if (emitted) {
+              artifacts.push({
+                path: artifact.resolvedPath,
+                operation
+              })
+            }
+          }
+
+          const output = {
+            ok: !stepError,
+            code: stepError ? ('failed' as const) : ('ok' as const),
+            command,
+            cwd,
             stepId,
             stepIndex: state.stepIndex,
-            command,
             outputPreview: preview.text,
+            stdoutPreview: clipText(result.stdout, input.safePreviewChars),
+            stderrPreview: clipText(result.stderr, input.safePreviewChars),
             exitCode: result.exitCode,
             timedOut: result.timedOut,
             truncated: result.truncated || preview.truncated,
-            completedAt: Date.now()
-          })
-          input.emitActivity({
-            actionType: 'terminal_exec',
-            status: 'completed',
-            summary: `${command} -> success`
-          })
-        }
-
-        const artifacts: Array<{ path: string; operation: AiFileArtifactOperation }> = []
-        for (const artifact of artifactCandidates) {
-          if (!fs.existsSync(artifact.resolvedPath)) continue
-          const operation =
-            artifact.requestedOperation || (artifact.existedBefore ? 'updated' : 'created')
-          const emitted = emitFileArtifactEvent({
-            ctx: input.ctx,
-            runId: input.runId,
-            taskId: input.taskId,
-            capability: 'terminal_exec',
-            artifactPath: artifact.resolvedPath,
-            operation,
-            summary: artifact.summary,
-            stepId,
-            onNonFatalError: (reason) => {
-              input.emitActivity({
-                actionType: 'file_artifact',
-                status: 'failed',
-                summary: reason
-              })
-            }
-          })
-          if (emitted) {
-            artifacts.push({
-              path: artifact.resolvedPath,
-              operation
-            })
+            artifacts,
+            error: stepError
           }
+          if (stepError) {
+            session.fail(output as IpcJsonValue, stepError)
+          } else {
+            session.succeed(output as IpcJsonValue)
+          }
+          return output
+        },
+        onError: (error, session) => {
+          session.fail({ ok: false, code: 'failed', error: error.message } as IpcJsonValue, error.message)
         }
-
-        const output = {
-          ok: !stepError,
-          code: stepError ? ('failed' as const) : ('ok' as const),
-          command,
-          cwd,
-          stepId,
-          stepIndex: state.stepIndex,
-          outputPreview: preview.text,
-          stdoutPreview: clipText(result.stdout, input.safePreviewChars),
-          stderrPreview: clipText(result.stderr, input.safePreviewChars),
-          exitCode: result.exitCode,
-          timedOut: result.timedOut,
-          truncated: result.truncated || preview.truncated,
-          artifacts,
-          error: stepError
-        }
-        toolEvents.emitResult({
-          toolName,
-          toolCallId,
-          outputPreview: output,
-          error: stepError
-        })
-        return output
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error)
-        toolEvents.emitResult({
-          toolName,
-          toolCallId,
-          outputPreview: { ok: false, code: 'failed', error: msg } as IpcJsonValue,
-          error: msg
-        })
-        throw error
-      }
-    },
+      }),
     {
       name: 'terminal_run_command',
       description:

@@ -93,3 +93,5 @@ export const createToolEventEmitter = (input: {
           : undefined
     })
 })
+
+export type ToolEventEmitter = ReturnType<typeof createToolEventEmitter>

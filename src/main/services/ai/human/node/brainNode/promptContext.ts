@@ -5,7 +5,7 @@ import {
   buildRecentDecisionHistoryText,
   buildRecentToolResultsText,
   buildSkillContextText
-} from '../../prompts/contextRenderers'
+} from '../../prompts/brainContextSections'
 
 export const buildBrainPromptContext = (state: HumanState) =>
   buildHumanBrainPrompt({

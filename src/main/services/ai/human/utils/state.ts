@@ -11,21 +11,44 @@ export const createDefaultHumanRuntime = (): HumanState['runtime'] => ({
   status: 'running'
 })
 
+export const createDefaultHumanFacts = (): HumanState['brainMemory']['inside']['facts'] => []
+
+export const createDefaultHumanEvidences = (): HumanState['brainMemory']['inside']['evidences'] => []
+
+export const createDefaultHumanOpenQuestions = (): HumanState['brainMemory']['inside']['openQuestions'] => []
+
+export const createDefaultHumanSkillCatalog = (): HumanState['brainMemory']['outside']['skillCatalog'] =>
+  buildSkillCatalog()
+
+export const createDefaultHumanLearnedSkillIds = (): HumanState['brainMemory']['outside']['learnedSkillIds'] =>
+  []
+
+export const createDefaultHumanBrainDecisions = (): HumanState['brainMemory']['outside']['brainDecisions'] =>
+  []
+
+export const createDefaultHumanRuntimeArtifacts = (): HumanState['runtimeArtifacts'] => []
+
+export const createDefaultHumanTraceSteps = (): HumanState['trace']['steps'] => []
+
+export const createDefaultHumanBrainMemoryInside = (): HumanState['brainMemory']['inside'] => ({
+  facts: createDefaultHumanFacts(),
+  evidences: createDefaultHumanEvidences(),
+  openQuestions: createDefaultHumanOpenQuestions()
+})
+
+export const createDefaultHumanBrainMemoryOutside = (): HumanState['brainMemory']['outside'] => ({
+  skillCatalog: createDefaultHumanSkillCatalog(),
+  learnedSkillIds: createDefaultHumanLearnedSkillIds(),
+  brainDecisions: createDefaultHumanBrainDecisions()
+})
+
 export const createDefaultHumanBrainMemory = (): HumanState['brainMemory'] => ({
-  inside: {
-    facts: [],
-    evidences: [],
-    openQuestions: []
-  },
-  outside: {
-    skillCatalog: buildSkillCatalog(),
-    learnedSkillIds: [],
-    brainDecisions: []
-  }
+  inside: createDefaultHumanBrainMemoryInside(),
+  outside: createDefaultHumanBrainMemoryOutside()
 })
 
 export const createDefaultHumanTrace = (): HumanState['trace'] => ({
-  steps: []
+  steps: createDefaultHumanTraceSteps()
 })
 
 export const createDefaultHumanStateFields = (): Pick<
@@ -35,7 +58,7 @@ export const createDefaultHumanStateFields = (): Pick<
   task: createEmptyHumanTaskInput(),
   runtime: createDefaultHumanRuntime(),
   brainMemory: createDefaultHumanBrainMemory(),
-  runtimeArtifacts: [],
+  runtimeArtifacts: createDefaultHumanRuntimeArtifacts(),
   trace: createDefaultHumanTrace()
 })
 
