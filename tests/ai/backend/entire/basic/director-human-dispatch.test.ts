@@ -78,8 +78,10 @@ test('director-human-dispatch', async () => {
         if (taskInput.taskId === 'context-1') {
           return {
             taskId: taskInput.taskId,
-            status: 'blocked',
-            summary: '当前缺少上一轮指代所需的上下文。'
+            status: 'completed',
+            summary: '当前缺少上一轮指代所需的上下文，已整理可继续执行的边界。',
+            deliveryMarkdown:
+              '# 上下文补充结果\n\n## 本轮结论\n当前材料不足以补齐上一轮指代。\n\n## 可复用证据\n无\n\n## 当前边界\n- 暂无足够上下文可直接复用。\n- 可按当前输入继续常规计划执行。\n\n## 未决项\n- 上一轮指代缺少更具体材料。\n\n## 建议补充方向\n- 如无更多材料，直接进入常规计划执行。'
           }
         }
         if (taskInput.taskId === 'task-after-context') {
@@ -88,7 +90,7 @@ test('director-human-dispatch', async () => {
             status: 'completed',
             summary: '上下文回退后已完成计划子任务。',
             deliveryMarkdown:
-              '# 子任务交付\n\n## 任务状态\ncompleted\n\n## 本任务结论\n已在缺少上下文时回退到常规计划执行。\n\n## 已完成\n- 已整理可继续执行的事实。\n\n## 关键事实\n- 当前输入可直接进入后续汇总。\n\n## 关键证据\n- context blocked 后未污染 evidence。\n\n## 产物与引用\n无\n\n## 未决与风险\n无\n\n## 对后续任务的影响\n- synthesis 可继续输出。\n\n## 建议下一步\n- 汇总结果。',
+              '# 子任务交付\n\n## 本任务结论\n已在缺少上下文时回退到常规计划执行。\n\n## 已完成\n- 已整理可继续执行的事实。\n\n## 关键事实\n- 当前输入可直接进入后续汇总。\n\n## 关键证据\n- context fallback 后未污染 evidence。\n\n## 产物与引用\n无\n\n## 未决与风险\n无\n\n## 对后续任务的影响\n- synthesis 可继续输出。\n\n## 建议下一步\n- 汇总结果。',
             artifacts: [buildArtifact('/tmp/context-plan-output.docx', 'context fallback artifact')]
           }
         }
@@ -96,7 +98,7 @@ test('director-human-dispatch', async () => {
           taskId: taskInput.taskId,
           status: 'completed',
           summary: '上下文回退后的最终汇总完成。',
-          deliveryMarkdown: '# 最终答复\n\ncontext blocked 后已正常进入 plan 并完成汇总。',
+          deliveryMarkdown: '# 最终答复\n\ncontext fallback 后已正常进入 plan 并完成汇总。',
           artifacts: [buildArtifact('/tmp/context-synthesis-output.docx', 'context synthesis artifact')]
         }
       }
@@ -139,7 +141,7 @@ test('director-human-dispatch', async () => {
             status: 'completed',
             summary: '子任务完成。',
             deliveryMarkdown:
-              '# 子任务交付\n\n## 任务状态\ncompleted\n\n## 本任务结论\n已完成事实收集。\n\n## 已完成\n- 已完成关键核对。\n\n## 关键事实\n- 已整理事实。\n\n## 关键证据\n- 已找到证据。\n\n## 产物与引用\n无\n\n## 未决与风险\n无\n\n## 对后续任务的影响\n- synthesis 可直接汇总。\n\n## 建议下一步\n- 继续汇总输出。',
+              '# 子任务交付\n\n## 本任务结论\n已完成事实收集。\n\n## 已完成\n- 已完成关键核对。\n\n## 关键事实\n- 已整理事实。\n\n## 关键证据\n- 已找到证据。\n\n## 产物与引用\n无\n\n## 未决与风险\n无\n\n## 对后续任务的影响\n- synthesis 可直接汇总。\n\n## 建议下一步\n- 继续汇总输出。',
             artifacts: [buildArtifact('/tmp/task-output.docx', 'task artifact')]
           }
         }
@@ -181,31 +183,42 @@ test('director-human-dispatch', async () => {
       const allEvents = runtime.eventCollector.snapshot()
       const planEvents = allEvents.slice(contextEvents.length)
 
-      const blockedPlanCalls: string[] = []
-      const blockedPlanRunHumanTask: HumanTaskRunner = async (
+      const limitedPlanCalls: string[] = []
+      const limitedPlanRunHumanTask: HumanTaskRunner = async (
         taskInput
       ): Promise<HumanTaskOutput> => {
-        blockedPlanCalls.push(taskInput.taskId)
-        if (taskInput.taskId === 'task-blocked') {
+        limitedPlanCalls.push(taskInput.taskId)
+        if (taskInput.taskId === 'task-limited') {
           return {
             taskId: taskInput.taskId,
-            status: 'blocked',
-            summary: '子任务当前被阻塞。',
+            status: 'completed',
+            summary: '子任务已完成当前可交付部分，但仍存在材料缺口。',
             deliveryMarkdown:
-              '# 子任务交付\n\n## 任务状态\nblocked\n\n## 本任务结论\n当前任务受阻。\n\n## 已完成\n- 已确认阻塞点。\n\n## 关键事实\n- 需要等待补充材料。\n\n## 关键证据\n- 当前上下文不足。\n\n## 产物与引用\n无\n\n## 未决与风险\n- 材料缺失。\n\n## 对后续任务的影响\n- synthesis 只能做部分交付。\n\n## 建议下一步\n- 补充材料后继续。',
-            artifacts: [buildArtifact('/tmp/blocked-task-output.docx', 'blocked task artifact')]
+              '# 子任务交付\n\n## 本任务结论\n已完成当前可交付部分，但仍存在材料缺口。\n\n## 已完成\n- 已确认当前可交付范围。\n\n## 关键事实\n- 仍需补充部分材料。\n\n## 关键证据\n- 当前上下文不足以补齐全部结论。\n\n## 产物与引用\n无\n\n## 未决与风险\n- 材料缺失。\n\n## 对后续任务的影响\n- 后续任务需结合当前限制继续推进。\n\n## 建议下一步\n- 继续执行后续任务并在最终汇总中说明限制。',
+            artifacts: [buildArtifact('/tmp/limited-task-output.docx', 'limited task artifact')]
+          }
+        }
+
+        if (taskInput.taskId === 'task-follow-up') {
+          return {
+            taskId: taskInput.taskId,
+            status: 'completed',
+            summary: '后续任务已在限制条件下继续完成。',
+            deliveryMarkdown:
+              '# 子任务交付\n\n## 本任务结论\n已在现有限制下完成后续整理。\n\n## 已完成\n- 已补充后续整理结果。\n\n## 关键事实\n- 已整合剩余可确认内容。\n\n## 关键证据\n- 已复用前序任务交付。\n\n## 产物与引用\n无\n\n## 未决与风险\n- 仍有材料缺口待补充。\n\n## 对后续任务的影响\n- synthesis 应合并限制说明后统一输出。\n\n## 建议下一步\n- 进入最终汇总。',
+            artifacts: [buildArtifact('/tmp/follow-up-output.docx', 'follow-up artifact')]
           }
         }
 
         return {
           taskId: taskInput.taskId,
           status: 'completed',
-          summary: '阻塞后已汇总当前状态。',
-          deliveryMarkdown: '# 最终答复\n\n任务阻塞，但已完成当前可交付汇总。',
-          artifacts: [buildArtifact('/tmp/blocked-synthesis-output.docx', 'blocked synthesis artifact')]
+          summary: '限制说明已汇总到最终交付。',
+          deliveryMarkdown: '# 最终答复\n\n任务已完成当前可交付汇总，并明确标注剩余限制。',
+          artifacts: [buildArtifact('/tmp/limited-synthesis-output.docx', 'limited synthesis artifact')]
         }
       }
-      const blockedPlanCtx = runtime.createAiRunContext({
+      const limitedPlanCtx = runtime.createAiRunContext({
         chatStructuredOverride: async (input) => {
           if (input.caller === 'director.intent') {
             return {
@@ -216,9 +229,14 @@ test('director-human-dispatch', async () => {
             return {
               tasks: [
                 {
-                  id: 'task-blocked',
-                  title: '阻塞任务',
-                  userInput: '尝试完成当前任务，但允许在证据不足时阻塞'
+                  id: 'task-limited',
+                  title: '受限任务',
+                  userInput: '先完成当前可交付部分，并明确记录限制'
+                },
+                {
+                  id: 'task-follow-up',
+                  title: '后续整理任务',
+                  userInput: '结合前序限制继续整理剩余可确认内容'
                 }
               ] satisfies AiPlanTask[]
             }
@@ -226,27 +244,27 @@ test('director-human-dispatch', async () => {
           throw new Error(`unexpected structured call: ${input.caller}`)
         }
       })
-      const blockedPlanGraph = buildDirectorGraph({
-        ctx: blockedPlanCtx,
-        runHumanTask: blockedPlanRunHumanTask
+      const limitedPlanGraph = buildDirectorGraph({
+        ctx: limitedPlanCtx,
+        runHumanTask: limitedPlanRunHumanTask
       })
-      const blockedPlanState = (await blockedPlanGraph.invoke(buildInitialState(runtime))) as AiRunState
-      const blockedAllEvents = runtime.eventCollector.snapshot()
-      const blockedPlanEvents = blockedAllEvents.slice(allEvents.length)
+      const limitedPlanState = (await limitedPlanGraph.invoke(buildInitialState(runtime))) as AiRunState
+      const limitedAllEvents = runtime.eventCollector.snapshot()
+      const limitedPlanEvents = limitedAllEvents.slice(allEvents.length)
 
       return {
         directState,
         contextState,
         planState,
-        blockedPlanState,
+        limitedPlanState,
         directCalls,
         contextCalls,
         planCalls,
-        blockedPlanCalls,
+        limitedPlanCalls,
         directEvents,
         contextEvents,
         planEvents,
-        blockedPlanEvents
+        limitedPlanEvents
       }
     },
     assert: async (result, runtime) => {
@@ -284,7 +302,7 @@ test('director-human-dispatch', async () => {
         {
           name: 'director-context-fallback-dispatch',
           message:
-            'blocked context flow should emit the context task first, then fall back to plan task and synthesis-human',
+            'context fallback flow should emit the context task first, then fall back to plan task and synthesis-human',
           data: result.contextCalls
         }
       )
@@ -297,7 +315,7 @@ test('director-human-dispatch', async () => {
         {
           name: 'director-context-fallback-state',
           message:
-            'blocked context flow should keep contextEvidence empty, consume one round, and continue through plan + synthesis',
+            'context fallback flow should keep contextEvidence empty, consume one round, and continue through plan + synthesis',
           data: result.contextState
         }
       )
@@ -321,9 +339,7 @@ test('director-human-dispatch', async () => {
       )
       const contextLifecycleEvents = result.contextEvents.filter(
         (event) =>
-          (isEventType(event, 'task_started') ||
-            isEventType(event, 'task_blocked') ||
-            isEventType(event, 'task_completed')) &&
+          (isEventType(event, 'task_started') || isEventType(event, 'task_completed')) &&
           event.taskId === 'context-1'
       )
 
@@ -342,54 +358,60 @@ test('director-human-dispatch', async () => {
       runtime.assertThat(
         contextLifecycleEvents.length === 2 &&
           contextLifecycleEvents.some((event) => isEventType(event, 'task_started')) &&
-          contextLifecycleEvents.some((event) => isEventType(event, 'task_blocked')) &&
-          !contextLifecycleEvents.some((event) => isEventType(event, 'task_completed')),
+          contextLifecycleEvents.some((event) => isEventType(event, 'task_completed')),
         {
-          name: 'director-context-blocked-events',
+          name: 'director-context-completed-events',
           message:
-            'context human dispatch should emit started/blocked lifecycle events and must not emit completed when blocked',
+            'context human dispatch should emit started/completed lifecycle events even when no reusable evidence is extracted',
           data: contextLifecycleEvents
         }
       )
 
-      runtime.assertThat(result.blockedPlanCalls.join(',') === 'task-blocked,synthesis-human', {
-        name: 'director-blocked-plan-dispatch',
-        message:
-          'blocked plan flow should stop additional task dispatch after the blocked task and continue directly to synthesis-human',
-        data: result.blockedPlanCalls
-      })
-
       runtime.assertThat(
-        result.blockedPlanState.plan.length === 1 &&
-          result.blockedPlanState.plan[0]?.status === 'blocked' &&
-          result.blockedPlanState.finalArtifacts.length === 2,
+        result.limitedPlanCalls.join(',') === 'task-limited,task-follow-up,synthesis-human',
         {
-          name: 'director-blocked-plan-state',
+          name: 'director-limited-plan-dispatch',
           message:
-            'blocked plan flow should preserve the blocked task status and still merge blocked-task + synthesis artifacts',
-          data: result.blockedPlanState
+            'limited-result plan flow should continue dispatching subsequent tasks and then run synthesis-human',
+          data: result.limitedPlanCalls
         }
       )
 
-      const blockedLifecycleEvents = result.blockedPlanEvents.filter(
+      runtime.assertThat(
+        result.limitedPlanState.plan.length === 2 &&
+          result.limitedPlanState.plan.every((task) => task.status === 'completed') &&
+          result.limitedPlanState.finalArtifacts.length === 3,
+        {
+          name: 'director-limited-plan-state',
+          message:
+            'limited-result plan flow should preserve completed task statuses and merge limited-task, follow-up, and synthesis artifacts',
+          data: result.limitedPlanState
+        }
+      )
+
+      const limitedLifecycleEvents = result.limitedPlanEvents.filter(
         (event) =>
-          (isEventType(event, 'task_started') ||
-            isEventType(event, 'task_blocked') ||
-            isEventType(event, 'task_completed')) &&
-          (event.taskId === 'task-blocked' || event.taskId === 'synthesis-human')
+          (isEventType(event, 'task_started') || isEventType(event, 'task_completed')) &&
+          (event.taskId === 'task-limited' ||
+            event.taskId === 'task-follow-up' ||
+            event.taskId === 'synthesis-human')
       )
       runtime.assertThat(
-        blockedLifecycleEvents.some(
-          (event) => isEventType(event, 'task_blocked') && event.taskId === 'task-blocked'
-        ) &&
-          blockedLifecycleEvents.some(
+        limitedLifecycleEvents.length === 6 &&
+          limitedLifecycleEvents.some(
+            (event) => isEventType(event, 'task_completed') && event.taskId === 'task-limited'
+          ) &&
+          limitedLifecycleEvents.some(
+            (event) => isEventType(event, 'task_completed') && event.taskId === 'task-follow-up'
+          ) &&
+          limitedLifecycleEvents.some(
             (event) => isEventType(event, 'task_completed') && event.taskId === 'synthesis-human'
           ),
         {
-          name: 'director-blocked-plan-events',
+          name: 'director-limited-plan-events',
           message:
-            'blocked plan flow should emit task_blocked for the blocked task and still emit synthesis completion lifecycle events',
-          data: blockedLifecycleEvents
+            'limited-result plan flow should emit only started/completed lifecycle events for both business tasks and synthesis',
+          data: limitedLifecycleEvents
         }
       )
     }

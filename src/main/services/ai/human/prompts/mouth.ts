@@ -6,7 +6,6 @@ const buildDeliveryModeRules = (deliveryMode: HumanMouthPromptInput['deliveryMod
       '当前 deliveryMode=task_handoff。',
       'deliveryMarkdown 必须使用以下固定 markdown 章节，且章节名必须完全一致：',
       '# 子任务交付',
-      '## 任务状态',
       '## 本任务结论',
       '## 已完成',
       '## 关键事实',
@@ -24,7 +23,7 @@ const buildDeliveryModeRules = (deliveryMode: HumanMouthPromptInput['deliveryMod
       '当前 deliveryMode=context_note。',
       'deliveryMarkdown 必须使用以下固定 markdown 章节，且章节名必须完全一致：',
       '# 上下文补充结果',
-      '## 当前状态',
+      '## 本轮结论',
       '## 可复用证据',
       '## 当前边界',
       '## 未决项',
@@ -43,14 +42,14 @@ const buildOutputExample = (deliveryMode: HumanMouthPromptInput['deliveryMode'])
   if (deliveryMode === 'task_handoff') {
     return `{
   "summary": "已完成本子任务，并整理出可供后续任务承接的关键事实。",
-  "deliveryMarkdown": "# 子任务交付\\n\\n## 任务状态\\ncompleted\\n\\n## 本任务结论\\n已完成本子任务。\\n\\n## 已完成\\n- 已完成关键核对。\\n\\n## 关键事实\\n- 事实一\\n\\n## 关键证据\\n- 证据一\\n\\n## 产物与引用\\n无\\n\\n## 未决与风险\\n无\\n\\n## 对后续任务的影响\\n- 后续任务可直接继承以上结论。\\n\\n## 建议下一步\\n- 继续执行下一个任务。"
+  "deliveryMarkdown": "# 子任务交付\\n\\n## 本任务结论\\n已完成本子任务。\\n\\n## 已完成\\n- 已完成关键核对。\\n\\n## 关键事实\\n- 事实一\\n\\n## 关键证据\\n- 证据一\\n\\n## 产物与引用\\n无\\n\\n## 未决与风险\\n无\\n\\n## 对后续任务的影响\\n- 后续任务可直接继承以上结论。\\n\\n## 建议下一步\\n- 继续执行下一个任务。"
 }`
   }
 
   if (deliveryMode === 'context_note') {
     return `{
   "summary": "已补充当前上下文，并整理出可复用证据。",
-  "deliveryMarkdown": "# 上下文补充结果\\n\\n## 当前状态\\ncompleted\\n\\n## 可复用证据\\n- 证据一\\n\\n## 当前边界\\n- 当前确认范围\\n\\n## 未决项\\n无\\n\\n## 建议补充方向\\n- 如需继续，可补充更多材料。"
+  "deliveryMarkdown": "# 上下文补充结果\\n\\n## 本轮结论\\n已补充当前上下文。\\n\\n## 可复用证据\\n- 证据一\\n\\n## 当前边界\\n- 当前确认范围\\n\\n## 未决项\\n无\\n\\n## 建议补充方向\\n- 如需继续，可补充更多材料。"
 }`
   }
 
@@ -77,7 +76,7 @@ export const buildHumanMouthPrompt = (input: HumanMouthPromptInput) => {
 
   <delivery_principles>
     1. 如果任务已经完成，先直接给出结论，再给关键依据，再给结果或产物说明。
-    2. 如果任务当前阻塞，先说明已经完成到哪里，再说明阻塞原因，再说明继续需要什么。
+    2. 如果当前结果有限，先说明已经完成到哪里，再说明限制和继续需要什么。
     3. 只使用已经给你的事实、证据和最终判断，不要偷偷补充新的推理。
     4. 语言要清楚、克制、可执行，不要堆内部过程。
   </delivery_principles>
@@ -114,7 +113,7 @@ ${buildOutputExample(input.deliveryMode)}
 </system>
 `.trim(),
     user: `
-<user_context>
+  <user_context>
   <delivery_mode>
 ${input.deliveryMode}
   </delivery_mode>
@@ -122,10 +121,6 @@ ${input.deliveryMode}
   <user_request>
 ${input.userInput}
   </user_request>
-
-  <final_status>
-${input.finalStatus}
-  </final_status>
 
   <final_decision>
 ${input.finalDecisionText}

@@ -237,14 +237,13 @@ export const completeHumanTask = (input: {
   ctx: AiRunContext
   cache: HumanRuntimeCache
   state: HumanState
-  finalStatus: 'completed' | 'blocked'
   summary: string
   deliveryMarkdown: string
   streamAnswer: boolean
   internalDelivery: boolean
 }): HumanState => {
   const finalResult: HumanResult = {
-    status: input.finalStatus,
+    status: 'completed',
     summary: input.summary,
     deliveryMarkdown: input.deliveryMarkdown,
     artifacts: input.state.runtimeArtifacts.length > 0 ? [...input.state.runtimeArtifacts] : undefined
@@ -272,15 +271,15 @@ export const completeHumanTask = (input: {
     ...input.state,
     runtime: {
       stage: 'mouth',
-      status: input.finalStatus
+      status: 'completed'
     },
     result: finalResult,
     trace: {
       steps: appendHumanTraceStep({
         steps: input.state.trace.steps,
-        action: input.finalStatus === 'completed' ? 'deliver_result' : 'block_result',
+        action: 'deliver_result',
         publicNarrative: finalResult.summary,
-        resultStatus: input.finalStatus === 'completed' ? 'ok' : 'blocked',
+        resultStatus: 'ok',
         summary: finalResult.summary
       })
     }

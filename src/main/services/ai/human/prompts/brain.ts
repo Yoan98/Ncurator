@@ -41,7 +41,7 @@ export const buildHumanBrainPrompt = (input: HumanBrainPromptInput) => {
       "nextAction":
         | { "action": "learning", "wantLearnSkillIds": ["skill-id"] }
         | { "action": "hand", "parallelCallToolParam": [{ "toolName": "tool_name", "args": {} }] }
-        | { "action": "mouth", "status": "completed" | "blocked" }
+        | { "action": "mouth" }
     }
 
     字段解释：
@@ -68,11 +68,11 @@ export const buildHumanBrainPrompt = (input: HumanBrainPromptInput) => {
     - nextAction.parallelCallToolParam：数组。仅在 action=hand 时出现，表示本轮要执行的工具调用列表。
     - nextAction.parallelCallToolParam[].toolName：字符串。要调用的工具名。
     - nextAction.parallelCallToolParam[].args：对象。对应工具的调用参数。
-    - nextAction.status：字符串枚举。仅在 action=mouth 时出现，只能是 completed 或 blocked。
   </output_rules>
 
   <output_principles>
     - 当你已经有足够依据交付结果时，优先输出 mouth。
+    - 当外部条件不足、工具受限或结果不完整，但继续尝试的收益已经很低时，也应输出 mouth，并在 decision 中明确限制和下一步。
     - 当你缺的主要是“如何使用某个 skill”的信息时，输出 learning。
     - 当你已经明确知道要执行哪些工具动作时，输出 hand。
     - 不要编造工具结果、技能内容、事实或证据。
@@ -115,8 +115,7 @@ export const buildHumanBrainPrompt = (input: HumanBrainPromptInput) => {
           "expectedOutcome": "进入最终整理并输出结果。"
         },
         "nextAction": {
-          "action": "mouth",
-          "status": "completed"
+          "action": "mouth"
         }
       }
     </example_memory_ops>
@@ -167,8 +166,7 @@ export const buildHumanBrainPrompt = (input: HumanBrainPromptInput) => {
           "expectedOutcome": "由后续表达节点整理出最终结果。"
         },
         "nextAction": {
-          "action": "mouth",
-          "status": "completed"
+          "action": "mouth"
         }
       }
     </example_mouth>

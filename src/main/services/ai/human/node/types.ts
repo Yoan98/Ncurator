@@ -17,7 +17,6 @@ export type AiRunContextWithHumanOverrides = AiRunContext & {
   resolveHumanDeliveryOverride?: (input: {
     userInput: string
     deliveryMode: HumanDeliveryMode
-    status: 'completed' | 'blocked'
     summary: string
     state: HumanState
   }) => MouthOutput | undefined

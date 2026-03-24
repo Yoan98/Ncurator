@@ -106,7 +106,7 @@ const buildHumanPromptRenderView = (state: HumanState): HumanPromptRenderView =>
           ? `wantLearnSkillIds=[${record.nextAction.wantLearnSkillIds.join(',')}]`
           : action === 'hand'
             ? `parallelCallToolParam=${JSON.stringify(record.nextAction.parallelCallToolParam)}`
-            : `status=${record.nextAction.status}`
+            : 'final_delivery=true'
 
       return `- 第${ordinal}轮（createdAt=${record.createdAt}）：决定“${record.decision.summary}”；原因：${record.decision.reason}；预期结果：${record.decision.expectedOutcome}；nextAction.action=${action}；nextAction数据：${nextActionPayload}`
     }),

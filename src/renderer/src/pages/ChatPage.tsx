@@ -487,14 +487,6 @@ const ChatPage: React.FC = () => {
         return
       }
 
-      if (evt.type === 'task_blocked') {
-        if (evt.internal) return
-        setAiPlan((prev) =>
-          prev.map((t) => (t.id === evt.taskId ? { ...t, status: 'blocked' } : t))
-        )
-        return
-      }
-
       if (evt.type === 'workspace_required') {
         if (!evt.internal) {
           setLoading(false)

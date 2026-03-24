@@ -71,13 +71,6 @@ export type TestHumanReasonShortcut =
       rationale: string
       publicNarrative: string
     }
-  | {
-      action: 'block_task'
-      reason: string
-      rationale: string
-      publicNarrative: string
-      details?: JsonValue
-    }
 
 export type TestHumanReasonOverride = {
   remainingUses?: number
@@ -108,7 +101,7 @@ export type CreateAiRunContextInput = {
     userInput: string
     deliveryMode: HumanDeliveryMode
     summary: string
-    status: 'completed' | 'blocked'
+    status: 'completed'
     state: HumanState
   }) => string | MouthOutput
   liveModelConfig?: LiveLlmConfig

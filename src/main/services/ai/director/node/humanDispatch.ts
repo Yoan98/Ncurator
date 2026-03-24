@@ -40,17 +40,6 @@ export const runDirectorHumanSubtask = async (input: {
     input.options
   )
 
-  if (output.status === 'blocked') {
-    input.ctx.sendEvent({
-      type: 'task_blocked',
-      runId: input.runId,
-      taskId: input.taskId,
-      summary: output.summary,
-      stage: input.stage
-    })
-    return output
-  }
-
   input.ctx.sendEvent({
     type: 'task_completed',
     runId: input.runId,

@@ -484,7 +484,7 @@ export interface CommitDraftReviewResponse {
   error?: string
 }
 
-export type AiTaskStatus = 'ready' | 'running' | 'completed' | 'blocked'
+export type AiTaskStatus = 'ready' | 'running' | 'completed'
 export type AiRunStatus = 'running' | 'completed' | 'failed' | 'cancelled'
 export type RuntimeIssueCode =
   | 'workspace_binding_missing'
@@ -522,8 +522,7 @@ export type HumanStepAction =
   | 'learn_skill'
   | 'call_tool'
   | 'deliver_result'
-  | 'block_result'
-export type HumanStepResultStatus = 'ok' | 'error' | 'blocked'
+export type HumanStepResultStatus = 'ok' | 'error'
 export type WatchHintSource = 'learning' | 'hand' | 'memory_reducer'
 
 export type AiRuntimeSettings = Record<string, never>
@@ -633,12 +632,6 @@ type AiRunEventPayload =
       summary: string
       deliveryMarkdown: string
       createdAt: number
-    }
-  | {
-      type: 'task_blocked'
-      runId: string
-      taskId: string
-      summary: string
     }
   | {
       type: 'tool_call_started'

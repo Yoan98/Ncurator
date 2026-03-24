@@ -11,7 +11,7 @@ import type { AiPlanTask, AiRunEvent } from '../../../../shared/types'
 
 type HumanStepEvent = Extract<AiRunEvent, { type: 'human_step' }>
 type TaskDeliveryEvent = Extract<AiRunEvent, { type: 'task_delivery_ready' }>
-type BlockedEvent = Extract<
+type ConstraintEvent = Extract<
   AiRunEvent,
   { type: 'approval_required' | 'workspace_required' | 'runtime_issue' }
 >
@@ -73,7 +73,7 @@ const getRunState = (events: AiRunEvent[]): {
   }
 }
 
-const getBlockedCopy = (event: BlockedEvent | null): string | null => {
+const getConstraintCopy = (event: ConstraintEvent | null): string | null => {
   if (!event) return null
   if (event.type === 'approval_required') return `${event.reason}。命令：${event.command}`
   if (event.type === 'workspace_required') return event.reason
@@ -98,7 +98,7 @@ const AssistantRunCard: React.FC<AssistantRunCardProps> = ({
 }) => {
   const visibleEvents = useMemo(() => events.filter((event) => !event.internal), [events])
   const recentHumanSteps = visibleEvents.filter((event) => event.type === 'human_step').slice(-5) as HumanStepEvent[]
-  const blockedEvent =
+  const constraintEvent =
     [...visibleEvents].reverse().find(
       (event) =>
         event.type === 'approval_required' ||
@@ -115,7 +115,7 @@ const AssistantRunCard: React.FC<AssistantRunCardProps> = ({
   const completedCount = plan.filter((item) => item.status === 'completed').length
   const progressPercent = plan.length > 0 ? Math.round((completedCount / plan.length) * 100) : 0
   const runState = getRunState(visibleEvents)
-  const blockedCopy = getBlockedCopy(blockedEvent as BlockedEvent | null)
+  const constraintCopy = getConstraintCopy(constraintEvent as ConstraintEvent | null)
   const answerSummary = getAnswerPreview(answerPreview, answerEvent as AnswerCompletedEvent | null)
   const deliveryStageLabel =
     latestDelivery && latestDelivery.type === 'task_delivery_ready'
@@ -178,9 +178,7 @@ const AssistantRunCard: React.FC<AssistantRunCardProps> = ({
                         ? 'bg-[#F3FAF0] text-[#4F7A46]'
                         : item.status === 'running'
                           ? 'bg-[#FBF5F2] text-[#D97757]'
-                          : item.status === 'blocked'
-                            ? 'bg-[#FFF1F0] text-[#C2413B]'
-                            : 'bg-white text-[#666666]'
+                          : 'bg-white text-[#666666]'
                     }`}
                   >
                     {item.title}
@@ -218,9 +216,9 @@ const AssistantRunCard: React.FC<AssistantRunCardProps> = ({
             </div>
           ) : null}
 
-          {blockedCopy ? (
+          {constraintCopy ? (
             <div className="rounded-2xl border border-[#FDECC8] bg-[#FFF9ED] px-4 py-3 text-sm text-[#8A6510]">
-              {blockedCopy}
+              {constraintCopy}
             </div>
           ) : null}
 

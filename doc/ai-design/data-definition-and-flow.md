@@ -58,8 +58,8 @@ interface DirectorPlanTask {
   // 派发给 human 的任务输入。
   userInput: string
   // 任务状态。
-  // ready 表示尚未派发；blocked 表示已经派发但最终阻塞。
-  status: 'ready' | 'running' | 'completed' | 'blocked'
+  // ready 表示尚未派发；completed 表示已经完成当前可交付内容。
+  status: 'ready' | 'running' | 'completed'
   // 该任务的正式交付内容。
   // 在 plan 链路中，通常是供后续任务与 synthesis 使用的 task_handoff 文档。
   deliveryMarkdown?: string
@@ -106,7 +106,7 @@ interface HumanRunDispatchOptions {
 
 ```ts
 type HumanStage = 'brain' | 'learning' | 'hand' | 'mouth'
-type HumanStatus = 'running' | 'completed' | 'blocked'
+type HumanStatus = 'running' | 'completed'
 type MemoryOpField = 'facts' | 'evidences' | 'openQuestions'
 
 interface HumanState {
@@ -239,8 +239,6 @@ type BrainNextAction =
   | {
       // 进入 mouth 节点。
       action: 'mouth'
-      // mouth 节点最终对外输出的状态。
-      status: 'completed' | 'blocked'
     };
 
 type BrainMemoryOp =
@@ -340,7 +338,7 @@ interface MouthOutput {
 
 interface HumanResult {
   // human 最终状态。
-  status: 'completed' | 'blocked'
+  status: 'completed'
   // 最终结果摘要。
   summary: string
   // 最终对用户交付的 markdown。
@@ -353,7 +351,7 @@ interface HumanTaskOutput {
   // 本次 human 执行所对应的任务 ID。
   taskId: string
   // 本次任务的最终状态。
-  status: 'completed' | 'blocked'
+  status: 'completed'
   // 任务结果摘要。
   summary: string
   // 正式交付 markdown。
@@ -371,11 +369,10 @@ interface HumanTraceStep {
     | 'learn_skill'
     | 'call_tool'
     | 'deliver_result'
-    | 'block_result'
   // 面向外部轨迹的叙述。
   publicNarrative: string
   // 当前步骤的结果状态。
-  resultStatus?: 'ok' | 'error' | 'blocked'
+  resultStatus?: 'ok' | 'error'
   // 若本步与 skill 有关，则记录 skillId。
   skillId?: string
   // 若本步与 tool 有关，则记录 toolName。
@@ -535,9 +532,9 @@ flowchart LR
     T -->|读取 taskId + userInput| M
     BM -->|读取 facts / evidences / openQuestions| M
     LTR -->|整理最近工具结果摘要| M
-    LBD -->|读取当前 nextAction.status 与最终决策| M
+    LBD -->|读取当前最终决策| M
     A -->|读取已收集的结构化 artifacts| M
     WH -->|必要时整理为交付提示| M
-    M -->|输出 summary + deliveryMarkdown；runner 按 nextAction.status 回写 result，并透传 artifacts| R
+    M -->|输出 summary + deliveryMarkdown；runner 回写 completed result，并透传 artifacts| R
     M -->|追加 mouth 执行轨迹| TR
 ```

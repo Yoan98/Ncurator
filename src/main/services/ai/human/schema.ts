@@ -4,7 +4,6 @@ import { aiArtifactRefSchema } from '../schema'
 import {
   AI_TOOL_FAMILY_IDS,
   HUMAN_DELIVERY_MODES,
-  HUMAN_FINAL_STATUSES,
   HUMAN_STAGES,
   HUMAN_STATUSES,
   HUMAN_STEP_ACTIONS,
@@ -31,7 +30,6 @@ export const toolFamilyIdSchema = z.enum(AI_TOOL_FAMILY_IDS)
 export const toolCallResultCodeSchema = z.enum(TOOL_CALL_RESULT_CODES)
 export const humanStageSchema = z.enum(HUMAN_STAGES)
 export const humanStatusSchema = z.enum(HUMAN_STATUSES)
-export const humanFinalStatusSchema = z.enum(HUMAN_FINAL_STATUSES)
 export const humanDeliveryModeSchema = z.enum(HUMAN_DELIVERY_MODES)
 
 export const humanTaskInputSchema = z.object({
@@ -132,8 +130,7 @@ export const brainNextActionSchema = z.union([
     parallelCallToolParam: z.array(toolCallParamSchema).min(1)
   }),
   z.object({
-    action: z.literal('mouth'),
-    status: humanFinalStatusSchema
+    action: z.literal('mouth')
   })
 ])
 
@@ -158,13 +155,13 @@ export const humanDeliveryPayloadSchema = z.object({
 export const mouthOutputSchema = humanDeliveryPayloadSchema
 
 export const humanResultSchema = humanDeliveryPayloadSchema.extend({
-  status: humanFinalStatusSchema,
+  status: z.literal('completed'),
   artifacts: z.array(aiArtifactRefSchema).optional()
 })
 
 export const humanTaskOutputSchema = humanDeliveryPayloadSchema.extend({
   taskId: z.string(),
-  status: humanFinalStatusSchema,
+  status: z.literal('completed'),
   artifacts: z.array(aiArtifactRefSchema).optional()
 })
 

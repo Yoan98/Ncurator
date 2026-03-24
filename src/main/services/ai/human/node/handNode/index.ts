@@ -57,14 +57,9 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       state,
       source: 'hand',
       traceItems: results.map((result) => ({
-        action: result.code === 'ok' ? 'call_tool' : 'block_result',
+        action: 'call_tool',
         publicNarrative: result.summary,
-        resultStatus:
-          result.code === 'ok'
-            ? 'ok'
-            : result.code === 'workspace_required' || result.code === 'approval_denied'
-              ? 'blocked'
-              : 'error',
+        resultStatus: result.code === 'ok' ? 'ok' : 'error',
         toolName: result.toolName,
         summary: result.summary
       })),

@@ -150,24 +150,12 @@ const translateTestReasonShortcut = (output: TestHumanReasonShortcut): LastBrain
         expectedOutcome: '进入最终完成交付。'
       },
       nextAction: {
-        action: 'mouth',
-        status: 'completed'
+        action: 'mouth'
       }
     }
   }
 
-  return {
-    memoryOps: [],
-    decision: {
-      summary: output.reason,
-      reason: output.rationale,
-      expectedOutcome: '进入最终阻塞交付。'
-    },
-    nextAction: {
-      action: 'mouth',
-      status: 'blocked'
-    }
-  }
+  throw new Error(`unsupported test human reason shortcut: ${String((output as { action?: string }).action || '')}`)
 }
 
 type CreateTestAiRunContextInput = CreateAiRunContextInput & {
@@ -273,11 +261,11 @@ export const createTestAiRunContext = (input: CreateTestAiRunContextInput): AiRu
     resolveToolExecutionOverride,
     resolveBrainDecisionOverride,
     resolveHumanDeliveryOverride: input.humanDeliveryOverride
-      ? ({ userInput, deliveryMode, status, summary, state }) => {
+      ? ({ userInput, deliveryMode, summary, state }) => {
           const output = input.humanDeliveryOverride?.({
             userInput,
             deliveryMode,
-            status,
+            status: 'completed',
             summary,
             state
           })

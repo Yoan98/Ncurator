@@ -133,14 +133,6 @@ export const buildContextEnrichPatch = (input: {
   state: AiRunState
   output: HumanTaskOutput
 }): Partial<AiRunState> => {
-  if (input.output.status === 'blocked') {
-    return {
-      contextRounds: input.state.contextRounds + 1,
-      contextObjective: undefined,
-      directorStage: 'director_intent'
-    }
-  }
-
   const reusableEvidence = extractReusableContextEvidence(input.output.deliveryMarkdown)
   const nextContextEvidence =
     reusableEvidence.length > 0
@@ -149,7 +141,7 @@ export const buildContextEnrichPatch = (input: {
             appendContextEvidence({ ...input.state, contextEvidence: evidences }, item),
           input.state.contextEvidence
         )
-      : appendContextEvidence(input.state, input.output.summary)
+      : input.state.contextEvidence
 
   return {
     contextRounds: input.state.contextRounds + 1,
@@ -173,13 +165,12 @@ export const buildPlanExecPatch = (input: {
   const runningPlan = input.plan.map((item, index) =>
     index === input.taskIndex ? { ...item, status: 'running' as const } : item
   )
-  const blocked = input.output.status === 'blocked'
   const nextPlan = runningPlan.map((item, index) => {
     if (index !== input.taskIndex) return item
 
     return {
       ...item,
-      status: blocked ? ('blocked' as const) : ('completed' as const),
+      status: 'completed' as const,
       deliveryMarkdown: input.output.deliveryMarkdown,
       artifacts: input.output.artifacts
     }
@@ -189,8 +180,7 @@ export const buildPlanExecPatch = (input: {
   return {
     plan: nextPlan,
     dispatchCursor: input.taskIndex + 1,
-    directorStage:
-      blocked || !hasPending ? 'director_synthesis_human' : 'director_plan_exec'
+    directorStage: !hasPending ? 'director_synthesis_human' : 'director_plan_exec'
   }
 }
 

@@ -22,9 +22,9 @@ const renderEvidenceLines = (state: HumanState): string =>
 const renderOpenQuestionLines = (state: HumanState): string =>
   renderBulletLines(state.brainMemory.inside.openQuestions)
 
-const buildUserAnswerMarkdown = (state: HumanState, finalStatus: 'completed' | 'blocked', summary: string) =>
+const buildUserAnswerMarkdown = (state: HumanState, summary: string) =>
   [
-    finalStatus === 'completed' ? '# 处理结果' : '# 当前阻塞说明',
+    '# 处理结果',
     '',
     summary,
     '',
@@ -34,25 +34,15 @@ const buildUserAnswerMarkdown = (state: HumanState, finalStatus: 'completed' | '
     '## 关键证据',
     renderEvidenceLines(state),
     '',
-    '## 未决项',
+    '## 限制与未决项',
     renderOpenQuestionLines(state)
   ].join('\n')
 
-const buildTaskHandoffMarkdown = (
-  state: HumanState,
-  finalStatus: 'completed' | 'blocked',
-  summary: string
-) => {
+const buildTaskHandoffMarkdown = (state: HumanState, summary: string) => {
   const defaultNextStep =
-    finalStatus === 'completed'
-      ? state.lastBrainDecision?.decision.expectedOutcome || '可基于以上结论继续后续任务。'
-      : state.lastBrainDecision?.decision.expectedOutcome || '需先解决当前阻塞后再继续后续任务。'
-
+    state.lastBrainDecision?.decision.expectedOutcome || '可基于以上结论继续后续任务。'
   return [
     '# 子任务交付',
-    '',
-    '## 任务状态',
-    finalStatus,
     '',
     '## 本任务结论',
     summary,
@@ -73,27 +63,19 @@ const buildTaskHandoffMarkdown = (
     renderOpenQuestionLines(state),
     '',
     '## 对后续任务的影响',
-    renderBulletLines([
-      finalStatus === 'completed'
-        ? '后续任务可以直接继承以上已确认事实与证据。'
-        : '后续任务需要先处理当前阻塞或调整执行路径。'
-    ]),
+    renderBulletLines(['后续任务应结合以上已确认事实、证据和限制继续推进。']),
     '',
     '## 建议下一步',
     renderBulletLines([defaultNextStep])
   ].join('\n')
 }
 
-const buildContextNoteMarkdown = (
-  state: HumanState,
-  finalStatus: 'completed' | 'blocked',
-  summary: string
-) =>
+const buildContextNoteMarkdown = (state: HumanState, summary: string) =>
   [
     '# 上下文补充结果',
     '',
-    '## 当前状态',
-    finalStatus,
+    '## 本轮结论',
+    summary,
     '',
     '## 可复用证据',
     renderEvidenceLines(state),
@@ -114,14 +96,13 @@ const buildContextNoteMarkdown = (
 export const buildFallbackDeliveryMarkdown = (input: {
   state: HumanState
   deliveryMode: HumanDeliveryMode
-  finalStatus: 'completed' | 'blocked'
   summary: string
 }): string => {
   if (input.deliveryMode === 'task_handoff') {
-    return buildTaskHandoffMarkdown(input.state, input.finalStatus, input.summary)
+    return buildTaskHandoffMarkdown(input.state, input.summary)
   }
   if (input.deliveryMode === 'context_note') {
-    return buildContextNoteMarkdown(input.state, input.finalStatus, input.summary)
+    return buildContextNoteMarkdown(input.state, input.summary)
   }
-  return buildUserAnswerMarkdown(input.state, input.finalStatus, input.summary)
+  return buildUserAnswerMarkdown(input.state, input.summary)
 }

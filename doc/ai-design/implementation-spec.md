@@ -40,7 +40,7 @@ stateDiagram-v2
     director_plan --> director_complete: plan_failed
 
     director_plan_exec --> director_plan_exec: next_task
-    director_plan_exec --> director_synthesis_human: all_done_or_blocked
+    director_plan_exec --> director_synthesis_human: all_done
 
     director_synthesis_human --> director_complete
     director_complete --> [*]
@@ -213,7 +213,7 @@ stateDiagram-v2
 **Why**
 
 - plan 产出的只是任务清单，真正的执行需要单独节点来承接。
-- 任务执行与结果回写是 run 中最容易失控的部分，单独节点更利于约束 stop-dispatch、blocked 收敛和任务事件。
+- 任务执行与结果回写是 run 中最容易失控的部分，单独节点更利于约束串行推进、best-effort 收敛和任务事件。
 - 让 `director_plan_exec` 只做“当前任务派发 + 当前任务回写”，可以保持状态推进简单可追踪。
 
 **How**
@@ -224,17 +224,16 @@ stateDiagram-v2
 - 回写：当前任务 `status`、`deliveryMarkdown`、`artifacts`，以及 `DirectorState.dispatchCursor`、`DirectorState.directorStage`
 - 下一跳：`director_plan_exec` 或 `director_synthesis_human`
 - 实现约束：
-  - 当前策略是串行 `stop-dispatch`。
+  - 当前策略是串行执行，直到没有剩余 `ready` task。
   - 没有待执行任务时直接进入 `director_synthesis_human`。
   - 任务派发前先把当前任务标记为 `running`。
-  - `blocked` 任务会停止后续业务任务，但仍进入 synthesis 收口。
   - 回写时只更新当前已派发任务，不重写其他任务结果。
 
 **Not**
 
 - 不并行派发计划任务。
 - 不跳过 `dispatchCursor` 直接执行后续任务。
-- 不把 `blocked` 与“尚未派发”混用。
+- 不把“结果有限”误写成额外状态字段。
 
 **Data Mapping**
 
@@ -345,7 +344,7 @@ stateDiagram-v2
     hand --> brain
 
     mouth --> brain: status=running (rare)
-    mouth --> [*]: completed / blocked
+    mouth --> [*]: completed
 ```
 
 **Not**
@@ -489,7 +488,7 @@ stateDiagram-v2
 - 回写：`HumanState.result`、`HumanState.runtime.status`、`HumanState.runtime.stage = mouth`、`HumanState.trace.steps`
 - 下一跳：当前实现下正常结束；只有 `mouth` 把 `runtime.status` 保持为 `running` 时 graph 才会回到 `brain`
 - 实现约束：
-  - 最终状态由 `lastBrainDecision.nextAction.status` 推导，不由 `mouth` 自行决定。
+  - 当前实现下 `mouth` 统一收敛为 `completed`，限制与未决项通过交付内容表达，不新增额外终态。
   - 模型输出必须通过 `ctx.chatStructured`。
   - prompt 必须通过 `buildMouthPromptContext`。
   - `deliveryMarkdown` 为空时，必须使用 fallback builder 补足。

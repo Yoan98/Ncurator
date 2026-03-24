@@ -18,15 +18,9 @@ export const createMouthNode = (input: {
   return async (state: HumanState): Promise<HumanState> => {
     input.ctx.checkCancelled()
 
-    const finalStatus =
-      state.lastBrainDecision?.nextAction.action === 'mouth' &&
-      state.lastBrainDecision.nextAction.status === 'completed'
-        ? 'completed'
-        : 'blocked'
     const override = ctxWithOverride.resolveHumanDeliveryOverride?.({
       userInput: state.task.userInput,
       deliveryMode: input.deliveryMode,
-      status: finalStatus,
       summary: state.lastBrainDecision?.decision.summary || '任务结束',
       state
     })
@@ -35,8 +29,7 @@ export const createMouthNode = (input: {
     if (!result) {
       const prompt = buildMouthPromptContext({
         state,
-        deliveryMode: input.deliveryMode,
-        finalStatus
+        deliveryMode: input.deliveryMode
       })
       result = await input.ctx.chatStructured({
         caller: 'human.mouth',
@@ -54,7 +47,6 @@ export const createMouthNode = (input: {
       buildFallbackDeliveryMarkdown({
         state,
         deliveryMode: input.deliveryMode,
-        finalStatus,
         summary
       })
 
@@ -62,7 +54,6 @@ export const createMouthNode = (input: {
       ctx: input.ctx,
       cache: input.cache,
       state,
-      finalStatus,
       summary,
       deliveryMarkdown,
       streamAnswer: input.streamAnswer,

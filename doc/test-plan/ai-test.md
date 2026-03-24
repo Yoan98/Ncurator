@@ -504,26 +504,26 @@
   3. 最终交付保留恢复后的推进结果或明确说明仍剩余的阻塞。
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
-`human-workspace-blocked-recovery`
+`human-workspace-restricted-best-effort`
 - 实现状态: `待检查`
-- What: 验证工作区阻塞上抛
-- Why: 本地优先场景里最常见的阻塞之一
+- What: 验证工作区受限时的 best-effort 收敛
+- Why: 本地优先场景里最常见的外部约束之一
 - How: 缺工作区绑定时，请求补充 workspace，而不是空跑或乱答
 - Oracle:
-  1. 缺少 workspace 绑定时，结果进入阻塞或安全收敛，而不是伪造完成。
+  1. 缺少 workspace 绑定时，结果以安全完成收敛，而不是伪造已执行的 workspace 动作。
   2. 交付中明确指出缺的是 workspace 还是具体材料。
   3. 在 workspace 补充前，不执行依赖 workspace 的读取或命令。
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
-`human-approval-blocked-recovery`
+`human-approval-restricted-best-effort`
 - 实现状态: `待检查`
-- What: 验证审批阻塞收敛
-- Why: 阻塞时的行为质量直接决定用户体验
+- What: 验证审批受限时的 best-effort 收敛
+- Why: 外部约束下的行为质量直接决定用户体验
 - How: 需要执行命令或覆盖保存但未获批准时，能停在正确节点并给出继续条件
 - Oracle:
   1. 需要审批的命令或覆盖保存在未获批准前不会真正执行。
-  2. 结果会明确说明阻塞点和继续条件。
-  3. 阻塞前已经完成的读取、分析或中间结果不会丢失。
+  2. 结果会明确说明受限点和继续条件。
+  3. 受限前已经完成的读取、分析或中间结果不会丢失。
 - Not: 不验证 `director` 路由、`plan` 拆解和 UI 呈现。
 
 `human-evidence-insufficient-safe-stop`
@@ -1171,26 +1171,26 @@
 
 #### boundary
 
-`plan-blocked-task-convergence`
+`plan-limited-task-convergence`
 - 实现状态: `待检查`
-- What: 验证阻塞时计划可收敛
+- What: 验证结果受限时计划可收敛
 - Why: 复杂任务不一定每次都能完整完成，但必须能收住
 - How: 出现审批、缺文件或资料不足时，仍能产出明确后续
 - Oracle:
-  1. 任务阻塞后，对应 `DirectorPlanTask.status` 为 `blocked`。
-  2. 阻塞不会让已完成 task 的 `deliveryMarkdown` 或 `artifacts` 丢失。
-  3. 计划链路会进入收敛或 synthesis，而不是继续盲目派发。
+  1. 任务结果受限时，对应 `DirectorPlanTask.status` 仍保持 `completed`。
+  2. 受限结果不会让已完成 task 的 `deliveryMarkdown` 或 `artifacts` 丢失。
+  3. 计划链路最终会进入 synthesis，且交付中保留限制说明。
 - Not: 不验证具体工具调用实现细节和 UI 呈现。
 
-`plan-stop-dispatch-on-blocked`
+`plan-continue-after-limited-task`
 - 实现状态: `待检查`
-- What: 验证阻塞后停止继续派发任务
-- Why: 已知阻塞后继续派发只会放大噪音和错误结果
-- How: 某个 task 明确进入 `blocked` 后，不再继续派发后续业务 task，而是进入收敛或 handoff
+- What: 验证受限结果后继续派发任务
+- Why: best-effort 模型下，不应把“结果有限”误当成终止信号
+- How: 某个 task 只能完成部分交付时，仍继续派发后续业务 task，并在最终汇总中统一说明限制
 - Oracle:
-  1. 首个业务 task 进入 `blocked` 后，不再继续派发后续业务 task。
-  2. 后续流程直接转向收敛或 `director_synthesis_human`。
-  3. 被阻塞的 task 保持 `blocked` 状态，不会被误写成 `completed`。
+  1. 首个业务 task 产出受限结果后，后续业务 task 仍继续派发。
+  2. 后续流程最终进入 `director_synthesis_human` 完成汇总。
+  3. 受限 task 保持 `completed` 状态，不新增额外状态字段。
 - Not: 不验证具体工具调用实现细节和 UI 呈现。
 
 `plan-no-redundant-task`
@@ -1285,15 +1285,15 @@
   3. 最终会收敛到汇总或交付任务，而不是停在中间步骤。
 - Not: 不验证具体工具调用实现细节和 UI 呈现。
 
-`plan-live-blocked-task-convergence`
+`plan-live-limited-task-convergence`
 - 实现状态: `待检查`
-- What: 验证 live 阻塞计划收敛
+- What: 验证 live 受限结果计划收敛
 - Why: 计划层的安全收尾不能只在静态 case 成立
-- How: 在真实模型下，阻塞后仍能产出明确下一步
+- How: 在真实模型下，结果受限后仍能产出明确下一步
 - Oracle:
-  1. 任务阻塞后，对应 `DirectorPlanTask.status` 为 `blocked`。
-  2. 阻塞不会让已完成 task 的 `deliveryMarkdown` 或 `artifacts` 丢失。
-  3. 计划链路会进入收敛或 synthesis，而不是继续盲目派发。
+  1. 任务结果受限后，对应 `DirectorPlanTask.status` 仍保持 `completed`。
+  2. 受限结果不会让已完成 task 的 `deliveryMarkdown` 或 `artifacts` 丢失。
+  3. 计划链路会继续执行并进入 synthesis，而不是提前终止。
 - Not: 不验证具体工具调用实现细节和 UI 呈现。
 
 ### 3.6 `entire`
@@ -1863,4 +1863,3 @@
   2. 补充 workspace 后，原任务能够继续而不是重新开题。
   3. 恢复后的最终结果仍对应最初用户目标。
 - Not: 不验证内部 graph 中间 state 与低层工具实现细节。
-

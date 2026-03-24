@@ -61,8 +61,7 @@ const buildState = (): HumanState => {
       expectedOutcome: '进入最终整理输出。'
     },
     nextAction: {
-      action: 'mouth',
-      status: 'completed'
+      action: 'mouth'
     }
   }
 
@@ -85,8 +84,7 @@ test('prompt-context-rendering', async () => {
         brainPrompt: buildBrainPromptContext(state),
         mouthPrompt: buildMouthPromptContext({
           state,
-          deliveryMode: 'task_handoff',
-          finalStatus: 'completed'
+          deliveryMode: 'task_handoff'
         })
       }
     },

@@ -12,7 +12,6 @@ export type HumanBrainPromptInput = {
 export type HumanMouthPromptInput = {
   deliveryMode: HumanDeliveryMode
   userInput: string
-  finalStatus: 'completed' | 'blocked'
   finalDecisionText: string
   factsText: string
   evidencesText: string

@@ -204,8 +204,7 @@ test('state-transition-regression', async () => {
                   expectedOutcome: '应回到 brain 并给出 watchHint。'
                 },
                 nextAction: {
-                  action: 'mouth',
-                  status: 'completed'
+                  action: 'mouth'
                 }
               }
             }
@@ -224,11 +223,10 @@ test('state-transition-regression', async () => {
         decision: {
           summary: '可以完成交付',
           reason: '关键事实已经齐备。',
-          expectedOutcome: '输出 completed 结果。'
+          expectedOutcome: '输出最终结果。'
         },
         nextAction: {
-          action: 'mouth',
-          status: 'completed'
+          action: 'mouth'
         }
       }
       const mouthCompletedNode = createMouthNode({
@@ -242,32 +240,32 @@ test('state-transition-regression', async () => {
       })
       const mouthCompletedResult = await mouthCompletedNode(mouthCompletedState)
 
-      const mouthBlockedState = createInitialHumanState({
-        taskId: 'mouth-blocked',
-        userInput: '验证 mouth 阻塞收口'
+      const mouthLimitedState = createInitialHumanState({
+        taskId: 'mouth-limited',
+        userInput: '验证 mouth 受限收口'
       })
-      mouthBlockedState.lastBrainDecision = {
+      mouthLimitedState.lastBrainDecision = {
         memoryOps: [],
         decision: {
-          summary: '当前仍有阻塞',
+          summary: '当前结果有限',
           reason: '证据不完整。',
-          expectedOutcome: '输出 blocked 结果。'
+          expectedOutcome: '输出包含限制说明的结果。'
         },
         nextAction: {
-          action: 'mouth',
-          status: 'blocked'
+          action: 'mouth'
         }
       }
-      const mouthBlockedNode = createMouthNode({
+      const mouthLimitedNode = createMouthNode({
         ctx: runtime.createAiRunContext({
-          humanDeliveryOverride: () => '# 处理结果\n\n当前仍有阻塞。'
+          humanDeliveryOverride: () =>
+            '# 子任务交付\n\n## 本任务结论\n已完成当前可交付整理。\n\n## 已完成\n- 已整理当前可确认内容。\n\n## 关键事实\n无\n\n## 关键证据\n无\n\n## 产物与引用\n无\n\n## 未决与风险\n- 证据仍不完整。\n\n## 对后续任务的影响\n- 后续任务需结合当前限制继续推进。\n\n## 建议下一步\n- 补充材料后继续。'
         }),
         cache: createHumanRuntimeCache(),
         deliveryMode: 'task_handoff',
         streamAnswer: false,
         internalDelivery: true
       })
-      const mouthBlockedResult = await mouthBlockedNode(mouthBlockedState)
+      const mouthLimitedResult = await mouthLimitedNode(mouthLimitedState)
 
       return {
         initialState,
@@ -279,7 +277,7 @@ test('state-transition-regression', async () => {
         brainHandResult,
         brainInvalidMemoryResult,
         mouthCompletedResult,
-        mouthBlockedResult,
+        mouthLimitedResult,
         events: runtime.eventCollector.snapshot()
       }
     },
@@ -352,15 +350,15 @@ test('state-transition-regression', async () => {
       runtime.assertThat(
         result.mouthCompletedResult.runtime.status === 'completed' &&
           result.mouthCompletedResult.result?.status === 'completed' &&
-          result.mouthBlockedResult.runtime.status === 'blocked' &&
-          result.mouthBlockedResult.result?.status === 'blocked',
+          result.mouthLimitedResult.runtime.status === 'completed' &&
+          result.mouthLimitedResult.result?.status === 'completed',
         {
-          name: 'human-mouth-final-statuses',
+          name: 'human-mouth-completed-status',
           message:
-            'mouth transition helper should preserve both completed and blocked final statuses after the shared refactor',
+            'mouth transition helper should always converge to completed, including limited-result deliveries',
           data: {
             mouthCompletedResult: result.mouthCompletedResult,
-            mouthBlockedResult: result.mouthBlockedResult
+            mouthLimitedResult: result.mouthLimitedResult
           }
         }
       )
@@ -386,13 +384,13 @@ test('state-transition-regression', async () => {
       runtime.assertThat(
         deliveryEvents.length === 2 &&
           deliveryEvents.some((event) => event.taskId === 'mouth-completed') &&
-          deliveryEvents.some((event) => event.taskId === 'mouth-blocked') &&
+          deliveryEvents.some((event) => event.taskId === 'mouth-limited') &&
           answerCompletedEvents.length === 1 &&
           answerCompletedEvents[0]?.taskId === 'mouth-completed',
         {
           name: 'human-mouth-delivery-events',
           message:
-            'mouth helper should preserve task delivery events for completed/blocked outputs and keep answer_completed on streamed final answers',
+            'mouth helper should preserve task delivery events for completed and limited-result outputs and keep answer_completed on streamed final answers',
           data: {
             deliveryEvents,
             answerCompletedEvents

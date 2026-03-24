@@ -9,16 +9,14 @@ import {
 export const buildMouthPromptContext = (input: {
   state: HumanState
   deliveryMode: HumanDeliveryMode
-  finalStatus: 'completed' | 'blocked'
 }) => {
   const finalDecision = input.state.lastBrainDecision
-    ? `最终决定：“${input.state.lastBrainDecision.decision.summary}”；原因：${input.state.lastBrainDecision.decision.reason}；预期结果：${input.state.lastBrainDecision.decision.expectedOutcome}；结束状态${input.finalStatus}`
+    ? `最终决定：“${input.state.lastBrainDecision.decision.summary}”；原因：${input.state.lastBrainDecision.decision.reason}；预期结果：${input.state.lastBrainDecision.decision.expectedOutcome}`
     : 'none'
 
   return buildHumanMouthPrompt({
     deliveryMode: input.deliveryMode,
     userInput: input.state.task.userInput,
-    finalStatus: input.finalStatus,
     finalDecisionText: finalDecision,
     factsText: renderFactLines(input.state, 'mouth'),
     evidencesText: renderEvidenceLines(input.state, 'mouth'),

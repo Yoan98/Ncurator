@@ -35,8 +35,7 @@ const buildState = () => {
       expectedOutcome: '整理交付结果。'
     },
     nextAction: {
-      action: 'mouth',
-      status: 'completed'
+      action: 'mouth'
     }
   }
   return state
@@ -73,13 +72,11 @@ test('render-output-regression', async () => {
         taskHandoffMarkdown: buildFallbackDeliveryMarkdown({
           state,
           deliveryMode: 'task_handoff',
-          finalStatus: 'completed',
           summary: '已整理交付。'
         }),
         contextNoteMarkdown: buildFallbackDeliveryMarkdown({
           state,
           deliveryMode: 'context_note',
-          finalStatus: 'completed',
           summary: '已补充上下文。'
         })
       }

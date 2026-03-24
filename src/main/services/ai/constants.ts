@@ -10,4 +10,4 @@ export const AI_DIRECTOR_STAGES = [
   'director_complete'
 ] as const
 
-export const PLAN_TASK_STATUSES = ['ready', 'running', 'completed', 'blocked'] as const
+export const PLAN_TASK_STATUSES = ['ready', 'running', 'completed'] as const

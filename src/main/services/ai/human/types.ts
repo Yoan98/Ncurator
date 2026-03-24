@@ -3,7 +3,6 @@ import type { JsonObject } from '../../../../shared/types'
 import type { z } from 'zod/v4'
 import type { AiToolFamilyId } from './tools/types'
 import {
-  HUMAN_FINAL_STATUSES,
   HUMAN_STAGES,
   HUMAN_STATUSES,
   HUMAN_STEP_ACTIONS,
@@ -34,7 +33,6 @@ import {
 export type RuntimeSkillId = (typeof RUNTIME_SKILL_IDS)[number]
 export type HumanStage = (typeof HUMAN_STAGES)[number]
 export type HumanStatus = (typeof HUMAN_STATUSES)[number]
-export type HumanFinalStatus = (typeof HUMAN_FINAL_STATUSES)[number]
 export type HumanStepAction = (typeof HUMAN_STEP_ACTIONS)[number]
 export type HumanStepResultStatus = (typeof HUMAN_STEP_RESULT_STATUSES)[number]
 export type ToolCallResultCode = (typeof TOOL_CALL_RESULT_CODES)[number]

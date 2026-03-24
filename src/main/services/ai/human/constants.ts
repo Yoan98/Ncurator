@@ -10,18 +10,16 @@ export const RUNTIME_SKILL_IDS = runtimeSkillIds as [
 ]
 
 export const HUMAN_STAGES = ['brain', 'learning', 'hand', 'mouth'] as const
-export const HUMAN_STATUSES = ['running', 'completed', 'blocked'] as const
-export const HUMAN_FINAL_STATUSES = ['completed', 'blocked'] as const
+export const HUMAN_STATUSES = ['running', 'completed'] as const
 
 export const HUMAN_STEP_ACTIONS = [
   'brain_decision',
   'learn_skill',
   'call_tool',
-  'deliver_result',
-  'block_result'
+  'deliver_result'
 ] as const
 
-export const HUMAN_STEP_RESULT_STATUSES = ['ok', 'error', 'blocked'] as const
+export const HUMAN_STEP_RESULT_STATUSES = ['ok', 'error'] as const
 
 export const TOOL_CALL_RESULT_CODES = [
   'ok',
