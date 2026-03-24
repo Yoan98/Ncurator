@@ -5,7 +5,7 @@ import { docxToolFamily } from '../../tools/docx'
 import { kbToolFamily } from '../../tools/kb'
 import { terminalToolFamily } from '../../tools/terminal'
 import type { HumanRuntimeCache, RuntimeSkillId } from '../../types'
-import { getSkillDefinition } from './skillRegistry'
+import { getSkillDefinition } from '../../tools/catalog'
 
 const TOOL_FAMILY_BUILDERS: Record<
   AiToolFamilyId,

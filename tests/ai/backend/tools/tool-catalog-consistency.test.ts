@@ -2,7 +2,6 @@ import { buildRetrievalTools } from '../../../../src/main/services/ai/human/tool
 import { docxToolFamily } from '../../../../src/main/services/ai/human/tools/docx'
 import { terminalToolFamily } from '../../../../src/main/services/ai/human/tools/terminal'
 import { test } from 'vitest'
-import { buildSkillCatalog } from '../../../../src/main/services/ai/human/node/learningNode/skillRegistry'
 import { getToolExecutionMeta } from '../../../../src/main/services/ai/human/node/handNode/toolExecutionMeta'
 import {
   DOCX_SAVE_TOOL_SPEC,
@@ -10,13 +9,14 @@ import {
   getDocxToolSpec
 } from '../../../../src/main/services/ai/human/tools/docx/toolSpecs'
 import {
+  buildSkillCatalog,
   getToolContract,
   getToolDescriptor,
   getToolPromptSpec,
   listToolNamesByFamily,
   listToolNamesBySkill,
   TOOL_CATALOG
-} from '../../../../src/main/services/ai/human/tools/toolCatalog'
+} from '../../../../src/main/services/ai/human/tools/catalog'
 import { DOCX_TOOL_DEFINITIONS } from '../../../../src/main/services/ai/human/tools/catalog/toolDescriptors/docx'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 

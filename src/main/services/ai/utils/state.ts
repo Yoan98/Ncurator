@@ -1,27 +1,13 @@
 import type { AiRunState } from '../types'
 
-export const createDefaultAiRunStatus = (): AiRunState['status'] => 'running'
-
-export const createDefaultDirectorStage = (): AiRunState['directorStage'] => 'director_intent'
-
-export const createDefaultContextRounds = (): AiRunState['contextRounds'] => 0
-
-export const createDefaultContextEvidence = (): AiRunState['contextEvidence'] => []
-
-export const createDefaultPlan = (): AiRunState['plan'] => []
-
-export const createDefaultDispatchCursor = (): AiRunState['dispatchCursor'] => 0
-
-export const createDefaultFinalArtifacts = (): AiRunState['finalArtifacts'] => []
-
 export const createDefaultAiRunStateFields = () => ({
-  status: createDefaultAiRunStatus(),
-  directorStage: createDefaultDirectorStage(),
-  contextRounds: createDefaultContextRounds(),
-  contextEvidence: createDefaultContextEvidence(),
-  plan: createDefaultPlan(),
-  dispatchCursor: createDefaultDispatchCursor(),
-  finalArtifacts: createDefaultFinalArtifacts()
+  status: 'running' as const,
+  directorStage: 'director_intent' as const,
+  contextRounds: 0,
+  contextEvidence: [] as AiRunState['contextEvidence'],
+  plan: [] as AiRunState['plan'],
+  dispatchCursor: 0,
+  finalArtifacts: [] as AiRunState['finalArtifacts']
 })
 
 export const createInitialAiRunState = (input: {

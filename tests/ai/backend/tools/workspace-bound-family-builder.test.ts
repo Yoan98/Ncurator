@@ -1,7 +1,7 @@
 import { test } from 'vitest'
 import { docxToolFamily } from '../../../../src/main/services/ai/human/tools/docx'
 import { terminalToolFamily } from '../../../../src/main/services/ai/human/tools/terminal'
-import { listToolNamesByFamily } from '../../../../src/main/services/ai/human/tools/toolCatalog'
+import { listToolNamesByFamily } from '../../../../src/main/services/ai/human/tools/catalog'
 import type { AiTaskResultCode, JsonObject } from '../../../../src/shared/types'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 

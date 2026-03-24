@@ -1,7 +1,7 @@
 import type { AiRunContext } from '../../../types'
+import { mouthOutputSchema } from '../../schema'
 import type { HumanDeliveryMode, HumanRuntimeCache, HumanState } from '../../types'
 import { buildMouthPromptContext } from './promptContext'
-import { mouthResultSchema } from './contract'
 import type { AiRunContextWithHumanOverrides } from '../types'
 import { completeHumanTask } from '../utils/stateTransitions'
 import { buildDeliveryModeFallbackMarkdown } from '../../shared/deliveryContracts'
@@ -35,7 +35,7 @@ export const createMouthNode = (input: {
         caller: 'human.mouth',
         system: prompt.system,
         user: prompt.user,
-        schema: mouthResultSchema,
+        schema: mouthOutputSchema,
         schemaName: 'human_mouth_result',
         temperature: 0.2
       })

@@ -1,7 +1,7 @@
 import type { AiRunContext } from '../../../types'
 import type { HumanRuntimeCache, HumanState } from '../../types'
+import { hasSkillDefinition } from '../../tools/catalog'
 import { ensureSkillTools } from './skillLoader'
-import { hasSkillDefinition } from './skillRegistry'
 import { returnToBrain, returnToBrainAfterTrace, returnToBrainWithWatchHint } from '../utils/stateTransitions'
 
 const buildDuplicateLearnHint = (skillId: string) =>

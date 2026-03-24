@@ -1,6 +1,5 @@
 import type { HumanState, ToolPromptSpec } from '../types'
-import { getToolPromptSpec } from '../tools/toolCatalog'
-import { getSkillDefinition } from '../node/learningNode/skillRegistry'
+import { getSkillDefinition, getToolPromptSpec } from '../tools/catalog'
 import { renderLineList } from '../../utils/render'
 import {
   renderHumanEvidenceLines,

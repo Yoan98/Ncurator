@@ -1,19 +1,16 @@
 import type { JsonObject } from '../../../../../../shared/types'
 import type { z } from 'zod/v4'
-import type { RuntimeSkillId, ToolPromptSpec } from '../../types'
+import type { RuntimeSkillId, SkillDefinition, ToolPromptSpec } from '../../types'
 import type {
   AiToolFamilyId,
   ToolContractDefinition,
   ToolExecutionMeta
 } from '../types'
 
-export type CapabilitySkillDefinition = {
-  skillId: RuntimeSkillId
-  title: string
-  summary: string
-  whenToUse: string
-  detail: string
-}
+export type CatalogSkillMetadata = Pick<
+  SkillDefinition,
+  'skillId' | 'title' | 'summary' | 'whenToUse' | 'detail'
+>
 
 export type StaticExecutionMetaConfig = {
   mutability: ToolExecutionMeta['mutability']

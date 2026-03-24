@@ -1,7 +1,7 @@
 import type { RuntimeSkillId } from '../../types'
-import type { CapabilitySkillDefinition } from './factories'
+import type { CatalogSkillMetadata } from './factories'
 
-export const CATALOG_SKILL_DEFINITIONS: Record<RuntimeSkillId, CapabilitySkillDefinition> = {
+export const CATALOG_SKILL_DEFINITIONS: Record<RuntimeSkillId, CatalogSkillMetadata> = {
   'workspace-cli': {
     skillId: 'workspace-cli',
     title: 'workspace-cli',

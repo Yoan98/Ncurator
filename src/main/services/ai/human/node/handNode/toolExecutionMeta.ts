@@ -1,5 +1,5 @@
 import type { JsonObject } from '../../../../../../shared/types'
-import { getToolDescriptor } from '../../tools/toolCatalog'
+import { getToolDescriptor } from '../../tools/catalog'
 import type { ToolExecutionMeta } from '../../tools/types'
 
 export const getToolExecutionMeta = (input: {
