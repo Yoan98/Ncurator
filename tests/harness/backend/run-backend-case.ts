@@ -170,6 +170,7 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
     })
     throw error
   } finally {
+    const runtimeEvents = eventCollector.snapshot()
     recordEvent({
       type: 'run',
       name: 'end',
@@ -197,6 +198,7 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
     await writeRunLog({
       meta,
       events,
+      runtimeEvents,
       artifacts
     })
 

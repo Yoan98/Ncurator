@@ -105,11 +105,12 @@
 
 - AI 编写测试代码时，必须优先对齐 `How + Oracle + Not`，不能只根据 `What` 自行脑补实现。
 - `Oracle` 至少包含 2 条明确、可观察、可失败的断言，不设上限。
-- `Oracle` 只定义 gating 的最低验收线，不限制测试在 `meta.json`、`timeline.jsonl`、`artifacts.json` 中暴露更多诊断事实。
+- `Oracle` 只定义 gating 的最低验收线，不限制测试在 `meta.json`、`timeline.jsonl`、`runtime-events.jsonl`、`artifacts.json` 中暴露更多诊断事实。
 - 测试实现必须把 `Oracle` 落成稳定断言、状态检查或产物校验，不能写成“结果正确”“与描述一致”这类套话。
 - 若 `How` 已明确分支、模式或运行前提，测试实现必须按文档覆盖，不得擅自删减。
 - 若 `Not` 已声明排除范围，测试实现不得把其他阶段职责塞进同一条 case。
 - 若本文还没有定义对应正式 case，不得直接往 `tests/**` 非 `temp` 目录补测试代码。
+- 若 `Oracle`、断言 `data`、`timeline.jsonl` 仍不足以解释失败原因，AI 必须继续读取 `runtime-events.jsonl`，不能只看摘要日志就下结论。
 
 示例：
 

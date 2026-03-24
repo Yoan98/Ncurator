@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import type { AiRunEvent } from '../../../src/shared/types'
 import {
   TEST_LOG_SCHEMA_VERSION,
   type TestArtifactsIndex,
@@ -52,7 +53,7 @@ export const resolveRunArtifactsDir = (input: {
   runId: string
 }): string => path.join(resolveRunLogDir(input), 'artifacts')
 
-const toJsonLines = (events: readonly TestLogEvent[]): string =>
+const toJsonLines = <T>(events: readonly T[]): string =>
   events.map((event) => JSON.stringify(event)).join('\n')
 
 const toArtifactsIndex = (items: readonly TestArtifact[]): TestArtifactsIndex => ({
@@ -63,6 +64,7 @@ const toArtifactsIndex = (items: readonly TestArtifact[]): TestArtifactsIndex =>
 export const writeRunLog = async (input: {
   meta: TestRunMeta
   events: readonly TestLogEvent[]
+  runtimeEvents: readonly AiRunEvent[]
   artifacts: readonly TestArtifact[]
 }): Promise<string> => {
   const logDir = resolveRunLogDir({
@@ -73,6 +75,7 @@ export const writeRunLog = async (input: {
   await mkdir(logDir, { recursive: true })
   await writeFile(path.join(logDir, 'meta.json'), JSON.stringify(input.meta, null, 2), 'utf8')
   await writeFile(path.join(logDir, 'timeline.jsonl'), toJsonLines(input.events), 'utf8')
+  await writeFile(path.join(logDir, 'runtime-events.jsonl'), toJsonLines(input.runtimeEvents), 'utf8')
   await writeFile(
     path.join(logDir, 'artifacts.json'),
     JSON.stringify(toArtifactsIndex(input.artifacts), null, 2),

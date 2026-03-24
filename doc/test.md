@@ -5,9 +5,10 @@
 - 测试体系收敛为两层产物：
   - 原始日志：`tests/logs/**`
   - 正式分析文档：`tests/report/<domain>/report.md`
-- 原始日志统一由三类文件组成：
+- 原始日志统一由四类文件组成：
   - `meta.json`
   - `timeline.jsonl`
+  - `runtime-events.jsonl`
   - `artifacts.json`
 - 测试样例只记录事实，不直接写失败原因分析、优化建议或能力判断。
 
@@ -177,6 +178,7 @@ runner 不负责：
 tests/logs/<domain>/<layer>/<suite>/<groups...>/<caseId>/<runId>/
   meta.json
   timeline.jsonl
+  runtime-events.jsonl
   artifacts.json
   artifacts/
 ```
@@ -189,6 +191,9 @@ tests/logs/<domain>/<layer>/<suite>/<groups...>/<caseId>/<runId>/
 - `timeline.jsonl`
   - 单次 run 的事实事件流。
   - 用来回答“本次 run 按顺序发生了什么”。
+- `runtime-events.jsonl`
+  - 单次 run 的完整运行时原始事件流。
+  - 用来回答“底层 runtime 真实发出了哪些 `sendEvent` 事件”。
 - `artifacts.json`
   - 单次 run 的附件索引。
   - 用来回答“本次 run 产生了哪些可回看的附件”。
@@ -226,7 +231,7 @@ tests/logs/<domain>/<layer>/<suite>/<groups...>/<caseId>/<runId>/
 
 - `schemaVersion`
   - 日志 schema 版本号。
-  - 固定值为 `3`。
+  - 固定值为 `4`。
 - `runId`
   - 本次执行唯一标识，对应目录名。
 - `caseId`
@@ -281,11 +286,17 @@ tests/logs/<domain>/<layer>/<suite>/<groups...>/<caseId>/<runId>/
   - 事件大类。
   - 当前值域：
     - `run`
+      - 只用于单次 case 的运行生命周期。
     - `step`
+      - 只用于测试作者显式定义的语义步骤，不用于底层工具噪音。
     - `assertion`
+      - 只用于 `Oracle` 或核心验收断言。
     - `artifact`
+      - 只用于登记一个已经写出的附件。
     - `signal`
+      - 只用于外部可观察信号，例如路由变化、IPC 调用、真实 runtime event、console。
     - `error`
+      - 只用于 runner 或测试执行层面的未恢复错误。
 - `name`
   - 事件的稳定语义名，不是脚本名。
   - 同类事实在不同 run、不同 case 中应尽量复用同一命名。
@@ -312,6 +323,18 @@ tests/logs/<domain>/<layer>/<suite>/<groups...>/<caseId>/<runId>/
 - `signal` 用于记录可观察到的外部信号，例如路由变化、IPC 调用、AI 事件。
 - 当失败事件存在明确证据时，优先把证据放进 `data` 或 artifact，不要在 `message` 中写大段解释。
 - e2e 下不把所有 Playwright 底层调用逐条倾倒进 timeline；底层重放依赖 `trace.zip`，timeline 只保留语义 step / assertion / signal。
+- `run` 之外的业务状态不要塞进 `status`。
+  - 例如 `blocked`、`completed`、`cancelled` 应保留在 `runtime-events.jsonl` 或写进 `data`，不要扩充 `timeline.status`。
+
+### `runtime-events.jsonl`
+
+- 文件内容是逐行 `AiRunEvent` JSON，不包额外 wrapper，不做 schema 投影。
+- 范围固定为完整 `sendEvent` 原始事件流。
+  - 包括 tool、guard、scope 校验、审批、产物、runtime issue、AI 运行等所有通过 `sendEvent` 发出的事件。
+  - 不包含本地 harness 自己维护但未经过 `sendEvent` 的临时数组，例如某些工具测试里的 `activities[]`。
+- `runtime-events.jsonl` 始终写出；如果本次 run 没有 runtime 事件，则写空文件。
+- backend 与 e2e 的采集路径可以不同，但最终落盘契约必须一致。
+- 当 `Oracle`、断言 `data`、`timeline.jsonl` 或 report 仍不足以解释失败原因时，必须继续回看 `runtime-events.jsonl`。
 
 ### `artifacts.json`
 
@@ -331,7 +354,7 @@ tests/logs/<domain>/<layer>/<suite>/<groups...>/<caseId>/<runId>/
 
 - `schemaVersion`
   - 附件索引 schema 版本号。
-  - 固定值为 `3`。
+  - 固定值为 `4`。
 - `id`
   - 单个附件的稳定标识。
 - `kind`
@@ -358,11 +381,12 @@ tests/logs/<domain>/<layer>/<suite>/<groups...>/<caseId>/<runId>/
 
 ## 6. backend 与 e2e 的统一约束
 
-- backend 和 e2e 共用同一份 `meta.json` / `timeline.jsonl` / `artifacts.json` 基础契约。
+- backend 和 e2e 共用同一份 `meta.json` / `timeline.jsonl` / `runtime-events.jsonl` / `artifacts.json` 基础契约。
 - backend 与 e2e 的差异只体现在：
   - `meta.runtime.driver`
   - `meta.runtime.target`
   - `artifacts.json.items[].kind`
+  - `runtime-events.jsonl` 的采集路径
   - `timeline.jsonl` 中出现的语义事件名与信号类型
 
 ### e2e 默认附件策略
@@ -431,7 +455,7 @@ tests/report/<domain>/
   - `当前评估`
   - `下一步建议`
 - `证据` 默认只列出能定位该条证据的最小信息，例如 `caseId`、`runId`、`status`。
-- 不要在 report 正文里机械展开 `meta.json`、`timeline.jsonl`、`artifacts.json` 这些文件名。
+- 不要在 report 正文里机械展开 `meta.json`、`timeline.jsonl`、`runtime-events.jsonl`、`artifacts.json` 这些文件名。
 - 只有当失败分析或结论明确依赖某个关键附件时，才额外补充附件名称或用途说明。
 - `通过率` 只写当前节点覆盖范围内的统计，不混入其他节点数据。
 - `通过率` 固定拆成两组：
@@ -550,8 +574,9 @@ tests/report/<domain>/
 
 1. 运行目标测试命令。
 2. 读取对应 domain 下的 raw logs。
-3. 必要时回看失败 run 的 `meta.json`、`timeline.jsonl` 与 `artifacts.json`。
-4. 更新 `tests/report/<domain>/report.md`。
+3. 先看 `timeline.jsonl`；若信息仍不足，再回看 `runtime-events.jsonl` 与关键附件。
+4. 必要时继续回看失败 run 的 `meta.json` 与 `artifacts.json`。
+5. 更新 `tests/report/<domain>/report.md`。
 
 ## 9. 明确禁止
 

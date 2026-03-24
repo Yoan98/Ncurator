@@ -371,6 +371,7 @@ export const runE2ECase = async <TResult>(definition: E2ETestCaseDefinition<TRes
     throw error
   } finally {
     const signals = await launchedApp.collectSignals()
+    const runtimeEvents = signals.aiRunEventEntries.map((entry) => entry.event)
 
     for (const routeEntry of signals.routeEntries) {
       pushEvent({
@@ -488,6 +489,7 @@ export const runE2ECase = async <TResult>(definition: E2ETestCaseDefinition<TRes
     await writeRunLog({
       meta,
       events,
+      runtimeEvents,
       artifacts
     })
   }
