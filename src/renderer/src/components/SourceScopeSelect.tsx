@@ -94,9 +94,7 @@ const SourceScopeSelect: React.FC<SourceScopeSelectProps> = ({
       notFoundContent={loading ? <Spin size="small" /> : '没有匹配的资料范围'}
       onSearch={(nextQuery) => setQuery(nextQuery)}
       onFocus={() => {
-        if (options.length === 0) {
-          void loadOptions(query)
-        }
+        void loadOptions(query)
       }}
       onChange={(nextKeys) => {
         const nextScopes = nextKeys

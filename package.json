@@ -16,7 +16,6 @@
     "test:ai:backend:tools": "node scripts/test-workflow.mjs --domain ai --layer backend --suite tools",
     "test:ai:e2e": "node scripts/test-workflow.mjs --domain ai --layer e2e",
     "test:ai:sample": "node scripts/test-workflow.mjs --domain ai --layer backend --suite tools --group terminal --case terminal-basic-command",
-    "test:workspace": "zsh scripts/test-workspace.sh",
     "test:workspace:backend": "node scripts/test-workflow.mjs --domain workspace --layer backend",
     "start": "electron-vite preview",
     "dev": "electron-vite dev",

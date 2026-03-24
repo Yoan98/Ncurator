@@ -49,10 +49,7 @@ test('settings-web-source-management', async () => {
         name: 'filter-web-source',
         message: '使用搜索输入过滤网页资料列表',
         run: async () => {
-          await runtime.page
-            .getByTestId(importSelectors.webSourceSearchInput)
-            .locator('input')
-            .fill('workspace-test')
+          await runtime.page.getByPlaceholder('按标题或 URL 过滤网页资料').fill('workspace-test')
           await runtime.page.waitForFunction(
             ({ cardTestId }) => Boolean(document.querySelector(`[data-testid="${cardTestId}"]`)),
             {

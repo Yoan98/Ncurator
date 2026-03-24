@@ -46,6 +46,7 @@ export const selectSourceScope = async (
 ): Promise<void> => {
   const field = page.getByTestId(input.fieldTestId)
   await field.locator('.ant-select-selector').click()
-  await page.getByText(input.label, { exact: true }).click()
+  await field.locator('input').fill(input.label)
+  await page.locator('.ant-select-dropdown').getByText(input.label).first().click()
   await field.locator('.ant-select-selection-item').filter({ hasText: input.label }).waitFor()
 }

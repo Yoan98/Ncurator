@@ -254,8 +254,12 @@ tests/
 
 补充说明：
 
-- `workspace` 的完整域回归通过 `scripts/test-workspace.sh` 执行。
-- 原因是当前桌面环境下，Playwright Electron e2e 需要由 shell 直接拉起；backend 仍继续走 `scripts/test-workflow.mjs`。
+- `workspace` backend 继续通过 `scripts/test-workflow.mjs` 执行。
+- `workspace` e2e 在当前桌面环境下需要直接使用 shell 命令拉起；不要再通过额外的 `npm run` 或 shell wrapper 二次包装 Electron，否则可能在 `electron.launch` 前触发 `SIGABRT`。
+- 推荐顺序：
+  1. `pnpm test:workspace:backend`
+  2. `pnpm exec electron-vite build`
+  3. `pnpm exec vitest --config vitest.e2e.config.mts run tests/workspace/e2e`
 
 当前命令面：
 
@@ -264,8 +268,9 @@ tests/
 - `pnpm test:ai:backend:tools`
 - `pnpm test:ai:e2e`
 - `pnpm test:ai:sample`
-- `pnpm test:workspace`
 - `pnpm test:workspace:backend`
+- `pnpm exec electron-vite build`
+- `pnpm exec vitest --config vitest.e2e.config.mts run tests/workspace/e2e`
 
 runner 支持的过滤参数：
 

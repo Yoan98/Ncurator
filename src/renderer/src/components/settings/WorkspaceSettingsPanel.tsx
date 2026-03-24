@@ -867,15 +867,15 @@ const WorkspaceSettingsPanel: React.FC = () => {
             </Button>
           </div>
 
-          <Input.Search
-            size="large"
-            placeholder="按标题或 URL 过滤网页资料"
-            value={webKeyword}
-            onChange={(event) => setWebKeyword(event.target.value)}
-            onSearch={() => void loadWebSources()}
-            className="mb-4"
-            data-testid={importSelectors.webSourceSearchInput}
-          />
+          <div className="mb-4" data-testid={importSelectors.webSourceSearchInput}>
+            <Input.Search
+              size="large"
+              placeholder="按标题或 URL 过滤网页资料"
+              value={webKeyword}
+              onChange={(event) => setWebKeyword(event.target.value)}
+              onSearch={() => void loadWebSources()}
+            />
+          </div>
 
           <div
             className="min-h-[640px] rounded-2xl border border-[#E5E5E4] bg-[#FAFAF9] p-3"
