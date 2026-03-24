@@ -3,6 +3,8 @@ import { aiRunStateContractSchema } from '../../../../src/main/services/ai/schem
 import { createDirectorRunStateSchema } from '../../../../src/main/services/ai/director/state/schema'
 import { createInitialAiRunState, createDefaultAiRunStateFields } from '../../../../src/main/services/ai/utils/state'
 import { createHumanRunStateSchema } from '../../../../src/main/services/ai/human/state/schema'
+import { KB_HYBRID_SEARCH_CHUNKS_CONTRACT } from '../../../../src/main/services/ai/human/tools/catalog/toolDescriptors/kb'
+import { TERMINAL_RUN_COMMAND_CONTRACT } from '../../../../src/main/services/ai/human/tools/catalog/toolDescriptors/terminal'
 import {
   applyOpsSchema,
   docOpSchema,
@@ -105,6 +107,14 @@ test('contract-alignment', async () => {
         parsedApplyOps: applyOpsSchema.parse({
           docId: 'doc-1',
           ops: [op]
+        }),
+        parsedTerminalRunCommand: TERMINAL_RUN_COMMAND_CONTRACT.schema.parse({
+          command: 'cat README.md',
+          cwd: '.'
+        }),
+        parsedKbHybridSearch: KB_HYBRID_SEARCH_CHUNKS_CONTRACT.schema.parse({
+          queryText: '发布前复核要求',
+          limit: 3
         })
       }
     },
@@ -165,15 +175,19 @@ test('contract-alignment', async () => {
       runtime.assertThat(
         result.parsedParagraph.runs[0]?.text === '段落内容' &&
           result.parsedDocOp.type === 'insert_after' &&
-          result.parsedApplyOps.ops.length === 1,
+          result.parsedApplyOps.ops.length === 1 &&
+          result.parsedTerminalRunCommand.command === 'cat README.md' &&
+          result.parsedKbHybridSearch.queryText === '发布前复核要求',
         {
           name: 'docx-contract-parse',
           message:
-            'docx paragraph and operation contracts should stay aligned between exported types and input schemas',
+            'docx, terminal, and KB representative input contracts should stay aligned between shared tool contracts and schemas',
           data: {
             parsedParagraph: result.parsedParagraph,
             parsedDocOp: result.parsedDocOp,
-            parsedApplyOps: result.parsedApplyOps
+            parsedApplyOps: result.parsedApplyOps,
+            parsedTerminalRunCommand: result.parsedTerminalRunCommand,
+            parsedKbHybridSearch: result.parsedKbHybridSearch
           }
         }
       )
