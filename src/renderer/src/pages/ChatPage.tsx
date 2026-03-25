@@ -11,7 +11,7 @@ import type {
   LLMConfig,
   SearchResult,
   SourceScopeSelection,
-  ValidateDraftCommitResponse
+  ValidateDraftCommitResponse,
   WorkspaceSource,
   WorkspaceRuntimeBinding
 } from '../../../shared/types'
@@ -147,6 +147,11 @@ const ChatPage: React.FC = () => {
         )
       ).filter(Boolean),
     [selectedSourceScopes]
+  )
+
+  const selectedWorkspace = useMemo(
+    () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) || null,
+    [selectedWorkspaceId, workspaces]
   )
 
   const reviewTurn = useMemo(() => {
@@ -351,7 +356,29 @@ const ChatPage: React.FC = () => {
 
   useEffect(() => {
     void loadSessions()
-  }, [])
+    void loadWorkspaces()
+    void loadModelConfigs()
+  }, [loadModelConfigs, loadWorkspaces])
+
+  useEffect(() => {
+    const handleModelRefresh = (): void => {
+      void loadModelConfigs()
+    }
+    window.addEventListener('check-llm-config', handleModelRefresh)
+    return () => {
+      window.removeEventListener('check-llm-config', handleModelRefresh)
+    }
+  }, [loadModelConfigs])
+
+  useEffect(() => {
+    const refreshSources = (): void => {
+      void loadWorkspaces()
+    }
+    window.api.sourceListRefresh(refreshSources)
+    return () => {
+      window.api.removeSourceListRefreshListeners()
+    }
+  }, [loadWorkspaces])
 
   useEffect(() => {
     window.localStorage.setItem(WORKBENCH_SIDEBAR_STORAGE_KEY, String(sidebarCollapsed))
@@ -363,7 +390,9 @@ const ChatPage: React.FC = () => {
       setLoading(false)
       setAiRunId(null)
       setSearchTurn(null)
+      setInput('')
       setSelectedSourceScopes([])
+      setComposerResetKey((value) => value + 1)
       setPendingApprovalRequest(null)
       setApprovalSubmitting(false)
       setPendingWorkspaceRequest(null)
@@ -751,13 +780,16 @@ const ChatPage: React.FC = () => {
     const likelyExecutable =
       /\b(cmd|bash|shell|terminal|command|run)\b/i.test(userQuery) ||
       /终端|命令|脚本|执行|创建文件|删除文件|修改文件/.test(userQuery)
-    const hasWorkspaceBinding = selectedSourceScopes.some((scope) => scope.workspace?.rootPath)
+    const hasWorkspaceBinding =
+      selectedSourceScopes.some((scope) => scope.workspace?.rootPath) || Boolean(selectedWorkspace)
     if (likelyExecutable && !hasWorkspaceBinding) {
-      message.warning('该请求可能触发本地执行，请先通过 @ 选择工作空间、目录或文件范围')
+      message.warning('该请求可能触发本地执行，请先选择当前工作区，必要时再通过 @ 插入文件或目录')
       return
     }
 
     setInput('')
+    setSelectedSourceScopes([])
+    setComposerResetKey((value) => value + 1)
     setLoading(true)
     setSearchTurn(null)
     setPendingApprovalRequest(null)
@@ -804,6 +836,8 @@ const ChatPage: React.FC = () => {
         sessionId: currentSessionId,
         input: userQuery,
         selectedSourceScopes: selectedSourceScopes.length > 0 ? selectedSourceScopes : undefined,
+        modelConfigId: selectedModelConfigId || undefined,
+        workspace: createWorkspaceBinding(selectedWorkspace),
         allowNonLocal: false
       })
       if (!response.success || !response.runId) {
@@ -821,7 +855,11 @@ const ChatPage: React.FC = () => {
       }))
 
       try {
-        const searchResponse = await window.api.search(userQuery)
+        const searchResponse = await window.api.search(
+          userQuery,
+          'all',
+          selectedDocumentIds.length > 0 ? selectedDocumentIds : undefined
+        )
         const parsedResults = searchResponse.results.map(parseIpcResult)
         const unique: SearchResult[] = []
         const seenIds = new Set<string>()
@@ -857,6 +895,8 @@ const ChatPage: React.FC = () => {
     }
 
     setInput('')
+    setSelectedSourceScopes([])
+    setComposerResetKey((value) => value + 1)
     setLoading(true)
     setAiRunId(null)
     setPendingApprovalRequest(null)
@@ -884,8 +924,8 @@ const ChatPage: React.FC = () => {
       const results = response.results.map(parseIpcResult)
       const assistantContent =
         results.length > 0
-          ? `已在当前本地资料范围中找到 ${results.length} 条结果，右侧可以直接查看命中详情。`
-          : '未在当前本地资料范围中找到匹配结果。'
+          ? `已在当前资料范围中找到 ${results.length} 条结果，右侧可以直接查看命中详情。`
+          : '未在当前资料范围中找到匹配结果。'
       const assistantMessage: ChatMessage = {
         id: crypto.randomUUID(),
         session_id: currentSessionId,
@@ -956,9 +996,10 @@ const ChatPage: React.FC = () => {
 
   const handleContinueWithWorkspace = async (): Promise<void> => {
     if (!pendingWorkspaceRequest || !currentSessionId || loading) return
-    const hasWorkspaceBinding = selectedSourceScopes.some((scope) => scope.workspace?.rootPath)
+    const hasWorkspaceBinding =
+      selectedSourceScopes.some((scope) => scope.workspace?.rootPath) || Boolean(selectedWorkspace)
     if (!hasWorkspaceBinding) {
-      message.warning('请先通过 @ 选择工作空间、目录或文件范围后再继续')
+      message.warning('请先选择当前工作区，必要时再通过 @ 插入目录或文件后继续')
       return
     }
 
@@ -1002,6 +1043,8 @@ const ChatPage: React.FC = () => {
         sessionId: currentSessionId,
         input: pendingWorkspaceRequest.input,
         selectedSourceScopes: selectedSourceScopes.length > 0 ? selectedSourceScopes : undefined,
+        modelConfigId: selectedModelConfigId || undefined,
+        workspace: createWorkspaceBinding(selectedWorkspace),
         allowNonLocal: false
       })
       if (!response.success || !response.runId) {
@@ -1291,8 +1334,8 @@ const ChatPage: React.FC = () => {
                     <h3 className="text-[20px] font-semibold text-[#1F1F1F]">从一个问题开始</h3>
                     <p className="mt-2 text-[14px] leading-7 text-[#666666]">
                       {composerMode === 'search'
-                        ? '纯搜索模式只检索当前本地资料范围，不调用大模型。'
-                        : 'AI 会在当前范围内执行任务，并把步骤、文件和待确认修改整理到右侧。'}
+                        ? '搜索模式只检索当前资料范围。'
+                        : '智能模式会结合当前工作区与插入资料执行。'}
                     </p>
                   </div>
                 </div>
@@ -1307,102 +1350,27 @@ const ChatPage: React.FC = () => {
           </div>
 
           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[#F5F5F4] via-[#F5F5F4] to-transparent px-6 pb-6 pt-12">
-            <div className="mx-auto max-w-[920px] rounded-[24px] border border-[#E5E5E4] bg-white/96 px-4 py-4 shadow-[0_12px_30px_rgba(31,31,31,0.08)] backdrop-blur-sm transition-all duration-200 focus-within:border-[#D97757] focus-within:ring-4 focus-within:ring-[#F4E5DF]">
-              <TextArea
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                placeholder={
-                  composerMode === 'search'
-                    ? '输入要搜索的内容...'
-                    : '输入问题，AI 会整理步骤、文件和待确认修改...'
-                }
-                autoSize={isJsdomTestEnv ? undefined : { minRows: 1, maxRows: 6 }}
-                variant="borderless"
-                className="text-[15px] leading-7"
-                data-testid={workbenchSelectors.input}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault()
-                    void handleSend()
-                  }
+            <div className="mx-auto max-w-[920px]">
+              <WorkbenchComposer
+                mode={composerMode}
+                onModeChange={setComposerMode}
+                modelConfigs={modelConfigs}
+                selectedModelConfigId={selectedModelConfigId}
+                onModelConfigChange={setSelectedModelConfigId}
+                workspaces={workspaces}
+                selectedWorkspaceId={selectedWorkspaceId}
+                onWorkspaceChange={setSelectedWorkspaceId}
+                onDraftChange={(draft) => {
+                  setInput(draft.input)
+                  setSelectedSourceScopes(draft.selectedSourceScopes)
                 }}
+                onSubmit={() => void handleSend()}
+                onCancel={() => void handleCancel()}
+                loading={loading}
+                canSubmit={Boolean(input.trim())}
+                showCancel={loading && composerMode === 'ai' && Boolean(aiRunId)}
+                resetKey={composerResetKey}
               />
-
-              <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-end">
-                <div className="shrink-0">
-                  <div
-                    className="grid grid-cols-2 rounded-2xl bg-[#F5F5F4] p-1"
-                    data-testid={workbenchSelectors.modeSwitch}
-                  >
-                    {[
-                      { key: 'ai', label: 'AI 对话' },
-                      { key: 'search', label: '纯搜索' }
-                    ].map((item) => (
-                      <button
-                        key={item.key}
-                        type="button"
-                        onClick={() => setComposerMode(item.key as WorkbenchMode)}
-                        className={`rounded-xl px-3 py-2 text-[13px] transition-all duration-200 ${
-                          composerMode === item.key
-                            ? 'bg-white text-[#1F1F1F] shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
-                            : 'text-[#666666]'
-                        }`}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="min-w-0 flex-1" data-testid={workbenchSelectors.sourceScopeField}>
-                  <div className="mb-1.5 flex items-center justify-between gap-3 px-1">
-                    <span className="text-[11px] font-medium uppercase tracking-[0.16em] text-[#999999]">
-                      {composerMode === 'ai' ? '参考范围' : '搜索范围'}
-                    </span>
-                    <span className="text-[12px] text-[#999999]">
-                      {selectedSourceScopes.length > 0
-                        ? `已选 ${selectedSourceScopes.length} 项`
-                        : composerMode === 'ai'
-                          ? '可选'
-                          : '建议选择'}
-                    </span>
-                  </div>
-                  <SourceScopeSelect
-                    mode={composerMode === 'ai' ? 'chat' : 'search'}
-                    value={selectedSourceScopes}
-                    onChange={setSelectedSourceScopes}
-                    placeholder={
-                      composerMode === 'ai'
-                        ? '输入 @ 选择优先参考的工作空间、目录、文件或网页资料'
-                        : '输入 @ 锁定搜索范围，只搜索已准备的本地资料'
-                    }
-                    className="w-full"
-                  />
-                </div>
-
-                <div className="flex shrink-0 items-center gap-2 self-end">
-                  {loading && composerMode === 'ai' && aiRunId ? (
-                    <Button
-                      onClick={() => void handleCancel()}
-                      className="border-[#E5E5E4] bg-white"
-                      data-testid={workbenchSelectors.cancelButton}
-                    >
-                      取消
-                    </Button>
-                  ) : null}
-                  <Button
-                    type="primary"
-                    icon={<HiArrowUp className="h-4 w-4" />}
-                    onClick={() => void handleSend()}
-                    disabled={!input.trim() || loading}
-                    loading={loading}
-                    className={`${input.trim() ? '!bg-[#D97757]' : '!bg-[#E5E5E4] !text-white'} !rounded-xl !px-4 border-none shadow-none`}
-                    data-testid={workbenchSelectors.sendButton}
-                  >
-                    发送
-                  </Button>
-                </div>
-              </div>
 
               {composerMode === 'ai' && (pendingApprovalRequest || pendingWorkspaceRequest) ? (
                 <div
@@ -1444,16 +1412,14 @@ const ChatPage: React.FC = () => {
                     <div className="flex flex-col gap-3">
                       <div>{pendingWorkspaceRequest.reason}</div>
                       <div className="text-xs text-[#8A6510]">
-                        请先通过 @ 选择工作空间、目录或文件范围，再继续运行。
+                        请选择当前工作区，必要时再通过 @ 插入目录或文件后继续运行。
                       </div>
                       <div className="flex gap-2">
                         <Button
                           type="primary"
                           onClick={() => void handleContinueWithWorkspace()}
                           loading={loading}
-                          disabled={
-                            !selectedSourceScopes.some((scope) => scope.workspace?.rootPath)
-                          }
+                          disabled={!selectedWorkspace}
                           data-testid={chatSelectors.workspaceContinueButton}
                         >
                           继续运行
@@ -1485,34 +1451,6 @@ const ChatPage: React.FC = () => {
                   纯搜索只会检索已准备完成的本地资料；未准备文件不会进入候选结果。
                 </div>
               ) : null}
-
-              <div className="mt-3 flex items-center justify-between gap-3">
-                <div className="flex flex-wrap items-center gap-2 text-[12px] text-[#999999]">
-                  {composerMode === 'ai' ? (
-                    <>
-                      <Tooltip title="由主进程执行计划并回传步骤、文件与待确认修改。">
-                        <span className="flex items-center gap-1 rounded-full bg-[#F5F5F4] px-2.5 py-1">
-                          <HiBookOpen className="text-[#D97757]" />
-                          <span>AI Runner</span>
-                        </span>
-                      </Tooltip>
-                      <span className="rounded-full bg-[#F5F5F4] px-2.5 py-1 text-[#666666]">
-                        优先参考范围
-                      </span>
-                    </>
-                  ) : (
-                    <span className="rounded-full bg-[#F5F5F4] px-2.5 py-1 text-[#666666]">
-                      仅搜索本地资料
-                    </span>
-                  )}
-                  {selectedSourceScopes.length > 0 ? (
-                    <span className="rounded-full bg-[#FBF5F2] px-2.5 py-1 text-[#D97757]">
-                      已选 {selectedSourceScopes.length} 个
-                      {composerMode === 'ai' ? '参考范围' : '搜索范围'}
-                    </span>
-                  ) : null}
-                </div>
-              </div>
             </div>
           </div>
         </div>

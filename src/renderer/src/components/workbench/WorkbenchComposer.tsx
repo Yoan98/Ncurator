@@ -47,6 +47,7 @@ type WorkbenchComposerProps = {
   onSubmit: () => void
   onCancel: () => void
   loading: boolean
+  canSubmit: boolean
   showCancel: boolean
   resetKey: number
 }
@@ -66,6 +67,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   onSubmit,
   onCancel,
   loading,
+  canSubmit,
   showCancel,
   resetKey
 }) => {
@@ -114,10 +116,32 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     if (!editor || !selection || !selection.rangeCount || !selection.isCollapsed) return null
 
     const anchorNode = selection.anchorNode
-    if (!isTextNode(anchorNode) || !editor.contains(anchorNode)) return null
+    let textNode: Text | null = null
+    let caretOffset = selection.anchorOffset
 
-    const caretOffset = selection.anchorOffset
-    const beforeCaret = anchorNode.data.slice(0, caretOffset)
+    if (isTextNode(anchorNode) && editor.contains(anchorNode)) {
+      textNode = anchorNode
+    } else if (anchorNode === editor) {
+      const previousChild = editor.childNodes[Math.max(0, selection.anchorOffset - 1)] || null
+      if (isTextNode(previousChild)) {
+        textNode = previousChild
+        caretOffset = previousChild.data.length
+      }
+    } else if (anchorNode instanceof HTMLElement && editor.contains(anchorNode)) {
+      const previousChild = anchorNode.childNodes[Math.max(0, selection.anchorOffset - 1)] || null
+      const nextChild = anchorNode.childNodes[selection.anchorOffset] || null
+      if (isTextNode(previousChild)) {
+        textNode = previousChild
+        caretOffset = previousChild.data.length
+      } else if (isTextNode(nextChild)) {
+        textNode = nextChild
+        caretOffset = 0
+      }
+    }
+
+    if (!textNode) return null
+
+    const beforeCaret = textNode.data.slice(0, caretOffset)
     const triggerIndex = beforeCaret.lastIndexOf('@')
     if (triggerIndex < 0) return null
 
@@ -128,7 +152,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     if (previousChar && !/[\s([{,，。；;、]/.test(previousChar)) return null
 
     return {
-      textNode: anchorNode,
+      textNode,
       caretOffset,
       triggerIndex,
       query
@@ -227,7 +251,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     const loadMentionOptions = async (): Promise<void> => {
       setMentionLoading(true)
       try {
-        const scopeTypes =
+        const scopeTypes: SourceScopeSelection['scopeType'][] =
           selectedWorkspaceId && selectedWorkspaceId.trim() ? COMPOSER_SCOPE_TYPES : ['web']
         const response = await window.api.sourceScopeList({
           mode: mode === 'ai' ? 'chat' : 'search',
@@ -269,7 +293,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     const handleSelectionChange = (): void => {
       const editor = editorRef.current
       const selection = window.getSelection()
-      if (!editor || !selection || !editor.contains(selection.anchorNode)) return
+      if (!editor || !selection) return
+      if (selection.anchorNode !== editor && !editor.contains(selection.anchorNode)) return
       refreshMentionContext()
     }
 
@@ -617,9 +642,9 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             <button
               type="button"
               onClick={onSubmit}
-              disabled={loading}
+              disabled={loading || !canSubmit}
               className={`inline-flex h-14 w-14 items-center justify-center rounded-full text-white transition ${
-                loading ? 'bg-[#D8D8D6]' : 'bg-[#111111] hover:-translate-y-[1px]'
+                loading || !canSubmit ? 'bg-[#D8D8D6]' : 'bg-[#111111] hover:-translate-y-[1px]'
               }`}
               data-testid={workbenchSelectors.sendButton}
               aria-label={mode === 'ai' ? '发送智能请求' : '执行搜索'}

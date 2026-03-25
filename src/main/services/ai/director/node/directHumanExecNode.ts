@@ -1,5 +1,4 @@
 import type { AiRunState, DirectorNodeContext, HumanTaskRunner } from '../../types'
-import { buildDirectHumanPatch } from './helpers'
 import { buildDirectHumanObjective } from './objectives'
 import { createDirectorHumanDispatchNode } from './humanDispatch'
 
@@ -22,6 +21,10 @@ export const createDirectHumanExecNode = (input: {
         deliveryMode: 'user_answer',
         streamAnswer: true
       },
-      buildPatch: (output) => buildDirectHumanPatch(output)
+      buildPatch: (output) => ({
+        finalDeliveryMarkdown: output.deliveryMarkdown,
+        finalArtifacts: output.artifacts || [],
+        directorStage: 'director_complete'
+      })
     })
   })

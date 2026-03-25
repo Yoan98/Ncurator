@@ -40,13 +40,18 @@ export const createFixtureWorkspaceFromSettings = async (
 export const selectSourceScope = async (
   page: Page,
   input: {
-    fieldTestId: string
+    workspaceLabel: string
+    query: string
     label: string
   }
 ): Promise<void> => {
-  const field = page.getByTestId(input.fieldTestId)
-  await field.locator('.ant-select-selector').click()
-  await field.locator('input').fill(input.label)
-  await page.locator('.ant-select-dropdown').getByText(input.label).first().click()
-  await field.locator('.ant-select-selection-item').filter({ hasText: input.label }).waitFor()
+  const workspaceSelect = page.getByTestId(workbenchSelectors.workspaceSelect)
+  await workspaceSelect.locator('.ant-select-selector').click()
+  await page.locator('.ant-select-dropdown').getByText(input.workspaceLabel).first().click()
+
+  await page.getByRole('button', { name: '插入资料' }).click()
+  const editor = page.getByTestId(workbenchSelectors.input)
+  await editor.pressSequentially(input.query)
+  await page.getByTestId(workbenchSelectors.mentionPanel).getByText(input.label).first().click()
+  await editor.getByText(input.label).waitFor()
 }

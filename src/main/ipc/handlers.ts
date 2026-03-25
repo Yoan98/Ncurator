@@ -1098,13 +1098,16 @@ export function registerHandlers(services: {
 
   ipcMain.handle(
     'workspace-create',
-    async (_event, payload: CreateWorkspaceSourceRequest): Promise<WorkspaceMutationResponse> => {
+    async (event, payload: CreateWorkspaceSourceRequest): Promise<WorkspaceMutationResponse> => {
       try {
         const fixtureCreate = createE2EFixtureWorkspace({
           rootPath: payload.rootPath,
           name: payload.name
         })
-        if (fixtureCreate) return fixtureCreate
+        if (fixtureCreate) {
+          emitSourceListRefresh(event.sender)
+          return fixtureCreate
+        }
         const existingWorkspaces = await workspaceStore.listWorkspaces()
         await workspaceService.assertNoNestedWorkspace(
           payload.rootPath,
@@ -1119,6 +1122,7 @@ export function registerHandlers(services: {
         })
         await workspaceStore.saveWorkspace(scanResult.workspace)
         await workspaceStore.replaceWorkspaceNodes(workspaceId, scanResult.nodes)
+        emitSourceListRefresh(event.sender)
         return { success: true, workspace: scanResult.workspace }
       } catch (error: unknown) {
         console.error('❌ [WORKSPACE-CREATE] ERROR:', error)

@@ -1,8 +1,6 @@
 import { z } from 'zod/v4'
 import type { AiPlanTask } from '../../../../../shared/types'
-import { mergeArtifactRefs } from '../../utils/artifacts'
-import type { AiRunState, DirectorNodeContext, HumanTaskOutput } from '../../types'
-import { extractContextNoteReusableEvidence } from '../../human/shared/deliveryContracts'
+import type { AiRunState, DirectorNodeContext } from '../../types'
 
 export const DEFAULT_MAX_CONTEXT_ROUNDS = 2
 const DIRECTOR_HISTORY_LIMITS = {
@@ -31,10 +29,6 @@ export const appendContextEvidence = (state: AiRunState, text: string): string[]
   if (!normalized) return state.contextEvidence
   if (state.contextEvidence.includes(normalized)) return state.contextEvidence
   return [...state.contextEvidence, normalized].slice(-24)
-}
-
-export const extractReusableContextEvidence = (deliveryMarkdown: string | undefined): string[] => {
-  return extractContextNoteReusableEvidence(deliveryMarkdown)
 }
 
 export const loadDirectorHistory = (ctx: Pick<DirectorNodeContext, 'loadHistory'>) =>
@@ -109,70 +103,3 @@ export const pickPendingTaskIndex = (plan: AiPlanTask[], cursor = 0): number => 
   }
   return -1
 }
-
-export const buildContextEnrichPatch = (input: {
-  state: AiRunState
-  output: HumanTaskOutput
-}): Partial<AiRunState> => {
-  const reusableEvidence = extractReusableContextEvidence(input.output.deliveryMarkdown)
-  const nextContextEvidence =
-    reusableEvidence.length > 0
-      ? reusableEvidence.reduce(
-          (evidences, item) =>
-            appendContextEvidence({ ...input.state, contextEvidence: evidences }, item),
-          input.state.contextEvidence
-        )
-      : input.state.contextEvidence
-
-  return {
-    contextRounds: input.state.contextRounds + 1,
-    contextEvidence: nextContextEvidence,
-    contextObjective: undefined,
-    directorStage: 'director_intent'
-  }
-}
-
-export const buildDirectHumanPatch = (output: HumanTaskOutput): Partial<AiRunState> => ({
-  finalDeliveryMarkdown: output.deliveryMarkdown,
-  finalArtifacts: output.artifacts || [],
-  directorStage: 'director_complete'
-})
-
-export const buildPlanExecPatch = (input: {
-  plan: AiPlanTask[]
-  taskIndex: number
-  output: HumanTaskOutput
-}): Pick<AiRunState, 'plan' | 'dispatchCursor' | 'directorStage'> => {
-  const runningPlan = input.plan.map((item, index) =>
-    index === input.taskIndex ? { ...item, status: 'running' as const } : item
-  )
-  const nextPlan = runningPlan.map((item, index) => {
-    if (index !== input.taskIndex) return item
-
-    return {
-      ...item,
-      status: 'completed' as const,
-      deliveryMarkdown: input.output.deliveryMarkdown,
-      artifacts: input.output.artifacts
-    }
-  })
-  const hasPending = nextPlan.some((item) => item.status === 'ready')
-
-  return {
-    plan: nextPlan,
-    dispatchCursor: input.taskIndex + 1,
-    directorStage: !hasPending ? 'director_synthesis_human' : 'director_plan_exec'
-  }
-}
-
-export const buildSynthesisHumanPatch = (input: {
-  state: AiRunState
-  output: HumanTaskOutput
-}): Partial<AiRunState> => ({
-  finalDeliveryMarkdown: input.output.deliveryMarkdown,
-  finalArtifacts: mergeArtifactRefs(
-    ...input.state.plan.map((task) => task.artifacts),
-    input.output.artifacts
-  ),
-  directorStage: 'director_complete'
-})

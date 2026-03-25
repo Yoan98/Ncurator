@@ -4,7 +4,8 @@ import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import { workbenchSelectors } from '../../../../../src/renderer/src/testing/selectors'
 import { openWorkbench, selectSourceScope } from '../../utils/workspaceUi'
 
-const E2E_UNPREPARED_SCOPE_LABEL = 'E2E 未准备工作区'
+const E2E_UNPREPARED_WORKSPACE_LABEL = 'E2E 未准备工作区'
+const E2E_UNPREPARED_DIRECTORY_LABEL = 'docs'
 
 test('workspace-source-scope-bindings-and-warnings', async () => {
   await runE2ECase({
@@ -15,7 +16,7 @@ test('workspace-source-scope-bindings-and-warnings', async () => {
     suite: 'scope',
     groups: ['scenario'],
     description:
-      'workbench should expose unprepared workspace scopes in AI mode, hide them from pure search, and show the corresponding user-facing warnings.',
+      'workbench should scope @ suggestions to the current workspace, keep unprepared directory selections visible in AI mode, and hide them from pure search suggestions.',
     fixtures: [],
     runMode: 'repeatable',
     execute: async (runtime) => {
@@ -31,31 +32,42 @@ test('workspace-source-scope-bindings-and-warnings', async () => {
         name: 'create-unprepared-workspace',
         message: '通过 IPC 创建一个尚未准备的工作空间 fixture',
         run: async () => {
-          const response = await runtime.page.evaluate(async (): Promise<WorkspaceMutationResponse> => {
-            return window.api.workspaceCreate({
-              rootPath: '/tmp/ncurator-e2e-unprepared-workspace',
-              name: 'E2E 未准备工作区'
-            })
-          })
+          const response = await runtime.page.evaluate(
+            async (workspaceName: string): Promise<WorkspaceMutationResponse> => {
+              return window.api.workspaceCreate({
+                rootPath: '/tmp/ncurator-e2e-unprepared-workspace',
+                name: workspaceName
+              })
+            },
+            E2E_UNPREPARED_WORKSPACE_LABEL
+          )
           if (!response.success) {
             throw new Error(response.error || 'failed to create e2e workspace fixture')
           }
+
+          await runtime.page.evaluate(() => {
+            window.location.hash = '#/settings?tab=workspace'
+          })
+          await openWorkbench(runtime.page)
         }
       })
 
       const chatScopes = await runtime.page.evaluate(async (): Promise<SourceScopeListResponse> => {
         return window.api.sourceScopeList({
-          mode: 'chat'
+          mode: 'chat',
+          workspaceId: 'e2e-import-workspace-1',
+          scopeTypes: ['directory', 'file', 'web']
         })
       })
 
       await runtime.step({
         name: 'select-unprepared-scope',
-        message: '在 AI 模式下选择未准备工作空间范围',
+        message: '在 AI 模式下选中当前工作区，并通过 @ 选择未准备目录',
         run: async () => {
           await selectSourceScope(runtime.page, {
-            fieldTestId: workbenchSelectors.sourceScopeField,
-            label: E2E_UNPREPARED_SCOPE_LABEL
+            workspaceLabel: E2E_UNPREPARED_WORKSPACE_LABEL,
+            query: E2E_UNPREPARED_DIRECTORY_LABEL,
+            label: E2E_UNPREPARED_DIRECTORY_LABEL
           })
           await runtime.page.getByTestId(workbenchSelectors.scopeAiWarning).waitFor()
         }
@@ -67,17 +79,17 @@ test('workspace-source-scope-bindings-and-warnings', async () => {
         name: 'switch-to-search-mode',
         message: '切换到纯搜索模式并检查提示',
         run: async () => {
-          await runtime.page
-            .getByTestId(workbenchSelectors.modeSwitch)
-            .getByText('纯搜索', { exact: true })
-            .click()
+          await runtime.page.getByTestId(workbenchSelectors.modeSwitch).locator('.ant-select-selector').click()
+          await runtime.page.locator('.ant-select-dropdown').getByText('搜索').click()
           await runtime.page.getByTestId(workbenchSelectors.scopeSearchWarning).waitFor()
         }
       })
 
       const searchScopes = await runtime.page.evaluate(async (): Promise<SourceScopeListResponse> => {
         return window.api.sourceScopeList({
-          mode: 'search'
+          mode: 'search',
+          workspaceId: 'e2e-import-workspace-1',
+          scopeTypes: ['directory', 'file', 'web']
         })
       })
       const searchWarningText = await runtime.page
@@ -99,20 +111,20 @@ test('workspace-source-scope-bindings-and-warnings', async () => {
     assert: async (result, runtime) => {
       await runtime.assertThat(
         result.chatScopes.items.some(
-          (scope) => scope.label === E2E_UNPREPARED_SCOPE_LABEL && scope.hasUnpreparedFiles
+          (scope) => scope.label === E2E_UNPREPARED_DIRECTORY_LABEL && scope.hasUnpreparedFiles
         ),
         {
-          name: 'workspace-source-scope-chat-exposes-unprepared-workspace',
-          message: 'chat mode should expose unprepared workspace scopes so AI mode can still read local files directly',
+          name: 'workspace-source-scope-chat-exposes-unprepared-directory',
+          message: 'chat mode should expose unprepared directory scopes inside the current workspace so AI mode can still read local files directly',
           data: result
         }
       )
 
       await runtime.assertThat(
-        !result.searchScopes.items.some((scope) => scope.label === E2E_UNPREPARED_SCOPE_LABEL),
+        !result.searchScopes.items.some((scope) => scope.label === E2E_UNPREPARED_DIRECTORY_LABEL),
         {
-          name: 'workspace-source-scope-search-hides-unprepared-workspace',
-          message: 'pure search mode should hide unprepared workspace scopes from the selectable candidates',
+          name: 'workspace-source-scope-search-hides-unprepared-directory',
+          message: 'pure search mode should hide unprepared directory scopes from the selectable candidates',
           data: result
         }
       )

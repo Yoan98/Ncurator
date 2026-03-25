@@ -6,6 +6,10 @@ export const DEFAULT_HUMAN_RUNTIME: HumanState['runtime'] = {
   status: 'running'
 }
 
+export const createDefaultHumanRuntime = (): HumanState['runtime'] => ({
+  ...DEFAULT_HUMAN_RUNTIME
+})
+
 export const createEmptyHumanTaskInput = (): HumanTaskInput => ({
   taskId: '',
   userInput: ''
@@ -40,9 +44,7 @@ export const createDefaultHumanStateFields = (): Pick<
   'task' | 'runtime' | 'brainMemory' | 'runtimeArtifacts' | 'trace'
 > => ({
   task: createEmptyHumanTaskInput(),
-  runtime: {
-    ...DEFAULT_HUMAN_RUNTIME
-  },
+  runtime: createDefaultHumanRuntime(),
   brainMemory: createDefaultHumanBrainMemory(),
   runtimeArtifacts: [],
   trace: createDefaultHumanTrace()

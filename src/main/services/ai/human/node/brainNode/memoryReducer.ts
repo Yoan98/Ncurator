@@ -4,16 +4,8 @@ const INVALID_MEMORY_OP_HINT =
   'memoryReducer 检测到非法记忆编辑，已忽略对应操作，请重新判断下一步。'
 
 type BrainMemoryInside = HumanState['brainMemory']['inside']
-type BrainMemoryField = keyof BrainMemoryInside
 type NonRemoveBrainMemoryOp = Exclude<BrainMemoryOp, { op: 'remove' }>
-type BrainMemoryFieldList<TField extends BrainMemoryField> = BrainMemoryInside[TField]
-type BrainMemoryFieldValue<TField extends BrainMemoryField> = BrainMemoryFieldList<TField>[number]
-type FactsMemoryOp = Extract<NonRemoveBrainMemoryOp, { field: 'facts' }>
-type EvidencesMemoryOp = Extract<NonRemoveBrainMemoryOp, { field: 'evidences' }>
-type OpenQuestionsMemoryOp = Extract<NonRemoveBrainMemoryOp, { field: 'openQuestions' }>
-type BrainMemoryFieldStrategyContext = {
-  validEvidenceIds: Set<string>
-}
+type BrainMemoryRemoveOp = Extract<BrainMemoryOp, { op: 'remove' }>
 
 const hasEvidenceIds = (
   evidenceIdsInScope: Set<string>,
@@ -32,16 +24,7 @@ const removeAtIndex = <T>(list: T[], index: number): T[] => {
   return list.filter((_, currentIndex) => currentIndex !== index)
 }
 
-const setFieldValue = <TField extends BrainMemoryField>(
-  inside: BrainMemoryInside,
-  field: TField,
-  value: BrainMemoryInside[TField]
-): BrainMemoryInside => ({
-  ...inside,
-  [field]: value
-})
-
-const applyCollectionOp = <T>(input: {
+const applyAddOrEdit = <T>(input: {
   list: T[]
   op: {
     op: 'add' | 'edit'
@@ -83,142 +66,112 @@ const applyCollectionOp = <T>(input: {
   }
 }
 
-const removeCollectionItem = <T>(list: T[], index: number): { list: T[]; invalid: boolean } => {
-  if (index < 0 || index >= list.length) {
+const removeCollectionItem = <T>(input: {
+  list: T[]
+  index: number
+}): { list: T[]; invalid: boolean } => {
+  if (input.index < 0 || input.index >= input.list.length) {
     return {
-      list,
+      list: input.list,
       invalid: true
     }
   }
   return {
-    list: removeAtIndex(list, index),
+    list: removeAtIndex(input.list, input.index),
     invalid: false
   }
 }
 
-const applyCollectionFieldOp = <TField extends BrainMemoryField>(input: {
-  inside: BrainMemoryInside
-  field: TField
-  list: BrainMemoryFieldList<TField>
-  op: {
-    op: 'add' | 'edit'
-    index?: number
-    value: BrainMemoryFieldValue<TField>
-  }
-  validate?: (value: BrainMemoryFieldValue<TField>) => boolean
-}) => {
-  const outcome = applyCollectionOp<BrainMemoryFieldValue<TField>>({
-    list: input.list,
-    op: input.op,
-    validate: input.validate
-  })
-  return {
-    inside: setFieldValue(input.inside, input.field, outcome.list as BrainMemoryFieldList<TField>),
-    invalid: outcome.invalid
-  }
-}
-
-const removeCollectionFieldOp = <TField extends BrainMemoryField>(input: {
-  inside: BrainMemoryInside
-  field: TField
-  list: BrainMemoryFieldList<TField>
-  index: number
-}) => {
-  const outcome = removeCollectionItem<BrainMemoryFieldValue<TField>>(input.list, input.index)
-  return {
-    inside: setFieldValue(input.inside, input.field, outcome.list as BrainMemoryFieldList<TField>),
-    invalid: outcome.invalid
-  }
-}
-
-const BRAIN_MEMORY_FIELD_STRATEGIES = {
-  facts: {
-    apply: (
-      inside: BrainMemoryInside,
-      op: FactsMemoryOp,
-      context: BrainMemoryFieldStrategyContext
-    ) =>
-      applyCollectionFieldOp({
-        inside,
-        field: 'facts',
-        list: inside.facts,
-        op,
-        validate: (value) => hasEvidenceIds(context.validEvidenceIds, value.evidenceIds)
-      }),
-    remove: (inside: BrainMemoryInside, index: number) =>
-      removeCollectionFieldOp({
-        inside,
-        field: 'facts',
-        list: inside.facts,
-        index
-      })
-  },
-  evidences: {
-    apply: (
-      inside: BrainMemoryInside,
-      op: EvidencesMemoryOp
-    ) =>
-      applyCollectionFieldOp({
-        inside,
-        field: 'evidences',
-        list: inside.evidences,
-        op
-      }),
-    remove: (inside: BrainMemoryInside, index: number) =>
-      removeCollectionFieldOp({
-        inside,
-        field: 'evidences',
-        list: inside.evidences,
-        index
-      })
-  },
-  openQuestions: {
-    apply: (
-      inside: BrainMemoryInside,
-      op: OpenQuestionsMemoryOp
-    ) =>
-      applyCollectionFieldOp({
-        inside,
-        field: 'openQuestions',
-        list: inside.openQuestions,
-        op
-      }),
-    remove: (inside: BrainMemoryInside, index: number) =>
-      removeCollectionFieldOp({
-        inside,
-        field: 'openQuestions',
-        list: inside.openQuestions,
-        index
-      })
-  }
-}
-
-const applyFieldOp = (input: {
+const applyNonRemoveOp = (input: {
   inside: BrainMemoryInside
   op: NonRemoveBrainMemoryOp
-  context: BrainMemoryFieldStrategyContext
-}) => {
+  validEvidenceIds: Set<string>
+}): { inside: BrainMemoryInside; invalid: boolean } => {
   if (input.op.field === 'facts') {
-    return BRAIN_MEMORY_FIELD_STRATEGIES.facts.apply(input.inside, input.op, input.context)
+    const outcome = applyAddOrEdit({
+      list: input.inside.facts,
+      op: input.op,
+      validate: (value) => hasEvidenceIds(input.validEvidenceIds, value.evidenceIds)
+    })
+    return {
+      inside: {
+        ...input.inside,
+        facts: outcome.list
+      },
+      invalid: outcome.invalid
+    }
   }
+
   if (input.op.field === 'evidences') {
-    return BRAIN_MEMORY_FIELD_STRATEGIES.evidences.apply(input.inside, input.op)
+    const outcome = applyAddOrEdit({
+      list: input.inside.evidences,
+      op: input.op
+    })
+    return {
+      inside: {
+        ...input.inside,
+        evidences: outcome.list
+      },
+      invalid: outcome.invalid
+    }
   }
-  return BRAIN_MEMORY_FIELD_STRATEGIES.openQuestions.apply(input.inside, input.op)
+
+  const outcome = applyAddOrEdit({
+    list: input.inside.openQuestions,
+    op: input.op
+  })
+  return {
+    inside: {
+      ...input.inside,
+      openQuestions: outcome.list
+    },
+    invalid: outcome.invalid
+  }
 }
 
-const removeFieldOp = (input: {
+const applyRemoveOp = (input: {
   inside: BrainMemoryInside
-  field: BrainMemoryField
-  index: number
-}) => {
-  if (input.field === 'facts') {
-    return BRAIN_MEMORY_FIELD_STRATEGIES.facts.remove(input.inside, input.index)
+  op: BrainMemoryRemoveOp
+}): { inside: BrainMemoryInside; invalid: boolean } => {
+  if (input.op.field === 'facts') {
+    const outcome = removeCollectionItem({
+      list: input.inside.facts,
+      index: input.op.index
+    })
+    return {
+      inside: {
+        ...input.inside,
+        facts: outcome.list
+      },
+      invalid: outcome.invalid
+    }
   }
-  if (input.field === 'evidences') {
-    return BRAIN_MEMORY_FIELD_STRATEGIES.evidences.remove(input.inside, input.index)
+
+  if (input.op.field === 'evidences') {
+    const outcome = removeCollectionItem({
+      list: input.inside.evidences,
+      index: input.op.index
+    })
+    return {
+      inside: {
+        ...input.inside,
+        evidences: outcome.list
+      },
+      invalid: outcome.invalid
+    }
   }
-  return BRAIN_MEMORY_FIELD_STRATEGIES.openQuestions.remove(input.inside, input.index)
+
+  const outcome = removeCollectionItem({
+    list: input.inside.openQuestions,
+    index: input.op.index
+  })
+  return {
+    inside: {
+      ...input.inside,
+      openQuestions: outcome.list
+    },
+    invalid: outcome.invalid
+  }
 }
 
 const computeFinalEvidenceIds = (input: {
@@ -231,21 +184,24 @@ const computeFinalEvidenceIds = (input: {
     if (op.field !== 'evidences') return
 
     if (op.op === 'remove') {
-      const outcome = removeFieldOp({
-        inside: setFieldValue(input.inside, 'evidences', evidences),
-        field: 'evidences',
-        index: op.index
+      const outcome = applyRemoveOp({
+        inside: {
+          ...input.inside,
+          evidences
+        },
+        op
       })
       if (!outcome.invalid) evidences = outcome.inside.evidences
       return
     }
 
-    const outcome = applyFieldOp({
-      inside: setFieldValue(input.inside, 'evidences', evidences),
+    const outcome = applyNonRemoveOp({
+      inside: {
+        ...input.inside,
+        evidences
+      },
       op,
-      context: {
-        validEvidenceIds: new Set(evidences.map((item) => item.id))
-      }
+      validEvidenceIds: new Set(evidences.map((item) => item.id))
     })
     if (!outcome.invalid) {
       evidences = outcome.inside.evidences
@@ -276,10 +232,9 @@ export const reduceBrainMemory = (input: {
 
   input.memoryOps.forEach((op) => {
     if (op.op === 'remove') {
-      const outcome = removeFieldOp({
+      const outcome = applyRemoveOp({
         inside: nextInside,
-        field: op.field,
-        index: op.index
+        op
       })
       if (outcome.invalid) {
         hasInvalidOp = true
@@ -289,12 +244,10 @@ export const reduceBrainMemory = (input: {
       return
     }
 
-    const outcome = applyFieldOp({
+    const outcome = applyNonRemoveOp({
       inside: nextInside,
       op,
-      context: {
-        validEvidenceIds: finalEvidenceIds
-      }
+      validEvidenceIds: finalEvidenceIds
     })
 
     nextInside = outcome.inside

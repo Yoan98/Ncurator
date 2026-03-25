@@ -82,11 +82,7 @@ const createKbChunkSearchDefinition = (input: {
       name: input.name,
       purpose: input.purpose,
       whenToUse: input.whenToUse,
-      preconditions: [
-        input.name === 'kb_hybrid_search_chunks'
-          ? 'queryText 不能为空。'
-          : 'queryText 不能为空。'
-      ],
+      preconditions: ['queryText 不能为空。'],
       args: KB_SEARCH_ARGS,
       returns: createKbSearchReturns(input.returnType),
       commonMistakes: input.commonMistakes,

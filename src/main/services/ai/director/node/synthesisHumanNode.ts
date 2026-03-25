@@ -1,5 +1,5 @@
 import type { AiRunState, DirectorNodeContext, HumanTaskRunner } from '../../types'
-import { buildSynthesisHumanPatch } from './helpers'
+import { mergeArtifactRefs } from '../../utils/artifacts'
 import { buildSynthesisHumanObjective } from './objectives'
 import { createDirectorHumanDispatchNode } from './humanDispatch'
 
@@ -24,10 +24,13 @@ export const createSynthesisHumanNode = (input: {
         deliveryMode: 'user_answer',
         streamAnswer: true
       },
-      buildPatch: (output) =>
-        buildSynthesisHumanPatch({
-          state,
-          output
-        })
+      buildPatch: (output) => ({
+        finalDeliveryMarkdown: output.deliveryMarkdown,
+        finalArtifacts: mergeArtifactRefs(
+          ...state.plan.map((task) => task.artifacts),
+          output.artifacts
+        ),
+        directorStage: 'director_complete'
+      })
     })
   })
