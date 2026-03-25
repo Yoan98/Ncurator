@@ -1,74 +1,60 @@
-import React, { useMemo } from 'react'
-import { Segmented } from 'antd'
-import { HiCog6Tooth, HiOutlineRectangleStack } from 'react-icons/hi2'
+import React from 'react'
+import { Navigate, useLocation, useParams } from 'react-router-dom'
+import AppPageHeader from '../components/app/AppPageHeader'
 import ModelSettingsPanel from '../components/settings/ModelSettingsPanel'
+import SettingsMenuButton from '../components/settings/SettingsMenuButton'
+import WebSourcesSettingsPanel from '../components/settings/WebSourcesSettingsPanel'
 import WorkspaceSettingsPanel from '../components/settings/WorkspaceSettingsPanel'
-import { SETTINGS_TABS } from '../components/settings/constants'
-import type { SettingsTabValue } from '../components/settings/types'
+import { SETTINGS_SECTION_META } from '../components/settings/constants'
+import type { SettingsSectionValue } from '../components/settings/types'
 import { settingsSelectors } from '../testing/selectors'
 
-const getInitialTab = (): SettingsTabValue => {
-  const params = new URLSearchParams(window.location.hash.split('?')[1] || '')
+const normalizeSettingsSection = (value: string | undefined): SettingsSectionValue | null => {
+  if (!value) return null
+  if (value === 'model' || value === 'workspace' || value === 'web-sources') {
+    return value
+  }
+  return null
+}
+
+const getLegacySection = (search: string): SettingsSectionValue => {
+  const params = new URLSearchParams(search)
   const tab = params.get('tab')
-  return tab === 'workspace' ? 'workspace' : 'model'
+  if (tab === 'workspace') return 'workspace'
+  return 'model'
 }
 
 const SettingsPage: React.FC = () => {
-  const [activeTab, setActiveTab] = React.useState<SettingsTabValue>(getInitialTab)
+  const location = useLocation()
+  const params = useParams<{ section?: string }>()
+  const currentSection = normalizeSettingsSection(params.section)
 
-  const activeMeta = useMemo(
-    () =>
-      activeTab === 'workspace'
-        ? {
-            icon: <HiOutlineRectangleStack className="h-5 w-5" />,
-            title: 'Workspace 设置',
-            description: '管理工作空间、网页资料和本地优先上下文。'
-          }
-        : {
-            icon: <HiCog6Tooth className="h-5 w-5" />,
-            title: '模型设置',
-            description: '配置模型服务、API Key 和当前默认执行入口。'
-          },
-    [activeTab]
-  )
-
-  const handleTabChange = (value: string): void => {
-    const nextTab = value === 'workspace' ? 'workspace' : 'model'
-    setActiveTab(nextTab)
-    const url = new URL(window.location.href)
-    url.hash = `#/settings?tab=${nextTab}`
-    window.history.replaceState(null, '', url.toString())
+  if (!params.section) {
+    return <Navigate to={SETTINGS_SECTION_META[getLegacySection(location.search)].path} replace />
   }
 
+  if (!currentSection) {
+    return <Navigate to={SETTINGS_SECTION_META.model.path} replace />
+  }
+
+  const sectionMeta = SETTINGS_SECTION_META[currentSection]
+
   return (
-    <div className="min-h-full bg-[#F5F5F4] px-5 py-6" data-testid={settingsSelectors.page}>
-      <div className="mx-auto flex max-w-7xl flex-col gap-5">
-        <section className="flex flex-col gap-4 rounded-[22px] border border-[#E5E5E4] bg-white px-6 py-5 shadow-[0_1px_2px_rgba(0,0,0,0.04)] lg:flex-row lg:items-center lg:justify-between">
-          <div className="max-w-2xl">
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#F4E5DF] bg-[#FBF5F2] px-3 py-1 text-[11px] font-medium text-[#D97757]">
-              {activeMeta.icon}
-              Settings
-            </div>
-            <h1 className="text-[24px] font-semibold tracking-tight text-[#1F1F1F]">
-              {activeMeta.title}
-            </h1>
-            <p className="mt-2 text-sm leading-7 text-[#666666]">{activeMeta.description}</p>
-          </div>
+    <div
+      className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(251,245,242,0.95),_rgba(245,245,244,0.92)_42%,_#F5F5F4_72%)]"
+      data-testid={settingsSelectors.page}
+    >
+      <div className="mx-auto flex max-w-[1360px] flex-col gap-5 px-5 py-5 lg:px-6">
+        <AppPageHeader
+          icon={sectionMeta.icon}
+          title={sectionMeta.title}
+          description={sectionMeta.description}
+          actions={<SettingsMenuButton label="Setting" />}
+        />
 
-          <Segmented
-            value={activeTab}
-            onChange={(value) => handleTabChange(String(value))}
-            options={SETTINGS_TABS.map((item) => ({
-              label: item.label,
-              value: item.value
-            }))}
-            className="bg-[#F5F5F4]"
-            size="middle"
-            data-testid={settingsSelectors.tabSwitch}
-          />
-        </section>
-
-        <div>{activeTab === 'workspace' ? <WorkspaceSettingsPanel /> : <ModelSettingsPanel />}</div>
+        {currentSection === 'workspace' ? <WorkspaceSettingsPanel /> : null}
+        {currentSection === 'model' ? <ModelSettingsPanel /> : null}
+        {currentSection === 'web-sources' ? <WebSourcesSettingsPanel /> : null}
       </div>
     </div>
   )

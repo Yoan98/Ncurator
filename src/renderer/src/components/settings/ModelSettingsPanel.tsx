@@ -57,6 +57,11 @@ const ModelSettingsPanel: React.FC = () => {
     return exactMatch || []
   }, [currentBaseUrl])
 
+  const activeConfig = useMemo(
+    () => configs.find((config) => config.is_active) || configs[0] || null,
+    [configs]
+  )
+
   const handleAdd = (): void => {
     setEditingConfig(null)
     form.resetFields()
@@ -180,33 +185,66 @@ const ModelSettingsPanel: React.FC = () => {
   ]
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-[28px] border border-[#E5E5E4] bg-[radial-gradient(circle_at_top_left,_#FBF5F2,_#F5F5F4_68%)] px-7 py-7 shadow-[0_4px_16px_rgba(0,0,0,0.06)]">
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div className="max-w-2xl">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#F4E5DF] bg-white px-3 py-1 text-[12px] font-medium text-[#D97757]">
-              <HiCog6Tooth className="h-4 w-4" />
+    <div className="space-y-4">
+      <section className="rounded-[18px] border border-[#E5E5E4] bg-white/88 px-5 py-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="max-w-3xl">
+            <div className="flex items-center gap-2 text-[12px] font-medium uppercase tracking-[0.18em] text-[#999999]">
+              <HiCog6Tooth className="h-4 w-4 text-[#D97757]" />
               Model
             </div>
-            <h2 className="text-[28px] font-semibold tracking-tight text-[#1F1F1F]">
-              模型与 API 配置
+            <h2 className="mt-2 text-[18px] font-semibold tracking-tight text-[#1F1F1F]">
+              默认对话模型与 API
             </h2>
-            <p className="mt-3 max-w-2xl text-base leading-relaxed text-[#666666]">
-              在这里维护对话与推理使用的模型配置。激活后的配置会立即成为默认执行入口。
+            <p className="mt-1 text-[13px] leading-6 text-[#666666]">
+              这里只保留必要信息：当前启用配置、服务商入口和新增动作，不再用大段说明占首屏。
             </p>
           </div>
-          <Button
-            type="primary"
-            icon={<HiPlus className="h-4 w-4" />}
-            onClick={handleAdd}
-            className="h-11 rounded-lg border-none !bg-[#D97757] px-5 shadow-sm hover:!bg-[#C66A4A]"
-          >
-            新增配置
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Tag className="!m-0 rounded-full border-[#E5E5E4] bg-white px-3 py-1 text-[12px] text-[#666666]">
+              共 {configs.length} 个配置
+            </Tag>
+            {activeConfig ? (
+              <Tag className="!m-0 rounded-full border-[#F4E5DF] bg-[#FBF5F2] px-3 py-1 text-[12px] text-[#D97757]">
+                当前 {activeConfig.model_name}
+              </Tag>
+            ) : null}
+            <Button
+              type="primary"
+              icon={<HiPlus className="h-4 w-4" />}
+              onClick={handleAdd}
+              className="border-none !bg-[#D97757] shadow-sm hover:!bg-[#C66A4A]"
+            >
+              新增配置
+            </Button>
+          </div>
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-[28px] border border-[#E5E5E4] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.06)]">
+      <section className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_280px]">
+        <div className="rounded-[18px] border border-[#E5E5E4] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+          <div className="text-[14px] font-semibold text-[#1F1F1F]">当前使用</div>
+          {activeConfig ? (
+            <div className="mt-3 space-y-2 text-[12px] text-[#666666]">
+              <div className="text-[15px] font-semibold text-[#1F1F1F]">{activeConfig.name}</div>
+              <div>{activeConfig.model_name}</div>
+              <div className="truncate">{activeConfig.base_url}</div>
+            </div>
+          ) : (
+            <div className="mt-3 text-[12px] text-[#999999]">还没有可用配置，请先新增一条。</div>
+          )}
+        </div>
+        <div className="rounded-[18px] border border-[#E5E5E4] bg-[#FCFBF8] px-5 py-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+          <div className="text-[14px] font-semibold text-[#1F1F1F]">使用方式</div>
+          <div className="mt-3 space-y-2 text-[12px] leading-6 text-[#666666]">
+            <div>保留一个默认配置作为当前执行入口。</div>
+            <div>切换启用后，workbench 会立即读取新配置。</div>
+            <div>服务商建议优先从预设地址选择，再补模型名称。</div>
+          </div>
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-[20px] border border-[#E5E5E4] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
         <Table
           dataSource={configs}
           columns={columns}
@@ -214,7 +252,7 @@ const ModelSettingsPanel: React.FC = () => {
           pagination={false}
           loading={loading}
           size="middle"
-          className="[&_.ant-table-thead_th]:!bg-[#F5F5F4] [&_.ant-table-thead_th]:!py-4 [&_.ant-table-thead_th]:!text-[#666666] [&_.ant-table-thead_th]:!font-medium [&_.ant-table-tbody_td]:!py-4"
+          className="[&_.ant-table-thead_th]:!bg-[#F5F5F4] [&_.ant-table-thead_th]:!py-3 [&_.ant-table-thead_th]:!text-[12px] [&_.ant-table-thead_th]:!text-[#666666] [&_.ant-table-thead_th]:!font-medium [&_.ant-table-tbody_td]:!py-3 [&_.ant-table-tbody_td]:!align-middle"
         />
       </section>
 

@@ -1,4 +1,12 @@
 import type { WorkspaceNode, WorkspaceSource, WebSourceRecord } from '../../../../shared/types'
+import type { SettingsSectionMeta, SettingsSectionValue } from './types'
+import {
+  HiCloudArrowDown,
+  HiGlobeAlt,
+  HiOutlineBeaker,
+  HiOutlineRectangleStack,
+  HiSparkles
+} from 'react-icons/hi2'
 
 import openaiLogo from '../../assets/img/openai.png'
 import qianwenLogo from '../../assets/img/qianwen.png'
@@ -7,9 +15,71 @@ import deepseekLogo from '../../assets/img/deepseek.png'
 import kimiLogo from '../../assets/img/kimi.png'
 import guijiliudongLogo from '../../assets/img/guijiliudong.png'
 
-export const SETTINGS_TABS = [
-  { label: '模型', value: 'model' },
-  { label: 'Workspace', value: 'workspace' }
+export const SETTINGS_SECTION_ORDER: SettingsSectionValue[] = ['model', 'workspace', 'web-sources']
+
+export const SETTINGS_SECTION_META: Record<SettingsSectionValue, SettingsSectionMeta> = {
+  model: {
+    value: 'model',
+    label: '大模型',
+    title: '大模型',
+    description: '配置默认对话模型、API Key 和当前启用入口。',
+    path: '/settings/model',
+    icon: <HiSparkles className="h-5 w-5" />
+  },
+  workspace: {
+    value: 'workspace',
+    label: '工作空间',
+    title: '工作空间',
+    description: '管理本地项目路径、扫描状态和准备操作。',
+    path: '/settings/workspace',
+    icon: <HiOutlineRectangleStack className="h-5 w-5" />
+  },
+  'web-sources': {
+    value: 'web-sources',
+    label: '网页资料',
+    title: '网页资料',
+    description: '单独管理网页来源、抓取状态和高级规则。',
+    path: '/settings/web-sources',
+    icon: <HiGlobeAlt className="h-5 w-5" />
+  }
+}
+
+export const APP_MENU_ITEMS = [
+  {
+    key: 'model',
+    label: '大模型',
+    description: '默认对话模型与 API 配置',
+    path: '/settings/model',
+    icon: <HiSparkles className="h-4 w-4" />
+  },
+  {
+    key: 'workspace',
+    label: '工作空间',
+    description: '本地项目路径、扫描与准备',
+    path: '/settings/workspace',
+    icon: <HiOutlineRectangleStack className="h-4 w-4" />
+  },
+  {
+    key: 'web-sources',
+    label: '网页资料',
+    description: '网页来源、抓取状态与高级规则',
+    path: '/settings/web-sources',
+    icon: <HiGlobeAlt className="h-4 w-4" />
+  },
+  {
+    key: 'model-download',
+    label: '向量模型',
+    description: '下载本地检索模型',
+    path: '/model-download',
+    icon: <HiCloudArrowDown className="h-4 w-4" />
+  },
+  {
+    key: 'test',
+    label: '实验室',
+    description: '查看检索与数据调试能力',
+    path: '/test',
+    icon: <HiOutlineBeaker className="h-4 w-4" />
+  }
 ] as const
 
 export const PROVIDER_OPTIONS = [

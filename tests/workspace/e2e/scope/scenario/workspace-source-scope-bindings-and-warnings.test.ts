@@ -46,7 +46,7 @@ test('workspace-source-scope-bindings-and-warnings', async () => {
           }
 
           await runtime.page.evaluate(() => {
-            window.location.hash = '#/settings?tab=workspace'
+            window.location.hash = '#/settings/workspace'
           })
           await openWorkbench(runtime.page)
         }

@@ -108,7 +108,7 @@ test('settings-workspace-create-scan-prepare-flow', async () => {
           message: 'prepared workspaces created from settings should appear in source-scope selection afterwards',
           data: {
             searchScopes: result.searchScopes,
-            settingsPage: `#/settings?tab=workspace`
+            settingsPage: `#/settings/workspace`
           }
         }
       )

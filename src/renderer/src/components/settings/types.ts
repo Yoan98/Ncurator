@@ -6,7 +6,7 @@ import type {
   WorkspaceSyncProgress
 } from '../../../../shared/types'
 
-export type SettingsTabValue = 'model' | 'workspace'
+export type SettingsSectionValue = 'model' | 'workspace' | 'web-sources'
 
 export type LlmConfigFormValues = Pick<LLMConfig, 'name' | 'base_url' | 'model_name' | 'api_key'>
 
@@ -27,4 +27,13 @@ export type WorkspaceTreeDisplayStrategy = {
   defaultExpandDepth: number
   isLargeTree: boolean
   helperText: string
+}
+
+export type SettingsSectionMeta = {
+  value: SettingsSectionValue
+  label: string
+  title: string
+  description: string
+  path: string
+  icon: ReactNode
 }

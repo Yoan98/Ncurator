@@ -17,6 +17,7 @@ import type {
 } from '../../../shared/types'
 import { parseIpcResult } from '../utils/serialization'
 import MarkdownRenderer from '../components/MarkdownRenderer'
+import SettingsMenuButton from '../components/settings/SettingsMenuButton'
 import AssistantTurnCard from '../components/workbench/AssistantTurnCard'
 import WorkbenchComposer from '../components/workbench/WorkbenchComposer'
 import WorkbenchContentPanel from '../components/workbench/WorkbenchContentPanel'
@@ -39,6 +40,7 @@ import {
   getToolBadge
 } from '../components/workbench/utils'
 import { chatSelectors, workbenchSelectors } from '../testing/selectors'
+import brandIcon from '../../../resources/icon.png'
 
 type ApprovalRequiredEvent = Extract<AiRunEvent, { type: 'approval_required' }>
 type WorkspaceRequiredEvent = Extract<AiRunEvent, { type: 'workspace_required' }>
@@ -1258,34 +1260,57 @@ const ChatPage: React.FC = () => {
 
   return (
     <div
-      className="flex h-full bg-[#F5F5F4]"
+      className="flex min-h-screen bg-[#F5F5F4]"
       data-testid={workbenchSelectors.page}
       data-workbench-mode={composerMode}
     >
       <aside
-        className={`flex h-[calc(100vh-64px)] flex-col border-r border-[#E5E5E4] bg-[#F8F6F2] transition-all duration-200 ${
+        className={`flex h-screen flex-col border-r border-[#E5E5E4] bg-[#F8F6F2] transition-all duration-200 ${
           sidebarCollapsed ? 'w-14' : 'w-[220px]'
         }`}
       >
-        <div className="flex items-center justify-between border-b border-[#E5E5E4] px-3 py-3">
-          {!sidebarCollapsed ? (
-            <span className="text-sm font-semibold text-[#1F1F1F]">对话</span>
-          ) : null}
-          <div className="flex items-center gap-1">
-            <Button
-              type="text"
-              size="small"
-              icon={<HiPlus className="h-4 w-4" />}
-              className="text-[#D97757] hover:text-[#C66A4A] hover:bg-[#FBF5F2]"
-              onClick={() => void createNewSession()}
-            />
-            <Button
-              type="text"
-              size="small"
-              icon={<HiBars3 className="h-4 w-4" />}
-              onClick={() => setSidebarCollapsed((previous) => !previous)}
-              data-testid={workbenchSelectors.sessionsToggle}
-            />
+        <div className="border-b border-[#E5E5E4] px-2 py-3">
+          <div
+            className={`flex ${sidebarCollapsed ? 'flex-col items-center gap-2' : 'items-center justify-between gap-2'}`}
+          >
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-2xl bg-[#FBF5F2]">
+                <img src={brandIcon} alt="馆长" className="w-5 invert-100" />
+              </span>
+              {!sidebarCollapsed ? (
+                <div className="min-w-0">
+                  <div className="truncate text-[13px] font-semibold tracking-[0.01em] text-[#1F1F1F]">
+                    馆长
+                  </div>
+                  <div className="text-[11px] uppercase tracking-[0.18em] text-[#999999]">
+                    Workbench
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
+            <div className={`flex items-center gap-1 ${sidebarCollapsed ? 'flex-col' : ''}`}>
+              <Button
+                type={sidebarCollapsed ? 'text' : 'primary'}
+                size="small"
+                icon={<HiPlus className="h-4 w-4" />}
+                className={
+                  sidebarCollapsed
+                    ? 'text-[#D97757] hover:text-[#C66A4A] hover:bg-[#FBF5F2]'
+                    : 'border-none !bg-[#D97757] shadow-none hover:!bg-[#C66A4A]'
+                }
+                onClick={() => void createNewSession()}
+              >
+                {!sidebarCollapsed ? '新对话' : null}
+              </Button>
+              <Button
+                type="text"
+                size="small"
+                icon={<HiBars3 className="h-4 w-4" />}
+                onClick={() => setSidebarCollapsed((previous) => !previous)}
+                data-testid={workbenchSelectors.sessionsToggle}
+              />
+            </div>
           </div>
         </div>
 
@@ -1330,17 +1355,27 @@ const ChatPage: React.FC = () => {
       </aside>
 
       <div className="min-w-0 flex-1 border-r border-[#E5E5E4]">
-        <div className="relative flex h-[calc(100vh-64px)] flex-col">
+        <div className="relative flex h-screen flex-col">
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-end px-5 pt-4">
+            <div className="pointer-events-auto">
+              <SettingsMenuButton />
+            </div>
+          </div>
+
           <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-52 pt-6" ref={scrollRef}>
             <div className="mx-auto flex max-w-[860px] flex-col gap-5">
               {currentMessages.length === 0 ? (
-                <div className="flex min-h-[58vh] flex-col items-center justify-center gap-4 rounded-[24px] border border-dashed border-[#E5E5E4] bg-[#FAFAF9]/90 px-8 py-10 text-center">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-[#F4E5DF] bg-[#FBF5F2] text-[#D97757]">
-                    <HiBookOpen className="h-7 w-7" />
-                  </div>
-                  <div>
-                    <h3 className="text-[20px] font-semibold text-[#1F1F1F]">从一个问题开始</h3>
-                    <p className="mt-2 text-[14px] leading-7 text-[#666666]">
+                <div className="relative flex min-h-[58vh] items-center justify-center overflow-hidden px-8 py-12 text-center">
+                  <div className="absolute inset-x-[12%] top-[18%] h-44 rounded-full bg-[radial-gradient(circle,rgba(251,245,242,0.98),rgba(251,245,242,0.58)_42%,rgba(245,245,244,0)_76%)] blur-2xl" />
+                  <div className="absolute inset-x-[20%] bottom-[20%] h-32 rounded-full bg-[radial-gradient(circle,rgba(244,229,223,0.42),rgba(245,245,244,0)_72%)] blur-3xl" />
+                  <div className="relative max-w-[420px]">
+                    <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-white/45 text-[#D19A87] shadow-[inset_0_0_0_1px_rgba(228,215,206,0.7)] backdrop-blur-sm">
+                      <HiBookOpen className="h-5 w-5" />
+                    </div>
+                    <h3 className="mt-5 text-[18px] font-semibold tracking-[-0.01em] text-[#2A2826]">
+                      从一个问题开始
+                    </h3>
+                    <p className="mt-2 text-[13px] leading-6 text-[#7C7771]">
                       {composerMode === 'search'
                         ? '搜索模式只检索当前资料范围。'
                         : '智能模式会结合当前工作区与插入资料执行。'}
@@ -1357,7 +1392,7 @@ const ChatPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[#F5F5F4] via-[#F5F5F4] to-transparent px-6 pb-6 pt-12">
+          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[#F5F5F4] via-[#F5F5F4]/96 via-58% to-transparent px-6 pb-6 pt-14">
             <div className="mx-auto max-w-[920px]">
               <WorkbenchComposer
                 mode={composerMode}

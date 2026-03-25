@@ -24,7 +24,7 @@ const NotificationCenter: React.FC = () => {
   const [checkingModel, setCheckingModel] = useState(false)
   const [workbenchMode, setWorkbenchMode] = useState<'ai' | 'search'>('search')
 
-  const isSettingsPage = location.pathname === '/settings'
+  const isSettingsPage = location.pathname.startsWith('/settings')
   const isDownloadPage = location.pathname === '/model-download'
   const isWorkbenchPage = location.pathname === '/'
 
@@ -116,7 +116,7 @@ const NotificationCenter: React.FC = () => {
             icon: <HiOutlineCog6Tooth className="text-xl" />,
             action: {
               label: '去配置',
-              onClick: () => navigate('/settings')
+              onClick: () => navigate('/settings/model')
             }
           })
         } else {
@@ -135,14 +135,14 @@ const NotificationCenter: React.FC = () => {
         updateNotification('llm-config-missing', {
           id: 'llm-config-missing',
           title: '未配置大模型 API',
-          description: '智能回答和对话功能需要配置 LLM API，请先完成配置。',
-          icon: <HiOutlineCog6Tooth className="text-xl" />,
-          action: {
-            label: '去配置',
-            onClick: () => navigate('/settings')
-          }
-        })
-      }
+            description: '智能回答和对话功能需要配置 LLM API，请先完成配置。',
+            icon: <HiOutlineCog6Tooth className="text-xl" />,
+            action: {
+              label: '去配置',
+              onClick: () => navigate('/settings/model')
+            }
+          })
+        }
     }
 
     window.addEventListener('check-llm-config', handleCheckEvent)

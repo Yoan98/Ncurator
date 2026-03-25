@@ -104,3 +104,49 @@ mark {
   color: #666666 !important;
   padding-inline-end: 8px !important;
 }
+
+.workbench-composer-select.ant-select {
+  color: #757572;
+  font-size: 12px;
+}
+
+.workbench-composer-select.ant-select .ant-select-selector {
+  min-height: 28px !important;
+  padding: 0 6px !important;
+  border-radius: 999px !important;
+  box-shadow: none !important;
+}
+
+.workbench-composer-select.ant-select .ant-select-selection-wrap {
+  min-width: 0;
+}
+
+.workbench-composer-select.ant-select .ant-select-selection-item,
+.workbench-composer-select.ant-select .ant-select-selection-placeholder {
+  line-height: 28px !important;
+  font-size: 12px !important;
+}
+
+.workbench-composer-select.ant-select .ant-select-selection-placeholder {
+  color: #9b9b97 !important;
+}
+
+.workbench-composer-select.ant-select .ant-select-arrow {
+  inset-inline-end: 6px !important;
+}
+
+.workbench-composer-select.ant-select:hover .ant-select-selector {
+  background: rgba(255, 255, 255, 0.72) !important;
+}
+
+.workbench-composer-select.ant-select-focused .ant-select-selector,
+.workbench-composer-select.ant-select-open .ant-select-selector {
+  background: rgba(255, 255, 255, 0.88) !important;
+}
+
+.workbench-composer-select-dropdown .ant-select-item {
+  min-height: 32px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  font-size: 12px;
+}

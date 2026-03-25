@@ -693,7 +693,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       ) : null}
 
       <div
-        className="rounded-[28px] border border-[#E5E5E4] bg-white/96 px-4 pb-2.5 pt-2.5 shadow-[0_10px_24px_rgba(31,31,31,0.07)] backdrop-blur-sm transition-all duration-200 focus-within:border-[#D97757] focus-within:ring-4 focus-within:ring-[#F4E5DF]"
+        className="rounded-[26px] border border-[#ECE7DF] bg-white/88 px-3.5 pb-2 pt-2 shadow-[0_6px_18px_rgba(31,31,31,0.05)] backdrop-blur-md transition-all duration-200 focus-within:border-[#D97757] focus-within:ring-4 focus-within:ring-[#F4E5DF]"
         data-testid={workbenchSelectors.sourceScopeField}
         onMouseDown={(event) => {
           const target = event.target
@@ -704,7 +704,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           focusEditor()
         }}
       >
-        <div className="relative min-h-[64px]">
+        <div className="relative min-h-[58px]">
           <span
             ref={editorRef}
             contentEditable
@@ -713,7 +713,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             aria-multiline="true"
             tabIndex={0}
             spellCheck={false}
-            className="block min-h-[44px] w-full whitespace-pre-wrap break-words bg-transparent text-[15px] leading-6 text-[#1F1F1F] outline-none [&_[data-role='scope-token']]:align-middle"
+            className="block min-h-[40px] w-full whitespace-pre-wrap break-words bg-transparent text-[15px] leading-6 text-[#1F1F1F] outline-none [&_[data-role='scope-token']]:align-middle"
             data-testid={workbenchSelectors.input}
             onInput={handleEditorInput}
             onKeyDown={handleEditorKeyDown}
@@ -744,8 +744,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           </div>
         </div>
 
-        <div className="mt-1.5 flex items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2 text-[#7B7B79]">
+        <div className="mt-1 flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-1.5 text-[#7B7B79]">
             <Select
               value={mode}
               onChange={(nextValue) => {
@@ -753,13 +753,13 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                 focusEditorAfterControlChange()
               }}
               variant="borderless"
-              suffixIcon={<HiChevronDown className="h-4 w-4 text-[#7B7B79]" />}
+              suffixIcon={<HiChevronDown className="h-3.5 w-3.5 text-[#8F8F8C]" />}
               options={[
                 {
                   value: 'ai',
                   label: (
-                    <span className="flex items-center gap-2">
-                      <HiSparkles className="h-4 w-4" />
+                    <span className="flex items-center gap-1.5 text-[12px]">
+                      <HiSparkles className="h-3.5 w-3.5" />
                       <span>智能</span>
                     </span>
                   )
@@ -767,14 +767,15 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                 {
                   value: 'search',
                   label: (
-                    <span className="flex items-center gap-2">
-                      <HiMagnifyingGlass className="h-4 w-4" />
+                    <span className="flex items-center gap-1.5 text-[12px]">
+                      <HiMagnifyingGlass className="h-3.5 w-3.5" />
                       <span>搜索</span>
                     </span>
                   )
                 }
               ]}
-              className="min-w-[84px]"
+              popupClassName="workbench-composer-select-dropdown"
+              className="workbench-composer-select min-w-[72px]"
               data-testid={workbenchSelectors.modeSwitch}
             />
 
@@ -785,9 +786,10 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                 focusEditorAfterControlChange()
               }}
               variant="borderless"
-              suffixIcon={<HiChevronDown className="h-4 w-4 text-[#7B7B79]" />}
+              suffixIcon={<HiChevronDown className="h-3.5 w-3.5 text-[#8F8F8C]" />}
               optionLabelProp="label"
-              className="min-w-[120px]"
+              popupClassName="workbench-composer-select-dropdown"
+              className="workbench-composer-select min-w-[104px]"
               options={modelConfigs.map((config) => ({
                 value: config.id,
                 label: config.model_name,
@@ -804,9 +806,10 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                 focusEditorAfterControlChange()
               }}
               variant="borderless"
-              suffixIcon={<HiChevronDown className="h-4 w-4 text-[#7B7B79]" />}
+              suffixIcon={<HiChevronDown className="h-3.5 w-3.5 text-[#8F8F8C]" />}
               optionLabelProp="label"
-              className="min-w-[128px]"
+              popupClassName="workbench-composer-select-dropdown"
+              className="workbench-composer-select min-w-[112px]"
               options={workspaces.map((workspace) => ({
                 value: workspace.id,
                 label: workspace.name,
@@ -821,7 +824,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             {showCancel ? (
               <Button
                 onClick={onCancel}
-                className="border-[#E5E5E4] bg-white"
+                size="small"
+                className="h-8 rounded-full border-[#E5E5E4] bg-white px-3 text-[12px] text-[#666666]"
                 data-testid={workbenchSelectors.cancelButton}
               >
                 取消
@@ -831,13 +835,13 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               type="button"
               onClick={onSubmit}
               disabled={loading || !canSubmit}
-              className={`inline-flex h-12 w-12 items-center justify-center rounded-full text-white transition ${
+              className={`inline-flex h-10 w-10 items-center justify-center rounded-full text-white transition ${
                 loading || !canSubmit ? 'bg-[#D8D8D6]' : 'bg-[#111111] hover:-translate-y-[1px]'
               }`}
               data-testid={workbenchSelectors.sendButton}
               aria-label={mode === 'ai' ? '发送智能请求' : '执行搜索'}
             >
-              {loading ? <Spin size="small" /> : <HiArrowUp className="h-6 w-6" />}
+              {loading ? <Spin size="small" /> : <HiArrowUp className="h-5 w-5" />}
             </button>
           </div>
         </div>

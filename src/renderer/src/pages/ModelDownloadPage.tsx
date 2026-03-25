@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Button, Progress, Typography, message, Tag, List } from 'antd'
+import { Button, Progress, Typography, message, Tag, List } from 'antd'
 import { HiCloudArrowDown, HiCheckCircle, HiExclamationCircle } from 'react-icons/hi2'
+import AppPageHeader from '../components/app/AppPageHeader'
+import SettingsMenuButton from '../components/settings/SettingsMenuButton'
 
 const { Title } = Typography
 
@@ -102,25 +104,23 @@ const ModelDownloadPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-full p-8 font-sans max-w-5xl mx-auto">
-      <div className="flex items-center gap-4 mb-8">
-        <div className="w-10 h-10 rounded-xl bg-[#FBF5F2] flex items-center justify-center text-[#D97757]">
-          <HiCloudArrowDown className="text-xl" />
-        </div>
-        <div>
-          <Title level={3} className="!mb-0 !font-bold !text-[#1F1F1F]">
-            模型下载
-          </Title>
-          <p className="text-[#999999] text-sm mt-1">
-            下载本地向量模型，为您的知识库提供语义搜索能力
-          </p>
-        </div>
-      </div>
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(251,245,242,0.95),_rgba(245,245,244,0.92)_42%,_#F5F5F4_72%)]">
+      <div className="mx-auto max-w-5xl px-5 py-5 lg:px-6">
+        <AppPageHeader
+          icon={<HiCloudArrowDown className="h-5 w-5" />}
+          title="向量模型"
+          description="下载本地检索模型，为搜索和知识库能力提供向量基础。"
+          actions={<SettingsMenuButton label="Setting" />}
+        />
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {/* Right Column: Model List */}
-        <div className="md:col-span-3">
-          <Card className="bg-white border border-[#E5E5E4] shadow-sm !rounded-2xl min-h-[400px]">
+        <div className="rounded-[20px] border border-[#E5E5E4] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+          <div className="border-b border-[#E5E5E4] px-5 py-4">
+            <Title level={4} className="!mb-0 !text-[#1F1F1F]">
+              模型列表
+            </Title>
+            <p className="mt-1 text-[13px] text-[#666666]">保持页面像工具页，而不是宣传块。</p>
+          </div>
+          <div className="px-5 py-2">
             <List
               loading={loading}
               itemLayout="horizontal"
@@ -148,12 +148,12 @@ const ModelDownloadPage: React.FC = () => {
                       </Button>
                     )
                   ]}
-                  className="!px-0 !py-6"
+                  className="!px-0 !py-5"
                 >
                   <List.Item.Meta
                     title={
-                      <div className="flex items-center gap-3 mb-2">
-                        <span className="text-lg font-bold text-[#1F1F1F]">{item.name}</span>
+                      <div className="mb-2 flex items-center gap-3">
+                        <span className="text-[16px] font-semibold text-[#1F1F1F]">{item.name}</span>
                         {item.tags.map((tag) => (
                           <Tag key={tag} className="mr-0 text-xs">
                             {tag}
@@ -165,13 +165,11 @@ const ModelDownloadPage: React.FC = () => {
                       <div className="space-y-4">
                         <p className="text-[#666666]">{item.description}</p>
 
-                        {downloadingId === item.id && (
-                          <div className="bg-[#F5F5F4] p-4 rounded-xl border border-[#E5E5E4]">
-                            <div className="flex justify-between text-sm mb-2">
+                        {downloadingId === item.id ? (
+                          <div className="rounded-[18px] border border-[#E5E5E4] bg-[#F5F5F4] p-4">
+                            <div className="mb-2 flex justify-between text-sm">
                               <span className="text-[#1F1F1F] font-medium">正在下载...</span>
-                              <span className="text-[#D97757] font-medium">
-                                {downloadProgress}%
-                              </span>
+                              <span className="text-[#D97757] font-medium">{downloadProgress}%</span>
                             </div>
                             <Progress
                               percent={downloadProgress}
@@ -186,21 +184,21 @@ const ModelDownloadPage: React.FC = () => {
                               </span>
                             </div>
                           </div>
-                        )}
+                        ) : null}
 
-                        {errorMsg && downloadingId === item.id && (
-                          <div className="text-red-500 text-sm flex items-center gap-1">
+                        {errorMsg && downloadingId === item.id ? (
+                          <div className="flex items-center gap-1 text-sm text-red-500">
                             <HiExclamationCircle />
                             {errorMsg}
                           </div>
-                        )}
+                        ) : null}
                       </div>
                     }
                   />
                 </List.Item>
               )}
             />
-          </Card>
+          </div>
         </div>
       </div>
     </div>

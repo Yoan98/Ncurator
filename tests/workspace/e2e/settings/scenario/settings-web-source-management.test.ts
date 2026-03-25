@@ -2,7 +2,7 @@ import { test } from 'vitest'
 import type { WebSourceListResponse } from '../../../../../src/shared/types'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import { importSelectors } from '../../../../../src/renderer/src/testing/selectors'
-import { openWorkspaceSettings } from '../../utils/workspaceUi'
+import { openWebSourceSettings } from '../../utils/workspaceUi'
 
 const E2E_WEB_SOURCE_ID = 'e2e-web-source-1'
 const E2E_WEB_SOURCE_URL = 'https://example.com/workspace-test'
@@ -16,15 +16,15 @@ test('settings-web-source-management', async () => {
     suite: 'settings',
     groups: ['scenario'],
     description:
-      'settings should support adding, filtering, refreshing, and deleting web sources from the unified Workspace entry.',
+      'settings should support adding, filtering, refreshing, and deleting web sources from the dedicated web-sources page.',
     fixtures: [],
     runMode: 'repeatable',
     execute: async (runtime) => {
       await runtime.step({
         name: 'open-workspace-settings',
-        message: '进入 Workspace 设置页',
+        message: '进入网页资料设置页',
         run: async () => {
-          await openWorkspaceSettings(runtime.page)
+          await openWebSourceSettings(runtime.page)
         }
       })
 
@@ -123,7 +123,7 @@ test('settings-web-source-management', async () => {
         result.initialWebSources.items.some((item) => item.url === E2E_WEB_SOURCE_URL),
         {
           name: 'settings-web-source-added-to-list',
-          message: 'new web sources added from settings should appear in the unified list immediately',
+          message: 'new web sources added from settings should appear in the dedicated web-sources list immediately',
           data: result
         }
       )
@@ -143,7 +143,7 @@ test('settings-web-source-management', async () => {
           result.webSourceSectionText.includes('暂无网页资料'),
         {
           name: 'settings-web-source-delete-clears-list',
-          message: 'deleting the only web source should remove it from the list and restore the empty state',
+          message: 'deleting the only web source should remove it from the dedicated page and restore the empty state',
           data: result
         }
       )

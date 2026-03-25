@@ -9,9 +9,16 @@ const E2E_WORKSPACE_CARD_ID = 'e2e-import-workspace-1'
 
 export const openWorkspaceSettings = async (page: Page): Promise<void> => {
   await page.evaluate(() => {
-    window.location.hash = '#/settings?tab=workspace'
+    window.location.hash = '#/settings/workspace'
   })
   await page.waitForSelector(`[data-testid="${settingsSelectors.workspacePanel}"]`)
+}
+
+export const openWebSourceSettings = async (page: Page): Promise<void> => {
+  await page.evaluate(() => {
+    window.location.hash = '#/settings/web-sources'
+  })
+  await page.waitForSelector(`[data-testid="${importSelectors.webSourceSection}"]`)
 }
 
 export const openWorkbench = async (page: Page): Promise<void> => {
