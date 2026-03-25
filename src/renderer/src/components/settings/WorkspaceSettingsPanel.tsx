@@ -1,16 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import {
-  Alert,
-  Button,
-  Empty,
-  Modal,
-  Progress,
-  Segmented,
-  Tag,
-  Tooltip,
-  Tree,
-  message
-} from 'antd'
+import { Alert, Button, Empty, Modal, Progress, Segmented, Tag, Tooltip, Tree, message } from 'antd'
 import type {
   LegacyLocalImportMigrationStatus,
   WorkspacePrepareMode,

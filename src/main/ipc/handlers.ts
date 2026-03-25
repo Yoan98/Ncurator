@@ -1,4 +1,5 @@
 import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import type { OpenDialogOptions } from 'electron'
 import { IngestionService } from '../services/ingestion/loader'
 import { EmbeddingService } from '../services/vector/EmbeddingService'
 import { StorageService } from '../services/storage/StorageService'
@@ -1089,10 +1090,10 @@ export function registerHandlers(services: {
 
   ipcMain.handle('pick-directory', async (event): Promise<PickDirectoryResponse> => {
     try {
-      const dialogOptions = {
+      const dialogOptions: OpenDialogOptions = {
         title: '选择工作空间目录',
         buttonLabel: '选择此目录',
-        properties: ['openDirectory', 'createDirectory', 'dontAddToRecent'] as const
+        properties: ['openDirectory', 'createDirectory', 'dontAddToRecent']
       }
       let result
       try {

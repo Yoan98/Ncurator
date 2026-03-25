@@ -127,9 +127,7 @@ const WebSourcesSettingsPanel: React.FC = () => {
     }
 
     setWebRefreshingAll(true)
-    setWebRefreshingIds(
-      Object.fromEntries(webSources.map((source) => [source.id, true] as const))
-    )
+    setWebRefreshingIds(Object.fromEntries(webSources.map((source) => [source.id, true] as const)))
     try {
       const results = await Promise.allSettled(
         webSources.map((source) => window.api.webSourceRefresh({ webSourceId: source.id }))
@@ -189,7 +187,13 @@ const WebSourcesSettingsPanel: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Tooltip title={webRefreshingAll ? '正在刷新当前列表里的网页资料。' : '重新抓取当前列表里的网页资料。'}>
+            <Tooltip
+              title={
+                webRefreshingAll
+                  ? '正在刷新当前列表里的网页资料。'
+                  : '重新抓取当前列表里的网页资料。'
+              }
+            >
               <Button
                 icon={<HiArrowPath className="h-4 w-4" />}
                 className="border-[#E5E5E4] bg-white text-[#1F1F1F]"

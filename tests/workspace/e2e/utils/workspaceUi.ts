@@ -62,19 +62,16 @@ export const selectSourceScope = async (
   const editor = page.getByTestId(workbenchSelectors.input)
   await editor.click()
   await editor.focus()
-  await page.waitForFunction(
-    (testId) => {
-      const editorElement = document.querySelector(`[data-testid="${testId}"]`)
-      if (!(editorElement instanceof HTMLElement)) return false
-      const selection = window.getSelection()
-      return (
-        document.activeElement === editorElement &&
-        Boolean(selection?.anchorNode) &&
-        editorElement.contains(selection.anchorNode)
-      )
-    },
-    workbenchSelectors.input
-  )
+  await page.waitForFunction((testId) => {
+    const editorElement = document.querySelector(`[data-testid="${testId}"]`)
+    if (!(editorElement instanceof HTMLElement)) return false
+    const selection = window.getSelection()
+    return (
+      document.activeElement === editorElement &&
+      Boolean(selection?.anchorNode) &&
+      editorElement.contains(selection.anchorNode)
+    )
+  }, workbenchSelectors.input)
   await page.keyboard.type(`@${input.query}`)
   await page.getByTestId(workbenchSelectors.mentionPanel).getByText(input.label).first().click()
   await editor.getByText(input.label).waitFor()
