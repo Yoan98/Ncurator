@@ -9,12 +9,16 @@ type SettingsMenuButtonProps = {
   label?: string
   className?: string
   placement?: DropdownProps['placement']
+  iconClassName?: string
+  bare?: boolean
 }
 
 const SettingsMenuButton: React.FC<SettingsMenuButtonProps> = ({
   label,
   className,
-  placement = 'bottomRight'
+  placement = 'bottomRight',
+  iconClassName,
+  bare = false
 }) => {
   const navigate = useNavigate()
   const iconOnly = !label
@@ -45,15 +49,26 @@ const SettingsMenuButton: React.FC<SettingsMenuButtonProps> = ({
         }
       }}
     >
-      <Button
-        icon={<HiOutlineCog6Tooth className="h-3.5 w-3.5" />}
-        aria-label="设置"
-        className={`!inline-flex !h-9 !items-center !rounded-xl !border-[#E5E5E4] !bg-white/92 !text-[#666666] shadow-[0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur-sm hover:!border-[#D97757] hover:!text-[#D97757] ${
-          iconOnly ? '!w-9 !justify-center !px-0' : '!px-3'
-        } ${className || ''}`}
-      >
-        {label}
-      </Button>
+      {bare ? (
+        <button
+          type="button"
+          aria-label="设置"
+          className={`inline-flex items-center justify-center text-[#666666] transition-colors hover:text-[#D97757] ${className || ''}`}
+        >
+          <HiOutlineCog6Tooth className={iconClassName || 'h-3.5 w-3.5'} />
+          {label ? <span className="ml-2">{label}</span> : null}
+        </button>
+      ) : (
+        <Button
+          icon={<HiOutlineCog6Tooth className={iconClassName || 'h-3.5 w-3.5'} />}
+          aria-label="设置"
+          className={`!inline-flex !h-9 !items-center !rounded-xl !border-[#E5E5E4] !bg-white/92 !text-[#666666] shadow-[0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur-sm hover:!border-[#D97757] hover:!text-[#D97757] ${
+            iconOnly ? '!w-9 !justify-center !px-0' : '!px-3'
+          } ${className || ''}`}
+        >
+          {label}
+        </Button>
+      )}
     </Dropdown>
   )
 }

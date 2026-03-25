@@ -56,13 +56,13 @@ test('settings-workspace-create-scan-prepare-flow', async () => {
 
       await runtime.step({
         name: 'prepare-workspace',
-        message: '触发准备并等待状态刷新为已准备',
+        message: '触发加载并等待状态刷新为已加载',
         run: async () => {
           await runtime.page.getByTestId(importSelectors.workspaceQuickPrepareButton).click()
           await runtime.page.waitForFunction(
             (testId) => {
               const element = document.querySelector(`[data-testid="${testId}"]`)
-              return element?.textContent?.includes('已准备')
+              return element?.textContent?.includes('已加载')
             },
             importSelectors.workspaceStatus
           )
@@ -79,7 +79,7 @@ test('settings-workspace-create-scan-prepare-flow', async () => {
 
       await runtime.captureScreenshot({
         name: 'settings-workspace-create-scan-prepare',
-        message: '工作空间创建并准备完成后的设置页截图'
+        message: '工作空间创建并加载完成后的设置页截图'
       })
 
       return {
@@ -89,9 +89,9 @@ test('settings-workspace-create-scan-prepare-flow', async () => {
       }
     },
     assert: async (result, runtime) => {
-      await runtime.assertThat(result.workspaceStatusText.includes('已准备'), {
+      await runtime.assertThat(result.workspaceStatusText.includes('已加载'), {
         name: 'settings-workspace-status-after-prepare',
-        message: 'the selected workspace should end in the prepared state after scan and prepare complete',
+        message: 'the selected workspace should end in the loaded state after scan and prepare complete',
         data: result
       })
 

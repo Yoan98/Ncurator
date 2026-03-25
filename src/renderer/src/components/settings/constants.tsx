@@ -24,7 +24,7 @@ export const SETTINGS_SECTION_META: Record<SettingsSectionValue, SettingsSection
     value: 'workspace',
     label: '工作空间',
     title: '工作空间',
-    description: '管理本地项目路径、扫描状态和准备操作。',
+    description: '管理本地项目路径、扫描状态和加载操作。',
     path: '/settings/workspace',
     icon: <HiOutlineRectangleStack className="h-5 w-5" />
   },
@@ -49,7 +49,7 @@ export const APP_MENU_ITEMS = [
   {
     key: 'workspace',
     label: '工作空间',
-    description: '本地项目路径、扫描与准备',
+    description: '本地项目路径、扫描与加载',
     path: '/settings/workspace',
     icon: <HiOutlineRectangleStack className="h-4 w-4" />
   },
@@ -148,10 +148,10 @@ export const WORKSPACE_STATUS_META: Record<
   WorkspaceSource['status'],
   { label: string; className: string }
 > = {
-  not_prepared: { label: '未准备', className: 'border-[#E5E5E4] bg-[#F8F8F7] text-[#666666]' },
+  not_prepared: { label: '未加载', className: 'border-[#E5E5E4] bg-[#F8F8F7] text-[#666666]' },
   scanning: { label: '扫描中', className: 'border-[#FDE2D8] bg-[#FFF3EE] text-[#C66A4A]' },
-  preparing: { label: '准备中', className: 'border-[#FDE2D8] bg-[#FFF3EE] text-[#C66A4A]' },
-  prepared: { label: '已准备', className: 'border-[#DCEBD7] bg-[#F3FAF0] text-[#4F7A46]' },
+  preparing: { label: '加载中', className: 'border-[#FDE2D8] bg-[#FFF3EE] text-[#C66A4A]' },
+  prepared: { label: '已加载', className: 'border-[#DCEBD7] bg-[#F3FAF0] text-[#4F7A46]' },
   stale: { label: '待更新', className: 'border-[#FDECC8] bg-[#FFF9ED] text-[#AD7B18]' },
   failed: { label: '失败', className: 'border-[#F7D5D9] bg-[#FFF2F4] text-[#B5455D]' },
   unavailable: { label: '不可用', className: 'border-[#F7D5D9] bg-[#FFF2F4] text-[#B5455D]' }
@@ -161,9 +161,9 @@ export const WORKSPACE_NODE_STATUS_META: Record<
   WorkspaceNode['prepare_status'],
   { label: string; className: string }
 > = {
-  not_prepared: { label: '未准备', className: 'border-[#E5E5E4] bg-[#F8F8F7] text-[#666666]' },
-  preparing: { label: '准备中', className: 'border-[#FDE2D8] bg-[#FFF3EE] text-[#C66A4A]' },
-  prepared: { label: '已准备', className: 'border-[#DCEBD7] bg-[#F3FAF0] text-[#4F7A46]' },
+  not_prepared: { label: '未加载', className: 'border-[#E5E5E4] bg-[#F8F8F7] text-[#666666]' },
+  preparing: { label: '加载中', className: 'border-[#FDE2D8] bg-[#FFF3EE] text-[#C66A4A]' },
+  prepared: { label: '已加载', className: 'border-[#DCEBD7] bg-[#F3FAF0] text-[#4F7A46]' },
   stale: { label: '待更新', className: 'border-[#FDECC8] bg-[#FFF9ED] text-[#AD7B18]' },
   failed: { label: '失败', className: 'border-[#F7D5D9] bg-[#FFF2F4] text-[#B5455D]' },
   missing: { label: '缺失', className: 'border-[#F7D5D9] bg-[#FFF2F4] text-[#B5455D]' }

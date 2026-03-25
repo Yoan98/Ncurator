@@ -253,11 +253,11 @@ ${contextText}`
             mode="search"
             value={selectedScopes}
             onChange={setSelectedScopes}
-            placeholder="可选：仅搜索已准备的工作空间、目录、文件或网页资料"
+            placeholder="可选：仅搜索已加载的工作空间、目录、文件或网页资料"
             className="w-full"
           />
           <div className="mt-2 text-xs text-[#999999]">
-            搜索模式仅允许已准备范围；未准备的本地资料不会进入候选列表。
+            搜索模式仅允许已加载范围；未加载的本地资料不会进入候选列表。
             {selectedScopes.length > 0 ? ` 当前已锁定 ${selectedScopes.length} 个范围。` : ''}
           </div>
         </div>

@@ -29,7 +29,7 @@ test('settings-workspace-empty-and-error-state', async () => {
 
       await runtime.step({
         name: 'create-failing-workspace',
-        message: '创建一个会在准备阶段失败的 E2E fixture 工作空间',
+        message: '创建一个会在加载阶段失败的 E2E fixture 工作空间',
         run: async () => {
           await createFixtureWorkspaceFromSettings(runtime.page, {
             rootPath: '/tmp/ncurator-e2e-prepare-fail-workspace',
@@ -40,7 +40,7 @@ test('settings-workspace-empty-and-error-state', async () => {
 
       await runtime.step({
         name: 'trigger-prepare-failure',
-        message: '触发准备失败并等待错误信息可见',
+        message: '触发加载失败并等待错误信息可见',
         run: async () => {
           await runtime.page.getByTestId(importSelectors.workspaceQuickPrepareButton).click()
           await runtime.page.getByTestId(importSelectors.workspaceLastError).waitFor()
@@ -67,7 +67,7 @@ test('settings-workspace-empty-and-error-state', async () => {
 
       await runtime.captureScreenshot({
         name: 'settings-workspace-empty-and-error-state',
-        message: '空态与准备失败后的工作空间设置页截图'
+        message: '空态与加载失败后的工作空间设置页截图'
       })
 
       return {
@@ -78,7 +78,7 @@ test('settings-workspace-empty-and-error-state', async () => {
       }
     },
     assert: async (result, runtime) => {
-      await runtime.assertThat(result.emptyStateText.includes('还没有工作空间'), {
+      await runtime.assertThat(result.emptyStateText.includes('暂无工作空间'), {
         name: 'settings-workspace-empty-state-visible',
         message: 'the Workspace settings page should show a clear empty state before any workspace exists',
         data: result
@@ -89,14 +89,14 @@ test('settings-workspace-empty-and-error-state', async () => {
           result.workspaceErrorText.includes('E2E fixture prepare failed'),
         {
           name: 'settings-workspace-error-state-visible',
-          message: 'prepare failures should surface a visible failed status and an inline error message',
+          message: 'load failures should surface a visible failed status and an inline error message',
           data: result
         }
       )
 
       await runtime.assertThat(
         result.detailText.includes('先扫描') &&
-          result.detailText.includes('开始准备') &&
+          result.detailText.includes('开始加载') &&
           result.detailText.includes('移除'),
         {
           name: 'settings-workspace-error-state-actions-remain-usable',

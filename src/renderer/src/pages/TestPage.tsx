@@ -16,7 +16,7 @@ import {
 import { HiMagnifyingGlass, HiDocumentText, HiCube } from 'react-icons/hi2'
 import { parseIpcResult } from '../utils/serialization'
 import AppPageHeader from '../components/app/AppPageHeader'
-import SettingsMenuButton from '../components/settings/SettingsMenuButton'
+import SettingsFloatingMenu from '../components/settings/SettingsFloatingMenu'
 
 const { Paragraph } = Typography
 
@@ -149,7 +149,6 @@ function TestPage(): React.JSX.Element {
           icon={<HiCube className="h-5 w-5" />}
           title="实验室"
           description="保留检索、文档和 chunk 调试能力，页面 chrome 与正式设置页保持同一套气质。"
-          actions={<SettingsMenuButton className="!h-10 !w-10 !rounded-xl !px-0" />}
         />
 
         <div className="min-h-0 flex-1 overflow-y-auto pb-5">
@@ -407,6 +406,7 @@ function TestPage(): React.JSX.Element {
           </Modal>
         </div>
       </div>
+      <SettingsFloatingMenu />
     </div>
   )
 }

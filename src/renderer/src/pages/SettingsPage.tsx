@@ -2,7 +2,7 @@ import React from 'react'
 import { Navigate, useLocation, useParams } from 'react-router-dom'
 import AppPageHeader from '../components/app/AppPageHeader'
 import ModelSettingsPanel from '../components/settings/ModelSettingsPanel'
-import SettingsMenuButton from '../components/settings/SettingsMenuButton'
+import SettingsFloatingMenu from '../components/settings/SettingsFloatingMenu'
 import WebSourcesSettingsPanel from '../components/settings/WebSourcesSettingsPanel'
 import WorkspaceSettingsPanel from '../components/settings/WorkspaceSettingsPanel'
 import { SETTINGS_SECTION_META } from '../components/settings/constants'
@@ -51,7 +51,6 @@ const SettingsPage: React.FC = () => {
           description={sectionMeta.description}
           navigationMode="back"
           backTo="/"
-          actions={<SettingsMenuButton className="!h-10 !w-10 !rounded-xl !px-0" />}
         />
 
         <div className="min-h-0 flex-1 overflow-hidden pb-4 pr-1">
@@ -60,6 +59,7 @@ const SettingsPage: React.FC = () => {
           {currentSection === 'web-sources' ? <WebSourcesSettingsPanel /> : null}
         </div>
       </div>
+      <SettingsFloatingMenu />
     </div>
   )
 }

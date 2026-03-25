@@ -953,7 +953,7 @@ const ChatPage: React.FC = () => {
     const userQuery = input.trim()
     const hasStrictScope = selectedSourceScopes.length > 0
     if (hasStrictScope && selectedDocumentIds.length === 0) {
-      message.warning('当前搜索范围没有已准备完成的本地资料，无法执行纯搜索。')
+      message.warning('当前搜索范围没有已加载的本地资料，无法执行纯搜索。')
       return
     }
 
@@ -1605,7 +1605,7 @@ const ChatPage: React.FC = () => {
                         className="mt-3 rounded-2xl border border-[#FDECC8] bg-[#FFF9ED] px-3 py-2.5 text-sm text-[#8A6510]"
                         data-testid={workbenchSelectors.scopeAiWarning}
                       >
-                        已选范围包含未准备的本地文件。AI 可能直接读取原文件，耗时更长，并增加 token
+                        已选范围包含未加载的本地文件。AI 可能直接读取原文件，耗时更长，并增加 token
                         消耗。
                       </div>
                     ) : null}
@@ -1616,7 +1616,7 @@ const ChatPage: React.FC = () => {
                         className="mt-3 rounded-2xl border border-[#FDECC8] bg-[#FFF9ED] px-3 py-2.5 text-sm text-[#8A6510]"
                         data-testid={workbenchSelectors.scopeSearchWarning}
                       >
-                        纯搜索只会检索已准备完成的本地资料；未准备文件不会进入候选结果。
+                        纯搜索只会检索已加载的本地资料；未加载文件不会进入候选结果。
                       </div>
                     ) : null}
                   </div>

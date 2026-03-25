@@ -47,8 +47,10 @@ test('settings-workspace-tab-only-entry', async () => {
 
       await runtime.assertThat(
         result.bodyText.includes('工作空间') &&
-          result.bodyText.includes('本地工作区与准备状态') &&
-          !result.bodyText.includes('网页资料来源与抓取状态'),
+          result.bodyText.includes('管理本地项目路径、扫描状态和加载操作。') &&
+          result.bodyText.includes('添加工作空间') &&
+          result.bodyText.includes('选择一个工作空间') &&
+          !result.bodyText.includes('来源列表'),
         {
           name: 'settings-workspace-sections-visible',
           message: 'the Workspace settings view should focus on local workspaces only after the split',
@@ -56,11 +58,14 @@ test('settings-workspace-tab-only-entry', async () => {
         }
       )
 
-      await runtime.assertThat(result.bodyText.includes('网页资料已拆成独立页面'), {
-        name: 'settings-workspace-split-copy',
-        message: 'the Workspace page should explain that web sources now live on their own page',
-        data: result
-      })
+      await runtime.assertThat(
+        result.bodyText.includes('刷新') && result.bodyText.includes('暂无工作空间'),
+        {
+          name: 'settings-workspace-split-copy',
+          message: 'the Workspace page should keep the empty state focused on workspace management',
+          data: result
+        }
+      )
     }
   })
 })

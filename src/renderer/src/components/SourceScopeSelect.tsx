@@ -121,8 +121,8 @@ const SourceScopeSelect: React.FC<SourceScopeSelectProps> = ({
                 }`}
               >
                 {scope.hasUnpreparedFiles
-                  ? `未准备 ${scope.unpreparedFileCount || 0}`
-                  : `已准备 ${scope.preparedDocumentCount || 0}`}
+                  ? `未加载 ${scope.unpreparedFileCount || 0}`
+                  : `已加载 ${scope.preparedDocumentCount || 0}`}
               </Tag>
             )}
           </div>

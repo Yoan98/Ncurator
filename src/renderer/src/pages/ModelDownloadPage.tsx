@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Button, Progress, Typography, message, Tag, List } from 'antd'
 import { HiCloudArrowDown, HiCheckCircle, HiExclamationCircle } from 'react-icons/hi2'
 import AppPageHeader from '../components/app/AppPageHeader'
-import SettingsMenuButton from '../components/settings/SettingsMenuButton'
+import SettingsFloatingMenu from '../components/settings/SettingsFloatingMenu'
 
 const { Title } = Typography
 
@@ -112,7 +112,6 @@ const ModelDownloadPage: React.FC = () => {
           description="下载本地检索模型，为搜索和知识库能力提供向量基础。"
           navigationMode="back"
           backTo="/"
-          actions={<SettingsMenuButton className="!h-10 !w-10 !rounded-xl !px-0" />}
         />
 
         <div className="min-h-0 flex-1 overflow-hidden pb-4 pr-1">
@@ -208,6 +207,7 @@ const ModelDownloadPage: React.FC = () => {
           </div>
         </div>
       </div>
+      <SettingsFloatingMenu />
     </div>
   )
 }

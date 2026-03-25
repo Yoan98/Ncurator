@@ -22,6 +22,7 @@ import {
   formatDateTime,
   getDefaultExpandedKeys,
   getWorkspaceActionTooltip,
+  getVisibleWorkspaceNodes,
   getWorkspaceStatusBadge,
   getWorkspaceStats,
   getWorkspaceTreeDisplayStrategy
@@ -38,6 +39,30 @@ const getWorkspaceNameFromPath = (rootPath: string): string => {
   const segments = normalizedPath.split(/[\\/]/).filter(Boolean)
   return segments[segments.length - 1] || normalizedPath
 }
+
+const WORKSPACE_LOAD_MODE_OPTIONS: Array<{
+  label: string
+  value: WorkspacePrepareMode
+  description: string
+}> = [
+  {
+    label: '全部',
+    value: 'full',
+    description: '当前目录下所有支持加载的文件都会重新加载，并覆盖旧缓存。'
+  },
+  {
+    label: '新变更',
+    value: 'presence_only',
+    description: '只同步新增和删除的文件；已有文件内容不会重新加载。'
+  },
+  {
+    label: '旧文件',
+    value: 'changes_only',
+    description: '只检查并重新加载之前已加载过且内容有变更的旧文件，不处理新增和删除。'
+  }
+]
+
+const SUPPORTED_WORKSPACE_FILE_TYPES = ['docx', 'pdf'] as const
 
 const WorkspaceSettingsPanel: React.FC = () => {
   const [workspaces, setWorkspaces] = useState<WorkspaceSource[]>([])
@@ -59,7 +84,8 @@ const WorkspaceSettingsPanel: React.FC = () => {
   )
 
   const selectedWorkspaceNodes = useMemo(
-    () => (selectedWorkspaceId ? workspaceNodes[selectedWorkspaceId] || [] : []),
+    () =>
+      selectedWorkspaceId ? getVisibleWorkspaceNodes(workspaceNodes[selectedWorkspaceId] || []) : [],
     [selectedWorkspaceId, workspaceNodes]
   )
 
@@ -104,7 +130,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
         const next = { ...previous }
         workspaceResponse.items.forEach((workspace) => {
           if (!next[workspace.id]) {
-            const nodes = nextNodes[workspace.id] || []
+            const nodes = getVisibleWorkspaceNodes(nextNodes[workspace.id] || [])
             next[workspace.id] = getDefaultExpandedKeys(
               nodes,
               getWorkspaceTreeDisplayStrategy(nodes).defaultExpandDepth
@@ -217,6 +243,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
       message.error('扫描失败')
     } finally {
       setWorkspaceActions((previous) => ({ ...previous, [workspace.id]: undefined }))
+      setWorkspaceProgress((previous) => ({ ...previous, [workspace.id]: undefined }))
     }
   }
 
@@ -231,7 +258,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
         phase: 'prepare',
         total: 0,
         completed: 0,
-        message: '正在准备资料'
+        message: '正在加载资料'
       }
     }))
 
@@ -241,19 +268,20 @@ const WorkspaceSettingsPanel: React.FC = () => {
         mode
       })
       if (!response.success) {
-        message.error(response.error || '准备失败')
+        message.error(response.error || '加载失败')
         return
       }
       if (response.progress) {
         setWorkspaceProgress((previous) => ({ ...previous, [workspace.id]: response.progress }))
       }
       await loadWorkspaces()
-      message.success('准备完成')
+      message.success('加载完成')
     } catch (error) {
       console.error(error)
-      message.error('准备失败')
+      message.error('加载失败')
     } finally {
       setWorkspaceActions((previous) => ({ ...previous, [workspace.id]: undefined }))
+      setWorkspaceProgress((previous) => ({ ...previous, [workspace.id]: undefined }))
     }
   }
 
@@ -343,7 +371,8 @@ const WorkspaceSettingsPanel: React.FC = () => {
               data-testid={importSelectors.workspaceList}
             >
               {workspaces.map((workspace) => {
-                const stats = getWorkspaceStats(workspaceNodes[workspace.id] || [])
+                const visibleNodes = getVisibleWorkspaceNodes(workspaceNodes[workspace.id] || [])
+                const stats = getWorkspaceStats(visibleNodes)
                 const progress = workspaceProgress[workspace.id]
                 const isSelected = workspace.id === selectedWorkspaceId
                 const statusBadge = getWorkspaceStatusBadge({
@@ -387,7 +416,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                     <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-[#666666]">
                       <span>目录 {stats.directoryCount}</span>
                       <span>文件 {stats.fileCount}</span>
-                      <span>已准备 {stats.preparedCount}</span>
+                      <span>已加载 {stats.preparedCount}</span>
                       <span>
                         待处理 {stats.unpreparedCount + stats.staleCount + stats.failedCount}
                       </span>
@@ -464,7 +493,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                     </div>
                     <div className="mt-2 flex flex-wrap gap-3 text-[12px] text-[#999999]">
                       <span>最近扫描：{formatDateTime(selectedWorkspace.last_scan_at)}</span>
-                      <span>最近准备：{formatDateTime(selectedWorkspace.last_prepare_at)}</span>
+                      <span>最近加载：{formatDateTime(selectedWorkspace.last_prepare_at)}</span>
                     </div>
                     {selectedWorkspace.last_error ? (
                       <div
@@ -500,36 +529,49 @@ const WorkspaceSettingsPanel: React.FC = () => {
                 </div>
               </div>
 
-              <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 pr-4">
-                <div className="grid min-h-full gap-4 xl:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
-                  <div className="space-y-4">
+              <div className="min-h-0 flex-1 overflow-hidden px-5 py-5 pr-4">
+                <div className="grid h-full min-h-0 gap-4 xl:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
+                  <div className="space-y-4 overflow-y-auto pr-1">
                     <section className="rounded-[18px] border border-[#E5E5E4] bg-[#FCFBF8] p-4">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[14px] font-semibold text-[#1F1F1F]">准备策略</span>
-                        <Tooltip title="全部差异会补齐新增、变更和删除；仅新增删除跳过内容变更检测；仅变更会重准备已有文件。">
-                          <span className="inline-flex cursor-help items-center text-[#999999]">
-                            <HiOutlineQuestionMarkCircle className="h-4 w-4" />
-                          </span>
+                      <div className="flex items-center gap-1.5">
+                        <div className="text-[14px] font-semibold text-[#1F1F1F]">加载范围</div>
+                        <Tooltip title="加载会把文件文本切块并缓存，后续搜索更快，也能减少 AI 直接读取原文时的 token 消耗。">
+                          <HiOutlineQuestionMarkCircle className="h-4 w-4 cursor-help text-[#999999] transition-colors hover:text-[#D97757]" />
                         </Tooltip>
                       </div>
 
-                      <div className="mt-3">
-                        <Segmented
-                          value={workspaceModes[selectedWorkspace.id] || 'changes_only'}
-                          onChange={(value) =>
-                            setWorkspaceModes((previous) => ({
-                              ...previous,
-                              [selectedWorkspace.id]: value as WorkspacePrepareMode
-                            }))
+                      <div className="mt-3 flex items-center gap-2">
+                        <div className="min-w-0 flex-1">
+                          <Segmented
+                            value={workspaceModes[selectedWorkspace.id] || 'changes_only'}
+                            onChange={(value) =>
+                              setWorkspaceModes((previous) => ({
+                                ...previous,
+                                [selectedWorkspace.id]: value as WorkspacePrepareMode
+                              }))
+                            }
+                            options={WORKSPACE_LOAD_MODE_OPTIONS.map((option) => ({
+                              label: option.label,
+                              value: option.value
+                            }))}
+                            className="bg-[#F5F5F4]"
+                            size="middle"
+                          />
+                        </div>
+                        <Tooltip
+                          title={
+                            <div className="max-w-[280px] space-y-1.5 text-[12px] leading-5">
+                              {WORKSPACE_LOAD_MODE_OPTIONS.map((option) => (
+                                <div key={option.value}>
+                                  <span className="font-medium">{option.label}</span>
+                                  <span>：{option.description}</span>
+                                </div>
+                              ))}
+                            </div>
                           }
-                          options={[
-                            { label: '全部差异', value: 'full' },
-                            { label: '仅新增删除', value: 'presence_only' },
-                            { label: '仅变更', value: 'changes_only' }
-                          ]}
-                          className="bg-[#F5F5F4]"
-                          size="middle"
-                        />
+                        >
+                          <HiOutlineQuestionMarkCircle className="h-4 w-4 shrink-0 cursor-help text-[#999999] transition-colors hover:text-[#D97757]" />
+                        </Tooltip>
                       </div>
 
                       <div className="mt-4 grid grid-cols-2 gap-2">
@@ -562,7 +604,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                             loading={workspaceActions[selectedWorkspace.id] === 'prepare'}
                             data-testid={importSelectors.workspaceQuickPrepareButton}
                           >
-                            开始准备
+                            开始加载
                           </Button>
                         </Tooltip>
                       </div>
@@ -579,7 +621,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                           </div>
                         </div>
                         <div className="rounded-[14px] bg-[#FAFAF9] px-3 py-3">
-                          已准备
+                          已加载
                           <div className="mt-1 text-[13px] font-semibold text-[#1F1F1F]">
                             {getWorkspaceStats(selectedWorkspaceNodes).preparedCount}
                           </div>
@@ -588,10 +630,24 @@ const WorkspaceSettingsPanel: React.FC = () => {
                     </section>
                   </div>
 
-                  <div className="min-h-0 min-w-0">
-                    <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <div className="text-[14px] font-semibold text-[#1F1F1F]">目录树快照</div>
+                  <div className="flex min-h-0 min-w-0 flex-col">
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+                        <div className="text-[14px] font-semibold text-[#1F1F1F]">目录树</div>
+                        {SUPPORTED_WORKSPACE_FILE_TYPES.map((fileType) => (
+                          <Tag
+                            key={fileType}
+                            className="!mr-0 !inline-flex !items-center gap-1.5 !rounded-full !border !px-2.5 !py-1"
+                            style={{
+                              borderColor: '#D8EECF',
+                              backgroundColor: '#EEF8E9',
+                              color: '#4C7D37'
+                            }}
+                          >
+                            <HiCheckCircle className="h-3.5 w-3.5" />
+                            <span>{fileType}</span>
+                          </Tag>
+                        ))}
                       </div>
                       <div className="flex flex-wrap gap-2">
                         {selectedWorkspaceTreeStrategy.isLargeTree ? (
@@ -634,18 +690,18 @@ const WorkspaceSettingsPanel: React.FC = () => {
                         showIcon
                         icon={<HiOutlineExclamationCircle className="h-4 w-4" />}
                         className="!mb-3 rounded-[16px] border-[#F4E5DF] bg-[#FBF5F2] text-[#666666]"
-                        message="扫描或准备进行中"
+                        message="扫描或加载进行中"
                       />
                     ) : null}
 
                     <div
-                      className="min-h-[520px] overflow-auto rounded-[18px] border border-[#E5E5E4] bg-[#FAFAF9] p-3"
+                      className="flex min-h-0 flex-1 overflow-hidden rounded-[18px] border border-[#E5E5E4] bg-[#FAFAF9] p-3"
                       data-testid={importSelectors.workspaceTree}
                     >
                       {selectedWorkspaceNodes.length > 0 ? (
                         <Tree
                           blockNode
-                          height={560}
+                          height={Math.max(selectedWorkspaceTreeStrategy.isLargeTree ? 520 : 460, 360)}
                           virtual
                           treeData={selectedWorkspaceTree}
                           expandedKeys={workspaceExpandedKeys[selectedWorkspace.id] || []}
@@ -657,7 +713,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                           }
                         />
                       ) : (
-                        <div className="flex min-h-[500px] items-center justify-center">
+                        <div className="flex min-h-0 flex-1 items-center justify-center">
                           <Empty
                             image={Empty.PRESENTED_IMAGE_SIMPLE}
                             description={<span className="text-[#666666]">没有可追踪文件</span>}
@@ -691,7 +747,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
         className="[&_.ant-modal-content]:!rounded-[24px]"
       >
         <p className="mb-0 text-[#666666]">
-          移除后，该工作空间将不再出现在资料范围和聊天范围里。若仍需使用，请重新添加并重新准备。
+          移除后，该工作空间将不再出现在资料范围和聊天范围里。若仍需使用，请重新添加并重新加载。
         </p>
       </Modal>
     </div>
