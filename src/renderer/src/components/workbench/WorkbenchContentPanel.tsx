@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Button, Empty } from 'antd'
-import { HiArrowLeft, HiOutlineMagnifyingGlass, HiOutlineXMark } from 'react-icons/hi2'
+import { HiArrowLeft, HiOutlineMagnifyingGlass } from 'react-icons/hi2'
 import type { DraftChangeResolution, ValidateDraftCommitResponse } from '../../../../shared/types'
 import EmbeddedFileViewer from '../fileRenders/EmbeddedFileViewer'
 import { FILE_ORIGIN_LABELS, REVIEW_STATUS_META } from './constants'
@@ -76,8 +76,8 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
       className="flex h-full flex-col border-l border-[#E5E5E4] bg-white"
       data-testid={workbenchSelectors.contentPanel}
     >
-      <div className="flex items-center justify-between gap-3 border-b border-[#E5E5E4] bg-[#FCFBF8] px-5 py-4">
-        <div className="min-w-0">
+      <div className="flex h-11 items-center border-b border-[#E5E5E4] bg-[#FCFBF8] px-4">
+        <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             {state.kind !== 'empty' ? (
               <Button
@@ -106,33 +106,13 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
               </span>
             ) : null}
           </div>
-          <div className="mt-1 truncate text-xs text-[#999999]">
-            {state.kind === 'document_view'
-              ? state.file.path
-              : state.kind === 'search_results'
-                ? `${state.results.length} 条命中`
-                : state.kind === 'review_session' && state.review
-                  ? state.review.review.id
-                  : '从对话中的步骤、文件或搜索结果进入这里。'}
-          </div>
         </div>
-        {state.kind !== 'empty' ? (
-          <Button
-            type="text"
-            size="small"
-            icon={<HiOutlineXMark className="h-4 w-4" />}
-            onClick={onClose}
-          />
-        ) : null}
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden px-5 py-5">
         {state.kind === 'empty' ? (
           <div className="flex h-full items-center justify-center rounded-[20px] border border-dashed border-[#E5E5E4] bg-[#FAFAF9]">
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={<span className="text-[#666666]">{state.description}</span>}
-            />
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={false} />
           </div>
         ) : null}
 

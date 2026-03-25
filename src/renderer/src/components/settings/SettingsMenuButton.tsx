@@ -20,15 +20,12 @@ const SettingsMenuButton: React.FC<SettingsMenuButtonProps> = ({ label, classNam
         items: APP_MENU_ITEMS.map((item) => ({
           key: item.key,
           label: (
-            <div className="min-w-[188px] py-1">
+            <div className="min-w-[152px] py-0.5">
               <div className="flex items-center gap-3 text-[13px] font-medium text-[#1F1F1F]">
-                <span className="flex h-8 w-8 items-center justify-center rounded-xl border border-[#E5E5E4] bg-[#FAFAF9] text-[#666666]">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#E5E5E4] bg-[#FAFAF9] text-[#666666]">
                   {item.icon}
                 </span>
                 <span>{item.label}</span>
-              </div>
-              <div className="mt-1 pl-[44px] text-[12px] leading-5 text-[#999999]">
-                {item.description}
               </div>
             </div>
           )

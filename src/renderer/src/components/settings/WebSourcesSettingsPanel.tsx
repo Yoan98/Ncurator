@@ -1,7 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { Alert, Button, Empty, Input, Modal, Tag, message } from 'antd'
+import { Button, Empty, Input, Modal, Tag, message } from 'antd'
 import type { WebSourceRecord } from '../../../../shared/types'
-import { HiArrowPath, HiGlobeAlt, HiOutlineAdjustmentsHorizontal, HiOutlineTrash } from 'react-icons/hi2'
+import {
+  HiArrowPath,
+  HiGlobeAlt,
+  HiOutlineAdjustmentsHorizontal,
+  HiOutlineTrash
+} from 'react-icons/hi2'
 import { importSelectors } from '../../testing/selectors'
 import { formatDateTime, getWebStatusMeta, parseSelectors } from './utils/workspace'
 
@@ -152,19 +157,26 @@ const WebSourcesSettingsPanel: React.FC = () => {
 
   return (
     <div className="space-y-4" data-testid={importSelectors.webSourceSection}>
-      <section className="rounded-[18px] border border-[#E5E5E4] bg-white/88 px-5 py-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur-sm">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div className="max-w-3xl">
-            <div className="flex items-center gap-2 text-[12px] font-medium uppercase tracking-[0.18em] text-[#999999]">
-              <HiGlobeAlt className="h-4 w-4 text-[#D97757]" />
-              Web Sources
+      <section className="rounded-[18px] border border-[#E5E5E4] bg-white/88 px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-2xl border border-[#F4E5DF] bg-[#FBF5F2] text-[#D97757]">
+              <HiGlobeAlt className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-[16px] font-semibold tracking-tight text-[#1F1F1F]">网页资料</h2>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <Tag className="!m-0 rounded-full border-[#E5E5E4] bg-white px-3 py-1 text-[12px] text-[#666666]">
+                  共 {webSources.length} 条
+                </Tag>
+                <Tag className="!m-0 rounded-full border-[#F4E5DF] bg-[#FBF5F2] px-3 py-1 text-[12px] text-[#D97757]">
+                  处理中 {statusSummary['1'] || 0}
+                </Tag>
+                <Tag className="!m-0 rounded-full border-[#DCEBD7] bg-[#F3FAF0] px-3 py-1 text-[12px] text-[#4F7A46]">
+                  已抓取 {statusSummary['2'] || 0}
+                </Tag>
+              </div>
             </div>
-            <h2 className="mt-2 text-[18px] font-semibold tracking-tight text-[#1F1F1F]">
-              网页资料来源与抓取状态
-            </h2>
-            <p className="mt-1 text-[13px] leading-6 text-[#666666]">
-              网页资料单独管理，避免与本地工作空间共用一个拥挤页面。默认只暴露 URL，抓取规则放进高级设置。
-            </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -188,34 +200,10 @@ const WebSourcesSettingsPanel: React.FC = () => {
         </div>
       </section>
 
-      <div className="grid gap-3 xl:grid-cols-3">
-        <Alert
-          showIcon
-          className="rounded-[18px] border-[#E5E5E4] bg-white text-[#666666]"
-          message="总数"
-          description={<span className="text-[18px] font-semibold text-[#1F1F1F]">{webSources.length}</span>}
-        />
-        <Alert
-          showIcon
-          className="rounded-[18px] border-[#F4E5DF] bg-[#FBF5F2] text-[#666666]"
-          message="处理中"
-          description={<span className="text-[18px] font-semibold text-[#1F1F1F]">{statusSummary['1'] || 0}</span>}
-        />
-        <Alert
-          showIcon
-          className="rounded-[18px] border-[#DCEBD7] bg-[#F3FAF0] text-[#4F7A46]"
-          message="已抓取"
-          description={<span className="text-[18px] font-semibold text-[#1F1F1F]">{statusSummary['2'] || 0}</span>}
-        />
-      </div>
-
       <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
         <section className="flex min-h-[720px] flex-col rounded-[20px] border border-[#E5E5E4] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
           <div className="border-b border-[#E5E5E4] px-4 py-4">
             <div className="text-[15px] font-semibold text-[#1F1F1F]">来源列表</div>
-            <div className="mt-1 text-[12px] leading-5 text-[#999999]">
-              列表负责选择来源，详情和刷新动作放在右侧。
-            </div>
             <div className="mt-3" data-testid={importSelectors.webSourceSearchInput}>
               <Input.Search
                 placeholder="按标题或 URL 过滤网页资料"
@@ -262,9 +250,7 @@ const WebSourcesSettingsPanel: React.FC = () => {
                           <div className="truncate text-[14px] font-semibold text-[#1F1F1F]">
                             {item.title || item.url}
                           </div>
-                          <div className="mt-1 truncate text-[12px] text-[#666666]">
-                            {item.url}
-                          </div>
+                          <div className="mt-1 truncate text-[12px] text-[#666666]">{item.url}</div>
                         </div>
                         <Tag className={`!mr-0 rounded-full ${statusMeta.className}`}>
                           {statusMeta.label}
@@ -388,7 +374,7 @@ const WebSourcesSettingsPanel: React.FC = () => {
             <div className="flex min-h-[720px] items-center justify-center px-6">
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={<span className="text-[#666666]">选择一条网页资料查看详情和状态</span>}
+                description={<span className="text-[#666666]">选择一条网页资料</span>}
               />
             </div>
           )}
@@ -418,9 +404,6 @@ const WebSourcesSettingsPanel: React.FC = () => {
               autoSize={{ minRows: 4, maxRows: 8 }}
               data-testid={importSelectors.webSourceUrlInput}
             />
-            <div className="mt-2 text-[12px] text-[#999999]">
-              默认按完整页面抓取；只有在站点结构复杂时，才需要展开高级规则。
-            </div>
           </div>
 
           <button

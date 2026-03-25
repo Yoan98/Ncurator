@@ -48,8 +48,9 @@ const SettingsPage: React.FC = () => {
         <AppPageHeader
           icon={sectionMeta.icon}
           title={sectionMeta.title}
-          description={sectionMeta.description}
-          actions={<SettingsMenuButton label="Setting" />}
+          navigationMode="back"
+          backTo="/"
+          actions={<SettingsMenuButton label="设置" />}
         />
 
         {currentSection === 'workspace' ? <WorkspaceSettingsPanel /> : null}

@@ -1,6 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { App, Button } from 'antd'
-import { HiBars3, HiPlus, HiTrash, HiUser, HiBookOpen } from 'react-icons/hi2'
+import {
+  HiArrowLeft,
+  HiArrowRight,
+  HiBars3,
+  HiBookOpen,
+  HiPlus,
+  HiTrash,
+  HiUser
+} from 'react-icons/hi2'
 import type {
   AiRunEvent,
   ChatMessage,
@@ -21,7 +29,10 @@ import SettingsMenuButton from '../components/settings/SettingsMenuButton'
 import AssistantTurnCard from '../components/workbench/AssistantTurnCard'
 import WorkbenchComposer from '../components/workbench/WorkbenchComposer'
 import WorkbenchContentPanel from '../components/workbench/WorkbenchContentPanel'
-import { WORKBENCH_SIDEBAR_STORAGE_KEY } from '../components/workbench/constants'
+import {
+  WORKBENCH_CONTENT_PANEL_COLLAPSED_STORAGE_KEY,
+  WORKBENCH_SIDEBAR_STORAGE_KEY
+} from '../components/workbench/constants'
 import type {
   AssistantTurnReviewTarget,
   AssistantTurnStep,
@@ -40,15 +51,15 @@ import {
   getToolBadge
 } from '../components/workbench/utils'
 import { chatSelectors, workbenchSelectors } from '../testing/selectors'
-import brandIcon from '../../../resources/icon.png'
+import brandIcon from '../../../../resources/icon.png'
 
 type ApprovalRequiredEvent = Extract<AiRunEvent, { type: 'approval_required' }>
 type WorkspaceRequiredEvent = Extract<AiRunEvent, { type: 'workspace_required' }>
 
-const createEmptyPanel = (description: string, title = '内容面板'): WorkbenchContentPanelState => ({
+const createEmptyPanel = (): WorkbenchContentPanelState => ({
   kind: 'empty',
-  title,
-  description
+  title: '',
+  description: ''
 })
 
 const createAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
@@ -106,12 +117,14 @@ const ChatPage: React.FC = () => {
   const [selectedModelConfigId, setSelectedModelConfigId] = useState<string | null>(null)
   const [composerResetKey, setComposerResetKey] = useState(0)
   const [assistantTurns, setAssistantTurns] = useState<Record<string, AssistantTurnViewModel>>({})
-  const [contentPanel, setContentPanel] = useState<WorkbenchContentPanelState>(
-    createEmptyPanel('从对话中的步骤、文件或搜索结果进入这里。')
-  )
+  const [contentPanel, setContentPanel] = useState<WorkbenchContentPanelState>(createEmptyPanel())
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     const stored = window.localStorage.getItem(WORKBENCH_SIDEBAR_STORAGE_KEY)
     return stored === 'true'
+  })
+  const [contentPanelCollapsed, setContentPanelCollapsed] = useState<boolean>(() => {
+    const stored = window.localStorage.getItem(WORKBENCH_CONTENT_PANEL_COLLAPSED_STORAGE_KEY)
+    return stored === null ? true : stored === 'true'
   })
 
   const [activeDraftReviewId, setActiveDraftReviewId] = useState<string | null>(null)
@@ -168,6 +181,16 @@ const ChatPage: React.FC = () => {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
   }
+
+  const showContentPanel = useCallback((nextState: WorkbenchContentPanelState): void => {
+    setContentPanel(nextState)
+    setContentPanelCollapsed(false)
+  }, [])
+
+  const closeContentPanel = useCallback((): void => {
+    setContentPanel(createEmptyPanel())
+    setContentPanelCollapsed(true)
+  }, [])
 
   const resetDraftReviewState = (): void => {
     setActiveDraftReviewId(null)
@@ -286,7 +309,7 @@ const ChatPage: React.FC = () => {
       setActiveDraftReview(detailResponse.review)
       setActiveDraftReviewId(reviewId)
       setDraftCommitValidation(validationResponse)
-      setContentPanel({
+      showContentPanel({
         kind: 'review_session',
         title: '修改确认',
         reviewId,
@@ -387,6 +410,13 @@ const ChatPage: React.FC = () => {
   }, [sidebarCollapsed])
 
   useEffect(() => {
+    window.localStorage.setItem(
+      WORKBENCH_CONTENT_PANEL_COLLAPSED_STORAGE_KEY,
+      String(contentPanelCollapsed)
+    )
+  }, [contentPanelCollapsed])
+
+  useEffect(() => {
     if (currentSessionId) {
       void loadMessages(currentSessionId)
       setLoading(false)
@@ -399,7 +429,7 @@ const ChatPage: React.FC = () => {
       setApprovalSubmitting(false)
       setPendingWorkspaceRequest(null)
       setAssistantTurns({})
-      setContentPanel(createEmptyPanel('从对话中的步骤、文件或搜索结果进入这里。'))
+      setContentPanel(createEmptyPanel())
       resetDraftReviewState()
       void loadDraftReviewsForSession(currentSessionId)
     } else {
@@ -442,7 +472,7 @@ const ChatPage: React.FC = () => {
       return
     }
 
-    setContentPanel({
+    showContentPanel({
       kind: 'document_view',
       title: '文档查看',
       file
@@ -474,7 +504,7 @@ const ChatPage: React.FC = () => {
       return
     }
     setSearchTurn(turn)
-    setContentPanel({
+    showContentPanel({
       kind: 'document_view',
       title: '文档查看',
       file: fileRef,
@@ -542,7 +572,7 @@ const ChatPage: React.FC = () => {
 
         const searchResults = extractSearchResultsFromToolOutput(event.outputPreview)
         if (searchResults.length > 0) {
-          setContentPanel({
+          showContentPanel({
             kind: 'search_results',
             title: '搜索结果',
             query: event.toolName,
@@ -800,7 +830,7 @@ const ChatPage: React.FC = () => {
     assistantMsgIdRef.current = null
     lastSubmittedInputRef.current = userQuery
     lastSubmittedScopesRef.current = selectedSourceScopes
-    setContentPanel(createEmptyPanel('运行中的文件、搜索结果和待确认修改会显示在这里。'))
+    setContentPanel(createEmptyPanel())
 
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
@@ -904,7 +934,7 @@ const ChatPage: React.FC = () => {
     setPendingApprovalRequest(null)
     setApprovalSubmitting(false)
     setPendingWorkspaceRequest(null)
-    setContentPanel(createEmptyPanel('搜索结果会显示在这里。'))
+    setContentPanel(createEmptyPanel())
 
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
@@ -945,7 +975,7 @@ const ChatPage: React.FC = () => {
         createdAt: Date.now()
       }
       setSearchTurn(nextTurn)
-      setContentPanel({
+      showContentPanel({
         kind: 'search_results',
         title: '搜索结果',
         query: userQuery,
@@ -1233,7 +1263,7 @@ const ChatPage: React.FC = () => {
             return
           }
           if (searchTurn) {
-            setContentPanel({
+            showContentPanel({
               kind: 'search_results',
               title: '搜索结果',
               query: searchTurn.query,
@@ -1269,44 +1299,27 @@ const ChatPage: React.FC = () => {
           sidebarCollapsed ? 'w-14' : 'w-[220px]'
         }`}
       >
-        <div className="border-b border-[#E5E5E4] px-2 py-3">
+        <div className="border-b border-[#E5E5E4] px-2 py-2">
           <div
-            className={`flex ${sidebarCollapsed ? 'flex-col items-center gap-2' : 'items-center justify-between gap-2'}`}
+            className={`flex ${sidebarCollapsed ? 'flex-col items-center gap-1.5' : 'items-center justify-between gap-2'}`}
           >
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="flex h-8 w-8 items-center justify-center rounded-2xl bg-[#FBF5F2]">
-                <img src={brandIcon} alt="馆长" className="w-5 invert-100" />
-              </span>
-              {!sidebarCollapsed ? (
-                <div className="min-w-0">
-                  <div className="truncate text-[13px] font-semibold tracking-[0.01em] text-[#1F1F1F]">
-                    馆长
-                  </div>
-                  <div className="text-[11px] uppercase tracking-[0.18em] text-[#999999]">
-                    Workbench
-                  </div>
-                </div>
-              ) : null}
-            </div>
+            <span className="flex h-8 w-8 items-center justify-center rounded-2xl bg-[#FBF5F2]">
+              <img src={brandIcon} alt="NCurator" className="w-5 invert-100" />
+            </span>
 
             <div className={`flex items-center gap-1 ${sidebarCollapsed ? 'flex-col' : ''}`}>
               <Button
-                type={sidebarCollapsed ? 'text' : 'primary'}
+                type="text"
                 size="small"
                 icon={<HiPlus className="h-4 w-4" />}
-                className={
-                  sidebarCollapsed
-                    ? 'text-[#D97757] hover:text-[#C66A4A] hover:bg-[#FBF5F2]'
-                    : 'border-none !bg-[#D97757] shadow-none hover:!bg-[#C66A4A]'
-                }
+                className="!flex !h-8 !w-8 !items-center !justify-center !rounded-xl !border !border-transparent !p-0 !text-[#D97757] hover:!border-[#E5E5E4] hover:!bg-white hover:!text-[#C66A4A]"
                 onClick={() => void createNewSession()}
-              >
-                {!sidebarCollapsed ? '新对话' : null}
-              </Button>
+              />
               <Button
                 type="text"
                 size="small"
                 icon={<HiBars3 className="h-4 w-4" />}
+                className="!flex !h-8 !w-8 !items-center !justify-center !rounded-xl !border !border-transparent !p-0 !text-[#666666] hover:!border-[#E5E5E4] hover:!bg-white hover:!text-[#1F1F1F]"
                 onClick={() => setSidebarCollapsed((previous) => !previous)}
                 data-testid={workbenchSelectors.sessionsToggle}
               />
@@ -1354,15 +1367,28 @@ const ChatPage: React.FC = () => {
         </div>
       </aside>
 
-      <div className="min-w-0 flex-1 border-r border-[#E5E5E4]">
+      <div className={`min-w-0 flex-1 ${contentPanelCollapsed ? '' : 'border-r border-[#E5E5E4]'}`}>
         <div className="relative flex h-screen flex-col">
-          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-end px-5 pt-4">
-            <div className="pointer-events-auto">
-              <SettingsMenuButton />
+          <div className="flex h-11 items-center justify-end border-b border-[#E5E5E4] bg-[#F8F6F2]/88 px-4 backdrop-blur-sm">
+            <div className="flex items-center gap-2">
+              <Button
+                type="text"
+                size="small"
+                icon={
+                  contentPanelCollapsed ? (
+                    <HiArrowLeft className="h-4 w-4" />
+                  ) : (
+                    <HiArrowRight className="h-4 w-4" />
+                  )
+                }
+                className="!flex !h-8 !w-8 !items-center !justify-center !rounded-xl !border !border-[#E5E5E4] !bg-white/92 !p-0 !text-[#666666] shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:!border-[#D97757] hover:!text-[#D97757]"
+                onClick={() => setContentPanelCollapsed((previous) => !previous)}
+              />
+              <SettingsMenuButton className="!h-8 !rounded-xl !px-2.5" />
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-52 pt-6" ref={scrollRef}>
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-52 pt-4" ref={scrollRef}>
             <div className="mx-auto flex max-w-[860px] flex-col gap-5">
               {currentMessages.length === 0 ? (
                 <div className="relative flex min-h-[58vh] items-center justify-center overflow-hidden px-8 py-12 text-center">
@@ -1496,7 +1522,15 @@ const ChatPage: React.FC = () => {
         </div>
       </div>
 
-      <div className={contentPanel.kind === 'review_session' ? 'w-[520px]' : 'w-[430px]'}>
+      <div
+        className={`overflow-hidden transition-[width] duration-200 ${
+          contentPanelCollapsed
+            ? 'w-0'
+            : contentPanel.kind === 'review_session'
+              ? 'w-[520px]'
+              : 'w-[430px]'
+        }`}
+      >
         <WorkbenchContentPanel
           state={
             contentPanel.kind === 'review_session' && activeDraftReview
@@ -1510,9 +1544,7 @@ const ChatPage: React.FC = () => {
           draftBulkApplying={draftBulkApplying}
           draftCommitSubmitting={draftCommitSubmitting}
           reviewTurn={reviewTurn}
-          onClose={() =>
-            setContentPanel(createEmptyPanel('从对话中的步骤、文件或搜索结果进入这里。'))
-          }
+          onClose={closeContentPanel}
           onOpenSearchResult={(turn, resultIndex) => void openSearchResult(turn, resultIndex)}
           onOpenReview={openDraftReview}
           onOpenFile={(file) => void openFile(file)}

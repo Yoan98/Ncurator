@@ -1,12 +1,6 @@
 import type { WorkspaceNode, WorkspaceSource, WebSourceRecord } from '../../../../shared/types'
 import type { SettingsSectionMeta, SettingsSectionValue } from './types'
-import {
-  HiCloudArrowDown,
-  HiGlobeAlt,
-  HiOutlineBeaker,
-  HiOutlineRectangleStack,
-  HiSparkles
-} from 'react-icons/hi2'
+import { HiCloudArrowDown, HiGlobeAlt, HiOutlineRectangleStack, HiSparkles } from 'react-icons/hi2'
 
 import openaiLogo from '../../assets/img/openai.png'
 import qianwenLogo from '../../assets/img/qianwen.png'
@@ -72,13 +66,6 @@ export const APP_MENU_ITEMS = [
     description: '下载本地检索模型',
     path: '/model-download',
     icon: <HiCloudArrowDown className="h-4 w-4" />
-  },
-  {
-    key: 'test',
-    label: '实验室',
-    description: '查看检索与数据调试能力',
-    path: '/test',
-    icon: <HiOutlineBeaker className="h-4 w-4" />
   }
 ] as const
 

@@ -110,7 +110,7 @@ const ModelDownloadPage: React.FC = () => {
           icon={<HiCloudArrowDown className="h-5 w-5" />}
           title="向量模型"
           description="下载本地检索模型，为搜索和知识库能力提供向量基础。"
-          actions={<SettingsMenuButton label="Setting" />}
+          actions={<SettingsMenuButton label="设置" />}
         />
 
         <div className="rounded-[20px] border border-[#E5E5E4] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
@@ -153,7 +153,9 @@ const ModelDownloadPage: React.FC = () => {
                   <List.Item.Meta
                     title={
                       <div className="mb-2 flex items-center gap-3">
-                        <span className="text-[16px] font-semibold text-[#1F1F1F]">{item.name}</span>
+                        <span className="text-[16px] font-semibold text-[#1F1F1F]">
+                          {item.name}
+                        </span>
                         {item.tags.map((tag) => (
                           <Tag key={tag} className="mr-0 text-xs">
                             {tag}
@@ -169,7 +171,9 @@ const ModelDownloadPage: React.FC = () => {
                           <div className="rounded-[18px] border border-[#E5E5E4] bg-[#F5F5F4] p-4">
                             <div className="mb-2 flex justify-between text-sm">
                               <span className="text-[#1F1F1F] font-medium">正在下载...</span>
-                              <span className="text-[#D97757] font-medium">{downloadProgress}%</span>
+                              <span className="text-[#D97757] font-medium">
+                                {downloadProgress}%
+                              </span>
                             </div>
                             <Progress
                               percent={downloadProgress}

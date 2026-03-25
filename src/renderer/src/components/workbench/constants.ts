@@ -2,6 +2,7 @@ import type { AssistantStepStatus, WorkbenchFileOrigin } from './types'
 import type { DraftReviewStatus } from '../../../../shared/types'
 
 export const WORKBENCH_SIDEBAR_STORAGE_KEY = 'workbench.sidebar.collapsed'
+export const WORKBENCH_CONTENT_PANEL_COLLAPSED_STORAGE_KEY = 'workbench.content-panel.collapsed'
 
 export const ASSISTANT_STEP_STATUS_META: Record<
   AssistantStepStatus,

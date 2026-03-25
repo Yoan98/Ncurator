@@ -1,6 +1,22 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { Alert, Button, Empty, Input, Modal, Progress, Segmented, Tag, Tooltip, Tree, message } from 'antd'
-import type { LegacyLocalImportMigrationStatus, WorkspacePrepareMode, WorkspaceSource } from '../../../../shared/types'
+import {
+  Alert,
+  Button,
+  Empty,
+  Input,
+  Modal,
+  Progress,
+  Segmented,
+  Tag,
+  Tooltip,
+  Tree,
+  message
+} from 'antd'
+import type {
+  LegacyLocalImportMigrationStatus,
+  WorkspacePrepareMode,
+  WorkspaceSource
+} from '../../../../shared/types'
 import {
   HiArrowPath,
   HiOutlineExclamationCircle,
@@ -253,22 +269,19 @@ const WorkspaceSettingsPanel: React.FC = () => {
 
   return (
     <div className="space-y-4" data-testid={settingsSelectors.workspacePanel}>
-      <section className="rounded-[18px] border border-[#E5E5E4] bg-white/88 px-5 py-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur-sm">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div className="max-w-3xl">
-            <div className="flex items-center gap-2 text-[12px] font-medium uppercase tracking-[0.18em] text-[#999999]">
-              <HiOutlineRectangleStack className="h-4 w-4 text-[#D97757]" />
-              Workspace
+      <section className="rounded-[18px] border border-[#E5E5E4] bg-white/88 px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-2xl border border-[#F4E5DF] bg-[#FBF5F2] text-[#D97757]">
+              <HiOutlineRectangleStack className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-[16px] font-semibold tracking-tight text-[#1F1F1F]">工作空间</h2>
+              <div className="text-[12px] text-[#666666]">共 {workspaces.length} 个</div>
             </div>
-            <h2 className="mt-2 text-[18px] font-semibold tracking-tight text-[#1F1F1F]">
-              本地工作区与准备状态
-            </h2>
-            <p className="mt-1 text-[13px] leading-6 text-[#666666]">
-              这里只处理本地工作空间。网页资料已拆成独立页面，避免把两种来源混在同一视图里。
-            </p>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
               icon={<HiArrowPath className="h-4 w-4" />}
               className="border-[#E5E5E4] bg-white text-[#1F1F1F]"
@@ -289,31 +302,15 @@ const WorkspaceSettingsPanel: React.FC = () => {
         </div>
       </section>
 
-      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+      {legacyMigrationStatus?.hasLegacyLocalImports ? (
         <Alert
           showIcon
           icon={<HiOutlineExclamationCircle className="h-4 w-4" />}
-          className="rounded-[18px] border-[#F4E5DF] bg-[#FBF5F2] text-[#666666]"
-          message="本地优先"
-          description="AI 会优先使用这里已准备的本地内容；如果范围不足，再提示用户是否继续引用非本地信息。"
+          className="rounded-[18px] border-[#FDECC8] bg-[#FFF9ED] text-[#666666]"
+          message="检测到旧本地导入记录"
+          description={`已清理 ${legacyMigrationStatus.removedDocumentCount} 条旧记录与 ${legacyMigrationStatus.removedChunkCount} 条 chunk。`}
         />
-
-        <Alert
-          showIcon
-          icon={<HiOutlineExclamationCircle className="h-4 w-4" />}
-          className={`rounded-[18px] text-[#666666] ${
-            legacyMigrationStatus?.hasLegacyLocalImports
-              ? 'border-[#FDECC8] bg-[#FFF9ED]'
-              : 'border-[#E5E5E4] bg-white'
-          }`}
-          message="旧导入入口已下线"
-          description={
-            legacyMigrationStatus?.hasLegacyLocalImports
-              ? `升级时已清理 ${legacyMigrationStatus.removedDocumentCount} 条旧本地记录与 ${legacyMigrationStatus.removedChunkCount} 条 chunk；如历史聊天仍引用旧资料，请重新添加工作空间。`
-              : '旧版本通过复制文件导入的本地资料不再继续兼容，后续统一通过工作空间管理。'
-          }
-        />
-      </div>
+      ) : null}
 
       <div className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)]">
         <section
@@ -322,9 +319,6 @@ const WorkspaceSettingsPanel: React.FC = () => {
         >
           <div className="border-b border-[#E5E5E4] px-4 py-4">
             <div className="text-[15px] font-semibold text-[#1F1F1F]">工作空间</div>
-            <div className="mt-1 text-[12px] leading-5 text-[#999999]">
-              当前共 {workspaces.length} 个工作空间。左侧只负责选择，具体操作放在右侧详情区。
-            </div>
           </div>
 
           {workspaces.length === 0 ? (
@@ -334,11 +328,14 @@ const WorkspaceSettingsPanel: React.FC = () => {
             >
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={<span className="text-[#666666]">还没有工作空间，先添加一个绝对路径。</span>}
+                description={<span className="text-[#666666]">暂无工作空间</span>}
               />
             </div>
           ) : (
-            <div className="flex-1 space-y-2 overflow-y-auto px-3 py-3" data-testid={importSelectors.workspaceList}>
+            <div
+              className="flex-1 space-y-2 overflow-y-auto px-3 py-3"
+              data-testid={importSelectors.workspaceList}
+            >
               {workspaces.map((workspace) => {
                 const stats = getWorkspaceStats(workspaceNodes[workspace.id] || [])
                 const statusMeta = getWorkspaceStatusMeta(workspace.status)
@@ -375,7 +372,9 @@ const WorkspaceSettingsPanel: React.FC = () => {
                       <span>目录 {stats.directoryCount}</span>
                       <span>文件 {stats.fileCount}</span>
                       <span>已准备 {stats.preparedCount}</span>
-                      <span>待处理 {stats.unpreparedCount + stats.staleCount + stats.failedCount}</span>
+                      <span>
+                        待处理 {stats.unpreparedCount + stats.staleCount + stats.failedCount}
+                      </span>
                     </div>
 
                     {progress ? (
@@ -550,9 +549,6 @@ const WorkspaceSettingsPanel: React.FC = () => {
                   <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <div className="text-[14px] font-semibold text-[#1F1F1F]">目录树快照</div>
-                      <div className="mt-1 text-[12px] leading-5 text-[#999999]">
-                        {selectedWorkspaceTreeStrategy.helperText}
-                      </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {selectedWorkspaceTreeStrategy.isLargeTree ? (
@@ -596,7 +592,6 @@ const WorkspaceSettingsPanel: React.FC = () => {
                       icon={<HiOutlineExclamationCircle className="h-4 w-4" />}
                       className="!mb-3 rounded-[16px] border-[#F4E5DF] bg-[#FBF5F2] text-[#666666]"
                       message="扫描或准备进行中"
-                      description="当前目录树仍展示上一次成功扫描的快照；任务结束后会自动刷新。"
                     />
                   ) : null}
 
@@ -622,7 +617,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                       <div className="flex min-h-[500px] items-center justify-center">
                         <Empty
                           image={Empty.PRESENTED_IMAGE_SIMPLE}
-                          description={<span className="text-[#666666]">当前工作空间没有可追踪文件</span>}
+                          description={<span className="text-[#666666]">没有可追踪文件</span>}
                         />
                       </div>
                     )}
@@ -634,7 +629,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
             <div className="flex min-h-[720px] items-center justify-center px-6">
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={<span className="text-[#666666]">选择一个工作空间查看目录树和准备操作</span>}
+                description={<span className="text-[#666666]">选择一个工作空间</span>}
               />
             </div>
           )}
