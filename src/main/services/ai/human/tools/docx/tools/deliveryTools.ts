@@ -44,10 +44,6 @@ export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredTool
           }
         },
         buildSuccess: (workerPayload) => {
-          runtime.input.ctx.trackDocxPreview({
-            docId,
-            previewPath: workerPayload.previewPath
-          })
           const operation: AiFileArtifactOperation = existsBefore ? 'updated' : 'created'
           emitFileArtifactEvent({
             ctx: runtime.input.ctx,

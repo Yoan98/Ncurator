@@ -40,11 +40,11 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
     },
     execute: async ({ args, toolName, toolCallId }) => {
       runtime.input.ctx.checkCancelled()
-      const sourcePath = runtime.resolveDocxPath({
+      const requestedSourcePath = runtime.resolveDocxPath({
         cwd: runtime.workspaceRootPath,
         rawPath: args.sourcePath
       })
-      if (!sourcePath) {
+      if (!requestedSourcePath) {
         return runtime.emitFailure({
           toolName,
           toolCallId,
@@ -52,12 +52,23 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           error: 'sourcePath must be a workspace-bound .docx path'
         })
       }
-      if (!fs.existsSync(sourcePath)) {
+      if (!fs.existsSync(requestedSourcePath)) {
         return runtime.emitFailure({
           toolName,
           toolCallId,
           code: 'invalid_input',
           error: 'sourcePath not found'
+        })
+      }
+
+      const resolvedTarget = await runtime.input.ctx.resolveDocxOpenTarget(requestedSourcePath)
+      const openPath = resolvedTarget.openPath
+      if (!fs.existsSync(openPath)) {
+        return runtime.emitFailure({
+          toolName,
+          toolCallId,
+          code: 'invalid_input',
+          error: 'effective docx path not found'
         })
       }
 
@@ -68,28 +79,31 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
         expectedAction: DOCX_OPEN_TOOL_SPEC.workerAction!,
         activity: {
           actionType: DOCX_OPEN_TOOL_SPEC.activityActionType!,
-          startedSummary: `打开文档: ${sourcePath}`,
-          buildCompletedSummary: () => `文档已打开: ${path.basename(sourcePath)}`,
+          startedSummary: `打开文档: ${requestedSourcePath}`,
+          buildCompletedSummary: () => `文档已打开: ${path.basename(requestedSourcePath)}`,
           buildFailedSummary: (failure) => `文档打开失败: ${failure.error}`
         },
         request: {
           action: DOCX_OPEN_TOOL_SPEC.workerAction!,
           payload: {
-            sourcePath
+            sourcePath: openPath
           }
         },
         buildSuccess: (workerPayload) => {
           runtime.state.lastDocId = workerPayload.docId
-          runtime.state.sourcePathByDocId.set(workerPayload.docId, sourcePath)
+          runtime.state.sourcePathByDocId.set(
+            workerPayload.docId,
+            resolvedTarget.trackedSourcePath
+          )
           runtime.registerSnapshot(workerPayload.docId)
           runtime.input.ctx.trackDocxOpen({
             docId: workerPayload.docId,
-            sourcePath
+            sourcePath: resolvedTarget.trackedSourcePath
           })
           const result = {
             ok: true,
             code: 'ok' as const,
-            summary: `doc opened: ${path.basename(sourcePath)}`,
+            summary: `doc opened: ${path.basename(requestedSourcePath)}`,
             docId: workerPayload.docId,
             meta: workerPayload.meta,
             stats: workerPayload.stats

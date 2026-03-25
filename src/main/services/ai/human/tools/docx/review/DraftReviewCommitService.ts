@@ -1,24 +1,46 @@
-import { randomUUID } from 'node:crypto'
+import { randomUUID, createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
+import path from 'node:path'
 import type {
   CommitDraftReviewRequest,
   CommitDraftReviewResponse,
   DraftCommitJob,
   DraftCommitResultItem,
   DraftCommitValidationIssue,
+  DraftReviewDocument,
   DraftReviewSummary,
   ValidateDraftCommitRequest,
   ValidateDraftCommitResponse
 } from '../../../../../../../shared/types'
 import type { DraftReviewStore } from '../../../../../storage/domains/DraftReviewStore'
-import { getDocxWorkerClient, releaseDocxRunSession } from '../worker/docxWorkerClient'
+import { normalizeDocxConfirmCopy } from './confirmCopy'
 import {
   collectArtifactPaths,
   createArchivedCommittedDetail,
-  getMetadataGroupId,
-  isSourceVersionFresh,
-  parseDocxOpFromMetadata
+  isSourceVersionFresh
 } from './utils'
+
+const buildTempOutputPath = (sourcePath: string, suffix: string): string =>
+  path.join(path.dirname(sourcePath), `${path.basename(sourcePath)}.${suffix}.tmp`)
+
+const fileExists = async (filePath: string): Promise<boolean> => {
+  try {
+    await fs.access(filePath)
+    return true
+  } catch {
+    return false
+  }
+}
+
+const readFileStats = async (
+  filePath: string
+): Promise<{ checksum: string; byteSize: number }> => {
+  const buffer = await fs.readFile(filePath)
+  return {
+    checksum: createHash('sha256').update(buffer).digest('hex'),
+    byteSize: buffer.byteLength
+  }
+}
 
 export class DraftReviewCommitService {
   public constructor(private readonly draftReviewStore: DraftReviewStore) {}
@@ -32,8 +54,8 @@ export class DraftReviewCommitService {
         ready: false,
         issues: [
           {
-            code: 'review_not_found',
-            message: '草稿审阅不存在或已被移除。'
+            code: 'session_not_found',
+            message: '确认文档不存在或已被移除。'
           }
         ]
       }
@@ -41,35 +63,23 @@ export class DraftReviewCommitService {
 
     const issues: DraftCommitValidationIssue[] = []
     const status = detail.review.status
-    if (status === 'committing' || status === 'committed' || status === 'cancelled') {
+    if (
+      status === 'committing' ||
+      status === 'committed' ||
+      status === 'discarded' ||
+      status === 'superseded'
+    ) {
       issues.push({
-        code: 'review_not_ready',
-        message: '当前草稿状态不允许提交。'
+        code: 'session_not_ready',
+        message: '当前确认文档状态不允许提交。'
       })
     }
 
-    if (detail.changes.some((change) => change.decision === 'pending')) {
-      issues.push({
-        code: 'pending_changes',
-        message: '仍有未决修改，必须先逐块接受或拒绝。'
-      })
-    }
-
-    const freshnessResults = await Promise.all(
-      detail.documents.map(async (document) => ({
-        document,
-        fresh: await isSourceVersionFresh(document.source_path, document.source_version)
-      }))
+    const documentIssues = await Promise.all(
+      detail.documents.map(async (document) => await this.validateDocument(detail.review.id, document))
     )
-    freshnessResults.forEach(({ document, fresh }) => {
-      if (!fresh) {
-        issues.push({
-          code: 'source_changed',
-          message: '源文件已发生变化，无法基于旧草稿直接提交。',
-          documentId: document.id,
-          sourcePath: document.source_path
-        })
-      }
+    documentIssues.forEach((documentIssueList) => {
+      issues.push(...documentIssueList)
     })
 
     return {
@@ -82,7 +92,7 @@ export class DraftReviewCommitService {
     request: CommitDraftReviewRequest
   ): Promise<CommitDraftReviewResponse> {
     const detail = await this.draftReviewStore.getReviewDetail(request.reviewId)
-    if (!detail) return { success: false, error: 'review not found' }
+    if (!detail) return { success: false, error: 'confirm session not found' }
     if (!request.overwrite) {
       return { success: false, error: 'overwrite confirmation is required' }
     }
@@ -102,11 +112,7 @@ export class DraftReviewCommitService {
       id: randomUUID(),
       review_id: request.reviewId,
       status: 'running',
-      document_count: detail.documents.filter((document) =>
-        detail.changes.some(
-          (change) => change.document_id === document.id && change.decision === 'accepted'
-        )
-      ).length,
+      document_count: detail.documents.length,
       results: [],
       started_at: now
     }
@@ -118,72 +124,37 @@ export class DraftReviewCommitService {
       last_error: undefined
     })
 
-    const commitRunId = `draft-commit-${job.id}`
     const results: DraftCommitResultItem[] = []
+    const tempPaths: string[] = []
 
     try {
-      const client = getDocxWorkerClient()
       for (const document of detail.documents) {
-        const acceptedChanges = detail.changes
-          .filter((change) => change.document_id === document.id && change.decision === 'accepted')
-          .sort((left, right) => left.order_index - right.order_index)
-        if (acceptedChanges.length === 0) continue
+        const confirmPath = document.confirm_artifact_path
+        if (!confirmPath) {
+          throw new Error(`missing confirm artifact for ${document.source_name}`)
+        }
 
-        const openResponse = await client.call({
-          runId: commitRunId,
-          action: 'open',
-          payload: {
-            sourcePath: document.source_path
-          }
+        const normalizedTempPath =
+          document.effective_draft_artifact_path ||
+          buildTempOutputPath(document.source_path, `normalized-${job.id}`)
+        const sourceTempPath = buildTempOutputPath(document.source_path, `commit-${job.id}`)
+        tempPaths.push(normalizedTempPath, sourceTempPath)
+
+        await normalizeDocxConfirmCopy({
+          confirmArtifactPath: confirmPath,
+          outPath: normalizedTempPath
         })
-        if (!openResponse.ok || openResponse.payload.action !== 'open') {
-          throw new Error(openResponse.ok ? 'commit open worker protocol mismatch' : openResponse.error)
-        }
+        const normalizedBuffer = await fs.readFile(normalizedTempPath)
+        await fs.writeFile(sourceTempPath, normalizedBuffer)
+        await fs.rename(sourceTempPath, document.source_path)
 
-        let currentDocId = openResponse.payload.docId
-        const appliedGroups = new Set<string>()
-        for (const change of acceptedChanges) {
-          const groupId = getMetadataGroupId(change.metadata)
-          if (groupId && appliedGroups.has(groupId)) continue
-          if (groupId) appliedGroups.add(groupId)
-
-          const op = parseDocxOpFromMetadata(change.metadata)
-          if (!op) throw new Error(`missing docx op metadata for change ${change.id}`)
-
-          const applyResponse = await client.call({
-            runId: commitRunId,
-            action: 'apply_ops',
-            payload: {
-              docId: currentDocId,
-              ops: [op]
-            }
-          })
-          if (!applyResponse.ok || applyResponse.payload.action !== 'apply_ops') {
-            throw new Error(
-              applyResponse.ok ? 'commit apply worker protocol mismatch' : applyResponse.error
-            )
-          }
-          currentDocId = applyResponse.payload.newDocId
-        }
-
-        const saveResponse = await client.call({
-          runId: commitRunId,
-          action: 'save',
-          payload: {
-            docId: currentDocId,
-            outPath: document.source_path
-          }
-        })
-        if (!saveResponse.ok || saveResponse.payload.action !== 'save') {
-          throw new Error(saveResponse.ok ? 'commit save worker protocol mismatch' : saveResponse.error)
-        }
-
+        const stats = await readFileStats(document.source_path)
         results.push({
           draft_document_id: document.id,
           output_path: document.source_path,
           operation: 'updated',
-          checksum: saveResponse.payload.checksum,
-          byte_size: saveResponse.payload.byteSize
+          checksum: stats.checksum,
+          byte_size: stats.byteSize
         })
       }
 
@@ -201,7 +172,7 @@ export class DraftReviewCommitService {
       })
       await this.draftReviewStore.saveReviewDetail(archivedDetail)
       await Promise.all(
-        collectArtifactPaths(detail).map(async (artifactPath) => {
+        [...collectArtifactPaths(detail), ...tempPaths].map(async (artifactPath) => {
           try {
             await fs.rm(artifactPath, { force: true })
           } catch {
@@ -229,14 +200,86 @@ export class DraftReviewCommitService {
         updated_at: Date.now(),
         last_error: message
       })
+      await Promise.all(
+        tempPaths.map(async (artifactPath) => {
+          try {
+            await fs.rm(artifactPath, { force: true })
+          } catch {
+            return
+          }
+        })
+      )
       return {
         success: false,
         job: failedJob,
         error: message
       }
-    } finally {
-      await releaseDocxRunSession(commitRunId)
     }
+  }
+
+  private async validateDocument(
+    reviewId: string,
+    document: DraftReviewDocument
+  ): Promise<DraftCommitValidationIssue[]> {
+    const issues: DraftCommitValidationIssue[] = []
+    if (!document.confirm_artifact_path) {
+      issues.push({
+        code: 'confirm_copy_missing',
+        message: '确认副本不存在，无法提交。',
+        documentId: document.id,
+        sourcePath: document.source_path
+      })
+      return issues
+    }
+
+    if (!(await fileExists(document.confirm_artifact_path))) {
+      issues.push({
+        code: 'confirm_copy_missing',
+        message: '确认副本已丢失，需要重新生成。',
+        documentId: document.id,
+        sourcePath: document.source_path
+      })
+      return issues
+    }
+
+    const fresh = await isSourceVersionFresh(document.source_path, document.source_version)
+    if (!fresh) {
+      issues.push({
+        code: 'source_changed',
+        message: '源文件已发生变化，无法基于旧确认文档直接替换。',
+        documentId: document.id,
+        sourcePath: document.source_path
+      })
+    }
+
+    const validationTempPath = buildTempOutputPath(
+      document.source_path,
+      `validate-${reviewId}-${document.id}`
+    )
+    try {
+      await normalizeDocxConfirmCopy({
+        confirmArtifactPath: document.confirm_artifact_path,
+        outPath: validationTempPath
+      })
+      await fs.rm(validationTempPath, { force: true })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      issues.push({
+        code: /busy|lock|perm/i.test(message) ? 'confirm_copy_locked' : 'confirm_copy_invalid',
+        message: /busy|lock|perm/i.test(message)
+          ? '确认副本当前被其他应用占用，请关闭后重试。'
+          : '确认副本结构已损坏，需要重新生成。',
+        documentId: document.id,
+        sourcePath: document.source_path
+      })
+      try {
+        await fs.rm(validationTempPath, { force: true })
+      } catch {
+        return issues
+      }
+    }
+
+    return issues
   }
 
   private async handleValidationFailure(input: {
@@ -262,14 +305,13 @@ export class DraftReviewCommitService {
         error: errorMessage
       }
       await this.appendCommitJob(input.request.reviewId, conflictJob)
+      await this.updateReviewSummary({
+        ...input.review,
+        status: 'conflicted',
+        updated_at: now,
+        last_error: errorMessage
+      })
     }
-
-    await this.updateReviewSummary({
-      ...input.review,
-      status: hasConflict ? 'conflicted' : input.review.status,
-      updated_at: now,
-      last_error: errorMessage
-    })
 
     return {
       success: false,
@@ -278,18 +320,18 @@ export class DraftReviewCommitService {
     }
   }
 
-  private async updateReviewSummary(review: DraftReviewSummary): Promise<void> {
-    await this.draftReviewStore.saveReview(review)
-  }
-
-  private async appendCommitJob(reviewId: string, nextJob: DraftCommitJob): Promise<void> {
+  private async appendCommitJob(reviewId: string, job: DraftCommitJob): Promise<void> {
     const jobs = await this.draftReviewStore.listCommitJobs(reviewId)
-    await this.draftReviewStore.replaceCommitJobs(reviewId, [...jobs, nextJob])
+    await this.draftReviewStore.replaceCommitJobs(reviewId, [...jobs, job])
   }
 
   private async replaceCommitJob(reviewId: string, nextJob: DraftCommitJob): Promise<void> {
     const jobs = await this.draftReviewStore.listCommitJobs(reviewId)
-    const withoutCurrent = jobs.filter((job) => job.id !== nextJob.id)
-    await this.draftReviewStore.replaceCommitJobs(reviewId, [...withoutCurrent, nextJob])
+    const filtered = jobs.filter((job) => job.id !== nextJob.id)
+    await this.draftReviewStore.replaceCommitJobs(reviewId, [...filtered, nextJob])
+  }
+
+  private async updateReviewSummary(review: DraftReviewSummary): Promise<void> {
+    await this.draftReviewStore.saveReview(review)
   }
 }

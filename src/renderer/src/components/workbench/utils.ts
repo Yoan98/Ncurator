@@ -183,6 +183,8 @@ export const getReviewRenderKind = (document: DraftReviewDocument): DraftReviewR
 export const formatLocatorSummary = (change: DraftReviewChange): string => {
   const section = typeof change.locator.section === 'string' ? change.locator.section : null
   const heading = typeof change.locator.heading === 'string' ? change.locator.heading : null
+  const blockId = typeof change.locator.blockId === 'string' ? change.locator.blockId : null
+  const action = typeof change.locator.action === 'string' ? change.locator.action : null
   const paragraphIndex =
     typeof change.locator.paragraphIndex === 'number'
       ? `第 ${change.locator.paragraphIndex + 1} 段`
@@ -195,7 +197,9 @@ export const formatLocatorSummary = (change: DraftReviewChange): string => {
       : null
 
   return (
-    [section, heading, paragraphIndex, rowIndex, columnIndex].filter(Boolean).join(' / ') ||
+    [section, heading, paragraphIndex, rowIndex, columnIndex, blockId, action]
+      .filter(Boolean)
+      .join(' / ') ||
     '定位信息未结构化'
   )
 }

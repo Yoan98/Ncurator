@@ -1,5 +1,7 @@
 import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import type { OpenDialogOptions } from 'electron'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import { IngestionService } from '../services/ingestion/loader'
 import { EmbeddingService } from '../services/vector/EmbeddingService'
 import { StorageService } from '../services/storage/StorageService'
@@ -43,6 +45,8 @@ import type {
   CommitDraftReviewRequest,
   CommitDraftReviewResponse,
   CreateWorkspaceSourceRequest,
+  DiscardDraftReviewRequest,
+  DiscardDraftReviewResponse,
   DeleteWorkspaceSourceResponse,
   ListSourceScopesRequest,
   ListDraftReviewsRequest,
@@ -50,9 +54,10 @@ import type {
   ListWorkspaceNodesRequest,
   GetDraftReviewRequest,
   GetDraftReviewResponse,
+  OpenPathWithApplicationRequest,
+  OpenPathWithApplicationResponse,
   PickDirectoryResponse,
-  SetDraftChangeDecisionRequest,
-  SetDraftChangeDecisionResponse,
+  PickApplicationResponse,
   SourceScopeListResponse,
   ValidateDraftCommitRequest,
   ValidateDraftCommitResponse,
@@ -95,6 +100,7 @@ import {
 } from '../testing/e2eFixtures'
 
 const jieba = Jieba.withDict(dict)
+const execFileAsync = promisify(execFile)
 const getErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
 
@@ -415,32 +421,11 @@ export function registerHandlers(services: {
       changedBlocks: applyRejectedResponse.payload.changedBlocks
     })
 
-    const previewResponse = await client.call({
-      runId: input.runId,
-      action: 'render_preview',
-      payload: {
-        docId: applyRejectedResponse.payload.newDocId,
-        format: 'html',
-        previewPath: path.join(
-          workspaceRootPath,
-          '.ncurator',
-          'docx-previews',
-          `${input.runId}-review-preview.docx`
-        )
-      }
-    })
-    if (previewResponse.ok && previewResponse.payload.action === 'render_preview') {
-      input.draftReviewService.registerDocxPreview({
-        runId: input.runId,
-        docId: applyRejectedResponse.payload.newDocId,
-        previewPath: previewResponse.payload.previewPath
-      })
-    }
-
-    const detail = await input.draftReviewService.finalizeRunReview({
+    const details = await input.draftReviewService.finalizeRunReview({
       runId: input.runId,
       workspaceRootPath
     })
+    const detail = details[0]
     if (!detail) {
       throw new Error('e2e review detail missing after finalize')
     }
@@ -499,21 +484,21 @@ export function registerHandlers(services: {
     })
 
     detail.documents.forEach((document) => {
-      if (!document.preview_artifact_path) return
+      if (!document.confirm_artifact_path) return
       input.sendEvent({
         type: 'file_artifact',
         runId: input.runId,
         taskId: plan[0].id,
         artifactId: uuidv4(),
         capability: 'docx',
-        path: document.preview_artifact_path,
-        fileName: path.basename(document.preview_artifact_path),
+        path: document.confirm_artifact_path,
+        fileName: path.basename(document.confirm_artifact_path),
         operation: 'created',
-        artifactRole: 'preview',
+        artifactRole: 'draft',
         reviewId: detail.review.id,
         draftDocumentId: document.id,
         draftSnapshotId: document.latest_draft_snapshot_id,
-        summary: `preview ready: ${document.source_name}`,
+        summary: `confirm doc ready: ${document.source_name}`,
         createdAt: Date.now()
       })
     })
@@ -546,15 +531,15 @@ export function registerHandlers(services: {
     await pauseForE2EFixture()
 
     detail.documents.forEach((document) => {
-      if (!document.draft_artifact_path) return
+      if (!document.effective_draft_artifact_path) return
       input.sendEvent({
         type: 'file_artifact',
         runId: input.runId,
         taskId: plan[1].id,
         artifactId: uuidv4(),
         capability: 'docx',
-        path: document.draft_artifact_path,
-        fileName: path.basename(document.draft_artifact_path),
+        path: document.effective_draft_artifact_path,
+        fileName: path.basename(document.effective_draft_artifact_path),
         operation: 'created',
         artifactRole: 'draft',
         reviewId: detail.review.id,
@@ -1075,6 +1060,32 @@ export function registerHandlers(services: {
     }
   })
 
+  ipcMain.handle(
+    'open-path-with-application',
+    async (
+      _event,
+      payload: OpenPathWithApplicationRequest
+    ): Promise<OpenPathWithApplicationResponse> => {
+      try {
+        const filePath = path.resolve(String(payload?.filePath || '').trim())
+        const appPath = path.resolve(String(payload?.appPath || '').trim())
+        if (!filePath || !appPath) {
+          return { success: false, error: 'filePath and appPath are required' }
+        }
+        if (!fs.existsSync(filePath)) return { success: false, error: 'file path not found' }
+        if (!fs.existsSync(appPath)) return { success: false, error: 'application not found' }
+        if (process.platform !== 'darwin') {
+          return { success: false, error: 'open with application currently supports macOS only' }
+        }
+
+        await execFileAsync('/usr/bin/open', ['-a', appPath, filePath])
+        return { success: true }
+      } catch (error: unknown) {
+        return { success: false, error: getErrorMessage(error) }
+      }
+    }
+  )
+
   ipcMain.handle('reveal-path', async (_event, rawPath: string) => {
     try {
       const value = String(rawPath || '').trim()
@@ -1108,6 +1119,36 @@ export function registerHandlers(services: {
         return { canceled: true }
       }
       return { canceled: false, path: result.filePaths[0] }
+    } catch (error: unknown) {
+      return { canceled: true, error: getErrorMessage(error) }
+    }
+  })
+
+  ipcMain.handle('pick-application', async (event): Promise<PickApplicationResponse> => {
+    try {
+      if (process.platform !== 'darwin') {
+        return { canceled: true, error: 'pick application currently supports macOS only' }
+      }
+      const dialogOptions: OpenDialogOptions = {
+        title: '选择要打开确认文档的应用',
+        buttonLabel: '选择此应用',
+        defaultPath: '/Applications',
+        properties: ['openFile', 'dontAddToRecent'],
+        filters: [{ name: 'Applications', extensions: ['app'] }]
+      }
+      let result
+      try {
+        const ownerWindow = BrowserWindow.fromWebContents(event.sender)
+        result = ownerWindow
+          ? await dialog.showOpenDialog(ownerWindow, dialogOptions)
+          : await dialog.showOpenDialog(dialogOptions)
+      } catch {
+        result = await dialog.showOpenDialog(dialogOptions)
+      }
+      if (result.canceled || result.filePaths.length === 0) {
+        return { canceled: true }
+      }
+      return { canceled: false, appPath: result.filePaths[0] }
     } catch (error: unknown) {
       return { canceled: true, error: getErrorMessage(error) }
     }
@@ -2001,45 +2042,47 @@ export function registerHandlers(services: {
             return
           }
 
-          const draftReviewDetail = workspace?.rootPath
+          const draftReviewDetails = workspace?.rootPath
             ? await draftReviewService.finalizeRunReview({
                 runId,
                 workspaceRootPath: workspace.rootPath
               })
-            : null
+            : []
 
-          if (draftReviewDetail) {
+          if (draftReviewDetails.length > 0) {
             result.finalArtifacts = mergeArtifactRefs(
               result.finalArtifacts,
-              buildRunArtifactsFromDraftReviewDetail(draftReviewDetail)
+              ...draftReviewDetails.map((detail) => buildRunArtifactsFromDraftReviewDetail(detail))
             )
-            sendEvent({
-              type: 'draft_review_ready',
-              runId,
-              review: {
-                reviewId: draftReviewDetail.review.id,
-                documentCount: draftReviewDetail.review.document_count,
-                changeCount: draftReviewDetail.review.change_count
-              },
-              createdAt: Date.now()
-            })
-            draftReviewDetail.documents.forEach((document) => {
-              if (!document.draft_artifact_path) return
+            draftReviewDetails.forEach((draftReviewDetail) => {
               sendEvent({
-                type: 'file_artifact',
+                type: 'draft_review_ready',
                 runId,
-                taskId: 'draft-review',
-                artifactId: uuidv4(),
-                capability: 'docx',
-                path: document.draft_artifact_path,
-                fileName: path.basename(document.draft_artifact_path),
-                operation: 'created',
-                artifactRole: 'draft',
-                reviewId: draftReviewDetail.review.id,
-                draftDocumentId: document.id,
-                draftSnapshotId: document.latest_draft_snapshot_id,
-                summary: `draft ready: ${document.source_name}`,
+                review: {
+                  reviewId: draftReviewDetail.review.id,
+                  documentCount: draftReviewDetail.review.document_count,
+                  changeCount: draftReviewDetail.review.change_count
+                },
                 createdAt: Date.now()
+              })
+              draftReviewDetail.documents.forEach((document) => {
+                if (!document.confirm_artifact_path) return
+                sendEvent({
+                  type: 'file_artifact',
+                  runId,
+                  taskId: 'draft-review',
+                  artifactId: uuidv4(),
+                  capability: 'docx',
+                  path: document.confirm_artifact_path,
+                  fileName: path.basename(document.confirm_artifact_path),
+                  operation: 'created',
+                  artifactRole: 'draft',
+                  reviewId: draftReviewDetail.review.id,
+                  draftDocumentId: document.id,
+                  draftSnapshotId: document.latest_draft_snapshot_id,
+                  summary: `confirm doc ready: ${document.source_name}`,
+                  createdAt: Date.now()
+                })
               })
             })
           }
@@ -2142,21 +2185,6 @@ export function registerHandlers(services: {
   )
 
   ipcMain.handle(
-    'draft-review-set-decision',
-    async (
-      _event,
-      payload: SetDraftChangeDecisionRequest
-    ): Promise<SetDraftChangeDecisionResponse> => {
-      try {
-        return await draftReviewService.setChangeDecision(payload)
-      } catch (e: unknown) {
-        console.error('[DRAFT-REVIEW-SET-DECISION] Error:', e)
-        return { success: false, error: getErrorMessage(e) }
-      }
-    }
-  )
-
-  ipcMain.handle(
     'draft-review-validate',
     async (_event, payload: ValidateDraftCommitRequest): Promise<ValidateDraftCommitResponse> => {
       try {
@@ -2167,7 +2195,7 @@ export function registerHandlers(services: {
           ready: false,
           issues: [
             {
-              code: 'review_not_ready',
+              code: 'session_not_ready',
               message: getErrorMessage(e)
             }
           ]
@@ -2183,6 +2211,18 @@ export function registerHandlers(services: {
         return await draftReviewService.commitReview(payload)
       } catch (e: unknown) {
         console.error('[DRAFT-REVIEW-COMMIT] Error:', e)
+        return { success: false, error: getErrorMessage(e) }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'draft-review-discard',
+    async (_event, payload: DiscardDraftReviewRequest): Promise<DiscardDraftReviewResponse> => {
+      try {
+        return await draftReviewService.discardReview(payload)
+      } catch (e: unknown) {
+        console.error('[DRAFT-REVIEW-DISCARD] Error:', e)
         return { success: false, error: getErrorMessage(e) }
       }
     }

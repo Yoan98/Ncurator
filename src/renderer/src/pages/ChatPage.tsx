@@ -14,7 +14,6 @@ import type {
   AiRunEvent,
   ChatMessage,
   ChatSession,
-  DraftChangeResolution,
   DraftReviewDetail,
   DraftReviewSummary,
   LLMConfig,
@@ -77,13 +76,13 @@ const createAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
 
 const sortDraftReviews = (items: DraftReviewSummary[]): DraftReviewSummary[] => {
   const priority: Record<DraftReviewSummary['status'], number> = {
-    review_pending: 0,
-    commit_ready: 1,
-    conflicted: 2,
-    failed: 3,
-    committing: 4,
-    committed: 5,
-    cancelled: 6
+    pending_confirm: 0,
+    conflicted: 1,
+    failed: 2,
+    committing: 3,
+    committed: 4,
+    discarded: 5,
+    superseded: 6
   }
   return [...items].sort((left, right) => {
     const priorityGap = priority[left.status] - priority[right.status]
@@ -135,9 +134,8 @@ const ChatPage: React.FC = () => {
   const [draftCommitValidation, setDraftCommitValidation] =
     useState<ValidateDraftCommitResponse | null>(null)
   const [draftValidationLoading, setDraftValidationLoading] = useState(false)
-  const [draftDecisionBusyIds, setDraftDecisionBusyIds] = useState<string[]>([])
-  const [draftBulkApplying, setDraftBulkApplying] = useState(false)
   const [draftCommitSubmitting, setDraftCommitSubmitting] = useState(false)
+  const [draftDiscardSubmitting, setDraftDiscardSubmitting] = useState(false)
 
   const [pendingApprovalRequest, setPendingApprovalRequest] =
     useState<ApprovalRequiredEvent | null>(null)
@@ -367,6 +365,9 @@ const ChatPage: React.FC = () => {
         setActiveDraftReviewId(null)
         setActiveDraftReview(null)
         setDraftCommitValidation(null)
+        setContentPanel((current) =>
+          current.kind === 'review_session' ? createEmptyPanel() : current
+        )
         return
       }
       await loadDraftReviewDetail(nextReviewId)
@@ -716,14 +717,14 @@ const ChatPage: React.FC = () => {
           reviewTargets: [
             {
               reviewId: event.review.reviewId,
-              title: '待确认修改',
+              title: '确认文档',
               changeCount: event.review.changeCount,
               documentCount: event.review.documentCount
             }
           ]
         }))
         if (!event.internal && currentSessionId) {
-          message.success(`草稿审阅已准备完成：${event.review.changeCount} 处修改`)
+          message.success(`确认文档已生成：${event.review.changeCount} 处修改`)
           void loadDraftReviewsForSession(currentSessionId, event.review.reviewId)
         }
         return
@@ -1131,58 +1132,6 @@ const ChatPage: React.FC = () => {
     }
   }
 
-  const handleDraftChangeDecision = async (
-    changeId: string,
-    decision: DraftChangeResolution
-  ): Promise<void> => {
-    if (!activeDraftReview || !currentSessionId) return
-    setDraftDecisionBusyIds((previous) => [...previous, changeId])
-    try {
-      const response = await window.api.draftReviewSetDecision({
-        reviewId: activeDraftReview.review.id,
-        changeId,
-        decision
-      })
-      if (!response.success) {
-        message.error(response.error || '更新草稿决策失败')
-        return
-      }
-      await loadDraftReviewsForSession(currentSessionId, activeDraftReview.review.id)
-    } catch (error) {
-      console.error(error)
-      message.error('更新草稿决策失败')
-    } finally {
-      setDraftDecisionBusyIds((previous) => previous.filter((item) => item !== changeId))
-    }
-  }
-
-  const handleDraftBulkDecision = async (decision: DraftChangeResolution): Promise<void> => {
-    if (!activeDraftReview || !currentSessionId || draftBulkApplying) return
-    const pendingChanges = activeDraftReview.changes.filter(
-      (change) => change.decision === 'pending'
-    )
-    if (pendingChanges.length === 0) return
-    setDraftBulkApplying(true)
-    try {
-      for (const change of pendingChanges) {
-        const response = await window.api.draftReviewSetDecision({
-          reviewId: activeDraftReview.review.id,
-          changeId: change.id,
-          decision
-        })
-        if (!response.success) {
-          throw new Error(response.error || 'bulk review decision failed')
-        }
-      }
-      await loadDraftReviewsForSession(currentSessionId, activeDraftReview.review.id)
-    } catch (error) {
-      console.error(error)
-      message.error('批量更新草稿决策失败')
-    } finally {
-      setDraftBulkApplying(false)
-    }
-  }
-
   const handleDraftValidationRefresh = async (): Promise<void> => {
     if (!activeDraftReview) return
     try {
@@ -1202,7 +1151,7 @@ const ChatPage: React.FC = () => {
       })
       setDraftCommitValidation(validation)
       if (!validation.ready) {
-        message.warning('提交前仍有未决修改或源文件冲突。')
+        message.warning('提交前校验未通过，请先处理提示问题。')
         return
       }
       const response = await window.api.draftReviewCommit({
@@ -1212,7 +1161,7 @@ const ChatPage: React.FC = () => {
       if (!response.success) {
         message.error(response.error || '提交失败')
       } else {
-        message.success('已提交接受的修改到真实文件')
+        message.success('确认文档已写回源文件')
       }
       await loadDraftReviewsForSession(currentSessionId, activeDraftReview.review.id)
     } catch (error) {
@@ -1220,6 +1169,48 @@ const ChatPage: React.FC = () => {
       message.error('提交草稿失败')
     } finally {
       setDraftCommitSubmitting(false)
+    }
+  }
+
+  const handleDraftDiscard = async (): Promise<void> => {
+    if (!activeDraftReview || !currentSessionId || draftDiscardSubmitting) return
+    setDraftDiscardSubmitting(true)
+    try {
+      const response = await window.api.draftReviewDiscard({
+        reviewId: activeDraftReview.review.id
+      })
+      if (!response.success) {
+        message.error(response.error || '放弃确认文档失败')
+        return
+      }
+      message.success('已放弃本次修改')
+      await loadDraftReviewsForSession(currentSessionId, activeDraftReview.review.id)
+    } catch (error) {
+      console.error(error)
+      message.error('放弃确认文档失败')
+    } finally {
+      setDraftDiscardSubmitting(false)
+    }
+  }
+
+  const openPathWithApplicationOrNotify = async (filePath: string): Promise<void> => {
+    try {
+      const picked = await window.api.pickApplication()
+      if (picked.canceled) return
+      if (!picked.appPath) {
+        message.error(picked.error || '未选择应用')
+        return
+      }
+      const response = await window.api.openPathWithApplication({
+        filePath,
+        appPath: picked.appPath
+      })
+      if (!response.success) {
+        message.error(response.error || '使用指定应用打开失败')
+      }
+    } catch (error) {
+      console.error(error)
+      message.error('使用指定应用打开失败')
     }
   }
 
@@ -1642,20 +1633,17 @@ const ChatPage: React.FC = () => {
                 draftReviewLoading={draftReviewLoading}
                 draftCommitValidation={draftCommitValidation}
                 draftValidationLoading={draftValidationLoading}
-                draftDecisionBusyIds={draftDecisionBusyIds}
-                draftBulkApplying={draftBulkApplying}
                 draftCommitSubmitting={draftCommitSubmitting}
+                draftDiscardSubmitting={draftDiscardSubmitting}
                 reviewTurn={reviewTurn}
                 onOpenSearchResult={(turn, resultIndex) => void openSearchResult(turn, resultIndex)}
                 onOpenReview={openDraftReview}
                 onOpenFile={(file) => void openFile(file)}
-                onSetDecision={(changeId, decision) =>
-                  void handleDraftChangeDecision(changeId, decision)
-                }
-                onSetAllPending={(decision) => void handleDraftBulkDecision(decision)}
                 onRefreshValidation={() => void handleDraftValidationRefresh()}
                 onCommit={() => void handleDraftCommit()}
+                onDiscard={() => void handleDraftDiscard()}
                 onOpenPath={openPathOrNotify}
+                onOpenWithApplication={openPathWithApplicationOrNotify}
                 onRevealPath={revealPathOrNotify}
               />
             </div>

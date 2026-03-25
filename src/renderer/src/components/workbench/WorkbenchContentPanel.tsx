@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Button, Empty } from 'antd'
 import { HiOutlineMagnifyingGlass } from 'react-icons/hi2'
-import type { DraftChangeResolution, ValidateDraftCommitResponse } from '../../../../shared/types'
+import type { ValidateDraftCommitResponse } from '../../../../shared/types'
 import EmbeddedFileViewer from '../fileRenders/EmbeddedFileViewer'
 import WorkbenchReviewPanel from './WorkbenchReviewPanel'
 import type {
@@ -17,18 +17,17 @@ type WorkbenchContentPanelProps = {
   draftReviewLoading: boolean
   draftCommitValidation: ValidateDraftCommitResponse | null
   draftValidationLoading: boolean
-  draftDecisionBusyIds: string[]
-  draftBulkApplying: boolean
   draftCommitSubmitting: boolean
+  draftDiscardSubmitting: boolean
   reviewTurn?: AssistantTurnViewModel
   onOpenSearchResult: (turn: SearchWorkbenchTurn, resultIndex: number) => void
   onOpenReview: (reviewId: string) => void
   onOpenFile: (file: WorkbenchFileRef) => void
-  onSetDecision: (changeId: string, decision: DraftChangeResolution) => void
-  onSetAllPending: (decision: DraftChangeResolution) => void
   onRefreshValidation: () => void
   onCommit: () => void
+  onDiscard: () => void
   onOpenPath: (filePath: string) => Promise<void>
+  onOpenWithApplication: (filePath: string) => Promise<void>
   onRevealPath: (filePath: string) => Promise<void>
 }
 
@@ -37,18 +36,17 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
   draftReviewLoading,
   draftCommitValidation,
   draftValidationLoading,
-  draftDecisionBusyIds,
-  draftBulkApplying,
   draftCommitSubmitting,
+  draftDiscardSubmitting,
   reviewTurn,
   onOpenSearchResult,
   onOpenReview,
   onOpenFile,
-  onSetDecision,
-  onSetAllPending,
   onRefreshValidation,
   onCommit,
+  onDiscard,
   onOpenPath,
+  onOpenWithApplication,
   onRevealPath
 }) => {
   const [selectedSearchIndex, setSelectedSearchIndex] = useState(0)
@@ -160,7 +158,7 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
                   <div className="mt-1 break-all text-xs text-[#999999]">{state.file.path}</div>
                 </div>
                 {state.file.reviewId ? (
-                  <Button onClick={() => onOpenReview(state.file.reviewId || '')}>查看差异</Button>
+                  <Button onClick={() => onOpenReview(state.file.reviewId || '')}>查看确认文档</Button>
                 ) : null}
               </div>
             </div>
@@ -180,16 +178,15 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
             loading={draftReviewLoading}
             validation={draftCommitValidation}
             validating={draftValidationLoading}
-            busyChangeIds={draftDecisionBusyIds}
-            bulkApplying={draftBulkApplying}
             committing={draftCommitSubmitting}
+            discarding={draftDiscardSubmitting}
             turn={reviewTurn}
-            onSetDecision={onSetDecision}
-            onSetAllPending={onSetAllPending}
             onRefreshValidation={onRefreshValidation}
             onCommit={onCommit}
+            onDiscard={onDiscard}
             onOpenFile={onOpenFile}
             onOpenPath={onOpenPath}
+            onOpenWithApplication={onOpenWithApplication}
             onRevealPath={onRevealPath}
           />
         ) : null}

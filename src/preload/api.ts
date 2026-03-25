@@ -29,8 +29,11 @@ import type {
   SearchResponse,
   SearchResult,
   SearchSourceFilter,
-  SetDraftChangeDecisionRequest,
-  SetDraftChangeDecisionResponse,
+  DiscardDraftReviewRequest,
+  DiscardDraftReviewResponse,
+  PickApplicationResponse,
+  OpenPathWithApplicationRequest,
+  OpenPathWithApplicationResponse,
   SourceScopeListResponse,
   ValidateDraftCommitRequest,
   ValidateDraftCommitResponse,
@@ -145,11 +148,15 @@ export type DesktopApi = {
   ) => Promise<AiRunApprovalDecisionResponse>
   draftReviewList: (payload?: ListDraftReviewsRequest) => Promise<ListDraftReviewsResponse>
   draftReviewGet: (payload: GetDraftReviewRequest) => Promise<GetDraftReviewResponse>
-  draftReviewSetDecision: (
-    payload: SetDraftChangeDecisionRequest
-  ) => Promise<SetDraftChangeDecisionResponse>
   draftReviewValidate: (payload: ValidateDraftCommitRequest) => Promise<ValidateDraftCommitResponse>
   draftReviewCommit: (payload: CommitDraftReviewRequest) => Promise<CommitDraftReviewResponse>
+  draftReviewDiscard: (
+    payload: DiscardDraftReviewRequest
+  ) => Promise<DiscardDraftReviewResponse>
+  pickApplication: () => Promise<PickApplicationResponse>
+  openPathWithApplication: (
+    payload: OpenPathWithApplicationRequest
+  ) => Promise<OpenPathWithApplicationResponse>
   onAiRunEvent: (cb: (event: AiRunEvent) => void) => void
   removeAiRunEventListeners: () => void
 }

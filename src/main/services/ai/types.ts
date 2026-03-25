@@ -4,6 +4,7 @@ import type { LlmConfigStore } from '../storage/domains/LlmConfigStore'
 import type { EmbeddingService } from '../vector/EmbeddingService'
 import type { DocxChangedBlock, DocxOp } from './human/tools/docx/types'
 import type { DraftReviewService } from './human/tools/docx/review/DraftReviewService'
+import type { ResolvedDocxOpenTarget } from './human/tools/docx/review/types'
 import type { z } from 'zod/v4'
 import type {
   AiRuntimeSettings,
@@ -121,7 +122,7 @@ export type AiRunContext = {
     op: DocxOp
     changedBlocks: DocxChangedBlock[]
   }) => void
-  trackDocxPreview: (input: { docId: string; previewPath: string }) => void
+  resolveDocxOpenTarget: (sourcePath: string) => Promise<ResolvedDocxOpenTarget>
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService
 }
@@ -151,6 +152,6 @@ export type DocxToolContext = Pick<
   | 'requestApproval'
   | 'trackDocxOpen'
   | 'trackDocxChanges'
-  | 'trackDocxPreview'
+  | 'resolveDocxOpenTarget'
   | 'embeddingService'
 >

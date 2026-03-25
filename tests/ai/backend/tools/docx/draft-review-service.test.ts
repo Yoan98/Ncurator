@@ -1,9 +1,9 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { test, vi } from 'vitest'
+import JSZip from 'jszip'
+import { test } from 'vitest'
 import type {
   DocumentRecord,
-  DraftChangeDecision,
   DraftCommitJob,
   DraftReviewChange,
   DraftReviewDetail,
@@ -13,9 +13,13 @@ import type {
 import type { DocumentsStore } from '../../../../../src/main/services/storage/domains/DocumentsStore'
 import type { DraftReviewStore } from '../../../../../src/main/services/storage/domains/DraftReviewStore'
 import { DraftReviewService } from '../../../../../src/main/services/ai/human/tools/docx/review/DraftReviewService'
-import { DraftReviewStateService } from '../../../../../src/main/services/ai/human/tools/docx/review/DraftReviewStateService'
-import * as docxWorkerClientModule from '../../../../../src/main/services/ai/human/tools/docx/worker/docxWorkerClient'
+import {
+  getDocxWorkerClient,
+  releaseDocxRunSession
+} from '../../../../../src/main/services/ai/human/tools/docx/worker/docxWorkerClient'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
+
+const FIXTURE_PATH = path.resolve(process.cwd(), 'tests/fixtures/ai/docx/sample-edit.docx')
 
 const cloneDetail = (detail: DraftReviewDetail): DraftReviewDetail => ({
   review: { ...detail.review },
@@ -68,31 +72,12 @@ const createDraftReviewStoreStub = (): DraftReviewStore => {
         total: items.length
       }
     },
+    async getReview(reviewId: string): Promise<DraftReviewSummary | null> {
+      return detailById.get(reviewId)?.review || null
+    },
     async getReviewDetail(reviewId: string): Promise<DraftReviewDetail | null> {
       const detail = detailById.get(reviewId)
       return detail ? cloneDetail(detail) : null
-    },
-    async updateChangeDecision(
-      reviewId: string,
-      changeId: string,
-      decision: DraftChangeDecision
-    ): Promise<DraftReviewChange | null> {
-      const detail = detailById.get(reviewId)
-      if (!detail) return null
-
-      const currentChange = detail.changes.find((change) => change.id === changeId)
-      if (!currentChange) return null
-
-      const nextChange: DraftReviewChange = {
-        ...currentChange,
-        decision,
-        updated_at: Date.now()
-      }
-      detailById.set(reviewId, {
-        ...detail,
-        changes: detail.changes.map((change) => (change.id === changeId ? nextChange : change))
-      })
-      return { ...nextChange }
     },
     async replaceDocuments(reviewId: string, documents: DraftReviewDocument[]): Promise<void> {
       const detail = ensureExisting(reviewId)
@@ -104,6 +89,12 @@ const createDraftReviewStoreStub = (): DraftReviewStore => {
         }))
       })
     },
+    async listDocuments(reviewId: string): Promise<DraftReviewDocument[]> {
+      return ensureExisting(reviewId).documents.map((document) => ({
+        ...document,
+        source_version: { ...document.source_version }
+      }))
+    },
     async replaceChanges(reviewId: string, changes: DraftReviewChange[]): Promise<void> {
       const detail = ensureExisting(reviewId)
       detailById.set(reviewId, {
@@ -114,6 +105,13 @@ const createDraftReviewStoreStub = (): DraftReviewStore => {
           metadata: change.metadata ? { ...change.metadata } : undefined
         }))
       })
+    },
+    async listChanges(reviewId: string): Promise<DraftReviewChange[]> {
+      return ensureExisting(reviewId).changes.map((change) => ({
+        ...change,
+        locator: { ...change.locator },
+        metadata: change.metadata ? { ...change.metadata } : undefined
+      }))
     },
     async replaceCommitJobs(reviewId: string, jobs: DraftCommitJob[]): Promise<void> {
       const detail = ensureExisting(reviewId)
@@ -133,8 +131,16 @@ const createDraftReviewStoreStub = (): DraftReviewStore => {
     },
     async saveReviewDetail(detail: DraftReviewDetail): Promise<void> {
       detailById.set(detail.review.id, cloneDetail(detail))
+    },
+    async deleteReview(reviewId: string): Promise<void> {
+      detailById.delete(reviewId)
+    },
+    async listActiveReviewsBySourcePath(sourcePath: string): Promise<DraftReviewDetail[]> {
+      return [...detailById.values()]
+        .filter((detail) => detail.documents.some((document) => document.source_path === sourcePath))
+        .map((detail) => cloneDetail(detail))
     }
-  } as unknown as DraftReviewStore
+  } as DraftReviewStore
 }
 
 const createDocumentsStoreStub = (sourcePath: string): DocumentsStore =>
@@ -150,7 +156,14 @@ const createDocumentsStoreStub = (sourcePath: string): DocumentsStore =>
         import_status: 2
       }
     }
-  }) as unknown as DocumentsStore
+  }) as DocumentsStore
+
+const extractDocxText = async (docxPath: string): Promise<string> => {
+  const buffer = await fs.readFile(docxPath)
+  const zip = await JSZip.loadAsync(buffer)
+  const xml = await zip.file('word/document.xml')?.async('text')
+  return xml || ''
+}
 
 test('draft-review-service', async () => {
   await runBackendCase({
@@ -161,233 +174,159 @@ test('draft-review-service', async () => {
     suite: 'tools',
     groups: ['docx'],
     description:
-      'draft review facade should preserve finalize, review-state rebuild, validate, and commit behavior after splitting tracker/state/commit services.',
-    fixtures: [],
+      'draft review service should generate confirm copy sessions, resolve active confirm drafts for continued editing, and normalize the confirm copy back into the source document on commit.',
+    fixtures: [FIXTURE_PATH],
     runMode: 'repeatable',
     execute: async (runtime) => {
       const sourcePath = path.join(runtime.workspaceRoot, 'review-source.docx')
-      const previewPath = path.join(runtime.workspaceRoot, 'preview.docx')
-      await fs.writeFile(sourcePath, Buffer.from('source document'))
-      await fs.writeFile(previewPath, Buffer.from('preview document'))
+      await fs.copyFile(FIXTURE_PATH, sourcePath)
 
       const draftReviewStore = createDraftReviewStoreStub()
       const documentsStore = createDocumentsStoreStub(sourcePath)
       const service = new DraftReviewService(draftReviewStore, documentsStore)
-      const stateService = new DraftReviewStateService(draftReviewStore)
-      const workerCalls: Array<{ action: string; outPath?: string; runId: string }> = []
-
-      const getClientSpy = vi
-        .spyOn(docxWorkerClientModule, 'getDocxWorkerClient')
-        .mockReturnValue({
-          call: async (request) => {
-            workerCalls.push({
-              action: request.action,
-              outPath:
-                'payload' in request && typeof request.payload === 'object'
-                  ? ('outPath' in request.payload ? request.payload.outPath : undefined)
-                  : undefined,
-              runId: request.runId
-            })
-
-            if (request.action === 'open') {
-              return {
-                requestId: 'open-request',
-                ok: true,
-                payload: {
-                  action: 'open',
-                  docId: 'commit-doc-1',
-                  meta: {
-                    title: '',
-                    creator: '',
-                    lastModifiedBy: '',
-                    description: '',
-                    defaultFont: 'Calibri'
-                  },
-                  stats: {
-                    blockCount: 1,
-                    paragraphCount: 1,
-                    tableCount: 0,
-                    imageCount: 0,
-                    charCount: 12
-                  }
-                }
-              } as const
-            }
-
-            if (request.action === 'apply_ops') {
-              return {
-                requestId: 'apply-request',
-                ok: true,
-                payload: {
-                  action: 'apply_ops',
-                  newDocId: 'commit-doc-2',
-                  changedBlocks: [],
-                  warnings: []
-                }
-              } as const
-            }
-
-            if (request.action === 'save') {
-              const outPath = request.payload.outPath
-              await fs.mkdir(path.dirname(outPath), { recursive: true })
-              await fs.writeFile(outPath, Buffer.from(`saved:${path.basename(outPath)}`))
-              return {
-                requestId: 'save-request',
-                ok: true,
-                payload: {
-                  action: 'save',
-                  outPath,
-                  checksum: `checksum:${path.basename(outPath)}`,
-                  byteSize: 16
-                }
-              } as const
-            }
-
-            throw new Error(`unexpected worker action: ${request.action}`)
-          }
-        })
-      const releaseSpy = vi
-        .spyOn(docxWorkerClientModule, 'releaseDocxRunSession')
-        .mockResolvedValue(undefined)
+      const client = getDocxWorkerClient()
 
       try {
         service.beginRun({
           runId: runtime.runId,
           sessionId: 'draft-review-session',
-          inputText: '更新文档中的关键措辞'
-        })
-        service.registerDocxOpen({
-          runId: runtime.runId,
-          docId: 'doc-1',
-          sourcePath
-        })
-        service.registerDocxChanges({
-          runId: runtime.runId,
-          previousDocId: 'doc-1',
-          nextDocId: 'doc-2',
-          op: {
-            type: 'replace_text',
-            query: 'source',
-            replace: 'updated'
-          },
-          changedBlocks: [
-            {
-              action: 'replace_text',
-              blockId: 'paragraph-1',
-              beforeText: 'source document',
-              afterText: 'updated document'
-            }
-          ]
-        })
-        service.registerDocxPreview({
-          runId: runtime.runId,
-          docId: 'doc-2',
-          previewPath
+          inputText: '把 Hello 改成 Hi'
         })
 
-        const detail = await service.finalizeRunReview({
+        const openResponse = await client.call({
+          runId: runtime.runId,
+          action: 'open',
+          payload: { sourcePath }
+        })
+        if (!openResponse.ok || openResponse.payload.action !== 'open') {
+          throw new Error(openResponse.ok ? 'open worker protocol mismatch' : openResponse.error)
+        }
+        service.registerDocxOpen({
+          runId: runtime.runId,
+          docId: openResponse.payload.docId,
+          sourcePath
+        })
+
+        const applyResponse = await client.call({
+          runId: runtime.runId,
+          action: 'apply_ops',
+          payload: {
+            docId: openResponse.payload.docId,
+            ops: [{ type: 'replace_text', query: 'Hello', replace: 'Hi' }]
+          }
+        })
+        if (!applyResponse.ok || applyResponse.payload.action !== 'apply_ops') {
+          throw new Error(
+            applyResponse.ok ? 'apply worker protocol mismatch' : applyResponse.error
+          )
+        }
+        service.registerDocxChanges({
+          runId: runtime.runId,
+          previousDocId: openResponse.payload.docId,
+          nextDocId: applyResponse.payload.newDocId,
+          op: { type: 'replace_text', query: 'Hello', replace: 'Hi' },
+          changedBlocks: applyResponse.payload.changedBlocks
+        })
+
+        const details = await service.finalizeRunReview({
           runId: runtime.runId,
           workspaceRootPath: runtime.workspaceRoot
         })
+        const detail = details[0]
         if (!detail) {
-          throw new Error('expected draft review detail to be created')
+          throw new Error('expected confirm session detail to be created')
         }
 
-        const decisionResult = await service.setChangeDecision({
-          reviewId: detail.review.id,
-          changeId: detail.changes[0]?.id || '',
-          decision: 'accepted'
-        })
-        const rebuiltDetail = await stateService.rebuildReviewState(detail.review.id)
         const validation = await service.validateCommit({ reviewId: detail.review.id })
+        const resolvedOpenTarget = await service.resolveDocxOpenTarget(sourcePath)
+        const resolvedOpenText = await extractDocxText(resolvedOpenTarget.openPath)
+        const confirmCopyText = detail.documents[0]?.confirm_artifact_path
+          ? await extractDocxText(detail.documents[0].confirm_artifact_path)
+          : ''
+
         const commit = await service.commitReview({
           reviewId: detail.review.id,
           overwrite: true
         })
         const committedReview = await service.getReview({ reviewId: detail.review.id })
+        const sourceTextAfterCommit = await extractDocxText(sourcePath)
+        const confirmExistsAfterCommit = detail.documents[0]?.confirm_artifact_path
+          ? await fs
+              .access(detail.documents[0].confirm_artifact_path)
+              .then(() => true)
+              .catch(() => false)
+          : false
 
         return {
           detail,
-          decisionResult,
-          rebuiltDetail,
           validation,
+          resolvedOpenTarget,
+          resolvedOpenText,
+          confirmCopyText,
           commit,
           committedReview,
-          workerCalls,
-          previewExistsAfterCommit: await fs
-            .access(previewPath)
-            .then(() => true)
-            .catch(() => false),
-          draftExistsAfterCommit: detail.documents[0]?.draft_artifact_path
-            ? await fs
-                .access(detail.documents[0].draft_artifact_path)
-                .then(() => true)
-                .catch(() => false)
-            : false,
-          sourceContentsAfterCommit: await fs.readFile(sourcePath, 'utf8'),
-          releaseCalls: releaseSpy.mock.calls
+          sourceTextAfterCommit,
+          confirmExistsAfterCommit
         }
       } finally {
-        getClientSpy.mockRestore()
-        releaseSpy.mockRestore()
+        await releaseDocxRunSession(runtime.runId)
       }
     },
     assert: async (result, runtime) => {
       runtime.assertThat(
-        result.detail.review.status === 'review_pending' &&
+        result.detail.review.status === 'pending_confirm' &&
           result.detail.documents.length === 1 &&
           result.detail.changes.length === 1 &&
-          Boolean(result.detail.documents[0]?.draft_artifact_path),
+          Boolean(result.detail.documents[0]?.confirm_artifact_path) &&
+          Boolean(result.detail.documents[0]?.manifest_artifact_path) &&
+          Boolean(result.detail.documents[0]?.effective_draft_artifact_path),
         {
-          name: 'draft-review-finalize',
+          name: 'confirm-session-finalize',
           message:
-            'finalizeRunReview should still build one persisted review with document, change, and saved draft artifact metadata after tracker extraction',
+            'finalizeRunReview should generate a single confirm session with confirm copy, manifest, and effective draft artifacts.',
           data: result.detail
         }
       )
 
       runtime.assertThat(
-        result.decisionResult.success &&
-          result.decisionResult.review?.status === 'commit_ready' &&
-          result.decisionResult.document?.accepted_change_count === 1,
+        result.validation.ready &&
+          result.confirmCopyText.includes('w:ins') &&
+          result.confirmCopyText.includes('w:del'),
         {
-          name: 'draft-review-rebuild-state',
+          name: 'confirm-copy-markup',
           message:
-            'setChangeDecision should still rebuild review/document counters through the extracted review state service',
+            'validateCommit should succeed and the generated confirm copy should contain inserted/deleted OOXML markers.',
           data: {
-            decisionResult: result.decisionResult,
-            rebuiltDetail: result.rebuiltDetail
+            validation: result.validation,
+            confirmCopyText: result.confirmCopyText
           }
         }
       )
 
       runtime.assertThat(
-        result.rebuiltDetail.review.status === 'commit_ready' &&
-          result.rebuiltDetail.review.pending_change_count === 0 &&
-          result.rebuiltDetail.review.accepted_change_count === 1,
+        result.resolvedOpenTarget.trackedSourcePath === result.detail.documents[0].source_path &&
+          result.resolvedOpenText.includes('Hi from fixture') &&
+          !result.resolvedOpenText.includes('w:ins') &&
+          !result.resolvedOpenText.includes('w:del'),
         {
-          name: 'draft-review-state-service',
+          name: 'confirm-open-normalize',
           message:
-            'DraftReviewStateService.rebuildReviewState should keep review counters and status consistent after the service split',
-          data: result.rebuiltDetail
+            'continued AI editing should resolve through the active confirm copy and read a normalized clean draft instead of the raw source file.',
+          data: {
+            resolvedOpenTarget: result.resolvedOpenTarget,
+            resolvedOpenText: result.resolvedOpenText
+          }
         }
       )
-
-      runtime.assertThat(result.validation.ready, {
-        name: 'draft-review-validate',
-        message:
-          'validateCommit should still report ready once all changes are resolved and the source file remains fresh',
-        data: result.validation
-      })
 
       runtime.assertThat(
         result.commit.success &&
           result.commit.job?.status === 'completed' &&
           result.committedReview.review?.review.status === 'committed',
         {
-          name: 'draft-review-commit',
+          name: 'confirm-commit',
           message:
-            'commitReview should still finish successfully and archive the review detail through the extracted commit service',
+            'commitReview should normalize the confirm copy, replace the source file, and mark the confirm session as committed.',
           data: {
             commit: result.commit,
             committedReview: result.committedReview
@@ -396,37 +335,15 @@ test('draft-review-service', async () => {
       )
 
       runtime.assertThat(
-        result.previewExistsAfterCommit === false &&
-          result.draftExistsAfterCommit === false &&
-          result.sourceContentsAfterCommit.includes('saved:review-source.docx'),
+        result.sourceTextAfterCommit.includes('Hi from fixture') &&
+          result.confirmExistsAfterCommit === false,
         {
-          name: 'draft-review-artifact-cleanup',
+          name: 'confirm-artifact-cleanup',
           message:
-            'commitReview should still clean preview/draft artifacts and write the committed content back to the source path',
+            'after commit the source document should contain the normalized content and the confirm artifacts should be cleaned up.',
           data: {
-            previewExistsAfterCommit: result.previewExistsAfterCommit,
-            draftExistsAfterCommit: result.draftExistsAfterCommit,
-            sourceContentsAfterCommit: result.sourceContentsAfterCommit
-          }
-        }
-      )
-
-      runtime.assertThat(
-        result.workerCalls.some((call) => call.action === 'save' && call.runId === runtime.runId) &&
-          result.workerCalls.some(
-            (call) => call.action === 'open' && call.runId.startsWith('draft-commit-')
-          ) &&
-          result.workerCalls.some(
-            (call) => call.action === 'apply_ops' && call.runId.startsWith('draft-commit-')
-          ) &&
-          result.releaseCalls.length === 1,
-        {
-          name: 'draft-review-worker-flow',
-          message:
-            'finalize and commit paths should still exercise save/open/apply_ops/save worker flow and release the commit run session',
-          data: {
-            workerCalls: result.workerCalls,
-            releaseCalls: result.releaseCalls
+            sourceTextAfterCommit: result.sourceTextAfterCommit,
+            confirmExistsAfterCommit: result.confirmExistsAfterCommit
           }
         }
       )

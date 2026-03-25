@@ -15,15 +15,15 @@ export const ASSISTANT_STEP_STATUS_META: Record<
 }
 
 export const REVIEW_STATUS_META: Record<DraftReviewStatus, { label: string; className: string }> = {
-  review_pending: {
+  pending_confirm: {
     label: '待确认修改',
     className: 'border-[#F4E5DF] bg-[#FBF5F2] text-[#D97757]'
   },
-  commit_ready: { label: '可提交', className: 'border-[#DCEBD7] bg-[#F3FAF0] text-[#4F7A46]' },
   committing: { label: '提交中', className: 'border-[#FDECC8] bg-[#FFF9ED] text-[#8A6510]' },
   committed: { label: '已提交', className: 'border-[#DCEBD7] bg-[#F3FAF0] text-[#4F7A46]' },
   conflicted: { label: '有冲突', className: 'border-[#F7D5D9] bg-[#FFF2F4] text-[#B5455D]' },
-  cancelled: { label: '已取消', className: 'border-[#E5E5E4] bg-[#F8F8F7] text-[#666666]' },
+  discarded: { label: '已放弃', className: 'border-[#E5E5E4] bg-[#F8F8F7] text-[#666666]' },
+  superseded: { label: '已被更新', className: 'border-[#E5E5E4] bg-[#F8F8F7] text-[#666666]' },
   failed: { label: '提交失败', className: 'border-[#F7D5D9] bg-[#FFF2F4] text-[#B5455D]' }
 }
 

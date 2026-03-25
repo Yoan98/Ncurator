@@ -154,15 +154,16 @@ const parseCommitResults = (value: PrimitiveRowValue): DraftCommitResultItem[] =
 const normalizeDraftReviewStatus = (value: PrimitiveRowValue): DraftReviewStatus => {
   const normalized = String(value ?? '').trim()
   switch (normalized) {
-    case 'commit_ready':
+    case 'pending_confirm':
     case 'committing':
     case 'committed':
     case 'conflicted':
-    case 'cancelled':
+    case 'discarded':
+    case 'superseded':
     case 'failed':
       return normalized
     default:
-      return 'review_pending'
+      return 'pending_confirm'
   }
 }
 
@@ -239,8 +240,11 @@ const toDraftReviewDocument = (row: DraftReviewDocumentRow): DraftReviewDocument
   source_name: toRequiredString(row.source_name),
   format: normalizeDraftDocumentFormat(row.format),
   latest_draft_snapshot_id: toRequiredString(row.latest_draft_snapshot_id),
-  preview_artifact_path: toOptionalString(row.preview_artifact_path),
-  draft_artifact_path: toOptionalString(row.draft_artifact_path),
+  confirm_artifact_path: toOptionalString(row.preview_artifact_path),
+  manifest_artifact_path: toOptionalString(row.preview_artifact_path)
+    ? `${String(row.preview_artifact_path)}.manifest.json`
+    : undefined,
+  effective_draft_artifact_path: toOptionalString(row.draft_artifact_path),
   source_version: parseSourceVersion(row.source_version_json),
   total_change_count: toRequiredNumber(row.total_change_count),
   pending_change_count: toRequiredNumber(row.pending_change_count),
@@ -261,8 +265,12 @@ const toDraftReviewChange = (row: DraftReviewChangeRow): DraftReviewChange => ({
   decision: normalizeDraftChangeDecision(row.decision),
   before_text: toRequiredString(row.before_text),
   after_text: toRequiredString(row.after_text),
+  anchor_name:
+    parseJsonObject(row.metadata_json) &&
+    typeof parseJsonObject(row.metadata_json)?.anchor_name === 'string'
+      ? String(parseJsonObject(row.metadata_json)?.anchor_name)
+      : undefined,
   locator: parseJsonObject(row.locator_json) || {},
-  preview_artifact_path: toOptionalString(row.preview_artifact_path),
   metadata: parseJsonObject(row.metadata_json),
   created_at: toRequiredNumber(row.created_at),
   updated_at: toRequiredNumber(row.updated_at)
@@ -315,8 +323,8 @@ const toDraftReviewDocumentWriteRow = (document: DraftReviewDocument): DraftWrit
   source_name: document.source_name,
   format: document.format,
   latest_draft_snapshot_id: document.latest_draft_snapshot_id,
-  preview_artifact_path: document.preview_artifact_path,
-  draft_artifact_path: document.draft_artifact_path,
+  preview_artifact_path: document.confirm_artifact_path,
+  draft_artifact_path: document.effective_draft_artifact_path,
   source_version_json: JSON.stringify(document.source_version),
   total_change_count: document.total_change_count,
   pending_change_count: document.pending_change_count,
@@ -338,8 +346,11 @@ const toDraftReviewChangeWriteRow = (change: DraftReviewChange): DraftWriteRow =
   before_text: change.before_text,
   after_text: change.after_text,
   locator_json: JSON.stringify(change.locator),
-  preview_artifact_path: change.preview_artifact_path,
-  metadata_json: change.metadata ? JSON.stringify(change.metadata) : undefined,
+  preview_artifact_path: undefined,
+  metadata_json: JSON.stringify({
+    ...(change.metadata || {}),
+    ...(change.anchor_name ? { anchor_name: change.anchor_name } : {})
+  }),
   created_at: change.created_at,
   updated_at: change.updated_at
 })
@@ -423,32 +434,6 @@ export class DraftReviewStore {
     return rows.map(toDraftReviewChange).sort((a, b) => a.order_index - b.order_index)
   }
 
-  public async updateChangeDecision(
-    reviewId: string,
-    changeId: string,
-    decision: DraftChangeDecision
-  ): Promise<DraftReviewChange | null> {
-    const table = await this.core.openTable(LANCE_TABLES.DRAFT_REVIEW_CHANGE)
-    const safeReviewId = this.core.escapeSqlString(reviewId)
-    const safeChangeId = this.core.escapeSqlString(changeId)
-    const rows = (await table
-      .query()
-      .where(`review_id = '${safeReviewId}' AND id = '${safeChangeId}'`)
-      .limit(1)
-      .toArray()) as DraftReviewChangeRow[]
-    const row = rows[0]
-    if (!row) return null
-    const change = toDraftReviewChange(row)
-    const next: DraftReviewChange = {
-      ...change,
-      decision,
-      updated_at: Date.now()
-    }
-    await table.delete(`review_id = '${safeReviewId}' AND id = '${safeChangeId}'`)
-    await table.add([omitUndefined(toDraftReviewChangeWriteRow(next))])
-    return next
-  }
-
   public async replaceCommitJobs(reviewId: string, jobs: DraftCommitJob[]): Promise<void> {
     const table = await this.core.openTable(LANCE_TABLES.DRAFT_COMMIT_JOB)
     await table.delete(`review_id = '${this.core.escapeSqlString(reviewId)}'`)
@@ -500,5 +485,26 @@ export class DraftReviewStore {
     await documentTable.delete(`review_id = '${safeReviewId}'`)
     await changeTable.delete(`review_id = '${safeReviewId}'`)
     await commitJobTable.delete(`review_id = '${safeReviewId}'`)
+  }
+
+  public async listActiveReviewsBySourcePath(
+    sourcePath: string,
+    statuses: DraftReviewStatus[]
+  ): Promise<DraftReviewDetail[]> {
+    if (statuses.length === 0) return []
+    const documentTable = await this.core.openTable(LANCE_TABLES.DRAFT_REVIEW_DOCUMENT)
+    const safeSourcePath = this.core.escapeSqlString(sourcePath)
+    const documentRows = (await documentTable
+      .query()
+      .where(`source_path = '${safeSourcePath}'`)
+      .toArray()) as DraftReviewDocumentRow[]
+    const reviewIds = Array.from(
+      new Set(documentRows.map((row) => toOptionalString(row.review_id)).filter(Boolean))
+    ) as string[]
+    const details = await Promise.all(reviewIds.map((reviewId) => this.getReviewDetail(reviewId)))
+    return details
+      .filter((detail): detail is DraftReviewDetail => Boolean(detail))
+      .filter((detail) => statuses.includes(detail.review.status))
+      .sort((left, right) => right.review.updated_at - left.review.updated_at)
   }
 }

@@ -11,6 +11,7 @@ type EmbeddedFileViewerDocument = IDocument & {
   filePath?: string
   metadata?: {
     pageNumber?: number
+    anchorName?: string
   }
   file?: File | Blob
 }
@@ -19,6 +20,7 @@ type EmbeddedFileViewerProps = {
   filePath?: string
   fileName?: string
   pageNumber?: number
+  anchorName?: string
   emptyText?: string
 }
 
@@ -46,6 +48,7 @@ const EmbeddedFileViewer: React.FC<EmbeddedFileViewerProps> = ({
   filePath,
   fileName,
   pageNumber,
+  anchorName,
   emptyText = '选择一个文件后在这里查看内容。'
 }) => {
   const [loading, setLoading] = useState(false)
@@ -89,7 +92,13 @@ const EmbeddedFileViewer: React.FC<EmbeddedFileViewerProps> = ({
           fileName,
           filePath,
           fileType: getFileType(fileName),
-          metadata: pageNumber ? { pageNumber } : undefined
+          metadata:
+            pageNumber || anchorName
+              ? {
+                  ...(pageNumber ? { pageNumber } : {}),
+                  ...(anchorName ? { anchorName } : {})
+                }
+              : undefined
         })
       } catch (error) {
         console.error('Failed to load file preview', error)
@@ -100,7 +109,7 @@ const EmbeddedFileViewer: React.FC<EmbeddedFileViewerProps> = ({
     }
 
     void loadDocument()
-  }, [fileName, filePath, pageNumber])
+  }, [anchorName, fileName, filePath, pageNumber])
 
   if (!filePath || !fileName) {
     return (

@@ -1,51 +1,88 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import jsPreviewDocx from '@js-preview/docx'
 import '@js-preview/docx/lib/index.css'
 import './index.css'
 
-const CustomDocxRenderer = ({ mainState }) => {
+type DocViewerMetadata = {
+  anchorName?: string
+  pageNumber?: number
+}
+
+type DocViewerDocument = {
+  file?: File | Blob
+  uri?: string
+  metadata?: DocViewerMetadata
+}
+
+type DocViewerMainState = {
+  currentDocument?: DocViewerDocument | null
+}
+
+type CustomDocxRendererProps = {
+  mainState: DocViewerMainState
+}
+
+const scrollToAnchor = (container: HTMLDivElement, anchorName?: string): void => {
+  if (!anchorName) return
+  window.requestAnimationFrame(() => {
+    const anchor = container.querySelector<HTMLElement>(`#${CSS.escape(anchorName)}`)
+    if (!anchor) return
+    anchor.scrollIntoView({
+      block: 'center',
+      behavior: 'smooth'
+    })
+  })
+}
+
+const CustomDocxRenderer = ({ mainState }: CustomDocxRendererProps) => {
   const { currentDocument } = mainState
+  const containerRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
-    if (!currentDocument) return
+    const container = containerRef.current
+    if (!container || !currentDocument) return
 
-    const initHtmlContent = async () => {
+    let cancelled = false
+    const renderDocx = async (): Promise<void> => {
       let file = currentDocument.file
       if (!file && currentDocument.uri) {
         try {
-          const res = await fetch(currentDocument.uri)
-          file = await res.blob()
-        } catch (e) {
-          console.error('Failed to fetch docx', e)
+          const response = await fetch(currentDocument.uri)
+          file = await response.blob()
+        } catch (error) {
+          console.error('Failed to fetch docx', error)
           return
         }
       }
+      if (!file || cancelled) return
 
-      if (!file) return
-
-      const docxEle = document.getElementById('my-docx-renderer')
-      if (!docxEle) return
-
-      // Clear previous content if any?
-      // jsPreviewDocx.init appends? Or replaces?
-      // Usually it expects an empty container or handles it.
-      // Let's assume it handles it or we clear it.
-      docxEle.innerHTML = ''
-
-      const myDocxPreviewer = jsPreviewDocx.init(docxEle)
-      myDocxPreviewer.preview(file)
+      container.innerHTML = ''
+      const previewer = jsPreviewDocx.init(container, {
+        renderChanges: true
+      })
+      try {
+        await previewer.preview(file)
+        if (!cancelled) {
+          scrollToAnchor(container, currentDocument.metadata?.anchorName)
+        }
+      } catch (error) {
+        console.error('Failed to render docx preview', error)
+      }
     }
 
-    initHtmlContent()
+    void renderDocx()
+    return () => {
+      cancelled = true
+    }
   }, [currentDocument])
 
   if (!currentDocument) return null
 
   return (
     <div
-      id="my-docx-renderer"
-      className="docx-content w-full h-full overflow-auto bg-white p-8 shadow-sm"
-    ></div>
+      ref={containerRef}
+      className="docx-content h-full w-full overflow-auto bg-white p-8 shadow-sm"
+    />
   )
 }
 

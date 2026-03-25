@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { invokeStructuredChat } from '../../../src/main/services/ai/structuredOutput'
+import type { ResolvedDocxOpenTarget } from '../../../src/main/services/ai/human/tools/docx/review/types'
 import type { DocxChangedBlock, DocxOp } from '../../../src/main/services/ai/human/tools/docx/types'
 import type { LastBrainDecision } from '../../../src/main/services/ai/human/types'
 import type { AiRunContext } from '../../../src/main/services/ai/types'
@@ -170,7 +171,7 @@ type CreateTestAiRunContextInput = CreateAiRunContextInput & {
     op: DocxOp
     changedBlocks: DocxChangedBlock[]
   }) => void
-  trackDocxPreview?: (input: { docId: string; previewPath: string }) => void
+  resolveDocxOpenTarget?: (sourcePath: string) => Promise<ResolvedDocxOpenTarget>
 }
 
 export const createTestAiRunContext = (input: CreateTestAiRunContextInput): AiRunContext => {
@@ -257,7 +258,12 @@ export const createTestAiRunContext = (input: CreateTestAiRunContextInput): AiRu
       },
     trackDocxOpen: input.trackDocxOpen || (() => undefined),
     trackDocxChanges: input.trackDocxChanges || (() => undefined),
-    trackDocxPreview: input.trackDocxPreview || (() => undefined),
+    resolveDocxOpenTarget:
+      input.resolveDocxOpenTarget ||
+      (async (sourcePath) => ({
+        openPath: sourcePath,
+        trackedSourcePath: sourcePath
+      })),
     resolveToolExecutionOverride,
     resolveBrainDecisionOverride,
     resolveHumanDeliveryOverride: input.humanDeliveryOverride

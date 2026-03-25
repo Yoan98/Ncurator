@@ -145,21 +145,21 @@ export const buildRunArtifactsFromDraftReviewDetail = (
       documentCount: detail.review.document_count,
       changeCount: detail.review.change_count
     },
-    summary: `draft review ready (${detail.review.document_count} docs, ${detail.review.change_count} changes)`
+    summary: `confirm document ready (${detail.review.document_count} docs, ${detail.review.change_count} changes)`
   }
 
   const draftArtifacts = detail.documents.flatMap((document) => {
-    if (!document.draft_artifact_path) return []
+    if (!document.confirm_artifact_path) return []
     return [
       createFileArtifactRef({
         capability: 'docx',
-        artifactPath: document.draft_artifact_path,
+        artifactPath: document.confirm_artifact_path,
         operation: 'created',
         artifactRole: 'draft',
         reviewId: detail.review.id,
         draftDocumentId: document.id,
         draftSnapshotId: document.latest_draft_snapshot_id,
-        summary: `draft ready: ${document.source_name}`
+        summary: `confirm doc ready: ${document.source_name}`
       })
     ]
   })

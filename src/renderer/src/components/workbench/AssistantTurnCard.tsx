@@ -167,7 +167,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                 {turn?.reviewTargets.length ? (
                   <div>
                     <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-[#999999]">
-                      待确认修改
+                      确认文档
                     </div>
                     <div className="space-y-2">
                       {turn.reviewTargets.map((review) => {

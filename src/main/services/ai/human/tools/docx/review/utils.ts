@@ -57,8 +57,15 @@ export const toReviewStatus = (
   previous?: DraftReviewStatus
 ): DraftReviewStatus => {
   if (previous === 'committing' || previous === 'committed') return previous
-  if (previous === 'conflicted' || previous === 'failed' || previous === 'cancelled') return previous
-  return hasPending ? 'review_pending' : 'commit_ready'
+  if (
+    previous === 'conflicted' ||
+    previous === 'failed' ||
+    previous === 'discarded' ||
+    previous === 'superseded'
+  ) {
+    return previous
+  }
+  return hasPending ? 'pending_confirm' : 'pending_confirm'
 }
 
 export const buildSourceVersion = async (sourcePath: string): Promise<DraftSourceVersion> => {
@@ -101,14 +108,15 @@ export const parseDocxOpFromMetadata = (metadata?: JsonObject): DocxOp | null =>
 export const getMetadataGroupId = (metadata?: JsonObject): string =>
   typeof metadata?.group_id === 'string' ? metadata.group_id : ''
 
+export const getManifestPathForConfirmArtifact = (confirmArtifactPath: string): string =>
+  `${confirmArtifactPath}.manifest.json`
+
 export const collectArtifactPaths = (detail: DraftReviewDetail): string[] => {
   const unique = new Set<string>()
   detail.documents.forEach((document) => {
-    if (document.preview_artifact_path) unique.add(document.preview_artifact_path)
-    if (document.draft_artifact_path) unique.add(document.draft_artifact_path)
-  })
-  detail.changes.forEach((change) => {
-    if (change.preview_artifact_path) unique.add(change.preview_artifact_path)
+    if (document.confirm_artifact_path) unique.add(document.confirm_artifact_path)
+    if (document.manifest_artifact_path) unique.add(document.manifest_artifact_path)
+    if (document.effective_draft_artifact_path) unique.add(document.effective_draft_artifact_path)
   })
   return [...unique]
 }
@@ -129,13 +137,13 @@ export const createArchivedCommittedDetail = (input: {
     },
     documents: input.detail.documents.map((document) => ({
       ...document,
-      preview_artifact_path: undefined,
-      draft_artifact_path: undefined,
+      confirm_artifact_path: undefined,
+      manifest_artifact_path: undefined,
+      effective_draft_artifact_path: undefined,
       updated_at: updatedAt
     })),
     changes: input.detail.changes.map((change) => ({
       ...change,
-      preview_artifact_path: undefined,
       updated_at: updatedAt
     })),
     commit_jobs: [

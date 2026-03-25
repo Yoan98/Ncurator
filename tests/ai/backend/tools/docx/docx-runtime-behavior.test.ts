@@ -113,7 +113,7 @@ test('docx-runtime-behavior', async () => {
             requestApproval: workerMismatchCtx.requestApproval,
             trackDocxOpen: workerMismatchCtx.trackDocxOpen,
             trackDocxChanges: workerMismatchCtx.trackDocxChanges,
-            trackDocxPreview: workerMismatchCtx.trackDocxPreview,
+            resolveDocxOpenTarget: workerMismatchCtx.resolveDocxOpenTarget,
             embeddingService: workerMismatchCtx.embeddingService
           },
           runId: runtime.runId,

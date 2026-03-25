@@ -335,20 +335,22 @@ export type DraftReviewRenderKind =
 export type DraftChangeDecision = 'pending' | 'accepted' | 'rejected'
 export type DraftChangeResolution = Exclude<DraftChangeDecision, 'pending'>
 export type DraftReviewStatus =
-  | 'review_pending'
-  | 'commit_ready'
+  | 'pending_confirm'
   | 'committing'
   | 'committed'
   | 'conflicted'
-  | 'cancelled'
+  | 'discarded'
+  | 'superseded'
   | 'failed'
 export type DraftArtifactRole = 'preview' | 'draft' | 'committed'
 export type DraftCommitJobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'conflicted'
 export type DraftCommitValidationIssueCode =
-  | 'pending_changes'
   | 'source_changed'
-  | 'review_not_found'
-  | 'review_not_ready'
+  | 'session_not_found'
+  | 'session_not_ready'
+  | 'confirm_copy_missing'
+  | 'confirm_copy_invalid'
+  | 'confirm_copy_locked'
 
 export interface DraftSourceVersion {
   mtime_ms?: number
@@ -384,8 +386,9 @@ export interface DraftReviewDocument {
   format: DraftDocumentFormat
   review_render_kind?: DraftReviewRenderKind
   latest_draft_snapshot_id: string
-  preview_artifact_path?: string
-  draft_artifact_path?: string
+  confirm_artifact_path?: string
+  manifest_artifact_path?: string
+  effective_draft_artifact_path?: string
   source_version: DraftSourceVersion
   total_change_count: number
   pending_change_count: number
@@ -406,10 +409,10 @@ export interface DraftReviewChange {
   decision: DraftChangeDecision
   before_text: string
   after_text: string
+  anchor_name?: string
   locator: JsonObject
   diff_hunks?: DraftTextDiffHunk[]
   source_step_ref?: string
-  preview_artifact_path?: string
   metadata?: JsonObject
   created_at: number
   updated_at: number
@@ -472,20 +475,6 @@ export interface GetDraftReviewResponse {
   error?: string
 }
 
-export interface SetDraftChangeDecisionRequest {
-  reviewId: string
-  changeId: string
-  decision: DraftChangeResolution
-}
-
-export interface SetDraftChangeDecisionResponse {
-  success: boolean
-  review?: DraftReviewSummary
-  document?: DraftReviewDocument
-  change?: DraftReviewChange
-  error?: string
-}
-
 export interface DraftCommitValidationIssue {
   code: DraftCommitValidationIssueCode
   message: string
@@ -510,6 +499,32 @@ export interface CommitDraftReviewRequest {
 export interface CommitDraftReviewResponse {
   success: boolean
   job?: DraftCommitJob
+  error?: string
+}
+
+export interface DiscardDraftReviewRequest {
+  reviewId: string
+}
+
+export interface DiscardDraftReviewResponse {
+  success: boolean
+  review?: DraftReviewSummary
+  error?: string
+}
+
+export interface PickApplicationResponse {
+  canceled: boolean
+  appPath?: string
+  error?: string
+}
+
+export interface OpenPathWithApplicationRequest {
+  filePath: string
+  appPath: string
+}
+
+export interface OpenPathWithApplicationResponse {
+  success: boolean
   error?: string
 }
 

@@ -35,9 +35,11 @@ const api: DesktopApi = {
     ipcRenderer.invoke('open-external', url),
   openPath: (filePath: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('open-path', filePath),
+  openPathWithApplication: (payload) => ipcRenderer.invoke('open-path-with-application', payload),
   revealPath: (filePath: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('reveal-path', filePath),
   pickDirectory: () => ipcRenderer.invoke('pick-directory'),
+  pickApplication: () => ipcRenderer.invoke('pick-application'),
   search: (query: string, sourceType?: SearchSourceFilter, documentIds?: string[]) =>
     ipcRenderer.invoke('search', query, sourceType, documentIds),
   ftsSearch: (query: string, sourceType?: SearchSourceFilter, documentIds?: string[]) =>
@@ -103,10 +105,6 @@ const api: DesktopApi = {
   },
   draftReviewList: (payload) => ipcRenderer.invoke('draft-review-list', payload),
   draftReviewGet: (payload) => ipcRenderer.invoke('draft-review-get', payload),
-  draftReviewSetDecision: (payload) => {
-    emitE2EIpcCall('draftReviewSetDecision')
-    return ipcRenderer.invoke('draft-review-set-decision', payload)
-  },
   draftReviewValidate: (payload) => {
     emitE2EIpcCall('draftReviewValidate')
     return ipcRenderer.invoke('draft-review-validate', payload)
@@ -115,6 +113,7 @@ const api: DesktopApi = {
     emitE2EIpcCall('draftReviewCommit')
     return ipcRenderer.invoke('draft-review-commit', payload)
   },
+  draftReviewDiscard: (payload) => ipcRenderer.invoke('draft-review-discard', payload),
   onAiRunEvent: (cb: (event: AiRunEvent) => void) =>
     ipcRenderer.on('ai-run-event', (_event, data) => {
       emitE2EAiRunEvent(data)

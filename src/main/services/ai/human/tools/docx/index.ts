@@ -32,7 +32,7 @@ export const docxToolFamily = createWorkspaceBoundToolFamily({
         requestApproval: ctx.requestApproval,
         trackDocxOpen: ctx.trackDocxOpen,
         trackDocxChanges: ctx.trackDocxChanges,
-        trackDocxPreview: ctx.trackDocxPreview,
+        resolveDocxOpenTarget: ctx.resolveDocxOpenTarget,
         embeddingService: ctx.embeddingService
       },
       runId,

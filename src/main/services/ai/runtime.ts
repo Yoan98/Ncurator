@@ -97,13 +97,8 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
         changedBlocks
       })
     },
-    trackDocxPreview: ({ docId, previewPath }) => {
-      deps.draftReviewService.registerDocxPreview({
-        runId: payload.runId,
-        docId,
-        previewPath
-      })
-    },
+    resolveDocxOpenTarget: async (sourcePath) =>
+      await deps.draftReviewService.resolveDocxOpenTarget(sourcePath),
     documentsStore: deps.documentsStore,
     embeddingService: deps.embeddingService
   }
