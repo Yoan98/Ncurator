@@ -72,6 +72,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   const editorRef = useRef<HTMLDivElement | null>(null)
   const knownScopesRef = useRef(new Map<string, SourceScopeSelection>())
   const mentionRefreshFrameRef = useRef<number | null>(null)
+  const isComposingRef = useRef(false)
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
   const [mentionOptions, setMentionOptions] = useState<SourceScopeSelection[]>([])
   const [mentionLoading, setMentionLoading] = useState(false)
@@ -97,29 +98,20 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     setMentionActiveIndex(0)
   }, [])
 
-  const ensureEditorHasCaretTarget = useCallback((): Text | null => {
-    const editor = editorRef.current
-    if (!editor) return null
-    const lastChild = editor.lastChild
-    if (isTextNode(lastChild)) return lastChild
-    const emptyTextNode = document.createTextNode('')
-    editor.appendChild(emptyTextNode)
-    return emptyTextNode
-  }, [])
-
   const focusEditor = useCallback(() => {
     const editor = editorRef.current
     if (!editor) return
     editor.focus()
     const selection = window.getSelection()
     if (selection?.rangeCount && editor.contains(selection.anchorNode)) return
-    const caretTarget = ensureEditorHasCaretTarget()
-    if (caretTarget) {
-      moveCaretToTextNode(caretTarget, caretTarget.data.length)
-      return
-    }
     moveCaretToEnd(editor)
-  }, [ensureEditorHasCaretTarget])
+  }, [])
+
+  const focusEditorAfterControlChange = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      focusEditor()
+    })
+  }, [focusEditor])
 
   const syncDraftFromEditor = useCallback(() => {
     const editor = editorRef.current
@@ -145,10 +137,14 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     if (isTextNode(anchorNode) && editor.contains(anchorNode)) {
       textNode = anchorNode
     } else if (anchorNode === editor) {
-      const previousChild = editor.childNodes[Math.max(0, selection.anchorOffset - 1)] || null
+      const previousChild = selection.anchorOffset > 0 ? editor.childNodes[selection.anchorOffset - 1] : null
+      const nextChild = editor.childNodes[selection.anchorOffset] || null
       if (isTextNode(previousChild)) {
         textNode = previousChild
         caretOffset = previousChild.data.length
+      } else if (isTextNode(nextChild)) {
+        textNode = nextChild
+        caretOffset = 0
       }
     } else if (anchorNode instanceof HTMLElement && editor.contains(anchorNode)) {
       const previousChild = anchorNode.childNodes[Math.max(0, selection.anchorOffset - 1)] || null
@@ -261,11 +257,10 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     const editor = editorRef.current
     if (!editor) return
     renderComposerNodesToEditor(editor, [])
-    ensureEditorHasCaretTarget()
     setHasContent(false)
     onDraftChange({ input: '', selectedSourceScopes: [] })
     closeMention()
-  }, [closeMention, ensureEditorHasCaretTarget, onDraftChange, resetKey])
+  }, [closeMention, onDraftChange, resetKey])
 
   useEffect(() => {
     const editor = editorRef.current
@@ -274,10 +269,12 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     const nextNodes = pruneComposerNodesByWorkspace(currentNodes, selectedWorkspaceId)
     if (nextNodes.length === currentNodes.length) return
     renderComposerNodesToEditor(editor, nextNodes)
-    ensureEditorHasCaretTarget()
+    if (document.activeElement === editor) {
+      moveCaretToEnd(editor)
+    }
     syncDraftFromEditor()
     closeMention()
-  }, [closeMention, ensureEditorHasCaretTarget, selectedWorkspaceId, syncDraftFromEditor])
+  }, [closeMention, selectedWorkspaceId, syncDraftFromEditor])
 
   useEffect(() => {
     if (mentionQuery === null) return
@@ -344,7 +341,16 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 
   const handleEditorInput = (): void => {
     syncDraftFromEditor()
+    if (isComposingRef.current) return
     scheduleMentionRefresh()
+  }
+
+  const handleEditorFocus = (): void => {
+    const selection = window.getSelection()
+    if (selection?.rangeCount && editorRef.current?.contains(selection.anchorNode)) return
+    const editor = editorRef.current
+    if (!editor) return
+    moveCaretToEnd(editor)
   }
 
   const handleEditorPaste = (event: React.ClipboardEvent<HTMLDivElement>): void => {
@@ -355,6 +361,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   }
 
   const handleEditorKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    if (event.nativeEvent.isComposing || isComposingRef.current) return
+
     if (mentionQuery !== null) {
       if (event.key === 'ArrowDown' && mentionOptions.length > 0) {
         event.preventDefault()
@@ -412,7 +420,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     if (!(previousNode instanceof HTMLElement) || previousNode.dataset.role !== 'scope-token') return
     event.preventDefault()
     previousNode.remove()
-    ensureEditorHasCaretTarget()
+    focusEditor()
     syncDraftFromEditor()
     closeMention()
   }
@@ -426,7 +434,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     const token = removeButton.closest('[data-role="scope-token"]')
     if (!(token instanceof HTMLElement)) return
     token.remove()
-    ensureEditorHasCaretTarget()
+    focusEditor()
     syncDraftFromEditor()
     closeMention()
   }
@@ -438,12 +446,12 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     <div className="relative">
       {mentionQuery !== null ? (
         <div
-          className="absolute inset-x-0 bottom-full mb-3 overflow-hidden rounded-[28px] border border-[#E5E5E4] bg-white/98 shadow-[0_18px_50px_rgba(31,31,31,0.09)] backdrop-blur-sm"
+          className="absolute inset-x-0 bottom-full mb-2 overflow-hidden rounded-[24px] border border-[#E5E5E4] bg-white/98 shadow-[0_16px_40px_rgba(31,31,31,0.08)] backdrop-blur-sm"
           data-testid={workbenchSelectors.mentionPanel}
         >
-          <div className="max-h-[320px] overflow-y-auto px-3 py-3">
+          <div className="max-h-[300px] overflow-y-auto px-2.5 py-2.5">
             {mentionLoading ? (
-              <div className="flex items-center justify-center py-10 text-[#999999]">
+              <div className="flex items-center justify-center py-8 text-[#999999]">
                 <Spin size="small" />
               </div>
             ) : mentionOptions.length === 0 ? (
@@ -471,7 +479,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                         <button
                           key={getScopeKey(scope)}
                           type="button"
-                          className={`flex w-full items-center gap-3 rounded-[20px] px-4 py-3 text-left transition ${
+                          className={`flex w-full items-center gap-3 rounded-[18px] px-3 py-2.5 text-left transition ${
                             active ? 'bg-[#F3F1EF]' : 'hover:bg-[#F7F6F4]'
                           }`}
                           onMouseDown={(event) => {
@@ -480,7 +488,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                           }}
                         >
                           <span
-                            className={`inline-flex h-8 w-8 items-center justify-center rounded-xl ${
+                            className={`inline-flex h-7 w-7 items-center justify-center rounded-[10px] ${
                               scope.scopeType === 'directory'
                                 ? 'bg-[#F8F3EC] text-[#8A5A2B]'
                                 : 'bg-[#EEF4FF] text-[#3B82F6]'
@@ -493,10 +501,10 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                             )}
                           </span>
                           <div className="min-w-0 flex-1">
-                            <div className="truncate text-[15px] font-medium text-[#1F1F1F]">
+                            <div className="truncate text-[14px] font-medium leading-6 text-[#1F1F1F]">
                               {scope.label}
                             </div>
-                            <div className="truncate text-[13px] text-[#999999]">
+                            <div className="truncate text-[12px] leading-5 text-[#999999]">
                               {scope.relativePath || scope.absolutePath}
                             </div>
                           </div>
@@ -520,7 +528,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                         <button
                           key={getScopeKey(scope)}
                           type="button"
-                          className={`flex w-full items-center gap-3 rounded-[20px] px-4 py-3 text-left transition ${
+                          className={`flex w-full items-center gap-3 rounded-[18px] px-3 py-2.5 text-left transition ${
                             active ? 'bg-[#F3F1EF]' : 'hover:bg-[#F7F6F4]'
                           }`}
                           onMouseDown={(event) => {
@@ -528,14 +536,14 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                             insertMentionScope(scope)
                           }}
                         >
-                          <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-[#EDF7F5] text-[#2F7D6B]">
+                          <span className="inline-flex h-7 w-7 items-center justify-center rounded-[10px] bg-[#EDF7F5] text-[#2F7D6B]">
                             <HiGlobeAlt className="h-4 w-4" />
                           </span>
                           <div className="min-w-0 flex-1">
-                            <div className="truncate text-[15px] font-medium text-[#1F1F1F]">
+                            <div className="truncate text-[14px] font-medium leading-6 text-[#1F1F1F]">
                               {scope.label}
                             </div>
-                            <div className="truncate text-[13px] text-[#999999]">
+                            <div className="truncate text-[12px] leading-5 text-[#999999]">
                               {scope.absolutePath}
                             </div>
                           </div>
@@ -551,34 +559,49 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       ) : null}
 
       <div
-        className="rounded-[28px] border border-[#E5E5E4] bg-white/96 px-4 pb-3 pt-3 shadow-[0_12px_30px_rgba(31,31,31,0.08)] backdrop-blur-sm transition-all duration-200 focus-within:border-[#D97757] focus-within:ring-4 focus-within:ring-[#F4E5DF]"
+        className="rounded-[28px] border border-[#E5E5E4] bg-white/96 px-4 pb-2.5 pt-2.5 shadow-[0_10px_24px_rgba(31,31,31,0.07)] backdrop-blur-sm transition-all duration-200 focus-within:border-[#D97757] focus-within:ring-4 focus-within:ring-[#F4E5DF]"
         data-testid={workbenchSelectors.sourceScopeField}
         onMouseDown={(event) => {
           const target = event.target
           if (!(target instanceof HTMLElement)) return
+          if (target.closest('[contenteditable="true"]')) return
           if (target.closest('button') || target.closest('.ant-select')) return
           event.preventDefault()
           focusEditor()
         }}
       >
-        <div className="relative min-h-[78px]">
+        <div className="relative min-h-[64px]">
           <div
             ref={editorRef}
             contentEditable
             suppressContentEditableWarning
-            className="min-h-[52px] w-full whitespace-pre-wrap break-words bg-transparent text-[15px] leading-7 text-[#1F1F1F] outline-none [&_[data-role='scope-token']]:align-middle"
+            role="textbox"
+            aria-multiline="true"
+            tabIndex={0}
+            spellCheck={false}
+            className="min-h-[44px] w-full whitespace-pre-wrap break-words bg-transparent text-[15px] leading-6 text-[#1F1F1F] outline-none [&_[data-role='scope-token']]:align-middle"
             data-testid={workbenchSelectors.input}
             onInput={handleEditorInput}
             onKeyDown={handleEditorKeyDown}
             onPaste={handleEditorPaste}
             onClickCapture={handleEditorClickCapture}
-            onFocus={() => {
-              ensureEditorHasCaretTarget()
+            onFocus={handleEditorFocus}
+            onKeyUp={() => {
+              if (isComposingRef.current) return
+              scheduleMentionRefresh()
+            }}
+            onCompositionStart={() => {
+              isComposingRef.current = true
+            }}
+            onCompositionEnd={() => {
+              isComposingRef.current = false
+              syncDraftFromEditor()
+              scheduleMentionRefresh()
             }}
           />
 
           <div
-            className={`pointer-events-none absolute inset-x-0 top-0 text-[15px] leading-7 text-[#B3B3B0] ${
+            className={`pointer-events-none absolute inset-x-0 top-0 text-[15px] leading-6 text-[#B3B3B0] ${
               hasContent ? 'hidden' : ''
             }`}
           >
@@ -586,11 +609,14 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           </div>
         </div>
 
-        <div className="mt-2 flex items-end justify-between gap-4">
+        <div className="mt-1.5 flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2 text-[#7B7B79]">
             <Select
               value={mode}
-              onChange={(nextValue) => onModeChange(nextValue as WorkbenchMode)}
+              onChange={(nextValue) => {
+                onModeChange(nextValue as WorkbenchMode)
+                focusEditorAfterControlChange()
+              }}
               variant="borderless"
               suffixIcon={<HiChevronDown className="h-4 w-4 text-[#7B7B79]" />}
               options={[
@@ -613,17 +639,20 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                   )
                 }
               ]}
-              className="min-w-[92px]"
+              className="min-w-[84px]"
               data-testid={workbenchSelectors.modeSwitch}
             />
 
             <Select
               value={selectedModel?.id}
-              onChange={(nextValue) => onModelConfigChange(String(nextValue))}
+              onChange={(nextValue) => {
+                onModelConfigChange(String(nextValue))
+                focusEditorAfterControlChange()
+              }}
               variant="borderless"
               suffixIcon={<HiChevronDown className="h-4 w-4 text-[#7B7B79]" />}
               optionLabelProp="label"
-              className="min-w-[130px]"
+              className="min-w-[120px]"
               options={modelConfigs.map((config) => ({
                 value: config.id,
                 label: config.model_name,
@@ -635,11 +664,14 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 
             <Select
               value={selectedWorkspace?.id}
-              onChange={(nextValue) => onWorkspaceChange(String(nextValue))}
+              onChange={(nextValue) => {
+                onWorkspaceChange(String(nextValue))
+                focusEditorAfterControlChange()
+              }}
               variant="borderless"
               suffixIcon={<HiChevronDown className="h-4 w-4 text-[#7B7B79]" />}
               optionLabelProp="label"
-              className="min-w-[140px]"
+              className="min-w-[128px]"
               options={workspaces.map((workspace) => ({
                 value: workspace.id,
                 label: workspace.name,
@@ -664,13 +696,13 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               type="button"
               onClick={onSubmit}
               disabled={loading || !canSubmit}
-              className={`inline-flex h-14 w-14 items-center justify-center rounded-full text-white transition ${
+              className={`inline-flex h-12 w-12 items-center justify-center rounded-full text-white transition ${
                 loading || !canSubmit ? 'bg-[#D8D8D6]' : 'bg-[#111111] hover:-translate-y-[1px]'
               }`}
               data-testid={workbenchSelectors.sendButton}
               aria-label={mode === 'ai' ? '发送智能请求' : '执行搜索'}
             >
-              {loading ? <Spin size="small" /> : <HiArrowUp className="h-7 w-7" />}
+              {loading ? <Spin size="small" /> : <HiArrowUp className="h-6 w-6" />}
             </button>
           </div>
         </div>

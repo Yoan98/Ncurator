@@ -1,6 +1,6 @@
 import type { SourceScopeSelection } from '../../../../../shared/types'
 
-export const COMPOSER_PLACEHOLDER = '问点什么，或输入 @ 插入资料'
+export const COMPOSER_PLACEHOLDER = '输入问题，或 @ 资料'
 
 export const COMPOSER_SCOPE_TYPES: SourceScopeSelection['scopeType'][] = ['directory', 'file', 'web']
 

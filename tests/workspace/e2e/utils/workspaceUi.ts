@@ -51,7 +51,12 @@ export const selectSourceScope = async (
 
   const editor = page.getByTestId(workbenchSelectors.input)
   await editor.click()
-  await editor.pressSequentially(`@${input.query}`)
+  await editor.focus()
+  await page.waitForFunction(
+    (testId) => document.activeElement?.getAttribute('data-testid') === testId,
+    workbenchSelectors.input
+  )
+  await page.keyboard.type(`@${input.query}`)
   await page.getByTestId(workbenchSelectors.mentionPanel).getByText(input.label).first().click()
   await editor.getByText(input.label).waitFor()
 }

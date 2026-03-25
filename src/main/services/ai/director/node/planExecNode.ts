@@ -1,60 +1,62 @@
 import type { AiRunState, DirectorNodeContext, HumanTaskRunner } from '../../types'
 import { buildPlanTaskObjective } from './objectives'
 import { pickPendingTaskIndex } from './helpers'
-import { createDirectorHumanDispatchNode } from './humanDispatch'
+import { runDirectorHumanSubtask } from './humanDispatch'
 
 export const createPlanExecNode = (input: {
   ctx: DirectorNodeContext
   runHumanTask: HumanTaskRunner
-}) =>
-  createDirectorHumanDispatchNode({
-    ...input,
-    prepare: (state: AiRunState) => {
-      const taskIndex = pickPendingTaskIndex(state.plan, state.dispatchCursor)
-      if (taskIndex < 0) {
-        return {
-          skipPatch: {
-            directorStage: 'director_synthesis_human'
-          }
-        }
-      }
+}) => {
+  const { ctx, runHumanTask } = input
 
-      const task = state.plan[taskIndex]
+  return async (state: AiRunState): Promise<Partial<AiRunState>> => {
+    ctx.checkCancelled()
+
+    const taskIndex = pickPendingTaskIndex(state.plan, state.dispatchCursor)
+    if (taskIndex < 0) {
       return {
-        taskId: task.id,
-        stage: 'director_plan_exec',
-        userInput: buildPlanTaskObjective({
-          userInput: state.input,
-          task,
-          selectedScopeSummary: input.ctx.selectedScopeSummary,
-          contextEvidence: state.contextEvidence,
-          priorDeliveries: state.plan.slice(0, taskIndex).filter((item) => Boolean(item.deliveryMarkdown))
-        }),
-        options: {
-          deliveryMode: 'task_handoff'
-        },
-        buildPatch: (output) => {
-          const runningPlan = state.plan.map((item, index) =>
-            index === taskIndex ? { ...item, status: 'running' as const } : item
-          )
-          const nextPlan = runningPlan.map((item, index) => {
-            if (index !== taskIndex) return item
-
-            return {
-              ...item,
-              status: 'completed' as const,
-              deliveryMarkdown: output.deliveryMarkdown,
-              artifacts: output.artifacts
-            }
-          })
-          const hasPending = nextPlan.some((item) => item.status === 'ready')
-
-          return {
-            plan: nextPlan,
-            dispatchCursor: taskIndex + 1,
-            directorStage: !hasPending ? 'director_synthesis_human' : 'director_plan_exec'
-          }
-        }
+        directorStage: 'director_synthesis_human'
       }
     }
-  })
+
+    const task = state.plan[taskIndex]
+    const output = await runDirectorHumanSubtask({
+      ctx,
+      runId: state.runId,
+      taskId: task.id,
+      stage: 'director_plan_exec',
+      userInput: buildPlanTaskObjective({
+        userInput: state.input,
+        task,
+        selectedScopeSummary: ctx.selectedScopeSummary,
+        contextEvidence: state.contextEvidence,
+        priorDeliveries: state.plan.slice(0, taskIndex).filter((item) => Boolean(item.deliveryMarkdown))
+      }),
+      runHumanTask,
+      options: {
+        deliveryMode: 'task_handoff'
+      }
+    })
+
+    const runningPlan = state.plan.map((item, index) =>
+      index === taskIndex ? { ...item, status: 'running' as const } : item
+    )
+    const nextPlan = runningPlan.map((item, index) => {
+      if (index !== taskIndex) return item
+
+      return {
+        ...item,
+        status: 'completed' as const,
+        deliveryMarkdown: output.deliveryMarkdown,
+        artifacts: output.artifacts
+      }
+    })
+    const hasPending = nextPlan.some((item) => item.status === 'ready')
+
+    return {
+      plan: nextPlan,
+      dispatchCursor: taskIndex + 1,
+      directorStage: hasPending ? 'director_plan_exec' : 'director_synthesis_human'
+    }
+  }
+}

@@ -1248,6 +1248,14 @@ const ChatPage: React.FC = () => {
     )
   }
 
+  const handleComposerDraftChange = useCallback(
+    (draft: { input: string; selectedSourceScopes: SourceScopeSelection[] }) => {
+      setInput(draft.input)
+      setSelectedSourceScopes(draft.selectedSourceScopes)
+    },
+    []
+  )
+
   return (
     <div
       className="flex h-full bg-[#F5F5F4]"
@@ -1360,10 +1368,7 @@ const ChatPage: React.FC = () => {
                 workspaces={workspaces}
                 selectedWorkspaceId={selectedWorkspaceId}
                 onWorkspaceChange={setSelectedWorkspaceId}
-                onDraftChange={(draft) => {
-                  setInput(draft.input)
-                  setSelectedSourceScopes(draft.selectedSourceScopes)
-                }}
+                onDraftChange={handleComposerDraftChange}
                 onSubmit={() => void handleSend()}
                 onCancel={() => void handleCancel()}
                 loading={loading}

@@ -98,7 +98,7 @@ export const readComposerNodesFromEditor = (
 
 const appendBadge = (container: HTMLElement, label: string, className: string): void => {
   const badge = document.createElement('span')
-  badge.className = `inline-flex h-5 min-w-5 items-center justify-center rounded-md px-1.5 text-[10px] font-semibold tracking-[0.08em] ${className}`
+  badge.className = `inline-flex h-4 min-w-4 items-center justify-center rounded-md px-1 text-[9px] font-semibold tracking-[0.08em] ${className}`
   badge.textContent = label
   container.appendChild(badge)
 }
@@ -106,7 +106,7 @@ const appendBadge = (container: HTMLElement, label: string, className: string): 
 const appendRemoveButton = (container: HTMLElement): void => {
   const button = document.createElement('button')
   button.type = 'button'
-  button.className = 'inline-flex h-4 w-4 items-center justify-center rounded-full text-[11px] leading-none text-current/70 transition hover:bg-black/5 hover:text-current'
+  button.className = 'inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] leading-none text-current/70 transition hover:bg-black/5 hover:text-current'
   button.setAttribute('aria-label', '移除资料标签')
   button.dataset.action = 'remove-scope-token'
   button.textContent = '×'
@@ -115,7 +115,7 @@ const appendRemoveButton = (container: HTMLElement): void => {
 
 export const createScopeTokenElement = (scope: SourceScopeSelection): HTMLElement => {
   const token = document.createElement('span')
-  token.className = `mx-0.5 inline-flex max-w-full items-center gap-2 rounded-xl border px-2 py-1 align-baseline text-[14px] leading-5 ${TOKEN_TONE_CLASSNAME[scope.scopeType]}`
+  token.className = `mx-0.5 inline-flex max-w-full items-center gap-1.5 rounded-lg border px-2 py-0.5 align-baseline text-[13px] leading-5 ${TOKEN_TONE_CLASSNAME[scope.scopeType]}`
   token.contentEditable = 'false'
   token.dataset.role = 'scope-token'
   token.dataset.scopeKey = getScopeKey(scope)
@@ -123,7 +123,7 @@ export const createScopeTokenElement = (scope: SourceScopeSelection): HTMLElemen
   appendBadge(token, getScopeBadgeLabel(scope), TOKEN_BADGE_CLASSNAME[scope.scopeType])
 
   const label = document.createElement('span')
-  label.className = 'max-w-[220px] truncate font-medium'
+  label.className = 'max-w-[180px] truncate font-medium'
   label.textContent = scope.label
   token.appendChild(label)
 
