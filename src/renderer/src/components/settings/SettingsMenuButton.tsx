@@ -11,6 +11,7 @@ type SettingsMenuButtonProps = {
 
 const SettingsMenuButton: React.FC<SettingsMenuButtonProps> = ({ label, className }) => {
   const navigate = useNavigate()
+  const iconOnly = !label
 
   return (
     <Dropdown
@@ -40,7 +41,10 @@ const SettingsMenuButton: React.FC<SettingsMenuButtonProps> = ({ label, classNam
     >
       <Button
         icon={<HiOutlineCog6Tooth className="h-[18px] w-[18px]" />}
-        className={`!inline-flex !h-10 !items-center !rounded-2xl !border-[#E5E5E4] !bg-white/92 !px-3 !text-[#666666] shadow-[0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur-sm hover:!border-[#D97757] hover:!text-[#D97757] ${className || ''}`}
+        aria-label="设置"
+        className={`!inline-flex !h-10 !items-center !rounded-2xl !border-[#E5E5E4] !bg-white/92 !text-[#666666] shadow-[0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur-sm hover:!border-[#D97757] hover:!text-[#D97757] ${
+          iconOnly ? '!w-10 !justify-center !px-0' : '!px-3'
+        } ${className || ''}`}
       >
         {label}
       </Button>

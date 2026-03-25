@@ -8,7 +8,7 @@ import type {
 } from '../../types'
 import type { CapabilityToolDefinition, CatalogSkillMetadata } from './factories'
 import { CATALOG_SKILL_DEFINITIONS } from './skillDefinitions'
-import { DOCX_TOOL_DEFINITIONS } from './toolDescriptors/docx'
+import { DOCX_TOOL_DEFINITIONS } from '../docx/toolSpecs'
 import { KB_TOOL_DEFINITIONS } from './toolDescriptors/kb'
 import { TERMINAL_TOOL_DEFINITIONS } from './toolDescriptors/terminal'
 import type {
@@ -72,29 +72,31 @@ const TOOL_DESCRIPTORS_BY_FAMILY = new Map<AiToolFamilyId, ToolDescriptor[]>()
 const TOOL_CONTRACTS_BY_SKILL = new Map<RuntimeSkillId, ToolContractDefinition[]>()
 const TOOL_DESCRIPTORS_BY_SKILL = new Map<RuntimeSkillId, ToolDescriptor[]>()
 
-CATALOG_TOOL_CONTRACTS.forEach((contract, index) => {
-  const descriptor = TOOL_CATALOG[index]
+const registerToolContractGroup = <TKey, TValue>(
+  target: Map<TKey, TValue[]>,
+  key: TKey,
+  value: TValue
+) => {
+  const items = target.get(key) || []
+  items.push(value)
+  target.set(key, items)
+}
 
+const registerToolContract = (contract: ToolContract, descriptor: ToolDescriptor) => {
   TOOL_CONTRACT_BY_NAME.set(contract.name, contract)
   TOOL_DESCRIPTOR_BY_NAME.set(contract.name, descriptor)
 
-  const familyContracts = TOOL_CONTRACTS_BY_FAMILY.get(contract.familyId) || []
-  familyContracts.push(contract)
-  TOOL_CONTRACTS_BY_FAMILY.set(contract.familyId, familyContracts)
-
-  const familyDescriptors = TOOL_DESCRIPTORS_BY_FAMILY.get(contract.familyId) || []
-  familyDescriptors.push(descriptor)
-  TOOL_DESCRIPTORS_BY_FAMILY.set(contract.familyId, familyDescriptors)
+  registerToolContractGroup(TOOL_CONTRACTS_BY_FAMILY, contract.familyId, contract)
+  registerToolContractGroup(TOOL_DESCRIPTORS_BY_FAMILY, contract.familyId, descriptor)
 
   contract.skillIds.forEach((skillId) => {
-    const skillContracts = TOOL_CONTRACTS_BY_SKILL.get(skillId) || []
-    skillContracts.push(contract)
-    TOOL_CONTRACTS_BY_SKILL.set(skillId, skillContracts)
-
-    const skillDescriptors = TOOL_DESCRIPTORS_BY_SKILL.get(skillId) || []
-    skillDescriptors.push(descriptor)
-    TOOL_DESCRIPTORS_BY_SKILL.set(skillId, skillDescriptors)
+    registerToolContractGroup(TOOL_CONTRACTS_BY_SKILL, skillId, contract)
+    registerToolContractGroup(TOOL_DESCRIPTORS_BY_SKILL, skillId, descriptor)
   })
+}
+
+CATALOG_TOOL_CONTRACTS.forEach((contract, index) => {
+  registerToolContract(contract, TOOL_CATALOG[index])
 })
 
 const SKILL_DEFINITION_BY_ID = new Map<RuntimeSkillId, SkillDefinition>(

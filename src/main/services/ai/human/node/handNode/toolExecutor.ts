@@ -1,13 +1,15 @@
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { IpcJsonObject, JsonValue } from '../../../../../../shared/types'
+import { isJsonObject } from '../../../../../utils/aiCapabilityUtils'
 import type { AiRunContext } from '../../../types'
+import { TOOL_CALL_RESULT_CODES } from '../../constants'
 import type {
   AiRunContextWithHumanOverrides,
   HumanRuntimeCache,
   RuntimeSkillId,
-  ToolCallResult
+  ToolCallResult,
+  ToolCallResultCode
 } from '../../types'
-import { normalizeToolCallResult } from '../../utils/toolResult'
 import { withToolLifecycle } from '../../tools/utils/lifecycle'
 import { createToolEventEmitter } from '../../tools/utils/toolEvents'
 
@@ -23,6 +25,76 @@ const findTool = (input: {
     if (matched) return matched
   }
   return undefined
+}
+
+const isToolCallResultCode = (value: string): value is ToolCallResultCode =>
+  TOOL_CALL_RESULT_CODES.includes(value as ToolCallResultCode)
+
+const parseToolCallResultCode = (input: {
+  code?: JsonValue
+  ok?: boolean
+  success?: boolean
+}): ToolCallResultCode => {
+  const { code, ok, success } = input
+  if (typeof code === 'string' && isToolCallResultCode(code)) {
+    return code
+  }
+
+  return ok === false || success === false ? 'failed' : 'ok'
+}
+
+const normalizeToolCallResult = (
+  toolName: string,
+  payload: JsonValue
+): ToolCallResult => {
+  if (isJsonObject(payload)) {
+    return {
+      toolName,
+      ok: payload.ok !== false && payload.success !== false,
+      code: parseToolCallResultCode({
+        code: payload.code,
+        ok: payload.ok === false ? false : payload.ok === true ? true : undefined,
+        success: payload.success === false ? false : payload.success === true ? true : undefined
+      }),
+      summary:
+        typeof payload.summary === 'string'
+          ? payload.summary
+          : typeof payload.error === 'string'
+            ? payload.error
+            : typeof payload.message === 'string'
+              ? payload.message
+              : `${toolName} executed`,
+      data: payload
+    }
+  }
+
+  if (typeof payload === 'string') {
+    return {
+      toolName,
+      ok: true,
+      code: 'ok',
+      summary: payload.trim() || `${toolName} executed`,
+      data: payload
+    }
+  }
+
+  if (Array.isArray(payload)) {
+    return {
+      toolName,
+      ok: true,
+      code: 'ok',
+      summary: `${toolName} returned ${payload.length} item(s)`,
+      data: payload
+    }
+  }
+
+  return {
+    toolName,
+    ok: true,
+    code: 'ok',
+    summary: `${toolName} executed`,
+    data: payload
+  }
 }
 
 export const executeToolCall = async (input: {

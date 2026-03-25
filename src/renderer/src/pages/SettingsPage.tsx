@@ -41,21 +41,23 @@ const SettingsPage: React.FC = () => {
 
   return (
     <div
-      className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(251,245,242,0.95),_rgba(245,245,244,0.92)_42%,_#F5F5F4_72%)]"
+      className="h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(251,245,242,0.95),_rgba(245,245,244,0.92)_42%,_#F5F5F4_72%)]"
       data-testid={settingsSelectors.page}
     >
-      <div className="mx-auto flex max-w-[1360px] flex-col gap-5 px-5 py-5 lg:px-6">
+      <div className="mx-auto flex h-full w-full max-w-[1360px] flex-col gap-5 px-5 py-5 lg:px-6">
         <AppPageHeader
           icon={sectionMeta.icon}
           title={sectionMeta.title}
           navigationMode="back"
           backTo="/"
-          actions={<SettingsMenuButton label="设置" />}
+          actions={<SettingsMenuButton />}
         />
 
-        {currentSection === 'workspace' ? <WorkspaceSettingsPanel /> : null}
-        {currentSection === 'model' ? <ModelSettingsPanel /> : null}
-        {currentSection === 'web-sources' ? <WebSourcesSettingsPanel /> : null}
+        <div className="min-h-0 flex-1 overflow-y-auto pb-5">
+          {currentSection === 'workspace' ? <WorkspaceSettingsPanel /> : null}
+          {currentSection === 'model' ? <ModelSettingsPanel /> : null}
+          {currentSection === 'web-sources' ? <WebSourcesSettingsPanel /> : null}
+        </div>
       </div>
     </div>
   )

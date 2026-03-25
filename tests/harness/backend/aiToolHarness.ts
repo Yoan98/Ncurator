@@ -10,7 +10,7 @@ import {
   TableRow,
   WidthType
 } from 'docx'
-import { buildDocxCapabilityTools } from '../../../src/main/services/ai/human/tools/docx/docxTools'
+import { buildDocxCapabilityTools } from '../../../src/main/services/ai/human/tools/docx'
 import { releaseDocxRunSession } from '../../../src/main/services/ai/human/tools/docx/worker/docxWorkerClient'
 import { buildKbCapabilityTools } from '../../../src/main/services/ai/human/tools/kb/retrievalTools'
 import { buildTerminalCapabilityTools } from '../../../src/main/services/ai/human/tools/terminal/terminalTools'

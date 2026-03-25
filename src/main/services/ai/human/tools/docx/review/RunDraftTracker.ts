@@ -4,12 +4,12 @@ import type {
   DraftReviewChange,
   DraftReviewDetail,
   DraftReviewDocument,
+  JsonObject,
   DraftReviewSummary
 } from '../../../../../../../shared/types'
 import type { DocumentsStore } from '../../../../../storage/domains/DocumentsStore'
 import type { DocxChangedBlock, DocxOp } from '../types'
 import { getDocxWorkerClient } from '../worker/docxWorkerClient'
-import type { RunDraftState } from './types'
 import {
   buildDocxChangeLocator,
   buildDocxChangeSummary,
@@ -19,6 +19,35 @@ import {
   sanitizeFileName
 } from './utils'
 import { clipText } from '../../../../utils/text'
+
+type RunDraftChangeSeed = {
+  id: string
+  orderIndex: number
+  changeKind: DraftReviewChange['change_kind']
+  title: string
+  summary: string
+  beforeText: string
+  afterText: string
+  locator: JsonObject
+  metadata: JsonObject
+}
+
+type RunDraftDocument = {
+  sourcePath: string
+  sourceName: string
+  initialDocId: string
+  latestDocId: string
+  previewArtifactPath?: string
+  changes: RunDraftChangeSeed[]
+}
+
+type RunDraftState = {
+  sessionId: string
+  inputText: string
+  documentBySourcePath: Map<string, RunDraftDocument>
+  sourcePathByDocId: Map<string, string>
+  orderCounter: number
+}
 
 export class RunDraftTracker {
   private readonly runDrafts = new Map<string, RunDraftState>()

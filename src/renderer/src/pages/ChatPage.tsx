@@ -1,14 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { App, Button } from 'antd'
-import {
-  HiArrowLeft,
-  HiArrowRight,
-  HiBars3,
-  HiBookOpen,
-  HiPlus,
-  HiTrash,
-  HiUser
-} from 'react-icons/hi2'
+import { HiBars3, HiBookOpen, HiOutlineViewColumns, HiPlus, HiTrash, HiUser } from 'react-icons/hi2'
+import { HiViewColumns } from 'react-icons/hi2'
 import type {
   AiRunEvent,
   ChatMessage,
@@ -33,6 +26,7 @@ import {
   WORKBENCH_CONTENT_PANEL_COLLAPSED_STORAGE_KEY,
   WORKBENCH_SIDEBAR_STORAGE_KEY
 } from '../components/workbench/constants'
+import { FILE_ORIGIN_LABELS, REVIEW_STATUS_META } from '../components/workbench/constants'
 import type {
   AssistantTurnReviewTarget,
   AssistantTurnStep,
@@ -187,10 +181,34 @@ const ChatPage: React.FC = () => {
     setContentPanelCollapsed(false)
   }, [])
 
-  const closeContentPanel = useCallback((): void => {
-    setContentPanel(createEmptyPanel())
-    setContentPanelCollapsed(true)
-  }, [])
+  const sharedHeaderMeta = useMemo(() => {
+    if (contentPanelCollapsed || contentPanel.kind === 'empty') {
+      return null
+    }
+
+    if (contentPanel.kind === 'document_view') {
+      return {
+        title: contentPanel.file.fileName || contentPanel.title,
+        badge: FILE_ORIGIN_LABELS[contentPanel.file.origin],
+        badgeClassName: 'border-[#E5E5E4] bg-white text-[#666666]'
+      }
+    }
+
+    if (contentPanel.kind === 'review_session' && contentPanel.review) {
+      const statusMeta = REVIEW_STATUS_META[contentPanel.review.review.status]
+      return {
+        title: contentPanel.title,
+        badge: statusMeta.label,
+        badgeClassName: statusMeta.className
+      }
+    }
+
+    return {
+      title: contentPanel.title,
+      badge: null,
+      badgeClassName: ''
+    }
+  }, [contentPanel, contentPanelCollapsed])
 
   const resetDraftReviewState = (): void => {
     setActiveDraftReviewId(null)
@@ -1367,194 +1385,227 @@ const ChatPage: React.FC = () => {
         </div>
       </aside>
 
-      <div className={`min-w-0 flex-1 ${contentPanelCollapsed ? '' : 'border-r border-[#E5E5E4]'}`}>
-        <div className="relative flex h-screen flex-col">
-          <div className="flex h-11 items-center justify-end border-b border-[#E5E5E4] bg-[#F8F6F2]/88 px-4 backdrop-blur-sm">
+      <div className="min-w-0 flex-1">
+        <div className="flex h-screen min-h-0 flex-col">
+          <div className="flex h-11 shrink-0 items-center justify-between bg-[#F5F5F4] px-4">
+            <div className="min-w-0 flex-1">
+              {sharedHeaderMeta ? (
+                <div className="flex min-w-0 items-center gap-2">
+                  <div
+                    className="truncate text-sm font-semibold text-[#1F1F1F]"
+                    data-testid={workbenchSelectors.contentPanelTitle}
+                  >
+                    {sharedHeaderMeta.title}
+                  </div>
+                  {sharedHeaderMeta.badge ? (
+                    <span
+                      className={`rounded-full border px-2.5 py-1 text-[11px] ${sharedHeaderMeta.badgeClassName}`}
+                    >
+                      {sharedHeaderMeta.badge}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+
             <div className="flex items-center gap-2">
               <Button
                 type="text"
                 size="small"
                 icon={
                   contentPanelCollapsed ? (
-                    <HiArrowLeft className="h-4 w-4" />
+                    <HiOutlineViewColumns className="h-4 w-4" />
                   ) : (
-                    <HiArrowRight className="h-4 w-4" />
+                    <HiViewColumns className="h-4 w-4" />
                   )
                 }
-                className="!flex !h-8 !w-8 !items-center !justify-center !rounded-xl !border !border-[#E5E5E4] !bg-white/92 !p-0 !text-[#666666] shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:!border-[#D97757] hover:!text-[#D97757]"
+                className={`!flex !h-8 !w-8 !items-center !justify-center !rounded-xl !border !p-0 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:!border-[#D97757] hover:!text-[#D97757] ${
+                  contentPanelCollapsed
+                    ? '!border-[#E5E5E4] !bg-white/92 !text-[#666666]'
+                    : '!border-[#F4E5DF] !bg-[#FBF5F2] !text-[#D97757]'
+                }`}
                 onClick={() => setContentPanelCollapsed((previous) => !previous)}
               />
-              <SettingsMenuButton className="!h-8 !rounded-xl !px-2.5" />
+              <SettingsMenuButton className="!h-8 !w-8 !rounded-xl !px-0" />
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-52 pt-4" ref={scrollRef}>
-            <div className="mx-auto flex max-w-[860px] flex-col gap-5">
-              {currentMessages.length === 0 ? (
-                <div className="relative flex min-h-[58vh] items-center justify-center overflow-hidden px-8 py-12 text-center">
-                  <div className="absolute inset-x-[12%] top-[18%] h-44 rounded-full bg-[radial-gradient(circle,rgba(251,245,242,0.98),rgba(251,245,242,0.58)_42%,rgba(245,245,244,0)_76%)] blur-2xl" />
-                  <div className="absolute inset-x-[20%] bottom-[20%] h-32 rounded-full bg-[radial-gradient(circle,rgba(244,229,223,0.42),rgba(245,245,244,0)_72%)] blur-3xl" />
-                  <div className="relative max-w-[420px]">
-                    <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-white/45 text-[#D19A87] shadow-[inset_0_0_0_1px_rgba(228,215,206,0.7)] backdrop-blur-sm">
-                      <HiBookOpen className="h-5 w-5" />
-                    </div>
-                    <h3 className="mt-5 text-[18px] font-semibold tracking-[-0.01em] text-[#2A2826]">
-                      从一个问题开始
-                    </h3>
-                    <p className="mt-2 text-[13px] leading-6 text-[#7C7771]">
-                      {composerMode === 'search'
-                        ? '搜索模式只检索当前资料范围。'
-                        : '智能模式会结合当前工作区与插入资料执行。'}
-                    </p>
+          <div className="flex min-h-0 flex-1 overflow-hidden">
+            <div className="min-w-0 flex-1">
+              <div className="flex h-full min-h-0 flex-col">
+                <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-4" ref={scrollRef}>
+                  <div className="mx-auto flex max-w-[860px] flex-col gap-5 pb-8">
+                    {currentMessages.length === 0 ? (
+                      <div className="relative flex min-h-[58vh] items-center justify-center overflow-hidden px-8 py-12 text-center">
+                        <div className="absolute inset-x-[12%] top-[18%] h-44 rounded-full bg-[radial-gradient(circle,rgba(251,245,242,0.98),rgba(251,245,242,0.58)_42%,rgba(245,245,244,0)_76%)] blur-2xl" />
+                        <div className="absolute inset-x-[20%] bottom-[20%] h-32 rounded-full bg-[radial-gradient(circle,rgba(244,229,223,0.42),rgba(245,245,244,0)_72%)] blur-3xl" />
+                        <div className="relative max-w-[420px]">
+                          <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-white/45 text-[#D19A87] shadow-[inset_0_0_0_1px_rgba(228,215,206,0.7)] backdrop-blur-sm">
+                            <HiBookOpen className="h-5 w-5" />
+                          </div>
+                          <h3 className="mt-5 text-[18px] font-semibold tracking-[-0.01em] text-[#2A2826]">
+                            从一个问题开始
+                          </h3>
+                          <p className="mt-2 text-[13px] leading-6 text-[#7C7771]">
+                            {composerMode === 'search'
+                              ? '搜索模式只检索当前资料范围。'
+                              : '智能模式会结合当前工作区与插入资料执行。'}
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      currentMessages.map((messageItem) =>
+                        messageItem.role === 'user'
+                          ? renderUserMessage(messageItem)
+                          : renderAssistantMessage(messageItem)
+                      )
+                    )}
                   </div>
                 </div>
-              ) : (
-                currentMessages.map((messageItem) =>
-                  messageItem.role === 'user'
-                    ? renderUserMessage(messageItem)
-                    : renderAssistantMessage(messageItem)
-                )
-              )}
+
+                <div className="shrink-0 bg-gradient-to-t from-[#F5F5F4] via-[#F5F5F4]/96 via-58% to-transparent px-6 pb-6 pt-6">
+                  <div className="mx-auto max-w-[920px]">
+                    <WorkbenchComposer
+                      mode={composerMode}
+                      onModeChange={setComposerMode}
+                      modelConfigs={modelConfigs}
+                      selectedModelConfigId={selectedModelConfigId}
+                      onModelConfigChange={setSelectedModelConfigId}
+                      workspaces={workspaces}
+                      selectedWorkspaceId={selectedWorkspaceId}
+                      onWorkspaceChange={setSelectedWorkspaceId}
+                      onDraftChange={handleComposerDraftChange}
+                      onSubmit={() => void handleSend()}
+                      onCancel={() => void handleCancel()}
+                      loading={loading}
+                      canSubmit={Boolean(input.trim())}
+                      showCancel={loading && composerMode === 'ai' && Boolean(aiRunId)}
+                      resetKey={composerResetKey}
+                    />
+
+                    {composerMode === 'ai' &&
+                    (pendingApprovalRequest || pendingWorkspaceRequest) ? (
+                      <div
+                        className="mt-3 rounded-2xl border border-[#FDECC8] bg-[#FFF9ED] px-3 py-3 text-sm text-[#8A6510]"
+                        data-testid={
+                          pendingApprovalRequest
+                            ? chatSelectors.approvalBanner
+                            : chatSelectors.workspaceBanner
+                        }
+                      >
+                        {pendingApprovalRequest ? (
+                          <div className="flex flex-col gap-3">
+                            <div>{pendingApprovalRequest.reason}</div>
+                            <div className="text-xs text-[#8A6510]">
+                              风险级别：{pendingApprovalRequest.riskLevel} ·{' '}
+                              {pendingApprovalRequest.command}
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                type="primary"
+                                onClick={() => void handleApprovalDecision(true)}
+                                loading={approvalSubmitting}
+                                data-testid={chatSelectors.approvalApproveButton}
+                              >
+                                批准执行
+                              </Button>
+                              <Button
+                                onClick={() => void handleApprovalDecision(false)}
+                                disabled={approvalSubmitting}
+                                data-testid={chatSelectors.approvalDenyButton}
+                              >
+                                拒绝执行
+                              </Button>
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {pendingWorkspaceRequest ? (
+                          <div className="flex flex-col gap-3">
+                            <div>{pendingWorkspaceRequest.reason}</div>
+                            <div className="text-xs text-[#8A6510]">
+                              请选择当前工作区，必要时再通过 @ 插入目录或文件后继续运行。
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                type="primary"
+                                onClick={() => void handleContinueWithWorkspace()}
+                                loading={loading}
+                                disabled={!selectedWorkspace}
+                                data-testid={chatSelectors.workspaceContinueButton}
+                              >
+                                继续运行
+                              </Button>
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    {composerMode === 'ai' &&
+                    selectedSourceScopes.some(
+                      (scope) => scope.sourceType === 'workspace' && scope.hasUnpreparedFiles
+                    ) ? (
+                      <div
+                        className="mt-3 rounded-2xl border border-[#FDECC8] bg-[#FFF9ED] px-3 py-2.5 text-sm text-[#8A6510]"
+                        data-testid={workbenchSelectors.scopeAiWarning}
+                      >
+                        已选范围包含未准备的本地文件。AI 可能直接读取原文件，耗时更长，并增加 token
+                        消耗。
+                      </div>
+                    ) : null}
+
+                    {composerMode === 'search' &&
+                    selectedSourceScopes.some((scope) => scope.hasUnpreparedFiles) ? (
+                      <div
+                        className="mt-3 rounded-2xl border border-[#FDECC8] bg-[#FFF9ED] px-3 py-2.5 text-sm text-[#8A6510]"
+                        data-testid={workbenchSelectors.scopeSearchWarning}
+                      >
+                        纯搜索只会检索已准备完成的本地资料；未准备文件不会进入候选结果。
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
 
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-[#F5F5F4] via-[#F5F5F4]/96 via-58% to-transparent px-6 pb-6 pt-14">
-            <div className="mx-auto max-w-[920px]">
-              <WorkbenchComposer
-                mode={composerMode}
-                onModeChange={setComposerMode}
-                modelConfigs={modelConfigs}
-                selectedModelConfigId={selectedModelConfigId}
-                onModelConfigChange={setSelectedModelConfigId}
-                workspaces={workspaces}
-                selectedWorkspaceId={selectedWorkspaceId}
-                onWorkspaceChange={setSelectedWorkspaceId}
-                onDraftChange={handleComposerDraftChange}
-                onSubmit={() => void handleSend()}
-                onCancel={() => void handleCancel()}
-                loading={loading}
-                canSubmit={Boolean(input.trim())}
-                showCancel={loading && composerMode === 'ai' && Boolean(aiRunId)}
-                resetKey={composerResetKey}
+            <div
+              className={`min-h-0 overflow-hidden transition-[width] duration-200 ${
+                contentPanelCollapsed
+                  ? 'w-0'
+                  : contentPanel.kind === 'review_session'
+                    ? 'w-[520px]'
+                    : 'w-[430px]'
+              }`}
+            >
+              <WorkbenchContentPanel
+                state={
+                  contentPanel.kind === 'review_session' && activeDraftReview
+                    ? { ...contentPanel, review: activeDraftReview }
+                    : contentPanel
+                }
+                draftReviewLoading={draftReviewLoading}
+                draftCommitValidation={draftCommitValidation}
+                draftValidationLoading={draftValidationLoading}
+                draftDecisionBusyIds={draftDecisionBusyIds}
+                draftBulkApplying={draftBulkApplying}
+                draftCommitSubmitting={draftCommitSubmitting}
+                reviewTurn={reviewTurn}
+                onOpenSearchResult={(turn, resultIndex) => void openSearchResult(turn, resultIndex)}
+                onOpenReview={openDraftReview}
+                onOpenFile={(file) => void openFile(file)}
+                onSetDecision={(changeId, decision) =>
+                  void handleDraftChangeDecision(changeId, decision)
+                }
+                onSetAllPending={(decision) => void handleDraftBulkDecision(decision)}
+                onRefreshValidation={() => void handleDraftValidationRefresh()}
+                onCommit={() => void handleDraftCommit()}
+                onOpenPath={openPathOrNotify}
+                onRevealPath={revealPathOrNotify}
               />
-
-              {composerMode === 'ai' && (pendingApprovalRequest || pendingWorkspaceRequest) ? (
-                <div
-                  className="mt-3 rounded-2xl border border-[#FDECC8] bg-[#FFF9ED] px-3 py-3 text-sm text-[#8A6510]"
-                  data-testid={
-                    pendingApprovalRequest
-                      ? chatSelectors.approvalBanner
-                      : chatSelectors.workspaceBanner
-                  }
-                >
-                  {pendingApprovalRequest ? (
-                    <div className="flex flex-col gap-3">
-                      <div>{pendingApprovalRequest.reason}</div>
-                      <div className="text-xs text-[#8A6510]">
-                        风险级别：{pendingApprovalRequest.riskLevel} ·{' '}
-                        {pendingApprovalRequest.command}
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          type="primary"
-                          onClick={() => void handleApprovalDecision(true)}
-                          loading={approvalSubmitting}
-                          data-testid={chatSelectors.approvalApproveButton}
-                        >
-                          批准执行
-                        </Button>
-                        <Button
-                          onClick={() => void handleApprovalDecision(false)}
-                          disabled={approvalSubmitting}
-                          data-testid={chatSelectors.approvalDenyButton}
-                        >
-                          拒绝执行
-                        </Button>
-                      </div>
-                    </div>
-                  ) : null}
-
-                  {pendingWorkspaceRequest ? (
-                    <div className="flex flex-col gap-3">
-                      <div>{pendingWorkspaceRequest.reason}</div>
-                      <div className="text-xs text-[#8A6510]">
-                        请选择当前工作区，必要时再通过 @ 插入目录或文件后继续运行。
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          type="primary"
-                          onClick={() => void handleContinueWithWorkspace()}
-                          loading={loading}
-                          disabled={!selectedWorkspace}
-                          data-testid={chatSelectors.workspaceContinueButton}
-                        >
-                          继续运行
-                        </Button>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-
-              {composerMode === 'ai' &&
-              selectedSourceScopes.some(
-                (scope) => scope.sourceType === 'workspace' && scope.hasUnpreparedFiles
-              ) ? (
-                <div
-                  className="mt-3 rounded-2xl border border-[#FDECC8] bg-[#FFF9ED] px-3 py-2.5 text-sm text-[#8A6510]"
-                  data-testid={workbenchSelectors.scopeAiWarning}
-                >
-                  已选范围包含未准备的本地文件。AI 可能直接读取原文件，耗时更长，并增加 token 消耗。
-                </div>
-              ) : null}
-
-              {composerMode === 'search' &&
-              selectedSourceScopes.some((scope) => scope.hasUnpreparedFiles) ? (
-                <div
-                  className="mt-3 rounded-2xl border border-[#FDECC8] bg-[#FFF9ED] px-3 py-2.5 text-sm text-[#8A6510]"
-                  data-testid={workbenchSelectors.scopeSearchWarning}
-                >
-                  纯搜索只会检索已准备完成的本地资料；未准备文件不会进入候选结果。
-                </div>
-              ) : null}
             </div>
           </div>
         </div>
-      </div>
-
-      <div
-        className={`overflow-hidden transition-[width] duration-200 ${
-          contentPanelCollapsed
-            ? 'w-0'
-            : contentPanel.kind === 'review_session'
-              ? 'w-[520px]'
-              : 'w-[430px]'
-        }`}
-      >
-        <WorkbenchContentPanel
-          state={
-            contentPanel.kind === 'review_session' && activeDraftReview
-              ? { ...contentPanel, review: activeDraftReview }
-              : contentPanel
-          }
-          draftReviewLoading={draftReviewLoading}
-          draftCommitValidation={draftCommitValidation}
-          draftValidationLoading={draftValidationLoading}
-          draftDecisionBusyIds={draftDecisionBusyIds}
-          draftBulkApplying={draftBulkApplying}
-          draftCommitSubmitting={draftCommitSubmitting}
-          reviewTurn={reviewTurn}
-          onClose={closeContentPanel}
-          onOpenSearchResult={(turn, resultIndex) => void openSearchResult(turn, resultIndex)}
-          onOpenReview={openDraftReview}
-          onOpenFile={(file) => void openFile(file)}
-          onSetDecision={(changeId, decision) => void handleDraftChangeDecision(changeId, decision)}
-          onSetAllPending={(decision) => void handleDraftBulkDecision(decision)}
-          onRefreshValidation={() => void handleDraftValidationRefresh()}
-          onCommit={() => void handleDraftCommit()}
-          onOpenPath={openPathOrNotify}
-          onRevealPath={revealPathOrNotify}
-        />
       </div>
     </div>
   )

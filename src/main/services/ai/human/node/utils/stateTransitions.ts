@@ -9,7 +9,6 @@ import type {
   LastBrainDecision,
   RuntimeSkillId
 } from '../../types'
-import { emitHumanStep, emitTaskDelivery, emitWatchHint } from './events'
 import { getAvailableToolNames } from './runtimeCache'
 
 export type HumanTraceItemInput = {
@@ -22,6 +21,73 @@ export type HumanTraceItemInput = {
 }
 
 type HumanEventStage = 'human_brain' | 'human_learning' | 'human_hand' | 'human_mouth'
+
+const emitHumanStep = (input: {
+  ctx: AiRunContext
+  taskId: string
+  step: HumanTraceStep
+  learnedSkillIds: RuntimeSkillId[]
+  availableToolNames: string[]
+  stage: HumanEventStage
+}) => {
+  input.ctx.sendEvent({
+    type: 'human_step',
+    runId: input.ctx.runId,
+    taskId: input.taskId,
+    stepIndex: input.step.step,
+    action: input.step.action,
+    skillId: input.step.skillId,
+    toolName: input.step.toolName,
+    publicNarrative: input.step.publicNarrative,
+    learnedSkillIds: [...input.learnedSkillIds],
+    availableToolNames: [...input.availableToolNames],
+    resultStatus: input.step.resultStatus,
+    summary: input.step.summary,
+    createdAt: Date.now(),
+    stage: input.stage
+  })
+}
+
+const emitWatchHint = (input: {
+  ctx: AiRunContext
+  taskId?: string
+  source: WatchHintSource
+  summary: string
+}) => {
+  input.ctx.sendEvent({
+    type: 'watch_hint',
+    runId: input.ctx.runId,
+    taskId: input.taskId,
+    source: input.source,
+    summary: input.summary,
+    createdAt: Date.now(),
+    stage:
+      input.source === 'learning'
+        ? 'human_learning'
+        : input.source === 'hand'
+          ? 'human_hand'
+          : 'human_brain'
+  })
+}
+
+const emitTaskDelivery = (input: {
+  ctx: AiRunContext
+  taskId: string
+  summary: string
+  deliveryMarkdown: string
+  internal?: boolean
+}) => {
+  input.ctx.sendEvent({
+    type: 'task_delivery_ready',
+    runId: input.ctx.runId,
+    taskId: input.taskId,
+    summary: input.summary,
+    deliveryMarkdown: input.deliveryMarkdown,
+    createdAt: Date.now(),
+    internal: input.internal,
+    stage: 'human_mouth'
+  })
+}
 
 const buildStepToolContext = (input: {
   cache: HumanRuntimeCache

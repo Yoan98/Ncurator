@@ -1,7 +1,7 @@
 import type { AiRunState, DirectorNodeContext, HumanTaskRunner } from '../../types'
 import { buildPlanTaskObjective } from './objectives'
 import { pickPendingTaskIndex } from './helpers'
-import { runDirectorHumanSubtask } from './humanDispatch'
+import { runDirectorHumanSubtask } from './humanSubtasks'
 
 export const createPlanExecNode = (input: {
   ctx: DirectorNodeContext

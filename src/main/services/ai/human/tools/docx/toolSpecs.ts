@@ -13,8 +13,12 @@ import {
   searchSchema,
   validateSchema
 } from './schemas'
-import { readStringArg } from '../catalog/factories'
-import type { StaticExecutionMetaConfig } from '../catalog/factories'
+import {
+  createStaticCapabilityToolDefinition,
+  readStringArg,
+  type CapabilityToolDefinition,
+  type StaticExecutionMetaConfig
+} from '../catalog/factories'
 import type { DocxWorkerAction } from './worker/types'
 
 const DOCX_REPLACE_TEXT_EXAMPLE: JsonObject = {
@@ -589,3 +593,18 @@ export function getDocxToolSpec<TName extends DocxToolName>(
   }
   return spec as Extract<AnyDocxToolSpec, { name: TName }>
 }
+
+const toDocxToolDefinition = (
+  spec: AnyDocxToolSpec
+): CapabilityToolDefinition =>
+  createStaticCapabilityToolDefinition({
+    name: spec.name,
+    familyId: 'docx',
+    skillIds: [...spec.skillIds],
+    requiresWorkspace: true,
+    schema: spec.schema as CapabilityToolDefinition['schema'],
+    promptSpec: spec.promptSpec,
+    executionMeta: spec.executionMeta
+  })
+
+export const DOCX_TOOL_DEFINITIONS = DOCX_TOOL_SPECS.map(toDocxToolDefinition)

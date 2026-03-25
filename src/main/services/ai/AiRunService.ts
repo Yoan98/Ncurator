@@ -1,11 +1,11 @@
 import { buildDirectorGraph } from './director/graph/directorGraph'
 import { createAiRunContext } from './runtime'
-import type { AiRunDeps, AiRunStartPayload, AiRunState } from './types'
 import {
   createCancelledAiRunState,
   createFailedAiRunState,
   createInitialAiRunState
-} from './utils/state'
+} from './director/state/schema'
+import type { AiRunDeps, AiRunStartPayload, AiRunState } from './types'
 
 export class AiRunService {
   private static instance: AiRunService

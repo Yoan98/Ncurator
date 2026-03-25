@@ -1,8 +1,15 @@
 import { test } from 'vitest'
 import { aiRunStateContractSchema } from '../../../../src/main/services/ai/schema'
-import { createDirectorRunStateSchema } from '../../../../src/main/services/ai/director/state/schema'
-import { createInitialAiRunState, createDefaultAiRunStateFields } from '../../../../src/main/services/ai/utils/state'
-import { createHumanRunStateSchema } from '../../../../src/main/services/ai/human/state/schema'
+import {
+  createDefaultAiRunStateFields,
+  createDirectorRunStateSchema,
+  createInitialAiRunState
+} from '../../../../src/main/services/ai/director/state/schema'
+import {
+  createDefaultHumanStateFields,
+  createHumanRunStateSchema,
+  createInitialHumanState
+} from '../../../../src/main/services/ai/human/state/schema'
 import { KB_HYBRID_SEARCH_CHUNKS_CONTRACT } from '../../../../src/main/services/ai/human/tools/catalog/toolDescriptors/kb'
 import { TERMINAL_RUN_COMMAND_CONTRACT } from '../../../../src/main/services/ai/human/tools/catalog/toolDescriptors/terminal'
 import {
@@ -16,10 +23,6 @@ import type {
 } from '../../../../src/main/services/ai/human/tools/docx/types'
 import { humanStateContractSchema } from '../../../../src/main/services/ai/human/schema'
 import type { HumanState } from '../../../../src/main/services/ai/human/types'
-import {
-  createDefaultHumanStateFields,
-  createInitialHumanState
-} from '../../../../src/main/services/ai/human/utils/state'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 
 type DirectorSchemaFields = {

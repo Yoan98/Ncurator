@@ -1,6 +1,8 @@
-import { JSON_ONLY_INTENT_CONTRACT } from './constants'
-import type { IntentPromptInput } from './types'
-import { buildDirectorPromptUserContext } from './userContext'
+import {
+  buildDirectorPromptUserContext,
+  type IntentPromptInput,
+  JSON_ONLY_INTENT_CONTRACT
+} from './shared'
 
 export const buildIntentPrompt = (input: IntentPromptInput) => {
   return {

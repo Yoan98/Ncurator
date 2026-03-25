@@ -2,13 +2,15 @@ import { END, START, StateGraph } from '@langchain/langgraph'
 import type { AiRunContext, AiRunState, HumanTaskRunner } from '../../types'
 import { createHumanGraphRunner } from '../../human/graph/humanGraph'
 import { createIntentNode } from '../node/intentNode'
-import { createContextEnrichNode } from '../node/contextEnrichNode'
-import { createDirectHumanExecNode } from '../node/directHumanExecNode'
 import { createPlanNode } from '../node/planNode'
 import { createPlanExecNode } from '../node/planExecNode'
-import { createSynthesisHumanNode } from '../node/synthesisHumanNode'
 import { createCompleteNode } from '../node/completeNode'
 import { DEFAULT_MAX_CONTEXT_ROUNDS } from '../node/helpers'
+import {
+  createContextEnrichNode,
+  createDirectHumanExecNode,
+  createSynthesisHumanNode
+} from '../node/humanSubtasks'
 import { createDirectorRunStateSchema } from '../state/schema'
 
 export const buildDirectorGraph = (input: {

@@ -6,7 +6,7 @@ import type {
   AiRunEvent
 } from '../../../../../src/shared/types'
 import type { AiRunState, HumanTaskOutput, HumanTaskRunner } from '../../../../../src/main/services/ai/types'
-import { createInitialAiRunState } from '../../../../../src/main/services/ai/utils/state'
+import { createInitialAiRunState } from '../../../../../src/main/services/ai/director/state/schema'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 
 const buildInitialState = (runtime: {

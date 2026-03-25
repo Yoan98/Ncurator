@@ -30,12 +30,18 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     if (!cfg) throw new Error('未配置可用的大模型，请先在「大模型配置」中设置并启用一个模型')
     return cfg
   }
+  let requestedConfigPromise: ReturnType<typeof getRequestedConfig> | undefined
+
+  const loadRequestedConfig = async () => {
+    requestedConfigPromise ||= getRequestedConfig()
+    return await requestedConfigPromise
+  }
 
   const chatStructured: AiRunContext['chatStructured'] = async <T extends Record<string, unknown>>(
     input
   ): Promise<T> => {
     checkCancelled()
-    const cfg = await getRequestedConfig()
+    const cfg = await loadRequestedConfig()
     return invokeStructuredChat({
       caller: input.caller,
       cfg,

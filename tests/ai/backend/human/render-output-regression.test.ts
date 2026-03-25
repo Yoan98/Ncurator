@@ -10,7 +10,7 @@ import {
   renderHumanFactLines,
   renderHumanOpenQuestionLines
 } from '../../../../src/main/services/ai/human/shared/memoryRenderers'
-import { createInitialHumanState } from '../../../../src/main/services/ai/human/utils/state'
+import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 import { renderLineList, renderNamedSections } from '../../../../src/main/services/ai/utils/render'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 

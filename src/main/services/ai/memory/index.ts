@@ -13,6 +13,14 @@ const sessionMemorySchema: z.ZodType<ChatSessionMemory> = z.object({
   linkedDocumentIds: z.array(z.string())
 })
 
+const EMPTY_SESSION_MEMORY: ChatSessionMemory = {
+  summary: '',
+  openTasks: [],
+  userPrefs: [],
+  pinnedFacts: [],
+  linkedDocumentIds: []
+}
+
 const toList = (value: JsonValue | undefined): string[] =>
   (Array.isArray(value) ? value : []).map((item) => String(item || '').trim()).filter(Boolean)
 
@@ -37,13 +45,7 @@ export const updateSessionMemoryAfterRun = async (input: {
   const sessionId = String(input.sessionId || '').trim()
   if (!sessionId) return
 
-  const prev = (await input.chatStore.getSessionMemory(sessionId)) || {
-    summary: '',
-    openTasks: [],
-    userPrefs: [],
-    pinnedFacts: [],
-    linkedDocumentIds: []
-  }
+  const prev = (await input.chatStore.getSessionMemory(sessionId)) || EMPTY_SESSION_MEMORY
 
   const cfg = await input.llmStore.getActive()
   if (!cfg) return

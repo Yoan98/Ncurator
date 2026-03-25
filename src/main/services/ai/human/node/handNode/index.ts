@@ -1,12 +1,41 @@
+import type { JsonObject } from '../../../../../../shared/types'
 import { HUMAN_DEFAULT_TOOL_CALL_LIMIT } from '../../constants'
 import type { AiRunContext } from '../../../types'
 import { extractArtifactRefsFromToolResults, mergeArtifactRefs } from '../../../utils/artifacts'
+import { getToolDescriptor } from '../../tools/catalog'
+import type { ToolExecutionMeta } from '../../tools/types'
 import type { HumanRuntimeCache, HumanState, ToolCallParam } from '../../types'
-import { canBatchPlan } from './toolExecutionMeta'
 import { executeToolCall } from './toolExecutor'
 import { returnToBrain, returnToBrainAfterTrace, returnToBrainWithWatchHint } from '../utils/stateTransitions'
 
 const MAX_PARALLEL_TOOL_CALLS = 4
+
+export const getToolExecutionMeta = (input: {
+  toolName: string
+  args: JsonObject
+}): ToolExecutionMeta => {
+  const descriptor = getToolDescriptor(input.toolName)
+  if (descriptor) return descriptor.resolveExecutionMeta(input.args)
+
+  return {
+    mutability: 'mutating',
+    parallelSafe: false
+  }
+}
+
+export const canBatchPlan = (input: {
+  actions: Array<{ toolName: string; args: JsonObject }>
+  maxParallel: number
+}): boolean => {
+  if (input.actions.length <= 1) return true
+  if (input.actions.length > input.maxParallel) return false
+
+  for (const action of input.actions) {
+    const meta = getToolExecutionMeta(action)
+    if (meta.mutability !== 'read_only' || !meta.parallelSafe) return false
+  }
+  return true
+}
 
 const validateParallelToolCalls = (parallelCallToolParam: ToolCallParam[]): boolean => {
   return canBatchPlan({

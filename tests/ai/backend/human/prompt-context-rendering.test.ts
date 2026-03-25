@@ -1,7 +1,7 @@
 import { test } from 'vitest'
 import { buildBrainPromptContext } from '../../../../src/main/services/ai/human/prompts/brain'
 import { buildMouthPromptContext } from '../../../../src/main/services/ai/human/prompts/mouth'
-import { createInitialHumanState } from '../../../../src/main/services/ai/human/utils/state'
+import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 import type { HumanState } from '../../../../src/main/services/ai/human/types'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 

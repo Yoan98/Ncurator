@@ -58,6 +58,11 @@ export const createDefaultHumanStateFields = (): Pick<
   trace: createDefaultHumanTrace()
 })
 
+export const createInitialHumanState = (task: HumanTaskInput): HumanState => ({
+  ...createDefaultHumanStateFields(),
+  task
+})
+
 export const createHumanRunStateSchema = () => {
   return new StateSchema({
     task: humanTaskInputSchema.default(createEmptyHumanTaskInput),

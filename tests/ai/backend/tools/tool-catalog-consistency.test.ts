@@ -2,9 +2,10 @@ import { buildKbCapabilityTools } from '../../../../src/main/services/ai/human/t
 import { docxToolFamily } from '../../../../src/main/services/ai/human/tools/docx'
 import { terminalToolFamily } from '../../../../src/main/services/ai/human/tools/terminal'
 import { test } from 'vitest'
-import { getToolExecutionMeta } from '../../../../src/main/services/ai/human/node/handNode/toolExecutionMeta'
+import { getToolExecutionMeta } from '../../../../src/main/services/ai/human/node/handNode'
 import {
   DOCX_SAVE_TOOL_SPEC,
+  DOCX_TOOL_DEFINITIONS,
   DOCX_TOOL_SPECS,
   getDocxToolSpec
 } from '../../../../src/main/services/ai/human/tools/docx/toolSpecs'
@@ -17,7 +18,6 @@ import {
   listToolNamesBySkill,
   TOOL_CATALOG
 } from '../../../../src/main/services/ai/human/tools/catalog'
-import { DOCX_TOOL_DEFINITIONS } from '../../../../src/main/services/ai/human/tools/catalog/toolDescriptors/docx'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 
 const sortNames = (values: string[]): string[] =>

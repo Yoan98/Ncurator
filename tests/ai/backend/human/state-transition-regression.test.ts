@@ -7,7 +7,7 @@ import { createMouthNode } from '../../../../src/main/services/ai/human/node/mou
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
 import { createHumanRunStateSchema } from '../../../../src/main/services/ai/human/state/schema'
 import type { HumanState } from '../../../../src/main/services/ai/human/types'
-import { createInitialHumanState } from '../../../../src/main/services/ai/human/utils/state'
+import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 
 const isEventType = <TType extends AiRunEvent['type']>(

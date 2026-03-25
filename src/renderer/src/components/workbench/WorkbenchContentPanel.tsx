@@ -1,9 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Button, Empty } from 'antd'
-import { HiArrowLeft, HiOutlineMagnifyingGlass } from 'react-icons/hi2'
+import { HiOutlineMagnifyingGlass } from 'react-icons/hi2'
 import type { DraftChangeResolution, ValidateDraftCommitResponse } from '../../../../shared/types'
 import EmbeddedFileViewer from '../fileRenders/EmbeddedFileViewer'
-import { FILE_ORIGIN_LABELS, REVIEW_STATUS_META } from './constants'
 import WorkbenchReviewPanel from './WorkbenchReviewPanel'
 import type {
   AssistantTurnViewModel,
@@ -22,7 +21,6 @@ type WorkbenchContentPanelProps = {
   draftBulkApplying: boolean
   draftCommitSubmitting: boolean
   reviewTurn?: AssistantTurnViewModel
-  onClose: () => void
   onOpenSearchResult: (turn: SearchWorkbenchTurn, resultIndex: number) => void
   onOpenReview: (reviewId: string) => void
   onOpenFile: (file: WorkbenchFileRef) => void
@@ -43,7 +41,6 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
   draftBulkApplying,
   draftCommitSubmitting,
   reviewTurn,
-  onClose,
   onOpenSearchResult,
   onOpenReview,
   onOpenFile,
@@ -66,50 +63,12 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
     return state.results[selectedSearchIndex] || state.results[0] || null
   }, [selectedSearchIndex, state])
 
-  const reviewStatusMeta =
-    state.kind === 'review_session' && state.review
-      ? REVIEW_STATUS_META[state.review.review.status]
-      : null
-
   return (
     <aside
-      className="flex h-full flex-col border-l border-[#E5E5E4] bg-white"
+      className="flex h-full min-h-0 flex-col border-l border-[#E5E5E4] bg-white"
       data-testid={workbenchSelectors.contentPanel}
     >
-      <div className="flex h-11 items-center border-b border-[#E5E5E4] bg-[#FCFBF8] px-4">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            {state.kind !== 'empty' ? (
-              <Button
-                type="text"
-                size="small"
-                icon={<HiArrowLeft className="h-4 w-4" />}
-                onClick={onClose}
-              />
-            ) : null}
-            <div
-              className="truncate text-sm font-semibold text-[#1F1F1F]"
-              data-testid={workbenchSelectors.contentPanelTitle}
-            >
-              {state.title}
-            </div>
-            {state.kind === 'document_view' ? (
-              <span className="rounded-full border border-[#E5E5E4] bg-[#FAFAF9] px-2.5 py-1 text-[11px] text-[#666666]">
-                {FILE_ORIGIN_LABELS[state.file.origin]}
-              </span>
-            ) : null}
-            {reviewStatusMeta ? (
-              <span
-                className={`rounded-full border px-2.5 py-1 text-[11px] ${reviewStatusMeta.className}`}
-              >
-                {reviewStatusMeta.label}
-              </span>
-            ) : null}
-          </div>
-        </div>
-      </div>
-
-      <div className="min-h-0 flex-1 overflow-hidden px-5 py-5">
+      <div className="min-h-0 flex-1 overflow-hidden px-5 py-4">
         {state.kind === 'empty' ? (
           <div className="flex h-full items-center justify-center rounded-[20px] border border-dashed border-[#E5E5E4] bg-[#FAFAF9]">
             <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={false} />
