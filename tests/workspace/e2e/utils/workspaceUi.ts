@@ -49,9 +49,9 @@ export const selectSourceScope = async (
   await workspaceSelect.locator('.ant-select-selector').click()
   await page.locator('.ant-select-dropdown').getByText(input.workspaceLabel).first().click()
 
-  await page.getByRole('button', { name: '插入资料' }).click()
   const editor = page.getByTestId(workbenchSelectors.input)
-  await editor.pressSequentially(input.query)
+  await editor.click()
+  await editor.pressSequentially(`@${input.query}`)
   await page.getByTestId(workbenchSelectors.mentionPanel).getByText(input.label).first().click()
   await editor.getByText(input.label).waitFor()
 }

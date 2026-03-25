@@ -1,9 +1,8 @@
 import type { AiRunContext } from '../../../types'
 import { lastBrainDecisionSchema } from '../../schema'
-import type { HumanRuntimeCache, HumanState } from '../../types'
+import type { AiRunContextWithHumanOverrides, HumanRuntimeCache, HumanState } from '../../types'
 import { buildBrainPromptContext } from '../../prompts/brain'
 import { reduceBrainMemory } from './memoryReducer'
-import type { AiRunContextWithHumanOverrides } from '../types'
 import { applyBrainDecisionTransition } from '../utils/stateTransitions'
 
 export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCache }) => {

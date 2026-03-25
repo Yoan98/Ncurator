@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Empty, Select, Spin, Tooltip } from 'antd'
+import { Button, Empty, Select, Spin } from 'antd'
 import {
   HiArrowUp,
   HiChevronDown,
@@ -7,8 +7,6 @@ import {
   HiFolder,
   HiGlobeAlt,
   HiMagnifyingGlass,
-  HiMicrophone,
-  HiPlus,
   HiSparkles
 } from 'react-icons/hi2'
 import type { LLMConfig, SourceScopeSelection, WorkspaceSource } from '../../../../shared/types'
@@ -73,6 +71,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 }) => {
   const editorRef = useRef<HTMLDivElement | null>(null)
   const knownScopesRef = useRef(new Map<string, SourceScopeSelection>())
+  const mentionRefreshFrameRef = useRef<number | null>(null)
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
   const [mentionOptions, setMentionOptions] = useState<SourceScopeSelection[]>([])
   const [mentionLoading, setMentionLoading] = useState(false)
@@ -97,6 +96,30 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     setMentionOptions([])
     setMentionActiveIndex(0)
   }, [])
+
+  const ensureEditorHasCaretTarget = useCallback((): Text | null => {
+    const editor = editorRef.current
+    if (!editor) return null
+    const lastChild = editor.lastChild
+    if (isTextNode(lastChild)) return lastChild
+    const emptyTextNode = document.createTextNode('')
+    editor.appendChild(emptyTextNode)
+    return emptyTextNode
+  }, [])
+
+  const focusEditor = useCallback(() => {
+    const editor = editorRef.current
+    if (!editor) return
+    editor.focus()
+    const selection = window.getSelection()
+    if (selection?.rangeCount && editor.contains(selection.anchorNode)) return
+    const caretTarget = ensureEditorHasCaretTarget()
+    if (caretTarget) {
+      moveCaretToTextNode(caretTarget, caretTarget.data.length)
+      return
+    }
+    moveCaretToEnd(editor)
+  }, [ensureEditorHasCaretTarget])
 
   const syncDraftFromEditor = useCallback(() => {
     const editor = editorRef.current
@@ -169,6 +192,16 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     setMentionActiveIndex(0)
   }, [closeMention, getMentionContext])
 
+  const scheduleMentionRefresh = useCallback(() => {
+    if (mentionRefreshFrameRef.current !== null) {
+      window.cancelAnimationFrame(mentionRefreshFrameRef.current)
+    }
+    mentionRefreshFrameRef.current = window.requestAnimationFrame(() => {
+      mentionRefreshFrameRef.current = null
+      refreshMentionContext()
+    })
+  }, [refreshMentionContext])
+
   const insertTextAtSelection = useCallback((text: string) => {
     const editor = editorRef.current
     const selection = window.getSelection()
@@ -176,7 +209,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 
     const range = selection.getRangeAt(0)
     if (!editor.contains(range.commonAncestorContainer)) {
-      moveCaretToEnd(editor)
+      focusEditor()
     }
 
     const nextSelection = window.getSelection()
@@ -228,10 +261,11 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     const editor = editorRef.current
     if (!editor) return
     renderComposerNodesToEditor(editor, [])
+    ensureEditorHasCaretTarget()
     setHasContent(false)
     onDraftChange({ input: '', selectedSourceScopes: [] })
     closeMention()
-  }, [closeMention, onDraftChange, resetKey])
+  }, [closeMention, ensureEditorHasCaretTarget, onDraftChange, resetKey])
 
   useEffect(() => {
     const editor = editorRef.current
@@ -240,9 +274,10 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     const nextNodes = pruneComposerNodesByWorkspace(currentNodes, selectedWorkspaceId)
     if (nextNodes.length === currentNodes.length) return
     renderComposerNodesToEditor(editor, nextNodes)
+    ensureEditorHasCaretTarget()
     syncDraftFromEditor()
     closeMention()
-  }, [closeMention, selectedWorkspaceId, syncDraftFromEditor])
+  }, [closeMention, ensureEditorHasCaretTarget, selectedWorkspaceId, syncDraftFromEditor])
 
   useEffect(() => {
     if (mentionQuery === null) return
@@ -300,13 +335,16 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 
     document.addEventListener('selectionchange', handleSelectionChange)
     return () => {
+      if (mentionRefreshFrameRef.current !== null) {
+        window.cancelAnimationFrame(mentionRefreshFrameRef.current)
+      }
       document.removeEventListener('selectionchange', handleSelectionChange)
     }
   }, [refreshMentionContext])
 
   const handleEditorInput = (): void => {
     syncDraftFromEditor()
-    refreshMentionContext()
+    scheduleMentionRefresh()
   }
 
   const handleEditorPaste = (event: React.ClipboardEvent<HTMLDivElement>): void => {
@@ -374,6 +412,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     if (!(previousNode instanceof HTMLElement) || previousNode.dataset.role !== 'scope-token') return
     event.preventDefault()
     previousNode.remove()
+    ensureEditorHasCaretTarget()
     syncDraftFromEditor()
     closeMention()
   }
@@ -387,19 +426,9 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     const token = removeButton.closest('[data-role="scope-token"]')
     if (!(token instanceof HTMLElement)) return
     token.remove()
+    ensureEditorHasCaretTarget()
     syncDraftFromEditor()
     closeMention()
-  }
-
-  const handleInsertTrigger = (): void => {
-    const editor = editorRef.current
-    if (!editor) return
-    editor.focus()
-    const selection = window.getSelection()
-    if (!selection || !selection.rangeCount || !editor.contains(selection.anchorNode)) {
-      moveCaretToEnd(editor)
-    }
-    insertTextAtSelection('@')
   }
 
   const localMentionOptions = mentionOptions.filter((scope) => scope.sourceType === 'workspace')
@@ -522,20 +551,30 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       ) : null}
 
       <div
-        className="rounded-[28px] border border-[#E5E5E4] bg-white/96 px-4 pb-4 pt-4 shadow-[0_12px_30px_rgba(31,31,31,0.08)] backdrop-blur-sm transition-all duration-200 focus-within:border-[#D97757] focus-within:ring-4 focus-within:ring-[#F4E5DF]"
+        className="rounded-[28px] border border-[#E5E5E4] bg-white/96 px-4 pb-3 pt-3 shadow-[0_12px_30px_rgba(31,31,31,0.08)] backdrop-blur-sm transition-all duration-200 focus-within:border-[#D97757] focus-within:ring-4 focus-within:ring-[#F4E5DF]"
         data-testid={workbenchSelectors.sourceScopeField}
+        onMouseDown={(event) => {
+          const target = event.target
+          if (!(target instanceof HTMLElement)) return
+          if (target.closest('button') || target.closest('.ant-select')) return
+          event.preventDefault()
+          focusEditor()
+        }}
       >
-        <div className="relative min-h-[136px]">
+        <div className="relative min-h-[78px]">
           <div
             ref={editorRef}
             contentEditable
             suppressContentEditableWarning
-            className="min-h-[92px] w-full whitespace-pre-wrap break-words bg-transparent text-[15px] leading-7 text-[#1F1F1F] outline-none [&_[data-role='scope-token']]:align-middle"
+            className="min-h-[52px] w-full whitespace-pre-wrap break-words bg-transparent text-[15px] leading-7 text-[#1F1F1F] outline-none [&_[data-role='scope-token']]:align-middle"
             data-testid={workbenchSelectors.input}
             onInput={handleEditorInput}
             onKeyDown={handleEditorKeyDown}
             onPaste={handleEditorPaste}
             onClickCapture={handleEditorClickCapture}
+            onFocus={() => {
+              ensureEditorHasCaretTarget()
+            }}
           />
 
           <div
@@ -547,19 +586,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           </div>
         </div>
 
-        <div className="mt-4 flex items-end justify-between gap-4">
+        <div className="mt-2 flex items-end justify-between gap-4">
           <div className="flex min-w-0 items-center gap-2 text-[#7B7B79]">
-            <Tooltip title="插入资料">
-              <button
-                type="button"
-                className="inline-flex h-10 w-10 items-center justify-center rounded-full transition hover:bg-[#F5F5F4] hover:text-[#1F1F1F]"
-                aria-label="插入资料"
-                onClick={handleInsertTrigger}
-              >
-                <HiPlus className="h-6 w-6" />
-              </button>
-            </Tooltip>
-
             <Select
               value={mode}
               onChange={(nextValue) => onModeChange(nextValue as WorkbenchMode)}
@@ -623,13 +651,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-full text-[#8B8B88] transition hover:bg-[#F5F5F4] hover:text-[#1F1F1F]"
-              aria-label="语音输入"
-            >
-              <HiMicrophone className="h-5 w-5" />
-            </button>
             {showCancel ? (
               <Button
                 onClick={onCancel}

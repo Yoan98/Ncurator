@@ -1,8 +1,12 @@
 import type { AiRunContext } from '../../../types'
 import { mouthOutputSchema } from '../../schema'
-import type { HumanDeliveryMode, HumanRuntimeCache, HumanState } from '../../types'
+import type {
+  AiRunContextWithHumanOverrides,
+  HumanDeliveryMode,
+  HumanRuntimeCache,
+  HumanState
+} from '../../types'
 import { buildMouthPromptContext } from '../../prompts/mouth'
-import type { AiRunContextWithHumanOverrides } from '../types'
 import { completeHumanTask } from '../utils/stateTransitions'
 import { buildDeliveryModeFallbackMarkdown } from '../../shared/deliveryContracts'
 
