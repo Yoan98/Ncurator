@@ -11,6 +11,7 @@ import {
   humanTraceSchema
 } from '../schema'
 import {
+  DEFAULT_HUMAN_RUNTIME,
   createDefaultHumanBrainMemory,
   createDefaultHumanBrainMemoryInside,
   createDefaultHumanBrainMemoryOutside,
@@ -20,13 +21,9 @@ import {
 } from '../utils/state'
 
 export const createHumanRunStateSchema = () => {
-  const defaultHumanRuntime = {
-    stage: 'brain' as const,
-    status: 'running' as const
-  }
   const runtimeSchema = humanRuntimeSchema.extend({
-    stage: humanStageSchema.default(defaultHumanRuntime.stage),
-    status: humanStatusSchema.default(defaultHumanRuntime.status)
+    stage: humanStageSchema.default(DEFAULT_HUMAN_RUNTIME.stage),
+    status: humanStatusSchema.default(DEFAULT_HUMAN_RUNTIME.status)
   })
   const brainMemoryInsideSchema = humanBrainMemoryInsideSchema.extend({
     facts: humanBrainMemoryInsideSchema.shape.facts.default(() => []),
@@ -48,7 +45,9 @@ export const createHumanRunStateSchema = () => {
 
   return new StateSchema({
     task: humanTaskInputSchema.default(createEmptyHumanTaskInput),
-    runtime: runtimeSchema.default(defaultHumanRuntime),
+    runtime: runtimeSchema.default(() => ({
+      ...DEFAULT_HUMAN_RUNTIME
+    })),
     brainMemory: brainMemorySchema.default(createDefaultHumanBrainMemory),
     lastParallelCallToolResults: humanStateContractSchema.shape.lastParallelCallToolResults,
     lastBrainDecision: humanStateContractSchema.shape.lastBrainDecision,

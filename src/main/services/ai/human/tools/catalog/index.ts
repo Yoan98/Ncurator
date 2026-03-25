@@ -20,10 +20,16 @@ import type {
 export const SKILL_DEFINITIONS: Record<RuntimeSkillId, CatalogSkillMetadata> =
   CATALOG_SKILL_DEFINITIONS
 
+export const CATALOG_TOOL_CONTRACT_SETS = {
+  terminal: TERMINAL_TOOL_DEFINITIONS,
+  kb: KB_TOOL_DEFINITIONS,
+  docx: DOCX_TOOL_DEFINITIONS
+} as const
+
 export const CATALOG_TOOL_CONTRACTS = [
-  ...TERMINAL_TOOL_DEFINITIONS,
-  ...KB_TOOL_DEFINITIONS,
-  ...DOCX_TOOL_DEFINITIONS
+  ...CATALOG_TOOL_CONTRACT_SETS.terminal,
+  ...CATALOG_TOOL_CONTRACT_SETS.kb,
+  ...CATALOG_TOOL_CONTRACT_SETS.docx
 ] as const
 
 type ToolContract = (typeof CATALOG_TOOL_CONTRACTS)[number]

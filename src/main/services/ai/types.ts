@@ -50,6 +50,7 @@ export type AiRunStartPayload = {
   input: string
   selectedDocumentIds?: string[]
   selectedSourceScopes?: SourceScopeSelection[]
+  modelConfigId?: string
   allowNonLocal?: boolean
   workspace?: {
     workspaceId: string

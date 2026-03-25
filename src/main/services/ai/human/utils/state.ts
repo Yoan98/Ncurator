@@ -1,6 +1,11 @@
 import { buildSkillCatalog } from '../tools/catalog'
 import type { HumanState, HumanTaskInput } from '../types'
 
+export const DEFAULT_HUMAN_RUNTIME: HumanState['runtime'] = {
+  stage: 'brain',
+  status: 'running'
+}
+
 export const createEmptyHumanTaskInput = (): HumanTaskInput => ({
   taskId: '',
   userInput: ''
@@ -36,8 +41,7 @@ export const createDefaultHumanStateFields = (): Pick<
 > => ({
   task: createEmptyHumanTaskInput(),
   runtime: {
-    stage: 'brain',
-    status: 'running'
+    ...DEFAULT_HUMAN_RUNTIME
   },
   brainMemory: createDefaultHumanBrainMemory(),
   runtimeArtifacts: [],

@@ -1,4 +1,4 @@
-import { buildRetrievalTools } from '../../../../src/main/services/ai/human/tools/kb/retrievalTools'
+import { buildKbCapabilityTools } from '../../../../src/main/services/ai/human/tools/kb/retrievalTools'
 import { docxToolFamily } from '../../../../src/main/services/ai/human/tools/docx'
 import { terminalToolFamily } from '../../../../src/main/services/ai/human/tools/terminal'
 import { test } from 'vitest'
@@ -47,7 +47,7 @@ test('tool-catalog-consistency', async () => {
         runId: runtime.runId,
         taskId: runtime.taskId
       })
-      const kbTools = buildRetrievalTools({
+      const kbTools = buildKbCapabilityTools({
         ctx: {
           runId: ctx.runId,
           checkCancelled: ctx.checkCancelled,

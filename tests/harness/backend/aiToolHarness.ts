@@ -12,7 +12,7 @@ import {
 } from 'docx'
 import { buildDocxCapabilityTools } from '../../../src/main/services/ai/human/tools/docx/docxTools'
 import { releaseDocxRunSession } from '../../../src/main/services/ai/human/tools/docx/worker/docxWorkerClient'
-import { buildRetrievalTools } from '../../../src/main/services/ai/human/tools/kb/retrievalTools'
+import { buildKbCapabilityTools } from '../../../src/main/services/ai/human/tools/kb/retrievalTools'
 import { buildTerminalCapabilityTools } from '../../../src/main/services/ai/human/tools/terminal/terminalTools'
 import type { JsonObject, JsonValue } from '../../../src/shared/types'
 import type { BackendTestRuntime, CreateAiRunContextInput } from './test-types'
@@ -114,7 +114,7 @@ export const createRetrievalToolHarness = (
 
   return {
     ...createToolInvoker(
-      buildRetrievalTools({
+      buildKbCapabilityTools({
         ctx,
         runId: runtime.runId,
         taskId: runtime.taskId

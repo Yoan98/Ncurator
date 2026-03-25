@@ -1,8 +1,41 @@
-import type { HumanMouthPromptInput } from './types'
+import type { HumanDeliveryMode, HumanState } from '../types'
 import {
   buildDeliveryModePromptExample,
   buildDeliveryModePromptRules
 } from '../shared/deliveryContracts'
+import {
+  renderHumanEvidenceLines,
+  renderHumanFactLines,
+  renderHumanOpenQuestionLines
+} from '../shared/memoryRenderers'
+
+type HumanMouthPromptInput = {
+  deliveryMode: HumanDeliveryMode
+  userInput: string
+  finalDecisionText: string
+  factsText: string
+  evidencesText: string
+  openQuestionsText: string
+}
+
+const buildFinalDecisionText = (state: HumanState): string =>
+  state.lastBrainDecision
+    ? `最终决定：“${state.lastBrainDecision.decision.summary}”；原因：${state.lastBrainDecision.decision.reason}；预期结果：${state.lastBrainDecision.decision.expectedOutcome}`
+    : 'none'
+
+export const buildMouthPromptContext = (input: {
+  state: HumanState
+  deliveryMode: HumanDeliveryMode
+}) => {
+  return buildHumanMouthPrompt({
+    deliveryMode: input.deliveryMode,
+    userInput: input.state.task.userInput,
+    finalDecisionText: buildFinalDecisionText(input.state),
+    factsText: renderHumanFactLines(input.state, 'mouth_prompt'),
+    evidencesText: renderHumanEvidenceLines(input.state, 'mouth_prompt'),
+    openQuestionsText: renderHumanOpenQuestionLines(input.state, 'mouth_prompt')
+  })
+}
 
 export const buildHumanMouthPrompt = (input: HumanMouthPromptInput) => {
   return {

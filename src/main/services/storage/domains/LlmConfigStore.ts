@@ -53,4 +53,11 @@ export class LlmConfigStore {
     const configs = await this.list()
     return configs.find((c) => c.is_active) || null
   }
+
+  public async getById(id: string): Promise<LLMConfig | null> {
+    const safeId = String(id || '').trim()
+    if (!safeId) return null
+    const configs = await this.list()
+    return configs.find((config) => config.id === safeId) || null
+  }
 }

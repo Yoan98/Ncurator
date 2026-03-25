@@ -173,6 +173,22 @@ const normalizeSelectedSourceScopes = (
   return normalized.length > 0 ? normalized : undefined
 }
 
+const normalizeScopeTypeFilters = (
+  scopeTypes: ListSourceScopesRequest['scopeTypes']
+): Set<SourceScopeSelection['scopeType']> | null => {
+  if (!Array.isArray(scopeTypes) || scopeTypes.length === 0) return null
+  const normalized = scopeTypes
+    .map((scopeType) => String(scopeType || '').trim())
+    .filter(
+      (scopeType): scopeType is SourceScopeSelection['scopeType'] =>
+        scopeType === 'workspace' ||
+        scopeType === 'directory' ||
+        scopeType === 'file' ||
+        scopeType === 'web'
+    )
+  return normalized.length > 0 ? new Set(normalized) : null
+}
+
 export function registerHandlers(services: {
   ingestionService: IngestionService
   embeddingService: EmbeddingService
@@ -1531,8 +1547,11 @@ export function registerHandlers(services: {
 
         await ensureWebSourcesHydrated()
         const workspaceItems = await workspaceStore.listWorkspaces()
+        const workspaceIdFilter = String(payload.workspaceId || '').trim()
+        const scopeTypeFilters = normalizeScopeTypeFilters(payload.scopeTypes)
         const localScopes: SourceScopeSelection[] = []
         for (const workspace of workspaceItems) {
+          if (workspaceIdFilter && workspace.id !== workspaceIdFilter) continue
           const nodes = await workspaceStore.listWorkspaceNodes({ workspaceId: workspace.id })
           localScopes.push(...buildWorkspaceScopeSelections(workspace, nodes))
         }
@@ -1543,6 +1562,7 @@ export function registerHandlers(services: {
 
         const allScopes = [...localScopes, ...webScopes]
           .filter((scope) => scopeMatchesQuery(scope, payload.query))
+          .filter((scope) => (scopeTypeFilters ? scopeTypeFilters.has(scope.scopeType) : true))
           .filter((scope) => (payload.mode === 'search' ? shouldIncludeScopeInSearch(scope) : true))
 
         return { items: allScopes, total: allScopes.length }
@@ -1755,6 +1775,7 @@ export function registerHandlers(services: {
       const selectedDocumentIds = Array.isArray(payload?.selectedDocumentIds)
         ? payload.selectedDocumentIds.map(String).filter(Boolean)
         : undefined
+      const modelConfigId = payload?.modelConfigId ? String(payload.modelConfigId).trim() : undefined
       const selectedSourceScopes = normalizeSelectedSourceScopes(payload?.selectedSourceScopes)
       const inferredWorkspace = selectedSourceScopes?.find((scope) => scope.workspace)?.workspace
       const workspace =
@@ -1832,6 +1853,7 @@ export function registerHandlers(services: {
               input,
               selectedDocumentIds,
               selectedSourceScopes,
+              modelConfigId,
               allowNonLocal,
               workspace
             },

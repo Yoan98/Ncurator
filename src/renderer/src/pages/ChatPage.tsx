@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { App, Button, Input, Tooltip } from 'antd'
-import { HiArrowUp, HiBars3, HiPlus, HiTrash, HiUser, HiBookOpen } from 'react-icons/hi2'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { App, Button } from 'antd'
+import { HiBars3, HiPlus, HiTrash, HiUser, HiBookOpen } from 'react-icons/hi2'
 import type {
   AiRunEvent,
   ChatMessage,
@@ -8,14 +8,17 @@ import type {
   DraftChangeResolution,
   DraftReviewDetail,
   DraftReviewSummary,
+  LLMConfig,
   SearchResult,
   SourceScopeSelection,
   ValidateDraftCommitResponse
+  WorkspaceSource,
+  WorkspaceRuntimeBinding
 } from '../../../shared/types'
 import { parseIpcResult } from '../utils/serialization'
 import MarkdownRenderer from '../components/MarkdownRenderer'
-import SourceScopeSelect from '../components/SourceScopeSelect'
 import AssistantTurnCard from '../components/workbench/AssistantTurnCard'
+import WorkbenchComposer from '../components/workbench/WorkbenchComposer'
 import WorkbenchContentPanel from '../components/workbench/WorkbenchContentPanel'
 import { WORKBENCH_SIDEBAR_STORAGE_KEY } from '../components/workbench/constants'
 import type {
@@ -36,11 +39,6 @@ import {
   getToolBadge
 } from '../components/workbench/utils'
 import { chatSelectors, workbenchSelectors } from '../testing/selectors'
-
-const { TextArea } = Input
-
-const isJsdomTestEnv =
-  typeof navigator !== 'undefined' && /jsdom/i.test(String(navigator.userAgent || ''))
 
 type ApprovalRequiredEvent = Extract<AiRunEvent, { type: 'approval_required' }>
 type WorkspaceRequiredEvent = Extract<AiRunEvent, { type: 'workspace_required' }>
@@ -79,6 +77,16 @@ const sortDraftReviews = (items: DraftReviewSummary[]): DraftReviewSummary[] => 
   })
 }
 
+const createWorkspaceBinding = (
+  workspace: WorkspaceSource | null
+): WorkspaceRuntimeBinding | undefined =>
+  workspace
+    ? {
+        workspaceId: workspace.id,
+        rootPath: workspace.root_path
+      }
+    : undefined
+
 const ChatPage: React.FC = () => {
   const { message } = App.useApp()
   const [sessions, setSessions] = useState<ChatSession[]>([])
@@ -90,6 +98,11 @@ const ChatPage: React.FC = () => {
   const [aiRunId, setAiRunId] = useState<string | null>(null)
   const [searchTurn, setSearchTurn] = useState<SearchWorkbenchTurn | null>(null)
   const [selectedSourceScopes, setSelectedSourceScopes] = useState<SourceScopeSelection[]>([])
+  const [workspaces, setWorkspaces] = useState<WorkspaceSource[]>([])
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null)
+  const [modelConfigs, setModelConfigs] = useState<LLMConfig[]>([])
+  const [selectedModelConfigId, setSelectedModelConfigId] = useState<string | null>(null)
+  const [composerResetKey, setComposerResetKey] = useState(0)
   const [assistantTurns, setAssistantTurns] = useState<Record<string, AssistantTurnViewModel>>({})
   const [contentPanel, setContentPanel] = useState<WorkbenchContentPanelState>(
     createEmptyPanel('从对话中的步骤、文件或搜索结果进入这里。')
@@ -207,6 +220,32 @@ const ChatPage: React.FC = () => {
       console.error('Failed to load messages', error)
     }
   }
+
+  const loadWorkspaces = useCallback(async (): Promise<void> => {
+    try {
+      const response = await window.api.workspaceList()
+      setWorkspaces(response.items)
+      setSelectedWorkspaceId((current) => {
+        if (current && response.items.some((workspace) => workspace.id === current)) return current
+        return response.items[0]?.id || null
+      })
+    } catch (error) {
+      console.error('Failed to load workspaces', error)
+    }
+  }, [])
+
+  const loadModelConfigs = useCallback(async (): Promise<void> => {
+    try {
+      const list = await window.api.llmConfigList()
+      setModelConfigs(list)
+      setSelectedModelConfigId((current) => {
+        if (current && list.some((config) => config.id === current)) return current
+        return list.find((config) => config.is_active)?.id || list[0]?.id || null
+      })
+    } catch (error) {
+      console.error('Failed to load llm configs', error)
+    }
+  }, [])
 
   const createNewSession = async (): Promise<void> => {
     try {

@@ -1,9 +1,7 @@
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { AiRunContext } from '../../../types'
 import type { AiToolFamilyId, ToolFamilyBuildInput } from '../../tools/types'
-import { docxToolFamily } from '../../tools/docx'
-import { kbToolFamily } from '../../tools/kb'
-import { terminalToolFamily } from '../../tools/terminal'
+import { TOOL_FAMILY_DEFINITIONS } from '../../tools'
 import type { HumanRuntimeCache, RuntimeSkillId } from '../../types'
 import { getSkillDefinition } from '../../tools/catalog'
 
@@ -11,9 +9,9 @@ const TOOL_FAMILY_BUILDERS: Record<
   AiToolFamilyId,
   (input: ToolFamilyBuildInput) => StructuredToolInterface[]
 > = {
-  terminal: terminalToolFamily.buildTools,
-  kb: kbToolFamily.buildTools,
-  docx: docxToolFamily.buildTools
+  terminal: TOOL_FAMILY_DEFINITIONS.terminal.buildTools,
+  kb: TOOL_FAMILY_DEFINITIONS.kb.buildTools,
+  docx: TOOL_FAMILY_DEFINITIONS.docx.buildTools
 }
 
 const ensureFamilyTools = (input: {
@@ -57,18 +55,4 @@ export const ensureSkillTools = (input: {
   const built = familyTools.filter((tool) => allowedToolNames.has(String(tool.name || '').trim()))
   input.cache.skillToolsets[input.skillId] = built
   return built
-}
-
-export const getAvailableToolNames = (input: {
-  learnedSkillIds: RuntimeSkillId[]
-  cache: HumanRuntimeCache
-}): string[] => {
-  const toolNames = new Set<string>()
-  input.learnedSkillIds.forEach((skillId) => {
-    ;(input.cache.skillToolsets[skillId] || []).forEach((tool) => {
-      const toolName = String(tool.name || '').trim()
-      if (toolName) toolNames.add(toolName)
-    })
-  })
-  return Array.from(toolNames)
 }

@@ -1,11 +1,28 @@
 import { HUMAN_DEFAULT_TOOL_CALL_LIMIT } from '../../constants'
 import type { AiRunContext } from '../../../types'
 import { extractArtifactRefsFromToolResults, mergeArtifactRefs } from '../../../utils/artifacts'
-import type { HumanRuntimeCache, HumanState } from '../../types'
-import { validateParallelToolCalls } from './actionBatchGuard'
+import type { HumanRuntimeCache, HumanState, ToolCallParam } from '../../types'
+import { canBatchPlan } from './toolExecutionMeta'
 import { executeToolCall } from './toolExecutor'
-import { buildInvalidBatchHint, buildToolLimitHint } from './watchHint'
 import { returnToBrain, returnToBrainAfterTrace, returnToBrainWithWatchHint } from '../utils/stateTransitions'
+
+const MAX_PARALLEL_TOOL_CALLS = 4
+
+const validateParallelToolCalls = (parallelCallToolParam: ToolCallParam[]): boolean => {
+  return canBatchPlan({
+    actions: parallelCallToolParam.map((item) => ({
+      toolName: item.toolName,
+      args: item.args
+    })),
+    maxParallel: MAX_PARALLEL_TOOL_CALLS
+  })
+}
+
+const buildInvalidBatchHint = () =>
+  'hand 收到不满足并行安全要求的工具批次，已返回 brain 重新决策。'
+
+const buildToolLimitHint = (toolCallCount: number, limit: number) =>
+  `hand 累计工具调用次数达到 ${toolCallCount}，已超过临时上限 ${limit}，请优先考虑收敛。`
 
 export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCache }) => {
   return async (state: HumanState): Promise<HumanState> => {

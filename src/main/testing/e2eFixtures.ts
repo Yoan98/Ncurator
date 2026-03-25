@@ -232,6 +232,11 @@ export const getE2EFixtureSourceScopes = (
   if (!isE2EFixtureModeEnabled()) return null
 
   const query = String(payload.query || '').trim()
+  const workspaceId = String(payload.workspaceId || '').trim()
+  const scopeTypeFilters =
+    Array.isArray(payload.scopeTypes) && payload.scopeTypes.length > 0
+      ? new Set(payload.scopeTypes.map((scopeType) => String(scopeType || '').trim()))
+      : null
   const importWorkspaceScope =
     e2eWorkspaceState.workspace
       ? {
@@ -260,6 +265,8 @@ export const getE2EFixtureSourceScopes = (
     (scope): scope is SourceScopeSelection => Boolean(scope)
   )
   const items = allItems.filter((scope) => {
+    if (workspaceId && scope.sourceType === 'workspace' && scope.sourceId !== workspaceId) return false
+    if (scopeTypeFilters && !scopeTypeFilters.has(scope.scopeType)) return false
     if (!query) return true
     return scope.label.includes(query) || scope.sourceId.includes(query)
   })

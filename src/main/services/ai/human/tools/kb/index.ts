@@ -1,7 +1,7 @@
 import type { ToolFamilyDefinition } from '../types'
-import { buildRetrievalTools } from './retrievalTools'
+import { buildKbCapabilityTools } from './retrievalTools'
 
 export const kbToolFamily: ToolFamilyDefinition = {
   familyId: 'kb',
-  buildTools: ({ ctx, runId, taskId }) => buildRetrievalTools({ ctx, runId, taskId })
+  buildTools: ({ ctx, runId, taskId }) => buildKbCapabilityTools({ ctx, runId, taskId })
 }

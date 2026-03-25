@@ -227,6 +227,8 @@ export interface DeleteWebSourceResponse {
 export interface ListSourceScopesRequest {
   query?: string
   mode: 'chat' | 'search'
+  workspaceId?: string
+  scopeTypes?: SourceScopeType[]
 }
 
 export interface SearchResult {
@@ -592,6 +594,7 @@ export type AiRunStartRequest = {
   input: string
   selectedDocumentIds?: string[]
   selectedSourceScopes?: SourceScopeSelection[]
+  modelConfigId?: string
   workspace?: WorkspaceRuntimeBinding
   allowNonLocal?: boolean
 }

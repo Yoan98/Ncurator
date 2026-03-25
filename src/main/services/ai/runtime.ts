@@ -24,8 +24,9 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     normalizedScopes
   )
 
-  const getActiveConfig = async () => {
-    const cfg = await deps.llmStore.getActive()
+  const getRequestedConfig = async () => {
+    const requestedId = String(payload.modelConfigId || '').trim()
+    const cfg = requestedId ? await deps.llmStore.getById(requestedId) : await deps.llmStore.getActive()
     if (!cfg) throw new Error('未配置可用的大模型，请先在「大模型配置」中设置并启用一个模型')
     return cfg
   }
@@ -34,7 +35,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     input
   ): Promise<T> => {
     checkCancelled()
-    const cfg = await getActiveConfig()
+    const cfg = await getRequestedConfig()
     return invokeStructuredChat({
       caller: input.caller,
       cfg,

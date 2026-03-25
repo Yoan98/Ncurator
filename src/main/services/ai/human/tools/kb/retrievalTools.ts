@@ -42,7 +42,7 @@ export const resolveScopedDocumentIds = (
   return requested.filter((id) => allowed.has(id))
 }
 
-export const buildRetrievalTools = (input: {
+export const buildKbCapabilityTools = (input: {
   ctx: KnowledgeRetrievalContext
   runId: string
   taskId?: string
