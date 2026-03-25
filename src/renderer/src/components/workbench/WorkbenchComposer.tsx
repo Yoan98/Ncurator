@@ -218,7 +218,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     if (isTextNode(anchorNode) && editor.contains(anchorNode)) {
       textNode = anchorNode
     } else if (anchorNode === editor) {
-      const previousChild = selection.anchorOffset > 0 ? editor.childNodes[selection.anchorOffset - 1] : null
+      const previousChild =
+        selection.anchorOffset > 0 ? editor.childNodes[selection.anchorOffset - 1] : null
       const nextChild = editor.childNodes[selection.anchorOffset] || null
       if (isTextNode(previousChild)) {
         textNode = previousChild
@@ -279,40 +280,43 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     })
   }, [refreshMentionContext])
 
-  const insertTextAtSelection = useCallback((text: string) => {
-    const editor = editorRef.current
-    if (!editor) return
+  const insertTextAtSelection = useCallback(
+    (text: string) => {
+      const editor = editorRef.current
+      if (!editor) return
 
-    let selection = window.getSelection()
-    if (!selection || !selection.rangeCount) {
-      focusEditor()
-      selection = window.getSelection()
-    }
-    if (!selection || !selection.rangeCount) return
+      let selection = window.getSelection()
+      if (!selection || !selection.rangeCount) {
+        focusEditor()
+        selection = window.getSelection()
+      }
+      if (!selection || !selection.rangeCount) return
 
-    const range = selection.getRangeAt(0)
-    if (!editor.contains(range.commonAncestorContainer)) {
-      focusEditor()
-    }
+      const range = selection.getRangeAt(0)
+      if (!editor.contains(range.commonAncestorContainer)) {
+        focusEditor()
+      }
 
-    const nextSelection = window.getSelection()
-    if (!nextSelection || !nextSelection.rangeCount) return
-    const nextRange = nextSelection.getRangeAt(0)
-    nextRange.deleteContents()
-    const startContainer = nextRange.startContainer
-    if (isTextNode(startContainer)) {
-      const insertOffset = nextRange.startOffset
-      startContainer.data = `${startContainer.data.slice(0, insertOffset)}${text}${startContainer.data.slice(insertOffset)}`
-      moveCaretToTextNode(startContainer, insertOffset + text.length)
-    } else {
-      const textNode = document.createTextNode(text)
-      nextRange.insertNode(textNode)
-      moveCaretToTextNode(textNode, text.length)
-    }
-    editor.normalize()
-    syncDraftFromEditor()
-    refreshMentionContext()
-  }, [refreshMentionContext, syncDraftFromEditor])
+      const nextSelection = window.getSelection()
+      if (!nextSelection || !nextSelection.rangeCount) return
+      const nextRange = nextSelection.getRangeAt(0)
+      nextRange.deleteContents()
+      const startContainer = nextRange.startContainer
+      if (isTextNode(startContainer)) {
+        const insertOffset = nextRange.startOffset
+        startContainer.data = `${startContainer.data.slice(0, insertOffset)}${text}${startContainer.data.slice(insertOffset)}`
+        moveCaretToTextNode(startContainer, insertOffset + text.length)
+      } else {
+        const textNode = document.createTextNode(text)
+        nextRange.insertNode(textNode)
+        moveCaretToTextNode(textNode, text.length)
+      }
+      editor.normalize()
+      syncDraftFromEditor()
+      refreshMentionContext()
+    },
+    [refreshMentionContext, syncDraftFromEditor]
+  )
 
   const insertMentionScope = useCallback(
     (scope: SourceScopeSelection) => {
@@ -551,7 +555,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       previousNode = editor.childNodes[selection.anchorOffset - 1] || null
     }
 
-    if (!(previousNode instanceof HTMLElement) || previousNode.dataset.role !== 'scope-token') return
+    if (!(previousNode instanceof HTMLElement) || previousNode.dataset.role !== 'scope-token')
+      return
     event.preventDefault()
     previousNode.remove()
     focusEditor()
@@ -835,13 +840,13 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               type="button"
               onClick={onSubmit}
               disabled={loading || !canSubmit}
-              className={`inline-flex h-10 w-10 items-center justify-center rounded-full text-white transition ${
+              className={`inline-flex h-9 w-9 items-center justify-center rounded-full text-white transition ${
                 loading || !canSubmit ? 'bg-[#D8D8D6]' : 'bg-[#111111] hover:-translate-y-[1px]'
               }`}
               data-testid={workbenchSelectors.sendButton}
               aria-label={mode === 'ai' ? '发送智能请求' : '执行搜索'}
             >
-              {loading ? <Spin size="small" /> : <HiArrowUp className="h-5 w-5" />}
+              {loading ? <Spin size="small" /> : <HiArrowUp className="h-4.5 w-4.5" />}
             </button>
           </div>
         </div>

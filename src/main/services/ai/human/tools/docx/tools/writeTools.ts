@@ -16,6 +16,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
     name: DOCX_APPLY_OPS_TOOL_SPEC.name,
     description: DOCX_APPLY_OPS_TOOL_SPEC.description,
     schema: DOCX_APPLY_OPS_TOOL_SPEC.schema,
+    getRequiredDocId: (args) => args.docId,
     onError: ({ message }) => {
       runtime.input.emitActivity({
         actionType: DOCX_APPLY_OPS_TOOL_SPEC.activityActionType!,
@@ -23,17 +24,14 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         summary: `编辑失败: ${message}`
       })
     },
-    execute: async ({ args, toolName, toolCallId }) => {
-      const docIdResult = runtime.requireDocId({ toolName, toolCallId, docId: args.docId })
-      if ('failure' in docIdResult) return docIdResult.failure
-
-      const expandedOps = await runtime.expandOpsForReview(docIdResult.docId, args.ops as DocxOp[])
+    execute: async ({ args, toolName, toolCallId, docId }) => {
+      const expandedOps = await runtime.expandOpsForReview(docId, args.ops as DocxOp[])
       runtime.input.emitActivity({
         actionType: DOCX_APPLY_OPS_TOOL_SPEC.activityActionType!,
         status: 'started',
         summary: `应用操作: ${expandedOps.length} 条`
       })
-      let currentDocId = docIdResult.docId
+      let currentDocId = docId
       const collectedChangedBlocks: DocxChangedBlock[] = []
       const collectedWarnings: string[] = []
 
@@ -114,6 +112,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
     name: DOCX_ROLLBACK_TOOL_SPEC.name,
     description: DOCX_ROLLBACK_TOOL_SPEC.description,
     schema: DOCX_ROLLBACK_TOOL_SPEC.schema,
+    getRequiredDocId: (args) => args.docId,
     onError: ({ message }) => {
       runtime.input.emitActivity({
         actionType: DOCX_ROLLBACK_TOOL_SPEC.activityActionType!,
@@ -121,18 +120,15 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         summary: `回滚失败: ${message}`
       })
     },
-    execute: async ({ args, toolName, toolCallId }) => {
-      const docIdResult = runtime.requireDocId({ toolName, toolCallId, docId: args.docId })
-      if ('failure' in docIdResult) return docIdResult.failure
-
+    execute: async ({ args, toolName, toolCallId, docId }) => {
       runtime.input.emitActivity({
         actionType: DOCX_ROLLBACK_TOOL_SPEC.activityActionType!,
         status: 'started',
-        summary: `准备回滚文档快照: ${docIdResult.docId}`
+        summary: `准备回滚文档快照: ${docId}`
       })
 
       const resolved = runtime.resolveRollbackTarget(
-        docIdResult.docId,
+        docId,
         args.targetDocId,
         args.steps
       )
@@ -153,7 +149,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
       }
 
       runtime.state.lastDocId = resolved.targetDocId
-      const sourcePath = runtime.state.sourcePathByDocId.get(docIdResult.docId)
+      const sourcePath = runtime.state.sourcePathByDocId.get(docId)
       if (sourcePath && !runtime.state.sourcePathByDocId.has(resolved.targetDocId)) {
         runtime.state.sourcePathByDocId.set(resolved.targetDocId, sourcePath)
       }
@@ -163,7 +159,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         code: 'ok' as const,
         summary: `rollback ready (${resolved.stepsApplied} step${resolved.stepsApplied === 1 ? '' : 's'}, not saved)`,
         docId: resolved.targetDocId,
-        previousDocId: docIdResult.docId,
+        previousDocId: docId,
         stepsApplied: resolved.stepsApplied
       }
       return finalizeDocxToolSuccess({

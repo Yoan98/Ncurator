@@ -2,8 +2,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { AiFileArtifactOperation } from '../../../../../../shared/types'
 import type { ArtifactCandidate, TerminalArtifactCandidate } from './types'
-import { parseShellTokens, splitCommandSegments } from './commandParsing'
-import { resolveWorkspacePath } from './terminalPaths'
+import { parseShellCommandSegments } from './commandParsing'
+import { resolveWorkspacePath } from './terminalCwd'
 import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
 import type { TerminalToolContext } from '../../../types'
 import type { CapabilityActivityInput } from '../types'
@@ -28,8 +28,7 @@ const extractRedirectionPaths = (tokens: string[]): string[] => {
 const pickNonOptionArgs = (tokens: string[]): string[] =>
   tokens.filter((token, index) => index > 0 && token && !token.startsWith('-'))
 
-const detectSegmentArtifacts = (segment: string): TerminalArtifactCandidate[] => {
-  const tokens = parseShellTokens(segment)
+const detectSegmentArtifacts = (tokens: string[]): TerminalArtifactCandidate[] => {
   if (tokens.length === 0) return []
 
   const first = String(tokens[0] || '').toLowerCase()
@@ -60,8 +59,8 @@ const detectSegmentArtifacts = (segment: string): TerminalArtifactCandidate[] =>
 
 export const collectTerminalArtifactCandidates = (command: string): TerminalArtifactCandidate[] => {
   const unique = new Map<string, TerminalArtifactCandidate>()
-  for (const segment of splitCommandSegments(command)) {
-    for (const candidate of detectSegmentArtifacts(segment)) {
+  for (const segment of parseShellCommandSegments(command)) {
+    for (const candidate of detectSegmentArtifacts(segment.tokens)) {
       const key = candidate.rawPath.trim()
       if (!key) continue
       const previous = unique.get(key)

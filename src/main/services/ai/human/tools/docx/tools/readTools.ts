@@ -109,6 +109,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
     name: DOCX_OUTLINE_TOOL_SPEC.name,
     description: DOCX_OUTLINE_TOOL_SPEC.description,
     schema: DOCX_OUTLINE_TOOL_SPEC.schema,
+    getRequiredDocId: (args) => args.docId,
     onError: ({ message }) => {
       runtime.input.emitActivity({
         actionType: DOCX_OUTLINE_TOOL_SPEC.activityActionType!,
@@ -116,26 +117,23 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
         summary: message
       })
     },
-    execute: async ({ args, toolName, toolCallId }) => {
+    execute: async ({ args, toolName, toolCallId, docId }) => {
       runtime.input.ctx.checkCancelled()
-      const docIdResult = runtime.requireDocId({ toolName, toolCallId, docId: args.docId })
-      if ('failure' in docIdResult) return docIdResult.failure
-
       return await runDocxWorkerToolAction<'outline', DocxOutlineResult>({
         runtime,
         toolName,
         toolCallId,
         expectedAction: DOCX_OUTLINE_TOOL_SPEC.workerAction!,
-        draftDocId: docIdResult.docId,
+        draftDocId: docId,
         activity: {
           actionType: DOCX_OUTLINE_TOOL_SPEC.activityActionType!,
-          startedSummary: `提取结构: ${docIdResult.docId}`,
+          startedSummary: `提取结构: ${docId}`,
           buildCompletedSummary: (result) => `结构提取完成: ${String(result.blocks.length)} blocks`
         },
         request: {
           action: DOCX_OUTLINE_TOOL_SPEC.workerAction!,
           payload: {
-            docId: docIdResult.docId,
+            docId,
             maxBlocks: Number(args.maxBlocks || 200),
             includeTables: Boolean(args.includeTables ?? true),
             includeCells: Boolean(args.includeCells ?? true)
@@ -158,7 +156,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
               blockCount: result.blocks.length,
               truncated: result.truncated
             },
-            draftDocId: docIdResult.docId
+            draftDocId: docId
           }
         }
       })
@@ -170,10 +168,8 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
     name: DOCX_GET_BLOCK_TOOL_SPEC.name,
     description: DOCX_GET_BLOCK_TOOL_SPEC.description,
     schema: DOCX_GET_BLOCK_TOOL_SPEC.schema,
-    execute: async ({ args, toolName, toolCallId }) => {
-      const docIdResult = runtime.requireDocId({ toolName, toolCallId, docId: args.docId })
-      if ('failure' in docIdResult) return docIdResult.failure
-
+    getRequiredDocId: (args) => args.docId,
+    execute: async ({ args, toolName, toolCallId, docId }) => {
       return await runDocxWorkerToolAction({
         runtime,
         toolName,
@@ -182,7 +178,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
         request: {
           action: DOCX_GET_BLOCK_TOOL_SPEC.workerAction!,
           payload: {
-            docId: docIdResult.docId,
+            docId,
             blockId: args.blockId
           }
         },
@@ -201,7 +197,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
               summary: result.summary,
               blockType: result.block.type
             },
-            draftDocId: docIdResult.docId
+            draftDocId: docId
           }
         }
       })
@@ -213,12 +209,10 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
     name: DOCX_SEARCH_TOOL_SPEC.name,
     description: DOCX_SEARCH_TOOL_SPEC.description,
     schema: DOCX_SEARCH_TOOL_SPEC.schema,
-    execute: async ({ args, toolName, toolCallId }) => {
-      const docIdResult = runtime.requireDocId({ toolName, toolCallId, docId: args.docId })
-      if ('failure' in docIdResult) return docIdResult.failure
-
+    getRequiredDocId: (args) => args.docId,
+    execute: async ({ args, toolName, toolCallId, docId }) => {
       if (args.mode === 'semantic') {
-        const semanticIndex = await runtime.buildSemanticDocIndex(docIdResult.docId)
+        const semanticIndex = await runtime.buildSemanticDocIndex(docId)
         const queryEmbeddingResponse = await runtime.input.ctx.embeddingService.embed(args.query)
         const queryEmbeddingRows = splitEmbeddingRows(
           queryEmbeddingResponse.data,
@@ -263,7 +257,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
             matchCount: result.matches.length,
             warnings: result.warnings
           },
-          draftDocId: docIdResult.docId
+          draftDocId: docId
         })
       }
 
@@ -275,7 +269,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
         request: {
           action: DOCX_SEARCH_TOOL_SPEC.workerAction!,
           payload: {
-            docId: docIdResult.docId,
+            docId,
             query: args.query,
             mode: args.mode,
             scopeBlockIds: args.scope?.blockIds || []
@@ -298,7 +292,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
               matchCount: result.matches.length,
               warnings: result.warnings
             },
-            draftDocId: docIdResult.docId
+            draftDocId: docId
           }
         }
       })
@@ -310,11 +304,9 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
     name: DOCX_GET_HISTORY_TOOL_SPEC.name,
     description: DOCX_GET_HISTORY_TOOL_SPEC.description,
     schema: DOCX_GET_HISTORY_TOOL_SPEC.schema,
-    execute: async ({ args, toolName, toolCallId }) => {
-      const docIdResult = runtime.requireDocId({ toolName, toolCallId, docId: args.docId })
-      if ('failure' in docIdResult) return docIdResult.failure
-
-      const history = runtime.buildSnapshotHistory(docIdResult.docId, Number(args.maxDepth || 10))
+    getRequiredDocId: (args) => args.docId,
+    execute: async ({ args, toolName, toolCallId, docId }) => {
+      const history = runtime.buildSnapshotHistory(docId, Number(args.maxDepth || 10))
       if (history.length === 0) {
         return runtime.emitFailure({
           toolName,
@@ -328,7 +320,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
         ok: true,
         code: 'ok' as const,
         summary: `snapshot history loaded (${history.length} items)`,
-        currentDocId: docIdResult.docId,
+        currentDocId: docId,
         snapshots: history
       }
       return finalizeDocxToolSuccess({
@@ -342,7 +334,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           summary: result.summary,
           snapshotCount: result.snapshots.length
         },
-        draftDocId: docIdResult.docId
+        draftDocId: docId
       })
     }
   })

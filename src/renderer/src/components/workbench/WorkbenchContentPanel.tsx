@@ -70,8 +70,11 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
     >
       <div className="min-h-0 flex-1 overflow-hidden px-5 py-4">
         {state.kind === 'empty' ? (
-          <div className="flex h-full items-center justify-center rounded-[20px] border border-dashed border-[#E5E5E4] bg-[#FAFAF9]">
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={false} />
+          <div className="flex h-full items-center justify-center rounded-[20px] bg-[#FAFAF9]">
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={<span className="text-[12px] text-[#999999]">右侧暂无内容</span>}
+            />
           </div>
         ) : null}
 

@@ -4,7 +4,6 @@ import type { AiTaskResultCode, IpcJsonObject, IpcJsonValue } from '../../../../
 import type { TerminalToolContext } from '../../../types'
 import { TERMINAL_RUN_COMMAND_CONTRACT } from '../catalog/toolDescriptors/terminal'
 import { runTerminalCommand } from './terminalExec'
-import { checkWorkspaceBoundary } from './terminalCommandPolicy'
 import type {
   TerminalCapabilityToolsInput,
   TerminalCapabilityToolsRuntimeState,
@@ -15,9 +14,8 @@ import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import type { CapabilityActivityInput } from '../types'
 import { mergeArtifactCandidates, recordTerminalArtifacts } from './terminalArtifacts'
-import { analyzeTerminalCommand } from './terminalCommandAnalysis'
+import { analyzeTerminalCommand, checkWorkspaceBoundary } from './terminalCommandPolicy'
 import { resolveTerminalCwd } from './terminalCwd'
-
 const buildTerminalStepError = (input: {
   exitCode: number | null
   timedOut: boolean

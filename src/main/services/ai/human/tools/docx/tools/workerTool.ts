@@ -164,10 +164,12 @@ export const createDocxTool = <TSchema extends z.ZodType, TResult extends object
   name: string
   description: string
   schema: TSchema
+  getRequiredDocId?: (args: z.infer<TSchema>) => string | undefined
   execute: (params: {
     args: z.infer<TSchema>
     toolName: string
     toolCallId: string
+    docId?: string
   }) => Promise<TResult | DocxToolFailure>
   onError?: (params: { args: z.infer<TSchema>; message: string }) => void
 }): StructuredToolInterface =>
@@ -178,12 +180,25 @@ export const createDocxTool = <TSchema extends z.ZodType, TResult extends object
         emitter: input.runtime.toolEvents,
         toolName: input.name,
         args: parsedArgs as JsonObject,
-        execute: async ({ toolName, toolCallId }) =>
-          await input.execute({
+        execute: async ({ toolName, toolCallId }) => {
+          let docId: string | undefined
+          if (input.getRequiredDocId) {
+            const docIdResult = input.runtime.requireDocId({
+              toolName,
+              toolCallId,
+              docId: input.getRequiredDocId(parsedArgs)
+            })
+            if ('failure' in docIdResult) return docIdResult.failure
+            docId = docIdResult.docId
+          }
+
+          return await input.execute({
             args: parsedArgs,
             toolName,
-            toolCallId
-          }),
+            toolCallId,
+            docId
+          })
+        },
         onError: (error, { toolName, toolCallId }) => {
           input.runtime.emitFailure({
             toolName,

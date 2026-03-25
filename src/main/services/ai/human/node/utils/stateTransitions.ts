@@ -1,318 +1,30 @@
 import type { AiRunContext } from '../../../types'
 import type { WatchHintSource } from '../../../../../../shared/types'
-import { HUMAN_MAX_BRAIN_DECISION_HISTORY } from '../../constants'
-import type {
-  HumanResult,
-  HumanRuntimeCache,
-  HumanState,
-  HumanTraceStep,
-  LastBrainDecision,
-  RuntimeSkillId
-} from '../../types'
-import { getAvailableToolNames } from './runtimeCache'
+import type { HumanRuntimeCache, HumanState, LastBrainDecision } from '../../types'
+import {
+  emitLatestHumanStepForState,
+  emitTailHumanStepsForState,
+  emitTaskDelivery,
+  emitWatchHint
+} from './stateTransitionEvents'
+import {
+  appendHumanTraceStep,
+  applyBrainDecisionState,
+  buildHumanResult,
+  completeHumanTaskState,
+  returnToBrainAfterTraceState,
+  returnToBrainState,
+  type HumanStateOverrides,
+  type HumanTraceItemInput
+} from './stateTransitionState'
 
-export type HumanTraceItemInput = {
-  action: HumanTraceStep['action']
-  publicNarrative: string
-  resultStatus?: HumanTraceStep['resultStatus']
-  skillId?: RuntimeSkillId
-  toolName?: string
-  summary: string
-}
+export type { HumanTraceItemInput } from './stateTransitionState'
 
-type HumanEventStage = 'human_brain' | 'human_learning' | 'human_hand' | 'human_mouth'
-
-const emitHumanStep = (input: {
-  ctx: AiRunContext
-  taskId: string
-  step: HumanTraceStep
-  learnedSkillIds: RuntimeSkillId[]
-  availableToolNames: string[]
-  stage: HumanEventStage
-}) => {
-  input.ctx.sendEvent({
-    type: 'human_step',
-    runId: input.ctx.runId,
-    taskId: input.taskId,
-    stepIndex: input.step.step,
-    action: input.step.action,
-    skillId: input.step.skillId,
-    toolName: input.step.toolName,
-    publicNarrative: input.step.publicNarrative,
-    learnedSkillIds: [...input.learnedSkillIds],
-    availableToolNames: [...input.availableToolNames],
-    resultStatus: input.step.resultStatus,
-    summary: input.step.summary,
-    createdAt: Date.now(),
-    stage: input.stage
-  })
-}
-
-const emitWatchHint = (input: {
-  ctx: AiRunContext
-  taskId?: string
-  source: WatchHintSource
-  summary: string
-}) => {
-  input.ctx.sendEvent({
-    type: 'watch_hint',
-    runId: input.ctx.runId,
-    taskId: input.taskId,
-    source: input.source,
-    summary: input.summary,
-    createdAt: Date.now(),
-    stage:
-      input.source === 'learning'
-        ? 'human_learning'
-        : input.source === 'hand'
-          ? 'human_hand'
-          : 'human_brain'
-  })
-}
-
-const emitTaskDelivery = (input: {
-  ctx: AiRunContext
-  taskId: string
-  summary: string
-  deliveryMarkdown: string
-  internal?: boolean
-}) => {
-  input.ctx.sendEvent({
-    type: 'task_delivery_ready',
-    runId: input.ctx.runId,
-    taskId: input.taskId,
-    summary: input.summary,
-    deliveryMarkdown: input.deliveryMarkdown,
-    createdAt: Date.now(),
-    internal: input.internal,
-    stage: 'human_mouth'
-  })
-}
-
-const buildStepToolContext = (input: {
-  cache: HumanRuntimeCache
-  state: HumanState
-}) => ({
-  learnedSkillIds: input.state.brainMemory.outside.learnedSkillIds,
-  availableToolNames: getAvailableToolNames({
-    learnedSkillIds: input.state.brainMemory.outside.learnedSkillIds,
-    cache: input.cache
-  })
-})
-
-const emitLatestHumanStepForState = (input: {
-  ctx: AiRunContext
-  cache: HumanRuntimeCache
-  taskId: string
-  state: HumanState
-  stage: HumanEventStage
-}) => {
-  const step = input.state.trace.steps.at(-1)
-  if (!step) return
-
-  const toolContext = buildStepToolContext({
-    cache: input.cache,
-    state: input.state
-  })
-  emitHumanStep({
-    ctx: input.ctx,
-    taskId: input.taskId,
-    step,
-    learnedSkillIds: toolContext.learnedSkillIds,
-    availableToolNames: toolContext.availableToolNames,
-    stage: input.stage
-  })
-}
-
-const emitTailHumanStepsForState = (input: {
-  ctx: AiRunContext
-  cache: HumanRuntimeCache
-  taskId: string
-  state: HumanState
-  count: number
-  stage: HumanEventStage
-}) => {
-  if (input.count <= 0) return
-
-  const toolContext = buildStepToolContext({
-    cache: input.cache,
-    state: input.state
-  })
-  input.state.trace.steps.slice(-input.count).forEach((step) => {
-    emitHumanStep({
-      ctx: input.ctx,
-      taskId: input.taskId,
-      step,
-      learnedSkillIds: toolContext.learnedSkillIds,
-      availableToolNames: toolContext.availableToolNames,
-      stage: input.stage
-    })
-  })
-}
-
-export const appendHumanTraceStep = (input: {
-  steps: HumanTraceStep[]
-  item: HumanTraceItemInput
-}): HumanTraceStep[] => {
-  const step = input.steps.length + 1
-  return [
-    ...input.steps,
-    {
-      step,
-      action: input.item.action,
-      publicNarrative: input.item.publicNarrative,
-      resultStatus: input.item.resultStatus,
-      skillId: input.item.skillId,
-      toolName: input.item.toolName,
-      summary: input.item.summary
-    }
-  ]
-}
-
-const appendHumanTraceSteps = (input: {
-  steps: HumanTraceStep[]
-  items: HumanTraceItemInput[]
-}): HumanTraceStep[] =>
-  input.items.reduce(
-    (steps, item) =>
-      appendHumanTraceStep({
-        steps,
-        item
-      }),
-    input.steps
-  )
-
-const returnToBrainState = (
-  state: HumanState,
-  overrides: Partial<Omit<HumanState, 'runtime'>> & {
-    runtime?: Partial<HumanState['runtime']>
-  } = {}
-): HumanState => ({
-  ...state,
-  ...overrides,
-  runtime: {
-    ...state.runtime,
-    ...overrides.runtime,
-    stage: 'brain'
-  }
-})
-
-const returnToBrainAfterTraceState = (input: {
-  state: HumanState
-  traceItems: HumanTraceItemInput[]
-  watchHint?: string
-  overrides?: Partial<Omit<HumanState, 'runtime' | 'watchHint' | 'trace'>> & {
-    runtime?: Partial<HumanState['runtime']>
-  }
-}): HumanState => {
-  const traceSteps = appendHumanTraceSteps({
-    steps: input.state.trace.steps,
-    items: input.traceItems
-  })
-
-  return returnToBrainState(input.state, {
-    ...input.overrides,
-    watchHint: input.watchHint,
-    trace: {
-      steps: traceSteps
-    }
-  })
-}
-
-const resolveBrainNextStage = (input: {
-  watchHint?: string
-  decision: LastBrainDecision
-}): HumanState['runtime']['stage'] => {
-  if (input.watchHint) return 'brain'
-  return input.decision.nextAction.action === 'learning'
-    ? 'learning'
-    : input.decision.nextAction.action === 'hand'
-      ? 'hand'
-      : 'mouth'
-}
-
-const applyBrainDecisionState = (input: {
-  state: HumanState
-  decision: LastBrainDecision
-  reducedInside: HumanState['brainMemory']['inside']
-  watchHint?: string
-  createdAt: number
-}): HumanState => ({
-  ...input.state,
-  runtime: {
-    stage: resolveBrainNextStage({
-      watchHint: input.watchHint,
-      decision: input.decision
-    }),
-    status: 'running'
-  },
-  brainMemory: {
-    inside: input.reducedInside,
-    outside: {
-      ...input.state.brainMemory.outside,
-      brainDecisions: [
-        ...input.state.brainMemory.outside.brainDecisions,
-        {
-          ...input.decision,
-          createdAt: input.createdAt
-        }
-      ].slice(-HUMAN_MAX_BRAIN_DECISION_HISTORY)
-    }
-  },
-  lastBrainDecision: input.decision,
-  watchHint: input.watchHint,
-  trace: {
-    steps: appendHumanTraceStep({
-      steps: input.state.trace.steps,
-      item: {
-        action: 'brain_decision',
-        publicNarrative: input.decision.decision.summary,
-        resultStatus: 'ok',
-        summary: input.decision.decision.reason
-      }
-    })
-  }
-})
-
-const buildHumanResult = (input: {
-  state: HumanState
-  summary: string
-  deliveryMarkdown: string
-}): HumanResult => ({
-  status: 'completed',
-  summary: input.summary,
-  deliveryMarkdown: input.deliveryMarkdown,
-  artifacts: input.state.runtimeArtifacts.length > 0 ? [...input.state.runtimeArtifacts] : undefined
-})
-
-const completeHumanTaskState = (input: {
-  state: HumanState
-  result: HumanResult
-}): HumanState => ({
-  ...input.state,
-  runtime: {
-    stage: 'mouth',
-    status: 'completed'
-  },
-  result: input.result,
-  trace: {
-    steps: appendHumanTraceStep({
-      steps: input.state.trace.steps,
-      item: {
-        action: 'deliver_result',
-        publicNarrative: input.result.summary,
-        resultStatus: 'ok',
-        summary: input.result.summary
-      }
-    })
-  }
-})
+export { appendHumanTraceStep } from './stateTransitionState'
 
 export const returnToBrain = (
   state: HumanState,
-  overrides: Partial<Omit<HumanState, 'runtime'>> & {
-    runtime?: Partial<HumanState['runtime']>
-  } = {}
+  overrides: HumanStateOverrides = {}
 ): HumanState => returnToBrainState(state, overrides)
 
 export const returnToBrainWithWatchHint = (input: {
@@ -320,9 +32,7 @@ export const returnToBrainWithWatchHint = (input: {
   state: HumanState
   source: WatchHintSource
   watchHint: string
-  overrides?: Partial<Omit<HumanState, 'runtime' | 'watchHint'>> & {
-    runtime?: Partial<HumanState['runtime']>
-  }
+  overrides?: HumanStateOverrides<'watchHint'>
 }): HumanState => {
   emitWatchHint({
     ctx: input.ctx,
@@ -344,9 +54,7 @@ export const returnToBrainAfterTrace = (input: {
   traceItems: HumanTraceItemInput[]
   stage: 'human_learning' | 'human_hand'
   watchHint?: string
-  overrides?: Partial<Omit<HumanState, 'runtime' | 'watchHint' | 'trace'>> & {
-    runtime?: Partial<HumanState['runtime']>
-  }
+  overrides?: HumanStateOverrides<'watchHint' | 'trace'>
 }): HumanState => {
   const nextState = returnToBrainAfterTraceState({
     state: input.state,

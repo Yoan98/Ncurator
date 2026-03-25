@@ -1,7 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { App, Button } from 'antd'
-import { HiBars3, HiBookOpen, HiOutlineViewColumns, HiPlus, HiTrash, HiUser } from 'react-icons/hi2'
-import { HiViewColumns } from 'react-icons/hi2'
+import {
+  HiBookOpen,
+  HiOutlinePencilSquare,
+  HiOutlineRectangleGroup,
+  HiOutlineViewColumns,
+  HiRectangleGroup,
+  HiTrash,
+  HiUser,
+  HiViewColumns
+} from 'react-icons/hi2'
 import type {
   AiRunEvent,
   ChatMessage,
@@ -161,6 +169,11 @@ const ChatPage: React.FC = () => {
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) || null,
     [selectedWorkspaceId, workspaces]
+  )
+
+  const currentSession = useMemo(
+    () => sessions.find((session) => session.id === currentSessionId) || null,
+    [currentSessionId, sessions]
   )
 
   const reviewTurn = useMemo(() => {
@@ -1321,23 +1334,44 @@ const ChatPage: React.FC = () => {
           <div
             className={`flex ${sidebarCollapsed ? 'flex-col items-center gap-1.5' : 'items-center justify-between gap-2'}`}
           >
-            <span className="flex h-8 w-8 items-center justify-center rounded-2xl bg-[#FBF5F2]">
-              <img src={brandIcon} alt="NCurator" className="w-5 invert-100" />
-            </span>
+            {sidebarCollapsed ? (
+              <span className="flex h-7 w-7 items-center justify-center rounded-xl border border-[#E5E5E4] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+                <img src={brandIcon} alt="馆长" className="w-4 invert-100" />
+              </span>
+            ) : (
+              <div className="flex min-w-0 items-center gap-2">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-[#E5E5E4] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+                  <img src={brandIcon} alt="馆长" className="w-4 invert-100" />
+                </span>
+                <span className="truncate text-[13px] font-semibold tracking-[0.01em] text-[#1F1F1F]">
+                  馆长
+                </span>
+              </div>
+            )}
 
             <div className={`flex items-center gap-1 ${sidebarCollapsed ? 'flex-col' : ''}`}>
               <Button
                 type="text"
                 size="small"
-                icon={<HiPlus className="h-4 w-4" />}
-                className="!flex !h-8 !w-8 !items-center !justify-center !rounded-xl !border !border-transparent !p-0 !text-[#D97757] hover:!border-[#E5E5E4] hover:!bg-white hover:!text-[#C66A4A]"
+                icon={<HiOutlinePencilSquare className="h-3 w-3" />}
+                className="!flex !h-7 !w-7 !items-center !justify-center !rounded-xl !border !border-[#E5E5E4] !bg-white/92 !p-0 !text-[#D97757] shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:!border-[#D97757] hover:!text-[#C66A4A]"
                 onClick={() => void createNewSession()}
               />
               <Button
                 type="text"
                 size="small"
-                icon={<HiBars3 className="h-4 w-4" />}
-                className="!flex !h-8 !w-8 !items-center !justify-center !rounded-xl !border !border-transparent !p-0 !text-[#666666] hover:!border-[#E5E5E4] hover:!bg-white hover:!text-[#1F1F1F]"
+                icon={
+                  sidebarCollapsed ? (
+                    <HiOutlineViewColumns className="h-3 w-3" />
+                  ) : (
+                    <HiViewColumns className="h-3 w-3" />
+                  )
+                }
+                className={`!flex !h-7 !w-7 !items-center !justify-center !rounded-xl !border !p-0 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:!border-[#D97757] hover:!text-[#D97757] ${
+                  sidebarCollapsed
+                    ? '!border-[#E5E5E4] !bg-white/92 !text-[#666666]'
+                    : '!border-[#F4E5DF] !bg-[#FBF5F2] !text-[#D97757]'
+                }`}
                 onClick={() => setSidebarCollapsed((previous) => !previous)}
                 data-testid={workbenchSelectors.sessionsToggle}
               />
@@ -1356,7 +1390,7 @@ const ChatPage: React.FC = () => {
                 currentSessionId === session.id
                   ? 'border-[#F4E5DF] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
                   : 'border-transparent bg-transparent hover:border-[#ECE7DF] hover:bg-white/80'
-              } ${sidebarCollapsed ? 'px-2 py-3' : 'px-3 py-3'}`}
+              } ${sidebarCollapsed ? 'px-2 py-2' : 'px-3 py-2'}`}
               onClick={() => setCurrentSessionId(session.id)}
             >
               {sidebarCollapsed ? (
@@ -1374,8 +1408,8 @@ const ChatPage: React.FC = () => {
                   <Button
                     type="text"
                     size="small"
-                    icon={<HiTrash className="h-4 w-4" />}
-                    className="absolute right-2 top-3 opacity-0 transition-opacity group-hover:opacity-100"
+                    icon={<HiTrash className="h-3.5 w-3.5" />}
+                    className="!absolute !bottom-1.5 !right-1.5 !left-auto !top-auto !z-10 opacity-0 transition-opacity group-hover:opacity-100"
                     onClick={(event) => void deleteSession(event, session.id)}
                   />
                 </>
@@ -1383,21 +1417,45 @@ const ChatPage: React.FC = () => {
             </div>
           ))}
         </div>
+
+        <div className="px-2 py-2">
+          <SettingsMenuButton
+            label={sidebarCollapsed ? undefined : '设置'}
+            placement={sidebarCollapsed ? 'topRight' : 'topLeft'}
+            className={`!h-7 !rounded-xl ${
+              sidebarCollapsed ? '!w-7 !px-0' : '!w-full !justify-start !px-2.5'
+            }`}
+          />
+        </div>
       </aside>
 
       <div className="min-w-0 flex-1">
         <div className="flex h-screen min-h-0 flex-col">
-          <div className="flex h-11 shrink-0 items-center justify-between bg-[#F5F5F4] px-4">
+          <div
+            className={`flex h-11 shrink-0 items-center justify-between bg-[#F5F5F4] px-4 ${
+              contentPanelCollapsed ? '' : 'border-b border-[#E5E5E4]'
+            }`}
+          >
             <div className="min-w-0 flex-1">
-              {sharedHeaderMeta ? (
+              {currentSession || sharedHeaderMeta ? (
                 <div className="flex min-w-0 items-center gap-2">
-                  <div
-                    className="truncate text-sm font-semibold text-[#1F1F1F]"
-                    data-testid={workbenchSelectors.contentPanelTitle}
-                  >
-                    {sharedHeaderMeta.title}
-                  </div>
-                  {sharedHeaderMeta.badge ? (
+                  {currentSession ? (
+                    <div className="truncate text-sm font-semibold text-[#1F1F1F]">
+                      {currentSession.title}
+                    </div>
+                  ) : null}
+                  {currentSession && sharedHeaderMeta ? (
+                    <span className="text-[#D4D4D3]">/</span>
+                  ) : null}
+                  {sharedHeaderMeta ? (
+                    <div
+                      className="truncate text-sm font-semibold text-[#1F1F1F]"
+                      data-testid={workbenchSelectors.contentPanelTitle}
+                    >
+                      {sharedHeaderMeta.title}
+                    </div>
+                  ) : null}
+                  {sharedHeaderMeta?.badge ? (
                     <span
                       className={`rounded-full border px-2.5 py-1 text-[11px] ${sharedHeaderMeta.badgeClassName}`}
                     >
@@ -1408,26 +1466,23 @@ const ChatPage: React.FC = () => {
               ) : null}
             </div>
 
-            <div className="flex items-center gap-2">
-              <Button
-                type="text"
-                size="small"
-                icon={
-                  contentPanelCollapsed ? (
-                    <HiOutlineViewColumns className="h-4 w-4" />
-                  ) : (
-                    <HiViewColumns className="h-4 w-4" />
-                  )
-                }
-                className={`!flex !h-8 !w-8 !items-center !justify-center !rounded-xl !border !p-0 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:!border-[#D97757] hover:!text-[#D97757] ${
-                  contentPanelCollapsed
-                    ? '!border-[#E5E5E4] !bg-white/92 !text-[#666666]'
-                    : '!border-[#F4E5DF] !bg-[#FBF5F2] !text-[#D97757]'
-                }`}
-                onClick={() => setContentPanelCollapsed((previous) => !previous)}
-              />
-              <SettingsMenuButton className="!h-8 !w-8 !rounded-xl !px-0" />
-            </div>
+            <Button
+              type="text"
+              size="small"
+              icon={
+                contentPanelCollapsed ? (
+                  <HiOutlineRectangleGroup className="h-3 w-3" />
+                ) : (
+                  <HiRectangleGroup className="h-3 w-3" />
+                )
+              }
+              className={`!flex !h-7 !w-7 !items-center !justify-center !rounded-xl !border !p-0 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:!border-[#D97757] hover:!text-[#D97757] ${
+                contentPanelCollapsed
+                  ? '!border-[#E5E5E4] !bg-white/92 !text-[#666666]'
+                  : '!border-[#F4E5DF] !bg-[#FBF5F2] !text-[#D97757]'
+              }`}
+              onClick={() => setContentPanelCollapsed((previous) => !previous)}
+            />
           </div>
 
           <div className="flex min-h-0 flex-1 overflow-hidden">

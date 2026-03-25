@@ -1,6 +1,13 @@
 import { StateSchema } from '@langchain/langgraph'
 import { aiRunStateFieldSchemas } from '../../schema'
-import type { AiRunState } from '../../types'
+import { humanTaskOutputSchema } from '../../human/schema'
+import type { AiRunState, HumanTaskOutput } from '../../types'
+import { z } from 'zod/v4'
+
+export type DirectorGraphState = AiRunState & {
+  planExecPendingTaskIndex?: number
+  planExecPendingTaskOutput?: HumanTaskOutput
+}
 
 export const DEFAULT_AI_RUN_STATUS: AiRunState['status'] = 'running'
 export const DEFAULT_AI_DIRECTOR_STAGE: AiRunState['directorStage'] = 'director_intent'
@@ -64,6 +71,12 @@ export const createFailedAiRunState = (input: {
   error: input.error
 })
 
+export const toPublicAiRunState = (state: DirectorGraphState): AiRunState => {
+  const { planExecPendingTaskIndex: _planExecPendingTaskIndex, planExecPendingTaskOutput: _planExecPendingTaskOutput, ...publicState } =
+    state
+  return publicState
+}
+
 export const createDirectorRunStateSchema = () => {
   return new StateSchema({
     runId: aiRunStateFieldSchemas.runId,
@@ -78,6 +91,8 @@ export const createDirectorRunStateSchema = () => {
     dispatchCursor: aiRunStateFieldSchemas.dispatchCursor.default(DEFAULT_DISPATCH_CURSOR),
     error: aiRunStateFieldSchemas.error,
     finalDeliveryMarkdown: aiRunStateFieldSchemas.finalDeliveryMarkdown,
-    finalArtifacts: aiRunStateFieldSchemas.finalArtifacts.default(createDefaultFinalArtifacts)
+    finalArtifacts: aiRunStateFieldSchemas.finalArtifacts.default(createDefaultFinalArtifacts),
+    planExecPendingTaskIndex: z.number().int().min(0).optional(),
+    planExecPendingTaskOutput: humanTaskOutputSchema.optional()
   })
 }

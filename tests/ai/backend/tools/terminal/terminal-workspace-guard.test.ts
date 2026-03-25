@@ -3,9 +3,9 @@ import path from 'node:path'
 import { test } from 'vitest'
 import { parseShellTokens, splitCommandSegments } from '../../../../../src/main/services/ai/human/tools/terminal/commandParsing'
 import { terminalToolFamily } from '../../../../../src/main/services/ai/human/tools/terminal'
-import { analyzeTerminalCommand } from '../../../../../src/main/services/ai/human/tools/terminal/terminalCommandAnalysis'
 import { collectTerminalArtifactCandidates } from '../../../../../src/main/services/ai/human/tools/terminal/terminalArtifacts'
 import {
+  analyzeTerminalCommand,
   checkWorkspaceBoundary,
   classifyCommandMode,
   classifyCommandRisk
@@ -72,8 +72,14 @@ test('terminal-workspace-guard', async () => {
           commandSegments: splitCommandSegments(
             'cat notes/readme.txt && printf "done" > reports/output.txt | tee reports/log.txt'
           ),
+          quotedCommandSegments: splitCommandSegments(
+            'printf "left|right" && printf "semi;colon"'
+          ),
           artifactCandidates: collectTerminalArtifactCandidates(
             'mkdir reports && printf "done" > reports/output.txt | tee reports/log.txt'
+          ),
+          quotedArtifactCandidates: collectTerminalArtifactCandidates(
+            'printf "left|right" > reports/quoted-output.txt'
           ),
           cwdResolutions: {
             rootAlias: resolveTerminalCwd({
@@ -106,6 +112,14 @@ test('terminal-workspace-guard', async () => {
               risk: classifyCommandRisk('rm -rf reports')
             },
             boundaryInside: checkWorkspaceBoundary(`cat ${notesFile}`, runtime.workspaceRoot),
+            boundaryQuotedLiteral: checkWorkspaceBoundary(
+              'printf "../outside.txt"',
+              runtime.workspaceRoot
+            ),
+            boundaryQuotedEscape: checkWorkspaceBoundary(
+              'cat "../outside.txt"',
+              runtime.workspaceRoot
+            ),
             boundaryEscape: checkWorkspaceBoundary('cat ../outside.txt', runtime.workspaceRoot),
             boundaryOutsideAbsolute: checkWorkspaceBoundary('cat /tmp/outside.txt', runtime.workspaceRoot)
           },
@@ -151,6 +165,8 @@ test('terminal-workspace-guard', async () => {
           'printf,terminal helper,>,reports/output.txt' &&
           result.helperChecks.commandSegments.join(',') ===
             'cat notes/readme.txt,printf "done" > reports/output.txt,tee reports/log.txt' &&
+          result.helperChecks.quotedCommandSegments.join(',') ===
+            'printf "left|right",printf "semi;colon"' &&
           result.helperChecks.artifactCandidates.length === 3 &&
           result.helperChecks.artifactCandidates[0]?.rawPath === 'reports' &&
           result.helperChecks.artifactCandidates[0]?.operation === 'created' &&
@@ -159,7 +175,10 @@ test('terminal-workspace-guard', async () => {
           ) &&
           result.helperChecks.artifactCandidates.some(
             (candidate) => candidate.rawPath === 'reports/log.txt'
-          ),
+          ) &&
+          result.helperChecks.quotedArtifactCandidates.length === 1 &&
+          result.helperChecks.quotedArtifactCandidates[0]?.rawPath === 'reports/quoted-output.txt',
+          
         {
           name: 'terminal-helper-command-parsing',
           message:
@@ -203,6 +222,8 @@ test('terminal-workspace-guard', async () => {
           result.helperChecks.commandAnalyses.writeRedirect.artifactCandidates[0]?.rawPath ===
             'reports/output.txt' &&
           result.helperChecks.commandPolicies.boundaryInside.ok &&
+          result.helperChecks.commandPolicies.boundaryQuotedLiteral.ok &&
+          !result.helperChecks.commandPolicies.boundaryQuotedEscape.ok &&
           !result.helperChecks.commandPolicies.boundaryEscape.ok &&
           !result.helperChecks.commandPolicies.boundaryOutsideAbsolute.ok,
         {

@@ -48,6 +48,7 @@ const SettingsPage: React.FC = () => {
         <AppPageHeader
           icon={sectionMeta.icon}
           title={sectionMeta.title}
+          description={sectionMeta.description}
           navigationMode="back"
           backTo="/"
           actions={<SettingsMenuButton />}

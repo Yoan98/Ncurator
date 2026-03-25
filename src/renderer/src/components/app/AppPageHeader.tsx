@@ -37,9 +37,14 @@ const AppPageHeader: React.FC<AppPageHeaderProps> = ({
             <span className="flex h-9 w-9 items-center justify-center rounded-2xl border border-[#E5E5E4] bg-white text-[#D97757] shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
               {icon}
             </span>
-            <h1 className="truncate text-[18px] font-semibold tracking-tight text-[#1F1F1F]">
-              {title}
-            </h1>
+            <div className="min-w-0">
+              <h1 className="truncate text-[18px] font-semibold tracking-tight text-[#1F1F1F]">
+                {title}
+              </h1>
+              {description ? (
+                <p className="truncate text-[13px] text-[#666666]">{description}</p>
+              ) : null}
+            </div>
           </div>
         </div>
 

@@ -2,7 +2,7 @@ import type { JsonObject } from '../../../../../../../shared/types'
 import { z } from 'zod/v4'
 import type { CapabilityToolDefinition } from '../factories'
 import { createCapabilityToolDefinition, readStringArg } from '../factories'
-import { analyzeTerminalCommand } from '../../terminal/terminalCommandAnalysis'
+import { analyzeTerminalCommand } from '../../terminal/terminalCommandPolicy'
 
 const TERMINAL_COMMAND_EXAMPLE: JsonObject = {
   command: 'cat ai/workspace/materials/daily/2026-03-16-note.md',

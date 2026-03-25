@@ -110,6 +110,8 @@ const ModelDownloadPage: React.FC = () => {
           icon={<HiCloudArrowDown className="h-5 w-5" />}
           title="向量模型"
           description="下载本地检索模型，为搜索和知识库能力提供向量基础。"
+          navigationMode="back"
+          backTo="/"
           actions={<SettingsMenuButton />}
         />
 

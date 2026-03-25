@@ -180,6 +180,12 @@ export interface WorkspaceMutationResponse {
   error?: string
 }
 
+export interface PickDirectoryResponse {
+  canceled: boolean
+  path?: string
+  error?: string
+}
+
 export interface DeleteWorkspaceSourceResponse {
   success: boolean
   deletedWorkspaceId?: string

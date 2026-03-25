@@ -11,7 +11,7 @@ import {
   createDirectHumanExecNode,
   createSynthesisHumanNode
 } from '../node/humanSubtasks'
-import { createDirectorRunStateSchema } from '../state/schema'
+import { createDirectorRunStateSchema, type DirectorGraphState } from '../state/schema'
 
 export const buildDirectorGraph = (input: {
   ctx: AiRunContext
@@ -32,15 +32,15 @@ export const buildDirectorGraph = (input: {
   const completeNode = createCompleteNode()
 
   return new StateGraph(State)
-    .addNode('director_intent_node', (state: AiRunState) => intentNode(state))
-    .addNode('director_context_human_node', (state: AiRunState) => contextEnrichNode(state))
-    .addNode('director_direct_human_exec_node', (state: AiRunState) => directHumanExecNode(state))
-    .addNode('director_plan_node', (state: AiRunState) => planNode(state))
-    .addNode('director_plan_exec_node', (state: AiRunState) => planExecNode(state))
-    .addNode('director_synthesis_human_node', (state: AiRunState) => synthesisHumanNode(state))
-    .addNode('director_complete_node', (state: AiRunState) => completeNode(state))
+    .addNode('director_intent_node', (state: DirectorGraphState) => intentNode(state))
+    .addNode('director_context_human_node', (state: DirectorGraphState) => contextEnrichNode(state))
+    .addNode('director_direct_human_exec_node', (state: DirectorGraphState) => directHumanExecNode(state))
+    .addNode('director_plan_node', (state: DirectorGraphState) => planNode(state))
+    .addNode('director_plan_exec_node', (state: DirectorGraphState) => planExecNode(state))
+    .addNode('director_synthesis_human_node', (state: DirectorGraphState) => synthesisHumanNode(state))
+    .addNode('director_complete_node', (state: DirectorGraphState) => completeNode(state))
     .addEdge(START, 'director_intent_node')
-    .addConditionalEdges('director_intent_node', (state: AiRunState) => {
+    .addConditionalEdges('director_intent_node', (state: DirectorGraphState) => {
       if (state.directorStage === 'director_context_human') return 'director_context_human_node'
       if (state.directorStage === 'director_direct_human_exec') return 'director_direct_human_exec_node'
       if (state.directorStage === 'director_plan') return 'director_plan_node'
@@ -50,12 +50,12 @@ export const buildDirectorGraph = (input: {
     })
     .addEdge('director_context_human_node', 'director_intent_node')
     .addEdge('director_direct_human_exec_node', 'director_complete_node')
-    .addConditionalEdges('director_plan_node', (state: AiRunState) => {
+    .addConditionalEdges('director_plan_node', (state: DirectorGraphState) => {
       if (state.directorStage === 'director_plan_exec' && state.status === 'running')
         return 'director_plan_exec_node'
       return 'director_complete_node'
     })
-    .addConditionalEdges('director_plan_exec_node', (state: AiRunState) => {
+    .addConditionalEdges('director_plan_exec_node', (state: DirectorGraphState) => {
       if (state.directorStage === 'director_plan_exec' && state.status === 'running')
         return 'director_plan_exec_node'
       return 'director_synthesis_human_node'

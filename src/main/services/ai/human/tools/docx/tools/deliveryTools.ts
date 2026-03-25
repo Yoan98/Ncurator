@@ -21,14 +21,12 @@ export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredTool
     name: DOCX_RENDER_PREVIEW_TOOL_SPEC.name,
     description: DOCX_RENDER_PREVIEW_TOOL_SPEC.description,
     schema: DOCX_RENDER_PREVIEW_TOOL_SPEC.schema,
-    execute: async ({ args, toolName, toolCallId }) => {
-      const docIdResult = runtime.requireDocId({ toolName, toolCallId, docId: args.docId })
-      if ('failure' in docIdResult) return docIdResult.failure
-
+    getRequiredDocId: (args) => args.docId,
+    execute: async ({ args, toolName, toolCallId, docId }) => {
       const previewDir = path.join(runtime.workspaceRootPath, '.ncurator', 'docx-previews')
       const previewPath = path.join(
         previewDir,
-        `${runtime.input.runId}-${docIdResult.docId}-${Date.now().toString(36)}.docx`
+        `${runtime.input.runId}-${docId}-${Date.now().toString(36)}.docx`
       )
       const existsBefore = fs.existsSync(previewPath)
 
@@ -40,14 +38,14 @@ export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredTool
         request: {
           action: DOCX_RENDER_PREVIEW_TOOL_SPEC.workerAction!,
           payload: {
-            docId: docIdResult.docId,
+            docId,
             format: args.format,
             previewPath
           }
         },
         buildSuccess: (workerPayload) => {
           runtime.input.ctx.trackDocxPreview({
-            docId: docIdResult.docId,
+            docId,
             previewPath: workerPayload.previewPath
           })
           const operation: AiFileArtifactOperation = existsBefore ? 'updated' : 'created'
@@ -59,7 +57,7 @@ export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredTool
             artifactPath: workerPayload.previewPath,
             operation,
             artifactRole: 'preview',
-            draftSnapshotId: docIdResult.docId,
+            draftSnapshotId: docId,
             summary: `docx preview generated (${workerPayload.renderer})`
           })
 
@@ -74,7 +72,7 @@ export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredTool
           return {
             result,
             outputPreview: result,
-            draftDocId: docIdResult.docId
+            draftDocId: docId
           }
         }
       })
@@ -86,11 +84,9 @@ export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredTool
     name: DOCX_SAVE_TOOL_SPEC.name,
     description: DOCX_SAVE_TOOL_SPEC.description,
     schema: DOCX_SAVE_TOOL_SPEC.schema,
-    execute: async ({ args, toolName, toolCallId }) => {
-      const docIdResult = runtime.requireDocId({ toolName, toolCallId, docId: args.docId })
-      if ('failure' in docIdResult) return docIdResult.failure
-
-      const sourcePath = runtime.state.sourcePathByDocId.get(docIdResult.docId)
+    getRequiredDocId: (args) => args.docId,
+    execute: async ({ args, toolName, toolCallId, docId }) => {
+      const sourcePath = runtime.state.sourcePathByDocId.get(docId)
       const cwd = sourcePath ? path.dirname(sourcePath) : runtime.workspaceRootPath
       const outPath = runtime.resolveDocxPath({
         cwd,
@@ -141,7 +137,7 @@ export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredTool
         request: {
           action: DOCX_SAVE_TOOL_SPEC.workerAction!,
           payload: {
-            docId: docIdResult.docId,
+            docId,
             outPath
           }
         },
@@ -155,7 +151,7 @@ export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredTool
             artifactPath: outPath,
             operation,
             artifactRole: 'committed',
-            draftSnapshotId: docIdResult.docId,
+            draftSnapshotId: docId,
             summary: `docx saved (${operation})`
           })
 
@@ -171,7 +167,7 @@ export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredTool
           return {
             result,
             outputPreview: result,
-            draftDocId: docIdResult.docId
+            draftDocId: docId
           }
         }
       })
@@ -183,10 +179,8 @@ export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredTool
     name: DOCX_VALIDATE_TOOL_SPEC.name,
     description: DOCX_VALIDATE_TOOL_SPEC.description,
     schema: DOCX_VALIDATE_TOOL_SPEC.schema,
-    execute: async ({ args, toolName, toolCallId }) => {
-      const docIdResult = runtime.requireDocId({ toolName, toolCallId, docId: args.docId })
-      if ('failure' in docIdResult) return docIdResult.failure
-
+    getRequiredDocId: (args) => args.docId,
+    execute: async ({ args, toolName, toolCallId, docId }) => {
       return await runDocxWorkerToolAction({
         runtime,
         toolName,
@@ -195,7 +189,7 @@ export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredTool
         request: {
           action: DOCX_VALIDATE_TOOL_SPEC.workerAction!,
           payload: {
-            docId: docIdResult.docId
+            docId
           }
         },
         buildSuccess: (workerPayload) => {
@@ -219,7 +213,7 @@ export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredTool
                 runtime.input.safePreviewChars
               )
             },
-            draftDocId: docIdResult.docId
+            draftDocId: docId
           }
         }
       })

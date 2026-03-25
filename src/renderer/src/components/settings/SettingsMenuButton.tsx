@@ -1,5 +1,6 @@
 import React from 'react'
 import { Button, Dropdown } from 'antd'
+import type { DropdownProps } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { HiOutlineCog6Tooth } from 'react-icons/hi2'
 import { APP_MENU_ITEMS } from './constants'
@@ -7,16 +8,21 @@ import { APP_MENU_ITEMS } from './constants'
 type SettingsMenuButtonProps = {
   label?: string
   className?: string
+  placement?: DropdownProps['placement']
 }
 
-const SettingsMenuButton: React.FC<SettingsMenuButtonProps> = ({ label, className }) => {
+const SettingsMenuButton: React.FC<SettingsMenuButtonProps> = ({
+  label,
+  className,
+  placement = 'bottomRight'
+}) => {
   const navigate = useNavigate()
   const iconOnly = !label
 
   return (
     <Dropdown
       trigger={['click']}
-      placement="bottomRight"
+      placement={placement}
       menu={{
         items: APP_MENU_ITEMS.map((item) => ({
           key: item.key,
@@ -40,10 +46,10 @@ const SettingsMenuButton: React.FC<SettingsMenuButtonProps> = ({ label, classNam
       }}
     >
       <Button
-        icon={<HiOutlineCog6Tooth className="h-[18px] w-[18px]" />}
+        icon={<HiOutlineCog6Tooth className="h-3.5 w-3.5" />}
         aria-label="设置"
-        className={`!inline-flex !h-10 !items-center !rounded-2xl !border-[#E5E5E4] !bg-white/92 !text-[#666666] shadow-[0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur-sm hover:!border-[#D97757] hover:!text-[#D97757] ${
-          iconOnly ? '!w-10 !justify-center !px-0' : '!px-3'
+        className={`!inline-flex !h-9 !items-center !rounded-xl !border-[#E5E5E4] !bg-white/92 !text-[#666666] shadow-[0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur-sm hover:!border-[#D97757] hover:!text-[#D97757] ${
+          iconOnly ? '!w-9 !justify-center !px-0' : '!px-3'
         } ${className || ''}`}
       >
         {label}

@@ -1,11 +1,16 @@
 import { buildDirectorGraph } from './director/graph/directorGraph'
 import { createAiRunContext } from './runtime'
 import {
+  type DirectorGraphState,
   createCancelledAiRunState,
   createFailedAiRunState,
-  createInitialAiRunState
+  createInitialAiRunState,
+  toPublicAiRunState
 } from './director/state/schema'
 import type { AiRunDeps, AiRunStartPayload, AiRunState } from './types'
+
+const isCancelledError = (error: unknown): boolean =>
+  Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'CANCELLED')
 
 export class AiRunService {
   private static instance: AiRunService
@@ -28,17 +33,11 @@ export class AiRunService {
           runId: payload.runId,
           sessionId: payload.sessionId,
           input: String(payload.input || '')
-        }) as AiRunState
+        }) as DirectorGraphState
       )
-      return res as AiRunState
+      return toPublicAiRunState(res as DirectorGraphState)
     } catch (e) {
-      const err = e as { code?: string; message?: string }
-      if (
-        err.code === 'CANCELLED' ||
-        String(err.message || '')
-          .toLowerCase()
-          .includes('cancel')
-      ) {
+      if (isCancelledError(e)) {
         return createCancelledAiRunState({
           runId: payload.runId,
           sessionId: payload.sessionId,
