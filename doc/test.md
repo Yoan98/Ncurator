@@ -7,9 +7,14 @@
 - 本文不定义具体业务域的正式 case 内容；正式 case 的 `用例名称 / 实现状态 / What / Why / How / Oracle / Not` 统一以 `doc/test-plan/**` 为准。
 - 当需要判断正式 case 是否可以进入 `tests/**`、日志应如何落盘、report 应如何生成与引用证据时，以本文为准。
 
-## 1. 目标
+## 1. 写测试前先判断
 
-- 测试体系收敛为两层产物：
+- 如果只记一件事：写测试前先判断这是正式长期回归 case，还是一次性临时排查 case。
+- 默认策略：
+  - 只要还在排查、验证猜想、补上下文、试运行 fixture，或尚未确定要长期维护，一律先放 `tests/temp/**`。
+  - 只有确认要长期维护、参与 gating 或进入正式 report 的 case，才进入正式测试目录。
+  - 只要要进入正式测试目录，必须先补对应 `doc/test-plan/**`；未登记的 case 不得直接写进 `tests/**` 非 `temp` 目录。
+- 测试体系最终只沉淀两层正式产物：
   - 原始日志：`tests/logs/**`
   - 正式分析文档：`tests/report/<domain>/report.md`
 - 原始日志统一由四类文件组成：
@@ -124,12 +129,16 @@ tests/
 - `temp/` 默认不参与 gating，也不参与正式 report 汇总。
 - 除 `tests/temp/**` 外，`tests/**` 中的正式测试目录只允许放已在 `doc/test-plan/**` 登记的 case，否则需要主动讨论。
 
-## 3. 测试准入与用例编写规范
+## 3. 用例准入与编写规则
 
-- 正式 case 与临时 case 的准入路径不同，必须先判断类型，再决定放置位置。
-- 正式长期维护 case 的标准顺序固定为：先补 `doc/test-plan/**`，再写测试代码，再执行 runner，再分析 raw logs，再更新 report。
+### 3.1 快速判断
 
-### 3.0 正式 test-plan 共享约束
+- 正式长期回归 case：用于长期维护、参与 gating、进入正式 report，必须进入正式测试闭环。
+- 临时排查 case：只用于一次性排查、验证猜想、临时复现或补充上下文，固定放在 `tests/temp/**`。
+- 用户没有明确要求“补正式长期 case”时，默认先写 `tests/temp/**`，不要直接进入正式目录。
+- 当临时 case 需要转为正式长期 case 时，顺序必须是：先补 `doc/test-plan/**`，再迁入正式目录。
+
+### 3.2 正式 case 共享约束
 
 - `doc/test-plan/**` 下每个领域文档，都是该领域正式测试用例定义的唯一规格来源。
 - 新增、修改或补齐正式 case 时，必须严格对齐对应文档中的 `用例名称 / 实现状态 / What / Why / How / Oracle / Not`。
@@ -138,7 +147,7 @@ tests/
 - 如果 `tests/**` 非 `temp` 目录里缺少对应正式 case，必须先补 `doc/test-plan/**` 定义，再补测试代码。
 - 每个 `用例名称` 都必须稳定映射到唯一 `caseId`、唯一测试文件和唯一日志目录。
 
-### 3.0.1 实现状态取值约定
+### 3.3 实现状态取值约定
 
 - `待检查`
   - 已在计划中定义，但还未核对代码是否已经实现或与文档一致。
@@ -153,7 +162,7 @@ tests/
 - `已废弃`
   - 该 case 不再作为正式测试目标保留，但保留历史记录。
 
-### 3.0.2 用例字段定义
+### 3.4 用例字段定义
 
 - `用例名称`
   - 稳定 `caseId`，用于映射测试文件、日志目录和报告归属。
@@ -170,69 +179,71 @@ tests/
 - `Not`
   - 这条 case 明确不验证什么，防止实现时擅自扩张范围。
 
-### 3.1 基础case
-- 这类case要保证基础能力能正常使用。
-- case 尽量短、输入尽量单一、断言聚焦核心结果。
+### 3.5 正式目录分组口径
 
-### 3.2 边界case
-- 这类case要覆盖失败、阻塞、歧义、安全限制、空结果、超时等边界情况的处理。
+- `basic`
+  - 用于验证基础能力可用，输入尽量单一，断言聚焦核心结果。
+- `boundary`
+  - 用于覆盖失败、阻塞、歧义、安全限制、空结果、超时等边界处理。
+- `scenario`
+  - 用于覆盖真实用户场景，是正式长期 case 的主干。
+- `live`
+  - 用于验证真实模型参与下的正式执行路径。
+  - 只要生产路径中存在模型参与，就不能只靠 `basic / boundary / scenario` 得出能力成立结论。
+  - `live` case 应优先依赖真实 fixture、真实流程和正式交付，而不是只验证脚本化骨架。
 
-### 3.3 实际场景case
-- 这类case是核心，要能直接对应真实用户诉求。
+### 3.6 长期价值与 temp 规则
 
-### 3.4 Live case
-- 这类case用于验证真实模型参与下的正式执行路径。
-- 只要生产路径中存在模型参与，就不能只靠 `basic / boundary / scenario` 得出能力成立结论。
-- `live` case 应优先依赖真实 fixture、真实流程和正式交付，而不是只验证脚本化骨架。
-- 对 `human`、长任务、端到端任务这类能力，`live` 是主结论来源；非 live case 主要用于稳定回归与诊断。
-
-### 3.5 长期价值
-- 设计每个case时需考虑它的长期性，适合后续重复回归。
 - 进入正式 domain 目录的 case 默认都应具备长期回归价值。
+- 一次性排查、临时验证、待定样例统一放在 `tests/temp/**`。
+- `tests/temp/**` 默认不参与 gating，也不进入正式 report。
 
-### 3.6 临时case
-- 一次性排查、临时验证或待定样例统一放在 `tests/temp/**`。
+### 3.7 常见正反例
+
+- 反例：为了排查某个猜想，直接在 `tests/ai/**` 或 `tests/workspace/**` 新增正式 case。
+  - 这类需求如果还没有进入长期维护范围，应先写进 `tests/temp/**`。
+- 正例：为了确认某个上下文拼接问题是否真实存在，先写 `tests/temp/**` 做一次性验证。
+- 正例：某条真实用户场景已经确定要长期回归，先补对应 `doc/test-plan/**`，再补正式测试代码。
 
 ## 4. 正式测试闭环流程
 
-### 4.1 判断测试类型
+### 4.1 固定顺序
 
-- 正式长期回归 case：用于长期维护、参与 gating、进入正式 report，必须走 `doc/test-plan/**` -> `tests/**` -> `tests/logs/**` -> `tests/report/**` 的完整链路。
-- 临时排查 case：只用于一次性排查、验证猜想或临时复现，固定放在 `tests/temp/**`，不参与 gating，也不进入正式 report。
+1. 先判断这是正式长期回归 case，还是临时排查 case。
+2. 如果只是临时排查，直接写入 `tests/temp/**`，不进入正式闭环。
+3. 如果要进入正式目录，先更新对应 `doc/test-plan/**`。
+4. 再写或调整 `tests/**` 中的正式测试代码。
+5. 通过 `scripts/test-workflow.mjs` 执行并产生日志。
+6. 先看 `timeline.jsonl`，不足时再看 `runtime-events.jsonl`、`meta.json` 与 `artifacts.json`。
+7. 最后基于 `tests/logs/<domain>/**` 更新 `tests/report/<domain>/report.md`。
 
-### 4.2 定义或更新正式 case 规格
-
-- 新增、补齐或调整正式 case 时，必须先更新 `doc/test-plan/**` 中对应测试计划。
-- 正式 case 规格至少要明确 `用例名称 / 实现状态 / What / Why / How / Oracle / Not`，测试代码必须按这些字段落地，不得自行脑补。
-- `用例名称` 需要稳定映射到唯一 `caseId`、唯一测试文件和唯一日志目录。
-
-### 4.3 放入测试目录
+### 4.2 放入测试目录
 
 - 正式 case 固定放在 `tests/<domain>/<layer>/<suite>/<groups...>/<case>.test.ts`。
 - 临时 case 固定放在 `tests/temp/**`。
 - 未在 `doc/test-plan/**` 登记的验证，不得进入正式测试目录。
-- 当临时 case 需要转为正式长期 case 时，顺序必须是：先补 `doc/test-plan/**`，再迁入正式目录。
+- 临时 case 转正式 case 时，先补 `doc/test-plan/**`，再迁入正式目录。
 
-### 4.4 执行与产生日志
+### 4.3 执行与产生日志
 
 - 正式测试统一通过 `scripts/test-workflow.mjs` 执行。
 - runner 只负责收集测试文件、执行测试并落 `tests/logs/**`。
 - e2e 请求下 runner 先执行同域 backend；除此之外不负责失败分析、建议整理或 report 更新。
 
-### 4.5 读取与分析 raw logs
+### 4.4 读取与分析 raw logs
 
 - 默认先读取目标 run 的 `timeline.jsonl`，理解语义步骤、断言事实和失败位置。
 - 如果 `timeline.jsonl` 仍不足以解释结果，再继续读取 `runtime-events.jsonl` 与关键附件。
 - 必要时回看 `meta.json` 与 `artifacts.json`，确认 run 摘要、统计值和附件索引。
 - 所有分析结论都必须可回溯到 raw logs 与 artifacts，不得脱离证据做推断。
 
-### 4.6 更新正式 report
+### 4.5 更新正式 report
 
 - 正式 report 固定更新 `tests/report/<domain>/report.md`。
 - report 只能基于 `tests/logs/<domain>/**` 及其附件生成；`tests/temp/**` 不进入正式 report。
 - report 负责沉淀当前现状分析、失败模式和下一步建议，但不能替代 raw logs 本身。
 
-### 4.7 结论回流
+### 4.6 结论回流
 
 - 如果问题出在 case 定义、验收口径或阶段边界，必须先改 `doc/test-plan/**`，再改测试代码。
 - 如果只是实现缺陷或回归问题，可在保持 case 规格不变的前提下修实现并重跑。

@@ -187,17 +187,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     if (!editor) return
     stripCaretPlaceholderFromEditor()
     const nodes = readComposerNodesFromEditor(editor, knownScopesRef.current)
-    console.log('syncDraftFromEditor', {
-      textContent: editor.textContent,
-      childNodes: Array.from(editor.childNodes).map((child) => ({
-        nodeType: child.nodeType,
-        nodeName: child.nodeName,
-        textContent: child.textContent
-      })),
-      nodes: nodes.map((node) =>
-        node.kind === 'text' ? { kind: node.kind, text: node.text } : { kind: node.kind, key: getScopeKey(node.scope) }
-      )
-    })
     draftNodesRef.current = nodes
     setHasContent(nodes.length > 0)
     const draft = extractComposerDraftValue(nodes)
