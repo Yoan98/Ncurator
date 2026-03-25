@@ -37,12 +37,20 @@ export type TerminalCapabilityToolsRuntimeState = {
 }
 
 export type TerminalCommandApprovalRiskLevel = 'low' | 'medium' | 'high'
+export type TerminalCommandMode = 'read_only' | 'mutating' | 'unknown'
 
 export type ArtifactCandidate = {
   resolvedPath: string
   summary: string
   requestedOperation?: AiFileArtifactOperation
   existedBefore: boolean
+}
+
+export type TerminalCommandAnalysis = {
+  riskLevel: TerminalCommandApprovalRiskLevel
+  commandMode: TerminalCommandMode
+  resourceKey: string
+  artifactCandidates: TerminalArtifactCandidate[]
 }
 
 export type ResolvedCwd =

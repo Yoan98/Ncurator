@@ -9,13 +9,8 @@ import type {
   LastBrainDecision,
   RuntimeSkillId
 } from '../../types'
-import {
-  emitAnswerCompletedEffect,
-  emitLatestHumanStepForState,
-  emitTailHumanStepsForState,
-  emitTaskDeliveryEffect,
-  emitWatchHintEffect
-} from './stateTransitionEffects'
+import { emitHumanStep, emitTaskDelivery, emitWatchHint } from './events'
+import { getAvailableToolNames } from './runtimeCache'
 
 export type HumanTraceItemInput = {
   action: HumanTraceStep['action']
@@ -24,6 +19,69 @@ export type HumanTraceItemInput = {
   skillId?: RuntimeSkillId
   toolName?: string
   summary: string
+}
+
+type HumanEventStage = 'human_brain' | 'human_learning' | 'human_hand' | 'human_mouth'
+
+const buildStepToolContext = (input: {
+  cache: HumanRuntimeCache
+  state: HumanState
+}) => ({
+  learnedSkillIds: input.state.brainMemory.outside.learnedSkillIds,
+  availableToolNames: getAvailableToolNames({
+    learnedSkillIds: input.state.brainMemory.outside.learnedSkillIds,
+    cache: input.cache
+  })
+})
+
+const emitLatestHumanStepForState = (input: {
+  ctx: AiRunContext
+  cache: HumanRuntimeCache
+  taskId: string
+  state: HumanState
+  stage: HumanEventStage
+}) => {
+  const step = input.state.trace.steps.at(-1)
+  if (!step) return
+
+  const toolContext = buildStepToolContext({
+    cache: input.cache,
+    state: input.state
+  })
+  emitHumanStep({
+    ctx: input.ctx,
+    taskId: input.taskId,
+    step,
+    learnedSkillIds: toolContext.learnedSkillIds,
+    availableToolNames: toolContext.availableToolNames,
+    stage: input.stage
+  })
+}
+
+const emitTailHumanStepsForState = (input: {
+  ctx: AiRunContext
+  cache: HumanRuntimeCache
+  taskId: string
+  state: HumanState
+  count: number
+  stage: HumanEventStage
+}) => {
+  if (input.count <= 0) return
+
+  const toolContext = buildStepToolContext({
+    cache: input.cache,
+    state: input.state
+  })
+  input.state.trace.steps.slice(-input.count).forEach((step) => {
+    emitHumanStep({
+      ctx: input.ctx,
+      taskId: input.taskId,
+      step,
+      learnedSkillIds: toolContext.learnedSkillIds,
+      availableToolNames: toolContext.availableToolNames,
+      stage: input.stage
+    })
+  })
 }
 
 export const appendHumanTraceStep = (input: {
@@ -200,7 +258,7 @@ export const returnToBrainWithWatchHint = (input: {
     runtime?: Partial<HumanState['runtime']>
   }
 }): HumanState => {
-  emitWatchHintEffect({
+  emitWatchHint({
     ctx: input.ctx,
     taskId: input.state.task.taskId,
     source: input.source,
@@ -232,7 +290,7 @@ export const returnToBrainAfterTrace = (input: {
   })
 
   if (input.watchHint) {
-    emitWatchHintEffect({
+    emitWatchHint({
       ctx: input.ctx,
       taskId: input.state.task.taskId,
       source: input.source,
@@ -276,7 +334,7 @@ export const applyBrainDecisionTransition = (input: {
   })
 
   if (input.watchHint) {
-    emitWatchHintEffect({
+    emitWatchHint({
       ctx: input.ctx,
       taskId: input.state.task.taskId,
       source: 'memory_reducer',
@@ -303,14 +361,16 @@ export const completeHumanTask = (input: {
   })
 
   if (input.streamAnswer) {
-    emitAnswerCompletedEffect({
-      ctx: input.ctx,
+    input.ctx.sendEvent({
+      type: 'answer_completed',
+      runId: input.ctx.runId,
       taskId: input.state.task.taskId,
-      deliveryMarkdown: input.deliveryMarkdown
+      text: input.deliveryMarkdown,
+      stage: 'human_mouth'
     })
   }
 
-  emitTaskDeliveryEffect({
+  emitTaskDelivery({
     ctx: input.ctx,
     taskId: input.state.task.taskId,
     summary: finalResult.summary,

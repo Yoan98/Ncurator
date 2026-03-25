@@ -3,6 +3,7 @@ import path from 'node:path'
 import { test } from 'vitest'
 import { parseShellTokens, splitCommandSegments } from '../../../../../src/main/services/ai/human/tools/terminal/commandParsing'
 import { terminalToolFamily } from '../../../../../src/main/services/ai/human/tools/terminal'
+import { analyzeTerminalCommand } from '../../../../../src/main/services/ai/human/tools/terminal/terminalCommandAnalysis'
 import { collectTerminalArtifactCandidates } from '../../../../../src/main/services/ai/human/tools/terminal/terminalArtifacts'
 import {
   checkWorkspaceBoundary,
@@ -107,6 +108,16 @@ test('terminal-workspace-guard', async () => {
             boundaryInside: checkWorkspaceBoundary(`cat ${notesFile}`, runtime.workspaceRoot),
             boundaryEscape: checkWorkspaceBoundary('cat ../outside.txt', runtime.workspaceRoot),
             boundaryOutsideAbsolute: checkWorkspaceBoundary('cat /tmp/outside.txt', runtime.workspaceRoot)
+          },
+          commandAnalyses: {
+            safeRead: analyzeTerminalCommand({
+              command: 'cat notes/readme.txt',
+              cwd: '.'
+            }),
+            writeRedirect: analyzeTerminalCommand({
+              command: 'printf "done" > reports/output.txt',
+              cwd: 'notes'
+            })
           }
         },
         activities: harness.activities,
@@ -176,11 +187,21 @@ test('terminal-workspace-guard', async () => {
       )
 
       runtime.assertThat(
-        result.helperChecks.commandPolicies.safeRead.risk === 'low' &&
+          result.helperChecks.commandPolicies.safeRead.risk === 'low' &&
           result.helperChecks.commandPolicies.safeRead.mode === 'read_only' &&
           result.helperChecks.commandPolicies.writeRedirect.risk === 'medium' &&
           result.helperChecks.commandPolicies.writeRedirect.mode === 'mutating' &&
           result.helperChecks.commandPolicies.destructive.risk === 'high' &&
+          result.helperChecks.commandAnalyses.safeRead.riskLevel === 'low' &&
+          result.helperChecks.commandAnalyses.safeRead.commandMode === 'read_only' &&
+          result.helperChecks.commandAnalyses.safeRead.resourceKey === '.' &&
+          result.helperChecks.commandAnalyses.safeRead.artifactCandidates.length === 0 &&
+          result.helperChecks.commandAnalyses.writeRedirect.riskLevel === 'medium' &&
+          result.helperChecks.commandAnalyses.writeRedirect.commandMode === 'mutating' &&
+          result.helperChecks.commandAnalyses.writeRedirect.resourceKey === 'notes' &&
+          result.helperChecks.commandAnalyses.writeRedirect.artifactCandidates.length === 1 &&
+          result.helperChecks.commandAnalyses.writeRedirect.artifactCandidates[0]?.rawPath ===
+            'reports/output.txt' &&
           result.helperChecks.commandPolicies.boundaryInside.ok &&
           !result.helperChecks.commandPolicies.boundaryEscape.ok &&
           !result.helperChecks.commandPolicies.boundaryOutsideAbsolute.ok,

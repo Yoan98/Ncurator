@@ -4,7 +4,7 @@ import type { AiTaskResultCode, IpcJsonObject, IpcJsonValue } from '../../../../
 import type { TerminalToolContext } from '../../../types'
 import { TERMINAL_RUN_COMMAND_CONTRACT } from '../catalog/toolDescriptors/terminal'
 import { runTerminalCommand } from './terminalExec'
-import { checkWorkspaceBoundary, classifyCommandRisk } from './terminalCommandPolicy'
+import { checkWorkspaceBoundary } from './terminalCommandPolicy'
 import type {
   TerminalCapabilityToolsInput,
   TerminalCapabilityToolsRuntimeState,
@@ -15,6 +15,7 @@ import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import type { CapabilityActivityInput } from '../types'
 import { mergeArtifactCandidates, recordTerminalArtifacts } from './terminalArtifacts'
+import { analyzeTerminalCommand } from './terminalCommandAnalysis'
 import { resolveTerminalCwd } from './terminalCwd'
 
 const buildTerminalStepError = (input: {
@@ -191,7 +192,11 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             return boundaryError
           }
 
-          const riskLevel = classifyCommandRisk(command)
+          const analysis = analyzeTerminalCommand({
+            command,
+            cwd: args.cwd
+          })
+          const riskLevel = analysis.riskLevel
           if (riskLevel !== 'low') {
             const approval = await requestTerminalCommandApproval({
               ctx: input.ctx,
@@ -211,7 +216,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
           }
 
           const artifactCandidates = mergeArtifactCandidates({
-            command,
+            commandCandidates: analysis.artifactCandidates,
             expectedArtifacts: Array.isArray(args.expectedArtifacts) ? args.expectedArtifacts : [],
             cwd,
             workspaceRootPath: input.workspaceRootPath

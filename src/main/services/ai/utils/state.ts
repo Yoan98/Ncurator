@@ -1,23 +1,25 @@
 import type { AiRunState } from '../types'
+import {
+  createDefaultAiRunStateFields,
+  DEFAULT_AI_DIRECTOR_STAGE,
+  DEFAULT_AI_RUN_STATUS,
+  DEFAULT_CONTEXT_ROUNDS,
+  DEFAULT_DISPATCH_CURSOR,
+  createDefaultAiPlan,
+  createDefaultContextEvidence,
+  createDefaultFinalArtifacts
+} from '../director/state/schema'
 
-export const DEFAULT_AI_RUN_STATUS: AiRunState['status'] = 'running'
-export const DEFAULT_AI_DIRECTOR_STAGE: AiRunState['directorStage'] = 'director_intent'
-export const DEFAULT_CONTEXT_ROUNDS: AiRunState['contextRounds'] = 0
-export const DEFAULT_DISPATCH_CURSOR: AiRunState['dispatchCursor'] = 0
-
-export const createDefaultContextEvidence = (): AiRunState['contextEvidence'] => []
-export const createDefaultAiPlan = (): AiRunState['plan'] => []
-export const createDefaultFinalArtifacts = (): AiRunState['finalArtifacts'] => []
-
-export const createDefaultAiRunStateFields = () => ({
-  status: DEFAULT_AI_RUN_STATUS,
-  directorStage: DEFAULT_AI_DIRECTOR_STAGE,
-  contextRounds: DEFAULT_CONTEXT_ROUNDS,
-  contextEvidence: createDefaultContextEvidence(),
-  plan: createDefaultAiPlan(),
-  dispatchCursor: DEFAULT_DISPATCH_CURSOR,
-  finalArtifacts: createDefaultFinalArtifacts()
-})
+export {
+  DEFAULT_AI_RUN_STATUS,
+  DEFAULT_AI_DIRECTOR_STAGE,
+  DEFAULT_CONTEXT_ROUNDS,
+  DEFAULT_DISPATCH_CURSOR,
+  createDefaultContextEvidence,
+  createDefaultAiPlan,
+  createDefaultFinalArtifacts,
+  createDefaultAiRunStateFields
+}
 
 export const createInitialAiRunState = (input: {
   runId: string

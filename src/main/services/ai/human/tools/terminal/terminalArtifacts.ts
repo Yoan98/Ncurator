@@ -76,7 +76,7 @@ export const collectTerminalArtifactCandidates = (command: string): TerminalArti
 }
 
 export const mergeArtifactCandidates = (input: {
-  command: string
+  commandCandidates: TerminalArtifactCandidate[]
   expectedArtifacts: Array<{ path: string; operation?: AiFileArtifactOperation; summary?: string }>
   cwd: string
   workspaceRootPath: string
@@ -86,7 +86,7 @@ export const mergeArtifactCandidates = (input: {
     { requestedOperation?: AiFileArtifactOperation; summary?: string }
   >()
 
-  const commandCandidates = collectTerminalArtifactCandidates(input.command).map((item) => ({
+  const commandCandidates = input.commandCandidates.map((item) => ({
     path: item.rawPath,
     operation: item.operation,
     summary: undefined

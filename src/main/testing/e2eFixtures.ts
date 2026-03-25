@@ -19,6 +19,11 @@ import type {
   WorkspaceSource,
   WorkspaceListResponse
 } from '../../shared/types'
+import {
+  buildWorkspaceScopeSelections,
+  scopeMatchesQuery,
+  shouldIncludeScopeInSearch
+} from '../services/sourceScope/selection'
 
 export type E2EChatScenario =
   | 'chat-plan-artifact'
@@ -231,44 +236,29 @@ export const getE2EFixtureSourceScopes = (
 ): SourceScopeListResponse | null => {
   if (!isE2EFixtureModeEnabled()) return null
 
-  const query = String(payload.query || '').trim()
   const workspaceId = String(payload.workspaceId || '').trim()
   const scopeTypeFilters =
     Array.isArray(payload.scopeTypes) && payload.scopeTypes.length > 0
       ? new Set(payload.scopeTypes.map((scopeType) => String(scopeType || '').trim()))
       : null
-  const importWorkspaceScope =
-    e2eWorkspaceState.workspace
-      ? {
-          scopeType: 'workspace' as const,
-          sourceType: 'workspace' as const,
-          sourceId: e2eWorkspaceState.workspace.id,
-          label: e2eWorkspaceState.workspace.name,
-          documentIds:
-            e2eWorkspaceState.workspace.status === 'prepared' ? [E2E_IMPORT_DOCUMENT_ID] : [],
-          hasUnpreparedFiles: e2eWorkspaceState.workspace.status !== 'prepared',
-          preparedDocumentCount: e2eWorkspaceState.workspace.status === 'prepared' ? 1 : 0,
-          unpreparedFileCount: e2eWorkspaceState.workspace.status === 'prepared' ? 0 : 1,
-          workspace: {
-            workspaceId: e2eWorkspaceState.workspace.id,
-            rootPath: e2eWorkspaceState.workspace.root_path
-          }
-        }
-      : null
-  const webScopes = e2eWebSourceState.items.map(buildFixtureWebSourceSelection)
+  const fixtureWorkspaceScopes = e2eWorkspaceState.workspace
+    ? buildWorkspaceScopeSelections(e2eWorkspaceState.workspace, e2eWorkspaceState.nodes)
+    : []
+  const webScopes = e2eWebSourceState.items
+    .map(buildFixtureWebSourceSelection)
+    .filter((scope): scope is SourceScopeSelection => Boolean(scope))
   const allItems = [
     E2E_CHAT_WORKSPACE_SCOPE,
     E2E_SEARCH_SCOPE,
     ...webScopes,
-    payload.mode === 'chat' || !importWorkspaceScope?.hasUnpreparedFiles ? importWorkspaceScope : null
-  ].filter(
-    (scope): scope is SourceScopeSelection => Boolean(scope)
-  )
+    ...fixtureWorkspaceScopes
+  ]
   const items = allItems.filter((scope) => {
     if (workspaceId && scope.sourceType === 'workspace' && scope.sourceId !== workspaceId) return false
     if (scopeTypeFilters && !scopeTypeFilters.has(scope.scopeType)) return false
-    if (!query) return true
-    return scope.label.includes(query) || scope.sourceId.includes(query)
+    if (!scopeMatchesQuery(scope, payload.query)) return false
+    if (payload.mode === 'search' && !shouldIncludeScopeInSearch(scope)) return false
+    return true
   })
 
   return {

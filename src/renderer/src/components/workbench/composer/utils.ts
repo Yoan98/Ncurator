@@ -74,7 +74,7 @@ export const pruneComposerNodesByWorkspace = (
   )
 
 export const readComposerNodesFromEditor = (
-  editor: HTMLDivElement,
+  editor: HTMLElement,
   knownScopes: Map<string, SourceScopeSelection>
 ): ComposerNode[] => {
   const nextNodes: ComposerNode[] = []
@@ -132,7 +132,7 @@ export const createScopeTokenElement = (scope: SourceScopeSelection): HTMLElemen
 }
 
 export const renderComposerNodesToEditor = (
-  editor: HTMLDivElement,
+  editor: HTMLElement,
   nodes: ComposerNode[]
 ): void => {
   editor.replaceChildren()
@@ -155,7 +155,7 @@ export const moveCaretToTextNode = (textNode: Text, offset: number): void => {
   selection.addRange(range)
 }
 
-export const moveCaretToEnd = (editor: HTMLDivElement): void => {
+export const moveCaretToEnd = (editor: HTMLElement): void => {
   const selection = window.getSelection()
   if (!selection) return
   const range = document.createRange()

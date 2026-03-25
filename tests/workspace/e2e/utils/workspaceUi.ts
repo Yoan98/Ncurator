@@ -48,12 +48,22 @@ export const selectSourceScope = async (
   const workspaceSelect = page.getByTestId(workbenchSelectors.workspaceSelect)
   await workspaceSelect.locator('.ant-select-selector').click()
   await page.locator('.ant-select-dropdown').getByText(input.workspaceLabel).first().click()
+  await page.waitForTimeout(120)
 
   const editor = page.getByTestId(workbenchSelectors.input)
   await editor.click()
   await editor.focus()
   await page.waitForFunction(
-    (testId) => document.activeElement?.getAttribute('data-testid') === testId,
+    (testId) => {
+      const editorElement = document.querySelector(`[data-testid="${testId}"]`)
+      if (!(editorElement instanceof HTMLElement)) return false
+      const selection = window.getSelection()
+      return (
+        document.activeElement === editorElement &&
+        Boolean(selection?.anchorNode) &&
+        editorElement.contains(selection.anchorNode)
+      )
+    },
     workbenchSelectors.input
   )
   await page.keyboard.type(`@${input.query}`)

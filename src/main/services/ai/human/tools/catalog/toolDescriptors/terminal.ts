@@ -2,8 +2,7 @@ import type { JsonObject } from '../../../../../../../shared/types'
 import { z } from 'zod/v4'
 import type { CapabilityToolDefinition } from '../factories'
 import { createCapabilityToolDefinition, readStringArg } from '../factories'
-import { classifyCommandMode, classifyCommandRisk } from '../../terminal/terminalCommandPolicy'
-import { collectTerminalArtifactCandidates } from '../../terminal/terminalArtifacts'
+import { analyzeTerminalCommand } from '../../terminal/terminalCommandAnalysis'
 
 const TERMINAL_COMMAND_EXAMPLE: JsonObject = {
   command: 'cat ai/workspace/materials/daily/2026-03-16-note.md',
@@ -23,24 +22,27 @@ export const terminalRunCommandSchema = z.object({
 })
 
 const resolveTerminalExecutionMeta: CapabilityToolDefinition['resolveExecutionMeta'] = (args) => {
-  const command = readStringArg(args, 'command') || ''
-  const risk = classifyCommandRisk(command)
-  const commandMode = classifyCommandMode(command)
-  const artifacts = collectTerminalArtifactCandidates(command)
-  const resourceKey = readStringArg(args, 'cwd') || 'workspace'
+  const analysis = analyzeTerminalCommand({
+    command: readStringArg(args, 'command') || '',
+    cwd: readStringArg(args, 'cwd')
+  })
 
-  if (risk === 'low' && commandMode === 'read_only' && artifacts.length === 0) {
+  if (
+    analysis.riskLevel === 'low' &&
+    analysis.commandMode === 'read_only' &&
+    analysis.artifactCandidates.length === 0
+  ) {
     return {
       mutability: 'read_only',
       parallelSafe: true,
-      resourceKey
+      resourceKey: analysis.resourceKey
     }
   }
 
   return {
     mutability: 'mutating',
     parallelSafe: false,
-    resourceKey
+    resourceKey: analysis.resourceKey
   }
 }
 

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Button, Empty, Select, Spin } from 'antd'
 import {
   HiArrowUp,
@@ -13,7 +13,7 @@ import type { LLMConfig, SourceScopeSelection, WorkspaceSource } from '../../../
 import { workbenchSelectors } from '../../testing/selectors'
 import type { WorkbenchMode } from './types'
 import { COMPOSER_PLACEHOLDER, COMPOSER_SCOPE_TYPES } from './composer/constants'
-import type { ComposerDraftValue } from './composer/types'
+import type { ComposerDraftValue, ComposerNode } from './composer/types'
 import {
   createScopeTokenElement,
   extractComposerDraftValue,
@@ -51,6 +51,20 @@ type WorkbenchComposerProps = {
 }
 
 const isTextNode = (value: Node | null): value is Text => value instanceof Text
+const CARET_ANCHOR_ROLE = 'composer-caret-anchor'
+const areComposerNodesEqual = (left: ComposerNode[], right: ComposerNode[]): boolean =>
+  left.length === right.length &&
+  left.every((node, index) => {
+    const peer = right[index]
+    if (!peer || node.kind !== peer.kind) return false
+    if (node.kind === 'text' && peer.kind === 'text') {
+      return node.text === peer.text
+    }
+    if (node.kind === 'scope' && peer.kind === 'scope') {
+      return getScopeKey(node.scope) === getScopeKey(peer.scope)
+    }
+    return false
+  })
 
 const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   mode,
@@ -69,9 +83,12 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   showCancel,
   resetKey
 }) => {
-  const editorRef = useRef<HTMLDivElement | null>(null)
+  const editorRef = useRef<HTMLSpanElement | null>(null)
+  const draftNodesRef = useRef<ComposerNode[]>([])
   const knownScopesRef = useRef(new Map<string, SourceScopeSelection>())
+  const draftSyncFrameRef = useRef<number | null>(null)
   const mentionRefreshFrameRef = useRef<number | null>(null)
+  const controlFocusTimeoutRef = useRef<number | null>(null)
   const isComposingRef = useRef(false)
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
   const [mentionOptions, setMentionOptions] = useState<SourceScopeSelection[]>([])
@@ -98,32 +115,107 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     setMentionActiveIndex(0)
   }, [])
 
+  const ensureEditorHasCaretTarget = useCallback((): void => {
+    const editor = editorRef.current
+    if (!editor) return
+    const lastChild = editor.lastChild
+    if (isTextNode(lastChild)) {
+      return
+    }
+    if (lastChild instanceof HTMLBRElement && lastChild.dataset.role === CARET_ANCHOR_ROLE) {
+      return
+    }
+    const anchor = document.createElement('br')
+    anchor.dataset.role = CARET_ANCHOR_ROLE
+    editor.appendChild(anchor)
+  }, [])
+
+  const stripCaretPlaceholderFromEditor = useCallback(() => {
+    const editor = editorRef.current
+    if (!editor) return
+    editor.querySelectorAll(`br[data-role="${CARET_ANCHOR_ROLE}"]`).forEach((anchor) => {
+      anchor.remove()
+    })
+  }, [])
+
+  const restoreCaretToEnd = useCallback(() => {
+    const editor = editorRef.current
+    if (!editor) return
+    const selection = window.getSelection()
+    if (
+      selection?.rangeCount &&
+      selection.isCollapsed &&
+      isTextNode(selection.anchorNode) &&
+      editor.contains(selection.anchorNode)
+    ) {
+      return
+    }
+
+    ensureEditorHasCaretTarget()
+    moveCaretToEnd(editor)
+  }, [ensureEditorHasCaretTarget])
+
   const focusEditor = useCallback(() => {
     const editor = editorRef.current
     if (!editor) return
     editor.focus()
-    const selection = window.getSelection()
-    if (selection?.rangeCount && editor.contains(selection.anchorNode)) return
-    moveCaretToEnd(editor)
-  }, [])
+    restoreCaretToEnd()
+  }, [restoreCaretToEnd])
 
   const focusEditorAfterControlChange = useCallback(() => {
+    if (controlFocusTimeoutRef.current !== null) {
+      window.clearTimeout(controlFocusTimeoutRef.current)
+    }
     window.requestAnimationFrame(() => {
-      focusEditor()
+      controlFocusTimeoutRef.current = window.setTimeout(() => {
+        const activeElement = document.activeElement
+        if (
+          activeElement instanceof HTMLElement &&
+          activeElement !== editorRef.current &&
+          !editorRef.current?.contains(activeElement)
+        ) {
+          activeElement.blur()
+        }
+        focusEditor()
+        controlFocusTimeoutRef.current = null
+      }, 80)
     })
   }, [focusEditor])
 
   const syncDraftFromEditor = useCallback(() => {
     const editor = editorRef.current
     if (!editor) return
+    stripCaretPlaceholderFromEditor()
     const nodes = readComposerNodesFromEditor(editor, knownScopesRef.current)
+    console.log('syncDraftFromEditor', {
+      textContent: editor.textContent,
+      childNodes: Array.from(editor.childNodes).map((child) => ({
+        nodeType: child.nodeType,
+        nodeName: child.nodeName,
+        textContent: child.textContent
+      })),
+      nodes: nodes.map((node) =>
+        node.kind === 'text' ? { kind: node.kind, text: node.text } : { kind: node.kind, key: getScopeKey(node.scope) }
+      )
+    })
+    draftNodesRef.current = nodes
     setHasContent(nodes.length > 0)
     const draft = extractComposerDraftValue(nodes)
     draft.selectedSourceScopes.forEach((scope) => {
       knownScopesRef.current.set(getScopeKey(scope), scope)
     })
     onDraftChange(draft)
-  }, [onDraftChange])
+  }, [onDraftChange, stripCaretPlaceholderFromEditor])
+
+  const scheduleDraftSyncFromEditor = useCallback(() => {
+    if (draftSyncFrameRef.current !== null) {
+      window.cancelAnimationFrame(draftSyncFrameRef.current)
+    }
+    draftSyncFrameRef.current = window.requestAnimationFrame(() => {
+      draftSyncFrameRef.current = null
+      syncDraftFromEditor()
+    })
+  }, [syncDraftFromEditor])
 
   const getMentionContext = useCallback((): MentionContext | null => {
     const editor = editorRef.current
@@ -200,8 +292,14 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 
   const insertTextAtSelection = useCallback((text: string) => {
     const editor = editorRef.current
-    const selection = window.getSelection()
-    if (!editor || !selection || !selection.rangeCount) return
+    if (!editor) return
+
+    let selection = window.getSelection()
+    if (!selection || !selection.rangeCount) {
+      focusEditor()
+      selection = window.getSelection()
+    }
+    if (!selection || !selection.rangeCount) return
 
     const range = selection.getRangeAt(0)
     if (!editor.contains(range.commonAncestorContainer)) {
@@ -212,9 +310,17 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     if (!nextSelection || !nextSelection.rangeCount) return
     const nextRange = nextSelection.getRangeAt(0)
     nextRange.deleteContents()
-    const textNode = document.createTextNode(text)
-    nextRange.insertNode(textNode)
-    moveCaretToTextNode(textNode, text.length)
+    const startContainer = nextRange.startContainer
+    if (isTextNode(startContainer)) {
+      const insertOffset = nextRange.startOffset
+      startContainer.data = `${startContainer.data.slice(0, insertOffset)}${text}${startContainer.data.slice(insertOffset)}`
+      moveCaretToTextNode(startContainer, insertOffset + text.length)
+    } else {
+      const textNode = document.createTextNode(text)
+      nextRange.insertNode(textNode)
+      moveCaretToTextNode(textNode, text.length)
+    }
+    editor.normalize()
     syncDraftFromEditor()
     refreshMentionContext()
   }, [refreshMentionContext, syncDraftFromEditor])
@@ -256,11 +362,13 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   useEffect(() => {
     const editor = editorRef.current
     if (!editor) return
+    draftNodesRef.current = []
     renderComposerNodesToEditor(editor, [])
+    ensureEditorHasCaretTarget()
     setHasContent(false)
     onDraftChange({ input: '', selectedSourceScopes: [] })
     closeMention()
-  }, [closeMention, onDraftChange, resetKey])
+  }, [closeMention, ensureEditorHasCaretTarget, onDraftChange, resetKey])
 
   useEffect(() => {
     const editor = editorRef.current
@@ -268,13 +376,14 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     const currentNodes = readComposerNodesFromEditor(editor, knownScopesRef.current)
     const nextNodes = pruneComposerNodesByWorkspace(currentNodes, selectedWorkspaceId)
     if (nextNodes.length === currentNodes.length) return
+    draftNodesRef.current = nextNodes
     renderComposerNodesToEditor(editor, nextNodes)
     if (document.activeElement === editor) {
-      moveCaretToEnd(editor)
+      restoreCaretToEnd()
     }
     syncDraftFromEditor()
     closeMention()
-  }, [closeMention, selectedWorkspaceId, syncDraftFromEditor])
+  }, [closeMention, restoreCaretToEnd, selectedWorkspaceId, syncDraftFromEditor])
 
   useEffect(() => {
     if (mentionQuery === null) return
@@ -335,32 +444,68 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       if (mentionRefreshFrameRef.current !== null) {
         window.cancelAnimationFrame(mentionRefreshFrameRef.current)
       }
+      if (draftSyncFrameRef.current !== null) {
+        window.cancelAnimationFrame(draftSyncFrameRef.current)
+      }
+      if (controlFocusTimeoutRef.current !== null) {
+        window.clearTimeout(controlFocusTimeoutRef.current)
+      }
       document.removeEventListener('selectionchange', handleSelectionChange)
     }
   }, [refreshMentionContext])
 
+  useEffect(() => {
+    const editor = editorRef.current
+    if (!editor) return
+
+    const handleNativeBeforeInput = (event: InputEvent): void => {
+      if (event.isComposing || isComposingRef.current) return
+      if (event.inputType !== 'insertText' || !event.data) return
+      event.preventDefault()
+      insertTextAtSelection(event.data)
+    }
+
+    editor.addEventListener('beforeinput', handleNativeBeforeInput)
+    return () => {
+      editor.removeEventListener('beforeinput', handleNativeBeforeInput)
+    }
+  }, [insertTextAtSelection])
+
+  useLayoutEffect(() => {
+    const editor = editorRef.current
+    if (!editor) return
+    const expectedNodes = draftNodesRef.current
+    const currentNodes = readComposerNodesFromEditor(editor, knownScopesRef.current)
+    if (areComposerNodesEqual(currentNodes, expectedNodes)) return
+    const shouldRestoreCaret = document.activeElement === editor
+    renderComposerNodesToEditor(editor, expectedNodes)
+    if (shouldRestoreCaret) {
+      moveCaretToEnd(editor)
+    }
+  })
+
   const handleEditorInput = (): void => {
-    syncDraftFromEditor()
+    scheduleDraftSyncFromEditor()
     if (isComposingRef.current) return
     scheduleMentionRefresh()
   }
 
   const handleEditorFocus = (): void => {
-    const selection = window.getSelection()
-    if (selection?.rangeCount && editorRef.current?.contains(selection.anchorNode)) return
-    const editor = editorRef.current
-    if (!editor) return
-    moveCaretToEnd(editor)
+    restoreCaretToEnd()
   }
 
-  const handleEditorPaste = (event: React.ClipboardEvent<HTMLDivElement>): void => {
+  const handleEditorMouseUp = (): void => {
+    restoreCaretToEnd()
+  }
+
+  const handleEditorPaste = (event: React.ClipboardEvent<HTMLSpanElement>): void => {
     event.preventDefault()
     const pastedText = event.clipboardData.getData('text/plain')
     if (!pastedText) return
     insertTextAtSelection(pastedText)
   }
 
-  const handleEditorKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+  const handleEditorKeyDown = (event: React.KeyboardEvent<HTMLSpanElement>): void => {
     if (event.nativeEvent.isComposing || isComposingRef.current) return
 
     if (mentionQuery !== null) {
@@ -425,7 +570,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     closeMention()
   }
 
-  const handleEditorClickCapture = (event: React.MouseEvent<HTMLDivElement>): void => {
+  const handleEditorClickCapture = (event: React.MouseEvent<HTMLSpanElement>): void => {
     const target = event.target
     if (!(target instanceof HTMLElement)) return
     const removeButton = target.closest('[data-action="remove-scope-token"]')
@@ -571,7 +716,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
         }}
       >
         <div className="relative min-h-[64px]">
-          <div
+          <span
             ref={editorRef}
             contentEditable
             suppressContentEditableWarning
@@ -579,13 +724,14 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             aria-multiline="true"
             tabIndex={0}
             spellCheck={false}
-            className="min-h-[44px] w-full whitespace-pre-wrap break-words bg-transparent text-[15px] leading-6 text-[#1F1F1F] outline-none [&_[data-role='scope-token']]:align-middle"
+            className="block min-h-[44px] w-full whitespace-pre-wrap break-words bg-transparent text-[15px] leading-6 text-[#1F1F1F] outline-none [&_[data-role='scope-token']]:align-middle"
             data-testid={workbenchSelectors.input}
             onInput={handleEditorInput}
             onKeyDown={handleEditorKeyDown}
             onPaste={handleEditorPaste}
             onClickCapture={handleEditorClickCapture}
             onFocus={handleEditorFocus}
+            onMouseUp={handleEditorMouseUp}
             onKeyUp={() => {
               if (isComposingRef.current) return
               scheduleMentionRefresh()
