@@ -53,13 +53,20 @@ export const runDirectorHumanSubtask = async (input: {
   return output
 }
 
-const mergeReusableEvidence = (state: AiRunState, deliveryMarkdown: string | undefined): string[] => {
-  const reusableEvidence = extractContextNoteReusableEvidence(deliveryMarkdown)
-  if (reusableEvidence.length === 0) return state.contextEvidence
+const mergeReusableEvidence = (input: {
+  state: AiRunState
+  output: HumanTaskOutput
+}): string[] => {
+  const reusableEvidence = extractContextNoteReusableEvidence(input.output.deliveryMarkdown)
+  const fallbackSummary = String(input.output.summary || '').trim()
+  const candidateEvidence =
+    reusableEvidence.length > 0 ? reusableEvidence : fallbackSummary ? [fallbackSummary] : []
+  if (candidateEvidence.length === 0) return input.state.contextEvidence
 
-  return reusableEvidence.reduce(
-    (evidences, item) => appendContextEvidence({ ...state, contextEvidence: evidences }, item),
-    state.contextEvidence
+  return candidateEvidence.reduce(
+    (evidences, item) =>
+      appendContextEvidence({ ...input.state, contextEvidence: evidences }, item),
+    input.state.contextEvidence
   )
 }
 
@@ -91,7 +98,10 @@ export const createContextEnrichNode = (input: {
 
     return {
       contextRounds: state.contextRounds + 1,
-      contextEvidence: mergeReusableEvidence(state, output.deliveryMarkdown),
+      contextEvidence: mergeReusableEvidence({
+        state,
+        output
+      }),
       contextObjective: undefined,
       directorStage: 'director_intent'
     }

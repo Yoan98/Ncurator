@@ -51,10 +51,10 @@ const SettingsPage: React.FC = () => {
           description={sectionMeta.description}
           navigationMode="back"
           backTo="/"
-          actions={<SettingsMenuButton />}
+          actions={<SettingsMenuButton className="!h-10 !w-10 !rounded-xl !px-0" />}
         />
 
-        <div className="min-h-0 flex-1 overflow-y-auto pb-5">
+        <div className="min-h-0 flex-1 overflow-hidden pb-4 pr-1">
           {currentSection === 'workspace' ? <WorkspaceSettingsPanel /> : null}
           {currentSection === 'model' ? <ModelSettingsPanel /> : null}
           {currentSection === 'web-sources' ? <WebSourcesSettingsPanel /> : null}

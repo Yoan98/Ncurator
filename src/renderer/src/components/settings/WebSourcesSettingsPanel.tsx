@@ -1,14 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { Button, Empty, Input, Modal, Tag, message } from 'antd'
+import { Button, Empty, Input, Modal, Tooltip, message } from 'antd'
 import type { WebSourceRecord } from '../../../../shared/types'
-import {
-  HiArrowPath,
-  HiGlobeAlt,
-  HiOutlineAdjustmentsHorizontal,
-  HiOutlineTrash
-} from 'react-icons/hi2'
+import { HiArrowPath, HiOutlineTrash } from 'react-icons/hi2'
 import { importSelectors } from '../../testing/selectors'
-import { formatDateTime, getWebStatusMeta, parseSelectors } from './utils/workspace'
+import StatusTag from './StatusTag'
+import { formatDateTime, getWebStatusBadge } from './utils/workspace'
 
 const WebSourcesSettingsPanel: React.FC = () => {
   const [webSources, setWebSources] = useState<WebSourceRecord[]>([])
@@ -16,12 +12,11 @@ const WebSourcesSettingsPanel: React.FC = () => {
   const [webKeyword, setWebKeyword] = useState('')
   const [webModalVisible, setWebModalVisible] = useState(false)
   const [webUrlsText, setWebUrlsText] = useState('')
-  const [webIncludeSelectorsText, setWebIncludeSelectorsText] = useState('')
-  const [webExcludeSelectorsText, setWebExcludeSelectorsText] = useState('')
   const [webSubmitting, setWebSubmitting] = useState(false)
+  const [webRefreshingAll, setWebRefreshingAll] = useState(false)
+  const [webRefreshingIds, setWebRefreshingIds] = useState<Record<string, boolean>>({})
   const [deleteWebSource, setDeleteWebSource] = useState<WebSourceRecord | null>(null)
   const [selectedWebSourceId, setSelectedWebSourceId] = useState<string | null>(null)
-  const [showAdvancedRules, setShowAdvancedRules] = useState(false)
 
   const loadWebSources = useCallback(async (): Promise<void> => {
     setWebLoading(true)
@@ -73,15 +68,10 @@ const WebSourcesSettingsPanel: React.FC = () => {
     [selectedWebSourceId, webSources]
   )
 
-  const statusSummary = useMemo(
-    () =>
-      webSources.reduce<Record<string, number>>((summary, source) => {
-        const key = String(source.import_status)
-        summary[key] = (summary[key] || 0) + 1
-        return summary
-      }, {}),
-    [webSources]
-  )
+  const selectedWebStatusBadge = useMemo(() => {
+    if (!selectedWebSource) return null
+    return getWebStatusBadge(selectedWebSource, Boolean(webRefreshingIds[selectedWebSource.id]))
+  }, [selectedWebSource, webRefreshingIds])
 
   const handleWebImport = async (): Promise<void> => {
     const urls = webUrlsText
@@ -95,15 +85,7 @@ const WebSourcesSettingsPanel: React.FC = () => {
 
     setWebSubmitting(true)
     try {
-      const includeSelectors = parseSelectors(webIncludeSelectorsText)
-      const excludeSelectors = parseSelectors(webExcludeSelectorsText)
-      const response = await window.api.ingestWebs(
-        urls.map((url) => ({
-          url,
-          includeSelectors,
-          excludeSelectors
-        }))
-      )
+      const response = await window.api.ingestWebs(urls.map((url) => ({ url })))
       if (!response.success) {
         message.error(response.error || '提交网页资料失败')
         return
@@ -111,9 +93,6 @@ const WebSourcesSettingsPanel: React.FC = () => {
       message.success('网页资料已加入队列')
       setWebModalVisible(false)
       setWebUrlsText('')
-      setWebIncludeSelectorsText('')
-      setWebExcludeSelectorsText('')
-      setShowAdvancedRules(false)
       await loadWebSources()
     } catch (error) {
       console.error(error)
@@ -124,17 +103,59 @@ const WebSourcesSettingsPanel: React.FC = () => {
   }
 
   const handleRefreshWebSource = async (source: WebSourceRecord): Promise<void> => {
+    setWebRefreshingIds((previous) => ({ ...previous, [source.id]: true }))
     try {
       const response = await window.api.webSourceRefresh({ webSourceId: source.id })
       if (!response.success) {
-        message.error(response.error || '刷新网页资料失败')
+        message.error(response.error || '重新抓取网页资料失败')
         return
       }
-      message.success('网页资料已刷新')
+      message.success('网页资料已重新抓取')
       await loadWebSources()
     } catch (error) {
       console.error(error)
-      message.error('刷新网页资料失败')
+      message.error('重新抓取网页资料失败')
+    } finally {
+      setWebRefreshingIds((previous) => ({ ...previous, [source.id]: false }))
+    }
+  }
+
+  const handleRefreshAllWebSources = async (): Promise<void> => {
+    if (webSources.length === 0) {
+      message.warning('暂无可抓取的网页资料')
+      return
+    }
+
+    setWebRefreshingAll(true)
+    setWebRefreshingIds(
+      Object.fromEntries(webSources.map((source) => [source.id, true] as const))
+    )
+    try {
+      const results = await Promise.allSettled(
+        webSources.map((source) => window.api.webSourceRefresh({ webSourceId: source.id }))
+      )
+      const successCount = results.filter(
+        (result) => result.status === 'fulfilled' && result.value.success
+      ).length
+      const failedCount = results.length - successCount
+
+      if (successCount > 0) {
+        message.success(
+          failedCount > 0
+            ? `已触发 ${successCount} 条网页重新抓取，${failedCount} 条失败`
+            : `已触发 ${successCount} 条网页重新抓取`
+        )
+      } else {
+        message.error('全部抓取失败')
+      }
+
+      await loadWebSources()
+    } catch (error) {
+      console.error(error)
+      message.error('全部抓取失败')
+    } finally {
+      setWebRefreshingAll(false)
+      setWebRefreshingIds({})
     }
   }
 
@@ -156,41 +177,30 @@ const WebSourcesSettingsPanel: React.FC = () => {
   }
 
   return (
-    <div className="space-y-4" data-testid={importSelectors.webSourceSection}>
-      <section className="rounded-[18px] border border-[#E5E5E4] bg-white/88 px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur-sm">
+    <div
+      className="flex h-full min-h-0 flex-col gap-4 overflow-hidden"
+      data-testid={importSelectors.webSourceSection}
+    >
+      <section className="shrink-0 rounded-[18px] border border-[#E5E5E4] bg-white/88 px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-2xl border border-[#F4E5DF] bg-[#FBF5F2] text-[#D97757]">
-              <HiGlobeAlt className="h-4 w-4" />
-            </span>
-            <div className="min-w-0">
-              <h2 className="text-[16px] font-semibold tracking-tight text-[#1F1F1F]">网页资料</h2>
-              <div className="flex flex-wrap gap-2 pt-1">
-                <Tag className="!m-0 rounded-full border-[#E5E5E4] bg-white px-3 py-1 text-[12px] text-[#666666]">
-                  共 {webSources.length} 条
-                </Tag>
-                <Tag className="!m-0 rounded-full border-[#F4E5DF] bg-[#FBF5F2] px-3 py-1 text-[12px] text-[#D97757]">
-                  处理中 {statusSummary['1'] || 0}
-                </Tag>
-                <Tag className="!m-0 rounded-full border-[#DCEBD7] bg-[#F3FAF0] px-3 py-1 text-[12px] text-[#4F7A46]">
-                  已抓取 {statusSummary['2'] || 0}
-                </Tag>
-              </div>
-            </div>
+          <div className="min-w-0">
+            <h2 className="text-[16px] font-semibold tracking-tight text-[#1F1F1F]">网页资料</h2>
+            <div className="pt-1 text-[12px] text-[#666666]">共 {webSources.length} 条</div>
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Button
-              icon={<HiArrowPath className="h-4 w-4" />}
-              className="border-[#E5E5E4] bg-white text-[#1F1F1F]"
-              onClick={() => void loadWebSources()}
-              loading={webLoading}
-            >
-              刷新
-            </Button>
+            <Tooltip title={webRefreshingAll ? '正在刷新当前列表里的网页资料。' : '重新抓取当前列表里的网页资料。'}>
+              <Button
+                icon={<HiArrowPath className="h-4 w-4" />}
+                className="border-[#E5E5E4] bg-white text-[#1F1F1F]"
+                onClick={() => void handleRefreshAllWebSources()}
+                loading={webRefreshingAll}
+              >
+                全部抓取
+              </Button>
+            </Tooltip>
             <Button
               type="primary"
-              icon={<HiGlobeAlt className="h-4 w-4" />}
               onClick={() => setWebModalVisible(true)}
               data-testid={importSelectors.webSourceOpenModalButton}
             >
@@ -200,8 +210,8 @@ const WebSourcesSettingsPanel: React.FC = () => {
         </div>
       </section>
 
-      <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
-        <section className="flex min-h-[720px] flex-col rounded-[20px] border border-[#E5E5E4] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+      <div className="grid min-h-0 flex-1 gap-4 overflow-hidden pr-1 xl:grid-cols-[360px_minmax(0,1fr)]">
+        <section className="flex min-h-0 flex-col rounded-[20px] border border-[#E5E5E4] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
           <div className="border-b border-[#E5E5E4] px-4 py-4">
             <div className="text-[15px] font-semibold text-[#1F1F1F]">来源列表</div>
             <div className="mt-3" data-testid={importSelectors.webSourceSearchInput}>
@@ -217,11 +227,11 @@ const WebSourcesSettingsPanel: React.FC = () => {
           </div>
 
           <div
-            className="flex-1 overflow-y-auto px-3 py-3"
+            className="flex-1 overflow-y-auto px-3 py-3 pr-2"
             data-testid={importSelectors.webSourceList}
           >
             {webSources.length === 0 ? (
-              <div className="flex min-h-[640px] items-center justify-center">
+              <div className="flex min-h-full items-center justify-center">
                 <Empty
                   image={Empty.PRESENTED_IMAGE_SIMPLE}
                   description={<span className="text-[#666666]">暂无网页资料</span>}
@@ -230,8 +240,8 @@ const WebSourcesSettingsPanel: React.FC = () => {
             ) : (
               <div className="space-y-2">
                 {webSources.map((item) => {
-                  const statusMeta = getWebStatusMeta(item.import_status)
                   const isSelected = item.id === selectedWebSourceId
+                  const statusBadge = getWebStatusBadge(item, Boolean(webRefreshingIds[item.id]))
 
                   return (
                     <button
@@ -252,9 +262,12 @@ const WebSourcesSettingsPanel: React.FC = () => {
                           </div>
                           <div className="mt-1 truncate text-[12px] text-[#666666]">{item.url}</div>
                         </div>
-                        <Tag className={`!mr-0 rounded-full ${statusMeta.className}`}>
-                          {statusMeta.label}
-                        </Tag>
+                        <StatusTag
+                          label={statusBadge.label}
+                          className={statusBadge.className}
+                          tooltip={statusBadge.tooltip}
+                          icon={statusBadge.icon}
+                        />
                       </div>
                       <div className="mt-3 text-[12px] text-[#999999]">
                         最近抓取：{formatDateTime(item.fetched_at)}
@@ -267,7 +280,7 @@ const WebSourcesSettingsPanel: React.FC = () => {
           </div>
         </section>
 
-        <section className="flex min-h-[720px] flex-col rounded-[20px] border border-[#E5E5E4] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+        <section className="flex min-h-0 flex-col overflow-hidden rounded-[20px] border border-[#E5E5E4] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
           {selectedWebSource ? (
             <>
               <div className="border-b border-[#E5E5E4] px-5 py-5">
@@ -277,11 +290,14 @@ const WebSourcesSettingsPanel: React.FC = () => {
                       <h3 className="text-[16px] font-semibold text-[#1F1F1F]">
                         {selectedWebSource.title || selectedWebSource.url}
                       </h3>
-                      <Tag
-                        className={`!mr-0 rounded-full ${getWebStatusMeta(selectedWebSource.import_status).className}`}
-                      >
-                        {getWebStatusMeta(selectedWebSource.import_status).label}
-                      </Tag>
+                      {selectedWebStatusBadge ? (
+                        <StatusTag
+                          label={selectedWebStatusBadge.label}
+                          className={selectedWebStatusBadge.className}
+                          tooltip={selectedWebStatusBadge.tooltip}
+                          icon={selectedWebStatusBadge.icon}
+                        />
+                      ) : null}
                     </div>
                     <button
                       type="button"
@@ -298,14 +314,23 @@ const WebSourcesSettingsPanel: React.FC = () => {
                   </div>
 
                   <div className="flex flex-wrap gap-2">
-                    <Button
-                      icon={<HiArrowPath className="h-4 w-4" />}
-                      className="border-[#E5E5E4] bg-white text-[#1F1F1F]"
-                      onClick={() => void handleRefreshWebSource(selectedWebSource)}
-                      data-testid={`${importSelectors.webSourceRefreshButtonPrefix}-${selectedWebSource.id}`}
+                    <Tooltip
+                      title={
+                        webRefreshingIds[selectedWebSource.id]
+                          ? '正在重新抓取这条网页资料。'
+                          : '重新抓取当前网页资料。'
+                      }
                     >
-                      刷新
-                    </Button>
+                      <Button
+                        icon={<HiArrowPath className="h-4 w-4" />}
+                        className="border-[#E5E5E4] bg-white text-[#1F1F1F]"
+                        onClick={() => void handleRefreshWebSource(selectedWebSource)}
+                        loading={Boolean(webRefreshingIds[selectedWebSource.id])}
+                        data-testid={`${importSelectors.webSourceRefreshButtonPrefix}-${selectedWebSource.id}`}
+                      >
+                        重新抓取
+                      </Button>
+                    </Tooltip>
                     <Button
                       danger
                       icon={<HiOutlineTrash className="h-4 w-4" />}
@@ -318,60 +343,31 @@ const WebSourcesSettingsPanel: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid gap-4 px-5 py-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-                <div className="space-y-4">
-                  <section className="rounded-[18px] border border-[#E5E5E4] bg-[#FCFBF8] p-4">
-                    <div className="text-[14px] font-semibold text-[#1F1F1F]">抓取标识</div>
-                    <div className="mt-3 space-y-2 text-[12px] text-[#666666]">
-                      <div>规范化标识：{selectedWebSource.normalized_url}</div>
-                      <div>创建时间：{formatDateTime(selectedWebSource.created_at)}</div>
-                      <div>最近更新：{formatDateTime(selectedWebSource.updated_at)}</div>
-                      <div>最近抓取：{formatDateTime(selectedWebSource.fetched_at)}</div>
-                    </div>
-                  </section>
-
+              <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 pr-4">
+                <div className="grid min-h-full gap-4">
                   <section className="rounded-[18px] border border-[#E5E5E4] bg-white p-4">
-                    <div className="text-[14px] font-semibold text-[#1F1F1F]">高级规则</div>
-                    <div className="mt-3 grid gap-3 lg:grid-cols-2">
-                      <div className="rounded-[14px] bg-[#FAFAF9] px-3 py-3">
-                        <div className="text-[12px] text-[#999999]">Include Selectors</div>
-                        <div className="mt-2 text-[12px] leading-6 text-[#666666]">
-                          {selectedWebSource.include_selectors?.length
-                            ? selectedWebSource.include_selectors.join(', ')
-                            : '未设置'}
-                        </div>
-                      </div>
-                      <div className="rounded-[14px] bg-[#FAFAF9] px-3 py-3">
-                        <div className="text-[12px] text-[#999999]">Exclude Selectors</div>
-                        <div className="mt-2 text-[12px] leading-6 text-[#666666]">
-                          {selectedWebSource.exclude_selectors?.length
-                            ? selectedWebSource.exclude_selectors.join(', ')
-                            : '未设置'}
-                        </div>
-                      </div>
+                    <div className="text-[14px] font-semibold text-[#1F1F1F]">状态与异常</div>
+                    <div className="mt-3 rounded-[14px] bg-[#FAFAF9] px-3 py-3 text-[12px] text-[#666666]">
+                      当前状态：{selectedWebStatusBadge?.label || '处理中'}
                     </div>
+                    <div className="mt-3 rounded-[14px] bg-[#FAFAF9] px-3 py-3 text-[12px] text-[#666666]">
+                      最近抓取：{formatDateTime(selectedWebSource.fetched_at)}
+                    </div>
+                    {selectedWebSource.last_error ? (
+                      <div className="mt-3 rounded-[14px] border border-[#F7D5D9] bg-[#FFF2F4] px-3 py-3 text-[12px] leading-6 text-[#B5455D]">
+                        {selectedWebSource.last_error}
+                      </div>
+                    ) : (
+                      <div className="mt-3 rounded-[14px] border border-[#DCEBD7] bg-[#F3FAF0] px-3 py-3 text-[12px] text-[#4F7A46]">
+                        当前没有抓取错误。
+                      </div>
+                    )}
                   </section>
                 </div>
-
-                <section className="rounded-[18px] border border-[#E5E5E4] bg-white p-4">
-                  <div className="text-[14px] font-semibold text-[#1F1F1F]">状态与异常</div>
-                  <div className="mt-3 rounded-[14px] bg-[#FAFAF9] px-3 py-3 text-[12px] text-[#666666]">
-                    当前状态：{getWebStatusMeta(selectedWebSource.import_status).label}
-                  </div>
-                  {selectedWebSource.last_error ? (
-                    <div className="mt-3 rounded-[14px] border border-[#F7D5D9] bg-[#FFF2F4] px-3 py-3 text-[12px] leading-6 text-[#B5455D]">
-                      {selectedWebSource.last_error}
-                    </div>
-                  ) : (
-                    <div className="mt-3 rounded-[14px] border border-[#DCEBD7] bg-[#F3FAF0] px-3 py-3 text-[12px] text-[#4F7A46]">
-                      当前没有抓取错误。
-                    </div>
-                  )}
-                </section>
               </div>
             </>
           ) : (
-            <div className="flex min-h-[720px] items-center justify-center px-6">
+            <div className="flex min-h-0 flex-1 items-center justify-center px-6">
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description={<span className="text-[#666666]">选择一条网页资料</span>}
@@ -405,40 +401,6 @@ const WebSourcesSettingsPanel: React.FC = () => {
               data-testid={importSelectors.webSourceUrlInput}
             />
           </div>
-
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 rounded-xl border border-[#E5E5E4] bg-[#FAFAF9] px-3 py-2 text-[13px] text-[#666666] transition-colors hover:border-[#D97757] hover:text-[#D97757]"
-            onClick={() => setShowAdvancedRules((previous) => !previous)}
-          >
-            <HiOutlineAdjustmentsHorizontal className="h-4 w-4" />
-            {showAdvancedRules ? '收起高级规则' : '展开高级规则'}
-          </button>
-
-          {showAdvancedRules ? (
-            <div className="space-y-4 rounded-[18px] border border-[#E5E5E4] bg-[#FCFBF8] p-4">
-              <div>
-                <div className="mb-2 text-sm font-medium text-[#1F1F1F]">Include Selectors</div>
-                <Input.TextArea
-                  value={webIncludeSelectorsText}
-                  onChange={(event) => setWebIncludeSelectorsText(event.target.value)}
-                  placeholder="可选，逗号或换行分隔"
-                  autoSize={{ minRows: 2, maxRows: 4 }}
-                  data-testid={importSelectors.webSourceIncludeSelectorsInput}
-                />
-              </div>
-              <div>
-                <div className="mb-2 text-sm font-medium text-[#1F1F1F]">Exclude Selectors</div>
-                <Input.TextArea
-                  value={webExcludeSelectorsText}
-                  onChange={(event) => setWebExcludeSelectorsText(event.target.value)}
-                  placeholder="可选，逗号或换行分隔"
-                  autoSize={{ minRows: 2, maxRows: 4 }}
-                  data-testid={importSelectors.webSourceExcludeSelectorsInput}
-                />
-              </div>
-            </div>
-          ) : null}
         </div>
       </Modal>
 

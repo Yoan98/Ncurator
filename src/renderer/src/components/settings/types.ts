@@ -3,6 +3,7 @@ import type {
   LLMConfig,
   WorkspaceNode,
   WorkspacePrepareMode,
+  WorkspaceSource,
   WorkspaceSyncProgress
 } from '../../../../shared/types'
 
@@ -36,4 +37,22 @@ export type SettingsSectionMeta = {
   description: string
   path: string
   icon: ReactNode
+}
+
+export type StatusBadgeVisual = {
+  label: string
+  className: string
+  tooltip: string
+  icon: ReactNode
+}
+
+export type WorkspaceAction = 'scan' | 'prepare'
+
+export type WorkspaceStatusBadgeInput = {
+  status: WorkspaceSource['status']
+  lastScanAt?: number
+  lastPrepareAt?: number
+  lastError?: string
+  action?: WorkspaceAction
+  progress?: WorkspaceSyncProgress
 }

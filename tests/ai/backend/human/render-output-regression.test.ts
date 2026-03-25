@@ -5,6 +5,7 @@ import {
   buildDeliveryModePromptRules,
   extractContextNoteReusableEvidence
 } from '../../../../src/main/services/ai/human/shared/deliveryContracts'
+import { buildMouthPromptContext } from '../../../../src/main/services/ai/human/prompts/mouth'
 import {
   renderHumanEvidenceLines,
   renderHumanFactLines,
@@ -43,6 +44,26 @@ const buildState = () => {
       action: 'mouth'
     }
   }
+  state.lastParallelCallToolResults = [
+    {
+      toolName: 'docx_render_preview',
+      ok: true,
+      code: 'ok',
+      summary: '已生成预览文件。',
+      data: {
+        previewPath: '/tmp/review-preview.docx'
+      }
+    }
+  ]
+  state.runtimeArtifacts.push({
+    kind: 'file',
+    capability: 'docx',
+    path: '/tmp/review-preview.docx',
+    fileName: 'review-preview.docx',
+    operation: 'created',
+    artifactRole: 'preview',
+    summary: '预览已生成。'
+  })
   return state
 }
 
@@ -84,9 +105,18 @@ test('render-output-regression', async () => {
           mode: 'context_note',
           summary: '已补充上下文。'
         }),
+        userAnswerMarkdown: buildDeliveryModeFallbackMarkdown({
+          state,
+          mode: 'user_answer',
+          summary: '已整理最终答复。'
+        }),
         taskHandoffRules: buildDeliveryModePromptRules('task_handoff'),
         contextNoteRules: buildDeliveryModePromptRules('context_note'),
         contextNoteExample: buildDeliveryModePromptExample('context_note'),
+        mouthPromptUser: buildMouthPromptContext({
+          state,
+          deliveryMode: 'task_handoff'
+        }).user,
         extractedReusableEvidence: extractContextNoteReusableEvidence(
           buildDeliveryModeFallbackMarkdown({
             state,
@@ -128,16 +158,19 @@ test('render-output-regression', async () => {
         result.taskHandoffMarkdown.includes('# 子任务交付') &&
           result.taskHandoffMarkdown.includes('## 关键事实') &&
           result.taskHandoffMarkdown.includes('## 关键证据') &&
+          result.taskHandoffMarkdown.includes('review-preview.docx') &&
           result.taskHandoffMarkdown.includes('## 建议下一步') &&
           result.contextNoteMarkdown.includes('# 上下文补充结果') &&
-          result.contextNoteMarkdown.includes('## 可复用证据'),
+          result.contextNoteMarkdown.includes('## 可复用证据') &&
+          result.userAnswerMarkdown.includes('## 产物与引用'),
         {
           name: 'render-delivery-markdown-headings',
           message:
-            'fallback delivery markdown should keep the existing task_handoff and context_note headings stable',
+            'fallback delivery markdown should keep the existing task_handoff/context_note headings stable and expose runtime artifacts when present',
           data: {
             taskHandoffMarkdown: result.taskHandoffMarkdown,
-            contextNoteMarkdown: result.contextNoteMarkdown
+            contextNoteMarkdown: result.contextNoteMarkdown,
+            userAnswerMarkdown: result.userAnswerMarkdown
           }
         }
       )
@@ -167,8 +200,21 @@ test('render-output-regression', async () => {
         {
           name: 'render-context-note-evidence-extraction',
           message:
-            'context_note evidence extraction should read from the same shared delivery contract headings as fallback markdown',
+          'context_note evidence extraction should read from the same shared delivery contract headings as fallback markdown',
           data: result.extractedReusableEvidence
+        }
+      )
+
+      runtime.assertThat(
+        result.mouthPromptUser.includes('<recent_tool_results>') &&
+          result.mouthPromptUser.includes('docx_render_preview') &&
+          result.mouthPromptUser.includes('<runtime_artifacts>') &&
+          result.mouthPromptUser.includes('review-preview.docx'),
+        {
+          name: 'render-mouth-prompt-runtime-context',
+          message:
+            'mouth prompt context should expose recent tool results and runtime artifacts so delivery can accurately mention produced files',
+          data: result.mouthPromptUser
         }
       )
     }

@@ -4,6 +4,7 @@ import { createBrainNode } from '../../../../src/main/services/ai/human/node/bra
 import { createHandNode } from '../../../../src/main/services/ai/human/node/handNode'
 import { createLearningNode } from '../../../../src/main/services/ai/human/node/learningNode'
 import { createMouthNode } from '../../../../src/main/services/ai/human/node/mouthNode'
+import { mouthOutputSchema } from '../../../../src/main/services/ai/human/schema'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
 import { createHumanRunStateSchema } from '../../../../src/main/services/ai/human/state/schema'
 import type { HumanState } from '../../../../src/main/services/ai/human/types'
@@ -267,6 +268,49 @@ test('state-transition-regression', async () => {
       })
       const mouthLimitedResult = await mouthLimitedNode(mouthLimitedState)
 
+      const emptyDeliveryMarkdownSchemaAccepted = mouthOutputSchema.safeParse({
+        summary: '允许空 deliveryMarkdown',
+        deliveryMarkdown: ''
+      }).success
+
+      const mouthFallbackState = createInitialHumanState({
+        taskId: 'mouth-empty-markdown',
+        userInput: '验证 mouth 空 markdown fallback'
+      })
+      mouthFallbackState.lastBrainDecision = {
+        memoryOps: [],
+        decision: {
+          summary: '可以完成交付',
+          reason: '显式返回空 markdown，验证 fallback。',
+          expectedOutcome: '使用 fallback markdown 收口。'
+        },
+        nextAction: {
+          action: 'mouth'
+        }
+      }
+      mouthFallbackState.runtimeArtifacts.push({
+        kind: 'file',
+        capability: 'docx',
+        path: '/tmp/fallback-preview.docx',
+        fileName: 'fallback-preview.docx',
+        operation: 'created',
+        artifactRole: 'preview',
+        summary: 'fallback 预览文件'
+      })
+      const mouthFallbackNode = createMouthNode({
+        ctx: runtime.createAiRunContext({
+          humanDeliveryOverride: ({ summary }) => ({
+            summary,
+            deliveryMarkdown: ''
+          })
+        }),
+        cache: createHumanRuntimeCache(),
+        deliveryMode: 'user_answer',
+        streamAnswer: false,
+        internalDelivery: false
+      })
+      const mouthFallbackResult = await mouthFallbackNode(mouthFallbackState)
+
       return {
         initialState,
         schemaDefaultTask,
@@ -278,6 +322,8 @@ test('state-transition-regression', async () => {
         brainInvalidMemoryResult,
         mouthCompletedResult,
         mouthLimitedResult,
+        emptyDeliveryMarkdownSchemaAccepted,
+        mouthFallbackResult,
         events: runtime.eventCollector.snapshot()
       }
     },
@@ -363,6 +409,21 @@ test('state-transition-regression', async () => {
         }
       )
 
+      runtime.assertThat(
+        result.emptyDeliveryMarkdownSchemaAccepted &&
+          result.mouthFallbackResult.result?.deliveryMarkdown?.includes('# 处理结果') &&
+          result.mouthFallbackResult.result?.deliveryMarkdown?.includes('fallback-preview.docx'),
+        {
+          name: 'human-mouth-empty-markdown-fallback',
+          message:
+            'mouth schema should accept empty deliveryMarkdown so the node fallback builder can still produce a completed delivery with artifact references',
+          data: {
+            emptyDeliveryMarkdownSchemaAccepted: result.emptyDeliveryMarkdownSchemaAccepted,
+            mouthFallbackResult: result.mouthFallbackResult
+          }
+        }
+      )
+
       const watchHintEvents = result.events.filter((event) => isEventType(event, 'watch_hint'))
       runtime.assertThat(
         watchHintEvents.length === 3 &&
@@ -382,15 +443,16 @@ test('state-transition-regression', async () => {
         isEventType(event, 'answer_completed')
       )
       runtime.assertThat(
-        deliveryEvents.length === 2 &&
+        deliveryEvents.length === 3 &&
           deliveryEvents.some((event) => event.taskId === 'mouth-completed') &&
           deliveryEvents.some((event) => event.taskId === 'mouth-limited') &&
+          deliveryEvents.some((event) => event.taskId === 'mouth-empty-markdown') &&
           answerCompletedEvents.length === 1 &&
           answerCompletedEvents[0]?.taskId === 'mouth-completed',
         {
           name: 'human-mouth-delivery-events',
           message:
-            'mouth helper should preserve task delivery events for completed and limited-result outputs and keep answer_completed on streamed final answers',
+            'mouth helper should preserve task delivery events for completed, limited-result, and fallback outputs and keep answer_completed on streamed final answers',
           data: {
             deliveryEvents,
             answerCompletedEvents

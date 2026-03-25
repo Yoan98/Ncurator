@@ -5,6 +5,7 @@ import {
   renderHumanFactLines,
   renderHumanOpenQuestionLines
 } from './memoryRenderers'
+import { renderHumanArtifactLines } from './runtimeRenderers'
 
 type DeliverySection = {
   heading: string
@@ -154,7 +155,7 @@ const TASK_HANDOFF_CONTRACT: StructuredDeliveryContract = {
       },
       {
         heading: '## 产物与引用',
-        body: '无'
+        body: renderHumanArtifactLines(state, 'fallback_markdown')
       },
       {
         heading: '## 未决与风险',
@@ -239,6 +240,9 @@ const USER_ANSWER_CONTRACT: DeliveryModeContract = {
       '',
       '## 关键证据',
       renderHumanEvidenceLines(state, 'fallback_markdown'),
+      '',
+      '## 产物与引用',
+      renderHumanArtifactLines(state, 'fallback_markdown'),
       '',
       '## 限制与未决项',
       renderHumanOpenQuestionLines(state, 'fallback_markdown')

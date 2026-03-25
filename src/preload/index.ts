@@ -1,9 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import type {
-  AiRunEvent,
-  SearchSourceFilter
-} from '../shared/types'
+import type { AiRunEvent, SearchSourceFilter } from '../shared/types'
 import type { DesktopApi } from './api'
 
 const isE2EObserverEnabled = process.env.NCURATOR_E2E_MODE === '1'
@@ -40,11 +37,8 @@ const api: DesktopApi = {
     ipcRenderer.invoke('open-path', filePath),
   revealPath: (filePath: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('reveal-path', filePath),
-  search: (
-    query: string,
-    sourceType?: SearchSourceFilter,
-    documentIds?: string[]
-  ) =>
+  pickDirectory: () => ipcRenderer.invoke('pick-directory'),
+  search: (query: string, sourceType?: SearchSourceFilter, documentIds?: string[]) =>
     ipcRenderer.invoke('search', query, sourceType, documentIds),
   ftsSearch: (query: string, sourceType?: SearchSourceFilter, documentIds?: string[]) =>
     ipcRenderer.invoke('fts-search', query, sourceType, documentIds),
@@ -66,7 +60,8 @@ const api: DesktopApi = {
   webSourceList: () => ipcRenderer.invoke('web-source-list'),
   webSourceRefresh: (payload) => ipcRenderer.invoke('web-source-refresh', payload),
   webSourceDelete: (webSourceId: string) => ipcRenderer.invoke('web-source-delete', webSourceId),
-  legacyLocalImportMigrationStatus: () => ipcRenderer.invoke('legacy-local-import-migration-status'),
+  legacyLocalImportMigrationStatus: () =>
+    ipcRenderer.invoke('legacy-local-import-migration-status'),
   listChunks: (payload) => ipcRenderer.invoke('list-chunks', payload),
   deleteDocuments: (
     ids: string[]
@@ -86,21 +81,14 @@ const api: DesktopApi = {
 
   // Chat & LLM
   chatSessionList: () => ipcRenderer.invoke('chat-session-list'),
-  chatSessionSave: (session) =>
-    ipcRenderer.invoke('chat-session-save', session),
-  chatSessionDelete: (id: string) =>
-    ipcRenderer.invoke('chat-session-delete', id),
-  chatMessageList: (sessionId: string) =>
-    ipcRenderer.invoke('chat-message-list', sessionId),
-  chatMessageSave: (message) =>
-    ipcRenderer.invoke('chat-message-save', message),
+  chatSessionSave: (session) => ipcRenderer.invoke('chat-session-save', session),
+  chatSessionDelete: (id: string) => ipcRenderer.invoke('chat-session-delete', id),
+  chatMessageList: (sessionId: string) => ipcRenderer.invoke('chat-message-list', sessionId),
+  chatMessageSave: (message) => ipcRenderer.invoke('chat-message-save', message),
   llmConfigList: () => ipcRenderer.invoke('llm-config-list'),
-  llmConfigSave: (config) =>
-    ipcRenderer.invoke('llm-config-save', config),
-  llmConfigDelete: (id: string) =>
-    ipcRenderer.invoke('llm-config-delete', id),
-  llmConfigSetActive: (id: string) =>
-    ipcRenderer.invoke('llm-config-set-active', id),
+  llmConfigSave: (config) => ipcRenderer.invoke('llm-config-save', config),
+  llmConfigDelete: (id: string) => ipcRenderer.invoke('llm-config-delete', id),
+  llmConfigSetActive: (id: string) => ipcRenderer.invoke('llm-config-set-active', id),
   aiRuntimeSettingsGet: () => ipcRenderer.invoke('ai-runtime-settings-get'),
   aiRuntimeSettingsSave: (settings) => ipcRenderer.invoke('ai-runtime-settings-save', settings),
 

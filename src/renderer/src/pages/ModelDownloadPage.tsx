@@ -112,17 +112,17 @@ const ModelDownloadPage: React.FC = () => {
           description="下载本地检索模型，为搜索和知识库能力提供向量基础。"
           navigationMode="back"
           backTo="/"
-          actions={<SettingsMenuButton />}
+          actions={<SettingsMenuButton className="!h-10 !w-10 !rounded-xl !px-0" />}
         />
 
-        <div className="min-h-0 flex-1 overflow-y-auto pb-5">
-          <div className="rounded-[20px] border border-[#E5E5E4] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+        <div className="min-h-0 flex-1 overflow-hidden pb-4 pr-1">
+          <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-[20px] border border-[#E5E5E4] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
             <div className="border-b border-[#E5E5E4] px-5 py-4">
               <Title level={4} className="!mb-0 !text-[#1F1F1F]">
                 模型列表
               </Title>
             </div>
-            <div className="px-5 py-2">
+            <div className="min-h-0 flex-1 overflow-auto px-5 py-2 pr-4">
               <List
                 loading={loading}
                 itemLayout="horizontal"

@@ -8,6 +8,10 @@ import {
   renderHumanFactLines,
   renderHumanOpenQuestionLines
 } from '../shared/memoryRenderers'
+import {
+  renderHumanArtifactLines,
+  renderHumanRecentToolResultLines
+} from '../shared/runtimeRenderers'
 
 type HumanMouthPromptInput = {
   deliveryMode: HumanDeliveryMode
@@ -16,6 +20,9 @@ type HumanMouthPromptInput = {
   factsText: string
   evidencesText: string
   openQuestionsText: string
+  recentToolResultsText: string
+  runtimeArtifactsText: string
+  watchHintText: string
 }
 
 const buildFinalDecisionText = (state: HumanState): string =>
@@ -33,7 +40,10 @@ export const buildMouthPromptContext = (input: {
     finalDecisionText: buildFinalDecisionText(input.state),
     factsText: renderHumanFactLines(input.state, 'mouth_prompt'),
     evidencesText: renderHumanEvidenceLines(input.state, 'mouth_prompt'),
-    openQuestionsText: renderHumanOpenQuestionLines(input.state, 'mouth_prompt')
+    openQuestionsText: renderHumanOpenQuestionLines(input.state, 'mouth_prompt'),
+    recentToolResultsText: renderHumanRecentToolResultLines(input.state, 'prompt'),
+    runtimeArtifactsText: renderHumanArtifactLines(input.state, 'prompt'),
+    watchHintText: input.state.watchHint || 'none'
   })
 }
 
@@ -57,6 +67,7 @@ export const buildHumanMouthPrompt = (input: HumanMouthPromptInput) => {
     2. 如果当前结果有限，先说明已经完成到哪里，再说明限制和继续需要什么。
     3. 只使用已经给你的事实、证据和最终判断，不要偷偷补充新的推理。
     4. 语言要清楚、克制、可执行，不要堆内部过程。
+    5. 如果存在运行时产物或最近工具结果，只能准确引用已经给出的路径、状态和摘要，不要补编额外元数据。
   </delivery_principles>
 
   <delivery_mode_rules>
@@ -115,6 +126,18 @@ ${input.evidencesText}
   <open_questions>
 ${input.openQuestionsText}
   </open_questions>
+
+  <recent_tool_results>
+${input.recentToolResultsText}
+  </recent_tool_results>
+
+  <runtime_artifacts>
+${input.runtimeArtifactsText}
+  </runtime_artifacts>
+
+  <watch_hint>
+${input.watchHintText}
+  </watch_hint>
 </user_context>
 `.trim()
   }

@@ -35,10 +35,12 @@ export const createFixtureWorkspaceFromSettings = async (
     name: string
   }
 ): Promise<void> => {
-  await page.getByTestId(importSelectors.createWorkspaceButton).click()
-  await page.getByTestId(importSelectors.createWorkspaceRootInput).fill(input.rootPath)
-  await page.getByTestId(importSelectors.createWorkspaceNameInput).fill(input.name)
-  await page.getByTestId(importSelectors.createWorkspaceConfirmButton).click()
+  await page.evaluate(async ({ rootPath, name }) => {
+    const response = await window.api.workspaceCreate({ rootPath, name })
+    if (!response.success) {
+      throw new Error(response.error || 'workspace create failed')
+    }
+  }, input)
   await page.waitForSelector(
     `[data-testid="${importSelectors.workspaceCardPrefix}-${E2E_WORKSPACE_CARD_ID}"]`
   )

@@ -1,4 +1,4 @@
-import { ipcMain, shell } from 'electron'
+import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { IngestionService } from '../services/ingestion/loader'
 import { EmbeddingService } from '../services/vector/EmbeddingService'
 import { StorageService } from '../services/storage/StorageService'
@@ -49,6 +49,7 @@ import type {
   ListWorkspaceNodesRequest,
   GetDraftReviewRequest,
   GetDraftReviewResponse,
+  PickDirectoryResponse,
   SetDraftChangeDecisionRequest,
   SetDraftChangeDecisionResponse,
   SourceScopeListResponse,
@@ -155,7 +156,9 @@ const normalizeSelectedSourceScopes = (
       label: String(scope.label || '').trim(),
       absolutePath: scope.absolutePath ? String(scope.absolutePath).trim() : undefined,
       relativePath: scope.relativePath ? String(scope.relativePath).trim() : undefined,
-      documentIds: Array.isArray(scope.documentIds) ? scope.documentIds.map(String).filter(Boolean) : [],
+      documentIds: Array.isArray(scope.documentIds)
+        ? scope.documentIds.map(String).filter(Boolean)
+        : [],
       workspace:
         scope.workspace &&
         String(scope.workspace.workspaceId || '').trim() &&
@@ -765,9 +768,9 @@ export function registerHandlers(services: {
         .filter((source) => source.document_id)
         .map((source) => [source.document_id || '', source] as const)
     )
-    const webDocuments = (await documentsStore.listDocuments({ page: 1, pageSize: 2000 })).items.filter(
-      (document) => document.source_type === 'web'
-    )
+    const webDocuments = (
+      await documentsStore.listDocuments({ page: 1, pageSize: 2000 })
+    ).items.filter((document) => document.source_type === 'web')
 
     for (const document of webDocuments) {
       if (existingByDocumentId.has(document.id)) continue
@@ -1084,6 +1087,31 @@ export function registerHandlers(services: {
     }
   })
 
+  ipcMain.handle('pick-directory', async (event): Promise<PickDirectoryResponse> => {
+    try {
+      const dialogOptions = {
+        title: '选择工作空间目录',
+        buttonLabel: '选择此目录',
+        properties: ['openDirectory', 'createDirectory', 'dontAddToRecent'] as const
+      }
+      let result
+      try {
+        const ownerWindow = BrowserWindow.fromWebContents(event.sender)
+        result = ownerWindow
+          ? await dialog.showOpenDialog(ownerWindow, dialogOptions)
+          : await dialog.showOpenDialog(dialogOptions)
+      } catch {
+        result = await dialog.showOpenDialog(dialogOptions)
+      }
+      if (result.canceled || result.filePaths.length === 0) {
+        return { canceled: true }
+      }
+      return { canceled: false, path: result.filePaths[0] }
+    } catch (error: unknown) {
+      return { canceled: true, error: getErrorMessage(error) }
+    }
+  })
+
   ipcMain.handle('workspace-list', async (): Promise<WorkspaceListResponse> => {
     try {
       const fixtureList = getE2EFixtureWorkspaceList()
@@ -1241,12 +1269,13 @@ export function registerHandlers(services: {
 
   ipcMain.handle(
     'workspace-prepare',
-    async (event, payload: { workspaceId: string; mode?: string }): Promise<WorkspaceJobResponse> => {
+    async (
+      event,
+      payload: { workspaceId: string; mode?: string }
+    ): Promise<WorkspaceJobResponse> => {
       const workspaceId = String(payload.workspaceId || '').trim()
       const mode =
-        payload.mode === 'presence_only' || payload.mode === 'changes_only'
-          ? payload.mode
-          : 'full'
+        payload.mode === 'presence_only' || payload.mode === 'changes_only' ? payload.mode : 'full'
       if (!workspaceId) return { success: false, error: 'workspaceId is required' }
       if (activeWorkspacePrepareJobs.has(workspaceId)) {
         return { success: false, error: 'workspace prepare already running' }
@@ -1285,9 +1314,15 @@ export function registerHandlers(services: {
           now: prepareStartedAt
         })
 
-        const nodeMap = new Map(mergedNodes.map((node) => [getWorkspaceScopeKey(node), node] as const))
-        const basePrepareTargets = [...diff.added, ...diff.changed].filter((node) => node.kind === 'file')
-        const basePrepareKeys = new Set(basePrepareTargets.map((node) => getWorkspaceScopeKey(node)))
+        const nodeMap = new Map(
+          mergedNodes.map((node) => [getWorkspaceScopeKey(node), node] as const)
+        )
+        const basePrepareTargets = [...diff.added, ...diff.changed].filter(
+          (node) => node.kind === 'file'
+        )
+        const basePrepareKeys = new Set(
+          basePrepareTargets.map((node) => getWorkspaceScopeKey(node))
+        )
         const retryTargets = mergedNodes.filter(
           (node) =>
             node.kind === 'file' &&
@@ -1484,10 +1519,7 @@ export function registerHandlers(services: {
 
   ipcMain.handle(
     'web-source-refresh',
-    async (
-      event,
-      payload: { webSourceId: string }
-    ): Promise<WebSourceMutationResponse> => {
+    async (event, payload: { webSourceId: string }): Promise<WebSourceMutationResponse> => {
       try {
         const fixtureResponse = refreshE2EFixtureWebSource(String(payload.webSourceId || '').trim())
         if (fixtureResponse) {
@@ -1579,33 +1611,28 @@ export function registerHandlers(services: {
 
   ipcMain.handle(
     'search',
-    async (
-      _event,
-      query: string,
-      sourceType?: 'all' | 'file' | 'web',
-      documentIds?: string[]
-    ) => {
-    try {
-      const fixtureSearch = getE2EFixtureSearchResponse(query, documentIds)
-      if (fixtureSearch) {
-        return fixtureSearch
+    async (_event, query: string, sourceType?: 'all' | 'file' | 'web', documentIds?: string[]) => {
+      try {
+        const fixtureSearch = getE2EFixtureSearchResponse(query, documentIds)
+        if (fixtureSearch) {
+          return fixtureSearch
+        }
+        const { data: queryVector } = await embeddingService.embed(query)
+        const filter = sourceType && sourceType !== 'all' ? sourceType : undefined
+        const results = await documentsStore.search(queryVector, query, 5, filter, documentIds)
+
+        const tokens = jieba.cutForSearch(query, true)
+
+        const finalResults = results.map(normalizeForIpc)
+
+        return {
+          results: finalResults,
+          tokens
+        }
+      } catch (error: unknown) {
+        console.error('❌ [SEARCH] ERROR:', error)
+        throw error
       }
-      const { data: queryVector } = await embeddingService.embed(query)
-      const filter = sourceType && sourceType !== 'all' ? sourceType : undefined
-      const results = await documentsStore.search(queryVector, query, 5, filter, documentIds)
-
-      const tokens = jieba.cutForSearch(query, true)
-
-      const finalResults = results.map(normalizeForIpc)
-
-      return {
-        results: finalResults,
-        tokens
-      }
-    } catch (error: unknown) {
-      console.error('❌ [SEARCH] ERROR:', error)
-      throw error
-    }
     }
   )
 
@@ -1663,7 +1690,13 @@ export function registerHandlers(services: {
       try {
         const { data: queryVector } = await embeddingService.embed(query)
         const filter = sourceType && sourceType !== 'all' ? sourceType : undefined
-        const results = await documentsStore.hybridSearch(queryVector, query, 20, filter, documentIds)
+        const results = await documentsStore.hybridSearch(
+          queryVector,
+          query,
+          20,
+          filter,
+          documentIds
+        )
         const normalized = results.map(normalizeForIpc)
         console.log('🔎 [HYBRID-SEARCH] RESULTS:', normalized)
         return normalized
@@ -1779,7 +1812,9 @@ export function registerHandlers(services: {
       const selectedDocumentIds = Array.isArray(payload?.selectedDocumentIds)
         ? payload.selectedDocumentIds.map(String).filter(Boolean)
         : undefined
-      const modelConfigId = payload?.modelConfigId ? String(payload.modelConfigId).trim() : undefined
+      const modelConfigId = payload?.modelConfigId
+        ? String(payload.modelConfigId).trim()
+        : undefined
       const selectedSourceScopes = normalizeSelectedSourceScopes(payload?.selectedSourceScopes)
       const inferredWorkspace = selectedSourceScopes?.find((scope) => scope.workspace)?.workspace
       const workspace =
@@ -1799,10 +1834,9 @@ export function registerHandlers(services: {
                 rootPath: inferredWorkspace.rootPath,
                 policyProfile: inferredWorkspace.policyProfile
               }
-          : undefined
+            : undefined
       const allowNonLocal = Boolean(payload?.allowNonLocal)
-      const e2eFixtureScenario =
-        isE2EFixtureModeEnabled() ? matchE2EChatScenario(input) : null
+      const e2eFixtureScenario = isE2EFixtureModeEnabled() ? matchE2EChatScenario(input) : null
       if (!sessionId) return { success: false, error: 'sessionId is required' }
       if (!input) return { success: false, error: 'input is required' }
 
@@ -2123,10 +2157,7 @@ export function registerHandlers(services: {
 
   ipcMain.handle(
     'draft-review-validate',
-    async (
-      _event,
-      payload: ValidateDraftCommitRequest
-    ): Promise<ValidateDraftCommitResponse> => {
+    async (_event, payload: ValidateDraftCommitRequest): Promise<ValidateDraftCommitResponse> => {
       try {
         return await draftReviewService.validateCommit(payload)
       } catch (e: unknown) {

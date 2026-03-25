@@ -12,7 +12,7 @@ import {
   message
 } from 'antd'
 import type { TableColumnsType } from 'antd'
-import { HiCheckCircle, HiCog6Tooth, HiPencil, HiPlus, HiTrash } from 'react-icons/hi2'
+import { HiCheckCircle, HiPencil, HiPlus, HiTrash } from 'react-icons/hi2'
 import type { LLMConfig } from '../../../../shared/types'
 import { MODEL_MAPPING, PROVIDER_OPTIONS } from './constants'
 import type { FlatModelOption, GroupedModelOption, LlmConfigFormValues } from './types'
@@ -185,19 +185,14 @@ const ModelSettingsPanel: React.FC = () => {
   ]
 
   return (
-    <div className="space-y-4">
-      <section className="rounded-[18px] border border-[#E5E5E4] bg-white/88 px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur-sm">
+    <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
+      <section className="shrink-0 rounded-[18px] border border-[#E5E5E4] bg-white/88 px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-9 w-9 items-center justify-center rounded-2xl border border-[#F4E5DF] bg-[#FBF5F2] text-[#D97757]">
-              <HiCog6Tooth className="h-4 w-4" />
-            </span>
-            <div className="min-w-0">
-              <h2 className="text-[16px] font-semibold tracking-tight text-[#1F1F1F]">大模型</h2>
-              {activeConfig ? (
-                <div className="truncate text-[12px] text-[#666666]">{activeConfig.model_name}</div>
-              ) : null}
-            </div>
+          <div className="min-w-0">
+            <h2 className="text-[16px] font-semibold tracking-tight text-[#1F1F1F]">大模型</h2>
+            {activeConfig ? (
+              <div className="truncate text-[12px] text-[#666666]">{activeConfig.model_name}</div>
+            ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Tag className="!m-0 rounded-full border-[#E5E5E4] bg-white px-3 py-1 text-[12px] text-[#666666]">
@@ -220,16 +215,18 @@ const ModelSettingsPanel: React.FC = () => {
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-[20px] border border-[#E5E5E4] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-        <Table
-          dataSource={configs}
-          columns={columns}
-          rowKey="id"
-          pagination={false}
-          loading={loading}
-          size="middle"
-          className="[&_.ant-table-thead_th]:!bg-[#F5F5F4] [&_.ant-table-thead_th]:!py-3 [&_.ant-table-thead_th]:!text-[12px] [&_.ant-table-thead_th]:!text-[#666666] [&_.ant-table-thead_th]:!font-medium [&_.ant-table-tbody_td]:!py-3 [&_.ant-table-tbody_td]:!align-middle"
-        />
+      <section className="min-h-0 flex-1 overflow-hidden rounded-[20px] border border-[#E5E5E4] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+        <div className="h-full overflow-auto pr-1">
+          <Table
+            dataSource={configs}
+            columns={columns}
+            rowKey="id"
+            pagination={false}
+            loading={loading}
+            size="middle"
+            className="[&_.ant-table-thead_th]:!bg-[#F5F5F4] [&_.ant-table-thead_th]:!py-3 [&_.ant-table-thead_th]:!text-[12px] [&_.ant-table-thead_th]:!text-[#666666] [&_.ant-table-thead_th]:!font-medium [&_.ant-table-tbody_td]:!py-3 [&_.ant-table-tbody_td]:!align-middle"
+          />
+        </div>
       </section>
 
       <Modal

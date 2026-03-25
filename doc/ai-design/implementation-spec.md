@@ -190,7 +190,8 @@ stateDiagram-v2
 - 实现约束：
   - 模型输出必须通过 `ctx.chatStructured`。
   - prompt 必须通过 `buildPlanPrompt` 组织。
-  - 计划结果必须先经过 `validatePlannerTasks` 校验，再转换为 `DirectorPlanTask`。
+  - 计划结果必须先经过 `validatePlannerTasks` 的基础结果校验，再转换为 `DirectorPlanTask`。
+  - `validatePlannerTasks` 只做“是否产出任务”等结构性兜底，不做基于指定文本匹配的任务拒绝。
   - 每个计划任务都必须能交给单个 `human` 闭环执行。
 
 **Not**

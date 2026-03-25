@@ -149,7 +149,7 @@ export const brainDecisionRecordSchema = z.object({
 
 export const humanDeliveryPayloadSchema = z.object({
   summary: z.string().min(1),
-  deliveryMarkdown: z.string().min(1).optional()
+  deliveryMarkdown: z.string().optional()
 })
 
 export const mouthOutputSchema = humanDeliveryPayloadSchema

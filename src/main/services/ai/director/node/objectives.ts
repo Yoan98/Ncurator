@@ -1,4 +1,4 @@
-import type { AiPlanTask } from '../../../../../shared/types'
+import type { AiArtifactRef, AiPlanTask } from '../../../../../shared/types'
 import { normalizeRenderText, renderLineList, renderNamedSections } from '../../utils/render'
 
 const renderContextEvidence = (contextEvidence: string[]): string => {
@@ -7,6 +7,21 @@ const renderContextEvidence = (contextEvidence: string[]): string => {
     style: 'numbered'
   })
 }
+
+const renderArtifactRef = (artifact: AiArtifactRef): string => {
+  if (artifact.kind === 'file') {
+    const role = artifact.artifactRole ? `/${artifact.artifactRole}` : ''
+    return `${artifact.fileName} (${artifact.path}) [${artifact.capability}/${artifact.operation}${role}] - ${artifact.summary}`
+  }
+
+  return `draft review ${artifact.review.reviewId} (${artifact.review.documentCount} docs, ${artifact.review.changeCount} changes) - ${artifact.summary}`
+}
+
+const renderTaskArtifacts = (artifacts: AiArtifactRef[] | undefined): string =>
+  renderLineList((artifacts || []).map(renderArtifactRef), {
+    fallback: '无',
+    style: 'bullet'
+  })
 
 const buildDirectorObjective = (input: {
   title: string
@@ -34,7 +49,10 @@ const renderDeliveries = (tasks: AiPlanTask[]): string => {
         `### 任务 ${index + 1}: ${normalizeRenderText(task.title, task.id)}`,
         `- taskId: ${task.id}`,
         `- 状态: ${task.status}`,
-        `- 正式交付:\n${normalizeRenderText(task.deliveryMarkdown || '', '无')}`
+        '#### 正式交付',
+        normalizeRenderText(task.deliveryMarkdown || '', '无'),
+        '#### 产物与引用',
+        renderTaskArtifacts(task.artifacts)
       ].join('\n')
     )
     .join('\n\n')

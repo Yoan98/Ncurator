@@ -23,6 +23,7 @@ import type {
   ListSourceScopesRequest,
   ListWorkspaceNodesRequest,
   LLMConfig,
+  PickDirectoryResponse,
   PrepareWorkspaceRequest,
   RefreshWebSourceRequest,
   SearchResponse,
@@ -61,19 +62,26 @@ export type DownloadProgress = {
 }
 
 export type DesktopApi = {
-  ingestWeb: (payload: WebIngestPayload) => Promise<{ success: boolean; count?: number; error?: string }>
+  ingestWeb: (
+    payload: WebIngestPayload
+  ) => Promise<{ success: boolean; count?: number; error?: string }>
   ingestWebs: (
     payload: WebIngestPayload[]
   ) => Promise<{ success: boolean; created?: number; error?: string }>
   openExternal: (url: string) => Promise<{ success: boolean; error?: string }>
   openPath: (filePath: string) => Promise<{ success: boolean; error?: string }>
   revealPath: (filePath: string) => Promise<{ success: boolean; error?: string }>
+  pickDirectory: () => Promise<PickDirectoryResponse>
   search: (
     query: string,
     sourceType?: SearchSourceFilter,
     documentIds?: string[]
   ) => Promise<SearchResponse>
-  ftsSearch: (query: string, sourceType?: SearchSourceFilter, documentIds?: string[]) => Promise<SearchResult[]>
+  ftsSearch: (
+    query: string,
+    sourceType?: SearchSourceFilter,
+    documentIds?: string[]
+  ) => Promise<SearchResult[]>
   vectorSearch: (
     query: string,
     sourceType?: SearchSourceFilter,
@@ -140,9 +148,7 @@ export type DesktopApi = {
   draftReviewSetDecision: (
     payload: SetDraftChangeDecisionRequest
   ) => Promise<SetDraftChangeDecisionResponse>
-  draftReviewValidate: (
-    payload: ValidateDraftCommitRequest
-  ) => Promise<ValidateDraftCommitResponse>
+  draftReviewValidate: (payload: ValidateDraftCommitRequest) => Promise<ValidateDraftCommitResponse>
   draftReviewCommit: (payload: CommitDraftReviewRequest) => Promise<CommitDraftReviewResponse>
   onAiRunEvent: (cb: (event: AiRunEvent) => void) => void
   removeAiRunEventListeners: () => void
