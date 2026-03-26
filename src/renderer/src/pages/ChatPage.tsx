@@ -35,7 +35,6 @@ import {
 } from '../components/workbench/constants'
 import { FILE_ORIGIN_LABELS, REVIEW_STATUS_META } from '../components/workbench/constants'
 import type {
-  AssistantTurnReviewTarget,
   AssistantTurnStep,
   AssistantTurnViewModel,
   SearchWorkbenchTurn,
@@ -51,6 +50,10 @@ import {
   getSearchResultFileRef,
   getToolBadge
 } from '../components/workbench/utils'
+import {
+  groupReviewTargetsByRunId,
+  mergeReviewTargets
+} from '../components/workbench/reviewTargetUtils'
 import { chatSelectors, workbenchSelectors } from '../testing/selectors'
 import brandIcon from '../../../../resources/icon.png'
 
@@ -73,43 +76,6 @@ const createAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
   reviewTargets: [],
   blockers: []
 })
-
-const buildReviewTarget = (review: DraftReviewSummary): AssistantTurnReviewTarget => ({
-  reviewId: review.id,
-  title: review.title,
-  changeCount: review.change_count,
-  documentCount: review.document_count,
-  status: review.status
-})
-
-const mergeReviewTargets = (
-  current: AssistantTurnReviewTarget[],
-  next: AssistantTurnReviewTarget
-): AssistantTurnReviewTarget[] => [
-  next,
-  ...current.filter((item) => item.reviewId !== next.reviewId)
-]
-
-const groupReviewTargetsByRunId = (
-  reviews: DraftReviewSummary[]
-): Map<string, AssistantTurnReviewTarget[]> => {
-  const grouped = new Map<string, DraftReviewSummary[]>()
-  reviews.forEach((review) => {
-    const existing = grouped.get(review.run_id) || []
-    existing.push(review)
-    grouped.set(review.run_id, existing)
-  })
-
-  return new Map(
-    [...grouped.entries()].map(([runId, runReviews]) => [
-      runId,
-      runReviews
-        .slice()
-        .sort((left, right) => right.updated_at - left.updated_at)
-        .map((review) => buildReviewTarget(review))
-    ])
-  )
-}
 
 const sortDraftReviews = (items: DraftReviewSummary[]): DraftReviewSummary[] => {
   const priority: Record<DraftReviewSummary['status'], number> = {
