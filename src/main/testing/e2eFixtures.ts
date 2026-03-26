@@ -30,6 +30,7 @@ export type E2EChatScenario =
   | 'chat-approval'
   | 'chat-workspace'
   | 'chat-edit-review'
+  | 'chat-multi-review'
   | 'chat-review-conflict'
 export type E2ESearchScenario = 'search-results'
 
@@ -38,6 +39,7 @@ const E2E_CHAT_SCENARIO_PREFIXES: Record<E2EChatScenario, string> = {
   'chat-approval': '[e2e:chat-approval]',
   'chat-workspace': '[e2e:chat-workspace]',
   'chat-edit-review': '[e2e:chat-edit-review]',
+  'chat-multi-review': '[e2e:chat-multi-review]',
   'chat-review-conflict': '[e2e:chat-review-conflict]'
 }
 

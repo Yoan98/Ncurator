@@ -10,7 +10,7 @@
 - 当涉及 `human` 的 skill 集合、skill 命名、skill 边界或 skill 与 tools 的映射时，请阅读 `doc/ai-design/human-skill-design.md`
 - 当涉及 AI prompt 设计、prompt 结构、标签组织或 structured output 编排时，请阅读 `doc/ai-design/prompt-design.md`
 - 当涉及 AI 后续重构方向、迭代规划或未决方案时，请阅读 `doc/ai-design/refactor-plan.md`
-- 当涉及 Core AI 测试方案、阶段划分、backend 与 `final` e2e 验收边界、用例规划、`human` skill 覆盖、`watchHint`/并行边界或排查时何时继续查看 `runtime-events.jsonl` 时，请先阅读 `doc/test-plan/ai-test.md`
+- 当涉及 Core AI 测试方案、阶段划分、backend 与 `final` e2e 验收边界、确认文档模式验收、用例规划、`human` skill 覆盖、`watchHint`/并行边界或排查时何时继续查看 `runtime-events.jsonl` 时，请先阅读 `doc/test-plan/ai-test.md`
 - 当涉及 Workspace 测试方案、工作空间扫描/准备、网页资料、`Settings -> Workspace` 空态/错误态、source scope 提示联动或正式 workspace case 规划时，请先阅读 `doc/test-plan/workspace-test.md`
 - 当涉及数据库、LanceDB、表职责或检索存储实现时，请阅读 `doc/database.md`
 - 当涉及目录规范、模块边界、文件归位或工程结构时，请阅读 `doc/project-structure.md`

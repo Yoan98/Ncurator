@@ -240,7 +240,7 @@ export function registerHandlers(services: {
     process.cwd(),
     'tests',
     'fixtures',
-    'main',
+    'ai',
     'docx',
     'sample-edit.docx'
   )
@@ -329,16 +329,15 @@ export function registerHandlers(services: {
     })
   }
 
-  const createE2EDraftReview = async (input: {
+  const stageE2EDraftReviewDocument = async (input: {
     runId: string
     draftReviewService: DraftReviewService
-    conflict: boolean
+    sourceFileName: string
+    acceptedReplace: string
+    rejectedReplace: string
   }) => {
     const workspaceRootPath = path.join('/tmp', 'ncurator-e2e-review-workspace', input.runId)
-    const sourcePath = path.join(
-      workspaceRootPath,
-      input.conflict ? 'e2e-review-conflict.docx' : 'e2e-review-source.docx'
-    )
+    const sourcePath = path.join(workspaceRootPath, input.sourceFileName)
     await fs.promises.mkdir(workspaceRootPath, { recursive: true })
     await fs.promises.copyFile(E2E_REVIEW_FIXTURE_SOURCE, sourcePath)
 
@@ -363,13 +362,13 @@ export function registerHandlers(services: {
     const acceptedOp = {
       type: 'replace_text' as const,
       query: 'Hello',
-      replace: 'E2E accepted paragraph',
+      replace: input.acceptedReplace,
       replaceAll: true
     }
     const rejectedOp = {
       type: 'replace_text' as const,
       query: 'fixture',
-      replace: 'E2E rejected paragraph',
+      replace: input.rejectedReplace,
       replaceAll: true
     }
 
@@ -421,25 +420,59 @@ export function registerHandlers(services: {
       changedBlocks: applyRejectedResponse.payload.changedBlocks
     })
 
+    return {
+      sourcePath,
+      workspaceRootPath
+    }
+  }
+
+  const createE2EDraftReviews = async (input: {
+    runId: string
+    draftReviewService: DraftReviewService
+    conflict: boolean
+    multiple: boolean
+  }) => {
+    const stagedSources: string[] = []
+
+    const firstDocument = await stageE2EDraftReviewDocument({
+      runId: input.runId,
+      draftReviewService: input.draftReviewService,
+      sourceFileName: input.conflict ? 'e2e-review-conflict.docx' : 'e2e-review-source-a.docx',
+      acceptedReplace: input.multiple ? 'E2E accepted paragraph A' : 'E2E accepted paragraph',
+      rejectedReplace: input.multiple ? 'E2E rejected paragraph A' : 'E2E rejected paragraph'
+    })
+    stagedSources.push(firstDocument.sourcePath)
+
+    if (input.multiple) {
+      const secondDocument = await stageE2EDraftReviewDocument({
+        runId: input.runId,
+        draftReviewService: input.draftReviewService,
+        sourceFileName: 'e2e-review-source-b.docx',
+        acceptedReplace: 'E2E accepted paragraph B',
+        rejectedReplace: 'E2E rejected paragraph B'
+      })
+      stagedSources.push(secondDocument.sourcePath)
+    }
+
     const details = await input.draftReviewService.finalizeRunReview({
       runId: input.runId,
-      workspaceRootPath
+      workspaceRootPath: firstDocument.workspaceRootPath
     })
-    const detail = details[0]
-    if (!detail) {
-      throw new Error('e2e review detail missing after finalize')
+    if (details.length === 0) {
+      throw new Error('e2e review details missing after finalize')
     }
 
     if (input.conflict) {
-      const sourceStat = await fs.promises.stat(sourcePath)
+      const conflictSourcePath = stagedSources[0]
+      if (!conflictSourcePath) {
+        throw new Error('e2e conflict source path missing')
+      }
+      const sourceStat = await fs.promises.stat(conflictSourcePath)
       const nextTime = new Date(sourceStat.mtimeMs + 120_000)
-      await fs.promises.utimes(sourcePath, nextTime, nextTime)
+      await fs.promises.utimes(conflictSourcePath, nextTime, nextTime)
     }
 
-    return {
-      detail,
-      sourcePath
-    }
+    return details
   }
 
   const emitE2EEditReviewFlow = async (input: {
@@ -447,6 +480,7 @@ export function registerHandlers(services: {
     sendEvent: (event: AiRunEvent) => void
     draftReviewService: DraftReviewService
     conflict: boolean
+    multiple: boolean
   }): Promise<void> => {
     const plan = [
       {
@@ -477,29 +511,32 @@ export function registerHandlers(services: {
     })
     await pauseForE2EFixture()
 
-    const { detail } = await createE2EDraftReview({
+    const details = await createE2EDraftReviews({
       runId: input.runId,
       draftReviewService: input.draftReviewService,
-      conflict: input.conflict
+      conflict: input.conflict,
+      multiple: input.multiple
     })
 
-    detail.documents.forEach((document) => {
-      if (!document.confirm_artifact_path) return
-      input.sendEvent({
-        type: 'file_artifact',
-        runId: input.runId,
-        taskId: plan[0].id,
-        artifactId: uuidv4(),
-        capability: 'docx',
-        path: document.confirm_artifact_path,
-        fileName: path.basename(document.confirm_artifact_path),
-        operation: 'created',
-        artifactRole: 'draft',
-        reviewId: detail.review.id,
-        draftDocumentId: document.id,
-        draftSnapshotId: document.latest_draft_snapshot_id,
-        summary: `confirm doc ready: ${document.source_name}`,
-        createdAt: Date.now()
+    details.forEach((detail) => {
+      detail.documents.forEach((document) => {
+        if (!document.confirm_artifact_path) return
+        input.sendEvent({
+          type: 'file_artifact',
+          runId: input.runId,
+          taskId: plan[0].id,
+          artifactId: uuidv4(),
+          capability: 'docx',
+          path: document.confirm_artifact_path,
+          fileName: path.basename(document.confirm_artifact_path),
+          operation: 'created',
+          artifactRole: 'draft',
+          reviewId: detail.review.id,
+          draftDocumentId: document.id,
+          draftSnapshotId: document.latest_draft_snapshot_id,
+          summary: `confirm doc ready: ${document.source_name}`,
+          createdAt: Date.now()
+        })
       })
     })
     await pauseForE2EFixture()
@@ -518,35 +555,39 @@ export function registerHandlers(services: {
     })
     await pauseForE2EFixture()
 
-    input.sendEvent({
-      type: 'draft_review_ready',
-      runId: input.runId,
-      review: {
-        reviewId: detail.review.id,
-        documentCount: detail.review.document_count,
-        changeCount: detail.review.change_count
-      },
-      createdAt: Date.now()
+    details.forEach((detail) => {
+      input.sendEvent({
+        type: 'draft_review_ready',
+        runId: input.runId,
+        review: {
+          reviewId: detail.review.id,
+          documentCount: detail.review.document_count,
+          changeCount: detail.review.change_count
+        },
+        createdAt: Date.now()
+      })
     })
     await pauseForE2EFixture()
 
-    detail.documents.forEach((document) => {
-      if (!document.effective_draft_artifact_path) return
-      input.sendEvent({
-        type: 'file_artifact',
-        runId: input.runId,
-        taskId: plan[1].id,
-        artifactId: uuidv4(),
-        capability: 'docx',
-        path: document.effective_draft_artifact_path,
-        fileName: path.basename(document.effective_draft_artifact_path),
-        operation: 'created',
-        artifactRole: 'draft',
-        reviewId: detail.review.id,
-        draftDocumentId: document.id,
-        draftSnapshotId: document.latest_draft_snapshot_id,
-        summary: `draft ready: ${document.source_name}`,
-        createdAt: Date.now()
+    details.forEach((detail) => {
+      detail.documents.forEach((document) => {
+        if (!document.effective_draft_artifact_path) return
+        input.sendEvent({
+          type: 'file_artifact',
+          runId: input.runId,
+          taskId: plan[1].id,
+          artifactId: uuidv4(),
+          capability: 'docx',
+          path: document.effective_draft_artifact_path,
+          fileName: path.basename(document.effective_draft_artifact_path),
+          operation: 'created',
+          artifactRole: 'draft',
+          reviewId: detail.review.id,
+          draftDocumentId: document.id,
+          draftSnapshotId: document.latest_draft_snapshot_id,
+          summary: `draft ready: ${document.source_name}`,
+          createdAt: Date.now()
+        })
       })
     })
     await pauseForE2EFixture()
@@ -561,6 +602,8 @@ export function registerHandlers(services: {
       runId: input.runId,
       text: input.conflict
         ? 'E2E fixture 已生成草稿审阅，并在提交前制造了源文件冲突。'
+        : input.multiple
+          ? 'E2E fixture 已生成两个确认文档，可分别确认。'
         : 'E2E fixture 已生成草稿审阅，可继续逐块确认并提交。'
     })
     input.sendEvent({
@@ -729,7 +772,19 @@ export function registerHandlers(services: {
         runId: input.runId,
         sendEvent: input.sendEvent,
         draftReviewService: input.draftReviewService,
-        conflict: false
+        conflict: false,
+        multiple: false
+      })
+      return true
+    }
+
+    if (scenario === 'chat-multi-review') {
+      await emitE2EEditReviewFlow({
+        runId: input.runId,
+        sendEvent: input.sendEvent,
+        draftReviewService: input.draftReviewService,
+        conflict: false,
+        multiple: true
       })
       return true
     }
@@ -739,7 +794,8 @@ export function registerHandlers(services: {
         runId: input.runId,
         sendEvent: input.sendEvent,
         draftReviewService: input.draftReviewService,
-        conflict: true
+        conflict: true,
+        multiple: false
       })
       return true
     }
@@ -1913,18 +1969,18 @@ export function registerHandlers(services: {
         inputText: input
       })
       ;(async () => {
-        const handledByE2EFixture = await maybeHandleE2EFixtureRun({
-          runId,
-          inputText: input,
-          selectedSourceScopes,
-          sendEvent,
-          draftReviewService
-        })
-        if (handledByE2EFixture) {
-          return
-        }
-
         try {
+          const handledByE2EFixture = await maybeHandleE2EFixtureRun({
+            runId,
+            inputText: input,
+            selectedSourceScopes,
+            sendEvent,
+            draftReviewService
+          })
+          if (handledByE2EFixture) {
+            return
+          }
+
           const runtimeSettings = await aiRuntimeSettingsStore.get()
           const result = await AiRunService.getInstance().run(
             {

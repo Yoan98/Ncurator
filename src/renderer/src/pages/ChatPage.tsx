@@ -190,6 +190,16 @@ const ChatPage: React.FC = () => {
     }
   }
 
+  const emitSuccessMessage = (content: string): void => {
+    if (typeof message.success === 'function') {
+      message.success(content)
+      return
+    }
+    if (typeof message.open === 'function') {
+      message.open({ type: 'success', content })
+    }
+  }
+
   const showContentPanel = useCallback((nextState: WorkbenchContentPanelState): void => {
     setContentPanel(nextState)
     setContentPanelCollapsed(false)
@@ -1164,7 +1174,7 @@ const ChatPage: React.FC = () => {
       if (!response.success) {
         message.error(response.error || '提交失败')
       } else {
-        message.success('确认文档已写回源文件')
+        emitSuccessMessage('确认文档已写回源文件')
       }
       await loadDraftReviewsForSession(currentSessionId, activeDraftReview.review.id)
     } catch (error) {
@@ -1186,7 +1196,7 @@ const ChatPage: React.FC = () => {
         message.error(response.error || '放弃确认文档失败')
         return
       }
-      message.success('已放弃本次修改')
+      emitSuccessMessage('已放弃本次修改')
       await loadDraftReviewsForSession(currentSessionId, activeDraftReview.review.id)
     } catch (error) {
       console.error(error)
