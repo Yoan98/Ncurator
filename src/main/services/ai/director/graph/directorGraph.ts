@@ -1,5 +1,5 @@
 import { END, START, StateGraph } from '@langchain/langgraph'
-import type { AiRunContext, AiRunState, HumanTaskRunner } from '../../types'
+import type { AiRunContext, HumanTaskRunner } from '../../types'
 import { createHumanGraphRunner } from '../../human/graph/humanGraph'
 import { createIntentNode } from '../node/intentNode'
 import { createPlanNode } from '../node/planNode'

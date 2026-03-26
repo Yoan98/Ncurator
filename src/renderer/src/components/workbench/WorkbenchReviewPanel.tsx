@@ -8,6 +8,21 @@ import { formatLocatorSummary } from './utils'
 import type { AssistantTurnViewModel, WorkbenchFileRef } from './types'
 import { workbenchSelectors } from '../../testing/selectors'
 
+const ACTIVE_CONFIRM_STATUSES = new Set(['pending_confirm', 'conflicted', 'failed'])
+
+const getEndedStateMessage = (status: DraftReviewDetail['review']['status']): string => {
+  if (status === 'committed') {
+    return '确认副本已清理，修改已写回源文件。'
+  }
+  if (status === 'discarded') {
+    return '确认副本已清理，源文件未被替换。'
+  }
+  if (status === 'superseded') {
+    return '当前确认会话已失效，请查看最新确认文档。'
+  }
+  return '当前确认副本不可用，只能继续查看源文件。'
+}
+
 type WorkbenchReviewPanelProps = {
   review: DraftReviewDetail | null
   loading: boolean
@@ -80,12 +95,26 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
       .sort((left, right) => left.started_at - right.started_at)
       .at(-1) || null
   const reviewStatusMeta = review ? REVIEW_STATUS_META[review.review.status] : null
-  const confirmPath = selectedDocument?.confirm_artifact_path || selectedDocument?.source_path
+  const confirmArtifactPath = selectedDocument?.confirm_artifact_path
   const confirmFileName = selectedDocument
     ? `${selectedDocument.source_name.replace(/\.docx$/i, '')}-确认文档.docx`
     : undefined
+  const sourceFile: WorkbenchFileRef | null = selectedDocument
+    ? {
+        path: selectedDocument.source_path,
+        fileName: selectedDocument.source_name,
+        origin: 'source',
+        reviewId: review?.review.id,
+        draftDocumentId: selectedDocument.id,
+        format: selectedDocument.format
+      }
+    : null
+  const isActiveConfirmSession =
+    Boolean(review && confirmArtifactPath && ACTIVE_CONFIRM_STATUSES.has(review.review.status))
+  const endedStateMessage = review ? getEndedStateMessage(review.review.status) : ''
   const commitDisabled =
     !review ||
+    !isActiveConfirmSession ||
     !validation?.ready ||
     committing ||
     validating ||
@@ -127,7 +156,9 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
                 {selectedDocument.source_path}
               </div>
               <div className="mt-3 text-sm leading-relaxed text-[#666666]">
-                右侧展示的是 AI 生成的确认文档副本。确认后会清除标记并替换源文件。
+                {isActiveConfirmSession
+                  ? '右侧展示的是 AI 生成的确认文档副本。确认后会清除标记并替换源文件。'
+                  : endedStateMessage}
               </div>
             </div>
             {reviewStatusMeta ? (
@@ -196,29 +227,22 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
       <div className="min-h-0 flex-1 space-y-4 overflow-auto py-4">
         <div className="rounded-[18px] border border-[#E5E5E4] bg-white px-4 py-4">
           <div className="flex flex-wrap gap-2">
-            {confirmPath ? (
-              <Button size="small" onClick={() => void onOpenPath(confirmPath)}>
+            {isActiveConfirmSession && confirmArtifactPath ? (
+              <Button size="small" onClick={() => void onOpenPath(confirmArtifactPath)}>
                 系统默认打开
               </Button>
             ) : null}
-            {confirmPath ? (
-              <Button size="small" onClick={() => void onOpenWithApplication(confirmPath)}>
+            {isActiveConfirmSession && confirmArtifactPath ? (
+              <Button size="small" onClick={() => void onOpenWithApplication(confirmArtifactPath)}>
                 选择其他应用打开...
               </Button>
             ) : null}
-            <Button
-              size="small"
-              icon={<FolderOpenOutlined />}
-              onClick={() => void onRevealPath(selectedDocument.source_path)}
-            >
-              定位源文件
-            </Button>
-            {confirmPath && confirmFileName ? (
+            {isActiveConfirmSession && confirmArtifactPath && confirmFileName ? (
               <Button
                 size="small"
                 onClick={() =>
                   onOpenFile({
-                    path: confirmPath,
+                    path: confirmArtifactPath,
                     fileName: confirmFileName,
                     origin: 'edited_draft',
                     reviewId: review.review.id,
@@ -230,87 +254,110 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
                 在工作台中打开
               </Button>
             ) : null}
-          </div>
-        </div>
-
-        <div className="min-h-[420px]">
-          <EmbeddedFileViewer
-            filePath={confirmPath}
-            fileName={confirmFileName || selectedDocument.source_name}
-            anchorName={selectedChange?.anchor_name}
-            emptyText="当前确认文档暂时不可预览。"
-          />
-        </div>
-
-        <div
-          className="rounded-[18px] border border-[#E5E5E4] bg-[#FCFBF8] px-4 py-4"
-          data-testid={workbenchSelectors.reviewValidation}
-        >
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <div className="text-[13px] font-semibold text-[#1F1F1F]">提交前校验</div>
-              <div className="mt-1 text-xs text-[#666666]">
-                校验通过后会对确认文档做 normalize，再替换源文件。
-              </div>
-            </div>
+            {sourceFile ? (
+              <Button size="small" onClick={() => onOpenFile(sourceFile)}>
+                打开源文件
+              </Button>
+            ) : null}
             <Button
               size="small"
-              icon={<ReloadOutlined />}
-              onClick={onRefreshValidation}
-              loading={validating}
+              icon={<FolderOpenOutlined />}
+              onClick={() => void onRevealPath(selectedDocument.source_path)}
             >
-              重新校验
+              定位源文件
             </Button>
-          </div>
-          <div className="mt-3 space-y-2">
-            {validation?.issues.length ? (
-              validation.issues.map((issue, index) => (
-                <div
-                  key={`${issue.code}-${index}`}
-                  className="rounded-xl border border-[#FDECC8] bg-[#FFF9ED] px-3 py-3 text-sm text-[#8A6510]"
-                >
-                  <div>{issue.message}</div>
-                  {issue.sourcePath ? (
-                    <div className="mt-1 break-all text-xs text-[#999999]">{issue.sourcePath}</div>
-                  ) : null}
-                </div>
-              ))
-            ) : (
-              <div className="rounded-xl border border-[#DCEBD7] bg-[#F3FAF0] px-3 py-3 text-sm text-[#4F7A46]">
-                校验通过，可以确认替换源文件。
-              </div>
-            )}
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="primary"
-            size="large"
-            icon={<FileSyncOutlined />}
-            onClick={onCommit}
-            loading={committing}
-            disabled={commitDisabled}
-            data-testid={workbenchSelectors.reviewCommitButton}
-          >
-            确认替换源文件
-          </Button>
-          <Button
-            size="large"
-            icon={<StopOutlined />}
-            onClick={onDiscard}
-            loading={discarding}
-            disabled={
-              committing ||
-              discarding ||
-              review.review.status === 'committed' ||
-              review.review.status === 'discarded'
-            }
-            data-testid={workbenchSelectors.reviewDiscardButton}
-          >
-            放弃本次修改
-          </Button>
-        </div>
+        {isActiveConfirmSession && confirmArtifactPath ? (
+          <>
+            <div className="min-h-[420px]">
+              <EmbeddedFileViewer
+                filePath={confirmArtifactPath}
+                fileName={confirmFileName || selectedDocument.source_name}
+                anchorName={selectedChange?.anchor_name}
+                emptyText="当前确认文档暂时不可预览。"
+              />
+            </div>
+
+            <div
+              className="rounded-[18px] border border-[#E5E5E4] bg-[#FCFBF8] px-4 py-4"
+              data-testid={workbenchSelectors.reviewValidation}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-[13px] font-semibold text-[#1F1F1F]">提交前校验</div>
+                  <div className="mt-1 text-xs text-[#666666]">
+                    校验通过后会对确认文档做 normalize，再替换源文件。
+                  </div>
+                </div>
+                <Button
+                  size="small"
+                  icon={<ReloadOutlined />}
+                  onClick={onRefreshValidation}
+                  loading={validating}
+                >
+                  重新校验
+                </Button>
+              </div>
+              <div className="mt-3 space-y-2">
+                {validation?.issues.length ? (
+                  validation.issues.map((issue, index) => (
+                    <div
+                      key={`${issue.code}-${index}`}
+                      className="rounded-xl border border-[#FDECC8] bg-[#FFF9ED] px-3 py-3 text-sm text-[#8A6510]"
+                    >
+                      <div>{issue.message}</div>
+                      {issue.sourcePath ? (
+                        <div className="mt-1 break-all text-xs text-[#999999]">{issue.sourcePath}</div>
+                      ) : null}
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-xl border border-[#DCEBD7] bg-[#F3FAF0] px-3 py-3 text-sm text-[#4F7A46]">
+                    校验通过，可以确认替换源文件。
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="primary"
+                size="large"
+                icon={<FileSyncOutlined />}
+                onClick={onCommit}
+                loading={committing}
+                disabled={commitDisabled}
+                data-testid={workbenchSelectors.reviewCommitButton}
+              >
+                确认替换源文件
+              </Button>
+              <Button
+                size="large"
+                icon={<StopOutlined />}
+                onClick={onDiscard}
+                loading={discarding}
+                disabled={
+                  committing ||
+                  discarding ||
+                  !isActiveConfirmSession ||
+                  review.review.status === 'committed' ||
+                  review.review.status === 'discarded' ||
+                  review.review.status === 'superseded'
+                }
+                data-testid={workbenchSelectors.reviewDiscardButton}
+              >
+                放弃本次修改
+              </Button>
+            </div>
+          </>
+        ) : (
+          <div className="rounded-[18px] border border-[#E5E5E4] bg-[#FCFBF8] px-4 py-5">
+            <div className="text-[13px] font-semibold text-[#1F1F1F]">确认文档状态</div>
+            <div className="mt-2 text-sm leading-relaxed text-[#666666]">{endedStateMessage}</div>
+          </div>
+        )}
 
         {turn?.steps.length ? (
           <section className="rounded-[18px] border border-[#E5E5E4] bg-[#FCFBF8] px-4 py-4">

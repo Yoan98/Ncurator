@@ -165,6 +165,98 @@ const extractDocxText = async (docxPath: string): Promise<string> => {
   return xml || ''
 }
 
+const rewriteDocxDocumentXml = async (
+  docxPath: string,
+  rewrite: (xml: string) => string
+): Promise<void> => {
+  const buffer = await fs.readFile(docxPath)
+  const zip = await JSZip.loadAsync(buffer)
+  const xml = await zip.file('word/document.xml')?.async('text')
+  if (!xml) throw new Error('word/document.xml missing')
+  zip.file('word/document.xml', rewrite(xml))
+  const nextBuffer = await zip.generateAsync({
+    type: 'nodebuffer',
+    compression: 'DEFLATE'
+  })
+  await fs.writeFile(docxPath, nextBuffer)
+}
+
+const appendExternalRevision = async (docxPath: string): Promise<void> => {
+  await rewriteDocxDocumentXml(docxPath, (xml) =>
+    xml.replace(
+      '</w:p>',
+      '<w:ins w:id="990001" w:author="External User" w:date="2026-03-25T00:00:00Z"><w:r><w:t>外部修订</w:t></w:r></w:ins></w:p>'
+    )
+  )
+}
+
+const renameAnchorInConfirmCopy = async (
+  docxPath: string,
+  anchorName: string
+): Promise<void> => {
+  await rewriteDocxDocumentXml(docxPath, (xml) =>
+    xml.replace(`w:name="${anchorName}"`, `w:name="${anchorName}-broken"`)
+  )
+}
+
+const createConfirmReview = async (input: {
+  runId: string
+  sessionId: string
+  userInput: string
+  sourcePath: string
+  service: DraftReviewService
+}): Promise<DraftReviewDetail> => {
+  const client = getDocxWorkerClient()
+  input.service.beginRun({
+    runId: input.runId,
+    sessionId: input.sessionId,
+    inputText: input.userInput
+  })
+
+  const openResponse = await client.call({
+    runId: input.runId,
+    action: 'open',
+    payload: { sourcePath: input.sourcePath }
+  })
+  if (!openResponse.ok || openResponse.payload.action !== 'open') {
+    throw new Error(openResponse.ok ? 'open worker protocol mismatch' : openResponse.error)
+  }
+  input.service.registerDocxOpen({
+    runId: input.runId,
+    docId: openResponse.payload.docId,
+    sourcePath: input.sourcePath
+  })
+
+  const applyResponse = await client.call({
+    runId: input.runId,
+    action: 'apply_ops',
+    payload: {
+      docId: openResponse.payload.docId,
+      ops: [{ type: 'replace_text', query: 'Hello', replace: 'Hi' }]
+    }
+  })
+  if (!applyResponse.ok || applyResponse.payload.action !== 'apply_ops') {
+    throw new Error(applyResponse.ok ? 'apply worker protocol mismatch' : applyResponse.error)
+  }
+  input.service.registerDocxChanges({
+    runId: input.runId,
+    previousDocId: openResponse.payload.docId,
+    nextDocId: applyResponse.payload.newDocId,
+    op: { type: 'replace_text', query: 'Hello', replace: 'Hi' },
+    changedBlocks: applyResponse.payload.changedBlocks
+  })
+
+  const details = await input.service.finalizeRunReview({
+    runId: input.runId,
+    workspaceRootPath: path.dirname(input.sourcePath)
+  })
+  const detail = details[0]
+  if (!detail) {
+    throw new Error('expected confirm session detail to be created')
+  }
+  return detail
+}
+
 test('draft-review-service', async () => {
   await runBackendCase({
     caseId: 'draft-review-service',
@@ -184,58 +276,14 @@ test('draft-review-service', async () => {
       const draftReviewStore = createDraftReviewStoreStub()
       const documentsStore = createDocumentsStoreStub(sourcePath)
       const service = new DraftReviewService(draftReviewStore, documentsStore)
-      const client = getDocxWorkerClient()
-
       try {
-        service.beginRun({
+        const detail = await createConfirmReview({
           runId: runtime.runId,
           sessionId: 'draft-review-session',
-          inputText: '把 Hello 改成 Hi'
+          userInput: '把 Hello 改成 Hi',
+          sourcePath,
+          service
         })
-
-        const openResponse = await client.call({
-          runId: runtime.runId,
-          action: 'open',
-          payload: { sourcePath }
-        })
-        if (!openResponse.ok || openResponse.payload.action !== 'open') {
-          throw new Error(openResponse.ok ? 'open worker protocol mismatch' : openResponse.error)
-        }
-        service.registerDocxOpen({
-          runId: runtime.runId,
-          docId: openResponse.payload.docId,
-          sourcePath
-        })
-
-        const applyResponse = await client.call({
-          runId: runtime.runId,
-          action: 'apply_ops',
-          payload: {
-            docId: openResponse.payload.docId,
-            ops: [{ type: 'replace_text', query: 'Hello', replace: 'Hi' }]
-          }
-        })
-        if (!applyResponse.ok || applyResponse.payload.action !== 'apply_ops') {
-          throw new Error(
-            applyResponse.ok ? 'apply worker protocol mismatch' : applyResponse.error
-          )
-        }
-        service.registerDocxChanges({
-          runId: runtime.runId,
-          previousDocId: openResponse.payload.docId,
-          nextDocId: applyResponse.payload.newDocId,
-          op: { type: 'replace_text', query: 'Hello', replace: 'Hi' },
-          changedBlocks: applyResponse.payload.changedBlocks
-        })
-
-        const details = await service.finalizeRunReview({
-          runId: runtime.runId,
-          workspaceRootPath: runtime.workspaceRoot
-        })
-        const detail = details[0]
-        if (!detail) {
-          throw new Error('expected confirm session detail to be created')
-        }
 
         const validation = await service.validateCommit({ reviewId: detail.review.id })
         const resolvedOpenTarget = await service.resolveDocxOpenTarget(sourcePath)
@@ -344,6 +392,197 @@ test('draft-review-service', async () => {
           data: {
             sourceTextAfterCommit: result.sourceTextAfterCommit,
             confirmExistsAfterCommit: result.confirmExistsAfterCommit
+          }
+        }
+      )
+    }
+  })
+})
+
+test('draft-review-service-preserves-plain-text-edits-and-blocks-external-revisions', async () => {
+  await runBackendCase({
+    caseId: 'draft-review-service-preserves-plain-text-edits-and-blocks-external-revisions',
+    caseType: 'basic',
+    domain: 'ai',
+    layer: 'backend',
+    suite: 'tools',
+    groups: ['docx'],
+    description:
+      'confirm copy normalization should preserve plain text external edits while rejecting non-system revisions for continued editing and commit validation.',
+    fixtures: [FIXTURE_PATH],
+    runMode: 'repeatable',
+    execute: async (runtime) => {
+      const sourcePath = path.join(runtime.workspaceRoot, 'review-source.docx')
+      await fs.copyFile(FIXTURE_PATH, sourcePath)
+
+      const draftReviewStore = createDraftReviewStoreStub()
+      const documentsStore = createDocumentsStoreStub(sourcePath)
+      const service = new DraftReviewService(draftReviewStore, documentsStore)
+
+      try {
+        const detail = await createConfirmReview({
+          runId: runtime.runId,
+          sessionId: 'draft-review-session',
+          userInput: '把 Hello 改成 Hi',
+          sourcePath,
+          service
+        })
+        const confirmArtifactPath = detail.documents[0]?.confirm_artifact_path
+        if (!confirmArtifactPath) {
+          throw new Error('expected confirm artifact path')
+        }
+
+        await rewriteDocxDocumentXml(confirmArtifactPath, (xml) =>
+          xml.replace('Hi from fixture', 'Manual Hi from fixture')
+        )
+        const normalizedOpenTarget = await service.resolveDocxOpenTarget(sourcePath)
+        const normalizedText = await extractDocxText(normalizedOpenTarget.openPath)
+
+        await appendExternalRevision(confirmArtifactPath)
+        const invalidValidation = await service.validateCommit({ reviewId: detail.review.id })
+        const resolveAfterExternalRevision = await service
+          .resolveDocxOpenTarget(sourcePath)
+          .then(() => 'ok')
+          .catch((error: Error) => error.message)
+
+        return {
+          normalizedText,
+          invalidValidation,
+          resolveAfterExternalRevision
+        }
+      } finally {
+        await releaseDocxRunSession(runtime.runId)
+      }
+    },
+    assert: async (result, runtime) => {
+      runtime.assertThat(
+        result.normalizedText.includes('Manual Hi from fixture') &&
+          !result.normalizedText.includes('w:ins') &&
+          !result.normalizedText.includes('w:del'),
+        {
+          name: 'confirm-copy-preserves-plain-text-edits',
+          message:
+            'normalize should preserve plain text edits made directly in the confirm copy while still removing system review markup.',
+          data: {
+            normalizedText: result.normalizedText
+          }
+        }
+      )
+
+      runtime.assertThat(
+        result.invalidValidation.ready === false &&
+          result.invalidValidation.issues.some(
+            (issue) =>
+              issue.code === 'confirm_copy_invalid' &&
+              issue.message.includes('外部修订')
+          ) &&
+          result.resolveAfterExternalRevision.includes('confirm_copy_external_revisions'),
+        {
+          name: 'confirm-copy-blocks-external-revisions',
+          message:
+            'non-system revisions added in external editors should block both commit validation and continued AI editing.',
+          data: {
+            invalidValidation: result.invalidValidation,
+            resolveAfterExternalRevision: result.resolveAfterExternalRevision
+          }
+        }
+      )
+    }
+  })
+})
+
+test('draft-review-service-rejects-missing-manifest-and-anchor-mismatch', async () => {
+  await runBackendCase({
+    caseId: 'draft-review-service-rejects-missing-manifest-and-anchor-mismatch',
+    caseType: 'basic',
+    domain: 'ai',
+    layer: 'backend',
+    suite: 'tools',
+    groups: ['docx'],
+    description:
+      'confirm copy validation should reject missing manifests and broken system anchors before normalize is allowed to continue.',
+    fixtures: [FIXTURE_PATH],
+    runMode: 'repeatable',
+    execute: async (runtime) => {
+      const sourcePath = path.join(runtime.workspaceRoot, 'review-source.docx')
+      await fs.copyFile(FIXTURE_PATH, sourcePath)
+
+      const draftReviewStore = createDraftReviewStoreStub()
+      const documentsStore = createDocumentsStoreStub(sourcePath)
+      const service = new DraftReviewService(draftReviewStore, documentsStore)
+
+      try {
+        const missingManifestDetail = await createConfirmReview({
+          runId: runtime.runId,
+          sessionId: 'draft-review-session-a',
+          userInput: '把 Hello 改成 Hi',
+          sourcePath,
+          service
+        })
+        const missingManifestPath = missingManifestDetail.documents[0]?.manifest_artifact_path
+        if (!missingManifestPath) {
+          throw new Error('expected manifest artifact path')
+        }
+        await fs.rm(missingManifestPath, { force: true })
+        const missingManifestValidation = await service.validateCommit({
+          reviewId: missingManifestDetail.review.id
+        })
+
+        const sourcePathTwo = path.join(runtime.workspaceRoot, 'review-source-two.docx')
+        await fs.copyFile(FIXTURE_PATH, sourcePathTwo)
+        const anchorMismatchDetail = await createConfirmReview({
+          runId: `${runtime.runId}-anchor`,
+          sessionId: 'draft-review-session-b',
+          userInput: '把 Hello 改成 Hi',
+          sourcePath: sourcePathTwo,
+          service
+        })
+        const confirmArtifactPath = anchorMismatchDetail.documents[0]?.confirm_artifact_path
+        const anchorName = anchorMismatchDetail.changes[0]?.anchor_name
+        if (!confirmArtifactPath || !anchorName) {
+          throw new Error('expected confirm artifact path and anchor name')
+        }
+        await renameAnchorInConfirmCopy(confirmArtifactPath, anchorName)
+        const anchorMismatchValidation = await service.validateCommit({
+          reviewId: anchorMismatchDetail.review.id
+        })
+
+        return {
+          missingManifestValidation,
+          anchorMismatchValidation
+        }
+      } finally {
+        await releaseDocxRunSession(runtime.runId)
+        await releaseDocxRunSession(`${runtime.runId}-anchor`)
+      }
+    },
+    assert: async (result, runtime) => {
+      runtime.assertThat(
+        result.missingManifestValidation.ready === false &&
+          result.missingManifestValidation.issues.some(
+            (issue) => issue.code === 'confirm_copy_invalid'
+          ),
+        {
+          name: 'confirm-copy-missing-manifest-invalid',
+          message:
+            'missing manifest sidecars should mark the confirm copy invalid instead of allowing normalize to continue.',
+          data: {
+            missingManifestValidation: result.missingManifestValidation
+          }
+        }
+      )
+
+      runtime.assertThat(
+        result.anchorMismatchValidation.ready === false &&
+          result.anchorMismatchValidation.issues.some(
+            (issue) => issue.code === 'confirm_copy_invalid'
+          ),
+        {
+          name: 'confirm-copy-anchor-mismatch-invalid',
+          message:
+            'broken or missing system anchors should be rejected before continued editing or commit can proceed.',
+          data: {
+            anchorMismatchValidation: result.anchorMismatchValidation
           }
         }
       )

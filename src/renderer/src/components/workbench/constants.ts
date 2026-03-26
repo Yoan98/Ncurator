@@ -30,7 +30,8 @@ export const REVIEW_STATUS_META: Record<DraftReviewStatus, { label: string; clas
 export const FILE_ORIGIN_LABELS: Record<WorkbenchFileOrigin, string> = {
   search_hit: '搜索命中',
   read: '读取',
-  edited_draft: '待确认修改',
+  edited_draft: '确认文档',
   artifact: '产物',
-  preview: '预览'
+  preview: '预览',
+  source: '源文件'
 }

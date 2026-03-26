@@ -74,6 +74,43 @@ const createAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
   blockers: []
 })
 
+const buildReviewTarget = (review: DraftReviewSummary): AssistantTurnReviewTarget => ({
+  reviewId: review.id,
+  title: review.title,
+  changeCount: review.change_count,
+  documentCount: review.document_count,
+  status: review.status
+})
+
+const mergeReviewTargets = (
+  current: AssistantTurnReviewTarget[],
+  next: AssistantTurnReviewTarget
+): AssistantTurnReviewTarget[] => [
+  next,
+  ...current.filter((item) => item.reviewId !== next.reviewId)
+]
+
+const groupReviewTargetsByRunId = (
+  reviews: DraftReviewSummary[]
+): Map<string, AssistantTurnReviewTarget[]> => {
+  const grouped = new Map<string, DraftReviewSummary[]>()
+  reviews.forEach((review) => {
+    const existing = grouped.get(review.run_id) || []
+    existing.push(review)
+    grouped.set(review.run_id, existing)
+  })
+
+  return new Map(
+    [...grouped.entries()].map(([runId, runReviews]) => [
+      runId,
+      runReviews
+        .slice()
+        .sort((left, right) => right.updated_at - left.updated_at)
+        .map((review) => buildReviewTarget(review))
+    ])
+  )
+}
+
 const sortDraftReviews = (items: DraftReviewSummary[]): DraftReviewSummary[] => {
   const priority: Record<DraftReviewSummary['status'], number> = {
     pending_confirm: 0,
@@ -227,9 +264,8 @@ const ChatPage: React.FC = () => {
     setDraftReviewLoading(false)
     setDraftCommitValidation(null)
     setDraftValidationLoading(false)
-    setDraftDecisionBusyIds([])
-    setDraftBulkApplying(false)
     setDraftCommitSubmitting(false)
+    setDraftDiscardSubmitting(false)
   }
 
   const updateActiveTurn = (
@@ -365,29 +401,31 @@ const ChatPage: React.FC = () => {
         setActiveDraftReviewId(null)
         setActiveDraftReview(null)
         setDraftCommitValidation(null)
+        setAssistantTurns((previous) => {
+          const nextTurns: Record<string, AssistantTurnViewModel> = { ...previous }
+          Object.values(previous).forEach((turn) => {
+            if (!turn.runId) return
+            nextTurns[turn.messageId] = {
+              ...turn,
+              reviewTargets: []
+            }
+          })
+          return nextTurns
+        })
         setContentPanel((current) =>
           current.kind === 'review_session' ? createEmptyPanel() : current
         )
         return
       }
       await loadDraftReviewDetail(nextReviewId)
-      const reviewMap = new Map(nextItems.map((item) => [item.run_id, item]))
+      const reviewTargetsByRunId = groupReviewTargetsByRunId(nextItems)
       setAssistantTurns((previous) => {
         const nextTurns: Record<string, AssistantTurnViewModel> = { ...previous }
         Object.values(previous).forEach((turn) => {
           if (!turn.runId) return
-          const review = reviewMap.get(turn.runId)
-          if (!review) return
-          const target: AssistantTurnReviewTarget = {
-            reviewId: review.id,
-            title: review.title,
-            changeCount: review.change_count,
-            documentCount: review.document_count,
-            status: review.status
-          }
           nextTurns[turn.messageId] = {
             ...turn,
-            reviewTargets: [target]
+            reviewTargets: reviewTargetsByRunId.get(turn.runId) || []
           }
         })
         return nextTurns
@@ -714,14 +752,13 @@ const ChatPage: React.FC = () => {
       if (event.type === 'draft_review_ready') {
         updateActiveTurn((current) => ({
           ...current,
-          reviewTargets: [
-            {
-              reviewId: event.review.reviewId,
-              title: '确认文档',
-              changeCount: event.review.changeCount,
-              documentCount: event.review.documentCount
-            }
-          ]
+          reviewTargets: mergeReviewTargets(current.reviewTargets, {
+            reviewId: event.review.reviewId,
+            title: '确认文档',
+            changeCount: event.review.changeCount,
+            documentCount: event.review.documentCount,
+            status: 'pending_confirm'
+          })
         }))
         if (!event.internal && currentSessionId) {
           message.success(`确认文档已生成：${event.review.changeCount} 处修改`)

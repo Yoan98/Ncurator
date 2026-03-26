@@ -17,6 +17,7 @@ import { normalizeDocxConfirmCopy } from './confirmCopy'
 import {
   collectArtifactPaths,
   createArchivedCommittedDetail,
+  getManifestPathForConfirmArtifact,
   isSourceVersionFresh
 } from './utils'
 
@@ -30,6 +31,13 @@ const fileExists = async (filePath: string): Promise<boolean> => {
   } catch {
     return false
   }
+}
+
+const mapConfirmCopyInvalidMessage = (errorMessage: string): string => {
+  if (errorMessage.includes('confirm_copy_external_revisions')) {
+    return '确认副本包含外部修订，请先在 Word/WPS 中接受或拒绝修订后重试。'
+  }
+  return '确认副本结构已损坏，需要重新生成。'
 }
 
 const readFileStats = async (
@@ -133,6 +141,8 @@ export class DraftReviewCommitService {
         if (!confirmPath) {
           throw new Error(`missing confirm artifact for ${document.source_name}`)
         }
+        const manifestArtifactPath =
+          document.manifest_artifact_path || getManifestPathForConfirmArtifact(confirmPath)
 
         const normalizedTempPath =
           document.effective_draft_artifact_path ||
@@ -142,6 +152,7 @@ export class DraftReviewCommitService {
 
         await normalizeDocxConfirmCopy({
           confirmArtifactPath: confirmPath,
+          manifestArtifactPath,
           outPath: normalizedTempPath
         })
         const normalizedBuffer = await fs.readFile(normalizedTempPath)
@@ -241,6 +252,18 @@ export class DraftReviewCommitService {
       })
       return issues
     }
+    const manifestArtifactPath =
+      document.manifest_artifact_path ||
+      getManifestPathForConfirmArtifact(document.confirm_artifact_path)
+    if (!(await fileExists(manifestArtifactPath))) {
+      issues.push({
+        code: 'confirm_copy_invalid',
+        message: '确认副本结构已损坏，需要重新生成。',
+        documentId: document.id,
+        sourcePath: document.source_path
+      })
+      return issues
+    }
 
     const fresh = await isSourceVersionFresh(document.source_path, document.source_version)
     if (!fresh) {
@@ -259,6 +282,7 @@ export class DraftReviewCommitService {
     try {
       await normalizeDocxConfirmCopy({
         confirmArtifactPath: document.confirm_artifact_path,
+        manifestArtifactPath,
         outPath: validationTempPath
       })
       await fs.rm(validationTempPath, { force: true })
@@ -268,7 +292,7 @@ export class DraftReviewCommitService {
         code: /busy|lock|perm/i.test(message) ? 'confirm_copy_locked' : 'confirm_copy_invalid',
         message: /busy|lock|perm/i.test(message)
           ? '确认副本当前被其他应用占用，请关闭后重试。'
-          : '确认副本结构已损坏，需要重新生成。',
+          : mapConfirmCopyInvalidMessage(message),
         documentId: document.id,
         sourcePath: document.source_path
       })

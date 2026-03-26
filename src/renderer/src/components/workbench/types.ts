@@ -14,7 +14,13 @@ export type SearchWorkbenchTurn = {
   createdAt: number
 }
 
-export type WorkbenchFileOrigin = 'search_hit' | 'read' | 'edited_draft' | 'artifact' | 'preview'
+export type WorkbenchFileOrigin =
+  | 'search_hit'
+  | 'read'
+  | 'edited_draft'
+  | 'artifact'
+  | 'preview'
+  | 'source'
 
 export type WorkbenchFileRef = {
   path: string

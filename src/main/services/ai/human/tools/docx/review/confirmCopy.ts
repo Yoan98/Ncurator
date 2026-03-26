@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { XMLSerializer } from '@xmldom/xmldom'
 import type JSZip from 'jszip'
-import type { DraftSourceVersion } from '../../../../../../../shared/types'
+import type { DraftSourceVersion, JsonValue } from '../../../../../../../shared/types'
 import {
   buildBlockIndex,
   loadDocxBundle,
@@ -299,19 +299,108 @@ const createDeletedClone = (node: IndexedNode, revisionId: number): Element => {
   return cloned
 }
 
-const collectSystemBookmarkIds = (root: Element, out: Set<string>): void => {
-  const children = Array.from({ length: root.childNodes.length })
-    .map((_, index) => root.childNodes.item(index))
-    .filter(Boolean)
-  children.forEach((child) => {
-    if (!isElementNode(child)) return
-    const bookmarkName = child.getAttribute('w:name') || child.getAttribute('name') || ''
-    if (child.localName === 'bookmarkStart' && bookmarkName.startsWith(DOCX_CONFIRM_ANCHOR_PREFIX)) {
-      const bookmarkId = child.getAttribute('w:id') || child.getAttribute('id') || ''
-      if (bookmarkId) out.add(bookmarkId)
+const getWordAttribute = (node: Element, localName: string): string =>
+  node.getAttribute(`w:${localName}`) || node.getAttribute(localName) || ''
+
+const readConfirmManifest = async (manifestArtifactPath: string): Promise<DocxConfirmManifest> => {
+  const raw = await fs.readFile(manifestArtifactPath, 'utf8')
+  let parsed: JsonValue
+  try {
+    parsed = JSON.parse(raw) as JsonValue
+  } catch {
+    throw new Error('confirm_copy_manifest_invalid')
+  }
+
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('confirm_copy_manifest_invalid')
+  }
+
+  const candidate = parsed as Partial<DocxConfirmManifest>
+  if (
+    candidate.version !== DOCX_CONFIRM_MANIFEST_VERSION ||
+    typeof candidate.review_id !== 'string' ||
+    !candidate.review_id.trim() ||
+    !Array.isArray(candidate.changes)
+  ) {
+    throw new Error('confirm_copy_manifest_invalid')
+  }
+
+  const seenAnchors = new Set<string>()
+  for (const change of candidate.changes) {
+    if (!change || typeof change !== 'object' || Array.isArray(change)) {
+      throw new Error('confirm_copy_manifest_invalid')
     }
-    collectSystemBookmarkIds(child, out)
-  })
+    const anchorName =
+      'anchor_name' in change && typeof change.anchor_name === 'string'
+        ? change.anchor_name.trim()
+        : ''
+    if (!anchorName || !anchorName.startsWith(DOCX_CONFIRM_ANCHOR_PREFIX)) {
+      throw new Error('confirm_copy_manifest_invalid')
+    }
+    if (seenAnchors.has(anchorName)) {
+      throw new Error('confirm_copy_manifest_invalid')
+    }
+    seenAnchors.add(anchorName)
+  }
+
+  if (candidate.change_count !== candidate.changes.length) {
+    throw new Error('confirm_copy_manifest_invalid')
+  }
+
+  return {
+    ...candidate,
+    review_id: candidate.review_id,
+    changes: candidate.changes as DocxConfirmManifestChange[]
+  } as DocxConfirmManifest
+}
+
+const validateConfirmCopyStructure = (
+  root: Element,
+  manifest: DocxConfirmManifest
+): Set<string> => {
+  const expectedAnchors = new Set(manifest.changes.map((change) => change.anchor_name))
+  const anchorCounts = new Map<string, number>()
+  const bookmarkIds = new Set<string>()
+
+  const visit = (node: Element): void => {
+    const children = Array.from({ length: node.childNodes.length })
+      .map((_, index) => node.childNodes.item(index))
+      .filter(Boolean)
+    children.forEach((child) => {
+      if (!isElementNode(child)) return
+
+      if (child.localName === 'bookmarkStart') {
+        const bookmarkName = getWordAttribute(child, 'name')
+        if (bookmarkName.startsWith(DOCX_CONFIRM_ANCHOR_PREFIX)) {
+          if (!expectedAnchors.has(bookmarkName)) {
+            throw new Error('confirm_copy_manifest_anchor_mismatch')
+          }
+          anchorCounts.set(bookmarkName, (anchorCounts.get(bookmarkName) || 0) + 1)
+          const bookmarkId = getWordAttribute(child, 'id')
+          if (bookmarkId) bookmarkIds.add(bookmarkId)
+        }
+      }
+
+      if (child.localName === 'ins' || child.localName === 'del') {
+        const author = getWordAttribute(child, 'author')
+        if (author !== SYSTEM_AUTHOR) {
+          throw new Error('confirm_copy_external_revisions')
+        }
+      }
+
+      visit(child)
+    })
+  }
+
+  visit(root)
+
+  for (const anchorName of expectedAnchors) {
+    if (anchorCounts.get(anchorName) !== 1) {
+      throw new Error('confirm_copy_manifest_anchor_mismatch')
+    }
+  }
+
+  return bookmarkIds
 }
 
 const removeSystemBookmarkMarkers = (root: Element, bookmarkIds: Set<string>): void => {
@@ -320,11 +409,12 @@ const removeSystemBookmarkMarkers = (root: Element, bookmarkIds: Set<string>): v
     .filter(Boolean)
   children.forEach((child) => {
     if (!isElementNode(child)) return
-    const bookmarkName = child.getAttribute('w:name') || child.getAttribute('name') || ''
-    const bookmarkId = child.getAttribute('w:id') || child.getAttribute('id') || ''
+    const bookmarkName = getWordAttribute(child, 'name')
+    const bookmarkId = getWordAttribute(child, 'id')
     if (
       (child.localName === 'bookmarkStart' &&
-        bookmarkName.startsWith(DOCX_CONFIRM_ANCHOR_PREFIX)) ||
+        bookmarkName.startsWith(DOCX_CONFIRM_ANCHOR_PREFIX) &&
+        bookmarkIds.has(bookmarkId)) ||
       (child.localName === 'bookmarkEnd' && bookmarkIds.has(bookmarkId))
     ) {
       root.removeChild(child)
@@ -334,13 +424,16 @@ const removeSystemBookmarkMarkers = (root: Element, bookmarkIds: Set<string>): v
   })
 }
 
-const unwrapInsertedRuns = (root: Element): void => {
+const unwrapSystemRevisions = (root: Element): void => {
   const children = Array.from({ length: root.childNodes.length })
     .map((_, index) => root.childNodes.item(index))
     .filter(Boolean)
   children.forEach((child) => {
     if (!isElementNode(child)) return
-    if (child.localName === 'ins') {
+    const isSystemRevision =
+      (child.localName === 'ins' || child.localName === 'del') &&
+      getWordAttribute(child, 'author') === SYSTEM_AUTHOR
+    if (child.localName === 'ins' && isSystemRevision) {
       const moved = Array.from({ length: child.childNodes.length })
         .map((_, index) => child.childNodes.item(index))
         .filter(Boolean)
@@ -350,11 +443,11 @@ const unwrapInsertedRuns = (root: Element): void => {
       root.removeChild(child)
       return
     }
-    if (child.localName === 'del') {
+    if (child.localName === 'del' && isSystemRevision) {
       root.removeChild(child)
       return
     }
-    unwrapInsertedRuns(child)
+    unwrapSystemRevisions(child)
   })
 }
 
@@ -546,14 +639,15 @@ export const materializeDocxConfirmCopy = async (input: {
 
 export const normalizeDocxConfirmCopy = async (input: {
   confirmArtifactPath: string
+  manifestArtifactPath: string
   outPath: string
 }): Promise<void> => {
+  const manifest = await readConfirmManifest(input.manifestArtifactPath)
   const buffer = await fs.readFile(input.confirmArtifactPath)
   const bundle = await loadDocxBundle(buffer)
-  const bookmarkIds = new Set<string>()
-  collectSystemBookmarkIds(bundle.documentDom.documentElement, bookmarkIds)
+  const bookmarkIds = validateConfirmCopyStructure(bundle.documentDom.documentElement, manifest)
   removeSystemBookmarkMarkers(bundle.documentDom.documentElement, bookmarkIds)
-  unwrapInsertedRuns(bundle.documentDom.documentElement)
+  unwrapSystemRevisions(bundle.documentDom.documentElement)
   pruneEmptyStructure(bundle.documentDom.documentElement)
   const normalizedBuffer = await writeDocumentXml(bundle.zip, bundle.documentDom)
   await ensureDirForFile(input.outPath)

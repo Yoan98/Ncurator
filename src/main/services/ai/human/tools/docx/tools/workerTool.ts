@@ -169,7 +169,7 @@ export const createDocxTool = <TSchema extends z.ZodType, TResult extends object
     args: z.infer<TSchema>
     toolName: string
     toolCallId: string
-    docId?: string
+    docId: string
   }) => Promise<TResult | DocxToolFailure>
   onError?: (params: { args: z.infer<TSchema>; message: string }) => void
 }): StructuredToolInterface =>
@@ -196,7 +196,7 @@ export const createDocxTool = <TSchema extends z.ZodType, TResult extends object
             args: parsedArgs,
             toolName,
             toolCallId,
-            docId
+            docId: docId || ''
           })
         },
         onError: (error, { toolName, toolCallId }) => {

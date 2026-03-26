@@ -8,7 +8,6 @@ import {
   emitWatchHint
 } from './stateTransitionEvents'
 import {
-  appendHumanTraceStep,
   applyBrainDecisionState,
   buildHumanResult,
   completeHumanTaskState,

@@ -12,7 +12,7 @@ import type { DocxChangedBlock, DocxOp } from '../types'
 import { getDocxWorkerClient } from '../worker/docxWorkerClient'
 import { DOCX_CONFIRM_ANCHOR_PREFIX } from './constants'
 import { materializeDocxConfirmCopy } from './confirmCopy'
-import type { RunDraftChangeSeed, RunDraftDocument } from './types'
+import type { RunDraftDocument } from './types'
 import {
   buildDocxChangeLocator,
   buildDocxChangeSummary,

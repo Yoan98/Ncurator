@@ -176,7 +176,7 @@ export const buildDocxDeliveryTools = (runtime: DocxToolRuntime): StructuredTool
     description: DOCX_VALIDATE_TOOL_SPEC.description,
     schema: DOCX_VALIDATE_TOOL_SPEC.schema,
     getRequiredDocId: (args) => args.docId,
-    execute: async ({ args, toolName, toolCallId, docId }) => {
+    execute: async ({ toolName, toolCallId, docId }) => {
       return await runDocxWorkerToolAction({
         runtime,
         toolName,

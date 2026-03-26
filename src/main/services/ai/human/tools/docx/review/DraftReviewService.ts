@@ -18,7 +18,7 @@ import { DraftReviewCommitService } from './DraftReviewCommitService'
 import { normalizeDocxConfirmCopy } from './confirmCopy'
 import { RunDraftTracker } from './RunDraftTracker'
 import type { ResolvedDocxOpenTarget } from './types'
-import { collectArtifactPaths } from './utils'
+import { collectArtifactPaths, getManifestPathForConfirmArtifact } from './utils'
 
 export class DraftReviewService {
   private readonly runDraftTracker: RunDraftTracker
@@ -157,11 +157,15 @@ export class DraftReviewService {
     if (!document?.confirm_artifact_path) {
       throw new Error('active confirm copy is missing')
     }
+    const manifestArtifactPath =
+      document.manifest_artifact_path ||
+      getManifestPathForConfirmArtifact(document.confirm_artifact_path)
     const effectiveDraftPath =
       document.effective_draft_artifact_path ||
       document.confirm_artifact_path.replace(/\.docx$/i, '.effective.docx')
     await normalizeDocxConfirmCopy({
       confirmArtifactPath: document.confirm_artifact_path,
+      manifestArtifactPath,
       outPath: effectiveDraftPath
     })
     return {

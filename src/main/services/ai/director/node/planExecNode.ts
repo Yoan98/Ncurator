@@ -1,4 +1,4 @@
-import type { AiRunState, DirectorNodeContext, HumanTaskRunner } from '../../types'
+import type { DirectorNodeContext, HumanTaskRunner } from '../../types'
 import type { DirectorGraphState } from '../state/schema'
 import { buildPlanTaskObjective } from './objectives'
 import { pickPendingTaskIndex } from './helpers'
