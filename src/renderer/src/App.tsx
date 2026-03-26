@@ -17,7 +17,7 @@ function App(): React.JSX.Element {
         token: {
           colorPrimary: '#D97757',
           colorLink: '#D97757',
-          borderRadius: 8,
+          borderRadius: 10,
           controlHeight: 36,
           controlHeightLG: 40,
           controlHeightSM: 28,
@@ -33,15 +33,19 @@ function App(): React.JSX.Element {
           Button: {
             primaryShadow: '0 2px 8px rgba(217, 119, 87, 0.2)',
             borderRadius: 10,
-            controlHeight: 36
+            controlHeight: 36,
+            defaultShadow: 'none'
           },
           Card: {
-            borderRadiusLG: 12
+            borderRadiusLG: 18
           },
           Input: {
             controlHeight: 38,
             activeBorderColor: '#D97757',
             hoverBorderColor: '#C66A4A'
+          },
+          Modal: {
+            borderRadiusLG: 24
           },
           Select: {
             activeBorderColor: '#D97757',

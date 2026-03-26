@@ -8,7 +8,10 @@ import type {
 import {
   HiArrowPath,
   HiCheckCircle,
+  HiDocumentText,
+  HiFolder,
   HiOutlineExclamationCircle,
+  HiOutlineClock,
   HiOutlineFolderPlus,
   HiOutlineQuestionMarkCircle,
   HiOutlineTrash,
@@ -85,7 +88,9 @@ const WorkspaceSettingsPanel: React.FC = () => {
 
   const selectedWorkspaceNodes = useMemo(
     () =>
-      selectedWorkspaceId ? getVisibleWorkspaceNodes(workspaceNodes[selectedWorkspaceId] || []) : [],
+      selectedWorkspaceId
+        ? getVisibleWorkspaceNodes(workspaceNodes[selectedWorkspaceId] || [])
+        : [],
     [selectedWorkspaceId, workspaceNodes]
   )
 
@@ -96,6 +101,10 @@ const WorkspaceSettingsPanel: React.FC = () => {
 
   const selectedWorkspaceTree = useMemo(
     () => createWorkspaceTree(selectedWorkspaceNodes),
+    [selectedWorkspaceNodes]
+  )
+  const selectedWorkspaceStats = useMemo(
+    () => getWorkspaceStats(selectedWorkspaceNodes),
     [selectedWorkspaceNodes]
   )
 
@@ -307,7 +316,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
       className="flex h-full min-h-0 flex-col gap-4 overflow-hidden"
       data-testid={settingsSelectors.workspacePanel}
     >
-      <section className="shrink-0 rounded-[18px] border border-[#E5E5E4] bg-white/88 px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur-sm">
+      <section className="ui-panel-ghost shrink-0 px-4 py-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <h2 className="text-[16px] font-semibold tracking-tight text-[#1F1F1F]">工作空间</h2>
@@ -347,10 +356,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
       ) : null}
 
       <div className="grid min-h-0 flex-1 gap-4 overflow-hidden pr-1 xl:grid-cols-[340px_minmax(0,1fr)]">
-        <section
-          className="flex min-h-0 flex-col rounded-[20px] border border-[#E5E5E4] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
-          data-testid={importSelectors.page}
-        >
+        <section className="ui-panel flex min-h-0 flex-col" data-testid={importSelectors.page}>
           <div className="border-b border-[#E5E5E4] px-4 py-4">
             <div className="text-[15px] font-semibold text-[#1F1F1F]">工作空间</div>
           </div>
@@ -390,9 +396,9 @@ const WorkspaceSettingsPanel: React.FC = () => {
                     type="button"
                     onClick={() => setSelectedWorkspaceId(workspace.id)}
                     data-testid={`${importSelectors.workspaceCardPrefix}-${workspace.id}`}
-                    className={`w-full rounded-[16px] border px-4 py-4 text-left transition-all duration-200 ${
+                    className={`ui-hover-lift w-full rounded-[14px] border px-4 py-4 text-left ${
                       isSelected
-                        ? 'border-[#D97757] bg-[#FCFBF8] shadow-[0_4px_16px_rgba(217,119,87,0.10)]'
+                        ? 'border-[#D97757] bg-[#FCFBF8] shadow-[0_0_0_1px_rgba(244,229,223,0.9)]'
                         : 'border-[#E5E5E4] bg-white hover:border-[#D4D4D3] hover:bg-[#FCFBF8]'
                     }`}
                   >
@@ -413,17 +419,27 @@ const WorkspaceSettingsPanel: React.FC = () => {
                       />
                     </div>
 
-                    <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-[#666666]">
-                      <span>目录 {stats.directoryCount}</span>
-                      <span>文件 {stats.fileCount}</span>
-                      <span>已加载 {stats.preparedCount}</span>
-                      <span>
-                        待处理 {stats.unpreparedCount + stats.staleCount + stats.failedCount}
+                    <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[#666666]">
+                      <span className="ui-status-pill border-transparent bg-[#F7F5F1] text-[#666666]">
+                        <HiFolder className="h-3.5 w-3.5" />
+                        {stats.directoryCount}
+                      </span>
+                      <span className="ui-status-pill border-transparent bg-[#F7F5F1] text-[#666666]">
+                        <HiDocumentText className="h-3.5 w-3.5" />
+                        {stats.fileCount}
+                      </span>
+                      <span className="ui-status-pill border-transparent bg-[#F2F9EF] text-[#4F7A46]">
+                        <HiCheckCircle className="h-3.5 w-3.5" />
+                        {stats.preparedCount}
+                      </span>
+                      <span className="ui-status-pill border-transparent bg-[#FFF5E7] text-[#AD7B18]">
+                        <HiOutlineClock className="h-3.5 w-3.5" />
+                        {stats.unpreparedCount + stats.staleCount + stats.failedCount}
                       </span>
                     </div>
 
                     {progress ? (
-                      <div className="mt-3 rounded-[14px] border border-[#E5E5E4] bg-white px-3 py-3">
+                      <div className="ui-inset mt-3 border-[#EEE7DE] bg-[#FFFEFD] px-3 py-3">
                         <div className="mb-2 flex items-center justify-between text-[12px] text-[#666666]">
                           <Tooltip title={progress.message || '最近任务'}>
                             <span className="inline-flex items-center gap-1.5">
@@ -466,7 +482,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
         </section>
 
         <section
-          className="flex min-h-0 flex-col overflow-hidden rounded-[20px] border border-[#E5E5E4] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+          className="ui-panel flex min-h-0 flex-col overflow-hidden"
           data-testid={importSelectors.workspaceDetail}
         >
           {selectedWorkspace ? (
@@ -491,9 +507,15 @@ const WorkspaceSettingsPanel: React.FC = () => {
                     <div className="mt-2 break-all text-[12px] text-[#666666]">
                       {selectedWorkspace.root_path}
                     </div>
-                    <div className="mt-2 flex flex-wrap gap-3 text-[12px] text-[#999999]">
-                      <span>最近扫描：{formatDateTime(selectedWorkspace.last_scan_at)}</span>
-                      <span>最近加载：{formatDateTime(selectedWorkspace.last_prepare_at)}</span>
+                    <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[#666666]">
+                      <span className="ui-status-pill border-transparent bg-[#F7F5F1] text-[#666666]">
+                        <HiArrowPath className="h-3.5 w-3.5" />
+                        扫描 {formatDateTime(selectedWorkspace.last_scan_at)}
+                      </span>
+                      <span className="ui-status-pill border-transparent bg-[#FBF5F2] text-[#D97757]">
+                        <HiSparkles className="h-3.5 w-3.5" />
+                        加载 {formatDateTime(selectedWorkspace.last_prepare_at)}
+                      </span>
                     </div>
                     {selectedWorkspace.last_error ? (
                       <div
@@ -532,7 +554,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
               <div className="min-h-0 flex-1 overflow-hidden px-5 py-5 pr-4">
                 <div className="grid h-full min-h-0 gap-4 xl:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
                   <div className="space-y-4 overflow-y-auto pr-1">
-                    <section className="rounded-[18px] border border-[#E5E5E4] bg-[#FCFBF8] p-4">
+                    <section className="ui-panel-soft p-4">
                       <div className="flex items-center gap-1.5">
                         <div className="text-[14px] font-semibold text-[#1F1F1F]">加载范围</div>
                         <Tooltip title="加载会把文件文本切块并缓存，后续搜索更快，也能减少 AI 直接读取原文时的 token 消耗。">
@@ -610,20 +632,45 @@ const WorkspaceSettingsPanel: React.FC = () => {
                       </div>
                     </section>
 
-                    <section className="rounded-[18px] border border-[#E5E5E4] bg-white p-4">
+                    <section className="ui-panel p-4">
                       <div className="text-[14px] font-semibold text-[#1F1F1F]">摘要</div>
                       <div className="mt-3 grid grid-cols-2 gap-2 text-[12px] text-[#666666]">
-                        <div className="rounded-[14px] bg-[#FAFAF9] px-3 py-3">
-                          目录 / 文件
-                          <div className="mt-1 text-[13px] font-semibold text-[#1F1F1F]">
-                            {getWorkspaceStats(selectedWorkspaceNodes).directoryCount} /{' '}
-                            {getWorkspaceStats(selectedWorkspaceNodes).fileCount}
+                        <div className="ui-inset px-3 py-3">
+                          <div className="inline-flex items-center gap-1.5">
+                            <HiFolder className="h-4 w-4 text-[#8A5A2B]" />
+                            <span>目录</span>
+                          </div>
+                          <div className="mt-1 text-[16px] font-semibold text-[#1F1F1F]">
+                            {selectedWorkspaceStats.directoryCount}
                           </div>
                         </div>
-                        <div className="rounded-[14px] bg-[#FAFAF9] px-3 py-3">
-                          已加载
-                          <div className="mt-1 text-[13px] font-semibold text-[#1F1F1F]">
-                            {getWorkspaceStats(selectedWorkspaceNodes).preparedCount}
+                        <div className="ui-inset px-3 py-3">
+                          <div className="inline-flex items-center gap-1.5">
+                            <HiDocumentText className="h-4 w-4 text-[#666666]" />
+                            <span>文件</span>
+                          </div>
+                          <div className="mt-1 text-[16px] font-semibold text-[#1F1F1F]">
+                            {selectedWorkspaceStats.fileCount}
+                          </div>
+                        </div>
+                        <div className="ui-inset px-3 py-3">
+                          <div className="inline-flex items-center gap-1.5">
+                            <HiCheckCircle className="h-4 w-4 text-[#4F7A46]" />
+                            <span>已加载</span>
+                          </div>
+                          <div className="mt-1 text-[16px] font-semibold text-[#1F1F1F]">
+                            {selectedWorkspaceStats.preparedCount}
+                          </div>
+                        </div>
+                        <div className="ui-inset px-3 py-3">
+                          <div className="inline-flex items-center gap-1.5">
+                            <HiOutlineClock className="h-4 w-4 text-[#AD7B18]" />
+                            <span>待处理</span>
+                          </div>
+                          <div className="mt-1 text-[16px] font-semibold text-[#1F1F1F]">
+                            {selectedWorkspaceStats.unpreparedCount +
+                              selectedWorkspaceStats.staleCount +
+                              selectedWorkspaceStats.failedCount}
                           </div>
                         </div>
                       </div>
@@ -695,13 +742,16 @@ const WorkspaceSettingsPanel: React.FC = () => {
                     ) : null}
 
                     <div
-                      className="flex min-h-0 flex-1 overflow-hidden rounded-[18px] border border-[#E5E5E4] bg-[#FAFAF9] p-3"
+                      className="ui-inset flex min-h-0 flex-1 overflow-hidden p-3"
                       data-testid={importSelectors.workspaceTree}
                     >
                       {selectedWorkspaceNodes.length > 0 ? (
                         <Tree
                           blockNode
-                          height={Math.max(selectedWorkspaceTreeStrategy.isLargeTree ? 520 : 460, 360)}
+                          height={Math.max(
+                            selectedWorkspaceTreeStrategy.isLargeTree ? 520 : 460,
+                            360
+                          )}
                           virtual
                           treeData={selectedWorkspaceTree}
                           expandedKeys={workspaceExpandedKeys[selectedWorkspace.id] || []}

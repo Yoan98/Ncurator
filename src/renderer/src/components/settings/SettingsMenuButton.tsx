@@ -33,9 +33,7 @@ const SettingsMenuButton: React.FC<SettingsMenuButtonProps> = ({
           label: (
             <div className="min-w-[152px] py-0.5">
               <div className="flex items-center gap-3 text-[13px] font-medium text-[#1F1F1F]">
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#E5E5E4] bg-[#FAFAF9] text-[#666666]">
-                  {item.icon}
-                </span>
+                <span className="ui-icon-well flex h-7 w-7 text-[#666666]">{item.icon}</span>
                 <span>{item.label}</span>
               </div>
             </div>
@@ -62,7 +60,7 @@ const SettingsMenuButton: React.FC<SettingsMenuButtonProps> = ({
         <Button
           icon={<HiOutlineCog6Tooth className={iconClassName || 'h-3.5 w-3.5'} />}
           aria-label="设置"
-          className={`!inline-flex !h-9 !items-center !rounded-xl !border-[#E5E5E4] !bg-white/92 !text-[#666666] shadow-[0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur-sm hover:!border-[#D97757] hover:!text-[#D97757] ${
+          className={`!inline-flex !h-9 !items-center !rounded-[10px] !border-[#E5E5E4] !bg-white !text-[#666666] !shadow-none hover:!border-[#D97757] hover:!text-[#D97757] ${
             iconOnly ? '!w-9 !justify-center !px-0' : '!px-3'
           } ${className || ''}`}
         >

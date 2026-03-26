@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { App, Button } from 'antd'
 import {
   HiBookOpen,
+  HiOutlineExclamationCircle,
   HiOutlinePencilSquare,
   HiOutlineRectangleGroup,
   HiOutlineViewColumns,
@@ -1330,7 +1331,7 @@ const ChatPage: React.FC = () => {
       data-workbench-mode={composerMode}
     >
       <aside
-        className={`flex h-screen flex-col border-r border-[#E5E5E4] bg-[#F8F6F2] transition-all duration-200 ${
+        className={`flex h-screen flex-col border-r border-[#E5E5E4] bg-[#F7F5F1] transition-all duration-200 ${
           sidebarCollapsed ? 'w-14' : 'w-[220px]'
         }`}
       >
@@ -1339,12 +1340,12 @@ const ChatPage: React.FC = () => {
             className={`flex ${sidebarCollapsed ? 'flex-col items-center gap-1.5' : 'items-center justify-between gap-2'}`}
           >
             {sidebarCollapsed ? (
-              <span className="flex h-7 w-7 items-center justify-center rounded-xl border border-[#E5E5E4] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+              <span className="ui-icon-well flex h-7 w-7 bg-white">
                 <img src={brandIcon} alt="馆长" className="w-4 invert-100" />
               </span>
             ) : (
               <div className="flex min-w-0 items-center gap-2">
-                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-[#E5E5E4] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+                <span className="ui-icon-well flex h-7 w-7 shrink-0 bg-white">
                   <img src={brandIcon} alt="馆长" className="w-4 invert-100" />
                 </span>
                 <span className="truncate text-[13px] font-semibold tracking-[0.01em] text-[#1F1F1F]">
@@ -1358,7 +1359,7 @@ const ChatPage: React.FC = () => {
                 type="text"
                 size="small"
                 icon={<HiOutlinePencilSquare className="h-3 w-3" />}
-                className="!flex !h-7 !w-7 !items-center !justify-center !rounded-xl !border !border-[#E5E5E4] !bg-white/92 !p-0 !text-[#D97757] shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:!border-[#D97757] hover:!text-[#C66A4A]"
+                className="!flex !h-7 !w-7 !items-center !justify-center !rounded-[10px] !border !border-[#E5E5E4] !bg-white !p-0 !text-[#D97757] !shadow-none hover:!border-[#D97757] hover:!text-[#C66A4A]"
                 onClick={() => void createNewSession()}
               />
               <Button
@@ -1371,9 +1372,9 @@ const ChatPage: React.FC = () => {
                     <HiViewColumns className="h-3 w-3" />
                   )
                 }
-                className={`!flex !h-7 !w-7 !items-center !justify-center !rounded-xl !border !p-0 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:!border-[#D97757] hover:!text-[#D97757] ${
+                className={`!flex !h-7 !w-7 !items-center !justify-center !rounded-[10px] !border !p-0 !shadow-none hover:!border-[#D97757] hover:!text-[#D97757] ${
                   sidebarCollapsed
-                    ? '!border-[#E5E5E4] !bg-white/92 !text-[#666666]'
+                    ? '!border-[#E5E5E4] !bg-white !text-[#666666]'
                     : '!border-[#F4E5DF] !bg-[#FBF5F2] !text-[#D97757]'
                 }`}
                 onClick={() => setSidebarCollapsed((previous) => !previous)}
@@ -1390,12 +1391,20 @@ const ChatPage: React.FC = () => {
           {sessions.map((session) => (
             <div
               key={session.id}
-              className={`group relative cursor-pointer rounded-2xl border transition-all duration-200 ${
+              role="button"
+              tabIndex={0}
+              className={`group relative w-full rounded-[14px] border text-left transition-all duration-200 ${
                 currentSessionId === session.id
                   ? 'border-[#F4E5DF] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
                   : 'border-transparent bg-transparent hover:border-[#ECE7DF] hover:bg-white/80'
               } ${sidebarCollapsed ? 'px-2 py-2' : 'px-3 py-2'}`}
               onClick={() => setCurrentSessionId(session.id)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  setCurrentSessionId(session.id)
+                }
+              }}
             >
               {sidebarCollapsed ? (
                 <div className="flex justify-center text-xs font-medium text-[#1F1F1F]">
@@ -1426,7 +1435,7 @@ const ChatPage: React.FC = () => {
           <SettingsMenuButton
             label={sidebarCollapsed ? undefined : '设置'}
             placement={sidebarCollapsed ? 'topRight' : 'topLeft'}
-            className={`!h-7 !rounded-xl ${
+            className={`!h-7 !rounded-[10px] ${
               sidebarCollapsed ? '!w-7 !px-0' : '!w-full !justify-start !px-2.5'
             }`}
           />
@@ -1480,9 +1489,9 @@ const ChatPage: React.FC = () => {
                   <HiRectangleGroup className="h-3 w-3" />
                 )
               }
-              className={`!flex !h-7 !w-7 !items-center !justify-center !rounded-xl !border !p-0 shadow-[0_1px_2px_rgba(0,0,0,0.04)] hover:!border-[#D97757] hover:!text-[#D97757] ${
+              className={`!flex !h-7 !w-7 !items-center !justify-center !rounded-[10px] !border !p-0 !shadow-none hover:!border-[#D97757] hover:!text-[#D97757] ${
                 contentPanelCollapsed
-                  ? '!border-[#E5E5E4] !bg-white/92 !text-[#666666]'
+                  ? '!border-[#E5E5E4] !bg-white !text-[#666666]'
                   : '!border-[#F4E5DF] !bg-[#FBF5F2] !text-[#D97757]'
               }`}
               onClick={() => setContentPanelCollapsed((previous) => !previous)}
@@ -1545,59 +1554,62 @@ const ChatPage: React.FC = () => {
                     {composerMode === 'ai' &&
                     (pendingApprovalRequest || pendingWorkspaceRequest) ? (
                       <div
-                        className="mt-3 rounded-2xl border border-[#FDECC8] bg-[#FFF9ED] px-3 py-3 text-sm text-[#8A6510]"
+                        className="mt-3 flex items-start gap-2 rounded-[14px] border border-[#FDECC8] bg-[#FFF9ED] px-3 py-3 text-sm text-[#8A6510]"
                         data-testid={
                           pendingApprovalRequest
                             ? chatSelectors.approvalBanner
                             : chatSelectors.workspaceBanner
                         }
                       >
-                        {pendingApprovalRequest ? (
-                          <div className="flex flex-col gap-3">
-                            <div>{pendingApprovalRequest.reason}</div>
-                            <div className="text-xs text-[#8A6510]">
-                              风险级别：{pendingApprovalRequest.riskLevel} ·{' '}
-                              {pendingApprovalRequest.command}
+                        <HiOutlineExclamationCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          {pendingApprovalRequest ? (
+                            <div className="flex flex-col gap-3">
+                              <div>{pendingApprovalRequest.reason}</div>
+                              <div className="text-xs text-[#8A6510]">
+                                风险级别：{pendingApprovalRequest.riskLevel} ·{' '}
+                                {pendingApprovalRequest.command}
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  type="primary"
+                                  onClick={() => void handleApprovalDecision(true)}
+                                  loading={approvalSubmitting}
+                                  data-testid={chatSelectors.approvalApproveButton}
+                                >
+                                  批准执行
+                                </Button>
+                                <Button
+                                  onClick={() => void handleApprovalDecision(false)}
+                                  disabled={approvalSubmitting}
+                                  data-testid={chatSelectors.approvalDenyButton}
+                                >
+                                  拒绝执行
+                                </Button>
+                              </div>
                             </div>
-                            <div className="flex gap-2">
-                              <Button
-                                type="primary"
-                                onClick={() => void handleApprovalDecision(true)}
-                                loading={approvalSubmitting}
-                                data-testid={chatSelectors.approvalApproveButton}
-                              >
-                                批准执行
-                              </Button>
-                              <Button
-                                onClick={() => void handleApprovalDecision(false)}
-                                disabled={approvalSubmitting}
-                                data-testid={chatSelectors.approvalDenyButton}
-                              >
-                                拒绝执行
-                              </Button>
-                            </div>
-                          </div>
-                        ) : null}
+                          ) : null}
 
-                        {pendingWorkspaceRequest ? (
-                          <div className="flex flex-col gap-3">
-                            <div>{pendingWorkspaceRequest.reason}</div>
-                            <div className="text-xs text-[#8A6510]">
-                              请选择当前工作区，必要时再通过 @ 插入目录或文件后继续运行。
+                          {pendingWorkspaceRequest ? (
+                            <div className="flex flex-col gap-3">
+                              <div>{pendingWorkspaceRequest.reason}</div>
+                              <div className="text-xs text-[#8A6510]">
+                                请选择当前工作区，必要时再通过 @ 插入目录或文件后继续运行。
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  type="primary"
+                                  onClick={() => void handleContinueWithWorkspace()}
+                                  loading={loading}
+                                  disabled={!selectedWorkspace}
+                                  data-testid={chatSelectors.workspaceContinueButton}
+                                >
+                                  继续运行
+                                </Button>
+                              </div>
                             </div>
-                            <div className="flex gap-2">
-                              <Button
-                                type="primary"
-                                onClick={() => void handleContinueWithWorkspace()}
-                                loading={loading}
-                                disabled={!selectedWorkspace}
-                                data-testid={chatSelectors.workspaceContinueButton}
-                              >
-                                继续运行
-                              </Button>
-                            </div>
-                          </div>
-                        ) : null}
+                          ) : null}
+                        </div>
                       </div>
                     ) : null}
 
@@ -1606,21 +1618,22 @@ const ChatPage: React.FC = () => {
                       (scope) => scope.sourceType === 'workspace' && scope.hasUnpreparedFiles
                     ) ? (
                       <div
-                        className="mt-3 rounded-2xl border border-[#FDECC8] bg-[#FFF9ED] px-3 py-2.5 text-sm text-[#8A6510]"
+                        className="mt-3 flex items-start gap-2 rounded-[14px] border border-[#FDECC8] bg-[#FFF9ED] px-3 py-2.5 text-sm text-[#8A6510]"
                         data-testid={workbenchSelectors.scopeAiWarning}
                       >
-                        已选范围包含未加载的本地文件。AI 可能直接读取原文件，耗时更长，并增加 token
-                        消耗。
+                        <HiOutlineExclamationCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                        <span>已选范围包含未加载文件，AI 可能直接读取原文件，耗时更长。</span>
                       </div>
                     ) : null}
 
                     {composerMode === 'search' &&
                     selectedSourceScopes.some((scope) => scope.hasUnpreparedFiles) ? (
                       <div
-                        className="mt-3 rounded-2xl border border-[#FDECC8] bg-[#FFF9ED] px-3 py-2.5 text-sm text-[#8A6510]"
+                        className="mt-3 flex items-start gap-2 rounded-[14px] border border-[#FDECC8] bg-[#FFF9ED] px-3 py-2.5 text-sm text-[#8A6510]"
                         data-testid={workbenchSelectors.scopeSearchWarning}
                       >
-                        纯搜索只会检索已加载的本地资料；未加载文件不会进入候选结果。
+                        <HiOutlineExclamationCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                        <span>纯搜索只检索已加载资料，未加载文件不会进入候选结果。</span>
                       </div>
                     ) : null}
                   </div>

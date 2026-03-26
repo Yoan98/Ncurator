@@ -30,7 +30,7 @@ const renderFileChip = (
       key={`${file.origin}-${file.path}`}
       type="button"
       onClick={() => onOpenFile(file)}
-      className="inline-flex max-w-full items-center gap-2 rounded-full border border-[#E5E5E4] bg-white px-3 py-1.5 text-left text-xs text-[#666666] transition-all duration-200 hover:-translate-y-[1px] hover:border-[#D97757] hover:text-[#D97757]"
+      className="ui-hover-lift inline-flex max-w-full items-center gap-2 rounded-full border border-[#E5E5E4] bg-white px-3 py-1.5 text-left text-xs text-[#666666] hover:border-[#D97757] hover:text-[#D97757]"
     >
       <HiOutlineDocumentText className="h-3.5 w-3.5 flex-shrink-0" />
       <span className="truncate">{file.fileName}</span>
@@ -62,7 +62,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
 
   return (
     <div className="flex gap-4" data-testid={`workbench-assistant-turn-${messageId}`}>
-      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-[#F4E5DF] bg-[#FBF5F2] text-[#D97757]">
+      <div className="ui-icon-well ui-icon-well-brand flex h-9 w-9 flex-shrink-0">
         <HiSparkles className="h-[18px] w-[18px]" />
       </div>
       <div className="min-w-0 flex-1">
@@ -72,7 +72,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
         </div>
 
         {hasExecutionDetails ? (
-          <div className="mt-2.5 overflow-hidden rounded-[18px] border border-[#E5E5E4] bg-[#FCFBF8]">
+          <div className="ui-panel-soft mt-2.5 overflow-hidden">
             <button
               type="button"
               className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors duration-200 hover:bg-white/70"
@@ -81,9 +81,16 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
             >
               <div>
                 <div className="text-[13px] font-medium text-[#1F1F1F]">执行过程</div>
-                <div className="mt-1 text-[12px] text-[#666666]">
-                  {turn?.steps.length || 0} 步 · 读取 {turn?.readFiles.length || 0} 个文件 · 修改{' '}
-                  {turn?.editedFiles.length || 0} 个文件
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <span className="ui-status-pill border-transparent bg-white text-[#666666]">
+                    {turn?.steps.length || 0} 步
+                  </span>
+                  <span className="ui-status-pill border-transparent bg-white text-[#666666]">
+                    读取 {turn?.readFiles.length || 0}
+                  </span>
+                  <span className="ui-status-pill border-transparent bg-white text-[#666666]">
+                    修改 {turn?.editedFiles.length || 0}
+                  </span>
                 </div>
               </div>
               <HiChevronDown

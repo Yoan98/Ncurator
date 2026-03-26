@@ -40,11 +40,8 @@ const SettingsPage: React.FC = () => {
   const sectionMeta = SETTINGS_SECTION_META[currentSection]
 
   return (
-    <div
-      className="h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(251,245,242,0.95),_rgba(245,245,244,0.92)_42%,_#F5F5F4_72%)]"
-      data-testid={settingsSelectors.page}
-    >
-      <div className="mx-auto flex h-full w-full max-w-[1360px] flex-col gap-5 px-5 py-5 lg:px-6">
+    <div className="h-screen overflow-hidden bg-[#F5F5F4]" data-testid={settingsSelectors.page}>
+      <div className="mx-auto flex h-full w-full max-w-[1320px] flex-col gap-4 px-5 py-5 lg:px-6">
         <AppPageHeader
           icon={sectionMeta.icon}
           title={sectionMeta.title}

@@ -67,6 +67,7 @@ tests/                   # 自动化测试
 - 跨进程共享实体
 
 凡是 Main 与 Renderer 都会消费的数据结构，必须从 `src/shared/**` 导出，不能在两侧各自重复维护。
+
 - 只给 `main`、`ai`、`human` 单侧使用的类型与常量，不要放进 `src/shared/**`。
 
 ## 6. 测试目录规则
@@ -81,9 +82,11 @@ tests/                   # 自动化测试
 ## 7. 文档目录规则
 
 - `doc/` 下的 canonical 文档默认直接放在根目录。
-- `doc/README.md` 是默认阅读入口。
+- 文档阅读路径默认由 `AGENTS.md` 维护。
 - canonical 文档、阅读路径和同步清单都在 `doc/` 根目录维护。
 - `doc/ai-design/` 用于 AI 总体架构、实现规范、数据契约与数据流转、skill 设计、prompt 设计，以及未来重构规划。
+- `doc/prd/` 用于按产品模块维护用户可见功能规格与验收标准，例如 `workbench.md` 与 `settings.md`。
+- 用户可见功能行为变更时，应优先同步 `doc/prd/**`，再同步代码实现与测试。
 - `doc/test-plan/` 用于维护各类测试计划文档。
 - 测试计划按对应诉求或测试域拆分，例如 Core AI 测试计划放在 `doc/test-plan/ai-test.md`。
 - 长期维护的正式测试用例，必须先在 `doc/test-plan/**` 中定义，再落到 `tests/**` 正式目录。

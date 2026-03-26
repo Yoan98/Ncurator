@@ -585,7 +585,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     <div className="relative">
       {mentionQuery !== null ? (
         <div
-          className="absolute inset-x-0 bottom-full mb-2 overflow-hidden rounded-[24px] border border-[#E5E5E4] bg-white/98 shadow-[0_16px_40px_rgba(31,31,31,0.08)] backdrop-blur-sm"
+          className="absolute inset-x-0 bottom-full mb-2 overflow-hidden rounded-[24px] border border-[#E8E2DA] bg-white shadow-[0_18px_44px_rgba(31,31,31,0.08)]"
           data-testid={workbenchSelectors.mentionPanel}
         >
           <div className="max-h-[300px] overflow-y-auto px-2.5 py-2.5">
@@ -618,8 +618,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                         <button
                           key={getScopeKey(scope)}
                           type="button"
-                          className={`flex w-full items-center gap-3 rounded-[18px] px-3 py-2.5 text-left transition ${
-                            active ? 'bg-[#F3F1EF]' : 'hover:bg-[#F7F6F4]'
+                          className={`flex w-full items-center gap-3 rounded-[14px] px-3 py-2.5 text-left transition ${
+                            active ? 'bg-[#FBF5F2]' : 'hover:bg-[#FAF6F1]'
                           }`}
                           onMouseDown={(event) => {
                             event.preventDefault()
@@ -667,8 +667,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                         <button
                           key={getScopeKey(scope)}
                           type="button"
-                          className={`flex w-full items-center gap-3 rounded-[18px] px-3 py-2.5 text-left transition ${
-                            active ? 'bg-[#F3F1EF]' : 'hover:bg-[#F7F6F4]'
+                          className={`flex w-full items-center gap-3 rounded-[14px] px-3 py-2.5 text-left transition ${
+                            active ? 'bg-[#FBF5F2]' : 'hover:bg-[#FAF6F1]'
                           }`}
                           onMouseDown={(event) => {
                             event.preventDefault()
@@ -698,7 +698,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       ) : null}
 
       <div
-        className="rounded-[26px] border border-[#ECE7DF] bg-white/88 px-3.5 pb-2 pt-2 shadow-[0_6px_18px_rgba(31,31,31,0.05)] backdrop-blur-md transition-all duration-200 focus-within:border-[#D97757] focus-within:ring-4 focus-within:ring-[#F4E5DF]"
+        className="rounded-[24px] border border-[#E8E2DA] bg-white px-3.5 pb-2.5 pt-2.5 shadow-[0_8px_24px_rgba(31,31,31,0.06)] transition-all duration-200 focus-within:border-[#D97757] focus-within:ring-4 focus-within:ring-[#F4E5DF]"
         data-testid={workbenchSelectors.sourceScopeField}
         onMouseDown={(event) => {
           const target = event.target
@@ -749,7 +749,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           </div>
         </div>
 
-        <div className="mt-1 flex items-center justify-between gap-3">
+        <div className="mt-2 flex items-center justify-between gap-3 border-t border-[#F3EEE6] pt-2">
           <div className="flex min-w-0 items-center gap-1.5 text-[#7B7B79]">
             <Select
               value={mode}
@@ -830,7 +830,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               <Button
                 onClick={onCancel}
                 size="small"
-                className="h-8 rounded-full border-[#E5E5E4] bg-white px-3 text-[12px] text-[#666666]"
+                className="h-8 rounded-full border-[#E5E5E4] bg-white px-3 text-[12px] text-[#666666] shadow-none"
                 data-testid={workbenchSelectors.cancelButton}
               >
                 取消
@@ -841,7 +841,9 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               onClick={onSubmit}
               disabled={loading || !canSubmit}
               className={`inline-flex h-9 w-9 items-center justify-center rounded-full text-white transition ${
-                loading || !canSubmit ? 'bg-[#D8D8D6]' : 'bg-[#111111] hover:-translate-y-[1px]'
+                loading || !canSubmit
+                  ? 'bg-[#D8D8D6]'
+                  : 'bg-[#D97757] shadow-[0_6px_14px_rgba(217,119,87,0.18)] hover:-translate-y-[1px] hover:bg-[#C66A4A]'
               }`}
               data-testid={workbenchSelectors.sendButton}
               aria-label={mode === 'ai' ? '发送智能请求' : '执行搜索'}

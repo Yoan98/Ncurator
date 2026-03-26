@@ -63,12 +63,12 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
 
   return (
     <aside
-      className="flex h-full min-h-0 flex-col border-l border-[#E5E5E4] bg-white"
+      className="flex h-full min-h-0 flex-col border-l border-[#E5E5E4] bg-[#FCFBF8]"
       data-testid={workbenchSelectors.contentPanel}
     >
       <div className="min-h-0 flex-1 overflow-hidden px-5 py-4">
         {state.kind === 'empty' ? (
-          <div className="flex h-full items-center justify-center rounded-[20px] bg-[#FAFAF9]">
+          <div className="flex h-full items-center justify-center rounded-[18px] border border-dashed border-[#E5E5E4] bg-[#FAFAF9]">
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
               description={<span className="text-[12px] text-[#999999]">右侧暂无内容</span>}
@@ -79,7 +79,7 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
         {state.kind === 'search_results' ? (
           <div className="grid h-full gap-4 xl:grid-cols-[0.92fr_1.08fr]">
             <div
-              className="overflow-auto rounded-[20px] border border-[#E5E5E4] bg-[#FAFAF9] p-3"
+              className="ui-inset overflow-auto p-3"
               data-testid={workbenchSelectors.searchResults}
             >
               <div className="mb-3 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">
@@ -92,7 +92,7 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
                     key={result.id}
                     type="button"
                     onClick={() => setSelectedSearchIndex(index)}
-                    className={`w-full rounded-2xl border px-3 py-3 text-left transition-all duration-200 ${
+                    className={`ui-hover-lift w-full rounded-[14px] border px-3 py-3 text-left ${
                       index === selectedSearchIndex
                         ? 'border-[#D97757] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
                         : 'border-[#E5E5E4] bg-white hover:border-[#D97757]'
@@ -110,7 +110,7 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
             </div>
 
             <div className="flex min-h-0 flex-col gap-4">
-              <div className="rounded-[20px] border border-[#E5E5E4] bg-[#FCFBF8] px-4 py-4">
+              <div className="ui-panel-soft px-4 py-4">
                 <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">
                   命中详情
                 </div>
@@ -149,7 +149,7 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
 
         {state.kind === 'document_view' ? (
           <div className="flex h-full flex-col gap-4" data-testid={workbenchSelectors.documentView}>
-            <div className="rounded-[20px] border border-[#E5E5E4] bg-[#FCFBF8] px-4 py-4">
+            <div className="ui-panel-soft px-4 py-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="text-[13px] font-semibold text-[#1F1F1F]">
@@ -158,7 +158,9 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
                   <div className="mt-1 break-all text-xs text-[#999999]">{state.file.path}</div>
                 </div>
                 {state.file.reviewId ? (
-                  <Button onClick={() => onOpenReview(state.file.reviewId || '')}>查看确认文档</Button>
+                  <Button onClick={() => onOpenReview(state.file.reviewId || '')}>
+                    查看确认文档
+                  </Button>
                 ) : null}
               </div>
             </div>

@@ -1,6 +1,5 @@
 # NCurator-Desktop Workspace 测试计划
 
-
 ## 1. 总体目标
 
 本计划用于验证 Workspace 能否稳定承担“本地优先资料入口”这条职责，而不是只在 UI 上能看到一个列表。
@@ -13,6 +12,7 @@
 - 把 Workspace 产出的状态、范围与后续对话入口稳定接起来
 
 测试用例设计准则、测试目录、runner、raw log、report 契约统一以 [test.md](/Users/test/work-space/NCurator-Desktop/doc/test.md) 为准，这里不再重复展开。
+
 
 ## 2. 模型与阶段边界
 

@@ -22,13 +22,25 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
   --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.06);
   --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08);
+
+  /* 统一 UI token */
+  --ui-radius-control: 10px;
+  --ui-radius-inset: 14px;
+  --ui-radius-panel: 18px;
+  --ui-radius-overlay: 24px;
+  --ui-transition: 180ms ease;
 }
 
 body {
   background-color: var(--color-bg-primary);
   color: var(--color-text-primary);
   font-family:
-    'SF Pro Text', 'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    'SF Pro Text',
+    'PingFang SC',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -37,6 +49,83 @@ body {
 
 #root {
   min-height: 100vh;
+}
+
+button:not(:disabled),
+[role='button']:not([aria-disabled='true']),
+a[href],
+.ant-btn:not(:disabled),
+.ant-dropdown-menu-item,
+.ant-dropdown-menu-submenu-title,
+.ant-select-selector,
+.ant-switch,
+.ant-segmented-item,
+.ant-pagination-item,
+.ant-tabs-tab-btn {
+  cursor: pointer !important;
+}
+
+button:disabled,
+.ant-btn:disabled,
+.ant-btn[disabled],
+[role='button'][aria-disabled='true'],
+.ant-switch.ant-switch-disabled {
+  cursor: not-allowed !important;
+}
+
+input,
+textarea,
+[contenteditable='true'],
+.ant-input,
+.ant-input-affix-wrapper,
+.ant-select-selection-search-input {
+  cursor: text;
+}
+
+.ui-panel {
+  @apply border border-[#E5E5E4] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)];
+  border-radius: var(--ui-radius-panel);
+}
+
+.ui-panel-soft {
+  @apply border border-[#E5E5E4] bg-[#FCFBF8] shadow-[0_1px_2px_rgba(0,0,0,0.04)];
+  border-radius: var(--ui-radius-panel);
+}
+
+.ui-panel-ghost {
+  @apply border border-[#E8E2DA] bg-white/88 shadow-[0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur-sm;
+  border-radius: var(--ui-radius-panel);
+}
+
+.ui-inset {
+  @apply border border-[#ECE7DF] bg-[#FAFAF9];
+  border-radius: var(--ui-radius-inset);
+}
+
+.ui-icon-well {
+  @apply inline-flex items-center justify-center border border-[#E8E2DA] bg-[#FAFAF9] text-[#666666];
+  border-radius: var(--ui-radius-inset);
+}
+
+.ui-icon-well-brand {
+  @apply border-[#F4E5DF] bg-[#FBF5F2] text-[#D97757];
+}
+
+.ui-status-pill {
+  @apply inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium leading-none;
+}
+
+.ui-hover-lift {
+  transition:
+    transform var(--ui-transition),
+    border-color var(--ui-transition),
+    background-color var(--ui-transition),
+    box-shadow var(--ui-transition),
+    color var(--ui-transition);
+}
+
+.ui-hover-lift:hover {
+  transform: translateY(-1px);
 }
 
 /* 滚动条样式优化 */

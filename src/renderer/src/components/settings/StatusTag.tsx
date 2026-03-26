@@ -13,7 +13,7 @@ const StatusTag: React.FC<StatusTagProps> = ({ label, className, tooltip, icon, 
   return (
     <Tooltip title={tooltip}>
       <Tag
-        className={`!mr-0 !inline-flex !items-center rounded-full !px-2.5 !py-1 !leading-none ${className}`}
+        className={`!mr-0 !inline-flex !items-center !border !rounded-full !px-2.5 !py-1 !text-[11px] !font-medium !leading-none shadow-none ${className}`}
         data-testid={dataTestId}
       >
         <span className="inline-flex items-center gap-1.5 leading-none">

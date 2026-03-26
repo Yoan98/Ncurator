@@ -186,7 +186,7 @@ const ModelSettingsPanel: React.FC = () => {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
-      <section className="shrink-0 rounded-[18px] border border-[#E5E5E4] bg-white/88 px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur-sm">
+      <section className="ui-panel-ghost shrink-0 px-4 py-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <h2 className="text-[16px] font-semibold tracking-tight text-[#1F1F1F]">大模型</h2>
@@ -215,7 +215,7 @@ const ModelSettingsPanel: React.FC = () => {
         </div>
       </section>
 
-      <section className="min-h-0 flex-1 overflow-hidden rounded-[20px] border border-[#E5E5E4] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+      <section className="ui-panel min-h-0 flex-1 overflow-hidden">
         <div className="h-full overflow-auto pr-1">
           <Table
             dataSource={configs}

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Button, Empty, Input, Modal, Tooltip, message } from 'antd'
 import type { WebSourceRecord } from '../../../../shared/types'
-import { HiArrowPath, HiOutlineTrash } from 'react-icons/hi2'
+import { HiArrowPath, HiGlobeAlt, HiOutlineClock, HiOutlineTrash } from 'react-icons/hi2'
 import { importSelectors } from '../../testing/selectors'
 import StatusTag from './StatusTag'
 import { formatDateTime, getWebStatusBadge } from './utils/workspace'
@@ -179,7 +179,7 @@ const WebSourcesSettingsPanel: React.FC = () => {
       className="flex h-full min-h-0 flex-col gap-4 overflow-hidden"
       data-testid={importSelectors.webSourceSection}
     >
-      <section className="shrink-0 rounded-[18px] border border-[#E5E5E4] bg-white/88 px-4 py-3 shadow-[0_1px_2px_rgba(0,0,0,0.04)] backdrop-blur-sm">
+      <section className="ui-panel-ghost shrink-0 px-4 py-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <h2 className="text-[16px] font-semibold tracking-tight text-[#1F1F1F]">网页资料</h2>
@@ -215,7 +215,7 @@ const WebSourcesSettingsPanel: React.FC = () => {
       </section>
 
       <div className="grid min-h-0 flex-1 gap-4 overflow-hidden pr-1 xl:grid-cols-[360px_minmax(0,1fr)]">
-        <section className="flex min-h-0 flex-col rounded-[20px] border border-[#E5E5E4] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+        <section className="ui-panel flex min-h-0 flex-col">
           <div className="border-b border-[#E5E5E4] px-4 py-4">
             <div className="text-[15px] font-semibold text-[#1F1F1F]">来源列表</div>
             <div className="mt-3" data-testid={importSelectors.webSourceSearchInput}>
@@ -253,18 +253,25 @@ const WebSourcesSettingsPanel: React.FC = () => {
                       type="button"
                       onClick={() => setSelectedWebSourceId(item.id)}
                       data-testid={`${importSelectors.webSourceCardPrefix}-${item.id}`}
-                      className={`w-full rounded-[16px] border px-4 py-4 text-left transition-all duration-200 ${
+                      className={`ui-hover-lift w-full rounded-[14px] border px-4 py-4 text-left ${
                         isSelected
-                          ? 'border-[#D97757] bg-[#FCFBF8] shadow-[0_4px_16px_rgba(217,119,87,0.10)]'
+                          ? 'border-[#D97757] bg-[#FCFBF8] shadow-[0_0_0_1px_rgba(244,229,223,0.9)]'
                           : 'border-[#E5E5E4] bg-white hover:border-[#D4D4D3] hover:bg-[#FCFBF8]'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="truncate text-[14px] font-semibold text-[#1F1F1F]">
-                            {item.title || item.url}
+                        <div className="flex min-w-0 items-start gap-3">
+                          <span className="ui-icon-well ui-icon-well-brand flex h-8 w-8 shrink-0">
+                            <HiGlobeAlt className="h-4 w-4" />
+                          </span>
+                          <div className="min-w-0">
+                            <div className="truncate text-[14px] font-semibold text-[#1F1F1F]">
+                              {item.title || item.url}
+                            </div>
+                            <div className="mt-1 truncate text-[12px] text-[#666666]">
+                              {item.url}
+                            </div>
                           </div>
-                          <div className="mt-1 truncate text-[12px] text-[#666666]">{item.url}</div>
                         </div>
                         <StatusTag
                           label={statusBadge.label}
@@ -273,8 +280,9 @@ const WebSourcesSettingsPanel: React.FC = () => {
                           icon={statusBadge.icon}
                         />
                       </div>
-                      <div className="mt-3 text-[12px] text-[#999999]">
-                        最近抓取：{formatDateTime(item.fetched_at)}
+                      <div className="mt-3 inline-flex items-center gap-1.5 text-[11px] text-[#999999]">
+                        <HiOutlineClock className="h-3.5 w-3.5" />
+                        {formatDateTime(item.fetched_at)}
                       </div>
                     </button>
                   )
@@ -284,7 +292,7 @@ const WebSourcesSettingsPanel: React.FC = () => {
           </div>
         </section>
 
-        <section className="flex min-h-0 flex-col overflow-hidden rounded-[20px] border border-[#E5E5E4] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+        <section className="ui-panel flex min-h-0 flex-col overflow-hidden">
           {selectedWebSource ? (
             <>
               <div className="border-b border-[#E5E5E4] px-5 py-5">
@@ -305,7 +313,7 @@ const WebSourcesSettingsPanel: React.FC = () => {
                     </div>
                     <button
                       type="button"
-                      className="mt-2 break-all text-left text-[13px] text-[#D97757] hover:text-[#C66A4A]"
+                      className="mt-3 inline-flex max-w-full items-center gap-2 break-all rounded-full bg-[#FBF5F2] px-3 py-1.5 text-left text-[12px] text-[#D97757] transition-colors hover:text-[#C66A4A]"
                       onClick={async () => {
                         const response = await window.api.openExternal(selectedWebSource.url)
                         if (!response.success) {
@@ -313,6 +321,7 @@ const WebSourcesSettingsPanel: React.FC = () => {
                         }
                       }}
                     >
+                      <HiGlobeAlt className="h-3.5 w-3.5 shrink-0" />
                       {selectedWebSource.url}
                     </button>
                   </div>
@@ -349,13 +358,25 @@ const WebSourcesSettingsPanel: React.FC = () => {
 
               <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 pr-4">
                 <div className="grid min-h-full gap-4">
-                  <section className="rounded-[18px] border border-[#E5E5E4] bg-white p-4">
+                  <section className="ui-panel p-4">
                     <div className="text-[14px] font-semibold text-[#1F1F1F]">状态与异常</div>
-                    <div className="mt-3 rounded-[14px] bg-[#FAFAF9] px-3 py-3 text-[12px] text-[#666666]">
-                      当前状态：{selectedWebStatusBadge?.label || '处理中'}
-                    </div>
-                    <div className="mt-3 rounded-[14px] bg-[#FAFAF9] px-3 py-3 text-[12px] text-[#666666]">
-                      最近抓取：{formatDateTime(selectedWebSource.fetched_at)}
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <div className="ui-inset px-3 py-3 text-[12px] text-[#666666]">
+                        <div className="text-[11px] uppercase tracking-[0.12em] text-[#999999]">
+                          状态
+                        </div>
+                        <div className="mt-1 text-[14px] font-semibold text-[#1F1F1F]">
+                          {selectedWebStatusBadge?.label || '处理中'}
+                        </div>
+                      </div>
+                      <div className="ui-inset px-3 py-3 text-[12px] text-[#666666]">
+                        <div className="text-[11px] uppercase tracking-[0.12em] text-[#999999]">
+                          最近抓取
+                        </div>
+                        <div className="mt-1 text-[14px] font-semibold text-[#1F1F1F]">
+                          {formatDateTime(selectedWebSource.fetched_at)}
+                        </div>
+                      </div>
                     </div>
                     {selectedWebSource.last_error ? (
                       <div className="mt-3 rounded-[14px] border border-[#F7D5D9] bg-[#FFF2F4] px-3 py-3 text-[12px] leading-6 text-[#B5455D]">
@@ -363,7 +384,7 @@ const WebSourcesSettingsPanel: React.FC = () => {
                       </div>
                     ) : (
                       <div className="mt-3 rounded-[14px] border border-[#DCEBD7] bg-[#F3FAF0] px-3 py-3 text-[12px] text-[#4F7A46]">
-                        当前没有抓取错误。
+                        暂无抓取错误
                       </div>
                     )}
                   </section>

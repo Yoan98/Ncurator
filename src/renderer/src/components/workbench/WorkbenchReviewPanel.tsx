@@ -1,6 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Button, Spin } from 'antd'
-import { FileSyncOutlined, FolderOpenOutlined, ReloadOutlined, StopOutlined } from '@ant-design/icons'
+import {
+  FileSyncOutlined,
+  FolderOpenOutlined,
+  ReloadOutlined,
+  StopOutlined
+} from '@ant-design/icons'
 import type { DraftReviewDetail, ValidateDraftCommitResponse } from '../../../../shared/types'
 import EmbeddedFileViewer from '../fileRenders/EmbeddedFileViewer'
 import { REVIEW_STATUS_META } from './constants'
@@ -109,8 +114,9 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
         format: selectedDocument.format
       }
     : null
-  const isActiveConfirmSession =
-    Boolean(review && confirmArtifactPath && ACTIVE_CONFIRM_STATUSES.has(review.review.status))
+  const isActiveConfirmSession = Boolean(
+    review && confirmArtifactPath && ACTIVE_CONFIRM_STATUSES.has(review.review.status)
+  )
   const endedStateMessage = review ? getEndedStateMessage(review.review.status) : ''
   const commitDisabled =
     !review ||
@@ -137,7 +143,7 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
   if (!review || !selectedDocument) {
     return (
       <div
-        className="flex h-full items-center justify-center rounded-[18px] border border-dashed border-[#E5E5E4] bg-[#FAFAF9] text-sm text-[#999999]"
+        className="ui-inset flex h-full items-center justify-center border-dashed text-sm text-[#999999]"
         data-testid={workbenchSelectors.reviewPanel}
       >
         当前没有待确认的文档。
@@ -147,18 +153,26 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
 
   return (
     <div className="flex h-full min-h-0 flex-col" data-testid={workbenchSelectors.reviewPanel}>
-      <div className="space-y-4 border-b border-[#E5E5E4] pb-4">
-        <div className="rounded-[18px] border border-[#E5E5E4] bg-[#FCFBF8] px-4 py-4">
+      <div className="space-y-3 border-b border-[#E5E5E4] pb-4">
+        <div className="ui-panel-soft px-4 py-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="text-[13px] font-semibold text-[#1F1F1F]">{review.review.title}</div>
               <div className="mt-2 break-all text-xs text-[#666666]">
                 {selectedDocument.source_path}
               </div>
-              <div className="mt-3 text-sm leading-relaxed text-[#666666]">
-                {isActiveConfirmSession
-                  ? '右侧展示的是 AI 生成的确认文档副本。确认后会清除标记并替换源文件。'
-                  : endedStateMessage}
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                <span className="ui-status-pill border-transparent bg-white text-[#666666]">
+                  确认副本
+                </span>
+                {isActiveConfirmSession ? (
+                  <span className="ui-status-pill border-transparent bg-[#FBF5F2] text-[#D97757]">
+                    可替换源文件
+                  </span>
+                ) : null}
+              </div>
+              <div className="mt-3 text-[12px] leading-5 text-[#666666]">
+                {isActiveConfirmSession ? '确认后会清理副本并替换源文件。' : endedStateMessage}
               </div>
             </div>
             {reviewStatusMeta ? (
@@ -175,7 +189,7 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
                 key={document.id}
                 type="button"
                 onClick={() => setSelectedDocumentId(document.id)}
-                className={`rounded-full border px-3 py-1.5 text-xs transition-all duration-200 ${
+                className={`ui-hover-lift rounded-full border px-3 py-1.5 text-xs ${
                   document.id === selectedDocumentId
                     ? 'border-[#D97757] bg-white text-[#D97757]'
                     : 'border-[#E5E5E4] bg-[#F8F8F7] text-[#666666] hover:border-[#D97757] hover:text-[#D97757]'
@@ -187,7 +201,7 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
           </div>
         </div>
 
-        <div className="rounded-[18px] border border-[#E5E5E4] bg-white px-4 py-4">
+        <div className="ui-panel px-4 py-4">
           <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">
             修改导航
           </div>
@@ -197,7 +211,7 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
                 key={change.id}
                 type="button"
                 onClick={() => setSelectedChangeId(change.id)}
-                className={`w-full rounded-2xl border px-3 py-3 text-left transition-all duration-200 ${
+                className={`ui-hover-lift w-full rounded-[14px] border px-3 py-3 text-left ${
                   change.id === selectedChangeId
                     ? 'border-[#D97757] bg-[#FCFBF8]'
                     : 'border-[#E5E5E4] bg-[#FAFAF9] hover:border-[#D97757]'
@@ -225,16 +239,16 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
       </div>
 
       <div className="min-h-0 flex-1 space-y-4 overflow-auto py-4">
-        <div className="rounded-[18px] border border-[#E5E5E4] bg-white px-4 py-4">
+        <div className="ui-panel px-4 py-4">
           <div className="flex flex-wrap gap-2">
             {isActiveConfirmSession && confirmArtifactPath ? (
               <Button size="small" onClick={() => void onOpenPath(confirmArtifactPath)}>
-                系统默认打开
+                系统打开
               </Button>
             ) : null}
             {isActiveConfirmSession && confirmArtifactPath ? (
               <Button size="small" onClick={() => void onOpenWithApplication(confirmArtifactPath)}>
-                选择其他应用打开...
+                其他应用
               </Button>
             ) : null}
             {isActiveConfirmSession && confirmArtifactPath && confirmFileName ? (
@@ -251,12 +265,12 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
                   })
                 }
               >
-                在工作台中打开
+                工作台
               </Button>
             ) : null}
             {sourceFile ? (
               <Button size="small" onClick={() => onOpenFile(sourceFile)}>
-                打开源文件
+                源文件
               </Button>
             ) : null}
             <Button
@@ -264,7 +278,7 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
               icon={<FolderOpenOutlined />}
               onClick={() => void onRevealPath(selectedDocument.source_path)}
             >
-              定位源文件
+              定位
             </Button>
           </div>
         </div>
@@ -281,14 +295,14 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
             </div>
 
             <div
-              className="rounded-[18px] border border-[#E5E5E4] bg-[#FCFBF8] px-4 py-4"
+              className="ui-panel-soft px-4 py-4"
               data-testid={workbenchSelectors.reviewValidation}
             >
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="text-[13px] font-semibold text-[#1F1F1F]">提交前校验</div>
                   <div className="mt-1 text-xs text-[#666666]">
-                    校验通过后会对确认文档做 normalize，再替换源文件。
+                    通过后会先 normalize，再替换源文件。
                   </div>
                 </div>
                 <Button
@@ -309,7 +323,9 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
                     >
                       <div>{issue.message}</div>
                       {issue.sourcePath ? (
-                        <div className="mt-1 break-all text-xs text-[#999999]">{issue.sourcePath}</div>
+                        <div className="mt-1 break-all text-xs text-[#999999]">
+                          {issue.sourcePath}
+                        </div>
                       ) : null}
                     </div>
                   ))
@@ -348,25 +364,28 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
                 }
                 data-testid={workbenchSelectors.reviewDiscardButton}
               >
-                放弃本次修改
+                放弃修改
               </Button>
             </div>
           </>
         ) : (
-          <div className="rounded-[18px] border border-[#E5E5E4] bg-[#FCFBF8] px-4 py-5">
+          <div className="ui-panel-soft px-4 py-5">
             <div className="text-[13px] font-semibold text-[#1F1F1F]">确认文档状态</div>
             <div className="mt-2 text-sm leading-relaxed text-[#666666]">{endedStateMessage}</div>
           </div>
         )}
 
         {turn?.steps.length ? (
-          <section className="rounded-[18px] border border-[#E5E5E4] bg-[#FCFBF8] px-4 py-4">
+          <section className="ui-panel-soft px-4 py-4">
             <div className="text-xs font-medium uppercase tracking-[0.18em] text-[#999999]">
               相关步骤
             </div>
             <div className="mt-3 space-y-2">
               {turn.steps.map((step) => (
-                <div key={step.id} className="rounded-xl border border-[#E5E5E4] bg-white px-3 py-3">
+                <div
+                  key={step.id}
+                  className="rounded-[14px] border border-[#E5E5E4] bg-white px-3 py-3"
+                >
                   <div className="text-[13px] font-medium text-[#1F1F1F]">{step.summary}</div>
                   <div className="mt-1 text-xs text-[#666666]">{step.tool}</div>
                 </div>
@@ -377,7 +396,7 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
 
         {latestCommitJob ? (
           <div
-            className="rounded-[18px] border border-[#E5E5E4] bg-[#FCFBF8] px-4 py-4"
+            className="ui-panel-soft px-4 py-4"
             data-testid={workbenchSelectors.reviewCommitResults}
           >
             <div className="text-[13px] font-semibold text-[#1F1F1F]">最近一次提交结果</div>
@@ -385,7 +404,7 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
               {latestCommitJob.results.map((result) => (
                 <div
                   key={`${result.draft_document_id}-${result.output_path}`}
-                  className="rounded-xl border border-[#E5E5E4] bg-white px-3 py-3"
+                  className="rounded-[14px] border border-[#E5E5E4] bg-white px-3 py-3"
                 >
                   <div className="break-all text-sm text-[#1F1F1F]">{result.output_path}</div>
                   <div className="mt-1 text-xs text-[#666666]">
