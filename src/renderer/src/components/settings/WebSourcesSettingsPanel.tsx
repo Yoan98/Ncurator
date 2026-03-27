@@ -12,9 +12,14 @@ const WebSourcesSettingsPanel: React.FC = () => {
   const [webKeyword, setWebKeyword] = useState('')
   const [webModalVisible, setWebModalVisible] = useState(false)
   const [webUrlsText, setWebUrlsText] = useState('')
+  const [webUrlsError, setWebUrlsError] = useState('')
   const [webSubmitting, setWebSubmitting] = useState(false)
   const [webRefreshingAll, setWebRefreshingAll] = useState(false)
   const [webRefreshingIds, setWebRefreshingIds] = useState<Record<string, boolean>>({})
+  const [webActionFeedback, setWebActionFeedback] = useState<{
+    tone: 'success' | 'warning' | 'error'
+    text: string
+  } | null>(null)
   const [deleteWebSource, setDeleteWebSource] = useState<WebSourceRecord | null>(null)
   const [selectedWebSourceId, setSelectedWebSourceId] = useState<string | null>(null)
 
@@ -79,10 +84,12 @@ const WebSourcesSettingsPanel: React.FC = () => {
       .map((url) => url.trim())
       .filter(Boolean)
     if (urls.length === 0) {
+      setWebUrlsError('请至少输入一个 URL')
       message.warning('请至少输入一个 URL')
       return
     }
 
+    setWebUrlsError('')
     setWebSubmitting(true)
     try {
       const response = await window.api.ingestWebs(urls.map((url) => ({ url })))
@@ -122,6 +129,10 @@ const WebSourcesSettingsPanel: React.FC = () => {
 
   const handleRefreshAllWebSources = async (): Promise<void> => {
     if (webSources.length === 0) {
+      setWebActionFeedback({
+        tone: 'warning',
+        text: '暂无可抓取的网页资料'
+      })
       message.warning('暂无可抓取的网页资料')
       return
     }
@@ -138,12 +149,20 @@ const WebSourcesSettingsPanel: React.FC = () => {
       const failedCount = results.length - successCount
 
       if (successCount > 0) {
-        message.success(
+        const feedbackText =
           failedCount > 0
             ? `已触发 ${successCount} 条网页重新抓取，${failedCount} 条失败`
             : `已触发 ${successCount} 条网页重新抓取`
-        )
+        setWebActionFeedback({
+          tone: failedCount > 0 ? 'warning' : 'success',
+          text: feedbackText
+        })
+        message.success(feedbackText)
       } else {
+        setWebActionFeedback({
+          tone: 'error',
+          text: '全部抓取失败'
+        })
         message.error('全部抓取失败')
       }
 
@@ -205,7 +224,10 @@ const WebSourcesSettingsPanel: React.FC = () => {
             </Tooltip>
             <Button
               type="primary"
-              onClick={() => setWebModalVisible(true)}
+              onClick={() => {
+                setWebUrlsError('')
+                setWebModalVisible(true)
+              }}
               data-testid={importSelectors.webSourceOpenModalButton}
             >
               添加网页
@@ -213,6 +235,20 @@ const WebSourcesSettingsPanel: React.FC = () => {
           </div>
         </div>
       </section>
+
+      {webActionFeedback ? (
+        <div
+          className={`rounded-[18px] border px-4 py-3 text-[12px] ${
+            webActionFeedback.tone === 'success'
+              ? 'border-[#DCEBD7] bg-[#F3FAF0] text-[#4F7A46]'
+              : webActionFeedback.tone === 'warning'
+                ? 'border-[#FDECC8] bg-[#FFF9ED] text-[#AD7B18]'
+                : 'border-[#F7D5D9] bg-[#FFF2F4] text-[#B5455D]'
+          }`}
+        >
+          {webActionFeedback.text}
+        </div>
+      ) : null}
 
       <div className="grid min-h-0 flex-1 gap-4 overflow-hidden pr-1 xl:grid-cols-[360px_minmax(0,1fr)]">
         <section className="ui-panel flex min-h-0 flex-col">
@@ -420,11 +456,19 @@ const WebSourcesSettingsPanel: React.FC = () => {
             <div className="mb-2 text-sm font-medium text-[#1F1F1F]">URL</div>
             <Input.TextArea
               value={webUrlsText}
-              onChange={(event) => setWebUrlsText(event.target.value)}
+              onChange={(event) => {
+                setWebUrlsText(event.target.value)
+                if (webUrlsError) {
+                  setWebUrlsError('')
+                }
+              }}
               placeholder="每行一个 URL"
               autoSize={{ minRows: 4, maxRows: 8 }}
               data-testid={importSelectors.webSourceUrlInput}
             />
+            {webUrlsError ? (
+              <div className="mt-2 text-[12px] text-[#B5455D]">{webUrlsError}</div>
+            ) : null}
           </div>
         </div>
       </Modal>

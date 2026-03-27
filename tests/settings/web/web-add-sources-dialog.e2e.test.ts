@@ -4,8 +4,7 @@ import { runE2ECase } from '../../harness/e2e/run-e2e-case'
 import {
   getSettingsLocator,
   getSettingsPrefixLocator,
-  navigateToSettingsSection,
-  waitForAntMessage
+  navigateToSettingsSection
 } from '../../harness/e2e/settings'
 
 describe('settings web e2e', () => {
@@ -37,7 +36,7 @@ describe('settings web e2e', () => {
           message: '空输入直接提交，确认页面给出至少输入一个 URL 的提示。',
           run: async () => {
             await getSettingsLocator(page, importSelectors.webSourceConfirmButton).click()
-            await waitForAntMessage(page, '请至少输入一个 URL')
+            await page.getByText('请至少输入一个 URL').waitFor({ state: 'visible' })
             emptyWarningShown = true
           }
         })

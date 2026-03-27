@@ -5,8 +5,7 @@ import {
   getSettingsLocator,
   getSettingsPrefixLocator,
   navigateToSettingsSection,
-  seedWebSources,
-  waitForAntMessage
+  seedWebSources
 } from '../../harness/e2e/settings'
 
 describe('settings web e2e', () => {
@@ -49,7 +48,7 @@ describe('settings web e2e', () => {
             await searchInput.fill('no-visible-source')
             await page.getByText('暂无网页资料').waitFor({ state: 'visible' })
             await page.getByRole('button', { name: '全部抓取' }).click()
-            await waitForAntMessage(page, '暂无可抓取的网页资料')
+            await page.getByText('暂无可抓取的网页资料').waitFor({ state: 'visible' })
             emptyListWarningShown = true
           }
         })
@@ -64,7 +63,7 @@ describe('settings web e2e', () => {
               `[data-testid^="${importSelectors.webSourceCardPrefix}-"]`
             )
             await page.getByRole('button', { name: '全部抓取' }).click()
-            await waitForAntMessage(page, '已触发 1 条网页重新抓取，1 条失败')
+            await page.getByText('已触发 1 条网页重新抓取，1 条失败').waitFor({ state: 'visible' })
             summaryFeedbackShown = true
           }
         })

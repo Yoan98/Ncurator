@@ -23,6 +23,7 @@ describe('settings web e2e', () => {
           'input'
         )
         let initialCardCount = 0
+        let emptyStateVisible = false
 
         await runtime.step({
           name: 'seed-web-sources',
@@ -63,6 +64,7 @@ describe('settings web e2e', () => {
 
             await searchInput.fill('missing-source')
             await page.getByText('暂无网页资料').waitFor({ state: 'visible' })
+            emptyStateVisible = true
 
             await searchInput.fill('beta')
             await page.waitForFunction(
@@ -78,7 +80,7 @@ describe('settings web e2e', () => {
         return {
           initialCardCount,
           initialDetailVisible,
-          emptyStateVisible: await page.getByText('暂无网页资料').isVisible(),
+          emptyStateVisible,
           betaDetailVisible: await page
             .getByRole('button', { name: 'https://example.com/beta', exact: true })
             .isVisible()
