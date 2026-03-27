@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { createTestAiRunContext } from './contextFactory'
+import { collectBackendRunArtifacts } from './artifactCollector'
 import { assertRequiredFixtures } from './fixtureGuard'
 import type {
   BackendTestRuntime,
@@ -82,7 +83,6 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
   })
   const eventCollector = new EventCollector()
   const events: TestLogEvent[] = []
-  const artifacts: TestArtifact[] = []
   let workspaceRoot = ''
   let fixtureBindings: FixtureBinding[] = []
   let status: TestRunStatus = 'failed'
@@ -168,6 +168,15 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
     throw error
   } finally {
     const runtimeEvents = eventCollector.snapshot()
+    const artifacts = workspaceRoot
+      ? await collectBackendRunArtifacts({
+          scope,
+          caseId: definition.caseId,
+          runId,
+          workspaceRoot,
+          runtimeEvents
+        })
+      : []
     recordEvent({
       type: 'run',
       name: 'end',

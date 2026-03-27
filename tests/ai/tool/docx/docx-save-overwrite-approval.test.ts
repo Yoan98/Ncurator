@@ -1,11 +1,13 @@
 import fs from 'node:fs/promises'
-import { describe, it } from 'vitest'
+import path from 'node:path'
+import { describe, expect, it } from 'vitest'
 import {
   createDocxToolHarness,
   writeTestDocxFile
 } from '../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import { filterEventsByType } from '../testHelpers'
+import { readCapturedRunLog } from '../logHelpers'
 import {
   type DocxApplyOpsResult,
   type DocxFailureResult,
@@ -35,6 +37,8 @@ const createEditedDoc = async (
 
 describe('ai tool docx backend', () => {
   it('docx-save-overwrite-approval', async () => {
+    let runId = ''
+
     await runBackendCase({
       caseId: 'docx-save-overwrite-approval',
       domain: 'ai',
@@ -44,6 +48,7 @@ describe('ai tool docx backend', () => {
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
+        runId = runtime.runId
         await writeTestDocxFile(runtime.workspaceRoot, 'save-source.docx', [
           {
             type: 'paragraph',
@@ -157,5 +162,26 @@ describe('ai tool docx backend', () => {
         )
       }
     })
+
+    const captured = await readCapturedRunLog({
+      scope: 'ai/tool/docx',
+      caseId: 'docx-save-overwrite-approval',
+      runId
+    })
+    const copiedArtifactNames = await Promise.all(
+      captured.artifacts.items.map(async (item) => path.basename(item.path))
+    )
+    const copiedArtifactSizes = await Promise.all(
+      captured.artifacts.items.map(async (item) => {
+        const stat = await fs.stat(path.join(captured.logDir, item.path))
+        return stat.size
+      })
+    )
+
+    expect(captured.meta.stats.artifacts).toBe(2)
+    expect(captured.artifacts.items).toHaveLength(2)
+    expect(copiedArtifactNames.some((name) => name.endsWith('new-output.docx'))).toBe(true)
+    expect(copiedArtifactNames.some((name) => name.endsWith('existing-approved.docx'))).toBe(true)
+    expect(copiedArtifactSizes.every((size) => size > 0)).toBe(true)
   })
 })

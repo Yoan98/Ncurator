@@ -1,9 +1,10 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { describe, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { createTerminalToolHarness } from '../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import { filterEventsByType } from '../testHelpers'
+import { readCapturedRunLog } from '../logHelpers'
 
 type TerminalRunCommandResult = {
   ok: boolean
@@ -13,6 +14,8 @@ type TerminalRunCommandResult = {
 
 describe('ai tool terminal backend', () => {
   it('terminal-inline-edit-artifact-contract', async () => {
+    let runId = ''
+
     await runBackendCase({
       caseId: 'terminal-inline-edit-artifact-contract',
       domain: 'ai',
@@ -22,6 +25,7 @@ describe('ai tool terminal backend', () => {
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
+        runId = runtime.runId
         const sourceDir = path.join(runtime.workspaceRoot, 'generated')
         await fs.mkdir(sourceDir, { recursive: true })
         await fs.writeFile(path.join(runtime.workspaceRoot, 'notes.txt'), 'before\n')
@@ -106,5 +110,21 @@ describe('ai tool terminal backend', () => {
         )
       }
     })
+
+    const captured = await readCapturedRunLog({
+      scope: 'ai/tool/terminal',
+      caseId: 'terminal-inline-edit-artifact-contract',
+      runId
+    })
+    const copiedArtifacts = await Promise.all(
+      captured.artifacts.items.map((item) =>
+        fs.readFile(path.join(captured.logDir, item.path), 'utf8')
+      )
+    )
+
+    expect(captured.meta.stats.artifacts).toBe(2)
+    expect(captured.artifacts.items).toHaveLength(2)
+    expect(copiedArtifacts).toContain('after\n')
+    expect(copiedArtifacts).toContain('')
   })
 })

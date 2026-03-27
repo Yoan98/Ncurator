@@ -15,17 +15,17 @@
 
 对应 latest run 窗口：
 
-- `tool`：`tests/logs/ai/tool/**/20260327-161412-321 ~ 20260327-161414-187`
+- `tool`：`tests/logs/ai/tool/**/20260327-170141-488 ~ 20260327-170143-790`
 - `human/basics`：`tests/logs/ai/human/basics/**/20260327-164126-767 ~ 20260327-164126-775`
 
 ## 3. Tool 现状
 
 代表性 latest 证据：
 
-- `docx-save-overwrite-approval` | run=`20260327-161412-440` | `passed`
-- `kb-evidence-search-family-contract` | run=`20260327-161414-116` | `passed`
-- `terminal-risk-and-boundary-guard` | run=`20260327-161414-187` | `passed`
-- `hand-tool-limit-and-artifact-merge` | run=`20260327-161412-527` | `passed`
+- `docx-save-overwrite-approval` | run=`20260327-170141-488` | `passed`
+- `kb-evidence-search-family-contract` | run=`20260327-170143-590` | `passed`
+- `terminal-risk-and-boundary-guard` | run=`20260327-170143-790` | `passed`
+- `hand-tool-limit-and-artifact-merge` | run=`20260327-170141-623` | `passed`
 
 当前判断：
 
@@ -33,9 +33,10 @@
 - `terminal-risk-and-boundary-guard` latest raw logs 仍显示越界命令直接返回 `workspace_required`，没有进入真实 step 执行。
 - `hand-tool-limit-and-artifact-merge` latest raw logs 仍显示 `runtimeArtifacts` 跨 terminal/docx 工具正确合并，并在超限后写入收敛型 `watch_hint`。
 
-仍存在的日志侧缺口：
+当前新增的日志侧收口：
 
-- `file_artifact` 事实仍没有完整汇总进 `meta.stats.artifacts` 与 `artifacts.json`，分析 artifact 仍需要继续读取 `runtime-events.jsonl`。
+- `docx-save-overwrite-approval` latest raw logs 已显示 `meta.stats.artifacts = 2`，且 `artifacts.json` 与 `artifacts/file-artifacts/**` 同步落盘。
+- `terminal-inline-edit-artifact-contract` latest raw logs 已显示 `file_artifact` 事实被回填进 `artifacts.json`，并保留 `stepId` 级 refs。
 
 ## 4. Human Basics 现状
 
@@ -77,7 +78,7 @@
 ## 5. 剩余风险与下一步
 
 - `human/scenarios`、`human/live` 与 `director` 正式 case 仍未形成正式 latest 覆盖，AI 域整体闭环还没有推进到复杂任务与编排层。
-- artifact 汇总口径仍不完整；只看 `meta.json` 与 `artifacts.json` 还不足以覆盖全部产物事实。
+- `artifacts.json` 当前已能稳定索引 backend `file_artifact` 实体附件，但更细的语义信息仍以 `runtime-events.jsonl` 为准。
 
 建议的下一阶段顺序：
 
