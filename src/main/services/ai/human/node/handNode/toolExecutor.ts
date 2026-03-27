@@ -137,12 +137,19 @@ export const executeToolCall = async (input: {
       args: input.args as IpcJsonObject,
       execute: async (session) => {
         const outputPreview = injected.data || injected.summary
+        const normalizedInjected: ToolCallResult = {
+          toolName: input.toolName,
+          ok: injected.ok,
+          code: injected.code,
+          summary: injected.summary,
+          data: injected.data
+        }
         if (injected.ok) {
           session.succeed(outputPreview)
         } else {
           session.fail(outputPreview, injected.summary)
         }
-        return injected
+        return normalizedInjected
       }
     })
   }

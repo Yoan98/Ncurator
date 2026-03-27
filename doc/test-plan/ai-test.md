@@ -66,7 +66,7 @@ AI 正式测试当前分为三个 suite：
 ## 5. Case 登记约定
 
 - 本文中的 `用例名称` 直接作为稳定 `caseId` 使用。
-- 当前 `tests/ai/**` 下还没有已登记的正式测试文件，因此本文新增的正式 case 先统一标记为 `未实现`。
+- AI 新增正式 case 在登记时默认先标记为 `待检查`，落测试后再更新为实际实现状态。
 - AI 当前不再新增 `e2e` 测试类型；正式文件统一使用普通测试文件名。
 - AI 当前建议 group 划分如下：
   - `tool`：`docx`、`kb`、`terminal`、`hand`
@@ -329,7 +329,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`basic-learning-hand-mouth-smoke`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证最基础的 `brain -> learning -> hand -> mouth` 链路。
 - Why：应先保证基础代码没有把主链路走断。
 - How：使用 `humanReasonOverrides` 固定每一轮决策，显式走过四个部位。
@@ -342,7 +342,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`basic-watchhint-retry`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证 `watchHint` 触发后会回到 `brain` 再次决策。
 - Why：这是 human 收敛和纠偏的基础机制。
 - How：分别模拟 `memory_reducer` 和 `hand` 写入 `watchHint` 的路径。
@@ -355,7 +355,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`basic-delivery-mode-contract`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证 `user_answer`、`task_handoff` 和 `context_note` 三种 `deliveryMode` 的结果契约。
 - Why：`mouth` 是 `human` 与 `director` 之间的稳定交接边界。
 - How：分别运行三种模式，固定同一条任务完成路径。
@@ -368,7 +368,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`basic-tool-failure-recovery`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证工具失败后的返回与后续收敛。
 - Why：基础异常不能直接把 `human` 执行链打崩。
 - How：注入失败的 tool result，再让后续 `brain` 决定继续还是结束。
@@ -381,7 +381,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`basic-brain-memory-write-boundary`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证 `brainMemory.inside` 只允许由 `brain` 通过 `memoryOps` 修改。
 - Why：这是当前架构中最关键的状态边界之一。
 - How：运行一轮包含工具调用的任务，分别检查 `hand` 前后与下一轮 `brain` 后的状态。
@@ -394,7 +394,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`basic-tool-limit-converge`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证工具调用超限后 `human` 会收敛而不是死循环。
 - Why：这是 autonomous execution 防漂移的基础保护。
 - How：降低 `hardActionLimit`，并构造多轮连续工具调用。
