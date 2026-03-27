@@ -53,9 +53,15 @@ export const waitForAssistantTurnCount = async (page: Page, count: number): Prom
 
 export const waitForReviewTabCount = async (page: Page, count: number): Promise<void> => {
   await page.waitForFunction(
-    ({ selector, minCount }) => document.querySelectorAll(selector).length >= minCount,
+    ({ selector, minCount }) => {
+      const host = document.querySelector(selector)
+      if (!(host instanceof HTMLElement)) return false
+      return Array.from(host.querySelectorAll('button')).filter(
+        (button) => button instanceof HTMLElement && button.offsetParent !== null
+      ).length >= minCount
+    },
     {
-      selector: `${byTestId(workbenchSelectors.reviewTabs)} button`,
+      selector: byTestId(workbenchSelectors.reviewTabs),
       minCount: count
     }
   )
@@ -70,7 +76,15 @@ export const openLatestAssistantReview = async (page: Page): Promise<void> => {
   if ((await reviewButtons.count()) === 0) {
     await expandLatestAssistantTurn(page)
   }
-  await reviewButtons.last().waitFor({ state: 'visible' })
+  await page.waitForFunction(
+    ({ selector }) =>
+      Array.from(document.querySelectorAll(selector)).some(
+        (button) => button instanceof HTMLElement && button.offsetParent !== null
+      ),
+    {
+      selector: `button${byTestIdPrefix(workbenchSelectors.assistantTurnReviewPrefix)}`
+    }
+  )
   await reviewButtons.last().click()
 }
 

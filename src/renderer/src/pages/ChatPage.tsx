@@ -112,6 +112,11 @@ const createWorkspaceBinding = (
       }
     : undefined
 
+const delay = (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    window.setTimeout(resolve, ms)
+  })
+
 const ChatPage: React.FC = () => {
   const { message } = App.useApp()
   const [sessions, setSessions] = useState<ChatSession[]>([])
@@ -387,14 +392,52 @@ const ChatPage: React.FC = () => {
     options?: {
       preferredReviewId?: string | null
       autoOpen?: boolean
+      forceOpenWorkspace?: boolean
     }
   ): Promise<void> => {
     try {
-      const response = await window.api.draftReviewList({ sessionId })
-      const nextItems = sortDraftReviews(response.items)
-      const activeItems = nextItems.filter((item) =>
-        ACTIVE_REVIEW_WORKSPACE_STATUSES.has(item.status)
-      )
+      const shouldWaitForCompleteDetails =
+        Boolean(options?.forceOpenWorkspace) || Boolean(options?.preferredReviewId)
+      const maxAttempts = shouldWaitForCompleteDetails ? 6 : 1
+      let nextItems: DraftReviewSummary[] = []
+      let activeItems: DraftReviewSummary[] = []
+      let activeDetails: DraftReviewDetail[] = []
+
+      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+        const response = await window.api.draftReviewList({ sessionId })
+        nextItems = sortDraftReviews(response.items)
+        activeItems = nextItems.filter((item) =>
+          ACTIVE_REVIEW_WORKSPACE_STATUSES.has(item.status)
+        )
+
+        if (activeItems.length === 0) {
+          activeDetails = []
+          break
+        }
+
+        const activeDetailsResponses = await Promise.all(
+          activeItems.map((item) => window.api.draftReviewGet({ reviewId: item.id }))
+        )
+        activeDetails = activeDetailsResponses
+          .map((item) => item.review)
+          .filter((item): item is DraftReviewDetail => Boolean(item))
+          .sort((left, right) => right.review.updated_at - left.review.updated_at)
+
+        const missingPreferredReview =
+          options?.preferredReviewId !== undefined &&
+          options.preferredReviewId !== null &&
+          !activeDetails.some((detail) => detail.review.id === options.preferredReviewId)
+        const missingActiveDetails = activeDetails.length < activeItems.length
+
+        if (!missingPreferredReview && !missingActiveDetails) {
+          break
+        }
+
+        if (attempt < maxAttempts - 1) {
+          await delay(150)
+        }
+      }
+
       const reviewTargetsByRunId = groupReviewTargetsByRunId(activeItems)
 
       setAssistantTurns((previous) => {
@@ -418,14 +461,6 @@ const ChatPage: React.FC = () => {
         )
         return
       }
-
-      const activeDetailsResponses = await Promise.all(
-        activeItems.map((item) => window.api.draftReviewGet({ reviewId: item.id }))
-      )
-      const activeDetails = activeDetailsResponses
-        .map((item) => item.review)
-        .filter((item): item is DraftReviewDetail => Boolean(item))
-        .sort((left, right) => right.review.updated_at - left.review.updated_at)
 
       const latestByFileKey = new Map<string, DraftReviewDetail>()
       activeDetails.forEach((detail) => {
@@ -492,6 +527,7 @@ const ChatPage: React.FC = () => {
       }
 
       const shouldOpenWorkspace =
+        Boolean(options?.forceOpenWorkspace) ||
         contentPanel.kind === 'review_workspace' ||
         (Boolean(options?.autoOpen) &&
           (contentPanel.kind === 'empty' ||
@@ -643,6 +679,14 @@ const ChatPage: React.FC = () => {
   }
 
   const openDraftReview = (reviewId: string): void => {
+    if (currentSessionId) {
+      void loadDraftReviewsForSession(currentSessionId, {
+        preferredReviewId: reviewId,
+        forceOpenWorkspace: true
+      })
+      return
+    }
+
     const nextTab = reviewWorkspaceTabs.find((tab) => tab.reviewId === reviewId) || null
     const nextTabs = nextTab
       ? reviewWorkspaceTabs.map((tab) =>

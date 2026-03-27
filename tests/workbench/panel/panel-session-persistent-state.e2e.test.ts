@@ -30,6 +30,8 @@ describe('workbench panel e2e', () => {
           message: '先进入搜索模式，建立右侧搜索列表状态。',
           run: async () => {
             await waitForWorkbenchReady(page)
+            await getWorkbenchLocator(page, workbenchSelectors.newSessionButton).click()
+            await page.getByText('右侧暂无内容').waitFor({ state: 'visible' })
             await switchWorkbenchMode(page, 'search')
             await submitWorkbenchMessage(page, '[e2e:search-results]')
             await getWorkbenchLocator(page, workbenchSelectors.searchResults).waitFor({

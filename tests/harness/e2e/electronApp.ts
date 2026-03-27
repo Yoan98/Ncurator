@@ -1,5 +1,6 @@
 import path from 'node:path'
-import { access } from 'node:fs/promises'
+import os from 'node:os'
+import { access, mkdtemp, rm } from 'node:fs/promises'
 import electronPath from 'electron'
 import {
   _electron as electron,
@@ -113,13 +114,15 @@ export const launchElectronApp = async (): Promise<LaunchedElectronApp> => {
   await ensureBuiltAppExists()
 
   const consoleEntries: E2EConsoleEntry[] = []
+  const userDataDir = await mkdtemp(path.join(os.tmpdir(), 'ncurator-e2e-user-data-'))
   const electronApp = await electron.launch({
     executablePath: electronPath,
     args: ['.'],
     cwd: process.cwd(),
     env: {
       ...process.env,
-      NCURATOR_E2E_MODE: '1'
+      NCURATOR_E2E_MODE: '1',
+      NCURATOR_USER_DATA_PATH: userDataDir
     }
   })
 
@@ -165,6 +168,7 @@ export const launchElectronApp = async (): Promise<LaunchedElectronApp> => {
         path: input.tracePath
       })
       await electronApp.close()
+      await rm(userDataDir, { recursive: true, force: true })
     }
   }
 }
