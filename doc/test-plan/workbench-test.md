@@ -88,8 +88,6 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 
 - Workbench 的用户可见行为默认归入本计划，不再挂到 AI 或 Settings 域下。
 - `scope`、`workspace_required` 恢复、右侧面板和 `review` 统一归入 workbench。
-- 所有正式结论都应优先引用 [workbench.md](/Users/test/work-space/NCurator-Desktop/doc/prd/workbench.md) 中对应的 `WB-*` 编号。
-- Workbench 正式目录路径与 case 登记规则统一以 [test.md](/Users/test/work-space/NCurator-Desktop/doc/test.md) 为准。
 
 ## 4. Case 登记约定
 

@@ -52,8 +52,6 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 - Settings 的用户可见行为默认归入本计划，不再单独维护 `workspace` 测试域。
 - `workspace` 在这里是 Settings 下的 suite，不是独立测试 domain。
-- 所有正式结论都应优先引用 [settings.md](/Users/test/work-space/NCurator-Desktop/doc/prd/settings.md) 中对应的 `SET-*` 编号。
-- Settings 正式目录路径与 case 登记规则统一以 [test.md](/Users/test/work-space/NCurator-Desktop/doc/test.md) 为准。
 
 ## 4. Case 登记约定
 
