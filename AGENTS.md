@@ -17,13 +17,13 @@
 - 当涉及 UI 整体风格、配色、字级、圆角、阴影、图标、cursor 或通用交互 affordance 时，请阅读 `doc/ui-style.md`
 
 ### 1.3 测试相关
-- 当涉及AI的测试计划、阶段划分、suite/group归属、tool/docx 正式 case 边界、正式 case 登记 / 裁剪或 live / 非 live 测试边界时，请阅读 `doc/test-plan/ai-test.md`
-- 当涉及Workbench的测试计划、suite划分、右侧持续工作区、review 导航 / anchor、文件级确认或与 `doc/prd/workbench.md` 的测试对齐时，请阅读 `doc/test-plan/workbench-test.md`
+- 当涉及AI的测试计划、阶段划分、suite/group归属、tool/docx 正式 case 边界、tool suite case 实现状态、正式 case 登记 / 裁剪或 live / 非 live 测试边界时，请阅读 `doc/test-plan/ai-test.md`
+- 当涉及Workbench的测试计划、suite划分、标准任务闭环 smoke、`@` 多 token / 多类型插入、右侧持续工作区、review 导航 / anchor、文件级确认或与 `doc/prd/workbench.md` 的测试对齐时，请阅读 `doc/test-plan/workbench-test.md`
 - 当涉及Settings的测试计划、suite划分、正式 case 登记 / 裁剪或与 `doc/prd/settings.md` 的测试对齐时，请阅读 `doc/test-plan/settings-test.md`
 - 当涉及测试架构、目录分层、正式 case 字段填写或 case 登记规则时，必须阅读 `doc/test.md`
 
 ### 1.4 prd产品文档相关
-- 当涉及 workbench 的会话管理、composer 输入、`@` 资料范围、AI 运行阻塞、搜索结果、右侧持续工作区、文档预览、确认修改文件 tab 或同文件多轮累计差异的产品需求、操作逻辑、状态反馈或验收标准时，请阅读 `doc/prd/workbench.md`
+- 当涉及 workbench 的会话管理、composer 输入、标准任务闭环、`@` 资料范围与多 token 插入、AI 运行阻塞、搜索结果、右侧持续工作区、文档预览、确认修改文件 tab 或同文件多轮累计差异的产品需求、操作逻辑、状态反馈或验收标准时，请阅读 `doc/prd/workbench.md`
 - 当涉及 `Settings -> 大模型 / 工作空间 / 网页资料 / 向量模型` 的产品需求、功能入口、交互流程、操作逻辑、状态反馈或验收标准时，请阅读 `doc/prd/settings.md`
 
 ## 2. 必须遵守的规则

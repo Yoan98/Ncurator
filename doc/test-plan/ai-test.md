@@ -96,7 +96,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`docx-minimal-edit-flow`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证“修改 docx 某一段话”的最小工具链能独立跑通。
 - Why：这是最典型、最能说明工具层是否可用的真实任务拆解。
 - How：准备包含目标段落的 fixture docx，依次调用 `docx_open -> docx_search` 或 `docx_outline -> docx_apply_ops -> docx_validate -> docx_render_preview`，必要时显式读取目标 block。
@@ -109,7 +109,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`docx-large-document-navigation`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证大文本 docx 下的读取、定位和局部精读链路。
 - Why：长文档最容易把 `open / outline / search / get_block` 的基础能力打坏。
 - How：构造高 block 数量的长文档，覆盖 `docx_open`、`docx_outline`、`docx_search` 和 `docx_get_block`，同时验证局部定位与截断返回。
@@ -122,7 +122,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`docx-complex-ops-batch`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证复杂编辑操作组合的执行契约。
 - Why：复杂编辑是 docx 写入能力的核心风险区。
 - How：在同一条 case 中覆盖 `replace_text`、`replace_block`、`insert_before`、`insert_after`、`delete_block` 和 `update_table_cell` 六类操作。
@@ -135,7 +135,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`docx-format-variants-contract`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证 docx 各类格式 block 的读取与修改契约。
 - Why：不同 block 类型常常只在各自路径上暴露 bug。
 - How：构造同时包含 `paragraph`、`heading(style)`、`table` 和 `table_cell` 的 fixture docx，覆盖读取、定位和修改。
@@ -148,7 +148,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`docx-mixed-format-preservation`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证混合格式文本在编辑后的保留与更新。
 - Why：run 级样式最容易在修改过程中丢失。
 - How：构造包含 `bold / italic / underline / color` 的段落和表格单元格，执行修改后生成 preview。
@@ -161,7 +161,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`docx-review-aware-open-and-continue-edit`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证存在 active review 时，`docx_open` 会基于最新 effective draft 打开并继续编辑，而不是退回源文件。
 - Why：同文件多轮未提交修改能否形成正确累计差异，前提就是工具层继续编辑的是最新草稿。
 - How：准备同一路径的源 docx 与已累计修改的 effective draft，通过 `resolveDocxOpenTarget` 把 `docx_open` 指向 effective draft；随后调用 `docx_search` 或 `docx_get_block` 校验读取结果，再执行 `docx_apply_ops -> docx_validate`。
@@ -175,7 +175,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`docx-history-and-rollback`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证快照历史查询与回滚能力，包括多轮继续编辑后的撤销。
 - Why：复杂编辑任务必须具备可回退能力，且撤销不能误伤磁盘源文件。
 - How：执行多轮 `apply_ops` 后调用 `docx_get_history`，同时覆盖按 `steps` 回滚和按 `targetDocId` 回滚，再做一次 `validate` 并校验源文件磁盘内容未变。
@@ -189,7 +189,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`docx-precondition-guard`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证未 `open` 或无效 `docId` 时的前置保护。
 - Why：这是最基础也最常见的工具异常入口。
 - How：在不 `open` 的情况下直接调用 `docx_outline`、`docx_search`、`docx_apply_ops`、`docx_validate`，并覆盖无效 `docId`。
@@ -202,7 +202,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`docx-save-overwrite-approval`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证保存到新路径、覆盖已有文件和审批边界。
 - Why：落盘是 docx 工具链里风险最高的动作。
 - How：先生成修改后的新快照，再分别覆盖“保存到新路径”“覆盖已有文件且 `overwrite=true`”“审批通过”和“审批拒绝”。
@@ -217,7 +217,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`kb-document-discovery-contract`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证 `kb_list_documents` 的列表、过滤和范围收敛契约。
 - Why：`kb-document-discovery` 这个 skill 不能缺失直接工具覆盖。
 - How：准备多份知识文档和 `selectedDocumentIds`，调用 `kb_list_documents` 覆盖无过滤、关键词过滤和指定文档范围。
@@ -230,7 +230,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`kb-evidence-search-family-contract`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证 `kb_hybrid_search_chunks`、`kb_vector_search_chunks` 和 `kb_fts_search_chunks` 三个工具的统一检索契约。
 - Why：`kb-evidence-query` 下的每个工具都必须有正式 case 显式调用。
 - How：对同一份 fixture 数据分别调用三种检索工具，覆盖普通范围和显式 `documentIds` 范围。
@@ -245,7 +245,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`terminal-directory-inspection-readonly`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证目录与文件检查类只读命令的基础契约。
 - Why：查询目录下文件是 terminal 最高频的基础场景之一。
 - How：覆盖 `ls`、`find`、`pwd`、`stat` 或 `wc` 等只读命令。
@@ -258,7 +258,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`terminal-text-search-readonly`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证代码和文本搜索类命令的只读契约。
 - Why：`rg / grep` 是 AI 编程工具极高频的基础能力。
 - How：覆盖 `rg` 与 `grep` 两类搜索命令，验证普通查询和带路径参数查询。
@@ -271,7 +271,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`terminal-inline-edit-artifact-contract`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证编辑文本类命令的 mutating 判定与 artifact 识别。
 - Why：编辑文本指令是 AI 编程和自动化任务中的高频场景。
 - How：覆盖一类原地编辑命令和一类生成文件命令，并传入 `expectedArtifacts`。
@@ -284,7 +284,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`terminal-risk-and-boundary-guard`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证高风险命令、路径逃逸和 workspace 边界保护。
 - Why：terminal 是最容易越界的工具。
 - How：覆盖高风险命令、相对路径逃逸、越界绝对路径和审批拒绝路径。
@@ -299,7 +299,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`hand-parallel-safety-contract`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证 `hand` 对并行工具批次的安全守卫。
 - Why：并行失控会直接污染上层执行结论。
 - How：分别构造只读安全批次与 mutating/unsafe 批次，例如 `docx_outline + docx_search` 与 `docx_apply_ops + docx_validate`。
@@ -312,7 +312,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`hand-tool-limit-and-artifact-merge`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证工具调用上限与 runtime artifact 合并逻辑。
 - Why：这是 `hand` 的核心运行态边界。
 - How：拉低 `hardActionLimit`，并构造 terminal/docx 多工具结果共同产出 artifact 的场景。

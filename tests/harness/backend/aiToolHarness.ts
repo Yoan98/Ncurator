@@ -5,9 +5,11 @@ import {
   HeadingLevel,
   Packer,
   Paragraph,
+  TextRun,
   Table,
   TableCell,
   TableRow,
+  UnderlineType,
   WidthType
 } from 'docx'
 import { buildDocxCapabilityTools } from '../../../src/main/services/ai/human/tools/docx'
@@ -126,6 +128,23 @@ export const createRetrievalToolHarness = (
 
 export type TestDocxHeadingLevel = 1 | 2 | 3
 
+export type TestDocxRun = {
+  text: string
+  bold?: boolean
+  italic?: boolean
+  underline?: boolean
+  color?: string
+}
+
+export type TestDocxParagraph = {
+  style?: string
+  runs: TestDocxRun[]
+}
+
+export type TestDocxCell = {
+  paragraphs: TestDocxParagraph[]
+}
+
 export type TestDocxBlock =
   | {
       type: 'heading'
@@ -147,22 +166,83 @@ const toHeadingLevel = (level: TestDocxHeadingLevel | undefined): HeadingLevel =
   return HeadingLevel.HEADING_1
 }
 
-export const writeTestDocxFile = async (
+export type RichTestDocxBlock =
+  | {
+      type: 'heading'
+      level?: TestDocxHeadingLevel
+      paragraph: TestDocxParagraph
+    }
+  | {
+      type: 'paragraph'
+      paragraph: TestDocxParagraph
+    }
+  | {
+      type: 'table'
+      rows: TestDocxCell[][]
+    }
+
+const createTextRun = (run: TestDocxRun): TextRun =>
+  new TextRun({
+    text: run.text,
+    bold: run.bold,
+    italics: run.italic,
+    underline: run.underline ? { type: UnderlineType.SINGLE } : undefined,
+    color: run.color
+  })
+
+const createParagraph = (
+  paragraph: TestDocxParagraph,
+  heading?: HeadingLevel
+): Paragraph =>
+  new Paragraph({
+    heading,
+    style: paragraph.style,
+    children: paragraph.runs.map((run) => createTextRun(run))
+  })
+
+const toRichParagraph = (text: string): TestDocxParagraph => ({
+  runs: [{ text }]
+})
+
+const toRichBlock = (block: TestDocxBlock): RichTestDocxBlock => {
+  if (block.type === 'heading') {
+    return {
+      type: 'heading',
+      level: block.level,
+      paragraph: toRichParagraph(block.text)
+    }
+  }
+
+  if (block.type === 'paragraph') {
+    return {
+      type: 'paragraph',
+      paragraph: toRichParagraph(block.text)
+    }
+  }
+
+  return {
+    type: 'table',
+    rows: block.rows.map((row) =>
+      row.map((cellText) => ({
+        paragraphs: [toRichParagraph(cellText)]
+      }))
+    )
+  }
+}
+
+export const writeRichTestDocxFile = async (
   workspaceRoot: string,
   relativePath: string,
-  blocks: readonly TestDocxBlock[]
+  blocks: readonly RichTestDocxBlock[]
 ): Promise<string> => {
   const filePath = path.join(workspaceRoot, relativePath)
   const children = blocks.map((block) => {
     if (block.type === 'heading') {
-      return new Paragraph({
-        text: block.text,
-        heading: toHeadingLevel(block.level)
-      })
+      return createParagraph(block.paragraph, toHeadingLevel(block.level))
     }
 
     if (block.type === 'paragraph') {
-      return new Paragraph(block.text)
+      return createParagraph(block.paragraph)
     }
 
     return new Table({
@@ -172,9 +252,9 @@ export const writeTestDocxFile = async (
       },
       rows: block.rows.map((row) => {
         return new TableRow({
-          children: row.map((cellText) => {
+          children: row.map((cell) => {
             return new TableCell({
-              children: [new Paragraph(cellText)]
+              children: cell.paragraphs.map((paragraph) => createParagraph(paragraph))
             })
           })
         })
@@ -194,6 +274,18 @@ export const writeTestDocxFile = async (
   await fs.mkdir(path.dirname(filePath), { recursive: true })
   await fs.writeFile(filePath, buffer)
   return filePath
+}
+
+export const writeTestDocxFile = async (
+  workspaceRoot: string,
+  relativePath: string,
+  blocks: readonly TestDocxBlock[]
+): Promise<string> => {
+  return await writeRichTestDocxFile(
+    workspaceRoot,
+    relativePath,
+    blocks.map((block) => toRichBlock(block))
+  )
 }
 
 export const writeWorkbenchSampleDocx = async (
