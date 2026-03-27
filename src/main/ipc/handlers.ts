@@ -1095,6 +1095,9 @@ export function registerHandlers(services: {
       if (!['http:', 'https:'].includes(parsed.protocol)) {
         return { success: false, error: '仅支持 http/https URL' }
       }
+      if (isE2EFixtureModeEnabled()) {
+        return { success: true }
+      }
       await shell.openExternal(parsed.toString())
       return { success: true }
     } catch (error: unknown) {

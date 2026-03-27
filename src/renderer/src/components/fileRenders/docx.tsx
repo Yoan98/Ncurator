@@ -58,7 +58,10 @@ const CustomDocxRenderer = ({ mainState }: CustomDocxRendererProps) => {
 
       container.innerHTML = ''
       const previewer = jsPreviewDocx.init(container, {
-        renderChanges: true
+        renderChanges: true,
+        inWrapper: true,
+        ignoreWidth: true,
+        ignoreHeight: true
       })
       try {
         await previewer.preview(file)
@@ -81,7 +84,7 @@ const CustomDocxRenderer = ({ mainState }: CustomDocxRendererProps) => {
   return (
     <div
       ref={containerRef}
-      className="docx-content h-full w-full overflow-auto bg-white p-8 shadow-sm"
+      className="docx-content h-full w-full overflow-auto bg-[#F8F7F4] px-3 py-3"
     />
   )
 }

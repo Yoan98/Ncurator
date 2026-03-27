@@ -10,25 +10,16 @@ import type {
 import type { DocumentsStore } from '../../../../../storage/domains/DocumentsStore'
 import type { DocxChangedBlock, DocxOp } from '../types'
 import { getDocxWorkerClient } from '../worker/docxWorkerClient'
-import { DOCX_CONFIRM_ANCHOR_PREFIX } from './constants'
 import { materializeDocxConfirmCopy } from './confirmCopy'
+import { computeCumulativeDocxChangeSeeds } from './cumulativeDiff'
 import type { RunDraftDocument } from './types'
-import {
-  buildDocxChangeLocator,
-  buildDocxChangeSummary,
-  buildDocxChangeTitle,
-  buildSourceVersion,
-  getDocxChangeKind,
-  getManifestPathForConfirmArtifact,
-  sanitizeFileName
-} from './utils'
+import { buildSourceVersion, getManifestPathForConfirmArtifact, sanitizeFileName } from './utils'
 import { clipText } from '../../../../utils/text'
 
 type RunDraftState = {
   sessionId: string
   documentBySourcePath: Map<string, RunDraftDocument>
   sourcePathByDocId: Map<string, string>
-  orderCounter: number
 }
 
 export class RunDraftTracker {
@@ -40,8 +31,7 @@ export class RunDraftTracker {
     this.runDrafts.set(input.runId, {
       sessionId: input.sessionId,
       documentBySourcePath: new Map(),
-      sourcePathByDocId: new Map(),
-      orderCounter: 0
+      sourcePathByDocId: new Map()
     })
   }
 
@@ -64,9 +54,8 @@ export class RunDraftTracker {
     state.documentBySourcePath.set(sourcePath, {
       sourcePath,
       sourceName: path.basename(sourcePath),
-      initialDocId: input.docId,
       latestDocId: input.docId,
-      changes: []
+      dirtyChangeCount: 0
     })
     state.sourcePathByDocId.set(input.docId, sourcePath)
   }
@@ -89,30 +78,7 @@ export class RunDraftTracker {
 
     state.sourcePathByDocId.set(input.nextDocId, sourcePath)
     document.latestDocId = input.nextDocId
-    const groupId = randomUUID()
-
-    input.changedBlocks.forEach((change) => {
-      state.orderCounter += 1
-      document.changes.push({
-        id: randomUUID(),
-        orderIndex: state.orderCounter,
-        changeKind: getDocxChangeKind(input.op),
-        title: buildDocxChangeTitle(input.op, change),
-        summary: buildDocxChangeSummary(input.op, change),
-        beforeText: change.beforeText,
-        afterText: change.afterText,
-        locator: buildDocxChangeLocator(change),
-        metadata: {
-          engine: 'docx_change_v1',
-          group_id: groupId,
-          docx_op_json: JSON.stringify(input.op),
-          previous_doc_id: input.previousDocId,
-          next_doc_id: input.nextDocId
-        },
-        anchorName: `${DOCX_CONFIRM_ANCHOR_PREFIX}${randomUUID().replace(/-/g, '')}`,
-        docxOp: input.op
-      })
-    })
+    document.dirtyChangeCount += input.changedBlocks.length
   }
 
   public async finalizeRunReview(input: {
@@ -123,7 +89,7 @@ export class RunDraftTracker {
     if (!state) return []
 
     const changedDocuments = [...state.documentBySourcePath.values()].filter(
-      (document) => document.changes.length > 0
+      (document) => document.dirtyChangeCount > 0
     )
     if (changedDocuments.length === 0) {
       this.runDrafts.delete(input.runId)
@@ -142,10 +108,6 @@ export class RunDraftTracker {
         'draft-reviews',
         reviewId
       )
-      const basePath = path.join(
-        draftDir,
-        `${String(index + 1).padStart(2, '0')}-base-${sanitizeFileName(document.sourceName)}`
-      )
       const confirmPath = path.join(
         draftDir,
         `${String(index + 1).padStart(2, '0')}-confirm-${sanitizeFileName(document.sourceName)}`
@@ -156,19 +118,6 @@ export class RunDraftTracker {
       )
       const manifestPath = getManifestPathForConfirmArtifact(confirmPath)
 
-      const baseSaveResponse = await client.call({
-        runId: input.runId,
-        action: 'save',
-        payload: {
-          docId: document.initialDocId,
-          outPath: basePath
-        }
-      })
-      if (!baseSaveResponse.ok || baseSaveResponse.payload.action !== 'save') {
-        throw new Error(
-          baseSaveResponse.ok ? 'draft base save worker protocol mismatch' : baseSaveResponse.error
-        )
-      }
       const effectiveSaveResponse = await client.call({
         runId: input.runId,
         action: 'save',
@@ -188,9 +137,20 @@ export class RunDraftTracker {
       const sourceDocument = await this.documentsStore.getDocumentByFilePath(document.sourcePath)
       const sourceVersion = await buildSourceVersion(document.sourcePath)
       const documentId = randomUUID()
-      const baseBuffer = await fs.readFile(basePath)
+      const sourceBuffer = await fs.readFile(document.sourcePath)
+      const latestDraftBuffer = await fs.readFile(effectiveDraftPath)
+      const cumulativeChanges = await computeCumulativeDocxChangeSeeds({
+        sourceBuffer,
+        latestDraftBuffer,
+        latestDraftSnapshotId: document.latestDocId
+      })
+
+      if (cumulativeChanges.length === 0) {
+        continue
+      }
+
       await materializeDocxConfirmCopy({
-        baseBuffer,
+        baseBuffer: sourceBuffer,
         confirmArtifactPath: confirmPath,
         manifestArtifactPath: manifestPath,
         reviewId,
@@ -198,10 +158,9 @@ export class RunDraftTracker {
         sourceName: document.sourceName,
         latestDraftSnapshotId: document.latestDocId,
         sourceVersion,
-        changes: document.changes,
+        changes: cumulativeChanges,
         createdAt: now
       })
-      await fs.rm(basePath, { force: true })
 
       const reviewDocument: DraftReviewDocument = {
         id: documentId,
@@ -215,15 +174,15 @@ export class RunDraftTracker {
         manifest_artifact_path: manifestPath,
         effective_draft_artifact_path: effectiveDraftPath,
         source_version: sourceVersion,
-        total_change_count: document.changes.length,
-        pending_change_count: document.changes.length,
+        total_change_count: cumulativeChanges.length,
+        pending_change_count: cumulativeChanges.length,
         accepted_change_count: 0,
         rejected_change_count: 0,
         created_at: now,
         updated_at: now
       }
 
-      const reviewChanges: DraftReviewChange[] = document.changes.map((change) => ({
+      const reviewChanges: DraftReviewChange[] = cumulativeChanges.map((change) => ({
           id: change.id,
           review_id: reviewId,
           document_id: documentId,

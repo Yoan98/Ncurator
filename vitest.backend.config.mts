@@ -2,8 +2,14 @@ import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   test: {
-    include: ['tests/**/backend/**/*.test.ts'],
-    exclude: ['tests/harness/**', 'tests/fixtures/**', 'tests/logs/**', 'tests/report/**'],
+    include: ['tests/**/*.test.ts'],
+    exclude: [
+      'tests/**/*.e2e.test.ts',
+      'tests/harness/**',
+      'tests/fixtures/**',
+      'tests/logs/**',
+      'tests/report/**'
+    ],
     environment: 'node',
     globals: true,
     testTimeout: 120_000,

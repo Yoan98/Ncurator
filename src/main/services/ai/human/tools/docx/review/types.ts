@@ -18,9 +18,8 @@ export type RunDraftChangeSeed = {
 export type RunDraftDocument = {
   sourcePath: string
   sourceName: string
-  initialDocId: string
   latestDocId: string
-  changes: RunDraftChangeSeed[]
+  dirtyChangeCount: number
 }
 
 export type DocxConfirmManifestChange = {

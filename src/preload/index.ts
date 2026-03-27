@@ -31,8 +31,10 @@ const api: DesktopApi = {
     ipcRenderer.invoke('ingest-web', payload),
   ingestWebs: (payload): Promise<{ success: boolean; created?: number; error?: string }> =>
     ipcRenderer.invoke('ingest-webs', payload),
-  openExternal: (url: string): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke('open-external', url),
+  openExternal: (url: string): Promise<{ success: boolean; error?: string }> => {
+    emitE2EIpcCall('openExternal')
+    return ipcRenderer.invoke('open-external', url)
+  },
   openPath: (filePath: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('open-path', filePath),
   openPathWithApplication: (payload) => ipcRenderer.invoke('open-path-with-application', payload),
@@ -113,7 +115,10 @@ const api: DesktopApi = {
     emitE2EIpcCall('draftReviewCommit')
     return ipcRenderer.invoke('draft-review-commit', payload)
   },
-  draftReviewDiscard: (payload) => ipcRenderer.invoke('draft-review-discard', payload),
+  draftReviewDiscard: (payload) => {
+    emitE2EIpcCall('draftReviewDiscard')
+    return ipcRenderer.invoke('draft-review-discard', payload)
+  },
   onAiRunEvent: (cb: (event: AiRunEvent) => void) =>
     ipcRenderer.on('ai-run-event', (_event, data) => {
       emitE2EAiRunEvent(data)

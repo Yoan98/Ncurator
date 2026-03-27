@@ -38,6 +38,7 @@ import { FILE_ORIGIN_LABELS, REVIEW_STATUS_META } from '../components/workbench/
 import type {
   AssistantTurnStep,
   AssistantTurnViewModel,
+  ReviewWorkspaceTab,
   SearchWorkbenchTurn,
   WorkbenchContentPanelState,
   WorkbenchFileRef,
@@ -77,6 +78,12 @@ const createAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
   reviewTargets: [],
   blockers: []
 })
+
+const ACTIVE_REVIEW_WORKSPACE_STATUSES = new Set<DraftReviewSummary['status']>([
+  'pending_confirm',
+  'conflicted',
+  'failed'
+])
 
 const sortDraftReviews = (items: DraftReviewSummary[]): DraftReviewSummary[] => {
   const priority: Record<DraftReviewSummary['status'], number> = {
@@ -123,6 +130,8 @@ const ChatPage: React.FC = () => {
   const [composerResetKey, setComposerResetKey] = useState(0)
   const [assistantTurns, setAssistantTurns] = useState<Record<string, AssistantTurnViewModel>>({})
   const [contentPanel, setContentPanel] = useState<WorkbenchContentPanelState>(createEmptyPanel())
+  const [reviewWorkspaceTabs, setReviewWorkspaceTabs] = useState<ReviewWorkspaceTab[]>([])
+  const [modalPreviewFile, setModalPreviewFile] = useState<WorkbenchFileRef | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     const stored = window.localStorage.getItem(WORKBENCH_SIDEBAR_STORAGE_KEY)
     return stored === 'true'
@@ -132,12 +141,10 @@ const ChatPage: React.FC = () => {
     return stored === null ? true : stored === 'true'
   })
 
-  const [activeDraftReviewId, setActiveDraftReviewId] = useState<string | null>(null)
   const [activeDraftReview, setActiveDraftReview] = useState<DraftReviewDetail | null>(null)
   const [draftReviewLoading, setDraftReviewLoading] = useState(false)
   const [draftCommitValidation, setDraftCommitValidation] =
     useState<ValidateDraftCommitResponse | null>(null)
-  const [draftValidationLoading, setDraftValidationLoading] = useState(false)
   const [draftCommitSubmitting, setDraftCommitSubmitting] = useState(false)
   const [draftDiscardSubmitting, setDraftDiscardSubmitting] = useState(false)
 
@@ -178,13 +185,6 @@ const ChatPage: React.FC = () => {
     [currentSessionId, sessions]
   )
 
-  const reviewTurn = useMemo(() => {
-    if (!activeDraftReview) return undefined
-    return Object.values(assistantTurns).find(
-      (turn) => turn.runId === activeDraftReview.review.run_id
-    )
-  }, [activeDraftReview, assistantTurns])
-
   const scrollToBottom = (): void => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
@@ -206,12 +206,24 @@ const ChatPage: React.FC = () => {
     setContentPanelCollapsed(false)
   }, [])
 
+  const showReviewWorkspace = useCallback(
+    (tabs: ReviewWorkspaceTab[], activeFileKey: string | null): void => {
+      showContentPanel({
+        kind: 'review_workspace',
+        title: '修改确认',
+        tabs,
+        activeFileKey
+      })
+    },
+    [showContentPanel]
+  )
+
   const sharedHeaderMeta = useMemo(() => {
     if (contentPanelCollapsed || contentPanel.kind === 'empty') {
       return null
     }
 
-    if (contentPanel.kind === 'document_view') {
+    if (contentPanel.kind === 'file_preview') {
       return {
         title: contentPanel.file.fileName || contentPanel.title,
         badge: FILE_ORIGIN_LABELS[contentPanel.file.origin],
@@ -219,10 +231,10 @@ const ChatPage: React.FC = () => {
       }
     }
 
-    if (contentPanel.kind === 'review_session' && contentPanel.review) {
-      const statusMeta = REVIEW_STATUS_META[contentPanel.review.review.status]
+    if (contentPanel.kind === 'review_workspace' && activeDraftReview) {
+      const statusMeta = REVIEW_STATUS_META[activeDraftReview.review.status]
       return {
-        title: contentPanel.title,
+        title: activeDraftReview.documents[0]?.source_name || contentPanel.title,
         badge: statusMeta.label,
         badgeClassName: statusMeta.className
       }
@@ -236,13 +248,12 @@ const ChatPage: React.FC = () => {
   }, [contentPanel, contentPanelCollapsed])
 
   const resetDraftReviewState = (): void => {
-    setActiveDraftReviewId(null)
     setActiveDraftReview(null)
     setDraftReviewLoading(false)
     setDraftCommitValidation(null)
-    setDraftValidationLoading(false)
     setDraftCommitSubmitting(false)
     setDraftDiscardSubmitting(false)
+    setReviewWorkspaceTabs([])
   }
 
   const updateActiveTurn = (
@@ -336,27 +347,36 @@ const ChatPage: React.FC = () => {
     }
   }
 
-  const loadDraftReviewDetail = async (reviewId: string): Promise<void> => {
+  const loadDraftReviewDetail = async (input: {
+    reviewId: string
+    detail?: DraftReviewDetail | null
+    tabs?: ReviewWorkspaceTab[]
+    activeFileKey?: string | null
+    openWorkspace?: boolean
+  }): Promise<void> => {
     setDraftReviewLoading(true)
     try {
-      const [detailResponse, validationResponse] = await Promise.all([
-        window.api.draftReviewGet({ reviewId }),
-        window.api.draftReviewValidate({ reviewId })
-      ])
+      const detailResponse =
+        input.detail !== undefined ? { review: input.detail } : await window.api.draftReviewGet({ reviewId: input.reviewId })
       if (!detailResponse.review) {
         setActiveDraftReview(null)
-        setDraftCommitValidation(validationResponse)
+        setDraftCommitValidation(null)
         return
       }
+
       setActiveDraftReview(detailResponse.review)
-      setActiveDraftReviewId(reviewId)
-      setDraftCommitValidation(validationResponse)
-      showContentPanel({
-        kind: 'review_session',
-        title: '修改确认',
-        reviewId,
-        review: detailResponse.review
-      })
+      setDraftCommitValidation(null)
+
+      if (input.openWorkspace) {
+        showReviewWorkspace(
+          input.tabs || reviewWorkspaceTabs,
+          input.activeFileKey || detailResponse.review.documents[0]?.source_path || null
+        )
+      }
+    } catch (error) {
+      console.error('Failed to load draft review detail', error)
+      setActiveDraftReview(null)
+      setDraftCommitValidation(null)
     } finally {
       setDraftReviewLoading(false)
     }
@@ -364,38 +384,19 @@ const ChatPage: React.FC = () => {
 
   const loadDraftReviewsForSession = async (
     sessionId: string,
-    preferredReviewId?: string | null
+    options?: {
+      preferredReviewId?: string | null
+      autoOpen?: boolean
+    }
   ): Promise<void> => {
-    setDraftReviewLoading(true)
     try {
       const response = await window.api.draftReviewList({ sessionId })
       const nextItems = sortDraftReviews(response.items)
+      const activeItems = nextItems.filter((item) =>
+        ACTIVE_REVIEW_WORKSPACE_STATUSES.has(item.status)
+      )
+      const reviewTargetsByRunId = groupReviewTargetsByRunId(activeItems)
 
-      const currentSelectedId = preferredReviewId || activeDraftReviewId
-      const nextReviewId =
-        nextItems.find((item) => item.id === currentSelectedId)?.id || nextItems[0]?.id || null
-      if (!nextReviewId) {
-        setActiveDraftReviewId(null)
-        setActiveDraftReview(null)
-        setDraftCommitValidation(null)
-        setAssistantTurns((previous) => {
-          const nextTurns: Record<string, AssistantTurnViewModel> = { ...previous }
-          Object.values(previous).forEach((turn) => {
-            if (!turn.runId) return
-            nextTurns[turn.messageId] = {
-              ...turn,
-              reviewTargets: []
-            }
-          })
-          return nextTurns
-        })
-        setContentPanel((current) =>
-          current.kind === 'review_session' ? createEmptyPanel() : current
-        )
-        return
-      }
-      await loadDraftReviewDetail(nextReviewId)
-      const reviewTargetsByRunId = groupReviewTargetsByRunId(nextItems)
       setAssistantTurns((previous) => {
         const nextTurns: Record<string, AssistantTurnViewModel> = { ...previous }
         Object.values(previous).forEach((turn) => {
@@ -407,22 +408,106 @@ const ChatPage: React.FC = () => {
         })
         return nextTurns
       })
+
+      if (activeItems.length === 0) {
+        setReviewWorkspaceTabs([])
+        setActiveDraftReview(null)
+        setDraftCommitValidation(null)
+        setContentPanel((current) =>
+          current.kind === 'review_workspace' ? createEmptyPanel() : current
+        )
+        return
+      }
+
+      const activeDetailsResponses = await Promise.all(
+        activeItems.map((item) => window.api.draftReviewGet({ reviewId: item.id }))
+      )
+      const activeDetails = activeDetailsResponses
+        .map((item) => item.review)
+        .filter((item): item is DraftReviewDetail => Boolean(item))
+        .sort((left, right) => right.review.updated_at - left.review.updated_at)
+
+      const latestByFileKey = new Map<string, DraftReviewDetail>()
+      activeDetails.forEach((detail) => {
+        const fileKey = detail.documents[0]?.source_path
+        if (!fileKey || latestByFileKey.has(fileKey)) return
+        latestByFileKey.set(fileKey, detail)
+      })
+
+      const currentWorkspaceFileKey =
+        contentPanel.kind === 'review_workspace'
+          ? contentPanel.activeFileKey
+          : activeDraftReview?.documents[0]?.source_path || null
+      const previewFileKey =
+        contentPanel.kind === 'file_preview' ? contentPanel.file.path : null
+      const preferredFileKey =
+        options?.preferredReviewId
+          ? [...latestByFileKey.values()].find(
+              (detail) => detail.review.id === options.preferredReviewId
+            )?.documents[0]?.source_path || null
+          : null
+      const nextTabs = [...latestByFileKey.values()].map((detail) => {
+        const fileKey = detail.documents[0]?.source_path || detail.review.id
+        const previousTab = reviewWorkspaceTabs.find((tab) => tab.fileKey === fileKey)
+        const shouldMarkUnseen =
+          previousTab?.reviewId !== detail.review.id &&
+          currentWorkspaceFileKey !== fileKey &&
+          previewFileKey !== fileKey &&
+          preferredFileKey !== fileKey
+
+        return {
+          fileKey,
+          reviewId: detail.review.id,
+          fileName: detail.documents[0]?.source_name || detail.review.title,
+          sourcePath: fileKey,
+          changeCount: detail.review.pending_change_count,
+          status: detail.review.status,
+          unseen: shouldMarkUnseen
+        }
+      })
+
+      const nextSelectedFileKey =
+        preferredFileKey ||
+        (currentWorkspaceFileKey &&
+        nextTabs.some((tab) => tab.fileKey === currentWorkspaceFileKey)
+          ? currentWorkspaceFileKey
+          : nextTabs[0]?.fileKey || null)
+      const normalizedTabs = nextTabs.map((tab) =>
+        tab.fileKey === nextSelectedFileKey ? { ...tab, unseen: false } : tab
+      )
+      setReviewWorkspaceTabs(normalizedTabs)
+
+      const nextSelectedTab =
+        normalizedTabs.find((tab) => tab.fileKey === nextSelectedFileKey) || normalizedTabs[0]
+      if (!nextSelectedTab) {
+        return
+      }
+
+      const nextSelectedDetail =
+        latestByFileKey.get(nextSelectedTab.fileKey) ||
+        activeDetails.find((detail) => detail.review.id === nextSelectedTab.reviewId) ||
+        null
+      if (!nextSelectedDetail) {
+        return
+      }
+
+      const shouldOpenWorkspace =
+        contentPanel.kind === 'review_workspace' ||
+        (Boolean(options?.autoOpen) &&
+          (contentPanel.kind === 'empty' ||
+            (previewFileKey !== null && previewFileKey === nextSelectedTab.fileKey)))
+
+      await loadDraftReviewDetail({
+        reviewId: nextSelectedTab.reviewId,
+        detail: nextSelectedDetail,
+        tabs: normalizedTabs,
+        activeFileKey: nextSelectedTab.fileKey,
+        openWorkspace: shouldOpenWorkspace
+      })
     } catch (error) {
       console.error('Failed to load draft reviews', error)
       setActiveDraftReview(null)
       setDraftCommitValidation(null)
-    } finally {
-      setDraftReviewLoading(false)
-    }
-  }
-
-  const refreshDraftCommitValidation = async (reviewId: string): Promise<void> => {
-    setDraftValidationLoading(true)
-    try {
-      const response = await window.api.draftReviewValidate({ reviewId })
-      setDraftCommitValidation(response)
-    } finally {
-      setDraftValidationLoading(false)
     }
   }
 
@@ -469,6 +554,7 @@ const ChatPage: React.FC = () => {
       setLoading(false)
       setAiRunId(null)
       setSearchTurn(null)
+      setModalPreviewFile(null)
       setInput('')
       setSelectedSourceScopes([])
       setComposerResetKey((value) => value + 1)
@@ -478,10 +564,11 @@ const ChatPage: React.FC = () => {
       setAssistantTurns({})
       setContentPanel(createEmptyPanel())
       resetDraftReviewState()
-      void loadDraftReviewsForSession(currentSessionId)
+      void loadDraftReviewsForSession(currentSessionId, { autoOpen: true })
     } else {
       setCurrentMessages([])
       setAssistantTurns({})
+      setModalPreviewFile(null)
       resetDraftReviewState()
     }
   }, [currentSessionId])
@@ -519,8 +606,9 @@ const ChatPage: React.FC = () => {
       return
     }
 
+    setModalPreviewFile(null)
     showContentPanel({
-      kind: 'document_view',
+      kind: 'file_preview',
       title: '文档查看',
       file
     })
@@ -551,16 +639,23 @@ const ChatPage: React.FC = () => {
       return
     }
     setSearchTurn(turn)
-    showContentPanel({
-      kind: 'document_view',
-      title: '文档查看',
-      file: fileRef,
-      searchResult: result
-    })
+    setModalPreviewFile(fileRef)
   }
 
   const openDraftReview = (reviewId: string): void => {
-    void loadDraftReviewDetail(reviewId)
+    const nextTab = reviewWorkspaceTabs.find((tab) => tab.reviewId === reviewId) || null
+    const nextTabs = nextTab
+      ? reviewWorkspaceTabs.map((tab) =>
+          tab.fileKey === nextTab.fileKey ? { ...tab, unseen: false } : tab
+        )
+      : reviewWorkspaceTabs
+    setReviewWorkspaceTabs(nextTabs)
+    void loadDraftReviewDetail({
+      reviewId,
+      tabs: nextTabs,
+      activeFileKey: nextTab?.fileKey || null,
+      openWorkspace: true
+    })
   }
 
   useEffect(() => {
@@ -619,10 +714,11 @@ const ChatPage: React.FC = () => {
 
         const searchResults = extractSearchResultsFromToolOutput(event.outputPreview)
         if (searchResults.length > 0) {
+          setModalPreviewFile(null)
           showContentPanel({
-            kind: 'search_results',
+            kind: 'search_list',
             title: '搜索结果',
-            query: event.toolName,
+            query: lastSubmittedInputRef.current || event.toolName,
             results: searchResults,
             tokens: []
           })
@@ -739,7 +835,12 @@ const ChatPage: React.FC = () => {
         }))
         if (!event.internal && currentSessionId) {
           message.success(`确认文档已生成：${event.review.changeCount} 处修改`)
-          void loadDraftReviewsForSession(currentSessionId, event.review.reviewId)
+          const shouldAutoOpen =
+            contentPanel.kind === 'review_workspace' || contentPanel.kind === 'file_preview'
+          void loadDraftReviewsForSession(currentSessionId, {
+            preferredReviewId: event.review.reviewId,
+            autoOpen: shouldAutoOpen
+          })
         }
         return
       }
@@ -876,7 +977,6 @@ const ChatPage: React.FC = () => {
     assistantMsgIdRef.current = null
     lastSubmittedInputRef.current = userQuery
     lastSubmittedScopesRef.current = selectedSourceScopes
-    setContentPanel(createEmptyPanel())
 
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
@@ -980,7 +1080,6 @@ const ChatPage: React.FC = () => {
     setPendingApprovalRequest(null)
     setApprovalSubmitting(false)
     setPendingWorkspaceRequest(null)
-    setContentPanel(createEmptyPanel())
 
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
@@ -1021,8 +1120,9 @@ const ChatPage: React.FC = () => {
         createdAt: Date.now()
       }
       setSearchTurn(nextTurn)
+      setModalPreviewFile(null)
       showContentPanel({
-        kind: 'search_results',
+        kind: 'search_list',
         title: '搜索结果',
         query: userQuery,
         results,
@@ -1146,16 +1246,6 @@ const ChatPage: React.FC = () => {
     }
   }
 
-  const handleDraftValidationRefresh = async (): Promise<void> => {
-    if (!activeDraftReview) return
-    try {
-      await refreshDraftCommitValidation(activeDraftReview.review.id)
-    } catch (error) {
-      console.error(error)
-      message.error('刷新提交校验失败')
-    }
-  }
-
   const handleDraftCommit = async (): Promise<void> => {
     if (!activeDraftReview || !currentSessionId || draftCommitSubmitting) return
     setDraftCommitSubmitting(true)
@@ -1177,7 +1267,7 @@ const ChatPage: React.FC = () => {
       } else {
         emitSuccessMessage('确认文档已写回源文件')
       }
-      await loadDraftReviewsForSession(currentSessionId, activeDraftReview.review.id)
+      await loadDraftReviewsForSession(currentSessionId, { autoOpen: true })
     } catch (error) {
       console.error(error)
       message.error('提交草稿失败')
@@ -1190,15 +1280,48 @@ const ChatPage: React.FC = () => {
     if (!activeDraftReview || !currentSessionId || draftDiscardSubmitting) return
     setDraftDiscardSubmitting(true)
     try {
+      const discardedReviewId = activeDraftReview.review.id
       const response = await window.api.draftReviewDiscard({
-        reviewId: activeDraftReview.review.id
+        reviewId: discardedReviewId
       })
       if (!response.success) {
         message.error(response.error || '放弃确认文档失败')
         return
       }
       emitSuccessMessage('已放弃本次修改')
-      await loadDraftReviewsForSession(currentSessionId, activeDraftReview.review.id)
+      setAssistantTurns((previous) => {
+        const nextTurns: Record<string, AssistantTurnViewModel> = {}
+        Object.entries(previous).forEach(([messageId, turn]) => {
+          nextTurns[messageId] = {
+            ...turn,
+            reviewTargets: turn.reviewTargets.filter((target) => target.reviewId !== discardedReviewId)
+          }
+        })
+        return nextTurns
+      })
+
+      const remainingTabs = reviewWorkspaceTabs
+        .filter((tab) => tab.reviewId !== discardedReviewId)
+        .map((tab, index) => (index === 0 ? { ...tab, unseen: false } : tab))
+      setReviewWorkspaceTabs(remainingTabs)
+      setDraftCommitValidation(null)
+
+      if (remainingTabs.length === 0) {
+        setActiveDraftReview(null)
+        setContentPanel((current) =>
+          current.kind === 'review_workspace' ? createEmptyPanel() : current
+        )
+        return
+      }
+
+      const nextTab = remainingTabs[0]
+      showReviewWorkspace(remainingTabs, nextTab.fileKey)
+      await loadDraftReviewDetail({
+        reviewId: nextTab.reviewId,
+        tabs: remainingTabs,
+        activeFileKey: nextTab.fileKey,
+        openWorkspace: true
+      })
     } catch (error) {
       console.error(error)
       message.error('放弃确认文档失败')
@@ -1299,8 +1422,9 @@ const ChatPage: React.FC = () => {
             return
           }
           if (searchTurn) {
+            setModalPreviewFile(null)
             showContentPanel({
-              kind: 'search_results',
+              kind: 'search_list',
               title: '搜索结果',
               query: searchTurn.query,
               results: searchTurn.results,
@@ -1361,6 +1485,7 @@ const ChatPage: React.FC = () => {
                 icon={<HiOutlinePencilSquare className="h-3 w-3" />}
                 className="!flex !h-7 !w-7 !items-center !justify-center !rounded-[10px] !border !border-[#E5E5E4] !bg-white !p-0 !text-[#D97757] !shadow-none hover:!border-[#D97757] hover:!text-[#C66A4A]"
                 onClick={() => void createNewSession()}
+                data-testid={workbenchSelectors.newSessionButton}
               />
               <Button
                 type="text"
@@ -1642,32 +1767,43 @@ const ChatPage: React.FC = () => {
             </div>
 
             <div
-              className={`min-h-0 overflow-hidden transition-[width] duration-200 ${
-                contentPanelCollapsed
-                  ? 'w-0'
-                  : contentPanel.kind === 'review_session'
-                    ? 'w-[520px]'
-                    : 'w-[430px]'
-              }`}
+              className="min-h-0 overflow-hidden transition-[width] duration-200"
+              style={{
+                width: contentPanelCollapsed
+                  ? 0
+                  : contentPanel.kind === 'review_workspace'
+                    ? 'min(48vw, 780px)'
+                    : contentPanel.kind === 'file_preview'
+                      ? 'min(46vw, 740px)'
+                      : 440
+              }}
             >
               <WorkbenchContentPanel
-                state={
-                  contentPanel.kind === 'review_session' && activeDraftReview
-                    ? { ...contentPanel, review: activeDraftReview }
-                    : contentPanel
-                }
+                state={contentPanel}
+                activeReview={activeDraftReview}
                 draftReviewLoading={draftReviewLoading}
                 draftCommitValidation={draftCommitValidation}
-                draftValidationLoading={draftValidationLoading}
                 draftCommitSubmitting={draftCommitSubmitting}
                 draftDiscardSubmitting={draftDiscardSubmitting}
-                reviewTurn={reviewTurn}
+                modalPreviewFile={modalPreviewFile}
                 onOpenSearchResult={(turn, resultIndex) => void openSearchResult(turn, resultIndex)}
-                onOpenReview={openDraftReview}
-                onOpenFile={(file) => void openFile(file)}
-                onRefreshValidation={() => void handleDraftValidationRefresh()}
+                onSelectReviewTab={(fileKey) => {
+                  const nextTab = reviewWorkspaceTabs.find((tab) => tab.fileKey === fileKey)
+                  if (!nextTab) return
+                  const nextTabs = reviewWorkspaceTabs.map((tab) =>
+                    tab.fileKey === fileKey ? { ...tab, unseen: false } : tab
+                  )
+                  setReviewWorkspaceTabs(nextTabs)
+                  void loadDraftReviewDetail({
+                    reviewId: nextTab.reviewId,
+                    tabs: nextTabs,
+                    activeFileKey: fileKey,
+                    openWorkspace: true
+                  })
+                }}
                 onCommit={() => void handleDraftCommit()}
                 onDiscard={() => void handleDraftDiscard()}
+                onCloseModalPreview={() => setModalPreviewFile(null)}
                 onOpenPath={openPathOrNotify}
                 onOpenWithApplication={openPathWithApplicationOrNotify}
                 onRevealPath={revealPathOrNotify}

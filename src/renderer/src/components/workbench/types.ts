@@ -1,6 +1,5 @@
 import type {
   DraftDocumentFormat,
-  DraftReviewDetail,
   DraftReviewStatus,
   SearchResult
 } from '../../../../shared/types'
@@ -31,6 +30,16 @@ export type WorkbenchFileRef = {
   draftDocumentId?: string
   format?: DraftDocumentFormat
   pageNumber?: number
+}
+
+export type ReviewWorkspaceTab = {
+  fileKey: string
+  reviewId: string
+  fileName: string
+  sourcePath: string
+  changeCount: number
+  status: DraftReviewStatus
+  unseen: boolean
 }
 
 export type AssistantStepStatus = 'running' | 'completed' | 'review_needed' | 'failed'
@@ -77,21 +86,20 @@ export type WorkbenchContentPanelState =
       description: string
     }
   | {
-      kind: 'search_results'
+      kind: 'search_list'
       title: string
       query: string
       results: SearchResult[]
       tokens: string[]
     }
   | {
-      kind: 'document_view'
+      kind: 'file_preview'
       title: string
       file: WorkbenchFileRef
-      searchResult?: SearchResult
     }
   | {
-      kind: 'review_session'
+      kind: 'review_workspace'
       title: string
-      reviewId: string
-      review?: DraftReviewDetail | null
+      tabs: ReviewWorkspaceTab[]
+      activeFileKey: string | null
     }

@@ -605,7 +605,7 @@ export const getE2EFixtureSearchResponse = (
     }
   }
 
-  const result: SearchResult = {
+  const fileResult: SearchResult = {
     id: 'e2e-search-result-1',
     text: 'E2E 搜索命中内容，包含范围过滤后的稳定片段。',
     document_name: 'e2e-search-result.md',
@@ -623,8 +623,25 @@ export const getE2EFixtureSearchResponse = (
     }
   }
 
+  const webResult: SearchResult = {
+    id: 'e2e-search-result-web-1',
+    text: 'E2E 网页搜索命中内容，用于验证外部打开规则。',
+    document_name: 'fixture-web-result',
+    document_id: 'e2e-search-web-doc-1',
+    source_type: 'web',
+    created_at: Date.now(),
+    document: {
+      id: 'e2e-search-web-doc-1',
+      name: 'fixture-web-result',
+      source_type: 'web',
+      file_path: 'https://example.com/e2e-search-result',
+      created_at: Date.now(),
+      import_status: 2
+    }
+  }
+
   return {
-    results: [result],
+    results: [fileResult, webResult],
     tokens: ['E2E', '搜索', '命中']
   }
 }

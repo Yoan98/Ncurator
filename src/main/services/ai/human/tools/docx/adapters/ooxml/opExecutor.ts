@@ -15,14 +15,13 @@ import { injectPatchTag } from './anchorInjector'
 import {
   buildBlockIndex,
   loadDocxBundle,
-  extractBlockText,
-  paragraphNodeToSpec
+  extractBlockText
 } from './blockIndex'
+import { blockSpecText, nodeToBlockSpec } from './blockSpec'
 import { childElements, collectText, isElementNode } from './dom'
 import type {
   ApplyOpsResult,
-  BlockIndex,
-  IndexedNode
+  BlockIndex
 } from './types'
 import type {
   DocxBlockSpec,
@@ -79,43 +78,6 @@ const tableFromSpec = (spec: DocxTableSpec): Table => {
 
 const specToDocxChildren = (specs: DocxBlockSpec[]): Array<Paragraph | Table> => {
   return specs.map((spec) => (spec.kind === 'paragraph' ? paragraphFromSpec(spec) : tableFromSpec(spec)))
-}
-
-const tableNodeToSpec = (node: Element): DocxTableSpec => {
-  const rows = childElements(node, 'tr').map((rowNode) => {
-    return childElements(rowNode, 'tc').map((cellNode) => {
-      const paragraphs = childElements(cellNode, 'p')
-      const paragraphSpecs = paragraphs.length > 0 ? paragraphs.map((paragraph) => paragraphNodeToSpec(paragraph)) : [{ kind: 'paragraph' as const, style: 'Normal', runs: [{ text: '' }] }]
-      return {
-        paragraphs: paragraphSpecs
-      }
-    })
-  })
-  return {
-    kind: 'table',
-    rows
-  }
-}
-
-const nodeToBlockSpec = (node: IndexedNode): DocxBlockSpec => {
-  if (node.kind === 'paragraph') return paragraphNodeToSpec(node.node)
-  if (node.kind === 'table') return tableNodeToSpec(node.node)
-
-  const paragraphs = childElements(node.node, 'p')
-  return {
-    kind: 'paragraph',
-    style: paragraphs[0] ? paragraphNodeToSpec(paragraphs[0]).style : 'Normal',
-    runs: [{ text: paragraphs.map((paragraph) => paragraphNodeToSpec(paragraph).runs.map((run) => run.text).join('')).join('\n') }]
-  }
-}
-
-const blockSpecText = (spec: DocxBlockSpec): string => {
-  if (spec.kind === 'paragraph') return spec.runs.map((run) => run.text).join('')
-  return spec.rows
-    .map((row) =>
-      row.map((cell) => cell.paragraphs.map((paragraph) => paragraph.runs.map((run) => run.text).join('')).join('\n')).join(' | ')
-    )
-    .join('\n')
 }
 
 const patchWithTag = async (input: {
