@@ -18,7 +18,8 @@
 
 ### 1.3 测试相关
 - 当涉及AI的测试计划、阶段划分或阶段归属时，请阅读 `doc/test-plan/ai-test.md`
-- 当涉及Workspace的测试计划时，请阅读 `doc/test-plan/workspace-test.md`
+- 当涉及Workbench的测试计划、suite划分或与 `doc/prd/workbench.md` 的测试对齐时，请阅读 `doc/test-plan/workbench-test.md`
+- 当涉及Settings的测试计划、suite划分或与 `doc/prd/settings.md` 的测试对齐时，请阅读 `doc/test-plan/settings-test.md`
 - 当涉及测试架构、目录分层或 case 登记规则时，必须阅读 `doc/test.md`
 
 ### 1.4 prd产品文档相关

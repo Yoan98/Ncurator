@@ -29,52 +29,76 @@ tests/
   harness/
   fixtures/
   ai/
-    backend/
-      tool/
-        <case>.test.ts
-      human/
-        <case>.test.ts
-      director/
-        <case>.test.ts
-    e2e/
-      real/
-        <case>.test.ts
-  workspace/
-    backend/
-      source-service/
-        <case>.test.ts
-      ipc/
-        <case>.test.ts
-      scope/
-        <case>.test.ts
-    e2e/
-      settings/
-        <case>.test.ts
-      scope/
-        <case>.test.ts
+    tool/
+      <case>.test.ts
+    human/
+      <case>.test.ts
+    director/
+      <case>.test.ts
+  workbench/
+    core/
+      <case>.test.ts
+      <case>.e2e.test.ts
+    session/
+      <case>.test.ts
+      <case>.e2e.test.ts
+    composer/
+      <case>.test.ts
+      <case>.e2e.test.ts
+    mode/
+      <case>.test.ts
+      <case>.e2e.test.ts
+    scope/
+      <case>.test.ts
+      <case>.e2e.test.ts
+    blocker/
+      <case>.test.ts
+      <case>.e2e.test.ts
+    panel/
+      <case>.test.ts
+      <case>.e2e.test.ts
+    review/
+      <case>.test.ts
+      <case>.e2e.test.ts
+  settings/
+    model/
+      <case>.test.ts
+      <case>.e2e.test.ts
+    workspace/
+      <case>.test.ts
+      <case>.e2e.test.ts
+    web/
+      <case>.test.ts
+      <case>.e2e.test.ts
+    vector/
+      <case>.test.ts
+      <case>.e2e.test.ts
   kb-search/
-    backend/
-      <suite>/
-        <case>.test.ts
-    e2e/
-      <suite>/
-        <case>.test.ts
+    <suite>/
+      <case>.test.ts
+      <case>.e2e.test.ts
   temp/
   logs/
   report/
     ai/
       report.md
-    workspace/
+    workbench/
+      report.md
+    settings/
       report.md
 ```
 
 规则：
 
 - 目录统一使用 kebab-case。
-- 测试发现目录使用通用树形结构：`tests/<domain>/<layer>/<suite>/<groups...>/<case>.test.ts`。
+- 测试发现目录使用通用树形结构：`tests/<domain>/<suite>/<groups...>/<case>.test.ts`。
 - `suite` 是第一层稳定分类；`groups...` 是 suite 下可选的任意深度子目录。
-- AI 域当前直接使用阶段名作为 `suite`：`tool`、`human`、`director`、`real`。
+- AI 域当前使用 `tool`、`human`、`director` 作为 `suite`。
+- Workbench 域当前使用 `core`、`session`、`composer`、`mode`、`scope`、`blocker`、`panel`、`review` 作为 `suite`。
+- Settings 域当前使用 `model`、`workspace`、`web`、`vector` 作为 `suite`。
 - 当某个 `suite` 不需要继续细分时，正式 case 可以直接放在该 `suite` 目录下。
+- 普通测试文件使用 `<case>.test.ts` 命名。
+- e2e 测试文件使用 `<case>.e2e.test.ts` 命名。
 - `temp/` 默认不参与 gating，也不参与正式 report 汇总。
 - 除 `tests/temp/**` 外，`tests/**` 中的正式测试目录只允许放已在 `doc/test-plan/**` 登记的 case，否则需要主动讨论。
 
@@ -134,12 +158,15 @@ tests/
 
 - `suite`
   - 第一层稳定分类，按领域内最长期稳定的阶段、模块或能力边界划分。
-  - 例如 AI 当前使用 `tool / human / director / real`；Workspace 当前使用 `source-service / ipc / settings / scope`。
+  - 例如 AI 当前使用 `tool / human / director`；Workbench 当前使用 `core / session / composer / mode / scope / blocker / panel / review`；Settings 当前使用 `model / workspace / web / vector`。
 - `group`
   - `suite` 下的可选子目录。
   - 只有在同一 `suite` 内确实需要继续分层时才创建，命名必须直接表达业务语义，不再默认使用固定四分组。
 - `case`
   - 最终测试文件，对应唯一 `caseId`、唯一日志目录和唯一 report 归属。
+- `type`
+  - 测试类型只通过文件名体现。
+  - 普通测试默认视为 `backend`；文件名包含 `.e2e.test.ts` 时视为 `e2e`。
 
 ### 3.6 长期价值与 temp 规则
 
@@ -149,7 +176,7 @@ tests/
 
 ### 3.7 常见正反例
 
-- 反例：为了排查某个猜想，直接在 `tests/ai/**` 或 `tests/workspace/**` 新增正式 case。
+- 反例：为了排查某个猜想，直接在 `tests/ai/**`、`tests/workbench/**` 或 `tests/settings/**` 新增正式 case。
   - 这类需求如果还没有进入长期维护范围，应先写进 `tests/temp/**`。
 - 正例：为了确认某个上下文拼接问题是否真实存在，先写 `tests/temp/**` 做一次性验证。
 - 正例：某条真实用户场景已经确定要长期回归，先补对应 `doc/test-plan/**`，再补正式测试代码。
@@ -168,16 +195,17 @@ tests/
 
 ### 4.2 放入测试目录
 
-- 正式 case 固定放在 `tests/<domain>/<layer>/<suite>/<groups...>/<case>.test.ts`。
+- 正式 case 固定放在 `tests/<domain>/<suite>/<groups...>/<case>.test.ts`。
+- e2e case 固定放在 `tests/<domain>/<suite>/<groups...>/<case>.e2e.test.ts`。
 - 临时 case 固定放在 `tests/temp/**`。
 - 未在 `doc/test-plan/**` 登记的验证，不得进入正式测试目录。
 - 临时 case 转正式 case 时，先补 `doc/test-plan/**`，再迁入正式目录。
 
 ### 4.3 执行与产生日志
 
-- 正式测试统一通过 `scripts/test-workflow.mjs` 执行。
+- 测试统一通过 `scripts/test-workflow.mjs` 执行。
 - runner 只负责收集测试文件、执行测试并落 `tests/logs/**`。
-- e2e 请求下 runner 先执行同域 backend；除此之外不负责失败分析、建议整理或 report 更新。
+- e2e 请求下 runner 先执行同 scope 下的普通测试，再执行 `.e2e.test.ts`；除此之外不负责失败分析、建议整理或 report 更新。
 
 ### 4.4 读取与分析 raw logs
 
@@ -202,30 +230,19 @@ tests/
 
 统一入口默认是 `scripts/test-workflow.mjs`。
 
-补充说明：
-
-- `workspace` backend 继续通过 `scripts/test-workflow.mjs` 执行。
-- `workspace` e2e 在当前桌面环境下需要直接使用 shell 命令拉起；不要再通过额外的 `npm run` 或 shell wrapper 二次包装 Electron，否则可能在 `electron.launch` 前触发 `SIGABRT`。
-- 推荐顺序：
-  1. `pnpm test:workspace:backend`
-  2. `pnpm exec electron-vite build`
-  3. `pnpm exec vitest --config vitest.e2e.config.mts run tests/workspace/e2e`
-
 当前命令面：
 
 - `pnpm test:ai`
-- `pnpm test:ai:backend`
-- `pnpm test:ai:backend:tools`
-- `pnpm test:ai:e2e`
-- `pnpm test:ai:sample`
-- `pnpm test:workspace:backend`
-- `pnpm exec electron-vite build`
-- `pnpm exec vitest --config vitest.e2e.config.mts run tests/workspace/e2e`
+- `pnpm test:ai:tool`
+- `pnpm test:workbench`
+- `pnpm test:workbench:e2e`
+- `pnpm test:settings`
+- `pnpm test:settings:e2e`
 
 runner 支持的过滤参数：
 
 - `--domain`
-- `--layer`
+- `--type`
 - `--suite`
 - `--group`，可重复传入
 - `--case`
@@ -233,14 +250,15 @@ runner 支持的过滤参数：
 
 补充规则：
 
-- 默认按 `suite` 运行时，runner 收集该 `suite` 下的全部正式 case。
+- 默认按 `suite` 运行时，runner 会先收集普通测试，再收集 `.e2e.test.ts`。
+- `--type` 取值为 `backend` 或 `e2e`。
 - `--group` 只在目标 `suite` 确实存在额外子目录时使用；如果 case 直接位于 `suite` 根目录，则不需要 `--group`。
 
 runner 的职责只有三件事：
 
 1. 找到目标测试文件并执行。
 2. 落原始日志到 `tests/logs/**`。
-3. 在 e2e 请求下先执行同域 backend。
+3. 在 e2e 请求下先执行同 scope 下的普通测试。
 
 runner 不负责：
 
@@ -254,7 +272,7 @@ runner 不负责：
 每个 run 固定目录：
 
 ```text
-tests/logs/<domain>/<layer>/<suite>/<groups...>/<caseId>/<runId>/
+tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
   meta.json
   timeline.jsonl
   runtime-events.jsonl
@@ -282,12 +300,12 @@ tests/logs/<domain>/<layer>/<suite>/<groups...>/<caseId>/<runId>/
 
 ### 目录与命名规则
 
-- `<domain>/<layer>/<suite>/<groups...>`
-  - 目录层级体现业务域、测试层和 suite 树。
+- `<domain>/<suite>/<groups...>`
+  - 目录层级体现业务域与 suite 树。
   - 当前 runner 通过目录过滤测试范围。
 - `<caseId>`
   - 对应用例稳定标识。
-  - 通常与测试文件名一致。
+  - 通常与测试文件名去掉 `.test.ts` 后一致；e2e case 通常以 `.e2e` 结尾。
 - `<runId>`
   - 单次执行唯一标识。
   - 当前格式：`YYYYMMDD-HHmmss-SSS`。
@@ -317,7 +335,7 @@ tests/logs/<domain>/<layer>/<suite>/<groups...>/<caseId>/<runId>/
   - 说明这次 run 属于哪条用例。
 - `scope`
   - 说明这次 run 属于哪个稳定测试范围。
-  - 格式为 `<domain>/<layer>/<suite>/<groups...>`，不包含 `caseId`。
+  - 格式为 `<domain>/<suite>/<groups...>`，不包含 `caseId`。
 - `status`
   - 本次 run 的最终结果。
   - 当前值域是 `passed` / `failed`。
@@ -412,7 +430,7 @@ tests/logs/<domain>/<layer>/<suite>/<groups...>/<caseId>/<runId>/
   - 包括 tool、guard、scope 校验、审批、产物、runtime issue、AI 运行等所有通过 `sendEvent` 发出的事件。
   - 不包含本地 harness 自己维护但未经过 `sendEvent` 的临时数组，例如某些工具测试里的 `activities[]`。
 - `runtime-events.jsonl` 始终写出；如果本次 run 没有 runtime 事件，则写空文件。
-- backend 与 e2e 的采集路径可以不同，但最终落盘契约必须一致。
+- 普通测试与 e2e 的采集路径可以不同，但最终落盘契约必须一致。
 - 当 `Oracle`、断言 `data`、`timeline.jsonl` 或 report 仍不足以解释失败原因时，必须继续回看 `runtime-events.jsonl`。
 
 ### `artifacts.json`
@@ -458,10 +476,10 @@ tests/logs/<domain>/<layer>/<suite>/<groups...>/<caseId>/<runId>/
 - `artifacts.json` 必须始终写出，即使 `items` 为空数组。
 - `artifacts/` 目录只有在确实存在实体附件文件时才创建。
 
-### backend 与 e2e 的统一约束
+### 不同测试类型的统一约束
 
-- backend 和 e2e 共用同一份 `meta.json` / `timeline.jsonl` / `runtime-events.jsonl` / `artifacts.json` 基础契约。
-- backend 与 e2e 的差异只体现在：
+- 普通测试与 e2e 共用同一份 `meta.json` / `timeline.jsonl` / `runtime-events.jsonl` / `artifacts.json` 基础契约。
+- 两类测试的差异只体现在：
   - `meta.runtime.driver`
   - `meta.runtime.target`
   - `artifacts.json.items[].kind`
@@ -504,8 +522,8 @@ tests/report/<domain>/
   - `分析范围`
   - `总体结论`
   - `下一阶段建议`
-- 按 `backend` / `e2e` 展开
-- 每个 layer / suite / groups 节点按需要继续下钻
+- 按 suite / groups 展开
+- 每个 suite / groups 节点按需要继续下钻
 - 每个节点至少包含：
   - `证据`
   - `通过率`
@@ -524,10 +542,10 @@ tests/report/<domain>/
 - `总体结论` 中的统计口径固定拆成两类：
   - `历史总数据`：基于当前 analysis window 内全部 raw runs 统计
   - `最新总数据`：每个 case 只看最新一轮 run 的修复后统计
-- `总览` 之后按 domain 下实际存在的 layer 展开，当前通常是 `## backend` 与 `## e2e`。
-- layer 之下按目录树继续展开：
-  - suite 使用 `###`
-  - suite 下第一层 group 使用 `####`
+- `总览` 之后按 domain 下实际存在的 suite 展开。
+- suite 之下按目录树继续展开：
+  - suite 使用 `##`
+  - suite 下第一层 group 使用 `###`
   - 更深层 group 继续按 Markdown 标题层级递增
 - 每个实际分析节点都必须包含以下固定小节，顺序保持一致：
   - `证据`
@@ -550,35 +568,33 @@ tests/report/<domain>/
 ### `report.md` 最小示例
 
 ```md
-# AI 域测试报告
+# Workbench 域测试报告
 
 ## 总览
 
 ### 分析范围
 
-- raw logs 范围: 当前仓库内 `tests/logs/ai/**`
-- 已分析 scope: `ai/backend/tool`、`ai/e2e/real`
+- raw logs 范围: 当前仓库内 `tests/logs/workbench/**`
+- 已分析 scope: `workbench/scope`、`workbench/review`
 
 ### 总体结论
 
 - 历史总数据: `2` 次 raw runs，其中 `2` 次 passed、`0` 次 failed，historicalSuccessRate=`100.0%`
 - 最新总数据: `2 / 2` 个 case 的最新一轮 run 为 passed，latestSuccessRate=`100.0%`
-- 当前结论: 当前 backend sample 与 e2e smoke 已跑通，但真实执行阻塞路径覆盖仍不足。
+- 当前结论: 当前 scope 普通样例与 review e2e smoke 已跑通，但阻塞恢复与续做覆盖仍不足。
 
 ### 下一阶段建议
 
-- 先补 `backend/human` 的单任务闭环
-- 再补 `e2e/real` 的阻塞恢复分支
+- 先补 `blocker` 的状态收敛
+- 再补 `session` 的续做主线
 
-## backend
+## scope
 
-### tool
+### 证据
 
-#### 证据
+- `workbench-scope-token-cleanup` | type=`backend` | run=`20260315-101530-112` | status=`passed`
 
-- `tool-terminal-command-smoke` | run=`20260315-101530-112` | status=`passed`
-
-#### 通过率
+### 通过率
 
 - 历史总数据:
   - totalRuns: 1
@@ -591,30 +607,28 @@ tests/report/<domain>/
   - latestFailedCases: 0
   - latestSuccessRate: 100.0%
 
-#### 失败分析
+### 失败分析
 
 - 当前没有 failed run，因此无法给出失败模式结论。
 
-#### 当前评估
+### 当前评估
 
-- terminal happy path 已稳定产出 raw logs。
-- 当前不足是还没有正式纳入失败/阻塞样例。
+- scope 基础收敛路径已稳定产出 raw logs。
+- 当前不足是跨模式与跨工作区切换覆盖仍不足。
 
-#### 下一步建议
+### 下一步建议
 
-- 增加 `tool-terminal-approval-rejected`
-- 增加 `tool-terminal-timeout-stop`
+- 增加 `workbench-scope-search-strict-range`
+- 增加 `workbench-scope-cross-workspace-cleanup`
 
-## e2e
+## review
 
-### real
+### 证据
 
-#### 证据
-
-- `real-docx-rewrite-smoke` | run=`20260315-103002-008` | status=`passed`
+- `workbench-review-submit.e2e` | type=`e2e` | run=`20260315-103002-008` | status=`passed`
 - 关键附件: playwright trace
 
-#### 通过率
+### 通过率
 
 - 历史总数据:
   - totalRuns: 1
@@ -627,19 +641,19 @@ tests/report/<domain>/
   - latestFailedCases: 0
   - latestSuccessRate: 100.0%
 
-#### 失败分析
+### 失败分析
 
 - 当前没有 failed run，因此无法给出失败模式结论。
 
-#### 当前评估
+### 当前评估
 
-- real smoke 主链路已可用。
-- 当前不足是 approval、workspace required、review 等真实路径尚未纳入。
+- review smoke 主链路已可用。
+- 当前不足是 approval、workspace required 和续做主线仍未纳入。
 
-#### 下一步建议
+### 下一步建议
 
 - 补充 approval 路径
-- 补充 workspace required 场景
+- 补充 session 续做场景
 ```
 
 约束：

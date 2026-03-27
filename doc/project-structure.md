@@ -74,7 +74,9 @@ tests/                   # 自动化测试
 
 - `tests/harness/**` 只放可复用的测试基础设施，不承载旧 suite 治理逻辑或旧 report 契约。
 - `tests/fixtures/**` 只放长期复用的输入样本，不混入运行产物。
-- `tests/ai/**` 按 `backend` / `e2e`、`suite` 与可选子目录拆分，是当前 AI 测试的主目录。
+- `tests/ai/**` 只放 AI 契约测试。
+- `tests/workbench/**` 按 workbench PRD 模块组织正式测试。
+- `tests/settings/**` 按 settings PRD 模块组织正式测试。
 - `tests/kb-search/**` 预留给检索链路测试；`tests/temp/**` 仅放临时或待定用例。
 - `tests/logs/**` 只放每次运行的原始日志；`tests/report/**` 只放按 domain 维护的正式分析文档。
 - 测试目录统一使用 kebab-case，运行产物不得反向成为测试发现入口。
@@ -88,5 +90,5 @@ tests/                   # 自动化测试
 - `doc/prd/` 用于按产品模块维护用户可见功能规格与验收标准，例如 `workbench.md` 与 `settings.md`。
 - 用户可见功能行为变更时，应优先同步 `doc/prd/**`，再同步代码实现与测试。
 - `doc/test-plan/` 用于维护各类测试计划文档。
-- 测试计划按对应诉求或测试域拆分，例如 Core AI 测试计划放在 `doc/test-plan/ai-test.md`。
+- 测试计划按测试域与产品面拆分，例如 `doc/test-plan/ai-test.md`、`doc/test-plan/workbench-test.md`、`doc/test-plan/settings-test.md`。
 - 长期维护的正式测试用例，必须先在 `doc/test-plan/**` 中定义，再落到 `tests/**` 正式目录。

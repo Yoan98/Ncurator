@@ -2,8 +2,8 @@ import type { JsonValue } from '../../../src/shared/types'
 
 export const TEST_LOG_SCHEMA_VERSION = 4 as const
 
-export type TestDomain = 'ai' | 'workspace' | 'kb-search' | 'temp'
-export type TestLayer = 'backend' | 'e2e'
+export type TestDomain = 'ai' | 'workbench' | 'settings' | 'kb-search' | 'temp'
+export type TestType = 'backend' | 'e2e'
 export type TestRunStatus = 'passed' | 'failed'
 export type TestLogStatus = 'info' | 'ok' | 'failed' | 'skipped'
 export type TestLogEventType = 'run' | 'step' | 'assertion' | 'artifact' | 'signal' | 'error'

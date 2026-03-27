@@ -17,7 +17,7 @@ const splitScope = (scope: string): string[] => {
     .split('/')
     .map((item) => item.trim())
     .filter(Boolean)
-  if (parts.length < 3) {
+  if (parts.length < 2) {
     throw new Error(`invalid test scope: ${scope}`)
   }
   return parts

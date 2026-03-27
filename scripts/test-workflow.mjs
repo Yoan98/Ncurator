@@ -13,7 +13,7 @@ const ELECTRON_VITE_BIN = resolveLocalBin('electron-vite')
 const parseArgs = (argv) => {
   const parsed = {
     domain: '',
-    layer: '',
+    type: '',
     suite: '',
     groups: [],
     caseId: '',
@@ -28,8 +28,8 @@ const parseArgs = (argv) => {
       index += 1
       continue
     }
-    if (current === '--layer' && next) {
-      parsed.layer = next
+    if (current === '--type' && next) {
+      parsed.type = next
       index += 1
       continue
     }
@@ -74,11 +74,12 @@ const walk = async (target) => {
 const resolveScopeDir = (input) => {
   const parts = [TESTS_ROOT]
   if (input.domain) parts.push(input.domain)
-  if (input.layer) parts.push(input.layer)
   if (input.suite) parts.push(input.suite)
   if (input.groups.length > 0) parts.push(...input.groups)
   return path.join(...parts)
 }
+
+const isE2EFile = (filePath) => path.basename(filePath).endsWith('.e2e.test.ts')
 
 const findTestFiles = async (input) => {
   const scopeDir = resolveScopeDir(input)
@@ -93,9 +94,8 @@ const findTestFiles = async (input) => {
   return allFiles
     .filter((filePath) => filePath.endsWith('.test.ts'))
     .filter((filePath) => {
-      if (input.caseId || input.groups.length > 0) return true
-      const segments = filePath.split(path.sep)
-      return !segments.includes('live')
+      if (!input.type) return true
+      return input.type === 'e2e' ? isE2EFile(filePath) : !isE2EFile(filePath)
     })
     .filter((filePath) => {
       if (!input.caseId) return true
@@ -151,16 +151,16 @@ const buildE2EApp = () => {
 }
 
 const formatScope = (input) =>
-  [input.domain, input.layer, input.suite, ...input.groups].filter(Boolean).join('/')
+  [[input.domain, input.suite, ...input.groups].filter(Boolean).join('/'), input.type].filter(Boolean).join(' ')
 
-const runLayerWorkflow = async (input) => {
+const runTypeWorkflow = async (input) => {
   const testFiles = await findTestFiles(input)
   if (testFiles.length === 0) {
     process.stdout.write(`[test-workflow] no tests found for ${formatScope(input)}\n`)
     return 0
   }
 
-  if (input.layer === 'e2e') {
+  if (input.type === 'e2e') {
     const buildCode = buildE2EApp()
     if (buildCode !== 0) {
       return buildCode
@@ -170,7 +170,7 @@ const runLayerWorkflow = async (input) => {
   let exitCode = 0
   for (let iteration = 0; iteration < input.runs; iteration += 1) {
     const code = runVitest({
-      configPath: input.layer === 'backend' ? 'vitest.backend.config.mts' : 'vitest.e2e.config.mts',
+      configPath: input.type === 'e2e' ? 'vitest.e2e.config.mts' : 'vitest.backend.config.mts',
       testFiles
     })
     if (code !== 0) {
@@ -191,24 +191,24 @@ const main = async () => {
 
   let exitCode = 0
 
-  if (!args.layer || args.layer === 'backend') {
-    exitCode = await runLayerWorkflow({
+  if (!args.type || args.type === 'backend') {
+    exitCode = await runTypeWorkflow({
       ...args,
-      layer: 'backend'
+      type: 'backend'
     })
   }
 
-  if (exitCode === 0 && args.layer === 'e2e') {
-    exitCode = await runLayerWorkflow({
+  if (exitCode === 0 && args.type === 'e2e') {
+    exitCode = await runTypeWorkflow({
       ...args,
-      layer: 'backend'
+      type: 'backend'
     })
   }
 
-  if (exitCode === 0 && (!args.layer || args.layer === 'e2e')) {
-    exitCode = await runLayerWorkflow({
+  if (exitCode === 0 && (!args.type || args.type === 'e2e')) {
+    exitCode = await runTypeWorkflow({
       ...args,
-      layer: 'e2e'
+      type: 'e2e'
     })
   }
 

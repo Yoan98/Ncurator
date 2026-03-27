@@ -21,12 +21,12 @@ import type { z } from 'zod/v4'
 import type { EventCollector } from '../core/eventCollector'
 import type {
   TestDomain,
-  TestLayer,
+  TestType,
   TestLogEvent,
   TestRunMeta
 } from '../core/report-contract'
 
-export type { TestDomain, TestLayer, TestLogEvent, TestRunMeta } from '../core/report-contract'
+export type { TestDomain, TestType, TestLogEvent, TestRunMeta } from '../core/report-contract'
 
 export type ApprovalPolicy = 'auto-approve' | 'deny-medium-high' | 'deny-all'
 
@@ -83,7 +83,6 @@ export type LiveLlmConfig = Pick<LLMConfig, 'base_url' | 'model_name' | 'api_key
   is_active: true
 }
 
-export type TestCaseType = 'basic' | 'boundary' | 'scenario' | 'live'
 export type TestRunMode = 'single' | 'repeatable'
 
 export type FixtureBinding = {
@@ -139,9 +138,8 @@ export type BackendTestRuntime = {
 
 export type TestCaseDefinition<TResult> = {
   caseId: string
-  caseType: TestCaseType
-  domain: Extract<TestDomain, 'ai' | 'workspace' | 'kb-search' | 'temp'>
-  layer: Extract<TestLayer, 'backend'>
+  testType?: Extract<TestType, 'backend'>
+  domain: Extract<TestDomain, 'ai' | 'workbench' | 'settings' | 'kb-search' | 'temp'>
   suite: string
   groups?: readonly string[]
   description: string

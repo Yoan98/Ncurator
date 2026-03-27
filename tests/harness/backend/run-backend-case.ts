@@ -13,7 +13,6 @@ import {
   TEST_LOG_SCHEMA_VERSION,
   type TestArtifact,
   type TestDomain,
-  type TestLayer,
   type TestLogEvent,
   type TestRunMeta,
   type TestRunStatus
@@ -41,11 +40,10 @@ const toRelativeWorkspaceTarget = (workspaceRoot: string, absoluteWorkspacePath:
 
 const buildRunScope = (input: {
   domain: TestDomain
-  layer: TestLayer
   suite: string
   groups: readonly string[]
 }): string => {
-  const parts = [input.domain, input.layer, input.suite]
+  const parts = [input.domain, input.suite]
   parts.push(...input.groups)
   return parts.join('/')
 }
@@ -74,7 +72,6 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
   const runId = createRunId(startedAtMs)
   const scope = buildRunScope({
     domain: definition.domain,
-    layer: definition.layer,
     suite: definition.suite,
     groups: definition.groups || []
   })

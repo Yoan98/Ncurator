@@ -8,7 +8,6 @@ import {
   type TestArtifactKind,
   type TestArtifactRefs,
   type TestDomain,
-  type TestLayer,
   type TestLogEvent,
   type TestLogStatus,
   type TestRunMeta,
@@ -17,7 +16,6 @@ import {
 import { createRunId, resolveRunArtifactsDir, writeRunLog } from '../core/write-run-log'
 import { launchElectronApp, type E2ERuntimeSignals } from './electronApp'
 
-export type E2ETestCaseType = 'basic' | 'boundary' | 'scenario' | 'live'
 export type E2ETestRunMode = 'single' | 'repeatable'
 
 type E2EAssertionInput = {
@@ -64,9 +62,7 @@ export type E2ETestRuntime = {
 
 export type E2ETestCaseDefinition<TResult> = {
   caseId: string
-  caseType: E2ETestCaseType
-  domain: Extract<TestDomain, 'ai' | 'workspace' | 'kb-search' | 'temp'>
-  layer: Extract<TestLayer, 'e2e'>
+  domain: Extract<TestDomain, 'ai' | 'workbench' | 'settings' | 'kb-search' | 'temp'>
   suite: string
   groups?: readonly string[]
   description: string
@@ -78,11 +74,10 @@ export type E2ETestCaseDefinition<TResult> = {
 
 const buildRunScope = (input: {
   domain: TestDomain
-  layer: TestLayer
   suite: string
   groups: readonly string[]
 }): string => {
-  const parts = [input.domain, input.layer, input.suite]
+  const parts = [input.domain, input.suite]
   parts.push(...input.groups)
   return parts.join('/')
 }
@@ -179,7 +174,6 @@ export const runE2ECase = async <TResult>(definition: E2ETestCaseDefinition<TRes
   const runId = createRunId(startedAtMs)
   const scope = buildRunScope({
     domain: definition.domain,
-    layer: definition.layer,
     suite: definition.suite,
     groups: definition.groups || []
   })
