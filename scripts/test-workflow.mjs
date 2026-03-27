@@ -124,7 +124,12 @@ const runCommandWithFallback = (input) => {
 }
 
 const runVitest = (input) => {
-  const commandArgs = ['--config', input.configPath, 'run', ...input.testFiles]
+  const extraArgs = input.testFiles.some((filePath) =>
+    filePath.includes(`${path.sep}live${path.sep}`)
+  )
+    ? ['--maxWorkers', '1']
+    : []
+  const commandArgs = ['--config', input.configPath, ...extraArgs, 'run', ...input.testFiles]
   return runCommandWithFallback({
     primary: {
       bin: PNPM_BIN,

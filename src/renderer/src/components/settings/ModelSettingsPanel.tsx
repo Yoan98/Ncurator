@@ -16,6 +16,7 @@ import { HiCheckCircle, HiPencil, HiPlus, HiTrash } from 'react-icons/hi2'
 import type { LLMConfig } from '../../../../shared/types'
 import { MODEL_MAPPING, PROVIDER_OPTIONS } from './constants'
 import type { FlatModelOption, GroupedModelOption, LlmConfigFormValues } from './types'
+import { settingsSelectors } from '../../testing/selectors'
 
 const ModelSettingsPanel: React.FC = () => {
   const [configs, setConfigs] = useState<LLMConfig[]>([])
@@ -160,6 +161,7 @@ const ModelSettingsPanel: React.FC = () => {
               size="small"
               onClick={() => void handleActivate(record.id)}
               className="!text-[#D97757]"
+              data-testid={`${settingsSelectors.modelActivateButtonPrefix}-${record.id}`}
             >
               启用
             </Button>
@@ -170,6 +172,7 @@ const ModelSettingsPanel: React.FC = () => {
             icon={<HiPencil />}
             onClick={() => handleEdit(record)}
             className="text-[#666666] hover:text-[#D97757]"
+            data-testid={`${settingsSelectors.modelEditButtonPrefix}-${record.id}`}
           />
           <Popconfirm
             title="确定要删除此配置吗？"
@@ -177,7 +180,13 @@ const ModelSettingsPanel: React.FC = () => {
             okText="确定"
             cancelText="取消"
           >
-            <Button type="text" danger size="small" icon={<HiTrash />} />
+            <Button
+              type="text"
+              danger
+              size="small"
+              icon={<HiTrash />}
+              data-testid={`${settingsSelectors.modelDeleteButtonPrefix}-${record.id}`}
+            />
           </Popconfirm>
         </Space>
       )
@@ -185,7 +194,10 @@ const ModelSettingsPanel: React.FC = () => {
   ]
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
+    <div
+      className="flex h-full min-h-0 flex-col gap-4 overflow-hidden"
+      data-testid={settingsSelectors.modelPanel}
+    >
       <section className="ui-panel-ghost shrink-0 px-4 py-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
@@ -199,7 +211,10 @@ const ModelSettingsPanel: React.FC = () => {
               共 {configs.length} 个配置
             </Tag>
             {activeConfig ? (
-              <Tag className="!m-0 rounded-full border-[#F4E5DF] bg-[#FBF5F2] px-3 py-1 text-[12px] text-[#D97757]">
+              <Tag
+                className="!m-0 rounded-full border-[#F4E5DF] bg-[#FBF5F2] px-3 py-1 text-[12px] text-[#D97757]"
+                data-testid={settingsSelectors.modelSummaryCurrent}
+              >
                 当前 {activeConfig.model_name}
               </Tag>
             ) : null}
@@ -208,6 +223,7 @@ const ModelSettingsPanel: React.FC = () => {
               icon={<HiPlus className="h-4 w-4" />}
               onClick={handleAdd}
               className="border-none !bg-[#D97757] shadow-sm hover:!bg-[#C66A4A]"
+              data-testid={settingsSelectors.modelAddButton}
             >
               新增配置
             </Button>
@@ -225,6 +241,7 @@ const ModelSettingsPanel: React.FC = () => {
             loading={loading}
             size="middle"
             className="[&_.ant-table-thead_th]:!bg-[#F5F5F4] [&_.ant-table-thead_th]:!py-3 [&_.ant-table-thead_th]:!text-[12px] [&_.ant-table-thead_th]:!text-[#666666] [&_.ant-table-thead_th]:!font-medium [&_.ant-table-tbody_td]:!py-3 [&_.ant-table-tbody_td]:!align-middle"
+            data-testid={settingsSelectors.modelTable}
           />
         </div>
       </section>
@@ -235,6 +252,9 @@ const ModelSettingsPanel: React.FC = () => {
         onOk={() => void handleSave()}
         onCancel={() => setIsModalOpen(false)}
         width={520}
+        data-testid={settingsSelectors.modelModal}
+        okButtonProps={{ 'data-testid': settingsSelectors.modelSaveButton }}
+        cancelButtonProps={{ 'data-testid': settingsSelectors.modelCancelButton }}
         className="[&_.ant-modal-content]:!rounded-[24px]"
       >
         <Form form={form} layout="vertical" className="pt-4">
@@ -243,7 +263,11 @@ const ModelSettingsPanel: React.FC = () => {
             label="配置名称"
             rules={[{ required: true, message: '请输入配置名称' }]}
           >
-            <Input size="large" placeholder="例如：我的 OpenAI" />
+            <Input
+              size="large"
+              placeholder="例如：我的 OpenAI"
+              data-testid={settingsSelectors.modelNameInput}
+            />
           </Form.Item>
 
           <Form.Item
@@ -256,6 +280,7 @@ const ModelSettingsPanel: React.FC = () => {
               defaultActiveFirstOption
               placeholder="https://api.openai.com/v1"
               allowClear
+              data-testid={settingsSelectors.modelBaseUrlInput}
               options={PROVIDER_OPTIONS.map((provider) => ({
                 value: provider.value,
                 label: (
@@ -288,6 +313,7 @@ const ModelSettingsPanel: React.FC = () => {
             <AutoComplete
               placeholder="例如：gpt-4o-mini"
               allowClear
+              data-testid={settingsSelectors.modelModelNameInput}
               options={modelOptions}
               filterOption={(inputValue, option) => {
                 const normalizedInput = inputValue.toUpperCase()
@@ -307,7 +333,11 @@ const ModelSettingsPanel: React.FC = () => {
             label="API Key"
             rules={[{ required: true, message: '请输入 API Key' }]}
           >
-            <Input.Password size="large" placeholder="sk-..." />
+            <Input.Password
+              size="large"
+              placeholder="sk-..."
+              data-testid={settingsSelectors.modelApiKeyInput}
+            />
           </Form.Item>
         </Form>
       </Modal>

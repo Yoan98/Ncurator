@@ -55,14 +55,23 @@ const api: DesktopApi = {
   workspaceCreate: (payload) => ipcRenderer.invoke('workspace-create', payload),
   workspaceDelete: (workspaceId: string) => ipcRenderer.invoke('workspace-delete', workspaceId),
   workspaceNodes: (payload) => ipcRenderer.invoke('workspace-nodes', payload),
-  workspaceScan: (payload) => ipcRenderer.invoke('workspace-scan', payload),
-  workspacePrepare: (payload) => ipcRenderer.invoke('workspace-prepare', payload),
+  workspaceScan: (payload) => {
+    emitE2EIpcCall('workspaceScan')
+    return ipcRenderer.invoke('workspace-scan', payload)
+  },
+  workspacePrepare: (payload) => {
+    emitE2EIpcCall(`workspacePrepare:${payload.mode}`)
+    return ipcRenderer.invoke('workspace-prepare', payload)
+  },
   sourceScopeList: (payload) => {
     emitE2EIpcCall('sourceScopeList')
     return ipcRenderer.invoke('source-scope-list', payload)
   },
   webSourceList: () => ipcRenderer.invoke('web-source-list'),
-  webSourceRefresh: (payload) => ipcRenderer.invoke('web-source-refresh', payload),
+  webSourceRefresh: (payload) => {
+    emitE2EIpcCall('webSourceRefresh')
+    return ipcRenderer.invoke('web-source-refresh', payload)
+  },
   webSourceDelete: (webSourceId: string) => ipcRenderer.invoke('web-source-delete', webSourceId),
   legacyLocalImportMigrationStatus: () =>
     ipcRenderer.invoke('legacy-local-import-migration-status'),

@@ -29,11 +29,20 @@ export const importSelectors = {
   workspaceCardPrefix: 'import-workspace-card',
   workspaceDetail: 'import-workspace-detail',
   workspaceStatus: 'import-workspace-status',
+  workspaceLastScanMeta: 'import-workspace-last-scan-meta',
+  workspaceLastPrepareMeta: 'import-workspace-last-prepare-meta',
   workspaceEmptyState: 'import-workspace-empty-state',
   workspaceLastError: 'import-workspace-last-error',
   workspaceQuickScanButton: 'import-workspace-quick-scan-button',
   workspaceQuickPrepareButton: 'import-workspace-quick-prepare-button',
+  workspaceRemoveButton: 'import-workspace-remove-button',
+  workspaceSummaryDirectories: 'import-workspace-summary-directories',
+  workspaceSummaryFiles: 'import-workspace-summary-files',
+  workspaceSummaryPrepared: 'import-workspace-summary-prepared',
+  workspaceSummaryPending: 'import-workspace-summary-pending',
   workspaceTree: 'import-workspace-tree',
+  workspaceDeleteConfirmButton: 'import-workspace-delete-confirm-button',
+  workspaceDeleteCancelButton: 'import-workspace-delete-cancel-button',
   createWorkspaceModal: 'import-create-workspace-modal',
   createWorkspaceRootInput: 'import-create-workspace-root-input',
   createWorkspaceNameInput: 'import-create-workspace-name-input',
@@ -59,7 +68,21 @@ export const importSelectors = {
 export const settingsSelectors = {
   page: 'settings-page',
   tabSwitch: 'settings-tab-switch',
-  workspacePanel: 'settings-workspace-panel'
+  workspacePanel: 'settings-workspace-panel',
+  modelPanel: 'settings-model-panel',
+  modelTable: 'settings-model-table',
+  modelSummaryCurrent: 'settings-model-summary-current',
+  modelAddButton: 'settings-model-add-button',
+  modelModal: 'settings-model-modal',
+  modelNameInput: 'settings-model-name-input',
+  modelBaseUrlInput: 'settings-model-base-url-input',
+  modelModelNameInput: 'settings-model-model-name-input',
+  modelApiKeyInput: 'settings-model-api-key-input',
+  modelSaveButton: 'settings-model-save-button',
+  modelCancelButton: 'settings-model-cancel-button',
+  modelEditButtonPrefix: 'settings-model-edit-button',
+  modelActivateButtonPrefix: 'settings-model-activate-button',
+  modelDeleteButtonPrefix: 'settings-model-delete-button'
 } as const
 
 export const searchSelectors = {

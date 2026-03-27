@@ -87,6 +87,7 @@ import {
   getE2EFixtureSearchResponse,
   getE2EFixtureWebSourceList,
   getE2EFixtureWorkspaceList,
+  getE2EFixtureWorkspaceDelayMs,
   getE2EFixtureWorkspaceNodes,
   getE2EFixtureSourceScopes,
   hasE2EWorkspaceBinding,
@@ -234,6 +235,12 @@ export function registerHandlers(services: {
 
   const pauseForE2EFixture = async (): Promise<void> => {
     await new Promise<void>((resolve) => setTimeout(resolve, 30))
+  }
+
+  const waitForE2EFixtureDelay = async (phase: 'scan' | 'prepare'): Promise<void> => {
+    const durationMs = getE2EFixtureWorkspaceDelayMs(phase)
+    if (durationMs <= 0) return
+    await new Promise<void>((resolve) => setTimeout(resolve, durationMs))
   }
 
   const E2E_REVIEW_FIXTURE_SOURCE = path.resolve(
@@ -1353,6 +1360,7 @@ export function registerHandlers(services: {
     'workspace-scan',
     async (event, payload: { workspaceId: string }): Promise<WorkspaceJobResponse> => {
       try {
+        await waitForE2EFixtureDelay('scan')
         const fixtureResponse = scanE2EFixtureWorkspace(String(payload.workspaceId || '').trim())
         if (fixtureResponse) {
           emitSourceListRefresh(event.sender)
@@ -1434,6 +1442,7 @@ export function registerHandlers(services: {
         return { success: false, error: 'workspace prepare already running' }
       }
 
+      await waitForE2EFixtureDelay('prepare')
       const fixtureResponse = prepareE2EFixtureWorkspace(workspaceId, mode)
       if (fixtureResponse) {
         emitSourceListRefresh(event.sender)

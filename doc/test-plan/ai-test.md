@@ -450,7 +450,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`kb-answer-autonomous-live`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证真实 AI 调用下的单任务 KB 问答能力。
 - Why：这是 `human` 作为单任务执行核心的最基础 live 证明。
 - How：使用 live 模型和固定 KB fixture，直接输入自然语言问题，不覆写推理。
@@ -463,7 +463,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`docx-edit-autonomous-live`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证真实 AI 调用下的简单 docx 编辑能力。
 - Why：这是最直接对应真实用户编辑诉求的 live case。
 - How：提供简单 docx，直接给自然语言编辑目标和交付要求，如“修改某段并给 preview”。
@@ -476,7 +476,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`long-task-multi-tool-live`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证真实 AI 调用下的长任务流程和多工具联动。
 - Why：human 的智能度不能只靠短任务证明。
 - How：使用 live 模型执行“先查资料，再改 docx，再给出交付说明”的长任务。
@@ -493,7 +493,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`basic-direct-path-smoke`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证 direct 路径的基础 graph 链路。
 - Why：这是 `human-first` 默认路径，必须最先稳定。
 - How：固定 `intent=direct_human` 并 stub direct human 输出。
@@ -506,7 +506,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`basic-context-path-smoke`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证 context 路径的基础链路。
 - Why：补上下文路径一旦断掉，复杂任务会直接走偏。
 - How：固定 `intent=need_context`，stub context human 输出，再让第二轮 intent 继续后续路径。
@@ -519,7 +519,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`basic-plan-path-smoke`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证 plan 路径的基础 graph 链路。
 - Why：复杂任务主干应先证明可走通，再谈质量。
 - How：固定 `intent=to_plan`，stub planner 输出和各子任务 human 输出。
@@ -532,7 +532,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`basic-complete-terminal-state`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证 `director_complete` 的终态收尾规则。
 - Why：终态错误会污染整条 run 生命周期。
 - How：分别从 `running`、`completed`、`failed` 和 `cancelled` 输入 complete 节点。
@@ -547,7 +547,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`context-evidence-reuse-contract`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证 context human 输出只提取可复用证据，不回写整段原文。
 - Why：这决定了后续 `intent / plan / synthesis` 吃到的是证据还是噪音。
 - How：构造同时包含高价值证据和解释性废话的 `context_note`。
@@ -560,7 +560,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`intent-context-round-cap-contract`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证 context 轮次到上限后的强制转 plan 行为。
 - Why：否则系统可能卡死在补上下文循环。
 - How：把 `contextRounds` 置到上限，再输入仍需额外上下文或规划的任务。
@@ -573,7 +573,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`plan-task-shape-contract`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`部分实现`
 - What：验证 planner 产出的任务都能交给单个 `human` 闭环执行。
 - Why：坏计划会直接拖垮后续执行。
 - How：对 planner 的结构化输出做正反两类样例校验，包含空任务列表和不可执行任务。
@@ -586,7 +586,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`plan-exec-serial-merge-contract`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证 `director_plan_exec` 的串行派发、当前任务回写和 artifacts 合并。
 - Why：这是复杂任务最终能否稳定收口的核心骨架。
 - How：stub 多个任务输出，部分任务带 artifact，再进入 synthesis。

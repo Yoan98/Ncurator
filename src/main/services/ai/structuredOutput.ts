@@ -91,6 +91,22 @@ export const isStructuredOutputMethodUnsupportedError = (
   if (!body) return false
 
   if (method === 'jsonSchema') {
+    const invalidSchemaSignals = [
+      'invalid schema for response_format',
+      'invalid schema for response format',
+      "'required' is required to be supplied",
+      "missing 'required'",
+      'missing required'
+    ]
+    if (
+      invalidSchemaSignals.some((signal) => body.includes(signal)) &&
+      ['response_format', 'response format', 'json_schema', 'json schema'].some((marker) =>
+        body.includes(marker)
+      )
+    ) {
+      return true
+    }
+
     return matchesUnsupportedSignal(body, [
       'json schema',
       'json_schema',

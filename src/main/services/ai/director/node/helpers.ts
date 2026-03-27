@@ -11,12 +11,12 @@ const DIRECTOR_HISTORY_LIMITS = {
 
 export const contextDecisionSchema = z.object({
   mode: z.enum(['need_context', 'to_plan', 'direct_human']),
-  reason: z.string().optional()
+  reason: z.string().default('')
 })
 
 export const plannerTaskSchema = z.object({
-  id: z.string().optional(),
-  title: z.string().optional(),
+  id: z.string().default(''),
+  title: z.string().default(''),
   userInput: z.string().min(1)
 })
 

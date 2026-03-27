@@ -55,6 +55,9 @@ const E2E_SEARCH_DOCUMENT_ID = 'e2e-search-doc-1'
 const E2E_IMPORT_ROOT_PATH = '/tmp/ncurator-e2e-import-workspace'
 const E2E_WORKSPACE_SCAN_ERROR_MARKER = 'scan-fail'
 const E2E_WORKSPACE_PREPARE_ERROR_MARKER = 'prepare-fail'
+const E2E_WORKSPACE_SCAN_DELAY_MARKER = 'scan-delay'
+const E2E_WORKSPACE_PREPARE_DELAY_MARKER = 'prepare-delay'
+const E2E_WEB_REFRESH_ERROR_MARKER = 'refresh-fail'
 
 type E2EWorkspaceFixtureMode = 'normal' | 'scan_error' | 'prepare_error'
 
@@ -92,6 +95,8 @@ type E2EWorkspaceFixtureState = {
   workspace: WorkspaceSource | null
   nodes: WorkspaceNode[]
   mode: E2EWorkspaceFixtureMode
+  scanDelayMs: number
+  prepareDelayMs: number
 }
 
 type E2ECreateImportWorkspaceNodesInput = {
@@ -148,6 +153,12 @@ const deriveWorkspaceFixtureMode = (rootPath: string): E2EWorkspaceFixtureMode =
   if (rootPath.includes(E2E_WORKSPACE_SCAN_ERROR_MARKER)) return 'scan_error'
   if (rootPath.includes(E2E_WORKSPACE_PREPARE_ERROR_MARKER)) return 'prepare_error'
   return 'normal'
+}
+
+const deriveWorkspaceFixtureDelayMs = (rootPath: string, phase: 'scan' | 'prepare'): number => {
+  const marker =
+    phase === 'scan' ? E2E_WORKSPACE_SCAN_DELAY_MARKER : E2E_WORKSPACE_PREPARE_DELAY_MARKER
+  return rootPath.includes(marker) ? 1200 : 0
 }
 
 const buildFixtureWebTitle = (url: string): string => {
@@ -227,7 +238,9 @@ const upsertFixtureWebSource = (input: WebIngestPayload): WebSourceRecord => {
 const e2eWorkspaceState: E2EWorkspaceFixtureState = {
   workspace: null,
   nodes: [],
-  mode: 'normal'
+  mode: 'normal',
+  scanDelayMs: 0,
+  prepareDelayMs: 0
 }
 const e2eWebSourceState: E2EWebSourceFixtureState = {
   items: []
@@ -300,6 +313,8 @@ export const createE2EFixtureWorkspace = (input: {
   }
   e2eWorkspaceState.workspace = workspace
   e2eWorkspaceState.mode = deriveWorkspaceFixtureMode(rootPath)
+  e2eWorkspaceState.scanDelayMs = deriveWorkspaceFixtureDelayMs(rootPath, 'scan')
+  e2eWorkspaceState.prepareDelayMs = deriveWorkspaceFixtureDelayMs(rootPath, 'prepare')
   e2eWorkspaceState.nodes = createImportWorkspaceNodes({
     workspaceId: workspace.id,
     rootPath: workspace.root_path,
@@ -327,6 +342,8 @@ export const deleteE2EFixtureWorkspace = (
   e2eWorkspaceState.workspace = null
   e2eWorkspaceState.nodes = []
   e2eWorkspaceState.mode = 'normal'
+  e2eWorkspaceState.scanDelayMs = 0
+  e2eWorkspaceState.prepareDelayMs = 0
 
   return {
     success: true,
@@ -347,6 +364,11 @@ export const getE2EFixtureWorkspaceNodes = (workspaceId: string): WorkspaceNodeL
     items: e2eWorkspaceState.nodes,
     total: e2eWorkspaceState.nodes.length
   }
+}
+
+export const getE2EFixtureWorkspaceDelayMs = (phase: 'scan' | 'prepare'): number => {
+  if (!isE2EFixtureModeEnabled()) return 0
+  return phase === 'scan' ? e2eWorkspaceState.scanDelayMs : e2eWorkspaceState.prepareDelayMs
 }
 
 export const scanE2EFixtureWorkspace = (workspaceId: string): WorkspaceJobResponse | null => {
@@ -524,6 +546,22 @@ export const refreshE2EFixtureWebSource = (webSourceId: string): WebSourceMutati
     return {
       success: false,
       error: 'web source not found'
+    }
+  }
+
+  if (source.url.includes(E2E_WEB_REFRESH_ERROR_MARKER)) {
+    const failed: WebSourceRecord = {
+      ...source,
+      import_status: 3,
+      last_error: 'E2E fixture web refresh failed',
+      updated_at: Date.now()
+    }
+    e2eWebSourceState.items = e2eWebSourceState.items.map((item) =>
+      item.id === failed.id ? failed : item
+    )
+    return {
+      success: false,
+      error: 'E2E fixture web refresh failed'
     }
   }
 

@@ -122,6 +122,7 @@ export const launchElectronApp = async (): Promise<LaunchedElectronApp> => {
     env: {
       ...process.env,
       NCURATOR_E2E_MODE: '1',
+      NCURATOR_E2E_WINDOW_MODE: process.env.NCURATOR_E2E_WINDOW_MODE || 'background',
       NCURATOR_USER_DATA_PATH: userDataDir
     }
   })

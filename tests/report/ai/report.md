@@ -6,19 +6,20 @@
 
 - raw logs 范围：当前仓库内 `tests/logs/ai/**`
 - 本次分析窗口：当前仓库内 AI 域全部 raw runs
-- 本次纳入分析的 suite：`tool`、`human`
-- 本次纳入分析的 groups：`tool/docx`、`tool/kb`、`tool/terminal`、`tool/hand`、`human/basics`、`human/scenarios`
+- 本次纳入分析的 suite：`tool`、`human`、`director`
+- 本次纳入分析的 groups：`tool/docx`、`tool/kb`、`tool/terminal`、`tool/hand`、`human/basics`、`human/scenarios`、`human/live`、`director/basics`、`director/contracts`
 
 ### 总体结论
 
-- 历史总数据：`totalRuns=93`、`passedRuns=84`、`failedRuns=9`、`historicalSuccessRate=90.3%`
-- 最新总数据：`latestCaseCount=26`、`latestPassedCases=26`、`latestFailedCases=0`、`latestSuccessRate=100.0%`
-- 当前结论：AI 域当前已经形成 `tool` suite 与 `human/basics + scenarios` 的 latest 全绿覆盖面；历史 failed run 主要集中在早期 `tool` 守卫边界、`human` 基础失败恢复，以及本轮 `human/scenarios` 的调试对齐过程。
+- 历史总数据：`totalRuns=127`、`passedRuns=108`、`failedRuns=19`、`historicalSuccessRate=85.0%`
+- 最新总数据：`latestCaseCount=37`、`latestPassedCases=35`、`latestFailedCases=2`、`latestSuccessRate=94.6%`
+- 当前结论：`tool` suite 与本轮新增的 `director/basics + contracts` 已形成 latest 全绿覆盖面；当前 latest failed case 仅剩 `human/live` 的 `docx-edit-autonomous-live` 与 `long-task-multi-tool-live`，两者在 raw logs 中都停在 `human.brain` 的 `structured_output_failed / 429` 限流错误，而不是 director/tool 合同回归。
 
 ### 下一阶段建议
 
-- 先补齐 `human/live`
-- 再推进 `director/basics` 与 `director/contracts`
+- 先重新拉平 `human/live` 的限流与执行窗口，恢复 latest 全绿
+- 再补齐 `director/live`
+- 补强 `plan-task-shape-contract` 对“不可执行任务” fail-fast 的 raw-log 证据
 
 ## tool
 
@@ -198,33 +199,46 @@
 - `basic-watchhint-retry` | `20260327-164126-775` | `passed`
 - `approval-denied-restricted-delivery` | `20260327-173741-685` | `passed`
 - `complex-docx-edit-simulated` | `20260327-173741-686` | `passed`
+- `docx-edit-autonomous-live` | `20260327-175650-244` | `failed`
+- `kb-answer-autonomous-live` | `20260327-180810-136` | `passed`
+- `long-task-multi-tool-live` | `20260327-175650-246` | `failed`
 - `multi-tool-collaboration-simulated` | `20260327-173741-685` | `passed`
 
 ### 通过率
 
-- 历史总数据：`totalRuns=26`、`passedRuns=21`、`failedRuns=5`、`historicalSuccessRate=80.8%`
-- 最新总数据：`latestCaseCount=9`、`latestPassedCases=9`、`latestFailedCases=0`、`latestSuccessRate=100.0%`
+- 历史总数据：`totalRuns=36`、`passedRuns=22`、`failedRuns=14`、`historicalSuccessRate=61.1%`
+- 最新总数据：`latestCaseCount=12`、`latestPassedCases=10`、`latestFailedCases=2`、`latestSuccessRate=83.3%`
 
 ### 失败分析
 
-- 历史 failed run 共 `5` 次：
+- 历史 failed run 共 `14` 次：
 - `basic-tool-failure-recovery` | `20260327-164036-153` | `failed`
 - `complex-docx-edit-simulated` | `20260327-173012-480` | `failed`
 - `complex-docx-edit-simulated` | `20260327-173518-239` | `failed`
 - `complex-docx-edit-simulated` | `20260327-173630-263` | `failed`
 - `multi-tool-collaboration-simulated` | `20260327-173012-478` | `failed`
-- 上述 failed run 的最新 run 均已转为 `passed`，因此当前 suite 没有 latest failed case。
+- `long-task-multi-tool-live` | `20260327-175324-266` | `failed`
+- `docx-edit-autonomous-live` | `20260327-175324-266` | `failed`
+- `kb-answer-autonomous-live` | `20260327-175324-267` | `failed`
+- `kb-answer-autonomous-live` | `20260327-175459-454` | `failed`
+- `docx-edit-autonomous-live` | `20260327-175459-454` | `failed`
+- `long-task-multi-tool-live` | `20260327-175459-454` | `failed`
+- `kb-answer-autonomous-live` | `20260327-175650-245` | `failed`
+- `long-task-multi-tool-live` | `20260327-175650-246` | `failed`
+- `docx-edit-autonomous-live` | `20260327-175650-244` | `failed`
+- 当前 latest failed case 为 `docx-edit-autonomous-live` 与 `long-task-multi-tool-live`，两条 raw log 都显示 `human.brain` 在结构化输出阶段命中 `429` 限流错误；`kb-answer-autonomous-live` 的 latest run 已转为 `passed`。
 
 ### 当前评估
 
-- `human` suite 当前已经形成 `basics` 与 `scenarios` 两组的正式 latest 覆盖。
-- 从 latest 口径看，`human` 的基础主链路、`watchHint` 收敛、`deliveryMode` 契约、失败恢复、记忆写入边界、复杂 docx 编辑、多工具联动与审批拒绝收敛都已有稳定证据。
-- 当前缺口已经从 `human/scenarios` 收缩到 `human/live`。
+- `human/basics` 与 `human/scenarios` 仍保持 latest 全绿，说明基础主链路、`watchHint` 收敛、`deliveryMode` 契约、失败恢复、记忆写入边界、复杂 docx 编辑、多工具联动与审批拒绝收敛仍然稳定。
+- `human/live` 已有 `kb-answer-autonomous-live` 的 latest passed 证据，但 `docx-edit-autonomous-live` 与 `long-task-multi-tool-live` 的 latest run 仍被 `429` 限流打断，因此当前 suite 还不能按 latest 口径判定为全绿。
+- 从 raw logs 看，当前 live 主要阻塞点是调用窗口和限流稳定性，而不是已经有明确证据表明 human 主逻辑发生了新回归。
 
 ### 下一步建议
 
-- 补齐 `human/live`
-- 再进入 `director/basics` 与 `director/contracts`
+- 先把 `docx-edit-autonomous-live` 与 `long-task-multi-tool-live` 重新跑到 latest 通过
+- 保持 `human/basics + scenarios` 的 latest 通过面
+- 在 human live 稳定后继续推进 `director/live`
 
 ### basics
 
@@ -295,3 +309,139 @@
 
 - 保持 `human/scenarios` latest 通过面
 - 将当前稳定的 scenario 契约继续提升到 `human/live` 与后续 `director` 场景
+
+### live
+
+#### 证据
+
+- `docx-edit-autonomous-live` | `20260327-175650-244` | `failed`
+- `kb-answer-autonomous-live` | `20260327-180810-136` | `passed`
+- `long-task-multi-tool-live` | `20260327-175650-246` | `failed`
+
+#### 通过率
+
+- 历史总数据：`totalRuns=10`、`passedRuns=1`、`failedRuns=9`、`historicalSuccessRate=10.0%`
+- 最新总数据：`latestCaseCount=3`、`latestPassedCases=1`、`latestFailedCases=2`、`latestSuccessRate=33.3%`
+
+#### 失败分析
+
+- 历史 failed run 共 `9` 次：
+- `long-task-multi-tool-live` | `20260327-175324-266` | `failed`
+- `docx-edit-autonomous-live` | `20260327-175324-266` | `failed`
+- `kb-answer-autonomous-live` | `20260327-175324-267` | `failed`
+- `kb-answer-autonomous-live` | `20260327-175459-454` | `failed`
+- `docx-edit-autonomous-live` | `20260327-175459-454` | `failed`
+- `long-task-multi-tool-live` | `20260327-175459-454` | `failed`
+- `kb-answer-autonomous-live` | `20260327-175650-245` | `failed`
+- `long-task-multi-tool-live` | `20260327-175650-246` | `failed`
+- `docx-edit-autonomous-live` | `20260327-175650-244` | `failed`
+- 从 latest raw logs 看，`docx-edit-autonomous-live` 与 `long-task-multi-tool-live` 的失败都停在 `human.brain` 的 `structured_output_failed`，报错正文明确为 `429` 限流；`kb-answer-autonomous-live` 的 latest run 已在 `20260327-180810-136` 转为 `passed`。
+
+#### 当前评估
+
+- `human/live` 已经证明 KB 问答链路可以在真实模型下闭环完成。
+- 但 docx 与长任务 live case 的 latest run 仍被限流中断，因此当前还没有足够 latest 证据证明 live 层整体稳定。
+- 现阶段更像是 live 运行窗口与请求节流问题，而不是已经明确落到 `docx`、`kb` 或 `human` 核心节点合同的功能性回归。
+
+#### 下一步建议
+
+- 以更宽的请求间隔和更少的并发重新运行 `docx-edit-autonomous-live` 与 `long-task-multi-tool-live`
+- 保留当前 `kb-answer-autonomous-live` 的 latest passed 作为 live 基线
+- 在 `human/live` latest 通过后，再把真实模型验证继续提升到 `director/live`
+
+## director
+
+### 证据
+
+- `basic-complete-terminal-state` | `20260327-181436-944` | `passed`
+- `basic-context-path-smoke` | `20260327-181437-334` | `passed`
+- `basic-direct-path-smoke` | `20260327-181437-336` | `passed`
+- `basic-plan-path-smoke` | `20260327-181437-334` | `passed`
+- `context-evidence-reuse-contract` | `20260327-181436-983` | `passed`
+- `intent-context-round-cap-contract` | `20260327-181436-946` | `passed`
+- `plan-exec-serial-merge-contract` | `20260327-181436-941` | `passed`
+- `plan-task-shape-contract` | `20260327-181436-728` | `passed`
+
+### 通过率
+
+- 历史总数据：`totalRuns=24`、`passedRuns=23`、`failedRuns=1`、`historicalSuccessRate=95.8%`
+- 最新总数据：`latestCaseCount=8`、`latestPassedCases=8`、`latestFailedCases=0`、`latestSuccessRate=100.0%`
+
+### 失败分析
+
+- 历史 failed run 共 `1` 次：
+- `basic-plan-path-smoke` | `20260327-181357-716` | `failed`
+- 该 failed run 的 timeline 只记录到测试断言 `synthesis objective 未正确包含计划交付与已选范围`，后续 latest run 已在 `20260327-181437-334` 转为 `passed`，因此当前 suite 没有 latest failed case。
+
+### 当前评估
+
+- `director` 现在已经具备 `basics + contracts` 两组正式 backend 覆盖，且 latest 口径全绿。
+- `basic-direct-path-smoke`、`basic-context-path-smoke` 与 `basic-plan-path-smoke` 已分别证明 direct/context/plan 三条主路径都能稳定回到 `director_complete`。
+- `context-evidence-reuse-contract`、`intent-context-round-cap-contract` 与 `plan-exec-serial-merge-contract` 已把 context 证据复用、轮次上限和串行派发/合并这些关键 orchestration 合同落成正式证据。
+
+### 下一步建议
+
+- 在保持 `director/basics + contracts` latest 通过面的前提下补齐 `director/live`
+- 继续补强 `plan-task-shape-contract` 对“不可执行任务” fail-fast 的 raw-log 证据
+
+### basics
+
+#### 证据
+
+- `basic-complete-terminal-state` | `20260327-181436-944` | `passed`
+- `basic-context-path-smoke` | `20260327-181437-334` | `passed`
+- `basic-direct-path-smoke` | `20260327-181437-336` | `passed`
+- `basic-plan-path-smoke` | `20260327-181437-334` | `passed`
+
+#### 通过率
+
+- 历史总数据：`totalRuns=12`、`passedRuns=11`、`failedRuns=1`、`historicalSuccessRate=91.7%`
+- 最新总数据：`latestCaseCount=4`、`latestPassedCases=4`、`latestFailedCases=0`、`latestSuccessRate=100.0%`
+
+#### 失败分析
+
+- 历史 failed run 共 `1` 次：
+- `basic-plan-path-smoke` | `20260327-181357-716` | `failed`
+- 该 case 的 latest run 已转为 `passed`，当前 group 没有 latest failed case。
+
+#### 当前评估
+
+- `basic-direct-path-smoke` 证明 `director_intent -> director_direct_human_exec -> director_complete` 已形成稳定默认链路。
+- `basic-context-path-smoke` 证明 context human 可以把可复用证据回填到 `contextEvidence`，再回到 `director_intent` 继续后续路径。
+- `basic-plan-path-smoke` 证明 `director_plan -> director_plan_exec -> director_synthesis_human -> director_complete` 的主干路径已经可以稳定回写计划结果、任务交付和最终 artifacts。
+- `basic-complete-terminal-state` 证明 `director_complete` 会把 `running` 收束为 `completed`，同时不会覆盖既有 `failed/cancelled/completed` 终态。
+
+#### 下一步建议
+
+- 保持 `director/basics` latest 通过面
+- 把当前稳定的基础编排继续提升到 `director/contracts` 与 `director/live`
+
+### contracts
+
+#### 证据
+
+- `context-evidence-reuse-contract` | `20260327-181436-983` | `passed`
+- `intent-context-round-cap-contract` | `20260327-181436-946` | `passed`
+- `plan-exec-serial-merge-contract` | `20260327-181436-941` | `passed`
+- `plan-task-shape-contract` | `20260327-181436-728` | `passed`
+
+#### 通过率
+
+- 历史总数据：`totalRuns=12`、`passedRuns=12`、`failedRuns=0`、`historicalSuccessRate=100.0%`
+- 最新总数据：`latestCaseCount=4`、`latestPassedCases=4`、`latestFailedCases=0`、`latestSuccessRate=100.0%`
+
+#### 失败分析
+
+- 当前没有 failed run，因此无法给出失败模式结论。
+
+#### 当前评估
+
+- `context-evidence-reuse-contract` 已证明 `director_context_human` 只会从 `context_note` 的“可复用证据”区块提取高价值 evidence，而不会把整段说明原样回写。
+- `intent-context-round-cap-contract` 已证明 `contextRounds` 到上限后会强制转入 `director_plan`，避免 context 循环。
+- `plan-exec-serial-merge-contract` 已证明 `director_plan_exec` 会按游标串行派发，并把 plan 阶段与 synthesis 阶段的 artifacts 合并进 `finalArtifacts`。
+- `plan-task-shape-contract` 的 latest raw log 当前已经覆盖 planner prompt guardrail 和空计划 fail-fast，但还没有更强的“不可执行 task”负例证据。
+
+#### 下一步建议
+
+- 继续补强 `plan-task-shape-contract` 的负例样本，使 raw logs 明确覆盖不可执行任务 fail-fast
+- 在 contracts 稳定的前提下补齐 `director/live`

@@ -508,11 +508,17 @@ const WorkspaceSettingsPanel: React.FC = () => {
                       {selectedWorkspace.root_path}
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[#666666]">
-                      <span className="ui-status-pill border-transparent bg-[#F7F5F1] text-[#666666]">
+                      <span
+                        className="ui-status-pill border-transparent bg-[#F7F5F1] text-[#666666]"
+                        data-testid={importSelectors.workspaceLastScanMeta}
+                      >
                         <HiArrowPath className="h-3.5 w-3.5" />
                         扫描 {formatDateTime(selectedWorkspace.last_scan_at)}
                       </span>
-                      <span className="ui-status-pill border-transparent bg-[#FBF5F2] text-[#D97757]">
+                      <span
+                        className="ui-status-pill border-transparent bg-[#FBF5F2] text-[#D97757]"
+                        data-testid={importSelectors.workspaceLastPrepareMeta}
+                      >
                         <HiSparkles className="h-3.5 w-3.5" />
                         加载 {formatDateTime(selectedWorkspace.last_prepare_at)}
                       </span>
@@ -544,6 +550,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                       danger
                       icon={<HiOutlineTrash className="h-4 w-4" />}
                       onClick={() => setDeleteWorkspaceId(selectedWorkspace.id)}
+                      data-testid={importSelectors.workspaceRemoveButton}
                     >
                       移除
                     </Button>
@@ -635,7 +642,10 @@ const WorkspaceSettingsPanel: React.FC = () => {
                     <section className="ui-panel p-4">
                       <div className="text-[14px] font-semibold text-[#1F1F1F]">摘要</div>
                       <div className="mt-3 grid grid-cols-2 gap-2 text-[12px] text-[#666666]">
-                        <div className="ui-inset px-3 py-3">
+                        <div
+                          className="ui-inset px-3 py-3"
+                          data-testid={importSelectors.workspaceSummaryDirectories}
+                        >
                           <div className="inline-flex items-center gap-1.5">
                             <HiFolder className="h-4 w-4 text-[#8A5A2B]" />
                             <span>目录</span>
@@ -644,7 +654,10 @@ const WorkspaceSettingsPanel: React.FC = () => {
                             {selectedWorkspaceStats.directoryCount}
                           </div>
                         </div>
-                        <div className="ui-inset px-3 py-3">
+                        <div
+                          className="ui-inset px-3 py-3"
+                          data-testid={importSelectors.workspaceSummaryFiles}
+                        >
                           <div className="inline-flex items-center gap-1.5">
                             <HiDocumentText className="h-4 w-4 text-[#666666]" />
                             <span>文件</span>
@@ -653,7 +666,10 @@ const WorkspaceSettingsPanel: React.FC = () => {
                             {selectedWorkspaceStats.fileCount}
                           </div>
                         </div>
-                        <div className="ui-inset px-3 py-3">
+                        <div
+                          className="ui-inset px-3 py-3"
+                          data-testid={importSelectors.workspaceSummaryPrepared}
+                        >
                           <div className="inline-flex items-center gap-1.5">
                             <HiCheckCircle className="h-4 w-4 text-[#4F7A46]" />
                             <span>已加载</span>
@@ -662,7 +678,10 @@ const WorkspaceSettingsPanel: React.FC = () => {
                             {selectedWorkspaceStats.preparedCount}
                           </div>
                         </div>
-                        <div className="ui-inset px-3 py-3">
+                        <div
+                          className="ui-inset px-3 py-3"
+                          data-testid={importSelectors.workspaceSummaryPending}
+                        >
                           <div className="inline-flex items-center gap-1.5">
                             <HiOutlineClock className="h-4 w-4 text-[#AD7B18]" />
                             <span>待处理</span>
@@ -792,8 +811,12 @@ const WorkspaceSettingsPanel: React.FC = () => {
         onCancel={() => setDeleteWorkspaceId(null)}
         onOk={() => void handleDeleteWorkspace()}
         okText="移除"
-        okButtonProps={{ danger: true }}
+        okButtonProps={{
+          danger: true,
+          'data-testid': importSelectors.workspaceDeleteConfirmButton
+        }}
         cancelText="取消"
+        cancelButtonProps={{ 'data-testid': importSelectors.workspaceDeleteCancelButton }}
         className="[&_.ant-modal-content]:!rounded-[24px]"
       >
         <p className="mb-0 text-[#666666]">

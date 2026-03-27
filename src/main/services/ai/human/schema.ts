@@ -12,18 +12,13 @@ import {
   TOOL_CALL_RESULT_CODES
 } from './constants'
 
-export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
-  z.union([
-    z.string(),
-    z.number(),
-    z.boolean(),
-    z.null(),
-    z.array(jsonValueSchema),
-    z.record(z.string(), jsonValueSchema)
-  ])
+export const jsonObjectSchema: z.ZodType<JsonObject> = z.lazy(() =>
+  z.object({}).catchall(jsonValueSchema)
 )
 
-export const jsonObjectSchema: z.ZodType<JsonObject> = z.record(z.string(), jsonValueSchema)
+export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
+  z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(jsonValueSchema), jsonObjectSchema])
+)
 
 export const runtimeSkillIdSchema = z.enum(RUNTIME_SKILL_IDS)
 export const toolFamilyIdSchema = z.enum(AI_TOOL_FAMILY_IDS)
@@ -57,7 +52,7 @@ export const brainEvidenceSchema = z.object({
   toolName: z.string().min(1),
   summary: z.string().min(1),
   sourceType: z.literal('tool_result'),
-  rawRef: z.string().min(1).optional()
+  rawRef: z.string().default('')
 })
 
 export const toolCallParamSchema = z.object({
@@ -149,7 +144,7 @@ export const brainDecisionRecordSchema = z.object({
 
 export const humanDeliveryPayloadSchema = z.object({
   summary: z.string().min(1),
-  deliveryMarkdown: z.string().optional()
+  deliveryMarkdown: z.string().default('')
 })
 
 export const mouthOutputSchema = humanDeliveryPayloadSchema

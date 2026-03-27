@@ -1,6 +1,7 @@
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { IpcJsonObject, JsonValue } from '../../../../../../shared/types'
 import { isJsonObject } from '../../../../../utils/aiCapabilityUtils'
+import { clipText } from '../../../utils/text'
 import type { AiRunContext } from '../../../types'
 import { TOOL_CALL_RESULT_CODES } from '../../constants'
 import type {
@@ -43,6 +44,66 @@ const parseToolCallResultCode = (input: {
   return ok === false || success === false ? 'failed' : 'ok'
 }
 
+const summarizePreviewRow = (value: JsonValue): string | undefined => {
+  if (!isJsonObject(value)) return undefined
+
+  const name =
+    typeof value.name === 'string'
+      ? value.name.trim()
+      : typeof value.document_name === 'string'
+        ? value.document_name.trim()
+        : typeof value.id === 'string'
+          ? value.id.trim()
+          : ''
+  const text =
+    typeof value.text === 'string'
+      ? clipText(value.text.trim().replace(/\s+/g, ' '), 80)
+      : typeof value.summary === 'string'
+        ? clipText(value.summary.trim().replace(/\s+/g, ' '), 80)
+        : ''
+
+  if (name && text) return `${name}: ${text}`
+  if (name) return name
+  if (text) return text
+  return undefined
+}
+
+const summarizePreviewRows = (toolName: string, rows: readonly JsonValue[]): string => {
+  const previews = rows
+    .map((row) => summarizePreviewRow(row))
+    .filter((value): value is string => value.length > 0)
+    .slice(0, 3)
+
+  if (previews.length === 0) {
+    return `${toolName} returned ${rows.length} item(s)`
+  }
+
+  return `${toolName} returned ${rows.length} item(s): ${previews.join(' | ')}`
+}
+
+const summarizeObjectPayload = (toolName: string, payload: IpcJsonObject): string | undefined => {
+  const items = Array.isArray(payload.items) ? payload.items : undefined
+  if (items) {
+    const total = typeof payload.total === 'number' ? payload.total : items.length
+    const previews = items
+      .map((row) => summarizePreviewRow(row))
+      .filter((value): value is string => value.length > 0)
+      .slice(0, 3)
+
+    if (previews.length > 0) {
+      return `${toolName} returned ${total} item(s): ${previews.join(' | ')}`
+    }
+    return `${toolName} returned ${total} item(s)`
+  }
+
+  const singlePreview = summarizePreviewRow(payload)
+  if (singlePreview) {
+    return `${toolName} returned ${singlePreview}`
+  }
+
+  return undefined
+}
+
 const normalizeToolCallResult = (
   toolName: string,
   payload: JsonValue
@@ -63,7 +124,7 @@ const normalizeToolCallResult = (
             ? payload.error
             : typeof payload.message === 'string'
               ? payload.message
-              : `${toolName} executed`,
+              : summarizeObjectPayload(toolName, payload) || `${toolName} executed`,
       data: payload
     }
   }
@@ -83,7 +144,7 @@ const normalizeToolCallResult = (
       toolName,
       ok: true,
       code: 'ok',
-      summary: `${toolName} returned ${payload.length} item(s)`,
+      summary: summarizePreviewRows(toolName, payload),
       data: payload
     }
   }
