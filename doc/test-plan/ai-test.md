@@ -409,7 +409,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`complex-docx-edit-simulated`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证复杂 docx 编辑任务的非 live 长链路。
 - Why：复杂 docx 编辑是 human 最核心也最易回归的真实任务类型之一。
 - How：模拟“长文档 + 多格式 + 多操作 + validate/preview”的单任务编辑场景。
@@ -422,7 +422,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`multi-tool-collaboration-simulated`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证 human 在单任务里联动多种工具完成任务。
 - Why：human 不应只会单工具单步执行。
 - How：模拟 `kb_list_documents -> kb_search -> docx_open/search/apply_ops/validate/render_preview` 的任务链。
@@ -435,7 +435,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`approval-denied-restricted-delivery`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证审批拒绝后的任务收敛与受限交付。
 - Why：真实任务里审批拒绝一定会发生。
 - How：让 `docx_save` 覆盖已有文件或高风险 terminal 命令被拒绝审批。
