@@ -17,9 +17,9 @@
 - 当涉及 UI 整体风格、配色、字级、圆角、阴影、图标、cursor 或通用交互 affordance 时，请阅读 `doc/ui-style.md`
 
 ### 1.3 测试相关
-- 当涉及AI的测试计划时，请阅读 `doc/test-plan/ai-test.md`
+- 当涉及AI的测试计划、阶段划分或阶段归属时，请阅读 `doc/test-plan/ai-test.md`
 - 当涉及Workspace的测试计划时，请阅读 `doc/test-plan/workspace-test.md`
-- 当涉及测试时，必须阅读 `doc/test.md`
+- 当涉及测试架构、目录分层或 case 登记规则时，必须阅读 `doc/test.md`
 
 ### 1.4 prd产品文档相关
 - 当涉及 workbench 的会话管理、composer 输入、`@` 资料范围、AI 运行阻塞、搜索结果、文档查看或确认修改的产品需求、操作逻辑、状态反馈或验收标准时，请阅读 `doc/prd/workbench.md`

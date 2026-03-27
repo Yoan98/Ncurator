@@ -30,83 +30,35 @@ tests/
   fixtures/
   ai/
     backend/
-      tools/
-        terminal/
-          basic/
-          boundary/
-          scenario/
-          live/
-        docx/
-          basic/
-          boundary/
-          scenario/
-          live/
-        kb/
-          basic/
-          boundary/
-          scenario/
-          live/
+      tool/
+        <case>.test.ts
       human/
-        basic/
-        boundary/
-        scenario/
-        live/
-      director-intent/
-        basic/
-        boundary/
-        scenario/
-        live/
-      director-context/
-        basic/
-        boundary/
-        scenario/
-        live/
-      director-plan/
-        basic/
-        boundary/
-        scenario/
-        live/
-      entire/
-        basic/
-        boundary/
-        scenario/
-        live/
+        <case>.test.ts
+      director/
+        <case>.test.ts
     e2e/
-      workbench/
-        basic/
-        boundary/
-        scenario/
-        live/
+      real/
+        <case>.test.ts
   workspace/
     backend/
       source-service/
-        basic/
-        boundary/
-        scenario/
+        <case>.test.ts
       ipc/
-        basic/
-        boundary/
-        scenario/
+        <case>.test.ts
       scope/
-        scenario/
+        <case>.test.ts
     e2e/
       settings/
-        basic/
-        boundary/
-        scenario/
+        <case>.test.ts
       scope/
-        scenario/
+        <case>.test.ts
   kb-search/
     backend/
-      basic/
-      boundary/
-      scenario/
-      live/
+      <suite>/
+        <case>.test.ts
     e2e/
-      basic/
-      boundary/
-      scenario/
-      live/
+      <suite>/
+        <case>.test.ts
   temp/
   logs/
   report/
@@ -121,9 +73,8 @@ tests/
 - 目录统一使用 kebab-case。
 - 测试发现目录使用通用树形结构：`tests/<domain>/<layer>/<suite>/<groups...>/<case>.test.ts`。
 - `suite` 是第一层稳定分类；`groups...` 是 suite 下可选的任意深度子目录。
-- 正式测试目录默认优先使用四类稳定分组：`basic`、`boundary`、`scenario`、`live`。
-- `basic / boundary / scenario` 用于组织稳定回归基线；`live` 用于组织真实模型路径验证。
-- 只要某个正式测试范围涉及模型参与，就必须在该范围下维护 `live/` 目录和对应的 live case。
+- AI 域当前直接使用阶段名作为 `suite`：`tool`、`human`、`director`、`real`。
+- 当某个 `suite` 不需要继续细分时，正式 case 可以直接放在该 `suite` 目录下。
 - `temp/` 默认不参与 gating，也不参与正式 report 汇总。
 - 除 `tests/temp/**` 外，`tests/**` 中的正式测试目录只允许放已在 `doc/test-plan/**` 登记的 case，否则需要主动讨论。
 
@@ -179,18 +130,16 @@ tests/
 - `Not`
   - 这条 case 明确不验证什么，防止实现时擅自扩张范围。
 
-### 3.5 正式目录分组口径
+### 3.5 正式目录层级口径
 
-- `basic`
-  - 用于验证基础能力可用，输入尽量单一，断言聚焦核心结果。
-- `boundary`
-  - 用于覆盖失败、阻塞、歧义、安全限制、空结果、超时等边界处理。
-- `scenario`
-  - 用于覆盖真实用户场景，是正式长期 case 的主干。
-- `live`
-  - 用于验证真实模型参与下的正式执行路径。
-  - 只要生产路径中存在模型参与，就不能只靠 `basic / boundary / scenario` 得出能力成立结论。
-  - `live` case 应优先依赖真实 fixture、真实流程和正式交付，而不是只验证脚本化骨架。
+- `suite`
+  - 第一层稳定分类，按领域内最长期稳定的阶段、模块或能力边界划分。
+  - 例如 AI 当前使用 `tool / human / director / real`；Workspace 当前使用 `source-service / ipc / settings / scope`。
+- `group`
+  - `suite` 下的可选子目录。
+  - 只有在同一 `suite` 内确实需要继续分层时才创建，命名必须直接表达业务语义，不再默认使用固定四分组。
+- `case`
+  - 最终测试文件，对应唯一 `caseId`、唯一日志目录和唯一 report 归属。
 
 ### 3.6 长期价值与 temp 规则
 
@@ -284,8 +233,8 @@ runner 支持的过滤参数：
 
 补充规则：
 
-- 默认按 `suite` 运行时，runner 只收集非 `live/` 正式 case，避免把稳定回归和 live 验证混在同一批执行里。
-- `live` case 应通过显式 `--group live` 或显式 `--case` 运行。
+- 默认按 `suite` 运行时，runner 收集该 `suite` 下的全部正式 case。
+- `--group` 只在目标 `suite` 确实存在额外子目录时使用；如果 case 直接位于 `suite` 根目录，则不需要 `--group`。
 
 runner 的职责只有三件事：
 
@@ -608,30 +557,28 @@ tests/report/<domain>/
 ### 分析范围
 
 - raw logs 范围: 当前仓库内 `tests/logs/ai/**`
-- 已分析 scope: `ai/backend/tools/terminal`、`ai/e2e/workbench`
+- 已分析 scope: `ai/backend/tool`、`ai/e2e/real`
 
 ### 总体结论
 
 - 历史总数据: `2` 次 raw runs，其中 `2` 次 passed、`0` 次 failed，historicalSuccessRate=`100.0%`
 - 最新总数据: `2 / 2` 个 case 的最新一轮 run 为 passed，latestSuccessRate=`100.0%`
-- 当前结论: 当前 backend sample 与 e2e smoke 已跑通，但失败路径覆盖仍不足。
+- 当前结论: 当前 backend sample 与 e2e smoke 已跑通，但真实执行阻塞路径覆盖仍不足。
 
 ### 下一阶段建议
 
-- 先补 `backend/tools/terminal` 的失败路径
-- 再补 `e2e/workbench` 的阻塞分支
+- 先补 `backend/human` 的单任务闭环
+- 再补 `e2e/real` 的阻塞恢复分支
 
 ## backend
 
-### tools
+### tool
 
-#### terminal
+#### 证据
 
-##### 证据
+- `tool-terminal-command-smoke` | run=`20260315-101530-112` | status=`passed`
 
-- `terminal-basic-command` | run=`20260315-101530-112` | status=`passed`
-
-##### 通过率
+#### 通过率
 
 - 历史总数据:
   - totalRuns: 1
@@ -644,30 +591,30 @@ tests/report/<domain>/
   - latestFailedCases: 0
   - latestSuccessRate: 100.0%
 
-##### 失败分析
+#### 失败分析
 
 - 当前没有 failed run，因此无法给出失败模式结论。
 
-##### 当前评估
+#### 当前评估
 
 - terminal happy path 已稳定产出 raw logs。
 - 当前不足是还没有正式纳入失败/阻塞样例。
 
-##### 下一步建议
+#### 下一步建议
 
-- 增加 `workspace-boundary-rejected`
-- 增加 `approval-denied`
+- 增加 `tool-terminal-approval-rejected`
+- 增加 `tool-terminal-timeout-stop`
 
 ## e2e
 
-### workbench
+### real
 
-##### 证据
+#### 证据
 
-- `workbench-plan-artifact-smoke` | run=`20260315-103002-008` | status=`passed`
+- `real-docx-rewrite-smoke` | run=`20260315-103002-008` | status=`passed`
 - 关键附件: playwright trace
 
-##### 通过率
+#### 通过率
 
 - 历史总数据:
   - totalRuns: 1
@@ -680,16 +627,16 @@ tests/report/<domain>/
   - latestFailedCases: 0
   - latestSuccessRate: 100.0%
 
-##### 失败分析
+#### 失败分析
 
 - 当前没有 failed run，因此无法给出失败模式结论。
 
-##### 当前评估
+#### 当前评估
 
-- workbench smoke 主链路已可用。
+- real smoke 主链路已可用。
 - 当前不足是 approval、workspace required、review 等真实路径尚未纳入。
 
-##### 下一步建议
+#### 下一步建议
 
 - 补充 approval 路径
 - 补充 workspace required 场景
