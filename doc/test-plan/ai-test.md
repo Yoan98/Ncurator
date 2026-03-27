@@ -28,7 +28,7 @@ AI 正式测试当前分为三个 suite：
 
 为什么：工具层不稳定时，上层执行、规划和真实任务验证都会失真。
 
-怎么做：以 `docx / kb / terminal / hand` 四类 group 组织正式 case；要求每个 skill 下的每个 tool 至少有 1 条正式 case 显式调用；对 `docx` 额外覆盖大文本、复杂操作、格式类型和混合格式四类高风险场景。
+怎么做：以 `docx / kb / terminal / hand` 四类 group 组织正式 case；要求每个 skill 下的每个 tool 至少有 1 条正式 case 显式调用；对 `docx` 额外覆盖大文本、复杂操作、格式类型、混合格式，以及 review-aware 草稿延续 / 回滚五类高风险场景。
 
 ### 2.2 `human`
 
@@ -157,18 +157,33 @@ AI 正式测试当前分为三个 suite：
   - 修改目标在 preview 中按预期呈现，不出现整段样式塌陷。
 - Not：不验证最终用户审阅交互。
 
+#### `docx-review-aware-open-and-continue-edit`
+
+- 用例名称：`docx-review-aware-open-and-continue-edit`
+- 测试类型：`backend`
+- 实现状态：`未实现`
+- What：验证存在 active review 时，`docx_open` 会基于最新 effective draft 打开并继续编辑，而不是退回源文件。
+- Why：同文件多轮未提交修改能否形成正确累计差异，前提就是工具层继续编辑的是最新草稿。
+- How：准备同一路径的源 docx 与已累计修改的 effective draft，通过 `resolveDocxOpenTarget` 把 `docx_open` 指向 effective draft；随后调用 `docx_search` 或 `docx_get_block` 校验读取结果，再执行 `docx_apply_ops -> docx_validate`。
+- Oracle：
+  - `open` 后读取到的是 latest draft 内容，而不是源文件旧内容。
+  - `apply_ops` 后的新快照保留前一轮草稿修改，并只叠加本轮 delta。
+  - `validate` 通过，且工具仍跟踪原始 `sourcePath` 作为后续落盘目标。
+- Not：不验证 review UI、确认替换源文件或 anchor 导航。
+
 #### `docx-history-and-rollback`
 
 - 用例名称：`docx-history-and-rollback`
 - 测试类型：`backend`
 - 实现状态：`未实现`
-- What：验证快照历史查询与回滚能力。
-- Why：复杂编辑任务必须具备可回退能力。
-- How：执行多轮 `apply_ops` 后调用 `docx_get_history` 与 `docx_rollback`，再做一次 `validate`。
+- What：验证快照历史查询与回滚能力，包括多轮继续编辑后的撤销。
+- Why：复杂编辑任务必须具备可回退能力，且撤销不能误伤磁盘源文件。
+- How：执行多轮 `apply_ops` 后调用 `docx_get_history`，同时覆盖按 `steps` 回滚和按 `targetDocId` 回滚，再做一次 `validate` 并校验源文件磁盘内容未变。
 - Oracle：
   - 历史链可追溯到祖先快照。
   - 回滚后当前 `docId` 回到目标祖先，且结构仍然有效。
-- Not：不验证磁盘文件恢复。
+  - 回滚只影响当前 run 内草稿快照，不会恢复或改写磁盘源文件。
+- Not：不验证 review 的放弃或确认替换。
 
 #### `docx-precondition-guard`
 
@@ -194,7 +209,7 @@ AI 正式测试当前分为三个 suite：
 - Oracle：
   - 新建保存返回 `created`，覆盖保存触发审批。
   - 审批拒绝后，磁盘上原文件不被改写。
-- Not：不验证 workbench 审批 UI。
+- Not：不验证 workbench 审批 UI，也不验证 review 的“确认替换 / 确认创建”；这些行为由 `workbench/review` 覆盖。
 
 #### 6.1.2 `kb`
 
