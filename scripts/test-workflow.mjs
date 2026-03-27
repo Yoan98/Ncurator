@@ -198,13 +198,6 @@ const main = async () => {
     })
   }
 
-  if (exitCode === 0 && args.type === 'e2e') {
-    exitCode = await runTypeWorkflow({
-      ...args,
-      type: 'backend'
-    })
-  }
-
   if (exitCode === 0 && (!args.type || args.type === 'e2e')) {
     exitCode = await runTypeWorkflow({
       ...args,

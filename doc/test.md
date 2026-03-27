@@ -29,54 +29,9 @@ tests/
   harness/
   fixtures/
   ai/
-    tool/
-      <case>.test.ts
-    human/
-      <case>.test.ts
-    director/
-      <case>.test.ts
   workbench/
-    core/
-      <case>.test.ts
-      <case>.e2e.test.ts
-    session/
-      <case>.test.ts
-      <case>.e2e.test.ts
-    composer/
-      <case>.test.ts
-      <case>.e2e.test.ts
-    mode/
-      <case>.test.ts
-      <case>.e2e.test.ts
-    scope/
-      <case>.test.ts
-      <case>.e2e.test.ts
-    blocker/
-      <case>.test.ts
-      <case>.e2e.test.ts
-    panel/
-      <case>.test.ts
-      <case>.e2e.test.ts
-    review/
-      <case>.test.ts
-      <case>.e2e.test.ts
   settings/
-    model/
-      <case>.test.ts
-      <case>.e2e.test.ts
-    workspace/
-      <case>.test.ts
-      <case>.e2e.test.ts
-    web/
-      <case>.test.ts
-      <case>.e2e.test.ts
-    vector/
-      <case>.test.ts
-      <case>.e2e.test.ts
   kb-search/
-    <suite>/
-      <case>.test.ts
-      <case>.e2e.test.ts
   temp/
   logs/
   report/
@@ -93,9 +48,7 @@ tests/
 - 目录统一使用 kebab-case。
 - 测试发现目录使用通用树形结构：`tests/<domain>/<suite>/<groups...>/<case>.test.ts`。
 - `suite` 是第一层稳定分类；`groups...` 是 suite 下可选的任意深度子目录。
-- AI 域当前使用 `tool`、`human`、`director` 作为 `suite`。
-- Workbench 域当前使用 `core`、`session`、`composer`、`mode`、`scope`、`blocker`、`panel`、`review` 作为 `suite`。
-- Settings 域当前使用 `model`、`workspace`、`web`、`vector` 作为 `suite`。
+- 各 domain 的 `suite` 列表与归属，只在对应 `doc/test-plan/**` 中定义，本文不重复展开。
 - 当某个 `suite` 不需要继续细分时，正式 case 可以直接放在该 `suite` 目录下。
 - 普通测试文件使用 `<case>.test.ts` 命名。
 - e2e 测试文件使用 `<case>.e2e.test.ts` 命名。
@@ -158,7 +111,7 @@ tests/
 
 - `suite`
   - 第一层稳定分类，按领域内最长期稳定的阶段、模块或能力边界划分。
-  - 例如 AI 当前使用 `tool / human / director`；Workbench 当前使用 `core / session / composer / mode / scope / blocker / panel / review`；Settings 当前使用 `model / workspace / web / vector`。
+  - 具体取值与归属，只看对应 `doc/test-plan/**`。
 - `group`
   - `suite` 下的可选子目录。
   - 只有在同一 `suite` 内确实需要继续分层时才创建，命名必须直接表达业务语义，不再默认使用固定四分组。
@@ -205,7 +158,7 @@ tests/
 
 - 测试统一通过 `scripts/test-workflow.mjs` 执行。
 - runner 只负责收集测试文件、执行测试并落 `tests/logs/**`。
-- e2e 请求下 runner 先执行同 scope 下的普通测试，再执行 `.e2e.test.ts`；除此之外不负责失败分析、建议整理或 report 更新。
+- 不带 `--type` 时，runner 会先执行普通测试，再执行 `.e2e.test.ts`；带 `--type backend` 或 `--type e2e` 时，只执行对应类型；除此之外不负责失败分析、建议整理或 report 更新。
 
 ### 4.4 读取与分析 raw logs
 
@@ -233,10 +186,12 @@ tests/
 当前命令面：
 
 - `pnpm test:ai`
-- `pnpm test:ai:tool`
+- `pnpm test:ai:backend`
 - `pnpm test:workbench`
+- `pnpm test:workbench:backend`
 - `pnpm test:workbench:e2e`
 - `pnpm test:settings`
+- `pnpm test:settings:backend`
 - `pnpm test:settings:e2e`
 
 runner 支持的过滤参数：
@@ -250,15 +205,16 @@ runner 支持的过滤参数：
 
 补充规则：
 
-- 默认按 `suite` 运行时，runner 会先收集普通测试，再收集 `.e2e.test.ts`。
+- 不带 `--type` 时，runner 会先收集普通测试，再收集 `.e2e.test.ts`。
 - `--type` 取值为 `backend` 或 `e2e`。
+- 如果需要继续收窄到某个 `suite`、`group` 或单条 `case`，统一通过 runner 参数过滤，不额外在本文展开具体模块命令。
 - `--group` 只在目标 `suite` 确实存在额外子目录时使用；如果 case 直接位于 `suite` 根目录，则不需要 `--group`。
 
 runner 的职责只有三件事：
 
 1. 找到目标测试文件并执行。
 2. 落原始日志到 `tests/logs/**`。
-3. 在 e2e 请求下先执行同 scope 下的普通测试。
+3. 在不带 `--type` 时按“普通测试 -> e2e”顺序执行。
 
 runner 不负责：
 
@@ -575,24 +531,24 @@ tests/report/<domain>/
 ### 分析范围
 
 - raw logs 范围: 当前仓库内 `tests/logs/workbench/**`
-- 已分析 scope: `workbench/scope`、`workbench/review`
+- 已分析 scope: `workbench/<suite-a>`、`workbench/<suite-b>`
 
 ### 总体结论
 
 - 历史总数据: `2` 次 raw runs，其中 `2` 次 passed、`0` 次 failed，historicalSuccessRate=`100.0%`
 - 最新总数据: `2 / 2` 个 case 的最新一轮 run 为 passed，latestSuccessRate=`100.0%`
-- 当前结论: 当前 scope 普通样例与 review e2e smoke 已跑通，但阻塞恢复与续做覆盖仍不足。
+- 当前结论: 当前已覆盖一个普通样例和一个 e2e smoke，但剩余 suite 仍待补齐。
 
 ### 下一阶段建议
 
-- 先补 `blocker` 的状态收敛
-- 再补 `session` 的续做主线
+- 先补 `suite-a` 的边界收敛
+- 再补 `suite-b` 的主线闭环
 
-## scope
+## <suite-a>
 
 ### 证据
 
-- `workbench-scope-token-cleanup` | type=`backend` | run=`20260315-101530-112` | status=`passed`
+- `workbench-suite-a-basic` | type=`backend` | run=`20260315-101530-112` | status=`passed`
 
 ### 通过率
 
@@ -613,19 +569,19 @@ tests/report/<domain>/
 
 ### 当前评估
 
-- scope 基础收敛路径已稳定产出 raw logs。
-- 当前不足是跨模式与跨工作区切换覆盖仍不足。
+- suite-a 的基础路径已稳定产出 raw logs。
+- 当前不足是边界场景覆盖仍不足。
 
 ### 下一步建议
 
-- 增加 `workbench-scope-search-strict-range`
-- 增加 `workbench-scope-cross-workspace-cleanup`
+- 增加 `workbench-suite-a-edge-1`
+- 增加 `workbench-suite-a-edge-2`
 
-## review
+## <suite-b>
 
 ### 证据
 
-- `workbench-review-submit.e2e` | type=`e2e` | run=`20260315-103002-008` | status=`passed`
+- `workbench-suite-b-smoke.e2e` | type=`e2e` | run=`20260315-103002-008` | status=`passed`
 - 关键附件: playwright trace
 
 ### 通过率
@@ -647,13 +603,13 @@ tests/report/<domain>/
 
 ### 当前评估
 
-- review smoke 主链路已可用。
-- 当前不足是 approval、workspace required 和续做主线仍未纳入。
+- suite-b 的 e2e smoke 主链路已可用。
+- 当前不足是剩余验收分支仍未纳入。
 
 ### 下一步建议
 
-- 补充 approval 路径
-- 补充 session 续做场景
+- 补充 `suite-b` 的验收分支 1
+- 补充 `suite-b` 的验收分支 2
 ```
 
 约束：
