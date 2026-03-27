@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import jsPreviewDocx from '@js-preview/docx'
 import '@js-preview/docx/lib/index.css'
 import './index.css'
+import { workbenchSelectors } from '../../testing/selectors'
 
 type DocViewerMetadata = {
   anchorName?: string
@@ -23,10 +24,17 @@ type CustomDocxRendererProps = {
 }
 
 const scrollToAnchor = (container: HTMLDivElement, anchorName?: string): void => {
-  if (!anchorName) return
+  if (!anchorName) {
+    delete container.dataset.currentAnchor
+    delete container.dataset.lastScrolledAnchor
+    return
+  }
+  container.dataset.currentAnchor = anchorName
+  delete container.dataset.lastScrolledAnchor
   window.requestAnimationFrame(() => {
     const anchor = container.querySelector<HTMLElement>(`#${CSS.escape(anchorName)}`)
     if (!anchor) return
+    container.dataset.lastScrolledAnchor = anchorName
     anchor.scrollIntoView({
       block: 'center',
       behavior: 'smooth'
@@ -85,6 +93,7 @@ const CustomDocxRenderer = ({ mainState }: CustomDocxRendererProps) => {
     <div
       ref={containerRef}
       className="docx-content h-full w-full overflow-auto bg-[#F8F7F4] px-3 py-3"
+      data-testid={workbenchSelectors.docxViewer}
     />
   )
 }

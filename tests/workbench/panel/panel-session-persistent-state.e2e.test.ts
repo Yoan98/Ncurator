@@ -10,6 +10,7 @@ import {
   submitWorkbenchMessage,
   switchWorkbenchMode,
   waitForAssistantTurnCount,
+  waitForReviewTabCount,
   waitForWorkbenchReady
 } from '../../harness/e2e/workbench'
 
@@ -24,6 +25,8 @@ describe('workbench panel e2e', () => {
       runMode: 'single',
       execute: async (runtime) => {
         const { page } = runtime
+        let reviewTitleAfterOtherFileRun = ''
+        let reviewTabCountAfterOtherFileRun = 0
 
         await runtime.step({
           name: 'prepare-search-list-state',
@@ -95,6 +98,41 @@ describe('workbench panel e2e', () => {
           }
         })
 
+        const assistantTurnsBeforeFourthAi = await getWorkbenchAssistantStepButtons(page).count()
+        await runtime.step({
+          name: 'keep-current-file-focused-when-other-review-arrives',
+          message: '当前正在查看 A 文件时生成 B 文件的新 review，确认右侧仍停留在 A 文件，不被新文件抢焦点。',
+          run: async () => {
+            await page.waitForFunction(
+              ({ selector, title }) => {
+                const host = document.querySelector(selector)
+                return host instanceof HTMLElement && host.innerText.includes(title)
+              },
+              {
+                selector: `[data-testid="${workbenchSelectors.contentPanelTitle}"]`,
+                title: 'e2e-review-source-a.docx'
+              }
+            )
+
+            await submitWorkbenchMessage(page, '[e2e:chat-edit-review-b]')
+            await waitForAssistantTurnCount(page, assistantTurnsBeforeFourthAi + 1)
+            await getWorkbenchLocator(page, workbenchSelectors.reviewPanel).waitFor({
+              state: 'visible'
+            })
+            await waitForReviewTabCount(page, 2)
+            reviewTitleAfterOtherFileRun =
+              (await getWorkbenchLocator(page, workbenchSelectors.contentPanelTitle).textContent()) ||
+              ''
+            reviewTabCountAfterOtherFileRun = await page.evaluate((selector) => {
+              const host = document.querySelector(selector)
+              if (!(host instanceof HTMLElement)) return 0
+              return Array.from(host.querySelectorAll('button')).filter(
+                (button) => button instanceof HTMLElement && button.offsetParent !== null
+              ).length
+            }, `[data-testid="${workbenchSelectors.reviewTabs}"]`)
+          }
+        })
+
         await runtime.step({
           name: 'clear-panel-on-session-switch',
           message: '创建新会话后，确认右侧回到空态。',
@@ -117,6 +155,8 @@ describe('workbench panel e2e', () => {
             page,
             workbenchSelectors.reviewPanel
           ).isVisible().catch(() => false),
+          reviewTitleAfterOtherFileRun,
+          reviewTabCountAfterOtherFileRun,
           emptyPanelVisible: await page.getByText('右侧暂无内容').isVisible()
         }
       },
@@ -132,6 +172,16 @@ describe('workbench panel e2e', () => {
           {
             name: 'no-previous-state-remains-after-session-switch',
             message: '切换会话后，上一会话的搜索列表、文件预览与 review 工作区都不应继续残留。',
+            data: result
+          }
+        )
+
+        await runtime.assertThat(
+          result.reviewTitleAfterOtherFileRun.includes('e2e-review-source-a.docx') &&
+            result.reviewTabCountAfterOtherFileRun >= 2,
+          {
+            name: 'other-file-review-does-not-steal-focus',
+            message: '当前正在查看 A 文件时，B 文件的新 review 只能作为新 tab 加入，不能抢走当前焦点，对齐 WB-PANEL-001-AC1。',
             data: result
           }
         )

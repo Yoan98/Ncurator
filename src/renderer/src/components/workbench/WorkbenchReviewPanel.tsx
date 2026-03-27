@@ -148,13 +148,17 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
               {reviewStatusMeta.label}
             </span>
           ) : null}
-          <span className="min-w-[56px] text-center text-xs text-[#666666]">
+          <span
+            className="min-w-[56px] text-center text-xs text-[#666666]"
+            data-testid={workbenchSelectors.reviewCounter}
+          >
             {documentChanges.length === 0 ? '0 / 0' : `${selectedChangeIndex + 1} / ${documentChanges.length}`}
           </span>
           <Button
             size="small"
             icon={<HiChevronLeft className="h-3.5 w-3.5" />}
             disabled={documentChanges.length === 0}
+            data-testid={workbenchSelectors.reviewPrevButton}
             onClick={() =>
               setSelectedChangeIndex((current) =>
                 documentChanges.length === 0
@@ -167,6 +171,7 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
             size="small"
             icon={<HiChevronRight className="h-3.5 w-3.5" />}
             disabled={documentChanges.length === 0}
+            data-testid={workbenchSelectors.reviewNextButton}
             onClick={() =>
               setSelectedChangeIndex((current) =>
                 documentChanges.length === 0 ? 0 : (current + 1) % documentChanges.length

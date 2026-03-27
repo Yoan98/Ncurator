@@ -115,6 +115,7 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 - How：在同一会话内先后覆盖搜索列表、文件预览和确认修改工作区三种状态，再发送新消息；随后切换到另一会话；对齐 `WB-PANEL-001`，覆盖 `WB-PANEL-001-AC1`、`WB-PANEL-001-AC2`。
 - Oracle：
   - 同会话继续发送消息后，右侧仍保留当前相关状态，对齐 `WB-PANEL-001-AC1`。
+  - 当前正在查看 A 文件时，B 文件的新 review 只能作为新 tab 加入，不能抢走当前焦点，对齐 `WB-PANEL-001-AC1`。
   - 切换会话后，右侧回到空态或新会话对应状态，对齐 `WB-PANEL-001-AC2`。
 - Not：不验证 review 具体差异内容，只验证右侧状态收口。
 
@@ -169,5 +170,20 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 - How：准备同一会话内多个待确认文件，进入确认修改工作区后切换 tab，并分别执行确认或放弃；对齐 `WB-PANEL-003`、`WB-REVIEW-001`、`WB-REVIEW-004`、`WB-REVIEW-007`。
 - Oracle：
   - 右侧以一文件一 tab 展示全部 active review 文件，不会互相覆盖，对齐 `WB-PANEL-003-AC2`、`WB-REVIEW-007-AC2`。
-  - 确认或放弃只影响当前 tab 对应文件，不影响其他文件 tab，对齐 `WB-REVIEW-004-AC1`、`WB-REVIEW-004-AC3`。
+  - 先确认替换当前文件后，只当前文件被写回并从 active tabs 中移除，其他文件继续保留，对齐 `WB-REVIEW-004-AC1`。
+  - 放弃剩余文件时，只当前 tab 对应文件退出 review，其他文件不受影响，对齐 `WB-REVIEW-004-AC3`。
 - Not：不验证 docx 累计 diff 的具体内容；该部分由 backend case 覆盖。
+
+#### `review-change-navigation-and-anchor`
+
+- 用例名称：`review-change-navigation-and-anchor`
+- 测试类型：`e2e`
+- 实现状态：`已实现`
+- What：验证确认修改工作区通过上一处 / 下一处切换当前修改时，计数与 docx 预览 anchor 会同步变化。
+- Why：这是 review 工作区的核心阅读路径，如果计数变化了但预览没定位，用户无法准确审阅对应差异。
+- How：准备单文件 review，进入确认修改工作区后依次点击下一处和上一处，检查当前修改计数与 docx 预览 anchor；对齐 `WB-REVIEW-001`、`WB-REVIEW-002`。
+- Oracle：
+  - 打开 review 后默认选中第一条修改，对齐 `WB-REVIEW-001-AC2`。
+  - 点击上一处 / 下一处时，当前修改计数明确变化，对齐 `WB-REVIEW-002-AC1`。
+  - docx 预览随当前修改切换到不同 anchor，并可回到原始 anchor，对齐 `WB-REVIEW-002-AC2`。
+- Not：不验证 docx 渲染像素细节；这里只验证导航与 anchor 对齐关系。

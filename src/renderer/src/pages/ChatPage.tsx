@@ -501,7 +501,17 @@ const ChatPage: React.FC = () => {
         }
       })
 
+      const currentWorkspaceSelectionStillAvailable = Boolean(
+        currentWorkspaceFileKey &&
+          nextTabs.some((tab) => tab.fileKey === currentWorkspaceFileKey)
+      )
+      const shouldKeepCurrentWorkspaceSelection =
+        contentPanel.kind === 'review_workspace' &&
+        currentWorkspaceSelectionStillAvailable &&
+        !Boolean(options?.forceOpenWorkspace) &&
+        preferredFileKey !== currentWorkspaceFileKey
       const nextSelectedFileKey =
+        (shouldKeepCurrentWorkspaceSelection ? currentWorkspaceFileKey : null) ||
         preferredFileKey ||
         (currentWorkspaceFileKey &&
         nextTabs.some((tab) => tab.fileKey === currentWorkspaceFileKey)

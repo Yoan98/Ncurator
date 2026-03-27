@@ -431,25 +431,45 @@ export function registerHandlers(services: {
     draftReviewService: DraftReviewService
     conflict: boolean
     multiple: boolean
+    primaryDocument?: {
+      sourceFileName: string
+      acceptedReplace: string
+      rejectedReplace: string
+    }
+    secondaryDocument?: {
+      sourceFileName: string
+      acceptedReplace: string
+      rejectedReplace: string
+    }
   }) => {
     const stagedSources: string[] = []
 
-    const firstDocument = await stageE2EDraftReviewDocument({
-      runId: input.runId,
-      draftReviewService: input.draftReviewService,
+    const primaryDocument = input.primaryDocument || {
       sourceFileName: input.conflict ? 'e2e-review-conflict.docx' : 'e2e-review-source-a.docx',
       acceptedReplace: input.multiple ? 'E2E accepted paragraph A' : 'E2E accepted paragraph',
       rejectedReplace: input.multiple ? 'E2E rejected paragraph A' : 'E2E rejected paragraph'
+    }
+    const firstDocument = await stageE2EDraftReviewDocument({
+      runId: input.runId,
+      draftReviewService: input.draftReviewService,
+      sourceFileName: primaryDocument.sourceFileName,
+      acceptedReplace: primaryDocument.acceptedReplace,
+      rejectedReplace: primaryDocument.rejectedReplace
     })
     stagedSources.push(firstDocument.sourcePath)
 
     if (input.multiple) {
-      const secondDocument = await stageE2EDraftReviewDocument({
-        runId: input.runId,
-        draftReviewService: input.draftReviewService,
+      const secondaryDocument = input.secondaryDocument || {
         sourceFileName: 'e2e-review-source-b.docx',
         acceptedReplace: 'E2E accepted paragraph B',
         rejectedReplace: 'E2E rejected paragraph B'
+      }
+      const secondDocument = await stageE2EDraftReviewDocument({
+        runId: input.runId,
+        draftReviewService: input.draftReviewService,
+        sourceFileName: secondaryDocument.sourceFileName,
+        acceptedReplace: secondaryDocument.acceptedReplace,
+        rejectedReplace: secondaryDocument.rejectedReplace
       })
       stagedSources.push(secondDocument.sourcePath)
     }
@@ -481,6 +501,17 @@ export function registerHandlers(services: {
     draftReviewService: DraftReviewService
     conflict: boolean
     multiple: boolean
+    primaryDocument?: {
+      sourceFileName: string
+      acceptedReplace: string
+      rejectedReplace: string
+    }
+    secondaryDocument?: {
+      sourceFileName: string
+      acceptedReplace: string
+      rejectedReplace: string
+    }
+    answerText?: string
   }): Promise<void> => {
     const plan = [
       {
@@ -515,7 +546,9 @@ export function registerHandlers(services: {
       runId: input.runId,
       draftReviewService: input.draftReviewService,
       conflict: input.conflict,
-      multiple: input.multiple
+      multiple: input.multiple,
+      primaryDocument: input.primaryDocument,
+      secondaryDocument: input.secondaryDocument
     })
 
     details.forEach((detail) => {
@@ -600,11 +633,13 @@ export function registerHandlers(services: {
     input.sendEvent({
       type: 'answer_completed',
       runId: input.runId,
-      text: input.conflict
-        ? 'E2E fixture 已生成草稿审阅，并在提交前制造了源文件冲突。'
-        : input.multiple
-          ? 'E2E fixture 已生成两个确认文档，可分别确认。'
-        : 'E2E fixture 已生成草稿审阅，可继续逐块确认并提交。'
+      text:
+        input.answerText ||
+        (input.conflict
+          ? 'E2E fixture 已生成草稿审阅，并在提交前制造了源文件冲突。'
+          : input.multiple
+            ? 'E2E fixture 已生成两个确认文档，可分别确认。'
+            : 'E2E fixture 已生成草稿审阅，可继续逐块确认并提交。')
     })
     input.sendEvent({
       type: 'run_completed',
@@ -774,6 +809,23 @@ export function registerHandlers(services: {
         draftReviewService: input.draftReviewService,
         conflict: false,
         multiple: false
+      })
+      return true
+    }
+
+    if (scenario === 'chat-edit-review-b') {
+      await emitE2EEditReviewFlow({
+        runId: input.runId,
+        sendEvent: input.sendEvent,
+        draftReviewService: input.draftReviewService,
+        conflict: false,
+        multiple: false,
+        primaryDocument: {
+          sourceFileName: 'e2e-review-source-b.docx',
+          acceptedReplace: 'E2E accepted paragraph B',
+          rejectedReplace: 'E2E rejected paragraph B'
+        },
+        answerText: 'E2E fixture 已生成 B 文件的草稿审阅。'
       })
       return true
     }
