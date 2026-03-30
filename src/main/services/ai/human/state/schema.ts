@@ -1,5 +1,5 @@
 import { StateSchema } from '@langchain/langgraph'
-import { buildSkillCatalog } from '../tools/catalog'
+import { buildSkillCatalog } from '../skills'
 import {
   humanBrainMemorySchema,
   humanRuntimeSchema,

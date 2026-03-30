@@ -327,6 +327,19 @@ interface ToolCallResult {
   summary: string
   // 工具返回的结构化数据。
   data?: JsonValue
+  // 对失败原因的结构化归因，帮助下一轮 brain 恢复。
+  diagnostic?: ToolCallDiagnostic
+}
+
+interface ToolCallDiagnostic {
+  // 失败归因类型。
+  kind:
+    | 'workspace_required'
+    | 'invalid_input'
+    | 'approval_denied'
+    | 'path_unavailable'
+  // 若失败原因能归约到缺字段，则给出最小字段名列表。
+  missingArgs?: string[]
 }
 
 interface MouthOutput {

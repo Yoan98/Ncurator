@@ -4,9 +4,9 @@
 ### 1.1 AI相关
 - 当涉及 AI 总体架构、Director/Human 分工或主流程时，请阅读 `doc/ai-design/architecture.md`
 - 当涉及 AI 节点实现，请阅读 `doc/ai-design/implementation-spec.md`
-- 当涉及 AI 状态字段、数据流转时，请阅读 `doc/ai-design/data-definition-and-flow.md`
+- 当涉及 AI 状态字段、数据流转、`ToolCallResult.diagnostic` 或 `human` 的运行约束投影时，请阅读 `doc/ai-design/data-definition-and-flow.md`
 - 当想看 AI 完整跑一遍的真实样例，请阅读 `doc/ai-design/example.md`
-- 当涉及 `human` 的 skill设计时，请阅读 `doc/ai-design/human-skill-design.md`
+- 当涉及 `human` 的 skill设计、`skills.ts`、family `toolSpecs.ts` 或 tools registry 时，请阅读 `doc/ai-design/human-skill-design.md`
 - 当涉及 AI prompt 设计，请阅读 `doc/ai-design/prompt-design.md`
 - 当涉及 AI 后续重构方向、迭代规划或未决方案时，请阅读 `doc/ai-design/refactor-plan.md`
 

@@ -1,28 +1,31 @@
+import type { AiRunContext } from '../../types'
 import type { HumanState } from '../types'
 import { buildBrainPromptSections } from './brainContextSections'
 
 type HumanBrainPromptInput = {
   userInput: string
   memorySnapshotText: string
+  runConstraintsText: string
   skillContextText: string
   recentToolResultsText: string
   recentDecisionHistoryText: string
   watchHintText: string
 }
 
-export const buildBrainPromptContext = (state: HumanState) => {
-  const sections = buildBrainPromptSections(state)
+export const buildBrainPromptContext = (input: { state: HumanState; ctx: AiRunContext }) => {
+  const sections = buildBrainPromptSections(input)
 
   return buildHumanBrainPrompt({
-    userInput: state.task.userInput,
+    userInput: input.state.task.userInput,
     memorySnapshotText: sections.memorySnapshotText,
+    runConstraintsText: sections.runConstraintsText,
     skillContextText: sections.skillContextText,
     recentToolResultsText: sections.recentToolResultsText,
     recentDecisionHistoryText: sections.recentDecisionHistoryText,
     watchHintText: [
       '如果这里是 none，表示当前没有额外的收敛提醒；否则应优先考虑结束任务或纠偏。',
       '',
-      state.watchHint || 'none'
+      input.state.watchHint || 'none'
     ].join('\n')
   })
 }
@@ -52,6 +55,10 @@ export const buildHumanBrainPrompt = (input: HumanBrainPromptInput) => {
     6. 如果你收到收敛提醒，应优先考虑结束任务，除非只差一次非常明确且必要的动作。
     7. 输出 hand 时，工具 args 必须使用工具说明里的精确字段名，并补齐所有 requiredArgs。
     8. 如果你现在无法给出某个工具的完整必填参数，不要猜；应改为 learning 或 mouth。
+    9. 如果任务是在当前已选资料范围内回答、提取事实或找证据，优先考虑 KB 能力，而不是默认退回 terminal。
+    10. 只有当任务确实需要访问工作区文件、执行命令或处理 docx 时，才进入 workspace 或 docx 能力。
+    11. 如果最近结果明确提示 workspace_required 或 path_unavailable，不要重复同类 terminal/docx 调用。
+    12. 如果最近结果提示 invalid_input 且缺字段明确，应优先修正参数或补充相关 skill，而不是切去无关能力。
   </judgement_principles>
 
   <output_rules>
@@ -209,6 +216,10 @@ ${input.userInput}
   <memory_snapshot>
 ${input.memorySnapshotText}
   </memory_snapshot>
+
+  <run_constraints>
+${input.runConstraintsText}
+  </run_constraints>
 
   <skill_context>
 ${input.skillContextText}

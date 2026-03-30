@@ -374,13 +374,14 @@ stateDiagram-v2
 **How**
 
 - 触发：`runtime.stage = brain`
-- 读取：`HumanState.task`、`HumanState.brainMemory`、`HumanState.lastParallelCallToolResults`、`HumanState.watchHint`、最近决策历史摘要
+- 读取：`HumanState.task`、`HumanState.brainMemory`、`HumanState.lastParallelCallToolResults`、`HumanState.watchHint`、最近决策历史摘要，以及 runtime 提供的 `run constraints` 视图
 - 输出：`LastBrainDecision`
 - 回写：`HumanState.brainMemory.inside`、`HumanState.brainMemory.outside.brainDecisions`、`HumanState.lastBrainDecision`、`HumanState.runtime.stage`、`HumanState.watchHint`、`HumanState.trace.steps`
 - 下一跳：`learning`、`hand`、`mouth`；当 memory reducer 产出 `watchHint` 时留在 `brain`
 - 实现约束：
   - 模型输出必须通过 `ctx.chatStructured`。
   - prompt 必须通过 `buildBrainPromptContext`。
+  - `buildBrainPromptContext` 的输入来源是 `state + ctx`；运行约束来自 `ctx.selectedScopeSummary / ctx.selectedDocumentIds / ctx.workspace / ctx.allowNonLocal` 的提示层投影，不持久化进 `HumanState`。
   - 输出必须先经过 `parseBrainDecisionOutput`。
   - `brainMemory.inside` 的修改必须经过 `reduceBrainMemory`，它的设计初衷就是这类信息将之用于brain的提示词记忆之中，且由brain进行输出修改。
   - `brainDecisions` 只保留最近 10 条。
@@ -413,13 +414,13 @@ stateDiagram-v2
 **How**
 
 - 触发：`lastBrainDecision.nextAction.action = learning`
-- 读取：`lastBrainDecision.nextAction.wantLearnSkillIds`、`brainMemory.outside.learnedSkillIds`、skill registry / loader
+- 读取：`lastBrainDecision.nextAction.wantLearnSkillIds`、`brainMemory.outside.learnedSkillIds`、`skills.ts`、`skillLoader`
 - 回写：`brainMemory.outside.learnedSkillIds`、`runtime.stage = brain`、必要时回写 `watchHint`、`trace.steps`
 - 下一跳：`brain`
 - 实现约束：
   - `learning` 不调用模型。
   - 未知 skill 或重复学习必须写 `watchHint` 并返回 `brain`。
-  - `ensureSkillTools` 负责把 skill 对应工具装入 runtime cache。
+  - `ensureSkillTools` 负责根据 `skills.ts` 与 family tool builder 把 skill 对应工具装入 runtime cache。
   - `learning` 只更新已学习 skill 集合，不扩张为新推理节点。
 
 **Not**
@@ -455,6 +456,7 @@ stateDiagram-v2
   - `hand` 不调用模型。
   - 工具批次先经过 `validateParallelToolCalls`。
   - 工具执行通过 `executeToolCall` 并行完成。
+  - `executeToolCall` 会把常见失败归一成结构化 `diagnostic`，供下一轮 `brain` 恢复与纠偏。
   - tool call count 超限时只写 `watchHint`，由下一轮 `brain` 决定是否收敛。
   - `runtimeArtifacts` 只从工具结构化结果提取并合并。
 
@@ -670,6 +672,7 @@ stateDiagram-v2
 - 如果后续需要引入非结构化模型调用，也应先补 runtime 级封装，不在 node 内直接拼接底层模型调用
 - 节点内部不要直接调用 `model.withStructuredOutput`，也不要散落手写 schema parse 逻辑
 - prompt 必须通过 `build*Prompt` 或 `build*PromptContext` 组织，不在 node 内联堆大段 prompt 文本
+- `human` 的 skill 元数据统一来自 `skills.ts`，tool 元数据统一来自 `tools/<family>/toolSpecs.ts` 与 `tools/registry.ts`
 - `learning`、`hand`、`complete` 这类确定性节点默认不引入额外模型调用
 - 节点入口先执行取消检查，再进行模型调用、工具调用或状态写入
 - 文档中的状态转移用于约束 graph 结构，不应用来反向实现一套脱离 `LangGraph` 的伪循环

@@ -8,7 +8,8 @@ import type {
   LastBrainDecision,
   MouthOutput,
   HumanState,
-  RuntimeSkillId
+  RuntimeSkillId,
+  ToolCallDiagnostic
 } from '../../../src/main/services/ai/human/types'
 import type {
   AiRuntimeSettings,
@@ -47,6 +48,7 @@ export type TestToolExecutionOverride = {
     code: AiTaskResultCode
     summary: string
     data?: JsonValue
+    diagnostic?: ToolCallDiagnostic
   }
 }
 
@@ -93,6 +95,7 @@ export type FixtureBinding = {
 export type CreateAiRunContextInput = {
   bindWorkspace?: boolean
   selectedDocumentIds?: string[]
+  allowNonLocal?: boolean
   approvalPolicy?: ApprovalPolicy | ApprovalResolver
   checkCancelledOverride?: () => void
   humanReasonOverrides?: TestHumanReasonOverride[]

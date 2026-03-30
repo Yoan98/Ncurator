@@ -1,6 +1,7 @@
 import type { JsonObject } from '../../../../../../shared/types'
 import type { z } from 'zod/v4'
-import type { RuntimeSkillId, ToolPromptSpec } from '../../types'
+import type { RuntimeSkillId } from '../../types'
+import type { HumanToolSpec } from '../types'
 import {
   applyOpsSchema,
   getBlockSchema,
@@ -14,11 +15,9 @@ import {
   validateSchema
 } from './schemas'
 import {
-  createStaticCapabilityToolDefinition,
-  readStringArg,
-  type CapabilityToolDefinition,
-  type StaticExecutionMetaConfig
-} from '../catalog/factories'
+  createStaticExecutionMetaResolver,
+  readStringArg
+} from '../utils/toolSpecUtils'
 import type { DocxWorkerAction } from './worker/types'
 
 const DOCX_REPLACE_TEXT_EXAMPLE: JsonObject = {
@@ -47,39 +46,53 @@ const DOCX_UPDATE_TABLE_CELL_EXAMPLE: JsonObject = {
   ]
 }
 
-const createDocxReadExecutionMeta = (): StaticExecutionMetaConfig => ({
-  mutability: 'read_only',
-  parallelSafe: true,
-  getResourceKey: (args) => readStringArg(args, 'docId'),
-  defaultResourceKey: 'docx'
-})
+const DOCX_REPLACE_TODO_BATCH_EXAMPLE: JsonObject = {
+  ops: [
+    {
+      type: 'replace_text',
+      query: '{{OWNER}}',
+      replace: 'Alice'
+    },
+    {
+      type: 'replace_text',
+      query: '{{DUE_DATE}}',
+      replace: '2026-03-30'
+    }
+  ]
+}
+
+const createDocxReadExecutionMeta = () =>
+  createStaticExecutionMetaResolver({
+    mutability: 'read_only',
+    parallelSafe: true,
+    getResourceKey: (args) => readStringArg(args, 'docId'),
+    defaultResourceKey: 'docx'
+  })
 
 const createDocxMutatingExecutionMeta = (input: {
   getResourceKey?: (args: JsonObject) => string | undefined
-}): StaticExecutionMetaConfig => ({
-  mutability: 'mutating',
-  parallelSafe: false,
-  getResourceKey: input.getResourceKey,
-  defaultResourceKey: 'docx'
-})
+}) =>
+  createStaticExecutionMetaResolver({
+    mutability: 'mutating',
+    parallelSafe: false,
+    getResourceKey: input.getResourceKey,
+    defaultResourceKey: 'docx'
+  })
 
 type DocxToolSpec<
   TArgs extends JsonObject = JsonObject,
   TName extends string = string,
   TSkillId extends RuntimeSkillId = RuntimeSkillId
-> = {
-  name: TName
+> = HumanToolSpec<TArgs, TName, TSkillId> & {
   description: string
-  skillIds: readonly TSkillId[]
-  schema: z.ZodType<TArgs>
-  promptSpec: ToolPromptSpec
-  executionMeta: StaticExecutionMetaConfig
   workerAction?: Exclude<DocxWorkerAction, 'release_run'>
   activityActionType?: string
 }
 
 export const DOCX_OPEN_TOOL_SPEC = {
   name: 'docx_open',
+  familyId: 'docx',
+  requiresWorkspace: true,
   description: 'Open a workspace-bound docx file and register a docId for subsequent operations.',
   skillIds: ['docx-read'],
   schema: openSchema,
@@ -118,7 +131,7 @@ export const DOCX_OPEN_TOOL_SPEC = {
       '不要传空路径或非 .docx 文件。'
     ]
   },
-  executionMeta: createDocxMutatingExecutionMeta({
+  resolveExecutionMeta: createDocxMutatingExecutionMeta({
     getResourceKey: (args) => readStringArg(args, 'sourcePath')
   }),
   workerAction: 'open',
@@ -127,6 +140,8 @@ export const DOCX_OPEN_TOOL_SPEC = {
 
 export const DOCX_OUTLINE_TOOL_SPEC = {
   name: 'docx_outline',
+  familyId: 'docx',
+  requiresWorkspace: true,
   description:
     'Extract a deterministic block outline for a previously opened doc (paragraph/table/table_cell).',
   skillIds: ['docx-read'],
@@ -176,13 +191,15 @@ export const DOCX_OUTLINE_TOOL_SPEC = {
     ],
     commonMistakes: ['如果任务已给出精确原文，可 open 后直接 apply_ops，不必先 outline。']
   },
-  executionMeta: createDocxReadExecutionMeta(),
+  resolveExecutionMeta: createDocxReadExecutionMeta(),
   workerAction: 'outline',
   activityActionType: 'docx_outline'
 } satisfies DocxToolSpec<z.infer<typeof outlineSchema>, 'docx_outline', 'docx-read'>
 
 export const DOCX_GET_BLOCK_TOOL_SPEC = {
   name: 'docx_get_block',
+  familyId: 'docx',
+  requiresWorkspace: true,
   description: 'Get one block by blockId with detailed structure.',
   skillIds: ['docx-read'],
   schema: getBlockSchema,
@@ -214,12 +231,14 @@ export const DOCX_GET_BLOCK_TOOL_SPEC = {
     ],
     commonMistakes: ['不要在没有 blockId 的情况下调用。']
   },
-  executionMeta: createDocxReadExecutionMeta(),
+  resolveExecutionMeta: createDocxReadExecutionMeta(),
   workerAction: 'get_block'
 } satisfies DocxToolSpec<z.infer<typeof getBlockSchema>, 'docx_get_block', 'docx-read'>
 
 export const DOCX_SEARCH_TOOL_SPEC = {
   name: 'docx_search',
+  familyId: 'docx',
+  requiresWorkspace: true,
   description:
     'Search blocks in a doc using literal/regex mode, or semantic block retrieval with cached embeddings.',
   skillIds: ['docx-read'],
@@ -268,12 +287,14 @@ export const DOCX_SEARCH_TOOL_SPEC = {
       'semantic 适合找相近语义，literal/regex 更适合稳定定位。'
     ]
   },
-  executionMeta: createDocxReadExecutionMeta(),
+  resolveExecutionMeta: createDocxReadExecutionMeta(),
   workerAction: 'search'
 } satisfies DocxToolSpec<z.infer<typeof searchSchema>, 'docx_search', 'docx-read'>
 
 export const DOCX_GET_HISTORY_TOOL_SPEC = {
   name: 'docx_get_history',
+  familyId: 'docx',
+  requiresWorkspace: true,
   description:
     'Inspect the immutable docx snapshot lineage for the current run. Useful for confirm/rollback flows before save.',
   skillIds: ['docx-read'],
@@ -305,11 +326,13 @@ export const DOCX_GET_HISTORY_TOOL_SPEC = {
       }
     ]
   },
-  executionMeta: createDocxReadExecutionMeta()
+  resolveExecutionMeta: createDocxReadExecutionMeta()
 } satisfies DocxToolSpec<z.infer<typeof historySchema>, 'docx_get_history', 'docx-read'>
 
 export const DOCX_APPLY_OPS_TOOL_SPEC = {
   name: 'docx_apply_ops',
+  familyId: 'docx',
+  requiresWorkspace: true,
   description:
     'Apply structured docx operations and return a new immutable docId snapshot with changed blocks.',
   skillIds: ['docx-write'],
@@ -352,7 +375,7 @@ export const DOCX_APPLY_OPS_TOOL_SPEC = {
       }
     ],
     commonMistakes: [
-      'replace_text 用 query/replace，不要误写成 source/target。',
+      'replace_text 的最小合法结构是 type/query/replace，不要缺少 type，也不要误写成 source/target。',
       'update_table_cell 的 content 必须是 paragraph 数组，不是纯字符串。',
       'apply_ops 后会产生 newDocId；后续若显式传 docId，应使用最新快照。'
     ],
@@ -364,10 +387,14 @@ export const DOCX_APPLY_OPS_TOOL_SPEC = {
       {
         goal: '更新表格单元格为 Bob',
         args: DOCX_UPDATE_TABLE_CELL_EXAMPLE
+      },
+      {
+        goal: '批量替换两个占位符',
+        args: DOCX_REPLACE_TODO_BATCH_EXAMPLE
       }
     ]
   },
-  executionMeta: createDocxMutatingExecutionMeta({
+  resolveExecutionMeta: createDocxMutatingExecutionMeta({
     getResourceKey: (args) => readStringArg(args, 'docId')
   }),
   workerAction: 'apply_ops',
@@ -376,6 +403,8 @@ export const DOCX_APPLY_OPS_TOOL_SPEC = {
 
 export const DOCX_ROLLBACK_TOOL_SPEC = {
   name: 'docx_rollback',
+  familyId: 'docx',
+  requiresWorkspace: true,
   description:
     'Move back to an ancestor docx snapshot in the current run without writing files. Use before user confirmation.',
   skillIds: ['docx-write'],
@@ -414,7 +443,7 @@ export const DOCX_ROLLBACK_TOOL_SPEC = {
     ],
     commonMistakes: ['rollback 只影响当前 run 内草稿，不会直接恢复磁盘上的原文件。']
   },
-  executionMeta: createDocxMutatingExecutionMeta({
+  resolveExecutionMeta: createDocxMutatingExecutionMeta({
     getResourceKey: (args) => readStringArg(args, 'docId') || readStringArg(args, 'targetDocId')
   }),
   activityActionType: 'docx_rollback'
@@ -422,6 +451,8 @@ export const DOCX_ROLLBACK_TOOL_SPEC = {
 
 export const DOCX_RENDER_PREVIEW_TOOL_SPEC = {
   name: 'docx_render_preview',
+  familyId: 'docx',
+  requiresWorkspace: true,
   description:
     'Render preview artifact for the current doc snapshot. html returns a preview docx artifact path for renderer.',
   skillIds: ['docx-delivery'],
@@ -466,7 +497,7 @@ export const DOCX_RENDER_PREVIEW_TOOL_SPEC = {
     ],
     commonMistakes: ['如果任务只要求 preview，不要额外 save。']
   },
-  executionMeta: createDocxMutatingExecutionMeta({
+  resolveExecutionMeta: createDocxMutatingExecutionMeta({
     getResourceKey: (args) => readStringArg(args, 'docId')
   }),
   workerAction: 'render_preview'
@@ -474,6 +505,8 @@ export const DOCX_RENDER_PREVIEW_TOOL_SPEC = {
 
 export const DOCX_SAVE_TOOL_SPEC = {
   name: 'docx_save',
+  familyId: 'docx',
+  requiresWorkspace: true,
   description: 'Save doc snapshot to a workspace docx path with overwrite approval guard.',
   skillIds: ['docx-delivery'],
   schema: saveSchema,
@@ -519,7 +552,7 @@ export const DOCX_SAVE_TOOL_SPEC = {
       'preview/handoff 任务默认不需要 save。'
     ]
   },
-  executionMeta: createDocxMutatingExecutionMeta({
+  resolveExecutionMeta: createDocxMutatingExecutionMeta({
     getResourceKey: (args) => readStringArg(args, 'outPath') || readStringArg(args, 'docId')
   }),
   workerAction: 'save'
@@ -527,6 +560,8 @@ export const DOCX_SAVE_TOOL_SPEC = {
 
 export const DOCX_VALIDATE_TOOL_SPEC = {
   name: 'docx_validate',
+  familyId: 'docx',
+  requiresWorkspace: true,
   description: 'Validate current doc snapshot structure and relationship consistency.',
   skillIds: ['docx-delivery'],
   schema: validateSchema,
@@ -551,7 +586,7 @@ export const DOCX_VALIDATE_TOOL_SPEC = {
       }
     ]
   },
-  executionMeta: createDocxReadExecutionMeta(),
+  resolveExecutionMeta: createDocxReadExecutionMeta(),
   workerAction: 'validate'
 } satisfies DocxToolSpec<z.infer<typeof validateSchema>, 'docx_validate', 'docx-delivery'>
 
@@ -593,18 +628,3 @@ export function getDocxToolSpec<TName extends DocxToolName>(
   }
   return spec as Extract<AnyDocxToolSpec, { name: TName }>
 }
-
-const toDocxToolDefinition = (
-  spec: AnyDocxToolSpec
-): CapabilityToolDefinition =>
-  createStaticCapabilityToolDefinition({
-    name: spec.name,
-    familyId: 'docx',
-    skillIds: [...spec.skillIds],
-    requiresWorkspace: true,
-    schema: spec.schema as CapabilityToolDefinition['schema'],
-    promptSpec: spec.promptSpec,
-    executionMeta: spec.executionMeta
-  })
-
-export const DOCX_TOOL_DEFINITIONS = DOCX_TOOL_SPECS.map(toDocxToolDefinition)

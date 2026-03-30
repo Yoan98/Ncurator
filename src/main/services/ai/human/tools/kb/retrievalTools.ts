@@ -4,11 +4,11 @@ import type { KnowledgeRetrievalContext } from '../../../types'
 import { normalizeForIpc } from '../../../../../utils/serialization'
 import {
   KB_CHUNK_SEARCH_SCHEMA,
-  KB_FTS_SEARCH_CHUNKS_CONTRACT,
-  KB_HYBRID_SEARCH_CHUNKS_CONTRACT,
-  KB_LIST_DOCUMENTS_CONTRACT,
-  KB_VECTOR_SEARCH_CHUNKS_CONTRACT
-} from '../catalog/toolDescriptors/kb'
+  KB_FTS_SEARCH_CHUNKS_TOOL_SPEC,
+  KB_HYBRID_SEARCH_CHUNKS_TOOL_SPEC,
+  KB_LIST_DOCUMENTS_TOOL_SPEC,
+  KB_VECTOR_SEARCH_CHUNKS_TOOL_SPEC
+} from './toolSpecs'
 import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
 
@@ -102,7 +102,7 @@ export const buildKbCapabilityTools = (input: {
     )
 
   const kbHybridSearchChunks = createChunkSearchTool({
-    name: KB_HYBRID_SEARCH_CHUNKS_CONTRACT.name,
+    name: KB_HYBRID_SEARCH_CHUNKS_TOOL_SPEC.name,
     description: 'Hybrid search over local knowledge base chunks (FTS + vector + RRF rerank).',
     execute: async (args) => {
       const { data: vec } = await ctx.embeddingService.embed(args.queryText)
@@ -117,7 +117,7 @@ export const buildKbCapabilityTools = (input: {
   })
 
   const kbVectorSearchChunks = createChunkSearchTool({
-    name: KB_VECTOR_SEARCH_CHUNKS_CONTRACT.name,
+    name: KB_VECTOR_SEARCH_CHUNKS_TOOL_SPEC.name,
     description: 'Vector-only search over local knowledge base chunks.',
     execute: async (args) => {
       const { data: vec } = await ctx.embeddingService.embed(args.queryText)
@@ -131,7 +131,7 @@ export const buildKbCapabilityTools = (input: {
   })
 
   const kbFtsSearchChunks = createChunkSearchTool({
-    name: KB_FTS_SEARCH_CHUNKS_CONTRACT.name,
+    name: KB_FTS_SEARCH_CHUNKS_TOOL_SPEC.name,
     description: 'FTS-only search over local knowledge base chunks.',
     execute: async (args) =>
       await ctx.documentsStore.ftsSearch(
@@ -146,7 +146,7 @@ export const buildKbCapabilityTools = (input: {
     async (args) =>
       await withToolLifecycle({
         emitter: toolEvents,
-        toolName: KB_LIST_DOCUMENTS_CONTRACT.name,
+        toolName: KB_LIST_DOCUMENTS_TOOL_SPEC.name,
         args: args as JsonObject,
         execute: async (session) => {
           ctx.checkCancelled()
@@ -181,9 +181,9 @@ export const buildKbCapabilityTools = (input: {
         }
       }),
     {
-      name: KB_LIST_DOCUMENTS_CONTRACT.name,
+      name: KB_LIST_DOCUMENTS_TOOL_SPEC.name,
       description: 'List local knowledge base documents by keyword (document table).',
-      schema: KB_LIST_DOCUMENTS_CONTRACT.schema
+      schema: KB_LIST_DOCUMENTS_TOOL_SPEC.schema
     }
   )
 

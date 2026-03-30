@@ -3,7 +3,7 @@ import type { AiRunContext } from '../../../types'
 import type { AiToolFamilyId, ToolFamilyBuildInput } from '../../tools/types'
 import { TOOL_FAMILY_DEFINITIONS } from '../../tools'
 import type { HumanRuntimeCache, RuntimeSkillId } from '../../types'
-import { getSkillDefinition } from '../../tools/catalog'
+import { getSkillDefinition } from '../../skills'
 
 const TOOL_FAMILY_BUILDERS: Record<
   AiToolFamilyId,

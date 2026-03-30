@@ -1,6 +1,6 @@
 import type { AiRunContext } from '../../../types'
 import type { HumanRuntimeCache, HumanState } from '../../types'
-import { hasSkillDefinition } from '../../tools/catalog'
+import { hasSkillDefinition } from '../../skills'
 import { ensureSkillTools } from './skillLoader'
 import { returnToBrain, returnToBrainAfterTrace, returnToBrainWithWatchHint } from '../utils/stateTransitions'
 

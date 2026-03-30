@@ -91,6 +91,7 @@ export type AiRunContext = {
   runId: string
   selectedDocumentIds?: string[]
   selectedScopeSummary: string
+  allowNonLocal: boolean
   humanRuntimeOverrides?: {
     hardActionLimit?: number
   }

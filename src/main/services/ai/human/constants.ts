@@ -29,6 +29,13 @@ export const TOOL_CALL_RESULT_CODES = [
   'invalid_input'
 ] as const
 
+export const TOOL_CALL_DIAGNOSTIC_KINDS = [
+  'workspace_required',
+  'invalid_input',
+  'approval_denied',
+  'path_unavailable'
+] as const
+
 export const HUMAN_DELIVERY_MODES = ['user_answer', 'task_handoff', 'context_note'] as const
 
 export const HUMAN_MAX_BRAIN_DECISION_HISTORY = 10

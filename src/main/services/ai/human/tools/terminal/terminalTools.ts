@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { tool } from '@langchain/core/tools'
 import type { AiTaskResultCode, IpcJsonObject, IpcJsonValue } from '../../../../../../shared/types'
 import type { TerminalToolContext } from '../../../types'
-import { TERMINAL_RUN_COMMAND_CONTRACT } from '../catalog/toolDescriptors/terminal'
+import { TERMINAL_RUN_COMMAND_TOOL_SPEC } from './toolSpecs'
 import { runTerminalCommand } from './terminalExec'
 import type {
   TerminalCapabilityToolsInput,
@@ -303,10 +303,10 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
         }
       }),
     {
-      name: TERMINAL_RUN_COMMAND_CONTRACT.name,
+      name: TERMINAL_RUN_COMMAND_TOOL_SPEC.name,
       description:
         'Execute one shell command inside workspace with boundary checks, risk classification, approval gating, and terminal-step events.',
-      schema: TERMINAL_RUN_COMMAND_CONTRACT.schema
+      schema: TERMINAL_RUN_COMMAND_TOOL_SPEC.schema
     }
   )
 

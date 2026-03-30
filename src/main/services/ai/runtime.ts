@@ -75,6 +75,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     runId: payload.runId,
     selectedDocumentIds: effectiveDocumentIds,
     selectedScopeSummary: buildSelectedScopeSummary(normalizedScopes, payload.allowNonLocal),
+    allowNonLocal: Boolean(payload.allowNonLocal),
     workspace: normalizeWorkspaceBinding(payload.workspace),
     checkCancelled,
     chatStructured,

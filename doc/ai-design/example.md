@@ -50,11 +50,10 @@
 为了便于阅读，下文把 `selectedScopeSummary` 近似理解成：
 
 ```text
-workspace=/project-alpha
-selected scopes:
-- workspace directory: docs/prd
-- kb document: 品牌术语规范
-- kb document: 发布说明模板
+1. directory: Alpha PRD 目录 (docs/prd)
+2. knowledge document: 品牌术语规范
+3. knowledge document: 发布说明模板
+允许非本地信息: 否
 ```
 
 ### 2.2 初始 `AiRunState`
@@ -74,6 +73,15 @@ selected scopes:
   dispatchCursor: 0,
   finalArtifacts: []
 }
+```
+
+同时，`brain` prompt 还会额外看到一段不进入 `HumanState` 的 `run constraints`，例如：
+
+```text
+- 资料范围摘要：已选择 Alpha PRD 目录、品牌术语规范、发布说明模板。
+- 已选文档数：2
+- 工作区：已绑定；如需访问文件，请使用工作区内相对路径。
+- 允许非本地信息：否
 ```
 
 这里还没有任何 `human` 状态。`director` 先决定这轮是直接做、先补上下文，还是拆计划。
@@ -298,6 +306,21 @@ selected scopes:
 - `trace.steps`
 
 这一步还不会改 `brainMemory.inside`。工具结果先原样落在 `lastParallelCallToolResults`，等下一轮 `brain` 再提炼成 evidences/facts。
+
+如果某次工具失败，`lastParallelCallToolResults` 里除了 `code/summary` 之外，还可能带有结构化 `diagnostic`。例如：
+
+```json
+{
+  "toolName": "docx_apply_ops",
+  "ok": false,
+  "code": "invalid_input",
+  "summary": "Invalid input at ops[0].type",
+  "diagnostic": {
+    "kind": "invalid_input",
+    "missingArgs": ["type"]
+  }
+}
+```
 
 #### 2.5.4 `brain` 第四次决策，再做一批文档读取
 

@@ -1,5 +1,7 @@
+import type { AiRunContext } from '../../types'
 import type { HumanState, ToolPromptSpec } from '../types'
-import { getSkillDefinition, getToolPromptSpec } from '../tools/catalog'
+import { getSkillDefinition } from '../skills'
+import { getToolPromptSpec } from '../tools/registry'
 import { renderLineList } from '../../utils/render'
 import {
   renderHumanEvidenceLines,
@@ -17,6 +19,7 @@ type BrainPromptRenderView = {
   factLines: string
   evidenceLines: string
   openQuestionLines: string
+  runConstraintsLines: string[]
   skillCatalogLines: string[]
   learnedSkillIdLines: string[]
   learnedSkillDetailLines: string[]
@@ -27,6 +30,7 @@ type BrainPromptRenderView = {
 
 export type BrainPromptSections = {
   memorySnapshotText: string
+  runConstraintsText: string
   skillContextText: string
   recentToolResultsText: string
   recentDecisionHistoryText: string
@@ -44,7 +48,34 @@ const renderLearnedToolSpecLine = (spec: ToolPromptSpec): string => {
   return `- 工具 ${spec.name}：适用场景=${spec.whenToUse}；必填参数=[${requiredArgs || 'none'}]；${example}`
 }
 
-const buildBrainPromptRenderView = (state: HumanState): BrainPromptRenderView => {
+const buildRecentToolResultLine = (
+  result: NonNullable<HumanState['lastParallelCallToolResults']>[number],
+  index: number
+): string => {
+  const diagnosticText = result.diagnostic
+    ? `；diagnostic=${result.diagnostic.kind}${result.diagnostic.missingArgs?.length ? `；missingArgs=[${result.diagnostic.missingArgs.join(', ')}]` : ''}`
+    : ''
+  return `- 第${index + 1}项：工具 ${result.toolName} ${result.ok ? '执行成功' : '执行失败'}（code=${result.code}）；摘要：${result.summary}${diagnosticText}`
+}
+
+const buildRunConstraintsLines = (ctx: AiRunContext): string[] => {
+  const selectedDocumentCount = ctx.selectedDocumentIds?.length || 0
+  return [
+    '- 当前运行约束来自系统运行态，不是用户额外说明。',
+    `- 资料范围摘要：${ctx.selectedScopeSummary.replace(/\n/g, ' | ')}`,
+    `- 已选文档数：${selectedDocumentCount}`,
+    ctx.workspace
+      ? '- 工作区：已绑定；若确实需要访问文件，请使用工作区内相对路径。'
+      : '- 工作区：未绑定；不要依赖 terminal 或 docx workspace 能力。',
+    `- 允许非本地信息：${ctx.allowNonLocal ? '是' : '否'}`
+  ]
+}
+
+const buildBrainPromptRenderView = (input: {
+  state: HumanState
+  ctx: AiRunContext
+}): BrainPromptRenderView => {
+  const { state, ctx } = input
   const learnedSkillIds = state.brainMemory.outside.learnedSkillIds
   const learnedSkillDefinitions = learnedSkillIds.map((skillId) => getSkillDefinition(skillId))
   const learnedToolNames = Array.from(
@@ -59,9 +90,8 @@ const buildBrainPromptRenderView = (state: HumanState): BrainPromptRenderView =>
       : ['none']
 
   const recentToolResultLines = renderLineList(
-    (state.lastParallelCallToolResults || []).map(
-      (result, index) =>
-        `- 第${index + 1}项：工具 ${result.toolName} ${result.ok ? '执行成功' : '执行失败'}（code=${result.code}）；摘要：${result.summary}`
+    (state.lastParallelCallToolResults || []).map((result, index) =>
+      buildRecentToolResultLine(result, index)
     ),
     {
       fallback: 'none',
@@ -92,6 +122,7 @@ const buildBrainPromptRenderView = (state: HumanState): BrainPromptRenderView =>
     factLines: renderHumanFactLines(state, 'brain_prompt'),
     evidenceLines: renderHumanEvidenceLines(state, 'brain_prompt'),
     openQuestionLines: renderHumanOpenQuestionLines(state, 'brain_prompt'),
+    runConstraintsLines: buildRunConstraintsLines(ctx),
     skillCatalogLines:
       state.brainMemory.outside.skillCatalog.length > 0
         ? state.brainMemory.outside.skillCatalog.map(
@@ -111,8 +142,11 @@ const buildBrainPromptRenderView = (state: HumanState): BrainPromptRenderView =>
   }
 }
 
-export const buildBrainPromptSections = (state: HumanState): BrainPromptSections => {
-  const view = buildBrainPromptRenderView(state)
+export const buildBrainPromptSections = (input: {
+  state: HumanState
+  ctx: AiRunContext
+}): BrainPromptSections => {
+  const view = buildBrainPromptRenderView(input)
 
   return {
     memorySnapshotText: [
@@ -126,6 +160,11 @@ export const buildBrainPromptSections = (state: HumanState): BrainPromptSections
       '',
       '仍未解决的问题：',
       view.openQuestionLines
+    ].join('\n'),
+    runConstraintsText: [
+      '下面是本次运行的固定边界。它们是当前任务真实可用范围的一部分，决策时必须一起考虑。',
+      '',
+      formatList(view.runConstraintsLines)
     ].join('\n'),
     skillContextText: [
       '下面是当前可用的技能信息。技能目录摘要只用于判断要不要学习；只有已学习 skill 的详细说明和工具要点，才代表你当前可以直接依赖的能力。',

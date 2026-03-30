@@ -9,6 +9,7 @@ import {
   HUMAN_STEP_ACTIONS,
   HUMAN_STEP_RESULT_STATUSES,
   RUNTIME_SKILL_IDS,
+  TOOL_CALL_DIAGNOSTIC_KINDS,
   TOOL_CALL_RESULT_CODES
 } from './constants'
 
@@ -23,6 +24,7 @@ export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
 export const runtimeSkillIdSchema = z.enum(RUNTIME_SKILL_IDS)
 export const toolFamilyIdSchema = z.enum(AI_TOOL_FAMILY_IDS)
 export const toolCallResultCodeSchema = z.enum(TOOL_CALL_RESULT_CODES)
+export const toolCallDiagnosticKindSchema = z.enum(TOOL_CALL_DIAGNOSTIC_KINDS)
 export const humanStageSchema = z.enum(HUMAN_STAGES)
 export const humanStatusSchema = z.enum(HUMAN_STATUSES)
 export const humanDeliveryModeSchema = z.enum(HUMAN_DELIVERY_MODES)
@@ -60,12 +62,18 @@ export const toolCallParamSchema = z.object({
   args: jsonObjectSchema
 })
 
+export const toolCallDiagnosticSchema = z.object({
+  kind: toolCallDiagnosticKindSchema,
+  missingArgs: z.array(z.string().min(1)).optional()
+})
+
 export const toolCallResultSchema = z.object({
   toolName: z.string().min(1),
   ok: z.boolean(),
   code: toolCallResultCodeSchema,
   summary: z.string().min(1),
-  data: jsonValueSchema.optional()
+  data: jsonValueSchema.optional(),
+  diagnostic: toolCallDiagnosticSchema.optional()
 })
 
 export const brainMemoryOpSchema = z.union([

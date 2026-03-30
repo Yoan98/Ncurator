@@ -174,6 +174,28 @@ type CreateTestAiRunContextInput = CreateAiRunContextInput & {
   resolveDocxOpenTarget?: (sourcePath: string) => Promise<ResolvedDocxOpenTarget>
 }
 
+const buildSelectedScopeSummary = (input: {
+  bindWorkspace: boolean
+  selectedDocumentIds?: string[]
+  allowNonLocal?: boolean
+}): string => {
+  const parts: string[] = []
+  if (input.selectedDocumentIds && input.selectedDocumentIds.length > 0) {
+    parts.push(`已选资料文档 ${input.selectedDocumentIds.length} 份。`)
+  } else {
+    parts.push('当前没有显式选中的资料文档。')
+  }
+
+  if (input.bindWorkspace) {
+    parts.push('当前已绑定工作区 test-workspace；如需访问文件，请使用工作区内相对路径。')
+  } else {
+    parts.push('当前未绑定工作区；不要依赖 terminal 或 docx workspace 能力。')
+  }
+
+  parts.push(`允许非本地信息: ${input.allowNonLocal ? '是' : '否'}`)
+  return parts.join('\n')
+}
+
 export const createTestAiRunContext = (input: CreateTestAiRunContextInput): AiRunContext => {
   const runId = input.runId || randomUUID()
   const bindWorkspace = input.bindWorkspace !== false
@@ -217,11 +239,12 @@ export const createTestAiRunContext = (input: CreateTestAiRunContextInput): AiRu
   const context = {
     runId,
     selectedDocumentIds: input.selectedDocumentIds,
-    selectedScopeSummary: bindWorkspace
-      ? `workspace:test-workspace`
-      : input.selectedDocumentIds?.length
-        ? `documents:${input.selectedDocumentIds.join(',')}`
-        : 'workspace:unbound',
+    selectedScopeSummary: buildSelectedScopeSummary({
+      bindWorkspace,
+      selectedDocumentIds: input.selectedDocumentIds,
+      allowNonLocal: input.allowNonLocal
+    }),
+    allowNonLocal: Boolean(input.allowNonLocal),
     humanRuntimeOverrides: input.humanRuntimeOverrides,
     workspace: bindWorkspace
       ? {

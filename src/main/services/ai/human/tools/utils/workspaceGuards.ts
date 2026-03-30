@@ -4,7 +4,7 @@ import type { z } from 'zod/v4'
 import { emitActivity } from '../../../../../utils/aiCapabilityUtils'
 import type { AiEventDispatchContext, AiRunContext } from '../../../types'
 import { jsonObjectSchema } from '../../schema'
-import { listToolNamesByFamily } from '../catalog'
+import { listToolNamesByFamily } from '../registry'
 import type {
   AiToolFamilyId,
   CapabilityActivityInput,

@@ -16,7 +16,10 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
       ? overriddenDecision
       : await input.ctx.chatStructured({
           caller: 'human.brain',
-          ...buildBrainPromptContext(state),
+          ...buildBrainPromptContext({
+            state,
+            ctx: input.ctx
+          }),
           schema: lastBrainDecisionSchema,
           schemaName: 'human_brain_decision',
           temperature: 0.1

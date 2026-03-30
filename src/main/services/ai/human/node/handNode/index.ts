@@ -2,7 +2,7 @@ import type { JsonObject } from '../../../../../../shared/types'
 import { HUMAN_DEFAULT_TOOL_CALL_LIMIT } from '../../constants'
 import type { AiRunContext } from '../../../types'
 import { extractArtifactRefsFromToolResults, mergeArtifactRefs } from '../../../utils/artifacts'
-import { getToolDescriptor } from '../../tools/catalog'
+import { getToolSpec } from '../../tools/registry'
 import type { ToolExecutionMeta } from '../../tools/types'
 import type { HumanRuntimeCache, HumanState, ToolCallParam } from '../../types'
 import { executeToolCall } from './toolExecutor'
@@ -14,8 +14,8 @@ export const getToolExecutionMeta = (input: {
   toolName: string
   args: JsonObject
 }): ToolExecutionMeta => {
-  const descriptor = getToolDescriptor(input.toolName)
-  if (descriptor) return descriptor.resolveExecutionMeta(input.args)
+  const spec = getToolSpec(input.toolName)
+  if (spec) return spec.resolveExecutionMeta(input.args)
 
   return {
     mutability: 'mutating',

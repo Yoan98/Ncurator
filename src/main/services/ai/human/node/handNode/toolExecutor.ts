@@ -8,6 +8,7 @@ import type {
   AiRunContextWithHumanOverrides,
   HumanRuntimeCache,
   RuntimeSkillId,
+  ToolCallDiagnostic,
   ToolCallResult,
   ToolCallResultCode
 } from '../../types'
@@ -104,28 +105,115 @@ const summarizeObjectPayload = (toolName: string, payload: IpcJsonObject): strin
   return undefined
 }
 
+const DIAGNOSTIC_FIELD_CANDIDATES = [
+  'type',
+  'query',
+  'replace',
+  'blockId',
+  'anchorBlockId',
+  'content',
+  'docId',
+  'sourcePath',
+  'outPath',
+  'command',
+  'cwd'
+] as const
+
+const extractMissingArgs = (message: string): string[] => {
+  const found = new Set<string>()
+  for (const field of DIAGNOSTIC_FIELD_CANDIDATES) {
+    if (
+      message.includes(`.${field}`) ||
+      message.includes(`"${field}"`) ||
+      message.includes(`'${field}'`) ||
+      message.includes(` ${field} `)
+    ) {
+      found.add(field)
+    }
+  }
+  return [...found]
+}
+
+const isToolCallDiagnosticKind = (
+  value: string
+): value is ToolCallDiagnostic['kind'] =>
+  ['workspace_required', 'invalid_input', 'approval_denied', 'path_unavailable'].includes(value)
+
+const inferDiagnosticFromFailure = (input: {
+  code: ToolCallResultCode
+  summary: string
+  payload?: IpcJsonObject
+}): ToolCallDiagnostic | undefined => {
+  const explicit = input.payload?.diagnostic
+  if (isJsonObject(explicit) && typeof explicit.kind === 'string' && isToolCallDiagnosticKind(explicit.kind)) {
+    return {
+      kind: explicit.kind,
+      missingArgs: Array.isArray(explicit.missingArgs)
+        ? explicit.missingArgs.map((item) => String(item).trim()).filter(Boolean)
+        : undefined
+    }
+  }
+
+  if (input.code === 'workspace_required') {
+    return { kind: 'workspace_required' }
+  }
+
+  if (input.code === 'approval_denied') {
+    return { kind: 'approval_denied' }
+  }
+
+  if (
+    input.summary.includes('cwd does not exist inside workspace') ||
+    input.summary.includes('sourcePath not found') ||
+    input.summary.includes('effective docx path not found')
+  ) {
+    return { kind: 'path_unavailable' }
+  }
+
+  if (input.code === 'invalid_input') {
+    const missingArgs = extractMissingArgs(input.summary)
+    return {
+      kind: 'invalid_input',
+      missingArgs: missingArgs.length > 0 ? missingArgs : undefined
+    }
+  }
+
+  return undefined
+}
+
 const normalizeToolCallResult = (
   toolName: string,
   payload: JsonValue
 ): ToolCallResult => {
   if (isJsonObject(payload)) {
+    const ok = payload.ok !== false && payload.success !== false
+    const code = parseToolCallResultCode({
+      code: payload.code,
+      ok: payload.ok === false ? false : payload.ok === true ? true : undefined,
+      success: payload.success === false ? false : payload.success === true ? true : undefined
+    })
+    const summary =
+      typeof payload.summary === 'string'
+        ? payload.summary
+        : typeof payload.error === 'string'
+          ? payload.error
+          : typeof payload.message === 'string'
+            ? payload.message
+            : summarizeObjectPayload(toolName, payload) || `${toolName} executed`
+
     return {
       toolName,
-      ok: payload.ok !== false && payload.success !== false,
-      code: parseToolCallResultCode({
-        code: payload.code,
-        ok: payload.ok === false ? false : payload.ok === true ? true : undefined,
-        success: payload.success === false ? false : payload.success === true ? true : undefined
-      }),
-      summary:
-        typeof payload.summary === 'string'
-          ? payload.summary
-          : typeof payload.error === 'string'
-            ? payload.error
-            : typeof payload.message === 'string'
-              ? payload.message
-              : summarizeObjectPayload(toolName, payload) || `${toolName} executed`,
-      data: payload
+      ok,
+      code,
+      summary,
+      data: payload,
+      diagnostic: ok
+        ? undefined
+        : inferDiagnosticFromFailure({
+            code,
+            summary,
+            payload
+          })
     }
   }
 
@@ -183,7 +271,10 @@ export const executeToolCall = async (input: {
       toolName: input.toolName,
       ok: false,
       code: 'invalid_input',
-      summary: `当前未学习可执行工具 ${input.toolName}。`
+      summary: `当前未学习可执行工具 ${input.toolName}。`,
+      diagnostic: {
+        kind: 'invalid_input'
+      }
     }
   }
 
@@ -203,7 +294,8 @@ export const executeToolCall = async (input: {
           ok: injected.ok,
           code: injected.code,
           summary: injected.summary,
-          data: injected.data
+          data: injected.data,
+          diagnostic: injected.diagnostic
         }
         if (injected.ok) {
           session.succeed(outputPreview)
@@ -224,7 +316,11 @@ export const executeToolCall = async (input: {
       toolName: input.toolName,
       ok: false,
       code: 'invalid_input',
-      summary: message
+      summary: message,
+      diagnostic: inferDiagnosticFromFailure({
+        code: 'invalid_input',
+        summary: message
+      })
     }
   }
 }

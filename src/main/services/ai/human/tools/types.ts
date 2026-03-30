@@ -44,21 +44,16 @@ export type WorkspaceCapabilityBuildInput<TContext = AiRunContext> = {
   emitActivity: (input: CapabilityActivityInput) => void
 }
 
-export type ToolDescriptor = {
-  name: string
-  familyId: AiToolFamilyId
-  skillIds: RuntimeSkillId[]
-  requiresWorkspace: boolean
-  promptSpec: ToolPromptSpec
-  resolveExecutionMeta: ToolExecutionMetaResolver
-}
-
-export type ToolContractDefinition<
+export type HumanToolSpec<
   TArgs extends JsonObject = JsonObject,
   TName extends string = string,
   TSkillId extends RuntimeSkillId = RuntimeSkillId
-> = Omit<ToolDescriptor, 'name' | 'skillIds'> & {
+> = {
   name: TName
+  familyId: AiToolFamilyId
   skillIds: TSkillId[]
+  requiresWorkspace: boolean
   schema: z.ZodType<TArgs>
+  promptSpec: ToolPromptSpec
+  resolveExecutionMeta: ToolExecutionMetaResolver
 }

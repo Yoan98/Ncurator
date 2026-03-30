@@ -33,10 +33,15 @@ const renderArtifactLine = (
 const renderToolResultLine = (
   result: NonNullable<HumanState['lastParallelCallToolResults']>[number],
   mode: HumanRuntimeRenderMode
-): string =>
-  mode === 'prompt'
-    ? `- 工具 ${result.toolName} ${result.ok ? '执行成功' : '执行失败'}（code=${result.code}）；摘要：${result.summary}`
-    : `${result.toolName} (${result.code}) - ${result.summary}`
+): string => {
+  const diagnosticText = result.diagnostic
+    ? `；diagnostic=${result.diagnostic.kind}${result.diagnostic.missingArgs?.length ? `；missingArgs=[${result.diagnostic.missingArgs.join(', ')}]` : ''}`
+    : ''
+
+  return mode === 'prompt'
+    ? `- 工具 ${result.toolName} ${result.ok ? '执行成功' : '执行失败'}（code=${result.code}）；摘要：${result.summary}${diagnosticText}`
+    : `${result.toolName} (${result.code}) - ${result.summary}${diagnosticText}`
+}
 
 export const renderHumanArtifactLines = (
   state: HumanState,

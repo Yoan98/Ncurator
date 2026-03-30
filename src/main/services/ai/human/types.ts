@@ -28,6 +28,7 @@ import {
   mouthOutputSchema,
   skillCatalogItemSchema,
   toolCallParamSchema,
+  toolCallDiagnosticSchema,
   toolCallResultSchema
 } from './schema'
 
@@ -83,6 +84,8 @@ export type BrainFact = z.infer<typeof brainFactSchema>
 export type BrainDecision = z.infer<typeof brainDecisionSchema>
 
 export type ToolCallParam = z.infer<typeof toolCallParamSchema>
+
+export type ToolCallDiagnostic = z.infer<typeof toolCallDiagnosticSchema>
 
 export type ToolCallResult = z.infer<typeof toolCallResultSchema>
 
