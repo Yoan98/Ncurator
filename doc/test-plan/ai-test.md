@@ -83,8 +83,22 @@ AI 正式测试当前分为三个 suite：
   - `AI_LIVE_BASE_URL`
   - `AI_LIVE_PRIMARY_MODEL_NAME`
   - `AI_LIVE_STRONG_MODEL_NAME`
+- `human/live` 与 `director/live` 的共享节流与重试环境变量统一为：
+  - `NCURATOR_AI_LIVE_MIN_INTERVAL_MS`
+  - `NCURATOR_AI_LIVE_MAX_RETRIES`
+  - `NCURATOR_AI_LIVE_RETRY_BASE_MS`
+  - `NCURATOR_AI_LIVE_RETRY_MAX_MS`
+- `NCURATOR_DIRECTOR_LIVE_MIN_INTERVAL_MS` 仅作为兼容旧 case 的 fallback，新增或调整 live case 时不再作为主变量使用。
 - `human/live` 与 `director/live` 的 `How / Oracle` 应优先断言结构化事实，如路由、节点步骤、工具调用、审批事件、artifact、完成态；不应对模型最终文案做精确文本断言。
 - `human/basics`、`human/scenarios`、`director/basics` 与 `director/contracts` 应优先使用 `chatStructuredOverride`、`humanReasonOverrides`、`humanDeliveryOverride` 和工具执行 override 稳定固定链路，避免把基础回归建立在 live 模型随机性之上。
+
+### 5.1 AI live case 设计与分析规则
+
+- `human/live` 与 `director/live` 的 `How` 必须使用真实用户风格的自然诉求，不得通过输入脚本化内部路径。
+- 禁止在 live `userInput` 中写死 `direct_human / plan / context` 目标、plan 条数、每轮工具数、内部工具名顺序，除非该约束本身就是要验证的真实用户需求。
+- 普通诉求与复杂诉求的路由差异，应主要由任务复杂度、资料范围和交付物复杂度自然触发；需要固定路径验证时，应放在 `human/basics`、`human/scenarios`、`director/basics` 或 `director/contracts`。
+- live `Oracle` 应优先断言行为类别与关键事实，如是否完成、是否进入低编排或增强路径、是否出现关键工具调用、是否产出 artifact；不应绑定精确 plan 条数、精确步骤序号或最终文案措辞。
+- live report 归因必须先区分 `环境阻塞`、`case 设计偏差`、`实现行为偏差`；若多类问题同时存在，应并列记录，不能只保留 `429` 结论。
 
 ## 6. 正式 Case 清单
 
@@ -453,7 +467,7 @@ AI 正式测试当前分为三个 suite：
 - 实现状态：`已实现`
 - What：验证真实 AI 调用下的单任务 KB 问答能力。
 - Why：这是 `human` 作为单任务执行核心的最基础 live 证明。
-- How：使用 live 模型和固定 KB fixture，直接输入自然语言问题，不覆写推理。
+- How：使用 live 模型和固定 KB fixture，直接输入自然语言问题，不覆写推理，也不在输入里指定内部检索步骤。
 - Oracle：
   - trace 至少覆盖 `brain` 与一次真实工具调用。
   - 最终结果为 `completed`，且消费了本地资料结果。
@@ -466,7 +480,7 @@ AI 正式测试当前分为三个 suite：
 - 实现状态：`已实现`
 - What：验证真实 AI 调用下的简单 docx 编辑能力。
 - Why：这是最直接对应真实用户编辑诉求的 live case。
-- How：提供简单 docx，直接给自然语言编辑目标和交付要求，如“修改某段并给 preview”。
+- How：提供简单 docx，直接给自然语言编辑目标和交付要求，如“修改某段并给 preview”，不在输入里指定内部工具顺序。
 - Oracle：
   - 真实出现 docx 读取、定位、写入和至少一个 delivery 工具调用。
   - 任务完成并产出可回看的 artifact 或稳定交付说明。
@@ -479,7 +493,7 @@ AI 正式测试当前分为三个 suite：
 - 实现状态：`已实现`
 - What：验证真实 AI 调用下的长任务流程和多工具联动。
 - Why：human 的智能度不能只靠短任务证明。
-- How：使用 live 模型执行“先查资料，再改 docx，再给出交付说明”的长任务。
+- How：使用 live 模型执行“先查资料，再改 docx，再给出交付说明”的长任务，不在输入里限制每轮工具数或固定步骤序。
 - Oracle：
   - 真实出现多轮 `brain / hand` 交替和多工具联动。
   - 任务最终稳定完成，不因长链路而直接漂移或中断。
@@ -604,10 +618,10 @@ AI 正式测试当前分为三个 suite：
 - 实现状态：`待调整`
 - What：验证普通任务在真实 AI 调用下仍然走 `human-first`。
 - Why：这是当前架构的首要原则。
-- How：使用 live 模型运行单任务 KB 问答或单文档总结类任务。
+- How：使用 live 模型运行单任务 KB 问答或单文档总结类自然请求，不在输入中提前指定“不要 plan”或固定工具路径。
 - Oracle：
-  - `director_intent` 选择 `direct_human`。
-  - 不进入 `context / plan`，最终答案来自一个 direct human。
+  - run 保持低编排行为，默认由一个 direct human 完成单任务交付。
+  - 不进入 `context / plan`，或至少不能出现无必要的增强链路。
 - Not：不验证复杂任务拆分。
 
 #### `complex-task-plan-and-synthesis-live`
@@ -617,8 +631,8 @@ AI 正式测试当前分为三个 suite：
 - 实现状态：`待调整`
 - What：验证复杂任务在真实 AI 调用下进入增强路径并最终完成真实任务。
 - Why：这是 `director` 编排能力最关键的实战验证。
-- How：使用 live strong model 执行“先取规则，再改 docx，最后综合交付”的复杂任务。
+- How：使用 live strong model 执行“先取资料事实，再改 docx，最后综合交付”的复杂任务，不在输入中写死 plan 条数或阶段脚本。
 - Oracle：
-  - run 不走 `direct_human`，而是进入 `context / plan / synthesis` 增强路径。
-  - 产生多条可执行 task，最终由 synthesis human 完成交付并正确合并 artifacts。
+  - run 不走 `direct_human`，而是进入增强路径并完成关键任务链。
+  - 最终由 synthesis human 完成交付并正确合并 plan 阶段 artifacts。
 - Not：不对最终文案做精确文本断言。

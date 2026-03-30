@@ -74,10 +74,10 @@ describe('ai human live backend', () => {
             output = await runner.run({
               taskId: runtime.taskId,
               userInput: [
-                '请根据当前已选资料，先找出本周风险总结和负责人说明。',
-                '再修改 `long-task-live.docx`，把 `RISK_TODO` 和 `OWNER_TODO` 替换成资料里的对应内容。',
-                '每一轮只做一个工具动作，不要重复检索，不要额外保存文件。',
-                '完成后直接给我简短交付说明，不要编造资料里没有的事实。'
+                '请根据当前已选资料完成一个小任务：找出本周风险总结和负责人说明。',
+                '然后更新 `long-task-live.docx`，把 `RISK_TODO` 和 `OWNER_TODO` 替换成资料里的对应内容。',
+                '不要覆盖保存原文件，也不要编造资料里没有的事实。',
+                '完成后直接给我一段简短交付说明。'
               ].join('\n')
             })
           } finally {

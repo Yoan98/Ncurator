@@ -40,7 +40,6 @@ describe('ai human live backend', () => {
           taskId: runtime.taskId,
           userInput: [
             '请仅基于当前已选本地资料回答：本周风险总结是什么？',
-            '如需先确认范围，只确认一次即可；拿到范围后直接检索证据并完成答复。',
             '不要编造未在资料里出现的事实。'
           ].join('\n')
         })

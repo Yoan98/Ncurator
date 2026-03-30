@@ -70,6 +70,8 @@ tests/
 - 新增、修改或补齐正式 case 时，必须严格对齐对应文档中的 `用例名称 / 实现状态 / What / Why / How / Oracle / Not`。
 - 如果 case 覆盖的是用户可见功能，`How / Oracle` 还必须映射到对应 `doc/prd/**` 的需求编号与验收编号。
 - `How` 用于定义 fixture、前置条件、输入、执行路径与运行方式；`Oracle` 用于定义必须成立的可断言结果；`Not` 用于定义禁止扩张的范围。
+- 正式 live case 的 `How` 不得把待验证的内部实现路径、内部工具顺序、固定 plan 条数或分步剧本直接写进用户输入；这类固定路径验证应放到 non-live 的 override / stub case。
+- 基于 raw logs 更新 report 时，结论顺序必须先区分环境阻塞，再区分 case 设计问题，最后才判断实现问题。
 - 如果 PRD 中的功能入口、交互流程、状态反馈或验收口径发生变化，必须先更新对应 `doc/prd/**`，再更新 `doc/test-plan/**` 与测试代码。
 - 如果实现行为变更导致正式 case 预期变化，必须先更新对应 `doc/test-plan/**`，再修改测试代码。
 - 如果 `tests/**` 非 `temp` 目录里缺少对应正式 case，必须先补 `doc/test-plan/**` 定义，再补测试代码。

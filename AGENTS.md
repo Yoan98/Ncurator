@@ -17,7 +17,7 @@
 - 当涉及 UI 整体风格、配色、字级、圆角、阴影、图标、cursor 或通用交互 affordance 时，请阅读 `doc/ui-style.md`
 
 ### 1.3 测试相关
-- 当涉及AI的测试计划、阶段划分、suite/group归属、tool/docx 或 human/director 正式 case 边界、`human/scenarios/live` 用例实现状态、正式 case 登记 / 裁剪、raw logs / report 更新或 live / 非 live 测试边界时，请阅读 `doc/test-plan/ai-test.md`
+- 当涉及AI的测试计划、阶段划分、suite/group归属、tool/docx 或 human/director 正式 case 边界、`human/scenarios/live` 用例实现状态、AI live 用例设计、live 节流与重试、正式 case 登记 / 裁剪、raw logs / report 更新、report 判因或 live / 非 live 测试边界时，请阅读 `doc/test-plan/ai-test.md`
 - 当涉及Workbench的测试计划、suite划分、标准任务闭环 smoke、`@` 多 token / 多类型插入、右侧持续工作区、review 导航 / anchor、文件级确认或与 `doc/prd/workbench.md` 的测试对齐时，请阅读 `doc/test-plan/workbench-test.md`
 - 当涉及Settings的测试计划、suite划分、正式 case 登记 / 裁剪、raw logs / report 更新或与 `doc/prd/settings.md` 的测试对齐时，请阅读 `doc/test-plan/settings-test.md`
 - 当涉及测试架构、目录分层、正式 case 字段填写或 case 登记规则时，必须阅读 `doc/test.md`

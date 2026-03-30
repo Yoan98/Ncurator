@@ -63,9 +63,6 @@ describe('ai human live backend', () => {
             userInput: [
               '请修改当前工作区里的 `docx-edit-live.docx`。',
               '把包含 `TODO` 的那一段改成 `Status: Approved after review.`。',
-              '原文和目标文案都已明确，不需要 outline 或 search；open 后可直接按原文做 replace_text。',
-              '严格按这个顺序推进：第一轮只允许 `docx_open`，第二轮只允许 `docx_apply_ops`，第三轮只允许 `docx_render_preview`，然后直接交付。',
-              '每一轮只做一个明确的 docx 工具动作，不要把多个 docx 动作放进同一轮。',
               '完成后生成 html preview，再给我交付说明。',
               '不要覆盖保存到其他磁盘文件。'
             ].join('\n')

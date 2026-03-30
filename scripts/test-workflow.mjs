@@ -80,6 +80,7 @@ const resolveScopeDir = (input) => {
 }
 
 const isE2EFile = (filePath) => path.basename(filePath).endsWith('.e2e.test.ts')
+const isLiveBackendFile = (filePath) => filePath.includes(`${path.sep}live${path.sep}`) && !isE2EFile(filePath)
 
 const findTestFiles = async (input) => {
   const scopeDir = resolveScopeDir(input)
@@ -124,9 +125,7 @@ const runCommandWithFallback = (input) => {
 }
 
 const runVitest = (input) => {
-  const extraArgs = input.testFiles.some((filePath) =>
-    filePath.includes(`${path.sep}live${path.sep}`)
-  )
+  const extraArgs = input.testFiles.some((filePath) => isLiveBackendFile(filePath))
     ? ['--maxWorkers', '1']
     : []
   const commandArgs = ['--config', input.configPath, ...extraArgs, 'run', ...input.testFiles]
@@ -141,6 +140,11 @@ const runVitest = (input) => {
     }
   })
 }
+
+const partitionBackendTestFiles = (testFiles) => ({
+  nonLiveFiles: testFiles.filter((filePath) => !isLiveBackendFile(filePath)),
+  liveFiles: testFiles.filter((filePath) => isLiveBackendFile(filePath))
+})
 
 const buildE2EApp = () => {
   return runCommandWithFallback({
@@ -174,12 +178,37 @@ const runTypeWorkflow = async (input) => {
 
   let exitCode = 0
   for (let iteration = 0; iteration < input.runs; iteration += 1) {
-    const code = runVitest({
-      configPath: input.type === 'e2e' ? 'vitest.e2e.config.mts' : 'vitest.backend.config.mts',
-      testFiles
-    })
-    if (code !== 0) {
-      exitCode = code
+    if (input.type === 'backend') {
+      const { nonLiveFiles, liveFiles } = partitionBackendTestFiles(testFiles)
+      const groups = [
+        {
+          configPath: 'vitest.backend.config.mts',
+          testFiles: nonLiveFiles
+        },
+        {
+          configPath: 'vitest.backend.live.config.mts',
+          testFiles: liveFiles
+        }
+      ].filter((group) => group.testFiles.length > 0)
+
+      for (const group of groups) {
+        const code = runVitest(group)
+        if (code !== 0) {
+          exitCode = code
+          break
+        }
+      }
+    } else {
+      const code = runVitest({
+        configPath: 'vitest.e2e.config.mts',
+        testFiles
+      })
+      if (code !== 0) {
+        exitCode = code
+      }
+    }
+
+    if (exitCode !== 0) {
       break
     }
   }

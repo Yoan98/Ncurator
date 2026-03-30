@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -55,18 +56,55 @@ export const HUMAN_LIVE_STRONG_MODEL: LiveLlmConfig | null = HUMAN_LIVE_STRONG_R
 
 const LIVE_PROGRESS_DEBUG_ENABLED = process.env.NCURATOR_AI_LIVE_PROGRESS === '1'
 
-const LIVE_RATE_LIMIT_DIR = path.join(os.tmpdir(), 'ncurator-human-live-rate-limit')
-const LIVE_RATE_LIMIT_LOCK_DIR = path.join(LIVE_RATE_LIMIT_DIR, 'lock')
-const LIVE_RATE_LIMIT_STATE_FILE = path.join(LIVE_RATE_LIMIT_DIR, 'state.json')
+const LIVE_RATE_LIMIT_ROOT_DIR = path.join(os.tmpdir(), 'ncurator-human-live-rate-limit')
+const DEFAULT_LIVE_MIN_INTERVAL_MS = 20_000
+const DEFAULT_LIVE_MAX_RETRIES = 2
+const DEFAULT_LIVE_RETRY_BASE_MS = 15_000
+const DEFAULT_LIVE_RETRY_MAX_MS = 90_000
+
+type LiveRateLimitChannelState = {
+  lastStartedAt: number
+}
+
+type LiveRateLimitControlConfig = {
+  minIntervalMs: number
+  maxRetries: number
+  retryBaseMs: number
+  retryMaxMs: number
+}
+
+type LiveRateLimitedOverrideOptions = {
+  legacyMinIntervalEnvVar?: string
+}
 
 const sleep = async (ms: number): Promise<void> =>
   await new Promise((resolve) => {
     setTimeout(resolve, ms)
   })
 
-const readLiveRateLimitState = async (): Promise<{ lastStartedAt: number }> => {
+const readPositiveEnvNumber = (name: string): number | undefined => {
+  const value = Number(process.env[name] || '')
+  return Number.isFinite(value) && value > 0 ? value : undefined
+}
+
+const hashLiveRateLimitChannel = (config: LiveLlmConfig): string =>
+  createHash('sha1')
+    .update(`${config.base_url}\n${config.api_key}`)
+    .digest('hex')
+
+const resolveLiveRateLimitChannelPaths = (config: LiveLlmConfig) => {
+  const channelId = hashLiveRateLimitChannel(config)
+  const channelDir = path.join(LIVE_RATE_LIMIT_ROOT_DIR, channelId)
+  return {
+    channelDir,
+    lockDir: path.join(channelDir, 'lock'),
+    stateFile: path.join(channelDir, 'state.json')
+  }
+}
+
+const readLiveRateLimitState = async (stateFile: string): Promise<LiveRateLimitChannelState> => {
   try {
-    const raw = await fs.readFile(LIVE_RATE_LIMIT_STATE_FILE, 'utf8')
+    const raw = await fs.readFile(stateFile, 'utf8')
     const parsed = JSON.parse(raw) as { lastStartedAt?: number }
     return {
       lastStartedAt: Number(parsed.lastStartedAt || 0)
@@ -78,12 +116,12 @@ const readLiveRateLimitState = async (): Promise<{ lastStartedAt: number }> => {
   }
 }
 
-const acquireLiveRateLimitLock = async (): Promise<void> => {
-  await fs.mkdir(LIVE_RATE_LIMIT_DIR, { recursive: true })
+const acquireLiveRateLimitLock = async (channelDir: string, lockDir: string): Promise<void> => {
+  await fs.mkdir(channelDir, { recursive: true })
 
   while (true) {
     try {
-      await fs.mkdir(LIVE_RATE_LIMIT_LOCK_DIR)
+      await fs.mkdir(lockDir)
       return
     } catch (error) {
       const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined
@@ -95,9 +133,9 @@ const acquireLiveRateLimitLock = async (): Promise<void> => {
   }
 }
 
-const releaseLiveRateLimitLock = async (): Promise<void> => {
+const releaseLiveRateLimitLock = async (lockDir: string): Promise<void> => {
   try {
-    await fs.rmdir(LIVE_RATE_LIMIT_LOCK_DIR)
+    await fs.rmdir(lockDir)
   } catch (error) {
     const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined
     if (code !== 'ENOENT') {
@@ -106,26 +144,126 @@ const releaseLiveRateLimitLock = async (): Promise<void> => {
   }
 }
 
-const awaitLiveRateLimitWindow = async (minIntervalMs: number): Promise<void> => {
-  await acquireLiveRateLimitLock()
+const resolveLiveRateLimitControlConfig = (
+  options: LiveRateLimitedOverrideOptions | undefined
+): LiveRateLimitControlConfig => {
+  const legacyMinIntervalMs = options?.legacyMinIntervalEnvVar
+    ? readPositiveEnvNumber(options.legacyMinIntervalEnvVar)
+    : undefined
+
+  return {
+    minIntervalMs:
+      readPositiveEnvNumber('NCURATOR_AI_LIVE_MIN_INTERVAL_MS') ||
+      legacyMinIntervalMs ||
+      DEFAULT_LIVE_MIN_INTERVAL_MS,
+    maxRetries:
+      readPositiveEnvNumber('NCURATOR_AI_LIVE_MAX_RETRIES') || DEFAULT_LIVE_MAX_RETRIES,
+    retryBaseMs:
+      readPositiveEnvNumber('NCURATOR_AI_LIVE_RETRY_BASE_MS') || DEFAULT_LIVE_RETRY_BASE_MS,
+    retryMaxMs: readPositiveEnvNumber('NCURATOR_AI_LIVE_RETRY_MAX_MS') || DEFAULT_LIVE_RETRY_MAX_MS
+  }
+}
+
+const getLiveRateLimitErrorText = (error: unknown): string => {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message
+  }
+  return String(error || '')
+}
+
+const isLiveRateLimitError = (error: unknown): boolean =>
+  /(?:^|[^a-z])429(?:[^a-z]|$)|MODEL_RATE_LIMIT|rate limit|请求数限制|too many requests/i.test(
+    getLiveRateLimitErrorText(error)
+  )
+
+const parseRetryAfterMs = (error: unknown): number | undefined => {
+  const message = getLiveRateLimitErrorText(error)
+  const secondsMatch =
+    /retry-after[:=\s]+(\d+(?:\.\d+)?)s\b/i.exec(message) ||
+    /retry after[:=\s]+(\d+(?:\.\d+)?)s\b/i.exec(message)
+  if (secondsMatch) {
+    const seconds = Number(secondsMatch[1])
+    return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds * 1000) : undefined
+  }
+
+  const msMatch =
+    /retry-after[:=\s]+(\d+)\s*ms\b/i.exec(message) ||
+    /retry after[:=\s]+(\d+)\s*ms\b/i.exec(message)
+  if (msMatch) {
+    const ms = Number(msMatch[1])
+    return Number.isFinite(ms) && ms > 0 ? ms : undefined
+  }
+
+  return undefined
+}
+
+const computeRetryDelayMs = (
+  error: unknown,
+  attemptIndex: number,
+  control: LiveRateLimitControlConfig
+): number => {
+  const retryAfterMs = parseRetryAfterMs(error)
+  if (retryAfterMs) {
+    return Math.min(control.retryMaxMs, retryAfterMs)
+  }
+
+  const exponentialDelayMs = Math.min(
+    control.retryMaxMs,
+    control.retryBaseMs * 2 ** Math.max(0, attemptIndex)
+  )
+  const jitterMs = Math.min(1_500, control.retryBaseMs)
+  return exponentialDelayMs + Math.floor(Math.random() * jitterMs)
+}
+
+const invokeLiveStructuredChatWithRateLimitControl = async <T extends Record<string, unknown>>(input: {
+  config: LiveLlmConfig
+  payload: Parameters<NonNullable<CreateAiRunContextInput['chatStructuredOverride']>>[0]
+  options?: LiveRateLimitedOverrideOptions
+}): Promise<T> => {
+  const control = resolveLiveRateLimitControlConfig(input.options)
+  const channelPaths = resolveLiveRateLimitChannelPaths(input.config)
+
+  await acquireLiveRateLimitLock(channelPaths.channelDir, channelPaths.lockDir)
 
   try {
-    const state = await readLiveRateLimitState()
-    const now = Date.now()
-    const waitMs = Math.max(0, state.lastStartedAt + minIntervalMs - now)
-    if (waitMs > 0) {
-      await sleep(waitMs)
+    for (let attemptIndex = 0; attemptIndex <= control.maxRetries; attemptIndex += 1) {
+      const state = await readLiveRateLimitState(channelPaths.stateFile)
+      const now = Date.now()
+      const waitMs = Math.max(0, state.lastStartedAt + control.minIntervalMs - now)
+      if (waitMs > 0) {
+        await sleep(waitMs)
+      }
+
+      await fs.writeFile(
+        channelPaths.stateFile,
+        JSON.stringify({
+          lastStartedAt: Date.now()
+        }),
+        'utf8'
+      )
+
+      try {
+        return (await invokeStructuredChat({
+          caller: input.payload.caller,
+          cfg: input.config,
+          schema: input.payload.schema,
+          schemaName: input.payload.schemaName,
+          system: input.payload.system,
+          user: input.payload.user,
+          temperature: input.payload.temperature
+        })) as T
+      } catch (error) {
+        if (!isLiveRateLimitError(error) || attemptIndex >= control.maxRetries) {
+          throw error
+        }
+
+        await sleep(computeRetryDelayMs(error, attemptIndex, control))
+      }
     }
 
-    await fs.writeFile(
-      LIVE_RATE_LIMIT_STATE_FILE,
-      JSON.stringify({
-        lastStartedAt: Date.now()
-      }),
-      'utf8'
-    )
+    throw new Error('unreachable live rate limit retry state')
   } finally {
-    await releaseLiveRateLimitLock()
+    await releaseLiveRateLimitLock(channelPaths.lockDir)
   }
 }
 
@@ -332,18 +470,13 @@ export const startLiveProgressLogger = (input: {
 
 export const createRateLimitedLiveChatStructuredOverride = (
   config: LiveLlmConfig,
-  minIntervalMs = 16_000
+  options?: LiveRateLimitedOverrideOptions
 ): NonNullable<CreateAiRunContextInput['chatStructuredOverride']> => {
   return async <T extends Record<string, unknown>>(input) => {
-    await awaitLiveRateLimitWindow(minIntervalMs)
-    return (await invokeStructuredChat({
-      caller: input.caller,
-      cfg: config,
-      schema: input.schema,
-      schemaName: input.schemaName,
-      system: input.system,
-      user: input.user,
-      temperature: input.temperature
-    })) as T
+    return await invokeLiveStructuredChatWithRateLimitControl<T>({
+      config,
+      payload: input,
+      options
+    })
   }
 }
