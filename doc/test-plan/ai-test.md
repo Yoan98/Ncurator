@@ -601,7 +601,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`simple-task-human-first-live`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`待调整`
 - What：验证普通任务在真实 AI 调用下仍然走 `human-first`。
 - Why：这是当前架构的首要原则。
 - How：使用 live 模型运行单任务 KB 问答或单文档总结类任务。
@@ -614,7 +614,7 @@ AI 正式测试当前分为三个 suite：
 
 - 用例名称：`complex-task-plan-and-synthesis-live`
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`待调整`
 - What：验证复杂任务在真实 AI 调用下进入增强路径并最终完成真实任务。
 - Why：这是 `director` 编排能力最关键的实战验证。
 - How：使用 live strong model 执行“先取规则，再改 docx，最后综合交付”的复杂任务。

@@ -1,9 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import type { AiRunEvent, SearchSourceFilter } from '../shared/types'
-import type { DesktopApi } from './api'
+import type {
+  AiRunEvent,
+  SearchSourceFilter,
+} from '../shared/types'
+import type { DesktopApi, E2EApiOverrides } from './api'
 
 const isE2EObserverEnabled = process.env.NCURATOR_E2E_MODE === '1'
+let e2eApiOverrides: E2EApiOverrides | null = null
 
 const emitE2EIpcCall = (name: string): void => {
   if (!isE2EObserverEnabled) return
@@ -25,6 +29,21 @@ const emitE2EAiRunEvent = (event: AiRunEvent): void => {
   )
 }
 
+const getE2EApiOverrides = (): E2EApiOverrides | null => {
+  if (!isE2EObserverEnabled) return null
+  return e2eApiOverrides
+}
+
+const hasOverrideKey = <T extends object>(input: T, key: keyof E2EApiOverrides): boolean =>
+  Object.prototype.hasOwnProperty.call(input, key)
+
+const waitForMs = async (ms: number): Promise<void> => {
+  if (ms <= 0) return
+  await new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms)
+  })
+}
+
 // Custom APIs for renderer
 const api: DesktopApi = {
   ingestWeb: (payload): Promise<{ success: boolean; count?: number; error?: string }> =>
@@ -40,7 +59,13 @@ const api: DesktopApi = {
   openPathWithApplication: (payload) => ipcRenderer.invoke('open-path-with-application', payload),
   revealPath: (filePath: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('reveal-path', filePath),
-  pickDirectory: () => ipcRenderer.invoke('pick-directory'),
+  pickDirectory: () => {
+    const overrides = getE2EApiOverrides()
+    if (overrides && hasOverrideKey(overrides, 'pickDirectoryResponse')) {
+      return Promise.resolve(overrides.pickDirectoryResponse || { canceled: true })
+    }
+    return ipcRenderer.invoke('pick-directory')
+  },
   pickApplication: () => ipcRenderer.invoke('pick-application'),
   search: (query: string, sourceType?: SearchSourceFilter, documentIds?: string[]) =>
     ipcRenderer.invoke('search', query, sourceType, documentIds),
@@ -51,10 +76,24 @@ const api: DesktopApi = {
   hybridSearch: (query: string, sourceType?: SearchSourceFilter, documentIds?: string[]) =>
     ipcRenderer.invoke('hybrid-search', query, sourceType, documentIds),
   listDocuments: (payload) => ipcRenderer.invoke('list-documents', payload),
-  workspaceList: () => ipcRenderer.invoke('workspace-list'),
+  workspaceList: () => {
+    const overrides = getE2EApiOverrides()
+    if (overrides && hasOverrideKey(overrides, 'workspaceListResponse')) {
+      return Promise.resolve(overrides.workspaceListResponse || { items: [], total: 0 })
+    }
+    return ipcRenderer.invoke('workspace-list')
+  },
   workspaceCreate: (payload) => ipcRenderer.invoke('workspace-create', payload),
   workspaceDelete: (workspaceId: string) => ipcRenderer.invoke('workspace-delete', workspaceId),
-  workspaceNodes: (payload) => ipcRenderer.invoke('workspace-nodes', payload),
+  workspaceNodes: (payload) => {
+    const overrides = getE2EApiOverrides()
+    const workspaceId = String(payload?.workspaceId || '').trim()
+    const response = overrides?.workspaceNodesResponseByWorkspaceId?.[workspaceId]
+    if (response) {
+      return Promise.resolve(response)
+    }
+    return ipcRenderer.invoke('workspace-nodes', payload)
+  },
   workspaceScan: (payload) => {
     emitE2EIpcCall('workspaceScan')
     return ipcRenderer.invoke('workspace-scan', payload)
@@ -68,13 +107,19 @@ const api: DesktopApi = {
     return ipcRenderer.invoke('source-scope-list', payload)
   },
   webSourceList: () => ipcRenderer.invoke('web-source-list'),
-  webSourceRefresh: (payload) => {
+  webSourceRefresh: async (payload) => {
     emitE2EIpcCall('webSourceRefresh')
+    await waitForMs(getE2EApiOverrides()?.webSourceRefreshDelayMs || 0)
     return ipcRenderer.invoke('web-source-refresh', payload)
   },
   webSourceDelete: (webSourceId: string) => ipcRenderer.invoke('web-source-delete', webSourceId),
-  legacyLocalImportMigrationStatus: () =>
-    ipcRenderer.invoke('legacy-local-import-migration-status'),
+  legacyLocalImportMigrationStatus: () => {
+    const overrides = getE2EApiOverrides()
+    if (overrides && hasOverrideKey(overrides, 'legacyLocalImportMigrationStatus')) {
+      return Promise.resolve(overrides.legacyLocalImportMigrationStatus ?? null)
+    }
+    return ipcRenderer.invoke('legacy-local-import-migration-status')
+  },
   listChunks: (payload) => ipcRenderer.invoke('list-chunks', payload),
   deleteDocuments: (
     ids: string[]
@@ -100,8 +145,22 @@ const api: DesktopApi = {
   chatMessageSave: (message) => ipcRenderer.invoke('chat-message-save', message),
   llmConfigList: () => ipcRenderer.invoke('llm-config-list'),
   llmConfigSave: (config) => ipcRenderer.invoke('llm-config-save', config),
-  llmConfigDelete: (id: string) => ipcRenderer.invoke('llm-config-delete', id),
+  llmConfigDelete: (id: string) => {
+    const response = getE2EApiOverrides()?.llmConfigDeleteResponseById?.[String(id || '').trim()]
+    if (response) {
+      return Promise.resolve(response)
+    }
+    return ipcRenderer.invoke('llm-config-delete', id)
+  },
   llmConfigSetActive: (id: string) => ipcRenderer.invoke('llm-config-set-active', id),
+  setE2EApiOverrides: (overrides) => {
+    if (!isE2EObserverEnabled) return
+    e2eApiOverrides = overrides
+  },
+  clearE2EApiOverrides: () => {
+    if (!isE2EObserverEnabled) return
+    e2eApiOverrides = null
+  },
   aiRuntimeSettingsGet: () => ipcRenderer.invoke('ai-runtime-settings-get'),
   aiRuntimeSettingsSave: (settings) => ipcRenderer.invoke('ai-runtime-settings-save', settings),
 

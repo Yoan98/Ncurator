@@ -1,12 +1,25 @@
 import type { Locator, Page } from 'playwright'
 import type {
   CreateWorkspaceSourceRequest,
+  LegacyLocalImportMigrationStatus,
   LLMConfig,
-  WorkspaceMutationResponse
+  PickDirectoryResponse,
+  WorkspaceListResponse,
+  WorkspaceMutationResponse,
+  WorkspaceNodeListResponse
 } from '../../../src/shared/types'
 import { importSelectors, settingsSelectors } from '../../../src/renderer/src/testing/selectors'
 
 export type SettingsSection = 'model' | 'workspace' | 'web-sources'
+
+export type SettingsE2EApiOverrides = {
+  pickDirectoryResponse?: PickDirectoryResponse
+  workspaceListResponse?: WorkspaceListResponse
+  workspaceNodesResponseByWorkspaceId?: Record<string, WorkspaceNodeListResponse>
+  legacyLocalImportMigrationStatus?: LegacyLocalImportMigrationStatus | null
+  llmConfigDeleteResponseById?: Record<string, { success: boolean; error?: string }>
+  webSourceRefreshDelayMs?: number
+}
 
 const byTestId = (testId: string): string => `[data-testid="${testId}"]`
 
@@ -40,6 +53,21 @@ export const navigateToSettingsSection = async (
 export const waitForAntMessage = async (page: Page, text: string): Promise<void> => {
   await page.locator('.ant-message').getByText(text).last().waitFor({
     state: 'visible'
+  })
+}
+
+export const setSettingsE2EApiOverrides = async (
+  page: Page,
+  overrides: SettingsE2EApiOverrides
+): Promise<void> => {
+  await page.evaluate((input) => {
+    window.api.setE2EApiOverrides(input)
+  }, overrides)
+}
+
+export const clearSettingsE2EApiOverrides = async (page: Page): Promise<void> => {
+  await page.evaluate(() => {
+    window.api.clearE2EApiOverrides()
   })
 }
 

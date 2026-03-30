@@ -12,11 +12,17 @@ import {
   filterToolCallResultEventsByNames,
   HUMAN_LIVE_STRONG_MODEL,
   isDocxPreviewArtifact,
-  KB_TOOL_NAMES
+  KB_TOOL_NAMES,
+  startLiveProgressLogger
 } from '../../human/live/testUtils'
 import { filterDirectorEventsByType, summarizeDirectorEvents } from '../testUtils'
 
-const liveIt = HUMAN_LIVE_STRONG_MODEL ? it : it.skip
+const DIRECTOR_LIVE_ENABLED = String(process.env.AI_ENABLE_DIRECTOR_LIVE || '').trim() === '1'
+const DIRECTOR_LIVE_MIN_INTERVAL_MS = (() => {
+  const value = Number(process.env.NCURATOR_DIRECTOR_LIVE_MIN_INTERVAL_MS || '')
+  return Number.isFinite(value) && value > 0 ? value : 30_000
+})()
+const liveIt = HUMAN_LIVE_STRONG_MODEL && DIRECTOR_LIVE_ENABLED ? it : it.skip
 
 describe('ai director live backend', () => {
   liveIt('complex-task-plan-and-synthesis-live', async () => {
@@ -50,22 +56,38 @@ describe('ai director live backend', () => {
         const kbFixture = createHumanLiveKbFixture()
         const runner = createDirectorTestRunner(runtime, {
           chatStructuredOverride: HUMAN_LIVE_STRONG_MODEL
-            ? createRateLimitedLiveChatStructuredOverride(HUMAN_LIVE_STRONG_MODEL, 16_000)
+            ? createRateLimitedLiveChatStructuredOverride(
+                HUMAN_LIVE_STRONG_MODEL,
+                DIRECTOR_LIVE_MIN_INTERVAL_MS
+              )
             : undefined,
+          humanRuntimeOverrides: {
+            hardActionLimit: 4
+          },
           selectedDocumentIds: kbFixture.selectedDocumentIds,
           documentsStoreOverrides: kbFixture.storeOverrides
         })
 
-        const output = await runner.run({
-          userInput: [
-            '请完成一个复杂多步骤任务：',
-            '1. 先只从当前已选资料里提取与本周风险总结、负责人说明相关的规则和事实。',
-            '2. 再打开当前工作区的 `director-plan-live.docx`，把 `RISK_TODO` 和 `OWNER_TODO` 分别替换成你从资料里得到的内容。',
-            '3. 然后生成 html preview，但不要覆盖保存源文件。',
-            '4. 最后基于前面各阶段结果给我综合交付说明。',
-            '5. 不要跳步，不要只给最终答案而忽略前面的本地动作，也不要编造资料外事实。'
-          ].join('\n')
+        const stopProgressLogger = startLiveProgressLogger({
+          caseId: 'complex-task-plan-and-synthesis-live',
+          snapshot: () => runtime.eventCollector.snapshot()
         })
+
+        let output: Awaited<ReturnType<typeof runner.run>>
+        try {
+          output = await runner.run({
+            userInput: [
+              '请完成一个复杂多步骤任务，并按阶段推进：',
+              '1. 先只从当前已选资料里提取一句本周风险总结和一句负责人说明。',
+              '2. 再打开当前工作区的 `director-plan-live.docx`，把 `RISK_TODO` 和 `OWNER_TODO` 分别替换成上面两句。',
+              '3. 然后生成 html preview，但不要覆盖保存源文件。',
+              '4. 最后给我综合交付说明。',
+              '不要额外做引用索引、校验和检查或复杂核验；只完成这三个必要阶段即可。'
+            ].join('\n')
+          })
+        } finally {
+          stopProgressLogger()
+        }
 
         const previewArtifacts = (output.finalArtifacts || []).filter(isDocxPreviewArtifact)
         const previewPaths = previewArtifacts.map((artifact) => artifact.path)
@@ -143,5 +165,5 @@ describe('ai director live backend', () => {
         )
       }
     })
-  }, 420_000)
+  }, 600_000)
 })

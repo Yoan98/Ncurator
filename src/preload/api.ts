@@ -64,6 +64,15 @@ export type DownloadProgress = {
   error?: string
 }
 
+export type E2EApiOverrides = {
+  pickDirectoryResponse?: PickDirectoryResponse
+  workspaceListResponse?: WorkspaceListResponse
+  workspaceNodesResponseByWorkspaceId?: Record<string, WorkspaceNodeListResponse>
+  legacyLocalImportMigrationStatus?: LegacyLocalImportMigrationStatus | null
+  llmConfigDeleteResponseById?: Record<string, { success: boolean; error?: string }>
+  webSourceRefreshDelayMs?: number
+}
+
 export type DesktopApi = {
   ingestWeb: (
     payload: WebIngestPayload
@@ -137,6 +146,8 @@ export type DesktopApi = {
   llmConfigSave: (config: LLMConfig) => Promise<{ success: boolean; error?: string }>
   llmConfigDelete: (id: string) => Promise<{ success: boolean; error?: string }>
   llmConfigSetActive: (id: string) => Promise<{ success: boolean; error?: string }>
+  setE2EApiOverrides: (overrides: E2EApiOverrides) => void
+  clearE2EApiOverrides: () => void
   aiRuntimeSettingsGet: () => Promise<AiRuntimeSettings>
   aiRuntimeSettingsSave: (
     settings: AiRuntimeSettings

@@ -53,6 +53,8 @@ export const HUMAN_LIVE_STRONG_MODEL: LiveLlmConfig | null = HUMAN_LIVE_STRONG_R
   ? loadLiveLlmConfigFromEnv('strong')
   : null
 
+const LIVE_PROGRESS_DEBUG_ENABLED = process.env.NCURATOR_AI_LIVE_PROGRESS === '1'
+
 const LIVE_RATE_LIMIT_DIR = path.join(os.tmpdir(), 'ncurator-human-live-rate-limit')
 const LIVE_RATE_LIMIT_LOCK_DIR = path.join(LIVE_RATE_LIMIT_DIR, 'lock')
 const LIVE_RATE_LIMIT_STATE_FILE = path.join(LIVE_RATE_LIMIT_DIR, 'state.json')
@@ -226,7 +228,10 @@ export const collectToolResultPreviewText = (
 
 export const filterHumanStepsByStage = (
   events: readonly AiRunEvent[],
-  stage: Extract<NonNullable<AiRunEvent['stage']>, 'human_brain' | 'human_hand' | 'human_learning' | 'human_mouth'>
+  stage: Extract<
+    NonNullable<AiRunEvent['stage']>,
+    'human_brain' | 'human_hand' | 'human_learning' | 'human_mouth'
+  >
 ): Extract<AiRunEvent, { type: 'human_step' }>[] =>
   filterAiRunEventsByType(events, 'human_step').filter((event) => event.stage === stage)
 
@@ -258,13 +263,80 @@ export const areAllPathsAccessible = async (paths: readonly string[]): Promise<b
   return results.every((result) => result)
 }
 
+const summarizeLiveProgressEvent = (event: AiRunEvent | undefined): string => {
+  if (!event) {
+    return 'no-events-yet'
+  }
+
+  if (event.type === 'human_step') {
+    return `${event.stage}:${event.action}:${event.summary}`
+  }
+
+  if (event.type === 'tool_call_started') {
+    return `tool_started:${event.toolName}`
+  }
+
+  if (event.type === 'tool_call_result') {
+    return `tool_result:${event.toolName}`
+  }
+
+  if (event.type === 'watch_hint') {
+    return `watch_hint:${event.summary}`
+  }
+
+  if (event.type === 'task_delivery_ready') {
+    return `delivery:${event.summary}`
+  }
+
+  if (event.type === 'approval_required') {
+    return `approval_required:${event.command}`
+  }
+
+  if (event.type === 'approval_decision') {
+    return `approval_decision:${event.approved ? 'approved' : 'denied'}`
+  }
+
+  if (event.type === 'file_artifact') {
+    return `artifact:${event.artifactRole}:${event.fileName}`
+  }
+
+  if (event.type === 'activity') {
+    return `activity:${event.actionType}:${event.status}`
+  }
+
+  return event.type
+}
+
+export const startLiveProgressLogger = (input: {
+  caseId: string
+  snapshot: () => AiRunEvent[]
+  intervalMs?: number
+}): (() => void) => {
+  if (!LIVE_PROGRESS_DEBUG_ENABLED) {
+    return () => undefined
+  }
+
+  const timer = setInterval(() => {
+    const events = input.snapshot()
+    const lastEvent = events.at(-1)
+    const secondLastEvent = events.at(-2)
+    console.error(
+      `[live-progress][${input.caseId}] events=${events.length} last=${summarizeLiveProgressEvent(lastEvent)} prev=${summarizeLiveProgressEvent(secondLastEvent)}`
+    )
+  }, input.intervalMs ?? 20_000)
+
+  return () => {
+    clearInterval(timer)
+  }
+}
+
 export const createRateLimitedLiveChatStructuredOverride = (
   config: LiveLlmConfig,
-  minIntervalMs = 13_000
+  minIntervalMs = 16_000
 ): NonNullable<CreateAiRunContextInput['chatStructuredOverride']> => {
   return async <T extends Record<string, unknown>>(input) => {
     await awaitLiveRateLimitWindow(minIntervalMs)
-    return await invokeStructuredChat({
+    return (await invokeStructuredChat({
       caller: input.caller,
       cfg: config,
       schema: input.schema,
@@ -272,6 +344,6 @@ export const createRateLimitedLiveChatStructuredOverride = (
       system: input.system,
       user: input.user,
       temperature: input.temperature
-    }) as T
+    })) as T
   }
 }

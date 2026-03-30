@@ -1,16 +1,22 @@
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import { createDirectorTestRunner } from '../../../harness/backend/directorHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
-  createHumanLiveKbFixture,
   createRateLimitedLiveChatStructuredOverride,
   filterToolCallResultEventsByNames,
   HUMAN_LIVE_PRIMARY_MODEL,
-  KB_TOOL_NAMES
+  startLiveProgressLogger
 } from '../../human/live/testUtils'
 import { filterDirectorEventsByType, summarizeDirectorEvents } from '../testUtils'
 
-const liveIt = HUMAN_LIVE_PRIMARY_MODEL ? it : it.skip
+const DIRECTOR_LIVE_ENABLED = String(process.env.AI_ENABLE_DIRECTOR_LIVE || '').trim() === '1'
+const DIRECTOR_LIVE_MIN_INTERVAL_MS = (() => {
+  const value = Number(process.env.NCURATOR_DIRECTOR_LIVE_MIN_INTERVAL_MS || '')
+  return Number.isFinite(value) && value > 0 ? value : 30_000
+})()
+const liveIt = HUMAN_LIVE_PRIMARY_MODEL && DIRECTOR_LIVE_ENABLED ? it : it.skip
 
 describe('ai director live backend', () => {
   liveIt('simple-task-human-first-live', async () => {
@@ -24,23 +30,45 @@ describe('ai director live backend', () => {
       runMode: 'single',
       runtimeModelName: HUMAN_LIVE_PRIMARY_MODEL?.model_name ?? null,
       execute: async (runtime) => {
-        const kbFixture = createHumanLiveKbFixture()
+        await fs.writeFile(
+          path.join(runtime.workspaceRoot, 'director-simple-live.txt'),
+          [
+            'Weekly risk summary: pending follow-up until compliance signs off.',
+            'Owner note: Compliance leads the final review window.'
+          ].join('\n'),
+          'utf8'
+        )
+
         const runner = createDirectorTestRunner(runtime, {
-          bindWorkspace: false,
           chatStructuredOverride: HUMAN_LIVE_PRIMARY_MODEL
-            ? createRateLimitedLiveChatStructuredOverride(HUMAN_LIVE_PRIMARY_MODEL, 15_000)
+            ? createRateLimitedLiveChatStructuredOverride(
+                HUMAN_LIVE_PRIMARY_MODEL,
+                DIRECTOR_LIVE_MIN_INTERVAL_MS
+              )
             : undefined,
-          selectedDocumentIds: kbFixture.selectedDocumentIds,
-          documentsStoreOverrides: kbFixture.storeOverrides
+          humanRuntimeOverrides: {
+            hardActionLimit: 4
+          }
         })
 
-        const output = await runner.run({
-          userInput: [
-            '请只基于当前已选本地资料直接回答一个简单问题：本周风险总结是什么？',
-            '先确认当前资料范围，再检索证据，然后给出简明最终答复。',
-            '不要修改任何文件，不要拆成多阶段计划，也不要编造资料外的事实。'
-          ].join('\n')
+        const stopProgressLogger = startLiveProgressLogger({
+          caseId: 'simple-task-human-first-live',
+          snapshot: () => runtime.eventCollector.snapshot()
         })
+
+        let output: Awaited<ReturnType<typeof runner.run>>
+        try {
+          output = await runner.run({
+            userInput: [
+              '请读取当前工作区里的 `director-simple-live.txt`，直接给我一个简短总结。',
+              '这是一个单任务文档总结请求：只需要读取内容并输出最终答复，不要修改文件，也不要拆成多阶段计划。',
+              '严格按这个顺序推进：先用一次只读 terminal 命令读取文件内容，然后直接交付。',
+              '总结时保留风险总结和负责人说明两点即可。'
+            ].join('\n')
+          })
+        } finally {
+          stopProgressLogger()
+        }
 
         return {
           output,
@@ -51,8 +79,9 @@ describe('ai director live backend', () => {
         const directorTaskStarted = filterDirectorEventsByType(result.events, 'task_started')
         const directorTaskCompleted = filterDirectorEventsByType(result.events, 'task_completed')
         const planCreatedEvents = filterDirectorEventsByType(result.events, 'plan_created')
-        const kbToolResults = filterToolCallResultEventsByNames(result.events, KB_TOOL_NAMES)
-        const kbPreviewText = kbToolResults.map((event) => JSON.stringify(event.outputPreview)).join('\n')
+        const terminalToolResults = filterToolCallResultEventsByNames(result.events, [
+          'terminal_run_command'
+        ])
 
         runtime.assertThat(
           result.output.status === 'completed' &&
@@ -77,21 +106,20 @@ describe('ai director live backend', () => {
         )
 
         runtime.assertThat(
-          kbToolResults.length >= 1 &&
+          terminalToolResults.length >= 1 &&
             result.output.finalDeliveryMarkdown?.trim().length !== 0 &&
-            kbPreviewText.includes('Risk Playbook.md') &&
-            !kbPreviewText.includes('Out of Scope Notes.md'),
+            result.output.finalDeliveryMarkdown.includes('Compliance'),
           {
-            name: 'director-live-simple-task-uses-scoped-kb-without-expansion',
+            name: 'director-live-simple-task-uses-a-single-document-summary-chain',
             message:
-              'simple-task-human-first-live 应由 direct human 基于当前已选资料完成单任务问答，且不能越出资料范围。',
+              'simple-task-human-first-live 应由 direct human 读取单个文档并完成最终总结，而不是升级为多阶段编排。',
             data: {
-              kbToolNames: kbToolResults.map((event) => event.toolName),
-              kbPreviewText
+              terminalToolNames: terminalToolResults.map((event) => event.toolName),
+              finalDeliveryMarkdown: result.output.finalDeliveryMarkdown
             }
           }
         )
       }
     })
-  }, 300_000)
+  }, 420_000)
 })

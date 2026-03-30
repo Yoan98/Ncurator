@@ -21,6 +21,7 @@ import { settingsSelectors } from '../../testing/selectors'
 const ModelSettingsPanel: React.FC = () => {
   const [configs, setConfigs] = useState<LLMConfig[]>([])
   const [loading, setLoading] = useState(false)
+  const [actionError, setActionError] = useState<string | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingConfig, setEditingConfig] = useState<LLMConfig | null>(null)
   const [form] = Form.useForm<LlmConfigFormValues>()
@@ -31,8 +32,10 @@ const ModelSettingsPanel: React.FC = () => {
     try {
       const list = await window.api.llmConfigList()
       setConfigs(list)
+      setActionError(null)
     } catch (error) {
       console.error('Failed to load configs', error)
+      setActionError('加载配置失败')
       message.error('加载配置失败')
     } finally {
       setLoading(false)
@@ -77,23 +80,39 @@ const ModelSettingsPanel: React.FC = () => {
 
   const handleDelete = async (id: string): Promise<void> => {
     try {
-      await window.api.llmConfigDelete(id)
+      const response = await window.api.llmConfigDelete(id)
+      if (!response.success) {
+        const errorMessage = response.error || '删除失败'
+        setActionError(errorMessage)
+        message.error(errorMessage)
+        return
+      }
+      setActionError(null)
       message.success('配置已删除')
       await loadConfigs()
     } catch (error) {
       console.error(error)
+      setActionError('删除失败')
       message.error('删除失败')
     }
   }
 
   const handleActivate = async (id: string): Promise<void> => {
     try {
-      await window.api.llmConfigSetActive(id)
+      const response = await window.api.llmConfigSetActive(id)
+      if (!response.success) {
+        const errorMessage = response.error || '切换失败'
+        setActionError(errorMessage)
+        message.error(errorMessage)
+        return
+      }
+      setActionError(null)
       message.success('已切换当前模型')
       await loadConfigs()
       window.dispatchEvent(new Event('check-llm-config'))
     } catch (error) {
       console.error(error)
+      setActionError('切换失败')
       message.error('切换失败')
     }
   }
@@ -107,7 +126,14 @@ const ModelSettingsPanel: React.FC = () => {
         is_active: editingConfig ? editingConfig.is_active : configs.length === 0
       }
 
-      await window.api.llmConfigSave(nextConfig)
+      const response = await window.api.llmConfigSave(nextConfig)
+      if (!response.success) {
+        const errorMessage = response.error || (editingConfig ? '更新失败' : '添加失败')
+        setActionError(errorMessage)
+        message.error(errorMessage)
+        return
+      }
+      setActionError(null)
       message.success(editingConfig ? '配置已更新' : '配置已添加')
       setIsModalOpen(false)
       await loadConfigs()
@@ -230,6 +256,12 @@ const ModelSettingsPanel: React.FC = () => {
           </div>
         </div>
       </section>
+
+      {actionError ? (
+        <div className="rounded-[18px] border border-[#F7D5D9] bg-[#FFF2F4] px-4 py-3 text-[12px] text-[#B5455D]">
+          {actionError}
+        </div>
+      ) : null}
 
       <section className="ui-panel min-h-0 flex-1 overflow-hidden">
         <div className="h-full overflow-auto pr-1">
