@@ -83,12 +83,8 @@ AI 正式测试当前分为三个 suite：
   - `AI_LIVE_BASE_URL`
   - `AI_LIVE_PRIMARY_MODEL_NAME`
   - `AI_LIVE_STRONG_MODEL_NAME`
-- `human/live` 与 `director/live` 的共享节流与重试环境变量统一为：
-  - `NCURATOR_AI_LIVE_MIN_INTERVAL_MS`
-  - `NCURATOR_AI_LIVE_MAX_RETRIES`
-  - `NCURATOR_AI_LIVE_RETRY_BASE_MS`
-  - `NCURATOR_AI_LIVE_RETRY_MAX_MS`
-- `NCURATOR_DIRECTOR_LIVE_MIN_INTERVAL_MS` 仅作为兼容旧 case 的 fallback，新增或调整 live case 时不再作为主变量使用。
+- `human/live` 与 `director/live` 的共享节流环境变量统一为 `NCURATOR_AI_LIVE_MIN_INTERVAL_MS`；live 测试层的重试与 backoff 预算使用代码默认值，不再额外暴露环境变量。
+- `director/live` 默认不参与常规 live 运行；仅在需要显式执行时设置 `AI_ENABLE_DIRECTOR_LIVE=1`。
 - `human/live` 与 `director/live` 的 `How / Oracle` 应优先断言结构化事实，如路由、节点步骤、工具调用、审批事件、artifact、完成态；不应对模型最终文案做精确文本断言。
 - `human/basics`、`human/scenarios`、`director/basics` 与 `director/contracts` 应优先使用 `chatStructuredOverride`、`humanReasonOverrides`、`humanDeliveryOverride` 和工具执行 override 稳定固定链路，避免把基础回归建立在 live 模型随机性之上。
 

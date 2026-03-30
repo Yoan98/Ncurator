@@ -73,10 +73,6 @@ type LiveRateLimitControlConfig = {
   retryMaxMs: number
 }
 
-type LiveRateLimitedOverrideOptions = {
-  legacyMinIntervalEnvVar?: string
-}
-
 const sleep = async (ms: number): Promise<void> =>
   await new Promise((resolve) => {
     setTimeout(resolve, ms)
@@ -144,23 +140,13 @@ const releaseLiveRateLimitLock = async (lockDir: string): Promise<void> => {
   }
 }
 
-const resolveLiveRateLimitControlConfig = (
-  options: LiveRateLimitedOverrideOptions | undefined
-): LiveRateLimitControlConfig => {
-  const legacyMinIntervalMs = options?.legacyMinIntervalEnvVar
-    ? readPositiveEnvNumber(options.legacyMinIntervalEnvVar)
-    : undefined
-
+const resolveLiveRateLimitControlConfig = (): LiveRateLimitControlConfig => {
   return {
     minIntervalMs:
-      readPositiveEnvNumber('NCURATOR_AI_LIVE_MIN_INTERVAL_MS') ||
-      legacyMinIntervalMs ||
-      DEFAULT_LIVE_MIN_INTERVAL_MS,
-    maxRetries:
-      readPositiveEnvNumber('NCURATOR_AI_LIVE_MAX_RETRIES') || DEFAULT_LIVE_MAX_RETRIES,
-    retryBaseMs:
-      readPositiveEnvNumber('NCURATOR_AI_LIVE_RETRY_BASE_MS') || DEFAULT_LIVE_RETRY_BASE_MS,
-    retryMaxMs: readPositiveEnvNumber('NCURATOR_AI_LIVE_RETRY_MAX_MS') || DEFAULT_LIVE_RETRY_MAX_MS
+      readPositiveEnvNumber('NCURATOR_AI_LIVE_MIN_INTERVAL_MS') || DEFAULT_LIVE_MIN_INTERVAL_MS,
+    maxRetries: DEFAULT_LIVE_MAX_RETRIES,
+    retryBaseMs: DEFAULT_LIVE_RETRY_BASE_MS,
+    retryMaxMs: DEFAULT_LIVE_RETRY_MAX_MS
   }
 }
 
@@ -218,9 +204,8 @@ const computeRetryDelayMs = (
 const invokeLiveStructuredChatWithRateLimitControl = async <T extends Record<string, unknown>>(input: {
   config: LiveLlmConfig
   payload: Parameters<NonNullable<CreateAiRunContextInput['chatStructuredOverride']>>[0]
-  options?: LiveRateLimitedOverrideOptions
 }): Promise<T> => {
-  const control = resolveLiveRateLimitControlConfig(input.options)
+  const control = resolveLiveRateLimitControlConfig()
   const channelPaths = resolveLiveRateLimitChannelPaths(input.config)
 
   await acquireLiveRateLimitLock(channelPaths.channelDir, channelPaths.lockDir)
@@ -469,14 +454,12 @@ export const startLiveProgressLogger = (input: {
 }
 
 export const createRateLimitedLiveChatStructuredOverride = (
-  config: LiveLlmConfig,
-  options?: LiveRateLimitedOverrideOptions
+  config: LiveLlmConfig
 ): NonNullable<CreateAiRunContextInput['chatStructuredOverride']> => {
   return async <T extends Record<string, unknown>>(input) => {
     return await invokeLiveStructuredChatWithRateLimitControl<T>({
       config,
-      payload: input,
-      options
+      payload: input
     })
   }
 }

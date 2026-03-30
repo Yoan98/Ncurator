@@ -37,12 +37,7 @@ describe('ai director live backend', () => {
 
         const runner = createDirectorTestRunner(runtime, {
           chatStructuredOverride: HUMAN_LIVE_PRIMARY_MODEL
-            ? createRateLimitedLiveChatStructuredOverride(
-                HUMAN_LIVE_PRIMARY_MODEL,
-                {
-                  legacyMinIntervalEnvVar: 'NCURATOR_DIRECTOR_LIVE_MIN_INTERVAL_MS'
-                }
-              )
+            ? createRateLimitedLiveChatStructuredOverride(HUMAN_LIVE_PRIMARY_MODEL)
             : undefined,
           humanRuntimeOverrides: {
             hardActionLimit: 4
