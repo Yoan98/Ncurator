@@ -16,7 +16,8 @@ import type {
   AiTaskResultCode,
   JsonObject,
   JsonValue,
-  LLMConfig
+  LLMConfig,
+  SelectedReference
 } from '../../../src/shared/types'
 import type { z } from 'zod/v4'
 import type { EventCollector } from '../core/eventCollector'
@@ -95,6 +96,7 @@ export type FixtureBinding = {
 export type CreateAiRunContextInput = {
   bindWorkspace?: boolean
   selectedDocumentIds?: string[]
+  selectedReferences?: SelectedReference[]
   approvalPolicy?: ApprovalPolicy | ApprovalResolver
   checkCancelledOverride?: () => void
   humanReasonOverrides?: TestHumanReasonOverride[]

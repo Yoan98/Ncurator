@@ -1,3 +1,5 @@
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
@@ -6,6 +8,7 @@ import {
   collectToolResultPreviewText,
   createRateLimitedLiveChatStructuredOverride,
   createHumanLiveKbFixture,
+  createHumanLiveKbSelectedReferences,
   filterHumanStepsByStage,
   filterToolCallResultEventsByNames,
   HUMAN_LIVE_PRIMARY_MODEL,
@@ -27,12 +30,26 @@ describe('ai human live backend', () => {
       runtimeModelName: HUMAN_LIVE_PRIMARY_MODEL?.model_name ?? null,
       execute: async (runtime) => {
         const kbFixture = createHumanLiveKbFixture()
+        const selectedReferences = createHumanLiveKbSelectedReferences(runtime.workspaceRoot)
+        await fs.mkdir(path.join(runtime.workspaceRoot, 'kb'), { recursive: true })
+        await Promise.all([
+          fs.writeFile(
+            path.join(runtime.workspaceRoot, 'kb', 'Risk Playbook.md'),
+            'Weekly risk summary should stay marked as pending follow-up until compliance signs off.',
+            'utf8'
+          ),
+          fs.writeFile(
+            path.join(runtime.workspaceRoot, 'kb', 'Owner Notes.md'),
+            'Owner note should mention that Compliance leads the final review window.',
+            'utf8'
+          )
+        ])
         const runner = createHumanTestRunner(runtime, {
-          bindWorkspace: false,
           chatStructuredOverride: HUMAN_LIVE_PRIMARY_MODEL
             ? createRateLimitedLiveChatStructuredOverride(HUMAN_LIVE_PRIMARY_MODEL)
             : undefined,
           selectedDocumentIds: kbFixture.selectedDocumentIds,
+          selectedReferences,
           documentsStoreOverrides: kbFixture.storeOverrides
         })
 

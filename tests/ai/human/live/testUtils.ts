@@ -6,7 +6,8 @@ import type {
   AiArtifactRef,
   AiRunEvent,
   DocumentRecord,
-  SearchResult
+  SearchResult,
+  SelectedReference
 } from '../../../../src/shared/types'
 import { invokeStructuredChat } from '../../../../src/main/services/ai/structuredOutput'
 import { hasLiveLlmConfigInEnv, loadLiveLlmConfigFromEnv } from '../../../harness/backend/llmConfig'
@@ -61,6 +62,7 @@ const DEFAULT_LIVE_MIN_INTERVAL_MS = 20_000
 const DEFAULT_LIVE_MAX_RETRIES = 2
 const DEFAULT_LIVE_RETRY_BASE_MS = 15_000
 const DEFAULT_LIVE_RETRY_MAX_MS = 90_000
+const DEFAULT_LIVE_STALE_LOCK_MS = 10 * 60_000
 
 type LiveRateLimitChannelState = {
   lastStartedAt: number
@@ -71,6 +73,7 @@ type LiveRateLimitControlConfig = {
   maxRetries: number
   retryBaseMs: number
   retryMaxMs: number
+  staleLockMs: number
 }
 
 const sleep = async (ms: number): Promise<void> =>
@@ -112,7 +115,40 @@ const readLiveRateLimitState = async (stateFile: string): Promise<LiveRateLimitC
   }
 }
 
-const acquireLiveRateLimitLock = async (channelDir: string, lockDir: string): Promise<void> => {
+const isLiveRateLimitLockStale = async (lockDir: string, staleLockMs: number): Promise<boolean> => {
+  try {
+    const stat = await fs.stat(lockDir)
+    return Date.now() - stat.mtimeMs >= staleLockMs
+  } catch (error) {
+    const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined
+    if (code === 'ENOENT') {
+      return false
+    }
+    throw error
+  }
+}
+
+const cleanupStaleLiveRateLimitLock = async (lockDir: string): Promise<boolean> => {
+  try {
+    await fs.rmdir(lockDir)
+    return true
+  } catch (error) {
+    const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined
+    if (code === 'ENOENT') {
+      return true
+    }
+    if (code === 'ENOTEMPTY' || code === 'EEXIST') {
+      return false
+    }
+    throw error
+  }
+}
+
+const acquireLiveRateLimitLock = async (
+  channelDir: string,
+  lockDir: string,
+  control: LiveRateLimitControlConfig
+): Promise<void> => {
   await fs.mkdir(channelDir, { recursive: true })
 
   while (true) {
@@ -123,6 +159,18 @@ const acquireLiveRateLimitLock = async (channelDir: string, lockDir: string): Pr
       const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined
       if (code !== 'EEXIST') {
         throw error
+      }
+      const stale = await isLiveRateLimitLockStale(lockDir, control.staleLockMs)
+      if (stale) {
+        const cleaned = await cleanupStaleLiveRateLimitLock(lockDir)
+        if (LIVE_PROGRESS_DEBUG_ENABLED) {
+          console.error(
+            `[live-progress][rate-limit-lock] stale lock detected at ${lockDir}; cleaned=${cleaned}`
+          )
+        }
+        if (cleaned) {
+          continue
+        }
       }
       await sleep(200)
     }
@@ -146,7 +194,9 @@ const resolveLiveRateLimitControlConfig = (): LiveRateLimitControlConfig => {
       readPositiveEnvNumber('NCURATOR_AI_LIVE_MIN_INTERVAL_MS') || DEFAULT_LIVE_MIN_INTERVAL_MS,
     maxRetries: DEFAULT_LIVE_MAX_RETRIES,
     retryBaseMs: DEFAULT_LIVE_RETRY_BASE_MS,
-    retryMaxMs: DEFAULT_LIVE_RETRY_MAX_MS
+    retryMaxMs: DEFAULT_LIVE_RETRY_MAX_MS,
+    staleLockMs:
+      readPositiveEnvNumber('NCURATOR_AI_LIVE_STALE_LOCK_MS') || DEFAULT_LIVE_STALE_LOCK_MS
   }
 }
 
@@ -208,7 +258,7 @@ const invokeLiveStructuredChatWithRateLimitControl = async <T extends Record<str
   const control = resolveLiveRateLimitControlConfig()
   const channelPaths = resolveLiveRateLimitChannelPaths(input.config)
 
-  await acquireLiveRateLimitLock(channelPaths.channelDir, channelPaths.lockDir)
+  await acquireLiveRateLimitLock(channelPaths.channelDir, channelPaths.lockDir, control)
 
   try {
     for (let attemptIndex = 0; attemptIndex <= control.maxRetries; attemptIndex += 1) {
@@ -216,6 +266,11 @@ const invokeLiveStructuredChatWithRateLimitControl = async <T extends Record<str
       const now = Date.now()
       const waitMs = Math.max(0, state.lastStartedAt + control.minIntervalMs - now)
       if (waitMs > 0) {
+        if (LIVE_PROGRESS_DEBUG_ENABLED) {
+          console.error(
+            `[live-progress][llm] waiting ${waitMs}ms before request; model=${input.config.model_name}; attempt=${attemptIndex + 1}`
+          )
+        }
         await sleep(waitMs)
       }
 
@@ -228,7 +283,12 @@ const invokeLiveStructuredChatWithRateLimitControl = async <T extends Record<str
       )
 
       try {
-        return (await invokeStructuredChat({
+        if (LIVE_PROGRESS_DEBUG_ENABLED) {
+          console.error(
+            `[live-progress][llm] invoke start; caller=${input.payload.caller}; schema=${input.payload.schemaName}; model=${input.config.model_name}; baseUrl=${input.config.base_url}; attempt=${attemptIndex + 1}`
+          )
+        }
+        const result = (await invokeStructuredChat({
           caller: input.payload.caller,
           cfg: input.config,
           schema: input.payload.schema,
@@ -237,7 +297,18 @@ const invokeLiveStructuredChatWithRateLimitControl = async <T extends Record<str
           user: input.payload.user,
           temperature: input.payload.temperature
         })) as T
+        if (LIVE_PROGRESS_DEBUG_ENABLED) {
+          console.error(
+            `[live-progress][llm] invoke success; caller=${input.payload.caller}; schema=${input.payload.schemaName}; model=${input.config.model_name}; attempt=${attemptIndex + 1}`
+          )
+        }
+        return result
       } catch (error) {
+        if (LIVE_PROGRESS_DEBUG_ENABLED) {
+          console.error(
+            `[live-progress][llm] invoke error; caller=${input.payload.caller}; schema=${input.payload.schemaName}; model=${input.config.model_name}; attempt=${attemptIndex + 1}; error=${getLiveRateLimitErrorText(error)}`
+          )
+        }
         if (!isLiveRateLimitError(error) || attemptIndex >= control.maxRetries) {
           throw error
         }
@@ -258,6 +329,33 @@ export type HumanLiveKbFixture = {
   rows: SearchResult[]
   storeOverrides: TestDocumentsStoreOverrides
 }
+
+export const createHumanLiveKbSelectedReferences = (
+  workspaceRoot: string
+): SelectedReference[] => [
+  {
+    kind: 'file',
+    workspaceId: 'test-workspace',
+    nodeId: 'node-doc-1',
+    name: 'Risk Playbook.md',
+    relativePath: 'kb/Risk Playbook.md',
+    absolutePath: path.join(workspaceRoot, 'kb', 'Risk Playbook.md'),
+    fileExt: 'md',
+    kbDocumentIds: ['doc-1'],
+    kbAvailability: 'indexed'
+  },
+  {
+    kind: 'file',
+    workspaceId: 'test-workspace',
+    nodeId: 'node-doc-2',
+    name: 'Owner Notes.md',
+    relativePath: 'kb/Owner Notes.md',
+    absolutePath: path.join(workspaceRoot, 'kb', 'Owner Notes.md'),
+    fileExt: 'md',
+    kbDocumentIds: ['doc-2'],
+    kbAvailability: 'indexed'
+  }
+]
 
 const filterRowsByDocumentIds = (
   rows: readonly SearchResult[],

@@ -6,6 +6,7 @@ import type { LastBrainDecision } from '../../../src/main/services/ai/human/type
 import type { AiRunContext } from '../../../src/main/services/ai/types'
 import type { AiApprovalDecision, AiApprovalRequest } from '../../../src/main/services/ai/types'
 import { buildSelectedContextText } from '../../../src/main/services/ai/utils/runContext'
+import type { SelectedReference } from '../../../src/shared/types'
 import type { EventCollector } from '../core/eventCollector'
 import type {
   ApprovalPolicy,
@@ -183,6 +184,13 @@ export const createTestAiRunContext = (input: CreateTestAiRunContextInput): AiRu
   const embeddingServiceStub = buildEmbeddingServiceStub()
   const resolveToolExecutionOverride = buildToolExecutionOverrideResolver(input.toolExecutionOverrides)
   const resolveBrainDecisionOverride = buildHumanReasonOverrideResolver(input.humanReasonOverrides)
+  const selectedReferences = Array.isArray(input.selectedReferences)
+    ? input.selectedReferences.filter(Boolean) as SelectedReference[]
+    : []
+  const selectedDocumentIds =
+    Array.isArray(input.selectedDocumentIds) && input.selectedDocumentIds.length > 0
+      ? input.selectedDocumentIds
+      : Array.from(new Set(selectedReferences.flatMap((reference) => reference.kbDocumentIds)))
   void input.sessionId
   void input.runtimeSettingsOverride
 
@@ -217,7 +225,7 @@ export const createTestAiRunContext = (input: CreateTestAiRunContextInput): AiRu
 
   const context = {
     runId,
-    selectedDocumentIds: input.selectedDocumentIds,
+    selectedDocumentIds,
     selectedContextText: buildSelectedContextText({
       workspace: bindWorkspace
         ? {
@@ -226,8 +234,8 @@ export const createTestAiRunContext = (input: CreateTestAiRunContextInput): AiRu
             rootPath: input.workspaceRootPath
           }
         : undefined,
-      selectedReferences: undefined,
-      usesWorkspaceDefaultKbScope: bindWorkspace
+      selectedReferences,
+      usesWorkspaceDefaultKbScope: bindWorkspace && selectedReferences.length === 0
     }),
     humanRuntimeOverrides: input.humanRuntimeOverrides,
     workspace: bindWorkspace
