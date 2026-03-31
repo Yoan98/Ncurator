@@ -30,26 +30,8 @@ const buildFinalDecisionText = (state: HumanState): string =>
     ? `最终决定：“${state.lastBrainDecision.decision.summary}”；原因：${state.lastBrainDecision.decision.reason}；预期结果：${state.lastBrainDecision.decision.expectedOutcome}`
     : 'none'
 
-export const buildMouthPromptContext = (input: {
-  state: HumanState
-  deliveryMode: HumanDeliveryMode
-}) => {
-  return buildHumanMouthPrompt({
-    deliveryMode: input.deliveryMode,
-    userInput: input.state.task.userInput,
-    finalDecisionText: buildFinalDecisionText(input.state),
-    factsText: renderHumanFactLines(input.state, 'mouth_prompt'),
-    evidencesText: renderHumanEvidenceLines(input.state, 'mouth_prompt'),
-    openQuestionsText: renderHumanOpenQuestionLines(input.state, 'mouth_prompt'),
-    recentToolResultsText: renderHumanRecentToolResultLines(input.state, 'prompt'),
-    runtimeArtifactsText: renderHumanArtifactLines(input.state, 'prompt'),
-    watchHintText: input.state.watchHint || 'none'
-  })
-}
-
-export const buildHumanMouthPrompt = (input: HumanMouthPromptInput) => {
-  return {
-    system: `
+export const buildMouthSystemPrompt = (deliveryMode: HumanDeliveryMode): string =>
+  `
 <system>
   <role>
     你现在扮演一个负责对外表达最终结果的人。
@@ -71,7 +53,7 @@ export const buildHumanMouthPrompt = (input: HumanMouthPromptInput) => {
   </delivery_principles>
 
   <delivery_mode_rules>
-${buildDeliveryModePromptRules(input.deliveryMode)}
+${buildDeliveryModePromptRules(deliveryMode)}
   </delivery_mode_rules>
 
   <output_rules>
@@ -97,11 +79,13 @@ ${buildDeliveryModePromptRules(input.deliveryMode)}
   </output_principles>
 
   <output_example>
-${buildDeliveryModePromptExample(input.deliveryMode)}
+${buildDeliveryModePromptExample(deliveryMode)}
   </output_example>
 </system>
-`.trim(),
-    user: `
+`.trim()
+
+export const buildMouthUserPrompt = (input: HumanMouthPromptInput): string =>
+  `
   <user_context>
   <delivery_mode>
 ${input.deliveryMode}
@@ -140,5 +124,27 @@ ${input.watchHintText}
   </watch_hint>
 </user_context>
 `.trim()
+
+export const buildMouthPromptContext = (input: {
+  state: HumanState
+  deliveryMode: HumanDeliveryMode
+}) => {
+  return buildHumanMouthPrompt({
+    deliveryMode: input.deliveryMode,
+    userInput: input.state.task.userInput,
+    finalDecisionText: buildFinalDecisionText(input.state),
+    factsText: renderHumanFactLines(input.state, 'mouth_prompt'),
+    evidencesText: renderHumanEvidenceLines(input.state, 'mouth_prompt'),
+    openQuestionsText: renderHumanOpenQuestionLines(input.state, 'mouth_prompt'),
+    recentToolResultsText: renderHumanRecentToolResultLines(input.state, 'prompt'),
+    runtimeArtifactsText: renderHumanArtifactLines(input.state, 'prompt'),
+    watchHintText: input.state.watchHint || 'none'
+  })
+}
+
+export const buildHumanMouthPrompt = (input: HumanMouthPromptInput) => {
+  return {
+    system: buildMouthSystemPrompt(input.deliveryMode),
+    user: buildMouthUserPrompt(input)
   }
 }

@@ -1,5 +1,3 @@
-import { renderLineList, renderNamedSections } from '../../utils/render'
-
 export const JSON_ONLY_INTENT_CONTRACT = [
   '只输出 JSON，不得输出任何额外文字。',
   '格式：{"mode":"need_context|to_plan|direct_human","reason":"string"}。',
@@ -26,29 +24,3 @@ export type IntentPromptInput = DirectorPromptSharedInput & {
 }
 
 export type PlanPromptInput = DirectorPromptSharedInput
-
-export const buildDirectorPromptUserContext = (
-  input: DirectorPromptSharedInput & {
-    extraSections?: Array<{ label: string; value: string }>
-  }
-) =>
-  renderNamedSections(
-    [
-      { label: '用户输入', value: input.userInput },
-      { label: '会话摘要', value: input.sessionSummaryText },
-      { label: '最近对话', value: input.recentTurnsText },
-      { label: '用户选择的参考资料', value: input.selectedContextText },
-      {
-        label: '上下文证据',
-        value: renderLineList(input.contextEvidence, {
-          fallback: '(none)',
-          style: 'plain'
-        })
-      },
-      ...(input.extraSections || [])
-    ],
-    {
-      fallback: '(none)',
-      style: 'plain'
-    }
-  )
