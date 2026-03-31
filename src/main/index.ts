@@ -8,6 +8,11 @@ import { EmbeddingService } from './services/vector/EmbeddingService'
 import { StorageService } from './services/storage/StorageService'
 import { ModelService } from './services/model/ModelService'
 import { globalShortcut } from 'electron'
+import { loadRootEnvOnce } from './utils/rootEnv'
+
+if (!app.isPackaged) {
+  loadRootEnvOnce()
+}
 
 function createWindow(): void {
   // Create the browser window.
