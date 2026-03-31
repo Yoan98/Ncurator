@@ -1,5 +1,6 @@
 import type { AiRunContext, AiRunDeps, AiRunStartPayload, CancelledError } from './types'
 import { invokeStructuredChat } from './structuredOutput'
+import { runStructuredChatWithActivity } from './utils/structuredChatActivity'
 import { clipText } from './utils/text'
 import {
   buildEffectiveDocumentIds,
@@ -43,14 +44,29 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
   ): Promise<T> => {
     checkCancelled()
     const cfg = await loadRequestedConfig()
-    return invokeStructuredChat({
-      caller: input.caller,
-      cfg,
-      schema: input.schema,
-      schemaName: input.schemaName,
-      system: input.system,
-      user: input.user,
-      temperature: input.temperature
+    return runStructuredChatWithActivity({
+      ctx: {
+        runId: payload.runId,
+        sendEvent: deps.sendEvent
+      },
+      runId: payload.runId,
+      telemetry: {
+        caller: input.caller,
+        schemaName: input.schemaName,
+        modelName: cfg.model_name,
+        baseUrl: cfg.base_url,
+        attempt: 1
+      },
+      execute: async () =>
+        await invokeStructuredChat({
+          caller: input.caller,
+          cfg,
+          schema: input.schema,
+          schemaName: input.schemaName,
+          system: input.system,
+          user: input.user,
+          temperature: input.temperature
+        })
     })
   }
 

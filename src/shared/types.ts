@@ -663,6 +663,16 @@ export type AiRunApprovalDecisionResponse = {
   error?: string
 }
 
+export interface AiActivityDetails {
+  caller?: string
+  schemaName?: string
+  model?: string
+  baseUrlHost?: string
+  attempt?: number
+  durationMs?: number
+  reason?: string
+}
+
 type AiRunEventPayload =
   | {
       type: 'run_started'
@@ -756,6 +766,7 @@ type AiRunEventPayload =
       actionType: string
       status: 'started' | 'completed' | 'failed'
       summary: string
+      details?: AiActivityDetails
       createdAt: number
     }
   | {

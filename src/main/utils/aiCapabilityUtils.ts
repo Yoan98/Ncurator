@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { AIMessage, BaseMessage } from '@langchain/core/messages'
 import type { AiEventDispatchContext } from '../services/ai/types'
-import type { JsonObject, JsonValue } from '../../shared/types'
+import type { AiActivityDetails, JsonObject, JsonValue } from '../../shared/types'
 
 type MessageContent = BaseMessage['content'] | undefined
 
@@ -72,6 +72,7 @@ export const emitActivity = (input: {
   actionType: string
   status: 'started' | 'completed' | 'failed'
   summary: string
+  details?: AiActivityDetails
 }) => {
   input.ctx.sendEvent({
     type: 'activity',
@@ -81,6 +82,7 @@ export const emitActivity = (input: {
     actionType: input.actionType,
     status: input.status,
     summary: input.summary,
+    details: input.details,
     createdAt: Date.now()
   })
 }

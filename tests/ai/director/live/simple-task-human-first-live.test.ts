@@ -36,6 +36,7 @@ describe('ai director live backend', () => {
         )
 
         const runner = createDirectorTestRunner(runtime, {
+          liveModelConfig: HUMAN_LIVE_PRIMARY_MODEL || undefined,
           chatStructuredOverride: HUMAN_LIVE_PRIMARY_MODEL
             ? createRateLimitedLiveChatStructuredOverride(HUMAN_LIVE_PRIMARY_MODEL)
             : undefined,

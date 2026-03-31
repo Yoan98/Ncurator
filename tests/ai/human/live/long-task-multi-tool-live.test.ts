@@ -70,6 +70,7 @@ describe('ai human live backend', () => {
           const runner = createHumanTestRunner(
             runtime,
             {
+              liveModelConfig: HUMAN_LIVE_PRIMARY_MODEL || undefined,
               chatStructuredOverride: HUMAN_LIVE_PRIMARY_MODEL
                 ? createRateLimitedLiveChatStructuredOverride(HUMAN_LIVE_PRIMARY_MODEL)
                 : undefined,

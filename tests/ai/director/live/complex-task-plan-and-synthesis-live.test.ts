@@ -1,3 +1,5 @@
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import { writeTestDocxFile } from '../../../harness/backend/aiToolHarness'
 import { createDirectorTestRunner } from '../../../harness/backend/directorHarness'
@@ -5,6 +7,7 @@ import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
   areAllPathsAccessible,
   createHumanLiveKbFixture,
+  createHumanLiveKbSelectedReferences,
   createRateLimitedLiveChatStructuredOverride,
   DOCX_DELIVERY_TOOL_NAMES,
   DOCX_READ_TOOL_NAMES,
@@ -50,7 +53,22 @@ describe('ai director live backend', () => {
         ])
 
         const kbFixture = createHumanLiveKbFixture()
+        const selectedReferences = createHumanLiveKbSelectedReferences(runtime.workspaceRoot)
+        await fs.mkdir(path.join(runtime.workspaceRoot, 'kb'), { recursive: true })
+        await Promise.all([
+          fs.writeFile(
+            path.join(runtime.workspaceRoot, 'kb', 'Risk Playbook.md'),
+            'Weekly risk summary should stay marked as pending follow-up until compliance signs off.',
+            'utf8'
+          ),
+          fs.writeFile(
+            path.join(runtime.workspaceRoot, 'kb', 'Owner Notes.md'),
+            'Owner note should mention that Compliance leads the final review window.',
+            'utf8'
+          )
+        ])
         const runner = createDirectorTestRunner(runtime, {
+          liveModelConfig: HUMAN_LIVE_STRONG_MODEL || undefined,
           chatStructuredOverride: HUMAN_LIVE_STRONG_MODEL
             ? createRateLimitedLiveChatStructuredOverride(HUMAN_LIVE_STRONG_MODEL)
             : undefined,
@@ -58,6 +76,7 @@ describe('ai director live backend', () => {
             hardActionLimit: 4
           },
           selectedDocumentIds: kbFixture.selectedDocumentIds,
+          selectedReferences,
           documentsStoreOverrides: kbFixture.storeOverrides
         })
 

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { invokeStructuredChat } from '../../../src/main/services/ai/structuredOutput'
+import { runStructuredChatWithActivity } from '../../../src/main/services/ai/utils/structuredChatActivity'
 import type { ResolvedDocxOpenTarget } from '../../../src/main/services/ai/human/tools/docx/review/types'
 import type { DocxChangedBlock, DocxOp } from '../../../src/main/services/ai/human/tools/docx/types'
 import type { LastBrainDecision } from '../../../src/main/services/ai/human/types'
@@ -247,20 +248,39 @@ export const createTestAiRunContext = (input: CreateTestAiRunContextInput): AiRu
       : undefined,
     checkCancelled: input.checkCancelledOverride || (() => undefined),
     chatStructured: async <T extends Record<string, unknown>>(payload): Promise<T> => {
-      if (input.chatStructuredOverride) {
-        return input.chatStructuredOverride<T>(payload)
-      }
-      if (!input.liveModelConfig) {
-        throw new Error('chatStructured is not available in this test harness context')
-      }
-      return invokeStructuredChat({
+      const telemetryConfig = input.liveModelConfig
+      const telemetry = {
         caller: payload.caller,
-        cfg: input.liveModelConfig,
-        schema: payload.schema,
         schemaName: payload.schemaName,
-        system: payload.system,
-        user: payload.user,
-        temperature: payload.temperature
+        modelName: telemetryConfig?.model_name || 'override',
+        baseUrl: telemetryConfig?.base_url || '',
+        attempt: 1
+      }
+
+      return runStructuredChatWithActivity({
+        ctx: {
+          runId,
+          sendEvent: (event) => input.eventCollector.add(event)
+        },
+        runId,
+        telemetry,
+        execute: async () => {
+          if (input.chatStructuredOverride) {
+            return await input.chatStructuredOverride<T>(payload)
+          }
+          if (!input.liveModelConfig) {
+            throw new Error('chatStructured is not available in this test harness context')
+          }
+          return await invokeStructuredChat({
+            caller: payload.caller,
+            cfg: input.liveModelConfig,
+            schema: payload.schema,
+            schemaName: payload.schemaName,
+            system: payload.system,
+            user: payload.user,
+            temperature: payload.temperature
+          })
+        }
       })
     },
     sendEvent: (event: Parameters<AiRunContext['sendEvent']>[0]) => {

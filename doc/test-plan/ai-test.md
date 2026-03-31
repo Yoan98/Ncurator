@@ -605,6 +605,19 @@ AI 正式测试当前分为三个 suite：
   - `finalArtifacts` 正确合并计划阶段与 synthesis 阶段结果。
 - Not：不验证 live 规划判断。
 
+#### `structured-chat-activity-contract`
+
+- 用例名称：`structured-chat-activity-contract`
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 `chatStructured` 在成功与失败时都会产出统一的 `llm_structured_output` activity 事件。
+- Why：如果缺少这层稳定事件，live 调试和 raw logs 就很难区分“没有真正发起模型调用”“上游调用挂起”和“调用失败”。
+- How：通过 `chatStructuredOverride` 分别构造成功与失败两类结构化调用，检查 runtime event 流中的 activity 事件与细节字段。
+- Oracle：
+  - 成功调用会产生 `started -> completed`，失败调用会产生 `started -> failed`。
+  - `details` 中保留 `caller / schemaName / model / baseUrlHost / durationMs / reason` 等后端排障字段。
+- Not：不验证真实上游模型质量，也不验证前端对 activity 的展示。
+
 #### 6.3.3 `live`
 
 #### `simple-task-human-first-live`

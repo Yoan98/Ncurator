@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -63,9 +63,20 @@ const DEFAULT_LIVE_MAX_RETRIES = 2
 const DEFAULT_LIVE_RETRY_BASE_MS = 15_000
 const DEFAULT_LIVE_RETRY_MAX_MS = 90_000
 const DEFAULT_LIVE_STALE_LOCK_MS = 10 * 60_000
+const DEFAULT_LIVE_LEASE_HEARTBEAT_MS = 5_000
+const DEFAULT_LIVE_LOCK_WAIT_TIMEOUT_MS = 60_000
 
 type LiveRateLimitChannelState = {
   lastStartedAt: number
+}
+
+type LiveRateLimitLease = {
+  ownerId: string
+  pid: number
+  acquiredAt: number
+  heartbeatAt: number
+  modelName: string
+  baseUrl: string
 }
 
 type LiveRateLimitControlConfig = {
@@ -74,6 +85,8 @@ type LiveRateLimitControlConfig = {
   retryBaseMs: number
   retryMaxMs: number
   staleLockMs: number
+  leaseHeartbeatMs: number
+  lockWaitTimeoutMs: number
 }
 
 const sleep = async (ms: number): Promise<void> =>
@@ -96,7 +109,7 @@ const resolveLiveRateLimitChannelPaths = (config: LiveLlmConfig) => {
   const channelDir = path.join(LIVE_RATE_LIMIT_ROOT_DIR, channelId)
   return {
     channelDir,
-    lockDir: path.join(channelDir, 'lock'),
+    leaseFile: path.join(channelDir, 'lease.json'),
     stateFile: path.join(channelDir, 'state.json')
   }
 }
@@ -115,22 +128,66 @@ const readLiveRateLimitState = async (stateFile: string): Promise<LiveRateLimitC
   }
 }
 
-const isLiveRateLimitLockStale = async (lockDir: string, staleLockMs: number): Promise<boolean> => {
+const createLiveRateLimitLease = (config: LiveLlmConfig): LiveRateLimitLease => ({
+  ownerId: randomUUID(),
+  pid: process.pid,
+  acquiredAt: Date.now(),
+  heartbeatAt: Date.now(),
+  modelName: config.model_name,
+  baseUrl: config.base_url
+})
+
+const readLiveRateLimitLease = async (leaseFile: string): Promise<LiveRateLimitLease | null> => {
   try {
-    const stat = await fs.stat(lockDir)
-    return Date.now() - stat.mtimeMs >= staleLockMs
+    const raw = await fs.readFile(leaseFile, 'utf8')
+    const parsed = JSON.parse(raw) as Partial<LiveRateLimitLease>
+    if (
+      typeof parsed.ownerId !== 'string' ||
+      !parsed.ownerId.trim() ||
+      !Number.isFinite(parsed.acquiredAt) ||
+      !Number.isFinite(parsed.heartbeatAt)
+    ) {
+      return null
+    }
+    return {
+      ownerId: parsed.ownerId,
+      pid: Number(parsed.pid || 0),
+      acquiredAt: Number(parsed.acquiredAt),
+      heartbeatAt: Number(parsed.heartbeatAt),
+      modelName: String(parsed.modelName || ''),
+      baseUrl: String(parsed.baseUrl || '')
+    }
   } catch (error) {
     const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined
     if (code === 'ENOENT') {
-      return false
+      return null
     }
     throw error
   }
 }
 
-const cleanupStaleLiveRateLimitLock = async (lockDir: string): Promise<boolean> => {
+const writeLiveRateLimitLease = async (
+  leaseFile: string,
+  lease: LiveRateLimitLease,
+  flag?: 'wx'
+): Promise<void> => {
+  await fs.writeFile(leaseFile, JSON.stringify(lease), {
+    encoding: 'utf8',
+    flag
+  })
+}
+
+const isLiveRateLimitLeaseStale = (
+  lease: LiveRateLimitLease | null,
+  staleLockMs: number
+): boolean => {
+  if (!lease) return true
+  return Date.now() - lease.heartbeatAt >= staleLockMs
+}
+
+const cleanupStaleLiveRateLimitLease = async (leaseFile: string): Promise<boolean> => {
   try {
-    await fs.rmdir(lockDir)
+    await fs.unlink(leaseFile)
     return true
   } catch (error) {
     const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined
@@ -144,46 +201,112 @@ const cleanupStaleLiveRateLimitLock = async (lockDir: string): Promise<boolean> 
   }
 }
 
-const acquireLiveRateLimitLock = async (
-  channelDir: string,
-  lockDir: string,
+const cleanupLegacyDirectoryLocks = async (channelDir: string, staleLockMs: number): Promise<void> => {
+  const legacyLockDirs = [path.join(LIVE_RATE_LIMIT_ROOT_DIR, 'lock'), path.join(channelDir, 'lock')]
+  await Promise.all(
+    legacyLockDirs.map(async (legacyLockDir) => {
+      try {
+        const stat = await fs.stat(legacyLockDir)
+        if (!stat.isDirectory() || Date.now() - stat.mtimeMs < staleLockMs) {
+          return
+        }
+        await fs.rmdir(legacyLockDir)
+        if (LIVE_PROGRESS_DEBUG_ENABLED) {
+          console.error(
+            `[live-progress][rate-limit-lock] cleaned legacy lock dir ${legacyLockDir}`
+          )
+        }
+      } catch (error) {
+        const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined
+        if (code !== 'ENOENT' && code !== 'ENOTEMPTY') {
+          throw error
+        }
+      }
+    })
+  )
+}
+
+const startLiveRateLimitLeaseHeartbeat = (
+  leaseFile: string,
+  lease: LiveRateLimitLease,
   control: LiveRateLimitControlConfig
+): (() => void) => {
+  let stopped = false
+  const timer = setInterval(() => {
+    if (stopped) return
+    lease.heartbeatAt = Date.now()
+    void writeLiveRateLimitLease(leaseFile, lease).catch((error) => {
+      if (LIVE_PROGRESS_DEBUG_ENABLED) {
+        console.error(
+          `[live-progress][rate-limit-lock] heartbeat write failed; leaseFile=${leaseFile}; error=${getLiveRateLimitErrorText(error)}`
+        )
+      }
+    })
+  }, control.leaseHeartbeatMs)
+
+  return () => {
+    stopped = true
+    clearInterval(timer)
+  }
+}
+
+const releaseLiveRateLimitLease = async (
+  leaseFile: string,
+  ownerId: string
 ): Promise<void> => {
+  try {
+    const lease = await readLiveRateLimitLease(leaseFile)
+    if (!lease || lease.ownerId !== ownerId) {
+      return
+    }
+    await fs.unlink(leaseFile)
+  } catch (error) {
+    const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined
+    if (code !== 'ENOENT') {
+      throw error
+    }
+  }
+}
+
+const acquireLiveRateLimitLease = async (
+  channelDir: string,
+  leaseFile: string,
+  config: LiveLlmConfig,
+  control: LiveRateLimitControlConfig
+): Promise<LiveRateLimitLease> => {
   await fs.mkdir(channelDir, { recursive: true })
+  await cleanupLegacyDirectoryLocks(channelDir, control.staleLockMs)
+  const startedAt = Date.now()
 
   while (true) {
+    const lease = createLiveRateLimitLease(config)
     try {
-      await fs.mkdir(lockDir)
-      return
+      await writeLiveRateLimitLease(leaseFile, lease, 'wx')
+      return lease
     } catch (error) {
       const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined
       if (code !== 'EEXIST') {
         throw error
       }
-      const stale = await isLiveRateLimitLockStale(lockDir, control.staleLockMs)
+      const existingLease = await readLiveRateLimitLease(leaseFile)
+      const stale = isLiveRateLimitLeaseStale(existingLease, control.staleLockMs)
       if (stale) {
-        const cleaned = await cleanupStaleLiveRateLimitLock(lockDir)
+        const cleaned = await cleanupStaleLiveRateLimitLease(leaseFile)
         if (LIVE_PROGRESS_DEBUG_ENABLED) {
           console.error(
-            `[live-progress][rate-limit-lock] stale lock detected at ${lockDir}; cleaned=${cleaned}`
+            `[live-progress][rate-limit-lock] stale lease detected at ${leaseFile}; cleaned=${cleaned}`
           )
         }
         if (cleaned) {
           continue
         }
       }
+      if (Date.now() - startedAt >= control.lockWaitTimeoutMs) {
+        throw new Error(
+          `live_rate_limit_lock_timeout; waitedMs=${Date.now() - startedAt}; leaseFile=${leaseFile}; owner=${existingLease?.ownerId || 'unknown'}; model=${existingLease?.modelName || 'unknown'}`
+        )
+      }
       await sleep(200)
-    }
-  }
-}
-
-const releaseLiveRateLimitLock = async (lockDir: string): Promise<void> => {
-  try {
-    await fs.rmdir(lockDir)
-  } catch (error) {
-    const code = error instanceof Error ? (error as Error & { code?: string }).code : undefined
-    if (code !== 'ENOENT') {
-      throw error
     }
   }
 }
@@ -196,7 +319,13 @@ const resolveLiveRateLimitControlConfig = (): LiveRateLimitControlConfig => {
     retryBaseMs: DEFAULT_LIVE_RETRY_BASE_MS,
     retryMaxMs: DEFAULT_LIVE_RETRY_MAX_MS,
     staleLockMs:
-      readPositiveEnvNumber('NCURATOR_AI_LIVE_STALE_LOCK_MS') || DEFAULT_LIVE_STALE_LOCK_MS
+      readPositiveEnvNumber('NCURATOR_AI_LIVE_STALE_LOCK_MS') || DEFAULT_LIVE_STALE_LOCK_MS,
+    leaseHeartbeatMs:
+      readPositiveEnvNumber('NCURATOR_AI_LIVE_LEASE_HEARTBEAT_MS') ||
+      DEFAULT_LIVE_LEASE_HEARTBEAT_MS,
+    lockWaitTimeoutMs:
+      readPositiveEnvNumber('NCURATOR_AI_LIVE_LOCK_WAIT_TIMEOUT_MS') ||
+      DEFAULT_LIVE_LOCK_WAIT_TIMEOUT_MS
   }
 }
 
@@ -257,8 +386,17 @@ const invokeLiveStructuredChatWithRateLimitControl = async <T extends Record<str
 }): Promise<T> => {
   const control = resolveLiveRateLimitControlConfig()
   const channelPaths = resolveLiveRateLimitChannelPaths(input.config)
-
-  await acquireLiveRateLimitLock(channelPaths.channelDir, channelPaths.lockDir, control)
+  const lease = await acquireLiveRateLimitLease(
+    channelPaths.channelDir,
+    channelPaths.leaseFile,
+    input.config,
+    control
+  )
+  const stopLeaseHeartbeat = startLiveRateLimitLeaseHeartbeat(
+    channelPaths.leaseFile,
+    lease,
+    control
+  )
 
   try {
     for (let attemptIndex = 0; attemptIndex <= control.maxRetries; attemptIndex += 1) {
@@ -319,7 +457,8 @@ const invokeLiveStructuredChatWithRateLimitControl = async <T extends Record<str
 
     throw new Error('unreachable live rate limit retry state')
   } finally {
-    await releaseLiveRateLimitLock(channelPaths.lockDir)
+    stopLeaseHeartbeat()
+    await releaseLiveRateLimitLease(channelPaths.leaseFile, lease.ownerId)
   }
 }
 
