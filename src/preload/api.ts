@@ -20,7 +20,7 @@ import type {
   LegacyLocalImportMigrationStatus,
   ListDraftReviewsRequest,
   ListDraftReviewsResponse,
-  ListSourceScopesRequest,
+  ListReferenceItemsRequest,
   ListWorkspaceNodesRequest,
   LLMConfig,
   PickDirectoryResponse,
@@ -34,7 +34,7 @@ import type {
   PickApplicationResponse,
   OpenPathWithApplicationRequest,
   OpenPathWithApplicationResponse,
-  SourceScopeListResponse,
+  ReferenceItemListResponse,
   ValidateDraftCommitRequest,
   ValidateDraftCommitResponse,
   WebSourceListResponse,
@@ -115,7 +115,9 @@ export type DesktopApi = {
   workspaceNodes: (payload: ListWorkspaceNodesRequest) => Promise<WorkspaceNodeListResponse>
   workspaceScan: (payload: { workspaceId: string }) => Promise<WorkspaceJobResponse>
   workspacePrepare: (payload: PrepareWorkspaceRequest) => Promise<WorkspaceJobResponse>
-  sourceScopeList: (payload: ListSourceScopesRequest) => Promise<SourceScopeListResponse>
+  referenceItemList: (
+    payload: ListReferenceItemsRequest
+  ) => Promise<ReferenceItemListResponse>
   webSourceList: () => Promise<WebSourceListResponse>
   webSourceRefresh: (payload: RefreshWebSourceRequest) => Promise<WebSourceMutationResponse>
   webSourceDelete: (webSourceId: string) => Promise<DeleteWebSourceResponse>

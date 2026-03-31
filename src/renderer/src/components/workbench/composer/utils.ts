@@ -1,6 +1,11 @@
-import type { SourceScopeSelection } from '../../../../../shared/types'
+import type { SelectedReference } from '../../../../../shared/types'
 import { TOKEN_BADGE_CLASSNAME, TOKEN_TONE_CLASSNAME } from './constants'
 import type { ComposerDraftValue, ComposerNode } from './types'
+import {
+  getReferenceBadgeLabel,
+  getReferenceKey,
+  pruneReferencesByWorkspace
+} from '../../../utils/reference'
 
 export const createTextNode = (text = ''): ComposerNode => ({
   id: crypto.randomUUID(),
@@ -8,22 +13,13 @@ export const createTextNode = (text = ''): ComposerNode => ({
   text
 })
 
-export const createScopeNode = (scope: SourceScopeSelection): ComposerNode => ({
+export const createScopeNode = (scope: SelectedReference): ComposerNode => ({
   id: crypto.randomUUID(),
   kind: 'scope',
   scope
 })
 
-export const getScopeKey = (scope: SourceScopeSelection): string =>
-  [scope.sourceType, scope.sourceId, scope.scopeType, scope.nodeId || 'root'].join(':')
-
-export const getScopeBadgeLabel = (scope: SourceScopeSelection): string => {
-  if (scope.scopeType === 'workspace') return 'WS'
-  if (scope.scopeType === 'directory') return 'DIR'
-  if (scope.scopeType === 'web') return 'WEB'
-  const ext = scope.relativePath?.split('.').pop()?.trim()
-  return ext ? ext.slice(0, 4).toUpperCase() : 'FILE'
-}
+export const getScopeKey = (scope: SelectedReference): string => getReferenceKey(scope)
 
 export const normalizeComposerNodes = (nodes: ComposerNode[]): ComposerNode[] => {
   const nextNodes: ComposerNode[] = []
@@ -42,7 +38,7 @@ export const normalizeComposerNodes = (nodes: ComposerNode[]): ComposerNode[] =>
 }
 
 export const extractComposerDraftValue = (nodes: ComposerNode[]): ComposerDraftValue => {
-  const scopeMap = new Map<string, SourceScopeSelection>()
+  const scopeMap = new Map<string, SelectedReference>()
   const input = nodes
     .filter((node): node is Extract<ComposerNode, { kind: 'text' }> => node.kind === 'text')
     .map((node) => node.text)
@@ -57,7 +53,7 @@ export const extractComposerDraftValue = (nodes: ComposerNode[]): ComposerDraftV
 
   return {
     input,
-    selectedSourceScopes: Array.from(scopeMap.values())
+    selectedReferences: Array.from(scopeMap.values())
   }
 }
 
@@ -68,14 +64,13 @@ export const pruneComposerNodesByWorkspace = (
   normalizeComposerNodes(
     nodes.filter((node) => {
       if (node.kind !== 'scope') return true
-      if (node.scope.sourceType !== 'workspace') return true
-      return Boolean(workspaceId) && node.scope.sourceId === workspaceId
+      return pruneReferencesByWorkspace([node.scope], workspaceId).length > 0
     })
   )
 
 export const readComposerNodesFromEditor = (
   editor: HTMLElement,
-  knownScopes: Map<string, SourceScopeSelection>
+  knownScopes: Map<string, SelectedReference>
 ): ComposerNode[] => {
   const nextNodes: ComposerNode[] = []
   editor.childNodes.forEach((child) => {
@@ -113,18 +108,18 @@ const appendRemoveButton = (container: HTMLElement): void => {
   container.appendChild(button)
 }
 
-export const createScopeTokenElement = (scope: SourceScopeSelection): HTMLElement => {
+export const createScopeTokenElement = (scope: SelectedReference): HTMLElement => {
   const token = document.createElement('span')
-  token.className = `mx-0.5 inline-flex max-w-full items-center gap-1.5 rounded-lg border px-2 py-0.5 align-baseline text-[13px] leading-5 ${TOKEN_TONE_CLASSNAME[scope.scopeType]}`
+  token.className = `mx-0.5 inline-flex max-w-full items-center gap-1.5 rounded-lg border px-2 py-0.5 align-baseline text-[13px] leading-5 ${TOKEN_TONE_CLASSNAME[scope.kind]}`
   token.contentEditable = 'false'
   token.dataset.role = 'scope-token'
   token.dataset.scopeKey = getScopeKey(scope)
 
-  appendBadge(token, getScopeBadgeLabel(scope), TOKEN_BADGE_CLASSNAME[scope.scopeType])
+  appendBadge(token, getReferenceBadgeLabel(scope), TOKEN_BADGE_CLASSNAME[scope.kind])
 
   const label = document.createElement('span')
   label.className = 'max-w-[180px] truncate font-medium'
-  label.textContent = scope.label
+  label.textContent = scope.name
   token.appendChild(label)
 
   appendRemoveButton(token)

@@ -60,7 +60,7 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
       taskId: taskInput.taskId,
       status: output.result?.status || 'completed',
       summary: output.result?.summary || '任务未产出最终结果。',
-      deliveryMarkdown: output.result?.deliveryMarkdown,
+      deliveryMarkdown: output.result?.deliveryMarkdown || '',
       artifacts: output.result?.artifacts
     }
   }

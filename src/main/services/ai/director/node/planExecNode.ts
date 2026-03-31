@@ -65,7 +65,7 @@ export const createPlanExecNode = (input: {
         userInput: buildPlanTaskObjective({
           userInput: state.input,
           task,
-          selectedScopeSummary: ctx.selectedScopeSummary,
+          selectedContextText: ctx.selectedContextText,
           contextEvidence: state.contextEvidence,
           priorDeliveries: state.plan
             .slice(0, taskIndex)

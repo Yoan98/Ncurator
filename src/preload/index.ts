@@ -102,9 +102,9 @@ const api: DesktopApi = {
     emitE2EIpcCall(`workspacePrepare:${payload.mode}`)
     return ipcRenderer.invoke('workspace-prepare', payload)
   },
-  sourceScopeList: (payload) => {
-    emitE2EIpcCall('sourceScopeList')
-    return ipcRenderer.invoke('source-scope-list', payload)
+  referenceItemList: (payload) => {
+    emitE2EIpcCall('referenceItemList')
+    return ipcRenderer.invoke('reference-item-list', payload)
   },
   webSourceList: () => ipcRenderer.invoke('web-source-list'),
   webSourceRefresh: async (payload) => {

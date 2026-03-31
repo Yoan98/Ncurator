@@ -73,7 +73,7 @@ stateDiagram-v2
 **How**
 
 - 触发：graph 起点，或 `director_context_human` 返回后再次路由。
-- 读取：`DirectorState.input`、`DirectorState.contextRounds`、`DirectorState.contextEvidence`、历史摘要、最近对话、`ctx.selectedScopeSummary`。
+- 读取：`DirectorState.input`、`DirectorState.contextRounds`、`DirectorState.contextEvidence`、历史摘要、最近对话、`ctx.selectedContextText`。
 - 回写：`DirectorState.directorStage`；必要时回写 `DirectorState.contextObjective`。
 - 下一跳：`director_direct_human_exec`、`director_context_human`、`director_plan`。
 - 实现约束：
@@ -183,7 +183,7 @@ stateDiagram-v2
 **How**
 
 - 触发：`DirectorState.directorStage = director_plan`
-- 读取：`DirectorState.input`、`DirectorState.contextEvidence`、历史摘要、最近对话、`ctx.selectedScopeSummary`
+- 读取：`DirectorState.input`、`DirectorState.contextEvidence`、历史摘要、最近对话、`ctx.selectedContextText`
 - 输出：计划任务列表
 - 回写：`DirectorState.plan`、`DirectorState.dispatchCursor = 0`、`DirectorState.directorStage = director_plan_exec`；失败时回写 `DirectorState.status = failed` 与 `DirectorState.error`
 - 下一跳：`director_plan_exec` 或 `director_complete`
@@ -220,7 +220,7 @@ stateDiagram-v2
 **How**
 
 - 触发：`DirectorState.directorStage = director_plan_exec`
-- 读取：`DirectorState.plan`、`DirectorState.dispatchCursor`、`DirectorState.input`、`DirectorState.contextEvidence`、之前任务的 `deliveryMarkdown`、`ctx.selectedScopeSummary`
+- 读取：`DirectorState.plan`、`DirectorState.dispatchCursor`、`DirectorState.input`、`DirectorState.contextEvidence`、之前任务的 `deliveryMarkdown`、`ctx.selectedContextText`
 - 调用：按 `dispatchCursor` 串行派发 `human`；`deliveryMode = task_handoff`
 - 回写：当前任务 `status`、`deliveryMarkdown`、`artifacts`，以及 `DirectorState.dispatchCursor`、`DirectorState.directorStage`
 - 下一跳：`director_plan_exec` 或 `director_synthesis_human`
@@ -257,7 +257,7 @@ stateDiagram-v2
 **How**
 
 - 触发：`DirectorState.directorStage = director_synthesis_human`
-- 读取：`DirectorState.input`、`DirectorState.contextEvidence`、`DirectorState.plan`、`ctx.selectedScopeSummary`
+- 读取：`DirectorState.input`、`DirectorState.contextEvidence`、`DirectorState.plan`、`ctx.selectedContextText`
 - 调用：派发一个 `human` 任务；`deliveryMode = user_answer`；`streamAnswer = true`
 - 回写：`DirectorState.finalDeliveryMarkdown`、`DirectorState.finalArtifacts`、`DirectorState.directorStage = director_complete`
 - 下一跳：`director_complete`
@@ -374,14 +374,14 @@ stateDiagram-v2
 **How**
 
 - 触发：`runtime.stage = brain`
-- 读取：`HumanState.task`、`HumanState.brainMemory`、`HumanState.lastParallelCallToolResults`、`HumanState.watchHint`、最近决策历史摘要，以及 runtime 提供的 `run constraints` 视图
+- 读取：`HumanState.task`、`HumanState.brainMemory`、`HumanState.lastParallelCallToolResults`、`HumanState.watchHint`、最近决策历史摘要，以及 runtime 提供的“用户选择的参考资料”文本
 - 输出：`LastBrainDecision`
 - 回写：`HumanState.brainMemory.inside`、`HumanState.brainMemory.outside.brainDecisions`、`HumanState.lastBrainDecision`、`HumanState.runtime.stage`、`HumanState.watchHint`、`HumanState.trace.steps`
 - 下一跳：`learning`、`hand`、`mouth`；当 memory reducer 产出 `watchHint` 时留在 `brain`
 - 实现约束：
   - 模型输出必须通过 `ctx.chatStructured`。
   - prompt 必须通过 `buildBrainPromptContext`。
-  - `buildBrainPromptContext` 的输入来源是 `state + ctx`；运行约束来自 `ctx.selectedScopeSummary / ctx.selectedDocumentIds / ctx.workspace / ctx.allowNonLocal` 的提示层投影，不持久化进 `HumanState`。
+  - `buildBrainPromptContext` 的输入来源是 `state + ctx`；参考资料上下文统一来自 `ctx.selectedContextText`，知识库检索约束来自 `ctx.selectedDocumentIds`，这些运行时投影都不持久化进 `HumanState`。
   - 输出必须先经过 `parseBrainDecisionOutput`。
   - `brainMemory.inside` 的修改必须经过 `reduceBrainMemory`，它的设计初衷就是这类信息将之用于brain的提示词记忆之中，且由brain进行输出修改。
   - `brainDecisions` 只保留最近 10 条。

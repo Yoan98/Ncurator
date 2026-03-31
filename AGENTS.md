@@ -4,7 +4,7 @@
 ### 1.1 AI相关
 - 当涉及 AI 总体架构、Director/Human 分工或主流程时，请阅读 `doc/ai-design/architecture.md`
 - 当涉及 AI 节点实现，请阅读 `doc/ai-design/implementation-spec.md`
-- 当涉及 AI 状态字段、数据流转、`ToolCallResult.diagnostic` 或 `human` 的运行约束投影时，请阅读 `doc/ai-design/data-definition-and-flow.md`
+- 当涉及 AI 状态字段、数据流转、`ToolCallResult.diagnostic`、`selectedContextText` 或 `human` 的运行约束投影时，请阅读 `doc/ai-design/data-definition-and-flow.md`
 - 当想看 AI 完整跑一遍的真实样例，请阅读 `doc/ai-design/example.md`
 - 当涉及 `human` 的 skill设计、`skills.ts`、family `toolSpecs.ts` 或 tools registry 时，请阅读 `doc/ai-design/human-skill-design.md`
 - 当涉及 AI prompt 设计，请阅读 `doc/ai-design/prompt-design.md`
@@ -23,7 +23,7 @@
 - 当涉及测试架构、目录分层、正式 case 字段填写或 case 登记规则时，必须阅读 `doc/test.md`
 
 ### 1.4 prd产品文档相关
-- 当涉及 workbench 的会话管理、composer 输入、标准任务闭环、`@` 资料范围与多 token 插入、AI 运行阻塞、搜索结果、右侧持续工作区、文档预览、确认修改文件 tab 或同文件多轮累计差异的产品需求、操作逻辑、状态反馈或验收标准时，请阅读 `doc/prd/workbench.md`
+- 当涉及 workbench 的会话管理、composer 输入、标准任务闭环、工作区绑定、`@` 参考资料 token 与多 token 插入、AI 运行阻塞、搜索结果、右侧持续工作区、文档预览、确认修改文件 tab 或同文件多轮累计差异的产品需求、操作逻辑、状态反馈或验收标准时，请阅读 `doc/prd/workbench.md`
 - 当涉及 `Settings -> 大模型 / 工作空间 / 网页资料 / 向量模型` 的产品需求、功能入口、交互流程、操作逻辑、状态反馈或验收标准时，请阅读 `doc/prd/settings.md`
 
 ## 2. 必须遵守的规则

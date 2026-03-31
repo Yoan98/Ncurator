@@ -9,6 +9,39 @@
 - 节点行为、技术实现约束与跨层规则见 `implementation-spec.md`。
 - 本文只定义状态、契约与数据流转，不展开架构动机与阅读导引。
 
+### 1.1 `AiRunContext`
+
+`AiRunContext` 是运行时注入给 `director` 与 `human` 的只读上下文，不持久化进 `DirectorState` 或 `HumanState`。
+
+```ts
+interface AiRunContext {
+  // 当前 run 的唯一标识。
+  runId: string
+  // 当前会话标识，用于关联历史与消息落盘。
+  sessionId: string
+  // 当前绑定的工作区。
+  // 正常 workbench 发送前会先完成工作区选择；这里保留 optional 仅用于内部防御式兜底。
+  workspace?: {
+    // 工作区唯一标识。
+    workspaceId: string
+    // 工作区名称，用于 AI 可读上下文。
+    workspaceName: string
+    // 工作区根路径，后续本地相对路径都以它为基准。
+    rootPath: string
+    // 可选的策略配置。
+    policyProfile?: string
+  }
+  // runtime 根据 workspace + selectedReferences 推导出的最终 KB 范围。
+  // 有显式 selectedReferences 时收口到这些 reference 的 kbDocumentIds；
+  // 无显式 selectedReferences 但有 workspace 时，默认收口到当前工作区全部已索引文件；
+  // 两者都没有时，不提供本地 KB 范围。
+  selectedDocumentIds?: string[]
+  // 唯一的“用户选择的参考资料”文本投影。
+  // 固定包含当前工作区背景、参考资料类型说明和当前用户选择列表。
+  selectedContextText: string
+}
+```
+
 ## 2. `director` 数据定义
 
 ### `DirectorState`

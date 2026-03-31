@@ -18,13 +18,14 @@ import {
   releaseDocxRunSession
 } from '../services/ai/human/tools/docx/worker/docxWorkerClient'
 import {
-  buildWebScopeSelection,
-  buildWorkspaceScopeSelections,
+  buildWebReferenceItem,
+  buildWorkspaceDefaultDocumentIds,
+  buildWorkspaceReferenceItems,
   getWorkspaceScopeKey,
-  scopeMatchesQuery,
-  shouldIncludeScopeInSearch
+  referenceMatchesQuery,
+  shouldIncludeReferenceInSearch
 } from '../services/sourceScope/selection'
-import { validateSelectedScopesForRun } from '../services/sourceScope/validation'
+import { validateSelectedReferencesForRun } from '../services/sourceScope/validation'
 import { WorkspaceSourceService } from '../services/workspace/WorkspaceSourceService'
 import { WebSourceService } from '../services/web/WebSourceService'
 import { v4 as uuidv4 } from 'uuid'
@@ -48,7 +49,7 @@ import type {
   DiscardDraftReviewRequest,
   DiscardDraftReviewResponse,
   DeleteWorkspaceSourceResponse,
-  ListSourceScopesRequest,
+  ListReferenceItemsRequest,
   ListDraftReviewsRequest,
   ListDraftReviewsResponse,
   ListWorkspaceNodesRequest,
@@ -58,10 +59,10 @@ import type {
   OpenPathWithApplicationResponse,
   PickDirectoryResponse,
   PickApplicationResponse,
-  SourceScopeListResponse,
+  ReferenceItemListResponse,
   ValidateDraftCommitRequest,
   ValidateDraftCommitResponse,
-  SourceScopeSelection,
+  SelectedReference,
   WebSourceListResponse,
   WebSourceMutationResponse,
   DeleteWebSourceResponse,
@@ -89,8 +90,7 @@ import {
   getE2EFixtureWorkspaceList,
   getE2EFixtureWorkspaceDelayMs,
   getE2EFixtureWorkspaceNodes,
-  getE2EFixtureSourceScopes,
-  hasE2EWorkspaceBinding,
+  getE2EFixtureReferenceItems,
   ingestE2EFixtureWebSource,
   ingestE2EFixtureWebSources,
   isE2EFixtureModeEnabled,
@@ -152,50 +152,85 @@ const mergeScannedNodes = (params: {
   })
 }
 
-const normalizeSelectedSourceScopes = (
-  scopes: AiRunStartRequest['selectedSourceScopes']
-): SourceScopeSelection[] | undefined => {
-  if (!Array.isArray(scopes)) return undefined
-  const normalized = scopes
-    .map((scope) => ({
-      ...scope,
-      sourceId: String(scope.sourceId || '').trim(),
-      nodeId: scope.nodeId ? String(scope.nodeId).trim() : undefined,
-      label: String(scope.label || '').trim(),
-      absolutePath: scope.absolutePath ? String(scope.absolutePath).trim() : undefined,
-      relativePath: scope.relativePath ? String(scope.relativePath).trim() : undefined,
-      documentIds: Array.isArray(scope.documentIds)
-        ? scope.documentIds.map(String).filter(Boolean)
-        : [],
-      workspace:
-        scope.workspace &&
-        String(scope.workspace.workspaceId || '').trim() &&
-        String(scope.workspace.rootPath || '').trim()
-          ? {
-              workspaceId: String(scope.workspace.workspaceId).trim(),
-              rootPath: String(scope.workspace.rootPath).trim(),
-              policyProfile: scope.workspace.policyProfile
-                ? String(scope.workspace.policyProfile)
-                : undefined
-            }
-          : undefined
-    }))
-    .filter((scope) => scope.sourceId && scope.label)
+const toTrimmedStringList = (values: string[] | undefined): string[] =>
+  Array.isArray(values) ? values.map((value) => String(value).trim()).filter(Boolean) : []
+
+const normalizeKbAvailability = (
+  value: string | undefined
+): SelectedReference['kbAvailability'] =>
+  value === 'indexed' || value === 'partial' || value === 'not_indexed' ? value : 'not_indexed'
+
+const normalizeSelectedReferences = (
+  references: AiRunStartRequest['selectedReferences']
+): SelectedReference[] | undefined => {
+  if (!Array.isArray(references)) return undefined
+
+  const normalized = references
+    .map((reference) => {
+      if (reference.kind === 'web') {
+        return {
+          kind: 'web' as const,
+          webSourceId: String(reference.webSourceId || '').trim(),
+          name: String(reference.name || '').trim(),
+          url: String(reference.url || '').trim(),
+          kbDocumentIds: toTrimmedStringList(reference.kbDocumentIds),
+          kbAvailability: normalizeKbAvailability(reference.kbAvailability)
+        }
+      }
+
+      if (reference.kind === 'directory') {
+        return {
+          kind: 'directory' as const,
+          workspaceId: String(reference.workspaceId || '').trim(),
+          nodeId: String(reference.nodeId || '').trim(),
+          name: String(reference.name || '').trim(),
+          relativePath: String(reference.relativePath || '').trim(),
+          absolutePath: String(reference.absolutePath || '').trim(),
+          kbDocumentIds: toTrimmedStringList(reference.kbDocumentIds),
+          kbAvailability: normalizeKbAvailability(reference.kbAvailability),
+          indexedFileCount: Math.max(0, Number(reference.indexedFileCount || 0)),
+          notIndexedFileCount: Math.max(0, Number(reference.notIndexedFileCount || 0))
+        }
+      }
+
+      return {
+        kind: 'file' as const,
+        workspaceId: String(reference.workspaceId || '').trim(),
+        nodeId: String(reference.nodeId || '').trim(),
+        name: String(reference.name || '').trim(),
+        relativePath: String(reference.relativePath || '').trim(),
+        absolutePath: String(reference.absolutePath || '').trim(),
+        fileExt: reference.fileExt ? String(reference.fileExt).trim() : undefined,
+        kbDocumentIds: toTrimmedStringList(reference.kbDocumentIds),
+        kbAvailability: normalizeKbAvailability(reference.kbAvailability)
+      }
+    })
+    .filter((reference) => {
+      if (reference.kind === 'web') {
+        return Boolean(reference.webSourceId && reference.name && reference.url)
+      }
+
+      return Boolean(
+        reference.workspaceId &&
+          reference.nodeId &&
+          reference.name &&
+          reference.relativePath &&
+          reference.absolutePath
+      )
+    })
+
   return normalized.length > 0 ? normalized : undefined
 }
 
-const normalizeScopeTypeFilters = (
-  scopeTypes: ListSourceScopesRequest['scopeTypes']
-): Set<SourceScopeSelection['scopeType']> | null => {
-  if (!Array.isArray(scopeTypes) || scopeTypes.length === 0) return null
-  const normalized = scopeTypes
-    .map((scopeType) => String(scopeType || '').trim())
+const normalizeReferenceKindFilters = (
+  referenceKinds: ListReferenceItemsRequest['referenceKinds']
+): Set<SelectedReference['kind']> | null => {
+  if (!Array.isArray(referenceKinds) || referenceKinds.length === 0) return null
+  const normalized = referenceKinds
+    .map((referenceKind) => String(referenceKind || '').trim())
     .filter(
-      (scopeType): scopeType is SourceScopeSelection['scopeType'] =>
-        scopeType === 'workspace' ||
-        scopeType === 'directory' ||
-        scopeType === 'file' ||
-        scopeType === 'web'
+      (referenceKind): referenceKind is SelectedReference['kind'] =>
+        referenceKind === 'directory' || referenceKind === 'file' || referenceKind === 'web'
     )
   return normalized.length > 0 ? new Set(normalized) : null
 }
@@ -713,7 +748,12 @@ export function registerHandlers(services: {
   const maybeHandleE2EFixtureRun = async (input: {
     runId: string
     inputText: string
-    selectedSourceScopes: SourceScopeSelection[] | undefined
+    workspace?: {
+      workspaceId: string
+      workspaceName: string
+      rootPath: string
+      policyProfile?: string
+    }
     sendEvent: (event: AiRunEvent) => void
     draftReviewService: DraftReviewService
   }): Promise<boolean> => {
@@ -781,7 +821,7 @@ export function registerHandlers(services: {
     }
 
     if (scenario === 'chat-workspace') {
-      if (!hasE2EWorkspaceBinding(input.selectedSourceScopes)) {
+      if (!input.workspace?.rootPath) {
         input.sendEvent({
           type: 'workspace_required',
           runId: input.runId,
@@ -1735,37 +1775,41 @@ export function registerHandlers(services: {
   )
 
   ipcMain.handle(
-    'source-scope-list',
-    async (_event, payload: ListSourceScopesRequest): Promise<SourceScopeListResponse> => {
+    'reference-item-list',
+    async (_event, payload: ListReferenceItemsRequest): Promise<ReferenceItemListResponse> => {
       try {
-        const e2eScopes = getE2EFixtureSourceScopes(payload)
-        if (e2eScopes) {
-          return e2eScopes
+        const e2eReferences = getE2EFixtureReferenceItems(payload)
+        if (e2eReferences) {
+          return e2eReferences
         }
 
         await ensureWebSourcesHydrated()
-        const workspaceItems = await workspaceStore.listWorkspaces()
         const workspaceIdFilter = String(payload.workspaceId || '').trim()
-        const scopeTypeFilters = normalizeScopeTypeFilters(payload.scopeTypes)
-        const localScopes: SourceScopeSelection[] = []
-        for (const workspace of workspaceItems) {
-          if (workspaceIdFilter && workspace.id !== workspaceIdFilter) continue
-          const nodes = await workspaceStore.listWorkspaceNodes({ workspaceId: workspace.id })
-          localScopes.push(...buildWorkspaceScopeSelections(workspace, nodes))
+        const referenceKindFilters = normalizeReferenceKindFilters(payload.referenceKinds)
+        const localReferences: SelectedReference[] = []
+
+        if (workspaceIdFilter) {
+          const workspace = await workspaceStore.getWorkspaceById(workspaceIdFilter)
+          if (workspace) {
+            const nodes = await workspaceStore.listWorkspaceNodes({ workspaceId: workspace.id })
+            localReferences.push(...buildWorkspaceReferenceItems(workspace, nodes))
+          }
         }
 
-        const webScopes = (await webSourceStore.listWebSources())
-          .map(buildWebScopeSelection)
-          .filter((scope): scope is SourceScopeSelection => Boolean(scope))
+        const webReferences = (await webSourceStore.listWebSources()).map(buildWebReferenceItem)
 
-        const allScopes = [...localScopes, ...webScopes]
-          .filter((scope) => scopeMatchesQuery(scope, payload.query))
-          .filter((scope) => (scopeTypeFilters ? scopeTypeFilters.has(scope.scopeType) : true))
-          .filter((scope) => (payload.mode === 'search' ? shouldIncludeScopeInSearch(scope) : true))
+        const allReferences = [...localReferences, ...webReferences]
+          .filter((reference) => referenceMatchesQuery(reference, payload.query))
+          .filter((reference) =>
+            referenceKindFilters ? referenceKindFilters.has(reference.kind) : true
+          )
+          .filter((reference) =>
+            payload.mode === 'search' ? shouldIncludeReferenceInSearch(reference) : true
+          )
 
-        return { items: allScopes, total: allScopes.length }
+        return { items: allReferences, total: allReferences.length }
       } catch (error: unknown) {
-        console.error('❌ [SOURCE-SCOPE-LIST] ERROR:', error)
+        console.error('❌ [REFERENCE-ITEM-LIST] ERROR:', error)
         return { items: [], total: 0 }
       }
     }
@@ -1971,33 +2015,24 @@ export function registerHandlers(services: {
     async (event, payload: AiRunStartRequest): Promise<AiRunStartResponse> => {
       const sessionId = String(payload?.sessionId || '').trim()
       const input = String(payload?.input || '').trim()
-      const selectedDocumentIds = Array.isArray(payload?.selectedDocumentIds)
-        ? payload.selectedDocumentIds.map(String).filter(Boolean)
-        : undefined
       const modelConfigId = payload?.modelConfigId
         ? String(payload.modelConfigId).trim()
         : undefined
-      const selectedSourceScopes = normalizeSelectedSourceScopes(payload?.selectedSourceScopes)
-      const inferredWorkspace = selectedSourceScopes?.find((scope) => scope.workspace)?.workspace
+      const selectedReferences = normalizeSelectedReferences(payload?.selectedReferences)
       const workspace =
         payload?.workspace &&
         String(payload.workspace.workspaceId || '').trim() &&
+        String(payload.workspace.workspaceName || '').trim() &&
         String(payload.workspace.rootPath || '').trim()
           ? {
               workspaceId: String(payload.workspace.workspaceId).trim(),
+              workspaceName: String(payload.workspace.workspaceName).trim(),
               rootPath: String(payload.workspace.rootPath).trim(),
               policyProfile: payload.workspace.policyProfile
                 ? String(payload.workspace.policyProfile)
                 : undefined
             }
-          : inferredWorkspace
-            ? {
-                workspaceId: inferredWorkspace.workspaceId,
-                rootPath: inferredWorkspace.rootPath,
-                policyProfile: inferredWorkspace.policyProfile
-              }
             : undefined
-      const allowNonLocal = Boolean(payload?.allowNonLocal)
       const e2eFixtureScenario = isE2EFixtureModeEnabled() ? matchE2EChatScenario(input) : null
       if (!sessionId) return { success: false, error: 'sessionId is required' }
       if (!input) return { success: false, error: 'input is required' }
@@ -2012,8 +2047,8 @@ export function registerHandlers(services: {
       }
 
       if (!e2eFixtureScenario) {
-        const validation = await validateSelectedScopesForRun({
-          scopes: selectedSourceScopes,
+        const validation = await validateSelectedReferencesForRun({
+          references: selectedReferences,
           workspaceStore,
           webSourceStore,
           sendEvent,
@@ -2037,12 +2072,22 @@ export function registerHandlers(services: {
           const handledByE2EFixture = await maybeHandleE2EFixtureRun({
             runId,
             inputText: input,
-            selectedSourceScopes,
+            workspace,
             sendEvent,
             draftReviewService
           })
           if (handledByE2EFixture) {
             return
+          }
+
+          let selectedDocumentIds: string[] | undefined
+          if (!selectedReferences || selectedReferences.length === 0) {
+            if (workspace) {
+              const workspaceNodes = await workspaceStore.listWorkspaceNodes({
+                workspaceId: workspace.workspaceId
+              })
+              selectedDocumentIds = buildWorkspaceDefaultDocumentIds(workspaceNodes)
+            }
           }
 
           const runtimeSettings = await aiRuntimeSettingsStore.get()
@@ -2052,9 +2097,8 @@ export function registerHandlers(services: {
               sessionId,
               input,
               selectedDocumentIds,
-              selectedSourceScopes,
+              selectedReferences,
               modelConfigId,
-              allowNonLocal,
               workspace
             },
             {

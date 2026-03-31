@@ -3,9 +3,9 @@ import { invokeStructuredChat } from './structuredOutput'
 import { clipText } from './utils/text'
 import {
   buildEffectiveDocumentIds,
-  buildSelectedScopeSummary,
+  buildSelectedContextText,
   formatTurns,
-  normalizeSelectedSourceScopes,
+  normalizeSelectedReferences,
   normalizeWorkspaceBinding
 } from './utils/runContext'
 
@@ -18,10 +18,11 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     }
   }
 
-  const normalizedScopes = normalizeSelectedSourceScopes(payload.selectedSourceScopes)
+  const normalizedWorkspace = normalizeWorkspaceBinding(payload.workspace)
+  const normalizedReferences = normalizeSelectedReferences(payload.selectedReferences)
   const effectiveDocumentIds = buildEffectiveDocumentIds(
     payload.selectedDocumentIds,
-    normalizedScopes
+    normalizedReferences
   )
 
   const getRequestedConfig = async () => {
@@ -74,9 +75,14 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
   return {
     runId: payload.runId,
     selectedDocumentIds: effectiveDocumentIds,
-    selectedScopeSummary: buildSelectedScopeSummary(normalizedScopes, payload.allowNonLocal),
-    allowNonLocal: Boolean(payload.allowNonLocal),
-    workspace: normalizeWorkspaceBinding(payload.workspace),
+    selectedContextText: buildSelectedContextText({
+      workspace: normalizedWorkspace,
+      selectedReferences: normalizedReferences,
+      usesWorkspaceDefaultKbScope: Boolean(
+        normalizedWorkspace && (!normalizedReferences || normalizedReferences.length === 0)
+      )
+    }),
+    workspace: normalizedWorkspace,
     checkCancelled,
     chatStructured,
     sendEvent: deps.sendEvent,

@@ -13,7 +13,7 @@ import type {
   AiRunEventStage,
   AiRunStatus,
   AiTaskStatus,
-  SourceScopeSelection
+  SelectedReference
 } from '../../../shared/types'
 import type { HumanDeliveryMode, HumanTaskInput, HumanTaskOutput } from './human/types'
 import {
@@ -50,11 +50,11 @@ export type AiRunStartPayload = {
   sessionId: string
   input: string
   selectedDocumentIds?: string[]
-  selectedSourceScopes?: SourceScopeSelection[]
+  selectedReferences?: SelectedReference[]
   modelConfigId?: string
-  allowNonLocal?: boolean
   workspace?: {
     workspaceId: string
+    workspaceName: string
     rootPath: string
     policyProfile?: string
   }
@@ -90,13 +90,13 @@ export type AiRunDeps = {
 export type AiRunContext = {
   runId: string
   selectedDocumentIds?: string[]
-  selectedScopeSummary: string
-  allowNonLocal: boolean
+  selectedContextText: string
   humanRuntimeOverrides?: {
     hardActionLimit?: number
   }
   workspace?: {
     workspaceId: string
+    workspaceName: string
     rootPath: string
     policyProfile?: string
   }
@@ -132,7 +132,7 @@ export type AiEventDispatchContext = Pick<AiRunContext, 'runId' | 'sendEvent'>
 
 export type DirectorNodeContext = Pick<
   AiRunContext,
-  'runId' | 'checkCancelled' | 'chatStructured' | 'sendEvent' | 'loadHistory' | 'selectedScopeSummary'
+  'runId' | 'checkCancelled' | 'chatStructured' | 'sendEvent' | 'loadHistory' | 'selectedContextText'
 >
 
 export type TerminalToolContext = Pick<

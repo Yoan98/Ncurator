@@ -45,7 +45,7 @@ export type ToolPromptArgSpec = {
   type: string
   required: boolean
   description: string
-  enumValues?: string[]
+  enumValues?: readonly string[]
   defaultValue?: string
 }
 

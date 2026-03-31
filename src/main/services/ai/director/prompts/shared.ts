@@ -17,7 +17,7 @@ export type DirectorPromptSharedInput = {
   sessionSummaryText: string
   recentTurnsText: string
   contextEvidence: string[]
-  selectedScopeSummary: string
+  selectedContextText: string
 }
 
 export type IntentPromptInput = DirectorPromptSharedInput & {
@@ -37,7 +37,7 @@ export const buildDirectorPromptUserContext = (
       { label: '用户输入', value: input.userInput },
       { label: '会话摘要', value: input.sessionSummaryText },
       { label: '最近对话', value: input.recentTurnsText },
-      { label: '已选资料范围', value: input.selectedScopeSummary },
+      { label: '用户选择的参考资料', value: input.selectedContextText },
       {
         label: '上下文证据',
         value: renderLineList(input.contextEvidence, {

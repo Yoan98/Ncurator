@@ -9,10 +9,10 @@ import {
   HiMagnifyingGlass,
   HiSparkles
 } from 'react-icons/hi2'
-import type { LLMConfig, SourceScopeSelection, WorkspaceSource } from '../../../../shared/types'
+import type { LLMConfig, ReferenceKind, SelectedReference, WorkspaceSource } from '../../../../shared/types'
 import { workbenchSelectors } from '../../testing/selectors'
 import type { WorkbenchMode } from './types'
-import { COMPOSER_PLACEHOLDER, COMPOSER_SCOPE_TYPES } from './composer/constants'
+import { COMPOSER_PLACEHOLDER, COMPOSER_REFERENCE_KINDS } from './composer/constants'
 import type { ComposerDraftValue, ComposerNode } from './composer/types'
 import {
   createScopeTokenElement,
@@ -24,6 +24,11 @@ import {
   readComposerNodesFromEditor,
   renderComposerNodesToEditor
 } from './composer/utils'
+import {
+  getKbAvailabilityLabel,
+  getReferenceDisplayPath,
+  getReferenceTypeLabel
+} from '../../utils/reference'
 
 type MentionContext = {
   textNode: Text
@@ -85,13 +90,13 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 }) => {
   const editorRef = useRef<HTMLSpanElement | null>(null)
   const draftNodesRef = useRef<ComposerNode[]>([])
-  const knownScopesRef = useRef(new Map<string, SourceScopeSelection>())
+  const knownScopesRef = useRef(new Map<string, SelectedReference>())
   const draftSyncFrameRef = useRef<number | null>(null)
   const mentionRefreshFrameRef = useRef<number | null>(null)
   const controlFocusTimeoutRef = useRef<number | null>(null)
   const isComposingRef = useRef(false)
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
-  const [mentionOptions, setMentionOptions] = useState<SourceScopeSelection[]>([])
+  const [mentionOptions, setMentionOptions] = useState<SelectedReference[]>([])
   const [mentionLoading, setMentionLoading] = useState(false)
   const [mentionActiveIndex, setMentionActiveIndex] = useState(0)
   const [hasContent, setHasContent] = useState(false)
@@ -190,7 +195,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     draftNodesRef.current = nodes
     setHasContent(nodes.length > 0)
     const draft = extractComposerDraftValue(nodes)
-    draft.selectedSourceScopes.forEach((scope) => {
+    draft.selectedReferences.forEach((scope) => {
       knownScopesRef.current.set(getScopeKey(scope), scope)
     })
     onDraftChange(draft)
@@ -319,7 +324,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   )
 
   const insertMentionScope = useCallback(
-    (scope: SourceScopeSelection) => {
+    (scope: SelectedReference) => {
       const editor = editorRef.current
       const context = getMentionContext()
       if (!editor || !context) return
@@ -359,7 +364,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     renderComposerNodesToEditor(editor, [])
     ensureEditorHasCaretTarget()
     setHasContent(false)
-    onDraftChange({ input: '', selectedSourceScopes: [] })
+    onDraftChange({ input: '', selectedReferences: [] })
     closeMention()
   }, [closeMention, ensureEditorHasCaretTarget, onDraftChange, resetKey])
 
@@ -383,15 +388,23 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     let cancelled = false
 
     const loadMentionOptions = async (): Promise<void> => {
+      if (!selectedWorkspaceId || !selectedWorkspaceId.trim()) {
+        if (!cancelled) {
+          setMentionOptions([])
+          setMentionActiveIndex(0)
+          setMentionLoading(false)
+        }
+        return
+      }
+
       setMentionLoading(true)
       try {
-        const scopeTypes: SourceScopeSelection['scopeType'][] =
-          selectedWorkspaceId && selectedWorkspaceId.trim() ? COMPOSER_SCOPE_TYPES : ['web']
-        const response = await window.api.sourceScopeList({
+        const referenceKinds: ReferenceKind[] = COMPOSER_REFERENCE_KINDS
+        const response = await window.api.referenceItemList({
           mode: mode === 'ai' ? 'chat' : 'search',
           query: mentionQuery.trim() || undefined,
-          workspaceId: selectedWorkspaceId || undefined,
-          scopeTypes
+          workspaceId: selectedWorkspaceId,
+          referenceKinds
         })
 
         const editor = editorRef.current
@@ -400,7 +413,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           const draft = extractComposerDraftValue(
             readComposerNodesFromEditor(editor, knownScopesRef.current)
           )
-          draft.selectedSourceScopes.forEach((scope) => currentKeys.add(getScopeKey(scope)))
+          draft.selectedReferences.forEach((scope) => currentKeys.add(getScopeKey(scope)))
         }
 
         const nextOptions = response.items.filter((scope) => !currentKeys.has(getScopeKey(scope)))
@@ -578,8 +591,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     closeMention()
   }
 
-  const localMentionOptions = mentionOptions.filter((scope) => scope.sourceType === 'workspace')
-  const webMentionOptions = mentionOptions.filter((scope) => scope.sourceType === 'web')
+  const localMentionOptions = mentionOptions.filter((scope) => scope.kind !== 'web')
+  const webMentionOptions = mentionOptions.filter((scope) => scope.kind === 'web')
 
   return (
     <div className="relative">
@@ -596,11 +609,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             ) : mentionOptions.length === 0 ? (
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description={
-                  selectedWorkspace
-                    ? '当前工作区和网页资料中没有匹配项'
-                    : '先选工作区，或直接搜索网页资料'
-                }
+                description={selectedWorkspace ? '当前工作区和网页资料中没有匹配项' : '请先选择工作区'}
               />
             ) : (
               <div className="space-y-3">
@@ -628,12 +637,12 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                         >
                           <span
                             className={`inline-flex h-7 w-7 items-center justify-center rounded-[10px] ${
-                              scope.scopeType === 'directory'
+                              scope.kind === 'directory'
                                 ? 'bg-[#F8F3EC] text-[#8A5A2B]'
                                 : 'bg-[#EEF4FF] text-[#3B82F6]'
                             }`}
                           >
-                            {scope.scopeType === 'directory' ? (
+                            {scope.kind === 'directory' ? (
                               <HiFolder className="h-4 w-4" />
                             ) : (
                               <HiDocumentText className="h-4 w-4" />
@@ -641,11 +650,19 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                           </span>
                           <div className="min-w-0 flex-1">
                             <div className="truncate text-[14px] font-medium leading-6 text-[#1F1F1F]">
-                              {scope.label}
+                              {scope.name}
                             </div>
                             <div className="truncate text-[12px] leading-5 text-[#999999]">
-                              {scope.relativePath || scope.absolutePath}
+                              {getReferenceDisplayPath(scope)}
                             </div>
+                          </div>
+                          <div className="shrink-0 space-x-1">
+                            <span className="rounded-full border border-[#E5E5E4] bg-[#F8F8F7] px-2 py-0.5 text-[11px] text-[#666666]">
+                              {getReferenceTypeLabel(scope)}
+                            </span>
+                            <span className="rounded-full border border-[#F4E5DF] bg-[#FBF5F2] px-2 py-0.5 text-[11px] text-[#D97757]">
+                              {getKbAvailabilityLabel(scope.kbAvailability)}
+                            </span>
                           </div>
                         </button>
                       )
@@ -680,11 +697,19 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                           </span>
                           <div className="min-w-0 flex-1">
                             <div className="truncate text-[14px] font-medium leading-6 text-[#1F1F1F]">
-                              {scope.label}
+                              {scope.name}
                             </div>
                             <div className="truncate text-[12px] leading-5 text-[#999999]">
-                              {scope.absolutePath}
+                              {getReferenceDisplayPath(scope)}
                             </div>
+                          </div>
+                          <div className="shrink-0 space-x-1">
+                            <span className="rounded-full border border-[#E5E5E4] bg-[#F8F8F7] px-2 py-0.5 text-[11px] text-[#666666]">
+                              {getReferenceTypeLabel(scope)}
+                            </span>
+                            <span className="rounded-full border border-[#F4E5DF] bg-[#FBF5F2] px-2 py-0.5 text-[11px] text-[#D97757]">
+                              {getKbAvailabilityLabel(scope.kbAvailability)}
+                            </span>
                           </div>
                         </button>
                       )
@@ -699,7 +724,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 
       <div
         className="rounded-[24px] border border-[#E8E2DA] bg-white px-3.5 pb-2.5 pt-2.5 shadow-[0_8px_24px_rgba(31,31,31,0.06)] transition-all duration-200 focus-within:border-[#D97757] focus-within:ring-4 focus-within:ring-[#F4E5DF]"
-        data-testid={workbenchSelectors.sourceScopeField}
+        data-testid={workbenchSelectors.referenceField}
         onMouseDown={(event) => {
           const target = event.target
           if (!(target instanceof HTMLElement)) return
@@ -807,7 +832,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             <Select
               value={selectedWorkspace?.id}
               onChange={(nextValue) => {
-                onWorkspaceChange(String(nextValue))
+                onWorkspaceChange(nextValue ? String(nextValue) : null)
                 focusEditorAfterControlChange()
               }}
               variant="borderless"

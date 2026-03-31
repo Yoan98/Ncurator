@@ -1,5 +1,5 @@
 import type { StructuredToolInterface } from '@langchain/core/tools'
-import type { IpcJsonObject, JsonValue } from '../../../../../../shared/types'
+import type { JsonObject, JsonValue } from '../../../../../../shared/types'
 import { isJsonObject } from '../../../../../utils/aiCapabilityUtils'
 import { clipText } from '../../../utils/text'
 import type { AiRunContext } from '../../../types'
@@ -72,7 +72,7 @@ const summarizePreviewRow = (value: JsonValue): string | undefined => {
 const summarizePreviewRows = (toolName: string, rows: readonly JsonValue[]): string => {
   const previews = rows
     .map((row) => summarizePreviewRow(row))
-    .filter((value): value is string => value.length > 0)
+    .filter((value): value is string => Boolean(value && value.length > 0))
     .slice(0, 3)
 
   if (previews.length === 0) {
@@ -82,13 +82,13 @@ const summarizePreviewRows = (toolName: string, rows: readonly JsonValue[]): str
   return `${toolName} returned ${rows.length} item(s): ${previews.join(' | ')}`
 }
 
-const summarizeObjectPayload = (toolName: string, payload: IpcJsonObject): string | undefined => {
+const summarizeObjectPayload = (toolName: string, payload: JsonObject): string | undefined => {
   const items = Array.isArray(payload.items) ? payload.items : undefined
   if (items) {
     const total = typeof payload.total === 'number' ? payload.total : items.length
     const previews = items
       .map((row) => summarizePreviewRow(row))
-      .filter((value): value is string => value.length > 0)
+      .filter((value): value is string => Boolean(value && value.length > 0))
       .slice(0, 3)
 
     if (previews.length > 0) {
@@ -142,7 +142,7 @@ const isToolCallDiagnosticKind = (
 const inferDiagnosticFromFailure = (input: {
   code: ToolCallResultCode
   summary: string
-  payload?: IpcJsonObject
+  payload?: JsonObject
 }): ToolCallDiagnostic | undefined => {
   const explicit = input.payload?.diagnostic
   if (isJsonObject(explicit) && typeof explicit.kind === 'string' && isToolCallDiagnosticKind(explicit.kind)) {
@@ -286,7 +286,7 @@ export const executeToolCall = async (input: {
     return await withToolLifecycle({
       emitter: toolEvents,
       toolName: input.toolName,
-      args: input.args as IpcJsonObject,
+      args: input.args as JsonObject,
       execute: async (session) => {
         const outputPreview = injected.data || injected.summary
         const normalizedInjected: ToolCallResult = {

@@ -4,7 +4,7 @@ export const chatSelectors = {
   input: 'chat-input',
   sendButton: 'chat-send-button',
   cancelButton: 'chat-cancel-button',
-  sourceScopeField: 'chat-source-scope-field',
+  referenceField: 'chat-reference-field',
   tracePanel: 'chat-trace-panel',
   rightPanel: 'chat-right-panel',
   rightPanelTitle: 'chat-right-panel-title',
@@ -85,15 +85,6 @@ export const settingsSelectors = {
   modelDeleteButtonPrefix: 'settings-model-delete-button'
 } as const
 
-export const searchSelectors = {
-  page: 'search-page',
-  input: 'search-input',
-  submitButton: 'search-submit-button',
-  sourceScopeField: 'search-source-scope-field',
-  resultsList: 'search-results-list',
-  resultCardPrefix: 'search-result-card'
-} as const
-
 export const workbenchSelectors = {
   page: 'workbench-page',
   modeSwitch: 'workbench-mode-switch',
@@ -103,7 +94,7 @@ export const workbenchSelectors = {
   input: 'workbench-input',
   sendButton: 'workbench-send-button',
   cancelButton: 'workbench-cancel-button',
-  sourceScopeField: 'workbench-source-scope-field',
+  referenceField: 'workbench-reference-field',
   modelSelect: 'workbench-model-select',
   workspaceSelect: 'workbench-workspace-select',
   mentionPanel: 'workbench-mention-panel',
@@ -137,6 +128,6 @@ export const workbenchSelectors = {
   docxViewer: 'workbench-docx-viewer',
   reviewCommitResults: 'workbench-review-commit-results',
   reviewConflict: 'workbench-review-conflict',
-  scopeAiWarning: 'workbench-scope-ai-warning',
-  scopeSearchWarning: 'workbench-scope-search-warning'
+  referenceAiWarning: 'workbench-reference-ai-warning',
+  referenceSearchWarning: 'workbench-reference-search-warning'
 } as const

@@ -2,11 +2,10 @@ import type {
   AiPlanTask,
   DeleteWorkspaceSourceResponse,
   DeleteWebSourceResponse,
-  ListSourceScopesRequest,
+  ListReferenceItemsRequest,
   SearchResponse,
   SearchResult,
-  SourceScopeListResponse,
-  SourceScopeSelection,
+  ReferenceItemListResponse,
   WebIngestPayload,
   WebSourceListResponse,
   WebSourceMutationResponse,
@@ -20,9 +19,10 @@ import type {
   WorkspaceListResponse
 } from '../../shared/types'
 import {
-  buildWorkspaceScopeSelections,
-  scopeMatchesQuery,
-  shouldIncludeScopeInSearch
+  buildWebReferenceItem,
+  buildWorkspaceReferenceItems,
+  referenceMatchesQuery,
+  shouldIncludeReferenceInSearch
 } from '../services/sourceScope/selection'
 
 export type E2EChatScenario =
@@ -60,36 +60,6 @@ const E2E_WORKSPACE_PREPARE_DELAY_MARKER = 'prepare-delay'
 const E2E_WEB_REFRESH_ERROR_MARKER = 'refresh-fail'
 
 type E2EWorkspaceFixtureMode = 'normal' | 'scan_error' | 'prepare_error'
-
-export const E2E_CHAT_WORKSPACE_SCOPE: SourceScopeSelection = {
-  scopeType: 'workspace',
-  sourceType: 'workspace',
-  sourceId: 'e2e-workspace-1',
-  label: 'E2E 测试工作区',
-  documentIds: ['e2e-doc-1'],
-  hasUnpreparedFiles: false,
-  preparedDocumentCount: 1,
-  unpreparedFileCount: 0,
-  workspace: {
-    workspaceId: 'e2e-workspace-1',
-    rootPath: '/tmp/ncurator-e2e-workspace'
-  }
-}
-
-export const E2E_SEARCH_SCOPE: SourceScopeSelection = {
-  scopeType: 'workspace',
-  sourceType: 'workspace',
-  sourceId: 'e2e-search-workspace-1',
-  label: 'E2E 搜索工作区',
-  documentIds: [E2E_SEARCH_DOCUMENT_ID],
-  hasUnpreparedFiles: false,
-  preparedDocumentCount: 1,
-  unpreparedFileCount: 0,
-  workspace: {
-    workspaceId: 'e2e-search-workspace-1',
-    rootPath: '/tmp/ncurator-e2e-search-workspace'
-  }
-}
 
 type E2EWorkspaceFixtureState = {
   workspace: WorkspaceSource | null
@@ -179,18 +149,6 @@ const normalizeFixtureUrl = (rawUrl: string): { url: string; normalizedUrl: stri
   }
 }
 
-const buildFixtureWebSourceSelection = (source: WebSourceRecord): SourceScopeSelection => ({
-  scopeType: 'web',
-  sourceType: 'web',
-  sourceId: source.id,
-  label: source.title || source.url,
-  absolutePath: source.url,
-  documentIds: source.document_id ? [source.document_id] : [],
-  hasUnpreparedFiles: source.import_status !== 2,
-  preparedDocumentCount: source.import_status === 2 && source.document_id ? 1 : 0,
-  unpreparedFileCount: source.import_status === 2 ? 0 : 1
-})
-
 const upsertFixtureWebSource = (input: WebIngestPayload): WebSourceRecord => {
   const { url, normalizedUrl } = normalizeFixtureUrl(input.url)
   const now = Date.now()
@@ -248,33 +206,26 @@ const e2eWebSourceState: E2EWebSourceFixtureState = {
 
 export const isE2EFixtureModeEnabled = (): boolean => process.env.NCURATOR_E2E_MODE === '1'
 
-export const getE2EFixtureSourceScopes = (
-  payload: ListSourceScopesRequest
-): SourceScopeListResponse | null => {
+export const getE2EFixtureReferenceItems = (
+  payload: ListReferenceItemsRequest
+): ReferenceItemListResponse | null => {
   if (!isE2EFixtureModeEnabled()) return null
 
   const workspaceId = String(payload.workspaceId || '').trim()
-  const scopeTypeFilters =
-    Array.isArray(payload.scopeTypes) && payload.scopeTypes.length > 0
-      ? new Set(payload.scopeTypes.map((scopeType) => String(scopeType || '').trim()))
+  const referenceKindFilters =
+    Array.isArray(payload.referenceKinds) && payload.referenceKinds.length > 0
+      ? new Set(payload.referenceKinds.map((referenceKind) => String(referenceKind || '').trim()))
       : null
-  const fixtureWorkspaceScopes = e2eWorkspaceState.workspace
-    ? buildWorkspaceScopeSelections(e2eWorkspaceState.workspace, e2eWorkspaceState.nodes)
+  const fixtureWorkspaceReferences =
+    workspaceId && e2eWorkspaceState.workspace && e2eWorkspaceState.workspace.id === workspaceId
+      ? buildWorkspaceReferenceItems(e2eWorkspaceState.workspace, e2eWorkspaceState.nodes)
     : []
-  const webScopes = e2eWebSourceState.items
-    .map(buildFixtureWebSourceSelection)
-    .filter((scope): scope is SourceScopeSelection => Boolean(scope))
-  const allItems = [
-    E2E_CHAT_WORKSPACE_SCOPE,
-    E2E_SEARCH_SCOPE,
-    ...webScopes,
-    ...fixtureWorkspaceScopes
-  ]
-  const items = allItems.filter((scope) => {
-    if (workspaceId && scope.sourceType === 'workspace' && scope.sourceId !== workspaceId) return false
-    if (scopeTypeFilters && !scopeTypeFilters.has(scope.scopeType)) return false
-    if (!scopeMatchesQuery(scope, payload.query)) return false
-    if (payload.mode === 'search' && !shouldIncludeScopeInSearch(scope)) return false
+  const webReferences = e2eWebSourceState.items.map(buildWebReferenceItem)
+  const allItems = [...fixtureWorkspaceReferences, ...webReferences]
+  const items = allItems.filter((reference) => {
+    if (referenceKindFilters && !referenceKindFilters.has(reference.kind)) return false
+    if (!referenceMatchesQuery(reference, payload.query)) return false
+    if (payload.mode === 'search' && !shouldIncludeReferenceInSearch(reference)) return false
     return true
   })
 
@@ -700,10 +651,3 @@ export const buildE2EChatPlan = (): AiPlanTask[] => [
     status: 'ready'
   }
 ]
-
-export const hasE2EWorkspaceBinding = (
-  scopes: SourceScopeSelection[] | undefined
-): boolean => {
-  if (!Array.isArray(scopes)) return false
-  return scopes.some((scope) => Boolean(scope.workspace?.rootPath))
-}

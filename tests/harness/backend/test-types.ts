@@ -95,7 +95,6 @@ export type FixtureBinding = {
 export type CreateAiRunContextInput = {
   bindWorkspace?: boolean
   selectedDocumentIds?: string[]
-  allowNonLocal?: boolean
   approvalPolicy?: ApprovalPolicy | ApprovalResolver
   checkCancelledOverride?: () => void
   humanReasonOverrides?: TestHumanReasonOverride[]

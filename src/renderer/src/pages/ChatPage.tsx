@@ -19,7 +19,7 @@ import type {
   DraftReviewSummary,
   LLMConfig,
   SearchResult,
-  SourceScopeSelection,
+  SelectedReference,
   ValidateDraftCommitResponse,
   WorkspaceSource,
   WorkspaceRuntimeBinding
@@ -58,6 +58,12 @@ import {
 } from '../components/workbench/reviewTargetUtils'
 import { chatSelectors, workbenchSelectors } from '../testing/selectors'
 import brandIcon from '../../../../resources/icon.png'
+import {
+  collectReferenceDocumentIds,
+  collectWorkspaceIndexedDocumentIds,
+  hasIncompleteLocalKbCoverage,
+  pruneReferencesByWorkspace
+} from '../utils/reference'
 
 type ApprovalRequiredEvent = Extract<AiRunEvent, { type: 'approval_required' }>
 type WorkspaceRequiredEvent = Extract<AiRunEvent, { type: 'workspace_required' }>
@@ -108,6 +114,7 @@ const createWorkspaceBinding = (
   workspace
     ? {
         workspaceId: workspace.id,
+        workspaceName: workspace.name,
         rootPath: workspace.root_path
       }
     : undefined
@@ -127,9 +134,10 @@ const ChatPage: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const [aiRunId, setAiRunId] = useState<string | null>(null)
   const [searchTurn, setSearchTurn] = useState<SearchWorkbenchTurn | null>(null)
-  const [selectedSourceScopes, setSelectedSourceScopes] = useState<SourceScopeSelection[]>([])
+  const [selectedReferences, setSelectedReferences] = useState<SelectedReference[]>([])
   const [workspaces, setWorkspaces] = useState<WorkspaceSource[]>([])
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null)
+  const [workspaceDocumentIds, setWorkspaceDocumentIds] = useState<string[]>([])
   const [modelConfigs, setModelConfigs] = useState<LLMConfig[]>([])
   const [selectedModelConfigId, setSelectedModelConfigId] = useState<string | null>(null)
   const [composerResetKey, setComposerResetKey] = useState(0)
@@ -158,32 +166,55 @@ const ChatPage: React.FC = () => {
   const [approvalSubmitting, setApprovalSubmitting] = useState(false)
   const [pendingWorkspaceRequest, setPendingWorkspaceRequest] = useState<{
     input: string
-    scopes: SourceScopeSelection[]
+    references: SelectedReference[]
     reason: string
     request: WorkspaceRequiredEvent
   } | null>(null)
 
   const assistantMsgIdRef = useRef<string | null>(null)
   const lastSubmittedInputRef = useRef('')
-  const lastSubmittedScopesRef = useRef<SourceScopeSelection[]>([])
+  const lastSubmittedReferencesRef = useRef<SelectedReference[]>([])
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const selectedDocumentIds = useMemo(
-    () =>
-      Array.from(
-        new Set(
-          selectedSourceScopes.flatMap((scope) =>
-            Array.isArray(scope.documentIds) ? scope.documentIds.map((item) => String(item)) : []
-          )
-        )
-      ).filter(Boolean),
-    [selectedSourceScopes]
+    () => {
+      const explicitIds = collectReferenceDocumentIds(selectedReferences)
+      if (explicitIds.length > 0) return explicitIds
+      if (selectedWorkspaceId) return workspaceDocumentIds
+      return []
+    },
+    [selectedReferences, selectedWorkspaceId, workspaceDocumentIds]
   )
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) || null,
     [selectedWorkspaceId, workspaces]
   )
+
+  useEffect(() => {
+    setSelectedReferences((current) => pruneReferencesByWorkspace(current, selectedWorkspaceId))
+  }, [selectedWorkspaceId])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadWorkspaceDocumentIds = async (): Promise<void> => {
+      if (!selectedWorkspaceId) {
+        setWorkspaceDocumentIds([])
+        return
+      }
+
+      const response = await window.api.workspaceNodes({ workspaceId: selectedWorkspaceId })
+      if (!cancelled) {
+        setWorkspaceDocumentIds(collectWorkspaceIndexedDocumentIds(response.items))
+      }
+    }
+
+    void loadWorkspaceDocumentIds()
+    return () => {
+      cancelled = true
+    }
+  }, [selectedWorkspaceId])
 
   const currentSession = useMemo(
     () => sessions.find((session) => session.id === currentSessionId) || null,
@@ -602,7 +633,7 @@ const ChatPage: React.FC = () => {
       setSearchTurn(null)
       setModalPreviewFile(null)
       setInput('')
-      setSelectedSourceScopes([])
+      setSelectedReferences([])
       setComposerResetKey((value) => value + 1)
       setPendingApprovalRequest(null)
       setApprovalSubmitting(false)
@@ -801,7 +832,7 @@ const ChatPage: React.FC = () => {
           setLoading(false)
           setPendingWorkspaceRequest({
             input: lastSubmittedInputRef.current,
-            scopes: lastSubmittedScopesRef.current,
+            references: lastSubmittedReferencesRef.current,
             reason: event.reason,
             request: event
           })
@@ -1008,20 +1039,23 @@ const ChatPage: React.FC = () => {
       return
     }
     if (!input.trim() || !currentSessionId || loading) return
+    if (!selectedWorkspace) {
+      message.warning('请先选择当前工作区后再发送消息')
+      return
+    }
 
     const userQuery = input.trim()
     const likelyExecutable =
       /\b(cmd|bash|shell|terminal|command|run)\b/i.test(userQuery) ||
       /终端|命令|脚本|执行|创建文件|删除文件|修改文件/.test(userQuery)
-    const hasWorkspaceBinding =
-      selectedSourceScopes.some((scope) => scope.workspace?.rootPath) || Boolean(selectedWorkspace)
+    const hasWorkspaceBinding = Boolean(selectedWorkspace)
     if (likelyExecutable && !hasWorkspaceBinding) {
       message.warning('该请求可能触发本地执行，请先选择当前工作区，必要时再通过 @ 插入文件或目录')
       return
     }
 
     setInput('')
-    setSelectedSourceScopes([])
+    setSelectedReferences([])
     setComposerResetKey((value) => value + 1)
     setLoading(true)
     setSearchTurn(null)
@@ -1030,7 +1064,7 @@ const ChatPage: React.FC = () => {
     setPendingWorkspaceRequest(null)
     assistantMsgIdRef.current = null
     lastSubmittedInputRef.current = userQuery
-    lastSubmittedScopesRef.current = selectedSourceScopes
+    lastSubmittedReferencesRef.current = selectedReferences
 
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
@@ -1067,10 +1101,9 @@ const ChatPage: React.FC = () => {
       const response = await window.api.aiRunStart({
         sessionId: currentSessionId,
         input: userQuery,
-        selectedSourceScopes: selectedSourceScopes.length > 0 ? selectedSourceScopes : undefined,
+        selectedReferences: selectedReferences.length > 0 ? selectedReferences : undefined,
         modelConfigId: selectedModelConfigId || undefined,
-        workspace: createWorkspaceBinding(selectedWorkspace),
-        allowNonLocal: false
+        workspace: createWorkspaceBinding(selectedWorkspace)
       })
       if (!response.success || !response.runId) {
         setLoading(false)
@@ -1087,6 +1120,9 @@ const ChatPage: React.FC = () => {
       }))
 
       try {
+        if (selectedWorkspace && selectedDocumentIds.length === 0) {
+          return
+        }
         const searchResponse = await window.api.search(
           userQuery,
           'all',
@@ -1118,16 +1154,20 @@ const ChatPage: React.FC = () => {
 
   const handleSearchSend = async (): Promise<void> => {
     if (!input.trim() || !currentSessionId || loading) return
+    if (!selectedWorkspace) {
+      message.warning('请先选择当前工作区后再发送消息')
+      return
+    }
 
     const userQuery = input.trim()
-    const hasStrictScope = selectedSourceScopes.length > 0
+    const hasStrictScope = selectedReferences.length > 0 || Boolean(selectedWorkspace)
     if (hasStrictScope && selectedDocumentIds.length === 0) {
       message.warning('当前搜索范围没有已加载的本地资料，无法执行纯搜索。')
       return
     }
 
     setInput('')
-    setSelectedSourceScopes([])
+    setSelectedReferences([])
     setComposerResetKey((value) => value + 1)
     setLoading(true)
     setAiRunId(null)
@@ -1228,8 +1268,7 @@ const ChatPage: React.FC = () => {
 
   const handleContinueWithWorkspace = async (): Promise<void> => {
     if (!pendingWorkspaceRequest || !currentSessionId || loading) return
-    const hasWorkspaceBinding =
-      selectedSourceScopes.some((scope) => scope.workspace?.rootPath) || Boolean(selectedWorkspace)
+    const hasWorkspaceBinding = Boolean(selectedWorkspace)
     if (!hasWorkspaceBinding) {
       message.warning('请先选择当前工作区，必要时再通过 @ 插入目录或文件后继续')
       return
@@ -1251,7 +1290,7 @@ const ChatPage: React.FC = () => {
     setApprovalSubmitting(false)
     assistantMsgIdRef.current = null
     lastSubmittedInputRef.current = pendingWorkspaceRequest.input
-    lastSubmittedScopesRef.current = selectedSourceScopes
+    lastSubmittedReferencesRef.current = selectedReferences
 
     try {
       const assistantMessageId = crypto.randomUUID()
@@ -1274,10 +1313,9 @@ const ChatPage: React.FC = () => {
       const response = await window.api.aiRunStart({
         sessionId: currentSessionId,
         input: pendingWorkspaceRequest.input,
-        selectedSourceScopes: selectedSourceScopes.length > 0 ? selectedSourceScopes : undefined,
+        selectedReferences: selectedReferences.length > 0 ? selectedReferences : undefined,
         modelConfigId: selectedModelConfigId || undefined,
-        workspace: createWorkspaceBinding(selectedWorkspace),
-        allowNonLocal: false
+        workspace: createWorkspaceBinding(selectedWorkspace)
       })
       if (!response.success || !response.runId) {
         setLoading(false)
@@ -1495,9 +1533,9 @@ const ChatPage: React.FC = () => {
   }
 
   const handleComposerDraftChange = useCallback(
-    (draft: { input: string; selectedSourceScopes: SourceScopeSelection[] }) => {
+    (draft: { input: string; selectedReferences: SelectedReference[] }) => {
       setInput(draft.input)
-      setSelectedSourceScopes(draft.selectedSourceScopes)
+      setSelectedReferences(draft.selectedReferences)
     },
     []
   )
@@ -1725,10 +1763,19 @@ const ChatPage: React.FC = () => {
                       onSubmit={() => void handleSend()}
                       onCancel={() => void handleCancel()}
                       loading={loading}
-                      canSubmit={Boolean(input.trim())}
+                      canSubmit={Boolean(input.trim() && selectedWorkspace)}
                       showCancel={loading && composerMode === 'ai' && Boolean(aiRunId)}
                       resetKey={composerResetKey}
                     />
+
+                    {!selectedWorkspace ? (
+                      <div className="mt-3 flex items-start gap-2 rounded-[14px] border border-[#E5E5E4] bg-white px-3 py-3 text-sm text-[#666666]">
+                        <HiOutlineExclamationCircle className="mt-0.5 h-4 w-4 shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          请先在设置中添加并选择工作区后再发送消息。未显式插入 @ 参考资料时，系统会默认使用当前工作区中已索引文件作为本地检索范围。
+                        </div>
+                      </div>
+                    ) : null}
 
                     {composerMode === 'ai' &&
                     (pendingApprovalRequest || pendingWorkspaceRequest) ? (
@@ -1793,26 +1840,26 @@ const ChatPage: React.FC = () => {
                     ) : null}
 
                     {composerMode === 'ai' &&
-                    selectedSourceScopes.some(
-                      (scope) => scope.sourceType === 'workspace' && scope.hasUnpreparedFiles
-                    ) ? (
+                    selectedReferences.some(hasIncompleteLocalKbCoverage) ? (
                       <div
                         className="mt-3 flex items-start gap-2 rounded-[14px] border border-[#FDECC8] bg-[#FFF9ED] px-3 py-2.5 text-sm text-[#8A6510]"
-                        data-testid={workbenchSelectors.scopeAiWarning}
+                        data-testid={workbenchSelectors.referenceAiWarning}
                       >
                         <HiOutlineExclamationCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                        <span>已选范围包含未加载文件，AI 可能直接读取原文件，耗时更长。</span>
+                        <span>已选本地参考资料含未完全索引内容，AI 可能需要直接读取原文件，耗时更长。</span>
                       </div>
                     ) : null}
 
                     {composerMode === 'search' &&
-                    selectedSourceScopes.some((scope) => scope.hasUnpreparedFiles) ? (
+                    selectedReferences.some(
+                      (reference) => reference.kind === 'directory' && reference.kbAvailability === 'partial'
+                    ) ? (
                       <div
                         className="mt-3 flex items-start gap-2 rounded-[14px] border border-[#FDECC8] bg-[#FFF9ED] px-3 py-2.5 text-sm text-[#8A6510]"
-                        data-testid={workbenchSelectors.scopeSearchWarning}
+                        data-testid={workbenchSelectors.referenceSearchWarning}
                       >
                         <HiOutlineExclamationCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                        <span>纯搜索只检索已加载资料，未加载文件不会进入候选结果。</span>
+                        <span>当前搜索范围包含部分可检索目录，搜索只会覆盖其已索引子文件。</span>
                       </div>
                     ) : null}
                   </div>

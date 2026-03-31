@@ -44,16 +44,33 @@
 运行前提：
 
 - 已绑定 workspace
-- 已选本地资料范围，包含 Alpha PRD 所在目录和两份知识文档
+- 已选本地参考资料，包含 Alpha PRD 所在目录和两份知识文档
 - 会话里没有足够明确的“最新 docx 是哪一份”“上周评审意见具体指什么”
 
-为了便于阅读，下文把 `selectedScopeSummary` 近似理解成：
+为了便于阅读，下文把 `selectedContextText` 近似理解成：
 
 ```text
-1. directory: Alpha PRD 目录 (docs/prd)
-2. knowledge document: 品牌术语规范
-3. knowledge document: 发布说明模板
-允许非本地信息: 否
+当前工作区：Alpha Workspace（本地工作目录），后续本地文件路径都相对于这个工作区理解。
+
+参考资料类型说明：
+- 本地目录：工作区中的目录，可用于限定文件范围。
+- 本地文件：工作区中的具体文件。
+- 网页资料：已收录的网页内容。
+- 知识库可用性：
+  - 已索引：可直接通过知识库检索。
+  - 部分可检索：部分内容已索引，不能假设完整覆盖。
+  - 未索引：不能直接依赖知识库检索。
+
+当前用户选择：
+1. [本地目录] docs/prd/Alpha
+   名称：Alpha PRD
+   知识库可用性：部分可检索
+2. [网页资料] 品牌术语规范
+   地址：https://example.com/brand-terms
+   知识库可用性：已索引
+3. [网页资料] 发布说明模板
+   地址：https://example.com/release-template
+   知识库可用性：已索引
 ```
 
 ### 2.2 初始 `AiRunState`
@@ -75,13 +92,30 @@
 }
 ```
 
-同时，`brain` prompt 还会额外看到一段不进入 `HumanState` 的 `run constraints`，例如：
+同时，运行时会把一段不进入 `HumanState` 的“用户选择的参考资料”文本注入给 `director` 和 `brain`，例如：
 
 ```text
-- 资料范围摘要：已选择 Alpha PRD 目录、品牌术语规范、发布说明模板。
-- 已选文档数：2
-- 工作区：已绑定；如需访问文件，请使用工作区内相对路径。
-- 允许非本地信息：否
+当前工作区：Alpha Workspace（本地工作目录），后续本地文件路径都相对于这个工作区理解。
+
+参考资料类型说明：
+- 本地目录：工作区中的目录，可用于限定文件范围。
+- 本地文件：工作区中的具体文件。
+- 网页资料：已收录的网页内容。
+- 知识库可用性：
+  - 已索引：可直接通过知识库检索。
+  - 部分可检索：部分内容已索引，不能假设完整覆盖。
+  - 未索引：不能直接依赖知识库检索。
+
+当前用户选择：
+1. [本地目录] docs/prd/Alpha
+   名称：Alpha PRD
+   知识库可用性：部分可检索
+2. [网页资料] 品牌术语规范
+   地址：https://example.com/brand-terms
+   知识库可用性：已索引
+3. [网页资料] 发布说明模板
+   地址：https://example.com/release-template
+   知识库可用性：已索引
 ```
 
 这里还没有任何 `human` 状态。`director` 先决定这轮是直接做、先补上下文，还是拆计划。
@@ -94,7 +128,7 @@
 - `state.contextRounds`
 - `state.contextEvidence`
 - `ctx.loadHistory()` 返回的会话摘要和最近对话
-- `ctx.selectedScopeSummary`
+- `ctx.selectedContextText`
 
 在这个样例里，模型可能给出这样的结构化结果：
 
@@ -507,7 +541,7 @@ patch：
 
 ### 2.8 第 4 步：`director_plan`
 
-`director_plan` 会读取原始输入、历史、`contextEvidence`、`selectedScopeSummary`，再生成任务列表。
+`director_plan` 会读取原始输入、历史、`contextEvidence`、`selectedContextText`，再生成任务列表。
 
 在这个样例里，合法计划可以是：
 
@@ -946,7 +980,7 @@ runtimeArtifacts = [
 这个 `human` 读到的 `userInput` 不是原始一句话，而是 `buildSynthesisHumanObjective()` 组织出来的大对象，里面包含：
 
 - 原始用户请求
-- `selectedScopeSummary`
+- `selectedContextText`
 - `contextEvidence`
 - 全部 `plan[].deliveryMarkdown`
 

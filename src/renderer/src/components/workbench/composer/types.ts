@@ -1,4 +1,4 @@
-import type { SourceScopeSelection } from '../../../../../shared/types'
+import type { SelectedReference } from '../../../../../shared/types'
 
 export type ComposerTextNode = {
   id: string
@@ -9,12 +9,12 @@ export type ComposerTextNode = {
 export type ComposerScopeNode = {
   id: string
   kind: 'scope'
-  scope: SourceScopeSelection
+  scope: SelectedReference
 }
 
 export type ComposerNode = ComposerTextNode | ComposerScopeNode
 
 export type ComposerDraftValue = {
   input: string
-  selectedSourceScopes: SourceScopeSelection[]
+  selectedReferences: SelectedReference[]
 }

@@ -1,126 +1,127 @@
 import type {
-  SourceScopeSelection,
+  DirectoryReference,
+  FileReference,
+  KbAvailability,
+  SelectedReference,
+  WebReference,
   WebSourceRecord,
   WorkspaceNode,
-  WorkspaceRuntimeBinding,
   WorkspaceSource
 } from '../../../shared/types'
 
 export const getWorkspaceScopeKey = (node: Pick<WorkspaceNode, 'kind' | 'relative_path'>): string =>
   `${node.kind}:${node.relative_path}`
 
-export const collectPreparedDocumentIds = (nodes: WorkspaceNode[]): string[] =>
+const isIndexedWorkspaceFile = (node: WorkspaceNode): boolean =>
+  node.kind === 'file' && node.prepare_status === 'prepared' && Boolean(node.document_id)
+
+const collectIndexedFileNodes = (nodes: WorkspaceNode[]): WorkspaceNode[] =>
+  nodes.filter(isIndexedWorkspaceFile)
+
+const collectIndexedDocumentIds = (nodes: WorkspaceNode[]): string[] =>
   Array.from(
     new Set(
-      nodes
-        .filter((node) => node.prepare_status === 'prepared')
+      collectIndexedFileNodes(nodes)
         .map((node) => node.document_id)
         .filter(Boolean)
     )
   ) as string[]
 
-export const collectUnpreparedFileCount = (nodes: WorkspaceNode[]): number =>
-  nodes.filter(
-    (node) => node.kind === 'file' && (node.prepare_status !== 'prepared' || !node.document_id)
-  ).length
+const collectNotIndexedFileCount = (nodes: WorkspaceNode[]): number =>
+  nodes.filter((node) => node.kind === 'file' && !isIndexedWorkspaceFile(node)).length
 
-export const shouldIncludeScopeInSearch = (scope: SourceScopeSelection): boolean =>
-  scope.documentIds.length > 0 && !scope.hasUnpreparedFiles
+const resolveDirectoryAvailability = (nodes: WorkspaceNode[]): KbAvailability => {
+  const fileCount = nodes.filter((node) => node.kind === 'file').length
+  const indexedCount = collectIndexedFileNodes(nodes).length
+  if (fileCount === 0 || indexedCount === 0) return 'not_indexed'
+  if (indexedCount === fileCount) return 'indexed'
+  return 'partial'
+}
 
-export const scopeMatchesQuery = (scope: SourceScopeSelection, rawQuery?: string): boolean => {
+export const isLocalReference = (reference: SelectedReference): boolean => reference.kind !== 'web'
+
+export const buildWorkspaceDefaultDocumentIds = (nodes: WorkspaceNode[]): string[] =>
+  collectIndexedDocumentIds(nodes.filter((node) => node.kind === 'file'))
+
+export const shouldIncludeReferenceInSearch = (reference: SelectedReference): boolean =>
+  reference.kbDocumentIds.length > 0
+
+export const referenceMatchesQuery = (
+  reference: SelectedReference,
+  rawQuery?: string
+): boolean => {
   const query = String(rawQuery || '').trim().toLowerCase()
   if (!query) return true
-  return [scope.label, scope.relativePath, scope.absolutePath]
+
+  const values =
+    reference.kind === 'web'
+      ? [reference.name, reference.url]
+      : [reference.name, reference.relativePath, reference.absolutePath]
+
+  return values
     .map((value) => String(value || '').toLowerCase())
     .some((value) => value.includes(query))
 }
 
-export const collectScopeDocumentIds = (scopes?: SourceScopeSelection[]): string[] =>
+export const collectReferenceDocumentIds = (references?: SelectedReference[]): string[] =>
   Array.from(
     new Set(
-      (scopes || []).flatMap((scope) =>
-        Array.isArray(scope.documentIds) ? scope.documentIds.map((item) => String(item).trim()) : []
+      (references || []).flatMap((reference) =>
+        Array.isArray(reference.kbDocumentIds)
+          ? reference.kbDocumentIds.map((item) => String(item).trim())
+          : []
       )
     )
   ).filter(Boolean)
 
-export const buildWorkspaceScopeSelections = (
+export const buildWorkspaceReferenceItems = (
   workspace: WorkspaceSource,
   nodes: WorkspaceNode[]
-): SourceScopeSelection[] => {
-  const workspaceBinding: WorkspaceRuntimeBinding = {
-    workspaceId: workspace.id,
-    rootPath: workspace.root_path
-  }
+): SelectedReference[] => {
   const fileNodes = nodes.filter((node) => node.kind === 'file')
   const directoryNodes = nodes.filter((node) => node.kind === 'directory')
-  const workspaceDocumentIds = collectPreparedDocumentIds(fileNodes)
-  const workspaceUnpreparedFileCount = collectUnpreparedFileCount(fileNodes)
 
-  const workspaceScope: SourceScopeSelection = {
-    scopeType: 'workspace',
-    sourceType: 'workspace',
-    sourceId: workspace.id,
-    label: workspace.name,
-    absolutePath: workspace.root_path,
-    documentIds: workspaceDocumentIds,
-    hasUnpreparedFiles: workspaceUnpreparedFileCount > 0,
-    preparedDocumentCount: workspaceDocumentIds.length,
-    unpreparedFileCount: workspaceUnpreparedFileCount,
-    workspace: workspaceBinding
-  }
-
-  const directoryScopes = directoryNodes.map((node) => {
+  const directoryReferences: DirectoryReference[] = directoryNodes.map((node) => {
     const descendantFiles = fileNodes.filter((fileNode) =>
       fileNode.relative_path.startsWith(`${node.relative_path}/`)
     )
-    const documentIds = collectPreparedDocumentIds(descendantFiles)
-    const unpreparedFileCount = collectUnpreparedFileCount(descendantFiles)
+    const indexedFileCount = collectIndexedFileNodes(descendantFiles).length
+    const notIndexedFileCount = collectNotIndexedFileCount(descendantFiles)
+
     return {
-      scopeType: 'directory',
-      sourceType: 'workspace',
-      sourceId: workspace.id,
+      kind: 'directory',
+      workspaceId: workspace.id,
       nodeId: node.id,
-      label: node.name,
-      absolutePath: node.absolute_path,
+      name: node.name,
       relativePath: node.relative_path,
-      documentIds,
-      hasUnpreparedFiles: unpreparedFileCount > 0,
-      preparedDocumentCount: documentIds.length,
-      unpreparedFileCount,
-      workspace: workspaceBinding
-    } satisfies SourceScopeSelection
+      absolutePath: node.absolute_path,
+      kbDocumentIds: collectIndexedDocumentIds(descendantFiles),
+      kbAvailability: resolveDirectoryAvailability(descendantFiles),
+      indexedFileCount,
+      notIndexedFileCount
+    }
   })
 
-  const fileScopes = fileNodes.map((node) => ({
-    scopeType: 'file',
-    sourceType: 'workspace',
-    sourceId: workspace.id,
+  const fileReferences: FileReference[] = fileNodes.map((node) => ({
+    kind: 'file',
+    workspaceId: workspace.id,
     nodeId: node.id,
-    label: node.name,
-    absolutePath: node.absolute_path,
+    name: node.name,
     relativePath: node.relative_path,
-    documentIds: node.prepare_status === 'prepared' && node.document_id ? [node.document_id] : [],
-    hasUnpreparedFiles: node.prepare_status !== 'prepared' || !node.document_id,
-    preparedDocumentCount: node.prepare_status === 'prepared' && node.document_id ? 1 : 0,
-    unpreparedFileCount: node.prepare_status === 'prepared' && node.document_id ? 0 : 1,
-    workspace: workspaceBinding
-  })) satisfies SourceScopeSelection[]
+    absolutePath: node.absolute_path,
+    fileExt: node.file_ext || undefined,
+    kbDocumentIds: isIndexedWorkspaceFile(node) && node.document_id ? [node.document_id] : [],
+    kbAvailability: isIndexedWorkspaceFile(node) ? 'indexed' : 'not_indexed'
+  }))
 
-  return [workspaceScope, ...directoryScopes, ...fileScopes]
+  return [...directoryReferences, ...fileReferences]
 }
 
-export const buildWebScopeSelection = (source: WebSourceRecord): SourceScopeSelection | null => {
-  if (!source.document_id || source.import_status !== 2) return null
-  return {
-    scopeType: 'web',
-    sourceType: 'web',
-    sourceId: source.id,
-    label: source.title || source.url,
-    absolutePath: source.url,
-    documentIds: [source.document_id],
-    hasUnpreparedFiles: false,
-    preparedDocumentCount: 1,
-    unpreparedFileCount: 0
-  }
-}
+export const buildWebReferenceItem = (source: WebSourceRecord): WebReference => ({
+  kind: 'web',
+  webSourceId: source.id,
+  name: source.title || source.url,
+  url: source.url,
+  kbDocumentIds: source.document_id && source.import_status === 2 ? [source.document_id] : [],
+  kbAvailability: source.document_id && source.import_status === 2 ? 'indexed' : 'not_indexed'
+})

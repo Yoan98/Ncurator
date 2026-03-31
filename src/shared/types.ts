@@ -19,8 +19,8 @@ export type WorkspacePrepareStatus =
   | 'failed'
   | 'missing'
 export type WorkspacePrepareMode = 'full' | 'presence_only' | 'changes_only'
-export type SourceScopeType = 'workspace' | 'directory' | 'file' | 'web'
-export type SourceScopeSourceType = 'workspace' | 'web'
+export type ReferenceKind = 'directory' | 'file' | 'web'
+export type KbAvailability = 'indexed' | 'partial' | 'not_indexed'
 export type JsonPrimitive = string | number | boolean | null
 export type JsonValue = JsonPrimitive | JsonObject | JsonArray
 export type JsonObject = { [key: string]: JsonValue }
@@ -103,24 +103,46 @@ export interface WorkspaceNode {
 
 export interface WorkspaceRuntimeBinding {
   workspaceId: string
+  workspaceName: string
   rootPath: string
   policyProfile?: string
 }
 
-export interface SourceScopeSelection {
-  scopeType: SourceScopeType
-  sourceType: SourceScopeSourceType
-  sourceId: string
-  nodeId?: string
-  label: string
-  absolutePath?: string
-  relativePath?: string
-  documentIds: string[]
-  hasUnpreparedFiles: boolean
-  preparedDocumentCount?: number
-  unpreparedFileCount?: number
-  workspace?: WorkspaceRuntimeBinding
+export interface DirectoryReference {
+  kind: 'directory'
+  workspaceId: string
+  nodeId: string
+  name: string
+  relativePath: string
+  absolutePath: string
+  kbDocumentIds: string[]
+  kbAvailability: KbAvailability
+  indexedFileCount: number
+  notIndexedFileCount: number
 }
+
+export interface FileReference {
+  kind: 'file'
+  workspaceId: string
+  nodeId: string
+  name: string
+  relativePath: string
+  absolutePath: string
+  fileExt?: string
+  kbDocumentIds: string[]
+  kbAvailability: KbAvailability
+}
+
+export interface WebReference {
+  kind: 'web'
+  webSourceId: string
+  name: string
+  url: string
+  kbDocumentIds: string[]
+  kbAvailability: KbAvailability
+}
+
+export type SelectedReference = DirectoryReference | FileReference | WebReference
 
 export interface WorkspaceSyncProgress {
   workspace_id: string
@@ -145,8 +167,8 @@ export interface WorkspaceNodeListResponse {
   total: number
 }
 
-export interface SourceScopeListResponse {
-  items: SourceScopeSelection[]
+export interface ReferenceItemListResponse {
+  items: SelectedReference[]
   total: number
 }
 
@@ -230,11 +252,11 @@ export interface DeleteWebSourceResponse {
   error?: string
 }
 
-export interface ListSourceScopesRequest {
+export interface ListReferenceItemsRequest {
   query?: string
   mode: 'chat' | 'search'
   workspaceId?: string
-  scopeTypes?: SourceScopeType[]
+  referenceKinds?: ReferenceKind[]
 }
 
 export interface SearchResult {
@@ -613,11 +635,9 @@ export type AiPlanTask = {
 export type AiRunStartRequest = {
   sessionId: string
   input: string
-  selectedDocumentIds?: string[]
-  selectedSourceScopes?: SourceScopeSelection[]
+  selectedReferences?: SelectedReference[]
   modelConfigId?: string
   workspace?: WorkspaceRuntimeBinding
-  allowNonLocal?: boolean
 }
 
 export type AiRunStartResponse = {

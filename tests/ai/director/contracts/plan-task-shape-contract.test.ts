@@ -23,7 +23,7 @@ describe('ai director contracts backend', () => {
           sessionSummaryText: '之前用户一直在追踪发布说明与术语一致性。',
           recentTurnsText: '用户刚刚确认只使用当前已选资料。',
           contextEvidence: ['已确认需优先参考当前本地资料。'],
-          selectedScopeSummary: 'workspace:test-workspace'
+          selectedContextText: 'workspace:test-workspace'
         })
         const validDecision = planDecisionSchema.parse({
           tasks: [
