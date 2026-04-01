@@ -18,6 +18,7 @@ describe('ai tool docx backend', () => {
   it('docx-complex-ops-batch', async () => {
     await runBackendCase({
       caseId: 'docx-complex-ops-batch',
+      harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],

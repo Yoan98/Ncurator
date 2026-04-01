@@ -22,6 +22,7 @@ export const createHumanTestRunner = (
 
   return {
     ctx,
+    runner: run,
     run: async (taskInput: HumanTaskInput, dispatchOptions?: HumanRunDispatchOptions) =>
       await run(taskInput, dispatchOptions) as HumanTaskOutput
   }

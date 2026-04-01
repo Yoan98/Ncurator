@@ -1,7 +1,6 @@
 import { describe, it } from 'vitest'
 import { createRetrievalToolHarness } from '../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
-import { createTestDocumentRecord } from '../testHelpers'
 
 type KbListDocumentsResult = {
   items: Array<{
@@ -16,6 +15,7 @@ describe('ai tool kb backend', () => {
   it('kb-document-discovery-contract', async () => {
     await runBackendCase({
       caseId: 'kb-document-discovery-contract',
+      harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['kb'],
@@ -23,37 +23,41 @@ describe('ai tool kb backend', () => {
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
-        const documents = [
-          createTestDocumentRecord({
+        await runtime.seedKb([
+          {
             id: 'doc-1',
-            name: 'AI Tool Guide.md'
-          }),
-          createTestDocumentRecord({
+            name: 'AI Tool Guide.md',
+            chunks: [
+              {
+                id: 'chunk-1',
+                text: 'AI tool guide document mentions stable kb list scope.'
+              }
+            ]
+          },
+          {
             id: 'doc-2',
-            name: 'Release Checklist.md'
-          }),
-          createTestDocumentRecord({
+            name: 'Release Checklist.md',
+            chunks: [
+              {
+                id: 'chunk-2',
+                text: 'Release checklist document covers rollout steps.'
+              }
+            ]
+          },
+          {
             id: 'doc-3',
-            name: 'Director Notes.md'
-          })
-        ]
+            name: 'Director Notes.md',
+            chunks: [
+              {
+                id: 'chunk-3',
+                text: 'Director notes should stay out of current run scope.'
+              }
+            ]
+          }
+        ])
 
         const harness = createRetrievalToolHarness(runtime, {
-          selectedDocumentIds: ['doc-1', 'doc-2'],
-          documentsStoreOverrides: {
-            listDocuments: async ({ keyword }) => {
-              const normalizedKeyword = String(keyword || '').trim().toLowerCase()
-              const items = normalizedKeyword
-                ? documents.filter((document) =>
-                    document.name.toLowerCase().includes(normalizedKeyword)
-                  )
-                : documents
-              return {
-                items,
-                total: items.length
-              }
-            }
-          }
+          selectedDocumentIds: ['doc-1', 'doc-2']
         })
 
         return {

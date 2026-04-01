@@ -1,6 +1,5 @@
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { JsonObject } from '../../../../shared/types'
-import type { AiRunContext } from '../types'
 import type { z } from 'zod/v4'
 import type { AiToolFamilyId } from './tools/types'
 import {
@@ -113,18 +112,4 @@ export type HumanRuntimeCache = {
   familyToolsets: Partial<Record<AiToolFamilyId, StructuredToolInterface[]>>
   skillToolsets: Partial<Record<RuntimeSkillId, StructuredToolInterface[]>>
   toolCallCount: number
-}
-
-export type AiRunContextWithHumanOverrides = AiRunContext & {
-  resolveBrainDecisionOverride?: () => LastBrainDecision | undefined
-  resolveToolExecutionOverride?: (input: {
-    toolName: string
-    args: JsonObject
-  }) => ToolCallResult | undefined
-  resolveHumanDeliveryOverride?: (input: {
-    userInput: string
-    deliveryMode: HumanDeliveryMode
-    summary: string
-    state: HumanState
-  }) => MouthOutput | undefined
 }

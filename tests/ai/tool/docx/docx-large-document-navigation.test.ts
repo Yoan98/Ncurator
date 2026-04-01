@@ -15,6 +15,7 @@ describe('ai tool docx backend', () => {
   it('docx-large-document-navigation', async () => {
     await runBackendCase({
       caseId: 'docx-large-document-navigation',
+      harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],

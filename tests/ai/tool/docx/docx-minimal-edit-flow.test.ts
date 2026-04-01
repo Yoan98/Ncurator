@@ -17,6 +17,7 @@ describe('ai tool docx backend', () => {
   it('docx-minimal-edit-flow', async () => {
     await runBackendCase({
       caseId: 'docx-minimal-edit-flow',
+      harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],

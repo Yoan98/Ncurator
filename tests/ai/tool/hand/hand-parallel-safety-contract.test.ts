@@ -28,6 +28,7 @@ describe('ai tool hand backend', () => {
   it('hand-parallel-safety-contract', async () => {
     await runBackendCase({
       caseId: 'hand-parallel-safety-contract',
+      harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['hand'],

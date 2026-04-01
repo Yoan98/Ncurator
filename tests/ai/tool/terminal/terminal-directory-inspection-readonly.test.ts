@@ -24,6 +24,7 @@ describe('ai tool terminal backend', () => {
   it('terminal-directory-inspection-readonly', async () => {
     await runBackendCase({
       caseId: 'terminal-directory-inspection-readonly',
+      harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['terminal'],

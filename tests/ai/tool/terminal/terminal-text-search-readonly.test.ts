@@ -16,6 +16,7 @@ describe('ai tool terminal backend', () => {
   it('terminal-text-search-readonly', async () => {
     await runBackendCase({
       caseId: 'terminal-text-search-readonly',
+      harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['terminal'],

@@ -19,6 +19,7 @@ describe('ai tool docx backend', () => {
   it('docx-history-and-rollback', async () => {
     await runBackendCase({
       caseId: 'docx-history-and-rollback',
+      harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],

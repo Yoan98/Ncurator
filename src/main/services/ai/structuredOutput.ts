@@ -5,7 +5,8 @@ import type { LLMConfig } from '../../../shared/types'
 
 export const STRUCTURED_OUTPUT_METHODS = ['jsonSchema', 'functionCalling', 'jsonMode'] as const
 
-export type StructuredOutputMethod = (typeof STRUCTURED_OUTPUT_METHODS)[number]
+export type NativeStructuredOutputMethod = (typeof STRUCTURED_OUTPUT_METHODS)[number]
+export type StructuredOutputMethod = NativeStructuredOutputMethod | 'scripted'
 
 export type StructuredOutputInvocationResult<T extends Record<string, unknown>> = {
   output: T
@@ -22,6 +23,16 @@ type StructuredOutputInvocationInput<T extends Record<string, unknown>> = {
   user: string
   temperature?: number
 }
+
+export type StructuredOutputDriverResult = {
+  output: unknown
+  method: StructuredOutputMethod
+  fallbackChain?: StructuredOutputMethod[]
+}
+
+export type StructuredOutputDriver = (
+  input: StructuredOutputInvocationInput<Record<string, unknown>>
+) => Promise<StructuredOutputDriverResult>
 
 type ErrorResponseData = string | number | boolean | null | object
 
@@ -90,7 +101,7 @@ const matchesUnsupportedSignal = (body: string, markers: string[]): boolean => {
 }
 
 export const isStructuredOutputMethodUnsupportedError = (
-  method: StructuredOutputMethod,
+  method: NativeStructuredOutputMethod,
   error: ErrorLike
 ): boolean => {
   const body = getStructuredOutputErrorBody(error).toLowerCase()
@@ -135,7 +146,7 @@ export const isStructuredOutputMethodUnsupportedError = (
   return matchesUnsupportedSignal(body, ['json mode', 'json_object', 'response_format', 'response format'])
 }
 
-const buildMethodConfig = (method: StructuredOutputMethod, schemaName: string) => {
+const buildMethodConfig = (method: NativeStructuredOutputMethod, schemaName: string) => {
   if (method === 'jsonMode') {
     return {
       method,
@@ -150,9 +161,9 @@ const buildMethodConfig = (method: StructuredOutputMethod, schemaName: string) =
   } as const
 }
 
-export const invokeStructuredChat = async <T extends Record<string, unknown>>(
+const invokeStructuredChatWithNativeDriver = async <T extends Record<string, unknown>>(
   input: StructuredOutputInvocationInput<T>
-): Promise<StructuredOutputInvocationResult<T>> => {
+): Promise<StructuredOutputDriverResult> => {
   const methodErrors: string[] = []
 
   for (let index = 0; index < STRUCTURED_OUTPUT_METHODS.length; index += 1) {
@@ -164,10 +175,10 @@ export const invokeStructuredChat = async <T extends Record<string, unknown>>(
         buildMethodConfig(method, input.schemaName)
       )
       return {
-        output: (await structuredModel.invoke([
+        output: await structuredModel.invoke([
           new SystemMessage(input.system),
           new HumanMessage(input.user)
-        ])) as T,
+        ]),
         method,
         fallbackChain: STRUCTURED_OUTPUT_METHODS.slice(0, index + 1)
       }
@@ -202,4 +213,23 @@ export const invokeStructuredChat = async <T extends Record<string, unknown>>(
       `errors=${methodErrors.join(' | ') || 'unknown'}`
     ].join('; ')
   )
+}
+
+export const invokeStructuredChat = async <T extends Record<string, unknown>>(
+  input: StructuredOutputInvocationInput<T> & {
+    driver?: StructuredOutputDriver
+  }
+): Promise<StructuredOutputInvocationResult<T>> => {
+  const driver = input.driver || invokeStructuredChatWithNativeDriver
+  const result = await driver(input as StructuredOutputInvocationInput<Record<string, unknown>>)
+  const fallbackChain =
+    result.fallbackChain && result.fallbackChain.length > 0
+      ? result.fallbackChain
+      : [result.method]
+
+  return {
+    output: input.schema.parse(result.output),
+    method: result.method,
+    fallbackChain
+  }
 }

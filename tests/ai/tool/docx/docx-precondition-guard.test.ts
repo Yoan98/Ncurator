@@ -7,6 +7,7 @@ describe('ai tool docx backend', () => {
   it('docx-precondition-guard', async () => {
     await runBackendCase({
       caseId: 'docx-precondition-guard',
+      harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],

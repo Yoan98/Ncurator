@@ -22,8 +22,8 @@ export class StorageService {
   public readonly workspace: WorkspaceStore
   private legacyLocalImportMigrationStatus: LegacyLocalImportMigrationStatus | null = null
 
-  private constructor() {
-    this.core = new LanceDbCore()
+  public constructor(input: { dbPath?: string } = {}) {
+    this.core = new LanceDbCore(input.dbPath)
     this.documents = new DocumentsStore(this.core)
     this.webSource = new WebSourceStore(this.core)
     this.chat = new ChatStore(this.core)

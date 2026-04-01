@@ -15,6 +15,7 @@ describe('ai tool terminal backend', () => {
   it('terminal-risk-and-boundary-guard', async () => {
     await runBackendCase({
       caseId: 'terminal-risk-and-boundary-guard',
+      harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['terminal'],

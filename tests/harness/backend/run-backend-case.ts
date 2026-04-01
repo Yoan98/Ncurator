@@ -1,12 +1,11 @@
 import path from 'node:path'
-import { createTestAiRunContext } from './contextFactory'
 import { collectBackendRunArtifacts } from './artifactCollector'
 import { assertRequiredFixtures } from './fixtureGuard'
 import type {
-  BackendTestRuntime,
   FixtureBinding,
   TestCaseDefinition
 } from './test-types'
+import { createRealAiHarness } from './realAiHarness'
 import { writeRunLog, createRunId } from './write-run-log'
 import { cleanupWorkspace, copyFixturesIntoWorkspace, createIsolatedWorkspace } from './workspaceManager'
 import { EventCollector } from '../core/eventCollector'
@@ -115,48 +114,26 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
       fixtureBindings.map((binding) => ({
         from: binding.sourcePath,
         to: toRelativeWorkspaceTarget(workspaceRoot, binding.workspacePath)
-      }))
+        }))
     )
 
-    const runtime: BackendTestRuntime = {
+    const harness = await createRealAiHarness({
+      definition,
       runId,
       taskId,
       workspaceRoot,
       fixtureBindings,
       eventCollector,
-      recordEvent,
-      assertThat: (condition, input) => {
-        recordEvent({
-          type: 'assertion',
-          name: input.name,
-          status: condition ? 'ok' : 'failed',
-          message: input.message,
-          data: input.data
-        })
-        if (!condition) {
-          throw new Error(input.message)
-        }
-      },
-      getFixtureWorkspacePath: (sourcePath: string) => {
-        const absoluteSource = path.resolve(sourcePath)
-        const matched = fixtureBindings.find((binding) => binding.sourcePath === absoluteSource)
-        if (!matched) {
-          throw new Error(`fixture not bound into workspace: ${absoluteSource}`)
-        }
-        return matched.workspacePath
-      },
-      createAiRunContext: (input = {}) =>
-        createTestAiRunContext({
-          runId,
-          workspaceRootPath: workspaceRoot,
-          eventCollector,
-          ...input
-        })
-    }
+      recordEvent
+    })
 
-    const result = await definition.execute(runtime)
-    await definition.assert(result, runtime)
-    status = 'passed'
+    try {
+      const result = await definition.execute(harness.runtime)
+      await definition.assert(result, harness.runtime)
+      status = 'passed'
+    } finally {
+      await harness.dispose()
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     recordEvent({

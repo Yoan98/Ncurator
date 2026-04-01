@@ -1,7 +1,6 @@
 import { describe, it } from 'vitest'
 import { createRetrievalToolHarness } from '../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
-import { createTestSearchResult } from '../testHelpers'
 
 type KbSearchRow = {
   id: string
@@ -33,6 +32,7 @@ describe('ai tool kb backend', () => {
   it('kb-evidence-search-family-contract', async () => {
     await runBackendCase({
       caseId: 'kb-evidence-search-family-contract',
+      harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['kb'],
@@ -40,74 +40,74 @@ describe('ai tool kb backend', () => {
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
-        const rows = [
-          createTestSearchResult({
-            id: 'chunk-1',
-            text: 'Approval denied should keep existing files unchanged.',
-            documentId: 'doc-1',
-            documentName: 'AI Tool Guide.md'
-          }),
-          createTestSearchResult({
-            id: 'chunk-2',
-            text: 'Terminal artifacts must be declared and recorded.',
-            documentId: 'doc-2',
-            documentName: 'Release Checklist.md'
-          }),
-          createTestSearchResult({
-            id: 'chunk-3',
-            text: 'Out of scope notes should never be returned.',
-            documentId: 'doc-3',
-            documentName: 'Director Notes.md'
-          })
-        ]
-
-        const executeScopedSearch = async (
-          _queryText: string,
-          _limit: number,
-          _sourceType: string | undefined,
-          scopedDocumentIds?: string[]
-        ) => filterRowsByScope(rows, scopedDocumentIds)
+        await runtime.seedKb([
+          {
+            id: 'doc-1',
+            name: 'AI Tool Guide.md',
+            chunks: [
+              {
+                id: 'chunk-1',
+                text: 'Approval denied should keep existing files unchanged.'
+              }
+            ]
+          },
+          {
+            id: 'doc-2',
+            name: 'Release Checklist.md',
+            chunks: [
+              {
+                id: 'chunk-2',
+                text: 'Terminal artifacts must be declared and recorded.'
+              }
+            ]
+          },
+          {
+            id: 'doc-3',
+            name: 'Director Notes.md',
+            chunks: [
+              {
+                id: 'chunk-3',
+                text: 'Out of scope notes should never be returned.'
+              }
+            ]
+          }
+        ])
 
         const harness = createRetrievalToolHarness(runtime, {
-          selectedDocumentIds: ['doc-1', 'doc-2'],
-          documentsStoreOverrides: {
-            hybridSearch: async (_vec, queryText, limit, sourceType, scopedDocumentIds) =>
-              await executeScopedSearch(queryText, limit, sourceType, scopedDocumentIds),
-            vectorSearch: async (_vec, limit, sourceType, scopedDocumentIds) =>
-              await executeScopedSearch('vector', limit, sourceType, scopedDocumentIds),
-            ftsSearch: async (queryText, limit, sourceType, scopedDocumentIds) =>
-              await executeScopedSearch(queryText, limit, sourceType, scopedDocumentIds)
-          }
+          selectedDocumentIds: ['doc-1', 'doc-2']
         })
 
-        const invokeSearch = async (
-          toolName: SearchToolName,
-          args: { documentIds?: string[] }
-        ) => await harness.invoke<KbSearchRow[]>(toolName, {
-          queryText: 'approval denied',
+        const hybridInScope = await harness.invoke<KbSearchRow[]>('kb_hybrid_search_chunks', {
+          queryText: 'approval denied unchanged files',
+          limit: 5
+        })
+        const vectorSubset = await harness.invoke<KbSearchRow[]>('kb_vector_search_chunks', {
+          queryText: 'terminal artifacts recorded',
           limit: 5,
-          ...args
+          documentIds: ['doc-2', 'doc-3']
+        })
+        const ftsOutOfScope = await harness.invoke<KbSearchRow[]>('kb_fts_search_chunks', {
+          queryText: 'out of scope notes',
+          limit: 5,
+          documentIds: ['doc-3']
         })
 
         return {
-          hybridInScope: await invokeSearch('kb_hybrid_search_chunks', {}),
-          vectorSubset: await invokeSearch('kb_vector_search_chunks', {
-            documentIds: ['doc-2', 'doc-3']
-          }),
-          ftsOutOfScope: await invokeSearch('kb_fts_search_chunks', {
-            documentIds: ['doc-3']
-          })
+          hybridInScope,
+          vectorSubset,
+          ftsOutOfScope
         }
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.hybridInScope.length === 2 &&
+          result.hybridInScope.length >= 1 &&
             result.hybridInScope.every(
               (row) =>
                 (row.document_id === 'doc-1' || row.document_id === 'doc-2') &&
                 typeof row.document_name === 'string' &&
                 typeof row.text === 'string'
-            ),
+            ) &&
+            result.hybridInScope.some((row) => row.document_id === 'doc-1'),
           {
             name: 'hybrid-search-returns-stable-rows',
             message: 'kb_hybrid_search_chunks 应返回稳定 rows 结构，并限制在当前资料范围内。',
@@ -116,7 +116,8 @@ describe('ai tool kb backend', () => {
         )
 
         runtime.assertThat(
-          result.vectorSubset.length === 1 && result.vectorSubset[0]?.document_id === 'doc-2',
+          result.vectorSubset.length >= 1 &&
+            result.vectorSubset.every((row) => row.document_id === 'doc-2'),
           {
             name: 'vector-search-honors-explicit-document-scope',
             message: 'kb_vector_search_chunks 应继续遵守 documentIds 收窄后的范围。',

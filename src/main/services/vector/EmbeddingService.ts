@@ -1,12 +1,6 @@
 import { pipeline, env } from '@huggingface/transformers'
 import { MODELS_PATH } from '../../utils/paths'
 
-console.log('MODELS_PATH', MODELS_PATH)
-env.localModelPath = MODELS_PATH
-// env.backends.onnx.wasm.wasmPaths = './wasm';
-env.allowRemoteModels = false
-env.allowLocalModels = true
-
 enum ServiceStatus {
   UNINITIALIZED = 'uninitialized',
   INITIALIZING = 'initializing',
@@ -38,10 +32,15 @@ const toEmbeddingVector = (value: unknown): Float32Array => {
 export class EmbeddingService {
   private static instance: EmbeddingService
   private extractor: FeatureExtractor | null = null
-  private modelName: string = 'jinaai/jina-embeddings-v2-base-zh' // Using a Chinese model as default for now
+  private readonly modelName: string
+  private readonly modelsPath: string
   private status: ServiceStatus = ServiceStatus.UNINITIALIZED
+  private initializationPromise: Promise<void> | null = null
 
-  private constructor() {}
+  public constructor(input: { modelName?: string; modelsPath?: string } = {}) {
+    this.modelName = input.modelName || 'jinaai/jina-embeddings-v2-base-zh'
+    this.modelsPath = input.modelsPath || MODELS_PATH
+  }
 
   public static getInstance(): EmbeddingService {
     if (!EmbeddingService.instance) {
@@ -50,34 +49,41 @@ export class EmbeddingService {
     return EmbeddingService.instance
   }
 
+  public getModelName(): string {
+    return this.modelName
+  }
+
   public async initialize() {
     if (this.status === ServiceStatus.READY) return
 
-    if (this.status === ServiceStatus.INITIALIZING) {
+    if (this.initializationPromise) {
+      await this.initializationPromise
       return
     }
 
     this.status = ServiceStatus.INITIALIZING
-    try {
-      // Feature extraction pipeline
-      // Check if model exists locally first? transformers.js usually handles this if localModelPath is set.
-      // However, if files are missing, it might throw.
-      // We should wrap this in try-catch and set status to UNINITIALIZED or ERROR if it fails due to missing model,
-      // but let's see. If we catch error, we can stay in UNINITIALIZED or specific ERROR state.
-      // transformers.js pipeline return type is dynamic; keep it isolated in this adapter field.
-      const createExtractor = pipeline as (
-        task: string,
-        model: string,
-        options: { dtype: 'fp32' }
-      ) => Promise<FeatureExtractor>
-      this.extractor = await createExtractor('feature-extraction', this.modelName, { dtype: 'fp32' })
-      this.status = ServiceStatus.READY
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error)
-      console.warn('EmbeddingService initialization failed (likely model missing):', message)
-      // Do not throw, just set status to ERROR so app can continue
-      this.status = ServiceStatus.ERROR
-    }
+    this.initializationPromise = (async () => {
+      try {
+        env.localModelPath = this.modelsPath
+        env.allowRemoteModels = false
+        env.allowLocalModels = true
+        const createExtractor = pipeline as (
+          task: string,
+          model: string,
+          options: { dtype: 'fp32' }
+        ) => Promise<FeatureExtractor>
+        this.extractor = await createExtractor('feature-extraction', this.modelName, { dtype: 'fp32' })
+        this.status = ServiceStatus.READY
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error)
+        console.warn('EmbeddingService initialization failed (likely model missing):', message)
+        this.status = ServiceStatus.ERROR
+      } finally {
+        this.initializationPromise = null
+      }
+    })()
+
+    await this.initializationPromise
   }
 
   public getStatus() {

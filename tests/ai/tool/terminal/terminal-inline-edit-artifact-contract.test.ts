@@ -18,6 +18,7 @@ describe('ai tool terminal backend', () => {
 
     await runBackendCase({
       caseId: 'terminal-inline-edit-artifact-contract',
+      harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['terminal'],

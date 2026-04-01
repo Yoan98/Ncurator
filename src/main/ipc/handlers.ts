@@ -1987,7 +1987,9 @@ export function registerHandlers(services: {
 
   ipcMain.handle('download-model', async (event, repoId: string) => {
     try {
-      const result = await modelService.downloadModel(repoId, event.sender)
+      const result = await modelService.downloadModel(repoId, (payload) => {
+        event.sender.send('download-progress', payload)
+      })
       // After successful download, re-initialize embedding service
       await embeddingService.initialize()
       return result

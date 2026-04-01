@@ -19,6 +19,7 @@ describe('ai tool docx backend', () => {
   it('docx-format-variants-contract', async () => {
     await runBackendCase({
       caseId: 'docx-format-variants-contract',
+      harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],

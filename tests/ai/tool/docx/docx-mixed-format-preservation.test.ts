@@ -19,6 +19,7 @@ describe('ai tool docx backend', () => {
   it('docx-mixed-format-preservation', async () => {
     await runBackendCase({
       caseId: 'docx-mixed-format-preservation',
+      harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],

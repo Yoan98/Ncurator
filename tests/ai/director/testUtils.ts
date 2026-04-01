@@ -3,12 +3,7 @@ import {
   createInitialAiRunState,
   type DirectorGraphState
 } from '../../../src/main/services/ai/director/state/schema'
-import type {
-  HumanRunDispatchOptions,
-  HumanTaskInput,
-  HumanTaskOutput,
-  HumanTaskRunner
-} from '../../../src/main/services/ai/types'
+import type { HumanTaskOutput } from '../../../src/main/services/ai/types'
 import type {
   AiFileArtifactCapability,
   AiFileArtifactOperation,
@@ -65,73 +60,6 @@ export const applyDirectorPatch = (
     ...state,
     ...patch
   }) as DirectorGraphState
-
-type DirectorHumanCallRecord = {
-  taskInput: HumanTaskInput
-  options?: HumanRunDispatchOptions
-}
-
-type QueuedDirectorHumanResponse = {
-  taskId?: string
-  summary: string
-  deliveryMarkdown?: string
-  artifacts?: HumanTaskOutput['artifacts']
-  assertTask?: (input: {
-    callIndex: number
-    taskInput: HumanTaskInput
-    options?: HumanRunDispatchOptions
-  }) => void
-}
-
-export const createQueuedDirectorHumanTaskRunner = (
-  responses: readonly QueuedDirectorHumanResponse[]
-): {
-  runner: HumanTaskRunner
-  getCalls: () => readonly DirectorHumanCallRecord[]
-} => {
-  const calls: DirectorHumanCallRecord[] = []
-  let callIndex = 0
-
-  const runner: HumanTaskRunner = async (taskInput, options) => {
-    const current = responses[callIndex]
-    if (!current) {
-      throw new Error(`unexpected director human task call at index ${callIndex + 1}`)
-    }
-
-    current.assertTask?.({
-      callIndex,
-      taskInput,
-      options
-    })
-
-    calls.push({
-      taskInput: {
-        taskId: taskInput.taskId,
-        userInput: taskInput.userInput
-      },
-      options: options
-        ? {
-            ...options
-          }
-        : undefined
-    })
-
-    callIndex += 1
-
-    return {
-      taskId: current.taskId || taskInput.taskId,
-      status: 'completed',
-      summary: current.summary,
-      deliveryMarkdown: current.deliveryMarkdown || '',
-      artifacts: current.artifacts
-    }
-  }
-
-  return {
-    runner,
-    getCalls: () => calls
-  }
-}
 
 export const createTestFileArtifact = (input: {
   path: string

@@ -79,6 +79,7 @@ describe('ai tool hand backend', () => {
   it('hand-tool-limit-and-artifact-merge', async () => {
     await runBackendCase({
       caseId: 'hand-tool-limit-and-artifact-merge',
+      harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['hand'],

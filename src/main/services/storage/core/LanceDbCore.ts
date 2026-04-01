@@ -34,6 +34,8 @@ export class LanceDbCore {
   private db: lancedb.Connection | null = null
   private status: LanceDbCoreStatus = LanceDbCoreStatus.UNINITIALIZED
 
+  public constructor(private readonly dbPath: string = LANCE_DB_PATH) {}
+
   public getStatus(): LanceDbCoreStatus {
     return this.status
   }
@@ -48,11 +50,11 @@ export class LanceDbCore {
 
     this.status = LanceDbCoreStatus.INITIALIZING
     try {
-      if (!fs.existsSync(LANCE_DB_PATH)) {
-        fs.mkdirSync(LANCE_DB_PATH, { recursive: true })
+      if (!fs.existsSync(this.dbPath)) {
+        fs.mkdirSync(this.dbPath, { recursive: true })
       }
 
-      this.db = await lancedb.connect(LANCE_DB_PATH)
+      this.db = await lancedb.connect(this.dbPath)
       await this.ensureTables()
       this.status = LanceDbCoreStatus.READY
     } catch (error) {

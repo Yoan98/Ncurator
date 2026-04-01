@@ -3,7 +3,6 @@ import {
   createInitialAiRunState,
   type DirectorGraphState
 } from '../../../src/main/services/ai/director/state/schema'
-import type { HumanTaskRunner } from '../../../src/main/services/ai/types'
 import type { BackendTestRuntime, CreateAiRunContextInput } from './test-types'
 
 const DEFAULT_DIRECTOR_SESSION_ID = 'director-test-session'
@@ -13,7 +12,6 @@ const DEFAULT_RECURSION_LIMIT = 128
 type CreateDirectorTestRunnerOptions = {
   maxContextRounds?: number
   recursionLimit?: number
-  runHumanTask?: HumanTaskRunner
 }
 
 export const createDirectorTestRunner = (
@@ -24,8 +22,7 @@ export const createDirectorTestRunner = (
   const ctx = runtime.createAiRunContext(contextInput)
   const graph = buildDirectorGraph({
     ctx,
-    maxContextRounds: options.maxContextRounds,
-    runHumanTask: options.runHumanTask
+    maxContextRounds: options.maxContextRounds
   })
 
   return {

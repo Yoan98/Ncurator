@@ -1,29 +1,24 @@
 import type { AiRunContext } from '../../../types'
 import { lastBrainDecisionSchema } from '../../schema'
-import type { AiRunContextWithHumanOverrides, HumanRuntimeCache, HumanState } from '../../types'
+import type { HumanRuntimeCache, HumanState } from '../../types'
 import { buildBrainPromptContext } from '../../prompts/brain'
 import { reduceBrainMemory } from './memoryReducer'
 import { applyBrainDecisionTransition } from '../utils/stateTransitions'
 
 export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCache }) => {
-  const ctxWithOverride = input.ctx as AiRunContextWithHumanOverrides
-
   return async (state: HumanState): Promise<HumanState> => {
     input.ctx.checkCancelled()
 
-    const overriddenDecision = ctxWithOverride.resolveBrainDecisionOverride?.()
-    const rawOutput = overriddenDecision
-      ? overriddenDecision
-      : await input.ctx.chatStructured({
-          caller: 'human.brain',
-          ...buildBrainPromptContext({
-            state,
-            ctx: input.ctx
-          }),
-          schema: lastBrainDecisionSchema,
-          schemaName: 'human_brain_decision',
-          temperature: 0.1
-        })
+    const rawOutput = await input.ctx.chatStructured({
+      caller: 'human.brain',
+      ...buildBrainPromptContext({
+        state,
+        ctx: input.ctx
+      }),
+      schema: lastBrainDecisionSchema,
+      schemaName: 'human_brain_decision',
+      temperature: 0.1
+    })
     const parsedDecision = lastBrainDecisionSchema.parse(rawOutput)
     const reducedMemory = reduceBrainMemory({
       inside: state.brainMemory.inside,

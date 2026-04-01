@@ -15,6 +15,7 @@ describe('ai tool docx backend', () => {
   it('docx-review-aware-open-and-continue-edit', async () => {
     await runBackendCase({
       caseId: 'docx-review-aware-open-and-continue-edit',
+      harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
@@ -43,15 +44,21 @@ describe('ai tool docx backend', () => {
           }
         ])
 
-        const harness = createDocxToolHarness(runtime, {
-          resolveDocxOpenTarget: async (sourcePath) => ({
-            openPath: sourcePath.replace(
-              'review-aware-source.docx',
-              'review-aware-effective-draft.docx'
-            ),
-            trackedSourcePath: sourcePath
-          })
+        await runtime.seedDraftReview({
+          sessionId: 'review-aware-session',
+          runId: runtime.runId,
+          title: 'Review aware docx seed',
+          status: 'pending_confirm',
+          documents: [
+            {
+              sourcePath: `${runtime.workspaceRoot}/review-aware-source.docx`,
+              confirmBasePath: `${runtime.workspaceRoot}/review-aware-effective-draft.docx`,
+              sourceName: 'review-aware-source.docx'
+            }
+          ]
         })
+
+        const harness = createDocxToolHarness(runtime)
 
         try {
           const opened = await harness.invoke<DocxOpenResult>('docx_open', {

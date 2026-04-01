@@ -6,7 +6,6 @@ import type { AiRunContext } from '../../../types'
 import { TOOL_CALL_RESULT_CODES } from '../../constants'
 import { resolveToolResultErrorText } from '../../shared/toolResultRenderers'
 import type {
-  AiRunContextWithHumanOverrides,
   HumanRuntimeCache,
   RuntimeSkillId,
   ToolCallDiagnostic,
@@ -240,7 +239,6 @@ export const executeToolCall = async (input: {
   toolName: string
   args: Record<string, JsonValue>
 }): Promise<ToolCallResult> => {
-  const ctxWithOverride = input.ctx as AiRunContextWithHumanOverrides
   const toolEvents = createToolEventEmitter({
     ctx: input.ctx,
     runId: input.ctx.runId,
@@ -278,45 +276,6 @@ export const executeToolCall = async (input: {
           result
         )
         return result
-      }
-    })
-  }
-
-  const injected = ctxWithOverride.resolveToolExecutionOverride?.({
-    toolName: input.toolName,
-    args: input.args
-  })
-  if (injected) {
-    return await withToolLifecycle({
-      emitter: toolEvents,
-      toolName: input.toolName,
-      args: input.args as JsonObject,
-      execute: async (session) => {
-        const normalizedInjected: ToolCallResult = {
-          toolName: input.toolName,
-          ok: injected.ok,
-          code: injected.code,
-          data: injected.data,
-          diagnostic: injected.diagnostic
-        }
-        const outputPreview =
-          normalizedInjected.data ||
-          {
-            ok: normalizedInjected.ok,
-            code: normalizedInjected.code,
-            error: resolveToolResultErrorText(normalizedInjected)
-          }
-        if (injected.ok) {
-          session.succeed(outputPreview, undefined, normalizedInjected)
-        } else {
-          session.fail(
-            outputPreview,
-            resolveToolResultErrorText(normalizedInjected),
-            undefined,
-            normalizedInjected
-          )
-        }
-        return normalizedInjected
       }
     })
   }

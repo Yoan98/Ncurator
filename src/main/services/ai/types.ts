@@ -2,6 +2,7 @@ import type { ChatStore } from '../storage/domains/ChatStore'
 import type { DocumentsStore } from '../storage/domains/DocumentsStore'
 import type { LlmConfigStore } from '../storage/domains/LlmConfigStore'
 import type { EmbeddingService } from '../vector/EmbeddingService'
+import type { StructuredOutputDriver } from './structuredOutput'
 import type { DocxChangedBlock, DocxOp } from './human/tools/docx/types'
 import type { DraftReviewService } from './human/tools/docx/review/DraftReviewService'
 import type { ResolvedDocxOpenTarget } from './human/tools/docx/review/types'
@@ -87,6 +88,7 @@ export type AiRunDeps = {
   sendEvent: (event: AiRunEvent) => void
   recordLlmIo?: (record: AiLlmIoRecord) => void
   requestApproval: (request: AiApprovalRequest) => Promise<AiApprovalDecision>
+  structuredOutputDriver?: StructuredOutputDriver
 }
 
 export type AiRunContext = {

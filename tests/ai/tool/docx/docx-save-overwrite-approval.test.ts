@@ -41,6 +41,7 @@ describe('ai tool docx backend', () => {
 
     await runBackendCase({
       caseId: 'docx-save-overwrite-approval',
+      harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],

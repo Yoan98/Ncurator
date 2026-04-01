@@ -68,7 +68,8 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
           schemaName: input.schemaName,
           system: input.system,
           user: input.user,
-          temperature: input.temperature
+          temperature: input.temperature,
+          driver: deps.structuredOutputDriver
         })
     })
   }

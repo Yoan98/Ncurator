@@ -29,6 +29,7 @@ tests/
   harness/
   fixtures/
   ai/
+  unit/
   workbench/
   settings/
   kb-search/
@@ -70,7 +71,10 @@ tests/
 - 新增、修改或补齐正式 case 时，必须严格对齐对应文档中的 `用例名称 / 实现状态 / What / Why / How / Oracle / Not`。
 - 如果 case 覆盖的是用户可见功能，`How / Oracle` 还必须映射到对应 `doc/prd/**` 的需求编号与验收编号。
 - `How` 用于定义 fixture、前置条件、输入、执行路径与运行方式；`Oracle` 用于定义必须成立的可断言结果；`Not` 用于定义禁止扩张的范围。
-- 正式 live case 的 `How` 不得把待验证的内部实现路径、内部工具顺序、固定 plan 条数或分步剧本直接写进用户输入；这类固定路径验证应放到 non-live 的 override / stub case。
+- 正式 live case 的 `How` 不得把待验证的内部实现路径、内部工具顺序、固定 plan 条数或分步剧本直接写进用户输入；这类固定路径验证应放到 `mock-llm` case，由 scripted LLM 输出驱动而不是 fake runtime 节点。
+- 正式 `mock-llm` case 只允许替换 LLM 输出；不得 fake tool、store、review、`human` runner 或节点执行结果。
+- `tests/unit/**` 用于长期保留、但不进入 `doc/test-plan/**` 正式治理的 unit / helper / schema / prompt 类测试。
+- `tests/temp/**` 只用于一次性排查、验证猜想或临时复现；按需创建，不要求常驻。
 - 基于 raw logs 更新 report 时，结论顺序必须先区分环境阻塞，再区分 case 设计问题，最后才判断实现问题。
 - 如果 PRD 中的功能入口、交互流程、状态反馈或验收口径发生变化，必须先更新对应 `doc/prd/**`，再更新 `doc/test-plan/**` 与测试代码。
 - 如果实现行为变更导致正式 case 预期变化，必须先更新对应 `doc/test-plan/**`，再修改测试代码。
@@ -126,6 +130,7 @@ tests/
 ### 3.6 长期价值与 temp 规则
 
 - 进入正式 domain 目录的 case 默认都应具备长期回归价值。
+- `tests/unit/**` 默认具备长期维护价值，但不属于 formal test-plan case。
 - 一次性排查、临时验证、待定样例统一放在 `tests/temp/**`。
 - `tests/temp/**` 默认不参与 gating，也不进入正式 report。
 
@@ -135,6 +140,7 @@ tests/
   - 这类需求如果还没有进入长期维护范围，应先写进 `tests/temp/**`。
 - 正例：为了确认某个上下文拼接问题是否真实存在，先写 `tests/temp/**` 做一次性验证。
 - 正例：某条真实用户场景已经确定要长期回归，先补对应 `doc/test-plan/**`，再补正式测试代码。
+- 正例：某个 helper / schema / prompt 需要长期回归，但不属于 formal 业务 case，放进 `tests/unit/**`。
 
 ## 4. 正式测试闭环流程
 
@@ -152,6 +158,7 @@ tests/
 
 - 正式 case 固定放在 `tests/<domain>/<suite>/<groups...>/<case>.test.ts`。
 - e2e case 固定放在 `tests/<domain>/<suite>/<groups...>/<case>.e2e.test.ts`。
+- 长期非 formal 的 unit 测试固定放在 `tests/unit/**`。
 - 临时 case 固定放在 `tests/temp/**`。
 - 未在 `doc/test-plan/**` 登记的验证，不得进入正式测试目录。
 - 临时 case 转正式 case 时，先补 `doc/test-plan/**`，再迁入正式目录。
@@ -189,6 +196,13 @@ tests/
 
 - `pnpm test:ai`
 - `pnpm test:ai:backend`
+- `pnpm test:ai:tool`
+- `pnpm test:ai:human:mock-llm`
+- `pnpm test:ai:human:live`
+- `pnpm test:ai:director:mock-llm`
+- `pnpm test:ai:director:live`
+- `pnpm test:unit`
+- `pnpm test:unit:ai`
 - `pnpm test:workbench`
 - `pnpm test:workbench:backend`
 - `pnpm test:workbench:e2e`

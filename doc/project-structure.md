@@ -74,10 +74,11 @@ tests/                   # 自动化测试
 
 - `tests/harness/**` 只放可复用的测试基础设施，不承载旧 suite 治理逻辑或旧 report 契约。
 - `tests/fixtures/**` 只放长期复用的输入样本，不混入运行产物。
-- `tests/ai/**` 只放 AI 契约测试。
+- `tests/ai/**` 只放 AI formal tests。
+- `tests/unit/**` 放长期保留、但不进入 formal test-plan 的 unit / helper / schema / prompt 类测试。
 - `tests/workbench/**` 按 workbench PRD 模块组织正式测试。
 - `tests/settings/**` 按 settings PRD 模块组织正式测试。
-- `tests/kb-search/**` 预留给检索链路测试；`tests/temp/**` 仅放临时或待定用例。
+- `tests/kb-search/**` 预留给检索链路测试；`tests/temp/**` 仅放按需临时排查用例。
 - `tests/logs/**` 只放每次运行的原始日志；`tests/report/**` 只放按 domain 维护的正式分析文档。
 - 测试目录统一使用 kebab-case，运行产物不得反向成为测试发现入口。
 
