@@ -53,19 +53,20 @@ export const updateSessionMemoryAfterRun = async (input: {
   const memory = normalizeMemory(
     (
       await invokeStructuredChat({
-      caller: 'session.memory',
-      cfg,
-      schema: sessionMemorySchema,
-      schemaName: 'session_memory',
-      system: buildSessionMemoryPrompt(),
-      user: JSON.stringify({
-        previousMemory: prev,
-        newExchange: {
-          user: String(input.userInput || ''),
-          assistant: String(input.assistantOutput || '')
-        }
-      }),
-      temperature: 0.2
+        caller: 'session.memory',
+        cfg,
+        preferredMethod: cfg.preferredStructuredOutputMethod,
+        schema: sessionMemorySchema,
+        schemaName: 'session_memory',
+        system: buildSessionMemoryPrompt(),
+        user: JSON.stringify({
+          previousMemory: prev,
+          newExchange: {
+            user: String(input.userInput || ''),
+            assistant: String(input.assistantOutput || '')
+          }
+        }),
+        temperature: 0.2
       })
     ).output
   )

@@ -314,6 +314,8 @@ export interface DocumentListResponse {
 
 // Chat & LLM Types
 
+export type PreferredStructuredOutputMethod = 'jsonSchema' | 'jsonMode' | 'promptJson'
+
 export interface LLMConfig {
   id: string
   name: string
@@ -321,6 +323,7 @@ export interface LLMConfig {
   model_name: string
   api_key: string
   is_active: boolean
+  preferredStructuredOutputMethod?: PreferredStructuredOutputMethod
 }
 
 export interface ChatMessage {
@@ -583,12 +586,7 @@ export type AiTaskResultCode =
   | 'workspace_required'
   | 'approval_denied'
   | 'invalid_input'
-export type AiStructuredOutputMethod =
-  | 'jsonSchema'
-  | 'functionCalling'
-  | 'jsonMode'
-  | 'promptJson'
-  | 'scripted'
+export type AiStructuredOutputMethod = PreferredStructuredOutputMethod | 'scripted'
 export type AiToolCallDiagnosticKind =
   | 'workspace_required'
   | 'invalid_input'

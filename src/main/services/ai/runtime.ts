@@ -44,7 +44,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
   ): Promise<T> => {
     checkCancelled()
     const cfg = await loadRequestedConfig()
-    return runStructuredChatWithActivity({
+    const result = await runStructuredChatWithActivity<T>({
       ctx: {
         runId: payload.runId,
         sendEvent: deps.sendEvent,
@@ -64,6 +64,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
         await invokeStructuredChat({
           caller: input.caller,
           cfg,
+          preferredMethod: cfg.preferredStructuredOutputMethod,
           schema: input.schema,
           schemaName: input.schemaName,
           system: input.system,
@@ -72,6 +73,22 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
           driver: deps.structuredOutputDriver
         })
     })
+    if (
+      result.method !== 'scripted' &&
+      cfg.preferredStructuredOutputMethod !== result.method
+    ) {
+      const nextConfig = {
+        ...cfg,
+        preferredStructuredOutputMethod: result.method
+      }
+      try {
+        await deps.llmStore.save(nextConfig)
+        requestedConfigPromise = Promise.resolve(nextConfig)
+      } catch (error) {
+        console.warn('[AI-RUNTIME] Failed to persist preferred structured output method', error)
+      }
+    }
+    return result.output
   }
 
   const loadHistory: AiRunContext['loadHistory'] = async (limits) => {

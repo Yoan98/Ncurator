@@ -358,7 +358,8 @@ export class LanceDbCore {
           new arrow.Field('base_url', new arrow.Utf8()),
           new arrow.Field('model_name', new arrow.Utf8()),
           new arrow.Field('api_key', new arrow.Utf8()),
-          new arrow.Field('is_active', new arrow.Bool())
+          new arrow.Field('is_active', new arrow.Bool()),
+          new arrow.Field('preferredStructuredOutputMethod', new arrow.Utf8(), true)
         ])
       },
       {

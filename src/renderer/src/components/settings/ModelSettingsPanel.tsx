@@ -120,10 +120,18 @@ const ModelSettingsPanel: React.FC = () => {
   const handleSave = async (): Promise<void> => {
     try {
       const values = await form.validateFields()
+      const shouldResetPreferredMethod =
+        !!editingConfig &&
+        (editingConfig.base_url !== values.base_url ||
+          editingConfig.model_name !== values.model_name)
       const nextConfig: LLMConfig = {
         id: editingConfig ? editingConfig.id : crypto.randomUUID(),
         ...values,
-        is_active: editingConfig ? editingConfig.is_active : configs.length === 0
+        is_active: editingConfig ? editingConfig.is_active : configs.length === 0,
+        preferredStructuredOutputMethod:
+          editingConfig && !shouldResetPreferredMethod
+            ? editingConfig.preferredStructuredOutputMethod
+            : undefined
       }
 
       const response = await window.api.llmConfigSave(nextConfig)

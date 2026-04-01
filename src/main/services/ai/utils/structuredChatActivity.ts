@@ -55,7 +55,7 @@ export const runStructuredChatWithActivity = async <T>(input: {
   user: string
   telemetry: StructuredChatTelemetry
   execute: () => Promise<StructuredChatExecutionResult<T>>
-}): Promise<T> => {
+}): Promise<StructuredChatExecutionResult<T>> => {
   const startedAt = Date.now()
   const baseUrlHost = resolveBaseUrlHost(input.telemetry.baseUrl)
   const callId = randomUUID()
@@ -134,7 +134,7 @@ export const runStructuredChatWithActivity = async <T>(input: {
       durationMs,
       status: 'completed'
     })
-    return result.output
+    return result
   } catch (error) {
     const durationMs = Date.now() - startedAt
     const reason = error instanceof Error && error.message.trim() ? error.message.trim() : String(error || 'unknown')

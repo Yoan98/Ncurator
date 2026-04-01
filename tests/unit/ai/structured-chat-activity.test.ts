@@ -7,7 +7,7 @@ describe('ai unit structured chat activity', () => {
     const events: AiRunEvent[] = []
     const llmIoRecords: AiLlmIoRecord[] = []
 
-    const output = await runStructuredChatWithActivity({
+    const result = await runStructuredChatWithActivity({
       ctx: {
         runId: 'run-1',
         sendEvent: (event) => events.push(event),
@@ -32,7 +32,8 @@ describe('ai unit structured chat activity', () => {
       })
     })
 
-    expect(output).toEqual({ ok: true })
+    expect(result.output).toEqual({ ok: true })
+    expect(result.method).toBe('scripted')
     expect(events.filter((event) => event.type === 'activity')).toHaveLength(2)
     expect(llmIoRecords).toHaveLength(1)
     expect(llmIoRecords[0]?.method).toBe('scripted')
