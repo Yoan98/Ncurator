@@ -47,9 +47,12 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     return runStructuredChatWithActivity({
       ctx: {
         runId: payload.runId,
-        sendEvent: deps.sendEvent
+        sendEvent: deps.sendEvent,
+        recordLlmIo: deps.recordLlmIo
       },
       runId: payload.runId,
+      system: input.system,
+      user: input.user,
       telemetry: {
         caller: input.caller,
         schemaName: input.schemaName,
@@ -102,6 +105,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     checkCancelled,
     chatStructured,
     sendEvent: deps.sendEvent,
+    recordLlmIo: deps.recordLlmIo,
     requestApproval: deps.requestApproval,
     loadHistory,
     trackDocxOpen: ({ docId, sourcePath }) => {

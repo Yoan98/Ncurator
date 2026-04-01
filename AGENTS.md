@@ -3,8 +3,8 @@
 ## 1. 文档引用
 ### 1.1 AI相关
 - 当涉及 AI 总体架构、Director/Human 分工或主流程时，请阅读 `doc/ai-design/architecture.md`
-- 当涉及 AI 节点实现，请阅读 `doc/ai-design/implementation-spec.md`
-- 当涉及 AI 状态字段、数据流转、`ToolCallResult.diagnostic`、`selectedContextText` 或 `human` 的运行约束投影时，请阅读 `doc/ai-design/data-definition-and-flow.md`
+- 当涉及 AI 节点实现、director 路由或 planner 校验策略时，请阅读 `doc/ai-design/implementation-spec.md`
+- 当涉及 AI 状态字段、数据流转、`ToolCallResult` / `tool_call_result.result`、`llm-io.jsonl`、`selectedContextText` 或 `human` 的运行约束投影时，请阅读 `doc/ai-design/data-definition-and-flow.md`
 - 当想看 AI 完整跑一遍的真实样例，请阅读 `doc/ai-design/example.md`
 - 当涉及 `human` 的 skill设计、`skills.ts`、family `toolSpecs.ts` 或 tools registry 时，请阅读 `doc/ai-design/human-skill-design.md`
 - 当涉及 AI prompt 设计，请阅读 `doc/ai-design/prompt-design.md`
@@ -17,7 +17,7 @@
 - 当涉及 UI 整体风格、配色、字级、圆角、阴影、图标、cursor 或通用交互 affordance 时，请阅读 `doc/ui-style.md`
 
 ### 1.3 测试相关
-- 当涉及AI的测试计划、阶段划分、suite/group归属、tool/docx 或 human/director 正式 case 边界、`human/scenarios/live` 用例实现状态、AI live 用例设计、live 节流与开关、正式 case 登记 / 裁剪、raw logs / report 更新、report 判因或 live / 非 live 测试边界时，请阅读 `doc/test-plan/ai-test.md`
+- 当涉及AI的测试计划、阶段划分、suite/group归属、tool/docx 或 human/director 正式 case 边界、`human/scenarios/live` 用例实现状态、AI live 用例设计、live 节流与开关、`runtime-events.jsonl` / `llm-io.jsonl`、fixture-live / real-kb-live 区分、正式 case 登记 / 裁剪、raw logs / report 更新、report 判因或 live / 非 live 测试边界时，请阅读 `doc/test-plan/ai-test.md`
 - 当涉及Workbench的测试计划、suite划分、标准任务闭环 smoke、`@` 多 token / 多类型插入、右侧持续工作区、review 导航 / anchor、文件级确认或与 `doc/prd/workbench.md` 的测试对齐时，请阅读 `doc/test-plan/workbench-test.md`
 - 当涉及Settings的测试计划、suite划分、正式 case 登记 / 裁剪、raw logs / report 更新或与 `doc/prd/settings.md` 的测试对齐时，请阅读 `doc/test-plan/settings-test.md`
 - 当涉及测试架构、目录分层、正式 case 字段填写或 case 登记规则时，必须阅读 `doc/test.md`

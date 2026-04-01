@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { tool } from '@langchain/core/tools'
-import type { AiTaskResultCode, IpcJsonObject, IpcJsonValue } from '../../../../../../shared/types'
+import type {
+  AiTaskResultCode,
+  AiToolCallResult,
+  IpcJsonObject,
+  IpcJsonValue
+} from '../../../../../../shared/types'
 import type { TerminalToolContext } from '../../../types'
 import { TERMINAL_RUN_COMMAND_TOOL_SPEC } from './toolSpecs'
 import { runTerminalCommand } from './terminalExec'
@@ -115,6 +120,26 @@ const buildTerminalFailure = <TCode extends AiTaskResultCode>(input: {
   error: input.error
 })
 
+const buildTerminalToolResult = (input: {
+  toolName: string
+  ok: boolean
+  code: AiTaskResultCode
+  data: AiToolCallResult['data']
+}): AiToolCallResult => ({
+  toolName: input.toolName,
+  ok: input.ok,
+  code: input.code,
+  data: input.data,
+  diagnostic:
+    input.code === 'workspace_required'
+      ? { kind: 'workspace_required' }
+      : input.code === 'approval_denied'
+        ? { kind: 'approval_denied' }
+        : input.code === 'invalid_input'
+          ? { kind: 'invalid_input' }
+          : undefined
+})
+
 const requestTerminalCommandApproval = async (input: {
   ctx: TerminalToolContext
   runId: string
@@ -162,7 +187,17 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               code: 'invalid_input',
               error: 'empty command'
             })
-            session.fail(emptyResult, emptyResult.error)
+            session.fail(
+              emptyResult,
+              emptyResult.error,
+              undefined,
+              buildTerminalToolResult({
+                toolName: 'terminal_run_command',
+                ok: false,
+                code: emptyResult.code,
+                data: emptyResult
+              })
+            )
             return emptyResult
           }
 
@@ -175,7 +210,17 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               code: cwdResult.code,
               error: cwdResult.error
             })
-            session.fail(cwdError, cwdError.error)
+            session.fail(
+              cwdError,
+              cwdError.error,
+              undefined,
+              buildTerminalToolResult({
+                toolName: 'terminal_run_command',
+                ok: false,
+                code: cwdError.code,
+                data: cwdError
+              })
+            )
             return cwdError
           }
           const cwd = cwdResult.cwd
@@ -186,7 +231,17 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               code: 'workspace_required',
               error: `workspace boundary check failed: ${boundary.reason}`
             })
-            session.fail(boundaryError, boundaryError.error)
+            session.fail(
+              boundaryError,
+              boundaryError.error,
+              undefined,
+              buildTerminalToolResult({
+                toolName: 'terminal_run_command',
+                ok: false,
+                code: boundaryError.code,
+                data: boundaryError
+              })
+            )
             return boundaryError
           }
 
@@ -208,7 +263,17 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
                 code: 'approval_denied',
                 error: approval.error
               })
-              session.fail(denied, denied.error)
+              session.fail(
+                denied,
+                denied.error,
+                undefined,
+                buildTerminalToolResult({
+                  toolName: 'terminal_run_command',
+                  ok: false,
+                  code: denied.code,
+                  data: denied
+                })
+              )
               return denied
             }
           }
@@ -289,17 +354,47 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             timedOut: result.timedOut,
             truncated: result.truncated || preview.truncated,
             artifacts,
-            error: stepError
+            ...(stepError ? { error: stepError } : {})
           }
           if (stepError) {
-            session.fail(output as IpcJsonValue, stepError)
+            session.fail(
+              output as IpcJsonValue,
+              stepError,
+              undefined,
+              buildTerminalToolResult({
+                toolName: 'terminal_run_command',
+                ok: false,
+                code: 'failed',
+                data: output as AiToolCallResult['data']
+              })
+            )
           } else {
-            session.succeed(output as IpcJsonValue)
+            session.succeed(
+              output as IpcJsonValue,
+              undefined,
+              buildTerminalToolResult({
+                toolName: 'terminal_run_command',
+                ok: true,
+                code: 'ok',
+                data: output as AiToolCallResult['data']
+              })
+            )
           }
           return output
         },
         onError: (error, session) => {
-          session.fail({ ok: false, code: 'failed', error: error.message } as IpcJsonValue, error.message)
+          const failure = { ok: false, code: 'failed', error: error.message } as const
+          session.fail(
+            failure as IpcJsonValue,
+            error.message,
+            undefined,
+            buildTerminalToolResult({
+              toolName: 'terminal_run_command',
+              ok: false,
+              code: 'failed',
+              data: failure
+            })
+          )
         }
       }),
     {

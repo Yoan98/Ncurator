@@ -77,6 +77,9 @@ stateDiagram-v2
 - 回写：`DirectorState.directorStage`；必要时回写 `DirectorState.contextObjective`。
 - 下一跳：`director_direct_human_exec`、`director_context_human`、`director_plan`。
 - 实现约束：
+  - `direct_human` 是默认路径；只要单个 `human` 可闭环，即使过程中需要本地工具，也优先走 direct。
+  - `need_context` 只用于缺少关键指代、范围或关键证据，导致当前无法稳定判断的场景。
+  - `to_plan` 只用于明确需要多个可独立执行子任务，或后续必然需要 synthesis 汇总的复杂任务。
   - 节点入口先执行 `ctx.checkCancelled()`。
   - 超过上下文补充轮次上限时，直接进入 `director_plan`。
   - 模型输出必须通过 `ctx.chatStructured`。
@@ -191,7 +194,8 @@ stateDiagram-v2
   - 模型输出必须通过 `ctx.chatStructured`。
   - prompt 必须通过 `buildPlanPrompt` 组织。
   - 计划结果必须先经过 `validatePlannerTasks` 的基础结果校验，再转换为 `DirectorPlanTask`。
-  - `validatePlannerTasks` 只做“是否产出任务”等结构性兜底，不做基于指定文本匹配的任务拒绝。
+  - `validatePlannerTasks` 只负责结构性兜底，例如是否产出任务、任务是否为空；不在这里承担上游上下文传递纠错。
+  - runtime 会自动追加 synthesis human；planner 不得把“最终总结/综合答复”再写成单独计划任务。
   - 每个计划任务都必须能交给单个 `human` 闭环执行。
 
 **Not**
@@ -669,6 +673,7 @@ stateDiagram-v2
 - graph 的状态 schema 必须通过各自目录下的 `state/schema.ts` 定义和约束
 - graph 路由必须通过 `addConditionalEdges` 或等价 graph 路由表达，不要在 graph 外另写一套手工循环替代
 - 模型结构化输出必须统一通过 `ctx.chatStructured`，由 runtime 封装的 `invokeStructuredChat` 承接
+- `ctx.chatStructured` 必须统一产出 `llm_structured_output` activity；`details` 至少携带 `callId / caller / schemaName / model / durationMs / method / fallbackChain`
 - 如果后续需要引入非结构化模型调用，也应先补 runtime 级封装，不在 node 内直接拼接底层模型调用
 - 节点内部不要直接调用 `model.withStructuredOutput`，也不要散落手写 schema parse 逻辑
 - prompt 必须通过 `build*Prompt` 或 `build*PromptContext` 组织，不在 node 内联堆大段 prompt 文本

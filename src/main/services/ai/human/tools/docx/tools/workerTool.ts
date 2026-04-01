@@ -3,6 +3,7 @@ import { tool } from '@langchain/core/tools'
 import type { z } from 'zod/v4'
 import type { IpcJsonValue, JsonObject } from '../../../../../../../shared/types'
 import type { DocxToolFailure, DocxToolRuntime } from '../runtime'
+import { buildDocxToolCallResult } from '../runtime'
 import type {
   DocxWorkerAction,
   DocxWorkerRequest,
@@ -61,6 +62,12 @@ export const finalizeDocxToolSuccess = <TResult extends object>(input: {
     toolName: input.toolName,
     toolCallId: input.toolCallId,
     outputPreview: input.outputPreview,
+    result: buildDocxToolCallResult({
+      toolName: input.toolName,
+      ok: true,
+      code: 'ok',
+      data: input.result as JsonObject
+    }),
     draftDocId: input.draftDocId
   })
   if (input.activity?.buildCompletedSummary) {

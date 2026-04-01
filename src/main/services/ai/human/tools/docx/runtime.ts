@@ -1,4 +1,5 @@
 import path from 'node:path'
+import type { AiToolCallResult } from '../../../../../../shared/types'
 import type { DocxCapabilityToolsInput, DocxCapabilityToolsRuntimeState, DocxOp, DocxSnapshotLineageEntry, DocxToolResultCode, SemanticDocIndex } from './types'
 import { getDocxWorkerClient } from './worker/docxWorkerClient'
 import type { DocxWorkerRequest, DocxWorkerResponse } from './worker/types'
@@ -9,6 +10,24 @@ import type { ToolEventEmitter } from '../utils/toolEvents'
 
 type FailedWorkerResponse = Extract<DocxWorkerResponse, { ok: false }>
 type RequireDocIdResult = { docId: string } | { failure: DocxToolFailure }
+
+export const buildDocxToolCallResult = (input: {
+  toolName: string
+  ok: boolean
+  code: DocxToolResultCode
+  data: AiToolCallResult['data']
+}): AiToolCallResult => ({
+  toolName: input.toolName,
+  ok: input.ok,
+  code: input.code,
+  data: input.data,
+  diagnostic:
+    input.code === 'approval_denied'
+      ? { kind: 'approval_denied' }
+      : input.code === 'invalid_input'
+        ? { kind: 'invalid_input' }
+        : undefined
+})
 
 export type DocxToolFailure = {
   ok: false
@@ -116,6 +135,12 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       toolName: params.toolName,
       toolCallId: params.toolCallId,
       outputPreview: out,
+      result: buildDocxToolCallResult({
+        toolName: params.toolName,
+        ok: false,
+        code: out.code,
+        data: out
+      }),
       error: out.error,
       draftDocId: params.draftDocId
     })

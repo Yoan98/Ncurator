@@ -36,7 +36,21 @@ export const loadDirectorHistory = (ctx: Pick<DirectorNodeContext, 'loadHistory'
 
 export const validatePlannerTasks = (
   tasks: readonly z.infer<typeof plannerTaskSchema>[]
-): string | undefined => (tasks.length > 0 ? undefined : 'tasks: at least one task is required')
+): string | undefined => {
+  if (tasks.length === 0) {
+    return 'tasks: at least one task is required'
+  }
+
+  for (const [index, task] of tasks.entries()) {
+    const userInput = String(task.userInput || '').trim()
+
+    if (!userInput) {
+      return `tasks[${index}].userInput: empty`
+    }
+  }
+
+  return undefined
+}
 
 export const toPlanTasks = (tasks: readonly z.infer<typeof plannerTaskSchema>[]): AiPlanTask[] => {
   return tasks.map((task, index) => ({

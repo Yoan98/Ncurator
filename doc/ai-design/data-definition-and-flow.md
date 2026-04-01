@@ -356,8 +356,6 @@ interface ToolCallResult {
     | 'workspace_required'
     | 'approval_denied'
     | 'invalid_input'
-  // 工具结果摘要。
-  summary: string
   // 工具返回的结构化数据。
   data?: JsonValue
   // 对失败原因的结构化归因，帮助下一轮 brain 恢复。
@@ -427,6 +425,56 @@ interface HumanTraceStep {
   summary: string
 }
 ```
+
+
+### `tool_call_result` 事件与结构化模型日志
+
+```ts
+interface ToolCallResultEvent {
+  type: 'tool_call_result'
+  runId: string
+  taskId?: string
+  toolCallId: string
+  toolName: string
+  // 轻量时间线展示使用的输出预览。
+  outputPreview: IpcJsonValue
+  // 标准化后的工具结果，供后续 AI 或排障直接消费。
+  result?: ToolCallResult
+  completedAt: number
+  error?: string
+}
+
+interface AiActivityDetails {
+  callId?: string
+  caller?: string
+  schemaName?: string
+  model?: string
+  durationMs?: number
+  method?: 'jsonSchema' | 'functionCalling' | 'jsonMode' | 'override'
+  fallbackChain?: Array<'jsonSchema' | 'functionCalling' | 'jsonMode' | 'override'>
+  reason?: string
+}
+
+interface AiLlmIoRecord {
+  callId: string
+  runId: string
+  taskId?: string
+  caller: string
+  schemaName: string
+  model: string
+  system: string
+  user: string
+  output?: JsonValue
+  method?: 'jsonSchema' | 'functionCalling' | 'jsonMode' | 'override'
+  fallbackChain: Array<'jsonSchema' | 'functionCalling' | 'jsonMode' | 'override'>
+  startedAt: number
+  completedAt: number
+  durationMs: number
+  status: 'completed' | 'failed'
+  reason?: string
+}
+```
+
 
 ## 4. 数据流转图
 

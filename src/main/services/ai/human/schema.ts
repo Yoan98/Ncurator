@@ -71,7 +71,6 @@ export const toolCallResultSchema = z.object({
   toolName: z.string().min(1),
   ok: z.boolean(),
   code: toolCallResultCodeSchema,
-  summary: z.string().min(1),
   data: jsonValueSchema.optional(),
   diagnostic: toolCallDiagnosticSchema.optional()
 })

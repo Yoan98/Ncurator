@@ -7,6 +7,7 @@ import type { DraftReviewService } from './human/tools/docx/review/DraftReviewSe
 import type { ResolvedDocxOpenTarget } from './human/tools/docx/review/types'
 import type { z } from 'zod/v4'
 import type {
+  AiLlmIoRecord,
   AiRuntimeSettings,
   AiPlanTask,
   AiRunEvent,
@@ -84,6 +85,7 @@ export type AiRunDeps = {
   draftReviewService: DraftReviewService
   isCancelled: () => boolean
   sendEvent: (event: AiRunEvent) => void
+  recordLlmIo?: (record: AiLlmIoRecord) => void
   requestApproval: (request: AiApprovalRequest) => Promise<AiApprovalDecision>
 }
 
@@ -110,6 +112,7 @@ export type AiRunContext = {
     temperature?: number
   }) => Promise<T>
   sendEvent: (event: AiRunEvent) => void
+  recordLlmIo?: (record: AiLlmIoRecord) => void
   requestApproval: (request: AiApprovalRequest) => Promise<AiApprovalDecision>
   loadHistory: (limits?: {
     recentTurns?: number
@@ -128,7 +131,7 @@ export type AiRunContext = {
   embeddingService: EmbeddingService
 }
 
-export type AiEventDispatchContext = Pick<AiRunContext, 'runId' | 'sendEvent'>
+export type AiEventDispatchContext = Pick<AiRunContext, 'runId' | 'sendEvent' | 'recordLlmIo'>
 
 export type DirectorNodeContext = Pick<
   AiRunContext,

@@ -64,6 +64,7 @@ describe('ai director contracts backend', () => {
           activities: runtime.eventCollector
             .snapshot()
             .filter((event) => event.type === 'activity' && event.actionType === 'llm_structured_output'),
+          llmIoRecords: runtime.eventCollector.snapshotLlmIo(),
           failureMessage
         }
       },
@@ -71,6 +72,10 @@ describe('ai director contracts backend', () => {
         const statuses = result.activities.map((event) => event.status)
         const summaries = result.activities.map((event) => event.summary)
         const details = result.activities.map((event) => event.details)
+        const completedActivity = result.activities.find((event) => event.status === 'completed')
+        const failedActivity = result.activities.find((event) => event.status === 'failed')
+        const completedLlmIo = result.llmIoRecords.find((record) => record.status === 'completed')
+        const failedLlmIo = result.llmIoRecords.find((record) => record.status === 'failed')
 
         runtime.assertThat(
           result.activities.length === 4 &&
@@ -79,15 +84,31 @@ describe('ai director contracts backend', () => {
             statuses[2] === 'started' &&
             statuses[3] === 'failed' &&
             details.every((item) => item?.model === 'gpt-5' && item?.baseUrlHost === 'example.test') &&
+            typeof details[0]?.callId === 'string' &&
+            details[0]?.callId === details[1]?.callId &&
+            details[2]?.callId === details[3]?.callId &&
+            completedActivity?.details?.method === 'override' &&
+            completedActivity?.details?.fallbackChain?.[0] === 'override' &&
             summaries.some((summary) => summary.includes('contract.success')) &&
             summaries.some((summary) => summary.includes('contract.failure')) &&
+            result.llmIoRecords.length === 2 &&
+            completedLlmIo?.callId === completedActivity?.details?.callId &&
+            completedLlmIo?.method === 'override' &&
+            completedLlmIo?.fallbackChain[0] === 'override' &&
+            completedLlmIo?.output &&
+            typeof completedLlmIo.output === 'object' &&
+            !Array.isArray(completedLlmIo.output) &&
+            completedLlmIo.output.ok === true &&
+            failedLlmIo?.callId === failedActivity?.details?.callId &&
+            failedLlmIo?.reason?.includes('simulated structured output failure') === true &&
             result.failureMessage.includes('simulated structured output failure'),
           {
             name: 'chat-structured-emits-start-complete-and-failed-activities',
             message:
-              'chatStructured 应为成功与失败调用都产出统一的 llm_structured_output activity，并保留 caller/model/baseUrlHost 等排障信息。',
+              'chatStructured 应为成功与失败调用都产出统一 activity，并通过 callId 关联 llm-io 记录，保留 method/fallback 等排障信息。',
             data: {
               activities: result.activities,
+              llmIoRecords: result.llmIoRecords,
               failureMessage: result.failureMessage
             }
           }

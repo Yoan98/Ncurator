@@ -3,9 +3,15 @@ import { z } from 'zod/v4'
 import { createChatModel } from '../llm/chatModel'
 import type { LLMConfig } from '../../../shared/types'
 
-const STRUCTURED_OUTPUT_METHODS = ['jsonSchema', 'functionCalling', 'jsonMode'] as const
+export const STRUCTURED_OUTPUT_METHODS = ['jsonSchema', 'functionCalling', 'jsonMode'] as const
 
-type StructuredOutputMethod = (typeof STRUCTURED_OUTPUT_METHODS)[number]
+export type StructuredOutputMethod = (typeof STRUCTURED_OUTPUT_METHODS)[number]
+
+export type StructuredOutputInvocationResult<T extends Record<string, unknown>> = {
+  output: T
+  method: StructuredOutputMethod
+  fallbackChain: StructuredOutputMethod[]
+}
 
 type StructuredOutputInvocationInput<T extends Record<string, unknown>> = {
   caller: string
@@ -146,20 +152,25 @@ const buildMethodConfig = (method: StructuredOutputMethod, schemaName: string) =
 
 export const invokeStructuredChat = async <T extends Record<string, unknown>>(
   input: StructuredOutputInvocationInput<T>
-): Promise<T> => {
+): Promise<StructuredOutputInvocationResult<T>> => {
   const methodErrors: string[] = []
 
-  for (const method of STRUCTURED_OUTPUT_METHODS) {
+  for (let index = 0; index < STRUCTURED_OUTPUT_METHODS.length; index += 1) {
+    const method = STRUCTURED_OUTPUT_METHODS[index]
     try {
       const model = createChatModel(input.cfg, { temperature: input.temperature ?? 0.2 })
       const structuredModel = model.withStructuredOutput(
         input.schema,
         buildMethodConfig(method, input.schemaName)
       )
-      return (await structuredModel.invoke([
-        new SystemMessage(input.system),
-        new HumanMessage(input.user)
-      ])) as T
+      return {
+        output: (await structuredModel.invoke([
+          new SystemMessage(input.system),
+          new HumanMessage(input.user)
+        ])) as T,
+        method,
+        fallbackChain: STRUCTURED_OUTPUT_METHODS.slice(0, index + 1)
+      }
     } catch (error) {
       const normalizedError = toErrorLike(
         error as object | string | number | boolean | null | undefined

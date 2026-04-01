@@ -45,8 +45,10 @@ describe('ai director contracts backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.prompt.system.includes('不要把“总结答复”写成计划中的业务任务。') &&
-            result.prompt.system.includes('每个 userInput 必须包含“动作 + 对象 + 完成判据”；禁止空泛任务。'),
+          result.prompt.system.includes('最终总结、综合答复、汇总成文这类 synthesis 工作由 runtime 追加，不要写进 tasks。') &&
+            result.prompt.system.includes(
+              'task.userInput 必须明确写出动作、对象和完成判据，避免“继续处理”“再看看”“优化一下”这类空泛描述。'
+            ),
           {
             name: 'plan-prompt-contains-shape-and-synthesis-guardrails',
             message:

@@ -2,6 +2,7 @@ import type { JsonObject } from '../../../../../../shared/types'
 import { HUMAN_DEFAULT_TOOL_CALL_LIMIT } from '../../constants'
 import type { AiRunContext } from '../../../types'
 import { extractArtifactRefsFromToolResults, mergeArtifactRefs } from '../../../utils/artifacts'
+import { buildToolCallDisplayText } from '../../shared/toolResultRenderers'
 import { getToolSpec } from '../../tools/registry'
 import type { ToolExecutionMeta } from '../../tools/types'
 import type { HumanRuntimeCache, HumanState, ToolCallParam } from '../../types'
@@ -104,10 +105,10 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       source: 'hand',
       traceItems: results.map((result) => ({
         action: 'call_tool',
-        publicNarrative: result.summary,
+        publicNarrative: buildToolCallDisplayText(result),
         resultStatus: result.code === 'ok' ? 'ok' : 'error',
         toolName: result.toolName,
-        summary: result.summary
+        summary: buildToolCallDisplayText(result)
       })),
       stage: 'human_hand',
       watchHint,

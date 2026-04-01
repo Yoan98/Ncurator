@@ -583,6 +583,46 @@ export type AiTaskResultCode =
   | 'workspace_required'
   | 'approval_denied'
   | 'invalid_input'
+export type AiStructuredOutputMethod =
+  | 'jsonSchema'
+  | 'functionCalling'
+  | 'jsonMode'
+  | 'override'
+export type AiToolCallDiagnosticKind =
+  | 'workspace_required'
+  | 'invalid_input'
+  | 'approval_denied'
+  | 'path_unavailable'
+export type AiToolCallDiagnostic = {
+  kind: AiToolCallDiagnosticKind
+  missingArgs?: string[]
+}
+export type AiToolCallResult = {
+  toolName: string
+  ok: boolean
+  code: AiTaskResultCode
+  data?: JsonValue
+  diagnostic?: AiToolCallDiagnostic
+}
+export type AiLlmIoRecord = {
+  callId: string
+  runId: string
+  taskId?: string
+  caller: string
+  schemaName: string
+  model: string
+  baseUrlHost: string
+  system: string
+  user: string
+  output?: JsonValue
+  method?: AiStructuredOutputMethod
+  fallbackChain: AiStructuredOutputMethod[]
+  startedAt: number
+  completedAt: number
+  durationMs: number
+  status: 'completed' | 'failed'
+  reason?: string
+}
 export type HumanStepAction = 'brain_decision' | 'learn_skill' | 'call_tool' | 'deliver_result'
 export type HumanStepResultStatus = 'ok' | 'error'
 export type WatchHintSource = 'learning' | 'hand' | 'memory_reducer'
@@ -664,12 +704,15 @@ export type AiRunApprovalDecisionResponse = {
 }
 
 export interface AiActivityDetails {
+  callId?: string
   caller?: string
   schemaName?: string
   model?: string
   baseUrlHost?: string
   attempt?: number
   durationMs?: number
+  method?: AiStructuredOutputMethod
+  fallbackChain?: AiStructuredOutputMethod[]
   reason?: string
 }
 
@@ -720,6 +763,7 @@ type AiRunEventPayload =
       toolCallId: string
       toolName: string
       outputPreview: IpcJsonValue
+      result?: AiToolCallResult
       draftRef?: AiDraftSnapshotRef
       completedAt: number
       error?: string

@@ -57,11 +57,10 @@ describe('ai human basics backend', () => {
               result: {
                 ok: false,
                 code: 'failed',
-                summary: 'mock terminal failure',
                 data: {
                   ok: false,
                   code: 'failed',
-                  summary: 'mock terminal failure'
+                  error: 'mock terminal failure'
                 }
               }
             }
@@ -85,15 +84,40 @@ describe('ai human basics backend', () => {
         const brainSteps = filterAiRunEventsByType(result.events, 'human_step').filter(
           (event) => event.stage === 'human_brain'
         )
+        const handSteps = filterAiRunEventsByType(result.events, 'human_step').filter(
+          (event) => event.stage === 'human_hand'
+        )
 
         runtime.assertThat(
           result.capturedState?.lastParallelCallToolResults?.[0]?.toolName === 'terminal_run_command' &&
             result.capturedState.lastParallelCallToolResults?.[0]?.code === 'failed' &&
-            result.capturedState.lastParallelCallToolResults?.[0]?.summary === 'mock terminal failure',
+            result.capturedState.lastParallelCallToolResults?.[0]?.data &&
+            typeof result.capturedState.lastParallelCallToolResults[0].data === 'object' &&
+            !Array.isArray(result.capturedState.lastParallelCallToolResults[0].data) &&
+            result.capturedState.lastParallelCallToolResults[0].data.error === 'mock terminal failure',
           {
             name: 'failed-tool-result-is-written-back-to-state',
             message: '工具失败后，lastParallelCallToolResults 应保留失败结果，供下一轮 brain 继续消费。',
             data: result.capturedState?.lastParallelCallToolResults
+          }
+        )
+
+        runtime.assertThat(
+          toolResults[0]?.result?.toolName === 'terminal_run_command' &&
+            toolResults[0]?.result?.code === 'failed' &&
+            toolResults[0]?.result?.data &&
+            typeof toolResults[0].result.data === 'object' &&
+            !Array.isArray(toolResults[0].result.data) &&
+            toolResults[0].result.data.error === 'mock terminal failure' &&
+            handSteps[0]?.summary === '调用工具 terminal_run_command（失败）',
+          {
+            name: 'tool-result-event-carries-standardized-result-and-generic-hand-copy',
+            message:
+              'tool_call_result 应携带标准化 result，hand trace/human_step 文案应退化为通用成功失败描述，而不是依赖旧 summary。',
+            data: {
+              toolResult: toolResults[0],
+              handSteps
+            }
           }
         )
 

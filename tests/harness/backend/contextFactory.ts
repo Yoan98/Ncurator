@@ -260,13 +260,20 @@ export const createTestAiRunContext = (input: CreateTestAiRunContextInput): AiRu
       return runStructuredChatWithActivity({
         ctx: {
           runId,
-          sendEvent: (event) => input.eventCollector.add(event)
+          sendEvent: (event) => input.eventCollector.add(event),
+          recordLlmIo: (record) => input.eventCollector.addLlmIo(record)
         },
         runId,
+        system: payload.system,
+        user: payload.user,
         telemetry,
         execute: async () => {
           if (input.chatStructuredOverride) {
-            return await input.chatStructuredOverride<T>(payload)
+            return {
+              output: await input.chatStructuredOverride<T>(payload),
+              method: 'override' as const,
+              fallbackChain: ['override' as const]
+            }
           }
           if (!input.liveModelConfig) {
             throw new Error('chatStructured is not available in this test harness context')

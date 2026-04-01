@@ -6,6 +6,7 @@ import {
   renderHumanFactLines,
   renderHumanOpenQuestionLines
 } from '../shared/memoryRenderers'
+import { renderHumanRecentToolResultLines } from '../shared/runtimeRenderers'
 import { getToolPromptSpec } from '../tools/registry'
 import type { HumanState, ToolPromptSpec } from '../types'
 
@@ -35,16 +36,6 @@ const renderLearnedToolSpecLine = (spec: ToolPromptSpec): string => {
     : '示例=none'
 
   return `- 工具 ${spec.name}：适用场景=${spec.whenToUse}；必填参数=[${requiredArgs || 'none'}]；${example}`
-}
-
-const buildRecentToolResultLine = (
-  result: NonNullable<HumanState['lastParallelCallToolResults']>[number],
-  index: number
-): string => {
-  const diagnosticText = result.diagnostic
-    ? `；diagnostic=${result.diagnostic.kind}${result.diagnostic.missingArgs?.length ? `；missingArgs=[${result.diagnostic.missingArgs.join(', ')}]` : ''}`
-    : ''
-  return `- 第${index + 1}项：工具 ${result.toolName} ${result.ok ? '执行成功' : '执行失败'}（code=${result.code}）；摘要：${result.summary}${diagnosticText}`
 }
 
 const buildMemorySnapshotText = (state: HumanState): string =>
@@ -119,15 +110,7 @@ const buildRecentToolResultsText = (state: HumanState): string =>
   [
     '下面是最近一轮工具调用刚带回来的新信息。请把这些结果和已有记忆一起判断，不要重复做同样的动作。',
     '',
-    renderLineList(
-      (state.lastParallelCallToolResults || []).map((result, index) =>
-        buildRecentToolResultLine(result, index)
-      ),
-      {
-        fallback: 'none',
-        style: 'plain'
-      }
-    )
+    renderHumanRecentToolResultLines(state, 'prompt')
   ].join('\n')
 
 const buildRecentDecisionHistoryText = (state: HumanState): string =>

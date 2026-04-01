@@ -51,7 +51,8 @@ export const updateSessionMemoryAfterRun = async (input: {
   if (!cfg) return
 
   const memory = normalizeMemory(
-    await invokeStructuredChat({
+    (
+      await invokeStructuredChat({
       caller: 'session.memory',
       cfg,
       schema: sessionMemorySchema,
@@ -65,7 +66,8 @@ export const updateSessionMemoryAfterRun = async (input: {
         }
       }),
       temperature: 0.2
-    })
+      })
+    ).output
   )
   await input.chatStore.saveSessionMemory(sessionId, memory)
 }

@@ -53,6 +53,13 @@ const createFileArtifactRef = (input: {
   summary: input.summary
 })
 
+const readToolDataSummary = (result: ToolCallResult): string | undefined =>
+  isJsonObject(result.data)
+    ? readNonEmptyString(result.data, 'summary') ||
+      readNonEmptyString(result.data, 'message') ||
+      readNonEmptyString(result.data, 'error')
+    : undefined
+
 const extractTerminalArtifacts = (result: ToolCallResult): AiArtifactRef[] => {
   if (result.toolName !== 'terminal_run_command' || !isJsonObject(result.data)) return []
   const rawArtifacts = result.data.artifacts
@@ -66,7 +73,9 @@ const extractTerminalArtifacts = (result: ToolCallResult): AiArtifactRef[] => {
         capability: 'terminal_exec',
         artifactPath,
         operation: readArtifactOperation(item, 'operation', 'created'),
-        summary: result.summary
+        summary:
+          readNonEmptyString(item, 'summary') ||
+          `terminal command produced/updated file: ${path.basename(artifactPath)}`
       })
     ]
   })
@@ -82,7 +91,10 @@ const extractDocxPreviewArtifacts = (result: ToolCallResult): AiArtifactRef[] =>
       artifactPath: previewPath,
       operation: 'created',
       artifactRole: 'preview',
-      summary: readNonEmptyString(result.data, 'summary') || result.summary
+      summary:
+        readNonEmptyString(result.data, 'summary') ||
+        readToolDataSummary(result) ||
+        `docx preview generated: ${path.basename(previewPath)}`
     })
   ]
 }
@@ -97,7 +109,10 @@ const extractDocxSaveArtifacts = (result: ToolCallResult): AiArtifactRef[] => {
       artifactPath: outPath,
       operation: readArtifactOperation(result.data, 'operation', 'created'),
       artifactRole: 'committed',
-      summary: readNonEmptyString(result.data, 'summary') || result.summary
+      summary:
+        readNonEmptyString(result.data, 'summary') ||
+        readToolDataSummary(result) ||
+        `doc saved: ${path.basename(outPath)}`
     })
   ]
 }

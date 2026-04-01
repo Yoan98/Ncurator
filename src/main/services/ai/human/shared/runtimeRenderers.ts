@@ -1,5 +1,10 @@
 import type { HumanState } from '../types'
 import { renderLineList } from '../../utils/render'
+import {
+  buildToolCallDisplayText,
+  renderToolDiagnosticText,
+  renderToolResultDataPreview
+} from './toolResultRenderers'
 
 export type HumanRuntimeRenderMode = 'prompt' | 'fallback_markdown'
 
@@ -34,13 +39,15 @@ const renderToolResultLine = (
   result: NonNullable<HumanState['lastParallelCallToolResults']>[number],
   mode: HumanRuntimeRenderMode
 ): string => {
-  const diagnosticText = result.diagnostic
-    ? `；diagnostic=${result.diagnostic.kind}${result.diagnostic.missingArgs?.length ? `；missingArgs=[${result.diagnostic.missingArgs.join(', ')}]` : ''}`
-    : ''
+  const diagnosticText = renderToolDiagnosticText(result)
+  const previewText = renderToolResultDataPreview(result)
+  const statusText = result.ok ? '执行成功' : '执行失败'
+  const resultText = previewText ? `；结果：${previewText}` : ''
+  const displayText = buildToolCallDisplayText(result)
 
   return mode === 'prompt'
-    ? `- 工具 ${result.toolName} ${result.ok ? '执行成功' : '执行失败'}（code=${result.code}）；摘要：${result.summary}${diagnosticText}`
-    : `${result.toolName} (${result.code}) - ${result.summary}${diagnosticText}`
+    ? `- 工具 ${result.toolName} ${statusText}（code=${result.code}）${resultText}${diagnosticText}`
+    : `${displayText}（code=${result.code}）${resultText}${diagnosticText}`
 }
 
 export const renderHumanArtifactLines = (

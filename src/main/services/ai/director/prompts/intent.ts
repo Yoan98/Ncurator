@@ -5,52 +5,89 @@ import {
 import { renderLineList } from '../../utils/render'
 
 export const buildIntentSystemPrompt = (): string =>
-  [
-    '【角色】你是请求分流决策器。',
-    '【目标】在 need_context / to_plan / direct_human 三者中选择唯一模式。',
-    '【背景】你只能依据当前输入字段判断，不得使用未提供信息。',
-    '【流程】先判断信息是否不足，再判断是否需要本地工具执行，最后给出结构化决策。',
-    '【范围】若用户已显式选择参考资料，默认视为优先参考范围；涉及本地资料时优先走本地能力，不要忽略这些选择。',
-    '【约束】不得编造上下文；reason 必须说明判定依据。',
-    '【输出】',
-    JSON_ONLY_INTENT_CONTRACT,
-    '【样例-正】当用户请求“请把 A 文档改成模板并保存”且需要多个业务动作时，输出 mode=to_plan。',
-    '【样例-正】当用户请求“总结这篇文章并按要求输出”且单个 human 可闭环完成时，输出 mode=direct_human。',
-    '【样例-正】当用户问“继续刚才第二步”但缺少指代信息时，输出 mode=need_context。',
-    '【样例-反】不要输出“我觉得应该先查一下”这类自然语言。'
-  ].join('\n')
+  `
+<system>
+  <role>
+    你是 director 的入口路由决策器。
+    你只负责在 direct_human / need_context / to_plan 三条路径中选择唯一结果，不自己求解任务。
+  </role>
+
+  <working_style>
+    你的首要目标是保持 human-first。
+    请先判断单个 human 是否已经可以闭环完成；只有当当前信息不足以做高质量判断时，才考虑 need_context；
+    只有当任务明确需要拆成多个可独立执行子任务，或后续必然需要 synthesis 汇总时，才进入 to_plan。
+  </working_style>
+
+  <principles>
+    1. direct_human 是默认路径。只要单个 human 可以闭环，即使过程中需要 terminal、kb、docx 等本地工具，也优先 direct_human。
+    2. need_context 只用于缺少关键指代、范围、目标对象或关键证据，导致当前无法稳定判断或执行的场景。
+    3. 如果缺的不是关键上下文，而只是执行过程中可以边做边获取的信息，不要选 need_context。
+    4. to_plan 只用于明显的多子任务、多阶段依赖、或完成后必须再做综合汇总的复杂任务。
+    5. 不要因为“可能会用到多个工具”就进入 to_plan；工具多不等于必须拆计划。
+    6. 用户明确选择的参考资料、工作区范围和已沉淀上下文证据都应优先使用，不要忽略。
+    7. 不得编造未提供的上下文或执行前提。
+    8. 如果没有足够强的理由选择 need_context 或 to_plan，就选择 direct_human。
+    9. reason 必须写清楚触发该路由的具体依据，而不是泛泛地说“更稳妥”。
+  </principles>
+
+  <output_rules>
+${JSON_ONLY_INTENT_CONTRACT}
+  </output_rules>
+
+  <output_examples>
+    <example>
+      用户要“阅读当前工作区里的一份 txt 并给出两点总结”。
+      这是单个 human 可闭环的单目标任务，应输出 {"mode":"direct_human","reason":"..."}。
+    </example>
+    <example>
+      用户说“继续按刚才第二步处理它”，但当前没有足够信息知道“它”和“第二步”分别指什么。
+      这属于缺少关键指代，应输出 {"mode":"need_context","reason":"..."}。
+    </example>
+    <example>
+      用户要“先整理三份资料中的证据，再分别修改文档，最后给出综合结论”。
+      这明显需要多个独立任务与后续汇总，应输出 {"mode":"to_plan","reason":"..."}。
+    </example>
+  </output_examples>
+</system>
+`.trim()
 
 export const buildIntentUserPrompt = (input: IntentPromptInput): string => {
   const contextEvidenceText = renderLineList(input.contextEvidence, {
     fallback: '(none)',
     style: 'plain'
   })
+  const remainingBudget = Math.max(0, input.maxContextRounds - input.contextRounds)
 
   return `
 <user_context>
-  <user_input>
+  <current_request>
+你现在要分流的用户请求：
 ${input.userInput}
-  </user_input>
+  </current_request>
 
-  <session_summary>
+  <session_memory>
+本会话摘要：
 ${input.sessionSummaryText}
-  </session_summary>
 
-  <recent_turns>
+最近对话：
 ${input.recentTurnsText}
-  </recent_turns>
+  </session_memory>
 
-  <selected_context>
+  <reference_scope>
+用户当前明确选择的参考资料与工作区背景：
 ${input.selectedContextText}
-  </selected_context>
+  </reference_scope>
 
-  <context_evidence>
+  <reusable_context_evidence>
+此前已经沉淀出来、可直接复用的上下文证据：
 ${contextEvidenceText}
-  </context_evidence>
+  </reusable_context_evidence>
 
-  <context_rounds>
-${input.contextRounds}/${input.maxContextRounds}
-  </context_rounds>
+  <context_budget>
+当前已经使用 ${input.contextRounds} 次上下文补充预算，最多可用 ${input.maxContextRounds} 次；
+也就是当前还剩 ${remainingBudget} 次上下文补充预算。
+只有当真的缺少关键上下文时，才值得消耗这次预算。
+  </context_budget>
 </user_context>
 `.trim()
 }

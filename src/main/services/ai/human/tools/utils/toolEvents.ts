@@ -1,5 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import type { IpcJsonObject, IpcJsonValue } from '../../../../../../shared/types'
+import type {
+  AiToolCallResult,
+  IpcJsonObject,
+  IpcJsonValue
+} from '../../../../../../shared/types'
 import type { AiEventDispatchContext } from '../../../types'
 
 type DraftRef = {
@@ -37,6 +41,7 @@ export const emitToolCallResult = (input: {
   toolCallId: string
   toolName: string
   outputPreview: IpcJsonValue
+  result?: AiToolCallResult
   error?: string
   stage?: 'human_hand'
   draftRef?: DraftRef
@@ -48,6 +53,7 @@ export const emitToolCallResult = (input: {
     toolCallId: input.toolCallId,
     toolName: input.toolName,
     outputPreview: input.outputPreview,
+    result: input.result,
     draftRef: input.draftRef,
     completedAt: Date.now(),
     error: input.error,
@@ -75,6 +81,7 @@ export const createToolEventEmitter = (input: {
     toolName: string
     toolCallId: string
     outputPreview: IpcJsonValue
+    result?: AiToolCallResult
     error?: string
     draftDocId?: string
   }): void =>
@@ -85,6 +92,7 @@ export const createToolEventEmitter = (input: {
       toolCallId: params.toolCallId,
       toolName: params.toolName,
       outputPreview: params.outputPreview,
+      result: params.result,
       error: params.error,
       stage: input.stage,
       draftRef:

@@ -205,6 +205,7 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
       meta,
       events,
       runtimeEvents,
+      llmIoRecords: eventCollector.snapshotLlmIo(),
       artifacts
     })
 

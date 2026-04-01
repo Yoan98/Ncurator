@@ -87,6 +87,8 @@ AI 正式测试当前分为三个 suite：
 - `director/live` 默认不参与常规 live 运行；仅在需要显式执行时设置 `AI_ENABLE_DIRECTOR_LIVE=1`。
 - `human/live` 与 `director/live` 的 `How / Oracle` 应优先断言结构化事实，如路由、节点步骤、工具调用、审批事件、artifact、完成态；不应对模型最终文案做精确文本断言。
 - `human/basics`、`human/scenarios`、`director/basics` 与 `director/contracts` 应优先使用 `chatStructuredOverride`、`humanReasonOverrides`、`humanDeliveryOverride` 和工具执行 override 稳定固定链路，避免把基础回归建立在 live 模型随机性之上。
+- AI backend 测试日志默认同时写出 `runtime-events.jsonl` 与 `llm-io.jsonl`：
+  `runtime-events.jsonl` 用于轻量时间线与事件顺序排查，`llm-io.jsonl` 用于查看结构化模型调用的完整输入输出。
 
 ### 5.1 AI live case 设计与分析规则
 
@@ -95,6 +97,9 @@ AI 正式测试当前分为三个 suite：
 - 普通诉求与复杂诉求的路由差异，应主要由任务复杂度、资料范围和交付物复杂度自然触发；需要固定路径验证时，应放在 `human/basics`、`human/scenarios`、`director/basics` 或 `director/contracts`。
 - live `Oracle` 应优先断言行为类别与关键事实，如是否完成、是否进入低编排或增强路径、是否出现关键工具调用、是否产出 artifact；不应绑定精确 plan 条数、精确步骤序号或最终文案措辞。
 - live report 归因必须先区分 `环境阻塞`、`case 设计偏差`、`实现行为偏差`；若多类问题同时存在，应并列记录，不能只保留 `429` 结论。
+- 当前涉及 KB 的 live / 准 live 用例，需要明确区分两层：
+  - `fixture-live`：真实 AI + 真实工具包装 + fixture/stub 数据源。
+  - `real-kb-live/e2e`：真实导入、真实索引、真实检索的全链路用例；未单列前，不应把 `fixture-live` 误记为真实 KB e2e。
 
 ## 6. 正式 Case 清单
 
@@ -387,6 +392,19 @@ AI 正式测试当前分为三个 suite：
   - `human` 能继续回到 `brain` 并稳定收口。
 - Not：不验证真实模型是否选择最佳补救动作。
 
+#### `basic-tool-result-data-first-rendering`
+
+- 用例名称：`basic-tool-result-data-first-rendering`
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 `brain` prompt 与 fallback 展示都基于 `ToolCallResult.data` 渲染，而不是依赖旧 tool summary。
+- Why：如果日志和 prompt 只剩摘要，后续 AI 分析 live logs 时会丢掉关键上下文。
+- How：构造包含 terminal 正文预览和 KB 失败信息的最近工具结果，直接检查 prompt 与 fallback 文本。
+- Oracle：
+  - `brain` prompt 能看到来自 `data.outputPreview / stdoutPreview / error` 的可读正文。
+  - fallback 工具展示退化为通用成功失败文案，不再依赖 tool summary。
+- Not：不验证真实工具执行。
+
 #### `basic-brain-memory-write-boundary`
 
 - 用例名称：`basic-brain-memory-write-boundary`
@@ -610,12 +628,13 @@ AI 正式测试当前分为三个 suite：
 - 用例名称：`structured-chat-activity-contract`
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 `chatStructured` 在成功与失败时都会产出统一的 `llm_structured_output` activity 事件。
-- Why：如果缺少这层稳定事件，live 调试和 raw logs 就很难区分“没有真正发起模型调用”“上游调用挂起”和“调用失败”。
-- How：通过 `chatStructuredOverride` 分别构造成功与失败两类结构化调用，检查 runtime event 流中的 activity 事件与细节字段。
+- What：验证 `chatStructured` 在成功与失败时都会产出统一的 `llm_structured_output` activity，并回写 `llm-io` 记录。
+- Why：如果缺少稳定的 `callId / method / fallback` 元数据与完整 I/O，live 调试和 raw logs 很难高质量追查模型行为。
+- How：通过 `chatStructuredOverride` 分别构造成功与失败两类结构化调用，检查 runtime event 流中的 activity 与 `llm-io` 记录。
 - Oracle：
   - 成功调用会产生 `started -> completed`，失败调用会产生 `started -> failed`。
-  - `details` 中保留 `caller / schemaName / model / baseUrlHost / durationMs / reason` 等后端排障字段。
+  - `details` 中保留 `callId / caller / schemaName / model / baseUrlHost / durationMs / method / fallbackChain / reason` 等排障字段。
+  - `llm-io` 记录能通过 `callId` 与 activity 关联。
 - Not：不验证真实上游模型质量，也不验证前端对 activity 的展示。
 
 #### 6.3.3 `live`
@@ -629,8 +648,8 @@ AI 正式测试当前分为三个 suite：
 - Why：这是当前架构的首要原则。
 - How：使用 live 模型运行单任务 KB 问答或单文档总结类自然请求，不在输入中提前指定“不要 plan”或固定工具路径。
 - Oracle：
-  - run 保持低编排行为，默认由一个 direct human 完成单任务交付。
-  - 不进入 `context / plan`，或至少不能出现无必要的增强链路。
+  - run 保持 low orchestration，默认由一个 direct human 完成单任务交付。
+  - 不进入 `context / plan`。
 - Not：不验证复杂任务拆分。
 
 #### `complex-task-plan-and-synthesis-live`
@@ -640,7 +659,7 @@ AI 正式测试当前分为三个 suite：
 - 实现状态：`待调整`
 - What：验证复杂任务在真实 AI 调用下进入增强路径并最终完成真实任务。
 - Why：这是 `director` 编排能力最关键的实战验证。
-- How：使用 live strong model 执行“先取资料事实，再改 docx，最后综合交付”的复杂任务，不在输入中写死 plan 条数或阶段脚本。
+- How：使用 live strong model 执行“先取资料事实，再改 docx，最后综合交付”的复杂任务；当前用例允许使用 `fixture-live` 数据层，不在输入中写死 plan 条数或阶段脚本。
 - Oracle：
   - run 不走 `direct_human`，而是进入增强路径并完成关键任务链。
   - 最终由 synthesis human 完成交付并正确合并 plan 阶段 artifacts。

@@ -1,5 +1,10 @@
 import { tool } from '@langchain/core/tools'
-import type { JsonObject, SearchResult } from '../../../../../../shared/types'
+import type {
+  AiToolCallResult,
+  JsonObject,
+  JsonValue,
+  SearchResult
+} from '../../../../../../shared/types'
 import type { KnowledgeRetrievalContext } from '../../../types'
 import { normalizeForIpc } from '../../../../../utils/serialization'
 import {
@@ -23,6 +28,29 @@ const previewArray = <T>(rows: T[], max = 3): T[] => {
 const toStringIdList = (value: string[] | undefined): string[] => {
   if (!Array.isArray(value)) return []
   return value.map((item) => String(item).trim()).filter(Boolean)
+}
+
+const buildKbResult = (input: {
+  toolName: string
+  data: unknown
+  ok?: boolean
+  code?: AiToolCallResult['code']
+}): AiToolCallResult => {
+  const data = (() => {
+    try {
+      return JSON.parse(JSON.stringify(input.data)) as JsonValue
+    } catch {
+      return undefined
+    }
+  })()
+
+  return {
+    toolName: input.toolName,
+    ok: input.ok ?? true,
+    code: input.code || (input.ok === false ? 'failed' : 'ok'),
+    data,
+    diagnostic: undefined
+  }
 }
 
 export const resolveScopedDocumentIds = (
@@ -81,17 +109,46 @@ export const buildKbCapabilityTools = (input: {
             ctx.checkCancelled()
             const prepared = resolveSearchArgs(args)
             if (Array.isArray(prepared.scopedDocumentIds) && prepared.scopedDocumentIds.length === 0) {
-              session.succeed([])
+              const emptyRows: SearchResult[] = []
+              session.succeed(
+                [],
+                undefined,
+                buildKbResult({
+                  toolName: input.name,
+                  data: emptyRows
+                })
+              )
               return []
             }
 
             const rows = await input.execute(prepared)
             const normalized = rows.map(normalizeForIpc)
-            session.succeed(previewArray(normalized))
+            session.succeed(
+              previewArray(normalized),
+              undefined,
+              buildKbResult({
+                toolName: input.name,
+                data: normalized
+              })
+            )
             return normalized
           },
           onError: (error, session) => {
-            session.fail([], error.message)
+            session.fail(
+              [],
+              error.message,
+              undefined,
+              buildKbResult({
+                toolName: input.name,
+                ok: false,
+                code: 'failed',
+                data: {
+                  items: [],
+                  total: 0,
+                  error: error.message
+                }
+              })
+            )
           }
         }),
       {
@@ -160,24 +217,59 @@ export const buildKbCapabilityTools = (input: {
 
           if (Array.isArray(scopedDocumentIds) && scopedDocumentIds.length === 0) {
             const empty = { items: [], total: 0 }
-            session.succeed([])
+            session.succeed(
+              [],
+              undefined,
+              buildKbResult({
+                toolName: KB_LIST_DOCUMENTS_TOOL_SPEC.name,
+                data: empty
+              })
+            )
             return empty
           }
 
           const res = await ctx.documentsStore.listDocuments({ keyword, page, pageSize })
           if (!scopedDocumentIds) {
-            session.succeed(previewArray(res.items))
+            session.succeed(
+              previewArray(res.items),
+              undefined,
+              buildKbResult({
+                toolName: KB_LIST_DOCUMENTS_TOOL_SPEC.name,
+                data: res
+              })
+            )
             return res
           }
 
           const allowed = new Set(scopedDocumentIds)
           const items = res.items.filter((item) => allowed.has(item.id))
           const normalized = { items, total: items.length }
-          session.succeed(previewArray(items))
+          session.succeed(
+            previewArray(items),
+            undefined,
+            buildKbResult({
+              toolName: KB_LIST_DOCUMENTS_TOOL_SPEC.name,
+              data: normalized
+            })
+          )
           return normalized
         },
         onError: (error, session) => {
-          session.fail({ items: [], total: 0 }, error.message)
+          session.fail(
+            { items: [], total: 0 },
+            error.message,
+            undefined,
+            buildKbResult({
+              toolName: KB_LIST_DOCUMENTS_TOOL_SPEC.name,
+              ok: false,
+              code: 'failed',
+              data: {
+                items: [],
+                total: 0,
+                error: error.message
+              }
+            })
+          )
         }
       }),
     {

@@ -4,6 +4,7 @@ import { isJsonObject } from '../../../../../utils/aiCapabilityUtils'
 import { clipText } from '../../../utils/text'
 import type { AiRunContext } from '../../../types'
 import { TOOL_CALL_RESULT_CODES } from '../../constants'
+import { resolveToolResultErrorText } from '../../shared/toolResultRenderers'
 import type {
   AiRunContextWithHumanOverrides,
   HumanRuntimeCache,
@@ -69,19 +70,6 @@ const summarizePreviewRow = (value: JsonValue): string | undefined => {
   return undefined
 }
 
-const summarizePreviewRows = (toolName: string, rows: readonly JsonValue[]): string => {
-  const previews = rows
-    .map((row) => summarizePreviewRow(row))
-    .filter((value): value is string => Boolean(value && value.length > 0))
-    .slice(0, 3)
-
-  if (previews.length === 0) {
-    return `${toolName} returned ${rows.length} item(s)`
-  }
-
-  return `${toolName} returned ${rows.length} item(s): ${previews.join(' | ')}`
-}
-
 const summarizeObjectPayload = (toolName: string, payload: JsonObject): string | undefined => {
   const items = Array.isArray(payload.items) ? payload.items : undefined
   if (items) {
@@ -141,7 +129,7 @@ const isToolCallDiagnosticKind = (
 
 const inferDiagnosticFromFailure = (input: {
   code: ToolCallResultCode
-  summary: string
+  message: string
   payload?: JsonObject
 }): ToolCallDiagnostic | undefined => {
   const explicit = input.payload?.diagnostic
@@ -163,15 +151,15 @@ const inferDiagnosticFromFailure = (input: {
   }
 
   if (
-    input.summary.includes('cwd does not exist inside workspace') ||
-    input.summary.includes('sourcePath not found') ||
-    input.summary.includes('effective docx path not found')
+    input.message.includes('cwd does not exist inside workspace') ||
+    input.message.includes('sourcePath not found') ||
+    input.message.includes('effective docx path not found')
   ) {
     return { kind: 'path_unavailable' }
   }
 
   if (input.code === 'invalid_input') {
-    const missingArgs = extractMissingArgs(input.summary)
+    const missingArgs = extractMissingArgs(input.message)
     return {
       kind: 'invalid_input',
       missingArgs: missingArgs.length > 0 ? missingArgs : undefined
@@ -180,6 +168,15 @@ const inferDiagnosticFromFailure = (input: {
 
   return undefined
 }
+
+const resolvePayloadMessage = (toolName: string, payload: JsonObject): string =>
+  typeof payload.error === 'string'
+    ? payload.error
+    : typeof payload.message === 'string'
+      ? payload.message
+      : typeof payload.summary === 'string'
+        ? payload.summary
+        : summarizeObjectPayload(toolName, payload) || `${toolName} executed`
 
 const normalizeToolCallResult = (
   toolName: string,
@@ -192,26 +189,18 @@ const normalizeToolCallResult = (
       ok: payload.ok === false ? false : payload.ok === true ? true : undefined,
       success: payload.success === false ? false : payload.success === true ? true : undefined
     })
-    const summary =
-      typeof payload.summary === 'string'
-        ? payload.summary
-        : typeof payload.error === 'string'
-          ? payload.error
-          : typeof payload.message === 'string'
-            ? payload.message
-            : summarizeObjectPayload(toolName, payload) || `${toolName} executed`
+    const message = resolvePayloadMessage(toolName, payload)
 
     return {
       toolName,
       ok,
       code,
-      summary,
       data: payload,
       diagnostic: ok
         ? undefined
         : inferDiagnosticFromFailure({
             code,
-            summary,
+            message,
             payload
           })
     }
@@ -222,7 +211,6 @@ const normalizeToolCallResult = (
       toolName,
       ok: true,
       code: 'ok',
-      summary: payload.trim() || `${toolName} executed`,
       data: payload
     }
   }
@@ -232,7 +220,6 @@ const normalizeToolCallResult = (
       toolName,
       ok: true,
       code: 'ok',
-      summary: summarizePreviewRows(toolName, payload),
       data: payload
     }
   }
@@ -241,7 +228,6 @@ const normalizeToolCallResult = (
     toolName,
     ok: true,
     code: 'ok',
-    summary: `${toolName} executed`,
     data: payload
   }
 }
@@ -267,15 +253,33 @@ export const executeToolCall = async (input: {
     cache: input.cache
   })
   if (!tool) {
-    return {
+    const result: ToolCallResult = {
       toolName: input.toolName,
       ok: false,
       code: 'invalid_input',
-      summary: `当前未学习可执行工具 ${input.toolName}。`,
+      data: {
+        ok: false,
+        code: 'invalid_input',
+        error: `当前未学习可执行工具 ${input.toolName}。`
+      },
       diagnostic: {
         kind: 'invalid_input'
       }
     }
+    return await withToolLifecycle({
+      emitter: toolEvents,
+      toolName: input.toolName,
+      args: input.args as JsonObject,
+      execute: async (session) => {
+        session.fail(
+          result.data || { error: `当前未学习可执行工具 ${input.toolName}。` },
+          resolveToolResultErrorText(result),
+          undefined,
+          result
+        )
+        return result
+      }
+    })
   }
 
   const injected = ctxWithOverride.resolveToolExecutionOverride?.({
@@ -288,19 +292,29 @@ export const executeToolCall = async (input: {
       toolName: input.toolName,
       args: input.args as JsonObject,
       execute: async (session) => {
-        const outputPreview = injected.data || injected.summary
         const normalizedInjected: ToolCallResult = {
           toolName: input.toolName,
           ok: injected.ok,
           code: injected.code,
-          summary: injected.summary,
           data: injected.data,
           diagnostic: injected.diagnostic
         }
+        const outputPreview =
+          normalizedInjected.data ||
+          {
+            ok: normalizedInjected.ok,
+            code: normalizedInjected.code,
+            error: resolveToolResultErrorText(normalizedInjected)
+          }
         if (injected.ok) {
-          session.succeed(outputPreview)
+          session.succeed(outputPreview, undefined, normalizedInjected)
         } else {
-          session.fail(outputPreview, injected.summary)
+          session.fail(
+            outputPreview,
+            resolveToolResultErrorText(normalizedInjected),
+            undefined,
+            normalizedInjected
+          )
         }
         return normalizedInjected
       }
@@ -316,10 +330,14 @@ export const executeToolCall = async (input: {
       toolName: input.toolName,
       ok: false,
       code: 'invalid_input',
-      summary: message,
+      data: {
+        ok: false,
+        code: 'invalid_input',
+        error: message
+      },
       diagnostic: inferDiagnosticFromFailure({
         code: 'invalid_input',
-        summary: message
+        message
       })
     }
   }

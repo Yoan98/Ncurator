@@ -5,6 +5,8 @@ import { emitActivity } from '../../../../../utils/aiCapabilityUtils'
 import type { AiEventDispatchContext, AiRunContext } from '../../../types'
 import { jsonObjectSchema } from '../../schema'
 import { listToolNamesByFamily } from '../registry'
+import { withToolLifecycle } from './lifecycle'
+import { createToolEventEmitter } from './toolEvents'
 import type {
   AiToolFamilyId,
   CapabilityActivityInput,
@@ -29,17 +31,42 @@ export const createWorkspaceRequiredGuardTool = <TSchema extends z.ZodType>(inpu
   error: string
 }): StructuredToolInterface =>
   tool(
-    async () => {
-      input.ctx.sendEvent({
-        type: 'workspace_required',
+    async (args) => {
+      const toolEvents = createToolEventEmitter({
+        ctx: input.ctx,
         runId: input.runId,
         taskId: input.taskId,
-        reason: input.reason,
-        requiredFields: ['workspaceId', 'rootPath'],
-        createdAt: Date.now(),
         stage: 'human_hand'
       })
-      return buildWorkspaceRequiredResult(input.error)
+
+      return await withToolLifecycle({
+        emitter: toolEvents,
+        toolName: input.name,
+        args: (args || {}) as Record<string, never>,
+        execute: async (session) => {
+          input.ctx.sendEvent({
+            type: 'workspace_required',
+            runId: input.runId,
+            taskId: input.taskId,
+            reason: input.reason,
+            requiredFields: ['workspaceId', 'rootPath'],
+            createdAt: Date.now(),
+            stage: 'human_hand'
+          })
+          const payload = buildWorkspaceRequiredResult(input.error)
+          const result = {
+            toolName: input.name,
+            ok: false,
+            code: 'workspace_required' as const,
+            data: payload,
+            diagnostic: {
+              kind: 'workspace_required' as const
+            }
+          }
+          session.fail(payload, input.error, undefined, result)
+          return payload
+        }
+      })
     },
     {
       name: input.name,

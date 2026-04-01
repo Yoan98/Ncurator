@@ -47,7 +47,6 @@ export type TestToolExecutionOverride = {
   result: {
     ok: boolean
     code: AiTaskResultCode
-    summary: string
     data?: JsonValue
     diagnostic?: ToolCallDiagnostic
   }

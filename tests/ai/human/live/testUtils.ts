@@ -190,7 +190,7 @@ const invokeLiveStructuredChatWithRateLimitControl = async <T extends Record<str
           system: input.payload.system,
           user: input.payload.user,
           temperature: input.payload.temperature
-        })) as T
+        })).output as T
         if (LIVE_PROGRESS_DEBUG_ENABLED) {
           console.error(
             `[live-progress][llm] invoke success; caller=${input.payload.caller}; schema=${input.payload.schemaName}; model=${input.config.model_name}; attempt=${attemptIndex + 1}`
