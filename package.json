@@ -60,7 +60,6 @@
     "katex": "^0.16.28",
     "mammoth": "^1.11.0",
     "mark.js": "^8.11.1",
-    "openai": "^6.16.0",
     "pdf-parse": "^2.4.5",
     "react-doc-viewer": "^0.1.15",
     "react-icons": "^5.5.0",
