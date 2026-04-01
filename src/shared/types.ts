@@ -587,6 +587,7 @@ export type AiStructuredOutputMethod =
   | 'jsonSchema'
   | 'functionCalling'
   | 'jsonMode'
+  | 'promptJson'
   | 'scripted'
 export type AiToolCallDiagnosticKind =
   | 'workspace_required'

@@ -2,11 +2,17 @@ import { HumanMessage, SystemMessage } from '@langchain/core/messages'
 import { z } from 'zod/v4'
 import { createChatModel } from '../llm/chatModel'
 import type { LLMConfig } from '../../../shared/types'
+import { normalizeOpenAIBaseUrl } from '../../../shared/llmBaseUrl'
 
-export const STRUCTURED_OUTPUT_METHODS = ['jsonSchema', 'functionCalling', 'jsonMode'] as const
+export const NATIVE_STRUCTURED_OUTPUT_METHODS = [
+  'jsonSchema',
+  'functionCalling',
+  'jsonMode'
+] as const
+export const STRUCTURED_OUTPUT_METHODS = [...NATIVE_STRUCTURED_OUTPUT_METHODS, 'promptJson'] as const
 
-export type NativeStructuredOutputMethod = (typeof STRUCTURED_OUTPUT_METHODS)[number]
-export type StructuredOutputMethod = NativeStructuredOutputMethod | 'scripted'
+export type NativeStructuredOutputMethod = (typeof NATIVE_STRUCTURED_OUTPUT_METHODS)[number]
+export type StructuredOutputMethod = (typeof STRUCTURED_OUTPUT_METHODS)[number] | 'scripted'
 
 export type StructuredOutputInvocationResult<T extends Record<string, unknown>> = {
   output: T
@@ -107,6 +113,16 @@ export const isStructuredOutputMethodUnsupportedError = (
   const body = getStructuredOutputErrorBody(error).toLowerCase()
   if (!body) return false
 
+  const providerCompatibilitySignals = [
+    "cannot read properties of undefined (reading 'map')",
+    'cannot read properties of undefined (reading "map")',
+    "cannot read properties of undefined (reading 'message')",
+    'cannot read properties of undefined (reading "message")'
+  ]
+  if (providerCompatibilitySignals.some((signal) => body.includes(signal))) {
+    return true
+  }
+
   if (method === 'jsonSchema') {
     const invalidSchemaSignals = [
       'invalid schema for response_format',
@@ -161,13 +177,130 @@ const buildMethodConfig = (method: NativeStructuredOutputMethod, schemaName: str
   } as const
 }
 
+const extractTextContent = (content: unknown): string => {
+  if (typeof content === 'string') {
+    return content
+  }
+
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (typeof part === 'string') return part
+        if (!part || typeof part !== 'object') return ''
+        if ('text' in part && typeof part.text === 'string') return part.text
+        if ('content' in part && typeof part.content === 'string') return part.content
+        return ''
+      })
+      .filter(Boolean)
+      .join('\n')
+  }
+
+  if (content && typeof content === 'object') {
+    if ('text' in content && typeof content.text === 'string') {
+      return content.text
+    }
+    if ('content' in content && typeof content.content === 'string') {
+      return content.content
+    }
+  }
+
+  return ''
+}
+
+const normalizePromptJsonText = (raw: string): string => {
+  const trimmed = raw.trim()
+  if (!trimmed.startsWith('```')) {
+    return trimmed
+  }
+
+  return trimmed
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/, '')
+    .trim()
+}
+
+const parsePromptJsonOutput = (raw: string): Record<string, unknown> => {
+  const normalized = normalizePromptJsonText(raw)
+  if (!normalized) {
+    throw new Error('prompt_json_empty_response')
+  }
+
+  const parsed = JSON.parse(normalized) as unknown
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('prompt_json_non_object_response')
+  }
+
+  return parsed as Record<string, unknown>
+}
+
+const buildPromptJsonUrl = (baseUrl: string): string => {
+  const normalized = normalizeOpenAIBaseUrl(baseUrl)
+  if (!normalized) {
+    throw new Error('prompt_json_missing_base_url')
+  }
+  return `${normalized.replace(/\/$/, '')}/chat/completions`
+}
+
+const invokeStructuredChatWithPromptJsonDriver = async <T extends Record<string, unknown>>(
+  input: StructuredOutputInvocationInput<T>
+): Promise<StructuredOutputDriverResult> => {
+  const response = await fetch(buildPromptJsonUrl(input.cfg.base_url), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${input.cfg.api_key}`
+    },
+    body: JSON.stringify({
+      model: input.cfg.model_name,
+      messages: [
+        {
+          role: 'system',
+          content: input.system
+        },
+        {
+          role: 'user',
+          content: input.user
+        }
+      ],
+      temperature: input.temperature ?? 0.2
+    })
+  })
+
+  const payload = (await response.json().catch(() => null)) as
+    | {
+        choices?: Array<{
+          message?: {
+            content?: unknown
+          }
+        }>
+        error?: {
+          message?: string
+        }
+      }
+    | null
+
+  if (!response.ok) {
+    const reason =
+      payload?.error?.message ||
+      `prompt_json_http_${String(response.status)} ${response.statusText || 'request failed'}`
+    throw new Error(reason)
+  }
+
+  const rawText = extractTextContent(payload?.choices?.[0]?.message?.content)
+  return {
+    output: parsePromptJsonOutput(rawText),
+    method: 'promptJson',
+    fallbackChain: [...NATIVE_STRUCTURED_OUTPUT_METHODS, 'promptJson']
+  }
+}
+
 const invokeStructuredChatWithNativeDriver = async <T extends Record<string, unknown>>(
   input: StructuredOutputInvocationInput<T>
 ): Promise<StructuredOutputDriverResult> => {
   const methodErrors: string[] = []
 
-  for (let index = 0; index < STRUCTURED_OUTPUT_METHODS.length; index += 1) {
-    const method = STRUCTURED_OUTPUT_METHODS[index]
+  for (let index = 0; index < NATIVE_STRUCTURED_OUTPUT_METHODS.length; index += 1) {
+    const method = NATIVE_STRUCTURED_OUTPUT_METHODS[index]
     try {
       const model = createChatModel(input.cfg, { temperature: input.temperature ?? 0.2 })
       const structuredModel = model.withStructuredOutput(
@@ -180,7 +313,7 @@ const invokeStructuredChatWithNativeDriver = async <T extends Record<string, unk
           new HumanMessage(input.user)
         ]),
         method,
-        fallbackChain: STRUCTURED_OUTPUT_METHODS.slice(0, index + 1)
+        fallbackChain: NATIVE_STRUCTURED_OUTPUT_METHODS.slice(0, index + 1)
       }
     } catch (error) {
       const normalizedError = toErrorLike(
@@ -201,6 +334,24 @@ const invokeStructuredChatWithNativeDriver = async <T extends Record<string, unk
         ].join('; ')
       )
     }
+  }
+
+  try {
+    return await invokeStructuredChatWithPromptJsonDriver(input)
+  } catch (error) {
+    const normalizedError = toErrorLike(
+      error as object | string | number | boolean | null | undefined
+    )
+    throw new Error(
+      [
+        'structured_output_failed',
+        `caller=${input.caller}`,
+        `schema=${input.schemaName}`,
+        `model=${input.cfg.model_name}`,
+        'method=promptJson',
+        `reason=${getErrorText(normalizedError)}`
+      ].join('; ')
+    )
   }
 
   throw new Error(
