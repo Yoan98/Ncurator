@@ -132,5 +132,5 @@ describe('ai tool kb backend', () => {
         })
       }
     })
-  })
+  }, 600_000)
 })

@@ -1,11 +1,21 @@
 import fs from 'fs'
 import path from 'path'
+import { Readable, Transform } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
+import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
 import { MODELS_PATH } from '../../utils/paths'
 
 const HF_ENDPOINT = 'https://hf-mirror.com'
 const DOWNLOAD_LOCK_POLL_MS = 1000
 const DOWNLOAD_LOCK_STALE_MS = 1000 * 60 * 60
 const DOWNLOAD_LOCK_METADATA_FILE = 'owner.json'
+const DOWNLOAD_STATE_FILE = '.download-state.json'
+const DOWNLOAD_COMPLETE_FILE = '.download-complete.json'
+const DOWNLOAD_RETRY_BASE_MS = 2000
+const METADATA_FETCH_MAX_ATTEMPTS = 3
+const FILE_DOWNLOAD_MAX_ATTEMPTS = 6
+const METADATA_FETCH_TIMEOUT_MS = 30_000
+const FILE_FETCH_TIMEOUT_MS = 300_000
 const getErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
 
@@ -19,6 +29,14 @@ type ModelDefinition = {
   description: string
   tags: string[]
   requiredFiles?: readonly string[]
+  downloadFiles?: readonly string[]
+}
+
+type ModelDownloadState = {
+  repoId: string
+  files: string[]
+  completedFiles: string[]
+  updatedAt: number
 }
 
 const MODEL_DEFINITIONS: readonly ModelDefinition[] = [
@@ -27,7 +45,32 @@ const MODEL_DEFINITIONS: readonly ModelDefinition[] = [
     name: '中文模型 ',
     description: '专为中文语境优化，适合大多数中文知识库场景。',
     tags: ['中文优化', '1.12GB'],
-    requiredFiles: ['config.json', 'tokenizer.json']
+    requiredFiles: [
+      '1_Pooling/config.json',
+      'config.json',
+      'config_sentence_transformers.json',
+      'merges.txt',
+      'modules.json',
+      'onnx/model.onnx',
+      'sentence_bert_config.json',
+      'special_tokens_map.json',
+      'tokenizer.json',
+      'tokenizer_config.json',
+      'vocab.json'
+    ],
+    downloadFiles: [
+      '1_Pooling/config.json',
+      'config.json',
+      'config_sentence_transformers.json',
+      'merges.txt',
+      'modules.json',
+      'onnx/model.onnx',
+      'sentence_bert_config.json',
+      'special_tokens_map.json',
+      'tokenizer.json',
+      'tokenizer_config.json',
+      'vocab.json'
+    ]
   }
 ]
 
@@ -74,6 +117,154 @@ export class ModelService {
 
   private resolveDownloadLockPath(repoId: string): string {
     return path.join(MODELS_PATH, `${repoId.replaceAll('/', '__')}.download.lock`)
+  }
+
+  private resolveDownloadStatePath(repoId: string): string {
+    return path.join(this.resolveModelPath(repoId), DOWNLOAD_STATE_FILE)
+  }
+
+  private resolveDownloadCompletePath(repoId: string): string {
+    return path.join(this.resolveModelPath(repoId), DOWNLOAD_COMPLETE_FILE)
+  }
+
+  private hasNonEmptyFile(filePath: string): boolean {
+    try {
+      const stats = fs.statSync(filePath)
+      return stats.isFile() && stats.size > 0
+    } catch {
+      return false
+    }
+  }
+
+  private readJsonFileSync<TValue>(filePath: string): TValue | null {
+    try {
+      return JSON.parse(fs.readFileSync(filePath, 'utf8')) as TValue
+    } catch {
+      return null
+    }
+  }
+
+  private async readJsonFile<TValue>(filePath: string): Promise<TValue | null> {
+    try {
+      const raw = await fs.promises.readFile(filePath, 'utf8')
+      return JSON.parse(raw) as TValue
+    } catch {
+      return null
+    }
+  }
+
+  private async writeDownloadState(repoId: string, state: ModelDownloadState): Promise<void> {
+    await fs.promises.writeFile(
+      this.resolveDownloadStatePath(repoId),
+      JSON.stringify(state, null, 2),
+      'utf8'
+    )
+  }
+
+  private async markDownloadComplete(repoId: string, files: string[]): Promise<void> {
+    await fs.promises.writeFile(
+      this.resolveDownloadCompletePath(repoId),
+      JSON.stringify(
+        {
+          repoId,
+          files,
+          completedAt: Date.now()
+        },
+        null,
+        2
+      ),
+      'utf8'
+    )
+    await fs.promises.rm(this.resolveDownloadStatePath(repoId), { force: true })
+  }
+
+  private isLargeModelArtifact(filename: string): boolean {
+    return (
+      filename.endsWith('.safetensors') ||
+      filename.endsWith('.bin') ||
+      filename.endsWith('.onnx')
+    )
+  }
+
+  private async fetchWithTimeout(
+    url: string,
+    timeoutMs: number,
+    init: RequestInit = {}
+  ): Promise<Response> {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => {
+      controller.abort()
+    }, timeoutMs)
+
+    try {
+      return await fetch(url, {
+        ...init,
+        signal: controller.signal
+      })
+    } finally {
+      clearTimeout(timeout)
+    }
+  }
+
+  private async fetchJsonWithRetry<TValue>(url: string, attempts: number): Promise<TValue> {
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      try {
+        const response = await this.fetchWithTimeout(url, METADATA_FETCH_TIMEOUT_MS)
+        if (!response.ok) {
+          throw new Error(`Failed to fetch metadata: ${response.status} ${response.statusText}`)
+        }
+        return (await response.json()) as TValue
+      } catch (error: unknown) {
+        if (attempt === attempts) {
+          throw error
+        }
+        console.warn(
+          `[ModelService] Metadata fetch attempt ${String(attempt)} failed for ${url}: ${getErrorMessage(error)}`
+        )
+        await sleep(DOWNLOAD_RETRY_BASE_MS * attempt)
+      }
+    }
+
+    throw new Error(`metadata fetch failed for ${url}`)
+  }
+
+  private async downloadFileWithRetry(
+    url: string,
+    destPath: string,
+    onProgress: (progress: number) => void
+  ): Promise<void> {
+    for (let attempt = 1; attempt <= FILE_DOWNLOAD_MAX_ATTEMPTS; attempt += 1) {
+      try {
+        await this.downloadFile(url, destPath, onProgress)
+        return
+      } catch (error: unknown) {
+        if (attempt === FILE_DOWNLOAD_MAX_ATTEMPTS) {
+          throw error
+        }
+        console.warn(
+          `[ModelService] File download attempt ${String(attempt)} failed for ${url}: ${getErrorMessage(error)}`
+        )
+        await sleep(DOWNLOAD_RETRY_BASE_MS * attempt)
+      }
+    }
+  }
+
+  private resolveFilesToDownload(repoId: string, siblingNames: Set<string>): string[] {
+    const definition = this.getModelDefinition(repoId)
+    const requestedFiles = definition?.downloadFiles
+
+    if (!requestedFiles || requestedFiles.length === 0) {
+      return Array.from(siblingNames)
+    }
+
+    const missingFiles = requestedFiles.filter((filename) => !siblingNames.has(filename))
+    if (missingFiles.length > 0) {
+      throw new Error(
+        `model metadata missing required download files for ${repoId}: ${missingFiles.join(', ')}`
+      )
+    }
+
+    return [...requestedFiles]
   }
 
   private async writeLockMetadata(lockPath: string): Promise<void> {
@@ -133,8 +324,29 @@ export class ModelService {
     }
 
     const definition = this.getModelDefinition(repoId)
+
+    const completedState = this.readJsonFileSync<{
+      files?: string[]
+    }>(this.resolveDownloadCompletePath(repoId))
+    if (Array.isArray(completedState?.files) && completedState.files.length > 0) {
+      const completionFilesReady = completedState.files.every((file) =>
+        this.hasNonEmptyFile(path.join(modelPath, file))
+      )
+      if (!completionFilesReady) {
+        return false
+      }
+      if (definition?.requiredFiles && definition.requiredFiles.length > 0) {
+        return definition.requiredFiles.every((file) =>
+          this.hasNonEmptyFile(path.join(modelPath, file))
+        )
+      }
+      return true
+    }
+
     if (definition?.requiredFiles && definition.requiredFiles.length > 0) {
-      return definition.requiredFiles.every((file) => fs.existsSync(path.join(modelPath, file)))
+      return definition.requiredFiles.every((file) =>
+        this.hasNonEmptyFile(path.join(modelPath, file))
+      )
     }
 
     return fs.readdirSync(modelPath).length > 0
@@ -203,22 +415,27 @@ export class ModelService {
 
       const metadataUrl = `${HF_ENDPOINT}/api/models/${repoId}`
       console.log(`[ModelService] Fetching metadata from ${metadataUrl}`)
-      const response = await fetch(metadataUrl)
-      if (!response.ok) {
-        throw new Error(`Failed to fetch metadata: ${response.statusText}`)
-      }
-      const metadata = await response.json()
+      const metadata = await this.fetchJsonWithRetry<{
+        siblings?: Array<{ rfilename: string }>
+      }>(metadataUrl, METADATA_FETCH_MAX_ATTEMPTS)
 
       const siblings = metadata.siblings || []
-      const filesToDownload = siblings.filter(() => true)
+      const siblingNames = new Set(siblings.map((file) => String(file.rfilename)))
+      const filesToDownload = this.resolveFilesToDownload(repoId, siblingNames)
+      const persistedState =
+        (await this.readJsonFile<ModelDownloadState>(this.resolveDownloadStatePath(repoId))) || null
+      const completedSet = new Set(
+        (persistedState?.completedFiles || []).filter((filename) =>
+          filesToDownload.includes(filename)
+        )
+      )
 
       console.log(`[ModelService] Found ${filesToDownload.length} files to download`)
 
       let completedFiles = 0
       const totalFiles = filesToDownload.length
 
-      for (const file of filesToDownload) {
-        const filename = file.rfilename
+      for (const filename of filesToDownload) {
         const fileUrl = `${HF_ENDPOINT}/${repoId}/resolve/main/${filename}`
         const filePath = path.join(modelPath, filename)
         const fileDir = path.dirname(filePath)
@@ -226,6 +443,18 @@ export class ModelService {
         if (!fs.existsSync(fileDir)) {
           fs.mkdirSync(fileDir, { recursive: true })
         }
+
+        const reusableExistingFile =
+          completedSet.has(filename) ||
+          (!this.isLargeModelArtifact(filename) && this.hasNonEmptyFile(filePath))
+
+        if (reusableExistingFile && this.hasNonEmptyFile(filePath)) {
+          completedSet.add(filename)
+          completedFiles += 1
+          continue
+        }
+
+        await fs.promises.rm(`${filePath}.part`, { force: true })
 
         console.log(`[ModelService] Downloading ${filename}...`)
 
@@ -238,10 +467,16 @@ export class ModelService {
           completedFiles
         })
 
-        await this.downloadFile(fileUrl, filePath, () => {
-        })
+        await this.downloadFileWithRetry(fileUrl, filePath, () => {})
 
+        completedSet.add(filename)
         completedFiles++
+        await this.writeDownloadState(repoId, {
+          repoId,
+          files: filesToDownload,
+          completedFiles: [...completedSet],
+          updatedAt: Date.now()
+        })
 
         this.emitProgress(reporter, {
           repoId,
@@ -252,6 +487,8 @@ export class ModelService {
           completedFiles
         })
       }
+
+      await this.markDownloadComplete(repoId, filesToDownload)
 
       console.log(`[ModelService] Download complete for ${repoId}`)
       this.emitProgress(reporter, {
@@ -313,26 +550,52 @@ export class ModelService {
     destPath: string,
     onProgress: (progress: number) => void
   ) {
-    const response = await fetch(url)
-    if (!response.ok) throw new Error(`Failed to download ${url}: ${response.statusText}`)
+    const tempPath = `${destPath}.part`
+    const existingPartialBytes = this.hasNonEmptyFile(tempPath) ? fs.statSync(tempPath).size : 0
+    const response = await this.fetchWithTimeout(url, FILE_FETCH_TIMEOUT_MS, {
+      headers:
+        existingPartialBytes > 0
+          ? {
+              Range: `bytes=${String(existingPartialBytes)}-`
+            }
+          : undefined
+    })
+
+    if (response.status !== 200 && response.status !== 206) {
+      throw new Error(`Failed to download ${url}: ${response.status} ${response.statusText}`)
+    }
     if (!response.body) throw new Error(`No body in response for ${url}`)
 
-    const fileStream = fs.createWriteStream(destPath)
-    const reader = response.body.getReader()
-    const contentLength = +(response.headers.get('Content-Length') || 0)
-    let receivedLength = 0
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      fileStream.write(Buffer.from(value))
-      receivedLength += value.length
-      if (contentLength > 0) {
-        onProgress(receivedLength / contentLength)
-      }
+    let fileStartBytes = 0
+    let fileFlags: 'w' | 'a' = 'w'
+    if (existingPartialBytes > 0 && response.status === 206) {
+      fileStartBytes = existingPartialBytes
+      fileFlags = 'a'
+    } else if (existingPartialBytes > 0) {
+      await fs.promises.rm(tempPath, { force: true })
     }
 
-    fileStream.end()
+    const fileStream = fs.createWriteStream(tempPath, { flags: fileFlags })
+    const chunkLength = +(response.headers.get('Content-Length') || 0)
+    const totalLength = chunkLength > 0 ? fileStartBytes + chunkLength : 0
+    let receivedLength = fileStartBytes
+
+    try {
+      const source = Readable.fromWeb(response.body as NodeReadableStream<Uint8Array>)
+      const progressStream = new Transform({
+        transform(chunk, _encoding, callback) {
+          receivedLength += Buffer.byteLength(chunk)
+          if (totalLength > 0) {
+            onProgress(receivedLength / totalLength)
+          }
+          callback(null, chunk)
+        }
+      })
+      await pipeline(source, progressStream, fileStream)
+      await fs.promises.rename(tempPath, destPath)
+    } catch (error: unknown) {
+      fileStream.destroy()
+      throw error
+    }
   }
 }

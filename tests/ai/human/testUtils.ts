@@ -105,6 +105,17 @@ export const readToolCallResultPreview = <TValue extends JsonValue>(
   return event.outputPreview as TValue
 }
 
+export const readLatestToolResultDataFromEvents = <TValue>(
+  events: readonly AiRunEvent[],
+  toolName: string
+): TValue => {
+  const event = filterToolCallResultEventsByName(events, toolName).at(-1)
+  if (!event?.result?.data) {
+    throw new Error(`tool result data missing for ${toolName}`)
+  }
+  return event.result.data as TValue
+}
+
 export const readToolCallInput = <TValue extends JsonObject>(
   events: readonly AiRunEvent[],
   toolName: string,

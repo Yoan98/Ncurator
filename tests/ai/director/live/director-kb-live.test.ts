@@ -79,5 +79,5 @@ describe('ai director live backend', () => {
         )
       }
     })
-  })
+  }, 600_000)
 })
