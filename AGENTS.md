@@ -3,7 +3,7 @@
 ## 1. 文档引用
 ### 1.1 AI相关
 - 当涉及 AI 架构、主流程或 Director/Human 分工时，请阅读 `doc/ai-design/architecture.md`
-- 当涉及 AI 实现、路由、状态流转或运行数据时，请阅读 `doc/ai-design/implementation-spec.md` 与 `doc/ai-design/data-definition-and-flow.md`
+- 当涉及 AI 实现、路由、跨层边界或运行数据时，请阅读 `doc/ai-design/implementation-spec.md` 与 `doc/ai-design/data-definition-and-flow.md`
 - 当涉及 AI 样例、skills、prompt 或后续规划时，请阅读 `doc/ai-design/example.md`、`doc/ai-design/human-skill-design.md`、`doc/ai-design/prompt-design.md`、`doc/ai-design/refactor-plan.md`
 
 ### 1.2 项目整体相关
