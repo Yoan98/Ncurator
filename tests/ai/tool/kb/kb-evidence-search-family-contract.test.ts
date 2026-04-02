@@ -64,6 +64,7 @@ describe('ai tool kb backend', () => {
           {
             id: 'doc-3',
             name: 'Director Notes.md',
+            workspaceId: 'other-workspace',
             chunks: [
               {
                 id: 'chunk-3',
@@ -73,9 +74,7 @@ describe('ai tool kb backend', () => {
           }
         ])
 
-        const harness = createRetrievalToolHarness(runtime, {
-          selectedDocumentIds: ['doc-1', 'doc-2']
-        })
+        const harness = createRetrievalToolHarness(runtime)
 
         const hybridInScope = await harness.invoke<KbSearchRow[]>('kb_hybrid_search_chunks', {
           queryText: 'approval denied unchanged files',
@@ -110,7 +109,7 @@ describe('ai tool kb backend', () => {
             result.hybridInScope.some((row) => row.document_id === 'doc-1'),
           {
             name: 'hybrid-search-returns-stable-rows',
-            message: 'kb_hybrid_search_chunks 应返回稳定 rows 结构，并限制在当前资料范围内。',
+            message: 'kb_hybrid_search_chunks 应返回稳定 rows 结构，并默认限制在当前工作区范围内。',
             data: result.hybridInScope
           }
         )
@@ -120,14 +119,14 @@ describe('ai tool kb backend', () => {
             result.vectorSubset.every((row) => row.document_id === 'doc-2'),
           {
             name: 'vector-search-honors-explicit-document-scope',
-            message: 'kb_vector_search_chunks 应继续遵守 documentIds 收窄后的范围。',
+            message: 'kb_vector_search_chunks 应继续遵守 documentIds 在当前工作区内的收窄范围。',
             data: result.vectorSubset
           }
         )
 
         runtime.assertThat(result.ftsOutOfScope.length === 0, {
           name: 'fts-search-rejects-out-of-scope-document-ids',
-          message: 'kb_fts_search_chunks 在 requested documentIds 完全超出 run scope 时应返回空结果。',
+          message: 'kb_fts_search_chunks 在 requested documentIds 完全超出当前工作区时应返回空结果。',
           data: result.ftsOutOfScope
         })
       }

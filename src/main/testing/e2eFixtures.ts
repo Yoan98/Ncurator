@@ -152,11 +152,15 @@ const normalizeFixtureUrl = (rawUrl: string): { url: string; normalizedUrl: stri
 const upsertFixtureWebSource = (input: WebIngestPayload): WebSourceRecord => {
   const { url, normalizedUrl } = normalizeFixtureUrl(input.url)
   const now = Date.now()
-  const existing = e2eWebSourceState.items.find((item) => item.normalized_url === normalizedUrl)
+  const workspaceId = String(input.workspaceId || '').trim()
+  const existing = e2eWebSourceState.items.find(
+    (item) => item.workspace_id === workspaceId && item.normalized_url === normalizedUrl
+  )
 
   const nextSource: WebSourceRecord = existing
     ? {
         ...existing,
+        workspace_id: workspaceId,
         url,
         normalized_url: normalizedUrl,
         title: buildFixtureWebTitle(url),
@@ -169,6 +173,7 @@ const upsertFixtureWebSource = (input: WebIngestPayload): WebSourceRecord => {
       }
     : {
         id: `e2e-web-source-${e2eWebSourceState.items.length + 1}`,
+        workspace_id: workspaceId,
         identity_kind: 'normalized_url',
         normalized_url: normalizedUrl,
         url,
@@ -219,8 +224,10 @@ export const getE2EFixtureReferenceItems = (
   const fixtureWorkspaceReferences =
     workspaceId && e2eWorkspaceState.workspace && e2eWorkspaceState.workspace.id === workspaceId
       ? buildWorkspaceReferenceItems(e2eWorkspaceState.workspace, e2eWorkspaceState.nodes)
-    : []
-  const webReferences = e2eWebSourceState.items.map(buildWebReferenceItem)
+      : []
+  const webReferences = e2eWebSourceState.items
+    .filter((item) => item.workspace_id === workspaceId)
+    .map(buildWebReferenceItem)
   const allItems = [...fixtureWorkspaceReferences, ...webReferences]
   const items = allItems.filter((reference) => {
     if (referenceKindFilters && !referenceKindFilters.has(reference.kind)) return false
@@ -295,6 +302,7 @@ export const deleteE2EFixtureWorkspace = (
   e2eWorkspaceState.mode = 'normal'
   e2eWorkspaceState.scanDelayMs = 0
   e2eWorkspaceState.prepareDelayMs = 0
+  e2eWebSourceState.items = e2eWebSourceState.items.filter((item) => item.workspace_id !== workspaceId)
 
   return {
     success: true,
@@ -481,18 +489,24 @@ export const ingestE2EFixtureWebSources = (
   }
 }
 
-export const getE2EFixtureWebSourceList = (): WebSourceListResponse | null => {
+export const getE2EFixtureWebSourceList = (workspaceId: string): WebSourceListResponse | null => {
   if (!isE2EFixtureModeEnabled()) return null
+  const items = e2eWebSourceState.items.filter((item) => item.workspace_id === workspaceId)
   return {
-    items: e2eWebSourceState.items,
-    total: e2eWebSourceState.items.length
+    items,
+    total: items.length
   }
 }
 
-export const refreshE2EFixtureWebSource = (webSourceId: string): WebSourceMutationResponse | null => {
+export const refreshE2EFixtureWebSource = (
+  workspaceId: string,
+  webSourceId: string
+): WebSourceMutationResponse | null => {
   if (!isE2EFixtureModeEnabled()) return null
 
-  const source = e2eWebSourceState.items.find((item) => item.id === webSourceId)
+  const source = e2eWebSourceState.items.find(
+    (item) => item.workspace_id === workspaceId && item.id === webSourceId
+  )
   if (!source) {
     return {
       success: false,
@@ -534,10 +548,15 @@ export const refreshE2EFixtureWebSource = (webSourceId: string): WebSourceMutati
   }
 }
 
-export const deleteE2EFixtureWebSource = (webSourceId: string): DeleteWebSourceResponse | null => {
+export const deleteE2EFixtureWebSource = (
+  workspaceId: string,
+  webSourceId: string
+): DeleteWebSourceResponse | null => {
   if (!isE2EFixtureModeEnabled()) return null
 
-  const exists = e2eWebSourceState.items.some((item) => item.id === webSourceId)
+  const exists = e2eWebSourceState.items.some(
+    (item) => item.workspace_id === workspaceId && item.id === webSourceId
+  )
   if (!exists) {
     return {
       success: false,
@@ -545,7 +564,9 @@ export const deleteE2EFixtureWebSource = (webSourceId: string): DeleteWebSourceR
     }
   }
 
-  e2eWebSourceState.items = e2eWebSourceState.items.filter((item) => item.id !== webSourceId)
+  e2eWebSourceState.items = e2eWebSourceState.items.filter(
+    (item) => !(item.workspace_id === workspaceId && item.id === webSourceId)
+  )
   return {
     success: true,
     deletedWebSourceId: webSourceId

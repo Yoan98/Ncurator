@@ -2,10 +2,13 @@ import { describe, it } from 'vitest'
 import { importSelectors } from '../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../harness/e2e/run-e2e-case'
 import {
+  SETTINGS_WEB_E2E_TIMEOUT_MS,
+  createFixtureWorkspace,
   getSettingsLocator,
   getSettingsPrefixLocator,
   navigateToSettingsSection,
-  seedWebSources
+  seedWebSources,
+  workspaceCardLocator
 } from '../../harness/e2e/settings'
 
 describe('settings web e2e', () => {
@@ -27,13 +30,18 @@ describe('settings web e2e', () => {
 
         await runtime.step({
           name: 'seed-web-sources',
-          message: '预置两条网页资料，进入网页资料设置页。',
+          message: '预置工作区与两条网页资料，进入工作区设置详情。',
           run: async () => {
-            await seedWebSources(page, [
+            const workspace = await createFixtureWorkspace(page, {
+              rootPath: '/tmp/settings-web-page-load-workspace',
+              name: '网页资料工作区'
+            })
+            await seedWebSources(page, workspace.workspace!.id, [
               'https://example.com/beta',
               'https://docs.example.com/alpha'
             ])
-            await navigateToSettingsSection(page, 'web-sources')
+            await navigateToSettingsSection(page, 'workspace')
+            await workspaceCardLocator(page, workspace.workspace!.id).click()
             await page.waitForFunction(
               (selector) => document.querySelectorAll(selector).length === 2,
               `[data-testid^="${importSelectors.webSourceCardPrefix}-"]`
@@ -107,5 +115,5 @@ describe('settings web e2e', () => {
         })
       }
     })
-  })
+  }, SETTINGS_WEB_E2E_TIMEOUT_MS)
 })

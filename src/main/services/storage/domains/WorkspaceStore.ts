@@ -243,8 +243,14 @@ export class WorkspaceStore {
     const safeId = this.core.escapeSqlString(id)
     const workspaceTable = await this.core.openTable(LANCE_TABLES.WORKSPACE_SOURCE)
     const nodeTable = await this.core.openTable(LANCE_TABLES.WORKSPACE_NODE)
+    const webSourceTable = await this.core.openTable(LANCE_TABLES.WEB_SOURCE)
+    const chunkTable = await this.core.openTable(LANCE_TABLES.CHUNK)
+    const documentTable = await this.core.openTable(LANCE_TABLES.DOCUMENT)
     await workspaceTable.delete(`id = '${safeId}'`)
     await nodeTable.delete(`workspace_id = '${safeId}'`)
+    await webSourceTable.delete(`workspace_id = '${safeId}'`)
+    await chunkTable.delete(`workspace_id = '${safeId}'`)
+    await documentTable.delete(`workspace_id = '${safeId}'`)
   }
 
   public async replaceWorkspaceNodes(workspaceId: string, nodes: WorkspaceNode[]): Promise<void> {

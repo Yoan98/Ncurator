@@ -2,6 +2,7 @@ import { describe, it } from 'vitest'
 import { importSelectors } from '../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../harness/e2e/run-e2e-case'
 import {
+  SETTINGS_E2E_TIMEOUT_MS,
   createFixtureWorkspace,
   getSettingsLocator,
   navigateToSettingsSection
@@ -92,5 +93,5 @@ describe('settings workspace e2e', () => {
         )
       }
     })
-  })
+  }, SETTINGS_E2E_TIMEOUT_MS)
 })

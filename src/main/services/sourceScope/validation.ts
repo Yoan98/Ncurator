@@ -7,8 +7,9 @@ type WorkspaceLookup = {
 
 type WebSourceLookup = {
   getWebSourceById: (
-    id: string
-  ) => Promise<{ id: string; import_status: number; document_id?: string } | null>
+    id: string,
+    workspaceId?: string
+  ) => Promise<{ id: string; workspace_id: string; import_status: number; document_id?: string } | null>
 }
 
 export const validateSelectedReferencesForRun = async (params: {
@@ -80,8 +81,20 @@ export const validateSelectedReferencesForRun = async (params: {
       continue
     }
 
-    const source = await params.webSourceStore.getWebSourceById(reference.webSourceId)
-    if (!source || source.import_status !== 2 || !source.document_id) {
+    const workspaceId = String(reference.workspaceId || '').trim()
+    if (!workspaceId) {
+      params.sendEvent({
+        type: 'runtime_issue',
+        runId: params.runId,
+        code: 'workspace_binding_missing',
+        message: '当前网页资料缺少可用的工作空间上下文，请重新选择。',
+        createdAt: getNow()
+      })
+      return { ok: false, error: 'workspace binding missing' }
+    }
+
+    const source = await params.webSourceStore.getWebSourceById(reference.webSourceId, workspaceId)
+    if (!source || source.workspace_id !== workspaceId || source.import_status !== 2 || !source.document_id) {
       params.sendEvent({
         type: 'runtime_issue',
         runId: params.runId,

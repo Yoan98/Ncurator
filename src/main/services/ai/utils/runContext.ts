@@ -22,7 +22,7 @@ const buildTypeDescriptionText = (): string =>
     '参考资料类型说明：',
     '- 本地目录：工作区中的目录，可用于限定文件范围。',
     '- 本地文件：工作区中的具体文件。',
-    '- 网页资料：已收录的网页内容。',
+    '- 网页资料：当前工作区中已收录的网页内容。',
     '- 知识库可用性：',
     '  - 已索引：可直接通过知识库检索。',
     '  - 部分可检索：部分内容已索引，不能假设完整覆盖。',
@@ -30,11 +30,14 @@ const buildTypeDescriptionText = (): string =>
   ].join('\n')
 
 const renderSelectedReference = (reference: SelectedReference, index: number): string => {
+  const kbDocumentIds =
+    reference.kbDocumentIds.length > 0 ? reference.kbDocumentIds.join(', ') : 'none'
   if (reference.kind === 'web') {
     return [
       `${index}. [网页资料] ${reference.name}`,
       `   地址：${reference.url}`,
-      `   知识库可用性：${KB_AVAILABILITY_LABEL[reference.kbAvailability]}`
+      `   知识库可用性：${KB_AVAILABILITY_LABEL[reference.kbAvailability]}`,
+      `   kbDocumentIds：${kbDocumentIds}`
     ].join('\n')
   }
 
@@ -42,7 +45,8 @@ const renderSelectedReference = (reference: SelectedReference, index: number): s
   return [
     `${index}. [${typeLabel}] ${reference.relativePath}`,
     `   名称：${reference.name}`,
-    `   知识库可用性：${KB_AVAILABILITY_LABEL[reference.kbAvailability]}`
+    `   知识库可用性：${KB_AVAILABILITY_LABEL[reference.kbAvailability]}`,
+    `   kbDocumentIds：${kbDocumentIds}`
   ].join('\n')
 }
 
@@ -74,6 +78,7 @@ export const normalizeSelectedReferences = (
       if (reference.kind === 'web') {
         return {
           kind: 'web' as const,
+          workspaceId: String(reference.workspaceId || '').trim(),
           webSourceId: String(reference.webSourceId || '').trim(),
           name: String(reference.name || '').trim(),
           url: String(reference.url || '').trim(),
@@ -111,7 +116,7 @@ export const normalizeSelectedReferences = (
     })
     .filter((reference) => {
       if (reference.kind === 'web') {
-        return Boolean(reference.webSourceId && reference.name && reference.url)
+        return Boolean(reference.workspaceId && reference.webSourceId && reference.name && reference.url)
       }
 
       return Boolean(
@@ -126,29 +131,27 @@ export const normalizeSelectedReferences = (
   return normalized.length > 0 ? normalized : undefined
 }
 
-export const collectSelectedReferenceDocumentIds = (
-  references: SelectedReference[] | undefined
-): string[] => {
-  if (!Array.isArray(references)) return []
-  return Array.from(
-    new Set(references.flatMap((reference) => toTrimmedStringList(reference.kbDocumentIds)))
-  )
-}
-
-export const buildEffectiveDocumentIds = (
-  explicitDocumentIds: string[] | undefined,
-  references: SelectedReference[] | undefined
-): string[] | undefined => {
-  const merged = Array.from(
-    new Set([...toTrimmedStringList(explicitDocumentIds), ...collectSelectedReferenceDocumentIds(references)])
-  )
-  return merged.length > 0 ? merged : undefined
+const buildSelectedReferenceDocumentIdsText = (
+  references: SelectedReference[]
+): string => {
+  const pairs = references
+    .filter((reference) => reference.kbDocumentIds.length > 0)
+    .map((reference, index) => {
+      const label =
+        reference.kind === 'web'
+          ? `${index + 1}. [网页资料] ${reference.name}`
+          : `${index + 1}. [${reference.kind === 'directory' ? '本地目录' : '本地文件'}] ${reference.name}`
+      return `${label} -> [${reference.kbDocumentIds.join(', ')}]`
+    })
+  if (pairs.length === 0) {
+    return '当前没有可直接缩圈的 kbDocumentIds；不带 documentIds 时默认搜索整个当前工作区知识库。'
+  }
+  return ['当前已选参考资料对应的 kbDocumentIds：', ...pairs].join('\n')
 }
 
 export const buildSelectedContextText = (input: {
   workspace?: AiRunStartPayload['workspace']
   selectedReferences?: SelectedReference[]
-  usesWorkspaceDefaultKbScope: boolean
 }): string => {
   const workspaceText = input.workspace
     ? [
@@ -158,14 +161,30 @@ export const buildSelectedContextText = (input: {
     : '当前工作区：未绑定（仅内部兜底场景；正常 workbench 发送前会先选择工作区）。'
 
   const references = input.selectedReferences || []
+  const kbScopeText = input.workspace
+    ? [
+        '知识库默认搜索范围：当前工作区下全部已导入资料（包括本地文件与网页资料）。',
+        references.length > 0
+          ? '当前已选参考资料只是优先缩圈候选；如结果不足，可回到整个当前工作区范围继续检索；若用户明确要求只看这些资料，则保持缩圈。'
+          : '当前用户没有指定任何目录、文件或网页资料；若需要知识库检索，默认搜索当前工作区下全部已导入资料。'
+      ].join('\n')
+    : '知识库默认搜索范围：未绑定工作区，不能假设存在可用的本地知识库范围。'
   const selectedText =
     references.length > 0
       ? ['当前用户已指定以下参考资料：', ...references.map((reference, index) => renderSelectedReference(reference, index + 1))].join('\n')
-      : input.workspace && input.usesWorkspaceDefaultKbScope
-        ? '当前用户没有指定任何目录、文件或网页资料；本轮默认使用当前工作区中已索引文件作为本地检索范围。'
-        : '当前用户没有指定任何目录、文件或网页资料。'
+      : '当前用户没有指定任何目录、文件或网页资料。'
 
-  return [workspaceText, '', buildTypeDescriptionText(), '', selectedText].join('\n')
+  return [
+    workspaceText,
+    '',
+    buildTypeDescriptionText(),
+    '',
+    kbScopeText,
+    '',
+    selectedText,
+    '',
+    buildSelectedReferenceDocumentIdsText(references)
+  ].join('\n')
 }
 
 export const formatTurns = (messages: ChatMessage[]): string =>

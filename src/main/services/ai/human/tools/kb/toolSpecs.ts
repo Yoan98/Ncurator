@@ -52,7 +52,7 @@ const KB_SEARCH_ARGS = [
     name: 'documentIds',
     type: 'string[]',
     required: false,
-    description: '进一步缩小到指定文档 ID 列表；不能跳出当前运行范围。'
+    description: '可选；主动缩小到指定文档 ID 列表，仍不能跳出当前工作区范围。'
   }
 ] as const
 
@@ -73,19 +73,19 @@ const createKbChunkSearchSpec = (input: {
   name: input.name,
   familyId: 'kb',
   skillIds: ['kb-evidence-query'],
-  requiresWorkspace: false,
+  requiresWorkspace: true,
   schema: KB_CHUNK_SEARCH_SCHEMA,
   promptSpec: {
     name: input.name,
     purpose: input.purpose,
     whenToUse: input.whenToUse,
-    preconditions: ['queryText 不能为空。', '检索默认受当前已选资料范围约束。'],
+    preconditions: ['queryText 不能为空。', '默认搜索范围是当前工作区知识库。'],
     args: [...KB_SEARCH_ARGS],
     returns: [...KB_RETURNS],
     commonMistakes: input.commonMistakes,
     examples: [
       {
-        goal: '在当前资料范围内检索 approval denied 相关规范',
+        goal: '在当前工作区知识库中检索 approval denied 相关规范',
         args: KB_SEARCH_EXAMPLE
       }
     ]
@@ -95,11 +95,11 @@ const createKbChunkSearchSpec = (input: {
 
 export const KB_HYBRID_SEARCH_CHUNKS_TOOL_SPEC = createKbChunkSearchSpec({
   name: 'kb_hybrid_search_chunks',
-  purpose: '在本地知识库上做 hybrid 检索，综合关键词与向量召回。',
-  whenToUse: '默认首选的 KB 取证入口；当任务要基于当前已选资料回答、提取事实或找证据时优先使用。',
+  purpose: '在当前工作区知识库上做 hybrid 检索，综合关键词与向量召回。',
+  whenToUse: '默认首选的 KB 取证入口；当任务要在当前工作区知识库中找内容、提取事实或找证据时优先使用。',
   commonMistakes: [
     '已有明确 chunk 证据时，不要为了“再确认一次”反复检索。',
-    'documentIds 只能进一步缩小范围，不能突破当前已选资料。'
+    '不要把已选资料误认为唯一可搜索范围；documentIds 只表示这一步主动缩圈。'
   ]
 })
 
@@ -125,12 +125,12 @@ export const KB_LIST_DOCUMENTS_TOOL_SPEC: HumanToolSpec<
   name: 'kb_list_documents',
   familyId: 'kb',
   skillIds: ['kb-document-discovery'],
-  requiresWorkspace: false,
+  requiresWorkspace: true,
   schema: KB_LIST_DOCUMENTS_SCHEMA,
   promptSpec: {
     name: 'kb_list_documents',
-    purpose: '列出当前范围内的知识库文档。',
-    whenToUse: '只有在资料范围不清楚、需要先找候选文档、或 search 没有给出可用结果时使用。',
+    purpose: '列出当前工作区范围内的知识库文档。',
+    whenToUse: '只有在需要先缩小候选文档范围、提高定位精度、或 search 结果过散时使用。',
     preconditions: ['若已选资料和命中 chunk 已经足够，通常不需要再 list_documents。'],
     args: [
       {
@@ -155,7 +155,7 @@ export const KB_LIST_DOCUMENTS_TOOL_SPEC: HumanToolSpec<
         name: 'documentIds',
         type: 'string[]',
         required: false,
-        description: '进一步缩小到指定文档 ID 列表。'
+        description: '可选；进一步缩小到指定文档 ID 列表。'
       }
     ],
     returns: [
@@ -170,7 +170,10 @@ export const KB_LIST_DOCUMENTS_TOOL_SPEC: HumanToolSpec<
         description: '命中文档总数。'
       }
     ],
-    commonMistakes: ['不要在已经拿到明确 chunk 证据后再 list_documents 做重复确认。']
+    commonMistakes: [
+      '不要把 list_documents 当成每次 KB 搜索的固定前置步骤。',
+      '不要在已经拿到明确 chunk 证据后再 list_documents 做重复确认。'
+    ]
   },
   resolveExecutionMeta: KB_EXECUTION_META
 }

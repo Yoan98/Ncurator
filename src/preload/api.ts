@@ -12,6 +12,7 @@ import type {
   CommitDraftReviewResponse,
   ChunkListResponse,
   CreateWorkspaceSourceRequest,
+  DeleteWebSourceRequest,
   DeleteWebSourceResponse,
   DeleteWorkspaceSourceResponse,
   DocumentRecord,
@@ -21,6 +22,7 @@ import type {
   ListDraftReviewsRequest,
   ListDraftReviewsResponse,
   ListReferenceItemsRequest,
+  ListWebSourcesRequest,
   ListWorkspaceNodesRequest,
   LLMConfig,
   PickDirectoryResponse,
@@ -118,9 +120,9 @@ export type DesktopApi = {
   referenceItemList: (
     payload: ListReferenceItemsRequest
   ) => Promise<ReferenceItemListResponse>
-  webSourceList: () => Promise<WebSourceListResponse>
+  webSourceList: (payload: ListWebSourcesRequest) => Promise<WebSourceListResponse>
   webSourceRefresh: (payload: RefreshWebSourceRequest) => Promise<WebSourceMutationResponse>
-  webSourceDelete: (webSourceId: string) => Promise<DeleteWebSourceResponse>
+  webSourceDelete: (payload: DeleteWebSourceRequest) => Promise<DeleteWebSourceResponse>
   legacyLocalImportMigrationStatus: () => Promise<LegacyLocalImportMigrationStatus | null>
   listChunks: (payload: {
     keyword?: string

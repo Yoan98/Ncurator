@@ -47,6 +47,7 @@ describe('ai tool kb backend', () => {
           {
             id: 'doc-3',
             name: 'Director Notes.md',
+            workspaceId: 'other-workspace',
             chunks: [
               {
                 id: 'chunk-3',
@@ -56,9 +57,7 @@ describe('ai tool kb backend', () => {
           }
         ])
 
-        const harness = createRetrievalToolHarness(runtime, {
-          selectedDocumentIds: ['doc-1', 'doc-2']
-        })
+        const harness = createRetrievalToolHarness(runtime)
 
         return {
           allInScope: await harness.invoke<KbListDocumentsResult>('kb_list_documents', {}),
@@ -79,7 +78,7 @@ describe('ai tool kb backend', () => {
             result.allInScope.items.map((item) => item.id).join(',') === 'doc-1,doc-2',
           {
             name: 'list-documents-honors-run-scope',
-            message: 'kb_list_documents 应只返回当前 selectedDocumentIds 范围内的文档。',
+            message: 'kb_list_documents 默认应只返回当前工作区范围内的文档。',
             data: {
               ids: result.allInScope.items.map((item) => item.id),
               total: result.allInScope.total
@@ -105,7 +104,7 @@ describe('ai tool kb backend', () => {
             result.emptySubset.items.length === 0,
           {
             name: 'list-documents-narrows-to-requested-document-ids',
-            message: 'documentIds 只能在 run scope 内继续收窄，超出范围时应稳定返回空列表。',
+            message: 'documentIds 只能在当前工作区范围内继续收窄，超出工作区时应稳定返回空列表。',
             data: {
               requestedSubset: result.requestedSubset,
               emptySubset: result.emptySubset

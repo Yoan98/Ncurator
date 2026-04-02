@@ -3,7 +3,6 @@ import { invokeStructuredChat } from './structuredOutput'
 import { runStructuredChatWithActivity } from './utils/structuredChatActivity'
 import { clipText } from './utils/text'
 import {
-  buildEffectiveDocumentIds,
   buildSelectedContextText,
   formatTurns,
   normalizeSelectedReferences,
@@ -21,10 +20,6 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
 
   const normalizedWorkspace = normalizeWorkspaceBinding(payload.workspace)
   const normalizedReferences = normalizeSelectedReferences(payload.selectedReferences)
-  const effectiveDocumentIds = buildEffectiveDocumentIds(
-    payload.selectedDocumentIds,
-    normalizedReferences
-  )
 
   const getRequestedConfig = async () => {
     const requestedId = String(payload.modelConfigId || '').trim()
@@ -111,13 +106,9 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
 
   return {
     runId: payload.runId,
-    selectedDocumentIds: effectiveDocumentIds,
     selectedContextText: buildSelectedContextText({
       workspace: normalizedWorkspace,
-      selectedReferences: normalizedReferences,
-      usesWorkspaceDefaultKbScope: Boolean(
-        normalizedWorkspace && (!normalizedReferences || normalizedReferences.length === 0)
-      )
+      selectedReferences: normalizedReferences
     }),
     workspace: normalizedWorkspace,
     checkCancelled,

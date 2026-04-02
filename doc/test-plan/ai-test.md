@@ -199,20 +199,20 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 `kb_list_documents` 的真实列表、过滤与范围收敛契约。
+- What：验证 `kb_list_documents` 在当前工作区默认范围内的真实列表、过滤与缩圈契约。
 - Why：KB 资料发现必须真实调用生产检索存储。
-- How：通过真实 `DocumentsStore.addDocument / addChunks` 导入 fixture 后执行列表查询。
-- Oracle：结果只包含允许范围内的文档，空结果与非空结果都稳定可断言。
+- How：通过真实 `DocumentsStore.addDocument / addChunks` 导入多工作区 fixture 后执行列表查询。
+- Oracle：结果默认只包含当前工作区文档，`documentIds` 只做进一步缩圈，空结果与非空结果都稳定可断言。
 - Not：不验证问答文案。
 
 ##### `kb-evidence-search-family-contract`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 `kb_hybrid_search_chunks / kb_vector_search_chunks / kb_fts_search_chunks` 的统一真实检索契约。
+- What：验证 `kb_hybrid_search_chunks / kb_vector_search_chunks / kb_fts_search_chunks` 在当前工作区范围内的统一真实检索契约。
 - Why：KB tool family 必须显式覆盖每个正式工具。
-- How：对同一批真实 seed 数据分别执行三种检索，并覆盖 `documentIds` 范围。
-- Oracle：三种检索都返回稳定 `rows`，且遵守范围约束。
+- How：对多工作区真实 seed 数据分别执行三种检索，并覆盖 `documentIds` 缩圈。
+- Oracle：三种检索都返回稳定 `rows`，默认受当前工作区约束，且遵守 `documentIds` 缩圈语义。
 - Not：不比较召回优劣。
 
 #### `terminal`

@@ -3,6 +3,7 @@ import type { WorkspaceSource } from '../../../src/shared/types'
 import { importSelectors } from '../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../harness/e2e/run-e2e-case'
 import {
+  SETTINGS_E2E_TIMEOUT_MS,
   getSettingsLocator,
   navigateToSettingsSection,
   setSettingsE2EApiOverrides
@@ -117,5 +118,5 @@ describe('settings workspace e2e', () => {
         })
       }
     })
-  })
+  }, SETTINGS_E2E_TIMEOUT_MS)
 })

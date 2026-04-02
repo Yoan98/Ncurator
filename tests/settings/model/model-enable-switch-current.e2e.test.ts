@@ -2,7 +2,12 @@ import { describe, it } from 'vitest'
 import type { LLMConfig } from '../../../src/shared/types'
 import { settingsSelectors } from '../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../harness/e2e/run-e2e-case'
-import { getSettingsLocator, navigateToSettingsSection, seedModelConfigs } from '../../harness/e2e/settings'
+import {
+  SETTINGS_E2E_TIMEOUT_MS,
+  getSettingsLocator,
+  navigateToSettingsSection,
+  seedModelConfigs
+} from '../../harness/e2e/settings'
 
 const SEEDED_CONFIGS: readonly LLMConfig[] = [
   {
@@ -105,5 +110,5 @@ describe('settings model e2e', () => {
         )
       }
     })
-  })
+  }, SETTINGS_E2E_TIMEOUT_MS)
 })

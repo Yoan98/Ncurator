@@ -1,4 +1,4 @@
-import type { KbAvailability, SelectedReference, WorkspaceNode } from '../../../shared/types'
+import type { KbAvailability, SelectedReference } from '../../../shared/types'
 
 const KB_AVAILABILITY_LABELS: Record<KbAvailability, string> = {
   indexed: '已索引',
@@ -11,7 +11,7 @@ export const getKbAvailabilityLabel = (availability: KbAvailability): string =>
 
 export const getReferenceKey = (reference: SelectedReference): string =>
   reference.kind === 'web'
-    ? `web:${reference.webSourceId}`
+    ? `web:${reference.workspaceId}:${reference.webSourceId}`
     : `${reference.kind}:${reference.workspaceId}:${reference.nodeId}`
 
 export const getReferenceTypeLabel = (reference: SelectedReference): string => {
@@ -45,17 +45,7 @@ export const pruneReferencesByWorkspace = (
   references: SelectedReference[],
   workspaceId: string | null
 ): SelectedReference[] =>
-  references.filter((reference) => reference.kind === 'web' || reference.workspaceId === workspaceId)
-
-export const collectWorkspaceIndexedDocumentIds = (nodes: WorkspaceNode[]): string[] =>
-  Array.from(
-    new Set(
-      nodes
-        .filter((node) => node.kind === 'file' && node.prepare_status === 'prepared' && node.document_id)
-        .map((node) => node.document_id)
-        .filter(Boolean)
-    )
-  ) as string[]
+  references.filter((reference) => reference.workspaceId === workspaceId)
 
 export const hasIncompleteLocalKbCoverage = (reference: SelectedReference): boolean =>
   reference.kind !== 'web' && reference.kbAvailability !== 'indexed'

@@ -3,12 +3,12 @@
 ## 1. 文档引用
 ### 1.1 AI相关
 - 当涉及 AI 架构、主流程或 Director/Human 分工时，请阅读 `doc/ai-design/architecture.md`
-- 当涉及 AI 实现、路由、跨层边界或运行数据时，请阅读 `doc/ai-design/implementation-spec.md` 与 `doc/ai-design/data-definition-and-flow.md`
+- 当涉及 AI 实现、路由、跨层边界、运行数据或工作区 KB 范围时，请阅读 `doc/ai-design/implementation-spec.md` 与 `doc/ai-design/data-definition-and-flow.md`
 - 当涉及 AI 样例、skills、prompt 或后续规划时，请阅读 `doc/ai-design/example.md`、`doc/ai-design/human-skill-design.md`、`doc/ai-design/prompt-design.md`、`doc/ai-design/refactor-plan.md`
 
 ### 1.2 项目整体相关
 - 当涉及项目整体架构与技术栈时，请阅读 `doc/architecture.md`
-- 当涉及数据库、工程结构或目录归位时，请阅读 `doc/database.md` 与 `doc/project-structure.md`
+- 当涉及数据库、工程结构、目录归位或工作区化网页资料存储时，请阅读 `doc/database.md` 与 `doc/project-structure.md`
 - 当涉及 UI 风格与通用交互规范时，请阅读 `doc/ui-style.md`
 
 ### 1.3 测试相关
@@ -18,8 +18,8 @@
 - 当涉及测试架构、formal/temp 准入、runner、raw logs、report 或 case 登记规范时，请阅读 `doc/test.md`
 
 ### 1.4 prd产品文档相关
-- 当涉及 Workbench 的产品需求、交互或验收标准时，请阅读 `doc/prd/workbench.md`
-- 当涉及 Settings 的产品需求、交互或验收标准时，请阅读 `doc/prd/settings.md`
+- 当涉及 Workbench 的产品需求、交互、工作区资料范围或验收标准时，请阅读 `doc/prd/workbench.md`
+- 当涉及 Settings 的产品需求、交互、工作区内网页资料管理或验收标准时，请阅读 `doc/prd/settings.md`
 
 ## 2. 必须遵守的规则
 

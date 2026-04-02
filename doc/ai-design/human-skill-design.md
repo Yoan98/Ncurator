@@ -46,12 +46,12 @@
 ### `kb-document-discovery`
 
 - 对应工具：`kb_list_documents`
-- 用途：先确定应该查哪份知识文档。
+- 用途：在当前工作区知识库内缩小候选文档范围。
 
 ### `kb-evidence-query`
 
 - 对应工具：`kb_hybrid_search_chunks`、`kb_vector_search_chunks`、`kb_fts_search_chunks`
-- 用途：直接查询 chunk 证据并收敛事实依据。
+- 用途：在当前工作区知识库中直接查询 chunk 证据并收敛事实依据；已选资料足够明确时可先缩圈，不足时可扩大回当前工作区范围。
 
 ## 4. 与状态设计的关系
 
@@ -59,4 +59,3 @@
 - `learnedSkillIds` 存的是当前已经学习过的 skill id。
 - `learning` 只负责把 skill 标记为已学习，不负责额外引入 `activate_capability` 语义。
 - tool 的选择、过滤和装配由 `skillLoader + tools/registry.ts` 完成，不要求放进 skill 同名目录。
-

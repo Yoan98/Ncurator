@@ -10,7 +10,10 @@ import type {
 } from '../../../src/shared/types'
 import { importSelectors, settingsSelectors } from '../../../src/renderer/src/testing/selectors'
 
-export type SettingsSection = 'model' | 'workspace' | 'web-sources'
+export type SettingsSection = 'model' | 'workspace'
+
+export const SETTINGS_E2E_TIMEOUT_MS = 30_000
+export const SETTINGS_WEB_E2E_TIMEOUT_MS = SETTINGS_E2E_TIMEOUT_MS
 
 export type SettingsE2EApiOverrides = {
   pickDirectoryResponse?: PickDirectoryResponse
@@ -27,8 +30,7 @@ const byTestIdPrefix = (testIdPrefix: string): string => `[data-testid^="${testI
 
 const SETTINGS_SECTION_HEADINGS: Record<SettingsSection, string> = {
   model: '大模型',
-  workspace: '工作空间',
-  'web-sources': '网页资料'
+  workspace: '工作空间'
 }
 
 export const getSettingsLocator = (page: Page, testId: string): Locator =>
@@ -98,17 +100,22 @@ export const createFixtureWorkspace = async (
   return response
 }
 
-export const seedWebSources = async (page: Page, urls: readonly string[]): Promise<void> => {
+export const seedWebSources = async (
+  page: Page,
+  workspaceId: string,
+  urls: readonly string[]
+): Promise<void> => {
   await page.evaluate(async (input) => {
     const response = await window.api.ingestWebs(
       input.urls.map((url) => ({
+        workspaceId: input.workspaceId,
         url
       }))
     )
     if (!response.success) {
       throw new Error(response.error || 'failed to ingest web source fixtures')
     }
-  }, { urls })
+  }, { workspaceId, urls })
 }
 
 export const workspaceCardLocator = (page: Page, workspaceId: string): Locator =>

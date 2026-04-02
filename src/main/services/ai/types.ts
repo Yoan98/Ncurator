@@ -51,7 +51,6 @@ export type AiRunStartPayload = {
   runId: string
   sessionId: string
   input: string
-  selectedDocumentIds?: string[]
   selectedReferences?: SelectedReference[]
   modelConfigId?: string
   workspace?: {
@@ -93,7 +92,6 @@ export type AiRunDeps = {
 
 export type AiRunContext = {
   runId: string
-  selectedDocumentIds?: string[]
   selectedContextText: string
   humanRuntimeOverrides?: {
     hardActionLimit?: number
@@ -147,7 +145,7 @@ export type TerminalToolContext = Pick<
 
 export type KnowledgeRetrievalContext = Pick<
   AiRunContext,
-  'runId' | 'checkCancelled' | 'sendEvent' | 'selectedDocumentIds' | 'documentsStore' | 'embeddingService'
+  'runId' | 'checkCancelled' | 'sendEvent' | 'workspace' | 'documentsStore' | 'embeddingService'
 >
 
 export type DocxToolContext = Pick<

@@ -7,7 +7,7 @@ import type {
   WorkspaceSyncProgress
 } from '../../../../shared/types'
 
-export type SettingsSectionValue = 'model' | 'workspace' | 'web-sources'
+export type SettingsSectionValue = 'model' | 'workspace'
 
 export type LlmConfigFormValues = Pick<LLMConfig, 'name' | 'base_url' | 'model_name' | 'api_key'>
 

@@ -2,7 +2,11 @@ import type { Page } from 'playwright'
 import { describe, it } from 'vitest'
 import { settingsSelectors } from '../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../harness/e2e/run-e2e-case'
-import { getSettingsLocator, navigateToSettingsSection } from '../../harness/e2e/settings'
+import {
+  SETTINGS_E2E_TIMEOUT_MS,
+  getSettingsLocator,
+  navigateToSettingsSection
+} from '../../harness/e2e/settings'
 
 const fillModelForm = async (page: Page): Promise<void> => {
   await getSettingsLocator(page, settingsSelectors.modelNameInput).fill('首个配置')
@@ -80,5 +84,5 @@ describe('settings model e2e', () => {
         )
       }
     })
-  })
+  }, SETTINGS_E2E_TIMEOUT_MS)
 })

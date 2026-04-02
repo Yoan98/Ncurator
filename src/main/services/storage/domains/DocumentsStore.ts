@@ -15,6 +15,7 @@ type ChunkRow = Record<string, unknown> & {
   text?: unknown
   document_name?: unknown
   document_id?: unknown
+  workspace_id?: unknown
   source_type?: unknown
   metadata?: unknown
   created_at?: unknown
@@ -25,6 +26,7 @@ type DocumentRow = Record<string, unknown> & {
   id?: unknown
   name?: unknown
   source_type?: unknown
+  workspace_id?: unknown
   file_path?: unknown
   created_at?: unknown
   import_status?: unknown
@@ -48,6 +50,7 @@ const toDocumentRecord = (value: unknown): DocumentRecord => {
     id: toString(row.id),
     name: toString(row.name),
     source_type: normalizeSourceType(row.source_type),
+    workspace_id: toOptionalString(row.workspace_id),
     file_path: toOptionalString(row.file_path),
     created_at: toNumber(row.created_at),
     import_status: importStatus
@@ -72,6 +75,7 @@ const toSearchResult = (value: unknown): SearchResult => {
 
 type WebSourceRow = Record<string, unknown> & {
   id?: unknown
+  workspace_id?: unknown
   normalized_url?: unknown
   url?: unknown
   title?: unknown
@@ -89,6 +93,7 @@ const toWebSourceRecord = (value: unknown): WebSourceRecord => {
   const importStatus = (status === 1 ? 1 : status === 3 ? 3 : 2) as 1 | 2 | 3
   return {
     id: toString(row.id),
+    workspace_id: toString(row.workspace_id),
     identity_kind: 'normalized_url',
     normalized_url: toString(row.normalized_url),
     url: toString(row.url),
@@ -113,6 +118,39 @@ export class DocumentsStore {
     return this.reranker
   }
 
+  private buildChunkWhere(input: {
+    workspaceId?: string
+    sourceType?: string
+    documentIds?: string[]
+  }): string | undefined {
+    return this.core.combineWhere([
+      input.workspaceId
+        ? `workspace_id = '${this.core.escapeSqlString(input.workspaceId)}'`
+        : undefined,
+      input.sourceType ? `source_type = '${this.core.escapeSqlString(input.sourceType)}'` : undefined,
+      this.core.buildInClause('document_id', input.documentIds)
+    ])
+  }
+
+  private buildDocumentWhere(input: {
+    workspaceId?: string
+    keyword?: string
+    sourceType?: DocumentRecord['source_type']
+    documentIds?: string[]
+  }): string | undefined {
+    const keyword = String(input.keyword || '').trim()
+    return this.core.combineWhere([
+      input.workspaceId
+        ? `workspace_id = '${this.core.escapeSqlString(input.workspaceId)}'`
+        : undefined,
+      input.sourceType
+        ? `source_type = '${this.core.escapeSqlString(input.sourceType)}'`
+        : undefined,
+      keyword ? `name LIKE '%${this.core.escapeSqlString(keyword)}%'` : undefined,
+      this.core.buildInClause('id', input.documentIds)
+    ])
+  }
+
   public async addDocument(doc: DocumentRecord): Promise<void> {
     const table = await this.core.openTable(LANCE_TABLES.DOCUMENT)
     await table.add([
@@ -120,6 +158,7 @@ export class DocumentsStore {
         id: doc.id,
         name: doc.name,
         source_type: doc.source_type,
+        workspace_id: doc.workspace_id,
         file_path: doc.file_path,
         created_at: doc.created_at,
         import_status: doc.import_status
@@ -137,7 +176,7 @@ export class DocumentsStore {
 
   public async updateDocumentById(
     id: string,
-    values: Partial<Pick<DocumentRecord, 'name' | 'file_path' | 'source_type'>>
+    values: Partial<Pick<DocumentRecord, 'name' | 'file_path' | 'source_type' | 'workspace_id'>>
   ): Promise<void> {
     const table = await this.core.openTable(LANCE_TABLES.DOCUMENT)
     await table.update({ where: `id = '${this.core.escapeSqlString(id)}'`, values })
@@ -186,6 +225,7 @@ export class DocumentsStore {
       text: chunks[i].text,
       id: chunks[i].id,
       document_id: chunks[i].document_id,
+      workspace_id: chunks[i].workspace_id,
       document_name: chunks[i].document_name,
       source_type: chunks[i].source_type,
       metadata: chunks[i].metadata,
@@ -200,14 +240,12 @@ export class DocumentsStore {
     queryVector: Float32Array,
     limit = 50,
     sourceType?: string,
+    workspaceId?: string,
     documentIds?: string[]
   ): Promise<SearchResult[]> {
     const table = await this.core.openTable(LANCE_TABLES.CHUNK)
     const query = table.query()
-    const where = this.core.combineWhere([
-      sourceType ? `source_type = '${this.core.escapeSqlString(sourceType)}'` : undefined,
-      this.core.buildInClause('document_id', documentIds)
-    ])
+    const where = this.buildChunkWhere({ workspaceId, sourceType, documentIds })
     if (where) query.where(where)
     const results = await query.nearestTo(queryVector).distanceType('cosine').limit(limit).toArray()
     return results.map(toSearchResult)
@@ -217,14 +255,12 @@ export class DocumentsStore {
     queryText: string,
     limit = 50,
     sourceType?: string,
+    workspaceId?: string,
     documentIds?: string[]
   ): Promise<SearchResult[]> {
     const table = await this.core.openTable(LANCE_TABLES.CHUNK)
     const q = table.query()
-    const where = this.core.combineWhere([
-      sourceType ? `source_type = '${this.core.escapeSqlString(sourceType)}'` : undefined,
-      this.core.buildInClause('document_id', documentIds)
-    ])
+    const where = this.buildChunkWhere({ workspaceId, sourceType, documentIds })
     if (where) q.where(where)
     const results = await q.fullTextSearch(queryText).limit(limit).toArray()
     return results.map(toSearchResult)
@@ -235,15 +271,13 @@ export class DocumentsStore {
     queryText: string,
     limit = 50,
     sourceType?: string,
+    workspaceId?: string,
     documentIds?: string[]
   ): Promise<SearchResult[]> {
     const reranker = await this.getRRFReranker()
     const table = await this.core.openTable(LANCE_TABLES.CHUNK)
     const q = table.query()
-    const where = this.core.combineWhere([
-      sourceType ? `source_type = '${this.core.escapeSqlString(sourceType)}'` : undefined,
-      this.core.buildInClause('document_id', documentIds)
-    ])
+    const where = this.buildChunkWhere({ workspaceId, sourceType, documentIds })
     if (where) q.where(where)
     const results = await q
       .fullTextSearch(queryText)
@@ -260,9 +294,17 @@ export class DocumentsStore {
     queryText: string,
     limit = 50,
     sourceType?: string,
+    workspaceId?: string,
     documentIds?: string[]
   ): Promise<SearchResult[]> {
-    const results = await this.hybridSearch(queryVector, queryText, limit, sourceType, documentIds)
+    const results = await this.hybridSearch(
+      queryVector,
+      queryText,
+      limit,
+      sourceType,
+      workspaceId,
+      documentIds
+    )
     if (results.length === 0) return []
 
     const resultDocumentIds = Array.from(
@@ -294,15 +336,13 @@ export class DocumentsStore {
     keyword?: string
     page: number
     pageSize: number
+    workspaceId?: string
+    documentIds?: string[]
   }): Promise<DocumentListResponse> {
-    const { keyword, page, pageSize } = params
+    const { keyword, page, pageSize, workspaceId, documentIds } = params
     const table = await this.core.openTable(LANCE_TABLES.DOCUMENT)
 
-    let where: string | undefined = undefined
-    const kw = String(keyword || '').trim()
-    if (kw) {
-      where = `name LIKE '%${this.core.escapeSqlString(kw)}%'`
-    }
+    const where = this.buildDocumentWhere({ workspaceId, keyword, documentIds })
 
     const total = await table.countRows(where)
     const skip = Math.max(0, (page - 1) * pageSize)
@@ -317,12 +357,14 @@ export class DocumentsStore {
   }
 
   public async listDocumentsBySourceType(
-    sourceType: DocumentRecord['source_type']
+    sourceType: DocumentRecord['source_type'],
+    workspaceId?: string
   ): Promise<DocumentRecord[]> {
     const table = await this.core.openTable(LANCE_TABLES.DOCUMENT)
+    const where = this.buildDocumentWhere({ sourceType, workspaceId })
     const rows = await table
       .query()
-      .where(`source_type = '${this.core.escapeSqlString(sourceType)}'`)
+      .where(where || `source_type = '${this.core.escapeSqlString(sourceType)}'`)
       .toArray()
     return await this.attachWebSourceMetadata(rows.map(toDocumentRecord))
   }
@@ -371,11 +413,16 @@ export class DocumentsStore {
     keyword?: string
     page: number
     pageSize: number
+    workspaceId?: string
+    documentIds?: string[]
   }): Promise<ChunkListResponse> {
-    const { keyword, page, pageSize } = params
+    const { keyword, page, pageSize, workspaceId, documentIds } = params
     const table = await this.core.openTable(LANCE_TABLES.CHUNK)
 
-    const where = this.core.buildWhereFromKeyword(keyword, ['text', 'document_name'])
+    const where = this.core.combineWhere([
+      this.buildChunkWhere({ workspaceId, documentIds }),
+      this.core.buildWhereFromKeyword(keyword, ['text', 'document_name'])
+    ])
     const total = await table.countRows(where)
     const skip = Math.max(0, (page - 1) * pageSize)
 

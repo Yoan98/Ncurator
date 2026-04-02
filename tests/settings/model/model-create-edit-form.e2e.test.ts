@@ -1,7 +1,11 @@
 import { describe, it } from 'vitest'
 import { settingsSelectors } from '../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../harness/e2e/run-e2e-case'
-import { getSettingsLocator, navigateToSettingsSection } from '../../harness/e2e/settings'
+import {
+  SETTINGS_E2E_TIMEOUT_MS,
+  getSettingsLocator,
+  navigateToSettingsSection
+} from '../../harness/e2e/settings'
 
 describe('settings model e2e', () => {
   it('model-create-edit-form', async () => {
@@ -133,5 +137,5 @@ describe('settings model e2e', () => {
         )
       }
     })
-  })
+  }, SETTINGS_E2E_TIMEOUT_MS)
 })

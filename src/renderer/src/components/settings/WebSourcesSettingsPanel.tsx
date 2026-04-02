@@ -6,7 +6,17 @@ import { importSelectors } from '../../testing/selectors'
 import StatusTag from './StatusTag'
 import { formatDateTime, getWebStatusBadge } from './utils/workspace'
 
-const WebSourcesSettingsPanel: React.FC = () => {
+type WebSourcesSettingsPanelProps = {
+  workspaceId: string | null
+  workspaceName?: string
+  embedded?: boolean
+}
+
+const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
+  workspaceId,
+  workspaceName,
+  embedded = false
+}) => {
   const [webSources, setWebSources] = useState<WebSourceRecord[]>([])
   const [webLoading, setWebLoading] = useState(false)
   const [webKeyword, setWebKeyword] = useState('')
@@ -24,9 +34,13 @@ const WebSourcesSettingsPanel: React.FC = () => {
   const [selectedWebSourceId, setSelectedWebSourceId] = useState<string | null>(null)
 
   const loadWebSources = useCallback(async (): Promise<void> => {
+    if (!workspaceId) {
+      setWebSources([])
+      return
+    }
     setWebLoading(true)
     try {
-      const response = await window.api.webSourceList()
+      const response = await window.api.webSourceList({ workspaceId })
       const keyword = webKeyword.trim().toLowerCase()
       const items = keyword
         ? response.items.filter((item) =>
@@ -42,7 +56,7 @@ const WebSourcesSettingsPanel: React.FC = () => {
     } finally {
       setWebLoading(false)
     }
-  }, [webKeyword])
+  }, [webKeyword, workspaceId])
 
   useEffect(() => {
     void loadWebSources()
@@ -92,7 +106,12 @@ const WebSourcesSettingsPanel: React.FC = () => {
     setWebUrlsError('')
     setWebSubmitting(true)
     try {
-      const response = await window.api.ingestWebs(urls.map((url) => ({ url })))
+      if (!workspaceId) {
+        message.warning('请先选择工作空间')
+        return
+      }
+      const scopedPayload = urls.map((url) => ({ workspaceId, url }))
+      const response = await window.api.ingestWebs(scopedPayload)
       if (!response.success) {
         message.error(response.error || '提交网页资料失败')
         return
@@ -110,9 +129,13 @@ const WebSourcesSettingsPanel: React.FC = () => {
   }
 
   const handleRefreshWebSource = async (source: WebSourceRecord): Promise<void> => {
+    if (!workspaceId) {
+      message.warning('请先选择工作空间')
+      return
+    }
     setWebRefreshingIds((previous) => ({ ...previous, [source.id]: true }))
     try {
-      const response = await window.api.webSourceRefresh({ webSourceId: source.id })
+      const response = await window.api.webSourceRefresh({ workspaceId, webSourceId: source.id })
       if (!response.success) {
         message.error(response.error || '重新抓取网页资料失败')
         return
@@ -128,6 +151,10 @@ const WebSourcesSettingsPanel: React.FC = () => {
   }
 
   const handleRefreshAllWebSources = async (): Promise<void> => {
+    if (!workspaceId) {
+      message.warning('请先选择工作空间')
+      return
+    }
     if (webSources.length === 0) {
       setWebActionFeedback({
         tone: 'warning',
@@ -141,7 +168,9 @@ const WebSourcesSettingsPanel: React.FC = () => {
     setWebRefreshingIds(Object.fromEntries(webSources.map((source) => [source.id, true] as const)))
     try {
       const results = await Promise.allSettled(
-        webSources.map((source) => window.api.webSourceRefresh({ webSourceId: source.id }))
+        webSources.map((source) =>
+          window.api.webSourceRefresh({ workspaceId, webSourceId: source.id })
+        )
       )
       const successCount = results.filter(
         (result) => result.status === 'fulfilled' && result.value.success
@@ -179,7 +208,14 @@ const WebSourcesSettingsPanel: React.FC = () => {
   const handleDeleteWebSource = async (): Promise<void> => {
     if (!deleteWebSource) return
     try {
-      const response = await window.api.webSourceDelete(deleteWebSource.id)
+      if (!workspaceId) {
+        message.warning('请先选择工作空间')
+        return
+      }
+      const response = await window.api.webSourceDelete({
+        workspaceId,
+        webSourceId: deleteWebSource.id
+      })
       if (!response.success) {
         message.error(response.error || '删除网页资料失败')
         return
@@ -195,14 +231,17 @@ const WebSourcesSettingsPanel: React.FC = () => {
 
   return (
     <div
-      className="flex h-full min-h-0 flex-col gap-4 overflow-hidden"
+      className={`flex min-h-0 flex-col gap-4 overflow-hidden ${embedded ? '' : 'h-full'}`}
       data-testid={importSelectors.webSourceSection}
     >
       <section className="ui-panel-ghost shrink-0 px-4 py-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <h2 className="text-[16px] font-semibold tracking-tight text-[#1F1F1F]">网页资料</h2>
-            <div className="pt-1 text-[12px] text-[#666666]">共 {webSources.length} 条</div>
+            <div className="pt-1 text-[12px] text-[#666666]">
+              {workspaceName ? `${workspaceName} · ` : ''}
+              共 {webSources.length} 条
+            </div>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -274,7 +313,11 @@ const WebSourcesSettingsPanel: React.FC = () => {
               <div className="flex min-h-full items-center justify-center">
                 <Empty
                   image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description={<span className="text-[#666666]">暂无网页资料</span>}
+                  description={
+                    <span className="text-[#666666]">
+                      {workspaceId ? '当前工作区暂无网页资料' : '请先选择工作空间'}
+                    </span>
+                  }
                 />
               </div>
             ) : (

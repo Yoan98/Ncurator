@@ -31,6 +31,7 @@ export type IpcJsonArray = IpcJsonValue[]
 export type IpcJsonValue = IpcJsonPrimitive | IpcJsonObject | IpcJsonArray
 
 export interface WebIngestPayload {
+  workspaceId: string
   url: string
   includeSelectors?: string[]
   excludeSelectors?: string[]
@@ -40,6 +41,7 @@ export interface DocumentRecord {
   id: string
   name: string
   source_type: DocumentSourceType
+  workspace_id?: string
   file_path?: string
   created_at: number
   import_status: DocumentImportStatus
@@ -54,6 +56,7 @@ export interface DocumentRecord {
 
 export interface WebSourceRecord {
   id: string
+  workspace_id: string
   identity_kind: WebSourceIdentityKind
   normalized_url: string
   url: string
@@ -135,6 +138,7 @@ export interface FileReference {
 
 export interface WebReference {
   kind: 'web'
+  workspaceId: string
   webSourceId: string
   name: string
   url: string
@@ -237,7 +241,17 @@ export interface WorkspaceJobResponse {
 }
 
 export interface RefreshWebSourceRequest {
+  workspaceId: string
   webSourceId: string
+}
+
+export interface DeleteWebSourceRequest {
+  workspaceId: string
+  webSourceId: string
+}
+
+export interface ListWebSourcesRequest {
+  workspaceId: string
 }
 
 export interface WebSourceMutationResponse {

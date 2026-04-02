@@ -1,7 +1,7 @@
 import { describe, it } from 'vitest'
 import {
   buildWebReferenceItem,
-  buildWorkspaceDefaultDocumentIds,
+  collectReferenceDocumentIds,
   buildWorkspaceReferenceItems,
   shouldIncludeReferenceInSearch
 } from '../../../src/main/services/sourceScope/selection'
@@ -94,6 +94,7 @@ const WORKSPACE_NODES: WorkspaceNode[] = [
 
 const INDEXED_WEB_SOURCE: WebSourceRecord = {
   id: 'web-1',
+  workspace_id: WORKSPACE.id,
   identity_kind: 'normalized_url',
   normalized_url: 'https://example.com/rules',
   url: 'https://example.com/rules',
@@ -106,6 +107,7 @@ const INDEXED_WEB_SOURCE: WebSourceRecord = {
 
 const NOT_INDEXED_WEB_SOURCE: WebSourceRecord = {
   id: 'web-2',
+  workspace_id: WORKSPACE.id,
   identity_kind: 'normalized_url',
   normalized_url: 'https://example.com/draft',
   url: 'https://example.com/draft',
@@ -144,7 +146,11 @@ describe('workbench scope backend', () => {
           notIndexedFileReference,
           indexedWebReference,
           notIndexedWebReference,
-          workspaceDefaultDocumentIds: buildWorkspaceDefaultDocumentIds(WORKSPACE_NODES),
+          workspaceDefaultDocumentIds: collectReferenceDocumentIds([
+            ...references,
+            indexedWebReference,
+            notIndexedWebReference
+          ]),
           searchableReferenceKinds: [
             directoryReference,
             indexedFileReference,
@@ -206,13 +212,14 @@ describe('workbench scope backend', () => {
         )
 
         runtime.assertThat(
-          JSON.stringify(result.workspaceDefaultDocumentIds) === JSON.stringify(['doc-a', 'doc-root']) &&
+          JSON.stringify(result.workspaceDefaultDocumentIds) ===
+            JSON.stringify(['doc-a', 'doc-root', 'web-doc-1']) &&
             JSON.stringify(result.searchableReferenceKinds) ===
               JSON.stringify(['directory:PRD', 'file:a.docx', 'web:发布规范']),
           {
             name: 'workspace-default-kb-scope-and-search-filter-stay-aligned',
             message:
-              '方案 B 下仅绑定工作区时，应默认收口到工作区全部已索引文件；搜索模式同时只允许 kbDocumentIds 非空的 reference 进入候选。',
+              '仅绑定工作区时，应默认收口到当前工作区全部可检索资料；搜索模式同时只允许 kbDocumentIds 非空的 reference 进入候选。',
             data: {
               workspaceDefaultDocumentIds: result.workspaceDefaultDocumentIds,
               searchableReferenceKinds: result.searchableReferenceKinds

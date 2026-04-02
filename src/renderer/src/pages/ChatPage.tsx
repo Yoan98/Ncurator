@@ -60,7 +60,6 @@ import { chatSelectors, workbenchSelectors } from '../testing/selectors'
 import brandIcon from '../../../../resources/icon.png'
 import {
   collectReferenceDocumentIds,
-  collectWorkspaceIndexedDocumentIds,
   hasIncompleteLocalKbCoverage,
   pruneReferencesByWorkspace
 } from '../utils/reference'
@@ -204,9 +203,13 @@ const ChatPage: React.FC = () => {
         return
       }
 
-      const response = await window.api.workspaceNodes({ workspaceId: selectedWorkspaceId })
+      const response = await window.api.referenceItemList({
+        mode: 'search',
+        workspaceId: selectedWorkspaceId,
+        referenceKinds: ['directory', 'file', 'web']
+      })
       if (!cancelled) {
-        setWorkspaceDocumentIds(collectWorkspaceIndexedDocumentIds(response.items))
+        setWorkspaceDocumentIds(collectReferenceDocumentIds(response.items))
       }
     }
 
@@ -1162,7 +1165,7 @@ const ChatPage: React.FC = () => {
     const userQuery = input.trim()
     const hasStrictScope = selectedReferences.length > 0 || Boolean(selectedWorkspace)
     if (hasStrictScope && selectedDocumentIds.length === 0) {
-      message.warning('当前搜索范围没有已加载的本地资料，无法执行纯搜索。')
+      message.warning('当前搜索范围没有已加载资料，无法执行纯搜索。')
       return
     }
 

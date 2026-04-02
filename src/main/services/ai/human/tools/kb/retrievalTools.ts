@@ -53,21 +53,9 @@ const buildKbResult = (input: {
   }
 }
 
-export const resolveScopedDocumentIds = (
-  runScopedIds: string[] | undefined,
-  requestedIds: string[] | undefined
-): string[] | null => {
-  const runScope = toStringIdList(runScopedIds)
-  const requested = toStringIdList(requestedIds)
-
-  if (runScope.length === 0) {
-    return requested.length > 0 ? requested : null
-  }
-
-  if (requested.length === 0) return runScope
-
-  const allowed = new Set(runScope)
-  return requested.filter((id) => allowed.has(id))
+const resolveRequestedDocumentIds = (requestedIds: string[] | undefined): string[] | null => {
+  if (!Array.isArray(requestedIds)) return null
+  return toStringIdList(requestedIds)
 }
 
 export const buildKbCapabilityTools = (input: {
@@ -88,10 +76,11 @@ export const buildKbCapabilityTools = (input: {
     sourceType?: 'all' | 'file' | 'web'
     documentIds?: string[]
   }) => ({
+    workspaceId: String(ctx.workspace?.workspaceId || '').trim() || undefined,
     queryText: String(args.queryText || '').trim(),
     limit: Math.max(1, Math.min(MAX_RETRIEVAL_LIMIT, Number(args.limit ?? 10))),
     filter: args.sourceType && args.sourceType !== 'all' ? String(args.sourceType) : undefined,
-    scopedDocumentIds: resolveScopedDocumentIds(ctx.selectedDocumentIds, args.documentIds)
+    requestedDocumentIds: resolveRequestedDocumentIds(args.documentIds)
   })
 
   const createChunkSearchTool = (input: {
@@ -108,7 +97,13 @@ export const buildKbCapabilityTools = (input: {
           execute: async (session) => {
             ctx.checkCancelled()
             const prepared = resolveSearchArgs(args)
-            if (Array.isArray(prepared.scopedDocumentIds) && prepared.scopedDocumentIds.length === 0) {
+            if (!prepared.workspaceId) {
+              throw new Error('workspace is required for kb search')
+            }
+            if (
+              Array.isArray(prepared.requestedDocumentIds) &&
+              prepared.requestedDocumentIds.length === 0
+            ) {
               const emptyRows: SearchResult[] = []
               session.succeed(
                 [],
@@ -168,7 +163,8 @@ export const buildKbCapabilityTools = (input: {
         args.queryText,
         args.limit,
         args.filter,
-        args.scopedDocumentIds || undefined
+        args.workspaceId,
+        args.requestedDocumentIds || undefined
       )
     }
   })
@@ -182,7 +178,8 @@ export const buildKbCapabilityTools = (input: {
         vec,
         args.limit,
         args.filter,
-        args.scopedDocumentIds || undefined
+        args.workspaceId,
+        args.requestedDocumentIds || undefined
       )
     }
   })
@@ -195,7 +192,8 @@ export const buildKbCapabilityTools = (input: {
         args.queryText,
         args.limit,
         args.filter,
-        args.scopedDocumentIds || undefined
+        args.workspaceId,
+        args.requestedDocumentIds || undefined
       )
   })
 
@@ -207,15 +205,16 @@ export const buildKbCapabilityTools = (input: {
         args: args as JsonObject,
         execute: async (session) => {
           ctx.checkCancelled()
+          const workspaceId = String(ctx.workspace?.workspaceId || '').trim() || undefined
+          if (!workspaceId) {
+            throw new Error('workspace is required for kb search')
+          }
           const keyword = String(args.keyword || '').trim() || undefined
           const page = Math.max(1, Number(args.page ?? 1))
           const pageSize = Math.max(1, Math.min(MAX_LIST_PAGE_SIZE, Number(args.pageSize ?? 20)))
-          const scopedDocumentIds = resolveScopedDocumentIds(
-            ctx.selectedDocumentIds,
-            args.documentIds
-          )
+          const requestedDocumentIds = resolveRequestedDocumentIds(args.documentIds)
 
-          if (Array.isArray(scopedDocumentIds) && scopedDocumentIds.length === 0) {
+          if (Array.isArray(requestedDocumentIds) && requestedDocumentIds.length === 0) {
             const empty = { items: [], total: 0 }
             session.succeed(
               [],
@@ -228,24 +227,15 @@ export const buildKbCapabilityTools = (input: {
             return empty
           }
 
-          const res = await ctx.documentsStore.listDocuments({ keyword, page, pageSize })
-          if (!scopedDocumentIds) {
-            session.succeed(
-              previewArray(res.items),
-              undefined,
-              buildKbResult({
-                toolName: KB_LIST_DOCUMENTS_TOOL_SPEC.name,
-                data: res
-              })
-            )
-            return res
-          }
-
-          const allowed = new Set(scopedDocumentIds)
-          const items = res.items.filter((item) => allowed.has(item.id))
-          const normalized = { items, total: items.length }
+          const normalized = await ctx.documentsStore.listDocuments({
+            keyword,
+            page,
+            pageSize,
+            workspaceId,
+            documentIds: requestedDocumentIds || undefined
+          })
           session.succeed(
-            previewArray(items),
+            previewArray(normalized.items),
             undefined,
             buildKbResult({
               toolName: KB_LIST_DOCUMENTS_TOOL_SPEC.name,

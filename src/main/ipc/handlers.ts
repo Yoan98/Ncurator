@@ -19,7 +19,6 @@ import {
 } from '../services/ai/human/tools/docx/worker/docxWorkerClient'
 import {
   buildWebReferenceItem,
-  buildWorkspaceDefaultDocumentIds,
   buildWorkspaceReferenceItems,
   getWorkspaceScopeKey,
   referenceMatchesQuery,
@@ -62,6 +61,9 @@ import type {
   ReferenceItemListResponse,
   ValidateDraftCommitRequest,
   ValidateDraftCommitResponse,
+  ListWebSourcesRequest,
+  RefreshWebSourceRequest,
+  DeleteWebSourceRequest,
   SelectedReference,
   WebSourceListResponse,
   WebSourceMutationResponse,
@@ -170,6 +172,7 @@ const normalizeSelectedReferences = (
       if (reference.kind === 'web') {
         return {
           kind: 'web' as const,
+          workspaceId: String(reference.workspaceId || '').trim(),
           webSourceId: String(reference.webSourceId || '').trim(),
           name: String(reference.name || '').trim(),
           url: String(reference.url || '').trim(),
@@ -207,7 +210,7 @@ const normalizeSelectedReferences = (
     })
     .filter((reference) => {
       if (reference.kind === 'web') {
-        return Boolean(reference.webSourceId && reference.name && reference.url)
+        return Boolean(reference.workspaceId && reference.webSourceId && reference.name && reference.url)
       }
 
       return Boolean(
@@ -915,14 +918,17 @@ export function registerHandlers(services: {
 
     for (const document of webDocuments) {
       if (existingByDocumentId.has(document.id)) continue
+      const workspaceId = String(document.workspace_id || '').trim()
+      if (!workspaceId) continue
       const rawUrl = String(document.source_url || document.file_path || document.name || '').trim()
       if (!rawUrl) continue
       try {
         const { url, normalizedUrl } = webSourceService.normalizeUrl(rawUrl)
-        const existing = await webSourceStore.getWebSourceByNormalizedUrl(normalizedUrl)
+        const existing = await webSourceStore.getWebSourceByNormalizedUrl(normalizedUrl, workspaceId)
         const now = Date.now()
         if (existing) {
           await webSourceStore.updateWebSource(existing.id, {
+            workspace_id: workspaceId,
             url,
             title: document.source_title || document.name,
             document_id: document.id,
@@ -934,6 +940,7 @@ export function registerHandlers(services: {
           continue
         }
         const source = webSourceService.createWebSource({
+          workspaceId,
           url,
           normalizedUrl,
           title: document.source_title || document.name,
@@ -972,7 +979,8 @@ export function registerHandlers(services: {
       await documentsStore.updateDocumentById(existingDocument.id, {
         name: source.title || source.url,
         file_path: source.url,
-        source_type: 'web'
+        source_type: 'web',
+        workspace_id: source.workspace_id
       })
       await documentsStore.updateDocumentImportStatus(existingDocument.id, 1)
       await documentsStore.deleteChunksByDocumentIds([existingDocument.id])
@@ -981,6 +989,7 @@ export function registerHandlers(services: {
         id: nextDocumentId,
         name: source.title || source.url,
         source_type: 'web',
+        workspace_id: source.workspace_id,
         file_path: source.url,
         created_at: now,
         import_status: 1,
@@ -1003,7 +1012,8 @@ export function registerHandlers(services: {
       await documentsStore.updateDocumentById(nextDocumentId, {
         name: documentName,
         file_path: source.url,
-        source_type: 'web'
+        source_type: 'web',
+        workspace_id: source.workspace_id
       })
 
       const allSplitDocs = [...splitDocs.bigSplitDocs, ...splitDocs.miniSplitDocs]
@@ -1017,6 +1027,7 @@ export function registerHandlers(services: {
         text: allSplitDocs[index].pageContent,
         id: uuidv4(),
         document_id: nextDocumentId,
+        workspace_id: source.workspace_id,
         document_name: documentName,
         source_type: 'web',
         metadata: {
@@ -1059,7 +1070,7 @@ export function registerHandlers(services: {
     'ingest-web',
     async (
       event,
-      payload: { url: string; includeSelectors?: string[]; excludeSelectors?: string[] }
+      payload: { workspaceId: string; url: string; includeSelectors?: string[]; excludeSelectors?: string[] }
     ) => {
       try {
         const fixtureResponse = ingestE2EFixtureWebSource(payload)
@@ -1068,13 +1079,18 @@ export function registerHandlers(services: {
           return fixtureResponse
         }
         await ensureWebSourcesHydrated()
+        const workspaceId = String(payload?.workspaceId || '').trim()
         const rawUrl = String(payload?.url || '').trim()
+        if (!workspaceId) throw new Error('workspaceId 不能为空')
         if (!rawUrl) throw new Error('URL 不能为空')
+        const workspace = await workspaceStore.getWorkspaceById(workspaceId)
+        if (!workspace) throw new Error('工作区不存在')
         const { url, normalizedUrl } = webSourceService.normalizeUrl(rawUrl)
-        const existing = await webSourceStore.getWebSourceByNormalizedUrl(normalizedUrl)
+        const existing = await webSourceStore.getWebSourceByNormalizedUrl(normalizedUrl, workspaceId)
         const source =
           existing ||
           webSourceService.createWebSource({
+            workspaceId,
             url,
             normalizedUrl,
             includeSelectors: payload.includeSelectors,
@@ -1083,6 +1099,7 @@ export function registerHandlers(services: {
           })
         const nextSource: WebSourceRecord = {
           ...source,
+          workspace_id: workspaceId,
           url,
           normalized_url: normalizedUrl,
           include_selectors: payload.includeSelectors,
@@ -1116,7 +1133,12 @@ export function registerHandlers(services: {
     'ingest-webs',
     async (
       event,
-      payload: Array<{ url: string; includeSelectors?: string[]; excludeSelectors?: string[] }>
+      payload: Array<{
+        workspaceId: string
+        url: string
+        includeSelectors?: string[]
+        excludeSelectors?: string[]
+      }>
     ) => {
       try {
         const fixtureResponse = ingestE2EFixtureWebSources(payload)
@@ -1129,13 +1151,20 @@ export function registerHandlers(services: {
         const preparedSources: WebSourceRecord[] = []
 
         for (const item of items) {
+          const workspaceId = String(item?.workspaceId || '').trim()
           const rawUrl = String(item?.url || '').trim()
-          if (!rawUrl) continue
+          if (!workspaceId || !rawUrl) continue
+          const workspace = await workspaceStore.getWorkspaceById(workspaceId)
+          if (!workspace) continue
           const { url, normalizedUrl } = webSourceService.normalizeUrl(rawUrl)
-          const existing = await webSourceStore.getWebSourceByNormalizedUrl(normalizedUrl)
+          const existing = await webSourceStore.getWebSourceByNormalizedUrl(
+            normalizedUrl,
+            workspaceId
+          )
           const source =
             existing ||
             webSourceService.createWebSource({
+              workspaceId,
               url,
               normalizedUrl,
               includeSelectors: item.includeSelectors,
@@ -1144,6 +1173,7 @@ export function registerHandlers(services: {
             })
           const nextSource: WebSourceRecord = {
             ...source,
+            workspace_id: workspaceId,
             url,
             normalized_url: normalizedUrl,
             include_selectors: item.includeSelectors,
@@ -1585,6 +1615,7 @@ export function registerHandlers(services: {
                 id: documentId,
                 name: currentNode.name,
                 source_type: 'file',
+                workspace_id: workspaceId,
                 file_path: currentNode.absolute_path,
                 created_at: Date.now(),
                 import_status: 1
@@ -1604,6 +1635,7 @@ export function registerHandlers(services: {
               text: allSplitDocs[index].pageContent,
               id: uuidv4(),
               document_id: documentId,
+              workspace_id: workspaceId,
               document_name: currentNode.name,
               source_type: 'file',
               metadata: {
@@ -1702,18 +1734,23 @@ export function registerHandlers(services: {
     }
   )
 
-  ipcMain.handle('web-source-list', async (): Promise<WebSourceListResponse> => {
+  ipcMain.handle(
+    'web-source-list',
+    async (_event, payload: ListWebSourcesRequest): Promise<WebSourceListResponse> => {
     try {
-      const fixtureList = getE2EFixtureWebSourceList()
+      const workspaceId = String(payload?.workspaceId || '').trim()
+      if (!workspaceId) return { items: [], total: 0 }
+      const fixtureList = getE2EFixtureWebSourceList(workspaceId)
       if (fixtureList) return fixtureList
       await ensureWebSourcesHydrated()
-      const items = await webSourceStore.listWebSources()
+      const items = await webSourceStore.listWebSources(workspaceId)
       return { items, total: items.length }
     } catch (error: unknown) {
       console.error('❌ [WEB-SOURCE-LIST] ERROR:', error)
       return { items: [], total: 0 }
     }
-  })
+    }
+  )
 
   ipcMain.handle('legacy-local-import-migration-status', async () => {
     return storageService.getLegacyLocalImportMigrationStatus()
@@ -1721,19 +1758,20 @@ export function registerHandlers(services: {
 
   ipcMain.handle(
     'web-source-refresh',
-    async (event, payload: { webSourceId: string }): Promise<WebSourceMutationResponse> => {
+    async (event, payload: RefreshWebSourceRequest): Promise<WebSourceMutationResponse> => {
       try {
-        const fixtureResponse = refreshE2EFixtureWebSource(String(payload.webSourceId || '').trim())
+        const workspaceId = String(payload?.workspaceId || '').trim()
+        const webSourceId = String(payload?.webSourceId || '').trim()
+        const fixtureResponse = refreshE2EFixtureWebSource(workspaceId, webSourceId)
         if (fixtureResponse) {
           emitSourceListRefresh(event.sender)
           return fixtureResponse
         }
         await ensureWebSourcesHydrated()
-        const webSourceId = String(payload.webSourceId || '').trim()
-        if (!webSourceId) {
-          return { success: false, error: 'webSourceId is required' }
+        if (!workspaceId || !webSourceId) {
+          return { success: false, error: 'workspaceId and webSourceId are required' }
         }
-        const source = await webSourceStore.getWebSourceById(webSourceId)
+        const source = await webSourceStore.getWebSourceById(webSourceId, workspaceId)
         if (!source) {
           return { success: false, error: 'web source not found' }
         }
@@ -1748,23 +1786,27 @@ export function registerHandlers(services: {
 
   ipcMain.handle(
     'web-source-delete',
-    async (event, webSourceId: string): Promise<DeleteWebSourceResponse> => {
+    async (event, payload: DeleteWebSourceRequest): Promise<DeleteWebSourceResponse> => {
       try {
-        const fixtureResponse = deleteE2EFixtureWebSource(String(webSourceId || '').trim())
+        const workspaceId = String(payload?.workspaceId || '').trim()
+        const safeId = String(payload?.webSourceId || '').trim()
+        const fixtureResponse = deleteE2EFixtureWebSource(workspaceId, safeId)
         if (fixtureResponse) {
           emitSourceListRefresh(event.sender)
           return fixtureResponse
         }
         await ensureWebSourcesHydrated()
-        const safeId = String(webSourceId || '').trim()
-        const source = await webSourceStore.getWebSourceById(safeId)
+        if (!workspaceId || !safeId) {
+          return { success: false, error: 'workspaceId and webSourceId are required' }
+        }
+        const source = await webSourceStore.getWebSourceById(safeId, workspaceId)
         if (!source) {
           return { success: false, error: 'web source not found' }
         }
         if (source.document_id) {
           await documentsStore.deleteDocumentsByIds([source.document_id])
         }
-        await webSourceStore.deleteWebSource(safeId)
+        await webSourceStore.deleteWebSource(safeId, workspaceId)
         emitSourceListRefresh(event.sender)
         return { success: true, deletedWebSourceId: safeId }
       } catch (error: unknown) {
@@ -1796,7 +1838,9 @@ export function registerHandlers(services: {
           }
         }
 
-        const webReferences = (await webSourceStore.listWebSources()).map(buildWebReferenceItem)
+        const webReferences = workspaceIdFilter
+          ? (await webSourceStore.listWebSources(workspaceIdFilter)).map(buildWebReferenceItem)
+          : []
 
         const allReferences = [...localReferences, ...webReferences]
           .filter((reference) => referenceMatchesQuery(reference, payload.query))
@@ -1825,7 +1869,14 @@ export function registerHandlers(services: {
         }
         const { data: queryVector } = await embeddingService.embed(query)
         const filter = sourceType && sourceType !== 'all' ? sourceType : undefined
-        const results = await documentsStore.search(queryVector, query, 5, filter, documentIds)
+        const results = await documentsStore.search(
+          queryVector,
+          query,
+          5,
+          filter,
+          undefined,
+          documentIds
+        )
 
         const tokens = jieba.cutForSearch(query, true)
 
@@ -1852,7 +1903,7 @@ export function registerHandlers(services: {
     ): Promise<SearchResult[]> => {
       try {
         const filter = sourceType && sourceType !== 'all' ? sourceType : undefined
-        const results = await documentsStore.ftsSearch(query, 20, filter, documentIds)
+        const results = await documentsStore.ftsSearch(query, 20, filter, undefined, documentIds)
         const normalized = results.map(normalizeForIpc)
         // console.log('🔎 [FTS-SEARCH] RESULTS:', normalized)
         return normalized
@@ -1874,7 +1925,13 @@ export function registerHandlers(services: {
       try {
         const { data: queryVector } = await embeddingService.embed(query)
         const filter = sourceType && sourceType !== 'all' ? sourceType : undefined
-        const results = await documentsStore.vectorSearch(queryVector, 20, filter, documentIds)
+        const results = await documentsStore.vectorSearch(
+          queryVector,
+          20,
+          filter,
+          undefined,
+          documentIds
+        )
         const normalized = results.map(normalizeForIpc)
         console.log('🔎 [VECTOR-SEARCH] RESULTS:', normalized)
         return normalized
@@ -1901,6 +1958,7 @@ export function registerHandlers(services: {
           query,
           20,
           filter,
+          undefined,
           documentIds
         )
         const normalized = results.map(normalizeForIpc)
@@ -2082,23 +2140,12 @@ export function registerHandlers(services: {
             return
           }
 
-          let selectedDocumentIds: string[] | undefined
-          if (!selectedReferences || selectedReferences.length === 0) {
-            if (workspace) {
-              const workspaceNodes = await workspaceStore.listWorkspaceNodes({
-                workspaceId: workspace.workspaceId
-              })
-              selectedDocumentIds = buildWorkspaceDefaultDocumentIds(workspaceNodes)
-            }
-          }
-
           const runtimeSettings = await aiRuntimeSettingsStore.get()
           const result = await AiRunService.getInstance().run(
             {
               runId,
               sessionId,
               input,
-              selectedDocumentIds,
               selectedReferences,
               modelConfigId,
               workspace

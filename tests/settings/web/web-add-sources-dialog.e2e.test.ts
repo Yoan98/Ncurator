@@ -2,9 +2,12 @@ import { describe, it } from 'vitest'
 import { importSelectors } from '../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../harness/e2e/run-e2e-case'
 import {
+  SETTINGS_WEB_E2E_TIMEOUT_MS,
+  createFixtureWorkspace,
   getSettingsLocator,
   getSettingsPrefixLocator,
-  navigateToSettingsSection
+  navigateToSettingsSection,
+  workspaceCardLocator
 } from '../../harness/e2e/settings'
 
 describe('settings web e2e', () => {
@@ -23,9 +26,14 @@ describe('settings web e2e', () => {
 
         await runtime.step({
           name: 'open-add-dialog',
-          message: '进入网页资料页并打开添加弹窗。',
+          message: '创建工作区，进入工作区详情并打开添加网页弹窗。',
           run: async () => {
-            await navigateToSettingsSection(page, 'web-sources')
+            const workspace = await createFixtureWorkspace(page, {
+              rootPath: '/tmp/settings-web-add-dialog-workspace',
+              name: '网页资料工作区'
+            })
+            await navigateToSettingsSection(page, 'workspace')
+            await workspaceCardLocator(page, workspace.workspace!.id).click()
             await getSettingsLocator(page, importSelectors.webSourceOpenModalButton).click()
             await urlTextarea.waitFor({ state: 'visible' })
           }
@@ -91,5 +99,5 @@ describe('settings web e2e', () => {
         })
       }
     })
-  })
+  }, SETTINGS_WEB_E2E_TIMEOUT_MS)
 })

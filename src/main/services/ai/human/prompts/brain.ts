@@ -168,14 +168,15 @@ export const buildBrainSystemPrompt = (): string =>
     6. 如果你收到收敛提醒，应优先考虑结束任务，除非只差一次非常明确且必要的动作。
     7. 输出 hand 时，工具 args 必须使用工具说明里的精确字段名，并补齐所有 requiredArgs。
     8. 如果你现在无法给出某个工具的完整必填参数，不要猜；应改为 learning 或 mouth。
-    9. 如果任务是在当前用户选择的参考资料内回答、提取事实或找证据，优先考虑 KB 能力，而不是默认退回 terminal。
-    10. 只有当任务确实需要访问工作区文件、执行命令或处理 docx 时，才进入 workspace 或 docx 能力。
-    11. 如果最近结果明确提示 workspace_required 或 path_unavailable，不要重复同类 terminal/docx 调用。
-    12. 如果最近结果提示 invalid_input 且缺字段明确，应优先修正参数或补充相关 skill，而不是切去无关能力。
-    13. learning 只用于补齐“下一步动作”最值得学习的 skill，不要为未来阶段提前学习完整流程的 skill。
-    14. 单次 learning 最多学习 2 个 skill；如果 1 个 skill 就足以支撑下一步，优先只学习 1 个。
-    15. mouth 不会执行任何工具；一旦选择 mouth，就表示你认为当前已经具备最终交付所需的信息、证据和产物。
-    16. 如果结果仍依赖未来的 KB、terminal、docx 或其他工具动作才能完成，readyToDeliver 必须为 false，且不能选择 mouth。
+    9. 如果任务是在当前工作区知识库中回答、提取事实、找规则或找证据，优先考虑 KB 能力，而不是默认退回 terminal。
+    10. 如果当前已选参考资料已经足够明确，优先通过 documentIds 缩圈搜索；如果缩圈不足，可扩大回当前工作区知识库范围。
+    11. 只有当任务确实需要访问工作区文件、执行命令或处理 docx 时，才进入 workspace 或 docx 能力。
+    12. 如果最近结果明确提示 workspace_required 或 path_unavailable，不要重复同类 terminal/docx 调用。
+    13. 如果最近结果提示 invalid_input 且缺字段明确，应优先修正参数或补充相关 skill，而不是切去无关能力。
+    14. learning 只用于补齐“下一步动作”最值得学习的 skill，不要为未来阶段提前学习完整流程的 skill。
+    15. 单次 learning 最多学习 2 个 skill；如果 1 个 skill 就足以支撑下一步，优先只学习 1 个。
+    16. mouth 不会执行任何工具；一旦选择 mouth，就表示你认为当前已经具备最终交付所需的信息、证据和产物。
+    17. 如果结果仍依赖未来的 KB、terminal、docx 或其他工具动作才能完成，readyToDeliver 必须为 false，且不能选择 mouth。
   </judgement_principles>
 
   <output_rules>

@@ -2,10 +2,13 @@ import { describe, it } from 'vitest'
 import { importSelectors } from '../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../harness/e2e/run-e2e-case'
 import {
+  SETTINGS_WEB_E2E_TIMEOUT_MS,
+  createFixtureWorkspace,
   getSettingsLocator,
   navigateToSettingsSection,
   seedWebSources,
-  setSettingsE2EApiOverrides
+  setSettingsE2EApiOverrides,
+  workspaceCardLocator
 } from '../../harness/e2e/settings'
 
 describe('settings web e2e', () => {
@@ -19,17 +22,24 @@ describe('settings web e2e', () => {
       runMode: 'single',
       execute: async (runtime) => {
         const { page } = runtime
+        let workspaceId = ''
         let refreshingStatusVisible = false
 
         await runtime.step({
           name: 'seed-web-source',
-          message: '预置一条网页资料，注入抓取延迟，并进入网页资料页。',
+          message: '预置工作区与一条网页资料，注入抓取延迟，并进入工作区详情。',
           run: async () => {
-            await seedWebSources(page, ['https://example.com/refresh-one-source'])
+            const workspace = await createFixtureWorkspace(page, {
+              rootPath: '/tmp/settings-web-refresh-one-workspace',
+              name: '网页资料工作区'
+            })
+            workspaceId = workspace.workspace!.id
+            await seedWebSources(page, workspaceId, ['https://example.com/refresh-one-source'])
             await setSettingsE2EApiOverrides(page, {
               webSourceRefreshDelayMs: 1200
             })
-            await navigateToSettingsSection(page, 'web-sources')
+            await navigateToSettingsSection(page, 'workspace')
+            await workspaceCardLocator(page, workspaceId).click()
             await getSettingsLocator(
               page,
               `${importSelectors.webSourceRefreshButtonPrefix}-e2e-web-source-1`
@@ -37,10 +47,12 @@ describe('settings web e2e', () => {
           }
         })
 
-        const initialFetchedAt = await page.evaluate(async () => {
-          const response = await window.api.webSourceList()
+        const initialFetchedAt = await page.evaluate(async (selectedWorkspaceId) => {
+          const response = await window.api.webSourceList({
+            workspaceId: selectedWorkspaceId
+          })
           return response.items.find((item) => item.id === 'e2e-web-source-1')?.fetched_at || 0
-        })
+        }, workspaceId)
 
         await runtime.step({
           name: 'refresh-current-web-source',
@@ -52,20 +64,24 @@ describe('settings web e2e', () => {
             ).click()
             await page.getByText('处理中').first().waitFor({ state: 'visible' })
             refreshingStatusVisible = true
-            await page.waitForFunction(async (previousFetchedAt) => {
-              const response = await window.api.webSourceList()
+            await page.waitForFunction(async ([previousFetchedAt, selectedWorkspaceId]) => {
+              const response = await window.api.webSourceList({
+                workspaceId: String(selectedWorkspaceId || '')
+              })
               const currentFetchedAt =
                 response.items.find((item) => item.id === 'e2e-web-source-1')?.fetched_at || 0
               return currentFetchedAt > Number(previousFetchedAt || 0)
-            }, initialFetchedAt)
+            }, [initialFetchedAt, workspaceId])
             await page.getByText('已抓取').first().waitFor({ state: 'visible' })
           }
         })
 
-        const refreshedFetchedAt = await page.evaluate(async () => {
-          const response = await window.api.webSourceList()
+        const refreshedFetchedAt = await page.evaluate(async (selectedWorkspaceId) => {
+          const response = await window.api.webSourceList({
+            workspaceId: selectedWorkspaceId
+          })
           return response.items.find((item) => item.id === 'e2e-web-source-1')?.fetched_at || 0
-        })
+        }, workspaceId)
 
         return {
           initialFetchedAt,
@@ -91,5 +107,5 @@ describe('settings web e2e', () => {
         )
       }
     })
-  })
+  }, SETTINGS_WEB_E2E_TIMEOUT_MS)
 })

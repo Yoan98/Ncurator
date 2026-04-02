@@ -119,6 +119,7 @@ export const buildWorkspaceReferenceItems = (
 
 export const buildWebReferenceItem = (source: WebSourceRecord): WebReference => ({
   kind: 'web',
+  workspaceId: source.workspace_id,
   webSourceId: source.id,
   name: source.title || source.url,
   url: source.url,

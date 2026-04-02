@@ -3,7 +3,6 @@ import { Navigate, useLocation, useParams } from 'react-router-dom'
 import AppPageHeader from '../components/app/AppPageHeader'
 import ModelSettingsPanel from '../components/settings/ModelSettingsPanel'
 import SettingsFloatingMenu from '../components/settings/SettingsFloatingMenu'
-import WebSourcesSettingsPanel from '../components/settings/WebSourcesSettingsPanel'
 import WorkspaceSettingsPanel from '../components/settings/WorkspaceSettingsPanel'
 import { SETTINGS_SECTION_META } from '../components/settings/constants'
 import type { SettingsSectionValue } from '../components/settings/types'
@@ -11,7 +10,8 @@ import { settingsSelectors } from '../testing/selectors'
 
 const normalizeSettingsSection = (value: string | undefined): SettingsSectionValue | null => {
   if (!value) return null
-  if (value === 'model' || value === 'workspace' || value === 'web-sources') {
+  if (value === 'web-sources') return 'workspace'
+  if (value === 'model' || value === 'workspace') {
     return value
   }
   return null
@@ -53,7 +53,6 @@ const SettingsPage: React.FC = () => {
         <div className="min-h-0 flex-1 overflow-hidden pb-4 pr-1">
           {currentSection === 'workspace' ? <WorkspaceSettingsPanel /> : null}
           {currentSection === 'model' ? <ModelSettingsPanel /> : null}
-          {currentSection === 'web-sources' ? <WebSourcesSettingsPanel /> : null}
         </div>
       </div>
       <SettingsFloatingMenu />

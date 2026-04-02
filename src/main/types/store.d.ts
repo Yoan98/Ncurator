@@ -27,7 +27,9 @@ import {
   ScanWorkspaceRequest,
   PrepareWorkspaceRequest,
   WorkspaceJobResponse,
+  ListWebSourcesRequest,
   RefreshWebSourceRequest,
+  DeleteWebSourceRequest,
   WebSourceMutationResponse,
   DeleteWebSourceResponse,
   ListReferenceItemsRequest,
@@ -114,7 +116,9 @@ export type {
   ScanWorkspaceRequest,
   PrepareWorkspaceRequest,
   WorkspaceJobResponse,
+  ListWebSourcesRequest,
   RefreshWebSourceRequest,
+  DeleteWebSourceRequest,
   WebSourceMutationResponse,
   DeleteWebSourceResponse,
   ListReferenceItemsRequest,
@@ -197,6 +201,7 @@ export interface ChunkInput {
   text: string
   id: string
   document_id: string
+  workspace_id: string
   document_name: string
   source_type: string
   metadata: {

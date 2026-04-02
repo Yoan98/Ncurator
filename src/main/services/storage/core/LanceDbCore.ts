@@ -185,6 +185,7 @@ export class LanceDbCore {
           new arrow.Field('text', new arrow.Utf8()),
           new arrow.Field('id', new arrow.Utf8()),
           new arrow.Field('document_id', new arrow.Utf8()),
+          new arrow.Field('workspace_id', new arrow.Utf8()),
           new arrow.Field('document_name', new arrow.Utf8()),
           new arrow.Field('source_type', new arrow.Utf8()),
           new arrow.Field(
@@ -193,6 +194,7 @@ export class LanceDbCore {
           ),
           new arrow.Field('created_at', new arrow.Int64())
         ]),
+        recreateIfSchemaChanged: true,
         ftsIndexConfig: {
           column: 'text',
           options: {
@@ -210,15 +212,18 @@ export class LanceDbCore {
           new arrow.Field('id', new arrow.Utf8()),
           new arrow.Field('name', new arrow.Utf8()),
           new arrow.Field('source_type', new arrow.Utf8()),
+          new arrow.Field('workspace_id', new arrow.Utf8(), true),
           new arrow.Field('file_path', new arrow.Utf8(), true),
           new arrow.Field('created_at', new arrow.Int64()),
           new arrow.Field('import_status', new arrow.Int32())
-        ])
+        ]),
+        recreateIfSchemaChanged: true
       },
       {
         name: LANCE_TABLES.WEB_SOURCE,
         schema: new arrow.Schema([
           new arrow.Field('id', new arrow.Utf8()),
+          new arrow.Field('workspace_id', new arrow.Utf8()),
           new arrow.Field('identity_kind', new arrow.Utf8()),
           new arrow.Field('normalized_url', new arrow.Utf8()),
           new arrow.Field('url', new arrow.Utf8()),
@@ -231,7 +236,8 @@ export class LanceDbCore {
           new arrow.Field('last_error', new arrow.Utf8(), true),
           new arrow.Field('created_at', new arrow.Int64()),
           new arrow.Field('updated_at', new arrow.Int64())
-        ])
+        ]),
+        recreateIfSchemaChanged: true
       },
       {
         name: LANCE_TABLES.WORKSPACE_SOURCE,

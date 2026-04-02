@@ -2,10 +2,13 @@ import { describe, it } from 'vitest'
 import { importSelectors } from '../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../harness/e2e/run-e2e-case'
 import {
+  SETTINGS_WEB_E2E_TIMEOUT_MS,
+  createFixtureWorkspace,
   getSettingsLocator,
   getSettingsPrefixLocator,
   navigateToSettingsSection,
-  seedWebSources
+  seedWebSources,
+  workspaceCardLocator
 } from '../../harness/e2e/settings'
 
 describe('settings web e2e', () => {
@@ -22,10 +25,15 @@ describe('settings web e2e', () => {
 
         await runtime.step({
           name: 'seed-web-source',
-          message: '预置一条网页资料并进入网页资料页。',
+          message: '预置工作区与一条网页资料并进入工作区详情。',
           run: async () => {
-            await seedWebSources(page, ['https://example.com/detail-delete'])
-            await navigateToSettingsSection(page, 'web-sources')
+            const workspace = await createFixtureWorkspace(page, {
+              rootPath: '/tmp/settings-web-detail-delete-workspace',
+              name: '网页资料工作区'
+            })
+            await seedWebSources(page, workspace.workspace!.id, ['https://example.com/detail-delete'])
+            await navigateToSettingsSection(page, 'workspace')
+            await workspaceCardLocator(page, workspace.workspace!.id).click()
             await getSettingsLocator(page, `${importSelectors.webSourceDeleteButtonPrefix}-e2e-web-source-1`).waitFor({
               state: 'visible'
             })
@@ -67,5 +75,5 @@ describe('settings web e2e', () => {
         })
       }
     })
-  })
+  }, SETTINGS_WEB_E2E_TIMEOUT_MS)
 })

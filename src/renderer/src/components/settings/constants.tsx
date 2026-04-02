@@ -1,6 +1,6 @@
 import type { WorkspaceNode, WorkspaceSource, WebSourceRecord } from '../../../../shared/types'
 import type { SettingsSectionMeta, SettingsSectionValue } from './types'
-import { HiCloudArrowDown, HiGlobeAlt, HiOutlineRectangleStack, HiSparkles } from 'react-icons/hi2'
+import { HiCloudArrowDown, HiOutlineRectangleStack, HiSparkles } from 'react-icons/hi2'
 
 import openaiLogo from '../../assets/img/openai.png'
 import qianwenLogo from '../../assets/img/qianwen.png'
@@ -9,7 +9,7 @@ import deepseekLogo from '../../assets/img/deepseek.png'
 import kimiLogo from '../../assets/img/kimi.png'
 import guijiliudongLogo from '../../assets/img/guijiliudong.png'
 
-export const SETTINGS_SECTION_ORDER: SettingsSectionValue[] = ['model', 'workspace', 'web-sources']
+export const SETTINGS_SECTION_ORDER: SettingsSectionValue[] = ['model', 'workspace']
 
 export const SETTINGS_SECTION_META: Record<SettingsSectionValue, SettingsSectionMeta> = {
   model: {
@@ -24,17 +24,9 @@ export const SETTINGS_SECTION_META: Record<SettingsSectionValue, SettingsSection
     value: 'workspace',
     label: '工作空间',
     title: '工作空间',
-    description: '管理本地项目路径、扫描状态和加载操作。',
+    description: '管理本地项目路径、网页资料、扫描状态和加载操作。',
     path: '/settings/workspace',
     icon: <HiOutlineRectangleStack className="h-5 w-5" />
-  },
-  'web-sources': {
-    value: 'web-sources',
-    label: '网页资料',
-    title: '网页资料',
-    description: '单独管理网页来源、抓取状态和高级规则。',
-    path: '/settings/web-sources',
-    icon: <HiGlobeAlt className="h-5 w-5" />
   }
 }
 
@@ -49,16 +41,9 @@ export const APP_MENU_ITEMS = [
   {
     key: 'workspace',
     label: '工作空间',
-    description: '本地项目路径、扫描与加载',
+    description: '本地项目路径、网页资料、扫描与加载',
     path: '/settings/workspace',
     icon: <HiOutlineRectangleStack className="h-4 w-4" />
-  },
-  {
-    key: 'web-sources',
-    label: '网页资料',
-    description: '网页来源、抓取状态与高级规则',
-    path: '/settings/web-sources',
-    icon: <HiGlobeAlt className="h-4 w-4" />
   },
   {
     key: 'model-download',

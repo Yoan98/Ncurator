@@ -52,20 +52,20 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     skillId: 'kb-document-discovery',
     familyId: 'kb',
     title: 'kb-document-discovery',
-    summary: '先确定应该查看哪些知识库文档。',
-    whenToUse: '当资料范围不清楚、只知道主题、或检索结果为空时使用。',
+    summary: '在当前工作区知识库内缩小候选文档范围。',
+    whenToUse: '当只知道主题、结果过散、或需要提高精准文档定位时使用。',
     detail:
-      '它只负责找候选文档，不是最终取证入口。已有明确已选资料或已有 chunk 命中时，不要反复列文档。',
+      '它是文档级缩圈能力，不是固定前置步骤，也不负责直接提炼事实或规则。只有在需要进一步缩小候选文档时才使用。',
     toolNames: ['kb_list_documents']
   },
   'kb-evidence-query': {
     skillId: 'kb-evidence-query',
     familyId: 'kb',
     title: 'kb-evidence-query',
-    summary: '直接检索 chunk 证据并收敛事实依据。',
-    whenToUse: '当任务是基于当前已选资料回答、提取事实、找证据或做摘要时使用。',
+    summary: '在当前工作区知识库中直接搜索内容，提取 chunk 级证据。',
+    whenToUse: '当任务需要查资料怎么写、找证据、找规则、找引用或基于资料作答时使用。',
     detail:
-      '默认优先 hybrid 检索；需要精确关键词时再用 fts，需要更宽松语义匹配时再用 vector。它通常比 terminal 更适合“基于资料回答”类任务。',
+      '它是当前工作区 KB 的默认搜索入口。默认优先 hybrid；需要精确术语时再用 fts，需要扩大语义召回时再用 vector。若已选资料足够明确，可带 documentIds 先缩圈；若结果不足，可扩大回当前工作区范围。',
     toolNames: ['kb_hybrid_search_chunks', 'kb_vector_search_chunks', 'kb_fts_search_chunks']
   }
 }

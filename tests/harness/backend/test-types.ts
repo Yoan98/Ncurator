@@ -80,6 +80,7 @@ export type SeedKbChunkInput = {
 export type SeedKbDocumentInput = {
   id: string
   name: string
+  workspaceId?: string
   sourceType?: 'file' | 'web'
   filePath?: string
   createdAt?: number

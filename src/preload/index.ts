@@ -106,13 +106,13 @@ const api: DesktopApi = {
     emitE2EIpcCall('referenceItemList')
     return ipcRenderer.invoke('reference-item-list', payload)
   },
-  webSourceList: () => ipcRenderer.invoke('web-source-list'),
+  webSourceList: (payload) => ipcRenderer.invoke('web-source-list', payload),
   webSourceRefresh: async (payload) => {
     emitE2EIpcCall('webSourceRefresh')
     await waitForMs(getE2EApiOverrides()?.webSourceRefreshDelayMs || 0)
     return ipcRenderer.invoke('web-source-refresh', payload)
   },
-  webSourceDelete: (webSourceId: string) => ipcRenderer.invoke('web-source-delete', webSourceId),
+  webSourceDelete: (payload) => ipcRenderer.invoke('web-source-delete', payload),
   legacyLocalImportMigrationStatus: () => {
     const overrides = getE2EApiOverrides()
     if (overrides && hasOverrideKey(overrides, 'legacyLocalImportMigrationStatus')) {

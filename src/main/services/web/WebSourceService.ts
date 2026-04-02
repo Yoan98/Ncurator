@@ -43,6 +43,7 @@ export class WebSourceService {
   }
 
   public createWebSource(params: {
+    workspaceId: string
     url: string
     normalizedUrl: string
     title?: string
@@ -57,6 +58,7 @@ export class WebSourceService {
     const now = params.now ?? Date.now()
     return {
       id: uuidv4(),
+      workspace_id: params.workspaceId,
       identity_kind: 'normalized_url',
       normalized_url: params.normalizedUrl,
       url: params.url,

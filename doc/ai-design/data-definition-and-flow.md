@@ -31,13 +31,8 @@ interface AiRunContext {
     // 可选的策略配置。
     policyProfile?: string
   }
-  // runtime 根据 workspace + selectedReferences 推导出的最终 KB 范围。
-  // 有显式 selectedReferences 时收口到这些 reference 的 kbDocumentIds；
-  // 无显式 selectedReferences 但有 workspace 时，默认收口到当前工作区全部已索引文件；
-  // 两者都没有时，不提供本地 KB 范围。
-  selectedDocumentIds?: string[]
   // 唯一的“用户选择的参考资料”文本投影。
-  // 固定包含当前工作区背景、参考资料类型说明和当前用户选择列表。
+  // 固定包含当前工作区背景、默认 KB 搜索范围说明、参考资料类型说明、当前用户选择列表和对应的 kbDocumentIds。
   selectedContextText: string
 }
 ```

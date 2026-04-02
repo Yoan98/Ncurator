@@ -3,6 +3,7 @@ import type { WorkspaceNode, WorkspaceSource } from '../../../src/shared/types'
 import { importSelectors } from '../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../harness/e2e/run-e2e-case'
 import {
+  SETTINGS_E2E_TIMEOUT_MS,
   getSettingsLocator,
   getSettingsPrefixLocator,
   navigateToSettingsSection,
@@ -121,6 +122,7 @@ describe('settings workspace e2e', () => {
       execute: async (runtime) => {
         const { page } = runtime
         const workspaceDetail = getSettingsLocator(page, importSelectors.workspaceDetail)
+        const workspaceTitle = workspaceDetail.getByRole('heading', { name: '第一个工作空间' })
 
         await runtime.step({
           name: 'override-workspace-responses',
@@ -155,13 +157,13 @@ describe('settings workspace e2e', () => {
             await getSettingsLocator(page, `${importSelectors.workspaceCardPrefix}-workspace-first`).waitFor({
               state: 'visible'
             })
-            await workspaceDetail.getByText('第一个工作空间').waitFor({ state: 'visible' })
+            await workspaceTitle.waitFor({ state: 'visible' })
           }
         })
 
         return {
           cardCount: await getSettingsPrefixLocator(page, importSelectors.workspaceCardPrefix).count(),
-          detailHasFirstWorkspace: await workspaceDetail.getByText('第一个工作空间').isVisible(),
+          detailHasFirstWorkspace: await workspaceTitle.isVisible(),
           detailRootPathVisible: await workspaceDetail
             .getByText('/tmp/ncurator-e2e-workspace-first', { exact: true })
             .isVisible(),
@@ -194,5 +196,5 @@ describe('settings workspace e2e', () => {
         )
       }
     })
-  })
+  }, SETTINGS_E2E_TIMEOUT_MS)
 })

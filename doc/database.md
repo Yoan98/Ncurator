@@ -26,7 +26,7 @@
 - **组合根（Facade）**: `src/main/services/storage/StorageService.ts`
   - 统一持有 `core` 与各 domain store
   - 应用启动时在 `src/main/index.ts` 调用 `await storageService.initialize()`
-  - 初始化阶段会执行一次旧本地导入清理迁移：保留网页资料，清理未绑定 `workspace_node.document_id` 的历史本地 file documents
+  - 初始化阶段会执行一次旧本地导入清理迁移：清理未绑定 `workspace_node.document_id` 的历史本地 file documents
 
 ### 约束与最佳实践
 
@@ -50,6 +50,7 @@
 | text          | Utf8                         | 切片文本内容（建立 FTS 索引） |
 | id            | Utf8                         | 切片唯一标识                  |
 | document_id   | Utf8                         | 关联的文档 ID                 |
+| workspace_id  | Utf8                         | 关联的工作区 ID               |
 | document_name | Utf8                         | 文档名称快照                  |
 | source_type   | Utf8                         | 来源类型（如 'file', 'web'）  |
 | metadata      | Struct                       | 元数据（如页码等）            |
@@ -68,6 +69,7 @@
 | id            | Utf8             | 文档唯一标识                                 |
 | name          | Utf8             | 文件名                                       |
 | source_type   | Utf8             | 来源类型（如 'file', 'web'）                 |
+| workspace_id  | Utf8（Nullable） | 所属工作区 ID                                |
 | file_path     | Utf8（Nullable） | 原始文件路径                                 |
 | created_at    | Int64            | 创建时间戳                                   |
 | import_status | Int32            | 导入状态（1 导入中，2 导入成功，3 导入失败） |
@@ -81,6 +83,7 @@
 说明：
 - `source_type='file'` 的 document 仅表示“已准备的本地文件索引文档”，其真相来源必须可由 `workspace_node.document_id` 反向找到。
 - `source_type='web'` 的 document 由 `web_source.document_id` 绑定到网页资料来源。
+- 当前实现要求本地文档与网页文档都归属于某个工作区，KB 默认检索直接按 `workspace_id` 收口。
 
 ### 表: web_source（网页资料来源表）
 
@@ -89,6 +92,7 @@
 | 字段名                 | 类型             | 描述                                      |
 | :--------------------- | :--------------- | :---------------------------------------- |
 | id                     | Utf8             | 网页来源唯一标识                          |
+| workspace_id           | Utf8             | 所属工作区 ID                              |
 | identity_kind          | Utf8             | 当前固定为 `normalized_url`               |
 | normalized_url         | Utf8             | URL 规范化后的 identity                   |
 | url                    | Utf8             | 原始/最新 URL                             |
@@ -101,6 +105,10 @@
 | last_error             | Utf8（Nullable） | 最近一次抓取错误                          |
 | created_at             | Int64            | 创建时间戳                                |
 | updated_at             | Int64            | 更新时间戳                                |
+
+说明：
+- `web_source` 不再是全局资源，而是工作区内资源。
+- 同一 `normalized_url` 允许在不同工作区分别存在，各自维护抓取状态与 `document_id` 绑定。
 
 ### 表: workspace_source（工作空间来源表）
 

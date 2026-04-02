@@ -20,6 +20,7 @@ import {
 } from 'react-icons/hi2'
 import { importSelectors, settingsSelectors } from '../../testing/selectors'
 import StatusTag from './StatusTag'
+import WebSourcesSettingsPanel from './WebSourcesSettingsPanel'
 import {
   createWorkspaceTree,
   formatDateTime,
@@ -558,8 +559,8 @@ const WorkspaceSettingsPanel: React.FC = () => {
                 </div>
               </div>
 
-              <div className="min-h-0 flex-1 overflow-hidden px-5 py-5 pr-4">
-                <div className="grid h-full min-h-0 gap-4 xl:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
+              <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 pr-4">
+                <div className="grid min-h-0 gap-4 xl:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
                   <div className="space-y-4 overflow-y-auto pr-1">
                     <section className="ui-panel-soft p-4">
                       <div className="flex items-center gap-1.5">
@@ -791,6 +792,14 @@ const WorkspaceSettingsPanel: React.FC = () => {
                       )}
                     </div>
                   </div>
+                </div>
+
+                <div className="mt-4">
+                  <WebSourcesSettingsPanel
+                    workspaceId={selectedWorkspace.id}
+                    workspaceName={selectedWorkspace.name}
+                    embedded
+                  />
                 </div>
               </div>
             </>

@@ -89,7 +89,6 @@ export const createRealAiDepsFactory = async (input: {
         runId: input.runId,
         sessionId: contextInput.sessionId || 'test-session',
         input: contextInput.userInput || '请处理当前测试任务。',
-        selectedDocumentIds: contextInput.selectedDocumentIds,
         selectedReferences: contextInput.selectedReferences,
         modelConfigId: contextInput.modelConfigId,
         workspace: bindWorkspace

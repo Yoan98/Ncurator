@@ -211,7 +211,7 @@ stateDiagram-v2
 ### 6.1 `brain`
 
 - 职责：`human` 内唯一推理节点，负责基于当前任务、记忆、最近工具结果与收敛提示，产出新的 `LastBrainDecision`。
-- 主要读取：`task`、`brainMemory`、`lastParallelCallToolResults`、`watchHint`、最近决策历史摘要、`ctx.selectedContextText`、`ctx.selectedDocumentIds`。
+- 主要读取：`task`、`brainMemory`、`lastParallelCallToolResults`、`watchHint`、最近决策历史摘要、`ctx.selectedContextText`、`ctx.workspace`。
 - 主要回写：`brainMemory.inside`、`brainDecisions`、`lastBrainDecision`、`runtime.stage`、`watchHint`、`trace.steps`。
 - 特有约束：
   - 模型输出必须通过 `ctx.chatStructured`。
@@ -269,7 +269,7 @@ stateDiagram-v2
   - 由各节点持续追加，供事件、审计与回放使用。
 - 其他补充规则
   - `brain` 是唯一推理节点；`learning`、`hand`、`mouth` 不扩张为新的决策中心。
-  - `ctx.selectedContextText` 与 `ctx.selectedDocumentIds` 是 runtime 投影，不持久化进 `HumanState`。
+  - `ctx.selectedContextText` 与 `ctx.workspace` 是 runtime 投影，不持久化进 `HumanState`。
 
 ## 7. 共享契约
 
