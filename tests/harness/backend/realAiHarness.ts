@@ -10,6 +10,12 @@ import { createRealAiDepsFactory } from './realAiDepsFactory'
 import { seedKbFixture } from './seedKbFixture'
 import { seedChatHistory } from './seedChatHistory'
 import { seedDraftReview } from './seedDraftReview'
+import {
+  appendSeedKbDocuments,
+  appendSeedWorkspaceFile,
+  cloneBackendSeedManifest,
+  createEmptyBackendSeedManifest
+} from './seedManifest'
 
 export const createRealAiHarness = async (input: {
   definition: {
@@ -31,6 +37,8 @@ export const createRealAiHarness = async (input: {
     workspaceRoot: input.workspaceRoot,
     eventCollector: input.eventCollector
   })
+
+  const seedManifest = createEmptyBackendSeedManifest()
 
   const runtime: BackendTestRuntime = {
     mode: input.definition.harnessMode,
@@ -69,6 +77,10 @@ export const createRealAiHarness = async (input: {
       }
       return matched.workspacePath
     },
+    recordSeedWorkspaceFile: (record) => {
+      appendSeedWorkspaceFile(seedManifest, record)
+    },
+    getSeedManifest: () => cloneBackendSeedManifest(seedManifest),
     createAiRunContext: (contextInput = {}) => depsFactory.createAiRunContext(contextInput),
     createHumanTaskRunner: (contextInput = {}) => depsFactory.createHumanTaskRunner(contextInput),
     ensureEmbeddingReady: async () => {
@@ -81,6 +93,7 @@ export const createRealAiHarness = async (input: {
         embeddingService: depsFactory.embeddingService,
         documents
       })
+      appendSeedKbDocuments(seedManifest, documents)
     },
     seedChatHistory: async (payload) => {
       await seedChatHistory({

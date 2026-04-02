@@ -8,6 +8,7 @@ import {
   type TestLogEvent,
   type TestRunMeta
 } from './report-contract'
+import type { PersistedSeedManifest } from '../backend/seedManifest'
 
 const pad2 = (value: number): string => String(value).padStart(2, '0')
 const pad3 = (value: number): string => String(value).padStart(3, '0')
@@ -67,6 +68,7 @@ export const writeRunLog = async (input: {
   runtimeEvents: readonly AiRunEvent[]
   llmIoRecords?: readonly AiLlmIoRecord[]
   artifacts: readonly TestArtifact[]
+  seedManifest?: PersistedSeedManifest
 }): Promise<string> => {
   const logDir = resolveRunLogDir({
     scope: input.meta.scope,
@@ -85,6 +87,19 @@ export const writeRunLog = async (input: {
   await writeFile(
     path.join(logDir, 'artifacts.json'),
     JSON.stringify(toArtifactsIndex(input.artifacts), null, 2),
+    'utf8'
+  )
+  await writeFile(
+    path.join(logDir, 'seed-manifest.json'),
+    JSON.stringify(
+      input.seedManifest || {
+        schemaVersion: 1,
+        workspaceFiles: [],
+        kbDocuments: []
+      },
+      null,
+      2
+    ),
     'utf8'
   )
   return logDir

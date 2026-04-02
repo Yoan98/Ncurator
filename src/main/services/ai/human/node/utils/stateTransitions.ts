@@ -11,6 +11,7 @@ import {
   applyBrainDecisionState,
   buildHumanResult,
   completeHumanTaskState,
+  resolveBrainDecisionWatchHint,
   returnToBrainAfterTraceState,
   returnToBrainState,
   type HumanStateOverrides,
@@ -90,11 +91,15 @@ export const applyBrainDecisionTransition = (input: {
   reducedInside: HumanState['brainMemory']['inside']
   watchHint?: string
 }): HumanState => {
+  const watchHint = resolveBrainDecisionWatchHint({
+    decision: input.decision,
+    watchHint: input.watchHint
+  })
   const nextState = applyBrainDecisionState({
     state: input.state,
     decision: input.decision,
     reducedInside: input.reducedInside,
-    watchHint: input.watchHint,
+    watchHint,
     createdAt: Date.now()
   })
 
@@ -106,12 +111,12 @@ export const applyBrainDecisionTransition = (input: {
     stage: 'human_brain'
   })
 
-  if (input.watchHint) {
+  if (watchHint) {
     emitWatchHint({
       ctx: input.ctx,
       taskId: input.state.task.taskId,
-      source: 'memory_reducer',
-      summary: input.watchHint
+      source: input.watchHint ? 'memory_reducer' : 'brain',
+      summary: watchHint
     })
   }
 

@@ -39,6 +39,7 @@ export const buildLearnSkillsDecision = (input: {
 }): LastBrainDecision => ({
   memoryOps: input.memoryOps || [],
   decision: buildDecisionMetadata(input),
+  readyToDeliver: false,
   nextAction: {
     action: 'learning',
     wantLearnSkillIds: input.skillIds
@@ -55,6 +56,7 @@ export const buildToolDecision = (input: {
 }): LastBrainDecision => ({
   memoryOps: input.memoryOps || [],
   decision: buildDecisionMetadata(input),
+  readyToDeliver: false,
   nextAction: {
     action: 'hand',
     parallelCallToolParam: [
@@ -74,6 +76,7 @@ export const buildCompleteTaskDecision = (input: {
 }): LastBrainDecision => ({
   memoryOps: input.memoryOps || [],
   decision: buildDecisionMetadata(input),
+  readyToDeliver: true,
   nextAction: {
     action: 'mouth'
   }

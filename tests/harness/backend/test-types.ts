@@ -86,6 +86,19 @@ export type SeedKbDocumentInput = {
   chunks: readonly SeedKbChunkInput[]
 }
 
+export type SeedWorkspaceFileRecord = {
+  relativePath: string
+  absolutePath: string
+  summary?: string
+  metadata?: JsonValue
+}
+
+export type BackendSeedManifest = {
+  schemaVersion: 1
+  workspaceFiles: SeedWorkspaceFileRecord[]
+  kbDocuments: SeedKbDocumentInput[]
+}
+
 export type SeedChatHistoryInput = {
   sessionId: string
   title?: string
@@ -151,6 +164,8 @@ export type BackendTestRuntime = {
   recordEvent: (input: Omit<TestLogEvent, 'ts'>) => void
   assertThat: (condition: boolean, input: { name: string; message: string; data?: JsonValue }) => void
   getFixtureWorkspacePath: (sourcePath: string) => string
+  recordSeedWorkspaceFile: (input: SeedWorkspaceFileRecord) => void
+  getSeedManifest: () => BackendSeedManifest
   createAiRunContext: (input?: CreateAiRunContextInput) => AiRunContext
   createHumanTaskRunner: (input?: CreateAiRunContextInput) => HumanTaskRunner
   ensureEmbeddingReady: () => Promise<void>

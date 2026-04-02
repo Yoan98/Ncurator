@@ -143,12 +143,14 @@ export const brainNextActionSchema = z.union([
 export const lastBrainDecisionSchema = z.object({
   memoryOps: z.array(brainMemoryOpSchema),
   decision: brainDecisionSchema,
+  readyToDeliver: z.boolean(),
   nextAction: brainNextActionSchema
 })
 
 export const brainDecisionRecordSchema = z.object({
   memoryOps: z.array(brainMemoryOpSchema),
   decision: brainDecisionSchema,
+  readyToDeliver: z.boolean(),
   nextAction: brainNextActionSchema,
   createdAt: z.number()
 })

@@ -105,6 +105,7 @@ describe('ai tool hand backend', () => {
               reason: '两个工具都是 read_only 且 parallelSafe。',
               expectedOutcome: '直接返回 outline 和 search 结果。'
             },
+            readyToDeliver: false,
             nextAction: {
               action: 'hand',
               parallelCallToolParam: [
@@ -149,6 +150,7 @@ describe('ai tool hand backend', () => {
               reason: '故意构造不安全批次，验证 hand 是否拒绝。',
               expectedOutcome: '写入 watchHint 并返回 brain。'
             },
+            readyToDeliver: false,
             nextAction: {
               action: 'hand',
               parallelCallToolParam: [

@@ -70,44 +70,73 @@ export const seedRiskReportKb = async (runtime: BackendTestRuntime): Promise<str
 export const seedRiskReportWorkspace = async (
   runtime: BackendTestRuntime
 ): Promise<RiskReportWorkspaceSeed> => {
-  const templateRelativePath = 'weekly-risk-report-template.docx'
-  const templatePath = await writeTestDocxFile(runtime.workspaceRoot, templateRelativePath, [
+  const templateBlocks = [
     {
-      type: 'heading',
+      type: 'heading' as const,
       text: '本周风险周报',
       level: 1
     },
     {
-      type: 'paragraph',
+      type: 'paragraph' as const,
       text: '本周风险结论：RISK_TODO'
     },
     {
-      type: 'paragraph',
+      type: 'paragraph' as const,
       text: '负责人说明：OWNER_TODO'
     },
     {
-      type: 'paragraph',
+      type: 'paragraph' as const,
       text: '备注：本模板用于每周固定汇报。'
     }
-  ])
-
-  await writeTestDocxFile(runtime.workspaceRoot, 'team-sync-notes.docx', [
+  ]
+  const notesBlocks = [
     {
-      type: 'heading',
+      type: 'heading' as const,
       text: '团队同步纪要',
       level: 1
     },
     {
-      type: 'paragraph',
+      type: 'paragraph' as const,
       text: '这里只记录会议纪要，不是周报模板。'
     }
-  ])
+  ]
+  const summaryRelativePath = 'weekly-risk-summary.txt'
+  const summaryText = '请在找到正式模板后再补全文档内容。\n'
+  const templateRelativePath = 'weekly-risk-report-template.docx'
+  const templatePath = await writeTestDocxFile(runtime.workspaceRoot, templateRelativePath, templateBlocks)
+  runtime.recordSeedWorkspaceFile({
+    relativePath: templateRelativePath,
+    absolutePath: templatePath,
+    summary: '风险周报模板 docx',
+    metadata: {
+      format: 'docx',
+      blocks: templateBlocks
+    }
+  })
 
-  await fs.writeFile(
-    path.join(runtime.workspaceRoot, 'weekly-risk-summary.txt'),
-    '请在找到正式模板后再补全文档内容。\n',
-    'utf8'
-  )
+  const notesRelativePath = 'team-sync-notes.docx'
+  const notesPath = await writeTestDocxFile(runtime.workspaceRoot, notesRelativePath, notesBlocks)
+  runtime.recordSeedWorkspaceFile({
+    relativePath: notesRelativePath,
+    absolutePath: notesPath,
+    summary: '干扰项会议纪要 docx',
+    metadata: {
+      format: 'docx',
+      blocks: notesBlocks
+    }
+  })
+
+  const summaryPath = path.join(runtime.workspaceRoot, summaryRelativePath)
+  await fs.writeFile(summaryPath, summaryText, 'utf8')
+  runtime.recordSeedWorkspaceFile({
+    relativePath: summaryRelativePath,
+    absolutePath: summaryPath,
+    summary: '风险摘要提示文本',
+    metadata: {
+      format: 'text',
+      text: summaryText
+    }
+  })
 
   const originalTemplateBytes = await fs.readFile(templatePath)
 

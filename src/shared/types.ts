@@ -633,7 +633,7 @@ export type AiLlmIoRecord = {
 }
 export type HumanStepAction = 'brain_decision' | 'learn_skill' | 'call_tool' | 'deliver_result'
 export type HumanStepResultStatus = 'ok' | 'error'
-export type WatchHintSource = 'learning' | 'hand' | 'memory_reducer'
+export type WatchHintSource = 'brain' | 'learning' | 'hand' | 'memory_reducer'
 
 export type AiRuntimeSettings = Record<string, never>
 

@@ -53,6 +53,7 @@ describe('ai human mock-llm backend', () => {
                     reason: '需要通过真实 graph 触发第二轮 brain。',
                     expectedOutcome: '确认 memory 在第二轮仍然可见。'
                   },
+                  readyToDeliver: false,
                   nextAction: {
                     action: 'learning',
                     wantLearnSkillIds: ['workspace-cli']

@@ -160,10 +160,10 @@ export const buildSelectedContextText = (input: {
   const references = input.selectedReferences || []
   const selectedText =
     references.length > 0
-      ? ['当前用户选择：', ...references.map((reference, index) => renderSelectedReference(reference, index + 1))].join('\n')
+      ? ['当前用户已指定以下参考资料：', ...references.map((reference, index) => renderSelectedReference(reference, index + 1))].join('\n')
       : input.workspace && input.usesWorkspaceDefaultKbScope
-        ? '当前用户选择：未显式选择目录、文件或网页资料；本轮默认使用当前工作区中已索引文件作为本地检索范围。'
-        : '当前用户选择：未显式选择目录、文件或网页资料。'
+        ? '当前用户没有指定任何目录、文件或网页资料；本轮默认使用当前工作区中已索引文件作为本地检索范围。'
+        : '当前用户没有指定任何目录、文件或网页资料。'
 
   return [workspaceText, '', buildTypeDescriptionText(), '', selectedText].join('\n')
 }

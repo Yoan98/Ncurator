@@ -2,10 +2,13 @@ import path from 'node:path'
 import { collectBackendRunArtifacts } from './artifactCollector'
 import { assertRequiredFixtures } from './fixtureGuard'
 import type {
+  BackendSeedManifest,
+  BackendTestRuntime,
   FixtureBinding,
   TestCaseDefinition
 } from './test-types'
 import { createRealAiHarness } from './realAiHarness'
+import { collectBackendSeedArtifacts } from './seedManifest'
 import { writeRunLog, createRunId } from './write-run-log'
 import { cleanupWorkspace, copyFixturesIntoWorkspace, createIsolatedWorkspace } from './workspaceManager'
 import { EventCollector } from '../core/eventCollector'
@@ -85,6 +88,7 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
   let workspaceRoot = ''
   let fixtureBindings: FixtureBinding[] = []
   let status: TestRunStatus = 'failed'
+  let runtime: BackendTestRuntime | undefined
 
   const recordEvent = (input: Omit<TestLogEvent, 'ts'>): void => {
     events.push({
@@ -126,10 +130,11 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
       eventCollector,
       recordEvent
     })
+    runtime = harness.runtime
 
     try {
-      const result = await definition.execute(harness.runtime)
-      await definition.assert(result, harness.runtime)
+      const result = await definition.execute(runtime)
+      await definition.assert(result, runtime)
       status = 'passed'
     } finally {
       await harness.dispose()
@@ -145,7 +150,7 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
     throw error
   } finally {
     const runtimeEvents = eventCollector.snapshot()
-    const artifacts = workspaceRoot
+    const runtimeArtifacts = workspaceRoot
       ? await collectBackendRunArtifacts({
           scope,
           caseId: definition.caseId,
@@ -154,6 +159,23 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
           runtimeEvents
         })
       : []
+    const emptySeedManifest: BackendSeedManifest = {
+      schemaVersion: 1,
+      workspaceFiles: [],
+      kbDocuments: []
+    }
+    const seedArtifacts = runtime
+      ? await collectBackendSeedArtifacts({
+          scope,
+          caseId: definition.caseId,
+          runId,
+          manifest: runtime.getSeedManifest()
+        })
+      : {
+          artifacts: [],
+          persistedManifest: emptySeedManifest
+        }
+    const artifacts = [...runtimeArtifacts, ...seedArtifacts.artifacts]
     recordEvent({
       type: 'run',
       name: 'end',
@@ -183,7 +205,8 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
       events,
       runtimeEvents,
       llmIoRecords: eventCollector.snapshotLlmIo(),
-      artifacts
+      artifacts,
+      seedManifest: seedArtifacts.persistedManifest
     })
 
     if (workspaceRoot) {

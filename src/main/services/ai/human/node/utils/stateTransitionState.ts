@@ -86,6 +86,24 @@ export const returnToBrainAfterTraceState = (input: {
   })
 }
 
+const combineWatchHints = (hints: Array<string | undefined>): string | undefined => {
+  const normalized = hints.map((hint) => String(hint || '').trim()).filter(Boolean)
+  if (normalized.length === 0) return undefined
+  return Array.from(new Set(normalized)).join('\n')
+}
+
+export const resolveBrainDecisionWatchHint = (input: {
+  decision: LastBrainDecision
+  watchHint?: string
+}): string | undefined => {
+  const decisionWatchHint =
+    input.decision.nextAction.action === 'mouth' && !input.decision.readyToDeliver
+      ? 'brain 选择 mouth 时必须 readyToDeliver=true；当前结果仍未准备好收尾，请继续判断下一步。'
+      : undefined
+
+  return combineWatchHints([input.watchHint, decisionWatchHint])
+}
+
 const resolveBrainNextStage = (input: {
   watchHint?: string
   decision: LastBrainDecision

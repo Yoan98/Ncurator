@@ -69,6 +69,7 @@ describe('ai unit learning tool budget', () => {
           reason: '测试学习上限',
           expectedOutcome: '应被 schema 拦住'
         },
+        readyToDeliver: false,
         nextAction: {
           action: 'learning',
           wantLearnSkillIds: ['workspace-cli', 'docx-read', 'docx-write']
@@ -82,5 +83,7 @@ describe('ai unit learning tool budget', () => {
 
     expect(prompt).toContain('learning 只用于补齐“下一步动作”最值得学习的 skill')
     expect(prompt).toContain('单次 learning 最多学习 2 个 skill')
+    expect(prompt).toContain('mouth 不会执行任何工具')
+    expect(prompt).toContain('readyToDeliver')
   })
 })

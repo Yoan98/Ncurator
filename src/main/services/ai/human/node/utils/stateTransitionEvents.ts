@@ -56,7 +56,9 @@ export const emitWatchHint = (input: {
     summary: input.summary,
     createdAt: Date.now(),
     stage:
-      input.source === 'learning'
+      input.source === 'brain'
+        ? 'human_brain'
+        : input.source === 'learning'
         ? 'human_learning'
         : input.source === 'hand'
           ? 'human_hand'

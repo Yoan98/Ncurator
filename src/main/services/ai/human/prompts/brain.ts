@@ -128,7 +128,7 @@ const buildRecentDecisionHistoryText = (state: HumanState): string =>
               ? `parallelCallToolParam=${JSON.stringify(record.nextAction.parallelCallToolParam)}`
               : 'final_delivery=true'
 
-        return `- 第${ordinal}轮（createdAt=${record.createdAt}）：决定“${record.decision.summary}”；原因：${record.decision.reason}；预期结果：${record.decision.expectedOutcome}；nextAction.action=${action}；nextAction数据：${nextActionPayload}`
+        return `- 第${ordinal}轮（createdAt=${record.createdAt}）：决定“${record.decision.summary}”；原因：${record.decision.reason}；预期结果：${record.decision.expectedOutcome}；readyToDeliver=${String(record.readyToDeliver)}；nextAction.action=${action}；nextAction数据：${nextActionPayload}`
       }),
       {
         fallback: 'none',
@@ -174,6 +174,8 @@ export const buildBrainSystemPrompt = (): string =>
     12. 如果最近结果提示 invalid_input 且缺字段明确，应优先修正参数或补充相关 skill，而不是切去无关能力。
     13. learning 只用于补齐“下一步动作”最值得学习的 skill，不要为未来阶段提前学习完整流程的 skill。
     14. 单次 learning 最多学习 2 个 skill；如果 1 个 skill 就足以支撑下一步，优先只学习 1 个。
+    15. mouth 不会执行任何工具；一旦选择 mouth，就表示你认为当前已经具备最终交付所需的信息、证据和产物。
+    16. 如果结果仍依赖未来的 KB、terminal、docx 或其他工具动作才能完成，readyToDeliver 必须为 false，且不能选择 mouth。
   </judgement_principles>
 
   <output_rules>
@@ -187,6 +189,7 @@ export const buildBrainSystemPrompt = (): string =>
         "reason": "string",
         "expectedOutcome": "string"
       },
+      "readyToDeliver": true,
       "nextAction":
         | { "action": "learning", "wantLearnSkillIds": ["skill-id"] }
         | { "action": "hand", "parallelCallToolParam": [{ "toolName": "tool_name", "args": {} }] }
@@ -211,6 +214,7 @@ export const buildBrainSystemPrompt = (): string =>
     - decision.summary：字符串。简洁说明这轮决定做什么。
     - decision.reason：字符串。说明为什么做这个决定。
     - decision.expectedOutcome：字符串。说明期望这一步带来什么结果。
+    - readyToDeliver：布尔值。只有当当前已经具备最终交付所需的信息、证据和产物时，才为 true。
     - nextAction：对象。表示下一跳动作，且只能输出 learning、hand、mouth 三种结构之一。
     - nextAction.action：字符串枚举。只能是 learning、hand、mouth。
     - nextAction.wantLearnSkillIds：字符串数组。仅在 action=learning 时出现，表示本轮要学习的 skill id 列表；最多 2 个。
@@ -224,6 +228,7 @@ export const buildBrainSystemPrompt = (): string =>
     - 当外部条件不足、工具受限或结果不完整，但继续尝试的收益已经很低时，也应输出 mouth，并在 decision 中明确限制和下一步。
     - 当你缺的主要是“如何使用某个 skill”的信息时，输出 learning。
     - 当你已经明确知道要执行哪些工具动作时，输出 hand。
+    - 选择 mouth 时，readyToDeliver 必须为 true；mouth 不会再调用任何工具。
     - 不要编造工具结果、技能内容、事实或证据。
     - 不要输出 markdown。
   </output_principles>
@@ -263,6 +268,7 @@ export const buildBrainSystemPrompt = (): string =>
           "reason": "当前事实已经有足够证据支撑，不需要继续检索。",
           "expectedOutcome": "进入最终整理并输出结果。"
         },
+        "readyToDeliver": true,
         "nextAction": {
           "action": "mouth"
         }
@@ -277,6 +283,7 @@ export const buildBrainSystemPrompt = (): string =>
           "reason": "我已经知道任务要继续推进，但还缺少相关 skill 的使用细节，继续猜测风险较高。",
           "expectedOutcome": "获得足够的技能说明后，我可以决定是否调用工具。"
         },
+        "readyToDeliver": false,
         "nextAction": {
           "action": "learning",
           "wantLearnSkillIds": ["docx-read"]
@@ -292,6 +299,7 @@ export const buildBrainSystemPrompt = (): string =>
           "reason": "当前缺的是可验证的结果，而不是额外的解释。",
           "expectedOutcome": "拿到新的工具结果后，我可以更新记忆并判断是否收敛。"
         },
+        "readyToDeliver": false,
         "nextAction": {
           "action": "hand",
           "parallelCallToolParam": [
@@ -314,6 +322,7 @@ export const buildBrainSystemPrompt = (): string =>
           "reason": "现有证据已经足够支持最终结论，没有必要继续扩展动作。",
           "expectedOutcome": "由后续表达节点整理出最终结果。"
         },
+        "readyToDeliver": true,
         "nextAction": {
           "action": "mouth"
         }

@@ -27,7 +27,7 @@ type HumanMouthPromptInput = {
 
 const buildFinalDecisionText = (state: HumanState): string =>
   state.lastBrainDecision
-    ? `最终决定：“${state.lastBrainDecision.decision.summary}”；原因：${state.lastBrainDecision.decision.reason}；预期结果：${state.lastBrainDecision.decision.expectedOutcome}`
+    ? `最终决定（readyToDeliver=${String(state.lastBrainDecision.readyToDeliver)}）：“${state.lastBrainDecision.decision.summary}”；原因：${state.lastBrainDecision.decision.reason}；预期结果：${state.lastBrainDecision.decision.expectedOutcome}`
     : 'none'
 
 export const buildMouthSystemPrompt = (deliveryMode: HumanDeliveryMode): string =>
@@ -50,6 +50,7 @@ export const buildMouthSystemPrompt = (deliveryMode: HumanDeliveryMode): string 
     3. 只使用已经给你的事实、证据和最终判断，不要偷偷补充新的推理。
     4. 语言要清楚、克制、可执行，不要堆内部过程。
     5. 如果存在运行时产物或最近工具结果，只能准确引用已经给出的路径、状态和摘要，不要补编额外元数据。
+    6. 你不会调用工具，也不会继续推进未完成步骤；如果仍有步骤没做，只能如实说明当前停在哪。
   </delivery_principles>
 
   <delivery_mode_rules>
@@ -74,6 +75,7 @@ ${buildDeliveryModePromptRules(deliveryMode)}
     - 不要引入新的事实、依据、步骤或承诺。
     - 不要暴露内部字段名、节点名或系统术语。
     - 如果依据不足，就保持保守表达，不要写成确定结论。
+    - 不要把未来可能执行的工具动作写成“后续会自动完成”或“已经在进行中”。
     - 不要输出 status 字段，最终状态由外部上下文决定。
     - 如果提供 deliveryMarkdown，它必须是完整结果，而不是零散句子。
   </output_principles>
