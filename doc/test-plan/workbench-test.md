@@ -6,6 +6,8 @@
 
 workbench 正式测试统一对齐 [workbench.md](/Users/test/work-space/NCurator-Desktop/doc/prd/workbench.md)，新增、调整或验收结论都应引用对应的 `WB-*` 需求编号与验收编号。
 
+正式 / temp 准入、runner、raw logs、report 与正式 case 共享字段，统一遵循 `doc/test.md`。
+
 ## 2. Suite 设计
 
 workbench 的正式测试 suite 直接对齐 PRD 模块：
@@ -84,28 +86,20 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 
 怎么做：围绕 review 打开、默认选中、修改导航、提交前校验、现有受支持文件写回、新建受支持文件落盘、放弃、结束态、右侧回退和多 review 入口组织正式 case。
 
-## 3. Suite 归属规则
+## 3. 领域特有规则
 
 - Workbench 的用户可见行为默认归入本计划，不再挂到 AI 或 Settings 域下。
 - `scope`、`workspace_required` 恢复、右侧面板和 `review` 统一归入 workbench。
-
-## 4. Case 登记约定
-
-- 本文中的 `用例名称` 直接作为稳定 `caseId` 使用。
 - 当前 `tests/workbench/**` 下已实现的正式 case 只有 `panel` 与 `review` 的 6 条；本次新增的其余 case 默认先标记为 `未实现`。
 - Workbench 当前不额外拆 `group`；若后续没有新增层级需求，正式 case 默认直接落在 `tests/workbench/<suite>/`。
-- 文件映射规则：
-  - `backend`：`tests/workbench/<suite>/<caseId>.test.ts`
-  - `e2e`：`tests/workbench/<suite>/<caseId>.e2e.test.ts`
 - `How` 与 `Oracle` 必须显式映射到 [workbench.md](/Users/test/work-space/NCurator-Desktop/doc/prd/workbench.md) 的需求编号与验收编号。
 
-## 5. 正式 Case 清单
+## 4. 正式 Case 清单
 
-### 5.1 `core`
+### 4.1 `core`
 
 #### `core-general-task-without-local-context`
 
-- 用例名称：`core-general-task-without-local-context`
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证已绑定工作区但未显式选择任何本地参考资料时，智能模式仍可正常完成不依赖本地文档的通用任务。
@@ -118,7 +112,6 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `core-explicit-scope-affects-search-and-run`
 
-- 用例名称：`core-explicit-scope-affects-search-and-run`
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证用户显式选择的参考资料，或仅绑定工作区时的默认本地范围，会同时影响搜索模式和智能模式的执行收敛。
@@ -131,7 +124,6 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `core-confirm-review-boundary-disclosure`
 
-- 用例名称：`core-confirm-review-boundary-disclosure`
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证 workbench 对“确认修改落盘能力”的边界表达准确：`docx` 可进入确认修改流程，其他类型不会被伪装成同一套保证能力。
@@ -144,7 +136,6 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `core-local-first-with-general-fallback`
 
-- 用例名称：`core-local-first-with-general-fallback`
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证用户绑定本地资料后，结果会优先使用本地资料；本地资料不足覆盖通用部分时，再退回模型通用知识继续完成。
@@ -157,7 +148,6 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `core-terminal-result-consumed-by-delivery`
 
-- 用例名称：`core-terminal-result-consumed-by-delivery`
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证智能模式中 `terminal` 的结果会被后续回答、分析或文件产物消费；若结果不足或执行失败，会明确说明限制。
@@ -170,7 +160,6 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `core-standard-task-delivery-smoke`
 
-- 用例名称：`core-standard-task-delivery-smoke`
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证用户给出一个标准任务并提供足够上下文后，workbench 能沿同一条任务链完成资料使用、必要执行和最终交付。
@@ -181,11 +170,10 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
   - 最终结果同时体现用户显式范围和执行得到的关键信息，不会把范围、执行结果和最终交付割裂开，对齐 `WB-CORE-006-AC2`。
 - Not：不验证 review 落盘和审批阻塞分支。
 
-### 5.2 `session`
+### 4.2 `session`
 
 #### `session-bootstrap-and-title-update`
 
-- 用例名称：`session-bootstrap-and-title-update`
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证无历史会话时会自动创建默认会话，并在首条用户消息发送后更新标题。
@@ -199,7 +187,6 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `session-switch-resets-runtime-state`
 
-- 用例名称：`session-switch-resets-runtime-state`
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证切换会话后，主区消息、输入草稿、`@` 范围、阻塞状态和右侧内容都切换到目标会话上下文。
@@ -212,7 +199,6 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `session-delete-current-fallback`
 
-- 用例名称：`session-delete-current-fallback`
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证删除普通会话和当前会话后，列表与当前选中状态都会正确回退，页面保持可继续聊天。
@@ -225,7 +211,6 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `session-follow-up-keeps-task-mainline`
 
-- 用例名称：`session-follow-up-keeps-task-mainline`
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证同一会话内基于上一轮结果继续 refinement 时，系统会复用当前任务主线，而不是把它误当成全新无关任务。
@@ -236,11 +221,10 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
   - 续做完成后的结果体现的是对上一轮结果的继续修改或补充，而不是简单重复旧输出或重新开题，对齐 `WB-SESSION-005-AC2`。
 - Not：不验证跨会话续做。
 
-### 5.3 `composer`
+### 4.3 `composer`
 
 #### `composer-send-guards-and-shortcuts`
 
-- 用例名称：`composer-send-guards-and-shortcuts`
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证发送前置条件和输入框键盘行为。
@@ -255,7 +239,6 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `composer-smart-mode-run-bootstrap`
 
-- 用例名称：`composer-smart-mode-run-bootstrap`
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证智能模式发送时，主区先插入用户消息和 assistant 占位壳，再由事件流逐步补全内容。
@@ -268,7 +251,6 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `composer-search-mode-summary-no-run`
 
-- 用例名称：`composer-search-mode-summary-no-run`
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证搜索模式发送时不启动 AI 运行，而是直接进入搜索结果态。
@@ -281,7 +263,6 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `composer-local-execution-requires-workspace`
 
-- 用例名称：`composer-local-execution-requires-workspace`
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证工作区未绑定时，workbench 的发送入口会统一被拦截，而不是只在本地执行类请求时才拦截。
@@ -294,7 +275,6 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `composer-cancel-running-run`
 
-- 用例名称：`composer-cancel-running-run`
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证智能模式在运行中会显示取消入口，取消后当前运行结束并给出已取消反馈。
@@ -305,11 +285,10 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
   - 取消成功后，当前运行结束并给出已取消反馈，对齐 `WB-COMPOSER-006-AC2`。
 - Not：不验证取消后的会话续做。
 
-### 5.4 `mode`
+### 4.4 `mode`
 
 #### `mode-switch-preserves-draft-and-route`
 
-- 用例名称：`mode-switch-preserves-draft-and-route`
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证智能模式和搜索模式之间切换时，共用同一输入区并立即按新模式执行。
@@ -322,7 +301,6 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `mode-search-strict-scope-empty-guard`
 
-- 用例名称：`mode-search-strict-scope-empty-guard`
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证搜索模式下显式严格范围里没有已加载本地资料时，纯搜索会被阻止并展示明确提示。
@@ -333,11 +311,10 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
   - 用户收到“当前搜索范围没有已加载的本地资料，无法执行纯搜索”的明确提示，对齐 `WB-MODE-002-AC2`。
 - Not：不验证普通非严格范围搜索。
 
-### 5.5 `scope`
+### 4.5 `scope`
 
 #### `scope-candidate-sources-follow-workspace`
 
-- 用例名称：`scope-candidate-sources-follow-workspace`
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证 `@` 候选来源会随当前工作区变化。
@@ -350,7 +327,6 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `scope-insert-each-type-and-multi-token`
 
-- 用例名称：`scope-insert-each-type-and-multi-token`
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证目录、文件和网页资料三类候选都能成功插入输入框，并支持多个 token 共存。
@@ -364,7 +340,6 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `scope-token-delete-dedupe-and-workspace-cleanup`
 
-- 用例名称：`scope-token-delete-dedupe-and-workspace-cleanup`
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证已插入范围不会重复出现，删除后会退出发送参数，切换工作区后旧工作区本地 token 会被清理。
@@ -378,7 +353,6 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `scope-empty-candidate-hint`
 
-- 用例名称：`scope-empty-candidate-hint`
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证无可插入范围时，系统会按上下文展示明确提示。
@@ -389,11 +363,10 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
   - 已选工作区但没有匹配项时，提示“当前工作区和网页资料中没有匹配项”，对齐 `WB-SCOPE-004-AC2`。
 - Not：不验证候选列表视觉样式。
 
-### 5.6 `blocker`
+### 4.6 `blocker`
 
 #### `blocker-approval-resume-and-reject`
 
-- 用例名称：`blocker-approval-resume-and-reject`
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证 AI 运行中的审批阻塞在批准和拒绝两条路径上都能稳定收敛。
@@ -407,7 +380,6 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `blocker-workspace-required-replays-last-input`
 
-- 用例名称：`blocker-workspace-required-replays-last-input`
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证 `workspace_required` 作为运行时兜底恢复路径触发后，用户补工作区并点击继续时，会基于上一条真实输入重新启动运行。
@@ -420,7 +392,6 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `blocker-unloaded-sources-warning-by-mode`
 
-- 用例名称：`blocker-unloaded-sources-warning-by-mode`
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证已选范围中存在未加载资料时，智能模式和搜索模式会显示不同 warning。
@@ -431,11 +402,10 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
   - 搜索模式下提示纯搜索只检索已加载资料，未加载文件不会进入候选结果，对齐 `WB-BLOCKER-003-AC2`。
 - Not：不验证未加载资料的后台准备逻辑。
 
-### 5.7 `panel`
+### 4.7 `panel`
 
 #### `panel-session-persistent-state`
 
-- 用例名称：`panel-session-persistent-state`
 - 测试类型：`e2e`
 - 实现状态：`已实现`
 - What：验证同一会话内继续发送消息时，右侧不会默认清空，而是保留当前搜索列表、文件预览或确认修改工作区；切换会话后才重置。
@@ -449,7 +419,6 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `panel-search-local-preview-modal`
 
-- 用例名称：`panel-search-local-preview-modal`
 - 测试类型：`e2e`
 - 实现状态：`已实现`
 - What：验证搜索模式下点击本地结果会使用 modal 预览文件，关闭 modal 后仍停留在搜索列表；网页结果继续外部打开。
@@ -462,7 +431,6 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `panel-preview-priority-layout`
 
-- 用例名称：`panel-preview-priority-layout`
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证普通文件打开后，右侧主体空间默认让给文件预览，只保留轻量工具条。
@@ -472,11 +440,10 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
   - 普通文件打开后，右侧除轻量工具条外全部用于文件预览，对齐 `WB-PANEL-003-AC1`。
 - Not：不验证 review 文件 tab 和提交动作。
 
-### 5.8 `review`
+### 4.8 `review`
 
 #### `review-cumulative-docx-diff`
 
-- 用例名称：`review-cumulative-docx-diff`
 - 测试类型：`backend`
 - 实现状态：`已实现`
 - What：验证同一文件多轮未提交修改后，最新 review 展示的是“源文件 vs 当前最新草稿”的累计差异，而不是仅最后一轮增量。
@@ -489,7 +456,6 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `review-table-cell-cumulative-diff`
 
-- 用例名称：`review-table-cell-cumulative-diff`
 - 测试类型：`backend`
 - 实现状态：`已实现`
 - What：验证表格在行列结构不变时，会收敛成单元格级累计 diff；结构变化时退化为整表替换。
@@ -502,7 +468,6 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `review-file-tabs-and-file-level-actions`
 
-- 用例名称：`review-file-tabs-and-file-level-actions`
 - 测试类型：`e2e`
 - 实现状态：`已实现`
 - What：验证多文件 review 在右侧按文件 tab 展示，切换 tab 后只操作当前文件，并保持预览优先布局。
@@ -517,7 +482,6 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `review-change-navigation-and-anchor`
 
-- 用例名称：`review-change-navigation-and-anchor`
 - 测试类型：`e2e`
 - 实现状态：`已实现`
 - What：验证确认修改工作区通过上一处 / 下一处切换当前修改时，计数与 docx 预览 anchor 会同步变化。
@@ -531,7 +495,6 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `review-pre-submit-validation-and-create-target`
 
-- 用例名称：`review-pre-submit-validation-and-create-target`
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证新建 `docx` 的确认修改在提交前会执行校验，只有 `ready=true` 时才允许最终创建目标文件。
@@ -545,7 +508,6 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `review-ended-state-collapse`
 
-- 用例名称：`review-ended-state-collapse`
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证 review 已 `committed`、`discarded` 或 `superseded` 后，界面会收敛为只读结束态。
@@ -558,7 +520,6 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `review-turn-entries-preserved-and-cleared`
 
-- 用例名称：`review-turn-entries-preserved-and-cleared`
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证同一 run 生成多个确认文档时，assistant turn 会保留全部入口；当当前会话 review 清空后，失效入口会同步清理。

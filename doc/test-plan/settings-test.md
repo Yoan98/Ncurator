@@ -6,6 +6,8 @@
 
 Settings 正式测试统一对齐 [settings.md](/Users/test/work-space/NCurator-Desktop/doc/prd/settings.md)，新增、调整或验收结论都应引用对应的 `SET-*` 需求编号与验收编号。
 
+正式 / temp 准入、runner、raw logs、report 与正式 case 共享字段，统一遵循 `doc/test.md`。
+
 ## 2. Suite 设计
 
 Settings 的正式测试 suite 直接对齐 PRD 模块：
@@ -48,28 +50,20 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 怎么做：围绕模型列表、单任务下载、进度展示、完成刷新和失败反馈组织正式 case。
 
-## 3. Suite 归属规则
+## 3. 领域特有规则
 
 - Settings 的用户可见行为默认归入本计划，不再单独维护 `workspace` 测试域。
 - `workspace` 在这里是 Settings 下的 suite，不是独立测试 domain。
-
-## 4. Case 登记约定
-
-- 本文中的 `用例名称` 直接作为稳定 `caseId` 使用。
 - 当前 `settings` 域已落地部分正式测试文件；已完成代码与 raw logs 对齐的 case 标记为 `已实现`，其余 case 继续保留 `未实现`，后续按取舍推进。
 - Settings 当前不额外拆 `group`；若后续没有新增层级需求，正式 case 默认直接落在 `tests/settings/<suite>/`。
-- 文件映射规则：
-  - `backend`：`tests/settings/<suite>/<caseId>.test.ts`
-  - `e2e`：`tests/settings/<suite>/<caseId>.e2e.test.ts`
 - `How` 与 `Oracle` 必须显式映射到 [settings.md](/Users/test/work-space/NCurator-Desktop/doc/prd/settings.md) 的需求编号与验收编号。
 
-## 5. 正式 Case 清单
+## 4. 正式 Case 清单
 
-### 5.1 `model`
+### 4.1 `model`
 
 #### `model-config-list-contract`
 
-- 用例名称：`model-config-list-contract`
 - 测试类型：`backend`
 - 实现状态：`未实现`
 - What：验证大模型页初始化依赖的配置查询契约，能够返回完整配置列表并明确识别当前激活配置。
@@ -82,7 +76,6 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `model-page-load-active-config`
 
-- 用例名称：`model-page-load-active-config`
 - 测试类型：`e2e`
 - 实现状态：`已实现`
 - What：验证用户进入大模型页后，配置列表与当前激活配置标识能在页面上完成初始化展示。
@@ -95,7 +88,6 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `model-create-edit-form`
 
-- 用例名称：`model-create-edit-form`
 - 测试类型：`e2e`
 - 实现状态：`已实现`
 - What：验证新增和编辑配置的表单内容、预填逻辑与必填校验。
@@ -109,7 +101,6 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `model-first-config-auto-activate`
 
-- 用例名称：`model-first-config-auto-activate`
 - 测试类型：`e2e`
 - 实现状态：`已实现`
 - What：验证当模型列表为空时，新增第一条配置后会自动成为当前模型。
@@ -121,7 +112,6 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `model-enable-switch-current`
 
-- 用例名称：`model-enable-switch-current`
 - 测试类型：`e2e`
 - 实现状态：`已实现`
 - What：验证用户手动启用其他模型配置后，当前模型标识会正确切换。
@@ -133,7 +123,6 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `model-active-config-change-event`
 
-- 用例名称：`model-active-config-change-event`
 - 测试类型：`backend`
 - 实现状态：`未实现`
 - What：验证保存当前激活配置或切换当前配置成功后，会向外派发 `check-llm-config` 事件，并使下游读取到最新配置。
@@ -146,7 +135,6 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `model-delete-config-feedback`
 
-- 用例名称：`model-delete-config-feedback`
 - 测试类型：`e2e`
 - 实现状态：`已实现`
 - What：验证删除模型配置后的列表刷新，以及删除失败时的错误反馈。
@@ -157,11 +145,10 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
   - 删除失败时页面出现明确错误提示，对齐 `SET-MODEL-005-AC2`。
 - Not：不定义删除后默认重新选中哪一项；只验证被删项移除和失败反馈。
 
-### 5.2 `workspace`
+### 4.2 `workspace`
 
 #### `workspace-page-load-default-selection`
 
-- 用例名称：`workspace-page-load-default-selection`
 - 测试类型：`e2e`
 - 实现状态：`已实现`
 - What：验证工作空间页打开后会自动初始化列表和详情，并在未选中时默认选中第一条工作空间。
@@ -174,7 +161,6 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `workspace-add-selection-flow`
 
-- 用例名称：`workspace-add-selection-flow`
 - 测试类型：`e2e`
 - 实现状态：`已实现`
 - What：验证添加工作空间时，取消目录选择不会产生副作用，选择目录成功后会立刻创建并切到新工作空间。
@@ -187,7 +173,6 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `workspace-scan-contract`
 
-- 用例名称：`workspace-scan-contract`
 - 测试类型：`backend`
 - 实现状态：`未实现`
 - What：验证工作空间扫描请求的参数、进度事件和结果载荷契约，能支撑页面同步刷新扫描状态与目录树。
@@ -200,7 +185,6 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `workspace-scan-progress-refresh`
 
-- 用例名称：`workspace-scan-progress-refresh`
 - 测试类型：`e2e`
 - 实现状态：`已实现`
 - What：验证点击“先扫描”后，页面能展示进行中状态，并在完成后刷新时间、状态和目录树。
@@ -213,7 +197,6 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `workspace-load-mode-contract`
 
-- 用例名称：`workspace-load-mode-contract`
 - 测试类型：`backend`
 - 实现状态：`未实现`
 - What：验证工作空间加载时，界面选中的 `full`、`presence_only`、`changes_only` 模式会准确进入实际请求。
@@ -226,7 +209,6 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `workspace-load-by-mode`
 
-- 用例名称：`workspace-load-by-mode`
 - 测试类型：`e2e`
 - 实现状态：`已实现`
 - What：验证用户切换加载模式并点击“开始加载”后，页面会按选中模式执行，并刷新最近加载时间、摘要统计和状态 badge。
@@ -239,7 +221,6 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `workspace-detail-status-and-error`
 
-- 用例名称：`workspace-detail-status-and-error`
 - 测试类型：`e2e`
 - 实现状态：`已实现`
 - What：验证详情区会稳定展示工作空间的最近错误和摘要统计，而不是只在控制台暴露状态。
@@ -252,7 +233,6 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `workspace-open-path-contract`
 
-- 用例名称：`workspace-open-path-contract`
 - 测试类型：`backend`
 - 实现状态：`未实现`
 - What：验证点击“打开路径”时，会通过系统能力定位当前工作空间目录。
@@ -264,7 +244,6 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `workspace-remove-source-contract`
 
-- 用例名称：`workspace-remove-source-contract`
 - 测试类型：`backend`
 - 实现状态：`未实现`
 - What：验证移除工作空间后，该工作空间会从 Settings 列表数据源与后续资料范围依赖的数据源中同时消失。
@@ -277,7 +256,6 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `workspace-remove-from-list`
 
-- 用例名称：`workspace-remove-from-list`
 - 测试类型：`e2e`
 - 实现状态：`已实现`
 - What：验证用户在工作空间页移除工作空间后，当前列表和详情区不会继续展示已删除项。
@@ -290,7 +268,6 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `workspace-empty-tree-legacy-hints`
 
-- 用例名称：`workspace-empty-tree-legacy-hints`
 - 测试类型：`e2e`
 - 实现状态：`已实现`
 - What：验证无工作空间、无可追踪文件和旧本地导入残留三类提示都能在页面上明确展示。
@@ -302,11 +279,10 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
   - 检测到旧本地导入数据时，页面顶部出现迁移清理提醒，对齐 `SET-WORKSPACE-007-AC3`。
 - Not：不验证迁移清理动作本身的执行结果；这里只验证提示出现。
 
-### 5.3 `web`
+### 4.3 `web`
 
 #### `web-page-load-filter-selection`
 
-- 用例名称：`web-page-load-filter-selection`
 - 测试类型：`e2e`
 - 实现状态：`已实现`
 - What：验证网页资料页打开后会初始化列表与详情，本地筛选能按标题、URL 或标准化 URL 生效，并在筛选结果非空时默认选中第一条。
@@ -320,7 +296,6 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `web-add-sources-dialog`
 
-- 用例名称：`web-add-sources-dialog`
 - 测试类型：`e2e`
 - 实现状态：`已实现`
 - What：验证网页资料添加弹窗的空输入校验、多行 URL 提交和成功后的收尾反馈。
@@ -333,7 +308,6 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `web-refresh-one-source`
 
-- 用例名称：`web-refresh-one-source`
 - 测试类型：`e2e`
 - 实现状态：`已实现`
 - What：验证用户对当前选中的网页资料执行重新抓取时，会看到刷新中的状态，并在成功后刷新最近抓取时间和状态。
@@ -346,7 +320,6 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `web-refresh-visible-list-contract`
 
-- 用例名称：`web-refresh-visible-list-contract`
 - 测试类型：`backend`
 - 实现状态：`未实现`
 - What：验证“全部抓取”只会对当前列表中的网页资料发起重新抓取，不会误触发被筛掉的项目。
@@ -359,7 +332,6 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `web-refresh-all-summary`
 
-- 用例名称：`web-refresh-all-summary`
 - 测试类型：`e2e`
 - 实现状态：`已实现`
 - What：验证“全部抓取”在空列表和非空列表两种场景下的页面反馈。
@@ -372,7 +344,6 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `web-open-url-contract`
 
-- 用例名称：`web-open-url-contract`
 - 测试类型：`backend`
 - 实现状态：`未实现`
 - What：验证点击网页资料 URL 时，系统会调用默认浏览器打开原网页，而不是进入本地预览路径。
@@ -384,7 +355,6 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `web-detail-and-delete`
 
-- 用例名称：`web-detail-and-delete`
 - 测试类型：`e2e`
 - 实现状态：`已实现`
 - What：验证网页资料详情区的错误空态展示，以及删除成功后的列表刷新。
@@ -395,11 +365,10 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
   - 删除成功后，该网页资料从列表中消失，对齐 `SET-WEB-005-AC3`。
 - Not：不验证 URL 外链打开；该能力由 `web-open-url-contract` 覆盖。
 
-### 5.4 `vector`
+### 4.4 `vector`
 
 #### `vector-model-catalog-load`
 
-- 用例名称：`vector-model-catalog-load`
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证向量模型页打开后，模型列表能成功加载并区分已安装模型与可下载模型；失败时给出明确错误提示。
@@ -412,7 +381,6 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `vector-download-single-task-contract`
 
-- 用例名称：`vector-download-single-task-contract`
 - 测试类型：`backend`
 - 实现状态：`未实现`
 - What：验证向量模型下载的单任务约束与进度事件契约，确保同一时间只能有一个下载任务，并能持续上报进度字段。
@@ -425,7 +393,6 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `vector-download-progress`
 
-- 用例名称：`vector-download-progress`
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证下载过程中，页面会持续更新总进度、当前文件和已完成文件数，并阻止其他模型继续触发下载。
@@ -438,7 +405,6 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `vector-download-result-feedback`
 
-- 用例名称：`vector-download-result-feedback`
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证向量模型下载完成后会刷新为已安装状态，下载失败时会提示失败原因并退出下载中状态。

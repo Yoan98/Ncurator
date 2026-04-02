@@ -1,57 +1,52 @@
 # NCurator-Desktop AI 测试计划
 
-## 1. 总原则
+## 1. 总体目标
 
-AI 正式测试只按三类原则治理：
+- 本计划用于定义 AI 域正式测试的范围与领域特有规则。
+- 正式 / temp 准入、runner、raw logs、report 与正式 case 共享字段，统一遵循 `doc/test.md`。
+- AI 正式测试只围绕三类稳定对象治理：
+  1. `tool`
+  2. `human`
+  3. `director`
 
-1. `tool`
-2. `human`
-3. `director`
-
-其中：
-
-- `tool` 只验证真实生产工具调用，不允许 fake。
-- `human` 分 `mock-llm` 和 `live`。
-- `director` 分 `mock-llm` 和 `live`。
-
-
-## 2. Suite 规则
+## 2. Suite 设计
 
 ### 2.1 `tool`
 
+- `tool` 只验证真实生产工具调用，不允许 fake。
 - 目标：验证 tool 与 `hand` 工具执行守卫在真实生产代码下的输入输出是否正常、合理。
 - 约束：必须真实调用生产工具、真实 store、真实 review service、真实 artifact 流。
 - 禁止：fake `documentsStore`、fake `embeddingService`、fake `resolveDocxOpenTarget`、fake tool result。
 
-### 2.2 `human/mock-llm`
+### 2.2 `human`
 
-- 目标：在 non-live 条件下验证 `human` 的真实执行链路。
-- 约束：只允许 mock LLM 输入输出；必须真实走 `createAiRunContext -> human graph -> learning / hand / mouth -> store / review / artifact`。
-- 禁止：`humanReasonOverrides`、`toolExecutionOverrides`、`humanDeliveryOverride`、手工串 node、fake tool/store/review。
-- 覆盖要求：要通过不同 case 把关键节点与关键边都跑到，而不是只验证一条 happy path。
+- `mock-llm`
+  - 目标：在 non-live 条件下验证 `human` 的真实执行链路。
+  - 约束：只允许 mock LLM 输入输出；必须真实走 `createAiRunContext -> human graph -> learning / hand / mouth -> store / review / artifact`。
+  - 禁止：`humanReasonOverrides`、`toolExecutionOverrides`、`humanDeliveryOverride`、手工串 node、fake tool/store/review。
+  - 覆盖要求：要通过不同 case 把关键节点与关键边都跑到，而不是只验证一条 happy path。
+- `live`
+  - 目标：验证真实模型下 `human` 的真实业务执行。
+  - 约束：必须走真实 `ctx.chatStructured`、真实 KB、真实工具、真实 review / artifact。
+  - 禁止：任何 scripted driver、`chatStructuredOverride`、fixture store override。
+  - 覆盖要求：至少保留 1 条简单任务和 1 条复杂任务正式 case；如复杂任务有多条长期价值用例，可同时保留。
 
-### 2.3 `human/live`
+### 2.3 `director`
 
-- 目标：验证真实模型下 `human` 的真实业务执行。
-- 约束：必须走真实 `ctx.chatStructured`、真实 KB、真实工具、真实 review / artifact。
-- 禁止：任何 scripted driver、`chatStructuredOverride`、fixture store override。
-- 覆盖要求：至少保留 1 条简单任务和 1 条复杂任务正式 case；如复杂任务有多条长期价值用例，可同时保留。
+- `mock-llm`
+  - 目标：在 non-live 条件下验证 `director` 的真实编排链。
+  - 约束：只允许 mock LLM 输入输出；必须真实派发真实 `human`，并真实走 route / context / plan / synthesis。
+  - 禁止：`runHumanTask` stub、fake `human` runner、手工拼接 director 节点结果。
+  - 覆盖要求：要通过不同 case 把关键编排节点与关键转移边都跑到。
+- `live`
+  - 目标：验证真实模型下 `director -> human -> tools / KB / docx / artifacts` 的真实业务执行。
+  - 约束：不允许任何 fake。
+  - 禁止：scripted driver、`chatStructuredOverride`、`documentsStoreOverrides`、fake `human` runner。
+  - 覆盖要求：至少保留 1 条简单任务和 1 条复杂任务正式 case；如复杂任务有多条长期价值用例，可同时保留。
 
-### 2.4 `director/mock-llm`
+## 3. 领域特有规则
 
-- 目标：在 non-live 条件下验证 `director` 的真实编排链。
-- 约束：只允许 mock LLM 输入输出；必须真实派发真实 `human`，并真实走 route / context / plan / synthesis。
-- 禁止：`runHumanTask` stub、fake `human` runner、手工拼接 director 节点结果。
-- 覆盖要求：要通过不同 case 把关键编排节点与关键转移边都跑到。
-
-### 2.5 `director/live`
-
-- 目标：验证真实模型下 `director -> human -> tools / KB / docx / artifacts` 的真实业务执行。
-- 约束：不允许任何 fake。
-- 禁止：scripted driver、`chatStructuredOverride`、`documentsStoreOverrides`、fake `human` runner。
-- 覆盖要求：至少保留 1 条简单任务和 1 条复杂任务正式 case；如复杂任务有多条长期价值用例，可同时保留。
-
-## 3. Harness 规则
+### 3.1 Harness 规则
 
 - AI 正式 backend case 必须使用生产 `createAiRunContext` 作为唯一正式 runtime 入口。
 - formal harness 必须使用真实 `StorageService / DocumentsStore / ChatStore / DraftReviewStore / LlmConfigStore / DraftReviewService / EmbeddingService`。
@@ -61,7 +56,23 @@ AI 正式测试只按三类原则治理：
 - embedding 模型缺失时，harness 应优先通过真实生产下载链自动检查并下载，不得引入测试专用 embedding 替身。
 - 旧式 fake API 一律不得进入 formal harness；一次性排查如果确实需要 fake，只允许写入 `tests/temp/**`。
 
-## 4. 目录与命令
+### 3.2 `mock-llm` 与 `live` 设计口径
+
+#### `mock-llm`
+
+- 目的：快速定位非 LLM 问题，并验证每个关键节点、关键边在真实生产 graph 中都能跑通。
+- 允许：脚本化 LLM 输入输出。
+- 不允许：脚本化 runtime 节点执行结果。
+- 断言重点：节点流转、工具调用、审批事件、artifact、memory、错误收敛、状态收口。
+
+#### `live`
+
+- 目的：验证真实业务场景在真实生产调用下可以完成。
+- case 设计必须使用真实用户风格输入，不得把内部 route、固定工具顺序或 plan 条数写进用户输入。
+- 断言重点：完成态、关键 route、关键工具调用、关键 artifact、关键事实是否成立。
+- 不对最终文案做精确文本断言。
+
+### 3.3 目录与命令
 
 正式 AI 测试目录：
 
@@ -86,25 +97,9 @@ AI 正式测试只按三类原则治理：
 - `pnpm test:unit`
 - `pnpm test:unit:ai`
 
-## 5. `mock-llm` 与 `live` 设计口径
+## 4. 正式 Case 清单
 
-### 5.1 `mock-llm`
-
-- 目的：快速定位非 LLM 问题，并验证每个关键节点、关键边在真实生产 graph 中都能跑通。
-- 允许：脚本化 LLM 输入输出。
-- 不允许：脚本化 runtime 节点执行结果。
-- 断言重点：节点流转、工具调用、审批事件、artifact、memory、错误收敛、状态收口。
-
-### 5.2 `live`
-
-- 目的：验证真实业务场景在真实生产调用下可以完成。
-- case 设计必须使用真实用户风格输入，不得把内部 route、固定工具顺序或 plan 条数写进用户输入。
-- 断言重点：完成态、关键 route、关键工具调用、关键 artifact、关键事实是否成立。
-- 不对最终文案做精确文本断言。
-
-## 6. 正式 Case 清单
-
-### 6.1 `tool`
+### 4.1 `tool`
 
 #### `docx`
 
@@ -284,7 +279,7 @@ AI 正式测试只按三类原则治理：
 - Oracle：超限被守卫拦截，artifact 合并结果稳定。
 - Not：不验证 `human` 全链路。
 
-### 6.2 `human`
+### 4.2 `human`
 
 #### `mock-llm`
 
@@ -408,7 +403,7 @@ AI 正式测试只按三类原则治理：
 - Oracle：任务最终完成；事件流中至少出现一次 `terminal_run_command`、一次以 `kb_` 开头的检索工具调用、一次 `docx_open`、一次 `docx_apply_ops` 与一次 `docx_render_preview`；存在 preview/draft artifact，且原模板未被覆盖。
 - Not：不绑定最终答案措辞，也不要求固定检索工具顺序。
 
-### 6.3 `director`
+### 4.3 `director`
 
 #### `mock-llm`
 
