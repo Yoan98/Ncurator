@@ -4,6 +4,7 @@ import { aiArtifactRefSchema } from '../schema'
 import {
   AI_TOOL_FAMILY_IDS,
   HUMAN_DELIVERY_MODES,
+  HUMAN_MAX_SKILLS_PER_LEARNING_STEP,
   HUMAN_STAGES,
   HUMAN_STATUSES,
   HUMAN_STEP_ACTIONS,
@@ -125,7 +126,10 @@ export const brainDecisionSchema = z.object({
 export const brainNextActionSchema = z.union([
   z.object({
     action: z.literal('learning'),
-    wantLearnSkillIds: z.array(runtimeSkillIdSchema).min(1)
+    wantLearnSkillIds: z
+      .array(runtimeSkillIdSchema)
+      .min(1)
+      .max(HUMAN_MAX_SKILLS_PER_LEARNING_STEP)
   }),
   z.object({
     action: z.literal('hand'),

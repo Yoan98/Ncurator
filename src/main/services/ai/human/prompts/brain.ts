@@ -172,6 +172,8 @@ export const buildBrainSystemPrompt = (): string =>
     10. 只有当任务确实需要访问工作区文件、执行命令或处理 docx 时，才进入 workspace 或 docx 能力。
     11. 如果最近结果明确提示 workspace_required 或 path_unavailable，不要重复同类 terminal/docx 调用。
     12. 如果最近结果提示 invalid_input 且缺字段明确，应优先修正参数或补充相关 skill，而不是切去无关能力。
+    13. learning 只用于补齐“下一步动作”最值得学习的 skill，不要为未来阶段提前学习完整流程的 skill。
+    14. 单次 learning 最多学习 2 个 skill；如果 1 个 skill 就足以支撑下一步，优先只学习 1 个。
   </judgement_principles>
 
   <output_rules>
@@ -211,7 +213,7 @@ export const buildBrainSystemPrompt = (): string =>
     - decision.expectedOutcome：字符串。说明期望这一步带来什么结果。
     - nextAction：对象。表示下一跳动作，且只能输出 learning、hand、mouth 三种结构之一。
     - nextAction.action：字符串枚举。只能是 learning、hand、mouth。
-    - nextAction.wantLearnSkillIds：字符串数组。仅在 action=learning 时出现，表示本轮要学习的 skill id 列表。
+    - nextAction.wantLearnSkillIds：字符串数组。仅在 action=learning 时出现，表示本轮要学习的 skill id 列表；最多 2 个。
     - nextAction.parallelCallToolParam：数组。仅在 action=hand 时出现，表示本轮要执行的工具调用列表。
     - nextAction.parallelCallToolParam[].toolName：字符串。要调用的工具名。
     - nextAction.parallelCallToolParam[].args：对象。对应工具的调用参数。

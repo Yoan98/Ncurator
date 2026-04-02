@@ -12,7 +12,7 @@
 - 当涉及 UI 风格与通用交互规范时，请阅读 `doc/ui-style.md`
 
 ### 1.3 测试相关
-- 当涉及 AI 测试时，请阅读 `doc/test-plan/ai-test.md`
+- 当涉及 AI 测试、mock-llm/live case、learning 约束或 active tool budget 时，请阅读 `doc/test-plan/ai-test.md`
 - 当涉及 Workbench 测试时，请阅读 `doc/test-plan/workbench-test.md`
 - 当涉及 Settings 测试时，请阅读 `doc/test-plan/settings-test.md`
 - 当涉及测试架构、formal/temp 准入、runner、raw logs、report 或 case 登记规范时，请阅读 `doc/test.md`

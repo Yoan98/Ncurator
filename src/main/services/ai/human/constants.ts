@@ -39,4 +39,6 @@ export const TOOL_CALL_DIAGNOSTIC_KINDS = [
 export const HUMAN_DELIVERY_MODES = ['user_answer', 'task_handoff', 'context_note'] as const
 
 export const HUMAN_MAX_BRAIN_DECISION_HISTORY = 10
+export const HUMAN_MAX_SKILLS_PER_LEARNING_STEP = 2
+export const HUMAN_MAX_ACTIVE_TOOLS = 20
 export const HUMAN_DEFAULT_TOOL_CALL_LIMIT = 50
