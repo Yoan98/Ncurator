@@ -151,7 +151,10 @@ export const buildSelectedContextText = (input: {
   usesWorkspaceDefaultKbScope: boolean
 }): string => {
   const workspaceText = input.workspace
-    ? `当前工作区：${input.workspace.workspaceName}（本地工作目录），后续本地文件路径都相对于这个工作区理解。`
+    ? [
+        `当前工作区绝对路径：${input.workspace.rootPath}`,
+        '后续所有本地文件路径、cwd 与生成产物路径，都必须位于该工作区内；未显式指定 cwd 时，默认从该工作区根目录开始。'
+      ].join('\n')
     : '当前工作区：未绑定（仅内部兜底场景；正常 workbench 发送前会先选择工作区）。'
 
   const references = input.selectedReferences || []
