@@ -30,15 +30,13 @@ export const createDirectorTestRunner = (
     run: async (input?: {
       sessionId?: string
       userInput?: string
-      initialState?: Partial<DirectorGraphState>
     }): Promise<DirectorGraphState> => {
       const initialState = {
         ...createInitialAiRunState({
           runId: runtime.runId,
           sessionId: input?.sessionId || DEFAULT_DIRECTOR_SESSION_ID,
           input: input?.userInput || DEFAULT_DIRECTOR_INPUT
-        }),
-        ...(input?.initialState || {})
+        })
       } as DirectorGraphState
 
       return await graph.invoke(initialState, {

@@ -7,7 +7,7 @@ import {
   hasUnchangedFileBytes,
   seedRiskReportKb,
   seedRiskReportWorkspace
-} from '../../live/testData'
+} from '../../../harness/backend/aiLiveTestData'
 import { filterAiRunEventsByType } from '../testUtils'
 
 describe('ai human live backend', () => {

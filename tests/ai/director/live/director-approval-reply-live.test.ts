@@ -5,7 +5,7 @@ import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
   DIRECTOR_APPROVAL_REPLY_USER_INPUT,
   seedFileRetentionKb
-} from '../../live/testData'
+} from '../../../harness/backend/aiLiveTestData'
 import { filterDirectorEventsByType, filterDirectorTaskEventsByStage } from '../testUtils'
 
 describe('ai director live backend', () => {

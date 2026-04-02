@@ -5,7 +5,7 @@ import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
   HUMAN_FILE_RETENTION_USER_INPUT,
   seedFileRetentionKb
-} from '../../live/testData'
+} from '../../../harness/backend/aiLiveTestData'
 import { filterAiRunEventsByType } from '../testUtils'
 
 describe('ai human live backend', () => {

@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { writeTestDocxFile } from '../../harness/backend/aiToolHarness'
-import type { BackendTestRuntime, SeedKbDocumentInput } from '../../harness/backend/test-types'
+import { writeTestDocxFile } from './aiToolHarness'
+import type { BackendTestRuntime, SeedKbDocumentInput } from './test-types'
 
 export const HUMAN_FILE_RETENTION_USER_INPUT =
   '我记不清一个细则了。审批没通过的时候，原文件到底要不要保留？你按我刚才选的资料帮我确认一下，直接给我一个明确结论就行。'
