@@ -314,7 +314,15 @@ export interface DocumentListResponse {
 
 // Chat & LLM Types
 
-export type PreferredStructuredOutputMethod = 'jsonSchema' | 'jsonMode' | 'promptJson'
+export type AiStructuredOutputTransport = 'completions' | 'responses'
+export type AiStructuredOutputMethod = 'jsonSchema' | 'jsonMode' | 'promptJson' | 'scripted'
+export type PreferredStructuredOutputProfile =
+  | 'completions:jsonSchema'
+  | 'completions:jsonMode'
+  | 'completions:promptJson'
+  | 'responses:jsonSchema'
+  | 'responses:promptJson'
+export type AiStructuredOutputProfile = PreferredStructuredOutputProfile | 'scripted'
 
 export interface LLMConfig {
   id: string
@@ -323,7 +331,7 @@ export interface LLMConfig {
   model_name: string
   api_key: string
   is_active: boolean
-  preferredStructuredOutputMethod?: PreferredStructuredOutputMethod
+  preferredStructuredOutputProfile?: PreferredStructuredOutputProfile
 }
 
 export interface ChatMessage {
@@ -586,7 +594,6 @@ export type AiTaskResultCode =
   | 'workspace_required'
   | 'approval_denied'
   | 'invalid_input'
-export type AiStructuredOutputMethod = PreferredStructuredOutputMethod | 'scripted'
 export type AiToolCallDiagnosticKind =
   | 'workspace_required'
   | 'invalid_input'
@@ -615,7 +622,9 @@ export type AiLlmIoRecord = {
   user: string
   output?: JsonValue
   method?: AiStructuredOutputMethod
-  fallbackChain: AiStructuredOutputMethod[]
+  transport?: AiStructuredOutputTransport
+  profile?: AiStructuredOutputProfile
+  fallbackChain: AiStructuredOutputProfile[]
   startedAt: number
   completedAt: number
   durationMs: number
@@ -711,7 +720,9 @@ export interface AiActivityDetails {
   attempt?: number
   durationMs?: number
   method?: AiStructuredOutputMethod
-  fallbackChain?: AiStructuredOutputMethod[]
+  transport?: AiStructuredOutputTransport
+  profile?: AiStructuredOutputProfile
+  fallbackChain?: AiStructuredOutputProfile[]
   reason?: string
 }
 

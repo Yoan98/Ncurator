@@ -2,17 +2,21 @@ import { describe, it } from 'vitest'
 import { loadLiveLlmConfigFromEnv, hasLiveLlmConfigInEnv } from '../../../harness/backend/llmConfig'
 import { createDirectorTestRunner } from '../../../harness/backend/directorHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
-import { filterDirectorTaskEventsByStage } from '../testUtils'
+import {
+  DIRECTOR_APPROVAL_REPLY_USER_INPUT,
+  seedFileRetentionKb
+} from '../../live/testData'
+import { filterDirectorEventsByType, filterDirectorTaskEventsByStage } from '../testUtils'
 
 describe('ai director live backend', () => {
-  it('director-simple-human-first-live', async () => {
+  it('director-approval-reply-live', async () => {
     await runBackendCase({
-      caseId: 'director-simple-human-first-live',
+      caseId: 'director-approval-reply-live',
       harnessMode: 'live',
       domain: 'ai',
       suite: 'director',
       groups: ['live'],
-      description: '验证 live 模式下 director 会通过真实 human-first 路径完成简单任务。',
+      description: '验证 live 模式下 director 会把常见资料问答回复任务走成真实 human-first 路径。',
       fixtures: [],
       runMode: 'single',
       runtimeModelName: hasLiveLlmConfigInEnv('primary')
@@ -28,9 +32,12 @@ describe('ai director live backend', () => {
         }
 
         await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv('primary'))
-        const runner = createDirectorTestRunner(runtime)
+        const selectedDocumentIds = await seedFileRetentionKb(runtime)
+        const runner = createDirectorTestRunner(runtime, {
+          selectedDocumentIds
+        })
         const state = await runner.run({
-          userInput: '这是一个简单任务。请读取当前工作区路径并给出简短答复。'
+          userInput: DIRECTOR_APPROVAL_REPLY_USER_INPUT
         })
 
         return {
@@ -43,7 +50,7 @@ describe('ai director live backend', () => {
         if (result.skipped) {
           runtime.assertThat(true, {
             name: 'live-config-not-provided',
-            message: '未提供 live 模型配置，已跳过 director live direct case。'
+            message: '未提供 live 模型配置，已跳过 director live approval reply case。'
           })
           return
         }
@@ -53,18 +60,23 @@ describe('ai director live backend', () => {
           'task_started',
           'director_direct_human_exec'
         )
+        const planCreatedEvents = filterDirectorEventsByType(result.events, 'plan_created')
+        const toolResults = filterDirectorEventsByType(result.events, 'tool_call_result')
 
         runtime.assertThat(
           result.state?.status === 'completed' &&
             directTaskStarts.length === 1 &&
+            planCreatedEvents.length === 0 &&
+            toolResults.some((event) => event.toolName.startsWith('kb_')) &&
             typeof result.state?.finalDeliveryMarkdown === 'string' &&
             result.state.finalDeliveryMarkdown.length > 0,
           {
-            name: 'director-live-runs-real-human-first-path',
-            message: 'live director simple case 应走真实 human-first 路径并产出最终结果。',
+            name: 'director-live-runs-direct-human-reply-for-approval-question',
+            message: 'live director simple case 应直接走 human-first 路径完成审批回复任务。',
             data: {
               finalDeliveryMarkdown: result.state?.finalDeliveryMarkdown,
-              directTaskStarts
+              directTaskStarts,
+              toolNames: toolResults.map((event) => event.toolName)
             }
           }
         )

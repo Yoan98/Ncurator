@@ -673,7 +673,8 @@ stateDiagram-v2
 - graph 的状态 schema 必须通过各自目录下的 `state/schema.ts` 定义和约束
 - graph 路由必须通过 `addConditionalEdges` 或等价 graph 路由表达，不要在 graph 外另写一套手工循环替代
 - 模型结构化输出必须统一通过 `ctx.chatStructured`，由 runtime 封装的 `invokeStructuredChat` 承接
-- `ctx.chatStructured` 必须统一产出 `llm_structured_output` activity；`details` 至少携带 `callId / caller / schemaName / model / durationMs / method / fallbackChain`
+- `ctx.chatStructured` 必须统一在 `completions / responses` transport 与结构化方法之间做 runtime 级探测与缓存，不在 node 内自行切换底层 transport 或方法
+- `ctx.chatStructured` 必须统一产出 `llm_structured_output` activity；`details` 至少携带 `callId / caller / schemaName / model / durationMs / method / transport / profile / fallbackChain`
 - 如果后续需要引入非结构化模型调用，也应先补 runtime 级封装，不在 node 内直接拼接底层模型调用
 - 节点内部不要直接调用 `model.withStructuredOutput`，也不要散落手写 schema parse 逻辑
 - prompt 必须通过 `build*Prompt` 或 `build*PromptContext` 组织，不在 node 内联堆大段 prompt 文本

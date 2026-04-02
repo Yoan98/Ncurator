@@ -1,24 +1,37 @@
 import { HumanMessage, SystemMessage } from '@langchain/core/messages'
 import { z } from 'zod/v4'
 import { createChatModel } from '../llm/chatModel'
-import type { LLMConfig, PreferredStructuredOutputMethod } from '../../../shared/types'
+import type {
+  AiStructuredOutputMethod,
+  AiStructuredOutputProfile,
+  AiStructuredOutputTransport,
+  LLMConfig,
+  PreferredStructuredOutputProfile
+} from '../../../shared/types'
 
 export const NATIVE_STRUCTURED_OUTPUT_METHODS = ['jsonSchema', 'jsonMode'] as const
 export const STRUCTURED_OUTPUT_METHODS = [...NATIVE_STRUCTURED_OUTPUT_METHODS, 'promptJson'] as const
+export const COMPLETIONS_STRUCTURED_OUTPUT_PROFILES = [
+  'completions:jsonSchema',
+  'completions:jsonMode',
+  'completions:promptJson'
+] as const
+export const RESPONSES_STRUCTURED_OUTPUT_PROFILES = [
+  'responses:jsonSchema',
+  'responses:promptJson'
+] as const
+export const STRUCTURED_OUTPUT_PROFILES = [
+  ...COMPLETIONS_STRUCTURED_OUTPUT_PROFILES,
+  ...RESPONSES_STRUCTURED_OUTPUT_PROFILES
+] as const
 
-export type NativeStructuredOutputMethod = (typeof NATIVE_STRUCTURED_OUTPUT_METHODS)[number]
-export type StructuredOutputMethod = PreferredStructuredOutputMethod | 'scripted'
-
-export type StructuredOutputInvocationResult<T extends Record<string, unknown>> = {
-  output: T
-  method: StructuredOutputMethod
-  fallbackChain: StructuredOutputMethod[]
-}
+type NativeStructuredOutputMethod = (typeof NATIVE_STRUCTURED_OUTPUT_METHODS)[number]
+type NonScriptedStructuredOutputMethod = Exclude<AiStructuredOutputMethod, 'scripted'>
 
 type StructuredOutputInvocationInput<T extends Record<string, unknown>> = {
   caller: string
   cfg: LLMConfig
-  preferredMethod?: PreferredStructuredOutputMethod
+  preferredProfile?: PreferredStructuredOutputProfile
   schema: z.ZodType<T>
   schemaName: string
   system: string
@@ -26,10 +39,20 @@ type StructuredOutputInvocationInput<T extends Record<string, unknown>> = {
   temperature?: number
 }
 
+export type StructuredOutputInvocationResult<T extends Record<string, unknown>> = {
+  output: T
+  method: AiStructuredOutputMethod
+  transport?: AiStructuredOutputTransport
+  profile: AiStructuredOutputProfile
+  fallbackChain: AiStructuredOutputProfile[]
+}
+
 export type StructuredOutputDriverResult = {
   output: unknown
-  method: StructuredOutputMethod
-  fallbackChain?: StructuredOutputMethod[]
+  method: AiStructuredOutputMethod
+  transport?: AiStructuredOutputTransport
+  profile?: AiStructuredOutputProfile
+  fallbackChain?: AiStructuredOutputProfile[]
 }
 
 export type StructuredOutputDriver = (
@@ -46,6 +69,37 @@ type ErrorLike =
         data?: ErrorResponseData
       }
     }
+
+type StructuredOutputProfileMetadata = {
+  transport: AiStructuredOutputTransport
+  method: NonScriptedStructuredOutputMethod
+}
+
+const STRUCTURED_OUTPUT_PROFILE_METADATA: Record<
+  PreferredStructuredOutputProfile,
+  StructuredOutputProfileMetadata
+> = {
+  'completions:jsonSchema': {
+    transport: 'completions',
+    method: 'jsonSchema'
+  },
+  'completions:jsonMode': {
+    transport: 'completions',
+    method: 'jsonMode'
+  },
+  'completions:promptJson': {
+    transport: 'completions',
+    method: 'promptJson'
+  },
+  'responses:jsonSchema': {
+    transport: 'responses',
+    method: 'jsonSchema'
+  },
+  'responses:promptJson': {
+    transport: 'responses',
+    method: 'promptJson'
+  }
+}
 
 const toErrorLike = (
   value: object | string | number | boolean | null | undefined
@@ -102,8 +156,8 @@ const matchesUnsupportedSignal = (body: string, markers: string[]): boolean => {
     markers.some((marker) => body.includes(marker))
 }
 
-export const isStructuredOutputMethodUnsupportedError = (
-  method: NativeStructuredOutputMethod,
+export const isStructuredOutputTransportCompatibilityError = (
+  transport: AiStructuredOutputTransport,
   error: ErrorLike
 ): boolean => {
   const body = getStructuredOutputErrorBody(error).toLowerCase()
@@ -118,6 +172,27 @@ export const isStructuredOutputMethodUnsupportedError = (
   if (providerCompatibilitySignals.some((signal) => body.includes(signal))) {
     return true
   }
+
+  if (transport === 'completions') {
+    if (body.includes('/v1/chat/completions') && body.includes('please use /v1/responses')) {
+      return true
+    }
+    return matchesUnsupportedSignal(body, [
+      '/v1/chat/completions',
+      'chat/completions',
+      'legacy protocol'
+    ])
+  }
+
+  return matchesUnsupportedSignal(body, ['/v1/responses', 'responses api', 'responses endpoint'])
+}
+
+export const isStructuredOutputMethodUnsupportedError = (
+  method: NativeStructuredOutputMethod,
+  error: ErrorLike
+): boolean => {
+  const body = getStructuredOutputErrorBody(error).toLowerCase()
+  if (!body) return false
 
   if (method === 'jsonSchema') {
     const invalidSchemaSignals = [
@@ -144,7 +219,12 @@ export const isStructuredOutputMethodUnsupportedError = (
     ])
   }
 
-  return matchesUnsupportedSignal(body, ['json mode', 'json_object', 'response_format', 'response format'])
+  return matchesUnsupportedSignal(body, [
+    'json mode',
+    'json_object',
+    'response_format',
+    'response format'
+  ])
 }
 
 const buildMethodConfig = (method: NativeStructuredOutputMethod, schemaName: string) => {
@@ -218,10 +298,52 @@ const parsePromptJsonOutput = (raw: string): Record<string, unknown> => {
   return parsed as Record<string, unknown>
 }
 
+const buildStructuredOutputProfile = (
+  transport: AiStructuredOutputTransport,
+  method: NonScriptedStructuredOutputMethod
+): PreferredStructuredOutputProfile => {
+  if (transport === 'completions') {
+    if (method === 'jsonSchema') return 'completions:jsonSchema'
+    if (method === 'jsonMode') return 'completions:jsonMode'
+    if (method === 'promptJson') return 'completions:promptJson'
+    throw new Error(`structured_output_invalid_profile_combo:${transport}:${method}`)
+  }
+
+  if (method === 'jsonSchema') return 'responses:jsonSchema'
+  if (method === 'promptJson') return 'responses:promptJson'
+  throw new Error(`structured_output_invalid_profile_combo:${transport}:${method}`)
+}
+
+const resolveStructuredOutputProfile = (
+  profile: PreferredStructuredOutputProfile
+): StructuredOutputProfileMetadata => STRUCTURED_OUTPUT_PROFILE_METADATA[profile]
+
+const resolveResultProfile = (
+  result: StructuredOutputDriverResult
+): AiStructuredOutputProfile => {
+  if (result.profile) {
+    return result.profile
+  }
+
+  if (result.method === 'scripted') {
+    return 'scripted'
+  }
+
+  if (result.transport) {
+    return buildStructuredOutputProfile(result.transport, result.method)
+  }
+
+  throw new Error('structured_output_driver_missing_profile')
+}
+
 const invokeStructuredChatWithPromptJsonDriver = async <T extends Record<string, unknown>>(
-  input: StructuredOutputInvocationInput<T>
+  input: StructuredOutputInvocationInput<T>,
+  transport: AiStructuredOutputTransport
 ): Promise<StructuredOutputDriverResult> => {
-  const model = createChatModel(input.cfg, { temperature: input.temperature ?? 0.2 })
+  const model = createChatModel(input.cfg, {
+    temperature: input.temperature ?? 0.2,
+    transport
+  })
   const response = await model.invoke([
     new SystemMessage(input.system),
     new HumanMessage(input.user)
@@ -229,27 +351,45 @@ const invokeStructuredChatWithPromptJsonDriver = async <T extends Record<string,
   const rawText = extractTextContent(response.content)
   return {
     output: parsePromptJsonOutput(rawText),
-    method: 'promptJson'
+    method: 'promptJson',
+    transport,
+    profile: buildStructuredOutputProfile(transport, 'promptJson')
   }
 }
 
 const buildAttemptOrder = (
-  preferredMethod?: PreferredStructuredOutputMethod
-): PreferredStructuredOutputMethod[] => {
-  if (!preferredMethod) {
-    return [...STRUCTURED_OUTPUT_METHODS]
+  preferredProfile?: PreferredStructuredOutputProfile
+): PreferredStructuredOutputProfile[] => {
+  if (!preferredProfile) {
+    return [...STRUCTURED_OUTPUT_PROFILES]
   }
   return [
-    preferredMethod,
-    ...STRUCTURED_OUTPUT_METHODS.filter((method) => method !== preferredMethod)
+    preferredProfile,
+    ...STRUCTURED_OUTPUT_PROFILES.filter((profile) => profile !== preferredProfile)
   ]
+}
+
+const getTransportBoundaryIndex = (
+  attemptOrder: PreferredStructuredOutputProfile[],
+  startIndex: number
+): number => {
+  const currentTransport = resolveStructuredOutputProfile(attemptOrder[startIndex]).transport
+  let nextIndex = startIndex
+  while (nextIndex + 1 < attemptOrder.length) {
+    const nextTransport = resolveStructuredOutputProfile(attemptOrder[nextIndex + 1]).transport
+    if (nextTransport !== currentTransport) break
+    nextIndex += 1
+  }
+  return nextIndex
 }
 
 const buildStructuredOutputFailure = (input: {
   caller: string
   schemaName: string
   modelName: string
-  method: PreferredStructuredOutputMethod
+  profile: PreferredStructuredOutputProfile
+  transport: AiStructuredOutputTransport
+  method: NonScriptedStructuredOutputMethod
   reason: string
 }) =>
   new Error(
@@ -258,61 +398,78 @@ const buildStructuredOutputFailure = (input: {
       `caller=${input.caller}`,
       `schema=${input.schemaName}`,
       `model=${input.modelName}`,
+      `profile=${input.profile}`,
+      `transport=${input.transport}`,
       `method=${input.method}`,
       `reason=${input.reason}`
     ].join('; ')
   )
 
-const invokeStructuredChatWithMethod = async <T extends Record<string, unknown>>(
-  method: PreferredStructuredOutputMethod,
+const invokeStructuredChatWithProfile = async <T extends Record<string, unknown>>(
+  profile: PreferredStructuredOutputProfile,
   input: StructuredOutputInvocationInput<T>
 ): Promise<StructuredOutputDriverResult> => {
+  const { method, transport } = resolveStructuredOutputProfile(profile)
+
   if (method === 'promptJson') {
-    return await invokeStructuredChatWithPromptJsonDriver(input)
+    return await invokeStructuredChatWithPromptJsonDriver(input, transport)
   }
 
-  const model = createChatModel(input.cfg, { temperature: input.temperature ?? 0.2 })
+  const model = createChatModel(input.cfg, {
+    temperature: input.temperature ?? 0.2,
+    transport
+  })
   const structuredModel = model.withStructuredOutput(input.schema, buildMethodConfig(method, input.schemaName))
   return {
     output: await structuredModel.invoke([
       new SystemMessage(input.system),
       new HumanMessage(input.user)
     ]),
-    method
+    method,
+    transport,
+    profile
   }
 }
 
 const invokeStructuredChatWithNativeDriver = async <T extends Record<string, unknown>>(
   input: StructuredOutputInvocationInput<T>
 ): Promise<StructuredOutputDriverResult> => {
-  const attemptOrder = buildAttemptOrder(input.preferredMethod)
-  const methodErrors: string[] = []
+  const attemptOrder = buildAttemptOrder(input.preferredProfile)
+  const attemptedProfiles: PreferredStructuredOutputProfile[] = []
+  const profileErrors: string[] = []
 
   for (let index = 0; index < attemptOrder.length; index += 1) {
-    const method = attemptOrder[index]
+    const profile = attemptOrder[index]
+    const { method, transport } = resolveStructuredOutputProfile(profile)
+    attemptedProfiles.push(profile)
     try {
-      const result = await invokeStructuredChatWithMethod(method, input)
+      const result = await invokeStructuredChatWithProfile(profile, input)
       return {
         ...result,
-        fallbackChain: attemptOrder.slice(0, index + 1)
+        fallbackChain: attemptedProfiles
       }
     } catch (error) {
       const normalizedError = toErrorLike(
         error as object | string | number | boolean | null | undefined
       )
-      if (
-        method !== 'promptJson' &&
-        isStructuredOutputMethodUnsupportedError(method, normalizedError)
-      ) {
-        methodErrors.push(`${method}: ${getErrorText(normalizedError)}`)
+      const reason = getErrorText(normalizedError)
+      if (isStructuredOutputTransportCompatibilityError(transport, normalizedError)) {
+        profileErrors.push(`${profile}: ${reason}`)
+        index = getTransportBoundaryIndex(attemptOrder, index)
+        continue
+      }
+      if (method !== 'promptJson' && isStructuredOutputMethodUnsupportedError(method, normalizedError)) {
+        profileErrors.push(`${profile}: ${reason}`)
         continue
       }
       throw buildStructuredOutputFailure({
         caller: input.caller,
         schemaName: input.schemaName,
         modelName: input.cfg.model_name,
+        profile,
+        transport,
         method,
-        reason: getErrorText(normalizedError)
+        reason
       })
     }
   }
@@ -323,8 +480,8 @@ const invokeStructuredChatWithNativeDriver = async <T extends Record<string, unk
       `caller=${input.caller}`,
       `schema=${input.schemaName}`,
       `model=${input.cfg.model_name}`,
-      `tried=${attemptOrder.join(' -> ')}`,
-      `errors=${methodErrors.join(' | ') || 'unknown'}`
+      `tried=${attemptedProfiles.join(' -> ')}`,
+      `errors=${profileErrors.join(' | ') || 'unknown'}`
     ].join('; ')
   )
 }
@@ -336,14 +493,15 @@ export const invokeStructuredChat = async <T extends Record<string, unknown>>(
 ): Promise<StructuredOutputInvocationResult<T>> => {
   const driver = input.driver || invokeStructuredChatWithNativeDriver
   const result = await driver(input as StructuredOutputInvocationInput<Record<string, unknown>>)
+  const profile = resolveResultProfile(result)
   const fallbackChain =
-    result.fallbackChain && result.fallbackChain.length > 0
-      ? result.fallbackChain
-      : [result.method]
+    result.fallbackChain && result.fallbackChain.length > 0 ? result.fallbackChain : [profile]
 
   return {
     output: input.schema.parse(result.output),
     method: result.method,
+    transport: result.transport,
+    profile,
     fallbackChain
   }
 }

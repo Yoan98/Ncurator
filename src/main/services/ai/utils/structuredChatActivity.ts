@@ -2,7 +2,12 @@ import { randomUUID } from 'node:crypto'
 import { normalizeOpenAIBaseUrl } from '../../../../shared/llmBaseUrl'
 import { emitActivity } from '../../../utils/aiCapabilityUtils'
 import type { AiEventDispatchContext } from '../types'
-import type { AiStructuredOutputMethod, JsonValue } from '../../../../shared/types'
+import type {
+  AiStructuredOutputMethod,
+  AiStructuredOutputProfile,
+  AiStructuredOutputTransport,
+  JsonValue
+} from '../../../../shared/types'
 
 type StructuredChatTelemetry = {
   caller: string
@@ -15,7 +20,9 @@ type StructuredChatTelemetry = {
 export type StructuredChatExecutionResult<T> = {
   output: T
   method?: AiStructuredOutputMethod
-  fallbackChain?: AiStructuredOutputMethod[]
+  transport?: AiStructuredOutputTransport
+  profile?: AiStructuredOutputProfile
+  fallbackChain?: AiStructuredOutputProfile[]
 }
 
 const resolveBaseUrlHost = (baseUrl: string): string => {
@@ -95,8 +102,8 @@ export const runStructuredChatWithActivity = async <T>(input: {
     const fallbackChain =
       result.fallbackChain && result.fallbackChain.length > 0
         ? result.fallbackChain
-        : result.method
-          ? [result.method]
+        : result.profile
+          ? [result.profile]
           : []
     emitActivity({
       ctx: input.ctx,
@@ -113,6 +120,8 @@ export const runStructuredChatWithActivity = async <T>(input: {
         ...details,
         durationMs,
         method: result.method,
+        transport: result.transport,
+        profile: result.profile,
         fallbackChain
       }
     })
@@ -128,6 +137,8 @@ export const runStructuredChatWithActivity = async <T>(input: {
       user: input.user,
       output: normalizeOutput(result.output),
       method: result.method,
+      transport: result.transport,
+      profile: result.profile,
       fallbackChain,
       startedAt,
       completedAt: startedAt + durationMs,

@@ -50,25 +50,37 @@ export const updateSessionMemoryAfterRun = async (input: {
   const cfg = await input.llmStore.getActive()
   if (!cfg) return
 
-  const memory = normalizeMemory(
-    (
-      await invokeStructuredChat({
-        caller: 'session.memory',
-        cfg,
-        preferredMethod: cfg.preferredStructuredOutputMethod,
-        schema: sessionMemorySchema,
-        schemaName: 'session_memory',
-        system: buildSessionMemoryPrompt(),
-        user: JSON.stringify({
-          previousMemory: prev,
-          newExchange: {
-            user: String(input.userInput || ''),
-            assistant: String(input.assistantOutput || '')
-          }
-        }),
-        temperature: 0.2
+  const result = await invokeStructuredChat({
+    caller: 'session.memory',
+    cfg,
+    preferredProfile: cfg.preferredStructuredOutputProfile,
+    schema: sessionMemorySchema,
+    schemaName: 'session_memory',
+    system: buildSessionMemoryPrompt(),
+    user: JSON.stringify({
+      previousMemory: prev,
+      newExchange: {
+        user: String(input.userInput || ''),
+        assistant: String(input.assistantOutput || '')
+      }
+    }),
+    temperature: 0.2
+  })
+
+  if (
+    result.profile !== 'scripted' &&
+    cfg.preferredStructuredOutputProfile !== result.profile
+  ) {
+    try {
+      await input.llmStore.save({
+        ...cfg,
+        preferredStructuredOutputProfile: result.profile
       })
-    ).output
-  )
+    } catch (error) {
+      console.warn('[AI-MEMORY] Failed to persist preferred structured output profile', error)
+    }
+  }
+
+  const memory = normalizeMemory(result.output)
   await input.chatStore.saveSessionMemory(sessionId, memory)
 }

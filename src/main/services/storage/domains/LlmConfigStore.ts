@@ -8,13 +8,17 @@ type LlmConfigRow = {
   model_name?: unknown
   api_key?: unknown
   is_active?: unknown
-  preferredStructuredOutputMethod?: unknown
+  preferredStructuredOutputProfile?: unknown
 }
 
-const isPreferredStructuredOutputMethod = (
+const isPreferredStructuredOutputProfile = (
   value: unknown
-): value is NonNullable<LLMConfig['preferredStructuredOutputMethod']> =>
-  value === 'jsonSchema' || value === 'jsonMode' || value === 'promptJson'
+): value is NonNullable<LLMConfig['preferredStructuredOutputProfile']> =>
+  value === 'completions:jsonSchema' ||
+  value === 'completions:jsonMode' ||
+  value === 'completions:promptJson' ||
+  value === 'responses:jsonSchema' ||
+  value === 'responses:promptJson'
 
 export class LlmConfigStore {
   public constructor(private readonly core: LanceDbCore) {}
@@ -37,10 +41,10 @@ export class LlmConfigStore {
         model_name: String(row.model_name || ''),
         api_key: String(row.api_key || ''),
         is_active: Boolean(row.is_active),
-        preferredStructuredOutputMethod: isPreferredStructuredOutputMethod(
-          row.preferredStructuredOutputMethod
+        preferredStructuredOutputProfile: isPreferredStructuredOutputProfile(
+          row.preferredStructuredOutputProfile
         )
-          ? row.preferredStructuredOutputMethod
+          ? row.preferredStructuredOutputProfile
           : undefined
       }
     })

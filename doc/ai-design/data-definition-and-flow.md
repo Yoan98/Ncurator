@@ -450,8 +450,23 @@ interface AiActivityDetails {
   schemaName?: string
   model?: string
   durationMs?: number
-  method?: 'jsonSchema' | 'functionCalling' | 'jsonMode' | 'override'
-  fallbackChain?: Array<'jsonSchema' | 'functionCalling' | 'jsonMode' | 'override'>
+  method?: 'jsonSchema' | 'jsonMode' | 'promptJson' | 'scripted'
+  transport?: 'completions' | 'responses'
+  profile?:
+    | 'completions:jsonSchema'
+    | 'completions:jsonMode'
+    | 'completions:promptJson'
+    | 'responses:jsonSchema'
+    | 'responses:promptJson'
+    | 'scripted'
+  fallbackChain?: Array<
+    | 'completions:jsonSchema'
+    | 'completions:jsonMode'
+    | 'completions:promptJson'
+    | 'responses:jsonSchema'
+    | 'responses:promptJson'
+    | 'scripted'
+  >
   reason?: string
 }
 
@@ -465,8 +480,23 @@ interface AiLlmIoRecord {
   system: string
   user: string
   output?: JsonValue
-  method?: 'jsonSchema' | 'functionCalling' | 'jsonMode' | 'override'
-  fallbackChain: Array<'jsonSchema' | 'functionCalling' | 'jsonMode' | 'override'>
+  method?: 'jsonSchema' | 'jsonMode' | 'promptJson' | 'scripted'
+  transport?: 'completions' | 'responses'
+  profile?:
+    | 'completions:jsonSchema'
+    | 'completions:jsonMode'
+    | 'completions:promptJson'
+    | 'responses:jsonSchema'
+    | 'responses:promptJson'
+    | 'scripted'
+  fallbackChain: Array<
+    | 'completions:jsonSchema'
+    | 'completions:jsonMode'
+    | 'completions:promptJson'
+    | 'responses:jsonSchema'
+    | 'responses:promptJson'
+    | 'scripted'
+  >
   startedAt: number
   completedAt: number
   durationMs: number

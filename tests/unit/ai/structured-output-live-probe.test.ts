@@ -21,13 +21,41 @@ describe('ai unit structured output live probe', () => {
 
       const cfg = loadLiveLlmConfigFromEnv('primary')
       const probeCases: Array<{
-        label: 'auto' | 'jsonSchema' | 'jsonMode' | 'promptJson'
-        preferredMethod?: 'jsonSchema' | 'jsonMode' | 'promptJson'
+        label:
+          | 'auto'
+          | 'completions:jsonSchema'
+          | 'completions:jsonMode'
+          | 'completions:promptJson'
+          | 'responses:jsonSchema'
+          | 'responses:promptJson'
+        preferredProfile?:
+          | 'completions:jsonSchema'
+          | 'completions:jsonMode'
+          | 'completions:promptJson'
+          | 'responses:jsonSchema'
+          | 'responses:promptJson'
       }> = [
         { label: 'auto' },
-        { label: 'jsonSchema', preferredMethod: 'jsonSchema' },
-        { label: 'jsonMode', preferredMethod: 'jsonMode' },
-        { label: 'promptJson', preferredMethod: 'promptJson' }
+        {
+          label: 'completions:jsonSchema',
+          preferredProfile: 'completions:jsonSchema'
+        },
+        {
+          label: 'completions:jsonMode',
+          preferredProfile: 'completions:jsonMode'
+        },
+        {
+          label: 'completions:promptJson',
+          preferredProfile: 'completions:promptJson'
+        },
+        {
+          label: 'responses:jsonSchema',
+          preferredProfile: 'responses:jsonSchema'
+        },
+        {
+          label: 'responses:promptJson',
+          preferredProfile: 'responses:promptJson'
+        }
       ]
 
       const results: Array<Record<string, unknown>> = []
@@ -37,7 +65,7 @@ describe('ai unit structured output live probe', () => {
           const result = await invokeStructuredChat({
             caller: `live.probe.${probeCase.label}`,
             cfg,
-            preferredMethod: probeCase.preferredMethod,
+            preferredProfile: probeCase.preferredProfile,
             schema,
             schemaName: 'live_probe_answer',
             system:
@@ -49,7 +77,9 @@ describe('ai unit structured output live probe', () => {
           results.push({
             case: probeCase.label,
             ok: true,
+            transport: result.transport,
             method: result.method,
+            profile: result.profile,
             fallbackChain: result.fallbackChain,
             output: result.output
           })
@@ -66,7 +96,7 @@ describe('ai unit structured output live probe', () => {
         `${JSON.stringify({ baseUrl: cfg.base_url, model: cfg.model_name, results }, null, 2)}\n`
       )
 
-      expect(results).toHaveLength(4)
+      expect(results).toHaveLength(6)
     },
     180_000
   )

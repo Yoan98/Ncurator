@@ -139,15 +139,37 @@ export class LanceDbCore {
 
     const tableNames = await this.db.tableNames()
     if (!tableNames.includes(config.name)) {
-      const table = await this.db.createEmptyTable(config.name, config.schema)
+      await this.createTable(config)
+      return
+    }
 
-      if (config.vectorIndexConfig) {
-        await table.createIndex(config.vectorIndexConfig.column, config.vectorIndexConfig.options)
-      }
+    if (config.recreateIfSchemaChanged) {
+      const table = await this.db.openTable(config.name)
+      const currentSchema = await table.schema()
+      const currentFieldNames = currentSchema.fields.map((field) => field.name)
+      const nextFieldNames = config.schema.fields.map((field) => field.name)
+      const schemaChanged =
+        currentFieldNames.length !== nextFieldNames.length ||
+        currentFieldNames.some((fieldName, index) => fieldName !== nextFieldNames[index])
 
-      if (config.ftsIndexConfig) {
-        await table.createIndex(config.ftsIndexConfig.column, config.ftsIndexConfig.options)
+      if (schemaChanged) {
+        await this.db.dropTable(config.name)
+        await this.createTable(config)
       }
+    }
+  }
+
+  private async createTable(config: TableConfig): Promise<void> {
+    if (!this.db) throw new Error('Database connection not established')
+
+    const table = await this.db.createEmptyTable(config.name, config.schema)
+
+    if (config.vectorIndexConfig) {
+      await table.createIndex(config.vectorIndexConfig.column, config.vectorIndexConfig.options)
+    }
+
+    if (config.ftsIndexConfig) {
+      await table.createIndex(config.ftsIndexConfig.column, config.ftsIndexConfig.options)
     }
   }
 
@@ -352,6 +374,7 @@ export class LanceDbCore {
       },
       {
         name: LANCE_TABLES.LLM_CONFIG,
+        recreateIfSchemaChanged: true,
         schema: new arrow.Schema([
           new arrow.Field('id', new arrow.Utf8()),
           new arrow.Field('name', new arrow.Utf8()),
@@ -359,7 +382,7 @@ export class LanceDbCore {
           new arrow.Field('model_name', new arrow.Utf8()),
           new arrow.Field('api_key', new arrow.Utf8()),
           new arrow.Field('is_active', new arrow.Bool()),
-          new arrow.Field('preferredStructuredOutputMethod', new arrow.Utf8(), true)
+          new arrow.Field('preferredStructuredOutputProfile', new arrow.Utf8(), true)
         ])
       },
       {

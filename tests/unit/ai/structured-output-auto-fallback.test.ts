@@ -11,8 +11,16 @@ vi.mock('../../../src/main/services/llm/chatModel', () => ({
 
 import {
   STRUCTURED_OUTPUT_METHODS,
+  STRUCTURED_OUTPUT_PROFILES,
   invokeStructuredChat
 } from '../../../src/main/services/ai/structuredOutput'
+
+type StructuredOutputProfile =
+  | 'completions:jsonSchema'
+  | 'completions:jsonMode'
+  | 'completions:promptJson'
+  | 'responses:jsonSchema'
+  | 'responses:promptJson'
 
 type MethodBehavior =
   | {
@@ -24,11 +32,7 @@ type MethodBehavior =
       error: Error
     }
 
-type MethodBehaviorMap = {
-  jsonSchema?: MethodBehavior
-  jsonMode?: MethodBehavior
-  promptJson?: MethodBehavior
-}
+type MethodBehaviorMap = Partial<Record<StructuredOutputProfile, MethodBehavior>>
 
 const schema = z.object({
   answer: z.string()
@@ -54,26 +58,34 @@ const baseInput = {
 } as const
 
 const configureCreateChatModel = (behaviors: MethodBehaviorMap, callOrder: string[]): void => {
-  createChatModelMock.mockImplementation(() => ({
-    withStructuredOutput: (_schema: typeof schema, config: { method: 'jsonSchema' | 'jsonMode' }) => ({
-      invoke: async () => {
-        callOrder.push(config.method)
-        const behavior = behaviors[config.method]
-        if (!behavior) throw new Error(`missing_behavior:${config.method}`)
-        if (behavior.type === 'error') throw behavior.error
-        return behavior.output
-      }
-    }),
-    invoke: async () => {
-      callOrder.push('promptJson')
-      const behavior = behaviors.promptJson
-      if (!behavior) throw new Error('missing_behavior:promptJson')
-      if (behavior.type === 'error') throw behavior.error
+  createChatModelMock.mockImplementation(
+    (_cfg, options?: { transport?: 'completions' | 'responses' }) => {
+      const transport = options?.transport ?? 'completions'
+
       return {
-        content: JSON.stringify(behavior.output)
+        withStructuredOutput: (_schema: typeof schema, config: { method: 'jsonSchema' | 'jsonMode' }) => ({
+          invoke: async () => {
+            const profile = `${transport}:${config.method}` as StructuredOutputProfile
+            callOrder.push(profile)
+            const behavior = behaviors[profile]
+            if (!behavior) throw new Error(`missing_behavior:${profile}`)
+            if (behavior.type === 'error') throw behavior.error
+            return behavior.output
+          }
+        }),
+        invoke: async () => {
+          const profile = `${transport}:promptJson` as StructuredOutputProfile
+          callOrder.push(profile)
+          const behavior = behaviors[profile]
+          if (!behavior) throw new Error(`missing_behavior:${profile}`)
+          if (behavior.type === 'error') throw behavior.error
+          return {
+            content: JSON.stringify(behavior.output)
+          }
+        }
       }
     }
-  }))
+  )
 }
 
 describe('ai unit structured output auto fallback', () => {
@@ -81,11 +93,11 @@ describe('ai unit structured output auto fallback', () => {
     createChatModelMock.mockReset()
   })
 
-  it('uses jsonSchema first and stops when it succeeds', async () => {
+  it('uses completions jsonSchema first and stops when it succeeds', async () => {
     const callOrder: string[] = []
     configureCreateChatModel(
       {
-        jsonSchema: {
+        'completions:jsonSchema': {
           type: 'success',
           output: { answer: 'from schema' }
         }
@@ -96,21 +108,30 @@ describe('ai unit structured output auto fallback', () => {
     const result = await invokeStructuredChat(baseInput)
 
     expect(STRUCTURED_OUTPUT_METHODS).toEqual(['jsonSchema', 'jsonMode', 'promptJson'])
+    expect(STRUCTURED_OUTPUT_PROFILES).toEqual([
+      'completions:jsonSchema',
+      'completions:jsonMode',
+      'completions:promptJson',
+      'responses:jsonSchema',
+      'responses:promptJson'
+    ])
     expect(result.output).toEqual({ answer: 'from schema' })
+    expect(result.transport).toBe('completions')
     expect(result.method).toBe('jsonSchema')
-    expect(result.fallbackChain).toEqual(['jsonSchema'])
-    expect(callOrder).toEqual(['jsonSchema'])
+    expect(result.profile).toBe('completions:jsonSchema')
+    expect(result.fallbackChain).toEqual(['completions:jsonSchema'])
+    expect(callOrder).toEqual(['completions:jsonSchema'])
   })
 
-  it('falls back from jsonSchema to jsonMode when provider compatibility fails', async () => {
+  it('falls back within completions when jsonSchema is unsupported and jsonMode succeeds', async () => {
     const callOrder: string[] = []
     configureCreateChatModel(
       {
-        jsonSchema: {
+        'completions:jsonSchema': {
           type: 'error',
-          error: new Error("Cannot read properties of undefined (reading 'map')")
+          error: new Error('response_format json schema is not supported by this provider')
         },
-        jsonMode: {
+        'completions:jsonMode': {
           type: 'success',
           output: { answer: 'from json mode' }
         }
@@ -121,26 +142,62 @@ describe('ai unit structured output auto fallback', () => {
     const result = await invokeStructuredChat(baseInput)
 
     expect(result.output).toEqual({ answer: 'from json mode' })
+    expect(result.transport).toBe('completions')
     expect(result.method).toBe('jsonMode')
-    expect(result.fallbackChain).toEqual(['jsonSchema', 'jsonMode'])
-    expect(callOrder).toEqual(['jsonSchema', 'jsonMode'])
+    expect(result.profile).toBe('completions:jsonMode')
+    expect(result.fallbackChain).toEqual(['completions:jsonSchema', 'completions:jsonMode'])
+    expect(callOrder).toEqual(['completions:jsonSchema', 'completions:jsonMode'])
   })
 
-  it('falls back to promptJson via plain invoke and does not use raw fetch', async () => {
+  it('jumps to responses when completions transport hits a compatibility error', async () => {
     const callOrder: string[] = []
     configureCreateChatModel(
       {
-        jsonSchema: {
-          type: 'error',
-          error: new Error("Cannot read properties of undefined (reading 'map')")
-        },
-        jsonMode: {
+        'completions:jsonSchema': {
           type: 'error',
           error: new Error("Cannot read properties of undefined (reading 'message')")
         },
-        promptJson: {
+        'responses:jsonSchema': {
           type: 'success',
-          output: { answer: 'from prompt json' }
+          output: { answer: 'from responses schema' }
+        }
+      },
+      callOrder
+    )
+
+    const result = await invokeStructuredChat(baseInput)
+
+    expect(result.output).toEqual({ answer: 'from responses schema' })
+    expect(result.transport).toBe('responses')
+    expect(result.method).toBe('jsonSchema')
+    expect(result.profile).toBe('responses:jsonSchema')
+    expect(result.fallbackChain).toEqual(['completions:jsonSchema', 'responses:jsonSchema'])
+    expect(callOrder).toEqual(['completions:jsonSchema', 'responses:jsonSchema'])
+  })
+
+  it('falls back to responses promptJson via plain invoke and does not use raw fetch', async () => {
+    const callOrder: string[] = []
+    configureCreateChatModel(
+      {
+        'completions:jsonSchema': {
+          type: 'error',
+          error: new Error('response_format json schema is not supported by this provider')
+        },
+        'completions:jsonMode': {
+          type: 'error',
+          error: new Error('response_format json_object is not supported by this provider')
+        },
+        'completions:promptJson': {
+          type: 'error',
+          error: new Error("Cannot read properties of undefined (reading 'message')")
+        },
+        'responses:jsonSchema': {
+          type: 'error',
+          error: new Error('response_format json schema is not supported by this provider')
+        },
+        'responses:promptJson': {
+          type: 'success',
+          output: { answer: 'from responses prompt json' }
         }
       },
       callOrder
@@ -150,21 +207,35 @@ describe('ai unit structured output auto fallback', () => {
     try {
       const result = await invokeStructuredChat(baseInput)
 
-      expect(result.output).toEqual({ answer: 'from prompt json' })
+      expect(result.output).toEqual({ answer: 'from responses prompt json' })
+      expect(result.transport).toBe('responses')
       expect(result.method).toBe('promptJson')
-      expect(result.fallbackChain).toEqual(['jsonSchema', 'jsonMode', 'promptJson'])
-      expect(callOrder).toEqual(['jsonSchema', 'jsonMode', 'promptJson'])
+      expect(result.profile).toBe('responses:promptJson')
+      expect(result.fallbackChain).toEqual([
+        'completions:jsonSchema',
+        'completions:jsonMode',
+        'completions:promptJson',
+        'responses:jsonSchema',
+        'responses:promptJson'
+      ])
+      expect(callOrder).toEqual([
+        'completions:jsonSchema',
+        'completions:jsonMode',
+        'completions:promptJson',
+        'responses:jsonSchema',
+        'responses:promptJson'
+      ])
       expect(fetchSpy).not.toHaveBeenCalled()
     } finally {
       fetchSpy.mockRestore()
     }
   })
 
-  it('tries the preferred method first and skips auto when it succeeds', async () => {
+  it('tries the preferred profile first and skips auto when it succeeds', async () => {
     const callOrder: string[] = []
     configureCreateChatModel(
       {
-        promptJson: {
+        'responses:promptJson': {
           type: 'success',
           output: { answer: 'cached prompt json' }
         }
@@ -174,24 +245,26 @@ describe('ai unit structured output auto fallback', () => {
 
     const result = await invokeStructuredChat({
       ...baseInput,
-      preferredMethod: 'promptJson'
+      preferredProfile: 'responses:promptJson'
     })
 
     expect(result.output).toEqual({ answer: 'cached prompt json' })
+    expect(result.transport).toBe('responses')
     expect(result.method).toBe('promptJson')
-    expect(result.fallbackChain).toEqual(['promptJson'])
-    expect(callOrder).toEqual(['promptJson'])
+    expect(result.profile).toBe('responses:promptJson')
+    expect(result.fallbackChain).toEqual(['responses:promptJson'])
+    expect(callOrder).toEqual(['responses:promptJson'])
   })
 
-  it('falls back after a preferred-method compatibility failure and returns the new winning method', async () => {
+  it('falls back after a preferred-profile compatibility failure and returns the new winning profile', async () => {
     const callOrder: string[] = []
     configureCreateChatModel(
       {
-        jsonMode: {
+        'responses:jsonSchema': {
           type: 'error',
           error: new Error("Cannot read properties of undefined (reading 'message')")
         },
-        jsonSchema: {
+        'completions:jsonSchema': {
           type: 'success',
           output: { answer: 're-probed schema' }
         }
@@ -201,20 +274,22 @@ describe('ai unit structured output auto fallback', () => {
 
     const result = await invokeStructuredChat({
       ...baseInput,
-      preferredMethod: 'jsonMode'
+      preferredProfile: 'responses:jsonSchema'
     })
 
     expect(result.output).toEqual({ answer: 're-probed schema' })
+    expect(result.transport).toBe('completions')
     expect(result.method).toBe('jsonSchema')
-    expect(result.fallbackChain).toEqual(['jsonMode', 'jsonSchema'])
-    expect(callOrder).toEqual(['jsonMode', 'jsonSchema'])
+    expect(result.profile).toBe('completions:jsonSchema')
+    expect(result.fallbackChain).toEqual(['responses:jsonSchema', 'completions:jsonSchema'])
+    expect(callOrder).toEqual(['responses:jsonSchema', 'completions:jsonSchema'])
   })
 
-  it('does not swallow non-compatibility errors from the preferred method', async () => {
+  it('does not swallow non-compatibility errors from the preferred profile', async () => {
     const callOrder: string[] = []
     configureCreateChatModel(
       {
-        jsonMode: {
+        'completions:jsonMode': {
           type: 'error',
           error: new Error('network socket disconnected unexpectedly')
         }
@@ -225,11 +300,11 @@ describe('ai unit structured output auto fallback', () => {
     await expect(
       invokeStructuredChat({
         ...baseInput,
-        preferredMethod: 'jsonMode'
+        preferredProfile: 'completions:jsonMode'
       })
     ).rejects.toThrow(
-      'structured_output_failed; caller=unit.test; schema=unit_schema; model=gpt-5; method=jsonMode; reason=network socket disconnected unexpectedly'
+      'structured_output_failed; caller=unit.test; schema=unit_schema; model=gpt-5; profile=completions:jsonMode; transport=completions; method=jsonMode; reason=network socket disconnected unexpectedly'
     )
-    expect(callOrder).toEqual(['jsonMode'])
+    expect(callOrder).toEqual(['completions:jsonMode'])
   })
 })

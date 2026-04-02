@@ -28,6 +28,7 @@ describe('ai unit structured chat activity', () => {
           ok: true
         },
         method: 'scripted',
+        profile: 'scripted',
         fallbackChain: ['scripted']
       })
     })
@@ -37,6 +38,7 @@ describe('ai unit structured chat activity', () => {
     expect(events.filter((event) => event.type === 'activity')).toHaveLength(2)
     expect(llmIoRecords).toHaveLength(1)
     expect(llmIoRecords[0]?.method).toBe('scripted')
+    expect(llmIoRecords[0]?.profile).toBe('scripted')
     expect(llmIoRecords[0]?.fallbackChain).toEqual(['scripted'])
   })
 })

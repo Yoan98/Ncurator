@@ -2,17 +2,21 @@ import { describe, it } from 'vitest'
 import { loadLiveLlmConfigFromEnv, hasLiveLlmConfigInEnv } from '../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
+import {
+  HUMAN_FILE_RETENTION_USER_INPUT,
+  seedFileRetentionKb
+} from '../../live/testData'
 import { filterAiRunEventsByType } from '../testUtils'
 
 describe('ai human live backend', () => {
-  it('human-kb-answer-live', async () => {
+  it('human-file-retention-answer-live', async () => {
     await runBackendCase({
-      caseId: 'human-kb-answer-live',
+      caseId: 'human-file-retention-answer-live',
       harnessMode: 'live',
       domain: 'ai',
       suite: 'human',
       groups: ['live'],
-      description: '验证 live 模式下 human 会通过真实知识库存储、embedding 与检索工具完成回答。',
+      description: '验证 live 模式下 human 会基于真实已选资料完成常见规则问答。',
       fixtures: [],
       runMode: 'single',
       runtimeModelName: hasLiveLlmConfigInEnv('primary')
@@ -28,25 +32,13 @@ describe('ai human live backend', () => {
         }
 
         await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv('primary'))
-        await runtime.seedKb([
-          {
-            id: 'doc-1',
-            name: 'Risk Playbook.md',
-            chunks: [
-              {
-                id: 'chunk-1',
-                text: '审批被拒绝时必须保留现有文件不变。'
-              }
-            ]
-          }
-        ])
-
+        const selectedDocumentIds = await seedFileRetentionKb(runtime)
         const runner = createHumanTestRunner(runtime, {
-          selectedDocumentIds: ['doc-1']
+          selectedDocumentIds
         })
         const output = await runner.run({
           taskId: runtime.taskId,
-          userInput: '请只根据当前知识库回答：审批被拒绝时应如何处理现有文件？必要时请先检索知识库。'
+          userInput: HUMAN_FILE_RETENTION_USER_INPUT
         })
 
         return {
@@ -59,26 +51,29 @@ describe('ai human live backend', () => {
         if (result.skipped) {
           runtime.assertThat(true, {
             name: 'live-config-not-provided',
-            message: '未提供 live 模型配置，已跳过 human live KB case。'
+            message: '未提供 live 模型配置，已跳过 human live file retention case。'
           })
           return
         }
 
         const toolResults = filterAiRunEventsByType(result.events, 'tool_call_result')
+        const deliveryText = `${result.output?.summary || ''}\n${result.output?.deliveryMarkdown || ''}`
 
         runtime.assertThat(
           result.output?.status === 'completed' &&
-            toolResults.some((event) => event.toolName.startsWith('kb_')),
+            toolResults.some((event) => event.toolName.startsWith('kb_')) &&
+            /(保留|不变)/.test(deliveryText),
           {
-            name: 'human-live-uses-real-kb-tooling',
-            message: 'live human KB case 应通过真实 chatStructured 和真实 KB 工具完成回答。',
+            name: 'human-live-answers-file-retention-question-with-real-kb',
+            message: 'live human simple case 应基于真实已选资料完成文件保留规则问答。',
             data: {
               toolNames: toolResults.map((event) => event.toolName),
-              summary: result.output?.summary
+              summary: result.output?.summary,
+              deliveryMarkdown: result.output?.deliveryMarkdown
             }
           }
         )
       }
     })
-  }, 600_000)
+  })
 })

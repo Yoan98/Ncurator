@@ -179,6 +179,7 @@ export type {
 export interface TableConfig {
   name: string
   schema: arrow.Schema
+  recreateIfSchemaChanged?: boolean
   vectorIndexConfig?: {
     column: string
     options?: Record<string, unknown>

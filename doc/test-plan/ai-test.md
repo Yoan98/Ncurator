@@ -389,23 +389,23 @@ AI 正式测试只按三类原则治理：
 
 #### `live`
 
-##### `human-terminal-answer-live`
+##### `human-file-retention-answer-live`
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 live 模式下 `human` 会通过真实 `chatStructured` 和真实 terminal 工具完成简单任务。
-- Why：`human/live` 需要至少有一条简单业务样例证明真实模型下最短闭环仍可执行。
-- How：注入真实 live LLM 配置后，直接输入“读取当前工作区路径并简短答复”的自然语言任务，让真实 `human` 自主决定是否调用 terminal。
-- Oracle：任务最终完成，且真实工具结果中至少出现一次 `terminal_run_command`。
+- What：验证 live 模式下 `human` 会基于真实已选资料完成常见规则问答。
+- Why：`human/live` 需要至少有一条高频真实问答样例，证明真实模型下的单目标资料检索闭环可执行。
+- How：注入真实 live LLM 配置，seed 一份与“审批未通过时保留原文件”相关的真实 KB 文档并限制在已选范围内，然后直接输入“审批没通过时原文件到底要不要保留”的自然语言诉求，让真实 `human` 自主完成。
+- Oracle：任务最终完成，且真实工具结果中至少出现一次以 `kb_` 开头的检索工具调用，最终结论明确指向保留原文件。
 - Not：不对最终文案做精确文本断言。
 
-##### `human-kb-answer-live`
+##### `human-risk-report-draft-live`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 live 模式下 `human` 会通过真实 KB 存储、真实 embedding 与真实检索工具完成复杂知识问答。
-- Why：`human/live` 不能只有简单 terminal 样例，还需要至少一条复杂业务样例覆盖真实资料检索。
-- How：注入真实 live LLM 配置，seed 真实 KB 文档并限制在选中文档范围内，然后直接输入自然语言 KB 问答任务。
-- Oracle：任务最终完成，且真实工具结果中至少出现一次以 `kb_` 开头的检索工具调用。
+- What：验证 live 模式下 `human` 会在一个真实长任务里串起模板定位、资料取证、docx 编辑与预览交付。
+- Why：`human/live` 需要至少一条长期高价值复杂样例，覆盖 workspace、KB、docx 与最终交付链路。
+- How：注入真实 live LLM 配置；workspace 中动态写入带 `RISK_TODO / OWNER_TODO` 占位符的周报模板和干扰文件；seed 两份真实 KB 文档分别提供风险结论与负责人说明并限制在已选范围内；直接输入“找到上周 Word 周报模板，按已选资料补全风险结论与负责人，生成预览且不要覆盖原文件”的自然语言诉求，让真实 `human` 自主完成。
+- Oracle：任务最终完成；事件流中至少出现一次 `terminal_run_command`、一次以 `kb_` 开头的检索工具调用、一次 `docx_open`、一次 `docx_apply_ops` 与一次 `docx_render_preview`；存在 preview/draft artifact，且原模板未被覆盖。
 - Not：不绑定最终答案措辞，也不要求固定检索工具顺序。
 
 ### 6.3 `director`
@@ -483,21 +483,21 @@ AI 正式测试只按三类原则治理：
 
 #### `live`
 
-##### `director-simple-human-first-live`
+##### `director-approval-reply-live`
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 live 模式下 `director` 会通过真实 `human-first` 路径完成简单任务。
-- Why：`director/live` 需要至少有一条简单业务样例，证明真实模型不会把所有任务都误拉进增强路径。
-- How：注入真实 live LLM 配置后，直接输入一个读取当前工作区路径的简单自然语言任务，让真实 `director` 自主路由并执行。
-- Oracle：最终 run 完成，真实发生一次 `director_direct_human_exec`，且最终交付内容非空。
+- What：验证 live 模式下 `director` 会把一个常见资料问答回复任务走成真实 `human-first` 路径。
+- Why：`director/live` 需要至少有一条简单真实样例，证明单目标、单交付任务会优先 direct 给 `human` 而不是误升级为 plan。
+- How：注入真实 live LLM 配置，seed 一份与“审批未通过时保留原文件”相关的真实 KB 文档并限制在已选范围内；直接输入“同事来问审批没过时原文件怎么处理，帮我整理一段两三句话回复”的自然语言诉求，让真实 `director` 自主路由并执行。
+- Oracle：最终 run 完成；真实发生一次 `director_direct_human_exec`；不出现 `plan_created`；事件流中至少出现一次以 `kb_` 开头的真实工具调用；最终交付内容非空。
 - Not：不对路由原因文本或最终回答措辞做精确断言。
 
-##### `director-kb-live`
+##### `director-risk-report-delivery-live`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 live 模式下 `director` 会结合真实 KB 与真实 `human` 完成复杂任务。
-- Why：`director/live` 不能只有 simple human-first，还需要至少一条复杂真实业务样例覆盖资料检索。
-- How：注入真实 live LLM 配置，seed 真实 KB 文档并限制资料范围，然后直接输入自然语言 KB 问答任务，让真实 `director -> human` 自主完成。
-- Oracle：最终 run 完成，且事件流中至少出现一次以 `kb_` 开头的真实工具调用。
+- What：验证 live 模式下 `director` 会把一个真实长任务拆解为资料整理、模板补全与最终交付。
+- Why：`director/live` 需要至少一条长期高价值复杂样例，覆盖 plan、human 子任务、synthesis 与 artifact 合并。
+- How：注入真实 live LLM 配置；workspace 中动态写入带占位符的周报模板和干扰文件；seed 两份真实 KB 文档分别提供风险结论与负责人说明并限制在已选范围内；直接输入“把本周风险周报整件事做完：整理资料、找模板、补全文档、生成预览、给交付说明”的自然语言诉求，让真实 `director -> human` 自主完成。
+- Oracle：最终 run 完成；事件流中出现 `plan_created`、至少一次 `director_plan_exec` 与一次 `director_synthesis_human`；全链路至少出现一次 `terminal_run_command`、一次以 `kb_` 开头的检索工具调用、一次 `docx_apply_ops` 与一次 `docx_render_preview`；`finalArtifacts` 中存在 preview/draft artifact。
 - Not：不绑定最终 route 说明文本，也不固定 KB 工具选择顺序。

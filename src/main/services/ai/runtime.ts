@@ -64,7 +64,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
         await invokeStructuredChat({
           caller: input.caller,
           cfg,
-          preferredMethod: cfg.preferredStructuredOutputMethod,
+          preferredProfile: cfg.preferredStructuredOutputProfile,
           schema: input.schema,
           schemaName: input.schemaName,
           system: input.system,
@@ -74,18 +74,18 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
         })
     })
     if (
-      result.method !== 'scripted' &&
-      cfg.preferredStructuredOutputMethod !== result.method
+      result.profile !== 'scripted' &&
+      cfg.preferredStructuredOutputProfile !== result.profile
     ) {
       const nextConfig = {
         ...cfg,
-        preferredStructuredOutputMethod: result.method
+        preferredStructuredOutputProfile: result.profile
       }
       try {
         await deps.llmStore.save(nextConfig)
         requestedConfigPromise = Promise.resolve(nextConfig)
       } catch (error) {
-        console.warn('[AI-RUNTIME] Failed to persist preferred structured output method', error)
+        console.warn('[AI-RUNTIME] Failed to persist preferred structured output profile', error)
       }
     }
     return result.output

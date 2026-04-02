@@ -128,9 +128,9 @@ const ModelSettingsPanel: React.FC = () => {
         id: editingConfig ? editingConfig.id : crypto.randomUUID(),
         ...values,
         is_active: editingConfig ? editingConfig.is_active : configs.length === 0,
-        preferredStructuredOutputMethod:
+        preferredStructuredOutputProfile:
           editingConfig && !shouldResetPreferredMethod
-            ? editingConfig.preferredStructuredOutputMethod
+            ? editingConfig.preferredStructuredOutputProfile
             : undefined
       }
 
