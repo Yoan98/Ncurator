@@ -54,18 +54,21 @@ describe('ai human mock-llm backend', () => {
                   readyToDeliver: false,
                   nextAction: {
                     action: 'hand',
-                    parallelCallToolParam: [
-                      {
-                        toolName: 'terminal_run_command',
-                        args: {
-                          command: 'pwd'
+                    toolUsePlan: {
+                      mode: 'parallel',
+                      calls: [
+                        {
+                          toolName: 'terminal_run_command',
+                          args: {
+                            command: 'pwd'
+                          }
+                        },
+                        {
+                          toolName: 'kb_list_documents',
+                          args: {}
                         }
-                      },
-                      {
-                        toolName: 'kb_list_documents',
-                        args: {}
-                      }
-                    ]
+                      ]
+                    }
                   }
                 }
               },

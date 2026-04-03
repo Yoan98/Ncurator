@@ -8,6 +8,7 @@ import { applyBrainDecisionTransition } from '../utils/stateTransitions'
 export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCache }) => {
   return async (state: HumanState): Promise<HumanState> => {
     input.ctx.checkCancelled()
+    input.cache.currentState = state
 
     const rawOutput = await input.ctx.chatStructured({
       caller: 'human.brain',

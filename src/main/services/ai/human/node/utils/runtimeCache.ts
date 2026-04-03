@@ -1,3 +1,7 @@
+import {
+  getEffectiveLearnedSkillIds,
+  getSkillDefinition
+} from '../../skills'
 import type { HumanRuntimeCache, RuntimeSkillId } from '../../types'
 
 export const createHumanRuntimeCache = (): HumanRuntimeCache => ({
@@ -11,10 +15,10 @@ export const getAvailableToolNames = (input: {
   cache: HumanRuntimeCache
 }): string[] => {
   const toolNames = new Set<string>()
-  input.learnedSkillIds.forEach((skillId) => {
-    ;(input.cache.skillToolsets[skillId] || []).forEach((tool) => {
-      const toolName = String(tool.name || '').trim()
-      if (toolName) toolNames.add(toolName)
+  getEffectiveLearnedSkillIds(input.learnedSkillIds).forEach((skillId) => {
+    getSkillDefinition(skillId).toolNames.forEach((toolName) => {
+      const normalized = String(toolName || '').trim()
+      if (normalized) toolNames.add(normalized)
     })
   })
   return Array.from(toolNames)

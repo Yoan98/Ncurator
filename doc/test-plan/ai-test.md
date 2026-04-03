@@ -269,6 +269,16 @@
 - Oracle：并行工具结果被正确聚合，运行状态无串扰。
 - Not：不验证 `brain` 决策来源。
 
+##### `hand-serial-docx-chain`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 `hand` 在 `serial` 模式下会按顺序执行真实 docx 写入、校验与预览链路。
+- Why：复杂 docx 链路依赖最新快照，必须通过正式 case 守住串行执行契约。
+- How：通过真实 `hand` 执行 `docx_apply_ops -> docx_validate -> docx_render_preview`。
+- Oracle：工具结果顺序稳定、全部成功，且会产出 preview artifact。
+- Not：不验证 `brain` 是否自然生成这条计划。
+
 ##### `hand-tool-limit-and-artifact-merge`
 
 - 测试类型：`backend`
@@ -278,6 +288,16 @@
 - How：通过真实工具结果触发 limit 与 artifact merge 分支。
 - Oracle：超限被守卫拦截，artifact 合并结果稳定。
 - Not：不验证 `human` 全链路。
+
+##### `hand-history-recall`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 builtin `history-recall` 能通过真实 `hand` 链路加载旧历史，并写入 `loaded_history_context`。
+- Why：过程历史的按需展开是长链路任务的重要收敛能力，需要有正式 case 长期守住。
+- How：先 seed 历史 round，再通过真实 `hand` 调用 internal tool `history_recall`。
+- Oracle：`lastToolUseResults` 中出现 `history_recall`，且 `processMemory.loadedHistoryContext` 被真实写入。
+- Not：不验证 `brain` 是否一定会主动触发这条能力。
 
 ### 4.2 `human`
 

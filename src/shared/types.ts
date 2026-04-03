@@ -584,6 +584,7 @@ export type RuntimeIssueCode =
   | 'scope_unavailable'
   | 'approval_denied'
 export type RuntimeSkillId =
+  | 'history-recall'
   | 'workspace-cli'
   | 'docx-read'
   | 'docx-write'
@@ -847,6 +848,7 @@ type AiRunEventPayload =
       toolName?: string
       publicNarrative: string
       learnedSkillIds: RuntimeSkillId[]
+      effectiveSkillIds: RuntimeSkillId[]
       availableToolNames: string[]
       resultStatus?: HumanStepResultStatus
       summary: string
@@ -858,6 +860,8 @@ type AiRunEventPayload =
       runId: string
       taskId?: string
       source: WatchHintSource
+      code: string
+      detail?: JsonObject
       summary: string
       createdAt: number
     }

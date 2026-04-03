@@ -31,10 +31,22 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
     })
 
     const graph = new StateGraph(State)
-      .addNode('human_brain_node', (state) => brainNode(state as HumanState))
-      .addNode('human_learning_node', (state) => learningNode(state as HumanState))
-      .addNode('human_hand_node', (state) => handNode(state as HumanState))
-      .addNode('human_mouth_node', (state) => mouthNode(state as HumanState))
+      .addNode('human_brain_node', (state) => {
+        cache.currentState = state as HumanState
+        return brainNode(state as HumanState)
+      })
+      .addNode('human_learning_node', (state) => {
+        cache.currentState = state as HumanState
+        return learningNode(state as HumanState)
+      })
+      .addNode('human_hand_node', (state) => {
+        cache.currentState = state as HumanState
+        return handNode(state as HumanState)
+      })
+      .addNode('human_mouth_node', (state) => {
+        cache.currentState = state as HumanState
+        return mouthNode(state as HumanState)
+      })
       .addEdge(START, 'human_brain_node')
       .addConditionalEdges('human_brain_node', (state) => {
         const humanState = state as HumanState

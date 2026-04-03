@@ -1,10 +1,36 @@
-import { RUNTIME_SKILL_IDS } from './constants'
-import type { RuntimeSkillId, SkillCatalogItem, SkillDefinition } from './types'
+import {
+  BUILTIN_RUNTIME_SKILL_IDS,
+  EXTERNAL_RUNTIME_SKILL_IDS,
+  LEARNABLE_RUNTIME_SKILL_IDS,
+  RUNTIME_SKILL_IDS
+} from './constants'
+import type {
+  HumanState,
+  RuntimeSkillId,
+  SkillCatalogItem,
+  SkillDefinition
+} from './types'
 
 export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
+  'history-recall': {
+    skillId: 'history-recall',
+    familyId: 'internal',
+    source: 'builtin',
+    availability: 'always_on',
+    countsTowardToolBudget: false,
+    title: 'history-recall',
+    summary: '回看之前几轮已经做过的正式判断、执行动作和结果。',
+    whenToUse: '当最近一轮和历史摘要还不足以定位失败模式或需要回看更早细节时使用。',
+    detail:
+      '它用于主动加载更详细的过程历史，不负责读取工作区或知识库。优先先看你已有的上一轮与历史链；只有确实需要查看更多旧轮次时再调用。',
+    toolNames: ['history_recall']
+  },
   'workspace-cli': {
     skillId: 'workspace-cli',
     familyId: 'terminal',
+    source: 'external',
+    availability: 'learnable',
+    countsTowardToolBudget: true,
     title: 'workspace-cli',
     summary: '读取 workspace 文件、检查环境、执行单条 CLI 命令。',
     whenToUse: '当任务必须读取工作区文件、确认目录状态、执行单条命令或生成中间文件时使用。',
@@ -15,6 +41,9 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
   'docx-read': {
     skillId: 'docx-read',
     familyId: 'docx',
+    source: 'external',
+    availability: 'learnable',
+    countsTowardToolBudget: true,
     title: 'docx-read',
     summary: '打开 docx、定位结构、检索内容、查看历史。',
     whenToUse: '当任务需要阅读、定位或理解 docx 内容时使用。',
@@ -31,6 +60,9 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
   'docx-write': {
     skillId: 'docx-write',
     familyId: 'docx',
+    source: 'external',
+    availability: 'learnable',
+    countsTowardToolBudget: true,
     title: 'docx-write',
     summary: '修改 docx 内容，或基于快照回滚到上一版。',
     whenToUse: '当你已经明确知道要改哪里、改成什么，或需要回滚当前草稿快照时使用。',
@@ -41,6 +73,9 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
   'docx-delivery': {
     skillId: 'docx-delivery',
     familyId: 'docx',
+    source: 'external',
+    availability: 'learnable',
+    countsTowardToolBudget: true,
     title: 'docx-delivery',
     summary: '校验 docx 草稿、生成预览、按需落盘。',
     whenToUse: '当文档内容已经准备好，需要形成可审阅或可交付结果时使用。',
@@ -51,6 +86,9 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
   'kb-document-discovery': {
     skillId: 'kb-document-discovery',
     familyId: 'kb',
+    source: 'external',
+    availability: 'learnable',
+    countsTowardToolBudget: true,
     title: 'kb-document-discovery',
     summary: '在当前工作区知识库内缩小候选文档范围。',
     whenToUse: '当只知道主题、结果过散、或需要提高精准文档定位时使用。',
@@ -61,6 +99,9 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
   'kb-evidence-query': {
     skillId: 'kb-evidence-query',
     familyId: 'kb',
+    source: 'external',
+    availability: 'learnable',
+    countsTowardToolBudget: true,
     title: 'kb-evidence-query',
     summary: '在当前工作区知识库中直接搜索内容，提取 chunk 级证据。',
     whenToUse: '当任务需要查资料怎么写、找证据、找规则、找引用或基于资料作答时使用。',
@@ -72,6 +113,12 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
 
 export const hasSkillDefinition = (skillId: string): skillId is RuntimeSkillId =>
   RUNTIME_SKILL_IDS.includes(skillId as RuntimeSkillId)
+
+export const isBuiltinSkillId = (skillId: string): skillId is RuntimeSkillId =>
+  BUILTIN_RUNTIME_SKILL_IDS.includes(skillId as (typeof BUILTIN_RUNTIME_SKILL_IDS)[number])
+
+export const isLearnableSkillId = (skillId: string): skillId is RuntimeSkillId =>
+  LEARNABLE_RUNTIME_SKILL_IDS.includes(skillId as (typeof LEARNABLE_RUNTIME_SKILL_IDS)[number])
 
 export const getSkillDefinition = (skillId: RuntimeSkillId): SkillDefinition => {
   const definition = SKILL_DEFINITIONS[skillId]
@@ -87,12 +134,44 @@ export const getSkillDefinition = (skillId: RuntimeSkillId): SkillDefinition => 
 export const listSkillDefinitions = (): SkillDefinition[] =>
   RUNTIME_SKILL_IDS.map((skillId) => getSkillDefinition(skillId))
 
+export const listBuiltinSkillDefinitions = (): SkillDefinition[] =>
+  BUILTIN_RUNTIME_SKILL_IDS.map((skillId) => getSkillDefinition(skillId))
+
+export const listExternalSkillDefinitions = (): SkillDefinition[] =>
+  EXTERNAL_RUNTIME_SKILL_IDS.map((skillId) => getSkillDefinition(skillId))
+
 export const buildSkillCatalog = (): SkillCatalogItem[] =>
   listSkillDefinitions().map((definition) => ({
     skillId: definition.skillId,
     familyId: definition.familyId,
+    source: definition.source,
+    availability: definition.availability,
+    countsTowardToolBudget: definition.countsTowardToolBudget,
     title: definition.title,
     summary: definition.summary,
     toolNames: [...definition.toolNames],
     whenToUse: definition.whenToUse
   }))
+
+export const getEffectiveLearnedSkillIds = (
+  learnedSkillIds: HumanState['brainMemory']['outside']['learnedSkillIds']
+): RuntimeSkillId[] => {
+  const seen = new Set<RuntimeSkillId>()
+  const ordered = [...BUILTIN_RUNTIME_SKILL_IDS, ...learnedSkillIds]
+
+  return ordered.filter((skillId) => {
+    if (seen.has(skillId)) return false
+    seen.add(skillId)
+    return true
+  })
+}
+
+export const findEffectiveSkillIdByToolName = (input: {
+  toolName: string
+  learnedSkillIds: HumanState['brainMemory']['outside']['learnedSkillIds']
+}): RuntimeSkillId | undefined => {
+  const target = String(input.toolName || '').trim()
+  return getEffectiveLearnedSkillIds(input.learnedSkillIds).find((skillId) =>
+    getSkillDefinition(skillId).toolNames.includes(target)
+  )
+}

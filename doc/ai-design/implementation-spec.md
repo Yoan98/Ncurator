@@ -19,7 +19,7 @@
 - `human` 只负责 task 级 autonomous execution，不承担 run 级编排。
 - `brain` 是 `human` 内唯一推理节点。
 - `brainMemory.inside` 只允许通过 `brain` 的 `memoryOps` 修改。
-- `lastBrainDecision` 只表示当前动作快照，`brainDecisions` 只表示最近决策历史。
+- `lastBrainDecision` 只表示当前动作快照；正式过程历史由 `processMemory.roundHistory` 承接。
 - `deliveryMode` 只影响交付组织方式，不改变求解职责。
 - `mouth` 不新增事实，不扩张 artifacts。
 - `director` 与 `human` 之间只通过稳定交接契约通信，不直接穿透对方内部状态。
@@ -210,35 +210,40 @@ stateDiagram-v2
 
 ### 6.1 `brain`
 
-- 职责：`human` 内唯一推理节点，负责基于当前任务、记忆、最近工具结果与收敛提示，产出新的 `LastBrainDecision`。
-- 主要读取：`task`、`brainMemory`、`lastParallelCallToolResults`、`watchHint`、最近决策历史摘要、`ctx.selectedContextText`、`ctx.workspace`。
-- 主要回写：`brainMemory.inside`、`brainDecisions`、`lastBrainDecision`、`runtime.stage`、`watchHint`、`trace.steps`。
+- 职责：`human` 内唯一推理节点，负责基于当前任务、稳定记忆、过程历史与收敛提示，产出新的 `LastBrainDecision`。
+- 主要读取：`task`、`brainMemory.inside`、`brainMemory.outside`、`processMemory.roundHistory`、`processMemory.loadedHistoryContext`、`watchHint`、`ctx.selectedContextText`、`ctx.workspace`。
+- 主要回写：`brainMemory.inside`、`brainDecisions`、`lastBrainDecision`、`processMemory.loadedHistoryContext`、`runtime.stage`、`watchHint`、`trace.steps`。
 - 特有约束：
   - 模型输出必须通过 `ctx.chatStructured`。
   - prompt 必须通过 `buildBrainPromptContext`。
   - 输出必须先经过 `parseBrainDecisionOutput`。
   - `brainMemory.inside` 只能通过 `reduceBrainMemory` 修改。
-  - `brain` 回看历史时只消费摘要，不直接把 `lastBrainDecision` 重新喂回。
+  - `brain` 的主输入块固定为 `user_request`、`user_selected_context`、`your_stable_memory`、`your_capabilities`、`last_round_focus`、`history_chain`、`loaded_history_context`、`convergence_hint`。
+  - `brain` 回看历史时不再依赖 `recent_*` 拼接块，而是统一消费 `roundHistory` 渲染结果。
 
 ### 6.2 `learning`
 
-- 职责：装载本轮 `brain` 指定的 skill，并更新已学习 skill 集合。
+- 职责：装载本轮 `brain` 指定的 external skill，并更新已学习 skill 集合。
 - 主要读取：`wantLearnSkillIds`、`learnedSkillIds`、`skills.ts`、`skillLoader`。
-- 主要回写：`learnedSkillIds`、`runtime.stage`、必要时 `watchHint`、`trace.steps`。
+- 主要回写：`learnedSkillIds`、`lastLearningOutcome`、`processMemory.roundHistory`、`runtime.stage`、必要时 `watchHint`、`trace.steps`。
 - 特有约束：
   - 不调用模型。
-  - 未知 skill 或重复学习时，只写 `watchHint` 并返回 `brain`。
+  - `learning` 采用 partial success：有新 skill 时只加载新 skill，并把重复 / 未知 skill 写入 `lastLearningOutcome`。
+  - 只有当整轮 learning 完全没有新 skill，或 active tool budget 超限时，才写 `watchHint` 并返回 `brain`。
+  - builtin skill 始终可用，不进入 learning，不计入 active tool budget。
   - `ensureSkillTools` 负责根据 `skills.ts` 与 family tool builder 把 skill 对应工具装入 runtime cache。
 
 ### 6.3 `hand`
 
-- 职责：承接 `brain` 已经明确决定的工具调用批次，执行并回写工具结果与 artifacts。
-- 主要读取：`parallelCallToolParam`、`learnedSkillIds`、runtime cache 中已装载的工具。
-- 主要回写：`lastParallelCallToolResults`、`runtimeArtifacts`、`runtime.stage`、必要时 `watchHint`、`trace.steps`。
+- 职责：承接 `brain` 已经明确决定的工具调用批次，执行并回写工具结果、过程历史与 artifacts。
+- 主要读取：`toolUsePlan`、`learnedSkillIds`、runtime cache 中已装载的工具、`processMemory.roundHistory`。
+- 主要回写：`lastToolUseResults`、`processMemory.roundHistory`、`processMemory.loadedHistoryContext`、`runtimeArtifacts`、`runtime.stage`、必要时 `watchHint`、`trace.steps`。
 - 特有约束：
   - 不调用模型。
-  - 工具批次先经过 `validateParallelToolCalls`。
+  - `toolUsePlan.mode=parallel` 只允许 `read_only && parallelSafe=true` 的调用，且数量受并行上限限制。
+  - `toolUsePlan.mode=serial` 允许任意调用组合，但必须按顺序逐条执行。
   - 工具执行通过 `executeToolCall` 完成。
+  - `history_recall` 作为 internal family 的只读 builtin 工具，通过 `hand` 进入真实执行链，并把结果写入 `loadedHistoryContext`。
   - tool call count 超限时只写 `watchHint`，由下一轮 `brain` 决定是否收敛。
   - `runtimeArtifacts` 只从工具结构化结果提取并合并。
 
@@ -258,11 +263,21 @@ stateDiagram-v2
 
 - `lastBrainDecision`
   - 当前动作分发快照，供 `learning / hand / mouth` 读取。
-  - 不作为下一轮 `brain` 的直接回看输入。
+  - 不作为下一轮 `brain` 的主要历史输入。
 - `brainDecisions`
-  - 最近决策历史，只保留最近 10 条，用于回看和审计。
+  - 最近决策历史，只保留最近 10 条，用于审计和兼容期辅助排查；prompt 主路径不再直接消费它。
+- `processMemory.roundHistory`
+  - `human` 的正式过程历史。
+  - 每轮统一记录 `decision + execution`，由 `brain / learning / hand / mouth` 共同回填。
+- `processMemory.loadedHistoryContext`
+  - `history_recall` 主动加载出来的旧历史结果，只用于下一轮或最近几轮 `brain` 判断。
 - `watchHint`
   - 轻量纠偏信号，不扩张成新的 watchdog 子系统。
+  - 采用结构化 `{ code, detail }` 契约；自然语言文案由 `prompts/watchHints.ts` 统一渲染。
+- `lastLearningOutcome`
+  - 记录最近一轮 learning 的真实执行结果，便于 runtime 排查；prompt 主路径改由 `roundHistory` 消费。
+- `lastToolUseResults`
+  - 记录最近一次 hand 的原始 runtime 结果，便于 runtime 排查；prompt 主路径改由 `roundHistory` 消费。
 - `runtimeArtifacts`
   - 只在 `hand` 阶段增长，在 `mouth` 阶段透传到结果。
 - `trace.steps`

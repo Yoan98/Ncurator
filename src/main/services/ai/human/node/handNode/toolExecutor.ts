@@ -4,7 +4,9 @@ import { isJsonObject } from '../../../../../utils/aiCapabilityUtils'
 import { clipText } from '../../../utils/text'
 import type { AiRunContext } from '../../../types'
 import { TOOL_CALL_RESULT_CODES } from '../../constants'
+import { ensureSkillTools } from '../learningNode/skillLoader'
 import { resolveToolResultErrorText } from '../../shared/toolResultRenderers'
+import { findEffectiveSkillIdByToolName, getEffectiveLearnedSkillIds } from '../../skills'
 import type {
   HumanRuntimeCache,
   RuntimeSkillId,
@@ -20,7 +22,7 @@ const findTool = (input: {
   learnedSkillIds: RuntimeSkillId[]
   cache: HumanRuntimeCache
 }): StructuredToolInterface | undefined => {
-  for (const skillId of input.learnedSkillIds) {
+  for (const skillId of getEffectiveLearnedSkillIds(input.learnedSkillIds)) {
     const matched = (input.cache.skillToolsets[skillId] || []).find(
       (tool) => String(tool.name || '').trim() === input.toolName
     )
@@ -245,6 +247,19 @@ export const executeToolCall = async (input: {
     taskId: input.taskId,
     stage: 'human_hand'
   })
+  const matchedSkillId = findEffectiveSkillIdByToolName({
+    toolName: input.toolName,
+    learnedSkillIds: input.learnedSkillIds
+  })
+  if (matchedSkillId) {
+    ensureSkillTools({
+      cache: input.cache,
+      ctx: input.ctx,
+      runId: input.ctx.runId,
+      taskId: input.taskId,
+      skillId: matchedSkillId
+    })
+  }
   const tool = findTool({
     toolName: input.toolName,
     learnedSkillIds: input.learnedSkillIds,

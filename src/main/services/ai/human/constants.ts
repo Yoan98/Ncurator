@@ -1,6 +1,8 @@
-export const AI_TOOL_FAMILY_IDS = ['terminal', 'kb', 'docx'] as const
+export const AI_TOOL_FAMILY_IDS = ['terminal', 'kb', 'docx', 'internal'] as const
 
-export const RUNTIME_SKILL_IDS = [
+export const BUILTIN_RUNTIME_SKILL_IDS = ['history-recall'] as const
+
+export const EXTERNAL_RUNTIME_SKILL_IDS = [
   'workspace-cli',
   'docx-read',
   'docx-write',
@@ -8,6 +10,16 @@ export const RUNTIME_SKILL_IDS = [
   'kb-document-discovery',
   'kb-evidence-query'
 ] as const
+
+export const LEARNABLE_RUNTIME_SKILL_IDS = EXTERNAL_RUNTIME_SKILL_IDS
+
+export const RUNTIME_SKILL_IDS = [
+  ...BUILTIN_RUNTIME_SKILL_IDS,
+  ...EXTERNAL_RUNTIME_SKILL_IDS
+] as const
+
+export const HUMAN_SKILL_SOURCES = ['builtin', 'external'] as const
+export const HUMAN_SKILL_AVAILABILITIES = ['always_on', 'learnable'] as const
 
 export const HUMAN_STAGES = ['brain', 'learning', 'hand', 'mouth'] as const
 export const HUMAN_STATUSES = ['running', 'completed'] as const
@@ -37,8 +49,29 @@ export const TOOL_CALL_DIAGNOSTIC_KINDS = [
 ] as const
 
 export const HUMAN_DELIVERY_MODES = ['user_answer', 'task_handoff', 'context_note'] as const
+export const HUMAN_TOOL_USE_PLAN_MODES = ['parallel', 'serial'] as const
+export const HUMAN_HAND_PLAN_INVALID_REASONS = [
+  'parallel_requires_read_only',
+  'parallel_limit_exceeded'
+] as const
+export const HUMAN_WATCH_HINT_CODES = [
+  'learning_no_effect',
+  'learning_tool_budget_exceeded',
+  'hand_plan_invalid',
+  'hand_tool_limit_exceeded',
+  'brain_invalid_mouth_transition',
+  'memory_invalid_op'
+] as const
 
 export const HUMAN_MAX_BRAIN_DECISION_HISTORY = 10
-export const HUMAN_MAX_SKILLS_PER_LEARNING_STEP = 2
 export const HUMAN_MAX_ACTIVE_TOOLS = 20
 export const HUMAN_DEFAULT_TOOL_CALL_LIMIT = 50
+export const HUMAN_ROUND_EXECUTION_KINDS = [
+  'pre_execution_blocked',
+  'learning',
+  'hand',
+  'mouth'
+] as const
+export const HUMAN_MAX_ROUND_HISTORY = 12
+export const HUMAN_MAX_HISTORY_CHAIN_ITEMS = 5
+export const HUMAN_MAX_LOADED_HISTORY_ROUNDS = 3

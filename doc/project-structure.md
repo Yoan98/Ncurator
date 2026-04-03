@@ -39,16 +39,17 @@ tests/                   # 自动化测试
 - 会话记忆更新逻辑与记忆 prompt 放在 `src/main/services/ai/memory/**`。
 - AI 级别通用 helper 放在 `src/main/services/ai/utils/**`。
 - Director graph、node、prompt、state 放在 `src/main/services/ai/director/**`。
-- Human graph、node、prompts、state、tools 放在 `src/main/services/ai/human/**`。
+- Human graph、memory、node、prompts、state、tools 放在 `src/main/services/ai/human/**`。
 - `shared/**` 只放 Human 跨阶段共享逻辑。
-- `node/brainNode/**` 放推理、决策 contract、prompt context 和 memory reducer。
+- `memory/**` 放 stable memory reducer、process memory、history prompt builder，以及与 `roundHistory / loadedHistoryContext` 相关的共用逻辑。
+- `node/brainNode/**` 放推理、决策 contract 和脑节点特有逻辑。
 - `node/learningNode/**` 放 skill 详情加载与外部记忆更新。
-- `node/handNode/**` 放工具调用执行、批处理保护与 `watchHint` 生成。
+- `node/handNode/**` 放工具调用执行、`toolUsePlan` 校验与 `watchHint` 生成。
 - `node/mouthNode/**` 放最终交付生成与结果收口。
 - `node/utils/**` 只放少量跨 node 共用、且无单一归属的中性逻辑。
-- `prompts/**` 放 `human` 的 `brain` / `mouth` 提示词，以及少量共享 prompt 类型或片段。
-- Tool 实现按实现域归位放在 `src/main/services/ai/human/tools/**`，例如 `docx/**`、`kb/**`、`terminal/**`。
-- `skillCatalog` / `skillRegistry` 负责维护 skill 与 tool 的映射；skill 级筛选或装配逻辑放在 registry / loader，不要求给每个 skill 单独建目录。
+- `prompts/**` 放 `human` 的 `brain` / `mouth` 提示词，以及 `watchHint` 渲染等少量共享 prompt 片段。
+- Tool 实现按实现域归位放在 `src/main/services/ai/human/tools/**`，例如 `docx/**`、`kb/**`、`terminal/**`、`internal/**`。
+- `skillCatalog` / `skillRegistry` 负责维护 builtin/external skill 与 tool 的映射；skill 级筛选或装配逻辑放在 registry / loader，不要求给每个 skill 单独建目录。
 - Docx 审阅相关服务放在 `src/main/services/ai/human/tools/docx/review/**`。
 - Director 与 Human 的运行态 state schema 分别放在各自目录下的 `state/schema.ts`。
 

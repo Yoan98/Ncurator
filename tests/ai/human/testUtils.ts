@@ -53,18 +53,22 @@ export const buildToolDecision = (input: {
   reason: string
   expectedOutcome: string
   memoryOps?: BrainMemoryOp[]
+  mode?: 'parallel' | 'serial'
 }): LastBrainDecision => ({
   memoryOps: input.memoryOps || [],
   decision: buildDecisionMetadata(input),
   readyToDeliver: false,
   nextAction: {
     action: 'hand',
-    parallelCallToolParam: [
-      {
-        toolName: input.toolName,
-        args: input.args
-      }
-    ]
+    toolUsePlan: {
+      mode: input.mode || 'serial',
+      calls: [
+        {
+          toolName: input.toolName,
+          args: input.args
+        }
+      ]
+    }
   }
 })
 
@@ -137,9 +141,9 @@ export const readSingleToolResultData = <TValue extends JsonValue>(
   state: HumanState,
   toolName?: string
 ): TValue => {
-  const result = state.lastParallelCallToolResults?.[0]
+  const result = state.lastToolUseResults?.[0]
   if (!result) {
-    throw new Error('lastParallelCallToolResults is empty')
+    throw new Error('lastToolUseResults is empty')
   }
   if (toolName && result.toolName !== toolName) {
     throw new Error(`expected tool result ${toolName}, received ${result.toolName}`)

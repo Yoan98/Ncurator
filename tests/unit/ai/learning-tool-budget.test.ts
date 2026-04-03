@@ -60,14 +60,14 @@ describe('ai unit learning tool budget', () => {
     })
   })
 
-  it('limits one learning action to at most two skills', () => {
-    expect(() =>
+  it('allows learning decisions to request three or more skills', () => {
+    expect(
       lastBrainDecisionSchema.parse({
         memoryOps: [],
         decision: {
           summary: '学习多个技能',
-          reason: '测试学习上限',
-          expectedOutcome: '应被 schema 拦住'
+          reason: '测试学习不再受固定数量上限约束',
+          expectedOutcome: '应由 active tool budget 决定是否可执行'
         },
         readyToDeliver: false,
         nextAction: {
@@ -75,14 +75,20 @@ describe('ai unit learning tool budget', () => {
           wantLearnSkillIds: ['workspace-cli', 'docx-read', 'docx-write']
         }
       })
-    ).toThrow()
+    ).toMatchObject({
+      nextAction: {
+        action: 'learning',
+        wantLearnSkillIds: ['workspace-cli', 'docx-read', 'docx-write']
+      }
+    })
   })
 
   it('mentions the focused learning rule in the brain prompt', () => {
     const prompt = buildBrainSystemPrompt()
 
     expect(prompt).toContain('learning 只用于补齐“下一步动作”最值得学习的 skill')
-    expect(prompt).toContain('单次 learning 最多学习 2 个 skill')
+    expect(prompt).toContain('learning 没有固定数量上限')
+    expect(prompt).toContain('active tool budget')
     expect(prompt).toContain('mouth 不会执行任何工具')
     expect(prompt).toContain('readyToDeliver')
   })

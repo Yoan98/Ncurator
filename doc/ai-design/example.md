@@ -293,7 +293,7 @@
 但注意：
 
 - `skillCatalog` 本来就有
-- 真正决定“当前可调用哪些工具”的，是 `learnedSkillIds + runtime cache`
+- 真正决定“当前可调用哪些工具”的，是 `builtin + learned external` 形成的 effective skills，再结合 runtime cache
 
 #### 2.5.3 `brain` 第三次决策，进入 `hand` 做第一批工具调用
 
@@ -309,21 +309,24 @@
   },
   "nextAction": {
     "action": "hand",
-    "parallelCallToolParam": [
-      {
-        "toolName": "terminal_run_command",
-        "args": {
-          "command": "find docs/prd -name '*Alpha*PRD*.docx' -maxdepth 2",
-          "cwd": "/project-alpha"
+    "toolUsePlan": {
+      "mode": "parallel",
+      "calls": [
+        {
+          "toolName": "terminal_run_command",
+          "args": {
+            "command": "find docs/prd -name '*Alpha*PRD*.docx' -maxdepth 2",
+            "cwd": "/project-alpha"
+          }
+        },
+        {
+          "toolName": "kb_list_documents",
+          "args": {
+            "query": "Alpha 发布模板 评审意见 术语"
+          }
         }
-      },
-      {
-        "toolName": "kb_list_documents",
-        "args": {
-          "query": "Alpha 发布模板 评审意见 术语"
-        }
-      }
-    ]
+      ]
+    }
   }
 }
 ```
@@ -336,12 +339,13 @@
 
 `hand` 会并行执行它们，并把结果写进：
 
-- `lastParallelCallToolResults`
+- `lastToolUseResults`
+- `processMemory.roundHistory`
 - `trace.steps`
 
-这一步还不会改 `brainMemory.inside`。工具结果先原样落在 `lastParallelCallToolResults`，等下一轮 `brain` 再提炼成 evidences/facts。
+这一步还不会改 `brainMemory.inside`。工具结果先原样落在 `lastToolUseResults`，同时以标准化结果行进入 `roundHistory`，等下一轮 `brain` 再提炼成 evidences/facts。
 
-如果某次工具失败，`lastParallelCallToolResults` 里除了 `code/summary` 之外，还可能带有结构化 `diagnostic`。例如：
+如果某次工具失败，`lastToolUseResults` 里除了 `code/summary` 之外，还可能带有结构化 `diagnostic`。例如：
 
 ```json
 {
@@ -402,14 +406,17 @@
   },
   "nextAction": {
     "action": "hand",
-    "parallelCallToolParam": [
-      {
-        "toolName": "docx_open",
-        "args": {
-          "sourcePath": "/project-alpha/docs/prd/Alpha/PRD-Alpha-v7.docx"
+    "toolUsePlan": {
+      "mode": "serial",
+      "calls": [
+        {
+          "toolName": "docx_open",
+          "args": {
+            "sourcePath": "/project-alpha/docs/prd/Alpha/PRD-Alpha-v7.docx"
+          }
         }
-      }
-    ]
+      ]
+    }
   }
 }
 ```
@@ -420,22 +427,25 @@
 {
   "nextAction": {
     "action": "hand",
-    "parallelCallToolParam": [
-      {
-        "toolName": "docx_outline",
-        "args": {
-          "docId": "doc-alpha-v7"
+    "toolUsePlan": {
+      "mode": "parallel",
+      "calls": [
+        {
+          "toolName": "docx_outline",
+          "args": {
+            "docId": "doc-alpha-v7"
+          }
+        },
+        {
+          "toolName": "docx_search",
+          "args": {
+            "docId": "doc-alpha-v7",
+            "query": "发布日期 术语 品牌名",
+            "mode": "literal"
+          }
         }
-      },
-      {
-        "toolName": "docx_search",
-        "args": {
-          "docId": "doc-alpha-v7",
-          "query": "发布日期 术语 品牌名",
-          "mode": "literal"
-        }
-      }
-    ]
+      ]
+    }
   }
 }
 ```
@@ -663,13 +673,13 @@ patch：
 
 1. `brain` 决定学习 `kb-evidence-query`
 2. `learning` 装入 `kb_hybrid_search_chunks / kb_vector_search_chunks / kb_fts_search_chunks`
-3. `brain -> hand` 发一个只读并行批次，例如 `kb_hybrid_search_chunks + kb_fts_search_chunks`
+3. `brain -> hand` 发一个只读并行 `toolUsePlan`，例如 `kb_hybrid_search_chunks + kb_fts_search_chunks`
 4. `brain` 根据检索结果写入 `evidences/facts`
 5. `mouth` 产出 `task_handoff`
 
 这一步的重点是：
 
-- `lastParallelCallToolResults` 会同时持有两条 KB 结果
+- `lastToolUseResults` 会同时持有两条 KB 结果
 - `brain` 负责把 chunk 结果提炼成“规则”
 - 规则不会直接写回 `DirectorState`，而是先留在 `task-2.deliveryMarkdown`
 
@@ -779,7 +789,7 @@ selected scopes:
 
 #### 2.11.1 `task-3` 的 `human` 前半段：先学能力
 
-由于这是新的 `human`，它依然从空的 `learnedSkillIds` 开始。
+由于这是新的 `human`，它依然从空的 external `learnedSkillIds` 开始；builtin skill 仍然始终可用。
 
 第一轮通常会学习：
 

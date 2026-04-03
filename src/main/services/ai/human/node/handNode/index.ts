@@ -2,10 +2,15 @@ import type { JsonObject } from '../../../../../../shared/types'
 import { HUMAN_DEFAULT_TOOL_CALL_LIMIT } from '../../constants'
 import type { AiRunContext } from '../../../types'
 import { extractArtifactRefsFromToolResults, mergeArtifactRefs } from '../../../utils/artifacts'
+import {
+  appendDecisionRound,
+  buildHandExecution,
+  readLoadedHistoryContextFromToolResults
+} from '../../memory/roundHistory'
 import { buildToolCallDisplayText } from '../../shared/toolResultRenderers'
 import { getToolSpec } from '../../tools/registry'
 import type { ToolExecutionMeta } from '../../tools/types'
-import type { HumanRuntimeCache, HumanState, ToolCallParam } from '../../types'
+import type { HumanRuntimeCache, HumanState, HumanWatchHint, ToolCallResult, ToolUsePlan } from '../../types'
 import { executeToolCall } from './toolExecutor'
 import { returnToBrain, returnToBrainAfterTrace, returnToBrainWithWatchHint } from '../utils/stateTransitions'
 
@@ -38,25 +43,104 @@ export const canBatchPlan = (input: {
   return true
 }
 
-const validateParallelToolCalls = (parallelCallToolParam: ToolCallParam[]): boolean => {
-  return canBatchPlan({
-    actions: parallelCallToolParam.map((item) => ({
-      toolName: item.toolName,
-      args: item.args
-    })),
-    maxParallel: MAX_PARALLEL_TOOL_CALLS
-  })
+const createHandPlanInvalidWatchHint = (input: {
+  mode: ToolUsePlan['mode']
+  reason: Extract<HumanWatchHint, { code: 'hand_plan_invalid' }>['detail']['reason']
+  offendingToolNames: string[]
+  callCount?: number
+  limit?: number
+}): HumanWatchHint => ({
+  code: 'hand_plan_invalid',
+  detail: {
+    mode: input.mode,
+    reason: input.reason,
+    offendingToolNames: input.offendingToolNames,
+    callCount: input.callCount,
+    limit: input.limit
+  }
+})
+
+const buildToolLimitWatchHint = (toolCallCount: number, limit: number): HumanWatchHint => ({
+  code: 'hand_tool_limit_exceeded',
+  detail: {
+    toolCallCount,
+    limit
+  }
+})
+
+const validateToolUsePlan = (toolUsePlan: ToolUsePlan): HumanWatchHint | undefined => {
+  if (toolUsePlan.mode === 'serial') return undefined
+  if (toolUsePlan.calls.length > MAX_PARALLEL_TOOL_CALLS) {
+    return createHandPlanInvalidWatchHint({
+      mode: 'parallel',
+      reason: 'parallel_limit_exceeded',
+      offendingToolNames: toolUsePlan.calls.map((item) => item.toolName),
+      callCount: toolUsePlan.calls.length,
+      limit: MAX_PARALLEL_TOOL_CALLS
+    })
+  }
+
+  const offendingToolNames = toolUsePlan.calls
+    .filter((item) => {
+      const meta = getToolExecutionMeta({
+        toolName: item.toolName,
+        args: item.args
+      })
+      return meta.mutability !== 'read_only' || !meta.parallelSafe
+    })
+    .map((item) => item.toolName)
+
+  return offendingToolNames.length > 0
+    ? createHandPlanInvalidWatchHint({
+        mode: 'parallel',
+        reason: 'parallel_requires_read_only',
+        offendingToolNames
+      })
+    : undefined
 }
 
-const buildInvalidBatchHint = () =>
-  'hand 收到不满足并行安全要求的工具批次，已返回 brain 重新决策。'
+const executeToolUsePlan = async (input: {
+  toolUsePlan: ToolUsePlan
+  ctx: AiRunContext
+  cache: HumanRuntimeCache
+  taskId: string
+  learnedSkillIds: HumanState['brainMemory']['outside']['learnedSkillIds']
+}): Promise<ToolCallResult[]> => {
+  if (input.toolUsePlan.mode === 'parallel') {
+    return Promise.all(
+      input.toolUsePlan.calls.map((toolCall) =>
+        executeToolCall({
+          ctx: input.ctx,
+          cache: input.cache,
+          taskId: input.taskId,
+          learnedSkillIds: input.learnedSkillIds,
+          toolName: toolCall.toolName,
+          args: toolCall.args
+        })
+      )
+    )
+  }
 
-const buildToolLimitHint = (toolCallCount: number, limit: number) =>
-  `hand 累计工具调用次数达到 ${toolCallCount}，已超过临时上限 ${limit}，请优先考虑收敛。`
+  const results: Awaited<ReturnType<typeof executeToolCall>>[] = []
+  for (const toolCall of input.toolUsePlan.calls) {
+    results.push(
+      await executeToolCall({
+        ctx: input.ctx,
+        cache: input.cache,
+        taskId: input.taskId,
+        learnedSkillIds: input.learnedSkillIds,
+        toolName: toolCall.toolName,
+        args: toolCall.args
+      })
+    )
+  }
+  return results
+}
 
 export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCache }) => {
   return async (state: HumanState): Promise<HumanState> => {
     input.ctx.checkCancelled()
+    input.cache.currentState = state
     const toolCallLimit =
       input.ctx.humanRuntimeOverrides?.hardActionLimit || HUMAN_DEFAULT_TOOL_CALL_LIMIT
 
@@ -64,40 +148,46 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       return returnToBrain(state)
     }
 
-    const parallelCallToolParam = state.lastBrainDecision.nextAction.parallelCallToolParam
-    if (!validateParallelToolCalls(parallelCallToolParam)) {
-      const watchHint = buildInvalidBatchHint()
+    const { toolUsePlan } = state.lastBrainDecision.nextAction
+    const invalidPlanWatchHint = validateToolUsePlan(toolUsePlan)
+    if (invalidPlanWatchHint) {
       return returnToBrainWithWatchHint({
         ctx: input.ctx,
         state,
         source: 'hand',
-        watchHint
+        watchHint: invalidPlanWatchHint,
+        overrides: {
+          processMemory: appendDecisionRound({
+            state,
+            execution: buildHandExecution({
+              toolUsePlan,
+              toolResults: [],
+              watchHint: invalidPlanWatchHint
+            })
+          })
+        }
       })
     }
 
     const learnedSkillIds = state.brainMemory.outside.learnedSkillIds
-    const results = await Promise.all(
-      parallelCallToolParam.map((toolCall) =>
-        executeToolCall({
-          ctx: input.ctx,
-          cache: input.cache,
-          taskId: state.task.taskId,
-          learnedSkillIds,
-          toolName: toolCall.toolName,
-          args: toolCall.args
-        })
-      )
-    )
+    const results = await executeToolUsePlan({
+      toolUsePlan,
+      ctx: input.ctx,
+      cache: input.cache,
+      taskId: state.task.taskId,
+      learnedSkillIds
+    })
     input.cache.toolCallCount += results.length
 
     const watchHint =
       input.cache.toolCallCount > toolCallLimit
-        ? buildToolLimitHint(input.cache.toolCallCount, toolCallLimit)
+        ? buildToolLimitWatchHint(input.cache.toolCallCount, toolCallLimit)
         : undefined
     const runtimeArtifacts = mergeArtifactRefs(
       state.runtimeArtifacts,
       extractArtifactRefsFromToolResults(results)
     )
+    const loadedHistoryContext = readLoadedHistoryContextFromToolResults(results)
     const nextState = returnToBrainAfterTrace({
       ctx: input.ctx,
       cache: input.cache,
@@ -113,8 +203,19 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       stage: 'human_hand',
       watchHint,
       overrides: {
-        lastParallelCallToolResults: results,
-        runtimeArtifacts
+        lastToolUseResults: results,
+        runtimeArtifacts,
+        processMemory: {
+          ...appendDecisionRound({
+            state,
+            execution: buildHandExecution({
+              toolUsePlan,
+              toolResults: results,
+              watchHint
+            })
+          }),
+          loadedHistoryContext
+        }
       }
     })
     return nextState

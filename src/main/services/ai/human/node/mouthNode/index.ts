@@ -14,6 +14,7 @@ export const createMouthNode = (input: {
 }) => {
   return async (state: HumanState): Promise<HumanState> => {
     input.ctx.checkCancelled()
+    input.cache.currentState = state
 
     const prompt = buildMouthPromptContext({
       state,

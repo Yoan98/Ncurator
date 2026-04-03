@@ -99,7 +99,8 @@ describe('ai human mock-llm backend', () => {
             watchHints.some(
               (event) =>
                 event.source === 'hand' &&
-                event.summary.includes('超过临时上限 1')
+                event.code === 'hand_tool_limit_exceeded' &&
+                event.detail?.limit === 1
             ),
           {
             name: 'hand-emits-tool-limit-watchhint',

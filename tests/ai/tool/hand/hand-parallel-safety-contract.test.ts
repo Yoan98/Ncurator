@@ -108,23 +108,26 @@ describe('ai tool hand backend', () => {
             readyToDeliver: false,
             nextAction: {
               action: 'hand',
-              parallelCallToolParam: [
-                {
-                  toolName: 'docx_outline',
-                  args: {
-                    docId: openResult.docId,
-                    maxBlocks: 20
+              toolUsePlan: {
+                mode: 'parallel',
+                calls: [
+                  {
+                    toolName: 'docx_outline',
+                    args: {
+                      docId: openResult.docId,
+                      maxBlocks: 20
+                    }
+                  },
+                  {
+                    toolName: 'docx_search',
+                    args: {
+                      docId: openResult.docId,
+                      query: 'approval denied',
+                      mode: 'literal'
+                    }
                   }
-                },
-                {
-                  toolName: 'docx_search',
-                  args: {
-                    docId: openResult.docId,
-                    query: 'approval denied',
-                    mode: 'literal'
-                  }
-                }
-              ]
+                ]
+              }
             }
           }
         })
@@ -153,27 +156,30 @@ describe('ai tool hand backend', () => {
             readyToDeliver: false,
             nextAction: {
               action: 'hand',
-              parallelCallToolParam: [
-                {
-                  toolName: 'docx_apply_ops',
-                  args: {
-                    docId: openResult.docId,
-                    ops: [
-                      {
-                        type: 'replace_text',
-                        query: 'Risk summary',
-                        replace: 'Updated risk summary'
-                      }
-                    ]
+              toolUsePlan: {
+                mode: 'parallel',
+                calls: [
+                  {
+                    toolName: 'docx_apply_ops',
+                    args: {
+                      docId: openResult.docId,
+                      ops: [
+                        {
+                          type: 'replace_text',
+                          query: 'Risk summary',
+                          replace: 'Updated risk summary'
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    toolName: 'docx_validate',
+                    args: {
+                      docId: openResult.docId
+                    }
                   }
-                },
-                {
-                  toolName: 'docx_validate',
-                  args: {
-                    docId: openResult.docId
-                  }
-                }
-              ]
+                ]
+              }
             }
           }
         })
@@ -193,26 +199,26 @@ describe('ai tool hand backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.safeState.lastParallelCallToolResults?.length === 2 &&
-            result.safeState.lastParallelCallToolResults.every((item) => item.code === 'ok') &&
+          result.safeState.lastToolUseResults?.length === 2 &&
+            result.safeState.lastToolUseResults.every((item) => item.code === 'ok') &&
             !result.safeState.watchHint,
           {
             name: 'safe-parallel-batch-executes',
             message: '只读且 parallelSafe 的工具批次应真正执行，并写回多个 tool result。',
-            data: result.safeState.lastParallelCallToolResults
+            data: result.safeState.lastToolUseResults
           }
         )
 
         runtime.assertThat(
-          result.unsafeState.watchHint?.includes('并行安全要求') === true &&
+          result.unsafeState.watchHint?.code === 'hand_plan_invalid' &&
+            result.unsafeState.watchHint.detail.reason === 'parallel_requires_read_only' &&
             result.toolStartedAfterUnsafe === result.toolStartedBeforeUnsafe,
           {
             name: 'unsafe-parallel-batch-stops-before-tool-execution',
             message: 'mutating/unsafe 批次应直接返回 brain 并写入 watchHint，而不是继续执行工具。',
             data: {
               watchHint: result.unsafeState.watchHint,
-              preservedLastParallelCallToolResults:
-                result.unsafeState.lastParallelCallToolResults,
+              preservedLastToolUseResults: result.unsafeState.lastToolUseResults,
               toolStartedBeforeUnsafe: result.toolStartedBeforeUnsafe,
               toolStartedAfterUnsafe: result.toolStartedAfterUnsafe
             }

@@ -43,17 +43,22 @@ export const createDefaultHumanBrainMemory = (): HumanState['brainMemory'] => ({
   outside: createDefaultHumanBrainMemoryOutside()
 })
 
+export const createDefaultHumanProcessMemory = (): HumanState['processMemory'] => ({
+  roundHistory: []
+})
+
 export const createDefaultHumanTrace = (): HumanState['trace'] => ({
   steps: []
 })
 
 export const createDefaultHumanStateFields = (): Pick<
   HumanState,
-  'task' | 'runtime' | 'brainMemory' | 'runtimeArtifacts' | 'trace'
+  'task' | 'runtime' | 'brainMemory' | 'processMemory' | 'runtimeArtifacts' | 'trace'
 > => ({
   task: createEmptyHumanTaskInput(),
   runtime: createDefaultHumanRuntime(),
   brainMemory: createDefaultHumanBrainMemory(),
+  processMemory: createDefaultHumanProcessMemory(),
   runtimeArtifacts: [],
   trace: createDefaultHumanTrace()
 })
@@ -68,7 +73,9 @@ export const createHumanRunStateSchema = () => {
     task: humanTaskInputSchema.default(createEmptyHumanTaskInput),
     runtime: humanRuntimeSchema.default(createDefaultHumanRuntime),
     brainMemory: humanBrainMemorySchema.default(createDefaultHumanBrainMemory),
-    lastParallelCallToolResults: humanStateContractSchema.shape.lastParallelCallToolResults,
+    processMemory: humanStateContractSchema.shape.processMemory.default(createDefaultHumanProcessMemory),
+    lastToolUseResults: humanStateContractSchema.shape.lastToolUseResults,
+    lastLearningOutcome: humanStateContractSchema.shape.lastLearningOutcome,
     lastBrainDecision: humanStateContractSchema.shape.lastBrainDecision,
     watchHint: humanStateContractSchema.shape.watchHint,
     runtimeArtifacts: humanStateContractSchema.shape.runtimeArtifacts.default(() => []),

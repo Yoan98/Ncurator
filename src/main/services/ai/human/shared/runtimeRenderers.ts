@@ -36,7 +36,7 @@ const renderArtifactLine = (
 }
 
 const renderToolResultLine = (
-  result: NonNullable<HumanState['lastParallelCallToolResults']>[number],
+  result: NonNullable<HumanState['lastToolUseResults']>[number],
   mode: HumanRuntimeRenderMode
 ): string => {
   const diagnosticText = renderToolDiagnosticText(result)
@@ -64,7 +64,7 @@ export const renderHumanRecentToolResultLines = (
   mode: HumanRuntimeRenderMode
 ): string =>
   renderLineList(
-    (state.lastParallelCallToolResults || []).map((result) => renderToolResultLine(result, mode)),
+    (state.lastToolUseResults || []).map((result) => renderToolResultLine(result, mode)),
     {
       fallback: getRenderFallback(mode),
       style: getRenderStyle(mode)

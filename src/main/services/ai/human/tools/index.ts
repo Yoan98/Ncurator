@@ -1,5 +1,6 @@
 import type { AiToolFamilyId, ToolFamilyDefinition } from './types'
 import { docxToolFamily } from './docx'
+import { internalToolFamily } from './internal'
 import { buildKbCapabilityTools } from './kb/retrievalTools'
 import { terminalToolFamily } from './terminal'
 
@@ -11,7 +12,8 @@ export const kbToolFamily: ToolFamilyDefinition = {
 export const TOOL_FAMILY_DEFINITIONS: Record<AiToolFamilyId, ToolFamilyDefinition> = {
   terminal: terminalToolFamily,
   kb: kbToolFamily,
-  docx: docxToolFamily
+  docx: docxToolFamily,
+  internal: internalToolFamily
 }
 
 export const getToolFamilyDefinition = (familyId: AiToolFamilyId): ToolFamilyDefinition =>

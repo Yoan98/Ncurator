@@ -35,7 +35,10 @@ describe('ai unit mouth readyToDeliver guard', () => {
       createdAt: 1
     })
 
-    expect(watchHint).toContain('brain 选择 mouth 时必须 readyToDeliver=true')
+    expect(watchHint).toEqual({
+      code: 'brain_invalid_mouth_transition',
+      detail: {}
+    })
     expect(nextState.runtime.stage).toBe('brain')
     expect(nextState.watchHint).toBe(watchHint)
   })

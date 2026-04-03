@@ -1,8 +1,15 @@
 import { HUMAN_MAX_BRAIN_DECISION_HISTORY } from '../../constants'
+import {
+  appendRoundRecord,
+  appendDecisionRound,
+  buildMouthExecution,
+  buildPreExecutionBlockedExecution
+} from '../../memory/roundHistory'
 import type {
   HumanResult,
   HumanState,
   HumanTraceStep,
+  HumanWatchHint,
   LastBrainDecision
 } from '../../types'
 
@@ -69,7 +76,7 @@ export const returnToBrainState = (
 export const returnToBrainAfterTraceState = (input: {
   state: HumanState
   traceItems: HumanTraceItemInput[]
-  watchHint?: string
+  watchHint?: HumanWatchHint
   overrides?: HumanStateOverrides<'watchHint' | 'trace'>
 }): HumanState => {
   const traceSteps = appendHumanTraceSteps({
@@ -86,26 +93,21 @@ export const returnToBrainAfterTraceState = (input: {
   })
 }
 
-const combineWatchHints = (hints: Array<string | undefined>): string | undefined => {
-  const normalized = hints.map((hint) => String(hint || '').trim()).filter(Boolean)
-  if (normalized.length === 0) return undefined
-  return Array.from(new Set(normalized)).join('\n')
-}
-
 export const resolveBrainDecisionWatchHint = (input: {
   decision: LastBrainDecision
-  watchHint?: string
-}): string | undefined => {
-  const decisionWatchHint =
-    input.decision.nextAction.action === 'mouth' && !input.decision.readyToDeliver
-      ? 'brain 选择 mouth 时必须 readyToDeliver=true；当前结果仍未准备好收尾，请继续判断下一步。'
-      : undefined
-
-  return combineWatchHints([input.watchHint, decisionWatchHint])
+  watchHint?: HumanWatchHint
+}): HumanWatchHint | undefined => {
+  if (input.watchHint) return input.watchHint
+  return input.decision.nextAction.action === 'mouth' && !input.decision.readyToDeliver
+    ? {
+        code: 'brain_invalid_mouth_transition',
+        detail: {}
+      }
+    : undefined
 }
 
 const resolveBrainNextStage = (input: {
-  watchHint?: string
+  watchHint?: HumanWatchHint
   decision: LastBrainDecision
 }): HumanState['runtime']['stage'] => {
   if (input.watchHint) return 'brain'
@@ -120,7 +122,7 @@ export const applyBrainDecisionState = (input: {
   state: HumanState
   decision: LastBrainDecision
   reducedInside: HumanState['brainMemory']['inside']
-  watchHint?: string
+  watchHint?: HumanWatchHint
   createdAt: number
 }): HumanState => ({
   ...input.state,
@@ -144,6 +146,17 @@ export const applyBrainDecisionState = (input: {
       ].slice(-HUMAN_MAX_BRAIN_DECISION_HISTORY)
     }
   },
+  processMemory: input.watchHint
+    ? appendRoundRecord({
+        state: input.state,
+        decision: input.decision,
+        execution: buildPreExecutionBlockedExecution(input.watchHint),
+        createdAt: input.createdAt
+      })
+    : {
+        ...input.state.processMemory,
+        loadedHistoryContext: undefined
+      },
   lastBrainDecision: input.decision,
   watchHint: input.watchHint,
   trace: {
@@ -179,6 +192,13 @@ export const completeHumanTaskState = (input: {
     stage: 'mouth',
     status: 'completed'
   },
+  processMemory: appendDecisionRound({
+    state: input.state,
+    execution: buildMouthExecution({
+      summary: input.result.summary,
+      completed: true
+    })
+  }),
   result: input.result,
   trace: {
     steps: appendHumanTraceStep({

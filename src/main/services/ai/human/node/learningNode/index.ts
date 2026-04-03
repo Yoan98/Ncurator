@@ -1,19 +1,54 @@
 import type { AiRunContext } from '../../../types'
 import { HUMAN_MAX_ACTIVE_TOOLS } from '../../constants'
-import type { HumanRuntimeCache, HumanState } from '../../types'
-import { getSkillDefinition, hasSkillDefinition } from '../../skills'
+import type { HumanLearningOutcome, HumanRuntimeCache, HumanState, HumanWatchHint } from '../../types'
+import {
+  getEffectiveLearnedSkillIds,
+  getSkillDefinition,
+  hasSkillDefinition,
+  isLearnableSkillId
+} from '../../skills'
+import { appendDecisionRound, buildLearningExecution } from '../../memory/roundHistory'
 import { ensureSkillTools } from './skillLoader'
-import { fitSkillIdsToToolBudget } from './toolBudget'
+import { countActiveToolNamesForSkillIds, fitSkillIdsToToolBudget } from './toolBudget'
 import { returnToBrain, returnToBrainAfterTrace, returnToBrainWithWatchHint } from '../utils/stateTransitions'
 
-const buildDuplicateLearnHint = (skillId: string) =>
-  `learning 请求重复学习 ${skillId}，已忽略本次学习并返回 brain 重新决策。`
+const dedupeInOrder = <TValue extends string>(values: readonly TValue[]): TValue[] => {
+  const out: TValue[] = []
+  const seen = new Set<TValue>()
 
-const buildUnknownSkillHint = (skillId: string) =>
-  `learning 收到未知 skill ${skillId}，已返回 brain 重新决策。`
+  values.forEach((value) => {
+    if (seen.has(value)) return
+    seen.add(value)
+    out.push(value)
+  })
 
-const buildToolBudgetHint = (activeToolCount: number) =>
-  `learning 请求加载的 skill 会暴露 ${activeToolCount} 个工具，已超过当前 active tool 上限 ${HUMAN_MAX_ACTIVE_TOOLS}，请改为更聚焦的 skill 组合。`
+  return out
+}
+
+const buildNoEffectWatchHint = (input: {
+  requestedSkillIds: string[]
+  duplicateSkillIds: HumanLearningOutcome['skippedDuplicateSkillIds']
+  unknownSkillIds: string[]
+}): HumanWatchHint => ({
+  code: 'learning_no_effect',
+  detail: {
+    requestedSkillIds: input.requestedSkillIds,
+    duplicateSkillIds: input.duplicateSkillIds,
+    unknownSkillIds: input.unknownSkillIds
+  }
+})
+
+const buildToolBudgetWatchHint = (input: {
+  requestedSkillIds: string[]
+  activeToolCount: number
+}): HumanWatchHint => ({
+  code: 'learning_tool_budget_exceeded',
+  detail: {
+    requestedSkillIds: input.requestedSkillIds,
+    activeToolCount: input.activeToolCount,
+    limit: HUMAN_MAX_ACTIVE_TOOLS
+  }
+})
 
 const buildLearnSummary = (input: {
   skillId: string
@@ -28,56 +63,123 @@ const buildLearnSummary = (input: {
   return `learning 已加载 ${input.skillId} 的说明与工具。${budgetSummary}`
 }
 
+const buildLearningOutcome = (input: {
+  requestedSkillIds: string[]
+  loadedSkillIds: HumanLearningOutcome['loadedSkillIds']
+  skippedDuplicateSkillIds: HumanLearningOutcome['skippedDuplicateSkillIds']
+  skippedUnknownSkillIds: string[]
+  evictedSkillIds: HumanLearningOutcome['evictedSkillIds']
+  activeToolCount: number
+}): HumanLearningOutcome => ({
+  requestedSkillIds: input.requestedSkillIds,
+  loadedSkillIds: input.loadedSkillIds,
+  skippedDuplicateSkillIds: input.skippedDuplicateSkillIds,
+  skippedUnknownSkillIds: input.skippedUnknownSkillIds,
+  evictedSkillIds: input.evictedSkillIds,
+  activeToolCount: input.activeToolCount
+})
+
 export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCache }) => {
   return async (state: HumanState): Promise<HumanState> => {
     input.ctx.checkCancelled()
+    input.cache.currentState = state
 
     if (!state.lastBrainDecision || state.lastBrainDecision.nextAction.action !== 'learning') {
       return returnToBrain(state)
     }
 
-    const requestedSkillIds = state.lastBrainDecision.nextAction.wantLearnSkillIds
-    const unknownSkillId = requestedSkillIds.find((skillId) => !hasSkillDefinition(skillId))
-    if (unknownSkillId) {
-      const watchHint = buildUnknownSkillHint(unknownSkillId)
-      return returnToBrainWithWatchHint({
-        ctx: input.ctx,
-        state,
-        source: 'learning',
-        watchHint
-      })
-    }
-
-    const duplicatedSkillId = requestedSkillIds.find((skillId) =>
-      state.brainMemory.outside.learnedSkillIds.includes(skillId)
+    const requestedSkillIds = dedupeInOrder(state.lastBrainDecision.nextAction.wantLearnSkillIds)
+    const effectiveLearnedSkillIds = getEffectiveLearnedSkillIds(state.brainMemory.outside.learnedSkillIds)
+    const duplicateSkillIds = requestedSkillIds.filter(
+      (skillId): skillId is HumanLearningOutcome['skippedDuplicateSkillIds'][number] =>
+        hasSkillDefinition(skillId) && effectiveLearnedSkillIds.includes(skillId)
     )
-    if (duplicatedSkillId) {
-      const watchHint = buildDuplicateLearnHint(duplicatedSkillId)
+    const unknownSkillIds = requestedSkillIds.filter((skillId) => !hasSkillDefinition(skillId))
+    const newSkillIds = requestedSkillIds.filter(
+      (skillId): skillId is HumanLearningOutcome['loadedSkillIds'][number] =>
+        isLearnableSkillId(skillId) && !state.brainMemory.outside.learnedSkillIds.includes(skillId)
+    )
+
+    if (newSkillIds.length === 0) {
+      const activeToolCount = countActiveToolNamesForSkillIds({
+        skillIds: state.brainMemory.outside.learnedSkillIds,
+        getToolNames: (skillId) => getSkillDefinition(skillId).toolNames
+      })
+      const lastLearningOutcome = buildLearningOutcome({
+        requestedSkillIds,
+        loadedSkillIds: [],
+        skippedDuplicateSkillIds: duplicateSkillIds,
+        skippedUnknownSkillIds: unknownSkillIds,
+        evictedSkillIds: [],
+        activeToolCount
+      })
+
       return returnToBrainWithWatchHint({
         ctx: input.ctx,
         state,
         source: 'learning',
-        watchHint
+        watchHint: buildNoEffectWatchHint({
+          requestedSkillIds,
+          duplicateSkillIds,
+          unknownSkillIds
+        }),
+        overrides: {
+          lastLearningOutcome,
+          processMemory: appendDecisionRound({
+            state,
+            execution: buildLearningExecution({
+              learningOutcome: lastLearningOutcome,
+              watchHint: buildNoEffectWatchHint({
+                requestedSkillIds,
+                duplicateSkillIds,
+                unknownSkillIds
+              })
+            })
+          })
+        }
       })
     }
 
     const fittedLearnedSkills = fitSkillIdsToToolBudget({
       existingSkillIds: state.brainMemory.outside.learnedSkillIds,
-      requestedSkillIds,
+      requestedSkillIds: [...duplicateSkillIds, ...newSkillIds],
       maxActiveTools: HUMAN_MAX_ACTIVE_TOOLS,
       getToolNames: (skillId) => getSkillDefinition(skillId).toolNames
     })
     if (!fittedLearnedSkills.ok) {
-      const watchHint = buildToolBudgetHint(fittedLearnedSkills.activeToolCount)
+      const lastLearningOutcome = buildLearningOutcome({
+        requestedSkillIds,
+        loadedSkillIds: [],
+        skippedDuplicateSkillIds: duplicateSkillIds,
+        skippedUnknownSkillIds: unknownSkillIds,
+        evictedSkillIds: [],
+        activeToolCount: fittedLearnedSkills.activeToolCount
+      })
       return returnToBrainWithWatchHint({
         ctx: input.ctx,
         state,
         source: 'learning',
-        watchHint
+        watchHint: buildToolBudgetWatchHint({
+          requestedSkillIds,
+          activeToolCount: fittedLearnedSkills.activeToolCount
+        }),
+        overrides: {
+          lastLearningOutcome,
+          processMemory: appendDecisionRound({
+            state,
+            execution: buildLearningExecution({
+              learningOutcome: lastLearningOutcome,
+              watchHint: buildToolBudgetWatchHint({
+                requestedSkillIds,
+                activeToolCount: fittedLearnedSkills.activeToolCount
+              })
+            })
+          })
+        }
       })
     }
 
-    requestedSkillIds.forEach((skillId) => {
+    newSkillIds.forEach((skillId) => {
       ensureSkillTools({
         cache: input.cache,
         ctx: input.ctx,
@@ -87,12 +189,20 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
       })
     })
     const learnedSkillIds = fittedLearnedSkills.learnedSkillIds
+    const lastLearningOutcome = buildLearningOutcome({
+      requestedSkillIds,
+      loadedSkillIds: newSkillIds,
+      skippedDuplicateSkillIds: duplicateSkillIds,
+      skippedUnknownSkillIds: unknownSkillIds,
+      evictedSkillIds: fittedLearnedSkills.evictedSkillIds,
+      activeToolCount: fittedLearnedSkills.activeToolCount
+    })
     const nextState = returnToBrainAfterTrace({
       ctx: input.ctx,
       cache: input.cache,
       state,
       source: 'learning',
-      traceItems: requestedSkillIds.map((skillId) => ({
+      traceItems: newSkillIds.map((skillId) => ({
         action: 'learn_skill',
         publicNarrative: `已学习 ${skillId}`,
         resultStatus: 'ok',
@@ -111,7 +221,14 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
             ...state.brainMemory.outside,
             learnedSkillIds
           }
-        }
+        },
+        lastLearningOutcome,
+        processMemory: appendDecisionRound({
+          state,
+          execution: buildLearningExecution({
+            learningOutcome: lastLearningOutcome
+          })
+        })
       }
     })
     return nextState

@@ -1,6 +1,14 @@
 import type { AiRunContext } from '../../../types'
 import type { WatchHintSource } from '../../../../../../shared/types'
-import type { HumanRuntimeCache, HumanState, HumanTraceStep, RuntimeSkillId } from '../../types'
+import type {
+  HumanRuntimeCache,
+  HumanState,
+  HumanTraceStep,
+  HumanWatchHint,
+  RuntimeSkillId
+} from '../../types'
+import { renderWatchHintDetail, summarizeWatchHint } from '../../prompts/watchHints'
+import { getEffectiveLearnedSkillIds } from '../../skills'
 import { getAvailableToolNames } from './runtimeCache'
 
 export type HumanEventStage = 'human_brain' | 'human_learning' | 'human_hand' | 'human_mouth'
@@ -10,6 +18,7 @@ const emitHumanStep = (input: {
   taskId: string
   step: HumanTraceStep
   learnedSkillIds: RuntimeSkillId[]
+  effectiveSkillIds: RuntimeSkillId[]
   availableToolNames: string[]
   stage: HumanEventStage
 }) => {
@@ -23,6 +32,7 @@ const emitHumanStep = (input: {
     toolName: input.step.toolName,
     publicNarrative: input.step.publicNarrative,
     learnedSkillIds: [...input.learnedSkillIds],
+    effectiveSkillIds: [...input.effectiveSkillIds],
     availableToolNames: [...input.availableToolNames],
     resultStatus: input.step.resultStatus,
     summary: input.step.summary,
@@ -36,6 +46,7 @@ const buildStepToolContext = (input: {
   state: HumanState
 }) => ({
   learnedSkillIds: input.state.brainMemory.outside.learnedSkillIds,
+  effectiveSkillIds: getEffectiveLearnedSkillIds(input.state.brainMemory.outside.learnedSkillIds),
   availableToolNames: getAvailableToolNames({
     learnedSkillIds: input.state.brainMemory.outside.learnedSkillIds,
     cache: input.cache
@@ -46,14 +57,16 @@ export const emitWatchHint = (input: {
   ctx: AiRunContext
   taskId?: string
   source: WatchHintSource
-  summary: string
+  watchHint: HumanWatchHint
 }) => {
   input.ctx.sendEvent({
     type: 'watch_hint',
     runId: input.ctx.runId,
     taskId: input.taskId,
     source: input.source,
-    summary: input.summary,
+    code: input.watchHint.code,
+    detail: renderWatchHintDetail(input.watchHint),
+    summary: summarizeWatchHint(input.watchHint),
     createdAt: Date.now(),
     stage:
       input.source === 'brain'
@@ -104,6 +117,7 @@ export const emitLatestHumanStepForState = (input: {
     taskId: input.taskId,
     step,
     learnedSkillIds: toolContext.learnedSkillIds,
+    effectiveSkillIds: toolContext.effectiveSkillIds,
     availableToolNames: toolContext.availableToolNames,
     stage: input.stage
   })
@@ -129,6 +143,7 @@ export const emitTailHumanStepsForState = (input: {
       taskId: input.taskId,
       step,
       learnedSkillIds: toolContext.learnedSkillIds,
+      effectiveSkillIds: toolContext.effectiveSkillIds,
       availableToolNames: toolContext.availableToolNames,
       stage: input.stage
     })

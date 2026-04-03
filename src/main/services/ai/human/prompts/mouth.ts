@@ -3,15 +3,14 @@ import {
   buildDeliveryModePromptExample,
   buildDeliveryModePromptRules
 } from '../shared/deliveryContracts'
+import { buildLastRoundFocusText } from '../memory/historyPrompt'
 import {
   renderHumanEvidenceLines,
   renderHumanFactLines,
   renderHumanOpenQuestionLines
 } from '../shared/memoryRenderers'
-import {
-  renderHumanArtifactLines,
-  renderHumanRecentToolResultLines
-} from '../shared/runtimeRenderers'
+import { renderHumanArtifactLines } from '../shared/runtimeRenderers'
+import { renderWatchHintForMouth } from './watchHints'
 
 type HumanMouthPromptInput = {
   deliveryMode: HumanDeliveryMode
@@ -20,7 +19,7 @@ type HumanMouthPromptInput = {
   factsText: string
   evidencesText: string
   openQuestionsText: string
-  recentToolResultsText: string
+  lastRoundFocusText: string
   runtimeArtifactsText: string
   watchHintText: string
 }
@@ -113,9 +112,9 @@ ${input.evidencesText}
 ${input.openQuestionsText}
   </open_questions>
 
-  <recent_tool_results>
-${input.recentToolResultsText}
-  </recent_tool_results>
+  <last_round_focus>
+${input.lastRoundFocusText}
+  </last_round_focus>
 
   <runtime_artifacts>
 ${input.runtimeArtifactsText}
@@ -138,9 +137,9 @@ export const buildMouthPromptContext = (input: {
     factsText: renderHumanFactLines(input.state, 'mouth_prompt'),
     evidencesText: renderHumanEvidenceLines(input.state, 'mouth_prompt'),
     openQuestionsText: renderHumanOpenQuestionLines(input.state, 'mouth_prompt'),
-    recentToolResultsText: renderHumanRecentToolResultLines(input.state, 'prompt'),
+    lastRoundFocusText: buildLastRoundFocusText(input.state),
     runtimeArtifactsText: renderHumanArtifactLines(input.state, 'prompt'),
-    watchHintText: input.state.watchHint || 'none'
+    watchHintText: input.state.watchHint ? renderWatchHintForMouth(input.state.watchHint) : 'none'
   })
 }
 

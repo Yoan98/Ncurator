@@ -3,12 +3,17 @@ import type { JsonObject, JsonValue } from '../../../../shared/types'
 import { aiArtifactRefSchema } from '../schema'
 import {
   AI_TOOL_FAMILY_IDS,
+  HUMAN_SKILL_AVAILABILITIES,
+  HUMAN_SKILL_SOURCES,
   HUMAN_DELIVERY_MODES,
-  HUMAN_MAX_SKILLS_PER_LEARNING_STEP,
+  HUMAN_HAND_PLAN_INVALID_REASONS,
+  HUMAN_ROUND_EXECUTION_KINDS,
   HUMAN_STAGES,
   HUMAN_STATUSES,
   HUMAN_STEP_ACTIONS,
   HUMAN_STEP_RESULT_STATUSES,
+  HUMAN_TOOL_USE_PLAN_MODES,
+  HUMAN_WATCH_HINT_CODES,
   RUNTIME_SKILL_IDS,
   TOOL_CALL_DIAGNOSTIC_KINDS,
   TOOL_CALL_RESULT_CODES
@@ -29,6 +34,12 @@ export const toolCallDiagnosticKindSchema = z.enum(TOOL_CALL_DIAGNOSTIC_KINDS)
 export const humanStageSchema = z.enum(HUMAN_STAGES)
 export const humanStatusSchema = z.enum(HUMAN_STATUSES)
 export const humanDeliveryModeSchema = z.enum(HUMAN_DELIVERY_MODES)
+export const humanToolUsePlanModeSchema = z.enum(HUMAN_TOOL_USE_PLAN_MODES)
+export const humanHandPlanInvalidReasonSchema = z.enum(HUMAN_HAND_PLAN_INVALID_REASONS)
+export const humanWatchHintCodeSchema = z.enum(HUMAN_WATCH_HINT_CODES)
+export const humanSkillSourceSchema = z.enum(HUMAN_SKILL_SOURCES)
+export const humanSkillAvailabilitySchema = z.enum(HUMAN_SKILL_AVAILABILITIES)
+export const humanRoundExecutionKindSchema = z.enum(HUMAN_ROUND_EXECUTION_KINDS)
 
 export const humanTaskInputSchema = z.object({
   taskId: z.string(),
@@ -38,6 +49,9 @@ export const humanTaskInputSchema = z.object({
 export const skillCatalogItemSchema = z.object({
   skillId: runtimeSkillIdSchema,
   familyId: toolFamilyIdSchema,
+  source: humanSkillSourceSchema,
+  availability: humanSkillAvailabilitySchema,
+  countsTowardToolBudget: z.boolean(),
   title: z.string().min(1),
   summary: z.string().min(1),
   toolNames: z.array(z.string().min(1)),
@@ -74,6 +88,74 @@ export const toolCallResultSchema = z.object({
   code: toolCallResultCodeSchema,
   data: jsonValueSchema.optional(),
   diagnostic: toolCallDiagnosticSchema.optional()
+})
+
+export const toolUsePlanSchema = z.object({
+  mode: humanToolUsePlanModeSchema,
+  calls: z.array(toolCallParamSchema).min(1)
+})
+
+export const humanLearningOutcomeSchema = z.object({
+  requestedSkillIds: z.array(z.string().min(1)),
+  loadedSkillIds: z.array(runtimeSkillIdSchema),
+  skippedDuplicateSkillIds: z.array(runtimeSkillIdSchema),
+  skippedUnknownSkillIds: z.array(z.string().min(1)),
+  evictedSkillIds: z.array(runtimeSkillIdSchema),
+  activeToolCount: z.number().int().min(0)
+})
+
+export const humanWatchHintSchema = z.discriminatedUnion('code', [
+  z.object({
+    code: z.literal('learning_no_effect'),
+    detail: z.object({
+      requestedSkillIds: z.array(z.string().min(1)),
+      duplicateSkillIds: z.array(runtimeSkillIdSchema),
+      unknownSkillIds: z.array(z.string().min(1))
+    })
+  }),
+  z.object({
+    code: z.literal('learning_tool_budget_exceeded'),
+    detail: z.object({
+      requestedSkillIds: z.array(z.string().min(1)),
+      activeToolCount: z.number().int().min(0),
+      limit: z.number().int().min(1)
+    })
+  }),
+  z.object({
+    code: z.literal('hand_plan_invalid'),
+    detail: z.object({
+      mode: humanToolUsePlanModeSchema,
+      reason: humanHandPlanInvalidReasonSchema,
+      offendingToolNames: z.array(z.string().min(1)),
+      callCount: z.number().int().min(1).optional(),
+      limit: z.number().int().min(1).optional()
+    })
+  }),
+  z.object({
+    code: z.literal('hand_tool_limit_exceeded'),
+    detail: z.object({
+      toolCallCount: z.number().int().min(0),
+      limit: z.number().int().min(1)
+    })
+  }),
+  z.object({
+    code: z.literal('brain_invalid_mouth_transition'),
+    detail: z.object({})
+  }),
+  z.object({
+    code: z.literal('memory_invalid_op'),
+    detail: z.object({})
+  })
+])
+
+export const humanHistoryToolResultSchema = z.object({
+  toolName: z.string().min(1),
+  ok: z.boolean(),
+  code: toolCallResultCodeSchema,
+  summary: z.string().min(1),
+  dataPreview: z.string().optional(),
+  diagnosticText: z.string().optional(),
+  artifactRefs: z.array(aiArtifactRefSchema).optional()
 })
 
 export const brainMemoryOpSchema = z.union([
@@ -126,14 +208,11 @@ export const brainDecisionSchema = z.object({
 export const brainNextActionSchema = z.union([
   z.object({
     action: z.literal('learning'),
-    wantLearnSkillIds: z
-      .array(runtimeSkillIdSchema)
-      .min(1)
-      .max(HUMAN_MAX_SKILLS_PER_LEARNING_STEP)
+    wantLearnSkillIds: z.array(z.string().min(1)).min(1)
   }),
   z.object({
     action: z.literal('hand'),
-    parallelCallToolParam: z.array(toolCallParamSchema).min(1)
+    toolUsePlan: toolUsePlanSchema
   }),
   z.object({
     action: z.literal('mouth')
@@ -195,6 +274,55 @@ export const humanBrainMemorySchema = z.object({
   outside: humanBrainMemoryOutsideSchema
 })
 
+export const humanRoundExecutionSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('pre_execution_blocked'),
+    watchHint: humanWatchHintSchema
+  }),
+  z.object({
+    kind: z.literal('learning'),
+    learningOutcome: humanLearningOutcomeSchema,
+    watchHint: humanWatchHintSchema.optional()
+  }),
+  z.object({
+    kind: z.literal('hand'),
+    toolUsePlan: toolUsePlanSchema,
+    toolResults: z.array(humanHistoryToolResultSchema),
+    watchHint: humanWatchHintSchema.optional(),
+    artifactRefs: z.array(aiArtifactRefSchema).optional()
+  }),
+  z.object({
+    kind: z.literal('mouth'),
+    summary: z.string().min(1),
+    completed: z.boolean()
+  })
+])
+
+export const humanRoundRecordSchema = z.object({
+  roundId: z.number().int().min(1),
+  createdAt: z.number(),
+  decision: lastBrainDecisionSchema,
+  execution: humanRoundExecutionSchema
+})
+
+export const historyRecallFilterSchema = z.object({
+  roundIds: z.array(z.number().int().min(1)).optional(),
+  executionKinds: z.array(humanRoundExecutionKindSchema).optional(),
+  toolNames: z.array(z.string().min(1)).optional(),
+  watchHintCodes: z.array(humanWatchHintCodeSchema).optional(),
+  limit: z.number().int().min(1).optional()
+})
+
+export const humanLoadedHistoryContextSchema = z.object({
+  filters: historyRecallFilterSchema,
+  rounds: z.array(humanRoundRecordSchema)
+})
+
+export const humanProcessMemorySchema = z.object({
+  roundHistory: z.array(humanRoundRecordSchema),
+  loadedHistoryContext: humanLoadedHistoryContextSchema.optional()
+})
+
 export const humanTraceStepSchema = z.object({
   step: z.number(),
   action: z.enum(HUMAN_STEP_ACTIONS),
@@ -213,9 +341,11 @@ export const humanStateContractSchema = z.object({
   task: humanTaskInputSchema,
   runtime: humanRuntimeSchema,
   brainMemory: humanBrainMemorySchema,
-  lastParallelCallToolResults: z.array(toolCallResultSchema).optional(),
+  processMemory: humanProcessMemorySchema,
+  lastToolUseResults: z.array(toolCallResultSchema).optional(),
+  lastLearningOutcome: humanLearningOutcomeSchema.optional(),
   lastBrainDecision: lastBrainDecisionSchema.optional(),
-  watchHint: z.string().optional(),
+  watchHint: humanWatchHintSchema.optional(),
   runtimeArtifacts: z.array(aiArtifactRefSchema),
   result: humanResultSchema.optional(),
   trace: humanTraceSchema

@@ -66,12 +66,15 @@ const buildHandState = (input: {
     readyToDeliver: false,
     nextAction: {
       action: 'hand' as const,
-      parallelCallToolParam: [
-        {
-          toolName: input.toolName,
-          args: input.args
-        }
-      ]
+      toolUsePlan: {
+        mode: 'serial' as const,
+        calls: [
+          {
+            toolName: input.toolName,
+            args: input.args
+          }
+        ]
+      }
     }
   }
 })
@@ -204,14 +207,15 @@ describe('ai tool hand backend', () => {
         )
 
         runtime.assertThat(
-          result.secondState.watchHint?.includes('超过临时上限 1') === true &&
-            result.secondState.lastParallelCallToolResults?.[0]?.toolName === 'docx_render_preview',
+          result.secondState.watchHint?.code === 'hand_tool_limit_exceeded' &&
+            result.secondState.watchHint.detail.limit === 1 &&
+            result.secondState.lastToolUseResults?.[0]?.toolName === 'docx_render_preview',
           {
             name: 'tool-limit-produces-converging-watchhint',
             message: '超过 hardActionLimit 后，hand 应写入收敛型 watchHint，同时保留当前工具结果。',
             data: {
               watchHint: result.secondState.watchHint,
-              lastParallelCallToolResults: result.secondState.lastParallelCallToolResults
+              lastToolUseResults: result.secondState.lastToolUseResults
             }
           }
         )

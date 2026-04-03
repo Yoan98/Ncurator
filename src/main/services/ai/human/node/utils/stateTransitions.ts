@@ -1,6 +1,11 @@
 import type { AiRunContext } from '../../../types'
 import type { WatchHintSource } from '../../../../../../shared/types'
-import type { HumanRuntimeCache, HumanState, LastBrainDecision } from '../../types'
+import type {
+  HumanRuntimeCache,
+  HumanState,
+  HumanWatchHint,
+  LastBrainDecision
+} from '../../types'
 import {
   emitLatestHumanStepForState,
   emitTailHumanStepsForState,
@@ -31,14 +36,14 @@ export const returnToBrainWithWatchHint = (input: {
   ctx: AiRunContext
   state: HumanState
   source: WatchHintSource
-  watchHint: string
+  watchHint: HumanWatchHint
   overrides?: HumanStateOverrides<'watchHint'>
 }): HumanState => {
   emitWatchHint({
     ctx: input.ctx,
     taskId: input.state.task.taskId,
     source: input.source,
-    summary: input.watchHint
+    watchHint: input.watchHint
   })
   return returnToBrainState(input.state, {
     ...input.overrides,
@@ -53,7 +58,7 @@ export const returnToBrainAfterTrace = (input: {
   source: WatchHintSource
   traceItems: HumanTraceItemInput[]
   stage: 'human_learning' | 'human_hand'
-  watchHint?: string
+  watchHint?: HumanWatchHint
   overrides?: HumanStateOverrides<'watchHint' | 'trace'>
 }): HumanState => {
   const nextState = returnToBrainAfterTraceState({
@@ -68,7 +73,7 @@ export const returnToBrainAfterTrace = (input: {
       ctx: input.ctx,
       taskId: input.state.task.taskId,
       source: input.source,
-      summary: input.watchHint
+      watchHint: input.watchHint
     })
   }
 
@@ -89,7 +94,7 @@ export const applyBrainDecisionTransition = (input: {
   state: HumanState
   decision: LastBrainDecision
   reducedInside: HumanState['brainMemory']['inside']
-  watchHint?: string
+  watchHint?: HumanWatchHint
 }): HumanState => {
   const watchHint = resolveBrainDecisionWatchHint({
     decision: input.decision,
@@ -116,7 +121,7 @@ export const applyBrainDecisionTransition = (input: {
       ctx: input.ctx,
       taskId: input.state.task.taskId,
       source: input.watchHint ? 'memory_reducer' : 'brain',
-      summary: watchHint
+      watchHint
     })
   }
 

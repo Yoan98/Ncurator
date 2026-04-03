@@ -85,7 +85,9 @@ describe('ai human mock-llm backend', () => {
           result.output.status === 'completed' &&
             latestLearningStep?.learnedSkillIds.join(',') ===
               'workspace-cli,docx-read,docx-write,docx-delivery,kb-document-discovery,kb-evidence-query' &&
-            latestLearningStep.availableToolNames.length === 15 &&
+            latestLearningStep?.effectiveSkillIds.includes('history-recall') &&
+            latestLearningStep.availableToolNames.includes('history_recall') &&
+            latestLearningStep.availableToolNames.length === 16 &&
             latestLearningStep.summary.includes('当前 active tools=15') &&
             !latestLearningStep.summary.includes('已淘汰最早学习的 skill='),
           {
@@ -93,6 +95,7 @@ describe('ai human mock-llm backend', () => {
             message: 'learning 在预算未超限时应保留当前 skill，并把 active tool 数反映到 learning summary 中。',
             data: {
               learnedSkillIds: latestLearningStep?.learnedSkillIds,
+              effectiveSkillIds: latestLearningStep?.effectiveSkillIds,
               availableToolNames: latestLearningStep?.availableToolNames,
               summary: latestLearningStep?.summary
             }

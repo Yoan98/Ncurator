@@ -1,10 +1,16 @@
 import type { ToolPromptSpec } from '../types'
 import { DOCX_TOOL_SPECS } from './docx/toolSpecs'
+import { INTERNAL_TOOL_SPECS } from './internal/toolSpecs'
 import { KB_TOOL_SPECS } from './kb/toolSpecs'
 import { TERMINAL_TOOL_SPECS } from './terminal/toolSpecs'
 import type { AiToolFamilyId, HumanToolSpec } from './types'
 
-export const ALL_TOOL_SPECS = [...TERMINAL_TOOL_SPECS, ...KB_TOOL_SPECS, ...DOCX_TOOL_SPECS] as const
+export const ALL_TOOL_SPECS = [
+  ...TERMINAL_TOOL_SPECS,
+  ...KB_TOOL_SPECS,
+  ...DOCX_TOOL_SPECS,
+  ...INTERNAL_TOOL_SPECS
+] as const
 
 type AnyToolSpec = (typeof ALL_TOOL_SPECS)[number]
 

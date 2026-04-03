@@ -88,7 +88,9 @@ describe('ai human mock-llm backend', () => {
             watchHints.some(
               (event) =>
                 event.source === 'learning' &&
-                event.summary.includes('重复学习 workspace-cli')
+                event.code === 'learning_no_effect' &&
+                Array.isArray(event.detail?.duplicateSkillIds) &&
+                event.detail.duplicateSkillIds.includes('workspace-cli')
             ) &&
             toolResults.some((event) => event.toolName === 'terminal_run_command'),
           {

@@ -11,7 +11,8 @@ const TOOL_FAMILY_BUILDERS: Record<
 > = {
   terminal: TOOL_FAMILY_DEFINITIONS.terminal.buildTools,
   kb: TOOL_FAMILY_DEFINITIONS.kb.buildTools,
-  docx: TOOL_FAMILY_DEFINITIONS.docx.buildTools
+  docx: TOOL_FAMILY_DEFINITIONS.docx.buildTools,
+  internal: TOOL_FAMILY_DEFINITIONS.internal.buildTools
 }
 
 const ensureFamilyTools = (input: {
@@ -26,6 +27,7 @@ const ensureFamilyTools = (input: {
 
   const built = TOOL_FAMILY_BUILDERS[input.familyId]({
     ctx: input.ctx,
+    cache: input.cache,
     runId: input.runId,
     taskId: input.taskId
   })

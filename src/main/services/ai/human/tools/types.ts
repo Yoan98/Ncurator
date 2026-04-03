@@ -3,12 +3,13 @@ import type { JsonObject } from '../../../../../shared/types'
 import type { AiRunContext } from '../../types'
 import type { z } from 'zod/v4'
 import { AI_TOOL_FAMILY_IDS } from '../constants'
-import type { RuntimeSkillId, ToolPromptSpec } from '../types'
+import type { HumanRuntimeCache, RuntimeSkillId, ToolPromptSpec } from '../types'
 
 export type AiToolFamilyId = (typeof AI_TOOL_FAMILY_IDS)[number]
 
 export type ToolFamilyBuildInput = {
   ctx: AiRunContext
+  cache: HumanRuntimeCache
   runId: string
   taskId: string
 }

@@ -1,22 +1,32 @@
 import type { AiRunContext } from '../../types'
 import { renderLineList } from '../../utils/render'
-import { getSkillDefinition } from '../skills'
+import {
+  buildHistoryChainText,
+  buildLastRoundFocusText,
+  buildLoadedHistoryContextText
+} from '../memory/historyPrompt'
+import {
+  getEffectiveLearnedSkillIds,
+  getSkillDefinition,
+  listBuiltinSkillDefinitions
+} from '../skills'
 import {
   renderHumanEvidenceLines,
   renderHumanFactLines,
   renderHumanOpenQuestionLines
 } from '../shared/memoryRenderers'
-import { renderHumanRecentToolResultLines } from '../shared/runtimeRenderers'
 import { getToolPromptSpec } from '../tools/registry'
 import type { HumanState, ToolPromptSpec } from '../types'
+import { renderWatchHintForBrain } from './watchHints'
 
 type HumanBrainPromptInput = {
   userInput: string
-  memorySnapshotText: string
-  selectedContextText: string
-  skillContextText: string
-  recentToolResultsText: string
-  recentDecisionHistoryText: string
+  userSelectedContextText: string
+  stableMemoryText: string
+  capabilitiesText: string
+  lastRoundFocusText: string
+  historyChainText: string
+  loadedHistoryContextText: string
   watchHintText: string
 }
 
@@ -38,9 +48,9 @@ const renderLearnedToolSpecLine = (spec: ToolPromptSpec): string => {
   return `- 工具 ${spec.name}：适用场景=${spec.whenToUse}；必填参数=[${requiredArgs || 'none'}]；${example}`
 }
 
-const buildMemorySnapshotText = (state: HumanState): string =>
+const buildStableMemoryText = (state: HumanState): string =>
   [
-    '下面是你之前沉淀下来的记忆。这些内容代表当前已经确认、可以直接复用或仍影响推进的信息。',
+    '这是你之前沉淀下来的稳定记忆。它只包含已经确认、可以复用、或仍影响推进的事实与问题。',
     '',
     '已确认的事实：',
     renderHumanFactLines(state, 'brain_prompt'),
@@ -54,94 +64,62 @@ const buildMemorySnapshotText = (state: HumanState): string =>
 
 const buildSelectedContextPromptText = (ctx: AiRunContext): string =>
   [
-    '下面是当前用户明确给出的参考资料上下文。后续判断、检索和文件定位都必须先对齐这段信息。',
+    '这是当前用户明确给出的参考资料上下文。后续判断、检索和文件定位都必须先对齐这段信息。',
     '',
     ctx.selectedContextText
   ].join('\n')
 
-const buildSkillContextText = (state: HumanState): string => {
-  const learnedSkillIds = state.brainMemory.outside.learnedSkillIds
-  const learnedSkillDefinitions = learnedSkillIds.map((skillId) => getSkillDefinition(skillId))
-  const learnedToolNames = Array.from(
-    new Set(learnedSkillDefinitions.flatMap((definition) => definition.toolNames))
+const buildCapabilitiesText = (state: HumanState): string => {
+  const effectiveSkillIds = getEffectiveLearnedSkillIds(state.brainMemory.outside.learnedSkillIds)
+  const effectiveSkillDefinitions = effectiveSkillIds.map((skillId) => getSkillDefinition(skillId))
+  const learnedExternalSkillDefinitions = effectiveSkillDefinitions.filter(
+    (definition) => definition.source === 'external'
   )
-  const learnedToolSpecLines =
-    learnedToolNames.length > 0
-      ? learnedToolNames
-          .map((toolName) => getToolPromptSpec(toolName))
-          .filter((spec): spec is ToolPromptSpec => Boolean(spec))
-          .map(renderLearnedToolSpecLine)
-      : ['none']
-
-  const skillCatalogLines =
-    state.brainMemory.outside.skillCatalog.length > 0
-      ? state.brainMemory.outside.skillCatalog.map(
-          (item) =>
-            `- ${item.skillId}：${item.summary}；可提供工具=[${item.toolNames.join(', ')}]；适用场景=${item.whenToUse}`
-        )
-      : ['none']
-
-  const learnedSkillIdLines =
-    learnedSkillIds.length > 0 ? learnedSkillIds.map((skillId) => `- ${skillId}`) : ['none']
-
-  const learnedSkillDetailLines =
-    learnedSkillDefinitions.length > 0
-      ? learnedSkillDefinitions.map((definition) => `- ${definition.skillId}：${definition.detail}`)
-      : ['none']
+  const externalSkillCatalogLines = state.brainMemory.outside.skillCatalog
+    .filter((item) => item.source === 'external' && item.availability === 'learnable')
+    .map(
+      (item) =>
+        `- ${item.skillId}：${item.summary}；可提供工具=[${item.toolNames.join(', ')}]；适用场景=${item.whenToUse}`
+    )
+  const effectiveToolSpecLines = Array.from(
+    new Set(effectiveSkillDefinitions.flatMap((definition) => definition.toolNames))
+  )
+    .map((toolName) => getToolPromptSpec(toolName))
+    .filter((spec): spec is ToolPromptSpec => Boolean(spec))
+    .map(renderLearnedToolSpecLine)
 
   return [
-    '下面是当前可用的技能信息。技能目录摘要只用于判断要不要学习；只有已学习 skill 的详细说明和工具要点，才代表你当前可以直接依赖的能力。',
+    '这是你当前稳定可用的能力信息。只有这里明确可用的能力，才代表你可以直接依赖。',
     '',
-    '当前可用技能目录摘要：',
-    formatPlainList(skillCatalogLines),
+    '始终可用的内置技能：',
+    formatPlainList(
+      listBuiltinSkillDefinitions().map(
+        (definition) =>
+          `- ${definition.skillId}：${definition.summary}；适用场景=${definition.whenToUse}`
+      )
+    ),
     '',
-    '已经学习的 skill id：',
-    formatPlainList(learnedSkillIdLines),
+    '已经学会的外置技能：',
+    formatPlainList(
+      learnedExternalSkillDefinitions.map(
+        (definition) =>
+          `- ${definition.skillId}：${definition.detail}；可提供工具=[${definition.toolNames.join(', ')}]`
+      )
+    ),
     '',
-    '已学习技能的详细说明：',
-    formatPlainList(learnedSkillDetailLines),
+    '如有需要可以补学的外置技能目录：',
+    formatPlainList(externalSkillCatalogLines),
     '',
-    '已学习技能对应的工具使用要点：',
-    formatPlainList(learnedToolSpecLines)
+    '当前可直接依赖的工具使用要点：',
+    formatPlainList(effectiveToolSpecLines)
   ].join('\n')
 }
-
-const buildRecentToolResultsText = (state: HumanState): string =>
-  [
-    '下面是最近一轮工具调用刚带回来的新信息。请把这些结果和已有记忆一起判断，不要重复做同样的动作。',
-    '',
-    renderHumanRecentToolResultLines(state, 'prompt')
-  ].join('\n')
-
-const buildRecentDecisionHistoryText = (state: HumanState): string =>
-  [
-    '下面是最近几轮已经做过的正式判断摘要，只用于帮助你理解时间顺序并避免重复决策。',
-    '',
-    renderLineList(
-      state.brainMemory.outside.brainDecisions.map((record, index) => {
-        const ordinal = index + 1
-        const action = record.nextAction.action
-        const nextActionPayload =
-          action === 'learning'
-            ? `wantLearnSkillIds=[${record.nextAction.wantLearnSkillIds.join(',')}]`
-            : action === 'hand'
-              ? `parallelCallToolParam=${JSON.stringify(record.nextAction.parallelCallToolParam)}`
-              : 'final_delivery=true'
-
-        return `- 第${ordinal}轮（createdAt=${record.createdAt}）：决定“${record.decision.summary}”；原因：${record.decision.reason}；预期结果：${record.decision.expectedOutcome}；readyToDeliver=${String(record.readyToDeliver)}；nextAction.action=${action}；nextAction数据：${nextActionPayload}`
-      }),
-      {
-        fallback: 'none',
-        style: 'plain'
-      }
-    )
-  ].join('\n')
 
 const buildWatchHintText = (state: HumanState): string =>
   [
     '如果这里是 none，表示当前没有额外的收敛提醒；否则应优先考虑结束任务或纠偏。',
     '',
-    state.watchHint || 'none'
+    state.watchHint ? renderWatchHintForBrain(state.watchHint) : 'none'
   ].join('\n')
 
 export const buildBrainSystemPrompt = (): string =>
@@ -155,7 +133,7 @@ export const buildBrainSystemPrompt = (): string =>
   <working_style>
     请像一个判断力稳定的人类大脑一样工作：
     先理解用户真正要完成的事情，
-    再结合你已经沉淀下来的记忆和刚获得的新信息，
+    再结合你已经沉淀下来的稳定记忆、最近一轮闭环、过程历史和刚获得的新信息，
     判断现在最应该做的是继续补充信息、调用工具、还是直接结束任务。
   </working_style>
 
@@ -163,20 +141,22 @@ export const buildBrainSystemPrompt = (): string =>
     1. 优先判断任务是否已经可以结束。
     2. 如果当前信息不足以做决定，再判断是否缺少某个技能说明。
     3. 只有当你已经明确知道要调用什么工具、以及为什么调用时，才进入工具执行。
-    4. 记忆里只保留真正会帮助后续判断的事实、证据和未解决问题，不要把低价值噪音反复堆进去。
-    5. 如果最近已经拿到足够证据，就不要为了“再确认一次”而重复做同样的动作。
-    6. 如果你收到收敛提醒，应优先考虑结束任务，除非只差一次非常明确且必要的动作。
-    7. 输出 hand 时，工具 args 必须使用工具说明里的精确字段名，并补齐所有 requiredArgs。
-    8. 如果你现在无法给出某个工具的完整必填参数，不要猜；应改为 learning 或 mouth。
-    9. 如果任务是在当前工作区知识库中回答、提取事实、找规则或找证据，优先考虑 KB 能力，而不是默认退回 terminal。
-    10. 如果当前已选参考资料已经足够明确，优先通过 documentIds 缩圈搜索；如果缩圈不足，可扩大回当前工作区知识库范围。
-    11. 只有当任务确实需要访问工作区文件、执行命令或处理 docx 时，才进入 workspace 或 docx 能力。
-    12. 如果最近结果明确提示 workspace_required 或 path_unavailable，不要重复同类 terminal/docx 调用。
-    13. 如果最近结果提示 invalid_input 且缺字段明确，应优先修正参数或补充相关 skill，而不是切去无关能力。
-    14. learning 只用于补齐“下一步动作”最值得学习的 skill，不要为未来阶段提前学习完整流程的 skill。
-    15. 单次 learning 最多学习 2 个 skill；如果 1 个 skill 就足以支撑下一步，优先只学习 1 个。
-    16. mouth 不会执行任何工具；一旦选择 mouth，就表示你认为当前已经具备最终交付所需的信息、证据和产物。
-    17. 如果结果仍依赖未来的 KB、terminal、docx 或其他工具动作才能完成，readyToDeliver 必须为 false，且不能选择 mouth。
+    4. 稳定记忆里只保留真正会帮助后续判断的事实、证据和未解决问题，不要把低价值噪音反复堆进去。
+    5. 先看 last_round_focus，再看 history_chain；只有它们仍不足以判断时，才考虑调用 history-recall。
+    6. 如果最近已经拿到足够证据，就不要为了“再确认一次”而重复做同样的动作。
+    7. 如果你收到收敛提醒，应优先考虑结束任务，除非只差一次非常明确且必要的动作。
+    8. 输出 hand 时，工具 args 必须使用工具说明里的精确字段名，并补齐所有 requiredArgs。
+    9. 如果你现在无法给出某个工具的完整必填参数，不要猜；应改为 learning 或 mouth。
+    10. 如果任务是在当前工作区知识库中回答、提取事实、找规则或找证据，优先考虑 KB 能力，而不是默认退回 terminal。
+    11. 如果当前已选参考资料已经足够明确，优先通过 documentIds 缩圈搜索；如果缩圈不足，可扩大回当前工作区知识库范围。
+    12. 只有当任务确实需要访问工作区文件、执行命令或处理 docx 时，才进入 workspace 或 docx 能力。
+    13. 如果最近结果明确提示 workspace_required 或 path_unavailable，不要重复同类 terminal/docx 调用。
+    14. 如果最近结果提示 invalid_input 且缺字段明确，应优先修正参数或补充相关 skill，而不是切去无关能力。
+    15. learning 只用于补齐“下一步动作”最值得学习的 skill，不要为未来阶段提前学习完整流程的 skill。
+    16. learning 没有固定数量上限，但应保持“最小充分集合”；真正的硬约束是 active tool budget，而不是把 skill 学满。
+    17. hand 的 toolUsePlan 单轮只能选择一种 mode。只有只读且彼此独立的工具动作才用 parallel；只要有写操作、依赖前一步结果，或需要最新快照，就必须用 serial。
+    18. mouth 不会执行任何工具；一旦选择 mouth，就表示你认为当前已经具备最终交付所需的信息、证据和产物。
+    19. 如果结果仍依赖未来的 KB、terminal、docx、history_recall 或其他工具动作才能完成，readyToDeliver 必须为 false，且不能选择 mouth。
   </judgement_principles>
 
   <output_rules>
@@ -193,7 +173,7 @@ export const buildBrainSystemPrompt = (): string =>
       "readyToDeliver": true,
       "nextAction":
         | { "action": "learning", "wantLearnSkillIds": ["skill-id"] }
-        | { "action": "hand", "parallelCallToolParam": [{ "toolName": "tool_name", "args": {} }] }
+        | { "action": "hand", "toolUsePlan": { "mode": "parallel", "calls": [{ "toolName": "tool_name", "args": {} }] } }
         | { "action": "mouth" }
     }
 
@@ -218,10 +198,12 @@ export const buildBrainSystemPrompt = (): string =>
     - readyToDeliver：布尔值。只有当当前已经具备最终交付所需的信息、证据和产物时，才为 true。
     - nextAction：对象。表示下一跳动作，且只能输出 learning、hand、mouth 三种结构之一。
     - nextAction.action：字符串枚举。只能是 learning、hand、mouth。
-    - nextAction.wantLearnSkillIds：字符串数组。仅在 action=learning 时出现，表示本轮要学习的 skill id 列表；最多 2 个。
-    - nextAction.parallelCallToolParam：数组。仅在 action=hand 时出现，表示本轮要执行的工具调用列表。
-    - nextAction.parallelCallToolParam[].toolName：字符串。要调用的工具名。
-    - nextAction.parallelCallToolParam[].args：对象。对应工具的调用参数。
+    - nextAction.wantLearnSkillIds：字符串数组。仅在 action=learning 时出现，表示本轮要学习的 skill id 列表。
+    - nextAction.toolUsePlan：对象。仅在 action=hand 时出现，表示本轮工具执行计划。
+    - nextAction.toolUsePlan.mode：字符串枚举。只能是 parallel 或 serial。
+    - nextAction.toolUsePlan.calls：数组。表示本轮要执行的工具调用列表。
+    - nextAction.toolUsePlan.calls[].toolName：字符串。要调用的工具名。
+    - nextAction.toolUsePlan.calls[].args：对象。对应工具的调用参数。
   </output_rules>
 
   <output_principles>
@@ -235,47 +217,6 @@ export const buildBrainSystemPrompt = (): string =>
   </output_principles>
 
   <output_examples>
-    <example_memory_ops>
-      {
-        "memoryOps": [
-          {
-            "op": "add",
-            "field": "evidences",
-            "value": {
-              "id": "evidence-kb-risk-1",
-              "toolName": "kb_hybrid_search_chunks",
-              "summary": "知识库结果显示项目风险控制要求包含上线前复核。",
-              "sourceType": "tool_result",
-              "rawRef": "tool_result#1"
-            }
-          },
-          {
-            "op": "add",
-            "field": "facts",
-            "value": {
-              "id": "fact-risk-review-1",
-              "summary": "项目上线前需要执行复核。",
-              "evidenceIds": ["evidence-kb-risk-1"]
-            }
-          },
-          {
-            "op": "remove",
-            "field": "openQuestions",
-            "index": 0
-          }
-        ],
-        "decision": {
-          "summary": "已经得到关键依据，准备结束任务",
-          "reason": "当前事实已经有足够证据支撑，不需要继续检索。",
-          "expectedOutcome": "进入最终整理并输出结果。"
-        },
-        "readyToDeliver": true,
-        "nextAction": {
-          "action": "mouth"
-        }
-      }
-    </example_memory_ops>
-
     <example_learning>
       {
         "memoryOps": [],
@@ -292,28 +233,70 @@ export const buildBrainSystemPrompt = (): string =>
       }
     </example_learning>
 
-    <example_hand>
+    <example_hand_parallel>
       {
         "memoryOps": [],
         "decision": {
-          "summary": "调用工具获取完成任务所需的直接证据",
-          "reason": "当前缺的是可验证的结果，而不是额外的解释。",
+          "summary": "并行读取多个只读结果来补齐证据",
+          "reason": "当前缺的是多个彼此独立的读取结果，而且这些工具都是只读并行安全的。",
           "expectedOutcome": "拿到新的工具结果后，我可以更新记忆并判断是否收敛。"
         },
         "readyToDeliver": false,
         "nextAction": {
           "action": "hand",
-          "parallelCallToolParam": [
-            {
-              "toolName": "kb_hybrid_search_chunks",
-              "args": {
-                "queryText": "项目风险控制要求"
+          "toolUsePlan": {
+            "mode": "parallel",
+            "calls": [
+              {
+                "toolName": "kb_hybrid_search_chunks",
+                "args": {
+                  "queryText": "项目风险控制要求"
+                }
               }
-            }
-          ]
+            ]
+          }
         }
       }
-    </example_hand>
+    </example_hand_parallel>
+
+    <example_hand_serial>
+      {
+        "memoryOps": [],
+        "decision": {
+          "summary": "按顺序完成文档写入、校验和预览",
+          "reason": "这些动作依赖同一份最新 docx 快照，不能并行执行。",
+          "expectedOutcome": "得到真实更新后的校验结果与预览产物。"
+        },
+        "readyToDeliver": false,
+        "nextAction": {
+          "action": "hand",
+          "toolUsePlan": {
+            "mode": "serial",
+            "calls": [
+              {
+                "toolName": "docx_apply_ops",
+                "args": {
+                  "docId": "doc-1",
+                  "ops": [
+                    {
+                      "type": "replace_text",
+                      "query": "RISK_TODO",
+                      "replace": "待跟进"
+                    }
+                  ]
+                }
+              },
+              {
+                "toolName": "docx_validate",
+                "args": {
+                  "docId": "doc-1"
+                }
+              }
+            ]
+          }
+        }
+      }
+    </example_hand_serial>
 
     <example_mouth>
       {
@@ -340,40 +323,45 @@ export const buildBrainUserPrompt = (input: HumanBrainPromptInput): string =>
 ${input.userInput}
   </user_request>
 
-  <memory_snapshot>
-${input.memorySnapshotText}
-  </memory_snapshot>
+  <user_selected_context>
+${input.userSelectedContextText}
+  </user_selected_context>
 
-  <selected_context>
-${input.selectedContextText}
-  </selected_context>
+  <your_stable_memory>
+${input.stableMemoryText}
+  </your_stable_memory>
 
-  <skill_context>
-${input.skillContextText}
-  </skill_context>
+  <your_capabilities>
+${input.capabilitiesText}
+  </your_capabilities>
 
-  <recent_tool_results>
-${input.recentToolResultsText}
-  </recent_tool_results>
+  <last_round_focus>
+${input.lastRoundFocusText}
+  </last_round_focus>
 
-  <recent_decision_history>
-${input.recentDecisionHistoryText}
-  </recent_decision_history>
+  <history_chain>
+${input.historyChainText}
+  </history_chain>
 
-  <converge_hint>
+  <loaded_history_context>
+${input.loadedHistoryContextText}
+  </loaded_history_context>
+
+  <convergence_hint>
 ${input.watchHintText}
-  </converge_hint>
+  </convergence_hint>
 </user_context>
 `.trim()
 
 export const buildBrainPromptContext = (input: { state: HumanState; ctx: AiRunContext }) => {
   return buildHumanBrainPrompt({
     userInput: input.state.task.userInput,
-    memorySnapshotText: buildMemorySnapshotText(input.state),
-    selectedContextText: buildSelectedContextPromptText(input.ctx),
-    skillContextText: buildSkillContextText(input.state),
-    recentToolResultsText: buildRecentToolResultsText(input.state),
-    recentDecisionHistoryText: buildRecentDecisionHistoryText(input.state),
+    userSelectedContextText: buildSelectedContextPromptText(input.ctx),
+    stableMemoryText: buildStableMemoryText(input.state),
+    capabilitiesText: buildCapabilitiesText(input.state),
+    lastRoundFocusText: buildLastRoundFocusText(input.state),
+    historyChainText: buildHistoryChainText(input.state),
+    loadedHistoryContextText: buildLoadedHistoryContextText(input.state),
     watchHintText: buildWatchHintText(input.state)
   })
 }
