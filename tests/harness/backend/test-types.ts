@@ -137,7 +137,6 @@ export type CreateAiRunContextInput = {
   bindWorkspace?: boolean
   sessionId?: string
   userInput?: string
-  selectedDocumentIds?: string[]
   selectedReferences?: SelectedReference[]
   modelConfigId?: string
   approvalPolicy?: ApprovalPolicy | ApprovalResolver

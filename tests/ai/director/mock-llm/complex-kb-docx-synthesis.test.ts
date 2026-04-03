@@ -43,7 +43,6 @@ describe('ai director mock-llm backend', () => {
         ])
 
         const runner = createDirectorTestRunner(runtime, {
-          selectedDocumentIds: ['doc-1'],
           structuredOutputScript: {
             'director.intent': [
               {

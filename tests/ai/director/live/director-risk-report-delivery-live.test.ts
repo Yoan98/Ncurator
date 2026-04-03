@@ -37,12 +37,10 @@ describe('ai director live backend', () => {
         }
 
         await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv('primary'))
-        const selectedDocumentIds = await seedRiskReportKb(runtime)
+        await seedRiskReportKb(runtime)
         const workspaceSeed = await seedRiskReportWorkspace(runtime)
 
-        const runner = createDirectorTestRunner(runtime, {
-          selectedDocumentIds
-        })
+        const runner = createDirectorTestRunner(runtime)
         const state = await runner.run({
           userInput: DIRECTOR_RISK_REPORT_DELIVERY_USER_INPUT
         })

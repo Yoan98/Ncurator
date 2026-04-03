@@ -33,7 +33,6 @@ describe('ai human mock-llm backend', () => {
         ])
 
         const runner = createHumanTestRunner(runtime, {
-          selectedDocumentIds: ['doc-1'],
           structuredOutputScript: {
             'human.brain': [
               {

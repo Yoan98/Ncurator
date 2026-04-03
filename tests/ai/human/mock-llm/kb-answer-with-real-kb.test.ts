@@ -46,7 +46,6 @@ describe('ai human mock-llm backend', () => {
 
         let mouthPrompt = ''
         const runner = createHumanTestRunner(runtime, {
-          selectedDocumentIds: ['doc-1', 'doc-2'],
           structuredOutputScript: {
             'human.brain': [
               {

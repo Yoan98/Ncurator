@@ -34,12 +34,10 @@ describe('ai human live backend', () => {
         }
 
         await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv('primary'))
-        const selectedDocumentIds = await seedRiskReportKb(runtime)
+        await seedRiskReportKb(runtime)
         const workspaceSeed = await seedRiskReportWorkspace(runtime)
 
-        const runner = createHumanTestRunner(runtime, {
-          selectedDocumentIds
-        })
+        const runner = createHumanTestRunner(runtime)
         const output = await runner.run({
           taskId: runtime.taskId,
           userInput: HUMAN_RISK_REPORT_DRAFT_USER_INPUT

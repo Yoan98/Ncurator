@@ -32,10 +32,8 @@ describe('ai human live backend', () => {
         }
 
         await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv('primary'))
-        const selectedDocumentIds = await seedFileRetentionKb(runtime)
-        const runner = createHumanTestRunner(runtime, {
-          selectedDocumentIds
-        })
+        await seedFileRetentionKb(runtime)
+        const runner = createHumanTestRunner(runtime)
         const output = await runner.run({
           taskId: runtime.taskId,
           userInput: HUMAN_FILE_RETENTION_USER_INPUT

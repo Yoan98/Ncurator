@@ -175,7 +175,7 @@ const ChatPage: React.FC = () => {
   const lastSubmittedReferencesRef = useRef<SelectedReference[]>([])
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  const selectedDocumentIds = useMemo(
+  const kbScopeDocumentIds = useMemo(
     () => {
       const explicitIds = collectReferenceDocumentIds(selectedReferences)
       if (explicitIds.length > 0) return explicitIds
@@ -1123,13 +1123,13 @@ const ChatPage: React.FC = () => {
       }))
 
       try {
-        if (selectedWorkspace && selectedDocumentIds.length === 0) {
+        if (selectedWorkspace && kbScopeDocumentIds.length === 0) {
           return
         }
         const searchResponse = await window.api.search(
           userQuery,
           'all',
-          selectedDocumentIds.length > 0 ? selectedDocumentIds : undefined
+          kbScopeDocumentIds.length > 0 ? kbScopeDocumentIds : undefined
         )
         const parsedResults = searchResponse.results.map(parseIpcResult)
         const unique: SearchResult[] = []
@@ -1164,7 +1164,7 @@ const ChatPage: React.FC = () => {
 
     const userQuery = input.trim()
     const hasStrictScope = selectedReferences.length > 0 || Boolean(selectedWorkspace)
-    if (hasStrictScope && selectedDocumentIds.length === 0) {
+    if (hasStrictScope && kbScopeDocumentIds.length === 0) {
       message.warning('当前搜索范围没有已加载资料，无法执行纯搜索。')
       return
     }
@@ -1193,7 +1193,7 @@ const ChatPage: React.FC = () => {
       const response = await window.api.search(
         userQuery,
         'all',
-        hasStrictScope ? selectedDocumentIds : undefined
+        hasStrictScope ? kbScopeDocumentIds : undefined
       )
       const results = response.results.map(parseIpcResult)
       const assistantContent =

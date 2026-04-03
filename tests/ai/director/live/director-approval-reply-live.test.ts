@@ -32,10 +32,8 @@ describe('ai director live backend', () => {
         }
 
         await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv('primary'))
-        const selectedDocumentIds = await seedFileRetentionKb(runtime)
-        const runner = createDirectorTestRunner(runtime, {
-          selectedDocumentIds
-        })
+        await seedFileRetentionKb(runtime)
+        const runner = createDirectorTestRunner(runtime)
         const state = await runner.run({
           userInput: DIRECTOR_APPROVAL_REPLY_USER_INPUT
         })

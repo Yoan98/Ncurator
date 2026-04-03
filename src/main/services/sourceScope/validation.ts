@@ -1,4 +1,5 @@
 import fs from 'fs'
+import path from 'path'
 import type { AiRunEvent, SelectedReference } from '../../../shared/types'
 
 type WorkspaceLookup = {
@@ -10,6 +11,15 @@ type WebSourceLookup = {
     id: string,
     workspaceId?: string
   ) => Promise<{ id: string; workspace_id: string; import_status: number; document_id?: string } | null>
+}
+
+const isPathWithinWorkspace = (workspaceRootPath: string, targetPath: string): boolean => {
+  const resolvedWorkspaceRoot = path.resolve(workspaceRootPath)
+  const resolvedTargetPath = path.resolve(targetPath)
+  if (resolvedWorkspaceRoot === resolvedTargetPath) return true
+
+  const relativePath = path.relative(resolvedWorkspaceRoot, resolvedTargetPath)
+  return Boolean(relativePath) && !relativePath.startsWith('..') && !path.isAbsolute(relativePath)
 }
 
 export const validateSelectedReferencesForRun = async (params: {
@@ -72,6 +82,18 @@ export const validateSelectedReferencesForRun = async (params: {
           runId: params.runId,
           code: 'scope_unavailable',
           message: `所选参考资料已失效：${reference.absolutePath}`,
+          workspaceId,
+          createdAt: getNow()
+        })
+        return { ok: false, error: 'scope unavailable' }
+      }
+
+      if (!isPathWithinWorkspace(workspace.root_path, reference.absolutePath)) {
+        params.sendEvent({
+          type: 'runtime_issue',
+          runId: params.runId,
+          code: 'scope_unavailable',
+          message: `所选参考资料不属于当前工作空间：${reference.absolutePath}`,
           workspaceId,
           createdAt: getNow()
         })
