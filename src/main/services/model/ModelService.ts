@@ -3,7 +3,7 @@ import path from 'path'
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web'
-import { MODELS_PATH } from '../../utils/paths'
+import { listModelPathCandidates, MODELS_PATH } from '../../utils/paths'
 
 const HF_ENDPOINT = 'https://hf-mirror.com'
 const DOWNLOAD_LOCK_POLL_MS = 1000
@@ -125,6 +125,61 @@ export class ModelService {
 
   private resolveDownloadCompletePath(repoId: string): string {
     return path.join(this.resolveModelPath(repoId), DOWNLOAD_COMPLETE_FILE)
+  }
+
+  private isModelDownloadedAtPath(repoId: string, modelPath: string): boolean {
+    if (!fs.existsSync(modelPath) || !fs.statSync(modelPath).isDirectory()) {
+      return false
+    }
+
+    const definition = this.getModelDefinition(repoId)
+    const completedState = this.readJsonFileSync<{
+      files?: string[]
+    }>(path.join(modelPath, DOWNLOAD_COMPLETE_FILE))
+
+    if (Array.isArray(completedState?.files) && completedState.files.length > 0) {
+      const completionFilesReady = completedState.files.every((file) =>
+        this.hasNonEmptyFile(path.join(modelPath, file))
+      )
+      if (!completionFilesReady) {
+        return false
+      }
+      if (definition?.requiredFiles && definition.requiredFiles.length > 0) {
+        return definition.requiredFiles.every((file) =>
+          this.hasNonEmptyFile(path.join(modelPath, file))
+        )
+      }
+      return true
+    }
+
+    if (definition?.requiredFiles && definition.requiredFiles.length > 0) {
+      return definition.requiredFiles.every((file) =>
+        this.hasNonEmptyFile(path.join(modelPath, file))
+      )
+    }
+
+    return fs.readdirSync(modelPath).length > 0
+  }
+
+  private listAlternateDownloadedModelPaths(repoId: string): string[] {
+    const currentModelPath = this.resolveModelPath(repoId)
+    return listModelPathCandidates()
+      .map((modelsPath) => path.join(modelsPath, repoId))
+      .filter((candidate) => path.resolve(candidate) !== path.resolve(currentModelPath))
+      .filter((candidate) => this.isModelDownloadedAtPath(repoId, candidate))
+  }
+
+  private async reuseDownloadedModelFromAlternatePath(repoId: string): Promise<boolean> {
+    const alternatePath = this.listAlternateDownloadedModelPaths(repoId)[0]
+    if (!alternatePath) {
+      return false
+    }
+
+    const modelPath = this.resolveModelPath(repoId)
+    await fs.promises.mkdir(path.dirname(modelPath), { recursive: true })
+    await fs.promises.rm(modelPath, { recursive: true, force: true })
+    await fs.promises.symlink(alternatePath, modelPath, 'dir')
+    return true
   }
 
   private hasNonEmptyFile(filePath: string): boolean {
@@ -318,38 +373,7 @@ export class ModelService {
   }
 
   public isModelDownloaded(repoId: string): boolean {
-    const modelPath = this.resolveModelPath(repoId)
-    if (!fs.existsSync(modelPath) || !fs.statSync(modelPath).isDirectory()) {
-      return false
-    }
-
-    const definition = this.getModelDefinition(repoId)
-
-    const completedState = this.readJsonFileSync<{
-      files?: string[]
-    }>(this.resolveDownloadCompletePath(repoId))
-    if (Array.isArray(completedState?.files) && completedState.files.length > 0) {
-      const completionFilesReady = completedState.files.every((file) =>
-        this.hasNonEmptyFile(path.join(modelPath, file))
-      )
-      if (!completionFilesReady) {
-        return false
-      }
-      if (definition?.requiredFiles && definition.requiredFiles.length > 0) {
-        return definition.requiredFiles.every((file) =>
-          this.hasNonEmptyFile(path.join(modelPath, file))
-        )
-      }
-      return true
-    }
-
-    if (definition?.requiredFiles && definition.requiredFiles.length > 0) {
-      return definition.requiredFiles.every((file) =>
-        this.hasNonEmptyFile(path.join(modelPath, file))
-      )
-    }
-
-    return fs.readdirSync(modelPath).length > 0
+    return this.isModelDownloadedAtPath(repoId, this.resolveModelPath(repoId))
   }
 
   private async acquireDownloadLock(repoId: string): Promise<() => Promise<void>> {
@@ -523,6 +547,15 @@ export class ModelService {
       const releaseLock = await this.acquireDownloadLock(repoId)
       try {
         if (this.isModelDownloaded(repoId)) {
+          this.emitProgress(reporter, {
+            repoId,
+            status: 'completed',
+            progress: 100
+          })
+          return { success: true }
+        }
+
+        if (await this.reuseDownloadedModelFromAlternatePath(repoId)) {
           this.emitProgress(reporter, {
             repoId,
             status: 'completed',
