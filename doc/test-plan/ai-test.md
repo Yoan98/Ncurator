@@ -27,7 +27,7 @@
   - 覆盖要求：要通过不同 case 把关键节点与关键边都跑到，而不是只验证一条 happy path。
 - `live`
   - 目标：验证真实模型下 `human` 的真实业务执行。
-  - 约束：必须走真实 `ctx.chatStructured`、真实 KB、真实工具、真实 review / artifact。
+  - 约束：必须走真实统一 LLM executor（包括 `ctx.chatStructured / ctx.chatText`）、真实 KB、真实工具、真实 review / artifact。
   - 禁止：任何 scripted driver、`chatStructuredOverride`、fixture store override。
   - 覆盖要求：至少保留 1 条简单任务和 1 条复杂任务正式 case；如复杂任务有多条长期价值用例，可同时保留。
 
@@ -50,8 +50,8 @@
 
 - AI 正式 backend case 必须使用生产 `createAiRunContext` 作为唯一正式 runtime 入口。
 - formal harness 必须使用真实 `StorageService / DocumentsStore / ChatStore / DraftReviewStore / LlmConfigStore / DraftReviewService / EmbeddingService`。
-- `mock-llm` 统一通过 scripted structured output driver 固定 LLM 输出；除 LLM 输出外，其余全部真实。
-- `live` 统一通过真实 `LlmConfigStore` 注入 live 配置，并走生产 `chatStructured`。
+- `mock-llm` 统一通过 scripted LLM driver 固定 LLM 输出；除 LLM 输出外，其余全部真实。
+- `live` 统一通过真实 `LlmConfigStore` 注入 live 配置，并走生产统一 LLM executor。
 - KB fixture 必须走真实导入、真实索引、真实检索。
 - embedding 模型缺失时，harness 应优先通过真实生产下载链自动检查并下载，不得引入测试专用 embedding 替身。
 - 旧式 fake API 一律不得进入 formal harness；一次性排查如果确实需要 fake，只允许写入 `tests/temp/**`。
@@ -71,6 +71,7 @@
 - case 设计必须使用真实用户风格输入，不得把内部 route、固定工具顺序或 plan 条数写进用户输入。
 - 断言重点：完成态、关键 route、关键工具调用、关键 artifact、关键事实是否成立。
 - 不对最终文案做精确文本断言。
+- transport / structured output 兼容性探针类 case，应至少分别覆盖一次 `force_non_stream` 与 `force_stream` 路径。
 
 ### 3.3 目录与命令
 

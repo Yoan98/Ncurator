@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { runStructuredChatWithActivity } from '../../../src/main/services/ai/utils/structuredChatActivity'
+import {
+  runLlmCallWithActivity,
+  runStructuredChatWithActivity
+} from '../../../src/main/services/ai/utils/structuredChatActivity'
 import type { AiLlmIoRecord, AiRunEvent } from '../../../src/shared/types'
 
 describe('ai unit structured chat activity', () => {
@@ -40,5 +43,82 @@ describe('ai unit structured chat activity', () => {
     expect(llmIoRecords[0]?.method).toBe('scripted')
     expect(llmIoRecords[0]?.profile).toBe('scripted')
     expect(llmIoRecords[0]?.fallbackChain).toEqual(['scripted'])
+  })
+
+  it('records streamed text deltas and stream metadata', async () => {
+    const events: AiRunEvent[] = []
+    const llmIoRecords: AiLlmIoRecord[] = []
+
+    const result = await runLlmCallWithActivity({
+      ctx: {
+        runId: 'run-2',
+        sendEvent: (event) => events.push(event),
+        recordLlmIo: (record) => llmIoRecords.push(record)
+      },
+      runId: 'run-2',
+      taskId: 'task-1',
+      system: 'system prompt',
+      user: 'user prompt',
+      telemetry: {
+        actionType: 'llm_text_output',
+        caller: 'human.mouth',
+        schemaName: 'human_mouth_markdown',
+        modelName: 'scripted-llm',
+        baseUrl: 'https://scripted.local/v1',
+        streamingMode: 'force_stream',
+        attempt: 1
+      },
+      execute: async (observer) => {
+        observer.onDelta?.('Hello')
+        observer.onDelta?.(' world')
+        return {
+          output: 'Hello world',
+          rawText: 'Hello world',
+          transport: 'responses',
+          streamed: true
+        }
+      }
+    })
+
+    expect(result.output).toBe('Hello world')
+
+    const streamEvents = events.filter((event) => event.type === 'llm_stream_delta')
+    expect(streamEvents).toHaveLength(2)
+    expect(streamEvents[0]).toMatchObject({
+      type: 'llm_stream_delta',
+      runId: 'run-2',
+      taskId: 'task-1',
+      caller: 'human.mouth',
+      chunkIndex: 1,
+      text: 'Hello',
+      internal: true
+    })
+
+    const completedActivity = events
+      .filter((event) => event.type === 'activity')
+      .find((event) => event.type === 'activity' && event.status === 'completed')
+    expect(completedActivity).toMatchObject({
+      type: 'activity',
+      actionType: 'llm_text_output',
+      status: 'completed',
+      details: {
+        streamingMode: 'force_stream',
+        streamed: true,
+        chunkCount: 2,
+        transport: 'responses'
+      }
+    })
+
+    expect(llmIoRecords).toHaveLength(1)
+    expect(llmIoRecords[0]).toMatchObject({
+      caller: 'human.mouth',
+      schemaName: 'human_mouth_markdown',
+      rawText: 'Hello world',
+      transport: 'responses',
+      streamingMode: 'force_stream',
+      streamed: true,
+      chunkCount: 2,
+      status: 'completed'
+    })
   })
 })

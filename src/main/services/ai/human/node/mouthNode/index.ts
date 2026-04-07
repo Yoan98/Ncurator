@@ -1,15 +1,15 @@
 import type { AiRunContext } from '../../../types'
-import { mouthOutputSchema } from '../../schema'
 import type { HumanDeliveryMode, HumanRuntimeCache, HumanState } from '../../types'
 import { buildMouthPromptContext } from '../../prompts/mouth'
 import { completeHumanTask } from '../utils/stateTransitions'
 import { buildDeliveryModeFallbackMarkdown } from '../../shared/deliveryContracts'
+import { deriveDeliverySummary } from '../../shared/deliverySummary'
 
 export const createMouthNode = (input: {
   ctx: AiRunContext
   cache: HumanRuntimeCache
   deliveryMode: HumanDeliveryMode
-  streamAnswer: boolean
+  emitAnswerEvents: boolean
   internalDelivery: boolean
 }) => {
   return async (state: HumanState): Promise<HumanState> => {
@@ -20,23 +20,37 @@ export const createMouthNode = (input: {
       state,
       deliveryMode: input.deliveryMode
     })
-    const result = await input.ctx.chatStructured({
+    const rawDeliveryMarkdown = await input.ctx.chatText({
       caller: 'human.mouth',
+      taskId: state.task.taskId,
       system: prompt.system,
       user: prompt.user,
-      schema: mouthOutputSchema,
-      schemaName: 'human_mouth_result',
-      temperature: 0.2
+      schemaName: 'human_mouth_markdown',
+      temperature: 0.2,
+      onTextDelta: input.emitAnswerEvents
+        ? (text) => {
+            input.ctx.sendEvent({
+              type: 'answer_token',
+              runId: input.ctx.runId,
+              taskId: state.task.taskId,
+              token: text,
+              stage: 'human_mouth'
+            })
+          }
+        : undefined
     })
 
-    const summary = String(result.summary || '').trim() || '任务结束'
     const deliveryMarkdown =
-      String(result.deliveryMarkdown || '').trim() ||
+      String(rawDeliveryMarkdown || '').trim() ||
       buildDeliveryModeFallbackMarkdown({
         state,
         mode: input.deliveryMode,
-        summary
+        summary: state.lastBrainDecision?.decision.summary || '任务结束'
       })
+    const summary = deriveDeliverySummary({
+      deliveryMarkdown,
+      state
+    })
 
     return completeHumanTask({
       ctx: input.ctx,
@@ -44,7 +58,7 @@ export const createMouthNode = (input: {
       state,
       summary,
       deliveryMarkdown,
-      streamAnswer: input.streamAnswer,
+      emitAnswerEvents: input.emitAnswerEvents,
       internalDelivery: input.internalDelivery
     })
   }

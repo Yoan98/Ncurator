@@ -47,7 +47,7 @@
 - 已选本地参考资料，包含 Alpha PRD 所在目录和两份知识文档
 - 会话里没有足够明确的“最新 docx 是哪一份”“上周评审意见具体指什么”
 
-为了便于阅读，下文把 `selectedContextText` 近似理解成：
+为了便于阅读，下文把 `ctx.referenceScope` 在 prompt 中渲染后的参考资料上下文近似理解成：
 
 ```text
 当前工作区：Alpha Workspace（本地工作目录），后续本地文件路径都相对于这个工作区理解。
@@ -128,7 +128,7 @@
 - `state.contextRounds`
 - `state.contextEvidence`
 - `ctx.loadHistory()` 返回的会话摘要和最近对话
-- `ctx.selectedContextText`
+- `ctx.referenceScope` 渲染出的参考资料上下文
 
 在这个样例里，模型可能给出这样的结构化结果：
 
@@ -551,7 +551,7 @@ patch：
 
 ### 2.8 第 4 步：`director_plan`
 
-`director_plan` 会读取原始输入、历史、`contextEvidence`、`selectedContextText`，再生成任务列表。
+`director_plan` 会读取原始输入、历史、`contextEvidence`、由 `ctx.referenceScope` 渲染出的参考资料上下文，再生成任务列表。
 
 在这个样例里，合法计划可以是：
 
@@ -983,14 +983,14 @@ runtimeArtifacts = [
 {
   taskId: 'synthesis-human',
   deliveryMode: 'user_answer',
-  streamAnswer: true
+  emitAnswerEvents: true
 }
 ```
 
 这个 `human` 读到的 `userInput` 不是原始一句话，而是 `buildSynthesisHumanObjective()` 组织出来的大对象，里面包含：
 
 - 原始用户请求
-- `selectedContextText`
+- 由 `ctx.referenceScope` 渲染出的参考资料上下文
 - `contextEvidence`
 - 全部 `plan[].deliveryMarkdown`
 
@@ -1112,7 +1112,7 @@ runtimeArtifacts = [
 
 - `context-1` 的交付是内部交付，不是最终答复
 - `plan` 阶段每个 task 的正式产出都先进入 `deliveryMarkdown`
-- 只有 direct / synthesis 这类 `user_answer + streamAnswer=true` 的任务会走 `answer_completed`
+- 只有 direct / synthesis 这类 `user_answer + emitAnswerEvents=true` 的任务会走 `answer_completed`
 
 ## 3. 样例 B：默认 direct-human 路径
 
@@ -1182,7 +1182,7 @@ patch：
 {
   taskId: 'direct-human',
   deliveryMode: 'user_answer',
-  streamAnswer: true
+  emitAnswerEvents: true
 }
 ```
 
@@ -1311,6 +1311,7 @@ patch：
 
 - `src/main/services/ai/AiRunService.ts`
 - `src/main/services/ai/runtime.ts`
+- `src/main/services/ai/llmExecutor.ts`
 - `src/main/services/ai/director/graph/directorGraph.ts`
 - `src/main/services/ai/director/node/intentNode.ts`
 - `src/main/services/ai/director/node/contextEnrichNode.ts`
@@ -1325,8 +1326,8 @@ patch：
 - `src/main/services/ai/human/node/handNode/index.ts`
 - `src/main/services/ai/human/node/mouthNode/index.ts`
 - `src/main/services/ai/human/node/utils/stateTransitions.ts`
-- `src/main/services/ai/human/node/utils/events.ts`
-- `src/main/services/ai/human/node/mouthNode/deliveryMarkdown.ts`
+- `src/main/services/ai/human/node/utils/stateTransitionEvents.ts`
+- `src/main/services/ai/human/shared/deliverySummary.ts`
 - `src/main/services/ai/utils/artifacts.ts`
 
 如果你后面要改 AI 逻辑，最有用的阅读顺序通常是：

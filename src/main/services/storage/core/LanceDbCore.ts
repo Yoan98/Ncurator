@@ -388,13 +388,16 @@ export class LanceDbCore {
           new arrow.Field('model_name', new arrow.Utf8()),
           new arrow.Field('api_key', new arrow.Utf8()),
           new arrow.Field('is_active', new arrow.Bool()),
-          new arrow.Field('preferredStructuredOutputProfile', new arrow.Utf8(), true)
+          new arrow.Field('preferredStructuredOutputProfile', new arrow.Utf8(), true),
+          new arrow.Field('preferredTransport', new arrow.Utf8(), true)
         ])
       },
       {
         name: LANCE_TABLES.AI_RUNTIME_SETTINGS,
+        recreateIfSchemaChanged: true,
         schema: new arrow.Schema([
           new arrow.Field('id', new arrow.Utf8()),
+          new arrow.Field('llmStreamingMode', new arrow.Utf8()),
           new arrow.Field('updated_at', new arrow.Int64())
         ])
       }

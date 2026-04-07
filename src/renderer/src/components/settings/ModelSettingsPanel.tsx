@@ -131,7 +131,9 @@ const ModelSettingsPanel: React.FC = () => {
         preferredStructuredOutputProfile:
           editingConfig && !shouldResetPreferredMethod
             ? editingConfig.preferredStructuredOutputProfile
-            : undefined
+            : undefined,
+        preferredTransport:
+          editingConfig && !shouldResetPreferredMethod ? editingConfig.preferredTransport : undefined
       }
 
       const response = await window.api.llmConfigSave(nextConfig)

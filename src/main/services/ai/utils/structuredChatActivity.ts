@@ -3,26 +3,40 @@ import { normalizeOpenAIBaseUrl } from '../../../../shared/llmBaseUrl'
 import { emitActivity } from '../../../utils/aiCapabilityUtils'
 import type { AiEventDispatchContext } from '../types'
 import type {
+  AiLlmStreamingMode,
   AiStructuredOutputMethod,
   AiStructuredOutputProfile,
   AiStructuredOutputTransport,
   JsonValue
 } from '../../../../shared/types'
 
-type StructuredChatTelemetry = {
+export type LlmCallStreamObserver = {
+  onStart?: () => void
+  onDelta?: (text: string) => void
+  onComplete?: (input: { rawText?: string }) => void
+  onError?: (error: Error) => void
+}
+
+type LlmActionType = 'llm_structured_output' | 'llm_text_output'
+
+type LlmCallTelemetry = {
+  actionType: LlmActionType
   caller: string
   schemaName: string
   modelName: string
   baseUrl: string
+  streamingMode: AiLlmStreamingMode
   attempt?: number
 }
 
-export type StructuredChatExecutionResult<T> = {
+export type LlmCallExecutionResult<T> = {
   output: T
+  rawText?: string
   method?: AiStructuredOutputMethod
   transport?: AiStructuredOutputTransport
   profile?: AiStructuredOutputProfile
   fallbackChain?: AiStructuredOutputProfile[]
+  streamed?: boolean
 }
 
 const resolveBaseUrlHost = (baseUrl: string): string => {
@@ -38,7 +52,7 @@ const resolveBaseUrlHost = (baseUrl: string): string => {
 
 const formatLlmActivitySummary = (input: {
   status: 'started' | 'completed' | 'failed'
-  telemetry: StructuredChatTelemetry
+  telemetry: LlmCallTelemetry
   durationMs?: number
   reason?: string
 }): string => {
@@ -54,25 +68,31 @@ const formatLlmActivitySummary = (input: {
   return `LLM 调用失败：${target}（${input.durationMs || 0}ms）${input.reason ? `；${input.reason}` : ''}`
 }
 
-export const runStructuredChatWithActivity = async <T>(input: {
+export const runLlmCallWithActivity = async <T>(input: {
   ctx: AiEventDispatchContext
   runId: string
   taskId?: string
   system: string
   user: string
-  telemetry: StructuredChatTelemetry
-  execute: () => Promise<StructuredChatExecutionResult<T>>
-}): Promise<StructuredChatExecutionResult<T>> => {
+  telemetry: LlmCallTelemetry
+  onTextDelta?: (text: string) => void
+  execute: (observer: LlmCallStreamObserver, callId: string) => Promise<LlmCallExecutionResult<T>>
+}): Promise<LlmCallExecutionResult<T>> => {
   const startedAt = Date.now()
   const baseUrlHost = resolveBaseUrlHost(input.telemetry.baseUrl)
   const callId = randomUUID()
+  let chunkCount = 0
+  let firstTokenAt: number | undefined
+  let latestRawText = ''
+
   const details = {
     callId,
     caller: input.telemetry.caller,
     schemaName: input.telemetry.schemaName,
     model: input.telemetry.modelName,
     baseUrlHost,
-    attempt: input.telemetry.attempt || 1
+    attempt: input.telemetry.attempt || 1,
+    streamingMode: input.telemetry.streamingMode
   }
 
   const normalizeOutput = (value: T): JsonValue | undefined => {
@@ -83,11 +103,40 @@ export const runStructuredChatWithActivity = async <T>(input: {
     }
   }
 
+  const observer: LlmCallStreamObserver = {
+    onStart: () => undefined,
+    onDelta: (text) => {
+      if (!text) return
+      const createdAt = Date.now()
+      chunkCount += 1
+      latestRawText += text
+      if (!firstTokenAt) {
+        firstTokenAt = createdAt
+      }
+      input.ctx.sendEvent({
+        type: 'llm_stream_delta',
+        runId: input.runId,
+        taskId: input.taskId,
+        callId,
+        caller: input.telemetry.caller,
+        chunkIndex: chunkCount,
+        text,
+        createdAt,
+        internal: true
+      })
+      input.onTextDelta?.(text)
+    },
+    onComplete: (payload) => {
+      latestRawText = payload.rawText || latestRawText
+    },
+    onError: () => undefined
+  }
+
   emitActivity({
     ctx: input.ctx,
     runId: input.runId,
     taskId: input.taskId,
-    actionType: 'llm_structured_output',
+    actionType: input.telemetry.actionType,
     status: 'started',
     summary: formatLlmActivitySummary({
       status: 'started',
@@ -96,8 +145,10 @@ export const runStructuredChatWithActivity = async <T>(input: {
     details
   })
 
+  observer.onStart?.()
+
   try {
-    const result = await input.execute()
+    const result = await input.execute(observer, callId)
     const durationMs = Date.now() - startedAt
     const fallbackChain =
       result.fallbackChain && result.fallbackChain.length > 0
@@ -105,11 +156,16 @@ export const runStructuredChatWithActivity = async <T>(input: {
         : result.profile
           ? [result.profile]
           : []
+    const rawText = result.rawText ?? (latestRawText || undefined)
+    observer.onComplete?.({ rawText })
+    const streamed = Boolean(result.streamed || chunkCount > 0)
+    const firstTokenLatencyMs = firstTokenAt ? firstTokenAt - startedAt : undefined
+
     emitActivity({
       ctx: input.ctx,
       runId: input.runId,
       taskId: input.taskId,
-      actionType: 'llm_structured_output',
+      actionType: input.telemetry.actionType,
       status: 'completed',
       summary: formatLlmActivitySummary({
         status: 'completed',
@@ -122,9 +178,13 @@ export const runStructuredChatWithActivity = async <T>(input: {
         method: result.method,
         transport: result.transport,
         profile: result.profile,
-        fallbackChain
+        fallbackChain,
+        streamed,
+        chunkCount,
+        firstTokenLatencyMs
       }
     })
+
     input.ctx.recordLlmIo?.({
       callId,
       runId: input.runId,
@@ -136,10 +196,15 @@ export const runStructuredChatWithActivity = async <T>(input: {
       system: input.system,
       user: input.user,
       output: normalizeOutput(result.output),
+      rawText,
       method: result.method,
       transport: result.transport,
       profile: result.profile,
       fallbackChain,
+      streamingMode: input.telemetry.streamingMode,
+      streamed,
+      chunkCount,
+      firstTokenLatencyMs,
       startedAt,
       completedAt: startedAt + durationMs,
       durationMs,
@@ -149,11 +214,15 @@ export const runStructuredChatWithActivity = async <T>(input: {
   } catch (error) {
     const durationMs = Date.now() - startedAt
     const reason = error instanceof Error && error.message.trim() ? error.message.trim() : String(error || 'unknown')
+    const normalizedError = error instanceof Error ? error : new Error(reason)
+    observer.onError?.(normalizedError)
+    const firstTokenLatencyMs = firstTokenAt ? firstTokenAt - startedAt : undefined
+
     emitActivity({
       ctx: input.ctx,
       runId: input.runId,
       taskId: input.taskId,
-      actionType: 'llm_structured_output',
+      actionType: input.telemetry.actionType,
       status: 'failed',
       summary: formatLlmActivitySummary({
         status: 'failed',
@@ -164,6 +233,9 @@ export const runStructuredChatWithActivity = async <T>(input: {
       details: {
         ...details,
         durationMs,
+        streamed: chunkCount > 0,
+        chunkCount,
+        firstTokenLatencyMs,
         reason
       }
     })
@@ -177,7 +249,12 @@ export const runStructuredChatWithActivity = async <T>(input: {
       baseUrlHost,
       system: input.system,
       user: input.user,
+      rawText: latestRawText || undefined,
       fallbackChain: [],
+      streamingMode: input.telemetry.streamingMode,
+      streamed: chunkCount > 0,
+      chunkCount,
+      firstTokenLatencyMs,
       startedAt,
       completedAt: startedAt + durationMs,
       durationMs,
@@ -187,3 +264,22 @@ export const runStructuredChatWithActivity = async <T>(input: {
     throw error
   }
 }
+
+export const runStructuredChatWithActivity = async <T>(input: {
+  ctx: AiEventDispatchContext
+  runId: string
+  taskId?: string
+  system: string
+  user: string
+  telemetry: Omit<LlmCallTelemetry, 'actionType'> & {
+    actionType?: 'llm_structured_output'
+  }
+  execute: (observer: LlmCallStreamObserver, callId: string) => Promise<LlmCallExecutionResult<T>>
+}): Promise<LlmCallExecutionResult<T>> =>
+  await runLlmCallWithActivity({
+    ...input,
+    telemetry: {
+      ...input.telemetry,
+      actionType: 'llm_structured_output'
+    }
+  })

@@ -134,7 +134,7 @@ export const completeHumanTask = (input: {
   state: HumanState
   summary: string
   deliveryMarkdown: string
-  streamAnswer: boolean
+  emitAnswerEvents: boolean
   internalDelivery: boolean
 }): HumanState => {
   const finalResult = buildHumanResult({
@@ -143,7 +143,7 @@ export const completeHumanTask = (input: {
     deliveryMarkdown: input.deliveryMarkdown
   })
 
-  if (input.streamAnswer) {
+  if (input.emitAnswerEvents) {
     input.ctx.sendEvent({
       type: 'answer_completed',
       runId: input.ctx.runId,

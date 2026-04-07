@@ -17,23 +17,77 @@
 interface AiRunContext {
   // 当前 run 的唯一标识。
   runId: string
-  // 当前会话标识，用于关联历史与消息落盘。
-  sessionId: string
+  // 规范化后的工作区与参考资料范围。
+  referenceScope: {
+    workspace?: {
+      workspaceId: string
+      workspaceName: string
+      rootPath: string
+      policyProfile?: string
+    }
+    selectedReferences: SelectedReference[]
+    hasExplicitSelectedReferences: boolean
+    hasDirectDocumentNarrowing: boolean
+    defaultKnowledgeScope: 'current_workspace' | 'unavailable'
+  }
   // 当前绑定的工作区。
-  // 正常 workbench 发送前会先完成工作区选择；这里保留 optional 仅用于内部防御式兜底。
   workspace?: {
-    // 工作区唯一标识。
     workspaceId: string
-    // 工作区名称，用于 AI 可读上下文。
     workspaceName: string
-    // 工作区根路径，后续本地相对路径都以它为基准。
     rootPath: string
-    // 可选的策略配置。
     policyProfile?: string
   }
-  // 唯一的“用户选择的参考资料”文本投影。
-  // 固定包含当前工作区背景、默认 KB 搜索范围说明、参考资料类型说明、当前用户选择列表和对应的 kbDocumentIds。
-  selectedContextText: string
+  // 节点统一通过 runtime 提供的结构化 / 文本 LLM 入口调用模型。
+  chatStructured<T>(input: {
+    caller: string
+    taskId?: string
+    system: string
+    user: string
+    schema: z.ZodType<T>
+    schemaName: string
+    temperature?: number
+  }): Promise<T>
+  chatText(input: {
+    caller: string
+    taskId?: string
+    system: string
+    user: string
+    schemaName: string
+    temperature?: number
+    onTextDelta?: (text: string) => void
+  }): Promise<string>
+  // 统一读取历史摘要与最近对话。
+  loadHistory(limits?: {
+    recentTurns?: number
+    maxRecentTurnsChars?: number
+    maxSummaryChars?: number
+  }): Promise<{
+    recentTurnsText: string
+    sessionSummaryText: string
+  }>
+}
+
+interface AiRuntimeSettings {
+  // 全局 LLM 流式传输策略。
+  llmStreamingMode: 'force_stream' | 'force_non_stream'
+}
+
+interface LLMConfig {
+  id: string
+  name: string
+  base_url: string
+  model_name: string
+  api_key: string
+  is_active: boolean
+  // 结构化输出路径最近一次成功的 profile。
+  preferredStructuredOutputProfile?:
+    | 'completions:jsonSchema'
+    | 'completions:jsonMode'
+    | 'completions:promptJson'
+    | 'responses:jsonSchema'
+    | 'responses:promptJson'
+  // 文本输出路径最近一次成功的 transport。
+  preferredTransport?: 'completions' | 'responses'
 }
 ```
 
@@ -143,6 +197,9 @@ interface HumanTaskInput {
 interface HumanRunDispatchOptions {
   // 当前 human 结果要按哪种交付模式组织。
   deliveryMode?: 'user_answer' | 'task_handoff' | 'context_note'
+  // 是否向外发送最终答案增量事件。
+  // 只影响用户答案事件，不影响底层 LLM transport 是否采用 streaming。
+  emitAnswerEvents?: boolean
 }
 ```
 
@@ -648,6 +705,8 @@ interface AiActivityDetails {
   schemaName?: string
   // 本次调用使用的模型名。
   model?: string
+  // 本次调用使用的 baseUrl host。
+  baseUrlHost?: string
   // 调用耗时。
   durationMs?: number
   // 结构化输出方法。
@@ -671,12 +730,39 @@ interface AiActivityDetails {
     | 'responses:promptJson'
     | 'scripted'
   >
+  // 本次调用的全局流式策略。
+  streamingMode?: 'force_stream' | 'force_non_stream'
+  // 本次调用是否实际走了流式传输。
+  streamed?: boolean
+  // 本次调用收到的文本 chunk 数。
+  chunkCount?: number
+  // 首个 chunk 到达延迟。
+  firstTokenLatencyMs?: number
   // 若出现 fallback 或失败，补充原因。
   reason?: string
 }
 
+interface LlmStreamDeltaEvent {
+  // 事件类型。
+  type: 'llm_stream_delta'
+  // 所属 run。
+  runId: string
+  // 若来自 human 子任务，则带 taskId。
+  taskId?: string
+  // 本次 LLM 调用的唯一标识。
+  callId: string
+  // 调用方；例如 human.brain 或 human.mouth。
+  caller: string
+  // 当前是第几个文本 chunk。
+  chunkIndex: number
+  // 当前文本增量。
+  text: string
+  // 事件创建时间。
+  createdAt: number
+}
+
 interface AiLlmIoRecord {
-  // 本次结构化调用的唯一标识。
+  // 本次 LLM 调用的唯一标识。
   callId: string
   // 所属 run。
   runId: string
@@ -688,12 +774,16 @@ interface AiLlmIoRecord {
   schemaName: string
   // 使用的模型名。
   model: string
+  // 调用目标 host。
+  baseUrlHost: string
   // 最终 system prompt。
   system: string
   // 最终 user prompt。
   user: string
-  // 结构化输出结果。
+  // 结构化输出结果；text 调用通常为空。
   output?: JsonValue
+  // 最终聚合得到的原始文本。
+  rawText?: string
   // 结构化输出方法。
   method?: 'jsonSchema' | 'jsonMode' | 'promptJson' | 'scripted'
   // 使用的底层 transport。
@@ -715,6 +805,14 @@ interface AiLlmIoRecord {
     | 'responses:promptJson'
     | 'scripted'
   >
+  // 本次调用的全局流式策略。
+  streamingMode?: 'force_stream' | 'force_non_stream'
+  // 本次调用是否实际走了流式传输。
+  streamed?: boolean
+  // 本次调用收到的文本 chunk 数。
+  chunkCount?: number
+  // 首个 chunk 到达延迟。
+  firstTokenLatencyMs?: number
   // 开始时间。
   startedAt: number
   // 完成时间。
@@ -887,6 +985,6 @@ flowchart LR
     LBD -->|读取当前最终决策| M
     A -->|读取已收集的结构化 artifacts| M
     WH -->|必要时整理为交付提示| M
-    M -->|输出 summary + deliveryMarkdown；runner 回写 completed result，并透传 artifacts| R
+    M -->|输出 deliveryMarkdown；runner 派生 summary、回写 completed result，并透传 artifacts| R
     M -->|追加 mouth 执行轨迹| TR
 ```

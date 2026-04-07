@@ -52,8 +52,11 @@
 - graph 的状态 schema 必须通过各自目录下的 `state/schema.ts` 定义与约束。
 - graph 路由必须通过 `addConditionalEdges` 或等价 graph 表达，不在 graph 外另写第二套控制循环。
 - 模型结构化输出必须统一通过 `ctx.chatStructured`，不在 node 内自行切换 `completions / responses` transport 或结构化方法。
-- `ctx.chatStructured` 的 transport 探测、profile 选择、fallback 和缓存都属于 runtime 责任，不属于 node 责任。
+- 面向最终交付的自由文本输出必须统一通过 `ctx.chatText`，不在 node 内直接操作底层模型实例。
+- `ctx.chatStructured / ctx.chatText` 的 transport 探测、profile 选择、streaming 策略、fallback 和缓存都属于 runtime 责任，不属于 node 责任。
+- runtime 可以把最近一次成功的 `preferredStructuredOutputProfile / preferredTransport` 回写到 `LLMConfig`，node 不直接操作这些偏好缓存。
 - `ctx.chatStructured` 必须统一产出 `llm_structured_output` activity；详细字段以数据文档为准。
+- `ctx.chatText` 必须统一产出 `llm_text_output` activity；若开启流式传输，增量文本通过 runtime 事件统一分发。
 - 节点内部不要直接调用底层模型实例，也不要散落手写 schema parse 逻辑。
 - prompt 必须通过 `build*Prompt` 或 `build*PromptContext` 组织，不在 node 内联堆大段 prompt 文本。
 - `learning`、`hand`、`director_complete` 这类确定性节点默认不引入额外模型调用。
@@ -96,7 +99,7 @@ stateDiagram-v2
 ### 4.1 `director_intent`
 
 - 职责：run 入口路由，决定 direct、context 或 plan。
-- 主要输入：`input`、`contextRounds`、`contextEvidence`、历史摘要、最近对话、`ctx.selectedContextText`。
+- 主要输入：`input`、`contextRounds`、`contextEvidence`、历史摘要、最近对话、`ctx.referenceScope`。
 - 主要回写：`directorStage`，必要时 `contextObjective`。
 - 下一跳：`director_direct_human_exec`、`director_context_human`、`director_plan`。
 - 特有约束：
@@ -129,14 +132,14 @@ stateDiagram-v2
 - 下一跳：`director_complete`。
 - 特有约束：
   - `deliveryMode = user_answer`。
-  - `streamAnswer = true`。
+  - `emitAnswerEvents = true`。
   - `userInput` 必须通过 `buildDirectHumanObjective` 生成。
   - `director` 只消费 `HumanTaskOutput`，不读取 `human` 内部状态。
 
 ### 4.4 `director_plan`
 
 - 职责：把当前 run 拆成一组可交给单个 `human` 执行的计划任务。
-- 主要输入：`input`、`contextEvidence`、历史摘要、最近对话、`ctx.selectedContextText`。
+- 主要输入：`input`、`contextEvidence`、历史摘要、最近对话、`ctx.referenceScope`。
 - 主要回写：`plan`、`dispatchCursor`、`directorStage`；失败时回写 `status`、`error`。
 - 下一跳：`director_plan_exec` 或 `director_complete`。
 - 特有约束：
@@ -150,7 +153,7 @@ stateDiagram-v2
 ### 4.5 `director_plan_exec`
 
 - 职责：按当前游标串行执行计划任务，并把 `human` 子任务结果稳定回写到计划状态中。
-- 主要输入：`plan`、`dispatchCursor`、`input`、`contextEvidence`、之前任务结果、`ctx.selectedContextText`。
+- 主要输入：`plan`、`dispatchCursor`、`input`、`contextEvidence`、之前任务结果、`ctx.referenceScope`。
 - 主要回写：当前任务的 `status`、`deliveryMarkdown`、`artifacts`，以及 `dispatchCursor`、`directorStage`。
 - 下一跳：`director_plan_exec` 或 `director_synthesis_human`。
 - 特有约束：
@@ -162,12 +165,12 @@ stateDiagram-v2
 ### 4.6 `director_synthesis_human`
 
 - 职责：把 context 与 plan 阶段沉淀下来的结果重新交给一个 `human`，产出最终用户交付。
-- 主要输入：`input`、`contextEvidence`、`plan`、`ctx.selectedContextText`。
+- 主要输入：`input`、`contextEvidence`、`plan`、`ctx.referenceScope`。
 - 主要回写：`finalDeliveryMarkdown`、`finalArtifacts`、`directorStage`。
 - 下一跳：`director_complete`。
 - 特有约束：
   - `deliveryMode = user_answer`。
-  - `streamAnswer = true`。
+  - `emitAnswerEvents = true`。
   - synthesis 只面向最终用户交付，不再生成新的计划任务。
   - `userInput` 必须通过 `buildSynthesisHumanObjective` 组织。
   - `finalArtifacts` 需要合并计划阶段已有 artifacts 与 synthesis 输出 artifacts。
@@ -211,7 +214,7 @@ stateDiagram-v2
 ### 6.1 `brain`
 
 - 职责：`human` 内唯一推理节点，负责基于当前任务、稳定记忆、过程历史与收敛提示，产出新的 `LastBrainDecision`。
-- 主要读取：`task`、`brainMemory.inside`、`brainMemory.outside`、`processMemory.roundHistory`、`processMemory.loadedHistoryContext`、`watchHint`、`ctx.selectedContextText`、`ctx.workspace`。
+- 主要读取：`task`、`brainMemory.inside`、`brainMemory.outside`、`processMemory.roundHistory`、`processMemory.loadedHistoryContext`、`watchHint`、`ctx.referenceScope`、`ctx.workspace`。
 - 主要回写：`brainMemory.inside`、`brainDecisions`、`lastBrainDecision`、`processMemory.loadedHistoryContext`、`runtime.stage`、`watchHint`、`trace.steps`。
 - 特有约束：
   - 模型输出必须通过 `ctx.chatStructured`。
@@ -253,9 +256,11 @@ stateDiagram-v2
 - 主要读取：`task`、`brainMemory.inside`、`lastBrainDecision`、`runtimeArtifacts`、`deliveryMode`。
 - 主要回写：`result`、`runtime.status`、`runtime.stage`、`trace.steps`。
 - 特有约束：
-  - 模型输出必须通过 `ctx.chatStructured`。
+  - 模型输出必须通过 `ctx.chatText`。
   - prompt 必须通过 `buildMouthPromptContext`。
   - `deliveryMarkdown` 为空时，必须使用 fallback builder 补足。
+  - `summary` 由 runtime 基于最终 markdown 与 `lastBrainDecision` 本地派生，不再额外调用结构化 LLM 输出。
+  - 只有在 `emitAnswerEvents = true` 时，`mouth` 才向外发 `answer_token / answer_completed`。
   - artifacts 由 runtime 透传到 `result`，不是由 `mouth` 生成。
   - `mouth` 当前实现通常收敛为 `completed`；只有极少数需要继续运行时才会回到 `brain`。
 
@@ -284,7 +289,7 @@ stateDiagram-v2
   - 由各节点持续追加，供事件、审计与回放使用。
 - 其他补充规则
   - `brain` 是唯一推理节点；`learning`、`hand`、`mouth` 不扩张为新的决策中心。
-  - `ctx.selectedContextText` 与 `ctx.workspace` 是 runtime 投影，不持久化进 `HumanState`。
+  - `ctx.referenceScope` 与 `ctx.workspace` 是 runtime 投影，不持久化进 `HumanState`。
 
 ## 7. 共享契约
 

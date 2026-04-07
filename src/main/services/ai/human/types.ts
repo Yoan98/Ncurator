@@ -34,7 +34,6 @@ import {
   humanTraceStepSchema,
   humanWatchHintSchema,
   lastBrainDecisionSchema,
-  mouthOutputSchema,
   skillCatalogItemSchema,
   toolCallParamSchema,
   toolCallDiagnosticSchema,
@@ -115,8 +114,6 @@ export type LastBrainDecision = z.infer<typeof lastBrainDecisionSchema>
 export type BrainDecisionRecord = z.infer<typeof brainDecisionRecordSchema>
 
 export type HumanResult = z.infer<typeof humanResultSchema>
-
-export type MouthOutput = z.infer<typeof mouthOutputSchema>
 
 export type HumanTraceStep = z.infer<typeof humanTraceStepSchema>
 

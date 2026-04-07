@@ -17,6 +17,7 @@ import {
   getDocxWorkerClient,
   releaseDocxRunSession
 } from '../services/ai/human/tools/docx/worker/docxWorkerClient'
+import type { AiLlmIoRecord } from '../../shared/types'
 import {
   buildWebReferenceItem,
   buildWorkspaceReferenceItems,
@@ -243,6 +244,7 @@ export function registerHandlers(services: {
   embeddingService: EmbeddingService
   storageService: StorageService
   modelService: ModelService
+  recordLlmIo?: (record: AiLlmIoRecord) => void
 }) {
   const { ingestionService, embeddingService, storageService, modelService } = services
   const activeAiRuns = new Map<string, { cancelled: boolean; senderId: number }>()
@@ -2159,6 +2161,7 @@ export function registerHandlers(services: {
               draftReviewService,
               isCancelled: () => Boolean(activeAiRuns.get(runId)?.cancelled),
               sendEvent,
+              recordLlmIo: services.recordLlmIo,
               requestApproval: async (request) => {
                 const approvals = activeAiApprovals.get(runId)
                 if (!approvals) return { approved: false, reason: 'run not active' }
@@ -2302,11 +2305,15 @@ export function registerHandlers(services: {
 
           try {
             await updateSessionMemoryAfterRun({
+              runId,
               sessionId,
               userInput: input,
               assistantOutput: result.finalDeliveryMarkdown || '',
+              runtimeSettings,
               chatStore,
-              llmStore
+              llmStore,
+              sendEvent,
+              recordLlmIo: services.recordLlmIo
             })
           } catch (e) {
             void e
@@ -2535,7 +2542,9 @@ export function registerHandlers(services: {
       return await aiRuntimeSettingsStore.get()
     } catch (e: unknown) {
       console.error('[AI-RUNTIME-SETTINGS-GET] Error:', e)
-      return {}
+      return {
+        llmStreamingMode: 'force_stream'
+      }
     }
   })
 

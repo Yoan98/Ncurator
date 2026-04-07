@@ -9,6 +9,7 @@ import { ModelService } from '../../../src/main/services/model/ModelService'
 import { StorageService } from '../../../src/main/services/storage/StorageService'
 import { EmbeddingService } from '../../../src/main/services/vector/EmbeddingService'
 import { ensureEmbeddingReady } from '../../../src/main/services/vector/ensureEmbeddingReady'
+import type { AiRuntimeSettings } from '../../../src/shared/types'
 import type { BackendHarnessMode, CreateAiRunContextInput, LiveLlmConfig } from './test-types'
 import type { EventCollector } from '../core/eventCollector'
 import { createScriptedStructuredOutputDriver } from './scriptedStructuredOutputDriver'
@@ -20,6 +21,10 @@ const SCRIPTED_LLM_CONFIG: LiveLlmConfig = {
   model_name: 'scripted-llm',
   api_key: 'scripted',
   is_active: true
+}
+
+const DEFAULT_RUNTIME_SETTINGS: AiRuntimeSettings = {
+  llmStreamingMode: 'force_stream'
 }
 
 const buildApprovalResolver = (
@@ -75,9 +80,10 @@ export const createRealAiDepsFactory = async (input: {
   }
 
   const createContext = (contextInput: CreateAiRunContextInput = {}): AiRunContext => {
-    if (input.mode !== 'mock-llm' && contextInput.structuredOutputScript) {
+    const llmScript = contextInput.llmScript || contextInput.structuredOutputScript
+    if (input.mode !== 'mock-llm' && llmScript) {
       throw new Error(
-        `structuredOutputScript is only allowed in mock-llm mode; mode=${input.mode}`
+        `llmScript is only allowed in mock-llm mode; mode=${input.mode}`
       )
     }
 
@@ -100,7 +106,7 @@ export const createRealAiDepsFactory = async (input: {
           : undefined
       },
       {
-        runtimeSettings: {},
+        runtimeSettings: DEFAULT_RUNTIME_SETTINGS,
         llmStore: storageService.llm,
         chatStore: storageService.chat,
         documentsStore: storageService.documents,
@@ -137,8 +143,8 @@ export const createRealAiDepsFactory = async (input: {
           })
           return decision
         },
-        structuredOutputDriver: contextInput.structuredOutputScript
-          ? createScriptedStructuredOutputDriver(contextInput.structuredOutputScript)
+        llmDriver: llmScript
+          ? createScriptedStructuredOutputDriver(llmScript)
           : undefined
       }
     )

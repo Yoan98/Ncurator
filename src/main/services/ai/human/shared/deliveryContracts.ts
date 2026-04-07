@@ -87,7 +87,7 @@ const buildStructuredDeliveryPromptRulesInternal = (
 ): string => {
   return [
     `当前 deliveryMode=${contract.mode}。`,
-    'deliveryMarkdown 必须使用以下固定 markdown 章节，且章节名必须完全一致：',
+    '最终输出必须使用以下固定 markdown 章节，且章节名必须完全一致：',
     contract.title,
     ...contract.headings,
     '空章节写“无”。'
@@ -96,12 +96,7 @@ const buildStructuredDeliveryPromptRulesInternal = (
 
 const buildStructuredDeliveryPromptExampleInternal = (
   contract: StructuredDeliveryContract
-): string => {
-  return `{
-  "summary": "${contract.exampleSummary}",
-  "deliveryMarkdown": "${contract.exampleDeliveryMarkdown.replace(/\n/g, '\\n')}"
-}`
-}
+): string => contract.exampleDeliveryMarkdown
 
 const buildStructuredDeliveryFallbackMarkdownInternal = (input: {
   contract: StructuredDeliveryContract
@@ -223,12 +218,10 @@ const USER_ANSWER_CONTRACT: DeliveryModeContract = {
   buildPromptRules: () =>
     [
       '当前 deliveryMode=user_answer。',
-      'deliveryMarkdown 面向最终用户，可自然组织为完整 markdown 结果，不要求固定章节。'
+      '最终输出面向最终用户，可自然组织为完整 markdown 结果，不要求固定章节。'
     ].join('\n'),
-  buildPromptExample: () => `{
-  "summary": "已整理出当前任务的最终答复。",
-  "deliveryMarkdown": "# 处理结果\\n\\n已完成本次任务。\\n\\n## 关键依据\\n- 依据一\\n- 依据二"
-}`,
+  buildPromptExample: () =>
+    '# 处理结果\n\n已完成本次任务。\n\n## 关键依据\n- 依据一\n- 依据二',
   buildFallbackMarkdown: ({ state, summary }) =>
     [
       '# 处理结果',

@@ -12,8 +12,8 @@ vi.mock('../../../src/main/services/llm/chatModel', () => ({
 import {
   STRUCTURED_OUTPUT_METHODS,
   STRUCTURED_OUTPUT_PROFILES,
-  invokeStructuredChat
 } from '../../../src/main/services/ai/structuredOutput'
+import { invokeStructuredChat } from '../../../src/main/services/ai/llmExecutor'
 
 type StructuredOutputProfile =
   | 'completions:jsonSchema'
@@ -63,14 +63,22 @@ const configureCreateChatModel = (behaviors: MethodBehaviorMap, callOrder: strin
       const transport = options?.transport ?? 'completions'
 
       return {
-        withStructuredOutput: (_schema: typeof schema, config: { method: 'jsonSchema' | 'jsonMode' }) => ({
+        withConfig: (config: {
+          response_format?: {
+            type?: 'json_object' | 'json_schema'
+          }
+        }) => ({
           invoke: async () => {
-            const profile = `${transport}:${config.method}` as StructuredOutputProfile
+            const method =
+              config.response_format?.type === 'json_object' ? 'jsonMode' : 'jsonSchema'
+            const profile = `${transport}:${method}` as StructuredOutputProfile
             callOrder.push(profile)
             const behavior = behaviors[profile]
             if (!behavior) throw new Error(`missing_behavior:${profile}`)
             if (behavior.type === 'error') throw behavior.error
-            return behavior.output
+            return {
+              content: JSON.stringify(behavior.output)
+            }
           }
         }),
         invoke: async () => {

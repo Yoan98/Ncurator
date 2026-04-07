@@ -1,7 +1,6 @@
 import type { AiRunContext, AiRunDeps, AiRunStartPayload, CancelledError } from './types'
+import { createAiLlmExecutor } from './llmExecutor'
 import { buildReferenceScope } from './prompts/referenceScope'
-import { invokeStructuredChat } from './structuredOutput'
-import { runStructuredChatWithActivity } from './utils/structuredChatActivity'
 import { clipText } from './utils/text'
 import {
   formatTurns,
@@ -34,57 +33,23 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     return await requestedConfigPromise
   }
 
-  const chatStructured: AiRunContext['chatStructured'] = async <T extends Record<string, unknown>>(
-    input
-  ): Promise<T> => {
-    checkCancelled()
-    const cfg = await loadRequestedConfig()
-    const result = await runStructuredChatWithActivity<T>({
-      ctx: {
-        runId: payload.runId,
-        sendEvent: deps.sendEvent,
-        recordLlmIo: deps.recordLlmIo
-      },
-      runId: payload.runId,
-      system: input.system,
-      user: input.user,
-      telemetry: {
-        caller: input.caller,
-        schemaName: input.schemaName,
-        modelName: cfg.model_name,
-        baseUrl: cfg.base_url,
-        attempt: 1
-      },
-      execute: async () =>
-        await invokeStructuredChat({
-          caller: input.caller,
-          cfg,
-          preferredProfile: cfg.preferredStructuredOutputProfile,
-          schema: input.schema,
-          schemaName: input.schemaName,
-          system: input.system,
-          user: input.user,
-          temperature: input.temperature,
-          driver: deps.structuredOutputDriver
-        })
-    })
-    if (
-      result.profile !== 'scripted' &&
-      cfg.preferredStructuredOutputProfile !== result.profile
-    ) {
-      const nextConfig = {
-        ...cfg,
-        preferredStructuredOutputProfile: result.profile
-      }
-      try {
-        await deps.llmStore.save(nextConfig)
-        requestedConfigPromise = Promise.resolve(nextConfig)
-      } catch (error) {
-        console.warn('[AI-RUNTIME] Failed to persist preferred structured output profile', error)
-      }
-    }
-    return result.output
+  const saveRequestedConfig = async (nextConfig: Awaited<ReturnType<typeof getRequestedConfig>>) => {
+    await deps.llmStore.save(nextConfig)
+    requestedConfigPromise = Promise.resolve(nextConfig)
   }
+
+  const llmExecutor = createAiLlmExecutor({
+    eventCtx: {
+      runId: payload.runId,
+      sendEvent: deps.sendEvent,
+      recordLlmIo: deps.recordLlmIo
+    },
+    runtimeSettings: deps.runtimeSettings,
+    getConfig: loadRequestedConfig,
+    saveConfig: saveRequestedConfig,
+    checkCancelled,
+    driver: deps.llmDriver
+  })
 
   const loadHistory: AiRunContext['loadHistory'] = async (limits) => {
     checkCancelled()
@@ -112,7 +77,8 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     }),
     workspace: normalizedWorkspace,
     checkCancelled,
-    chatStructured,
+    chatStructured: llmExecutor.chatStructured,
+    chatText: llmExecutor.chatText,
     sendEvent: deps.sendEvent,
     recordLlmIo: deps.recordLlmIo,
     requestApproval: deps.requestApproval,

@@ -2,7 +2,7 @@ import type { ChatStore } from '../storage/domains/ChatStore'
 import type { DocumentsStore } from '../storage/domains/DocumentsStore'
 import type { LlmConfigStore } from '../storage/domains/LlmConfigStore'
 import type { EmbeddingService } from '../vector/EmbeddingService'
-import type { StructuredOutputDriver } from './structuredOutput'
+import type { AiLlmDriver } from './llmExecutor'
 import type { DocxChangedBlock, DocxOp } from './human/tools/docx/types'
 import type { DraftReviewService } from './human/tools/docx/review/DraftReviewService'
 import type { ResolvedDocxOpenTarget } from './human/tools/docx/review/types'
@@ -34,7 +34,7 @@ export type PlanTaskStatus = z.infer<typeof planTaskStatusSchema>
 
 export type HumanRunDispatchOptions = {
   deliveryMode?: HumanDeliveryMode
-  streamAnswer?: boolean
+  emitAnswerEvents?: boolean
   internalDelivery?: boolean
 }
 
@@ -97,7 +97,7 @@ export type AiRunDeps = {
   sendEvent: (event: AiRunEvent) => void
   recordLlmIo?: (record: AiLlmIoRecord) => void
   requestApproval: (request: AiApprovalRequest) => Promise<AiApprovalDecision>
-  structuredOutputDriver?: StructuredOutputDriver
+  llmDriver?: AiLlmDriver
 }
 
 export type AiRunContext = {
@@ -115,12 +115,22 @@ export type AiRunContext = {
   checkCancelled: () => void
   chatStructured: <T extends Record<string, unknown>>(input: {
     caller: string
+    taskId?: string
     system: string
     user: string
     schema: z.ZodType<T>
     schemaName: string
     temperature?: number
   }) => Promise<T>
+  chatText: (input: {
+    caller: string
+    taskId?: string
+    system: string
+    user: string
+    schemaName: string
+    temperature?: number
+    onTextDelta?: (text: string) => void
+  }) => Promise<string>
   sendEvent: (event: AiRunEvent) => void
   recordLlmIo?: (record: AiLlmIoRecord) => void
   requestApproval: (request: AiApprovalRequest) => Promise<AiApprovalDecision>

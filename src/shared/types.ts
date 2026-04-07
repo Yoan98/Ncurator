@@ -330,6 +330,7 @@ export interface DocumentListResponse {
 
 export type AiStructuredOutputTransport = 'completions' | 'responses'
 export type AiStructuredOutputMethod = 'jsonSchema' | 'jsonMode' | 'promptJson' | 'scripted'
+export type AiLlmStreamingMode = 'force_stream' | 'force_non_stream'
 export type PreferredStructuredOutputProfile =
   | 'completions:jsonSchema'
   | 'completions:jsonMode'
@@ -346,6 +347,7 @@ export interface LLMConfig {
   api_key: string
   is_active: boolean
   preferredStructuredOutputProfile?: PreferredStructuredOutputProfile
+  preferredTransport?: AiStructuredOutputTransport
 }
 
 export interface ChatMessage {
@@ -636,10 +638,15 @@ export type AiLlmIoRecord = {
   system: string
   user: string
   output?: JsonValue
+  rawText?: string
   method?: AiStructuredOutputMethod
   transport?: AiStructuredOutputTransport
   profile?: AiStructuredOutputProfile
   fallbackChain: AiStructuredOutputProfile[]
+  streamingMode?: AiLlmStreamingMode
+  streamed?: boolean
+  chunkCount?: number
+  firstTokenLatencyMs?: number
   startedAt: number
   completedAt: number
   durationMs: number
@@ -650,7 +657,9 @@ export type HumanStepAction = 'brain_decision' | 'learn_skill' | 'call_tool' | '
 export type HumanStepResultStatus = 'ok' | 'error'
 export type WatchHintSource = 'brain' | 'learning' | 'hand' | 'memory_reducer'
 
-export type AiRuntimeSettings = Record<string, never>
+export type AiRuntimeSettings = {
+  llmStreamingMode: AiLlmStreamingMode
+}
 
 export type AiFileArtifactCapability = 'terminal_exec' | 'docx'
 export type AiFileArtifactOperation = 'created' | 'updated'
@@ -738,6 +747,10 @@ export interface AiActivityDetails {
   transport?: AiStructuredOutputTransport
   profile?: AiStructuredOutputProfile
   fallbackChain?: AiStructuredOutputProfile[]
+  streamingMode?: AiLlmStreamingMode
+  streamed?: boolean
+  chunkCount?: number
+  firstTokenLatencyMs?: number
   reason?: string
 }
 
@@ -914,6 +927,16 @@ type AiRunEventPayload =
       approved: boolean
       reason?: string
       decidedAt: number
+    }
+  | {
+      type: 'llm_stream_delta'
+      runId: string
+      taskId?: string
+      callId: string
+      caller: string
+      chunkIndex: number
+      text: string
+      createdAt: number
     }
   | {
       type: 'answer_token'

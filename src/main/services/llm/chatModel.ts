@@ -8,6 +8,7 @@ export type ChatModelFactoryOptions = {
   maxRetries?: number
   timeout?: number
   transport?: AiStructuredOutputTransport
+  streaming?: boolean
 }
 
 export const createChatModel = (cfg: LLMConfig, opts?: ChatModelFactoryOptions) => {
@@ -18,6 +19,7 @@ export const createChatModel = (cfg: LLMConfig, opts?: ChatModelFactoryOptions) 
     temperature: opts?.temperature ?? 0.2,
     maxRetries: opts?.maxRetries ?? 2,
     timeout: opts?.timeout,
+    streaming: opts?.streaming === true,
     configuration: {
       baseURL: normalizeOpenAIBaseUrl(cfg.base_url)
     }

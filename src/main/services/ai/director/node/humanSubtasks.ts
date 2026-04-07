@@ -129,7 +129,7 @@ export const createDirectHumanExecNode = (input: {
       runHumanTask,
       options: {
         deliveryMode: 'user_answer',
-        streamAnswer: true
+        emitAnswerEvents: true
       }
     })
 
@@ -164,7 +164,7 @@ export const createSynthesisHumanNode = (input: {
       runHumanTask,
       options: {
         deliveryMode: 'user_answer',
-        streamAnswer: true
+        emitAnswerEvents: true
       }
     })
 

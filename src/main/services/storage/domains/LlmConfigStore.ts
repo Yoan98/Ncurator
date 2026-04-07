@@ -2,13 +2,14 @@ import type { LLMConfig } from '../../../types/store'
 import { LanceDbCore, LANCE_TABLES } from '../core/LanceDbCore'
 
 type LlmConfigRow = {
-  id?: unknown
-  name?: unknown
-  base_url?: unknown
-  model_name?: unknown
-  api_key?: unknown
-  is_active?: unknown
-  preferredStructuredOutputProfile?: unknown
+  id?: string | null
+  name?: string | null
+  base_url?: string | null
+  model_name?: string | null
+  api_key?: string | null
+  is_active?: boolean | null
+  preferredStructuredOutputProfile?: string | null
+  preferredTransport?: string | null
 }
 
 const isPreferredStructuredOutputProfile = (
@@ -19,6 +20,11 @@ const isPreferredStructuredOutputProfile = (
   value === 'completions:promptJson' ||
   value === 'responses:jsonSchema' ||
   value === 'responses:promptJson'
+
+const isPreferredTransport = (
+  value: unknown
+): value is NonNullable<LLMConfig['preferredTransport']> =>
+  value === 'completions' || value === 'responses'
 
 export class LlmConfigStore {
   public constructor(private readonly core: LanceDbCore) {}
@@ -45,6 +51,9 @@ export class LlmConfigStore {
           row.preferredStructuredOutputProfile
         )
           ? row.preferredStructuredOutputProfile
+          : undefined,
+        preferredTransport: isPreferredTransport(row.preferredTransport)
+          ? row.preferredTransport
           : undefined
       }
     })

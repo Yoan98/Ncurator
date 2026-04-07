@@ -69,5 +69,8 @@ describe('ai unit mouth readyToDeliver guard', () => {
 
     expect(prompt).toContain('你不会调用工具，也不会继续推进未完成步骤')
     expect(prompt).toContain('不要把未来可能执行的工具动作写成“后续会自动完成”')
+    expect(prompt).toContain('你必须只输出最终 markdown 正文')
+    expect(prompt).not.toContain('"deliveryMarkdown"')
+    expect(prompt).not.toContain('"summary"')
   })
 })

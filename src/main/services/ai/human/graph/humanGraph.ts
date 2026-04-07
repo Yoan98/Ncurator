@@ -26,7 +26,7 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
       ctx,
       cache,
       deliveryMode: options.deliveryMode || 'user_answer',
-      streamAnswer: Boolean(options.streamAnswer),
+      emitAnswerEvents: Boolean(options.emitAnswerEvents),
       internalDelivery: Boolean(options.internalDelivery)
     })
 

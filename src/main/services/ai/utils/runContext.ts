@@ -1,4 +1,4 @@
-import type { SelectedReference } from '../../../../shared/types'
+import type { KbAvailability, SelectedReference } from '../../../../shared/types'
 import type { ChatMessage } from '../../../types/store'
 import type { AiRunStartPayload } from '../types'
 

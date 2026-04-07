@@ -1,9 +1,11 @@
 import { z } from 'zod/v4'
 import type { ChatSessionMemory, JsonValue } from '../../../types/store'
+import { createAiLlmExecutor } from '../llmExecutor'
 import type { ChatStore } from '../../storage/domains/ChatStore'
 import type { LlmConfigStore } from '../../storage/domains/LlmConfigStore'
-import { invokeStructuredChat } from '../structuredOutput'
 import { buildSessionMemoryPrompt } from './prompts/session'
+import type { AiLlmIoRecord, AiRunEvent, AiRuntimeSettings, LLMConfig } from '../../../../shared/types'
+import type { AiLlmDriver } from '../llmExecutor'
 
 const sessionMemorySchema: z.ZodType<ChatSessionMemory> = z.object({
   summary: z.string(),
@@ -36,24 +38,43 @@ const normalizeMemory = (input: JsonValue | undefined): ChatSessionMemory => {
 }
 
 export const updateSessionMemoryAfterRun = async (input: {
+  runId: string
   sessionId: string
   userInput: string
   assistantOutput: string
+  runtimeSettings: AiRuntimeSettings
   chatStore: ChatStore
   llmStore: LlmConfigStore
+  sendEvent: (event: AiRunEvent) => void
+  recordLlmIo?: (record: AiLlmIoRecord) => void
+  llmDriver?: AiLlmDriver
 }): Promise<void> => {
   const sessionId = String(input.sessionId || '').trim()
   if (!sessionId) return
 
   const prev = (await input.chatStore.getSessionMemory(sessionId)) || EMPTY_SESSION_MEMORY
 
-  const cfg = await input.llmStore.getActive()
+  let cfg = await input.llmStore.getActive()
   if (!cfg) return
 
-  const result = await invokeStructuredChat({
+  const llmExecutor = createAiLlmExecutor({
+    eventCtx: {
+      runId: input.runId,
+      sendEvent: input.sendEvent,
+      recordLlmIo: input.recordLlmIo
+    },
+    runtimeSettings: input.runtimeSettings,
+    getConfig: async (): Promise<LLMConfig> => cfg!,
+    saveConfig: async (nextConfig) => {
+      await input.llmStore.save(nextConfig)
+      cfg = nextConfig
+    },
+    checkCancelled: () => undefined,
+    driver: input.llmDriver
+  })
+
+  const result = await llmExecutor.chatStructured({
     caller: 'session.memory',
-    cfg,
-    preferredProfile: cfg.preferredStructuredOutputProfile,
     schema: sessionMemorySchema,
     schemaName: 'session_memory',
     system: buildSessionMemoryPrompt(),
@@ -67,20 +88,6 @@ export const updateSessionMemoryAfterRun = async (input: {
     temperature: 0.2
   })
 
-  if (
-    result.profile !== 'scripted' &&
-    cfg.preferredStructuredOutputProfile !== result.profile
-  ) {
-    try {
-      await input.llmStore.save({
-        ...cfg,
-        preferredStructuredOutputProfile: result.profile
-      })
-    } catch (error) {
-      console.warn('[AI-MEMORY] Failed to persist preferred structured output profile', error)
-    }
-  }
-
-  const memory = normalizeMemory(result.output)
+  const memory = normalizeMemory(result)
   await input.chatStore.saveSessionMemory(sessionId, memory)
 }

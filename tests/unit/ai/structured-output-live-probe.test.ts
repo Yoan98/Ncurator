@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod/v4'
-import { invokeStructuredChat } from '../../../src/main/services/ai/structuredOutput'
+import { invokeStructuredChat } from '../../../src/main/services/ai/llmExecutor'
+import type { AiLlmStreamingMode, PreferredStructuredOutputProfile } from '../../../src/shared/types'
 import {
   hasLiveLlmConfigInEnv,
   loadLiveLlmConfigFromEnv
@@ -21,21 +22,12 @@ describe('ai unit structured output live probe', () => {
 
       const cfg = loadLiveLlmConfigFromEnv('primary')
       const probeCases: Array<{
-        label:
-          | 'auto'
-          | 'completions:jsonSchema'
-          | 'completions:jsonMode'
-          | 'completions:promptJson'
-          | 'responses:jsonSchema'
-          | 'responses:promptJson'
-        preferredProfile?:
-          | 'completions:jsonSchema'
-          | 'completions:jsonMode'
-          | 'completions:promptJson'
-          | 'responses:jsonSchema'
-          | 'responses:promptJson'
+        label: string
+        preferredProfile?: PreferredStructuredOutputProfile
+        streamingMode?: AiLlmStreamingMode
       }> = [
         { label: 'auto' },
+        { label: 'auto-stream', streamingMode: 'force_stream' },
         {
           label: 'completions:jsonSchema',
           preferredProfile: 'completions:jsonSchema'
@@ -66,6 +58,7 @@ describe('ai unit structured output live probe', () => {
             caller: `live.probe.${probeCase.label}`,
             cfg,
             preferredProfile: probeCase.preferredProfile,
+            streamingMode: probeCase.streamingMode,
             schema,
             schemaName: 'live_probe_answer',
             system:
@@ -81,12 +74,14 @@ describe('ai unit structured output live probe', () => {
             method: result.method,
             profile: result.profile,
             fallbackChain: result.fallbackChain,
+            streamed: result.streamed,
             output: result.output
           })
         } catch (error) {
           results.push({
             case: probeCase.label,
             ok: false,
+            streamingMode: probeCase.streamingMode || 'force_non_stream',
             error: error instanceof Error ? error.message : String(error)
           })
         }
@@ -96,7 +91,7 @@ describe('ai unit structured output live probe', () => {
         `${JSON.stringify({ baseUrl: cfg.base_url, model: cfg.model_name, results }, null, 2)}\n`
       )
 
-      expect(results).toHaveLength(6)
+      expect(results).toHaveLength(7)
     },
     180_000
   )

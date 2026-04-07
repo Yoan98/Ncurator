@@ -57,17 +57,7 @@ ${buildDeliveryModePromptRules(deliveryMode)}
   </delivery_mode_rules>
 
   <output_rules>
-    你必须只输出 JSON，不要输出任何额外说明。
-
-    输出结构固定为：
-    {
-      "summary": "string",
-      "deliveryMarkdown": "string (optional)"
-    }
-
-    字段解释：
-    - summary：字符串。面向用户的一句简洁结果摘要。
-    - deliveryMarkdown：字符串，可选。最终正式交付内容；如果给出，必须是完整 markdown 正文。
+    你必须只输出最终 markdown 正文，不要输出任何额外说明，不要包 JSON，不要包代码块。
   </output_rules>
 
   <output_principles>
@@ -75,8 +65,7 @@ ${buildDeliveryModePromptRules(deliveryMode)}
     - 不要暴露内部字段名、节点名或系统术语。
     - 如果依据不足，就保持保守表达，不要写成确定结论。
     - 不要把未来可能执行的工具动作写成“后续会自动完成”或“已经在进行中”。
-    - 不要输出 status 字段，最终状态由外部上下文决定。
-    - 如果提供 deliveryMarkdown，它必须是完整结果，而不是零散句子。
+    - 输出必须是完整结果，而不是零散句子或局部片段。
   </output_principles>
 
   <output_example>

@@ -1,11 +1,7 @@
-import { HumanMessage, SystemMessage } from '@langchain/core/messages'
-import { z } from 'zod/v4'
-import { createChatModel } from '../llm/chatModel'
 import type {
   AiStructuredOutputMethod,
   AiStructuredOutputProfile,
   AiStructuredOutputTransport,
-  LLMConfig,
   PreferredStructuredOutputProfile
 } from '../../../shared/types'
 
@@ -25,39 +21,8 @@ export const STRUCTURED_OUTPUT_PROFILES = [
   ...RESPONSES_STRUCTURED_OUTPUT_PROFILES
 ] as const
 
-type NativeStructuredOutputMethod = (typeof NATIVE_STRUCTURED_OUTPUT_METHODS)[number]
-type NonScriptedStructuredOutputMethod = Exclude<AiStructuredOutputMethod, 'scripted'>
-
-type StructuredOutputInvocationInput<T extends Record<string, unknown>> = {
-  caller: string
-  cfg: LLMConfig
-  preferredProfile?: PreferredStructuredOutputProfile
-  schema: z.ZodType<T>
-  schemaName: string
-  system: string
-  user: string
-  temperature?: number
-}
-
-export type StructuredOutputInvocationResult<T extends Record<string, unknown>> = {
-  output: T
-  method: AiStructuredOutputMethod
-  transport?: AiStructuredOutputTransport
-  profile: AiStructuredOutputProfile
-  fallbackChain: AiStructuredOutputProfile[]
-}
-
-export type StructuredOutputDriverResult = {
-  output: unknown
-  method: AiStructuredOutputMethod
-  transport?: AiStructuredOutputTransport
-  profile?: AiStructuredOutputProfile
-  fallbackChain?: AiStructuredOutputProfile[]
-}
-
-export type StructuredOutputDriver = (
-  input: StructuredOutputInvocationInput<Record<string, unknown>>
-) => Promise<StructuredOutputDriverResult>
+export type NativeStructuredOutputMethod = (typeof NATIVE_STRUCTURED_OUTPUT_METHODS)[number]
+export type NonScriptedStructuredOutputMethod = Exclude<AiStructuredOutputMethod, 'scripted'>
 
 type ErrorResponseData = string | number | boolean | null | object
 
@@ -70,7 +35,7 @@ type ErrorLike =
       }
     }
 
-type StructuredOutputProfileMetadata = {
+export type StructuredOutputProfileMetadata = {
   transport: AiStructuredOutputTransport
   method: NonScriptedStructuredOutputMethod
 }
@@ -101,9 +66,7 @@ const STRUCTURED_OUTPUT_PROFILE_METADATA: Record<
   }
 }
 
-const toErrorLike = (
-  value: object | string | number | boolean | null | undefined
-): ErrorLike => {
+const toErrorLike = (value: unknown): ErrorLike => {
   if (value instanceof Error) return value
   if (value && typeof value === 'object') {
     return value as Extract<ErrorLike, object>
@@ -113,20 +76,28 @@ const toErrorLike = (
   }
 }
 
-const getErrorText = (error: ErrorLike): string => {
-  if (error instanceof Error && error.message.trim()) return error.message.trim()
-  if (typeof error.message === 'string' && error.message.trim()) return error.message.trim()
+export const getErrorText = (error: unknown): string => {
+  const normalized = toErrorLike(error)
+  if (normalized instanceof Error && normalized.message.trim()) {
+    return normalized.message.trim()
+  }
+  if (typeof normalized.message === 'string' && normalized.message.trim()) {
+    return normalized.message.trim()
+  }
   return 'unknown structured output error'
 }
 
-const getStructuredOutputErrorBody = (error: ErrorLike): string => {
-  const parts = [getErrorText(error)]
+const getStructuredOutputErrorBody = (
+  error: unknown
+): string => {
+  const normalized = toErrorLike(error)
+  const parts = [getErrorText(normalized)]
   const responseData =
-    'response' in error &&
-    error.response &&
-    typeof error.response === 'object' &&
-    'data' in error.response
-      ? error.response.data
+    'response' in normalized &&
+    normalized.response &&
+    typeof normalized.response === 'object' &&
+    'data' in normalized.response
+      ? normalized.response.data
       : undefined
   if (responseData !== undefined) {
     try {
@@ -156,9 +127,9 @@ const matchesUnsupportedSignal = (body: string, markers: string[]): boolean => {
     markers.some((marker) => body.includes(marker))
 }
 
-export const isStructuredOutputTransportCompatibilityError = (
+export const isTransportCompatibilityError = (
   transport: AiStructuredOutputTransport,
-  error: ErrorLike
+  error: unknown
 ): boolean => {
   const body = getStructuredOutputErrorBody(error).toLowerCase()
   if (!body) return false
@@ -187,9 +158,11 @@ export const isStructuredOutputTransportCompatibilityError = (
   return matchesUnsupportedSignal(body, ['/v1/responses', 'responses api', 'responses endpoint'])
 }
 
+export const isStructuredOutputTransportCompatibilityError = isTransportCompatibilityError
+
 export const isStructuredOutputMethodUnsupportedError = (
   method: NativeStructuredOutputMethod,
-  error: ErrorLike
+  error: unknown
 ): boolean => {
   const body = getStructuredOutputErrorBody(error).toLowerCase()
   if (!body) return false
@@ -227,22 +200,53 @@ export const isStructuredOutputMethodUnsupportedError = (
   ])
 }
 
-const buildMethodConfig = (method: NativeStructuredOutputMethod, schemaName: string) => {
-  if (method === 'jsonMode') {
-    return {
-      method,
-      name: schemaName
-    } as const
+export const buildStructuredOutputProfile = (
+  transport: AiStructuredOutputTransport,
+  method: NonScriptedStructuredOutputMethod
+): PreferredStructuredOutputProfile => {
+  if (transport === 'completions') {
+    if (method === 'jsonSchema') return 'completions:jsonSchema'
+    if (method === 'jsonMode') return 'completions:jsonMode'
+    if (method === 'promptJson') return 'completions:promptJson'
+    throw new Error(`structured_output_invalid_profile_combo:${transport}:${method}`)
   }
 
-  return {
-    method,
-    name: schemaName,
-    strict: true
-  } as const
+  if (method === 'jsonSchema') return 'responses:jsonSchema'
+  if (method === 'promptJson') return 'responses:promptJson'
+  throw new Error(`structured_output_invalid_profile_combo:${transport}:${method}`)
 }
 
-const extractTextContent = (content: unknown): string => {
+export const resolveStructuredOutputProfile = (
+  profile: PreferredStructuredOutputProfile
+): StructuredOutputProfileMetadata => STRUCTURED_OUTPUT_PROFILE_METADATA[profile]
+
+export const buildStructuredOutputAttemptOrder = (
+  preferredProfile?: PreferredStructuredOutputProfile
+): PreferredStructuredOutputProfile[] => {
+  if (!preferredProfile) {
+    return [...STRUCTURED_OUTPUT_PROFILES]
+  }
+  return [
+    preferredProfile,
+    ...STRUCTURED_OUTPUT_PROFILES.filter((profile) => profile !== preferredProfile)
+  ]
+}
+
+export const getTransportBoundaryIndex = (
+  attemptOrder: PreferredStructuredOutputProfile[],
+  startIndex: number
+): number => {
+  const currentTransport = resolveStructuredOutputProfile(attemptOrder[startIndex]).transport
+  let nextIndex = startIndex
+  while (nextIndex + 1 < attemptOrder.length) {
+    const nextTransport = resolveStructuredOutputProfile(attemptOrder[nextIndex + 1]).transport
+    if (nextTransport !== currentTransport) break
+    nextIndex += 1
+  }
+  return nextIndex
+}
+
+export const extractTextContent = (content: unknown): string => {
   if (typeof content === 'string') {
     return content
   }
@@ -272,7 +276,7 @@ const extractTextContent = (content: unknown): string => {
   return ''
 }
 
-const normalizePromptJsonText = (raw: string): string => {
+export const normalizePromptJsonText = (raw: string): string => {
   const trimmed = raw.trim()
   if (!trimmed.startsWith('```')) {
     return trimmed
@@ -284,7 +288,7 @@ const normalizePromptJsonText = (raw: string): string => {
     .trim()
 }
 
-const parsePromptJsonOutput = (raw: string): Record<string, unknown> => {
+export const parsePromptJsonOutput = (raw: string): Record<string, unknown> => {
   const normalized = normalizePromptJsonText(raw)
   if (!normalized) {
     throw new Error('prompt_json_empty_response')
@@ -298,210 +302,36 @@ const parsePromptJsonOutput = (raw: string): Record<string, unknown> => {
   return parsed as Record<string, unknown>
 }
 
-const buildStructuredOutputProfile = (
-  transport: AiStructuredOutputTransport,
-  method: NonScriptedStructuredOutputMethod
-): PreferredStructuredOutputProfile => {
-  if (transport === 'completions') {
-    if (method === 'jsonSchema') return 'completions:jsonSchema'
-    if (method === 'jsonMode') return 'completions:jsonMode'
-    if (method === 'promptJson') return 'completions:promptJson'
-    throw new Error(`structured_output_invalid_profile_combo:${transport}:${method}`)
+export const parseJsonObjectText = (raw: string): Record<string, unknown> => {
+  const normalized = normalizePromptJsonText(raw)
+  if (!normalized) {
+    throw new Error('structured_output_empty_response')
   }
 
-  if (method === 'jsonSchema') return 'responses:jsonSchema'
-  if (method === 'promptJson') return 'responses:promptJson'
-  throw new Error(`structured_output_invalid_profile_combo:${transport}:${method}`)
+  const parsed = JSON.parse(normalized) as unknown
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('structured_output_non_object_response')
+  }
+
+  return parsed as Record<string, unknown>
 }
 
-const resolveStructuredOutputProfile = (
-  profile: PreferredStructuredOutputProfile
-): StructuredOutputProfileMetadata => STRUCTURED_OUTPUT_PROFILE_METADATA[profile]
-
-const resolveResultProfile = (
-  result: StructuredOutputDriverResult
-): AiStructuredOutputProfile => {
-  if (result.profile) {
-    return result.profile
+export const resolveResultProfile = (input: {
+  method: AiStructuredOutputMethod
+  transport?: AiStructuredOutputTransport
+  profile?: AiStructuredOutputProfile
+}): AiStructuredOutputProfile => {
+  if (input.profile) {
+    return input.profile
   }
 
-  if (result.method === 'scripted') {
+  if (input.method === 'scripted') {
     return 'scripted'
   }
 
-  if (result.transport) {
-    return buildStructuredOutputProfile(result.transport, result.method)
+  if (input.transport) {
+    return buildStructuredOutputProfile(input.transport, input.method)
   }
 
   throw new Error('structured_output_driver_missing_profile')
-}
-
-const invokeStructuredChatWithPromptJsonDriver = async <T extends Record<string, unknown>>(
-  input: StructuredOutputInvocationInput<T>,
-  transport: AiStructuredOutputTransport
-): Promise<StructuredOutputDriverResult> => {
-  const model = createChatModel(input.cfg, {
-    temperature: input.temperature ?? 0.2,
-    transport
-  })
-  const response = await model.invoke([
-    new SystemMessage(input.system),
-    new HumanMessage(input.user)
-  ])
-  const rawText = extractTextContent(response.content)
-  return {
-    output: parsePromptJsonOutput(rawText),
-    method: 'promptJson',
-    transport,
-    profile: buildStructuredOutputProfile(transport, 'promptJson')
-  }
-}
-
-const buildAttemptOrder = (
-  preferredProfile?: PreferredStructuredOutputProfile
-): PreferredStructuredOutputProfile[] => {
-  if (!preferredProfile) {
-    return [...STRUCTURED_OUTPUT_PROFILES]
-  }
-  return [
-    preferredProfile,
-    ...STRUCTURED_OUTPUT_PROFILES.filter((profile) => profile !== preferredProfile)
-  ]
-}
-
-const getTransportBoundaryIndex = (
-  attemptOrder: PreferredStructuredOutputProfile[],
-  startIndex: number
-): number => {
-  const currentTransport = resolveStructuredOutputProfile(attemptOrder[startIndex]).transport
-  let nextIndex = startIndex
-  while (nextIndex + 1 < attemptOrder.length) {
-    const nextTransport = resolveStructuredOutputProfile(attemptOrder[nextIndex + 1]).transport
-    if (nextTransport !== currentTransport) break
-    nextIndex += 1
-  }
-  return nextIndex
-}
-
-const buildStructuredOutputFailure = (input: {
-  caller: string
-  schemaName: string
-  modelName: string
-  profile: PreferredStructuredOutputProfile
-  transport: AiStructuredOutputTransport
-  method: NonScriptedStructuredOutputMethod
-  reason: string
-}) =>
-  new Error(
-    [
-      'structured_output_failed',
-      `caller=${input.caller}`,
-      `schema=${input.schemaName}`,
-      `model=${input.modelName}`,
-      `profile=${input.profile}`,
-      `transport=${input.transport}`,
-      `method=${input.method}`,
-      `reason=${input.reason}`
-    ].join('; ')
-  )
-
-const invokeStructuredChatWithProfile = async <T extends Record<string, unknown>>(
-  profile: PreferredStructuredOutputProfile,
-  input: StructuredOutputInvocationInput<T>
-): Promise<StructuredOutputDriverResult> => {
-  const { method, transport } = resolveStructuredOutputProfile(profile)
-
-  if (method === 'promptJson') {
-    return await invokeStructuredChatWithPromptJsonDriver(input, transport)
-  }
-
-  const model = createChatModel(input.cfg, {
-    temperature: input.temperature ?? 0.2,
-    transport
-  })
-  const structuredModel = model.withStructuredOutput(input.schema, buildMethodConfig(method, input.schemaName))
-  return {
-    output: await structuredModel.invoke([
-      new SystemMessage(input.system),
-      new HumanMessage(input.user)
-    ]),
-    method,
-    transport,
-    profile
-  }
-}
-
-const invokeStructuredChatWithNativeDriver = async <T extends Record<string, unknown>>(
-  input: StructuredOutputInvocationInput<T>
-): Promise<StructuredOutputDriverResult> => {
-  const attemptOrder = buildAttemptOrder(input.preferredProfile)
-  const attemptedProfiles: PreferredStructuredOutputProfile[] = []
-  const profileErrors: string[] = []
-
-  for (let index = 0; index < attemptOrder.length; index += 1) {
-    const profile = attemptOrder[index]
-    const { method, transport } = resolveStructuredOutputProfile(profile)
-    attemptedProfiles.push(profile)
-    try {
-      const result = await invokeStructuredChatWithProfile(profile, input)
-      return {
-        ...result,
-        fallbackChain: attemptedProfiles
-      }
-    } catch (error) {
-      const normalizedError = toErrorLike(
-        error as object | string | number | boolean | null | undefined
-      )
-      const reason = getErrorText(normalizedError)
-      if (isStructuredOutputTransportCompatibilityError(transport, normalizedError)) {
-        profileErrors.push(`${profile}: ${reason}`)
-        index = getTransportBoundaryIndex(attemptOrder, index)
-        continue
-      }
-      if (method !== 'promptJson' && isStructuredOutputMethodUnsupportedError(method, normalizedError)) {
-        profileErrors.push(`${profile}: ${reason}`)
-        continue
-      }
-      throw buildStructuredOutputFailure({
-        caller: input.caller,
-        schemaName: input.schemaName,
-        modelName: input.cfg.model_name,
-        profile,
-        transport,
-        method,
-        reason
-      })
-    }
-  }
-
-  throw new Error(
-    [
-      'structured_output_unsupported',
-      `caller=${input.caller}`,
-      `schema=${input.schemaName}`,
-      `model=${input.cfg.model_name}`,
-      `tried=${attemptedProfiles.join(' -> ')}`,
-      `errors=${profileErrors.join(' | ') || 'unknown'}`
-    ].join('; ')
-  )
-}
-
-export const invokeStructuredChat = async <T extends Record<string, unknown>>(
-  input: StructuredOutputInvocationInput<T> & {
-    driver?: StructuredOutputDriver
-  }
-): Promise<StructuredOutputInvocationResult<T>> => {
-  const driver = input.driver || invokeStructuredChatWithNativeDriver
-  const result = await driver(input as StructuredOutputInvocationInput<Record<string, unknown>>)
-  const profile = resolveResultProfile(result)
-  const fallbackChain =
-    result.fallbackChain && result.fallbackChain.length > 0 ? result.fallbackChain : [profile]
-
-  return {
-    output: input.schema.parse(result.output),
-    method: result.method,
-    transport: result.transport,
-    profile,
-    fallbackChain
-  }
 }

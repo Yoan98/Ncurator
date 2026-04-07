@@ -12,6 +12,7 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
 
     const rawOutput = await input.ctx.chatStructured({
       caller: 'human.brain',
+      taskId: state.task.taskId,
       ...buildBrainPromptContext({
         state,
         ctx: input.ctx

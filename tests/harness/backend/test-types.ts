@@ -37,26 +37,33 @@ export type ApprovalResolver = (request: AiApprovalRequest) => AiApprovalDecisio
 
 export type BackendHarnessMode = 'tool-real' | 'mock-llm' | 'live'
 
-export type ScriptedStructuredOutputCall = {
+export type ScriptedLlmCall = {
   caller: string
   schemaName: string
   system: string
   user: string
   callIndex: number
+  mode: 'structured' | 'text'
 }
 
-export type ScriptedStructuredOutputStep =
+type ScriptedLlmStreamShape = {
+  chunks?: string[]
+}
+
+export type ScriptedLlmStep =
   | {
       output: JsonObject
-    }
+    } & ScriptedLlmStreamShape
+  | {
+      text: string
+    } & ScriptedLlmStreamShape
   | {
       error: string
     }
-  | ((input: ScriptedStructuredOutputCall) => JsonObject | Promise<JsonObject>)
+  | ((input: ScriptedLlmCall) => JsonObject | string | Promise<JsonObject | string>)
 
-export type StructuredOutputScript = Partial<
-  Record<string, readonly ScriptedStructuredOutputStep[]>
->
+export type LlmScript = Partial<Record<string, readonly ScriptedLlmStep[]>>
+export type StructuredOutputScript = LlmScript
 
 export type LiveLlmConfig = Pick<LLMConfig, 'base_url' | 'model_name' | 'api_key'> & {
   id: string
@@ -144,6 +151,7 @@ export type CreateAiRunContextInput = {
   humanRuntimeOverrides?: {
     hardActionLimit?: number
   }
+  llmScript?: LlmScript
   structuredOutputScript?: StructuredOutputScript
 }
 
