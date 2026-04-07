@@ -157,7 +157,7 @@ export const createSynthesisHumanNode = (input: {
       stage: 'director_synthesis_human',
       userInput: buildSynthesisHumanObjective({
         userInput: state.input,
-        selectedContextText: ctx.selectedContextText,
+        referenceScope: ctx.referenceScope,
         contextEvidence: state.contextEvidence,
         plan: state.plan
       }),

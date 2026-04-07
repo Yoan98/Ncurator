@@ -2,6 +2,7 @@ import {
   type IntentPromptInput,
   JSON_ONLY_INTENT_CONTRACT
 } from './shared'
+import { renderReferenceScopeText } from '../../prompts/referenceScope'
 import { renderLineList } from '../../utils/render'
 
 export const buildIntentSystemPrompt = (): string =>
@@ -74,8 +75,8 @@ ${input.recentTurnsText}
   </session_memory>
 
   <reference_scope>
-用户当前明确选择的参考资料与工作区背景：
-${input.selectedContextText}
+当前任务的资料范围与工作区边界：
+${renderReferenceScopeText(input.referenceScope)}
   </reference_scope>
 
   <reusable_context_evidence>

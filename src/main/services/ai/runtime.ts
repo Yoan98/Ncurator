@@ -1,9 +1,9 @@
 import type { AiRunContext, AiRunDeps, AiRunStartPayload, CancelledError } from './types'
+import { buildReferenceScope } from './prompts/referenceScope'
 import { invokeStructuredChat } from './structuredOutput'
 import { runStructuredChatWithActivity } from './utils/structuredChatActivity'
 import { clipText } from './utils/text'
 import {
-  buildSelectedContextText,
   formatTurns,
   normalizeSelectedReferences,
   normalizeWorkspaceBinding
@@ -106,7 +106,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
 
   return {
     runId: payload.runId,
-    selectedContextText: buildSelectedContextText({
+    referenceScope: buildReferenceScope({
       workspace: normalizedWorkspace,
       selectedReferences: normalizedReferences
     }),

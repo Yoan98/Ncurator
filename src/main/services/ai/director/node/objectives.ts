@@ -1,4 +1,6 @@
 import type { AiArtifactRef, AiPlanTask } from '../../../../../shared/types'
+import type { AiReferenceScope } from '../../types'
+import { renderReferenceScopeText } from '../../prompts/referenceScope'
 import { normalizeRenderText, renderLineList, renderNamedSections } from '../../utils/render'
 
 const renderContextEvidence = (contextEvidence: string[]): string => {
@@ -99,7 +101,7 @@ export const buildPlanTaskObjective = (input: {
   task: AiPlanTask
   contextEvidence: string[]
   priorDeliveries: AiPlanTask[]
-  selectedContextText: string
+  referenceScope: AiReferenceScope
 }): string => {
   return buildDirectorObjective({
     title: '# 计划子任务',
@@ -110,7 +112,7 @@ export const buildPlanTaskObjective = (input: {
     sections: [
       { label: '总体目标', value: input.userInput },
       { label: '当前子任务', value: `${input.task.title}\n${input.task.userInput}` },
-      { label: '用户选择的参考资料', value: input.selectedContextText },
+      { label: '资料范围与工作区边界', value: renderReferenceScopeText(input.referenceScope) },
       { label: '上下文证据', value: renderContextEvidence(input.contextEvidence) },
       { label: '前序任务交付', value: renderDeliveries(input.priorDeliveries) }
     ]
@@ -121,7 +123,7 @@ export const buildSynthesisHumanObjective = (input: {
   userInput: string
   contextEvidence: string[]
   plan: AiPlanTask[]
-  selectedContextText: string
+  referenceScope: AiReferenceScope
 }): string => {
   return buildDirectorObjective({
     title: '# 汇总交付任务',
@@ -131,7 +133,7 @@ export const buildSynthesisHumanObjective = (input: {
     ],
     sections: [
       { label: '原始用户请求', value: input.userInput },
-      { label: '用户选择的参考资料', value: input.selectedContextText },
+      { label: '资料范围与工作区边界', value: renderReferenceScopeText(input.referenceScope) },
       { label: '上下文证据', value: renderContextEvidence(input.contextEvidence) },
       { label: '全部任务交付', value: renderDeliveries(input.plan) }
     ]

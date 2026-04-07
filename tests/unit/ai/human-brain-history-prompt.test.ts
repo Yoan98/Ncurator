@@ -6,12 +6,13 @@ import {
   buildLearningExecution
 } from '../../../src/main/services/ai/human/memory/roundHistory'
 import { buildBrainPromptContext } from '../../../src/main/services/ai/human/prompts/brain'
+import { buildReferenceScope } from '../../../src/main/services/ai/prompts/referenceScope'
 import { createInitialHumanState } from '../../../src/main/services/ai/human/state/schema'
 import type { LastBrainDecision } from '../../../src/main/services/ai/human/types'
 
-const createStubAiRunContext = (selectedContextText: string): AiRunContext => ({
+const createStubAiRunContext = (referenceScope: AiRunContext['referenceScope']): AiRunContext => ({
   runId: 'run-test',
-  selectedContextText,
+  referenceScope,
   checkCancelled: () => {},
   chatStructured: async () => {
     throw new Error('chatStructured should not be called in prompt unit tests')
@@ -157,22 +158,74 @@ describe('ai unit brain prompt history blocks', () => {
     }
     const prompt = buildBrainPromptContext({
       state,
-      ctx: createStubAiRunContext('这里是用户明确选中的参考资料。')
+      ctx: createStubAiRunContext(
+        buildReferenceScope({
+          workspace: {
+            workspaceId: 'workspace-1',
+            workspaceName: 'workspace',
+            rootPath: '/tmp/workspace-root'
+          },
+          selectedReferences: [
+            {
+              kind: 'file',
+              workspaceId: 'workspace-1',
+              nodeId: 'node-1',
+              name: 'weekly-risk.md',
+              relativePath: 'reports/weekly-risk.md',
+              absolutePath: '/tmp/workspace-root/reports/weekly-risk.md',
+              kbAvailability: 'indexed',
+              kbDocumentIds: ['doc-1']
+            }
+          ]
+        })
+      )
     })
 
-    expect(prompt.user).toContain('<user_selected_context>')
-    expect(prompt.user).toContain('<your_stable_memory>')
-    expect(prompt.user).toContain('<your_capabilities>')
-    expect(prompt.user).toContain('<last_round_focus>')
-    expect(prompt.user).toContain('<history_chain>')
-    expect(prompt.user).toContain('<loaded_history_context>')
-    expect(prompt.user).toContain('<convergence_hint>')
+    expect(prompt.user).toContain('<reference_scope>')
+    expect(prompt.user).toContain('<confirmed_memory>')
+    expect(prompt.user).toContain('<current_capabilities>')
+    expect(prompt.user).toContain('<recent_focus>')
+    expect(prompt.user).toContain('<earlier_history>')
+    expect(prompt.user).toContain('<expanded_history>')
+    expect(prompt.user).toContain('<correction_hint>')
     expect(prompt.user).not.toContain('<recent_learning_outcome>')
     expect(prompt.user).not.toContain('<recent_tool_results>')
     expect(prompt.user).not.toContain('<recent_decision_history>')
+    expect(prompt.user).toContain('优先参考资料：')
+    expect(prompt.system).toContain('<input_use_rules>')
+    expect(prompt.system).toContain('<action_contract>')
+    expect(prompt.system).not.toContain('human graph')
+    expect(prompt.system).not.toContain('<node_topology>')
     expect(prompt.user).toContain('history-recall')
     expect(prompt.user).toContain('决策了什么：')
     expect(prompt.user).toContain('做了什么：')
     expect(prompt.user).toContain('结果是什么：')
+  })
+
+  it('renders default workspace scope as available even when no explicit references are selected', () => {
+    const state = createInitialHumanState({
+      taskId: 'task-reference-scope',
+      userInput: '按当前工作区资料回答这个问题'
+    })
+
+    const prompt = buildBrainPromptContext({
+      state,
+      ctx: createStubAiRunContext(
+        buildReferenceScope({
+          workspace: {
+            workspaceId: 'workspace-1',
+            workspaceName: 'workspace',
+            rootPath: '/tmp/workspace-root'
+          },
+          selectedReferences: []
+        })
+      )
+    })
+
+    expect(prompt.user).toContain('<reference_scope>')
+    expect(prompt.user).toContain('当前用户未显式指定优先参考资料。')
+    expect(prompt.user).toContain('当前应先使用默认范围，而不要把这理解成无资料可查。')
+    expect(prompt.user).toContain('当前没有可直接缩圈的 kbDocumentIds。')
+    expect(prompt.user).toContain('不表示默认知识库范围不可用。')
   })
 })

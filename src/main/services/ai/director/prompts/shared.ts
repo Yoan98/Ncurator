@@ -1,3 +1,5 @@
+import type { AiReferenceScope } from '../../types'
+
 export const JSON_ONLY_INTENT_CONTRACT = [
   '只输出 JSON，不得输出任何额外文字。',
   '格式：{"mode":"need_context|to_plan|direct_human","reason":"string"}。',
@@ -15,7 +17,7 @@ export type DirectorPromptSharedInput = {
   sessionSummaryText: string
   recentTurnsText: string
   contextEvidence: string[]
-  selectedContextText: string
+  referenceScope: AiReferenceScope
 }
 
 export type IntentPromptInput = DirectorPromptSharedInput & {

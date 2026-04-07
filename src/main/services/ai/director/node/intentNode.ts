@@ -29,7 +29,7 @@ export const createIntentNode = (input: { ctx: DirectorNodeContext; maxContextRo
       contextEvidence: state.contextEvidence,
       contextRounds: state.contextRounds,
       maxContextRounds,
-      selectedContextText: ctx.selectedContextText
+      referenceScope: ctx.referenceScope
     })
 
     const decision = await ctx.chatStructured({

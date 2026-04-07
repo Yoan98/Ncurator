@@ -15,7 +15,7 @@ export const createPlanNode = (input: { ctx: DirectorNodeContext }) => {
       sessionSummaryText: history.sessionSummaryText,
       recentTurnsText: history.recentTurnsText,
       contextEvidence: state.contextEvidence,
-      selectedContextText: ctx.selectedContextText
+      referenceScope: ctx.referenceScope
     })
 
     const decision = await ctx.chatStructured({

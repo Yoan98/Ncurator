@@ -83,13 +83,22 @@ describe('ai unit learning tool budget', () => {
     })
   })
 
-  it('mentions the focused learning rule in the brain prompt', () => {
+  it('mentions the natural-language input and action contracts in the brain prompt', () => {
     const prompt = buildBrainSystemPrompt()
 
-    expect(prompt).toContain('learning 只用于补齐“下一步动作”最值得学习的 skill')
+    expect(prompt).toContain('<input_use_rules>')
+    expect(prompt).toContain('任务目标（task_goal）')
+    expect(prompt).toContain('资料范围与工作区边界（reference_scope）')
+    expect(prompt).toContain('<reasoning_rules>')
+    expect(prompt).toContain('什么状态才算真正完成')
+    expect(prompt).toContain('误判成“无法获得”')
+    expect(prompt).toContain('低成本且高信息增益')
+    expect(prompt).toContain('<action_contract>')
+    expect(prompt).toContain('你只负责判断下一步')
     expect(prompt).toContain('learning 没有固定数量上限')
     expect(prompt).toContain('active tool budget')
     expect(prompt).toContain('mouth 不会执行任何工具')
-    expect(prompt).toContain('readyToDeliver')
+    expect(prompt).not.toContain('human graph')
+    expect(prompt).not.toContain('<node_topology>')
   })
 })

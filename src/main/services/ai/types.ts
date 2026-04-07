@@ -61,6 +61,16 @@ export type AiRunStartPayload = {
   }
 }
 
+export type AiWorkspaceBinding = NonNullable<AiRunStartPayload['workspace']>
+
+export type AiReferenceScope = {
+  workspace?: AiWorkspaceBinding
+  selectedReferences: SelectedReference[]
+  hasExplicitSelectedReferences: boolean
+  hasDirectDocumentNarrowing: boolean
+  defaultKnowledgeScope: 'current_workspace' | 'unavailable'
+}
+
 export type AiApprovalRequest = {
   runId: string
   taskId: string
@@ -92,7 +102,7 @@ export type AiRunDeps = {
 
 export type AiRunContext = {
   runId: string
-  selectedContextText: string
+  referenceScope: AiReferenceScope
   humanRuntimeOverrides?: {
     hardActionLimit?: number
   }
@@ -135,7 +145,7 @@ export type AiEventDispatchContext = Pick<AiRunContext, 'runId' | 'sendEvent' | 
 
 export type DirectorNodeContext = Pick<
   AiRunContext,
-  'runId' | 'checkCancelled' | 'chatStructured' | 'sendEvent' | 'loadHistory' | 'selectedContextText'
+  'runId' | 'checkCancelled' | 'chatStructured' | 'sendEvent' | 'loadHistory' | 'referenceScope'
 >
 
 export type TerminalToolContext = Pick<
