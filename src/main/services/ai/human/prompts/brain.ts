@@ -279,12 +279,17 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
     - learning 只负责补齐当前真正缺失的技能说明。
     - hand 只负责执行已经决定好的工具计划。
     - mouth 只负责整理最终结果，不新增事实，不继续执行工具。
-    - 输出 hand 时，工具 args 必须使用工具说明中的精确字段名，并补齐所有 requiredArgs。
+  </action_boundaries>
+
+  <transition_contract>
+    - nextAction 只能在 learning、hand、mouth 三者中选择其一。
+    - 选择 learning：当你已经知道缺少哪类能力说明，且补齐后能明显降低不确定性时。
+    - 选择 hand：当下一步已经明确成一批工具调用，且你能给出完整合法的 toolUsePlan 时。
     - 如果你现在无法给出某个工具的完整必填参数，不要猜；应改为 learning 或 mouth。
     - hand 的 toolUsePlan 单轮只能选择一种 mode。只有只读且彼此独立、并行安全的动作才用 parallel；其余情况必须用 serial。
     - 如果结果仍依赖未来的工具动作才能完成，readyToDeliver 必须为 false，且不能选择 mouth。
-    - 选择 mouth 时，readyToDeliver 必须为 true。
-  </action_boundaries>
+    - 选择 mouth：只在 readyToDeliver=true 且当前已经足够形成最终交付时。
+  </transition_contract>
 
   <context_block_guide>
     - task_goal：用户原始诉求与限制。
@@ -327,12 +332,10 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
     - decision.reason：说明你为什么这样判断，必须基于已给上下文、记忆或真实结果。
     - decision.expectedOutcome：说明你希望下一跳拿到什么结果，帮助后续节点收敛。
     - readyToDeliver=true 只表示当前已经具备最终交付所需的信息、证据和产物。
-    - nextAction=learning：当你已经知道缺少哪类能力说明，且补齐后能明显降低不确定性时选择。
-    - nextAction=hand：当下一步已经明确成一批工具调用，且你能给出完整合法的 toolUsePlan 时选择。
+    - nextAction 只能输出一种合法结构：learning、hand 或 mouth。
     - hand.toolUsePlan.mode：parallel 只用于只读且彼此独立、并行安全的调用；其余情况必须用 serial。
     - hand.toolUsePlan.calls[*].toolName：必须严格使用当前工具说明里的精确名称。
     - hand.toolUsePlan.calls[*].args：必须是对象，字段名、必填参数和参数层级都必须与工具说明一致。
-    - nextAction=mouth：只在 readyToDeliver=true 且当前已经足够形成最终交付时选择。
   </output_contract>
 
   <examples>

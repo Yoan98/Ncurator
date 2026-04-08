@@ -133,6 +133,8 @@ describe('ai unit learning tool budget', () => {
     expect(prompt).toContain('<action_boundaries>')
     expect(prompt).toContain('你只负责判断下一步')
     expect(prompt).toContain('learning 只负责补齐当前真正缺失的技能说明')
+    expect(prompt).toContain('<transition_contract>')
+    expect(prompt).toContain('nextAction 只能在 learning、hand、mouth 三者中选择其一')
     expect(prompt).toContain('<context_block_guide>')
     expect(prompt).toContain('<output_contract>')
     expect(prompt).toContain('updatedStableMemory')
