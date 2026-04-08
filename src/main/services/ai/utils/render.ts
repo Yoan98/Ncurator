@@ -8,6 +8,19 @@ export const normalizeRenderText = (value: string | undefined, fallback: string)
 export const collectRenderLines = (values: Array<string | undefined>): string[] =>
   values.map((value) => String(value || '').trim()).filter(Boolean)
 
+export const renderInlineList = (
+  values: Array<string | undefined>,
+  input: {
+    fallback: string
+    separator?: string
+  }
+): string => {
+  const items = collectRenderLines(values)
+  if (items.length === 0) return input.fallback
+
+  return items.join(input.separator || '、')
+}
+
 export const renderLineList = (
   values: Array<string | undefined>,
   input: {

@@ -1,3 +1,4 @@
+import { renderInlineList } from '../../utils/render'
 import type { AiRunContext } from '../../types'
 import { renderReferenceScopeText } from '../../prompts/referenceScope'
 import {
@@ -21,6 +22,15 @@ import type {
 } from '../types'
 import { renderWatchHintForBrain } from './watchHints'
 
+const renderQuotedNames = (items: readonly string[]): string =>
+  renderInlineList(
+    items.map((item) => `\`${item}\``),
+    {
+      separator: '、',
+      fallback: 'none'
+    }
+  )
+
 const renderLearnedToolSpecLine = (spec: ToolPromptSpec): string => {
   const requiredArgs = spec.args
     .filter((arg) => arg.required)
@@ -33,119 +43,179 @@ const renderLearnedToolSpecLine = (spec: ToolPromptSpec): string => {
   return `- 工具 ${spec.name}：用途=${spec.purpose}；必填参数=[${requiredArgs || 'none'}]；${example}`
 }
 
-const renderStringList = (items: readonly string[]): string =>
-  items.length > 0 ? items.join('、') : 'none'
+const renderDecisionNextAction = (record: HumanRoundRecord): string => {
+  switch (record.decision.nextAction.action) {
+    case 'learning':
+      return `- 你准备下一步做：准备学习 ${renderQuotedNames(
+        record.decision.nextAction.wantLearnSkillIds
+      )}。`
+    case 'hand':
+      return `- 你准备下一步做：准备进入 hand，${
+        record.decision.nextAction.toolUsePlan.mode === 'parallel'
+          ? `以 parallel 模式并行执行 ${renderQuotedNames(
+              record.decision.nextAction.toolUsePlan.calls.map((call) => call.toolName)
+            )}。`
+          : `以 serial 模式按顺序执行 ${renderQuotedNames(
+              record.decision.nextAction.toolUsePlan.calls.map((call) => call.toolName)
+            )}。`
+      }`
+    case 'mouth':
+      return '- 你准备下一步做：准备进入 mouth 组织最终交付。'
+  }
+}
 
-const renderRoundRecord = (
-  record: HumanRoundRecord,
-  detail: 'focus' | 'chain' | 'loaded'
-): string => {
-  const nextActionText =
-    record.decision.nextAction.action === 'learning'
-      ? `- 你准备下一步做：准备学习 ${renderStringList(record.decision.nextAction.wantLearnSkillIds.map((skillId) => `\`${skillId}\``))}。`
-      : record.decision.nextAction.action === 'hand'
-        ? `- 你准备下一步做：准备进入 hand，${
-            record.decision.nextAction.toolUsePlan.mode === 'parallel'
-              ? `以 parallel 模式并行执行 ${renderStringList(record.decision.nextAction.toolUsePlan.calls.map((call) => `\`${call.toolName}\``))}。`
-              : `以 serial 模式按顺序执行 ${renderStringList(record.decision.nextAction.toolUsePlan.calls.map((call) => `\`${call.toolName}\``))}。`
-          }`
-        : '- 你准备下一步做：准备进入 mouth 组织最终交付。'
-
-  const executionText =
-    record.execution.kind === 'pre_execution_blocked'
-      ? '- 没有进入真实执行，系统在执行前阻断了这轮动作。'
-      : record.execution.kind === 'learning'
-        ? '- 进入 learning，按请求尝试补齐外置技能。'
-        : record.execution.kind === 'hand'
-          ? [
-              `- 进入 hand，执行模式是 ${record.execution.toolUsePlan.mode}。`,
-              record.execution.toolUsePlan.mode === 'parallel'
-                ? `- 实际并行执行了 ${renderStringList(record.execution.toolUsePlan.calls.map((call) => `\`${call.toolName}\``))}。`
-                : `- 实际按顺序执行了 ${renderStringList(record.execution.toolUsePlan.calls.map((call) => `\`${call.toolName}\``))}。`,
-              detail !== 'chain'
-                ? `- 本轮计划包含 ${record.execution.toolUsePlan.calls.length} 个工具调用。`
-                : ''
-            ]
-              .filter(Boolean)
-              .join('\n')
-          : '- 进入 mouth，组织最终说明。'
-
-  const resultText =
-    record.execution.kind === 'pre_execution_blocked'
-      ? renderWatchHintForBrain(record.execution.watchHint)
-      : record.execution.kind === 'learning'
-        ? [
-            `- 已加载的技能：${renderStringList(record.execution.learningOutcome.loadedSkillIds.map((skillId) => `\`${skillId}\``))}`,
-            `- 已跳过的重复技能：${renderStringList(record.execution.learningOutcome.skippedDuplicateSkillIds.map((skillId) => `\`${skillId}\``))}`,
-            `- 未识别的技能：${renderStringList(record.execution.learningOutcome.skippedUnknownSkillIds.map((skillId) => `\`${skillId}\``))}`,
-            `- 当前 active tool 数：${String(record.execution.learningOutcome.activeToolCount)}`,
-            record.execution.watchHint
-              ? `- 收敛提示：${renderWatchHintForBrain(record.execution.watchHint)}`
-              : ''
-          ]
-            .filter(Boolean)
-            .join('\n')
-        : record.execution.kind === 'hand'
-          ? [
-              ...record.execution.toolResults.map((result) =>
-                [
-                  `- \`${result.toolName}\`：${result.summary}`,
-                  result.dataPreview ? `结果：${result.dataPreview}` : '',
-                  result.diagnosticText ? `诊断：${result.diagnosticText}` : ''
-                ]
-                  .filter(Boolean)
-                  .join('；')
-              ),
-              record.execution.artifactRefs && record.execution.artifactRefs.length > 0
-                ? `- 产物：${renderStringList(
-                    record.execution.artifactRefs.map((artifact) =>
-                      artifact.kind === 'file'
-                        ? `\`${artifact.fileName}\``
-                        : `draft review ${artifact.review.reviewId}`
-                    )
-                  )}`
-                : '',
-              record.execution.watchHint
-                ? `- 收敛提示：${renderWatchHintForBrain(record.execution.watchHint)}`
-                : ''
-            ]
-              .filter(Boolean)
-              .join('\n')
-          : `${`- 输出摘要：${record.execution.summary}`}\n${
-              record.execution.completed ? '- 任务已完成。' : '- 任务未完成。'
-            }`
-
-  return `
-- 第 ${record.roundId} 轮
-
-决策了什么：
+const renderRoundDecision = (record: HumanRoundRecord): string =>
+  `
 - 你的判断：${record.decision.decision.summary}
 - 你这样判断的原因：${record.decision.decision.reason}
 - 你当时期待的结果：${record.decision.decision.expectedOutcome}
 - ${record.decision.readyToDeliver ? '你当时认为已经可以交付。' : '你当时认为还不能直接交付。'}
-${nextActionText}
+${renderDecisionNextAction(record)}
+`.trim()
+
+const renderRoundExecution = (
+  record: HumanRoundRecord,
+  detail: 'focus' | 'chain' | 'loaded'
+): string => {
+  switch (record.execution.kind) {
+    case 'pre_execution_blocked':
+      return '- 没有进入真实执行，系统在执行前阻断了这轮动作。'
+    case 'learning':
+      return '- 进入 learning，按请求尝试补齐外置技能。'
+    case 'hand':
+      return `
+- 进入 hand，执行模式是 ${record.execution.toolUsePlan.mode}。
+- ${
+        record.execution.toolUsePlan.mode === 'parallel'
+          ? `实际并行执行了 ${renderQuotedNames(record.execution.toolUsePlan.calls.map((call) => call.toolName))}。`
+          : `实际按顺序执行了 ${renderQuotedNames(record.execution.toolUsePlan.calls.map((call) => call.toolName))}。`
+      }
+${detail !== 'chain' ? `- 本轮计划包含 ${record.execution.toolUsePlan.calls.length} 个工具调用。` : ''}
+`
+        .trim()
+        .replace(/\n\n+/g, '\n')
+    case 'mouth':
+      return '- 进入 mouth，组织最终说明。'
+  }
+}
+
+const renderRoundResult = (record: HumanRoundRecord): string => {
+  switch (record.execution.kind) {
+    case 'pre_execution_blocked':
+      return renderWatchHintForBrain(record.execution.watchHint)
+    case 'learning':
+      return `
+- 已加载的技能：${renderQuotedNames(record.execution.learningOutcome.loadedSkillIds)}
+- 已跳过的重复技能：${renderQuotedNames(record.execution.learningOutcome.skippedDuplicateSkillIds)}
+- 未识别的技能：${renderQuotedNames(record.execution.learningOutcome.skippedUnknownSkillIds)}
+- 当前 active tool 数：${String(record.execution.learningOutcome.activeToolCount)}
+${record.execution.watchHint ? `- 收敛提示：${renderWatchHintForBrain(record.execution.watchHint)}` : ''}
+`
+        .trim()
+        .replace(/\n\n+/g, '\n')
+    case 'hand': {
+      const toolResultLines = record.execution.toolResults
+        .map((result) =>
+          [
+            `- \`${result.toolName}\`：${result.summary}`,
+            result.dataPreview ? `结果：${result.dataPreview}` : '',
+            result.diagnosticText ? `诊断：${result.diagnosticText}` : ''
+          ]
+            .filter(Boolean)
+            .join('；')
+        )
+        .join('\n')
+      const artifactLine =
+        record.execution.artifactRefs && record.execution.artifactRefs.length > 0
+          ? `- 产物：${renderInlineList(
+              record.execution.artifactRefs.map((artifact) =>
+                artifact.kind === 'file'
+                  ? `\`${artifact.fileName}\``
+                  : `draft review ${artifact.review.reviewId}`
+              ),
+              {
+                separator: '、',
+                fallback: 'none'
+              }
+            )}`
+          : ''
+      const watchHintLine = record.execution.watchHint
+        ? `- 收敛提示：${renderWatchHintForBrain(record.execution.watchHint)}`
+        : ''
+
+      return [toolResultLines, artifactLine, watchHintLine].filter(Boolean).join('\n')
+    }
+    case 'mouth':
+      return `
+- 输出摘要：${record.execution.summary}
+${record.execution.completed ? '- 任务已完成。' : '- 任务未完成。'}
+`.trim()
+  }
+}
+
+const renderRoundRecord = (
+  record: HumanRoundRecord,
+  detail: 'focus' | 'chain' | 'loaded'
+): string =>
+  `
+- 第 ${record.roundId} 轮
+
+决策了什么：
+${renderRoundDecision(record)}
 
 做了什么：
-${executionText}
+${renderRoundExecution(record, detail)}
 
 结果是什么：
-${resultText}
+${renderRoundResult(record)}
 `.trim()
-}
 
-const renderLoadedHistoryIntro = (
+const renderRoundSection = (input: {
+  intro: string
+  records: HumanRoundRecord[]
+  detail: 'focus' | 'chain' | 'loaded'
+}): string =>
+  `
+${input.intro}
+
+${
+  input.records.length > 0
+    ? input.records.map((record) => renderRoundRecord(record, input.detail)).join('\n\n')
+    : 'none'
+}
+`.trim()
+
+const renderLoadedHistorySection = (
   loadedHistoryContext: HumanLoadedHistoryContext | undefined
 ): string => {
-  if (!loadedHistoryContext) {
-    return '这是你主动回看后加载的历史细节。只有在明确回看历史后这里才会出现内容。'
-  }
+  const intro = loadedHistoryContext
+    ? `这是你主动加载的更详细历史。只有在你明确调用 history-recall 后才会出现。
+本次过滤条件：roundIds=${renderInlineList(
+        (loadedHistoryContext.filters.roundIds || []).map(String),
+        {
+          separator: '、',
+          fallback: 'none'
+        }
+      )}；executionKinds=${renderInlineList(loadedHistoryContext.filters.executionKinds || [], {
+        separator: '、',
+        fallback: 'none'
+      })}；toolNames=${renderInlineList(loadedHistoryContext.filters.toolNames || [], {
+        separator: '、',
+        fallback: 'none'
+      })}；watchHintCodes=${renderInlineList(loadedHistoryContext.filters.watchHintCodes || [], {
+        separator: '、',
+        fallback: 'none'
+      })}；limit=${String(loadedHistoryContext.filters.limit || loadedHistoryContext.rounds.length)}。`
+    : '这是你主动回看后加载的历史细节。只有在明确回看历史后这里才会出现内容。'
 
-  const filters = loadedHistoryContext.filters
-  return `这是你主动加载的更详细历史。只有在你明确调用 history-recall 后才会出现。
-本次过滤条件：roundIds=${renderStringList((filters.roundIds || []).map(String))}；executionKinds=${renderStringList(filters.executionKinds || [])}；toolNames=${renderStringList(filters.toolNames || [])}；watchHintCodes=${renderStringList(filters.watchHintCodes || [])}；limit=${String(filters.limit || loadedHistoryContext.rounds.length)}。`
+  return renderRoundSection({
+    intro,
+    records: loadedHistoryContext?.rounds || [],
+    detail: 'loaded'
+  })
 }
 
-const renderAvailableSkillsText = (state: HumanState): string => {
+const renderAvailableSkillsSection = (state: HumanState): string => {
   const effectiveSkillIds = getEffectiveLearnedSkillIds(state.skills.learnedSkillIds)
   const effectiveSkillDefinitions = effectiveSkillIds.map((skillId) => getSkillDefinition(skillId))
   const learnedExternalSkillDefinitions = effectiveSkillDefinitions.filter(
@@ -164,7 +234,8 @@ const renderAvailableSkillsText = (state: HumanState): string => {
     .filter((spec): spec is ToolPromptSpec => Boolean(spec))
     .map(renderLearnedToolSpecLine)
 
-  return `这是你当前已经可直接依赖、或仍可补充学习的技能与工具信息。
+  return `
+这是你当前已经可直接依赖、或仍可补充学习的技能与工具信息。
 
 始终可用的技能：
 ${
@@ -190,15 +261,11 @@ ${
 ${learnableSkillLines.join('\n') || 'none'}
 
 当前可直接调用的工具：
-${effectiveToolSpecLines.join('\n') || 'none'}`
+${effectiveToolSpecLines.join('\n') || 'none'}
+`.trim()
 }
 
 export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }) => {
-  const lastRoundRecord = getLastRoundFocus(input.state)
-  const historyChainRecords = getHistoryChainRounds(input.state)
-  const loadedHistoryContext = getLoadedHistoryContext(input.state)
-  const loadedHistoryRecords = loadedHistoryContext?.rounds || []
-
   const system = `
 <system>
   <role>
@@ -324,34 +391,28 @@ ${renderHumanStableNotes(input.state, 'brain_prompt')}
     </your_notes>
 
     <recent_progress>
-这是最近一轮过程记录。
-
-${lastRoundRecord ? renderRoundRecord(lastRoundRecord, 'focus') : 'none'}
+${renderRoundSection({
+  intro: '这是最近一轮过程记录。',
+  records: getLastRoundFocus(input.state) ? [getLastRoundFocus(input.state)!] : [],
+  detail: 'focus'
+})}
     </recent_progress>
 
     <earlier_attempts>
-这是更早几轮过程记录。
-
-${
-  historyChainRecords.length > 0
-    ? historyChainRecords.map((record) => renderRoundRecord(record, 'chain')).join('\n')
-    : 'none'
-}
+${renderRoundSection({
+  intro: '这是更早几轮过程记录。',
+  records: getHistoryChainRounds(input.state),
+  detail: 'chain'
+})}
     </earlier_attempts>
 
     <recalled_history>
-${renderLoadedHistoryIntro(loadedHistoryContext)}
-
-${
-  loadedHistoryRecords.length > 0
-    ? loadedHistoryRecords.map((record) => renderRoundRecord(record, 'loaded')).join('\n')
-    : 'none'
-}
+${renderLoadedHistorySection(getLoadedHistoryContext(input.state))}
     </recalled_history>
   </memory>
 
   <available_skills>
-${renderAvailableSkillsText(input.state)}
+${renderAvailableSkillsSection(input.state)}
   </available_skills>
 
   <correction_hint>

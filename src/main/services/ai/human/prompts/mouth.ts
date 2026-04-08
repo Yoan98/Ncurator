@@ -1,3 +1,4 @@
+import { renderInlineList } from '../../utils/render'
 import {
   DELIVERY_MODE_PROMPT_EXAMPLES,
   DELIVERY_MODE_PROMPT_RULES
@@ -8,36 +9,59 @@ import { renderHumanArtifactLines } from '../shared/runtimeRenderers'
 import type { HumanDeliveryMode, HumanRoundRecord, HumanState } from '../types'
 import { renderWatchHintForMouth } from './watchHints'
 
-const renderStringList = (items: readonly string[]): string =>
-  items.length > 0 ? items.join('、') : 'none'
-
-const renderRecentProgressText = (record: HumanRoundRecord | undefined): string => {
+const renderRecentProgressSection = (record: HumanRoundRecord | undefined): string => {
   if (!record) {
-    return `这是最近一轮过程记录。
+    return `
+这是最近一轮过程记录。
 
-none`
+none
+`.trim()
   }
 
   const progressText =
     record.execution.kind === 'pre_execution_blocked'
       ? `- 执行前阻断：${renderWatchHintForMouth(record.execution.watchHint)}`
       : record.execution.kind === 'learning'
-        ? `- learning 结果：已加载 ${renderStringList(record.execution.learningOutcome.loadedSkillIds.map((skillId) => `\`${skillId}\``))}；重复 ${renderStringList(record.execution.learningOutcome.skippedDuplicateSkillIds.map((skillId) => `\`${skillId}\``))}；未知 ${renderStringList(record.execution.learningOutcome.skippedUnknownSkillIds.map((skillId) => `\`${skillId}\``))}。`
+        ? `- learning 结果：已加载 ${renderInlineList(
+            record.execution.learningOutcome.loadedSkillIds.map((skillId) => `\`${skillId}\``),
+            {
+              separator: '、',
+              fallback: 'none'
+            }
+          )}；重复 ${renderInlineList(
+            record.execution.learningOutcome.skippedDuplicateSkillIds.map(
+              (skillId) => `\`${skillId}\``
+            ),
+            {
+              separator: '、',
+              fallback: 'none'
+            }
+          )}；未知 ${renderInlineList(
+            record.execution.learningOutcome.skippedUnknownSkillIds.map(
+              (skillId) => `\`${skillId}\``
+            ),
+            {
+              separator: '、',
+              fallback: 'none'
+            }
+          )}。`
         : record.execution.kind === 'hand'
-          ? [
-              `- hand 执行模式：${record.execution.toolUsePlan.mode}`,
-              ...record.execution.toolResults.map(
-                (result) => `- \`${result.toolName}\`：${result.summary}`
-              )
-            ].join('\n')
+          ? `
+- hand 执行模式：${record.execution.toolUsePlan.mode}
+${record.execution.toolResults.map((result) => `- \`${result.toolName}\`：${result.summary}`).join('\n')}
+`
+              .trim()
+              .replace(/\n\n+/g, '\n')
           : `- mouth 输出摘要：${record.execution.summary}`
 
-  return `这是最近一轮过程记录。
+  return `
+这是最近一轮过程记录。
 
 - 第 ${record.roundId} 轮判断：${record.decision.decision.summary}
 - 原因：${record.decision.decision.reason}
 - 预期结果：${record.decision.decision.expectedOutcome}
-${progressText}`
+${progressText}
+`.trim()
 }
 
 const buildFinalDecisionText = (state: HumanState): string =>
@@ -109,7 +133,7 @@ ${renderHumanStableNotes(input.state, 'mouth_prompt')}
   </your_notes>
 
   <recent_progress>
-${renderRecentProgressText(getLastRoundFocus(input.state))}
+${renderRecentProgressSection(getLastRoundFocus(input.state))}
   </recent_progress>
 
   <runtime_artifacts>
