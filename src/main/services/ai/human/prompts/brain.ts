@@ -171,32 +171,22 @@ ${renderRoundResult(record)}
 `.trim()
 
 const renderRoundSection = (input: {
-  intro: string
   records: HumanRoundRecord[]
   detail: 'focus' | 'chain' | 'loaded'
 }): string =>
-  `
-${input.intro}
-
-${
   input.records.length > 0
     ? input.records.map((record) => renderRoundRecord(record, input.detail)).join('\n\n')
     : 'none'
-}
-`.trim()
 
-const renderLoadedHistorySection = (
+const renderLoadedHistoryText = (
   loadedHistoryContext: HumanLoadedHistoryContext | undefined
-): string => {
-  const intro = loadedHistoryContext
-    ? `这是你主动加载的更详细历史。只有在你明确调用 history-recall 后才会出现。
-本次过滤条件：roundIds=${renderInlineList(
-        (loadedHistoryContext.filters.roundIds || []).map(String),
-        {
-          separator: '、',
-          fallback: 'none'
-        }
-      )}；executionKinds=${renderInlineList(loadedHistoryContext.filters.executionKinds || [], {
+): string =>
+  loadedHistoryContext
+    ? `
+过滤条件：roundIds=${renderInlineList((loadedHistoryContext.filters.roundIds || []).map(String), {
+        separator: '、',
+        fallback: 'none'
+      })}；executionKinds=${renderInlineList(loadedHistoryContext.filters.executionKinds || [], {
         separator: '、',
         fallback: 'none'
       })}；toolNames=${renderInlineList(loadedHistoryContext.filters.toolNames || [], {
@@ -205,15 +195,15 @@ const renderLoadedHistorySection = (
       })}；watchHintCodes=${renderInlineList(loadedHistoryContext.filters.watchHintCodes || [], {
         separator: '、',
         fallback: 'none'
-      })}；limit=${String(loadedHistoryContext.filters.limit || loadedHistoryContext.rounds.length)}。`
-    : '这是你主动回看后加载的历史细节。只有在明确回看历史后这里才会出现内容。'
+      })}；limit=${String(loadedHistoryContext.filters.limit || loadedHistoryContext.rounds.length)}
 
-  return renderRoundSection({
-    intro,
-    records: loadedHistoryContext?.rounds || [],
-    detail: 'loaded'
-  })
-}
+${renderRoundSection({
+  records: loadedHistoryContext.rounds,
+  detail: 'loaded'
+})}
+`
+        .trim()
+    : 'none'
 
 const renderAvailableSkillsSection = (state: HumanState): string => {
   const effectiveSkillIds = getEffectiveLearnedSkillIds(state.skills.learnedSkillIds)
@@ -235,8 +225,6 @@ const renderAvailableSkillsSection = (state: HumanState): string => {
     .map(renderLearnedToolSpecLine)
 
   return `
-这是你当前已经可直接依赖、或仍可补充学习的技能与工具信息。
-
 始终可用的技能：
 ${
   listBuiltinSkillDefinitions()
@@ -283,7 +271,7 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
     - 你会收到任务、记忆、技能、历史和提示等不同类型的信息。
     - 这些信息是提供给你判断当前局面的参考材料，不是固定流程。
     - 你需要自行判断哪些信息重要、哪些信息只是背景，以及下一步最合适的动作。
-    - 除了明确写出的职责边界、输出规则和硬约束，不要把上下文说明理解成固定操作指令。
+    - 除了明确写出的职责边界、输出契约和硬约束，不要把上下文说明理解成固定操作指令。
   </autonomy_principles>
 
   <action_boundaries>
@@ -298,39 +286,54 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
     - 选择 mouth 时，readyToDeliver 必须为 true。
   </action_boundaries>
 
-  <output_rules>
-    你必须只输出 JSON，不要输出任何额外说明。
+  <context_block_guide>
+    - task_goal：用户原始诉求与限制。
+    - reference_scope：当前工作区、默认知识范围、显式缩圈范围和可用边界。
+    - your_notes：稳定任务笔记，按“已确认 / 关键依据 / 未决问题”组织。
+    - recent_progress：最近一轮完整过程记录，用于判断刚做了什么、得到什么。
+    - earlier_attempts：更早轮次过程链，用于识别重复路径、失败模式和已经验证过的动作。
+    - recalled_history：主动回看的详细历史；只有明确回看后才会出现，并可能附带过滤条件。
+    - available_skills：当前已生效或仍可学习的 skills，以及当前可直接调用的工具说明。
+    - correction_hint：当前额外的收敛或纠偏提示；若无则为 none。
+  </context_block_guide>
 
-    输出结构固定为：
-    {
-      "updatedStableMemory": {
-        "confirmedFacts": "string",
-        "keyEvidence": "string",
-        "openQuestions": "string"
-      },
-      "decision": {
-        "summary": "string",
-        "reason": "string",
-        "expectedOutcome": "string"
-      },
-      "readyToDeliver": false,
-      "nextAction":
-        | { "action": "learning", "wantLearnSkillIds": ["skill-id"] }
-        | { "action": "hand", "toolUsePlan": { "mode": "parallel", "calls": [{ "toolName": "tool_name", "args": {} }] } }
-        | { "action": "mouth" }
-    }
-
-    字段解释：
-    - updatedStableMemory：可选对象。表示本轮对任务笔记的局部更新。
-    - updatedStableMemory 缺失：表示本轮不更新任务笔记。
-    - updatedStableMemory 出现但某个字段缺失：表示该字段保持原值。
-    - updatedStableMemory 的字段值是字符串：表示用该字符串覆盖对应字段。
-    - updatedStableMemory 的字段值是空字符串：表示显式清空对应字段。
-    - decision：对象。表示你本轮的正式判断。
-    - readyToDeliver：布尔值。只有当当前已经具备最终交付所需的信息、证据和产物时，才为 true。
-    - nextAction：对象。表示下一跳动作，且只能输出 learning、hand、mouth 三种结构之一。
-    - 不要输出 markdown。
-  </output_rules>
+  <output_contract>
+    - 你必须只输出 JSON，不要输出任何额外说明，也不要输出 markdown。
+    - 输出顶层结构固定为：
+      {
+        "updatedStableMemory"?: {
+          "confirmedFacts"?: "string",
+          "keyEvidence"?: "string",
+          "openQuestions"?: "string"
+        },
+        "decision": {
+          "summary": "string",
+          "reason": "string",
+          "expectedOutcome": "string"
+        },
+        "readyToDeliver": "boolean",
+        "nextAction":
+          | { "action": "learning", "wantLearnSkillIds": ["skill-id"] }
+          | { "action": "hand", "toolUsePlan": { "mode": "parallel|serial", "calls": [{ "toolName": "tool_name", "args": {} }] } }
+          | { "action": "mouth" }
+      }
+    - updatedStableMemory 是可选的 partial patch；缺失表示本轮不更新任务笔记。
+    - updatedStableMemory 中某个字段缺失：表示该字段保持原值。
+    - updatedStableMemory 中某个字段为空字符串：表示显式清空该字段。
+    - updatedStableMemory.confirmedFacts：只写当前已经确认、可以直接成立的事实。
+    - updatedStableMemory.keyEvidence：只写支撑事实的关键依据、证据来源或命中摘要。
+    - updatedStableMemory.openQuestions：只写仍阻碍收敛的未知点、限制或待确认项。
+    - decision.summary：一句话概括你本轮的判断或下一步意图。
+    - decision.reason：说明你为什么这样判断，必须基于已给上下文、记忆或真实结果。
+    - decision.expectedOutcome：说明你希望下一跳拿到什么结果，帮助后续节点收敛。
+    - readyToDeliver=true 只表示当前已经具备最终交付所需的信息、证据和产物。
+    - nextAction=learning：当你已经知道缺少哪类能力说明，且补齐后能明显降低不确定性时选择。
+    - nextAction=hand：当下一步已经明确成一批工具调用，且你能给出完整合法的 toolUsePlan 时选择。
+    - hand.toolUsePlan.mode：parallel 只用于只读且彼此独立、并行安全的调用；其余情况必须用 serial。
+    - hand.toolUsePlan.calls[*].toolName：必须严格使用当前工具说明里的精确名称。
+    - hand.toolUsePlan.calls[*].args：必须是对象，字段名、必填参数和参数层级都必须与工具说明一致。
+    - nextAction=mouth：只在 readyToDeliver=true 且当前已经足够形成最终交付时选择。
+  </output_contract>
 
   <examples>
     <example_keep_notes>
@@ -347,6 +350,31 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
         }
       }
     </example_keep_notes>
+
+    <example_tool_plan>
+      {
+        "decision": {
+          "summary": "下一步已经明确，准备执行真实工具调用。",
+          "reason": "当前已具备所需能力，且已经能写出完整合法的工具参数。",
+          "expectedOutcome": "拿到当前工作区路径，供后续判断继续使用。"
+        },
+        "readyToDeliver": false,
+        "nextAction": {
+          "action": "hand",
+          "toolUsePlan": {
+            "mode": "serial",
+            "calls": [
+              {
+                "toolName": "terminal_run_command",
+                "args": {
+                  "command": "pwd"
+                }
+              }
+            ]
+          }
+        }
+      }
+    </example_tool_plan>
 
     <example_partial_notes_update>
       {
@@ -376,23 +404,16 @@ ${input.state.task.userInput}
   </task_goal>
 
   <reference_scope>
-这是当前任务的资料范围、工作区边界与默认可检索范围说明。
-它描述当前任务默认可以接触的资料范围，以及用户是否已经显式缩圈。
-
 ${renderReferenceScopeText(input.ctx.referenceScope)}
   </reference_scope>
 
   <memory>
     <your_notes>
-这是你之前沉淀下来的任务笔记。
-它记录当前任务中已经确认的事实、关键依据和仍未解决的问题。
-
 ${renderHumanStableNotes(input.state, 'brain_prompt')}
     </your_notes>
 
     <recent_progress>
 ${renderRoundSection({
-  intro: '这是最近一轮过程记录。',
   records: getLastRoundFocus(input.state) ? [getLastRoundFocus(input.state)!] : [],
   detail: 'focus'
 })}
@@ -400,14 +421,13 @@ ${renderRoundSection({
 
     <earlier_attempts>
 ${renderRoundSection({
-  intro: '这是更早几轮过程记录。',
   records: getHistoryChainRounds(input.state),
   detail: 'chain'
 })}
     </earlier_attempts>
 
     <recalled_history>
-${renderLoadedHistorySection(getLoadedHistoryContext(input.state))}
+${renderLoadedHistoryText(getLoadedHistoryContext(input.state))}
     </recalled_history>
   </memory>
 
@@ -416,8 +436,6 @@ ${renderAvailableSkillsSection(input.state)}
   </available_skills>
 
   <correction_hint>
-这是当前的收敛或纠偏提示。
-
 ${input.state.execution.watchHint ? renderWatchHintForBrain(input.state.execution.watchHint) : 'none'}
   </correction_hint>
 </user_context>

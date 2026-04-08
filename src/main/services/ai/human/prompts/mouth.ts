@@ -11,11 +11,7 @@ import { renderWatchHintForMouth } from './watchHints'
 
 const renderRecentProgressSection = (record: HumanRoundRecord | undefined): string => {
   if (!record) {
-    return `
-这是最近一轮过程记录。
-
-none
-`.trim()
+    return 'none'
   }
 
   const progressText =
@@ -55,8 +51,6 @@ ${record.execution.toolResults.map((result) => `- \`${result.toolName}\`：${res
           : `- mouth 输出摘要：${record.execution.summary}`
 
   return `
-这是最近一轮过程记录。
-
 - 第 ${record.roundId} 轮判断：${record.decision.decision.summary}
 - 原因：${record.decision.decision.reason}
 - 预期结果：${record.decision.decision.expectedOutcome}
@@ -83,6 +77,24 @@ export const buildMouthPrompt = (input: { state: HumanState; deliveryMode: Human
     只把已经确认的信息组织成最终交付。
   </working_style>
 
+  <source_of_truth>
+    - final_decision 是 brain 已经确认的最终判断；你负责表达，不负责重新推翻或改写它。
+    - your_notes 是当前任务的稳定事实来源，包括已确认事实、关键依据和未决问题；正文中的事实与依据优先从这里取。
+    - recent_progress 只用于补充最近完成到哪里、最近结果如何，不必把内部过程完整复述出来。
+    - runtime_artifacts 只允许准确引用已经给出的路径、文件名、状态和摘要，不要补编额外元数据。
+    - correction_hint 只用于如实说明限制、阻断或未完成点，不要把它扩写成新的事实。
+  </source_of_truth>
+
+  <context_block_guide>
+    - delivery_mode：当前交付模式，决定结果面向谁，以及结果应该如何组织。
+    - task_goal：用户原始诉求与限制。
+    - final_decision：brain 已经确认的最终判断与收口方向。
+    - your_notes：稳定任务笔记，按“已确认 / 关键依据 / 未决问题”组织。
+    - recent_progress：最近一轮过程记录，用于补充当前完成到哪里。
+    - runtime_artifacts：运行中已经产生的真实产物列表。
+    - correction_hint：当前额外的收敛或纠偏提醒；若无则为 none。
+  </context_block_guide>
+
   <delivery_principles>
     1. 如果任务已经完成，先直接给出结论，再给关键依据，再给结果或产物说明。
     2. 如果当前结果有限，先说明已经完成到哪里，再说明限制和继续需要什么。
@@ -96,17 +108,14 @@ export const buildMouthPrompt = (input: { state: HumanState; deliveryMode: Human
 ${DELIVERY_MODE_PROMPT_RULES[input.deliveryMode]}
   </delivery_mode_rules>
 
-  <output_rules>
-    你必须只输出最终 markdown 正文，不要输出任何额外说明，不要包 JSON，不要包代码块。
-  </output_rules>
-
-  <output_principles>
+  <output_contract>
+    - 你必须只输出最终 markdown 正文，不要输出任何额外说明、JSON 或代码块。
     - 不要引入新的事实、依据、步骤或承诺。
     - 不要暴露内部字段名、节点名或系统术语。
     - 如果依据不足，就保持保守表达，不要写成确定结论。
     - 不要把未来可能执行的工具动作写成“后续会自动完成”或“已经在进行中”。
     - 输出必须是完整结果，而不是零散句子或局部片段。
-  </output_principles>
+  </output_contract>
 
   <output_example>
 ${DELIVERY_MODE_PROMPT_EXAMPLES[input.deliveryMode]}

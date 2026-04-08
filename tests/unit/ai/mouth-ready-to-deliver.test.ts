@@ -72,10 +72,35 @@ describe('ai unit mouth readyToDeliver guard', () => {
       deliveryMode: 'user_answer'
     }).system
 
+    expect(prompt).toContain('<source_of_truth>')
+    expect(prompt).toContain('<context_block_guide>')
+    expect(prompt).toContain('<output_contract>')
+    expect(prompt).toContain('final_decision 是 brain 已经确认的最终判断')
+    expect(prompt).toContain('runtime_artifacts 只允许准确引用已经给出的路径')
     expect(prompt).toContain('你不会调用工具，也不会继续推进未完成步骤')
     expect(prompt).toContain('不要把未来可能执行的工具动作写成“后续会自动完成”')
     expect(prompt).toContain('你必须只输出最终 markdown 正文')
     expect(prompt).not.toContain('"deliveryMarkdown"')
     expect(prompt).not.toContain('"summary"')
+  })
+
+  it('keeps mouth user-context blocks data-only and moves explanations into system', () => {
+    const result = buildMouthPrompt({
+      state: createInitialHumanState({
+        taskId: 'task-2',
+        userInput: '请根据当前信息给我一个最终答复'
+      }),
+      deliveryMode: 'user_answer'
+    })
+
+    expect(result.system).toContain('delivery_mode：当前交付模式')
+    expect(result.system).toContain('final_decision：brain 已经确认的最终判断')
+    expect(result.user).not.toContain('这是当前交付模式。')
+    expect(result.user).not.toContain('这是用户这次原始诉求与限制。')
+    expect(result.user).not.toContain('这是 brain 已经做出的最终决定。')
+    expect(result.user).not.toContain('这是任务的稳定笔记')
+    expect(result.user).not.toContain('这是最近一轮最相关的过程记录。')
+    expect(result.user).not.toContain('这是运行中已经产生的真实产物列表。')
+    expect(result.user).not.toContain('这是当前额外的收敛或纠偏提醒。')
   })
 })
