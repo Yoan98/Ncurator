@@ -84,22 +84,15 @@ describe('ai tool hand backend', () => {
             taskId: runtime.taskId,
             userInput: 'inspect docx in parallel'
           }),
-          brainMemory: {
-            inside: {
-              facts: [],
-              evidences: [],
-              openQuestions: []
-            },
-            outside: {
-              ...createInitialHumanState({
-                taskId: runtime.taskId,
-                userInput: 'inspect docx in parallel'
-              }).brainMemory.outside,
-              learnedSkillIds: ['docx-read']
-            }
+          skills: {
+            learnedSkillIds: ['docx-read']
           },
-          lastBrainDecision: {
-            memoryOps: [],
+          execution: {
+            ...createInitialHumanState({
+              taskId: runtime.taskId,
+              userInput: 'inspect docx in parallel'
+            }).execution,
+            currentDecision: {
             decision: {
               summary: '并行读取 docx 结构和命中段落',
               reason: '两个工具都是 read_only 且 parallelSafe。',
@@ -129,6 +122,7 @@ describe('ai tool hand backend', () => {
                 ]
               }
             }
+            }
           }
         })
 
@@ -139,15 +133,12 @@ describe('ai tool hand backend', () => {
 
         const unsafeState = await handNode({
           ...safeState,
-          brainMemory: {
-            ...safeState.brainMemory,
-            outside: {
-              ...safeState.brainMemory.outside,
-              learnedSkillIds: ['docx-read', 'docx-write', 'docx-delivery']
-            }
+          skills: {
+            learnedSkillIds: ['docx-read', 'docx-write', 'docx-delivery']
           },
-          lastBrainDecision: {
-            memoryOps: [],
+          execution: {
+            ...safeState.execution,
+            currentDecision: {
             decision: {
               summary: '并行写入和 validate',
               reason: '故意构造不安全批次，验证 hand 是否拒绝。',
@@ -181,6 +172,7 @@ describe('ai tool hand backend', () => {
                 ]
               }
             }
+            }
           }
         })
 
@@ -199,26 +191,26 @@ describe('ai tool hand backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.safeState.lastToolUseResults?.length === 2 &&
-            result.safeState.lastToolUseResults.every((item) => item.code === 'ok') &&
-            !result.safeState.watchHint,
+          result.safeState.execution.lastToolResults?.length === 2 &&
+            result.safeState.execution.lastToolResults.every((item) => item.code === 'ok') &&
+            !result.safeState.execution.watchHint,
           {
             name: 'safe-parallel-batch-executes',
             message: '只读且 parallelSafe 的工具批次应真正执行，并写回多个 tool result。',
-            data: result.safeState.lastToolUseResults
+            data: result.safeState.execution.lastToolResults
           }
         )
 
         runtime.assertThat(
-          result.unsafeState.watchHint?.code === 'hand_plan_invalid' &&
-            result.unsafeState.watchHint.detail.reason === 'parallel_requires_read_only' &&
+          result.unsafeState.execution.watchHint?.code === 'hand_plan_invalid' &&
+            result.unsafeState.execution.watchHint.detail.reason === 'parallel_requires_read_only' &&
             result.toolStartedAfterUnsafe === result.toolStartedBeforeUnsafe,
           {
             name: 'unsafe-parallel-batch-stops-before-tool-execution',
             message: 'mutating/unsafe 批次应直接返回 brain 并写入 watchHint，而不是继续执行工具。',
             data: {
-              watchHint: result.unsafeState.watchHint,
-              preservedLastToolUseResults: result.unsafeState.lastToolUseResults,
+              watchHint: result.unsafeState.execution.watchHint,
+              preservedLastToolUseResults: result.unsafeState.execution.lastToolResults,
               toolStartedBeforeUnsafe: result.toolStartedBeforeUnsafe,
               toolStartedAfterUnsafe: result.toolStartedAfterUnsafe
             }

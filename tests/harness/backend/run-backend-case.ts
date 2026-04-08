@@ -150,7 +150,7 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
     throw error
   } finally {
     const runtimeEvents = eventCollector.snapshot()
-    const runtimeArtifacts = workspaceRoot
+    const runArtifacts = workspaceRoot
       ? await collectBackendRunArtifacts({
           scope,
           caseId: definition.caseId,
@@ -175,7 +175,7 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
           artifacts: [],
           persistedManifest: emptySeedManifest
         }
-    const artifacts = [...runtimeArtifacts, ...seedArtifacts.artifacts]
+    const artifacts = [...runArtifacts, ...seedArtifacts.artifacts]
     recordEvent({
       type: 'run',
       name: 'end',

@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { buildBrainSystemPrompt } from '../../../src/main/services/ai/human/prompts/brain'
-import { lastBrainDecisionSchema } from '../../../src/main/services/ai/human/schema'
+import type { AiRunContext } from '../../../src/main/services/ai/types'
+import { buildBrainPrompt } from '../../../src/main/services/ai/human/prompts/brain'
+import { humanDecisionSchema } from '../../../src/main/services/ai/human/schema'
+import { createInitialHumanState } from '../../../src/main/services/ai/human/state/schema'
 import {
   countActiveToolNamesForSkillIds,
   fitSkillIdsToToolBudget
 } from '../../../src/main/services/ai/human/node/learningNode/toolBudget'
+import { buildReferenceScope } from '../../../src/main/services/ai/prompts/referenceScope'
 
 type FakeSkillId = 'alpha' | 'beta' | 'gamma' | 'delta' | 'epsilon' | 'zeta'
 
@@ -18,6 +21,30 @@ const FAKE_SKILL_TOOLS: Record<FakeSkillId, readonly string[]> = {
 }
 
 const getFakeToolNames = (skillId: FakeSkillId): readonly string[] => FAKE_SKILL_TOOLS[skillId]
+
+const createStubAiRunContext = (referenceScope: AiRunContext['referenceScope']): AiRunContext => ({
+  runId: 'run-test',
+  referenceScope,
+  checkCancelled: () => {},
+  chatStructured: async () => {
+    throw new Error('chatStructured should not be called in prompt unit tests')
+  },
+  sendEvent: () => {},
+  requestApproval: async () => ({
+    approved: false
+  }),
+  loadHistory: async () => ({
+    recentTurnsText: '',
+    sessionSummaryText: ''
+  }),
+  trackDocxOpen: () => {},
+  trackDocxChanges: () => {},
+  resolveDocxOpenTarget: async () => {
+    throw new Error('resolveDocxOpenTarget should not be called in prompt unit tests')
+  },
+  documentsStore: undefined as never,
+  embeddingService: undefined as never
+})
 
 describe('ai unit learning tool budget', () => {
   it('counts unique active tool names across learned skills', () => {
@@ -62,8 +89,7 @@ describe('ai unit learning tool budget', () => {
 
   it('allows learning decisions to request three or more skills', () => {
     expect(
-      lastBrainDecisionSchema.parse({
-        memoryOps: [],
+      humanDecisionSchema.parse({
         decision: {
           summary: '学习多个技能',
           reason: '测试学习不再受固定数量上限约束',
@@ -84,20 +110,34 @@ describe('ai unit learning tool budget', () => {
   })
 
   it('mentions the natural-language input and action contracts in the brain prompt', () => {
-    const prompt = buildBrainSystemPrompt()
+    const prompt = buildBrainPrompt({
+      state: createInitialHumanState({
+        taskId: 'task-1',
+        userInput: '请继续处理这个任务'
+      }),
+      ctx: createStubAiRunContext(
+        buildReferenceScope({
+          workspace: {
+            workspaceId: 'workspace-1',
+            workspaceName: 'workspace',
+            rootPath: '/tmp/workspace-root'
+          },
+          selectedReferences: []
+        })
+      )
+    }).system
 
-    expect(prompt).toContain('<input_use_rules>')
-    expect(prompt).toContain('任务目标（task_goal）')
-    expect(prompt).toContain('资料范围与工作区边界（reference_scope）')
-    expect(prompt).toContain('<reasoning_rules>')
-    expect(prompt).toContain('什么状态才算真正完成')
-    expect(prompt).toContain('误判成“无法获得”')
-    expect(prompt).toContain('低成本且高信息增益')
-    expect(prompt).toContain('<action_contract>')
+    expect(prompt).toContain('<autonomy_principles>')
+    expect(prompt).toContain('任务、记忆、技能、历史和提示等不同类型的信息')
+    expect(prompt).toContain('参考材料，不是固定流程')
+    expect(prompt).toContain('<action_boundaries>')
     expect(prompt).toContain('你只负责判断下一步')
-    expect(prompt).toContain('learning 没有固定数量上限')
-    expect(prompt).toContain('active tool budget')
-    expect(prompt).toContain('mouth 不会执行任何工具')
+    expect(prompt).toContain('learning 只负责补齐当前真正缺失的技能说明')
+    expect(prompt).toContain('<output_rules>')
+    expect(prompt).toContain('updatedStableMemory')
+    expect(prompt).toContain('mouth 只负责整理最终结果，不新增事实，不继续执行工具')
+    expect(prompt).not.toContain('<input_use_rules>')
+    expect(prompt).not.toContain('<reasoning_rules>')
     expect(prompt).not.toContain('human graph')
     expect(prompt).not.toContain('<node_topology>')
   })

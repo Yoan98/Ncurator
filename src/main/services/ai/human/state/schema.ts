@@ -1,21 +1,23 @@
 import { StateSchema } from '@langchain/langgraph'
-import { buildSkillCatalog } from '../skills'
 import {
-  humanBrainMemorySchema,
-  humanRuntimeSchema,
+  humanExecutionSchema,
+  humanMemorySchema,
+  humanSkillsSchema,
   humanStateContractSchema,
   humanTaskInputSchema,
   humanTraceSchema
 } from '../schema'
 import type { HumanState, HumanTaskInput } from '../types'
 
-export const DEFAULT_HUMAN_RUNTIME: HumanState['runtime'] = {
+export const DEFAULT_HUMAN_EXECUTION: HumanState['execution'] = {
   stage: 'brain',
-  status: 'running'
+  status: 'running',
+  artifacts: []
 }
 
-export const createDefaultHumanRuntime = (): HumanState['runtime'] => ({
-  ...DEFAULT_HUMAN_RUNTIME
+export const createDefaultHumanExecution = (): HumanState['execution'] => ({
+  ...DEFAULT_HUMAN_EXECUTION,
+  artifacts: []
 })
 
 export const createEmptyHumanTaskInput = (): HumanTaskInput => ({
@@ -23,28 +25,23 @@ export const createEmptyHumanTaskInput = (): HumanTaskInput => ({
   userInput: ''
 })
 
-export const createDefaultHumanSkillCatalog = (): HumanState['brainMemory']['outside']['skillCatalog'] =>
-  buildSkillCatalog()
-
-export const createDefaultHumanBrainMemoryInside = (): HumanState['brainMemory']['inside'] => ({
-  facts: [],
-  evidences: [],
-  openQuestions: []
+export const createDefaultHumanStableMemory = (): HumanState['memory']['stable'] => ({
+  confirmedFacts: '',
+  keyEvidence: '',
+  openQuestions: ''
 })
 
-export const createDefaultHumanBrainMemoryOutside = (): HumanState['brainMemory']['outside'] => ({
-  skillCatalog: createDefaultHumanSkillCatalog(),
-  learnedSkillIds: [],
-  brainDecisions: []
-})
-
-export const createDefaultHumanBrainMemory = (): HumanState['brainMemory'] => ({
-  inside: createDefaultHumanBrainMemoryInside(),
-  outside: createDefaultHumanBrainMemoryOutside()
-})
-
-export const createDefaultHumanProcessMemory = (): HumanState['processMemory'] => ({
+export const createDefaultHumanMemoryHistory = (): HumanState['memory']['history'] => ({
   roundHistory: []
+})
+
+export const createDefaultHumanMemory = (): HumanState['memory'] => ({
+  stable: createDefaultHumanStableMemory(),
+  history: createDefaultHumanMemoryHistory()
+})
+
+export const createDefaultHumanSkills = (): HumanState['skills'] => ({
+  learnedSkillIds: []
 })
 
 export const createDefaultHumanTrace = (): HumanState['trace'] => ({
@@ -53,13 +50,12 @@ export const createDefaultHumanTrace = (): HumanState['trace'] => ({
 
 export const createDefaultHumanStateFields = (): Pick<
   HumanState,
-  'task' | 'runtime' | 'brainMemory' | 'processMemory' | 'runtimeArtifacts' | 'trace'
+  'task' | 'execution' | 'memory' | 'skills' | 'trace'
 > => ({
   task: createEmptyHumanTaskInput(),
-  runtime: createDefaultHumanRuntime(),
-  brainMemory: createDefaultHumanBrainMemory(),
-  processMemory: createDefaultHumanProcessMemory(),
-  runtimeArtifacts: [],
+  execution: createDefaultHumanExecution(),
+  memory: createDefaultHumanMemory(),
+  skills: createDefaultHumanSkills(),
   trace: createDefaultHumanTrace()
 })
 
@@ -71,14 +67,9 @@ export const createInitialHumanState = (task: HumanTaskInput): HumanState => ({
 export const createHumanRunStateSchema = () => {
   return new StateSchema({
     task: humanTaskInputSchema.default(createEmptyHumanTaskInput),
-    runtime: humanRuntimeSchema.default(createDefaultHumanRuntime),
-    brainMemory: humanBrainMemorySchema.default(createDefaultHumanBrainMemory),
-    processMemory: humanStateContractSchema.shape.processMemory.default(createDefaultHumanProcessMemory),
-    lastToolUseResults: humanStateContractSchema.shape.lastToolUseResults,
-    lastLearningOutcome: humanStateContractSchema.shape.lastLearningOutcome,
-    lastBrainDecision: humanStateContractSchema.shape.lastBrainDecision,
-    watchHint: humanStateContractSchema.shape.watchHint,
-    runtimeArtifacts: humanStateContractSchema.shape.runtimeArtifacts.default(() => []),
+    execution: humanExecutionSchema.default(createDefaultHumanExecution),
+    memory: humanMemorySchema.default(createDefaultHumanMemory),
+    skills: humanSkillsSchema.default(createDefaultHumanSkills),
     result: humanStateContractSchema.shape.result,
     trace: humanTraceSchema.default(createDefaultHumanTrace)
   })

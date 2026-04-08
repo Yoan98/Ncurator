@@ -1,6 +1,6 @@
 import type { AiRunContext } from '../../../types'
 import type { HumanDeliveryMode, HumanRuntimeCache, HumanState } from '../../types'
-import { buildMouthPromptContext } from '../../prompts/mouth'
+import { buildMouthPrompt } from '../../prompts/mouth'
 import { completeHumanTask } from '../utils/stateTransitions'
 import { buildDeliveryModeFallbackMarkdown } from '../../shared/deliveryContracts'
 import { deriveDeliverySummary } from '../../shared/deliverySummary'
@@ -16,7 +16,7 @@ export const createMouthNode = (input: {
     input.ctx.checkCancelled()
     input.cache.currentState = state
 
-    const prompt = buildMouthPromptContext({
+    const prompt = buildMouthPrompt({
       state,
       deliveryMode: input.deliveryMode
     })
@@ -45,7 +45,7 @@ export const createMouthNode = (input: {
       buildDeliveryModeFallbackMarkdown({
         state,
         mode: input.deliveryMode,
-        summary: state.lastBrainDecision?.decision.summary || '任务结束'
+        summary: state.execution.currentDecision?.decision.summary || '任务结束'
       })
     const summary = deriveDeliverySummary({
       deliveryMarkdown,

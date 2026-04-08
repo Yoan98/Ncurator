@@ -1,7 +1,7 @@
 import type {
-  BrainMemoryOp,
+  HumanDecision,
   HumanState,
-  LastBrainDecision,
+  HumanStableMemoryPatch,
   RuntimeSkillId
 } from '../../../src/main/services/ai/human/types'
 import type { AiRunEvent, JsonObject, JsonValue } from '../../../src/shared/types'
@@ -35,9 +35,9 @@ export const buildLearnSkillsDecision = (input: {
   summary: string
   reason: string
   expectedOutcome: string
-  memoryOps?: BrainMemoryOp[]
-}): LastBrainDecision => ({
-  memoryOps: input.memoryOps || [],
+  updatedStableMemory?: HumanStableMemoryPatch
+}): HumanDecision => ({
+  updatedStableMemory: input.updatedStableMemory,
   decision: buildDecisionMetadata(input),
   readyToDeliver: false,
   nextAction: {
@@ -52,10 +52,10 @@ export const buildToolDecision = (input: {
   summary: string
   reason: string
   expectedOutcome: string
-  memoryOps?: BrainMemoryOp[]
+  updatedStableMemory?: HumanStableMemoryPatch
   mode?: 'parallel' | 'serial'
-}): LastBrainDecision => ({
-  memoryOps: input.memoryOps || [],
+}): HumanDecision => ({
+  updatedStableMemory: input.updatedStableMemory,
   decision: buildDecisionMetadata(input),
   readyToDeliver: false,
   nextAction: {
@@ -76,9 +76,9 @@ export const buildCompleteTaskDecision = (input: {
   summary: string
   reason: string
   expectedOutcome: string
-  memoryOps?: BrainMemoryOp[]
-}): LastBrainDecision => ({
-  memoryOps: input.memoryOps || [],
+  updatedStableMemory?: HumanStableMemoryPatch
+}): HumanDecision => ({
+  updatedStableMemory: input.updatedStableMemory,
   decision: buildDecisionMetadata(input),
   readyToDeliver: true,
   nextAction: {
@@ -141,9 +141,9 @@ export const readSingleToolResultData = <TValue extends JsonValue>(
   state: HumanState,
   toolName?: string
 ): TValue => {
-  const result = state.lastToolUseResults?.[0]
+  const result = state.execution.lastToolResults?.[0]
   if (!result) {
-    throw new Error('lastToolUseResults is empty')
+    throw new Error('execution.lastToolResults is empty')
   }
   if (toolName && result.toolName !== toolName) {
     throw new Error(`expected tool result ${toolName}, received ${result.toolName}`)

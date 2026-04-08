@@ -59,11 +59,9 @@ export const HUMAN_WATCH_HINT_CODES = [
   'learning_tool_budget_exceeded',
   'hand_plan_invalid',
   'hand_tool_limit_exceeded',
-  'brain_invalid_mouth_transition',
-  'memory_invalid_op'
+  'brain_invalid_mouth_transition'
 ] as const
 
-export const HUMAN_MAX_BRAIN_DECISION_HISTORY = 10
 export const HUMAN_MAX_ACTIVE_TOOLS = 20
 export const HUMAN_DEFAULT_TOOL_CALL_LIMIT = 50
 export const HUMAN_ROUND_EXECUTION_KINDS = [

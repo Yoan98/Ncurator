@@ -1,12 +1,11 @@
-import {
-  type PlanPromptInput,
-  JSON_ONLY_PLAN_CONTRACT
-} from './shared'
+import { type PlanPromptInput, JSON_ONLY_PLAN_CONTRACT } from './shared'
 import { renderReferenceScopeText } from '../../prompts/referenceScope'
-import { renderLineList } from '../../utils/render'
 
-export const buildPlanSystemPrompt = (): string =>
-  `
+export const buildPlanPrompt = (input: PlanPromptInput) => {
+  const contextEvidenceText =
+    input.contextEvidence.length > 0 ? input.contextEvidence.join('\n') : '(none)'
+
+  const system = `
 <system>
   <role>
     你是 director 的任务规划器。
@@ -50,13 +49,7 @@ ${JSON_ONLY_PLAN_CONTRACT}
 </system>
 `.trim()
 
-export const buildPlanUserPrompt = (input: PlanPromptInput): string => {
-  const contextEvidenceText = renderLineList(input.contextEvidence, {
-    fallback: '(none)',
-    style: 'plain'
-  })
-
-  return `
+  const user = `
 <user_context>
   <current_request>
 当前需要规划的原始用户请求：
@@ -82,11 +75,9 @@ ${contextEvidenceText}
   </reusable_context_evidence>
 </user_context>
 `.trim()
-}
 
-export const buildPlanPrompt = (input: PlanPromptInput) => {
   return {
-    system: buildPlanSystemPrompt(),
-    user: buildPlanUserPrompt(input)
+    system,
+    user
   }
 }

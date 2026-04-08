@@ -92,22 +92,15 @@ describe('ai tool hand backend', () => {
             taskId: runtime.taskId,
             userInput: '请顺序完成风险周报文档修改与预览'
           }),
-          brainMemory: {
-            inside: {
-              facts: [],
-              evidences: [],
-              openQuestions: []
-            },
-            outside: {
-              ...createInitialHumanState({
-                taskId: runtime.taskId,
-                userInput: '请顺序完成风险周报文档修改与预览'
-              }).brainMemory.outside,
-              learnedSkillIds: ['docx-read', 'docx-write', 'docx-delivery']
-            }
+          skills: {
+            learnedSkillIds: ['docx-read', 'docx-write', 'docx-delivery']
           },
-          lastBrainDecision: {
-            memoryOps: [],
+          execution: {
+            ...createInitialHumanState({
+              taskId: runtime.taskId,
+              userInput: '请顺序完成风险周报文档修改与预览'
+            }).execution,
+            currentDecision: {
             decision: {
               summary: '串行完成 docx 编辑链路',
               reason: '文档写入、validate 和 preview 依赖同一份最新快照。',
@@ -150,6 +143,7 @@ describe('ai tool hand backend', () => {
                 ]
               }
             }
+            }
           }
         })
 
@@ -158,25 +152,25 @@ describe('ai tool hand backend', () => {
         }
       },
       assert: async (result, runtime) => {
-        const toolNames = result.state.lastToolUseResults?.map((item) => item.toolName) || []
+        const toolNames = result.state.execution.lastToolResults?.map((item) => item.toolName) || []
 
         runtime.assertThat(
           toolNames.join(',') === 'docx_apply_ops,docx_validate,docx_render_preview' &&
-            result.state.lastToolUseResults?.every((item) => item.code === 'ok') &&
-            !result.state.watchHint,
+            result.state.execution.lastToolResults?.every((item) => item.code === 'ok') &&
+            !result.state.execution.watchHint,
           {
             name: 'serial-docx-chain-executes-in-order',
             message: 'serial 模式应按顺序执行 docx_apply_ops、docx_validate、docx_render_preview。',
             data: {
               toolNames,
-              lastToolUseResults: result.state.lastToolUseResults,
-              watchHint: result.state.watchHint
+              lastToolUseResults: result.state.execution.lastToolResults,
+              watchHint: result.state.execution.watchHint
             }
           }
         )
 
         runtime.assertThat(
-          result.state.runtimeArtifacts.some(
+          result.state.execution.artifacts.some(
             (artifact) =>
               artifact.kind === 'file' &&
               artifact.capability === 'docx' &&
@@ -185,7 +179,7 @@ describe('ai tool hand backend', () => {
           {
             name: 'serial-docx-chain-produces-preview-artifact',
             message: 'serial docx 链路完成后应生成 preview artifact。',
-            data: result.state.runtimeArtifacts
+            data: result.state.execution.artifacts
           }
         )
       }

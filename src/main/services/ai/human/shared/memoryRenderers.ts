@@ -1,73 +1,50 @@
-import type { HumanState } from '../types'
-import { renderLineList } from '../../utils/render'
+import type { HumanStableMemory, HumanState } from '../types'
 
 export type HumanMemoryRenderMode = 'brain_prompt' | 'mouth_prompt' | 'fallback_markdown'
+export type HumanStableMemoryField = keyof HumanStableMemory
 
 const getRenderFallback = (mode: HumanMemoryRenderMode): string =>
   mode === 'fallback_markdown' ? '无' : 'none'
 
-const getRenderStyle = (mode: HumanMemoryRenderMode): 'plain' | 'bullet' =>
-  mode === 'fallback_markdown' ? 'bullet' : 'plain'
+const normalizeMemoryText = (value: string): string =>
+  String(value || '')
+    .replace(/\r\n/g, '\n')
+    .trim()
 
-const renderFactLine = (
-  fact: HumanState['brainMemory']['inside']['facts'][number],
-  mode: HumanMemoryRenderMode
-): string =>
-  mode === 'brain_prompt'
-    ? `- 事实 ${fact.id}：${fact.summary}；支持证据=[${fact.evidenceIds.join(', ')}]`
-    : mode === 'mouth_prompt'
-      ? `- ${fact.summary} (evidenceIds=[${fact.evidenceIds.join(', ')}])`
-      : fact.summary
-
-const renderEvidenceLine = (
-  evidence: HumanState['brainMemory']['inside']['evidences'][number],
-  mode: HumanMemoryRenderMode
-): string => {
-  if (mode === 'brain_prompt') {
-    return `- 证据 ${evidence.id}：来源工具 ${evidence.toolName}；摘要：${evidence.summary}${evidence.rawRef ? `；rawRef=${evidence.rawRef}` : ''}`
-  }
-
-  const compact = `${evidence.toolName}: ${evidence.summary}${evidence.rawRef ? ` (${evidence.rawRef})` : ''}`
-  return mode === 'mouth_prompt' ? `- ${compact}` : compact
+const renderStableMemoryValue = (value: string, mode: HumanMemoryRenderMode): string => {
+  const normalized = normalizeMemoryText(value)
+  return normalized || getRenderFallback(mode)
 }
 
-const renderOpenQuestionLine = (question: string, mode: HumanMemoryRenderMode): string =>
-  mode === 'fallback_markdown' ? question : `- ${question}`
+export const renderHumanStableMemoryField = (input: {
+  state: HumanState
+  field: HumanStableMemoryField
+  mode: HumanMemoryRenderMode
+}): string => renderStableMemoryValue(input.state.memory.stable[input.field], input.mode)
 
-export const renderHumanFactLines = (
+export const renderHumanStableNotes = (
   state: HumanState,
   mode: HumanMemoryRenderMode
 ): string =>
-  renderLineList(
-    state.brainMemory.inside.facts.map((fact) => renderFactLine(fact, mode)),
-    {
-      fallback: getRenderFallback(mode),
-      style: getRenderStyle(mode)
-    }
-  )
-
-export const renderHumanEvidenceLines = (
-  state: HumanState,
-  mode: HumanMemoryRenderMode
-): string =>
-  renderLineList(
-    state.brainMemory.inside.evidences.map((evidence) => renderEvidenceLine(evidence, mode)),
-    {
-      fallback: getRenderFallback(mode),
-      style: getRenderStyle(mode)
-    }
-  )
-
-export const renderHumanOpenQuestionLines = (
-  state: HumanState,
-  mode: HumanMemoryRenderMode
-): string =>
-  renderLineList(
-    state.brainMemory.inside.openQuestions.map((question) =>
-      renderOpenQuestionLine(question, mode)
-    ),
-    {
-      fallback: getRenderFallback(mode),
-      style: getRenderStyle(mode)
-    }
-  )
+  [
+    '已确认：',
+    renderHumanStableMemoryField({
+      state,
+      field: 'confirmedFacts',
+      mode
+    }),
+    '',
+    '关键依据：',
+    renderHumanStableMemoryField({
+      state,
+      field: 'keyEvidence',
+      mode
+    }),
+    '',
+    '未决问题：',
+    renderHumanStableMemoryField({
+      state,
+      field: 'openQuestions',
+      mode
+    })
+  ].join('\n')

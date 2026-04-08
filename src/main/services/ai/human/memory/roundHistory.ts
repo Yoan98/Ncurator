@@ -1,13 +1,10 @@
 import { extractArtifactRefsFromToolResult, extractArtifactRefsFromToolResults } from '../../utils/artifacts'
 import {
+  buildToolCallDisplayText,
   renderToolDiagnosticText,
-  renderToolResultDataPreview,
-  buildToolCallDisplayText
+  renderToolResultDataPreview
 } from '../shared/toolResultRenderers'
-import {
-  historyRecallFilterSchema,
-  humanLoadedHistoryContextSchema
-} from '../schema'
+import { historyRecallFilterSchema, humanLoadedHistoryContextSchema } from '../schema'
 import type {
   HumanHistoryToolResult,
   HumanLoadedHistoryContext,
@@ -20,19 +17,17 @@ import type {
   ToolCallResult,
   ToolUsePlan
 } from '../types'
-import { HUMAN_PROCESS_MEMORY_LIMITS } from './constants'
+import { HUMAN_HISTORY_LIMITS } from './constants'
 
-const nextRoundId = (roundHistory: HumanState['processMemory']['roundHistory']): number =>
+const nextRoundId = (roundHistory: HumanState['memory']['history']['roundHistory']): number =>
   (roundHistory.at(-1)?.roundId || 0) + 1
 
 const trimRoundHistory = (
-  roundHistory: HumanState['processMemory']['roundHistory']
-): HumanState['processMemory']['roundHistory'] =>
-  roundHistory.slice(-HUMAN_PROCESS_MEMORY_LIMITS.roundHistory)
+  roundHistory: HumanState['memory']['history']['roundHistory']
+): HumanState['memory']['history']['roundHistory'] =>
+  roundHistory.slice(-HUMAN_HISTORY_LIMITS.roundHistory)
 
-export const buildHistoryToolResult = (
-  result: ToolCallResult
-): HumanHistoryToolResult => {
+export const buildHistoryToolResult = (result: ToolCallResult): HumanHistoryToolResult => {
   const diagnosticText = renderToolDiagnosticText(result).replace(/^；/, '').trim() || undefined
   return {
     toolName: result.toolName,
@@ -93,12 +88,12 @@ export const appendRoundRecord = (input: {
   decision: HumanRoundRecord['decision']
   execution: HumanRoundExecution
   createdAt?: number
-}): HumanState['processMemory'] => ({
-  ...input.state.processMemory,
+}): HumanState['memory']['history'] => ({
+  ...input.state.memory.history,
   roundHistory: trimRoundHistory([
-    ...input.state.processMemory.roundHistory,
+    ...input.state.memory.history.roundHistory,
     {
-      roundId: nextRoundId(input.state.processMemory.roundHistory),
+      roundId: nextRoundId(input.state.memory.history.roundHistory),
       createdAt: input.createdAt || Date.now(),
       decision: input.decision,
       execution: input.execution
@@ -110,35 +105,30 @@ export const appendDecisionRound = (input: {
   state: HumanState
   execution: HumanRoundExecution
   createdAt?: number
-}): HumanState['processMemory'] => {
-  if (!input.state.lastBrainDecision) {
-    return input.state.processMemory
+}): HumanState['memory']['history'] => {
+  if (!input.state.execution.currentDecision) {
+    return input.state.memory.history
   }
 
   return appendRoundRecord({
     state: input.state,
-    decision: input.state.lastBrainDecision,
+    decision: input.state.execution.currentDecision,
     execution: input.execution,
     createdAt: input.createdAt
   })
 }
 
-export const getLastRoundFocus = (
-  state: HumanState
-): HumanRoundRecord | undefined => state.processMemory.roundHistory.at(-1)
+export const getLastRoundFocus = (state: HumanState): HumanRoundRecord | undefined =>
+  state.memory.history.roundHistory.at(-1)
 
 export const getHistoryChainRounds = (state: HumanState): HumanRoundRecord[] =>
-  state.processMemory.roundHistory
-    .slice(0, -1)
-    .slice(-HUMAN_PROCESS_MEMORY_LIMITS.historyChain)
+  state.memory.history.roundHistory.slice(0, -1).slice(-HUMAN_HISTORY_LIMITS.historyChain)
 
 export const getLoadedHistoryContext = (
   state: HumanState
-): HumanLoadedHistoryContext | undefined => state.processMemory.loadedHistoryContext
+): HumanLoadedHistoryContext | undefined => state.memory.history.loadedHistoryContext
 
-const readExecutionWatchHint = (
-  execution: HumanRoundExecution
-): HumanWatchHint | undefined =>
+const readExecutionWatchHint = (execution: HumanRoundExecution): HumanWatchHint | undefined =>
   execution.kind === 'pre_execution_blocked' ||
   execution.kind === 'learning' ||
   execution.kind === 'hand'
@@ -185,7 +175,7 @@ export const filterRoundHistory = (input: {
       if (!matchesWatchHintCodes(record.execution, filters.watchHintCodes)) return false
       return true
     })
-    .slice(-Math.max(1, filters.limit || HUMAN_PROCESS_MEMORY_LIMITS.loadedHistoryRounds))
+    .slice(-Math.max(1, filters.limit || HUMAN_HISTORY_LIMITS.loadedHistoryRounds))
 }
 
 export const buildLoadedHistoryContext = (input: {
@@ -193,7 +183,7 @@ export const buildLoadedHistoryContext = (input: {
   rounds: HumanRoundRecord[]
 }): HumanLoadedHistoryContext => ({
   filters: historyRecallFilterSchema.parse(input.filters),
-  rounds: input.rounds.slice(0, HUMAN_PROCESS_MEMORY_LIMITS.loadedHistoryRounds)
+  rounds: input.rounds.slice(0, HUMAN_HISTORY_LIMITS.loadedHistoryRounds)
 })
 
 export const readLoadedHistoryContextFromToolResults = (

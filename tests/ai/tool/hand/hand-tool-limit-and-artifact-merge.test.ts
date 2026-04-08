@@ -41,27 +41,20 @@ const buildHandState = (input: {
     taskId: input.taskId,
     userInput: input.userInput
   }),
-  brainMemory: {
-    inside: {
-      facts: [],
-      evidences: [],
-      openQuestions: []
-    },
-    outside: {
-      ...createInitialHumanState({
-        taskId: input.taskId,
-        userInput: input.userInput
-      }).brainMemory.outside,
-      learnedSkillIds: input.learnedSkillIds
-    }
+  skills: {
+    learnedSkillIds: input.learnedSkillIds
   },
-  runtimeArtifacts: input.previousArtifacts || [],
-  lastBrainDecision: {
-    memoryOps: [],
+  execution: {
+    ...createInitialHumanState({
+      taskId: input.taskId,
+      userInput: input.userInput
+    }).execution,
+    artifacts: input.previousArtifacts || [],
+    currentDecision: {
     decision: {
       summary: `调用 ${input.toolName}`,
       reason: '验证 hand 的工具上限与 artifact 合并行为。',
-      expectedOutcome: '工具执行后更新 runtimeArtifacts。'
+      expectedOutcome: '工具执行后更新 execution.artifacts。'
     },
     readyToDeliver: false,
     nextAction: {
@@ -76,6 +69,7 @@ const buildHandState = (input: {
         ]
       }
     }
+    }
   }
 })
 
@@ -87,7 +81,7 @@ describe('ai tool hand backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['hand'],
-      description: '验证 hand 的工具调用上限收敛和 runtimeArtifacts 合并。',
+      description: '验证 hand 的工具调用上限收敛和 execution.artifacts 合并。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -166,7 +160,7 @@ describe('ai tool hand backend', () => {
               docId: openResult.docId,
               format: 'html'
             },
-            previousArtifacts: firstState.runtimeArtifacts
+            previousArtifacts: firstState.execution.artifacts
           }),
           trace: firstState.trace
         })
@@ -178,22 +172,22 @@ describe('ai tool hand backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.firstState.runtimeArtifacts.length === 1 &&
-            result.firstState.runtimeArtifacts[0]?.kind === 'file' &&
-            result.firstState.runtimeArtifacts[0]?.capability === 'terminal_exec',
+          result.firstState.execution.artifacts.length === 1 &&
+            result.firstState.execution.artifacts[0]?.kind === 'file' &&
+            result.firstState.execution.artifacts[0]?.capability === 'terminal_exec',
           {
             name: 'runtime-artifacts-grow-after-first-tool',
-            message: '第一次工具执行后，runtimeArtifacts 应记录 terminal 产物。',
-            data: result.firstState.runtimeArtifacts
+            message: '第一次工具执行后，execution.artifacts 应记录 terminal 产物。',
+            data: result.firstState.execution.artifacts
           }
         )
 
         runtime.assertThat(
-          result.secondState.runtimeArtifacts.length === 2 &&
-            result.secondState.runtimeArtifacts.some(
+          result.secondState.execution.artifacts.length === 2 &&
+            result.secondState.execution.artifacts.some(
               (artifact) => artifact.kind === 'file' && artifact.capability === 'terminal_exec'
             ) &&
-            result.secondState.runtimeArtifacts.some(
+            result.secondState.execution.artifacts.some(
               (artifact) =>
                 artifact.kind === 'file' &&
                 artifact.capability === 'docx' &&
@@ -202,20 +196,20 @@ describe('ai tool hand backend', () => {
           {
             name: 'runtime-artifacts-merge-across-tools',
             message: '多个工具产生的 artifact 应在 hand 内正确合并，而不是相互覆盖。',
-            data: result.secondState.runtimeArtifacts
+            data: result.secondState.execution.artifacts
           }
         )
 
         runtime.assertThat(
-          result.secondState.watchHint?.code === 'hand_tool_limit_exceeded' &&
-            result.secondState.watchHint.detail.limit === 1 &&
-            result.secondState.lastToolUseResults?.[0]?.toolName === 'docx_render_preview',
+          result.secondState.execution.watchHint?.code === 'hand_tool_limit_exceeded' &&
+            result.secondState.execution.watchHint.detail.limit === 1 &&
+            result.secondState.execution.lastToolResults?.[0]?.toolName === 'docx_render_preview',
           {
             name: 'tool-limit-produces-converging-watchhint',
             message: '超过 hardActionLimit 后，hand 应写入收敛型 watchHint，同时保留当前工具结果。',
             data: {
-              watchHint: result.secondState.watchHint,
-              lastToolUseResults: result.secondState.lastToolUseResults
+              watchHint: result.secondState.execution.watchHint,
+              lastToolUseResults: result.secondState.execution.lastToolResults
             }
           }
         )

@@ -8,16 +8,15 @@ import {
 } from '../../../src/main/services/ai/human/memory/roundHistory'
 import { applyBrainDecisionState } from '../../../src/main/services/ai/human/node/utils/stateTransitionState'
 import { createInitialHumanState } from '../../../src/main/services/ai/human/state/schema'
-import type { LastBrainDecision } from '../../../src/main/services/ai/human/types'
+import type { HumanDecision } from '../../../src/main/services/ai/human/types'
 
 const buildDecision = (input: {
   summary: string
   reason: string
   expectedOutcome: string
-  nextAction: LastBrainDecision['nextAction']
+  nextAction: HumanDecision['nextAction']
   readyToDeliver?: boolean
-}): LastBrainDecision => ({
-  memoryOps: [],
+}): HumanDecision => ({
   decision: {
     summary: input.summary,
     reason: input.reason,
@@ -27,7 +26,7 @@ const buildDecision = (input: {
   nextAction: input.nextAction
 })
 
-describe('ai unit human process memory', () => {
+describe('ai unit human memory history', () => {
   it('records a pre_execution_blocked round when brain is sent back before execution', () => {
     const initialState = createInitialHumanState({
       taskId: 'task-1',
@@ -46,7 +45,7 @@ describe('ai unit human process memory', () => {
     const nextState = applyBrainDecisionState({
       state: initialState,
       decision,
-      reducedInside: initialState.brainMemory.inside,
+      stableMemory: initialState.memory.stable,
       watchHint: {
         code: 'brain_invalid_mouth_transition',
         detail: {}
@@ -54,8 +53,8 @@ describe('ai unit human process memory', () => {
       createdAt: 1
     })
 
-    expect(nextState.processMemory.roundHistory).toHaveLength(1)
-    expect(nextState.processMemory.roundHistory[0]).toMatchObject({
+    expect(nextState.memory.history.roundHistory).toHaveLength(1)
+    expect(nextState.memory.history.roundHistory[0]).toMatchObject({
       roundId: 1,
       createdAt: 1,
       decision,
@@ -88,7 +87,9 @@ describe('ai unit human process memory', () => {
 
       return {
         ...state,
-        processMemory: appendRoundRecord({
+        memory: {
+          ...state.memory,
+          history: appendRoundRecord({
           state,
           decision,
           execution:
@@ -129,13 +130,14 @@ describe('ai unit human process memory', () => {
                   }
                 }),
           createdAt: round
-        })
+          })
+        }
       }
     }, initialState)
 
     const historyChain = getHistoryChainRounds(stateWithHistory)
 
-    expect(stateWithHistory.processMemory.roundHistory.at(-1)?.roundId).toBe(7)
+    expect(stateWithHistory.memory.history.roundHistory.at(-1)?.roundId).toBe(7)
     expect(historyChain.map((record) => record.roundId)).toEqual([2, 3, 4, 5, 6])
   })
 
@@ -146,18 +148,21 @@ describe('ai unit human process memory', () => {
     })
     const state = {
       ...initialState,
-      lastBrainDecision: buildDecision({
-        summary: '学习 docx-read',
-        reason: '需要读取文档结构。',
-        expectedOutcome: '补齐 docx 阅读能力。',
-        nextAction: {
-          action: 'learning',
-          wantLearnSkillIds: ['docx-read']
-        }
-      })
+      execution: {
+        ...initialState.execution,
+        currentDecision: buildDecision({
+          summary: '学习 docx-read',
+          reason: '需要读取文档结构。',
+          expectedOutcome: '补齐 docx 阅读能力。',
+          nextAction: {
+            action: 'learning',
+            wantLearnSkillIds: ['docx-read']
+          }
+        })
+      }
     }
 
-    const nextProcessMemory = appendDecisionRound({
+    const nextHistory = appendDecisionRound({
       state,
       execution: buildLearningExecution({
         learningOutcome: {
@@ -172,7 +177,7 @@ describe('ai unit human process memory', () => {
       createdAt: 99
     })
 
-    expect(nextProcessMemory.roundHistory[0]).toMatchObject({
+    expect(nextHistory.roundHistory[0]).toMatchObject({
       roundId: 1,
       createdAt: 99,
       execution: {

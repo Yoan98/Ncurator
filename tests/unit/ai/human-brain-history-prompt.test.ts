@@ -5,10 +5,10 @@ import {
   buildHandExecution,
   buildLearningExecution
 } from '../../../src/main/services/ai/human/memory/roundHistory'
-import { buildBrainPromptContext } from '../../../src/main/services/ai/human/prompts/brain'
+import { buildBrainPrompt } from '../../../src/main/services/ai/human/prompts/brain'
 import { buildReferenceScope } from '../../../src/main/services/ai/prompts/referenceScope'
 import { createInitialHumanState } from '../../../src/main/services/ai/human/state/schema'
-import type { LastBrainDecision } from '../../../src/main/services/ai/human/types'
+import type { HumanDecision } from '../../../src/main/services/ai/human/types'
 
 const createStubAiRunContext = (referenceScope: AiRunContext['referenceScope']): AiRunContext => ({
   runId: 'run-test',
@@ -38,9 +38,8 @@ const buildDecision = (input: {
   summary: string
   reason: string
   expectedOutcome: string
-  nextAction: LastBrainDecision['nextAction']
-}): LastBrainDecision => ({
-  memoryOps: [],
+  nextAction: HumanDecision['nextAction']
+}): HumanDecision => ({
   decision: {
     summary: input.summary,
     reason: input.reason,
@@ -59,48 +58,63 @@ describe('ai unit brain prompt history blocks', () => {
 
     const withLearningRound = {
       ...initialState,
-      brainMemory: {
-        ...initialState.brainMemory,
-        outside: {
-          ...initialState.brainMemory.outside,
-          learnedSkillIds: ['workspace-cli']
-        }
+      skills: {
+        learnedSkillIds: ['workspace-cli']
       },
-      processMemory: appendRoundRecord({
-        state: initialState,
-        decision: buildDecision({
-          summary: '先补齐 workspace 能力',
-          reason: '还缺 terminal 能力。',
-          expectedOutcome: '拿到命令执行能力后再继续。',
-          nextAction: {
-            action: 'learning',
-            wantLearnSkillIds: ['workspace-cli']
-          }
-        }),
-        execution: buildLearningExecution({
-          learningOutcome: {
-            requestedSkillIds: ['workspace-cli'],
-            loadedSkillIds: ['workspace-cli'],
-            skippedDuplicateSkillIds: [],
-            skippedUnknownSkillIds: [],
-            evictedSkillIds: [],
-            activeToolCount: 1
-          }
-        }),
-        createdAt: 1
-      })
+      memory: {
+        ...initialState.memory,
+        history: appendRoundRecord({
+          state: initialState,
+          decision: buildDecision({
+            summary: '先补齐 workspace 能力',
+            reason: '还缺 terminal 能力。',
+            expectedOutcome: '拿到命令执行能力后再继续。',
+            nextAction: {
+              action: 'learning',
+              wantLearnSkillIds: ['workspace-cli']
+            }
+          }),
+          execution: buildLearningExecution({
+            learningOutcome: {
+              requestedSkillIds: ['workspace-cli'],
+              loadedSkillIds: ['workspace-cli'],
+              skippedDuplicateSkillIds: [],
+              skippedUnknownSkillIds: [],
+              evictedSkillIds: [],
+              activeToolCount: 1
+            }
+          }),
+          createdAt: 1
+        })
+      }
     }
 
     const withHandRound = {
       ...withLearningRound,
-      processMemory: appendRoundRecord({
-        state: withLearningRound,
-        decision: buildDecision({
-          summary: '读取工作区路径',
-          reason: '已经具备 workspace-cli。',
-          expectedOutcome: '确认当前 workspace 根路径。',
-          nextAction: {
-            action: 'hand',
+      memory: {
+        ...withLearningRound.memory,
+        history: appendRoundRecord({
+          state: withLearningRound,
+          decision: buildDecision({
+            summary: '读取工作区路径',
+            reason: '已经具备 workspace-cli。',
+            expectedOutcome: '确认当前 workspace 根路径。',
+            nextAction: {
+              action: 'hand',
+              toolUsePlan: {
+                mode: 'serial',
+                calls: [
+                  {
+                    toolName: 'terminal_run_command',
+                    args: {
+                      command: 'pwd'
+                    }
+                  }
+                ]
+              }
+            }
+          }),
+          execution: buildHandExecution({
             toolUsePlan: {
               mode: 'serial',
               calls: [
@@ -111,52 +125,42 @@ describe('ai unit brain prompt history blocks', () => {
                   }
                 }
               ]
-            }
-          }
-        }),
-        execution: buildHandExecution({
-          toolUsePlan: {
-            mode: 'serial',
-            calls: [
+            },
+            toolResults: [
               {
                 toolName: 'terminal_run_command',
-                args: {
-                  command: 'pwd'
+                ok: true,
+                code: 'ok',
+                data: {
+                  ok: true,
+                  code: 'ok',
+                  outputPreview: '/workspace/root'
                 }
               }
             ]
-          },
-          toolResults: [
-            {
-              toolName: 'terminal_run_command',
-              ok: true,
-              code: 'ok',
-              data: {
-                ok: true,
-                code: 'ok',
-                outputPreview: '/workspace/root'
-              }
-            }
-          ]
+          }),
+          createdAt: 2
         }),
-        createdAt: 2
-      })
+      }
     }
 
     const state = {
       ...withHandRound,
-      processMemory: {
-        ...withHandRound.processMemory,
-        loadedHistoryContext: {
-          filters: {
-            executionKinds: ['learning'],
-            limit: 1
-          },
-          rounds: [withHandRound.processMemory.roundHistory[0]]
+      memory: {
+        ...withHandRound.memory,
+        history: {
+          ...withHandRound.memory.history,
+          loadedHistoryContext: {
+            filters: {
+              executionKinds: ['learning'],
+              limit: 1
+            },
+            rounds: [withHandRound.memory.history.roundHistory[0]]
+          }
         }
       }
     }
-    const prompt = buildBrainPromptContext({
+    const prompt = buildBrainPrompt({
       state,
       ctx: createStubAiRunContext(
         buildReferenceScope({
@@ -182,20 +186,32 @@ describe('ai unit brain prompt history blocks', () => {
     })
 
     expect(prompt.user).toContain('<reference_scope>')
-    expect(prompt.user).toContain('<confirmed_memory>')
-    expect(prompt.user).toContain('<current_capabilities>')
-    expect(prompt.user).toContain('<recent_focus>')
-    expect(prompt.user).toContain('<earlier_history>')
-    expect(prompt.user).toContain('<expanded_history>')
+    expect(prompt.user).toContain('<memory>')
+    expect(prompt.user).toContain('<your_notes>')
+    expect(prompt.user).toContain('<recent_progress>')
+    expect(prompt.user).toContain('<earlier_attempts>')
+    expect(prompt.user).toContain('<recalled_history>')
+    expect(prompt.user).toContain('<available_skills>')
     expect(prompt.user).toContain('<correction_hint>')
+    expect(prompt.user).not.toContain('<confirmed_memory>')
+    expect(prompt.user).not.toContain('<current_capabilities>')
+    expect(prompt.user).not.toContain('<recent_focus>')
+    expect(prompt.user).not.toContain('<earlier_history>')
+    expect(prompt.user).not.toContain('<expanded_history>')
     expect(prompt.user).not.toContain('<recent_learning_outcome>')
     expect(prompt.user).not.toContain('<recent_tool_results>')
     expect(prompt.user).not.toContain('<recent_decision_history>')
     expect(prompt.user).toContain('优先参考资料：')
-    expect(prompt.system).toContain('<input_use_rules>')
-    expect(prompt.system).toContain('<action_contract>')
+    expect(prompt.system).toContain('<autonomy_principles>')
+    expect(prompt.system).toContain('<action_boundaries>')
+    expect(prompt.system).toContain('<output_rules>')
+    expect(prompt.system).not.toContain('<input_use_rules>')
+    expect(prompt.system).not.toContain('<reasoning_rules>')
     expect(prompt.system).not.toContain('human graph')
     expect(prompt.system).not.toContain('<node_topology>')
+    expect(prompt.user).toContain('这是你之前沉淀下来的任务笔记。')
+    expect(prompt.user).toContain('这是最近一轮过程记录。')
+    expect(prompt.user).toContain('这是更早几轮过程记录。')
     expect(prompt.user).toContain('history-recall')
     expect(prompt.user).toContain('决策了什么：')
     expect(prompt.user).toContain('做了什么：')
@@ -208,7 +224,7 @@ describe('ai unit brain prompt history blocks', () => {
       userInput: '按当前工作区资料回答这个问题'
     })
 
-    const prompt = buildBrainPromptContext({
+    const prompt = buildBrainPrompt({
       state,
       ctx: createStubAiRunContext(
         buildReferenceScope({

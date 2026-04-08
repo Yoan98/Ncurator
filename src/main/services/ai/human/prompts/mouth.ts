@@ -1,40 +1,56 @@
-import type { HumanDeliveryMode, HumanState } from '../types'
 import {
-  buildDeliveryModePromptExample,
-  buildDeliveryModePromptRules
+  DELIVERY_MODE_PROMPT_EXAMPLES,
+  DELIVERY_MODE_PROMPT_RULES
 } from '../shared/deliveryContracts'
-import { buildLastRoundFocusText } from '../memory/historyPrompt'
-import {
-  renderHumanEvidenceLines,
-  renderHumanFactLines,
-  renderHumanOpenQuestionLines
-} from '../shared/memoryRenderers'
+import { getLastRoundFocus } from '../memory/roundHistory'
+import { renderHumanStableNotes } from '../shared/memoryRenderers'
 import { renderHumanArtifactLines } from '../shared/runtimeRenderers'
+import type { HumanDeliveryMode, HumanRoundRecord, HumanState } from '../types'
 import { renderWatchHintForMouth } from './watchHints'
 
-type HumanMouthPromptInput = {
-  deliveryMode: HumanDeliveryMode
-  userInput: string
-  finalDecisionText: string
-  factsText: string
-  evidencesText: string
-  openQuestionsText: string
-  lastRoundFocusText: string
-  runtimeArtifactsText: string
-  watchHintText: string
+const renderStringList = (items: readonly string[]): string =>
+  items.length > 0 ? items.join('、') : 'none'
+
+const renderRecentProgressText = (record: HumanRoundRecord | undefined): string => {
+  if (!record) {
+    return `这是最近一轮过程记录。
+
+none`
+  }
+
+  const progressText =
+    record.execution.kind === 'pre_execution_blocked'
+      ? `- 执行前阻断：${renderWatchHintForMouth(record.execution.watchHint)}`
+      : record.execution.kind === 'learning'
+        ? `- learning 结果：已加载 ${renderStringList(record.execution.learningOutcome.loadedSkillIds.map((skillId) => `\`${skillId}\``))}；重复 ${renderStringList(record.execution.learningOutcome.skippedDuplicateSkillIds.map((skillId) => `\`${skillId}\``))}；未知 ${renderStringList(record.execution.learningOutcome.skippedUnknownSkillIds.map((skillId) => `\`${skillId}\``))}。`
+        : record.execution.kind === 'hand'
+          ? [
+              `- hand 执行模式：${record.execution.toolUsePlan.mode}`,
+              ...record.execution.toolResults.map(
+                (result) => `- \`${result.toolName}\`：${result.summary}`
+              )
+            ].join('\n')
+          : `- mouth 输出摘要：${record.execution.summary}`
+
+  return `这是最近一轮过程记录。
+
+- 第 ${record.roundId} 轮判断：${record.decision.decision.summary}
+- 原因：${record.decision.decision.reason}
+- 预期结果：${record.decision.decision.expectedOutcome}
+${progressText}`
 }
 
 const buildFinalDecisionText = (state: HumanState): string =>
-  state.lastBrainDecision
-    ? `最终决定（readyToDeliver=${String(state.lastBrainDecision.readyToDeliver)}）：“${state.lastBrainDecision.decision.summary}”；原因：${state.lastBrainDecision.decision.reason}；预期结果：${state.lastBrainDecision.decision.expectedOutcome}`
+  state.execution.currentDecision
+    ? `最终决定（readyToDeliver=${String(state.execution.currentDecision.readyToDeliver)}）：“${state.execution.currentDecision.decision.summary}”；原因：${state.execution.currentDecision.decision.reason}；预期结果：${state.execution.currentDecision.decision.expectedOutcome}`
     : 'none'
 
-export const buildMouthSystemPrompt = (deliveryMode: HumanDeliveryMode): string =>
-  `
+export const buildMouthPrompt = (input: { state: HumanState; deliveryMode: HumanDeliveryMode }) => {
+  const system = `
 <system>
   <role>
     你现在扮演一个负责对外表达最终结果的人。
-    你的任务是把已经确定下来的判断、事实和证据，整理成用户可以直接阅读和继续使用的结果。
+    你的任务是把已经确定下来的判断、任务笔记和产物整理成最终交付。
   </role>
 
   <working_style>
@@ -46,14 +62,14 @@ export const buildMouthSystemPrompt = (deliveryMode: HumanDeliveryMode): string 
   <delivery_principles>
     1. 如果任务已经完成，先直接给出结论，再给关键依据，再给结果或产物说明。
     2. 如果当前结果有限，先说明已经完成到哪里，再说明限制和继续需要什么。
-    3. 只使用已经给你的事实、证据和最终判断，不要偷偷补充新的推理。
+    3. 只使用已经给你的任务笔记、最终判断和产物，不要补充新的事实或推理。
     4. 语言要清楚、克制、可执行，不要堆内部过程。
-    5. 如果存在运行时产物或最近工具结果，只能准确引用已经给出的路径、状态和摘要，不要补编额外元数据。
+    5. 如果存在运行时产物或最近过程记录，只能准确引用已经给出的路径、状态和摘要。
     6. 你不会调用工具，也不会继续推进未完成步骤；如果仍有步骤没做，只能如实说明当前停在哪。
   </delivery_principles>
 
   <delivery_mode_rules>
-${buildDeliveryModePromptRules(deliveryMode)}
+${DELIVERY_MODE_PROMPT_RULES[input.deliveryMode]}
   </delivery_mode_rules>
 
   <output_rules>
@@ -69,72 +85,45 @@ ${buildDeliveryModePromptRules(deliveryMode)}
   </output_principles>
 
   <output_example>
-${buildDeliveryModePromptExample(deliveryMode)}
+${DELIVERY_MODE_PROMPT_EXAMPLES[input.deliveryMode]}
   </output_example>
 </system>
 `.trim()
 
-export const buildMouthUserPrompt = (input: HumanMouthPromptInput): string =>
-  `
-  <user_context>
+  const user = `
+<user_context>
   <delivery_mode>
 ${input.deliveryMode}
   </delivery_mode>
 
-  <user_request>
-${input.userInput}
-  </user_request>
+  <task_goal>
+${input.state.task.userInput}
+  </task_goal>
 
   <final_decision>
-${input.finalDecisionText}
+${buildFinalDecisionText(input.state)}
   </final_decision>
 
-  <facts>
-${input.factsText}
-  </facts>
+  <your_notes>
+${renderHumanStableNotes(input.state, 'mouth_prompt')}
+  </your_notes>
 
-  <evidences>
-${input.evidencesText}
-  </evidences>
-
-  <open_questions>
-${input.openQuestionsText}
-  </open_questions>
-
-  <last_round_focus>
-${input.lastRoundFocusText}
-  </last_round_focus>
+  <recent_progress>
+${renderRecentProgressText(getLastRoundFocus(input.state))}
+  </recent_progress>
 
   <runtime_artifacts>
-${input.runtimeArtifactsText}
+${renderHumanArtifactLines(input.state, 'prompt')}
   </runtime_artifacts>
 
-  <watch_hint>
-${input.watchHintText}
-  </watch_hint>
+  <correction_hint>
+${input.state.execution.watchHint ? renderWatchHintForMouth(input.state.execution.watchHint) : 'none'}
+  </correction_hint>
 </user_context>
 `.trim()
 
-export const buildMouthPromptContext = (input: {
-  state: HumanState
-  deliveryMode: HumanDeliveryMode
-}) => {
-  return buildHumanMouthPrompt({
-    deliveryMode: input.deliveryMode,
-    userInput: input.state.task.userInput,
-    finalDecisionText: buildFinalDecisionText(input.state),
-    factsText: renderHumanFactLines(input.state, 'mouth_prompt'),
-    evidencesText: renderHumanEvidenceLines(input.state, 'mouth_prompt'),
-    openQuestionsText: renderHumanOpenQuestionLines(input.state, 'mouth_prompt'),
-    lastRoundFocusText: buildLastRoundFocusText(input.state),
-    runtimeArtifactsText: renderHumanArtifactLines(input.state, 'prompt'),
-    watchHintText: input.state.watchHint ? renderWatchHintForMouth(input.state.watchHint) : 'none'
-  })
-}
-
-export const buildHumanMouthPrompt = (input: HumanMouthPromptInput) => {
   return {
-    system: buildMouthSystemPrompt(input.deliveryMode),
-    user: buildMouthUserPrompt(input)
+    system,
+    user
   }
 }

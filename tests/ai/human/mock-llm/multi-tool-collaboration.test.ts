@@ -45,7 +45,6 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: {
-                  memoryOps: [],
                   decision: {
                     summary: '并行执行 terminal 与 KB 工具',
                     reason: '两个动作都属于只读且可以并行。',

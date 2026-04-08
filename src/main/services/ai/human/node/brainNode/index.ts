@@ -1,8 +1,8 @@
 import type { AiRunContext } from '../../../types'
-import { lastBrainDecisionSchema } from '../../schema'
+import { humanDecisionSchema } from '../../schema'
 import type { HumanRuntimeCache, HumanState } from '../../types'
-import { buildBrainPromptContext } from '../../prompts/brain'
-import { reduceBrainMemory } from './memoryReducer'
+import { applyStableMemoryPatch } from '../../memory/stableMemory'
+import { buildBrainPrompt } from '../../prompts/brain'
 import { applyBrainDecisionTransition } from '../utils/stateTransitions'
 
 export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCache }) => {
@@ -13,18 +13,18 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
     const rawOutput = await input.ctx.chatStructured({
       caller: 'human.brain',
       taskId: state.task.taskId,
-      ...buildBrainPromptContext({
+      ...buildBrainPrompt({
         state,
         ctx: input.ctx
       }),
-      schema: lastBrainDecisionSchema,
+      schema: humanDecisionSchema,
       schemaName: 'human_brain_decision',
       temperature: 0.1
     })
-    const parsedDecision = lastBrainDecisionSchema.parse(rawOutput)
-    const reducedMemory = reduceBrainMemory({
-      inside: state.brainMemory.inside,
-      memoryOps: parsedDecision.memoryOps
+    const parsedDecision = humanDecisionSchema.parse(rawOutput)
+    const stableMemory = applyStableMemoryPatch({
+      stable: state.memory.stable,
+      patch: parsedDecision.updatedStableMemory
     })
 
     return applyBrainDecisionTransition({
@@ -32,8 +32,7 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
       cache: input.cache,
       state,
       decision: parsedDecision,
-      reducedInside: reducedMemory.inside,
-      watchHint: reducedMemory.watchHint
+      stableMemory
     })
   }
 }

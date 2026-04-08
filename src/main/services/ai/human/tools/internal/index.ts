@@ -31,7 +31,7 @@ export const internalToolFamily: ToolFamilyDefinition = {
               }
 
               const rounds = filterRoundHistory({
-                roundHistory: state.processMemory.roundHistory,
+                roundHistory: state.memory.history.roundHistory,
                 filters: args
               })
               const payload = {

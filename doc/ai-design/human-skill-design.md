@@ -1,92 +1,115 @@
 # NCurator-Desktop Human Skill 设计
 
-本文定义 `human` 的 skill 集合、skill 拆分边界，以及 skill 和 tools 的关系，只描述当前基线，不保留历史迁移说明。
+本文只定义 `human` 的 skill 设计边界、分类方式与当前基线，只描述当前正式设计，不展开 runtime 细节、目录归位或历史迁移说明。
 
-## 1. 设计目标
+## 1. 文档定位
 
-- `skill` 是 `human` 统一使用的能力说明单元，分为 builtin 与 external 两类。
-- `skill` 的命名要让 `brain` 能清楚判断“现在缺不缺这类说明”。
-- `skill` 的拆分要减少 prompt 噪音，让 `brain`、`learning` 和 `hand` 都能围绕同一套能力边界稳定推进。
+- 当需要判断什么能力应该被建模为 `skill` 时，阅读本文。
+- 当需要判断 `brain / learning / hand` 各自负责什么时，阅读 `implementation-spec.md`。
+- 当需要确认 `learnedSkillIds`、`available_skills`、`lastLearningOutcome` 等字段契约时，阅读 `data-definition-and-flow.md`。
 
-## 2. 设计原则
+## 2. 设计目标
 
-- `skill` 是 `human` 内部统一使用的设计概念。
-- builtin skill 始终可用，直接出现在 `your_capabilities`；external skill 才进入 `learning`。
-- skill 拆分按 `brain` 的决策边界来定，不按历史命名习惯强行延续。
-- skill 不能过大，否则 learning 的说明噪音太高。
-- skill 也不能过碎，否则 `brain` 会反复学习过多小 skill。
-- `skillCatalog` 只保留摘要信息；完整 skill 说明在 `brain` prompt 拼装时按“builtin + learned external”动态展开。
-- skill 是决策与学习边界，不等于文件系统边界。
-- tools 的代码实现按实现域归位即可，一个实现域可以同时服务多个 skill。
-- `src/main/services/ai/human/skills.ts` 是 skill 的单一事实源，直接维护 `skill -> familyId / source / availability / toolNames / whenToUse / detail` 的映射。
-- tool spec 由各 family 自己维护在 `tools/<family>/toolSpecs.ts`，不再通过独立 `catalog` 二次派生。
-- `tools/registry.ts` 只做聚合与查询，不再额外建立一层并行 tool contract 模型。
+- 让 `brain` 能稳定判断“当前缺不缺这类能力说明”。
+- 让 `learning` 能按最小必要范围加载 external skill，减少 prompt 噪音。
+- 让 `hand` 能基于已经生效的 skill 集合使用正确工具。
+- 让 skill 设计长期保持清晰，不被具体工具实现方式反向绑死。
 
-## 3. 类型划分
+## 3. 设计原则
 
-### 3.1 builtin skill
+- `skill` 是 `human` 内部统一使用的能力说明单元，不是目录划分单元。
+- skill 的拆分边界按 `brain` 的决策边界确定，不按工具数量或文件数量强行切分。
+- skill 不能过大，否则 learning 时会一次引入过多无关说明。
+- skill 也不能过碎，否则 `brain` 会频繁学习很多只差一点点的小 skill。
+- skill 应优先说明“什么时候用、用来解决什么问题、不负责什么”，而不是把执行步骤写成另一套长 prompt。
+- skill 描述的是能力边界；tool 描述的是具体执行入口；两者有关联，但不是一一等价。
+
+## 4. `skill` 与 `tool` 的关系
+
+- `brain` 判断当前是否缺少某类 skill。
+- `learning` 负责把 external skill 加入当前有效能力集合。
+- `hand` 只调用当前有效能力集合允许使用的工具。
+- 一个 skill 可以对应多个 tools，因为同一类能力往往需要多个执行入口配合。
+- 多个 skill 也可以共享同一个实现域，只要它们面向 `brain` 的决策边界不同。
+- 本文只定义 skill 该怎么设计，不展开 tool registry、runtime cache 或文件组织方式。
+
+## 5. 类型划分
+
+### 5.1 builtin skill
 
 - 始终可用。
-- 不需要 learning。
+- 不需要经过 `learning`。
 - 不写入 `learnedSkillIds`。
 - 不计入 active tool budget。
-- 直接通过 `your_capabilities` 暴露给 `brain`。
+- 会直接出现在 `brain` 可见的 `available_skills` 中。
 
-### 3.2 external skill
+### 5.2 external skill
 
-- 需要 `learning` 显式加载。
+- 需要 `learning` 显式加载后才进入当前有效能力集合。
 - 会写入 `learnedSkillIds`。
-- 是否继续保留受 active tool budget 约束。
-- 对 `brain` 来说，它和 builtin skill 一样都会出现在有效能力集合中。
+- 受 active tool budget 约束。
+- 对 `brain` 来说，生效后它和 builtin skill 一样，都会出现在 `available_skills` 中。
 
-## 4. 当前目标 Skill 集合
+## 6. 当前基线 Skill 集合
 
 ### `history-recall`
 
 - 类型：builtin
-- 对应工具：`history_recall`
-- 用途：主动回看之前几轮已经做过的正式判断、执行动作和结果。
+- 核心职责：主动回看之前几轮已经做过的正式判断、执行动作和结果。
+- 典型工具：`history_recall`
+- 不负责什么：不替代当前轮的推理，也不直接生成最终交付。
 
 ### `workspace-cli`
 
 - 类型：external
-- 对应工具：`terminal_run_command`
-- 用途：读取 workspace 文件、检查环境、执行单条 CLI 命令。
+- 核心职责：在当前 workspace 内读取文件、检查环境、执行单条 CLI 命令。
+- 典型工具：`terminal_run_command`
+- 不负责什么：不负责知识库检索，也不负责 docx 结构化编辑。
 
 ### `docx-read`
 
 - 类型：external
-- 对应工具：`docx_open`、`docx_outline`、`docx_get_block`、`docx_search`、`docx_get_history`
-- 用途：打开 docx、定位结构、查找内容、查看历史。
+- 核心职责：打开 docx、查看结构、定位 block、查找内容与查看历史。
+- 典型工具：`docx_open`、`docx_outline`、`docx_get_block`、`docx_search`、`docx_get_history`
+- 不负责什么：不负责修改 docx，也不负责预览与落盘交付。
 
 ### `docx-write`
 
 - 类型：external
-- 对应工具：`docx_apply_ops`、`docx_rollback`
-- 用途：修改 docx 内容，或基于历史快照回滚。
+- 核心职责：基于结构化操作修改 docx，或按需回滚快照。
+- 典型工具：`docx_apply_ops`、`docx_rollback`
+- 不负责什么：不负责文档读取建模，也不负责最终交付组织。
 
 ### `docx-delivery`
 
 - 类型：external
-- 对应工具：`docx_validate`、`docx_render_preview`、`docx_save`
-- 用途：做文档校验、生成预览、按需落盘。
+- 核心职责：对 docx 结果做校验、生成预览并按需保存。
+- 典型工具：`docx_validate`、`docx_render_preview`、`docx_save`
+- 不负责什么：不负责决定改什么内容，也不负责最终用户答复的措辞。
 
 ### `kb-document-discovery`
 
 - 类型：external
-- 对应工具：`kb_list_documents`
-- 用途：在当前工作区知识库内缩小候选文档范围。
+- 核心职责：在当前工作区知识库内先缩小候选文档范围。
+- 典型工具：`kb_list_documents`
+- 不负责什么：不直接提炼 chunk 级证据，也不替代事实归纳。
 
 ### `kb-evidence-query`
 
 - 类型：external
-- 对应工具：`kb_hybrid_search_chunks`、`kb_vector_search_chunks`、`kb_fts_search_chunks`
-- 用途：在当前工作区知识库中直接查询 chunk 证据并收敛事实依据；已选资料足够明确时可先缩圈，不足时可扩大回当前工作区范围。
+- 核心职责：在当前工作区知识库中直接检索 chunk 证据，帮助 `brain` 收敛事实依据。
+- 典型工具：`kb_hybrid_search_chunks`、`kb_vector_search_chunks`、`kb_fts_search_chunks`
+- 不负责什么：不负责文档修改，也不负责目录级候选文档发现。
 
-## 5. 与状态设计的关系
+## 7. 与状态和 prompt 的关系
 
-- `skillCatalog` 存的是以上 skill 的摘要信息。
-- `learnedSkillIds` 只存 external 且已经学习过的 skill id；builtin skill 不写入这里。
-- `brain` 真正可见、可用的能力集合是 builtin + learned external，也就是 effective skills。
-- `learning` 只负责 external skill，不负责 builtin skill。
-- tool 的选择、过滤和装配由 `skillLoader + tools/registry.ts` 完成，不要求放进 skill 同名目录。
+- `learnedSkillIds` 只记录 external 且已经成功学习过的 skill。
+- `brain` 真正可见、可用的能力集合，是 builtin + learned external，也就是 effective skills。
+- `available_skills` 应渲染 effective skills，而不是原始文件列表或实现目录。
+- `learning` 的结果会进入 `lastLearningOutcome` 与 `roundHistory`，但 skill 的完整说明不应长期持久化进 `HumanState`。
+
+## 8. 维护规则
+
+- 当 `brain` 的决策边界发生变化时，应重新检查 skill 是否需要合并、拆分或重命名。
+- 当 skill 的类型、职责边界或典型工具发生变化时，应同步更新本文档与相关实现。
+- 已经落地并确认的 skill 设计，不应继续停留在 `refactor-plan.md` 中。

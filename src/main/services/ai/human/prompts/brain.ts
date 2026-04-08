@@ -1,41 +1,25 @@
 import type { AiRunContext } from '../../types'
 import { renderReferenceScopeText } from '../../prompts/referenceScope'
-import { renderLineList } from '../../utils/render'
 import {
-  buildHistoryChainText,
-  buildLastRoundFocusText,
-  buildLoadedHistoryContextText
-} from '../memory/historyPrompt'
+  getHistoryChainRounds,
+  getLastRoundFocus,
+  getLoadedHistoryContext
+} from '../memory/roundHistory'
 import {
   getEffectiveLearnedSkillIds,
   getSkillDefinition,
-  listBuiltinSkillDefinitions
+  listBuiltinSkillDefinitions,
+  listExternalSkillDefinitions
 } from '../skills'
-import {
-  renderHumanEvidenceLines,
-  renderHumanFactLines,
-  renderHumanOpenQuestionLines
-} from '../shared/memoryRenderers'
+import { renderHumanStableNotes } from '../shared/memoryRenderers'
 import { getToolPromptSpec } from '../tools/registry'
-import type { HumanState, ToolPromptSpec } from '../types'
+import type {
+  HumanLoadedHistoryContext,
+  HumanRoundRecord,
+  HumanState,
+  ToolPromptSpec
+} from '../types'
 import { renderWatchHintForBrain } from './watchHints'
-
-type HumanBrainPromptInput = {
-  userInput: string
-  referenceScopeText: string
-  stableMemoryText: string
-  capabilitiesText: string
-  lastRoundFocusText: string
-  historyChainText: string
-  loadedHistoryContextText: string
-  watchHintText: string
-}
-
-const formatPlainList = (items: string[]): string =>
-  renderLineList(items, {
-    fallback: 'none',
-    style: 'plain'
-  })
 
 const renderLearnedToolSpecLine = (spec: ToolPromptSpec): string => {
   const requiredArgs = spec.args
@@ -46,43 +30,132 @@ const renderLearnedToolSpecLine = (spec: ToolPromptSpec): string => {
     ? `示例目标=${spec.examples[0].goal}；示例参数键=[${Object.keys(spec.examples[0].args).join(', ') || 'none'}]`
     : '示例=none'
 
-  return `- 工具 ${spec.name}：适用场景=${spec.whenToUse}；必填参数=[${requiredArgs || 'none'}]；${example}`
+  return `- 工具 ${spec.name}：用途=${spec.purpose}；必填参数=[${requiredArgs || 'none'}]；${example}`
 }
 
-const buildStableMemoryText = (state: HumanState): string =>
-  [
-    '这是你之前沉淀下来的稳定记忆。它只包含已经确认、可以复用、或仍影响推进的事实与问题。',
-    '',
-    '已确认的事实：',
-    renderHumanFactLines(state, 'brain_prompt'),
-    '',
-    '支撑这些事实的关键证据：',
-    renderHumanEvidenceLines(state, 'brain_prompt'),
-    '',
-    '仍未解决的问题：',
-    renderHumanOpenQuestionLines(state, 'brain_prompt')
-  ].join('\n')
+const renderStringList = (items: readonly string[]): string =>
+  items.length > 0 ? items.join('、') : 'none'
 
-const buildReferenceScopePromptText = (ctx: AiRunContext): string =>
-  [
-    '这是当前任务的资料范围、工作区边界与默认可检索范围说明。',
-    '它决定你当前默认可以去哪里找信息，以及用户有没有显式缩圈；它本身不自动等于已经确认的事实或证据。',
-    '如果这里写“未显式指定优先参考资料”，只表示当前未缩圈，不表示无资料可查。',
-    '',
-    renderReferenceScopeText(ctx.referenceScope)
-  ].join('\n')
+const renderRoundRecord = (
+  record: HumanRoundRecord,
+  detail: 'focus' | 'chain' | 'loaded'
+): string => {
+  const nextActionText =
+    record.decision.nextAction.action === 'learning'
+      ? `- 你准备下一步做：准备学习 ${renderStringList(record.decision.nextAction.wantLearnSkillIds.map((skillId) => `\`${skillId}\``))}。`
+      : record.decision.nextAction.action === 'hand'
+        ? `- 你准备下一步做：准备进入 hand，${
+            record.decision.nextAction.toolUsePlan.mode === 'parallel'
+              ? `以 parallel 模式并行执行 ${renderStringList(record.decision.nextAction.toolUsePlan.calls.map((call) => `\`${call.toolName}\``))}。`
+              : `以 serial 模式按顺序执行 ${renderStringList(record.decision.nextAction.toolUsePlan.calls.map((call) => `\`${call.toolName}\``))}。`
+          }`
+        : '- 你准备下一步做：准备进入 mouth 组织最终交付。'
 
-const buildCapabilitiesText = (state: HumanState): string => {
-  const effectiveSkillIds = getEffectiveLearnedSkillIds(state.brainMemory.outside.learnedSkillIds)
+  const executionText =
+    record.execution.kind === 'pre_execution_blocked'
+      ? '- 没有进入真实执行，系统在执行前阻断了这轮动作。'
+      : record.execution.kind === 'learning'
+        ? '- 进入 learning，按请求尝试补齐外置技能。'
+        : record.execution.kind === 'hand'
+          ? [
+              `- 进入 hand，执行模式是 ${record.execution.toolUsePlan.mode}。`,
+              record.execution.toolUsePlan.mode === 'parallel'
+                ? `- 实际并行执行了 ${renderStringList(record.execution.toolUsePlan.calls.map((call) => `\`${call.toolName}\``))}。`
+                : `- 实际按顺序执行了 ${renderStringList(record.execution.toolUsePlan.calls.map((call) => `\`${call.toolName}\``))}。`,
+              detail !== 'chain'
+                ? `- 本轮计划包含 ${record.execution.toolUsePlan.calls.length} 个工具调用。`
+                : ''
+            ]
+              .filter(Boolean)
+              .join('\n')
+          : '- 进入 mouth，组织最终说明。'
+
+  const resultText =
+    record.execution.kind === 'pre_execution_blocked'
+      ? renderWatchHintForBrain(record.execution.watchHint)
+      : record.execution.kind === 'learning'
+        ? [
+            `- 已加载的技能：${renderStringList(record.execution.learningOutcome.loadedSkillIds.map((skillId) => `\`${skillId}\``))}`,
+            `- 已跳过的重复技能：${renderStringList(record.execution.learningOutcome.skippedDuplicateSkillIds.map((skillId) => `\`${skillId}\``))}`,
+            `- 未识别的技能：${renderStringList(record.execution.learningOutcome.skippedUnknownSkillIds.map((skillId) => `\`${skillId}\``))}`,
+            `- 当前 active tool 数：${String(record.execution.learningOutcome.activeToolCount)}`,
+            record.execution.watchHint
+              ? `- 收敛提示：${renderWatchHintForBrain(record.execution.watchHint)}`
+              : ''
+          ]
+            .filter(Boolean)
+            .join('\n')
+        : record.execution.kind === 'hand'
+          ? [
+              ...record.execution.toolResults.map((result) =>
+                [
+                  `- \`${result.toolName}\`：${result.summary}`,
+                  result.dataPreview ? `结果：${result.dataPreview}` : '',
+                  result.diagnosticText ? `诊断：${result.diagnosticText}` : ''
+                ]
+                  .filter(Boolean)
+                  .join('；')
+              ),
+              record.execution.artifactRefs && record.execution.artifactRefs.length > 0
+                ? `- 产物：${renderStringList(
+                    record.execution.artifactRefs.map((artifact) =>
+                      artifact.kind === 'file'
+                        ? `\`${artifact.fileName}\``
+                        : `draft review ${artifact.review.reviewId}`
+                    )
+                  )}`
+                : '',
+              record.execution.watchHint
+                ? `- 收敛提示：${renderWatchHintForBrain(record.execution.watchHint)}`
+                : ''
+            ]
+              .filter(Boolean)
+              .join('\n')
+          : `${`- 输出摘要：${record.execution.summary}`}\n${
+              record.execution.completed ? '- 任务已完成。' : '- 任务未完成。'
+            }`
+
+  return `
+- 第 ${record.roundId} 轮
+
+决策了什么：
+- 你的判断：${record.decision.decision.summary}
+- 你这样判断的原因：${record.decision.decision.reason}
+- 你当时期待的结果：${record.decision.decision.expectedOutcome}
+- ${record.decision.readyToDeliver ? '你当时认为已经可以交付。' : '你当时认为还不能直接交付。'}
+${nextActionText}
+
+做了什么：
+${executionText}
+
+结果是什么：
+${resultText}
+`.trim()
+}
+
+const renderLoadedHistoryIntro = (
+  loadedHistoryContext: HumanLoadedHistoryContext | undefined
+): string => {
+  if (!loadedHistoryContext) {
+    return '这是你主动回看后加载的历史细节。只有在明确回看历史后这里才会出现内容。'
+  }
+
+  const filters = loadedHistoryContext.filters
+  return `这是你主动加载的更详细历史。只有在你明确调用 history-recall 后才会出现。
+本次过滤条件：roundIds=${renderStringList((filters.roundIds || []).map(String))}；executionKinds=${renderStringList(filters.executionKinds || [])}；toolNames=${renderStringList(filters.toolNames || [])}；watchHintCodes=${renderStringList(filters.watchHintCodes || [])}；limit=${String(filters.limit || loadedHistoryContext.rounds.length)}。`
+}
+
+const renderAvailableSkillsText = (state: HumanState): string => {
+  const effectiveSkillIds = getEffectiveLearnedSkillIds(state.skills.learnedSkillIds)
   const effectiveSkillDefinitions = effectiveSkillIds.map((skillId) => getSkillDefinition(skillId))
   const learnedExternalSkillDefinitions = effectiveSkillDefinitions.filter(
     (definition) => definition.source === 'external'
   )
-  const externalSkillCatalogLines = state.brainMemory.outside.skillCatalog
-    .filter((item) => item.source === 'external' && item.availability === 'learnable')
+  const learnableSkillLines = listExternalSkillDefinitions()
+    .filter((definition) => !state.skills.learnedSkillIds.includes(definition.skillId))
     .map(
-      (item) =>
-        `- ${item.skillId}：${item.summary}；可提供工具=[${item.toolNames.join(', ')}]；适用场景=${item.whenToUse}`
+      (definition) =>
+        `- ${definition.skillId}：${definition.summary}；可提供工具=[${definition.toolNames.join(', ')}]；适用场景=${definition.whenToUse}`
     )
   const effectiveToolSpecLines = Array.from(
     new Set(effectiveSkillDefinitions.flatMap((definition) => definition.toolNames))
@@ -91,98 +164,83 @@ const buildCapabilitiesText = (state: HumanState): string => {
     .filter((spec): spec is ToolPromptSpec => Boolean(spec))
     .map(renderLearnedToolSpecLine)
 
-  return [
-    '这是你当前稳定可用的能力信息。只有这里明确可用的内容，才代表你现在可以直接依赖。',
-    '',
-    '现在始终可用的能力：',
-    formatPlainList(
-      listBuiltinSkillDefinitions().map(
-        (definition) =>
-          `- ${definition.skillId}：${definition.summary}；适用场景=${definition.whenToUse}`
-      )
-    ),
-    '',
-    '当前已经补齐、可直接使用的能力：',
-    formatPlainList(
-      learnedExternalSkillDefinitions.map(
-        (definition) =>
-          `- ${definition.skillId}：${definition.detail}；可提供工具=[${definition.toolNames.join(', ')}]`
-      )
-    ),
-    '',
-    '如需继续推进，可以补学的能力：',
-    formatPlainList(externalSkillCatalogLines),
-    '',
-    '当前可直接调用的工具：',
-    formatPlainList(effectiveToolSpecLines)
-  ].join('\n')
+  return `这是你当前已经可直接依赖、或仍可补充学习的技能与工具信息。
+
+始终可用的技能：
+${
+  listBuiltinSkillDefinitions()
+    .map(
+      (definition) =>
+        `- ${definition.skillId}：${definition.summary}；适用场景=${definition.whenToUse}`
+    )
+    .join('\n') || 'none'
 }
 
-const buildWatchHintText = (state: HumanState): string =>
-  [
-    '如果这里是 none，表示当前没有额外的收敛提醒；否则应优先考虑结束任务或纠偏。',
-    '',
-    state.watchHint ? renderWatchHintForBrain(state.watchHint) : 'none'
-  ].join('\n')
+已经学习的技能：
+${
+  learnedExternalSkillDefinitions
+    .map(
+      (definition) =>
+        `- ${definition.skillId}：${definition.detail}；可提供工具=[${definition.toolNames.join(', ')}]`
+    )
+    .join('\n') || 'none'
+}
 
-export const buildBrainSystemPrompt = (): string =>
-  `
+仍可补充学习的技能：
+${learnableSkillLines.join('\n') || 'none'}
+
+当前可直接调用的工具：
+${effectiveToolSpecLines.join('\n') || 'none'}`
+}
+
+export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }) => {
+  const lastRoundRecord = getLastRoundFocus(input.state)
+  const historyChainRecords = getHistoryChainRounds(input.state)
+  const loadedHistoryContext = getLoadedHistoryContext(input.state)
+  const loadedHistoryRecords = loadedHistoryContext?.rounds || []
+
+  const system = `
 <system>
   <role>
-    你现在扮演一个负责分析情况、整理记忆、做出下一步判断的大脑角色。
-    你的目标不是直接把话说给用户听，也不是亲自执行工具，而是先想清楚接下来最合适的一步，让任务稳定推进，直到可以结束。
+    你现在扮演一个负责理解任务、审视记忆并决定下一步动作的大脑角色。
+    你的职责是判断任务当前处在什么阶段，以及 learning、hand、mouth 中哪一步最合适。
   </role>
 
   <working_style>
-    请像一个判断力稳定的人类大脑一样工作：
-    先理解用户真正要完成的交付，再判断离完成还差什么。
-    只基于当前输入、已确认记忆和真实工具结果做判断，不编造事实、证据、能力或工具结果。
+    请像一个判断稳定的人类执行者一样工作：
+    理解任务目标，结合当前记忆、真实执行结果和可用能力，自主判断下一步。
+    不编造事实、证据、能力或工具结果。
   </working_style>
 
-  <input_use_rules>
-    这些输入块承担不同作用，应按它们的职责理解，而不是把它们都当作同一种“上下文”。
-    - 任务目标（task_goal）：定义用户真正要完成的目标与最终交付。
-    - 资料范围与工作区边界（reference_scope）：定义工作区边界、优先参考资料和默认可检索范围；它是可优先参考的范围信息，不自动等于事实或证据。
-    - 已确认记忆（confirmed_memory）：只包含已经确认、可复用的事实、证据和未解决问题；它比临时猜测更可信。
-    - 当前可用能力（current_capabilities）：只有这里明确列出的能力与工具，才代表你现在可以直接依赖；其余能力只能先通过 learning 补齐。
-    - 最近焦点（recent_focus）：最近一轮最重要的完整闭环，优先级高于更早历史。
-    - 更早历史（earlier_history）：你之前的决策与工具等调用结果。
-    - 展开历史（expanded_history）：只有你主动回看历史后才会出现的更细节内容；若未加载，不要假设其内容存在。
-    - 纠偏提示（correction_hint）：高优先级纠偏信号；它不直接提供答案，但会影响下一步判断优先级。
-    - 任一输入块出现 none，只表示该块当前为空，不自动推出否定结论。
-    - recent_focus 与 correction_hint 优先于更老历史；不要为了“再确认一次”而重复执行没有新增收益的动作。
-  </input_use_rules>
+  <autonomy_principles>
+    - 你会收到任务、记忆、技能、历史和提示等不同类型的信息。
+    - 这些信息是提供给你判断当前局面的参考材料，不是固定流程。
+    - 你需要自行判断哪些信息重要、哪些信息只是背景，以及下一步最合适的动作。
+    - 除了明确写出的职责边界、输出规则和硬约束，不要把上下文说明理解成固定操作指令。
+  </autonomy_principles>
 
-  <reasoning_rules>
-    1. 先定义当前任务真正要完成的交付，以及什么状态才算真正完成。
-    2. 把信息分成三类：已经确认的、尚未确认的、虽然未明说但可以低成本验证的。
-    3. 每一轮只抓当前最关键的一个不确定性，优先选择低成本且高信息增益的下一步。
-    4. 不把“未显式提供”误判成“无法获得”，也不把范围说明误判成已经确认的证据。
-    5. 只有当结论已经稳定，或继续行动也不会显著改善结果时，才考虑结束任务。
-  </reasoning_rules>
-
-  <action_contract>
-    - 你只负责判断下一步，不亲自补能力、执行工具或对外表达。
-    - learning 只负责补齐当前下一步真正缺失的能力说明，使对应能力变成现在可直接依赖的能力。
-    - hand 只负责执行已经决定好的动作计划，不负责改变求解目标。
-    - mouth 只负责整理最终结果，不负责新增事实、补做检索或继续工具执行。
-    - 选择 learning：下一步已经明确，但主要卡在某个 skill 的使用边界、工具能力或参数构造方式。
-    - 选择 hand：下一步已有明确目标动作，且当前可直接依赖的能力、工具和关键参数已足以执行。
-    - 选择 mouth：当前已具备最终交付所需的信息、证据和产物，或者继续推进也只会重复已知限制。
-    - 输出 hand 时，工具 args 必须使用工具说明里的精确字段名，并补齐所有 requiredArgs；如果你现在无法给出某个工具的完整必填参数，不要猜，应改为 learning 或继续判断是否应 mouth。
-    - learning 只用于补齐“下一步动作”最值得学习的 skill，不要为未来阶段提前学习完整流程的 skill。
-    - learning 没有固定数量上限，但应保持“最小充分集合”；真正的硬约束是 active tool budget，而不是把 skill 学满。
-    - hand 的 toolUsePlan 单轮只能选择一种 mode。只有只读且彼此独立、并行安全的动作才用 parallel；只要有写操作、依赖前一步结果，或需要最新快照，就必须用 serial。
-    - mouth 不会执行任何工具；一旦选择 mouth，就表示你认为当前已经具备最终交付所需的信息、证据和产物。
-    - 如果结果仍依赖未来的 KB、terminal、docx、history_recall 或其他新增动作才能完成，readyToDeliver 必须为 false，且不能选择 mouth。
-  </action_contract>
+  <action_boundaries>
+    - 你只负责判断下一步，不亲自补能力、执行工具或直接对用户表达。
+    - learning 只负责补齐当前真正缺失的技能说明。
+    - hand 只负责执行已经决定好的工具计划。
+    - mouth 只负责整理最终结果，不新增事实，不继续执行工具。
+    - 输出 hand 时，工具 args 必须使用工具说明中的精确字段名，并补齐所有 requiredArgs。
+    - 如果你现在无法给出某个工具的完整必填参数，不要猜；应改为 learning 或 mouth。
+    - hand 的 toolUsePlan 单轮只能选择一种 mode。只有只读且彼此独立、并行安全的动作才用 parallel；其余情况必须用 serial。
+    - 如果结果仍依赖未来的工具动作才能完成，readyToDeliver 必须为 false，且不能选择 mouth。
+    - 选择 mouth 时，readyToDeliver 必须为 true。
+  </action_boundaries>
 
   <output_rules>
     你必须只输出 JSON，不要输出任何额外说明。
 
     输出结构固定为：
     {
-      "memoryOps": [],
+      "updatedStableMemory": {
+        "confirmedFacts": "string",
+        "keyEvidence": "string",
+        "openQuestions": "string"
+      },
       "decision": {
         "summary": "string",
         "reason": "string",
@@ -196,45 +254,24 @@ export const buildBrainSystemPrompt = (): string =>
     }
 
     字段解释：
-    - memoryOps：数组。表示本轮对内部记忆的增量操作；没有要修改的内容时输出空数组。
-    - memoryOps 只记录稳定、可复用的事实、证据和未解问题；不要写入猜测、重复项或仅对当前一轮短暂有用的噪音。
-    - memoryOps[].op：字符串枚举。只能是 add、edit、remove。
-    - memoryOps[].field：字符串枚举。只能是 facts、evidences、openQuestions。
-    - memoryOps[].index：数字。仅在 edit、remove 时出现，表示要修改或删除的目标索引。
-    - memoryOps[].value：仅在 add、edit 时出现。
-    - memoryOps[].value（facts）：对象，结构为 { id, summary, evidenceIds }。
-    - memoryOps[].value.id：字符串。该 fact 或 evidence 的稳定标识。
-    - memoryOps[].value.summary：字符串。该 fact 或 evidence 的简洁摘要。
-    - memoryOps[].value.evidenceIds：字符串数组。仅 facts 使用，表示支撑该 fact 的 evidence id 列表。
-    - memoryOps[].value.toolName：字符串。仅 evidences 使用，表示 evidence 对应的工具名。
-    - memoryOps[].value.sourceType：字符串常量。仅 evidences 使用，当前固定为 tool_result。
-    - memoryOps[].value.rawRef：可选字符串。仅 evidences 使用，表示原始结果引用位置。
-    - memoryOps[].value（openQuestions）：字符串。表示仍未解决的问题描述。
-    - decision：对象。表示本轮正式判断。
-    - decision.summary：字符串。简洁说明这轮决定做什么。
-    - decision.reason：字符串。说明为什么做这个决定。
-    - decision.expectedOutcome：字符串。说明期望这一步带来什么结果。
+    - updatedStableMemory：可选对象。表示本轮对任务笔记的局部更新。
+    - updatedStableMemory 缺失：表示本轮不更新任务笔记。
+    - updatedStableMemory 出现但某个字段缺失：表示该字段保持原值。
+    - updatedStableMemory 的字段值是字符串：表示用该字符串覆盖对应字段。
+    - updatedStableMemory 的字段值是空字符串：表示显式清空对应字段。
+    - decision：对象。表示你本轮的正式判断。
     - readyToDeliver：布尔值。只有当当前已经具备最终交付所需的信息、证据和产物时，才为 true。
     - nextAction：对象。表示下一跳动作，且只能输出 learning、hand、mouth 三种结构之一。
-    - nextAction.action：字符串枚举。只能是 learning、hand、mouth。
-    - nextAction.wantLearnSkillIds：字符串数组。仅在 action=learning 时出现，表示本轮要学习的 skill id 列表。
-    - nextAction.toolUsePlan：对象。仅在 action=hand 时出现，表示本轮工具执行计划。
-    - nextAction.toolUsePlan.mode：字符串枚举。只能是 parallel 或 serial。
-    - nextAction.toolUsePlan.calls：数组。表示本轮要执行的工具调用列表。
-    - nextAction.toolUsePlan.calls[].toolName：字符串。要调用的工具名。
-    - nextAction.toolUsePlan.calls[].args：对象。对应工具的调用参数。
-    - decision.summary / reason / expectedOutcome：这是你的内部判断记录，不是最终对用户的话。
     - 不要输出 markdown。
   </output_rules>
 
   <examples>
-    <example_learning>
+    <example_keep_notes>
       {
-        "memoryOps": [],
         "decision": {
-          "summary": "先补充当前所需的技能说明",
-          "reason": "我已经知道任务要继续推进，但还缺少相关 skill 的使用细节，继续猜测风险较高。",
-          "expectedOutcome": "获得足够的技能说明后，我可以决定是否调用工具。"
+          "summary": "先学习当前缺失的技能",
+          "reason": "下一步已经明确，但仍缺少相关技能说明。",
+          "expectedOutcome": "补齐技能说明后可以决定是否调用工具。"
         },
         "readyToDeliver": false,
         "nextAction": {
@@ -242,144 +279,91 @@ export const buildBrainSystemPrompt = (): string =>
           "wantLearnSkillIds": ["docx-read"]
         }
       }
-    </example_learning>
+    </example_keep_notes>
 
-    <example_hand_default_scope>
+    <example_partial_notes_update>
       {
-        "memoryOps": [],
-        "decision": {
-          "summary": "先在默认知识库范围内做一次低成本检索",
-          "reason": "当前没有显式缩圈资料，但默认工作区知识库范围可用；先检索一次是最低成本且信息增益最高的动作。",
-          "expectedOutcome": "拿到第一批证据后，我可以判断是否已经能回答，或是否还需要继续缩圈。"
+        "updatedStableMemory": {
+          "keyEvidence": "- kb_hybrid_search_chunks 命中了审批驳回时保留原文件的制度说明。",
+          "openQuestions": ""
         },
-        "readyToDeliver": false,
-        "nextAction": {
-          "action": "hand",
-          "toolUsePlan": {
-            "mode": "serial",
-            "calls": [
-              {
-                "toolName": "kb_hybrid_search_chunks",
-                "args": {
-                  "queryText": "approval denied 文件是否保留"
-                }
-              }
-            ]
-          }
-        }
-      }
-    </example_hand_default_scope>
-
-    <example_hand_serial>
-      {
-        "memoryOps": [],
         "decision": {
-          "summary": "按顺序完成文档写入、校验和预览",
-          "reason": "这些动作依赖同一份最新 docx 快照，不能并行执行。",
-          "expectedOutcome": "得到真实更新后的校验结果与预览产物。"
-        },
-        "readyToDeliver": false,
-        "nextAction": {
-          "action": "hand",
-          "toolUsePlan": {
-            "mode": "serial",
-            "calls": [
-              {
-                "toolName": "docx_apply_ops",
-                "args": {
-                  "docId": "doc-1",
-                  "ops": [
-                    {
-                      "type": "replace_text",
-                      "query": "RISK_TODO",
-                      "replace": "待跟进"
-                    }
-                  ]
-                }
-              },
-              {
-                "toolName": "docx_validate",
-                "args": {
-                  "docId": "doc-1"
-                }
-              }
-            ]
-          }
-        }
-      }
-    </example_hand_serial>
-
-    <example_mouth>
-      {
-        "memoryOps": [],
-        "decision": {
-          "summary": "当前已经可以结束任务",
-          "reason": "现有证据已经足够支持最终结论，没有必要继续扩展动作。",
-          "expectedOutcome": "由后续表达节点整理出最终结果。"
+          "summary": "证据已经足够，准备结束任务",
+          "reason": "当前已拿到能直接支撑结论的依据。",
+          "expectedOutcome": "由后续表达节点整理最终结果。"
         },
         "readyToDeliver": true,
         "nextAction": {
           "action": "mouth"
         }
       }
-    </example_mouth>
+    </example_partial_notes_update>
   </examples>
 </system>
 `.trim()
 
-export const buildBrainUserPrompt = (input: HumanBrainPromptInput): string =>
-  `
+  const user = `
 <user_context>
   <task_goal>
-${input.userInput}
+${input.state.task.userInput}
   </task_goal>
 
   <reference_scope>
-${input.referenceScopeText}
+这是当前任务的资料范围、工作区边界与默认可检索范围说明。
+它描述当前任务默认可以接触的资料范围，以及用户是否已经显式缩圈。
+
+${renderReferenceScopeText(input.ctx.referenceScope)}
   </reference_scope>
 
-  <confirmed_memory>
-${input.stableMemoryText}
-  </confirmed_memory>
+  <memory>
+    <your_notes>
+这是你之前沉淀下来的任务笔记。
+它记录当前任务中已经确认的事实、关键依据和仍未解决的问题。
 
-  <current_capabilities>
-${input.capabilitiesText}
-  </current_capabilities>
+${renderHumanStableNotes(input.state, 'brain_prompt')}
+    </your_notes>
 
-  <recent_focus>
-${input.lastRoundFocusText}
-  </recent_focus>
+    <recent_progress>
+这是最近一轮过程记录。
 
-  <earlier_history>
-${input.historyChainText}
-  </earlier_history>
+${lastRoundRecord ? renderRoundRecord(lastRoundRecord, 'focus') : 'none'}
+    </recent_progress>
 
-  <expanded_history>
-${input.loadedHistoryContextText}
-  </expanded_history>
+    <earlier_attempts>
+这是更早几轮过程记录。
+
+${
+  historyChainRecords.length > 0
+    ? historyChainRecords.map((record) => renderRoundRecord(record, 'chain')).join('\n')
+    : 'none'
+}
+    </earlier_attempts>
+
+    <recalled_history>
+${renderLoadedHistoryIntro(loadedHistoryContext)}
+
+${
+  loadedHistoryRecords.length > 0
+    ? loadedHistoryRecords.map((record) => renderRoundRecord(record, 'loaded')).join('\n')
+    : 'none'
+}
+    </recalled_history>
+  </memory>
+
+  <available_skills>
+${renderAvailableSkillsText(input.state)}
+  </available_skills>
 
   <correction_hint>
-${input.watchHintText}
+这是当前的收敛或纠偏提示。
+
+${input.state.execution.watchHint ? renderWatchHintForBrain(input.state.execution.watchHint) : 'none'}
   </correction_hint>
 </user_context>
 `.trim()
 
-export const buildBrainPromptContext = (input: { state: HumanState; ctx: AiRunContext }) => {
-  return buildHumanBrainPrompt({
-    userInput: input.state.task.userInput,
-    referenceScopeText: buildReferenceScopePromptText(input.ctx),
-    stableMemoryText: buildStableMemoryText(input.state),
-    capabilitiesText: buildCapabilitiesText(input.state),
-    lastRoundFocusText: buildLastRoundFocusText(input.state),
-    historyChainText: buildHistoryChainText(input.state),
-    loadedHistoryContextText: buildLoadedHistoryContextText(input.state),
-    watchHintText: buildWatchHintText(input.state)
-  })
-}
-
-export const buildHumanBrainPrompt = (input: HumanBrainPromptInput) => {
   return {
-    system: buildBrainSystemPrompt(),
-    user: buildBrainUserPrompt(input)
+    system,
+    user
   }
 }

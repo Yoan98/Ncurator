@@ -4,7 +4,7 @@ import {
   HUMAN_MAX_ROUND_HISTORY
 } from '../constants'
 
-export const HUMAN_PROCESS_MEMORY_LIMITS = {
+export const HUMAN_HISTORY_LIMITS = {
   roundHistory: HUMAN_MAX_ROUND_HISTORY,
   historyChain: HUMAN_MAX_HISTORY_CHAIN_ITEMS,
   loadedHistoryRounds: HUMAN_MAX_LOADED_HISTORY_ROUNDS

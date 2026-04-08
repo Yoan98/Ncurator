@@ -297,7 +297,7 @@
 - What：验证 builtin `history-recall` 能通过真实 `hand` 链路加载旧历史，并写入 `loaded_history_context`。
 - Why：过程历史的按需展开是长链路任务的重要收敛能力，需要有正式 case 长期守住。
 - How：先 seed 历史 round，再通过真实 `hand` 调用 internal tool `history_recall`。
-- Oracle：`lastToolUseResults` 中出现 `history_recall`，且 `processMemory.loadedHistoryContext` 被真实写入。
+- Oracle：`execution.lastToolResults` 中出现 `history_recall`，且 `memory.history.loadedHistoryContext` 被真实写入。
 - Not：不验证 `brain` 是否一定会主动触发这条能力。
 
 ### 4.2 `human`
@@ -377,11 +377,11 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证第一轮 `brain` 写入的 `facts / evidences / openQuestions` 会在下一轮真实 `brain` prompt 中继续可见。
+- What：验证第一轮 `brain` 写入的 `updatedStableMemory` patch 会在下一轮真实 `brain` prompt 中继续可见。
 - Why：memory 跨轮延续是 `human` 长链路推理的核心能力，必须由真实 graph 保证。
-- How：第一轮 `brain` 通过 `memoryOps` 写入事实、证据和未决项，并触发一次真实 learning；第二轮 `brain` 读取真实 prompt，检查这些内容是否还在。
-- Oracle：第二轮 `brain` prompt 中同时出现前一轮写入的 fact、evidence 和 open question，任务最终完成。
-- Not：不验证更复杂的 memory 去重或压缩策略。
+- How：第一轮 `brain` 通过 `updatedStableMemory` 局部更新任务笔记，并触发一次真实 learning；第二轮 `brain` 读取真实 prompt，检查这些内容是否还在。
+- Oracle：第二轮 `brain` prompt 中同时出现前一轮写入的已确认事实、关键依据和未决问题，任务最终完成。
+- Not：不验证更复杂的 memory 压缩策略。
 
 ##### `complex-docx-edit`
 

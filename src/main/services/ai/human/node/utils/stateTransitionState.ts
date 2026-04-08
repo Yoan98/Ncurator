@@ -1,16 +1,16 @@
-import { HUMAN_MAX_BRAIN_DECISION_HISTORY } from '../../constants'
 import {
-  appendRoundRecord,
   appendDecisionRound,
+  appendRoundRecord,
   buildMouthExecution,
   buildPreExecutionBlockedExecution
 } from '../../memory/roundHistory'
 import type {
+  HumanDecision,
   HumanResult,
+  HumanStableMemory,
   HumanState,
   HumanTraceStep,
-  HumanWatchHint,
-  LastBrainDecision
+  HumanWatchHint
 } from '../../types'
 
 export type HumanTraceItemInput = {
@@ -23,9 +23,9 @@ export type HumanTraceItemInput = {
 }
 
 export type HumanStateOverrides<TExcluded extends keyof HumanState = never> = Partial<
-  Omit<HumanState, 'runtime' | TExcluded>
+  Omit<HumanState, 'execution' | TExcluded>
 > & {
-  runtime?: Partial<HumanState['runtime']>
+  execution?: Partial<HumanState['execution']>
 }
 
 const appendHumanTraceSteps = (input: {
@@ -66,9 +66,9 @@ export const returnToBrainState = (
 ): HumanState => ({
   ...state,
   ...overrides,
-  runtime: {
-    ...state.runtime,
-    ...overrides.runtime,
+  execution: {
+    ...state.execution,
+    ...overrides.execution,
     stage: 'brain'
   }
 })
@@ -77,7 +77,7 @@ export const returnToBrainAfterTraceState = (input: {
   state: HumanState
   traceItems: HumanTraceItemInput[]
   watchHint?: HumanWatchHint
-  overrides?: HumanStateOverrides<'watchHint' | 'trace'>
+  overrides?: HumanStateOverrides<'trace'>
 }): HumanState => {
   const traceSteps = appendHumanTraceSteps({
     steps: input.state.trace.steps,
@@ -86,7 +86,10 @@ export const returnToBrainAfterTraceState = (input: {
 
   return returnToBrainState(input.state, {
     ...input.overrides,
-    watchHint: input.watchHint,
+    execution: {
+      ...input.overrides?.execution,
+      watchHint: input.watchHint
+    },
     trace: {
       steps: traceSteps
     }
@@ -94,7 +97,7 @@ export const returnToBrainAfterTraceState = (input: {
 }
 
 export const resolveBrainDecisionWatchHint = (input: {
-  decision: LastBrainDecision
+  decision: HumanDecision
   watchHint?: HumanWatchHint
 }): HumanWatchHint | undefined => {
   if (input.watchHint) return input.watchHint
@@ -108,8 +111,8 @@ export const resolveBrainDecisionWatchHint = (input: {
 
 const resolveBrainNextStage = (input: {
   watchHint?: HumanWatchHint
-  decision: LastBrainDecision
-}): HumanState['runtime']['stage'] => {
+  decision: HumanDecision
+}): HumanState['execution']['stage'] => {
   if (input.watchHint) return 'brain'
   return input.decision.nextAction.action === 'learning'
     ? 'learning'
@@ -120,45 +123,36 @@ const resolveBrainNextStage = (input: {
 
 export const applyBrainDecisionState = (input: {
   state: HumanState
-  decision: LastBrainDecision
-  reducedInside: HumanState['brainMemory']['inside']
+  decision: HumanDecision
+  stableMemory: HumanStableMemory
   watchHint?: HumanWatchHint
   createdAt: number
 }): HumanState => ({
   ...input.state,
-  runtime: {
+  execution: {
+    ...input.state.execution,
     stage: resolveBrainNextStage({
       watchHint: input.watchHint,
       decision: input.decision
     }),
-    status: 'running'
+    status: 'running',
+    currentDecision: input.decision,
+    watchHint: input.watchHint
   },
-  brainMemory: {
-    inside: input.reducedInside,
-    outside: {
-      ...input.state.brainMemory.outside,
-      brainDecisions: [
-        ...input.state.brainMemory.outside.brainDecisions,
-        {
-          ...input.decision,
+  memory: {
+    stable: input.stableMemory,
+    history: input.watchHint
+      ? appendRoundRecord({
+          state: input.state,
+          decision: input.decision,
+          execution: buildPreExecutionBlockedExecution(input.watchHint),
           createdAt: input.createdAt
+        })
+      : {
+          ...input.state.memory.history,
+          loadedHistoryContext: undefined
         }
-      ].slice(-HUMAN_MAX_BRAIN_DECISION_HISTORY)
-    }
   },
-  processMemory: input.watchHint
-    ? appendRoundRecord({
-        state: input.state,
-        decision: input.decision,
-        execution: buildPreExecutionBlockedExecution(input.watchHint),
-        createdAt: input.createdAt
-      })
-    : {
-        ...input.state.processMemory,
-        loadedHistoryContext: undefined
-      },
-  lastBrainDecision: input.decision,
-  watchHint: input.watchHint,
   trace: {
     steps: appendHumanTraceStep({
       steps: input.state.trace.steps,
@@ -180,7 +174,7 @@ export const buildHumanResult = (input: {
   status: 'completed',
   summary: input.summary,
   deliveryMarkdown: input.deliveryMarkdown,
-  artifacts: input.state.runtimeArtifacts.length > 0 ? [...input.state.runtimeArtifacts] : undefined
+  artifacts: input.state.execution.artifacts.length > 0 ? [...input.state.execution.artifacts] : undefined
 })
 
 export const completeHumanTaskState = (input: {
@@ -188,17 +182,21 @@ export const completeHumanTaskState = (input: {
   result: HumanResult
 }): HumanState => ({
   ...input.state,
-  runtime: {
+  execution: {
+    ...input.state.execution,
     stage: 'mouth',
     status: 'completed'
   },
-  processMemory: appendDecisionRound({
-    state: input.state,
-    execution: buildMouthExecution({
-      summary: input.result.summary,
-      completed: true
+  memory: {
+    ...input.state.memory,
+    history: appendDecisionRound({
+      state: input.state,
+      execution: buildMouthExecution({
+        summary: input.result.summary,
+        completed: true
+      })
     })
-  }),
+  },
   result: input.result,
   trace: {
     steps: appendHumanTraceStep({

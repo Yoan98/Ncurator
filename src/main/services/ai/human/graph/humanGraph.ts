@@ -50,16 +50,16 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
       .addEdge(START, 'human_brain_node')
       .addConditionalEdges('human_brain_node', (state) => {
         const humanState = state as HumanState
-        if (humanState.runtime.stage === 'learning') return 'human_learning_node'
-        if (humanState.runtime.stage === 'hand') return 'human_hand_node'
-        if (humanState.runtime.stage === 'mouth') return 'human_mouth_node'
+        if (humanState.execution.stage === 'learning') return 'human_learning_node'
+        if (humanState.execution.stage === 'hand') return 'human_hand_node'
+        if (humanState.execution.stage === 'mouth') return 'human_mouth_node'
         return 'human_brain_node'
       })
       .addEdge('human_learning_node', 'human_brain_node')
       .addEdge('human_hand_node', 'human_brain_node')
       .addConditionalEdges('human_mouth_node', (state) => {
         const humanState = state as HumanState
-        if (humanState.runtime.status === 'running') return 'human_brain_node'
+        if (humanState.execution.status === 'running') return 'human_brain_node'
         return END
       })
       .compile()

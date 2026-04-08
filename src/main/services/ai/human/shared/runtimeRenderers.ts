@@ -15,7 +15,7 @@ const getRenderStyle = (mode: HumanRuntimeRenderMode): 'plain' | 'bullet' =>
   mode === 'fallback_markdown' ? 'bullet' : 'plain'
 
 const renderArtifactLine = (
-  artifact: HumanState['runtimeArtifacts'][number],
+  artifact: HumanState['execution']['artifacts'][number],
   mode: HumanRuntimeRenderMode
 ): string => {
   if (artifact.kind === 'file') {
@@ -36,7 +36,7 @@ const renderArtifactLine = (
 }
 
 const renderToolResultLine = (
-  result: NonNullable<HumanState['lastToolUseResults']>[number],
+  result: NonNullable<HumanState['execution']['lastToolResults']>[number],
   mode: HumanRuntimeRenderMode
 ): string => {
   const diagnosticText = renderToolDiagnosticText(result)
@@ -54,7 +54,7 @@ export const renderHumanArtifactLines = (
   state: HumanState,
   mode: HumanRuntimeRenderMode
 ): string =>
-  renderLineList(state.runtimeArtifacts.map((artifact) => renderArtifactLine(artifact, mode)), {
+  renderLineList(state.execution.artifacts.map((artifact) => renderArtifactLine(artifact, mode)), {
     fallback: getRenderFallback(mode),
     style: getRenderStyle(mode)
   })
@@ -64,7 +64,7 @@ export const renderHumanRecentToolResultLines = (
   mode: HumanRuntimeRenderMode
 ): string =>
   renderLineList(
-    (state.lastToolUseResults || []).map((result) => renderToolResultLine(result, mode)),
+    (state.execution.lastToolResults || []).map((result) => renderToolResultLine(result, mode)),
     {
       fallback: getRenderFallback(mode),
       style: getRenderStyle(mode)

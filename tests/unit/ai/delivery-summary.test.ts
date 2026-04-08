@@ -22,8 +22,7 @@ describe('ai unit delivery summary', () => {
       taskId: 'task-1',
       userInput: '请整理结果'
     })
-    state.lastBrainDecision = {
-      memoryOps: [],
+    state.execution.currentDecision = {
       decision: {
         summary: '当前应结束并交付结果',
         reason: '信息已经足够。',

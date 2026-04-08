@@ -5,9 +5,7 @@ import {
   RUNTIME_SKILL_IDS
 } from './constants'
 import type {
-  HumanState,
   RuntimeSkillId,
-  SkillCatalogItem,
   SkillDefinition
 } from './types'
 
@@ -140,21 +138,8 @@ export const listBuiltinSkillDefinitions = (): SkillDefinition[] =>
 export const listExternalSkillDefinitions = (): SkillDefinition[] =>
   EXTERNAL_RUNTIME_SKILL_IDS.map((skillId) => getSkillDefinition(skillId))
 
-export const buildSkillCatalog = (): SkillCatalogItem[] =>
-  listSkillDefinitions().map((definition) => ({
-    skillId: definition.skillId,
-    familyId: definition.familyId,
-    source: definition.source,
-    availability: definition.availability,
-    countsTowardToolBudget: definition.countsTowardToolBudget,
-    title: definition.title,
-    summary: definition.summary,
-    toolNames: [...definition.toolNames],
-    whenToUse: definition.whenToUse
-  }))
-
 export const getEffectiveLearnedSkillIds = (
-  learnedSkillIds: HumanState['brainMemory']['outside']['learnedSkillIds']
+  learnedSkillIds: RuntimeSkillId[]
 ): RuntimeSkillId[] => {
   const seen = new Set<RuntimeSkillId>()
   const ordered = [...BUILTIN_RUNTIME_SKILL_IDS, ...learnedSkillIds]
@@ -168,7 +153,7 @@ export const getEffectiveLearnedSkillIds = (
 
 export const findEffectiveSkillIdByToolName = (input: {
   toolName: string
-  learnedSkillIds: HumanState['brainMemory']['outside']['learnedSkillIds']
+  learnedSkillIds: RuntimeSkillId[]
 }): RuntimeSkillId | undefined => {
   const target = String(input.toolName || '').trim()
   return getEffectiveLearnedSkillIds(input.learnedSkillIds).find((skillId) =>

@@ -44,7 +44,7 @@ export const deriveDeliverySummary = (input: {
     }
   }
 
-  const decisionSummary = clipSummary(input.state.lastBrainDecision?.decision.summary || '')
+  const decisionSummary = clipSummary(input.state.execution.currentDecision?.decision.summary || '')
   if (decisionSummary) return decisionSummary
   return '任务结束'
 }

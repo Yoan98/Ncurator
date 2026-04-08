@@ -11,7 +11,7 @@ describe('ai human mock-llm backend', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证真实 graph 中第一轮 brain 写入的 memory 会在下一轮真实 prompt 中继续可见。',
+      description: '验证真实 graph 中第一轮 brain 写入的 stable memory patch 会在下一轮真实 prompt 中继续可见。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -21,33 +21,11 @@ describe('ai human mock-llm backend', () => {
             'human.brain': [
               {
                 output: {
-                  memoryOps: [
-                    {
-                      op: 'add',
-                      field: 'evidences',
-                      value: {
-                        id: 'evidence-risk-1',
-                        toolName: 'kb_fts_search_chunks',
-                        summary: '知识库显示上线前必须执行复核。',
-                        sourceType: 'tool_result',
-                        rawRef: 'tool_result#1'
-                      }
-                    },
-                    {
-                      op: 'add',
-                      field: 'facts',
-                      value: {
-                        id: 'fact-risk-review-1',
-                        summary: '项目上线前需要执行复核。',
-                        evidenceIds: ['evidence-risk-1']
-                      }
-                    },
-                    {
-                      op: 'add',
-                      field: 'openQuestions',
-                      value: '还不确定最终负责人。'
-                    }
-                  ],
+                  updatedStableMemory: {
+                    confirmedFacts: '- 项目上线前需要执行复核。',
+                    keyEvidence: '- 知识库显示上线前必须执行复核。',
+                    openQuestions: '- 还不确定最终负责人。'
+                  },
                   decision: {
                     summary: '先学习一个 skill，让 memory 进入下一轮 prompt。',
                     reason: '需要通过真实 graph 触发第二轮 brain。',
@@ -98,8 +76,8 @@ describe('ai human mock-llm backend', () => {
         runtime.assertThat(
           result.output.status === 'completed' && result.secondBrainSeesMemory,
           {
-            name: 'brain-memory-persists-across-real-graph-rounds',
-            message: 'memoryOps 写入的事实、证据和未决项应在下一轮真实 brain prompt 中继续存在。',
+            name: 'stable-memory-patch-persists-across-real-graph-rounds',
+            message: 'updatedStableMemory 写入的任务笔记应在下一轮真实 brain prompt 中继续存在。',
             data: {
               secondBrainSeesMemory: result.secondBrainSeesMemory
             }

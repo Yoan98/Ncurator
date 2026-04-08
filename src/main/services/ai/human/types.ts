@@ -3,40 +3,39 @@ import type { JsonObject } from '../../../../shared/types'
 import type { z } from 'zod/v4'
 import type { AiToolFamilyId } from './tools/types'
 import {
-  HUMAN_STAGES,
-  HUMAN_STATUSES,
-  HUMAN_STEP_ACTIONS,
-  HUMAN_STEP_RESULT_STATUSES,
+  HUMAN_ROUND_EXECUTION_KINDS,
   HUMAN_SKILL_AVAILABILITIES,
   HUMAN_SKILL_SOURCES,
-  HUMAN_ROUND_EXECUTION_KINDS,
+  HUMAN_STATUSES,
+  HUMAN_STAGES,
+  HUMAN_STEP_ACTIONS,
+  HUMAN_STEP_RESULT_STATUSES,
   RUNTIME_SKILL_IDS,
   TOOL_CALL_RESULT_CODES
 } from './constants'
 import {
-  brainDecisionRecordSchema,
   brainDecisionSchema,
-  brainEvidenceSchema,
-  brainFactSchema,
-  brainMemoryOpSchema,
   brainNextActionSchema,
+  humanDecisionSchema,
+  humanDeliveryModeSchema,
+  humanExecutionSchema,
+  humanHistoryToolResultSchema,
   humanLearningOutcomeSchema,
   humanLoadedHistoryContextSchema,
-  humanProcessMemorySchema,
-  humanRoundRecordSchema,
-  humanRoundExecutionSchema,
-  humanDeliveryModeSchema,
-  humanHistoryToolResultSchema,
+  humanMemoryHistorySchema,
   humanResultSchema,
+  humanRoundExecutionSchema,
+  humanRoundRecordSchema,
+  humanStableMemoryPatchSchema,
+  humanStableMemorySchema,
   humanStateContractSchema,
   humanTaskInputSchema,
   humanTaskOutputSchema,
   humanTraceStepSchema,
   humanWatchHintSchema,
-  lastBrainDecisionSchema,
-  skillCatalogItemSchema,
-  toolCallParamSchema,
+  skillDefinitionBaseSchema,
   toolCallDiagnosticSchema,
+  toolCallParamSchema,
   toolCallResultSchema,
   toolUsePlanSchema
 } from './schema'
@@ -83,49 +82,35 @@ export type ToolPromptSpec = {
   examples?: ToolPromptExample[]
 }
 
-export type SkillCatalogItem = z.infer<typeof skillCatalogItemSchema>
+export type SkillDefinitionBase = z.infer<typeof skillDefinitionBaseSchema>
 
-export type SkillDefinition = SkillCatalogItem & {
+export type SkillDefinition = SkillDefinitionBase & {
   detail: string
 }
 
-export type BrainEvidence = z.infer<typeof brainEvidenceSchema>
-
-export type BrainFact = z.infer<typeof brainFactSchema>
-
 export type BrainDecision = z.infer<typeof brainDecisionSchema>
+export type BrainNextAction = z.infer<typeof brainNextActionSchema>
+export type HumanStableMemory = z.infer<typeof humanStableMemorySchema>
+export type HumanStableMemoryPatch = z.infer<typeof humanStableMemoryPatchSchema>
+export type HumanDecision = z.infer<typeof humanDecisionSchema>
 
 export type ToolCallParam = z.infer<typeof toolCallParamSchema>
 export type ToolUsePlan = z.infer<typeof toolUsePlanSchema>
-
 export type ToolCallDiagnostic = z.infer<typeof toolCallDiagnosticSchema>
-
 export type ToolCallResult = z.infer<typeof toolCallResultSchema>
 export type HumanLearningOutcome = z.infer<typeof humanLearningOutcomeSchema>
 export type HumanWatchHint = z.infer<typeof humanWatchHintSchema>
 export type HumanHistoryToolResult = z.infer<typeof humanHistoryToolResultSchema>
-
-export type BrainMemoryOp = z.infer<typeof brainMemoryOpSchema>
-
-export type BrainNextAction = z.infer<typeof brainNextActionSchema>
-
-export type LastBrainDecision = z.infer<typeof lastBrainDecisionSchema>
-
-export type BrainDecisionRecord = z.infer<typeof brainDecisionRecordSchema>
-
 export type HumanResult = z.infer<typeof humanResultSchema>
-
 export type HumanTraceStep = z.infer<typeof humanTraceStepSchema>
-
 export type HumanTaskInput = z.infer<typeof humanTaskInputSchema>
-
 export type HumanTaskOutput = z.infer<typeof humanTaskOutputSchema>
-
+export type HumanExecution = z.infer<typeof humanExecutionSchema>
 export type HumanState = z.infer<typeof humanStateContractSchema>
 export type HumanRoundExecution = z.infer<typeof humanRoundExecutionSchema>
 export type HumanRoundRecord = z.infer<typeof humanRoundRecordSchema>
 export type HumanLoadedHistoryContext = z.infer<typeof humanLoadedHistoryContextSchema>
-export type HumanProcessMemory = z.infer<typeof humanProcessMemorySchema>
+export type HumanMemoryHistory = z.infer<typeof humanMemoryHistorySchema>
 
 export type HumanRuntimeCache = {
   familyToolsets: Partial<Record<AiToolFamilyId, StructuredToolInterface[]>>

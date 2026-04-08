@@ -31,49 +31,66 @@ describe('ai tool hand backend', () => {
 
         const stateWithLearningRound = {
           ...initialState,
-          processMemory: appendRoundRecord({
-            state: initialState,
-            decision: {
-              memoryOps: [],
+          memory: {
+            ...initialState.memory,
+            history: appendRoundRecord({
+              state: initialState,
               decision: {
-                summary: '学习 docx-delivery',
-                reason: '后续需要生成预览。',
-                expectedOutcome: '补齐预览交付能力。'
+                decision: {
+                  summary: '学习 docx-delivery',
+                  reason: '后续需要生成预览。',
+                  expectedOutcome: '补齐预览交付能力。'
+                },
+                readyToDeliver: false,
+                nextAction: {
+                  action: 'learning',
+                  wantLearnSkillIds: ['docx-delivery']
+                }
               },
-              readyToDeliver: false,
-              nextAction: {
-                action: 'learning',
-                wantLearnSkillIds: ['docx-delivery']
-              }
-            },
-            execution: buildLearningExecution({
-              learningOutcome: {
-                requestedSkillIds: ['docx-delivery'],
-                loadedSkillIds: ['docx-delivery'],
-                skippedDuplicateSkillIds: [],
-                skippedUnknownSkillIds: [],
-                evictedSkillIds: [],
-                activeToolCount: 3
-              }
-            }),
-            createdAt: 1
-          })
+              execution: buildLearningExecution({
+                learningOutcome: {
+                  requestedSkillIds: ['docx-delivery'],
+                  loadedSkillIds: ['docx-delivery'],
+                  skippedDuplicateSkillIds: [],
+                  skippedUnknownSkillIds: [],
+                  evictedSkillIds: [],
+                  activeToolCount: 3
+                }
+              }),
+              createdAt: 1
+            })
+          }
         }
 
         const stateWithHandRound = {
           ...stateWithLearningRound,
-          processMemory: appendRoundRecord({
-            state: stateWithLearningRound,
-            decision: {
-              memoryOps: [],
+          memory: {
+            ...stateWithLearningRound.memory,
+            history: appendRoundRecord({
+              state: stateWithLearningRound,
               decision: {
-                summary: '生成 docx 预览',
-                reason: '已经具备 delivery 能力，可以生成预览。',
-                expectedOutcome: '拿到 preview artifact。'
+                decision: {
+                  summary: '生成 docx 预览',
+                  reason: '已经具备 delivery 能力，可以生成预览。',
+                  expectedOutcome: '拿到 preview artifact。'
+                },
+                readyToDeliver: false,
+                nextAction: {
+                  action: 'hand',
+                  toolUsePlan: {
+                    mode: 'serial',
+                    calls: [
+                      {
+                        toolName: 'docx_render_preview',
+                        args: {
+                          docId: 'doc-1'
+                        }
+                      }
+                    ]
+                  }
+                }
               },
-              readyToDeliver: false,
-              nextAction: {
-                action: 'hand',
+              execution: buildHandExecution({
                 toolUsePlan: {
                   mode: 'serial',
                   calls: [
@@ -84,59 +101,48 @@ describe('ai tool hand backend', () => {
                       }
                     }
                   ]
-                }
-              }
-            },
-            execution: buildHandExecution({
-              toolUsePlan: {
-                mode: 'serial',
-                calls: [
+                },
+                toolResults: [
                   {
                     toolName: 'docx_render_preview',
-                    args: {
-                      docId: 'doc-1'
-                    }
-                  }
-                ]
-              },
-              toolResults: [
-                {
-                  toolName: 'docx_render_preview',
-                  ok: true,
-                  code: 'ok',
-                  data: {
                     ok: true,
                     code: 'ok',
-                    summary: 'preview generated (html)',
-                    previewPath: '/tmp/preview.docx'
-                  }
-                }
-              ]
-            }),
-            createdAt: 2
-          }),
-          lastBrainDecision: {
-            memoryOps: [],
-            decision: {
-              summary: '回看 docx 预览相关历史',
-              reason: '最近历史摘要还不够，需要看更详细的旧轮次。',
-              expectedOutcome: '加载到包含 docx_render_preview 的旧历史。'
-            },
-            readyToDeliver: false,
-            nextAction: {
-              action: 'hand',
-              toolUsePlan: {
-                mode: 'parallel',
-                calls: [
-                  {
-                    toolName: 'history_recall',
-                    args: {
-                      executionKinds: ['hand'],
-                      toolNames: ['docx_render_preview'],
-                      limit: 1
+                    data: {
+                      ok: true,
+                      code: 'ok',
+                      summary: 'preview generated (html)',
+                      previewPath: '/tmp/preview.docx'
                     }
                   }
                 ]
+              }),
+              createdAt: 2
+            })
+          },
+          execution: {
+            ...stateWithLearningRound.execution,
+            currentDecision: {
+              decision: {
+                summary: '回看 docx 预览相关历史',
+                reason: '最近历史摘要还不够，需要看更详细的旧轮次。',
+                expectedOutcome: '加载到包含 docx_render_preview 的旧历史。'
+              },
+              readyToDeliver: false,
+              nextAction: {
+                action: 'hand',
+                toolUsePlan: {
+                  mode: 'parallel',
+                  calls: [
+                    {
+                      toolName: 'history_recall',
+                      args: {
+                        executionKinds: ['hand'],
+                        toolNames: ['docx_render_preview'],
+                        limit: 1
+                      }
+                    }
+                  ]
+                }
               }
             }
           }
@@ -149,11 +155,11 @@ describe('ai tool hand backend', () => {
         }
       },
       assert: async (result, runtime) => {
-        const loadedRounds = result.nextState.processMemory.loadedHistoryContext?.rounds || []
-        const latestRound = result.nextState.processMemory.roundHistory.at(-1)
+        const loadedRounds = result.nextState.memory.history.loadedHistoryContext?.rounds || []
+        const latestRound = result.nextState.memory.history.roundHistory.at(-1)
 
         runtime.assertThat(
-          result.nextState.lastToolUseResults?.[0]?.toolName === 'history_recall' &&
+          result.nextState.execution.lastToolResults?.[0]?.toolName === 'history_recall' &&
             loadedRounds.length === 1 &&
             loadedRounds[0]?.roundId === 2 &&
             latestRound?.execution.kind === 'hand' &&
@@ -162,8 +168,8 @@ describe('ai tool hand backend', () => {
             name: 'history-recall-loads-old-rounds',
             message: 'history_recall 应通过 hand 真实执行，并把匹配到的旧历史写入 loaded_history_context。',
             data: {
-              lastToolUseResults: result.nextState.lastToolUseResults,
-              loadedHistoryContext: result.nextState.processMemory.loadedHistoryContext,
+              lastToolUseResults: result.nextState.execution.lastToolResults,
+              loadedHistoryContext: result.nextState.memory.history.loadedHistoryContext,
               latestRound
             }
           }

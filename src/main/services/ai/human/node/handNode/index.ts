@@ -104,7 +104,7 @@ const executeToolUsePlan = async (input: {
   ctx: AiRunContext
   cache: HumanRuntimeCache
   taskId: string
-  learnedSkillIds: HumanState['brainMemory']['outside']['learnedSkillIds']
+  learnedSkillIds: HumanState['skills']['learnedSkillIds']
 }): Promise<ToolCallResult[]> => {
   if (input.toolUsePlan.mode === 'parallel') {
     return Promise.all(
@@ -144,11 +144,11 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
     const toolCallLimit =
       input.ctx.humanRuntimeOverrides?.hardActionLimit || HUMAN_DEFAULT_TOOL_CALL_LIMIT
 
-    if (!state.lastBrainDecision || state.lastBrainDecision.nextAction.action !== 'hand') {
+    if (!state.execution.currentDecision || state.execution.currentDecision.nextAction.action !== 'hand') {
       return returnToBrain(state)
     }
 
-    const { toolUsePlan } = state.lastBrainDecision.nextAction
+    const { toolUsePlan } = state.execution.currentDecision.nextAction
     const invalidPlanWatchHint = validateToolUsePlan(toolUsePlan)
     if (invalidPlanWatchHint) {
       return returnToBrainWithWatchHint({
@@ -157,19 +157,22 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
         source: 'hand',
         watchHint: invalidPlanWatchHint,
         overrides: {
-          processMemory: appendDecisionRound({
-            state,
-            execution: buildHandExecution({
-              toolUsePlan,
-              toolResults: [],
-              watchHint: invalidPlanWatchHint
+          memory: {
+            ...state.memory,
+            history: appendDecisionRound({
+              state,
+              execution: buildHandExecution({
+                toolUsePlan,
+                toolResults: [],
+                watchHint: invalidPlanWatchHint
+              })
             })
-          })
+          }
         }
       })
     }
 
-    const learnedSkillIds = state.brainMemory.outside.learnedSkillIds
+    const learnedSkillIds = state.skills.learnedSkillIds
     const results = await executeToolUsePlan({
       toolUsePlan,
       ctx: input.ctx,
@@ -183,8 +186,8 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       input.cache.toolCallCount > toolCallLimit
         ? buildToolLimitWatchHint(input.cache.toolCallCount, toolCallLimit)
         : undefined
-    const runtimeArtifacts = mergeArtifactRefs(
-      state.runtimeArtifacts,
+    const artifacts = mergeArtifactRefs(
+      state.execution.artifacts,
       extractArtifactRefsFromToolResults(results)
     )
     const loadedHistoryContext = readLoadedHistoryContextFromToolResults(results)
@@ -203,18 +206,23 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       stage: 'human_hand',
       watchHint,
       overrides: {
-        lastToolUseResults: results,
-        runtimeArtifacts,
-        processMemory: {
-          ...appendDecisionRound({
-            state,
-            execution: buildHandExecution({
-              toolUsePlan,
-              toolResults: results,
-              watchHint
-            })
-          }),
-          loadedHistoryContext
+        execution: {
+          lastToolResults: results,
+          artifacts
+        },
+        memory: {
+          ...state.memory,
+          history: {
+            ...appendDecisionRound({
+              state,
+              execution: buildHandExecution({
+                toolUsePlan,
+                toolResults: results,
+                watchHint
+              })
+            }),
+            loadedHistoryContext
+          }
         }
       }
     })

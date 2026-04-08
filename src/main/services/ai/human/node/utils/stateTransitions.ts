@@ -1,10 +1,11 @@
 import type { AiRunContext } from '../../../types'
 import type { WatchHintSource } from '../../../../../../shared/types'
 import type {
+  HumanDecision,
   HumanRuntimeCache,
   HumanState,
+  HumanStableMemory,
   HumanWatchHint,
-  LastBrainDecision
 } from '../../types'
 import {
   emitLatestHumanStepForState,
@@ -37,7 +38,7 @@ export const returnToBrainWithWatchHint = (input: {
   state: HumanState
   source: WatchHintSource
   watchHint: HumanWatchHint
-  overrides?: HumanStateOverrides<'watchHint'>
+  overrides?: HumanStateOverrides
 }): HumanState => {
   emitWatchHint({
     ctx: input.ctx,
@@ -47,7 +48,10 @@ export const returnToBrainWithWatchHint = (input: {
   })
   return returnToBrainState(input.state, {
     ...input.overrides,
-    watchHint: input.watchHint
+    execution: {
+      ...input.overrides?.execution,
+      watchHint: input.watchHint
+    }
   })
 }
 
@@ -59,7 +63,7 @@ export const returnToBrainAfterTrace = (input: {
   traceItems: HumanTraceItemInput[]
   stage: 'human_learning' | 'human_hand'
   watchHint?: HumanWatchHint
-  overrides?: HumanStateOverrides<'watchHint' | 'trace'>
+  overrides?: HumanStateOverrides<'trace'>
 }): HumanState => {
   const nextState = returnToBrainAfterTraceState({
     state: input.state,
@@ -92,8 +96,8 @@ export const applyBrainDecisionTransition = (input: {
   ctx: AiRunContext
   cache: HumanRuntimeCache
   state: HumanState
-  decision: LastBrainDecision
-  reducedInside: HumanState['brainMemory']['inside']
+  decision: HumanDecision
+  stableMemory: HumanStableMemory
   watchHint?: HumanWatchHint
 }): HumanState => {
   const watchHint = resolveBrainDecisionWatchHint({
@@ -103,7 +107,7 @@ export const applyBrainDecisionTransition = (input: {
   const nextState = applyBrainDecisionState({
     state: input.state,
     decision: input.decision,
-    reducedInside: input.reducedInside,
+    stableMemory: input.stableMemory,
     watchHint,
     createdAt: Date.now()
   })
@@ -120,7 +124,7 @@ export const applyBrainDecisionTransition = (input: {
     emitWatchHint({
       ctx: input.ctx,
       taskId: input.state.task.taskId,
-      source: input.watchHint ? 'memory_reducer' : 'brain',
+      source: 'brain',
       watchHint
     })
   }

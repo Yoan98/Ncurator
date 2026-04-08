@@ -1,14 +1,15 @@
 import type {
   HumanLoadedHistoryContext,
+  HumanMemoryHistory,
   HumanRoundExecution,
   HumanRoundRecord,
-  HumanState,
+  HumanStableMemory,
   HumanWatchHint
 } from '../types'
 
-export type HumanStableMemory = HumanState['brainMemory']['inside']
-export type HumanProcessMemory = HumanState['processMemory']
 export type HumanHistoryLoadedContext = NonNullable<HumanLoadedHistoryContext>
 export type HumanHistoryRecord = HumanRoundRecord
 export type HumanHistoryExecution = HumanRoundExecution
 export type HumanHistoryHint = HumanWatchHint
+export type HumanProcessMemory = HumanMemoryHistory
+export type HumanTaskStableMemory = HumanStableMemory

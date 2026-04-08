@@ -45,10 +45,10 @@ const buildStepToolContext = (input: {
   cache: HumanRuntimeCache
   state: HumanState
 }) => ({
-  learnedSkillIds: input.state.brainMemory.outside.learnedSkillIds,
-  effectiveSkillIds: getEffectiveLearnedSkillIds(input.state.brainMemory.outside.learnedSkillIds),
+  learnedSkillIds: input.state.skills.learnedSkillIds,
+  effectiveSkillIds: getEffectiveLearnedSkillIds(input.state.skills.learnedSkillIds),
   availableToolNames: getAvailableToolNames({
-    learnedSkillIds: input.state.brainMemory.outside.learnedSkillIds,
+    learnedSkillIds: input.state.skills.learnedSkillIds,
     cache: input.cache
   })
 })

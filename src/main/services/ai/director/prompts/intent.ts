@@ -1,12 +1,12 @@
-import {
-  type IntentPromptInput,
-  JSON_ONLY_INTENT_CONTRACT
-} from './shared'
+import { type IntentPromptInput, JSON_ONLY_INTENT_CONTRACT } from './shared'
 import { renderReferenceScopeText } from '../../prompts/referenceScope'
-import { renderLineList } from '../../utils/render'
 
-export const buildIntentSystemPrompt = (): string =>
-  `
+export const buildIntentPrompt = (input: IntentPromptInput) => {
+  const contextEvidenceText =
+    input.contextEvidence.length > 0 ? input.contextEvidence.join('\n') : '(none)'
+  const remainingBudget = Math.max(0, input.maxContextRounds - input.contextRounds)
+
+  const system = `
 <system>
   <role>
     你是 director 的入口路由决策器。
@@ -52,14 +52,7 @@ ${JSON_ONLY_INTENT_CONTRACT}
 </system>
 `.trim()
 
-export const buildIntentUserPrompt = (input: IntentPromptInput): string => {
-  const contextEvidenceText = renderLineList(input.contextEvidence, {
-    fallback: '(none)',
-    style: 'plain'
-  })
-  const remainingBudget = Math.max(0, input.maxContextRounds - input.contextRounds)
-
-  return `
+  const user = `
 <user_context>
   <current_request>
 你现在要分流的用户请求：
@@ -91,11 +84,9 @@ ${contextEvidenceText}
   </context_budget>
 </user_context>
 `.trim()
-}
 
-export const buildIntentPrompt = (input: IntentPromptInput) => {
   return {
-    system: buildIntentSystemPrompt(),
-    user: buildIntentUserPrompt(input)
+    system,
+    user
   }
 }

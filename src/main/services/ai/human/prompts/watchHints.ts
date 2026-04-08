@@ -28,8 +28,6 @@ export const summarizeWatchHint = (hint: HumanWatchHint): string => {
       return `hand 累计工具调用次数达到 ${hint.detail.toolCallCount}，已超过临时上限 ${hint.detail.limit}。`
     case 'brain_invalid_mouth_transition':
       return 'brain 选择 mouth 时必须 readyToDeliver=true；当前结果仍未准备好收尾。'
-    case 'memory_invalid_op':
-      return 'memoryReducer 检测到非法记忆编辑，已忽略对应操作。'
   }
 }
 
@@ -76,11 +74,6 @@ export const renderWatchHintForBrain = (hint: HumanWatchHint): string => {
       return [
         '你上一轮选择了 mouth，但 readyToDeliver=false。',
         '只要结果仍依赖未来工具动作，就不能选择 mouth。'
-      ].join('\n')
-    case 'memory_invalid_op':
-      return [
-        '上一轮 memoryOps 含非法操作，系统已忽略对应变更。',
-        '请基于当前真实记忆重新判断下一步。'
       ].join('\n')
   }
 }
