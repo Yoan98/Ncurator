@@ -627,6 +627,32 @@ interface HumanTraceStep {
 ### 关键运行事件与结构化模型日志
 
 ```ts
+interface AiRunEventEnvelope {
+  // 该事件是否仅供内部调试、日志与排障使用。
+  internal?: boolean
+  // 统一阶段标记；当前正式实现只保留 human 四阶段。
+  stage?: AiRunEventStage
+}
+
+// 当前正式实现里，外发事件统一采用 “具体 payload + AiRunEventEnvelope” 的组合形式。
+interface RunStartedEvent {
+  type: 'run_started'
+  runId: string
+  sessionId: string
+  createdAt: number
+  input: string
+}
+
+interface ToolCallStartedEvent {
+  type: 'tool_call_started'
+  runId: string
+  taskId?: string
+  toolCallId: string
+  toolName: string
+  input: IpcJsonObject
+  createdAt: number
+}
+
 interface ToolCallResultEvent {
   // 事件类型。
   type: 'tool_call_result'
@@ -641,13 +667,62 @@ interface ToolCallResultEvent {
   // 轻量时间线展示使用的输出预览。
   outputPreview: IpcJsonValue
   // 标准化后的工具结果，供后续 AI 或排障直接消费。
-  result?: ToolCallResult
+  result?: AiToolCallResult
   // 若工具输出了 draft snapshot，可通过这里关联。
   draftRef?: AiDraftSnapshotRef
   // 工具调用完成时间。
   completedAt: number
   // 若调用失败，补充错误文本。
   error?: string
+}
+
+interface TerminalStepStartedEvent {
+  type: 'terminal_step_started'
+  runId: string
+  taskId: string
+  stepId: string
+  stepIndex: number
+  command: string
+  cwd: string
+  createdAt: number
+}
+
+interface TerminalStepResultEvent {
+  type: 'terminal_step_result'
+  runId: string
+  taskId: string
+  stepId: string
+  stepIndex: number
+  command: string
+  outputPreview: string
+  exitCode: number | null
+  timedOut: boolean
+  truncated: boolean
+  completedAt: number
+}
+
+interface TerminalStepErrorEvent {
+  type: 'terminal_step_error'
+  runId: string
+  taskId: string
+  stepId: string
+  stepIndex: number
+  command: string
+  error: string
+  outputPreview?: string
+  completedAt: number
+}
+
+interface ActivityEvent {
+  type: 'activity'
+  runId: string
+  taskId?: string
+  activityId: string
+  actionType: string
+  status: 'started' | 'completed' | 'failed'
+  summary: string
+  details?: AiActivityDetails
+  createdAt: number
 }
 
 interface HumanStepEvent {
@@ -681,8 +756,72 @@ interface HumanStepEvent {
   draftRef?: AiDraftSnapshotRef
   // 事件创建时间。
   createdAt: number
-  // 事件统一携带的阶段标记。
-  stage?: 'human_brain' | 'human_learning' | 'human_hand' | 'human_mouth'
+}
+
+interface WatchHintEvent {
+  type: 'watch_hint'
+  runId: string
+  taskId?: string
+  source: WatchHintSource
+  code: string
+  detail?: JsonObject
+  summary: string
+  createdAt: number
+}
+
+interface FileArtifactEvent {
+  type: 'file_artifact'
+  runId: string
+  taskId: string
+  artifactId: string
+  capability: AiFileArtifactCapability
+  path: string
+  fileName: string
+  operation: AiFileArtifactOperation
+  artifactRole?: AiFileArtifactRole
+  reviewId?: string
+  draftDocumentId?: string
+  draftSnapshotId?: string
+  summary: string
+  stepId?: string
+  createdAt: number
+}
+
+interface DraftReviewReadyEvent {
+  type: 'draft_review_ready'
+  runId: string
+  review: AiDraftReviewRef
+  createdAt: number
+}
+
+interface WorkspaceRequiredEvent {
+  type: 'workspace_required'
+  runId: string
+  taskId: string
+  reason: string
+  requiredFields: Array<'workspaceId' | 'rootPath'>
+  createdAt: number
+}
+
+interface ApprovalRequiredEvent {
+  type: 'approval_required'
+  runId: string
+  taskId: string
+  approvalId: string
+  command: string
+  riskLevel: 'medium' | 'high'
+  reason: string
+  createdAt: number
+}
+
+interface ApprovalDecisionEvent {
+  type: 'approval_decision'
+  runId: string
+  taskId: string
+  approvalId: string
+  approved: boolean
+  reason?: string
+  decidedAt: number
 }
 
 interface AnswerCompletedEvent {
@@ -694,8 +833,13 @@ interface AnswerCompletedEvent {
   taskId?: string
   // 最终完整文本。
   text: string
-  // 事件统一携带的阶段标记。
-  stage?: 'human_mouth'
+}
+
+interface AnswerTokenEvent {
+  type: 'answer_token'
+  runId: string
+  taskId?: string
+  token: string
 }
 
 interface AiActivityDetails {
@@ -763,6 +907,33 @@ interface LlmStreamDeltaEvent {
   text: string
   // 事件创建时间。
   createdAt: number
+}
+
+interface RuntimeIssueEvent {
+  type: 'runtime_issue'
+  runId: string
+  code: RuntimeIssueCode
+  message: string
+  taskId?: string
+  workspaceId?: string
+  scopeSourceId?: string
+  createdAt: number
+}
+
+interface RunCompletedEvent {
+  type: 'run_completed'
+  runId: string
+}
+
+interface RunFailedEvent {
+  type: 'run_failed'
+  runId: string
+  error: string
+}
+
+interface RunCancelledEvent {
+  type: 'run_cancelled'
+  runId: string
 }
 
 interface AiLlmIoRecord {

@@ -25,7 +25,7 @@ import {
 } from '../services/sourceScope/selection'
 
 export type E2EChatScenario =
-  | 'chat-plan-artifact'
+  | 'chat-artifact-flow'
   | 'chat-approval'
   | 'chat-workspace'
   | 'chat-edit-review'
@@ -35,7 +35,7 @@ export type E2EChatScenario =
 export type E2ESearchScenario = 'search-results'
 
 const E2E_CHAT_SCENARIO_PREFIXES: Record<E2EChatScenario, string> = {
-  'chat-plan-artifact': '[e2e:chat-plan-artifact]',
+  'chat-artifact-flow': '[e2e:chat-artifact-flow]',
   'chat-approval': '[e2e:chat-approval]',
   'chat-workspace': '[e2e:chat-workspace]',
   'chat-edit-review': '[e2e:chat-edit-review]',

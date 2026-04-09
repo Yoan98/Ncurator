@@ -291,14 +291,14 @@ export function registerHandlers(services: {
     'sample-edit.docx'
   )
 
-  const emitE2EChatPlanAndArtifact = async (input: {
+  const emitE2EChatArtifactFlow = async (input: {
     runId: string
     sendEvent: (event: AiRunEvent) => void
   }): Promise<void> => {
     input.sendEvent({
       type: 'human_step',
       runId: input.runId,
-      taskId: 'task-e2e-human',
+      taskId: input.runId,
       stepIndex: 1,
       action: 'call_tool',
       toolName: 'kb_hybrid_search_chunks',
@@ -315,7 +315,7 @@ export function registerHandlers(services: {
     input.sendEvent({
       type: 'tool_call_started',
       runId: input.runId,
-      taskId: 'task-e2e-human',
+      taskId: input.runId,
       toolCallId: 'tool-e2e-search',
       toolName: 'kb_hybrid_search_chunks',
       input: {
@@ -328,7 +328,7 @@ export function registerHandlers(services: {
     input.sendEvent({
       type: 'tool_call_result',
       runId: input.runId,
-      taskId: 'task-e2e-human',
+      taskId: input.runId,
       toolCallId: 'tool-e2e-search',
       toolName: 'kb_hybrid_search_chunks',
       outputPreview: [
@@ -345,7 +345,7 @@ export function registerHandlers(services: {
     input.sendEvent({
       type: 'human_step',
       runId: input.runId,
-      taskId: 'task-e2e-human',
+      taskId: input.runId,
       stepIndex: 2,
       action: 'deliver_result',
       publicNarrative: '生成文件产物并整理最终结果',
@@ -361,7 +361,7 @@ export function registerHandlers(services: {
     input.sendEvent({
       type: 'file_artifact',
       runId: input.runId,
-      taskId: 'task-e2e-human',
+      taskId: input.runId,
       artifactId: 'artifact-e2e-1',
       capability: 'docx',
       path: '/tmp/ncurator-e2e-result.docx',
@@ -559,7 +559,7 @@ export function registerHandlers(services: {
     input.sendEvent({
       type: 'human_step',
       runId: input.runId,
-      taskId: 'task-e2e-review',
+      taskId: input.runId,
       stepIndex: 1,
       action: 'call_tool',
       toolName: 'docx_apply_ops',
@@ -588,7 +588,7 @@ export function registerHandlers(services: {
         input.sendEvent({
           type: 'file_artifact',
           runId: input.runId,
-          taskId: 'task-e2e-review',
+          taskId: input.runId,
           artifactId: uuidv4(),
           capability: 'docx',
           path: document.confirm_artifact_path,
@@ -608,7 +608,7 @@ export function registerHandlers(services: {
     input.sendEvent({
       type: 'human_step',
       runId: input.runId,
-      taskId: 'task-e2e-review',
+      taskId: input.runId,
       stepIndex: 2,
       action: 'deliver_result',
       publicNarrative: '暴露审阅结果并等待用户确认',
@@ -641,7 +641,7 @@ export function registerHandlers(services: {
         input.sendEvent({
           type: 'file_artifact',
           runId: input.runId,
-          taskId: 'task-e2e-review',
+          taskId: input.runId,
           artifactId: uuidv4(),
           capability: 'docx',
           path: document.effective_draft_artifact_path,
@@ -746,17 +746,17 @@ export function registerHandlers(services: {
     const scenario = matchE2EChatScenario(input.inputText)
     if (!scenario) return false
 
-    const approvalTaskId = 'task-e2e-approval'
+    const taskId = input.runId
 
-    if (scenario === 'chat-plan-artifact') {
-      await emitE2EChatPlanAndArtifact({
+    if (scenario === 'chat-artifact-flow') {
+      await emitE2EChatArtifactFlow({
         runId: input.runId,
         sendEvent: input.sendEvent
       })
       input.sendEvent({
         type: 'answer_completed',
         runId: input.runId,
-        text: 'E2E fixture 已生成计划与文件产物。'
+        text: 'E2E fixture 已生成过程结果与文件产物。'
       })
       input.sendEvent({
         type: 'run_completed',
@@ -768,7 +768,7 @@ export function registerHandlers(services: {
     if (scenario === 'chat-approval') {
       const approved = await waitForE2EApprovalDecision({
         runId: input.runId,
-        taskId: approvalTaskId,
+        taskId,
         sendEvent: input.sendEvent
       })
 
@@ -778,7 +778,7 @@ export function registerHandlers(services: {
           runId: input.runId,
           code: 'approval_denied',
           message: 'E2E fixture 审批被拒绝',
-          taskId: approvalTaskId,
+          taskId,
           createdAt: Date.now()
         })
         input.sendEvent({
@@ -788,7 +788,7 @@ export function registerHandlers(services: {
         return true
       }
 
-      await emitE2EChatPlanAndArtifact({
+      await emitE2EChatArtifactFlow({
         runId: input.runId,
         sendEvent: input.sendEvent
       })
@@ -809,7 +809,7 @@ export function registerHandlers(services: {
         input.sendEvent({
           type: 'workspace_required',
           runId: input.runId,
-          taskId: 'task-e2e-workspace',
+          taskId,
           reason: 'E2E fixture 需要工作区上下文才能继续',
           requiredFields: ['workspaceId', 'rootPath'],
           createdAt: Date.now()
@@ -817,7 +817,7 @@ export function registerHandlers(services: {
         return true
       }
 
-      await emitE2EChatPlanAndArtifact({
+      await emitE2EChatArtifactFlow({
         runId: input.runId,
         sendEvent: input.sendEvent
       })
