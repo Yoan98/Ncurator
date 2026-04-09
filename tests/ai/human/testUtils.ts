@@ -4,7 +4,7 @@ import type {
   HumanStableMemoryPatch,
   RuntimeSkillId
 } from '../../../src/main/services/ai/human/types'
-import type { AiRunEvent, JsonObject, JsonValue } from '../../../src/shared/types'
+import type { AiRunEvent, JsonArray, JsonObject, JsonValue } from '../../../src/shared/types'
 
 export const filterAiRunEventsByType = <TType extends AiRunEvent['type']>(
   events: readonly AiRunEvent[],
@@ -97,6 +97,83 @@ export const filterToolCallStartedEventsByName = (
   toolName: string
 ): Extract<AiRunEvent, { type: 'tool_call_started' }>[] =>
   filterAiRunEventsByType(events, 'tool_call_started').filter((event) => event.toolName === toolName)
+
+export const collectStartedToolInputs = (
+  events: readonly AiRunEvent[],
+  toolName: string
+): JsonObject[] => filterToolCallStartedEventsByName(events, toolName).map((event) => event.input)
+
+export const collectStartedToolStringArgs = (
+  events: readonly AiRunEvent[],
+  toolName: string,
+  argName: string
+): string[] =>
+  collectStartedToolInputs(events, toolName)
+    .map((input) => input[argName])
+    .filter((value): value is string => typeof value === 'string')
+
+export const hasKbToolCall = (events: readonly AiRunEvent[]): boolean =>
+  filterAiRunEventsByType(events, 'tool_call_result').some((event) => event.toolName.startsWith('kb_'))
+
+const isJsonObject = (value: JsonValue | undefined): value is JsonObject =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const isJsonArray = (value: JsonValue | undefined): value is JsonArray => Array.isArray(value)
+
+const collectDocxBlockKindsFromValue = (
+  value: JsonValue | undefined,
+  kinds: Set<'paragraph' | 'table'>
+): void => {
+  if (isJsonArray(value)) {
+    value.forEach((item) => collectDocxBlockKindsFromValue(item, kinds))
+    return
+  }
+
+  if (!isJsonObject(value)) {
+    return
+  }
+
+  const kind = value.kind
+  if (kind === 'paragraph' || kind === 'table') {
+    kinds.add(kind)
+  }
+
+  collectDocxBlockKindsFromValue(value.content, kinds)
+  collectDocxBlockKindsFromValue(value.ops, kinds)
+  collectDocxBlockKindsFromValue(value.rows, kinds)
+}
+
+export const collectDocxApplyOpsContentKinds = (
+  events: readonly AiRunEvent[]
+): Array<'paragraph' | 'table'> => {
+  const kinds = new Set<'paragraph' | 'table'>()
+  collectStartedToolInputs(events, 'docx_apply_ops').forEach((input) => {
+    collectDocxBlockKindsFromValue(input, kinds)
+  })
+  return [...kinds]
+}
+
+const isStructuredOutputEmptyResponseError = (error: unknown): boolean =>
+  error instanceof Error && error.message.includes('structured_output_empty_response')
+
+export const runWithStructuredOutputRetry = async (
+  action: () => Promise<void>,
+  maxAttempts = 2
+): Promise<void> => {
+  let lastError: unknown = null
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await action()
+      return
+    } catch (error) {
+      lastError = error
+      if (!isStructuredOutputEmptyResponseError(error) || attempt >= maxAttempts) {
+        throw error
+      }
+    }
+  }
+  throw lastError
+}
 
 export const readToolCallResultPreview = <TValue extends JsonValue>(
   events: readonly AiRunEvent[],

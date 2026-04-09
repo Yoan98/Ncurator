@@ -1,132 +1,41 @@
-import { renderInlineList } from '../../utils/render'
-import { getLastRoundFocus } from '../memory/roundHistory'
+import { getLoadedHistoryContext } from '../memory/roundHistory'
+import { renderUnifiedHistoryText } from '../shared/historyRenderers'
 import { renderHumanStableNotes } from '../shared/memoryRenderers'
 import { renderHumanArtifactLines } from '../shared/runtimeRenderers'
-import type { HumanRoundRecord, HumanState } from '../types'
-import { renderWatchHintForMouth } from './watchHints'
-
-const renderRecentProgressSection = (record: HumanRoundRecord | undefined): string => {
-  if (!record) {
-    return 'none'
-  }
-
-  const progressText =
-    record.execution.kind === 'pre_execution_blocked'
-      ? `- 执行前阻断：${renderWatchHintForMouth(record.execution.watchHint)}`
-      : record.execution.kind === 'learning'
-        ? `- learning 结果：已加载 ${renderInlineList(
-            record.execution.learningOutcome.loadedSkillIds.map((skillId) => `\`${skillId}\``),
-            {
-              separator: '、',
-              fallback: 'none'
-            }
-          )}；重复 ${renderInlineList(
-            record.execution.learningOutcome.skippedDuplicateSkillIds.map(
-              (skillId) => `\`${skillId}\``
-            ),
-            {
-              separator: '、',
-              fallback: 'none'
-            }
-          )}；未知 ${renderInlineList(
-            record.execution.learningOutcome.skippedUnknownSkillIds.map(
-              (skillId) => `\`${skillId}\``
-            ),
-            {
-              separator: '、',
-              fallback: 'none'
-            }
-          )}。`
-        : record.execution.kind === 'hand'
-          ? `
-- hand 执行模式：${record.execution.toolUsePlan.mode}
-${record.execution.toolResults.map((result) => `- \`${result.toolName}\`：${result.summary}`).join('\n')}
-`
-              .trim()
-              .replace(/\n\n+/g, '\n')
-          : `- mouth 输出摘要：${record.execution.summary}`
-
-  return `
-- 第 ${record.roundId} 轮判断：${record.decision.decision.summary}
-- 原因：${record.decision.decision.reason}
-- 预期结果：${record.decision.decision.expectedOutcome}
-${progressText}
-`.trim()
-}
+import type { HumanState } from '../types'
 
 const buildFinalDecisionText = (state: HumanState): string =>
   state.execution.currentDecision
     ? `最终决定（readyToDeliver=${String(state.execution.currentDecision.readyToDeliver)}）：“${state.execution.currentDecision.decision.summary}”；原因：${state.execution.currentDecision.decision.reason}；预期结果：${state.execution.currentDecision.decision.expectedOutcome}`
     : 'none'
 
-const OUTPUT_EXAMPLE = `
-# 处理结果
-
-已完成当前任务，下面是基于现有事实和结果整理出的最终结论。
-
-## 关键依据
-- 依据一
-
-## 产物与引用
-- /path/to/file.docx
-
-## 当前限制
-无
-`.trim()
-
 export const buildMouthPrompt = (input: { state: HumanState }) => {
   const system = `
 <system>
   <role>
-    你现在扮演一个负责对外表达最终结果的人。
-    你的任务是把已经确定下来的判断、任务笔记和产物整理成最终交付。
+    你现在负责根据已有事实回答用户这次任务。
+    你的目标不是复述内部过程，而是直接完成 task_goal 里用户真正要的回复。
   </role>
 
-  <working_style>
-    请像一个表达清晰、判断克制的人一样输出结果：
-    不夸大、不补编、不引入新的结论，
-    只把已经确认的信息组织成最终交付。
-  </working_style>
-
-  <source_of_truth>
-    - final_decision 是 brain 已经确认的最终判断；你负责表达，不负责重新推翻或改写它。
-    - your_notes 是当前任务的稳定事实来源，包括已确认事实、关键依据和未决问题；正文中的事实与依据优先从这里取。
-    - recent_progress 只用于补充最近完成到哪里、最近结果如何，不必把内部过程完整复述出来。
-    - runtime_artifacts 只允许准确引用已经给出的路径、文件名、状态和摘要，不要补编额外元数据。
-    - correction_hint 只用于如实说明限制、阻断或未完成点，不要把它扩写成新的事实。
-  </source_of_truth>
-
-  <context_block_guide>
-    - task_goal：用户原始诉求与限制。
-    - final_decision：brain 已经确认的最终判断与收口方向。
-    - your_notes：稳定任务笔记，按“已确认 / 关键依据 / 未决问题”组织。
-    - recent_progress：最近一轮过程记录，用于补充当前完成到哪里。
-    - runtime_artifacts：运行中已经产生的真实产物列表。
-    - correction_hint：当前额外的收敛或纠偏提醒；若无则为 none。
-  </context_block_guide>
-
-  <delivery_principles>
-    1. 如果任务已经完成，先直接给出结论，再给关键依据，再给结果或产物说明。
-    2. 如果当前结果有限，先说明已经完成到哪里，再说明限制和继续需要什么。
-    3. 只使用已经给你的任务笔记、最终判断和产物，不要补充新的事实或推理。
-    4. 语言要清楚、克制、可执行，不要堆内部过程。
-    5. 如果存在运行时产物或最近过程记录，只能准确引用已经给出的路径、状态和摘要。
-    6. 你不会调用工具，也不会继续推进未完成步骤；如果仍有步骤没做，只能如实说明当前停在哪。
-  </delivery_principles>
+  <available_information>
+    - task_goal：用户最初要你完成什么，以及用户显式要求你回答哪些点。
+    - final_decision：brain 最后确认的收口方向。
+    - your_notes：当前稳定事实来源。其中：
+      - 已确认：当前稳定成立、可以直接告诉用户的事实。
+      - 关键依据：支撑这些事实的证据、来源或命中结果。
+      - 未决问题：仍会影响结论、或需要用户补充确认的点。
+    - history：任务过程中真实发生过的决策、执行和结果，可用于补足 your_notes 不够具体的地方。
+    - runtime_artifacts：运行中已经产生的真实产物，可按给定路径、文件名、状态和摘要引用。
+  </available_information>
 
   <output_contract>
-    - 你必须只输出最终 markdown 正文，不要输出任何额外说明、JSON 或代码块。
-    - 不要引入新的事实、依据、步骤或承诺。
-    - 不要暴露内部字段名、节点名或系统术语。
-    - 如果依据不足，就保持保守表达，不要写成确定结论。
-    - 不要把未来可能执行的工具动作写成“后续会自动完成”或“已经在进行中”。
-    - 输出必须是完整结果，而不是零散句子或局部片段。
-    - 默认使用最终用户答复的组织方式：先给结论，再给关键依据，再给产物或当前限制。
+    - 只输出最终 markdown 正文，不要输出 JSON 或额外说明。
+    - 直接回答 task_goal，优先覆盖用户显式提出的问题。
+    - your_notes 优先；如果 your_notes 不够具体，可结合 history 与 runtime_artifacts 补足。
+    - 只基于提供的信息回答，不要补编新的事实。
+    - 标题、分节、列表都按需要使用，不固定。
+    - 默认使用用户能理解的语言，不原样照抄内部标签、block id、tool 名，除非用户明确要求这些内部细节。
   </output_contract>
-
-  <output_example>
-${OUTPUT_EXAMPLE}
-  </output_example>
 </system>
 `.trim()
 
@@ -144,17 +53,16 @@ ${buildFinalDecisionText(input.state)}
 ${renderHumanStableNotes(input.state, 'mouth_prompt')}
   </your_notes>
 
-  <recent_progress>
-${renderRecentProgressSection(getLastRoundFocus(input.state))}
-  </recent_progress>
+  <history>
+${renderUnifiedHistoryText({
+  roundHistory: input.state.memory.history.roundHistory,
+  loadedHistoryContext: getLoadedHistoryContext(input.state)
+})}
+  </history>
 
   <runtime_artifacts>
 ${renderHumanArtifactLines(input.state, 'prompt')}
   </runtime_artifacts>
-
-  <correction_hint>
-${input.state.execution.watchHint ? renderWatchHintForMouth(input.state.execution.watchHint) : 'none'}
-  </correction_hint>
 </user_context>
 `.trim()
 

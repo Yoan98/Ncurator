@@ -94,10 +94,10 @@ stateDiagram-v2
 
 ### 5.4 `mouth`
 
-- 职责：把当前已经确定的状态整理成最终用户交付，并回写 `HumanResult`。
-- 主要读取：`task`、`memory.stable`、`execution.currentDecision`、`execution.artifacts`。
+- 职责：围绕 `task_goal` 把当前已经确定的状态组织成最终用户交付，并回写 `HumanResult`。
+- 主要读取：`task`、`memory.stable`、`memory.history.roundHistory`、`memory.history.loadedHistoryContext`、`execution.currentDecision`、`execution.artifacts`。
 - 主要回写：`result`、`execution.status`、`execution.stage`、`trace.steps`。
-- 约束：模型输出必须通过 `ctx.chatText`；输出固定面向最终用户；若开启 `emitAnswerEvents`，增量文本通过 `answer_token` 发出，完成后通过 `answer_completed` 收口。
+- 约束：模型输出必须通过 `ctx.chatText`；输出面向最终用户，优先直接完成用户原始诉求；可使用自由段落或列表组织，不要求固定报告模板；若开启 `emitAnswerEvents`，增量文本通过 `answer_token` 发出，完成后通过 `answer_completed` 收口。
 
 ## 6. 事件与交付
 

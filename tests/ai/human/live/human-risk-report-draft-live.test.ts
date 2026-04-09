@@ -83,8 +83,12 @@ describe('ai human live backend', () => {
             toolNames.includes('docx_render_preview') &&
             docxArtifacts.length > 0 &&
             templateUnchanged &&
-            /(待跟进|合规签署)/.test(deliveryText) &&
-            /Alice/.test(deliveryText),
+            /风险结论/.test(deliveryText) &&
+            /负责人(说明)?/.test(deliveryText) &&
+            /Weekly Risk Summary\.md/.test(deliveryText) &&
+            /Owner Note\.md/.test(deliveryText) &&
+            /(预览|preview)/i.test(deliveryText) &&
+            /(未覆盖原文件|原文件未被覆盖|未覆盖原件)/.test(deliveryText),
           {
             name: 'human-live-completes-risk-report-draft-through-real-tool-chain',
             message: 'live human complex case 应通过 terminal、KB 与 docx 真实工具链完成周报草稿任务。',

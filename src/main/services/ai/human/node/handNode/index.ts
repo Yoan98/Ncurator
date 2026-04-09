@@ -1,5 +1,5 @@
 import type { JsonObject } from '../../../../../../shared/types'
-import { HUMAN_DEFAULT_TOOL_CALL_LIMIT } from '../../constants'
+import { HUMAN_DEFAULT_TOOL_CALL_LIMIT, HUMAN_MAX_PARALLEL_TOOL_CALLS } from '../../constants'
 import type { AiRunContext } from '../../../types'
 import { extractArtifactRefsFromToolResults, mergeArtifactRefs } from '../../../utils/artifacts'
 import {
@@ -13,8 +13,6 @@ import type { ToolExecutionMeta } from '../../tools/types'
 import type { HumanRuntimeCache, HumanState, HumanWatchHint, ToolCallResult, ToolUsePlan } from '../../types'
 import { executeToolCall } from './toolExecutor'
 import { returnToBrain, returnToBrainAfterTrace, returnToBrainWithWatchHint } from '../utils/stateTransitions'
-
-const MAX_PARALLEL_TOOL_CALLS = 4
 
 export const getToolExecutionMeta = (input: {
   toolName: string
@@ -70,13 +68,13 @@ const buildToolLimitWatchHint = (toolCallCount: number, limit: number): HumanWat
 
 const validateToolUsePlan = (toolUsePlan: ToolUsePlan): HumanWatchHint | undefined => {
   if (toolUsePlan.mode === 'serial') return undefined
-  if (toolUsePlan.calls.length > MAX_PARALLEL_TOOL_CALLS) {
+  if (toolUsePlan.calls.length > HUMAN_MAX_PARALLEL_TOOL_CALLS) {
     return createHandPlanInvalidWatchHint({
       mode: 'parallel',
       reason: 'parallel_limit_exceeded',
       offendingToolNames: toolUsePlan.calls.map((item) => item.toolName),
       callCount: toolUsePlan.calls.length,
-      limit: MAX_PARALLEL_TOOL_CALLS
+      limit: HUMAN_MAX_PARALLEL_TOOL_CALLS
     })
   }
 

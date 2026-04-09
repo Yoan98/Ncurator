@@ -126,18 +126,182 @@ describe('ai tool hand backend', () => {
           }
         })
 
+        const safeLimitState = await handNode({
+          ...safeState,
+          skills: {
+            learnedSkillIds: ['docx-read']
+          },
+          execution: {
+            ...safeState.execution,
+            currentDecision: {
+              decision: {
+                summary: '执行 6 个只读并行调用',
+                reason: '验证新的并行上限允许 6 个安全调用。',
+                expectedOutcome: '六个 read_only 且 parallelSafe 的调用全部真正执行。'
+              },
+              readyToDeliver: false,
+              nextAction: {
+                action: 'hand',
+                toolUsePlan: {
+                  mode: 'parallel',
+                  calls: [
+                    {
+                      toolName: 'docx_outline',
+                      args: {
+                        docId: openResult.docId,
+                        maxBlocks: 20
+                      }
+                    },
+                    {
+                      toolName: 'docx_search',
+                      args: {
+                        docId: openResult.docId,
+                        query: 'Safety',
+                        mode: 'literal'
+                      }
+                    },
+                    {
+                      toolName: 'docx_search',
+                      args: {
+                        docId: openResult.docId,
+                        query: 'Risk',
+                        mode: 'literal'
+                      }
+                    },
+                    {
+                      toolName: 'docx_search',
+                      args: {
+                        docId: openResult.docId,
+                        query: 'monitor',
+                        mode: 'literal'
+                      }
+                    },
+                    {
+                      toolName: 'docx_search',
+                      args: {
+                        docId: openResult.docId,
+                        query: 'approval',
+                        mode: 'literal'
+                      }
+                    },
+                    {
+                      toolName: 'docx_search',
+                      args: {
+                        docId: openResult.docId,
+                        query: 'edge',
+                        mode: 'literal'
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        })
+
+        const toolStartedBeforeLimitExceeded = filterEventsByType(
+          runtime.eventCollector.snapshot(),
+          'tool_call_started'
+        ).length
+
+        const limitExceededState = await handNode({
+          ...safeLimitState,
+          skills: {
+            learnedSkillIds: ['docx-read']
+          },
+          execution: {
+            ...safeLimitState.execution,
+            currentDecision: {
+              decision: {
+                summary: '执行 7 个只读并行调用',
+                reason: '验证超过并行上限时会直接回到 brain。',
+                expectedOutcome: '写入 parallel_limit_exceeded watchHint，且不继续执行工具。'
+              },
+              readyToDeliver: false,
+              nextAction: {
+                action: 'hand',
+                toolUsePlan: {
+                  mode: 'parallel',
+                  calls: [
+                    {
+                      toolName: 'docx_outline',
+                      args: {
+                        docId: openResult.docId,
+                        maxBlocks: 20
+                      }
+                    },
+                    {
+                      toolName: 'docx_search',
+                      args: {
+                        docId: openResult.docId,
+                        query: 'Safety',
+                        mode: 'literal'
+                      }
+                    },
+                    {
+                      toolName: 'docx_search',
+                      args: {
+                        docId: openResult.docId,
+                        query: 'Risk',
+                        mode: 'literal'
+                      }
+                    },
+                    {
+                      toolName: 'docx_search',
+                      args: {
+                        docId: openResult.docId,
+                        query: 'monitor',
+                        mode: 'literal'
+                      }
+                    },
+                    {
+                      toolName: 'docx_search',
+                      args: {
+                        docId: openResult.docId,
+                        query: 'approval',
+                        mode: 'literal'
+                      }
+                    },
+                    {
+                      toolName: 'docx_search',
+                      args: {
+                        docId: openResult.docId,
+                        query: 'edge',
+                        mode: 'literal'
+                      }
+                    },
+                    {
+                      toolName: 'docx_search',
+                      args: {
+                        docId: openResult.docId,
+                        query: 'cases',
+                        mode: 'literal'
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        })
+
+        const toolStartedAfterLimitExceeded = filterEventsByType(
+          runtime.eventCollector.snapshot(),
+          'tool_call_started'
+        ).length
+
         const toolStartedBeforeUnsafe = filterEventsByType(
           runtime.eventCollector.snapshot(),
           'tool_call_started'
         ).length
 
         const unsafeState = await handNode({
-          ...safeState,
+          ...limitExceededState,
           skills: {
             learnedSkillIds: ['docx-read', 'docx-write', 'docx-delivery']
           },
           execution: {
-            ...safeState.execution,
+            ...limitExceededState.execution,
             currentDecision: {
             decision: {
               summary: '并行写入和 validate',
@@ -183,7 +347,11 @@ describe('ai tool hand backend', () => {
 
         return {
           safeState,
+          safeLimitState,
+          limitExceededState,
           unsafeState,
+          toolStartedBeforeLimitExceeded,
+          toolStartedAfterLimitExceeded,
           toolStartedBeforeUnsafe,
           toolStartedAfterUnsafe,
           events: runtime.eventCollector.snapshot()
@@ -198,6 +366,33 @@ describe('ai tool hand backend', () => {
             name: 'safe-parallel-batch-executes',
             message: '只读且 parallelSafe 的工具批次应真正执行，并写回多个 tool result。',
             data: result.safeState.execution.lastToolResults
+          }
+        )
+
+        runtime.assertThat(
+          result.safeLimitState.execution.lastToolResults?.length === 6 &&
+            result.safeLimitState.execution.lastToolResults.every((item) => item.code === 'ok') &&
+            !result.safeLimitState.execution.watchHint,
+          {
+            name: 'six-safe-parallel-calls-are-allowed',
+            message: '6 个只读且 parallelSafe 的工具调用应真正执行并写回结果。',
+            data: result.safeLimitState.execution.lastToolResults
+          }
+        )
+
+        runtime.assertThat(
+          result.limitExceededState.execution.watchHint?.code === 'hand_plan_invalid' &&
+            result.limitExceededState.execution.watchHint.detail.reason === 'parallel_limit_exceeded' &&
+            result.limitExceededState.execution.watchHint.detail.limit === 6 &&
+            result.toolStartedAfterLimitExceeded === result.toolStartedBeforeLimitExceeded,
+          {
+            name: 'seven-parallel-calls-stop-before-execution',
+            message: '超过 6 个并行工具调用时应直接返回 brain 并写入 parallel_limit_exceeded。',
+            data: {
+              watchHint: result.limitExceededState.execution.watchHint,
+              toolStartedBeforeLimitExceeded: result.toolStartedBeforeLimitExceeded,
+              toolStartedAfterLimitExceeded: result.toolStartedAfterLimitExceeded
+            }
           }
         )
 

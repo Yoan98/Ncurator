@@ -78,8 +78,4 @@ export const renderWatchHintForBrain = (hint: HumanWatchHint): string => {
   }
 }
 
-export const renderWatchHintForMouth = (hint: HumanWatchHint): string => {
-  return summarizeWatchHint(hint)
-}
-
 export const renderWatchHintDetail = (hint: HumanWatchHint): JsonObject => asJsonObject(hint.detail)

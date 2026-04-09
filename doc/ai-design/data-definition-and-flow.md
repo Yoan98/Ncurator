@@ -1100,20 +1100,21 @@ flowchart LR
 flowchart LR
     T[("task")]
     SM[("memory.stable")]
-    PM[("memory.history.roundHistory")]
+    PM[("memory.history.roundHistory / loadedHistoryContext")]
     CD[("execution.currentDecision")]
     A[("execution.artifacts")]
-    WH[("execution.watchHint")]
     M["mouth"]
     R[("result")]
     TR[("trace.steps")]
 
     T -->|读取 taskId + userInput| M
     SM -->|读取任务笔记| M
-    PM -->|读取上一轮完整闭环| M
+    PM -->|读取统一 history 事实视图| M
     CD -->|读取当前最终决策| M
     A -->|读取已收集的结构化 artifacts| M
-    WH -->|必要时整理为交付提示| M
     M -->|输出 deliveryMarkdown；node 派生 summary、回写 completed result，并透传 artifacts| R
     M -->|追加 mouth 执行轨迹| TR
 ```
+
+- `mouth` 不再依赖 `recent_progress / earlier_attempts / recalled_history` 这类拆分块；统一基于 `roundHistory + loadedHistoryContext` 渲染单一 `history` 视图。
+- `mouth` 的 prompt 输入仍以 `your_notes` 为优先事实来源；当 `your_notes` 不够具体时，再从统一 `history` 与 `runtime_artifacts` 补足用户回答所需细节，而不是依赖额外的 `watchHint` 说明。
