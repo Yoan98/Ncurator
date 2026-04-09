@@ -84,7 +84,6 @@ import { Jieba } from '@node-rs/jieba'
 import { dict } from '@node-rs/jieba/dict'
 import { normalizeForIpc } from '../utils/serialization'
 import {
-  buildE2EChatPlan,
   createE2EFixtureWorkspace,
   deleteE2EFixtureWebSource,
   deleteE2EFixtureWorkspace,
@@ -296,25 +295,27 @@ export function registerHandlers(services: {
     runId: string
     sendEvent: (event: AiRunEvent) => void
   }): Promise<void> => {
-    const plan = buildE2EChatPlan()
     input.sendEvent({
-      type: 'plan_created',
+      type: 'human_step',
       runId: input.runId,
-      plan
-    })
-    await pauseForE2EFixture()
-
-    input.sendEvent({
-      type: 'task_started',
-      runId: input.runId,
-      taskId: plan[0].id
+      taskId: 'task-e2e-human',
+      stepIndex: 1,
+      action: 'call_tool',
+      toolName: 'kb_hybrid_search_chunks',
+      publicNarrative: '执行检索并整理结果',
+      learnedSkillIds: [],
+      effectiveSkillIds: [],
+      availableToolNames: ['kb_hybrid_search_chunks'],
+      summary: 'E2E fixture 开始执行检索。',
+      createdAt: Date.now(),
+      stage: 'human_hand'
     })
     await pauseForE2EFixture()
 
     input.sendEvent({
       type: 'tool_call_started',
       runId: input.runId,
-      taskId: plan[0].id,
+      taskId: 'task-e2e-human',
       toolCallId: 'tool-e2e-search',
       toolName: 'kb_hybrid_search_chunks',
       input: {
@@ -327,7 +328,7 @@ export function registerHandlers(services: {
     input.sendEvent({
       type: 'tool_call_result',
       runId: input.runId,
-      taskId: plan[0].id,
+      taskId: 'task-e2e-human',
       toolCallId: 'tool-e2e-search',
       toolName: 'kb_hybrid_search_chunks',
       outputPreview: [
@@ -342,23 +343,25 @@ export function registerHandlers(services: {
     await pauseForE2EFixture()
 
     input.sendEvent({
-      type: 'task_completed',
+      type: 'human_step',
       runId: input.runId,
-      taskId: plan[0].id
-    })
-    await pauseForE2EFixture()
-
-    input.sendEvent({
-      type: 'task_started',
-      runId: input.runId,
-      taskId: plan[1].id
+      taskId: 'task-e2e-human',
+      stepIndex: 2,
+      action: 'deliver_result',
+      publicNarrative: '生成文件产物并整理最终结果',
+      learnedSkillIds: [],
+      effectiveSkillIds: [],
+      availableToolNames: [],
+      summary: 'E2E fixture 已生成文件产物。',
+      createdAt: Date.now(),
+      stage: 'human_mouth'
     })
     await pauseForE2EFixture()
 
     input.sendEvent({
       type: 'file_artifact',
       runId: input.runId,
-      taskId: plan[1].id,
+      taskId: 'task-e2e-human',
       artifactId: 'artifact-e2e-1',
       capability: 'docx',
       path: '/tmp/ncurator-e2e-result.docx',
@@ -366,13 +369,6 @@ export function registerHandlers(services: {
       operation: 'created',
       summary: 'E2E 生成测试文档',
       createdAt: Date.now()
-    })
-    await pauseForE2EFixture()
-
-    input.sendEvent({
-      type: 'task_completed',
-      runId: input.runId,
-      taskId: plan[1].id
     })
   }
 
@@ -560,32 +556,20 @@ export function registerHandlers(services: {
     }
     answerText?: string
   }): Promise<void> => {
-    const plan = [
-      {
-        id: 'task-e2e-edit-draft',
-        title: '生成草稿并建立审阅集合',
-        userInput: '执行 docx 编辑并生成统一审阅结果',
-        status: 'ready' as const
-      },
-      {
-        id: 'task-e2e-review-ready',
-        title: '切换到草稿审阅',
-        userInput: '向前端暴露可回放的审阅与提交状态',
-        status: 'ready' as const
-      }
-    ]
-
     input.sendEvent({
-      type: 'plan_created',
+      type: 'human_step',
       runId: input.runId,
-      plan
-    })
-    await pauseForE2EFixture()
-
-    input.sendEvent({
-      type: 'task_started',
-      runId: input.runId,
-      taskId: plan[0].id
+      taskId: 'task-e2e-review',
+      stepIndex: 1,
+      action: 'call_tool',
+      toolName: 'docx_apply_ops',
+      publicNarrative: '生成草稿并建立审阅集合',
+      learnedSkillIds: [],
+      effectiveSkillIds: [],
+      availableToolNames: ['docx_apply_ops'],
+      summary: 'E2E fixture 开始准备草稿审阅。',
+      createdAt: Date.now(),
+      stage: 'human_hand'
     })
     await pauseForE2EFixture()
 
@@ -604,7 +588,7 @@ export function registerHandlers(services: {
         input.sendEvent({
           type: 'file_artifact',
           runId: input.runId,
-          taskId: plan[0].id,
+          taskId: 'task-e2e-review',
           artifactId: uuidv4(),
           capability: 'docx',
           path: document.confirm_artifact_path,
@@ -622,16 +606,18 @@ export function registerHandlers(services: {
     await pauseForE2EFixture()
 
     input.sendEvent({
-      type: 'task_completed',
+      type: 'human_step',
       runId: input.runId,
-      taskId: plan[0].id
-    })
-    await pauseForE2EFixture()
-
-    input.sendEvent({
-      type: 'task_started',
-      runId: input.runId,
-      taskId: plan[1].id
+      taskId: 'task-e2e-review',
+      stepIndex: 2,
+      action: 'deliver_result',
+      publicNarrative: '暴露审阅结果并等待用户确认',
+      learnedSkillIds: [],
+      effectiveSkillIds: [],
+      availableToolNames: [],
+      summary: 'E2E fixture 已准备好审阅结果。',
+      createdAt: Date.now(),
+      stage: 'human_mouth'
     })
     await pauseForE2EFixture()
 
@@ -655,7 +641,7 @@ export function registerHandlers(services: {
         input.sendEvent({
           type: 'file_artifact',
           runId: input.runId,
-          taskId: plan[1].id,
+          taskId: 'task-e2e-review',
           artifactId: uuidv4(),
           capability: 'docx',
           path: document.effective_draft_artifact_path,
@@ -669,13 +655,6 @@ export function registerHandlers(services: {
           createdAt: Date.now()
         })
       })
-    })
-    await pauseForE2EFixture()
-
-    input.sendEvent({
-      type: 'task_completed',
-      runId: input.runId,
-      taskId: plan[1].id
     })
     input.sendEvent({
       type: 'answer_completed',

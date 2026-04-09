@@ -2,23 +2,23 @@
 
 ## 1. 总览
 
-本设计分为 `director` 与 `human` 两层：
+本设计分为两层：
 
-- `director` 负责 run 级编排、计划调度和最终汇总。
+- runtime shell 负责 run 级启动、上下文注入与状态收口。
 - `human` 负责单任务闭环执行。
 - 节点行为、技术实现约束与跨层规则见 `implementation-spec.md`。
 - 本文只定义状态、契约与数据流转，不展开架构动机与阅读导引。
 
 ### 1.1 `AiRunContext`
 
-`AiRunContext` 是运行时注入给 `director` 与 `human` 的只读上下文，不持久化进 `DirectorState` 或 `HumanState`。下面的注释只说明字段作用，不重复实现规则。
+`AiRunContext` 是运行时注入给 `human` 的只读上下文，不持久化进 `AiRunState` 或 `HumanState`。下面的注释只说明字段作用，不重复实现规则。
 
 ```ts
 interface AiRunContext {
   // 当前 run 的唯一标识；事件、日志和 activity 都通过它关联到同一次运行。
   runId: string
 
-  // 规范化后的工作区与参考资料范围；director 与 brain 通过它判断当前可默认使用的资料边界。
+  // 规范化后的工作区与参考资料范围；brain 与工具层通过它判断当前可默认使用的资料边界。
   referenceScope: {
     // 当前 reference scope 绑定的工作区；缺失表示当前 run 没有工作区上下文。
     workspace?: {
@@ -62,11 +62,11 @@ interface AiRunContext {
   // 节点统一在入口处调用的取消检查；一旦抛错，当前 run 会立刻终止后续动作。
   checkCancelled: () => void
 
-  // 节点统一通过 runtime 提供的结构化 LLM 入口调用模型。
+  // brain 统一通过 runtime 提供的结构化 LLM 入口调用模型。
   chatStructured<T>(input: {
     // 调用方标识；用于 activity、日志和排障定位。
     caller: string
-    // 若来自 human 子任务，则带 taskId。
+    // 当前 human taskId。
     taskId?: string
     // 最终 system prompt。
     system: string
@@ -80,11 +80,11 @@ interface AiRunContext {
     temperature?: number
   }): Promise<T>
 
-  // 节点统一通过 runtime 提供的文本 LLM 入口调用模型。
+  // mouth 统一通过 runtime 提供的文本 LLM 入口调用模型。
   chatText(input: {
     // 调用方标识；用于 activity、日志和排障定位。
     caller: string
-    // 若来自 human 子任务，则带 taskId。
+    // 当前 human taskId。
     taskId?: string
     // 最终 system prompt。
     system: string
@@ -107,7 +107,7 @@ interface AiRunContext {
   // 工具层统一请求审批的入口；高风险命令或写操作通过它获取用户批准。
   requestApproval: (request: AiApprovalRequest) => Promise<AiApprovalDecision>
 
-  // 统一读取历史摘要与最近对话；director 与 brain 通过它拿到压缩后的历史上下文。
+  // 统一读取历史摘要与最近对话；brain 通过它拿到压缩后的历史上下文。
   loadHistory(limits?: {
     // 最近对话最大轮数。
     recentTurns?: number
@@ -177,60 +177,26 @@ interface LLMConfig {
 }
 ```
 
-## 2. `director` 数据定义
+## 2. run 数据定义
 
-### `DirectorState`
+### `AiRunState`
 
 ```ts
-interface DirectorState {
+interface AiRunState {
   // 当前 run 的唯一标识；与 AiRunContext.runId 对齐。
   runId: string
   // 当前会话标识；用于关联消息、历史与本次运行。
   sessionId: string
-  // director 层运行状态；表示整个 run 是否仍在推进、已完成、失败或被取消。
+  // run 级运行状态；表示整个 run 是否仍在推进、已完成、失败或被取消。
   status: 'running' | 'completed' | 'failed' | 'cancelled'
-  // 用户本轮原始输入；是 director 路由与后续 objective builder 的基础输入。
+  // 用户本轮原始输入；是本次 human 运行的源任务目标。
   input: string
-  // director 当前所在节点；用于 graph 路由与运行态展示。
-  directorStage:
-    | 'director_intent'
-    | 'director_context_human'
-    | 'director_plan'
-    | 'director_plan_exec'
-    | 'director_direct_human_exec'
-    | 'director_synthesis_human'
-    | 'director_complete'
-  // 已经进行过多少轮上下文补充；用于限制 context 循环次数。
-  contextRounds: number
-  // 当前上下文补充阶段派发给 context human 的任务目标；只在 context 路径上有值。
-  contextObjective?: string
-  // context 阶段沉淀下来的关键证据摘要；供后续 intent、plan 和 synthesis 复用。
-  contextEvidence: string[]
-  // 计划任务列表；每一项都是后续可以派发给单个 human 的任务。
-  plan: DirectorPlanTask[]
-  // 当前指向下一项待派发任务的游标；plan 执行阶段据此推进。
-  dispatchCursor: number
   // run 级错误信息；只在失败路径上写入。
   error?: string
-  // director 最终对用户输出的 markdown；direct 或 synthesis 路径会写入它。
+  // 最终对用户输出的 markdown；完成路径会写入它。
   finalDeliveryMarkdown?: string
   // run 结束时可供系统继续消费的结构化交付物引用。
   finalArtifacts: AiArtifactRef[]
-}
-
-interface DirectorPlanTask {
-  // 计划任务 ID；在一次 run 内唯一。
-  id: string
-  // 任务短标题；主要用于日志、UI 和阅读计划时快速识别任务。
-  title: string
-  // 派发给 human 的任务输入；由 planner 或 objective builder 组织后写入。
-  userInput: string
-  // 任务状态；ready 表示尚未执行，running 表示当前执行中，completed 表示已有稳定交付。
-  status: 'ready' | 'running' | 'completed'
-  // 该任务的正式交付内容；在 plan 链路中通常是供后续任务和 synthesis 使用的 task_handoff。
-  deliveryMarkdown?: string
-  // 该任务已经产生的结构化交付物引用；例如 preview 文件或最终保存文件。
-  artifacts?: AiArtifactRef[]
 }
 
 type AiArtifactRef =
@@ -272,20 +238,22 @@ type AiArtifactRef =
     };
 
 interface HumanTaskInput {
-  // 当前 human 任务 ID；director 与 human 都用它识别当前 task。
+  // 当前 human 任务 ID；当前正式实现里直接使用 runId。
   taskId: string
-  // 派发给当前 human 的自然语言任务输入；是 human 的主任务目标。
+  // 派发给当前 human 的自然语言任务输入；当前正式实现里直接使用用户原始输入。
   userInput: string
 }
 
 interface HumanRunDispatchOptions {
-  // 当前 human 结果要按哪种交付模式组织；只影响 mouth 交付形态，不改变求解职责。
-  deliveryMode?: 'user_answer' | 'task_handoff' | 'context_note'
   // 是否向外发送最终答案增量事件；只影响 answer 事件，不改变底层 transport 策略。
   emitAnswerEvents?: boolean
-  // 这次交付是否标记为内部交付；例如 context_note 通常不直接面向最终用户。
-  internalDelivery?: boolean
 }
+
+type AiRunEventStage =
+  | 'human_brain'
+  | 'human_learning'
+  | 'human_hand'
+  | 'human_mouth'
 ```
 
 ## 3. `human` 数据定义
@@ -588,7 +556,7 @@ type HumanWatchHint =
       // hand 的工具调用次数超过本轮允许上限。
       code: 'hand_tool_limit_exceeded'
       detail: {
-        // 本轮计划中的工具调用数。
+        // 当前累计工具调用数。
         toolCallCount: number
         // 允许上限。
         limit: number
@@ -603,8 +571,8 @@ type HumanWatchHint =
 interface MouthOutput {
   // mouth 对本轮交付的简短摘要。
   summary: string
-  // mouth 生成的正式 markdown；缺失时 runtime 会走 fallback builder 补足。
-  deliveryMarkdown?: string
+  // mouth 生成的正式 markdown；若模型空输出，node 会先做 fallback，再写入 result。
+  deliveryMarkdown: string
 }
 
 interface HumanResult {
@@ -613,21 +581,21 @@ interface HumanResult {
   // 对当前 task 最终完成情况的简短摘要。
   summary: string
   // 最终正式 markdown 交付。
-  deliveryMarkdown?: string
+  deliveryMarkdown: string
   // 最终透传的 artifact 列表。
   artifacts?: AiArtifactRef[]
 }
 
 interface HumanTaskOutput {
-  // 返回给 director 的 taskId；用于让上层知道是哪一个子任务完成了。
+  // 返回给 runtime shell 的 taskId；与当前 human task 对齐。
   taskId: string
   // 当前跨层输出的状态；目前只返回 completed。
   status: 'completed'
-  // 返回给 director 的简短摘要。
+  // 返回给 runtime shell 的简短摘要。
   summary: string
-  // 返回给 director 的正式 markdown 交付。
-  deliveryMarkdown?: string
-  // 返回给 director 的 artifact 列表。
+  // 返回给 runtime shell 的正式 markdown 交付。
+  deliveryMarkdown: string
+  // 返回给 runtime shell 的 artifact 列表。
   artifacts?: AiArtifactRef[]
 }
 
@@ -656,7 +624,7 @@ interface HumanTraceStep {
 }
 ```
 
-### `tool_call_result` 事件与结构化模型日志
+### 关键运行事件与结构化模型日志
 
 ```ts
 interface ToolCallResultEvent {
@@ -664,7 +632,7 @@ interface ToolCallResultEvent {
   type: 'tool_call_result'
   // 所属 run。
   runId: string
-  // 若来自 human 子任务，则带 taskId。
+  // 若来自 human task，则带 taskId。
   taskId?: string
   // 本次工具调用的唯一标识。
   toolCallId: string
@@ -674,10 +642,60 @@ interface ToolCallResultEvent {
   outputPreview: IpcJsonValue
   // 标准化后的工具结果，供后续 AI 或排障直接消费。
   result?: ToolCallResult
+  // 若工具输出了 draft snapshot，可通过这里关联。
+  draftRef?: AiDraftSnapshotRef
   // 工具调用完成时间。
   completedAt: number
   // 若调用失败，补充错误文本。
   error?: string
+}
+
+interface HumanStepEvent {
+  // 事件类型。
+  type: 'human_step'
+  // 所属 run。
+  runId: string
+  // 当前 human taskId。
+  taskId: string
+  // 当前步骤序号。
+  stepIndex: number
+  // 当前步骤动作类型。
+  action: 'brain_decision' | 'learn_skill' | 'call_tool' | 'deliver_result'
+  // 若本步与 skill 有关，则记录 skillId。
+  skillId?: RuntimeSkillId
+  // 若本步与 tool 有关，则记录 toolName。
+  toolName?: string
+  // 面向用户的过程叙述。
+  publicNarrative: string
+  // 当前已学习 skill。
+  learnedSkillIds: RuntimeSkillId[]
+  // 当前有效 skill。
+  effectiveSkillIds: RuntimeSkillId[]
+  // 当前可用工具名。
+  availableToolNames: string[]
+  // 当前步骤结果状态。
+  resultStatus?: 'ok' | 'error'
+  // 当前步骤摘要。
+  summary: string
+  // 若步骤产生了 draft snapshot，可通过这里关联。
+  draftRef?: AiDraftSnapshotRef
+  // 事件创建时间。
+  createdAt: number
+  // 事件统一携带的阶段标记。
+  stage?: 'human_brain' | 'human_learning' | 'human_hand' | 'human_mouth'
+}
+
+interface AnswerCompletedEvent {
+  // 事件类型。
+  type: 'answer_completed'
+  // 所属 run。
+  runId: string
+  // 当前 human taskId。
+  taskId?: string
+  // 最终完整文本。
+  text: string
+  // 事件统一携带的阶段标记。
+  stage?: 'human_mouth'
 }
 
 interface AiActivityDetails {
@@ -691,6 +709,8 @@ interface AiActivityDetails {
   model?: string
   // 本次调用使用的 baseUrl host。
   baseUrlHost?: string
+  // 调用重试序号。
+  attempt?: number
   // 调用耗时。
   durationMs?: number
   // 结构化输出方法。
@@ -731,7 +751,7 @@ interface LlmStreamDeltaEvent {
   type: 'llm_stream_delta'
   // 所属 run。
   runId: string
-  // 若来自 human 子任务，则带 taskId。
+  // 若来自 human task，则带 taskId。
   taskId?: string
   // 本次 LLM 调用的唯一标识。
   callId: string
@@ -750,7 +770,7 @@ interface AiLlmIoRecord {
   callId: string
   // 所属 run。
   runId: string
-  // 若来自 human 子任务，则带 taskId。
+  // 若来自 human task，则带 taskId。
   taskId?: string
   // 调用方；例如 human.brain 或 human.mouth。
   caller: string
@@ -810,76 +830,30 @@ interface AiLlmIoRecord {
 }
 ```
 
-
 ## 4. 数据流转图
 
 下面的图按阶段拆开，每张图只表达一段数据读写。
 
-### `director` 直接路径：`direct human`
+### run 入口：`AiRunService -> human -> AiRunState`
 
 ```mermaid
 flowchart LR
     U["用户输入"]
-    S1[("DirectorState.input / directorStage")]
-    MI["director_intent"]
-    MD["director_direct_human_exec"]
-    H["human 输出结果"]
-    S2[("DirectorState.finalDeliveryMarkdown / finalArtifacts")]
-    S3[("DirectorState.status / error")]
+    S1[("AiRunState.runId / sessionId / status / input")]
+    R["AiRunService.run"]
+    C["AiRunContext"]
+    H1[("HumanTaskInput.taskId / userInput")]
+    H2["human 输出结果"]
+    S2[("AiRunState.finalDeliveryMarkdown / finalArtifacts / status / error")]
 
     U -->|写入 input| S1
-    S1 -->|读取 input + directorStage| MI
-    MI -->|回写 directorStage| S1
-    S1 -->|默认路径读取 input| MD
-    MD -->|派发 taskId + userInput + deliveryMode=user_answer| H
-    H -->|返回 taskId + status + summary + deliveryMarkdown + artifacts| MD
-    MD -->|写入最终交付| S2
-    S2 -->|进入收尾| S3
-```
-
-### `director` 阶段一：输入进入 `context / plan`
-
-```mermaid
-flowchart LR
-    U["用户输入"]
-    S1[("DirectorState.input / directorStage")]
-    MI["director_intent"]
-    S2[("DirectorState.contextObjective / contextRounds / contextEvidence")]
-    MC["director_context_human"]
-    MP["director_plan"]
-    S3[("DirectorState.plan / dispatchCursor")]
-
-    U -->|写入 input| S1
-    S1 -->|读取 input + directorStage| MI
-    MI -->|回写 directorStage| S1
-    S1 -->|复杂任务时读取 input| MC
-    S2 -->|读取旧 context 状态| MC
-    MC -->|回写 contextRounds + contextEvidence + directorStage| S2
-    S1 -->|读取 input| MP
-    S2 -->|读取 contextEvidence| MP
-    MP -->|写入 plan + dispatchCursor + directorStage| S3
-```
-
-### `director` 阶段二：计划派发、结果回写、最终收尾
-
-```mermaid
-flowchart LR
-    S3[("DirectorState.plan / dispatchCursor")]
-    ME["director_plan_exec"]
-    H["human 输出结果"]
-    MS["director_synthesis_human"]
-    S4[("DirectorState.finalDeliveryMarkdown / finalArtifacts")]
-    MX["director_complete"]
-    S5[("DirectorState.status / error")]
-
-    S3 -->|读取当前游标任务| ME
-    ME -->|派发 taskId + userInput| H
-    H -->|返回 taskId + status + summary + deliveryMarkdown + artifacts| ME
-    ME -->|回写当前任务结果 + 更新 dispatchCursor| S3
-    S3 -->|全部完成或阻塞后读取所有任务结果| MS
-    MS -->|写入最终交付| S4
-    S4 -->|进入收尾| MX
-    MX -->|写入 run 终态| S5
+    S1 -->|读取 runId / sessionId / input| R
+    R -->|创建运行时上下文| C
+    R -->|派发 taskId=runId,userInput=input| H1
+    C -->|作为只读 runtime 注入| H2
+    H1 -->|启动 human graph| H2
+    H2 -->|返回 taskId + status + summary + deliveryMarkdown + artifacts| R
+    R -->|写入最终交付或失败信息| S2
 ```
 
 ### `human` 阶段一：`brain` 读取输入并产出决策
@@ -969,6 +943,6 @@ flowchart LR
     CD -->|读取当前最终决策| M
     A -->|读取已收集的结构化 artifacts| M
     WH -->|必要时整理为交付提示| M
-    M -->|输出 deliveryMarkdown；runner 派生 summary、回写 completed result，并透传 artifacts| R
+    M -->|输出 deliveryMarkdown；node 派生 summary、回写 completed result，并透传 artifacts| R
     M -->|追加 mouth 执行轨迹| TR
 ```

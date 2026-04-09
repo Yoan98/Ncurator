@@ -577,7 +577,6 @@ export interface OpenPathWithApplicationResponse {
   error?: string
 }
 
-export type AiTaskStatus = 'ready' | 'running' | 'completed'
 export type AiRunStatus = 'running' | 'completed' | 'failed' | 'cancelled'
 export type RuntimeIssueCode =
   | 'workspace_binding_missing'
@@ -594,13 +593,6 @@ export type RuntimeSkillId =
   | 'kb-document-discovery'
   | 'kb-evidence-query'
 export type AiRunEventStage =
-  | 'director_intent'
-  | 'director_context_human'
-  | 'director_plan'
-  | 'director_plan_exec'
-  | 'director_direct_human_exec'
-  | 'director_synthesis_human'
-  | 'director_complete'
   | 'human_brain'
   | 'human_learning'
   | 'human_hand'
@@ -695,15 +687,6 @@ export type AiDraftReviewArtifactRef = {
 }
 export type AiArtifactRef = AiFileArtifactRef | AiDraftReviewArtifactRef
 
-export type AiPlanTask = {
-  id: string
-  title: string
-  userInput: string
-  status: AiTaskStatus
-  deliveryMarkdown?: string
-  artifacts?: AiArtifactRef[]
-}
-
 export type AiRunStartRequest = {
   sessionId: string
   input: string
@@ -761,29 +744,6 @@ type AiRunEventPayload =
       sessionId: string
       createdAt: number
       input: string
-    }
-  | {
-      type: 'plan_created'
-      runId: string
-      plan: AiPlanTask[]
-    }
-  | {
-      type: 'task_started'
-      runId: string
-      taskId: string
-    }
-  | {
-      type: 'task_completed'
-      runId: string
-      taskId: string
-    }
-  | {
-      type: 'task_delivery_ready'
-      runId: string
-      taskId: string
-      summary: string
-      deliveryMarkdown: string
-      createdAt: number
     }
   | {
       type: 'tool_call_started'

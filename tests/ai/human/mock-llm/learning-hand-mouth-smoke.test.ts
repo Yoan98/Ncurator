@@ -78,7 +78,6 @@ describe('ai human mock-llm backend', () => {
       assert: async (result, runtime) => {
         const humanSteps = filterAiRunEventsByType(result.events, 'human_step')
         const toolResults = filterAiRunEventsByType(result.events, 'tool_call_result')
-        const deliveryEvents = filterAiRunEventsByType(result.events, 'task_delivery_ready')
         const stageSet = new Set(humanSteps.map((event) => event.stage))
 
         runtime.assertThat(
@@ -99,13 +98,13 @@ describe('ai human mock-llm backend', () => {
 
         runtime.assertThat(
           toolResults.some((event) => event.toolName === 'terminal_run_command') &&
-            deliveryEvents.length === 1,
+            result.output.deliveryMarkdown.includes('human 主链路验证'),
           {
             name: 'human-mainline-completes-with-real-tool-and-real-mouth',
             message: 'mock-llm smoke case 应完成真实工具调用，并通过真实 mouth 收束为最终交付。',
             data: {
               toolResults: toolResults.map((event) => event.toolName),
-              deliveryCount: deliveryEvents.length
+              deliveryMarkdown: result.output.deliveryMarkdown
             }
           }
         )

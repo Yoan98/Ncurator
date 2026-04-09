@@ -4,10 +4,9 @@
 
 - 本计划用于定义 AI 域正式测试的范围与领域特有规则。
 - 正式 / temp 准入、runner、raw logs、report 与正式 case 共享字段，统一遵循 `doc/test.md`。
-- AI 正式测试只围绕三类稳定对象治理：
+- AI 正式测试只围绕两类稳定对象治理：
   1. `tool`
   2. `human`
-  3. `director`
 
 ## 2. Suite 设计
 
@@ -21,27 +20,14 @@
 ### 2.2 `human`
 
 - `mock-llm`
-  - 目标：在 non-live 条件下验证 `human` 的真实执行链路。
+  - 目标：在 non-live 条件下验证 `AiRunService -> human` 入口和 `human` 主链的真实执行链路。
   - 约束：只允许 mock LLM 输入输出；必须真实走 `createAiRunContext -> human graph -> learning / hand / mouth -> store / review / artifact`。
-  - 禁止：`humanReasonOverrides`、`toolExecutionOverrides`、`humanDeliveryOverride`、手工串 node、fake tool/store/review。
+  - 禁止：`humanReasonOverrides`、`toolExecutionOverrides`、手工串 node、fake tool/store/review。
   - 覆盖要求：要通过不同 case 把关键节点与关键边都跑到，而不是只验证一条 happy path。
 - `live`
   - 目标：验证真实模型下 `human` 的真实业务执行。
   - 约束：必须走真实统一 LLM executor（包括 `ctx.chatStructured / ctx.chatText`）、真实 KB、真实工具、真实 review / artifact。
   - 禁止：任何 scripted driver、`chatStructuredOverride`、fixture store override。
-  - 覆盖要求：至少保留 1 条简单任务和 1 条复杂任务正式 case；如复杂任务有多条长期价值用例，可同时保留。
-
-### 2.3 `director`
-
-- `mock-llm`
-  - 目标：在 non-live 条件下验证 `director` 的真实编排链。
-  - 约束：只允许 mock LLM 输入输出；必须真实派发真实 `human`，并真实走 route / context / plan / synthesis。
-  - 禁止：`runHumanTask` stub、fake `human` runner、手工拼接 director 节点结果。
-  - 覆盖要求：要通过不同 case 把关键编排节点与关键转移边都跑到。
-- `live`
-  - 目标：验证真实模型下 `director -> human -> tools / KB / docx / artifacts` 的真实业务执行。
-  - 约束：不允许任何 fake。
-  - 禁止：scripted driver、`chatStructuredOverride`、`documentsStoreOverrides`、fake `human` runner。
   - 覆盖要求：至少保留 1 条简单任务和 1 条复杂任务正式 case；如复杂任务有多条长期价值用例，可同时保留。
 
 ## 3. 领域特有规则
@@ -68,8 +54,8 @@
 #### `live`
 
 - 目的：验证真实业务场景在真实生产调用下可以完成。
-- case 设计必须使用真实用户风格输入，不得把内部 route、固定工具顺序或 plan 条数写进用户输入。
-- 断言重点：完成态、关键 route、关键工具调用、关键 artifact、关键事实是否成立。
+- case 设计必须使用真实用户风格输入，不得把内部固定工具顺序写进用户输入。
+- 断言重点：完成态、关键工具调用、关键 artifact、关键事实是否成立。
 - 不对最终文案做精确文本断言。
 - transport / structured output 兼容性探针类 case，应至少分别覆盖一次 `force_non_stream` 与 `force_stream` 路径。
 
@@ -80,8 +66,6 @@
 - `tests/ai/tool/<group>/<case>.test.ts`
 - `tests/ai/human/mock-llm/<case>.test.ts`
 - `tests/ai/human/live/<case>.test.ts`
-- `tests/ai/director/mock-llm/<case>.test.ts`
-- `tests/ai/director/live/<case>.test.ts`
 
 长期非 formal 测试目录：
 
@@ -90,11 +74,10 @@
 推荐命令：
 
 - `pnpm test:ai`
+- `pnpm test:ai:backend`
 - `pnpm test:ai:tool`
 - `pnpm test:ai:human:mock-llm`
 - `pnpm test:ai:human:live`
-- `pnpm test:ai:director:mock-llm`
-- `pnpm test:ai:director:live`
 - `pnpm test:unit`
 - `pnpm test:unit:ai`
 
@@ -304,13 +287,24 @@
 
 #### `mock-llm`
 
+##### `ai-run-service-human-only`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 `AiRunService` 在 mock-llm 模式下会直接进入真实 `human` graph。
+- Why：run 入口已经是 human-only 运行时，必须有正式 case 长期守住这条入口事实。
+- How：通过 `AiRunService.getInstance().run(...)` 启动一次真实 run，再用 scripted structured output 驱动 `brain -> learning -> hand -> mouth` 完成闭环。
+- Oracle：真实出现 `human_brain`、`human_learning`、`human_hand`、`human_mouth` 四个 stage，`AiRunState.finalDeliveryMarkdown` 正常落地，且 `AiRunService` 自身不直接发 `run_completed`。
+- Not：不验证更复杂 live 业务链路。
+
 ##### `learning-hand-mouth-smoke`
+
 - 测试类型：`backend`
 - 实现状态：`已实现`
 - What：验证 `human` 在 mock-llm 模式下能稳定走通真实 `brain -> learning -> hand -> mouth` 主链路。
 - Why：这是 `human` graph 的最小真实闭环，后续所有复杂样例都建立在这条主链路之上。
 - How：通过 scripted structured output 依次驱动学习 `workspace-cli`、执行一次真实 `terminal_run_command(pwd)`，再进入真实 `mouth` 完成交付。
-- Oracle：`human_brain`、`human_learning`、`human_hand`、`human_mouth` 四个 stage 都真实出现，且至少有一次真实 terminal 工具结果与一次真实 delivery 事件。
+- Oracle：`human_brain`、`human_learning`、`human_hand`、`human_mouth` 四个 stage 都真实出现，且至少有一次真实 terminal 工具结果与一次真实最终交付。
 - Not：不验证复杂分支、异常恢复或 live 模型质量。
 
 ##### `learning-tool-budget-tracking`
@@ -363,16 +357,6 @@
 - Oracle：真实工具结果返回 `approval_denied`，审批事件里存在 `approved=false`，磁盘上不会真的创建 `blocked-dir`，任务最终完成。
 - Not：不验证用户如何在 UI 中恢复被拒绝的动作。
 
-##### `delivery-mode-contract`
-
-- 测试类型：`backend`
-- 实现状态：`已实现`
-- What：验证真实 `mouth` 在不同 `deliveryMode` 下会按各自生产契约输出。
-- Why：`human -> director` 的交接边界依赖 `context_note` 与 `task_handoff` 的稳定格式。
-- How：分别以 `context_note` 和 `task_handoff` 两种 internal delivery 运行同一条真实 `human` 主链路，最后都通过真实 `mouth` 完成交付。
-- Oracle：`context_note` 输出包含 `可复用证据` 结构，`task_handoff` 输出包含 `关键证据` 结构，两者不混淆。
-- Not：不验证 `director` 如何消费这些交付物。
-
 ##### `brain-memory-write-boundary`
 
 - 测试类型：`backend`
@@ -416,6 +400,7 @@
 #### `live`
 
 ##### `human-file-retention-answer-live`
+
 - 测试类型：`backend`
 - 实现状态：`已实现`
 - What：验证 live 模式下 `human` 会基于真实已选资料完成常见规则问答。
@@ -434,96 +419,9 @@
 - Oracle：任务最终完成；事件流中至少出现一次 `terminal_run_command`、一次以 `kb_` 开头的检索工具调用、一次 `docx_open`、一次 `docx_apply_ops` 与一次 `docx_render_preview`；存在 preview/draft artifact，且原模板未被覆盖。
 - Not：不绑定最终答案措辞，也不要求固定检索工具顺序。
 
-### 4.3 `director`
+## 5. 验收口径
 
-#### `mock-llm`
-
-##### `simple-task-stays-human-first`
-- 测试类型：`backend`
-- 实现状态：`已实现`
-- What：验证 `director` 在 mock-llm 模式下会通过真实 `human-first` 路径完成简单任务。
-- Why：`direct_human` 是 `director` 的默认低编排路径，必须先独立守住。
-- How：把 `director.intent` 固定为 `direct_human`，然后让真实 `human` 学习 terminal skill、真实执行 `terminal_run_command(pwd)` 并完成最终交付。
-- Oracle：真实发生一次 `director_direct_human_exec` 的 `task_started/task_completed`，最终 run 完成且交付中包含 human-first 结果。
-- Not：不验证更复杂的 route 切换。
-
-##### `context-enrich-then-direct`
-
-- 测试类型：`backend`
-- 实现状态：`已实现`
-- What：验证 `director` 会先走真实 context human，再回到 intent 并进入 direct human。
-- Why：`need_context -> direct_human` 是复杂度中等任务的重要过渡路径。
-- How：第一次 `director.intent` 固定为 `need_context`，由真实 `human` 产出 `context_note`；第二次 `director.intent` 再固定为 `direct_human`，由真实 `human` 完成任务。
-- Oracle：最终 run 完成，`contextRounds=1`，且 `contextEvidence` 中保留了 context human 产出的可复用证据。
-- Not：不验证 evidence 质量高低或 context 摘要文案。
-
-##### `context-round-cap`
-
-- 测试类型：`backend`
-- 实现状态：`已实现`
-- What：验证 `contextRounds` 达到上限后，`director` 会直接转入 `plan` 阶段而不再重复调用 intent。
-- Why：如果没有这个保护，`director` 可能卡死在 context 循环。
-- How：把 `maxContextRounds` 设为 `1`，首次 `intent` 返回 `need_context`，context 完成后继续推进，检查是否直接进入真实 `plan` 路径。
-- Oracle：整个 run 最终完成，`intent` 只被调用一次，且最终 state 中已经生成计划任务。
-- Not：不验证 planner 产出的任务质量。
-
-##### `plan-exec-then-synthesis`
-
-- 测试类型：`backend`
-- 实现状态：`已实现`
-- What：验证 `director` 会通过真实 `human` 逐项执行计划，再进入 synthesis 完成最终综合输出。
-- Why：`to_plan -> plan_exec -> synthesis` 是 `director` 最核心的增强路径主干。
-- How：固定 `intent=to_plan`，planner 产出两个任务，然后由真实 `human` 分别完成两个 handoff，最后再由真实 synthesis human 产出最终结果。
-- Oracle：`plan_created` 真实出现一次，`director_plan_exec` 真实串行启动两个任务，所有计划任务都完成，最终输出完成。
-- Not：不验证 live planner 是否会自然拆成相同任务。
-
-##### `context-evidence-reuse`
-
-- 测试类型：`backend`
-- 实现状态：`已实现`
-- What：验证真实 context human 产出的可复用 evidence 会进入后续 director 的 plan prompt。
-- Why：如果 context 证据不能复用，context 路径就会退化成一次性说明文字，无法支撑后续编排。
-- How：先让真实 context human 产出包含 `Alice owns the risk` 的 `context_note`，再进入真实 `director.plan`，检查 planner prompt 是否看到了这条 evidence。
-- Oracle：最终 run 完成，且 planner 收到的真实 prompt 中包含 `Alice owns the risk`。
-- Not：不验证 planner 对证据的理解质量。
-
-##### `plan-exec-serial-merge`
-
-- 测试类型：`backend`
-- 实现状态：`已实现`
-- What：验证 `director_plan_exec` 会按计划顺序串行派发真实 `human` 子任务。
-- Why：计划执行一旦乱序，后续状态合并和综合输出都会失真。
-- How：planner 产出 `task-a`、`task-b` 两个任务，随后由真实 `human` 依次完成两个 handoff，再进入 synthesis。
-- Oracle：`director_plan_exec` 的 `task_started` 顺序严格为 `task-a,task-b`，最终 run 完成。
-- Not：不验证并行计划执行策略。
-
-##### `complex-kb-docx-synthesis`
-
-- 测试类型：`backend`
-- 实现状态：`已实现`
-- What：验证 `director` 在 mock-llm 模式下仍会通过真实 `human` 跑通 `KB + docx + synthesis` 复杂组合链路。
-- Why：这是当前 `director` 最接近真实复杂业务的正式样例，能够同时守住检索、编辑和综合输出。
-- How：seed 真实 KB 文档与真实 docx 文件，固定 `intent=to_plan` 后产出 `task-kb` 和 `task-docx`，再分别通过真实 `human` 完成 KB 搜索与 docx 编辑，最后进入 synthesis。
-- Oracle：真实 KB 检索结果中包含目标文档 `doc-1`，真实 `docx_apply_ops` 产生一处 `changedBlocks`，最终 run 完成。
-- Not：不验证更复杂的多阶段 artifact 渲染或最终文案风格。
-
-#### `live`
-
-##### `director-approval-reply-live`
-- 测试类型：`backend`
-- 实现状态：`已实现`
-- What：验证 live 模式下 `director` 会把一个常见资料问答回复任务走成真实 `human-first` 路径。
-- Why：`director/live` 需要至少有一条简单真实样例，证明单目标、单交付任务会优先 direct 给 `human` 而不是误升级为 plan。
-- How：注入真实 live LLM 配置，seed 一份与“审批未通过时保留原文件”相关的真实 KB 文档并限制在已选范围内；直接输入“同事来问审批没过时原文件怎么处理，帮我整理一段两三句话回复”的自然语言诉求，让真实 `director` 自主路由并执行。
-- Oracle：最终 run 完成；真实发生一次 `director_direct_human_exec`；不出现 `plan_created`；事件流中至少出现一次以 `kb_` 开头的真实工具调用；最终交付内容非空。
-- Not：不对路由原因文本或最终回答措辞做精确断言。
-
-##### `director-risk-report-delivery-live`
-
-- 测试类型：`backend`
-- 实现状态：`已实现`
-- What：验证 live 模式下 `director` 会把一个真实长任务拆解为资料整理、模板补全与最终交付。
-- Why：`director/live` 需要至少一条长期高价值复杂样例，覆盖 plan、human 子任务、synthesis 与 artifact 合并。
-- How：注入真实 live LLM 配置；workspace 中动态写入带占位符的周报模板和干扰文件；seed 两份真实 KB 文档分别提供风险结论与负责人说明并限制在已选范围内；直接输入“把本周风险周报整件事做完：整理资料、找模板、补全文档、生成预览、给交付说明”的自然语言诉求，让真实 `director -> human` 自主完成。
-- Oracle：最终 run 完成；事件流中出现 `plan_created`、至少一次 `director_plan_exec` 与一次 `director_synthesis_human`；全链路至少出现一次 `terminal_run_command`、一次以 `kb_` 开头的检索工具调用、一次 `docx_apply_ops` 与一次 `docx_render_preview`；`finalArtifacts` 中存在 preview/draft artifact。
-- Not：不绑定最终 route 说明文本，也不固定 KB 工具选择顺序。
+- `tool` suite 必须持续守住真实工具输入输出、审批边界和 artifact 契约。
+- `human/mock-llm` 必须覆盖 `AiRunService -> human` 入口、`brain / learning / hand / mouth` 主链、memory 延续、watch hint 收敛与复杂工具协作。
+- `human/live` 必须至少保留 1 条简单任务和 1 条复杂任务正式 case。
+- `human` suite 必须继续支撑 `WB-CORE-002`、`WB-CORE-005`、`WB-CORE-006`。

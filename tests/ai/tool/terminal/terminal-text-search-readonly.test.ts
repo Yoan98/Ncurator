@@ -30,8 +30,8 @@ describe('ai tool terminal backend', () => {
           'Approval denied should keep existing files unchanged.\nTerminal artifacts must be recorded.\n'
         )
         await fs.writeFile(
-          path.join(runtime.workspaceRoot, 'notes', 'director.md'),
-          'Director path should not leave workspace scope.\n'
+          path.join(runtime.workspaceRoot, 'notes', 'overview.md'),
+          'Overview content should not leave workspace scope.\n'
         )
 
         const harness = createTerminalToolHarness(runtime)
@@ -44,7 +44,7 @@ describe('ai tool terminal backend', () => {
             command: 'grep -R "artifacts" notes'
           }),
           boundaryRejected: await harness.invoke<TerminalRunCommandResult>('terminal_run_command', {
-            command: 'rg "Director" ../'
+            command: 'rg "Overview" ../'
           }),
           events: runtime.eventCollector.snapshot()
         }

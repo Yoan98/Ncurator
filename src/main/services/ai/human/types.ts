@@ -17,7 +17,6 @@ import {
   brainDecisionSchema,
   brainNextActionSchema,
   humanDecisionSchema,
-  humanDeliveryModeSchema,
   humanExecutionSchema,
   humanHistoryToolResultSchema,
   humanLearningOutcomeSchema,
@@ -46,7 +45,6 @@ export type HumanStatus = (typeof HUMAN_STATUSES)[number]
 export type HumanStepAction = (typeof HUMAN_STEP_ACTIONS)[number]
 export type HumanStepResultStatus = (typeof HUMAN_STEP_RESULT_STATUSES)[number]
 export type ToolCallResultCode = (typeof TOOL_CALL_RESULT_CODES)[number]
-export type HumanDeliveryMode = z.infer<typeof humanDeliveryModeSchema>
 export type HumanSkillSource = (typeof HUMAN_SKILL_SOURCES)[number]
 export type HumanSkillAvailability = (typeof HUMAN_SKILL_AVAILABILITIES)[number]
 export type HumanRoundExecutionKind = (typeof HUMAN_ROUND_EXECUTION_KINDS)[number]

@@ -79,25 +79,6 @@ export const emitWatchHint = (input: {
   })
 }
 
-export const emitTaskDelivery = (input: {
-  ctx: AiRunContext
-  taskId: string
-  summary: string
-  deliveryMarkdown: string
-  internal?: boolean
-}) => {
-  input.ctx.sendEvent({
-    type: 'task_delivery_ready',
-    runId: input.ctx.runId,
-    taskId: input.taskId,
-    summary: input.summary,
-    deliveryMarkdown: input.deliveryMarkdown,
-    createdAt: Date.now(),
-    internal: input.internal,
-    stage: 'human_mouth'
-  })
-}
-
 export const emitLatestHumanStepForState = (input: {
   ctx: AiRunContext
   cache: HumanRuntimeCache

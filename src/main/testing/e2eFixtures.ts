@@ -1,5 +1,4 @@
 import type {
-  AiPlanTask,
   DeleteWorkspaceSourceResponse,
   DeleteWebSourceResponse,
   ListReferenceItemsRequest,
@@ -657,18 +656,3 @@ export const getE2EFixtureSearchResponse = (
     tokens: ['E2E', '搜索', '命中']
   }
 }
-
-export const buildE2EChatPlan = (): AiPlanTask[] => [
-  {
-    id: 'task-e2e-collect-context',
-    title: '收集上下文并执行检索',
-    userInput: '读取输入并返回检索结果',
-    status: 'ready'
-  },
-  {
-    id: 'task-e2e-generate-artifact',
-    title: '生成测试文档',
-    userInput: '生成一个可展示的文件产物',
-    status: 'ready'
-  }
-]

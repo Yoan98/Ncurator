@@ -188,8 +188,6 @@ runner 不负责：
   - `pnpm test:ai:tool`
   - `pnpm test:ai:human:mock-llm`
   - `pnpm test:ai:human:live`
-  - `pnpm test:ai:director:mock-llm`
-  - `pnpm test:ai:director:live`
 - Unit
   - `pnpm test:unit`
   - `pnpm test:unit:ai`

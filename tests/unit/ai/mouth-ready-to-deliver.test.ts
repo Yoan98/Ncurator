@@ -68,8 +68,7 @@ describe('ai unit mouth readyToDeliver guard', () => {
       state: createInitialHumanState({
         taskId: 'task-1',
         userInput: '请完成任务'
-      }),
-      deliveryMode: 'user_answer'
+      })
     }).system
 
     expect(prompt).toContain('<source_of_truth>')
@@ -89,12 +88,11 @@ describe('ai unit mouth readyToDeliver guard', () => {
       state: createInitialHumanState({
         taskId: 'task-2',
         userInput: '请根据当前信息给我一个最终答复'
-      }),
-      deliveryMode: 'user_answer'
+      })
     })
 
-    expect(result.system).toContain('delivery_mode：当前交付模式')
     expect(result.system).toContain('final_decision：brain 已经确认的最终判断')
+    expect(result.system).toContain('默认使用最终用户答复的组织方式')
     expect(result.user).not.toContain('这是当前交付模式。')
     expect(result.user).not.toContain('这是用户这次原始诉求与限制。')
     expect(result.user).not.toContain('这是 brain 已经做出的最终决定。')

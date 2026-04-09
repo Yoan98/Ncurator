@@ -48,7 +48,6 @@ export const TOOL_CALL_DIAGNOSTIC_KINDS = [
   'path_unavailable'
 ] as const
 
-export const HUMAN_DELIVERY_MODES = ['user_answer', 'task_handoff', 'context_note'] as const
 export const HUMAN_TOOL_USE_PLAN_MODES = ['parallel', 'serial'] as const
 export const HUMAN_HAND_PLAN_INVALID_REASONS = [
   'parallel_requires_read_only',

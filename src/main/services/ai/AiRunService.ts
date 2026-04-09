@@ -1,12 +1,10 @@
-import { buildDirectorGraph } from './director/graph/directorGraph'
+import { createHumanGraphRunner } from './human/graph/humanGraph'
 import { createAiRunContext } from './runtime'
 import {
-  type DirectorGraphState,
+  createCompletedAiRunState,
   createCancelledAiRunState,
   createFailedAiRunState,
-  createInitialAiRunState,
-  toPublicAiRunState
-} from './director/state/schema'
+} from './run/state'
 import type { AiRunDeps, AiRunStartPayload, AiRunState } from './types'
 
 const isCancelledError = (error: unknown): boolean =>
@@ -26,16 +24,24 @@ export class AiRunService {
 
   public async run(payload: AiRunStartPayload, deps: AiRunDeps): Promise<AiRunState> {
     const ctx = createAiRunContext(payload, deps)
-    const graph = buildDirectorGraph({ ctx })
+    const runHumanTask = createHumanGraphRunner({ ctx })
     try {
-      const res = await graph.invoke(
-        createInitialAiRunState({
-          runId: payload.runId,
-          sessionId: payload.sessionId,
-          input: String(payload.input || '')
-        }) as DirectorGraphState
+      const output = await runHumanTask(
+        {
+          taskId: payload.runId,
+          userInput: String(payload.input || '')
+        },
+        {
+          emitAnswerEvents: true
+        }
       )
-      return toPublicAiRunState(res as DirectorGraphState)
+      return createCompletedAiRunState({
+        runId: payload.runId,
+        sessionId: payload.sessionId,
+        input: String(payload.input || ''),
+        finalDeliveryMarkdown: output.deliveryMarkdown,
+        finalArtifacts: output.artifacts || []
+      })
     } catch (e) {
       if (isCancelledError(e)) {
         return createCancelledAiRunState({

@@ -1,25 +1,19 @@
 import type { AiRunContext } from '../../../types'
-import type { HumanDeliveryMode, HumanRuntimeCache, HumanState } from '../../types'
+import type { HumanRuntimeCache, HumanState } from '../../types'
 import { buildMouthPrompt } from '../../prompts/mouth'
 import { completeHumanTask } from '../utils/stateTransitions'
-import { buildDeliveryModeFallbackMarkdown } from '../../shared/deliveryContracts'
 import { deriveDeliverySummary } from '../../shared/deliverySummary'
 
 export const createMouthNode = (input: {
   ctx: AiRunContext
   cache: HumanRuntimeCache
-  deliveryMode: HumanDeliveryMode
   emitAnswerEvents: boolean
-  internalDelivery: boolean
 }) => {
   return async (state: HumanState): Promise<HumanState> => {
     input.ctx.checkCancelled()
     input.cache.currentState = state
 
-    const prompt = buildMouthPrompt({
-      state,
-      deliveryMode: input.deliveryMode
-    })
+    const prompt = buildMouthPrompt({ state })
     const rawDeliveryMarkdown = await input.ctx.chatText({
       caller: 'human.mouth',
       taskId: state.task.taskId,
@@ -42,11 +36,7 @@ export const createMouthNode = (input: {
 
     const deliveryMarkdown =
       String(rawDeliveryMarkdown || '').trim() ||
-      buildDeliveryModeFallbackMarkdown({
-        state,
-        mode: input.deliveryMode,
-        summary: state.execution.currentDecision?.decision.summary || '任务结束'
-      })
+      ['# 处理结果', '', state.execution.currentDecision?.decision.summary || '任务结束'].join('\n')
     const summary = deriveDeliverySummary({
       deliveryMarkdown,
       state
@@ -58,8 +48,7 @@ export const createMouthNode = (input: {
       state,
       summary,
       deliveryMarkdown,
-      emitAnswerEvents: input.emitAnswerEvents,
-      internalDelivery: input.internalDelivery
+      emitAnswerEvents: input.emitAnswerEvents
     })
   }
 }

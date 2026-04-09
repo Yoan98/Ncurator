@@ -10,32 +10,20 @@ import type { z } from 'zod/v4'
 import type {
   AiLlmIoRecord,
   AiRuntimeSettings,
-  AiPlanTask,
   AiRunEvent,
   AiRunEventStage,
   AiRunStatus,
-  AiTaskStatus,
   SelectedReference
 } from '../../../shared/types'
-import type { HumanDeliveryMode, HumanTaskInput, HumanTaskOutput } from './human/types'
-import {
-  aiDirectorStageSchema,
-  aiRunStateContractSchema,
-  directorStatusSchema,
-  planTaskStatusSchema
-} from './schema'
+import type { HumanTaskInput, HumanTaskOutput } from './human/types'
+import { aiRunStateContractSchema, aiRunStatusSchema } from './schema'
 
-export type { AiTaskStatus, AiRunStatus, AiPlanTask }
-export type { HumanDeliveryMode, HumanTaskInput, HumanTaskOutput }
+export type { AiRunStatus, HumanTaskInput, HumanTaskOutput }
 
-export type DirectorStatus = z.infer<typeof directorStatusSchema>
-export type AiDirectorStage = z.infer<typeof aiDirectorStageSchema>
-export type PlanTaskStatus = z.infer<typeof planTaskStatusSchema>
+export type AiRunStateStatus = z.infer<typeof aiRunStatusSchema>
 
 export type HumanRunDispatchOptions = {
-  deliveryMode?: HumanDeliveryMode
   emitAnswerEvents?: boolean
-  internalDelivery?: boolean
 }
 
 export type CancelledError = Error & { code: 'CANCELLED' }
@@ -152,11 +140,6 @@ export type AiRunContext = {
 }
 
 export type AiEventDispatchContext = Pick<AiRunContext, 'runId' | 'sendEvent' | 'recordLlmIo'>
-
-export type DirectorNodeContext = Pick<
-  AiRunContext,
-  'runId' | 'checkCancelled' | 'chatStructured' | 'sendEvent' | 'loadHistory' | 'referenceScope'
->
 
 export type TerminalToolContext = Pick<
   AiRunContext,

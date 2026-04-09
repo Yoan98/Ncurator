@@ -3,7 +3,6 @@ import type { JsonObject, JsonValue } from '../../../../shared/types'
 import { aiArtifactRefSchema } from '../schema'
 import {
   AI_TOOL_FAMILY_IDS,
-  HUMAN_DELIVERY_MODES,
   HUMAN_HAND_PLAN_INVALID_REASONS,
   HUMAN_ROUND_EXECUTION_KINDS,
   HUMAN_SKILL_AVAILABILITIES,
@@ -33,7 +32,6 @@ export const toolCallResultCodeSchema = z.enum(TOOL_CALL_RESULT_CODES)
 export const toolCallDiagnosticKindSchema = z.enum(TOOL_CALL_DIAGNOSTIC_KINDS)
 export const humanStageSchema = z.enum(HUMAN_STAGES)
 export const humanStatusSchema = z.enum(HUMAN_STATUSES)
-export const humanDeliveryModeSchema = z.enum(HUMAN_DELIVERY_MODES)
 export const humanToolUsePlanModeSchema = z.enum(HUMAN_TOOL_USE_PLAN_MODES)
 export const humanHandPlanInvalidReasonSchema = z.enum(HUMAN_HAND_PLAN_INVALID_REASONS)
 export const humanWatchHintCodeSchema = z.enum(HUMAN_WATCH_HINT_CODES)

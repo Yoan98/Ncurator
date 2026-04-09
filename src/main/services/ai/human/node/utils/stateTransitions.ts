@@ -10,7 +10,6 @@ import type {
 import {
   emitLatestHumanStepForState,
   emitTailHumanStepsForState,
-  emitTaskDelivery,
   emitWatchHint
 } from './stateTransitionEvents'
 import {
@@ -139,7 +138,6 @@ export const completeHumanTask = (input: {
   summary: string
   deliveryMarkdown: string
   emitAnswerEvents: boolean
-  internalDelivery: boolean
 }): HumanState => {
   const finalResult = buildHumanResult({
     state: input.state,
@@ -156,14 +154,6 @@ export const completeHumanTask = (input: {
       stage: 'human_mouth'
     })
   }
-
-  emitTaskDelivery({
-    ctx: input.ctx,
-    taskId: input.state.task.taskId,
-    summary: finalResult.summary,
-    deliveryMarkdown: input.deliveryMarkdown,
-    internal: input.internalDelivery
-  })
 
   const nextState = completeHumanTaskState({
     state: input.state,

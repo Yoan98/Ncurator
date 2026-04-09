@@ -46,12 +46,12 @@ describe('ai tool kb backend', () => {
           },
           {
             id: 'doc-3',
-            name: 'Director Notes.md',
+            name: 'Archive Notes.md',
             workspaceId: 'other-workspace',
             chunks: [
               {
                 id: 'chunk-3',
-                text: 'Director notes should stay out of current run scope.'
+                text: 'Archive notes should stay out of current run scope.'
               }
             ]
           }

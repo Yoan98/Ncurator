@@ -1,21 +1,21 @@
 # NCurator-Desktop AI 简化样例
 
-本文只给一条最小真实样例，用来快速说明当前代码里 `director` 与 `human` 的每个环节是怎么处理输入、状态和交付的。
+本文给一条最小真实样例，用来快速说明当前代码里 `AiRunService` 与 `human` 的每个环节是怎么处理输入、状态和交付的。
 
-- 本文只覆盖默认路径：`director_intent -> director_direct_human_exec -> human -> director_complete`
+- 本文只覆盖当前正式路径：`AiRunService -> human -> AiRunState`
 - 本文只覆盖 `human` 内部最常见闭环：`brain -> learning -> hand -> brain -> mouth`
-- 本文不展开 `context`、`plan`、`synthesis`、异常分支与历史迁移说明
+- 本文不展开异常分支、审批阻断、history_recall 与 draft review 细节
 
-字段名、节点名、交付模式和状态转移都以当前代码实现为准；示例中的模型输出和工具结果是“符合当前契约的一组代表性样本”，不是固定字面值。
+字段名、节点名和状态转移都以当前代码实现为准；示例中的模型输出和工具结果是“符合当前契约的一组代表性样本”，不是固定字面值。
 
 ## 1. 先看这条样例要说明什么
 
 这条样例只回答四个问题：
 
-1. `director` 怎么判断这轮直接交给单个 `human`
+1. 一次 run 是怎么直接进入 `human` 的
 2. `human` 怎么从“还不会做”走到“可以交付”
 3. `learning / hand / mouth` 分别往状态里写什么
-4. 最终答案是怎么从 `human` 回到 `director` 的
+4. 最终答案是怎么从 `human` 回到 `AiRunState` 的
 
 ## 2. 用户请求
 
@@ -45,9 +45,46 @@
 
 ## 3. 这次 run 是怎么开始的
 
-### 3.1 初始 `DirectorState`
+### 3.1 `AiRunStartPayload`
 
-`AiRunService.run()` 会先创建 run 级初始状态：
+`AiRunService.run()` 接收的输入可以近似理解成：
+
+```ts
+{
+  runId: 'run-simple',
+  sessionId: 'session-simple',
+  input: '基于已选知识范围，总结《发布说明模板》里对“发布日期”字段的写法要求，给我一个简短结论。',
+  selectedReferences: [
+    {
+      kind: 'web',
+      workspaceId: 'ws-alpha',
+      webSourceId: 'web-release-template',
+      name: '发布说明模板',
+      url: 'https://example.com/release-template',
+      kbDocumentIds: ['doc-release-template'],
+      kbAvailability: 'ready'
+    },
+    {
+      kind: 'web',
+      workspaceId: 'ws-alpha',
+      webSourceId: 'web-brand-terms',
+      name: '品牌术语规范',
+      url: 'https://example.com/brand-terms',
+      kbDocumentIds: ['doc-brand-terms'],
+      kbAvailability: 'ready'
+    }
+  ],
+  workspace: {
+    workspaceId: 'ws-alpha',
+    workspaceName: 'Alpha Workspace',
+    rootPath: '/workspace/alpha'
+  }
+}
+```
+
+### 3.2 初始 `AiRunState`
+
+`AiRunService` 先创建 run 级初始状态：
 
 ```ts
 {
@@ -55,105 +92,67 @@
   sessionId: 'session-simple',
   status: 'running',
   input: '基于已选知识范围，总结《发布说明模板》里对“发布日期”字段的写法要求，给我一个简短结论。',
-  directorStage: 'director_intent',
-  contextRounds: 0,
-  contextEvidence: [],
-  plan: [],
-  dispatchCursor: 0,
   finalArtifacts: []
 }
 ```
 
-这时还没有任何 `human` 状态。`director` 先做的事，是判断当前这轮应该走哪条主路径。
+### 3.3 运行时另外提供了什么
 
-### 3.2 运行时另外提供了什么
-
-除了 `DirectorState` 以外，runtime 还会给节点注入：
+除了 `AiRunState` 以外，runtime 还会给这次执行注入：
 
 - `ctx.referenceScope`：当前工作区与已选参考资料范围
 - `ctx.loadHistory()`：最近对话和会话摘要
 - `ctx.chatStructured / ctx.chatText`：统一的 LLM 调用入口
+- `ctx.sendEvent`：统一事件出口
 
-这些内容都是运行时上下文，不会直接持久化进 `DirectorState` 或 `HumanState`。
+这些内容都是运行时上下文，不会直接持久化进 `AiRunState` 或 `HumanState`。
 
-## 4. `director` 是怎么处理这条请求的
+### 3.4 run 到 `human` 的完整链路
 
-### 4.1 第一步：`director_intent`
-
-`director_intent` 真实会读取：
-
-- `state.input`
-- `state.contextRounds`
-- `state.contextEvidence`
-- `ctx.loadHistory()` 返回的历史摘要
-- `ctx.referenceScope` 渲染出的资料范围
-
-在这个样例里，模型很可能给出这样的结构化结果：
-
-```json
-{
-  "mode": "direct_human",
-  "reason": "任务目标单一，已选知识范围足够明确，单个 human 可以通过知识检索直接闭环。"
-}
+```mermaid
+flowchart TD
+    A["AiRunStartPayload"] --> B["AiRunService.run"]
+    B --> C["AiRunState(status=running)"]
+    B --> D["AiRunContext"]
+    B --> E["HumanTaskInput(taskId=runId,userInput=input)"]
+    E --> F["human.brain"]
+    F --> G["human.learning"]
+    G --> H["human.brain"]
+    H --> I["human.hand"]
+    I --> J["human.brain"]
+    J --> K["human.mouth"]
+    K --> L["HumanTaskOutput"]
+    L --> M["AiRunState(status=completed)"]
 ```
 
-于是 `director_intent` 回写：
+这里最关键的事实是：
+
+- `taskId` 直接等于 `runId`
+- `userInput` 直接使用用户原始输入
+- 中间没有额外的 route、plan、synthesis 包装层
+
+## 4. `human` 是怎么闭环完成任务的
+
+### 4.1 `HumanTaskInput`
+
+`AiRunService` 直接派发给 `human` 的输入是：
 
 ```ts
 {
-  contextObjective: undefined,
-  directorStage: 'director_direct_human_exec'
+  taskId: 'run-simple',
+  userInput: '基于已选知识范围，总结《发布说明模板》里对“发布日期”字段的写法要求，给我一个简短结论。'
 }
 ```
 
-这里最关键的一点是：
-
-- `director` 只做路由判断
-- 它不会自己去查知识，也不会自己拼最终答案
-
-### 4.2 第二步：`director_direct_human_exec`
-
-进入默认路径后，`director` 会派发一个新的 `human`：
-
-```ts
-{
-  taskInput: {
-    taskId: 'direct-human',
-    userInput: '# 直接执行任务 ...'
-  },
-  options: {
-    deliveryMode: 'user_answer',
-    emitAnswerEvents: true
-  }
-}
-```
-
-这里的 `userInput` 不是把用户原话直接丢给 `human`，而是由 `buildDirectHumanObjective()` 组织出的任务目标文本。它会把：
-
-- 原始用户请求
-- 当前参考资料范围
-- 当前上下文证据
-
-整理成 `human` 更容易直接执行的一段任务描述。
-
-跨层传递时，`director` 只会派发：
-
-- `HumanTaskInput`
-- `HumanRunDispatchOptions`
-
-它不会直接读写 `HumanState`。
-
-## 5. `human` 是怎么闭环完成任务的
-
-### 5.1 初始 `HumanState`
+### 4.2 初始 `HumanState`
 
 每个 `human` 都从一个新的 task 级状态开始：
 
 ```ts
 {
   task: {
-    taskId: 'direct-human',
-    userInput: '# 直接执行任务 ...'
+    taskId: 'run-simple',
+    userInput: '基于已选知识范围，总结《发布说明模板》里对“发布日期”字段的写法要求，给我一个简短结论。'
   },
   execution: {
     stage: 'brain',
@@ -181,10 +180,10 @@
 
 这个初始状态说明了两件事：
 
-- `human` 只处理当前这个 task，不继承上一个 task 的内部状态
+- `human` 只处理当前这一个 task，不继承别的 task 内部状态
 - 真正的执行闭环，从 `brain` 才刚刚开始
 
-### 5.2 第一步：`brain` 先判断缺什么能力
+### 4.3 第一步：`brain` 先判断缺什么能力
 
 `brain` 会读取：
 
@@ -219,7 +218,7 @@
 - 追加一条 `trace.steps`
 - 把 `execution.stage` 变成 `learning`
 
-### 5.3 第二步：`learning` 加载 external skill
+### 4.4 第二步：`learning` 加载 external skill
 
 `learning` 不调用模型，只处理本轮要学的 skill。
 
@@ -239,6 +238,20 @@
     learnedSkillIds: ['kb-evidence-query']
   },
   execution: {
+    stage: 'brain',
+    status: 'running',
+    currentDecision: {
+      decision: {
+        summary: '先学习知识证据检索能力。',
+        reason: '当前任务需要从已选知识范围中找到关于发布日期字段的直接依据。',
+        expectedOutcome: '拿到与发布日期写法相关的 chunk 证据。'
+      },
+      readyToDeliver: false,
+      nextAction: {
+        action: 'learning',
+        wantLearnSkillIds: ['kb-evidence-query']
+      }
+    },
     lastLearningOutcome: {
       requestedSkillIds: ['kb-evidence-query'],
       loadedSkillIds: ['kb-evidence-query'],
@@ -247,17 +260,44 @@
       evictedSkillIds: [],
       activeToolCount: 1
     },
-    stage: 'brain'
+    artifacts: []
+  },
+  memory: {
+    history: {
+      roundHistory: [
+        {
+          roundId: 1,
+          decision: {
+            decision: {
+              summary: '先学习知识证据检索能力。',
+              reason: '当前任务需要从已选知识范围中找到关于发布日期字段的直接依据。',
+              expectedOutcome: '拿到与发布日期写法相关的 chunk 证据。'
+            },
+            readyToDeliver: false,
+            nextAction: {
+              action: 'learning',
+              wantLearnSkillIds: ['kb-evidence-query']
+            }
+          },
+          execution: {
+            kind: 'learning',
+            learningOutcome: {
+              requestedSkillIds: ['kb-evidence-query'],
+              loadedSkillIds: ['kb-evidence-query'],
+              skippedDuplicateSkillIds: [],
+              skippedUnknownSkillIds: [],
+              evictedSkillIds: [],
+              activeToolCount: 1
+            }
+          }
+        }
+      ]
+    }
   }
 }
 ```
 
-这一步最值得记住的是：
-
-- `learning` 只负责让某个 external skill 生效
-- 它不直接查知识，也不直接更新最终答案
-
-### 5.4 第三步：`brain` 再决定去调工具
+### 4.5 第三步：`brain` 再决定去调工具
 
 现在 `brain` 已经看到了可用的 `kb-evidence-query`，于是下一轮可以转向 `hand`：
 
@@ -275,10 +315,11 @@
       "mode": "serial",
       "calls": [
         {
-          "toolName": "kb_hybrid_search_chunks",
+          "toolName": "kb_fts_search_chunks",
           "args": {
-            "query": "发布日期 字段 写法 要求 发布说明模板",
-            "topK": 5
+            "queryText": "发布日期 字段 写法 要求 发布说明模板",
+            "limit": 5,
+            "documentIds": ["doc-release-template"]
           }
         }
       ]
@@ -289,7 +330,7 @@
 
 这时 `brain` 的职责仍然只是决策，不直接执行工具。
 
-### 5.5 第四步：`hand` 调工具并沉淀运行结果
+### 4.6 第四步：`hand` 调工具并沉淀运行结果
 
 `hand` 会执行 `toolUsePlan` 里的工具调用，并把标准化结果写回状态。
 
@@ -298,17 +339,17 @@
 ```json
 [
   {
-    "toolName": "kb_hybrid_search_chunks",
+    "toolName": "kb_fts_search_chunks",
     "ok": true,
     "code": "ok",
-    "data": {
-      "chunks": [
-        {
-          "documentTitle": "发布说明模板",
-          "text": "发布日期字段应使用“预计发布日期”或“计划发布日期”表述；若日期未最终锁定，应同时补充待确认说明。"
-        }
-      ]
-    }
+    "data": [
+      {
+        "id": "chunk-release-date-1",
+        "document_id": "doc-release-template",
+        "document_name": "发布说明模板",
+        "text": "发布日期字段应使用“预计发布日期”或“计划发布日期”表述；若日期未最终锁定，应同时补充待确认说明。"
+      }
+    ]
   }
 ]
 ```
@@ -317,12 +358,97 @@
 
 - `execution.lastToolResults`
 - `memory.history.roundHistory`
+- `execution.artifacts`
 - `trace.steps`
 - `execution.stage = 'brain'`
 
-这一步通常还不会直接改 `memory.stable`。工具结果先原样进入运行记录，等下一轮 `brain` 再决定哪些事实要沉淀成正式任务笔记。
+代表性的状态切片：
 
-### 5.6 第五步：`brain` 基于证据收敛，并转向 `mouth`
+```ts
+{
+  execution: {
+    stage: 'brain',
+    status: 'running',
+    lastToolResults: [
+      {
+        toolName: 'kb_fts_search_chunks',
+        ok: true,
+        code: 'ok',
+        data: [
+          {
+            id: 'chunk-release-date-1',
+            document_id: 'doc-release-template',
+            document_name: '发布说明模板',
+            text: '发布日期字段应使用“预计发布日期”或“计划发布日期”表述；若日期未最终锁定，应同时补充待确认说明。'
+          }
+        ]
+      }
+    ],
+    artifacts: []
+  },
+  memory: {
+    history: {
+      roundHistory: [
+        '...',
+        {
+          roundId: 2,
+          decision: {
+            decision: {
+              summary: '检索发布说明模板里与发布日期字段相关的直接证据。',
+              reason: '已经具备知识检索能力，可以开始拿事实依据。',
+              expectedOutcome: '确认发布日期字段的推荐写法与边界说明。'
+            },
+            readyToDeliver: false,
+            nextAction: {
+              action: 'hand',
+              toolUsePlan: {
+                mode: 'serial',
+                calls: [
+                  {
+                    toolName: 'kb_fts_search_chunks',
+                    args: {
+                      queryText: '发布日期 字段 写法 要求 发布说明模板',
+                      limit: 5,
+                      documentIds: ['doc-release-template']
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          execution: {
+            kind: 'hand',
+            toolUsePlan: {
+              mode: 'serial',
+              calls: [
+                {
+                  toolName: 'kb_fts_search_chunks',
+                  args: {
+                    queryText: '发布日期 字段 写法 要求 发布说明模板',
+                    limit: 5,
+                    documentIds: ['doc-release-template']
+                  }
+                }
+              ]
+            },
+            toolResults: [
+              {
+                toolName: 'kb_fts_search_chunks',
+                ok: true,
+                code: 'ok',
+                summary: '命中发布说明模板中与发布日期字段相关的证据。',
+                dataPreview: '发布日期字段应使用“预计发布日期”或“计划发布日期”表述；若日期未最终锁定，应同时补充待确认说明。'
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+### 4.7 第五步：`brain` 基于证据收敛，并转向 `mouth`
 
 工具结果回来后，`brain` 会把关键内容整理进稳定记忆，并判断现在已经可以交付：
 
@@ -349,8 +475,9 @@
 
 - `brain` 是 `human` 内唯一推理节点
 - 是否“已经可以交付”也是由 `brain` 判断
+- `memory.stable` 里沉淀的是已经可以长期复用的任务事实与依据
 
-### 5.7 第六步：`mouth` 组织正式交付
+### 4.8 第六步：`mouth` 组织正式交付
 
 `mouth` 读取：
 
@@ -359,9 +486,9 @@
 - `memory.history.roundHistory`
 - `execution.currentDecision`
 - `execution.artifacts`
-- 当前 `deliveryMode`
+- `execution.watchHint`
 
-在本例中，`deliveryMode = user_answer`，所以它会输出面向最终用户的 markdown。代表性交付如下：
+在本例中，它会输出面向最终用户的 markdown。代表性交付如下：
 
 ```md
 # 处理结果
@@ -369,70 +496,83 @@
 《发布说明模板》里，发布日期字段应优先使用“预计发布日期”或“计划发布日期”这类未锁定表述。
 
 如果日期还没有最终确认，需要同时补充“待确认”说明，而不是把日期写成已经完全确定的口径。
+
+## 关键依据
+- 模板中明确要求：若日期未最终锁定，应同时补充待确认说明。
 ```
 
 runtime 随后会基于这段 markdown 与当前决策生成 `summary`，并透传已有 artifacts。因为这个样例没有文件类产物，所以 `artifacts` 仍为空。
 
-最终 `HumanTaskOutput` 大致是：
+## 5. 最终结果怎么回到 run
+
+### 5.1 `HumanTaskOutput`
+
+`human` 完成后返回：
 
 ```ts
 {
-  taskId: 'direct-human',
+  taskId: 'run-simple',
   status: 'completed',
   summary: '已总结发布日期字段的写法要求。',
   deliveryMarkdown: '# 处理结果 ...',
-  artifacts: undefined
+  artifacts: []
 }
 ```
 
-## 6. `director` 最后怎么收口
+### 5.2 最终 `AiRunState`
 
-### 6.1 `director_direct_human_exec` 回写最终交付
-
-`director` 收到 `HumanTaskOutput` 后，只会把稳定结果回写到 run 级状态：
+`AiRunService` 收到 `HumanTaskOutput` 后，只会把稳定结果回写到 run 级状态：
 
 ```ts
 {
-  finalDeliveryMarkdown: '# 处理结果 ...',
-  finalArtifacts: [],
-  directorStage: 'director_complete'
-}
-```
-
-### 6.2 `director_complete` 设置 run 终态
-
-最后 `director_complete` 只做 run 级收尾：
-
-```ts
-{
+  runId: 'run-simple',
+  sessionId: 'session-simple',
   status: 'completed',
-  directorStage: 'director_complete'
+  input: '基于已选知识范围，总结《发布说明模板》里对“发布日期”字段的写法要求，给我一个简短结论。',
+  finalDeliveryMarkdown: '# 处理结果 ...',
+  finalArtifacts: []
 }
 ```
 
-到这里，这条最小样例就完整结束了。
+### 5.3 这条链路里会看到哪些代表性事件
 
-## 7. 把这条链路压成一张图
+如果 IPC 层启用了正式事件流，时间线可以近似理解成：
+
+```text
+run_started
+human_step(stage=human_brain, action=brain_decision)
+human_step(stage=human_learning, action=learn_skill)
+human_step(stage=human_brain, action=brain_decision)
+tool_call_started(toolName=kb_fts_search_chunks)
+tool_call_result(toolName=kb_fts_search_chunks)
+human_step(stage=human_hand, action=call_tool)
+human_step(stage=human_brain, action=brain_decision)
+answer_token(...)
+answer_completed(...)
+human_step(stage=human_mouth, action=deliver_result)
+run_completed
+```
+
+## 6. 把这条链路压成一张回顾图
 
 ```mermaid
 flowchart TD
-    A["用户输入"] --> B["director_intent"]
-    B --> C["director_direct_human_exec"]
-    C --> D["human.brain"]
-    D --> E["human.learning"]
-    E --> F["human.brain"]
-    F --> G["human.hand"]
-    G --> H["human.brain"]
-    H --> I["human.mouth"]
-    I --> J["HumanTaskOutput"]
-    J --> K["director_complete"]
+    A["AiRunService"] --> B["HumanTaskInput(taskId=runId,userInput=input)"]
+    B --> C["human.brain"]
+    C --> D["human.learning"]
+    D --> E["human.brain"]
+    E --> F["human.hand"]
+    F --> G["human.brain"]
+    G --> H["human.mouth"]
+    H --> I["HumanTaskOutput"]
+    I --> J["AiRunState"]
 ```
 
-## 8. 这个样例最值得记住的几点
+## 7. 这个样例最值得记住的几点
 
-- `director` 只负责路由、派发和收尾，不负责单任务内部推理。
-- `brain` 是 `human` 内唯一推理节点；`learning / hand / mouth` 都不是新的决策中心。
-- `learning` 只让 external skill 生效。
-- `hand` 只执行工具，并把原始结果沉淀进运行状态。
-- `mouth` 只负责组织正式交付，不负责新增事实。
-- `director` 与 `human` 之间真正跨层传递的是 `HumanTaskInput + HumanRunDispatchOptions -> HumanTaskOutput`，而不是 `HumanState`。
+- run 入口直接启动 `human`，不会再额外包装任务目标
+- `brain` 是唯一推理节点；`learning / hand / mouth` 都不是新的决策中心
+- `learning` 只让 external skill 生效
+- `hand` 只执行工具，并把标准化结果沉淀进运行状态
+- `mouth` 只负责组织正式交付，不负责新增事实
+- `AiRunService` 与 `human` 之间真正跨层传递的是 `HumanTaskInput -> HumanTaskOutput`，而不是 `HumanState`

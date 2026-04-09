@@ -16,8 +16,6 @@
     "test:ai:tool": "node scripts/test-workflow.mjs --domain ai --suite tool --type backend",
     "test:ai:human:mock-llm": "node scripts/test-workflow.mjs --domain ai --suite human --group mock-llm --type backend",
     "test:ai:human:live": "node scripts/test-workflow.mjs --domain ai --suite human --group live --type backend",
-    "test:ai:director:mock-llm": "node scripts/test-workflow.mjs --domain ai --suite director --group mock-llm --type backend",
-    "test:ai:director:live": "node scripts/test-workflow.mjs --domain ai --suite director --group live --type backend",
     "test:unit": "node scripts/test-workflow.mjs --domain unit --type backend",
     "test:unit:ai": "node scripts/test-workflow.mjs --domain unit --suite ai --type backend",
     "test:workbench": "node scripts/test-workflow.mjs --domain workbench",
