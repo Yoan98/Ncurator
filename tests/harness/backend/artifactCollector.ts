@@ -1,7 +1,7 @@
 import { cp, mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import type { AiRunEvent } from '../../../src/shared/types'
-import type { TestArtifact } from '../core/report-contract'
+import type { TestArtifact } from '../core/run-log-contract'
 import { resolveRunArtifactsDir } from './write-run-log'
 
 const sanitizeFileName = (value: string): string => {

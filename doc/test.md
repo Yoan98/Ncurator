@@ -3,15 +3,14 @@
 ## 1. 文档定位
 
 - 本文是 NCurator-Desktop 的唯一测试总规范。
-- 本文负责定义测试体系总览、正式 case 准入、正式测试闭环、runner、raw logs 与 report 契约。
+- 本文负责定义测试体系总览、正式 case 准入、正式测试闭环、runner 与 raw logs 契约。
 - 各业务域的 suite 列表、正式 case 定义与领域特有规则，只在对应 `doc/test-plan/**` 中维护，本文不重复登记 case 清单。
 - 如果 case 覆盖的是用户可见功能，还必须先对齐对应 `doc/prd/**`。
 - 如果只记一件事：写测试前先判断这是正式长期回归 case，还是一次性临时排查 case。
 
-正式测试体系只沉淀两层长期产物：
+正式测试体系只沉淀一层长期产物：
 
 - 原始日志：`tests/logs/**`
-- 正式分析文档：`tests/report/<domain>/report.md`
 
 正式测试样例只记录事实，不直接写失败原因分析、优化建议或能力判断。
 
@@ -20,7 +19,7 @@
 ### 2.1 正式 case 与临时 case
 
 - 正式长期回归 case
-  - 用于长期维护、参与 gating、进入正式 report。
+  - 用于长期维护、参与 gating。
   - 必须进入正式测试闭环。
 - 临时排查 case
   - 只用于一次性排查、验证猜想、临时复现或补上下文。
@@ -28,7 +27,7 @@
 - 默认策略
   - 用户没有明确要求“补正式长期 case”时，默认先写 `tests/temp/**`。
   - 只要还在排查、验证猜想、试运行 fixture 或尚未确定要长期维护，一律先放 `tests/temp/**`。
-  - 只有确认要长期维护、参与 gating 或进入正式 report 的 case，才进入正式测试目录。
+  - 只有确认要长期维护、参与 gating 的 case，才进入正式测试目录。
 
 ### 2.2 目录结构
 
@@ -43,13 +42,6 @@ tests/
   kb-search/
   temp/
   logs/
-  report/
-    ai/
-      report.md
-    workbench/
-      report.md
-    settings/
-      report.md
 ```
 
 规则：
@@ -61,7 +53,7 @@ tests/
 - 各 domain 的 `suite` 列表与归属，只在对应 `doc/test-plan/**` 中定义。
 - 当某个 `suite` 不需要继续细分时，正式 case 可以直接放在该 `suite` 目录下。
 - `tests/unit/**` 用于长期保留、但不进入 `doc/test-plan/**` 正式治理的 unit / helper / schema / prompt 类测试。
-- `tests/temp/**` 默认不参与 gating，也不参与正式 report 汇总。
+- `tests/temp/**` 默认不参与 gating，也不沉淀正式长期产物。
 - 除 `tests/temp/**` 外，`tests/**` 中的正式测试目录只允许放已在 `doc/test-plan/**` 登记的 case。
 
 ### 2.3 稳定映射模型
@@ -75,7 +67,7 @@ tests/
   - `suite` 下可选子目录。
   - 只有同一 `suite` 内确实需要继续分层时才创建。
 - `case`
-  - 最终测试文件，对应唯一 `caseId`、唯一日志目录和唯一 report 归属。
+  - 最终测试文件，对应唯一 `caseId` 与唯一日志目录。
 - `type`
   - 测试类型只通过文件名体现。
   - 普通测试默认视为 `backend`；文件名包含 `.e2e.test.ts` 时视为 `e2e`。
@@ -91,7 +83,7 @@ tests/
 - 如果 case 覆盖的是用户可见功能，`How / Oracle` 必须映射到对应 `doc/prd/**` 的需求编号与验收编号。
 - 如果 PRD 的功能入口、交互流程、状态反馈或验收口径发生变化，必须先更新对应 `doc/prd/**`，再更新 `doc/test-plan/**` 与测试代码。
 - 如果实现行为变更导致正式 case 预期变化，必须先更新对应 `doc/test-plan/**`，再修改测试代码。
-- 每个正式 `caseId` 都必须稳定映射到唯一测试文件、唯一日志目录和唯一 report 归属。
+- 每个正式 `caseId` 都必须稳定映射到唯一测试文件与唯一日志目录。
 
 ### 3.2 正式 case 共享字段
 
@@ -161,7 +153,7 @@ tests/
 4. 再写或调整 `tests/**` 中的正式测试代码。
 5. 通过 `scripts/test-workflow.mjs` 执行并产生日志。
 6. 先看 `timeline.jsonl`，不足时再看 `runtime-events.jsonl`、`meta.json` 与 `artifacts.json`。
-7. 最后基于 `tests/logs/<domain>/**` 更新 `tests/report/<domain>/report.md`。
+7. 最后基于 raw logs 回流结论，决定是否需要更新 `doc/test-plan/**` 或实现代码。
 
 ### 4.2 runner 与常用命令
 
@@ -178,7 +170,6 @@ runner 不负责：
 - 写事实汇总稿。
 - 写失败原因分析。
 - 写优化建议。
-- 更新正式 `report.md`。
 
 当前常用命令按域收口如下：
 
@@ -223,17 +214,11 @@ runner 支持的过滤参数：
 - 必要时回看 `meta.json` 与 `artifacts.json`，确认 run 摘要、统计值和附件索引。
 - 所有分析结论都必须可回溯到 raw logs 与 artifacts，不得脱离证据做推断。
 
-### 4.4 更新正式 report
-
-- 正式 report 固定更新 `tests/report/<domain>/report.md`。
-- report 只能基于 `tests/logs/<domain>/**` 及其附件生成；`tests/temp/**` 不进入正式 report。
-- report 负责沉淀当前现状分析、失败模式和下一步建议，但不能替代 raw logs 本身。
-
-### 4.5 结论回流
+### 4.4 结论回流
 
 - 如果问题出在 case 定义、验收口径或阶段边界，必须先改 `doc/test-plan/**`，再改测试代码。
 - 如果只是实现缺陷或回归问题，可在保持 case 规格不变的前提下修实现并重跑。
-- report 中已有结论若被新 run 推翻，应以最新 raw logs 重新分析并更新，不保留无证据的旧判断。
+- 任何分析结论若被新 run 推翻，都应以最新 raw logs 重新分析，不保留无证据的旧判断。
 
 ## 5. runner 与原始产物契约
 
@@ -356,7 +341,7 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
 - 范围固定为完整 runtime 原始事件流。
 - 普通测试与 e2e 的采集路径可以不同，但最终落盘契约必须一致。
 - `runtime-events.jsonl` 始终写出；如果本次 run 没有 runtime 事件，则写空文件。
-- 当 `Oracle`、断言 `data`、`timeline.jsonl` 或 report 仍不足以解释失败原因时，必须继续回看 `runtime-events.jsonl`。
+- 当 `Oracle`、断言 `data` 或 `timeline.jsonl` 仍不足以解释失败原因时，必须继续回看 `runtime-events.jsonl`。
 
 ### 5.5 `artifacts.json`
 
@@ -410,179 +395,17 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
   - 生成位于 `artifacts/playwright/report/index.html` 的 HTML 诊断页。
 - 默认不保留 video。
 
-## 6. 正式 report 契约
-
-### 6.1 位置与作用
-
-- `report` 是正式测试闭环中的最终分析产物；前提是对应 domain 已先生成可回看的 raw logs。
-- 当前正式分析文档固定放在：
-
-```text
-tests/report/<domain>/
-  report.md
-```
-
-- `report.md` 是当前业务域唯一正式分析报告。
-- `report.md` 只基于 `tests/logs/<domain>/**` 与 artifacts 写出当前现状分析。
-
-### 6.2 `report.md` 建议结构
-
-- 顶层先写 `总览`
-- `总览` 至少包含：
-  - `分析范围`
-  - `总体结论`
-  - `下一阶段建议`
-- `总览` 之后按 suite / groups 展开
-- 每个实际分析节点至少包含：
-  - `证据`
-  - `通过率`
-  - `失败分析`
-  - `当前评估`
-  - `下一步建议`
-
-### 6.3 `report.md` 格式约束
-
-- 顶层标题使用 `# <Domain> 域测试报告`。
-- 顶层必须先有 `## 总览`。
-- `总览` 下固定小节顺序：
-  - `### 分析范围`
-  - `### 总体结论`
-  - `### 下一阶段建议`
-- `总体结论` 中的统计口径固定拆成两类：
-  - `历史总数据`
-  - `最新总数据`
-- `历史总数据` 基于当前 analysis window 内全部 raw runs 统计。
-- `最新总数据` 每个 case 只看最新一轮 run 的修复后统计。
-- suite 之下按目录树继续展开：
-  - suite 使用 `##`
-  - suite 下第一层 group 使用 `###`
-  - 更深层 group 继续按 Markdown 标题层级递增
-- 每个实际分析节点都必须包含以下固定小节，顺序保持一致：
-  - `证据`
-  - `通过率`
-  - `失败分析`
-  - `当前评估`
-  - `下一步建议`
-- `证据` 默认只列出能定位该条证据的最小信息，例如 `caseId`、`runId`、`status`。
-- 不要在 report 正文里机械展开 `meta.json`、`timeline.jsonl`、`runtime-events.jsonl`、`artifacts.json` 这些文件名。
-- 只有当失败分析或结论明确依赖某个关键附件时，才额外补充附件名称或用途说明。
-- `通过率` 只写当前节点覆盖范围内的统计，不混入其他节点数据。
-- `通过率` 固定拆成两组：
-  - `历史总数据`：`totalRuns`、`passedRuns`、`failedRuns`、`historicalSuccessRate`
-  - `最新总数据`：`latestCaseCount`、`latestPassedCases`、`latestFailedCases`、`latestSuccessRate`
-- `历史总数据` 与 `最新总数据` 不得混写成同一个 successRate 口径。
-- `失败分析` 在没有 failed run 时应明确写“当前没有 failed run，因此无法给出失败模式结论”。
-- `当前评估` 负责总结当前状态和主要不足。
-- `下一步建议` 只写基于现有证据能支撑的下一步建议。
-
-### 6.4 `report.md` 最小示例
-
-```md
-# Workbench 域测试报告
-
-## 总览
-
-### 分析范围
-
-- raw logs 范围: 当前仓库内 `tests/logs/workbench/**`
-- 已分析 scope: `workbench/<suite-a>`、`workbench/<suite-b>`
-
-### 总体结论
-
-- 历史总数据: `2` 次 raw runs，其中 `2` 次 passed、`0` 次 failed，historicalSuccessRate=`100.0%`
-- 最新总数据: `2 / 2` 个 case 的最新一轮 run 为 passed，latestSuccessRate=`100.0%`
-- 当前结论: 当前已覆盖一个普通样例和一个 e2e smoke，但剩余 suite 仍待补齐。
-
-### 下一阶段建议
-
-- 先补 `suite-a` 的边界收敛
-- 再补 `suite-b` 的主线闭环
-
-## <suite-a>
-
-### 证据
-
-- `workbench-suite-a-basic` | type=`backend` | run=`20260315-101530-112` | status=`passed`
-
-### 通过率
-
-- 历史总数据:
-  - totalRuns: 1
-  - passedRuns: 1
-  - failedRuns: 0
-  - historicalSuccessRate: 100.0%
-- 最新总数据:
-  - latestCaseCount: 1
-  - latestPassedCases: 1
-  - latestFailedCases: 0
-  - latestSuccessRate: 100.0%
-
-### 失败分析
-
-- 当前没有 failed run，因此无法给出失败模式结论。
-
-### 当前评估
-
-- suite-a 的基础路径已稳定产出 raw logs。
-- 当前不足是边界场景覆盖仍不足。
-
-### 下一步建议
-
-- 增加 `workbench-suite-a-edge-1`
-- 增加 `workbench-suite-a-edge-2`
-
-## <suite-b>
-
-### 证据
-
-- `workbench-suite-b-smoke.e2e` | type=`e2e` | run=`20260315-103002-008` | status=`passed`
-- 关键附件: playwright trace
-
-### 通过率
-
-- 历史总数据:
-  - totalRuns: 1
-  - passedRuns: 1
-  - failedRuns: 0
-  - historicalSuccessRate: 100.0%
-- 最新总数据:
-  - latestCaseCount: 1
-  - latestPassedCases: 1
-  - latestFailedCases: 0
-  - latestSuccessRate: 100.0%
-
-### 失败分析
-
-- 当前没有 failed run，因此无法给出失败模式结论。
-
-### 当前评估
-
-- suite-b 的 e2e smoke 主链路已可用。
-- 当前不足是剩余验收分支仍未纳入。
-
-### 下一步建议
-
-- 补充 `suite-b` 的验收分支 1
-- 补充 `suite-b` 的验收分支 2
-```
-
-约束：
-
-- report 只引用 raw logs 与 artifacts 作为证据来源。
-- report 可以做分析与建议，但不得写入没有日志依据的推断。
-
-## 7. 明确禁止与常见误区
+## 6. 明确禁止与常见误区
 
 明确禁止：
 
 - 测试样例直接输出失败原因分析。
-- runner 自动调用测试所用 AI 模型生成 report。
-- report 写入没有日志依据的推断。
+- 脱离 raw logs 与 artifacts 写入没有证据依据的分析结论。
 - 为单个 runner 或单种工具单独再设计一套平行 raw log 契约。
 
 常见误区：
 
 - 把 `tests/unit/**` 当成 formal domain case 管理。
-- 把 `tests/temp/**` 的结果直接写进正式 report。
+- 把 `tests/temp/**` 的结果直接当成正式长期结论。
 - 在 `timeline.jsonl` 中倾倒底层噪音，而不是保留高价值语义事件。
 - 在没有更新 `doc/test-plan/**` 的情况下直接修改正式 case 预期。

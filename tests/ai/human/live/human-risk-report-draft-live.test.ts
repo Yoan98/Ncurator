@@ -8,7 +8,36 @@ import {
   seedRiskReportKb,
   seedRiskReportWorkspace
 } from '../../../harness/backend/aiLiveTestData'
-import { filterAiRunEventsByType } from '../testUtils'
+import { filterAiRunEventsByType, hasKbToolCall } from '../testUtils'
+
+type DocxApplyOpsResult = {
+  changedBlocks?: Array<{
+    blockId?: string
+    beforeText?: string
+    afterText?: string
+  }>
+}
+
+const mentionsPreviewReady = (text: string): boolean => /(可预览|预览|preview)/i.test(text)
+
+const mentionsOriginalPreserved = (text: string): boolean =>
+  /(未|不会|没有).{0,10}(覆盖|改写|修改).{0,10}(原(文件|模板)|原始模板|模板文件|源文件)/.test(text) ||
+  /(保留|保持).{0,10}(原(文件|模板)|原始模板|模板文件|源文件).{0,6}(不动|不变)/.test(text)
+
+const hasExpectedRiskReportChanges = (changedBlocks: readonly DocxApplyOpsResult['changedBlocks'][number][]) =>
+  changedBlocks.length === 2 &&
+  changedBlocks.some(
+    (block) =>
+      block.blockId === 'b:1' &&
+      /风险结论/.test(block.beforeText || '') &&
+      /待跟进/.test(block.afterText || '')
+  ) &&
+  changedBlocks.some(
+    (block) =>
+      block.blockId === 'b:2' &&
+      /负责人说明/.test(block.beforeText || '') &&
+      /Alice/.test(block.afterText || '')
+  )
 
 describe('ai human live backend', () => {
   it('human-risk-report-draft-live', async () => {
@@ -61,6 +90,11 @@ describe('ai human live backend', () => {
 
         const toolResults = filterAiRunEventsByType(result.events, 'tool_call_result')
         const toolNames = toolResults.map((event) => event.toolName)
+        const latestDocxApplyOpsEvent = toolResults
+          .filter((event) => event.toolName === 'docx_apply_ops')
+          .at(-1)
+        const docxApplyOps = (latestDocxApplyOpsEvent?.result?.data as DocxApplyOpsResult | undefined) || {}
+        const changedBlocks = docxApplyOps.changedBlocks || []
         const docxArtifacts =
           result.output?.artifacts?.filter(
             (artifact) =>
@@ -77,23 +111,55 @@ describe('ai human live backend', () => {
         runtime.assertThat(
           result.output?.status === 'completed' &&
             toolNames.includes('terminal_run_command') &&
-            toolNames.some((toolName) => toolName.startsWith('kb_')) &&
+            hasKbToolCall(result.events) &&
             toolNames.includes('docx_open') &&
             toolNames.includes('docx_apply_ops') &&
-            toolNames.includes('docx_render_preview') &&
-            docxArtifacts.length > 0 &&
-            templateUnchanged &&
+            toolNames.includes('docx_render_preview'),
+          {
+            name: 'human-live-risk-report-runs-required-tool-chain',
+            message: 'live human complex case 应通过 terminal、KB 与 docx 真实工具链完成周报草稿任务。',
+            data: {
+              toolNames,
+              summary: result.output?.summary,
+              deliveryMarkdown: result.output?.deliveryMarkdown,
+              artifacts: result.output?.artifacts
+            }
+          }
+        )
+
+        runtime.assertThat(docxArtifacts.length > 0 && templateUnchanged, {
+          name: 'human-live-risk-report-produces-preview-without-overwriting-template',
+          message: 'live human complex case 应生成 preview/draft artifact，且原模板文件不能被覆盖。',
+          data: {
+            toolNames,
+            templatePath: result.workspaceSeed.templatePath,
+            artifacts: result.output?.artifacts
+          }
+        })
+
+        runtime.assertThat(hasExpectedRiskReportChanges(changedBlocks), {
+          name: 'human-live-risk-report-updates-risk-and-owner-placeholders',
+          message: 'live human complex case 应把模板中的风险结论和负责人说明两处占位符替换为实际内容。',
+          data: {
+            changedBlocks,
+            toolNames
+          }
+        })
+
+        runtime.assertThat(
+          /weekly-risk-report-template\.docx/.test(deliveryText) &&
             /风险结论/.test(deliveryText) &&
             /负责人(说明)?/.test(deliveryText) &&
             /Weekly Risk Summary\.md/.test(deliveryText) &&
             /Owner Note\.md/.test(deliveryText) &&
-            /(预览|preview)/i.test(deliveryText) &&
-            /(未覆盖原文件|原文件未被覆盖|未覆盖原件)/.test(deliveryText),
+            mentionsPreviewReady(deliveryText) &&
+            mentionsOriginalPreserved(deliveryText),
           {
-            name: 'human-live-completes-risk-report-draft-through-real-tool-chain',
-            message: 'live human complex case 应通过 terminal、KB 与 docx 真实工具链完成周报草稿任务。',
+            name: 'human-live-risk-report-delivery-explains-user-facing-outcome',
+            message: 'live human complex case 的最终交付应从用户视角说明模板、两处修改、依据来源、预览产物和未覆盖原文件。',
             data: {
               toolNames,
+              changedBlocks,
               summary: result.output?.summary,
               deliveryMarkdown: result.output?.deliveryMarkdown,
               artifacts: result.output?.artifacts

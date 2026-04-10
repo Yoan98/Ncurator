@@ -19,7 +19,7 @@ import {
   type TestLogEvent,
   type TestRunMeta,
   type TestRunStatus
-} from '../core/report-contract'
+} from '../core/run-log-contract'
 
 const fixturesRoot = path.resolve(process.cwd(), 'tests', 'fixtures')
 

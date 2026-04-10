@@ -3,7 +3,7 @@
 ## 1. 总体目标
 
 - 本计划用于定义 AI 域正式测试的范围与领域特有规则。
-- 正式 / temp 准入、runner、raw logs、report 与正式 case 共享字段，统一遵循 `doc/test.md`。
+- 正式 / temp 准入、runner、raw logs 与正式 case 共享字段，统一遵循 `doc/test.md`。
 - AI 正式测试只围绕两类稳定对象治理：
   1. `tool`
   2. `human`

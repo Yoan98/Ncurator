@@ -12,7 +12,7 @@ import {
   type TestLogStatus,
   type TestRunMeta,
   type TestRunStatus
-} from '../core/report-contract'
+} from '../core/run-log-contract'
 import { createRunId, resolveRunArtifactsDir, writeRunLog } from '../core/write-run-log'
 import { launchElectronApp, type E2ERuntimeSignals } from './electronApp'
 

@@ -7,7 +7,7 @@ import {
   type TestArtifact,
   type TestLogEvent,
   type TestRunMeta
-} from './report-contract'
+} from './run-log-contract'
 import type { PersistedSeedManifest } from '../backend/seedManifest'
 
 const pad2 = (value: number): string => String(value).padStart(2, '0')

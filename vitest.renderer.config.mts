@@ -11,7 +11,7 @@ export default defineConfig({
   },
   test: {
     include: ['tests/renderer/**/*.test.ts', 'tests/renderer/**/*.test.tsx'],
-    exclude: ['tests/harness/**', 'tests/fixtures/**', 'tests/logs/**', 'tests/report/**'],
+    exclude: ['tests/harness/**', 'tests/fixtures/**', 'tests/logs/**'],
     environment: 'jsdom',
     globals: true,
     setupFiles: ['tests/harness/renderer/setup.ts'],

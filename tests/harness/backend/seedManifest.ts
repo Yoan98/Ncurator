@@ -6,7 +6,7 @@ import type {
   SeedKbDocumentInput,
   SeedWorkspaceFileRecord
 } from './test-types'
-import type { TestArtifact } from '../core/report-contract'
+import type { TestArtifact } from '../core/run-log-contract'
 import { resolveRunArtifactsDir } from '../core/write-run-log'
 
 export const BACKEND_SEED_MANIFEST_SCHEMA_VERSION = 1 as const

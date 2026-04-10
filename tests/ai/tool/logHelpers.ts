@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { resolveRunLogDir } from '../../harness/backend/write-run-log'
-import type { TestArtifactsIndex, TestRunMeta } from '../../harness/core/report-contract'
+import type { TestArtifactsIndex, TestRunMeta } from '../../harness/core/run-log-contract'
 
 export const readCapturedRunLog = async (input: {
   scope: string

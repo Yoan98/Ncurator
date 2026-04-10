@@ -27,9 +27,9 @@ import type {
   TestType,
   TestLogEvent,
   TestRunMeta
-} from '../core/report-contract'
+} from '../core/run-log-contract'
 
-export type { TestDomain, TestType, TestLogEvent, TestRunMeta } from '../core/report-contract'
+export type { TestDomain, TestType, TestLogEvent, TestRunMeta } from '../core/run-log-contract'
 
 export type ApprovalPolicy = 'auto-approve' | 'deny-medium-high' | 'deny-all'
 

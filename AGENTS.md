@@ -19,7 +19,7 @@
 - 当涉及 human live 的 docx / KB 混合场景测试设计时，必须阅读 `doc/test-plan/ai-test.md`
 - 当涉及 Workbench 测试时，必须阅读 `doc/test-plan/workbench-test.md`
 - 当涉及 Settings 测试时，必须阅读 `doc/test-plan/settings-test.md`
-- 当涉及测试用例编写，测试规范时，必须阅读 `doc/test.md`
+- 当涉及测试用例编写、runner、raw logs 或日志分析时，必须阅读 `doc/test.md`
 
 ### 1.4 prd产品文档相关
 - 当涉及 Workbench 的产品需求、交互、工作区资料范围或验收标准时，必须阅读 `doc/prd/workbench.md`

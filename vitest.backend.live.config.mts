@@ -7,8 +7,7 @@ export default defineConfig({
       'tests/**/*.e2e.test.ts',
       'tests/harness/**',
       'tests/fixtures/**',
-      'tests/logs/**',
-      'tests/report/**'
+      'tests/logs/**'
     ],
     environment: 'node',
     globals: true,
