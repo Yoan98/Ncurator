@@ -402,11 +402,21 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证第一轮 `brain` 写入的 `updatedStableMemory` patch 会在下一轮真实 `brain` prompt 中继续可见。
+- What：验证第一轮 `brain` 写入的新 stable memory 字段会在下一轮真实 `brain` prompt 中继续可见。
 - Why：memory 跨轮延续是 `human` 长链路推理的核心能力，必须由真实 graph 保证。
 - How：第一轮 `brain` 通过 `updatedStableMemory` 局部更新任务笔记，并触发一次真实 learning；第二轮 `brain` 读取真实 prompt，检查这些内容是否还在。
-- Oracle：第二轮 `brain` prompt 中同时出现前一轮写入的已确认事实、关键依据和未决问题，任务最终完成。
+- Oracle：第二轮 `brain` prompt 中同时出现前一轮写入的当前理解、关键依据和 checklist 内容，任务最终完成。
 - Not：不验证更复杂的 memory 压缩策略。
+
+##### `checklist-memory-maintenance`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 checklist 作为长期任务板会在 mock-llm 下跨轮维护 todo、done 与 obsolete 状态。
+- Why：如果 checklist 不能跨轮保留并被重写成最新任务板，brain 很容易把长期记忆退化成单轮摘要。
+- How：第一轮 `brain` 写入只含 todo 的 checklist，并触发一次真实 learning；第二轮 `brain` 读取真实 prompt 后，将 checklist 重写为包含 done、todo 与 obsolete 的新版本。
+- Oracle：第二轮 `brain` prompt 中能看到第一轮写入的 checklist 与 note，任务最终完成，且新的 checklist 成功写回长期记忆。
+- Not：不验证 runtime 是否解析 checklist 结构或对其状态做额外机读校验。
 
 ##### `complex-docx-edit`
 

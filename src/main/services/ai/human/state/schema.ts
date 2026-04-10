@@ -26,9 +26,9 @@ export const createEmptyHumanTaskInput = (): HumanTaskInput => ({
 })
 
 export const createDefaultHumanStableMemory = (): HumanState['memory']['stable'] => ({
-  confirmedFacts: '',
+  currentUnderstanding: '',
   keyEvidence: '',
-  openQuestions: ''
+  checklist: ''
 })
 
 export const createDefaultHumanMemoryHistory = (): HumanState['memory']['history'] => ({

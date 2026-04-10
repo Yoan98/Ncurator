@@ -3,9 +3,9 @@ import { applyStableMemoryPatch } from '../../../src/main/services/ai/human/memo
 import type { HumanStableMemory } from '../../../src/main/services/ai/human/types'
 
 const BASE_STABLE_MEMORY: HumanStableMemory = {
-  confirmedFacts: '已确认事实',
+  currentUnderstanding: '当前理解',
   keyEvidence: '关键依据',
-  openQuestions: '未决问题'
+  checklist: '- [todo] 继续核对\n  - note: 还没完成'
 }
 
 describe('ai unit stable memory patch', () => {
@@ -26,9 +26,9 @@ describe('ai unit stable memory patch', () => {
         }
       })
     ).toEqual({
-      confirmedFacts: '已确认事实',
+      currentUnderstanding: '当前理解',
       keyEvidence: '新的关键依据',
-      openQuestions: '未决问题'
+      checklist: '- [todo] 继续核对\n  - note: 还没完成'
     })
   })
 
@@ -46,13 +46,13 @@ describe('ai unit stable memory patch', () => {
       applyStableMemoryPatch({
         stable: BASE_STABLE_MEMORY,
         patch: {
-          openQuestions: ''
+          checklist: ''
         }
       })
     ).toEqual({
-      confirmedFacts: '已确认事实',
+      currentUnderstanding: '当前理解',
       keyEvidence: '关键依据',
-      openQuestions: ''
+      checklist: ''
     })
   })
 
@@ -61,13 +61,13 @@ describe('ai unit stable memory patch', () => {
       applyStableMemoryPatch({
         stable: BASE_STABLE_MEMORY,
         patch: {
-          confirmedFacts: '第一行  \r\n第二行\t \r\n'
+          currentUnderstanding: '第一行  \r\n第二行\t \r\n'
         }
       })
     ).toEqual({
-      confirmedFacts: '第一行\n第二行',
+      currentUnderstanding: '第一行\n第二行',
       keyEvidence: '关键依据',
-      openQuestions: '未决问题'
+      checklist: '- [todo] 继续核对\n  - note: 还没完成'
     })
   })
 })

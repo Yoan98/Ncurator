@@ -27,10 +27,10 @@ export const renderHumanStableNotes = (
   mode: HumanMemoryRenderMode
 ): string =>
   [
-    '已确认：',
+    '当前理解：',
     renderHumanStableMemoryField({
       state,
-      field: 'confirmedFacts',
+      field: 'currentUnderstanding',
       mode
     }),
     '',
@@ -41,10 +41,10 @@ export const renderHumanStableNotes = (
       mode
     }),
     '',
-    '未决问题：',
+    '检查清单：',
     renderHumanStableMemoryField({
       state,
-      field: 'openQuestions',
+      field: 'checklist',
       mode
     })
   ].join('\n')

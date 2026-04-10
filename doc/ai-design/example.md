@@ -161,9 +161,9 @@ flowchart TD
   },
   memory: {
     stable: {
-      confirmedFacts: '',
+      currentUnderstanding: '',
       keyEvidence: '',
-      openQuestions: ''
+      checklist: ''
     },
     history: {
       roundHistory: []
@@ -455,9 +455,9 @@ flowchart TD
 ```json
 {
   "updatedStableMemory": {
-    "confirmedFacts": "- 《发布说明模板》要求发布日期字段使用“预计发布日期”或“计划发布日期”这类未锁定表述。",
+    "currentUnderstanding": "- 《发布说明模板》要求发布日期字段使用“预计发布日期”或“计划发布日期”这类未锁定表述。",
     "keyEvidence": "- 检索到的模板内容明确要求：如果日期尚未最终锁定，需要同时补充待确认说明。",
-    "openQuestions": ""
+    "checklist": "- [done] 确认发布日期字段的写法要求\\n  - note: 已从模板正文中命中对应说明。"
   },
   "decision": {
     "summary": "信息已经足够，整理成简短结论返回给用户。",

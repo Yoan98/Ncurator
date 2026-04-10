@@ -92,9 +92,9 @@ describe('ai unit mouth readyToDeliver guard', () => {
     })
 
     expect(result.system).toContain('task_goal：用户最初要你完成什么')
-    expect(result.system).toContain('已确认：当前稳定成立、可以直接告诉用户的事实')
-    expect(result.system).toContain('关键依据：支撑这些事实的证据')
-    expect(result.system).toContain('未决问题：仍会影响结论')
+    expect(result.system).toContain('当前理解：当前任务的最新长期理解')
+    expect(result.system).toContain('关键依据：支撑这些理解的证据')
+    expect(result.system).toContain('检查清单：当前任务板')
     expect(result.user).not.toContain('这是当前交付模式。')
     expect(result.user).not.toContain('这是用户这次原始诉求与限制。')
     expect(result.user).not.toContain('这是 brain 已经做出的最终决定。')

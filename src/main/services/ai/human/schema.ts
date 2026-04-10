@@ -139,9 +139,9 @@ export const humanHistoryToolResultSchema = z.object({
 })
 
 export const humanStableMemorySchema = z.object({
-  confirmedFacts: z.string(),
+  currentUnderstanding: z.string(),
   keyEvidence: z.string(),
-  openQuestions: z.string()
+  checklist: z.string()
 })
 
 export const humanStableMemoryPatchSchema = humanStableMemorySchema.partial()

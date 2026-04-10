@@ -1,4 +1,3 @@
-import { renderInlineList } from '../../utils/render'
 import type { AiRunContext } from '../../types'
 import { renderReferenceScopeText } from '../../prompts/referenceScope'
 import {
@@ -20,15 +19,6 @@ import type {
   ToolPromptSpec
 } from '../types'
 import { renderWatchHintForBrain } from './watchHints'
-
-const renderQuotedNames = (items: readonly string[]): string =>
-  renderInlineList(
-    items.map((item) => `\`${item}\``),
-    {
-      separator: '、',
-      fallback: 'none'
-    }
-  )
 
 const renderLearnedToolSpecLine = (spec: ToolPromptSpec): string => {
   const requiredArgs = spec.args
@@ -131,7 +121,7 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
   <context_block_guide>
     - task_goal：用户原始诉求与限制。
     - reference_scope：当前工作区、默认知识范围、显式缩圈范围和可用边界。
-    - your_notes：稳定任务笔记，按“已确认 / 关键依据 / 未决问题”组织。
+    - your_notes：稳定任务笔记，按“当前理解 / 关键依据 / 检查清单”组织。
     - recent_progress：最近一轮完整过程记录，用于判断刚做了什么、得到什么。
     - earlier_attempts：更早轮次过程链，用于识别重复路径、失败模式和已经验证过的动作。
     - recalled_history：主动回看的详细历史；只有明确回看后才会出现，并可能附带过滤条件。
@@ -144,9 +134,9 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
     - 输出顶层结构固定为：
       {
         "updatedStableMemory"?: {
-          "confirmedFacts"?: "string",
+          "currentUnderstanding"?: "string",
           "keyEvidence"?: "string",
-          "openQuestions"?: "string"
+          "checklist"?: "string"
         },
         "decision": {
           "summary": "string",
@@ -162,13 +152,24 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
     - updatedStableMemory 是可选的 partial patch；缺失表示本轮不更新任务笔记。
     - updatedStableMemory 中某个字段缺失：表示该字段保持原值。
     - updatedStableMemory 中某个字段为空字符串：表示显式清空该字段。
-    - updatedStableMemory.confirmedFacts：只写当前已经确认、可以直接成立的事实。
-    - updatedStableMemory.keyEvidence：只写支撑事实的关键依据、证据来源或命中摘要。
-    - updatedStableMemory.openQuestions：只写仍阻碍收敛的未知点、限制或待确认项。
+    - stableMemory 是长期记忆，不是本轮摘要。
+    - 如果你输出某个 stableMemory 字段，表示你给出了该字段基于旧内容累积编辑后的完整最新版本。
+    - 旧内容中仍然有效的信息不能因为本轮未提及而静默丢失；如果旧判断需要修正，应直接在该字段的新版本里改正。
+    - updatedStableMemory.currentUnderstanding：写当前任务的最新长期理解，可包含已确认事实、当前判断和关键限制。
+    - updatedStableMemory.keyEvidence：写支撑当前理解的关键依据、来源或命中摘要，并基于旧内容累积维护。
+    - updatedStableMemory.checklist：写当前任务板，使用 markdown 清单维护 todo / done / obsolete 三种状态；每条都必须带 note。
+    - checklist 示例格式：
+      - [todo] 事项标题
+        - note: 补充说明
+      - [done] 事项标题
+        - note: 完成依据或结果
+      - [obsolete] 事项标题
+        - note: 为什么这条路径失效或不再优先
     - decision.summary：一句话概括你本轮的判断或下一步意图。
     - decision.reason：说明你为什么这样判断，必须基于已给上下文、记忆或真实结果。
     - decision.expectedOutcome：说明你希望下一跳拿到什么结果，帮助后续节点收敛。
     - readyToDeliver=true 只表示当前已经具备最终交付所需的信息、证据和产物。
+    - 即使 checklist 里仍有未完成项，你仍可选择 mouth；但如果这样做，decision.reason 必须明确说明这些未完成项为何已不再阻塞最终交付。
     - nextAction 只能输出一种合法结构：learning、hand 或 mouth。
     - hand.toolUsePlan.mode：parallel 只用于只读且彼此独立、并行安全的调用；其余情况必须用 serial。
     - hand.toolUsePlan.calls[*].toolName：必须严格使用当前工具说明里的精确名称。
@@ -219,8 +220,9 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
     <example_partial_notes_update>
       {
         "updatedStableMemory": {
+          "currentUnderstanding": "- 已确认审批驳回时原文件保持不变。",
           "keyEvidence": "- kb_hybrid_search_chunks 命中了审批驳回时保留原文件的制度说明。",
-          "openQuestions": ""
+          "checklist": "- [done] 确认审批驳回时是否保留原文件\\n  - note: 已从知识库命中制度说明。"
         },
         "decision": {
           "summary": "证据已经足够，准备结束任务",

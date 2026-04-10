@@ -268,12 +268,12 @@ type HumanStage = 'brain' | 'learning' | 'hand' | 'mouth'
 type HumanStatus = 'running' | 'completed'
 
 interface HumanStableMemory {
-  // 已确认的任务事实；只放已经可以稳定复用的事实性内容。
-  confirmedFacts: string
-  // 当前关键依据；记录支撑结论的证据或来源摘要。
+  // 当前任务的最新长期理解；要求基于旧内容累积维护，而不是只写本轮摘要。
+  currentUnderstanding: string
+  // 当前关键依据；记录支撑理解的证据或来源摘要，并基于旧内容累积维护。
   keyEvidence: string
-  // 仍未解决的问题；帮助下一轮 brain 判断是否继续执行。
-  openQuestions: string
+  // 当前任务板；使用 markdown 维护 todo / done / obsolete 和 note。
+  checklist: string
 }
 
 // brain 对 stable memory 的局部补丁；缺失字段表示保持原值。
@@ -1041,7 +1041,7 @@ flowchart LR
     TR[("trace.steps")]
 
     T -->|读取 taskId + userInput| B
-    SM -->|读取 confirmedFacts / keyEvidence / openQuestions| B
+    SM -->|读取 currentUnderstanding / keyEvidence / checklist| B
     HM -->|读取 recent_progress / earlier_attempts / recalled_history| B
     SK -->|读取 learned external skills| B
     WH -->|存在时读取收敛提示| B

@@ -17,17 +17,17 @@ export const applyStableMemoryPatch = (input: {
   }
 
   return {
-    confirmedFacts:
-      typeof input.patch.confirmedFacts === 'string'
-        ? normalizeStableMemoryText(input.patch.confirmedFacts)
-        : input.stable.confirmedFacts,
+    currentUnderstanding:
+      typeof input.patch.currentUnderstanding === 'string'
+        ? normalizeStableMemoryText(input.patch.currentUnderstanding)
+        : input.stable.currentUnderstanding,
     keyEvidence:
       typeof input.patch.keyEvidence === 'string'
         ? normalizeStableMemoryText(input.patch.keyEvidence)
         : input.stable.keyEvidence,
-    openQuestions:
-      typeof input.patch.openQuestions === 'string'
-        ? normalizeStableMemoryText(input.patch.openQuestions)
-        : input.stable.openQuestions
+    checklist:
+      typeof input.patch.checklist === 'string'
+        ? normalizeStableMemoryText(input.patch.checklist)
+        : input.stable.checklist
   }
 }

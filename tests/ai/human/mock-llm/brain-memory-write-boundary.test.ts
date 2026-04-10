@@ -22,9 +22,9 @@ describe('ai human mock-llm backend', () => {
               {
                 output: {
                   updatedStableMemory: {
-                    confirmedFacts: '- 项目上线前需要执行复核。',
+                    currentUnderstanding: '- 项目上线前需要执行复核。',
                     keyEvidence: '- 知识库显示上线前必须执行复核。',
-                    openQuestions: '- 还不确定最终负责人。'
+                    checklist: '- [todo] 确认最终负责人。\n  - note: 当前还不确定。'
                   },
                   decision: {
                     summary: '先学习一个 skill，让 memory 进入下一轮 prompt。',
@@ -42,7 +42,8 @@ describe('ai human mock-llm backend', () => {
                 secondBrainSeesMemory =
                   user.includes('项目上线前需要执行复核') &&
                   user.includes('知识库显示上线前必须执行复核') &&
-                  user.includes('还不确定最终负责人')
+                  user.includes('确认最终负责人') &&
+                  user.includes('当前还不确定')
 
                 return buildCompleteTaskDecision({
                   summary: 'memory 已成功跨轮保持。',
