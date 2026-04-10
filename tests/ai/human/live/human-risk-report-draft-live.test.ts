@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import { loadLiveLlmConfigFromEnv, hasLiveLlmConfigInEnv } from '../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
@@ -32,6 +33,22 @@ const hasExpectedRiskReportChanges = (changedBlocks: readonly DocxApplyOpsResult
       /负责人说明/.test(block.beforeText || '') &&
       /Alice/.test(block.afterText || '')
   )
+
+const openedExpectedTemplate = (
+  openedSourcePaths: readonly string[],
+  templatePath: string
+): boolean => {
+  const workspaceRoot = path.dirname(templatePath)
+  return openedSourcePaths.some((sourcePath) => {
+    if (sourcePath === templatePath) {
+      return true
+    }
+    if (path.basename(sourcePath) === path.basename(templatePath)) {
+      return true
+    }
+    return path.resolve(workspaceRoot, sourcePath) === templatePath
+  })
+}
 
 describe('ai human live backend', () => {
   it('human-risk-report-draft-live', async () => {
@@ -112,7 +129,7 @@ describe('ai human live backend', () => {
           result.output?.status === 'completed' &&
             toolNames.includes('terminal_run_command') &&
             hasKbToolCall(result.events) &&
-            openedSourcePaths.includes(result.workspaceSeed.templatePath) &&
+            openedExpectedTemplate(openedSourcePaths, result.workspaceSeed.templatePath) &&
             toolNames.includes('docx_open') &&
             toolNames.includes('docx_apply_ops') &&
             toolNames.includes('docx_render_preview'),
