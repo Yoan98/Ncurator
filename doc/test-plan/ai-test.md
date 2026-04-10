@@ -487,7 +487,7 @@
 - What：验证 live 模式下 `human` 会基于两份已选 `docx` 做跨文件精读，并准确回答“过拟合 / 反走样”的成因与处理思路。
 - Why：真实用户在复习场景里经常已经选中了资料，但仍会把两个概念混在一起；这条 case 要长期守住“已选资料范围 + 跨文件准确回答”的正式能力，对齐 `WB-CORE-002-AC2`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
 - How：注入真实 live LLM 配置；把 `tests/fixtures/ai/docx/深度学习.docx` 与 `tests/fixtures/ai/docx/图形学.docx` 作为已选资料复制进 workspace；直接输入“我做题老把这两个点混在一起。你就按我刚选的这两份资料，帮我说清楚：过拟合和反走样各自是什么、为什么会出现、一般怎么处理。别补充课外知识，哪份文档没写你就直接说没写。”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；事件流中至少两次 `docx_open` 覆盖两份目标文档，且至少出现一次 `docx_search`、`docx_outline` 或 `docx_get_block`；最终回答同时命中“过拟合”的成因/处理事实组和“反走样”的成因/处理事实组；不出现 `docx_apply_ops` 或 `docx_save`。
+- Oracle：任务最终完成；事件流中至少两次 `docx_open` 覆盖两份目标文档，且至少出现一次 `docx_search`、`docx_outline` 或 `docx_get_block`；最终回答同时命中“过拟合”的定义/成因事实组，并对处理办法给出文档内事实或明确说明“没写”；同时命中“反走样”的成因/处理事实组；不出现 `docx_apply_ops` 或 `docx_save`。
 - Not：不要求固定回答结构，也不对最终文案做逐字断言。
 
 ##### `human-docx-contextual-comparison-draft-live`

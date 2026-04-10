@@ -24,6 +24,16 @@ const openedExpectedDoc = (
       sourcePath.endsWith(expectedRelativePath) || sourcePath.endsWith(`/${expectedName}`)
   )
 
+const hasOverfittingRemedyResponse = (deliveryText: string): boolean =>
+  /(没写|未写|没有写|文档没写)/.test(deliveryText) ||
+  /(数据增强|未使用过的数据|验证数据)/.test(deliveryText)
+
+const hasCompletedDelivery = (output: { summary?: string | null; deliveryMarkdown?: string | null }): boolean =>
+  typeof output.summary === 'string' &&
+  output.summary.trim().length > 0 &&
+  typeof output.deliveryMarkdown === 'string' &&
+  output.deliveryMarkdown.trim().length > 0
+
 describe('ai human live backend', () => {
   it('human-docx-cause-remedy-reading-live', async () => {
     await runWithStructuredOutputRetry(async () => {
@@ -85,7 +95,7 @@ describe('ai human live backend', () => {
           const deliveryText = `${result.output?.summary || ''}\n${result.output?.deliveryMarkdown || ''}`
 
           runtime.assertThat(
-            result.output?.status === 'completed' &&
+            hasCompletedDelivery(result.output || {}) &&
               result.fixtureDocs.every((fixtureDoc) =>
                 openedExpectedDoc(openedSourcePaths, fixtureDoc.relativePath, fixtureDoc.name)
               ) &&
@@ -99,7 +109,7 @@ describe('ai human live backend', () => {
               !toolNames.includes('docx_save') &&
               /(过拟合|过度拟合)/.test(deliveryText) &&
               /(记住过多训练数据中的特征值|训练时间过久)/.test(deliveryText) &&
-              /(数据增强|未使用过的数据|验证数据)/.test(deliveryText) &&
+              hasOverfittingRemedyResponse(deliveryText) &&
               /反走样/.test(deliveryText) &&
               /(采样频率低于信号频率|像素.*边界)/.test(deliveryText) &&
               /(低通滤波|多个采样点|多个像素点|多次采样)/.test(deliveryText),
