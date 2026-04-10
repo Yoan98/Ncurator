@@ -20,6 +20,31 @@ const readStringField = (obj: JsonObject, key: string): string | undefined => {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined
 }
 
+const readNumberField = (obj: JsonObject, key: string): number | undefined => {
+  const value = obj[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+const readBooleanField = (obj: JsonObject, key: string): boolean | undefined => {
+  const value = obj[key]
+  return typeof value === 'boolean' ? value : undefined
+}
+
+const renderDocxOutlinePreview = (obj: JsonObject): string | undefined => {
+  const blockCount =
+    readNumberField(obj, 'blockCount') ??
+    (Array.isArray(obj.blocks) ? obj.blocks.length : undefined)
+  const truncated = readBooleanField(obj, 'truncated')
+
+  if (typeof blockCount !== 'number' || typeof truncated !== 'boolean') {
+    return undefined
+  }
+
+  return truncated
+    ? `返回 ${String(blockCount)} 个结构块（结果已截断，文档后续内容未包含）`
+    : `返回 ${String(blockCount)} 个结构块`
+}
+
 const renderRowPreview = (value: JsonValue): string | undefined => {
   if (typeof value === 'string') {
     const text = value.trim()
@@ -36,6 +61,7 @@ const renderRowPreview = (value: JsonValue): string | undefined => {
     readStringField(value, 'blockId')
   const text =
     readStringField(value, 'text') ||
+    readStringField(value, 'preview') ||
     readStringField(value, 'outputPreview') ||
     readStringField(value, 'stdoutPreview') ||
     readStringField(value, 'error') ||
@@ -74,6 +100,14 @@ const renderObjectPreview = (obj: JsonObject): string | undefined => {
   if (directText) {
     return toInlineText(directText)
   }
+
+  const outlinePreview = renderDocxOutlinePreview(obj)
+  if (outlinePreview) {
+    return outlinePreview
+  }
+
+  const nestedBlock = isJsonObject(obj.block) ? renderRowPreview(obj.block) : undefined
+  if (nestedBlock) return nestedBlock
 
   const collection =
     (Array.isArray(obj.items) && obj.items) ||

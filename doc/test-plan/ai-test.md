@@ -38,6 +38,7 @@
 - formal harness 必须使用真实 `StorageService / DocumentsStore / ChatStore / DraftReviewStore / LlmConfigStore / DraftReviewService / EmbeddingService`。
 - `mock-llm` 统一通过 scripted LLM driver 固定 LLM 输出；除 LLM 输出外，其余全部真实。
 - `live` 统一通过真实 `LlmConfigStore` 注入 live 配置，并走生产统一 LLM executor。
+- 凡是会进入 `human` 的正式 run，必须在进入 `human` 前完成 embedding 基础服务 preflight；不允许把 embedding 初始化推迟到某个工具调用时才暴露。
 - KB fixture 必须走真实导入、真实索引、真实检索。
 - embedding 模型缺失时，harness 应优先通过真实生产下载链自动检查并下载，不得引入测试专用 embedding 替身。
 - 旧式 fake API 一律不得进入 formal harness；一次性排查如果确实需要 fake，只允许写入 `tests/temp/**`。
@@ -106,6 +107,36 @@
 - How：对高 block 数 fixture 真实调用 `docx_open / outline / search / get_block`。
 - Oracle：长文档下仍返回稳定 block 信息与截断标记。
 - Not：不验证编辑落盘。
+
+##### `docx-search-unicode-normalization-contract`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 `docx_search` 在 literal / regex 模式下会做兼容字形归一，能用普通查询命中兼容字形文本。
+- Why：docx 文本里常见兼容字形，如果检索不归一，AI 会把“文档已写”误判成“文档未写”。
+- How：写入包含兼容字形文本的真实 docx，再分别执行 literal 与 regex 搜索。
+- Oracle：普通查询可命中兼容字形 block，且返回稳定 blockId。
+- Not：不比较字符偏移是否完全映射回原始编码位置。
+
+##### `docx-search-scope-contract`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 `docx_search` 默认搜索当前文档全部 block，且 `scope.blockIds` 只在当前文档内进一步缩圈。
+- Why：这是 docx 搜索的核心契约，必须长期稳定，避免 prompt 与工具行为不一致。
+- How：对同一 doc 先执行默认搜索，再传入 `scope.blockIds` 做缩圈搜索。
+- Oracle：默认搜索可命中文档内多个 block，缩圈后只返回指定 blockIds 范围内的结果。
+- Not：不验证 human 该如何选择何时缩圈。
+
+##### `docx-outline-truncation-contract`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 `docx_outline` 的结果会明确暴露“已截断、后续内容未包含”的事实。
+- Why：如果只返回原始计数、不暴露截断语义，human 很容易把局部 outline 误当全文。
+- How：对长文档执行真实 `docx_outline(maxBlocks=...)`，检查返回 summary 与事件预览。
+- Oracle：返回结果既包含 `truncated=true`，也包含清晰文字说明“结果已截断，文档后续内容未包含”。
+- Not：不验证 human 是否一定继续读取后续内容。
 
 ##### `docx-complex-ops-batch`
 
@@ -297,6 +328,16 @@
 - Oracle：真实出现 `human_brain`、`human_learning`、`human_hand`、`human_mouth` 四个 stage，`AiRunState.finalDeliveryMarkdown` 正常落地，且 `AiRunService` 自身不直接发 `run_completed`。
 - Not：不验证更复杂 live 业务链路。
 
+##### `ai-run-service-embedding-preflight`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 `AiRunService` 会在进入 `human` 前完成 embedding preflight，且 preflight 失败时会直接失败收口。
+- Why：embedding 已被定义为 AI run 的基础设施，不应等到 semantic 工具调用时才第一次暴露未就绪问题。
+- How：分别覆盖 preflight 成功后执行真实 semantic docx search，以及 preflight 直接失败的分支。
+- Oracle：成功分支中 semantic docx search 正常返回结果；失败分支中 run 直接失败且不会进入 `human` stage。
+- Not：不验证模型下载进度展示。
+
 ##### `learning-hand-mouth-smoke`
 
 - 测试类型：`backend`
@@ -376,6 +417,16 @@
 - How：先写入 fixture docx，再通过真实 `docx_open -> docx_apply_ops -> docx_search` 完成一次正文替换并检索新内容。
 - Oracle：真实 `docx_apply_ops` 只产生一处 `changedBlocks`，真实 `docx_search` 能命中新文本，任务最终完成。
 - Not：不验证 review UI 或最终落盘流程。
+
+##### `docx-read-fact-exposure`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 human 在 mock-llm 模式下能收到 docx 读取链路中的关键客观事实，包括 outline 截断说明与归一化后的搜索命中。
+- Why：这一层如果事实暴露不足，human 很容易把“当前结果被截断”或“搜索已命中”误读成别的状态。
+- How：构造包含长文档截断与兼容字形文本的真实 docx，通过 scripted brain 检查后续 prompt 是否包含“结果已截断，文档后续内容未包含”以及归一化搜索命中的事实。
+- Oracle：后续 `brain` prompt 中可读到截断文字说明与搜索命中信息，最终任务完成且不会把文档中已写内容误报为“未写”。
+- Not：不验证 live 模型在该场景下的自主策略优劣。
 
 ##### `multi-tool-collaboration`
 

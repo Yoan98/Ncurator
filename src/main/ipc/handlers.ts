@@ -4,6 +4,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { IngestionService } from '../services/ingestion/loader'
 import { EmbeddingService } from '../services/vector/EmbeddingService'
+import { ensureEmbeddingReady } from '../services/vector/ensureEmbeddingReady'
 import { StorageService } from '../services/storage/StorageService'
 import { ModelService } from '../services/model/ModelService'
 import { AiRunService } from '../services/ai/AiRunService'
@@ -2137,6 +2138,12 @@ export function registerHandlers(services: {
               chatStore,
               documentsStore,
               embeddingService,
+              ensureEmbeddingReady: async () => {
+                await ensureEmbeddingReady({
+                  embeddingService,
+                  modelService
+                })
+              },
               draftReviewService,
               isCancelled: () => Boolean(activeAiRuns.get(runId)?.cancelled),
               sendEvent,

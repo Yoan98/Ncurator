@@ -1,5 +1,6 @@
 import { createHumanGraphRunner } from './human/graph/humanGraph'
 import { createAiRunContext } from './runtime'
+import { runAiRuntimePreflight } from './runtimePreflight'
 import {
   createCompletedAiRunState,
   createCancelledAiRunState,
@@ -23,9 +24,10 @@ export class AiRunService {
   }
 
   public async run(payload: AiRunStartPayload, deps: AiRunDeps): Promise<AiRunState> {
-    const ctx = createAiRunContext(payload, deps)
-    const runHumanTask = createHumanGraphRunner({ ctx })
     try {
+      await runAiRuntimePreflight(deps)
+      const ctx = createAiRunContext(payload, deps)
+      const runHumanTask = createHumanGraphRunner({ ctx })
       const output = await runHumanTask(
         {
           taskId: payload.runId,

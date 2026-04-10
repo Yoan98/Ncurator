@@ -3,6 +3,7 @@ import path from 'node:path'
 import { createHumanGraphRunner } from '../../../src/main/services/ai/human/graph/humanGraph'
 import { DraftReviewService } from '../../../src/main/services/ai/human/tools/docx/review/DraftReviewService'
 import { createAiRunContext } from '../../../src/main/services/ai/runtime'
+import { runAiRuntimePreflight } from '../../../src/main/services/ai/runtimePreflight'
 import type { AiApprovalDecision, AiApprovalRequest } from '../../../src/main/services/ai/types'
 import type { AiRunContext } from '../../../src/main/services/ai/types'
 import { ModelService } from '../../../src/main/services/model/ModelService'
@@ -79,6 +80,13 @@ export const createRealAiDepsFactory = async (input: {
     await seedLlmConfig(SCRIPTED_LLM_CONFIG)
   }
 
+  const ensureReady = async (): Promise<void> => {
+    await ensureEmbeddingReady({
+      embeddingService,
+      modelService
+    })
+  }
+
   const createContext = (contextInput: CreateAiRunContextInput = {}): AiRunContext => {
     const llmScript = contextInput.llmScript || contextInput.structuredOutputScript
     if (input.mode !== 'mock-llm' && llmScript) {
@@ -111,6 +119,7 @@ export const createRealAiDepsFactory = async (input: {
         chatStore: storageService.chat,
         documentsStore: storageService.documents,
         embeddingService,
+        ensureEmbeddingReady: ensureReady,
         draftReviewService,
         isCancelled: contextInput.checkCancelledOverride || (() => false),
         sendEvent: (event) => input.eventCollector.add(event),
@@ -161,14 +170,18 @@ export const createRealAiDepsFactory = async (input: {
     storageService,
     embeddingService,
     draftReviewService,
-    ensureEmbeddingReady: async () => {
-      await ensureEmbeddingReady({
-        embeddingService,
-        modelService
-      })
-    },
+    ensureEmbeddingReady: ensureReady,
     createAiRunContext: createContext,
-    createHumanTaskRunner: (contextInput = {}) => createHumanGraphRunner({ ctx: createContext(contextInput) }),
+    createHumanTaskRunner: (contextInput = {}) => {
+      const ctx = createContext(contextInput)
+      const run = createHumanGraphRunner({ ctx })
+      return async (taskInput, options) => {
+        await runAiRuntimePreflight({
+          ensureEmbeddingReady: ensureReady
+        })
+        return await run(taskInput, options)
+      }
+    },
     seedLlmConfig,
     close: async () => {
       await storageService.close()

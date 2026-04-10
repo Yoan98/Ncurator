@@ -13,6 +13,7 @@ import {
   toOpenStats
 } from '../adapters/ooxml/blockIndex'
 import { validateDocxBuffer } from '../adapters/ooxml/validator'
+import { normalizeDocxSearchText } from '../utils/searchText'
 import type { DocSnapshot, DocxWorkerRequest, DocxWorkerResponse, RunSessions } from './types'
 
 const sessions: RunSessions = new Map()
@@ -51,9 +52,12 @@ const replaceAllOffsets = (text: string, query: string): Array<{ start: number; 
   return offsets
 }
 
+const normalizeRegexPattern = (pattern: string): string =>
+  String(pattern || '').normalize('NFKC')
+
 const regexOffsets = (text: string, pattern: string): Array<{ start: number; end: number }> => {
   const offsets: Array<{ start: number; end: number }> = []
-  const regExp = new RegExp(pattern, 'g')
+  const regExp = new RegExp(normalizeRegexPattern(pattern), 'g')
   for (;;) {
     const match = regExp.exec(text)
     if (!match) break
@@ -80,11 +84,16 @@ const searchBlocks = (input: {
   for (const block of input.blocks) {
     if (scope && !scope.has(block.blockId)) continue
     const text = input.blockText(block.blockId)
-    if (!text) continue
+    const normalizedText = normalizeDocxSearchText(text)
+    if (!normalizedText) continue
+    const normalizedQuery =
+      input.mode === 'literal'
+        ? normalizeDocxSearchText(input.query)
+        : normalizeRegexPattern(input.query)
     const offsets =
       input.mode === 'literal'
-        ? replaceAllOffsets(text, input.query)
-        : regexOffsets(text, input.query)
+        ? replaceAllOffsets(normalizedText, normalizedQuery)
+        : regexOffsets(normalizedText, normalizedQuery)
     if (offsets.length === 0) continue
     out.push({
       blockId: block.blockId,
@@ -200,7 +209,7 @@ export const handleDocxWorkerRequest = async (
       const mode = request.payload.mode
       if (mode === 'regex') {
         try {
-          void new RegExp(request.payload.query)
+          void new RegExp(normalizeRegexPattern(request.payload.query))
         } catch {
           return {
             requestId: request.requestId,

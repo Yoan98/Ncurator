@@ -40,6 +40,9 @@ describe('ai human mock-llm backend', () => {
             chatStore: runtime.chatStore,
             documentsStore: runtime.documentsStore,
             embeddingService: runtime.embeddingService,
+            ensureEmbeddingReady: async () => {
+              await runtime.ensureEmbeddingReady()
+            },
             draftReviewService: runtime.draftReviewService,
             isCancelled: () => false,
             sendEvent: (event) => runtime.eventCollector.add(event),

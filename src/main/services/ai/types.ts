@@ -80,6 +80,7 @@ export type AiRunDeps = {
   chatStore: ChatStore
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService
+  ensureEmbeddingReady: () => Promise<void>
   draftReviewService: DraftReviewService
   isCancelled: () => boolean
   sendEvent: (event: AiRunEvent) => void

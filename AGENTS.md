@@ -6,7 +6,7 @@
 - 当涉及 AI 实现、运行入口、跨层边界、LLM 执行入口、流式传输、runtime settings、运行数据、`execution.watchHint` / `toolUsePlan` / `execution.lastLearningOutcome` / `memory.history.roundHistory` / `history_recall` / `mouth` 统一 `history` prompt 输入契约或工作区 KB 范围时，必须阅读 `doc/ai-design/implementation-spec.md` 与 `doc/ai-design/data-definition-and-flow.md`
 - 当涉及 AI 最小运行样例、默认链路或想快速理解 human 各环节如何衔接时，必须阅读 `doc/ai-design/example.md`
 - 当涉及 human 的 skill 分类、拆分边界、builtin/external 区分或当前 skill 基线时，必须阅读 `doc/ai-design/human-skill-design.md`
-- 当涉及 prompt 的通用结构、输入组织、输出规则、约束表达或风格一致性时，必须阅读 `doc/ai-design/prompt-design.md`
+- 当涉及 prompt 的通用结构、输入组织、输出规则、约束表达、工具结果语义暴露、运行事实渲染或自主性边界时，必须阅读 `doc/ai-design/prompt-design.md`
 - 当涉及 AI 后续重构与迭代规划时，必须阅读 `doc/ai-design/refactor-plan.md`
 
 ### 1.2 项目整体相关
@@ -50,9 +50,9 @@
 
 - 文档入口或文档变更时，需同步更新`AGENTS.md`
 - 编写文档引用相关时，只需要描述什么时候需要读该文档就足够，不要添加很多细节
-- 用户可见功能改动前，必须先对齐对应 `doc/prd/**`；如果当前 PRD 缺项或与目标行为不一致，要先补 PRD 或同步改 PRD
-- 实现如果改变了功能入口、交互流程、状态反馈、边界情况或验收口径，必须同步更新对应 `doc/prd/**`
+- 只有当功能代码发生变动、对应测试用例文档明确要求对齐 `doc/prd/**`，或者 `doc/prd/**` 本身发生变更时，才需要对齐代码实现与 `doc/prd/**` 是否一致
+- 仅修改测试用例实现、断言方式、runner 使用、日志读取方式或其他不改变功能行为的内容时，不要求对齐 `doc/prd/**`
 
 ### 你的回复相关
-- 写正式测试或验收结论时，应优先引用对应 PRD 的需求编号与验收编号
-- 最终回复涉及功能实现时，应说明本次对齐的 PRD 编号，以及已验证和未验证项
+- 当对应测试用例文档明确要求引用 PRD 编号时，写正式测试或验收结论应按该文档要求执行
+- 最终回复涉及功能实现时，应说明已验证和未验证项；只有在对应测试用例文档明确要求或 `doc/prd/**` 发生变更时，才需要说明 PRD 对齐情况

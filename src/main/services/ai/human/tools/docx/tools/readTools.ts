@@ -3,6 +3,7 @@ import path from 'node:path'
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { DocxToolRuntime } from '../runtime'
 import type { DocxOutlineBlock } from '../types'
+import { clipText } from '../../../../utils/text'
 import { buildSemanticMatches, splitEmbeddingRows } from '../semanticSearch'
 import {
   DOCX_GET_BLOCK_TOOL_SPEC,
@@ -24,6 +25,23 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
     summary: string
     blocks: DocxOutlineBlock[]
     truncated: boolean
+  }
+
+  const buildOutlineSummary = (input: { blockCount: number; truncated: boolean }): string =>
+    input.truncated
+      ? `返回 ${String(input.blockCount)} 个结构块（结果已截断，文档后续内容未包含）`
+      : `返回 ${String(input.blockCount)} 个结构块`
+
+  const buildDetailedBlockPreview = (
+    block: {
+      type: 'paragraph' | 'table' | 'table_cell'
+      text?: string
+      preview?: string
+      blockId: string
+    }
+  ): string => {
+    const previewText = String(block.text || block.preview || '').trim()
+    return previewText ? clipText(previewText, runtime.input.safePreviewChars) : block.blockId
   }
 
   const docxOpenTool = createDocxTool({
@@ -142,7 +160,11 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
         activity: {
           actionType: DOCX_OUTLINE_TOOL_SPEC.activityActionType!,
           startedSummary: `提取结构: ${docId}`,
-          buildCompletedSummary: (result) => `结构提取完成: ${String(result.blocks.length)} blocks`
+          buildCompletedSummary: (result) =>
+            `结构提取完成：${buildOutlineSummary({
+              blockCount: result.blocks.length,
+              truncated: result.truncated
+            })}`
         },
         request: {
           action: DOCX_OUTLINE_TOOL_SPEC.workerAction!,
@@ -157,7 +179,10 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           const result: DocxOutlineResult = {
             ok: true,
             code: 'ok',
-            summary: `outline ready (${workerPayload.blocks.length} blocks)`,
+            summary: buildOutlineSummary({
+              blockCount: workerPayload.blocks.length,
+              truncated: workerPayload.truncated
+            }),
             blocks: workerPayload.blocks,
             truncated: workerPayload.truncated
           }
@@ -197,6 +222,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           }
         },
         buildSuccess: (workerPayload) => {
+          const blockPreview = buildDetailedBlockPreview(workerPayload.block)
           const result = {
             ok: true,
             code: 'ok' as const,
@@ -209,7 +235,9 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
               ok: result.ok,
               code: result.code,
               summary: result.summary,
-              blockType: result.block.type
+              blockId: result.block.blockId,
+              blockType: result.block.type,
+              text: blockPreview
             },
             draftDocId: docId
           }
@@ -226,6 +254,15 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
     getRequiredDocId: (args) => args.docId,
     execute: async ({ args, toolName, toolCallId, docId }) => {
       if (args.mode === 'semantic') {
+        if (runtime.input.ctx.embeddingService.getStatus() !== 'ready') {
+          return runtime.emitFailure({
+            toolName,
+            toolCallId,
+            code: 'failed',
+            error:
+              'semantic search requires embedding runtime to be ready before entering human'
+          })
+        }
         const semanticIndex = await runtime.buildSemanticDocIndex(docId)
         const queryEmbeddingResponse = await runtime.input.ctx.embeddingService.embed(args.query)
         const queryEmbeddingRows = splitEmbeddingRows(

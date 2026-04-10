@@ -1,4 +1,5 @@
 import { createHumanGraphRunner } from '../../../src/main/services/ai/human/graph/humanGraph'
+import { runAiRuntimePreflight } from '../../../src/main/services/ai/runtimePreflight'
 import type {
   HumanRunDispatchOptions,
   HumanTaskInput,
@@ -23,7 +24,11 @@ export const createHumanTestRunner = (
   return {
     ctx,
     runner: run,
-    run: async (taskInput: HumanTaskInput, dispatchOptions?: HumanRunDispatchOptions) =>
-      await run(taskInput, dispatchOptions) as HumanTaskOutput
+    run: async (taskInput: HumanTaskInput, dispatchOptions?: HumanRunDispatchOptions) => {
+      await runAiRuntimePreflight({
+        ensureEmbeddingReady: runtime.ensureEmbeddingReady
+      })
+      return await run(taskInput, dispatchOptions) as HumanTaskOutput
+    }
   }
 }

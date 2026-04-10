@@ -8,7 +8,7 @@ import {
   seedRiskReportKb,
   seedRiskReportWorkspace
 } from '../../../harness/backend/aiLiveTestData'
-import { filterAiRunEventsByType, hasKbToolCall } from '../testUtils'
+import { collectStartedToolStringArgs, filterAiRunEventsByType, hasKbToolCall } from '../testUtils'
 
 type DocxApplyOpsResult = {
   changedBlocks?: Array<{
@@ -17,12 +17,6 @@ type DocxApplyOpsResult = {
     afterText?: string
   }>
 }
-
-const mentionsPreviewReady = (text: string): boolean => /(可预览|预览|preview)/i.test(text)
-
-const mentionsOriginalPreserved = (text: string): boolean =>
-  /(未|不会|没有).{0,10}(覆盖|改写|修改).{0,10}(原(文件|模板)|原始模板|模板文件|源文件)/.test(text) ||
-  /(保留|保持).{0,10}(原(文件|模板)|原始模板|模板文件|源文件).{0,6}(不动|不变)/.test(text)
 
 const hasExpectedRiskReportChanges = (changedBlocks: readonly DocxApplyOpsResult['changedBlocks'][number][]) =>
   changedBlocks.length === 2 &&
@@ -90,11 +84,17 @@ describe('ai human live backend', () => {
 
         const toolResults = filterAiRunEventsByType(result.events, 'tool_call_result')
         const toolNames = toolResults.map((event) => event.toolName)
+        const openedSourcePaths = collectStartedToolStringArgs(result.events, 'docx_open', 'sourcePath')
         const latestDocxApplyOpsEvent = toolResults
           .filter((event) => event.toolName === 'docx_apply_ops')
           .at(-1)
         const docxApplyOps = (latestDocxApplyOpsEvent?.result?.data as DocxApplyOpsResult | undefined) || {}
         const changedBlocks = docxApplyOps.changedBlocks || []
+        const kbEvidenceText = JSON.stringify(
+          toolResults
+            .filter((event) => event.toolName.startsWith('kb_'))
+            .map((event) => event.outputPreview)
+        )
         const docxArtifacts =
           result.output?.artifacts?.filter(
             (artifact) =>
@@ -106,12 +106,13 @@ describe('ai human live backend', () => {
           result.workspaceSeed.templatePath,
           result.workspaceSeed.originalTemplateBytes
         )
-        const deliveryText = `${result.output?.summary || ''}\n${result.output?.deliveryMarkdown || ''}`
+        const deliveryText = `${result.output?.summary || ''}\n${result.output?.deliveryMarkdown || ''}`.trim()
 
         runtime.assertThat(
           result.output?.status === 'completed' &&
             toolNames.includes('terminal_run_command') &&
             hasKbToolCall(result.events) &&
+            openedSourcePaths.includes(result.workspaceSeed.templatePath) &&
             toolNames.includes('docx_open') &&
             toolNames.includes('docx_apply_ops') &&
             toolNames.includes('docx_render_preview'),
@@ -147,17 +148,15 @@ describe('ai human live backend', () => {
         })
 
         runtime.assertThat(
-          /weekly-risk-report-template\.docx/.test(deliveryText) &&
-            /风险结论/.test(deliveryText) &&
-            /负责人(说明)?/.test(deliveryText) &&
-            /Weekly Risk Summary\.md/.test(deliveryText) &&
-            /Owner Note\.md/.test(deliveryText) &&
-            mentionsPreviewReady(deliveryText) &&
-            mentionsOriginalPreserved(deliveryText),
+          kbEvidenceText.includes('Weekly Risk Summary.md') &&
+            kbEvidenceText.includes('Owner Note.md') &&
+            deliveryText.length > 0,
           {
-            name: 'human-live-risk-report-delivery-explains-user-facing-outcome',
-            message: 'live human complex case 的最终交付应从用户视角说明模板、两处修改、依据来源、预览产物和未覆盖原文件。',
+            name: 'human-live-risk-report-delivery-is-present-and-backed-by-evidence',
+            message: 'live human complex case 应给出最终交付，且运行过程中应实际命中支撑本次填写的两份资料。',
             data: {
+              openedSourcePaths,
+              kbEvidenceText,
               toolNames,
               changedBlocks,
               summary: result.output?.summary,

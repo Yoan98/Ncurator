@@ -186,7 +186,7 @@ export const DOCX_OUTLINE_TOOL_SPEC = {
       {
         name: 'truncated',
         type: 'boolean',
-        description: '返回是否因 maxBlocks 被截断。'
+        description: '返回是否因 maxBlocks 被截断；若为 true，表示文档后续内容未包含在这次 outline 结果中。'
       }
     ],
     commonMistakes: ['如果任务已给出精确原文，可 open 后直接 apply_ops，不必先 outline。']
@@ -272,7 +272,7 @@ export const DOCX_SEARCH_TOOL_SPEC = {
         name: 'scope',
         type: '{ blockIds?: string[] }',
         required: false,
-        description: '限制在指定 blockIds 范围内检索。'
+        description: '限制在指定 blockIds 范围内检索；省略时默认检索当前文档全部 block。'
       }
     ],
     returns: [
@@ -284,6 +284,7 @@ export const DOCX_SEARCH_TOOL_SPEC = {
     ],
     commonMistakes: [
       '不要把 query 写成空字符串。',
+      'scope 只是在当前文档内缩小到指定 blockIds；省略 scope 时不是只搜索 outline 结果，而是搜索当前文档全部 block。',
       'semantic 适合找相近语义，literal/regex 更适合稳定定位。'
     ]
   },
