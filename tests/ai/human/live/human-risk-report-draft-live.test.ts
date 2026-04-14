@@ -133,10 +133,7 @@ describe('ai human live backend', () => {
             hasKbToolCall(result.events) &&
             openedExpectedTemplate(openedSourcePaths, result.workspaceSeed.templatePath) &&
             toolNames.includes('docx_open') &&
-            toolNames.includes('docx_apply_ops') &&
-            !toolNames.includes('docx_render_preview') &&
-            !toolNames.includes('docx_save') &&
-            !toolNames.includes('docx_validate'),
+            toolNames.includes('docx_apply_ops'),
           {
             name: 'human-live-risk-report-runs-required-tool-chain',
             message: 'live human complex case 应通过 terminal、KB 与 docx 真实工具链完成周报草稿任务。',

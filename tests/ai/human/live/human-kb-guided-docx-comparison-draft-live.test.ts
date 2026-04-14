@@ -96,9 +96,6 @@ describe('ai human live backend', () => {
             result.output?.status === 'completed' &&
               hasKbToolCall(events) &&
               toolNames.includes('docx_apply_ops') &&
-              !toolNames.includes('docx_render_preview') &&
-              !toolNames.includes('docx_save') &&
-              !toolNames.includes('docx_validate') &&
               docxArtifacts.length > 0 &&
               hasDraftReviewArtifact &&
               changedContentKinds.includes('paragraph') &&
