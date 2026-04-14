@@ -41,7 +41,7 @@ const renderAvailableSkillsSection = (state: HumanState): string => {
     .filter((definition) => !state.skills.learnedSkillIds.includes(definition.skillId))
     .map(
       (definition) =>
-        `- ${definition.skillId}：${definition.summary}；可提供工具=[${definition.toolNames.join(', ')}]；适用场景=${definition.whenToUse}`
+        `- ${definition.skillId}：${definition.description}；可提供工具=[${definition.toolNames.join(', ')}]；适用场景=${definition.whenToUse}`
     )
   const effectiveToolSpecLines = Array.from(
     new Set(effectiveSkillDefinitions.flatMap((definition) => definition.toolNames))
@@ -56,7 +56,7 @@ ${
   listBuiltinSkillDefinitions()
     .map(
       (definition) =>
-        `- ${definition.skillId}：${definition.summary}；适用场景=${definition.whenToUse}`
+        `- ${definition.skillId}：${definition.description}；适用场景=${definition.whenToUse}`
     )
     .join('\n') || 'none'
 }
@@ -66,7 +66,7 @@ ${
   learnedExternalSkillDefinitions
     .map(
       (definition) =>
-        `- ${definition.skillId}：${definition.detail}；可提供工具=[${definition.toolNames.join(', ')}]`
+        `- ${definition.skillId}：${definition.description}；可提供工具=[${definition.toolNames.join(', ')}]；适用场景=${definition.whenToUse}`
     )
     .join('\n') || 'none'
 }

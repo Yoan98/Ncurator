@@ -5,7 +5,6 @@ import {
   AI_TOOL_FAMILY_IDS,
   HUMAN_HAND_PLAN_INVALID_REASONS,
   HUMAN_ROUND_EXECUTION_KINDS,
-  HUMAN_SKILL_AVAILABILITIES,
   HUMAN_SKILL_SOURCES,
   HUMAN_STAGES,
   HUMAN_STATUSES,
@@ -36,7 +35,6 @@ export const humanToolUsePlanModeSchema = z.enum(HUMAN_TOOL_USE_PLAN_MODES)
 export const humanHandPlanInvalidReasonSchema = z.enum(HUMAN_HAND_PLAN_INVALID_REASONS)
 export const humanWatchHintCodeSchema = z.enum(HUMAN_WATCH_HINT_CODES)
 export const humanSkillSourceSchema = z.enum(HUMAN_SKILL_SOURCES)
-export const humanSkillAvailabilitySchema = z.enum(HUMAN_SKILL_AVAILABILITIES)
 export const humanRoundExecutionKindSchema = z.enum(HUMAN_ROUND_EXECUTION_KINDS)
 
 export const humanTaskInputSchema = z.object({
@@ -48,10 +46,9 @@ export const skillDefinitionBaseSchema = z.object({
   skillId: runtimeSkillIdSchema,
   familyId: toolFamilyIdSchema,
   source: humanSkillSourceSchema,
-  availability: humanSkillAvailabilitySchema,
   countsTowardToolBudget: z.boolean(),
   title: z.string().min(1),
-  summary: z.string().min(1),
+  description: z.string().min(1),
   toolNames: z.array(z.string().min(1)),
   whenToUse: z.string().min(1)
 })

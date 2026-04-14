@@ -4,7 +4,6 @@ import type { z } from 'zod/v4'
 import type { AiToolFamilyId } from './tools/types'
 import {
   HUMAN_ROUND_EXECUTION_KINDS,
-  HUMAN_SKILL_AVAILABILITIES,
   HUMAN_SKILL_SOURCES,
   HUMAN_STATUSES,
   HUMAN_STAGES,
@@ -47,7 +46,6 @@ export type HumanStepAction = (typeof HUMAN_STEP_ACTIONS)[number]
 export type HumanStepResultStatus = (typeof HUMAN_STEP_RESULT_STATUSES)[number]
 export type ToolCallResultCode = (typeof TOOL_CALL_RESULT_CODES)[number]
 export type HumanSkillSource = (typeof HUMAN_SKILL_SOURCES)[number]
-export type HumanSkillAvailability = (typeof HUMAN_SKILL_AVAILABILITIES)[number]
 export type HumanRoundExecutionKind = (typeof HUMAN_ROUND_EXECUTION_KINDS)[number]
 
 export type ToolPromptArgSpec = {
@@ -82,10 +80,7 @@ export type ToolPromptSpec = {
 }
 
 export type SkillDefinitionBase = z.infer<typeof skillDefinitionBaseSchema>
-
-export type SkillDefinition = SkillDefinitionBase & {
-  detail: string
-}
+export type SkillDefinition = SkillDefinitionBase
 
 export type BrainDecision = z.infer<typeof brainDecisionSchema>
 export type BrainNextAction = z.infer<typeof brainNextActionSchema>

@@ -155,7 +155,7 @@ export const buildKbCapabilityTools = (input: {
 
   const kbHybridSearchChunks = createChunkSearchTool({
     name: KB_HYBRID_SEARCH_CHUNKS_TOOL_SPEC.name,
-    description: 'Hybrid search over local knowledge base chunks (FTS + vector + RRF rerank).',
+    description: '对本地知识库片段执行混合检索（关键词、向量与重排结合）。',
     execute: async (args) => {
       const { data: vec } = await ctx.embeddingService.embed(args.queryText)
       return await ctx.documentsStore.hybridSearch(
@@ -171,7 +171,7 @@ export const buildKbCapabilityTools = (input: {
 
   const kbVectorSearchChunks = createChunkSearchTool({
     name: KB_VECTOR_SEARCH_CHUNKS_TOOL_SPEC.name,
-    description: 'Vector-only search over local knowledge base chunks.',
+    description: '对本地知识库片段执行纯向量语义检索。',
     execute: async (args) => {
       const { data: vec } = await ctx.embeddingService.embed(args.queryText)
       return await ctx.documentsStore.vectorSearch(
@@ -186,7 +186,7 @@ export const buildKbCapabilityTools = (input: {
 
   const kbFtsSearchChunks = createChunkSearchTool({
     name: KB_FTS_SEARCH_CHUNKS_TOOL_SPEC.name,
-    description: 'FTS-only search over local knowledge base chunks.',
+    description: '对本地知识库片段执行纯关键词全文检索。',
     execute: async (args) =>
       await ctx.documentsStore.ftsSearch(
         args.queryText,
@@ -264,7 +264,7 @@ export const buildKbCapabilityTools = (input: {
       }),
     {
       name: KB_LIST_DOCUMENTS_TOOL_SPEC.name,
-      description: 'List local knowledge base documents by keyword (document table).',
+      description: '按关键词列出本地知识库文档。',
       schema: KB_LIST_DOCUMENTS_TOOL_SPEC.schema
     }
   )

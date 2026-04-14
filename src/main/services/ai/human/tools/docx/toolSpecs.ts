@@ -49,13 +49,13 @@ export const DOCX_OPEN_TOOL_SPEC = {
   name: 'docx_open',
   familyId: 'docx',
   requiresWorkspace: true,
-  description: 'Initialize or reuse a docx session for a workspace-bound sourcePath and return the current version.',
+  description: '初始化或复用指定文档的 docx 会话，并返回当前版本。',
   skillIds: ['docx-read'],
   schema: openSchema,
   promptSpec: {
     name: 'docx_open',
-    purpose: '初始化或复用当前 run 下某份 docx 的文档会话，并返回当前版本。',
-    whenToUse: '首次把某份 docx 纳入当前 run，或需要确认这份文档当前版本时使用。',
+    purpose: '初始化或复用当前任务过程中的某份 docx 文档会话，并返回当前版本。',
+    whenToUse: '首次把某份 docx 纳入当前任务过程，或需要确认这份文档当前版本时使用。',
     preconditions: ['必须存在 workspace 绑定。', 'sourcePath 必须是 workspace 内的 .docx 路径。'],
     args: [
       {
@@ -69,7 +69,7 @@ export const DOCX_OPEN_TOOL_SPEC = {
       {
         name: 'currentVersionRef',
         type: 'string',
-        description: '当前 run 下该文档当前活动版本的引用。'
+        description: '当前任务过程中该文档当前活动版本的引用。'
       },
       {
         name: 'meta',
@@ -85,7 +85,7 @@ export const DOCX_OPEN_TOOL_SPEC = {
     commonMistakes: [
       '不要在 open 之前调用其他 docx_* 工具。',
       '不要传空路径或非 .docx 文件。',
-      'docx_open 初始化的是当前 run 下的文档会话，不会修改原文件。'
+      'docx_open 初始化的是当前任务过程中的文档会话，不会修改原文件。'
     ]
   },
   resolveExecutionMeta: createDocxMutatingExecutionMeta({
@@ -99,7 +99,7 @@ export const DOCX_OUTLINE_TOOL_SPEC = {
   name: 'docx_outline',
   familyId: 'docx',
   requiresWorkspace: true,
-  description: 'Extract a deterministic block outline for an opened docx document selected by sourcePath.',
+  description: '按 sourcePath 提取已打开 docx 的稳定结构提纲。',
   skillIds: ['docx-read'],
   schema: outlineSchema,
   promptSpec: {
@@ -156,7 +156,7 @@ export const DOCX_GET_BLOCK_TOOL_SPEC = {
   name: 'docx_get_block',
   familyId: 'docx',
   requiresWorkspace: true,
-  description: 'Get one block by blockId with detailed structure from the current version of a docx sourcePath.',
+  description: '按 blockId 读取指定 docx 当前版本中的单个 block 详细结构。',
   skillIds: ['docx-read'],
   schema: getBlockSchema,
   promptSpec: {
@@ -194,8 +194,7 @@ export const DOCX_SEARCH_TOOL_SPEC = {
   name: 'docx_search',
   familyId: 'docx',
   requiresWorkspace: true,
-  description:
-    'Search blocks in the current version of a doc selected by sourcePath using literal/regex/semantic modes.',
+  description: '按 literal、regex 或 semantic 模式检索指定 docx 当前版本中的 block。',
   skillIds: ['docx-read'],
   schema: searchSchema,
   promptSpec: {
@@ -250,12 +249,12 @@ export const DOCX_GET_HISTORY_TOOL_SPEC = {
   name: 'docx_get_history',
   familyId: 'docx',
   requiresWorkspace: true,
-  description: 'Inspect the current version lineage for a docx document in the current run.',
+  description: '查看指定 docx 在当前任务过程中的当前版本链路。',
   skillIds: ['docx-read'],
   schema: historySchema,
   promptSpec: {
     name: 'docx_get_history',
-    purpose: '查看当前 run 内某份 docx 的当前版本链路。',
+    purpose: '查看当前任务过程中某份 docx 的当前版本链路。',
     whenToUse: '需要确认编辑历史、准备 rollback、或解释当前草稿来源时使用。',
     preconditions: ['必须先 open 目标 sourcePath 对应的文档。'],
     args: [
@@ -269,7 +268,7 @@ export const DOCX_GET_HISTORY_TOOL_SPEC = {
         name: 'maxDepth',
         type: 'number',
         required: false,
-        description: '最多返回多少层祖先快照，范围 1-100。'
+        description: '最多返回多少层祖先版本，范围 1-100。'
       }
     ],
     returns: [
@@ -287,8 +286,7 @@ export const DOCX_APPLY_OPS_TOOL_SPEC = {
   name: 'docx_apply_ops',
   familyId: 'docx',
   requiresWorkspace: true,
-  description:
-    'Apply structured docx operations to the current version selected by sourcePath and advance the version chain.',
+  description: '对指定 docx 当前版本执行结构化编辑，并推进版本链。',
   skillIds: ['docx-write'],
   schema: applyOpsSchema,
   promptSpec: {
@@ -340,13 +338,12 @@ export const DOCX_ROLLBACK_TOOL_SPEC = {
   name: 'docx_rollback',
   familyId: 'docx',
   requiresWorkspace: true,
-  description:
-    'Move back to an ancestor version of a docx document in the current run without writing files.',
+  description: '在当前任务过程中把指定 docx 回退到祖先版本，不写回文件系统。',
   skillIds: ['docx-write'],
   schema: rollbackSchema,
   promptSpec: {
     name: 'docx_rollback',
-    purpose: '回退到当前 run 内的祖先版本，不会写回文件系统。',
+    purpose: '回退到当前任务过程中的祖先版本，不会写回文件系统。',
     whenToUse: '草稿改坏了、需要回看上一个版本、或用户要求撤销时使用。',
     preconditions: ['必须先 open 目标 sourcePath 对应的文档。'],
     args: [

@@ -95,7 +95,7 @@
 - What：验证最小 docx 打开、定位、编辑与继续读取链路。
 - Why：这是 docx 工具链最基础的真实生产调用闭环。
 - How：对 fixture docx 真实执行 `docx_open -> docx_search / outline -> docx_apply_ops -> docx_search`。
-- Oracle：返回稳定 `docId/newDocId`、只目标 block 进入 `changedBlocks`，且修改后的结果可继续被读取工具消费。
+- Oracle：返回稳定 `currentVersionRef/previousVersionRef`，只目标 block 进入 `changedBlocks`，且修改后的结果可继续被读取工具消费。
 - Not：不验证 `human` 的工具选择。
 
 ##### `docx-large-document-navigation`
@@ -145,7 +145,7 @@
 - What：验证多类复杂编辑操作的真实执行契约。
 - Why：复杂写入是 docx 工具层高风险区。
 - How：覆盖 `replace_text / replace_block / insert_before / insert_after / delete_block / update_table_cell`。
-- Oracle：各类 op 都能产生可继续消费的新快照与 `changedBlocks`。
+- Oracle：各类 op 都能产生可继续消费的新版本与 `changedBlocks`。
 - Not：不验证上层 op 选择策略。
 
 ##### `docx-format-variants-contract`
@@ -182,20 +182,20 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 run 内历史查询与回滚能力。
+- What：验证任务过程内历史查询与回滚能力。
 - Why：复杂编辑任务必须可回退。
 - How：多轮真实 `apply_ops` 后执行 `docx_get_history` 与 rollback。
-- Oracle：历史链可追溯，回滚只影响 run 内草稿，不改写磁盘源文件。
+- Oracle：历史链可追溯，回滚只影响当前任务过程中的草稿版本，不改写磁盘源文件。
 - Not：不验证 review 放弃 / 确认。
 
 ##### `docx-precondition-guard`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证未 `open` 或无效 `docId` 时的前置保护。
+- What：验证未 `open`、无效 `sourcePath` 或无效版本引用时的前置保护。
 - Why：这是工具层最常见的异常入口。
 - How：直接调用 `outline / search / apply_ops / rollback` 覆盖非法输入。
-- Oracle：返回明确失败，不产生新快照，不污染运行状态。
+- Oracle：返回明确失败，不产生新版本，不污染运行状态。
 - Not：不验证上层重试策略。
 
 ##### `docx-apply-ops-invalid-snapshot-guard`
@@ -203,9 +203,9 @@
 - 测试类型：`backend`
 - 实现状态：`已实现`
 - What：验证 `apply_ops` 产出无效 docx 时会被工程内部校验拦截。
-- Why：validate 已下沉为工程门禁，必须有正式 case 守住“坏快照不能进入当前草稿”。
+- Why：validate 已下沉为工程门禁，必须有正式 case 守住“坏版本不能进入当前草稿”。
 - How：对带损坏关系引用的真实 docx 执行 `docx_open -> docx_apply_ops`。
-- Oracle：`apply_ops` 直接失败，且当前 run 的 `lastDocId` 与 tracked snapshot 不会推进到无效快照。
+- Oracle：`apply_ops` 直接失败，且当前文档会话的版本引用不会推进到无效版本。
 - Not：不验证上层如何决定重试或放弃。
 
 #### `kb`
@@ -289,7 +289,7 @@
 - 测试类型：`backend`
 - 实现状态：`已实现`
 - What：验证 `hand` 在 `serial` 模式下会按顺序执行真实 docx 写入与读回确认链路。
-- Why：复杂 docx 链路依赖最新快照，必须通过正式 case 守住串行执行契约。
+- Why：复杂 docx 链路依赖当前最新版本，必须通过正式 case 守住串行执行契约。
 - How：通过真实 `hand` 执行 `docx_apply_ops -> docx_search`。
 - Oracle：工具结果顺序稳定、全部成功，且不会在 hand 内直接产出 docx 交付 artifact。
 - Not：不验证 `brain` 是否自然生成这条计划。

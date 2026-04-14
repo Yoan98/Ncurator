@@ -122,14 +122,14 @@ interface AiRunContext {
     sessionSummaryText: string
   }>
 
-  // docx 打开后记录 docId 与源路径的映射，便于后续链路追踪。
+  // docx 打开后记录内部快照 docId 与源路径的映射，便于后续链路追踪。
   trackDocxOpen: (input: { docId: string; sourcePath: string }) => void
 
-  // docx 修改后记录前后快照与改动块，便于审计与回溯。
+  // docx 修改后记录前后内部快照与改动块，便于审计与回溯。
   trackDocxChanges: (input: {
-    // 变更前文档快照 ID。
+    // 变更前文档内部快照 ID。
     previousDocId: string
-    // 变更后文档快照 ID。
+    // 变更后文档内部快照 ID。
     nextDocId: string
     // 本次执行的 docx 操作。
     op: DocxOp

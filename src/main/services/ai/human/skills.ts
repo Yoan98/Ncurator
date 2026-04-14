@@ -14,39 +14,30 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     skillId: 'history-recall',
     familyId: 'internal',
     source: 'builtin',
-    availability: 'always_on',
     countsTowardToolBudget: false,
     title: 'history-recall',
-    summary: '回看之前几轮已经做过的正式判断、执行动作和结果。',
+    description: '回看之前几轮已经做过的正式判断、执行动作和结果。',
     whenToUse: '当最近一轮和历史摘要还不足以定位失败模式或需要回看更早细节时使用。',
-    detail:
-      '它用于主动加载更详细的过程历史，不负责读取工作区或知识库。优先先看你已有的上一轮与历史链；只有确实需要查看更多旧轮次时再调用。',
     toolNames: ['history_recall']
   },
   'workspace-cli': {
     skillId: 'workspace-cli',
     familyId: 'terminal',
     source: 'external',
-    availability: 'learnable',
     countsTowardToolBudget: true,
     title: 'workspace-cli',
-    summary: '读取 workspace 文件、检查环境、执行单条 CLI 命令。',
+    description: '读取 workspace 文件、检查环境、执行单条 CLI 命令。',
     whenToUse: '当任务必须读取工作区文件、确认目录状态、执行单条命令或生成中间文件时使用。',
-    detail:
-      '它不是知识库问答的默认入口，也不负责 docx 结构化编辑。优先把动作收敛为单条、边界清晰、可解释的命令；如果 KB 或 docx 工具已经足够，就不要退回 terminal。',
     toolNames: ['terminal_run_command']
   },
   'docx-read': {
     skillId: 'docx-read',
     familyId: 'docx',
     source: 'external',
-    availability: 'learnable',
     countsTowardToolBudget: true,
     title: 'docx-read',
-    summary: '打开 docx、定位结构、检索内容、查看历史。',
+    description: '打开 docx、定位结构、检索内容、查看版本历史。',
     whenToUse: '当任务需要阅读、定位或理解 docx 内容时使用。',
-    detail:
-      '它提供 docx 文档会话初始化、结构概览、block 级精读、全文或局部 block 检索，以及 run 内版本历史查看。它不负责真正写入文档。',
     toolNames: [
       'docx_open',
       'docx_outline',
@@ -59,39 +50,30 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     skillId: 'docx-write',
     familyId: 'docx',
     source: 'external',
-    availability: 'learnable',
     countsTowardToolBudget: true,
     title: 'docx-write',
-    summary: '修改 docx 内容，或基于快照回滚到上一版。',
-    whenToUse: '当你已经明确知道要改哪里、改成什么，或需要回滚当前草稿快照时使用。',
-    detail:
-      '它提供结构化编辑与 run 内版本回滚。它不负责确认副本生成、差异样式或最终落盘。',
+    description: '修改 docx 内容，或回退到较早版本。',
+    whenToUse: '当你已经明确知道要改哪里、改成什么，或需要撤销当前草稿修改时使用。',
     toolNames: ['docx_apply_ops', 'docx_rollback']
   },
   'kb-document-discovery': {
     skillId: 'kb-document-discovery',
     familyId: 'kb',
     source: 'external',
-    availability: 'learnable',
     countsTowardToolBudget: true,
     title: 'kb-document-discovery',
-    summary: '在当前工作区知识库内缩小候选文档范围。',
+    description: '在当前工作区知识库内缩小候选文档范围。',
     whenToUse: '当只知道主题、结果过散、或需要提高精准文档定位时使用。',
-    detail:
-      '它是文档级缩圈能力，不是固定前置步骤，也不负责直接提炼事实或规则。只有在需要进一步缩小候选文档时才使用。',
     toolNames: ['kb_list_documents']
   },
   'kb-evidence-query': {
     skillId: 'kb-evidence-query',
     familyId: 'kb',
     source: 'external',
-    availability: 'learnable',
     countsTowardToolBudget: true,
     title: 'kb-evidence-query',
-    summary: '在当前工作区知识库中直接搜索内容，提取 chunk 级证据。',
+    description: '在当前工作区知识库中直接搜索内容，提取 chunk 级证据。',
     whenToUse: '当任务需要查资料怎么写、找证据、找规则、找引用或基于资料作答时使用。',
-    detail:
-      '它是当前工作区 KB 的默认搜索入口。默认优先 hybrid；需要精确术语时再用 fts，需要扩大语义召回时再用 vector。若已选资料足够明确，可带 documentIds 先缩圈；若结果不足，可扩大回当前工作区范围。',
     toolNames: ['kb_hybrid_search_chunks', 'kb_vector_search_chunks', 'kb_fts_search_chunks']
   }
 }
