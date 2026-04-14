@@ -60,7 +60,7 @@ describe('ai tool docx backend', () => {
             sourcePath: 'invalid-snapshot-source.docx'
           })
           const failedApply = await harness.invoke<DocxFailureResult>('docx_apply_ops', {
-            docId: opened.docId,
+            sourcePath: opened.sourcePath,
             ops: [
               {
                 type: 'replace_text',
@@ -70,7 +70,7 @@ describe('ai tool docx backend', () => {
             ]
           })
           const searchOriginal = await harness.invoke<DocxSearchResult>('docx_search', {
-            docId: opened.docId,
+            sourcePath: opened.sourcePath,
             query: 'Original invalid snapshot source.',
             mode: 'literal'
           })
@@ -79,8 +79,9 @@ describe('ai tool docx backend', () => {
             opened,
             failedApply,
             searchOriginal,
-            lastDocId: harness.state.lastDocId,
-            trackedDocIds: [...harness.state.sourcePathByDocId.keys()]
+            activeVersionRef:
+              harness.state.documentSessionBySourcePath.get(opened.sourcePath)?.activeVersionRef || '',
+            trackedSourcePaths: [...harness.state.documentSessionBySourcePath.keys()]
           }
         } finally {
           await harness.release()
@@ -103,16 +104,16 @@ describe('ai tool docx backend', () => {
         )
 
         runtime.assertThat(
-          result.lastDocId === result.opened.docId &&
-            result.trackedDocIds.length === 1 &&
-            result.trackedDocIds[0] === result.opened.docId,
+          result.activeVersionRef === result.opened.currentVersionRef &&
+            result.trackedSourcePaths.length === 1 &&
+            result.trackedSourcePaths[0] === result.opened.sourcePath,
           {
             name: 'invalid-apply-does-not-advance-current-draft',
-            message: '无效快照不能成为当前草稿，也不能污染 run 内 docId 跟踪。',
+            message: '无效版本不能成为当前草稿，也不能污染 run 内文档会话跟踪。',
             data: {
               opened: result.opened,
-              lastDocId: result.lastDocId,
-              trackedDocIds: result.trackedDocIds
+              activeVersionRef: result.activeVersionRef,
+              trackedSourcePaths: result.trackedSourcePaths
             }
           }
         )

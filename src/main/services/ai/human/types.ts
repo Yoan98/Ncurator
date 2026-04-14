@@ -36,6 +36,7 @@ import {
   toolCallDiagnosticSchema,
   toolCallParamSchema,
   toolCallResultSchema,
+  toolResourceContextSchema,
   toolUsePlanSchema
 } from './schema'
 
@@ -95,6 +96,7 @@ export type HumanDecision = z.infer<typeof humanDecisionSchema>
 export type ToolCallParam = z.infer<typeof toolCallParamSchema>
 export type ToolUsePlan = z.infer<typeof toolUsePlanSchema>
 export type ToolCallDiagnostic = z.infer<typeof toolCallDiagnosticSchema>
+export type ToolResourceContext = z.infer<typeof toolResourceContextSchema>
 export type ToolCallResult = z.infer<typeof toolCallResultSchema>
 export type HumanLearningOutcome = z.infer<typeof humanLearningOutcomeSchema>
 export type HumanWatchHint = z.infer<typeof humanWatchHintSchema>

@@ -39,18 +39,18 @@ describe('ai tool docx backend', () => {
             sourcePath: 'scope-contract.docx'
           })
           const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
-            docId: opened.docId,
+            sourcePath: opened.sourcePath,
             maxBlocks: 20
           })
           const firstScopedBlockId =
             outline.blocks.find((block) => block.text.includes('第一段'))?.blockId || ''
           const fullSearch = await harness.invoke<DocxSearchResult>('docx_search', {
-            docId: opened.docId,
+            sourcePath: opened.sourcePath,
             query: '目标术语',
             mode: 'literal'
           })
           const scopedSearch = await harness.invoke<DocxSearchResult>('docx_search', {
-            docId: opened.docId,
+            sourcePath: opened.sourcePath,
             query: '目标术语',
             mode: 'literal',
             scope: {

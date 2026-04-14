@@ -36,6 +36,7 @@ export const buildHistoryToolResult = (result: ToolCallResult): HumanHistoryTool
     summary: buildToolCallDisplayText(result),
     dataPreview: renderToolResultDataPreview(result),
     diagnosticText,
+    resourceContext: result.resourceContext,
     artifactRefs: (() => {
       const refs = extractArtifactRefsFromToolResult(result)
       return refs.length > 0 ? refs : undefined

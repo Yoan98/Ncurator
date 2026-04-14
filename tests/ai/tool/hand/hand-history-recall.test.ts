@@ -83,7 +83,7 @@ describe('ai tool hand backend', () => {
                       {
                         toolName: 'docx_apply_ops',
                         args: {
-                          docId: 'doc-1',
+                          sourcePath: 'history-recall.docx',
                           ops: [
                             {
                               type: 'replace_text',
@@ -104,7 +104,7 @@ describe('ai tool hand backend', () => {
                     {
                       toolName: 'docx_apply_ops',
                       args: {
-                        docId: 'doc-1',
+                        sourcePath: 'history-recall.docx',
                         ops: [
                           {
                             type: 'replace_text',
@@ -121,11 +121,20 @@ describe('ai tool hand backend', () => {
                     toolName: 'docx_apply_ops',
                     ok: true,
                     code: 'ok',
+                    resourceContext: {
+                      family: 'docx',
+                      sourcePath: 'history-recall.docx',
+                      previousVersionRef: 'v1',
+                      currentVersionRef: 'v2',
+                      effectKind: 'mutated'
+                    },
                     data: {
                       ok: true,
                       code: 'ok',
                       summary: 'ops applied (1 changes)',
-                      newDocId: 'doc-2',
+                      sourcePath: 'history-recall.docx',
+                      previousVersionRef: 'v1',
+                      currentVersionRef: 'v2',
                       changedBlocks: [
                         {
                           action: 'replace_text',

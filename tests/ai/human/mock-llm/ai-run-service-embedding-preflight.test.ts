@@ -72,15 +72,15 @@ describe('ai human mock-llm backend', () => {
                 },
                 {
                   output: buildToolDecision({
-                    toolName: 'docx_open',
-                    args: {
-                      sourcePath: 'semantic-docx.docx'
-                    },
-                    summary: '打开文档',
-                    reason: '语义搜索前必须先拿到 docId。',
-                    expectedOutcome: '拿到 docId。'
-                  })
-                },
+                  toolName: 'docx_open',
+                  args: {
+                    sourcePath: 'semantic-docx.docx'
+                  },
+                  summary: '打开文档',
+                  reason: '语义搜索前必须先初始化文档会话。',
+                  expectedOutcome: '获得可继续搜索的当前版本。'
+                })
+              },
                 () => {
                   const openResult = readLatestToolResultDataFromEvents<DocxOpenResult>(
                     runtime.eventCollector.snapshot(),
@@ -89,7 +89,7 @@ describe('ai human mock-llm backend', () => {
                   return buildToolDecision({
                     toolName: 'docx_search',
                     args: {
-                      docId: openResult.docId,
+                      sourcePath: openResult.sourcePath,
                       query: '反走样',
                       mode: 'semantic'
                     },

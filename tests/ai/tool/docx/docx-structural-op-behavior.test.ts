@@ -45,7 +45,7 @@ describe('ai tool docx backend', () => {
             sourcePath: 'structural-op-behavior.docx'
           })
           const outlineBefore = await harness.invoke<DocxOutlineResult>('docx_outline', {
-            docId: opened.docId,
+            sourcePath: opened.sourcePath,
             includeTables: true,
             includeCells: true,
             maxBlocks: 50
@@ -53,7 +53,7 @@ describe('ai tool docx backend', () => {
           const anchorBlockId = findParagraphBlockIdByText(outlineBefore.blocks, 'Anchor text.')
 
           const replaceResult = await harness.invoke<DocxApplyOpsResult>('docx_apply_ops', {
-            docId: opened.docId,
+            sourcePath: opened.sourcePath,
             ops: [
               {
                 type: 'replace_text',
@@ -63,14 +63,14 @@ describe('ai tool docx backend', () => {
             ]
           })
           const outlineAfterReplace = await harness.invoke<DocxOutlineResult>('docx_outline', {
-            docId: replaceResult.newDocId,
+            sourcePath: replaceResult.sourcePath,
             includeTables: true,
             includeCells: true,
             maxBlocks: 50
           })
 
           const insertResult = await harness.invoke<DocxApplyOpsResult>('docx_apply_ops', {
-            docId: replaceResult.newDocId,
+            sourcePath: replaceResult.sourcePath,
             ops: [
               {
                 type: 'insert_after',
@@ -108,7 +108,7 @@ describe('ai tool docx backend', () => {
             ]
           })
           const outlineAfterInsert = await harness.invoke<DocxOutlineResult>('docx_outline', {
-            docId: insertResult.newDocId,
+            sourcePath: insertResult.sourcePath,
             includeTables: true,
             includeCells: true,
             maxBlocks: 80

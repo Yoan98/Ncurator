@@ -51,7 +51,7 @@ describe('ai tool docx backend', () => {
             sourcePath: 'format-variants.docx'
           })
           const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
-            docId: opened.docId,
+            sourcePath: opened.sourcePath,
             includeTables: true,
             includeCells: true,
             maxBlocks: 40
@@ -65,15 +65,15 @@ describe('ai tool docx backend', () => {
           const ownerCellBlockId = findTableCellBlockIdByText(outline.blocks, 'Alice')
 
           const headingBlock = await harness.invoke<DocxGetBlockResult>('docx_get_block', {
-            docId: opened.docId,
+            sourcePath: opened.sourcePath,
             blockId: headingBlockId
           })
           const ownerCellBlock = await harness.invoke<DocxGetBlockResult>('docx_get_block', {
-            docId: opened.docId,
+            sourcePath: opened.sourcePath,
             blockId: ownerCellBlockId
           })
           const applied = await harness.invoke<DocxApplyOpsResult>('docx_apply_ops', {
-            docId: opened.docId,
+            sourcePath: opened.sourcePath,
             ops: [
               {
                 type: 'replace_block',
@@ -96,7 +96,7 @@ describe('ai tool docx backend', () => {
             ]
           })
           const search = await harness.invoke<DocxSearchResult>('docx_search', {
-            docId: applied.newDocId,
+            sourcePath: applied.sourcePath,
             query: 'Narrative paragraph updated.',
             mode: 'literal'
           })

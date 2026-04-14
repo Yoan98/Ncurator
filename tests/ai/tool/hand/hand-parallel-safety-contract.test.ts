@@ -9,7 +9,8 @@ import { filterEventsByType } from '../testHelpers'
 
 type DocxOpenResult = {
   ok: boolean
-  docId: string
+  sourcePath: string
+  currentVersionRef: string
 }
 
 const invokeCachedTool = async <TResult>(
@@ -100,14 +101,14 @@ describe('ai tool hand backend', () => {
                   {
                     toolName: 'docx_outline',
                     args: {
-                      docId: openResult.docId,
+                      sourcePath: openResult.sourcePath,
                       maxBlocks: 20
                     }
                   },
                   {
                     toolName: 'docx_search',
                     args: {
-                      docId: openResult.docId,
+                      sourcePath: openResult.sourcePath,
                       query: 'approval denied',
                       mode: 'literal'
                     }
@@ -141,14 +142,14 @@ describe('ai tool hand backend', () => {
                     {
                       toolName: 'docx_outline',
                       args: {
-                        docId: openResult.docId,
+                        sourcePath: openResult.sourcePath,
                         maxBlocks: 20
                       }
                     },
                     {
                       toolName: 'docx_search',
                       args: {
-                        docId: openResult.docId,
+                        sourcePath: openResult.sourcePath,
                         query: 'Safety',
                         mode: 'literal'
                       }
@@ -156,7 +157,7 @@ describe('ai tool hand backend', () => {
                     {
                       toolName: 'docx_search',
                       args: {
-                        docId: openResult.docId,
+                        sourcePath: openResult.sourcePath,
                         query: 'Risk',
                         mode: 'literal'
                       }
@@ -164,7 +165,7 @@ describe('ai tool hand backend', () => {
                     {
                       toolName: 'docx_search',
                       args: {
-                        docId: openResult.docId,
+                        sourcePath: openResult.sourcePath,
                         query: 'monitor',
                         mode: 'literal'
                       }
@@ -172,7 +173,7 @@ describe('ai tool hand backend', () => {
                     {
                       toolName: 'docx_search',
                       args: {
-                        docId: openResult.docId,
+                        sourcePath: openResult.sourcePath,
                         query: 'approval',
                         mode: 'literal'
                       }
@@ -180,7 +181,7 @@ describe('ai tool hand backend', () => {
                     {
                       toolName: 'docx_search',
                       args: {
-                        docId: openResult.docId,
+                        sourcePath: openResult.sourcePath,
                         query: 'edge',
                         mode: 'literal'
                       }
@@ -219,14 +220,14 @@ describe('ai tool hand backend', () => {
                     {
                       toolName: 'docx_outline',
                       args: {
-                        docId: openResult.docId,
+                        sourcePath: openResult.sourcePath,
                         maxBlocks: 20
                       }
                     },
                     {
                       toolName: 'docx_search',
                       args: {
-                        docId: openResult.docId,
+                        sourcePath: openResult.sourcePath,
                         query: 'Safety',
                         mode: 'literal'
                       }
@@ -234,7 +235,7 @@ describe('ai tool hand backend', () => {
                     {
                       toolName: 'docx_search',
                       args: {
-                        docId: openResult.docId,
+                        sourcePath: openResult.sourcePath,
                         query: 'Risk',
                         mode: 'literal'
                       }
@@ -242,7 +243,7 @@ describe('ai tool hand backend', () => {
                     {
                       toolName: 'docx_search',
                       args: {
-                        docId: openResult.docId,
+                        sourcePath: openResult.sourcePath,
                         query: 'monitor',
                         mode: 'literal'
                       }
@@ -250,7 +251,7 @@ describe('ai tool hand backend', () => {
                     {
                       toolName: 'docx_search',
                       args: {
-                        docId: openResult.docId,
+                        sourcePath: openResult.sourcePath,
                         query: 'approval',
                         mode: 'literal'
                       }
@@ -258,7 +259,7 @@ describe('ai tool hand backend', () => {
                     {
                       toolName: 'docx_search',
                       args: {
-                        docId: openResult.docId,
+                        sourcePath: openResult.sourcePath,
                         query: 'edge',
                         mode: 'literal'
                       }
@@ -266,7 +267,7 @@ describe('ai tool hand backend', () => {
                     {
                       toolName: 'docx_search',
                       args: {
-                        docId: openResult.docId,
+                        sourcePath: openResult.sourcePath,
                         query: 'cases',
                         mode: 'literal'
                       }
@@ -310,7 +311,7 @@ describe('ai tool hand backend', () => {
                   {
                     toolName: 'docx_apply_ops',
                     args: {
-                      docId: openResult.docId,
+                      sourcePath: openResult.sourcePath,
                       ops: [
                         {
                           type: 'replace_text',
@@ -323,7 +324,7 @@ describe('ai tool hand backend', () => {
                   {
                     toolName: 'docx_search',
                     args: {
-                      docId: openResult.docId,
+                      sourcePath: openResult.sourcePath,
                       query: 'Risk summary',
                       mode: 'literal'
                     }

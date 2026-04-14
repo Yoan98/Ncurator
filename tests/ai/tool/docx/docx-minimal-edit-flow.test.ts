@@ -29,12 +29,12 @@ describe('ai tool docx backend', () => {
             sourcePath
           })
           const searchBefore = await harness.invoke<DocxSearchResult>('docx_search', {
-            docId: opened.docId,
+            sourcePath: opened.sourcePath,
             query: 'Hello',
             mode: 'literal'
           })
           const applied = await harness.invoke<DocxApplyOpsResult>('docx_apply_ops', {
-            docId: opened.docId,
+            sourcePath: opened.sourcePath,
             ops: [
               {
                 type: 'replace_text',
@@ -44,7 +44,7 @@ describe('ai tool docx backend', () => {
             ]
           })
           const searchAfter = await harness.invoke<DocxSearchResult>('docx_search', {
-            docId: applied.newDocId,
+            sourcePath: applied.sourcePath,
             query: 'Hi',
             mode: 'literal'
           })
@@ -61,15 +61,15 @@ describe('ai tool docx backend', () => {
       assert: async (result, runtime) => {
         runtime.assertThat(
           result.searchBefore.matches.length === 1 &&
-            result.applied.newDocId !== result.opened.docId &&
+            result.applied.currentVersionRef !== result.opened.currentVersionRef &&
             result.applied.changedBlocks.length === 1 &&
             result.applied.changedBlocks[0]?.action === 'replace_text',
           {
             name: 'minimal-edit-flow-produces-single-targeted-change',
-            message: '最小编辑流程应生成新的 docId，且只命中目标段落对应的 changedBlocks。',
+            message: '最小编辑流程应生成新的版本，且只命中目标段落对应的 changedBlocks。',
             data: {
-              originalDocId: result.opened.docId,
-              newDocId: result.applied.newDocId,
+              originalVersionRef: result.opened.currentVersionRef,
+              currentVersionRef: result.applied.currentVersionRef,
               changedBlocks: result.applied.changedBlocks
             }
           }

@@ -8,7 +8,8 @@ export type DocxOpenResult = {
   ok: boolean
   code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
   summary: string
-  docId: string
+  sourcePath: string
+  currentVersionRef: string
   meta: {
     title: string
     creator: string
@@ -61,7 +62,9 @@ export type DocxApplyOpsResult = {
   ok: boolean
   code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
   summary: string
-  newDocId: string
+  sourcePath: string
+  previousVersionRef: string
+  currentVersionRef: string
   changedBlocks: DocxChangedBlock[]
   warnings: string[]
 }
@@ -70,11 +73,13 @@ export type DocxHistoryResult = {
   ok: boolean
   code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
   summary: string
-  currentDocId: string
-  snapshots: Array<{
-    docId: string
-    parentDocId?: string
+  sourcePath: string
+  currentVersionRef: string
+  versions: Array<{
+    versionRef: string
+    parentVersionRef?: string
     createdAt: number
+    isCurrent: boolean
   }>
 }
 
@@ -82,8 +87,9 @@ export type DocxRollbackResult = {
   ok: boolean
   code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
   summary: string
-  docId: string
-  previousDocId: string
+  sourcePath: string
+  currentVersionRef: string
+  previousVersionRef: string
   stepsApplied: number
 }
 

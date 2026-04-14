@@ -9,7 +9,8 @@ import { runBackendCase } from '../../../harness/backend/run-backend-case'
 
 type DocxOpenResult = {
   ok: boolean
-  docId: string
+  sourcePath: string
+  currentVersionRef: string
 }
 
 type ToolsetItem = {
@@ -150,7 +151,7 @@ describe('ai tool hand backend', () => {
             learnedSkillIds: ['workspace-cli', 'docx-read'],
             toolName: 'docx_search',
             args: {
-              docId: openResult.docId,
+              sourcePath: openResult.sourcePath,
               query: 'Preview generation should be merged with terminal artifact.',
               mode: 'literal'
             },

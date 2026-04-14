@@ -41,16 +41,16 @@ describe('ai tool docx backend', () => {
             sourcePath: 'large-navigation.docx'
           })
           const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
-            docId: opened.docId,
+            sourcePath: opened.sourcePath,
             maxBlocks: 20
           })
           const search = await harness.invoke<DocxSearchResult>('docx_search', {
-            docId: opened.docId,
+            sourcePath: opened.sourcePath,
             query: 'target keyword',
             mode: 'literal'
           })
           const block = await harness.invoke<DocxGetBlockResult>('docx_get_block', {
-            docId: opened.docId,
+            sourcePath: opened.sourcePath,
             blockId: search.matches[0]?.blockId || ''
           })
 

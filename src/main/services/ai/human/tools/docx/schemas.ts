@@ -65,19 +65,19 @@ export const openSchema = z.object({
 })
 
 export const outlineSchema = z.object({
-  docId: z.string().min(1).optional(),
+  sourcePath: z.string().min(1),
   maxBlocks: z.number().int().min(1).max(2000).optional(),
   includeTables: z.boolean().optional(),
   includeCells: z.boolean().optional()
 })
 
 export const getBlockSchema = z.object({
-  docId: z.string().min(1).optional(),
+  sourcePath: z.string().min(1),
   blockId: z.string().min(1)
 })
 
 export const searchSchema = z.object({
-  docId: z.string().min(1).optional(),
+  sourcePath: z.string().min(1),
   query: z.string().min(1),
   mode: docxSearchModeSchema,
   scope: z
@@ -88,17 +88,17 @@ export const searchSchema = z.object({
 })
 
 export const applyOpsSchema = z.object({
-  docId: z.string().min(1).optional(),
+  sourcePath: z.string().min(1),
   ops: z.array(docOpSchema).min(1)
 })
 
 export const historySchema = z.object({
-  docId: z.string().min(1).optional(),
+  sourcePath: z.string().min(1),
   maxDepth: z.number().int().min(1).max(100).optional()
 })
 
 export const rollbackSchema = z.object({
-  docId: z.string().min(1).optional(),
-  targetDocId: z.string().min(1).optional(),
+  sourcePath: z.string().min(1),
+  targetVersionRef: z.string().min(1).optional(),
   steps: z.number().int().min(1).max(50).optional()
 })

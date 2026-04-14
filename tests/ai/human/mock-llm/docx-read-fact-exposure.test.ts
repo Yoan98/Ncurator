@@ -53,7 +53,7 @@ describe('ai human mock-llm backend', () => {
                   },
                   summary: '打开目标文档',
                   reason: '进入 docx 读取链路前需要先 open。',
-                  expectedOutcome: '拿到 docId。'
+                  expectedOutcome: '初始化文档会话并获得当前版本。'
                 })
               },
               () => {
@@ -64,7 +64,7 @@ describe('ai human mock-llm backend', () => {
                 return buildToolDecision({
                   toolName: 'docx_outline',
                   args: {
-                    docId: openResult.docId,
+                    sourcePath: openResult.sourcePath,
                     maxBlocks: 200
                   },
                   summary: '提取文档结构',
@@ -86,7 +86,7 @@ describe('ai human mock-llm backend', () => {
                 return buildToolDecision({
                   toolName: 'docx_search',
                   args: {
-                    docId: openResult.docId,
+                    sourcePath: openResult.sourcePath,
                     query: '反走样',
                     mode: 'literal'
                   },

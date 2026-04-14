@@ -11,19 +11,23 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证未 open 或传入无效 docId 时的前置保护。',
+      description: '验证未 open 或传入无效 sourcePath 时的前置保护。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
         const harness = createDocxToolHarness(runtime)
         try {
           return {
-            outlineWithoutOpen: await harness.invoke<DocxFailureResult>('docx_outline', {}),
+            outlineWithoutOpen: await harness.invoke<DocxFailureResult>('docx_outline', {
+              sourcePath: 'missing.docx'
+            }),
             searchWithoutOpen: await harness.invoke<DocxFailureResult>('docx_search', {
+              sourcePath: 'missing.docx',
               query: 'hello',
               mode: 'literal'
             }),
             applyWithoutOpen: await harness.invoke<DocxFailureResult>('docx_apply_ops', {
+              sourcePath: 'missing.docx',
               ops: [
                 {
                   type: 'replace_text',
@@ -32,14 +36,11 @@ describe('ai tool docx backend', () => {
                 }
               ]
             }),
-            rollbackWithoutOpen: await harness.invoke<DocxFailureResult>('docx_rollback', {}),
-            invalidDocId: await harness.invoke<DocxFailureResult>('docx_search', {
-              docId: 'missing-doc-id',
-              query: 'hello',
-              mode: 'literal'
+            rollbackWithoutOpen: await harness.invoke<DocxFailureResult>('docx_rollback', {
+              sourcePath: 'missing.docx',
+              steps: 1
             }),
-            lastDocId: harness.state.lastDocId,
-            trackedSourceCount: harness.state.sourcePathByDocId.size
+            trackedSourceCount: harness.state.documentSessionBySourcePath.size
           }
         } finally {
           await harness.release()
@@ -52,22 +53,20 @@ describe('ai tool docx backend', () => {
             result.searchWithoutOpen,
             result.applyWithoutOpen,
             result.rollbackWithoutOpen
-          ].every((item) => item.ok === false && item.code === 'invalid_input') &&
-            result.invalidDocId.ok === false,
+          ].every((item) => item.ok === false && item.code === 'invalid_input'),
           {
             name: 'docx-tools-fail-fast-before-open',
-            message: '未 open 或传入无效 docId 时，docx 工具应返回明确失败，不生成新快照。',
+            message: '未 open 时，docx 工具应返回明确失败，不生成新版本。',
             data: result
           }
         )
 
         runtime.assertThat(
-          !result.lastDocId && result.trackedSourceCount === 0,
+          result.trackedSourceCount === 0,
           {
             name: 'docx-precondition-failures-do-not-pollute-runtime-state',
-            message: '前置条件失败后，不应生成新快照，也不应污染当前 run 状态。',
+            message: '前置条件失败后，不应生成新版本，也不应污染当前 run 状态。',
             data: {
-              lastDocId: result.lastDocId,
               trackedSourceCount: result.trackedSourceCount
             }
           }

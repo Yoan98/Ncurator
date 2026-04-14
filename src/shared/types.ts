@@ -611,12 +611,20 @@ export type AiToolCallDiagnostic = {
   kind: AiToolCallDiagnosticKind
   missingArgs?: string[]
 }
+export type AiToolResourceContext = {
+  family: string
+  sourcePath?: string
+  currentVersionRef?: string
+  previousVersionRef?: string
+  effectKind?: string
+}
 export type AiToolCallResult = {
   toolName: string
   ok: boolean
   code: AiTaskResultCode
   data?: JsonValue
   diagnostic?: AiToolCallDiagnostic
+  resourceContext?: AiToolResourceContext
 }
 export type AiLlmIoRecord = {
   callId: string

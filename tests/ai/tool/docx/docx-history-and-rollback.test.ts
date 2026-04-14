@@ -45,7 +45,7 @@ describe('ai tool docx backend', () => {
             sourcePath: 'history-rollback.docx'
           })
           const firstEdit = await harness.invoke<DocxApplyOpsResult>('docx_apply_ops', {
-            docId: opened.docId,
+            sourcePath: opened.sourcePath,
             ops: [
               {
                 type: 'replace_text',
@@ -55,7 +55,7 @@ describe('ai tool docx backend', () => {
             ]
           })
           const secondEdit = await harness.invoke<DocxApplyOpsResult>('docx_apply_ops', {
-            docId: firstEdit.newDocId,
+            sourcePath: firstEdit.sourcePath,
             ops: [
               {
                 type: 'replace_text',
@@ -65,21 +65,21 @@ describe('ai tool docx backend', () => {
             ]
           })
           const history = await harness.invoke<DocxHistoryResult>('docx_get_history', {
-            docId: secondEdit.newDocId,
+            sourcePath: secondEdit.sourcePath,
             maxDepth: 10
           })
           const rollbackBySteps = await harness.invoke<DocxRollbackResult>('docx_rollback', {
-            docId: secondEdit.newDocId,
+            sourcePath: secondEdit.sourcePath,
             steps: 1
           })
           const searchAfterStepRollback = await harness.invoke<DocxSearchResult>('docx_search', {
-            docId: rollbackBySteps.docId,
+            sourcePath: rollbackBySteps.sourcePath,
             query: 'Keep this line, updated.',
             mode: 'literal'
           })
           const rollbackByTarget = await harness.invoke<DocxRollbackResult>('docx_rollback', {
-            docId: rollbackBySteps.docId,
-            targetDocId: opened.docId
+            sourcePath: rollbackBySteps.sourcePath,
+            targetVersionRef: opened.currentVersionRef
           })
           const sourceBufferAfter = await fs.readFile(sourcePath)
 
@@ -100,24 +100,24 @@ describe('ai tool docx backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.history.snapshots.length === 3 &&
-            result.history.snapshots[0]?.docId === result.secondEdit.newDocId &&
-            result.history.snapshots[1]?.docId === result.firstEdit.newDocId &&
-            result.history.snapshots[2]?.docId === result.opened.docId,
+          result.history.versions.length === 3 &&
+            result.history.versions[0]?.versionRef === result.secondEdit.currentVersionRef &&
+            result.history.versions[1]?.versionRef === result.firstEdit.currentVersionRef &&
+            result.history.versions[2]?.versionRef === result.opened.currentVersionRef,
           {
             name: 'snapshot-history-tracks-current-and-ancestors',
-            message: 'docx_get_history 应能追溯到多轮编辑形成的祖先快照链。',
-            data: result.history.snapshots
+            message: 'docx_get_history 应能追溯到多轮编辑形成的祖先版本链。',
+            data: result.history.versions
           }
         )
 
         runtime.assertThat(
-          result.rollbackBySteps.docId === result.firstEdit.newDocId &&
+          result.rollbackBySteps.currentVersionRef === result.firstEdit.currentVersionRef &&
             result.searchAfterStepRollback.matches.length === 0 &&
-            result.rollbackByTarget.docId === result.opened.docId,
+            result.rollbackByTarget.currentVersionRef === result.opened.currentVersionRef,
           {
             name: 'rollback-restores-target-ancestor-without-breaking-structure',
-            message: '按 steps 与按 targetDocId 回滚后，应回到目标祖先快照且结构保持有效。',
+            message: '按 steps 与按 targetVersionRef 回滚后，应回到目标祖先版本且结构保持有效。',
             data: {
               rollbackBySteps: result.rollbackBySteps,
               rollbackByTarget: result.rollbackByTarget,

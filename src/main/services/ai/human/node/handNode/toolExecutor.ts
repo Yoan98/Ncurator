@@ -101,7 +101,8 @@ const DIAGNOSTIC_FIELD_CANDIDATES = [
   'blockId',
   'anchorBlockId',
   'content',
-  'docId',
+  'versionRef',
+  'targetVersionRef',
   'sourcePath',
   'outPath',
   'command',
@@ -197,6 +198,10 @@ const normalizeToolCallResult = (
       ok,
       code,
       data: payload,
+      resourceContext: (() => {
+        const candidate = payload.resourceContext
+        return isJsonObject(candidate) ? candidate : undefined
+      })(),
       diagnostic: ok
         ? undefined
         : inferDiagnosticFromFailure({

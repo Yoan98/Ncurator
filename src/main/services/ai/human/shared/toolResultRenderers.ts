@@ -140,7 +140,47 @@ const renderObjectPreview = (obj: JsonObject): string | undefined => {
   return undefined
 }
 
+const renderResourceContextPreview = (result: ToolCallResult): string | undefined => {
+  const resourceContext = result.resourceContext
+  if (!resourceContext || resourceContext.family !== 'docx' || !resourceContext.sourcePath) {
+    return undefined
+  }
+
+  const parts = [`在 ${resourceContext.sourcePath} 上执行`]
+  if (resourceContext.effectKind === 'opened') {
+    parts[0] = `初始化文档会话 ${resourceContext.sourcePath}`
+  } else if (resourceContext.effectKind === 'rolled_back') {
+    parts[0] = `在 ${resourceContext.sourcePath} 上回退版本`
+  } else if (resourceContext.effectKind === 'history') {
+    parts[0] = `查看 ${resourceContext.sourcePath} 的版本历史`
+  } else if (resourceContext.effectKind === 'mutated') {
+    parts[0] = `在 ${resourceContext.sourcePath} 上应用编辑`
+  } else if (resourceContext.effectKind === 'searched') {
+    parts[0] = `在 ${resourceContext.sourcePath} 上搜索`
+  } else if (resourceContext.effectKind === 'read') {
+    parts[0] = `读取 ${resourceContext.sourcePath}`
+  }
+
+  if (resourceContext.previousVersionRef) {
+    parts.push(`上一版本 ${resourceContext.previousVersionRef}`)
+  }
+  if (resourceContext.currentVersionRef) {
+    parts.push(`当前版本 ${resourceContext.currentVersionRef}`)
+  }
+  return parts.join('；')
+}
+
 export const renderToolResultDataPreview = (result: ToolCallResult): string | undefined => {
+  const resourceContextPreview = renderResourceContextPreview(result)
+  if (resourceContextPreview) {
+    const value = result.data
+    const objectPreview = isJsonObject(value) ? renderObjectPreview(value) : undefined
+    if (objectPreview && objectPreview !== resourceContextPreview) {
+      return `${resourceContextPreview}；${objectPreview}`
+    }
+    return resourceContextPreview
+  }
+
   const value = result.data
   if (typeof value === 'string') {
     const text = value.trim()

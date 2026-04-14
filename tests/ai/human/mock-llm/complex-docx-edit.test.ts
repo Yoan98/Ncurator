@@ -53,7 +53,7 @@ describe('ai human mock-llm backend', () => {
                   },
                   summary: '打开原始文档',
                   reason: '必须先打开文档，才能进入编辑。',
-                  expectedOutcome: '拿到 docId。'
+                  expectedOutcome: '初始化文档会话并获得当前版本。'
                 })
               },
               () => {
@@ -64,7 +64,7 @@ describe('ai human mock-llm backend', () => {
                 return buildToolDecision({
                   toolName: 'docx_apply_ops',
                   args: {
-                    docId: openResult.docId,
+                    sourcePath: openResult.sourcePath,
                     ops: [
                       {
                         type: 'replace_text',
@@ -75,7 +75,7 @@ describe('ai human mock-llm backend', () => {
                   },
                   summary: '在真实 docx 上执行编辑',
                   reason: '验证真实写工具链路。',
-                  expectedOutcome: '生成 newDocId 和 changedBlocks。'
+                  expectedOutcome: '生成新版本并返回 changedBlocks。'
                 })
               },
               () => {
@@ -86,7 +86,7 @@ describe('ai human mock-llm backend', () => {
                 return buildToolDecision({
                   toolName: 'docx_search',
                   args: {
-                    docId: applyResult.newDocId,
+                    sourcePath: applyResult.sourcePath,
                     query: 'Cycle 3 cumulative draft content.',
                     mode: 'literal'
                   },

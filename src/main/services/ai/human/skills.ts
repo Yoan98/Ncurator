@@ -46,7 +46,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     summary: '打开 docx、定位结构、检索内容、查看历史。',
     whenToUse: '当任务需要阅读、定位或理解 docx 内容时使用。',
     detail:
-      '它提供 docx 的结构概览、block 级精读、全文或局部 block 检索，以及 run 内快照历史查看。outline 返回稳定 block 摘要且可能截断；get_block 返回指定 block 的完整内容；search 默认检索当前文档全部 block，也可用 scope.blockIds 缩小范围。它不负责真正写入文档。',
+      '它提供 docx 文档会话初始化、结构概览、block 级精读、全文或局部 block 检索，以及 run 内版本历史查看。它不负责真正写入文档。',
     toolNames: [
       'docx_open',
       'docx_outline',
@@ -65,7 +65,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     summary: '修改 docx 内容，或基于快照回滚到上一版。',
     whenToUse: '当你已经明确知道要改哪里、改成什么，或需要回滚当前草稿快照时使用。',
     detail:
-      '它提供结构化编辑与 run 内快照回滚。replace_text 只替换现有文本；insert_before / insert_after 会新增 block 级内容；replace_block 会整块替换；update_table_cell 只更新已有表格单元格。它不负责确认副本生成、差异样式或最终落盘。',
+      '它提供结构化编辑与 run 内版本回滚。它不负责确认副本生成、差异样式或最终落盘。',
     toolNames: ['docx_apply_ops', 'docx_rollback']
   },
   'kb-document-discovery': {

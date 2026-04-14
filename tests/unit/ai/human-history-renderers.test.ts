@@ -176,8 +176,17 @@ describe('ai unit human history renderers', () => {
                 toolName: 'docx_apply_ops',
                 ok: true,
                 code: 'ok',
+                resourceContext: {
+                  family: 'docx',
+                  sourcePath: 'weekly-risk.docx',
+                  previousVersionRef: 'v1',
+                  currentVersionRef: 'v2',
+                  effectKind: 'mutated'
+                },
                 data: {
-                  newDocId: 'doc-2',
+                  sourcePath: 'weekly-risk.docx',
+                  previousVersionRef: 'v1',
+                  currentVersionRef: 'v2',
                   summary: 'ops applied (1 changes)'
                 }
               }

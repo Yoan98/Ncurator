@@ -173,9 +173,28 @@ export type DocxSnapshotLineageEntry = {
   createdAt: number
 }
 
+export type DocxVersionEntry = {
+  versionRef: string
+  docId: string
+  parentVersionRef?: string
+  createdAt: number
+}
+
+export type DocxDocumentSession = {
+  sourcePath: string
+  activeDocId: string
+  activeVersionRef: string
+  nextVersionNumber: number
+  meta: DocxOpenMeta
+  stats: DocxOpenStats
+  docIdByVersionRef: Map<string, string>
+  versionRefByDocId: Map<string, string>
+}
+
 export type DocxCapabilityToolsRuntimeState = {
-  lastDocId?: string
   sourcePathByDocId: Map<string, string>
   semanticIndexByDocId: Map<string, SemanticDocIndex>
   snapshotEntryByDocId: Map<string, DocxSnapshotLineageEntry>
+  versionEntryByDocId: Map<string, DocxVersionEntry>
+  documentSessionBySourcePath: Map<string, DocxDocumentSession>
 }

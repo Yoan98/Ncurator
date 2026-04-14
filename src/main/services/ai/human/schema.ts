@@ -66,12 +66,21 @@ export const toolCallDiagnosticSchema = z.object({
   missingArgs: z.array(z.string().min(1)).optional()
 })
 
+export const toolResourceContextSchema = z.object({
+  family: z.string().min(1),
+  sourcePath: z.string().min(1).optional(),
+  currentVersionRef: z.string().min(1).optional(),
+  previousVersionRef: z.string().min(1).optional(),
+  effectKind: z.string().min(1).optional()
+})
+
 export const toolCallResultSchema = z.object({
   toolName: z.string().min(1),
   ok: z.boolean(),
   code: toolCallResultCodeSchema,
   data: jsonValueSchema.optional(),
-  diagnostic: toolCallDiagnosticSchema.optional()
+  diagnostic: toolCallDiagnosticSchema.optional(),
+  resourceContext: toolResourceContextSchema.optional()
 })
 
 export const toolUsePlanSchema = z.object({
@@ -135,7 +144,8 @@ export const humanHistoryToolResultSchema = z.object({
   summary: z.string().min(1),
   dataPreview: z.string().optional(),
   diagnosticText: z.string().optional(),
-  artifactRefs: z.array(aiArtifactRefSchema).optional()
+  artifactRefs: z.array(aiArtifactRefSchema).optional(),
+  resourceContext: toolResourceContextSchema.optional()
 })
 
 export const humanStableMemorySchema = z.object({

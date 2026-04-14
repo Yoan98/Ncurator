@@ -8,7 +8,8 @@ import { runBackendCase } from '../../../harness/backend/run-backend-case'
 
 type DocxOpenResult = {
   ok: boolean
-  docId: string
+  sourcePath: string
+  currentVersionRef: string
 }
 
 type ToolsetItem = {
@@ -108,7 +109,7 @@ describe('ai tool hand backend', () => {
                     {
                       toolName: 'docx_apply_ops',
                       args: {
-                        docId: opened.docId,
+                        sourcePath: opened.sourcePath,
                         ops: [
                           {
                             type: 'replace_text',
@@ -126,6 +127,7 @@ describe('ai tool hand backend', () => {
                     {
                       toolName: 'docx_search',
                       args: {
+                        sourcePath: opened.sourcePath,
                         query: '待跟进',
                         mode: 'literal'
                       }

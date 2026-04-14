@@ -35,12 +35,12 @@ describe('ai tool docx backend', () => {
             sourcePath: 'unicode-normalization.docx'
           })
           const literal = await harness.invoke<DocxSearchResult>('docx_search', {
-            docId: opened.docId,
+            sourcePath: opened.sourcePath,
             query: '反走样',
             mode: 'literal'
           })
           const regex = await harness.invoke<DocxSearchResult>('docx_search', {
-            docId: opened.docId,
+            sourcePath: opened.sourcePath,
             query: '反走样',
             mode: 'regex'
           })

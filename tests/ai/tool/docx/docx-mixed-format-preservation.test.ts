@@ -91,7 +91,7 @@ describe('ai tool docx backend', () => {
             sourcePath: 'mixed-format.docx'
           })
           const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
-            docId: opened.docId,
+            sourcePath: opened.sourcePath,
             includeTables: true,
             includeCells: true,
             maxBlocks: 50
@@ -108,7 +108,7 @@ describe('ai tool docx backend', () => {
           const ownerCellBlockId = findTableCellBlockIdByText(outline.blocks, 'Owner: Alice')
 
           const applied = await harness.invoke<DocxApplyOpsResult>('docx_apply_ops', {
-            docId: opened.docId,
+            sourcePath: opened.sourcePath,
             ops: [
               {
                 type: 'replace_block',
@@ -134,11 +134,11 @@ describe('ai tool docx backend', () => {
             ]
           })
           const preservedParagraph = await harness.invoke<DocxGetBlockResult>('docx_get_block', {
-            docId: applied.newDocId,
+            sourcePath: applied.sourcePath,
             blockId: mixedParagraphBlockId
           })
           const updatedCell = await harness.invoke<DocxGetBlockResult>('docx_get_block', {
-            docId: applied.newDocId,
+            sourcePath: applied.sourcePath,
             blockId: ownerCellBlockId
           })
 

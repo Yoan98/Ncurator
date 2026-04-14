@@ -21,7 +21,7 @@ const createDocxReadExecutionMeta = () =>
   createStaticExecutionMetaResolver({
     mutability: 'read_only',
     parallelSafe: true,
-    getResourceKey: (args) => readStringArg(args, 'docId'),
+    getResourceKey: (args) => readStringArg(args, 'sourcePath'),
     defaultResourceKey: 'docx'
   })
 
@@ -49,13 +49,13 @@ export const DOCX_OPEN_TOOL_SPEC = {
   name: 'docx_open',
   familyId: 'docx',
   requiresWorkspace: true,
-  description: 'Open a workspace-bound docx file and register a docId for subsequent operations.',
+  description: 'Initialize or reuse a docx session for a workspace-bound sourcePath and return the current version.',
   skillIds: ['docx-read'],
   schema: openSchema,
   promptSpec: {
     name: 'docx_open',
-    purpose: '打开 workspace 内的 docx 文件，并注册后续操作使用的 docId。',
-    whenToUse: '任何 docx_* 工具链的第一步；切换到另一份文档时也必须重新 open。',
+    purpose: '初始化或复用当前 run 下某份 docx 的文档会话，并返回当前版本。',
+    whenToUse: '首次把某份 docx 纳入当前 run，或需要确认这份文档当前版本时使用。',
     preconditions: ['必须存在 workspace 绑定。', 'sourcePath 必须是 workspace 内的 .docx 路径。'],
     args: [
       {
@@ -67,9 +67,9 @@ export const DOCX_OPEN_TOOL_SPEC = {
     ],
     returns: [
       {
-        name: 'docId',
+        name: 'currentVersionRef',
         type: 'string',
-        description: '后续读取、编辑或回滚都引用这个快照 ID。'
+        description: '当前 run 下该文档当前活动版本的引用。'
       },
       {
         name: 'meta',
@@ -84,7 +84,8 @@ export const DOCX_OPEN_TOOL_SPEC = {
     ],
     commonMistakes: [
       '不要在 open 之前调用其他 docx_* 工具。',
-      '不要传空路径或非 .docx 文件。'
+      '不要传空路径或非 .docx 文件。',
+      'docx_open 初始化的是当前 run 下的文档会话，不会修改原文件。'
     ]
   },
   resolveExecutionMeta: createDocxMutatingExecutionMeta({
@@ -98,21 +99,20 @@ export const DOCX_OUTLINE_TOOL_SPEC = {
   name: 'docx_outline',
   familyId: 'docx',
   requiresWorkspace: true,
-  description:
-    'Extract a deterministic block outline for a previously opened doc (paragraph/table/table_cell).',
+  description: 'Extract a deterministic block outline for an opened docx document selected by sourcePath.',
   skillIds: ['docx-read'],
   schema: outlineSchema,
   promptSpec: {
     name: 'docx_outline',
     purpose: '提取稳定的 block outline，帮助定位标题、段落、表格和 table cell。',
     whenToUse: '需要先看结构、拿稳定 blockId、或搜索命中不够精确时使用。',
-    preconditions: ['必须先 open 文档，或提供当前 run 中有效的 docId。'],
+    preconditions: ['必须先 open 目标 sourcePath 对应的文档。'],
     args: [
       {
-        name: 'docId',
+        name: 'sourcePath',
         type: 'string',
-        required: false,
-        description: '目标快照 ID；省略时默认使用最近一次 docId。'
+        required: true,
+        description: '目标 docx 的 workspace 路径。'
       },
       {
         name: 'maxBlocks',
@@ -156,20 +156,20 @@ export const DOCX_GET_BLOCK_TOOL_SPEC = {
   name: 'docx_get_block',
   familyId: 'docx',
   requiresWorkspace: true,
-  description: 'Get one block by blockId with detailed structure.',
+  description: 'Get one block by blockId with detailed structure from the current version of a docx sourcePath.',
   skillIds: ['docx-read'],
   schema: getBlockSchema,
   promptSpec: {
     name: 'docx_get_block',
     purpose: '读取单个 block 的详细结构。',
     whenToUse: '已经拿到 blockId，且需要看完整段落 run 或表格 cell 内容时使用。',
-    preconditions: ['必须先 open 文档，或提供当前 run 中有效的 docId。', '必须提供 blockId。'],
+    preconditions: ['必须先 open 目标 sourcePath 对应的文档。', '必须提供 blockId。'],
     args: [
       {
-        name: 'docId',
+        name: 'sourcePath',
         type: 'string',
-        required: false,
-        description: '目标快照 ID；省略时默认使用最近一次 docId。'
+        required: true,
+        description: '目标 docx 的 workspace 路径。'
       },
       {
         name: 'blockId',
@@ -195,20 +195,20 @@ export const DOCX_SEARCH_TOOL_SPEC = {
   familyId: 'docx',
   requiresWorkspace: true,
   description:
-    'Search blocks in a doc using literal/regex mode, or semantic block retrieval with cached embeddings.',
+    'Search blocks in the current version of a doc selected by sourcePath using literal/regex/semantic modes.',
   skillIds: ['docx-read'],
   schema: searchSchema,
   promptSpec: {
     name: 'docx_search',
     purpose: '按 literal / regex / semantic 检索 docx block 文本。',
     whenToUse: '需要定位目标段落、验证改写结果、或缩小 apply_ops 范围时使用。',
-    preconditions: ['必须先 open 文档，或提供当前 run 中有效的 docId。', 'query 不能为空。'],
+    preconditions: ['必须先 open 目标 sourcePath 对应的文档。', 'query 不能为空。'],
     args: [
       {
-        name: 'docId',
+        name: 'sourcePath',
         type: 'string',
-        required: false,
-        description: '目标快照 ID；省略时默认使用最近一次 docId。'
+        required: true,
+        description: '目标 docx 的 workspace 路径。'
       },
       {
         name: 'query',
@@ -250,20 +250,20 @@ export const DOCX_GET_HISTORY_TOOL_SPEC = {
   name: 'docx_get_history',
   familyId: 'docx',
   requiresWorkspace: true,
-  description: 'Inspect the immutable docx snapshot lineage for the current run.',
+  description: 'Inspect the current version lineage for a docx document in the current run.',
   skillIds: ['docx-read'],
   schema: historySchema,
   promptSpec: {
     name: 'docx_get_history',
-    purpose: '查看当前 run 内的 docx 快照链路。',
+    purpose: '查看当前 run 内某份 docx 的当前版本链路。',
     whenToUse: '需要确认编辑历史、准备 rollback、或解释当前草稿来源时使用。',
-    preconditions: ['必须先 open 文档，或提供当前 run 中有效的 docId。'],
+    preconditions: ['必须先 open 目标 sourcePath 对应的文档。'],
     args: [
       {
-        name: 'docId',
+        name: 'sourcePath',
         type: 'string',
-        required: false,
-        description: '目标快照 ID；省略时默认使用最近一次 docId。'
+        required: true,
+        description: '目标 docx 的 workspace 路径。'
       },
       {
         name: 'maxDepth',
@@ -274,9 +274,9 @@ export const DOCX_GET_HISTORY_TOOL_SPEC = {
     ],
     returns: [
       {
-        name: 'snapshots',
-        type: 'Array<{ docId: string; parentDocId?: string; createdAt: number }>',
-        description: '当前快照到祖先快照的历史链路。'
+        name: 'versions',
+        type: 'Array<{ versionRef: string; parentVersionRef?: string; createdAt: number; isCurrent: boolean }>',
+        description: '当前版本到祖先版本的历史链路。'
       }
     ]
   },
@@ -288,20 +288,20 @@ export const DOCX_APPLY_OPS_TOOL_SPEC = {
   familyId: 'docx',
   requiresWorkspace: true,
   description:
-    'Apply structured docx operations and return a new immutable docId snapshot with changed blocks.',
+    'Apply structured docx operations to the current version selected by sourcePath and advance the version chain.',
   skillIds: ['docx-write'],
   schema: applyOpsSchema,
   promptSpec: {
     name: 'docx_apply_ops',
-    purpose: '执行结构化 docx 编辑操作，并返回新的不可变 docId 快照。',
+    purpose: '执行结构化 docx 编辑操作，并返回新的当前版本。',
     whenToUse: '已经确定要替换、插入、删除或更新表格内容时使用。',
-    preconditions: ['必须先 open 文档，或提供当前 run 中有效的 docId。', 'ops 至少要有 1 条。'],
+    preconditions: ['必须先 open 目标 sourcePath 对应的文档。', 'ops 至少要有 1 条。'],
     args: [
       {
-        name: 'docId',
+        name: 'sourcePath',
         type: 'string',
-        required: false,
-        description: '目标快照 ID；省略时默认使用最近一次 docId。'
+        required: true,
+        description: '目标 docx 的 workspace 路径。'
       },
       {
         name: 'ops',
@@ -313,9 +313,9 @@ export const DOCX_APPLY_OPS_TOOL_SPEC = {
     ],
     returns: [
       {
-        name: 'newDocId',
+        name: 'currentVersionRef',
         type: 'string',
-        description: '编辑后的新快照 ID。后续读取、继续编辑或回滚都基于它继续。'
+        description: '编辑后的当前版本引用。后续读取、继续编辑或回滚都基于它继续。'
       },
       {
         name: 'changedBlocks',
@@ -330,7 +330,7 @@ export const DOCX_APPLY_OPS_TOOL_SPEC = {
     ]
   },
   resolveExecutionMeta: createDocxMutatingExecutionMeta({
-    getResourceKey: (args) => readStringArg(args, 'docId')
+    getResourceKey: (args) => readStringArg(args, 'sourcePath')
   }),
   workerAction: 'apply_ops',
   activityActionType: 'docx_apply_ops'
@@ -341,44 +341,44 @@ export const DOCX_ROLLBACK_TOOL_SPEC = {
   familyId: 'docx',
   requiresWorkspace: true,
   description:
-    'Move back to an ancestor docx snapshot in the current run without writing files.',
+    'Move back to an ancestor version of a docx document in the current run without writing files.',
   skillIds: ['docx-write'],
   schema: rollbackSchema,
   promptSpec: {
     name: 'docx_rollback',
-    purpose: '回退到当前 run 内的祖先草稿快照，不会写回文件系统。',
+    purpose: '回退到当前 run 内的祖先版本，不会写回文件系统。',
     whenToUse: '草稿改坏了、需要回看上一个版本、或用户要求撤销时使用。',
-    preconditions: ['必须先 open 文档，或提供当前 run 中有效的 docId。'],
+    preconditions: ['必须先 open 目标 sourcePath 对应的文档。'],
     args: [
       {
-        name: 'docId',
+        name: 'sourcePath',
         type: 'string',
-        required: false,
-        description: '起始快照 ID；省略时默认使用最近一次 docId。'
+        required: true,
+        description: '目标 docx 的 workspace 路径。'
       },
       {
-        name: 'targetDocId',
+        name: 'targetVersionRef',
         type: 'string',
         required: false,
-        description: '直接回退到指定祖先快照。'
+        description: '直接回退到指定祖先版本。'
       },
       {
         name: 'steps',
         type: 'number',
         required: false,
-        description: '从当前快照向前回退多少步。targetDocId 与 steps 至少二选一。'
+        description: '从当前版本向前回退多少步。targetVersionRef 与 steps 至少二选一。'
       }
     ],
     returns: [
       {
-        name: 'docId',
+        name: 'currentVersionRef',
         type: 'string',
-        description: '回退后的当前草稿快照 ID。'
+        description: '回退后的当前版本引用。'
       }
     ]
   },
   resolveExecutionMeta: createDocxMutatingExecutionMeta({
-    getResourceKey: (args) => readStringArg(args, 'docId') || readStringArg(args, 'targetDocId')
+    getResourceKey: (args) => readStringArg(args, 'sourcePath')
   }),
   activityActionType: 'docx_rollback'
 } satisfies DocxToolSpec<z.infer<typeof rollbackSchema>, 'docx_rollback', 'docx-write'>

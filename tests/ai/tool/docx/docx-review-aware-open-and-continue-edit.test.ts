@@ -64,17 +64,17 @@ describe('ai tool docx backend', () => {
             sourcePath: 'review-aware-source.docx'
           })
           const searchDraft = await harness.invoke<DocxSearchResult>('docx_search', {
-            docId: opened.docId,
+            sourcePath: opened.sourcePath,
             query: 'Cycle 2 draft content.',
             mode: 'literal'
           })
           const searchSourceOnly = await harness.invoke<DocxSearchResult>('docx_search', {
-            docId: opened.docId,
+            sourcePath: opened.sourcePath,
             query: 'Cycle 1 draft content.',
             mode: 'literal'
           })
           const applied = await harness.invoke<DocxApplyOpsResult>('docx_apply_ops', {
-            docId: opened.docId,
+            sourcePath: opened.sourcePath,
             ops: [
               {
                 type: 'replace_text',
@@ -84,7 +84,7 @@ describe('ai tool docx backend', () => {
             ]
           })
           const searchAfter = await harness.invoke<DocxSearchResult>('docx_search', {
-            docId: applied.newDocId,
+            sourcePath: applied.sourcePath,
             query: 'Cycle 3 cumulative draft content.',
             mode: 'literal'
           })
@@ -94,7 +94,8 @@ describe('ai tool docx backend', () => {
             searchSourceOnly,
             applied,
             searchAfter,
-            trackedSourcePath: harness.state.sourcePathByDocId.get(applied.newDocId) || ''
+            trackedSourcePath:
+              harness.state.documentSessionBySourcePath.get(applied.sourcePath)?.sourcePath || ''
           }
         } finally {
           await harness.release()

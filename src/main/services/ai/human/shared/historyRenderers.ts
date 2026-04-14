@@ -86,6 +86,13 @@ ${record.execution.watchHint ? `- 收敛提示：${renderWatchHintForBrain(recor
         .map((result) =>
           [
             `- \`${result.toolName}\`：${result.summary}`,
+            result.resourceContext
+              ? `上下文：sourcePath=${result.resourceContext.sourcePath || 'none'}；currentVersion=${result.resourceContext.currentVersionRef || 'none'}${
+                  result.resourceContext.previousVersionRef
+                    ? `；previousVersion=${result.resourceContext.previousVersionRef}`
+                    : ''
+                }`
+              : '',
             result.dataPreview ? `结果：${result.dataPreview}` : '',
             result.diagnosticText ? `诊断：${result.diagnosticText}` : ''
           ]

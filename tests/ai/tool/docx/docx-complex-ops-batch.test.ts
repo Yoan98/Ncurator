@@ -66,7 +66,7 @@ describe('ai tool docx backend', () => {
             sourcePath: 'complex-ops.docx'
           })
           const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
-            docId: opened.docId,
+            sourcePath: opened.sourcePath,
             maxBlocks: 50,
             includeTables: true,
             includeCells: true
@@ -88,7 +88,7 @@ describe('ai tool docx backend', () => {
           const ownerCellBlockId = findTableCellBlockIdByText(outline.blocks, 'Alice')
 
           const applied = await harness.invoke<DocxApplyOpsResult>('docx_apply_ops', {
-            docId: opened.docId,
+            sourcePath: opened.sourcePath,
             ops: [
               {
                 type: 'replace_text',
@@ -140,12 +140,12 @@ describe('ai tool docx backend', () => {
             ]
           })
           const search = await harness.invoke<DocxSearchResult>('docx_search', {
-            docId: applied.newDocId,
+            sourcePath: applied.sourcePath,
             query: 'Inserted after anchor.',
             mode: 'literal'
           })
           const finalOutline = await harness.invoke<DocxOutlineResult>('docx_outline', {
-            docId: applied.newDocId,
+            sourcePath: applied.sourcePath,
             maxBlocks: 80,
             includeTables: true,
             includeCells: true
@@ -179,7 +179,7 @@ describe('ai tool docx backend', () => {
             name: 'complex-ops-batch-covers-all-op-types',
             message: '复杂编辑 case 应覆盖六类 op，并产出新的快照摘要。',
             data: {
-              newDocId: result.applied.newDocId,
+              currentVersionRef: result.applied.currentVersionRef,
               changedActions
             }
           }

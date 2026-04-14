@@ -25,11 +25,10 @@ const renderLearnedToolSpecLine = (spec: ToolPromptSpec): string => {
     .filter((arg) => arg.required)
     .map((arg) => `${arg.name}:${arg.type}`)
     .join(', ')
-  const example = spec.examples?.[0]
-    ? `示例目标=${spec.examples[0].goal}；示例参数键=[${Object.keys(spec.examples[0].args).join(', ') || 'none'}]`
-    : '示例=none'
+  const preconditions = spec.preconditions?.join(' / ') || 'none'
+  const returns = spec.returns.map((item) => item.name).join(', ') || 'none'
 
-  return `- 工具 ${spec.name}：用途=${spec.purpose}；必填参数=[${requiredArgs || 'none'}]；${example}`
+  return `- 工具 ${spec.name}：用途=${spec.purpose}；前置条件=${preconditions}；必填参数=[${requiredArgs || 'none'}]；核心返回=[${returns}]`
 }
 
 const renderAvailableSkillsSection = (state: HumanState): string => {

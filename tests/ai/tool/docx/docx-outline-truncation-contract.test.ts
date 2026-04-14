@@ -34,7 +34,7 @@ describe('ai tool docx backend', () => {
             sourcePath: 'outline-truncation.docx'
           })
           const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
-            docId: opened.docId,
+            sourcePath: opened.sourcePath,
             maxBlocks: 10
           })
           const outlineEvent = filterAiRunEventsByType(runtime.eventCollector.snapshot(), 'tool_call_result')
