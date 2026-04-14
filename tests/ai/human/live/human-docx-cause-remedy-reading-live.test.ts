@@ -107,6 +107,8 @@ describe('ai human live backend', () => {
               ) &&
               !toolNames.includes('docx_apply_ops') &&
               !toolNames.includes('docx_save') &&
+              !toolNames.includes('docx_render_preview') &&
+              !toolNames.includes('docx_validate') &&
               /(过拟合|过度拟合)/.test(deliveryText) &&
               /(记住过多训练数据中的特征值|训练时间过久)/.test(deliveryText) &&
               hasOverfittingRemedyResponse(deliveryText) &&

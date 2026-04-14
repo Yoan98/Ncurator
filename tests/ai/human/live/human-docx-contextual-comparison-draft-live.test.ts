@@ -57,7 +57,7 @@ describe('ai human live backend', () => {
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
-        description: '验证 live 模式下 human 会在图形学相关位置后补写说明和对照表，并生成预览。',
+        description: '验证 live 模式下 human 会在图形学相关位置后补写说明和对照表，并生成 confirm copy。',
         fixtures: DOCX_CROSS_FILE_FIXTURE_PATHS,
         runMode: 'single',
         runtimeModelName: hasLiveLlmConfigInEnv('primary')
@@ -119,8 +119,10 @@ describe('ai human live backend', () => {
               (artifact) =>
                 artifact.kind === 'file' &&
                 artifact.capability === 'docx' &&
-                (artifact.artifactRole === 'preview' || artifact.artifactRole === 'draft')
+                artifact.artifactRole === 'draft'
             ) || []
+          const hasDraftReviewArtifact =
+            result.output?.artifacts?.some((artifact) => artifact.kind === 'draft_review') || false
           const unchangedFixtures = await Promise.all(
             result.originalFixtureBytes.map(async (fixture) =>
               await hasUnchangedFileBytes(fixture.workspacePath, fixture.bytes)
@@ -134,15 +136,17 @@ describe('ai human live backend', () => {
               ) &&
               hasTargetReadBeforeApply(events) &&
               toolNames.includes('docx_apply_ops') &&
-              toolNames.includes('docx_render_preview') &&
+              !toolNames.includes('docx_render_preview') &&
               !toolNames.includes('docx_save') &&
+              !toolNames.includes('docx_validate') &&
               docxArtifacts.length > 0 &&
+              hasDraftReviewArtifact &&
               changedContentKinds.includes('paragraph') &&
               changedContentKinds.includes('table') &&
               unchangedFixtures.every(Boolean),
             {
-              name: 'human-live-contextual-docx-write-produces-preview-without-overwriting-source',
-              message: 'live human 定位补写 case 应在读取定位后补写说明和表格，并仅生成预览稿。',
+              name: 'human-live-contextual-docx-write-produces-confirm-copy-without-overwriting-source',
+              message: 'live human 定位补写 case 应在读取定位后补写说明和表格，并仅生成 confirm copy。',
               data: {
                 openedSourcePaths,
                 toolNames,

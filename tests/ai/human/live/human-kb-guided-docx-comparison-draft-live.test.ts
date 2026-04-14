@@ -26,7 +26,7 @@ describe('ai human live backend', () => {
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
-        description: '验证 live 模式下 human 会先用 KB 缩圈定位课件，再继续对目标 docx 做预览型补写。',
+        description: '验证 live 模式下 human 会先用 KB 缩圈定位课件，再继续对目标 docx 做 confirm-copy 补写。',
         fixtures: [],
         runMode: 'single',
         runtimeModelName: hasLiveLlmConfigInEnv('primary')
@@ -78,8 +78,10 @@ describe('ai human live backend', () => {
               (artifact) =>
                 artifact.kind === 'file' &&
                 artifact.capability === 'docx' &&
-                (artifact.artifactRole === 'preview' || artifact.artifactRole === 'draft')
+                artifact.artifactRole === 'draft'
             ) || []
+          const hasDraftReviewArtifact =
+            result.output?.artifacts?.some((artifact) => artifact.kind === 'draft_review') || false
           const deepLearningUnchanged = await hasUnchangedFileBytes(
             result.workspaceSeed.deepLearningPath,
             result.workspaceSeed.originalDeepLearningBytes
@@ -94,9 +96,11 @@ describe('ai human live backend', () => {
             result.output?.status === 'completed' &&
               hasKbToolCall(events) &&
               toolNames.includes('docx_apply_ops') &&
-              toolNames.includes('docx_render_preview') &&
+              !toolNames.includes('docx_render_preview') &&
               !toolNames.includes('docx_save') &&
+              !toolNames.includes('docx_validate') &&
               docxArtifacts.length > 0 &&
+              hasDraftReviewArtifact &&
               changedContentKinds.includes('paragraph') &&
               changedContentKinds.includes('table') &&
               openedSourcePaths.some(
@@ -110,7 +114,7 @@ describe('ai human live backend', () => {
               graphicsUnchanged,
             {
               name: 'human-live-kb-guided-docx-write-uses-kb-and-preserves-source-files',
-              message: 'live human KB-guided 写 case 应先触发 KB 缩圈，再对目标 docx 生成预览稿且不覆盖原文件。',
+              message: 'live human KB-guided 写 case 应先触发 KB 缩圈，再对目标 docx 生成 confirm copy 且不覆盖原文件。',
               data: {
                 openedSourcePaths,
                 toolNames,

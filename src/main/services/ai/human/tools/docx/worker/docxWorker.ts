@@ -2,12 +2,13 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { parentPort } from 'node:worker_threads'
-import type { DocxOutlineBlock, DocxSearchMatch, DocxValidationProblem } from '../types'
+import type { DocxOutlineBlock, DocxSearchMatch } from '../types'
 import { applyDocxOps } from '../adapters/ooxml/opExecutor'
 import {
   buildBlockIndex,
   buildOutlineOutput,
   extractBlockText,
+  getBlockStructureFacts,
   getDetailedBlock,
   loadDocxBundle,
   toOpenStats
@@ -73,6 +74,7 @@ const regexOffsets = (text: string, pattern: string): Array<{ start: number; end
 
 const searchBlocks = (input: {
   blocks: DocxOutlineBlock[]
+  index: ReturnType<typeof buildBlockIndex>
   blockText: (blockId: string) => string
   query: string
   mode: 'literal' | 'regex'
@@ -95,8 +97,15 @@ const searchBlocks = (input: {
         ? replaceAllOffsets(normalizedText, normalizedQuery)
         : regexOffsets(normalizedText, normalizedQuery)
     if (offsets.length === 0) continue
+    const structureFacts = getBlockStructureFacts(input.index, block.blockId)
+    if (!structureFacts) continue
     out.push({
       blockId: block.blockId,
+      blockType: structureFacts.blockType,
+      bodyIndex: structureFacts.bodyIndex,
+      previousBodyBlockId: structureFacts.previousBodyBlockId,
+      nextBodyBlockId: structureFacts.nextBodyBlockId,
+      tableBlockId: structureFacts.tableBlockId,
       text,
       offsets
     })
@@ -221,6 +230,7 @@ export const handleDocxWorkerRequest = async (
       }
       const matches = searchBlocks({
         blocks: index.outline,
+        index,
         blockText: (blockId) => extractBlockText(index, blockId),
         query: request.payload.query,
         mode,
@@ -243,6 +253,16 @@ export const handleDocxWorkerRequest = async (
         buffer: snapshot.buffer,
         ops: request.payload.ops
       })
+      const validationProblems = await validateDocxBuffer(applied.buffer)
+      if (validationProblems.length > 0) {
+        return {
+          requestId: request.requestId,
+          ok: false,
+          code: 'failed',
+          error: `apply_ops produced invalid docx: ${validationProblems.map((problem) => problem.message).join('; ')}`,
+          warnings: validationProblems.map((problem) => `${problem.code}: ${problem.message}`)
+        }
+      }
       const runSession = getRunSession(request.runId, true)
       if (!runSession) throw new Error(`run session missing: ${request.runId}`)
       const newDocId = randomUUID()
@@ -265,32 +285,7 @@ export const handleDocxWorkerRequest = async (
       }
     }
 
-    if (request.action === 'render_preview') {
-      if (request.payload.format !== 'html') {
-        return {
-          requestId: request.requestId,
-          ok: false,
-          code: 'invalid_input',
-          error: `${request.payload.format} preview is not implemented`,
-          warnings: ['only html preview is supported in this version']
-        }
-      }
-      const snapshot = getSnapshot(request.runId, request.payload.docId)
-      await fs.mkdir(path.dirname(request.payload.previewPath), { recursive: true })
-      await fs.writeFile(request.payload.previewPath, snapshot.buffer)
-      return {
-        requestId: request.requestId,
-        ok: true,
-        payload: {
-          action: 'render_preview',
-          format: request.payload.format,
-          previewPath: request.payload.previewPath,
-          renderer: 'docx_file_artifact'
-        }
-      }
-    }
-
-    if (request.action === 'save') {
+    if (request.action === 'materialize_draft') {
       const snapshot = getSnapshot(request.runId, request.payload.docId)
       await fs.mkdir(path.dirname(request.payload.outPath), { recursive: true })
       await fs.writeFile(request.payload.outPath, snapshot.buffer)
@@ -299,22 +294,11 @@ export const handleDocxWorkerRequest = async (
         requestId: request.requestId,
         ok: true,
         payload: {
-          action: 'save',
+          action: 'materialize_draft',
           outPath: request.payload.outPath,
           checksum,
           byteSize: snapshot.buffer.byteLength
         }
-      }
-    }
-
-    const snapshot = getSnapshot(request.runId, request.payload.docId)
-    const problems: DocxValidationProblem[] = await validateDocxBuffer(snapshot.buffer)
-    return {
-      requestId: request.requestId,
-      ok: true,
-      payload: {
-        action: 'validate',
-        problems
       }
     }
   } catch (error) {

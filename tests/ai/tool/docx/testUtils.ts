@@ -1,8 +1,7 @@
 import type {
   DocxChangedBlock,
   DocxDetailedBlock,
-  DocxOutlineBlock,
-  DocxValidationProblem
+  DocxOutlineBlock
 } from '../../../../src/main/services/ai/human/tools/docx/types'
 
 export type DocxOpenResult = {
@@ -40,6 +39,11 @@ export type DocxSearchResult = {
   summary: string
   matches: Array<{
     blockId: string
+    blockType: 'paragraph' | 'table' | 'table_cell'
+    bodyIndex: number
+    previousBodyBlockId?: string
+    nextBodyBlockId?: string
+    tableBlockId?: string
     text: string
     offsets: Array<{ start: number; end: number }>
   }>
@@ -62,22 +66,6 @@ export type DocxApplyOpsResult = {
   warnings: string[]
 }
 
-export type DocxValidateResult = {
-  ok: boolean
-  code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
-  summary: string
-  problems: DocxValidationProblem[]
-}
-
-export type DocxPreviewResult = {
-  ok: boolean
-  code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
-  summary: string
-  format: 'html'
-  previewPath: string
-  renderer: 'docx_file_artifact'
-}
-
 export type DocxHistoryResult = {
   ok: boolean
   code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
@@ -97,16 +85,6 @@ export type DocxRollbackResult = {
   docId: string
   previousDocId: string
   stepsApplied: number
-}
-
-export type DocxSaveResult = {
-  ok: boolean
-  code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
-  summary: string
-  outPath: string
-  checksum: string
-  operation: 'created' | 'updated'
-  byteSize: number
 }
 
 export type DocxFailureResult = {

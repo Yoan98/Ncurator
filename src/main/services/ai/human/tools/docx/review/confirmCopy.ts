@@ -8,6 +8,7 @@ import {
   loadDocxBundle,
   paragraphNodeToSpec
 } from '../adapters/ooxml/blockIndex'
+import { validateDocxBuffer } from '../adapters/ooxml/validator'
 import { childElements, collectText, descendantElements, firstChildElement, isElementNode } from '../adapters/ooxml/dom'
 import type { IndexedNode } from '../adapters/ooxml/types'
 import type { DocxBlockSpec, DocxParagraphSpec, DocxTableSpec } from '../types'
@@ -29,6 +30,14 @@ type RevisionKind = 'inserted' | 'deleted'
 
 const ensureDirForFile = async (filePath: string): Promise<void> => {
   await fs.mkdir(path.dirname(filePath), { recursive: true })
+}
+
+const assertValidDocxBuffer = async (buffer: Buffer, context: string): Promise<void> => {
+  const problems = await validateDocxBuffer(buffer)
+  if (problems.length === 0) return
+  throw new Error(
+    `${context}: ${problems.map((problem) => `${problem.code}:${problem.message}`).join('; ')}`
+  )
 }
 
 const writeDocumentXml = async (zip: JSZip, doc: Document): Promise<Buffer> => {
@@ -614,6 +623,7 @@ export const materializeDocxConfirmCopy = async (input: {
   })
 
   const buffer = await writeDocumentXml(bundle.zip, bundle.documentDom)
+  await assertValidDocxBuffer(buffer, 'confirm_copy_invalid_generated')
   const manifest: DocxConfirmManifest = {
     version: DOCX_CONFIRM_MANIFEST_VERSION,
     review_id: input.reviewId,
@@ -650,6 +660,7 @@ export const normalizeDocxConfirmCopy = async (input: {
   unwrapSystemRevisions(bundle.documentDom.documentElement)
   pruneEmptyStructure(bundle.documentDom.documentElement)
   const normalizedBuffer = await writeDocumentXml(bundle.zip, bundle.documentDom)
+  await assertValidDocxBuffer(normalizedBuffer, 'confirm_copy_invalid_normalized')
   await ensureDirForFile(input.outPath)
   await fs.writeFile(input.outPath, normalizedBuffer)
 }

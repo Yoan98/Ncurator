@@ -10,7 +10,6 @@ import {
   type DocxOpenResult,
   type DocxOutlineResult,
   type DocxSearchResult,
-  type DocxValidateResult,
   findParagraphBlockIdByText,
   findTableCellBlockIdByText
 } from './testUtils'
@@ -101,17 +100,12 @@ describe('ai tool docx backend', () => {
             query: 'Narrative paragraph updated.',
             mode: 'literal'
           })
-          const validated = await harness.invoke<DocxValidateResult>('docx_validate', {
-            docId: applied.newDocId
-          })
-
           return {
             outline,
             headingBlock,
             ownerCellBlock,
             applied,
-            search,
-            validated
+            search
           }
         } finally {
           await harness.release()
@@ -138,15 +132,15 @@ describe('ai tool docx backend', () => {
         runtime.assertThat(
           result.applied.changedBlocks.length === 2 &&
             result.search.matches.length === 1 &&
-            result.validated.problems.length === 0 &&
-            result.applied.changedBlocks.some((block) => block.action === 'update_table_cell'),
+            result.applied.changedBlocks.some((block) => block.action === 'update_table_cell') &&
+            result.applied.warnings.length === 0,
           {
             name: 'format-variants-support-updating-paragraph-and-cell',
             message: 'paragraph 与 table_cell 修改后，结构仍应有效且可继续消费。',
             data: {
               changedBlocks: result.applied.changedBlocks,
-              validationProblems: result.validated.problems,
-              searchMatches: result.search.matches
+              searchMatches: result.search.matches,
+              warnings: result.applied.warnings
             }
           }
         )

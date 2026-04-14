@@ -1,4 +1,3 @@
-import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
 import { createDocxToolHarness } from '../../../harness/backend/aiToolHarness'
@@ -6,9 +5,7 @@ import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
   type DocxApplyOpsResult,
   type DocxOpenResult,
-  type DocxPreviewResult,
-  type DocxSearchResult,
-  type DocxValidateResult
+  type DocxSearchResult
 } from './testUtils'
 
 const SAMPLE_DOCX_FIXTURE = path.resolve('tests/fixtures/ai/docx/sample-edit.docx')
@@ -51,25 +48,11 @@ describe('ai tool docx backend', () => {
             query: 'Hi',
             mode: 'literal'
           })
-          const validated = await harness.invoke<DocxValidateResult>('docx_validate', {
-            docId: applied.newDocId
-          })
-          const preview = await harness.invoke<DocxPreviewResult>('docx_render_preview', {
-            docId: applied.newDocId,
-            format: 'html'
-          })
-
           return {
             opened,
             searchBefore,
             applied,
-            searchAfter,
-            validated,
-            preview,
-            previewExists: await fs
-              .access(preview.previewPath)
-              .then(() => true)
-              .catch(() => false)
+            searchAfter
           }
         } finally {
           await harness.release()
@@ -94,16 +77,14 @@ describe('ai tool docx backend', () => {
 
         runtime.assertThat(
           result.searchAfter.matches.length === 1 &&
-            result.validated.problems.length === 0 &&
-            result.previewExists,
+            result.searchAfter.matches[0]?.bodyIndex === result.searchBefore.matches[0]?.bodyIndex &&
+            result.applied.warnings.length === 0,
           {
-            name: 'minimal-edit-flow-validates-and-produces-preview',
-            message: '修改后应能 validate 通过，并生成可回看的 preview artifact。',
+            name: 'minimal-edit-flow-remains-readable-after-edit',
+            message: '修改后应能继续被 search 消费，并暴露稳定的结构位置事实。',
             data: {
               searchAfter: result.searchAfter.matches,
-              validationProblems: result.validated.problems,
-              previewPath: result.preview.previewPath,
-              previewExists: result.previewExists
+              warnings: result.applied.warnings
             }
           }
         )

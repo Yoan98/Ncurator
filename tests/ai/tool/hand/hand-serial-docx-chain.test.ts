@@ -36,7 +36,7 @@ describe('ai tool hand backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['hand'],
-      description: '验证 hand 在 serial 模式下可以顺序执行 docx 写入、校验和预览链路。',
+      description: '验证 hand 在 serial 模式下可以顺序执行 docx 写入和读回确认链路。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -73,13 +73,6 @@ describe('ai tool hand backend', () => {
           taskId: runtime.taskId,
           skillId: 'docx-write'
         })
-        ensureSkillTools({
-          cache,
-          ctx,
-          runId: runtime.runId,
-          taskId: runtime.taskId,
-          skillId: 'docx-delivery'
-        })
 
         const docxReadTools = cache.skillToolsets['docx-read'] || []
         const opened = await invokeCachedTool<DocxOpenResult>(docxReadTools, 'docx_open', {
@@ -93,7 +86,7 @@ describe('ai tool hand backend', () => {
             userInput: '请顺序完成风险周报文档修改与预览'
           }),
           skills: {
-            learnedSkillIds: ['docx-read', 'docx-write', 'docx-delivery']
+            learnedSkillIds: ['docx-read', 'docx-write']
           },
           execution: {
             ...createInitialHumanState({
@@ -101,48 +94,45 @@ describe('ai tool hand backend', () => {
               userInput: '请顺序完成风险周报文档修改与预览'
             }).execution,
             currentDecision: {
-            decision: {
-              summary: '串行完成 docx 编辑链路',
-              reason: '文档写入、validate 和 preview 依赖同一份最新快照。',
-              expectedOutcome: '产出真实 preview artifact。'
-            },
-            readyToDeliver: false,
-            nextAction: {
-              action: 'hand',
-              toolUsePlan: {
-                mode: 'serial',
-                calls: [
-                  {
-                    toolName: 'docx_apply_ops',
-                    args: {
-                      docId: opened.docId,
-                      ops: [
-                        {
-                          type: 'replace_text',
-                          query: 'RISK_TODO',
-                          replace: '待跟进'
-                        },
-                        {
-                          type: 'replace_text',
-                          query: 'OWNER_TODO',
-                          replace: 'Alice'
-                        }
-                      ]
+              decision: {
+                summary: '串行完成 docx 编辑链路',
+                reason: '先写入，再基于最新快照读回确认，依赖同一份最新草稿。',
+                expectedOutcome: '完成替换并确认新内容可继续搜索到。'
+              },
+              readyToDeliver: false,
+              nextAction: {
+                action: 'hand',
+                toolUsePlan: {
+                  mode: 'serial',
+                  calls: [
+                    {
+                      toolName: 'docx_apply_ops',
+                      args: {
+                        docId: opened.docId,
+                        ops: [
+                          {
+                            type: 'replace_text',
+                            query: 'RISK_TODO',
+                            replace: '待跟进'
+                          },
+                          {
+                            type: 'replace_text',
+                            query: 'OWNER_TODO',
+                            replace: 'Alice'
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      toolName: 'docx_search',
+                      args: {
+                        query: '待跟进',
+                        mode: 'literal'
+                      }
                     }
-                  },
-                  {
-                    toolName: 'docx_validate',
-                    args: {}
-                  },
-                  {
-                    toolName: 'docx_render_preview',
-                    args: {
-                      format: 'html'
-                    }
-                  }
-                ]
+                  ]
+                }
               }
-            }
             }
           }
         })
@@ -155,12 +145,12 @@ describe('ai tool hand backend', () => {
         const toolNames = result.state.execution.lastToolResults?.map((item) => item.toolName) || []
 
         runtime.assertThat(
-          toolNames.join(',') === 'docx_apply_ops,docx_validate,docx_render_preview' &&
+          toolNames.join(',') === 'docx_apply_ops,docx_search' &&
             result.state.execution.lastToolResults?.every((item) => item.code === 'ok') &&
             !result.state.execution.watchHint,
           {
             name: 'serial-docx-chain-executes-in-order',
-            message: 'serial 模式应按顺序执行 docx_apply_ops、docx_validate、docx_render_preview。',
+            message: 'serial 模式应按顺序执行 docx_apply_ops、docx_search。',
             data: {
               toolNames,
               lastToolUseResults: result.state.execution.lastToolResults,
@@ -170,16 +160,15 @@ describe('ai tool hand backend', () => {
         )
 
         runtime.assertThat(
-          result.state.execution.artifacts.some(
-            (artifact) =>
-              artifact.kind === 'file' &&
-              artifact.capability === 'docx' &&
-              artifact.artifactRole === 'preview'
-          ),
+          result.state.execution.artifacts.length === 0 &&
+            result.state.execution.lastToolResults?.[1]?.toolName === 'docx_search',
           {
-            name: 'serial-docx-chain-produces-preview-artifact',
-            message: 'serial docx 链路完成后应生成 preview artifact。',
-            data: result.state.execution.artifacts
+            name: 'serial-docx-chain-stays-within-edit-and-read-tools',
+            message: 'docx 编辑的 hand 链路不再产出交付 artifact；后续交付由工程侧 confirm copy 收口。',
+            data: {
+              artifacts: result.state.execution.artifacts,
+              lastToolUseResults: result.state.execution.lastToolResults
+            }
           }
         )
       }

@@ -78,14 +78,7 @@
 - 类型：external
 - 核心职责：基于结构化操作修改 docx，或按需回滚快照。
 - 典型工具：`docx_apply_ops`、`docx_rollback`
-- 不负责什么：不负责文档读取建模，也不负责最终交付组织。
-
-### `docx-delivery`
-
-- 类型：external
-- 核心职责：对 docx 结果做校验、生成预览并按需保存。
-- 典型工具：`docx_validate`、`docx_render_preview`、`docx_save`
-- 不负责什么：不负责决定改什么内容，也不负责最终用户答复的措辞。
+- 不负责什么：不负责文档读取建模，也不负责确认副本生成、差异样式或最终落盘。
 
 ### `kb-document-discovery`
 

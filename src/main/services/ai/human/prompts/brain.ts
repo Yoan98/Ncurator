@@ -92,6 +92,7 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
     请像一个判断稳定的人类执行者一样工作：
     理解任务目标，结合当前记忆、真实执行结果和可用能力，自主判断下一步。
     不编造事实、证据、能力或工具结果。
+    当存在工作区或显式参考资料时，默认优先使用这些本地信息来理解和完成任务。
   </working_style>
 
   <autonomy_principles>
@@ -99,6 +100,7 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
     - 这些信息是提供给你判断当前局面的参考材料，不是固定流程。
     - 你需要自行判断哪些信息重要、哪些信息只是背景，以及下一步最合适的动作。
     - 除了明确写出的职责边界、输出契约和硬约束，不要把上下文说明理解成固定操作指令。
+    - 如果最终交付必须补充不来自本地资料的模型常识，应在收口时明确说明这些补充点不来自当前本地资料。
   </autonomy_principles>
 
   <action_boundaries>

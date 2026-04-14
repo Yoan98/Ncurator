@@ -9,7 +9,6 @@ import {
   type DocxOpenResult,
   type DocxOutlineResult,
   type DocxSearchResult,
-  type DocxValidateResult,
   findParagraphBlockIdByText,
   findTableCellBlockIdByText
 } from './testUtils'
@@ -140,9 +139,6 @@ describe('ai tool docx backend', () => {
               }
             ]
           })
-          const validated = await harness.invoke<DocxValidateResult>('docx_validate', {
-            docId: applied.newDocId
-          })
           const search = await harness.invoke<DocxSearchResult>('docx_search', {
             docId: applied.newDocId,
             query: 'Inserted after anchor.',
@@ -157,7 +153,6 @@ describe('ai tool docx backend', () => {
 
           return {
             applied,
-            validated,
             search,
             finalOutline
           }
@@ -191,21 +186,21 @@ describe('ai tool docx backend', () => {
         )
 
         runtime.assertThat(
-          result.validated.problems.length === 0 &&
-            result.search.matches.length === 1 &&
+          result.search.matches.length === 1 &&
             result.finalOutline.blocks.some(
               (block) => block.type === 'paragraph' && block.text.includes('Inserted before anchor.')
             ) &&
             result.finalOutline.blocks.some(
               (block) => block.type === 'table_cell' && block.text.includes('Bob')
-            ),
+            ) &&
+            result.applied.warnings.length === 0,
           {
             name: 'complex-ops-batch-remains-consumable-after-edits',
-            message: '多操作顺序执行后，结果结构仍应能继续被 search/outline/validate 消费。',
+            message: '多操作顺序执行后，结果结构仍应能继续被 search/outline 消费。',
             data: {
-              validationProblems: result.validated.problems,
               searchMatches: result.search.matches,
-              finalOutline: result.finalOutline.blocks
+              finalOutline: result.finalOutline.blocks,
+              warnings: result.applied.warnings
             }
           }
         )

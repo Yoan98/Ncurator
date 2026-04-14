@@ -211,8 +211,8 @@ type AiArtifactRef =
       fileName: string
       // 这次操作是创建新文件还是更新已有文件。
       operation: 'created' | 'updated'
-      // 产物角色；区分 preview、draft、committed 等不同交付阶段。
-      artifactRole?: 'preview' | 'draft' | 'committed'
+      // 产物角色；区分 draft、committed 等不同交付阶段。
+      artifactRole?: 'draft' | 'committed'
       // 若来自 draft review，则记录 reviewId。
       reviewId?: string
       // 若是 docx draft，则记录 draft documentId。

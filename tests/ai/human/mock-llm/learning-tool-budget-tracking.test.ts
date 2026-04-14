@@ -32,10 +32,10 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildLearnSkillsDecision({
-                  skillIds: ['docx-write', 'docx-delivery'],
-                  summary: '再学习 docx 写入与交付',
+                  skillIds: ['docx-write'],
+                  summary: '再学习 docx 写入',
                   reason: '继续扩大当前活跃工具集合。',
-                  expectedOutcome: '获得 11 个活跃工具。'
+                  expectedOutcome: '获得 8 个活跃工具。'
                 })
               },
               {
@@ -43,7 +43,7 @@ describe('ai human mock-llm backend', () => {
                   skillIds: ['kb-document-discovery', 'kb-evidence-query'],
                   summary: '学习 kb 相关技能',
                   reason: '继续扩大当前活跃工具集合，并验证预算统计会保持准确。',
-                  expectedOutcome: '把当前 active tools 扩展到 15，并保持所有已学习 skill 可用。'
+                  expectedOutcome: '把当前 active tools 扩展到 12，并保持所有已学习 skill 可用。'
                 })
               },
               {
@@ -84,11 +84,11 @@ describe('ai human mock-llm backend', () => {
         runtime.assertThat(
           result.output.status === 'completed' &&
             latestLearningStep?.learnedSkillIds.join(',') ===
-              'workspace-cli,docx-read,docx-write,docx-delivery,kb-document-discovery,kb-evidence-query' &&
+              'workspace-cli,docx-read,docx-write,kb-document-discovery,kb-evidence-query' &&
             latestLearningStep?.effectiveSkillIds.includes('history-recall') &&
             latestLearningStep.availableToolNames.includes('history_recall') &&
-            latestLearningStep.availableToolNames.length === 16 &&
-            latestLearningStep.summary.includes('当前 active tools=15') &&
+            latestLearningStep.availableToolNames.length === 13 &&
+            latestLearningStep.summary.includes('当前 active tools=12') &&
             !latestLearningStep.summary.includes('已淘汰最早学习的 skill='),
           {
             name: 'learning-tracks-active-tool-count-under-budget',

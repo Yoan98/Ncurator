@@ -373,6 +373,11 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     const semanticIndex: SemanticDocIndex = {
       entries: blocks.map((block, indexRow) => ({
         blockId: block.blockId,
+        blockType: block.type,
+        bodyIndex: block.bodyIndex,
+        previousBodyBlockId: block.previousBodyBlockId,
+        nextBodyBlockId: block.nextBodyBlockId,
+        tableBlockId: block.type === 'table_cell' ? block.tableBlockId : undefined,
         text: block.text,
         embedding: rows[indexRow]
       }))

@@ -81,42 +81,6 @@ const extractTerminalArtifacts = (result: ToolCallResult): AiArtifactRef[] => {
   })
 }
 
-const extractDocxPreviewArtifacts = (result: ToolCallResult): AiArtifactRef[] => {
-  if (result.toolName !== 'docx_render_preview' || !isJsonObject(result.data)) return []
-  const previewPath = readNonEmptyString(result.data, 'previewPath')
-  if (!previewPath) return []
-  return [
-    createFileArtifactRef({
-      capability: 'docx',
-      artifactPath: previewPath,
-      operation: 'created',
-      artifactRole: 'preview',
-      summary:
-        readNonEmptyString(result.data, 'summary') ||
-        readToolDataSummary(result) ||
-        `docx preview generated: ${path.basename(previewPath)}`
-    })
-  ]
-}
-
-const extractDocxSaveArtifacts = (result: ToolCallResult): AiArtifactRef[] => {
-  if (result.toolName !== 'docx_save' || !isJsonObject(result.data)) return []
-  const outPath = readNonEmptyString(result.data, 'outPath')
-  if (!outPath) return []
-  return [
-    createFileArtifactRef({
-      capability: 'docx',
-      artifactPath: outPath,
-      operation: readArtifactOperation(result.data, 'operation', 'created'),
-      artifactRole: 'committed',
-      summary:
-        readNonEmptyString(result.data, 'summary') ||
-        readToolDataSummary(result) ||
-        `doc saved: ${path.basename(outPath)}`
-    })
-  ]
-}
-
 const getArtifactKey = (artifact: AiArtifactRef): string =>
   artifact.kind === 'file'
     ? `file:${artifact.path}`
@@ -139,11 +103,7 @@ export const mergeArtifactRefs = (
 }
 
 export const extractArtifactRefsFromToolResult = (result: ToolCallResult): AiArtifactRef[] =>
-  mergeArtifactRefs(
-    extractTerminalArtifacts(result),
-    extractDocxPreviewArtifacts(result),
-    extractDocxSaveArtifacts(result)
-  )
+  mergeArtifactRefs(extractTerminalArtifacts(result))
 
 export const extractArtifactRefsFromToolResults = (
   results: readonly ToolCallResult[]

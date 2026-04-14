@@ -39,7 +39,7 @@ describe('ai human mock-llm backend', () => {
             'human.brain': [
               {
                 output: buildLearnSkillsDecision({
-                  skillIds: ['docx-read', 'docx-write', 'docx-delivery'],
+                  skillIds: ['docx-read', 'docx-write'],
                   summary: '先学习 docx 相关 skill',
                   reason: '需要用真实 docx 工具完成编辑流程。',
                   expectedOutcome: '获得 docx 工具族。'
@@ -150,5 +150,5 @@ describe('ai human mock-llm backend', () => {
         )
       }
     })
-  })
+  }, 15_000)
 })

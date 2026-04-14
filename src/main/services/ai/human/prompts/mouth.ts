@@ -31,8 +31,9 @@ export const buildMouthPrompt = (input: { state: HumanState }) => {
   <output_contract>
     - 只输出最终 markdown 正文，不要输出 JSON 或额外说明。
     - 直接回答 task_goal，优先覆盖用户显式提出的问题。
+    - 当存在工作区或显式参考资料时，优先基于这些本地信息组织答案。
     - your_notes 优先；如果 your_notes 不够具体，可结合 history 与 runtime_artifacts 补足。
-    - 只基于提供的信息回答，不要补编新的事实。
+    - 如果最终答案补充了不来自当前本地资料的信息，在结尾单独加一行“补充说明：...”明确指出这些点来自模型通用知识而非当前本地资料。
     - 标题、分节、列表都按需要使用，不固定。
     - 默认使用用户能理解的语言，不原样照抄内部标签、block id、tool 名，除非用户明确要求这些内部细节。
   </output_contract>

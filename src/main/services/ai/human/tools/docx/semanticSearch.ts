@@ -55,6 +55,11 @@ export const buildSemanticMatches = (input: {
             : 0
       return {
         blockId: entry.blockId,
+        blockType: entry.blockType,
+        bodyIndex: entry.bodyIndex,
+        previousBodyBlockId: entry.previousBodyBlockId,
+        nextBodyBlockId: entry.nextBodyBlockId,
+        tableBlockId: entry.tableBlockId,
         text: entry.text,
         score: dotProduct(entry.embedding, input.queryEmbedding) + tokenBoost
       }
@@ -64,6 +69,11 @@ export const buildSemanticMatches = (input: {
 
   return scored.slice(0, 8).map((item) => ({
     blockId: item.blockId,
+    blockType: item.blockType,
+    bodyIndex: item.bodyIndex,
+    previousBodyBlockId: item.previousBodyBlockId,
+    nextBodyBlockId: item.nextBodyBlockId,
+    tableBlockId: item.tableBlockId,
     text: item.text,
     offsets: []
   }))

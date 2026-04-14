@@ -102,24 +102,3 @@ export const rollbackSchema = z.object({
   targetDocId: z.string().min(1).optional(),
   steps: z.number().int().min(1).max(50).optional()
 })
-
-export const renderPreviewSchema = z.object({
-  docId: z.string().min(1).optional(),
-  format: z.enum(['html', 'png', 'pdf']),
-  range: z
-    .object({
-      fromBlockId: z.string().optional(),
-      toBlockId: z.string().optional()
-    })
-    .optional()
-})
-
-export const saveSchema = z.object({
-  docId: z.string().min(1),
-  outPath: z.string().min(1),
-  overwrite: z.boolean().optional()
-})
-
-export const validateSchema = z.object({
-  docId: z.string().min(1).optional()
-})

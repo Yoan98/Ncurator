@@ -75,6 +75,8 @@ describe('ai unit mouth readyToDeliver guard', () => {
     expect(prompt).toContain('<output_contract>')
     expect(prompt).toContain('直接回答 task_goal')
     expect(prompt).toContain('your_notes 优先')
+    expect(prompt).toContain('优先基于这些本地信息组织答案')
+    expect(prompt).toContain('补充说明：')
     expect(prompt).toContain('history：任务过程中真实发生过的决策、执行和结果')
     expect(prompt).toContain('只输出最终 markdown 正文')
     expect(prompt).toContain('标题、分节、列表都按需要使用，不固定')
@@ -107,5 +109,17 @@ describe('ai unit mouth readyToDeliver guard', () => {
     expect(result.user).not.toContain('<recent_progress>')
     expect(result.user).not.toContain('<earlier_attempts>')
     expect(result.user).not.toContain('<recalled_history>')
+  })
+
+  it('keeps disclosure conditional instead of always requiring it', () => {
+    const prompt = buildMouthPrompt({
+      state: createInitialHumanState({
+        taskId: 'task-3',
+        userInput: '只按当前资料回答我'
+      })
+    }).system
+
+    expect(prompt).toContain('如果最终答案补充了不来自当前本地资料的信息')
+    expect(prompt).not.toContain('必须在结尾单独加一行“补充说明')
   })
 })

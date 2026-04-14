@@ -4,6 +4,9 @@ import type {
   DocxDetailedBlock,
   DocxDetailedParagraphBlock,
   DocxDetailedTableBlock,
+  DocxOutlineCellBlock,
+  DocxOutlineParagraphBlock,
+  DocxOutlineTableBlock,
   DocxOpenMeta,
   DocxOpenStats,
   DocxOutlineBlock,
@@ -187,10 +190,43 @@ const tableCells = (table: Element): Array<{ row: number; col: number; cell: Ele
   return out
 }
 
+const resolveBodyNeighbors = (
+  bodyBlockIds: readonly string[],
+  bodyIndex: number
+): { previousBodyBlockId?: string; nextBodyBlockId?: string } => ({
+  previousBodyBlockId: bodyIndex > 0 ? bodyBlockIds[bodyIndex - 1] : undefined,
+  nextBodyBlockId: bodyIndex + 1 < bodyBlockIds.length ? bodyBlockIds[bodyIndex + 1] : undefined
+})
+
+const withParagraphStructure = (
+  bodyBlockIds: readonly string[],
+  block: Omit<DocxOutlineParagraphBlock, 'previousBodyBlockId' | 'nextBodyBlockId'>
+): DocxOutlineParagraphBlock => ({
+  ...block,
+  ...resolveBodyNeighbors(bodyBlockIds, block.bodyIndex)
+})
+
+const withTableStructure = (
+  bodyBlockIds: readonly string[],
+  block: Omit<DocxOutlineTableBlock, 'previousBodyBlockId' | 'nextBodyBlockId'>
+): DocxOutlineTableBlock => ({
+  ...block,
+  ...resolveBodyNeighbors(bodyBlockIds, block.bodyIndex)
+})
+
+const withCellStructure = (
+  bodyBlockIds: readonly string[],
+  block: Omit<DocxOutlineCellBlock, 'previousBodyBlockId' | 'nextBodyBlockId'>
+): DocxOutlineCellBlock => ({
+  ...block,
+  ...resolveBodyNeighbors(bodyBlockIds, block.bodyIndex)
+})
+
 export const buildBlockIndex = (documentDom: Document): BlockIndex => {
   const body = getBody(documentDom)
-  const outline: DocxOutlineBlock[] = []
+  const outlineDraft: DocxOutlineBlock[] = []
   const nodesById: NodeMapById = new Map()
+  const bodyBlockIds: string[] = []
   let bodyIndex = 0
   let paragraphCount = 0
   let tableCount = 0
@@ -207,9 +243,11 @@ export const buildBlockIndex = (documentDom: Document): BlockIndex => {
       const blockId = `b:${bodyIndex}`
       const text = paragraphText(child)
       const style = paragraphStyle(child)
-      outline.push({
+      bodyBlockIds.push(blockId)
+      outlineDraft.push({
         blockId,
         type: 'paragraph',
+        bodyIndex,
         style,
         text
       })
@@ -228,9 +266,11 @@ export const buildBlockIndex = (documentDom: Document): BlockIndex => {
     if (child.localName === 'tbl') {
       const blockId = `tbl:${bodyIndex}`
       const tableSummary = summarizeTable(child)
-      outline.push({
+      bodyBlockIds.push(blockId)
+      outlineDraft.push({
         blockId,
         type: 'table',
+        bodyIndex,
         rows: tableSummary.rows,
         cols: tableSummary.cols,
         preview: tableSummary.preview
@@ -247,9 +287,10 @@ export const buildBlockIndex = (documentDom: Document): BlockIndex => {
         const cellBlockId = `${blockId}.r:${entry.row}.c:${entry.col}`
         const paragraphs = cellParagraphs(entry.cell)
         const text = paragraphs.map((paragraph) => paragraphText(paragraph)).join('\n')
-        outline.push({
+        outlineDraft.push({
           blockId: cellBlockId,
           type: 'table_cell',
+          bodyIndex,
           tableBlockId: blockId,
           row: entry.row,
           col: entry.col,
@@ -273,9 +314,20 @@ export const buildBlockIndex = (documentDom: Document): BlockIndex => {
     }
   }
 
+  const outline = outlineDraft.map((block) => {
+    if (block.type === 'paragraph') {
+      return withParagraphStructure(bodyBlockIds, block)
+    }
+    if (block.type === 'table') {
+      return withTableStructure(bodyBlockIds, block)
+    }
+    return withCellStructure(bodyBlockIds, block)
+  })
+
   return {
     outline,
     nodesById,
+    bodyBlockIds,
     paragraphCount,
     tableCount,
     charCount,
@@ -322,7 +374,12 @@ export const buildOutlineOutput = (
   }
 }
 
-const buildTableDetail = (blockId: string, tableNode: Element): DocxDetailedTableBlock => {
+const buildTableDetail = (
+  index: BlockIndex,
+  blockId: string,
+  tableNode: Element,
+  bodyIndex: number
+): DocxDetailedTableBlock => {
   const summary = summarizeTable(tableNode)
   const cells = tableCells(tableNode).map((entry) => {
     const paragraphs = cellParagraphs(entry.cell).map((paragraph, idx) =>
@@ -338,6 +395,8 @@ const buildTableDetail = (blockId: string, tableNode: Element): DocxDetailedTabl
   return {
     blockId,
     type: 'table',
+    bodyIndex,
+    ...resolveBodyNeighbors(index.bodyBlockIds, bodyIndex),
     rows: summary.rows,
     cols: summary.cols,
     preview: summary.preview,
@@ -348,8 +407,14 @@ const buildTableDetail = (blockId: string, tableNode: Element): DocxDetailedTabl
 export const getDetailedBlock = (index: BlockIndex, blockId: string): DocxDetailedBlock | null => {
   const node = index.nodesById.get(blockId)
   if (!node) return null
-  if (node.kind === 'paragraph') return paragraphDetail(blockId, node.node)
-  if (node.kind === 'table') return buildTableDetail(blockId, node.node)
+  if (node.kind === 'paragraph') {
+    return {
+      ...paragraphDetail(blockId, node.node),
+      bodyIndex: node.bodyIndex,
+      ...resolveBodyNeighbors(index.bodyBlockIds, node.bodyIndex)
+    }
+  }
+  if (node.kind === 'table') return buildTableDetail(index, blockId, node.node, node.bodyIndex)
 
   const paragraphs = cellParagraphs(node.node).map((paragraph, idx) =>
     paragraphDetail(`${blockId}.p:${idx + 1}`, paragraph)
@@ -357,11 +422,35 @@ export const getDetailedBlock = (index: BlockIndex, blockId: string): DocxDetail
   return {
     blockId,
     type: 'table_cell',
+    bodyIndex: node.bodyIndex,
+    ...resolveBodyNeighbors(index.bodyBlockIds, node.bodyIndex),
     tableBlockId: node.tableBlockId,
     row: node.row,
     col: node.col,
     text: paragraphs.map((paragraph) => paragraph.text).join('\n'),
     paragraphs
+  }
+}
+
+export const getBlockStructureFacts = (
+  index: BlockIndex,
+  blockId: string
+):
+  | {
+      blockType: 'paragraph' | 'table' | 'table_cell'
+      bodyIndex: number
+      previousBodyBlockId?: string
+      nextBodyBlockId?: string
+      tableBlockId?: string
+    }
+  | null => {
+  const node = index.nodesById.get(blockId)
+  if (!node) return null
+  return {
+    blockType: node.kind,
+    bodyIndex: node.bodyIndex,
+    ...resolveBodyNeighbors(index.bodyBlockIds, node.bodyIndex),
+    tableBlockId: node.kind === 'table_cell' ? node.tableBlockId : undefined
   }
 }
 

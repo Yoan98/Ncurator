@@ -8,58 +8,14 @@ import {
   historySchema,
   openSchema,
   outlineSchema,
-  renderPreviewSchema,
   rollbackSchema,
-  saveSchema,
-  searchSchema,
-  validateSchema
+  searchSchema
 } from './schemas'
 import {
   createStaticExecutionMetaResolver,
   readStringArg
 } from '../utils/toolSpecUtils'
 import type { DocxWorkerAction } from './worker/types'
-
-const DOCX_REPLACE_TEXT_EXAMPLE: JsonObject = {
-  ops: [
-    {
-      type: 'replace_text',
-      query: 'Checklist summary: pending policy sync.',
-      replace:
-        'Checklist summary: Mention approval-denied coverage and terminal artifact assertion before sign-off.'
-    }
-  ]
-}
-
-const DOCX_UPDATE_TABLE_CELL_EXAMPLE: JsonObject = {
-  ops: [
-    {
-      type: 'update_table_cell',
-      blockId: 'tbl:3.r:1.c:1',
-      content: [
-        {
-          kind: 'paragraph',
-          runs: [{ text: 'Bob' }]
-        }
-      ]
-    }
-  ]
-}
-
-const DOCX_REPLACE_TODO_BATCH_EXAMPLE: JsonObject = {
-  ops: [
-    {
-      type: 'replace_text',
-      query: '{{OWNER}}',
-      replace: 'Alice'
-    },
-    {
-      type: 'replace_text',
-      query: '{{DUE_DATE}}',
-      replace: '2026-03-30'
-    }
-  ]
-}
 
 const createDocxReadExecutionMeta = () =>
   createStaticExecutionMetaResolver({
@@ -113,7 +69,7 @@ export const DOCX_OPEN_TOOL_SPEC = {
       {
         name: 'docId',
         type: 'string',
-        description: '后续 outline/search/apply/save/preview/validate 使用的快照 ID。'
+        description: '后续读取、编辑或回滚都引用这个快照 ID。'
       },
       {
         name: 'meta',
@@ -181,7 +137,8 @@ export const DOCX_OUTLINE_TOOL_SPEC = {
       {
         name: 'blocks',
         type: 'Array<outline block>',
-        description: '按文档顺序排列的结构块，每个块带 blockId/type/preview。'
+        description:
+          '按文档顺序排列的结构块；每个块都带 blockId、type、bodyIndex 以及相邻 body block 事实。'
       },
       {
         name: 'truncated',
@@ -189,7 +146,6 @@ export const DOCX_OUTLINE_TOOL_SPEC = {
         description: '返回是否因 maxBlocks 被截断；若为 true，表示文档后续内容未包含在这次 outline 结果中。'
       }
     ],
-    commonMistakes: ['如果任务已给出精确原文，可 open 后直接 apply_ops，不必先 outline。']
   },
   resolveExecutionMeta: createDocxReadExecutionMeta(),
   workerAction: 'outline',
@@ -226,10 +182,9 @@ export const DOCX_GET_BLOCK_TOOL_SPEC = {
       {
         name: 'block',
         type: 'detailed block object',
-        description: '段落或表格的详细结构内容。'
+        description: '段落、表格或表格单元格的详细结构内容，并包含 bodyIndex 与相邻 body block 事实。'
       }
-    ],
-    commonMistakes: ['不要在没有 blockId 的情况下调用。']
+    ]
   },
   resolveExecutionMeta: createDocxReadExecutionMeta(),
   workerAction: 'get_block'
@@ -278,14 +233,13 @@ export const DOCX_SEARCH_TOOL_SPEC = {
     returns: [
       {
         name: 'matches',
-        type: 'Array<{ blockId: string; text: string; offsets: Array<{ start: number; end: number }> }>',
-        description: '命中的 block 列表及偏移信息。'
+        type: 'Array<{ blockId: string; blockType: string; bodyIndex: number; previousBodyBlockId?: string; nextBodyBlockId?: string; tableBlockId?: string; text: string; offsets: Array<{ start: number; end: number }> }>',
+        description: '命中的 block、偏移信息，以及该 block 在文档结构中的位置事实。'
       }
     ],
     commonMistakes: [
       '不要把 query 写成空字符串。',
-      'scope 只是在当前文档内缩小到指定 blockIds；省略 scope 时不是只搜索 outline 结果，而是搜索当前文档全部 block。',
-      'semantic 适合找相近语义，literal/regex 更适合稳定定位。'
+      'scope 只是在当前文档内缩小到指定 blockIds；省略 scope 时会搜索当前文档全部 block。'
     ]
   },
   resolveExecutionMeta: createDocxReadExecutionMeta(),
@@ -296,8 +250,7 @@ export const DOCX_GET_HISTORY_TOOL_SPEC = {
   name: 'docx_get_history',
   familyId: 'docx',
   requiresWorkspace: true,
-  description:
-    'Inspect the immutable docx snapshot lineage for the current run. Useful for confirm/rollback flows before save.',
+  description: 'Inspect the immutable docx snapshot lineage for the current run.',
   skillIds: ['docx-read'],
   schema: historySchema,
   promptSpec: {
@@ -355,14 +308,14 @@ export const DOCX_APPLY_OPS_TOOL_SPEC = {
         type: 'DocxOp[]',
         required: true,
         description:
-          '支持 replace_text、replace_block、insert_after、insert_before、delete_block、update_table_cell 六种操作。'
+          '支持 replace_text、replace_block、insert_after、insert_before、delete_block、update_table_cell 六种操作。replace_text 只改现有文本；insert_before / insert_after 会新增 block 级内容；replace_block 会替换整个 block；update_table_cell 只更新已有表格单元格。'
       }
     ],
     returns: [
       {
         name: 'newDocId',
         type: 'string',
-        description: '编辑后的新快照 ID。后续 preview/save/validate 基于它继续。'
+        description: '编辑后的新快照 ID。后续读取、继续编辑或回滚都基于它继续。'
       },
       {
         name: 'changedBlocks',
@@ -373,25 +326,6 @@ export const DOCX_APPLY_OPS_TOOL_SPEC = {
         name: 'warnings',
         type: 'string[]',
         description: '非致命提示信息。'
-      }
-    ],
-    commonMistakes: [
-      'replace_text 的最小合法结构是 type/query/replace，不要缺少 type，也不要误写成 source/target。',
-      'update_table_cell 的 content 必须是 paragraph 数组，不是纯字符串。',
-      'apply_ops 后会产生 newDocId；后续若显式传 docId，应使用最新快照。'
-    ],
-    examples: [
-      {
-        goal: '按原文做精确文本替换',
-        args: DOCX_REPLACE_TEXT_EXAMPLE
-      },
-      {
-        goal: '更新表格单元格为 Bob',
-        args: DOCX_UPDATE_TABLE_CELL_EXAMPLE
-      },
-      {
-        goal: '批量替换两个占位符',
-        args: DOCX_REPLACE_TODO_BATCH_EXAMPLE
       }
     ]
   },
@@ -407,7 +341,7 @@ export const DOCX_ROLLBACK_TOOL_SPEC = {
   familyId: 'docx',
   requiresWorkspace: true,
   description:
-    'Move back to an ancestor docx snapshot in the current run without writing files. Use before user confirmation.',
+    'Move back to an ancestor docx snapshot in the current run without writing files.',
   skillIds: ['docx-write'],
   schema: rollbackSchema,
   promptSpec: {
@@ -441,155 +375,13 @@ export const DOCX_ROLLBACK_TOOL_SPEC = {
         type: 'string',
         description: '回退后的当前草稿快照 ID。'
       }
-    ],
-    commonMistakes: ['rollback 只影响当前 run 内草稿，不会直接恢复磁盘上的原文件。']
+    ]
   },
   resolveExecutionMeta: createDocxMutatingExecutionMeta({
     getResourceKey: (args) => readStringArg(args, 'docId') || readStringArg(args, 'targetDocId')
   }),
   activityActionType: 'docx_rollback'
 } satisfies DocxToolSpec<z.infer<typeof rollbackSchema>, 'docx_rollback', 'docx-write'>
-
-export const DOCX_RENDER_PREVIEW_TOOL_SPEC = {
-  name: 'docx_render_preview',
-  familyId: 'docx',
-  requiresWorkspace: true,
-  description:
-    'Render preview artifact for the current doc snapshot. html returns a preview docx artifact path for renderer.',
-  skillIds: ['docx-delivery'],
-  schema: renderPreviewSchema,
-  promptSpec: {
-    name: 'docx_render_preview',
-    purpose: '为当前 docx 草稿生成可审阅 preview artifact。',
-    whenToUse: '完成编辑后，需要给用户 preview/handoff，而不是立即 save 时使用。',
-    preconditions: ['必须先 open 文档，或提供当前 run 中有效的 docId。', 'format 必须是支持的预览格式。'],
-    args: [
-      {
-        name: 'docId',
-        type: 'string',
-        required: false,
-        description: '目标快照 ID；省略时默认使用最近一次 docId。'
-      },
-      {
-        name: 'format',
-        type: '"html" | "png" | "pdf"',
-        required: true,
-        description: '预览格式。',
-        enumValues: ['html', 'png', 'pdf']
-      },
-      {
-        name: 'range',
-        type: '{ fromBlockId?: string; toBlockId?: string }',
-        required: false,
-        description: '可选的 block 范围，仅渲染局部。'
-      }
-    ],
-    returns: [
-      {
-        name: 'previewPath',
-        type: 'string',
-        description: '生成的 preview artifact 路径。'
-      },
-      {
-        name: 'renderer',
-        type: 'string',
-        description: '用于生成 preview 的渲染器标识。'
-      }
-    ],
-    commonMistakes: ['如果任务只要求 preview，不要额外 save。']
-  },
-  resolveExecutionMeta: createDocxMutatingExecutionMeta({
-    getResourceKey: (args) => readStringArg(args, 'docId')
-  }),
-  workerAction: 'render_preview'
-} satisfies DocxToolSpec<z.infer<typeof renderPreviewSchema>, 'docx_render_preview', 'docx-delivery'>
-
-export const DOCX_SAVE_TOOL_SPEC = {
-  name: 'docx_save',
-  familyId: 'docx',
-  requiresWorkspace: true,
-  description: 'Save doc snapshot to a workspace docx path with overwrite approval guard.',
-  skillIds: ['docx-delivery'],
-  schema: saveSchema,
-  promptSpec: {
-    name: 'docx_save',
-    purpose: '把当前 docx 草稿快照保存到 workspace 中的 .docx 路径。',
-    whenToUse: '只有当任务明确要求产出新文件或落盘结果时才使用。',
-    preconditions: ['必须提供 docId。', 'outPath 必须是 workspace 内的 .docx 路径。'],
-    args: [
-      {
-        name: 'docId',
-        type: 'string',
-        required: true,
-        description: '要保存的草稿快照 ID。'
-      },
-      {
-        name: 'outPath',
-        type: 'string',
-        required: true,
-        description: '目标输出路径；参数名必须是 outPath。'
-      },
-      {
-        name: 'overwrite',
-        type: 'boolean',
-        required: false,
-        description: '若目标已存在，是否允许覆盖；覆盖会触发审批。'
-      }
-    ],
-    returns: [
-      {
-        name: 'outPath',
-        type: 'string',
-        description: '实际保存路径。'
-      },
-      {
-        name: 'operation',
-        type: '"created" | "updated"',
-        description: '本次保存是新建还是覆盖更新。'
-      }
-    ],
-    commonMistakes: [
-      '不要把参数写成 targetPath 或 savePath；这里只认 outPath。',
-      'preview/handoff 任务默认不需要 save。'
-    ]
-  },
-  resolveExecutionMeta: createDocxMutatingExecutionMeta({
-    getResourceKey: (args) => readStringArg(args, 'outPath') || readStringArg(args, 'docId')
-  }),
-  workerAction: 'save'
-} satisfies DocxToolSpec<z.infer<typeof saveSchema>, 'docx_save', 'docx-delivery'>
-
-export const DOCX_VALIDATE_TOOL_SPEC = {
-  name: 'docx_validate',
-  familyId: 'docx',
-  requiresWorkspace: true,
-  description: 'Validate current doc snapshot structure and relationship consistency.',
-  skillIds: ['docx-delivery'],
-  schema: validateSchema,
-  promptSpec: {
-    name: 'docx_validate',
-    purpose: '校验当前 docx 草稿结构与关系是否一致。',
-    whenToUse: '编辑完成后、save 前、或需要确认结构有效时使用。',
-    preconditions: ['必须先 open 文档，或提供当前 run 中有效的 docId。'],
-    args: [
-      {
-        name: 'docId',
-        type: 'string',
-        required: false,
-        description: '目标快照 ID；省略时默认使用最近一次 docId。'
-      }
-    ],
-    returns: [
-      {
-        name: 'problems',
-        type: 'Array<{ code: string; message: string }>',
-        description: '校验问题列表；空数组表示通过。'
-      }
-    ]
-  },
-  resolveExecutionMeta: createDocxReadExecutionMeta(),
-  workerAction: 'validate'
-} satisfies DocxToolSpec<z.infer<typeof validateSchema>, 'docx_validate', 'docx-delivery'>
 
 export const DOCX_READ_TOOL_SPECS = [
   DOCX_OPEN_TOOL_SPEC,
@@ -601,16 +393,9 @@ export const DOCX_READ_TOOL_SPECS = [
 
 export const DOCX_WRITE_TOOL_SPECS = [DOCX_APPLY_OPS_TOOL_SPEC, DOCX_ROLLBACK_TOOL_SPEC] as const
 
-export const DOCX_DELIVERY_TOOL_SPECS = [
-  DOCX_RENDER_PREVIEW_TOOL_SPEC,
-  DOCX_SAVE_TOOL_SPEC,
-  DOCX_VALIDATE_TOOL_SPEC
-] as const
-
 export const DOCX_TOOL_SPECS = [
   ...DOCX_READ_TOOL_SPECS,
-  ...DOCX_WRITE_TOOL_SPECS,
-  ...DOCX_DELIVERY_TOOL_SPECS
+  ...DOCX_WRITE_TOOL_SPECS
 ] as const
 
 export type AnyDocxToolSpec = (typeof DOCX_TOOL_SPECS)[number]

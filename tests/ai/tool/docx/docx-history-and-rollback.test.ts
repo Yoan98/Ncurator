@@ -11,8 +11,7 @@ import {
   type DocxHistoryResult,
   type DocxOpenResult,
   type DocxRollbackResult,
-  type DocxSearchResult,
-  type DocxValidateResult
+  type DocxSearchResult
 } from './testUtils'
 
 describe('ai tool docx backend', () => {
@@ -82,9 +81,6 @@ describe('ai tool docx backend', () => {
             docId: rollbackBySteps.docId,
             targetDocId: opened.docId
           })
-          const validated = await harness.invoke<DocxValidateResult>('docx_validate', {
-            docId: rollbackByTarget.docId
-          })
           const sourceBufferAfter = await fs.readFile(sourcePath)
 
           return {
@@ -95,7 +91,6 @@ describe('ai tool docx backend', () => {
             rollbackBySteps,
             searchAfterStepRollback,
             rollbackByTarget,
-            validated,
             sourceBufferBefore,
             sourceBufferAfter
           }
@@ -119,16 +114,14 @@ describe('ai tool docx backend', () => {
         runtime.assertThat(
           result.rollbackBySteps.docId === result.firstEdit.newDocId &&
             result.searchAfterStepRollback.matches.length === 0 &&
-            result.rollbackByTarget.docId === result.opened.docId &&
-            result.validated.problems.length === 0,
+            result.rollbackByTarget.docId === result.opened.docId,
           {
             name: 'rollback-restores-target-ancestor-without-breaking-structure',
             message: '按 steps 与按 targetDocId 回滚后，应回到目标祖先快照且结构保持有效。',
             data: {
               rollbackBySteps: result.rollbackBySteps,
               rollbackByTarget: result.rollbackByTarget,
-              searchAfterStepRollback: result.searchAfterStepRollback.matches,
-              validationProblems: result.validated.problems
+              searchAfterStepRollback: result.searchAfterStepRollback.matches
             }
           }
         )

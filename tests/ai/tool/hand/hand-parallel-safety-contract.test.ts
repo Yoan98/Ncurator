@@ -64,13 +64,6 @@ describe('ai tool hand backend', () => {
           taskId: runtime.taskId,
           skillId: 'docx-write'
         })
-        ensureSkillTools({
-          cache,
-          ctx,
-          runId: runtime.runId,
-          taskId: runtime.taskId,
-          skillId: 'docx-delivery'
-        })
 
         const docxReadTools = cache.skillToolsets['docx-read'] || []
         const openResult = await invokeCachedTool<DocxOpenResult>(docxReadTools, 'docx_open', {
@@ -298,13 +291,13 @@ describe('ai tool hand backend', () => {
         const unsafeState = await handNode({
           ...limitExceededState,
           skills: {
-            learnedSkillIds: ['docx-read', 'docx-write', 'docx-delivery']
+            learnedSkillIds: ['docx-read', 'docx-write']
           },
           execution: {
             ...limitExceededState.execution,
             currentDecision: {
             decision: {
-              summary: '并行写入和 validate',
+              summary: '并行写入和读取',
               reason: '故意构造不安全批次，验证 hand 是否拒绝。',
               expectedOutcome: '写入 watchHint 并返回 brain。'
             },
@@ -328,9 +321,11 @@ describe('ai tool hand backend', () => {
                     }
                   },
                   {
-                    toolName: 'docx_validate',
+                    toolName: 'docx_search',
                     args: {
-                      docId: openResult.docId
+                      docId: openResult.docId,
+                      query: 'Risk summary',
+                      mode: 'literal'
                     }
                   }
                 ]

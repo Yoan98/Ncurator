@@ -7,8 +7,7 @@ import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
   type DocxApplyOpsResult,
   type DocxOpenResult,
-  type DocxSearchResult,
-  type DocxValidateResult
+  type DocxSearchResult
 } from './testUtils'
 
 describe('ai tool docx backend', () => {
@@ -89,17 +88,12 @@ describe('ai tool docx backend', () => {
             query: 'Cycle 3 cumulative draft content.',
             mode: 'literal'
           })
-          const validated = await harness.invoke<DocxValidateResult>('docx_validate', {
-            docId: applied.newDocId
-          })
-
           return {
             opened,
             searchDraft,
             searchSourceOnly,
             applied,
             searchAfter,
-            validated,
             trackedSourcePath: harness.state.sourcePathByDocId.get(applied.newDocId) || ''
           }
         } finally {
@@ -122,7 +116,7 @@ describe('ai tool docx backend', () => {
         runtime.assertThat(
           result.applied.changedBlocks.length === 1 &&
             result.searchAfter.matches.length === 1 &&
-            result.validated.problems.length === 0 &&
+            result.applied.warnings.length === 0 &&
             result.trackedSourcePath.endsWith('/review-aware-source.docx'),
           {
             name: 'review-aware-edit-keeps-cumulative-delta-and-source-target',
@@ -130,7 +124,8 @@ describe('ai tool docx backend', () => {
             data: {
               changedBlocks: result.applied.changedBlocks,
               searchAfter: result.searchAfter.matches,
-              trackedSourcePath: result.trackedSourcePath
+              trackedSourcePath: result.trackedSourcePath,
+              warnings: result.applied.warnings
             }
           }
         )

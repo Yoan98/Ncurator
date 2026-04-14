@@ -30,6 +30,7 @@ export type NodeMapById = Map<string, IndexedNode>
 export type BlockIndex = {
   outline: DocxOutlineBlock[]
   nodesById: NodeMapById
+  bodyBlockIds: string[]
   paragraphCount: number
   tableCount: number
   charCount: number

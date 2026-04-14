@@ -1,4 +1,3 @@
-import fs from 'node:fs/promises'
 import { describe, it } from 'vitest'
 import {
   createDocxToolHarness,
@@ -10,7 +9,6 @@ import {
   type DocxGetBlockResult,
   type DocxOpenResult,
   type DocxOutlineResult,
-  type DocxPreviewResult,
   findParagraphBlockIdByText,
   findTableCellBlockIdByText
 } from './testUtils'
@@ -143,20 +141,11 @@ describe('ai tool docx backend', () => {
             docId: applied.newDocId,
             blockId: ownerCellBlockId
           })
-          const preview = await harness.invoke<DocxPreviewResult>('docx_render_preview', {
-            docId: applied.newDocId,
-            format: 'html'
-          })
 
           return {
             applied,
             preservedParagraph,
-            updatedCell,
-            preview,
-            previewExists: await fs
-              .access(preview.previewPath)
-              .then(() => true)
-              .catch(() => false)
+            updatedCell
           }
         } finally {
           await harness.release()
@@ -181,14 +170,12 @@ describe('ai tool docx backend', () => {
             result.updatedCell.block.paragraphs.some((paragraph) =>
               paragraph.runs.some((run) => run.text === 'Bob' && run.italic && run.color === '008000')
             ) &&
-            result.previewExists,
+            result.applied.changedBlocks.length === 2,
           {
-            name: 'updated-target-renders-with-expected-formatting',
-            message: '修改目标应按预期保留/更新样式，并生成可回看的 preview。',
+            name: 'updated-target-preserves-expected-formatting',
+            message: '修改目标应按预期保留/更新样式，且写入结果仍可继续被 block 读取。',
             data: {
-              updatedCell: result.updatedCell.block,
-              previewPath: result.preview.previewPath,
-              previewExists: result.previewExists
+              updatedCell: result.updatedCell.block
             }
           }
         )

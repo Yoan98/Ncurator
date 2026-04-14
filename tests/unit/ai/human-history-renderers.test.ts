@@ -104,9 +104,9 @@ describe('ai unit human history renderers', () => {
         history: appendRoundRecord({
           state: learningState,
           decision: buildDecision({
-            summary: '读取资料并生成预览',
+            summary: '读取资料并执行编辑',
             reason: '已经具备需要的能力',
-            expectedOutcome: '拿到 docx 预览产物',
+            expectedOutcome: '拿到 docx 编辑结果',
             nextAction: {
               action: 'hand',
               toolUsePlan: {
@@ -119,9 +119,15 @@ describe('ai unit human history renderers', () => {
                     }
                   },
                   {
-                    toolName: 'docx_render_preview',
+                    toolName: 'docx_apply_ops',
                     args: {
-                      format: 'html'
+                      ops: [
+                        {
+                          type: 'replace_text',
+                          query: 'old',
+                          replace: 'new'
+                        }
+                      ]
                     }
                   }
                 ]
@@ -139,9 +145,15 @@ describe('ai unit human history renderers', () => {
                   }
                 },
                 {
-                  toolName: 'docx_render_preview',
+                  toolName: 'docx_apply_ops',
                   args: {
-                    format: 'html'
+                    ops: [
+                      {
+                        type: 'replace_text',
+                        query: 'old',
+                        replace: 'new'
+                      }
+                    ]
                   }
                 }
               ]
@@ -161,12 +173,12 @@ describe('ai unit human history renderers', () => {
                 }
               },
               {
-                toolName: 'docx_render_preview',
+                toolName: 'docx_apply_ops',
                 ok: true,
                 code: 'ok',
                 data: {
-                  previewPath: '/tmp/preview.docx',
-                  summary: 'preview generated (html)'
+                  newDocId: 'doc-2',
+                  summary: 'ops applied (1 changes)'
                 }
               }
             ]
@@ -222,7 +234,7 @@ describe('ai unit human history renderers', () => {
     expect(unifiedHistory).toContain('过程历史：')
     expect(unifiedHistory).toContain('主动回看历史：')
     expect(unifiedHistory).toContain('Weekly Risk Summary.md')
-    expect(unifiedHistory).toContain('preview generated (html)')
+    expect(unifiedHistory).toContain('ops applied (1 changes)')
     expect(brainPrompt.user).toContain(focusHistory)
     expect(mouthPrompt.user).toContain(unifiedHistory)
   })

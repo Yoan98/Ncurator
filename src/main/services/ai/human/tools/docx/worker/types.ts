@@ -6,8 +6,7 @@ import type {
   DocxOp,
   DocxOutlineBlock,
   DocxSearchMatch,
-  DocxSearchMode,
-  DocxValidationProblem
+  DocxSearchMode
 } from '../types'
 
 export type DocxWorkerAction =
@@ -16,9 +15,7 @@ export type DocxWorkerAction =
   | 'get_block'
   | 'search'
   | 'apply_ops'
-  | 'render_preview'
-  | 'save'
-  | 'validate'
+  | 'materialize_draft'
   | 'release_run'
 
 export type DocxWorkerRequest =
@@ -73,28 +70,10 @@ export type DocxWorkerRequest =
   | {
       requestId: string
       runId: string
-      action: 'render_preview'
-      payload: {
-        docId: string
-        format: 'html' | 'png' | 'pdf'
-        previewPath: string
-      }
-    }
-  | {
-      requestId: string
-      runId: string
-      action: 'save'
+      action: 'materialize_draft'
       payload: {
         docId: string
         outPath: string
-      }
-    }
-  | {
-      requestId: string
-      runId: string
-      action: 'validate'
-      payload: {
-        docId: string
       }
     }
   | {
@@ -132,20 +111,10 @@ export type DocxWorkerSuccessPayload =
       warnings: string[]
     }
   | {
-      action: 'render_preview'
-      format: 'html' | 'png' | 'pdf'
-      previewPath: string
-      renderer: 'docx_file_artifact'
-    }
-  | {
-      action: 'save'
+      action: 'materialize_draft'
       outPath: string
       checksum: string
       byteSize: number
-    }
-  | {
-      action: 'validate'
-      problems: DocxValidationProblem[]
     }
   | {
       action: 'release_run'

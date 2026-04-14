@@ -19,7 +19,7 @@ export const aiFileArtifactRefSchema: z.ZodType<AiFileArtifactRef> = z.object({
   path: z.string().min(1),
   fileName: z.string().min(1),
   operation: z.enum(['created', 'updated']),
-  artifactRole: z.enum(['preview', 'draft', 'committed']).optional(),
+  artifactRole: z.enum(['draft', 'committed']).optional(),
   reviewId: z.string().min(1).optional(),
   draftDocumentId: z.string().min(1).optional(),
   draftSnapshotId: z.string().min(1).optional(),

@@ -32,7 +32,7 @@ const invokeCachedTool = async <TResult>(
 const buildHandState = (input: {
   taskId: string
   userInput: string
-  learnedSkillIds: Array<'workspace-cli' | 'docx-read' | 'docx-delivery'>
+  learnedSkillIds: Array<'workspace-cli' | 'docx-read'>
   toolName: string
   args: Record<string, unknown>
   previousArtifacts?: AiArtifactRef[]
@@ -81,7 +81,7 @@ describe('ai tool hand backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['hand'],
-      description: '验证 hand 的工具调用上限收敛和 execution.artifacts 合并。',
+      description: '验证 hand 的工具调用上限收敛，以及非 artifact 工具不会覆盖已有 execution.artifacts。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -118,13 +118,6 @@ describe('ai tool hand backend', () => {
           taskId: runtime.taskId,
           skillId: 'docx-read'
         })
-        ensureSkillTools({
-          cache,
-          ctx,
-          runId: runtime.runId,
-          taskId: runtime.taskId,
-          skillId: 'docx-delivery'
-        })
 
         const docxReadTools = cache.skillToolsets['docx-read'] || []
         const openResult = await invokeCachedTool<DocxOpenResult>(docxReadTools, 'docx_open', {
@@ -153,12 +146,13 @@ describe('ai tool hand backend', () => {
         const secondState = await handNode({
           ...buildHandState({
             taskId: runtime.taskId,
-            userInput: 'create a docx preview artifact',
-            learnedSkillIds: ['workspace-cli', 'docx-read', 'docx-delivery'],
-            toolName: 'docx_render_preview',
+            userInput: 'read the docx without creating artifacts',
+            learnedSkillIds: ['workspace-cli', 'docx-read'],
+            toolName: 'docx_search',
             args: {
               docId: openResult.docId,
-              format: 'html'
+              query: 'Preview generation should be merged with terminal artifact.',
+              mode: 'literal'
             },
             previousArtifacts: firstState.execution.artifacts
           }),
@@ -183,27 +177,25 @@ describe('ai tool hand backend', () => {
         )
 
         runtime.assertThat(
-          result.secondState.execution.artifacts.length === 2 &&
+          result.secondState.execution.artifacts.length === 1 &&
             result.secondState.execution.artifacts.some(
               (artifact) => artifact.kind === 'file' && artifact.capability === 'terminal_exec'
             ) &&
-            result.secondState.execution.artifacts.some(
-              (artifact) =>
-                artifact.kind === 'file' &&
-                artifact.capability === 'docx' &&
-                artifact.artifactRole === 'preview'
-            ),
+            result.secondState.execution.lastToolResults?.[0]?.toolName === 'docx_search',
           {
-            name: 'runtime-artifacts-merge-across-tools',
-            message: '多个工具产生的 artifact 应在 hand 内正确合并，而不是相互覆盖。',
-            data: result.secondState.execution.artifacts
+            name: 'runtime-artifacts-are-preserved-when-next-tool-has-no-artifact',
+            message: '后续没有 artifact 的工具执行后，execution.artifacts 应保留已有 terminal 产物而不是被覆盖。',
+            data: {
+              artifacts: result.secondState.execution.artifacts,
+              lastToolUseResults: result.secondState.execution.lastToolResults
+            }
           }
         )
 
         runtime.assertThat(
           result.secondState.execution.watchHint?.code === 'hand_tool_limit_exceeded' &&
             result.secondState.execution.watchHint.detail.limit === 1 &&
-            result.secondState.execution.lastToolResults?.[0]?.toolName === 'docx_render_preview',
+            result.secondState.execution.lastToolResults?.[0]?.toolName === 'docx_search',
           {
             name: 'tool-limit-produces-converging-watchhint',
             message: '超过 hardActionLimit 后，hand 应写入收敛型 watchHint，同时保留当前工具结果。',

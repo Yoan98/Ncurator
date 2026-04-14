@@ -27,6 +27,9 @@ export type DocxOp = z.infer<typeof docOpSchema>
 export type DocxOutlineParagraphBlock = {
   blockId: string
   type: 'paragraph'
+  bodyIndex: number
+  previousBodyBlockId?: string
+  nextBodyBlockId?: string
   style: string
   text: string
 }
@@ -34,6 +37,9 @@ export type DocxOutlineParagraphBlock = {
 export type DocxOutlineTableBlock = {
   blockId: string
   type: 'table'
+  bodyIndex: number
+  previousBodyBlockId?: string
+  nextBodyBlockId?: string
   rows: number
   cols: number
   preview: string
@@ -42,6 +48,9 @@ export type DocxOutlineTableBlock = {
 export type DocxOutlineCellBlock = {
   blockId: string
   type: 'table_cell'
+  bodyIndex: number
+  previousBodyBlockId?: string
+  nextBodyBlockId?: string
   tableBlockId: string
   row: number
   col: number
@@ -53,6 +62,9 @@ export type DocxOutlineBlock = DocxOutlineParagraphBlock | DocxOutlineTableBlock
 export type DocxDetailedParagraphBlock = {
   blockId: string
   type: 'paragraph'
+  bodyIndex: number
+  previousBodyBlockId?: string
+  nextBodyBlockId?: string
   style: string
   text: string
   runs: DocxTextRunSpec[]
@@ -68,6 +80,9 @@ export type DocxDetailedTableCell = {
 export type DocxDetailedTableBlock = {
   blockId: string
   type: 'table'
+  bodyIndex: number
+  previousBodyBlockId?: string
+  nextBodyBlockId?: string
   rows: number
   cols: number
   preview: string
@@ -77,6 +92,9 @@ export type DocxDetailedTableBlock = {
 export type DocxDetailedCellBlock = {
   blockId: string
   type: 'table_cell'
+  bodyIndex: number
+  previousBodyBlockId?: string
+  nextBodyBlockId?: string
   tableBlockId: string
   row: number
   col: number
@@ -93,6 +111,11 @@ export type DocxSearchMode = z.infer<typeof docxSearchModeSchema>
 
 export type DocxSearchMatch = {
   blockId: string
+  blockType: 'paragraph' | 'table' | 'table_cell'
+  bodyIndex: number
+  previousBodyBlockId?: string
+  nextBodyBlockId?: string
+  tableBlockId?: string
   text: string
   offsets: Array<{ start: number; end: number }>
 }
@@ -131,6 +154,11 @@ export type DocxCapabilityToolsInput = WorkspaceCapabilityBuildInput<DocxToolCon
 
 export type SemanticDocIndexEntry = {
   blockId: string
+  blockType: 'paragraph' | 'table_cell'
+  bodyIndex: number
+  previousBodyBlockId?: string
+  nextBodyBlockId?: string
+  tableBlockId?: string
   text: string
   embedding: Float32Array
 }

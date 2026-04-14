@@ -58,7 +58,7 @@ describe('ai human live backend', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['live'],
-      description: '验证 live 模式下 human 会在真实长任务里串起模板定位、资料取证、docx 编辑与预览交付。',
+      description: '验证 live 模式下 human 会在真实长任务里串起模板定位、资料取证、docx 编辑与 confirm-copy 交付。',
       fixtures: [],
       runMode: 'single',
       runtimeModelName: hasLiveLlmConfigInEnv('primary')
@@ -117,8 +117,10 @@ describe('ai human live backend', () => {
             (artifact) =>
               artifact.kind === 'file' &&
               artifact.capability === 'docx' &&
-              (artifact.artifactRole === 'preview' || artifact.artifactRole === 'draft')
+              artifact.artifactRole === 'draft'
           ) || []
+        const hasDraftReviewArtifact =
+          result.output?.artifacts?.some((artifact) => artifact.kind === 'draft_review') || false
         const templateUnchanged = await hasUnchangedFileBytes(
           result.workspaceSeed.templatePath,
           result.workspaceSeed.originalTemplateBytes
@@ -132,7 +134,9 @@ describe('ai human live backend', () => {
             openedExpectedTemplate(openedSourcePaths, result.workspaceSeed.templatePath) &&
             toolNames.includes('docx_open') &&
             toolNames.includes('docx_apply_ops') &&
-            toolNames.includes('docx_render_preview'),
+            !toolNames.includes('docx_render_preview') &&
+            !toolNames.includes('docx_save') &&
+            !toolNames.includes('docx_validate'),
           {
             name: 'human-live-risk-report-runs-required-tool-chain',
             message: 'live human complex case 应通过 terminal、KB 与 docx 真实工具链完成周报草稿任务。',
@@ -145,9 +149,9 @@ describe('ai human live backend', () => {
           }
         )
 
-        runtime.assertThat(docxArtifacts.length > 0 && templateUnchanged, {
-          name: 'human-live-risk-report-produces-preview-without-overwriting-template',
-          message: 'live human complex case 应生成 preview/draft artifact，且原模板文件不能被覆盖。',
+        runtime.assertThat(docxArtifacts.length > 0 && hasDraftReviewArtifact && templateUnchanged, {
+          name: 'human-live-risk-report-produces-confirm-copy-without-overwriting-template',
+          message: 'live human complex case 应生成 confirm-copy/draft review artifact，且原模板文件不能被覆盖。',
           data: {
             toolNames,
             templatePath: result.workspaceSeed.templatePath,

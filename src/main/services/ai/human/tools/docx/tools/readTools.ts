@@ -237,6 +237,9 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
               summary: result.summary,
               blockId: result.block.blockId,
               blockType: result.block.type,
+              bodyIndex: result.block.bodyIndex,
+              previousBodyBlockId: result.block.previousBodyBlockId,
+              nextBodyBlockId: result.block.nextBodyBlockId,
               text: blockPreview
             },
             draftDocId: docId
@@ -306,6 +309,8 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
             code: result.code,
             summary: result.summary,
             matchCount: result.matches.length,
+            firstMatchBlockType: result.matches[0]?.blockType,
+            firstMatchBodyIndex: result.matches[0]?.bodyIndex,
             warnings: result.warnings
           },
           draftDocId: docId
@@ -341,6 +346,8 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
               code: result.code,
               summary: result.summary,
               matchCount: result.matches.length,
+              firstMatchBlockType: result.matches[0]?.blockType,
+              firstMatchBodyIndex: result.matches[0]?.bodyIndex,
               warnings: result.warnings
             },
             draftDocId: docId

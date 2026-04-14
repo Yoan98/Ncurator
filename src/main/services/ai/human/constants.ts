@@ -6,7 +6,6 @@ export const EXTERNAL_RUNTIME_SKILL_IDS = [
   'workspace-cli',
   'docx-read',
   'docx-write',
-  'docx-delivery',
   'kb-document-discovery',
   'kb-evidence-query'
 ] as const

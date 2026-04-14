@@ -92,10 +92,10 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证最小 docx 打开、定位、编辑、校验与预览链路。
+- What：验证最小 docx 打开、定位、编辑与继续读取链路。
 - Why：这是 docx 工具链最基础的真实生产调用闭环。
-- How：对 fixture docx 真实执行 `docx_open -> docx_search / outline -> docx_apply_ops -> docx_validate -> docx_render_preview`。
-- Oracle：返回稳定 `docId/newDocId`、只目标 block 进入 `changedBlocks`、`validate` 通过。
+- How：对 fixture docx 真实执行 `docx_open -> docx_search / outline -> docx_apply_ops -> docx_search`。
+- Oracle：返回稳定 `docId/newDocId`、只目标 block 进入 `changedBlocks`，且修改后的结果可继续被读取工具消费。
 - Not：不验证 `human` 的工具选择。
 
 ##### `docx-large-document-navigation`
@@ -164,8 +164,8 @@
 - 实现状态：`已实现`
 - What：验证混合格式文本在编辑后的样式保留。
 - Why：run 级样式保留是 docx 修改的重要风险。
-- How：对包含 `bold / italic / underline / color` 的真实 docx 执行编辑并预览。
-- Oracle：未修改部分样式保留，修改目标预览正确。
+- How：对包含 `bold / italic / underline / color` 的真实 docx 执行编辑，再通过 block 读取验证样式结果。
+- Oracle：未修改部分样式保留，修改目标样式正确。
 - Not：不验证 review UI。
 
 ##### `docx-review-aware-open-and-continue-edit`
@@ -174,7 +174,7 @@
 - 实现状态：`已实现`
 - What：验证 active review 下 `docx_open` 会基于 latest effective draft 继续编辑。
 - Why：多轮未确认修改能否累计，依赖 review-aware open 的真实行为。
-- How：通过真实 `DraftReviewStore + DraftReviewService` seed active review，再执行 `docx_open / docx_search / docx_apply_ops / docx_validate`。
+- How：通过真实 `DraftReviewStore + DraftReviewService` seed active review，再执行 `docx_open / docx_search / docx_apply_ops`。
 - Oracle：读取内容来自最新草稿而非源文件，新增修改只叠加当前 delta。
 - Not：不验证 review UI 与最终确认替换。
 
@@ -184,7 +184,7 @@
 - 实现状态：`已实现`
 - What：验证 run 内历史查询与回滚能力。
 - Why：复杂编辑任务必须可回退。
-- How：多轮真实 `apply_ops` 后执行 `docx_get_history` 与 rollback，再 `validate`。
+- How：多轮真实 `apply_ops` 后执行 `docx_get_history` 与 rollback。
 - Oracle：历史链可追溯，回滚只影响 run 内草稿，不改写磁盘源文件。
 - Not：不验证 review 放弃 / 确认。
 
@@ -194,19 +194,19 @@
 - 实现状态：`已实现`
 - What：验证未 `open` 或无效 `docId` 时的前置保护。
 - Why：这是工具层最常见的异常入口。
-- How：直接调用 `outline / search / apply_ops / validate` 覆盖非法输入。
+- How：直接调用 `outline / search / apply_ops / rollback` 覆盖非法输入。
 - Oracle：返回明确失败，不产生新快照，不污染运行状态。
 - Not：不验证上层重试策略。
 
-##### `docx-save-overwrite-approval`
+##### `docx-apply-ops-invalid-snapshot-guard`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证另存为、覆盖写入与审批边界。
-- Why：落盘是 docx 工具链最高风险动作之一。
-- How：对真实修改后草稿执行保存到新路径、覆盖已有文件、审批通过 / 拒绝分支。
-- Oracle：审批拒绝时原文件不改写，审批通过后返回正确落盘结果。
-- Not：不验证 workbench 审批 UI。
+- What：验证 `apply_ops` 产出无效 docx 时会被工程内部校验拦截。
+- Why：validate 已下沉为工程门禁，必须有正式 case 守住“坏快照不能进入当前草稿”。
+- How：对带损坏关系引用的真实 docx 执行 `docx_open -> docx_apply_ops`。
+- Oracle：`apply_ops` 直接失败，且当前 run 的 `lastDocId` 与 tracked snapshot 不会推进到无效快照。
+- Not：不验证上层如何决定重试或放弃。
 
 #### `kb`
 
@@ -288,10 +288,10 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 `hand` 在 `serial` 模式下会按顺序执行真实 docx 写入、校验与预览链路。
+- What：验证 `hand` 在 `serial` 模式下会按顺序执行真实 docx 写入与读回确认链路。
 - Why：复杂 docx 链路依赖最新快照，必须通过正式 case 守住串行执行契约。
-- How：通过真实 `hand` 执行 `docx_apply_ops -> docx_validate -> docx_render_preview`。
-- Oracle：工具结果顺序稳定、全部成功，且会产出 preview artifact。
+- How：通过真实 `hand` 执行 `docx_apply_ops -> docx_search`。
+- Oracle：工具结果顺序稳定、全部成功，且不会在 hand 内直接产出 docx 交付 artifact。
 - Not：不验证 `brain` 是否自然生成这条计划。
 
 ##### `hand-tool-limit-and-artifact-merge`
@@ -354,8 +354,8 @@
 - 实现状态：`已实现`
 - What：验证真实 `learning` 会持续记录当前 active tool 数，并在预算未超限时保留当前已学习 skill 集。
 - Why：`learning` 的 active tool 预算是后续扩展 `excel / ppt` 等新能力时的重要长期边界，正式 case 需要先守住基础统计与状态可见性。
-- How：通过 scripted structured output 依次学习 `workspace-cli + docx-read`、`docx-write + docx-delivery`、`kb-document-discovery + kb-evidence-query`，最后进入真实 `mouth` 收束；检查最后一轮真实 `human_learning` 事件中的 `learnedSkillIds`、`availableToolNames` 与 summary。
-- Oracle：任务最终完成；最后一轮 `human_learning` 事件中保留全部已学习 skill，`availableToolNames` 长度为 `15`，summary 包含 `当前 active tools=15`，且不包含 skill 淘汰文案。
+- How：通过 scripted structured output 依次学习 `workspace-cli + docx-read`、`docx-write`、`kb-document-discovery + kb-evidence-query`，最后进入真实 `mouth` 收束；检查最后一轮真实 `human_learning` 事件中的 `learnedSkillIds`、`availableToolNames` 与 summary。
+- Oracle：任务最终完成；最后一轮 `human_learning` 事件中保留全部已学习 skill，`availableToolNames` 长度为 `13`，summary 包含 `当前 active tools=12`，且不包含 skill 淘汰文案。
 - Not：不验证超过 `20` 个 active tools 后的淘汰算法细节。
 
 ##### `watchhint-retry`
@@ -474,10 +474,10 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 live 模式下 `human` 会在一个真实长任务里串起模板定位、资料取证、docx 编辑与预览交付。
+- What：验证 live 模式下 `human` 会在一个真实长任务里串起模板定位、资料取证、docx 编辑与 confirm-copy 交付。
 - Why：`human/live` 需要至少一条长期高价值复杂样例，覆盖 workspace、KB、docx 与最终交付链路。
-- How：注入真实 live LLM 配置；workspace 中动态写入带 `RISK_TODO / OWNER_TODO` 占位符的周报模板和干扰文件；seed 两份真实 KB 文档分别提供风险结论与负责人说明并限制在已选范围内；直接输入“找到上周 Word 周报模板，按已选资料补全风险结论与负责人，生成预览且不要覆盖原文件”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；事件流中至少出现一次 `terminal_run_command`、一次以 `kb_` 开头的检索工具调用、一次 `docx_open`、一次 `docx_apply_ops` 与一次 `docx_render_preview`；存在 preview/draft artifact，且原模板未被覆盖；最终答复能从用户视角说明改动的是“风险结论”和“负责人说明”两处、依据分别来自 `Weekly Risk Summary.md` 与 `Owner Note.md`，并明确已经生成预览且未覆盖原文件。
+- How：注入真实 live LLM 配置；workspace 中动态写入带 `RISK_TODO / OWNER_TODO` 占位符的周报模板和干扰文件；seed 两份真实 KB 文档分别提供风险结论与负责人说明并限制在已选范围内；直接输入“找到上周 Word 周报模板，按已选资料补全风险结论与负责人，生成确认稿且不要覆盖原文件”的自然语言诉求，让真实 `human` 自主完成。
+- Oracle：任务最终完成；事件流中至少出现一次 `terminal_run_command`、一次以 `kb_` 开头的检索工具调用、一次 `docx_open`、一次 `docx_apply_ops`；不存在 `docx_render_preview / docx_save / docx_validate`；存在 `draft_review` 与 `draft` artifact，且原模板未被覆盖；最终答复能从用户视角说明改动的是“风险结论”和“负责人说明”两处、依据分别来自 `Weekly Risk Summary.md` 与 `Owner Note.md`，并明确当前给出的是待确认草稿。
 - Not：不绑定最终答案措辞，也不要求固定检索工具顺序。
 
 ##### `human-docx-cause-remedy-reading-live`
@@ -494,20 +494,20 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 live 模式下 `human` 会基于两份已选 `docx`，在目标 `docx` 的相关位置追加解释性段落和对照表，并生成不覆盖原文件的预览稿。
-- Why：真实用户常见诉求不是“改占位符”，而是“在这块后面补一段更好懂的说明”；这条 case 覆盖跨文件取材、相关位置补写、结构化新增与 preview-only 交付，对齐 `WB-CORE-002-AC2`、`WB-CORE-003-AC1`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
-- How：注入真实 live LLM 配置；把 `tests/fixtures/ai/docx/深度学习.docx` 与 `tests/fixtures/ai/docx/图形学.docx` 作为已选资料复制进 workspace；直接输入“《图形学》里‘反走样’这一节我还是记不住。你参考我刚选的这两份 Word，直接在这一节最后补一小段更好理解的说明，再加个简单对照表，一列写反走样，一列写《深度学习》里的过拟合。直接给我可预览的版本就行，别改原文件，也不用先回我文字草稿。”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；事件流中至少两次 `docx_open` 覆盖两份目标文档；`docx_apply_ops` 前至少出现一次针对“反走样”的读取定位；至少出现一次 `docx_apply_ops` 与一次 `docx_render_preview`；存在 preview/draft artifact；不出现 `docx_save`；原始两份 `docx` 文件未被覆盖；写入请求里能看到新增说明段落与表格结构。
+- What：验证 live 模式下 `human` 会基于两份已选 `docx`，在目标 `docx` 的相关位置追加解释性段落和对照表，并生成不覆盖原文件的 confirm copy。
+- Why：真实用户常见诉求不是“改占位符”，而是“在这块后面补一段更好懂的说明”；这条 case 覆盖跨文件取材、相关位置补写、结构化新增与 confirm-copy 交付，对齐 `WB-CORE-002-AC2`、`WB-CORE-003-AC1`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
+- How：注入真实 live LLM 配置；把 `tests/fixtures/ai/docx/深度学习.docx` 与 `tests/fixtures/ai/docx/图形学.docx` 作为已选资料复制进 workspace；直接输入“《图形学》里‘反走样’这一节我还是记不住。你参考我刚选的这两份 Word，直接在这一节最后补一小段更好理解的说明，再加个简单对照表，一列写反走样，一列写《深度学习》里的过拟合。直接给我确认稿就行，别改原文件，也不用先回我文字草稿。”的自然语言诉求，让真实 `human` 自主完成。
+- Oracle：任务最终完成；事件流中至少两次 `docx_open` 覆盖两份目标文档；`docx_apply_ops` 前至少出现一次针对“反走样”的读取定位；至少出现一次 `docx_apply_ops`；不存在 `docx_render_preview / docx_save / docx_validate`；存在 `draft_review` 与 `draft` artifact；原始两份 `docx` 文件未被覆盖；写入请求里能看到新增说明段落与表格结构。
 - Not：不要求固定 op 组合，也不对最终说明文案做逐字断言。
 
 ##### `human-kb-guided-docx-comparison-draft-live`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 live 模式下 `human` 在本地资料较多时，会先用 KB 缩圈定位相关资料，再回到目标 `docx` 做跨文件补写并交付预览。
+- What：验证 live 模式下 `human` 在本地资料较多时，会先用 KB 缩圈定位相关资料，再回到目标 `docx` 做跨文件补写并交付 confirm copy。
 - Why：真实用户常常记得主题、不记得文件名；这条 case 要长期守住“工作区默认范围 + KB 缩圈 + docx 继续执行”的正式能力，对齐 `WB-CORE-002-AC2`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
-- How：注入真实 live LLM 配置；workspace 中动态写入 `深度学习.docx`、`图形学.docx` 和若干干扰文件，并把目标 `docx` 与干扰资料同时 seed 到真实 KB；不传 `selectedReferences`，只绑定 workspace；直接输入“我工作区资料有点多，我忘了是哪份课件在讲反走样了。你先帮我找到那份，再参考讲过拟合的那份资料，直接在‘反走样’那一节最后补一段更好记的说明，再加个简单对照表，一列写反走样，一列写过拟合。直接给我可预览的版本就行，别改原文件，也不用先回我文字草稿。”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；事件流中至少出现一次 KB 工具调用；后续出现 `docx_open` 并覆盖最终参与编辑的目标 `docx`；至少出现一次 `docx_apply_ops` 与一次 `docx_render_preview`；存在 preview/draft artifact；不出现 `docx_save`；目标原始 `docx` 未被覆盖；新增内容同时涉及“反走样”和“过拟合”。
+- How：注入真实 live LLM 配置；workspace 中动态写入 `深度学习.docx`、`图形学.docx` 和若干干扰文件，并把目标 `docx` 与干扰资料同时 seed 到真实 KB；不传 `selectedReferences`，只绑定 workspace；直接输入“我工作区资料有点多，我忘了是哪份课件在讲反走样了。你先帮我找到那份，再参考讲过拟合的那份资料，直接在‘反走样’那一节最后补一段更好记的说明，再加个简单对照表，一列写反走样，一列写过拟合。直接给我确认稿就行，别改原文件，也不用先回我文字草稿。”的自然语言诉求，让真实 `human` 自主完成。
+- Oracle：任务最终完成；事件流中至少出现一次 KB 工具调用；后续出现 `docx_open` 并覆盖最终参与编辑的目标 `docx`；至少出现一次 `docx_apply_ops`；不存在 `docx_render_preview / docx_save / docx_validate`；存在 `draft_review` 与 `draft` artifact；目标原始 `docx` 未被覆盖；新增内容同时涉及“反走样”和“过拟合”。
 - Not：不强制固定执行路径，也不要求 KB 缩圈后必须再打开所有候选资料。
 
 ## 5. 验收口径

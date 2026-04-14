@@ -32,9 +32,11 @@ describe('ai tool docx backend', () => {
                 }
               ]
             }),
-            validateWithoutOpen: await harness.invoke<DocxFailureResult>('docx_validate', {}),
-            invalidDocId: await harness.invoke<DocxFailureResult>('docx_validate', {
-              docId: 'missing-doc-id'
+            rollbackWithoutOpen: await harness.invoke<DocxFailureResult>('docx_rollback', {}),
+            invalidDocId: await harness.invoke<DocxFailureResult>('docx_search', {
+              docId: 'missing-doc-id',
+              query: 'hello',
+              mode: 'literal'
             }),
             lastDocId: harness.state.lastDocId,
             trackedSourceCount: harness.state.sourcePathByDocId.size
@@ -49,7 +51,7 @@ describe('ai tool docx backend', () => {
             result.outlineWithoutOpen,
             result.searchWithoutOpen,
             result.applyWithoutOpen,
-            result.validateWithoutOpen
+            result.rollbackWithoutOpen
           ].every((item) => item.ok === false && item.code === 'invalid_input') &&
             result.invalidDocId.ok === false,
           {

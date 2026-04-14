@@ -391,7 +391,7 @@ export type DraftReviewStatus =
   | 'discarded'
   | 'superseded'
   | 'failed'
-export type DraftArtifactRole = 'preview' | 'draft' | 'committed'
+export type DraftArtifactRole = 'draft' | 'committed'
 export type DraftCommitJobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'conflicted'
 export type DraftCommitValidationIssueCode =
   | 'source_changed'
@@ -589,7 +589,6 @@ export type RuntimeSkillId =
   | 'workspace-cli'
   | 'docx-read'
   | 'docx-write'
-  | 'docx-delivery'
   | 'kb-document-discovery'
   | 'kb-evidence-query'
 export type AiRunEventStage =

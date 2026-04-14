@@ -10,7 +10,7 @@ export type EmitFileArtifactEventInput = {
   capability: AiFileArtifactCapability
   artifactPath: string
   operation: AiFileArtifactOperation
-  artifactRole?: 'preview' | 'draft' | 'committed'
+  artifactRole?: 'draft' | 'committed'
   reviewId?: string
   draftDocumentId?: string
   draftSnapshotId?: string

@@ -26,7 +26,7 @@ describe('ai tool hand backend', () => {
         const handNode = createHandNode({ ctx, cache })
         const initialState = createInitialHumanState({
           taskId: runtime.taskId,
-          userInput: '回看之前与 docx 预览相关的历史执行情况'
+          userInput: '回看之前与 docx 编辑相关的历史执行情况'
         })
 
         const stateWithLearningRound = {
@@ -37,24 +37,24 @@ describe('ai tool hand backend', () => {
               state: initialState,
               decision: {
                 decision: {
-                  summary: '学习 docx-delivery',
-                  reason: '后续需要生成预览。',
-                  expectedOutcome: '补齐预览交付能力。'
+                  summary: '学习 docx-write',
+                  reason: '后续需要修改文档。',
+                  expectedOutcome: '补齐结构化写入能力。'
                 },
                 readyToDeliver: false,
                 nextAction: {
                   action: 'learning',
-                  wantLearnSkillIds: ['docx-delivery']
+                  wantLearnSkillIds: ['docx-write']
                 }
               },
               execution: buildLearningExecution({
                 learningOutcome: {
-                  requestedSkillIds: ['docx-delivery'],
-                  loadedSkillIds: ['docx-delivery'],
+                  requestedSkillIds: ['docx-write'],
+                  loadedSkillIds: ['docx-write'],
                   skippedDuplicateSkillIds: [],
                   skippedUnknownSkillIds: [],
                   evictedSkillIds: [],
-                  activeToolCount: 3
+                  activeToolCount: 2
                 }
               }),
               createdAt: 1
@@ -70,9 +70,9 @@ describe('ai tool hand backend', () => {
               state: stateWithLearningRound,
               decision: {
                 decision: {
-                  summary: '生成 docx 预览',
-                  reason: '已经具备 delivery 能力，可以生成预览。',
-                  expectedOutcome: '拿到 preview artifact。'
+                  summary: '执行 docx 编辑',
+                  reason: '已经具备 write 能力，可以执行结构化修改。',
+                  expectedOutcome: '拿到 changedBlocks。'
                 },
                 readyToDeliver: false,
                 nextAction: {
@@ -81,9 +81,16 @@ describe('ai tool hand backend', () => {
                     mode: 'serial',
                     calls: [
                       {
-                        toolName: 'docx_render_preview',
+                        toolName: 'docx_apply_ops',
                         args: {
-                          docId: 'doc-1'
+                          docId: 'doc-1',
+                          ops: [
+                            {
+                              type: 'replace_text',
+                              query: 'old',
+                              replace: 'new'
+                            }
+                          ]
                         }
                       }
                     ]
@@ -95,23 +102,38 @@ describe('ai tool hand backend', () => {
                   mode: 'serial',
                   calls: [
                     {
-                      toolName: 'docx_render_preview',
+                      toolName: 'docx_apply_ops',
                       args: {
-                        docId: 'doc-1'
+                        docId: 'doc-1',
+                        ops: [
+                          {
+                            type: 'replace_text',
+                            query: 'old',
+                            replace: 'new'
+                          }
+                        ]
                       }
                     }
                   ]
                 },
                 toolResults: [
                   {
-                    toolName: 'docx_render_preview',
+                    toolName: 'docx_apply_ops',
                     ok: true,
                     code: 'ok',
                     data: {
                       ok: true,
                       code: 'ok',
-                      summary: 'preview generated (html)',
-                      previewPath: '/tmp/preview.docx'
+                      summary: 'ops applied (1 changes)',
+                      newDocId: 'doc-2',
+                      changedBlocks: [
+                        {
+                          action: 'replace_text',
+                          blockId: 'b:1',
+                          beforeText: 'old',
+                          afterText: 'new'
+                        }
+                      ]
                     }
                   }
                 ]
@@ -123,9 +145,9 @@ describe('ai tool hand backend', () => {
             ...stateWithLearningRound.execution,
             currentDecision: {
               decision: {
-                summary: '回看 docx 预览相关历史',
+                summary: '回看 docx 编辑相关历史',
                 reason: '最近历史摘要还不够，需要看更详细的旧轮次。',
-                expectedOutcome: '加载到包含 docx_render_preview 的旧历史。'
+                expectedOutcome: '加载到包含 docx_apply_ops 的旧历史。'
               },
               readyToDeliver: false,
               nextAction: {
@@ -137,7 +159,7 @@ describe('ai tool hand backend', () => {
                       toolName: 'history_recall',
                       args: {
                         executionKinds: ['hand'],
-                        toolNames: ['docx_render_preview'],
+                        toolNames: ['docx_apply_ops'],
                         limit: 1
                       }
                     }

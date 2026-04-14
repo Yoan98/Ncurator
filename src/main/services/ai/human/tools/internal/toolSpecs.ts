@@ -6,7 +6,7 @@ import { historyRecallFilterSchema } from '../../schema'
 
 const HISTORY_RECALL_EXAMPLE: JsonObject = {
   executionKinds: ['hand'],
-  toolNames: ['docx_render_preview'],
+  toolNames: ['docx_apply_ops'],
   limit: 2
 }
 
@@ -79,7 +79,7 @@ export const HISTORY_RECALL_TOOL_SPEC: HumanToolSpec<
     ],
     examples: [
       {
-        goal: '回看最近几轮中与 docx 预览相关的详细执行结果',
+        goal: '回看最近几轮中与 docx 编辑相关的详细执行结果',
         args: HISTORY_RECALL_EXAMPLE
       }
     ]

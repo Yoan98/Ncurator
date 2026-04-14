@@ -65,21 +65,8 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     summary: '修改 docx 内容，或基于快照回滚到上一版。',
     whenToUse: '当你已经明确知道要改哪里、改成什么，或需要回滚当前草稿快照时使用。',
     detail:
-      '进入写入前应先定位到目标内容，并确认参数结构。对 replace_text，最小合法结构是 type/query/replace；修改后通常还需要 preview、validate 或 save 来完成交付。',
+      '它提供结构化编辑与 run 内快照回滚。replace_text 只替换现有文本；insert_before / insert_after 会新增 block 级内容；replace_block 会整块替换；update_table_cell 只更新已有表格单元格。它不负责确认副本生成、差异样式或最终落盘。',
     toolNames: ['docx_apply_ops', 'docx_rollback']
-  },
-  'docx-delivery': {
-    skillId: 'docx-delivery',
-    familyId: 'docx',
-    source: 'external',
-    availability: 'learnable',
-    countsTowardToolBudget: true,
-    title: 'docx-delivery',
-    summary: '校验 docx 草稿、生成预览、按需落盘。',
-    whenToUse: '当文档内容已经准备好，需要形成可审阅或可交付结果时使用。',
-    detail:
-      '优先用 validate 和 render_preview 做检查与交付；只有任务明确需要文件落盘时才 save。',
-    toolNames: ['docx_render_preview', 'docx_save', 'docx_validate']
   },
   'kb-document-discovery': {
     skillId: 'kb-document-discovery',

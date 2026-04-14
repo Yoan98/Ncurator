@@ -120,16 +120,19 @@ export class RunDraftTracker {
 
       const effectiveSaveResponse = await client.call({
         runId: input.runId,
-        action: 'save',
+        action: 'materialize_draft',
         payload: {
           docId: document.latestDocId,
           outPath: effectiveDraftPath
         }
       })
-      if (!effectiveSaveResponse.ok || effectiveSaveResponse.payload.action !== 'save') {
+      if (
+        !effectiveSaveResponse.ok ||
+        effectiveSaveResponse.payload.action !== 'materialize_draft'
+      ) {
         throw new Error(
           effectiveSaveResponse.ok
-            ? 'draft effective save worker protocol mismatch'
+            ? 'draft materialization worker protocol mismatch'
             : effectiveSaveResponse.error
         )
       }
