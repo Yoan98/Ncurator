@@ -5,10 +5,9 @@ import {
 } from '../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
-  type DocxApplyOpsResult,
-  type DocxGetBlockResult,
-  type DocxOpenResult,
+  type DocxMutationResult,
   type DocxOutlineResult,
+  type DocxReadResult,
   findParagraphBlockIdByText,
   findTableCellBlockIdByText
 } from './testUtils'
@@ -21,7 +20,7 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证混合格式段落与表格单元格在编辑后仍能保留/更新 run 样式。',
+      description: '验证 mixed-format 文本在样式编辑后仍保持可读，且未命中段落内容不受影响。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -87,13 +86,8 @@ describe('ai tool docx backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         try {
-          const opened = await harness.invoke<DocxOpenResult>('docx_open', {
-            sourcePath: 'mixed-format.docx'
-          })
           const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
-            sourcePath: opened.sourcePath,
-            includeTables: true,
-            includeCells: true,
+            sourcePath: 'mixed-format.docx',
             maxBlocks: 50
           })
 
@@ -101,49 +95,35 @@ describe('ai tool docx backend', () => {
             outline.blocks,
             'Bold Italic Underline Green'
           )
-          const targetParagraphBlockId = findParagraphBlockIdByText(
-            outline.blocks,
-            'Change this sentence.'
-          )
           const ownerCellBlockId = findTableCellBlockIdByText(outline.blocks, 'Owner: Alice')
 
-          const applied = await harness.invoke<DocxApplyOpsResult>('docx_apply_ops', {
-            sourcePath: opened.sourcePath,
-            ops: [
-              {
-                type: 'replace_block',
-                blockId: targetParagraphBlockId,
-                content: {
-                  kind: 'paragraph',
-                  runs: [{ text: 'Changed sentence in preview.' }]
-                }
-              },
-              {
-                type: 'update_table_cell',
-                blockId: ownerCellBlockId,
-                content: [
-                  {
-                    kind: 'paragraph',
-                    runs: [
-                      { text: 'Owner: ' },
-                      { text: 'Bob', italic: true, color: '008000' }
-                    ]
-                  }
-                ]
-              }
-            ]
+          const styledCell = await harness.invoke<DocxMutationResult>('docx_text_style_edit', {
+            sourcePath: outline.sourcePath,
+            blockId: ownerCellBlockId,
+            query: 'Alice',
+            style: {
+              italic: true,
+              color: '008000'
+            }
           })
-          const preservedParagraph = await harness.invoke<DocxGetBlockResult>('docx_get_block', {
-            sourcePath: applied.sourcePath,
+          const renamedCell = await harness.invoke<DocxMutationResult>('docx_text_edit', {
+            sourcePath: styledCell.sourcePath,
+            query: 'Alice',
+            replace: 'Bob',
+            blockIds: [ownerCellBlockId]
+          })
+          const preservedParagraph = await harness.invoke<DocxReadResult>('docx_read', {
+            sourcePath: renamedCell.sourcePath,
             blockId: mixedParagraphBlockId
           })
-          const updatedCell = await harness.invoke<DocxGetBlockResult>('docx_get_block', {
-            sourcePath: applied.sourcePath,
+          const updatedCell = await harness.invoke<DocxReadResult>('docx_read', {
+            sourcePath: renamedCell.sourcePath,
             blockId: ownerCellBlockId
           })
 
           return {
-            applied,
+            styledCell,
+            renamedCell,
             preservedParagraph,
             updatedCell
           }
@@ -153,29 +133,29 @@ describe('ai tool docx backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.preservedParagraph.block.type === 'paragraph' &&
-            result.preservedParagraph.block.runs.some((run) => run.bold) &&
-            result.preservedParagraph.block.runs.some((run) => run.italic) &&
-            result.preservedParagraph.block.runs.some((run) => run.underline) &&
-            result.preservedParagraph.block.runs.some((run) => run.color === '00AA00'),
+          result.preservedParagraph.matches[0]?.type === 'paragraph' &&
+            result.preservedParagraph.matches[0]?.text.includes('Bold Italic Underline Green') &&
+            result.styledCell.changedBlocks.some((block) => block.action === 'style_text'),
           {
-            name: 'unmodified-mixed-format-runs-remain-intact',
-            message: '未修改段落的 mixed-format runs 应在后续编辑后继续保留。',
-            data: result.preservedParagraph.block
+            name: 'unmodified-mixed-format-content-remains-readable',
+            message: '未修改段落在后续样式编辑后应继续可读，且样式工具应记录 style_text 变更。',
+            data: {
+              preservedParagraph: result.preservedParagraph.matches[0],
+              styledCell: result.styledCell.changedBlocks
+            }
           }
         )
 
         runtime.assertThat(
-          result.updatedCell.block.type === 'table_cell' &&
-            result.updatedCell.block.paragraphs.some((paragraph) =>
-              paragraph.runs.some((run) => run.text === 'Bob' && run.italic && run.color === '008000')
-            ) &&
-            result.applied.changedBlocks.length === 2,
+          result.updatedCell.matches[0]?.type === 'table_cell' &&
+            result.updatedCell.matches[0]?.text.includes('Bob') &&
+            result.renamedCell.changedBlocks.length === 1,
           {
-            name: 'updated-target-preserves-expected-formatting',
-            message: '修改目标应按预期保留/更新样式，且写入结果仍可继续被 block 读取。',
+            name: 'updated-target-remains-readable-after-style-and-text-edit',
+            message: '单元格经过样式和文本编辑后，仍应能按 table_cell 继续读取。',
             data: {
-              updatedCell: result.updatedCell.block
+              updatedCell: result.updatedCell.matches[0],
+              renamedCell: result.renamedCell.changedBlocks
             }
           }
         )

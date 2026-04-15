@@ -158,19 +158,11 @@ export const renderLoadedHistoryText = (
 ): string =>
   loadedHistoryContext
     ? `
-过滤条件：roundIds=${renderInlineList((loadedHistoryContext.filters.roundIds || []).map(String), {
-        separator: '、',
-        fallback: 'none'
-      })}；executionKinds=${renderInlineList(loadedHistoryContext.filters.executionKinds || [], {
-        separator: '、',
-        fallback: 'none'
-      })}；toolNames=${renderInlineList(loadedHistoryContext.filters.toolNames || [], {
-        separator: '、',
-        fallback: 'none'
-      })}；watchHintCodes=${renderInlineList(loadedHistoryContext.filters.watchHintCodes || [], {
-        separator: '、',
-        fallback: 'none'
-      })}；limit=${String(loadedHistoryContext.filters.limit || loadedHistoryContext.rounds.length)}
+过滤条件：query=${loadedHistoryContext.filters.query || 'none'}；startRoundId=${String(
+        loadedHistoryContext.filters.startRoundId || 'none'
+      )}；endRoundId=${String(loadedHistoryContext.filters.endRoundId || 'none')}；limit=${String(
+        loadedHistoryContext.filters.limit || loadedHistoryContext.rounds.length
+      )}
 
 ${renderRoundSection({
   records: loadedHistoryContext.rounds,

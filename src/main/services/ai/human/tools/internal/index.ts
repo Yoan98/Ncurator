@@ -4,7 +4,31 @@ import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import type { ToolFamilyDefinition } from '../types'
 import { buildLoadedHistoryContext, filterRoundHistory } from '../../memory/roundHistory'
-import { HISTORY_RECALL_TOOL_SPEC } from './toolSpecs'
+import { HISTORY_LIST_TOOL_SPEC, HISTORY_SEARCH_TOOL_SPEC } from './toolSpecs'
+
+const buildSearchHits = (rounds: ReturnType<typeof filterRoundHistory>, query: string) => {
+  const lowered = query.toLowerCase()
+  return rounds.map((round) => {
+    const summary = round.decision.decision.summary
+    const resultSummary =
+      round.execution.kind === 'hand'
+        ? round.execution.toolResults.map((item) => item.summary).join(' / ')
+        : round.execution.kind === 'mouth'
+          ? round.execution.summary
+          : round.execution.kind === 'learning'
+            ? round.execution.learningOutcome.loadedSkillIds.join(', ')
+            : round.execution.watchHint.code
+    const matchedText = [summary, resultSummary]
+      .find((item) => item.toLowerCase().includes(lowered))
+      || summary
+    return {
+      roundId: round.roundId,
+      stage: round.execution.kind,
+      summary,
+      matchedText
+    }
+  })
+}
 
 export const internalToolFamily: ToolFamilyDefinition = {
   familyId: 'internal',
@@ -16,83 +40,140 @@ export const internalToolFamily: ToolFamilyDefinition = {
       stage: 'human_hand'
     })
 
-    return [
-      tool(
-        async (args) =>
-          await withToolLifecycle({
-            emitter: toolEvents,
-            toolName: HISTORY_RECALL_TOOL_SPEC.name,
-            args: args as JsonObject,
-            execute: async (session) => {
-              ctx.checkCancelled()
-              const state = cache.currentState
-              if (!state) {
-                throw new Error('human state is required for history recall')
-              }
+    const historySearchTool = tool(
+      async (args) =>
+        await withToolLifecycle({
+          emitter: toolEvents,
+          toolName: HISTORY_SEARCH_TOOL_SPEC.name,
+          args: args as JsonObject,
+          execute: async (session) => {
+            ctx.checkCancelled()
+            const state = cache.currentState
+            if (!state) {
+              throw new Error('human state is required for history search')
+            }
 
-              const rounds = filterRoundHistory({
-                roundHistory: state.memory.history.roundHistory,
-                filters: args
+            const rounds = filterRoundHistory({
+              roundHistory: state.memory.history.roundHistory,
+              filters: args
+            })
+            const payload = {
+              ok: true,
+              code: 'ok' as const,
+              hits: buildSearchHits(rounds, String(args.query)),
+              ...buildLoadedHistoryContext({
+                filters: args,
+                rounds
               })
-              const payload = {
+            }
+
+            session.succeed(
+              payload.hits,
+              undefined,
+              {
+                toolName: HISTORY_SEARCH_TOOL_SPEC.name,
                 ok: true,
-                code: 'ok' as const,
-                ...buildLoadedHistoryContext({
-                  filters: args,
-                  rounds
-                })
+                code: 'ok',
+                data: payload
               }
+            )
 
-              session.succeed(
-                rounds.map((round) => ({
-                  roundId: round.roundId,
-                  executionKind: round.execution.kind,
-                  decision: round.decision.decision.summary,
-                  result:
-                    round.execution.kind === 'mouth'
-                      ? round.execution.summary
-                      : round.execution.kind === 'pre_execution_blocked'
-                        ? round.execution.watchHint.code
-                        : round.execution.kind === 'learning'
-                          ? round.execution.learningOutcome.loadedSkillIds.join(', ')
-                          : round.execution.toolResults.map((item) => item.toolName).join(', ')
-                })),
-                undefined,
-                {
-                  toolName: HISTORY_RECALL_TOOL_SPEC.name,
-                  ok: true,
-                  code: 'ok',
-                  data: payload
-                }
-              )
-
-              return payload
-            },
-            onError: (error, session) => {
-              session.fail(
-                [],
-                error.message,
-                undefined,
-                {
-                  toolName: HISTORY_RECALL_TOOL_SPEC.name,
+            return payload
+          },
+          onError: (error, session) => {
+            session.fail(
+              [],
+              error.message,
+              undefined,
+              {
+                toolName: HISTORY_SEARCH_TOOL_SPEC.name,
+                ok: false,
+                code: 'failed',
+                data: {
                   ok: false,
                   code: 'failed',
-                  data: {
-                    ok: false,
-                    code: 'failed',
-                    error: error.message,
-                    rounds: []
-                  }
+                  error: error.message,
+                  hits: []
                 }
-              )
+              }
+            )
+          }
+        }),
+      {
+        name: HISTORY_SEARCH_TOOL_SPEC.name,
+        description: HISTORY_SEARCH_TOOL_SPEC.promptSpec.purpose,
+        schema: HISTORY_SEARCH_TOOL_SPEC.schema
+      }
+    )
+
+    const historyListTool = tool(
+      async (args) =>
+        await withToolLifecycle({
+          emitter: toolEvents,
+          toolName: HISTORY_LIST_TOOL_SPEC.name,
+          args: args as JsonObject,
+          execute: async (session) => {
+            ctx.checkCancelled()
+            const state = cache.currentState
+            if (!state) {
+              throw new Error('human state is required for history list')
             }
-          }),
-        {
-          name: HISTORY_RECALL_TOOL_SPEC.name,
-          description: HISTORY_RECALL_TOOL_SPEC.promptSpec.purpose,
-          schema: HISTORY_RECALL_TOOL_SPEC.schema
-        }
-      )
-    ]
+
+            const rounds = filterRoundHistory({
+              roundHistory: state.memory.history.roundHistory,
+              filters: args
+            })
+            const payload = {
+              ok: true,
+              code: 'ok' as const,
+              ...buildLoadedHistoryContext({
+                filters: args,
+                rounds
+              })
+            }
+
+            session.succeed(
+              rounds.map((round) => ({
+                roundId: round.roundId,
+                executionKind: round.execution.kind,
+                decision: round.decision.decision.summary
+              })),
+              undefined,
+              {
+                toolName: HISTORY_LIST_TOOL_SPEC.name,
+                ok: true,
+                code: 'ok',
+                data: payload
+              }
+            )
+            return payload
+          },
+          onError: (error, session) => {
+            session.fail(
+              [],
+              error.message,
+              undefined,
+              {
+                toolName: HISTORY_LIST_TOOL_SPEC.name,
+                ok: false,
+                code: 'failed',
+                data: {
+                  ok: false,
+                  code: 'failed',
+                  error: error.message,
+                  rounds: []
+                }
+              }
+            )
+          }
+        }),
+      {
+        name: HISTORY_LIST_TOOL_SPEC.name,
+        description: HISTORY_LIST_TOOL_SPEC.promptSpec.purpose,
+        schema: HISTORY_LIST_TOOL_SPEC.schema
+      }
+    )
+
+    return [historySearchTool, historyListTool]
   }
 }

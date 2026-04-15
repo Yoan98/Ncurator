@@ -4,7 +4,7 @@ import {
   writeTestDocxFile
 } from '../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
-import type { DocxOpenResult, DocxSearchResult } from './testUtils'
+import type { DocxReadResult } from './testUtils'
 
 describe('ai tool docx backend', () => {
   it('docx-search-unicode-normalization-contract', async () => {
@@ -14,7 +14,7 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证 docx_search 会对兼容字形做归一化，普通查询仍可命中真实 block。',
+      description: '验证 docx_read(query) 会对兼容字形做归一化，普通查询仍可命中真实 block。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -31,23 +31,14 @@ describe('ai tool docx backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         try {
-          const opened = await harness.invoke<DocxOpenResult>('docx_open', {
-            sourcePath: 'unicode-normalization.docx'
-          })
-          const literal = await harness.invoke<DocxSearchResult>('docx_search', {
-            sourcePath: opened.sourcePath,
+          const literal = await harness.invoke<DocxReadResult>('docx_read', {
+            sourcePath: 'unicode-normalization.docx',
             query: '反走样',
-            mode: 'literal'
-          })
-          const regex = await harness.invoke<DocxSearchResult>('docx_search', {
-            sourcePath: opened.sourcePath,
-            query: '反走样',
-            mode: 'regex'
           })
 
           return {
             literal,
-            regex
+            regex: literal
           }
         } finally {
           await harness.release()

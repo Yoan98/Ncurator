@@ -25,6 +25,12 @@ export const tableSpecSchema = z.object({
 
 export const blockSpecSchema = z.union([paragraphSpecSchema, tableSpecSchema])
 export const docxSearchModeSchema = z.enum(['literal', 'regex', 'semantic'])
+export const docxTextStyleSchema = z.object({
+  color: z.string().optional(),
+  bold: z.boolean().optional(),
+  italic: z.boolean().optional(),
+  underline: z.boolean().optional()
+})
 
 export const docOpSchema = z.discriminatedUnion('type', [
   z.object({
@@ -57,6 +63,12 @@ export const docOpSchema = z.discriminatedUnion('type', [
     replace: z.string(),
     replaceAll: z.boolean().optional(),
     blockIds: z.array(z.string().min(1)).optional()
+  }),
+  z.object({
+    type: z.literal('style_text'),
+    blockId: z.string().min(1),
+    query: z.string().min(1),
+    style: docxTextStyleSchema
   })
 ])
 
@@ -101,4 +113,180 @@ export const rollbackSchema = z.object({
   sourcePath: z.string().min(1),
   targetVersionRef: z.string().min(1).optional(),
   steps: z.number().int().min(1).max(50).optional()
+})
+
+export const docxOutlineRequestSchema = z.object({
+  sourcePath: z.string().min(1),
+  maxBlocks: z.number().int().min(1).max(2000).optional()
+})
+
+export const docxReadRequestSchema = z
+  .object({
+    sourcePath: z.string().min(1),
+    query: z.string().min(1).optional(),
+    blockId: z.string().min(1).optional()
+  })
+  .refine((value) => Boolean(value.query) !== Boolean(value.blockId), {
+    message: 'exactly one of query or blockId is required',
+    path: ['query']
+  })
+
+export const docxParagraphEditActionSchema = z.enum([
+  'insert_before',
+  'insert_after',
+  'replace_text',
+  'delete'
+])
+
+export const docxParagraphEditSchema = z
+  .object({
+    sourcePath: z.string().min(1),
+    action: docxParagraphEditActionSchema,
+    anchorBlockId: z.string().min(1).optional(),
+    blockId: z.string().min(1).optional(),
+    text: z.string().optional()
+  })
+  .superRefine((value, ctx) => {
+    if (value.action === 'insert_before' || value.action === 'insert_after') {
+      if (!value.anchorBlockId) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['anchorBlockId'],
+          message: 'anchorBlockId is required for paragraph insertion'
+        })
+      }
+      if (typeof value.text !== 'string') {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['text'],
+          message: 'text is required for paragraph insertion'
+        })
+      }
+      return
+    }
+
+    if (!value.blockId) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['blockId'],
+        message: 'blockId is required for paragraph update'
+      })
+    }
+    if (value.action === 'replace_text' && typeof value.text !== 'string') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['text'],
+        message: 'text is required for paragraph replacement'
+      })
+    }
+  })
+
+export const docxHeadingEditActionSchema = z.enum([
+  'insert_before',
+  'insert_after',
+  'replace_text'
+])
+
+export const docxHeadingEditSchema = z
+  .object({
+    sourcePath: z.string().min(1),
+    action: docxHeadingEditActionSchema,
+    anchorBlockId: z.string().min(1).optional(),
+    blockId: z.string().min(1).optional(),
+    level: z.number().int().min(1).max(6),
+    text: z.string().min(1)
+  })
+  .superRefine((value, ctx) => {
+    if (value.action === 'insert_before' || value.action === 'insert_after') {
+      if (!value.anchorBlockId) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['anchorBlockId'],
+          message: 'anchorBlockId is required for heading insertion'
+        })
+      }
+      return
+    }
+
+    if (!value.blockId) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['blockId'],
+        message: 'blockId is required for heading replacement'
+      })
+    }
+  })
+
+export const docxTableEditActionSchema = z.enum([
+  'insert_before',
+  'insert_after',
+  'update_cell'
+])
+
+export const docxTableEditSchema = z
+  .object({
+    sourcePath: z.string().min(1),
+    action: docxTableEditActionSchema,
+    anchorBlockId: z.string().min(1).optional(),
+    cellBlockId: z.string().min(1).optional(),
+    rows: z.array(z.array(z.string())).min(1).optional(),
+    text: z.string().optional()
+  })
+  .superRefine((value, ctx) => {
+    if (value.action === 'insert_before' || value.action === 'insert_after') {
+      if (!value.anchorBlockId) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['anchorBlockId'],
+          message: 'anchorBlockId is required for table insertion'
+        })
+      }
+      if (!value.rows || value.rows.length === 0) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['rows'],
+          message: 'rows are required for table insertion'
+        })
+      }
+      return
+    }
+
+    if (!value.cellBlockId) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['cellBlockId'],
+        message: 'cellBlockId is required for table cell update'
+      })
+    }
+    if (typeof value.text !== 'string') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['text'],
+        message: 'text is required for table cell update'
+      })
+    }
+  })
+
+export const docxTextEditSchema = z.object({
+  sourcePath: z.string().min(1),
+  query: z.string().min(1),
+  replace: z.string(),
+  blockIds: z.array(z.string().min(1)).optional()
+})
+
+export const docxTextStyleEditSchema = z.object({
+  sourcePath: z.string().min(1),
+  blockId: z.string().min(1),
+  query: z.string().min(1),
+  style: docxTextStyleSchema
+})
+
+export const docxHistoryRequestSchema = z.object({
+  sourcePath: z.string().min(1),
+  limit: z.number().int().min(1).max(100).optional()
+})
+
+export const docxRollbackRequestSchema = z.object({
+  sourcePath: z.string().min(1),
+  versionRef: z.string().min(1)
 })

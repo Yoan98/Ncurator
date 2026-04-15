@@ -86,6 +86,11 @@ export type DocxToolRuntime = {
   callWorker: (request: Omit<DocxWorkerRequest, 'requestId' | 'runId'>) => Promise<DocxWorkerResponse>
   resolveDocxPath: (input: { cwd: string; rawPath: string }) => string | null
   getDocumentSession: (sourcePath: string) => DocxDocumentSession | undefined
+  ensureDocumentSession: (input: {
+    toolName: string
+    toolCallId: string
+    sourcePath: string
+  }) => Promise<RequireDocSessionResult>
   requireDocumentSession: (input: {
     toolName: string
     toolCallId: string
@@ -104,6 +109,8 @@ export type DocxToolRuntime = {
     sourcePath: string
     previousDocId: string
     nextDocId: string
+    changedBlocks?: DocxVersionEntry['changedBlocks']
+    summary?: string
   }) => { currentVersionRef: string; previousVersionRef: string }
   buildVersionHistory: (
     sourcePath: string,
@@ -137,9 +144,6 @@ export type DocxToolRuntime = {
     previousVersionRef?: string
   }) => DocxToolResourceContext
 }
-
-const buildRequiredDocumentError = (toolName: string, sourcePath: string): string =>
-  `sourcePath must be opened before ${toolName}: ${sourcePath}`
 
 export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxToolRuntime => {
   const state: DocxCapabilityToolsRuntimeState = {
@@ -274,12 +278,84 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
         toolName: params.toolName,
         toolCallId: params.toolCallId,
         code: 'invalid_input',
-        error: buildRequiredDocumentError(params.toolName, sourcePath),
+        error: `sourcePath must be opened before ${params.toolName}: ${sourcePath}`,
         resourceContext: {
           family: 'docx',
           sourcePath
         }
       })
+    }
+  }
+
+  const ensureDocumentSession = async (params: {
+    toolName: string
+    toolCallId: string
+    sourcePath: string
+  }): Promise<RequireDocSessionResult> => {
+    const requestedSourcePath = resolveDocxPath({
+      cwd: workspaceRootPath,
+      rawPath: params.sourcePath
+    })
+    if (!requestedSourcePath) {
+      return {
+        failure: emitFailure({
+          toolName: params.toolName,
+          toolCallId: params.toolCallId,
+          code: 'invalid_input',
+          error: 'sourcePath must be a workspace-bound .docx path'
+        })
+      }
+    }
+
+    const existing = requireDocumentSession({
+      toolName: params.toolName,
+      toolCallId: params.toolCallId,
+      sourcePath: requestedSourcePath
+    })
+    if (!('failure' in existing)) return existing
+
+    const resolvedTarget = await input.ctx.resolveDocxOpenTarget(requestedSourcePath)
+    const workerResponse = await callWorker({
+      action: 'open',
+      payload: {
+        sourcePath: resolvedTarget.openPath
+      }
+    })
+    if (!workerResponse.ok) {
+      return {
+        failure: emitWorkerFailure({
+          toolName: params.toolName,
+          toolCallId: params.toolCallId,
+          response: workerResponse
+        })
+      }
+    }
+    if (workerResponse.payload.action !== 'open') {
+      return {
+        failure: emitFailure({
+          toolName: params.toolName,
+          toolCallId: params.toolCallId,
+          code: 'failed',
+          error: 'worker protocol mismatch (open)'
+        })
+      }
+    }
+
+    const registered = registerOpenedDocument(
+      resolvedTarget.trackedSourcePath,
+      workerResponse.payload.docId,
+      workerResponse.payload.meta,
+      workerResponse.payload.stats
+    )
+    input.ctx.trackDocxOpen({
+      docId: workerResponse.payload.docId,
+      sourcePath: resolvedTarget.trackedSourcePath
+    })
+    return {
+      sourcePath: registered.session.sourcePath,
+      session: registered.session,
+      docId: registered.session.activeDocId,
+      currentVersionRef: registered.currentVersionRef
     }
   }
 
@@ -347,6 +423,8 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     sourcePath: string
     previousDocId: string
     nextDocId: string
+    changedBlocks?: DocxVersionEntry['changedBlocks']
+    summary?: string
   }) => {
     const sourcePath = path.resolve(params.sourcePath)
     const session = state.documentSessionBySourcePath.get(sourcePath)
@@ -369,7 +447,9 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       versionRef: currentVersionRef,
       docId: params.nextDocId,
       parentVersionRef: previousVersionRef,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      changedBlocks: params.changedBlocks,
+      summary: params.summary
     })
     return {
       currentVersionRef,
@@ -622,6 +702,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     callWorker,
     resolveDocxPath,
     getDocumentSession,
+    ensureDocumentSession,
     requireDocumentSession,
     registerOpenedDocument,
     registerDerivedVersion,

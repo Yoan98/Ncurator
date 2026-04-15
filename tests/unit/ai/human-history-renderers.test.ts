@@ -113,21 +113,16 @@ describe('ai unit human history renderers', () => {
                 mode: 'serial',
                 calls: [
                   {
-                    toolName: 'kb_hybrid_search_chunks',
+                    toolName: 'kb_search',
                     args: {
                       queryText: 'approval denied'
                     }
                   },
                   {
-                    toolName: 'docx_apply_ops',
+                    toolName: 'docx_text_edit',
                     args: {
-                      ops: [
-                        {
-                          type: 'replace_text',
-                          query: 'old',
-                          replace: 'new'
-                        }
-                      ]
+                      query: 'old',
+                      replace: 'new'
                     }
                   }
                 ]
@@ -139,28 +134,23 @@ describe('ai unit human history renderers', () => {
               mode: 'serial',
               calls: [
                 {
-                  toolName: 'kb_hybrid_search_chunks',
+                  toolName: 'kb_search',
                   args: {
                     queryText: 'approval denied'
                   }
                 },
                 {
-                  toolName: 'docx_apply_ops',
+                  toolName: 'docx_text_edit',
                   args: {
-                    ops: [
-                      {
-                        type: 'replace_text',
-                        query: 'old',
-                        replace: 'new'
-                      }
-                    ]
+                    query: 'old',
+                    replace: 'new'
                   }
                 }
               ]
             },
             toolResults: [
               {
-                toolName: 'kb_hybrid_search_chunks',
+                toolName: 'kb_search',
                 ok: true,
                 code: 'ok',
                 data: {
@@ -173,7 +163,7 @@ describe('ai unit human history renderers', () => {
                 }
               },
               {
-                toolName: 'docx_apply_ops',
+                toolName: 'docx_text_edit',
                 ok: true,
                 code: 'ok',
                 resourceContext: {
@@ -187,7 +177,7 @@ describe('ai unit human history renderers', () => {
                   sourcePath: 'weekly-risk.docx',
                   previousVersionRef: 'v1',
                   currentVersionRef: 'v2',
-                  summary: 'ops applied (1 changes)'
+                  summary: '文本替换完成，共 1 处变更'
                 }
               }
             ]
@@ -205,7 +195,6 @@ describe('ai unit human history renderers', () => {
           ...handState.memory.history,
           loadedHistoryContext: {
             filters: {
-              executionKinds: ['learning'],
               limit: 1
             },
             rounds: [handState.memory.history.roundHistory[0]]
@@ -243,7 +232,7 @@ describe('ai unit human history renderers', () => {
     expect(unifiedHistory).toContain('过程历史：')
     expect(unifiedHistory).toContain('主动回看历史：')
     expect(unifiedHistory).toContain('Weekly Risk Summary.md')
-    expect(unifiedHistory).toContain('ops applied (1 changes)')
+    expect(unifiedHistory).toContain('文本替换完成，共 1 处变更')
     expect(brainPrompt.user).toContain(focusHistory)
     expect(mouthPrompt.user).toContain(unifiedHistory)
   })
@@ -261,7 +250,7 @@ describe('ai unit human history renderers', () => {
         history: appendRoundRecord({
           state: initialState,
           decision: buildDecision({
-            summary: '重试 docx_apply_ops',
+            summary: '重试 docx_text_edit',
             reason: '需要根据失败信息修正参数',
             expectedOutcome: '拿到原始 schema 报错并继续收敛',
             nextAction: {
@@ -270,10 +259,10 @@ describe('ai unit human history renderers', () => {
                 mode: 'serial',
                 calls: [
                   {
-                    toolName: 'docx_apply_ops',
+                    toolName: 'docx_text_edit',
                     args: {
                       sourcePath: 'weekly-risk.docx',
-                      ops: []
+                      query: ''
                     }
                   }
                 ]
@@ -285,28 +274,28 @@ describe('ai unit human history renderers', () => {
               mode: 'serial',
               calls: [
                 {
-                  toolName: 'docx_apply_ops',
+                  toolName: 'docx_text_edit',
                   args: {
                     sourcePath: 'weekly-risk.docx',
-                    ops: []
+                    query: ''
                   }
                 }
               ]
             },
             toolResults: [
               {
-                toolName: 'docx_apply_ops',
+                toolName: 'docx_text_edit',
                 ok: false,
                 code: 'invalid_input',
                 data: {
                   ok: false,
                   code: 'invalid_input',
                   error:
-                    'Received tool input did not match expected schema ✖ Invalid input → at ops[0].type'
+                    'Received tool input did not match expected schema ✖ Invalid input → at query'
                 },
                 diagnostic: {
                   message:
-                    'Received tool input did not match expected schema ✖ Invalid input → at ops[0].type'
+                    'Received tool input did not match expected schema ✖ Invalid input → at query'
                 }
               }
             ]
@@ -322,7 +311,7 @@ describe('ai unit human history renderers', () => {
     })
 
     expect(rendered).toContain(
-      'diagnostic=Received tool input did not match expected schema ✖ Invalid input → at ops[0].type'
+      'diagnostic=Received tool input did not match expected schema ✖ Invalid input → at query'
     )
   })
 })

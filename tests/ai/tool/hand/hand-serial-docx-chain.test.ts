@@ -6,29 +6,6 @@ import { createInitialHumanState } from '../../../../src/main/services/ai/human/
 import { writeTestDocxFile } from '../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 
-type DocxOpenResult = {
-  ok: boolean
-  sourcePath: string
-  currentVersionRef: string
-}
-
-type ToolsetItem = {
-  name?: string
-  invoke: (input: Record<string, unknown>) => Promise<unknown>
-}
-
-const invokeCachedTool = async <TResult>(
-  toolset: readonly ToolsetItem[],
-  toolName: string,
-  args: Record<string, unknown>
-): Promise<TResult> => {
-  const tool = toolset.find((item) => String(item.name || '') === toolName)
-  if (!tool) {
-    throw new Error(`tool not found in cache: ${toolName}`)
-  }
-  return (await tool.invoke(args)) as TResult
-}
-
 describe('ai tool hand backend', () => {
   it('hand-serial-docx-chain', async () => {
     await runBackendCase({
@@ -75,11 +52,6 @@ describe('ai tool hand backend', () => {
           skillId: 'docx-write'
         })
 
-        const docxReadTools = cache.skillToolsets['docx-read'] || []
-        const opened = await invokeCachedTool<DocxOpenResult>(docxReadTools, 'docx_open', {
-          sourcePath: 'serial-docx-chain.docx'
-        })
-
         const handNode = createHandNode({ ctx, cache })
         const state = await handNode({
           ...createInitialHumanState({
@@ -107,29 +79,18 @@ describe('ai tool hand backend', () => {
                   mode: 'serial',
                   calls: [
                     {
-                      toolName: 'docx_apply_ops',
+                      toolName: 'docx_text_edit',
                       args: {
-                        sourcePath: opened.sourcePath,
-                        ops: [
-                          {
-                            type: 'replace_text',
-                            query: 'RISK_TODO',
-                            replace: '待跟进'
-                          },
-                          {
-                            type: 'replace_text',
-                            query: 'OWNER_TODO',
-                            replace: 'Alice'
-                          }
-                        ]
+                        sourcePath: 'serial-docx-chain.docx',
+                        query: 'RISK_TODO',
+                        replace: '待跟进'
                       }
                     },
                     {
-                      toolName: 'docx_search',
+                      toolName: 'docx_read',
                       args: {
-                        sourcePath: opened.sourcePath,
-                        query: '待跟进',
-                        mode: 'literal'
+                        sourcePath: 'serial-docx-chain.docx',
+                        query: '待跟进'
                       }
                     }
                   ]
@@ -147,12 +108,12 @@ describe('ai tool hand backend', () => {
         const toolNames = result.state.execution.lastToolResults?.map((item) => item.toolName) || []
 
         runtime.assertThat(
-          toolNames.join(',') === 'docx_apply_ops,docx_search' &&
+          toolNames.join(',') === 'docx_text_edit,docx_read' &&
             result.state.execution.lastToolResults?.every((item) => item.code === 'ok') &&
             !result.state.execution.watchHint,
           {
             name: 'serial-docx-chain-executes-in-order',
-            message: 'serial 模式应按顺序执行 docx_apply_ops、docx_search。',
+            message: 'serial 模式应按顺序执行 docx_text_edit、docx_read。',
             data: {
               toolNames,
               lastToolUseResults: result.state.execution.lastToolResults,
@@ -163,7 +124,7 @@ describe('ai tool hand backend', () => {
 
         runtime.assertThat(
           result.state.execution.artifacts.length === 0 &&
-            result.state.execution.lastToolResults?.[1]?.toolName === 'docx_search',
+            result.state.execution.lastToolResults?.[1]?.toolName === 'docx_read',
           {
             name: 'serial-docx-chain-stays-within-edit-and-read-tools',
             message: 'docx 编辑的 hand 链路不再产出交付 artifact；后续交付由工程侧 confirm copy 收口。',

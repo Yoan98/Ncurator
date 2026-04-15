@@ -5,11 +5,9 @@ import {
 } from '../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
-  type DocxApplyOpsResult,
-  type DocxGetBlockResult,
-  type DocxOpenResult,
+  type DocxMutationResult,
   type DocxOutlineResult,
-  type DocxSearchResult,
+  type DocxReadResult,
   findParagraphBlockIdByText,
   findTableCellBlockIdByText
 } from './testUtils'
@@ -47,13 +45,8 @@ describe('ai tool docx backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         try {
-          const opened = await harness.invoke<DocxOpenResult>('docx_open', {
-            sourcePath: 'format-variants.docx'
-          })
           const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
-            sourcePath: opened.sourcePath,
-            includeTables: true,
-            includeCells: true,
+            sourcePath: 'format-variants.docx',
             maxBlocks: 40
           })
 
@@ -64,48 +57,38 @@ describe('ai tool docx backend', () => {
           )
           const ownerCellBlockId = findTableCellBlockIdByText(outline.blocks, 'Alice')
 
-          const headingBlock = await harness.invoke<DocxGetBlockResult>('docx_get_block', {
-            sourcePath: opened.sourcePath,
+          const headingBlock = await harness.invoke<DocxReadResult>('docx_read', {
+            sourcePath: outline.sourcePath,
             blockId: headingBlockId
           })
-          const ownerCellBlock = await harness.invoke<DocxGetBlockResult>('docx_get_block', {
-            sourcePath: opened.sourcePath,
+          const ownerCellBlock = await harness.invoke<DocxReadResult>('docx_read', {
+            sourcePath: outline.sourcePath,
             blockId: ownerCellBlockId
           })
-          const applied = await harness.invoke<DocxApplyOpsResult>('docx_apply_ops', {
-            sourcePath: opened.sourcePath,
-            ops: [
-              {
-                type: 'replace_block',
-                blockId: narrativeBlockId,
-                content: {
-                  kind: 'paragraph',
-                  runs: [{ text: 'Narrative paragraph updated.' }]
-                }
-              },
-              {
-                type: 'update_table_cell',
-                blockId: ownerCellBlockId,
-                content: [
-                  {
-                    kind: 'paragraph',
-                    runs: [{ text: 'Bob' }]
-                  }
-                ]
-              }
-            ]
+          const updatedParagraph = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
+            sourcePath: outline.sourcePath,
+            action: 'replace_text',
+            blockId: narrativeBlockId,
+            text: 'Narrative paragraph updated.'
           })
-          const search = await harness.invoke<DocxSearchResult>('docx_search', {
-            sourcePath: applied.sourcePath,
-            query: 'Narrative paragraph updated.',
-            mode: 'literal'
+          const updatedCell = await harness.invoke<DocxMutationResult>('docx_table_edit', {
+            sourcePath: updatedParagraph.sourcePath,
+            action: 'update_cell',
+            cellBlockId: ownerCellBlockId,
+            text: 'Bob'
           })
+          const readUpdatedParagraph = await harness.invoke<DocxReadResult>('docx_read', {
+            sourcePath: updatedCell.sourcePath,
+            query: 'Narrative paragraph updated.'
+          })
+
           return {
             outline,
             headingBlock,
             ownerCellBlock,
-            applied,
-            search
+            updatedParagraph,
+            updatedCell,
+            readUpdatedParagraph
           }
         } finally {
           await harness.release()
@@ -116,31 +99,33 @@ describe('ai tool docx backend', () => {
           result.outline.blocks.some((block) => block.type === 'paragraph') &&
             result.outline.blocks.some((block) => block.type === 'table') &&
             result.outline.blocks.some((block) => block.type === 'table_cell') &&
-            result.headingBlock.block.type === 'paragraph' &&
-            result.ownerCellBlock.block.type === 'table_cell',
+            result.headingBlock.matches[0]?.type === 'paragraph' &&
+            result.ownerCellBlock.matches[0]?.type === 'table_cell',
           {
             name: 'format-variants-return-stable-block-types',
             message: 'heading、paragraph、table 和 table_cell 都应被稳定识别和读取。',
             data: {
               outline: result.outline.blocks,
-              headingBlock: result.headingBlock.block,
-              ownerCellBlock: result.ownerCellBlock.block
+              headingBlock: result.headingBlock.matches[0],
+              ownerCellBlock: result.ownerCellBlock.matches[0]
             }
           }
         )
 
         runtime.assertThat(
-          result.applied.changedBlocks.length === 2 &&
-            result.search.matches.length === 1 &&
-            result.applied.changedBlocks.some((block) => block.action === 'update_table_cell') &&
-            result.applied.warnings.length === 0,
+          result.updatedParagraph.changedBlocks.length === 1 &&
+            result.updatedCell.changedBlocks.length === 1 &&
+            result.readUpdatedParagraph.matches.length === 1 &&
+            result.updatedCell.changedBlocks.some((block) => block.action === 'update_table_cell') &&
+            result.updatedCell.warnings.length === 0,
           {
             name: 'format-variants-support-updating-paragraph-and-cell',
             message: 'paragraph 与 table_cell 修改后，结构仍应有效且可继续消费。',
             data: {
-              changedBlocks: result.applied.changedBlocks,
-              searchMatches: result.search.matches,
-              warnings: result.applied.warnings
+              updatedParagraph: result.updatedParagraph.changedBlocks,
+              updatedCell: result.updatedCell.changedBlocks,
+              readUpdatedParagraph: result.readUpdatedParagraph.matches,
+              warnings: result.updatedCell.warnings
             }
           }
         )

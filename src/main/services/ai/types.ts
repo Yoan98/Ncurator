@@ -13,6 +13,7 @@ import type {
   AiRunEvent,
   AiRunEventStage,
   AiRunStatus,
+  DraftReviewDetail,
   SelectedReference
 } from '../../../shared/types'
 import type { HumanTaskInput, HumanTaskOutput } from './human/types'
@@ -136,6 +137,9 @@ export type AiRunContext = {
     changedBlocks: DocxChangedBlock[]
   }) => void
   resolveDocxOpenTarget: (sourcePath: string) => Promise<ResolvedDocxOpenTarget>
+  beginDocxReviewRun: () => void
+  finalizeDocxReviewRun: () => Promise<DraftReviewDetail[]>
+  discardDocxReviewRun: () => void
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService
 }

@@ -94,7 +94,7 @@
 - 实现状态：`已实现`
 - What：验证最小 docx 打开、定位、编辑与继续读取链路。
 - Why：这是 docx 工具链最基础的真实生产调用闭环。
-- How：对 fixture docx 真实执行 `docx_open -> docx_search / outline -> docx_apply_ops -> docx_search`。
+- How：对 fixture docx 真实执行 `docx_read / docx_outline -> docx_text_edit -> docx_read`。
 - Oracle：返回稳定 `currentVersionRef/previousVersionRef`，只目标 block 进入 `changedBlocks`，且修改后的结果可继续被读取工具消费。
 - Not：不验证 `human` 的工具选择。
 
@@ -104,7 +104,7 @@
 - 实现状态：`已实现`
 - What：验证长文档下的读取、定位和局部精读能力。
 - Why：长文档最容易暴露基础定位问题。
-- How：对高 block 数 fixture 真实调用 `docx_open / outline / search / get_block`。
+- How：对高 block 数 fixture 真实调用 `docx_outline / docx_read`。
 - Oracle：长文档下仍返回稳定 block 信息与截断标记。
 - Not：不验证编辑落盘。
 
@@ -112,7 +112,7 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 `docx_search` 在 literal / regex 模式下会做兼容字形归一，能用普通查询命中兼容字形文本。
+- What：验证 `docx_read(query)` 会做兼容字形归一，能用普通查询命中兼容字形文本。
 - Why：docx 文本里常见兼容字形，如果检索不归一，AI 会把“文档已写”误判成“文档未写”。
 - How：写入包含兼容字形文本的真实 docx，再分别执行 literal 与 regex 搜索。
 - Oracle：普通查询可命中兼容字形 block，且返回稳定 blockId。
@@ -122,7 +122,7 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 `docx_search` 默认搜索当前文档全部 block，且 `scope.blockIds` 只在当前文档内进一步缩圈。
+- What：验证 `docx_read(query)` 默认搜索当前文档全部 block，且 `docx_text_edit.blockIds` 只在当前文档内进一步缩圈。
 - Why：这是 docx 搜索的核心契约，必须长期稳定，避免 prompt 与工具行为不一致。
 - How：对同一 doc 先执行默认搜索，再传入 `scope.blockIds` 做缩圈搜索。
 - Oracle：默认搜索可命中文档内多个 block，缩圈后只返回指定 blockIds 范围内的结果。
@@ -172,9 +172,9 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 active review 下 `docx_open` 会基于 latest effective draft 继续编辑。
+- What：验证 active review 下 docx 自动 open 会基于 latest effective draft 继续编辑。
 - Why：多轮未确认修改能否累计，依赖 review-aware open 的真实行为。
-- How：通过真实 `DraftReviewStore + DraftReviewService` seed active review，再执行 `docx_open / docx_search / docx_apply_ops`。
+- How：通过真实 `DraftReviewStore + DraftReviewService` seed active review，再执行 `docx_read / docx_text_edit`。
 - Oracle：读取内容来自最新草稿而非源文件，新增修改只叠加当前 delta。
 - Not：不验证 review UI 与最终确认替换。
 
@@ -184,7 +184,7 @@
 - 实现状态：`已实现`
 - What：验证任务过程内历史查询与回滚能力。
 - Why：复杂编辑任务必须可回退。
-- How：多轮真实 `apply_ops` 后执行 `docx_get_history` 与 rollback。
+- How：多轮真实编辑后执行 `docx_history` 与 rollback。
 - Oracle：历史链可追溯，回滚只影响当前任务过程中的草稿版本，不改写磁盘源文件。
 - Not：不验证 review 放弃 / 确认。
 
@@ -204,7 +204,7 @@
 - 实现状态：`已实现`
 - What：验证 `apply_ops` 产出无效 docx 时会被工程内部校验拦截。
 - Why：validate 已下沉为工程门禁，必须有正式 case 守住“坏版本不能进入当前草稿”。
-- How：对带损坏关系引用的真实 docx 执行 `docx_open -> docx_apply_ops`。
+- How：对带损坏关系引用的真实 docx 执行 `docx_text_edit` 或对象编辑工具。
 - Oracle：`apply_ops` 直接失败，且当前文档会话的版本引用不会推进到无效版本。
 - Not：不验证上层如何决定重试或放弃。
 
@@ -224,7 +224,7 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 `kb_hybrid_search_chunks / kb_vector_search_chunks / kb_fts_search_chunks` 在当前工作区范围内的统一真实检索契约。
+- What：验证 `kb_search` 在不同 strategy 下的统一真实检索契约。
 - Why：KB tool family 必须显式覆盖每个正式工具。
 - How：对多工作区真实 seed 数据分别执行三种检索，并覆盖 `documentIds` 缩圈。
 - Oracle：三种检索都返回稳定 `rows`，默认受当前工作区约束，且遵守 `documentIds` 缩圈语义。
@@ -238,7 +238,7 @@
 - 实现状态：`已实现`
 - What：验证目录检查类只读命令能真实执行并返回结构化摘要。
 - Why：这是 terminal 工具最典型的只读路径。
-- How：调用 `terminal_run_command` 读取目录信息。
+- How：调用 `workspace_list_files` / `workspace_read_file` 读取目录与文件信息。
 - Oracle：返回真实 stdout 片段、退出码与可消费摘要。
 - Not：不验证写操作。
 
@@ -248,7 +248,7 @@
 - 实现状态：`已实现`
 - What：验证只读文本搜索命令的真实执行契约。
 - Why：搜索是 terminal 工具最常见的辅助路径。
-- How：调用 `terminal_run_command` 真实执行搜索命令。
+- How：调用 `workspace_search_text` 真实执行文本搜索。
 - Oracle：返回可断言命中信息与正确退出状态。
 - Not：不验证修改文件。
 
@@ -258,7 +258,7 @@
 - 实现状态：`已实现`
 - What：验证危险命令与越界输入会被真实守卫拒绝。
 - Why：terminal 风险边界必须靠正式测试长期守住。
-- How：构造危险或越权命令调用 `terminal_run_command`。
+- How：构造危险或越权命令调用 `workspace_run_command`。
 - Oracle：返回明确拒绝，不执行实际破坏操作。
 - Not：不验证 UI 提示。
 
@@ -290,7 +290,7 @@
 - 实现状态：`已实现`
 - What：验证 `hand` 在 `serial` 模式下会按顺序执行真实 docx 写入与读回确认链路。
 - Why：复杂 docx 链路依赖当前最新版本，必须通过正式 case 守住串行执行契约。
-- How：通过真实 `hand` 执行 `docx_apply_ops -> docx_search`。
+- How：通过真实 `hand` 执行 `docx_text_edit -> docx_read`。
 - Oracle：工具结果顺序稳定、全部成功，且不会在 hand 内直接产出 docx 交付 artifact。
 - Not：不验证 `brain` 是否自然生成这条计划。
 
@@ -310,8 +310,8 @@
 - 实现状态：`已实现`
 - What：验证 builtin `history-recall` 能通过真实 `hand` 链路加载旧历史，并写入 `loaded_history_context`。
 - Why：过程历史的按需展开是长链路任务的重要收敛能力，需要有正式 case 长期守住。
-- How：先 seed 历史 round，再通过真实 `hand` 调用 internal tool `history_recall`。
-- Oracle：`execution.lastToolResults` 中出现 `history_recall`，且 `memory.history.loadedHistoryContext` 被真实写入。
+- How：先 seed 历史 round，再通过真实 `hand` 调用 internal tool `history_search` 或 `history_list`。
+- Oracle：`execution.lastToolResults` 中出现 `history_search` 或 `history_list`，且 `memory.history.loadedHistoryContext` 被真实写入。
 - Not：不验证 `brain` 是否一定会主动触发这条能力。
 
 ### 4.2 `human`
@@ -334,8 +334,8 @@
 - 实现状态：`已实现`
 - What：验证 `AiRunService` 会在进入 `human` 前完成 embedding preflight，且 preflight 失败时会直接失败收口。
 - Why：embedding 已被定义为 AI run 的基础设施，不应等到 semantic 工具调用时才第一次暴露未就绪问题。
-- How：分别覆盖 preflight 成功后执行真实 semantic docx search，以及 preflight 直接失败的分支。
-- Oracle：成功分支中 semantic docx search 正常返回结果；失败分支中 run 直接失败且不会进入 `human` stage。
+- How：分别覆盖 preflight 成功后执行真实 `docx_read`，以及 preflight 直接失败的分支。
+- Oracle：成功分支中 `docx_read` 正常返回结果；失败分支中 run 直接失败且不会进入 `human` stage。
 - Not：不验证模型下载进度展示。
 
 ##### `learning-hand-mouth-smoke`
@@ -344,7 +344,7 @@
 - 实现状态：`已实现`
 - What：验证 `human` 在 mock-llm 模式下能稳定走通真实 `brain -> learning -> hand -> mouth` 主链路。
 - Why：这是 `human` graph 的最小真实闭环，后续所有复杂样例都建立在这条主链路之上。
-- How：通过 scripted structured output 依次驱动学习 `workspace-cli`、执行一次真实 `terminal_run_command(pwd)`，再进入真实 `mouth` 完成交付。
+- How：通过 scripted structured output 依次驱动学习 `workspace-cli`、执行一次真实 `workspace_run_command(pwd)`，再进入真实 `mouth` 完成交付。
 - Oracle：`human_brain`、`human_learning`、`human_hand`、`human_mouth` 四个 stage 都真实出现，且至少有一次真实 terminal 工具结果与一次真实最终交付。
 - Not：不验证复杂分支、异常恢复或 live 模型质量。
 
@@ -355,7 +355,7 @@
 - What：验证真实 `learning` 会持续记录当前 active tool 数，并在预算未超限时保留当前已学习 skill 集。
 - Why：`learning` 的 active tool 预算是后续扩展 `excel / ppt` 等新能力时的重要长期边界，正式 case 需要先守住基础统计与状态可见性。
 - How：通过 scripted structured output 依次学习 `workspace-cli + docx-read`、`docx-write`、`kb-document-discovery + kb-evidence-query`，最后进入真实 `mouth` 收束；检查最后一轮真实 `human_learning` 事件中的 `learnedSkillIds`、`availableToolNames` 与 summary。
-- Oracle：任务最终完成；最后一轮 `human_learning` 事件中保留全部已学习 skill，`availableToolNames` 长度为 `13`，summary 包含 `当前 active tools=12`，且不包含 skill 淘汰文案。
+- Oracle：任务最终完成；最后一轮 `human_learning` 事件中保留全部已学习 skill，`availableToolNames` 与当前已学习 skill 的工具集合一致，summary 包含 `当前 active tools=`，且不包含 skill 淘汰文案。
 - Not：不验证超过 `20` 个 active tools 后的淘汰算法细节。
 
 ##### `watchhint-retry`
@@ -364,7 +364,7 @@
 - 实现状态：`已实现`
 - What：验证 duplicate learning 触发真实 `watch_hint` 后，graph 会回到 `brain` 并继续推进。
 - Why：`watch_hint -> brain` 是 `human` 的核心收敛边之一，断掉后很多异常都无法恢复。
-- How：第一轮先学习 `workspace-cli`，第二轮故意重复学习同一个 skill 触发 learning watch hint，随后再执行一次真实 `terminal_run_command(pwd)` 并完成交付。
+- How：第一轮先学习 `workspace-cli`，第二轮故意重复学习同一个 skill 触发 learning watch hint，随后再执行一次真实 `workspace_run_command(pwd)` 并完成交付。
 - Oracle：事件流中真实出现 source 为 `learning` 的 `watch_hint`，并且在它之后仍发生真实 terminal 工具调用，任务最终完成。
 - Not：不验证 live 模型是否会自然产生这类重复决策。
 
@@ -375,7 +375,7 @@
 - What：验证真实工具失败结果会被 `human` 吸收，并继续收束到最终交付。
 - Why：工具失败是高频真实场景，如果失败后链路无法继续，`human` 就不具备稳定执行能力。
 - How：先学习 `workspace-cli`，再真实执行一个会失败的只读命令 `cat definitely-missing-file.txt`，随后由 `brain` 决定停止重试并进入 `mouth`。
-- Oracle：真实 `terminal_run_command` 结果为失败，且 `human` 最终仍进入 `completed` 并产出最终交付。
+- Oracle：真实 `workspace_run_command` 结果为失败，且 `human` 最终仍进入 `completed` 并产出最终交付。
 - Not：不验证失败后的最佳补救策略是否最优。
 
 ##### `tool-limit-converge`
@@ -424,8 +424,8 @@
 - 实现状态：`已实现`
 - What：验证 mock-llm 下 `human` 仍通过真实 docx 工具链完成打开、编辑和搜索。
 - Why：复杂 docx 编辑是 `human` 的长期高价值真实任务类型。
-- How：先写入 fixture docx，再通过真实 `docx_open -> docx_apply_ops -> docx_search` 完成一次正文替换并检索新内容。
-- Oracle：真实 `docx_apply_ops` 只产生一处 `changedBlocks`，真实 `docx_search` 能命中新文本，任务最终完成。
+- How：先写入 fixture docx，再通过真实 `docx_text_edit -> docx_read` 完成一次正文替换并检索新内容。
+- Oracle：真实 `docx_text_edit` 只产生一处 `changedBlocks`，真实 `docx_read` 能命中新文本，任务最终完成。
 - Not：不验证 review UI 或最终落盘流程。
 
 ##### `docx-read-fact-exposure`
@@ -444,7 +444,7 @@
 - 实现状态：`已实现`
 - What：验证 `human` 会通过真实 `hand` 执行一次并行多工具协作。
 - Why：`human` 不能只验证单工具 happy path，还必须覆盖真实并行读工具场景。
-- How：先 seed 真实 KB 文档，再学习 terminal 与 KB skill，随后在一次 `hand` 决策中并行执行 `terminal_run_command(pwd)` 与 `kb_list_documents`。
+- How：先 seed 真实 KB 文档，再学习 terminal 与 KB skill，随后在一次 `hand` 决策中并行执行 `workspace_run_command(pwd)` 与 `kb_list_documents`。
 - Oracle：同一条任务中真实出现 terminal 与 KB 两类工具结果，任务最终完成。
 - Not：不验证更复杂的多轮依赖型并行调度。
 
@@ -454,7 +454,7 @@
 - 实现状态：`已实现`
 - What：验证 mock-llm 下的 KB 回答仍通过真实知识库存储、真实 embedding 与真实检索执行。
 - Why：KB 是当前最敏感的 fake 风险点，必须单独有正式 case 显式守住。
-- How：seed 两份真实 KB 文档，学习 KB skill 后真实执行 `kb_fts_search_chunks`，再通过真实 `mouth` 生成最终回答。
+- How：seed 两份真实 KB 文档，学习 KB skill 后真实执行 `kb_search(strategy=keyword)`，再通过真实 `mouth` 生成最终回答。
 - Oracle：真实 KB 检索结果中包含目标文档 `doc-1` 的证据，且这条证据文本会进入真实 `mouth` prompt，任务最终完成。
 - Not：不验证答案措辞或检索召回优劣。
 
@@ -477,7 +477,7 @@
 - What：验证 live 模式下 `human` 会在一个真实长任务里串起模板定位、资料取证、docx 编辑与 confirm-copy 交付。
 - Why：`human/live` 需要至少一条长期高价值复杂样例，覆盖 workspace、KB、docx 与最终交付链路。
 - How：注入真实 live LLM 配置；workspace 中动态写入带 `RISK_TODO / OWNER_TODO` 占位符的周报模板和干扰文件；seed 两份真实 KB 文档分别提供风险结论与负责人说明并限制在已选范围内；直接输入“找到上周 Word 周报模板，按已选资料补全风险结论与负责人，生成确认稿且不要覆盖原文件”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；事件流中至少出现一次 `terminal_run_command`、一次以 `kb_` 开头的检索工具调用、一次 `docx_open`、一次 `docx_apply_ops`；存在 `draft_review` 与 `draft` artifact，且原模板未被覆盖；最终答复能从用户视角说明改动的是“风险结论”和“负责人说明”两处、依据分别来自 `Weekly Risk Summary.md` 与 `Owner Note.md`，并明确当前给出的是待确认草稿。
+- Oracle：任务最终完成；事件流中至少出现一次 `workspace_run_command`、一次 KB 检索工具调用、一次 docx 读取、一次 docx 编辑；存在 `draft_review_ready` 事件，最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；原模板未被覆盖；最终答复能从用户视角说明改动的是“风险结论”和“负责人说明”两处、依据分别来自 `Weekly Risk Summary.md` 与 `Owner Note.md`，并明确当前给出的是待确认草稿。
 - Not：不绑定最终答案措辞，也不要求固定检索工具顺序。
 
 ##### `human-docx-cause-remedy-reading-live`
@@ -487,7 +487,7 @@
 - What：验证 live 模式下 `human` 会基于两份已选 `docx` 做跨文件精读，并准确回答“过拟合 / 反走样”的成因与处理思路。
 - Why：真实用户在复习场景里经常已经选中了资料，但仍会把两个概念混在一起；这条 case 要长期守住“已选资料范围 + 跨文件准确回答”的正式能力，对齐 `WB-CORE-002-AC2`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
 - How：注入真实 live LLM 配置；把 `tests/fixtures/ai/docx/深度学习.docx` 与 `tests/fixtures/ai/docx/图形学.docx` 作为已选资料复制进 workspace；直接输入“我做题老把这两个点混在一起。你就按我刚选的这两份资料，帮我说清楚：过拟合和反走样各自是什么、为什么会出现、一般怎么处理。别补充课外知识，哪份文档没写你就直接说没写。”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；事件流中至少两次 `docx_open` 覆盖两份目标文档，且至少出现一次 `docx_search`、`docx_outline` 或 `docx_get_block`；最终回答同时命中“过拟合”的定义/成因事实组，并对处理办法给出文档内事实或明确说明“没写”；同时命中“反走样”的成因/处理事实组；不出现 `docx_apply_ops`。
+- Oracle：任务最终完成；事件流中至少两次 `docx_read` 或 `docx_outline` 覆盖两份目标文档；最终回答同时命中“过拟合”的定义/成因事实组，并对处理办法给出文档内事实或明确说明“没写”；同时命中“反走样”的成因/处理事实组；不出现 docx 编辑工具。
 - Not：不要求固定回答结构，也不对最终文案做逐字断言。
 
 ##### `human-docx-contextual-comparison-draft-live`
@@ -497,7 +497,7 @@
 - What：验证 live 模式下 `human` 会基于两份已选 `docx`，在目标 `docx` 的相关位置追加解释性段落和对照表，并生成不覆盖原文件的 confirm copy。
 - Why：真实用户常见诉求不是“改占位符”，而是“在这块后面补一段更好懂的说明”；这条 case 覆盖跨文件取材、相关位置补写、结构化新增与 confirm-copy 交付，对齐 `WB-CORE-002-AC2`、`WB-CORE-003-AC1`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
 - How：注入真实 live LLM 配置；把 `tests/fixtures/ai/docx/深度学习.docx` 与 `tests/fixtures/ai/docx/图形学.docx` 作为已选资料复制进 workspace；直接输入“《图形学》里‘反走样’这一节我还是记不住。你参考我刚选的这两份 Word，直接在这一节最后补一小段更好理解的说明，再加个简单对照表，一列写反走样，一列写《深度学习》里的过拟合。直接给我确认稿就行，别改原文件，也不用先回我文字草稿。”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；事件流中至少两次 `docx_open` 覆盖两份目标文档；`docx_apply_ops` 前至少出现一次针对“反走样”的读取定位；至少出现一次 `docx_apply_ops`；存在 `draft_review` 与 `draft` artifact；原始两份 `docx` 文件未被覆盖；写入请求里能看到新增说明段落与表格结构。
+- Oracle：任务最终完成；事件流中至少两次 `docx_read` 或 `docx_outline` 覆盖两份目标文档；docx 编辑前至少出现一次针对“反走样”的读取定位；至少出现一次 docx 编辑工具；存在 `draft_review_ready` 事件，最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；原始两份 `docx` 文件未被覆盖；写入请求里能看到新增说明段落与表格结构。
 - Not：不要求固定 op 组合，也不对最终说明文案做逐字断言。
 
 ##### `human-kb-guided-docx-comparison-draft-live`
@@ -507,7 +507,7 @@
 - What：验证 live 模式下 `human` 在本地资料较多时，会先用 KB 缩圈定位相关资料，再回到目标 `docx` 做跨文件补写并交付 confirm copy。
 - Why：真实用户常常记得主题、不记得文件名；这条 case 要长期守住“工作区默认范围 + KB 缩圈 + docx 继续执行”的正式能力，对齐 `WB-CORE-002-AC2`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
 - How：注入真实 live LLM 配置；workspace 中动态写入 `深度学习.docx`、`图形学.docx` 和若干干扰文件，并把目标 `docx` 与干扰资料同时 seed 到真实 KB；不传 `selectedReferences`，只绑定 workspace；直接输入“我工作区资料有点多，我忘了是哪份课件在讲反走样了。你先帮我找到那份，再参考讲过拟合的那份资料，直接在‘反走样’那一节最后补一段更好记的说明，再加个简单对照表，一列写反走样，一列写过拟合。直接给我确认稿就行，别改原文件，也不用先回我文字草稿。”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；事件流中至少出现一次 KB 工具调用；后续出现 `docx_open` 并覆盖最终参与编辑的目标 `docx`；至少出现一次 `docx_apply_ops`；存在 `draft_review` 与 `draft` artifact；目标原始 `docx` 未被覆盖；新增内容同时涉及“反走样”和“过拟合”。
+- Oracle：任务最终完成；事件流中至少出现一次 KB 工具调用；后续出现 docx 读取并覆盖最终参与编辑的目标 `docx`；至少出现一次 docx 编辑工具；存在 `draft_review_ready` 事件，最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；目标原始 `docx` 未被覆盖；新增内容同时涉及“反走样”和“过拟合”。
 - Not：不强制固定执行路径，也不要求 KB 缩圈后必须再打开所有候选资料。
 
 ## 5. 验收口径

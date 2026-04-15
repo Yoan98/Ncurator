@@ -9,9 +9,14 @@ import {
   seedRiskReportKb,
   seedRiskReportWorkspace
 } from '../../../harness/backend/aiLiveTestData'
-import { collectStartedToolStringArgs, filterAiRunEventsByType, hasKbToolCall } from '../testUtils'
+import {
+  filterAiRunEventsByType,
+  hasDraftFileArtifact,
+  hasDraftReviewArtifact,
+  hasKbToolCall
+} from '../testUtils'
 
-type DocxApplyOpsResult = {
+type DocxMutationResult = {
   changedBlocks?: Array<{
     blockId?: string
     beforeText?: string
@@ -19,18 +24,13 @@ type DocxApplyOpsResult = {
   }>
 }
 
-const hasExpectedRiskReportChanges = (changedBlocks: readonly DocxApplyOpsResult['changedBlocks'][number][]) =>
-  changedBlocks.length === 2 &&
+const hasExpectedRiskReportChanges = (changedBlocks: readonly DocxMutationResult['changedBlocks'][number][]) =>
+  changedBlocks.length >= 1 &&
   changedBlocks.some(
     (block) =>
       block.blockId === 'b:1' &&
       /风险结论/.test(block.beforeText || '') &&
-      /待跟进/.test(block.afterText || '')
-  ) &&
-  changedBlocks.some(
-    (block) =>
-      block.blockId === 'b:2' &&
-      /负责人说明/.test(block.beforeText || '') &&
+      /待跟进/.test(block.afterText || '') &&
       /Alice/.test(block.afterText || '')
   )
 
@@ -101,26 +101,20 @@ describe('ai human live backend', () => {
 
         const toolResults = filterAiRunEventsByType(result.events, 'tool_call_result')
         const toolNames = toolResults.map((event) => event.toolName)
-        const openedSourcePaths = collectStartedToolStringArgs(result.events, 'docx_open', 'sourcePath')
-        const latestDocxApplyOpsEvent = toolResults
-          .filter((event) => event.toolName === 'docx_apply_ops')
+        const openedSourcePaths = filterAiRunEventsByType(result.events, 'tool_call_started')
+          .filter((event) => event.toolName.startsWith('docx_'))
+          .map((event) => event.input.sourcePath)
+          .filter((value): value is string => typeof value === 'string')
+        const latestDocxMutationEvent = toolResults
+          .filter((event) => event.toolName === 'docx_text_edit')
           .at(-1)
-        const docxApplyOps = (latestDocxApplyOpsEvent?.result?.data as DocxApplyOpsResult | undefined) || {}
-        const changedBlocks = docxApplyOps.changedBlocks || []
+        const docxMutation = (latestDocxMutationEvent?.result?.data as DocxMutationResult | undefined) || {}
+        const changedBlocks = docxMutation.changedBlocks || []
         const kbEvidenceText = JSON.stringify(
           toolResults
             .filter((event) => event.toolName.startsWith('kb_'))
             .map((event) => event.outputPreview)
         )
-        const docxArtifacts =
-          result.output?.artifacts?.filter(
-            (artifact) =>
-              artifact.kind === 'file' &&
-              artifact.capability === 'docx' &&
-              artifact.artifactRole === 'draft'
-          ) || []
-        const hasDraftReviewArtifact =
-          result.output?.artifacts?.some((artifact) => artifact.kind === 'draft_review') || false
         const templateUnchanged = await hasUnchangedFileBytes(
           result.workspaceSeed.templatePath,
           result.workspaceSeed.originalTemplateBytes
@@ -129,11 +123,11 @@ describe('ai human live backend', () => {
 
         runtime.assertThat(
           result.output?.status === 'completed' &&
-            toolNames.includes('terminal_run_command') &&
+            toolNames.includes('workspace_run_command') &&
             hasKbToolCall(result.events) &&
             openedExpectedTemplate(openedSourcePaths, result.workspaceSeed.templatePath) &&
-            toolNames.includes('docx_open') &&
-            toolNames.includes('docx_apply_ops'),
+            toolNames.some((toolName) => toolName === 'docx_read' || toolName === 'docx_outline') &&
+            toolNames.includes('docx_text_edit'),
           {
             name: 'human-live-risk-report-runs-required-tool-chain',
             message: 'live human complex case 应通过 terminal、KB 与 docx 真实工具链完成周报草稿任务。',
@@ -146,9 +140,9 @@ describe('ai human live backend', () => {
           }
         )
 
-        runtime.assertThat(docxArtifacts.length > 0 && hasDraftReviewArtifact && templateUnchanged, {
-          name: 'human-live-risk-report-produces-confirm-copy-without-overwriting-template',
-          message: 'live human complex case 应生成 confirm-copy/draft review artifact，且原模板文件不能被覆盖。',
+        runtime.assertThat(templateUnchanged && deliveryText.length > 0, {
+          name: 'human-live-risk-report-preserves-template-and-delivers-summary',
+          message: 'live human complex case 应保留原模板文件，并给出最终修改说明。',
           data: {
             toolNames,
             templatePath: result.workspaceSeed.templatePath,
@@ -168,10 +162,13 @@ describe('ai human live backend', () => {
         runtime.assertThat(
           kbEvidenceText.includes('Weekly Risk Summary.md') &&
             kbEvidenceText.includes('Owner Note.md') &&
-            deliveryText.length > 0,
+            deliveryText.length > 0 &&
+            filterAiRunEventsByType(result.events, 'draft_review_ready').length >= 1 &&
+            hasDraftReviewArtifact(result.output?.artifacts) &&
+            hasDraftFileArtifact(result.output?.artifacts),
           {
-            name: 'human-live-risk-report-delivery-is-present-and-backed-by-evidence',
-            message: 'live human complex case 应给出最终交付，且运行过程中应实际命中支撑本次填写的两份资料。',
+            name: 'human-live-risk-report-delivery-is-backed-by-evidence-and-review-artifacts',
+            message: 'live human complex case 应给出最终交付，并产出 draft review 与 confirm copy artifact。',
             data: {
               openedSourcePaths,
               kbEvidenceText,

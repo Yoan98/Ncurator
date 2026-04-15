@@ -58,9 +58,10 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildToolDecision({
-                  toolName: 'kb_fts_search_chunks',
+                  toolName: 'kb_search',
                   args: {
                     queryText: '审批被拒绝 保留现有文件',
+                    strategy: 'keyword',
                     limit: 5
                   },
                   summary: '执行真实 KB 搜索',
@@ -103,7 +104,7 @@ describe('ai human mock-llm backend', () => {
         const toolResults = filterAiRunEventsByType(result.events, 'tool_call_result')
         const kbResult = readLatestToolResultDataFromEvents<Array<{ document_id?: string; text: string }>>(
           toolResults,
-          'kb_fts_search_chunks'
+          'kb_search'
         )
 
         runtime.assertThat(

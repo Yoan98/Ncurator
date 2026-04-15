@@ -11,34 +11,28 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证未 open 或传入无效 sourcePath 时的前置保护。',
+      description: '验证自动 open 下，传入无效 sourcePath 时的前置保护。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
         const harness = createDocxToolHarness(runtime)
         try {
           return {
-            outlineWithoutOpen: await harness.invoke<DocxFailureResult>('docx_outline', {
+            outlineInvalidPath: await harness.invoke<DocxFailureResult>('docx_outline', {
               sourcePath: 'missing.docx'
             }),
-            searchWithoutOpen: await harness.invoke<DocxFailureResult>('docx_search', {
+            readInvalidPath: await harness.invoke<DocxFailureResult>('docx_read', {
+              sourcePath: 'missing.docx',
+              query: 'hello'
+            }),
+            editInvalidPath: await harness.invoke<DocxFailureResult>('docx_text_edit', {
               sourcePath: 'missing.docx',
               query: 'hello',
-              mode: 'literal'
+              replace: 'hi'
             }),
-            applyWithoutOpen: await harness.invoke<DocxFailureResult>('docx_apply_ops', {
+            rollbackInvalidPath: await harness.invoke<DocxFailureResult>('docx_rollback', {
               sourcePath: 'missing.docx',
-              ops: [
-                {
-                  type: 'replace_text',
-                  query: 'hello',
-                  replace: 'hi'
-                }
-              ]
-            }),
-            rollbackWithoutOpen: await harness.invoke<DocxFailureResult>('docx_rollback', {
-              sourcePath: 'missing.docx',
-              steps: 1
+              versionRef: 'v1'
             }),
             trackedSourceCount: harness.state.documentSessionBySourcePath.size
           }
@@ -49,14 +43,14 @@ describe('ai tool docx backend', () => {
       assert: async (result, runtime) => {
         runtime.assertThat(
           [
-            result.outlineWithoutOpen,
-            result.searchWithoutOpen,
-            result.applyWithoutOpen,
-            result.rollbackWithoutOpen
-          ].every((item) => item.ok === false && item.code === 'invalid_input'),
+            result.outlineInvalidPath,
+            result.readInvalidPath,
+            result.editInvalidPath,
+            result.rollbackInvalidPath
+          ].every((item) => item.ok === false),
           {
-            name: 'docx-tools-fail-fast-before-open',
-            message: '未 open 时，docx 工具应返回明确失败，不生成新版本。',
+            name: 'docx-tools-fail-fast-on-invalid-source-path',
+            message: '自动 open 模式下，docx 工具遇到无效 sourcePath 仍应明确失败，不生成新版本。',
             data: result
           }
         )

@@ -8,11 +8,10 @@ import type {
 import type { KnowledgeRetrievalContext } from '../../../types'
 import { normalizeForIpc } from '../../../../../utils/serialization'
 import {
-  KB_CHUNK_SEARCH_SCHEMA,
-  KB_FTS_SEARCH_CHUNKS_TOOL_SPEC,
-  KB_HYBRID_SEARCH_CHUNKS_TOOL_SPEC,
+  KB_LIST_DOCUMENTS_SCHEMA,
   KB_LIST_DOCUMENTS_TOOL_SPEC,
-  KB_VECTOR_SEARCH_CHUNKS_TOOL_SPEC
+  KB_SEARCH_SCHEMA,
+  KB_SEARCH_TOOL_SPEC
 } from './toolSpecs'
 import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
@@ -72,130 +71,111 @@ export const buildKbCapabilityTools = (input: {
 
   const resolveSearchArgs = (args: {
     queryText: string
+    strategy?: 'auto' | 'semantic' | 'keyword'
     limit?: number
     sourceType?: 'all' | 'file' | 'web'
     documentIds?: string[]
   }) => ({
     workspaceId: String(ctx.workspace?.workspaceId || '').trim() || undefined,
     queryText: String(args.queryText || '').trim(),
+    strategy: args.strategy || 'auto',
     limit: Math.max(1, Math.min(MAX_RETRIEVAL_LIMIT, Number(args.limit ?? 10))),
     filter: args.sourceType && args.sourceType !== 'all' ? String(args.sourceType) : undefined,
     requestedDocumentIds: resolveRequestedDocumentIds(args.documentIds)
   })
 
-  const createChunkSearchTool = (input: {
-    name: string
-    description: string
-    execute: (args: ReturnType<typeof resolveSearchArgs>) => Promise<SearchResult[]>
-  }) =>
-    tool(
-      async (args) =>
-        await withToolLifecycle({
-          emitter: toolEvents,
-          toolName: input.name,
-          args: args as JsonObject,
-          execute: async (session) => {
-            ctx.checkCancelled()
-            const prepared = resolveSearchArgs(args)
-            if (!prepared.workspaceId) {
-              throw new Error('workspace is required for kb search')
-            }
-            if (
-              Array.isArray(prepared.requestedDocumentIds) &&
-              prepared.requestedDocumentIds.length === 0
-            ) {
-              const emptyRows: SearchResult[] = []
-              session.succeed(
-                [],
-                undefined,
-                buildKbResult({
-                  toolName: input.name,
-                  data: emptyRows
-                })
-              )
-              return []
-            }
-
-            const rows = await input.execute(prepared)
-            const normalized = rows.map(normalizeForIpc)
-            session.succeed(
-              previewArray(normalized),
-              undefined,
-              buildKbResult({
-                toolName: input.name,
-                data: normalized
-              })
-            )
-            return normalized
-          },
-          onError: (error, session) => {
-            session.fail(
-              [],
-              error.message,
-              undefined,
-              buildKbResult({
-                toolName: input.name,
-                ok: false,
-                code: 'failed',
-                data: {
-                  items: [],
-                  total: 0,
-                  error: error.message
-                }
-              })
-            )
+  const kbSearch = tool(
+    async (args) =>
+      await withToolLifecycle({
+        emitter: toolEvents,
+        toolName: KB_SEARCH_TOOL_SPEC.name,
+        args: args as JsonObject,
+        execute: async (session) => {
+          ctx.checkCancelled()
+          const prepared = resolveSearchArgs(args)
+          if (!prepared.workspaceId) {
+            throw new Error('workspace is required for kb search')
           }
-        }),
-      {
-        name: input.name,
-        description: input.description,
-        schema: KB_CHUNK_SEARCH_SCHEMA
-      }
-    )
+          if (
+            Array.isArray(prepared.requestedDocumentIds) &&
+            prepared.requestedDocumentIds.length === 0
+          ) {
+            const emptyRows: SearchResult[] = []
+            session.succeed(
+              [],
+              undefined,
+              buildKbResult({
+                toolName: KB_SEARCH_TOOL_SPEC.name,
+                data: emptyRows
+              })
+            )
+            return []
+          }
 
-  const kbHybridSearchChunks = createChunkSearchTool({
-    name: KB_HYBRID_SEARCH_CHUNKS_TOOL_SPEC.name,
-    description: '对本地知识库片段执行混合检索（关键词、向量与重排结合）。',
-    execute: async (args) => {
-      const { data: vec } = await ctx.embeddingService.embed(args.queryText)
-      return await ctx.documentsStore.hybridSearch(
-        vec,
-        args.queryText,
-        args.limit,
-        args.filter,
-        args.workspaceId,
-        args.requestedDocumentIds || undefined
-      )
+          const rows = await (async () => {
+            if (prepared.strategy === 'keyword') {
+              return await ctx.documentsStore.ftsSearch(
+                prepared.queryText,
+                prepared.limit,
+                prepared.filter,
+                prepared.workspaceId,
+                prepared.requestedDocumentIds || undefined
+              )
+            }
+            const { data: vec } = await ctx.embeddingService.embed(prepared.queryText)
+            if (prepared.strategy === 'semantic') {
+              return await ctx.documentsStore.vectorSearch(
+                vec,
+                prepared.limit,
+                prepared.filter,
+                prepared.workspaceId,
+                prepared.requestedDocumentIds || undefined
+              )
+            }
+            return await ctx.documentsStore.hybridSearch(
+              vec,
+              prepared.queryText,
+              prepared.limit,
+              prepared.filter,
+              prepared.workspaceId,
+              prepared.requestedDocumentIds || undefined
+            )
+          })()
+          const normalized = rows.map(normalizeForIpc)
+          session.succeed(
+            previewArray(normalized),
+            undefined,
+            buildKbResult({
+              toolName: KB_SEARCH_TOOL_SPEC.name,
+              data: normalized
+            })
+          )
+          return normalized
+        },
+        onError: (error, session) => {
+          session.fail(
+            [],
+            error.message,
+            undefined,
+            buildKbResult({
+              toolName: KB_SEARCH_TOOL_SPEC.name,
+              ok: false,
+              code: 'failed',
+              data: {
+                items: [],
+                total: 0,
+                error: error.message
+              }
+            })
+          )
+        }
+      }),
+    {
+      name: KB_SEARCH_TOOL_SPEC.name,
+      description: KB_SEARCH_TOOL_SPEC.promptSpec.purpose,
+      schema: KB_SEARCH_SCHEMA
     }
-  })
-
-  const kbVectorSearchChunks = createChunkSearchTool({
-    name: KB_VECTOR_SEARCH_CHUNKS_TOOL_SPEC.name,
-    description: '对本地知识库片段执行纯向量语义检索。',
-    execute: async (args) => {
-      const { data: vec } = await ctx.embeddingService.embed(args.queryText)
-      return await ctx.documentsStore.vectorSearch(
-        vec,
-        args.limit,
-        args.filter,
-        args.workspaceId,
-        args.requestedDocumentIds || undefined
-      )
-    }
-  })
-
-  const kbFtsSearchChunks = createChunkSearchTool({
-    name: KB_FTS_SEARCH_CHUNKS_TOOL_SPEC.name,
-    description: '对本地知识库片段执行纯关键词全文检索。',
-    execute: async (args) =>
-      await ctx.documentsStore.ftsSearch(
-        args.queryText,
-        args.limit,
-        args.filter,
-        args.workspaceId,
-        args.requestedDocumentIds || undefined
-      )
-  })
+  )
 
   const kbListDocuments = tool(
     async (args) =>
@@ -209,7 +189,7 @@ export const buildKbCapabilityTools = (input: {
           if (!workspaceId) {
             throw new Error('workspace is required for kb search')
           }
-          const keyword = String(args.keyword || '').trim() || undefined
+          const query = String(args.query || '').trim() || undefined
           const page = Math.max(1, Number(args.page ?? 1))
           const pageSize = Math.max(1, Math.min(MAX_LIST_PAGE_SIZE, Number(args.pageSize ?? 20)))
           const requestedDocumentIds = resolveRequestedDocumentIds(args.documentIds)
@@ -228,7 +208,7 @@ export const buildKbCapabilityTools = (input: {
           }
 
           const normalized = await ctx.documentsStore.listDocuments({
-            keyword,
+            keyword: query,
             page,
             pageSize,
             workspaceId,
@@ -246,7 +226,7 @@ export const buildKbCapabilityTools = (input: {
         },
         onError: (error, session) => {
           session.fail(
-            { items: [], total: 0 },
+            [],
             error.message,
             undefined,
             buildKbResult({
@@ -264,10 +244,10 @@ export const buildKbCapabilityTools = (input: {
       }),
     {
       name: KB_LIST_DOCUMENTS_TOOL_SPEC.name,
-      description: '按关键词列出本地知识库文档。',
-      schema: KB_LIST_DOCUMENTS_TOOL_SPEC.schema
+      description: KB_LIST_DOCUMENTS_TOOL_SPEC.promptSpec.purpose,
+      schema: KB_LIST_DOCUMENTS_SCHEMA
     }
   )
 
-  return [kbHybridSearchChunks, kbVectorSearchChunks, kbFtsSearchChunks, kbListDocuments]
+  return [kbSearch, kbListDocuments]
 }

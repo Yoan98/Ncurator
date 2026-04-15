@@ -4,7 +4,7 @@ import type {
   HumanStableMemoryPatch,
   RuntimeSkillId
 } from '../../../src/main/services/ai/human/types'
-import type { AiRunEvent, JsonArray, JsonObject, JsonValue } from '../../../src/shared/types'
+import type { AiArtifactRef, AiRunEvent, JsonArray, JsonObject, JsonValue } from '../../../src/shared/types'
 
 export const filterAiRunEventsByType = <TType extends AiRunEvent['type']>(
   events: readonly AiRunEvent[],
@@ -115,6 +115,18 @@ export const collectStartedToolStringArgs = (
 export const hasKbToolCall = (events: readonly AiRunEvent[]): boolean =>
   filterAiRunEventsByType(events, 'tool_call_result').some((event) => event.toolName.startsWith('kb_'))
 
+export const hasDraftReviewArtifact = (artifacts: readonly AiArtifactRef[] | undefined): boolean =>
+  Array.isArray(artifacts) && artifacts.some((artifact) => artifact.kind === 'draft_review')
+
+export const hasDraftFileArtifact = (artifacts: readonly AiArtifactRef[] | undefined): boolean =>
+  Array.isArray(artifacts) &&
+  artifacts.some(
+    (artifact) =>
+      artifact.kind === 'file' &&
+      artifact.capability === 'docx' &&
+      artifact.artifactRole === 'draft'
+  )
+
 const isJsonObject = (value: JsonValue | undefined): value is JsonObject =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
@@ -147,8 +159,19 @@ export const collectDocxApplyOpsContentKinds = (
   events: readonly AiRunEvent[]
 ): Array<'paragraph' | 'table'> => {
   const kinds = new Set<'paragraph' | 'table'>()
-  collectStartedToolInputs(events, 'docx_apply_ops').forEach((input) => {
-    collectDocxBlockKindsFromValue(input, kinds)
+  ;['docx_paragraph_edit', 'docx_heading_edit', 'docx_table_edit'].forEach((toolName) => {
+    collectStartedToolInputs(events, toolName).forEach((input) => {
+      if (toolName === 'docx_paragraph_edit' || toolName === 'docx_heading_edit') {
+        kinds.add('paragraph')
+      }
+      if (
+        toolName === 'docx_table_edit' &&
+        (input.action === 'insert_before' || input.action === 'insert_after')
+      ) {
+        kinds.add('table')
+      }
+      collectDocxBlockKindsFromValue(input, kinds)
+    })
   })
   return [...kinds]
 }

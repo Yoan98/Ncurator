@@ -4,7 +4,7 @@ import {
   writeTestDocxFile
 } from '../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
-import type { DocxOpenResult, DocxOutlineResult, DocxSearchResult } from './testUtils'
+import type { DocxMutationResult, DocxOutlineResult, DocxReadResult } from './testUtils'
 
 describe('ai tool docx backend', () => {
   it('docx-search-scope-contract', async () => {
@@ -14,7 +14,7 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证 docx_search 默认搜索全文，scope.blockIds 只在当前文档内缩圈。',
+      description: '验证 docx_read 默认搜索全文，docx_text_edit.blockIds 只在当前文档内缩圈。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -35,33 +35,39 @@ describe('ai tool docx backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         try {
-          const opened = await harness.invoke<DocxOpenResult>('docx_open', {
-            sourcePath: 'scope-contract.docx'
-          })
           const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
-            sourcePath: opened.sourcePath,
+            sourcePath: 'scope-contract.docx',
             maxBlocks: 20
           })
           const firstScopedBlockId =
-            outline.blocks.find((block) => block.text.includes('第一段'))?.blockId || ''
-          const fullSearch = await harness.invoke<DocxSearchResult>('docx_search', {
-            sourcePath: opened.sourcePath,
-            query: '目标术语',
-            mode: 'literal'
+            outline.blocks.find(
+              (block) => block.type === 'paragraph' && block.preview.includes('第一段')
+            )?.blockId || ''
+          const fullRead = await harness.invoke<DocxReadResult>('docx_read', {
+            sourcePath: outline.sourcePath,
+            query: '目标术语'
           })
-          const scopedSearch = await harness.invoke<DocxSearchResult>('docx_search', {
-            sourcePath: opened.sourcePath,
+          const scopedEdit = await harness.invoke<DocxMutationResult>('docx_text_edit', {
+            sourcePath: outline.sourcePath,
             query: '目标术语',
-            mode: 'literal',
-            scope: {
-              blockIds: [firstScopedBlockId]
-            }
+            replace: '限定术语',
+            blockIds: [firstScopedBlockId]
+          })
+          const scopedRead = await harness.invoke<DocxReadResult>('docx_read', {
+            sourcePath: scopedEdit.sourcePath,
+            query: '限定术语'
+          })
+          const remainingRead = await harness.invoke<DocxReadResult>('docx_read', {
+            sourcePath: scopedEdit.sourcePath,
+            query: '目标术语'
           })
 
           return {
             firstScopedBlockId,
-            fullSearch,
-            scopedSearch
+            fullRead,
+            scopedEdit,
+            scopedRead,
+            remainingRead
           }
         } finally {
           await harness.release()
@@ -69,12 +75,13 @@ describe('ai tool docx backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.fullSearch.matches.length === 2 &&
-            result.scopedSearch.matches.length === 1 &&
-            result.scopedSearch.matches[0]?.blockId === result.firstScopedBlockId,
+          result.fullRead.matches.length === 2 &&
+            result.scopedRead.matches.length === 1 &&
+            result.scopedRead.matches[0]?.blockId === result.firstScopedBlockId &&
+            result.remainingRead.matches.length === 1,
           {
             name: 'docx-search-scope-stays-explicit',
-            message: '默认搜索应覆盖全文，scope.blockIds 只返回指定 block 范围内的结果。',
+            message: '默认搜索应覆盖全文，docx_text_edit.blockIds 只修改指定 block 范围内的结果。',
             data: result
           }
         )

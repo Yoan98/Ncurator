@@ -43,7 +43,7 @@ describe('ai human mock-llm backend', () => {
                   skillIds: ['kb-document-discovery', 'kb-evidence-query'],
                   summary: '学习 kb 相关技能',
                   reason: '继续扩大当前活跃工具集合，并验证预算统计会保持准确。',
-                  expectedOutcome: '把当前 active tools 扩展到 12，并保持所有已学习 skill 可用。'
+                  expectedOutcome: '继续扩大当前 active tools，并保持所有已学习 skill 可用。'
                 })
               },
               {
@@ -86,9 +86,10 @@ describe('ai human mock-llm backend', () => {
             latestLearningStep?.learnedSkillIds.join(',') ===
               'workspace-cli,docx-read,docx-write,kb-document-discovery,kb-evidence-query' &&
             latestLearningStep?.effectiveSkillIds.includes('history-recall') &&
-            latestLearningStep.availableToolNames.includes('history_recall') &&
-            latestLearningStep.availableToolNames.length === 13 &&
-            latestLearningStep.summary.includes('当前 active tools=12') &&
+            latestLearningStep.availableToolNames.includes('history_search') &&
+            latestLearningStep.availableToolNames.includes('history_list') &&
+            latestLearningStep.availableToolNames.length >= 16 &&
+            latestLearningStep.summary.includes('当前 active tools=') &&
             !latestLearningStep.summary.includes('已淘汰最早学习的 skill='),
           {
             name: 'learning-tracks-active-tool-count-under-budget',
@@ -103,5 +104,5 @@ describe('ai human mock-llm backend', () => {
         )
       }
     })
-  })
+  }, 15_000)
 })

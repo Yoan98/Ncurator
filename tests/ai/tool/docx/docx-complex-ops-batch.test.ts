@@ -5,10 +5,9 @@ import {
 } from '../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
-  type DocxApplyOpsResult,
-  type DocxOpenResult,
+  type DocxMutationResult,
   type DocxOutlineResult,
-  type DocxSearchResult,
+  type DocxReadResult,
   findParagraphBlockIdByText,
   findTableCellBlockIdByText
 } from './testUtils'
@@ -21,7 +20,7 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证 replace/insert/delete/update_table_cell/replace_text 六类复杂操作组合。',
+      description: '验证 paragraph/table/text 三类新 docx 编辑工具可组合完成复杂编辑。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -62,14 +61,9 @@ describe('ai tool docx backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         try {
-          const opened = await harness.invoke<DocxOpenResult>('docx_open', {
-            sourcePath: 'complex-ops.docx'
-          })
           const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
-            sourcePath: opened.sourcePath,
-            maxBlocks: 50,
-            includeTables: true,
-            includeCells: true
+            sourcePath: 'complex-ops.docx',
+            maxBlocks: 50
           })
 
           const replaceBlockId = findParagraphBlockIdByText(
@@ -87,73 +81,57 @@ describe('ai tool docx backend', () => {
           const deleteBlockId = findParagraphBlockIdByText(outline.blocks, 'Delete this paragraph.')
           const ownerCellBlockId = findTableCellBlockIdByText(outline.blocks, 'Alice')
 
-          const applied = await harness.invoke<DocxApplyOpsResult>('docx_apply_ops', {
-            sourcePath: opened.sourcePath,
-            ops: [
-              {
-                type: 'replace_text',
-                query: 'Need text replacement here.',
-                replace: 'Text replaced in final snapshot.'
-              },
-              {
-                type: 'delete_block',
-                blockId: deleteBlockId
-              },
-              {
-                type: 'update_table_cell',
-                blockId: ownerCellBlockId,
-                content: [
-                  {
-                    kind: 'paragraph',
-                    runs: [{ text: 'Bob' }]
-                  }
-                ]
-              },
-              {
-                type: 'insert_after',
-                anchorBlockId: insertAfterAnchor,
-                content: [
-                  {
-                    kind: 'paragraph',
-                    runs: [{ text: 'Inserted after anchor.' }]
-                  }
-                ]
-              },
-              {
-                type: 'insert_before',
-                anchorBlockId: insertBeforeAnchor,
-                content: [
-                  {
-                    kind: 'paragraph',
-                    runs: [{ text: 'Inserted before anchor.' }]
-                  }
-                ]
-              },
-              {
-                type: 'replace_block',
-                blockId: replaceBlockId,
-                content: {
-                  kind: 'paragraph',
-                  runs: [{ text: 'Replaced whole block in final snapshot.' }]
-                }
-              }
-            ]
+          const replaceText = await harness.invoke<DocxMutationResult>('docx_text_edit', {
+            sourcePath: 'complex-ops.docx',
+            query: 'Need text replacement here.',
+            replace: 'Text replaced in final snapshot.'
           })
-          const search = await harness.invoke<DocxSearchResult>('docx_search', {
-            sourcePath: applied.sourcePath,
-            query: 'Inserted after anchor.',
-            mode: 'literal'
+          const deleteParagraph = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
+            sourcePath: 'complex-ops.docx',
+            action: 'delete',
+            blockId: deleteBlockId
+          })
+          const updateCell = await harness.invoke<DocxMutationResult>('docx_table_edit', {
+            sourcePath: 'complex-ops.docx',
+            action: 'update_cell',
+            cellBlockId: ownerCellBlockId,
+            text: 'Bob'
+          })
+          const insertAfter = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
+            sourcePath: 'complex-ops.docx',
+            action: 'insert_after',
+            anchorBlockId: insertAfterAnchor,
+            text: 'Inserted after anchor.'
+          })
+          const insertBefore = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
+            sourcePath: 'complex-ops.docx',
+            action: 'insert_before',
+            anchorBlockId: insertBeforeAnchor,
+            text: 'Inserted before anchor.'
+          })
+          const replaceBlock = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
+            sourcePath: 'complex-ops.docx',
+            action: 'replace_text',
+            blockId: replaceBlockId,
+            text: 'Replaced whole block in final snapshot.'
+          })
+          const readAfter = await harness.invoke<DocxReadResult>('docx_read', {
+            sourcePath: 'complex-ops.docx',
+            query: 'Inserted after anchor.'
           })
           const finalOutline = await harness.invoke<DocxOutlineResult>('docx_outline', {
-            sourcePath: applied.sourcePath,
-            maxBlocks: 80,
-            includeTables: true,
-            includeCells: true
+            sourcePath: 'complex-ops.docx',
+            maxBlocks: 80
           })
 
           return {
-            applied,
-            search,
+            replaceText,
+            deleteParagraph,
+            updateCell,
+            insertAfter,
+            insertBefore,
+            replaceBlock,
+            readAfter,
             finalOutline
           }
         } finally {
@@ -161,7 +139,14 @@ describe('ai tool docx backend', () => {
         }
       },
       assert: async (result, runtime) => {
-        const changedActions = result.applied.changedBlocks.map((block) => block.action)
+        const changedActions = [
+          ...result.replaceText.changedBlocks.map((block) => block.action),
+          ...result.deleteParagraph.changedBlocks.map((block) => block.action),
+          ...result.updateCell.changedBlocks.map((block) => block.action),
+          ...result.insertAfter.changedBlocks.map((block) => block.action),
+          ...result.insertBefore.changedBlocks.map((block) => block.action),
+          ...result.replaceBlock.changedBlocks.map((block) => block.action)
+        ]
 
         runtime.assertThat(
           ['replace_text', 'delete_block', 'update_table_cell', 'insert_after', 'insert_before', 'replace_block'].every(
@@ -177,30 +162,44 @@ describe('ai tool docx backend', () => {
           ),
           {
             name: 'complex-ops-batch-covers-all-op-types',
-            message: '复杂编辑 case 应覆盖六类 op，并产出新的快照摘要。',
+            message: '复杂编辑 case 应覆盖六类底层变更动作，并产出新的版本摘要。',
             data: {
-              currentVersionRef: result.applied.currentVersionRef,
+              currentVersionRef: result.replaceBlock.currentVersionRef,
               changedActions
             }
           }
         )
 
         runtime.assertThat(
-          result.search.matches.length === 1 &&
+          result.readAfter.matches.length === 1 &&
             result.finalOutline.blocks.some(
-              (block) => block.type === 'paragraph' && block.text.includes('Inserted before anchor.')
+              (block) => block.type === 'paragraph' && block.preview.includes('Inserted before anchor.')
             ) &&
             result.finalOutline.blocks.some(
-              (block) => block.type === 'table_cell' && block.text.includes('Bob')
+              (block) => block.type === 'table_cell' && block.preview.includes('Bob')
             ) &&
-            result.applied.warnings.length === 0,
+            [
+              result.replaceText,
+              result.deleteParagraph,
+              result.updateCell,
+              result.insertAfter,
+              result.insertBefore,
+              result.replaceBlock
+            ].every((item) => item.warnings.length === 0),
           {
             name: 'complex-ops-batch-remains-consumable-after-edits',
-            message: '多操作顺序执行后，结果结构仍应能继续被 search/outline 消费。',
+            message: '多次对象编辑后，结果结构仍应能继续被 read/outline 消费。',
             data: {
-              searchMatches: result.search.matches,
+              searchMatches: result.readAfter.matches,
               finalOutline: result.finalOutline.blocks,
-              warnings: result.applied.warnings
+              warnings: [
+                result.replaceText.warnings,
+                result.deleteParagraph.warnings,
+                result.updateCell.warnings,
+                result.insertAfter.warnings,
+                result.insertBefore.warnings,
+                result.replaceBlock.warnings
+              ]
             }
           }
         )

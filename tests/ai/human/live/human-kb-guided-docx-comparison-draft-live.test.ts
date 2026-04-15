@@ -11,8 +11,9 @@ import {
 } from '../../../harness/backend/aiLiveTestData'
 import {
   collectDocxApplyOpsContentKinds,
-  collectStartedToolStringArgs,
   filterAiRunEventsByType,
+  hasDraftFileArtifact,
+  hasDraftReviewArtifact,
   hasKbToolCall,
   runWithStructuredOutputRetry
 } from '../testUtils'
@@ -46,7 +47,7 @@ describe('ai human live backend', () => {
           const workspaceSeed = await seedKbGuidedDocxWorkspace(runtime)
           await seedKbGuidedDocxKb(runtime, workspaceSeed)
 
-          const runner = createHumanTestRunner(runtime)
+          const runner = createHumanTestRunner(runtime, {}, { hardActionLimit: 6 })
           const output = await runner.run({
             taskId: runtime.taskId,
             userInput: HUMAN_KB_GUIDED_DOCX_COMPARISON_DRAFT_USER_INPUT
@@ -71,17 +72,11 @@ describe('ai human live backend', () => {
           const events = result.events
           const toolResults = filterAiRunEventsByType(events, 'tool_call_result')
           const toolNames = toolResults.map((event) => event.toolName)
-          const openedSourcePaths = collectStartedToolStringArgs(events, 'docx_open', 'sourcePath')
+          const openedSourcePaths = filterAiRunEventsByType(events, 'tool_call_started')
+            .filter((event) => event.toolName.startsWith('docx_'))
+            .map((event) => event.input.sourcePath)
+            .filter((value): value is string => typeof value === 'string')
           const changedContentKinds = collectDocxApplyOpsContentKinds(events)
-          const docxArtifacts =
-            result.output?.artifacts?.filter(
-              (artifact) =>
-                artifact.kind === 'file' &&
-                artifact.capability === 'docx' &&
-                artifact.artifactRole === 'draft'
-            ) || []
-          const hasDraftReviewArtifact =
-            result.output?.artifacts?.some((artifact) => artifact.kind === 'draft_review') || false
           const deepLearningUnchanged = await hasUnchangedFileBytes(
             result.workspaceSeed.deepLearningPath,
             result.workspaceSeed.originalDeepLearningBytes
@@ -95,11 +90,12 @@ describe('ai human live backend', () => {
           runtime.assertThat(
             result.output?.status === 'completed' &&
               hasKbToolCall(events) &&
-              toolNames.includes('docx_apply_ops') &&
-              docxArtifacts.length > 0 &&
-              hasDraftReviewArtifact &&
+              toolNames.some((toolName) => toolName.endsWith('_edit')) &&
               changedContentKinds.includes('paragraph') &&
               changedContentKinds.includes('table') &&
+              filterAiRunEventsByType(events, 'draft_review_ready').length >= 1 &&
+              hasDraftReviewArtifact(result.output?.artifacts) &&
+              hasDraftFileArtifact(result.output?.artifacts) &&
               openedSourcePaths.some(
                 (sourcePath) =>
                   sourcePath.endsWith(result.workspaceSeed.graphicsRelativePath) ||
@@ -108,10 +104,12 @@ describe('ai human live backend', () => {
               /(过拟合|过度拟合)/.test(deliveryText) &&
               /反走样/.test(deliveryText) &&
               deepLearningUnchanged &&
-              graphicsUnchanged,
+              graphicsUnchanged &&
+              typeof result.output?.deliveryMarkdown === 'string' &&
+              result.output.deliveryMarkdown.trim().length > 0,
             {
               name: 'human-live-kb-guided-docx-write-uses-kb-and-preserves-source-files',
-              message: 'live human KB-guided 写 case 应先触发 KB 缩圈，再对目标 docx 生成 confirm copy 且不覆盖原文件。',
+              message: 'live human KB-guided 写 case 应先触发 KB 缩圈，再对目标 docx 完成对象化补写且不覆盖原文件。',
               data: {
                 openedSourcePaths,
                 toolNames,

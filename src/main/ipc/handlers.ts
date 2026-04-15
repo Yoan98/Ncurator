@@ -9,10 +9,6 @@ import { StorageService } from '../services/storage/StorageService'
 import { ModelService } from '../services/model/ModelService'
 import { AiRunService } from '../services/ai/AiRunService'
 import { updateSessionMemoryAfterRun } from '../services/ai/memory'
-import {
-  buildRunArtifactsFromDraftReviewDetail,
-  mergeArtifactRefs
-} from '../services/ai/utils/artifacts'
 import { DraftReviewService } from '../services/ai/human/tools/docx/review/DraftReviewService'
 import {
   getDocxWorkerClient,
@@ -302,11 +298,11 @@ export function registerHandlers(services: {
       taskId: input.runId,
       stepIndex: 1,
       action: 'call_tool',
-      toolName: 'kb_hybrid_search_chunks',
+      toolName: 'kb_search',
       publicNarrative: '执行检索并整理结果',
       learnedSkillIds: [],
       effectiveSkillIds: [],
-      availableToolNames: ['kb_hybrid_search_chunks'],
+      availableToolNames: ['kb_search'],
       summary: 'E2E fixture 开始执行检索。',
       createdAt: Date.now(),
       stage: 'human_hand'
@@ -318,7 +314,7 @@ export function registerHandlers(services: {
       runId: input.runId,
       taskId: input.runId,
       toolCallId: 'tool-e2e-search',
-      toolName: 'kb_hybrid_search_chunks',
+      toolName: 'kb_search',
       input: {
         query: 'e2e fixture search'
       },
@@ -331,7 +327,7 @@ export function registerHandlers(services: {
       runId: input.runId,
       taskId: input.runId,
       toolCallId: 'tool-e2e-search',
-      toolName: 'kb_hybrid_search_chunks',
+      toolName: 'kb_search',
       outputPreview: [
         {
           id: 'chunk-e2e-1',
@@ -563,11 +559,11 @@ export function registerHandlers(services: {
       taskId: input.runId,
       stepIndex: 1,
       action: 'call_tool',
-      toolName: 'docx_apply_ops',
+      toolName: 'docx_text_edit',
       publicNarrative: '生成草稿并建立审阅集合',
       learnedSkillIds: [],
       effectiveSkillIds: [],
-      availableToolNames: ['docx_apply_ops'],
+      availableToolNames: ['docx_text_edit'],
       summary: 'E2E fixture 开始准备草稿审阅。',
       createdAt: Date.now(),
       stage: 'human_hand'
@@ -2242,51 +2238,6 @@ export function registerHandlers(services: {
             draftReviewService.discardRun(runId)
             sendEvent({ type: 'run_failed', runId, error: result.error || 'failed' })
             return
-          }
-
-          const draftReviewDetails = workspace?.rootPath
-            ? await draftReviewService.finalizeRunReview({
-                runId,
-                workspaceRootPath: workspace.rootPath
-              })
-            : []
-
-          if (draftReviewDetails.length > 0) {
-            result.finalArtifacts = mergeArtifactRefs(
-              result.finalArtifacts,
-              ...draftReviewDetails.map((detail) => buildRunArtifactsFromDraftReviewDetail(detail))
-            )
-            draftReviewDetails.forEach((draftReviewDetail) => {
-              sendEvent({
-                type: 'draft_review_ready',
-                runId,
-                review: {
-                  reviewId: draftReviewDetail.review.id,
-                  documentCount: draftReviewDetail.review.document_count,
-                  changeCount: draftReviewDetail.review.change_count
-                },
-                createdAt: Date.now()
-              })
-              draftReviewDetail.documents.forEach((document) => {
-                if (!document.confirm_artifact_path) return
-                sendEvent({
-                  type: 'file_artifact',
-                  runId,
-                  taskId: 'draft-review',
-                  artifactId: uuidv4(),
-                  capability: 'docx',
-                  path: document.confirm_artifact_path,
-                  fileName: path.basename(document.confirm_artifact_path),
-                  operation: 'created',
-                  artifactRole: 'draft',
-                  reviewId: draftReviewDetail.review.id,
-                  draftDocumentId: document.id,
-                  draftSnapshotId: document.latest_draft_snapshot_id,
-                  summary: `confirm doc ready: ${document.source_name}`,
-                  createdAt: Date.now()
-                })
-              })
-            })
           }
 
           try {

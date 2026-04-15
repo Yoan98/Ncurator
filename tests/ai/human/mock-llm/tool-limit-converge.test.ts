@@ -35,7 +35,7 @@ describe('ai human mock-llm backend', () => {
                 },
                 {
                   output: buildToolDecision({
-                    toolName: 'terminal_run_command',
+                    toolName: 'workspace_run_command',
                     args: {
                       command: 'pwd'
                     },
@@ -46,7 +46,7 @@ describe('ai human mock-llm backend', () => {
                 },
                 {
                   output: buildToolDecision({
-                    toolName: 'terminal_run_command',
+                    toolName: 'workspace_run_command',
                     args: {
                       command: 'ls'
                     },

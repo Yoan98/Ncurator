@@ -11,23 +11,6 @@ type KbSearchRow = {
   _score?: number
 }
 
-type SearchToolName =
-  | 'kb_hybrid_search_chunks'
-  | 'kb_vector_search_chunks'
-  | 'kb_fts_search_chunks'
-
-const filterRowsByScope = (
-  rows: readonly KbSearchRow[],
-  scopedDocumentIds?: string[]
-): KbSearchRow[] => {
-  if (!Array.isArray(scopedDocumentIds) || scopedDocumentIds.length === 0) {
-    return [...rows]
-  }
-
-  const allowed = new Set(scopedDocumentIds)
-  return rows.filter((row) => row.document_id && allowed.has(row.document_id))
-}
-
 describe('ai tool kb backend', () => {
   it('kb-evidence-search-family-contract', async () => {
     await runBackendCase({
@@ -36,7 +19,7 @@ describe('ai tool kb backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['kb'],
-      description: '验证 kb_hybrid/vector/fts 三个检索工具的统一返回结构和范围约束。',
+      description: '验证 kb_search 在 auto/semantic/keyword 三种 strategy 下的统一返回结构和范围约束。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -76,17 +59,20 @@ describe('ai tool kb backend', () => {
 
         const harness = createRetrievalToolHarness(runtime)
 
-        const hybridInScope = await harness.invoke<KbSearchRow[]>('kb_hybrid_search_chunks', {
+        const hybridInScope = await harness.invoke<KbSearchRow[]>('kb_search', {
           queryText: 'approval denied unchanged files',
+          strategy: 'auto',
           limit: 5
         })
-        const vectorSubset = await harness.invoke<KbSearchRow[]>('kb_vector_search_chunks', {
+        const vectorSubset = await harness.invoke<KbSearchRow[]>('kb_search', {
           queryText: 'terminal artifacts recorded',
+          strategy: 'semantic',
           limit: 5,
           documentIds: ['doc-2', 'doc-3']
         })
-        const ftsOutOfScope = await harness.invoke<KbSearchRow[]>('kb_fts_search_chunks', {
+        const ftsOutOfScope = await harness.invoke<KbSearchRow[]>('kb_search', {
           queryText: 'out of scope notes',
+          strategy: 'keyword',
           limit: 5,
           documentIds: ['doc-3']
         })
@@ -109,7 +95,7 @@ describe('ai tool kb backend', () => {
             result.hybridInScope.some((row) => row.document_id === 'doc-1'),
           {
             name: 'hybrid-search-returns-stable-rows',
-            message: 'kb_hybrid_search_chunks 应返回稳定 rows 结构，并默认限制在当前工作区范围内。',
+            message: 'kb_search(auto) 应返回稳定 rows 结构，并默认限制在当前工作区范围内。',
             data: result.hybridInScope
           }
         )
@@ -119,14 +105,14 @@ describe('ai tool kb backend', () => {
             result.vectorSubset.every((row) => row.document_id === 'doc-2'),
           {
             name: 'vector-search-honors-explicit-document-scope',
-            message: 'kb_vector_search_chunks 应继续遵守 documentIds 在当前工作区内的收窄范围。',
+            message: 'kb_search(semantic) 应继续遵守 documentIds 在当前工作区内的收窄范围。',
             data: result.vectorSubset
           }
         )
 
         runtime.assertThat(result.ftsOutOfScope.length === 0, {
           name: 'fts-search-rejects-out-of-scope-document-ids',
-          message: 'kb_fts_search_chunks 在 requested documentIds 完全超出当前工作区时应返回空结果。',
+          message: 'kb_search(keyword) 在 requested documentIds 完全超出当前工作区时应返回空结果。',
           data: result.ftsOutOfScope
         })
       }

@@ -35,25 +35,11 @@ describe('ai tool terminal backend', () => {
         const harness = createTerminalToolHarness(runtime)
 
         return {
-          updateExisting: await harness.invoke<TerminalRunCommandResult>('terminal_run_command', {
-            command: 'cp replacement.txt notes.txt',
-            expectedArtifacts: [
-              {
-                path: 'notes.txt',
-                operation: 'updated',
-                summary: 'notes file updated by terminal command'
-              }
-            ]
+          updateExisting: await harness.invoke<TerminalRunCommandResult>('workspace_run_command', {
+            command: 'cp replacement.txt notes.txt'
           }),
-          createNew: await harness.invoke<TerminalRunCommandResult>('terminal_run_command', {
-            command: 'touch generated/output.txt',
-            expectedArtifacts: [
-              {
-                path: 'generated/output.txt',
-                operation: 'created',
-                summary: 'generated output file'
-              }
-            ]
+          createNew: await harness.invoke<TerminalRunCommandResult>('workspace_run_command', {
+            command: 'touch generated/output.txt'
           }),
           notesContent: await fs.readFile(path.join(runtime.workspaceRoot, 'notes.txt'), 'utf8'),
           createdExists: await fs
@@ -98,7 +84,7 @@ describe('ai tool terminal backend', () => {
             artifactEvents.length >= 2,
           {
             name: 'mutating-terminal-commands-record-artifacts',
-            message: 'terminal_run_command 应识别并结构化返回更新/创建的目标文件 artifact。',
+            message: 'workspace_run_command 应识别并结构化返回更新/创建的目标文件 artifact。',
             data: {
               updateArtifacts: result.updateExisting.artifacts,
               createArtifacts: result.createNew.artifacts,

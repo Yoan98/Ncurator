@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { humanDecisionSchema } from '../../../src/main/services/ai/human/schema'
 import { ALL_TOOL_SPECS } from '../../../src/main/services/ai/human/tools/registry'
-import { DOCX_APPLY_OPS_TOOL_SPEC } from '../../../src/main/services/ai/human/tools/docx/toolSpecs'
+import { DOCX_TABLE_EDIT_TOOL_SPEC } from '../../../src/main/services/ai/human/tools/docx/toolSpecs'
 import {
   renderBrainOutputSchemaForPrompt,
   renderSchemaShape,
@@ -24,17 +24,15 @@ describe('ai unit tool prompt contract', () => {
     expect(invalidExamples).toEqual([])
   })
 
-  it('renders docx_apply_ops schema with nested paragraph and table structure', () => {
-    const promptText = renderToolSchemaForPrompt(DOCX_APPLY_OPS_TOOL_SPEC.schema)
+  it('renders docx_table_edit schema with rows structure', () => {
+    const promptText = renderToolSchemaForPrompt(DOCX_TABLE_EDIT_TOOL_SPEC.schema)
 
     expect(promptText).toContain('输入结构：')
     expect(promptText).toContain('insert_after')
     expect(promptText).toContain('anchorBlockId')
-    expect(promptText).toContain('kind')
-    expect(promptText).toContain('paragraph')
-    expect(promptText).toContain('runs')
-    expect(promptText).toContain('table')
     expect(promptText).toContain('rows')
+    expect(promptText).toContain('update_cell')
+    expect(promptText).toContain('cellBlockId')
   })
 
   it('renders brain decision schema as output shape', () => {

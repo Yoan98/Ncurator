@@ -140,6 +140,15 @@ interface AiRunContext {
   // docx 打开前把源路径解析成运行时可用的打开目标。
   resolveDocxOpenTarget: (sourcePath: string) => Promise<ResolvedDocxOpenTarget>
 
+  // human task 开始前注册本次 run 的 docx 草稿审阅上下文。
+  beginDocxReviewRun: () => void
+
+  // human task 完成后汇总本次 run 的 docx 改动，生成 draft review 与 confirm copy。
+  finalizeDocxReviewRun: () => Promise<DraftReviewDetail[]>
+
+  // human task 中断或失败后丢弃本次 run 尚未收口的 docx 草稿审阅状态。
+  discardDocxReviewRun: () => void
+
   // 当前 workspace 文档存储；知识检索和网页资料读取依赖它。
   documentsStore: DocumentsStore
 
@@ -337,7 +346,7 @@ interface HumanExecution {
 interface HumanMemoryHistory {
   // 最近几轮正式过程历史；是 brain 主要消费的过程记录来源。
   roundHistory: HumanRoundRecord[]
-  // 最近一次 history_recall 主动加载出来的旧历史；只作为补充上下文使用。
+  // 最近一次 history_search / history_list 主动加载出来的旧历史；只作为补充上下文使用。
   loadedHistoryContext?: HumanLoadedHistoryContext
 }
 
@@ -365,7 +374,7 @@ interface HumanState {
 }
 ```
 
-### `roundHistory` 与 `history_recall`
+### `roundHistory` 与 `history_search / history_list`
 
 ```ts
 interface HumanHistoryToolResult {
@@ -434,14 +443,12 @@ interface HumanRoundRecord {
 
 interface HumanLoadedHistoryContext {
   filters: {
-    // 限定要回看的 round id。
-    roundIds?: number[]
-    // 限定要回看的执行类型。
-    executionKinds?: Array<'pre_execution_blocked' | 'learning' | 'hand' | 'mouth'>
-    // 限定要回看的工具名。
-    toolNames?: string[]
-    // 限定要回看的 watch hint 类型。
-    watchHintCodes?: HumanWatchHint['code'][]
+    // 按关键词搜索历史时使用的查询词。
+    query?: string
+    // 可选的 round 起始边界。
+    startRoundId?: number
+    // 可选的 round 结束边界。
+    endRoundId?: number
     // 本次主动回看最多带回多少条 round。
     limit?: number
   }

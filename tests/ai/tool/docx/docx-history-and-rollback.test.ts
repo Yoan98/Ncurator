@@ -7,11 +7,10 @@ import {
 } from '../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
-  type DocxApplyOpsResult,
   type DocxHistoryResult,
-  type DocxOpenResult,
+  type DocxReadResult,
   type DocxRollbackResult,
-  type DocxSearchResult
+  type DocxMutationResult
 } from './testUtils'
 
 describe('ai tool docx backend', () => {
@@ -22,7 +21,7 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证快照历史查询与多轮继续编辑后的按步数/目标回滚。',
+      description: '验证版本历史查询与按 versionRef 回滚。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -41,56 +40,46 @@ describe('ai tool docx backend', () => {
         const sourceBufferBefore = await fs.readFile(sourcePath)
         const harness = createDocxToolHarness(runtime)
         try {
-          const opened = await harness.invoke<DocxOpenResult>('docx_open', {
-            sourcePath: 'history-rollback.docx'
+          const initialRead = await harness.invoke<DocxReadResult>('docx_read', {
+            sourcePath: 'history-rollback.docx',
+            query: 'Version one.'
           })
-          const firstEdit = await harness.invoke<DocxApplyOpsResult>('docx_apply_ops', {
-            sourcePath: opened.sourcePath,
-            ops: [
-              {
-                type: 'replace_text',
-                query: 'Version one.',
-                replace: 'Version two.'
-              }
-            ]
+          const firstEdit = await harness.invoke<DocxMutationResult>('docx_text_edit', {
+            sourcePath: initialRead.sourcePath,
+            query: 'Version one.',
+            replace: 'Version two.'
           })
-          const secondEdit = await harness.invoke<DocxApplyOpsResult>('docx_apply_ops', {
+          const secondEdit = await harness.invoke<DocxMutationResult>('docx_text_edit', {
             sourcePath: firstEdit.sourcePath,
-            ops: [
-              {
-                type: 'replace_text',
-                query: 'Keep this line.',
-                replace: 'Keep this line, updated.'
-              }
-            ]
+            query: 'Keep this line.',
+            replace: 'Keep this line, updated.'
           })
-          const history = await harness.invoke<DocxHistoryResult>('docx_get_history', {
+          const history = await harness.invoke<DocxHistoryResult>('docx_history', {
             sourcePath: secondEdit.sourcePath,
-            maxDepth: 10
+            limit: 10
           })
-          const rollbackBySteps = await harness.invoke<DocxRollbackResult>('docx_rollback', {
+          const rollbackByVersion = await harness.invoke<DocxRollbackResult>('docx_rollback', {
             sourcePath: secondEdit.sourcePath,
-            steps: 1
+            versionRef: firstEdit.currentVersionRef
           })
-          const searchAfterStepRollback = await harness.invoke<DocxSearchResult>('docx_search', {
-            sourcePath: rollbackBySteps.sourcePath,
-            query: 'Keep this line, updated.',
-            mode: 'literal'
+          const readAfterRollback = await harness.invoke<DocxReadResult>('docx_read', {
+            sourcePath: rollbackByVersion.sourcePath,
+            query: 'Keep this line, updated.'
           })
-          const rollbackByTarget = await harness.invoke<DocxRollbackResult>('docx_rollback', {
-            sourcePath: rollbackBySteps.sourcePath,
-            targetVersionRef: opened.currentVersionRef
+          const rollbackToInitial = await harness.invoke<DocxRollbackResult>('docx_rollback', {
+            sourcePath: rollbackByVersion.sourcePath,
+            versionRef: initialRead.currentVersionRef
           })
           const sourceBufferAfter = await fs.readFile(sourcePath)
 
           return {
-            opened,
+            initialRead,
             firstEdit,
             secondEdit,
             history,
-            rollbackBySteps,
-            searchAfterStepRollback,
-            rollbackByTarget,
+            rollbackByVersion,
+            readAfterRollback,
+            rollbackToInitial,
             sourceBufferBefore,
             sourceBufferAfter
           }
@@ -103,25 +92,25 @@ describe('ai tool docx backend', () => {
           result.history.versions.length === 3 &&
             result.history.versions[0]?.versionRef === result.secondEdit.currentVersionRef &&
             result.history.versions[1]?.versionRef === result.firstEdit.currentVersionRef &&
-            result.history.versions[2]?.versionRef === result.opened.currentVersionRef,
+            result.history.versions[2]?.versionRef === result.initialRead.currentVersionRef,
           {
             name: 'snapshot-history-tracks-current-and-ancestors',
-            message: 'docx_get_history 应能追溯到多轮编辑形成的祖先版本链。',
+            message: 'docx_history 应能追溯到多轮编辑形成的祖先版本链。',
             data: result.history.versions
           }
         )
 
         runtime.assertThat(
-          result.rollbackBySteps.currentVersionRef === result.firstEdit.currentVersionRef &&
-            result.searchAfterStepRollback.matches.length === 0 &&
-            result.rollbackByTarget.currentVersionRef === result.opened.currentVersionRef,
+          result.rollbackByVersion.currentVersionRef === result.firstEdit.currentVersionRef &&
+            result.readAfterRollback.matches.length === 0 &&
+            result.rollbackToInitial.currentVersionRef === result.initialRead.currentVersionRef,
           {
             name: 'rollback-restores-target-ancestor-without-breaking-structure',
-            message: '按 steps 与按 targetVersionRef 回滚后，应回到目标祖先版本且结构保持有效。',
+            message: '按 versionRef 回滚后，应回到目标祖先版本且结构保持有效。',
             data: {
-              rollbackBySteps: result.rollbackBySteps,
-              rollbackByTarget: result.rollbackByTarget,
-              searchAfterStepRollback: result.searchAfterStepRollback.matches
+              rollbackByVersion: result.rollbackByVersion,
+              rollbackToInitial: result.rollbackToInitial,
+              readAfterRollback: result.readAfterRollback.matches
             }
           }
         )

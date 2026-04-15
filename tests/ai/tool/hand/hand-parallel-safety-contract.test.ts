@@ -7,24 +7,6 @@ import { writeTestDocxFile } from '../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import { filterEventsByType } from '../testHelpers'
 
-type DocxOpenResult = {
-  ok: boolean
-  sourcePath: string
-  currentVersionRef: string
-}
-
-const invokeCachedTool = async <TResult>(
-  toolset: readonly { name?: string; invoke: (input: Record<string, unknown>) => Promise<unknown> }[],
-  toolName: string,
-  args: Record<string, unknown>
-): Promise<TResult> => {
-  const tool = toolset.find((item) => String(item.name || '') === toolName)
-  if (!tool) {
-    throw new Error(`tool not found in cache: ${toolName}`)
-  }
-  return (await tool.invoke(args)) as TResult
-}
-
 describe('ai tool hand backend', () => {
   it('hand-parallel-safety-contract', async () => {
     await runBackendCase({
@@ -66,12 +48,8 @@ describe('ai tool hand backend', () => {
           skillId: 'docx-write'
         })
 
-        const docxReadTools = cache.skillToolsets['docx-read'] || []
-        const openResult = await invokeCachedTool<DocxOpenResult>(docxReadTools, 'docx_open', {
-          sourcePath: 'parallel-safe.docx'
-        })
-
         const handNode = createHandNode({ ctx, cache })
+        const sourcePath = 'parallel-safe.docx'
 
         const safeState = await handNode({
           ...createInitialHumanState({
@@ -87,35 +65,34 @@ describe('ai tool hand backend', () => {
               userInput: 'inspect docx in parallel'
             }).execution,
             currentDecision: {
-            decision: {
-              summary: '并行读取 docx 结构和命中段落',
-              reason: '两个工具都是 read_only 且 parallelSafe。',
-              expectedOutcome: '直接返回 outline 和 search 结果。'
-            },
-            readyToDeliver: false,
-            nextAction: {
-              action: 'hand',
-              toolUsePlan: {
-                mode: 'parallel',
-                calls: [
-                  {
-                    toolName: 'docx_outline',
-                    args: {
-                      sourcePath: openResult.sourcePath,
-                      maxBlocks: 20
+              decision: {
+                summary: '并行读取 docx 结构和命中段落',
+                reason: '两个工具都是 read_only 且 parallelSafe。',
+                expectedOutcome: '直接返回 outline 和读取结果。'
+              },
+              readyToDeliver: false,
+              nextAction: {
+                action: 'hand',
+                toolUsePlan: {
+                  mode: 'parallel',
+                  calls: [
+                    {
+                      toolName: 'docx_outline',
+                      args: {
+                        sourcePath,
+                        maxBlocks: 20
+                      }
+                    },
+                    {
+                      toolName: 'docx_read',
+                      args: {
+                        sourcePath,
+                        query: 'approval denied'
+                      }
                     }
-                  },
-                  {
-                    toolName: 'docx_search',
-                    args: {
-                      sourcePath: openResult.sourcePath,
-                      query: 'approval denied',
-                      mode: 'literal'
-                    }
-                  }
-                ]
+                  ]
+                }
               }
-            }
             }
           }
         })
@@ -139,53 +116,12 @@ describe('ai tool hand backend', () => {
                 toolUsePlan: {
                   mode: 'parallel',
                   calls: [
-                    {
-                      toolName: 'docx_outline',
-                      args: {
-                        sourcePath: openResult.sourcePath,
-                        maxBlocks: 20
-                      }
-                    },
-                    {
-                      toolName: 'docx_search',
-                      args: {
-                        sourcePath: openResult.sourcePath,
-                        query: 'Safety',
-                        mode: 'literal'
-                      }
-                    },
-                    {
-                      toolName: 'docx_search',
-                      args: {
-                        sourcePath: openResult.sourcePath,
-                        query: 'Risk',
-                        mode: 'literal'
-                      }
-                    },
-                    {
-                      toolName: 'docx_search',
-                      args: {
-                        sourcePath: openResult.sourcePath,
-                        query: 'monitor',
-                        mode: 'literal'
-                      }
-                    },
-                    {
-                      toolName: 'docx_search',
-                      args: {
-                        sourcePath: openResult.sourcePath,
-                        query: 'approval',
-                        mode: 'literal'
-                      }
-                    },
-                    {
-                      toolName: 'docx_search',
-                      args: {
-                        sourcePath: openResult.sourcePath,
-                        query: 'edge',
-                        mode: 'literal'
-                      }
-                    }
+                    { toolName: 'docx_outline', args: { sourcePath, maxBlocks: 20 } },
+                    { toolName: 'docx_read', args: { sourcePath, query: 'Safety' } },
+                    { toolName: 'docx_read', args: { sourcePath, query: 'Risk' } },
+                    { toolName: 'docx_read', args: { sourcePath, query: 'monitor' } },
+                    { toolName: 'docx_read', args: { sourcePath, query: 'approval' } },
+                    { toolName: 'docx_read', args: { sourcePath, query: 'edge' } }
                   ]
                 }
               }
@@ -217,61 +153,13 @@ describe('ai tool hand backend', () => {
                 toolUsePlan: {
                   mode: 'parallel',
                   calls: [
-                    {
-                      toolName: 'docx_outline',
-                      args: {
-                        sourcePath: openResult.sourcePath,
-                        maxBlocks: 20
-                      }
-                    },
-                    {
-                      toolName: 'docx_search',
-                      args: {
-                        sourcePath: openResult.sourcePath,
-                        query: 'Safety',
-                        mode: 'literal'
-                      }
-                    },
-                    {
-                      toolName: 'docx_search',
-                      args: {
-                        sourcePath: openResult.sourcePath,
-                        query: 'Risk',
-                        mode: 'literal'
-                      }
-                    },
-                    {
-                      toolName: 'docx_search',
-                      args: {
-                        sourcePath: openResult.sourcePath,
-                        query: 'monitor',
-                        mode: 'literal'
-                      }
-                    },
-                    {
-                      toolName: 'docx_search',
-                      args: {
-                        sourcePath: openResult.sourcePath,
-                        query: 'approval',
-                        mode: 'literal'
-                      }
-                    },
-                    {
-                      toolName: 'docx_search',
-                      args: {
-                        sourcePath: openResult.sourcePath,
-                        query: 'edge',
-                        mode: 'literal'
-                      }
-                    },
-                    {
-                      toolName: 'docx_search',
-                      args: {
-                        sourcePath: openResult.sourcePath,
-                        query: 'cases',
-                        mode: 'literal'
-                      }
-                    }
+                    { toolName: 'docx_outline', args: { sourcePath, maxBlocks: 20 } },
+                    { toolName: 'docx_read', args: { sourcePath, query: 'Safety' } },
+                    { toolName: 'docx_read', args: { sourcePath, query: 'Risk' } },
+                    { toolName: 'docx_read', args: { sourcePath, query: 'monitor' } },
+                    { toolName: 'docx_read', args: { sourcePath, query: 'approval' } },
+                    { toolName: 'docx_read', args: { sourcePath, query: 'edge' } },
+                    { toolName: 'docx_read', args: { sourcePath, query: 'cases' } }
                   ]
                 }
               }
@@ -297,41 +185,35 @@ describe('ai tool hand backend', () => {
           execution: {
             ...limitExceededState.execution,
             currentDecision: {
-            decision: {
-              summary: '并行写入和读取',
-              reason: '故意构造不安全批次，验证 hand 是否拒绝。',
-              expectedOutcome: '写入 watchHint 并返回 brain。'
-            },
-            readyToDeliver: false,
-            nextAction: {
-              action: 'hand',
-              toolUsePlan: {
-                mode: 'parallel',
-                calls: [
-                  {
-                    toolName: 'docx_apply_ops',
-                    args: {
-                      sourcePath: openResult.sourcePath,
-                      ops: [
-                        {
-                          type: 'replace_text',
-                          query: 'Risk summary',
-                          replace: 'Updated risk summary'
-                        }
-                      ]
+              decision: {
+                summary: '并行写入和读取',
+                reason: '故意构造不安全批次，验证 hand 是否拒绝。',
+                expectedOutcome: '写入 watchHint 并返回 brain。'
+              },
+              readyToDeliver: false,
+              nextAction: {
+                action: 'hand',
+                toolUsePlan: {
+                  mode: 'parallel',
+                  calls: [
+                    {
+                      toolName: 'docx_text_edit',
+                      args: {
+                        sourcePath,
+                        query: 'Risk summary',
+                        replace: 'Updated risk summary'
+                      }
+                    },
+                    {
+                      toolName: 'docx_read',
+                      args: {
+                        sourcePath,
+                        query: 'Risk summary'
+                      }
                     }
-                  },
-                  {
-                    toolName: 'docx_search',
-                    args: {
-                      sourcePath: openResult.sourcePath,
-                      query: 'Risk summary',
-                      mode: 'literal'
-                    }
-                  }
-                ]
+                  ]
+                }
               }
-            }
             }
           }
         })
@@ -349,8 +231,7 @@ describe('ai tool hand backend', () => {
           toolStartedBeforeLimitExceeded,
           toolStartedAfterLimitExceeded,
           toolStartedBeforeUnsafe,
-          toolStartedAfterUnsafe,
-          events: runtime.eventCollector.snapshot()
+          toolStartedAfterUnsafe
         }
       },
       assert: async (result, runtime) => {

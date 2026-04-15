@@ -2,7 +2,7 @@ import { describe, it } from 'vitest'
 import { writeTestDocxFile } from '../../../harness/backend/aiToolHarness'
 import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
-import type { DocxOpenResult, DocxSearchResult } from '../../tool/docx/testUtils'
+import type { DocxReadResult } from '../../tool/docx/testUtils'
 import {
   buildCompleteTaskDecision,
   buildLearnSkillsDecision,
@@ -47,24 +47,9 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildToolDecision({
-                  toolName: 'docx_open',
-                  args: {
-                    sourcePath: 'docx-read-fact-exposure.docx'
-                  },
-                  summary: '打开目标文档',
-                  reason: '进入 docx 读取链路前需要先 open。',
-                  expectedOutcome: '初始化文档会话并获得当前版本。'
-                })
-              },
-              () => {
-                const openResult = readLatestToolResultDataFromEvents<DocxOpenResult>(
-                  runtime.eventCollector.snapshot(),
-                  'docx_open'
-                )
-                return buildToolDecision({
                   toolName: 'docx_outline',
                   args: {
-                    sourcePath: openResult.sourcePath,
+                    sourcePath: 'docx-read-fact-exposure.docx',
                     maxBlocks: 200
                   },
                   summary: '提取文档结构',
@@ -79,16 +64,11 @@ describe('ai human mock-llm backend', () => {
                 ) {
                   throw new Error('brain prompt is missing outline truncation fact exposure')
                 }
-                const openResult = readLatestToolResultDataFromEvents<DocxOpenResult>(
-                  runtime.eventCollector.snapshot(),
-                  'docx_open'
-                )
                 return buildToolDecision({
-                  toolName: 'docx_search',
+                  toolName: 'docx_read',
                   args: {
-                    sourcePath: openResult.sourcePath,
-                    query: '反走样',
-                    mode: 'literal'
+                    sourcePath: 'docx-read-fact-exposure.docx',
+                    query: '反走样'
                   },
                   summary: '搜索反走样内容',
                   reason: '验证兼容字形归一后，普通查询能命中真实文档文本。',
@@ -131,9 +111,9 @@ describe('ai human mock-llm backend', () => {
         }
       },
       assert: async (result, runtime) => {
-        const searchResult = readLatestToolResultDataFromEvents<DocxSearchResult>(
+        const searchResult = readLatestToolResultDataFromEvents<DocxReadResult>(
           result.events,
-          'docx_search'
+          'docx_read'
         )
 
         runtime.assertThat(

@@ -8,10 +8,9 @@ import {
 } from '../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
-  type DocxApplyOpsResult,
   type DocxFailureResult,
-  type DocxOpenResult,
-  type DocxSearchResult
+  type DocxMutationResult,
+  type DocxReadResult
 } from './testUtils'
 
 const corruptDocumentRelationships = async (filePath: string): Promise<void> => {
@@ -41,7 +40,7 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证 apply_ops 产出无效 docx 时会失败，且不会推进当前草稿快照。',
+      description: '验证对象编辑产出无效 docx 时会失败，且不会推进当前草稿快照。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -56,31 +55,29 @@ describe('ai tool docx backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         try {
-          const opened = await harness.invoke<DocxOpenResult>('docx_open', {
-            sourcePath: 'invalid-snapshot-source.docx'
+          const initialRead = await harness.invoke<DocxReadResult>('docx_read', {
+            sourcePath: 'invalid-snapshot-source.docx',
+            query: 'Original invalid snapshot source.'
           })
-          const failedApply = await harness.invoke<DocxFailureResult>('docx_apply_ops', {
-            sourcePath: opened.sourcePath,
-            ops: [
-              {
-                type: 'replace_text',
-                query: 'Original invalid snapshot source.',
-                replace: 'Should never become the latest draft.'
-              }
-            ]
-          })
-          const searchOriginal = await harness.invoke<DocxSearchResult>('docx_search', {
-            sourcePath: opened.sourcePath,
-            query: 'Original invalid snapshot source.',
-            mode: 'literal'
+          const failedEdit = await harness.invoke<DocxFailureResult | DocxMutationResult>(
+            'docx_text_edit',
+            {
+              sourcePath: initialRead.sourcePath,
+              query: 'Original invalid snapshot source.',
+              replace: 'Should never become the latest draft.'
+            }
+          )
+          const readOriginal = await harness.invoke<DocxReadResult>('docx_read', {
+            sourcePath: initialRead.sourcePath,
+            query: 'Original invalid snapshot source.'
           })
 
           return {
-            opened,
-            failedApply,
-            searchOriginal,
+            initialRead,
+            failedEdit,
+            readOriginal,
             activeVersionRef:
-              harness.state.documentSessionBySourcePath.get(opened.sourcePath)?.activeVersionRef || '',
+              harness.state.documentSessionBySourcePath.get(initialRead.sourcePath)?.activeVersionRef || '',
             trackedSourcePaths: [...harness.state.documentSessionBySourcePath.keys()]
           }
         } finally {
@@ -89,29 +86,29 @@ describe('ai tool docx backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.failedApply.ok === false &&
-            result.failedApply.code === 'failed' &&
-            result.failedApply.error.includes('invalid docx') &&
-            result.searchOriginal.matches.length === 1,
+          result.failedEdit.ok === false &&
+            result.failedEdit.code === 'failed' &&
+            result.failedEdit.error.includes('invalid docx') &&
+            result.readOriginal.matches.length === 1,
           {
-            name: 'apply-ops-fails-when-generated-snapshot-is-invalid',
-            message: '内部校验失败时，apply_ops 应直接失败，并保留原快照可继续读取。',
+            name: 'edit-fails-when-generated-snapshot-is-invalid',
+            message: '内部校验失败时，对象编辑应直接失败，并保留原快照可继续读取。',
             data: {
-              failedApply: result.failedApply,
-              searchOriginal: result.searchOriginal.matches
+              failedEdit: result.failedEdit,
+              readOriginal: result.readOriginal.matches
             }
           }
         )
 
         runtime.assertThat(
-          result.activeVersionRef === result.opened.currentVersionRef &&
+          result.activeVersionRef === result.initialRead.currentVersionRef &&
             result.trackedSourcePaths.length === 1 &&
-            result.trackedSourcePaths[0] === result.opened.sourcePath,
+            result.trackedSourcePaths[0] === result.initialRead.sourcePath,
           {
-            name: 'invalid-apply-does-not-advance-current-draft',
+            name: 'invalid-edit-does-not-advance-current-draft',
             message: '无效版本不能成为当前草稿，也不能污染 run 内文档会话跟踪。',
             data: {
-              opened: result.opened,
+              initialRead: result.initialRead,
               activeVersionRef: result.activeVersionRef,
               trackedSourcePaths: result.trackedSourcePaths
             }

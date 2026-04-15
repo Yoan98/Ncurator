@@ -236,16 +236,15 @@ export const humanRoundRecordSchema = z.object({
   execution: humanRoundExecutionSchema
 })
 
-export const historyRecallFilterSchema = z.object({
-  roundIds: z.array(z.number().int().min(1)).optional(),
-  executionKinds: z.array(humanRoundExecutionKindSchema).optional(),
-  toolNames: z.array(z.string().min(1)).optional(),
-  watchHintCodes: z.array(humanWatchHintCodeSchema).optional(),
+export const historySearchFilterSchema = z.object({
+  query: z.string().min(1).optional(),
+  startRoundId: z.number().int().min(1).optional(),
+  endRoundId: z.number().int().min(1).optional(),
   limit: z.number().int().min(1).optional()
 })
 
 export const humanLoadedHistoryContextSchema = z.object({
-  filters: historyRecallFilterSchema,
+  filters: historySearchFilterSchema,
   rounds: z.array(humanRoundRecordSchema)
 })
 

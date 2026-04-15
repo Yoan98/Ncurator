@@ -99,7 +99,7 @@ describe('ai unit human memory history', () => {
                     mode: 'serial',
                     calls: [
                       {
-                        toolName: 'terminal_run_command',
+                        toolName: 'workspace_run_command',
                         args: {
                           command: 'pwd'
                         }
@@ -108,7 +108,7 @@ describe('ai unit human memory history', () => {
                   },
                   toolResults: [
                     {
-                      toolName: 'terminal_run_command',
+                      toolName: 'workspace_run_command',
                       ok: true,
                       code: 'ok',
                       data: {

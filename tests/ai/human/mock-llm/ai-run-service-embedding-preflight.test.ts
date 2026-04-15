@@ -3,7 +3,7 @@ import { AiRunService } from '../../../../src/main/services/ai/AiRunService'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import { createScriptedStructuredOutputDriver } from '../../../harness/backend/scriptedStructuredOutputDriver'
 import { writeTestDocxFile } from '../../../harness/backend/aiToolHarness'
-import type { DocxOpenResult, DocxSearchResult } from '../../tool/docx/testUtils'
+import type { DocxReadResult } from '../../tool/docx/testUtils'
 import {
   buildCompleteTaskDecision,
   buildLearnSkillsDecision,
@@ -20,7 +20,7 @@ describe('ai human mock-llm backend', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证 AiRunService 会在进入 human 前完成 embedding preflight，并支撑 semantic docx search。',
+      description: '验证 AiRunService 会在进入 human 前完成 embedding preflight，并支撑后续 docx 读取。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -38,7 +38,7 @@ describe('ai human mock-llm backend', () => {
           {
             runId: runtime.runId,
             sessionId: 'embedding-preflight-session',
-            input: '请读取 docx，并用 semantic search 找到反走样相关内容。',
+            input: '请读取 docx，找到反走样相关内容。',
             workspace: {
               workspaceId: 'test-workspace',
               workspaceName: 'test-workspace',
@@ -72,36 +72,20 @@ describe('ai human mock-llm backend', () => {
                 },
                 {
                   output: buildToolDecision({
-                  toolName: 'docx_open',
+                  toolName: 'docx_read',
                   args: {
-                    sourcePath: 'semantic-docx.docx'
+                    sourcePath: 'semantic-docx.docx',
+                    query: '反走样'
                   },
-                  summary: '打开文档',
-                  reason: '语义搜索前必须先初始化文档会话。',
-                  expectedOutcome: '获得可继续搜索的当前版本。'
+                  summary: '读取相关片段',
+                  reason: '验证 embedding preflight 后 human 能直接进入 docx 读取。',
+                  expectedOutcome: '命中相关 block。'
                 })
-              },
-                () => {
-                  const openResult = readLatestToolResultDataFromEvents<DocxOpenResult>(
-                    runtime.eventCollector.snapshot(),
-                    'docx_open'
-                  )
-                  return buildToolDecision({
-                    toolName: 'docx_search',
-                    args: {
-                      sourcePath: openResult.sourcePath,
-                      query: '反走样',
-                      mode: 'semantic'
-                    },
-                    summary: '执行语义检索',
-                    reason: '验证 semantic docx search 在 run 前置 preflight 后可用。',
-                    expectedOutcome: '命中相关 block。'
-                  })
                 },
                 {
                   output: buildCompleteTaskDecision({
                     summary: 'embedding preflight 已验证。',
-                    reason: 'semantic search 已返回真实结果。',
+                    reason: 'docx 读取已返回真实结果。',
                     expectedOutcome: '输出最终答复。'
                   })
                 }
@@ -110,7 +94,7 @@ describe('ai human mock-llm backend', () => {
                 {
                   output: {
                     summary: 'embedding preflight 已验证。',
-                    deliveryMarkdown: '# Embedding Preflight\n\nsemantic docx search 已可用。'
+                    deliveryMarkdown: '# Embedding Preflight\n\ndocx 读取链路已可用。'
                   }
                 }
               ]
@@ -126,23 +110,23 @@ describe('ai human mock-llm backend', () => {
         }
       },
       assert: async (result, runtime) => {
-        const semanticSearchResult = readLatestToolResultDataFromEvents<DocxSearchResult>(
+        const docxReadResult = readLatestToolResultDataFromEvents<DocxReadResult>(
           result.events,
-          'docx_search'
+          'docx_read'
         )
 
         runtime.assertThat(
-          result.initialEmbeddingStatus === 'uninitialized' &&
+            result.initialEmbeddingStatus === 'uninitialized' &&
             result.ensureReadyCalls === 1 &&
             result.result.status === 'completed' &&
-            semanticSearchResult.matches.length >= 1,
+            docxReadResult.matches.length >= 1,
           {
             name: 'ai-run-service-preflights-embedding-before-human',
-            message: 'AiRunService 应在进入 human 前完成 embedding preflight，并让 semantic docx search 直接可用。',
+            message: 'AiRunService 应在进入 human 前完成 embedding preflight，并让后续 docx 读取直接可用。',
             data: {
               initialEmbeddingStatus: result.initialEmbeddingStatus,
               ensureReadyCalls: result.ensureReadyCalls,
-              semanticSearchResult,
+              docxReadResult,
               finalStatus: result.result.status
             }
           }

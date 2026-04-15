@@ -5,9 +5,8 @@ import {
 } from '../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
-  type DocxApplyOpsResult,
-  type DocxOpenResult,
-  type DocxSearchResult
+  type DocxMutationResult,
+  type DocxReadResult
 } from './testUtils'
 
 describe('ai tool docx backend', () => {
@@ -18,7 +17,7 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证 active review 场景下 docx_open 会继续打开最新草稿并叠加新改动。',
+      description: '验证 active review 场景下 docx 自动 open 会继续打开最新草稿并叠加新改动。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -60,40 +59,28 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
 
         try {
-          const opened = await harness.invoke<DocxOpenResult>('docx_open', {
-            sourcePath: 'review-aware-source.docx'
+          const readDraft = await harness.invoke<DocxReadResult>('docx_read', {
+            sourcePath: 'review-aware-source.docx',
+            query: 'Cycle 2 draft content.'
           })
-          const searchDraft = await harness.invoke<DocxSearchResult>('docx_search', {
-            sourcePath: opened.sourcePath,
+          const readSourceOnly = await harness.invoke<DocxReadResult>('docx_read', {
+            sourcePath: 'review-aware-source.docx',
+            query: 'Cycle 1 draft content.'
+          })
+          const applied = await harness.invoke<DocxMutationResult>('docx_text_edit', {
+            sourcePath: 'review-aware-source.docx',
             query: 'Cycle 2 draft content.',
-            mode: 'literal'
+            replace: 'Cycle 3 cumulative draft content.'
           })
-          const searchSourceOnly = await harness.invoke<DocxSearchResult>('docx_search', {
-            sourcePath: opened.sourcePath,
-            query: 'Cycle 1 draft content.',
-            mode: 'literal'
-          })
-          const applied = await harness.invoke<DocxApplyOpsResult>('docx_apply_ops', {
-            sourcePath: opened.sourcePath,
-            ops: [
-              {
-                type: 'replace_text',
-                query: 'Cycle 2 draft content.',
-                replace: 'Cycle 3 cumulative draft content.'
-              }
-            ]
-          })
-          const searchAfter = await harness.invoke<DocxSearchResult>('docx_search', {
+          const readAfter = await harness.invoke<DocxReadResult>('docx_read', {
             sourcePath: applied.sourcePath,
-            query: 'Cycle 3 cumulative draft content.',
-            mode: 'literal'
+            query: 'Cycle 3 cumulative draft content.'
           })
           return {
-            opened,
-            searchDraft,
-            searchSourceOnly,
+            readDraft,
+            readSourceOnly,
             applied,
-            searchAfter,
+            readAfter,
             trackedSourcePath:
               harness.state.documentSessionBySourcePath.get(applied.sourcePath)?.sourcePath || ''
           }
@@ -103,20 +90,20 @@ describe('ai tool docx backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.searchDraft.matches.length === 1 && result.searchSourceOnly.matches.length === 0,
+          result.readDraft.matches.length === 1 && result.readSourceOnly.matches.length === 0,
           {
             name: 'review-aware-open-reads-latest-effective-draft',
-            message: '存在 active review 时，docx_open 应先打开 latest effective draft，而不是源文件旧内容。',
+            message: '存在 active review 时，docx 自动 open 应先打开 latest effective draft，而不是源文件旧内容。',
             data: {
-              searchDraft: result.searchDraft.matches,
-              searchSourceOnly: result.searchSourceOnly.matches
+              searchDraft: result.readDraft.matches,
+              searchSourceOnly: result.readSourceOnly.matches
             }
           }
         )
 
         runtime.assertThat(
           result.applied.changedBlocks.length === 1 &&
-            result.searchAfter.matches.length === 1 &&
+            result.readAfter.matches.length === 1 &&
             result.applied.warnings.length === 0 &&
             result.trackedSourcePath.endsWith('/review-aware-source.docx'),
           {
@@ -124,7 +111,7 @@ describe('ai tool docx backend', () => {
             message: '继续编辑后应在最新草稿上叠加 delta，并继续跟踪原始 sourcePath 作为后续落盘目标。',
             data: {
               changedBlocks: result.applied.changedBlocks,
-              searchAfter: result.searchAfter.matches,
+              searchAfter: result.readAfter.matches,
               trackedSourcePath: result.trackedSourcePath,
               warnings: result.applied.warnings
             }

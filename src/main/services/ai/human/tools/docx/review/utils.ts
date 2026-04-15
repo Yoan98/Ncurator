@@ -31,6 +31,8 @@ export const describeDocxOp = (op: DocxOp): string => {
       return '更新表格单元格'
     case 'replace_text':
       return '替换文本'
+    case 'style_text':
+      return '更新文本样式'
   }
 }
 

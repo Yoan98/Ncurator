@@ -2,13 +2,15 @@ import { describe, it } from 'vitest'
 import { writeTestDocxFile } from '../../../harness/backend/aiToolHarness'
 import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
-import type { DocxApplyOpsResult, DocxOpenResult, DocxSearchResult } from '../../tool/docx/testUtils'
+import type { DocxMutationResult, DocxReadResult } from '../../tool/docx/testUtils'
 import {
   buildCompleteTaskDecision,
   buildLearnSkillsDecision,
   buildToolDecision,
   collectDocxApplyOpsContentKinds,
   filterAiRunEventsByType,
+  hasDraftFileArtifact,
+  hasDraftReviewArtifact,
   readLatestToolResultDataFromEvents
 } from '../testUtils'
 import { findParagraphBlockIdByText, type DocxOutlineResult } from '../../tool/docx/testUtils'
@@ -21,7 +23,7 @@ describe('ai human mock-llm backend', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证 mock-llm 模式下 human 仍通过真实 docx 工具链完成打开、编辑和搜索。',
+      description: '验证 mock-llm 模式下 human 仍通过真实 docx 工具链完成读取、编辑和读回确认。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -49,58 +51,33 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildToolDecision({
-                  toolName: 'docx_open',
+                  toolName: 'docx_text_edit',
                   args: {
-                    sourcePath: 'complex-edit.docx'
-                  },
-                  summary: '打开原始文档',
-                  reason: '必须先打开文档，才能进入编辑。',
-                  expectedOutcome: '初始化文档会话并获得当前版本。'
-                })
-              },
-              () => {
-                const openResult = readLatestToolResultDataFromEvents<DocxOpenResult>(
-                  runtime.eventCollector.snapshot(),
-                  'docx_open'
-                )
-                return buildToolDecision({
-                  toolName: 'docx_apply_ops',
-                  args: {
-                    sourcePath: openResult.sourcePath,
-                    ops: [
-                      {
-                        type: 'replace_text',
-                        query: 'Cycle 1 draft content.',
-                        replace: 'Cycle 3 cumulative draft content.'
-                      }
-                    ]
+                    sourcePath: 'complex-edit.docx',
+                    query: 'Cycle 1 draft content.',
+                    replace: 'Cycle 3 cumulative draft content.'
                   },
                   summary: '在真实 docx 上执行编辑',
                   reason: '验证真实写工具链路。',
                   expectedOutcome: '生成新版本并返回 changedBlocks。'
                 })
               },
-              () => {
-                const applyResult = readLatestToolResultDataFromEvents<DocxApplyOpsResult>(
-                  runtime.eventCollector.snapshot(),
-                  'docx_apply_ops'
-                )
-                return buildToolDecision({
-                  toolName: 'docx_search',
+              {
+                output: buildToolDecision({
+                  toolName: 'docx_read',
                   args: {
-                    sourcePath: applyResult.sourcePath,
-                    query: 'Cycle 3 cumulative draft content.',
-                    mode: 'literal'
+                    sourcePath: 'complex-edit.docx',
+                    query: 'Cycle 3 cumulative draft content.'
                   },
-                  summary: '搜索新内容',
+                  summary: '读取新内容',
                   reason: '验证编辑结果已经真实进入后续 docx session。',
-                  expectedOutcome: '确认新文本可被搜索到。'
+                  expectedOutcome: '确认新文本可被读取到。'
                 })
               },
               {
                 output: buildCompleteTaskDecision({
                   summary: 'docx 真实链路已走通。',
-                  reason: '打开、编辑、搜索三步都已经完成。',
+                  reason: '编辑与读回确认都已经完成。',
                   expectedOutcome: '进入最终交付。'
                 })
               }
@@ -109,7 +86,7 @@ describe('ai human mock-llm backend', () => {
               {
                 output: {
                   summary: 'docx 真实链路已走通。',
-                  deliveryMarkdown: '# Docx Flow\n\n已完成真实 docx 打开、编辑与搜索。'
+                  deliveryMarkdown: '# Docx Flow\n\n已完成真实 docx 编辑与读取确认。'
                 }
               }
             ]
@@ -118,7 +95,7 @@ describe('ai human mock-llm backend', () => {
 
         const output = await runner.run({
           taskId: runtime.taskId,
-          userInput: '请打开文档，修改内容，然后确认新内容可搜索到。'
+          userInput: '请修改内容，然后确认新内容可读取到。'
         })
 
         return {
@@ -128,25 +105,30 @@ describe('ai human mock-llm backend', () => {
       },
       assert: async (result, runtime) => {
         const toolResults = filterAiRunEventsByType(result.events, 'tool_call_result')
-        const applyResult = readLatestToolResultDataFromEvents<DocxApplyOpsResult>(
+        const applyResult = readLatestToolResultDataFromEvents<DocxMutationResult>(
           toolResults,
-          'docx_apply_ops'
+          'docx_text_edit'
         )
-        const searchResult = readLatestToolResultDataFromEvents<DocxSearchResult>(
+        const readResult = readLatestToolResultDataFromEvents<DocxReadResult>(
           toolResults,
-          'docx_search'
+          'docx_read'
         )
 
         runtime.assertThat(
           result.output.status === 'completed' &&
             applyResult.changedBlocks.length === 1 &&
-            searchResult.matches.length === 1,
+            readResult.matches.length === 1 &&
+            hasDraftReviewArtifact(result.output.artifacts) &&
+            hasDraftFileArtifact(result.output.artifacts) &&
+            filterAiRunEventsByType(result.events, 'draft_review_ready').length === 1,
           {
             name: 'human-docx-edit-uses-real-docx-production-chain',
-            message: 'mock-llm 下的 human/docx case 应通过真实 docx 工具链完成编辑并搜索到新内容。',
+            message:
+              'mock-llm 下的 human/docx case 应通过真实 docx 工具链完成编辑、读回确认并产出 draft review artifact。',
             data: {
               applyResult,
-              searchResult
+              readResult,
+              artifacts: result.output.artifacts
             }
           }
         )
@@ -161,7 +143,7 @@ describe('ai human mock-llm backend', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证 mock-llm 模式下 human 可以提交 paragraph/table 结构化 docx_apply_ops 参数。',
+      description: '验证 mock-llm 模式下 human 可以按对象类型提交段落与表格编辑参数。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -194,26 +176,9 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildToolDecision({
-                  toolName: 'docx_open',
-                  args: {
-                    sourcePath: 'complex-structured-edit.docx'
-                  },
-                  summary: '打开原始文档',
-                  reason: '必须先初始化 docx 会话。',
-                  expectedOutcome: '拿到 sourcePath 与当前版本。'
-                })
-              },
-              () => {
-                const openResult = readLatestToolResultDataFromEvents<DocxOpenResult>(
-                  runtime.eventCollector.snapshot(),
-                  'docx_open'
-                )
-                return buildToolDecision({
                   toolName: 'docx_outline',
                   args: {
-                    sourcePath: openResult.sourcePath,
-                    includeTables: true,
-                    includeCells: true,
+                    sourcePath: 'complex-structured-edit.docx',
                     maxBlocks: 60
                   },
                   summary: '读取结构提纲',
@@ -226,92 +191,53 @@ describe('ai human mock-llm backend', () => {
                   runtime.eventCollector.snapshot(),
                   'docx_outline'
                 )
-                const openResult = readLatestToolResultDataFromEvents<DocxOpenResult>(
-                  runtime.eventCollector.snapshot(),
-                  'docx_open'
-                )
                 const anchorBlockId = findParagraphBlockIdByText(
                   outlineResult.blocks,
                   '达到反走样。'
                 )
                 return buildToolDecision({
-                  toolName: 'docx_apply_ops',
+                  toolName: 'docx_paragraph_edit',
                   args: {
-                    sourcePath: openResult.sourcePath,
-                    ops: [
-                      {
-                        type: 'insert_after',
-                        anchorBlockId,
-                        content: [
-                          {
-                            kind: 'paragraph',
-                            runs: [
-                              {
-                                text: '补充说明：反走样通过平滑边缘像素来减轻锯齿感。'
-                              }
-                            ]
-                          },
-                          {
-                            kind: 'table',
-                            rows: [
-                              [
-                                {
-                                  paragraphs: [
-                                    {
-                                      kind: 'paragraph',
-                                      runs: [{ text: '反走样' }]
-                                    }
-                                  ]
-                                },
-                                {
-                                  paragraphs: [
-                                    {
-                                      kind: 'paragraph',
-                                      runs: [{ text: '过拟合' }]
-                                    }
-                                  ]
-                                }
-                              ],
-                              [
-                                {
-                                  paragraphs: [
-                                    {
-                                      kind: 'paragraph',
-                                      runs: [{ text: '平滑边缘，降低锯齿' }]
-                                    }
-                                  ]
-                                },
-                                {
-                                  paragraphs: [
-                                    {
-                                      kind: 'paragraph',
-                                      runs: [{ text: '记住训练噪声，泛化变差' }]
-                                    }
-                                  ]
-                                }
-                              ]
-                            ]
-                          }
-                        ]
-                      }
-                    ]
+                    sourcePath: 'complex-structured-edit.docx',
+                    action: 'insert_after',
+                    anchorBlockId,
+                    text: '补充说明：反走样通过平滑边缘像素来减轻锯齿感。'
                   },
-                  summary: '插入结构化说明与表格',
-                  reason: '验证 human 能提交合法的 paragraph/table 结构。',
-                  expectedOutcome: '生成包含新增段落与表格的新版本。'
+                  summary: '插入补充说明',
+                  reason: '先插入段落说明，后续再接表格。',
+                  expectedOutcome: '生成新增段落并返回 createdBlocks。'
                 })
               },
               () => {
-                const applyResult = readLatestToolResultDataFromEvents<DocxApplyOpsResult>(
+                const paragraphEditResult = readLatestToolResultDataFromEvents<DocxMutationResult>(
                   runtime.eventCollector.snapshot(),
-                  'docx_apply_ops'
+                  'docx_paragraph_edit'
                 )
+                const anchorBlockId = paragraphEditResult.createdBlocks?.[0]?.blockId
+                if (!anchorBlockId) {
+                  throw new Error('paragraph edit did not return createdBlocks')
+                }
                 return buildToolDecision({
+                  toolName: 'docx_table_edit',
+                  args: {
+                    sourcePath: 'complex-structured-edit.docx',
+                    action: 'insert_after',
+                    anchorBlockId,
+                    rows: [
+                      ['反走样', '过拟合'],
+                      ['平滑边缘，降低锯齿', '记住训练噪声，泛化变差']
+                    ]
+                  },
+                  summary: '插入对照表',
+                  reason: '验证 human 能提交合法的表格对象参数。',
+                  expectedOutcome: '生成包含新增表格的新版本。'
+                })
+              },
+              {
+                output: buildToolDecision({
                   toolName: 'docx_outline',
                   args: {
-                    sourcePath: applyResult.sourcePath,
-                    includeTables: true,
-                    includeCells: true,
+                    sourcePath: 'complex-structured-edit.docx',
                     maxBlocks: 80
                   },
                   summary: '复查新版本结构',
@@ -322,7 +248,7 @@ describe('ai human mock-llm backend', () => {
               {
                 output: buildCompleteTaskDecision({
                   summary: '结构化 docx 写入已完成。',
-                  reason: '已完成打开、定位、结构化写入和复查。',
+                  reason: '已完成定位、段落写入、表格写入和复查。',
                   expectedOutcome: '进入最终交付。'
                 })
               }
@@ -331,7 +257,7 @@ describe('ai human mock-llm backend', () => {
               {
                 output: {
                   summary: '结构化 docx 写入已完成。',
-                  deliveryMarkdown: '# Structured Docx Flow\n\n已完成 paragraph/table 结构化写入。'
+                  deliveryMarkdown: '# Structured Docx Flow\n\n已完成 paragraph/table 对象化写入。'
                 }
               }
             ]
@@ -350,9 +276,13 @@ describe('ai human mock-llm backend', () => {
       },
       assert: async (result, runtime) => {
         const toolResults = filterAiRunEventsByType(result.events, 'tool_call_result')
-        const applyResult = readLatestToolResultDataFromEvents<DocxApplyOpsResult>(
+        const paragraphEditResult = readLatestToolResultDataFromEvents<DocxMutationResult>(
           toolResults,
-          'docx_apply_ops'
+          'docx_paragraph_edit'
+        )
+        const tableEditResult = readLatestToolResultDataFromEvents<DocxMutationResult>(
+          toolResults,
+          'docx_table_edit'
         )
         const outlineResult = readLatestToolResultDataFromEvents<DocxOutlineResult>(
           toolResults,
@@ -361,23 +291,28 @@ describe('ai human mock-llm backend', () => {
         const contentKinds = collectDocxApplyOpsContentKinds(result.events)
 
         runtime.assertThat(
-          applyResult.changedBlocks.some((block) => block.action === 'insert_after') &&
+          paragraphEditResult.changedBlocks.some((block) => block.action === 'insert_after') &&
+            tableEditResult.changedBlocks.some((block) => block.action === 'insert_after') &&
             contentKinds.includes('paragraph') &&
             contentKinds.includes('table') &&
+            hasDraftReviewArtifact(result.output.artifacts) &&
+            hasDraftFileArtifact(result.output.artifacts) &&
             outlineResult.blocks.some(
               (block) =>
                 block.type === 'paragraph' &&
-                block.text.includes('补充说明：反走样通过平滑边缘像素来减轻锯齿感。')
+                block.preview.includes('补充说明：反走样通过平滑边缘像素来减轻锯齿感。')
             ) &&
             outlineResult.blocks.some((block) => block.type === 'table'),
           {
             name: 'human-docx-structured-insert-uses-legal-docx-shape',
             message:
-              'mock-llm 下的 human/docx case 应提交 paragraph/table 结构化 docx_apply_ops 参数并成功写入文档。',
+              'mock-llm 下的 human/docx case 应提交 paragraph/table 对象化参数、成功写入文档并产出 confirm copy artifact。',
             data: {
-              applyResult,
+              paragraphEditResult,
+              tableEditResult,
               outlineResult,
-              contentKinds
+              contentKinds,
+              artifacts: result.output.artifacts
             }
           }
         )

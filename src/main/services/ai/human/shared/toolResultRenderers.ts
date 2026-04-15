@@ -32,6 +32,7 @@ const readBooleanField = (obj: JsonObject, key: string): boolean | undefined => 
 
 const renderDocxOutlinePreview = (obj: JsonObject): string | undefined => {
   const blockCount =
+    readNumberField(obj, 'returnedBlockCount') ??
     readNumberField(obj, 'blockCount') ??
     (Array.isArray(obj.blocks) ? obj.blocks.length : undefined)
   const truncated = readBooleanField(obj, 'truncated')

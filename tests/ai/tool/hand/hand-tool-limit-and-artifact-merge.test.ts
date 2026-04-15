@@ -7,29 +7,6 @@ import type { AiArtifactRef } from '../../../../src/shared/types'
 import { writeTestDocxFile } from '../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 
-type DocxOpenResult = {
-  ok: boolean
-  sourcePath: string
-  currentVersionRef: string
-}
-
-type ToolsetItem = {
-  name?: string
-  invoke: (input: Record<string, unknown>) => Promise<unknown>
-}
-
-const invokeCachedTool = async <TResult>(
-  toolset: readonly ToolsetItem[],
-  toolName: string,
-  args: Record<string, unknown>
-): Promise<TResult> => {
-  const tool = toolset.find((item) => String(item.name || '') === toolName)
-  if (!tool) {
-    throw new Error(`tool not found in cache: ${toolName}`)
-  }
-  return (await tool.invoke(args)) as TResult
-}
-
 const buildHandState = (input: {
   taskId: string
   userInput: string
@@ -52,24 +29,24 @@ const buildHandState = (input: {
     }).execution,
     artifacts: input.previousArtifacts || [],
     currentDecision: {
-    decision: {
-      summary: `调用 ${input.toolName}`,
-      reason: '验证 hand 的工具上限与 artifact 合并行为。',
-      expectedOutcome: '工具执行后更新 execution.artifacts。'
-    },
-    readyToDeliver: false,
-    nextAction: {
-      action: 'hand' as const,
-      toolUsePlan: {
-        mode: 'serial' as const,
-        calls: [
-          {
-            toolName: input.toolName,
-            args: input.args
-          }
-        ]
+      decision: {
+        summary: `调用 ${input.toolName}`,
+        reason: '验证 hand 的工具上限与 artifact 合并行为。',
+        expectedOutcome: '工具执行后更新 execution.artifacts。'
+      },
+      readyToDeliver: false,
+      nextAction: {
+        action: 'hand' as const,
+        toolUsePlan: {
+          mode: 'serial' as const,
+          calls: [
+            {
+              toolName: input.toolName,
+              args: input.args
+            }
+          ]
+        }
       }
-    }
     }
   }
 })
@@ -120,26 +97,15 @@ describe('ai tool hand backend', () => {
           skillId: 'docx-read'
         })
 
-        const docxReadTools = cache.skillToolsets['docx-read'] || []
-        const openResult = await invokeCachedTool<DocxOpenResult>(docxReadTools, 'docx_open', {
-          sourcePath: 'artifact-merge.docx'
-        })
-
         const handNode = createHandNode({ ctx, cache })
         const firstState = await handNode(
           buildHandState({
             taskId: runtime.taskId,
             userInput: 'create a terminal artifact',
             learnedSkillIds: ['workspace-cli'],
-            toolName: 'terminal_run_command',
+            toolName: 'workspace_run_command',
             args: {
-              command: 'touch first.txt',
-              expectedArtifacts: [
-                {
-                  path: 'first.txt',
-                  operation: 'created'
-                }
-              ]
+              command: 'touch first.txt'
             }
           })
         )
@@ -149,11 +115,10 @@ describe('ai tool hand backend', () => {
             taskId: runtime.taskId,
             userInput: 'read the docx without creating artifacts',
             learnedSkillIds: ['workspace-cli', 'docx-read'],
-            toolName: 'docx_search',
+            toolName: 'docx_read',
             args: {
-              sourcePath: openResult.sourcePath,
-              query: 'Preview generation should be merged with terminal artifact.',
-              mode: 'literal'
+              sourcePath: 'artifact-merge.docx',
+              query: 'Preview generation should be merged with terminal artifact.'
             },
             previousArtifacts: firstState.execution.artifacts
           }),
@@ -182,7 +147,7 @@ describe('ai tool hand backend', () => {
             result.secondState.execution.artifacts.some(
               (artifact) => artifact.kind === 'file' && artifact.capability === 'terminal_exec'
             ) &&
-            result.secondState.execution.lastToolResults?.[0]?.toolName === 'docx_search',
+            result.secondState.execution.lastToolResults?.[0]?.toolName === 'docx_read',
           {
             name: 'runtime-artifacts-are-preserved-when-next-tool-has-no-artifact',
             message: '后续没有 artifact 的工具执行后，execution.artifacts 应保留已有 terminal 产物而不是被覆盖。',
@@ -196,7 +161,7 @@ describe('ai tool hand backend', () => {
         runtime.assertThat(
           result.secondState.execution.watchHint?.code === 'hand_tool_limit_exceeded' &&
             result.secondState.execution.watchHint.detail.limit === 1 &&
-            result.secondState.execution.lastToolResults?.[0]?.toolName === 'docx_search',
+            result.secondState.execution.lastToolResults?.[0]?.toolName === 'docx_read',
           {
             name: 'tool-limit-produces-converging-watchhint',
             message: '超过 hardActionLimit 后，hand 应写入收敛型 watchHint，同时保留当前工具结果。',

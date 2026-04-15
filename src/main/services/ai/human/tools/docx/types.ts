@@ -4,8 +4,21 @@ import type { z } from 'zod/v4'
 import type { WorkspaceCapabilityBuildInput } from '../types'
 import {
   blockSpecSchema,
+  docxHeadingEditActionSchema,
+  docxHeadingEditSchema,
+  docxHistoryRequestSchema,
+  docxOutlineRequestSchema,
+  docxParagraphEditActionSchema,
+  docxParagraphEditSchema,
+  docxReadRequestSchema,
   docOpSchema,
   docxSearchModeSchema,
+  docxRollbackRequestSchema,
+  docxTableEditActionSchema,
+  docxTableEditSchema,
+  docxTextEditSchema,
+  docxTextStyleEditSchema,
+  docxTextStyleSchema,
   paragraphSpecSchema,
   runSpecSchema,
   tableCellSpecSchema,
@@ -108,6 +121,19 @@ export type DocxDetailedBlock =
   | DocxDetailedCellBlock
 
 export type DocxSearchMode = z.infer<typeof docxSearchModeSchema>
+export type DocxOutlineRequest = z.infer<typeof docxOutlineRequestSchema>
+export type DocxReadRequest = z.infer<typeof docxReadRequestSchema>
+export type DocxParagraphEditAction = z.infer<typeof docxParagraphEditActionSchema>
+export type DocxParagraphEditRequest = z.infer<typeof docxParagraphEditSchema>
+export type DocxHeadingEditAction = z.infer<typeof docxHeadingEditActionSchema>
+export type DocxHeadingEditRequest = z.infer<typeof docxHeadingEditSchema>
+export type DocxTableEditAction = z.infer<typeof docxTableEditActionSchema>
+export type DocxTableEditRequest = z.infer<typeof docxTableEditSchema>
+export type DocxTextEditRequest = z.infer<typeof docxTextEditSchema>
+export type DocxTextStyle = z.infer<typeof docxTextStyleSchema>
+export type DocxTextStyleEditRequest = z.infer<typeof docxTextStyleEditSchema>
+export type DocxHistoryRequest = z.infer<typeof docxHistoryRequestSchema>
+export type DocxRollbackRequest = z.infer<typeof docxRollbackRequestSchema>
 
 export type DocxSearchMatch = {
   blockId: string
@@ -121,10 +147,22 @@ export type DocxSearchMatch = {
 }
 
 export type DocxChangedBlock = {
-  action: 'replace_block' | 'insert_after' | 'insert_before' | 'delete_block' | 'update_table_cell' | 'replace_text'
+  action:
+    | 'replace_block'
+    | 'insert_after'
+    | 'insert_before'
+    | 'delete_block'
+    | 'update_table_cell'
+    | 'replace_text'
+    | 'style_text'
   blockId: string
   beforeText: string
   afterText: string
+}
+
+export type DocxCreatedBlock = {
+  blockId: string
+  type: 'paragraph' | 'table' | 'table_cell'
 }
 
 export type DocxValidationProblem = {
@@ -178,6 +216,8 @@ export type DocxVersionEntry = {
   docId: string
   parentVersionRef?: string
   createdAt: number
+  summary?: string
+  changedBlocks?: DocxChangedBlock[]
 }
 
 export type DocxDocumentSession = {

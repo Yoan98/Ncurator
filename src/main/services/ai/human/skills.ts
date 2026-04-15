@@ -18,7 +18,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     title: 'history-recall',
     description: '回看之前几轮已经做过的正式判断、执行动作和结果。',
     whenToUse: '当最近一轮和历史摘要还不足以定位失败模式或需要回看更早细节时使用。',
-    toolNames: ['history_recall']
+    toolNames: ['history_search', 'history_list']
   },
   'workspace-cli': {
     skillId: 'workspace-cli',
@@ -28,7 +28,12 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     title: 'workspace-cli',
     description: '读取 workspace 文件、检查环境、执行单条 CLI 命令。',
     whenToUse: '当任务必须读取工作区文件、确认目录状态、执行单条命令或生成中间文件时使用。',
-    toolNames: ['terminal_run_command']
+    toolNames: [
+      'workspace_list_files',
+      'workspace_search_text',
+      'workspace_read_file',
+      'workspace_run_command'
+    ]
   },
   'docx-read': {
     skillId: 'docx-read',
@@ -36,15 +41,9 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     source: 'external',
     countsTowardToolBudget: true,
     title: 'docx-read',
-    description: '打开 docx、定位结构、检索内容、查看版本历史。',
+    description: '读取 docx 结构、精读片段、查看版本历史。',
     whenToUse: '当任务需要阅读、定位或理解 docx 内容时使用。',
-    toolNames: [
-      'docx_open',
-      'docx_outline',
-      'docx_get_block',
-      'docx_search',
-      'docx_get_history'
-    ]
+    toolNames: ['docx_outline', 'docx_read', 'docx_history']
   },
   'docx-write': {
     skillId: 'docx-write',
@@ -52,9 +51,16 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     source: 'external',
     countsTowardToolBudget: true,
     title: 'docx-write',
-    description: '修改 docx 内容，或回退到较早版本。',
+    description: '按段落、标题、表格、文本、样式对象编辑 docx，或回退到较早版本。',
     whenToUse: '当你已经明确知道要改哪里、改成什么，或需要撤销当前草稿修改时使用。',
-    toolNames: ['docx_apply_ops', 'docx_rollback']
+    toolNames: [
+      'docx_paragraph_edit',
+      'docx_heading_edit',
+      'docx_table_edit',
+      'docx_text_edit',
+      'docx_text_style_edit',
+      'docx_rollback'
+    ]
   },
   'kb-document-discovery': {
     skillId: 'kb-document-discovery',
@@ -74,7 +80,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     title: 'kb-evidence-query',
     description: '在当前工作区知识库中直接搜索内容，提取 chunk 级证据。',
     whenToUse: '当任务需要查资料怎么写、找证据、找规则、找引用或基于资料作答时使用。',
-    toolNames: ['kb_hybrid_search_chunks', 'kb_vector_search_chunks', 'kb_fts_search_chunks']
+    toolNames: ['kb_search']
   }
 }
 

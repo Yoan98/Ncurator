@@ -54,7 +54,7 @@ describe('ai tool hand backend', () => {
                   skippedDuplicateSkillIds: [],
                   skippedUnknownSkillIds: [],
                   evictedSkillIds: [],
-                  activeToolCount: 2
+                  activeToolCount: 6
                 }
               }),
               createdAt: 1
@@ -71,7 +71,7 @@ describe('ai tool hand backend', () => {
               decision: {
                 decision: {
                   summary: '执行 docx 编辑',
-                  reason: '已经具备 write 能力，可以执行结构化修改。',
+                  reason: '已经具备 write 能力，可以执行文本替换。',
                   expectedOutcome: '拿到 changedBlocks。'
                 },
                 readyToDeliver: false,
@@ -81,16 +81,11 @@ describe('ai tool hand backend', () => {
                     mode: 'serial',
                     calls: [
                       {
-                        toolName: 'docx_apply_ops',
+                        toolName: 'docx_text_edit',
                         args: {
                           sourcePath: 'history-recall.docx',
-                          ops: [
-                            {
-                              type: 'replace_text',
-                              query: 'old',
-                              replace: 'new'
-                            }
-                          ]
+                          query: 'old',
+                          replace: 'new'
                         }
                       }
                     ]
@@ -102,23 +97,18 @@ describe('ai tool hand backend', () => {
                   mode: 'serial',
                   calls: [
                     {
-                      toolName: 'docx_apply_ops',
+                      toolName: 'docx_text_edit',
                       args: {
                         sourcePath: 'history-recall.docx',
-                        ops: [
-                          {
-                            type: 'replace_text',
-                            query: 'old',
-                            replace: 'new'
-                          }
-                        ]
+                        query: 'old',
+                        replace: 'new'
                       }
                     }
                   ]
                 },
                 toolResults: [
                   {
-                    toolName: 'docx_apply_ops',
+                    toolName: 'docx_text_edit',
                     ok: true,
                     code: 'ok',
                     resourceContext: {
@@ -131,7 +121,7 @@ describe('ai tool hand backend', () => {
                     data: {
                       ok: true,
                       code: 'ok',
-                      summary: 'ops applied (1 changes)',
+                      summary: '文本替换完成',
                       sourcePath: 'history-recall.docx',
                       previousVersionRef: 'v1',
                       currentVersionRef: 'v2',
@@ -156,7 +146,7 @@ describe('ai tool hand backend', () => {
               decision: {
                 summary: '回看 docx 编辑相关历史',
                 reason: '最近历史摘要还不够，需要看更详细的旧轮次。',
-                expectedOutcome: '加载到包含 docx_apply_ops 的旧历史。'
+                expectedOutcome: '加载到包含 docx_text_edit 的旧历史。'
               },
               readyToDeliver: false,
               nextAction: {
@@ -165,10 +155,11 @@ describe('ai tool hand backend', () => {
                   mode: 'parallel',
                   calls: [
                     {
-                      toolName: 'history_recall',
+                      toolName: 'history_search',
                       args: {
-                        executionKinds: ['hand'],
-                        toolNames: ['docx_apply_ops'],
+                        query: 'docx_text_edit',
+                        startRoundId: 1,
+                        endRoundId: 2,
                         limit: 1
                       }
                     }
@@ -190,14 +181,14 @@ describe('ai tool hand backend', () => {
         const latestRound = result.nextState.memory.history.roundHistory.at(-1)
 
         runtime.assertThat(
-          result.nextState.execution.lastToolResults?.[0]?.toolName === 'history_recall' &&
+          result.nextState.execution.lastToolResults?.[0]?.toolName === 'history_search' &&
             loadedRounds.length === 1 &&
             loadedRounds[0]?.roundId === 2 &&
             latestRound?.execution.kind === 'hand' &&
-            latestRound.execution.toolResults[0]?.toolName === 'history_recall',
+            latestRound.execution.toolResults[0]?.toolName === 'history_search',
           {
             name: 'history-recall-loads-old-rounds',
-            message: 'history_recall 应通过 hand 真实执行，并把匹配到的旧历史写入 loaded_history_context。',
+            message: 'history_search 应通过 hand 真实执行，并把匹配到的旧历史写入 loaded_history_context。',
             data: {
               lastToolUseResults: result.nextState.execution.lastToolResults,
               loadedHistoryContext: result.nextState.memory.history.loadedHistoryContext,

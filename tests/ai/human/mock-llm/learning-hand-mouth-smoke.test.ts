@@ -35,7 +35,7 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildToolDecision({
-                  toolName: 'terminal_run_command',
+                  toolName: 'workspace_run_command',
                   args: {
                     command: 'pwd'
                   },
@@ -97,7 +97,7 @@ describe('ai human mock-llm backend', () => {
         )
 
         runtime.assertThat(
-          toolResults.some((event) => event.toolName === 'terminal_run_command') &&
+          toolResults.some((event) => event.toolName === 'workspace_run_command') &&
             result.output.deliveryMarkdown.includes('human 主链路验证'),
           {
             name: 'human-mainline-completes-with-real-tool-and-real-mouth',

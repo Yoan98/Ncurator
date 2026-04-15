@@ -21,7 +21,7 @@
 - skill 的拆分边界按 `brain` 的决策边界确定，不按工具数量或文件数量强行切分。
 - skill 不能过大，否则 learning 时会一次引入过多无关说明。
 - skill 也不能过碎，否则 `brain` 会频繁学习很多只差一点点的小 skill。
-- skill 应优先说明“什么时候用、用来解决什么问题、不负责什么”，而不是把执行步骤写成另一套长 prompt。
+- skill 应优先说明“什么时候用、用来解决什么问题”，而不是把执行步骤写成另一套长 prompt。
 - skill 应优先说明“这类能力是什么、什么时候用”，不把实现细节、执行顺序或固定边界话术塞进同一层描述。
 - tool 应优先说明“作用、输入方式、返回语义、默认行为与限制”，而不是把调用顺序写成操作手册。
 - skill 描述的是能力边界；tool 描述的是具体执行入口；两者有关联，但不是一一等价。
@@ -58,44 +58,61 @@
 ### `history-recall`
 
 - 类型：builtin
-- 核心职责：主动回看之前几轮已经做过的正式判断、执行动作和结果。
-- 典型工具：`history_recall`
-- 不负责什么：不替代当前轮的推理，也不直接生成最终交付。
+- 职责：主动回看之前几轮已经做过的正式判断、执行动作和结果。
+- 工具列表：
+  - `history_search`
+  - `history_list`
+- 适用场景：当最近一轮和历史摘要还不足以定位失败模式，或需要回看更早细节时使用。
 
 ### `workspace-cli`
 
 - 类型：external
-- 核心职责：在当前 workspace 内读取文件、检查环境、执行单条 CLI 命令。
-- 典型工具：`terminal_run_command`
-- 不负责什么：不负责知识库检索，也不负责 docx 结构化编辑。
+- 职责：在当前 workspace 内读取文件、检查目录状态、执行单条 CLI 命令。
+- 工具列表：
+  - `workspace_list_files`
+  - `workspace_search_text`
+  - `workspace_read_file`
+  - `workspace_run_command`
+- 适用场景：当任务需要直接查看工作区文件、检查环境状态、读取源码或执行单条命令时使用。
 
 ### `docx-read`
 
 - 类型：external
-- 核心职责：打开 docx、查看结构、定位 block、查找内容与查看历史。
-- 典型工具：`docx_open`、`docx_outline`、`docx_get_block`、`docx_search`、`docx_get_history`
-- 不负责什么：不负责修改 docx，也不负责预览与落盘交付。
+- 职责：查看 docx 结构、精读片段、读取表格内容与查看版本历史。
+- 工具列表：
+  - `docx_outline`
+  - `docx_read`
+  - `docx_history`
+- 适用场景：当任务需要理解 docx 结构、定位段落或表格、精读片段，或决定回滚版本时使用。
 
 ### `docx-write`
 
 - 类型：external
-- 核心职责：基于结构化操作修改 docx，或按需回滚到较早版本。
-- 典型工具：`docx_apply_ops`、`docx_rollback`
-- 不负责什么：不负责文档读取建模，也不负责确认副本生成、差异样式或最终落盘。
+- 职责：按段落、标题、表格、文本、样式对象编辑 docx，并支持版本回滚。
+- 工具列表：
+  - `docx_paragraph_edit`
+  - `docx_heading_edit`
+  - `docx_table_edit`
+  - `docx_text_edit`
+  - `docx_text_style_edit`
+  - `docx_rollback`
+- 适用场景：当任务已经明确知道要改哪里、改成什么，或需要撤销当前草稿修改时使用。
 
 ### `kb-document-discovery`
 
 - 类型：external
-- 核心职责：在当前工作区知识库内先缩小候选文档范围。
-- 典型工具：`kb_list_documents`
-- 不负责什么：不直接提炼 chunk 级证据，也不替代事实归纳。
+- 职责：在当前工作区知识库内先缩小候选文档范围。
+- 工具列表：
+  - `kb_list_documents`
+- 适用场景：当只知道主题、不记得文档名，或需要先缩小候选文档范围时使用。
 
 ### `kb-evidence-query`
 
 - 类型：external
-- 核心职责：在当前工作区知识库中直接检索 chunk 证据，帮助 `brain` 收敛事实依据。
-- 典型工具：`kb_hybrid_search_chunks`、`kb_vector_search_chunks`、`kb_fts_search_chunks`
-- 不负责什么：不负责文档修改，也不负责目录级候选文档发现。
+- 职责：在当前工作区知识库中直接搜索内容并提取证据。
+- 工具列表：
+  - `kb_search`
+- 适用场景：当任务需要查资料怎么写、找证据、找规则或基于资料作答时使用。
 
 ## 7. 与状态和 prompt 的关系
 
@@ -107,5 +124,5 @@
 ## 8. 维护规则
 
 - 当 `brain` 的决策边界发生变化时，应重新检查 skill 是否需要合并、拆分或重命名。
-- 当 skill 的类型、职责边界或典型工具发生变化时，应同步更新本文档与相关实现。
+- 当 skill 的类型、职责边界或工具列表发生变化时，应同步更新本文档与相关实现。
 - 已经落地并确认的 skill 设计，不应继续停留在 `refactor-plan.md` 中。

@@ -4,13 +4,12 @@ import {
   renderToolDiagnosticText,
   renderToolResultDataPreview
 } from '../shared/toolResultRenderers'
-import { historyRecallFilterSchema, humanLoadedHistoryContextSchema } from '../schema'
+import { historySearchFilterSchema, humanLoadedHistoryContextSchema } from '../schema'
 import type {
   HumanHistoryToolResult,
   HumanLoadedHistoryContext,
   HumanLearningOutcome,
   HumanRoundExecution,
-  HumanRoundExecutionKind,
   HumanRoundRecord,
   HumanState,
   HumanWatchHint,
@@ -129,68 +128,77 @@ export const getLoadedHistoryContext = (
   state: HumanState
 ): HumanLoadedHistoryContext | undefined => state.memory.history.loadedHistoryContext
 
-const readExecutionWatchHint = (execution: HumanRoundExecution): HumanWatchHint | undefined =>
-  execution.kind === 'pre_execution_blocked' ||
-  execution.kind === 'learning' ||
-  execution.kind === 'hand'
-    ? execution.watchHint
-    : undefined
+const buildRoundSearchText = (record: HumanRoundRecord): string => {
+  const segments: string[] = [
+    record.decision.decision.summary,
+    record.decision.decision.reason,
+    record.decision.decision.expectedOutcome
+  ]
 
-const matchesExecutionKind = (
-  execution: HumanRoundExecution,
-  expectedKinds: HumanRoundExecutionKind[] | undefined
-): boolean => !expectedKinds || expectedKinds.includes(execution.kind)
+  if (record.execution.kind === 'learning') {
+    segments.push(record.execution.learningOutcome.loadedSkillIds.join(' '))
+  } else if (record.execution.kind === 'hand') {
+    record.execution.toolResults.forEach((result) => {
+      segments.push(result.toolName, result.summary, result.dataPreview || '', result.diagnosticText || '')
+    })
+  } else if (record.execution.kind === 'mouth') {
+    segments.push(record.execution.summary)
+  } else {
+    segments.push(record.execution.watchHint.code)
+  }
 
-const matchesToolNames = (
-  execution: HumanRoundExecution,
-  toolNames: string[] | undefined
-): boolean => {
-  if (!toolNames || toolNames.length === 0) return true
-  if (execution.kind !== 'hand') return false
-
-  const expected = new Set(toolNames.map((toolName) => String(toolName || '').trim()))
-  return execution.toolResults.some((result) => expected.has(result.toolName))
+  return segments.join('\n').toLowerCase()
 }
 
-const matchesWatchHintCodes = (
-  execution: HumanRoundExecution,
-  watchHintCodes: HumanWatchHint['code'][] | undefined
-): boolean => {
-  if (!watchHintCodes || watchHintCodes.length === 0) return true
-  const watchHint = readExecutionWatchHint(execution)
-  return Boolean(watchHint && watchHintCodes.includes(watchHint.code))
+const withinRoundRange = (input: {
+  record: HumanRoundRecord
+  startRoundId?: number
+  endRoundId?: number
+}): boolean => {
+  if (typeof input.startRoundId === 'number' && input.record.roundId < input.startRoundId) return false
+  if (typeof input.endRoundId === 'number' && input.record.roundId > input.endRoundId) return false
+  return true
 }
 
 export const filterRoundHistory = (input: {
   roundHistory: HumanRoundRecord[]
   filters: HumanLoadedHistoryContext['filters']
 }): HumanRoundRecord[] => {
-  const filters = historyRecallFilterSchema.parse(input.filters)
-  const roundIds = filters.roundIds ? new Set(filters.roundIds) : undefined
+  const filters = historySearchFilterSchema.parse(input.filters)
+  const limit = Math.max(1, filters.limit || HUMAN_HISTORY_LIMITS.loadedHistoryRounds)
+  const query = String(filters.query || '').trim().toLowerCase()
 
-  return input.roundHistory
-    .filter((record) => {
-      if (roundIds && !roundIds.has(record.roundId)) return false
-      if (!matchesExecutionKind(record.execution, filters.executionKinds)) return false
-      if (!matchesToolNames(record.execution, filters.toolNames)) return false
-      if (!matchesWatchHintCodes(record.execution, filters.watchHintCodes)) return false
-      return true
+  const scoped = input.roundHistory.filter((record) =>
+    withinRoundRange({
+      record,
+      startRoundId: filters.startRoundId,
+      endRoundId: filters.endRoundId
     })
-    .slice(-Math.max(1, filters.limit || HUMAN_HISTORY_LIMITS.loadedHistoryRounds))
+  )
+
+  if (!query) {
+    return scoped.slice(-limit)
+  }
+
+  return scoped
+    .filter((record) => buildRoundSearchText(record).includes(query))
+    .slice(-limit)
 }
 
 export const buildLoadedHistoryContext = (input: {
   filters: HumanLoadedHistoryContext['filters']
   rounds: HumanRoundRecord[]
 }): HumanLoadedHistoryContext => ({
-  filters: historyRecallFilterSchema.parse(input.filters),
+  filters: historySearchFilterSchema.parse(input.filters),
   rounds: input.rounds.slice(0, HUMAN_HISTORY_LIMITS.loadedHistoryRounds)
 })
 
 export const readLoadedHistoryContextFromToolResults = (
   results: readonly ToolCallResult[]
 ): HumanLoadedHistoryContext | undefined => {
-  const data = results.find((result) => result.toolName === 'history_recall')?.data
+  const data = results.find(
+    (result) => result.toolName === 'history_search' || result.toolName === 'history_list'
+  )?.data
   const parsed = humanLoadedHistoryContextSchema.safeParse(data)
   return parsed.success ? parsed.data : undefined
 }

@@ -13,8 +13,9 @@ import {
 } from '../../../harness/backend/aiLiveTestData'
 import {
   collectDocxApplyOpsContentKinds,
-  collectStartedToolStringArgs,
   filterAiRunEventsByType,
+  hasDraftFileArtifact,
+  hasDraftReviewArtifact,
   runWithStructuredOutputRetry
 } from '../testUtils'
 
@@ -30,7 +31,13 @@ const openedExpectedDoc = (
 
 const hasTargetReadBeforeApply = (events: readonly AiRunEvent[]): boolean => {
   const firstApplyIndex = events.findIndex(
-    (event) => event.type === 'tool_call_started' && event.toolName === 'docx_apply_ops'
+    (event) =>
+      event.type === 'tool_call_started' &&
+      (event.toolName === 'docx_paragraph_edit' ||
+        event.toolName === 'docx_heading_edit' ||
+        event.toolName === 'docx_table_edit' ||
+        event.toolName === 'docx_text_edit' ||
+        event.toolName === 'docx_text_style_edit')
   )
   if (firstApplyIndex <= 0) {
     return false
@@ -40,11 +47,11 @@ const hasTargetReadBeforeApply = (events: readonly AiRunEvent[]): boolean => {
     if (event.type !== 'tool_call_started') {
       return false
     }
-    if (event.toolName === 'docx_search') {
+    if (event.toolName === 'docx_read') {
       const query = event.input.query
       return typeof query === 'string' && query.includes('反走样')
     }
-    return event.toolName === 'docx_outline' || event.toolName === 'docx_get_block'
+    return event.toolName === 'docx_outline'
   })
 }
 
@@ -112,17 +119,11 @@ describe('ai human live backend', () => {
           const events = result.events
           const toolResults = filterAiRunEventsByType(events, 'tool_call_result')
           const toolNames = toolResults.map((event) => event.toolName)
-          const openedSourcePaths = collectStartedToolStringArgs(events, 'docx_open', 'sourcePath')
+          const openedSourcePaths = filterAiRunEventsByType(events, 'tool_call_started')
+            .filter((event) => event.toolName.startsWith('docx_'))
+            .map((event) => event.input.sourcePath)
+            .filter((value): value is string => typeof value === 'string')
           const changedContentKinds = collectDocxApplyOpsContentKinds(events)
-          const docxArtifacts =
-            result.output?.artifacts?.filter(
-              (artifact) =>
-                artifact.kind === 'file' &&
-                artifact.capability === 'docx' &&
-                artifact.artifactRole === 'draft'
-            ) || []
-          const hasDraftReviewArtifact =
-            result.output?.artifacts?.some((artifact) => artifact.kind === 'draft_review') || false
           const unchangedFixtures = await Promise.all(
             result.originalFixtureBytes.map(async (fixture) =>
               await hasUnchangedFileBytes(fixture.workspacePath, fixture.bytes)
@@ -135,15 +136,18 @@ describe('ai human live backend', () => {
                 openedExpectedDoc(openedSourcePaths, fixtureDoc.relativePath, fixtureDoc.name)
               ) &&
               hasTargetReadBeforeApply(events) &&
-              toolNames.includes('docx_apply_ops') &&
-              docxArtifacts.length > 0 &&
-              hasDraftReviewArtifact &&
+              toolNames.some((toolName) => toolName.endsWith('_edit')) &&
               changedContentKinds.includes('paragraph') &&
               changedContentKinds.includes('table') &&
-              unchangedFixtures.every(Boolean),
+              filterAiRunEventsByType(events, 'draft_review_ready').length >= 1 &&
+              hasDraftReviewArtifact(result.output?.artifacts) &&
+              hasDraftFileArtifact(result.output?.artifacts) &&
+              unchangedFixtures.every(Boolean) &&
+              typeof result.output?.deliveryMarkdown === 'string' &&
+              result.output.deliveryMarkdown.trim().length > 0,
             {
               name: 'human-live-contextual-docx-write-produces-confirm-copy-without-overwriting-source',
-              message: 'live human 定位补写 case 应在读取定位后补写说明和表格，并仅生成 confirm copy。',
+              message: 'live human 定位补写 case 应在读取定位后补写说明和表格，且不覆盖原始资料。',
               data: {
                 openedSourcePaths,
                 toolNames,

@@ -41,7 +41,7 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildToolDecision({
-                  toolName: 'terminal_run_command',
+                  toolName: 'workspace_run_command',
                   args: {
                     command: 'pwd'
                   },
@@ -92,7 +92,7 @@ describe('ai human mock-llm backend', () => {
                 Array.isArray(event.detail?.duplicateSkillIds) &&
                 event.detail.duplicateSkillIds.includes('workspace-cli')
             ) &&
-            toolResults.some((event) => event.toolName === 'terminal_run_command'),
+            toolResults.some((event) => event.toolName === 'workspace_run_command'),
           {
             name: 'duplicate-learning-watchhint-recovers',
             message: 'duplicate learning 应由真实 learning node 产出 watch_hint，并在之后继续完成工具调用。',

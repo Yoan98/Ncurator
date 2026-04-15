@@ -1,64 +1,85 @@
-import type {
-  DocxChangedBlock,
-  DocxDetailedBlock,
-  DocxOutlineBlock
-} from '../../../../src/main/services/ai/human/tools/docx/types'
-
-export type DocxOpenResult = {
-  ok: boolean
-  code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
-  summary: string
-  sourcePath: string
-  currentVersionRef: string
-  meta: {
-    title: string
-    creator: string
-    lastModifiedBy: string
-    description: string
-    defaultFont: string
-  }
-  stats: {
-    blockCount: number
-    paragraphCount: number
-    tableCount: number
-    imageCount: number
-    charCount: number
-  }
-}
+import type { DocxChangedBlock, DocxOutlineBlock } from '../../../../src/main/services/ai/human/tools/docx/types'
 
 export type DocxOutlineResult = {
   ok: boolean
   code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
   summary: string
-  blocks: DocxOutlineBlock[]
+  sourcePath: string
+  currentVersionRef: string
+  returnedBlockCount: number
+  totalBlockCount: number
+  blocks: Array<
+    | {
+        blockId: string
+        type: 'paragraph'
+        bodyIndex: number
+        style?: string
+        headingLevel?: number
+        preview: string
+      }
+    | {
+        blockId: string
+        type: 'table'
+        bodyIndex: number
+        rows?: number
+        cols?: number
+        preview: string
+      }
+    | {
+        blockId: string
+        type: 'table_cell'
+        bodyIndex: number
+        tableBlockId?: string
+        row?: number
+        col?: number
+        preview: string
+      }
+  >
   truncated: boolean
 }
 
-export type DocxSearchResult = {
+export type DocxReadResult = {
   ok: boolean
   code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
   summary: string
-  matches: Array<{
-    blockId: string
-    blockType: 'paragraph' | 'table' | 'table_cell'
-    bodyIndex: number
-    previousBodyBlockId?: string
-    nextBodyBlockId?: string
-    tableBlockId?: string
-    text: string
-    offsets: Array<{ start: number; end: number }>
-  }>
-  warnings: string[]
+  sourcePath: string
+  currentVersionRef: string
+  truncated: boolean
+  totalMatchCount?: number
+  matches: Array<
+    | {
+        blockId: string
+        type: 'paragraph'
+        bodyIndex: number
+        text: string
+        style?: string
+        headingLevel?: number
+        contextBefore?: string
+        contextAfter?: string
+      }
+    | {
+        blockId: string
+        type: 'table'
+        bodyIndex: number
+        rows: Array<Array<{ cellBlockId: string; text: string }>>
+        contextBefore?: string
+        contextAfter?: string
+      }
+    | {
+        blockId: string
+        type: 'table_cell'
+        bodyIndex: number
+        tableBlockId: string
+        row: number
+        col: number
+        text: string
+        contextBefore?: string
+        contextAfter?: string
+      }
+  >
 }
 
-export type DocxGetBlockResult = {
-  ok: boolean
-  code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
-  summary: string
-  block: DocxDetailedBlock
-}
-
-export type DocxApplyOpsResult = {
+export type DocxMutationResult = {
   ok: boolean
   code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
   summary: string
@@ -66,6 +87,7 @@ export type DocxApplyOpsResult = {
   previousVersionRef: string
   currentVersionRef: string
   changedBlocks: DocxChangedBlock[]
+  createdBlocks?: Array<{ blockId: string; type: 'paragraph' | 'table' | 'table_cell' }>
   warnings: string[]
 }
 
@@ -80,6 +102,8 @@ export type DocxHistoryResult = {
     parentVersionRef?: string
     createdAt: number
     isCurrent: boolean
+    summary: string
+    changedBlocks: DocxChangedBlock[]
   }>
 }
 
@@ -90,7 +114,6 @@ export type DocxRollbackResult = {
   sourcePath: string
   currentVersionRef: string
   previousVersionRef: string
-  stepsApplied: number
 }
 
 export type DocxFailureResult = {
@@ -113,22 +136,22 @@ export const findOutlineBlock = (
 }
 
 export const findParagraphBlockIdByText = (
-  blocks: readonly DocxOutlineBlock[],
+  blocks: readonly DocxOutlineResult['blocks'],
   textFragment: string
 ): string =>
   findOutlineBlock(
     blocks,
-    (block) => block.type === 'paragraph' && block.text.includes(textFragment)
+    (block) => block.type === 'paragraph' && block.preview.includes(textFragment)
   ).blockId
 
-export const findTableBlockId = (blocks: readonly DocxOutlineBlock[]): string =>
+export const findTableBlockId = (blocks: readonly DocxOutlineResult['blocks']): string =>
   findOutlineBlock(blocks, (block) => block.type === 'table').blockId
 
 export const findTableCellBlockIdByText = (
-  blocks: readonly DocxOutlineBlock[],
+  blocks: readonly DocxOutlineResult['blocks'],
   textFragment: string
 ): string =>
   findOutlineBlock(
     blocks,
-    (block) => block.type === 'table_cell' && block.text.includes(textFragment)
+    (block) => block.type === 'table_cell' && block.preview.includes(textFragment)
   ).blockId

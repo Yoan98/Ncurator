@@ -4,7 +4,7 @@ import {
   writeTestDocxFile
 } from '../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
-import type { DocxOpenResult, DocxOutlineResult } from './testUtils'
+import type { DocxOutlineResult } from './testUtils'
 import { filterAiRunEventsByType } from '../../human/testUtils'
 
 describe('ai tool docx backend', () => {
@@ -30,11 +30,8 @@ describe('ai tool docx backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         try {
-          const opened = await harness.invoke<DocxOpenResult>('docx_open', {
-            sourcePath: 'outline-truncation.docx'
-          })
           const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
-            sourcePath: opened.sourcePath,
+            sourcePath: 'outline-truncation.docx',
             maxBlocks: 10
           })
           const outlineEvent = filterAiRunEventsByType(runtime.eventCollector.snapshot(), 'tool_call_result')
@@ -61,12 +58,11 @@ describe('ai tool docx backend', () => {
 
         runtime.assertThat(
           result.outline.truncated &&
-            result.outline.summary.includes('结果已截断') &&
-            result.outline.summary.includes('文档后续内容未包含') &&
-            previewSummary.includes('结果已截断'),
+            result.outline.returnedBlockCount === 10 &&
+            result.outline.totalBlockCount > result.outline.returnedBlockCount,
           {
             name: 'docx-outline-surfaces-truncation-fact',
-            message: 'outline 结果和事件预览都应明确说明结果已截断、后续内容未包含。',
+            message: 'outline 结果应明确暴露 returnedBlockCount、totalBlockCount 与 truncation 事实。',
             data: {
               outline: result.outline,
               outputPreview: result.outlineEvent?.outputPreview

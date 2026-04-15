@@ -58,7 +58,7 @@ describe('ai unit human tool executor diagnostic', () => {
       cache: createRuntimeCache(),
       taskId: 'task-tool-diagnostic',
       learnedSkillIds: ['workspace-cli'],
-      toolName: 'terminal_run_command',
+      toolName: 'workspace_run_command',
       args: {}
     })
 

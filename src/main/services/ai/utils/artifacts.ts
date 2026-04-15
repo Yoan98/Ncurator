@@ -1,9 +1,11 @@
 import path from 'node:path'
+import { v4 as uuidv4 } from 'uuid'
 import type {
   AiArtifactRef,
   AiDraftReviewArtifactRef,
   AiFileArtifactOperation,
   AiFileArtifactRef,
+  AiRunEvent,
   DraftReviewDetail,
   JsonObject,
   JsonValue
@@ -54,7 +56,7 @@ const createFileArtifactRef = (input: {
 })
 
 const extractTerminalArtifacts = (result: ToolCallResult): AiArtifactRef[] => {
-  if (result.toolName !== 'terminal_run_command' || !isJsonObject(result.data)) return []
+  if (result.toolName !== 'workspace_run_command' || !isJsonObject(result.data)) return []
   const rawArtifacts = result.data.artifacts
   if (!Array.isArray(rawArtifacts)) return []
   return rawArtifacts.flatMap((item) => {
@@ -133,4 +135,52 @@ export const buildRunArtifactsFromDraftReviewDetail = (
   })
 
   return mergeArtifactRefs([draftReviewArtifact], draftArtifacts)
+}
+
+export const appendDraftReviewArtifactsAndEmitEvents = (input: {
+  existingArtifacts?: readonly AiArtifactRef[]
+  details: readonly DraftReviewDetail[]
+  sendEvent: (event: AiRunEvent) => void
+  runId: string
+  taskId: string
+}): AiArtifactRef[] => {
+  const nextArtifacts = mergeArtifactRefs(
+    input.existingArtifacts,
+    ...input.details.map((detail) => buildRunArtifactsFromDraftReviewDetail(detail))
+  )
+
+  input.details.forEach((detail) => {
+    input.sendEvent({
+      type: 'draft_review_ready',
+      runId: input.runId,
+      review: {
+        reviewId: detail.review.id,
+        documentCount: detail.review.document_count,
+        changeCount: detail.review.change_count
+      },
+      createdAt: Date.now()
+    })
+
+    detail.documents.forEach((document) => {
+      if (!document.confirm_artifact_path) return
+      input.sendEvent({
+        type: 'file_artifact',
+        runId: input.runId,
+        taskId: input.taskId,
+        artifactId: uuidv4(),
+        capability: 'docx',
+        path: document.confirm_artifact_path,
+        fileName: path.basename(document.confirm_artifact_path),
+        operation: 'created',
+        artifactRole: 'draft',
+        reviewId: detail.review.id,
+        draftDocumentId: document.id,
+        draftSnapshotId: document.latest_draft_snapshot_id,
+        summary: `confirm doc ready: ${document.source_name}`,
+        createdAt: Date.now()
+      })
+    })
+  })
+
+  return nextArtifacts
 }

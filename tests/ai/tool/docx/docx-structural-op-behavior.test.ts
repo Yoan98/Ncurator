@@ -5,8 +5,7 @@ import {
 } from '../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
-  type DocxApplyOpsResult,
-  type DocxOpenResult,
+  type DocxMutationResult,
   type DocxOutlineResult,
   findParagraphBlockIdByText
 } from './testUtils'
@@ -19,7 +18,7 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证 replace_text 不创建新结构，insert_after 可创建新的 paragraph/table 结构。',
+      description: '验证文本编辑不创建新结构，段落/表格对象编辑可创建新的结构块。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -41,76 +40,37 @@ describe('ai tool docx backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         try {
-          const opened = await harness.invoke<DocxOpenResult>('docx_open', {
-            sourcePath: 'structural-op-behavior.docx'
-          })
           const outlineBefore = await harness.invoke<DocxOutlineResult>('docx_outline', {
-            sourcePath: opened.sourcePath,
-            includeTables: true,
-            includeCells: true,
+            sourcePath: 'structural-op-behavior.docx',
             maxBlocks: 50
           })
           const anchorBlockId = findParagraphBlockIdByText(outlineBefore.blocks, 'Anchor text.')
 
-          const replaceResult = await harness.invoke<DocxApplyOpsResult>('docx_apply_ops', {
-            sourcePath: opened.sourcePath,
-            ops: [
-              {
-                type: 'replace_text',
-                query: 'Anchor text.',
-                replace: 'Anchor text updated.'
-              }
-            ]
+          const replaceResult = await harness.invoke<DocxMutationResult>('docx_text_edit', {
+            sourcePath: outlineBefore.sourcePath,
+            query: 'Anchor text.',
+            replace: 'Anchor text updated.'
           })
           const outlineAfterReplace = await harness.invoke<DocxOutlineResult>('docx_outline', {
             sourcePath: replaceResult.sourcePath,
-            includeTables: true,
-            includeCells: true,
             maxBlocks: 50
           })
 
-          const insertResult = await harness.invoke<DocxApplyOpsResult>('docx_apply_ops', {
+          const insertParagraph = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
             sourcePath: replaceResult.sourcePath,
-            ops: [
-              {
-                type: 'insert_after',
-                anchorBlockId,
-                content: [
-                  {
-                    kind: 'paragraph',
-                    runs: [{ text: 'Extra explanation paragraph.' }]
-                  },
-                  {
-                    kind: 'table',
-                    rows: [
-                      [
-                        {
-                          paragraphs: [
-                            {
-                              kind: 'paragraph',
-                              runs: [{ text: '反走样' }]
-                            }
-                          ]
-                        },
-                        {
-                          paragraphs: [
-                            {
-                              kind: 'paragraph',
-                              runs: [{ text: '过拟合' }]
-                            }
-                          ]
-                        }
-                      ]
-                    ]
-                  }
-                ]
-              }
-            ]
+            action: 'insert_after',
+            anchorBlockId,
+            text: 'Extra explanation paragraph.'
+          })
+          const paragraphBlockId = insertParagraph.createdBlocks?.[0]?.blockId || anchorBlockId
+          const insertTable = await harness.invoke<DocxMutationResult>('docx_table_edit', {
+            sourcePath: insertParagraph.sourcePath,
+            action: 'insert_after',
+            anchorBlockId: paragraphBlockId,
+            rows: [['反走样', '过拟合']]
           })
           const outlineAfterInsert = await harness.invoke<DocxOutlineResult>('docx_outline', {
-            sourcePath: insertResult.sourcePath,
-            includeTables: true,
-            includeCells: true,
+            sourcePath: insertTable.sourcePath,
             maxBlocks: 80
           })
 
@@ -118,7 +78,8 @@ describe('ai tool docx backend', () => {
             outlineBefore,
             replaceResult,
             outlineAfterReplace,
-            insertResult,
+            insertParagraph,
+            insertTable,
             outlineAfterInsert
           }
         } finally {
@@ -133,7 +94,7 @@ describe('ai tool docx backend', () => {
             !result.outlineAfterReplace.blocks.some((block) => block.type === 'table'),
           {
             name: 'replace-text-does-not-create-new-block-structure',
-            message: 'replace_text 只应修改现有文本，不应凭空创建新的 paragraph/table 结构。',
+            message: 'docx_text_edit 只应修改现有文本，不应凭空创建新的 paragraph/table 结构。',
             data: {
               outlineBefore: result.outlineBefore.blocks,
               outlineAfterReplace: result.outlineAfterReplace.blocks,
@@ -143,19 +104,22 @@ describe('ai tool docx backend', () => {
         )
 
         runtime.assertThat(
-          result.insertResult.changedBlocks.some((block) => block.action === 'insert_after') &&
+          result.insertParagraph.changedBlocks.some((block) => block.action === 'insert_after') &&
+            result.insertTable.changedBlocks.some((block) => block.action === 'insert_after') &&
             result.outlineAfterInsert.blocks.some(
-              (block) => block.type === 'paragraph' && block.text.includes('Extra explanation paragraph.')
+              (block) =>
+                block.type === 'paragraph' && block.preview.includes('Extra explanation paragraph.')
             ) &&
             result.outlineAfterInsert.blocks.some((block) => block.type === 'table') &&
             result.outlineAfterInsert.blocks.length > result.outlineAfterReplace.blocks.length,
           {
-            name: 'insert-after-can-create-paragraph-and-table-structure',
-            message: 'insert_after 应能新增独立 paragraph/table 结构，而不是把内容并入原 block。',
+            name: 'object-edit-can-create-paragraph-and-table-structure',
+            message: '段落和表格对象编辑应能新增独立结构，而不是把内容并入原 block。',
             data: {
               outlineAfterReplace: result.outlineAfterReplace.blocks,
               outlineAfterInsert: result.outlineAfterInsert.blocks,
-              changedBlocks: result.insertResult.changedBlocks
+              paragraphEdit: result.insertParagraph.changedBlocks,
+              tableEdit: result.insertTable.changedBlocks
             }
           }
         )

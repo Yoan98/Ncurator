@@ -5,19 +5,10 @@ import { createTerminalToolHarness } from '../../../harness/backend/aiToolHarnes
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import { filterEventsByType } from '../testHelpers'
 
-type TerminalRunCommandResult = {
+type WorkspaceResult = {
   ok: boolean
   code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
-  command: string
-  cwd: string
-  outputPreview: string
-  stdoutPreview: string
-  stderrPreview: string
-  exitCode: number | null
-  timedOut: boolean
-  truncated: boolean
-  artifacts: Array<{ path: string; operation: 'created' | 'updated' }>
-  error?: string
+  [key: string]: unknown
 }
 
 describe('ai tool terminal backend', () => {
@@ -28,7 +19,7 @@ describe('ai tool terminal backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['terminal'],
-      description: '验证 ls/find/pwd/wc 等只读命令的基础契约。',
+      description: '验证 workspace 目录浏览与文件读取类只读工具的基础契约。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -43,17 +34,16 @@ describe('ai tool terminal backend', () => {
         const harness = createTerminalToolHarness(runtime)
 
         return {
-          pwd: await harness.invoke<TerminalRunCommandResult>('terminal_run_command', {
-            command: 'pwd'
+          files: await harness.invoke<WorkspaceResult>('workspace_list_files', {
+            path: 'materials',
+            limit: 20
           }),
-          ls: await harness.invoke<TerminalRunCommandResult>('terminal_run_command', {
-            command: 'ls materials/nested'
+          search: await harness.invoke<WorkspaceResult>('workspace_search_text', {
+            query: 'beta',
+            path: 'materials'
           }),
-          find: await harness.invoke<TerminalRunCommandResult>('terminal_run_command', {
-            command: 'find materials -type f'
-          }),
-          wc: await harness.invoke<TerminalRunCommandResult>('terminal_run_command', {
-            command: 'wc -c materials/nested/daily-note.txt'
+          read: await harness.invoke<WorkspaceResult>('workspace_read_file', {
+            path: 'materials/nested/daily-note.txt'
           }),
           events: runtime.eventCollector.snapshot()
         }
@@ -63,42 +53,37 @@ describe('ai tool terminal backend', () => {
         const stepErrors = filterEventsByType(result.events, 'terminal_step_error')
 
         runtime.assertThat(
-          result.pwd.ok &&
-            result.ls.ok &&
-            result.find.ok &&
-            result.wc.ok &&
+          result.files.ok &&
+            result.search.ok &&
+            result.read.ok &&
             approvalEvents.length === 0 &&
             stepErrors.length === 0,
           {
-            name: 'readonly-directory-commands-run-without-approval',
-            message: '目录与文件检查类只读命令应直接成功执行，且不触发审批。',
+            name: 'readonly-workspace-tools-run-without-approval',
+            message: '目录与文件读取类只读工具应直接成功执行，且不触发审批。',
             data: {
               approvals: approvalEvents.length,
               stepErrors: stepErrors.length,
-              codes: [result.pwd.code, result.ls.code, result.find.code, result.wc.code]
+              codes: [result.files.code, result.search.code, result.read.code]
             }
           }
         )
 
+        const fileItems = Array.isArray(result.files.items) ? result.files.items : []
+        const searchMatches = Array.isArray(result.search.matches) ? result.search.matches : []
+        const readContent = typeof result.read.content === 'string' ? result.read.content : ''
         runtime.assertThat(
-          result.pwd.outputPreview.includes(runtime.workspaceRoot) &&
-            result.ls.outputPreview.includes('daily-note.txt') &&
-            result.find.outputPreview.includes('materials/nested/daily-note.txt') &&
-            result.wc.outputPreview.includes('daily-note.txt'),
+          fileItems.some((item) => JSON.stringify(item).includes('daily-note.txt')) &&
+            searchMatches.some((item) => JSON.stringify(item).includes('beta')) &&
+            readContent.includes('alpha') &&
+            readContent.includes('gamma'),
           {
-            name: 'readonly-directory-commands-return-stable-output',
-            message: '只读命令输出应稳定可供后续推理消费，且不被当成文件产物。',
+            name: 'readonly-workspace-tools-return-stable-output',
+            message: 'workspace 只读工具应返回稳定结构，供后续推理继续消费。',
             data: {
-              pwd: result.pwd.outputPreview,
-              ls: result.ls.outputPreview,
-              find: result.find.outputPreview,
-              wc: result.wc.outputPreview,
-              artifactCounts: [
-                result.pwd.artifacts.length,
-                result.ls.artifacts.length,
-                result.find.artifacts.length,
-                result.wc.artifacts.length
-              ]
+              files: result.files,
+              search: result.search,
+              read: result.read
             }
           }
         )

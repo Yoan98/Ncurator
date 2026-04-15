@@ -213,7 +213,7 @@ ${outputShapeText}
             "mode": "serial",
             "calls": [
               {
-                "toolName": "terminal_run_command",
+                "toolName": "workspace_run_command",
                 "args": {
                   "command": "pwd"
                 }
@@ -228,7 +228,7 @@ ${outputShapeText}
       {
         "updatedStableMemory": {
           "currentUnderstanding": "- 已确认审批驳回时原文件保持不变。",
-          "keyEvidence": "- kb_hybrid_search_chunks 命中了审批驳回时保留原文件的制度说明。",
+          "keyEvidence": "- kb_search 命中了审批驳回时保留原文件的制度说明。",
           "checklist": "- [done] 确认审批驳回时是否保留原文件\\n  - note: 已从知识库命中制度说明。"
         },
         "decision": {

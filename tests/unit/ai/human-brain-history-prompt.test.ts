@@ -105,7 +105,7 @@ describe('ai unit brain prompt history blocks', () => {
                 mode: 'serial',
                 calls: [
                   {
-                    toolName: 'terminal_run_command',
+                    toolName: 'workspace_run_command',
                     args: {
                       command: 'pwd'
                     }
@@ -119,7 +119,7 @@ describe('ai unit brain prompt history blocks', () => {
               mode: 'serial',
               calls: [
                 {
-                  toolName: 'terminal_run_command',
+                  toolName: 'workspace_run_command',
                   args: {
                     command: 'pwd'
                   }
@@ -128,7 +128,7 @@ describe('ai unit brain prompt history blocks', () => {
             },
             toolResults: [
               {
-                toolName: 'terminal_run_command',
+                toolName: 'workspace_run_command',
                 ok: true,
                 code: 'ok',
                 data: {
@@ -152,7 +152,7 @@ describe('ai unit brain prompt history blocks', () => {
           ...withHandRound.memory.history,
           loadedHistoryContext: {
             filters: {
-              executionKinds: ['learning'],
+              query: 'learning',
               limit: 1
             },
             rounds: [withHandRound.memory.history.roundHistory[0]]
@@ -283,14 +283,14 @@ describe('ai unit brain prompt history blocks', () => {
       )
     })
 
-    expect(prompt.user).toContain('- 工具 docx_apply_ops')
+    expect(prompt.user).toContain('- 工具 docx_heading_edit')
     expect(prompt.user).toContain('输入结构：')
     expect(prompt.user).toContain('insert_after')
     expect(prompt.user).toContain('anchorBlockId')
-    expect(prompt.user).toContain('runs')
+    expect(prompt.user).toContain('level')
     expect(prompt.user).toContain('rows')
     expect(prompt.user).toContain('示例：')
-    expect(prompt.user).toContain('补充说明：反走样通过平滑边缘像素来减轻锯齿感。')
-    expect(prompt.user).not.toContain('- 工具 terminal_run_command')
+    expect(prompt.user).toContain('反走样与过拟合对照')
+    expect(prompt.user).not.toContain('- 工具 workspace_run_command')
   })
 })

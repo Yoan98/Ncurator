@@ -101,6 +101,23 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     },
     resolveDocxOpenTarget: async (sourcePath) =>
       await deps.draftReviewService.resolveDocxOpenTarget(sourcePath),
+    beginDocxReviewRun: () => {
+      deps.draftReviewService.beginRun({
+        runId: payload.runId,
+        sessionId: payload.sessionId,
+        inputText: String(payload.input || '')
+      })
+    },
+    finalizeDocxReviewRun: async () => {
+      if (!normalizedWorkspace?.rootPath) return []
+      return await deps.draftReviewService.finalizeRunReview({
+        runId: payload.runId,
+        workspaceRootPath: normalizedWorkspace.rootPath
+      })
+    },
+    discardDocxReviewRun: () => {
+      deps.draftReviewService.discardRun(payload.runId)
+    },
     documentsStore: deps.documentsStore,
     embeddingService: deps.embeddingService
   }

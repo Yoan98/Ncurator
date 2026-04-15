@@ -4,7 +4,7 @@
 
 - 本文只覆盖当前正式路径：`AiRunService -> human -> AiRunState`
 - 本文只覆盖 `human` 内部最常见闭环：`brain -> learning -> hand -> brain -> mouth`
-- 本文不展开异常分支、审批阻断、history_recall 与 draft review 细节
+- 本文不展开异常分支、审批阻断、history_search/history_list 与 draft review 细节
 
 字段名、节点名和状态转移都以当前代码实现为准；示例中的模型输出和工具结果是“符合当前契约的一组代表性样本”，不是固定字面值。
 
@@ -315,7 +315,7 @@ flowchart TD
       "mode": "serial",
       "calls": [
         {
-          "toolName": "kb_fts_search_chunks",
+          "toolName": "kb_search",
           "args": {
             "queryText": "发布日期 字段 写法 要求 发布说明模板",
             "limit": 5,
@@ -339,7 +339,7 @@ flowchart TD
 ```json
 [
   {
-    "toolName": "kb_fts_search_chunks",
+    "toolName": "kb_search",
     "ok": true,
     "code": "ok",
     "data": [
@@ -371,7 +371,7 @@ flowchart TD
     status: 'running',
     lastToolResults: [
       {
-        toolName: 'kb_fts_search_chunks',
+        toolName: 'kb_search',
         ok: true,
         code: 'ok',
         data: [
@@ -405,7 +405,7 @@ flowchart TD
                 mode: 'serial',
                 calls: [
                   {
-                    toolName: 'kb_fts_search_chunks',
+                    toolName: 'kb_search',
                     args: {
                       queryText: '发布日期 字段 写法 要求 发布说明模板',
                       limit: 5,
@@ -422,7 +422,7 @@ flowchart TD
               mode: 'serial',
               calls: [
                 {
-                  toolName: 'kb_fts_search_chunks',
+                  toolName: 'kb_search',
                   args: {
                     queryText: '发布日期 字段 写法 要求 发布说明模板',
                     limit: 5,
@@ -433,7 +433,7 @@ flowchart TD
             },
             toolResults: [
               {
-                toolName: 'kb_fts_search_chunks',
+                toolName: 'kb_search',
                 ok: true,
                 code: 'ok',
                 summary: '命中发布说明模板中与发布日期字段相关的证据。',
@@ -543,8 +543,8 @@ run_started
 human_step(stage=human_brain, action=brain_decision)
 human_step(stage=human_learning, action=learn_skill)
 human_step(stage=human_brain, action=brain_decision)
-tool_call_started(toolName=kb_fts_search_chunks)
-tool_call_result(toolName=kb_fts_search_chunks)
+tool_call_started(toolName=kb_search)
+tool_call_result(toolName=kb_search)
 human_step(stage=human_hand, action=call_tool)
 human_step(stage=human_brain, action=brain_decision)
 answer_token(...)

@@ -37,13 +37,13 @@ describe('ai tool terminal backend', () => {
         const harness = createTerminalToolHarness(runtime)
 
         return {
-          rg: await harness.invoke<TerminalRunCommandResult>('terminal_run_command', {
+          rg: await harness.invoke<TerminalRunCommandResult>('workspace_run_command', {
             command: 'rg "Approval denied" notes'
           }),
-          grep: await harness.invoke<TerminalRunCommandResult>('terminal_run_command', {
+          grep: await harness.invoke<TerminalRunCommandResult>('workspace_run_command', {
             command: 'grep -R "artifacts" notes'
           }),
-          boundaryRejected: await harness.invoke<TerminalRunCommandResult>('terminal_run_command', {
+          boundaryRejected: await harness.invoke<TerminalRunCommandResult>('workspace_run_command', {
             command: 'rg "Overview" ../'
           }),
           events: runtime.eventCollector.snapshot()

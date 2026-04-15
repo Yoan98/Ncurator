@@ -18,6 +18,7 @@ import {
   extractBlockText
 } from './blockIndex'
 import { blockSpecText, nodeToBlockSpec } from './blockSpec'
+import { paragraphNodeToSpec } from './blockIndex'
 import { childElements, collectText, isElementNode } from './dom'
 import type {
   ApplyOpsResult,
@@ -201,6 +202,182 @@ const replaceTextInParagraphNode = (
     changed = true
     if (!replaceAll) return changed
     searchFrom = replacedAt + replacement.length
+  }
+}
+
+const patchRunStyle = (input: {
+  run: DocxParagraphSpec['runs'][number]
+  style: NonNullable<Extract<DocxOp, { type: 'style_text' }>['style']>
+}): DocxParagraphSpec['runs'][number] => ({
+  ...input.run,
+  bold: input.style.bold ?? input.run.bold,
+  italic: input.style.italic ?? input.run.italic,
+  underline: input.style.underline ?? input.run.underline,
+  color: safeColor(input.style.color) ?? input.run.color
+})
+
+const styleParagraphSpec = (input: {
+  paragraph: DocxParagraphSpec
+  query: string
+  style: NonNullable<Extract<DocxOp, { type: 'style_text' }>['style']>
+}): { paragraph: DocxParagraphSpec; changed: boolean } => {
+  const query = String(input.query || '')
+  if (!query) {
+    return {
+      paragraph: input.paragraph,
+      changed: false
+    }
+  }
+  const text = input.paragraph.runs.map((run) => run.text).join('')
+  if (!text.includes(query)) {
+    return {
+      paragraph: input.paragraph,
+      changed: false
+    }
+  }
+
+  const rebuiltRuns: DocxParagraphSpec['runs'] = []
+  let offset = 0
+  let changed = false
+
+  input.paragraph.runs.forEach((run) => {
+    const runText = String(run.text || '')
+    if (!runText) return
+    let cursor = 0
+    while (cursor < runText.length) {
+      const matchStartsAt = text.indexOf(query, offset + cursor)
+      if (matchStartsAt < 0 || matchStartsAt >= offset + runText.length) {
+        const remainder = runText.slice(cursor)
+        if (remainder) {
+          rebuiltRuns.push({
+            ...run,
+            text: remainder
+          })
+        }
+        break
+      }
+
+      const localMatchStart = matchStartsAt - offset
+      if (localMatchStart > cursor) {
+        rebuiltRuns.push({
+          ...run,
+          text: runText.slice(cursor, localMatchStart)
+        })
+      }
+
+      const matchLocalEnd = Math.min(runText.length, localMatchStart + query.length)
+      rebuiltRuns.push(
+        patchRunStyle({
+          run: {
+            ...run,
+            text: runText.slice(localMatchStart, matchLocalEnd)
+          },
+          style: input.style
+        })
+      )
+      cursor = matchLocalEnd
+      changed = true
+    }
+    offset += runText.length
+  })
+
+  return {
+    paragraph: {
+      ...input.paragraph,
+      runs: rebuiltRuns.length > 0 ? rebuiltRuns : input.paragraph.runs
+    },
+    changed
+  }
+}
+
+const applyStyleTextOp = async (
+  buffer: Buffer,
+  op: Extract<DocxOp, { type: 'style_text' }>
+): Promise<{ buffer: Buffer; changedBlocks: DocxChangedBlock[]; warnings: string[] }> => {
+  const index = await loadIndex(buffer)
+  const warnings: string[] = []
+  const beforeText = extractBlockText(index, op.blockId)
+  const node = index.nodesById.get(op.blockId)
+
+  if (!node) {
+    return {
+      buffer,
+      changedBlocks: [],
+      warnings: [`style_text skipped: block not found (${op.blockId})`]
+    }
+  }
+
+  if (node.kind === 'table') {
+    return {
+      buffer,
+      changedBlocks: [],
+      warnings: [`style_text skipped: table block is not supported (${op.blockId})`]
+    }
+  }
+
+  if (node.kind === 'paragraph') {
+    const nextParagraph = styleParagraphSpec({
+      paragraph: nodeToBlockSpec(node) as DocxParagraphSpec,
+      query: op.query,
+      style: op.style
+    })
+    if (!nextParagraph.changed) {
+      return {
+        buffer,
+        changedBlocks: [],
+        warnings: [`style_text not found: ${op.query}`]
+      }
+    }
+    const nextBuffer = await patchWithTag({
+      buffer,
+      blockId: op.blockId,
+      children: [paragraphFromSpec(nextParagraph.paragraph)]
+    })
+    return {
+      buffer: nextBuffer,
+      changedBlocks: [
+        {
+          action: 'style_text',
+          blockId: op.blockId,
+          beforeText,
+          afterText: beforeText
+        }
+      ],
+      warnings
+    }
+  }
+
+  const nextParagraphs = childElements(node.node, 'p').map((paragraphNode) =>
+    styleParagraphSpec({
+      paragraph: paragraphNodeToSpec(paragraphNode),
+      query: op.query,
+      style: op.style
+    })
+  )
+  const changed = nextParagraphs.some((entry) => entry.changed)
+  if (!changed) {
+    return {
+      buffer,
+      changedBlocks: [],
+      warnings: [`style_text not found: ${op.query}`]
+    }
+  }
+  const nextBuffer = await patchWithTag({
+    buffer,
+    blockId: op.blockId,
+    children: nextParagraphs.map((entry) => paragraphFromSpec(entry.paragraph))
+  })
+  return {
+    buffer: nextBuffer,
+    changedBlocks: [
+      {
+        action: 'style_text',
+        blockId: op.blockId,
+        beforeText,
+        afterText: beforeText
+      }
+    ],
+    warnings
   }
 }
 
@@ -439,7 +616,7 @@ export const applyDocxOps = async (input: {
   }
 
   input.ops.forEach((op, inputOrder) => {
-    if (op.type === 'replace_text') {
+    if (op.type === 'replace_text' || op.type === 'style_text') {
       flushStructuralSegment()
       orderedOps.push(op)
       return
@@ -454,6 +631,13 @@ export const applyDocxOps = async (input: {
       workingBuffer = replaced.buffer
       changedBlocks.push(...replaced.changedBlocks)
       warnings.push(...replaced.warnings)
+      continue
+    }
+    if (op.type === 'style_text') {
+      const styled = await applyStyleTextOp(workingBuffer, op)
+      workingBuffer = styled.buffer
+      changedBlocks.push(...styled.changedBlocks)
+      warnings.push(...styled.warnings)
       continue
     }
 

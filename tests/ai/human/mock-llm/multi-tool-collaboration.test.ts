@@ -57,7 +57,7 @@ describe('ai human mock-llm backend', () => {
                       mode: 'parallel',
                       calls: [
                         {
-                          toolName: 'terminal_run_command',
+                          toolName: 'workspace_run_command',
                           args: {
                             command: 'pwd'
                           }
@@ -106,7 +106,7 @@ describe('ai human mock-llm backend', () => {
 
         runtime.assertThat(
           result.output.status === 'completed' &&
-            toolNames.includes('terminal_run_command') &&
+            toolNames.includes('workspace_run_command') &&
             toolNames.includes('kb_list_documents'),
           {
             name: 'human-can-execute-real-parallel-multi-tool-batch',

@@ -3,19 +3,20 @@ import type { z } from 'zod/v4'
 import type { RuntimeSkillId } from '../../types'
 import type { HumanToolSpec } from '../types'
 import {
-  applyOpsSchema,
-  getBlockSchema,
-  historySchema,
-  openSchema,
-  outlineSchema,
-  rollbackSchema,
-  searchSchema
+  docxHeadingEditSchema,
+  docxHistoryRequestSchema,
+  docxOutlineRequestSchema,
+  docxParagraphEditSchema,
+  docxReadRequestSchema,
+  docxRollbackRequestSchema,
+  docxTableEditSchema,
+  docxTextEditSchema,
+  docxTextStyleEditSchema
 } from './schemas'
 import {
   createStaticExecutionMetaResolver,
   readStringArg
 } from '../utils/toolSpecUtils'
-import type { DocxWorkerAction } from './worker/types'
 
 const createDocxReadExecutionMeta = () =>
   createStaticExecutionMetaResolver({
@@ -25,13 +26,11 @@ const createDocxReadExecutionMeta = () =>
     defaultResourceKey: 'docx'
   })
 
-const createDocxMutatingExecutionMeta = (input: {
-  getResourceKey?: (args: JsonObject) => string | undefined
-}) =>
+const createDocxMutatingExecutionMeta = () =>
   createStaticExecutionMetaResolver({
     mutability: 'mutating',
     parallelSafe: false,
-    getResourceKey: input.getResourceKey,
+    getResourceKey: (args) => readStringArg(args, 'sourcePath'),
     defaultResourceKey: 'docx'
   })
 
@@ -41,354 +40,382 @@ type DocxToolSpec<
   TSkillId extends RuntimeSkillId = RuntimeSkillId
 > = HumanToolSpec<TArgs, TName, TSkillId> & {
   description: string
-  workerAction?: Exclude<DocxWorkerAction, 'release_run'>
   activityActionType?: string
 }
 
 const DOCX_SOURCE_PATH_EXAMPLE = 'ai/docx/图形学.docx'
-const DOCX_OPEN_EXAMPLE: JsonObject = {
-  sourcePath: DOCX_SOURCE_PATH_EXAMPLE
-}
-const DOCX_OUTLINE_EXAMPLE: JsonObject = {
+const DOCX_READ_QUERY_EXAMPLE: JsonObject = {
   sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
-  maxBlocks: 40,
-  includeTables: true
+  query: '反走样'
 }
-const DOCX_GET_BLOCK_EXAMPLE: JsonObject = {
+const DOCX_READ_BLOCK_EXAMPLE: JsonObject = {
   sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
   blockId: 'b:26'
 }
-const DOCX_SEARCH_EXAMPLE: JsonObject = {
-  sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
-  query: '反走样',
-  mode: 'literal'
-}
-const DOCX_HISTORY_EXAMPLE: JsonObject = {
-  sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
-  maxDepth: 5
-}
-const DOCX_APPLY_OPS_INSERT_STRUCTURE_EXAMPLE: JsonObject = {
-  sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
-  ops: [
-    {
-      type: 'insert_after',
-      anchorBlockId: 'b:26',
-      content: [
-        {
-          kind: 'paragraph',
-          runs: [
-            {
-              text: '补充说明：反走样通过平滑边缘像素来减轻锯齿感。'
-            }
-          ]
-        },
-        {
-          kind: 'table',
-          rows: [
-            [
-              {
-                paragraphs: [
-                  {
-                    kind: 'paragraph',
-                    runs: [{ text: '反走样' }]
-                  }
-                ]
-              },
-              {
-                paragraphs: [
-                  {
-                    kind: 'paragraph',
-                    runs: [{ text: '过拟合' }]
-                  }
-                ]
-              }
-            ],
-            [
-              {
-                paragraphs: [
-                  {
-                    kind: 'paragraph',
-                    runs: [{ text: '平滑图像边缘，降低锯齿' }]
-                  }
-                ]
-              },
-              {
-                paragraphs: [
-                  {
-                    kind: 'paragraph',
-                    runs: [{ text: '记住训练噪声，泛化能力下降' }]
-                  }
-                ]
-              }
-            ]
-          ]
-        }
-      ]
-    }
-  ]
-}
-const DOCX_ROLLBACK_TARGET_EXAMPLE: JsonObject = {
-  sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
-  targetVersionRef: 'v2'
-}
-export const DOCX_OPEN_TOOL_SPEC = {
-  name: 'docx_open',
-  familyId: 'docx',
-  requiresWorkspace: true,
-  description: '初始化或复用指定文档的 docx 会话，并返回当前版本。',
-  skillIds: ['docx-read'],
-  schema: openSchema,
-  promptSpec: {
-    name: 'docx_open',
-    purpose: '初始化或复用当前任务过程中的某份 docx 文档会话，并返回当前版本。',
-    whenToUse: '首次把某份 docx 纳入当前任务过程，或需要确认这份文档当前版本时使用。',
-    preconditions: ['必须存在 workspace 绑定。', 'sourcePath 必须是 workspace 内的 .docx 路径。'],
-    returns: [
-      {
-        name: 'currentVersionRef',
-        type: 'string',
-        description: '当前任务过程中该文档当前活动版本的引用。'
-      },
-      {
-        name: 'meta',
-        type: 'object',
-        description: '文档元信息，如 title、creator、defaultFont。'
-      },
-      {
-        name: 'stats',
-        type: 'object',
-        description: '文档统计信息，如 blockCount、tableCount、charCount。'
-      }
-    ],
-    examples: [
-      {
-        goal: '把工作区中的 docx 文档纳入当前任务会话',
-        args: DOCX_OPEN_EXAMPLE
-      }
-    ]
-  },
-  resolveExecutionMeta: createDocxMutatingExecutionMeta({
-    getResourceKey: (args) => readStringArg(args, 'sourcePath')
-  }),
-  workerAction: 'open',
-  activityActionType: 'docx_open'
-} satisfies DocxToolSpec<z.infer<typeof openSchema>, 'docx_open', 'docx-read'>
 
 export const DOCX_OUTLINE_TOOL_SPEC = {
   name: 'docx_outline',
   familyId: 'docx',
   requiresWorkspace: true,
-  description: '按 sourcePath 提取已打开 docx 的稳定结构提纲。',
+  description: '读取 docx 的整体结构提纲。',
   skillIds: ['docx-read'],
-  schema: outlineSchema,
+  schema: docxOutlineRequestSchema,
   promptSpec: {
     name: 'docx_outline',
-    purpose: '提取稳定的 block outline，帮助定位标题、段落、表格和 table cell。',
-    whenToUse: '需要先看结构、拿稳定 blockId、或搜索命中不够精确时使用。',
-    preconditions: ['必须先 open 目标 sourcePath 对应的文档。'],
+    purpose: '总揽读取 docx 的稳定结构，拿到标题、段落、表格和单元格的 blockId。',
+    whenToUse: '当你需要先理解文档结构、定位标题或表格、或为后续精读/编辑拿到 blockId 时使用。',
+    preconditions: ['sourcePath 必须是 workspace 内的 .docx 路径。工具会自动打开目标文档。'],
     returns: [
       {
         name: 'blocks',
-        type: 'Array<outline block>',
-        description:
-          '按文档顺序排列的结构块；每个块都带 blockId、type、bodyIndex 以及相邻 body block 事实。'
+        type: 'Array<{ blockId: string; type: string; bodyIndex: number; preview: string }>',
+        description: '按文档顺序排列的结构块，包含标题层级、表格维度和单元格位置事实。'
       },
       {
         name: 'truncated',
         type: 'boolean',
-        description: '返回是否因 maxBlocks 被截断；若为 true，表示文档后续内容未包含在这次 outline 结果中。'
+        description: '是否因 maxBlocks 被截断。'
       }
     ],
     examples: [
       {
-        goal: '查看一份 docx 的结构提纲并展开表格',
-        args: DOCX_OUTLINE_EXAMPLE
+        goal: '先看一份 docx 的整体结构和标题、表格分布',
+        args: {
+          sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
+          maxBlocks: 40
+        }
       }
     ]
   },
   resolveExecutionMeta: createDocxReadExecutionMeta(),
-  workerAction: 'outline',
   activityActionType: 'docx_outline'
-} satisfies DocxToolSpec<z.infer<typeof outlineSchema>, 'docx_outline', 'docx-read'>
+} satisfies DocxToolSpec<z.infer<typeof docxOutlineRequestSchema>, 'docx_outline', 'docx-read'>
 
-export const DOCX_GET_BLOCK_TOOL_SPEC = {
-  name: 'docx_get_block',
+export const DOCX_READ_TOOL_SPEC = {
+  name: 'docx_read',
   familyId: 'docx',
   requiresWorkspace: true,
-  description: '按 blockId 读取指定 docx 当前版本中的单个 block 详细结构。',
+  description: '按 query 或 blockId 片段精读 docx。',
   skillIds: ['docx-read'],
-  schema: getBlockSchema,
+  schema: docxReadRequestSchema,
   promptSpec: {
-    name: 'docx_get_block',
-    purpose: '读取单个 block 的详细结构。',
-    whenToUse: '已经拿到 blockId，且需要看完整段落 run 或表格 cell 内容时使用。',
-    preconditions: ['必须先 open 目标 sourcePath 对应的文档。', '必须提供 blockId。'],
-    returns: [
-      {
-        name: 'block',
-        type: 'detailed block object',
-        description: '段落、表格或表格单元格的详细结构内容，并包含 bodyIndex 与相邻 body block 事实。'
-      }
-    ],
-    examples: [
-      {
-        goal: '读取已经定位到的 block 详细内容',
-        args: DOCX_GET_BLOCK_EXAMPLE
-      }
-    ]
-  },
-  resolveExecutionMeta: createDocxReadExecutionMeta(),
-  workerAction: 'get_block'
-} satisfies DocxToolSpec<z.infer<typeof getBlockSchema>, 'docx_get_block', 'docx-read'>
-
-export const DOCX_SEARCH_TOOL_SPEC = {
-  name: 'docx_search',
-  familyId: 'docx',
-  requiresWorkspace: true,
-  description: '按 literal、regex 或 semantic 模式检索指定 docx 当前版本中的 block。',
-  skillIds: ['docx-read'],
-  schema: searchSchema,
-  promptSpec: {
-    name: 'docx_search',
-    purpose: '按 literal / regex / semantic 检索 docx block 文本。',
-    whenToUse: '需要定位目标段落、验证改写结果、或缩小 apply_ops 范围时使用。',
-    preconditions: ['必须先 open 目标 sourcePath 对应的文档。', 'query 不能为空。'],
+    name: 'docx_read',
+    purpose: '读取某个 block，或按 query 查找后返回片段与上下文。',
+    whenToUse: '当你已经知道 blockId，或希望通过 query 定位并精读段落、表格、单元格内容时使用。',
+    preconditions: ['必须提供 query 或 blockId 其中一个。工具会自动打开目标文档。'],
     returns: [
       {
         name: 'matches',
-        type: 'Array<{ blockId: string; blockType: string; bodyIndex: number; previousBodyBlockId?: string; nextBodyBlockId?: string; tableBlockId?: string; text: string; offsets: Array<{ start: number; end: number }> }>',
-        description: '命中的 block、偏移信息，以及该 block 在文档结构中的位置事实。'
+        type: 'Array<paragraph | table | table_cell>',
+        description: '按命中文档顺序返回类型化内容；表格会直接返回二维 rows。'
+      },
+      {
+        name: 'truncated',
+        type: 'boolean',
+        description: '多命中场景下结果是否被截断。'
       }
     ],
     examples: [
       {
-        goal: '按文字检索 docx 中与反走样相关的 block',
-        args: DOCX_SEARCH_EXAMPLE
+        goal: '按 query 找到“反走样”对应的相关片段',
+        args: DOCX_READ_QUERY_EXAMPLE
+      },
+      {
+        goal: '按 blockId 精确读取一个已定位块',
+        args: DOCX_READ_BLOCK_EXAMPLE
       }
     ]
   },
   resolveExecutionMeta: createDocxReadExecutionMeta(),
-  workerAction: 'search'
-} satisfies DocxToolSpec<z.infer<typeof searchSchema>, 'docx_search', 'docx-read'>
+  activityActionType: 'docx_read'
+} satisfies DocxToolSpec<z.infer<typeof docxReadRequestSchema>, 'docx_read', 'docx-read'>
 
-export const DOCX_GET_HISTORY_TOOL_SPEC = {
-  name: 'docx_get_history',
+export const DOCX_HISTORY_TOOL_SPEC = {
+  name: 'docx_history',
   familyId: 'docx',
   requiresWorkspace: true,
-  description: '查看指定 docx 在当前任务过程中的当前版本链路。',
+  description: '查看当前任务过程中的 docx 版本历史。',
   skillIds: ['docx-read'],
-  schema: historySchema,
+  schema: docxHistoryRequestSchema,
   promptSpec: {
-    name: 'docx_get_history',
-    purpose: '查看当前任务过程中某份 docx 的当前版本链路。',
-    whenToUse: '需要确认编辑历史、准备 rollback、或解释当前草稿来源时使用。',
-    preconditions: ['必须先 open 目标 sourcePath 对应的文档。'],
+    name: 'docx_history',
+    purpose: '查看当前任务过程中这份 docx 的版本链、版本摘要和变更块。',
+    whenToUse: '当你要确认编辑历史、比较最近几版差异、或决定回滚到哪个版本时使用。',
+    preconditions: ['sourcePath 必须是 workspace 内的 .docx 路径。工具会自动打开目标文档。'],
     returns: [
       {
         name: 'versions',
-        type: 'Array<{ versionRef: string; parentVersionRef?: string; createdAt: number; isCurrent: boolean }>',
-        description: '当前版本到祖先版本的历史链路。'
+        type: 'Array<{ versionRef: string; summary: string; changedBlocks: Array<object> }>',
+        description: '按当前版本到祖先版本的顺序返回版本链。'
       }
     ],
     examples: [
       {
-        goal: '查看当前 docx 会话的最近版本链路',
-        args: DOCX_HISTORY_EXAMPLE
+        goal: '查看最近几个 docx 版本及各自改动摘要',
+        args: {
+          sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
+          limit: 5
+        }
       }
     ]
   },
-  resolveExecutionMeta: createDocxReadExecutionMeta()
-} satisfies DocxToolSpec<z.infer<typeof historySchema>, 'docx_get_history', 'docx-read'>
+  resolveExecutionMeta: createDocxReadExecutionMeta(),
+  activityActionType: 'docx_history'
+} satisfies DocxToolSpec<z.infer<typeof docxHistoryRequestSchema>, 'docx_history', 'docx-read'>
 
-export const DOCX_APPLY_OPS_TOOL_SPEC = {
-  name: 'docx_apply_ops',
+export const DOCX_PARAGRAPH_EDIT_TOOL_SPEC = {
+  name: 'docx_paragraph_edit',
   familyId: 'docx',
   requiresWorkspace: true,
-  description: '对指定 docx 当前版本执行结构化编辑，并推进版本链。',
+  description: '按段落对象执行插入、替换或删除。',
   skillIds: ['docx-write'],
-  schema: applyOpsSchema,
+  schema: docxParagraphEditSchema,
   promptSpec: {
-    name: 'docx_apply_ops',
-    purpose: '执行结构化 docx 编辑操作，并返回新的当前版本。',
-    whenToUse: '已经确定要替换、插入、删除或更新表格内容时使用。',
-    preconditions: ['必须先 open 目标 sourcePath 对应的文档。', 'ops 至少要有 1 条。'],
+    name: 'docx_paragraph_edit',
+    purpose: '按段落对象插入、替换或删除段落文本。',
+    whenToUse: '当你已经明确段落锚点或目标 blockId，且只需要插段落、改段落文本或删段落时使用。',
+    preconditions: ['插入动作需要 anchorBlockId 与 text；替换/删除需要 blockId。'],
     returns: [
       {
         name: 'currentVersionRef',
         type: 'string',
-        description: '编辑后的当前版本引用。后续读取、继续编辑或回滚都基于它继续。'
+        description: '本次段落编辑成功后的当前版本。'
       },
       {
-        name: 'changedBlocks',
-        type: 'Array<{ action: string; blockId: string; beforeText: string; afterText: string }>',
-        description: '本次变更涉及的 block 摘要。'
-      },
-      {
-        name: 'warnings',
-        type: 'string[]',
-        description: '非致命提示信息。'
+        name: 'createdBlocks',
+        type: 'Array<{ blockId: string; type: string }>',
+        description: '插入动作时创建出来的新块。'
       }
     ],
     examples: [
       {
-        goal: '在指定 block 后插入说明段落和表格结构',
-        args: DOCX_APPLY_OPS_INSERT_STRUCTURE_EXAMPLE
+        goal: '在目标段落后插入一段说明',
+        args: {
+          sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
+          action: 'insert_after',
+          anchorBlockId: 'b:26',
+          text: '补充说明：反走样通过平滑边缘像素来减轻锯齿感。'
+        }
       }
     ]
   },
-  resolveExecutionMeta: createDocxMutatingExecutionMeta({
-    getResourceKey: (args) => readStringArg(args, 'sourcePath')
-  }),
-  workerAction: 'apply_ops',
-  activityActionType: 'docx_apply_ops'
-} satisfies DocxToolSpec<z.infer<typeof applyOpsSchema>, 'docx_apply_ops', 'docx-write'>
+  resolveExecutionMeta: createDocxMutatingExecutionMeta(),
+  activityActionType: 'docx_paragraph_edit'
+} satisfies DocxToolSpec<
+  z.infer<typeof docxParagraphEditSchema>,
+  'docx_paragraph_edit',
+  'docx-write'
+>
+
+export const DOCX_HEADING_EDIT_TOOL_SPEC = {
+  name: 'docx_heading_edit',
+  familyId: 'docx',
+  requiresWorkspace: true,
+  description: '按标题对象执行插入或替换。',
+  skillIds: ['docx-write'],
+  schema: docxHeadingEditSchema,
+  promptSpec: {
+    name: 'docx_heading_edit',
+    purpose: '按标题对象插入或替换标题文本。',
+    whenToUse: '当你要在某处插入标题，或把现有标题块替换成新标题文本时使用。',
+    preconditions: ['插入动作需要 anchorBlockId；替换动作需要 blockId；level 必须是 1-6。'],
+    returns: [
+      {
+        name: 'currentVersionRef',
+        type: 'string',
+        description: '本次标题编辑成功后的当前版本。'
+      },
+      {
+        name: 'createdBlocks',
+        type: 'Array<{ blockId: string; type: string }>',
+        description: '插入动作时创建出来的新标题块。'
+      }
+    ],
+    examples: [
+      {
+        goal: '在指定 block 后插入一个二级标题',
+        args: {
+          sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
+          action: 'insert_after',
+          anchorBlockId: 'b:26',
+          level: 2,
+          text: '反走样与过拟合对照'
+        }
+      }
+    ]
+  },
+  resolveExecutionMeta: createDocxMutatingExecutionMeta(),
+  activityActionType: 'docx_heading_edit'
+} satisfies DocxToolSpec<z.infer<typeof docxHeadingEditSchema>, 'docx_heading_edit', 'docx-write'>
+
+export const DOCX_TABLE_EDIT_TOOL_SPEC = {
+  name: 'docx_table_edit',
+  familyId: 'docx',
+  requiresWorkspace: true,
+  description: '按表格对象执行插入或改单元格。',
+  skillIds: ['docx-write'],
+  schema: docxTableEditSchema,
+  promptSpec: {
+    name: 'docx_table_edit',
+    purpose: '按表格对象插入表格或更新单元格内容。',
+    whenToUse: '当你需要插入一个简单二维文本表格，或更新某个 table cell 的内容时使用。',
+    preconditions: ['插表动作需要 anchorBlockId 与 rows；改单元格动作需要 cellBlockId 与 text。'],
+    returns: [
+      {
+        name: 'currentVersionRef',
+        type: 'string',
+        description: '本次表格编辑成功后的当前版本。'
+      },
+      {
+        name: 'createdBlocks',
+        type: 'Array<{ blockId: string; type: string }>',
+        description: '插表动作时创建出来的新表格块与单元格块。'
+      }
+    ],
+    examples: [
+      {
+        goal: '在指定 block 后插入一个简单对照表',
+        args: {
+          sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
+          action: 'insert_after',
+          anchorBlockId: 'b:26',
+          rows: [
+            ['反走样', '过拟合'],
+            ['平滑图像边缘，降低锯齿', '记住训练噪声，泛化能力下降']
+          ]
+        }
+      }
+    ]
+  },
+  resolveExecutionMeta: createDocxMutatingExecutionMeta(),
+  activityActionType: 'docx_table_edit'
+} satisfies DocxToolSpec<z.infer<typeof docxTableEditSchema>, 'docx_table_edit', 'docx-write'>
+
+export const DOCX_TEXT_EDIT_TOOL_SPEC = {
+  name: 'docx_text_edit',
+  familyId: 'docx',
+  requiresWorkspace: true,
+  description: '按 query 执行文本查找替换。',
+  skillIds: ['docx-write'],
+  schema: docxTextEditSchema,
+  promptSpec: {
+    name: 'docx_text_edit',
+    purpose: '在当前 docx 中按 query 查找并替换文本，可选 blockIds 缩小范围。',
+    whenToUse: '当你想在一批命中文本里直接替换术语或改写短句时使用。',
+    preconditions: ['query 不能为空。'],
+    returns: [
+      {
+        name: 'changedBlocks',
+        type: 'Array<{ blockId: string; beforeText: string; afterText: string }>',
+        description: '本次文本替换实际改动到的块。'
+      }
+    ],
+    examples: [
+      {
+        goal: '把文中的“过拟合”统一替换成“模型过拟合”',
+        args: {
+          sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
+          query: '过拟合',
+          replace: '模型过拟合'
+        }
+      }
+    ]
+  },
+  resolveExecutionMeta: createDocxMutatingExecutionMeta(),
+  activityActionType: 'docx_text_edit'
+} satisfies DocxToolSpec<z.infer<typeof docxTextEditSchema>, 'docx_text_edit', 'docx-write'>
+
+export const DOCX_TEXT_STYLE_EDIT_TOOL_SPEC = {
+  name: 'docx_text_style_edit',
+  familyId: 'docx',
+  requiresWorkspace: true,
+  description: '在指定块内按 query 命中文本并应用样式。',
+  skillIds: ['docx-write'],
+  schema: docxTextStyleEditSchema,
+  promptSpec: {
+    name: 'docx_text_style_edit',
+    purpose: '给现有文本片段加颜色、粗体、斜体或下划线，不改文字本身。',
+    whenToUse: '当你需要把某一段已有文本标红、加粗或下划线时使用。',
+    preconditions: ['必须提供 blockId 与 query；style 至少要有一个字段。'],
+    returns: [
+      {
+        name: 'changedBlocks',
+        type: 'Array<{ blockId: string; beforeText: string; afterText: string }>',
+        description: '样式修改涉及到的块；文本本身通常不变，但格式会变化。'
+      }
+    ],
+    examples: [
+      {
+        goal: '把指定段落中“高风险”标红加粗',
+        args: {
+          sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
+          blockId: 'b:26',
+          query: '高风险',
+          style: {
+            color: 'FF0000',
+            bold: true
+          }
+        }
+      }
+    ]
+  },
+  resolveExecutionMeta: createDocxMutatingExecutionMeta(),
+  activityActionType: 'docx_text_style_edit'
+} satisfies DocxToolSpec<
+  z.infer<typeof docxTextStyleEditSchema>,
+  'docx_text_style_edit',
+  'docx-write'
+>
 
 export const DOCX_ROLLBACK_TOOL_SPEC = {
   name: 'docx_rollback',
   familyId: 'docx',
   requiresWorkspace: true,
-  description: '在当前任务过程中把指定 docx 回退到祖先版本，不写回文件系统。',
+  description: '按版本号回退当前 docx 草稿。',
   skillIds: ['docx-write'],
-  schema: rollbackSchema,
+  schema: docxRollbackRequestSchema,
   promptSpec: {
     name: 'docx_rollback',
-    purpose: '回退到当前任务过程中的祖先版本，不会写回文件系统。',
-    whenToUse: '草稿改坏了、需要回看上一个版本、或用户要求撤销时使用。',
-    preconditions: ['必须先 open 目标 sourcePath 对应的文档。'],
+    purpose: '把当前任务过程中的 docx 草稿切回指定 versionRef，不覆盖原文件。',
+    whenToUse: '当你已经通过 docx_history 确认要回退到哪个版本时使用。',
+    preconditions: ['必须先有可追溯的版本历史。'],
     returns: [
       {
         name: 'currentVersionRef',
         type: 'string',
-        description: '回退后的当前版本引用。'
+        description: '回退后的当前版本。'
       }
     ],
     examples: [
       {
-        goal: '直接回退到指定祖先版本',
-        args: DOCX_ROLLBACK_TARGET_EXAMPLE
+        goal: '把当前草稿回退到指定版本',
+        args: {
+          sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
+          versionRef: 'v2'
+        }
       }
     ]
   },
-  resolveExecutionMeta: createDocxMutatingExecutionMeta({
-    getResourceKey: (args) => readStringArg(args, 'sourcePath')
-  }),
+  resolveExecutionMeta: createDocxMutatingExecutionMeta(),
   activityActionType: 'docx_rollback'
-} satisfies DocxToolSpec<z.infer<typeof rollbackSchema>, 'docx_rollback', 'docx-write'>
+} satisfies DocxToolSpec<z.infer<typeof docxRollbackRequestSchema>, 'docx_rollback', 'docx-write'>
 
 export const DOCX_READ_TOOL_SPECS = [
-  DOCX_OPEN_TOOL_SPEC,
   DOCX_OUTLINE_TOOL_SPEC,
-  DOCX_GET_BLOCK_TOOL_SPEC,
-  DOCX_SEARCH_TOOL_SPEC,
-  DOCX_GET_HISTORY_TOOL_SPEC
+  DOCX_READ_TOOL_SPEC,
+  DOCX_HISTORY_TOOL_SPEC
 ] as const
 
-export const DOCX_WRITE_TOOL_SPECS = [DOCX_APPLY_OPS_TOOL_SPEC, DOCX_ROLLBACK_TOOL_SPEC] as const
-
-export const DOCX_TOOL_SPECS = [
-  ...DOCX_READ_TOOL_SPECS,
-  ...DOCX_WRITE_TOOL_SPECS
+export const DOCX_WRITE_TOOL_SPECS = [
+  DOCX_PARAGRAPH_EDIT_TOOL_SPEC,
+  DOCX_HEADING_EDIT_TOOL_SPEC,
+  DOCX_TABLE_EDIT_TOOL_SPEC,
+  DOCX_TEXT_EDIT_TOOL_SPEC,
+  DOCX_TEXT_STYLE_EDIT_TOOL_SPEC,
+  DOCX_ROLLBACK_TOOL_SPEC
 ] as const
+
+export const DOCX_TOOL_SPECS = [...DOCX_READ_TOOL_SPECS, ...DOCX_WRITE_TOOL_SPECS] as const
 
 export type AnyDocxToolSpec = (typeof DOCX_TOOL_SPECS)[number]
 export type DocxToolName = AnyDocxToolSpec['name']

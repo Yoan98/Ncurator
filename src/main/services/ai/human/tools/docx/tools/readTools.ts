@@ -1,195 +1,194 @@
-import fs from 'node:fs'
-import path from 'node:path'
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { DocxToolRuntime } from '../runtime'
-import type { DocxOutlineBlock } from '../types'
-import { clipText } from '../../../../utils/text'
-import { buildSemanticMatches, splitEmbeddingRows } from '../semanticSearch'
+import type {
+  DocxDetailedBlock,
+  DocxDetailedParagraphBlock,
+  DocxDetailedTableBlock,
+  DocxDetailedTableCell,
+  DocxOutlineBlock
+} from '../types'
 import {
-  DOCX_GET_BLOCK_TOOL_SPEC,
-  DOCX_GET_HISTORY_TOOL_SPEC,
-  DOCX_OPEN_TOOL_SPEC,
+  DOCX_HISTORY_TOOL_SPEC,
   DOCX_OUTLINE_TOOL_SPEC,
-  DOCX_SEARCH_TOOL_SPEC
+  DOCX_READ_TOOL_SPEC
 } from '../toolSpecs'
 import {
   createDocxTool,
-  finalizeDocxToolSuccess,
-  runDocxWorkerToolAction
+  finalizeDocxToolFailure,
+  finalizeDocxToolSuccess
 } from './workerTool'
 
-export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInterface[] => {
-  type DocxOutlineResult = {
-    ok: true
-    code: 'ok'
-    summary: string
-    sourcePath: string
-    currentVersionRef: string
-    blocks: DocxOutlineBlock[]
-    truncated: boolean
-    resourceContext: ReturnType<DocxToolRuntime['buildResourceContext']>
-  }
+const DEFAULT_OUTLINE_BLOCKS = 200
+const MAX_READ_MATCHES = 20
 
-  const buildOutlineSummary = (input: { blockCount: number; truncated: boolean }): string =>
-    input.truncated
-      ? `返回 ${String(input.blockCount)} 个结构块（结果已截断，文档后续内容未包含）`
-      : `返回 ${String(input.blockCount)} 个结构块`
+const headingLevelFromStyle = (style: string | undefined): number | undefined => {
+  const normalized = String(style || '').trim()
+  if (!normalized) return undefined
+  const match = normalized.match(/^heading\s*([1-6])$/i) || normalized.match(/^Heading([1-6])$/)
+  return match ? Number(match[1]) : undefined
+}
 
-  const buildDetailedBlockPreview = (
-    block: {
-      type: 'paragraph' | 'table' | 'table_cell'
-      text?: string
-      preview?: string
-      blockId: string
+const blockPreview = (block: DocxOutlineBlock): string =>
+  block.type === 'paragraph' ? block.text : block.type === 'table' ? block.preview : block.text
+
+const buildOutlineBlock = (block: DocxOutlineBlock) => {
+  if (block.type === 'paragraph') {
+    return {
+      blockId: block.blockId,
+      type: block.type,
+      bodyIndex: block.bodyIndex,
+      style: block.style,
+      headingLevel: headingLevelFromStyle(block.style),
+      preview: block.text
     }
-  ): string => {
-    const previewText = String(block.text || block.preview || '').trim()
-    return previewText ? clipText(previewText, runtime.input.safePreviewChars) : block.blockId
   }
+  if (block.type === 'table') {
+    return {
+      blockId: block.blockId,
+      type: block.type,
+      bodyIndex: block.bodyIndex,
+      rows: block.rows,
+      cols: block.cols,
+      preview: block.preview
+    }
+  }
+  return {
+    blockId: block.blockId,
+    type: block.type,
+    bodyIndex: block.bodyIndex,
+    tableBlockId: block.tableBlockId,
+    row: block.row,
+    col: block.col,
+    preview: block.text
+  }
+}
 
-  const docxOpenTool = createDocxTool({
-    runtime,
-    name: DOCX_OPEN_TOOL_SPEC.name,
-    description: DOCX_OPEN_TOOL_SPEC.description,
-    schema: DOCX_OPEN_TOOL_SPEC.schema,
-    onError: ({ message }) => {
-      runtime.input.emitActivity({
-        actionType: DOCX_OPEN_TOOL_SPEC.activityActionType!,
-        status: 'failed',
-        summary: `文档打开异常: ${message}`
-      })
-    },
-    execute: async ({ args, toolName, toolCallId }) => {
-      runtime.input.ctx.checkCancelled()
-      const requestedSourcePath = runtime.resolveDocxPath({
-        cwd: runtime.workspaceRootPath,
-        rawPath: args.sourcePath
-      })
-      if (!requestedSourcePath) {
-        return runtime.emitFailure({
-          toolName,
-          toolCallId,
-          code: 'invalid_input',
-          error: 'sourcePath must be a workspace-bound .docx path'
-        })
-      }
-      if (!fs.existsSync(requestedSourcePath)) {
-        return runtime.emitFailure({
-          toolName,
-          toolCallId,
-          code: 'invalid_input',
-          error: 'sourcePath not found'
-        })
-      }
+const buildContextPreview = (
+  outlineById: Map<string, DocxOutlineBlock>,
+  blockId: string | undefined
+): string | undefined => {
+  if (!blockId) return undefined
+  const block = outlineById.get(blockId)
+  if (!block) return undefined
+  const preview = blockPreview(block).trim()
+  return preview || undefined
+}
 
-      const existingSession = runtime.getDocumentSession(requestedSourcePath)
-      if (existingSession) {
-        const resourceContext = runtime.buildResourceContext({
-          sourcePath: requestedSourcePath,
-          effectKind: 'opened',
-          currentVersionRef: existingSession.activeVersionRef
-        })
-        const result = {
-          ok: true,
-          code: 'ok' as const,
-          summary: `doc session reused: ${path.basename(requestedSourcePath)}`,
-          sourcePath: requestedSourcePath,
-          currentVersionRef: existingSession.activeVersionRef,
-          meta: existingSession.meta,
-          stats: existingSession.stats,
-          resourceContext
-        }
-        return finalizeDocxToolSuccess({
-          runtime,
-          toolName,
-          toolCallId,
-          result,
-          outputPreview: {
-            ok: true,
-            code: 'ok',
-            summary: result.summary,
-            sourcePath: result.sourcePath,
-            currentVersionRef: result.currentVersionRef
-          },
-          draftDocId: existingSession.activeDocId,
-          activity: {
-            actionType: DOCX_OPEN_TOOL_SPEC.activityActionType!,
-            startedSummary: `打开文档: ${requestedSourcePath}`,
-            buildCompletedSummary: () => `文档会话已复用: ${path.basename(requestedSourcePath)}`
-          }
-        })
-      }
+const tableRowsFromCells = (cells: DocxDetailedTableCell[]): Array<Array<{ cellBlockId: string; text: string }>> => {
+  const grouped = new Map<number, Array<{ cellBlockId: string; text: string }>>()
+  cells.forEach((cell) => {
+    const row = grouped.get(cell.row) || []
+    row.push({
+      cellBlockId: cell.blockId,
+      text: cell.paragraphs.map((paragraph) => paragraph.text).join('\n')
+    })
+    grouped.set(cell.row, row)
+  })
+  return [...grouped.entries()]
+    .sort((left, right) => left[0] - right[0])
+    .map(([, row]) => row)
+}
 
-      const resolvedTarget = await runtime.input.ctx.resolveDocxOpenTarget(requestedSourcePath)
-      const openPath = resolvedTarget.openPath
-      if (!fs.existsSync(openPath)) {
-        return runtime.emitFailure({
-          toolName,
-          toolCallId,
-          code: 'invalid_input',
-          error: 'effective docx path not found'
-        })
-      }
+const buildParagraphMatch = (input: {
+  block: DocxDetailedParagraphBlock
+  outlineById: Map<string, DocxOutlineBlock>
+}) => ({
+  blockId: input.block.blockId,
+  type: 'paragraph' as const,
+  bodyIndex: input.block.bodyIndex,
+  text: input.block.text,
+  style: input.block.style,
+  headingLevel: headingLevelFromStyle(input.block.style),
+  contextBefore: buildContextPreview(input.outlineById, input.block.previousBodyBlockId),
+  contextAfter: buildContextPreview(input.outlineById, input.block.nextBodyBlockId)
+})
 
-      return await runDocxWorkerToolAction({
-        runtime,
-        toolName,
-        toolCallId,
-        expectedAction: DOCX_OPEN_TOOL_SPEC.workerAction!,
-        activity: {
-          actionType: DOCX_OPEN_TOOL_SPEC.activityActionType!,
-          startedSummary: `打开文档: ${requestedSourcePath}`,
-          buildCompletedSummary: () => `文档已打开: ${path.basename(requestedSourcePath)}`,
-          buildFailedSummary: (failure) => `文档打开失败: ${failure.error}`
-        },
-        request: {
-          action: DOCX_OPEN_TOOL_SPEC.workerAction!,
-          payload: {
-            sourcePath: openPath
-          }
-        },
-        buildSuccess: (workerPayload) => {
-          const { currentVersionRef } = runtime.registerOpenedDocument(
-            resolvedTarget.trackedSourcePath,
-            workerPayload.docId,
-            workerPayload.meta,
-            workerPayload.stats
-          )
-          runtime.input.ctx.trackDocxOpen({
-            docId: workerPayload.docId,
-            sourcePath: resolvedTarget.trackedSourcePath
-          })
-          const resourceContext = runtime.buildResourceContext({
-            sourcePath: resolvedTarget.trackedSourcePath,
-            effectKind: 'opened',
-            currentVersionRef
-          })
-          const result = {
-            ok: true,
-            code: 'ok' as const,
-            summary: `doc opened: ${path.basename(requestedSourcePath)}`,
-            sourcePath: resolvedTarget.trackedSourcePath,
-            currentVersionRef,
-            meta: workerPayload.meta,
-            stats: workerPayload.stats,
-            resourceContext
-          }
-          return {
-            result,
-            outputPreview: {
-              ok: result.ok,
-              code: result.code,
-              summary: result.summary,
-              sourcePath: result.sourcePath,
-              currentVersionRef: result.currentVersionRef
-            },
-            draftDocId: workerPayload.docId
-          }
-        }
-      })
+const buildTableMatch = (input: {
+  block: DocxDetailedTableBlock
+  outlineById: Map<string, DocxOutlineBlock>
+}) => ({
+  blockId: input.block.blockId,
+  type: 'table' as const,
+  bodyIndex: input.block.bodyIndex,
+  rows: tableRowsFromCells(input.block.cells),
+  contextBefore: buildContextPreview(input.outlineById, input.block.previousBodyBlockId),
+  contextAfter: buildContextPreview(input.outlineById, input.block.nextBodyBlockId)
+})
+
+const buildCellMatch = (input: {
+  block: Extract<DocxDetailedBlock, { type: 'table_cell' }>
+  outlineById: Map<string, DocxOutlineBlock>
+}) => ({
+  blockId: input.block.blockId,
+  type: 'table_cell' as const,
+  bodyIndex: input.block.bodyIndex,
+  tableBlockId: input.block.tableBlockId,
+  row: input.block.row,
+  col: input.block.col,
+  text: input.block.text,
+  contextBefore: buildContextPreview(input.outlineById, input.block.previousBodyBlockId),
+  contextAfter: buildContextPreview(input.outlineById, input.block.nextBodyBlockId)
+})
+
+const buildReadMatch = (input: {
+  block: DocxDetailedBlock
+  outlineById: Map<string, DocxOutlineBlock>
+}) => {
+  if (input.block.type === 'paragraph') {
+    return buildParagraphMatch({
+      block: input.block,
+      outlineById: input.outlineById
+    })
+  }
+  if (input.block.type === 'table') {
+    return buildTableMatch({
+      block: input.block,
+      outlineById: input.outlineById
+    })
+  }
+  return buildCellMatch({
+    block: input.block,
+    outlineById: input.outlineById
+  })
+}
+
+const fetchOutline = async (runtime: DocxToolRuntime, docId: string) => {
+  const outlineResponse = await runtime.callWorker({
+    action: 'outline',
+    payload: {
+      docId,
+      maxBlocks: 5000,
+      includeTables: true,
+      includeCells: true
     }
   })
+  if (!outlineResponse.ok) {
+    throw new Error(outlineResponse.error)
+  }
+  if (outlineResponse.payload.action !== 'outline') {
+    throw new Error('worker protocol mismatch (outline)')
+  }
+  return outlineResponse.payload.blocks
+}
 
+const fetchBlock = async (runtime: DocxToolRuntime, docId: string, blockId: string) => {
+  const blockResponse = await runtime.callWorker({
+    action: 'get_block',
+    payload: {
+      docId,
+      blockId
+    }
+  })
+  if (!blockResponse.ok) {
+    throw new Error(blockResponse.error)
+  }
+  if (blockResponse.payload.action !== 'get_block') {
+    throw new Error('worker protocol mismatch (get_block)')
+  }
+  return blockResponse.payload.block
+}
+
+export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInterface[] => {
   const docxOutlineTool = createDocxTool({
     runtime,
     name: DOCX_OUTLINE_TOOL_SPEC.name,
@@ -204,325 +203,68 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
     },
     execute: async ({ args, toolName, toolCallId }) => {
       runtime.input.ctx.checkCancelled()
-      const sessionResult = runtime.requireDocumentSession({
-        toolName,
-        toolCallId,
-        sourcePath: args.sourcePath
-      })
-      if ('failure' in sessionResult) return sessionResult.failure
-      return await runDocxWorkerToolAction<'outline', DocxOutlineResult>({
-        runtime,
-        toolName,
-        toolCallId,
-        expectedAction: DOCX_OUTLINE_TOOL_SPEC.workerAction!,
-        draftDocId: sessionResult.docId,
-        activity: {
-          actionType: DOCX_OUTLINE_TOOL_SPEC.activityActionType!,
-          startedSummary: `提取结构: ${sessionResult.sourcePath}`,
-          buildCompletedSummary: (result) =>
-            `结构提取完成：${buildOutlineSummary({
-              blockCount: result.blocks.length,
-              truncated: result.truncated
-            })}`
-        },
-        request: {
-          action: DOCX_OUTLINE_TOOL_SPEC.workerAction!,
-          payload: {
-            docId: sessionResult.docId,
-            maxBlocks: Number(args.maxBlocks || 200),
-            includeTables: Boolean(args.includeTables ?? true),
-            includeCells: Boolean(args.includeCells ?? true)
-          }
-        },
-        buildSuccess: (workerPayload) => {
-          const resourceContext = runtime.buildResourceContext({
-            sourcePath: sessionResult.sourcePath,
-            effectKind: 'read',
-            currentVersionRef: sessionResult.currentVersionRef
-          })
-          const result: DocxOutlineResult = {
-            ok: true,
-            code: 'ok',
-            summary: buildOutlineSummary({
-              blockCount: workerPayload.blocks.length,
-              truncated: workerPayload.truncated
-            }),
-            sourcePath: sessionResult.sourcePath,
-            currentVersionRef: sessionResult.currentVersionRef,
-            blocks: workerPayload.blocks,
-            truncated: workerPayload.truncated,
-            resourceContext
-          }
-          return {
-            result,
-            outputPreview: {
-              ok: result.ok,
-              code: result.code,
-              summary: result.summary,
-              sourcePath: result.sourcePath,
-              currentVersionRef: result.currentVersionRef,
-              blockCount: result.blocks.length,
-              truncated: result.truncated
-            },
-            draftDocId: sessionResult.docId
-          }
-        }
-      })
-    }
-  })
-
-  const docxGetBlockTool = createDocxTool({
-    runtime,
-    name: DOCX_GET_BLOCK_TOOL_SPEC.name,
-    description: DOCX_GET_BLOCK_TOOL_SPEC.description,
-    schema: DOCX_GET_BLOCK_TOOL_SPEC.schema,
-    execute: async ({ args, toolName, toolCallId }) => {
-      const sessionResult = runtime.requireDocumentSession({
-        toolName,
-        toolCallId,
-        sourcePath: args.sourcePath
-      })
-      if ('failure' in sessionResult) return sessionResult.failure
-      return await runDocxWorkerToolAction({
-        runtime,
-        toolName,
-        toolCallId,
-        expectedAction: DOCX_GET_BLOCK_TOOL_SPEC.workerAction!,
-        draftDocId: sessionResult.docId,
-        request: {
-          action: DOCX_GET_BLOCK_TOOL_SPEC.workerAction!,
-          payload: {
-            docId: sessionResult.docId,
-            blockId: args.blockId
-          }
-        },
-        buildSuccess: (workerPayload) => {
-          const blockPreview = buildDetailedBlockPreview(workerPayload.block)
-          const resourceContext = runtime.buildResourceContext({
-            sourcePath: sessionResult.sourcePath,
-            effectKind: 'read',
-            currentVersionRef: sessionResult.currentVersionRef
-          })
-          const result = {
-            ok: true,
-            code: 'ok' as const,
-            summary: `block loaded: ${args.blockId}`,
-            sourcePath: sessionResult.sourcePath,
-            currentVersionRef: sessionResult.currentVersionRef,
-            block: workerPayload.block,
-            resourceContext
-          }
-          return {
-            result,
-            outputPreview: {
-              ok: result.ok,
-              code: result.code,
-              summary: result.summary,
-              sourcePath: result.sourcePath,
-              currentVersionRef: result.currentVersionRef,
-              blockId: result.block.blockId,
-              blockType: result.block.type,
-              bodyIndex: result.block.bodyIndex,
-              previousBodyBlockId: result.block.previousBodyBlockId,
-              nextBodyBlockId: result.block.nextBodyBlockId,
-              text: blockPreview
-            },
-            draftDocId: sessionResult.docId
-          }
-        }
-      })
-    }
-  })
-
-  const docxSearchTool = createDocxTool({
-    runtime,
-    name: DOCX_SEARCH_TOOL_SPEC.name,
-    description: DOCX_SEARCH_TOOL_SPEC.description,
-    schema: DOCX_SEARCH_TOOL_SPEC.schema,
-    execute: async ({ args, toolName, toolCallId }) => {
-      const sessionResult = runtime.requireDocumentSession({
+      const sessionResult = await runtime.ensureDocumentSession({
         toolName,
         toolCallId,
         sourcePath: args.sourcePath
       })
       if ('failure' in sessionResult) return sessionResult.failure
 
-      if (args.mode === 'semantic') {
-        if (runtime.input.ctx.embeddingService.getStatus() !== 'ready') {
-          return runtime.emitFailure({
-            toolName,
-            toolCallId,
-            code: 'failed',
-            error: 'semantic search requires embedding runtime to be ready before entering human',
-            resourceContext: runtime.buildResourceContext({
-              sourcePath: sessionResult.sourcePath,
-              effectKind: 'searched',
-              currentVersionRef: sessionResult.currentVersionRef
-            })
-          })
+      const workerResponse = await runtime.callWorker({
+        action: 'outline',
+        payload: {
+          docId: sessionResult.docId,
+          maxBlocks: Number(args.maxBlocks || DEFAULT_OUTLINE_BLOCKS),
+          includeTables: true,
+          includeCells: true
         }
-        const semanticIndex = await runtime.buildSemanticDocIndex(sessionResult.docId)
-        const queryEmbeddingResponse = await runtime.input.ctx.embeddingService.embed(args.query)
-        const queryEmbeddingRows = splitEmbeddingRows(
-          queryEmbeddingResponse.data,
-          queryEmbeddingResponse.dims
-        )
-        const queryEmbedding = queryEmbeddingRows[0]
-        if (!queryEmbedding || queryEmbedding.length === 0) {
-          return runtime.emitFailure({
-            toolName,
-            toolCallId,
-            code: 'failed',
-            error: 'semantic query embedding is empty',
-            resourceContext: runtime.buildResourceContext({
-              sourcePath: sessionResult.sourcePath,
-              effectKind: 'searched',
-              currentVersionRef: sessionResult.currentVersionRef
-            })
-          })
-        }
-
-        const matches = buildSemanticMatches({
-          entries: semanticIndex.entries,
-          queryEmbedding,
-          scopeBlockIds: args.scope?.blockIds || [],
-          queryText: args.query
-        })
-        const warnings =
-          semanticIndex.entries.length === 0
-            ? ['no searchable paragraph or table cell blocks found for semantic search']
-            : []
-        const resourceContext = runtime.buildResourceContext({
-          sourcePath: sessionResult.sourcePath,
-          effectKind: 'searched',
-          currentVersionRef: sessionResult.currentVersionRef
-        })
-        const result = {
-          ok: true,
-          code: 'ok' as const,
-          summary: `semantic search done (${matches.length} matches)`,
-          sourcePath: sessionResult.sourcePath,
-          currentVersionRef: sessionResult.currentVersionRef,
-          matches,
-          warnings,
-          resourceContext
-        }
-        return finalizeDocxToolSuccess({
+      })
+      if (!workerResponse.ok) {
+        return finalizeDocxToolFailure({
           runtime,
-          toolName,
-          toolCallId,
-          result,
-          outputPreview: {
-            ok: result.ok,
-            code: result.code,
-            summary: result.summary,
-            sourcePath: result.sourcePath,
-            currentVersionRef: result.currentVersionRef,
-            matchCount: result.matches.length,
-            firstMatchBlockType: result.matches[0]?.blockType,
-            firstMatchBodyIndex: result.matches[0]?.bodyIndex,
-            warnings: result.warnings
-          },
-          draftDocId: sessionResult.docId
-        })
-      }
-
-      return await runDocxWorkerToolAction({
-        runtime,
-        toolName,
-        toolCallId,
-        expectedAction: DOCX_SEARCH_TOOL_SPEC.workerAction!,
-        draftDocId: sessionResult.docId,
-        request: {
-          action: DOCX_SEARCH_TOOL_SPEC.workerAction!,
-          payload: {
-            docId: sessionResult.docId,
-            query: args.query,
-            mode: args.mode,
-            scopeBlockIds: args.scope?.blockIds || []
-          }
-        },
-        buildSuccess: (workerPayload) => {
-          const resourceContext = runtime.buildResourceContext({
-            sourcePath: sessionResult.sourcePath,
-            effectKind: 'searched',
-            currentVersionRef: sessionResult.currentVersionRef
-          })
-          const result = {
-            ok: true,
-            code: 'ok' as const,
-            summary: `search done (${workerPayload.matches.length} matches)`,
-            sourcePath: sessionResult.sourcePath,
-            currentVersionRef: sessionResult.currentVersionRef,
-            matches: workerPayload.matches,
-            warnings: workerPayload.warnings,
-            resourceContext
-          }
-          return {
-            result,
-            outputPreview: {
-              ok: result.ok,
-              code: result.code,
-              summary: result.summary,
-              sourcePath: result.sourcePath,
-              currentVersionRef: result.currentVersionRef,
-              matchCount: result.matches.length,
-              firstMatchBlockType: result.matches[0]?.blockType,
-              firstMatchBodyIndex: result.matches[0]?.bodyIndex,
-              warnings: result.warnings
-            },
+          failure: runtime.emitWorkerFailure({
+            toolName,
+            toolCallId,
+            response: workerResponse,
             draftDocId: sessionResult.docId
+          }),
+          activity: {
+            actionType: DOCX_OUTLINE_TOOL_SPEC.activityActionType!
           }
-        }
-      })
-    }
-  })
-
-  const docxGetHistoryTool = createDocxTool({
-    runtime,
-    name: DOCX_GET_HISTORY_TOOL_SPEC.name,
-    description: DOCX_GET_HISTORY_TOOL_SPEC.description,
-    schema: DOCX_GET_HISTORY_TOOL_SPEC.schema,
-    execute: async ({ args, toolName, toolCallId }) => {
-      const sessionResult = runtime.requireDocumentSession({
-        toolName,
-        toolCallId,
-        sourcePath: args.sourcePath
-      })
-      if ('failure' in sessionResult) return sessionResult.failure
-      const history = runtime.buildVersionHistory(sessionResult.sourcePath, Number(args.maxDepth || 10))
-      if (history.length === 0) {
-        return runtime.emitFailure({
-          toolName,
-          toolCallId,
-          code: 'invalid_input',
-          error: 'sourcePath is not tracked in current docx version history',
-          resourceContext: runtime.buildResourceContext({
-            sourcePath: sessionResult.sourcePath,
-            effectKind: 'history',
-            currentVersionRef: sessionResult.currentVersionRef
-          })
+        })
+      }
+      if (workerResponse.payload.action !== 'outline') {
+        return finalizeDocxToolFailure({
+          runtime,
+          failure: runtime.emitFailure({
+            toolName,
+            toolCallId,
+            code: 'failed',
+            error: 'worker protocol mismatch (outline)',
+            draftDocId: sessionResult.docId
+          }),
+          activity: {
+            actionType: DOCX_OUTLINE_TOOL_SPEC.activityActionType!
+          }
         })
       }
 
-      const resourceContext = runtime.buildResourceContext({
-        sourcePath: sessionResult.sourcePath,
-        effectKind: 'history',
-        currentVersionRef: sessionResult.currentVersionRef
-      })
+      const allBlocks = await fetchOutline(runtime, sessionResult.docId)
       const result = {
         ok: true,
         code: 'ok' as const,
-        summary: `version history loaded (${history.length} items)`,
+        summary: `返回 ${String(workerResponse.payload.blocks.length)} 个结构块`,
         sourcePath: sessionResult.sourcePath,
         currentVersionRef: sessionResult.currentVersionRef,
-        versions: history.map((entry) => ({
-          versionRef: entry.versionRef,
-          parentVersionRef: entry.parentVersionRef,
-          createdAt: entry.createdAt,
-          isCurrent: entry.isCurrent
-        })),
-        resourceContext
+        returnedBlockCount: workerResponse.payload.blocks.length,
+        totalBlockCount: allBlocks.length,
+        truncated: workerResponse.payload.truncated,
+        blocks: workerResponse.payload.blocks.map(buildOutlineBlock),
+        resourceContext: runtime.buildResourceContext({
+          sourcePath: sessionResult.sourcePath,
+          effectKind: 'read',
+          currentVersionRef: sessionResult.currentVersionRef
+        })
       }
       return finalizeDocxToolSuccess({
         runtime,
@@ -530,23 +272,206 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
         toolCallId,
         result,
         outputPreview: {
-          ok: result.ok,
-          code: result.code,
-          summary: result.summary,
+          ok: true,
+          code: 'ok',
           sourcePath: result.sourcePath,
           currentVersionRef: result.currentVersionRef,
-          versionCount: result.versions.length
+          returnedBlockCount: result.returnedBlockCount,
+          totalBlockCount: result.totalBlockCount,
+          truncated: result.truncated
         },
-        draftDocId: sessionResult.docId
+        draftDocId: sessionResult.docId,
+        activity: {
+          actionType: DOCX_OUTLINE_TOOL_SPEC.activityActionType!,
+          startedSummary: `提取结构: ${sessionResult.sourcePath}`,
+          buildCompletedSummary: (output) => `结构提取完成：${String(output.returnedBlockCount)} 个块`
+        }
       })
     }
   })
 
-  return [
-    docxOpenTool,
-    docxOutlineTool,
-    docxGetBlockTool,
-    docxSearchTool,
-    docxGetHistoryTool
-  ]
+  const docxReadTool = createDocxTool({
+    runtime,
+    name: DOCX_READ_TOOL_SPEC.name,
+    description: DOCX_READ_TOOL_SPEC.description,
+    schema: DOCX_READ_TOOL_SPEC.schema,
+    onError: ({ message }) => {
+      runtime.input.emitActivity({
+        actionType: DOCX_READ_TOOL_SPEC.activityActionType!,
+        status: 'failed',
+        summary: message
+      })
+    },
+    execute: async ({ args, toolName, toolCallId }) => {
+      runtime.input.ctx.checkCancelled()
+      const sessionResult = await runtime.ensureDocumentSession({
+        toolName,
+        toolCallId,
+        sourcePath: args.sourcePath
+      })
+      if ('failure' in sessionResult) return sessionResult.failure
+
+      const outline = await fetchOutline(runtime, sessionResult.docId)
+      const outlineById = new Map(outline.map((block) => [block.blockId, block]))
+      const blockIds: string[] = []
+      let totalMatchCount = 0
+
+      if (typeof args.blockId === 'string' && args.blockId.trim()) {
+        blockIds.push(args.blockId.trim())
+        totalMatchCount = 1
+      } else {
+        const searchResponse = await runtime.callWorker({
+          action: 'search',
+          payload: {
+            docId: sessionResult.docId,
+            query: args.query!,
+            mode: 'literal',
+            scopeBlockIds: []
+          }
+        })
+        if (!searchResponse.ok) {
+          return finalizeDocxToolFailure({
+            runtime,
+            failure: runtime.emitWorkerFailure({
+              toolName,
+              toolCallId,
+              response: searchResponse,
+              draftDocId: sessionResult.docId
+            }),
+            activity: {
+              actionType: DOCX_READ_TOOL_SPEC.activityActionType!
+            }
+          })
+        }
+        if (searchResponse.payload.action !== 'search') {
+          return finalizeDocxToolFailure({
+            runtime,
+            failure: runtime.emitFailure({
+              toolName,
+              toolCallId,
+              code: 'failed',
+              error: 'worker protocol mismatch (search)',
+              draftDocId: sessionResult.docId
+            }),
+            activity: {
+              actionType: DOCX_READ_TOOL_SPEC.activityActionType!
+            }
+          })
+        }
+        totalMatchCount = searchResponse.payload.matches.length
+        blockIds.push(...searchResponse.payload.matches.slice(0, MAX_READ_MATCHES).map((match) => match.blockId))
+      }
+
+      const blocks = await Promise.all(blockIds.map((blockId) => fetchBlock(runtime, sessionResult.docId, blockId)))
+      const result = {
+        ok: true,
+        code: 'ok' as const,
+        summary: `返回 ${String(blocks.length)} 个命中片段`,
+        sourcePath: sessionResult.sourcePath,
+        currentVersionRef: sessionResult.currentVersionRef,
+        truncated: totalMatchCount > blocks.length,
+        totalMatchCount,
+        matches: blocks.map((block) =>
+          buildReadMatch({
+            block,
+            outlineById
+          })
+        ),
+        resourceContext: runtime.buildResourceContext({
+          sourcePath: sessionResult.sourcePath,
+          effectKind: 'read',
+          currentVersionRef: sessionResult.currentVersionRef
+        })
+      }
+      return finalizeDocxToolSuccess({
+        runtime,
+        toolName,
+        toolCallId,
+        result,
+        outputPreview: {
+          ok: true,
+          code: 'ok',
+          sourcePath: result.sourcePath,
+          currentVersionRef: result.currentVersionRef,
+          matchCount: result.matches.length,
+          truncated: result.truncated
+        },
+        draftDocId: sessionResult.docId,
+        activity: {
+          actionType: DOCX_READ_TOOL_SPEC.activityActionType!,
+          startedSummary: `读取文档片段: ${sessionResult.sourcePath}`,
+          buildCompletedSummary: (output) => `文档片段读取完成：${String(output.matches.length)} 个命中`
+        }
+      })
+    }
+  })
+
+  const docxHistoryTool = createDocxTool({
+    runtime,
+    name: DOCX_HISTORY_TOOL_SPEC.name,
+    description: DOCX_HISTORY_TOOL_SPEC.description,
+    schema: DOCX_HISTORY_TOOL_SPEC.schema,
+    onError: ({ message }) => {
+      runtime.input.emitActivity({
+        actionType: DOCX_HISTORY_TOOL_SPEC.activityActionType!,
+        status: 'failed',
+        summary: message
+      })
+    },
+    execute: async ({ args, toolName, toolCallId }) => {
+      runtime.input.ctx.checkCancelled()
+      const sessionResult = await runtime.ensureDocumentSession({
+        toolName,
+        toolCallId,
+        sourcePath: args.sourcePath
+      })
+      if ('failure' in sessionResult) return sessionResult.failure
+
+      const versions = runtime.buildVersionHistory(
+        sessionResult.sourcePath,
+        Math.max(1, Number(args.limit || 10))
+      )
+      const result = {
+        ok: true,
+        code: 'ok' as const,
+        summary: `返回 ${String(versions.length)} 个版本`,
+        sourcePath: sessionResult.sourcePath,
+        currentVersionRef: sessionResult.currentVersionRef,
+        versions: versions.map((version) => ({
+          versionRef: version.versionRef,
+          parentVersionRef: version.parentVersionRef,
+          createdAt: version.createdAt,
+          isCurrent: version.isCurrent,
+          summary: version.summary || '',
+          changedBlocks: version.changedBlocks || []
+        })),
+        resourceContext: runtime.buildResourceContext({
+          sourcePath: sessionResult.sourcePath,
+          effectKind: 'history',
+          currentVersionRef: sessionResult.currentVersionRef
+        })
+      }
+      return finalizeDocxToolSuccess({
+        runtime,
+        toolName,
+        toolCallId,
+        result,
+        outputPreview: {
+          ok: true,
+          code: 'ok',
+          sourcePath: result.sourcePath,
+          currentVersionRef: result.currentVersionRef,
+          versionCount: result.versions.length
+        },
+        draftDocId: sessionResult.docId,
+        activity: {
+          actionType: DOCX_HISTORY_TOOL_SPEC.activityActionType!,
+          startedSummary: `查看版本历史: ${sessionResult.sourcePath}`,
+          buildCompletedSummary: (output) => `版本历史返回 ${String(output.versions.length)} 项`
+        }
+      })
+    }
+  })
+
+  return [docxOutlineTool, docxReadTool, docxHistoryTool]
 }

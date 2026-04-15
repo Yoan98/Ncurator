@@ -3,9 +3,8 @@ import { describe, it } from 'vitest'
 import { createDocxToolHarness } from '../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
-  type DocxApplyOpsResult,
-  type DocxOpenResult,
-  type DocxSearchResult
+  type DocxMutationResult,
+  type DocxReadResult
 } from './testUtils'
 
 const SAMPLE_DOCX_FIXTURE = path.resolve('tests/fixtures/ai/docx/sample-edit.docx')
@@ -22,37 +21,26 @@ describe('ai tool docx backend', () => {
       fixtures: [SAMPLE_DOCX_FIXTURE],
       runMode: 'single',
       execute: async (runtime) => {
-        const harness = createDocxToolHarness(runtime)
+          const harness = createDocxToolHarness(runtime)
         try {
           const sourcePath = runtime.getFixtureWorkspacePath(SAMPLE_DOCX_FIXTURE)
-          const opened = await harness.invoke<DocxOpenResult>('docx_open', {
-            sourcePath
-          })
-          const searchBefore = await harness.invoke<DocxSearchResult>('docx_search', {
-            sourcePath: opened.sourcePath,
+          const readBefore = await harness.invoke<DocxReadResult>('docx_read', {
+            sourcePath,
             query: 'Hello',
-            mode: 'literal'
           })
-          const applied = await harness.invoke<DocxApplyOpsResult>('docx_apply_ops', {
-            sourcePath: opened.sourcePath,
-            ops: [
-              {
-                type: 'replace_text',
-                query: 'Hello',
-                replace: 'Hi'
-              }
-            ]
+          const applied = await harness.invoke<DocxMutationResult>('docx_text_edit', {
+            sourcePath,
+            query: 'Hello',
+            replace: 'Hi'
           })
-          const searchAfter = await harness.invoke<DocxSearchResult>('docx_search', {
+          const readAfter = await harness.invoke<DocxReadResult>('docx_read', {
             sourcePath: applied.sourcePath,
-            query: 'Hi',
-            mode: 'literal'
+            query: 'Hi'
           })
           return {
-            opened,
-            searchBefore,
+            readBefore,
             applied,
-            searchAfter
+            readAfter
           }
         } finally {
           await harness.release()
@@ -60,15 +48,15 @@ describe('ai tool docx backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.searchBefore.matches.length === 1 &&
-            result.applied.currentVersionRef !== result.opened.currentVersionRef &&
+          result.readBefore.matches.length === 1 &&
+            result.applied.currentVersionRef !== result.readBefore.currentVersionRef &&
             result.applied.changedBlocks.length === 1 &&
             result.applied.changedBlocks[0]?.action === 'replace_text',
           {
             name: 'minimal-edit-flow-produces-single-targeted-change',
             message: '最小编辑流程应生成新的版本，且只命中目标段落对应的 changedBlocks。',
             data: {
-              originalVersionRef: result.opened.currentVersionRef,
+              originalVersionRef: result.readBefore.currentVersionRef,
               currentVersionRef: result.applied.currentVersionRef,
               changedBlocks: result.applied.changedBlocks
             }
@@ -76,14 +64,14 @@ describe('ai tool docx backend', () => {
         )
 
         runtime.assertThat(
-          result.searchAfter.matches.length === 1 &&
-            result.searchAfter.matches[0]?.bodyIndex === result.searchBefore.matches[0]?.bodyIndex &&
+          result.readAfter.matches.length === 1 &&
+            result.readAfter.matches[0]?.bodyIndex === result.readBefore.matches[0]?.bodyIndex &&
             result.applied.warnings.length === 0,
           {
             name: 'minimal-edit-flow-remains-readable-after-edit',
             message: '修改后应能继续被 search 消费，并暴露稳定的结构位置事实。',
             data: {
-              searchAfter: result.searchAfter.matches,
+              searchAfter: result.readAfter.matches,
               warnings: result.applied.warnings
             }
           }
