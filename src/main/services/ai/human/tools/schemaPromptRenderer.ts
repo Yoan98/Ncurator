@@ -145,20 +145,31 @@ const renderSchemaType = (node: JsonSchemaNode, context: RenderContext, level: n
   return 'unknown'
 }
 
-export const renderToolSchemaForPrompt = (schema: z.ZodType): string => {
+const buildSchemaRenderOutput = (schema: z.ZodType): { rootSchema: string; definitionBlocks: string[] } => {
   const document = toJSONSchema(schema) as JsonSchemaNode
   const defs = isJsonSchemaNode(document.$defs) ? (document.$defs as Record<string, JsonSchemaNode>) : {}
   const context: RenderContext = { defs }
-  const rootSchema = renderSchemaType(document, context, 0)
-  const definitionBlocks = Object.entries(defs).map(
-    ([name, definition]) => `${name} = ${renderSchemaType(definition, context, 0)}`
-  )
+  return {
+    rootSchema: renderSchemaType(document, context, 0),
+    definitionBlocks: Object.entries(defs).map(
+      ([name, definition]) => `${name} = ${renderSchemaType(definition, context, 0)}`
+    )
+  }
+}
+
+export const renderSchemaShape = (schema: z.ZodType): string => {
+  const { rootSchema, definitionBlocks } = buildSchemaRenderOutput(schema)
 
   return [
-    '输入结构：',
     indentBlock(rootSchema, 1),
     ...(definitionBlocks.length > 0
       ? ['', '补充定义：', ...definitionBlocks.map((block) => indentBlock(block, 1))]
       : [])
   ].join('\n')
 }
+
+export const renderToolSchemaForPrompt = (schema: z.ZodType): string =>
+  ['输入结构：', renderSchemaShape(schema)].join('\n')
+
+export const renderBrainOutputSchemaForPrompt = (schema: z.ZodType): string =>
+  ['输出 JSON 结构：', renderSchemaShape(schema)].join('\n')

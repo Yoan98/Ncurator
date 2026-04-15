@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { humanDecisionSchema } from '../../../src/main/services/ai/human/schema'
 import { ALL_TOOL_SPECS } from '../../../src/main/services/ai/human/tools/registry'
 import { DOCX_APPLY_OPS_TOOL_SPEC } from '../../../src/main/services/ai/human/tools/docx/toolSpecs'
-import { renderToolSchemaForPrompt } from '../../../src/main/services/ai/human/tools/schemaPromptRenderer'
+import {
+  renderBrainOutputSchemaForPrompt,
+  renderSchemaShape,
+  renderToolSchemaForPrompt
+} from '../../../src/main/services/ai/human/tools/schemaPromptRenderer'
 
 describe('ai unit tool prompt contract', () => {
   it('requires every tool spec to provide schema-valid examples', () => {
@@ -30,5 +35,18 @@ describe('ai unit tool prompt contract', () => {
     expect(promptText).toContain('runs')
     expect(promptText).toContain('table')
     expect(promptText).toContain('rows')
+  })
+
+  it('renders brain decision schema as output shape', () => {
+    const shapeText = renderSchemaShape(humanDecisionSchema)
+    const promptText = renderBrainOutputSchemaForPrompt(humanDecisionSchema)
+
+    expect(shapeText).toContain('updatedStableMemory?')
+    expect(shapeText).toContain('decision:')
+    expect(shapeText).toContain('readyToDeliver: boolean')
+    expect(shapeText).toContain('nextAction:')
+    expect(promptText).toContain('输出 JSON 结构：')
+    expect(promptText).toContain('toolUsePlan')
+    expect(promptText).toContain('calls')
   })
 })

@@ -78,6 +78,7 @@ stateDiagram-v2
 - 主要回写：`memory.stable`、`execution.currentDecision`、`execution.stage`、`execution.watchHint`、`trace.steps`。
 - 约束：输出必须通过 `ctx.chatStructured` 与 schema 校验；`memory.stable` 只能通过 patch 修改。
 - 当前可直接调用的工具说明必须由 `registry -> tool spec` 统一供给；brain prompt 中的工具输入结构应来自 tool schema 的自动导出文本，并附带 tool spec examples。
+- brain prompt 中的输出 shape 应直接来自 `humanDecisionSchema` 的自动导出文本；`readyToDeliver`、stableMemory patch、action 选择约束等语义规则继续手写维护，不单独定义 display schema。
 
 ### 5.2 `learning`
 

@@ -490,6 +490,9 @@ interface ToolCallDiagnostic {
   message: string
 }
 
+// brain 结构化输出的唯一真实来源是 humanDecisionSchema；
+// prompt 中的输出 shape 应由该 schema 自动导出，而不是再维护一份手写结构模板。
+
 interface HumanLearningOutcome {
   // 本轮原始请求学习的 skill id 列表。
   requestedSkillIds: string[]

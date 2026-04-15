@@ -14,7 +14,8 @@ import {
 import { renderHumanStableNotes } from '../shared/memoryRenderers'
 import { renderLoadedHistoryText, renderRoundSection } from '../shared/historyRenderers'
 import { getToolSpec } from '../tools/registry'
-import { renderToolSchemaForPrompt } from '../tools/schemaPromptRenderer'
+import { renderBrainOutputSchemaForPrompt, renderToolSchemaForPrompt } from '../tools/schemaPromptRenderer'
+import { humanDecisionSchema } from '../schema'
 import type {
   HumanState,
   ToolPromptExample
@@ -98,6 +99,7 @@ ${effectiveToolSpecLines.join('\n') || 'none'}
 }
 
 export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }) => {
+  const outputShapeText = indentLines(renderBrainOutputSchemaForPrompt(humanDecisionSchema), 1)
   const system = `
 <system>
   <role>
@@ -148,26 +150,8 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
     - correction_hint：当前额外的收敛或纠偏提示；若无则为 none。
   </context_block_guide>
 
-  <output_contract>
+  <output_rules>
     - 你必须只输出 JSON，不要输出任何额外说明，也不要输出 markdown。
-    - 输出顶层结构固定为：
-      {
-        "updatedStableMemory"?: {
-          "currentUnderstanding"?: "string",
-          "keyEvidence"?: "string",
-          "checklist"?: "string"
-        },
-        "decision": {
-          "summary": "string",
-          "reason": "string",
-          "expectedOutcome": "string"
-        },
-        "readyToDeliver": "boolean",
-        "nextAction":
-          | { "action": "learning", "wantLearnSkillIds": ["skill-id"] }
-          | { "action": "hand", "toolUsePlan": { "mode": "parallel|serial", "calls": [{ "toolName": "tool_name", "args": {} }] } }
-          | { "action": "mouth" }
-      }
     - updatedStableMemory 是可选的 partial patch；缺失表示本轮不更新任务笔记。
     - updatedStableMemory 中某个字段缺失：表示该字段保持原值。
     - updatedStableMemory 中某个字段为空字符串：表示显式清空该字段。
@@ -193,7 +177,11 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
     - hand.toolUsePlan.mode：parallel 只用于只读且彼此独立、并行安全的调用；其余情况必须用 serial。
     - hand.toolUsePlan.calls[*].toolName：必须严格使用当前工具说明里的精确名称。
     - hand.toolUsePlan.calls[*].args：必须是对象，字段名、必填参数和参数层级都必须与工具说明一致。
-  </output_contract>
+  </output_rules>
+
+  <output_shape>
+${outputShapeText}
+  </output_shape>
 
   <examples>
     <example_keep_notes>
