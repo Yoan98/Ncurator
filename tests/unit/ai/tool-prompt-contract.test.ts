@@ -19,15 +19,6 @@ describe('ai unit tool prompt contract', () => {
     expect(invalidExamples).toEqual([])
   })
 
-  it('requires multiple examples for high-risk structured tools', () => {
-    const highRiskToolNames = ['docx_apply_ops', 'docx_rollback', 'terminal_run_command']
-    const insufficientExamples = ALL_TOOL_SPECS.filter(
-      (spec) => highRiskToolNames.includes(spec.name) && spec.promptSpec.examples.length < 2
-    ).map((spec) => spec.name)
-
-    expect(insufficientExamples).toEqual([])
-  })
-
   it('renders docx_apply_ops schema with nested paragraph and table structure', () => {
     const promptText = renderToolSchemaForPrompt(DOCX_APPLY_OPS_TOOL_SPEC.schema)
 

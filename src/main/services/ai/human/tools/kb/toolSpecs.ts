@@ -34,34 +34,6 @@ export const KB_LIST_DOCUMENTS_SCHEMA = z.object({
   documentIds: z.array(z.string()).optional()
 })
 
-const KB_SEARCH_ARGS = [
-  {
-    name: 'queryText',
-    type: 'string',
-    required: true,
-    description: '检索问题、事实目标或关键词。'
-  },
-  {
-    name: 'limit',
-    type: 'number',
-    required: false,
-    description: '最多返回多少个 chunk，默认 10，上限 50。'
-  },
-  {
-    name: 'sourceType',
-    type: '"all" | "file" | "web"',
-    required: false,
-    description: '限定来源类型。',
-    enumValues: ['all', 'file', 'web']
-  },
-  {
-    name: 'documentIds',
-    type: 'string[]',
-    required: false,
-    description: '可选；主动缩小到指定文档 ID 列表，仍不能跳出当前工作区范围。'
-  }
-] as const
-
 const KB_RETURNS = [
   {
     name: 'rows',
@@ -85,7 +57,6 @@ const createKbChunkSearchSpec = (input: {
     purpose: input.purpose,
     whenToUse: input.whenToUse,
     preconditions: ['queryText 不能为空。', '默认搜索范围是当前工作区知识库。'],
-    args: [...KB_SEARCH_ARGS],
     returns: [...KB_RETURNS],
     examples: [
       {
@@ -130,32 +101,6 @@ export const KB_LIST_DOCUMENTS_TOOL_SPEC: HumanToolSpec<
     purpose: '列出当前工作区范围内的知识库文档。',
     whenToUse: '只有在需要先缩小候选文档范围、提高定位精度、或 search 结果过散时使用。',
     preconditions: ['若已选资料和命中 chunk 已经足够，通常不需要再 list_documents。'],
-    args: [
-      {
-        name: 'keyword',
-        type: 'string',
-        required: false,
-        description: '按文档名关键词过滤。'
-      },
-      {
-        name: 'page',
-        type: 'number',
-        required: false,
-        description: '页码，默认 1。'
-      },
-      {
-        name: 'pageSize',
-        type: 'number',
-        required: false,
-        description: '每页数量，默认 20，上限 50。'
-      },
-      {
-        name: 'documentIds',
-        type: 'string[]',
-        required: false,
-        description: '可选；进一步缩小到指定文档 ID 列表。'
-      }
-    ],
     returns: [
       {
         name: 'items',

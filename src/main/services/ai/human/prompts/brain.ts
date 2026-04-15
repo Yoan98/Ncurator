@@ -32,10 +32,6 @@ const indentLines = (value: string, level: number): string =>
     .join('\n')
 
 const renderLearnedToolSpecLine = (spec: HumanToolSpec): string => {
-  const requiredArgs = spec.promptSpec.args
-    .filter((arg) => arg.required)
-    .map((arg) => `${arg.name}:${arg.type}`)
-    .join(', ')
   const preconditions = spec.promptSpec.preconditions?.join(' / ') || 'none'
   const returns = spec.promptSpec.returns.map((item) => item.name).join(', ') || 'none'
   const schemaText = indentLines(renderToolSchemaForPrompt(spec.schema), 2)
@@ -45,7 +41,6 @@ const renderLearnedToolSpecLine = (spec: HumanToolSpec): string => {
 - 工具 ${spec.name}
   - 用途：${spec.promptSpec.purpose}
   - 前置条件：${preconditions}
-  - 顶层必填参数：${requiredArgs || 'none'}
   - 核心返回：${returns}
   - 结构：
 ${schemaText}

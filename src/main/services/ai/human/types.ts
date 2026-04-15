@@ -48,15 +48,6 @@ export type ToolCallResultCode = (typeof TOOL_CALL_RESULT_CODES)[number]
 export type HumanSkillSource = (typeof HUMAN_SKILL_SOURCES)[number]
 export type HumanRoundExecutionKind = (typeof HUMAN_ROUND_EXECUTION_KINDS)[number]
 
-export type ToolPromptArgSpec = {
-  name: string
-  type: string
-  required: boolean
-  description: string
-  enumValues?: readonly string[]
-  defaultValue?: string
-}
-
 export type ToolPromptReturnSpec = {
   name: string
   type: string
@@ -73,7 +64,6 @@ export type ToolPromptSpec = {
   purpose: string
   whenToUse: string
   preconditions?: string[]
-  args: ToolPromptArgSpec[]
   returns: ToolPromptReturnSpec[]
   examples: ToolPromptExample[]
 }

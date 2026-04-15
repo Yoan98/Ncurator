@@ -67,17 +67,6 @@ const DOCX_HISTORY_EXAMPLE: JsonObject = {
   sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
   maxDepth: 5
 }
-const DOCX_APPLY_OPS_REPLACE_TEXT_EXAMPLE: JsonObject = {
-  sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
-  ops: [
-    {
-      type: 'replace_text',
-      query: '旧术语',
-      replace: '新术语',
-      replaceAll: true
-    }
-  ]
-}
 const DOCX_APPLY_OPS_INSERT_STRUCTURE_EXAMPLE: JsonObject = {
   sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
   ops: [
@@ -142,11 +131,6 @@ const DOCX_ROLLBACK_TARGET_EXAMPLE: JsonObject = {
   sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
   targetVersionRef: 'v2'
 }
-const DOCX_ROLLBACK_STEPS_EXAMPLE: JsonObject = {
-  sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
-  steps: 1
-}
-
 export const DOCX_OPEN_TOOL_SPEC = {
   name: 'docx_open',
   familyId: 'docx',
@@ -159,14 +143,6 @@ export const DOCX_OPEN_TOOL_SPEC = {
     purpose: '初始化或复用当前任务过程中的某份 docx 文档会话，并返回当前版本。',
     whenToUse: '首次把某份 docx 纳入当前任务过程，或需要确认这份文档当前版本时使用。',
     preconditions: ['必须存在 workspace 绑定。', 'sourcePath 必须是 workspace 内的 .docx 路径。'],
-    args: [
-      {
-        name: 'sourcePath',
-        type: 'string',
-        required: true,
-        description: '目标 docx 的相对或绝对 workspace 路径。'
-      }
-    ],
     returns: [
       {
         name: 'currentVersionRef',
@@ -210,32 +186,6 @@ export const DOCX_OUTLINE_TOOL_SPEC = {
     purpose: '提取稳定的 block outline，帮助定位标题、段落、表格和 table cell。',
     whenToUse: '需要先看结构、拿稳定 blockId、或搜索命中不够精确时使用。',
     preconditions: ['必须先 open 目标 sourcePath 对应的文档。'],
-    args: [
-      {
-        name: 'sourcePath',
-        type: 'string',
-        required: true,
-        description: '目标 docx 的 workspace 路径。'
-      },
-      {
-        name: 'maxBlocks',
-        type: 'number',
-        required: false,
-        description: '最多返回多少个 block，范围 1-2000。'
-      },
-      {
-        name: 'includeTables',
-        type: 'boolean',
-        required: false,
-        description: '是否返回 table block。'
-      },
-      {
-        name: 'includeCells',
-        type: 'boolean',
-        required: false,
-        description: '是否展开 table cell block。'
-      }
-    ],
     returns: [
       {
         name: 'blocks',
@@ -273,20 +223,6 @@ export const DOCX_GET_BLOCK_TOOL_SPEC = {
     purpose: '读取单个 block 的详细结构。',
     whenToUse: '已经拿到 blockId，且需要看完整段落 run 或表格 cell 内容时使用。',
     preconditions: ['必须先 open 目标 sourcePath 对应的文档。', '必须提供 blockId。'],
-    args: [
-      {
-        name: 'sourcePath',
-        type: 'string',
-        required: true,
-        description: '目标 docx 的 workspace 路径。'
-      },
-      {
-        name: 'blockId',
-        type: 'string',
-        required: true,
-        description: '目标 block 的稳定标识。'
-      }
-    ],
     returns: [
       {
         name: 'block',
@@ -317,33 +253,6 @@ export const DOCX_SEARCH_TOOL_SPEC = {
     purpose: '按 literal / regex / semantic 检索 docx block 文本。',
     whenToUse: '需要定位目标段落、验证改写结果、或缩小 apply_ops 范围时使用。',
     preconditions: ['必须先 open 目标 sourcePath 对应的文档。', 'query 不能为空。'],
-    args: [
-      {
-        name: 'sourcePath',
-        type: 'string',
-        required: true,
-        description: '目标 docx 的 workspace 路径。'
-      },
-      {
-        name: 'query',
-        type: 'string',
-        required: true,
-        description: '要检索的文本或模式。'
-      },
-      {
-        name: 'mode',
-        type: '"literal" | "regex" | "semantic"',
-        required: true,
-        description: 'literal 精确文本，regex 正则表达式，semantic 语义相近检索。',
-        enumValues: ['literal', 'regex', 'semantic']
-      },
-      {
-        name: 'scope',
-        type: '{ blockIds?: string[] }',
-        required: false,
-        description: '限制在指定 blockIds 范围内检索；省略时默认检索当前文档全部 block。'
-      }
-    ],
     returns: [
       {
         name: 'matches',
@@ -374,20 +283,6 @@ export const DOCX_GET_HISTORY_TOOL_SPEC = {
     purpose: '查看当前任务过程中某份 docx 的当前版本链路。',
     whenToUse: '需要确认编辑历史、准备 rollback、或解释当前草稿来源时使用。',
     preconditions: ['必须先 open 目标 sourcePath 对应的文档。'],
-    args: [
-      {
-        name: 'sourcePath',
-        type: 'string',
-        required: true,
-        description: '目标 docx 的 workspace 路径。'
-      },
-      {
-        name: 'maxDepth',
-        type: 'number',
-        required: false,
-        description: '最多返回多少层祖先版本，范围 1-100。'
-      }
-    ],
     returns: [
       {
         name: 'versions',
@@ -417,21 +312,6 @@ export const DOCX_APPLY_OPS_TOOL_SPEC = {
     purpose: '执行结构化 docx 编辑操作，并返回新的当前版本。',
     whenToUse: '已经确定要替换、插入、删除或更新表格内容时使用。',
     preconditions: ['必须先 open 目标 sourcePath 对应的文档。', 'ops 至少要有 1 条。'],
-    args: [
-      {
-        name: 'sourcePath',
-        type: 'string',
-        required: true,
-        description: '目标 docx 的 workspace 路径。'
-      },
-      {
-        name: 'ops',
-        type: 'DocxOp[]',
-        required: true,
-        description:
-          '支持 replace_text、replace_block、insert_after、insert_before、delete_block、update_table_cell 六种操作。replace_text 只改现有文本；insert_before / insert_after 会新增 block 级内容；replace_block 会替换整个 block；update_table_cell 只更新已有表格单元格。'
-      }
-    ],
     returns: [
       {
         name: 'currentVersionRef',
@@ -450,10 +330,6 @@ export const DOCX_APPLY_OPS_TOOL_SPEC = {
       }
     ],
     examples: [
-      {
-        goal: '按文本替换当前 docx 中已有术语',
-        args: DOCX_APPLY_OPS_REPLACE_TEXT_EXAMPLE
-      },
       {
         goal: '在指定 block 后插入说明段落和表格结构',
         args: DOCX_APPLY_OPS_INSERT_STRUCTURE_EXAMPLE
@@ -479,26 +355,6 @@ export const DOCX_ROLLBACK_TOOL_SPEC = {
     purpose: '回退到当前任务过程中的祖先版本，不会写回文件系统。',
     whenToUse: '草稿改坏了、需要回看上一个版本、或用户要求撤销时使用。',
     preconditions: ['必须先 open 目标 sourcePath 对应的文档。'],
-    args: [
-      {
-        name: 'sourcePath',
-        type: 'string',
-        required: true,
-        description: '目标 docx 的 workspace 路径。'
-      },
-      {
-        name: 'targetVersionRef',
-        type: 'string',
-        required: false,
-        description: '直接回退到指定祖先版本。'
-      },
-      {
-        name: 'steps',
-        type: 'number',
-        required: false,
-        description: '从当前版本向前回退多少步。targetVersionRef 与 steps 至少二选一。'
-      }
-    ],
     returns: [
       {
         name: 'currentVersionRef',
@@ -510,10 +366,6 @@ export const DOCX_ROLLBACK_TOOL_SPEC = {
       {
         goal: '直接回退到指定祖先版本',
         args: DOCX_ROLLBACK_TARGET_EXAMPLE
-      },
-      {
-        goal: '按步数回退最近一次 docx 修改',
-        args: DOCX_ROLLBACK_STEPS_EXAMPLE
       }
     ]
   },
