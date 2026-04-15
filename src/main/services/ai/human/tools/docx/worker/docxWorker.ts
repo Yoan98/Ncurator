@@ -301,6 +301,8 @@ export const handleDocxWorkerRequest = async (
         }
       }
     }
+
+    throw new Error('unknown action')
   } catch (error) {
     return {
       requestId: request.requestId,

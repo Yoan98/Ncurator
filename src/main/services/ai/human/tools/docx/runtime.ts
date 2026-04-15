@@ -1,11 +1,10 @@
 import path from 'node:path'
-import type { AiToolCallResult } from '../../../../../../shared/types'
+import type { AiToolCallResult, JsonObject } from '../../../../../../shared/types'
 import type {
   DocxCapabilityToolsInput,
   DocxCapabilityToolsRuntimeState,
   DocxDocumentSession,
   DocxOp,
-  DocxSnapshotLineageEntry,
   DocxToolResultCode,
   DocxVersionEntry,
   SemanticDocIndex
@@ -27,16 +26,12 @@ export type DocxToolResourceContext = {
   effectKind?: 'opened' | 'read' | 'searched' | 'mutated' | 'rolled_back' | 'history'
 }
 
-type ResolvedDocSession = {
-  sourcePath: string
-  session: DocxDocumentSession
-  docId: string
-  currentVersionRef: string
-}
-
 type RequireDocSessionResult =
   | { sourcePath: string; session: DocxDocumentSession; docId: string; currentVersionRef: string }
   | { failure: DocxToolFailure }
+
+const isToolResultRecord = (value: AiToolCallResult['data']): value is JsonObject =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
 
 export const buildDocxToolCallResult = (input: {
   toolName: string
@@ -51,10 +46,10 @@ export const buildDocxToolCallResult = (input: {
   data: input.data,
   resourceContext: input.resourceContext,
   diagnostic:
-    input.code === 'approval_denied'
-      ? { kind: 'approval_denied' }
-      : input.code === 'invalid_input'
-        ? { kind: 'invalid_input' }
+    input.ok || !isToolResultRecord(input.data)
+      ? undefined
+      : typeof input.data.error === 'string' && input.data.error.trim()
+        ? { message: input.data.error.trim() }
         : undefined
 })
 
@@ -96,7 +91,12 @@ export type DocxToolRuntime = {
     toolCallId: string
     sourcePath: string
   }) => RequireDocSessionResult
-  registerOpenedDocument: (sourcePath: string, docId: string) => {
+  registerOpenedDocument: (
+    sourcePath: string,
+    docId: string,
+    meta?: DocxDocumentSession['meta'],
+    stats?: DocxDocumentSession['stats']
+  ) => {
     session: DocxDocumentSession
     currentVersionRef: string
   }

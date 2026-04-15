@@ -9,6 +9,18 @@ const TERMINAL_COMMAND_EXAMPLE: JsonObject = {
   cwd: '.'
 }
 
+const TERMINAL_ARTIFACT_COMMAND_EXAMPLE: JsonObject = {
+  command: 'node scripts/export-risk-report.mjs',
+  cwd: '.',
+  expectedArtifacts: [
+    {
+      path: 'artifacts/risk-report.md',
+      operation: 'created',
+      summary: '导出的风险报告草稿'
+    }
+  ]
+}
+
 const artifactHintSchema = z.object({
   path: z.string(),
   operation: z.enum(['created', 'updated']).optional(),
@@ -78,15 +90,14 @@ export const TERMINAL_RUN_COMMAND_TOOL_SPEC: HumanToolSpec<
         description: '检测到并记录的文件产物。'
       }
     ],
-    commonMistakes: [
-      '不要把 shell 当成 KB 问答或 docx 结构化编辑的默认入口。',
-      '不要把多步流程挤成一条又长又难解释的命令。',
-      '命中 workspace_required、path_unavailable 或 approval_denied 后，不要立刻重复同一命令。'
-    ],
     examples: [
       {
         goal: '读取单个 workspace 材料文件',
         args: TERMINAL_COMMAND_EXAMPLE
+      },
+      {
+        goal: '声明会产生产物的单条命令',
+        args: TERMINAL_ARTIFACT_COMMAND_EXAMPLE
       }
     ]
   },

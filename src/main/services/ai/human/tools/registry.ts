@@ -31,13 +31,10 @@ const cloneToolPromptSpec = (spec: ToolPromptSpec): ToolPromptSpec => ({
     enumValues: item.enumValues ? [...item.enumValues] : undefined
   })),
   returns: spec.returns.map((item) => ({ ...item })),
-  commonMistakes: spec.commonMistakes ? [...spec.commonMistakes] : undefined,
-  examples: spec.examples
-    ? spec.examples.map((item) => ({
-        goal: item.goal,
-        args: { ...item.args }
-      }))
-    : undefined
+  examples: spec.examples.map((item) => ({
+    goal: item.goal,
+    args: structuredClone(item.args)
+  }))
 })
 
 export function getToolSpec<TName extends AnyToolSpec['name']>(

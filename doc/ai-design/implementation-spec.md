@@ -77,6 +77,7 @@ stateDiagram-v2
 - 主要读取：`task`、`memory.stable`、`memory.history.roundHistory`、`memory.history.loadedHistoryContext`、`execution.watchHint`、`skills.learnedSkillIds`、`ctx.referenceScope`、`ctx.workspace`。
 - 主要回写：`memory.stable`、`execution.currentDecision`、`execution.stage`、`execution.watchHint`、`trace.steps`。
 - 约束：输出必须通过 `ctx.chatStructured` 与 schema 校验；`memory.stable` 只能通过 patch 修改。
+- 当前可直接调用的工具说明必须由 `registry -> tool spec` 统一供给；brain prompt 中的工具输入结构应来自 tool schema 的自动导出文本，并附带 tool spec examples。
 
 ### 5.2 `learning`
 
@@ -91,6 +92,7 @@ stateDiagram-v2
 - 主要读取：`execution.currentDecision.nextAction.toolUsePlan`、`skills.learnedSkillIds`、runtime cache 中已装载的工具、`memory.history.roundHistory`。
 - 主要回写：`execution.lastToolResults`、`memory.history.roundHistory`、`memory.history.loadedHistoryContext`、`execution.artifacts`、`execution.stage`、必要时 `execution.watchHint`、`trace.steps`。
 - 约束：不调用模型；`parallel` 只允许只读且并行安全的工具。
+- tool 执行失败时，hand 应优先保留原始校验/运行时错误文本，并通过 `diagnostic.message` 回流给 brain 与历史渲染层；不要把错误再压缩成额外的预设分类。
 
 ### 5.4 `mouth`
 

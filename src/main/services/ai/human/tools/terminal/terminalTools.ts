@@ -3,8 +3,9 @@ import { tool } from '@langchain/core/tools'
 import type {
   AiTaskResultCode,
   AiToolCallResult,
+  JsonObject,
   IpcJsonObject,
-  IpcJsonValue
+  IpcJsonValue,
 } from '../../../../../../shared/types'
 import type { TerminalToolContext } from '../../../types'
 import { TERMINAL_RUN_COMMAND_TOOL_SPEC } from './toolSpecs'
@@ -21,6 +22,10 @@ import type { CapabilityActivityInput } from '../types'
 import { mergeArtifactCandidates, recordTerminalArtifacts } from './terminalArtifacts'
 import { analyzeTerminalCommand, checkWorkspaceBoundary } from './terminalCommandPolicy'
 import { resolveTerminalCwd } from './terminalCwd'
+
+const isJsonObjectRecord = (value: AiToolCallResult['data']): value is JsonObject =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
 const buildTerminalStepError = (input: {
   exitCode: number | null
   timedOut: boolean
@@ -131,13 +136,11 @@ const buildTerminalToolResult = (input: {
   code: input.code,
   data: input.data,
   diagnostic:
-    input.code === 'workspace_required'
-      ? { kind: 'workspace_required' }
-      : input.code === 'approval_denied'
-        ? { kind: 'approval_denied' }
-        : input.code === 'invalid_input'
-          ? { kind: 'invalid_input' }
-          : undefined
+    input.ok || !isJsonObjectRecord(input.data)
+      ? undefined
+      : typeof input.data.error === 'string' && input.data.error.trim()
+        ? { message: input.data.error.trim() }
+        : undefined
 })
 
 const requestTerminalCommandApproval = async (input: {

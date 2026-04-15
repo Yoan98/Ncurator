@@ -247,4 +247,82 @@ describe('ai unit human history renderers', () => {
     expect(brainPrompt.user).toContain(focusHistory)
     expect(mouthPrompt.user).toContain(unifiedHistory)
   })
+
+  it('preserves raw diagnostic message text in rendered history', () => {
+    const initialState = createInitialHumanState({
+      taskId: 'task-history-diagnostic',
+      userInput: '继续修正 docx 参数'
+    })
+
+    const state = {
+      ...initialState,
+      memory: {
+        ...initialState.memory,
+        history: appendRoundRecord({
+          state: initialState,
+          decision: buildDecision({
+            summary: '重试 docx_apply_ops',
+            reason: '需要根据失败信息修正参数',
+            expectedOutcome: '拿到原始 schema 报错并继续收敛',
+            nextAction: {
+              action: 'hand',
+              toolUsePlan: {
+                mode: 'serial',
+                calls: [
+                  {
+                    toolName: 'docx_apply_ops',
+                    args: {
+                      sourcePath: 'weekly-risk.docx',
+                      ops: []
+                    }
+                  }
+                ]
+              }
+            }
+          }),
+          execution: buildHandExecution({
+            toolUsePlan: {
+              mode: 'serial',
+              calls: [
+                {
+                  toolName: 'docx_apply_ops',
+                  args: {
+                    sourcePath: 'weekly-risk.docx',
+                    ops: []
+                  }
+                }
+              ]
+            },
+            toolResults: [
+              {
+                toolName: 'docx_apply_ops',
+                ok: false,
+                code: 'invalid_input',
+                data: {
+                  ok: false,
+                  code: 'invalid_input',
+                  error:
+                    'Received tool input did not match expected schema ✖ Invalid input → at ops[0].type'
+                },
+                diagnostic: {
+                  message:
+                    'Received tool input did not match expected schema ✖ Invalid input → at ops[0].type'
+                }
+              }
+            ]
+          }),
+          createdAt: 1
+        })
+      }
+    }
+
+    const rendered = renderRoundSection({
+      records: state.memory.history.roundHistory,
+      detail: 'loaded'
+    })
+
+    expect(rendered).toContain(
+      'diagnostic=Received tool input did not match expected schema ✖ Invalid input → at ops[0].type'
+    )
+  })
 })

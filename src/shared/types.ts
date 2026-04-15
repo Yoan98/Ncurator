@@ -602,14 +602,8 @@ export type AiTaskResultCode =
   | 'workspace_required'
   | 'approval_denied'
   | 'invalid_input'
-export type AiToolCallDiagnosticKind =
-  | 'workspace_required'
-  | 'invalid_input'
-  | 'approval_denied'
-  | 'path_unavailable'
 export type AiToolCallDiagnostic = {
-  kind: AiToolCallDiagnosticKind
-  missingArgs?: string[]
+  message: string
 }
 export type AiToolResourceContext = {
   family: string

@@ -8,6 +8,12 @@ const KB_SEARCH_EXAMPLE: JsonObject = {
   limit: 3
 }
 
+const KB_LIST_DOCUMENTS_EXAMPLE: JsonObject = {
+  keyword: 'weekly risk',
+  page: 1,
+  pageSize: 5
+}
+
 const KB_EXECUTION_META = createStaticExecutionMetaResolver({
   mutability: 'read_only',
   parallelSafe: true,
@@ -68,7 +74,6 @@ const createKbChunkSearchSpec = (input: {
   name: 'kb_hybrid_search_chunks' | 'kb_vector_search_chunks' | 'kb_fts_search_chunks'
   purpose: string
   whenToUse: string
-  commonMistakes: string[]
 }): HumanToolSpec<z.infer<typeof KB_CHUNK_SEARCH_SCHEMA>, typeof input.name, 'kb-evidence-query'> => ({
   name: input.name,
   familyId: 'kb',
@@ -82,7 +87,6 @@ const createKbChunkSearchSpec = (input: {
     preconditions: ['queryText 不能为空。', '默认搜索范围是当前工作区知识库。'],
     args: [...KB_SEARCH_ARGS],
     returns: [...KB_RETURNS],
-    commonMistakes: input.commonMistakes,
     examples: [
       {
         goal: '在当前工作区知识库中检索 approval denied 相关规范',
@@ -96,25 +100,19 @@ const createKbChunkSearchSpec = (input: {
 export const KB_HYBRID_SEARCH_CHUNKS_TOOL_SPEC = createKbChunkSearchSpec({
   name: 'kb_hybrid_search_chunks',
   purpose: '在当前工作区知识库上做 hybrid 检索，综合关键词与向量召回。',
-  whenToUse: '默认首选的 KB 取证入口；当任务要在当前工作区知识库中找内容、提取事实或找证据时优先使用。',
-  commonMistakes: [
-    '已有明确 chunk 证据时，不要为了“再确认一次”反复检索。',
-    '不要把已选资料误认为唯一可搜索范围；documentIds 只表示这一步主动缩圈。'
-  ]
+  whenToUse: '默认首选的 KB 取证入口；当任务要在当前工作区知识库中找内容、提取事实或找证据时优先使用。'
 })
 
 export const KB_VECTOR_SEARCH_CHUNKS_TOOL_SPEC = createKbChunkSearchSpec({
   name: 'kb_vector_search_chunks',
   purpose: '做纯向量语义检索。',
-  whenToUse: 'hybrid 没召回到合适结果，但你仍需要扩大语义召回范围时使用。',
-  commonMistakes: ['不要把 vector 当成默认第一步；通常先用 hybrid 更稳。']
+  whenToUse: 'hybrid 没召回到合适结果，但你仍需要扩大语义召回范围时使用。'
 })
 
 export const KB_FTS_SEARCH_CHUNKS_TOOL_SPEC = createKbChunkSearchSpec({
   name: 'kb_fts_search_chunks',
   purpose: '做纯关键词全文检索。',
-  whenToUse: '需要命中固定术语、精确短语或明确关键词时使用。',
-  commonMistakes: ['如果用户诉求是“找相近语义”，不要先用 fts。']
+  whenToUse: '需要命中固定术语、精确短语或明确关键词时使用。'
 })
 
 export const KB_LIST_DOCUMENTS_TOOL_SPEC: HumanToolSpec<
@@ -170,9 +168,11 @@ export const KB_LIST_DOCUMENTS_TOOL_SPEC: HumanToolSpec<
         description: '命中文档总数。'
       }
     ],
-    commonMistakes: [
-      '不要把 list_documents 当成每次 KB 搜索的固定前置步骤。',
-      '不要在已经拿到明确 chunk 证据后再 list_documents 做重复确认。'
+    examples: [
+      {
+        goal: '先列出名称中包含 weekly risk 的候选知识文档',
+        args: KB_LIST_DOCUMENTS_EXAMPLE
+      }
     ]
   },
   resolveExecutionMeta: KB_EXECUTION_META

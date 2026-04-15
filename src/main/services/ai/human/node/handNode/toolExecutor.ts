@@ -10,7 +10,6 @@ import { findEffectiveSkillIdByToolName, getEffectiveLearnedSkillIds } from '../
 import type {
   HumanRuntimeCache,
   RuntimeSkillId,
-  ToolCallDiagnostic,
   ToolCallResult,
   ToolCallResultCode
 } from '../../types'
@@ -94,81 +93,21 @@ const summarizeObjectPayload = (toolName: string, payload: JsonObject): string |
   return undefined
 }
 
-const DIAGNOSTIC_FIELD_CANDIDATES = [
-  'type',
-  'query',
-  'replace',
-  'blockId',
-  'anchorBlockId',
-  'content',
-  'versionRef',
-  'targetVersionRef',
-  'sourcePath',
-  'outPath',
-  'command',
-  'cwd'
-] as const
-
-const extractMissingArgs = (message: string): string[] => {
-  const found = new Set<string>()
-  for (const field of DIAGNOSTIC_FIELD_CANDIDATES) {
-    if (
-      message.includes(`.${field}`) ||
-      message.includes(`"${field}"`) ||
-      message.includes(`'${field}'`) ||
-      message.includes(` ${field} `)
-    ) {
-      found.add(field)
-    }
-  }
-  return [...found]
-}
-
-const isToolCallDiagnosticKind = (
-  value: string
-): value is ToolCallDiagnostic['kind'] =>
-  ['workspace_required', 'invalid_input', 'approval_denied', 'path_unavailable'].includes(value)
-
-const inferDiagnosticFromFailure = (input: {
+const inferDiagnosticMessage = (input: {
   code: ToolCallResultCode
   message: string
   payload?: JsonObject
-}): ToolCallDiagnostic | undefined => {
+}): string | undefined => {
   const explicit = input.payload?.diagnostic
-  if (isJsonObject(explicit) && typeof explicit.kind === 'string' && isToolCallDiagnosticKind(explicit.kind)) {
-    return {
-      kind: explicit.kind,
-      missingArgs: Array.isArray(explicit.missingArgs)
-        ? explicit.missingArgs.map((item) => String(item).trim()).filter(Boolean)
-        : undefined
-    }
+  if (isJsonObject(explicit) && typeof explicit.message === 'string' && explicit.message.trim()) {
+    return explicit.message.trim()
   }
 
-  if (input.code === 'workspace_required') {
-    return { kind: 'workspace_required' }
+  if (input.message.trim()) {
+    return input.message.trim()
   }
 
-  if (input.code === 'approval_denied') {
-    return { kind: 'approval_denied' }
-  }
-
-  if (
-    input.message.includes('cwd does not exist inside workspace') ||
-    input.message.includes('sourcePath not found') ||
-    input.message.includes('effective docx path not found')
-  ) {
-    return { kind: 'path_unavailable' }
-  }
-
-  if (input.code === 'invalid_input') {
-    const missingArgs = extractMissingArgs(input.message)
-    return {
-      kind: 'invalid_input',
-      missingArgs: missingArgs.length > 0 ? missingArgs : undefined
-    }
-  }
-
-  return undefined
+  return input.code === 'invalid_input' ? 'tool call failed (invalid_input)' : undefined
 }
 
 const resolvePayloadMessage = (toolName: string, payload: JsonObject): string =>
@@ -191,7 +130,7 @@ const normalizeToolCallResult = (
       ok: payload.ok === false ? false : payload.ok === true ? true : undefined,
       success: payload.success === false ? false : payload.success === true ? true : undefined
     })
-    const message = resolvePayloadMessage(toolName, payload)
+    const payloadMessage = resolvePayloadMessage(toolName, payload)
 
     return {
       toolName,
@@ -200,15 +139,39 @@ const normalizeToolCallResult = (
       data: payload,
       resourceContext: (() => {
         const candidate = payload.resourceContext
-        return isJsonObject(candidate) ? candidate : undefined
+        if (
+          isJsonObject(candidate) &&
+          typeof candidate.family === 'string' &&
+          candidate.family.trim().length > 0
+        ) {
+          return {
+            family: candidate.family,
+            sourcePath:
+              typeof candidate.sourcePath === 'string' ? candidate.sourcePath : undefined,
+            currentVersionRef:
+              typeof candidate.currentVersionRef === 'string'
+                ? candidate.currentVersionRef
+                : undefined,
+            previousVersionRef:
+              typeof candidate.previousVersionRef === 'string'
+                ? candidate.previousVersionRef
+                : undefined,
+            effectKind:
+              typeof candidate.effectKind === 'string' ? candidate.effectKind : undefined
+          }
+        }
+        return undefined
       })(),
       diagnostic: ok
         ? undefined
-        : inferDiagnosticFromFailure({
-            code,
-            message,
-            payload
-          })
+        : (() => {
+            const diagnosticMessage = inferDiagnosticMessage({
+              code,
+              message: payloadMessage,
+              payload
+            })
+            return diagnosticMessage ? { message: diagnosticMessage } : undefined
+          })()
     }
   }
 
@@ -281,7 +244,7 @@ export const executeToolCall = async (input: {
         error: `当前未学习可执行工具 ${input.toolName}。`
       },
       diagnostic: {
-        kind: 'invalid_input'
+        message: `当前未学习可执行工具 ${input.toolName}。`
       }
     }
     return await withToolLifecycle({
@@ -314,10 +277,9 @@ export const executeToolCall = async (input: {
         code: 'invalid_input',
         error: message
       },
-      diagnostic: inferDiagnosticFromFailure({
-        code: 'invalid_input',
+      diagnostic: {
         message
-      })
+      }
     }
   }
 }

@@ -73,10 +73,6 @@ export const HISTORY_RECALL_TOOL_SPEC: HumanToolSpec<
         description: '匹配条件的历史轮次。'
       }
     ],
-    commonMistakes: [
-      '不要把它当成默认第一步。',
-      '不要在 last_round_focus 和 history_chain 已经足够时重复回看历史。'
-    ],
     examples: [
       {
         goal: '回看最近几轮中与 docx 编辑相关的详细执行结果',

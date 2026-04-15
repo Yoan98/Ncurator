@@ -39,13 +39,6 @@ export const TOOL_CALL_RESULT_CODES = [
   'invalid_input'
 ] as const
 
-export const TOOL_CALL_DIAGNOSTIC_KINDS = [
-  'workspace_required',
-  'invalid_input',
-  'approval_denied',
-  'path_unavailable'
-] as const
-
 export const HUMAN_TOOL_USE_PLAN_MODES = ['parallel', 'serial'] as const
 export const HUMAN_HAND_PLAN_INVALID_REASONS = [
   'parallel_requires_read_only',

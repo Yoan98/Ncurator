@@ -45,6 +45,108 @@ type DocxToolSpec<
   activityActionType?: string
 }
 
+const DOCX_SOURCE_PATH_EXAMPLE = 'ai/docx/图形学.docx'
+const DOCX_OPEN_EXAMPLE: JsonObject = {
+  sourcePath: DOCX_SOURCE_PATH_EXAMPLE
+}
+const DOCX_OUTLINE_EXAMPLE: JsonObject = {
+  sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
+  maxBlocks: 40,
+  includeTables: true
+}
+const DOCX_GET_BLOCK_EXAMPLE: JsonObject = {
+  sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
+  blockId: 'b:26'
+}
+const DOCX_SEARCH_EXAMPLE: JsonObject = {
+  sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
+  query: '反走样',
+  mode: 'literal'
+}
+const DOCX_HISTORY_EXAMPLE: JsonObject = {
+  sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
+  maxDepth: 5
+}
+const DOCX_APPLY_OPS_REPLACE_TEXT_EXAMPLE: JsonObject = {
+  sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
+  ops: [
+    {
+      type: 'replace_text',
+      query: '旧术语',
+      replace: '新术语',
+      replaceAll: true
+    }
+  ]
+}
+const DOCX_APPLY_OPS_INSERT_STRUCTURE_EXAMPLE: JsonObject = {
+  sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
+  ops: [
+    {
+      type: 'insert_after',
+      anchorBlockId: 'b:26',
+      content: [
+        {
+          kind: 'paragraph',
+          runs: [
+            {
+              text: '补充说明：反走样通过平滑边缘像素来减轻锯齿感。'
+            }
+          ]
+        },
+        {
+          kind: 'table',
+          rows: [
+            [
+              {
+                paragraphs: [
+                  {
+                    kind: 'paragraph',
+                    runs: [{ text: '反走样' }]
+                  }
+                ]
+              },
+              {
+                paragraphs: [
+                  {
+                    kind: 'paragraph',
+                    runs: [{ text: '过拟合' }]
+                  }
+                ]
+              }
+            ],
+            [
+              {
+                paragraphs: [
+                  {
+                    kind: 'paragraph',
+                    runs: [{ text: '平滑图像边缘，降低锯齿' }]
+                  }
+                ]
+              },
+              {
+                paragraphs: [
+                  {
+                    kind: 'paragraph',
+                    runs: [{ text: '记住训练噪声，泛化能力下降' }]
+                  }
+                ]
+              }
+            ]
+          ]
+        }
+      ]
+    }
+  ]
+}
+const DOCX_ROLLBACK_TARGET_EXAMPLE: JsonObject = {
+  sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
+  targetVersionRef: 'v2'
+}
+const DOCX_ROLLBACK_STEPS_EXAMPLE: JsonObject = {
+  sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
+  steps: 1
+}
+
 export const DOCX_OPEN_TOOL_SPEC = {
   name: 'docx_open',
   familyId: 'docx',
@@ -82,10 +184,11 @@ export const DOCX_OPEN_TOOL_SPEC = {
         description: '文档统计信息，如 blockCount、tableCount、charCount。'
       }
     ],
-    commonMistakes: [
-      '不要在 open 之前调用其他 docx_* 工具。',
-      '不要传空路径或非 .docx 文件。',
-      'docx_open 初始化的是当前任务过程中的文档会话，不会修改原文件。'
+    examples: [
+      {
+        goal: '把工作区中的 docx 文档纳入当前任务会话',
+        args: DOCX_OPEN_EXAMPLE
+      }
     ]
   },
   resolveExecutionMeta: createDocxMutatingExecutionMeta({
@@ -146,6 +249,12 @@ export const DOCX_OUTLINE_TOOL_SPEC = {
         description: '返回是否因 maxBlocks 被截断；若为 true，表示文档后续内容未包含在这次 outline 结果中。'
       }
     ],
+    examples: [
+      {
+        goal: '查看一份 docx 的结构提纲并展开表格',
+        args: DOCX_OUTLINE_EXAMPLE
+      }
+    ]
   },
   resolveExecutionMeta: createDocxReadExecutionMeta(),
   workerAction: 'outline',
@@ -183,6 +292,12 @@ export const DOCX_GET_BLOCK_TOOL_SPEC = {
         name: 'block',
         type: 'detailed block object',
         description: '段落、表格或表格单元格的详细结构内容，并包含 bodyIndex 与相邻 body block 事实。'
+      }
+    ],
+    examples: [
+      {
+        goal: '读取已经定位到的 block 详细内容',
+        args: DOCX_GET_BLOCK_EXAMPLE
       }
     ]
   },
@@ -236,9 +351,11 @@ export const DOCX_SEARCH_TOOL_SPEC = {
         description: '命中的 block、偏移信息，以及该 block 在文档结构中的位置事实。'
       }
     ],
-    commonMistakes: [
-      '不要把 query 写成空字符串。',
-      'scope 只是在当前文档内缩小到指定 blockIds；省略 scope 时会搜索当前文档全部 block。'
+    examples: [
+      {
+        goal: '按文字检索 docx 中与反走样相关的 block',
+        args: DOCX_SEARCH_EXAMPLE
+      }
     ]
   },
   resolveExecutionMeta: createDocxReadExecutionMeta(),
@@ -276,6 +393,12 @@ export const DOCX_GET_HISTORY_TOOL_SPEC = {
         name: 'versions',
         type: 'Array<{ versionRef: string; parentVersionRef?: string; createdAt: number; isCurrent: boolean }>',
         description: '当前版本到祖先版本的历史链路。'
+      }
+    ],
+    examples: [
+      {
+        goal: '查看当前 docx 会话的最近版本链路',
+        args: DOCX_HISTORY_EXAMPLE
       }
     ]
   },
@@ -325,6 +448,16 @@ export const DOCX_APPLY_OPS_TOOL_SPEC = {
         type: 'string[]',
         description: '非致命提示信息。'
       }
+    ],
+    examples: [
+      {
+        goal: '按文本替换当前 docx 中已有术语',
+        args: DOCX_APPLY_OPS_REPLACE_TEXT_EXAMPLE
+      },
+      {
+        goal: '在指定 block 后插入说明段落和表格结构',
+        args: DOCX_APPLY_OPS_INSERT_STRUCTURE_EXAMPLE
+      }
     ]
   },
   resolveExecutionMeta: createDocxMutatingExecutionMeta({
@@ -371,6 +504,16 @@ export const DOCX_ROLLBACK_TOOL_SPEC = {
         name: 'currentVersionRef',
         type: 'string',
         description: '回退后的当前版本引用。'
+      }
+    ],
+    examples: [
+      {
+        goal: '直接回退到指定祖先版本',
+        args: DOCX_ROLLBACK_TARGET_EXAMPLE
+      },
+      {
+        goal: '按步数回退最近一次 docx 修改',
+        args: DOCX_ROLLBACK_STEPS_EXAMPLE
       }
     ]
   },

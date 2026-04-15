@@ -486,14 +486,8 @@ interface ToolCallResult {
 }
 
 interface ToolCallDiagnostic {
-  // 诊断类别；帮助 brain 和 runtime 做标准化处理。
-  kind:
-    | 'workspace_required'
-    | 'invalid_input'
-    | 'approval_denied'
-    | 'path_unavailable'
-  // 若是参数问题，则记录缺失参数名。
-  missingArgs?: string[]
+  // 原始错误文本；优先保留 schema 校验或运行时返回的 message。
+  message: string
 }
 
 interface HumanLearningOutcome {

@@ -13,7 +13,6 @@ import {
   HUMAN_TOOL_USE_PLAN_MODES,
   HUMAN_WATCH_HINT_CODES,
   RUNTIME_SKILL_IDS,
-  TOOL_CALL_DIAGNOSTIC_KINDS,
   TOOL_CALL_RESULT_CODES
 } from './constants'
 
@@ -28,7 +27,6 @@ export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
 export const runtimeSkillIdSchema = z.enum(RUNTIME_SKILL_IDS)
 export const toolFamilyIdSchema = z.enum(AI_TOOL_FAMILY_IDS)
 export const toolCallResultCodeSchema = z.enum(TOOL_CALL_RESULT_CODES)
-export const toolCallDiagnosticKindSchema = z.enum(TOOL_CALL_DIAGNOSTIC_KINDS)
 export const humanStageSchema = z.enum(HUMAN_STAGES)
 export const humanStatusSchema = z.enum(HUMAN_STATUSES)
 export const humanToolUsePlanModeSchema = z.enum(HUMAN_TOOL_USE_PLAN_MODES)
@@ -59,8 +57,7 @@ export const toolCallParamSchema = z.object({
 })
 
 export const toolCallDiagnosticSchema = z.object({
-  kind: toolCallDiagnosticKindSchema,
-  missingArgs: z.array(z.string().min(1)).optional()
+  message: z.string().min(1)
 })
 
 export const toolResourceContextSchema = z.object({

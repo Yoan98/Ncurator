@@ -13,22 +13,45 @@ import {
 } from '../skills'
 import { renderHumanStableNotes } from '../shared/memoryRenderers'
 import { renderLoadedHistoryText, renderRoundSection } from '../shared/historyRenderers'
-import { getToolPromptSpec } from '../tools/registry'
+import { getToolSpec } from '../tools/registry'
+import { renderToolSchemaForPrompt } from '../tools/schemaPromptRenderer'
 import type {
   HumanState,
-  ToolPromptSpec
+  ToolPromptExample
 } from '../types'
+import type { HumanToolSpec } from '../tools/types'
 import { renderWatchHintForBrain } from './watchHints'
 
-const renderLearnedToolSpecLine = (spec: ToolPromptSpec): string => {
-  const requiredArgs = spec.args
+const renderToolExample = (example: ToolPromptExample, index: number): string =>
+  `${index + 1}. ${example.goal}\n${JSON.stringify(example.args, null, 2)}`
+
+const indentLines = (value: string, level: number): string =>
+  value
+    .split('\n')
+    .map((line) => `${'  '.repeat(level)}${line}`)
+    .join('\n')
+
+const renderLearnedToolSpecLine = (spec: HumanToolSpec): string => {
+  const requiredArgs = spec.promptSpec.args
     .filter((arg) => arg.required)
     .map((arg) => `${arg.name}:${arg.type}`)
     .join(', ')
-  const preconditions = spec.preconditions?.join(' / ') || 'none'
-  const returns = spec.returns.map((item) => item.name).join(', ') || 'none'
+  const preconditions = spec.promptSpec.preconditions?.join(' / ') || 'none'
+  const returns = spec.promptSpec.returns.map((item) => item.name).join(', ') || 'none'
+  const schemaText = indentLines(renderToolSchemaForPrompt(spec.schema), 2)
+  const examples = indentLines(spec.promptSpec.examples.map(renderToolExample).join('\n'), 2)
 
-  return `- 工具 ${spec.name}：用途=${spec.purpose}；前置条件=${preconditions}；必填参数=[${requiredArgs || 'none'}]；核心返回=[${returns}]`
+  return `
+- 工具 ${spec.name}
+  - 用途：${spec.promptSpec.purpose}
+  - 前置条件：${preconditions}
+  - 顶层必填参数：${requiredArgs || 'none'}
+  - 核心返回：${returns}
+  - 结构：
+${schemaText}
+  - 示例：
+${examples}
+`.trim()
 }
 
 const renderAvailableSkillsSection = (state: HumanState): string => {
@@ -46,8 +69,8 @@ const renderAvailableSkillsSection = (state: HumanState): string => {
   const effectiveToolSpecLines = Array.from(
     new Set(effectiveSkillDefinitions.flatMap((definition) => definition.toolNames))
   )
-    .map((toolName) => getToolPromptSpec(toolName))
-    .filter((spec): spec is ToolPromptSpec => Boolean(spec))
+    .map((toolName) => getToolSpec(toolName))
+    .filter((spec): spec is HumanToolSpec => Boolean(spec))
     .map(renderLearnedToolSpecLine)
 
   return `

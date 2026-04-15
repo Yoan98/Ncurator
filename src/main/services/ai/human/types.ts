@@ -75,8 +75,7 @@ export type ToolPromptSpec = {
   preconditions?: string[]
   args: ToolPromptArgSpec[]
   returns: ToolPromptReturnSpec[]
-  commonMistakes?: string[]
-  examples?: ToolPromptExample[]
+  examples: ToolPromptExample[]
 }
 
 export type SkillDefinitionBase = z.infer<typeof skillDefinitionBaseSchema>

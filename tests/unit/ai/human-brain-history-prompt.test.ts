@@ -251,4 +251,39 @@ describe('ai unit brain prompt history blocks', () => {
     expect(prompt.user).toContain('当前没有可直接缩圈的 kbDocumentIds。')
     expect(prompt.user).toContain('不表示默认知识库范围不可用。')
   })
+
+  it('renders full schema and examples only for currently callable tools', () => {
+    const state = {
+      ...createInitialHumanState({
+        taskId: 'task-tool-schema-prompt',
+        userInput: '请准备编辑 docx'
+      }),
+      skills: {
+        learnedSkillIds: ['docx-read', 'docx-write']
+      }
+    }
+
+    const prompt = buildBrainPrompt({
+      state,
+      ctx: createStubAiRunContext(
+        buildReferenceScope({
+          workspace: {
+            workspaceId: 'workspace-1',
+            workspaceName: 'workspace',
+            rootPath: '/tmp/workspace-root'
+          }
+        })
+      )
+    })
+
+    expect(prompt.user).toContain('- 工具 docx_apply_ops')
+    expect(prompt.user).toContain('输入结构：')
+    expect(prompt.user).toContain('insert_after')
+    expect(prompt.user).toContain('anchorBlockId')
+    expect(prompt.user).toContain('runs')
+    expect(prompt.user).toContain('rows')
+    expect(prompt.user).toContain('示例：')
+    expect(prompt.user).toContain('补充说明：反走样通过平滑边缘像素来减轻锯齿感。')
+    expect(prompt.user).not.toContain('- 工具 terminal_run_command')
+  })
 })

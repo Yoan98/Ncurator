@@ -7,9 +7,11 @@ import {
   buildCompleteTaskDecision,
   buildLearnSkillsDecision,
   buildToolDecision,
+  collectDocxApplyOpsContentKinds,
   filterAiRunEventsByType,
   readLatestToolResultDataFromEvents
 } from '../testUtils'
+import { findParagraphBlockIdByText, type DocxOutlineResult } from '../../tool/docx/testUtils'
 
 describe('ai human mock-llm backend', () => {
   it('complex-docx-edit', async () => {
@@ -145,6 +147,237 @@ describe('ai human mock-llm backend', () => {
             data: {
               applyResult,
               searchResult
+            }
+          }
+        )
+      }
+    })
+  }, 15_000)
+
+  it('complex-docx-insert-structured-content', async () => {
+    await runBackendCase({
+      caseId: 'complex-docx-insert-structured-content',
+      harnessMode: 'mock-llm',
+      domain: 'ai',
+      suite: 'human',
+      groups: ['mock-llm'],
+      description: '验证 mock-llm 模式下 human 可以提交 paragraph/table 结构化 docx_apply_ops 参数。',
+      fixtures: [],
+      runMode: 'single',
+      execute: async (runtime) => {
+        await writeTestDocxFile(runtime.workspaceRoot, 'complex-structured-edit.docx', [
+          {
+            type: 'heading',
+            text: '图形学',
+            level: 1
+          },
+          {
+            type: 'paragraph',
+            text: '达到反走样。'
+          },
+          {
+            type: 'paragraph',
+            text: '结尾段落。'
+          }
+        ])
+
+        const runner = createHumanTestRunner(runtime, {
+          structuredOutputScript: {
+            'human.brain': [
+              {
+                output: buildLearnSkillsDecision({
+                  skillIds: ['docx-read', 'docx-write'],
+                  summary: '先学习 docx 读写能力',
+                  reason: '需要读取锚点并写入结构化内容。',
+                  expectedOutcome: '获得 docx 工具族。'
+                })
+              },
+              {
+                output: buildToolDecision({
+                  toolName: 'docx_open',
+                  args: {
+                    sourcePath: 'complex-structured-edit.docx'
+                  },
+                  summary: '打开原始文档',
+                  reason: '必须先初始化 docx 会话。',
+                  expectedOutcome: '拿到 sourcePath 与当前版本。'
+                })
+              },
+              () => {
+                const openResult = readLatestToolResultDataFromEvents<DocxOpenResult>(
+                  runtime.eventCollector.snapshot(),
+                  'docx_open'
+                )
+                return buildToolDecision({
+                  toolName: 'docx_outline',
+                  args: {
+                    sourcePath: openResult.sourcePath,
+                    includeTables: true,
+                    includeCells: true,
+                    maxBlocks: 60
+                  },
+                  summary: '读取结构提纲',
+                  reason: '需要先定位反走样段落的锚点 blockId。',
+                  expectedOutcome: '拿到可插入的 anchorBlockId。'
+                })
+              },
+              () => {
+                const outlineResult = readLatestToolResultDataFromEvents<DocxOutlineResult>(
+                  runtime.eventCollector.snapshot(),
+                  'docx_outline'
+                )
+                const openResult = readLatestToolResultDataFromEvents<DocxOpenResult>(
+                  runtime.eventCollector.snapshot(),
+                  'docx_open'
+                )
+                const anchorBlockId = findParagraphBlockIdByText(
+                  outlineResult.blocks,
+                  '达到反走样。'
+                )
+                return buildToolDecision({
+                  toolName: 'docx_apply_ops',
+                  args: {
+                    sourcePath: openResult.sourcePath,
+                    ops: [
+                      {
+                        type: 'insert_after',
+                        anchorBlockId,
+                        content: [
+                          {
+                            kind: 'paragraph',
+                            runs: [
+                              {
+                                text: '补充说明：反走样通过平滑边缘像素来减轻锯齿感。'
+                              }
+                            ]
+                          },
+                          {
+                            kind: 'table',
+                            rows: [
+                              [
+                                {
+                                  paragraphs: [
+                                    {
+                                      kind: 'paragraph',
+                                      runs: [{ text: '反走样' }]
+                                    }
+                                  ]
+                                },
+                                {
+                                  paragraphs: [
+                                    {
+                                      kind: 'paragraph',
+                                      runs: [{ text: '过拟合' }]
+                                    }
+                                  ]
+                                }
+                              ],
+                              [
+                                {
+                                  paragraphs: [
+                                    {
+                                      kind: 'paragraph',
+                                      runs: [{ text: '平滑边缘，降低锯齿' }]
+                                    }
+                                  ]
+                                },
+                                {
+                                  paragraphs: [
+                                    {
+                                      kind: 'paragraph',
+                                      runs: [{ text: '记住训练噪声，泛化变差' }]
+                                    }
+                                  ]
+                                }
+                              ]
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  summary: '插入结构化说明与表格',
+                  reason: '验证 human 能提交合法的 paragraph/table 结构。',
+                  expectedOutcome: '生成包含新增段落与表格的新版本。'
+                })
+              },
+              () => {
+                const applyResult = readLatestToolResultDataFromEvents<DocxApplyOpsResult>(
+                  runtime.eventCollector.snapshot(),
+                  'docx_apply_ops'
+                )
+                return buildToolDecision({
+                  toolName: 'docx_outline',
+                  args: {
+                    sourcePath: applyResult.sourcePath,
+                    includeTables: true,
+                    includeCells: true,
+                    maxBlocks: 80
+                  },
+                  summary: '复查新版本结构',
+                  reason: '确认新增段落与表格已经进入文档结构。',
+                  expectedOutcome: 'outline 中出现 paragraph 与 table。'
+                })
+              },
+              {
+                output: buildCompleteTaskDecision({
+                  summary: '结构化 docx 写入已完成。',
+                  reason: '已完成打开、定位、结构化写入和复查。',
+                  expectedOutcome: '进入最终交付。'
+                })
+              }
+            ],
+            'human.mouth': [
+              {
+                output: {
+                  summary: '结构化 docx 写入已完成。',
+                  deliveryMarkdown: '# Structured Docx Flow\n\n已完成 paragraph/table 结构化写入。'
+                }
+              }
+            ]
+          }
+        })
+
+        const output = await runner.run({
+          taskId: runtime.taskId,
+          userInput: '请在文档里插入补充说明和一个简单表格。'
+        })
+
+        return {
+          output,
+          events: runtime.eventCollector.snapshot()
+        }
+      },
+      assert: async (result, runtime) => {
+        const toolResults = filterAiRunEventsByType(result.events, 'tool_call_result')
+        const applyResult = readLatestToolResultDataFromEvents<DocxApplyOpsResult>(
+          toolResults,
+          'docx_apply_ops'
+        )
+        const outlineResult = readLatestToolResultDataFromEvents<DocxOutlineResult>(
+          toolResults,
+          'docx_outline'
+        )
+        const contentKinds = collectDocxApplyOpsContentKinds(result.events)
+
+        runtime.assertThat(
+          applyResult.changedBlocks.some((block) => block.action === 'insert_after') &&
+            contentKinds.includes('paragraph') &&
+            contentKinds.includes('table') &&
+            outlineResult.blocks.some(
+              (block) =>
+                block.type === 'paragraph' &&
+                block.text.includes('补充说明：反走样通过平滑边缘像素来减轻锯齿感。')
+            ) &&
+            outlineResult.blocks.some((block) => block.type === 'table'),
+          {
+            name: 'human-docx-structured-insert-uses-legal-docx-shape',
+            message:
+              'mock-llm 下的 human/docx case 应提交 paragraph/table 结构化 docx_apply_ops 参数并成功写入文档。',
+            data: {
+              applyResult,
+              outlineResult,
+              contentKinds
             }
           }
         )

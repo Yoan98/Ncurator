@@ -53,13 +53,6 @@ const createFileArtifactRef = (input: {
   summary: input.summary
 })
 
-const readToolDataSummary = (result: ToolCallResult): string | undefined =>
-  isJsonObject(result.data)
-    ? readNonEmptyString(result.data, 'summary') ||
-      readNonEmptyString(result.data, 'message') ||
-      readNonEmptyString(result.data, 'error')
-    : undefined
-
 const extractTerminalArtifacts = (result: ToolCallResult): AiArtifactRef[] => {
   if (result.toolName !== 'terminal_run_command' || !isJsonObject(result.data)) return []
   const rawArtifacts = result.data.artifacts

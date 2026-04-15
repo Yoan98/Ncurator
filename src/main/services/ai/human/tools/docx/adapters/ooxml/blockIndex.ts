@@ -72,6 +72,7 @@ const paragraphDetail = (blockId: string, paragraph: Element): DocxDetailedParag
   return {
     blockId,
     type: 'paragraph',
+    bodyIndex: -1,
     style: paragraphStyle(paragraph),
     text,
     runs
@@ -383,7 +384,16 @@ const buildTableDetail = (
   const summary = summarizeTable(tableNode)
   const cells = tableCells(tableNode).map((entry) => {
     const paragraphs = cellParagraphs(entry.cell).map((paragraph, idx) =>
-      paragraphDetail(`${blockId}.r:${entry.row}.c:${entry.col}.p:${idx + 1}`, paragraph)
+      {
+        const detail = paragraphDetail(
+          `${blockId}.r:${entry.row}.c:${entry.col}.p:${idx + 1}`,
+          paragraph
+        )
+        return {
+          ...detail,
+          bodyIndex
+        }
+      }
     )
     return {
       blockId: `${blockId}.r:${entry.row}.c:${entry.col}`,
@@ -417,7 +427,13 @@ export const getDetailedBlock = (index: BlockIndex, blockId: string): DocxDetail
   if (node.kind === 'table') return buildTableDetail(index, blockId, node.node, node.bodyIndex)
 
   const paragraphs = cellParagraphs(node.node).map((paragraph, idx) =>
-    paragraphDetail(`${blockId}.p:${idx + 1}`, paragraph)
+    {
+      const detail = paragraphDetail(`${blockId}.p:${idx + 1}`, paragraph)
+      return {
+        ...detail,
+        bodyIndex: node.bodyIndex
+      }
+    }
   )
   return {
     blockId,

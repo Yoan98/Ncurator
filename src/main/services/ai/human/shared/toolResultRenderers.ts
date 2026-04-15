@@ -202,12 +202,7 @@ export const renderToolResultDataPreview = (result: ToolCallResult): string | un
 
 export const renderToolDiagnosticText = (result: ToolCallResult): string => {
   if (!result.diagnostic) return ''
-
-  const missingArgsText =
-    result.diagnostic.missingArgs && result.diagnostic.missingArgs.length > 0
-      ? `；missingArgs=[${result.diagnostic.missingArgs.join(', ')}]`
-      : ''
-  return `；diagnostic=${result.diagnostic.kind}${missingArgsText}`
+  return `；diagnostic=${toInlineText(result.diagnostic.message)}`
 }
 
 export const buildToolCallDisplayText = (
