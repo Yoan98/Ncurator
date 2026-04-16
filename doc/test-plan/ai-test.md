@@ -86,8 +86,8 @@
 
 ### 4.1 `tool`
 
-- Last Run：`2026-04-16 11:33:10 +08:00`
-- Last Result：`未通过`（`21 / 22` 个测试用例通过）
+- Last Run：`2026-04-16 15:40:35 +08:00`
+- Last Result：`通过`（`23 / 23` 个测试用例通过）
 
 #### `docx`
 
@@ -241,13 +241,13 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 `kb_list_documents` 在当前工作区默认范围内的真实列表、过滤与缩圈契约。
+- What：验证 `kb_list_documents` 在当前工作区默认范围内的真实列表、`query` 过滤与缩圈契约。
 - Why：KB 资料发现必须真实调用生产检索存储。
 - How：通过真实 `DocumentsStore.addDocument / addChunks` 导入多工作区 fixture 后执行列表查询。
 - Oracle：结果默认只包含当前工作区文档，`documentIds` 只做进一步缩圈，空结果与非空结果都稳定可断言。
 - Not：不验证问答文案。
-- Last Run：`2026-04-16 11:33:09 +08:00`
-- Last Result：`未通过`
+- Last Run：`2026-04-16 15:40:33 +08:00`
+- Last Result：`通过`
 
 ##### `kb-evidence-search-family-contract`
 
@@ -267,24 +267,24 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证目录检查类只读命令能真实执行并返回结构化摘要。
+- What：验证 AI 可仅通过 `workspace_run_command` 真实执行目录浏览与文本读取类只读命令。
 - Why：这是 terminal 工具最典型的只读路径。
-- How：调用 `workspace_list_files` / `workspace_read_file` 读取目录与文件信息。
+- How：调用 `workspace_run_command` 执行真实 shell 命令，分别完成目录浏览与文件读取。
 - Oracle：返回真实 stdout 片段、退出码与可消费摘要。
 - Not：不验证写操作。
-- Last Run：`2026-04-16 11:33:10 +08:00`
+- Last Run：`2026-04-16 15:40:34 +08:00`
 - Last Result：`通过`
 
 ##### `terminal-text-search-readonly`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证只读文本搜索命令的真实执行契约。
+- What：验证 AI 可仅通过 `workspace_run_command` 真实执行只读文本搜索命令。
 - Why：搜索是 terminal 工具最常见的辅助路径。
-- How：调用 `workspace_search_text` 真实执行文本搜索。
+- How：调用 `workspace_run_command` 执行真实 shell 搜索命令。
 - Oracle：返回可断言命中信息与正确退出状态。
 - Not：不验证修改文件。
-- Last Run：`2026-04-16 11:33:10 +08:00`
+- Last Run：`2026-04-16 15:40:35 +08:00`
 - Last Result：`通过`
 
 ##### `terminal-risk-and-boundary-guard`
@@ -296,7 +296,7 @@
 - How：构造危险或越权命令调用 `workspace_run_command`。
 - Oracle：返回明确拒绝，不执行实际破坏操作。
 - Not：不验证 UI 提示。
-- Last Run：`2026-04-16 11:33:10 +08:00`
+- Last Run：`2026-04-16 15:40:34 +08:00`
 - Last Result：`通过`
 
 ##### `terminal-inline-edit-artifact-contract`
@@ -308,7 +308,7 @@
 - How：对测试文件执行真实 inline edit 命令并读取返回产物。
 - Oracle：artifact 信息完整，修改结果与磁盘状态一致。
 - Not：不验证上层审批流。
-- Last Run：`2026-04-16 11:33:08 +08:00`
+- Last Run：`2026-04-16 15:40:34 +08:00`
 - Last Result：`通过`
 
 #### `hand`
@@ -547,7 +547,7 @@
 - How：注入真实 live LLM 配置，seed 一份与“审批未通过时保留原文件”相关的真实 KB 文档并限制在已选范围内，然后直接输入“审批没通过时原文件到底要不要保留”的自然语言诉求，让真实 `human` 自主完成。
 - Oracle：任务最终完成，且真实工具结果中至少出现一次以 `kb_` 开头的检索工具调用，最终结论明确指向保留原文件。
 - Not：不对最终文案做精确文本断言。
-- Last Run：`2026-04-16 10:38:11 +08:00`
+- Last Run：`2026-04-16 15:40:43 +08:00`
 - Last Result：`通过`
 
 ##### `human-risk-report-draft-live`
@@ -559,8 +559,8 @@
 - How：注入真实 live LLM 配置；workspace 中动态写入带 `RISK_TODO / OWNER_TODO` 占位符的周报模板和干扰文件；seed 两份真实 KB 文档分别提供风险结论与负责人说明并限制在已选范围内；直接输入“找到上周 Word 周报模板，按已选资料补全风险结论与负责人，生成确认稿且不要覆盖原文件”的自然语言诉求，让真实 `human` 自主完成。
 - Oracle：任务最终完成；事件流中至少出现一次 `workspace_run_command`、一次 KB 检索工具调用、一次 docx 读取、一次 docx 编辑；存在 `draft_review_ready` 事件，最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；原模板未被覆盖；最终答复能从用户视角说明改动的是“风险结论”和“负责人说明”两处、依据分别来自 `Weekly Risk Summary.md` 与 `Owner Note.md`，并明确当前给出的是待确认草稿。
 - Not：不绑定最终答案措辞，也不要求固定检索工具顺序。
-- Last Run：`2026-04-16 11:42:54 +08:00`
-- Last Result：`未通过`
+- Last Run：`2026-04-16 15:59:11 +08:00`
+- Last Result：`通过`
 
 ##### `human-docx-cause-remedy-reading-live`
 

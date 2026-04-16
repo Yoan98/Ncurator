@@ -1953,11 +1953,11 @@ export function registerHandlers(services: {
     'list-documents',
     async (
       _event,
-      payload: { keyword?: string; page: number; pageSize: number }
+      payload: { query?: string; page: number; pageSize: number }
     ): Promise<DocumentListResponse> => {
       try {
-        const { keyword, page, pageSize } = payload
-        const res = await documentsStore.listDocuments({ keyword, page, pageSize })
+        const { query, page, pageSize } = payload
+        const res = await documentsStore.listDocuments({ query, page, pageSize })
         return res
       } catch (error: unknown) {
         console.error('❌ [LIST-DOCUMENTS] ERROR:', error)

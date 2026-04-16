@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import type { TerminalCommandInput, TerminalCommandResult } from './types'
 import { clipTextWithMeta } from '../../../utils/text'
+import { getAiRuntimePlatform } from '../../../utils/platform'
 
 export const runTerminalCommand = async (
   input: TerminalCommandInput
@@ -25,12 +26,20 @@ export const runTerminalCommand = async (
   }
 
   const startedAt = Date.now()
+  const platform = getAiRuntimePlatform()
+  const shellCommand =
+    platform === 'windows' ? 'powershell.exe' : '/bin/zsh'
+  const shellArgs =
+    platform === 'windows'
+      ? ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', command]
+      : ['-lc', command]
 
   return await new Promise<TerminalCommandResult>((resolve) => {
-    const child = spawn(command, {
+    const child = spawn(shellCommand, shellArgs, {
       cwd,
-      shell: true,
-      env: process.env
+      shell: false,
+      env: process.env,
+      windowsHide: true
     })
 
     let stdout = ''

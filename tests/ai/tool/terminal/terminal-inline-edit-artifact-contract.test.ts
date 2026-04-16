@@ -12,6 +12,8 @@ type TerminalRunCommandResult = {
   artifacts: Array<{ path: string; operation: 'created' | 'updated' }>
 }
 
+const isWindows = process.platform === 'win32'
+
 describe('ai tool terminal backend', () => {
   it('terminal-inline-edit-artifact-contract', async () => {
     let runId = ''
@@ -36,10 +38,14 @@ describe('ai tool terminal backend', () => {
 
         return {
           updateExisting: await harness.invoke<TerminalRunCommandResult>('workspace_run_command', {
-            command: 'cp replacement.txt notes.txt'
+            command: isWindows
+              ? 'Copy-Item -LiteralPath replacement.txt -Destination notes.txt'
+              : 'cp replacement.txt notes.txt'
           }),
           createNew: await harness.invoke<TerminalRunCommandResult>('workspace_run_command', {
-            command: 'touch generated/output.txt'
+            command: isWindows
+              ? 'New-Item -ItemType File -Path generated/output.txt'
+              : 'touch generated/output.txt'
           }),
           notesContent: await fs.readFile(path.join(runtime.workspaceRoot, 'notes.txt'), 'utf8'),
           createdExists: await fs

@@ -67,13 +67,10 @@
 ### `workspace-cli`
 
 - 类型：external
-- 职责：在当前 workspace 内读取文件、检查目录状态、执行单条 CLI 命令。
+- 职责：在当前 workspace 内执行单条 CLI 命令，让 AI 自主通过命令行完成浏览、搜索、读取、验证和生成中间结果。
 - 工具列表：
-  - `workspace_list_files`
-  - `workspace_search_text`
-  - `workspace_read_file`
   - `workspace_run_command`
-- 适用场景：当任务需要直接查看工作区文件、检查环境状态、读取源码或执行单条命令时使用。
+- 适用场景：当任务需要直接使用命令行处理工作区文件、检查环境状态、读取源码或执行单条命令时使用。
 
 ### `docx-read`
 

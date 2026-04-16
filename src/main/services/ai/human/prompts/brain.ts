@@ -50,6 +50,8 @@ ${examples}
 `.trim()
 }
 
+const renderPlatformText = (ctx: AiRunContext): string => `当前 terminal 平台：${ctx.platform}`
+
 const renderAvailableSkillsSection = (state: HumanState): string => {
   const effectiveSkillIds = getEffectiveLearnedSkillIds(state.skills.learnedSkillIds)
   const effectiveSkillDefinitions = effectiveSkillIds.map((skillId) => getSkillDefinition(skillId))
@@ -142,6 +144,7 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
   <context_block_guide>
     - task_goal：用户原始诉求与限制。
     - reference_scope：当前工作区、默认知识范围、显式缩圈范围和可用边界。
+    - terminal_platform：当前 terminal 所在平台；如果你决定使用命令行，应据此选择命令语法。
     - your_notes：稳定任务笔记，按“当前理解 / 关键依据 / 检查清单”组织。
     - recent_progress：最近一轮完整过程记录，用于判断刚做了什么、得到什么。
     - earlier_attempts：更早轮次过程链，用于识别重复路径、失败模式和已经验证过的动作。
@@ -255,6 +258,10 @@ ${input.state.task.userInput}
   <reference_scope>
 ${renderReferenceScopeText(input.ctx.referenceScope)}
   </reference_scope>
+
+  <terminal_platform>
+${renderPlatformText(input.ctx)}
+  </terminal_platform>
 
   <memory>
     <your_notes>

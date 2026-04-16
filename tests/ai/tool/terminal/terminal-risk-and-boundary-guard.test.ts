@@ -11,6 +11,8 @@ type TerminalRunCommandResult = {
   error?: string
 }
 
+const isWindows = process.platform === 'win32'
+
 describe('ai tool terminal backend', () => {
   it('terminal-risk-and-boundary-guard', async () => {
     await runBackendCase({
@@ -24,6 +26,7 @@ describe('ai tool terminal backend', () => {
       runMode: 'single',
       execute: async (runtime) => {
         const guardedDir = path.join(runtime.workspaceRoot, 'guarded')
+        const outsidePath = path.join(path.dirname(runtime.workspaceRoot), 'outside.txt')
         await fs.mkdir(guardedDir, { recursive: true })
         await fs.writeFile(path.join(guardedDir, 'keep.txt'), 'keep\n')
 
@@ -33,13 +36,13 @@ describe('ai tool terminal backend', () => {
 
         return {
           highRiskDenied: await harness.invoke<TerminalRunCommandResult>('workspace_run_command', {
-            command: 'rm -rf guarded'
+            command: isWindows ? 'Remove-Item -Recurse -Force guarded' : 'rm -rf guarded'
           }),
           relativeEscape: await harness.invoke<TerminalRunCommandResult>('workspace_run_command', {
-            command: 'cat ../outside.txt'
+            command: isWindows ? 'Get-Content ../outside.txt' : 'cat ../outside.txt'
           }),
           absoluteEscape: await harness.invoke<TerminalRunCommandResult>('workspace_run_command', {
-            command: 'cat /tmp/outside.txt'
+            command: isWindows ? `Get-Content "${outsidePath}"` : `cat "${outsidePath}"`
           }),
           guardedStillExists: await fs
             .access(path.join(guardedDir, 'keep.txt'))
@@ -55,7 +58,9 @@ describe('ai tool terminal backend', () => {
         runtime.assertThat(
           result.highRiskDenied.ok === false &&
             result.highRiskDenied.code === 'approval_denied' &&
-            approvalEvents.some((event) => event.command === 'rm -rf guarded') &&
+            approvalEvents.some((event) =>
+              event.command === (isWindows ? 'Remove-Item -Recurse -Force guarded' : 'rm -rf guarded')
+            ) &&
             result.guardedStillExists,
           {
             name: 'high-risk-commands-stop-at-approval',

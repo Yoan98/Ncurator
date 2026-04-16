@@ -208,7 +208,7 @@ export const buildKbCapabilityTools = (input: {
           }
 
           const normalized = await ctx.documentsStore.listDocuments({
-            keyword: query,
+            query,
             page,
             pageSize,
             workspaceId,

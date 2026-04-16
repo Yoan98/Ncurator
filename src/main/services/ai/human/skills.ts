@@ -26,14 +26,9 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     source: 'external',
     countsTowardToolBudget: true,
     title: 'workspace-cli',
-    description: '读取 workspace 文件、检查环境、执行单条 CLI 命令。',
-    whenToUse: '当任务必须读取工作区文件、确认目录状态、执行单条命令或生成中间文件时使用。',
-    toolNames: [
-      'workspace_list_files',
-      'workspace_search_text',
-      'workspace_read_file',
-      'workspace_run_command'
-    ]
+    description: '在当前 workspace 内执行单条 CLI 命令。',
+    whenToUse: '当任务需要通过命令行自主完成文件浏览、搜索、读取、验证或生成中间结果时使用。',
+    toolNames: ['workspace_run_command']
   },
   'docx-read': {
     skillId: 'docx-read',

@@ -1,3 +1,5 @@
+import { getAiRuntimePlatform } from '../../../utils/platform'
+
 export type ShellCommandSegment = {
   text: string
   tokens: string[]
@@ -10,12 +12,15 @@ const readSegmentSeparator = (text: string, index: number): string | undefined =
   return undefined
 }
 
-export const parseShellTokens = (command: string): string[] => {
+const isWindowsPlatform = (): boolean => getAiRuntimePlatform() === 'windows'
+
+export const parseShellTokens = (command: string, options?: { windowsStyle?: boolean }): string[] => {
   const text = String(command || '')
   const tokens: string[] = []
   let current = ''
   let quote: '"' | "'" | null = null
   let escaped = false
+  const windowsStyle = options?.windowsStyle ?? isWindowsPlatform()
 
   for (let index = 0; index < text.length; index += 1) {
     const char = text[index]
@@ -26,7 +31,7 @@ export const parseShellTokens = (command: string): string[] => {
       continue
     }
 
-    if (char === '\\') {
+    if (!windowsStyle && char === '\\') {
       escaped = true
       continue
     }
@@ -59,21 +64,27 @@ export const parseShellTokens = (command: string): string[] => {
 }
 
 export const extractAbsolutePathTokens = (command: string): string[] =>
-  parseShellTokens(command).filter((token) => token.startsWith('/'))
+  parseShellTokens(command).filter(
+    (token) => token.startsWith('/') || /^[a-z]:[\\/]/i.test(token) || /^\\\\/.test(token)
+  )
 
-export const parseShellCommandSegments = (command: string): ShellCommandSegment[] => {
+export const parseShellCommandSegments = (
+  command: string,
+  options?: { windowsStyle?: boolean }
+): ShellCommandSegment[] => {
   const text = String(command || '')
   const segments: ShellCommandSegment[] = []
   let quote: '"' | "'" | null = null
   let escaped = false
   let segmentStart = 0
+  const windowsStyle = options?.windowsStyle ?? isWindowsPlatform()
 
   const pushSegment = (segmentText: string) => {
     const normalized = segmentText.trim()
     if (!normalized) return
     segments.push({
       text: normalized,
-      tokens: parseShellTokens(normalized)
+      tokens: parseShellTokens(normalized, { windowsStyle })
     })
   }
 
@@ -85,7 +96,7 @@ export const parseShellCommandSegments = (command: string): ShellCommandSegment[
       continue
     }
 
-    if (char === '\\') {
+    if (!windowsStyle && char === '\\') {
       escaped = true
       continue
     }

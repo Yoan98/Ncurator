@@ -35,7 +35,7 @@ describe('ai human mock-llm backend', () => {
                   skillIds: ['docx-write'],
                   summary: '再学习 docx 写入',
                   reason: '继续扩大当前活跃工具集合。',
-                  expectedOutcome: '获得 8 个活跃工具。'
+                  expectedOutcome: '获得 12 个活跃工具。'
                 })
               },
               {
@@ -88,7 +88,7 @@ describe('ai human mock-llm backend', () => {
             latestLearningStep?.effectiveSkillIds.includes('history-recall') &&
             latestLearningStep.availableToolNames.includes('history_search') &&
             latestLearningStep.availableToolNames.includes('history_list') &&
-            latestLearningStep.availableToolNames.length >= 16 &&
+            latestLearningStep.availableToolNames.length >= 14 &&
             latestLearningStep.summary.includes('当前 active tools=') &&
             !latestLearningStep.summary.includes('已淘汰最早学习的 skill='),
           {

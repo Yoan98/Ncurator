@@ -7,6 +7,7 @@ import { resolveWorkspacePath } from './terminalCwd'
 import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
 import type { TerminalToolContext } from '../../../types'
 import type { CapabilityActivityInput } from '../types'
+import { getAiRuntimePlatform } from '../../../utils/platform'
 
 const extractRedirectionPaths = (tokens: string[]): string[] => {
   const paths: string[] = []
@@ -49,6 +50,20 @@ const detectSegmentArtifacts = (tokens: string[]): TerminalArtifactCandidate[] =
         operation: first === 'mv' ? 'updated' : undefined
       })
     }
+  } else if (first === 'copy-item' || first === 'move-item') {
+    const destination = args.at(-1)
+    if (destination) {
+      candidates.push({
+        rawPath: destination,
+        operation: first === 'move-item' ? 'updated' : undefined
+      })
+    }
+  } else if (first === 'new-item') {
+    const destination = args.at(-1)
+    if (destination) candidates.push({ rawPath: destination, operation: 'created' })
+  } else if (first === 'set-content' || first === 'add-content' || first === 'out-file') {
+    const destination = args.at(-1)
+    if (destination) candidates.push({ rawPath: destination })
   } else if (first === 'tee') {
     const destination = args.find((token) => token !== '/dev/null')
     if (destination) candidates.push({ rawPath: destination })
@@ -59,7 +74,8 @@ const detectSegmentArtifacts = (tokens: string[]): TerminalArtifactCandidate[] =
 
 export const collectTerminalArtifactCandidates = (command: string): TerminalArtifactCandidate[] => {
   const unique = new Map<string, TerminalArtifactCandidate>()
-  for (const segment of parseShellCommandSegments(command)) {
+  const windowsStyle = getAiRuntimePlatform() === 'windows'
+  for (const segment of parseShellCommandSegments(command, { windowsStyle })) {
     for (const candidate of detectSegmentArtifacts(segment.tokens)) {
       const key = candidate.rawPath.trim()
       if (!key) continue

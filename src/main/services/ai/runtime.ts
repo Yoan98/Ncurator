@@ -1,6 +1,7 @@
 import type { AiRunContext, AiRunDeps, AiRunStartPayload, CancelledError } from './types'
 import { createAiLlmExecutor } from './llmExecutor'
 import { buildReferenceScope } from './prompts/referenceScope'
+import { getAiRuntimePlatform } from './utils/platform'
 import { clipText } from './utils/text'
 import {
   formatTurns,
@@ -19,6 +20,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
 
   const normalizedWorkspace = normalizeWorkspaceBinding(payload.workspace)
   const normalizedReferences = normalizeSelectedReferences(payload.selectedReferences)
+  const platform = getAiRuntimePlatform()
 
   const getRequestedConfig = async () => {
     const requestedId = String(payload.modelConfigId || '').trim()
@@ -71,6 +73,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
 
   return {
     runId: payload.runId,
+    platform,
     referenceScope: buildReferenceScope({
       workspace: normalizedWorkspace,
       selectedReferences: normalizedReferences

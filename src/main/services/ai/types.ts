@@ -36,6 +36,8 @@ export type HumanTaskRunner = (
 
 export type AiRunState = z.infer<typeof aiRunStateContractSchema>
 
+export type AiRuntimePlatform = 'macos' | 'windows'
+
 export type AiRunStartPayload = {
   runId: string
   sessionId: string
@@ -92,6 +94,7 @@ export type AiRunDeps = {
 
 export type AiRunContext = {
   runId: string
+  platform: AiRuntimePlatform
   referenceScope: AiReferenceScope
   humanRuntimeOverrides?: {
     hardActionLimit?: number

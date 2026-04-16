@@ -5,11 +5,14 @@ import { createTerminalToolHarness } from '../../../harness/backend/aiToolHarnes
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import { filterEventsByType } from '../testHelpers'
 
-type WorkspaceResult = {
+type TerminalRunCommandResult = {
   ok: boolean
   code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
-  [key: string]: unknown
+  outputPreview: string
+  stdout: string
 }
+
+const isWindows = process.platform === 'win32'
 
 describe('ai tool terminal backend', () => {
   it('terminal-directory-inspection-readonly', async () => {
@@ -19,7 +22,7 @@ describe('ai tool terminal backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['terminal'],
-      description: '验证 workspace 目录浏览与文件读取类只读工具的基础契约。',
+      description: '验证 workspace 目录浏览与文本读取都可通过单条只读命令稳定完成。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -34,16 +37,15 @@ describe('ai tool terminal backend', () => {
         const harness = createTerminalToolHarness(runtime)
 
         return {
-          files: await harness.invoke<WorkspaceResult>('workspace_list_files', {
-            path: 'materials',
-            limit: 20
+          list: await harness.invoke<TerminalRunCommandResult>('workspace_run_command', {
+            command: isWindows
+              ? 'Get-ChildItem -LiteralPath materials -Recurse -Force'
+              : 'find materials -mindepth 1 -maxdepth 2'
           }),
-          search: await harness.invoke<WorkspaceResult>('workspace_search_text', {
-            query: 'beta',
-            path: 'materials'
-          }),
-          read: await harness.invoke<WorkspaceResult>('workspace_read_file', {
-            path: 'materials/nested/daily-note.txt'
+          read: await harness.invoke<TerminalRunCommandResult>('workspace_run_command', {
+            command: isWindows
+              ? 'Get-Content -LiteralPath materials/nested/daily-note.txt'
+              : 'cat materials/nested/daily-note.txt'
           }),
           events: runtime.eventCollector.snapshot()
         }
@@ -53,36 +55,30 @@ describe('ai tool terminal backend', () => {
         const stepErrors = filterEventsByType(result.events, 'terminal_step_error')
 
         runtime.assertThat(
-          result.files.ok &&
-            result.search.ok &&
+          result.list.ok &&
             result.read.ok &&
             approvalEvents.length === 0 &&
             stepErrors.length === 0,
           {
-            name: 'readonly-workspace-tools-run-without-approval',
-            message: '目录与文件读取类只读工具应直接成功执行，且不触发审批。',
+            name: 'readonly-shell-inspection-runs-without-approval',
+            message: '目录浏览与文本读取类只读命令应直接成功执行，且不触发审批。',
             data: {
               approvals: approvalEvents.length,
               stepErrors: stepErrors.length,
-              codes: [result.files.code, result.search.code, result.read.code]
+              codes: [result.list.code, result.read.code]
             }
           }
         )
 
-        const fileItems = Array.isArray(result.files.items) ? result.files.items : []
-        const searchMatches = Array.isArray(result.search.matches) ? result.search.matches : []
-        const readContent = typeof result.read.content === 'string' ? result.read.content : ''
         runtime.assertThat(
-          fileItems.some((item) => JSON.stringify(item).includes('daily-note.txt')) &&
-            searchMatches.some((item) => JSON.stringify(item).includes('beta')) &&
-            readContent.includes('alpha') &&
-            readContent.includes('gamma'),
+          result.list.outputPreview.includes('daily-note.txt') &&
+            result.read.stdout.includes('alpha') &&
+            result.read.stdout.includes('gamma'),
           {
-            name: 'readonly-workspace-tools-return-stable-output',
-            message: 'workspace 只读工具应返回稳定结构，供后续推理继续消费。',
+            name: 'readonly-shell-inspection-returns-stable-output',
+            message: 'workspace_run_command 应为目录浏览与文本读取返回可消费的稳定输出。',
             data: {
-              files: result.files,
-              search: result.search,
+              list: result.list,
               read: result.read
             }
           }

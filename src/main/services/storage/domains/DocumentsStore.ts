@@ -134,11 +134,11 @@ export class DocumentsStore {
 
   private buildDocumentWhere(input: {
     workspaceId?: string
-    keyword?: string
+    query?: string
     sourceType?: DocumentRecord['source_type']
     documentIds?: string[]
   }): string | undefined {
-    const keyword = String(input.keyword || '').trim()
+    const query = String(input.query || '').trim()
     return this.core.combineWhere([
       input.workspaceId
         ? `workspace_id = '${this.core.escapeSqlString(input.workspaceId)}'`
@@ -146,7 +146,7 @@ export class DocumentsStore {
       input.sourceType
         ? `source_type = '${this.core.escapeSqlString(input.sourceType)}'`
         : undefined,
-      keyword ? `name LIKE '%${this.core.escapeSqlString(keyword)}%'` : undefined,
+      query ? `name LIKE '%${this.core.escapeSqlString(query)}%'` : undefined,
       this.core.buildInClause('id', input.documentIds)
     ])
   }
@@ -333,23 +333,23 @@ export class DocumentsStore {
   }
 
   public async listDocuments(params: {
-    keyword?: string
+    query?: string
     page: number
     pageSize: number
     workspaceId?: string
     documentIds?: string[]
   }): Promise<DocumentListResponse> {
-    const { keyword, page, pageSize, workspaceId, documentIds } = params
+    const { query, page, pageSize, workspaceId, documentIds } = params
     const table = await this.core.openTable(LANCE_TABLES.DOCUMENT)
 
-    const where = this.buildDocumentWhere({ workspaceId, keyword, documentIds })
+    const where = this.buildDocumentWhere({ workspaceId, query, documentIds })
 
     const total = await table.countRows(where)
     const skip = Math.max(0, (page - 1) * pageSize)
 
-    const query = table.query()
-    if (where) query.where(where)
-    const rows = await query.limit(pageSize).offset(skip).toArray()
+    const queryBuilder = table.query()
+    if (where) queryBuilder.where(where)
+    const rows = await queryBuilder.limit(pageSize).offset(skip).toArray()
 
     const items = await this.attachWebSourceMetadata(rows.map(toDocumentRecord))
 

@@ -12,6 +12,8 @@ type TerminalRunCommandResult = {
   error?: string
 }
 
+const isWindows = process.platform === 'win32'
+
 describe('ai tool terminal backend', () => {
   it('terminal-text-search-readonly', async () => {
     await runBackendCase({
@@ -20,7 +22,7 @@ describe('ai tool terminal backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['terminal'],
-      description: '验证 rg/grep 搜索命令的只读契约与 workspace 边界约束。',
+      description: '验证通过单条只读命令执行文本搜索，并在越界路径参数下于执行前拒绝。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -37,14 +39,20 @@ describe('ai tool terminal backend', () => {
         const harness = createTerminalToolHarness(runtime)
 
         return {
-          rg: await harness.invoke<TerminalRunCommandResult>('workspace_run_command', {
-            command: 'rg "Approval denied" notes'
+          firstSearch: await harness.invoke<TerminalRunCommandResult>('workspace_run_command', {
+            command: isWindows
+              ? 'Get-ChildItem -Path notes -Recurse -File | Select-String -Pattern "Approval denied"'
+              : 'grep -R -n "Approval denied" notes'
           }),
-          grep: await harness.invoke<TerminalRunCommandResult>('workspace_run_command', {
-            command: 'grep -R "artifacts" notes'
+          secondSearch: await harness.invoke<TerminalRunCommandResult>('workspace_run_command', {
+            command: isWindows
+              ? 'Get-ChildItem -Path notes -Recurse -File | Select-String -Pattern "artifacts"'
+              : 'grep -R -n "artifacts" notes'
           }),
           boundaryRejected: await harness.invoke<TerminalRunCommandResult>('workspace_run_command', {
-            command: 'rg "Overview" ../'
+            command: isWindows
+              ? 'Get-ChildItem -Path ../ -Recurse -File | Select-String -Pattern "Overview"'
+              : 'grep -R -n "Overview" ../'
           }),
           events: runtime.eventCollector.snapshot()
         }
@@ -53,33 +61,33 @@ describe('ai tool terminal backend', () => {
         const approvalEvents = filterEventsByType(result.events, 'approval_required')
 
         runtime.assertThat(
-          result.rg.ok &&
-            result.grep.ok &&
-            result.rg.code === 'ok' &&
-            result.grep.code === 'ok' &&
+          result.firstSearch.ok &&
+            result.secondSearch.ok &&
+            result.firstSearch.code === 'ok' &&
+            result.secondSearch.code === 'ok' &&
             approvalEvents.length === 0,
           {
             name: 'search-commands-stay-readonly',
-            message: 'rg/grep 搜索命令应保持只读执行，不触发审批。',
+            message: '只读文本搜索命令应直接成功执行，不触发审批。',
             data: {
               approvals: approvalEvents.length,
-              rg: result.rg,
-              grep: result.grep
+              firstSearch: result.firstSearch,
+              secondSearch: result.secondSearch
             }
           }
         )
 
         runtime.assertThat(
-          result.rg.outputPreview.includes('release.md') &&
-            result.grep.outputPreview.includes('Terminal artifacts must be recorded.') &&
+          result.firstSearch.outputPreview.includes('release.md') &&
+            result.secondSearch.outputPreview.includes('Terminal artifacts must be recorded.') &&
             result.boundaryRejected.ok === false &&
             result.boundaryRejected.code === 'workspace_required',
           {
             name: 'search-commands-honor-boundary-checks',
             message: '文本搜索应正确返回命中结果，并在越界路径参数下于执行前拒绝。',
             data: {
-              rg: result.rg.outputPreview,
-              grep: result.grep.outputPreview,
+              firstSearch: result.firstSearch.outputPreview,
+              secondSearch: result.secondSearch.outputPreview,
               boundaryRejected: result.boundaryRejected
             }
           }

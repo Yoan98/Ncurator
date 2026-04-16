@@ -107,7 +107,7 @@ export type DesktopApi = {
     documentIds?: string[]
   ) => Promise<SearchResult[]>
   listDocuments: (payload: {
-    keyword?: string
+    query?: string
     page: number
     pageSize: number
   }) => Promise<{ items: DocumentRecord[]; total: number }>

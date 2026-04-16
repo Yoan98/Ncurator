@@ -25,12 +25,16 @@ type DocxMutationResult = {
 }
 
 const hasExpectedRiskReportChanges = (changedBlocks: readonly DocxMutationResult['changedBlocks'][number][]) =>
-  changedBlocks.length >= 1 &&
   changedBlocks.some(
     (block) =>
       block.blockId === 'b:1' &&
       /风险结论/.test(block.beforeText || '') &&
-      /待跟进/.test(block.afterText || '') &&
+      /待跟进/.test(block.afterText || '')
+  ) &&
+  changedBlocks.some(
+    (block) =>
+      block.blockId === 'b:2' &&
+      /负责人说明/.test(block.beforeText || '') &&
       /Alice/.test(block.afterText || '')
   )
 
@@ -105,11 +109,12 @@ describe('ai human live backend', () => {
           .filter((event) => event.toolName.startsWith('docx_'))
           .map((event) => event.input.sourcePath)
           .filter((value): value is string => typeof value === 'string')
-        const latestDocxMutationEvent = toolResults
+        const changedBlocks = toolResults
           .filter((event) => event.toolName === 'docx_text_edit')
-          .at(-1)
-        const docxMutation = (latestDocxMutationEvent?.result?.data as DocxMutationResult | undefined) || {}
-        const changedBlocks = docxMutation.changedBlocks || []
+          .flatMap((event) => {
+            const docxMutation = (event.result?.data as DocxMutationResult | undefined) || {}
+            return docxMutation.changedBlocks || []
+          })
         const kbEvidenceText = JSON.stringify(
           toolResults
             .filter((event) => event.toolName.startsWith('kb_'))

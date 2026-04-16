@@ -2,6 +2,7 @@ import { parseShellCommandSegments } from './commandParsing'
 import { collectTerminalArtifactCandidates } from './terminalArtifacts'
 import { isPathInsideRoot } from './terminalCwd'
 import type { TerminalCommandAnalysis } from './types'
+import { getAiRuntimePlatform } from '../../../utils/platform'
 
 type PathArgumentStrategy = 'all_non_option_args' | 'skip_first_non_option_arg' | 'none'
 
@@ -14,14 +15,26 @@ const COMMAND_PATH_ARGUMENT_STRATEGIES: Partial<Record<string, PathArgumentStrat
   python3: 'none',
   rg: 'skip_first_non_option_arg',
   grep: 'skip_first_non_option_arg',
-  sed: 'skip_first_non_option_arg'
+  sed: 'skip_first_non_option_arg',
+  'get-content': 'all_non_option_args',
+  'get-childitem': 'all_non_option_args',
+  'select-string': 'all_non_option_args',
+  'copy-item': 'all_non_option_args',
+  'move-item': 'all_non_option_args',
+  'remove-item': 'all_non_option_args',
+  'new-item': 'all_non_option_args',
+  'set-content': 'all_non_option_args',
+  'add-content': 'all_non_option_args',
+  'out-file': 'all_non_option_args'
 }
 
 const isRedirectionOperator = (token: string): boolean =>
   token === '>' || token === '>>' || token === '1>' || token === '1>>'
 
 const isRelativeEscapeToken = (token: string): boolean => {
-  const normalized = String(token || '').trim()
+  const normalized = String(token || '')
+    .trim()
+    .replace(/\\/g, '/')
   return (
     normalized === '..' ||
     normalized.startsWith('../') ||
@@ -79,12 +92,19 @@ export const checkWorkspaceBoundary = (
     return { ok: false, reason: 'workspace root path is missing' }
   }
 
-  for (const segment of parseShellCommandSegments(command)) {
+  const windowsStyle = getAiRuntimePlatform() === 'windows'
+
+  for (const segment of parseShellCommandSegments(command, { windowsStyle })) {
     for (const candidatePath of collectBoundaryPathTokens(segment.tokens)) {
       if (isRelativeEscapeToken(candidatePath)) {
         return { ok: false, reason: `relative path escapes workspace boundary: ${candidatePath}` }
       }
-      if (candidatePath.startsWith('/') && !isPathInsideRoot(candidatePath, rootPath)) {
+      if (
+        (candidatePath.startsWith('/') ||
+          /^[a-z]:[\\/]/i.test(candidatePath) ||
+          /^\\\\/.test(candidatePath)) &&
+        !isPathInsideRoot(candidatePath, rootPath)
+      ) {
         return { ok: false, reason: `path out of workspace boundary: ${candidatePath}` }
       }
     }
@@ -98,6 +118,7 @@ export const classifyCommandRisk = (command: string): 'low' | 'medium' | 'high' 
 
   if (
     /\brm\s+-rf\b/.test(text) ||
+    /\bremove-item\b/.test(text) ||
     /\bmkfs\b/.test(text) ||
     /\bdd\b/.test(text) ||
     /\bshutdown\b/.test(text) ||
@@ -114,6 +135,12 @@ export const classifyCommandRisk = (command: string): 'low' | 'medium' | 'high' 
     /\bmkdir\b/.test(text) ||
     /\btouch\b/.test(text) ||
     /\bchmod\b/.test(text) ||
+    /\bcopy-item\b/.test(text) ||
+    /\bmove-item\b/.test(text) ||
+    /\bnew-item\b/.test(text) ||
+    /\bset-content\b/.test(text) ||
+    /\badd-content\b/.test(text) ||
+    /\bout-file\b/.test(text) ||
     /\bcurl\b/.test(text) ||
     /\bwget\b/.test(text) ||
     /\bgit\s+push\b/.test(text) ||
@@ -136,6 +163,13 @@ export const classifyCommandMode = (command: string): 'read_only' | 'mutating' |
     /\bmkdir\b/.test(text) ||
     /\btouch\b/.test(text) ||
     /\bchmod\b/.test(text) ||
+    /\bcopy-item\b/.test(text) ||
+    /\bmove-item\b/.test(text) ||
+    /\bremove-item\b/.test(text) ||
+    /\bnew-item\b/.test(text) ||
+    /\bset-content\b/.test(text) ||
+    /\badd-content\b/.test(text) ||
+    /\bout-file\b/.test(text) ||
     /\bgit\s+(add|commit|push|apply|am)\b/.test(text) ||
     /\btee\b/.test(text) ||
     />/.test(text)
@@ -144,7 +178,7 @@ export const classifyCommandMode = (command: string): 'read_only' | 'mutating' |
   }
 
   if (
-    /^\s*(cat|sed|head|tail|rg|grep|find|ls|pwd|stat|wc|git\s+status|git\s+diff|git\s+show|python\s+.*-c|python3\s+.*-c|node\s+.*-e)\b/.test(
+    /^\s*(cat|sed|head|tail|rg|grep|find|ls|pwd|stat|wc|get-content|get-childitem|select-string|git\s+status|git\s+diff|git\s+show|python\s+.*-c|python3\s+.*-c|node\s+.*-e)\b/.test(
       text
     )
   ) {
