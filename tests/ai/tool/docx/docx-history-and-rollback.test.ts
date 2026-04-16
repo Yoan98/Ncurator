@@ -8,7 +8,7 @@ import {
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
   type DocxHistoryResult,
-  type DocxReadResult,
+  type DocxSearchResult,
   type DocxRollbackResult,
   type DocxMutationResult
 } from './testUtils'
@@ -40,12 +40,12 @@ describe('ai tool docx backend', () => {
         const sourceBufferBefore = await fs.readFile(sourcePath)
         const harness = createDocxToolHarness(runtime)
         try {
-          const initialRead = await harness.invoke<DocxReadResult>('docx_read', {
+          const initialSearch = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: 'history-rollback.docx',
             query: 'Version one.'
           })
           const firstEdit = await harness.invoke<DocxMutationResult>('docx_text_edit', {
-            sourcePath: initialRead.sourcePath,
+            sourcePath: initialSearch.sourcePath,
             query: 'Version one.',
             replace: 'Version two.'
           })
@@ -62,23 +62,23 @@ describe('ai tool docx backend', () => {
             sourcePath: secondEdit.sourcePath,
             versionRef: firstEdit.currentVersionRef
           })
-          const readAfterRollback = await harness.invoke<DocxReadResult>('docx_read', {
+          const searchAfterRollback = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: rollbackByVersion.sourcePath,
             query: 'Keep this line, updated.'
           })
           const rollbackToInitial = await harness.invoke<DocxRollbackResult>('docx_rollback', {
             sourcePath: rollbackByVersion.sourcePath,
-            versionRef: initialRead.currentVersionRef
+            versionRef: initialSearch.currentVersionRef
           })
           const sourceBufferAfter = await fs.readFile(sourcePath)
 
           return {
-            initialRead,
+            initialSearch,
             firstEdit,
             secondEdit,
             history,
             rollbackByVersion,
-            readAfterRollback,
+            searchAfterRollback,
             rollbackToInitial,
             sourceBufferBefore,
             sourceBufferAfter
@@ -92,7 +92,7 @@ describe('ai tool docx backend', () => {
           result.history.versions.length === 3 &&
             result.history.versions[0]?.versionRef === result.secondEdit.currentVersionRef &&
             result.history.versions[1]?.versionRef === result.firstEdit.currentVersionRef &&
-            result.history.versions[2]?.versionRef === result.initialRead.currentVersionRef,
+            result.history.versions[2]?.versionRef === result.initialSearch.currentVersionRef,
           {
             name: 'snapshot-history-tracks-current-and-ancestors',
             message: 'docx_history 应能追溯到多轮编辑形成的祖先版本链。',
@@ -102,15 +102,15 @@ describe('ai tool docx backend', () => {
 
         runtime.assertThat(
           result.rollbackByVersion.currentVersionRef === result.firstEdit.currentVersionRef &&
-            result.readAfterRollback.matches.length === 0 &&
-            result.rollbackToInitial.currentVersionRef === result.initialRead.currentVersionRef,
+            result.searchAfterRollback.matches.length === 0 &&
+            result.rollbackToInitial.currentVersionRef === result.initialSearch.currentVersionRef,
           {
             name: 'rollback-restores-target-ancestor-without-breaking-structure',
             message: '按 versionRef 回滚后，应回到目标祖先版本且结构保持有效。',
             data: {
               rollbackByVersion: result.rollbackByVersion,
               rollbackToInitial: result.rollbackToInitial,
-              readAfterRollback: result.readAfterRollback.matches
+              searchAfterRollback: result.searchAfterRollback.matches
             }
           }
         )

@@ -6,7 +6,7 @@ import {
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
   type DocxMutationResult,
-  type DocxReadResult
+  type DocxSearchResult
 } from './testUtils'
 
 describe('ai tool docx backend', () => {
@@ -59,11 +59,11 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
 
         try {
-          const readDraft = await harness.invoke<DocxReadResult>('docx_read', {
+          const readDraft = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: 'review-aware-source.docx',
             query: 'Cycle 2 draft content.'
           })
-          const readSourceOnly = await harness.invoke<DocxReadResult>('docx_read', {
+          const readSourceOnly = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: 'review-aware-source.docx',
             query: 'Cycle 1 draft content.'
           })
@@ -72,7 +72,7 @@ describe('ai tool docx backend', () => {
             query: 'Cycle 2 draft content.',
             replace: 'Cycle 3 cumulative draft content.'
           })
-          const readAfter = await harness.invoke<DocxReadResult>('docx_read', {
+          const readAfter = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: applied.sourcePath,
             query: 'Cycle 3 cumulative draft content.'
           })

@@ -10,7 +10,8 @@ import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
   type DocxFailureResult,
   type DocxMutationResult,
-  type DocxReadResult
+  type DocxReadResult,
+  type DocxSearchResult
 } from './testUtils'
 
 const corruptDocumentRelationships = async (filePath: string): Promise<void> => {
@@ -55,9 +56,13 @@ describe('ai tool docx backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         try {
-          const initialRead = await harness.invoke<DocxReadResult>('docx_read', {
+          const initialSearch = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: 'invalid-snapshot-source.docx',
             query: 'Original invalid snapshot source.'
+          })
+          const initialRead = await harness.invoke<DocxReadResult>('docx_read', {
+            sourcePath: 'invalid-snapshot-source.docx',
+            fromBlockId: initialSearch.matches[0]!.blockId
           })
           const failedEdit = await harness.invoke<DocxFailureResult | DocxMutationResult>(
             'docx_text_edit',
@@ -67,14 +72,19 @@ describe('ai tool docx backend', () => {
               replace: 'Should never become the latest draft.'
             }
           )
-          const readOriginal = await harness.invoke<DocxReadResult>('docx_read', {
+          const readOriginalSearch = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: initialRead.sourcePath,
             query: 'Original invalid snapshot source.'
+          })
+          const readOriginal = await harness.invoke<DocxReadResult>('docx_read', {
+            sourcePath: initialRead.sourcePath,
+            fromBlockId: readOriginalSearch.matches[0]!.blockId
           })
 
           return {
             initialRead,
             failedEdit,
+            readOriginalSearch,
             readOriginal,
             activeVersionRef:
               harness.state.documentSessionBySourcePath.get(initialRead.sourcePath)?.activeVersionRef || '',
@@ -89,13 +99,15 @@ describe('ai tool docx backend', () => {
           result.failedEdit.ok === false &&
             result.failedEdit.code === 'failed' &&
             result.failedEdit.error.includes('invalid docx') &&
-            result.readOriginal.matches.length === 1,
+            result.readOriginalSearch.matches.length === 1 &&
+            result.readOriginal.blocks.length === 1,
           {
             name: 'edit-fails-when-generated-snapshot-is-invalid',
             message: '内部校验失败时，对象编辑应直接失败，并保留原快照可继续读取。',
             data: {
               failedEdit: result.failedEdit,
-              readOriginal: result.readOriginal.matches
+              readOriginalSearch: result.readOriginalSearch.matches,
+              readOriginal: result.readOriginal.blocks
             }
           }
         )

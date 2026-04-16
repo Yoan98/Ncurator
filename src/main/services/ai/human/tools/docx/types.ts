@@ -11,6 +11,7 @@ import {
   docxParagraphEditActionSchema,
   docxParagraphEditSchema,
   docxReadRequestSchema,
+  docxSearchRequestSchema,
   docOpSchema,
   docxSearchModeSchema,
   docxRollbackRequestSchema,
@@ -122,6 +123,7 @@ export type DocxDetailedBlock =
 
 export type DocxSearchMode = z.infer<typeof docxSearchModeSchema>
 export type DocxOutlineRequest = z.infer<typeof docxOutlineRequestSchema>
+export type DocxSearchRequest = z.infer<typeof docxSearchRequestSchema>
 export type DocxReadRequest = z.infer<typeof docxReadRequestSchema>
 export type DocxParagraphEditAction = z.infer<typeof docxParagraphEditActionSchema>
 export type DocxParagraphEditRequest = z.infer<typeof docxParagraphEditSchema>
@@ -143,7 +145,8 @@ export type DocxSearchMatch = {
   nextBodyBlockId?: string
   tableBlockId?: string
   text: string
-  offsets: Array<{ start: number; end: number }>
+  offsets?: Array<{ start: number; end: number }>
+  score?: number
 }
 
 export type DocxChangedBlock = {

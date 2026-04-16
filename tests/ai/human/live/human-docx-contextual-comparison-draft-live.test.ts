@@ -47,11 +47,11 @@ const hasTargetReadBeforeApply = (events: readonly AiRunEvent[]): boolean => {
     if (event.type !== 'tool_call_started') {
       return false
     }
-    if (event.toolName === 'docx_read') {
+    if (event.toolName === 'docx_search') {
       const query = event.input.query
       return typeof query === 'string' && query.includes('反走样')
     }
-    return event.toolName === 'docx_outline'
+    return event.toolName === 'docx_outline' || event.toolName === 'docx_read'
   })
 }
 

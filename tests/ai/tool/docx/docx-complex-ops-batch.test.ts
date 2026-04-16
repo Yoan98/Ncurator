@@ -8,6 +8,7 @@ import {
   type DocxMutationResult,
   type DocxOutlineResult,
   type DocxReadResult,
+  type DocxSearchResult,
   findParagraphBlockIdByText,
   findTableCellBlockIdByText
 } from './testUtils'
@@ -115,9 +116,13 @@ describe('ai tool docx backend', () => {
             blockId: replaceBlockId,
             text: 'Replaced whole block in final snapshot.'
           })
-          const readAfter = await harness.invoke<DocxReadResult>('docx_read', {
+          const searchAfter = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: 'complex-ops.docx',
             query: 'Inserted after anchor.'
+          })
+          const readAfter = await harness.invoke<DocxReadResult>('docx_read', {
+            sourcePath: 'complex-ops.docx',
+            fromBlockId: searchAfter.matches[0]!.blockId
           })
           const finalOutline = await harness.invoke<DocxOutlineResult>('docx_outline', {
             sourcePath: 'complex-ops.docx',
@@ -131,6 +136,7 @@ describe('ai tool docx backend', () => {
             insertAfter,
             insertBefore,
             replaceBlock,
+            searchAfter,
             readAfter,
             finalOutline
           }
@@ -171,7 +177,8 @@ describe('ai tool docx backend', () => {
         )
 
         runtime.assertThat(
-          result.readAfter.matches.length === 1 &&
+          result.searchAfter.matches.length === 1 &&
+            result.readAfter.blocks.length === 1 &&
             result.finalOutline.blocks.some(
               (block) => block.type === 'paragraph' && block.preview.includes('Inserted before anchor.')
             ) &&
@@ -190,7 +197,8 @@ describe('ai tool docx backend', () => {
             name: 'complex-ops-batch-remains-consumable-after-edits',
             message: '多次对象编辑后，结果结构仍应能继续被 read/outline 消费。',
             data: {
-              searchMatches: result.readAfter.matches,
+              searchMatches: result.searchAfter.matches,
+              readBlocks: result.readAfter.blocks,
               finalOutline: result.finalOutline.blocks,
               warnings: [
                 result.replaceText.warnings,

@@ -23,7 +23,7 @@ describe('ai tool docx backend', () => {
             }),
             readInvalidPath: await harness.invoke<DocxFailureResult>('docx_read', {
               sourcePath: 'missing.docx',
-              query: 'hello'
+              fromBlockId: 'b:0'
             }),
             editInvalidPath: await harness.invoke<DocxFailureResult>('docx_text_edit', {
               sourcePath: 'missing.docx',

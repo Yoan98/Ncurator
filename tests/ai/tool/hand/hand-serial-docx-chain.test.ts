@@ -90,7 +90,7 @@ describe('ai tool hand backend', () => {
                       toolName: 'docx_read',
                       args: {
                         sourcePath: 'serial-docx-chain.docx',
-                        query: '待跟进'
+                        fromBlockId: 'b:1'
                       }
                     }
                   ]

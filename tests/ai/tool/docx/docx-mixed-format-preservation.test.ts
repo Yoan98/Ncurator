@@ -114,11 +114,11 @@ describe('ai tool docx backend', () => {
           })
           const preservedParagraph = await harness.invoke<DocxReadResult>('docx_read', {
             sourcePath: renamedCell.sourcePath,
-            blockId: mixedParagraphBlockId
+            fromBlockId: mixedParagraphBlockId
           })
           const updatedCell = await harness.invoke<DocxReadResult>('docx_read', {
             sourcePath: renamedCell.sourcePath,
-            blockId: ownerCellBlockId
+            fromBlockId: ownerCellBlockId
           })
 
           return {
@@ -133,28 +133,28 @@ describe('ai tool docx backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.preservedParagraph.matches[0]?.type === 'paragraph' &&
-            result.preservedParagraph.matches[0]?.text.includes('Bold Italic Underline Green') &&
+          result.preservedParagraph.blocks[0]?.type === 'paragraph' &&
+            result.preservedParagraph.blocks[0]?.text.includes('Bold Italic Underline Green') &&
             result.styledCell.changedBlocks.some((block) => block.action === 'style_text'),
           {
             name: 'unmodified-mixed-format-content-remains-readable',
             message: '未修改段落在后续样式编辑后应继续可读，且样式工具应记录 style_text 变更。',
             data: {
-              preservedParagraph: result.preservedParagraph.matches[0],
+              preservedParagraph: result.preservedParagraph.blocks[0],
               styledCell: result.styledCell.changedBlocks
             }
           }
         )
 
         runtime.assertThat(
-          result.updatedCell.matches[0]?.type === 'table_cell' &&
-            result.updatedCell.matches[0]?.text.includes('Bob') &&
+          result.updatedCell.blocks[0]?.type === 'table_cell' &&
+            result.updatedCell.blocks[0]?.text.includes('Bob') &&
             result.renamedCell.changedBlocks.length === 1,
           {
             name: 'updated-target-remains-readable-after-style-and-text-edit',
             message: '单元格经过样式和文本编辑后，仍应能按 table_cell 继续读取。',
             data: {
-              updatedCell: result.updatedCell.matches[0],
+              updatedCell: result.updatedCell.blocks[0],
               renamedCell: result.renamedCell.changedBlocks
             }
           }

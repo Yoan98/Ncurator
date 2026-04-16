@@ -8,6 +8,7 @@ import {
   docxOutlineRequestSchema,
   docxParagraphEditSchema,
   docxReadRequestSchema,
+  docxSearchRequestSchema,
   docxRollbackRequestSchema,
   docxTableEditSchema,
   docxTextEditSchema,
@@ -44,13 +45,24 @@ type DocxToolSpec<
 }
 
 const DOCX_SOURCE_PATH_EXAMPLE = 'ai/docx/图形学.docx'
-const DOCX_READ_QUERY_EXAMPLE: JsonObject = {
+const DOCX_SEARCH_LITERAL_EXAMPLE: JsonObject = {
   sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
   query: '反走样'
 }
-const DOCX_READ_BLOCK_EXAMPLE: JsonObject = {
+const DOCX_SEARCH_REGEX_EXAMPLE: JsonObject = {
   sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
-  blockId: 'b:26'
+  query: '反.*样',
+  mode: 'regex'
+}
+const DOCX_SEARCH_SEMANTIC_EXAMPLE: JsonObject = {
+  sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
+  query: '边缘锯齿怎么处理',
+  mode: 'semantic'
+}
+const DOCX_READ_RANGE_EXAMPLE: JsonObject = {
+  sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
+  fromBlockId: 'b:19',
+  toBlockId: 'b:26'
 }
 
 export const DOCX_OUTLINE_TOOL_SPEC = {
@@ -82,6 +94,7 @@ export const DOCX_OUTLINE_TOOL_SPEC = {
         goal: '先看一份 docx 的整体结构和标题、表格分布',
         args: {
           sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
+          fromBodyIndex: 0,
           maxBlocks: 40
         }
       }
@@ -91,38 +104,81 @@ export const DOCX_OUTLINE_TOOL_SPEC = {
   activityActionType: 'docx_outline'
 } satisfies DocxToolSpec<z.infer<typeof docxOutlineRequestSchema>, 'docx_outline', 'docx-read'>
 
-export const DOCX_READ_TOOL_SPEC = {
-  name: 'docx_read',
+export const DOCX_SEARCH_TOOL_SPEC = {
+  name: 'docx_search',
   familyId: 'docx',
   requiresWorkspace: true,
-  description: '按 query 或 blockId 片段精读 docx。',
+  description: '在 docx 中定位相关内容，支持 literal / regex / semantic 三种模式。',
   skillIds: ['docx-read'],
-  schema: docxReadRequestSchema,
+  schema: docxSearchRequestSchema,
   promptSpec: {
-    name: 'docx_read',
-    purpose: '读取某个 block，或按 query 查找后返回片段与上下文。',
-    whenToUse: '当你已经知道 blockId，或希望通过 query 定位并精读段落、表格、单元格内容时使用。',
-    preconditions: ['必须提供 query 或 blockId 其中一个。工具会自动打开目标文档。'],
+    name: 'docx_search',
+    purpose: '先定位相关 block，再决定是否继续精读。',
+    whenToUse:
+      '当你需要查找术语、换词重试、切换 regex / semantic 检索模式，或拿到 blockId 供后续 docx_read 精读时使用。',
+    preconditions: ['sourcePath 必须是 workspace 内的 .docx 路径。工具会自动打开目标文档。'],
     returns: [
       {
         name: 'matches',
-        type: 'Array<paragraph | table | table_cell>',
-        description: '按命中文档顺序返回类型化内容；表格会直接返回二维 rows。'
+        type: 'Array<{ blockId: string; bodyIndex: number; text: string }>',
+        description: '按命中文档顺序或相关度返回 block 命中，包含邻接 block 线索。'
       },
       {
-        name: 'truncated',
-        type: 'boolean',
-        description: '多命中场景下结果是否被截断。'
+        name: 'effectiveQuery, appliedAliases, truncated',
+        type: 'string | Array<{ from: string; to: string }> | boolean',
+        description: '显式说明本次实际使用的检索词、是否触发 alias fallback，以及返回结果是否被截断。'
       }
     ],
     examples: [
       {
-        goal: '按 query 找到“反走样”对应的相关片段',
-        args: DOCX_READ_QUERY_EXAMPLE
+        goal: '按原词做 literal 搜索，先定位“反走样”在哪些 block',
+        args: DOCX_SEARCH_LITERAL_EXAMPLE
       },
       {
-        goal: '按 blockId 精确读取一个已定位块',
-        args: DOCX_READ_BLOCK_EXAMPLE
+        goal: '用 regex 搜索术语形态不稳定的表达',
+        args: DOCX_SEARCH_REGEX_EXAMPLE
+      },
+      {
+        goal: '当用户只记得概念、不记得原词时，使用 semantic 召回相关段落',
+        args: DOCX_SEARCH_SEMANTIC_EXAMPLE
+      }
+    ]
+  },
+  resolveExecutionMeta: createDocxReadExecutionMeta(),
+  activityActionType: 'docx_search'
+} satisfies DocxToolSpec<z.infer<typeof docxSearchRequestSchema>, 'docx_search', 'docx-read'>
+
+export const DOCX_READ_TOOL_SPEC = {
+  name: 'docx_read',
+  familyId: 'docx',
+  requiresWorkspace: true,
+  description: '按 fromBlockId / toBlockId 连续精读 docx 区间。',
+  skillIds: ['docx-read'],
+  schema: docxReadRequestSchema,
+  promptSpec: {
+    name: 'docx_read',
+    purpose: '读取一个 block，或按 block 区间连续精读一段内容。',
+    whenToUse:
+      '当你已经通过 docx_search 或 docx_outline 拿到 blockId，准备精读一个 block 或一段连续区间时使用。',
+    preconditions: [
+      '必须提供 fromBlockId。若提供 toBlockId，则会返回 [fromBlockId, toBlockId] 的闭区间内容。工具会自动打开目标文档。'
+    ],
+    returns: [
+      {
+        name: 'blocks',
+        type: 'Array<paragraph | table | table_cell>',
+        description: '按文档顺序返回连续区间内的类型化 blocks；表格会保留结构化 cell 内容。'
+      },
+      {
+        name: 'fromBlockId, toBlockId, returnedBlockCount',
+        type: 'string | number',
+        description: '显式说明本次精读覆盖的 block 区间和实际返回块数。'
+      }
+    ],
+    examples: [
+      {
+        goal: '连续精读“反走样”一节对应的 block 区间',
+        args: DOCX_READ_RANGE_EXAMPLE
       }
     ]
   },
@@ -402,6 +458,7 @@ export const DOCX_ROLLBACK_TOOL_SPEC = {
 
 export const DOCX_READ_TOOL_SPECS = [
   DOCX_OUTLINE_TOOL_SPEC,
+  DOCX_SEARCH_TOOL_SPEC,
   DOCX_READ_TOOL_SPEC,
   DOCX_HISTORY_TOOL_SPEC
 ] as const

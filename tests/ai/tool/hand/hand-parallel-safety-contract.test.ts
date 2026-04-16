@@ -84,7 +84,7 @@ describe('ai tool hand backend', () => {
                       }
                     },
                     {
-                      toolName: 'docx_read',
+                      toolName: 'docx_search',
                       args: {
                         sourcePath,
                         query: 'approval denied'
@@ -117,11 +117,11 @@ describe('ai tool hand backend', () => {
                   mode: 'parallel',
                   calls: [
                     { toolName: 'docx_outline', args: { sourcePath, maxBlocks: 20 } },
-                    { toolName: 'docx_read', args: { sourcePath, query: 'Safety' } },
-                    { toolName: 'docx_read', args: { sourcePath, query: 'Risk' } },
-                    { toolName: 'docx_read', args: { sourcePath, query: 'monitor' } },
-                    { toolName: 'docx_read', args: { sourcePath, query: 'approval' } },
-                    { toolName: 'docx_read', args: { sourcePath, query: 'edge' } }
+                    { toolName: 'docx_search', args: { sourcePath, query: 'Safety' } },
+                    { toolName: 'docx_search', args: { sourcePath, query: 'Risk' } },
+                    { toolName: 'docx_search', args: { sourcePath, query: 'monitor' } },
+                    { toolName: 'docx_search', args: { sourcePath, query: 'approval' } },
+                    { toolName: 'docx_search', args: { sourcePath, query: 'edge' } }
                   ]
                 }
               }
@@ -154,12 +154,12 @@ describe('ai tool hand backend', () => {
                   mode: 'parallel',
                   calls: [
                     { toolName: 'docx_outline', args: { sourcePath, maxBlocks: 20 } },
-                    { toolName: 'docx_read', args: { sourcePath, query: 'Safety' } },
-                    { toolName: 'docx_read', args: { sourcePath, query: 'Risk' } },
-                    { toolName: 'docx_read', args: { sourcePath, query: 'monitor' } },
-                    { toolName: 'docx_read', args: { sourcePath, query: 'approval' } },
-                    { toolName: 'docx_read', args: { sourcePath, query: 'edge' } },
-                    { toolName: 'docx_read', args: { sourcePath, query: 'cases' } }
+                    { toolName: 'docx_search', args: { sourcePath, query: 'Safety' } },
+                    { toolName: 'docx_search', args: { sourcePath, query: 'Risk' } },
+                    { toolName: 'docx_search', args: { sourcePath, query: 'monitor' } },
+                    { toolName: 'docx_search', args: { sourcePath, query: 'approval' } },
+                    { toolName: 'docx_search', args: { sourcePath, query: 'edge' } },
+                    { toolName: 'docx_search', args: { sourcePath, query: 'cases' } }
                   ]
                 }
               }
@@ -205,7 +205,7 @@ describe('ai tool hand backend', () => {
                       }
                     },
                     {
-                      toolName: 'docx_read',
+                      toolName: 'docx_search',
                       args: {
                         sourcePath,
                         query: 'Risk summary'

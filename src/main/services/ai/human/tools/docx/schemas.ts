@@ -117,19 +117,26 @@ export const rollbackSchema = z.object({
 
 export const docxOutlineRequestSchema = z.object({
   sourcePath: z.string().min(1),
+  fromBodyIndex: z.number().int().min(0).optional(),
   maxBlocks: z.number().int().min(1).max(2000).optional()
 })
 
-export const docxReadRequestSchema = z
-  .object({
-    sourcePath: z.string().min(1),
-    query: z.string().min(1).optional(),
-    blockId: z.string().min(1).optional()
-  })
-  .refine((value) => Boolean(value.query) !== Boolean(value.blockId), {
-    message: 'exactly one of query or blockId is required',
-    path: ['query']
-  })
+export const docxSearchRequestSchema = z.object({
+  sourcePath: z.string().min(1),
+  query: z.string().min(1),
+  mode: docxSearchModeSchema.optional(),
+  scope: z
+    .object({
+      blockIds: z.array(z.string().min(1)).optional()
+    })
+    .optional()
+})
+
+export const docxReadRequestSchema = z.object({
+  sourcePath: z.string().min(1),
+  fromBlockId: z.string().min(1),
+  toBlockId: z.string().min(1).optional()
+})
 
 export const docxParagraphEditActionSchema = z.enum([
   'insert_before',

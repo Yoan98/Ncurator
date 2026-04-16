@@ -258,20 +258,25 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
   const getVersionRefByDocId = (docId: string): string | undefined =>
     state.versionEntryByDocId.get(docId)?.versionRef
 
+  const buildSessionResult = (
+    sourcePath: string,
+    session: DocxDocumentSession
+  ): Exclude<RequireDocSessionResult, { failure: DocxToolFailure }> => ({
+    sourcePath,
+    session,
+    docId: session.activeDocId,
+    currentVersionRef: session.activeVersionRef
+  })
+
   const requireDocumentSession = (params: {
     toolName: string
     toolCallId: string
     sourcePath: string
   }): RequireDocSessionResult => {
     const sourcePath = path.resolve(params.sourcePath)
-    const session = state.documentSessionBySourcePath.get(sourcePath)
+    const session = getDocumentSession(sourcePath)
     if (session) {
-      return {
-        sourcePath,
-        session,
-        docId: session.activeDocId,
-        currentVersionRef: session.activeVersionRef
-      }
+      return buildSessionResult(sourcePath, session)
     }
     return {
       failure: emitFailure({
@@ -307,12 +312,10 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       }
     }
 
-    const existing = requireDocumentSession({
-      toolName: params.toolName,
-      toolCallId: params.toolCallId,
-      sourcePath: requestedSourcePath
-    })
-    if (!('failure' in existing)) return existing
+    const existingSession = getDocumentSession(requestedSourcePath)
+    if (existingSession) {
+      return buildSessionResult(requestedSourcePath, existingSession)
+    }
 
     const resolvedTarget = await input.ctx.resolveDocxOpenTarget(requestedSourcePath)
     const workerResponse = await callWorker({

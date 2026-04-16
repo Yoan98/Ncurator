@@ -86,8 +86,8 @@
 
 ### 4.1 `tool`
 
-- Last Run：`2026-04-16 16:16:11 +08:00`
-- Last Result：`通过`（`23 / 23` 个测试用例通过）
+- Last Run：`待更新`
+- Last Result：`待更新`
 
 #### `docx`
 
@@ -97,7 +97,7 @@
 - 实现状态：`已实现`
 - What：验证最小 docx 打开、定位、编辑与继续读取链路。
 - Why：这是 docx 工具链最基础的真实生产调用闭环。
-- How：对 fixture docx 真实执行 `docx_read / docx_outline -> docx_text_edit -> docx_read`。
+- How：对 fixture docx 真实执行 `docx_search -> docx_read -> docx_text_edit -> docx_search -> docx_read`。
 - Oracle：返回稳定 `currentVersionRef/previousVersionRef`，只目标 block 进入 `changedBlocks`，且修改后的结果可继续被读取工具消费。
 - Not：不验证 `human` 的工具选择。
 - Last Run：`2026-04-16 16:16:09 +08:00`
@@ -109,8 +109,8 @@
 - 实现状态：`已实现`
 - What：验证长文档下的读取、定位和局部精读能力。
 - Why：长文档最容易暴露基础定位问题。
-- How：对高 block 数 fixture 真实调用 `docx_outline / docx_read`。
-- Oracle：长文档下仍返回稳定 block 信息与截断标记。
+- How：对高 block 数 fixture 真实调用 `docx_outline(fromBodyIndex,maxBlocks) / docx_search / docx_read`。
+- Oracle：长文档下仍返回稳定 block 信息、分页起点与截断标记，且能定位并精读目标 block。
 - Not：不验证编辑落盘。
 - Last Run：`2026-04-16 16:16:08 +08:00`
 - Last Result：`通过`
@@ -119,9 +119,9 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 `docx_read(query)` 会做兼容字形归一，能用普通查询命中兼容字形文本。
+- What：验证 `docx_search` 会做兼容字形归一，能用普通查询或 regex 命中兼容字形文本。
 - Why：docx 文本里常见兼容字形，如果检索不归一，AI 会把“文档已写”误判成“文档未写”。
-- How：写入包含兼容字形文本的真实 docx，再分别执行 literal 与 regex 搜索。
+- How：写入包含兼容字形文本的真实 docx，再分别执行 `docx_search(literal)` 与 `docx_search(regex)`。
 - Oracle：普通查询可命中兼容字形 block，且返回稳定 blockId。
 - Not：不比较字符偏移是否完全映射回原始编码位置。
 - Last Run：`2026-04-16 16:16:11 +08:00`
@@ -131,13 +131,85 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 `docx_read(query)` 默认搜索当前文档全部 block，且 `docx_text_edit.blockIds` 只在当前文档内进一步缩圈。
+- What：验证 `docx_search` 默认搜索当前文档全部 block，且 `docx_text_edit.blockIds` 只在当前文档内进一步缩圈。
 - Why：这是 docx 搜索的核心契约，必须长期稳定，避免 prompt 与工具行为不一致。
-- How：对同一 doc 先执行默认搜索，再传入 `scope.blockIds` 做缩圈搜索。
-- Oracle：默认搜索可命中文档内多个 block，缩圈后只返回指定 blockIds 范围内的结果。
+- How：对同一 doc 先执行默认搜索，再通过限定编辑范围验证后续搜索结果只影响指定 block。
+- Oracle：默认搜索可命中文档内多个 block，限定编辑后只修改指定 block 范围内的结果。
 - Not：不验证 human 该如何选择何时缩圈。
 - Last Run：`2026-04-16 16:16:11 +08:00`
 - Last Result：`通过`
+
+##### `docx-search-literal-alias-fallback`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 `docx_search(literal)` 在 0 命中时会触发有限 alias fallback。
+- Why：术语轻微变体是 docx 场景里的高频真实问题，必须由工具契约稳定承接。
+- How：写入只包含“过度拟合”的真实 docx，再以“过拟合”执行 `docx_search(literal)`。
+- Oracle：搜索结果命中目标 block，且显式返回 `effectiveQuery=过度拟合` 与 `appliedAliases`。
+- Not：不引入通用大词库或无限 rewrite。
+- Last Run：`待更新`
+- Last Result：`待更新`
+
+##### `docx-search-regex-contract`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 `docx_search(regex)` 可用，且非法 regex 会稳定报错。
+- Why：regex 是 AI 换词失败后的重要兜底能力，必须守住输入契约。
+- How：对真实 docx 执行合法 regex 搜索与非法 regex 搜索。
+- Oracle：合法 regex 正常命中并返回 offsets；非法 regex 返回 `invalid_input`。
+- Not：不比较不同 regex 引擎的高级语义差异。
+- Last Run：`待更新`
+- Last Result：`待更新`
+
+##### `docx-search-semantic-contract`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 `docx_search(semantic)` 能返回相关 block，且结果带 score。
+- Why：semantic 是换词失败后的召回增强能力，必须有正式契约保护。
+- How：在 embedding ready 前提下，对真实 docx 执行 `docx_search(mode=semantic)`。
+- Oracle：至少返回一个相关 block，且结果显式包含 `score`。
+- Not：不比较召回排序的全局最优性。
+- Last Run：`待更新`
+- Last Result：`待更新`
+
+##### `docx-read-range-contract`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 `docx_read(fromBlockId,toBlockId)` 会返回连续区间 blocks。
+- Why：这是“搜索 -> 精读”工作流的核心读取契约，必须长期稳定。
+- How：先通过真实 `docx_outline` 定位起止 block，再执行区间 `docx_read`。
+- Oracle：返回结果按文档顺序覆盖闭区间，`returnedBlockCount` 稳定。
+- Not：不验证 AI 何时该扩大片段范围。
+- Last Run：`待更新`
+- Last Result：`待更新`
+
+##### `docx-outline-pagination-contract`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 `docx_outline(fromBodyIndex,maxBlocks)` 可以翻到长文档后半段。
+- Why：如果只能重复看前几百块，AI 很容易误判“文档没写”。
+- How：对长文档执行带 `fromBodyIndex` 的真实 `docx_outline`。
+- Oracle：返回结果从指定 bodyIndex 开始，且继续保留稳定的总数与截断标记。
+- Not：不验证 UI 层如何呈现分页。
+- Last Run：`待更新`
+- Last Result：`待更新`
+
+##### `docx-auto-open-no-fake-failure`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 AI-facing docx 读取工具首次自动 open 时不再先发假失败结果。
+- Why：同一 toolCallId “先失败后成功”的噪音会误导 brain 对工具稳定性的判断。
+- How：对未预先打开的真实 docx 直接执行 `docx_search`，检查事件流中的 tool result。
+- Oracle：同一次调用只返回一次成功结果，不出现 `sourcePath must be opened before ...`。
+- Not：不验证内部显式 require 场景。
+- Last Run：`待更新`
+- Last Result：`待更新`
 
 ##### `docx-outline-truncation-contract`
 
@@ -494,8 +566,8 @@
 - 实现状态：`已实现`
 - What：验证 mock-llm 下 `human` 仍通过真实 docx 工具链完成打开、编辑和搜索。
 - Why：复杂 docx 编辑是 `human` 的长期高价值真实任务类型。
-- How：先写入 fixture docx，再通过真实 `docx_text_edit -> docx_read` 完成一次正文替换并检索新内容。
-- Oracle：真实 `docx_text_edit` 只产生一处 `changedBlocks`，真实 `docx_read` 能命中新文本，任务最终完成。
+- How：先写入 fixture docx，再通过真实 `docx_text_edit -> docx_search -> docx_read` 完成一次正文替换、定位和精读。
+- Oracle：真实 `docx_text_edit` 只产生一处 `changedBlocks`，真实 `docx_search` 与 `docx_read` 都能命中新文本，任务最终完成。
 - Not：不验证 review UI 或最终落盘流程。
 - Last Run：`2026-04-16 10:37:32 +08:00`
 - Last Result：`通过`
@@ -506,11 +578,23 @@
 - 实现状态：`已实现`
 - What：验证 human 在 mock-llm 模式下能收到 docx 读取链路中的关键客观事实，包括 outline 截断说明与归一化后的搜索命中。
 - Why：这一层如果事实暴露不足，human 很容易把“当前结果被截断”或“搜索已命中”误读成别的状态。
-- How：构造包含长文档截断与兼容字形文本的真实 docx，通过 scripted brain 检查后续 prompt 是否包含“结果已截断，文档后续内容未包含”以及归一化搜索命中的事实。
-- Oracle：后续 `brain` prompt 中可读到截断文字说明与搜索命中信息，最终任务完成且不会把文档中已写内容误报为“未写”。
+- How：构造包含长文档截断与兼容字形文本的真实 docx，通过 scripted brain 先执行 `docx_outline`、再执行 `docx_search` 与 `docx_read`，检查后续 prompt 是否包含相关事实。
+- Oracle：后续 `brain` prompt 中可读到截断文字说明、归一化搜索命中与区间精读正文，最终任务完成且不会把文档中已写内容误报为“未写”。
 - Not：不验证 live 模型在该场景下的自主策略优劣。
 - Last Run：`2026-04-16 10:37:34 +08:00`
 - Last Result：`通过`
+
+##### `docx-search-alias-then-range-read`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 mock-llm 下 `human` 会先做 alias fallback 搜索，再进入区间精读。
+- Why：这是 docx 新工作流里最关键的自主使用模式，必须有正式 scripted 回归。
+- How：构造只写“过度拟合”的真实 docx，scripted brain 先执行 `docx_search(query=过拟合)`，再以返回 blockId 执行区间 `docx_read`。
+- Oracle：`docx_search` 返回 alias fallback 事实，`docx_read` 返回定义/成因/处理线索，任务最终完成。
+- Not：不验证 live 模型是否一定会采用相同工具顺序。
+- Last Run：`待更新`
+- Last Result：`待更新`
 
 ##### `multi-tool-collaboration`
 
@@ -569,7 +653,7 @@
 - What：验证 live 模式下 `human` 会基于两份已选 `docx` 做跨文件精读，并准确回答“过拟合 / 反走样”的成因与处理思路。
 - Why：真实用户在复习场景里经常已经选中了资料，但仍会把两个概念混在一起；这条 case 要长期守住“已选资料范围 + 跨文件准确回答”的正式能力，对齐 `WB-CORE-002-AC2`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
 - How：注入真实 live LLM 配置；把 `tests/fixtures/ai/docx/深度学习.docx` 与 `tests/fixtures/ai/docx/图形学.docx` 作为已选资料复制进 workspace；直接输入“我做题老把这两个点混在一起。你就按我刚选的这两份资料，帮我说清楚：过拟合和反走样各自是什么、为什么会出现、一般怎么处理。别补充课外知识，哪份文档没写你就直接说没写。”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；事件流中至少两次 `docx_read` 或 `docx_outline` 覆盖两份目标文档；最终回答同时命中“过拟合”的定义/成因事实组，并对处理办法给出文档内事实或明确说明“没写”；同时命中“反走样”的成因/处理事实组；不出现 docx 编辑工具。
+- Oracle：任务最终完成；事件流中至少出现一次 `docx_search`，并且至少两次 `docx_read` / `docx_outline` / `docx_search` 覆盖两份目标文档；最终回答同时命中“过拟合”的定义/成因事实组，并对处理办法给出文档内事实或明确说明“没写”；同时命中“反走样”的成因/处理事实组；不出现 docx 编辑工具。
 - Not：不要求固定回答结构，也不对最终文案做逐字断言。
 
 ##### `human-docx-contextual-comparison-draft-live`
@@ -579,7 +663,7 @@
 - What：验证 live 模式下 `human` 会基于两份已选 `docx`，在目标 `docx` 的相关位置追加解释性段落和对照表，并生成不覆盖原文件的 confirm copy。
 - Why：真实用户常见诉求不是“改占位符”，而是“在这块后面补一段更好懂的说明”；这条 case 覆盖跨文件取材、相关位置补写、结构化新增与 confirm-copy 交付，对齐 `WB-CORE-002-AC2`、`WB-CORE-003-AC1`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
 - How：注入真实 live LLM 配置；把 `tests/fixtures/ai/docx/深度学习.docx` 与 `tests/fixtures/ai/docx/图形学.docx` 作为已选资料复制进 workspace；直接输入“《图形学》里‘反走样’这一节我还是记不住。你参考我刚选的这两份 Word，直接在这一节最后补一小段更好理解的说明，再加个简单对照表，一列写反走样，一列写《深度学习》里的过拟合。直接给我确认稿就行，别改原文件，也不用先回我文字草稿。”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；事件流中至少两次 `docx_read` 或 `docx_outline` 覆盖两份目标文档；docx 编辑前至少出现一次针对“反走样”的读取定位；至少出现一次 docx 编辑工具；存在 `draft_review_ready` 事件，最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；原始两份 `docx` 文件未被覆盖；写入请求里能看到新增说明段落与表格结构。
+- Oracle：任务最终完成；事件流中至少两次 `docx_search` / `docx_read` / `docx_outline` 覆盖两份目标文档；docx 编辑前至少出现一次针对“反走样”的读取定位；至少出现一次 docx 编辑工具；存在 `draft_review_ready` 事件，最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；原始两份 `docx` 文件未被覆盖；写入请求里能看到新增说明段落与表格结构。
 - Not：不要求固定 op 组合，也不对最终说明文案做逐字断言。
 
 ##### `human-kb-guided-docx-comparison-draft-live`

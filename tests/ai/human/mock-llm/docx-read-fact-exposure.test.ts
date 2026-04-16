@@ -2,7 +2,7 @@ import { describe, it } from 'vitest'
 import { writeTestDocxFile } from '../../../harness/backend/aiToolHarness'
 import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
-import type { DocxReadResult } from '../../tool/docx/testUtils'
+import type { DocxReadResult, DocxSearchResult } from '../../tool/docx/testUtils'
 import {
   buildCompleteTaskDecision,
   buildLearnSkillsDecision,
@@ -65,7 +65,7 @@ describe('ai human mock-llm backend', () => {
                   throw new Error('brain prompt is missing outline truncation fact exposure')
                 }
                 return buildToolDecision({
-                  toolName: 'docx_read',
+                  toolName: 'docx_search',
                   args: {
                     sourcePath: 'docx-read-fact-exposure.docx',
                     query: '反走样'
@@ -77,14 +77,35 @@ describe('ai human mock-llm backend', () => {
               },
               (input) => {
                 if (
-                  !input.user.includes('返回 1 项') ||
+                  (!input.user.includes('返回 1 个搜索命中') &&
+                    !input.user.includes('返回 1 项') &&
+                    !input.user.includes('搜索命中')) ||
                   (!input.user.includes('反⾛样') && !input.user.includes('反走样'))
                 ) {
                   throw new Error('brain prompt is missing normalized search hit exposure')
                 }
+                const searchResult = readLatestToolResultDataFromEvents<DocxSearchResult>(
+                  runtime.eventCollector.snapshot(),
+                  'docx_search'
+                )
+                return buildToolDecision({
+                  toolName: 'docx_read',
+                  args: {
+                    sourcePath: 'docx-read-fact-exposure.docx',
+                    fromBlockId: searchResult.matches[0]!.blockId
+                  },
+                  summary: '精读搜索命中',
+                  reason: '验证定位后可以继续精读目标 block。',
+                  expectedOutcome: '拿到目标正文。'
+                })
+              },
+              (input) => {
+                if (!input.user.includes('反⾛样会在采样不足时出现明显锯齿')) {
+                  throw new Error('brain prompt is missing range read fact exposure')
+                }
                 return buildCompleteTaskDecision({
                   summary: 'docx 读取事实暴露已验证。',
-                  reason: 'outline 截断说明与搜索命中都已进入 prompt。',
+                  reason: 'outline 截断说明、搜索命中与区间精读都已进入 prompt。',
                   expectedOutcome: '输出最终答复。'
                 })
               }
@@ -111,7 +132,11 @@ describe('ai human mock-llm backend', () => {
         }
       },
       assert: async (result, runtime) => {
-        const searchResult = readLatestToolResultDataFromEvents<DocxReadResult>(
+        const searchResult = readLatestToolResultDataFromEvents<DocxSearchResult>(
+          result.events,
+          'docx_search'
+        )
+        const readResult = readLatestToolResultDataFromEvents<DocxReadResult>(
           result.events,
           'docx_read'
         )
@@ -119,12 +144,14 @@ describe('ai human mock-llm backend', () => {
         runtime.assertThat(
           result.output.status === 'completed' &&
             searchResult.matches.length === 1 &&
+            readResult.blocks.length === 1 &&
             result.output.deliveryMarkdown.includes('不应答成“未写”'),
           {
             name: 'human-brain-sees-truncation-and-normalized-search-facts',
             message: 'human prompt 应能读到 outline 截断说明和归一化搜索命中，并完成正确收口。',
             data: {
               searchResult,
+              readResult,
               deliveryMarkdown: result.output.deliveryMarkdown
             }
           }

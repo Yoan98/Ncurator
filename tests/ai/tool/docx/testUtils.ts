@@ -8,11 +8,14 @@ export type DocxOutlineResult = {
   currentVersionRef: string
   returnedBlockCount: number
   totalBlockCount: number
+  fromBodyIndex?: number
   blocks: Array<
     | {
         blockId: string
         type: 'paragraph'
         bodyIndex: number
+        previousBodyBlockId?: string
+        nextBodyBlockId?: string
         style?: string
         headingLevel?: number
         preview: string
@@ -21,6 +24,8 @@ export type DocxOutlineResult = {
         blockId: string
         type: 'table'
         bodyIndex: number
+        previousBodyBlockId?: string
+        nextBodyBlockId?: string
         rows?: number
         cols?: number
         preview: string
@@ -29,6 +34,8 @@ export type DocxOutlineResult = {
         blockId: string
         type: 'table_cell'
         bodyIndex: number
+        previousBodyBlockId?: string
+        nextBodyBlockId?: string
         tableBlockId?: string
         row?: number
         col?: number
@@ -38,43 +45,115 @@ export type DocxOutlineResult = {
   truncated: boolean
 }
 
+export type DocxSearchResult = {
+  ok: boolean
+  code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
+  summary: string
+  sourcePath: string
+  currentVersionRef: string
+  mode: 'literal' | 'regex' | 'semantic'
+  effectiveQuery: string
+  appliedAliases: Array<{ from: string; to: string }>
+  totalMatchCount: number
+  returnedMatchCount: number
+  truncated: boolean
+  matches: Array<{
+    blockId: string
+    blockType: 'paragraph' | 'table' | 'table_cell'
+    bodyIndex: number
+    previousBodyBlockId?: string
+    nextBodyBlockId?: string
+    tableBlockId?: string
+    text: string
+    offsets?: Array<{ start: number; end: number }>
+    score?: number
+  }>
+}
+
 export type DocxReadResult = {
   ok: boolean
   code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
   summary: string
   sourcePath: string
   currentVersionRef: string
-  truncated: boolean
-  totalMatchCount?: number
-  matches: Array<
+  fromBlockId: string
+  toBlockId: string
+  returnedBlockCount: number
+  blocks: Array<
     | {
         blockId: string
         type: 'paragraph'
         bodyIndex: number
+        previousBodyBlockId?: string
+        nextBodyBlockId?: string
         text: string
         style?: string
         headingLevel?: number
-        contextBefore?: string
-        contextAfter?: string
+        runs: Array<{
+          text: string
+          bold?: boolean
+          italic?: boolean
+          underline?: boolean
+          color?: string
+        }>
       }
     | {
         blockId: string
         type: 'table'
         bodyIndex: number
-        rows: Array<Array<{ cellBlockId: string; text: string }>>
-        contextBefore?: string
-        contextAfter?: string
+        previousBodyBlockId?: string
+        nextBodyBlockId?: string
+        rows: number
+        cols: number
+        preview: string
+        cells: Array<{
+          blockId: string
+          row: number
+          col: number
+          paragraphs: Array<{
+            blockId: string
+            type: 'paragraph'
+            bodyIndex: number
+            previousBodyBlockId?: string
+            nextBodyBlockId?: string
+            style: string
+            text: string
+            runs: Array<{
+              text: string
+              bold?: boolean
+              italic?: boolean
+              underline?: boolean
+              color?: string
+            }>
+          }>
+        }>
       }
     | {
         blockId: string
         type: 'table_cell'
         bodyIndex: number
+        previousBodyBlockId?: string
+        nextBodyBlockId?: string
         tableBlockId: string
         row: number
         col: number
         text: string
-        contextBefore?: string
-        contextAfter?: string
+        paragraphs: Array<{
+          blockId: string
+          type: 'paragraph'
+          bodyIndex: number
+          previousBodyBlockId?: string
+          nextBodyBlockId?: string
+          style: string
+          text: string
+          runs: Array<{
+            text: string
+            bold?: boolean
+            italic?: boolean
+            underline?: boolean
+            color?: string
+          }>
+        }>
       }
   >
 }

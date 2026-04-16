@@ -29,6 +29,10 @@ const hasCompletedDelivery = (output: { summary?: string | null; deliveryMarkdow
   typeof output.deliveryMarkdown === 'string' &&
   output.deliveryMarkdown.trim().length > 0
 
+const hasOverfittingRemedyResponse = (deliveryText: string): boolean =>
+  /(没写|未写|没有写|文档没写)/.test(deliveryText) ||
+  /(数据增强|未使用过的数据|训练时未使用过的数据|验证数据)/.test(deliveryText)
+
 describe('ai human live backend', () => {
   it('human-docx-cause-remedy-reading-live', async () => {
     await runWithStructuredOutputRetry(async () => {
@@ -85,6 +89,7 @@ describe('ai human live backend', () => {
           const openedSourcePaths = filterAiRunEventsByType(result.events, 'tool_call_started')
             .filter(
               (event) =>
+                event.toolName === 'docx_search' ||
                 event.toolName === 'docx_outline' ||
                 event.toolName === 'docx_read' ||
                 event.toolName === 'docx_history'
@@ -98,17 +103,18 @@ describe('ai human live backend', () => {
               result.fixtureDocs.every((fixtureDoc) =>
                 openedExpectedDoc(openedSourcePaths, fixtureDoc.relativePath, fixtureDoc.name)
               ) &&
-              toolNames.some(
-                (toolName) =>
-                  toolName === 'docx_read' ||
-                  toolName === 'docx_outline'
-              ) &&
+              toolNames.some((toolName) => toolName === 'docx_search') &&
+              toolNames.some((toolName) => toolName === 'docx_read' || toolName === 'docx_outline') &&
               !toolNames.some((toolName) => toolName.endsWith('_edit')) &&
               /(过拟合|过度拟合)/.test(deliveryText) &&
-              /反走样/.test(deliveryText),
+              /(记住过多训练数据中的特征值|训练时间过久)/.test(deliveryText) &&
+              hasOverfittingRemedyResponse(deliveryText) &&
+              /反走样/.test(deliveryText) &&
+              /(采样频率低于信号频率|像素.*边界)/.test(deliveryText) &&
+              /(低通滤波|多个采样点|多个像素点|多次采样)/.test(deliveryText),
             {
               name: 'human-live-reads-both-selected-docx-and-explains-cause-and-remedy',
-              message: 'live human 读 case 应打开两份已选 docx，并围绕过拟合与反走样完成非编辑型交付。',
+              message: 'live human 读 case 应打开两份已选 docx，并准确回答过拟合与反走样的成因和处理思路。',
               data: {
                 openedSourcePaths,
                 toolNames,

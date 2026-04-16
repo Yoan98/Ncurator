@@ -6,7 +6,8 @@ import {
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
   type DocxOutlineResult,
-  type DocxReadResult
+  type DocxReadResult,
+  type DocxSearchResult
 } from './testUtils'
 
 describe('ai tool docx backend', () => {
@@ -37,15 +38,21 @@ describe('ai tool docx backend', () => {
         try {
           const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
             sourcePath: 'large-navigation.docx',
-            maxBlocks: 20
+            fromBodyIndex: 60,
+            maxBlocks: 10
+          })
+          const search = await harness.invoke<DocxSearchResult>('docx_search', {
+            sourcePath: 'large-navigation.docx',
+            query: 'target keyword'
           })
           const read = await harness.invoke<DocxReadResult>('docx_read', {
             sourcePath: 'large-navigation.docx',
-            query: 'target keyword',
+            fromBlockId: search.matches[0]!.blockId
           })
 
           return {
             outline,
+            search,
             read
           }
         } finally {
@@ -55,8 +62,9 @@ describe('ai tool docx backend', () => {
       assert: async (result, runtime) => {
         runtime.assertThat(
           result.outline.totalBlockCount >= 80 &&
-            result.outline.returnedBlockCount === 20 &&
-            result.outline.truncated,
+            result.outline.returnedBlockCount === 10 &&
+            result.outline.truncated &&
+            (result.outline.blocks[0]?.bodyIndex || 0) >= 60,
           {
             name: 'large-document-outline-stays-stable-under-truncation',
             message: '长文档 outline 应返回稳定 block 信息，并正确标记 maxBlocks 截断。',
@@ -69,14 +77,16 @@ describe('ai tool docx backend', () => {
         )
 
         runtime.assertThat(
-          result.read.matches.length === 1 &&
-            result.read.matches[0]?.type === 'paragraph' &&
-            result.read.matches[0]?.text.includes('target keyword appears here'),
+          result.search.matches.length === 1 &&
+            result.read.blocks.length === 1 &&
+            result.read.blocks[0]?.type === 'paragraph' &&
+            result.read.blocks[0]?.text.includes('target keyword appears here'),
           {
             name: 'large-document-search-can-locate-and-read-target-block',
-            message: 'docx_read 应能在长文档中稳定定位并精读目标 block。',
+            message: 'docx_search + docx_read 应能在长文档中稳定定位并精读目标 block。',
             data: {
-              matches: result.read.matches
+              searchMatches: result.search.matches,
+              readBlocks: result.read.blocks
             }
           }
         )

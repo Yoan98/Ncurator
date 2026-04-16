@@ -118,7 +118,7 @@ describe('ai tool hand backend', () => {
             toolName: 'docx_read',
             args: {
               sourcePath: 'artifact-merge.docx',
-              query: 'Preview generation should be merged with terminal artifact.'
+              fromBlockId: 'b:1'
             },
             previousArtifacts: firstState.execution.artifacts
           }),

@@ -13,6 +13,7 @@ import type { AssistantTurnStep, WorkbenchFileRef } from './types'
 const TOOL_LABEL_MAP: Record<string, string> = {
   kb_search: 'search',
   kb_list_documents: 'search',
+  docx_search: 'search',
   docx_read: 'read',
   docx_outline: 'read',
   docx_history: 'read',

@@ -2,7 +2,7 @@ import { describe, it } from 'vitest'
 import { writeTestDocxFile } from '../../../harness/backend/aiToolHarness'
 import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
-import type { DocxMutationResult, DocxReadResult } from '../../tool/docx/testUtils'
+import type { DocxMutationResult, DocxReadResult, DocxSearchResult } from '../../tool/docx/testUtils'
 import {
   buildCompleteTaskDecision,
   buildLearnSkillsDecision,
@@ -64,14 +64,30 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildToolDecision({
-                  toolName: 'docx_read',
+                  toolName: 'docx_search',
                   args: {
                     sourcePath: 'complex-edit.docx',
                     query: 'Cycle 3 cumulative draft content.'
                   },
-                  summary: '读取新内容',
+                  summary: '搜索新内容',
+                  reason: '先定位编辑后的 block，再继续精读。',
+                  expectedOutcome: '确认新文本可被搜索到。'
+                })
+              },
+              () => {
+                const searchResult = readLatestToolResultDataFromEvents<DocxSearchResult>(
+                  runtime.eventCollector.snapshot(),
+                  'docx_search'
+                )
+                return buildToolDecision({
+                  toolName: 'docx_read',
+                  args: {
+                    sourcePath: 'complex-edit.docx',
+                    fromBlockId: searchResult.matches[0]!.blockId
+                  },
+                  summary: '精读新内容',
                   reason: '验证编辑结果已经真实进入后续 docx session。',
-                  expectedOutcome: '确认新文本可被读取到。'
+                  expectedOutcome: '确认新文本可被精读到。'
                 })
               },
               {
@@ -109,6 +125,10 @@ describe('ai human mock-llm backend', () => {
           toolResults,
           'docx_text_edit'
         )
+        const searchResult = readLatestToolResultDataFromEvents<DocxSearchResult>(
+          toolResults,
+          'docx_search'
+        )
         const readResult = readLatestToolResultDataFromEvents<DocxReadResult>(
           toolResults,
           'docx_read'
@@ -117,7 +137,8 @@ describe('ai human mock-llm backend', () => {
         runtime.assertThat(
           result.output.status === 'completed' &&
             applyResult.changedBlocks.length === 1 &&
-            readResult.matches.length === 1 &&
+            searchResult.matches.length === 1 &&
+            readResult.blocks.length === 1 &&
             hasDraftReviewArtifact(result.output.artifacts) &&
             hasDraftFileArtifact(result.output.artifacts) &&
             filterAiRunEventsByType(result.events, 'draft_review_ready').length === 1,
@@ -127,6 +148,7 @@ describe('ai human mock-llm backend', () => {
               'mock-llm 下的 human/docx case 应通过真实 docx 工具链完成编辑、读回确认并产出 draft review artifact。',
             data: {
               applyResult,
+              searchResult,
               readResult,
               artifacts: result.output.artifacts
             }

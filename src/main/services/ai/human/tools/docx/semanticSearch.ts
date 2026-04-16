@@ -36,6 +36,8 @@ export const buildSemanticMatches = (input: {
   queryEmbedding: Float32Array
   scopeBlockIds: string[]
   queryText: string
+  topK: number
+  minScore: number
 }): DocxSearchMatch[] => {
   const scope = input.scopeBlockIds.length > 0 ? new Set(input.scopeBlockIds) : null
   const normalizedQuery = input.queryText.trim().toLowerCase()
@@ -67,14 +69,17 @@ export const buildSemanticMatches = (input: {
     .filter((item) => item.text.trim().length > 0)
     .sort((a, b) => b.score - a.score)
 
-  return scored.slice(0, 8).map((item) => ({
-    blockId: item.blockId,
-    blockType: item.blockType,
-    bodyIndex: item.bodyIndex,
-    previousBodyBlockId: item.previousBodyBlockId,
-    nextBodyBlockId: item.nextBodyBlockId,
-    tableBlockId: item.tableBlockId,
-    text: item.text,
-    offsets: []
-  }))
+  return scored
+    .filter((item) => item.score >= input.minScore)
+    .slice(0, input.topK)
+    .map((item) => ({
+      blockId: item.blockId,
+      blockType: item.blockType,
+      bodyIndex: item.bodyIndex,
+      previousBodyBlockId: item.previousBodyBlockId,
+      nextBodyBlockId: item.nextBodyBlockId,
+      tableBlockId: item.tableBlockId,
+      text: item.text,
+      score: item.score
+    }))
 }

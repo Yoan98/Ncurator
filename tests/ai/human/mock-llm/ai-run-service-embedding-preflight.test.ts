@@ -3,7 +3,7 @@ import { AiRunService } from '../../../../src/main/services/ai/AiRunService'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import { createScriptedStructuredOutputDriver } from '../../../harness/backend/scriptedStructuredOutputDriver'
 import { writeTestDocxFile } from '../../../harness/backend/aiToolHarness'
-import type { DocxReadResult } from '../../tool/docx/testUtils'
+import type { DocxSearchResult } from '../../tool/docx/testUtils'
 import {
   buildCompleteTaskDecision,
   buildLearnSkillsDecision,
@@ -72,15 +72,16 @@ describe('ai human mock-llm backend', () => {
                 },
                 {
                   output: buildToolDecision({
-                  toolName: 'docx_read',
-                  args: {
-                    sourcePath: 'semantic-docx.docx',
-                    query: '反走样'
-                  },
-                  summary: '读取相关片段',
-                  reason: '验证 embedding preflight 后 human 能直接进入 docx 读取。',
-                  expectedOutcome: '命中相关 block。'
-                })
+                    toolName: 'docx_search',
+                    args: {
+                      sourcePath: 'semantic-docx.docx',
+                      query: '边缘锯齿怎么处理',
+                      mode: 'semantic'
+                    },
+                    summary: '做语义搜索',
+                    reason: '验证 embedding preflight 后 human 能直接进入 docx semantic 搜索。',
+                    expectedOutcome: '命中相关 block。'
+                  })
                 },
                 {
                   output: buildCompleteTaskDecision({
@@ -110,23 +111,25 @@ describe('ai human mock-llm backend', () => {
         }
       },
       assert: async (result, runtime) => {
-        const docxReadResult = readLatestToolResultDataFromEvents<DocxReadResult>(
+        const docxSearchResult = readLatestToolResultDataFromEvents<DocxSearchResult>(
           result.events,
-          'docx_read'
+          'docx_search'
         )
 
         runtime.assertThat(
             result.initialEmbeddingStatus === 'uninitialized' &&
             result.ensureReadyCalls === 1 &&
             result.result.status === 'completed' &&
-            docxReadResult.matches.length >= 1,
+            docxSearchResult.mode === 'semantic' &&
+            docxSearchResult.matches.length >= 1 &&
+            typeof docxSearchResult.matches[0]?.score === 'number',
           {
             name: 'ai-run-service-preflights-embedding-before-human',
-            message: 'AiRunService 应在进入 human 前完成 embedding preflight，并让后续 docx 读取直接可用。',
+            message: 'AiRunService 应在进入 human 前完成 embedding preflight，并让后续 docx semantic 搜索直接可用。',
             data: {
               initialEmbeddingStatus: result.initialEmbeddingStatus,
               ensureReadyCalls: result.ensureReadyCalls,
-              docxReadResult,
+              docxSearchResult,
               finalStatus: result.result.status
             }
           }

@@ -4,7 +4,8 @@ import { createDocxToolHarness } from '../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
   type DocxMutationResult,
-  type DocxReadResult
+  type DocxReadResult,
+  type DocxSearchResult
 } from './testUtils'
 
 const SAMPLE_DOCX_FIXTURE = path.resolve('tests/fixtures/ai/docx/sample-edit.docx')
@@ -24,22 +25,32 @@ describe('ai tool docx backend', () => {
           const harness = createDocxToolHarness(runtime)
         try {
           const sourcePath = runtime.getFixtureWorkspacePath(SAMPLE_DOCX_FIXTURE)
+          const searchBefore = await harness.invoke<DocxSearchResult>('docx_search', {
+            sourcePath,
+            query: 'Hello'
+          })
           const readBefore = await harness.invoke<DocxReadResult>('docx_read', {
             sourcePath,
-            query: 'Hello',
+            fromBlockId: searchBefore.matches[0]!.blockId
           })
           const applied = await harness.invoke<DocxMutationResult>('docx_text_edit', {
             sourcePath,
             query: 'Hello',
             replace: 'Hi'
           })
-          const readAfter = await harness.invoke<DocxReadResult>('docx_read', {
+          const searchAfter = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: applied.sourcePath,
             query: 'Hi'
           })
+          const readAfter = await harness.invoke<DocxReadResult>('docx_read', {
+            sourcePath: applied.sourcePath,
+            fromBlockId: searchAfter.matches[0]!.blockId
+          })
           return {
+            searchBefore,
             readBefore,
             applied,
+            searchAfter,
             readAfter
           }
         } finally {
@@ -48,7 +59,8 @@ describe('ai tool docx backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.readBefore.matches.length === 1 &&
+          result.searchBefore.matches.length === 1 &&
+            result.readBefore.blocks.length === 1 &&
             result.applied.currentVersionRef !== result.readBefore.currentVersionRef &&
             result.applied.changedBlocks.length === 1 &&
             result.applied.changedBlocks[0]?.action === 'replace_text',
@@ -64,14 +76,16 @@ describe('ai tool docx backend', () => {
         )
 
         runtime.assertThat(
-          result.readAfter.matches.length === 1 &&
-            result.readAfter.matches[0]?.bodyIndex === result.readBefore.matches[0]?.bodyIndex &&
+          result.searchAfter.matches.length === 1 &&
+            result.readAfter.blocks.length === 1 &&
+            result.readAfter.blocks[0]?.bodyIndex === result.readBefore.blocks[0]?.bodyIndex &&
             result.applied.warnings.length === 0,
           {
             name: 'minimal-edit-flow-remains-readable-after-edit',
             message: '修改后应能继续被 search 消费，并暴露稳定的结构位置事实。',
             data: {
-              searchAfter: result.readAfter.matches,
+              searchAfter: result.searchAfter.matches,
+              readAfter: result.readAfter.blocks,
               warnings: result.applied.warnings
             }
           }

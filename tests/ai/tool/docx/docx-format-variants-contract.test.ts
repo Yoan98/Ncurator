@@ -8,6 +8,7 @@ import {
   type DocxMutationResult,
   type DocxOutlineResult,
   type DocxReadResult,
+  type DocxSearchResult,
   findParagraphBlockIdByText,
   findTableCellBlockIdByText
 } from './testUtils'
@@ -59,11 +60,11 @@ describe('ai tool docx backend', () => {
 
           const headingBlock = await harness.invoke<DocxReadResult>('docx_read', {
             sourcePath: outline.sourcePath,
-            blockId: headingBlockId
+            fromBlockId: headingBlockId
           })
           const ownerCellBlock = await harness.invoke<DocxReadResult>('docx_read', {
             sourcePath: outline.sourcePath,
-            blockId: ownerCellBlockId
+            fromBlockId: ownerCellBlockId
           })
           const updatedParagraph = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
             sourcePath: outline.sourcePath,
@@ -77,9 +78,13 @@ describe('ai tool docx backend', () => {
             cellBlockId: ownerCellBlockId,
             text: 'Bob'
           })
-          const readUpdatedParagraph = await harness.invoke<DocxReadResult>('docx_read', {
+          const searchUpdatedParagraph = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: updatedCell.sourcePath,
             query: 'Narrative paragraph updated.'
+          })
+          const readUpdatedParagraph = await harness.invoke<DocxReadResult>('docx_read', {
+            sourcePath: updatedCell.sourcePath,
+            fromBlockId: searchUpdatedParagraph.matches[0]!.blockId
           })
 
           return {
@@ -88,6 +93,7 @@ describe('ai tool docx backend', () => {
             ownerCellBlock,
             updatedParagraph,
             updatedCell,
+            searchUpdatedParagraph,
             readUpdatedParagraph
           }
         } finally {
@@ -99,15 +105,15 @@ describe('ai tool docx backend', () => {
           result.outline.blocks.some((block) => block.type === 'paragraph') &&
             result.outline.blocks.some((block) => block.type === 'table') &&
             result.outline.blocks.some((block) => block.type === 'table_cell') &&
-            result.headingBlock.matches[0]?.type === 'paragraph' &&
-            result.ownerCellBlock.matches[0]?.type === 'table_cell',
+            result.headingBlock.blocks[0]?.type === 'paragraph' &&
+            result.ownerCellBlock.blocks[0]?.type === 'table_cell',
           {
             name: 'format-variants-return-stable-block-types',
             message: 'heading、paragraph、table 和 table_cell 都应被稳定识别和读取。',
             data: {
               outline: result.outline.blocks,
-              headingBlock: result.headingBlock.matches[0],
-              ownerCellBlock: result.ownerCellBlock.matches[0]
+              headingBlock: result.headingBlock.blocks[0],
+              ownerCellBlock: result.ownerCellBlock.blocks[0]
             }
           }
         )
@@ -115,7 +121,8 @@ describe('ai tool docx backend', () => {
         runtime.assertThat(
           result.updatedParagraph.changedBlocks.length === 1 &&
             result.updatedCell.changedBlocks.length === 1 &&
-            result.readUpdatedParagraph.matches.length === 1 &&
+            result.searchUpdatedParagraph.matches.length === 1 &&
+            result.readUpdatedParagraph.blocks.length === 1 &&
             result.updatedCell.changedBlocks.some((block) => block.action === 'update_table_cell') &&
             result.updatedCell.warnings.length === 0,
           {
@@ -124,7 +131,8 @@ describe('ai tool docx backend', () => {
             data: {
               updatedParagraph: result.updatedParagraph.changedBlocks,
               updatedCell: result.updatedCell.changedBlocks,
-              readUpdatedParagraph: result.readUpdatedParagraph.matches,
+              searchUpdatedParagraph: result.searchUpdatedParagraph.matches,
+              readUpdatedParagraph: result.readUpdatedParagraph.blocks,
               warnings: result.updatedCell.warnings
             }
           }
