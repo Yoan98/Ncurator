@@ -319,7 +319,7 @@
 #### `mock-llm`
 
 - Last Run：`2026-04-16 10:37:34 +08:00`
-- Last Result：`通过`（本次批量执行 `14` 个测试文件 / `16` 个测试 / `16` 个 case 全部通过）
+- Last Result：`通过`（`14 / 14` 个测试用例通过）
 
 ##### `ai-run-service-human-only`
 
