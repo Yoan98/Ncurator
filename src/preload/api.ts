@@ -125,7 +125,7 @@ export type DesktopApi = {
   webSourceDelete: (payload: DeleteWebSourceRequest) => Promise<DeleteWebSourceResponse>
   legacyLocalImportMigrationStatus: () => Promise<LegacyLocalImportMigrationStatus | null>
   listChunks: (payload: {
-    keyword?: string
+    query?: string
     page: number
     pageSize: number
   }) => Promise<ChunkListResponse>

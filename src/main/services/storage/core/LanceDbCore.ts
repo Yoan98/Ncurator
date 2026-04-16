@@ -105,8 +105,8 @@ export class LanceDbCore {
     return clauses.map((c) => `(${c})`).join(' AND ')
   }
 
-  public buildWhereFromKeyword(keyword?: string, fields?: string[]): string | undefined {
-    const trimmed = String(keyword || '').trim()
+  public buildWhereFromQuery(query?: string, fields?: string[]): string | undefined {
+    const trimmed = String(query || '').trim()
     if (!trimmed) return undefined
     const isSql =
       /(\bAND\b|\bOR\b|\bNOT\b|=|>=|<=|>|<|\bLIKE\b|\bNOT LIKE\b|\bIN\b|\bIS NULL\b|\bIS NOT NULL\b|regexp_match\s*\()/i.test(

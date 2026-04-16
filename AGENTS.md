@@ -12,7 +12,7 @@
 
 ### 1.2 项目整体相关
 - 当涉及项目整体架构与技术栈时，必须阅读 `doc/architecture.md`
-- 当涉及数据库、工程结构、目录归位或工作区化网页资料存储时，必须阅读 `doc/database.md` 与 `doc/project-structure.md`
+- 当涉及数据库、工程结构、目录归位、工作区化网页资料存储，或 document/chunk 列表查询参数与 LanceDB where helper 命名时，必须阅读 `doc/database.md` 与 `doc/project-structure.md`
 - 当涉及 UI 风格与通用交互规范时，必须阅读 `doc/ui-style.md`
 
 ### 1.3 测试相关

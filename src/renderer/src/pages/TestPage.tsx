@@ -41,7 +41,7 @@ function TestPage(): React.JSX.Element {
   const [chunkLoading, setChunkLoading] = useState<boolean>(false)
   const [chunkPage, setChunkPage] = useState<number>(1)
   const [chunkPageSize, setChunkPageSize] = useState<number>(10)
-  const [chunkKeyword, setChunkKeyword] = useState<string>('')
+  const [chunkQuery, setChunkQuery] = useState<string>('')
 
   const [detailOpen, setDetailOpen] = useState<boolean>(false)
   const [detailText, setDetailText] = useState<string>('')
@@ -117,10 +117,10 @@ function TestPage(): React.JSX.Element {
     }
   }
 
-  const loadChunks = async (page = chunkPage, pageSize = chunkPageSize, keyword = chunkKeyword) => {
+  const loadChunks = async (page = chunkPage, pageSize = chunkPageSize, query = chunkQuery) => {
     setChunkLoading(true)
     try {
-      const res = await window.api.listChunks({ keyword, page, pageSize })
+      const res = await window.api.listChunks({ query, page, pageSize })
       setChunkItems(res.items.map(parseIpcResult))
       setChunkTotal(res.total)
       setChunkPage(page)
@@ -137,7 +137,7 @@ function TestPage(): React.JSX.Element {
     if (view === 'docs') {
       loadDocuments(1, docPageSize, docKeyword)
     } else if (view === 'chunks') {
-      loadChunks(1, chunkPageSize, chunkKeyword)
+      loadChunks(1, chunkPageSize, chunkQuery)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view])
@@ -223,7 +223,7 @@ function TestPage(): React.JSX.Element {
                 placeholder="Filter chunks by content..."
                 enterButton="Filter"
                 onSearch={(v) => {
-                  setChunkKeyword(v)
+                  setChunkQuery(v)
                   loadChunks(1, chunkPageSize, v)
                 }}
                 loading={chunkLoading}
@@ -326,7 +326,7 @@ function TestPage(): React.JSX.Element {
                   current: chunkPage,
                   pageSize: chunkPageSize,
                   total: chunkTotal,
-                  onChange: (page, pageSize) => loadChunks(page, pageSize, chunkKeyword),
+                  onChange: (page, pageSize) => loadChunks(page, pageSize, chunkQuery),
                   showTotal: (total) => `Total ${total} chunks`
                 }}
                 className="[&_.ant-table-thead_th]:!bg-[#F5F5F4] [&_.ant-table-thead_th]:!text-[#666666] [&_.ant-table-thead_th]:!font-medium"

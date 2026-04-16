@@ -1970,11 +1970,11 @@ export function registerHandlers(services: {
     'list-chunks',
     async (
       _event,
-      payload: { keyword?: string; page: number; pageSize: number }
+      payload: { query?: string; page: number; pageSize: number }
     ): Promise<ChunkListResponse> => {
       try {
-        const { keyword, page, pageSize } = payload
-        const res = await documentsStore.listChunks({ keyword, page, pageSize })
+        const { query, page, pageSize } = payload
+        const res = await documentsStore.listChunks({ query, page, pageSize })
         const normalized = res.items.map(normalizeForIpc)
         return { items: normalized, total: res.total }
       } catch (error: unknown) {

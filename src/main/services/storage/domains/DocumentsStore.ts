@@ -410,25 +410,25 @@ export class DocumentsStore {
   }
 
   public async listChunks(params: {
-    keyword?: string
+    query?: string
     page: number
     pageSize: number
     workspaceId?: string
     documentIds?: string[]
   }): Promise<ChunkListResponse> {
-    const { keyword, page, pageSize, workspaceId, documentIds } = params
+    const { query, page, pageSize, workspaceId, documentIds } = params
     const table = await this.core.openTable(LANCE_TABLES.CHUNK)
 
     const where = this.core.combineWhere([
       this.buildChunkWhere({ workspaceId, documentIds }),
-      this.core.buildWhereFromKeyword(keyword, ['text', 'document_name'])
+      this.core.buildWhereFromQuery(query, ['text', 'document_name'])
     ])
     const total = await table.countRows(where)
     const skip = Math.max(0, (page - 1) * pageSize)
 
-    const query = table.query()
-    if (where && where.trim().length > 0) query.where(where)
-    const rows = await query.limit(pageSize).offset(skip).toArray()
+    const queryBuilder = table.query()
+    if (where && where.trim().length > 0) queryBuilder.where(where)
+    const rows = await queryBuilder.limit(pageSize).offset(skip).toArray()
 
     const items = rows.map((item) => {
       const row = asRecord(item) as ChunkRow

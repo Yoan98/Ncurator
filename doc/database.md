@@ -32,7 +32,7 @@
 
 - **不要在业务逻辑里直接 `lancedb.connect/openTable/createIndex`**；新增/修改数据库行为优先在 `LanceDbCore` 或对应 `*Store` 内完成。
 - **where 条件中拼接外部输入时必须转义**：使用 `LanceDbCore.escapeSqlString()`；`IN` 条件优先用 `buildInClause()`。
-- **keyword 搜索条件优先复用**：`LanceDbCore.buildWhereFromKeyword(keyword, fields)`。
+- **query 搜索条件优先复用**：`LanceDbCore.buildWhereFromQuery(query, fields)`。
   - 该方法会在检测到“像 SQL 的输入”时直接返回原字符串，用于内部高级筛选；不要把不可信输入当作 SQL 传入。
 - **新增表/索引的入口**：
   1. 在 `LanceDbCore.ts` 的 `LANCE_TABLES` 与 `getTableConfigs()` 增加配置
