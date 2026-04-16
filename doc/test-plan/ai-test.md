@@ -86,8 +86,8 @@
 
 ### 4.1 `tool`
 
-- Last Run：`待更新`
-- Last Result：`待更新`
+- Last Run：`2026-04-16 18:32:26 +08:00`
+- Last Result：`通过`（`29 / 29` 个测试用例通过）
 
 #### `docx`
 
@@ -437,8 +437,8 @@
 
 #### `mock-llm`
 
-- Last Run：`2026-04-16 10:37:34 +08:00`
-- Last Result：`通过`（`14 / 14` 个测试用例通过）
+- Last Run：`2026-04-16 18:32:42 +08:00`
+- Last Result：`通过`（`15 / 15` 个测试用例通过）
 
 ##### `ai-run-service-human-only`
 
@@ -593,8 +593,8 @@
 - How：构造只写“过度拟合”的真实 docx，scripted brain 先执行 `docx_search(query=过拟合)`，再以返回 blockId 执行区间 `docx_read`。
 - Oracle：`docx_search` 返回 alias fallback 事实，`docx_read` 返回定义/成因/处理线索，任务最终完成。
 - Not：不验证 live 模型是否一定会采用相同工具顺序。
-- Last Run：`待更新`
-- Last Result：`待更新`
+- Last Run：`2026-04-16 18:32:42 +08:00`
+- Last Result：`通过`
 
 ##### `multi-tool-collaboration`
 
@@ -631,7 +631,7 @@
 - How：注入真实 live LLM 配置，seed 一份与“审批未通过时保留原文件”相关的真实 KB 文档并限制在已选范围内，然后直接输入“审批没通过时原文件到底要不要保留”的自然语言诉求，让真实 `human` 自主完成。
 - Oracle：任务最终完成，且真实工具结果中至少出现一次以 `kb_` 开头的检索工具调用，最终结论明确指向保留原文件。
 - Not：不对最终文案做精确文本断言。
-- Last Run：`2026-04-16 15:40:43 +08:00`
+- Last Run：`2026-04-16 18:33:26 +08:00`
 - Last Result：`通过`
 
 ##### `human-risk-report-draft-live`
@@ -643,7 +643,7 @@
 - How：注入真实 live LLM 配置；workspace 中动态写入带 `RISK_TODO / OWNER_TODO` 占位符的周报模板和干扰文件；seed 两份真实 KB 文档分别提供风险结论与负责人说明并限制在已选范围内；直接输入“找到上周 Word 周报模板，按已选资料补全风险结论与负责人，生成确认稿且不要覆盖原文件”的自然语言诉求，让真实 `human` 自主完成。
 - Oracle：任务最终完成；事件流中至少出现一次 `workspace_run_command`、一次 KB 检索工具调用、一次 docx 读取、一次 docx 编辑；存在 `draft_review_ready` 事件，最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；原模板未被覆盖；最终答复能从用户视角说明改动的是“风险结论”和“负责人说明”两处、依据分别来自 `Weekly Risk Summary.md` 与 `Owner Note.md`，并明确当前给出的是待确认草稿。
 - Not：不绑定最终答案措辞，也不要求固定检索工具顺序。
-- Last Run：`2026-04-16 15:59:11 +08:00`
+- Last Run：`2026-04-16 18:37:18 +08:00`
 - Last Result：`通过`
 
 ##### `human-docx-cause-remedy-reading-live`
