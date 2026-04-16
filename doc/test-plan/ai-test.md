@@ -318,6 +318,9 @@
 
 #### `mock-llm`
 
+- Last Run：`2026-04-16 10:37:34 +08:00`
+- Last Result：`通过`（本次批量执行 `14` 个测试文件 / `16` 个测试 / `16` 个 case 全部通过）
+
 ##### `ai-run-service-human-only`
 
 - 测试类型：`backend`
@@ -327,6 +330,8 @@
 - How：通过 `AiRunService.getInstance().run(...)` 启动一次真实 run，再用 scripted structured output 驱动 `brain -> learning -> hand -> mouth` 完成闭环。
 - Oracle：真实出现 `human_brain`、`human_learning`、`human_hand`、`human_mouth` 四个 stage，`AiRunState.finalDeliveryMarkdown` 正常落地，且 `AiRunService` 自身不直接发 `run_completed`。
 - Not：不验证更复杂 live 业务链路。
+- Last Run：`2026-04-16 10:37:31 +08:00`
+- Last Result：`通过`
 
 ##### `ai-run-service-embedding-preflight`
 
@@ -337,6 +342,8 @@
 - How：分别覆盖 preflight 成功后执行真实 `docx_read`，以及 preflight 直接失败的分支。
 - Oracle：成功分支中 `docx_read` 正常返回结果；失败分支中 run 直接失败且不会进入 `human` stage。
 - Not：不验证模型下载进度展示。
+- Last Run：`2026-04-16 10:37:34 +08:00`
+- Last Result：`通过`
 
 ##### `learning-hand-mouth-smoke`
 
@@ -347,6 +354,8 @@
 - How：通过 scripted structured output 依次驱动学习 `workspace-cli`、执行一次真实 `workspace_run_command(pwd)`，再进入真实 `mouth` 完成交付。
 - Oracle：`human_brain`、`human_learning`、`human_hand`、`human_mouth` 四个 stage 都真实出现，且至少有一次真实 terminal 工具结果与一次真实最终交付。
 - Not：不验证复杂分支、异常恢复或 live 模型质量。
+- Last Run：`2026-04-16 10:37:32 +08:00`
+- Last Result：`通过`
 
 ##### `learning-tool-budget-tracking`
 
@@ -357,6 +366,8 @@
 - How：通过 scripted structured output 依次学习 `workspace-cli + docx-read`、`docx-write`、`kb-document-discovery + kb-evidence-query`，最后进入真实 `mouth` 收束；检查最后一轮真实 `human_learning` 事件中的 `learnedSkillIds`、`availableToolNames` 与 summary。
 - Oracle：任务最终完成；最后一轮 `human_learning` 事件中保留全部已学习 skill，`availableToolNames` 与当前已学习 skill 的工具集合一致，summary 包含 `当前 active tools=`，且不包含 skill 淘汰文案。
 - Not：不验证超过 `20` 个 active tools 后的淘汰算法细节。
+- Last Run：`2026-04-16 10:37:31 +08:00`
+- Last Result：`通过`
 
 ##### `watchhint-retry`
 
@@ -367,6 +378,8 @@
 - How：第一轮先学习 `workspace-cli`，第二轮故意重复学习同一个 skill 触发 learning watch hint，随后再执行一次真实 `workspace_run_command(pwd)` 并完成交付。
 - Oracle：事件流中真实出现 source 为 `learning` 的 `watch_hint`，并且在它之后仍发生真实 terminal 工具调用，任务最终完成。
 - Not：不验证 live 模型是否会自然产生这类重复决策。
+- Last Run：`2026-04-16 10:37:34 +08:00`
+- Last Result：`通过`
 
 ##### `tool-failure-recovery`
 
@@ -377,6 +390,8 @@
 - How：先学习 `workspace-cli`，再真实执行一个会失败的只读命令 `cat definitely-missing-file.txt`，随后由 `brain` 决定停止重试并进入 `mouth`。
 - Oracle：真实 `workspace_run_command` 结果为失败，且 `human` 最终仍进入 `completed` 并产出最终交付。
 - Not：不验证失败后的最佳补救策略是否最优。
+- Last Run：`2026-04-16 10:37:34 +08:00`
+- Last Result：`通过`
 
 ##### `tool-limit-converge`
 
@@ -387,6 +402,8 @@
 - How：把 `hardActionLimit` 设为 `1`，先后真实执行两次只读 terminal 命令，让第二次调用命中上限保护。
 - Oracle：事件流中出现 source 为 `hand` 且摘要包含“超过临时上限 1”的 `watch_hint`，任务最终完成。
 - Not：不验证更高层是否继续扩展计划。
+- Last Run：`2026-04-16 10:37:34 +08:00`
+- Last Result：`通过`
 
 ##### `approval-denied-restricted-delivery`
 
@@ -397,6 +414,8 @@
 - How：设置 `approvalPolicy=deny-medium-high`，学习 `workspace-cli` 后尝试真实执行 `mkdir blocked-dir`，然后进入最终说明。
 - Oracle：真实工具结果返回 `approval_denied`，审批事件里存在 `approved=false`，磁盘上不会真的创建 `blocked-dir`，任务最终完成。
 - Not：不验证用户如何在 UI 中恢复被拒绝的动作。
+- Last Run：`2026-04-16 10:37:31 +08:00`
+- Last Result：`通过`
 
 ##### `brain-memory-write-boundary`
 
@@ -407,6 +426,8 @@
 - How：第一轮 `brain` 通过 `updatedStableMemory` 局部更新任务笔记，并触发一次真实 learning；第二轮 `brain` 读取真实 prompt，检查这些内容是否还在。
 - Oracle：第二轮 `brain` prompt 中同时出现前一轮写入的当前理解、关键依据和 checklist 内容，任务最终完成。
 - Not：不验证更复杂的 memory 压缩策略。
+- Last Run：`2026-04-16 10:37:31 +08:00`
+- Last Result：`通过`
 
 ##### `checklist-memory-maintenance`
 
@@ -417,6 +438,8 @@
 - How：第一轮 `brain` 写入只含 todo 的 checklist，并触发一次真实 learning；第二轮 `brain` 读取真实 prompt 后，将 checklist 重写为包含 done、todo 与 obsolete 的新版本。
 - Oracle：第二轮 `brain` prompt 中能看到第一轮写入的 checklist 与 note，任务最终完成，且新的 checklist 成功写回长期记忆。
 - Not：不验证 runtime 是否解析 checklist 结构或对其状态做额外机读校验。
+- Last Run：`2026-04-16 10:37:31 +08:00`
+- Last Result：`通过`
 
 ##### `complex-docx-edit`
 
@@ -427,6 +450,8 @@
 - How：先写入 fixture docx，再通过真实 `docx_text_edit -> docx_read` 完成一次正文替换并检索新内容。
 - Oracle：真实 `docx_text_edit` 只产生一处 `changedBlocks`，真实 `docx_read` 能命中新文本，任务最终完成。
 - Not：不验证 review UI 或最终落盘流程。
+- Last Run：`2026-04-16 10:37:32 +08:00`
+- Last Result：`通过`
 
 ##### `docx-read-fact-exposure`
 
@@ -437,6 +462,8 @@
 - How：构造包含长文档截断与兼容字形文本的真实 docx，通过 scripted brain 检查后续 prompt 是否包含“结果已截断，文档后续内容未包含”以及归一化搜索命中的事实。
 - Oracle：后续 `brain` prompt 中可读到截断文字说明与搜索命中信息，最终任务完成且不会把文档中已写内容误报为“未写”。
 - Not：不验证 live 模型在该场景下的自主策略优劣。
+- Last Run：`2026-04-16 10:37:34 +08:00`
+- Last Result：`通过`
 
 ##### `multi-tool-collaboration`
 
@@ -447,6 +474,8 @@
 - How：先 seed 真实 KB 文档，再学习 terminal 与 KB skill，随后在一次 `hand` 决策中并行执行 `workspace_run_command(pwd)` 与 `kb_list_documents`。
 - Oracle：同一条任务中真实出现 terminal 与 KB 两类工具结果，任务最终完成。
 - Not：不验证更复杂的多轮依赖型并行调度。
+- Last Run：`2026-04-16 10:37:32 +08:00`
+- Last Result：`通过`
 
 ##### `kb-answer-with-real-kb`
 
@@ -457,6 +486,8 @@
 - How：seed 两份真实 KB 文档，学习 KB skill 后真实执行 `kb_search(strategy=keyword)`，再通过真实 `mouth` 生成最终回答。
 - Oracle：真实 KB 检索结果中包含目标文档 `doc-1` 的证据，且这条证据文本会进入真实 `mouth` prompt，任务最终完成。
 - Not：不验证答案措辞或检索召回优劣。
+- Last Run：`2026-04-16 10:37:32 +08:00`
+- Last Result：`通过`
 
 #### `live`
 
@@ -469,6 +500,8 @@
 - How：注入真实 live LLM 配置，seed 一份与“审批未通过时保留原文件”相关的真实 KB 文档并限制在已选范围内，然后直接输入“审批没通过时原文件到底要不要保留”的自然语言诉求，让真实 `human` 自主完成。
 - Oracle：任务最终完成，且真实工具结果中至少出现一次以 `kb_` 开头的检索工具调用，最终结论明确指向保留原文件。
 - Not：不对最终文案做精确文本断言。
+- Last Run：`2026-04-16 10:38:11 +08:00`
+- Last Result：`通过`
 
 ##### `human-risk-report-draft-live`
 
