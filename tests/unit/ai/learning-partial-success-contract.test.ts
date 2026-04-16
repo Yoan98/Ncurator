@@ -1,10 +1,56 @@
-import { describe, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
+import type { AiRunContext } from '../../../src/main/services/ai/types'
 import { createLearningNode } from '../../../src/main/services/ai/human/node/learningNode'
 import { createHumanRuntimeCache } from '../../../src/main/services/ai/human/node/utils/runtimeCache'
 import { createInitialHumanState } from '../../../src/main/services/ai/human/state/schema'
-import { runBackendCase } from '../../harness/backend/run-backend-case'
+import type { HumanDecision } from '../../../src/main/services/ai/human/types'
 
-const buildLearningDecision = (skillIds: string[]) => ({
+const createStubAiRunContext = (): AiRunContext => ({
+  runId: 'run-learning-unit',
+  referenceScope: {
+    workspace: {
+      workspaceId: 'workspace-1',
+      workspaceName: 'workspace',
+      rootPath: '/tmp/workspace-root'
+    },
+    selectedReferences: [],
+    hasExplicitSelectedReferences: false,
+    hasDirectDocumentNarrowing: false,
+    defaultKnowledgeScope: 'current_workspace'
+  },
+  workspace: {
+    workspaceId: 'workspace-1',
+    workspaceName: 'workspace',
+    rootPath: '/tmp/workspace-root'
+  },
+  checkCancelled: () => {},
+  chatStructured: async () => {
+    throw new Error('chatStructured should not be called in learning unit tests')
+  },
+  chatText: async () => {
+    throw new Error('chatText should not be called in learning unit tests')
+  },
+  sendEvent: () => {},
+  requestApproval: async () => ({
+    approved: false
+  }),
+  loadHistory: async () => ({
+    recentTurnsText: '',
+    sessionSummaryText: ''
+  }),
+  trackDocxOpen: () => {},
+  trackDocxChanges: () => {},
+  resolveDocxOpenTarget: async () => {
+    throw new Error('resolveDocxOpenTarget should not be called in learning unit tests')
+  },
+  beginDocxReviewRun: () => {},
+  finalizeDocxReviewRun: async () => [],
+  discardDocxReviewRun: () => {},
+  documentsStore: undefined as never,
+  embeddingService: undefined as never
+})
+
+const buildLearningDecision = (skillIds: string[]): HumanDecision => ({
   decision: {
     summary: '测试 learning partial success',
     reason: '验证 learning 会加载新 skill，并跳过重复或未知 skill。',
@@ -17,132 +63,89 @@ const buildLearningDecision = (skillIds: string[]) => ({
   }
 })
 
-describe('ai human backend', () => {
-  it('learning-partial-success-contract', async () => {
-    await runBackendCase({
-      caseId: 'learning-partial-success-contract',
-      harnessMode: 'tool-real',
-      domain: 'ai',
-      suite: 'human',
-      groups: ['learning'],
-      description: '验证 learning 对重复和未知 skill 采用 partial success，而不是整批失败。',
-      fixtures: [],
-      runMode: 'single',
-      execute: async (runtime) => {
-        const ctx = runtime.createAiRunContext()
-        const cache = createHumanRuntimeCache()
-        const learningNode = createLearningNode({ ctx, cache })
+describe('ai unit learning partial success', () => {
+  it('loads new skills while skipping duplicates', async () => {
+    const ctx = createStubAiRunContext()
+    const cache = createHumanRuntimeCache()
+    const learningNode = createLearningNode({ ctx, cache })
+    const baseState = createInitialHumanState({
+      taskId: 'task-duplicate-plus-new',
+      userInput: '请学习 workspace-cli 和 docx-read'
+    })
 
-        const duplicatePlusNewBase = createInitialHumanState({
-          taskId: runtime.taskId,
-          userInput: '请学习 workspace-cli 和 docx-read'
-        })
-        const duplicatePlusNewState = await learningNode({
-          ...duplicatePlusNewBase,
-          skills: {
-            learnedSkillIds: ['workspace-cli']
-          },
-          execution: {
-            ...duplicatePlusNewBase.execution,
-            currentDecision: buildLearningDecision(['workspace-cli', 'docx-read'])
-          }
-        })
-
-        const unknownPlusNewBase = createInitialHumanState({
-          taskId: runtime.taskId,
-          userInput: '请学习 unknown-skill 和 workspace-cli'
-        })
-        const unknownPlusNewState = await learningNode({
-          ...unknownPlusNewBase,
-          execution: {
-            ...unknownPlusNewBase.execution,
-            currentDecision: buildLearningDecision(['unknown-skill', 'workspace-cli'])
-          }
-        })
-
-        const builtinOnlyBase = createInitialHumanState({
-          taskId: runtime.taskId,
-          userInput: '请学习 history-recall'
-        })
-        const builtinOnlyState = await learningNode({
-          ...builtinOnlyBase,
-          execution: {
-            ...builtinOnlyBase.execution,
-            currentDecision: buildLearningDecision(['history-recall'])
-          }
-        })
-
-        return {
-          duplicatePlusNewState,
-          unknownPlusNewState,
-          builtinOnlyState
-        }
+    const nextState = await learningNode({
+      ...baseState,
+      skills: {
+        learnedSkillIds: ['workspace-cli']
       },
-      assert: async (result, runtime) => {
-        runtime.assertThat(
-          !result.duplicatePlusNewState.execution.watchHint &&
-            result.duplicatePlusNewState.execution.lastLearningOutcome?.loadedSkillIds.includes(
-              'docx-read'
-            ) &&
-            result.duplicatePlusNewState.execution.lastLearningOutcome?.skippedDuplicateSkillIds.includes(
-              'workspace-cli'
-            ) &&
-            result.duplicatePlusNewState.execution.lastLearningOutcome?.skippedUnknownSkillIds.length ===
-              0 &&
-            result.duplicatePlusNewState.skills.learnedSkillIds.includes('workspace-cli') &&
-            result.duplicatePlusNewState.skills.learnedSkillIds.includes('docx-read') &&
-            result.duplicatePlusNewState.memory.history.roundHistory.at(-1)?.execution.kind ===
-              'learning',
-          {
-            name: 'learning-loads-new-skills-and-skips-duplicates',
-            message: '当请求里既有重复 skill 又有新 skill 时，learning 应只加载新 skill，不发 watchHint。',
-            data: {
-              watchHint: result.duplicatePlusNewState.execution.watchHint,
-              lastLearningOutcome: result.duplicatePlusNewState.execution.lastLearningOutcome,
-              learnedSkillIds: result.duplicatePlusNewState.skills.learnedSkillIds,
-              latestRound: result.duplicatePlusNewState.memory.history.roundHistory.at(-1)
-            }
-          }
-        )
-
-        runtime.assertThat(
-          !result.unknownPlusNewState.execution.watchHint &&
-            result.unknownPlusNewState.execution.lastLearningOutcome?.loadedSkillIds.includes(
-              'workspace-cli'
-            ) &&
-            result.unknownPlusNewState.execution.lastLearningOutcome?.skippedUnknownSkillIds.includes(
-              'unknown-skill'
-            ) &&
-            result.unknownPlusNewState.skills.learnedSkillIds.includes('workspace-cli'),
-          {
-            name: 'learning-loads-known-skills-and-skips-unknown',
-            message: '当请求里既有未知 skill 又有新 skill 时，learning 应只加载已知 skill，不发 watchHint。',
-            data: {
-              watchHint: result.unknownPlusNewState.execution.watchHint,
-              lastLearningOutcome: result.unknownPlusNewState.execution.lastLearningOutcome,
-              learnedSkillIds: result.unknownPlusNewState.skills.learnedSkillIds
-            }
-          }
-        )
-
-        runtime.assertThat(
-          result.builtinOnlyState.execution.watchHint?.code === 'learning_no_effect' &&
-            result.builtinOnlyState.execution.lastLearningOutcome?.loadedSkillIds.length === 0 &&
-            result.builtinOnlyState.execution.lastLearningOutcome?.skippedDuplicateSkillIds.includes(
-              'history-recall'
-            ) &&
-            !result.builtinOnlyState.skills.learnedSkillIds.includes('history-recall'),
-          {
-            name: 'learning-does-not-learn-builtin-skills',
-            message: 'builtin skill 应视为始终可用，而不是可学习的外置 skill。',
-            data: {
-              watchHint: result.builtinOnlyState.execution.watchHint,
-              lastLearningOutcome: result.builtinOnlyState.execution.lastLearningOutcome,
-              learnedSkillIds: result.builtinOnlyState.skills.learnedSkillIds
-            }
-          }
-        )
+      execution: {
+        ...baseState.execution,
+        currentDecision: buildLearningDecision(['workspace-cli', 'docx-read'])
       }
     })
+
+    expect(nextState.execution.watchHint).toBeUndefined()
+    expect(nextState.execution.lastLearningOutcome).toMatchObject({
+      loadedSkillIds: ['docx-read'],
+      skippedDuplicateSkillIds: ['workspace-cli'],
+      skippedUnknownSkillIds: []
+    })
+    expect(nextState.skills.learnedSkillIds).toEqual(['workspace-cli', 'docx-read'])
+    expect(nextState.memory.history.roundHistory.at(-1)?.execution.kind).toBe('learning')
+    expect(cache.skillToolsets['docx-read']).toBeTruthy()
+  })
+
+  it('loads known skills while skipping unknown ones', async () => {
+    const ctx = createStubAiRunContext()
+    const cache = createHumanRuntimeCache()
+    const learningNode = createLearningNode({ ctx, cache })
+    const baseState = createInitialHumanState({
+      taskId: 'task-unknown-plus-new',
+      userInput: '请学习 unknown-skill 和 workspace-cli'
+    })
+
+    const nextState = await learningNode({
+      ...baseState,
+      execution: {
+        ...baseState.execution,
+        currentDecision: buildLearningDecision(['unknown-skill', 'workspace-cli'])
+      }
+    })
+
+    expect(nextState.execution.watchHint).toBeUndefined()
+    expect(nextState.execution.lastLearningOutcome).toMatchObject({
+      loadedSkillIds: ['workspace-cli'],
+      skippedUnknownSkillIds: ['unknown-skill']
+    })
+    expect(nextState.skills.learnedSkillIds).toEqual(['workspace-cli'])
+    expect(nextState.memory.history.roundHistory.at(-1)?.execution.kind).toBe('learning')
+  })
+
+  it('treats builtin-only requests as no effect', async () => {
+    const ctx = createStubAiRunContext()
+    const cache = createHumanRuntimeCache()
+    const learningNode = createLearningNode({ ctx, cache })
+    const baseState = createInitialHumanState({
+      taskId: 'task-builtin-only',
+      userInput: '请学习 history-recall'
+    })
+
+    const nextState = await learningNode({
+      ...baseState,
+      execution: {
+        ...baseState.execution,
+        currentDecision: buildLearningDecision(['history-recall'])
+      }
+    })
+
+    expect(nextState.execution.watchHint).toMatchObject({
+      code: 'learning_no_effect'
+    })
+    expect(nextState.execution.lastLearningOutcome).toMatchObject({
+      loadedSkillIds: [],
+      skippedDuplicateSkillIds: ['history-recall']
+    })
+    expect(nextState.skills.learnedSkillIds).toEqual([])
+    expect(nextState.memory.history.roundHistory.at(-1)?.execution.kind).toBe('learning')
   })
 })

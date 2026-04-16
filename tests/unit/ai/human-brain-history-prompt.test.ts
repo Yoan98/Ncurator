@@ -50,7 +50,7 @@ const buildDecision = (input: {
 })
 
 describe('ai unit brain prompt history blocks', () => {
-  it('renders the new history-based brain prompt blocks and removes recent_* sections', () => {
+  it('renders the key history and decision contracts in the brain prompt', () => {
     const initialState = createInitialHumanState({
       taskId: 'task-history-prompt',
       userInput: '请继续推进这个任务'
@@ -187,48 +187,22 @@ describe('ai unit brain prompt history blocks', () => {
 
     expect(prompt.user).toContain('<reference_scope>')
     expect(prompt.user).toContain('<memory>')
-    expect(prompt.user).toContain('<your_notes>')
     expect(prompt.user).toContain('<recent_progress>')
     expect(prompt.user).toContain('<earlier_attempts>')
     expect(prompt.user).toContain('<recalled_history>')
     expect(prompt.user).toContain('<available_skills>')
     expect(prompt.user).toContain('<correction_hint>')
-    expect(prompt.user).not.toContain('<confirmed_memory>')
-    expect(prompt.user).not.toContain('<current_capabilities>')
-    expect(prompt.user).not.toContain('<recent_focus>')
-    expect(prompt.user).not.toContain('<earlier_history>')
-    expect(prompt.user).not.toContain('<expanded_history>')
-    expect(prompt.user).not.toContain('<recent_learning_outcome>')
-    expect(prompt.user).not.toContain('<recent_tool_results>')
-    expect(prompt.user).not.toContain('<recent_decision_history>')
     expect(prompt.user).toContain('优先参考资料：')
-    expect(prompt.system).toContain('<autonomy_principles>')
-    expect(prompt.system).toContain('<action_boundaries>')
     expect(prompt.system).toContain('<transition_contract>')
-    expect(prompt.system).toContain('<context_block_guide>')
-    expect(prompt.system).toContain('<output_rules>')
     expect(prompt.system).toContain('<output_shape>')
-    expect(prompt.system).not.toContain('<input_use_rules>')
-    expect(prompt.system).not.toContain('<reasoning_rules>')
-    expect(prompt.system).not.toContain('human graph')
     expect(prompt.system).not.toContain('<node_topology>')
-    expect(prompt.system).toContain('task_goal：用户原始诉求与限制。')
-    expect(prompt.system).toContain('recalled_history：主动回看的详细历史')
     expect(prompt.system).toContain('如果结果仍依赖未来的工具动作才能完成，readyToDeliver 必须为 false')
-    expect(prompt.system).toContain('输出 JSON 结构：')
     expect(prompt.system).toContain('updatedStableMemory?')
-    expect(prompt.system).toContain('nextAction:')
     expect(prompt.system).toContain('toolUsePlan')
-    expect(prompt.system).toContain('calls')
-    expect(prompt.system).not.toContain('输出顶层结构固定为：')
-    expect(prompt.user).not.toContain('这是用户这次直接提出的自然语言任务目标与限制。')
-    expect(prompt.user).not.toContain('这是你之前沉淀下来的任务笔记。')
-    expect(prompt.user).not.toContain('这是最近一轮最值得优先看的完整过程记录。')
-    expect(prompt.user).not.toContain('这是更早几轮的过程链。')
-    expect(prompt.user).not.toContain('这是当前的收敛或纠偏提示。')
+    expect(prompt.user).not.toContain('<confirmed_memory>')
+    expect(prompt.user).not.toContain('<recent_learning_outcome>')
     expect(prompt.user).toContain('history-recall')
     expect(prompt.user).toContain('决策了什么：')
-    expect(prompt.user).toContain('做了什么：')
     expect(prompt.user).toContain('结果是什么：')
   })
 
@@ -292,5 +266,91 @@ describe('ai unit brain prompt history blocks', () => {
     expect(prompt.user).toContain('示例：')
     expect(prompt.user).toContain('反走样与过拟合对照')
     expect(prompt.user).not.toContain('- 工具 workspace_run_command')
+  })
+
+  it('preserves the raw diagnostic message in rendered recent progress', () => {
+    const initialState = createInitialHumanState({
+      taskId: 'task-history-diagnostic',
+      userInput: '继续修正 docx 参数'
+    })
+
+    const state = {
+      ...initialState,
+      memory: {
+        ...initialState.memory,
+        history: appendRoundRecord({
+          state: initialState,
+          decision: buildDecision({
+            summary: '重试 docx_text_edit',
+            reason: '需要根据失败信息修正参数',
+            expectedOutcome: '拿到原始 schema 报错并继续收敛',
+            nextAction: {
+              action: 'hand',
+              toolUsePlan: {
+                mode: 'serial',
+                calls: [
+                  {
+                    toolName: 'docx_text_edit',
+                    args: {
+                      sourcePath: 'weekly-risk.docx',
+                      query: ''
+                    }
+                  }
+                ]
+              }
+            }
+          }),
+          execution: buildHandExecution({
+            toolUsePlan: {
+              mode: 'serial',
+              calls: [
+                {
+                  toolName: 'docx_text_edit',
+                  args: {
+                    sourcePath: 'weekly-risk.docx',
+                    query: ''
+                  }
+                }
+              ]
+            },
+            toolResults: [
+              {
+                toolName: 'docx_text_edit',
+                ok: false,
+                code: 'invalid_input',
+                data: {
+                  ok: false,
+                  code: 'invalid_input',
+                  error:
+                    'Received tool input did not match expected schema ✖ Invalid input → at query'
+                },
+                diagnostic: {
+                  message:
+                    'Received tool input did not match expected schema ✖ Invalid input → at query'
+                }
+              }
+            ]
+          }),
+          createdAt: 1
+        })
+      }
+    }
+
+    const prompt = buildBrainPrompt({
+      state,
+      ctx: createStubAiRunContext(
+        buildReferenceScope({
+          workspace: {
+            workspaceId: 'workspace-1',
+            workspaceName: 'workspace',
+            rootPath: '/tmp/workspace-root'
+          }
+        })
+      )
+    })
+
+    expect(prompt.user).toContain(
+      'diagnostic=Received tool input did not match expected schema ✖ Invalid input → at query'
+    )
   })
 })

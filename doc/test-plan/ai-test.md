@@ -86,6 +86,9 @@
 
 ### 4.1 `tool`
 
+- Last Run：`2026-04-16 11:33:10 +08:00`
+- Last Result：`未通过`（`21 / 22` 个测试用例通过）
+
 #### `docx`
 
 ##### `docx-minimal-edit-flow`
@@ -97,6 +100,8 @@
 - How：对 fixture docx 真实执行 `docx_read / docx_outline -> docx_text_edit -> docx_read`。
 - Oracle：返回稳定 `currentVersionRef/previousVersionRef`，只目标 block 进入 `changedBlocks`，且修改后的结果可继续被读取工具消费。
 - Not：不验证 `human` 的工具选择。
+- Last Run：`2026-04-16 11:33:10 +08:00`
+- Last Result：`通过`
 
 ##### `docx-large-document-navigation`
 
@@ -107,6 +112,8 @@
 - How：对高 block 数 fixture 真实调用 `docx_outline / docx_read`。
 - Oracle：长文档下仍返回稳定 block 信息与截断标记。
 - Not：不验证编辑落盘。
+- Last Run：`2026-04-16 11:33:08 +08:00`
+- Last Result：`通过`
 
 ##### `docx-search-unicode-normalization-contract`
 
@@ -117,6 +124,8 @@
 - How：写入包含兼容字形文本的真实 docx，再分别执行 literal 与 regex 搜索。
 - Oracle：普通查询可命中兼容字形 block，且返回稳定 blockId。
 - Not：不比较字符偏移是否完全映射回原始编码位置。
+- Last Run：`2026-04-16 11:33:08 +08:00`
+- Last Result：`通过`
 
 ##### `docx-search-scope-contract`
 
@@ -127,6 +136,8 @@
 - How：对同一 doc 先执行默认搜索，再传入 `scope.blockIds` 做缩圈搜索。
 - Oracle：默认搜索可命中文档内多个 block，缩圈后只返回指定 blockIds 范围内的结果。
 - Not：不验证 human 该如何选择何时缩圈。
+- Last Run：`2026-04-16 11:33:08 +08:00`
+- Last Result：`通过`
 
 ##### `docx-outline-truncation-contract`
 
@@ -137,6 +148,8 @@
 - How：对长文档执行真实 `docx_outline(maxBlocks=...)`，检查返回 summary 与事件预览。
 - Oracle：返回结果既包含 `truncated=true`，也包含清晰文字说明“结果已截断，文档后续内容未包含”。
 - Not：不验证 human 是否一定继续读取后续内容。
+- Last Run：`2026-04-16 11:33:10 +08:00`
+- Last Result：`通过`
 
 ##### `docx-complex-ops-batch`
 
@@ -147,6 +160,8 @@
 - How：覆盖 `replace_text / replace_block / insert_before / insert_after / delete_block / update_table_cell`。
 - Oracle：各类 op 都能产生可继续消费的新版本与 `changedBlocks`。
 - Not：不验证上层 op 选择策略。
+- Last Run：`2026-04-16 11:33:06 +08:00`
+- Last Result：`通过`
 
 ##### `docx-format-variants-contract`
 
@@ -157,6 +172,8 @@
 - How：使用混合 block fixture 真实执行读取、定位与修改。
 - Oracle：各类 block 都可稳定识别和修改，不破坏其余结构。
 - Not：不验证 run 级样式保留。
+- Last Run：`2026-04-16 11:33:05 +08:00`
+- Last Result：`通过`
 
 ##### `docx-mixed-format-preservation`
 
@@ -167,6 +184,8 @@
 - How：对包含 `bold / italic / underline / color` 的真实 docx 执行编辑，再通过 block 读取验证样式结果。
 - Oracle：未修改部分样式保留，修改目标样式正确。
 - Not：不验证 review UI。
+- Last Run：`2026-04-16 11:33:05 +08:00`
+- Last Result：`通过`
 
 ##### `docx-review-aware-open-and-continue-edit`
 
@@ -177,6 +196,8 @@
 - How：通过真实 `DraftReviewStore + DraftReviewService` seed active review，再执行 `docx_read / docx_text_edit`。
 - Oracle：读取内容来自最新草稿而非源文件，新增修改只叠加当前 delta。
 - Not：不验证 review UI 与最终确认替换。
+- Last Run：`2026-04-16 11:33:06 +08:00`
+- Last Result：`通过`
 
 ##### `docx-history-and-rollback`
 
@@ -187,6 +208,8 @@
 - How：多轮真实编辑后执行 `docx_history` 与 rollback。
 - Oracle：历史链可追溯，回滚只影响当前任务过程中的草稿版本，不改写磁盘源文件。
 - Not：不验证 review 放弃 / 确认。
+- Last Run：`2026-04-16 11:33:05 +08:00`
+- Last Result：`通过`
 
 ##### `docx-precondition-guard`
 
@@ -197,6 +220,8 @@
 - How：直接调用 `outline / search / apply_ops / rollback` 覆盖非法输入。
 - Oracle：返回明确失败，不产生新版本，不污染运行状态。
 - Not：不验证上层重试策略。
+- Last Run：`2026-04-16 11:33:10 +08:00`
+- Last Result：`通过`
 
 ##### `docx-apply-ops-invalid-snapshot-guard`
 
@@ -207,6 +232,8 @@
 - How：对带损坏关系引用的真实 docx 执行 `docx_text_edit` 或对象编辑工具。
 - Oracle：`apply_ops` 直接失败，且当前文档会话的版本引用不会推进到无效版本。
 - Not：不验证上层如何决定重试或放弃。
+- Last Run：`2026-04-16 11:33:08 +08:00`
+- Last Result：`通过`
 
 #### `kb`
 
@@ -219,6 +246,8 @@
 - How：通过真实 `DocumentsStore.addDocument / addChunks` 导入多工作区 fixture 后执行列表查询。
 - Oracle：结果默认只包含当前工作区文档，`documentIds` 只做进一步缩圈，空结果与非空结果都稳定可断言。
 - Not：不验证问答文案。
+- Last Run：`2026-04-16 11:33:09 +08:00`
+- Last Result：`未通过`
 
 ##### `kb-evidence-search-family-contract`
 
@@ -229,6 +258,8 @@
 - How：对多工作区真实 seed 数据分别执行三种检索，并覆盖 `documentIds` 缩圈。
 - Oracle：三种检索都返回稳定 `rows`，默认受当前工作区约束，且遵守 `documentIds` 缩圈语义。
 - Not：不比较召回优劣。
+- Last Run：`2026-04-16 11:33:09 +08:00`
+- Last Result：`通过`
 
 #### `terminal`
 
@@ -241,6 +272,8 @@
 - How：调用 `workspace_list_files` / `workspace_read_file` 读取目录与文件信息。
 - Oracle：返回真实 stdout 片段、退出码与可消费摘要。
 - Not：不验证写操作。
+- Last Run：`2026-04-16 11:33:10 +08:00`
+- Last Result：`通过`
 
 ##### `terminal-text-search-readonly`
 
@@ -251,6 +284,8 @@
 - How：调用 `workspace_search_text` 真实执行文本搜索。
 - Oracle：返回可断言命中信息与正确退出状态。
 - Not：不验证修改文件。
+- Last Run：`2026-04-16 11:33:10 +08:00`
+- Last Result：`通过`
 
 ##### `terminal-risk-and-boundary-guard`
 
@@ -261,6 +296,8 @@
 - How：构造危险或越权命令调用 `workspace_run_command`。
 - Oracle：返回明确拒绝，不执行实际破坏操作。
 - Not：不验证 UI 提示。
+- Last Run：`2026-04-16 11:33:10 +08:00`
+- Last Result：`通过`
 
 ##### `terminal-inline-edit-artifact-contract`
 
@@ -271,6 +308,8 @@
 - How：对测试文件执行真实 inline edit 命令并读取返回产物。
 - Oracle：artifact 信息完整，修改结果与磁盘状态一致。
 - Not：不验证上层审批流。
+- Last Run：`2026-04-16 11:33:08 +08:00`
+- Last Result：`通过`
 
 #### `hand`
 
@@ -283,6 +322,8 @@
 - How：通过真实 `hand` 执行安全并行批次、`6` 个只读安全并行批次、超过上限的 `7` 个并行批次以及包含 mutating 调用的不安全批次。
 - Oracle：`6` 个只读且 `parallelSafe` 的工具调用会被真实执行并正确聚合；`7` 个并行调用会在执行前被 `parallel_limit_exceeded` 拦截；包含 mutating 或非并行安全工具的批次会在执行前被 `parallel_requires_read_only` 拦截。
 - Not：不验证 `brain` 决策来源。
+- Last Run：`2026-04-16 11:33:05 +08:00`
+- Last Result：`通过`
 
 ##### `hand-serial-docx-chain`
 
@@ -293,6 +334,8 @@
 - How：通过真实 `hand` 执行 `docx_text_edit -> docx_read`。
 - Oracle：工具结果顺序稳定、全部成功，且不会在 hand 内直接产出 docx 交付 artifact。
 - Not：不验证 `brain` 是否自然生成这条计划。
+- Last Run：`2026-04-16 11:33:08 +08:00`
+- Last Result：`通过`
 
 ##### `hand-tool-limit-and-artifact-merge`
 
@@ -303,6 +346,8 @@
 - How：通过真实工具结果触发 limit 与 artifact merge 分支。
 - Oracle：超限被守卫拦截，artifact 合并结果稳定。
 - Not：不验证 `human` 全链路。
+- Last Run：`2026-04-16 11:33:08 +08:00`
+- Last Result：`通过`
 
 ##### `hand-history-recall`
 
@@ -313,6 +358,8 @@
 - How：先 seed 历史 round，再通过真实 `hand` 调用 internal tool `history_search` 或 `history_list`。
 - Oracle：`execution.lastToolResults` 中出现 `history_search` 或 `history_list`，且 `memory.history.loadedHistoryContext` 被真实写入。
 - Not：不验证 `brain` 是否一定会主动触发这条能力。
+- Last Run：`2026-04-16 11:33:10 +08:00`
+- Last Result：`通过`
 
 ### 4.2 `human`
 
@@ -512,6 +559,8 @@
 - How：注入真实 live LLM 配置；workspace 中动态写入带 `RISK_TODO / OWNER_TODO` 占位符的周报模板和干扰文件；seed 两份真实 KB 文档分别提供风险结论与负责人说明并限制在已选范围内；直接输入“找到上周 Word 周报模板，按已选资料补全风险结论与负责人，生成确认稿且不要覆盖原文件”的自然语言诉求，让真实 `human` 自主完成。
 - Oracle：任务最终完成；事件流中至少出现一次 `workspace_run_command`、一次 KB 检索工具调用、一次 docx 读取、一次 docx 编辑；存在 `draft_review_ready` 事件，最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；原模板未被覆盖；最终答复能从用户视角说明改动的是“风险结论”和“负责人说明”两处、依据分别来自 `Weekly Risk Summary.md` 与 `Owner Note.md`，并明确当前给出的是待确认草稿。
 - Not：不绑定最终答案措辞，也不要求固定检索工具顺序。
+- Last Run：`2026-04-16 11:42:54 +08:00`
+- Last Result：`未通过`
 
 ##### `human-docx-cause-remedy-reading-live`
 

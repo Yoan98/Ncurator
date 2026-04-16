@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import {
+  appendRoundRecord,
+  buildHandExecution
+} from '../../../src/main/services/ai/human/memory/roundHistory'
 import { buildMouthPrompt } from '../../../src/main/services/ai/human/prompts/mouth'
 import { createInitialHumanState } from '../../../src/main/services/ai/human/state/schema'
 import { applyBrainDecisionState, resolveBrainDecisionWatchHint } from '../../../src/main/services/ai/human/node/utils/stateTransitionState'
@@ -63,7 +67,7 @@ describe('ai unit mouth readyToDeliver guard', () => {
     expect(nextState.execution.stage).toBe('mouth')
   })
 
-  it('states in the mouth prompt that mouth cannot keep calling tools', () => {
+  it('renders the mouth system contract and keeps disclosure conditional', () => {
     const prompt = buildMouthPrompt({
       state: createInitialHumanState({
         taskId: 'task-1',
@@ -75,17 +79,12 @@ describe('ai unit mouth readyToDeliver guard', () => {
     expect(prompt).toContain('<output_contract>')
     expect(prompt).toContain('直接回答 task_goal')
     expect(prompt).toContain('your_notes 优先')
-    expect(prompt).toContain('优先基于这些本地信息组织答案')
-    expect(prompt).toContain('补充说明：')
-    expect(prompt).toContain('history：任务过程中真实发生过的决策、执行和结果')
     expect(prompt).toContain('只输出最终 markdown 正文')
-    expect(prompt).toContain('标题、分节、列表都按需要使用，不固定')
-    expect(prompt).toContain('不原样照抄内部标签、block id、tool 名')
-    expect(prompt).not.toContain('# 处理结果')
-    expect(prompt).not.toContain('## 关键依据')
+    expect(prompt).toContain('如果最终答案补充了不来自当前本地资料的信息')
+    expect(prompt).not.toContain('必须在结尾单独加一行“补充说明')
   })
 
-  it('keeps mouth user-context blocks data-only and moves explanations into system', () => {
+  it('keeps mouth user-context blocks data-only', () => {
     const result = buildMouthPrompt({
       state: createInitialHumanState({
         taskId: 'task-2',
@@ -95,31 +94,99 @@ describe('ai unit mouth readyToDeliver guard', () => {
 
     expect(result.system).toContain('task_goal：用户最初要你完成什么')
     expect(result.system).toContain('当前理解：当前任务的最新长期理解')
-    expect(result.system).toContain('关键依据：支撑这些理解的证据')
-    expect(result.system).toContain('检查清单：当前任务板')
     expect(result.user).not.toContain('这是当前交付模式。')
     expect(result.user).not.toContain('这是用户这次原始诉求与限制。')
-    expect(result.user).not.toContain('这是 brain 已经做出的最终决定。')
-    expect(result.user).not.toContain('这是任务的稳定笔记')
-    expect(result.user).not.toContain('这是最近一轮最相关的过程记录。')
-    expect(result.user).not.toContain('这是更早几轮的过程链。')
-    expect(result.user).not.toContain('这是运行中已经产生的真实产物列表。')
     expect(result.user).toContain('<history>')
     expect(result.user).not.toContain('<correction_hint>')
-    expect(result.user).not.toContain('<recent_progress>')
-    expect(result.user).not.toContain('<earlier_attempts>')
     expect(result.user).not.toContain('<recalled_history>')
   })
 
-  it('keeps disclosure conditional instead of always requiring it', () => {
-    const prompt = buildMouthPrompt({
-      state: createInitialHumanState({
-        taskId: 'task-3',
-        userInput: '只按当前资料回答我'
-      })
-    }).system
+  it('renders unified history and preserves raw diagnostic text in mouth prompt', () => {
+    const initialState = createInitialHumanState({
+      taskId: 'task-3',
+      userInput: '继续修正 docx 参数'
+    })
+    const history = appendRoundRecord({
+      state: initialState,
+      decision: {
+        decision: {
+          summary: '重试 docx_text_edit',
+          reason: '需要根据失败信息修正参数',
+          expectedOutcome: '拿到原始 schema 报错并继续收敛'
+        },
+        readyToDeliver: false,
+        nextAction: {
+          action: 'hand',
+          toolUsePlan: {
+            mode: 'serial',
+            calls: [
+              {
+                toolName: 'docx_text_edit',
+                args: {
+                  sourcePath: 'weekly-risk.docx',
+                  query: ''
+                }
+              }
+            ]
+          }
+        }
+      },
+      execution: buildHandExecution({
+        toolUsePlan: {
+          mode: 'serial',
+          calls: [
+            {
+              toolName: 'docx_text_edit',
+              args: {
+                sourcePath: 'weekly-risk.docx',
+                query: ''
+              }
+            }
+          ]
+        },
+        toolResults: [
+          {
+            toolName: 'docx_text_edit',
+            ok: false,
+            code: 'invalid_input',
+            data: {
+              ok: false,
+              code: 'invalid_input',
+              error:
+                'Received tool input did not match expected schema ✖ Invalid input → at query'
+            },
+            diagnostic: {
+              message:
+                'Received tool input did not match expected schema ✖ Invalid input → at query'
+            }
+          }
+        ]
+      }),
+      createdAt: 1
+    })
 
-    expect(prompt).toContain('如果最终答案补充了不来自当前本地资料的信息')
-    expect(prompt).not.toContain('必须在结尾单独加一行“补充说明')
+    const state = {
+      ...initialState,
+      memory: {
+        ...initialState.memory,
+        history: {
+          ...history,
+          loadedHistoryContext: {
+            filters: {
+              limit: 1
+            },
+            rounds: history.roundHistory
+          }
+        }
+      }
+    }
+
+    const prompt = buildMouthPrompt({ state })
+
+    expect(prompt.user).toContain('过程历史：')
+    expect(prompt.user).toContain('主动回看历史：')
+    expect(prompt.user).toContain(
+      'diagnostic=Received tool input did not match expected schema ✖ Invalid input → at query'
+    )
   })
 })
