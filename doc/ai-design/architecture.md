@@ -46,7 +46,7 @@ flowchart TD
 ### `mouth`
 
 - 只负责组织最终用户交付。
-- 基于当前任务笔记、最终决策、最近过程和 artifacts 生成最终 markdown。
+- 基于当前任务笔记、最近过程和 artifacts 生成最终 markdown。
 
 ## 3. 运行约束
 

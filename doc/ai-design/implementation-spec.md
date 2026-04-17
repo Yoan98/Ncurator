@@ -77,6 +77,7 @@ stateDiagram-v2
 - 主要读取：`task`、`memory.stable`、`memory.history.roundHistory`、`memory.history.loadedHistoryContext`、`execution.watchHint`、`skills.learnedSkillIds`、`ctx.referenceScope`、`ctx.workspace`。
 - 主要回写：`memory.stable`、`execution.currentDecision`、`execution.stage`、`execution.watchHint`、`trace.steps`。
 - 约束：输出必须通过 `ctx.chatStructured` 与 schema 校验；`memory.stable` 只能通过 patch 修改。
+- brain prompt 推荐按 `principles / decision_contract / stable_memory_contract / context_block_guide / output_contract / output_shape / examples` 组织：`principles` 承载工作方式与自主性边界，`decision_contract` 承载动作选择与 tool plan 语义，`stable_memory_contract` 承载长期任务笔记写法和更新原则，`output_contract` 只承载输出层规则。
 - 当前可直接调用的工具说明必须由 `registry -> tool spec` 统一供给；brain prompt 中的工具输入结构应来自 tool schema 的自动导出文本，并附带 tool spec examples。
 - brain prompt 中的输出 shape 应直接来自 `humanDecisionSchema` 的自动导出文本；`readyToDeliver`、stableMemory patch、action 选择约束等语义规则继续手写维护，不单独定义 display schema。
 
@@ -98,9 +99,9 @@ stateDiagram-v2
 ### 5.4 `mouth`
 
 - 职责：围绕 `task_goal` 把当前已经确定的状态组织成最终用户交付，并回写 `HumanResult`。
-- 主要读取：`task`、`memory.stable`、`memory.history.roundHistory`、`memory.history.loadedHistoryContext`、`execution.currentDecision`、`execution.artifacts`。
+- 主要读取：`task`、`memory.stable`、`memory.history.roundHistory`、`memory.history.loadedHistoryContext`、`execution.artifacts`。
 - 主要回写：`result`、`execution.status`、`execution.stage`、`trace.steps`。
-- 约束：模型输出必须通过 `ctx.chatText`；输出面向最终用户，优先直接完成用户原始诉求；可使用自由段落或列表组织，不要求固定报告模板；若开启 `emitAnswerEvents`，增量文本通过 `answer_token` 发出，完成后通过 `answer_completed` 收口。
+- 约束：模型输出必须通过 `ctx.chatText`；输出面向最终用户，优先直接完成用户原始诉求；优先依据 `memory.stable` 中的任务笔记组织交付，当笔记过于概括时再结合统一 `history` 与 `artifacts` 补足细节；可使用自由段落或列表组织，不要求固定报告模板；若开启 `emitAnswerEvents`，增量文本通过 `answer_token` 发出，完成后通过 `answer_completed` 收口。
 
 ## 6. 事件与交付
 

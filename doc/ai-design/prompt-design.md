@@ -17,8 +17,8 @@
 
 ## 3. 推荐结构
 
-- prompt 默认按“角色层、工作方式层、输出规则层、上下文层”组织。
-- 主要段落统一使用语义化标签，例如 `<system>`、`<role>`、`<working_style>`、`<principles>`、`<output_rules>`、`<user_context>`。
+- prompt 默认按“原则层、决策契约层、长期记忆契约层、输出契约层、上下文层”组织。
+- 主要段落统一使用语义化标签，例如 `<system>`、`<principles>`、`<decision_contract>`、`<stable_memory_contract>`、`<output_contract>`、`<user_context>`。
 - 标签用于组织信息，不用于制造过深层级。
 - 单个 prompt 应优先保持单一主线，避免把不同目的的规则混在同一个段落里。
 
@@ -26,15 +26,17 @@
 
 ```text
 <system>
-  <role>...</role>
-  <working_style>...</working_style>
   <principles>...</principles>
-  <output_rules>...</output_rules>
-  <output_example>...</output_example>
+  <decision_contract>...</decision_contract>
+  <stable_memory_contract>...</stable_memory_contract>
+  <context_block_guide>...</context_block_guide>
+  <output_contract>...</output_contract>
+  <output_shape>...</output_shape>
+  <examples>...</examples>
 </system>
 
 <user_context>
-  <task>...</task>
+  <task_goal>...</task_goal>
   <context_block>...</context_block>
   <context_block>...</context_block>
 </user_context>
@@ -61,13 +63,14 @@
 
 ## 5. 输出规则准则
 
-- 字段名只在 `output_rules`、字段说明和输出示例中集中出现。
+- 字段名只在 `output_contract`、字段说明和输出示例中集中出现。
 - 输出规则要同时说明顶层字段、字段含义、出现条件和允许结构。
 - 如果是 JSON 输出，要明确写“只输出 JSON，不要输出额外说明”。
 - 如果运行时已经支持 schema 约束的结构化输出，优先使用结构化输出能力承接契约。
 - 每类关键输出结构至少给一个完整示例；示例应尽量短，但必须完整。
 - 对“当前可直接调用”的工具，prompt 应同时提供：用途、前置条件、schema 自动导出的完整输入结构、返回语义与 examples；不要只暴露浅层必填参数名。
 - 当节点本身输出结构化 JSON 时，prompt 中的输出 shape 也应优先从真实输出 schema 自动导出；语义规则与 shape 分离，前者手写、后者自动生成。
+- prompt 中的原则、决策契约、长期记忆契约与输出契约应分层表达：前者负责工作方式和职责边界，后者只负责输出层规则。
 
 ## 6. 约束表达准则
 

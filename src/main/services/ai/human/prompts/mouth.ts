@@ -4,11 +4,6 @@ import { renderHumanStableNotes } from '../shared/memoryRenderers'
 import { renderHumanArtifactLines } from '../shared/runtimeRenderers'
 import type { HumanState } from '../types'
 
-const buildFinalDecisionText = (state: HumanState): string =>
-  state.execution.currentDecision
-    ? `最终决定（readyToDeliver=${String(state.execution.currentDecision.readyToDeliver)}）：“${state.execution.currentDecision.decision.summary}”；原因：${state.execution.currentDecision.decision.reason}；预期结果：${state.execution.currentDecision.decision.expectedOutcome}`
-    : 'none'
-
 export const buildMouthPrompt = (input: { state: HumanState }) => {
   const system = `
 <system>
@@ -19,11 +14,10 @@ export const buildMouthPrompt = (input: { state: HumanState }) => {
 
   <available_information>
     - task_goal：用户最初要你完成什么，以及用户显式要求你回答哪些点。
-    - final_decision：brain 最后确认的收口方向。
-    - your_notes：当前稳定事实来源。其中：
+    - your_notes：当前持续工作的任务笔记。其中：
       - 当前理解：当前任务的最新长期理解。
-      - 关键依据：支撑这些理解的证据、来源或命中结果。
-      - 检查清单：当前任务板，帮助你理解哪些事项已完成、未完成或已废弃。
+      - 关键依据：支撑这些理解或下一步动作的证据、来源与关键结果。
+      - 检查清单：当前任务板，帮助你理解哪些事项已完成、未完成、受阻或已废弃。
     - history：任务过程中真实发生过的决策、执行和结果，可用于补足 your_notes 不够具体的地方。
     - runtime_artifacts：运行中已经产生的真实产物，可按给定路径、文件名、状态和摘要引用。
   </available_information>
@@ -32,7 +26,9 @@ export const buildMouthPrompt = (input: { state: HumanState }) => {
     - 只输出最终 markdown 正文，不要输出 JSON 或额外说明。
     - 直接回答 task_goal，优先覆盖用户显式提出的问题。
     - 当存在工作区或显式参考资料时，优先基于这些本地信息组织答案。
-    - your_notes 优先；如果 your_notes 不够具体，可结合 history 与 runtime_artifacts 补足。
+    - 优先依据 your_notes 组织答案或交付内容。
+    - 如果 your_notes 过于概括、与更具体的证据记录存在张力，或不足以支撑用户要求的细节，可结合 history 与 runtime_artifacts 补足。
+    - 当概括性表述与更具体、可追溯的依据冲突时，以更具体的依据为准。
     - 如果最终答案补充了不来自当前本地资料的信息，在结尾单独加一行“补充说明：...”明确指出这些点来自模型通用知识而非当前本地资料。
     - 标题、分节、列表都按需要使用，不固定。
     - 默认使用用户能理解的语言，不原样照抄内部标签、block id、tool 名，除非用户明确要求这些内部细节。
@@ -45,10 +41,6 @@ export const buildMouthPrompt = (input: { state: HumanState }) => {
   <task_goal>
 ${input.state.task.userInput}
   </task_goal>
-
-  <final_decision>
-${buildFinalDecisionText(input.state)}
-  </final_decision>
 
   <your_notes>
 ${renderHumanStableNotes(input.state, 'mouth_prompt')}

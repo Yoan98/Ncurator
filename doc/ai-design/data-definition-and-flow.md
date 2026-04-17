@@ -277,11 +277,11 @@ type HumanStage = 'brain' | 'learning' | 'hand' | 'mouth'
 type HumanStatus = 'running' | 'completed'
 
 interface HumanStableMemory {
-  // 当前任务的最新长期理解；要求基于旧内容累积维护，而不是只写本轮摘要。
+  // 当前任务的最新长期理解；是持续工作的任务笔记，可按目标产物、当前阶段、当前策略、约束、已确认状态与仍待确认边界组织，要求基于旧内容累积维护，而不是只写本轮摘要。
   currentUnderstanding: string
-  // 当前关键依据；记录支撑理解的证据或来源摘要，并基于旧内容累积维护。
+  // 当前关键依据；记录支撑理解或下一步动作的证据、来源、关键内容与它直接支持什么，并基于旧内容累积维护。
   keyEvidence: string
-  // 当前任务板；使用 markdown 维护 todo / done / obsolete 和 note。
+  // 当前任务板；使用 markdown 维护 todo / done / obsolete 和 note，主要承载推进状态、覆盖范围、阻塞点和失效路径，不重复 currentUnderstanding 的大段语义判断。
   checklist: string
 }
 
@@ -1056,6 +1056,8 @@ flowchart LR
     B -->|追加 brain 执行轨迹| TR
 ```
 
+- `brain` 的 prompt 应分层表达 `principles / decision_contract / stable_memory_contract / context_block_guide / output_contract / output_shape / examples`，避免把工作方式、决策语义、长期记忆契约和输出层规则混写在同一块里。
+
 ### `human` 阶段二：`learning` 路径的数据流转
 
 ```mermaid
@@ -1107,7 +1109,6 @@ flowchart LR
     T[("task")]
     SM[("memory.stable")]
     PM[("memory.history.roundHistory / loadedHistoryContext")]
-    CD[("execution.currentDecision")]
     A[("execution.artifacts")]
     M["mouth"]
     R[("result")]
@@ -1116,11 +1117,11 @@ flowchart LR
     T -->|读取 taskId + userInput| M
     SM -->|读取任务笔记| M
     PM -->|读取统一 history 事实视图| M
-    CD -->|读取当前最终决策| M
     A -->|读取已收集的结构化 artifacts| M
     M -->|输出 deliveryMarkdown；node 派生 summary、回写 completed result，并透传 artifacts| R
     M -->|追加 mouth 执行轨迹| TR
 ```
 
 - `mouth` 不再依赖 `recent_progress / earlier_attempts / recalled_history` 这类拆分块；统一基于 `roundHistory + loadedHistoryContext` 渲染单一 `history` 视图。
-- `mouth` 的 prompt 输入仍以 `your_notes` 为优先事实来源；当 `your_notes` 不够具体时，再从统一 `history` 与 `runtime_artifacts` 补足用户回答所需细节，而不是依赖额外的 `watchHint` 说明。
+- `mouth` 的 prompt 输入仍以 `your_notes` 为优先事实来源；当 `your_notes` 过于概括或不足以支撑用户要求的细节时，再从统一 `history` 与 `runtime_artifacts` 补足用户回答所需细节，而不是依赖额外的 `watchHint` 说明。
+- `mouth` 不再依赖 `execution.currentDecision` 的收口摘要来组织最终交付；若 `your_notes` 与更具体的历史/产物依据存在张力，应以更具体、可追溯的依据为准。

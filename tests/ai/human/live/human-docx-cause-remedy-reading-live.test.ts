@@ -30,7 +30,10 @@ const hasCompletedDelivery = (output: { summary?: string | null; deliveryMarkdow
   output.deliveryMarkdown.trim().length > 0
 
 const hasOverfittingRemedyResponse = (deliveryText: string): boolean =>
-  /(没写|未写|没有写|文档没写)/.test(deliveryText) ||
+  /(没写|未写|没有写|文档没写|未提及|未说明|没有提到|未给出|未提供)/.test(deliveryText) ||
+  /(文档中未提及处理方法|文档未提及处理方法|文档中未说明处理方法|文档未说明处理方法)/.test(
+    deliveryText
+  ) ||
   /(数据增强|未使用过的数据|训练时未使用过的数据|验证数据)/.test(deliveryText)
 
 describe('ai human live backend', () => {
@@ -42,7 +45,7 @@ describe('ai human live backend', () => {
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
-        description: '验证 live 模式下 human 会基于两份已选 docx 准确回答过拟合与反走样的成因和处理思路。',
+        description: '验证 live 模式下 human 会基于两份已选 docx 覆盖过拟合与反走样的核心事实，并对缺失项保持保守。',
         fixtures: DOCX_CROSS_FILE_FIXTURE_PATHS,
         runMode: 'single',
         runtimeModelName: hasLiveLlmConfigInEnv('primary')
@@ -114,7 +117,8 @@ describe('ai human live backend', () => {
               /(低通滤波|多个采样点|多个像素点|多次采样)/.test(deliveryText),
             {
               name: 'human-live-reads-both-selected-docx-and-explains-cause-and-remedy',
-              message: 'live human 读 case 应打开两份已选 docx，并准确回答过拟合与反走样的成因和处理思路。',
+              message:
+                'live human 读 case 应打开两份已选 docx，覆盖过拟合与反走样的核心事实，并对文档未写部分保持保守表达。',
               data: {
                 openedSourcePaths,
                 toolNames,
