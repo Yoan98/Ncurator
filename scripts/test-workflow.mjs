@@ -17,7 +17,8 @@ const parseArgs = (argv) => {
     suite: '',
     groups: [],
     caseId: '',
-    runs: 1
+    runs: 1,
+    runDelayMs: 0
   }
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -51,11 +52,18 @@ const parseArgs = (argv) => {
     if (current === '--runs' && next) {
       parsed.runs = Math.max(1, Number(next))
       index += 1
+      continue
+    }
+    if (current === '--run-delay-ms' && next) {
+      parsed.runDelayMs = Math.max(0, Number(next))
+      index += 1
     }
   }
 
   return parsed
 }
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 const walk = async (target) => {
   const entries = await readdir(target, { withFileTypes: true })
@@ -177,6 +185,17 @@ const runTypeWorkflow = async (input) => {
   }
 
   let exitCode = 0
+  const { liveFiles } =
+    input.type === 'backend'
+      ? partitionBackendTestFiles(testFiles)
+      : { liveFiles: [] }
+  const runDelayMs =
+    input.runs > 1 && liveFiles.length > 0
+      ? input.runDelayMs > 0
+        ? input.runDelayMs
+        : 3000
+      : 0
+
   for (let iteration = 0; iteration < input.runs; iteration += 1) {
     if (input.type === 'backend') {
       const { nonLiveFiles, liveFiles } = partitionBackendTestFiles(testFiles)
@@ -210,6 +229,13 @@ const runTypeWorkflow = async (input) => {
 
     if (exitCode !== 0) {
       break
+    }
+
+    if (runDelayMs > 0 && iteration < input.runs - 1) {
+      process.stdout.write(
+        `[test-workflow] waiting ${String(runDelayMs)}ms before next live run (${String(iteration + 2)}/${String(input.runs)})\n`
+      )
+      await sleep(runDelayMs)
     }
   }
 

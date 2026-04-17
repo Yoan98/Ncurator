@@ -14,12 +14,12 @@ import {
 import { renderHumanStableNotes } from '../shared/memoryRenderers'
 import { renderLoadedHistoryText, renderRoundSection } from '../shared/historyRenderers'
 import { getToolSpec } from '../tools/registry'
-import { renderBrainOutputSchemaForPrompt, renderToolSchemaForPrompt } from '../tools/schemaPromptRenderer'
+import {
+  renderBrainOutputSchemaForPrompt,
+  renderToolSchemaForPrompt
+} from '../tools/schemaPromptRenderer'
 import { humanDecisionSchema } from '../schema'
-import type {
-  HumanState,
-  ToolPromptExample
-} from '../types'
+import type { HumanState, ToolPromptExample } from '../types'
 import type { HumanToolSpec } from '../tools/types'
 import { renderWatchHintForBrain } from './watchHints'
 
@@ -124,22 +124,21 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
     - 如果最终交付必须补充不来自本地资料的模型常识，应在收口时明确说明这些补充点不来自当前本地资料。
   </autonomy_principles>
 
-  <action_boundaries>
+  <next_action_guide>
     - 你只负责判断下一步，不亲自补能力、执行工具或直接对用户表达。
+    - nextAction 只能在 learning、hand、mouth 三者中选择其一。
+
     - learning 只负责补齐当前真正缺失的技能说明。
     - hand 只负责执行已经决定好的工具计划。
     - mouth 只负责整理最终结果，不新增事实，不继续执行工具。
-  </action_boundaries>
 
-  <transition_contract>
-    - nextAction 只能在 learning、hand、mouth 三者中选择其一。
     - 选择 learning：当你已经知道缺少哪类能力说明，且补齐后能明显降低不确定性时。
     - 选择 hand：当下一步已经明确成一批工具调用，且你能给出完整合法的 toolUsePlan 时。
-    - 如果你现在无法给出某个工具的完整必填参数，不要猜；应改为 learning 或 mouth。
-    - hand 的 toolUsePlan 单轮只能选择一种 mode。只有只读且彼此独立、并行安全的动作才用 parallel；其余情况必须用 serial。
-    - 如果结果仍依赖未来的工具动作才能完成，readyToDeliver 必须为 false，且不能选择 mouth。
     - 选择 mouth：只在 readyToDeliver=true 且当前已经足够形成最终交付时。
-  </transition_contract>
+
+    - 如果你现在无法给出某个工具的完整必填参数，不要猜；应改为 learning 或 mouth。
+    - 如果结果仍依赖未来的工具动作才能完成，readyToDeliver 必须为 false，且不能选择 mouth。
+  </action_boundaries>
 
   <context_block_guide>
     - task_goal：用户原始诉求与限制。
@@ -187,7 +186,7 @@ ${outputShapeText}
   </output_shape>
 
   <examples>
-    <example_keep_notes>
+    <example_learning>
       {
         "decision": {
           "summary": "先学习当前缺失的技能",
@@ -227,7 +226,7 @@ ${outputShapeText}
       }
     </example_tool_plan>
 
-    <example_partial_notes_update>
+    <example_delivery>
       {
         "updatedStableMemory": {
           "currentUnderstanding": "- 已确认审批驳回时原文件保持不变。",
