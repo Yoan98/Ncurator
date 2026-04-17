@@ -1,7 +1,7 @@
 import type { AiRunContext } from '../../types'
 import { renderReferenceScopeText } from '../../prompts/referenceScope'
 import {
-  getHistoryChainRounds,
+  getEarlierAttemptRounds,
   getLastRoundFocus,
   getLoadedHistoryContext
 } from '../memory/roundHistory'
@@ -277,7 +277,7 @@ ${renderRoundSection({
 
     <earlier_attempts>
 ${renderRoundSection({
-  records: getHistoryChainRounds(input.state),
+  records: getEarlierAttemptRounds(input.state),
   detail: 'chain'
 })}
     </earlier_attempts>

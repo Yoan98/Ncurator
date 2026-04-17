@@ -386,12 +386,14 @@ interface HumanHistoryToolResult {
   code: ToolCallResult['code']
   // 对本次工具结果的简短摘要。
   summary: string
-  // 面向 prompt 的轻量结果预览；避免把完整原始 data 全量塞入历史。
-  dataPreview?: string
+  // 本次工具调用的原始结构化返回；作为 history 的 canonical evidence 保存。
+  data?: JsonValue
   // 诊断信息的文本化摘要。
   diagnosticText?: string
   // 本次工具调用附带生成的 artifact 引用。
   artifactRefs?: AiArtifactRef[]
+  // 资源上下文；用于 prompt/history render 时补充 sourcePath、version 等运行事实。
+  resourceContext?: ToolResourceContext
 }
 
 type HumanRoundExecution =
@@ -414,7 +416,7 @@ type HumanRoundExecution =
       kind: 'hand'
       // 本轮执行的工具计划。
       toolUsePlan: ToolUsePlan
-      // 本轮工具结果的轻量历史版本。
+      // 本轮工具结果的原始历史版本；prompt/search 在读取 history 时再实时渲染。
       toolResults: HumanHistoryToolResult[]
       // 若 hand 触发了纠偏提示，则在这里补充。
       watchHint?: HumanWatchHint

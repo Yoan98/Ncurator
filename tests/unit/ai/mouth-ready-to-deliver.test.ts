@@ -189,4 +189,97 @@ describe('ai unit mouth readyToDeliver guard', () => {
       'diagnostic=Received tool input did not match expected schema ✖ Invalid input → at query'
     )
   })
+
+  it('renders full docx_read history blocks in mouth prompt', () => {
+    const initialState = createInitialHumanState({
+      taskId: 'task-4',
+      userInput: '按资料说明反走样处理方法'
+    })
+    const history = appendRoundRecord({
+      state: initialState,
+      decision: {
+        decision: {
+          summary: '读取图形学区间',
+          reason: '需要按原文说明反走样处理办法',
+          expectedOutcome: '拿到完整原文片段'
+        },
+        readyToDeliver: false,
+        nextAction: {
+          action: 'hand',
+          toolUsePlan: {
+            mode: 'serial',
+            calls: [
+              {
+                toolName: 'docx_read',
+                args: {
+                  sourcePath: 'graphics.docx',
+                  fromBlockId: 'b:19',
+                  toBlockId: 'b:26'
+                }
+              }
+            ]
+          }
+        }
+      },
+      execution: buildHandExecution({
+        toolUsePlan: {
+          mode: 'serial',
+          calls: [
+            {
+              toolName: 'docx_read',
+              args: {
+                sourcePath: 'graphics.docx',
+                fromBlockId: 'b:19',
+                toBlockId: 'b:26'
+              }
+            }
+          ]
+        },
+        toolResults: [
+          {
+            toolName: 'docx_read',
+            ok: true,
+            code: 'ok',
+            data: {
+              ok: true,
+              code: 'ok',
+              sourcePath: 'graphics.docx',
+              currentVersionRef: 'v3',
+              fromBlockId: 'b:19',
+              toBlockId: 'b:26',
+              returnedBlockCount: 2,
+              blocks: [
+                {
+                  blockId: 'b:23',
+                  type: 'paragraph',
+                  bodyIndex: 23,
+                  text: '通过模拟一个像素内多个像素点。'
+                },
+                {
+                  blockId: 'b:25',
+                  type: 'paragraph',
+                  bodyIndex: 25,
+                  text: '进行低通滤波，过滤掉高频信号，以达到反走样。'
+                }
+              ]
+            }
+          }
+        ]
+      }),
+      createdAt: 2
+    })
+
+    const prompt = buildMouthPrompt({
+      state: {
+        ...initialState,
+        memory: {
+          ...initialState.memory,
+          history
+        }
+      }
+    })
+
+    expect(prompt.user).toContain('多个像素点')
+    expect(prompt.user).toContain('低通滤波')
+  })
 })

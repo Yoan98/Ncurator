@@ -4,6 +4,7 @@ import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import type { ToolFamilyDefinition } from '../types'
 import { buildLoadedHistoryContext, filterRoundHistory } from '../../memory/roundHistory'
+import { renderToolResultDataText } from '../../shared/toolResultRenderers'
 import { HISTORY_LIST_TOOL_SPEC, HISTORY_SEARCH_TOOL_SPEC } from './toolSpecs'
 
 const buildSearchHits = (rounds: ReturnType<typeof filterRoundHistory>, query: string) => {
@@ -12,7 +13,13 @@ const buildSearchHits = (rounds: ReturnType<typeof filterRoundHistory>, query: s
     const summary = round.decision.decision.summary
     const resultSummary =
       round.execution.kind === 'hand'
-        ? round.execution.toolResults.map((item) => item.summary).join(' / ')
+        ? round.execution.toolResults
+            .map((item) =>
+              [item.summary, renderToolResultDataText(item), item.diagnosticText]
+                .filter(Boolean)
+                .join('\n')
+            )
+            .join('\n')
         : round.execution.kind === 'mouth'
           ? round.execution.summary
           : round.execution.kind === 'learning'

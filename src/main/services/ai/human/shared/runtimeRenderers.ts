@@ -1,10 +1,5 @@
 import type { HumanState } from '../types'
 import { renderLineList } from '../../utils/render'
-import {
-  buildToolCallDisplayText,
-  renderToolDiagnosticText,
-  renderToolResultDataPreview
-} from './toolResultRenderers'
 
 export type HumanRuntimeRenderMode = 'prompt' | 'fallback_markdown'
 
@@ -35,21 +30,6 @@ const renderArtifactLine = (
   return `draft review ${artifact.review.reviewId} (${artifact.review.documentCount} docs, ${artifact.review.changeCount} changes) - ${artifact.summary}`
 }
 
-const renderToolResultLine = (
-  result: NonNullable<HumanState['execution']['lastToolResults']>[number],
-  mode: HumanRuntimeRenderMode
-): string => {
-  const diagnosticText = renderToolDiagnosticText(result)
-  const previewText = renderToolResultDataPreview(result)
-  const statusText = result.ok ? '执行成功' : '执行失败'
-  const resultText = previewText ? `；结果：${previewText}` : ''
-  const displayText = buildToolCallDisplayText(result)
-
-  return mode === 'prompt'
-    ? `- 工具 ${result.toolName} ${statusText}（code=${result.code}）${resultText}${diagnosticText}`
-    : `${displayText}（code=${result.code}）${resultText}${diagnosticText}`
-}
-
 export const renderHumanArtifactLines = (
   state: HumanState,
   mode: HumanRuntimeRenderMode
@@ -58,15 +38,3 @@ export const renderHumanArtifactLines = (
     fallback: getRenderFallback(mode),
     style: getRenderStyle(mode)
   })
-
-export const renderHumanRecentToolResultLines = (
-  state: HumanState,
-  mode: HumanRuntimeRenderMode
-): string =>
-  renderLineList(
-    (state.execution.lastToolResults || []).map((result) => renderToolResultLine(result, mode)),
-    {
-      fallback: getRenderFallback(mode),
-      style: getRenderStyle(mode)
-    }
-  )

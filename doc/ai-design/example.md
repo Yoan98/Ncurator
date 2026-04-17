@@ -437,7 +437,14 @@ flowchart TD
                 ok: true,
                 code: 'ok',
                 summary: '命中发布说明模板中与发布日期字段相关的证据。',
-                dataPreview: '发布日期字段应使用“预计发布日期”或“计划发布日期”表述；若日期未最终锁定，应同时补充待确认说明。'
+                data: [
+                  {
+                    id: 'chunk-release-date-1',
+                    document_id: 'doc-release-template',
+                    document_name: '发布说明模板',
+                    text: '发布日期字段应使用“预计发布日期”或“计划发布日期”表述；若日期未最终锁定，应同时补充待确认说明。'
+                  }
+                ]
               }
             ]
           }

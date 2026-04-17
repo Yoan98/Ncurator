@@ -353,4 +353,117 @@ describe('ai unit brain prompt history blocks', () => {
       'diagnostic=Received tool input did not match expected schema ✖ Invalid input → at query'
     )
   })
+
+  it('renders complete docx_read blocks from raw history data into brain prompt', () => {
+    const initialState = createInitialHumanState({
+      taskId: 'task-docx-history-prompt',
+      userInput: '说明反走样的成因和处理方法'
+    })
+
+    const state = {
+      ...initialState,
+      memory: {
+        ...initialState.memory,
+        history: appendRoundRecord({
+          state: initialState,
+          decision: buildDecision({
+            summary: '读取图形学文档区间',
+            reason: '需要完整读取反走样段落',
+            expectedOutcome: '拿到定义、成因和处理方法',
+            nextAction: {
+              action: 'hand',
+              toolUsePlan: {
+                mode: 'serial',
+                calls: [
+                  {
+                    toolName: 'docx_read',
+                    args: {
+                      sourcePath: 'graphics.docx',
+                      fromBlockId: 'b:19',
+                      toBlockId: 'b:26'
+                    }
+                  }
+                ]
+              }
+            }
+          }),
+          execution: buildHandExecution({
+            toolUsePlan: {
+              mode: 'serial',
+              calls: [
+                {
+                  toolName: 'docx_read',
+                  args: {
+                    sourcePath: 'graphics.docx',
+                    fromBlockId: 'b:19',
+                    toBlockId: 'b:26'
+                  }
+                }
+              ]
+            },
+            toolResults: [
+              {
+                toolName: 'docx_read',
+                ok: true,
+                code: 'ok',
+                data: {
+                  ok: true,
+                  code: 'ok',
+                  sourcePath: 'graphics.docx',
+                  currentVersionRef: 'v3',
+                  fromBlockId: 'b:19',
+                  toBlockId: 'b:26',
+                  returnedBlockCount: 4,
+                  blocks: [
+                    {
+                      blockId: 'b:19',
+                      type: 'paragraph',
+                      bodyIndex: 19,
+                      text: '反走样'
+                    },
+                    {
+                      blockId: 'b:20',
+                      type: 'paragraph',
+                      bodyIndex: 20,
+                      text: '走样原因是由于采样频率低于信号频率。'
+                    },
+                    {
+                      blockId: 'b:23',
+                      type: 'paragraph',
+                      bodyIndex: 23,
+                      text: '通过模拟一个像素内多个像素点。'
+                    },
+                    {
+                      blockId: 'b:25',
+                      type: 'paragraph',
+                      bodyIndex: 25,
+                      text: '进行低通滤波，过滤掉高频信号，以达到反走样。'
+                    }
+                  ]
+                }
+              }
+            ]
+          }),
+          createdAt: 3
+        })
+      }
+    }
+
+    const prompt = buildBrainPrompt({
+      state,
+      ctx: createStubAiRunContext(
+        buildReferenceScope({
+          workspace: {
+            workspaceId: 'workspace-1',
+            workspaceName: 'workspace',
+            rootPath: '/tmp/workspace-root'
+          }
+        })
+      )
+    })
+
+    expect(prompt.user).toContain('多个像素点')
+    expect(prompt.user).toContain('低通滤波')
+    expect(prompt.user).toContain('graphics.docx')
+  })
 })

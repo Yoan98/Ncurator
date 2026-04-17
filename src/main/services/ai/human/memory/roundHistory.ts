@@ -2,7 +2,8 @@ import { extractArtifactRefsFromToolResult, extractArtifactRefsFromToolResults }
 import {
   buildToolCallDisplayText,
   renderToolDiagnosticText,
-  renderToolResultDataPreview
+  renderToolResourceContextText,
+  renderToolResultDataText
 } from '../shared/toolResultRenderers'
 import { historySearchFilterSchema, humanLoadedHistoryContextSchema } from '../schema'
 import type {
@@ -33,7 +34,7 @@ export const buildHistoryToolResult = (result: ToolCallResult): HumanHistoryTool
     ok: result.ok,
     code: result.code,
     summary: buildToolCallDisplayText(result),
-    dataPreview: renderToolResultDataPreview(result),
+    data: result.data,
     diagnosticText,
     resourceContext: result.resourceContext,
     artifactRefs: (() => {
@@ -121,8 +122,10 @@ export const appendDecisionRound = (input: {
 export const getLastRoundFocus = (state: HumanState): HumanRoundRecord | undefined =>
   state.memory.history.roundHistory.at(-1)
 
-export const getHistoryChainRounds = (state: HumanState): HumanRoundRecord[] =>
-  state.memory.history.roundHistory.slice(0, -1).slice(-HUMAN_HISTORY_LIMITS.historyChain)
+export const getEarlierAttemptRounds = (state: HumanState): HumanRoundRecord[] =>
+  state.memory.history.roundHistory
+    .slice(0, -1)
+    .slice(-HUMAN_HISTORY_LIMITS.earlierAttemptRounds)
 
 export const getLoadedHistoryContext = (
   state: HumanState
@@ -139,7 +142,13 @@ const buildRoundSearchText = (record: HumanRoundRecord): string => {
     segments.push(record.execution.learningOutcome.loadedSkillIds.join(' '))
   } else if (record.execution.kind === 'hand') {
     record.execution.toolResults.forEach((result) => {
-      segments.push(result.toolName, result.summary, result.dataPreview || '', result.diagnosticText || '')
+      segments.push(
+        result.toolName,
+        result.summary,
+        renderToolResourceContextText(result.resourceContext) || '',
+        renderToolResultDataText(result) || '',
+        result.diagnosticText || ''
+      )
     })
   } else if (record.execution.kind === 'mouth') {
     segments.push(record.execution.summary)

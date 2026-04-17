@@ -136,7 +136,7 @@ export const humanHistoryToolResultSchema = z.object({
   ok: z.boolean(),
   code: toolCallResultCodeSchema,
   summary: z.string().min(1),
-  dataPreview: z.string().optional(),
+  data: jsonValueSchema.optional(),
   diagnosticText: z.string().optional(),
   artifactRefs: z.array(aiArtifactRefSchema).optional(),
   resourceContext: toolResourceContextSchema.optional()

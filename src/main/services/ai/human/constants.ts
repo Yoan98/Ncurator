@@ -61,6 +61,6 @@ export const HUMAN_ROUND_EXECUTION_KINDS = [
   'hand',
   'mouth'
 ] as const
-export const HUMAN_MAX_ROUND_HISTORY = 12
-export const HUMAN_MAX_HISTORY_CHAIN_ITEMS = 5
-export const HUMAN_MAX_LOADED_HISTORY_ROUNDS = 3
+export const HUMAN_MAX_ROUND_HISTORY = 100
+export const HUMAN_MAX_EARLIER_ATTEMPT_ROUNDS = 20
+export const HUMAN_MAX_LOADED_HISTORY_ROUNDS = 10

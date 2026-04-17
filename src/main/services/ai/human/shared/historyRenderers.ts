@@ -1,6 +1,10 @@
 import { renderInlineList } from '../../utils/render'
 import type { HumanLoadedHistoryContext, HumanRoundRecord } from '../types'
 import { renderWatchHintForBrain } from '../prompts/watchHints'
+import {
+  renderToolResourceContextText,
+  renderToolResultDataText
+} from './toolResultRenderers'
 
 const renderQuotedNames = (items: readonly string[]): string =>
   renderInlineList(
@@ -83,22 +87,19 @@ ${record.execution.watchHint ? `- 收敛提示：${renderWatchHintForBrain(recor
         .replace(/\n\n+/g, '\n')
     case 'hand': {
       const toolResultLines = record.execution.toolResults
-        .map((result) =>
-          [
+        .map((result) => {
+          const resourceContextText = renderToolResourceContextText(result.resourceContext)
+          const dataText = renderToolResultDataText(result)
+
+          return [
             `- \`${result.toolName}\`：${result.summary}`,
-            result.resourceContext
-              ? `上下文：sourcePath=${result.resourceContext.sourcePath || 'none'}；currentVersion=${result.resourceContext.currentVersionRef || 'none'}${
-                  result.resourceContext.previousVersionRef
-                    ? `；previousVersion=${result.resourceContext.previousVersionRef}`
-                    : ''
-                }`
-              : '',
-            result.dataPreview ? `结果：${result.dataPreview}` : '',
+            resourceContextText ? `上下文：${resourceContextText}` : '',
+            dataText ? `结果：\n${dataText}` : '',
             result.diagnosticText ? `诊断：${result.diagnosticText}` : ''
           ]
             .filter(Boolean)
-            .join('；')
-        )
+            .join('\n')
+        })
         .join('\n')
       const artifactLine =
         record.execution.artifactRefs && record.execution.artifactRefs.length > 0
