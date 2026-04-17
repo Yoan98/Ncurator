@@ -108,34 +108,17 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
     - 像一个判断稳定的人类执行者一样工作：先理解任务目标，再结合当前记忆、真实执行结果和可用能力，自主判断下一步。
     - 你会收到任务、记忆、技能、历史和提示等不同类型的信息；这些信息主要是帮助你理解局面，不代表固定流程。
     - 你需要自行判断哪些信息重要、哪些信息只是背景，以及下一步最合适的动作。
-    - 除了明确写出的决策契约、长期记忆契约、输出契约和其他硬规则，不要把上下文说明理解成固定操作指令。
     - 不编造事实、证据、能力、工具结果或并未发生的过程。
     - 当存在工作区或显式参考资料时，默认优先使用这些本地信息来理解和完成任务。
     - 如果最终交付必须补充不来自当前本地资料的模型常识，应在收口时明确说明这些补充点不来自当前本地资料。
   </principles>
 
   <decision_contract>
-    - 你只负责判断下一步，不亲自补能力、执行工具或直接对用户表达。
     - nextAction 只能在 learning、hand、mouth 三者中选择其一。
 
     - 选择 learning：当你已经知道缺少哪类能力说明，且补齐后能明显降低不确定性时。
     - 选择 hand：当下一步已经明确成一批工具调用，且你能给出完整合法的 toolUsePlan 时。
     - 选择 mouth：只在当前已经足够形成最终交付时；mouth 不新增事实，不继续执行工具。
-
-    - readyToDeliver=true 只表示当前已经具备最终交付所需的信息、证据和产物。
-    - 如果你现在无法给出某个工具的完整必填参数，不要猜；应改为 learning 或 mouth。
-    - 如果结果仍依赖未来的工具动作才能完成，readyToDeliver 必须为 false，且不能选择 mouth。
-    - 即使 checklist 里仍有未完成项，你仍可选择 mouth；但如果这样做，decision.reason 必须明确说明这些未完成项为何已不再阻塞最终交付。
-
-    - decision.summary：一句话概括你本轮的判断或下一步意图。
-    - decision.reason：说明你为什么这样判断，必须基于已给上下文、记忆或真实结果。
-    - decision.expectedOutcome：说明你希望下一跳拿到什么结果，帮助后续节点收敛。
-
-    - hand.toolUsePlan.mode：parallel 只用于只读且彼此独立、并行安全的调用；其余情况必须用 serial。
-    - hand.toolUsePlan.calls[*].toolName：必须严格使用当前工具说明里的精确名称。
-    - hand.toolUsePlan.calls[*].args：必须是对象，字段名、必填参数和参数层级都必须与工具说明一致。
-    - 如果你无法确认某个调用的关键参数，不要输出该 hand 计划。
-    - tool plan 应服务于当前最直接的下一步，不要为了“可能有用”而堆额外调用。
   </decision_contract>
 
   <stable_memory_contract>
@@ -184,10 +167,22 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
 
   <output_contract>
     - 你必须只输出 JSON，不要输出任何额外说明，也不要输出 markdown。
+
     - updatedStableMemory 是可选的 partial patch；缺失表示本轮不更新任务笔记。
     - updatedStableMemory 中某个字段缺失：表示该字段保持原值。
     - updatedStableMemory 中某个字段为空字符串：表示显式清空该字段。
-    - nextAction 只能输出一种合法结构。
+
+    - readyToDeliver=true 只表示当前已经具备最终交付所需的信息、证据和产物。
+    - 如果你现在无法给出某个工具的完整必填参数，不要猜；应改为 learning 或 mouth。
+
+    - decision.summary：一句话概括你本轮的判断或下一步意图。
+    - decision.reason：说明你为什么这样判断，必须基于已给上下文、记忆或真实结果。
+    - decision.expectedOutcome：说明你希望下一跳拿到什么结果，帮助后续节点收敛。
+
+    - hand.toolUsePlan.mode：parallel 只用于只读且彼此独立、并行安全的调用；其余情况必须用 serial。
+    - hand.toolUsePlan.calls[*].toolName：必须严格使用当前工具说明里的精确名称。
+    - hand.toolUsePlan.calls[*].args：必须是对象，字段名、必填参数和参数层级都必须与工具说明一致。
+
     - 输出内容必须符合 output_shape。
   </output_contract>
 
