@@ -15,6 +15,7 @@
 ### 1.3 测试相关
 - 当涉及 AI 测试，必须阅读 `doc/test-plan/ai-test.md`
 - 当涉及 human live 的 docx / KB 混合场景测试设计时，必须阅读 `doc/test-plan/ai-test.md`
+- 当涉及 docx review / commit 分层测试设计时，必须阅读 `doc/test-plan/ai-test.md`
 - 当涉及 Workbench 测试时，必须阅读 `doc/test-plan/workbench-test.md`
 - 当涉及 Settings 测试时，必须阅读 `doc/test-plan/settings-test.md`
 - 当涉及测试用例编写、runner、raw logs 或日志分析时，必须阅读 `doc/test.md`

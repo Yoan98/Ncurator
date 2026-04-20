@@ -710,13 +710,23 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 live 模式下 `human` 会在一个真实长任务里串起模板定位、资料取证、docx 编辑与 confirm-copy 交付。
+- What：验证 live 模式下 `human` 会在一个真实长任务里串起模板定位、资料取证、docx 编辑与待确认稿交付。
 - Why：`human/live` 需要至少一条长期高价值复杂样例，覆盖 workspace、KB、docx 与最终交付链路。
-- How：注入真实 live LLM 配置；workspace 中动态写入带 `RISK_TODO / OWNER_TODO` 占位符的周报模板和干扰文件；seed 两份真实 KB 文档分别提供风险结论与负责人说明并限制在已选范围内；直接输入“找到上周 Word 周报模板，按已选资料补全风险结论与负责人，生成确认稿且不要覆盖原文件”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；事件流中至少出现一次 `workspace_run_command`、一次 KB 检索工具调用、一次 docx 读取、一次 docx 编辑；存在 `draft_review_ready` 事件，最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；原模板未被覆盖；最终答复能从用户视角说明改动的是“风险结论”和“负责人说明”两处、依据分别来自 `Weekly Risk Summary.md` 与 `Owner Note.md`，并明确当前给出的是待确认草稿。
-- Not：不绑定最终答案措辞，也不要求固定检索工具顺序。
+- How：注入真实 live LLM 配置；workspace 中动态写入带 `RISK_TODO / OWNER_TODO` 占位符的周报模板和干扰文件；seed 两份真实 KB 文档分别提供风险结论与负责人说明；直接输入“找到上周 Word 周报模板，按已选资料补全风险结论与负责人，整理成待确认稿”的自然语言诉求，让真实 `human` 自主完成。
+- Oracle：任务最终完成；事件流中至少出现一次 `workspace_run_command`、一次 KB 检索工具调用、一次 docx 读取、一次 docx 编辑；存在 `draft_review_ready` 事件，最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；最终答复能从用户视角说明改动的是“风险结论”和“负责人说明”两处、依据分别来自 `Weekly Risk Summary.md` 与 `Owner Note.md`，并明确当前给出的是待确认稿。
+- Not：不绑定最终答案措辞，不要求固定检索工具顺序，也不要求固定使用某一种 docx 写工具。
 - Last Run：`2026-04-16 18:37:18 +08:00`
 - Last Result：`通过`
+
+##### `risk-report-review-commit`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证风险周报场景在 review 生成后，既能产出包含目标修改的待确认稿，也能在 commit 后把最终内容落盘到源 `docx`。
+- Why：live case 只负责验证自主规划与 review 交付；review 结果与 commit 落盘结果需要用稳定 case 单独守住。
+- How：构造与 live case 相同的风险周报模板；通过真实 docx 工具执行两处占位符替换，随后 finalize review，直接检查 review artifact；再执行真实 `commitReview`，检查源文档最终内容。
+- Oracle：review artifact 中能读到“待跟进”和“Alice”对应的修改结果；commit 成功后，源模板中两处占位符被最终内容替换，且不再保留 `RISK_TODO / OWNER_TODO`。
+- Not：不覆盖 live 模型执行路径，不要求经过 KB 或 terminal。
 
 ##### `human-docx-cause-remedy-reading-live`
 

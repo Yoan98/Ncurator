@@ -127,6 +127,43 @@ export const hasDraftFileArtifact = (artifacts: readonly AiArtifactRef[] | undef
       artifact.artifactRole === 'draft'
   )
 
+const DOCX_WRITE_TOOL_NAMES = [
+  'docx_paragraph_edit',
+  'docx_heading_edit',
+  'docx_table_edit',
+  'docx_text_edit',
+  'docx_text_style_edit',
+  'docx_rollback'
+] as const
+
+type DocxWriteToolName = (typeof DOCX_WRITE_TOOL_NAMES)[number]
+
+type DocxChangedBlockPreview = {
+  blockId?: string
+  beforeText?: string
+  afterText?: string
+}
+
+type DocxMutationResultPreview = {
+  changedBlocks?: DocxChangedBlockPreview[]
+}
+
+export const isDocxWriteToolName = (toolName: string): toolName is DocxWriteToolName =>
+  DOCX_WRITE_TOOL_NAMES.includes(toolName as DocxWriteToolName)
+
+export const hasDocxWriteToolCall = (events: readonly AiRunEvent[]): boolean =>
+  filterAiRunEventsByType(events, 'tool_call_result').some((event) => isDocxWriteToolName(event.toolName))
+
+export const collectDocxWriteChangedBlocks = (
+  events: readonly AiRunEvent[]
+): DocxChangedBlockPreview[] =>
+  filterAiRunEventsByType(events, 'tool_call_result')
+    .filter((event) => isDocxWriteToolName(event.toolName))
+    .flatMap((event) => {
+      const mutation = (event.result?.data as DocxMutationResultPreview | undefined) || {}
+      return mutation.changedBlocks || []
+    })
+
 const isJsonObject = (value: JsonValue | undefined): value is JsonObject =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
