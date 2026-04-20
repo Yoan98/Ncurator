@@ -190,24 +190,24 @@ export const DOCX_HISTORY_TOOL_SPEC = {
   name: 'docx_history',
   familyId: 'docx',
   requiresWorkspace: true,
-  description: '查看当前任务过程中的 docx 版本历史。',
+  description: '查看当前任务过程中的 docx 修订历史。',
   skillIds: ['docx-read'],
   schema: docxHistoryRequestSchema,
   promptSpec: {
     name: 'docx_history',
-    purpose: '查看当前任务过程中这份 docx 的版本链、版本摘要和变更块。',
-    whenToUse: '当你要确认编辑历史、比较最近几版差异、或决定回滚到哪个版本时使用。',
+    purpose: '查看当前任务过程中这份 docx 的修订链、修订摘要和变更块。',
+    whenToUse: '当你要确认编辑历史、比较最近几次修订差异、或决定回滚到哪个修订时使用。',
     preconditions: ['sourcePath 必须是 workspace 内的 .docx 路径。工具会自动打开目标文档。'],
     returns: [
       {
-        name: 'versions',
-        type: 'Array<{ versionRef: string; summary: string; changedBlocks: Array<object> }>',
-        description: '按当前版本到祖先版本的顺序返回版本链。'
+        name: 'revisions',
+        type: 'Array<{ revisionRef: string; summary: string; changedBlocks: Array<object> }>',
+        description: '按当前修订到祖先修订的顺序返回修订链。'
       }
     ],
     examples: [
       {
-        goal: '查看最近几个 docx 版本及各自改动摘要',
+        goal: '查看最近几个 docx 修订及各自改动摘要',
         args: {
           sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
           limit: 5
@@ -233,9 +233,9 @@ export const DOCX_PARAGRAPH_EDIT_TOOL_SPEC = {
     preconditions: ['插入动作需要 anchorBlockId 与 text；替换/删除需要 blockId。'],
     returns: [
       {
-        name: 'currentVersionRef',
+        name: 'currentRevisionRef',
         type: 'string',
-        description: '本次段落编辑成功后的当前版本。'
+        description: '本次段落编辑成功后的当前修订。'
       },
       {
         name: 'createdBlocks',
@@ -277,9 +277,9 @@ export const DOCX_HEADING_EDIT_TOOL_SPEC = {
     preconditions: ['插入动作需要 anchorBlockId；替换动作需要 blockId；level 必须是 1-6。'],
     returns: [
       {
-        name: 'currentVersionRef',
+        name: 'currentRevisionRef',
         type: 'string',
-        description: '本次标题编辑成功后的当前版本。'
+        description: '本次标题编辑成功后的当前修订。'
       },
       {
         name: 'createdBlocks',
@@ -318,9 +318,9 @@ export const DOCX_TABLE_EDIT_TOOL_SPEC = {
     preconditions: ['插表动作需要 anchorBlockId 与 rows；改单元格动作需要 cellBlockId 与 text。'],
     returns: [
       {
-        name: 'currentVersionRef',
+        name: 'currentRevisionRef',
         type: 'string',
-        description: '本次表格编辑成功后的当前版本。'
+        description: '本次表格编辑成功后的当前修订。'
       },
       {
         name: 'createdBlocks',
@@ -427,27 +427,27 @@ export const DOCX_ROLLBACK_TOOL_SPEC = {
   name: 'docx_rollback',
   familyId: 'docx',
   requiresWorkspace: true,
-  description: '按版本号回退当前 docx 草稿。',
+  description: '按修订号回退当前 docx 草稿。',
   skillIds: ['docx-write'],
   schema: docxRollbackRequestSchema,
   promptSpec: {
     name: 'docx_rollback',
-    purpose: '把当前任务过程中的 docx 草稿切回指定 versionRef，不覆盖原文件。',
-    whenToUse: '当你已经通过 docx_history 确认要回退到哪个版本时使用。',
-    preconditions: ['必须先有可追溯的版本历史。'],
+    purpose: '把当前任务过程中的 docx 草稿切回指定 revisionRef，不覆盖原文件。',
+    whenToUse: '当你已经通过 docx_history 确认要回退到哪个修订时使用。',
+    preconditions: ['必须先有可追溯的修订历史。'],
     returns: [
       {
-        name: 'currentVersionRef',
+        name: 'currentRevisionRef',
         type: 'string',
-        description: '回退后的当前版本。'
+        description: '回退后的当前修订。'
       }
     ],
     examples: [
       {
-        goal: '把当前草稿回退到指定版本',
+        goal: '把当前草稿回退到指定修订',
         args: {
           sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
-          versionRef: 'v2'
+          revisionRef: 'v2'
         }
       }
     ]

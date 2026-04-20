@@ -168,9 +168,9 @@ describe('ai tool docx backend', () => {
           ),
           {
             name: 'complex-ops-batch-covers-all-op-types',
-            message: '复杂编辑 case 应覆盖六类底层变更动作，并产出新的版本摘要。',
+            message: '复杂编辑 case 应覆盖六类底层变更动作，并产出新的修订摘要。',
             data: {
-              currentVersionRef: result.replaceBlock.currentVersionRef,
+              currentRevisionRef: result.replaceBlock.currentRevisionRef,
               changedActions
             }
           }

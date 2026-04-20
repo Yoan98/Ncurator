@@ -114,8 +114,8 @@ describe('ai tool hand backend', () => {
                     resourceContext: {
                       family: 'docx',
                       sourcePath: 'history-recall.docx',
-                      previousVersionRef: 'v1',
-                      currentVersionRef: 'v2',
+                      previousRevisionRef: 'v1',
+                      currentRevisionRef: 'v2',
                       effectKind: 'mutated'
                     },
                     data: {
@@ -123,8 +123,8 @@ describe('ai tool hand backend', () => {
                       code: 'ok',
                       summary: '文本替换完成',
                       sourcePath: 'history-recall.docx',
-                      previousVersionRef: 'v1',
-                      currentVersionRef: 'v2',
+                      previousRevisionRef: 'v1',
+                      currentRevisionRef: 'v2',
                       changedBlocks: [
                         {
                           action: 'replace_text',

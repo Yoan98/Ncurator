@@ -79,7 +79,7 @@ describe('ai unit mouth readyToDeliver guard', () => {
     expect(prompt).toContain('<output_contract>')
     expect(prompt).toContain('直接回答 task_goal')
     expect(prompt).toContain('优先依据 your_notes 组织答案或交付内容')
-    expect(prompt).toContain('以更具体的依据为准')
+    expect(prompt).toContain('与更具体的证据记录存在张力')
     expect(prompt).toContain('只输出最终 markdown 正文')
     expect(prompt).toContain('如果最终答案补充了不来自当前本地资料的信息')
     expect(prompt).not.toContain('必须在结尾单独加一行“补充说明')
@@ -247,7 +247,7 @@ describe('ai unit mouth readyToDeliver guard', () => {
               ok: true,
               code: 'ok',
               sourcePath: 'graphics.docx',
-              currentVersionRef: 'v3',
+              currentRevisionRef: 'v3',
               fromBlockId: 'b:19',
               toBlockId: 'b:26',
               returnedBlockCount: 2,

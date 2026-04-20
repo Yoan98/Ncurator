@@ -91,17 +91,9 @@ const styleRunForRevision = (run: Element, kind: RevisionKind): void => {
   rPr.appendChild(shade)
 }
 
-const wrapRunWithRevision = (run: Element, kind: RevisionKind, revisionId: number): Element => {
-  const wrapper = run.ownerDocument.createElementNS(
-    WORD_NS,
-    kind === 'inserted' ? 'w:ins' : 'w:del'
-  )
-  setWordAttribute(wrapper, 'id', String(revisionId))
-  setWordAttribute(wrapper, 'author', SYSTEM_AUTHOR)
-  setWordAttribute(wrapper, 'date', new Date().toISOString())
+const wrapRunWithRevision = (run: Element, kind: RevisionKind, _revisionId: number): Element => {
   styleRunForRevision(run, kind)
-  wrapper.appendChild(run)
-  return wrapper
+  return run
 }
 
 const applyRevisionToRuns = (element: Element, kind: RevisionKind, revisionId: number): void => {
@@ -192,11 +184,51 @@ const createTableFromSpec = (
   revisionId?: number
 ): Element => {
   const table = doc.createElementNS(WORD_NS, 'w:tbl')
+  const columnCount = Math.max(1, ...spec.rows.map((row) => row.length))
+  const tableWidth = 9072
+  const columnWidth = Math.max(720, Math.floor(tableWidth / columnCount))
+
+  const tblPr = doc.createElementNS(WORD_NS, 'w:tblPr')
+  const tblW = doc.createElementNS(WORD_NS, 'w:tblW')
+  const tblLayout = doc.createElementNS(WORD_NS, 'w:tblLayout')
+  const tblLook = doc.createElementNS(WORD_NS, 'w:tblLook')
+  setWordAttribute(tblW, 'w', String(tableWidth))
+  setWordAttribute(tblW, 'type', 'dxa')
+  setWordAttribute(tblLayout, 'type', 'fixed')
+  setWordAttribute(tblLook, 'firstRow', '1')
+  setWordAttribute(tblLook, 'lastRow', '0')
+  setWordAttribute(tblLook, 'firstColumn', '1')
+  setWordAttribute(tblLook, 'lastColumn', '0')
+  setWordAttribute(tblLook, 'noHBand', '0')
+  setWordAttribute(tblLook, 'noVBand', '1')
+  tblPr.appendChild(tblW)
+  tblPr.appendChild(tblLayout)
+  tblPr.appendChild(tblLook)
+  table.appendChild(tblPr)
+
+  const tblGrid = doc.createElementNS(WORD_NS, 'w:tblGrid')
+  for (let index = 0; index < columnCount; index += 1) {
+    const gridCol = doc.createElementNS(WORD_NS, 'w:gridCol')
+    setWordAttribute(gridCol, 'w', String(columnWidth))
+    tblGrid.appendChild(gridCol)
+  }
+  table.appendChild(tblGrid)
+
   spec.rows.forEach((rowSpec) => {
     const row = doc.createElementNS(WORD_NS, 'w:tr')
     rowSpec.forEach((cellSpec) => {
       const cell = doc.createElementNS(WORD_NS, 'w:tc')
-      cellSpec.paragraphs.forEach((paragraphSpec) => {
+      const tcPr = doc.createElementNS(WORD_NS, 'w:tcPr')
+      const tcW = doc.createElementNS(WORD_NS, 'w:tcW')
+      setWordAttribute(tcW, 'w', String(columnWidth))
+      setWordAttribute(tcW, 'type', 'dxa')
+      tcPr.appendChild(tcW)
+      cell.appendChild(tcPr)
+      const paragraphs =
+        cellSpec.paragraphs.length > 0
+          ? cellSpec.paragraphs
+          : [{ kind: 'paragraph' as const, runs: [{ text: '' }] }]
+      paragraphs.forEach((paragraphSpec) => {
         cell.appendChild(createParagraphFromSpec(doc, paragraphSpec, kind, revisionId))
       })
       row.appendChild(cell)
@@ -434,30 +466,7 @@ const removeSystemBookmarkMarkers = (root: Element, bookmarkIds: Set<string>): v
 }
 
 const unwrapSystemRevisions = (root: Element): void => {
-  const children = Array.from({ length: root.childNodes.length })
-    .map((_, index) => root.childNodes.item(index))
-    .filter(Boolean)
-  children.forEach((child) => {
-    if (!isElementNode(child)) return
-    const isSystemRevision =
-      (child.localName === 'ins' || child.localName === 'del') &&
-      getWordAttribute(child, 'author') === SYSTEM_AUTHOR
-    if (child.localName === 'ins' && isSystemRevision) {
-      const moved = Array.from({ length: child.childNodes.length })
-        .map((_, index) => child.childNodes.item(index))
-        .filter(Boolean)
-      moved.forEach((node) => {
-        root.insertBefore(node, child)
-      })
-      root.removeChild(child)
-      return
-    }
-    if (child.localName === 'del' && isSystemRevision) {
-      root.removeChild(child)
-      return
-    }
-    unwrapSystemRevisions(child)
-  })
+  void root
 }
 
 const hasMeaningfulContent = (element: Element): boolean => {

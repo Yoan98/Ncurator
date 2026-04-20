@@ -13,7 +13,8 @@ import { getDocxWorkerClient } from '../worker/docxWorkerClient'
 import { materializeDocxConfirmCopy } from './confirmCopy'
 import { computeCumulativeDocxChangeSeeds } from './cumulativeDiff'
 import type { RunDraftDocument } from './types'
-import { buildSourceVersion, getManifestPathForConfirmArtifact, sanitizeFileName } from './utils'
+import { buildSourceVersion } from './utils'
+import { buildDocxReviewArtifactPaths } from './viewProjection'
 import { clipText } from '../../../../utils/text'
 
 type RunDraftState = {
@@ -102,28 +103,20 @@ export class RunDraftTracker {
     for (const [index, document] of changedDocuments.entries()) {
       const reviewId = randomUUID()
       const now = Date.now()
-      const draftDir = path.join(
-        path.resolve(input.workspaceRootPath),
-        '.ncurator',
-        'draft-reviews',
-        reviewId
-      )
-      const confirmPath = path.join(
-        draftDir,
-        `${String(index + 1).padStart(2, '0')}-confirm-${sanitizeFileName(document.sourceName)}`
-      )
-      const effectiveDraftPath = path.join(
-        draftDir,
-        `${String(index + 1).padStart(2, '0')}-effective-${sanitizeFileName(document.sourceName)}`
-      )
-      const manifestPath = getManifestPathForConfirmArtifact(confirmPath)
+      const { reviewArtifactPath, workingArtifactPath, manifestArtifactPath } =
+        buildDocxReviewArtifactPaths({
+          workspaceRootPath: input.workspaceRootPath,
+          reviewId,
+          documentIndex: index,
+          sourceName: document.sourceName
+        })
 
       const effectiveSaveResponse = await client.call({
         runId: input.runId,
         action: 'materialize_draft',
         payload: {
           docId: document.latestDocId,
-          outPath: effectiveDraftPath
+          outPath: workingArtifactPath
         }
       })
       if (
@@ -141,7 +134,7 @@ export class RunDraftTracker {
       const sourceVersion = await buildSourceVersion(document.sourcePath)
       const documentId = randomUUID()
       const sourceBuffer = await fs.readFile(document.sourcePath)
-      const latestDraftBuffer = await fs.readFile(effectiveDraftPath)
+      const latestDraftBuffer = await fs.readFile(workingArtifactPath)
       const cumulativeChanges = await computeCumulativeDocxChangeSeeds({
         sourceBuffer,
         latestDraftBuffer,
@@ -154,8 +147,8 @@ export class RunDraftTracker {
 
       await materializeDocxConfirmCopy({
         baseBuffer: sourceBuffer,
-        confirmArtifactPath: confirmPath,
-        manifestArtifactPath: manifestPath,
+        confirmArtifactPath: reviewArtifactPath,
+        manifestArtifactPath,
         reviewId,
         sourcePath: document.sourcePath,
         sourceName: document.sourceName,
@@ -173,9 +166,8 @@ export class RunDraftTracker {
         source_name: document.sourceName,
         format: 'docx',
         latest_draft_snapshot_id: document.latestDocId,
-        confirm_artifact_path: confirmPath,
-        manifest_artifact_path: manifestPath,
-        effective_draft_artifact_path: effectiveDraftPath,
+        review_artifact_path: reviewArtifactPath,
+        working_artifact_path: workingArtifactPath,
         source_version: sourceVersion,
         total_change_count: cumulativeChanges.length,
         pending_change_count: cumulativeChanges.length,

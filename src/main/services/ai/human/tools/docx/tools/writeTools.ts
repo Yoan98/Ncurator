@@ -127,8 +127,8 @@ type ApplySingleEditResult =
       failure: DocxToolFailure
     }
   | {
-      previousVersionRef: string
-      currentVersionRef: string
+      previousRevisionRef: string
+      currentRevisionRef: string
       changedBlocks: DocxChangedBlock[]
       warnings: string[]
       nextDocId: string
@@ -141,7 +141,7 @@ const applySingleEdit = async (input: {
   toolCallId: string
   sourcePath: string
   currentDocId: string
-  currentVersionRef: string
+  currentRevisionRef: string
   ops: DocxOp[]
   summary: string
   createdBlocks?: boolean
@@ -175,7 +175,7 @@ const applySingleEdit = async (input: {
     }
   }
 
-  const versionUpdate = input.runtime.registerDerivedVersion({
+  const revisionUpdate = input.runtime.registerRevision({
     sourcePath: input.sourcePath,
     previousDocId: input.currentDocId,
     nextDocId: workerResponse.payload.newDocId,
@@ -189,8 +189,8 @@ const applySingleEdit = async (input: {
     changedBlocks: workerResponse.payload.changedBlocks
   })
   return {
-    previousVersionRef: versionUpdate.previousVersionRef,
-    currentVersionRef: versionUpdate.currentVersionRef,
+    previousRevisionRef: revisionUpdate.previousRevisionRef,
+    currentRevisionRef: revisionUpdate.currentRevisionRef,
     changedBlocks: workerResponse.payload.changedBlocks,
     warnings: workerResponse.payload.warnings,
     nextDocId: workerResponse.payload.newDocId,
@@ -259,7 +259,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         toolCallId,
         sourcePath: sessionResult.sourcePath,
         currentDocId: sessionResult.docId,
-        currentVersionRef: sessionResult.currentVersionRef,
+        currentRevisionRef: sessionResult.currentRevisionRef,
         ops: [op],
         summary: `paragraph.${args.action}`,
         createdBlocks: args.action === 'insert_before' || args.action === 'insert_after'
@@ -284,16 +284,16 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           warnings: applied.warnings
         }),
         sourcePath: sessionResult.sourcePath,
-        previousVersionRef: applied.previousVersionRef,
-        currentVersionRef: applied.currentVersionRef,
+        previousRevisionRef: applied.previousRevisionRef,
+        currentRevisionRef: applied.currentRevisionRef,
         changedBlocks: applied.changedBlocks,
         createdBlocks: applied.createdBlocks,
         warnings: applied.warnings,
         resourceContext: runtime.buildResourceContext({
           sourcePath: sessionResult.sourcePath,
           effectKind: 'mutated',
-          previousVersionRef: applied.previousVersionRef,
-          currentVersionRef: applied.currentVersionRef
+          previousRevisionRef: applied.previousRevisionRef,
+          currentRevisionRef: applied.currentRevisionRef
         })
       }
       return finalizeDocxToolSuccess({
@@ -305,8 +305,8 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           ok: true,
           code: 'ok',
           sourcePath: result.sourcePath,
-          previousVersionRef: result.previousVersionRef,
-          currentVersionRef: result.currentVersionRef,
+          previousRevisionRef: result.previousRevisionRef,
+          currentRevisionRef: result.currentRevisionRef,
           changedCount: result.changedBlocks.length,
           createdBlocks: result.createdBlocks
         },
@@ -362,7 +362,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         toolCallId,
         sourcePath: sessionResult.sourcePath,
         currentDocId: sessionResult.docId,
-        currentVersionRef: sessionResult.currentVersionRef,
+        currentRevisionRef: sessionResult.currentRevisionRef,
         ops: [op],
         summary: `heading.${args.action}.level_${String(args.level)}`,
         createdBlocks: args.action !== 'replace_text'
@@ -387,16 +387,16 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           warnings: applied.warnings
         }),
         sourcePath: sessionResult.sourcePath,
-        previousVersionRef: applied.previousVersionRef,
-        currentVersionRef: applied.currentVersionRef,
+        previousRevisionRef: applied.previousRevisionRef,
+        currentRevisionRef: applied.currentRevisionRef,
         changedBlocks: applied.changedBlocks,
         createdBlocks: applied.createdBlocks,
         warnings: applied.warnings,
         resourceContext: runtime.buildResourceContext({
           sourcePath: sessionResult.sourcePath,
           effectKind: 'mutated',
-          previousVersionRef: applied.previousVersionRef,
-          currentVersionRef: applied.currentVersionRef
+          previousRevisionRef: applied.previousRevisionRef,
+          currentRevisionRef: applied.currentRevisionRef
         })
       }
       return finalizeDocxToolSuccess({
@@ -408,8 +408,8 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           ok: true,
           code: 'ok',
           sourcePath: result.sourcePath,
-          previousVersionRef: result.previousVersionRef,
-          currentVersionRef: result.currentVersionRef,
+          previousRevisionRef: result.previousRevisionRef,
+          currentRevisionRef: result.currentRevisionRef,
           changedCount: result.changedBlocks.length,
           createdBlocks: result.createdBlocks
         },
@@ -464,7 +464,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         toolCallId,
         sourcePath: sessionResult.sourcePath,
         currentDocId: sessionResult.docId,
-        currentVersionRef: sessionResult.currentVersionRef,
+        currentRevisionRef: sessionResult.currentRevisionRef,
         ops: [op],
         summary: `table.${args.action}`,
         createdBlocks: args.action !== 'update_cell'
@@ -489,16 +489,16 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           warnings: applied.warnings
         }),
         sourcePath: sessionResult.sourcePath,
-        previousVersionRef: applied.previousVersionRef,
-        currentVersionRef: applied.currentVersionRef,
+        previousRevisionRef: applied.previousRevisionRef,
+        currentRevisionRef: applied.currentRevisionRef,
         changedBlocks: applied.changedBlocks,
         createdBlocks: applied.createdBlocks,
         warnings: applied.warnings,
         resourceContext: runtime.buildResourceContext({
           sourcePath: sessionResult.sourcePath,
           effectKind: 'mutated',
-          previousVersionRef: applied.previousVersionRef,
-          currentVersionRef: applied.currentVersionRef
+          previousRevisionRef: applied.previousRevisionRef,
+          currentRevisionRef: applied.currentRevisionRef
         })
       }
       return finalizeDocxToolSuccess({
@@ -510,8 +510,8 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           ok: true,
           code: 'ok',
           sourcePath: result.sourcePath,
-          previousVersionRef: result.previousVersionRef,
-          currentVersionRef: result.currentVersionRef,
+          previousRevisionRef: result.previousRevisionRef,
+          currentRevisionRef: result.currentRevisionRef,
           changedCount: result.changedBlocks.length,
           createdBlocks: result.createdBlocks
         },
@@ -551,7 +551,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         toolCallId,
         sourcePath: sessionResult.sourcePath,
         currentDocId: sessionResult.docId,
-        currentVersionRef: sessionResult.currentVersionRef,
+        currentRevisionRef: sessionResult.currentRevisionRef,
         ops: [
           {
             type: 'replace_text',
@@ -583,15 +583,15 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           warnings: applied.warnings
         }),
         sourcePath: sessionResult.sourcePath,
-        previousVersionRef: applied.previousVersionRef,
-        currentVersionRef: applied.currentVersionRef,
+        previousRevisionRef: applied.previousRevisionRef,
+        currentRevisionRef: applied.currentRevisionRef,
         changedBlocks: applied.changedBlocks,
         warnings: applied.warnings,
         resourceContext: runtime.buildResourceContext({
           sourcePath: sessionResult.sourcePath,
           effectKind: 'mutated',
-          previousVersionRef: applied.previousVersionRef,
-          currentVersionRef: applied.currentVersionRef
+          previousRevisionRef: applied.previousRevisionRef,
+          currentRevisionRef: applied.currentRevisionRef
         })
       }
       return finalizeDocxToolSuccess({
@@ -603,8 +603,8 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           ok: true,
           code: 'ok',
           sourcePath: result.sourcePath,
-          previousVersionRef: result.previousVersionRef,
-          currentVersionRef: result.currentVersionRef,
+          previousRevisionRef: result.previousRevisionRef,
+          currentRevisionRef: result.currentRevisionRef,
           changedCount: result.changedBlocks.length
         },
         draftDocId: applied.nextDocId,
@@ -643,7 +643,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         toolCallId,
         sourcePath: sessionResult.sourcePath,
         currentDocId: sessionResult.docId,
-        currentVersionRef: sessionResult.currentVersionRef,
+        currentRevisionRef: sessionResult.currentRevisionRef,
         ops: [
           {
             type: 'style_text',
@@ -674,15 +674,15 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           warnings: applied.warnings
         }),
         sourcePath: sessionResult.sourcePath,
-        previousVersionRef: applied.previousVersionRef,
-        currentVersionRef: applied.currentVersionRef,
+        previousRevisionRef: applied.previousRevisionRef,
+        currentRevisionRef: applied.currentRevisionRef,
         changedBlocks: applied.changedBlocks,
         warnings: applied.warnings,
         resourceContext: runtime.buildResourceContext({
           sourcePath: sessionResult.sourcePath,
           effectKind: 'mutated',
-          previousVersionRef: applied.previousVersionRef,
-          currentVersionRef: applied.currentVersionRef
+          previousRevisionRef: applied.previousRevisionRef,
+          currentRevisionRef: applied.currentRevisionRef
         })
       }
       return finalizeDocxToolSuccess({
@@ -694,8 +694,8 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           ok: true,
           code: 'ok',
           sourcePath: result.sourcePath,
-          previousVersionRef: result.previousVersionRef,
-          currentVersionRef: result.currentVersionRef,
+          previousRevisionRef: result.previousRevisionRef,
+          currentRevisionRef: result.currentRevisionRef,
           changedCount: result.changedBlocks.length
         },
         draftDocId: applied.nextDocId,
@@ -728,7 +728,11 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
       })
       if ('failure' in sessionResult) return sessionResult.failure
 
-      const resolved = runtime.resolveRollbackTarget(sessionResult.sourcePath, args.versionRef, undefined)
+      const resolved = runtime.resolveRevisionRollbackTarget(
+        sessionResult.sourcePath,
+        args.revisionRef,
+        undefined
+      )
       if (!resolved.ok) {
         return finalizeDocxToolFailure({
           runtime,
@@ -740,7 +744,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
             resourceContext: runtime.buildResourceContext({
               sourcePath: sessionResult.sourcePath,
               effectKind: 'rolled_back',
-              currentVersionRef: sessionResult.currentVersionRef
+              currentRevisionRef: sessionResult.currentRevisionRef
             })
           }),
           activity: {
@@ -749,23 +753,23 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         })
       }
 
-      const versionState = runtime.activateVersion({
+      const revisionState = runtime.activateRevision({
         sourcePath: sessionResult.sourcePath,
         targetDocId: resolved.targetDocId,
-        targetVersionRef: resolved.targetVersionRef
+        targetRevisionRef: resolved.targetRevisionRef
       })
       const result = {
         ok: true,
         code: 'ok' as const,
-        summary: `已切回版本 ${resolved.targetVersionRef}`,
+        summary: `已切回修订 ${resolved.targetRevisionRef}`,
         sourcePath: sessionResult.sourcePath,
-        previousVersionRef: versionState.previousVersionRef,
-        currentVersionRef: versionState.currentVersionRef,
+        previousRevisionRef: revisionState.previousRevisionRef,
+        currentRevisionRef: revisionState.currentRevisionRef,
         resourceContext: runtime.buildResourceContext({
           sourcePath: sessionResult.sourcePath,
           effectKind: 'rolled_back',
-          previousVersionRef: versionState.previousVersionRef,
-          currentVersionRef: versionState.currentVersionRef
+          previousRevisionRef: revisionState.previousRevisionRef,
+          currentRevisionRef: revisionState.currentRevisionRef
         })
       }
       return finalizeDocxToolSuccess({
@@ -777,7 +781,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         draftDocId: resolved.targetDocId,
         activity: {
           actionType: DOCX_ROLLBACK_TOOL_SPEC.activityActionType!,
-          startedSummary: `准备回退到 ${args.versionRef}`,
+          startedSummary: `准备回退到 ${args.revisionRef}`,
           buildCompletedSummary: (output) => output.summary
         }
       })

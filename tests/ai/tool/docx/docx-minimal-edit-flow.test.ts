@@ -61,15 +61,15 @@ describe('ai tool docx backend', () => {
         runtime.assertThat(
           result.searchBefore.matches.length === 1 &&
             result.readBefore.blocks.length === 1 &&
-            result.applied.currentVersionRef !== result.readBefore.currentVersionRef &&
+            result.applied.currentRevisionRef !== result.readBefore.currentRevisionRef &&
             result.applied.changedBlocks.length === 1 &&
             result.applied.changedBlocks[0]?.action === 'replace_text',
           {
             name: 'minimal-edit-flow-produces-single-targeted-change',
-            message: '最小编辑流程应生成新的版本，且只命中目标段落对应的 changedBlocks。',
+            message: '最小编辑流程应生成新的修订，且只命中目标段落对应的 changedBlocks。',
             data: {
-              originalVersionRef: result.readBefore.currentVersionRef,
-              currentVersionRef: result.applied.currentVersionRef,
+              originalVersionRef: result.readBefore.currentRevisionRef,
+              currentRevisionRef: result.applied.currentRevisionRef,
               changedBlocks: result.applied.changedBlocks
             }
           }

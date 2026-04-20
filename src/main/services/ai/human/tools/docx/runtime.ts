@@ -5,8 +5,9 @@ import type {
   DocxCapabilityToolsRuntimeState,
   DocxDocumentSession,
   DocxOp,
+  DocxReplaySession,
+  DocxRevision,
   DocxToolResultCode,
-  DocxVersionEntry,
   SemanticDocIndex
 } from './types'
 import { getDocxWorkerClient } from './worker/docxWorkerClient'
@@ -21,13 +22,13 @@ type FailedWorkerResponse = Extract<DocxWorkerResponse, { ok: false }>
 export type DocxToolResourceContext = {
   family: 'docx'
   sourcePath: string
-  currentVersionRef?: string
-  previousVersionRef?: string
+  currentRevisionRef?: string
+  previousRevisionRef?: string
   effectKind?: 'opened' | 'read' | 'searched' | 'mutated' | 'rolled_back' | 'history'
 }
 
 type RequireDocSessionResult =
-  | { sourcePath: string; session: DocxDocumentSession; docId: string; currentVersionRef: string }
+  | { sourcePath: string; session: DocxDocumentSession; docId: string; currentRevisionRef: string }
   | { failure: DocxToolFailure }
 
 const isToolResultRecord = (value: AiToolCallResult['data']): value is JsonObject =>
@@ -86,6 +87,7 @@ export type DocxToolRuntime = {
   callWorker: (request: Omit<DocxWorkerRequest, 'requestId' | 'runId'>) => Promise<DocxWorkerResponse>
   resolveDocxPath: (input: { cwd: string; rawPath: string }) => string | null
   getDocumentSession: (sourcePath: string) => DocxDocumentSession | undefined
+  getReplaySession: (sourcePath: string) => DocxReplaySession | undefined
   ensureDocumentSession: (input: {
     toolName: string
     toolCallId: string
@@ -103,55 +105,59 @@ export type DocxToolRuntime = {
     stats?: DocxDocumentSession['stats']
   ) => {
     session: DocxDocumentSession
-    currentVersionRef: string
+    currentRevisionRef: string
   }
-  registerDerivedVersion: (input: {
+  registerRevision: (input: {
     sourcePath: string
     previousDocId: string
     nextDocId: string
-    changedBlocks?: DocxVersionEntry['changedBlocks']
+    changedBlocks?: DocxRevision['changedBlocks']
     summary?: string
-  }) => { currentVersionRef: string; previousVersionRef: string }
-  buildVersionHistory: (
+  }) => { currentRevisionRef: string; previousRevisionRef: string }
+  buildRevisionHistory: (
     sourcePath: string,
     maxDepth: number
-  ) => Array<DocxVersionEntry & { isCurrent: boolean }>
-  resolveRollbackTarget: (
+  ) => Array<DocxRevision & { isCurrent: boolean }>
+  resolveRevisionRollbackTarget: (
     sourcePath: string,
-    targetVersionRef?: string,
+    targetRevisionRef?: string,
     steps?: number
   ) =>
     | {
         ok: true
         targetDocId: string
-        targetVersionRef: string
-        previousVersionRef: string
+        targetRevisionRef: string
+        previousRevisionRef: string
         stepsApplied: number
       }
     | { ok: false; error: string }
-  activateVersion: (input: {
+  activateRevision: (input: {
     sourcePath: string
     targetDocId: string
-    targetVersionRef: string
-  }) => { previousVersionRef: string; currentVersionRef: string }
+    targetRevisionRef: string
+  }) => { previousRevisionRef: string; currentRevisionRef: string }
   expandOpsForReview: (docId: string, ops: DocxOp[]) => Promise<DocxOp[]>
   buildSemanticDocIndex: (docId: string) => Promise<SemanticDocIndex>
-  getVersionRefByDocId: (docId: string) => string | undefined
+  getRevisionRefByDocId: (docId: string) => string | undefined
   buildResourceContext: (input: {
     sourcePath: string
     effectKind: DocxToolResourceContext['effectKind']
-    currentVersionRef?: string
-    previousVersionRef?: string
+    currentRevisionRef?: string
+    previousRevisionRef?: string
   }) => DocxToolResourceContext
 }
 
 export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxToolRuntime => {
+  const revisionEntryByDocId = new Map<string, DocxRevision>()
+  const replaySessionBySourcePath = new Map<string, DocxReplaySession>()
+  const documentSessionBySourcePath = new Map<string, DocxDocumentSession>()
   const state: DocxCapabilityToolsRuntimeState = {
     sourcePathByDocId: new Map(),
     semanticIndexByDocId: new Map(),
     snapshotEntryByDocId: new Map(),
-    versionEntryByDocId: new Map(),
-    documentSessionBySourcePath: new Map()
+    revisionEntryByDocId,
+    replaySessionBySourcePath,
+    documentSessionBySourcePath
   }
   const workspaceRootPath = path.resolve(input.workspaceRootPath)
   const toolEvents = createToolEventEmitter({
@@ -255,8 +261,11 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
   const getDocumentSession = (sourcePath: string): DocxDocumentSession | undefined =>
     state.documentSessionBySourcePath.get(path.resolve(sourcePath))
 
-  const getVersionRefByDocId = (docId: string): string | undefined =>
-    state.versionEntryByDocId.get(docId)?.versionRef
+  const getReplaySession = (sourcePath: string): DocxReplaySession | undefined =>
+    state.replaySessionBySourcePath.get(path.resolve(sourcePath))
+
+  const getRevisionRefByDocId = (docId: string): string | undefined =>
+    state.revisionEntryByDocId.get(docId)?.revisionRef
 
   const buildSessionResult = (
     sourcePath: string,
@@ -265,7 +274,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     sourcePath,
     session,
     docId: session.activeDocId,
-    currentVersionRef: session.activeVersionRef
+    currentRevisionRef: session.activeRevisionRef
   })
 
   const requireDocumentSession = (params: {
@@ -358,7 +367,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       sourcePath: registered.session.sourcePath,
       session: registered.session,
       docId: registered.session.activeDocId,
-      currentVersionRef: registered.currentVersionRef
+      currentRevisionRef: registered.currentRevisionRef
     }
   }
 
@@ -381,23 +390,26 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     if (existing) {
       return {
         session: existing,
-        currentVersionRef: existing.activeVersionRef
+        currentRevisionRef: existing.activeRevisionRef
       }
     }
 
     registerSnapshot(docId)
     state.sourcePathByDocId.set(docId, normalizedSourcePath)
-    const versionEntry: DocxVersionEntry = {
-      versionRef: 'v1',
+    const revisionEntry: DocxRevision = {
+      revisionRef: 'v1',
       docId,
       createdAt: Date.now()
     }
-    state.versionEntryByDocId.set(docId, versionEntry)
+    state.revisionEntryByDocId.set(docId, revisionEntry)
+    const docIdByRef = new Map([['v1', docId]])
+    const refByDocId = new Map([[docId, 'v1']])
     const session: DocxDocumentSession = {
       sourcePath: normalizedSourcePath,
+      sourceDocId: docId,
       activeDocId: docId,
-      activeVersionRef: 'v1',
-      nextVersionNumber: 2,
+      activeRevisionRef: 'v1',
+      nextRevisionNumber: 2,
       meta: meta || {
         title: '',
         creator: '',
@@ -412,94 +424,98 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
         imageCount: 0,
         charCount: 0
       },
-      docIdByVersionRef: new Map([['v1', docId]]),
-      versionRefByDocId: new Map([[docId, 'v1']])
+      docIdByRevisionRef: docIdByRef,
+      revisionRefByDocId: refByDocId,
+      revisionByDocId: state.revisionEntryByDocId,
+      viewArtifacts: {}
     }
+    state.replaySessionBySourcePath.set(normalizedSourcePath, session)
     state.documentSessionBySourcePath.set(normalizedSourcePath, session)
     return {
       session,
-      currentVersionRef: 'v1'
+      currentRevisionRef: 'v1'
     }
   }
 
-  const registerDerivedVersion = (params: {
+  const registerRevision = (params: {
     sourcePath: string
     previousDocId: string
     nextDocId: string
-    changedBlocks?: DocxVersionEntry['changedBlocks']
+    changedBlocks?: DocxRevision['changedBlocks']
     summary?: string
   }) => {
     const sourcePath = path.resolve(params.sourcePath)
-    const session = state.documentSessionBySourcePath.get(sourcePath)
+    const session = state.replaySessionBySourcePath.get(sourcePath)
     if (!session) {
       throw new Error(`docx session not found for sourcePath: ${sourcePath}`)
     }
-    const previousVersionRef = session.versionRefByDocId.get(params.previousDocId)
-    if (!previousVersionRef) {
+    const previousRevisionRef = session.revisionRefByDocId.get(params.previousDocId)
+    if (!previousRevisionRef) {
       throw new Error(`previous docId is not tracked in docx session: ${params.previousDocId}`)
     }
-    const currentVersionRef = `v${String(session.nextVersionNumber)}`
-    session.nextVersionNumber += 1
+    const currentRevisionRef = `v${String(session.nextRevisionNumber)}`
+    session.nextRevisionNumber += 1
     session.activeDocId = params.nextDocId
-    session.activeVersionRef = currentVersionRef
-    session.docIdByVersionRef.set(currentVersionRef, params.nextDocId)
-    session.versionRefByDocId.set(params.nextDocId, currentVersionRef)
+    session.activeRevisionRef = currentRevisionRef
+    session.docIdByRevisionRef.set(currentRevisionRef, params.nextDocId)
+    session.revisionRefByDocId.set(params.nextDocId, currentRevisionRef)
     state.sourcePathByDocId.set(params.nextDocId, sourcePath)
     registerSnapshot(params.nextDocId, params.previousDocId)
-    state.versionEntryByDocId.set(params.nextDocId, {
-      versionRef: currentVersionRef,
+    const revisionEntry: DocxRevision = {
+      revisionRef: currentRevisionRef,
       docId: params.nextDocId,
-      parentVersionRef: previousVersionRef,
+      parentRevisionRef: previousRevisionRef,
       createdAt: Date.now(),
       changedBlocks: params.changedBlocks,
       summary: params.summary
-    })
+    }
+    state.revisionEntryByDocId.set(params.nextDocId, revisionEntry)
     return {
-      currentVersionRef,
-      previousVersionRef
+      currentRevisionRef,
+      previousRevisionRef
     }
   }
 
-  const buildVersionHistory = (
+  const buildRevisionHistory = (
     sourcePath: string,
     maxDepth: number
-  ): Array<DocxVersionEntry & { isCurrent: boolean }> => {
-    const session = state.documentSessionBySourcePath.get(path.resolve(sourcePath))
+  ): Array<DocxRevision & { isCurrent: boolean }> => {
+    const session = state.replaySessionBySourcePath.get(path.resolve(sourcePath))
     if (!session) return []
-    const entries: Array<DocxVersionEntry & { isCurrent: boolean }> = []
-    let currentVersionRef = session.activeVersionRef
+    const entries: Array<DocxRevision & { isCurrent: boolean }> = []
+    let currentRevisionRef = session.activeRevisionRef
     let traversed = 0
 
-    while (currentVersionRef && traversed < maxDepth) {
-      const docId = session.docIdByVersionRef.get(currentVersionRef)
+    while (currentRevisionRef && traversed < maxDepth) {
+      const docId = session.docIdByRevisionRef.get(currentRevisionRef)
       if (!docId) break
-      const entry = state.versionEntryByDocId.get(docId)
+      const entry = state.revisionEntryByDocId.get(docId)
       if (!entry) break
       entries.push({
         ...entry,
-        isCurrent: currentVersionRef === session.activeVersionRef
+        isCurrent: currentRevisionRef === session.activeRevisionRef
       })
-      currentVersionRef = entry.parentVersionRef || ''
+      currentRevisionRef = entry.parentRevisionRef || ''
       traversed += 1
     }
 
     return entries
   }
 
-  const resolveRollbackTarget = (
+  const resolveRevisionRollbackTarget = (
     sourcePath: string,
-    targetVersionRef?: string,
+    targetRevisionRef?: string,
     steps?: number
   ):
     | {
         ok: true
         targetDocId: string
-        targetVersionRef: string
-        previousVersionRef: string
+        targetRevisionRef: string
+        previousRevisionRef: string
         stepsApplied: number
       }
     | { ok: false; error: string } => {
-    const session = state.documentSessionBySourcePath.get(path.resolve(sourcePath))
+    const session = state.replaySessionBySourcePath.get(path.resolve(sourcePath))
     if (!session) {
       return {
         ok: false,
@@ -507,78 +523,78 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       }
     }
 
-    if (targetVersionRef) {
-      let cursor = session.activeVersionRef
+    if (targetRevisionRef) {
+      let cursor = session.activeRevisionRef
       let stepsApplied = 0
       while (cursor) {
-        if (cursor === targetVersionRef) {
-          const targetDocId = session.docIdByVersionRef.get(targetVersionRef)
+        if (cursor === targetRevisionRef) {
+          const targetDocId = session.docIdByRevisionRef.get(targetRevisionRef)
           if (!targetDocId) {
-            return { ok: false, error: 'targetVersionRef is not tracked in current docx session' }
+            return { ok: false, error: 'targetRevisionRef is not tracked in current docx session' }
           }
           return {
             ok: true,
             targetDocId,
-            targetVersionRef,
-            previousVersionRef: session.activeVersionRef,
+            targetRevisionRef,
+            previousRevisionRef: session.activeRevisionRef,
             stepsApplied
           }
         }
-        const docId = session.docIdByVersionRef.get(cursor)
-        const entry = docId ? state.versionEntryByDocId.get(docId) : undefined
-        if (!entry?.parentVersionRef) break
-        cursor = entry.parentVersionRef
+        const docId = session.docIdByRevisionRef.get(cursor)
+        const entry = docId ? state.revisionEntryByDocId.get(docId) : undefined
+        if (!entry?.parentRevisionRef) break
+        cursor = entry.parentRevisionRef
         stepsApplied += 1
       }
       return {
         ok: false,
-        error: 'targetVersionRef must be the current version or one of its ancestors'
+        error: 'targetRevisionRef must be the current revision or one of its ancestors'
       }
     }
 
-    let cursor = session.activeVersionRef
+    let cursor = session.activeRevisionRef
     const targetSteps = Math.max(1, Number(steps || 1))
     let stepsApplied = 0
     while (stepsApplied < targetSteps) {
-      const docId = session.docIdByVersionRef.get(cursor)
-      const entry = docId ? state.versionEntryByDocId.get(docId) : undefined
-      if (!entry?.parentVersionRef) {
+      const docId = session.docIdByRevisionRef.get(cursor)
+      const entry = docId ? state.revisionEntryByDocId.get(docId) : undefined
+      if (!entry?.parentRevisionRef) {
         return {
           ok: false,
-          error: 'rollback target exceeds available parent versions'
+          error: 'rollback target exceeds available parent revisions'
         }
       }
-      cursor = entry.parentVersionRef
+      cursor = entry.parentRevisionRef
       stepsApplied += 1
     }
-    const targetDocId = session.docIdByVersionRef.get(cursor)
+    const targetDocId = session.docIdByRevisionRef.get(cursor)
     if (!targetDocId) {
       return { ok: false, error: 'rollback target is not tracked in current docx session' }
     }
     return {
       ok: true,
       targetDocId,
-      targetVersionRef: cursor,
-      previousVersionRef: session.activeVersionRef,
+      targetRevisionRef: cursor,
+      previousRevisionRef: session.activeRevisionRef,
       stepsApplied
     }
   }
 
-  const activateVersion = (params: {
+  const activateRevision = (params: {
     sourcePath: string
     targetDocId: string
-    targetVersionRef: string
+    targetRevisionRef: string
   }) => {
-    const session = state.documentSessionBySourcePath.get(path.resolve(params.sourcePath))
+    const session = state.replaySessionBySourcePath.get(path.resolve(params.sourcePath))
     if (!session) {
       throw new Error(`docx session not found for sourcePath: ${params.sourcePath}`)
     }
-    const previousVersionRef = session.activeVersionRef
+    const previousRevisionRef = session.activeRevisionRef
     session.activeDocId = params.targetDocId
-    session.activeVersionRef = params.targetVersionRef
+    session.activeRevisionRef = params.targetRevisionRef
     return {
-      previousVersionRef,
-      currentVersionRef: params.targetVersionRef
+      previousRevisionRef,
+      currentRevisionRef: params.targetRevisionRef
     }
   }
 
@@ -685,13 +701,13 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
   const buildResourceContext = (params: {
     sourcePath: string
     effectKind: DocxToolResourceContext['effectKind']
-    currentVersionRef?: string
-    previousVersionRef?: string
+    currentRevisionRef?: string
+    previousRevisionRef?: string
   }): DocxToolResourceContext => ({
     family: 'docx',
     sourcePath: path.resolve(params.sourcePath),
-    currentVersionRef: params.currentVersionRef,
-    previousVersionRef: params.previousVersionRef,
+    currentRevisionRef: params.currentRevisionRef,
+    previousRevisionRef: params.previousRevisionRef,
     effectKind: params.effectKind
   })
 
@@ -705,16 +721,17 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     callWorker,
     resolveDocxPath,
     getDocumentSession,
+    getReplaySession,
     ensureDocumentSession,
     requireDocumentSession,
     registerOpenedDocument,
-    registerDerivedVersion,
-    buildVersionHistory,
-    resolveRollbackTarget,
-    activateVersion,
+    registerRevision,
+    buildRevisionHistory,
+    resolveRevisionRollbackTarget,
+    activateRevision,
     expandOpsForReview,
     buildSemanticDocIndex,
-    getVersionRefByDocId,
+    getRevisionRefByDocId,
     buildResourceContext
   }
 }

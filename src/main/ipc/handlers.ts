@@ -11,6 +11,10 @@ import { AiRunService } from '../services/ai/AiRunService'
 import { updateSessionMemoryAfterRun } from '../services/ai/memory'
 import { DraftReviewService } from '../services/ai/human/tools/docx/review/DraftReviewService'
 import {
+  getReviewArtifactPath,
+  getWorkingArtifactPath
+} from '../services/ai/human/tools/docx/review/viewProjection'
+import {
   getDocxWorkerClient,
   releaseDocxRunSession
 } from '../services/ai/human/tools/docx/worker/docxWorkerClient'
@@ -581,21 +585,22 @@ export function registerHandlers(services: {
 
     details.forEach((detail) => {
       detail.documents.forEach((document) => {
-        if (!document.confirm_artifact_path) return
+        const reviewArtifactPath = getReviewArtifactPath(document)
+        if (!reviewArtifactPath) return
         input.sendEvent({
           type: 'file_artifact',
           runId: input.runId,
           taskId: input.runId,
           artifactId: uuidv4(),
           capability: 'docx',
-          path: document.confirm_artifact_path,
-          fileName: path.basename(document.confirm_artifact_path),
+          path: reviewArtifactPath,
+          fileName: path.basename(reviewArtifactPath),
           operation: 'created',
           artifactRole: 'draft',
           reviewId: detail.review.id,
           draftDocumentId: document.id,
           draftSnapshotId: document.latest_draft_snapshot_id,
-          summary: `confirm doc ready: ${document.source_name}`,
+          summary: `review doc ready: ${document.source_name}`,
           createdAt: Date.now()
         })
       })
@@ -634,15 +639,16 @@ export function registerHandlers(services: {
 
     details.forEach((detail) => {
       detail.documents.forEach((document) => {
-        if (!document.effective_draft_artifact_path) return
+        const workingArtifactPath = getWorkingArtifactPath(document)
+        if (!workingArtifactPath) return
         input.sendEvent({
           type: 'file_artifact',
           runId: input.runId,
           taskId: input.runId,
           artifactId: uuidv4(),
           capability: 'docx',
-          path: document.effective_draft_artifact_path,
-          fileName: path.basename(document.effective_draft_artifact_path),
+          path: workingArtifactPath,
+          fileName: path.basename(workingArtifactPath),
           operation: 'created',
           artifactRole: 'draft',
           reviewId: detail.review.id,

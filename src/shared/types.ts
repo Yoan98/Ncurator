@@ -435,9 +435,8 @@ export interface DraftReviewDocument {
   format: DraftDocumentFormat
   review_render_kind?: DraftReviewRenderKind
   latest_draft_snapshot_id: string
-  confirm_artifact_path?: string
-  manifest_artifact_path?: string
-  effective_draft_artifact_path?: string
+  review_artifact_path?: string
+  working_artifact_path?: string
   source_version: DraftSourceVersion
   total_change_count: number
   pending_change_count: number
@@ -608,8 +607,8 @@ export type AiToolCallDiagnostic = {
 export type AiToolResourceContext = {
   family: string
   sourcePath?: string
-  currentVersionRef?: string
-  previousVersionRef?: string
+  currentRevisionRef?: string
+  previousRevisionRef?: string
   effectKind?: string
 }
 export type AiToolCallResult = {

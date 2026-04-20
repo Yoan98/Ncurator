@@ -295,5 +295,5 @@ export const docxHistoryRequestSchema = z.object({
 
 export const docxRollbackRequestSchema = z.object({
   sourcePath: z.string().min(1),
-  versionRef: z.string().min(1)
+  revisionRef: z.string().min(1)
 })

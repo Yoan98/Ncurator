@@ -67,17 +67,17 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
   const reviewStatusMeta = review ? REVIEW_STATUS_META[review.review.status] : null
   const isActiveConfirmSession = Boolean(
     review &&
-      selectedDocument?.confirm_artifact_path &&
+      selectedDocument?.review_artifact_path &&
       ACTIVE_CONFIRM_STATUSES.has(review.review.status)
   )
-  const confirmArtifactPath = selectedDocument?.confirm_artifact_path
-  const confirmFileName = selectedDocument
-    ? `${selectedDocument.source_name.replace(/\.docx$/i, '')}-确认文档.docx`
+  const reviewArtifactPath = selectedDocument?.review_artifact_path
+  const reviewFileName = selectedDocument
+    ? `${selectedDocument.source_name.replace(/\.docx$/i, '')}-审阅稿.docx`
     : undefined
   const viewerPath =
-    isActiveConfirmSession && confirmArtifactPath ? confirmArtifactPath : selectedDocument?.source_path
+    isActiveConfirmSession && reviewArtifactPath ? reviewArtifactPath : selectedDocument?.source_path
   const viewerName =
-    isActiveConfirmSession && confirmFileName ? confirmFileName : selectedDocument?.source_name
+    isActiveConfirmSession && reviewFileName ? reviewFileName : selectedDocument?.source_name
   const endedStateMessage = review ? getEndedStateMessage(review.review.status) : ''
   const commitDisabled =
     !review ||

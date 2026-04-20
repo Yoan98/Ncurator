@@ -204,7 +204,7 @@ describe('ai unit brain prompt history blocks', () => {
     expect(prompt.system).not.toContain('<autonomy_principles>')
     expect(prompt.system).not.toContain('<output_rules>')
     expect(prompt.system).not.toContain('<stable_memory_guidance>')
-    expect(prompt.system).toContain('如果结果仍依赖未来的工具动作才能完成，readyToDeliver 必须为 false')
+    expect(prompt.system).toContain('readyToDeliver=true 只表示当前已经具备最终交付所需的信息、证据和产物')
     expect(prompt.system).toContain('updatedStableMemory?')
     expect(prompt.system).toContain('toolUsePlan')
     expect(prompt.system).toContain('currentUnderstanding')
@@ -421,7 +421,7 @@ describe('ai unit brain prompt history blocks', () => {
                   ok: true,
                   code: 'ok',
                   sourcePath: 'graphics.docx',
-                  currentVersionRef: 'v3',
+                  currentRevisionRef: 'v3',
                   fromBlockId: 'b:19',
                   toBlockId: 'b:26',
                   returnedBlockCount: 4,

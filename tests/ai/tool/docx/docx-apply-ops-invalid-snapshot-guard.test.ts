@@ -86,8 +86,8 @@ describe('ai tool docx backend', () => {
             failedEdit,
             readOriginalSearch,
             readOriginal,
-            activeVersionRef:
-              harness.state.documentSessionBySourcePath.get(initialRead.sourcePath)?.activeVersionRef || '',
+            activeRevisionRef:
+              harness.state.documentSessionBySourcePath.get(initialRead.sourcePath)?.activeRevisionRef || '',
             trackedSourcePaths: [...harness.state.documentSessionBySourcePath.keys()]
           }
         } finally {
@@ -113,15 +113,15 @@ describe('ai tool docx backend', () => {
         )
 
         runtime.assertThat(
-          result.activeVersionRef === result.initialRead.currentVersionRef &&
+          result.activeRevisionRef === result.initialRead.currentRevisionRef &&
             result.trackedSourcePaths.length === 1 &&
             result.trackedSourcePaths[0] === result.initialRead.sourcePath,
           {
             name: 'invalid-edit-does-not-advance-current-draft',
-            message: '无效版本不能成为当前草稿，也不能污染 run 内文档会话跟踪。',
+            message: '无效修订不能成为当前草稿，也不能污染 run 内文档会话跟踪。',
             data: {
               initialRead: result.initialRead,
-              activeVersionRef: result.activeVersionRef,
+              activeRevisionRef: result.activeRevisionRef,
               trackedSourcePaths: result.trackedSourcePaths
             }
           }

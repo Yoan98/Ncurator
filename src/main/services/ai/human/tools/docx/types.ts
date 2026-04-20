@@ -214,30 +214,61 @@ export type DocxSnapshotLineageEntry = {
   createdAt: number
 }
 
-export type DocxVersionEntry = {
-  versionRef: string
+export type DocxRevision = {
+  revisionRef: string
   docId: string
-  parentVersionRef?: string
+  parentRevisionRef?: string
   createdAt: number
   summary?: string
   changedBlocks?: DocxChangedBlock[]
 }
 
-export type DocxDocumentSession = {
+export type DocxReplaySession = {
   sourcePath: string
+  sourceDocId: string
   activeDocId: string
-  activeVersionRef: string
-  nextVersionNumber: number
+  activeRevisionRef: string
+  nextRevisionNumber: number
   meta: DocxOpenMeta
   stats: DocxOpenStats
-  docIdByVersionRef: Map<string, string>
-  versionRefByDocId: Map<string, string>
+  docIdByRevisionRef: Map<string, string>
+  revisionRefByDocId: Map<string, string>
+  revisionByDocId: Map<string, DocxRevision>
+  viewArtifacts: Partial<Record<DocxViewArtifact['kind'], DocxViewArtifact>>
+}
+
+export type DocxDocumentSession = DocxReplaySession
+
+export type DocxReviewState =
+  | 'normal'
+  | 'inserted'
+  | 'deleted'
+  | 'replaced-old'
+  | 'replaced-new'
+
+export type DocxReplayNode = {
+  nodeId: string
+  blockId: string
+  bodyIndex: number
+  kind: 'paragraph' | 'table' | 'table_cell'
+  sourceOrigin: 'source' | 'generated'
+  reviewState: DocxReviewState
+  parentNodeId?: string
+}
+
+export type DocxViewArtifact = {
+  kind: 'working' | 'review' | 'committed'
+  path: string
+  checksum?: string
+  byteSize?: number
+  createdAt: number
 }
 
 export type DocxCapabilityToolsRuntimeState = {
   sourcePathByDocId: Map<string, string>
   semanticIndexByDocId: Map<string, SemanticDocIndex>
   snapshotEntryByDocId: Map<string, DocxSnapshotLineageEntry>
-  versionEntryByDocId: Map<string, DocxVersionEntry>
+  revisionEntryByDocId: Map<string, DocxRevision>
+  replaySessionBySourcePath: Map<string, DocxReplaySession>
   documentSessionBySourcePath: Map<string, DocxDocumentSession>
 }

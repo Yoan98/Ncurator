@@ -63,8 +63,8 @@ export const toolCallDiagnosticSchema = z.object({
 export const toolResourceContextSchema = z.object({
   family: z.string().min(1),
   sourcePath: z.string().min(1).optional(),
-  currentVersionRef: z.string().min(1).optional(),
-  previousVersionRef: z.string().min(1).optional(),
+  currentRevisionRef: z.string().min(1).optional(),
+  previousRevisionRef: z.string().min(1).optional(),
   effectKind: z.string().min(1).optional()
 })
 

@@ -32,7 +32,7 @@ describe('ai tool docx backend', () => {
             }),
             rollbackInvalidPath: await harness.invoke<DocxFailureResult>('docx_rollback', {
               sourcePath: 'missing.docx',
-              versionRef: 'v1'
+              revisionRef: 'v1'
             }),
             trackedSourceCount: harness.state.documentSessionBySourcePath.size
           }
@@ -50,7 +50,7 @@ describe('ai tool docx backend', () => {
           ].every((item) => item.ok === false),
           {
             name: 'docx-tools-fail-fast-on-invalid-source-path',
-            message: '自动 open 模式下，docx 工具遇到无效 sourcePath 仍应明确失败，不生成新版本。',
+            message: '自动 open 模式下，docx 工具遇到无效 sourcePath 仍应明确失败，不生成新修订。',
             data: result
           }
         )
@@ -59,7 +59,7 @@ describe('ai tool docx backend', () => {
           result.trackedSourceCount === 0,
           {
             name: 'docx-precondition-failures-do-not-pollute-runtime-state',
-            message: '前置条件失败后，不应生成新版本，也不应污染当前 run 状态。',
+            message: '前置条件失败后，不应生成新修订，也不应污染当前 run 状态。',
             data: {
               trackedSourceCount: result.trackedSourceCount
             }

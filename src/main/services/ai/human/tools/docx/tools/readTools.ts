@@ -160,8 +160,16 @@ const executeWorkerSearch = async (input: {
   mode: 'literal' | 'regex'
   scopeBlockIds: string[]
   sourcePath: string
-  currentVersionRef: string
-}) => {
+  currentRevisionRef: string
+}): Promise<
+  | {
+      failure: ReturnType<DocxToolRuntime['emitFailure']>
+    }
+  | {
+      matches: DocxSearchMatch[]
+      warnings: string[]
+    }
+> => {
   const workerResponse = await input.runtime.callWorker({
     action: 'search',
     payload: {
@@ -181,7 +189,7 @@ const executeWorkerSearch = async (input: {
         resourceContext: input.runtime.buildResourceContext({
           sourcePath: input.sourcePath,
           effectKind: 'searched',
-          currentVersionRef: input.currentVersionRef
+          currentRevisionRef: input.currentRevisionRef
         })
       })
     }
@@ -197,7 +205,7 @@ const executeWorkerSearch = async (input: {
         resourceContext: input.runtime.buildResourceContext({
           sourcePath: input.sourcePath,
           effectKind: 'searched',
-          currentVersionRef: input.currentVersionRef
+          currentRevisionRef: input.currentRevisionRef
         })
       })
     }
@@ -242,7 +250,7 @@ const findOutlineBlockIndex = (outline: DocxOutlineBlock[], blockId: string): nu
 
 const buildSearchResult = (input: {
   sourcePath: string
-  currentVersionRef: string
+  currentRevisionRef: string
   mode: 'literal' | 'regex' | 'semantic'
   effectiveQuery: string
   appliedAliases: AppliedAlias[]
@@ -255,7 +263,7 @@ const buildSearchResult = (input: {
   code: 'ok' as const,
   summary: `返回 ${String(input.matches.length)} 个搜索命中`,
   sourcePath: input.sourcePath,
-  currentVersionRef: input.currentVersionRef,
+  currentRevisionRef: input.currentRevisionRef,
   mode: input.mode,
   effectiveQuery: input.effectiveQuery,
   appliedAliases: input.appliedAliases,
@@ -267,7 +275,7 @@ const buildSearchResult = (input: {
   resourceContext: input.runtime.buildResourceContext({
     sourcePath: input.sourcePath,
     effectKind: 'searched',
-    currentVersionRef: input.currentVersionRef
+    currentRevisionRef: input.currentRevisionRef
   })
 })
 
@@ -308,7 +316,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
             resourceContext: runtime.buildResourceContext({
               sourcePath: sessionResult.sourcePath,
               effectKind: 'read',
-              currentVersionRef: sessionResult.currentVersionRef
+              currentRevisionRef: sessionResult.currentRevisionRef
             })
           }),
           activity: {
@@ -327,7 +335,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
         code: 'ok' as const,
         summary: `返回 ${String(sliced.blocks.length)} 个结构块`,
         sourcePath: sessionResult.sourcePath,
-        currentVersionRef: sessionResult.currentVersionRef,
+        currentRevisionRef: sessionResult.currentRevisionRef,
         fromBodyIndex: Number(args.fromBodyIndex || 0),
         returnedBlockCount: sliced.blocks.length,
         totalBlockCount: allBlocks.length,
@@ -336,7 +344,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
         resourceContext: runtime.buildResourceContext({
           sourcePath: sessionResult.sourcePath,
           effectKind: 'read',
-          currentVersionRef: sessionResult.currentVersionRef
+          currentRevisionRef: sessionResult.currentRevisionRef
         })
       }
       return finalizeDocxToolSuccess({
@@ -348,7 +356,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           ok: true,
           code: 'ok',
           sourcePath: result.sourcePath,
-          currentVersionRef: result.currentVersionRef,
+          currentRevisionRef: result.currentRevisionRef,
           fromBodyIndex: result.fromBodyIndex,
           returnedBlockCount: result.returnedBlockCount,
           totalBlockCount: result.totalBlockCount,
@@ -401,7 +409,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
               resourceContext: runtime.buildResourceContext({
                 sourcePath: sessionResult.sourcePath,
                 effectKind: 'searched',
-                currentVersionRef: sessionResult.currentVersionRef
+                currentRevisionRef: sessionResult.currentRevisionRef
               })
             }),
             activity: {
@@ -429,7 +437,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
               resourceContext: runtime.buildResourceContext({
                 sourcePath: sessionResult.sourcePath,
                 effectKind: 'searched',
-                currentVersionRef: sessionResult.currentVersionRef
+                currentRevisionRef: sessionResult.currentRevisionRef
               })
             }),
             activity: {
@@ -453,7 +461,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
             : []
         const result = buildSearchResult({
           sourcePath: sessionResult.sourcePath,
-          currentVersionRef: sessionResult.currentVersionRef,
+          currentRevisionRef: sessionResult.currentRevisionRef,
           mode,
           effectiveQuery: args.query,
           appliedAliases: [],
@@ -471,7 +479,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
             ok: true,
             code: 'ok',
             sourcePath: result.sourcePath,
-            currentVersionRef: result.currentVersionRef,
+            currentRevisionRef: result.currentRevisionRef,
             mode: result.mode,
             effectiveQuery: result.effectiveQuery,
             returnedMatchCount: result.returnedMatchCount,
@@ -506,7 +514,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           mode,
           scopeBlockIds,
           sourcePath: sessionResult.sourcePath,
-          currentVersionRef: sessionResult.currentVersionRef
+          currentRevisionRef: sessionResult.currentRevisionRef
         })
         if ('failure' in searchResult) {
           return finalizeDocxToolFailure({
@@ -529,7 +537,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
       const matches = allMatches.slice(0, MAX_SEARCH_MATCHES)
       const result = buildSearchResult({
         sourcePath: sessionResult.sourcePath,
-        currentVersionRef: sessionResult.currentVersionRef,
+        currentRevisionRef: sessionResult.currentRevisionRef,
         mode,
         effectiveQuery,
         appliedAliases,
@@ -547,7 +555,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           ok: true,
           code: 'ok',
           sourcePath: result.sourcePath,
-          currentVersionRef: result.currentVersionRef,
+          currentRevisionRef: result.currentRevisionRef,
           mode: result.mode,
           effectiveQuery: result.effectiveQuery,
           returnedMatchCount: result.returnedMatchCount,
@@ -600,7 +608,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
             resourceContext: runtime.buildResourceContext({
               sourcePath: sessionResult.sourcePath,
               effectKind: 'read',
-              currentVersionRef: sessionResult.currentVersionRef
+              currentRevisionRef: sessionResult.currentRevisionRef
             })
           }),
           activity: {
@@ -626,7 +634,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
             resourceContext: runtime.buildResourceContext({
               sourcePath: sessionResult.sourcePath,
               effectKind: 'read',
-              currentVersionRef: sessionResult.currentVersionRef
+              currentRevisionRef: sessionResult.currentRevisionRef
             })
           }),
           activity: {
@@ -646,7 +654,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
             resourceContext: runtime.buildResourceContext({
               sourcePath: sessionResult.sourcePath,
               effectKind: 'read',
-              currentVersionRef: sessionResult.currentVersionRef
+              currentRevisionRef: sessionResult.currentRevisionRef
             })
           }),
           activity: {
@@ -666,7 +674,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
             resourceContext: runtime.buildResourceContext({
               sourcePath: sessionResult.sourcePath,
               effectKind: 'read',
-              currentVersionRef: sessionResult.currentVersionRef
+              currentRevisionRef: sessionResult.currentRevisionRef
             })
           }),
           activity: {
@@ -684,7 +692,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
         code: 'ok' as const,
         summary: `返回 ${String(blocks.length)} 个连续块`,
         sourcePath: sessionResult.sourcePath,
-        currentVersionRef: sessionResult.currentVersionRef,
+        currentRevisionRef: sessionResult.currentRevisionRef,
         fromBlockId,
         toBlockId,
         returnedBlockCount: blocks.length,
@@ -692,7 +700,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
         resourceContext: runtime.buildResourceContext({
           sourcePath: sessionResult.sourcePath,
           effectKind: 'read',
-          currentVersionRef: sessionResult.currentVersionRef
+          currentRevisionRef: sessionResult.currentRevisionRef
         })
       }
       return finalizeDocxToolSuccess({
@@ -704,7 +712,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           ok: true,
           code: 'ok',
           sourcePath: result.sourcePath,
-          currentVersionRef: result.currentVersionRef,
+          currentRevisionRef: result.currentRevisionRef,
           fromBlockId: result.fromBlockId,
           toBlockId: result.toBlockId,
           returnedBlockCount: result.returnedBlockCount
@@ -740,28 +748,28 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
       })
       if ('failure' in sessionResult) return sessionResult.failure
 
-      const versions = runtime.buildVersionHistory(
+      const revisions = runtime.buildRevisionHistory(
         sessionResult.sourcePath,
         Math.max(1, Number(args.limit || 10))
       )
       const result = {
         ok: true,
         code: 'ok' as const,
-        summary: `返回 ${String(versions.length)} 个版本`,
+        summary: `返回 ${String(revisions.length)} 个修订`,
         sourcePath: sessionResult.sourcePath,
-        currentVersionRef: sessionResult.currentVersionRef,
-        versions: versions.map((version) => ({
-          versionRef: version.versionRef,
-          parentVersionRef: version.parentVersionRef,
-          createdAt: version.createdAt,
-          isCurrent: version.isCurrent,
-          summary: version.summary || '',
-          changedBlocks: version.changedBlocks || []
+        currentRevisionRef: sessionResult.currentRevisionRef,
+        revisions: revisions.map((revision) => ({
+          revisionRef: revision.revisionRef,
+          parentRevisionRef: revision.parentRevisionRef,
+          createdAt: revision.createdAt,
+          isCurrent: revision.isCurrent,
+          summary: revision.summary || '',
+          changedBlocks: revision.changedBlocks || []
         })),
         resourceContext: runtime.buildResourceContext({
           sourcePath: sessionResult.sourcePath,
           effectKind: 'history',
-          currentVersionRef: sessionResult.currentVersionRef
+          currentRevisionRef: sessionResult.currentRevisionRef
         })
       }
       return finalizeDocxToolSuccess({
@@ -773,14 +781,14 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           ok: true,
           code: 'ok',
           sourcePath: result.sourcePath,
-          currentVersionRef: result.currentVersionRef,
-          versionCount: result.versions.length
+          currentRevisionRef: result.currentRevisionRef,
+          revisionCount: result.revisions.length
         },
         draftDocId: sessionResult.docId,
         activity: {
           actionType: DOCX_HISTORY_TOOL_SPEC.activityActionType!,
-          startedSummary: `查看版本历史: ${sessionResult.sourcePath}`,
-          buildCompletedSummary: (output) => `版本历史返回 ${String(output.versions.length)} 项`
+          startedSummary: `查看修订历史: ${sessionResult.sourcePath}`,
+          buildCompletedSummary: (output) => `修订历史返回 ${String(output.revisions.length)} 项`
         }
       })
     }

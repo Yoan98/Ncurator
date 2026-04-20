@@ -148,13 +148,13 @@ const normalizeToolCallResult = (
             family: candidate.family,
             sourcePath:
               typeof candidate.sourcePath === 'string' ? candidate.sourcePath : undefined,
-            currentVersionRef:
-              typeof candidate.currentVersionRef === 'string'
-                ? candidate.currentVersionRef
+            currentRevisionRef:
+              typeof candidate.currentRevisionRef === 'string'
+                ? candidate.currentRevisionRef
                 : undefined,
-            previousVersionRef:
-              typeof candidate.previousVersionRef === 'string'
-                ? candidate.previousVersionRef
+            previousRevisionRef:
+              typeof candidate.previousRevisionRef === 'string'
+                ? candidate.previousRevisionRef
                 : undefined,
             effectKind:
               typeof candidate.effectKind === 'string' ? candidate.effectKind : undefined

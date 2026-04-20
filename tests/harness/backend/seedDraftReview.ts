@@ -4,6 +4,7 @@ import path from 'node:path'
 import type { DraftReviewStore } from '../../../src/main/services/storage/domains/DraftReviewStore'
 import { materializeDocxConfirmCopy } from '../../../src/main/services/ai/human/tools/docx/review/confirmCopy'
 import { buildSourceVersion } from '../../../src/main/services/ai/human/tools/docx/review/utils'
+import { buildDocxReviewArtifactPaths } from '../../../src/main/services/ai/human/tools/docx/review/viewProjection'
 import type { SeedDraftReviewInput } from './test-types'
 
 export const seedDraftReview = async (input: {
@@ -27,12 +28,18 @@ export const seedDraftReview = async (input: {
       const documentId = `${reviewId}-doc-${index + 1}`
       const sourceVersion = await buildSourceVersion(document.sourcePath)
       const confirmSourcePath = document.confirmBasePath || document.sourcePath
-      const confirmArtifactPath = path.join(reviewArtifactsRoot, `${documentId}.confirm.docx`)
-      const manifestArtifactPath = `${confirmArtifactPath}.manifest.json`
-      const effectiveDraftArtifactPath = path.join(
-        reviewArtifactsRoot,
-        `${documentId}.effective.docx`
-      )
+      const {
+        reviewArtifactPath: confirmArtifactPath,
+        workingArtifactPath: effectiveDraftArtifactPath,
+        manifestArtifactPath
+      } = buildDocxReviewArtifactPaths({
+        workspaceRootPath: input.workspaceRoot,
+        reviewId,
+        documentIndex: index,
+        sourceName: document.sourceName || path.basename(document.sourcePath)
+      })
+      await fs.mkdir(path.dirname(effectiveDraftArtifactPath), { recursive: true })
+      await fs.copyFile(confirmSourcePath, effectiveDraftArtifactPath)
 
       await materializeDocxConfirmCopy({
         baseBuffer: await fs.readFile(confirmSourcePath),
@@ -55,9 +62,8 @@ export const seedDraftReview = async (input: {
         source_name: document.sourceName || path.basename(document.sourcePath),
         format: document.format || 'docx',
         latest_draft_snapshot_id: document.latestDraftSnapshotId || `${documentId}-snapshot`,
-        confirm_artifact_path: confirmArtifactPath,
-        manifest_artifact_path: manifestArtifactPath,
-        effective_draft_artifact_path: effectiveDraftArtifactPath,
+        review_artifact_path: confirmArtifactPath,
+        working_artifact_path: effectiveDraftArtifactPath,
         source_version: sourceVersion,
         total_change_count: 0,
         pending_change_count: 0,

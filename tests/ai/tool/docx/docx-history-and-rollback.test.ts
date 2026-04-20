@@ -21,7 +21,7 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证版本历史查询与按 versionRef 回滚。',
+      description: '验证修订历史查询与按 revisionRef 回滚。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -60,7 +60,7 @@ describe('ai tool docx backend', () => {
           })
           const rollbackByVersion = await harness.invoke<DocxRollbackResult>('docx_rollback', {
             sourcePath: secondEdit.sourcePath,
-            versionRef: firstEdit.currentVersionRef
+            revisionRef: firstEdit.currentRevisionRef
           })
           const searchAfterRollback = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: rollbackByVersion.sourcePath,
@@ -68,7 +68,7 @@ describe('ai tool docx backend', () => {
           })
           const rollbackToInitial = await harness.invoke<DocxRollbackResult>('docx_rollback', {
             sourcePath: rollbackByVersion.sourcePath,
-            versionRef: initialSearch.currentVersionRef
+            revisionRef: initialSearch.currentRevisionRef
           })
           const sourceBufferAfter = await fs.readFile(sourcePath)
 
@@ -89,24 +89,24 @@ describe('ai tool docx backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.history.versions.length === 3 &&
-            result.history.versions[0]?.versionRef === result.secondEdit.currentVersionRef &&
-            result.history.versions[1]?.versionRef === result.firstEdit.currentVersionRef &&
-            result.history.versions[2]?.versionRef === result.initialSearch.currentVersionRef,
+          result.history.revisions.length === 3 &&
+            result.history.revisions[0]?.revisionRef === result.secondEdit.currentRevisionRef &&
+            result.history.revisions[1]?.revisionRef === result.firstEdit.currentRevisionRef &&
+            result.history.revisions[2]?.revisionRef === result.initialSearch.currentRevisionRef,
           {
             name: 'snapshot-history-tracks-current-and-ancestors',
-            message: 'docx_history 应能追溯到多轮编辑形成的祖先版本链。',
-            data: result.history.versions
+            message: 'docx_history 应能追溯到多轮编辑形成的祖先修订链。',
+            data: result.history.revisions
           }
         )
 
         runtime.assertThat(
-          result.rollbackByVersion.currentVersionRef === result.firstEdit.currentVersionRef &&
+          result.rollbackByVersion.currentRevisionRef === result.firstEdit.currentRevisionRef &&
             result.searchAfterRollback.matches.length === 0 &&
-            result.rollbackToInitial.currentVersionRef === result.initialSearch.currentVersionRef,
+            result.rollbackToInitial.currentRevisionRef === result.initialSearch.currentRevisionRef,
           {
             name: 'rollback-restores-target-ancestor-without-breaking-structure',
-            message: '按 versionRef 回滚后，应回到目标祖先版本且结构保持有效。',
+            message: '按 revisionRef 回滚后，应回到目标祖先修订且结构保持有效。',
             data: {
               rollbackByVersion: result.rollbackByVersion,
               rollbackToInitial: result.rollbackToInitial,

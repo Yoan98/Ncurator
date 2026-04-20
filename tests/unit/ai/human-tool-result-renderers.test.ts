@@ -28,7 +28,7 @@ describe('ai unit human tool result renderers', () => {
       toolName: 'docx_read',
       data: {
         sourcePath: 'graphics.docx',
-        currentVersionRef: 'v7',
+        currentRevisionRef: 'v7',
         fromBlockId: 'b:10',
         toBlockId: 'b:12',
         returnedBlockCount: 2,

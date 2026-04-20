@@ -6,7 +6,6 @@
 
 - 本文只负责说明运行入口、节点职责、跨层边界与实现约束。
 - 当需要确认字段、状态结构、事件内容或流转落点时，请阅读 `doc/ai-design/data-definition-and-flow.md`。
-- 当需要查看真实运行样例时，请阅读 `doc/ai-design/example.md`。
 - 当需要查看 `human` 的 skill 与 tool 组织方式时，请阅读 `doc/ai-design/human-skill-design.md`。
 - 当需要查看 prompt 设计时，请阅读 `doc/ai-design/prompt-design.md`。
 
@@ -46,6 +45,16 @@
 - 负责创建 `AiRunContext`、启动 `human`、处理取消、处理失败、整理 `AiRunState`。
 - `AiRunService` 不做 route、context enrich、plan、plan exec 或 synthesis。
 - run 成功时只回写 `finalDeliveryMarkdown` 与 `finalArtifacts`。
+
+### 3.1 docx 工作视图与审阅约束
+
+- docx 运行时真相统一收口为 `source baseline + cumulative replay session`。
+- 对上层暴露的当前状态、历史与回滚统一使用 `revision` 语义。
+- AI 只读取 `working draft view`；该视图必须无审阅标记，且只包含当前有效内容。
+- 用户确认前只查看 `review view`；该视图负责稳定展示新增、删除与替换差异。
+- 最终提交只允许由 `committed view` 落盘到源文件。
+- `resolveDocxOpenTarget` 在存在 active review 时必须返回 `working artifact`，并继续使用原始 `sourcePath` 作为最终落盘目标。
+- `finalizeDocxReviewRun` 必须同时生成 `working artifact` 与 `review artifact`，并通过 `draft_review_ready + file_artifact` 向上游暴露。
 
 ## 4. `human` 总览
 

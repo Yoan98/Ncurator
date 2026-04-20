@@ -15,10 +15,10 @@ import type {
 import type { DocumentsStore } from '../../../../../storage/domains/DocumentsStore'
 import type { DraftReviewStore } from '../../../../../storage/domains/DraftReviewStore'
 import { DraftReviewCommitService } from './DraftReviewCommitService'
-import { normalizeDocxConfirmCopy } from './confirmCopy'
 import { RunDraftTracker } from './RunDraftTracker'
 import type { ResolvedDocxOpenTarget } from './types'
-import { collectArtifactPaths, getManifestPathForConfirmArtifact } from './utils'
+import { collectArtifactPaths } from './utils'
+import { getWorkingArtifactPath } from './viewProjection'
 
 export class DraftReviewService {
   private readonly runDraftTracker: RunDraftTracker
@@ -128,9 +128,8 @@ export class DraftReviewService {
       review: updatedReview,
       documents: detail.documents.map((document) => ({
         ...document,
-        confirm_artifact_path: undefined,
-        manifest_artifact_path: undefined,
-        effective_draft_artifact_path: undefined,
+        review_artifact_path: undefined,
+        working_artifact_path: undefined,
         updated_at: updatedReview.updated_at
       }))
     })
@@ -154,22 +153,12 @@ export class DraftReviewService {
     }
 
     const document = activeDetail.documents.find((item) => item.source_path === sourcePath)
-    if (!document?.confirm_artifact_path) {
-      throw new Error('active confirm copy is missing')
+    const workingArtifactPath = document ? getWorkingArtifactPath(document) : undefined
+    if (!workingArtifactPath) {
+      throw new Error('active working draft is missing')
     }
-    const manifestArtifactPath =
-      document.manifest_artifact_path ||
-      getManifestPathForConfirmArtifact(document.confirm_artifact_path)
-    const effectiveDraftPath =
-      document.effective_draft_artifact_path ||
-      document.confirm_artifact_path.replace(/\.docx$/i, '.effective.docx')
-    await normalizeDocxConfirmCopy({
-      confirmArtifactPath: document.confirm_artifact_path,
-      manifestArtifactPath,
-      outPath: effectiveDraftPath
-    })
     return {
-      openPath: effectiveDraftPath,
+      openPath: workingArtifactPath,
       trackedSourcePath: sourcePath
     }
   }

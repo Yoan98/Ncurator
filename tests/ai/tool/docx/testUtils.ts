@@ -5,7 +5,7 @@ export type DocxOutlineResult = {
   code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
   summary: string
   sourcePath: string
-  currentVersionRef: string
+  currentRevisionRef: string
   returnedBlockCount: number
   totalBlockCount: number
   fromBodyIndex?: number
@@ -50,7 +50,7 @@ export type DocxSearchResult = {
   code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
   summary: string
   sourcePath: string
-  currentVersionRef: string
+  currentRevisionRef: string
   mode: 'literal' | 'regex' | 'semantic'
   effectiveQuery: string
   appliedAliases: Array<{ from: string; to: string }>
@@ -75,7 +75,7 @@ export type DocxReadResult = {
   code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
   summary: string
   sourcePath: string
-  currentVersionRef: string
+  currentRevisionRef: string
   fromBlockId: string
   toBlockId: string
   returnedBlockCount: number
@@ -163,8 +163,8 @@ export type DocxMutationResult = {
   code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
   summary: string
   sourcePath: string
-  previousVersionRef: string
-  currentVersionRef: string
+  previousRevisionRef: string
+  currentRevisionRef: string
   changedBlocks: DocxChangedBlock[]
   createdBlocks?: Array<{ blockId: string; type: 'paragraph' | 'table' | 'table_cell' }>
   warnings: string[]
@@ -175,10 +175,10 @@ export type DocxHistoryResult = {
   code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
   summary: string
   sourcePath: string
-  currentVersionRef: string
-  versions: Array<{
-    versionRef: string
-    parentVersionRef?: string
+  currentRevisionRef: string
+  revisions: Array<{
+    revisionRef: string
+    parentRevisionRef?: string
     createdAt: number
     isCurrent: boolean
     summary: string
@@ -191,8 +191,8 @@ export type DocxRollbackResult = {
   code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
   summary: string
   sourcePath: string
-  currentVersionRef: string
-  previousVersionRef: string
+  currentRevisionRef: string
+  previousRevisionRef: string
 }
 
 export type DocxFailureResult = {

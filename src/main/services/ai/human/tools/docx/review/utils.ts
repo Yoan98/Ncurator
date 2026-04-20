@@ -10,6 +10,7 @@ import type {
 } from '../../../../../../../shared/types'
 import { clipText } from '../../../../utils/text'
 import type { DocxChangedBlock, DocxOp } from '../types'
+import { getReviewArtifactPath, getWorkingArtifactPath } from './viewProjection'
 
 export const sanitizeFileName = (value: string): string => {
   const normalized = String(value || '').trim()
@@ -116,9 +117,10 @@ export const getManifestPathForConfirmArtifact = (confirmArtifactPath: string): 
 export const collectArtifactPaths = (detail: DraftReviewDetail): string[] => {
   const unique = new Set<string>()
   detail.documents.forEach((document) => {
-    if (document.confirm_artifact_path) unique.add(document.confirm_artifact_path)
-    if (document.manifest_artifact_path) unique.add(document.manifest_artifact_path)
-    if (document.effective_draft_artifact_path) unique.add(document.effective_draft_artifact_path)
+    const reviewArtifactPath = getReviewArtifactPath(document)
+    const workingArtifactPath = getWorkingArtifactPath(document)
+    if (reviewArtifactPath) unique.add(reviewArtifactPath)
+    if (workingArtifactPath) unique.add(workingArtifactPath)
   })
   return [...unique]
 }
@@ -139,9 +141,8 @@ export const createArchivedCommittedDetail = (input: {
     },
     documents: input.detail.documents.map((document) => ({
       ...document,
-      confirm_artifact_path: undefined,
-      manifest_artifact_path: undefined,
-      effective_draft_artifact_path: undefined,
+      review_artifact_path: undefined,
+      working_artifact_path: undefined,
       updated_at: updatedAt
     })),
     changes: input.detail.changes.map((change) => ({

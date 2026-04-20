@@ -11,6 +11,7 @@ import type {
   JsonValue
 } from '../../../../shared/types'
 import type { ToolCallResult } from '../human/types'
+import { getReviewArtifactPath } from '../human/tools/docx/review/viewProjection'
 
 const isJsonObject = (value: JsonValue | undefined): value is JsonObject => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
@@ -115,21 +116,22 @@ export const buildRunArtifactsFromDraftReviewDetail = (
       documentCount: detail.review.document_count,
       changeCount: detail.review.change_count
     },
-    summary: `confirm document ready (${detail.review.document_count} docs, ${detail.review.change_count} changes)`
+    summary: `review document ready (${detail.review.document_count} docs, ${detail.review.change_count} changes)`
   }
 
   const draftArtifacts = detail.documents.flatMap((document) => {
-    if (!document.confirm_artifact_path) return []
+    const reviewArtifactPath = getReviewArtifactPath(document)
+    if (!reviewArtifactPath) return []
     return [
       createFileArtifactRef({
         capability: 'docx',
-        artifactPath: document.confirm_artifact_path,
+        artifactPath: reviewArtifactPath,
         operation: 'created',
         artifactRole: 'draft',
         reviewId: detail.review.id,
         draftDocumentId: document.id,
         draftSnapshotId: document.latest_draft_snapshot_id,
-        summary: `confirm doc ready: ${document.source_name}`
+        summary: `review doc ready: ${document.source_name}`
       })
     ]
   })
@@ -162,21 +164,22 @@ export const appendDraftReviewArtifactsAndEmitEvents = (input: {
     })
 
     detail.documents.forEach((document) => {
-      if (!document.confirm_artifact_path) return
+      const reviewArtifactPath = getReviewArtifactPath(document)
+      if (!reviewArtifactPath) return
       input.sendEvent({
         type: 'file_artifact',
         runId: input.runId,
         taskId: input.taskId,
         artifactId: uuidv4(),
         capability: 'docx',
-        path: document.confirm_artifact_path,
-        fileName: path.basename(document.confirm_artifact_path),
+        path: reviewArtifactPath,
+        fileName: path.basename(reviewArtifactPath),
         operation: 'created',
         artifactRole: 'draft',
         reviewId: detail.review.id,
         draftDocumentId: document.id,
         draftSnapshotId: document.latest_draft_snapshot_id,
-        summary: `confirm doc ready: ${document.source_name}`,
+        summary: `review doc ready: ${document.source_name}`,
         createdAt: Date.now()
       })
     })

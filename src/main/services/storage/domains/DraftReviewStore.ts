@@ -45,8 +45,8 @@ type DraftReviewDocumentRow = {
   source_name?: PrimitiveRowValue
   format?: PrimitiveRowValue
   latest_draft_snapshot_id?: PrimitiveRowValue
-  preview_artifact_path?: PrimitiveRowValue
-  draft_artifact_path?: PrimitiveRowValue
+  review_artifact_path?: PrimitiveRowValue
+  working_artifact_path?: PrimitiveRowValue
   source_version_json?: PrimitiveRowValue
   total_change_count?: PrimitiveRowValue
   pending_change_count?: PrimitiveRowValue
@@ -68,7 +68,7 @@ type DraftReviewChangeRow = {
   before_text?: PrimitiveRowValue
   after_text?: PrimitiveRowValue
   locator_json?: PrimitiveRowValue
-  preview_artifact_path?: PrimitiveRowValue
+  review_artifact_path?: PrimitiveRowValue
   metadata_json?: PrimitiveRowValue
   created_at?: PrimitiveRowValue
   updated_at?: PrimitiveRowValue
@@ -240,11 +240,8 @@ const toDraftReviewDocument = (row: DraftReviewDocumentRow): DraftReviewDocument
   source_name: toRequiredString(row.source_name),
   format: normalizeDraftDocumentFormat(row.format),
   latest_draft_snapshot_id: toRequiredString(row.latest_draft_snapshot_id),
-  confirm_artifact_path: toOptionalString(row.preview_artifact_path),
-  manifest_artifact_path: toOptionalString(row.preview_artifact_path)
-    ? `${String(row.preview_artifact_path)}.manifest.json`
-    : undefined,
-  effective_draft_artifact_path: toOptionalString(row.draft_artifact_path),
+  review_artifact_path: toOptionalString(row.review_artifact_path),
+  working_artifact_path: toOptionalString(row.working_artifact_path),
   source_version: parseSourceVersion(row.source_version_json),
   total_change_count: toRequiredNumber(row.total_change_count),
   pending_change_count: toRequiredNumber(row.pending_change_count),
@@ -323,8 +320,8 @@ const toDraftReviewDocumentWriteRow = (document: DraftReviewDocument): DraftWrit
   source_name: document.source_name,
   format: document.format,
   latest_draft_snapshot_id: document.latest_draft_snapshot_id,
-  preview_artifact_path: document.confirm_artifact_path,
-  draft_artifact_path: document.effective_draft_artifact_path,
+  review_artifact_path: document.review_artifact_path,
+  working_artifact_path: document.working_artifact_path,
   source_version_json: JSON.stringify(document.source_version),
   total_change_count: document.total_change_count,
   pending_change_count: document.pending_change_count,
@@ -346,7 +343,7 @@ const toDraftReviewChangeWriteRow = (change: DraftReviewChange): DraftWriteRow =
   before_text: change.before_text,
   after_text: change.after_text,
   locator_json: JSON.stringify(change.locator),
-  preview_artifact_path: undefined,
+  review_artifact_path: undefined,
   metadata_json: JSON.stringify({
     ...(change.metadata || {}),
     ...(change.anchor_name ? { anchor_name: change.anchor_name } : {})

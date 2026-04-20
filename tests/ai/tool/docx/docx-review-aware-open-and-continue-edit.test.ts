@@ -17,7 +17,7 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证 active review 场景下 docx 自动 open 会继续打开最新草稿并叠加新改动。',
+      description: '验证 active review 场景下 docx 自动 open 会继续打开最新 working draft 并叠加新改动。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -93,7 +93,7 @@ describe('ai tool docx backend', () => {
           result.readDraft.matches.length === 1 && result.readSourceOnly.matches.length === 0,
           {
             name: 'review-aware-open-reads-latest-effective-draft',
-            message: '存在 active review 时，docx 自动 open 应先打开 latest effective draft，而不是源文件旧内容。',
+            message: '存在 active review 时，docx 自动 open 应先打开 latest working draft，而不是源文件旧内容。',
             data: {
               searchDraft: result.readDraft.matches,
               searchSourceOnly: result.readSourceOnly.matches

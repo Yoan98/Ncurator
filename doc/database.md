@@ -220,8 +220,8 @@
 | source_name             | Utf8             | 源文件名 |
 | format                  | Utf8             | 文档格式 |
 | latest_draft_snapshot_id| Utf8             | 最新草稿快照 |
-| preview_artifact_path   | Utf8（Nullable） | 预览产物路径 |
-| draft_artifact_path     | Utf8（Nullable） | 草稿产物路径 |
+| review_artifact_path    | Utf8（Nullable） | 审阅稿产物路径 |
+| working_artifact_path   | Utf8（Nullable） | working draft 产物路径 |
 | source_version_json     | Utf8             | 源版本信息 JSON |
 | total_change_count      | Int32            | 变更总数 |
 | pending_change_count    | Int32            | 待决策变更数 |
@@ -247,7 +247,7 @@
 | before_text         | Utf8             | 变更前文本 |
 | after_text          | Utf8             | 变更后文本 |
 | locator_json        | Utf8             | 定位信息 JSON |
-| preview_artifact_path| Utf8（Nullable）| 局部预览产物 |
+| review_artifact_path | Utf8（Nullable）| 局部审阅产物 |
 | metadata_json       | Utf8（Nullable） | 附加元数据 |
 | created_at          | Int64            | 创建时间 |
 | updated_at          | Int64            | 更新时间 |

@@ -206,16 +206,16 @@ const renderDocxSearchMatches = (value: JsonValue | undefined): string => {
     .join('\n')
 }
 
-const renderDocxVersions = (value: JsonValue | undefined): string => {
+const renderDocxRevisions = (value: JsonValue | undefined): string => {
   if (!Array.isArray(value) || value.length === 0) return 'none'
 
   return value
     .map((item, index) => {
       if (!isJsonObject(item)) return renderGenericArrayItem(item, index)
       return `- ${renderKeyValuePairs([
-        ['versionRef', readStringField(item, 'versionRef')],
+        ['revisionRef', readStringField(item, 'revisionRef')],
         ['docId', readStringField(item, 'docId')],
-        ['parentVersionRef', readStringField(item, 'parentVersionRef')],
+        ['parentRevisionRef', readStringField(item, 'parentRevisionRef')],
         ['summary', readStringField(item, 'summary')]
       ])}`
     })
@@ -226,7 +226,7 @@ const renderDocxReadResult = (obj: JsonObject): string =>
   [
     renderKeyValuePairs([
       ['sourcePath', readStringField(obj, 'sourcePath')],
-      ['currentVersionRef', readStringField(obj, 'currentVersionRef')],
+      ['currentRevisionRef', readStringField(obj, 'currentRevisionRef')],
       ['fromBlockId', readStringField(obj, 'fromBlockId')],
       ['toBlockId', readStringField(obj, 'toBlockId')],
       ['returnedBlockCount', readNumberTextField(obj, 'returnedBlockCount')]
@@ -241,7 +241,7 @@ const renderDocxSearchResult = (obj: JsonObject): string =>
   [
     renderKeyValuePairs([
       ['sourcePath', readStringField(obj, 'sourcePath')],
-      ['currentVersionRef', readStringField(obj, 'currentVersionRef')],
+      ['currentRevisionRef', readStringField(obj, 'currentRevisionRef')],
       ['mode', readStringField(obj, 'mode')],
       ['effectiveQuery', readStringField(obj, 'effectiveQuery')],
       ['returnedMatchCount', readNumberTextField(obj, 'returnedMatchCount')],
@@ -257,11 +257,13 @@ const renderDocxOutlineResult = (obj: JsonObject): string =>
   [
     renderKeyValuePairs([
       ['sourcePath', readStringField(obj, 'sourcePath')],
-      ['currentVersionRef', readStringField(obj, 'currentVersionRef')],
+      ['currentRevisionRef', readStringField(obj, 'currentRevisionRef')],
       ['fromBodyIndex', readNumberTextField(obj, 'fromBodyIndex')],
       ['returnedBlockCount', readNumberTextField(obj, 'returnedBlockCount')],
-      ['totalBlockCount', readNumberTextField(obj, 'totalBlockCount')]
+      ['totalBlockCount', readNumberTextField(obj, 'totalBlockCount')],
+      ['truncated', renderPrimitive(obj.truncated)]
     ]),
+    obj.truncated === true ? '结果已截断，文档后续内容未包含。' : undefined,
     'blocks:',
     renderDocxBlocks(obj.blocks)
   ]
@@ -272,10 +274,10 @@ const renderDocxHistoryResult = (obj: JsonObject): string =>
   [
     renderKeyValuePairs([
       ['sourcePath', readStringField(obj, 'sourcePath')],
-      ['currentVersionRef', readStringField(obj, 'currentVersionRef')]
+      ['currentRevisionRef', readStringField(obj, 'currentRevisionRef')]
     ]),
-    'versions:',
-    renderDocxVersions(obj.versions)
+    'revisions:',
+    renderDocxRevisions(obj.revisions)
   ]
     .filter(Boolean)
     .join('\n')
@@ -362,8 +364,8 @@ export const renderToolResourceContextText = (
     ['family', resourceContext.family],
     ['effectKind', resourceContext.effectKind],
     ['sourcePath', resourceContext.sourcePath],
-    ['previousVersionRef', resourceContext.previousVersionRef],
-    ['currentVersionRef', resourceContext.currentVersionRef]
+    ['previousRevisionRef', resourceContext.previousRevisionRef],
+    ['currentRevisionRef', resourceContext.currentRevisionRef]
   ])
 }
 

@@ -137,13 +137,13 @@ interface AiRunContext {
     changedBlocks: DocxChangedBlock[]
   }) => void
 
-  // docx 打开前把源路径解析成运行时可用的打开目标。
+  // docx 打开前把源路径解析成运行时可用的打开目标；若存在 active review，则返回 working draft view 对应的 artifact。
   resolveDocxOpenTarget: (sourcePath: string) => Promise<ResolvedDocxOpenTarget>
 
   // human task 开始前注册本次 run 的 docx 草稿审阅上下文。
   beginDocxReviewRun: () => void
 
-  // human task 完成后汇总本次 run 的 docx 改动，生成 draft review 与 confirm copy。
+  // human task 完成后汇总本次 run 的 docx 改动，生成 draft review、review artifact 与 working artifact。
   finalizeDocxReviewRun: () => Promise<DraftReviewDetail[]>
 
   // human task 中断或失败后丢弃本次 run 尚未收口的 docx 草稿审阅状态。
@@ -183,6 +183,56 @@ interface LLMConfig {
     | 'responses:promptJson'
   // 文本输出路径最近一次成功的 transport；runtime 会优先复用它。
   preferredTransport?: 'completions' | 'responses'
+}
+```
+
+### 1.2 docx replay session 与三视图
+
+
+```ts
+interface DocxReplaySession {
+  // 原始源文档路径；始终指向最终需要提交回去的 source。
+  sourcePath: string
+  // source 打开后对应的初始 worker docId，作为本次会话的 baseline。
+  sourceDocId: string
+  // 当前会话真正生效的 worker docId；working/review/commit 都从这里投影。
+  activeDocId: string
+  // 当前会话的最新修订引用；history / rollback 都围绕它推进。
+  activeRevisionRef: string
+  // 下一个修订号的计数器；每次真实编辑成功后递增。
+  nextRevisionNumber: number
+  // 当前会话里每个 docId 对应的修订记录；用于追溯祖先链和变更摘要。
+  revisionByDocId: Map<string, DocxRevision>
+  // 当前会话最近一次生成出来的三种视图产物；只是缓存，不是真相本身。
+  viewArtifacts: {
+    working?: DocxViewArtifact
+    review?: DocxViewArtifact
+    committed?: DocxViewArtifact
+  }
+}
+
+interface DocxRevision {
+  // 修订引用；对上层暴露的 docx 历史、回滚、资源上下文统一使用它。
+  revisionRef: string
+  // 该修订对应的 worker docId。
+  docId: string
+  // 祖先修订；用于串起当前会话的历史链。
+  parentRevisionRef?: string
+  // 修订创建时间；用于 history 展示与排障。
+  createdAt: number
+  // 本次修订的人类可读摘要；用于 history / review 辅助说明。
+  summary?: string
+  // 本次修订命中的 block 变化列表；供 review/history 使用。
+  changedBlocks?: DocxChangedBlock[]
+}
+
+interface DocxViewArtifact {
+  // 三类投影之一：AI 工作稿、用户审阅稿、最终提交稿。
+  kind: 'working' | 'review' | 'committed'
+  // 当前投影文件的实际路径。
+  path: string
+  // 投影生成时间；用于缓存失效与排障。
+  createdAt: number
 }
 ```
 

@@ -3,12 +3,9 @@
 ## 1. 文档引用
 ### 1.1 AI相关
 - 当涉及 AI 架构、主流程或 human-only runtime 时，必须阅读 `doc/ai-design/architecture.md`
-- 当涉及 AI 实现、运行入口、跨层边界、LLM 执行入口、流式传输、runtime settings、运行数据、`execution.watchHint` / `toolUsePlan` / `execution.lastLearningOutcome` / `memory.history.roundHistory` / `HumanHistoryToolResult.data` 原始结果存储 / history 实时渲染 / `memory.stable.currentUnderstanding` / `memory.stable.keyEvidence` / `memory.stable.checklist` / `history_search` / `history_list` / `mouth` 统一 `history` prompt 输入契约、`draft_review` / confirm-copy artifact 链路或工作区 KB 范围时，必须阅读 `doc/ai-design/implementation-spec.md` 与 `doc/ai-design/data-definition-and-flow.md`
-- 当涉及 AI 最小运行样例、默认链路或想快速理解 human 各环节如何衔接时，必须阅读 `doc/ai-design/example.md`
-- 当涉及 human 的 skill 分类、拆分边界、builtin/external 区分或当前 skill 基线时，必须阅读 `doc/ai-design/human-skill-design.md`
-- 当涉及 prompt 的通用结构、`principles / decision_contract / stable_memory_contract / output_contract` 分层、输入组织、输出规则、约束表达、工具结果语义暴露、运行事实渲染、自主性边界或 human 的 AI-facing 文案设计时，必须阅读 `doc/ai-design/prompt-design.md`
-- 当涉及 tool schema 自动导出为 prompt、brain 输出 shape 自动导出、tool spec examples、或 `diagnostic.message` 这类工具契约变更时，必须阅读 `doc/ai-design/implementation-spec.md`、`doc/ai-design/data-definition-and-flow.md` 与 `doc/ai-design/prompt-design.md`
-- 当涉及 AI 后续重构与迭代规划时，必须阅读 `doc/ai-design/refactor-plan.md`
+- 当涉及 AI 实现、运行入口、跨层边界、运行数据、docx replay/review 链路或工作区 KB 范围时，必须阅读 `doc/ai-design/implementation-spec.md` 与 `doc/ai-design/data-definition-and-flow.md`
+- 当涉及 human 的 skill 分类、builtin/external 边界或 skill 基线时，必须阅读 `doc/ai-design/human-skill-design.md`
+- 当涉及 prompt 结构、工具结果渲染、工具 schema/输出 shape 自动导出或 human AI-facing 文案时，必须阅读 `doc/ai-design/prompt-design.md`
 
 ### 1.2 项目整体相关
 - 当涉及项目整体架构与技术栈时，必须阅读 `doc/architecture.md`
