@@ -47,6 +47,7 @@ type DraftReviewDocumentRow = {
   latest_draft_snapshot_id?: PrimitiveRowValue
   review_artifact_path?: PrimitiveRowValue
   working_artifact_path?: PrimitiveRowValue
+  committed_artifact_path?: PrimitiveRowValue
   source_version_json?: PrimitiveRowValue
   total_change_count?: PrimitiveRowValue
   pending_change_count?: PrimitiveRowValue
@@ -242,6 +243,7 @@ const toDraftReviewDocument = (row: DraftReviewDocumentRow): DraftReviewDocument
   latest_draft_snapshot_id: toRequiredString(row.latest_draft_snapshot_id),
   review_artifact_path: toOptionalString(row.review_artifact_path),
   working_artifact_path: toOptionalString(row.working_artifact_path),
+  committed_artifact_path: toOptionalString(row.committed_artifact_path),
   source_version: parseSourceVersion(row.source_version_json),
   total_change_count: toRequiredNumber(row.total_change_count),
   pending_change_count: toRequiredNumber(row.pending_change_count),
@@ -322,6 +324,7 @@ const toDraftReviewDocumentWriteRow = (document: DraftReviewDocument): DraftWrit
   latest_draft_snapshot_id: document.latest_draft_snapshot_id,
   review_artifact_path: document.review_artifact_path,
   working_artifact_path: document.working_artifact_path,
+  committed_artifact_path: document.committed_artifact_path,
   source_version_json: JSON.stringify(document.source_version),
   total_change_count: document.total_change_count,
   pending_change_count: document.pending_change_count,

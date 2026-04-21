@@ -118,7 +118,7 @@ export class RunDraftTracker {
     for (const [index, document] of changedDocuments.entries()) {
       const reviewId = randomUUID()
       const now = Date.now()
-      const { reviewArtifactPath, workingArtifactPath } =
+      const { reviewArtifactPath, workingArtifactPath, committedArtifactPath } =
         buildDocxReviewArtifactPaths({
           workspaceRootPath: input.workspaceRootPath,
           reviewId,
@@ -171,6 +171,13 @@ export class RunDraftTracker {
         kind: 'review',
         outPath: reviewArtifactPath
       })
+      await materializeDocxProjectedArtifact({
+        sourceBuffer,
+        workingBuffer: latestDraftBuffer,
+        session: replaySession,
+        kind: 'committed',
+        outPath: committedArtifactPath
+      })
       replaySession.viewArtifacts.working = {
         kind: 'working',
         path: workingArtifactPath,
@@ -179,6 +186,11 @@ export class RunDraftTracker {
       replaySession.viewArtifacts.review = {
         kind: 'review',
         path: reviewArtifactPath,
+        createdAt: now
+      }
+      replaySession.viewArtifacts.committed = {
+        kind: 'committed',
+        path: committedArtifactPath,
         createdAt: now
       }
 
@@ -192,6 +204,7 @@ export class RunDraftTracker {
         latest_draft_snapshot_id: document.latestDocId,
         review_artifact_path: reviewArtifactPath,
         working_artifact_path: workingArtifactPath,
+        committed_artifact_path: committedArtifactPath,
         source_version: sourceVersion,
         total_change_count: reviewChanges.length,
         pending_change_count: reviewChanges.length,

@@ -222,6 +222,7 @@
 | latest_draft_snapshot_id| Utf8             | 最新草稿快照 |
 | review_artifact_path    | Utf8（Nullable） | 审阅稿产物路径 |
 | working_artifact_path   | Utf8（Nullable） | working draft 产物路径 |
+| committed_artifact_path | Utf8（Nullable） | committed view 产物路径 |
 | source_version_json     | Utf8             | 源版本信息 JSON |
 | total_change_count      | Int32            | 变更总数 |
 | pending_change_count    | Int32            | 待决策变更数 |

@@ -10,6 +10,7 @@ const sanitizeProjectedFileName = (value: string): string => {
 export type DocxReviewArtifactPaths = {
   reviewArtifactPath: string
   workingArtifactPath: string
+  committedArtifactPath: string
 }
 
 export const buildDocxReviewArtifactPaths = (input: {
@@ -33,9 +34,14 @@ export const buildDocxReviewArtifactPaths = (input: {
     draftDir,
     `${String(input.documentIndex + 1).padStart(2, '0')}-working-${baseName}`
   )
+  const committedArtifactPath = path.join(
+    draftDir,
+    `${String(input.documentIndex + 1).padStart(2, '0')}-committed-${baseName}`
+  )
   return {
     reviewArtifactPath,
-    workingArtifactPath
+    workingArtifactPath,
+    committedArtifactPath
   }
 }
 
@@ -48,5 +54,5 @@ export const getWorkingArtifactPath = (
 ): string | undefined => document.working_artifact_path
 
 export const getCommittedViewPath = (
-  document: Pick<DraftReviewDocument, 'working_artifact_path'>
-): string | undefined => document.working_artifact_path
+  document: Pick<DraftReviewDocument, 'committed_artifact_path'>
+): string | undefined => document.committed_artifact_path

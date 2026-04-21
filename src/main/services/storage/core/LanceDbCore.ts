@@ -336,6 +336,7 @@ export class LanceDbCore {
           new arrow.Field('latest_draft_snapshot_id', new arrow.Utf8()),
           new arrow.Field('review_artifact_path', new arrow.Utf8(), true),
           new arrow.Field('working_artifact_path', new arrow.Utf8(), true),
+          new arrow.Field('committed_artifact_path', new arrow.Utf8(), true),
           new arrow.Field('source_version_json', new arrow.Utf8()),
           new arrow.Field('total_change_count', new arrow.Int32()),
           new arrow.Field('pending_change_count', new arrow.Int32()),

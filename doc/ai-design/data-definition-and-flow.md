@@ -189,10 +189,15 @@ interface LLMConfig {
 
 ```ts
 interface DocxReplaySession {
+  // 本次 docx 会话对应的源文件路径；最终提交始终写回它。
   sourcePath: string
+  // baseline 打开时的 worker docId；回放和排障都可据此追溯起点。
   sourceDocId: string
+  // 当前 active revision 对应的 worker docId；working draft 打开时实际用它物化。
   activeDocId: string
+  // 当前会话最新修订引用；history / rollback / tool resourceContext 都围绕它暴露。
   activeRevisionRef: string
+  // 下一次成功编辑要分配的修订号。
   nextRevisionNumber: number
   // source baseline 的结构快照；作为 replay tree 的起点。
   sourceSnapshot: DocxReplaySnapshot
@@ -212,19 +217,30 @@ interface DocxReplaySession {
 }
 
 interface DocxRevision {
+  // 对外暴露的修订引用。
   revisionRef: string
+  // 该修订落在 worker 侧对应的 docId。
   docId: string
+  // 该修订的直接父修订。
   parentRevisionRef?: string
+  // 修订创建时间。
   createdAt: number
+  // 本次修订的简要摘要。
   summary?: string
+  // 本次修订命中的块级变更摘要；供 history/review 使用。
   changedBlocks?: DocxChangedBlock[]
+  // 本次修订实际执行过的 docx op 列表；供 replay tree 重建使用。
   ops?: DocxOp[]
+  // 本次修订新增出来的 block 列表；供插入节点回放与定位使用。
   createdBlocks?: DocxCreatedBlock[]
 }
 
 interface DocxViewArtifact {
+  // 当前 artifact 属于哪一种投影视图。
   kind: 'working' | 'review' | 'committed'
+  // 该视图物化后的文件路径。
   path: string
+  // 该视图最近一次生成时间。
   createdAt: number
 }
 ```

@@ -27,7 +27,11 @@ export const seedDraftReview = async (input: {
       const documentId = `${reviewId}-doc-${index + 1}`
       const sourceVersion = await buildSourceVersion(document.sourcePath)
       const confirmSourcePath = document.confirmBasePath || document.sourcePath
-      const { reviewArtifactPath: confirmArtifactPath, workingArtifactPath: effectiveDraftArtifactPath } =
+      const {
+        reviewArtifactPath: confirmArtifactPath,
+        workingArtifactPath: effectiveDraftArtifactPath,
+        committedArtifactPath
+      } =
         buildDocxReviewArtifactPaths({
         workspaceRootPath: input.workspaceRoot,
         reviewId,
@@ -37,6 +41,7 @@ export const seedDraftReview = async (input: {
       await fs.mkdir(path.dirname(effectiveDraftArtifactPath), { recursive: true })
       await fs.copyFile(confirmSourcePath, effectiveDraftArtifactPath)
       await fs.copyFile(confirmSourcePath, confirmArtifactPath)
+      await fs.copyFile(confirmSourcePath, committedArtifactPath)
 
       return {
         id: documentId,
@@ -48,6 +53,7 @@ export const seedDraftReview = async (input: {
         latest_draft_snapshot_id: document.latestDraftSnapshotId || `${documentId}-snapshot`,
         review_artifact_path: confirmArtifactPath,
         working_artifact_path: effectiveDraftArtifactPath,
+        committed_artifact_path: committedArtifactPath,
         source_version: sourceVersion,
         total_change_count: 0,
         pending_change_count: 0,

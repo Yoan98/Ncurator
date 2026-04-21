@@ -10,7 +10,7 @@ import type {
 } from '../../../../../../../shared/types'
 import { clipText } from '../../../../utils/text'
 import type { DocxChangedBlock, DocxOp } from '../types'
-import { getReviewArtifactPath, getWorkingArtifactPath } from './viewProjection'
+import { getCommittedViewPath, getReviewArtifactPath, getWorkingArtifactPath } from './viewProjection'
 
 export const sanitizeFileName = (value: string): string => {
   const normalized = String(value || '').trim()
@@ -116,8 +116,10 @@ export const collectArtifactPaths = (detail: DraftReviewDetail): string[] => {
   detail.documents.forEach((document) => {
     const reviewArtifactPath = getReviewArtifactPath(document)
     const workingArtifactPath = getWorkingArtifactPath(document)
+    const committedArtifactPath = getCommittedViewPath(document)
     if (reviewArtifactPath) unique.add(reviewArtifactPath)
     if (workingArtifactPath) unique.add(workingArtifactPath)
+    if (committedArtifactPath) unique.add(committedArtifactPath)
   })
   return [...unique]
 }
@@ -140,6 +142,7 @@ export const createArchivedCommittedDetail = (input: {
       ...document,
       review_artifact_path: undefined,
       working_artifact_path: undefined,
+      committed_artifact_path: undefined,
       updated_at: updatedAt
     })),
     changes: input.detail.changes.map((change) => ({

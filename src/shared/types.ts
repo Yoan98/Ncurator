@@ -399,6 +399,7 @@ export type DraftCommitValidationIssueCode =
   | 'session_not_ready'
   | 'review_artifact_missing'
   | 'working_artifact_missing'
+  | 'committed_artifact_missing'
   | 'review_artifact_locked'
 
 export interface DraftSourceVersion {
@@ -437,6 +438,7 @@ export interface DraftReviewDocument {
   latest_draft_snapshot_id: string
   review_artifact_path?: string
   working_artifact_path?: string
+  committed_artifact_path?: string
   source_version: DraftSourceVersion
   total_change_count: number
   pending_change_count: number

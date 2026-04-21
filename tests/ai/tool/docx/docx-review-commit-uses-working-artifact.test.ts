@@ -15,7 +15,7 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证提交审阅稿时以 working artifact 落盘，而不是以 review artifact 落盘。',
+      description: '验证提交审阅稿时以 committed artifact 落盘，而不是以 review artifact 或 working artifact 落盘。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -37,11 +37,17 @@ describe('ai tool docx backend', () => {
             text: '这是最终工作稿内容。'
           }
         ])
+        await writeTestDocxFile(runtime.workspaceRoot, 'commit-committed.docx', [
+          {
+            type: 'paragraph',
+            text: '这是最终提交稿内容。'
+          }
+        ])
 
         const seeded = await runtime.seedDraftReview({
           sessionId: 'commit-working-session',
           runId: runtime.runId,
-          title: 'Commit uses working artifact',
+          title: 'Commit uses committed artifact',
           status: 'pending_confirm',
           documents: [
             {
@@ -54,8 +60,8 @@ describe('ai tool docx backend', () => {
 
         const detail = await runtime.draftReviewStore.getReviewDetail(seeded.reviewId)
         const document = detail?.documents[0]
-        if (!document?.working_artifact_path) {
-          throw new Error('expected seeded working artifact path')
+        if (!document?.working_artifact_path || !document.committed_artifact_path) {
+          throw new Error('expected seeded working/committed artifact paths')
         }
 
         await writeTestDocxFile(runtime.workspaceRoot, 'commit-working.docx', [
@@ -71,6 +77,8 @@ describe('ai tool docx backend', () => {
 
         const workingSourceBuffer = await fs.readFile(`${runtime.workspaceRoot}/commit-working.docx`)
         await fs.writeFile(document.working_artifact_path, workingSourceBuffer)
+        const committedSourceBuffer = await fs.readFile(`${runtime.workspaceRoot}/commit-committed.docx`)
+        await fs.writeFile(document.committed_artifact_path, committedSourceBuffer)
 
         const commit = await runtime.draftReviewService.commitReview({
           reviewId: seeded.reviewId,
@@ -81,7 +89,7 @@ describe('ai tool docx backend', () => {
         try {
           const committedSearch = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: 'commit-source.docx',
-            query: '这是最终工作稿内容。'
+            query: '这是最终提交稿内容。'
           })
           const committedSecondParagraph = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: 'commit-source.docx',
@@ -111,11 +119,11 @@ describe('ai tool docx backend', () => {
 
         runtime.assertThat(
           result.committedSearch.matches.length === 1 &&
-            result.committedSecondParagraph.matches.length === 1 &&
+            result.committedSecondParagraph.matches.length === 0 &&
             result.reviewOnlySearch.matches.length === 0,
           {
-            name: 'commit-writes-working-artifact-content',
-            message: '提交后磁盘源文件应采用 working artifact 内容，而不是 review artifact 内容。',
+            name: 'commit-writes-committed-artifact-content',
+            message: '提交后磁盘源文件应采用 committed artifact 内容，而不是 review artifact 或 working artifact 内容。',
             data: {
               committedSearch: result.committedSearch.matches,
               committedSecondParagraph: result.committedSecondParagraph.matches,

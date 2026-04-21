@@ -137,6 +137,7 @@ export class DraftReviewService {
         ...document,
         review_artifact_path: undefined,
         working_artifact_path: undefined,
+        committed_artifact_path: undefined,
         updated_at: updatedReview.updated_at
       }))
     })

@@ -214,8 +214,9 @@ export class DraftReviewCommitService {
     document: DraftReviewDocument
   ): Promise<DraftCommitValidationIssue[]> {
     const issues: DraftCommitValidationIssue[] = []
-    const reviewPath = getReviewArtifactPath(document)
-    const workingPath = getWorkingArtifactPath(document)
+      const reviewPath = getReviewArtifactPath(document)
+      const workingPath = getWorkingArtifactPath(document)
+    const committedPath = getCommittedViewPath(document)
 
     if (!reviewPath) {
       issues.push({
@@ -241,6 +242,16 @@ export class DraftReviewCommitService {
       issues.push({
         code: 'working_artifact_missing',
         message: '当前工作稿已丢失，需要重新生成。',
+        documentId: document.id,
+        sourcePath: document.source_path
+      })
+      return issues
+    }
+
+    if (!committedPath || !(await fileExists(committedPath))) {
+      issues.push({
+        code: 'committed_artifact_missing',
+        message: '最终提交稿已丢失，需要重新生成。',
         documentId: document.id,
         sourcePath: document.source_path
       })

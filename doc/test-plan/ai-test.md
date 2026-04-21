@@ -311,10 +311,10 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证提交审阅稿时按 committed/working 视图语义落盘，而不是以 review artifact 直接覆盖源文件。
-- Why：最终落盘必须来自 committed/working 视图，不能把审阅标记直接写回源文件。
-- How：seed 一条 active review，再让 review 与 working artifact 指向不同内容后执行 commit。
-- Oracle：提交后 source 文件采用当前有效工作结果，review-only 内容不会写回。
+- What：验证提交审阅稿时按 committed view 语义落盘，而不是以 review artifact 或 working artifact 直接覆盖源文件。
+- Why：最终落盘必须来自 committed view，不能把审阅标记或仅供 AI 继续编辑的 working draft 直接写回源文件。
+- How：seed 一条 active review，再让 review / working / committed artifact 指向不同内容后执行 commit。
+- Oracle：提交后 source 文件采用 committed artifact 内容，review-only 与 working-only 内容都不会写回。
 - Not：不验证冲突处理。
 - Last Run：`2026-04-20 14:18:39 +08:00`
 - Last Result：`通过`
@@ -335,10 +335,10 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 discard review 只清理 working/review artifact，不影响 source 文件。
+- What：验证 discard review 只清理 working/review/committed artifact，不影响 source 文件。
 - Why：放弃审阅是非破坏性操作，必须长期稳定。
 - How：真实编辑并 finalize review 后执行 discard，再检查 source 与 artifact 状态。
-- Oracle：source 内容保持原样，review/working artifact 被清理，review 状态变为 `discarded`。
+- Oracle：source 内容保持原样，review/working/committed artifact 被清理，review 状态变为 `discarded`。
 - Not：不验证提交链路。
 - Last Run：`待更新`
 - Last Result：`待更新`
