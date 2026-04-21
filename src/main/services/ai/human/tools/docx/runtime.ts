@@ -3,9 +3,10 @@ import type { AiToolCallResult, JsonObject } from '../../../../../../shared/type
 import type {
   DocxCapabilityToolsInput,
   DocxCapabilityToolsRuntimeState,
-  DocxDocumentSession,
+  DocxDetailedBlock,
   DocxOp,
   DocxReplaySession,
+  DocxReplaySnapshot,
   DocxRevision,
   DocxToolResultCode,
   SemanticDocIndex
@@ -16,6 +17,11 @@ import { resolveWorkspacePath } from '../terminal/terminalCwd'
 import { isSemanticSearchableBlock, splitEmbeddingRows } from './semanticSearch'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import type { ToolEventEmitter } from '../utils/toolEvents'
+import {
+  applyRevisionToReplaySession,
+  createReplaySessionFromSnapshot,
+  createReplaySnapshot
+} from './review/replayTree'
 
 type FailedWorkerResponse = Extract<DocxWorkerResponse, { ok: false }>
 
@@ -28,7 +34,7 @@ export type DocxToolResourceContext = {
 }
 
 type RequireDocSessionResult =
-  | { sourcePath: string; session: DocxDocumentSession; docId: string; currentRevisionRef: string }
+  | { sourcePath: string; session: DocxReplaySession; docId: string; currentRevisionRef: string }
   | { failure: DocxToolFailure }
 
 const isToolResultRecord = (value: AiToolCallResult['data']): value is JsonObject =>
@@ -86,7 +92,6 @@ export type DocxToolRuntime = {
   }) => DocxToolFailure
   callWorker: (request: Omit<DocxWorkerRequest, 'requestId' | 'runId'>) => Promise<DocxWorkerResponse>
   resolveDocxPath: (input: { cwd: string; rawPath: string }) => string | null
-  getDocumentSession: (sourcePath: string) => DocxDocumentSession | undefined
   getReplaySession: (sourcePath: string) => DocxReplaySession | undefined
   ensureDocumentSession: (input: {
     toolName: string
@@ -101,19 +106,21 @@ export type DocxToolRuntime = {
   registerOpenedDocument: (
     sourcePath: string,
     docId: string,
-    meta?: DocxDocumentSession['meta'],
-    stats?: DocxDocumentSession['stats']
-  ) => {
-    session: DocxDocumentSession
+    meta?: DocxReplaySession['meta'],
+    stats?: DocxReplaySession['stats']
+  ) => Promise<{
+    session: DocxReplaySession
     currentRevisionRef: string
-  }
+  }>
   registerRevision: (input: {
     sourcePath: string
     previousDocId: string
     nextDocId: string
+    ops: DocxOp[]
+    createdBlocks: DocxRevision['createdBlocks']
     changedBlocks?: DocxRevision['changedBlocks']
     summary?: string
-  }) => { currentRevisionRef: string; previousRevisionRef: string }
+  }) => Promise<{ currentRevisionRef: string; previousRevisionRef: string }>
   buildRevisionHistory: (
     sourcePath: string,
     maxDepth: number
@@ -135,7 +142,7 @@ export type DocxToolRuntime = {
     sourcePath: string
     targetDocId: string
     targetRevisionRef: string
-  }) => { previousRevisionRef: string; currentRevisionRef: string }
+  }) => Promise<{ previousRevisionRef: string; currentRevisionRef: string }>
   expandOpsForReview: (docId: string, ops: DocxOp[]) => Promise<DocxOp[]>
   buildSemanticDocIndex: (docId: string) => Promise<SemanticDocIndex>
   getRevisionRefByDocId: (docId: string) => string | undefined
@@ -150,14 +157,12 @@ export type DocxToolRuntime = {
 export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxToolRuntime => {
   const revisionEntryByDocId = new Map<string, DocxRevision>()
   const replaySessionBySourcePath = new Map<string, DocxReplaySession>()
-  const documentSessionBySourcePath = new Map<string, DocxDocumentSession>()
   const state: DocxCapabilityToolsRuntimeState = {
     sourcePathByDocId: new Map(),
     semanticIndexByDocId: new Map(),
     snapshotEntryByDocId: new Map(),
     revisionEntryByDocId,
-    replaySessionBySourcePath,
-    documentSessionBySourcePath
+    replaySessionBySourcePath
   }
   const workspaceRootPath = path.resolve(input.workspaceRootPath)
   const toolEvents = createToolEventEmitter({
@@ -258,8 +263,46 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     return resolved
   }
 
-  const getDocumentSession = (sourcePath: string): DocxDocumentSession | undefined =>
-    state.documentSessionBySourcePath.get(path.resolve(sourcePath))
+  const buildReplaySnapshotForDoc = async (docId: string): Promise<DocxReplaySnapshot> => {
+    const outlineResponse = await callWorker({
+      action: 'outline',
+      payload: {
+        docId,
+        maxBlocks: 5000,
+        includeTables: true,
+        includeCells: true
+      }
+    })
+    if (!outlineResponse.ok) {
+      throw new Error(outlineResponse.error)
+    }
+    if (outlineResponse.payload.action !== 'outline') {
+      throw new Error('worker protocol mismatch (replay outline)')
+    }
+
+    const detailedBlocksById = new Map<string, DocxDetailedBlock>()
+    for (const block of outlineResponse.payload.blocks) {
+      const detailResponse = await callWorker({
+        action: 'get_block',
+        payload: {
+          docId,
+          blockId: block.blockId
+        }
+      })
+      if (!detailResponse.ok) {
+        throw new Error(detailResponse.error)
+      }
+      if (detailResponse.payload.action !== 'get_block') {
+        throw new Error('worker protocol mismatch (replay get_block)')
+      }
+      detailedBlocksById.set(block.blockId, detailResponse.payload.block)
+    }
+
+    return createReplaySnapshot({
+      outlineBlocks: outlineResponse.payload.blocks,
+      detailedBlocksById
+    })
+  }
 
   const getReplaySession = (sourcePath: string): DocxReplaySession | undefined =>
     state.replaySessionBySourcePath.get(path.resolve(sourcePath))
@@ -269,7 +312,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
 
   const buildSessionResult = (
     sourcePath: string,
-    session: DocxDocumentSession
+    session: DocxReplaySession
   ): Exclude<RequireDocSessionResult, { failure: DocxToolFailure }> => ({
     sourcePath,
     session,
@@ -283,7 +326,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     sourcePath: string
   }): RequireDocSessionResult => {
     const sourcePath = path.resolve(params.sourcePath)
-    const session = getDocumentSession(sourcePath)
+    const session = getReplaySession(sourcePath)
     if (session) {
       return buildSessionResult(sourcePath, session)
     }
@@ -321,7 +364,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       }
     }
 
-    const existingSession = getDocumentSession(requestedSourcePath)
+    const existingSession = getReplaySession(requestedSourcePath)
     if (existingSession) {
       return buildSessionResult(requestedSourcePath, existingSession)
     }
@@ -353,7 +396,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       }
     }
 
-    const registered = registerOpenedDocument(
+    const registered = await registerOpenedDocument(
       resolvedTarget.trackedSourcePath,
       workerResponse.payload.docId,
       workerResponse.payload.meta,
@@ -361,7 +404,8 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     )
     input.ctx.trackDocxOpen({
       docId: workerResponse.payload.docId,
-      sourcePath: resolvedTarget.trackedSourcePath
+      sourcePath: resolvedTarget.trackedSourcePath,
+      replaySession: registered.session
     })
     return {
       sourcePath: registered.session.sourcePath,
@@ -379,14 +423,14 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     })
   }
 
-  const registerOpenedDocument = (
+  const registerOpenedDocument = async (
     sourcePath: string,
     docId: string,
-    meta?: DocxDocumentSession['meta'],
-    stats?: DocxDocumentSession['stats']
+    meta?: DocxReplaySession['meta'],
+    stats?: DocxReplaySession['stats']
   ) => {
     const normalizedSourcePath = path.resolve(sourcePath)
-    const existing = state.documentSessionBySourcePath.get(normalizedSourcePath)
+    const existing = state.replaySessionBySourcePath.get(normalizedSourcePath)
     if (existing) {
       return {
         session: existing,
@@ -402,14 +446,12 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       createdAt: Date.now()
     }
     state.revisionEntryByDocId.set(docId, revisionEntry)
+    const snapshot = await buildReplaySnapshotForDoc(docId)
     const docIdByRef = new Map([['v1', docId]])
     const refByDocId = new Map([[docId, 'v1']])
-    const session: DocxDocumentSession = {
+    const session = createReplaySessionFromSnapshot({
       sourcePath: normalizedSourcePath,
       sourceDocId: docId,
-      activeDocId: docId,
-      activeRevisionRef: 'v1',
-      nextRevisionNumber: 2,
       meta: meta || {
         title: '',
         creator: '',
@@ -424,23 +466,24 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
         imageCount: 0,
         charCount: 0
       },
-      docIdByRevisionRef: docIdByRef,
-      revisionRefByDocId: refByDocId,
-      revisionByDocId: state.revisionEntryByDocId,
-      viewArtifacts: {}
-    }
+      snapshot
+    })
+    session.docIdByRevisionRef = docIdByRef
+    session.revisionRefByDocId = refByDocId
+    session.revisionByDocId = new Map([[docId, revisionEntry]])
     state.replaySessionBySourcePath.set(normalizedSourcePath, session)
-    state.documentSessionBySourcePath.set(normalizedSourcePath, session)
     return {
       session,
       currentRevisionRef: 'v1'
     }
   }
 
-  const registerRevision = (params: {
+  const registerRevision = async (params: {
     sourcePath: string
     previousDocId: string
     nextDocId: string
+    ops: DocxOp[]
+    createdBlocks: DocxRevision['createdBlocks']
     changedBlocks?: DocxRevision['changedBlocks']
     summary?: string
   }) => {
@@ -455,21 +498,34 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     }
     const currentRevisionRef = `v${String(session.nextRevisionNumber)}`
     session.nextRevisionNumber += 1
-    session.activeDocId = params.nextDocId
-    session.activeRevisionRef = currentRevisionRef
     session.docIdByRevisionRef.set(currentRevisionRef, params.nextDocId)
     session.revisionRefByDocId.set(params.nextDocId, currentRevisionRef)
     state.sourcePathByDocId.set(params.nextDocId, sourcePath)
     registerSnapshot(params.nextDocId, params.previousDocId)
+    const nextSnapshot = await buildReplaySnapshotForDoc(params.nextDocId)
     const revisionEntry: DocxRevision = {
       revisionRef: currentRevisionRef,
       docId: params.nextDocId,
       parentRevisionRef: previousRevisionRef,
       createdAt: Date.now(),
       changedBlocks: params.changedBlocks,
-      summary: params.summary
+      summary: params.summary,
+      ops: params.ops,
+      createdBlocks: params.createdBlocks
     }
     state.revisionEntryByDocId.set(params.nextDocId, revisionEntry)
+    session.revisionByDocId.set(params.nextDocId, revisionEntry)
+    params.ops.forEach((op) => {
+      applyRevisionToReplaySession({
+        session,
+        revisionRef: currentRevisionRef,
+        op,
+        createdBlocks: params.createdBlocks || [],
+        nextSnapshot
+      })
+    })
+    session.activeDocId = params.nextDocId
+    session.activeRevisionRef = currentRevisionRef
     return {
       currentRevisionRef,
       previousRevisionRef
@@ -489,7 +545,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     while (currentRevisionRef && traversed < maxDepth) {
       const docId = session.docIdByRevisionRef.get(currentRevisionRef)
       if (!docId) break
-      const entry = state.revisionEntryByDocId.get(docId)
+      const entry = session.revisionByDocId.get(docId)
       if (!entry) break
       entries.push({
         ...entry,
@@ -541,7 +597,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
           }
         }
         const docId = session.docIdByRevisionRef.get(cursor)
-        const entry = docId ? state.revisionEntryByDocId.get(docId) : undefined
+        const entry = docId ? session.revisionByDocId.get(docId) : undefined
         if (!entry?.parentRevisionRef) break
         cursor = entry.parentRevisionRef
         stepsApplied += 1
@@ -557,7 +613,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     let stepsApplied = 0
     while (stepsApplied < targetSteps) {
       const docId = session.docIdByRevisionRef.get(cursor)
-      const entry = docId ? state.revisionEntryByDocId.get(docId) : undefined
+      const entry = docId ? session.revisionByDocId.get(docId) : undefined
       if (!entry?.parentRevisionRef) {
         return {
           ok: false,
@@ -580,7 +636,54 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     }
   }
 
-  const activateRevision = (params: {
+  const rebuildReplaySessionAtRevision = async (
+    session: DocxReplaySession,
+    targetRevisionRef: string
+  ): Promise<void> => {
+    const targetChain: DocxRevision[] = []
+    let cursor = targetRevisionRef
+
+    while (cursor && cursor !== 'v1') {
+      const docId = session.docIdByRevisionRef.get(cursor)
+      const entry = docId ? session.revisionByDocId.get(docId) : undefined
+      if (!entry) break
+      targetChain.push(entry)
+      cursor = entry.parentRevisionRef || ''
+    }
+
+    const baseline = createReplaySessionFromSnapshot({
+      sourcePath: session.sourcePath,
+      sourceDocId: session.sourceDocId,
+      meta: session.meta,
+      stats: session.stats,
+      snapshot: session.sourceSnapshot
+    })
+    baseline.docIdByRevisionRef = session.docIdByRevisionRef
+    baseline.revisionRefByDocId = session.revisionRefByDocId
+    baseline.revisionByDocId = session.revisionByDocId
+    baseline.nextRevisionNumber = session.nextRevisionNumber
+    baseline.viewArtifacts = session.viewArtifacts
+
+    for (const revision of targetChain.reverse()) {
+      if (!revision.ops || revision.ops.length === 0) continue
+      const snapshot = await buildReplaySnapshotForDoc(revision.docId)
+      revision.ops.forEach((op) => {
+        applyRevisionToReplaySession({
+          session: baseline,
+          revisionRef: revision.revisionRef,
+          op,
+          createdBlocks: revision.createdBlocks || [],
+          nextSnapshot: snapshot
+        })
+      })
+    }
+
+    session.activeSnapshot = baseline.activeSnapshot
+    session.nodeById = baseline.nodeById
+    session.bodyNodeIds = baseline.bodyNodeIds
+  }
+
+  const activateRevision = async (params: {
     sourcePath: string
     targetDocId: string
     targetRevisionRef: string
@@ -590,6 +693,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       throw new Error(`docx session not found for sourcePath: ${params.sourcePath}`)
     }
     const previousRevisionRef = session.activeRevisionRef
+    await rebuildReplaySessionAtRevision(session, params.targetRevisionRef)
     session.activeDocId = params.targetDocId
     session.activeRevisionRef = params.targetRevisionRef
     return {
@@ -720,7 +824,6 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     emitWorkerFailure,
     callWorker,
     resolveDocxPath,
-    getDocumentSession,
     getReplaySession,
     ensureDocumentSession,
     requireDocumentSession,

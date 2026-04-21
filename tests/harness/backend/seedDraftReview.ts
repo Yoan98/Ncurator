@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import type { DraftReviewStore } from '../../../src/main/services/storage/domains/DraftReviewStore'
-import { materializeDocxConfirmCopy } from '../../../src/main/services/ai/human/tools/docx/review/confirmCopy'
 import { buildSourceVersion } from '../../../src/main/services/ai/human/tools/docx/review/utils'
 import { buildDocxReviewArtifactPaths } from '../../../src/main/services/ai/human/tools/docx/review/viewProjection'
 import type { SeedDraftReviewInput } from './test-types'
@@ -28,11 +27,8 @@ export const seedDraftReview = async (input: {
       const documentId = `${reviewId}-doc-${index + 1}`
       const sourceVersion = await buildSourceVersion(document.sourcePath)
       const confirmSourcePath = document.confirmBasePath || document.sourcePath
-      const {
-        reviewArtifactPath: confirmArtifactPath,
-        workingArtifactPath: effectiveDraftArtifactPath,
-        manifestArtifactPath
-      } = buildDocxReviewArtifactPaths({
+      const { reviewArtifactPath: confirmArtifactPath, workingArtifactPath: effectiveDraftArtifactPath } =
+        buildDocxReviewArtifactPaths({
         workspaceRootPath: input.workspaceRoot,
         reviewId,
         documentIndex: index,
@@ -40,19 +36,7 @@ export const seedDraftReview = async (input: {
       })
       await fs.mkdir(path.dirname(effectiveDraftArtifactPath), { recursive: true })
       await fs.copyFile(confirmSourcePath, effectiveDraftArtifactPath)
-
-      await materializeDocxConfirmCopy({
-        baseBuffer: await fs.readFile(confirmSourcePath),
-        confirmArtifactPath,
-        manifestArtifactPath,
-        reviewId,
-        sourcePath: document.sourcePath,
-        sourceName: document.sourceName || path.basename(document.sourcePath),
-        latestDraftSnapshotId: document.latestDraftSnapshotId || `${documentId}-snapshot`,
-        sourceVersion,
-        changes: [],
-        createdAt
-      })
+      await fs.copyFile(confirmSourcePath, confirmArtifactPath)
 
       return {
         id: documentId,

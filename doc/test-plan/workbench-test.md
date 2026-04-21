@@ -498,12 +498,12 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 - 测试类型：`e2e`
 - 实现状态：`未实现`
 - What：验证新建 `docx` 的确认修改在提交前会执行校验，只有 `ready=true` 时才允许最终创建目标文件。
-- Why：提交前校验是确认落盘的门禁，如果这里失守，就会把无效确认副本直接写成最终文件。
+- Why：提交前校验是确认落盘的门禁，如果这里失守，就会把无效审阅产物直接写成最终文件。
 - How：准备一个新建 `docx` 的 review，先覆盖校验失败再修复为通过，随后提交创建；对齐 `WB-REVIEW-003`、`WB-REVIEW-004`。
 - Oracle：
   - 校验有问题时，界面逐条展示问题并阻止本次提交落盘，对齐 `WB-REVIEW-003-AC1`。
   - 校验通过后，界面允许继续完成确认创建，对齐 `WB-REVIEW-003-AC2`。
-  - 提交成功后，仅当前文件 tab 对应的确认文档被创建为目标文件，对齐 `WB-REVIEW-004-AC2`。
+  - 提交成功后，仅当前文件 tab 对应的当前有效工作结果被创建为目标文件，对齐 `WB-REVIEW-004-AC2`。
 - Not：不验证修改现有 `docx` 的覆盖写回。
 
 #### `review-ended-state-collapse`
@@ -514,7 +514,7 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 - Why：结束态如果还暴露无效操作，用户很容易对已经结束的 review 再次误操作。
 - How：分别制造 `committed`、`discarded` 和 `superseded` 的 review，打开对应详情；对齐 `WB-REVIEW-005`，覆盖 `WB-REVIEW-005-AC1`、`WB-REVIEW-005-AC2`。
 - Oracle：
-  - 已结束 review 不再展示提交、放弃和确认副本操作入口，对齐 `WB-REVIEW-005-AC1`。
+  - 已结束 review 不再展示提交、放弃和审阅稿操作入口，对齐 `WB-REVIEW-005-AC1`。
   - 界面明确展示结束原因；若仍提供查看入口，只指向有效的源文件或当前可用结果，对齐 `WB-REVIEW-005-AC2`。
 - Not：不验证结束原因的产生逻辑。
 
@@ -522,10 +522,10 @@ workbench 的正式测试 suite 直接对齐 PRD 模块：
 
 - 测试类型：`e2e`
 - 实现状态：`未实现`
-- What：验证同一 run 生成多个确认文档时，assistant turn 会保留全部入口；当当前会话 review 清空后，失效入口会同步清理。
+- What：验证同一 run 生成多个审阅稿时，assistant turn 会保留全部入口；当当前会话 review 清空后，失效入口会同步清理。
 - Why：如果 turn 入口被覆盖或不清理，用户会在主区看到失效导航，误以为还能继续确认。
 - How：准备同一 run 生成多个 review 入口的场景，先检查 assistant turn 列表，再把当前会话所有 active review 处理完；对齐 `WB-REVIEW-006`、`WB-REVIEW-007`。
 - Oracle：
-  - 同一 run 生成的多个确认文档入口都会出现在同一 assistant turn 中，不会被后写 target 覆盖，对齐 `WB-REVIEW-007-AC1`。
+  - 同一 run 生成的多个审阅稿入口都会出现在同一 assistant turn 中，不会被后写 target 覆盖，对齐 `WB-REVIEW-007-AC1`。
   - 当前会话的 active review 清空后，assistant turn 不继续展示失效的确认修改入口，对齐 `WB-REVIEW-006-AC2`。
 - Not：不验证右侧 review tab 的切换；该部分由多文件 review case 覆盖。

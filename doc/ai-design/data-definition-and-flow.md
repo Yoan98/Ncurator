@@ -122,19 +122,17 @@ interface AiRunContext {
     sessionSummaryText: string
   }>
 
-  // docx 打开后记录内部快照 docId 与源路径的映射，便于后续链路追踪。
-  trackDocxOpen: (input: { docId: string; sourcePath: string }) => void
+  // docx 打开后记录当前 worker docId、源路径与 replay session，供后续 working/review 继续复用。
+  trackDocxOpen: (input: { docId: string; sourcePath: string; replaySession?: DocxReplaySession }) => void
 
-  // docx 修改后记录前后内部快照与改动块，便于审计与回溯。
+  // docx 修改后记录前后内部快照、改动块、createdBlocks 与最新 replay session，便于审计与回溯。
   trackDocxChanges: (input: {
-    // 变更前文档内部快照 ID。
     previousDocId: string
-    // 变更后文档内部快照 ID。
     nextDocId: string
-    // 本次执行的 docx 操作。
     op: DocxOp
-    // 本次操作影响到的 block 列表。
     changedBlocks: DocxChangedBlock[]
+    createdBlocks: DocxCreatedBlock[]
+    replaySession?: DocxReplaySession
   }) => void
 
   // docx 打开前把源路径解析成运行时可用的打开目标；若存在 active review，则返回 working draft view 对应的 artifact。
@@ -191,19 +189,21 @@ interface LLMConfig {
 
 ```ts
 interface DocxReplaySession {
-  // 原始源文档路径；始终指向最终需要提交回去的 source。
   sourcePath: string
-  // source 打开后对应的初始 worker docId，作为本次会话的 baseline。
   sourceDocId: string
-  // 当前会话真正生效的 worker docId；working/review/commit 都从这里投影。
   activeDocId: string
-  // 当前会话的最新修订引用；history / rollback 都围绕它推进。
   activeRevisionRef: string
-  // 下一个修订号的计数器；每次真实编辑成功后递增。
   nextRevisionNumber: number
-  // 当前会话里每个 docId 对应的修订记录；用于追溯祖先链和变更摘要。
+  // source baseline 的结构快照；作为 replay tree 的起点。
+  sourceSnapshot: DocxReplaySnapshot
+  // 当前 active revision 对应的结构快照；working/review/commit 都从它继续投影。
+  activeSnapshot: DocxReplaySnapshot
+  // 当前会话的修订集合；每个修订保存该轮 edit 的摘要、changedBlocks 与 op 语义。
   revisionByDocId: Map<string, DocxRevision>
-  // 当前会话最近一次生成出来的三种视图产物；只是缓存，不是真相本身。
+  // replay tree 的节点真相；bodyNodeIds 负责定义当前块顺序，nodeById 负责定义每个块的来源与 reviewState。
+  nodeById: Map<string, DocxReplayNode>
+  bodyNodeIds: string[]
+  // 最近一次生成出来的三种视图 artifact；只是缓存，不是真相本身。
   viewArtifacts: {
     working?: DocxViewArtifact
     review?: DocxViewArtifact
@@ -212,26 +212,19 @@ interface DocxReplaySession {
 }
 
 interface DocxRevision {
-  // 修订引用；对上层暴露的 docx 历史、回滚、资源上下文统一使用它。
   revisionRef: string
-  // 该修订对应的 worker docId。
   docId: string
-  // 祖先修订；用于串起当前会话的历史链。
   parentRevisionRef?: string
-  // 修订创建时间；用于 history 展示与排障。
   createdAt: number
-  // 本次修订的人类可读摘要；用于 history / review 辅助说明。
   summary?: string
-  // 本次修订命中的 block 变化列表；供 review/history 使用。
   changedBlocks?: DocxChangedBlock[]
+  ops?: DocxOp[]
+  createdBlocks?: DocxCreatedBlock[]
 }
 
 interface DocxViewArtifact {
-  // 三类投影之一：AI 工作稿、用户审阅稿、最终提交稿。
   kind: 'working' | 'review' | 'committed'
-  // 当前投影文件的实际路径。
   path: string
-  // 投影生成时间；用于缓存失效与排障。
   createdAt: number
 }
 ```

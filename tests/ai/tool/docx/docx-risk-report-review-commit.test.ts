@@ -6,9 +6,9 @@ import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import type { DocxMutationResult, DocxSearchResult } from './testUtils'
 
 describe('ai tool docx backend', () => {
-  it('risk-report-review-commit', async () => {
+  it('docx-risk-report-review-commit', async () => {
     await runBackendCase({
-      caseId: 'risk-report-review-commit',
+      caseId: 'docx-risk-report-review-commit',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
@@ -20,7 +20,7 @@ describe('ai tool docx backend', () => {
         const workspaceSeed = await seedRiskReportWorkspace(runtime)
         runtime.draftReviewService.beginRun({
           runId: runtime.runId,
-          sessionId: 'risk-report-review-commit-session',
+          sessionId: 'docx-risk-report-review-commit-session',
           inputText: '补全风险周报模板并提交'
         })
 

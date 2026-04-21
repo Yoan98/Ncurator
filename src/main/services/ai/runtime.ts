@@ -86,20 +86,30 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     recordLlmIo: deps.recordLlmIo,
     requestApproval: deps.requestApproval,
     loadHistory,
-    trackDocxOpen: ({ docId, sourcePath }) => {
+    trackDocxOpen: ({ docId, sourcePath, replaySession }) => {
       deps.draftReviewService.registerDocxOpen({
         runId: payload.runId,
         docId,
-        sourcePath
+        sourcePath,
+        replaySession
       })
     },
-    trackDocxChanges: ({ previousDocId, nextDocId, op, changedBlocks }) => {
+    trackDocxChanges: ({
+      previousDocId,
+      nextDocId,
+      op,
+      changedBlocks,
+      createdBlocks,
+      replaySession
+    }) => {
       deps.draftReviewService.registerDocxChanges({
         runId: payload.runId,
         previousDocId,
         nextDocId,
         op,
-        changedBlocks
+        changedBlocks,
+        createdBlocks,
+        replaySession
       })
     },
     resolveDocxOpenTarget: async (sourcePath) =>

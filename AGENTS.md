@@ -3,7 +3,7 @@
 ## 1. 文档引用
 ### 1.1 AI相关
 - 当涉及 AI 架构、主流程或 human-only runtime 时，必须阅读 `doc/ai-design/architecture.md`
-- 当涉及 AI 实现、运行入口、跨层边界、运行数据、docx replay/review 链路或工作区 KB 范围时，必须阅读 `doc/ai-design/implementation-spec.md` 与 `doc/ai-design/data-definition-and-flow.md`
+- 当涉及 AI 实现、运行入口、跨层边界、运行数据、docx replay/review/三视图链路或工作区 KB 范围时，必须阅读 `doc/ai-design/implementation-spec.md` 与 `doc/ai-design/data-definition-and-flow.md`
 - 当涉及 human 的 skill 分类、builtin/external 边界或 skill 基线时，必须阅读 `doc/ai-design/human-skill-design.md`
 - 当涉及 prompt 结构、工具结果渲染、工具 schema/输出 shape 自动导出或 human AI-facing 文案时，必须阅读 `doc/ai-design/prompt-design.md`
 

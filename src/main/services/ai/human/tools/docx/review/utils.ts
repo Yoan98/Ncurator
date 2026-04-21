@@ -111,9 +111,6 @@ export const parseDocxOpFromMetadata = (metadata?: JsonObject): DocxOp | null =>
 export const getMetadataGroupId = (metadata?: JsonObject): string =>
   typeof metadata?.group_id === 'string' ? metadata.group_id : ''
 
-export const getManifestPathForConfirmArtifact = (confirmArtifactPath: string): string =>
-  `${confirmArtifactPath}.manifest.json`
-
 export const collectArtifactPaths = (detail: DraftReviewDetail): string[] => {
   const unique = new Set<string>()
   detail.documents.forEach((document) => {

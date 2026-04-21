@@ -82,7 +82,7 @@ describe('ai tool docx backend', () => {
             applied,
             readAfter,
             trackedSourcePath:
-              harness.state.documentSessionBySourcePath.get(applied.sourcePath)?.sourcePath || ''
+              harness.state.replaySessionBySourcePath.get(applied.sourcePath)?.sourcePath || ''
           }
         } finally {
           await harness.release()

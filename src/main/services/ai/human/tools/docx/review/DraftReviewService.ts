@@ -40,7 +40,12 @@ export class DraftReviewService {
     this.runDraftTracker.discardRun(runId)
   }
 
-  public registerDocxOpen(input: { runId: string; docId: string; sourcePath: string }): void {
+  public registerDocxOpen(input: {
+    runId: string
+    docId: string
+    sourcePath: string
+    replaySession?: Parameters<RunDraftTracker['registerDocxOpen']>[0]['replaySession']
+  }): void {
     this.runDraftTracker.registerDocxOpen(input)
   }
 
@@ -50,6 +55,8 @@ export class DraftReviewService {
     nextDocId: string
     op: Parameters<RunDraftTracker['registerDocxChanges']>[0]['op']
     changedBlocks: Parameters<RunDraftTracker['registerDocxChanges']>[0]['changedBlocks']
+    createdBlocks: Parameters<RunDraftTracker['registerDocxChanges']>[0]['createdBlocks']
+    replaySession?: Parameters<RunDraftTracker['registerDocxChanges']>[0]['replaySession']
   }): void {
     this.runDraftTracker.registerDocxChanges(input)
   }
@@ -80,7 +87,7 @@ export class DraftReviewService {
     request: GetDraftReviewRequest
   ): Promise<GetDraftReviewResponse> {
     const review = await this.draftReviewStore.getReviewDetail(request.reviewId)
-    return review ? { review } : { error: 'confirm session not found' }
+    return review ? { review } : { error: 'review session not found' }
   }
 
   public async validateCommit(
@@ -99,13 +106,13 @@ export class DraftReviewService {
     request: DiscardDraftReviewRequest
   ): Promise<DiscardDraftReviewResponse> {
     const detail = await this.draftReviewStore.getReviewDetail(request.reviewId)
-    if (!detail) return { success: false, error: 'confirm session not found' }
+    if (!detail) return { success: false, error: 'review session not found' }
     if (
       detail.review.status === 'committing' ||
       detail.review.status === 'committed' ||
       detail.review.status === 'discarded'
     ) {
-      return { success: false, error: 'current confirm session cannot be discarded' }
+      return { success: false, error: 'current review session cannot be discarded' }
     }
 
     const updatedReview = {

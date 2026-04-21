@@ -17,9 +17,9 @@ const getEndedStateMessage = (status: DraftReviewDetail['review']['status']): st
     return '本文件修改已放弃，源文件保持不变。'
   }
   if (status === 'superseded') {
-    return '当前确认文档已失效，请查看该文件的最新版本。'
+    return '当前审阅稿已失效，请查看该文件的最新版本。'
   }
-  return '当前确认文档不可继续提交。'
+  return '当前审阅稿不可继续提交。'
 }
 
 type WorkbenchReviewPanelProps = {
@@ -105,7 +105,7 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
         className="ui-inset flex h-full items-center justify-center border-dashed text-sm text-[#999999]"
         data-testid={workbenchSelectors.reviewPanel}
       >
-        当前没有待确认的文档。
+        当前没有待确认的审阅稿。
       </div>
     )
   }
@@ -229,7 +229,7 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
           filePath={viewerPath}
           fileName={viewerName}
           anchorName={selectedChange?.anchor_name}
-          emptyText="当前确认文档暂时不可预览。"
+          emptyText="当前审阅稿暂时不可预览。"
         />
       </div>
     </div>

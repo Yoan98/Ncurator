@@ -10,7 +10,6 @@ const sanitizeProjectedFileName = (value: string): string => {
 export type DocxReviewArtifactPaths = {
   reviewArtifactPath: string
   workingArtifactPath: string
-  manifestArtifactPath: string
 }
 
 export const buildDocxReviewArtifactPaths = (input: {
@@ -36,8 +35,7 @@ export const buildDocxReviewArtifactPaths = (input: {
   )
   return {
     reviewArtifactPath,
-    workingArtifactPath,
-    manifestArtifactPath: `${reviewArtifactPath}.manifest.json`
+    workingArtifactPath
   }
 }
 
@@ -46,5 +44,9 @@ export const getReviewArtifactPath = (
 ): string | undefined => document.review_artifact_path
 
 export const getWorkingArtifactPath = (
+  document: Pick<DraftReviewDocument, 'working_artifact_path'>
+): string | undefined => document.working_artifact_path
+
+export const getCommittedViewPath = (
   document: Pick<DraftReviewDocument, 'working_artifact_path'>
 ): string | undefined => document.working_artifact_path

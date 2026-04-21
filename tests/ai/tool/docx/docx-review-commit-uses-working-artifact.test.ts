@@ -15,7 +15,7 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证提交确认文档时以 working artifact 落盘，而不是以 review artifact 落盘。',
+      description: '验证提交审阅稿时以 working artifact 落盘，而不是以 review artifact 落盘。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {

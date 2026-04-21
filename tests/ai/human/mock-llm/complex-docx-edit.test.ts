@@ -328,7 +328,7 @@ describe('ai human mock-llm backend', () => {
           {
             name: 'human-docx-structured-insert-uses-legal-docx-shape',
             message:
-              'mock-llm 下的 human/docx case 应提交 paragraph/table 对象化参数、成功写入文档并产出 confirm copy artifact。',
+              'mock-llm 下的 human/docx case 应提交 paragraph/table 对象化参数、成功写入文档并产出审阅稿 artifact。',
             data: {
               paragraphEditResult,
               tableEditResult,

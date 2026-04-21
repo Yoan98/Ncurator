@@ -397,9 +397,9 @@ export type DraftCommitValidationIssueCode =
   | 'source_changed'
   | 'session_not_found'
   | 'session_not_ready'
-  | 'confirm_copy_missing'
-  | 'confirm_copy_invalid'
-  | 'confirm_copy_locked'
+  | 'review_artifact_missing'
+  | 'working_artifact_missing'
+  | 'review_artifact_locked'
 
 export interface DraftSourceVersion {
   mtime_ms?: number

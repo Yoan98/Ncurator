@@ -437,7 +437,8 @@ export function registerHandlers(services: {
       previousDocId: openResponse.payload.docId,
       nextDocId: applyAcceptedResponse.payload.newDocId,
       op: acceptedOp,
-      changedBlocks: applyAcceptedResponse.payload.changedBlocks
+      changedBlocks: applyAcceptedResponse.payload.changedBlocks,
+      createdBlocks: []
     })
 
     const applyRejectedResponse = await client.call({
@@ -461,7 +462,8 @@ export function registerHandlers(services: {
       previousDocId: applyAcceptedResponse.payload.newDocId,
       nextDocId: applyRejectedResponse.payload.newDocId,
       op: rejectedOp,
-      changedBlocks: applyRejectedResponse.payload.changedBlocks
+      changedBlocks: applyRejectedResponse.payload.changedBlocks,
+      createdBlocks: []
     })
 
     return {
@@ -667,7 +669,7 @@ export function registerHandlers(services: {
         (input.conflict
           ? 'E2E fixture 已生成草稿审阅，并在提交前制造了源文件冲突。'
           : input.multiple
-            ? 'E2E fixture 已生成两个确认文档，可分别确认。'
+            ? 'E2E fixture 已生成两个审阅稿，可分别确认。'
             : 'E2E fixture 已生成草稿审阅，可继续逐块确认并提交。')
     })
     input.sendEvent({
@@ -1302,7 +1304,7 @@ export function registerHandlers(services: {
         return { canceled: true, error: 'pick application currently supports macOS only' }
       }
       const dialogOptions: OpenDialogOptions = {
-        title: '选择要打开确认文档的应用',
+        title: '选择要打开审阅稿的应用',
         buttonLabel: '选择此应用',
         defaultPath: '/Applications',
         properties: ['openFile', 'dontAddToRecent'],

@@ -18,7 +18,7 @@ import {
   createArchivedCommittedDetail,
   isSourceVersionFresh
 } from './utils'
-import { getReviewArtifactPath, getWorkingArtifactPath } from './viewProjection'
+import { getCommittedViewPath, getReviewArtifactPath, getWorkingArtifactPath } from './viewProjection'
 
 const buildTempOutputPath = (sourcePath: string, suffix: string): string =>
   path.join(path.dirname(sourcePath), `${path.basename(sourcePath)}.${suffix}.tmp`)
@@ -55,7 +55,7 @@ export class DraftReviewCommitService {
         issues: [
           {
             code: 'session_not_found',
-            message: '确认文档不存在或已被移除。'
+            message: '审阅稿不存在或已被移除。'
           }
         ]
       }
@@ -71,7 +71,7 @@ export class DraftReviewCommitService {
     ) {
       issues.push({
         code: 'session_not_ready',
-        message: '当前确认文档状态不允许提交。'
+        message: '当前审阅稿状态不允许提交。'
       })
     }
 
@@ -92,7 +92,7 @@ export class DraftReviewCommitService {
     request: CommitDraftReviewRequest
   ): Promise<CommitDraftReviewResponse> {
     const detail = await this.draftReviewStore.getReviewDetail(request.reviewId)
-    if (!detail) return { success: false, error: 'confirm session not found' }
+    if (!detail) return { success: false, error: 'review session not found' }
     if (!request.overwrite) {
       return { success: false, error: 'overwrite confirmation is required' }
     }
@@ -129,15 +129,15 @@ export class DraftReviewCommitService {
 
     try {
       for (const document of detail.documents) {
-        const workingPath = getWorkingArtifactPath(document)
-        if (!workingPath) {
-          throw new Error(`missing working artifact for ${document.source_name}`)
+        const committedViewPath = getCommittedViewPath(document)
+        if (!committedViewPath) {
+          throw new Error(`missing committed view for ${document.source_name}`)
         }
         const sourceTempPath = buildTempOutputPath(document.source_path, `commit-${job.id}`)
         tempPaths.push(sourceTempPath)
 
-        const workingBuffer = await fs.readFile(workingPath)
-        await fs.writeFile(sourceTempPath, workingBuffer)
+        const committedBuffer = await fs.readFile(committedViewPath)
+        await fs.writeFile(sourceTempPath, committedBuffer)
         await fs.rename(sourceTempPath, document.source_path)
 
         const stats = await readFileStats(document.source_path)
@@ -219,8 +219,8 @@ export class DraftReviewCommitService {
 
     if (!reviewPath) {
       issues.push({
-        code: 'confirm_copy_missing',
-        message: '审阅副本不存在，无法提交。',
+        code: 'review_artifact_missing',
+        message: '审阅稿不存在，无法提交。',
         documentId: document.id,
         sourcePath: document.source_path
       })
@@ -229,8 +229,8 @@ export class DraftReviewCommitService {
 
     if (!(await fileExists(reviewPath))) {
       issues.push({
-        code: 'confirm_copy_missing',
-        message: '审阅副本已丢失，需要重新生成。',
+        code: 'review_artifact_missing',
+        message: '审阅稿已丢失，需要重新生成。',
         documentId: document.id,
         sourcePath: document.source_path
       })
@@ -239,7 +239,7 @@ export class DraftReviewCommitService {
 
     if (!workingPath || !(await fileExists(workingPath))) {
       issues.push({
-        code: 'confirm_copy_invalid',
+        code: 'working_artifact_missing',
         message: '当前工作稿已丢失，需要重新生成。',
         documentId: document.id,
         sourcePath: document.source_path
@@ -251,7 +251,7 @@ export class DraftReviewCommitService {
     if (!fresh) {
       issues.push({
         code: 'source_changed',
-        message: '源文件已发生变化，无法基于旧确认文档直接替换。',
+        message: '源文件已发生变化，无法基于旧审阅稿直接替换。',
         documentId: document.id,
         sourcePath: document.source_path
       })

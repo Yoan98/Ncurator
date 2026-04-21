@@ -915,14 +915,14 @@ const ChatPage: React.FC = () => {
           ...current,
           reviewTargets: mergeReviewTargets(current.reviewTargets, {
             reviewId: event.review.reviewId,
-            title: '确认文档',
+            title: '审阅稿',
             changeCount: event.review.changeCount,
             documentCount: event.review.documentCount,
             status: 'pending_confirm'
           })
         }))
         if (!event.internal && currentSessionId) {
-          message.success(`确认文档已生成：${event.review.changeCount} 处修改`)
+          message.success(`审阅稿已生成：${event.review.changeCount} 处修改`)
           const shouldAutoOpen =
             contentPanel.kind === 'review_workspace' || contentPanel.kind === 'file_preview'
           void loadDraftReviewsForSession(currentSessionId, {
@@ -1360,7 +1360,7 @@ const ChatPage: React.FC = () => {
       if (!response.success) {
         message.error(response.error || '提交失败')
       } else {
-        emitSuccessMessage('确认文档已写回源文件')
+        emitSuccessMessage('审阅稿已写回源文件')
       }
       await loadDraftReviewsForSession(currentSessionId, { autoOpen: true })
     } catch (error) {
@@ -1380,7 +1380,7 @@ const ChatPage: React.FC = () => {
         reviewId: discardedReviewId
       })
       if (!response.success) {
-        message.error(response.error || '放弃确认文档失败')
+        message.error(response.error || '放弃审阅稿失败')
         return
       }
       emitSuccessMessage('已放弃本次修改')
@@ -1419,7 +1419,7 @@ const ChatPage: React.FC = () => {
       })
     } catch (error) {
       console.error(error)
-      message.error('放弃确认文档失败')
+      message.error('放弃审阅稿失败')
     } finally {
       setDraftDiscardSubmitting(false)
     }

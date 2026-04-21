@@ -175,10 +175,21 @@ const applySingleEdit = async (input: {
     }
   }
 
-  const revisionUpdate = input.runtime.registerRevision({
+  const createdBlocks = input.createdBlocks
+    ? await createdBlocksFromDiff({
+        runtime: input.runtime,
+        previousDocId: input.currentDocId,
+        nextDocId: workerResponse.payload.newDocId
+      })
+    : []
+  const reviewOps = await input.runtime.expandOpsForReview(input.currentDocId, input.ops)
+
+  const revisionUpdate = await input.runtime.registerRevision({
     sourcePath: input.sourcePath,
     previousDocId: input.currentDocId,
     nextDocId: workerResponse.payload.newDocId,
+    ops: reviewOps,
+    createdBlocks,
     changedBlocks: workerResponse.payload.changedBlocks,
     summary: input.summary
   })
@@ -186,7 +197,9 @@ const applySingleEdit = async (input: {
     previousDocId: input.currentDocId,
     nextDocId: workerResponse.payload.newDocId,
     op: input.ops[0],
-    changedBlocks: workerResponse.payload.changedBlocks
+    changedBlocks: workerResponse.payload.changedBlocks,
+    createdBlocks,
+    replaySession: input.runtime.getReplaySession(input.sourcePath)
   })
   return {
     previousRevisionRef: revisionUpdate.previousRevisionRef,
@@ -194,13 +207,7 @@ const applySingleEdit = async (input: {
     changedBlocks: workerResponse.payload.changedBlocks,
     warnings: workerResponse.payload.warnings,
     nextDocId: workerResponse.payload.newDocId,
-    createdBlocks: input.createdBlocks
-      ? await createdBlocksFromDiff({
-          runtime: input.runtime,
-          previousDocId: input.currentDocId,
-          nextDocId: workerResponse.payload.newDocId
-        })
-      : []
+    createdBlocks
   }
 }
 
@@ -753,7 +760,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         })
       }
 
-      const revisionState = runtime.activateRevision({
+      const revisionState = await runtime.activateRevision({
         sourcePath: sessionResult.sourcePath,
         targetDocId: resolved.targetDocId,
         targetRevisionRef: resolved.targetRevisionRef

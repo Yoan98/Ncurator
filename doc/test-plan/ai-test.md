@@ -311,13 +311,25 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证提交确认文档时以 working artifact 落盘，而不是以 review artifact 落盘。
+- What：验证提交审阅稿时按 committed/working 视图语义落盘，而不是以 review artifact 直接覆盖源文件。
 - Why：最终落盘必须来自 committed/working 视图，不能把审阅标记直接写回源文件。
 - How：seed 一条 active review，再让 review 与 working artifact 指向不同内容后执行 commit。
-- Oracle：提交后 source 文件采用 working artifact 内容，review-only 内容不会写回。
+- Oracle：提交后 source 文件采用当前有效工作结果，review-only 内容不会写回。
 - Not：不验证冲突处理。
 - Last Run：`2026-04-20 14:18:39 +08:00`
 - Last Result：`通过`
+
+##### `docx-risk-report-review-commit`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证风险周报场景在 review 生成后，既能产出包含目标修改的待确认稿，也能在 commit 后把最终内容落盘到源 `docx`。
+- Why：通用 commit 契约之外，还需要一条贴近真实业务内容的 docx 提交样例，确认 review 到 commit 的整条链路在具体场景里可用。
+- How：构造与 live 风险周报 case 相同的模板；通过真实 docx 工具执行两处占位符替换，随后 finalize review，直接检查 review artifact；再执行真实 `commitReview`，检查源文档最终内容。
+- Oracle：review artifact 中能读到“待跟进”和“Alice”对应的修改结果；commit 成功后，源模板中两处占位符被最终内容替换，且不再保留 `RISK_TODO / OWNER_TODO`。
+- Not：不覆盖 live 模型执行路径，不要求经过 KB 或 terminal。
+- Last Run：`待更新`
+- Last Result：`待更新`
 
 ##### `docx-review-discard-preserves-source`
 
@@ -718,16 +730,6 @@
 - Last Run：`2026-04-16 18:37:18 +08:00`
 - Last Result：`通过`
 
-##### `risk-report-review-commit`
-
-- 测试类型：`backend`
-- 实现状态：`已实现`
-- What：验证风险周报场景在 review 生成后，既能产出包含目标修改的待确认稿，也能在 commit 后把最终内容落盘到源 `docx`。
-- Why：live case 只负责验证自主规划与 review 交付；review 结果与 commit 落盘结果需要用稳定 case 单独守住。
-- How：构造与 live case 相同的风险周报模板；通过真实 docx 工具执行两处占位符替换，随后 finalize review，直接检查 review artifact；再执行真实 `commitReview`，检查源文档最终内容。
-- Oracle：review artifact 中能读到“待跟进”和“Alice”对应的修改结果；commit 成功后，源模板中两处占位符被最终内容替换，且不再保留 `RISK_TODO / OWNER_TODO`。
-- Not：不覆盖 live 模型执行路径，不要求经过 KB 或 terminal。
-
 ##### `human-docx-cause-remedy-reading-live`
 
 - 测试类型：`backend`
@@ -745,7 +747,7 @@
 - 测试类型：`backend`
 - 实现状态：`已实现`
 - What：验证 live 模式下 `human` 会基于两份已选 `docx`，在目标 `docx` 的相关位置追加解释性段落和对照表，并生成不覆盖原文件的审阅稿。
-- Why：真实用户常见诉求不是“改占位符”，而是“在这块后面补一段更好懂的说明”；这条 case 覆盖跨文件取材、相关位置补写、结构化新增与 confirm-copy 交付，对齐 `WB-CORE-002-AC2`、`WB-CORE-003-AC1`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
+- Why：真实用户常见诉求不是“改占位符”，而是“在这块后面补一段更好懂的说明”；这条 case 覆盖跨文件取材、相关位置补写、结构化新增与审阅稿交付，对齐 `WB-CORE-002-AC2`、`WB-CORE-003-AC1`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
 - How：注入真实 live LLM 配置；把 `tests/fixtures/ai/docx/深度学习.docx` 与 `tests/fixtures/ai/docx/图形学.docx` 作为已选资料复制进 workspace；直接输入“《图形学》里‘反走样’这一节我还是记不住。你参考我刚选的这两份 Word，直接在这一节最后补一小段更好理解的说明，再加个简单对照表，一列写反走样，一列写《深度学习》里的过拟合。直接给我确认稿就行，别改原文件，也不用先回我文字草稿。”的自然语言诉求，让真实 `human` 自主完成。
 - Oracle：任务最终完成；事件流中至少两次 `docx_search` / `docx_read` / `docx_outline` 覆盖两份目标文档；docx 编辑前至少出现一次针对“反走样”的读取定位；至少出现一次 docx 编辑工具；存在 `draft_review_ready` 事件，最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；原始两份 `docx` 文件未被覆盖；写入请求里能看到新增说明段落与表格结构。
 - Not：不要求固定 op 组合，也不对最终说明文案做逐字断言。

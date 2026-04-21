@@ -172,10 +172,10 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                 ) : null}
 
                 {turn?.reviewTargets.length ? (
-                  <div>
-                    <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-[#999999]">
-                      确认文档
-                    </div>
+                    <div>
+                      <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-[#999999]">
+                      审阅稿
+                      </div>
                     <div className="space-y-2">
                       {turn.reviewTargets.map((review) => {
                         const statusMeta = review.status ? REVIEW_STATUS_META[review.status] : null

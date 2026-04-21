@@ -8,12 +8,17 @@ import type {
   DraftReviewSummary
 } from '../../../../../../../shared/types'
 import type { DocumentsStore } from '../../../../../storage/domains/DocumentsStore'
-import type { DocxChangedBlock, DocxOp } from '../types'
+import type { DocxChangedBlock, DocxCreatedBlock, DocxOp, DocxReplaySession } from '../types'
 import { getDocxWorkerClient } from '../worker/docxWorkerClient'
-import { materializeDocxConfirmCopy } from './confirmCopy'
-import { computeCumulativeDocxChangeSeeds } from './cumulativeDiff'
+import { materializeDocxProjectedArtifact } from './reviewSerializer'
 import type { RunDraftDocument } from './types'
-import { buildSourceVersion } from './utils'
+import {
+  buildDocxChangeLocator,
+  buildDocxChangeSummary,
+  buildDocxChangeTitle,
+  buildSourceVersion,
+  getDocxChangeKind
+} from './utils'
 import { buildDocxReviewArtifactPaths } from './viewProjection'
 import { clipText } from '../../../../utils/text'
 
@@ -40,7 +45,12 @@ export class RunDraftTracker {
     this.runDrafts.delete(runId)
   }
 
-  public registerDocxOpen(input: { runId: string; docId: string; sourcePath: string }): void {
+  public registerDocxOpen(input: {
+    runId: string
+    docId: string
+    sourcePath: string
+    replaySession?: DocxReplaySession
+  }): void {
     const state = this.runDrafts.get(input.runId)
     if (!state) return
 
@@ -48,6 +58,7 @@ export class RunDraftTracker {
     const existing = state.documentBySourcePath.get(sourcePath)
     if (existing) {
       existing.latestDocId = input.docId
+      existing.replaySession = input.replaySession || existing.replaySession
       state.sourcePathByDocId.set(input.docId, sourcePath)
       return
     }
@@ -56,7 +67,8 @@ export class RunDraftTracker {
       sourcePath,
       sourceName: path.basename(sourcePath),
       latestDocId: input.docId,
-      dirtyChangeCount: 0
+      dirtyChangeCount: 0,
+      replaySession: input.replaySession
     })
     state.sourcePathByDocId.set(input.docId, sourcePath)
   }
@@ -67,6 +79,8 @@ export class RunDraftTracker {
     nextDocId: string
     op: DocxOp
     changedBlocks: DocxChangedBlock[]
+    createdBlocks: DocxCreatedBlock[]
+    replaySession?: DocxReplaySession
   }): void {
     const state = this.runDrafts.get(input.runId)
     if (!state || input.changedBlocks.length === 0) return
@@ -80,6 +94,7 @@ export class RunDraftTracker {
     state.sourcePathByDocId.set(input.nextDocId, sourcePath)
     document.latestDocId = input.nextDocId
     document.dirtyChangeCount += input.changedBlocks.length
+    document.replaySession = input.replaySession || document.replaySession
   }
 
   public async finalizeRunReview(input: {
@@ -103,7 +118,7 @@ export class RunDraftTracker {
     for (const [index, document] of changedDocuments.entries()) {
       const reviewId = randomUUID()
       const now = Date.now()
-      const { reviewArtifactPath, workingArtifactPath, manifestArtifactPath } =
+      const { reviewArtifactPath, workingArtifactPath } =
         buildDocxReviewArtifactPaths({
           workspaceRootPath: input.workspaceRootPath,
           reviewId,
@@ -135,28 +150,37 @@ export class RunDraftTracker {
       const documentId = randomUUID()
       const sourceBuffer = await fs.readFile(document.sourcePath)
       const latestDraftBuffer = await fs.readFile(workingArtifactPath)
-      const cumulativeChanges = await computeCumulativeDocxChangeSeeds({
-        sourceBuffer,
-        latestDraftBuffer,
-        latestDraftSnapshotId: document.latestDocId
-      })
+      const replaySession = document.replaySession
+      const reviewChanges = replaySession
+        ? this.buildReviewChanges({
+            reviewId,
+            documentId,
+            session: replaySession,
+            now
+          })
+        : []
 
-      if (cumulativeChanges.length === 0) {
+      if (!replaySession || reviewChanges.length === 0) {
         continue
       }
 
-      await materializeDocxConfirmCopy({
-        baseBuffer: sourceBuffer,
-        confirmArtifactPath: reviewArtifactPath,
-        manifestArtifactPath,
-        reviewId,
-        sourcePath: document.sourcePath,
-        sourceName: document.sourceName,
-        latestDraftSnapshotId: document.latestDocId,
-        sourceVersion,
-        changes: cumulativeChanges,
-        createdAt: now
+      await materializeDocxProjectedArtifact({
+        sourceBuffer,
+        workingBuffer: latestDraftBuffer,
+        session: replaySession,
+        kind: 'review',
+        outPath: reviewArtifactPath
       })
+      replaySession.viewArtifacts.working = {
+        kind: 'working',
+        path: workingArtifactPath,
+        createdAt: now
+      }
+      replaySession.viewArtifacts.review = {
+        kind: 'review',
+        path: reviewArtifactPath,
+        createdAt: now
+      }
 
       const reviewDocument: DraftReviewDocument = {
         id: documentId,
@@ -169,38 +193,20 @@ export class RunDraftTracker {
         review_artifact_path: reviewArtifactPath,
         working_artifact_path: workingArtifactPath,
         source_version: sourceVersion,
-        total_change_count: cumulativeChanges.length,
-        pending_change_count: cumulativeChanges.length,
+        total_change_count: reviewChanges.length,
+        pending_change_count: reviewChanges.length,
         accepted_change_count: 0,
         rejected_change_count: 0,
         created_at: now,
         updated_at: now
       }
 
-      const reviewChanges: DraftReviewChange[] = cumulativeChanges.map((change) => ({
-          id: change.id,
-          review_id: reviewId,
-          document_id: documentId,
-          order_index: change.orderIndex,
-          change_kind: change.changeKind,
-          title: change.title,
-          summary: change.summary,
-          decision: 'pending',
-          before_text: change.beforeText,
-          after_text: change.afterText,
-          anchor_name: change.anchorName,
-          locator: change.locator,
-          metadata: change.metadata,
-          created_at: now,
-          updated_at: now
-      }))
-
       const review: DraftReviewSummary = {
         id: reviewId,
         session_id: state.sessionId,
         run_id: input.runId,
         status: 'pending_confirm',
-        title: clipText(`确认文档：${document.sourceName}`, 80) || '确认文档',
+        title: clipText(`审阅稿：${document.sourceName}`, 80) || '审阅稿',
         document_count: 1,
         change_count: reviewChanges.length,
         pending_change_count: reviewChanges.length,
@@ -221,5 +227,47 @@ export class RunDraftTracker {
 
     this.runDrafts.delete(input.runId)
     return details
+  }
+
+  private buildReviewChanges(input: {
+    reviewId: string
+    documentId: string
+    session: DocxReplaySession
+    now: number
+  }): DraftReviewChange[] {
+    const revisions = [...input.session.revisionByDocId.values()]
+      .filter(
+        (revision) =>
+          revision.revisionRef !== 'v1' && (revision.ops?.length || 0) > 0 && (revision.changedBlocks?.length || 0) > 0
+      )
+      .sort((left, right) => left.createdAt - right.createdAt)
+
+    let orderIndex = 1
+    return revisions.flatMap((revision) =>
+      (revision.changedBlocks || []).map((change, changeIndex) => {
+        const op = revision.ops?.[changeIndex] || revision.ops?.[0]
+        return ({
+        id: `${input.reviewId}-${revision.revisionRef}-${String(orderIndex)}`,
+        review_id: input.reviewId,
+        document_id: input.documentId,
+        order_index: orderIndex++,
+        change_kind: op ? getDocxChangeKind(op) : 'block',
+        title: op ? buildDocxChangeTitle(op, change) : revision.summary || '文档修改',
+        summary: op ? buildDocxChangeSummary(op, change) : revision.summary || '',
+        decision: 'pending' as const,
+        before_text: change.beforeText,
+        after_text: change.afterText,
+        locator: buildDocxChangeLocator(change),
+        metadata: {
+          revision_ref: revision.revisionRef,
+          group_id: revision.revisionRef,
+          ...(op ? { docx_op_json: JSON.stringify(op) } : {}),
+          ...(revision.createdBlocks ? { created_blocks_json: JSON.stringify(revision.createdBlocks) } : {})
+        },
+        created_at: input.now,
+        updated_at: input.now
+      })
+      })
+    )
   }
 }

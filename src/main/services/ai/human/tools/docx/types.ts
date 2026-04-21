@@ -221,6 +221,22 @@ export type DocxRevision = {
   createdAt: number
   summary?: string
   changedBlocks?: DocxChangedBlock[]
+  ops?: DocxOp[]
+  createdBlocks?: DocxCreatedBlock[]
+}
+
+export type DocxReplaySnapshotBlock = {
+  blockId: string
+  bodyIndex: number
+  kind: 'paragraph' | 'table'
+  spec: DocxBlockSpec
+  tableCellBlockIds: string[]
+}
+
+export type DocxReplaySnapshot = {
+  blocks: DocxReplaySnapshotBlock[]
+  blockById: Map<string, DocxReplaySnapshotBlock>
+  tableBlockIdByCellBlockId: Map<string, string>
 }
 
 export type DocxReplaySession = {
@@ -231,13 +247,15 @@ export type DocxReplaySession = {
   nextRevisionNumber: number
   meta: DocxOpenMeta
   stats: DocxOpenStats
+  sourceSnapshot: DocxReplaySnapshot
+  activeSnapshot: DocxReplaySnapshot
   docIdByRevisionRef: Map<string, string>
   revisionRefByDocId: Map<string, string>
   revisionByDocId: Map<string, DocxRevision>
+  nodeById: Map<string, DocxReplayNode>
+  bodyNodeIds: string[]
   viewArtifacts: Partial<Record<DocxViewArtifact['kind'], DocxViewArtifact>>
 }
-
-export type DocxDocumentSession = DocxReplaySession
 
 export type DocxReviewState =
   | 'normal'
@@ -250,10 +268,15 @@ export type DocxReplayNode = {
   nodeId: string
   blockId: string
   bodyIndex: number
-  kind: 'paragraph' | 'table' | 'table_cell'
+  kind: 'paragraph' | 'table'
   sourceOrigin: 'source' | 'generated'
   reviewState: DocxReviewState
   parentNodeId?: string
+  sourceBlockId?: string
+  currentBlockId?: string
+  spec: DocxBlockSpec
+  createdRevisionRef: string
+  changedRevisionRef?: string
 }
 
 export type DocxViewArtifact = {
@@ -270,5 +293,4 @@ export type DocxCapabilityToolsRuntimeState = {
   snapshotEntryByDocId: Map<string, DocxSnapshotLineageEntry>
   revisionEntryByDocId: Map<string, DocxRevision>
   replaySessionBySourcePath: Map<string, DocxReplaySession>
-  documentSessionBySourcePath: Map<string, DocxDocumentSession>
 }

@@ -3,7 +3,12 @@ import type { DocumentsStore } from '../storage/domains/DocumentsStore'
 import type { LlmConfigStore } from '../storage/domains/LlmConfigStore'
 import type { EmbeddingService } from '../vector/EmbeddingService'
 import type { AiLlmDriver } from './llmExecutor'
-import type { DocxChangedBlock, DocxOp } from './human/tools/docx/types'
+import type {
+  DocxChangedBlock,
+  DocxCreatedBlock,
+  DocxOp,
+  DocxReplaySession
+} from './human/tools/docx/types'
 import type { DraftReviewService } from './human/tools/docx/review/DraftReviewService'
 import type { ResolvedDocxOpenTarget } from './human/tools/docx/review/types'
 import type { z } from 'zod/v4'
@@ -132,12 +137,18 @@ export type AiRunContext = {
     maxRecentTurnsChars?: number
     maxSummaryChars?: number
   }) => Promise<{ recentTurnsText: string; sessionSummaryText: string }>
-  trackDocxOpen: (input: { docId: string; sourcePath: string }) => void
+  trackDocxOpen: (input: {
+    docId: string
+    sourcePath: string
+    replaySession?: DocxReplaySession
+  }) => void
   trackDocxChanges: (input: {
     previousDocId: string
     nextDocId: string
     op: DocxOp
     changedBlocks: DocxChangedBlock[]
+    createdBlocks: DocxCreatedBlock[]
+    replaySession?: DocxReplaySession
   }) => void
   resolveDocxOpenTarget: (sourcePath: string) => Promise<ResolvedDocxOpenTarget>
   beginDocxReviewRun: () => void

@@ -64,7 +64,7 @@ describe('ai human live backend', () => {
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
-        description: '验证 live 模式下 human 会在图形学相关位置后补写说明和对照表，并生成 confirm copy。',
+        description: '验证 live 模式下 human 会在图形学相关位置后补写说明和对照表，并生成审阅稿。',
         fixtures: DOCX_CROSS_FILE_FIXTURE_PATHS,
         runMode: 'single',
         runtimeModelName: hasLiveLlmConfigInEnv('primary')

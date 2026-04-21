@@ -87,8 +87,8 @@ describe('ai tool docx backend', () => {
             readOriginalSearch,
             readOriginal,
             activeRevisionRef:
-              harness.state.documentSessionBySourcePath.get(initialRead.sourcePath)?.activeRevisionRef || '',
-            trackedSourcePaths: [...harness.state.documentSessionBySourcePath.keys()]
+              harness.state.replaySessionBySourcePath.get(initialRead.sourcePath)?.activeRevisionRef || '',
+            trackedSourcePaths: [...harness.state.replaySessionBySourcePath.keys()]
           }
         } finally {
           await harness.release()

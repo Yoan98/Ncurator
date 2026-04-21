@@ -34,7 +34,7 @@ describe('ai tool docx backend', () => {
               sourcePath: 'missing.docx',
               revisionRef: 'v1'
             }),
-            trackedSourceCount: harness.state.documentSessionBySourcePath.size
+            trackedSourceCount: harness.state.replaySessionBySourcePath.size
           }
         } finally {
           await harness.release()
