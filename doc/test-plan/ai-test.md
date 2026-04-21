@@ -247,6 +247,18 @@
 - Last Run：`2026-04-16 16:16:05 +08:00`
 - Last Result：`通过`
 
+##### `docx-positioned-layout-read-only-contract`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证命中 positioned block 时，docx 写工具会统一拒绝自动编辑。
+- Why：复杂定位排版 docx 在 preview/review 语义下即使只是原地改字也可能因修订标记叠加而错位，这条 case 要长期守住 `positioned = read-only` 的能力边界。
+- How：对真实 `图形学.docx` 执行 `docx_outline` 定位一个 positioned block，再分别尝试 `docx_paragraph_edit`、`docx_text_edit`、`docx_text_style_edit` 与 `docx_table_edit(insert_after)`。
+- Oracle：四类写入都返回 `invalid_input`；错误信息稳定包含“当前命中复杂定位排版区域，暂不支持自动编辑”；不产生新的当前修订。
+- Not：不验证 human 的回退话术，也不验证 positioned 文档中的读取质量。
+- Last Run：`2026-04-21 19:00:07 +08:00`
+- Last Result：`通过`
+
 ##### `docx-mixed-format-preservation`
 
 - 测试类型：`backend`
@@ -756,11 +768,11 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 live 模式下 `human` 在复杂 positioned docx 中，会保留原地安全修改，但对命中复杂定位排版区域的结构性写入做优雅回退。
-- Why：这类由 `framePr` / 绝对定位 shape 组成的 docx 结构性插入极易破坏版式；这条 case 要长期守住“安全修改可继续、结构性 positioned 写入必须拒绝并给用户手动提示”的正式能力，对齐 `WB-CORE-003-AC1`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
-- How：注入真实 live LLM 配置；把 `图形学.docx` 与 `深度学习.docx` 作为已选资料复制进 workspace；直接输入“我准备把这份图形学讲义发给同学复习，想顺手润一下。你先把‘反走样’这块里一两句特别拗口的话改得更好懂一点；如果合适，再参考我选的那份深度学习资料，在这一节后面补一个更容易记的类比说明和简短对照表。要是有些地方因为版式原因不适合自动动，你就直接告诉我怎么手动补。”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；事件流中至少两次 `docx_search` / `docx_read` / `docx_outline` 覆盖两份目标文档；至少一次安全 docx 原地修改成功；至少一次结构性写入因为命中复杂定位排版区域失败，并返回稳定 `diagnostic.message`；最终答复明确区分“已自动处理部分”和“需要手动补的部分”；原始 `docx` 文件未被覆盖。
-- Not：不强制一定生成结构性审阅稿，也不要求固定使用哪一种安全修改工具。
+- What：验证 live 模式下 `human` 在复杂 positioned docx 中不会执行任何自动编辑，而是对命中复杂定位排版区域的写入请求做优雅回退。
+- Why：这类由 `framePr` / 绝对定位 shape 组成的 docx 即使只是原地改字，在 preview/review 语义下也可能因修订标记叠加而错位；这条 case 要长期守住“positioned 区域只读、自动写入必须拒绝并给用户手动提示”的正式能力，对齐 `WB-CORE-003-AC1`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
+- How：注入真实 live LLM 配置；把 `图形学.docx` 与 `深度学习.docx` 作为已选资料复制进 workspace；直接输入“我准备把这份图形学讲义发给同学复习，想把‘反走样’这部分补得更容易记一些。你参考我选的那份深度学习资料，在这一节后面补一个类比说明和简短对照表。”的自然语言诉求，让真实 `human` 自主完成。
+- Oracle：任务最终完成；事件流中至少两次 `docx_search` / `docx_read` / `docx_outline` 覆盖两份目标文档；至少一次 docx 写入请求因为命中复杂定位排版区域失败，并返回稳定 `diagnostic.message`；不生成 `draft_review` 与 `draft` artifact；最终答复明确说明未自动编辑，并给出建议手动补充的内容；原始 `docx` 文件未被覆盖。
+- Not：不要求固定使用哪一种 docx 写工具，也不要求最终答复使用固定措辞。
 
 ##### `human-kb-guided-docx-comparison-draft-live`
 

@@ -93,8 +93,8 @@ const fetchDetailedBlock = async (
   return response.payload.block
 }
 
-const buildPositionedStructuralEditMessage = (operationLabel: string): string =>
-  `当前命中复杂定位排版区域，暂不支持执行${operationLabel}，以避免破坏版式；可继续读取、原地文本替换或样式修改。`
+const buildPositionedReadOnlyMessage = (): string =>
+  '当前命中复杂定位排版区域，暂不支持自动编辑，以避免预览修订和版式叠加导致错位；你可以手动按建议内容调整该处。'
 
 const failIfPositionedBlock = async (input: {
   runtime: DocxToolRuntime
@@ -104,7 +104,6 @@ const failIfPositionedBlock = async (input: {
   currentRevisionRef: string
   docId: string
   blockId: string
-  operationLabel: string
 }): Promise<DocxToolFailure | null> => {
   const block = await fetchDetailedBlock(input.runtime, input.docId, input.blockId)
   if (block.layoutMode !== 'positioned') {
@@ -114,7 +113,7 @@ const failIfPositionedBlock = async (input: {
     toolName: input.toolName,
     toolCallId: input.toolCallId,
     code: 'invalid_input',
-    error: buildPositionedStructuralEditMessage(input.operationLabel),
+    error: buildPositionedReadOnlyMessage(),
     draftDocId: input.docId,
     resourceContext: input.runtime.buildResourceContext({
       sourcePath: input.sourcePath,
@@ -122,6 +121,60 @@ const failIfPositionedBlock = async (input: {
       currentRevisionRef: input.currentRevisionRef
     })
   })
+}
+
+const resolveReplaceTextTargetBlockIds = async (input: {
+  runtime: DocxToolRuntime
+  docId: string
+  query: string
+  blockIds?: string[]
+}): Promise<string[]> => {
+  if (Array.isArray(input.blockIds) && input.blockIds.length > 0) {
+    return [...new Set(input.blockIds)]
+  }
+
+  const searchResponse = await input.runtime.callWorker({
+    action: 'search',
+    payload: {
+      docId: input.docId,
+      query: input.query,
+      mode: 'literal',
+      scopeBlockIds: []
+    }
+  })
+  if (!searchResponse.ok) {
+    return []
+  }
+  if (searchResponse.payload.action !== 'search') {
+    throw new Error('worker protocol mismatch (replace_text positioned search)')
+  }
+  return [...new Set(searchResponse.payload.matches.map((match) => match.blockId).filter(Boolean))]
+}
+
+const failIfAnyPositionedBlocks = async (input: {
+  runtime: DocxToolRuntime
+  toolName: string
+  toolCallId: string
+  sourcePath: string
+  currentRevisionRef: string
+  docId: string
+  blockIds: string[]
+}): Promise<DocxToolFailure | null> => {
+  for (const blockId of input.blockIds) {
+    const failure = await failIfPositionedBlock({
+      runtime: input.runtime,
+      toolName: input.toolName,
+      toolCallId: input.toolCallId,
+      sourcePath: input.sourcePath,
+      currentRevisionRef: input.currentRevisionRef,
+      docId: input.docId,
+      blockId
+    })
+    if (failure) {
+      return failure
+    }
+  }
+  return null
 }
 
 const createdBlocksFromDiff = async (input: {
@@ -275,8 +328,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
               sourcePath: sessionResult.sourcePath,
               currentRevisionRef: sessionResult.currentRevisionRef,
               docId: sessionResult.docId,
-              blockId: args.anchorBlockId!,
-              operationLabel: '段落插入'
+              blockId: args.anchorBlockId!
             })
             if (failure) {
               return finalizeDocxToolFailure({
@@ -295,6 +347,24 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           }
           break
         case 'replace_text': {
+          const failure = await failIfPositionedBlock({
+            runtime,
+            toolName,
+            toolCallId,
+            sourcePath: sessionResult.sourcePath,
+            currentRevisionRef: sessionResult.currentRevisionRef,
+            docId: sessionResult.docId,
+            blockId: args.blockId!
+          })
+          if (failure) {
+            return finalizeDocxToolFailure({
+              runtime,
+              failure,
+              activity: {
+                actionType: DOCX_PARAGRAPH_EDIT_TOOL_SPEC.activityActionType!
+              }
+            })
+          }
           const block = await fetchDetailedBlock(runtime, sessionResult.docId, args.blockId!)
           const style = block.type === 'paragraph' ? block.style : undefined
           op = {
@@ -313,8 +383,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
               sourcePath: sessionResult.sourcePath,
               currentRevisionRef: sessionResult.currentRevisionRef,
               docId: sessionResult.docId,
-              blockId: args.blockId!,
-              operationLabel: '段落删除'
+              blockId: args.blockId!
             })
             if (failure) {
               return finalizeDocxToolFailure({
@@ -423,6 +492,24 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
       const spec = paragraphSpecFromText(args.text, headingStyle(args.level))
       let op: DocxOp
       if (args.action === 'replace_text') {
+        const failure = await failIfPositionedBlock({
+          runtime,
+          toolName,
+          toolCallId,
+          sourcePath: sessionResult.sourcePath,
+          currentRevisionRef: sessionResult.currentRevisionRef,
+          docId: sessionResult.docId,
+          blockId: args.blockId!
+        })
+        if (failure) {
+          return finalizeDocxToolFailure({
+            runtime,
+            failure,
+            activity: {
+              actionType: DOCX_HEADING_EDIT_TOOL_SPEC.activityActionType!
+            }
+          })
+        }
         op = {
           type: 'replace_block',
           blockId: args.blockId!,
@@ -436,8 +523,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           sourcePath: sessionResult.sourcePath,
           currentRevisionRef: sessionResult.currentRevisionRef,
           docId: sessionResult.docId,
-          blockId: args.anchorBlockId!,
-          operationLabel: '标题插入'
+          blockId: args.anchorBlockId!
         })
         if (failure) {
           return finalizeDocxToolFailure({
@@ -551,8 +637,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           sourcePath: sessionResult.sourcePath,
           currentRevisionRef: sessionResult.currentRevisionRef,
           docId: sessionResult.docId,
-          blockId: args.cellBlockId!,
-          operationLabel: '表格单元格修改'
+          blockId: args.cellBlockId!
         })
         if (failure) {
           return finalizeDocxToolFailure({
@@ -576,8 +661,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           sourcePath: sessionResult.sourcePath,
           currentRevisionRef: sessionResult.currentRevisionRef,
           docId: sessionResult.docId,
-          blockId: args.anchorBlockId!,
-          operationLabel: '表格插入'
+          blockId: args.anchorBlockId!
         })
         if (failure) {
           return finalizeDocxToolFailure({
@@ -682,6 +766,31 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
       })
       if ('failure' in sessionResult) return sessionResult.failure
 
+      const targetBlockIds = await resolveReplaceTextTargetBlockIds({
+        runtime,
+        docId: sessionResult.docId,
+        query: args.query,
+        blockIds: args.blockIds
+      })
+      const failure = await failIfAnyPositionedBlocks({
+        runtime,
+        toolName,
+        toolCallId,
+        sourcePath: sessionResult.sourcePath,
+        currentRevisionRef: sessionResult.currentRevisionRef,
+        docId: sessionResult.docId,
+        blockIds: targetBlockIds
+      })
+      if (failure) {
+        return finalizeDocxToolFailure({
+          runtime,
+          failure,
+          activity: {
+            actionType: DOCX_TEXT_EDIT_TOOL_SPEC.activityActionType!
+          }
+        })
+      }
+
       const applied = await applySingleEdit({
         runtime,
         toolName,
@@ -773,6 +882,25 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         sourcePath: args.sourcePath
       })
       if ('failure' in sessionResult) return sessionResult.failure
+
+      const failure = await failIfPositionedBlock({
+        runtime,
+        toolName,
+        toolCallId,
+        sourcePath: sessionResult.sourcePath,
+        currentRevisionRef: sessionResult.currentRevisionRef,
+        docId: sessionResult.docId,
+        blockId: args.blockId
+      })
+      if (failure) {
+        return finalizeDocxToolFailure({
+          runtime,
+          failure,
+          activity: {
+            actionType: DOCX_TEXT_STYLE_EDIT_TOOL_SPEC.activityActionType!
+          }
+        })
+      }
 
       const applied = await applySingleEdit({
         runtime,

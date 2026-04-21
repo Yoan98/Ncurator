@@ -10,6 +10,8 @@ import {
   resolveSelectedDocxFixtures
 } from '../../../harness/backend/aiLiveTestData'
 import {
+  countDraftFileArtifacts,
+  countDraftReviewArtifacts,
   collectToolDiagnosticMessages,
   filterAiRunEventsByType,
   runWithStructuredOutputRetry
@@ -34,7 +36,7 @@ describe('ai human live backend', () => {
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
-        description: '验证 live 模式下 human 在复杂 positioned docx 中只执行安全修改，并对结构性写入做优雅回退。',
+        description: '验证 live 模式下 human 在复杂 positioned docx 中完全不自动编辑，并对写入请求做优雅回退。',
         fixtures: DOCX_READING_FIXTURE_PATHS,
         runMode: 'single',
         runtimeModelName: hasLiveLlmConfigInEnv('primary')
@@ -95,27 +97,20 @@ describe('ai human live backend', () => {
             (event) =>
               (event.toolName === 'docx_paragraph_edit' ||
                 event.toolName === 'docx_heading_edit' ||
-                event.toolName === 'docx_table_edit') &&
-              (event.input.action === 'insert_before' || event.input.action === 'insert_after')
+                event.toolName === 'docx_table_edit' ||
+                event.toolName === 'docx_text_edit' ||
+                event.toolName === 'docx_text_style_edit') &&
+              typeof event.input.sourcePath === 'string'
           )
           const writeResults = filterAiRunEventsByType(events, 'tool_call_result').filter((event) =>
-            event.toolName.startsWith('docx_')
+            event.toolName === 'docx_paragraph_edit' ||
+            event.toolName === 'docx_heading_edit' ||
+            event.toolName === 'docx_table_edit' ||
+            event.toolName === 'docx_text_edit' ||
+            event.toolName === 'docx_text_style_edit'
           )
-          const successfulWriteResults = writeResults.filter(
-            (event) =>
-              (event.toolName === 'docx_text_edit' ||
-                event.toolName === 'docx_text_style_edit' ||
-                event.toolName === 'docx_paragraph_edit' ||
-                event.toolName === 'docx_heading_edit') &&
-              event.result?.ok === true
-          )
-          const failedStructuralResults = writeResults.filter(
-            (event) =>
-              (event.toolName === 'docx_paragraph_edit' ||
-                event.toolName === 'docx_heading_edit' ||
-                event.toolName === 'docx_table_edit') &&
-              event.result?.ok === false
-          )
+          const successfulWriteResults = writeResults.filter((event) => event.result?.ok === true)
+          const failedWriteResults = writeResults.filter((event) => event.result?.ok === false)
           const diagnosticMessages = collectToolDiagnosticMessages(events)
           const unchangedFixtures = await Promise.all(
             result.originalFixtureBytes.map(async (fixture) => {
@@ -130,25 +125,28 @@ describe('ai human live backend', () => {
               result.fixtureDocs.every((fixtureDoc) =>
                 openedExpectedDoc(openedSourcePaths, fixtureDoc.relativePath, fixtureDoc.name)
               ) &&
-              successfulWriteResults.length >= 1 &&
               structuralStarted.length >= 1 &&
-              failedStructuralResults.length >= 1 &&
+              successfulWriteResults.length === 0 &&
+              failedWriteResults.length >= 1 &&
               diagnosticMessages.some((message) => message.includes('当前命中复杂定位排版区域')) &&
-              /(手动|版式|排版|没法自动|无法自动|自己补)/.test(deliveryText) &&
-              unchangedFixtures.every(Boolean),
+              countDraftReviewArtifacts(result.output?.artifacts) === 0 &&
+              countDraftFileArtifacts(result.output?.artifacts) === 0 &&
+              /(手动|版式|排版|没法自动|无法自动|复杂定位)/.test(deliveryText) &&
+              unchangedFixtures.every(Boolean) &&
+              typeof result.output?.deliveryMarkdown === 'string' &&
+              result.output.deliveryMarkdown.trim().length > 0,
             {
-              name: 'human-live-positioned-structural-edit-falls-back-cleanly',
+              name: 'human-live-positioned-docx-stays-read-only-and-falls-back-cleanly',
               message:
-                'live human positioned case 应保留安全修改，拦截结构性写入，并在最终答复中说明需要手动补充的部分。',
+                'live human positioned case 应拒绝所有自动编辑，不生成审阅稿，并在最终答复中给出手动补充建议。',
               data: {
                 openedSourcePaths,
-                structuralStarted: structuralStarted.map((event) => ({
+                writeAttempts: structuralStarted.map((event) => ({
                   toolName: event.toolName,
                   action: event.input.action,
                   sourcePath: event.input.sourcePath
                 })),
-                successfulWriteResults: successfulWriteResults.map((event) => event.toolName),
-                failedStructuralResults: failedStructuralResults.map((event) => ({
+                failedWriteResults: failedWriteResults.map((event) => ({
                   toolName: event.toolName,
                   diagnostic: event.result?.diagnostic?.message
                 })),
