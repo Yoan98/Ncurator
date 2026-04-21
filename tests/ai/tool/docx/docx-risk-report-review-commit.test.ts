@@ -1,9 +1,12 @@
+import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
+import { XMLSerializer } from '@xmldom/xmldom'
+import { loadDocxBundle } from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/blockIndex'
 import { createDocxToolHarness } from '../../../harness/backend/aiToolHarness'
 import { seedRiskReportWorkspace } from '../../../harness/backend/aiLiveTestData'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
-import type { DocxMutationResult, DocxSearchResult } from './testUtils'
+import type { DocxMutationResult, DocxOutlineResult, DocxSearchResult } from './testUtils'
 
 describe('ai tool docx backend', () => {
   it('docx-risk-report-review-commit', async () => {
@@ -26,17 +29,18 @@ describe('ai tool docx backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         try {
-          const firstEdit = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
-            sourcePath: workspaceSeed.templateRelativePath,
-            action: 'replace_text',
-            blockId: 'b:1',
-            text: '本周风险结论：在合规签署前，风险状态保持为“待跟进”。'
+          const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
+            sourcePath: workspaceSeed.templateRelativePath
           })
-          const secondEdit = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
+          const firstEdit = await harness.invoke<DocxMutationResult>('docx_text_edit', {
             sourcePath: workspaceSeed.templateRelativePath,
-            action: 'replace_text',
-            blockId: 'b:2',
-            text: '负责人说明：最终复核窗口由合规负责人 Alice 牵头。'
+            query: 'RISK_TODO',
+            replace: '在合规签署前，风险状态保持为“待跟进”。'
+          })
+          const secondEdit = await harness.invoke<DocxMutationResult>('docx_text_edit', {
+            sourcePath: workspaceSeed.templateRelativePath,
+            query: 'OWNER_TODO',
+            replace: '最终复核窗口由合规负责人 Alice 牵头。'
           })
 
           const details = await runtime.draftReviewService.finalizeRunReview({
@@ -58,6 +62,17 @@ describe('ai tool docx backend', () => {
             sourcePath: reviewRelativePath,
             query: 'Alice'
           })
+          const reviewOldRiskPlaceholder = await harness.invoke<DocxSearchResult>('docx_search', {
+            sourcePath: reviewRelativePath,
+            query: 'RISK_TODO'
+          })
+          const reviewOldOwnerPlaceholder = await harness.invoke<DocxSearchResult>('docx_search', {
+            sourcePath: reviewRelativePath,
+            query: 'OWNER_TODO'
+          })
+          const reviewXml = new XMLSerializer().serializeToString(
+            (await loadDocxBundle(await fs.readFile(document.review_artifact_path))).documentDom
+          )
 
           const commit = await runtime.draftReviewService.commitReview({
             reviewId: detail.review.id,
@@ -82,12 +97,16 @@ describe('ai tool docx backend', () => {
           })
 
           return {
+            outline,
             firstEdit,
             secondEdit,
             reviewId: detail.review.id,
             reviewArtifactPath: document.review_artifact_path,
             reviewRisk,
             reviewOwner,
+            reviewOldRiskPlaceholder,
+            reviewOldOwnerPlaceholder,
+            reviewXml,
             commit,
             committedRisk,
             committedOwner,
@@ -103,17 +122,39 @@ describe('ai tool docx backend', () => {
           result.firstEdit.changedBlocks.length === 1 &&
             result.secondEdit.changedBlocks.length === 1 &&
             result.reviewRisk.matches.length >= 1 &&
-            result.reviewOwner.matches.length >= 1,
+            result.reviewOwner.matches.length >= 1 &&
+            result.reviewOldRiskPlaceholder.matches.length >= 1 &&
+            result.reviewOldOwnerPlaceholder.matches.length >= 1,
           {
             name: 'risk-report-review-artifact-contains-updated-content',
-            message: '风险周报 review artifact 应包含风险结论与负责人两处更新结果。',
+            message: '风险周报 review artifact 应同时包含旧占位符删除项和新内容新增项。',
             data: {
               reviewId: result.reviewId,
               reviewArtifactPath: result.reviewArtifactPath,
+              outlineBlocks: result.outline.blocks,
               firstEdit: result.firstEdit.changedBlocks,
               secondEdit: result.secondEdit.changedBlocks,
               reviewRisk: result.reviewRisk.matches,
-              reviewOwner: result.reviewOwner.matches
+              reviewOwner: result.reviewOwner.matches,
+              reviewOldRiskPlaceholder: result.reviewOldRiskPlaceholder.matches,
+              reviewOldOwnerPlaceholder: result.reviewOldOwnerPlaceholder.matches
+            }
+          }
+        )
+
+        runtime.assertThat(
+          result.reviewXml.includes('本周风险结论：RISK_TODO') &&
+            result.reviewXml.includes('本周风险结论：在合规签署前，风险状态保持为“待跟进”。') &&
+            result.reviewXml.includes('负责人说明：OWNER_TODO') &&
+            result.reviewXml.includes('负责人说明：最终复核窗口由合规负责人 Alice 牵头。') &&
+            /<w:strike\/>[\s\S]*本周风险结论：RISK_TODO/.test(result.reviewXml) &&
+            /w:color w:val="166534"[\s\S]*本周风险结论：在合规签署前，风险状态保持为“待跟进”。/.test(result.reviewXml),
+          {
+            name: 'risk-report-review-artifact-keeps-old-and-new-xml-pairs',
+            message: '风险周报 review artifact 的 XML 应保留旧文本删除节点和新文本新增节点，不能把红绿两份都写成新文本。',
+            data: {
+              reviewArtifactPath: result.reviewArtifactPath,
+              reviewXmlSnippet: result.reviewXml.slice(0, 1600)
             }
           }
         )

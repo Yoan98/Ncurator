@@ -122,10 +122,10 @@ interface AiRunContext {
     sessionSummaryText: string
   }>
 
-  // docx 打开后记录当前 worker docId、源路径与 replay session，供后续 working/review 继续复用。
+  // docx 打开后记录当前 worker docId、源路径与 replay session；具体语义见 docx-design 文档。
   trackDocxOpen: (input: { docId: string; sourcePath: string; replaySession?: DocxReplaySession }) => void
 
-  // docx 修改后记录前后内部快照、改动块、createdBlocks 与最新 replay session，便于审计与回溯。
+  // docx 修改后记录改动摘要与最新 replay session；具体语义见 docx-design 文档。
   trackDocxChanges: (input: {
     previousDocId: string
     nextDocId: string
@@ -135,13 +135,13 @@ interface AiRunContext {
     replaySession?: DocxReplaySession
   }) => void
 
-  // docx 打开前把源路径解析成运行时可用的打开目标；若存在 active review，则返回 working draft view 对应的 artifact。
+  // docx 打开前把源路径解析成运行时可用的打开目标；docx 三视图规则见 docx-design 文档。
   resolveDocxOpenTarget: (sourcePath: string) => Promise<ResolvedDocxOpenTarget>
 
   // human task 开始前注册本次 run 的 docx 草稿审阅上下文。
   beginDocxReviewRun: () => void
 
-  // human task 完成后汇总本次 run 的 docx 改动，生成 draft review、review artifact 与 working artifact。
+  // human task 完成后汇总本次 run 的 docx 改动并生成对应视图 artifact。
   finalizeDocxReviewRun: () => Promise<DraftReviewDetail[]>
 
   // human task 中断或失败后丢弃本次 run 尚未收口的 docx 草稿审阅状态。
@@ -181,67 +181,6 @@ interface LLMConfig {
     | 'responses:promptJson'
   // 文本输出路径最近一次成功的 transport；runtime 会优先复用它。
   preferredTransport?: 'completions' | 'responses'
-}
-```
-
-### 1.2 docx replay session 与三视图
-
-
-```ts
-interface DocxReplaySession {
-  // 本次 docx 会话对应的源文件路径；最终提交始终写回它。
-  sourcePath: string
-  // baseline 打开时的 worker docId；回放和排障都可据此追溯起点。
-  sourceDocId: string
-  // 当前 active revision 对应的 worker docId；working draft 打开时实际用它物化。
-  activeDocId: string
-  // 当前会话最新修订引用；history / rollback / tool resourceContext 都围绕它暴露。
-  activeRevisionRef: string
-  // 下一次成功编辑要分配的修订号。
-  nextRevisionNumber: number
-  // source baseline 的结构快照；作为 replay tree 的起点。
-  sourceSnapshot: DocxReplaySnapshot
-  // 当前 active revision 对应的结构快照；working/review/commit 都从它继续投影。
-  activeSnapshot: DocxReplaySnapshot
-  // 当前会话的修订集合；每个修订保存该轮 edit 的摘要、changedBlocks 与 op 语义。
-  revisionByDocId: Map<string, DocxRevision>
-  // replay tree 的节点真相；bodyNodeIds 负责定义当前块顺序，nodeById 负责定义每个块的来源与 reviewState。
-  nodeById: Map<string, DocxReplayNode>
-  bodyNodeIds: string[]
-  // 最近一次生成出来的三种视图 artifact；只是缓存，不是真相本身。
-  viewArtifacts: {
-    working?: DocxViewArtifact
-    review?: DocxViewArtifact
-    committed?: DocxViewArtifact
-  }
-}
-
-interface DocxRevision {
-  // 对外暴露的修订引用。
-  revisionRef: string
-  // 该修订落在 worker 侧对应的 docId。
-  docId: string
-  // 该修订的直接父修订。
-  parentRevisionRef?: string
-  // 修订创建时间。
-  createdAt: number
-  // 本次修订的简要摘要。
-  summary?: string
-  // 本次修订命中的块级变更摘要；供 history/review 使用。
-  changedBlocks?: DocxChangedBlock[]
-  // 本次修订实际执行过的 docx op 列表；供 replay tree 重建使用。
-  ops?: DocxOp[]
-  // 本次修订新增出来的 block 列表；供插入节点回放与定位使用。
-  createdBlocks?: DocxCreatedBlock[]
-}
-
-interface DocxViewArtifact {
-  // 当前 artifact 属于哪一种投影视图。
-  kind: 'working' | 'review' | 'committed'
-  // 该视图物化后的文件路径。
-  path: string
-  // 该视图最近一次生成时间。
-  createdAt: number
 }
 ```
 

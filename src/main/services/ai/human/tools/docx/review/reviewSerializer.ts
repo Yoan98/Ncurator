@@ -266,11 +266,16 @@ const resolveElementForNode = (input: {
   currentIndex: ReturnType<typeof buildBlockIndex>
   sourceIndex: ReturnType<typeof buildBlockIndex>
 }): Element => {
-  const currentBlockId = input.node.currentBlockId || input.node.blockId
-  const currentNode = currentBlockId ? input.currentIndex.nodesById.get(currentBlockId) : undefined
-  const renderableCurrentNode = isRenderableIndexedNode(currentNode) ? currentNode : null
-  if (renderableCurrentNode) {
-    return cloneElement(renderableCurrentNode.node)
+  const shouldUseSourceView =
+    input.node.reviewState === 'deleted' || input.node.reviewState === 'replaced-old'
+
+  if (!shouldUseSourceView) {
+    const currentBlockId = input.node.currentBlockId || input.node.blockId
+    const currentNode = currentBlockId ? input.currentIndex.nodesById.get(currentBlockId) : undefined
+    const renderableCurrentNode = isRenderableIndexedNode(currentNode) ? currentNode : null
+    if (renderableCurrentNode) {
+      return cloneElement(renderableCurrentNode.node)
+    }
   }
 
   const sourceBlockId = input.node.sourceBlockId || input.node.blockId
@@ -278,6 +283,10 @@ const resolveElementForNode = (input: {
   const renderableSourceNode = isRenderableIndexedNode(sourceNode) ? sourceNode : null
   if (renderableSourceNode) {
     return cloneElement(renderableSourceNode.node)
+  }
+
+  if (shouldUseSourceView) {
+    return createBlockFromSpec(input.shellDocument, input.node.spec, null)
   }
 
   return createBlockFromSpec(input.shellDocument, input.node.spec, null)

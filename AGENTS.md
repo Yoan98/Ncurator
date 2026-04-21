@@ -3,16 +3,21 @@
 ## 1. 文档引用
 ### 1.1 AI相关
 - 当涉及 AI 架构、主流程或 human-only runtime 时，必须阅读 `doc/ai-design/architecture.md`
-- 当涉及 AI 实现、运行入口、跨层边界、运行数据、docx replay/review/三视图链路或工作区 KB 范围时，必须阅读 `doc/ai-design/implementation-spec.md` 与 `doc/ai-design/data-definition-and-flow.md`
+- 当涉及 AI 实现、运行入口、跨层边界或工作区 KB 范围时，必须阅读 `doc/ai-design/implementation-spec.md` 与 `doc/ai-design/data-definition-and-flow.md`
 - 当涉及 human 的 skill 分类、builtin/external 边界或 skill 基线时，必须阅读 `doc/ai-design/human-skill-design.md`
 - 当涉及 prompt 结构、工具结果渲染、工具 schema/输出 shape 自动导出或 human AI-facing 文案时，必须阅读 `doc/ai-design/prompt-design.md`
 
-### 1.2 项目整体相关
+### 1.2 docx相关
+- 当涉及 docx 编辑架构、source baseline、replay session 或三视图主线时，必须阅读 `doc/docx-design/architecture.md`
+- 当涉及 docx 实现约束、review/commit 链路、serializer 或样式继承时，必须阅读 `doc/docx-design/implementation-spec.md`
+- 当涉及 docx 数据结构、revision/replay node、artifact 关系或状态流转时，必须阅读 `doc/docx-design/data-definition-and-flow.md`
+
+### 1.3 项目整体相关
 - 当涉及项目整体架构与技术栈时，必须阅读 `doc/architecture.md`
 - 当涉及数据库、工程结构、目录归位、工作区化网页资料存储，或 document/chunk 列表查询参数与 LanceDB where helper 命名时，必须阅读 `doc/database.md` 与 `doc/project-structure.md`
 - 当涉及 UI 风格与通用交互规范时，必须阅读 `doc/ui-style.md`
 
-### 1.3 测试相关
+### 1.4 测试相关
 - 当涉及 AI 测试，必须阅读 `doc/test-plan/ai-test.md`
 - 当涉及 human live 的 docx / KB 混合场景测试设计时，必须阅读 `doc/test-plan/ai-test.md`
 - 当涉及 docx review / commit 分层测试设计时，必须阅读 `doc/test-plan/ai-test.md`
@@ -20,7 +25,7 @@
 - 当涉及 Settings 测试时，必须阅读 `doc/test-plan/settings-test.md`
 - 当涉及测试用例编写、runner、raw logs 或日志分析时，必须阅读 `doc/test.md`
 
-### 1.4 prd产品文档相关
+### 1.5 prd产品文档相关
 - 当涉及 Workbench 的产品需求、交互、工作区资料范围或验收标准时，必须阅读 `doc/prd/workbench.md`
 - 当涉及 Settings 的产品需求、交互、工作区内网页资料管理或验收标准时，必须阅读 `doc/prd/settings.md`
 

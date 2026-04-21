@@ -1,4 +1,7 @@
+import fs from 'node:fs/promises'
 import { describe, it } from 'vitest'
+import { XMLSerializer } from '@xmldom/xmldom'
+import { loadDocxBundle } from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/blockIndex'
 import { loadLiveLlmConfigFromEnv, hasLiveLlmConfigInEnv } from '../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
@@ -94,6 +97,15 @@ describe('ai human live backend', () => {
             .map((event) => event.outputPreview)
         )
         const deliveryText = `${result.output?.summary || ''}\n${result.output?.deliveryMarkdown || ''}`.trim()
+        const reviewArtifactPath =
+          result.output?.artifacts?.find(
+            (artifact) => artifact.kind === 'file' && artifact.capability === 'docx'
+          )?.path || ''
+        const reviewArtifactXml = reviewArtifactPath
+          ? new XMLSerializer().serializeToString(
+              (await loadDocxBundle(await fs.readFile(reviewArtifactPath))).documentDom
+            )
+          : ''
 
         runtime.assertThat(
           result.output?.status === 'completed' &&
@@ -149,6 +161,21 @@ describe('ai human live backend', () => {
               summary: result.output?.summary,
               deliveryMarkdown: result.output?.deliveryMarkdown,
               artifacts: result.output?.artifacts
+            }
+          }
+        )
+
+        runtime.assertThat(
+          reviewArtifactXml.includes('本周风险结论：RISK_TODO') &&
+            reviewArtifactXml.includes('负责人说明：OWNER_TODO') &&
+            reviewArtifactXml.includes('本周风险结论：在合规签署前，风险状态保持为“待跟进”。') &&
+            reviewArtifactXml.includes('负责人说明：最终复核窗口由合规负责人 Alice 牵头。'),
+          {
+            name: 'human-live-risk-report-review-artifact-keeps-old-and-new-text',
+            message: 'live human risk report case 的真实 review artifact 应同时保留旧占位符删除项和新内容新增项。',
+            data: {
+              reviewArtifactPath,
+              reviewArtifactXmlSnippet: reviewArtifactXml.slice(0, 1600)
             }
           }
         )

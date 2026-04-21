@@ -132,10 +132,42 @@ const buildSpecKey = (spec: DocxBlockSpec): string => {
     .join('\u2424')}`
 }
 
-const rebindVisibleNodesToSnapshot = (
-  session: DocxReplaySession,
+const findSnapshotMatchIndex = (input: {
+  cursor: number
   nextSnapshot: DocxReplaySnapshot
-): void => {
+  node: DocxReplayNode
+  usedBlockIds: Set<string>
+}): number => {
+  for (let index = input.cursor; index < input.nextSnapshot.blocks.length; index += 1) {
+    const block = input.nextSnapshot.blocks[index]
+    if (input.usedBlockIds.has(block.blockId) || block.kind !== input.node.kind) continue
+    if (
+      block.blockId === input.node.currentBlockId ||
+      block.blockId === input.node.blockId ||
+      (input.node.sourceBlockId && block.blockId === input.node.sourceBlockId)
+    ) {
+      return index
+    }
+  }
+
+  const nodeKey = buildSpecKey(input.node.spec)
+  for (let index = input.cursor; index < input.nextSnapshot.blocks.length; index += 1) {
+    const block = input.nextSnapshot.blocks[index]
+    if (input.usedBlockIds.has(block.blockId) || block.kind !== input.node.kind) continue
+    if (buildSpecKey(block.spec) === nodeKey) {
+      return index
+    }
+  }
+
+  return -1
+}
+
+const rebindVisibleNodesToSnapshot = (input: {
+  session: DocxReplaySession
+  nextSnapshot: DocxReplaySnapshot
+  skipNodeIds?: ReadonlySet<string>
+}): void => {
+  const { nextSnapshot, session, skipNodeIds } = input
   const visibleNodes = session.bodyNodeIds
     .map((nodeId) => session.nodeById.get(nodeId))
     .filter((node): node is DocxReplayNode => Boolean(node && isVisibleReviewState(node.reviewState)))
@@ -143,38 +175,18 @@ const rebindVisibleNodesToSnapshot = (
   let cursor = 0
 
   visibleNodes.forEach((node) => {
-    let matchIndex = -1
-
-    for (let index = cursor; index < nextSnapshot.blocks.length; index += 1) {
-      const block = nextSnapshot.blocks[index]
-      if (usedBlockIds.has(block.blockId) || block.kind !== node.kind) continue
-      if (
-        block.blockId === node.currentBlockId ||
-        block.blockId === node.blockId ||
-        (node.sourceBlockId && block.blockId === node.sourceBlockId)
-      ) {
-        matchIndex = index
-        break
-      }
-    }
-
-    if (matchIndex < 0) {
-      const nodeKey = buildSpecKey(node.spec)
-      for (let index = cursor; index < nextSnapshot.blocks.length; index += 1) {
-        const block = nextSnapshot.blocks[index]
-        if (usedBlockIds.has(block.blockId) || block.kind !== node.kind) continue
-        if (buildSpecKey(block.spec) === nodeKey) {
-          matchIndex = index
-          break
-        }
-      }
-    }
-
+    const matchIndex = findSnapshotMatchIndex({
+      cursor,
+      nextSnapshot,
+      node,
+      usedBlockIds
+    })
     if (matchIndex < 0) return
 
     const matchedBlock = nextSnapshot.blocks[matchIndex]
     usedBlockIds.add(matchedBlock.blockId)
     cursor = matchIndex + 1
+    if (skipNodeIds?.has(node.nodeId)) return
     node.currentBlockId = matchedBlock.blockId
     node.bodyIndex = matchedBlock.bodyIndex
     node.spec = matchedBlock.spec
@@ -349,7 +361,30 @@ export const applyRevisionToReplaySession = (input: {
   nextSnapshot: DocxReplaySnapshot
 }): void => {
   const { session, revisionRef, op, createdBlocks, nextSnapshot } = input
-  rebindVisibleNodesToSnapshot(session, nextSnapshot)
+  const targetBlockId =
+    op.type === 'update_table_cell' || (op.type === 'replace_text' && Array.isArray(op.blockIds) && op.blockIds[0])
+      ? op.type === 'update_table_cell'
+        ? op.blockId
+        : String(op.blockIds?.[0] || '')
+      : 'blockId' in op
+        ? String(op.blockId || '')
+        : ''
+  const targetNodeId = targetBlockId ? findVisibleNodeIdByBlockId(session, targetBlockId) : undefined
+  const targetNodeIdsToSkip =
+    targetNodeId &&
+    (op.type === 'delete_block' ||
+      op.type === 'replace_block' ||
+      op.type === 'replace_text' ||
+      op.type === 'style_text' ||
+      op.type === 'update_table_cell')
+      ? new Set([targetNodeId])
+      : undefined
+
+  rebindVisibleNodesToSnapshot({
+    session,
+    nextSnapshot,
+    skipNodeIds: targetNodeIdsToSkip
+  })
 
   if (op.type === 'insert_before' || op.type === 'insert_after') {
     const anchorNodeId = findVisibleNodeIdByBlockId(session, op.anchorBlockId)
@@ -385,15 +420,6 @@ export const applyRevisionToReplaySession = (input: {
     return
   }
 
-  const targetBlockId =
-    op.type === 'update_table_cell' || (op.type === 'replace_text' && Array.isArray(op.blockIds) && op.blockIds[0])
-      ? op.type === 'update_table_cell'
-        ? op.blockId
-        : String(op.blockIds?.[0] || '')
-      : 'blockId' in op
-        ? String(op.blockId || '')
-        : ''
-  const targetNodeId = targetBlockId ? findVisibleNodeIdByBlockId(session, targetBlockId) : undefined
   const targetNode = targetNodeId ? session.nodeById.get(targetNodeId) : undefined
 
   if (!targetNodeId || !targetNode) {

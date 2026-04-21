@@ -46,17 +46,6 @@
 - `AiRunService` 不做 route、context enrich、plan、plan exec 或 synthesis。
 - run 成功时只回写 `finalDeliveryMarkdown` 与 `finalArtifacts`。
 
-### 3.1 docx 工作视图与审阅约束
-
-- docx 运行时真相统一收口为 `source baseline + cumulative replay session`。
-- 对上层暴露的当前状态、历史与回滚统一使用 `revision` 语义。
-- AI 只读取 `working draft view`；该视图必须无审阅标记，且只包含当前有效内容。
-- 用户确认前只查看 `review view`；该视图负责稳定展示新增、删除与替换差异。
-- 最终提交只允许由 `committed view` 落盘到源文件。
-- `review view` 必须直接由当前 replay session 投影生成，不能重新以 source 为基线做累计差异重建。
-- `resolveDocxOpenTarget` 在存在 active review 时必须返回 `working artifact`，并继续使用原始 `sourcePath` 作为最终落盘目标。
-- `finalizeDocxReviewRun` 必须同时生成 `working artifact` 与 `review artifact`，并通过 `draft_review_ready + file_artifact` 向上游暴露。
-
 ## 4. `human` 总览
 
 - `human` 是 task 级 autonomous execution unit，负责把一个自然语言任务推进到完成或稳定阻塞。
