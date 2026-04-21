@@ -93,6 +93,37 @@ const fetchDetailedBlock = async (
   return response.payload.block
 }
 
+const buildPositionedStructuralEditMessage = (operationLabel: string): string =>
+  `当前命中复杂定位排版区域，暂不支持执行${operationLabel}，以避免破坏版式；可继续读取、原地文本替换或样式修改。`
+
+const failIfPositionedBlock = async (input: {
+  runtime: DocxToolRuntime
+  toolName: string
+  toolCallId: string
+  sourcePath: string
+  currentRevisionRef: string
+  docId: string
+  blockId: string
+  operationLabel: string
+}): Promise<DocxToolFailure | null> => {
+  const block = await fetchDetailedBlock(input.runtime, input.docId, input.blockId)
+  if (block.layoutMode !== 'positioned') {
+    return null
+  }
+  return input.runtime.emitFailure({
+    toolName: input.toolName,
+    toolCallId: input.toolCallId,
+    code: 'invalid_input',
+    error: buildPositionedStructuralEditMessage(input.operationLabel),
+    draftDocId: input.docId,
+    resourceContext: input.runtime.buildResourceContext({
+      sourcePath: input.sourcePath,
+      effectKind: 'mutated',
+      currentRevisionRef: input.currentRevisionRef
+    })
+  })
+}
+
 const createdBlocksFromDiff = async (input: {
   runtime: DocxToolRuntime
   previousDocId: string
@@ -236,6 +267,27 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
       switch (args.action) {
         case 'insert_before':
         case 'insert_after':
+          {
+            const failure = await failIfPositionedBlock({
+              runtime,
+              toolName,
+              toolCallId,
+              sourcePath: sessionResult.sourcePath,
+              currentRevisionRef: sessionResult.currentRevisionRef,
+              docId: sessionResult.docId,
+              blockId: args.anchorBlockId!,
+              operationLabel: '段落插入'
+            })
+            if (failure) {
+              return finalizeDocxToolFailure({
+                runtime,
+                failure,
+                activity: {
+                  actionType: DOCX_PARAGRAPH_EDIT_TOOL_SPEC.activityActionType!
+                }
+              })
+            }
+          }
           op = {
             type: args.action,
             anchorBlockId: args.anchorBlockId!,
@@ -253,6 +305,27 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           break
         }
         case 'delete':
+          {
+            const failure = await failIfPositionedBlock({
+              runtime,
+              toolName,
+              toolCallId,
+              sourcePath: sessionResult.sourcePath,
+              currentRevisionRef: sessionResult.currentRevisionRef,
+              docId: sessionResult.docId,
+              blockId: args.blockId!,
+              operationLabel: '段落删除'
+            })
+            if (failure) {
+              return finalizeDocxToolFailure({
+                runtime,
+                failure,
+                activity: {
+                  actionType: DOCX_PARAGRAPH_EDIT_TOOL_SPEC.activityActionType!
+                }
+              })
+            }
+          }
           op = {
             type: 'delete_block',
             blockId: args.blockId!
@@ -356,6 +429,25 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           content: spec
         }
       } else {
+        const failure = await failIfPositionedBlock({
+          runtime,
+          toolName,
+          toolCallId,
+          sourcePath: sessionResult.sourcePath,
+          currentRevisionRef: sessionResult.currentRevisionRef,
+          docId: sessionResult.docId,
+          blockId: args.anchorBlockId!,
+          operationLabel: '标题插入'
+        })
+        if (failure) {
+          return finalizeDocxToolFailure({
+            runtime,
+            failure,
+            activity: {
+              actionType: DOCX_HEADING_EDIT_TOOL_SPEC.activityActionType!
+            }
+          })
+        }
         op = {
           type: args.action,
           anchorBlockId: args.anchorBlockId!,
@@ -452,12 +544,50 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
 
       let op: DocxOp
       if (args.action === 'update_cell') {
+        const failure = await failIfPositionedBlock({
+          runtime,
+          toolName,
+          toolCallId,
+          sourcePath: sessionResult.sourcePath,
+          currentRevisionRef: sessionResult.currentRevisionRef,
+          docId: sessionResult.docId,
+          blockId: args.cellBlockId!,
+          operationLabel: '表格单元格修改'
+        })
+        if (failure) {
+          return finalizeDocxToolFailure({
+            runtime,
+            failure,
+            activity: {
+              actionType: DOCX_TABLE_EDIT_TOOL_SPEC.activityActionType!
+            }
+          })
+        }
         op = {
           type: 'update_table_cell',
           blockId: args.cellBlockId!,
           content: [paragraphSpecFromText(args.text!)]
         }
       } else {
+        const failure = await failIfPositionedBlock({
+          runtime,
+          toolName,
+          toolCallId,
+          sourcePath: sessionResult.sourcePath,
+          currentRevisionRef: sessionResult.currentRevisionRef,
+          docId: sessionResult.docId,
+          blockId: args.anchorBlockId!,
+          operationLabel: '表格插入'
+        })
+        if (failure) {
+          return finalizeDocxToolFailure({
+            runtime,
+            failure,
+            activity: {
+              actionType: DOCX_TABLE_EDIT_TOOL_SPEC.activityActionType!
+            }
+          })
+        }
         op = {
           type: args.action,
           anchorBlockId: args.anchorBlockId!,

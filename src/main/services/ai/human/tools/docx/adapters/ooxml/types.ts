@@ -1,17 +1,24 @@
 import type JSZip from 'jszip'
-import type { DocxChangedBlock, DocxOpenMeta, DocxOutlineBlock } from '../../types'
+import type {
+  DocxChangedBlock,
+  DocxLayoutMode,
+  DocxOpenMeta,
+  DocxOutlineBlock
+} from '../../types'
 
 export type IndexedNode =
   | {
       kind: 'paragraph'
       blockId: string
       bodyIndex: number
+      layoutMode: DocxLayoutMode
       node: Element
     }
   | {
       kind: 'table'
       blockId: string
       bodyIndex: number
+      layoutMode: DocxLayoutMode
       node: Element
     }
   | {
@@ -19,6 +26,7 @@ export type IndexedNode =
       blockId: string
       tableBlockId: string
       bodyIndex: number
+      layoutMode: DocxLayoutMode
       row: number
       col: number
       node: Element

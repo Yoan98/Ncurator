@@ -37,11 +37,13 @@ export type DocxTableCellSpec = z.infer<typeof tableCellSpecSchema>
 export type DocxTableSpec = z.infer<typeof tableSpecSchema>
 export type DocxBlockSpec = z.infer<typeof blockSpecSchema>
 export type DocxOp = z.infer<typeof docOpSchema>
+export type DocxLayoutMode = 'normal' | 'positioned'
 
 export type DocxOutlineParagraphBlock = {
   blockId: string
   type: 'paragraph'
   bodyIndex: number
+  layoutMode: DocxLayoutMode
   previousBodyBlockId?: string
   nextBodyBlockId?: string
   style: string
@@ -52,6 +54,7 @@ export type DocxOutlineTableBlock = {
   blockId: string
   type: 'table'
   bodyIndex: number
+  layoutMode: DocxLayoutMode
   previousBodyBlockId?: string
   nextBodyBlockId?: string
   rows: number
@@ -63,6 +66,7 @@ export type DocxOutlineCellBlock = {
   blockId: string
   type: 'table_cell'
   bodyIndex: number
+  layoutMode: DocxLayoutMode
   previousBodyBlockId?: string
   nextBodyBlockId?: string
   tableBlockId: string
@@ -77,6 +81,7 @@ export type DocxDetailedParagraphBlock = {
   blockId: string
   type: 'paragraph'
   bodyIndex: number
+  layoutMode: DocxLayoutMode
   previousBodyBlockId?: string
   nextBodyBlockId?: string
   style: string
@@ -86,6 +91,7 @@ export type DocxDetailedParagraphBlock = {
 
 export type DocxDetailedTableCell = {
   blockId: string
+  layoutMode: DocxLayoutMode
   row: number
   col: number
   paragraphs: DocxDetailedParagraphBlock[]
@@ -95,6 +101,7 @@ export type DocxDetailedTableBlock = {
   blockId: string
   type: 'table'
   bodyIndex: number
+  layoutMode: DocxLayoutMode
   previousBodyBlockId?: string
   nextBodyBlockId?: string
   rows: number
@@ -107,6 +114,7 @@ export type DocxDetailedCellBlock = {
   blockId: string
   type: 'table_cell'
   bodyIndex: number
+  layoutMode: DocxLayoutMode
   previousBodyBlockId?: string
   nextBodyBlockId?: string
   tableBlockId: string

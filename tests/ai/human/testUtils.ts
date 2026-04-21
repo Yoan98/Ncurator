@@ -118,6 +118,9 @@ export const hasKbToolCall = (events: readonly AiRunEvent[]): boolean =>
 export const hasDraftReviewArtifact = (artifacts: readonly AiArtifactRef[] | undefined): boolean =>
   Array.isArray(artifacts) && artifacts.some((artifact) => artifact.kind === 'draft_review')
 
+export const countDraftReviewArtifacts = (artifacts: readonly AiArtifactRef[] | undefined): number =>
+  Array.isArray(artifacts) ? artifacts.filter((artifact) => artifact.kind === 'draft_review').length : 0
+
 export const hasDraftFileArtifact = (artifacts: readonly AiArtifactRef[] | undefined): boolean =>
   Array.isArray(artifacts) &&
   artifacts.some(
@@ -126,6 +129,16 @@ export const hasDraftFileArtifact = (artifacts: readonly AiArtifactRef[] | undef
       artifact.capability === 'docx' &&
       artifact.artifactRole === 'draft'
   )
+
+export const countDraftFileArtifacts = (artifacts: readonly AiArtifactRef[] | undefined): number =>
+  Array.isArray(artifacts)
+    ? artifacts.filter(
+        (artifact) =>
+          artifact.kind === 'file' &&
+          artifact.capability === 'docx' &&
+          artifact.artifactRole === 'draft'
+      ).length
+    : 0
 
 const DOCX_WRITE_TOOL_NAMES = [
   'docx_paragraph_edit',
@@ -259,6 +272,15 @@ export const readLatestToolResultDataFromEvents = <TValue>(
   }
   return event.result.data as TValue
 }
+
+export const collectToolDiagnosticMessages = (
+  events: readonly AiRunEvent[],
+  toolName?: string
+): string[] =>
+  filterAiRunEventsByType(events, 'tool_call_result')
+    .filter((event) => (toolName ? event.toolName === toolName : true))
+    .map((event) => event.result?.diagnostic?.message)
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
 
 export const readToolCallInput = <TValue extends JsonObject>(
   events: readonly AiRunEvent[],

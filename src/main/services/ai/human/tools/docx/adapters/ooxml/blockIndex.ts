@@ -4,6 +4,7 @@ import type {
   DocxDetailedBlock,
   DocxDetailedParagraphBlock,
   DocxDetailedTableBlock,
+  DocxLayoutMode,
   DocxOutlineCellBlock,
   DocxOutlineParagraphBlock,
   DocxOutlineTableBlock,
@@ -73,6 +74,7 @@ const paragraphDetail = (blockId: string, paragraph: Element): DocxDetailedParag
     blockId,
     type: 'paragraph',
     bodyIndex: -1,
+    layoutMode: 'normal',
     style: paragraphStyle(paragraph),
     text,
     runs
@@ -175,6 +177,44 @@ const cellParagraphs = (cell: Element): Element[] => {
   return childElements(cell, 'p')
 }
 
+const hasDescendantLocalName = (node: Element, localName: string): boolean =>
+  descendantElements(node, localName).length > 0
+
+const hasAncestorLocalName = (node: Element, localNames: readonly string[]): boolean => {
+  let current: Node | null = node.parentNode
+  while (current) {
+    if (isElementNode(current) && current.localName && localNames.includes(current.localName)) {
+      return true
+    }
+    current = current.parentNode
+  }
+  return false
+}
+
+const paragraphLayoutMode = (paragraph: Element): DocxLayoutMode => {
+  const pPr = firstChildElement(paragraph, 'pPr')
+  if (pPr && firstChildElement(pPr, 'framePr')) {
+    return 'positioned'
+  }
+  if (
+    hasAncestorLocalName(paragraph, ['txbxContent', 'textbox', 'shape']) ||
+    hasDescendantLocalName(paragraph, 'anchor')
+  ) {
+    return 'positioned'
+  }
+  return 'normal'
+}
+
+const tableLayoutMode = (table: Element): DocxLayoutMode => {
+  if (
+    hasAncestorLocalName(table, ['txbxContent', 'textbox', 'shape']) ||
+    hasDescendantLocalName(table, 'anchor')
+  ) {
+    return 'positioned'
+  }
+  return 'normal'
+}
+
 const tableCells = (table: Element): Array<{ row: number; col: number; cell: Element }> => {
   const out: Array<{ row: number; col: number; cell: Element }> = []
   const rows = childElements(table, 'tr')
@@ -244,11 +284,13 @@ export const buildBlockIndex = (documentDom: Document): BlockIndex => {
       const blockId = `b:${bodyIndex}`
       const text = paragraphText(child)
       const style = paragraphStyle(child)
+      const layoutMode = paragraphLayoutMode(child)
       bodyBlockIds.push(blockId)
       outlineDraft.push({
         blockId,
         type: 'paragraph',
         bodyIndex,
+        layoutMode,
         style,
         text
       })
@@ -256,6 +298,7 @@ export const buildBlockIndex = (documentDom: Document): BlockIndex => {
         kind: 'paragraph',
         blockId,
         bodyIndex,
+        layoutMode,
         node: child
       })
       paragraphCount += 1
@@ -267,11 +310,13 @@ export const buildBlockIndex = (documentDom: Document): BlockIndex => {
     if (child.localName === 'tbl') {
       const blockId = `tbl:${bodyIndex}`
       const tableSummary = summarizeTable(child)
+      const layoutMode = tableLayoutMode(child)
       bodyBlockIds.push(blockId)
       outlineDraft.push({
         blockId,
         type: 'table',
         bodyIndex,
+        layoutMode,
         rows: tableSummary.rows,
         cols: tableSummary.cols,
         preview: tableSummary.preview
@@ -280,6 +325,7 @@ export const buildBlockIndex = (documentDom: Document): BlockIndex => {
         kind: 'table',
         blockId,
         bodyIndex,
+        layoutMode,
         node: child
       })
       tableCount += 1
@@ -292,6 +338,7 @@ export const buildBlockIndex = (documentDom: Document): BlockIndex => {
           blockId: cellBlockId,
           type: 'table_cell',
           bodyIndex,
+          layoutMode,
           tableBlockId: blockId,
           row: entry.row,
           col: entry.col,
@@ -302,6 +349,7 @@ export const buildBlockIndex = (documentDom: Document): BlockIndex => {
           blockId: cellBlockId,
           tableBlockId: blockId,
           bodyIndex,
+          layoutMode,
           row: entry.row,
           col: entry.col,
           node: entry.cell,
@@ -381,6 +429,8 @@ const buildTableDetail = (
   tableNode: Element,
   bodyIndex: number
 ): DocxDetailedTableBlock => {
+  const tableIndexedNode = index.nodesById.get(blockId)
+  const tableLayoutMode = tableIndexedNode?.kind === 'table' ? tableIndexedNode.layoutMode : 'normal'
   const summary = summarizeTable(tableNode)
   const cells = tableCells(tableNode).map((entry) => {
     const paragraphs = cellParagraphs(entry.cell).map((paragraph, idx) =>
@@ -391,12 +441,14 @@ const buildTableDetail = (
         )
         return {
           ...detail,
-          bodyIndex
+          bodyIndex,
+          layoutMode: tableLayoutMode
         }
       }
     )
     return {
       blockId: `${blockId}.r:${entry.row}.c:${entry.col}`,
+      layoutMode: tableLayoutMode,
       row: entry.row,
       col: entry.col,
       paragraphs
@@ -406,6 +458,7 @@ const buildTableDetail = (
     blockId,
     type: 'table',
     bodyIndex,
+    layoutMode: tableLayoutMode,
     ...resolveBodyNeighbors(index.bodyBlockIds, bodyIndex),
     rows: summary.rows,
     cols: summary.cols,
@@ -421,6 +474,7 @@ export const getDetailedBlock = (index: BlockIndex, blockId: string): DocxDetail
     return {
       ...paragraphDetail(blockId, node.node),
       bodyIndex: node.bodyIndex,
+      layoutMode: node.layoutMode,
       ...resolveBodyNeighbors(index.bodyBlockIds, node.bodyIndex)
     }
   }
@@ -431,7 +485,8 @@ export const getDetailedBlock = (index: BlockIndex, blockId: string): DocxDetail
       const detail = paragraphDetail(`${blockId}.p:${idx + 1}`, paragraph)
       return {
         ...detail,
-        bodyIndex: node.bodyIndex
+        bodyIndex: node.bodyIndex,
+        layoutMode: node.layoutMode
       }
     }
   )
@@ -439,6 +494,7 @@ export const getDetailedBlock = (index: BlockIndex, blockId: string): DocxDetail
     blockId,
     type: 'table_cell',
     bodyIndex: node.bodyIndex,
+    layoutMode: node.layoutMode,
     ...resolveBodyNeighbors(index.bodyBlockIds, node.bodyIndex),
     tableBlockId: node.tableBlockId,
     row: node.row,

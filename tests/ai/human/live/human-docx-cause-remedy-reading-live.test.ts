@@ -4,7 +4,8 @@ import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
   buildSelectedDocxFixtureReferences,
-  DOCX_CROSS_FILE_FIXTURE_PATHS,
+  DOCX_ALL_FIXTURE_PATHS,
+  DOCX_READING_FIXTURE_PATHS,
   HUMAN_DOCX_CAUSE_REMEDY_READING_USER_INPUT,
   resolveSelectedDocxFixtures
 } from '../../../harness/backend/aiLiveTestData'
@@ -46,7 +47,7 @@ describe('ai human live backend', () => {
         suite: 'human',
         groups: ['live'],
         description: '验证 live 模式下 human 会基于两份已选 docx 覆盖过拟合与反走样的核心事实，并对缺失项保持保守。',
-        fixtures: DOCX_CROSS_FILE_FIXTURE_PATHS,
+        fixtures: DOCX_ALL_FIXTURE_PATHS,
         runMode: 'single',
         runtimeModelName: hasLiveLlmConfigInEnv('primary')
           ? loadLiveLlmConfigFromEnv('primary').model_name
@@ -62,9 +63,9 @@ describe('ai human live backend', () => {
           }
 
           await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv('primary'))
-          const fixtureDocs = resolveSelectedDocxFixtures(runtime)
+          const fixtureDocs = resolveSelectedDocxFixtures(runtime, DOCX_READING_FIXTURE_PATHS)
           const runner = createHumanTestRunner(runtime, {
-            selectedReferences: buildSelectedDocxFixtureReferences(runtime)
+            selectedReferences: buildSelectedDocxFixtureReferences(runtime, DOCX_READING_FIXTURE_PATHS)
           })
           const output = await runner.run({
             taskId: runtime.taskId,

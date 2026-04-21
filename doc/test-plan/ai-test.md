@@ -734,32 +734,42 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 live 模式下 `human` 会基于两份已选 `docx` 做跨文件精读，并准确回答“过拟合 / 反走样”的成因与处理思路。
-- Why：真实用户在复习场景里经常已经选中了资料，但仍会把两个概念混在一起；这条 case 要长期守住“已选资料范围 + 跨文件准确回答”的正式能力，对齐 `WB-CORE-002-AC2`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
-- How：注入真实 live LLM 配置；把 `tests/fixtures/ai/docx/深度学习.docx` 与 `tests/fixtures/ai/docx/图形学.docx` 作为已选资料复制进 workspace；直接输入“我做题老把这两个点混在一起。你就按我刚选的这两份资料，帮我说清楚：过拟合和反走样各自是什么、为什么会出现、一般怎么处理。别补充课外知识，哪份文档没写你就直接说没写。”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；事件流中至少出现一次 `docx_search`，并且至少两次 `docx_read` / `docx_outline` / `docx_search` 覆盖两份目标文档；最终回答同时命中“过拟合”的定义/成因事实组，并对处理办法给出文档内事实或明确说明“没写”；同时命中“反走样”的成因/处理事实组；不出现 docx 编辑工具。
+- What：验证 live 模式下 `human` 会基于两份已选 `docx` 做跨文件精读，并准确回答“过拟合 / 反走样”的成因与处理思路；同时工作区存在其他 docx 干扰项也不会偏题。
+- Why：真实用户在复习场景里经常已经选中了资料，但 workspace 中通常不止这两份文档；这条 case 要长期守住“已选资料范围优先 + 跨文件准确回答”的正式能力，对齐 `WB-CORE-002-AC2`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
+- How：注入真实 live LLM 配置；把 `tests/fixtures/ai/docx` 目录整组 docx 复制进 workspace，其中只将 `深度学习.docx` 与 `图形学.docx` 作为已选资料；直接输入“我这两天复习的时候老把这两个概念混了。你就按我刚选的这两份课件，帮我讲清楚：过拟合和反走样分别是什么、为什么会出现、一般怎么处理。别自己补课外内容，哪份资料没写你就直接告诉我没写。”的自然语言诉求，让真实 `human` 自主完成。
+- Oracle：任务最终完成；事件流中至少出现一次 `docx_search`，并且至少两次 `docx_read` / `docx_outline` / `docx_search` 覆盖两份已选目标文档；最终回答同时命中“过拟合”的定义/成因事实组，并对处理办法给出文档内事实或明确说明“没写”；同时命中“反走样”的成因/处理事实组；不出现 docx 编辑工具；回答不应明显被 workspace 里的其他 docx 干扰。
 - Not：不要求固定回答结构，也不对最终文案做逐字断言。
 - Last Run：`2026-04-17 20:28:14 +08:00`
 - Last Result：`通过`
 
-##### `human-docx-contextual-comparison-draft-live`
+##### `human-docx-multi-doc-supported-edit-live`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 live 模式下 `human` 会基于两份已选 `docx`，在目标 `docx` 的相关位置追加解释性段落和对照表，并生成不覆盖原文件的审阅稿。
-- Why：真实用户常见诉求不是“改占位符”，而是“在这块后面补一段更好懂的说明”；这条 case 覆盖跨文件取材、相关位置补写、结构化新增与审阅稿交付，对齐 `WB-CORE-002-AC2`、`WB-CORE-003-AC1`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
-- How：注入真实 live LLM 配置；把 `tests/fixtures/ai/docx/深度学习.docx` 与 `tests/fixtures/ai/docx/图形学.docx` 作为已选资料复制进 workspace；直接输入“《图形学》里‘反走样’这一节我还是记不住。你参考我刚选的这两份 Word，直接在这一节最后补一小段更好理解的说明，再加个简单对照表，一列写反走样，一列写《深度学习》里的过拟合。直接给我确认稿就行，别改原文件，也不用先回我文字草稿。”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；事件流中至少两次 `docx_search` / `docx_read` / `docx_outline` 覆盖两份目标文档；docx 编辑前至少出现一次针对“反走样”的读取定位；至少出现一次 docx 编辑工具；存在 `draft_review_ready` 事件，最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；原始两份 `docx` 文件未被覆盖；写入请求里能看到新增说明段落与表格结构。
+- What：验证 live 模式下 `human` 会读取两份已选的正常 flow docx，参考案例文档内容，只把修改落到目标 PRD 上，并生成不覆盖原文件的审阅稿。
+- Why：真实用户常见诉求不是单文档改字，而是“参考另一份材料把主稿补得更完整”；这条 case 要长期守住多文档读取、单目标回写和结构化新增能力，对齐 `WB-CORE-002-AC2`、`WB-CORE-003-AC1`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
+- How：注入真实 live LLM 配置；把 `人工智能探究课堂PRD.docx` 与 `交互式探究学习案例：产业转移.docx` 作为已选资料复制进 workspace；直接输入“我在整理这版课堂方案，想把主稿里那段交互设计说明写得更落地一点。你参考我刚选的那份案例文档，把对应章节补得更清楚一些，再顺手加一个很短的对照表，方便老师一眼看懂重点。”的自然语言诉求，让真实 `human` 自主完成。
+- Oracle：任务最终完成；事件流中至少两次 `docx_search` / `docx_read` / `docx_outline` 覆盖两份目标文档；至少出现一次 docx 编辑工具；存在 `draft_review_ready` 事件，最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；原始两份 `docx` 文件未被覆盖；写入请求只应落在 `人工智能探究课堂PRD.docx` 上，并包含新增说明与表格结构。
 - Not：不要求固定 op 组合，也不对最终说明文案做逐字断言。
+
+##### `human-docx-positioned-structural-edit-fallback-live`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 live 模式下 `human` 在复杂 positioned docx 中，会保留原地安全修改，但对命中复杂定位排版区域的结构性写入做优雅回退。
+- Why：这类由 `framePr` / 绝对定位 shape 组成的 docx 结构性插入极易破坏版式；这条 case 要长期守住“安全修改可继续、结构性 positioned 写入必须拒绝并给用户手动提示”的正式能力，对齐 `WB-CORE-003-AC1`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
+- How：注入真实 live LLM 配置；把 `图形学.docx` 与 `深度学习.docx` 作为已选资料复制进 workspace；直接输入“我准备把这份图形学讲义发给同学复习，想顺手润一下。你先把‘反走样’这块里一两句特别拗口的话改得更好懂一点；如果合适，再参考我选的那份深度学习资料，在这一节后面补一个更容易记的类比说明和简短对照表。要是有些地方因为版式原因不适合自动动，你就直接告诉我怎么手动补。”的自然语言诉求，让真实 `human` 自主完成。
+- Oracle：任务最终完成；事件流中至少两次 `docx_search` / `docx_read` / `docx_outline` 覆盖两份目标文档；至少一次安全 docx 原地修改成功；至少一次结构性写入因为命中复杂定位排版区域失败，并返回稳定 `diagnostic.message`；最终答复明确区分“已自动处理部分”和“需要手动补的部分”；原始 `docx` 文件未被覆盖。
+- Not：不强制一定生成结构性审阅稿，也不要求固定使用哪一种安全修改工具。
 
 ##### `human-kb-guided-docx-comparison-draft-live`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 live 模式下 `human` 在本地资料较多时，会先用 KB 缩圈定位相关资料，再回到目标 `docx` 做跨文件补写并交付审阅稿。
-- Why：真实用户常常记得主题、不记得文件名；这条 case 要长期守住“工作区默认范围 + KB 缩圈 + docx 继续执行”的正式能力，对齐 `WB-CORE-002-AC2`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
-- How：注入真实 live LLM 配置；workspace 中动态写入 `深度学习.docx`、`图形学.docx` 和若干干扰文件，并把目标 `docx` 与干扰资料同时 seed 到真实 KB；不传 `selectedReferences`，只绑定 workspace；直接输入“我工作区资料有点多，我忘了是哪份课件在讲反走样了。你先帮我找到那份，再参考讲过拟合的那份资料，直接在‘反走样’那一节最后补一段更好记的说明，再加个简单对照表，一列写反走样，一列写过拟合。直接给我确认稿就行，别改原文件，也不用先回我文字草稿。”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；事件流中至少出现一次 KB 工具调用；后续出现 docx 读取并覆盖最终参与编辑的目标 `docx`；至少出现一次 docx 编辑工具；存在 `draft_review_ready` 事件，最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；目标原始 `docx` 未被覆盖；新增内容同时涉及“反走样”和“过拟合”。
+- What：验证 live 模式下 `human` 在不传 `selectedReferences` 且 workspace 存在整组 docx 时，会先用 KB 缩圈找出讲“反走样 / 过拟合”的两份源资料，再把内容分别回写到另外两份目标 docx。
+- Why：真实用户常常记得主题、不记得文件名，而且希望把资料内容整理回自己的教学文档；这条 case 要长期守住“工作区默认范围 + KB 缩圈 + 多源读取 + 多目标 docx 回写”的正式能力，对齐 `WB-CORE-002-AC2`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
+- How：注入真实 live LLM 配置；workspace 直接使用 `tests/fixtures/ai/docx` 目录下整组 docx，不传 `selectedReferences`；同时将 `图形学.docx`、`深度学习.docx`、`人工智能探究课堂PRD.docx` 与 `交互式探究学习案例：产业转移.docx` seed 到真实 KB；直接输入“我工作区里这几份课件和教学材料有点多，你别先靠文件名猜，直接在知识库里帮我找哪两份在讲反走样和过拟合。找到以后先看一遍，再把里面最适合老师讲‘概念区分’的内容分别补到课堂 PRD 和交互式案例里，写法尽量像备课备注和课堂引导语，不要像教材摘抄。”的自然语言诉求，让真实 `human` 自主完成。
+- Oracle：任务最终完成；事件流中至少出现一次 KB 工具调用；后续 docx 读取覆盖 `图形学.docx` 与 `深度学习.docx` 两份源资料；至少两次允许的 docx 编辑成功，且写入目标落在 `人工智能探究课堂PRD.docx` 与 `交互式探究学习案例：产业转移.docx` 两份目标稿上；存在至少两次 `draft_review_ready` 事件，最终输出 artifacts 中同时包含两组 `draft_review` 与 `draft`；四份原始 `docx` 文件未被覆盖；最终答复明确说明找到了哪两份源资料，并分别更新了哪两份教学文档。
 - Not：不强制固定执行路径，也不要求 KB 缩圈后必须再打开所有候选资料。
 
 ## 5. 验收口径

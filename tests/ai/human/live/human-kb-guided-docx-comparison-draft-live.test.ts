@@ -1,19 +1,20 @@
+import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
 import { loadLiveLlmConfigFromEnv, hasLiveLlmConfigInEnv } from '../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
-  hasUnchangedFileBytes,
+  buildKbGuidedDocxWorkspaceSeed,
+  DOCX_ALL_FIXTURE_PATHS,
   HUMAN_KB_GUIDED_DOCX_COMPARISON_DRAFT_USER_INPUT,
-  seedKbGuidedDocxKb,
-  seedKbGuidedDocxWorkspace
+  seedKbGuidedDocxKb
 } from '../../../harness/backend/aiLiveTestData'
 import {
   collectDocxApplyOpsContentKinds,
+  countDraftFileArtifacts,
+  countDraftReviewArtifacts,
   filterAiRunEventsByType,
-  hasDraftFileArtifact,
-  hasDraftReviewArtifact,
   hasKbToolCall,
   runWithStructuredOutputRetry
 } from '../testUtils'
@@ -27,8 +28,8 @@ describe('ai human live backend', () => {
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
-        description: '验证 live 模式下 human 会先用 KB 缩圈定位课件，再继续对目标 docx 做 confirm-copy 补写。',
-        fixtures: [],
+        description: '验证 live 模式下 human 会先用 KB 缩圈定位相关课件，再把内容回写到另外两份目标 docx。',
+        fixtures: DOCX_ALL_FIXTURE_PATHS,
         runMode: 'single',
         runtimeModelName: hasLiveLlmConfigInEnv('primary')
           ? loadLiveLlmConfigFromEnv('primary').model_name
@@ -44,10 +45,10 @@ describe('ai human live backend', () => {
           }
 
           await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv('primary'))
-          const workspaceSeed = await seedKbGuidedDocxWorkspace(runtime)
+          const workspaceSeed = await buildKbGuidedDocxWorkspaceSeed(runtime)
           await seedKbGuidedDocxKb(runtime, workspaceSeed)
 
-          const runner = createHumanTestRunner(runtime, {}, { hardActionLimit: 6 })
+          const runner = createHumanTestRunner(runtime, {}, { hardActionLimit: 8 })
           const output = await runner.run({
             taskId: runtime.taskId,
             userInput: HUMAN_KB_GUIDED_DOCX_COMPARISON_DRAFT_USER_INPUT
@@ -76,14 +77,38 @@ describe('ai human live backend', () => {
             .filter((event) => event.toolName.startsWith('docx_'))
             .map((event) => event.input.sourcePath)
             .filter((value): value is string => typeof value === 'string')
+          const writeSourcePaths = filterAiRunEventsByType(events, 'tool_call_started')
+            .filter((event) =>
+              event.toolName === 'docx_paragraph_edit' ||
+              event.toolName === 'docx_heading_edit' ||
+              event.toolName === 'docx_table_edit' ||
+              event.toolName === 'docx_text_edit' ||
+              event.toolName === 'docx_text_style_edit'
+            )
+            .map((event) => event.input.sourcePath)
+            .filter((value): value is string => typeof value === 'string')
           const changedContentKinds = collectDocxApplyOpsContentKinds(events)
-          const deepLearningUnchanged = await hasUnchangedFileBytes(
-            result.workspaceSeed.deepLearningPath,
-            result.workspaceSeed.originalDeepLearningBytes
+          const sourceDocsOpened = result.workspaceSeed.sourceDocs.every(
+            (fixtureDoc) =>
+              openedSourcePaths.some(
+                (sourcePath) =>
+                  sourcePath.endsWith(fixtureDoc.relativePath) ||
+                  sourcePath.endsWith(`/${path.basename(fixtureDoc.relativePath)}`)
+              )
           )
-          const graphicsUnchanged = await hasUnchangedFileBytes(
-            result.workspaceSeed.graphicsPath,
-            result.workspaceSeed.originalGraphicsBytes
+          const targetDocsWritten = result.workspaceSeed.targetDocs.every(
+            (fixtureDoc) =>
+              writeSourcePaths.some(
+                (sourcePath) =>
+                  sourcePath.endsWith(fixtureDoc.relativePath) ||
+                  sourcePath.endsWith(`/${path.basename(fixtureDoc.relativePath)}`)
+              )
+          )
+          const sourceDocsUnchanged = await Promise.all(
+            result.workspaceSeed.trackedDocs.map(async (fixture) => {
+              const currentBytes = await fs.readFile(fixture.workspacePath)
+              return Buffer.compare(currentBytes, Buffer.from(fixture.bytes)) === 0
+            })
           )
           const deliveryText = `${result.output?.summary || ''}\n${result.output?.deliveryMarkdown || ''}`
 
@@ -92,26 +117,23 @@ describe('ai human live backend', () => {
               hasKbToolCall(events) &&
               toolNames.some((toolName) => toolName.endsWith('_edit')) &&
               changedContentKinds.includes('paragraph') &&
-              changedContentKinds.includes('table') &&
-              filterAiRunEventsByType(events, 'draft_review_ready').length >= 1 &&
-              hasDraftReviewArtifact(result.output?.artifacts) &&
-              hasDraftFileArtifact(result.output?.artifacts) &&
-              openedSourcePaths.some(
-                (sourcePath) =>
-                  sourcePath.endsWith(result.workspaceSeed.graphicsRelativePath) ||
-                  sourcePath.endsWith(`/${path.basename(result.workspaceSeed.graphicsRelativePath)}`)
-              ) &&
+              sourceDocsOpened &&
+              targetDocsWritten &&
+              filterAiRunEventsByType(events, 'draft_review_ready').length >= 2 &&
+              countDraftReviewArtifacts(result.output?.artifacts) >= 2 &&
+              countDraftFileArtifacts(result.output?.artifacts) >= 2 &&
               /(过拟合|过度拟合)/.test(deliveryText) &&
               /反走样/.test(deliveryText) &&
-              deepLearningUnchanged &&
-              graphicsUnchanged &&
+              /PRD|课堂|案例/.test(deliveryText) &&
+              sourceDocsUnchanged.every(Boolean) &&
               typeof result.output?.deliveryMarkdown === 'string' &&
               result.output.deliveryMarkdown.trim().length > 0,
             {
-              name: 'human-live-kb-guided-docx-write-uses-kb-and-preserves-source-files',
-              message: 'live human KB-guided 写 case 应先触发 KB 缩圈，再对目标 docx 完成对象化补写且不覆盖原文件。',
+              name: 'human-live-kb-guided-docx-updates-two-target-docs-from-two-source-docs',
+              message: 'live human KB-guided 写 case 应先触发 KB 缩圈，再把两份源资料内容落到两份目标 docx 上且不覆盖原文件。',
               data: {
                 openedSourcePaths,
+                writeSourcePaths,
                 toolNames,
                 changedContentKinds,
                 summary: result.output?.summary,

@@ -3,9 +3,10 @@ import { loadLiveLlmConfigFromEnv, hasLiveLlmConfigInEnv } from '../../../../har
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
+  buildKbGuidedDocxWorkspaceSeed,
+  DOCX_ALL_FIXTURE_PATHS,
   HUMAN_KB_GUIDED_DOCX_READING_USER_INPUT,
-  seedKbGuidedDocxKb,
-  seedKbGuidedDocxWorkspace
+  seedKbGuidedDocxKb
 } from '../../../../harness/backend/aiLiveTestData'
 import {
   collectStartedToolStringArgs,
@@ -24,7 +25,7 @@ describe('temp ai human live backend', () => {
         suite: 'ai',
         groups: ['human', 'live'],
         description: '观察 live 模式下 human 在工作区资料较多时，会如何用 KB 缩圈并回答过拟合与反走样的处理思路。',
-        fixtures: [],
+        fixtures: DOCX_ALL_FIXTURE_PATHS,
         runMode: 'single',
         runtimeModelName: hasLiveLlmConfigInEnv('primary')
           ? loadLiveLlmConfigFromEnv('primary').model_name
@@ -39,7 +40,7 @@ describe('temp ai human live backend', () => {
           }
 
           await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv('primary'))
-          const workspaceSeed = await seedKbGuidedDocxWorkspace(runtime)
+          const workspaceSeed = await buildKbGuidedDocxWorkspaceSeed(runtime)
           await seedKbGuidedDocxKb(runtime, workspaceSeed)
 
           const runner = createHumanTestRunner(runtime)

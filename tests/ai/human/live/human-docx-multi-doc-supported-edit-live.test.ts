@@ -1,14 +1,12 @@
 import fs from 'node:fs/promises'
 import { describe, it } from 'vitest'
-import type { AiRunEvent } from '../../../../src/shared/types'
 import { loadLiveLlmConfigFromEnv, hasLiveLlmConfigInEnv } from '../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
   buildSelectedDocxFixtureReferences,
-  DOCX_CROSS_FILE_FIXTURE_PATHS,
-  hasUnchangedFileBytes,
-  HUMAN_DOCX_CONTEXTUAL_COMPARISON_DRAFT_USER_INPUT,
+  DOCX_MULTI_EDIT_FIXTURE_PATHS,
+  HUMAN_DOCX_MULTI_DOC_SUPPORTED_EDIT_USER_INPUT,
   resolveSelectedDocxFixtures
 } from '../../../harness/backend/aiLiveTestData'
 import {
@@ -29,43 +27,17 @@ const openedExpectedDoc = (
       sourcePath.endsWith(expectedRelativePath) || sourcePath.endsWith(`/${expectedName}`)
   )
 
-const hasTargetReadBeforeApply = (events: readonly AiRunEvent[]): boolean => {
-  const firstApplyIndex = events.findIndex(
-    (event) =>
-      event.type === 'tool_call_started' &&
-      (event.toolName === 'docx_paragraph_edit' ||
-        event.toolName === 'docx_heading_edit' ||
-        event.toolName === 'docx_table_edit' ||
-        event.toolName === 'docx_text_edit' ||
-        event.toolName === 'docx_text_style_edit')
-  )
-  if (firstApplyIndex <= 0) {
-    return false
-  }
-
-  return events.slice(0, firstApplyIndex).some((event) => {
-    if (event.type !== 'tool_call_started') {
-      return false
-    }
-    if (event.toolName === 'docx_search') {
-      const query = event.input.query
-      return typeof query === 'string' && query.includes('反走样')
-    }
-    return event.toolName === 'docx_outline' || event.toolName === 'docx_read'
-  })
-}
-
 describe('ai human live backend', () => {
-  it('human-docx-contextual-comparison-draft-live', async () => {
+  it('human-docx-multi-doc-supported-edit-live', async () => {
     await runWithStructuredOutputRetry(async () => {
       await runBackendCase({
-        caseId: 'human-docx-contextual-comparison-draft-live',
+        caseId: 'human-docx-multi-doc-supported-edit-live',
         harnessMode: 'live',
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
-        description: '验证 live 模式下 human 会在图形学相关位置后补写说明和对照表，并生成审阅稿。',
-        fixtures: DOCX_CROSS_FILE_FIXTURE_PATHS,
+        description: '验证 live 模式下 human 会参考一份正常 flow docx，回写另一份目标 docx，并生成审阅稿。',
+        fixtures: DOCX_MULTI_EDIT_FIXTURE_PATHS,
         runMode: 'single',
         runtimeModelName: hasLiveLlmConfigInEnv('primary')
           ? loadLiveLlmConfigFromEnv('primary').model_name
@@ -82,7 +54,7 @@ describe('ai human live backend', () => {
           }
 
           await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv('primary'))
-          const fixtureDocs = resolveSelectedDocxFixtures(runtime)
+          const fixtureDocs = resolveSelectedDocxFixtures(runtime, DOCX_MULTI_EDIT_FIXTURE_PATHS)
           const originalFixtureBytes = await Promise.all(
             fixtureDocs.map(async (fixtureDoc) => ({
               name: fixtureDoc.name,
@@ -92,11 +64,11 @@ describe('ai human live backend', () => {
             }))
           )
           const runner = createHumanTestRunner(runtime, {
-            selectedReferences: buildSelectedDocxFixtureReferences(runtime)
+            selectedReferences: buildSelectedDocxFixtureReferences(runtime, DOCX_MULTI_EDIT_FIXTURE_PATHS)
           })
           const output = await runner.run({
             taskId: runtime.taskId,
-            userInput: HUMAN_DOCX_CONTEXTUAL_COMPARISON_DRAFT_USER_INPUT
+            userInput: HUMAN_DOCX_MULTI_DOC_SUPPORTED_EDIT_USER_INPUT
           })
 
           return {
@@ -111,7 +83,7 @@ describe('ai human live backend', () => {
           if (result.skipped) {
             runtime.assertThat(true, {
               name: 'live-config-not-provided',
-              message: '未提供 live 模型配置，已跳过 human live contextual docx comparison draft case。'
+              message: '未提供 live 模型配置，已跳过 human live multi-doc supported edit case。'
             })
             return
           }
@@ -123,19 +95,30 @@ describe('ai human live backend', () => {
             .filter((event) => event.toolName.startsWith('docx_'))
             .map((event) => event.input.sourcePath)
             .filter((value): value is string => typeof value === 'string')
+          const writeSourcePaths = filterAiRunEventsByType(events, 'tool_call_started')
+            .filter((event) =>
+              event.toolName === 'docx_paragraph_edit' ||
+              event.toolName === 'docx_heading_edit' ||
+              event.toolName === 'docx_table_edit' ||
+              event.toolName === 'docx_text_edit' ||
+              event.toolName === 'docx_text_style_edit'
+            )
+            .map((event) => event.input.sourcePath)
+            .filter((value): value is string => typeof value === 'string')
           const changedContentKinds = collectDocxApplyOpsContentKinds(events)
           const unchangedFixtures = await Promise.all(
-            result.originalFixtureBytes.map(async (fixture) =>
-              await hasUnchangedFileBytes(fixture.workspacePath, fixture.bytes)
-            )
+            result.originalFixtureBytes.map(async (fixture) => {
+              const currentBytes = await fs.readFile(fixture.workspacePath)
+              return Buffer.compare(currentBytes, Buffer.from(fixture.bytes)) === 0
+            })
           )
+          const targetFixture = result.fixtureDocs.find((fixture) => fixture.name === '人工智能探究课堂PRD.docx')
 
           runtime.assertThat(
             result.output?.status === 'completed' &&
               result.fixtureDocs.every((fixtureDoc) =>
                 openedExpectedDoc(openedSourcePaths, fixtureDoc.relativePath, fixtureDoc.name)
               ) &&
-              hasTargetReadBeforeApply(events) &&
               toolNames.some((toolName) => toolName.endsWith('_edit')) &&
               changedContentKinds.includes('paragraph') &&
               changedContentKinds.includes('table') &&
@@ -143,13 +126,19 @@ describe('ai human live backend', () => {
               hasDraftReviewArtifact(result.output?.artifacts) &&
               hasDraftFileArtifact(result.output?.artifacts) &&
               unchangedFixtures.every(Boolean) &&
-              typeof result.output?.deliveryMarkdown === 'string' &&
-              result.output.deliveryMarkdown.trim().length > 0,
+              Boolean(targetFixture) &&
+              writeSourcePaths.length > 0 &&
+              writeSourcePaths.every(
+                (sourcePath) =>
+                  sourcePath.endsWith(targetFixture!.relativePath) ||
+                  sourcePath.endsWith(`/${targetFixture!.name}`)
+              ),
             {
-              name: 'human-live-contextual-docx-write-produces-confirm-copy-without-overwriting-source',
-              message: 'live human 定位补写 case 应在读取定位后补写说明和表格，且不覆盖原始资料。',
+              name: 'human-live-multi-doc-supported-edit-updates-only-target-doc',
+              message: 'live human 多文档编辑 case 应读取两份已选 docx，并只把修改落在目标 PRD 上。',
               data: {
                 openedSourcePaths,
+                writeSourcePaths,
                 toolNames,
                 changedContentKinds,
                 summary: result.output?.summary,

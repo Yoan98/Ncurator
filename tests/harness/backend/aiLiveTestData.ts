@@ -10,19 +10,33 @@ export const HUMAN_FILE_RETENTION_USER_INPUT =
 export const HUMAN_RISK_REPORT_DRAFT_USER_INPUT =
   '我下午要把本周风险周报发出去。工作区里应该有一份上周用过的 Word 周报模板，但我忘了文件名。你先帮我找到那份模板，再按我刚才选的资料，把本周风险结论和负责人补进去，整理成待确认稿。最后告诉我你改了哪几处，依据分别来自哪里。'
 
-export const DOCX_CROSS_FILE_FIXTURE_PATHS = [
+export const DOCX_READING_FIXTURE_PATHS = [
   'tests/fixtures/ai/docx/深度学习.docx',
   'tests/fixtures/ai/docx/图形学.docx'
 ] as const
 
-export const HUMAN_DOCX_CAUSE_REMEDY_READING_USER_INPUT =
-  '我做题老把这两个点混在一起。你就按我刚选的这两份资料，帮我说清楚：过拟合和反走样各自是什么、为什么会出现、一般怎么处理。别补充课外知识，哪份文档没写你就直接说没写。'
+export const DOCX_MULTI_EDIT_FIXTURE_PATHS = [
+  'tests/fixtures/ai/docx/人工智能探究课堂PRD.docx',
+  'tests/fixtures/ai/docx/交互式探究学习案例：产业转移.docx'
+] as const
 
-export const HUMAN_DOCX_CONTEXTUAL_COMPARISON_DRAFT_USER_INPUT =
-  '《图形学》里“反走样”这一节我还是记不住。你参考我刚选的这两份 Word，直接在这一节最后补一小段更好理解的说明，再加个简单对照表，一列写反走样，一列写《深度学习》里的过拟合。直接给我可预览的版本就行，别改原文件，也不用先回我文字草稿。'
+export const DOCX_ALL_FIXTURE_PATHS = [
+  ...DOCX_READING_FIXTURE_PATHS,
+  ...DOCX_MULTI_EDIT_FIXTURE_PATHS,
+  'tests/fixtures/ai/docx/sample-edit.docx'
+] as const
+
+export const HUMAN_DOCX_CAUSE_REMEDY_READING_USER_INPUT =
+  '我这两天复习的时候老把这两个概念混了。你就按我刚选的这两份课件，帮我讲清楚：过拟合和反走样分别是什么、为什么会出现、一般怎么处理。别自己补课外内容，哪份资料没写你就直接告诉我没写。'
+
+export const HUMAN_DOCX_MULTI_DOC_SUPPORTED_EDIT_USER_INPUT =
+  '我在整理这版课堂方案，想把主稿里那段交互设计说明写得更落地一点。你参考我刚选的那份案例文档，把对应章节补得更清楚一些，再顺手加一个很短的对照表，方便老师一眼看懂重点。'
+
+export const HUMAN_DOCX_POSITIONED_STRUCTURAL_EDIT_FALLBACK_USER_INPUT =
+  '我准备把这份图形学讲义发给同学复习，想顺手润一下。你先把“反走样”这块里一两句特别拗口的话改得更好懂一点；如果合适，再参考我选的那份深度学习资料，在这一节后面补一个更容易记的类比说明和简短对照表。要是有些地方因为版式原因不适合自动动，你就直接告诉我怎么手动补。'
 
 export const HUMAN_KB_GUIDED_DOCX_COMPARISON_DRAFT_USER_INPUT =
-  '我工作区资料有点多，我忘了是哪份课件在讲反走样了。你先帮我找到那份，再参考讲过拟合的那份资料，直接在“反走样”那一节最后补一段更好记的说明，再加个简单对照表，一列写反走样，一列写过拟合。直接给我可预览的版本就行，别改原文件，也不用先回我文字草稿。'
+  '我工作区里这几份课件和教学材料有点多，你别先靠文件名猜，直接在知识库里帮我找哪两份在讲反走样和过拟合。找到以后先看一遍，再把里面最适合老师讲“概念区分”的内容分别补到课堂 PRD 和交互式案例里，写法尽量像备课备注和课堂引导语，不要像教材摘抄。'
 
 export const HUMAN_KB_GUIDED_DOCX_READING_USER_INPUT =
   '我工作区里应该有两份课件分别讲过过拟合和反走样，但我忘了文件名。你先帮我找出来，再告诉我这两个问题一般怎么处理。'
@@ -76,13 +90,14 @@ export type SelectedDocxFixture = {
   name: string
 }
 
+export type TrackedDocxFixtureBytes = SelectedDocxFixture & {
+  bytes: Uint8Array
+}
+
 export type KbGuidedDocxWorkspaceSeed = {
-  deepLearningPath: string
-  deepLearningRelativePath: string
-  graphicsPath: string
-  graphicsRelativePath: string
-  originalDeepLearningBytes: Uint8Array
-  originalGraphicsBytes: Uint8Array
+  sourceDocs: SelectedDocxFixture[]
+  targetDocs: SelectedDocxFixture[]
+  trackedDocs: TrackedDocxFixtureBytes[]
 }
 
 export const seedFileRetentionKb = async (runtime: BackendTestRuntime): Promise<string[]> => {
@@ -97,7 +112,7 @@ export const seedRiskReportKb = async (runtime: BackendTestRuntime): Promise<str
 
 export const resolveSelectedDocxFixtures = (
   runtime: BackendTestRuntime,
-  fixturePaths: readonly string[] = DOCX_CROSS_FILE_FIXTURE_PATHS
+  fixturePaths: readonly string[] = DOCX_READING_FIXTURE_PATHS
 ): SelectedDocxFixture[] =>
   fixturePaths.map((fixturePath) => {
     const workspacePath = runtime.getFixtureWorkspacePath(fixturePath)
@@ -111,7 +126,7 @@ export const resolveSelectedDocxFixtures = (
 
 export const buildSelectedDocxFixtureReferences = (
   runtime: BackendTestRuntime,
-  fixturePaths: readonly string[] = DOCX_CROSS_FILE_FIXTURE_PATHS
+  fixturePaths: readonly string[] = DOCX_READING_FIXTURE_PATHS
 ): SelectedReference[] =>
   resolveSelectedDocxFixtures(runtime, fixturePaths).map((fixture, index) => ({
     kind: 'file',
@@ -125,123 +140,24 @@ export const buildSelectedDocxFixtureReferences = (
     kbAvailability: 'not_indexed'
   }))
 
-const copyDocxFixtureToWorkspaceRoot = async (input: {
+export const captureDocxFixtureBytes = async (
+  runtime: BackendTestRuntime,
+  fixturePaths: readonly string[]
+): Promise<TrackedDocxFixtureBytes[]> =>
+  await Promise.all(
+    resolveSelectedDocxFixtures(runtime, fixturePaths).map(async (fixture) => ({
+      ...fixture,
+      bytes: await fs.readFile(fixture.workspacePath)
+    }))
+  )
+
+export const buildKbGuidedDocxWorkspaceSeed = async (
   runtime: BackendTestRuntime
-  sourcePath: string
-  targetName: string
-  summary: string
-}): Promise<string> => {
-  const absoluteSourcePath = path.resolve(input.sourcePath)
-  const targetPath = path.join(input.runtime.workspaceRoot, input.targetName)
-  await fs.cp(absoluteSourcePath, targetPath)
-  input.runtime.recordSeedWorkspaceFile({
-    relativePath: input.targetName,
-    absolutePath: targetPath,
-    summary: input.summary,
-    metadata: {
-      format: 'docx'
-    }
-  })
-  return targetPath
-}
-
-export const seedKbGuidedDocxWorkspace = async (
-  runtime: BackendTestRuntime
-): Promise<KbGuidedDocxWorkspaceSeed> => {
-  const deepLearningRelativePath = '深度学习.docx'
-  const graphicsRelativePath = '图形学.docx'
-  const deepLearningPath = await copyDocxFixtureToWorkspaceRoot({
-    runtime,
-    sourcePath: DOCX_CROSS_FILE_FIXTURE_PATHS[0],
-    targetName: deepLearningRelativePath,
-    summary: '目标课件：深度学习'
-  })
-  const graphicsPath = await copyDocxFixtureToWorkspaceRoot({
-    runtime,
-    sourcePath: DOCX_CROSS_FILE_FIXTURE_PATHS[1],
-    targetName: graphicsRelativePath,
-    summary: '目标课件：图形学'
-  })
-
-  const scheduleRelativePath = '课程安排.docx'
-  const schedulePath = await writeTestDocxFile(runtime.workspaceRoot, scheduleRelativePath, [
-    {
-      type: 'heading',
-      text: '课程安排',
-      level: 1
-    },
-    {
-      type: 'paragraph',
-      text: '这里记录的是考试时间、教室和分组安排。'
-    }
-  ])
-  runtime.recordSeedWorkspaceFile({
-    relativePath: scheduleRelativePath,
-    absolutePath: schedulePath,
-    summary: '干扰项：课程安排',
-    metadata: {
-      format: 'docx'
-    }
-  })
-
-  const labNoteRelativePath = '机器学习实验记录.docx'
-  const labNotePath = await writeTestDocxFile(runtime.workspaceRoot, labNoteRelativePath, [
-    {
-      type: 'heading',
-      text: '机器学习实验记录',
-      level: 1
-    },
-    {
-      type: 'paragraph',
-      text: '本周实验主要关注学习率和 batch size 的调参过程。'
-    }
-  ])
-  runtime.recordSeedWorkspaceFile({
-    relativePath: labNoteRelativePath,
-    absolutePath: labNotePath,
-    summary: '干扰项：机器学习实验记录',
-    metadata: {
-      format: 'docx'
-    }
-  })
-
-  const readingListRelativePath = '参考书目.md'
-  const readingListPath = path.join(runtime.workspaceRoot, readingListRelativePath)
-  const readingListText = '- 线性代数导引\n- 计算机图形学基础\n'
-  await fs.writeFile(readingListPath, readingListText, 'utf8')
-  runtime.recordSeedWorkspaceFile({
-    relativePath: readingListRelativePath,
-    absolutePath: readingListPath,
-    summary: '干扰项：参考书目',
-    metadata: {
-      format: 'text',
-      text: readingListText
-    }
-  })
-
-  const progressRelativePath = '复习进度.txt'
-  const progressPath = path.join(runtime.workspaceRoot, progressRelativePath)
-  const progressText = '今天先看图形学，再看深度学习。\n'
-  await fs.writeFile(progressPath, progressText, 'utf8')
-  runtime.recordSeedWorkspaceFile({
-    relativePath: progressRelativePath,
-    absolutePath: progressPath,
-    summary: '干扰项：复习进度',
-    metadata: {
-      format: 'text',
-      text: progressText
-    }
-  })
-
-  return {
-    deepLearningPath,
-    deepLearningRelativePath,
-    graphicsPath,
-    graphicsRelativePath,
-    originalDeepLearningBytes: await fs.readFile(deepLearningPath),
-    originalGraphicsBytes: await fs.readFile(graphicsPath)
-  }
-}
+): Promise<KbGuidedDocxWorkspaceSeed> => ({
+  sourceDocs: resolveSelectedDocxFixtures(runtime, DOCX_READING_FIXTURE_PATHS),
+  targetDocs: resolveSelectedDocxFixtures(runtime, DOCX_MULTI_EDIT_FIXTURE_PATHS),
+  trackedDocs: await captureDocxFixtureBytes(runtime, DOCX_ALL_FIXTURE_PATHS)
+})
 
 export const seedKbGuidedDocxKb = async (
   runtime: BackendTestRuntime,
@@ -251,7 +167,7 @@ export const seedKbGuidedDocxKb = async (
     {
       id: 'doc-deep-learning',
       name: '深度学习.docx',
-      filePath: workspaceSeed.deepLearningPath,
+      filePath: workspaceSeed.sourceDocs[0]?.workspacePath,
       chunks: [
         {
           id: 'chunk-deep-learning-1',
@@ -270,7 +186,7 @@ export const seedKbGuidedDocxKb = async (
     {
       id: 'doc-graphics',
       name: '图形学.docx',
-      filePath: workspaceSeed.graphicsPath,
+      filePath: workspaceSeed.sourceDocs[1]?.workspacePath,
       chunks: [
         {
           id: 'chunk-graphics-1',
@@ -287,42 +203,55 @@ export const seedKbGuidedDocxKb = async (
       ]
     },
     {
-      id: 'doc-course-schedule',
-      name: '课程安排.docx',
-      filePath: path.join(runtime.workspaceRoot, '课程安排.docx'),
+      id: 'doc-ai-prd',
+      name: '人工智能探究课堂PRD.docx',
+      filePath: workspaceSeed.targetDocs.find((doc) => doc.name === '人工智能探究课堂PRD.docx')
+        ?.workspacePath,
       chunks: [
         {
-          id: 'chunk-course-schedule-1',
-          text: '课程安排只记录考试时间、教室和分组信息。'
+          id: 'chunk-ai-prd-1',
+          text: '人工智能探究课堂产品 PRD 支持讲授式、交互探究式和小组协作式三种课堂学习模式。'
+        },
+        {
+          id: 'chunk-ai-prd-2',
+          text: '统一设计原则包括：单一页面沉浸式体验、过程可视化、AI 不替代思考、结果可沉淀。'
         }
       ]
     },
     {
-      id: 'doc-ml-lab',
-      name: '机器学习实验记录.docx',
-      filePath: path.join(runtime.workspaceRoot, '机器学习实验记录.docx'),
+      id: 'doc-interactive-case',
+      name: '交互式探究学习案例：产业转移.docx',
+      filePath: workspaceSeed.targetDocs.find(
+        (doc) => doc.name === '交互式探究学习案例：产业转移.docx'
+      )?.workspacePath,
       chunks: [
         {
-          id: 'chunk-ml-lab-1',
-          text: '实验记录主要关注学习率和 batch size 的调参过程。'
+          id: 'chunk-interactive-case-1',
+          text: '产业转移探究案例强调情境引入、证据分析、规律归纳、迁移应用，并通过 AI 发起、学生活动、AI 即时反馈来推进环节。'
+        },
+        {
+          id: 'chunk-interactive-case-2',
+          text: '案例要求把复杂概念拆成可执行的探究步骤，让学生通过判断、解释和迁移应用学懂知识点。'
         }
       ]
     },
     {
-      id: 'doc-reading-list',
-      name: '参考书目.md',
-      filePath: path.join(runtime.workspaceRoot, '参考书目.md'),
+      id: 'doc-sample-edit',
+      name: 'sample-edit.docx',
+      filePath: resolveSelectedDocxFixtures(runtime, ['tests/fixtures/ai/docx/sample-edit.docx'])[0]
+        ?.workspacePath,
       chunks: [
         {
-          id: 'chunk-reading-list-1',
-          text: '参考书目里只有课程参考资料列表，没有过拟合或反走样的讲解。'
+          id: 'chunk-sample-edit-1',
+          text: 'sample-edit.docx 只是一个简单编辑样例，不包含过拟合或反走样的课程内容。'
         }
       ]
     }
   ]
 
-  await runtime.seedKb(kbDocuments)
-  return kbDocuments.map((document) => document.id)
+  const validDocuments = kbDocuments.filter((document) => typeof document.filePath === 'string')
+  await runtime.seedKb(validDocuments)
+  return validDocuments.map((document) => document.id)
 }
 
 export const seedRiskReportWorkspace = async (
