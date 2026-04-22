@@ -95,7 +95,7 @@ describe('ai human live backend', () => {
               (event) =>
                 event.toolName === 'docx_search' ||
                 event.toolName === 'docx_outline' ||
-                event.toolName === 'docx_read' ||
+                event.toolName === 'docx_read_blocks' ||
                 event.toolName === 'docx_history'
             )
             .map((event) => event.input.sourcePath)
@@ -108,7 +108,7 @@ describe('ai human live backend', () => {
                 openedExpectedDoc(openedSourcePaths, fixtureDoc.relativePath, fixtureDoc.name)
               ) &&
               toolNames.some((toolName) => toolName === 'docx_search') &&
-              toolNames.some((toolName) => toolName === 'docx_read' || toolName === 'docx_outline') &&
+              toolNames.some((toolName) => toolName === 'docx_read_blocks' || toolName === 'docx_outline') &&
               !toolNames.some((toolName) => toolName.endsWith('_edit')) &&
               /(过拟合|过度拟合)/.test(deliveryText) &&
               /(记住过多训练数据中的特征值|训练时间过久)/.test(deliveryText) &&

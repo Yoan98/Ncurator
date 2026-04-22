@@ -111,7 +111,7 @@ describe('ai human live backend', () => {
           result.output?.status === 'completed' &&
             toolNames.includes('workspace_run_command') &&
             hasKbToolCall(result.events) &&
-            toolNames.some((toolName) => toolName === 'docx_read' || toolName === 'docx_outline') &&
+            toolNames.some((toolName) => toolName === 'docx_read_blocks' || toolName === 'docx_outline') &&
             hasDocxWriteToolCall(result.events),
           {
             name: 'human-live-risk-report-runs-required-tool-chain',

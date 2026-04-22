@@ -115,7 +115,7 @@ describe('ai tool hand backend', () => {
             taskId: runtime.taskId,
             userInput: 'read the docx without creating artifacts',
             learnedSkillIds: ['workspace-cli', 'docx-read'],
-            toolName: 'docx_read',
+            toolName: 'docx_read_blocks',
             args: {
               sourcePath: 'artifact-merge.docx',
               fromBlockId: 'b:1'
@@ -147,7 +147,7 @@ describe('ai tool hand backend', () => {
             result.secondState.execution.artifacts.some(
               (artifact) => artifact.kind === 'file' && artifact.capability === 'terminal_exec'
             ) &&
-            result.secondState.execution.lastToolResults?.[0]?.toolName === 'docx_read',
+            result.secondState.execution.lastToolResults?.[0]?.toolName === 'docx_read_blocks',
           {
             name: 'runtime-artifacts-are-preserved-when-next-tool-has-no-artifact',
             message: '后续没有 artifact 的工具执行后，execution.artifacts 应保留已有 terminal 产物而不是被覆盖。',
@@ -161,7 +161,7 @@ describe('ai tool hand backend', () => {
         runtime.assertThat(
           result.secondState.execution.watchHint?.code === 'hand_tool_limit_exceeded' &&
             result.secondState.execution.watchHint.detail.limit === 1 &&
-            result.secondState.execution.lastToolResults?.[0]?.toolName === 'docx_read',
+            result.secondState.execution.lastToolResults?.[0]?.toolName === 'docx_read_blocks',
           {
             name: 'tool-limit-produces-converging-watchhint',
             message: '超过 hardActionLimit 后，hand 应写入收敛型 watchHint，同时保留当前工具结果。',

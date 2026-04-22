@@ -49,7 +49,7 @@ describe('ai tool docx backend', () => {
             throw new Error('expected positioned paragraph block was not found')
           }
 
-          const readPositionedParagraph = await harness.invoke<DocxReadResult>('docx_read', {
+          const readPositionedParagraph = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: outline.sourcePath,
             fromBlockId: positionedParagraph.blockId
           })

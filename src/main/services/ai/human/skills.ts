@@ -38,7 +38,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     title: 'docx-read',
     description: '读取 docx 结构、搜索定位、连续精读区间、查看版本历史。',
     whenToUse: '当任务需要浏览结构、换词搜索、定位 blockId 或连续精读 docx 内容时使用。',
-    toolNames: ['docx_outline', 'docx_search', 'docx_read', 'docx_history']
+    toolNames: ['docx_outline', 'docx_search', 'docx_read_blocks', 'docx_history']
   },
   'docx-write': {
     skillId: 'docx-write',

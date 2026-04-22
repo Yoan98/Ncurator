@@ -120,7 +120,7 @@ describe('ai tool docx backend', () => {
             sourcePath: 'complex-ops.docx',
             query: 'Inserted after anchor.'
           })
-          const readAfter = await harness.invoke<DocxReadResult>('docx_read', {
+          const readAfter = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: 'complex-ops.docx',
             fromBlockId: searchAfter.matches[0]!.blockId
           })

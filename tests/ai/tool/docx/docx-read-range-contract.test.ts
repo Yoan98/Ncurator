@@ -15,7 +15,7 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证 docx_read(fromBlockId,toBlockId) 会返回稳定的连续 blocks 区间。',
+      description: '验证 docx_read_blocks(fromBlockId,toBlockId) 会返回稳定的连续 blocks 区间。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -34,7 +34,7 @@ describe('ai tool docx backend', () => {
           })
           const fromBlockId = findParagraphBlockIdByText(outline.blocks, '第二段。')
           const toBlockId = findParagraphBlockIdByText(outline.blocks, '第四段。')
-          const read = await harness.invoke<DocxReadResult>('docx_read', {
+          const read = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: 'range-read.docx',
             fromBlockId,
             toBlockId

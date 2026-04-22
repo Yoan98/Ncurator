@@ -190,7 +190,7 @@ describe('ai unit brain prompt history blocks', () => {
     expect(prompt.user).toContain('<recent_progress>')
     expect(prompt.user).toContain('<earlier_attempts>')
     expect(prompt.user).toContain('<recalled_history>')
-    expect(prompt.user).toContain('<available_skills>')
+    expect(prompt.user).toContain('<skill_catalog>')
     expect(prompt.user).toContain('<correction_hint>')
     expect(prompt.user).toContain('优先参考资料：')
     expect(prompt.system).toContain('<principles>')
@@ -365,7 +365,7 @@ describe('ai unit brain prompt history blocks', () => {
     )
   })
 
-  it('renders complete docx_read blocks from raw history data into brain prompt', () => {
+  it('renders complete docx_read_blocks blocks from raw history data into brain prompt', () => {
     const initialState = createInitialHumanState({
       taskId: 'task-docx-history-prompt',
       userInput: '说明反走样的成因和处理方法'
@@ -387,7 +387,7 @@ describe('ai unit brain prompt history blocks', () => {
                 mode: 'serial',
                 calls: [
                   {
-                    toolName: 'docx_read',
+                    toolName: 'docx_read_blocks',
                     args: {
                       sourcePath: 'graphics.docx',
                       fromBlockId: 'b:19',
@@ -403,7 +403,7 @@ describe('ai unit brain prompt history blocks', () => {
               mode: 'serial',
               calls: [
                 {
-                  toolName: 'docx_read',
+                  toolName: 'docx_read_blocks',
                   args: {
                     sourcePath: 'graphics.docx',
                     fromBlockId: 'b:19',
@@ -414,7 +414,7 @@ describe('ai unit brain prompt history blocks', () => {
             },
             toolResults: [
               {
-                toolName: 'docx_read',
+                toolName: 'docx_read_blocks',
                 ok: true,
                 code: 'ok',
                 data: {

@@ -45,7 +45,7 @@ describe('ai tool docx backend', () => {
             sourcePath: 'large-navigation.docx',
             query: 'target keyword'
           })
-          const read = await harness.invoke<DocxReadResult>('docx_read', {
+          const read = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: 'large-navigation.docx',
             fromBlockId: search.matches[0]!.blockId
           })
@@ -83,7 +83,7 @@ describe('ai tool docx backend', () => {
             result.read.blocks[0]?.text.includes('target keyword appears here'),
           {
             name: 'large-document-search-can-locate-and-read-target-block',
-            message: 'docx_search + docx_read 应能在长文档中稳定定位并精读目标 block。',
+            message: 'docx_search + docx_read_blocks 应能在长文档中稳定定位并精读目标 block。',
             data: {
               searchMatches: result.search.matches,
               readBlocks: result.read.blocks

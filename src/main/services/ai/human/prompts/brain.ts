@@ -32,15 +32,22 @@ const indentLines = (value: string, level: number): string =>
     .map((line) => `${'  '.repeat(level)}${line}`)
     .join('\n')
 
-const renderLearnedToolSpecLine = (spec: HumanToolSpec): string => {
-  const preconditions = spec.promptSpec.preconditions?.join(' / ') || 'none'
-  const returns = spec.promptSpec.returns.map((item) => item.name).join(', ') || 'none'
-  const schemaText = indentLines(renderToolSchemaForPrompt(spec.schema), 2)
-  const examples = indentLines(spec.promptSpec.examples.map(renderToolExample).join('\n'), 2)
+const renderPlatformText = (ctx: AiRunContext): string => `当前 terminal 平台：${ctx.platform}`
+
+const renderSkillCatalogToolSpecLine = (input: {
+  spec: HumanToolSpec
+  skillLabels: string[]
+}): string => {
+  const preconditions = input.spec.promptSpec.preconditions?.join(' / ') || 'none'
+  const returns = input.spec.promptSpec.returns.map((item) => item.name).join(', ') || 'none'
+  const schemaText = indentLines(renderToolSchemaForPrompt(input.spec.schema), 2)
+  const examples = indentLines(input.spec.promptSpec.examples.map(renderToolExample).join('\n'), 2)
+  const ownerSkills = input.skillLabels.join('、') || 'none'
 
   return `
-- 工具 ${spec.name}
-  - 用途：${spec.promptSpec.purpose}
+- 工具 ${input.spec.name}
+  - 所属技能：${ownerSkills}
+  - 用途：${input.spec.promptSpec.purpose}
   - 前置条件：${preconditions}
   - 核心返回：${returns}
   - 结构：
@@ -50,47 +57,43 @@ ${examples}
 `.trim()
 }
 
-const renderPlatformText = (ctx: AiRunContext): string => `当前 terminal 平台：${ctx.platform}`
-
-const renderAvailableSkillsSection = (state: HumanState): string => {
+const renderSkillCatalogSection = (state: HumanState): string => {
   const effectiveSkillIds = getEffectiveLearnedSkillIds(state.skills.learnedSkillIds)
   const effectiveSkillDefinitions = effectiveSkillIds.map((skillId) => getSkillDefinition(skillId))
   const learnedExternalSkillDefinitions = effectiveSkillDefinitions.filter(
     (definition) => definition.source === 'external'
   )
+  const renderSkillLine = (definition: ReturnType<typeof getSkillDefinition>): string =>
+    [
+      `- ${definition.skillId}：${definition.description}`,
+      `  - 适用场景：${definition.whenToUse}`,
+      `  - learning 时填写：${definition.skillId}`
+    ].join('\n')
   const learnableSkillLines = listExternalSkillDefinitions()
     .filter((definition) => !state.skills.learnedSkillIds.includes(definition.skillId))
-    .map(
-      (definition) =>
-        `- ${definition.skillId}：${definition.description}；适用场景=${definition.whenToUse}`
-    )
+    .map(renderSkillLine)
   const effectiveToolSpecLines = Array.from(
     new Set(effectiveSkillDefinitions.flatMap((definition) => definition.toolNames))
   )
     .map((toolName) => getToolSpec(toolName))
     .filter((spec): spec is HumanToolSpec => Boolean(spec))
-    .map(renderLearnedToolSpecLine)
+    .map((spec) =>
+      renderSkillCatalogToolSpecLine({
+        spec,
+        skillLabels: effectiveSkillDefinitions
+          .filter((definition) => definition.toolNames.includes(spec.name))
+          .map((definition) => definition.skillId)
+      })
+    )
 
   return `
+skill是一项技能，一项技能通常会对应一个或多个tool，tool则是你最终会实际使用且用来完成事项的工具。
+
 始终可用的技能：
-${
-  listBuiltinSkillDefinitions()
-    .map(
-      (definition) =>
-        `- ${definition.skillId}：${definition.description}；适用场景=${definition.whenToUse}`
-    )
-    .join('\n') || 'none'
-}
+${listBuiltinSkillDefinitions().map(renderSkillLine).join('\n') || 'none'}
 
 已经学习的技能：
-${
-  learnedExternalSkillDefinitions
-    .map(
-      (definition) =>
-        `- ${definition.skillId}：${definition.description}；适用场景=${definition.whenToUse}`
-    )
-    .join('\n') || 'none'
-}
+${learnedExternalSkillDefinitions.map(renderSkillLine).join('\n') || 'none'}
 
 仍可补充学习的技能：
 ${learnableSkillLines.join('\n') || 'none'}
@@ -161,7 +164,7 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
     - recent_progress：最近一轮完整过程记录，用于判断刚做了什么、得到什么。
     - earlier_attempts：更早轮次过程链，用于识别重复路径、失败模式和已经验证过的动作。
     - recalled_history：主动回看的详细历史；只有明确回看后才会出现，并可能附带过滤条件。
-    - available_skills：当前已生效或仍可学习的 skills，以及当前可直接调用的工具说明。
+    - skill_catalog：当前已生效或仍可学习的 skills，以及当前可直接调用的工具说明。
     - correction_hint：当前额外的收敛或纠偏提示；若无则为 none。
   </context_block_guide>
 
@@ -291,9 +294,9 @@ ${renderLoadedHistoryText(getLoadedHistoryContext(input.state))}
     </recalled_history>
   </memory>
 
-  <available_skills>
-${renderAvailableSkillsSection(input.state)}
-  </available_skills>
+  <skill_catalog>
+${renderSkillCatalogSection(input.state)}
+  </skill_catalog>
 
   <correction_hint>
 ${input.state.execution.watchHint ? renderWatchHintForBrain(input.state.execution.watchHint) : 'none'}

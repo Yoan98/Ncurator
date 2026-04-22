@@ -112,11 +112,11 @@ describe('ai tool docx backend', () => {
             replace: 'Bob',
             blockIds: [ownerCellBlockId]
           })
-          const preservedParagraph = await harness.invoke<DocxReadResult>('docx_read', {
+          const preservedParagraph = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: renamedCell.sourcePath,
             fromBlockId: mixedParagraphBlockId
           })
-          const updatedCell = await harness.invoke<DocxReadResult>('docx_read', {
+          const updatedCell = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: renamedCell.sourcePath,
             fromBlockId: ownerCellBlockId
           })

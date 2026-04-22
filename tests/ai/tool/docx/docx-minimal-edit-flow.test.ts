@@ -29,7 +29,7 @@ describe('ai tool docx backend', () => {
             sourcePath,
             query: 'Hello'
           })
-          const readBefore = await harness.invoke<DocxReadResult>('docx_read', {
+          const readBefore = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath,
             fromBlockId: searchBefore.matches[0]!.blockId
           })
@@ -42,7 +42,7 @@ describe('ai tool docx backend', () => {
             sourcePath: applied.sourcePath,
             query: 'Hi'
           })
-          const readAfter = await harness.invoke<DocxReadResult>('docx_read', {
+          const readAfter = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: applied.sourcePath,
             fromBlockId: searchAfter.matches[0]!.blockId
           })

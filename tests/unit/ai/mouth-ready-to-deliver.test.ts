@@ -193,7 +193,7 @@ describe('ai unit mouth readyToDeliver guard', () => {
     )
   })
 
-  it('renders full docx_read history blocks in mouth prompt', () => {
+  it('renders full docx_read_blocks history blocks in mouth prompt', () => {
     const initialState = createInitialHumanState({
       taskId: 'task-4',
       userInput: '按资料说明反走样处理方法'
@@ -213,7 +213,7 @@ describe('ai unit mouth readyToDeliver guard', () => {
             mode: 'serial',
             calls: [
               {
-                toolName: 'docx_read',
+                toolName: 'docx_read_blocks',
                 args: {
                   sourcePath: 'graphics.docx',
                   fromBlockId: 'b:19',
@@ -229,7 +229,7 @@ describe('ai unit mouth readyToDeliver guard', () => {
           mode: 'serial',
           calls: [
             {
-              toolName: 'docx_read',
+              toolName: 'docx_read_blocks',
               args: {
                 sourcePath: 'graphics.docx',
                 fromBlockId: 'b:19',
@@ -240,7 +240,7 @@ describe('ai unit mouth readyToDeliver guard', () => {
         },
         toolResults: [
           {
-            toolName: 'docx_read',
+            toolName: 'docx_read_blocks',
             ok: true,
             code: 'ok',
             data: {

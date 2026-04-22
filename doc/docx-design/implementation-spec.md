@@ -68,7 +68,7 @@ docx 子系统负责：
 
 ### 3.4 read
 
-- `docx_read` 基于当前 working draft 返回连续 block 区间。
+- `docx_read_blocks` 基于当前 working draft 返回连续 block 区间。
 - `fromBlockId / toBlockId` 必须按文档顺序返回闭区间内容。
 - 返回内容必须足够支撑 AI 做连续精读，而不是只返回零散片段。
 

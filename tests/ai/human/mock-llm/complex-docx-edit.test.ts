@@ -80,7 +80,7 @@ describe('ai human mock-llm backend', () => {
                   'docx_search'
                 )
                 return buildToolDecision({
-                  toolName: 'docx_read',
+                  toolName: 'docx_read_blocks',
                   args: {
                     sourcePath: 'complex-edit.docx',
                     fromBlockId: searchResult.matches[0]!.blockId
@@ -131,7 +131,7 @@ describe('ai human mock-llm backend', () => {
         )
         const readResult = readLatestToolResultDataFromEvents<DocxReadResult>(
           toolResults,
-          'docx_read'
+          'docx_read_blocks'
         )
 
         runtime.assertThat(

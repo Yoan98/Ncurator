@@ -6,7 +6,7 @@
 
 - 当需要判断什么能力应该被建模为 `skill` 时，阅读本文。
 - 当需要判断 `brain / learning / hand` 各自负责什么时，阅读 `implementation-spec.md`。
-- 当需要确认 `learnedSkillIds`、`available_skills`、`lastLearningOutcome` 等字段契约时，阅读 `data-definition-and-flow.md`。
+- 当需要确认 `learnedSkillIds`、`skill_catalog`、`lastLearningOutcome` 等字段契约时，阅读 `data-definition-and-flow.md`。
 
 ## 2. 设计目标
 
@@ -44,14 +44,14 @@
 - 不需要经过 `learning`。
 - 不写入 `learnedSkillIds`。
 - 不计入 active tool budget。
-- 会直接出现在 `brain` 可见的 `available_skills` 中。
+- 会直接出现在 `brain` 可见的 `skill_catalog` 中。
 
 ### 5.2 external skill
 
 - 需要 `learning` 显式加载后才进入当前有效能力集合。
 - 会写入 `learnedSkillIds`。
 - 受 active tool budget 约束。
-- 对 `brain` 来说，生效后它和 builtin skill 一样，都会出现在 `available_skills` 中。
+- 对 `brain` 来说，生效后它和 builtin skill 一样，都会出现在 `skill_catalog` 中。
 
 ## 6. 当前基线 Skill 集合
 
@@ -79,7 +79,7 @@
 - 工具列表：
   - `docx_outline`
   - `docx_search`
-  - `docx_read`
+  - `docx_read_blocks`
   - `docx_history`
 - 适用场景：当任务需要理解 docx 结构、换词搜索、定位段落或表格、连续精读区间，或决定回滚版本时使用。
 
@@ -116,7 +116,7 @@
 
 - `learnedSkillIds` 只记录 external 且已经成功学习过的 skill。
 - `brain` 真正可见、可用的能力集合，是 builtin + learned external，也就是 effective skills。
-- `available_skills` 应渲染 effective skills，而不是原始文件列表或实现目录。
+- `skill_catalog` 应渲染 effective skills，而不是原始文件列表或实现目录。
 - `learning` 的结果会进入 `lastLearningOutcome` 与 `roundHistory`，但 skill 的完整说明不应长期持久化进 `HumanState`。
 
 ## 8. 维护规则

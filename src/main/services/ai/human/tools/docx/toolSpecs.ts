@@ -115,7 +115,7 @@ export const DOCX_SEARCH_TOOL_SPEC = {
     name: 'docx_search',
     purpose: '先定位相关 block，再决定是否继续精读。',
     whenToUse:
-      '当你需要查找术语、换词重试、切换 regex / semantic 检索模式，或拿到 blockId 供后续 docx_read 精读时使用。',
+      '当你需要查找术语、换词重试、切换 regex / semantic 检索模式，或拿到 blockId 供后续 docx_read_blocks 精读时使用。',
     preconditions: ['sourcePath 必须是 workspace 内的 .docx 路径。工具会自动打开目标文档。'],
     returns: [
       {
@@ -149,14 +149,14 @@ export const DOCX_SEARCH_TOOL_SPEC = {
 } satisfies DocxToolSpec<z.infer<typeof docxSearchRequestSchema>, 'docx_search', 'docx-read'>
 
 export const DOCX_READ_TOOL_SPEC = {
-  name: 'docx_read',
+  name: 'docx_read_blocks',
   familyId: 'docx',
   requiresWorkspace: true,
   description: '按 fromBlockId / toBlockId 连续精读 docx 区间。',
   skillIds: ['docx-read'],
   schema: docxReadRequestSchema,
   promptSpec: {
-    name: 'docx_read',
+    name: 'docx_read_blocks',
     purpose: '读取一个 block，或按 block 区间连续精读一段内容。',
     whenToUse:
       '当你已经通过 docx_search 或 docx_outline 拿到 blockId，准备精读一个 block 或一段连续区间时使用。',
@@ -183,8 +183,8 @@ export const DOCX_READ_TOOL_SPEC = {
     ]
   },
   resolveExecutionMeta: createDocxReadExecutionMeta(),
-  activityActionType: 'docx_read'
-} satisfies DocxToolSpec<z.infer<typeof docxReadRequestSchema>, 'docx_read', 'docx-read'>
+  activityActionType: 'docx_read_blocks'
+} satisfies DocxToolSpec<z.infer<typeof docxReadRequestSchema>, 'docx_read_blocks', 'docx-read'>
 
 export const DOCX_HISTORY_TOOL_SPEC = {
   name: 'docx_history',

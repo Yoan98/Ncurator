@@ -210,7 +210,7 @@ describe('ai unit human memory history', () => {
             mode: 'serial',
             calls: [
               {
-                toolName: 'docx_read',
+                toolName: 'docx_read_blocks',
                 args: {
                   sourcePath: 'graphics.docx',
                   fromBlockId: 'b:19',
@@ -226,7 +226,7 @@ describe('ai unit human memory history', () => {
           mode: 'serial',
           calls: [
             {
-              toolName: 'docx_read',
+              toolName: 'docx_read_blocks',
               args: {
                 sourcePath: 'graphics.docx',
                 fromBlockId: 'b:19',
@@ -237,7 +237,7 @@ describe('ai unit human memory history', () => {
         },
         toolResults: [
           {
-            toolName: 'docx_read',
+            toolName: 'docx_read_blocks',
             ok: true,
             code: 'ok',
             data: {
@@ -315,7 +315,7 @@ describe('ai unit human memory history', () => {
             mode: 'serial',
             calls: [
               {
-                toolName: 'docx_read',
+                toolName: 'docx_read_blocks',
                 args: {
                   sourcePath: 'graphics.docx',
                   fromBlockId: 'b:19',
@@ -331,7 +331,7 @@ describe('ai unit human memory history', () => {
           mode: 'serial',
           calls: [
             {
-              toolName: 'docx_read',
+              toolName: 'docx_read_blocks',
               args: {
                 sourcePath: 'graphics.docx',
                 fromBlockId: 'b:19',
@@ -342,7 +342,7 @@ describe('ai unit human memory history', () => {
         },
         toolResults: [
           {
-            toolName: 'docx_read',
+            toolName: 'docx_read_blocks',
             ok: true,
             code: 'ok',
             data: {

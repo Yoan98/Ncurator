@@ -60,7 +60,7 @@ describe('ai tool docx backend', () => {
             sourcePath: 'invalid-snapshot-source.docx',
             query: 'Original invalid snapshot source.'
           })
-          const initialRead = await harness.invoke<DocxReadResult>('docx_read', {
+          const initialRead = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: 'invalid-snapshot-source.docx',
             fromBlockId: initialSearch.matches[0]!.blockId
           })
@@ -76,7 +76,7 @@ describe('ai tool docx backend', () => {
             sourcePath: initialRead.sourcePath,
             query: 'Original invalid snapshot source.'
           })
-          const readOriginal = await harness.invoke<DocxReadResult>('docx_read', {
+          const readOriginal = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: initialRead.sourcePath,
             fromBlockId: readOriginalSearch.matches[0]!.blockId
           })

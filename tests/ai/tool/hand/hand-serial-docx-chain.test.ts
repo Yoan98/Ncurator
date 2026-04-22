@@ -87,7 +87,7 @@ describe('ai tool hand backend', () => {
                       }
                     },
                     {
-                      toolName: 'docx_read',
+                      toolName: 'docx_read_blocks',
                       args: {
                         sourcePath: 'serial-docx-chain.docx',
                         fromBlockId: 'b:1'
@@ -108,12 +108,12 @@ describe('ai tool hand backend', () => {
         const toolNames = result.state.execution.lastToolResults?.map((item) => item.toolName) || []
 
         runtime.assertThat(
-          toolNames.join(',') === 'docx_text_edit,docx_read' &&
+          toolNames.join(',') === 'docx_text_edit,docx_read_blocks' &&
             result.state.execution.lastToolResults?.every((item) => item.code === 'ok') &&
             !result.state.execution.watchHint,
           {
             name: 'serial-docx-chain-executes-in-order',
-            message: 'serial 模式应按顺序执行 docx_text_edit、docx_read。',
+            message: 'serial 模式应按顺序执行 docx_text_edit、docx_read_blocks。',
             data: {
               toolNames,
               lastToolUseResults: result.state.execution.lastToolResults,
@@ -124,7 +124,7 @@ describe('ai tool hand backend', () => {
 
         runtime.assertThat(
           result.state.execution.artifacts.length === 0 &&
-            result.state.execution.lastToolResults?.[1]?.toolName === 'docx_read',
+            result.state.execution.lastToolResults?.[1]?.toolName === 'docx_read_blocks',
           {
             name: 'serial-docx-chain-stays-within-edit-and-read-tools',
             message: 'docx 编辑的 hand 链路不再产出交付 artifact；后续交付由工程侧审阅稿/工作稿链路收口。',

@@ -58,11 +58,11 @@ describe('ai tool docx backend', () => {
           )
           const ownerCellBlockId = findTableCellBlockIdByText(outline.blocks, 'Alice')
 
-          const headingBlock = await harness.invoke<DocxReadResult>('docx_read', {
+          const headingBlock = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: outline.sourcePath,
             fromBlockId: headingBlockId
           })
-          const ownerCellBlock = await harness.invoke<DocxReadResult>('docx_read', {
+          const ownerCellBlock = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: outline.sourcePath,
             fromBlockId: ownerCellBlockId
           })
@@ -82,7 +82,7 @@ describe('ai tool docx backend', () => {
             sourcePath: updatedCell.sourcePath,
             query: 'Narrative paragraph updated.'
           })
-          const readUpdatedParagraph = await harness.invoke<DocxReadResult>('docx_read', {
+          const readUpdatedParagraph = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: updatedCell.sourcePath,
             fromBlockId: searchUpdatedParagraph.matches[0]!.blockId
           })

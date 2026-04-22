@@ -380,7 +380,7 @@ export const renderToolResultDataText = (
   if (!isJsonObject(value)) return undefined
 
   switch (result.toolName) {
-    case 'docx_read':
+    case 'docx_read_blocks':
       return renderDocxReadResult(value)
     case 'docx_search':
       return renderDocxSearchResult(value)

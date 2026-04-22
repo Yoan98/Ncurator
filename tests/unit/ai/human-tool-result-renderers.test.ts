@@ -23,9 +23,9 @@ describe('ai unit human tool result renderers', () => {
     expect(rendered).toContain('truncated=false')
   })
 
-  it('renders nested docx_read table, cell and runs details', () => {
+  it('renders nested docx_read_blocks table, cell and runs details', () => {
     const rendered = renderToolResultDataText({
-      toolName: 'docx_read',
+      toolName: 'docx_read_blocks',
       data: {
         sourcePath: 'graphics.docx',
         currentRevisionRef: 'v7',
