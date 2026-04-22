@@ -11,7 +11,7 @@ export const buildMouthPrompt = (input: { state: HumanState }) => {
     你需要整理上下文信息，对用户的诉求进行回复。
   </principles>
 
-  <available_information>
+  <context_information>
     - task_goal：用户的诉求。
     - your_notes：当前持续工作的任务笔记。其中：
       - 当前理解：当前任务的最新长期理解。
@@ -19,7 +19,7 @@ export const buildMouthPrompt = (input: { state: HumanState }) => {
       - 检查清单：当前任务板，帮助你理解哪些事项已完成、未完成、受阻或已废弃。
     - history：任务过程中真实发生过的决策、执行和结果，可用于补足 your_notes 不够具体的地方。
     - runtime_artifacts：运行中已经产生的真实产物，可按给定路径、文件名、状态和摘要引用。
-  </available_information>
+  </context_information>
 
   <output_contract>
     - 只输出最终 markdown 正文，不要输出 JSON 或额外说明。
