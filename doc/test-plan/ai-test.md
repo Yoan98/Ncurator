@@ -752,6 +752,16 @@
 - Oracle：任务最终完成；事件流中至少两次 `docx_search` / `docx_read_blocks` / `docx_outline` 覆盖两份目标文档；至少出现一次 docx 编辑工具；存在 `draft_review_ready` 事件，最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；原始两份 `docx` 文件未被覆盖；写入请求只应落在 `人工智能探究课堂PRD.docx` 上，并包含新增说明与表格结构。
 - Not：不要求固定 op 组合，也不对最终说明文案做逐字断言。
 
+##### `human-docx-cross-source-summary-draft-live`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 live 模式下 `human` 会读取两份已选源资料，并把跨源总结内容回写到一份独立的 docx 草稿上。
+- Why：真实用户常见诉求不只是“参考另一份文档补主稿”，还包括“把两份资料压成一份复习总结”；这条 case 要长期守住跨源读取、单目标总结成稿与不覆盖原文件的正式能力，对齐 `WB-CORE-002-AC2`、`WB-CORE-003-AC1`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
+- How：注入真实 live LLM 配置；把 `深度学习.docx`、`图形学.docx` 和 `sample-edit.docx` 作为已选资料复制进 workspace；直接输入“我想把刚选的这两份课件整理成一份发给同学复习的总结。我也放了一份 Word 草稿在旁边，你把关键概念、出现原因和常见处理方式压成一版清楚好记的总结，直接整理进那份草稿里。”的自然语言诉求，让真实 `human` 自主完成。
+- Oracle：任务最终完成；事件流中至少两次 `docx_search` / `docx_read_blocks` / `docx_outline` 覆盖两份源资料；至少出现一次 docx 编辑工具；存在 `draft_review_ready` 事件，最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；三份原始 `docx` 文件未被覆盖；写入请求只应落在 `sample-edit.docx` 上；最终答复应包含“过拟合/过度拟合”与“反走样”两个主题。
+- Not：不要求固定总结结构，也不要求一定生成表格。
+
 ##### `human-docx-positioned-structural-edit-fallback-live`
 
 - 测试类型：`backend`
@@ -768,7 +778,7 @@
 - 实现状态：`已实现`
 - What：验证 live 模式下 `human` 在不传 `selectedReferences` 且 workspace 存在整组 docx 时，会先用 KB 缩圈找出讲“反走样 / 过拟合”的两份源资料，再把内容分别回写到另外两份目标 docx。
 - Why：真实用户常常记得主题、不记得文件名，而且希望把资料内容整理回自己的教学文档；这条 case 要长期守住“工作区默认范围 + KB 缩圈 + 多源读取 + 多目标 docx 回写”的正式能力，对齐 `WB-CORE-002-AC2`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
-- How：注入真实 live LLM 配置；workspace 直接使用 `tests/fixtures/ai/docx` 目录下整组 docx，不传 `selectedReferences`；同时将 `图形学.docx`、`深度学习.docx`、`人工智能探究课堂PRD.docx` 与 `交互式探究学习案例：产业转移.docx` seed 到真实 KB；直接输入“我工作区里这几份课件和教学材料有点多，你别先靠文件名猜，直接在知识库里帮我找哪两份在讲反走样和过拟合。找到以后先看一遍，再把里面最适合老师讲‘概念区分’的内容分别补到课堂 PRD 和交互式案例里，写法尽量像备课备注和课堂引导语，不要像教材摘抄。”的自然语言诉求，让真实 `human` 自主完成。
+- How：注入真实 live LLM 配置；workspace 直接使用 `tests/fixtures/ai/docx` 目录下整组 docx，不传 `selectedReferences`；同时将 `图形学.docx`、`深度学习.docx`、`人工智能探究课堂PRD.docx` 与 `交互式探究学习案例：产业转移.docx` seed 到真实 KB；直接输入“我工作区里这几份课件和教学材料有点多，我想把里面跟反走样和过拟合有关的内容整理进两份教学文档里。你先把相关资料找出来看一遍，再把适合老师讲‘概念区分’的内容分别补到课堂 PRD 和交互式案例里，写法尽量像备课备注和课堂引导语，不要像教材摘抄。”的自然语言诉求，让真实 `human` 自主完成。
 - Oracle：任务最终完成；事件流中至少出现一次 KB 工具调用；后续 docx 读取覆盖 `图形学.docx` 与 `深度学习.docx` 两份源资料；至少两次允许的 docx 编辑成功，且写入目标落在 `人工智能探究课堂PRD.docx` 与 `交互式探究学习案例：产业转移.docx` 两份目标稿上；存在至少两次 `draft_review_ready` 事件，最终输出 artifacts 中同时包含两组 `draft_review` 与 `draft`；四份原始 `docx` 文件未被覆盖；最终答复明确说明找到了哪两份源资料，并分别更新了哪两份教学文档。
 - Not：不强制固定执行路径，也不要求 KB 缩圈后必须再打开所有候选资料。
 

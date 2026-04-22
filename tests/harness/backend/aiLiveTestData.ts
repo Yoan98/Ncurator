@@ -19,6 +19,11 @@ export const DOCX_MULTI_EDIT_FIXTURE_PATHS = [
   'tests/fixtures/ai/docx/交互式探究学习案例：产业转移.docx'
 ] as const
 
+export const DOCX_CROSS_SOURCE_SUMMARY_FIXTURE_PATHS = [
+  ...DOCX_READING_FIXTURE_PATHS,
+  'tests/fixtures/ai/docx/sample-edit.docx'
+] as const
+
 export const DOCX_ALL_FIXTURE_PATHS = [
   ...DOCX_READING_FIXTURE_PATHS,
   ...DOCX_MULTI_EDIT_FIXTURE_PATHS,
@@ -31,11 +36,14 @@ export const HUMAN_DOCX_CAUSE_REMEDY_READING_USER_INPUT =
 export const HUMAN_DOCX_MULTI_DOC_SUPPORTED_EDIT_USER_INPUT =
   '我在整理这版课堂方案，想把主稿里那段交互设计说明写得更落地一点。你参考我刚选的那份案例文档，把对应章节补得更清楚一些，再顺手加一个很短的对照表，方便老师一眼看懂重点。'
 
+export const HUMAN_DOCX_CROSS_SOURCE_SUMMARY_DRAFT_USER_INPUT =
+  '我想把刚选的这两份课件整理成一份发给同学复习的总结。我也放了一份 Word 草稿在旁边，你把关键概念、出现原因和常见处理方式压成一版清楚好记的总结，直接整理进那份草稿里。'
+
 export const HUMAN_DOCX_POSITIONED_STRUCTURAL_EDIT_FALLBACK_USER_INPUT =
   '我准备把这份图形学讲义发给同学复习，想把“反走样”这一节补得更容易记一些。你直接在这一节后面加一段更通俗的说明，再加一个很短的总结表，帮助大家快速区分两种常见做法。'
 
 export const HUMAN_KB_GUIDED_DOCX_COMPARISON_DRAFT_USER_INPUT =
-  '我工作区里这几份课件和教学材料有点多，你别先靠文件名猜，直接在知识库里帮我找哪两份在讲反走样和过拟合。找到以后先看一遍，再把里面最适合老师讲“概念区分”的内容分别补到课堂 PRD 和交互式案例里，写法尽量像备课备注和课堂引导语，不要像教材摘抄。'
+  '我工作区里这几份课件和教学材料有点多，我想把里面跟反走样和过拟合有关的内容整理进两份教学文档里。你先把相关资料找出来看一遍，再把适合老师讲“概念区分”的内容分别补到课堂 PRD 和交互式案例里，写法尽量像备课备注和课堂引导语，不要像教材摘抄。'
 
 export const HUMAN_KB_GUIDED_DOCX_READING_USER_INPUT =
   '我工作区里应该有两份课件分别讲过过拟合和反走样，但我忘了文件名。你先帮我找出来，再告诉我这两个问题一般怎么处理。'

@@ -8,8 +8,8 @@ export const buildMouthPrompt = (input: { state: HumanState }) => {
   const system = `
 <system>
   <role>
-    你现在负责根据已有事实回答用户这次任务。
-    你的目标不是复述内部过程，而是直接完成 task_goal 里用户真正要的回复。
+    你现在负责吸收当前任务在完整上下文下已经成立的信息，并把它整理成面对用户的最终回答。
+    你的目标不是复述内部过程，也不是替内部节点续做推理，而是把用户诉求、当前事实、已有结果与可引用产物自然组织成回复。
   </role>
 
   <available_information>
@@ -24,7 +24,8 @@ export const buildMouthPrompt = (input: { state: HumanState }) => {
 
   <output_contract>
     - 只输出最终 markdown 正文，不要输出 JSON 或额外说明。
-    - 直接回答 task_goal，优先覆盖用户显式提出的问题。
+    - 面向用户回答 task_goal，优先覆盖用户显式提出的问题。
+    - 回答应基于当前整体状态自然组织，不能脱离已经成立的信息。
     - 当存在工作区或显式参考资料时，优先基于这些本地信息组织答案。
     - 优先依据 your_notes 组织答案或交付内容。
     - 如果 your_notes 过于概括、与更具体的证据记录存在张力，或不足以支撑用户要求的细节，可结合 history 与 runtime_artifacts 补足。

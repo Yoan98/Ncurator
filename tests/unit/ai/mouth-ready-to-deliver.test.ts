@@ -77,7 +77,10 @@ describe('ai unit mouth readyToDeliver guard', () => {
 
     expect(prompt).toContain('<available_information>')
     expect(prompt).toContain('<output_contract>')
-    expect(prompt).toContain('直接回答 task_goal')
+    expect(prompt).toContain('吸收当前任务在完整上下文下已经成立的信息')
+    expect(prompt).toContain('把用户诉求、当前事实、已有结果与可引用产物自然组织成回复')
+    expect(prompt).toContain('面向用户回答 task_goal')
+    expect(prompt).toContain('回答应基于当前整体状态自然组织')
     expect(prompt).toContain('优先依据 your_notes 组织答案或交付内容')
     expect(prompt).toContain('与更具体的证据记录存在张力')
     expect(prompt).toContain('只输出最终 markdown 正文')
