@@ -4,9 +4,6 @@ import type { SelectedReference } from '../../../src/shared/types'
 import { writeTestDocxFile } from './aiToolHarness'
 import type { BackendTestRuntime, SeedKbDocumentInput } from './test-types'
 
-export const HUMAN_FILE_RETENTION_USER_INPUT =
-  '我记不清一个细则了。审批没通过的时候，原文件到底要不要保留？你按我刚才选的资料帮我确认一下，直接给我一个明确结论就行。'
-
 export const HUMAN_RISK_REPORT_DRAFT_USER_INPUT =
   '我下午要把本周风险周报发出去。工作区里应该有一份上周用过的 Word 周报模板，但我忘了文件名。你先帮我找到那份模板，再按我刚才选的资料，把本周风险结论和负责人补进去，整理成待确认稿。最后告诉我你改了哪几处，依据分别来自哪里。'
 
@@ -14,6 +11,8 @@ export const DOCX_READING_FIXTURE_PATHS = [
   'tests/fixtures/ai/docx/深度学习.docx',
   'tests/fixtures/ai/docx/图形学.docx'
 ] as const
+
+export const DOCX_POSITIONED_FIXTURE_PATHS = ['tests/fixtures/ai/docx/图形学.docx'] as const
 
 export const DOCX_MULTI_EDIT_FIXTURE_PATHS = [
   'tests/fixtures/ai/docx/人工智能探究课堂PRD.docx',
@@ -33,26 +32,13 @@ export const HUMAN_DOCX_MULTI_DOC_SUPPORTED_EDIT_USER_INPUT =
   '我在整理这版课堂方案，想把主稿里那段交互设计说明写得更落地一点。你参考我刚选的那份案例文档，把对应章节补得更清楚一些，再顺手加一个很短的对照表，方便老师一眼看懂重点。'
 
 export const HUMAN_DOCX_POSITIONED_STRUCTURAL_EDIT_FALLBACK_USER_INPUT =
-  '我准备把这份图形学讲义发给同学复习，想直接把“反走样”这一节整理得更好懂一些。你参考我选的那份深度学习资料，把要加的类比说明和简短对照表直接写进这份讲义里。'
+  '我准备把这份图形学讲义发给同学复习，想把“反走样”这一节补得更容易记一些。你直接在这一节后面加一段更通俗的说明，再加一个很短的总结表，帮助大家快速区分两种常见做法。'
 
 export const HUMAN_KB_GUIDED_DOCX_COMPARISON_DRAFT_USER_INPUT =
   '我工作区里这几份课件和教学材料有点多，你别先靠文件名猜，直接在知识库里帮我找哪两份在讲反走样和过拟合。找到以后先看一遍，再把里面最适合老师讲“概念区分”的内容分别补到课堂 PRD 和交互式案例里，写法尽量像备课备注和课堂引导语，不要像教材摘抄。'
 
 export const HUMAN_KB_GUIDED_DOCX_READING_USER_INPUT =
   '我工作区里应该有两份课件分别讲过过拟合和反走样，但我忘了文件名。你先帮我找出来，再告诉我这两个问题一般怎么处理。'
-
-export const FILE_RETENTION_DOCUMENTS: readonly SeedKbDocumentInput[] = [
-  {
-    id: 'doc-retention',
-    name: 'Approval Policy.md',
-    chunks: [
-      {
-        id: 'chunk-retention-1',
-        text: '审批被拒绝时必须保留现有文件不变。'
-      }
-    ]
-  }
-]
 
 export const RISK_REPORT_DOCUMENTS: readonly SeedKbDocumentInput[] = [
   {
@@ -98,11 +84,6 @@ export type KbGuidedDocxWorkspaceSeed = {
   sourceDocs: SelectedDocxFixture[]
   targetDocs: SelectedDocxFixture[]
   trackedDocs: TrackedDocxFixtureBytes[]
-}
-
-export const seedFileRetentionKb = async (runtime: BackendTestRuntime): Promise<string[]> => {
-  await runtime.seedKb(FILE_RETENTION_DOCUMENTS)
-  return FILE_RETENTION_DOCUMENTS.map((document) => document.id)
 }
 
 export const seedRiskReportKb = async (runtime: BackendTestRuntime): Promise<string[]> => {

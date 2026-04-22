@@ -5,7 +5,7 @@ import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
   buildSelectedDocxFixtureReferences,
-  DOCX_READING_FIXTURE_PATHS,
+  DOCX_POSITIONED_FIXTURE_PATHS,
   HUMAN_DOCX_POSITIONED_STRUCTURAL_EDIT_FALLBACK_USER_INPUT,
   resolveSelectedDocxFixtures
 } from '../../../harness/backend/aiLiveTestData'
@@ -36,8 +36,9 @@ describe('ai human live backend', () => {
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
-        description: '验证 live 模式下 human 在复杂 positioned docx 中完全不自动编辑，并对写入请求做优雅回退。',
-        fixtures: DOCX_READING_FIXTURE_PATHS,
+        description:
+          '验证 live 模式下 human 在复杂 positioned docx 中命中写入需求时不会自动编辑，而是优雅回退并给出手动补充建议。',
+        fixtures: DOCX_POSITIONED_FIXTURE_PATHS,
         runMode: 'single',
         runtimeModelName: hasLiveLlmConfigInEnv('primary')
           ? loadLiveLlmConfigFromEnv('primary').model_name
@@ -54,7 +55,7 @@ describe('ai human live backend', () => {
           }
 
           await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv('primary'))
-          const fixtureDocs = resolveSelectedDocxFixtures(runtime, DOCX_READING_FIXTURE_PATHS)
+          const fixtureDocs = resolveSelectedDocxFixtures(runtime, DOCX_POSITIONED_FIXTURE_PATHS)
           const originalFixtureBytes = await Promise.all(
             fixtureDocs.map(async (fixtureDoc) => ({
               name: fixtureDoc.name,
@@ -64,7 +65,10 @@ describe('ai human live backend', () => {
             }))
           )
           const runner = createHumanTestRunner(runtime, {
-            selectedReferences: buildSelectedDocxFixtureReferences(runtime, DOCX_READING_FIXTURE_PATHS)
+            selectedReferences: buildSelectedDocxFixtureReferences(
+              runtime,
+              DOCX_POSITIONED_FIXTURE_PATHS
+            )
           })
           const output = await runner.run({
             taskId: runtime.taskId,

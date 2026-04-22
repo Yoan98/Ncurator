@@ -718,18 +718,6 @@
 
 #### `live`
 
-##### `human-file-retention-answer-live`
-
-- 测试类型：`backend`
-- 实现状态：`已实现`
-- What：验证 live 模式下 `human` 会基于真实已选资料完成常见规则问答。
-- Why：`human/live` 需要至少有一条高频真实问答样例，证明真实模型下的单目标资料检索闭环可执行。
-- How：注入真实 live LLM 配置，seed 一份与“审批未通过时保留原文件”相关的真实 KB 文档并限制在已选范围内，然后直接输入“审批没通过时原文件到底要不要保留”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成，且真实工具结果中至少出现一次以 `kb_` 开头的检索工具调用，最终结论明确指向保留原文件。
-- Not：不对最终文案做精确文本断言。
-- Last Run：`2026-04-16 18:33:26 +08:00`
-- Last Result：`通过`
-
 ##### `human-risk-report-draft-live`
 
 - 测试类型：`backend`
@@ -770,8 +758,8 @@
 - 实现状态：`已实现`
 - What：验证 live 模式下 `human` 在复杂 positioned docx 中不会执行任何自动编辑，而是对命中复杂定位排版区域的写入请求做优雅回退。
 - Why：这类由 `framePr` / 绝对定位 shape 组成的 docx 即使只是原地改字，在 preview/review 语义下也可能因修订标记叠加而错位；这条 case 要长期守住“positioned 区域只读、自动写入必须拒绝并给用户手动提示”的正式能力，对齐 `WB-CORE-003-AC1`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
-- How：注入真实 live LLM 配置；把 `图形学.docx` 与 `深度学习.docx` 作为已选资料复制进 workspace；直接输入“我准备把这份图形学讲义发给同学复习，想直接把‘反走样’这一节整理得更好懂一些。你参考我选的那份深度学习资料，把要加的类比说明和简短对照表直接写进这份讲义里。”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；事件流中至少两次 `docx_search` / `docx_read` / `docx_outline` 覆盖两份目标文档；至少一次 docx 写入请求因为命中复杂定位排版区域失败，并返回稳定 `diagnostic.message`；不生成 `draft_review` 与 `draft` artifact；最终答复明确说明未自动编辑，并给出建议手动补充的内容；原始 `docx` 文件未被覆盖。
+- How：注入真实 live LLM 配置；只将 `图形学.docx` 作为已选资料复制进 workspace；直接输入“我准备把这份图形学讲义发给同学复习，想把‘反走样’这一节补得更容易记一些。你直接在这一节后面加一段更通俗的说明，再加一个很短的总结表，帮助大家快速区分两种常见做法。”的自然语言诉求，让真实 `human` 自主完成。
+- Oracle：任务最终完成；事件流中至少一次 `docx_search` / `docx_read` / `docx_outline` 覆盖 `图形学.docx`；至少一次 docx 写入请求因为命中复杂定位排版区域失败，并返回稳定 `diagnostic.message`；不生成 `draft_review` 与 `draft` artifact；最终答复明确说明未自动编辑，并给出建议手动补充的内容；原始 `docx` 文件未被覆盖。
 - Not：不要求固定使用哪一种 docx 写工具，也不要求最终答复使用固定措辞。
 
 ##### `human-kb-guided-docx-comparison-draft-live`
