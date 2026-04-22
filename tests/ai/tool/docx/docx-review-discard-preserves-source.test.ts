@@ -26,7 +26,7 @@ describe('ai tool docx backend', () => {
         ])
         const sourceBufferBefore = await fs.readFile(sourcePath)
 
-        runtime.draftReviewService.beginRun({
+        runtime.fileReviewService.beginRun({
           runId: runtime.runId,
           sessionId: 'discard-review-session',
           inputText: '创建后再放弃'
@@ -39,17 +39,16 @@ describe('ai tool docx backend', () => {
             query: '源文档原始内容。',
             replace: '仅存在于工作稿中的内容。'
           })
-          const details = await runtime.draftReviewService.finalizeRunReview({
+          const details = await runtime.fileReviewService.finalizeRunReview({
             runId: runtime.runId,
             workspaceRootPath: runtime.workspaceRoot
           })
           const detail = details[0]
-          const document = detail?.documents[0]
-          if (!detail || !document?.review_artifact_path || !document.working_artifact_path) {
+          if (!detail || !detail.review.draft_artifact_path || !detail.review.working_artifact_path) {
             throw new Error('expected finalized review detail')
           }
 
-          const discard = await runtime.draftReviewService.discardReview({
+          const discard = await runtime.fileReviewService.discardReview({
             reviewId: detail.review.id
           })
           const sourceBufferAfter = await fs.readFile(sourcePath)
@@ -65,14 +64,14 @@ describe('ai tool docx backend', () => {
           })
           await freshHarness.release()
           const reviewArtifactExists = await fs
-            .access(document.review_artifact_path)
+            .access(detail.review.draft_artifact_path)
             .then(() => true)
             .catch(() => false)
           const workingArtifactExists = await fs
-            .access(document.working_artifact_path)
+            .access(detail.review.working_artifact_path)
             .then(() => true)
             .catch(() => false)
-          const discardedDetail = await runtime.draftReviewStore.getReviewDetail(detail.review.id)
+          const discardedDetail = await runtime.fileReviewStore.getReviewDetail(detail.review.id)
 
           return {
             changed,

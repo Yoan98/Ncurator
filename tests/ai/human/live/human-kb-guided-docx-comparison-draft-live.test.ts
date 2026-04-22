@@ -13,7 +13,7 @@ import {
 import {
   collectDocxApplyOpsContentKinds,
   countDraftFileArtifacts,
-  countDraftReviewArtifacts,
+  countFileReviewArtifacts,
   filterAiRunEventsByType,
   hasKbToolCall,
   runWithStructuredOutputRetry
@@ -120,7 +120,7 @@ describe('ai human live backend', () => {
               sourceDocsOpened &&
               targetDocsWritten &&
               filterAiRunEventsByType(events, 'draft_review_ready').length >= 2 &&
-              countDraftReviewArtifacts(result.output?.artifacts) >= 2 &&
+              countFileReviewArtifacts(result.output?.artifacts) >= 2 &&
               countDraftFileArtifacts(result.output?.artifacts) >= 2 &&
               /(过拟合|过度拟合)/.test(deliveryText) &&
               /反走样/.test(deliveryText) &&

@@ -2,10 +2,9 @@ import { randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import type {
-  DraftReviewChange,
-  DraftReviewDetail,
-  DraftReviewDocument,
-  DraftReviewSummary
+  FileReview,
+  FileReviewChange,
+  FileReviewDetail
 } from '../../../../../../../shared/types'
 import type { DocumentsStore } from '../../../../../storage/domains/DocumentsStore'
 import type { DocxChangedBlock, DocxCreatedBlock, DocxOp, DocxReplaySession } from '../types'
@@ -87,7 +86,6 @@ export class RunDraftTracker {
 
     const sourcePath = state.sourcePathByDocId.get(input.previousDocId)
     if (!sourcePath) return
-
     const document = state.documentBySourcePath.get(sourcePath)
     if (!document) return
 
@@ -100,7 +98,7 @@ export class RunDraftTracker {
   public async finalizeRunReview(input: {
     runId: string
     workspaceRootPath: string
-  }): Promise<DraftReviewDetail[]> {
+  }): Promise<FileReviewDetail[]> {
     const state = this.runDrafts.get(input.runId)
     if (!state) return []
 
@@ -113,20 +111,19 @@ export class RunDraftTracker {
     }
 
     const client = getDocxWorkerClient()
-    const details: DraftReviewDetail[] = []
+    const details: FileReviewDetail[] = []
 
-    for (const [index, document] of changedDocuments.entries()) {
+    for (const document of changedDocuments) {
       const reviewId = randomUUID()
       const now = Date.now()
-      const { reviewArtifactPath, workingArtifactPath, committedArtifactPath } =
+      const { draftArtifactPath, workingArtifactPath, committedArtifactPath } =
         buildDocxReviewArtifactPaths({
           workspaceRootPath: input.workspaceRootPath,
           reviewId,
-          documentIndex: index,
           sourceName: document.sourceName
         })
 
-      const effectiveSaveResponse = await client.call({
+      const saveResponse = await client.call({
         runId: input.runId,
         action: 'materialize_draft',
         payload: {
@@ -134,42 +131,33 @@ export class RunDraftTracker {
           outPath: workingArtifactPath
         }
       })
-      if (
-        !effectiveSaveResponse.ok ||
-        effectiveSaveResponse.payload.action !== 'materialize_draft'
-      ) {
+      if (!saveResponse.ok || saveResponse.payload.action !== 'materialize_draft') {
         throw new Error(
-          effectiveSaveResponse.ok
-            ? 'draft materialization worker protocol mismatch'
-            : effectiveSaveResponse.error
+          saveResponse.ok ? 'draft materialization worker protocol mismatch' : saveResponse.error
         )
       }
 
       const sourceDocument = await this.documentsStore.getDocumentByFilePath(document.sourcePath)
       const sourceVersion = await buildSourceVersion(document.sourcePath)
-      const documentId = randomUUID()
       const sourceBuffer = await fs.readFile(document.sourcePath)
       const latestDraftBuffer = await fs.readFile(workingArtifactPath)
       const replaySession = document.replaySession
       const reviewChanges = replaySession
         ? this.buildReviewChanges({
             reviewId,
-            documentId,
             session: replaySession,
             now
           })
         : []
 
-      if (!replaySession || reviewChanges.length === 0) {
-        continue
-      }
+      if (!replaySession || reviewChanges.length === 0) continue
 
       await materializeDocxProjectedArtifact({
         sourceBuffer,
         workingBuffer: latestDraftBuffer,
         session: replaySession,
         kind: 'review',
-        outPath: reviewArtifactPath
+        outPath: draftArtifactPath
       })
       await materializeDocxProjectedArtifact({
         sourceBuffer,
@@ -178,6 +166,7 @@ export class RunDraftTracker {
         kind: 'committed',
         outPath: committedArtifactPath
       })
+
       replaySession.viewArtifacts.working = {
         kind: 'working',
         path: workingArtifactPath,
@@ -185,7 +174,7 @@ export class RunDraftTracker {
       }
       replaySession.viewArtifacts.review = {
         kind: 'review',
-        path: reviewArtifactPath,
+        path: draftArtifactPath,
         createdAt: now
       }
       replaySession.viewArtifacts.committed = {
@@ -194,33 +183,22 @@ export class RunDraftTracker {
         createdAt: now
       }
 
-      const reviewDocument: DraftReviewDocument = {
-        id: documentId,
-        review_id: reviewId,
-        source_document_id: sourceDocument?.id,
-        source_path: document.sourcePath,
-        source_name: document.sourceName,
-        format: 'docx',
-        latest_draft_snapshot_id: document.latestDocId,
-        review_artifact_path: reviewArtifactPath,
-        working_artifact_path: workingArtifactPath,
-        committed_artifact_path: committedArtifactPath,
-        source_version: sourceVersion,
-        total_change_count: reviewChanges.length,
-        pending_change_count: reviewChanges.length,
-        accepted_change_count: 0,
-        rejected_change_count: 0,
-        created_at: now,
-        updated_at: now
-      }
-
-      const review: DraftReviewSummary = {
+      const review: FileReview = {
         id: reviewId,
         session_id: state.sessionId,
         run_id: input.runId,
         status: 'pending_confirm',
         title: clipText(`审阅稿：${document.sourceName}`, 80) || '审阅稿',
-        document_count: 1,
+        source_document_id: sourceDocument?.id,
+        source_path: document.sourcePath,
+        source_name: document.sourceName,
+        format: 'docx',
+        review_render_kind: 'docx_block',
+        latest_draft_snapshot_id: document.latestDocId,
+        draft_artifact_path: draftArtifactPath,
+        working_artifact_path: workingArtifactPath,
+        committed_artifact_path: committedArtifactPath,
+        source_version: sourceVersion,
         change_count: reviewChanges.length,
         pending_change_count: reviewChanges.length,
         accepted_change_count: 0,
@@ -232,9 +210,8 @@ export class RunDraftTracker {
 
       details.push({
         review,
-        documents: [reviewDocument],
         changes: reviewChanges,
-        commit_jobs: []
+        commit_attempts: []
       })
     }
 
@@ -244,14 +221,15 @@ export class RunDraftTracker {
 
   private buildReviewChanges(input: {
     reviewId: string
-    documentId: string
     session: DocxReplaySession
     now: number
-  }): DraftReviewChange[] {
+  }): FileReviewChange[] {
     const revisions = [...input.session.revisionByDocId.values()]
       .filter(
         (revision) =>
-          revision.revisionRef !== 'v1' && (revision.ops?.length || 0) > 0 && (revision.changedBlocks?.length || 0) > 0
+          revision.revisionRef !== 'v1' &&
+          (revision.ops?.length || 0) > 0 &&
+          (revision.changedBlocks?.length || 0) > 0
       )
       .sort((left, right) => left.createdAt - right.createdAt)
 
@@ -259,27 +237,28 @@ export class RunDraftTracker {
     return revisions.flatMap((revision) =>
       (revision.changedBlocks || []).map((change, changeIndex) => {
         const op = revision.ops?.[changeIndex] || revision.ops?.[0]
-        return ({
-        id: `${input.reviewId}-${revision.revisionRef}-${String(orderIndex)}`,
-        review_id: input.reviewId,
-        document_id: input.documentId,
-        order_index: orderIndex++,
-        change_kind: op ? getDocxChangeKind(op) : 'block',
-        title: op ? buildDocxChangeTitle(op, change) : revision.summary || '文档修改',
-        summary: op ? buildDocxChangeSummary(op, change) : revision.summary || '',
-        decision: 'pending' as const,
-        before_text: change.beforeText,
-        after_text: change.afterText,
-        locator: buildDocxChangeLocator(change),
-        metadata: {
-          revision_ref: revision.revisionRef,
-          group_id: revision.revisionRef,
-          ...(op ? { docx_op_json: JSON.stringify(op) } : {}),
-          ...(revision.createdBlocks ? { created_blocks_json: JSON.stringify(revision.createdBlocks) } : {})
-        },
-        created_at: input.now,
-        updated_at: input.now
-      })
+        return {
+          id: `${input.reviewId}-${revision.revisionRef}-${String(orderIndex)}`,
+          review_id: input.reviewId,
+          order_index: orderIndex++,
+          change_kind: op ? getDocxChangeKind(op) : 'block',
+          title: op ? buildDocxChangeTitle(op, change) : revision.summary || '文档修改',
+          summary: op ? buildDocxChangeSummary(op, change) : revision.summary || '',
+          decision: 'pending',
+          before_text: change.beforeText,
+          after_text: change.afterText,
+          locator: buildDocxChangeLocator(change),
+          metadata: {
+            revision_ref: revision.revisionRef,
+            group_id: revision.revisionRef,
+            ...(op ? { docx_op_json: JSON.stringify(op) } : {}),
+            ...(revision.createdBlocks
+              ? { created_blocks_json: JSON.stringify(revision.createdBlocks) }
+              : {})
+          },
+          created_at: input.now,
+          updated_at: input.now
+        }
       })
     )
   }

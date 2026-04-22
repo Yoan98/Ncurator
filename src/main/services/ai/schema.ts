@@ -1,13 +1,13 @@
 import { z } from 'zod/v4'
 import type {
   AiArtifactRef,
-  AiDraftReviewArtifactRef,
-  AiDraftReviewRef,
+  AiFileReviewArtifactRef,
+  AiFileReviewRef,
   AiFileArtifactRef
 } from '../../../shared/types'
 import { AI_RUN_STATUSES } from './constants'
 
-export const aiDraftReviewRefSchema: z.ZodType<AiDraftReviewRef> = z.object({
+export const aiFileReviewRefSchema: z.ZodType<AiFileReviewRef> = z.object({
   reviewId: z.string().min(1),
   documentCount: z.number().int().min(0),
   changeCount: z.number().int().min(0)
@@ -26,15 +26,15 @@ export const aiFileArtifactRefSchema: z.ZodType<AiFileArtifactRef> = z.object({
   summary: z.string().min(1)
 })
 
-export const aiDraftReviewArtifactRefSchema: z.ZodType<AiDraftReviewArtifactRef> = z.object({
+export const aiFileReviewArtifactRefSchema: z.ZodType<AiFileReviewArtifactRef> = z.object({
   kind: z.literal('draft_review'),
-  review: aiDraftReviewRefSchema,
+  review: aiFileReviewRefSchema,
   summary: z.string().min(1)
 })
 
 export const aiArtifactRefSchema: z.ZodType<AiArtifactRef> = z.union([
   aiFileArtifactRefSchema,
-  aiDraftReviewArtifactRefSchema
+  aiFileReviewArtifactRefSchema
 ])
 
 export const aiRunStatusSchema = z.enum(AI_RUN_STATUSES)

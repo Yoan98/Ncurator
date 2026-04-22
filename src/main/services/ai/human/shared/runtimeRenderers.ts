@@ -4,37 +4,51 @@ import { renderLineList } from '../../utils/render'
 export type HumanRuntimeRenderMode = 'prompt' | 'fallback_markdown'
 
 const getRenderFallback = (mode: HumanRuntimeRenderMode): string =>
-  mode === 'fallback_markdown' ? '无' : 'none'
+  mode === 'fallback_markdown' ? '无' : '本次运行未形成新的文件改动结果。'
 
 const getRenderStyle = (mode: HumanRuntimeRenderMode): 'plain' | 'bullet' =>
   mode === 'fallback_markdown' ? 'bullet' : 'plain'
 
-const renderArtifactLine = (
-  artifact: HumanState['execution']['artifacts'][number],
+const renderChangedFile = (
+  file: NonNullable<HumanState['execution']['runtimeArtifacts']>['changed_files'][number],
   mode: HumanRuntimeRenderMode
 ): string => {
-  if (artifact.kind === 'file') {
-    const roleText = artifact.artifactRole ? `；role=${artifact.artifactRole}` : ''
-    if (mode === 'prompt') {
-      return `- 文件 ${artifact.fileName}：path=${artifact.path}；capability=${artifact.capability}；operation=${artifact.operation}${roleText}；summary=${artifact.summary}`
-    }
+  const highlights =
+    file.change_highlights.length > 0
+      ? file.change_highlights.map((item) => `    - ${item}`).join('\n')
+      : '    - 未提供更细的改动标题'
 
-    const roleLabel = artifact.artifactRole ? `/${artifact.artifactRole}` : ''
-    return `${artifact.fileName} (${artifact.path}) [${artifact.capability}/${artifact.operation}${roleLabel}] - ${artifact.summary}`
+  if (mode === 'fallback_markdown') {
+    return `${file.file_name} (${file.source_path}) - ${file.summary}`
   }
 
-  if (mode === 'prompt') {
-    return `- draft review ${artifact.review.reviewId}：documents=${artifact.review.documentCount}；changes=${artifact.review.changeCount}；summary=${artifact.summary}`
-  }
-
-  return `draft review ${artifact.review.reviewId} (${artifact.review.documentCount} docs, ${artifact.review.changeCount} changes) - ${artifact.summary}`
+  const draftLine = file.draft_artifact_path
+    ? `  - 待确认稿：${file.draft_artifact_path}`
+    : undefined
+  return [
+    `- 文件：${file.file_name}`,
+    `  - 路径：${file.source_path}`,
+    `  - 格式：${file.format}`,
+    `  - 改动数：${file.change_count}`,
+    `  - 摘要：${file.summary}`,
+    '  - 大致改动：',
+    highlights,
+    draftLine
+  ]
+    .filter(Boolean)
+    .join('\n')
 }
 
 export const renderHumanArtifactLines = (
   state: HumanState,
   mode: HumanRuntimeRenderMode
 ): string =>
-  renderLineList(state.execution.artifacts.map((artifact) => renderArtifactLine(artifact, mode)), {
-    fallback: getRenderFallback(mode),
-    style: getRenderStyle(mode)
-  })
+  renderLineList(
+    (state.execution.runtimeArtifacts?.changed_files || []).map((file) =>
+      renderChangedFile(file, mode)
+    ),
+    {
+      fallback: getRenderFallback(mode),
+      style: getRenderStyle(mode)
+    }
+  )

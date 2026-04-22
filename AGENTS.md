@@ -4,12 +4,14 @@
 ### 1.1 AI相关
 - 当涉及 AI 架构、主流程或 human-only runtime 时，必须阅读 `doc/ai-design/architecture.md`
 - 当涉及 AI 实现、运行入口、跨层边界或工作区 KB 范围时，必须阅读 `doc/ai-design/implementation-spec.md` 与 `doc/ai-design/data-definition-and-flow.md`
+- 当涉及 `mouth` 的 `reference_scope / runtime_artifacts` 组织方式，或 `FileReview` 运行态收口时，必须阅读 `doc/ai-design/implementation-spec.md` 与 `doc/ai-design/data-definition-and-flow.md`
 - 当涉及 human 的 skill 分类、builtin/external 边界或 skill 基线时，必须阅读 `doc/ai-design/human-skill-design.md`
 - 当涉及 prompt 结构、工具结果渲染、工具 schema/输出 shape 自动导出或 human AI-facing 文案时，必须阅读 `doc/ai-design/prompt-design.md`
 
 ### 1.2 docx相关
 - 当涉及 docx 编辑架构、source baseline、replay session 或三视图主线时，必须阅读 `doc/docx-design/architecture.md`
 - 当涉及 docx 实现约束、review/commit 链路、serializer 或样式继承时，必须阅读 `doc/docx-design/implementation-spec.md`
+- 当涉及单文件 `FileReview`、docx 审阅稿生成或提交尝试记录时，必须阅读 `doc/docx-design/implementation-spec.md` 与 `doc/database.md`
 - 当涉及 docx 数据结构、revision/replay node、artifact 关系或状态流转时，必须阅读 `doc/docx-design/data-definition-and-flow.md`
 
 ### 1.3 项目整体相关

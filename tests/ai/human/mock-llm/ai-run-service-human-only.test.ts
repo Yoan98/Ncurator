@@ -43,7 +43,7 @@ describe('ai human mock-llm backend', () => {
             ensureEmbeddingReady: async () => {
               await runtime.ensureEmbeddingReady()
             },
-            draftReviewService: runtime.draftReviewService,
+            fileReviewService: runtime.fileReviewService,
             isCancelled: () => false,
             sendEvent: (event) => runtime.eventCollector.add(event),
             recordLlmIo: (record) => runtime.eventCollector.addLlmIo(record),

@@ -42,7 +42,7 @@ describe('ai tool docx backend', () => {
           }
         ])
 
-        await runtime.seedDraftReview({
+        await runtime.seedFileReview({
           sessionId: 'review-aware-session',
           runId: runtime.runId,
           title: 'Review aware docx seed',

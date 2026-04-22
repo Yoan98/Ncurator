@@ -13,7 +13,7 @@ import {
   collectDocxApplyOpsContentKinds,
   filterAiRunEventsByType,
   hasDraftFileArtifact,
-  hasDraftReviewArtifact,
+  hasFileReviewArtifact,
   runWithStructuredOutputRetry
 } from '../testUtils'
 
@@ -123,7 +123,7 @@ describe('ai human live backend', () => {
               changedContentKinds.includes('paragraph') &&
               changedContentKinds.includes('table') &&
               filterAiRunEventsByType(events, 'draft_review_ready').length >= 1 &&
-              hasDraftReviewArtifact(result.output?.artifacts) &&
+              hasFileReviewArtifact(result.output?.artifacts) &&
               hasDraftFileArtifact(result.output?.artifacts) &&
               unchangedFixtures.every(Boolean) &&
               Boolean(targetFixture) &&

@@ -8,19 +8,19 @@ import type {
   AiRunStartResponse,
   ChatMessage,
   ChatSession,
-  CommitDraftReviewRequest,
-  CommitDraftReviewResponse,
+  CommitFileReviewRequest,
+  CommitFileReviewResponse,
   ChunkListResponse,
   CreateWorkspaceSourceRequest,
   DeleteWebSourceRequest,
   DeleteWebSourceResponse,
   DeleteWorkspaceSourceResponse,
   DocumentRecord,
-  GetDraftReviewRequest,
-  GetDraftReviewResponse,
+  GetFileReviewRequest,
+  GetFileReviewResponse,
   LegacyLocalImportMigrationStatus,
-  ListDraftReviewsRequest,
-  ListDraftReviewsResponse,
+  ListFileReviewsRequest,
+  ListFileReviewsResponse,
   ListReferenceItemsRequest,
   ListWebSourcesRequest,
   ListWorkspaceNodesRequest,
@@ -31,14 +31,14 @@ import type {
   SearchResponse,
   SearchResult,
   SearchSourceFilter,
-  DiscardDraftReviewRequest,
-  DiscardDraftReviewResponse,
+  DiscardFileReviewRequest,
+  DiscardFileReviewResponse,
   PickApplicationResponse,
   OpenPathWithApplicationRequest,
   OpenPathWithApplicationResponse,
   ReferenceItemListResponse,
-  ValidateDraftCommitRequest,
-  ValidateDraftCommitResponse,
+  ValidateFileReviewCommitRequest,
+  ValidateFileReviewCommitResponse,
   WebSourceListResponse,
   WebSourceMutationResponse,
   WebIngestPayload,
@@ -161,13 +161,13 @@ export type DesktopApi = {
   aiRunApprovalDecide: (
     payload: AiRunApprovalDecisionRequest
   ) => Promise<AiRunApprovalDecisionResponse>
-  draftReviewList: (payload?: ListDraftReviewsRequest) => Promise<ListDraftReviewsResponse>
-  draftReviewGet: (payload: GetDraftReviewRequest) => Promise<GetDraftReviewResponse>
-  draftReviewValidate: (payload: ValidateDraftCommitRequest) => Promise<ValidateDraftCommitResponse>
-  draftReviewCommit: (payload: CommitDraftReviewRequest) => Promise<CommitDraftReviewResponse>
-  draftReviewDiscard: (
-    payload: DiscardDraftReviewRequest
-  ) => Promise<DiscardDraftReviewResponse>
+  fileReviewList: (payload?: ListFileReviewsRequest) => Promise<ListFileReviewsResponse>
+  fileReviewGet: (payload: GetFileReviewRequest) => Promise<GetFileReviewResponse>
+  fileReviewValidate: (payload: ValidateFileReviewCommitRequest) => Promise<ValidateFileReviewCommitResponse>
+  fileReviewCommit: (payload: CommitFileReviewRequest) => Promise<CommitFileReviewResponse>
+  fileReviewDiscard: (
+    payload: DiscardFileReviewRequest
+  ) => Promise<DiscardFileReviewResponse>
   pickApplication: () => Promise<PickApplicationResponse>
   openPathWithApplication: (
     payload: OpenPathWithApplicationRequest

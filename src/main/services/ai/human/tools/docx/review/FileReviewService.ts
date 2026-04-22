@@ -1,35 +1,40 @@
 import fs from 'node:fs/promises'
 import type {
-  CommitDraftReviewRequest,
-  CommitDraftReviewResponse,
-  DiscardDraftReviewRequest,
-  DiscardDraftReviewResponse,
-  DraftReviewDetail,
-  GetDraftReviewRequest,
-  GetDraftReviewResponse,
-  ListDraftReviewsRequest,
-  ListDraftReviewsResponse,
-  ValidateDraftCommitRequest,
-  ValidateDraftCommitResponse
+  CommitFileReviewRequest,
+  CommitFileReviewResponse,
+  DiscardFileReviewRequest,
+  DiscardFileReviewResponse,
+  FileReviewDetail,
+  GetFileReviewRequest,
+  GetFileReviewResponse,
+  ListFileReviewsRequest,
+  ListFileReviewsResponse,
+  ValidateFileReviewCommitRequest,
+  ValidateFileReviewCommitResponse
 } from '../../../../../../../shared/types'
 import type { DocumentsStore } from '../../../../../storage/domains/DocumentsStore'
-import type { DraftReviewStore } from '../../../../../storage/domains/DraftReviewStore'
-import { DraftReviewCommitService } from './DraftReviewCommitService'
+import type { FileReviewStore } from '../../../../../storage/domains/FileReviewStore'
+import { FileReviewCommitService } from './FileReviewCommitService'
 import { RunDraftTracker } from './RunDraftTracker'
 import type { ResolvedDocxOpenTarget } from './types'
 import { collectArtifactPaths } from './utils'
 import { getWorkingArtifactPath } from './viewProjection'
 
-export class DraftReviewService {
+/**
+ * FileReviewService currently materializes docx reviews only.
+ * Future editable formats should reuse the same FileReview/CommitAttempt outer
+ * model while keeping their own tracker, serializer and commit validation logic.
+ */
+export class FileReviewService {
   private readonly runDraftTracker: RunDraftTracker
-  private readonly commitService: DraftReviewCommitService
+  private readonly commitService: FileReviewCommitService
 
   public constructor(
-    private readonly draftReviewStore: DraftReviewStore,
+    private readonly fileReviewStore: FileReviewStore,
     documentsStore: DocumentsStore
   ) {
     this.runDraftTracker = new RunDraftTracker(documentsStore)
-    this.commitService = new DraftReviewCommitService(draftReviewStore)
+    this.commitService = new FileReviewCommitService(fileReviewStore)
   }
 
   public beginRun(input: { runId: string; sessionId: string; inputText: string }): void {
@@ -64,48 +69,45 @@ export class DraftReviewService {
   public async finalizeRunReview(input: {
     runId: string
     workspaceRootPath: string
-  }): Promise<DraftReviewDetail[]> {
+  }): Promise<FileReviewDetail[]> {
     const details = await this.runDraftTracker.finalizeRunReview(input)
     if (details.length === 0) return []
     for (const detail of details) {
-      const sourcePath = detail.documents[0]?.source_path
-      if (sourcePath) {
-        await this.supersedeActiveReviews(sourcePath, detail.review.id)
-      }
-      await this.draftReviewStore.saveReviewDetail(detail)
+      await this.supersedeActiveReviews(detail.review.source_path, detail.review.id)
+      await this.fileReviewStore.saveReviewDetail(detail)
     }
     return details
   }
 
   public async listReviews(
-    request?: ListDraftReviewsRequest
-  ): Promise<ListDraftReviewsResponse> {
-    return await this.draftReviewStore.listReviews(request)
+    request?: ListFileReviewsRequest
+  ): Promise<ListFileReviewsResponse> {
+    return await this.fileReviewStore.listReviews(request)
   }
 
   public async getReview(
-    request: GetDraftReviewRequest
-  ): Promise<GetDraftReviewResponse> {
-    const review = await this.draftReviewStore.getReviewDetail(request.reviewId)
+    request: GetFileReviewRequest
+  ): Promise<GetFileReviewResponse> {
+    const review = await this.fileReviewStore.getReviewDetail(request.reviewId)
     return review ? { review } : { error: 'review session not found' }
   }
 
   public async validateCommit(
-    request: ValidateDraftCommitRequest
-  ): Promise<ValidateDraftCommitResponse> {
+    request: ValidateFileReviewCommitRequest
+  ): Promise<ValidateFileReviewCommitResponse> {
     return await this.commitService.validateCommit(request)
   }
 
   public async commitReview(
-    request: CommitDraftReviewRequest
-  ): Promise<CommitDraftReviewResponse> {
+    request: CommitFileReviewRequest
+  ): Promise<CommitFileReviewResponse> {
     return await this.commitService.commitReview(request)
   }
 
   public async discardReview(
-    request: DiscardDraftReviewRequest
-  ): Promise<DiscardDraftReviewResponse> {
-    const detail = await this.draftReviewStore.getReviewDetail(request.reviewId)
+    request: DiscardFileReviewRequest
+  ): Promise<DiscardFileReviewResponse> {
+    const detail = await this.fileReviewStore.getReviewDetail(request.reviewId)
     if (!detail) return { success: false, error: 'review session not found' }
     if (
       detail.review.status === 'committing' ||
@@ -119,6 +121,9 @@ export class DraftReviewService {
       ...detail.review,
       status: 'discarded' as const,
       updated_at: Date.now(),
+      draft_artifact_path: undefined,
+      working_artifact_path: undefined,
+      committed_artifact_path: undefined,
       last_error: undefined
     }
     await Promise.all(
@@ -130,16 +135,9 @@ export class DraftReviewService {
         }
       })
     )
-    await this.draftReviewStore.saveReviewDetail({
+    await this.fileReviewStore.saveReviewDetail({
       ...detail,
-      review: updatedReview,
-      documents: detail.documents.map((document) => ({
-        ...document,
-        review_artifact_path: undefined,
-        working_artifact_path: undefined,
-        committed_artifact_path: undefined,
-        updated_at: updatedReview.updated_at
-      }))
+      review: updatedReview
     })
     return {
       success: true,
@@ -148,7 +146,7 @@ export class DraftReviewService {
   }
 
   public async resolveDocxOpenTarget(sourcePath: string): Promise<ResolvedDocxOpenTarget> {
-    const activeReviews = await this.draftReviewStore.listActiveReviewsBySourcePath(sourcePath, [
+    const activeReviews = await this.fileReviewStore.listActiveReviewsBySourcePath(sourcePath, [
       'pending_confirm',
       'conflicted'
     ])
@@ -160,8 +158,7 @@ export class DraftReviewService {
       }
     }
 
-    const document = activeDetail.documents.find((item) => item.source_path === sourcePath)
-    const workingArtifactPath = document ? getWorkingArtifactPath(document) : undefined
+    const workingArtifactPath = getWorkingArtifactPath(activeDetail.review)
     if (!workingArtifactPath) {
       throw new Error('active working draft is missing')
     }
@@ -175,13 +172,13 @@ export class DraftReviewService {
     sourcePath: string,
     nextReviewId: string
   ): Promise<void> {
-    const activeReviews = await this.draftReviewStore.listActiveReviewsBySourcePath(sourcePath, [
+    const activeReviews = await this.fileReviewStore.listActiveReviewsBySourcePath(sourcePath, [
       'pending_confirm',
       'conflicted'
     ])
     for (const detail of activeReviews) {
       if (detail.review.id === nextReviewId) continue
-      await this.draftReviewStore.saveReviewDetail({
+      await this.fileReviewStore.saveReviewDetail({
         ...detail,
         review: {
           ...detail.review,

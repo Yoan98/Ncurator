@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Button, Empty, Modal } from 'antd'
 import { HiOutlineMagnifyingGlass } from 'react-icons/hi2'
-import type { DraftReviewDetail, ValidateDraftCommitResponse } from '../../../../shared/types'
+import type { FileReviewDetail, ValidateFileReviewCommitResponse } from '../../../../shared/types'
 import EmbeddedFileViewer from '../fileRenders/EmbeddedFileViewer'
 import WorkbenchReviewPanel from './WorkbenchReviewPanel'
 import type {
@@ -13,9 +13,9 @@ import { workbenchSelectors } from '../../testing/selectors'
 
 type WorkbenchContentPanelProps = {
   state: WorkbenchContentPanelState
-  activeReview: DraftReviewDetail | null
-  draftReviewLoading: boolean
-  draftCommitValidation: ValidateDraftCommitResponse | null
+  activeReview: FileReviewDetail | null
+  fileReviewLoading: boolean
+  draftCommitValidation: ValidateFileReviewCommitResponse | null
   draftCommitSubmitting: boolean
   draftDiscardSubmitting: boolean
   modalPreviewFile: WorkbenchFileRef | null
@@ -32,7 +32,7 @@ type WorkbenchContentPanelProps = {
 const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
   state,
   activeReview,
-  draftReviewLoading,
+  fileReviewLoading,
   draftCommitValidation,
   draftCommitSubmitting,
   draftDiscardSubmitting,
@@ -190,7 +190,7 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
           {state.kind === 'review_workspace' ? (
             <WorkbenchReviewPanel
               review={activeReview}
-              loading={draftReviewLoading}
+              loading={fileReviewLoading}
               validation={draftCommitValidation}
               committing={draftCommitSubmitting}
               discarding={draftDiscardSubmitting}

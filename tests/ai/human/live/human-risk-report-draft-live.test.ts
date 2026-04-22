@@ -15,7 +15,7 @@ import {
   filterAiRunEventsByType,
   hasDocxWriteToolCall,
   hasDraftFileArtifact,
-  hasDraftReviewArtifact,
+  hasFileReviewArtifact,
   hasKbToolCall
 } from '../testUtils'
 
@@ -149,7 +149,7 @@ describe('ai human live backend', () => {
             kbEvidenceText.includes('Owner Note.md') &&
             deliveryText.length > 0 &&
             filterAiRunEventsByType(result.events, 'draft_review_ready').length >= 1 &&
-            hasDraftReviewArtifact(result.output?.artifacts) &&
+            hasFileReviewArtifact(result.output?.artifacts) &&
             hasDraftFileArtifact(result.output?.artifacts),
           {
             name: 'human-live-risk-report-delivery-is-backed-by-evidence-and-review-artifacts',

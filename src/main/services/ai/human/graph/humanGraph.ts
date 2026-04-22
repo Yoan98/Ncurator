@@ -1,6 +1,5 @@
 import { END, START, StateGraph } from '@langchain/langgraph'
 import type { AiRunContext, HumanRunDispatchOptions } from '../../types'
-import { appendDraftReviewArtifactsAndEmitEvents } from '../../utils/artifacts'
 import type { HumanState, HumanTaskInput, HumanTaskOutput } from '../types'
 import { createBrainNode } from '../node/brainNode'
 import { createLearningNode } from '../node/learningNode'
@@ -69,24 +68,12 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
         recursionLimit: RECURSION_LIMIT
       })) as HumanState
 
-      const draftReviewDetails = await ctx.finalizeDocxReviewRun()
-      const artifacts =
-        draftReviewDetails.length > 0
-          ? appendDraftReviewArtifactsAndEmitEvents({
-              existingArtifacts: output.result?.artifacts,
-              details: draftReviewDetails,
-              sendEvent: ctx.sendEvent,
-              runId: ctx.runId,
-              taskId: taskInput.taskId
-            })
-          : output.result?.artifacts
-
       return {
         taskId: taskInput.taskId,
         status: output.result?.status || 'completed',
         summary: output.result?.summary || '任务未产出最终结果。',
         deliveryMarkdown: output.result?.deliveryMarkdown || '',
-        artifacts
+        artifacts: output.result?.artifacts
       }
     } catch (error) {
       ctx.discardDocxReviewRun()

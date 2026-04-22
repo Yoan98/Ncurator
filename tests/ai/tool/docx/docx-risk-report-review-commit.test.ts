@@ -21,7 +21,7 @@ describe('ai tool docx backend', () => {
       runMode: 'single',
       execute: async (runtime) => {
         const workspaceSeed = await seedRiskReportWorkspace(runtime)
-        runtime.draftReviewService.beginRun({
+        runtime.fileReviewService.beginRun({
           runId: runtime.runId,
           sessionId: 'docx-risk-report-review-commit-session',
           inputText: '补全风险周报模板并提交'
@@ -43,17 +43,16 @@ describe('ai tool docx backend', () => {
             replace: '最终复核窗口由合规负责人 Alice 牵头。'
           })
 
-          const details = await runtime.draftReviewService.finalizeRunReview({
+          const details = await runtime.fileReviewService.finalizeRunReview({
             runId: runtime.runId,
             workspaceRootPath: runtime.workspaceRoot
           })
           const detail = details[0]
-          const document = detail?.documents[0]
-          if (!detail || !document?.review_artifact_path) {
+          if (!detail || !detail.review.draft_artifact_path) {
             throw new Error('expected generated review artifact for risk report')
           }
 
-          const reviewRelativePath = path.relative(runtime.workspaceRoot, document.review_artifact_path)
+          const reviewRelativePath = path.relative(runtime.workspaceRoot, detail.review.draft_artifact_path)
           const reviewRisk = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: reviewRelativePath,
             query: '待跟进'
@@ -71,10 +70,10 @@ describe('ai tool docx backend', () => {
             query: 'OWNER_TODO'
           })
           const reviewXml = new XMLSerializer().serializeToString(
-            (await loadDocxBundle(await fs.readFile(document.review_artifact_path))).documentDom
+            (await loadDocxBundle(await fs.readFile(detail.review.draft_artifact_path))).documentDom
           )
 
-          const commit = await runtime.draftReviewService.commitReview({
+          const commit = await runtime.fileReviewService.commitReview({
             reviewId: detail.review.id,
             overwrite: true
           })
@@ -101,7 +100,7 @@ describe('ai tool docx backend', () => {
             firstEdit,
             secondEdit,
             reviewId: detail.review.id,
-            reviewArtifactPath: document.review_artifact_path,
+            reviewArtifactPath: detail.review.draft_artifact_path,
             reviewRisk,
             reviewOwner,
             reviewOldRiskPlaceholder,

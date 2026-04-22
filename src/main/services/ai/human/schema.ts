@@ -184,6 +184,20 @@ export const humanDeliveryPayloadSchema = z.object({
 
 export const mouthOutputSchema = humanDeliveryPayloadSchema
 
+export const runtimeChangedFileSchema = z.object({
+  file_name: z.string().min(1),
+  source_path: z.string().min(1),
+  format: z.literal('docx'),
+  change_count: z.number().int().min(0),
+  summary: z.string().min(1),
+  change_highlights: z.array(z.string().min(1)),
+  draft_artifact_path: z.string().min(1).optional()
+})
+
+export const runtimeArtifactsSummarySchema = z.object({
+  changed_files: z.array(runtimeChangedFileSchema)
+})
+
 export const humanResultSchema = humanDeliveryPayloadSchema.extend({
   status: z.literal('completed'),
   artifacts: z.array(aiArtifactRefSchema).optional()
@@ -202,7 +216,8 @@ export const humanExecutionSchema = z.object({
   watchHint: humanWatchHintSchema.optional(),
   lastToolResults: z.array(toolCallResultSchema).optional(),
   lastLearningOutcome: humanLearningOutcomeSchema.optional(),
-  artifacts: z.array(aiArtifactRefSchema)
+  artifacts: z.array(aiArtifactRefSchema),
+  runtimeArtifacts: runtimeArtifactsSummarySchema.optional()
 })
 
 export const humanRoundExecutionSchema = z.discriminatedUnion('kind', [

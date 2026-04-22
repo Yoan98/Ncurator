@@ -1,6 +1,6 @@
 import type {
   DraftDocumentFormat,
-  DraftReviewStatus,
+  FileReviewStatus,
   SearchResult
 } from '../../../../shared/types'
 
@@ -38,7 +38,7 @@ export type ReviewWorkspaceTab = {
   fileName: string
   sourcePath: string
   changeCount: number
-  status: DraftReviewStatus
+  status: FileReviewStatus
   unseen: boolean
 }
 
@@ -57,7 +57,7 @@ export type AssistantTurnReviewTarget = {
   title: string
   changeCount: number
   documentCount: number
-  status?: DraftReviewStatus
+  status?: FileReviewStatus
 }
 
 export type AssistantTurnBlocker = {

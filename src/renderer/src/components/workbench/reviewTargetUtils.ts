@@ -1,11 +1,11 @@
-import type { DraftReviewSummary } from '../../../../shared/types'
+import type { FileReview } from '../../../../shared/types'
 import type { AssistantTurnReviewTarget } from './types'
 
-export const buildReviewTarget = (review: DraftReviewSummary): AssistantTurnReviewTarget => ({
+export const buildReviewTarget = (review: FileReview): AssistantTurnReviewTarget => ({
   reviewId: review.id,
   title: review.title,
   changeCount: review.change_count,
-  documentCount: review.document_count,
+  documentCount: 1,
   status: review.status
 })
 
@@ -18,9 +18,9 @@ export const mergeReviewTargets = (
 ]
 
 export const groupReviewTargetsByRunId = (
-  reviews: DraftReviewSummary[]
+  reviews: FileReview[]
 ): Map<string, AssistantTurnReviewTarget[]> => {
-  const grouped = new Map<string, DraftReviewSummary[]>()
+  const grouped = new Map<string, FileReview[]>()
   reviews.forEach((review) => {
     const existing = grouped.get(review.run_id) || []
     existing.push(review)

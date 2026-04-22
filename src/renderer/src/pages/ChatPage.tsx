@@ -15,12 +15,12 @@ import type {
   AiRunEvent,
   ChatMessage,
   ChatSession,
-  DraftReviewDetail,
-  DraftReviewSummary,
+  FileReviewDetail,
+  FileReview,
   LLMConfig,
   SearchResult,
   SelectedReference,
-  ValidateDraftCommitResponse,
+  ValidateFileReviewCommitResponse,
   WorkspaceSource,
   WorkspaceRuntimeBinding
 } from '../../../shared/types'
@@ -84,14 +84,14 @@ const createAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
   blockers: []
 })
 
-const ACTIVE_REVIEW_WORKSPACE_STATUSES = new Set<DraftReviewSummary['status']>([
+const ACTIVE_REVIEW_WORKSPACE_STATUSES = new Set<FileReview['status']>([
   'pending_confirm',
   'conflicted',
   'failed'
 ])
 
-const sortDraftReviews = (items: DraftReviewSummary[]): DraftReviewSummary[] => {
-  const priority: Record<DraftReviewSummary['status'], number> = {
+const sortFileReviews = (items: FileReview[]): FileReview[] => {
+  const priority: Record<FileReview['status'], number> = {
     pending_confirm: 0,
     conflicted: 1,
     failed: 2,
@@ -153,10 +153,10 @@ const ChatPage: React.FC = () => {
     return stored === null ? true : stored === 'true'
   })
 
-  const [activeDraftReview, setActiveDraftReview] = useState<DraftReviewDetail | null>(null)
-  const [draftReviewLoading, setDraftReviewLoading] = useState(false)
+  const [activeFileReview, setActiveFileReview] = useState<FileReviewDetail | null>(null)
+  const [fileReviewLoading, setFileReviewLoading] = useState(false)
   const [draftCommitValidation, setDraftCommitValidation] =
-    useState<ValidateDraftCommitResponse | null>(null)
+    useState<ValidateFileReviewCommitResponse | null>(null)
   const [draftCommitSubmitting, setDraftCommitSubmitting] = useState(false)
   const [draftDiscardSubmitting, setDraftDiscardSubmitting] = useState(false)
 
@@ -270,10 +270,10 @@ const ChatPage: React.FC = () => {
       }
     }
 
-    if (contentPanel.kind === 'review_workspace' && activeDraftReview) {
-      const statusMeta = REVIEW_STATUS_META[activeDraftReview.review.status]
+    if (contentPanel.kind === 'review_workspace' && activeFileReview) {
+      const statusMeta = REVIEW_STATUS_META[activeFileReview.review.status]
       return {
-        title: activeDraftReview.documents[0]?.source_name || contentPanel.title,
+        title: activeFileReview.review.source_name || contentPanel.title,
         badge: statusMeta.label,
         badgeClassName: statusMeta.className
       }
@@ -286,9 +286,9 @@ const ChatPage: React.FC = () => {
     }
   }, [contentPanel, contentPanelCollapsed])
 
-  const resetDraftReviewState = (): void => {
-    setActiveDraftReview(null)
-    setDraftReviewLoading(false)
+  const resetFileReviewState = (): void => {
+    setActiveFileReview(null)
+    setFileReviewLoading(false)
     setDraftCommitValidation(null)
     setDraftCommitSubmitting(false)
     setDraftDiscardSubmitting(false)
@@ -386,42 +386,42 @@ const ChatPage: React.FC = () => {
     }
   }
 
-  const loadDraftReviewDetail = async (input: {
+  const loadFileReviewDetail = async (input: {
     reviewId: string
-    detail?: DraftReviewDetail | null
+    detail?: FileReviewDetail | null
     tabs?: ReviewWorkspaceTab[]
     activeFileKey?: string | null
     openWorkspace?: boolean
   }): Promise<void> => {
-    setDraftReviewLoading(true)
+    setFileReviewLoading(true)
     try {
       const detailResponse =
-        input.detail !== undefined ? { review: input.detail } : await window.api.draftReviewGet({ reviewId: input.reviewId })
+        input.detail !== undefined ? { review: input.detail } : await window.api.fileReviewGet({ reviewId: input.reviewId })
       if (!detailResponse.review) {
-        setActiveDraftReview(null)
+        setActiveFileReview(null)
         setDraftCommitValidation(null)
         return
       }
 
-      setActiveDraftReview(detailResponse.review)
+      setActiveFileReview(detailResponse.review)
       setDraftCommitValidation(null)
 
       if (input.openWorkspace) {
         showReviewWorkspace(
           input.tabs || reviewWorkspaceTabs,
-          input.activeFileKey || detailResponse.review.documents[0]?.source_path || null
+          input.activeFileKey || detailResponse.review.review.source_path || null
         )
       }
     } catch (error) {
       console.error('Failed to load draft review detail', error)
-      setActiveDraftReview(null)
+      setActiveFileReview(null)
       setDraftCommitValidation(null)
     } finally {
-      setDraftReviewLoading(false)
+      setFileReviewLoading(false)
     }
   }
 
-  const loadDraftReviewsForSession = async (
+  const loadFileReviewsForSession = async (
     sessionId: string,
     options?: {
       preferredReviewId?: string | null
@@ -433,13 +433,13 @@ const ChatPage: React.FC = () => {
       const shouldWaitForCompleteDetails =
         Boolean(options?.forceOpenWorkspace) || Boolean(options?.preferredReviewId)
       const maxAttempts = shouldWaitForCompleteDetails ? 6 : 1
-      let nextItems: DraftReviewSummary[] = []
-      let activeItems: DraftReviewSummary[] = []
-      let activeDetails: DraftReviewDetail[] = []
+      let nextItems: FileReview[] = []
+      let activeItems: FileReview[] = []
+      let activeDetails: FileReviewDetail[] = []
 
       for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-        const response = await window.api.draftReviewList({ sessionId })
-        nextItems = sortDraftReviews(response.items)
+        const response = await window.api.fileReviewList({ sessionId })
+        nextItems = sortFileReviews(response.items)
         activeItems = nextItems.filter((item) =>
           ACTIVE_REVIEW_WORKSPACE_STATUSES.has(item.status)
         )
@@ -450,11 +450,11 @@ const ChatPage: React.FC = () => {
         }
 
         const activeDetailsResponses = await Promise.all(
-          activeItems.map((item) => window.api.draftReviewGet({ reviewId: item.id }))
+          activeItems.map((item) => window.api.fileReviewGet({ reviewId: item.id }))
         )
         activeDetails = activeDetailsResponses
           .map((item) => item.review)
-          .filter((item): item is DraftReviewDetail => Boolean(item))
+          .filter((item): item is FileReviewDetail => Boolean(item))
           .sort((left, right) => right.review.updated_at - left.review.updated_at)
 
         const missingPreferredReview =
@@ -488,7 +488,7 @@ const ChatPage: React.FC = () => {
 
       if (activeItems.length === 0) {
         setReviewWorkspaceTabs([])
-        setActiveDraftReview(null)
+        setActiveFileReview(null)
         setDraftCommitValidation(null)
         setContentPanel((current) =>
           current.kind === 'review_workspace' ? createEmptyPanel() : current
@@ -496,9 +496,9 @@ const ChatPage: React.FC = () => {
         return
       }
 
-      const latestByFileKey = new Map<string, DraftReviewDetail>()
+      const latestByFileKey = new Map<string, FileReviewDetail>()
       activeDetails.forEach((detail) => {
-        const fileKey = detail.documents[0]?.source_path
+        const fileKey = detail.review.source_path
         if (!fileKey || latestByFileKey.has(fileKey)) return
         latestByFileKey.set(fileKey, detail)
       })
@@ -506,17 +506,17 @@ const ChatPage: React.FC = () => {
       const currentWorkspaceFileKey =
         contentPanel.kind === 'review_workspace'
           ? contentPanel.activeFileKey
-          : activeDraftReview?.documents[0]?.source_path || null
+          : activeFileReview?.review.source_path || null
       const previewFileKey =
         contentPanel.kind === 'file_preview' ? contentPanel.file.path : null
       const preferredFileKey =
         options?.preferredReviewId
           ? [...latestByFileKey.values()].find(
               (detail) => detail.review.id === options.preferredReviewId
-            )?.documents[0]?.source_path || null
+            )?.review.source_path || null
           : null
       const nextTabs = [...latestByFileKey.values()].map((detail) => {
-        const fileKey = detail.documents[0]?.source_path || detail.review.id
+        const fileKey = detail.review.source_path || detail.review.id
         const previousTab = reviewWorkspaceTabs.find((tab) => tab.fileKey === fileKey)
         const shouldMarkUnseen =
           previousTab?.reviewId !== detail.review.id &&
@@ -527,7 +527,7 @@ const ChatPage: React.FC = () => {
         return {
           fileKey,
           reviewId: detail.review.id,
-          fileName: detail.documents[0]?.source_name || detail.review.title,
+          fileName: detail.review.source_name || detail.review.title,
           sourcePath: fileKey,
           changeCount: detail.review.pending_change_count,
           status: detail.review.status,
@@ -577,7 +577,7 @@ const ChatPage: React.FC = () => {
           (contentPanel.kind === 'empty' ||
             (previewFileKey !== null && previewFileKey === nextSelectedTab.fileKey)))
 
-      await loadDraftReviewDetail({
+      await loadFileReviewDetail({
         reviewId: nextSelectedTab.reviewId,
         detail: nextSelectedDetail,
         tabs: normalizedTabs,
@@ -586,7 +586,7 @@ const ChatPage: React.FC = () => {
       })
     } catch (error) {
       console.error('Failed to load draft reviews', error)
-      setActiveDraftReview(null)
+      setActiveFileReview(null)
       setDraftCommitValidation(null)
     }
   }
@@ -643,13 +643,13 @@ const ChatPage: React.FC = () => {
       setPendingWorkspaceRequest(null)
       setAssistantTurns({})
       setContentPanel(createEmptyPanel())
-      resetDraftReviewState()
-      void loadDraftReviewsForSession(currentSessionId, { autoOpen: true })
+      resetFileReviewState()
+      void loadFileReviewsForSession(currentSessionId, { autoOpen: true })
     } else {
       setCurrentMessages([])
       setAssistantTurns({})
       setModalPreviewFile(null)
-      resetDraftReviewState()
+      resetFileReviewState()
     }
   }, [currentSessionId])
 
@@ -722,9 +722,9 @@ const ChatPage: React.FC = () => {
     setModalPreviewFile(fileRef)
   }
 
-  const openDraftReview = (reviewId: string): void => {
+  const openFileReview = (reviewId: string): void => {
     if (currentSessionId) {
-      void loadDraftReviewsForSession(currentSessionId, {
+      void loadFileReviewsForSession(currentSessionId, {
         preferredReviewId: reviewId,
         forceOpenWorkspace: true
       })
@@ -738,7 +738,7 @@ const ChatPage: React.FC = () => {
         )
       : reviewWorkspaceTabs
     setReviewWorkspaceTabs(nextTabs)
-    void loadDraftReviewDetail({
+    void loadFileReviewDetail({
       reviewId,
       tabs: nextTabs,
       activeFileKey: nextTab?.fileKey || null,
@@ -925,7 +925,7 @@ const ChatPage: React.FC = () => {
           message.success(`审阅稿已生成：${event.review.changeCount} 处修改`)
           const shouldAutoOpen =
             contentPanel.kind === 'review_workspace' || contentPanel.kind === 'file_preview'
-          void loadDraftReviewsForSession(currentSessionId, {
+          void loadFileReviewsForSession(currentSessionId, {
             preferredReviewId: event.review.reviewId,
             autoOpen: shouldAutoOpen
           })
@@ -1342,19 +1342,19 @@ const ChatPage: React.FC = () => {
   }
 
   const handleDraftCommit = async (): Promise<void> => {
-    if (!activeDraftReview || !currentSessionId || draftCommitSubmitting) return
+    if (!activeFileReview || !currentSessionId || draftCommitSubmitting) return
     setDraftCommitSubmitting(true)
     try {
-      const validation = await window.api.draftReviewValidate({
-        reviewId: activeDraftReview.review.id
+      const validation = await window.api.fileReviewValidate({
+        reviewId: activeFileReview.review.id
       })
       setDraftCommitValidation(validation)
       if (!validation.ready) {
         message.warning('提交前校验未通过，请先处理提示问题。')
         return
       }
-      const response = await window.api.draftReviewCommit({
-        reviewId: activeDraftReview.review.id,
+      const response = await window.api.fileReviewCommit({
+        reviewId: activeFileReview.review.id,
         overwrite: true
       })
       if (!response.success) {
@@ -1362,7 +1362,7 @@ const ChatPage: React.FC = () => {
       } else {
         emitSuccessMessage('审阅稿已写回源文件')
       }
-      await loadDraftReviewsForSession(currentSessionId, { autoOpen: true })
+      await loadFileReviewsForSession(currentSessionId, { autoOpen: true })
     } catch (error) {
       console.error(error)
       message.error('提交草稿失败')
@@ -1372,11 +1372,11 @@ const ChatPage: React.FC = () => {
   }
 
   const handleDraftDiscard = async (): Promise<void> => {
-    if (!activeDraftReview || !currentSessionId || draftDiscardSubmitting) return
+    if (!activeFileReview || !currentSessionId || draftDiscardSubmitting) return
     setDraftDiscardSubmitting(true)
     try {
-      const discardedReviewId = activeDraftReview.review.id
-      const response = await window.api.draftReviewDiscard({
+      const discardedReviewId = activeFileReview.review.id
+      const response = await window.api.fileReviewDiscard({
         reviewId: discardedReviewId
       })
       if (!response.success) {
@@ -1402,7 +1402,7 @@ const ChatPage: React.FC = () => {
       setDraftCommitValidation(null)
 
       if (remainingTabs.length === 0) {
-        setActiveDraftReview(null)
+        setActiveFileReview(null)
         setContentPanel((current) =>
           current.kind === 'review_workspace' ? createEmptyPanel() : current
         )
@@ -1411,7 +1411,7 @@ const ChatPage: React.FC = () => {
 
       const nextTab = remainingTabs[0]
       showReviewWorkspace(remainingTabs, nextTab.fileKey)
-      await loadDraftReviewDetail({
+      await loadFileReviewDetail({
         reviewId: nextTab.reviewId,
         tabs: remainingTabs,
         activeFileKey: nextTab.fileKey,
@@ -1530,7 +1530,7 @@ const ChatPage: React.FC = () => {
         onOpenFile={(file) => {
           void openFile(file)
         }}
-        onOpenReview={openDraftReview}
+        onOpenReview={openFileReview}
       />
     )
   }
@@ -1884,8 +1884,8 @@ const ChatPage: React.FC = () => {
             >
               <WorkbenchContentPanel
                 state={contentPanel}
-                activeReview={activeDraftReview}
-                draftReviewLoading={draftReviewLoading}
+                activeReview={activeFileReview}
+                fileReviewLoading={fileReviewLoading}
                 draftCommitValidation={draftCommitValidation}
                 draftCommitSubmitting={draftCommitSubmitting}
                 draftDiscardSubmitting={draftDiscardSubmitting}
@@ -1898,7 +1898,7 @@ const ChatPage: React.FC = () => {
                     tab.fileKey === fileKey ? { ...tab, unseen: false } : tab
                   )
                   setReviewWorkspaceTabs(nextTabs)
-                  void loadDraftReviewDetail({
+                  void loadFileReviewDetail({
                     reviewId: nextTab.reviewId,
                     tabs: nextTabs,
                     activeFileKey: fileKey,

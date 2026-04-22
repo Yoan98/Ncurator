@@ -75,17 +75,15 @@ describe('ai unit mouth readyToDeliver guard', () => {
       })
     }).system
 
-    expect(prompt).toContain('<available_information>')
+    expect(prompt).toContain('<context_information>')
     expect(prompt).toContain('<output_contract>')
-    expect(prompt).toContain('吸收当前任务在完整上下文下已经成立的信息')
-    expect(prompt).toContain('把用户诉求、当前事实、已有结果与可引用产物自然组织成回复')
-    expect(prompt).toContain('面向用户回答 task_goal')
-    expect(prompt).toContain('回答应基于当前整体状态自然组织')
-    expect(prompt).toContain('优先依据 your_notes 组织答案或交付内容')
-    expect(prompt).toContain('与更具体的证据记录存在张力')
+    expect(prompt).toContain('reference_scope')
+    expect(prompt).toContain('当前工作区、默认资料范围、显式选择的优先参考资料与当前缩圈状态')
+    expect(prompt).toContain('回答面向用户，但内容必须忠实于当前整体状态')
+    expect(prompt).toContain('优先吸收 reference_scope、your_notes、history、runtime_artifacts')
     expect(prompt).toContain('只输出最终 markdown 正文')
-    expect(prompt).toContain('如果最终答案补充了不来自当前本地资料的信息')
-    expect(prompt).not.toContain('必须在结尾单独加一行“补充说明')
+    expect(prompt).toContain('如果需要回复不在上下文中的内容时')
+    expect(prompt).toContain('补充说明')
   })
 
   it('keeps mouth user-context blocks data-only', () => {
@@ -96,9 +94,10 @@ describe('ai unit mouth readyToDeliver guard', () => {
       })
     })
 
-    expect(result.system).toContain('task_goal：用户最初要你完成什么')
-    expect(result.system).toContain('当前理解：当前任务的最新长期理解')
+    expect(result.system).toContain('task_goal：用户的诉求')
+    expect(result.system).toContain('your_notes：当前持续工作的任务笔记')
     expect(result.system).not.toContain('final_decision')
+    expect(result.user).toContain('<reference_scope>')
     expect(result.user).not.toContain('这是当前交付模式。')
     expect(result.user).not.toContain('这是用户这次原始诉求与限制。')
     expect(result.user).toContain('<history>')

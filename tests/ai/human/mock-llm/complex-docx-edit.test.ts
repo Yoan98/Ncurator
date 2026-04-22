@@ -10,7 +10,7 @@ import {
   collectDocxApplyOpsContentKinds,
   filterAiRunEventsByType,
   hasDraftFileArtifact,
-  hasDraftReviewArtifact,
+  hasFileReviewArtifact,
   readLatestToolResultDataFromEvents
 } from '../testUtils'
 import { findParagraphBlockIdByText, type DocxOutlineResult } from '../../tool/docx/testUtils'
@@ -139,7 +139,7 @@ describe('ai human mock-llm backend', () => {
             applyResult.changedBlocks.length === 1 &&
             searchResult.matches.length === 1 &&
             readResult.blocks.length === 1 &&
-            hasDraftReviewArtifact(result.output.artifacts) &&
+            hasFileReviewArtifact(result.output.artifacts) &&
             hasDraftFileArtifact(result.output.artifacts) &&
             filterAiRunEventsByType(result.events, 'draft_review_ready').length === 1,
           {
@@ -317,7 +317,7 @@ describe('ai human mock-llm backend', () => {
             tableEditResult.changedBlocks.some((block) => block.action === 'insert_after') &&
             contentKinds.includes('paragraph') &&
             contentKinds.includes('table') &&
-            hasDraftReviewArtifact(result.output.artifacts) &&
+            hasFileReviewArtifact(result.output.artifacts) &&
             hasDraftFileArtifact(result.output.artifacts) &&
             outlineResult.blocks.some(
               (block) =>

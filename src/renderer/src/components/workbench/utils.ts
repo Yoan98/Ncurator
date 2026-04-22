@@ -1,7 +1,7 @@
 import type {
-  DraftReviewChange,
-  DraftReviewDocument,
-  DraftReviewRenderKind,
+  FileReviewChange,
+  FileReview,
+  FileReviewRenderKind,
   DraftTextDiffHunk,
   IpcJsonArray,
   IpcJsonObject,
@@ -176,7 +176,7 @@ export const getStepFiles = (step: AssistantTurnStep): WorkbenchFileRef[] => {
   return dedupeFileRefs(step.files)
 }
 
-export const getReviewRenderKind = (document: DraftReviewDocument): DraftReviewRenderKind => {
+export const getReviewRenderKind = (document: FileReview): FileReviewRenderKind => {
   if (document.review_render_kind) return document.review_render_kind
   if (document.format === 'docx') return 'docx_block'
   if (document.format === 'md' || document.format === 'txt') return 'text_hunk'
@@ -185,20 +185,22 @@ export const getReviewRenderKind = (document: DraftReviewDocument): DraftReviewR
   return 'preview_only'
 }
 
-export const formatLocatorSummary = (change: DraftReviewChange): string => {
-  const section = typeof change.locator.section === 'string' ? change.locator.section : null
-  const heading = typeof change.locator.heading === 'string' ? change.locator.heading : null
-  const blockId = typeof change.locator.blockId === 'string' ? change.locator.blockId : null
-  const action = typeof change.locator.action === 'string' ? change.locator.action : null
+export const formatLocatorSummary = (change: FileReviewChange): string => {
+  const locator = change.locator
+  if (!locator) return '定位信息未结构化'
+  const section = typeof locator.section === 'string' ? locator.section : null
+  const heading = typeof locator.heading === 'string' ? locator.heading : null
+  const blockId = typeof locator.blockId === 'string' ? locator.blockId : null
+  const action = typeof locator.action === 'string' ? locator.action : null
   const paragraphIndex =
-    typeof change.locator.paragraphIndex === 'number'
-      ? `第 ${change.locator.paragraphIndex + 1} 段`
+    typeof locator.paragraphIndex === 'number'
+      ? `第 ${locator.paragraphIndex + 1} 段`
       : null
   const rowIndex =
-    typeof change.locator.rowIndex === 'number' ? `第 ${change.locator.rowIndex + 1} 行` : null
+    typeof locator.rowIndex === 'number' ? `第 ${locator.rowIndex + 1} 行` : null
   const columnIndex =
-    typeof change.locator.columnIndex === 'number'
-      ? `第 ${change.locator.columnIndex + 1} 列`
+    typeof locator.columnIndex === 'number'
+      ? `第 ${locator.columnIndex + 1} 列`
       : null
 
   return (
@@ -209,10 +211,10 @@ export const formatLocatorSummary = (change: DraftReviewChange): string => {
   )
 }
 
-export const buildFallbackDiffHunks = (change: DraftReviewChange): DraftTextDiffHunk[] => {
+export const buildFallbackDiffHunks = (change: FileReviewChange): DraftTextDiffHunk[] => {
   if (change.diff_hunks && change.diff_hunks.length > 0) return change.diff_hunks
-  const beforeLines = change.before_text.split('\n')
-  const afterLines = change.after_text.split('\n')
+  const beforeLines = String(change.before_text || '').split('\n')
+  const afterLines = String(change.after_text || '').split('\n')
   return [
     {
       id: change.id,
@@ -226,7 +228,7 @@ export const buildFallbackDiffHunks = (change: DraftReviewChange): DraftTextDiff
   ]
 }
 
-export const buildUnifiedDiffText = (change: DraftReviewChange): string => {
+export const buildUnifiedDiffText = (change: FileReviewChange): string => {
   return buildFallbackDiffHunks(change)
     .flatMap((hunk) =>
       hunk.lines.map(

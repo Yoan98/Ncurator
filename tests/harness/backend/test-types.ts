@@ -4,18 +4,18 @@ import type {
   AiRunContext
 } from '../../../src/main/services/ai/types'
 import type { HumanTaskRunner } from '../../../src/main/services/ai/types'
-import type { DraftReviewService } from '../../../src/main/services/ai/human/tools/docx/review/DraftReviewService'
+import type { FileReviewService } from '../../../src/main/services/ai/human/tools/docx/review/FileReviewService'
 import type { ChatStore } from '../../../src/main/services/storage/domains/ChatStore'
 import type { DocumentsStore } from '../../../src/main/services/storage/domains/DocumentsStore'
-import type { DraftReviewStore } from '../../../src/main/services/storage/domains/DraftReviewStore'
+import type { FileReviewStore } from '../../../src/main/services/storage/domains/FileReviewStore'
 import type { LlmConfigStore } from '../../../src/main/services/storage/domains/LlmConfigStore'
 import type { StorageService } from '../../../src/main/services/storage/StorageService'
 import type { EmbeddingService } from '../../../src/main/services/vector/EmbeddingService'
 import type {
   ChatMessage,
   ChatSessionMemory,
-  DraftReviewDocument,
-  DraftReviewStatus,
+  FileReview,
+  FileReviewStatus,
   JsonObject,
   JsonValue,
   LLMConfig,
@@ -122,12 +122,12 @@ export type SeedChatHistoryInput = {
   memory?: ChatSessionMemory
 }
 
-export type SeedDraftReviewInput = {
+export type SeedFileReviewInput = {
   reviewId?: string
   sessionId?: string
   runId?: string
   title?: string
-  status?: DraftReviewStatus
+  status?: FileReviewStatus
   createdAt?: number
   updatedAt?: number
   documents: readonly Array<{
@@ -135,7 +135,7 @@ export type SeedDraftReviewInput = {
     confirmBasePath?: string
     sourceName?: string
     sourceDocumentId?: string
-    format?: DraftReviewDocument['format']
+    format?: FileReview['format']
     latestDraftSnapshotId?: string
   }>
 }
@@ -165,10 +165,10 @@ export type BackendTestRuntime = {
   storageService: StorageService
   documentsStore: DocumentsStore
   chatStore: ChatStore
-  draftReviewStore: DraftReviewStore
+  fileReviewStore: FileReviewStore
   llmStore: LlmConfigStore
   embeddingService: EmbeddingService
-  draftReviewService: DraftReviewService
+  fileReviewService: FileReviewService
   recordEvent: (input: Omit<TestLogEvent, 'ts'>) => void
   assertThat: (condition: boolean, input: { name: string; message: string; data?: JsonValue }) => void
   getFixtureWorkspacePath: (sourcePath: string) => string
@@ -179,7 +179,7 @@ export type BackendTestRuntime = {
   ensureEmbeddingReady: () => Promise<void>
   seedKb: (input: readonly SeedKbDocumentInput[]) => Promise<void>
   seedChatHistory: (input: SeedChatHistoryInput) => Promise<void>
-  seedDraftReview: (input: SeedDraftReviewInput) => Promise<{ reviewId: string }>
+  seedFileReview: (input: SeedFileReviewInput) => Promise<{ reviewId: string }>
   seedLlmConfig: (config: LiveLlmConfig) => Promise<void>
 }
 

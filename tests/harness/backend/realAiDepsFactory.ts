@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { createHumanGraphRunner } from '../../../src/main/services/ai/human/graph/humanGraph'
-import { DraftReviewService } from '../../../src/main/services/ai/human/tools/docx/review/DraftReviewService'
+import { FileReviewService } from '../../../src/main/services/ai/human/tools/docx/review/FileReviewService'
 import { createAiRunContext } from '../../../src/main/services/ai/runtime'
 import { runAiRuntimePreflight } from '../../../src/main/services/ai/runtimePreflight'
 import type { AiApprovalDecision, AiApprovalRequest } from '../../../src/main/services/ai/types'
@@ -44,7 +44,7 @@ const buildApprovalResolver = (
 export type RealAiDepsFactory = {
   storageService: StorageService
   embeddingService: EmbeddingService
-  draftReviewService: DraftReviewService
+  fileReviewService: FileReviewService
   ensureEmbeddingReady: () => Promise<void>
   createAiRunContext: (input?: CreateAiRunContextInput) => AiRunContext
   createHumanTaskRunner: (input?: CreateAiRunContextInput) => ReturnType<typeof createHumanGraphRunner>
@@ -66,8 +66,8 @@ export const createRealAiDepsFactory = async (input: {
   const embeddingService = new EmbeddingService()
   const modelService = ModelService.getInstance()
 
-  const draftReviewService = new DraftReviewService(
-    storageService.draftReview,
+  const fileReviewService = new FileReviewService(
+    storageService.fileReview,
     storageService.documents
   )
 
@@ -120,7 +120,7 @@ export const createRealAiDepsFactory = async (input: {
         documentsStore: storageService.documents,
         embeddingService,
         ensureEmbeddingReady: ensureReady,
-        draftReviewService,
+        fileReviewService,
         isCancelled: contextInput.checkCancelledOverride || (() => false),
         sendEvent: (event) => input.eventCollector.add(event),
         recordLlmIo: (record) => input.eventCollector.addLlmIo(record),
@@ -169,7 +169,7 @@ export const createRealAiDepsFactory = async (input: {
   return {
     storageService,
     embeddingService,
-    draftReviewService,
+    fileReviewService,
     ensureEmbeddingReady: ensureReady,
     createAiRunContext: createContext,
     createHumanTaskRunner: (contextInput = {}) => {

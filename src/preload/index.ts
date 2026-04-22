@@ -173,19 +173,19 @@ const api: DesktopApi = {
     emitE2EIpcCall('aiRunApprovalDecide')
     return ipcRenderer.invoke('ai-run-approval-decide', payload)
   },
-  draftReviewList: (payload) => ipcRenderer.invoke('draft-review-list', payload),
-  draftReviewGet: (payload) => ipcRenderer.invoke('draft-review-get', payload),
-  draftReviewValidate: (payload) => {
-    emitE2EIpcCall('draftReviewValidate')
-    return ipcRenderer.invoke('draft-review-validate', payload)
+  fileReviewList: (payload) => ipcRenderer.invoke('file-review-list', payload),
+  fileReviewGet: (payload) => ipcRenderer.invoke('file-review-get', payload),
+  fileReviewValidate: (payload) => {
+    emitE2EIpcCall('fileReviewValidate')
+    return ipcRenderer.invoke('file-review-validate', payload)
   },
-  draftReviewCommit: (payload) => {
-    emitE2EIpcCall('draftReviewCommit')
-    return ipcRenderer.invoke('draft-review-commit', payload)
+  fileReviewCommit: (payload) => {
+    emitE2EIpcCall('fileReviewCommit')
+    return ipcRenderer.invoke('file-review-commit', payload)
   },
-  draftReviewDiscard: (payload) => {
-    emitE2EIpcCall('draftReviewDiscard')
-    return ipcRenderer.invoke('draft-review-discard', payload)
+  fileReviewDiscard: (payload) => {
+    emitE2EIpcCall('fileReviewDiscard')
+    return ipcRenderer.invoke('file-review-discard', payload)
   },
   onAiRunEvent: (cb: (event: AiRunEvent) => void) =>
     ipcRenderer.on('ai-run-event', (_event, data) => {

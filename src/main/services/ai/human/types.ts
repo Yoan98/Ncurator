@@ -30,6 +30,8 @@ import {
   humanTaskInputSchema,
   humanTaskOutputSchema,
   humanTraceStepSchema,
+  runtimeArtifactsSummarySchema,
+  runtimeChangedFileSchema,
   humanWatchHintSchema,
   skillDefinitionBaseSchema,
   toolCallDiagnosticSchema,
@@ -91,6 +93,8 @@ export type HumanTaskInput = z.infer<typeof humanTaskInputSchema>
 export type HumanTaskOutput = z.infer<typeof humanTaskOutputSchema>
 export type HumanExecution = z.infer<typeof humanExecutionSchema>
 export type HumanState = z.infer<typeof humanStateContractSchema>
+export type RuntimeChangedFile = z.infer<typeof runtimeChangedFileSchema>
+export type RuntimeArtifactsSummary = z.infer<typeof runtimeArtifactsSummarySchema>
 export type HumanRoundExecution = z.infer<typeof humanRoundExecutionSchema>
 export type HumanRoundRecord = z.infer<typeof humanRoundRecordSchema>
 export type HumanLoadedHistoryContext = z.infer<typeof humanLoadedHistoryContextSchema>

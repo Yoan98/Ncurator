@@ -9,9 +9,9 @@ import { StorageService } from '../services/storage/StorageService'
 import { ModelService } from '../services/model/ModelService'
 import { AiRunService } from '../services/ai/AiRunService'
 import { updateSessionMemoryAfterRun } from '../services/ai/memory'
-import { DraftReviewService } from '../services/ai/human/tools/docx/review/DraftReviewService'
+import { FileReviewService } from '../services/ai/human/tools/docx/review/FileReviewService'
 import {
-  getReviewArtifactPath,
+  getDraftArtifactPath,
   getWorkingArtifactPath
 } from '../services/ai/human/tools/docx/review/viewProjection'
 import {
@@ -44,25 +44,25 @@ import type {
   AiRunCancelResponse,
   AiRunApprovalDecisionRequest,
   AiRunApprovalDecisionResponse,
-  CommitDraftReviewRequest,
-  CommitDraftReviewResponse,
+  CommitFileReviewRequest,
+  CommitFileReviewResponse,
   CreateWorkspaceSourceRequest,
-  DiscardDraftReviewRequest,
-  DiscardDraftReviewResponse,
+  DiscardFileReviewRequest,
+  DiscardFileReviewResponse,
   DeleteWorkspaceSourceResponse,
   ListReferenceItemsRequest,
-  ListDraftReviewsRequest,
-  ListDraftReviewsResponse,
+  ListFileReviewsRequest,
+  ListFileReviewsResponse,
   ListWorkspaceNodesRequest,
-  GetDraftReviewRequest,
-  GetDraftReviewResponse,
+  GetFileReviewRequest,
+  GetFileReviewResponse,
   OpenPathWithApplicationRequest,
   OpenPathWithApplicationResponse,
   PickDirectoryResponse,
   PickApplicationResponse,
   ReferenceItemListResponse,
-  ValidateDraftCommitRequest,
-  ValidateDraftCommitResponse,
+  ValidateFileReviewCommitRequest,
+  ValidateFileReviewCommitResponse,
   ListWebSourcesRequest,
   RefreshWebSourceRequest,
   DeleteWebSourceRequest,
@@ -265,7 +265,7 @@ export function registerHandlers(services: {
   const aiRuntimeSettingsStore = storageService.aiRuntimeSettings
   const webSourceStore = storageService.webSource
   const workspaceStore = storageService.workspace
-  const draftReviewService = new DraftReviewService(storageService.draftReview, documentsStore)
+  const fileReviewService = new FileReviewService(storageService.fileReview, documentsStore)
   const workspaceService = new WorkspaceSourceService()
   const webSourceService = new WebSourceService()
 
@@ -373,9 +373,9 @@ export function registerHandlers(services: {
     })
   }
 
-  const stageE2EDraftReviewDocument = async (input: {
+  const stageE2EFileReview = async (input: {
     runId: string
-    draftReviewService: DraftReviewService
+    fileReviewService: FileReviewService
     sourceFileName: string
     acceptedReplace: string
     rejectedReplace: string
@@ -397,7 +397,7 @@ export function registerHandlers(services: {
       throw new Error(openResponse.ok ? 'e2e review open worker mismatch' : openResponse.error)
     }
 
-    input.draftReviewService.registerDocxOpen({
+    input.fileReviewService.registerDocxOpen({
       runId: input.runId,
       docId: openResponse.payload.docId,
       sourcePath
@@ -432,7 +432,7 @@ export function registerHandlers(services: {
       )
     }
 
-    input.draftReviewService.registerDocxChanges({
+    input.fileReviewService.registerDocxChanges({
       runId: input.runId,
       previousDocId: openResponse.payload.docId,
       nextDocId: applyAcceptedResponse.payload.newDocId,
@@ -457,7 +457,7 @@ export function registerHandlers(services: {
       )
     }
 
-    input.draftReviewService.registerDocxChanges({
+    input.fileReviewService.registerDocxChanges({
       runId: input.runId,
       previousDocId: applyAcceptedResponse.payload.newDocId,
       nextDocId: applyRejectedResponse.payload.newDocId,
@@ -472,9 +472,9 @@ export function registerHandlers(services: {
     }
   }
 
-  const createE2EDraftReviews = async (input: {
+  const createE2EFileReviews = async (input: {
     runId: string
-    draftReviewService: DraftReviewService
+    fileReviewService: FileReviewService
     conflict: boolean
     multiple: boolean
     primaryDocument?: {
@@ -495,9 +495,9 @@ export function registerHandlers(services: {
       acceptedReplace: input.multiple ? 'E2E accepted paragraph A' : 'E2E accepted paragraph',
       rejectedReplace: input.multiple ? 'E2E rejected paragraph A' : 'E2E rejected paragraph'
     }
-    const firstDocument = await stageE2EDraftReviewDocument({
+    const firstDocument = await stageE2EFileReview({
       runId: input.runId,
-      draftReviewService: input.draftReviewService,
+      fileReviewService: input.fileReviewService,
       sourceFileName: primaryDocument.sourceFileName,
       acceptedReplace: primaryDocument.acceptedReplace,
       rejectedReplace: primaryDocument.rejectedReplace
@@ -510,9 +510,9 @@ export function registerHandlers(services: {
         acceptedReplace: 'E2E accepted paragraph B',
         rejectedReplace: 'E2E rejected paragraph B'
       }
-      const secondDocument = await stageE2EDraftReviewDocument({
+      const secondDocument = await stageE2EFileReview({
         runId: input.runId,
-        draftReviewService: input.draftReviewService,
+        fileReviewService: input.fileReviewService,
         sourceFileName: secondaryDocument.sourceFileName,
         acceptedReplace: secondaryDocument.acceptedReplace,
         rejectedReplace: secondaryDocument.rejectedReplace
@@ -520,7 +520,7 @@ export function registerHandlers(services: {
       stagedSources.push(secondDocument.sourcePath)
     }
 
-    const details = await input.draftReviewService.finalizeRunReview({
+    const details = await input.fileReviewService.finalizeRunReview({
       runId: input.runId,
       workspaceRootPath: firstDocument.workspaceRootPath
     })
@@ -544,7 +544,7 @@ export function registerHandlers(services: {
   const emitE2EEditReviewFlow = async (input: {
     runId: string
     sendEvent: (event: AiRunEvent) => void
-    draftReviewService: DraftReviewService
+    fileReviewService: FileReviewService
     conflict: boolean
     multiple: boolean
     primaryDocument?: {
@@ -576,9 +576,9 @@ export function registerHandlers(services: {
     })
     await pauseForE2EFixture()
 
-    const details = await createE2EDraftReviews({
+    const details = await createE2EFileReviews({
       runId: input.runId,
-      draftReviewService: input.draftReviewService,
+      fileReviewService: input.fileReviewService,
       conflict: input.conflict,
       multiple: input.multiple,
       primaryDocument: input.primaryDocument,
@@ -586,25 +586,22 @@ export function registerHandlers(services: {
     })
 
     details.forEach((detail) => {
-      detail.documents.forEach((document) => {
-        const reviewArtifactPath = getReviewArtifactPath(document)
-        if (!reviewArtifactPath) return
-        input.sendEvent({
-          type: 'file_artifact',
-          runId: input.runId,
-          taskId: input.runId,
-          artifactId: uuidv4(),
-          capability: 'docx',
-          path: reviewArtifactPath,
-          fileName: path.basename(reviewArtifactPath),
-          operation: 'created',
-          artifactRole: 'draft',
-          reviewId: detail.review.id,
-          draftDocumentId: document.id,
-          draftSnapshotId: document.latest_draft_snapshot_id,
-          summary: `review doc ready: ${document.source_name}`,
-          createdAt: Date.now()
-        })
+      const draftArtifactPath = getDraftArtifactPath(detail.review)
+      if (!draftArtifactPath) return
+      input.sendEvent({
+        type: 'file_artifact',
+        runId: input.runId,
+        taskId: input.runId,
+        artifactId: uuidv4(),
+        capability: 'docx',
+        path: draftArtifactPath,
+        fileName: path.basename(draftArtifactPath),
+        operation: 'created',
+        artifactRole: 'draft',
+        reviewId: detail.review.id,
+        draftSnapshotId: detail.review.latest_draft_snapshot_id,
+        summary: `review doc ready: ${detail.review.source_name}`,
+        createdAt: Date.now()
       })
     })
     await pauseForE2EFixture()
@@ -631,7 +628,7 @@ export function registerHandlers(services: {
         runId: input.runId,
         review: {
           reviewId: detail.review.id,
-          documentCount: detail.review.document_count,
+          documentCount: 1,
           changeCount: detail.review.change_count
         },
         createdAt: Date.now()
@@ -640,25 +637,22 @@ export function registerHandlers(services: {
     await pauseForE2EFixture()
 
     details.forEach((detail) => {
-      detail.documents.forEach((document) => {
-        const workingArtifactPath = getWorkingArtifactPath(document)
-        if (!workingArtifactPath) return
-        input.sendEvent({
-          type: 'file_artifact',
-          runId: input.runId,
-          taskId: input.runId,
-          artifactId: uuidv4(),
-          capability: 'docx',
-          path: workingArtifactPath,
-          fileName: path.basename(workingArtifactPath),
-          operation: 'created',
-          artifactRole: 'draft',
-          reviewId: detail.review.id,
-          draftDocumentId: document.id,
-          draftSnapshotId: document.latest_draft_snapshot_id,
-          summary: `draft ready: ${document.source_name}`,
-          createdAt: Date.now()
-        })
+      const workingArtifactPath = getWorkingArtifactPath(detail.review)
+      if (!workingArtifactPath) return
+      input.sendEvent({
+        type: 'file_artifact',
+        runId: input.runId,
+        taskId: input.runId,
+        artifactId: uuidv4(),
+        capability: 'docx',
+        path: workingArtifactPath,
+        fileName: path.basename(workingArtifactPath),
+        operation: 'created',
+        artifactRole: 'draft',
+        reviewId: detail.review.id,
+        draftSnapshotId: detail.review.latest_draft_snapshot_id,
+        summary: `draft ready: ${detail.review.source_name}`,
+        createdAt: Date.now()
       })
     })
     input.sendEvent({
@@ -744,7 +738,7 @@ export function registerHandlers(services: {
       policyProfile?: string
     }
     sendEvent: (event: AiRunEvent) => void
-    draftReviewService: DraftReviewService
+    fileReviewService: FileReviewService
   }): Promise<boolean> => {
     if (!isE2EFixtureModeEnabled()) return false
 
@@ -842,7 +836,7 @@ export function registerHandlers(services: {
       await emitE2EEditReviewFlow({
         runId: input.runId,
         sendEvent: input.sendEvent,
-        draftReviewService: input.draftReviewService,
+        fileReviewService: input.fileReviewService,
         conflict: false,
         multiple: false
       })
@@ -853,7 +847,7 @@ export function registerHandlers(services: {
       await emitE2EEditReviewFlow({
         runId: input.runId,
         sendEvent: input.sendEvent,
-        draftReviewService: input.draftReviewService,
+        fileReviewService: input.fileReviewService,
         conflict: false,
         multiple: false,
         primaryDocument: {
@@ -870,7 +864,7 @@ export function registerHandlers(services: {
       await emitE2EEditReviewFlow({
         runId: input.runId,
         sendEvent: input.sendEvent,
-        draftReviewService: input.draftReviewService,
+        fileReviewService: input.fileReviewService,
         conflict: false,
         multiple: true
       })
@@ -881,7 +875,7 @@ export function registerHandlers(services: {
       await emitE2EEditReviewFlow({
         runId: input.runId,
         sendEvent: input.sendEvent,
-        draftReviewService: input.draftReviewService,
+        fileReviewService: input.fileReviewService,
         conflict: true,
         multiple: false
       })
@@ -2108,7 +2102,7 @@ export function registerHandlers(services: {
       }
 
       sendEvent({ type: 'run_started', runId, sessionId, createdAt: Date.now(), input })
-      draftReviewService.beginRun({
+      fileReviewService.beginRun({
         runId,
         sessionId,
         inputText: input
@@ -2120,7 +2114,7 @@ export function registerHandlers(services: {
             inputText: input,
             workspace,
             sendEvent,
-            draftReviewService
+            fileReviewService
           })
           if (handledByE2EFixture) {
             return
@@ -2148,7 +2142,7 @@ export function registerHandlers(services: {
                   modelService
                 })
               },
-              draftReviewService,
+              fileReviewService,
               isCancelled: () => Boolean(activeAiRuns.get(runId)?.cancelled),
               sendEvent,
               recordLlmIo: services.recordLlmIo,
@@ -2237,13 +2231,13 @@ export function registerHandlers(services: {
           )
 
           if (result.status === 'cancelled') {
-            draftReviewService.discardRun(runId)
+            fileReviewService.discardRun(runId)
             sendEvent({ type: 'run_cancelled', runId })
             return
           }
 
           if (result.status === 'failed') {
-            draftReviewService.discardRun(runId)
+            fileReviewService.discardRun(runId)
             sendEvent({ type: 'run_failed', runId, error: result.error || 'failed' })
             return
           }
@@ -2266,7 +2260,7 @@ export function registerHandlers(services: {
 
           sendEvent({ type: 'run_completed', runId })
         } catch (e: unknown) {
-          draftReviewService.discardRun(runId)
+          fileReviewService.discardRun(runId)
           if (activeAiRuns.get(runId)?.cancelled) {
             sendEvent({ type: 'run_cancelled', runId })
             return
@@ -2326,10 +2320,10 @@ export function registerHandlers(services: {
   )
 
   ipcMain.handle(
-    'draft-review-list',
-    async (_event, payload?: ListDraftReviewsRequest): Promise<ListDraftReviewsResponse> => {
+    'file-review-list',
+    async (_event, payload?: ListFileReviewsRequest): Promise<ListFileReviewsResponse> => {
       try {
-        return await draftReviewService.listReviews(payload)
+        return await fileReviewService.listReviews(payload)
       } catch (e: unknown) {
         console.error('[DRAFT-REVIEW-LIST] Error:', e)
         return { items: [], total: 0 }
@@ -2338,10 +2332,10 @@ export function registerHandlers(services: {
   )
 
   ipcMain.handle(
-    'draft-review-get',
-    async (_event, payload: GetDraftReviewRequest): Promise<GetDraftReviewResponse> => {
+    'file-review-get',
+    async (_event, payload: GetFileReviewRequest): Promise<GetFileReviewResponse> => {
       try {
-        return await draftReviewService.getReview(payload)
+        return await fileReviewService.getReview(payload)
       } catch (e: unknown) {
         console.error('[DRAFT-REVIEW-GET] Error:', e)
         return { error: getErrorMessage(e) }
@@ -2350,10 +2344,10 @@ export function registerHandlers(services: {
   )
 
   ipcMain.handle(
-    'draft-review-validate',
-    async (_event, payload: ValidateDraftCommitRequest): Promise<ValidateDraftCommitResponse> => {
+    'file-review-validate',
+    async (_event, payload: ValidateFileReviewCommitRequest): Promise<ValidateFileReviewCommitResponse> => {
       try {
-        return await draftReviewService.validateCommit(payload)
+        return await fileReviewService.validateCommit(payload)
       } catch (e: unknown) {
         console.error('[DRAFT-REVIEW-VALIDATE] Error:', e)
         return {
@@ -2370,10 +2364,10 @@ export function registerHandlers(services: {
   )
 
   ipcMain.handle(
-    'draft-review-commit',
-    async (_event, payload: CommitDraftReviewRequest): Promise<CommitDraftReviewResponse> => {
+    'file-review-commit',
+    async (_event, payload: CommitFileReviewRequest): Promise<CommitFileReviewResponse> => {
       try {
-        return await draftReviewService.commitReview(payload)
+        return await fileReviewService.commitReview(payload)
       } catch (e: unknown) {
         console.error('[DRAFT-REVIEW-COMMIT] Error:', e)
         return { success: false, error: getErrorMessage(e) }
@@ -2382,10 +2376,10 @@ export function registerHandlers(services: {
   )
 
   ipcMain.handle(
-    'draft-review-discard',
-    async (_event, payload: DiscardDraftReviewRequest): Promise<DiscardDraftReviewResponse> => {
+    'file-review-discard',
+    async (_event, payload: DiscardFileReviewRequest): Promise<DiscardFileReviewResponse> => {
       try {
-        return await draftReviewService.discardReview(payload)
+        return await fileReviewService.discardReview(payload)
       } catch (e: unknown) {
         console.error('[DRAFT-REVIEW-DISCARD] Error:', e)
         return { success: false, error: getErrorMessage(e) }

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Button, Spin } from 'antd'
 import { HiChevronLeft, HiChevronRight } from 'react-icons/hi2'
-import type { DraftReviewDetail, ValidateDraftCommitResponse } from '../../../../shared/types'
+import type { FileReviewDetail, ValidateFileReviewCommitResponse } from '../../../../shared/types'
 import EmbeddedFileViewer from '../fileRenders/EmbeddedFileViewer'
 import { REVIEW_STATUS_META } from './constants'
 import type { ReviewWorkspaceTab } from './types'
@@ -9,7 +9,7 @@ import { workbenchSelectors } from '../../testing/selectors'
 
 const ACTIVE_CONFIRM_STATUSES = new Set(['pending_confirm', 'conflicted', 'failed'])
 
-const getEndedStateMessage = (status: DraftReviewDetail['review']['status']): string => {
+const getEndedStateMessage = (status: FileReviewDetail['review']['status']): string => {
   if (status === 'committed') {
     return '本文件修改已写回源文件。'
   }
@@ -23,9 +23,9 @@ const getEndedStateMessage = (status: DraftReviewDetail['review']['status']): st
 }
 
 type WorkbenchReviewPanelProps = {
-  review: DraftReviewDetail | null
+  review: FileReviewDetail | null
   loading: boolean
-  validation: ValidateDraftCommitResponse | null
+  validation: ValidateFileReviewCommitResponse | null
   committing: boolean
   discarding: boolean
   tabs: ReviewWorkspaceTab[]
@@ -47,13 +47,10 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
 }) => {
   const [selectedChangeIndex, setSelectedChangeIndex] = useState(0)
 
-  const selectedDocument = review?.documents[0] || null
   const documentChanges = useMemo(() => {
-    if (!review || !selectedDocument) return []
-    return review.changes
-      .filter((item) => item.document_id === selectedDocument.id)
-      .sort((left, right) => left.order_index - right.order_index)
-  }, [review, selectedDocument])
+    if (!review) return []
+    return [...review.changes].sort((left, right) => left.order_index - right.order_index)
+  }, [review])
 
   useEffect(() => {
     if (documentChanges.length === 0) {
@@ -66,18 +63,16 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
   const selectedChange = documentChanges[selectedChangeIndex] || null
   const reviewStatusMeta = review ? REVIEW_STATUS_META[review.review.status] : null
   const isActiveConfirmSession = Boolean(
-    review &&
-      selectedDocument?.review_artifact_path &&
-      ACTIVE_CONFIRM_STATUSES.has(review.review.status)
+    review && review.review.draft_artifact_path && ACTIVE_CONFIRM_STATUSES.has(review.review.status)
   )
-  const reviewArtifactPath = selectedDocument?.review_artifact_path
-  const reviewFileName = selectedDocument
-    ? `${selectedDocument.source_name.replace(/\.docx$/i, '')}-审阅稿.docx`
+  const reviewArtifactPath = review?.review.draft_artifact_path
+  const reviewFileName = review
+    ? `${review.review.source_name.replace(/\.docx$/i, '')}-审阅稿.docx`
     : undefined
   const viewerPath =
-    isActiveConfirmSession && reviewArtifactPath ? reviewArtifactPath : selectedDocument?.source_path
+    isActiveConfirmSession && reviewArtifactPath ? reviewArtifactPath : review?.review.source_path
   const viewerName =
-    isActiveConfirmSession && reviewFileName ? reviewFileName : selectedDocument?.source_name
+    isActiveConfirmSession && reviewFileName ? reviewFileName : review?.review.source_name
   const endedStateMessage = review ? getEndedStateMessage(review.review.status) : ''
   const commitDisabled =
     !review ||
@@ -99,7 +94,7 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
     )
   }
 
-  if (!review || !selectedDocument) {
+  if (!review) {
     return (
       <div
         className="ui-inset flex h-full items-center justify-center border-dashed text-sm text-[#999999]"
@@ -118,7 +113,7 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
           data-testid={workbenchSelectors.reviewTabs}
         >
           {tabs.map((tab) => {
-            const active = tab.fileKey === selectedDocument.source_path
+            const active = tab.fileKey === review.review.source_path
             return (
               <button
                 key={tab.fileKey}

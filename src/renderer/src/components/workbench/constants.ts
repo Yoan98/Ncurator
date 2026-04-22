@@ -1,5 +1,5 @@
 import type { AssistantStepStatus, WorkbenchFileOrigin } from './types'
-import type { DraftReviewStatus } from '../../../../shared/types'
+import type { FileReviewStatus } from '../../../../shared/types'
 
 export const WORKBENCH_SIDEBAR_STORAGE_KEY = 'workbench.sidebar.collapsed'
 export const WORKBENCH_CONTENT_PANEL_COLLAPSED_STORAGE_KEY = 'workbench.content-panel.collapsed'
@@ -14,7 +14,7 @@ export const ASSISTANT_STEP_STATUS_META: Record<
   failed: { label: '失败', className: 'border-[#F7D5D9] bg-[#FFF2F4] text-[#B5455D]' }
 }
 
-export const REVIEW_STATUS_META: Record<DraftReviewStatus, { label: string; className: string }> = {
+export const REVIEW_STATUS_META: Record<FileReviewStatus, { label: string; className: string }> = {
   pending_confirm: {
     label: '待确认修改',
     className: 'border-[#F4E5DF] bg-[#FBF5F2] text-[#D97757]'

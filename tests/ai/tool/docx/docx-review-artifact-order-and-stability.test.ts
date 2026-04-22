@@ -29,7 +29,7 @@ describe('ai tool docx backend', () => {
           { type: 'paragraph', text: '结尾段落。' }
         ])
 
-        runtime.draftReviewService.beginRun({
+        runtime.fileReviewService.beginRun({
           runId: runtime.runId,
           sessionId: 'docx-review-order-session',
           inputText: '追加解释和对照表'
@@ -61,16 +61,16 @@ describe('ai tool docx backend', () => {
             ]
           })
 
-          const details = await runtime.draftReviewService.finalizeRunReview({
+          const details = await runtime.fileReviewService.finalizeRunReview({
             runId: runtime.runId,
             workspaceRootPath: runtime.workspaceRoot
           })
-          const document = details[0]?.documents[0]
-          if (!document?.review_artifact_path) {
+          const review = details[0]?.review
+          if (!review?.draft_artifact_path) {
             throw new Error('expected review artifact path')
           }
 
-          const reviewBuffer = await fs.readFile(document.review_artifact_path)
+          const reviewBuffer = await fs.readFile(review.draft_artifact_path)
           const reviewBundle = await loadDocxBundle(reviewBuffer)
           const reviewOutline = buildBlockIndex(reviewBundle.documentDom).outline
             .filter((block) => block.type !== 'table_cell')

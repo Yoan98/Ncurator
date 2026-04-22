@@ -142,7 +142,8 @@ interface AiRunContext {
   beginDocxReviewRun: () => void
 
   // human task 完成后汇总本次 run 的 docx 改动并生成对应视图 artifact。
-  finalizeDocxReviewRun: () => Promise<DraftReviewDetail[]>
+  // 当前返回单文件 FileReviewDetail[]；未来其他格式接入时应复用同一外壳。
+  finalizeDocxReviewRun: () => Promise<FileReviewDetail[]>
 
   // human task 中断或失败后丢弃本次 run 尚未收口的 docx 草稿审阅状态。
   discardDocxReviewRun: () => void

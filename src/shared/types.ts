@@ -375,7 +375,7 @@ export type DraftChangeKind =
   | 'worksheet_range'
   | 'slide_object'
   | 'page_region'
-export type DraftReviewRenderKind =
+export type FileReviewRenderKind =
   | 'docx_block'
   | 'text_hunk'
   | 'sheet_range'
@@ -383,7 +383,7 @@ export type DraftReviewRenderKind =
   | 'preview_only'
 export type DraftChangeDecision = 'pending' | 'accepted' | 'rejected'
 export type DraftChangeResolution = Exclude<DraftChangeDecision, 'pending'>
-export type DraftReviewStatus =
+export type FileReviewStatus =
   | 'pending_confirm'
   | 'committing'
   | 'committed'
@@ -392,8 +392,8 @@ export type DraftReviewStatus =
   | 'superseded'
   | 'failed'
 export type DraftArtifactRole = 'draft' | 'committed'
-export type DraftCommitJobStatus = 'pending' | 'running' | 'completed' | 'failed' | 'conflicted'
-export type DraftCommitValidationIssueCode =
+export type CommitAttemptStatus = 'pending' | 'running' | 'completed' | 'failed' | 'conflicted'
+export type CommitValidationIssueCode =
   | 'source_changed'
   | 'session_not_found'
   | 'session_not_ready'
@@ -409,13 +409,28 @@ export interface DraftSourceVersion {
   content_hash?: string
 }
 
-export interface DraftReviewSummary {
+/**
+ * FileReview is the single-file review envelope shared by supported file editors.
+ * Only docx is implemented today. Future xlsx/pptx support should reuse this
+ * outer shape while keeping format-specific change generation and commit rules
+ * inside each file subsystem.
+ */
+export interface FileReview {
   id: string
   session_id: string
   run_id: string
-  status: DraftReviewStatus
+  status: FileReviewStatus
   title: string
-  document_count: number
+  source_document_id?: string
+  source_path: string
+  source_name: string
+  format: DraftDocumentFormat
+  review_render_kind?: FileReviewRenderKind
+  latest_draft_snapshot_id: string
+  draft_artifact_path?: string
+  working_artifact_path?: string
+  committed_artifact_path?: string
+  source_version: DraftSourceVersion
   change_count: number
   pending_change_count: number
   accepted_change_count: number
@@ -427,40 +442,18 @@ export interface DraftReviewSummary {
   last_error?: string
 }
 
-export interface DraftReviewDocument {
+export interface FileReviewChange {
   id: string
   review_id: string
-  source_document_id?: string
-  source_path: string
-  source_name: string
-  format: DraftDocumentFormat
-  review_render_kind?: DraftReviewRenderKind
-  latest_draft_snapshot_id: string
-  review_artifact_path?: string
-  working_artifact_path?: string
-  committed_artifact_path?: string
-  source_version: DraftSourceVersion
-  total_change_count: number
-  pending_change_count: number
-  accepted_change_count: number
-  rejected_change_count: number
-  created_at: number
-  updated_at: number
-}
-
-export interface DraftReviewChange {
-  id: string
-  review_id: string
-  document_id: string
   order_index: number
   change_kind: DraftChangeKind
   title: string
   summary: string
   decision: DraftChangeDecision
-  before_text: string
-  after_text: string
+  before_text?: string
+  after_text?: string
   anchor_name?: string
-  locator: JsonObject
+  locator?: JsonObject
   diff_hunks?: DraftTextDiffHunk[]
   source_step_ref?: string
   metadata?: JsonObject
@@ -480,86 +473,101 @@ export interface DraftTextDiffHunk {
   lines: DraftTextDiffHunkLine[]
 }
 
-export interface DraftCommitResultItem {
-  draft_document_id: string
+export interface CommitResultItem {
+  review_id: string
   output_path: string
   operation: AiFileArtifactOperation
   checksum?: string
   byte_size?: number
 }
 
-export interface DraftCommitJob {
+/**
+ * CommitAttempt records submit-to-source executions for a FileReview.
+ * It is lifecycle history, not change content.
+ */
+export interface CommitAttempt {
   id: string
   review_id: string
-  status: DraftCommitJobStatus
-  document_count: number
-  results: DraftCommitResultItem[]
+  status: CommitAttemptStatus
+  results: CommitResultItem[]
   started_at: number
   completed_at?: number
   error?: string
 }
 
-export interface DraftReviewDetail {
-  review: DraftReviewSummary
-  documents: DraftReviewDocument[]
-  changes: DraftReviewChange[]
-  commit_jobs: DraftCommitJob[]
+export interface FileReviewDetail {
+  review: FileReview
+  changes: FileReviewChange[]
+  commit_attempts: CommitAttempt[]
 }
 
-export interface ListDraftReviewsRequest {
+export interface ListFileReviewsRequest {
   sessionId?: string
-  status?: DraftReviewStatus
+  status?: FileReviewStatus
 }
 
-export interface ListDraftReviewsResponse {
-  items: DraftReviewSummary[]
+export interface ListFileReviewsResponse {
+  items: FileReview[]
   total: number
 }
 
-export interface GetDraftReviewRequest {
+export interface GetFileReviewRequest {
   reviewId: string
 }
 
-export interface GetDraftReviewResponse {
-  review?: DraftReviewDetail
+export interface GetFileReviewResponse {
+  review?: FileReviewDetail
   error?: string
 }
 
-export interface DraftCommitValidationIssue {
-  code: DraftCommitValidationIssueCode
+export interface CommitValidationIssue {
+  code: CommitValidationIssueCode
   message: string
-  documentId?: string
   sourcePath?: string
 }
 
-export interface ValidateDraftCommitRequest {
+export interface ValidateFileReviewCommitRequest {
   reviewId: string
 }
 
-export interface ValidateDraftCommitResponse {
+export interface ValidateFileReviewCommitResponse {
   ready: boolean
-  issues: DraftCommitValidationIssue[]
+  issues: CommitValidationIssue[]
 }
 
-export interface CommitDraftReviewRequest {
+export interface CommitFileReviewRequest {
   reviewId: string
   overwrite?: boolean
 }
 
-export interface CommitDraftReviewResponse {
+export interface CommitFileReviewResponse {
   success: boolean
-  job?: DraftCommitJob
+  job?: CommitAttempt
   error?: string
 }
 
-export interface DiscardDraftReviewRequest {
+export interface DiscardFileReviewRequest {
   reviewId: string
 }
 
-export interface DiscardDraftReviewResponse {
+export interface DiscardFileReviewResponse {
   success: boolean
-  review?: DraftReviewSummary
+  review?: FileReview
   error?: string
+}
+
+export interface RuntimeChangedFile {
+  file_name: string
+  source_path: string
+  format: 'docx'
+  change_count: number
+  summary: string
+  change_highlights: string[]
+  draft_artifact_path?: string
+}
+
+export interface RuntimeArtifactsSummary {
+  changed_files: RuntimeChangedFile[]
 }
 
 export interface PickApplicationResponse {
@@ -677,17 +685,17 @@ export type AiDraftSnapshotRef = {
   format?: DraftDocumentFormat
   sourcePath?: string
 }
-export type AiDraftReviewRef = {
+export type AiFileReviewRef = {
   reviewId: string
   documentCount: number
   changeCount: number
 }
-export type AiDraftReviewArtifactRef = {
+export type AiFileReviewArtifactRef = {
   kind: 'draft_review'
-  review: AiDraftReviewRef
+  review: AiFileReviewRef
   summary: string
 }
-export type AiArtifactRef = AiFileArtifactRef | AiDraftReviewArtifactRef
+export type AiArtifactRef = AiFileArtifactRef | AiFileReviewArtifactRef
 
 export type AiRunStartRequest = {
   sessionId: string
@@ -860,7 +868,7 @@ type AiRunEventPayload =
   | {
       type: 'draft_review_ready'
       runId: string
-      review: AiDraftReviewRef
+      review: AiFileReviewRef
       createdAt: number
     }
   | {

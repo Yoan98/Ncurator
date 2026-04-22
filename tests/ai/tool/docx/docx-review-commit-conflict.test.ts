@@ -23,7 +23,7 @@ describe('ai tool docx backend', () => {
           { type: 'paragraph', text: '待修改的原文。' }
         ])
 
-        runtime.draftReviewService.beginRun({
+        runtime.fileReviewService.beginRun({
           runId: runtime.runId,
           sessionId: 'commit-conflict-session',
           inputText: '准备后制造冲突'
@@ -36,7 +36,7 @@ describe('ai tool docx backend', () => {
             query: '待修改的原文。',
             replace: '工作稿中的新版本。'
           })
-          const details = await runtime.draftReviewService.finalizeRunReview({
+          const details = await runtime.fileReviewService.finalizeRunReview({
             runId: runtime.runId,
             workspaceRootPath: runtime.workspaceRoot
           })
@@ -50,14 +50,14 @@ describe('ai tool docx backend', () => {
           ])
           const externalSourceBuffer = await fs.readFile(`${runtime.workspaceRoot}/commit-conflict.docx`)
 
-          const validation = await runtime.draftReviewService.validateCommit({
+          const validation = await runtime.fileReviewService.validateCommit({
             reviewId: detail.review.id
           })
-          const commit = await runtime.draftReviewService.commitReview({
+          const commit = await runtime.fileReviewService.commitReview({
             reviewId: detail.review.id,
             overwrite: true
           })
-          const conflictedDetail = await runtime.draftReviewStore.getReviewDetail(detail.review.id)
+          const conflictedDetail = await runtime.fileReviewStore.getReviewDetail(detail.review.id)
           const sourceBuffer = await fs.readFile(`${runtime.workspaceRoot}/commit-conflict.docx`)
 
           return {

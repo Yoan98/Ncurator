@@ -11,7 +11,7 @@ import {
 } from '../../../harness/backend/aiLiveTestData'
 import {
   countDraftFileArtifacts,
-  countDraftReviewArtifacts,
+  countFileReviewArtifacts,
   collectToolDiagnosticMessages,
   filterAiRunEventsByType,
   runWithStructuredOutputRetry
@@ -133,7 +133,7 @@ describe('ai human live backend', () => {
               successfulWriteResults.length === 0 &&
               failedWriteResults.length >= 1 &&
               diagnosticMessages.some((message) => message.includes('当前命中复杂定位排版区域')) &&
-              countDraftReviewArtifacts(result.output?.artifacts) === 0 &&
+              countFileReviewArtifacts(result.output?.artifacts) === 0 &&
               countDraftFileArtifacts(result.output?.artifacts) === 0 &&
               /(手动|版式|排版|没法自动|无法自动|复杂定位)/.test(deliveryText) &&
               unchangedFixtures.every(Boolean) &&

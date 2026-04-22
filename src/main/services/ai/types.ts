@@ -9,7 +9,7 @@ import type {
   DocxOp,
   DocxReplaySession
 } from './human/tools/docx/types'
-import type { DraftReviewService } from './human/tools/docx/review/DraftReviewService'
+import type { FileReviewService } from './human/tools/docx/review/FileReviewService'
 import type { ResolvedDocxOpenTarget } from './human/tools/docx/review/types'
 import type { z } from 'zod/v4'
 import type {
@@ -18,7 +18,7 @@ import type {
   AiRunEvent,
   AiRunEventStage,
   AiRunStatus,
-  DraftReviewDetail,
+  FileReviewDetail,
   SelectedReference
 } from '../../../shared/types'
 import type { HumanTaskInput, HumanTaskOutput } from './human/types'
@@ -89,7 +89,7 @@ export type AiRunDeps = {
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService
   ensureEmbeddingReady: () => Promise<void>
-  draftReviewService: DraftReviewService
+  fileReviewService: FileReviewService
   isCancelled: () => boolean
   sendEvent: (event: AiRunEvent) => void
   recordLlmIo?: (record: AiLlmIoRecord) => void
@@ -152,7 +152,7 @@ export type AiRunContext = {
   }) => void
   resolveDocxOpenTarget: (sourcePath: string) => Promise<ResolvedDocxOpenTarget>
   beginDocxReviewRun: () => void
-  finalizeDocxReviewRun: () => Promise<DraftReviewDetail[]>
+  finalizeDocxReviewRun: () => Promise<FileReviewDetail[]>
   discardDocxReviewRun: () => void
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService

@@ -87,7 +87,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     requestApproval: deps.requestApproval,
     loadHistory,
     trackDocxOpen: ({ docId, sourcePath, replaySession }) => {
-      deps.draftReviewService.registerDocxOpen({
+      deps.fileReviewService.registerDocxOpen({
         runId: payload.runId,
         docId,
         sourcePath,
@@ -102,7 +102,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
       createdBlocks,
       replaySession
     }) => {
-      deps.draftReviewService.registerDocxChanges({
+      deps.fileReviewService.registerDocxChanges({
         runId: payload.runId,
         previousDocId,
         nextDocId,
@@ -113,9 +113,9 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
       })
     },
     resolveDocxOpenTarget: async (sourcePath) =>
-      await deps.draftReviewService.resolveDocxOpenTarget(sourcePath),
+      await deps.fileReviewService.resolveDocxOpenTarget(sourcePath),
     beginDocxReviewRun: () => {
-      deps.draftReviewService.beginRun({
+      deps.fileReviewService.beginRun({
         runId: payload.runId,
         sessionId: payload.sessionId,
         inputText: String(payload.input || '')
@@ -123,13 +123,13 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     },
     finalizeDocxReviewRun: async () => {
       if (!normalizedWorkspace?.rootPath) return []
-      return await deps.draftReviewService.finalizeRunReview({
+      return await deps.fileReviewService.finalizeRunReview({
         runId: payload.runId,
         workspaceRootPath: normalizedWorkspace.rootPath
       })
     },
     discardDocxReviewRun: () => {
-      deps.draftReviewService.discardRun(payload.runId)
+      deps.fileReviewService.discardRun(payload.runId)
     },
     documentsStore: deps.documentsStore,
     embeddingService: deps.embeddingService

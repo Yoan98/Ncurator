@@ -1,16 +1,20 @@
 import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
 import type {
-  DraftCommitJob,
-  DraftReviewChange,
-  DraftReviewDetail,
-  DraftReviewStatus,
+  CommitAttempt,
   DraftSourceVersion,
+  FileReview,
+  FileReviewChange,
+  FileReviewStatus,
   JsonObject
 } from '../../../../../../../shared/types'
 import { clipText } from '../../../../utils/text'
 import type { DocxChangedBlock, DocxOp } from '../types'
-import { getCommittedViewPath, getReviewArtifactPath, getWorkingArtifactPath } from './viewProjection'
+import {
+  getCommittedArtifactPath,
+  getDraftArtifactPath,
+  getWorkingArtifactPath
+} from './viewProjection'
 
 export const sanitizeFileName = (value: string): string => {
   const normalized = String(value || '').trim()
@@ -37,7 +41,7 @@ export const describeDocxOp = (op: DocxOp): string => {
   }
 }
 
-export const getDocxChangeKind = (op: DocxOp): DraftReviewChange['change_kind'] =>
+export const getDocxChangeKind = (op: DocxOp): FileReviewChange['change_kind'] =>
   op.type === 'update_table_cell' ? 'table_cell' : 'block'
 
 export const buildDocxChangeTitle = (op: DocxOp, change: DocxChangedBlock): string => {
@@ -57,8 +61,8 @@ export const buildDocxChangeLocator = (change: DocxChangedBlock): JsonObject => 
 
 export const toReviewStatus = (
   hasPending: boolean,
-  previous?: DraftReviewStatus
-): DraftReviewStatus => {
+  previous?: FileReviewStatus
+): FileReviewStatus => {
   if (previous === 'committing' || previous === 'committed') return previous
   if (
     previous === 'conflicted' ||
@@ -111,24 +115,22 @@ export const parseDocxOpFromMetadata = (metadata?: JsonObject): DocxOp | null =>
 export const getMetadataGroupId = (metadata?: JsonObject): string =>
   typeof metadata?.group_id === 'string' ? metadata.group_id : ''
 
-export const collectArtifactPaths = (detail: DraftReviewDetail): string[] => {
+export const collectArtifactPaths = (detail: { review: FileReview }): string[] => {
   const unique = new Set<string>()
-  detail.documents.forEach((document) => {
-    const reviewArtifactPath = getReviewArtifactPath(document)
-    const workingArtifactPath = getWorkingArtifactPath(document)
-    const committedArtifactPath = getCommittedViewPath(document)
-    if (reviewArtifactPath) unique.add(reviewArtifactPath)
-    if (workingArtifactPath) unique.add(workingArtifactPath)
-    if (committedArtifactPath) unique.add(committedArtifactPath)
-  })
+  const draftArtifactPath = getDraftArtifactPath(detail.review)
+  const workingArtifactPath = getWorkingArtifactPath(detail.review)
+  const committedArtifactPath = getCommittedArtifactPath(detail.review)
+  if (draftArtifactPath) unique.add(draftArtifactPath)
+  if (workingArtifactPath) unique.add(workingArtifactPath)
+  if (committedArtifactPath) unique.add(committedArtifactPath)
   return [...unique]
 }
 
 export const createArchivedCommittedDetail = (input: {
-  detail: DraftReviewDetail
-  completedJob: DraftCommitJob
+  detail: { review: FileReview; changes: FileReviewChange[]; commit_attempts: CommitAttempt[] }
+  completedAttempt: CommitAttempt
   committedAt: number
-}): DraftReviewDetail => {
+}): { review: FileReview; changes: FileReviewChange[]; commit_attempts: CommitAttempt[] } => {
   const updatedAt = input.committedAt
   return {
     review: {
@@ -136,22 +138,18 @@ export const createArchivedCommittedDetail = (input: {
       status: 'committed',
       committed_at: input.committedAt,
       updated_at: updatedAt,
-      last_error: undefined
-    },
-    documents: input.detail.documents.map((document) => ({
-      ...document,
-      review_artifact_path: undefined,
+      draft_artifact_path: undefined,
       working_artifact_path: undefined,
       committed_artifact_path: undefined,
-      updated_at: updatedAt
-    })),
+      last_error: undefined
+    },
     changes: input.detail.changes.map((change) => ({
       ...change,
       updated_at: updatedAt
     })),
-    commit_jobs: [
-      ...input.detail.commit_jobs.filter((job) => job.id !== input.completedJob.id),
-      input.completedJob
+    commit_attempts: [
+      ...input.detail.commit_attempts.filter((attempt) => attempt.id !== input.completedAttempt.id),
+      input.completedAttempt
     ]
   }
 }

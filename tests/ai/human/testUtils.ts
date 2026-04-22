@@ -115,10 +115,10 @@ export const collectStartedToolStringArgs = (
 export const hasKbToolCall = (events: readonly AiRunEvent[]): boolean =>
   filterAiRunEventsByType(events, 'tool_call_result').some((event) => event.toolName.startsWith('kb_'))
 
-export const hasDraftReviewArtifact = (artifacts: readonly AiArtifactRef[] | undefined): boolean =>
+export const hasFileReviewArtifact = (artifacts: readonly AiArtifactRef[] | undefined): boolean =>
   Array.isArray(artifacts) && artifacts.some((artifact) => artifact.kind === 'draft_review')
 
-export const countDraftReviewArtifacts = (artifacts: readonly AiArtifactRef[] | undefined): number =>
+export const countFileReviewArtifacts = (artifacts: readonly AiArtifactRef[] | undefined): number =>
   Array.isArray(artifacts) ? artifacts.filter((artifact) => artifact.kind === 'draft_review').length : 0
 
 export const hasDraftFileArtifact = (artifacts: readonly AiArtifactRef[] | undefined): boolean =>

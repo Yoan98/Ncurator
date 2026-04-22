@@ -21,7 +21,7 @@
   - `WebSourceStore`：`web_source`（网页资料来源 identity、抓取状态与来源级元数据）
   - `WorkspaceStore`：`workspace_source` / `workspace_node`（工作空间、目录树快照、准备状态与节点绑定）
   - `ChatStore`：`chat_session` / `chat_message`（会话与消息 CRUD）
-  - `DraftReviewStore`：`draft_review` / `draft_review_document` / `draft_review_change` / `draft_commit_job`（草稿审阅、变更确认与提交结果）
+  - `FileReviewStore`：`file_review` / `file_review_change` / `commit_attempt`（单文件审阅、变更确认与提交结果）
   - `LlmConfigStore`：`llm_config`（配置 CRUD 与激活态切换）
 - **组合根（Facade）**: `src/main/services/storage/StorageService.ts`
   - 统一持有 `core` 与各 domain store
@@ -185,9 +185,9 @@
 | sources    | Utf8（Nullable） | 引用来源（SearchResult[] 的 JSON 字符串） |
 | error      | Boolean（Nullable） | 是否出错                               |
 
-### 表: draft_review（草稿审阅汇总表）
+### 表: file_review（单文件审阅表）
 
-存储一次 AI 运行产生的待审阅结果集合。
+存储一次 AI 运行中某个单文件的待审阅结果。当前只正式用于 `docx`，未来 `xlsx / pptx` 可沿用同一外壳。
 
 | 字段名                | 类型             | 描述 |
 | :-------------------- | :--------------- | :--- |
@@ -196,7 +196,16 @@
 | run_id                | Utf8             | 所属运行 |
 | status                | Utf8             | 审阅状态 |
 | title                 | Utf8             | 审阅标题 |
-| document_count        | Int32            | 文档数 |
+| source_document_id    | Utf8（Nullable） | 源 document ID |
+| source_path           | Utf8             | 源文件路径 |
+| source_name           | Utf8             | 源文件名 |
+| format                | Utf8             | 文件格式 |
+| review_render_kind    | Utf8（Nullable） | 预览/审阅渲染类型 |
+| latest_draft_snapshot_id | Utf8          | 最新草稿快照 |
+| draft_artifact_path   | Utf8（Nullable） | 待确认稿路径 |
+| working_artifact_path | Utf8（Nullable） | working artifact 路径 |
+| committed_artifact_path | Utf8（Nullable） | committed artifact 路径 |
+| source_version_json   | Utf8             | 源版本信息 JSON |
 | change_count          | Int32            | 变更总数 |
 | pending_change_count  | Int32            | 待决策变更数 |
 | accepted_change_count | Int32            | 已接受变更数 |
@@ -207,31 +216,7 @@
 | committed_at          | Int64（Nullable）| 最终提交时间 |
 | last_error            | Utf8（Nullable） | 最近错误 |
 
-### 表: draft_review_document（草稿审阅文档表）
-
-存储审阅中的单个草稿文档及其源文件版本信息。
-
-| 字段名                  | 类型             | 描述 |
-| :---------------------- | :--------------- | :--- |
-| id                      | Utf8             | 草稿文档 ID |
-| review_id               | Utf8             | 所属审阅 ID |
-| source_document_id      | Utf8（Nullable） | 源 document ID |
-| source_path             | Utf8             | 源文件路径 |
-| source_name             | Utf8             | 源文件名 |
-| format                  | Utf8             | 文档格式 |
-| latest_draft_snapshot_id| Utf8             | 最新草稿快照 |
-| review_artifact_path    | Utf8（Nullable） | 审阅稿产物路径 |
-| working_artifact_path   | Utf8（Nullable） | working draft 产物路径 |
-| committed_artifact_path | Utf8（Nullable） | committed view 产物路径 |
-| source_version_json     | Utf8             | 源版本信息 JSON |
-| total_change_count      | Int32            | 变更总数 |
-| pending_change_count    | Int32            | 待决策变更数 |
-| accepted_change_count   | Int32            | 已接受变更数 |
-| rejected_change_count   | Int32            | 已拒绝变更数 |
-| created_at              | Int64            | 创建时间 |
-| updated_at              | Int64            | 更新时间 |
-
-### 表: draft_review_change（草稿审阅变更表）
+### 表: file_review_change（单文件审阅变更表）
 
 存储最小审阅单元及其接受/拒绝状态。
 
@@ -239,7 +224,6 @@
 | :------------------ | :--------------- | :--- |
 | id                  | Utf8             | 变更 ID |
 | review_id           | Utf8             | 所属审阅 ID |
-| document_id         | Utf8             | 所属草稿文档 ID |
 | order_index         | Int32            | 排序索引 |
 | change_kind         | Utf8             | 变更类型 |
 | title               | Utf8             | 变更标题 |
@@ -247,13 +231,14 @@
 | decision            | Utf8             | `pending / accepted / rejected` |
 | before_text         | Utf8             | 变更前文本 |
 | after_text          | Utf8             | 变更后文本 |
-| locator_json        | Utf8             | 定位信息 JSON |
-| review_artifact_path | Utf8（Nullable）| 局部审阅产物 |
+| locator_json        | Utf8（Nullable） | 定位信息 JSON |
+| diff_hunks_json     | Utf8（Nullable） | 统一 diff 片段 |
+| source_step_ref     | Utf8（Nullable） | 来源步骤引用 |
 | metadata_json       | Utf8（Nullable） | 附加元数据 |
 | created_at          | Int64            | 创建时间 |
 | updated_at          | Int64            | 更新时间 |
 
-### 表: draft_commit_job（草稿提交任务表）
+### 表: commit_attempt（提交尝试表）
 
 存储审阅通过后的最终提交执行结果。
 
@@ -262,7 +247,6 @@
 | id            | Utf8             | 提交任务 ID |
 | review_id     | Utf8             | 所属审阅 ID |
 | status        | Utf8             | 提交状态 |
-| document_count| Int32            | 文档数量 |
 | results_json  | Utf8             | 提交结果 JSON |
 | started_at    | Int64            | 开始时间 |
 | completed_at  | Int64（Nullable）| 完成时间 |

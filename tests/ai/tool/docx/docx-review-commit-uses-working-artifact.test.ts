@@ -44,7 +44,7 @@ describe('ai tool docx backend', () => {
           }
         ])
 
-        const seeded = await runtime.seedDraftReview({
+        const seeded = await runtime.seedFileReview({
           sessionId: 'commit-working-session',
           runId: runtime.runId,
           title: 'Commit uses committed artifact',
@@ -58,9 +58,9 @@ describe('ai tool docx backend', () => {
           ]
         })
 
-        const detail = await runtime.draftReviewStore.getReviewDetail(seeded.reviewId)
-        const document = detail?.documents[0]
-        if (!document?.working_artifact_path || !document.committed_artifact_path) {
+        const detail = await runtime.fileReviewStore.getReviewDetail(seeded.reviewId)
+        const review = detail?.review
+        if (!review?.working_artifact_path || !review.committed_artifact_path) {
           throw new Error('expected seeded working/committed artifact paths')
         }
 
@@ -76,11 +76,11 @@ describe('ai tool docx backend', () => {
         ])
 
         const workingSourceBuffer = await fs.readFile(`${runtime.workspaceRoot}/commit-working.docx`)
-        await fs.writeFile(document.working_artifact_path, workingSourceBuffer)
+        await fs.writeFile(review.working_artifact_path, workingSourceBuffer)
         const committedSourceBuffer = await fs.readFile(`${runtime.workspaceRoot}/commit-committed.docx`)
-        await fs.writeFile(document.committed_artifact_path, committedSourceBuffer)
+        await fs.writeFile(review.committed_artifact_path, committedSourceBuffer)
 
-        const commit = await runtime.draftReviewService.commitReview({
+        const commit = await runtime.fileReviewService.commitReview({
           reviewId: seeded.reviewId,
           overwrite: true
         })

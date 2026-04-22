@@ -55,7 +55,7 @@ describe('ai human mock-llm backend', () => {
               ensureReadyCalls += 1
               await runtime.ensureEmbeddingReady()
             },
-            draftReviewService: runtime.draftReviewService,
+            fileReviewService: runtime.fileReviewService,
             isCancelled: () => false,
             sendEvent: (event) => runtime.eventCollector.add(event),
             recordLlmIo: (record) => runtime.eventCollector.addLlmIo(record),
@@ -170,7 +170,7 @@ describe('ai human mock-llm backend', () => {
             ensureEmbeddingReady: async () => {
               throw new Error('embedding preflight failed for test')
             },
-            draftReviewService: runtime.draftReviewService,
+            fileReviewService: runtime.fileReviewService,
             isCancelled: () => false,
             sendEvent: (event) => runtime.eventCollector.add(event),
             recordLlmIo: (record) => runtime.eventCollector.addLlmIo(record),
