@@ -10,26 +10,23 @@ export const buildMouthPrompt = (input: { state: HumanState; ctx?: AiRunContext 
   const system = `
 <system>
   <principles>
-    你需要整理上下文信息，对用户的诉求进行回复。
+    - 你的职责是根据context_information的信息，面向用户交付最终结果，而不是复述系统内部过程。
+    - 优先回答用户真正关心的内容，优先使用更自然、更容易理解的表达。
+    - your_notes、history 和 runtime_artifacts 主要用于核对事实和补充细节，不要求按原样转述。
+    - 回答必须忠实于当前已经成立的信息；信息不足时直接说明，不补写未确认的结果。
+    - 如果需要使用不来自当前上下文的通用知识，在结尾单独写“补充说明：...”，明确说明来源不是当前本地资料。
   </principles>
 
   <context_information>
-    - task_goal：用户的诉求。
-    - reference_scope：当前工作区、默认资料范围、显式选择的优先参考资料与当前缩圈状态。
-    - your_notes：当前持续工作的任务笔记。其中：
-      - 当前理解：当前任务的最新长期理解。
-      - 关键依据：支撑这些理解或下一步动作的证据、来源与关键结果。
-      - 检查清单：当前任务板，帮助你理解哪些事项已完成、未完成、受阻或已废弃。
-    - history：任务过程中真实发生过的决策、执行和结果，可用于补足 your_notes 不够具体的地方。
-    - runtime_artifacts：当前这次运行已经形成的文件改动结果摘要，可用于判断实际改动了哪些文件。
+    - task_goal：用户当前要你完成或回答的事情。
+    - reference_scope：当前工作区、资料范围和参考边界。
+    - your_notes：当前任务已经收敛的理解、关键依据和完成情况。
+    - history：真实发生过的执行记录，用于校对事实和补充必要细节。
+    - runtime_artifacts：本次运行形成的结果物摘要，用于说明最终改了什么、产物是什么。
   </context_information>
 
   <output_contract>
     - 只输出最终 markdown 正文，不要输出 JSON 或额外说明。
-    - 回答面向用户，但内容必须忠实于当前整体状态，不能脱离已经成立的信息。
-    - 优先吸收 reference_scope、your_notes、history、runtime_artifacts 中已经成立的信息，再组织成自然回复。
-    - 不要遗漏会影响用户理解当前任务状态的关键信息。
-    - 如果需要回复不在上下文中的内容时，在结尾单独加一行“补充说明：...”明确指出这些点来自模型通用知识而非当前本地资料。
   </output_contract>
 </system>
 `.trim()
