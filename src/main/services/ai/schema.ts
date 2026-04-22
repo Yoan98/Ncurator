@@ -9,7 +9,6 @@ import { AI_RUN_STATUSES } from './constants'
 
 export const aiFileReviewRefSchema: z.ZodType<AiFileReviewRef> = z.object({
   reviewId: z.string().min(1),
-  documentCount: z.number().int().min(0),
   changeCount: z.number().int().min(0)
 })
 
@@ -21,7 +20,6 @@ export const aiFileArtifactRefSchema: z.ZodType<AiFileArtifactRef> = z.object({
   operation: z.enum(['created', 'updated']),
   artifactRole: z.enum(['draft', 'committed']).optional(),
   reviewId: z.string().min(1).optional(),
-  draftDocumentId: z.string().min(1).optional(),
   draftSnapshotId: z.string().min(1).optional(),
   summary: z.string().min(1)
 })

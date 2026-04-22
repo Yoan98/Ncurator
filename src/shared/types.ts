@@ -674,20 +674,17 @@ export type AiFileArtifactRef = {
   operation: AiFileArtifactOperation
   artifactRole?: AiFileArtifactRole
   reviewId?: string
-  draftDocumentId?: string
   draftSnapshotId?: string
   summary: string
 }
 export type AiDraftSnapshotRef = {
   reviewId?: string
-  draftDocumentId?: string
   draftSnapshotId: string
   format?: DraftDocumentFormat
   sourcePath?: string
 }
 export type AiFileReviewRef = {
   reviewId: string
-  documentCount: number
   changeCount: number
 }
 export type AiFileReviewArtifactRef = {
@@ -859,7 +856,6 @@ type AiRunEventPayload =
       operation: AiFileArtifactOperation
       artifactRole?: AiFileArtifactRole
       reviewId?: string
-      draftDocumentId?: string
       draftSnapshotId?: string
       summary: string
       stepId?: string

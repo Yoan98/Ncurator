@@ -193,7 +193,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                                   {review.title}
                                 </div>
                                 <div className="mt-1 text-xs text-[#666666]">
-                                  {review.documentCount} 个文档 · {review.changeCount} 处修改
+                                  {review.changeCount} 处修改
                                 </div>
                               </div>
                               {statusMeta ? (

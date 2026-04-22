@@ -107,7 +107,6 @@ export const buildRunArtifactsFromFileReviewDetail = (detail: FileReviewDetail):
     kind: 'draft_review',
     review: {
       reviewId: detail.review.id,
-      documentCount: 1,
       changeCount: detail.review.change_count
     },
     summary: `review document ready (1 doc, ${detail.review.change_count} changes)`
@@ -148,7 +147,6 @@ export const appendFileReviewArtifactsAndEmitEvents = (input: {
       runId: input.runId,
       review: {
         reviewId: detail.review.id,
-        documentCount: 1,
         changeCount: detail.review.change_count
       },
       createdAt: Date.now()

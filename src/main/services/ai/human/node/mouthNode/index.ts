@@ -20,6 +20,41 @@ export const createMouthNode = (input: {
 
     const fileReviewDetails = await input.ctx.finalizeDocxReviewRun()
     const runtimeArtifacts = buildRuntimeArtifactsSummaryFromFileReviewDetails(fileReviewDetails)
+    const promptState: HumanState = {
+      ...state,
+      execution: {
+        ...state.execution,
+        runtimeArtifacts
+      }
+    }
+    input.cache.currentState = promptState
+
+    const prompt = buildMouthPrompt({ state: promptState, ctx: input.ctx })
+    const rawDeliveryMarkdown = await input.ctx.chatText({
+      caller: 'human.mouth',
+      taskId: promptState.task.taskId,
+      system: prompt.system,
+      user: prompt.user,
+      schemaName: 'human_mouth_markdown',
+      temperature: 0.2,
+      onTextDelta: input.emitAnswerEvents
+        ? (text) => {
+            input.ctx.sendEvent({
+              type: 'answer_token',
+              runId: input.ctx.runId,
+              taskId: promptState.task.taskId,
+              token: text,
+              stage: 'human_mouth'
+            })
+          }
+        : undefined
+    })
+
+    if (fileReviewDetails.length > 0) {
+      input.ctx.checkCancelled()
+      await input.ctx.persistDocxReviewRun(fileReviewDetails)
+    }
+
     const artifacts =
       fileReviewDetails.length > 0
         ? appendFileReviewArtifactsAndEmitEvents({
@@ -31,39 +66,17 @@ export const createMouthNode = (input: {
           })
         : mergeArtifactRefs(state.execution.artifacts)
     const readyState: HumanState = {
-      ...state,
+      ...promptState,
       execution: {
-        ...state.execution,
-        artifacts,
-        runtimeArtifacts
+        ...promptState.execution,
+        artifacts
       }
     }
     input.cache.currentState = readyState
 
-    const prompt = buildMouthPrompt({ state: readyState, ctx: input.ctx })
-    const rawDeliveryMarkdown = await input.ctx.chatText({
-      caller: 'human.mouth',
-      taskId: readyState.task.taskId,
-      system: prompt.system,
-      user: prompt.user,
-      schemaName: 'human_mouth_markdown',
-      temperature: 0.2,
-      onTextDelta: input.emitAnswerEvents
-        ? (text) => {
-            input.ctx.sendEvent({
-              type: 'answer_token',
-              runId: input.ctx.runId,
-              taskId: readyState.task.taskId,
-              token: text,
-              stage: 'human_mouth'
-            })
-          }
-        : undefined
-    })
-
     const deliveryMarkdown =
       String(rawDeliveryMarkdown || '').trim() ||
-      ['# 处理结果', '', readyState.execution.currentDecision?.decision.summary || '任务结束'].join('\n')
+      ['# 处理结果', '', promptState.execution.currentDecision?.decision.summary || '任务结束'].join('\n')
     const summary = deriveDeliverySummary({
       deliveryMarkdown,
       state: readyState

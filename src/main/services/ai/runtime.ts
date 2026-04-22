@@ -123,10 +123,13 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     },
     finalizeDocxReviewRun: async () => {
       if (!normalizedWorkspace?.rootPath) return []
-      return await deps.fileReviewService.finalizeRunReview({
+      return await deps.fileReviewService.materializeRunReview({
         runId: payload.runId,
         workspaceRootPath: normalizedWorkspace.rootPath
       })
+    },
+    persistDocxReviewRun: async (details) => {
+      await deps.fileReviewService.persistMaterializedReviews(details)
     },
     discardDocxReviewRun: () => {
       deps.fileReviewService.discardRun(payload.runId)

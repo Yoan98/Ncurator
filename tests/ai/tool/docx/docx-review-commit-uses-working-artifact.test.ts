@@ -49,13 +49,11 @@ describe('ai tool docx backend', () => {
           runId: runtime.runId,
           title: 'Commit uses committed artifact',
           status: 'pending_confirm',
-          documents: [
-            {
-              sourcePath: `${runtime.workspaceRoot}/commit-source.docx`,
-              confirmBasePath: `${runtime.workspaceRoot}/commit-review.docx`,
-              sourceName: 'commit-source.docx'
-            }
-          ]
+          file: {
+            sourcePath: `${runtime.workspaceRoot}/commit-source.docx`,
+            confirmBasePath: `${runtime.workspaceRoot}/commit-review.docx`,
+            sourceName: 'commit-source.docx'
+          }
         })
 
         const detail = await runtime.fileReviewStore.getReviewDetail(seeded.reviewId)

@@ -14,18 +14,15 @@ export const seedFileReview = async (input: {
   const reviewId = input.payload.reviewId || randomUUID()
   const createdAt = input.payload.createdAt || Date.now()
   const updatedAt = input.payload.updatedAt || createdAt
-  const document = input.payload.documents[0]
-  if (!document) {
-    throw new Error('seedFileReview requires one document payload')
-  }
+  const file = input.payload.file
 
-  const sourceVersion = await buildSourceVersion(document.sourcePath)
-  const confirmSourcePath = document.confirmBasePath || document.sourcePath
+  const sourceVersion = await buildSourceVersion(file.sourcePath)
+  const confirmSourcePath = file.confirmBasePath || file.sourcePath
   const { draftArtifactPath, workingArtifactPath, committedArtifactPath } =
     buildDocxReviewArtifactPaths({
       workspaceRootPath: input.workspaceRoot,
       reviewId,
-      sourceName: document.sourceName || path.basename(document.sourcePath)
+      sourceName: file.sourceName || path.basename(file.sourcePath)
     })
   await fs.mkdir(path.dirname(workingArtifactPath), { recursive: true })
   await fs.copyFile(confirmSourcePath, workingArtifactPath)
@@ -39,12 +36,12 @@ export const seedFileReview = async (input: {
       run_id: input.payload.runId || 'test-run',
       status: input.payload.status || 'pending_confirm',
       title: input.payload.title || 'Test File Review',
-      source_document_id: document.sourceDocumentId,
-      source_path: document.sourcePath,
-      source_name: document.sourceName || path.basename(document.sourcePath),
-      format: document.format || 'docx',
+      source_document_id: file.sourceDocumentId,
+      source_path: file.sourcePath,
+      source_name: file.sourceName || path.basename(file.sourcePath),
+      format: file.format || 'docx',
       review_render_kind: 'docx_block',
-      latest_draft_snapshot_id: document.latestDraftSnapshotId || `${reviewId}-snapshot`,
+      latest_draft_snapshot_id: file.latestDraftSnapshotId || `${reviewId}-snapshot`,
       draft_artifact_path: draftArtifactPath,
       working_artifact_path: workingArtifactPath,
       committed_artifact_path: committedArtifactPath,

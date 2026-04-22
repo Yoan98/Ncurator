@@ -5,7 +5,6 @@ export const buildReviewTarget = (review: FileReview): AssistantTurnReviewTarget
   reviewId: review.id,
   title: review.title,
   changeCount: review.change_count,
-  documentCount: 1,
   status: review.status
 })
 

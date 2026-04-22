@@ -12,7 +12,6 @@ export type EmitFileArtifactEventInput = {
   operation: AiFileArtifactOperation
   artifactRole?: 'draft' | 'committed'
   reviewId?: string
-  draftDocumentId?: string
   draftSnapshotId?: string
   summary: string
   stepId?: string
@@ -32,7 +31,6 @@ export const emitFileArtifactEvent = (input: EmitFileArtifactEventInput): boolea
       operation: input.operation,
       artifactRole: input.artifactRole,
       reviewId: input.reviewId,
-      draftDocumentId: input.draftDocumentId,
       draftSnapshotId: input.draftSnapshotId,
       summary: input.summary,
       stepId: input.stepId,

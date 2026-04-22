@@ -66,16 +66,29 @@ export class FileReviewService {
     this.runDraftTracker.registerDocxChanges(input)
   }
 
-  public async finalizeRunReview(input: {
+  public async materializeRunReview(input: {
     runId: string
     workspaceRootPath: string
   }): Promise<FileReviewDetail[]> {
-    const details = await this.runDraftTracker.finalizeRunReview(input)
-    if (details.length === 0) return []
+    return await this.runDraftTracker.finalizeRunReview(input)
+  }
+
+  public async persistMaterializedReviews(
+    details: readonly FileReviewDetail[]
+  ): Promise<void> {
     for (const detail of details) {
       await this.supersedeActiveReviews(detail.review.source_path, detail.review.id)
       await this.fileReviewStore.saveReviewDetail(detail)
     }
+  }
+
+  public async finalizeRunReview(input: {
+    runId: string
+    workspaceRootPath: string
+  }): Promise<FileReviewDetail[]> {
+    const details = await this.materializeRunReview(input)
+    if (details.length === 0) return []
+    await this.persistMaterializedReviews(details)
     return details
   }
 

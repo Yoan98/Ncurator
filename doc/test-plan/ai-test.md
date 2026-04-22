@@ -35,7 +35,7 @@
 ### 3.1 Harness 规则
 
 - AI 正式 backend case 必须使用生产 `createAiRunContext` 作为唯一正式 runtime 入口。
-- formal harness 必须使用真实 `StorageService / DocumentsStore / ChatStore / DraftReviewStore / LlmConfigStore / DraftReviewService / EmbeddingService`。
+- formal harness 必须使用真实 `StorageService / DocumentsStore / ChatStore / FileReviewStore / LlmConfigStore / FileReviewService / EmbeddingService`。
 - `mock-llm` 统一通过 scripted LLM driver 固定 LLM 输出；除 LLM 输出外，其余全部真实。
 - `live` 统一通过真实 `LlmConfigStore` 注入 live 配置，并走生产统一 LLM executor。
 - 凡是会进入 `human` 的正式 run，必须在进入 `human` 前完成 embedding 基础服务 preflight；不允许把 embedding 初始化推迟到某个工具调用时才暴露。
@@ -277,7 +277,7 @@
 - 实现状态：`已实现`
 - What：验证 active review 下 docx 自动 open 会基于 latest working draft 继续编辑。
 - Why：多轮未确认修改能否累计，依赖 review-aware open 的真实行为。
-- How：通过真实 `DraftReviewStore + DraftReviewService` seed active review，再执行 `docx_read_blocks / docx_text_edit`。
+- How：通过真实 `FileReviewStore + FileReviewService` seed active review，再执行 `docx_read_blocks / docx_text_edit`。
 - Oracle：读取内容来自最新草稿而非源文件，新增修改只叠加当前 delta。
 - Not：不验证 review UI 与最终确认替换。
 - Last Run：`2026-04-16 16:16:09 +08:00`

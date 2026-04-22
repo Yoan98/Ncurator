@@ -628,7 +628,6 @@ export function registerHandlers(services: {
         runId: input.runId,
         review: {
           reviewId: detail.review.id,
-          documentCount: 1,
           changeCount: detail.review.change_count
         },
         createdAt: Date.now()

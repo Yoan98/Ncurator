@@ -153,6 +153,7 @@ export type AiRunContext = {
   resolveDocxOpenTarget: (sourcePath: string) => Promise<ResolvedDocxOpenTarget>
   beginDocxReviewRun: () => void
   finalizeDocxReviewRun: () => Promise<FileReviewDetail[]>
+  persistDocxReviewRun: (details: readonly FileReviewDetail[]) => Promise<void>
   discardDocxReviewRun: () => void
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService

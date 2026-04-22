@@ -47,13 +47,11 @@ describe('ai tool docx backend', () => {
           runId: runtime.runId,
           title: 'Review aware docx seed',
           status: 'pending_confirm',
-          documents: [
-            {
-              sourcePath: `${runtime.workspaceRoot}/review-aware-source.docx`,
-              confirmBasePath: `${runtime.workspaceRoot}/review-aware-effective-draft.docx`,
-              sourceName: 'review-aware-source.docx'
-            }
-          ]
+          file: {
+            sourcePath: `${runtime.workspaceRoot}/review-aware-source.docx`,
+            confirmBasePath: `${runtime.workspaceRoot}/review-aware-effective-draft.docx`,
+            sourceName: 'review-aware-source.docx'
+          }
         })
 
         const harness = createDocxToolHarness(runtime)

@@ -21,6 +21,7 @@
 
 ### 1.4 测试相关
 - 当涉及 AI 测试，必须阅读 `doc/test-plan/ai-test.md`
+- 当涉及 AI formal harness、`FileReview` seed 或 docx review / commit 测试约束时，必须阅读 `doc/test-plan/ai-test.md`
 - 当涉及 human live 的 docx / KB 混合场景测试设计时，必须阅读 `doc/test-plan/ai-test.md`
 - 当涉及 docx review / commit 分层测试设计时，必须阅读 `doc/test-plan/ai-test.md`
 - 当涉及 Workbench 测试时，必须阅读 `doc/test-plan/workbench-test.md`

@@ -223,8 +223,6 @@ type AiArtifactRef =
       artifactRole?: 'draft' | 'committed'
       // 若来自 draft review，则记录 reviewId。
       reviewId?: string
-      // 若是 docx draft，则记录 draft documentId。
-      draftDocumentId?: string
       // 若是 docx draft，则记录 draft snapshotId。
       draftSnapshotId?: string
       // 面向 AI、日志和 UI 的简洁说明。
@@ -236,8 +234,6 @@ type AiArtifactRef =
       review: {
         // review 唯一标识。
         reviewId: string
-        // 本次 review 涉及的文档数。
-        documentCount: number
         // 本次 review 涉及的修改数。
         changeCount: number
       }
@@ -785,7 +781,6 @@ interface FileArtifactEvent {
   operation: AiFileArtifactOperation
   artifactRole?: AiFileArtifactRole
   reviewId?: string
-  draftDocumentId?: string
   draftSnapshotId?: string
   summary: string
   stepId?: string
@@ -795,7 +790,7 @@ interface FileArtifactEvent {
 interface DraftReviewReadyEvent {
   type: 'draft_review_ready'
   runId: string
-  review: AiDraftReviewRef
+  review: AiFileReviewRef
   createdAt: number
 }
 

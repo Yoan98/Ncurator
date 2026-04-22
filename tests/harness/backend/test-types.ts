@@ -130,14 +130,14 @@ export type SeedFileReviewInput = {
   status?: FileReviewStatus
   createdAt?: number
   updatedAt?: number
-  documents: readonly Array<{
+  file: {
     sourcePath: string
     confirmBasePath?: string
     sourceName?: string
     sourceDocumentId?: string
     format?: FileReview['format']
     latestDraftSnapshotId?: string
-  }>
+  }
 }
 
 export type CreateAiRunContextInput = {

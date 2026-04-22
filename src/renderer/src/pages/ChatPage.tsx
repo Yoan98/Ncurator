@@ -820,8 +820,7 @@ const ChatPage: React.FC = () => {
           fileName: event.fileName,
           origin: event.reviewId ? 'edited_draft' : 'artifact',
           summary: event.summary,
-          reviewId: event.reviewId,
-          draftDocumentId: event.draftDocumentId
+          reviewId: event.reviewId
         }
         updateActiveTurn((current) => ({
           ...current,
@@ -917,7 +916,6 @@ const ChatPage: React.FC = () => {
             reviewId: event.review.reviewId,
             title: '审阅稿',
             changeCount: event.review.changeCount,
-            documentCount: event.review.documentCount,
             status: 'pending_confirm'
           })
         }))

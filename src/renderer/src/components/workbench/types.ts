@@ -27,7 +27,6 @@ export type WorkbenchFileRef = {
   origin: WorkbenchFileOrigin
   summary?: string
   reviewId?: string
-  draftDocumentId?: string
   format?: DraftDocumentFormat
   pageNumber?: number
 }
@@ -56,7 +55,6 @@ export type AssistantTurnReviewTarget = {
   reviewId: string
   title: string
   changeCount: number
-  documentCount: number
   status?: FileReviewStatus
 }
 
