@@ -62,7 +62,7 @@ interface DocxReplayNode {
   // 节点当前审阅状态。
   reviewState: DocxReviewState
   // 节点来源；用于区分 source 节点与后续新增节点。
-  sourceOrigin: 'source' | 'inserted'
+  sourceOrigin: 'source' | 'generated'
   // 节点最近一次被哪个 revision 变更过。
   changedRevisionRef?: string
   // 节点最初由哪个 revision 创建。
@@ -112,6 +112,7 @@ interface DocxViewArtifact {
 - edit 执行后生成新的 `revision`。
 - 本次 revision 写入 session，并更新当前最新状态。
 - session 更新后重新投影新的 working draft。
+- 对结构插入，新增块集合按插入区间解析；下游旧块即使 `blockId` 漂移，也不能被计入 `createdBlocks`。
 
 ### 3.3 审阅
 
@@ -146,6 +147,7 @@ flowchart LR
 - `working draft view`：给 AI 使用，只保留当前有效内容。
 - `review view`：给用户使用，显示新增、删除与替换。
 - `committed view`：给提交使用，去除审阅态。
+- 结构插入后的 replay 重绑必须先保留本轮新增块，再去匹配旧节点，避免 review 中出现下游旧块重复或错位。
 
 三种 view 都来自当前 session，关系始终是：
 

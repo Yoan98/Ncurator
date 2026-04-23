@@ -89,6 +89,8 @@ docx 子系统负责：
 
 - worker 返回的 `changedBlocks` 必须进入 revision 摘要。
 - 新增块必须通过 `createdBlocks` 明确记录，并参与 replay session 节点更新。
+- 对 `insert_before / insert_after`，`createdBlocks` 必须按插入区间解析，不能依赖前后 `blockId` 集合差。
+- 原因是当前 `blockId` 由 `bodyIndex` 派生，结构插入后下游块的 `blockId` 可能整体漂移。
 
 ### 4.3 rollback
 
@@ -155,6 +157,7 @@ docx 子系统负责：
 
 - 插入 paragraph 时，优先继承锚点邻近 paragraph 的正文样式骨架。
 - 至少覆盖对齐、缩进、段前段后距、行距与编号信息。
+- 结构插入不得重写 anchor 原 XML；`insert_before / insert_after` 只能新增 sibling block，不能把 anchor 与新内容一起重建回写。
 
 ### 8.2 run 样式继承
 
@@ -171,3 +174,4 @@ docx 子系统负责：
 
 - review 标记只作为显示层叠加。
 - 不能破坏正文样式骨架、段落结构、表格布局与块顺序。
+- replay 在处理结构插入时，旧节点重绑必须避开当前 revision 的 `createdBlocks`，避免把新插入块重新绑定成旧节点。
