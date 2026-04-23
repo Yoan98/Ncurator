@@ -14,10 +14,7 @@ import {
   docxTextEditSchema,
   docxTextStyleEditSchema
 } from './schemas'
-import {
-  createStaticExecutionMetaResolver,
-  readStringArg
-} from '../utils/toolSpecUtils'
+import { createStaticExecutionMetaResolver, readStringArg } from '../utils/toolSpecUtils'
 
 const createDocxReadExecutionMeta = () =>
   createStaticExecutionMetaResolver({
@@ -126,7 +123,8 @@ export const DOCX_SEARCH_TOOL_SPEC = {
       {
         name: 'effectiveQuery, appliedAliases, truncated',
         type: 'string | Array<{ from: string; to: string }> | boolean',
-        description: '显式说明本次实际使用的检索词、是否触发 alias fallback，以及返回结果是否被截断。'
+        description:
+          '显式说明本次实际使用的检索词、是否触发 alias fallback，以及返回结果是否被截断。'
       }
     ],
     examples: [
@@ -231,7 +229,10 @@ export const DOCX_PARAGRAPH_EDIT_TOOL_SPEC = {
     purpose: '按段落对象插入、替换或删除段落文本。',
     whenToUse:
       '当你已经明确段落锚点或目标 blockId，且只需要插段落、改段落文本或删段落时使用。若命中复杂定位排版区域，任何自动编辑都会失败，此时不要重复尝试 docx 写操作。',
-    preconditions: ['插入动作需要 anchorBlockId 与 text；替换/删除需要 blockId。'],
+    preconditions: [
+      '插入动作需要 anchorBlockId 与 text；替换/删除需要 blockId。',
+      '写入内容必须是适合 Word 的正文纯文本，不要使用 markdown 语法。'
+    ],
     returns: [
       {
         name: 'currentRevisionRef',
@@ -276,7 +277,10 @@ export const DOCX_HEADING_EDIT_TOOL_SPEC = {
     purpose: '按标题对象插入或替换标题文本。',
     whenToUse:
       '当你要在某处插入标题，或把现有标题块替换成新标题文本时使用。若命中复杂定位排版区域，任何自动编辑都会失败，此时应改为说明限制并给用户手动操作建议。',
-    preconditions: ['插入动作需要 anchorBlockId；替换动作需要 blockId；level 必须是 1-6。'],
+    preconditions: [
+      '插入动作需要 anchorBlockId；替换动作需要 blockId；level 必须是 1-6。',
+      '写入内容必须是适合 Word 的正文纯文本，不要使用 markdown 语法）。'
+    ],
     returns: [
       {
         name: 'currentRevisionRef',
@@ -318,7 +322,10 @@ export const DOCX_TABLE_EDIT_TOOL_SPEC = {
     purpose: '按表格对象插入表格或更新单元格内容。',
     whenToUse:
       '当你需要插入一个简单二维文本表格，或更新某个 table cell 的内容时使用。若命中复杂定位排版区域，任何自动编辑都会失败，此时不要重复尝试 docx 写操作。',
-    preconditions: ['插表动作需要 anchorBlockId 与 rows；改单元格动作需要 cellBlockId 与 text。'],
+    preconditions: [
+      '插表动作需要 anchorBlockId 与 rows；改单元格动作需要 cellBlockId 与 text。',
+      '写入内容必须是适合 Word 的正文纯文本，不要使用 markdown 语法。'
+    ],
     returns: [
       {
         name: 'currentRevisionRef',
@@ -362,7 +369,10 @@ export const DOCX_TEXT_EDIT_TOOL_SPEC = {
     purpose: '在当前 docx 中按 query 查找并替换文本，可选 blockIds 缩小范围。',
     whenToUse:
       '当你想在一批命中文本里直接替换术语或改写短句时使用。它适合 normal 正文流里的原地改字，不适合新增结构；若命中复杂定位排版区域，也会直接失败。',
-    preconditions: ['query 不能为空。'],
+    preconditions: [
+      'query 不能为空。',
+      'replace 必须是适合 Word 的正文纯文本，不要使用 markdown 语法。'
+    ],
     returns: [
       {
         name: 'changedBlocks',

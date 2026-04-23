@@ -46,7 +46,8 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     source: 'external',
     countsTowardToolBudget: true,
     title: 'docx-write',
-    description: '按段落、标题、表格、文本、样式对象编辑 docx，或回退到较早版本。',
+    description:
+      '按段落、标题、表格、文本、样式对象编辑 docx，或回退到较早版本。写入 docx 时，内容应直接使用适合 Word 的正文纯文本，不要使用 markdown 语法。',
     whenToUse: '当你已经明确知道要改哪里、改成什么，或需要撤销当前草稿修改时使用。',
     toolNames: [
       'docx_paragraph_edit',
