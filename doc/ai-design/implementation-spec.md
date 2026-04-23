@@ -98,9 +98,9 @@ stateDiagram-v2
 ### 5.4 `mouth`
 
 - 职责：围绕 `task_goal` 把当前已经确定的状态组织成最终用户交付，并回写 `HumanResult`。
-- 主要读取：`task`、`reference_scope`、`memory.stable`、`memory.history.roundHistory`、`memory.history.loadedHistoryContext`、`execution.runtimeArtifacts`。
+- 主要读取：`task`、`reference_scope`、`memory.stable`、`memory.history.roundHistory`、`memory.history.loadedHistoryContext`、`execution.deliveryGuidance`、`execution.runtimeArtifacts`。
 - 主要回写：`result`、`execution.status`、`execution.stage`、`trace.steps`。
-- 约束：模型输出必须通过 `ctx.chatText`；输出面向最终用户，但必须忠实于当前整体状态；`mouth` 优先吸收 `reference_scope`、`memory.stable`、统一 `history` 与 changed-files 视图的 `runtimeArtifacts`，不再直接消费 review 内部结构；可使用自由段落或列表组织，不要求固定报告模板；若开启 `emitAnswerEvents`，增量文本通过 `answer_token` 发出，完成后通过 `answer_completed` 收口。
+- 约束：模型输出必须通过 `ctx.chatText`；输出面向最终用户，但必须忠实于当前整体状态；`mouth` 优先吸收 `reference_scope`、`memory.stable`、结果导向的 `history` 视图、`deliveryGuidance` 与 changed-files 视图的 `runtimeArtifacts`，不再直接消费 review 内部结构；可使用自由段落或列表组织，不要求固定报告模板；若开启 `emitAnswerEvents`，增量文本通过 `answer_token` 发出，完成后通过 `answer_completed` 收口。
 
 ## 6. 事件与交付
 

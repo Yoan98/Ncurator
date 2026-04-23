@@ -78,11 +78,11 @@ describe('ai unit mouth readyToDeliver guard', () => {
     expect(prompt).toContain('<context_information>')
     expect(prompt).toContain('<output_contract>')
     expect(prompt).toContain('reference_scope')
-    expect(prompt).toContain('当前工作区、默认资料范围、显式选择的优先参考资料与当前缩圈状态')
-    expect(prompt).toContain('回答面向用户，但内容必须忠实于当前整体状态')
-    expect(prompt).toContain('优先吸收 reference_scope、your_notes、history、runtime_artifacts')
+    expect(prompt).toContain('delivery_guidance')
+    expect(prompt).toContain('面向用户交付最终结果，而不是复述系统内部过程')
+    expect(prompt).toContain('优先将其转化为用户容易理解的最终答复')
     expect(prompt).toContain('只输出最终 markdown 正文')
-    expect(prompt).toContain('如果需要回复不在上下文中的内容时')
+    expect(prompt).toContain('如果需要使用不来自当前上下文的通用知识')
     expect(prompt).toContain('补充说明')
   })
 
@@ -94,19 +94,20 @@ describe('ai unit mouth readyToDeliver guard', () => {
       })
     })
 
-    expect(result.system).toContain('task_goal：用户的诉求')
-    expect(result.system).toContain('your_notes：当前持续工作的任务笔记')
+    expect(result.system).toContain('task_goal：用户当前要你完成或回答的事情')
+    expect(result.system).toContain('your_notes：当前任务已经收敛的理解、关键依据和完成情况')
     expect(result.system).not.toContain('final_decision')
     expect(result.user).toContain('<reference_scope>')
     expect(result.user).not.toContain('这是当前交付模式。')
     expect(result.user).not.toContain('这是用户这次原始诉求与限制。')
     expect(result.user).toContain('<history>')
+    expect(result.user).toContain('<delivery_guidance>')
     expect(result.user).not.toContain('<final_decision>')
     expect(result.user).not.toContain('<correction_hint>')
     expect(result.user).not.toContain('<recalled_history>')
   })
 
-  it('renders unified history and preserves raw diagnostic text in mouth prompt', () => {
+  it('renders mouth history as result-oriented facts and preserves raw diagnostic text', () => {
     const initialState = createInitialHumanState({
       taskId: 'task-3',
       userInput: '继续修正 docx 参数'
@@ -188,14 +189,15 @@ describe('ai unit mouth readyToDeliver guard', () => {
 
     const prompt = buildMouthPrompt({ state })
 
-    expect(prompt.user).toContain('过程历史：')
-    expect(prompt.user).toContain('主动回看历史：')
+    expect(prompt.user).toContain('已发生的关键结果：')
+    expect(prompt.user).toContain('主动回看的相关事实：')
     expect(prompt.user).toContain(
-      'diagnostic=Received tool input did not match expected schema ✖ Invalid input → at query'
+      'Received tool input did not match expected schema ✖ Invalid input → at query'
     )
+    expect(prompt.user).not.toContain('调用参数：')
   })
 
-  it('renders full docx_read_blocks history blocks in mouth prompt', () => {
+  it('renders key docx_read_blocks facts in mouth prompt', () => {
     const initialState = createInitialHumanState({
       taskId: 'task-4',
       userInput: '按资料说明反走样处理方法'
@@ -286,5 +288,27 @@ describe('ai unit mouth readyToDeliver guard', () => {
 
     expect(prompt.user).toContain('多个像素点')
     expect(prompt.user).toContain('低通滤波')
+    expect(prompt.user).not.toContain('fromBlockId')
+  })
+
+  it('renders delivery guidance when present', () => {
+    const initialState = createInitialHumanState({
+      taskId: 'task-5',
+      userInput: '请给我最终答复'
+    })
+
+    const prompt = buildMouthPrompt({
+      state: {
+        ...initialState,
+        execution: {
+          ...initialState.execution,
+          deliveryGuidance:
+            '这次没有自动修改原文档，也没有生成审阅稿。请先说明这一点，再给出手动补充建议。'
+        }
+      }
+    })
+
+    expect(prompt.user).toContain('<delivery_guidance>')
+    expect(prompt.user).toContain('这次没有自动修改原文档')
   })
 })

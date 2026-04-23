@@ -12,7 +12,7 @@ import {
   listExternalSkillDefinitions
 } from '../skills'
 import { renderHumanStableNotes } from '../shared/memoryRenderers'
-import { renderLoadedHistoryText, renderRoundSection } from '../shared/historyRenderers'
+import { renderBrainLoadedHistoryText, renderBrainRoundSection } from '../shared/historyRenderers'
 import { getToolSpec } from '../tools/registry'
 import {
   renderBrainOutputSchemaForPrompt,
@@ -161,7 +161,7 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
     - reference_scope：当前工作区、默认知识范围、显式缩圈范围和可用边界。
     - terminal_platform：当前 terminal 所在平台；如果你决定使用命令行，应据此选择命令语法。
     - your_notes：稳定任务笔记，按“当前理解 / 关键依据 / 检查清单”组织。
-    - recent_progress：最近一轮完整过程记录，用于判断刚做了什么、得到什么。
+    - latest_attempt：最近一轮完整尝试记录，用于判断刚做了什么、传了什么参数、拿到了什么结果。
     - earlier_attempts：更早轮次过程链，用于识别重复路径、失败模式和已经验证过的动作。
     - recalled_history：主动回看的详细历史；只有明确回看后才会出现，并可能附带过滤条件。
     - skill_catalog：当前已生效或仍可学习的 skills，以及当前可直接调用的工具说明。
@@ -275,22 +275,16 @@ ${renderPlatformText(input.ctx)}
 ${renderHumanStableNotes(input.state, 'brain_prompt')}
     </your_notes>
 
-    <recent_progress>
-${renderRoundSection({
-  records: getLastRoundFocus(input.state) ? [getLastRoundFocus(input.state)!] : [],
-  detail: 'focus'
-})}
-    </recent_progress>
+    <latest_attempt>
+${renderBrainRoundSection(getLastRoundFocus(input.state) ? [getLastRoundFocus(input.state)!] : [])}
+    </latest_attempt>
 
     <earlier_attempts>
-${renderRoundSection({
-  records: getEarlierAttemptRounds(input.state),
-  detail: 'chain'
-})}
+${renderBrainRoundSection(getEarlierAttemptRounds(input.state))}
     </earlier_attempts>
 
     <recalled_history>
-${renderLoadedHistoryText(getLoadedHistoryContext(input.state))}
+${renderBrainLoadedHistoryText(getLoadedHistoryContext(input.state))}
     </recalled_history>
   </memory>
 

@@ -1,10 +1,15 @@
-import { renderInlineList } from '../../utils/render'
-import type { HumanLoadedHistoryContext, HumanRoundRecord } from '../types'
-import { renderWatchHintForBrain } from '../prompts/watchHints'
-import {
-  renderToolResourceContextText,
-  renderToolResultDataText
-} from './toolResultRenderers'
+import type { JsonObject, JsonValue } from '../../../../../shared/types'
+import { renderInlineList, renderLineList } from '../../utils/render'
+import { summarizeWatchHint, renderWatchHintForBrain } from '../prompts/watchHints'
+import type {
+  HumanHistoryToolResult,
+  HumanLoadedHistoryContext,
+  HumanRoundRecord,
+  ToolCallParam
+} from '../types'
+
+const isJsonObject = (value: JsonValue | undefined): value is JsonObject =>
+  Boolean(value && typeof value === 'object' && !Array.isArray(value))
 
 const renderQuotedNames = (items: readonly string[]): string =>
   renderInlineList(
@@ -14,6 +19,173 @@ const renderQuotedNames = (items: readonly string[]): string =>
       fallback: 'none'
     }
   )
+
+const renderJsonValue = (value: JsonValue | JsonObject | undefined): string =>
+  value === undefined ? 'none' : JSON.stringify(value, null, 2)
+
+const readStringField = (obj: JsonObject, key: string): string | undefined => {
+  const value = obj[key]
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined
+}
+
+const readNumberField = (obj: JsonObject, key: string): number | undefined => {
+  const value = obj[key]
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+const pickObjectFields = (
+  obj: JsonObject,
+  keys: string[]
+): JsonObject =>
+  keys.reduce<JsonObject>((acc, key) => {
+    const value = obj[key]
+    if (value !== undefined) acc[key] = value
+    return acc
+  }, {})
+
+const reduceDocxBlocks = (value: JsonValue | undefined): JsonValue | undefined => {
+  if (!Array.isArray(value)) return undefined
+  return value.map((item) => {
+    if (!isJsonObject(item)) return item
+    const reduced = pickObjectFields(item, [
+      'blockId',
+      'type',
+      'bodyIndex',
+      'text',
+      'preview',
+      'summary'
+    ])
+
+    if (Array.isArray(item.cells)) {
+      reduced.cells = item.cells.map((cell) => {
+        if (!isJsonObject(cell)) return cell
+        const reducedCell = pickObjectFields(cell, ['blockId', 'row', 'col'])
+        if (Array.isArray(cell.paragraphs)) {
+          reducedCell.paragraphs = cell.paragraphs.map((paragraph) => {
+            if (!isJsonObject(paragraph)) return paragraph
+            return pickObjectFields(paragraph, ['blockId', 'type', 'bodyIndex', 'text', 'preview'])
+          })
+        }
+        return reducedCell
+      })
+    }
+
+    if (Array.isArray(item.paragraphs)) {
+      reduced.paragraphs = item.paragraphs.map((paragraph) => {
+        if (!isJsonObject(paragraph)) return paragraph
+        return pickObjectFields(paragraph, ['blockId', 'type', 'bodyIndex', 'text', 'preview'])
+      })
+    }
+
+    return reduced
+  })
+}
+
+const reduceDocxSearchMatches = (value: JsonValue | undefined): JsonValue | undefined => {
+  if (!Array.isArray(value)) return undefined
+  return value.map((item) => {
+    if (!isJsonObject(item)) return item
+    return pickObjectFields(item, ['blockId', 'blockType', 'bodyIndex', 'text'])
+  })
+}
+
+const reduceDocxRevisions = (value: JsonValue | undefined): JsonValue | undefined => {
+  if (!Array.isArray(value)) return undefined
+  return value.map((item) => {
+    if (!isJsonObject(item)) return item
+    return pickObjectFields(item, ['revisionRef', 'parentRevisionRef', 'summary', 'isCurrent'])
+  })
+}
+
+const buildBrainToolReturnValue = (result: HumanHistoryToolResult): JsonValue => {
+  const base: JsonObject = {
+    ok: result.ok,
+    code: result.code
+  }
+
+  if (!isJsonObject(result.data)) {
+    if (result.data !== undefined) base.data = result.data
+    return base
+  }
+
+  switch (result.toolName) {
+    case 'docx_read_blocks':
+      return {
+        ...base,
+        ...pickObjectFields(result.data, ['fromBlockId', 'toBlockId', 'returnedBlockCount']),
+        ...(reduceDocxBlocks(result.data.blocks) ? { blocks: reduceDocxBlocks(result.data.blocks) } : {})
+      }
+    case 'docx_search':
+      return {
+        ...base,
+        ...pickObjectFields(result.data, [
+          'mode',
+          'effectiveQuery',
+          'returnedMatchCount',
+          'totalMatchCount'
+        ]),
+        ...(reduceDocxSearchMatches(result.data.matches)
+          ? { matches: reduceDocxSearchMatches(result.data.matches) }
+          : {})
+      }
+    case 'docx_outline':
+      return {
+        ...base,
+        ...pickObjectFields(result.data, ['returnedBlockCount', 'totalBlockCount', 'truncated']),
+        ...(reduceDocxBlocks(result.data.blocks) ? { blocks: reduceDocxBlocks(result.data.blocks) } : {})
+      }
+    case 'docx_history':
+      return {
+        ...base,
+        ...(reduceDocxRevisions(result.data.revisions)
+          ? { revisions: reduceDocxRevisions(result.data.revisions) }
+          : {})
+      }
+    default:
+      return {
+        ...base,
+        ...pickObjectFields(result.data, [
+          'summary',
+          'message',
+          'error',
+          'outputPreview',
+          'stdoutPreview',
+          'stderrPreview',
+          'cwd',
+          'command',
+          'exitCode',
+          'timedOut',
+          'truncated',
+          'returnedBlockCount',
+          'returnedMatchCount',
+          'totalMatchCount',
+          'fromBlockId',
+          'toBlockId',
+          'changedBlocks',
+          'createdBlocks',
+          'items',
+          'total',
+          'hits',
+          'rounds'
+        ])
+      }
+  }
+}
+
+const buildBrainToolAttemptText = (input: {
+  call: ToolCallParam | undefined
+  result: HumanHistoryToolResult
+}): string =>
+  [
+    `- \`${input.result.toolName}\``,
+    '  调用参数：',
+    renderJsonValue(input.call?.args),
+    '  返回：',
+    renderJsonValue(buildBrainToolReturnValue(input.result)),
+    input.result.diagnosticText ? `  诊断：\n${input.result.diagnosticText}` : undefined
+  ]
+    .filter(Boolean)
+    .join('\n')
 
 const renderDecisionNextAction = (record: HumanRoundRecord): string => {
   switch (record.decision.nextAction.action) {
@@ -36,7 +208,7 @@ const renderDecisionNextAction = (record: HumanRoundRecord): string => {
   }
 }
 
-const renderRoundDecision = (record: HumanRoundRecord): string =>
+const renderBrainRoundDecision = (record: HumanRoundRecord): string =>
   `
 - 你的判断：${record.decision.decision.summary}
 - 你这样判断的原因：${record.decision.decision.reason}
@@ -45,33 +217,36 @@ const renderRoundDecision = (record: HumanRoundRecord): string =>
 ${renderDecisionNextAction(record)}
 `.trim()
 
-const renderRoundExecution = (
-  record: HumanRoundRecord,
-  detail: 'focus' | 'chain' | 'loaded'
-): string => {
+const renderBrainRoundExecution = (record: HumanRoundRecord): string => {
   switch (record.execution.kind) {
     case 'pre_execution_blocked':
       return '- 没有进入真实执行，系统在执行前阻断了这轮动作。'
     case 'learning':
       return '- 进入 learning，按请求尝试补齐外置技能。'
-    case 'hand':
+    case 'hand': {
+      const executedToolNames = record.execution.toolResults.map((result) => result.toolName)
+      const actualToolNames =
+        executedToolNames.length > 0
+          ? executedToolNames
+          : record.execution.toolUsePlan.calls.map((call) => call.toolName)
       return `
 - 进入 hand，执行模式是 ${record.execution.toolUsePlan.mode}。
 - ${
         record.execution.toolUsePlan.mode === 'parallel'
-          ? `实际并行执行了 ${renderQuotedNames(record.execution.toolUsePlan.calls.map((call) => call.toolName))}。`
-          : `实际按顺序执行了 ${renderQuotedNames(record.execution.toolUsePlan.calls.map((call) => call.toolName))}。`
+          ? `实际并行执行了 ${renderQuotedNames(actualToolNames)}。`
+          : `实际按顺序执行了 ${renderQuotedNames(actualToolNames)}。`
       }
-${detail !== 'chain' ? `- 本轮计划包含 ${record.execution.toolUsePlan.calls.length} 个工具调用。` : ''}
+- 本轮实际执行了 ${String(record.execution.toolResults.length)} 个工具调用。
 `
         .trim()
         .replace(/\n\n+/g, '\n')
+    }
     case 'mouth':
       return '- 进入 mouth，组织最终说明。'
   }
 }
 
-const renderRoundResult = (record: HumanRoundRecord): string => {
+const renderBrainRoundResult = (record: HumanRoundRecord): string => {
   switch (record.execution.kind) {
     case 'pre_execution_blocked':
       return renderWatchHintForBrain(record.execution.watchHint)
@@ -86,25 +261,19 @@ ${record.execution.watchHint ? `- 收敛提示：${renderWatchHintForBrain(recor
         .trim()
         .replace(/\n\n+/g, '\n')
     case 'hand': {
-      const toolResultLines = record.execution.toolResults
-        .map((result) => {
-          const resourceContextText = renderToolResourceContextText(result.resourceContext)
-          const dataText = renderToolResultDataText(result)
-
-          return [
-            `- \`${result.toolName}\`：${result.summary}`,
-            resourceContextText ? `上下文：${resourceContextText}` : '',
-            dataText ? `结果：\n${dataText}` : '',
-            result.diagnosticText ? `诊断：${result.diagnosticText}` : ''
-          ]
-            .filter(Boolean)
-            .join('\n')
-        })
+      const execution = record.execution
+      const toolAttempts = execution.toolResults
+        .map((result, index) =>
+          buildBrainToolAttemptText({
+            call: execution.toolUsePlan.calls[index],
+            result
+          })
+        )
         .join('\n')
       const artifactLine =
-        record.execution.artifactRefs && record.execution.artifactRefs.length > 0
+        execution.artifactRefs && execution.artifactRefs.length > 0
           ? `- 产物：${renderInlineList(
-              record.execution.artifactRefs.map((artifact) =>
+              execution.artifactRefs.map((artifact) =>
                 artifact.kind === 'file'
                   ? `\`${artifact.fileName}\``
                   : `draft review ${artifact.review.reviewId}`
@@ -115,11 +284,11 @@ ${record.execution.watchHint ? `- 收敛提示：${renderWatchHintForBrain(recor
               }
             )}`
           : ''
-      const watchHintLine = record.execution.watchHint
-        ? `- 收敛提示：${renderWatchHintForBrain(record.execution.watchHint)}`
+      const watchHintLine = execution.watchHint
+        ? `- 收敛提示：${renderWatchHintForBrain(execution.watchHint)}`
         : ''
 
-      return [toolResultLines, artifactLine, watchHintLine].filter(Boolean).join('\n')
+      return [toolAttempts, artifactLine, watchHintLine].filter(Boolean).join('\n')
     }
     case 'mouth':
       return `
@@ -129,32 +298,24 @@ ${record.execution.completed ? '- 任务已完成。' : '- 任务未完成。'}
   }
 }
 
-const renderRoundRecord = (
-  record: HumanRoundRecord,
-  detail: 'focus' | 'chain' | 'loaded'
-): string =>
+const renderBrainRoundRecord = (record: HumanRoundRecord): string =>
   `
 - 第 ${record.roundId} 轮
 
 决策了什么：
-${renderRoundDecision(record)}
+${renderBrainRoundDecision(record)}
 
 做了什么：
-${renderRoundExecution(record, detail)}
+${renderBrainRoundExecution(record)}
 
 结果是什么：
-${renderRoundResult(record)}
+${renderBrainRoundResult(record)}
 `.trim()
 
-export const renderRoundSection = (input: {
-  records: HumanRoundRecord[]
-  detail: 'focus' | 'chain' | 'loaded'
-}): string =>
-  input.records.length > 0
-    ? input.records.map((record) => renderRoundRecord(record, input.detail)).join('\n\n')
-    : 'none'
+export const renderBrainRoundSection = (records: HumanRoundRecord[]): string =>
+  records.length > 0 ? records.map(renderBrainRoundRecord).join('\n\n') : 'none'
 
-export const renderLoadedHistoryText = (
+export const renderBrainLoadedHistoryText = (
   loadedHistoryContext: HumanLoadedHistoryContext | undefined
 ): string =>
   loadedHistoryContext
@@ -165,27 +326,136 @@ export const renderLoadedHistoryText = (
         loadedHistoryContext.filters.limit || loadedHistoryContext.rounds.length
       )}
 
-${renderRoundSection({
-  records: loadedHistoryContext.rounds,
-  detail: 'loaded'
-})}
+${renderBrainRoundSection(loadedHistoryContext.rounds)}
 `
         .trim()
     : 'none'
 
-export const renderUnifiedHistoryText = (input: {
+const summarizeArrayTexts = (value: JsonValue | undefined, key: string): string[] => {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((item) => {
+      if (!isJsonObject(item)) return undefined
+      return readStringField(item, key) || readStringField(item, 'preview') || readStringField(item, 'summary')
+    })
+    .filter((item): item is string => Boolean(item && item.length > 0))
+}
+
+const summarizeToolResultForMouth = (result: HumanHistoryToolResult): string => {
+  if (result.diagnosticText) {
+    return `\`${result.toolName}\` 未完成：${result.diagnosticText}`
+  }
+
+  if (!isJsonObject(result.data)) {
+    return `\`${result.toolName}\`：${result.summary}`
+  }
+
+  switch (result.toolName) {
+    case 'docx_read_blocks': {
+      const texts = summarizeArrayTexts(result.data.blocks, 'text')
+      const count = readNumberField(result.data, 'returnedBlockCount') || texts.length
+      return texts.length > 0
+        ? `\`${result.toolName}\` 读取到 ${String(count)} 个块：${texts.join(' / ')}`
+        : `\`${result.toolName}\` 读取到 ${String(count)} 个块。`
+    }
+    case 'docx_search': {
+      const matches = summarizeArrayTexts(result.data.matches, 'text')
+      const count = readNumberField(result.data, 'returnedMatchCount') || matches.length
+      return matches.length > 0
+        ? `\`${result.toolName}\` 命中 ${String(count)} 处：${matches.join(' / ')}`
+        : `\`${result.toolName}\` 命中 ${String(count)} 处。`
+    }
+    case 'docx_outline': {
+      const blocks = summarizeArrayTexts(result.data.blocks, 'preview')
+      const count = readNumberField(result.data, 'returnedBlockCount') || blocks.length
+      return blocks.length > 0
+        ? `\`${result.toolName}\` 概览到 ${String(count)} 个块：${blocks.join(' / ')}`
+        : `\`${result.toolName}\` 概览到 ${String(count)} 个块。`
+    }
+    case 'docx_text_edit':
+    case 'docx_paragraph_edit':
+    case 'docx_heading_edit':
+    case 'docx_table_edit':
+    case 'docx_text_style_edit': {
+      const summary = readStringField(result.data, 'summary')
+      const changedBlocks = Array.isArray(result.data.changedBlocks) ? result.data.changedBlocks.length : 0
+      if (summary) return `\`${result.toolName}\`：${summary}`
+      return changedBlocks > 0
+        ? `\`${result.toolName}\` 已形成 ${String(changedBlocks)} 处修改。`
+        : `\`${result.toolName}\` 已完成。`
+    }
+    default: {
+      const summary =
+        readStringField(result.data, 'summary') ||
+        readStringField(result.data, 'message') ||
+        readStringField(result.data, 'outputPreview') ||
+        readStringField(result.data, 'stdoutPreview')
+      if (summary) return `\`${result.toolName}\`：${summary}`
+      const items = summarizeArrayTexts(result.data.items, 'text')
+      if (items.length > 0) return `\`${result.toolName}\` 返回：${items.join(' / ')}`
+      return `\`${result.toolName}\`：${result.summary}`
+    }
+  }
+}
+
+const renderMouthRoundFacts = (record: HumanRoundRecord): string[] => {
+  switch (record.execution.kind) {
+    case 'pre_execution_blocked':
+      return [`执行前被阻断：${summarizeWatchHint(record.execution.watchHint)}`]
+    case 'learning': {
+      const loaded = record.execution.learningOutcome.loadedSkillIds
+      const facts = loaded.length > 0 ? [`已补齐技能：${loaded.join('、')}`] : []
+      if (record.execution.watchHint) {
+        facts.push(`收敛提示：${summarizeWatchHint(record.execution.watchHint)}`)
+      }
+      return facts
+    }
+    case 'hand': {
+      const facts = record.execution.toolResults.map(summarizeToolResultForMouth)
+      if (record.execution.watchHint) {
+        facts.push(`收敛提示：${summarizeWatchHint(record.execution.watchHint)}`)
+      }
+      if (record.execution.artifactRefs && record.execution.artifactRefs.length > 0) {
+        facts.push(
+          `形成产物：${renderInlineList(
+            record.execution.artifactRefs.map((artifact) =>
+              artifact.kind === 'file'
+                ? `\`${artifact.fileName}\``
+                : `draft review ${artifact.review.reviewId}`
+            ),
+            {
+              separator: '、',
+              fallback: 'none'
+            }
+          )}`
+        )
+      }
+      return facts
+    }
+    case 'mouth':
+      return record.execution.completed ? [`已形成最终答复：${record.execution.summary}`] : []
+  }
+}
+
+const renderMouthFactsSection = (records: HumanRoundRecord[]): string =>
+  renderLineList(
+    records.flatMap(renderMouthRoundFacts).map((line) => `- ${line}`),
+    {
+      fallback: 'none',
+      style: 'plain'
+    }
+  )
+
+export const renderMouthHistoryText = (input: {
   roundHistory: HumanRoundRecord[]
   loadedHistoryContext: HumanLoadedHistoryContext | undefined
 }): string =>
   `
-过程历史：
-${renderRoundSection({
-  records: input.roundHistory,
-  detail: 'loaded'
-})}
+已发生的关键结果：
+${renderMouthFactsSection(input.roundHistory)}
 
-主动回看历史：
-${renderLoadedHistoryText(input.loadedHistoryContext)}
+主动回看的相关事实：
+${renderMouthFactsSection(input.loadedHistoryContext?.rounds || [])}
 `
     .trim()
     .replace(/\n{3,}/g, '\n\n')

@@ -187,7 +187,7 @@ describe('ai unit brain prompt history blocks', () => {
 
     expect(prompt.user).toContain('<reference_scope>')
     expect(prompt.user).toContain('<memory>')
-    expect(prompt.user).toContain('<recent_progress>')
+    expect(prompt.user).toContain('<latest_attempt>')
     expect(prompt.user).toContain('<earlier_attempts>')
     expect(prompt.user).toContain('<recalled_history>')
     expect(prompt.user).toContain('<skill_catalog>')
@@ -214,6 +214,9 @@ describe('ai unit brain prompt history blocks', () => {
     expect(prompt.user).toContain('history-recall')
     expect(prompt.user).toContain('决策了什么：')
     expect(prompt.user).toContain('结果是什么：')
+    expect(prompt.user).toContain('调用参数：')
+    expect(prompt.user).toContain('返回：')
+    expect(prompt.user).toContain('"command": "pwd"')
   })
 
   it('renders default workspace scope as available even when no explicit references are selected', () => {
@@ -360,8 +363,9 @@ describe('ai unit brain prompt history blocks', () => {
       )
     })
 
+    expect(prompt.user).toContain('诊断：')
     expect(prompt.user).toContain(
-      'diagnostic=Received tool input did not match expected schema ✖ Invalid input → at query'
+      'Received tool input did not match expected schema ✖ Invalid input → at query'
     )
   })
 
@@ -476,5 +480,6 @@ describe('ai unit brain prompt history blocks', () => {
     expect(prompt.user).toContain('多个像素点')
     expect(prompt.user).toContain('低通滤波')
     expect(prompt.user).toContain('graphics.docx')
+    expect(prompt.user).not.toContain('上下文：')
   })
 })

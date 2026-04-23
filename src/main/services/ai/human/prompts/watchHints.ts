@@ -26,6 +26,8 @@ export const summarizeWatchHint = (hint: HumanWatchHint): string => {
           )}。`
     case 'hand_tool_limit_exceeded':
       return `hand 累计工具调用次数达到 ${hint.detail.toolCallCount}，已超过临时上限 ${hint.detail.limit}。`
+    case 'hand_docx_positioned_write_blocked':
+      return `hand 命中复杂定位排版保护；${hint.detail.targetDescription}不能自动编辑。`
     case 'brain_invalid_mouth_transition':
       return 'brain 选择 mouth 时必须 readyToDeliver=true；当前结果仍未准备好收尾。'
   }
@@ -69,6 +71,11 @@ export const renderWatchHintForBrain = (hint: HumanWatchHint): string => {
         `toolCallCount=${String(hint.detail.toolCallCount)}`,
         `toolCallLimit=${String(hint.detail.limit)}`,
         '应优先考虑收敛；除非只差一次非常明确且必要的动作。'
+      ].join('\n')
+    case 'hand_docx_positioned_write_blocked':
+      return [
+        `上一轮命中了复杂定位排版保护，${hint.detail.targetDescription}不能自动编辑。`,
+        '不要继续尝试修改这处区域，继续处理当前任务中其他仍可完成的部分。'
       ].join('\n')
     case 'brain_invalid_mouth_transition':
       return [

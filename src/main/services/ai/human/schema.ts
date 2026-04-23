@@ -126,6 +126,12 @@ export const humanWatchHintSchema = z.discriminatedUnion('code', [
     })
   }),
   z.object({
+    code: z.literal('hand_docx_positioned_write_blocked'),
+    detail: z.object({
+      targetDescription: z.string().min(1)
+    })
+  }),
+  z.object({
     code: z.literal('brain_invalid_mouth_transition'),
     detail: z.object({})
   })
@@ -214,6 +220,7 @@ export const humanExecutionSchema = z.object({
   status: humanStatusSchema,
   currentDecision: humanDecisionSchema.optional(),
   watchHint: humanWatchHintSchema.optional(),
+  deliveryGuidance: z.string().min(1).optional(),
   lastToolResults: z.array(toolCallResultSchema).optional(),
   lastLearningOutcome: humanLearningOutcomeSchema.optional(),
   artifacts: z.array(aiArtifactRefSchema),

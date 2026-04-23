@@ -115,6 +115,7 @@ describe('ai human live backend', () => {
           )
           const successfulWriteResults = writeResults.filter((event) => event.result?.ok === true)
           const failedWriteResults = writeResults.filter((event) => event.result?.ok === false)
+          const watchHints = filterAiRunEventsByType(events, 'watch_hint')
           const diagnosticMessages = collectToolDiagnosticMessages(events)
           const unchangedFixtures = await Promise.all(
             result.originalFixtureBytes.map(async (fixture) => {
@@ -131,7 +132,10 @@ describe('ai human live backend', () => {
               ) &&
               structuralStarted.length >= 1 &&
               successfulWriteResults.length === 0 &&
-              failedWriteResults.length >= 1 &&
+              failedWriteResults.length === 1 &&
+              watchHints.some(
+                (event) => event.code === 'hand_docx_positioned_write_blocked'
+              ) &&
               diagnosticMessages.some((message) => message.includes('当前命中复杂定位排版区域')) &&
               countFileReviewArtifacts(result.output?.artifacts) === 0 &&
               countDraftFileArtifacts(result.output?.artifacts) === 0 &&
@@ -154,6 +158,7 @@ describe('ai human live backend', () => {
                   toolName: event.toolName,
                   diagnostic: event.result?.diagnostic?.message
                 })),
+                watchHints,
                 summary: result.output?.summary,
                 deliveryMarkdown: result.output?.deliveryMarkdown
               }

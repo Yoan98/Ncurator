@@ -23,6 +23,7 @@ import {
   finalizeDocxToolSuccess
 } from './workerTool'
 import type { DocxToolFailure } from '../runtime'
+import { DOCX_POSITIONED_LAYOUT_PROTECTION_MESSAGE } from '../constants'
 
 const paragraphSpecFromText = (text: string, style?: string): DocxParagraphSpec => ({
   kind: 'paragraph',
@@ -93,8 +94,7 @@ const fetchDetailedBlock = async (
   return response.payload.block
 }
 
-const buildPositionedReadOnlyMessage = (): string =>
-  '当前命中复杂定位排版区域，暂不支持自动编辑，以避免预览修订和版式叠加导致错位；你可以手动按建议内容调整该处。'
+const buildPositionedReadOnlyMessage = (): string => DOCX_POSITIONED_LAYOUT_PROTECTION_MESSAGE
 
 const failIfPositionedBlock = async (input: {
   runtime: DocxToolRuntime

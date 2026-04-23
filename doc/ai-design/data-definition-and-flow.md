@@ -330,6 +330,8 @@ interface HumanExecution {
   currentDecision?: HumanDecision
   // 收敛或纠偏提示；当 learning / hand / brain 触发保护逻辑时写入。
   watchHint?: HumanWatchHint
+  // 最终交付时必须吸收的额外说明；由 hand 在特殊回退场景下写入，mouth 负责转成用户可理解的话术。
+  deliveryGuidance?: string
   // 最近一次 hand 工具执行结果；主要供 runtime 排障与回放使用。
   lastToolResults?: ToolCallResult[]
   // 最近一次 learning 的真实执行结果；主要供 runtime 排障与回放使用。
@@ -387,7 +389,7 @@ interface HumanHistoryToolResult {
   diagnosticText?: string
   // 本次工具调用附带生成的 artifact 引用。
   artifactRefs?: AiArtifactRef[]
-  // 资源上下文；用于 prompt/history render 时补充 sourcePath、version 等运行事实。
+  // 资源上下文；作为运行态归因、日志与 history 检索文本的一部分保留，不直接进入 brain/mouth prompt 视图。
   resourceContext?: ToolResourceContext
 }
 
@@ -1042,7 +1044,7 @@ flowchart LR
 
     T -->|读取 taskId + userInput| B
     SM -->|读取 currentUnderstanding / keyEvidence / checklist| B
-    HM -->|读取 recent_progress / earlier_attempts / recalled_history| B
+    HM -->|读取 latest_attempt / earlier_attempts / recalled_history| B
     SK -->|读取 learned external skills| B
     WH -->|存在时读取收敛提示| B
     B -->|通过 updatedStableMemory patch 更新 stable memory| SM
@@ -1084,6 +1086,7 @@ flowchart LR
     PM[("memory.history.roundHistory / loadedHistoryContext")]
     A[("execution.artifacts")]
     WH[("execution.watchHint")]
+    DG[("execution.deliveryGuidance")]
     TR[("trace.steps")]
     B["brain"]
 
@@ -1091,7 +1094,8 @@ flowchart LR
     H -->|写入本轮工具结果数组| LTR
     H -->|追加 hand round 或 loaded history| PM
     H -->|从工具结构化输出提取并回写 artifacts| A
-    H -->|plan 非法或超过累计工具调用临时上限时写入| WH
+    H -->|plan 非法、超过累计工具调用临时上限或命中 positioned 保护时写入| WH
+    H -->|需要最终交付额外说明时写入| DG
     H -->|追加 hand 执行轨迹| TR
     H -->|返回下一轮 brain| B
 ```
@@ -1103,6 +1107,7 @@ flowchart LR
     T[("task")]
     SM[("memory.stable")]
     PM[("memory.history.roundHistory / loadedHistoryContext")]
+    DG[("execution.deliveryGuidance")]
     A[("execution.artifacts")]
     M["mouth"]
     R[("result")]
@@ -1110,12 +1115,13 @@ flowchart LR
 
     T -->|读取 taskId + userInput| M
     SM -->|读取任务笔记| M
-    PM -->|读取统一 history 事实视图| M
+    PM -->|读取结果导向的 history 事实视图| M
+    DG -->|存在时读取额外交付说明| M
     A -->|读取已收集的结构化 artifacts| M
     M -->|输出 deliveryMarkdown；node 派生 summary、回写 completed result，并透传 artifacts| R
     M -->|追加 mouth 执行轨迹| TR
 ```
 
-- `mouth` 不再依赖 `recent_progress / earlier_attempts / recalled_history` 这类拆分块；统一基于 `roundHistory + loadedHistoryContext` 渲染单一 `history` 视图。
-- `mouth` 的 prompt 输入仍以 `your_notes` 为优先事实来源；当 `your_notes` 过于概括或不足以支撑用户要求的细节时，再从统一 `history` 与 `runtime_artifacts` 补足用户回答所需细节，而不是依赖额外的 `watchHint` 说明。
+- `mouth` 不再直接消费 `brain` 的 `latest_attempt / earlier_attempts / recalled_history` 决策视图；它仍基于 `roundHistory + loadedHistoryContext`，但会渲染成一套独立的结果导向 `history` 视图。
+- `mouth` 的 prompt 输入仍以 `your_notes` 为优先事实来源；当 `your_notes` 过于概括或不足以支撑用户要求的细节时，再从结果导向的 `history`、`deliveryGuidance` 与 `runtime_artifacts` 补足用户回答所需细节，而不是依赖额外的低层 tool 参数。
 - `mouth` 不再依赖 `execution.currentDecision` 的收口摘要来组织最终交付；若 `your_notes` 与更具体的历史/产物依据存在张力，应以更具体、可追溯的依据为准。

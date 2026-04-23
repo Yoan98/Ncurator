@@ -49,6 +49,7 @@ export const HUMAN_WATCH_HINT_CODES = [
   'learning_tool_budget_exceeded',
   'hand_plan_invalid',
   'hand_tool_limit_exceeded',
+  'hand_docx_positioned_write_blocked',
   'brain_invalid_mouth_transition'
 ] as const
 

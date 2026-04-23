@@ -12,6 +12,7 @@ import { getToolSpec } from '../../tools/registry'
 import type { ToolExecutionMeta } from '../../tools/types'
 import type { HumanRuntimeCache, HumanState, HumanWatchHint, ToolCallResult, ToolUsePlan } from '../../types'
 import { executeToolCall } from './toolExecutor'
+import { deriveHandFollowupSignals, shouldStopSerialHandPlan } from './followupSignals'
 import { returnToBrain, returnToBrainAfterTrace, returnToBrainWithWatchHint } from '../utils/stateTransitions'
 
 export const getToolExecutionMeta = (input: {
@@ -131,6 +132,15 @@ const executeToolUsePlan = async (input: {
         args: toolCall.args
       })
     )
+    if (
+      input.toolUsePlan.mode === 'serial' &&
+      shouldStopSerialHandPlan({
+        toolUsePlan: input.toolUsePlan,
+        results
+      })
+    ) {
+      break
+    }
   }
   return results
 }
@@ -180,10 +190,15 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
     })
     input.cache.toolCallCount += results.length
 
-    const watchHint =
+    const followupSignals = deriveHandFollowupSignals({
+      toolUsePlan,
+      results
+    })
+    const toolLimitWatchHint =
       input.cache.toolCallCount > toolCallLimit
         ? buildToolLimitWatchHint(input.cache.toolCallCount, toolCallLimit)
         : undefined
+    const watchHint = followupSignals.watchHint || toolLimitWatchHint
     const artifacts = mergeArtifactRefs(
       state.execution.artifacts,
       extractArtifactRefsFromToolResults(results)
@@ -206,7 +221,8 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       overrides: {
         execution: {
           lastToolResults: results,
-          artifacts
+          artifacts,
+          deliveryGuidance: followupSignals.deliveryGuidance
         },
         memory: {
           ...state.memory,
