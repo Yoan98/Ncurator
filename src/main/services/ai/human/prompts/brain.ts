@@ -140,16 +140,10 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
       这里优先写证据本身和直接支持关系，少写最终判词式总结。
 
     - checklist：
-      用于记录任务推进状态、已覆盖范围、待做项、失效路径和阻塞点。
-      使用 markdown 清单维护 todo / done / obsolete 三种状态；每条都必须带 note。
-      note 优先写完成结果、覆盖范围、阻塞原因或下一步意义，不要把 currentUnderstanding 的语义结论整段重复到 checklist 里。
-      示例格式：
-        - [todo] 事项标题
-          - note: 补充说明
-        - [done] 事项标题
-          - note: 完成依据或结果
-        - [obsolete] 事项标题
-          - note: 为什么这条路径失效或不再优先
+      用于记录任务推进状态、已覆盖范围、待做项和失效路径。
+      checklist 必须是结构化数组；每项只包含 item 和 status 两个字段。
+      status 只能使用 todo / done / obsolete。
+      如果你输出 checklist，必须给出基于旧内容整理后的完整最新版本，而不是只写局部变更。
 
     - 更新 stableMemory 时，优先在旧笔记基础上就地编辑，只改被新证据影响的部分。
     - 没有新证据时，不要仅因表述习惯变化就重写整段长期笔记。
@@ -173,9 +167,9 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
 
     - updatedStableMemory 是可选的 partial patch；缺失表示本轮不更新任务笔记。
     - updatedStableMemory 中某个字段缺失：表示该字段保持原值。
-    - updatedStableMemory 中某个字段为空字符串：表示显式清空该字段。
+    - updatedStableMemory 中 currentUnderstanding / keyEvidence 为空字符串：表示显式清空该字段。
+    - updatedStableMemory 中 checklist 若出现，表示直接用该完整数组覆盖旧 checklist；传 [] 表示显式清空 checklist。
 
-    - readyToDeliver=true 只表示当前已经具备最终交付所需的信息、证据和产物。
     - 如果你现在无法给出某个工具的完整必填参数，不要猜；应改为 learning 或 mouth。
 
     - decision.summary：一句话概括你本轮的判断或下一步意图。
@@ -201,7 +195,6 @@ ${outputShapeText}
           "reason": "下一步已经明确，但仍缺少相关技能说明。",
           "expectedOutcome": "补齐技能说明后可以决定是否调用工具。"
         },
-        "readyToDeliver": false,
         "nextAction": {
           "action": "learning",
           "wantLearnSkillIds": ["docx-read"]
@@ -216,7 +209,6 @@ ${outputShapeText}
           "reason": "当前已具备所需能力，且已经能写出完整合法的工具参数。",
           "expectedOutcome": "拿到当前工作区路径，供后续判断继续使用。"
         },
-        "readyToDeliver": false,
         "nextAction": {
           "action": "hand",
           "toolUsePlan": {
@@ -239,14 +231,18 @@ ${outputShapeText}
         "updatedStableMemory": {
           "currentUnderstanding": "- 已确认审批驳回时原文件保持不变。",
           "keyEvidence": "- kb_search 命中了审批驳回时保留原文件的制度说明。",
-          "checklist": "- [done] 确认审批驳回时是否保留原文件\\n  - note: 已从知识库命中制度说明。"
+          "checklist": [
+            {
+              "item": "确认审批驳回时是否保留原文件",
+              "status": "done"
+            }
+          ]
         },
         "decision": {
           "summary": "证据已经足够，准备结束任务",
           "reason": "当前已拿到能直接支撑结论的依据。",
           "expectedOutcome": "由后续表达节点整理最终结果。"
         },
-        "readyToDeliver": true,
         "nextAction": {
           "action": "mouth"
         }

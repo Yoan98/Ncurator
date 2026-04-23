@@ -25,19 +25,21 @@ describe('ai human mock-llm backend', () => {
                     currentUnderstanding: '- 已开始整理当前任务板。',
                     keyEvidence: '- 当前还没有最终证据，只先建立任务板。',
                     checklist: [
-                      '- [todo] 确认 A 事项',
-                      '  - note: 第一轮先建任务板。',
-                      '',
-                      '- [todo] 确认 B 事项',
-                      '  - note: 还未开始处理。'
-                    ].join('\n')
+                      {
+                        item: '确认 A 事项',
+                        status: 'todo'
+                      },
+                      {
+                        item: '确认 B 事项',
+                        status: 'todo'
+                      }
+                    ]
                   },
                   decision: {
                     summary: '先学习一个 skill，让 checklist 进入下一轮 prompt。',
                     reason: '需要通过真实 graph 触发第二轮 brain。',
                     expectedOutcome: '确认 checklist 在下一轮仍然可见并可被重写维护。'
                   },
-                  readyToDeliver: false,
                   nextAction: {
                     action: 'learning',
                     wantLearnSkillIds: ['workspace-cli']
@@ -47,9 +49,7 @@ describe('ai human mock-llm backend', () => {
               ({ user }) => {
                 secondBrainSeesChecklist =
                   user.includes('[todo] 确认 A 事项') &&
-                  user.includes('第一轮先建任务板') &&
-                  user.includes('[todo] 确认 B 事项') &&
-                  user.includes('还未开始处理')
+                  user.includes('[todo] 确认 B 事项')
 
                 const completeDecision = buildCompleteTaskDecision({
                   summary: 'checklist 已成功跨轮维护。',
@@ -62,20 +62,23 @@ describe('ai human mock-llm backend', () => {
                     currentUnderstanding:
                       '- 已确认 checklist 会作为长期任务板跨轮保留，并允许在新信息下重写为最新版本。',
                     keyEvidence:
-                      '- 第二轮真实 brain prompt 中再次读到了第一轮 checklist 的 todo 项与 note。',
+                      '- 第二轮真实 brain prompt 中再次读到了第一轮 checklist 的 todo 项。',
                     checklist: [
-                      '- [done] 确认 A 事项',
-                      '  - note: 第二轮已验证完成。',
-                      '',
-                      '- [todo] 跟进 C 事项',
-                      '  - note: 第二轮新增的新任务。',
-                      '',
-                      '- [obsolete] 确认 B 事项',
-                      '  - note: 第二轮判断这条旧路径不再优先。'
-                    ].join('\n')
+                      {
+                        item: '确认 A 事项',
+                        status: 'done'
+                      },
+                      {
+                        item: '跟进 C 事项',
+                        status: 'done'
+                      },
+                      {
+                        item: '确认 B 事项',
+                        status: 'obsolete'
+                      }
+                    ]
                   },
                   decision: completeDecision.decision,
-                  readyToDeliver: completeDecision.readyToDeliver,
                   nextAction: completeDecision.nextAction
                 }
               }

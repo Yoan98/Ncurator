@@ -5,7 +5,12 @@ import type { HumanStableMemory } from '../../../src/main/services/ai/human/type
 const BASE_STABLE_MEMORY: HumanStableMemory = {
   currentUnderstanding: '当前理解',
   keyEvidence: '关键依据',
-  checklist: '- [todo] 继续核对\n  - note: 还没完成'
+  checklist: [
+    {
+      item: '继续核对',
+      status: 'todo'
+    }
+  ]
 }
 
 describe('ai unit stable memory patch', () => {
@@ -28,7 +33,12 @@ describe('ai unit stable memory patch', () => {
     ).toEqual({
       currentUnderstanding: '当前理解',
       keyEvidence: '新的关键依据',
-      checklist: '- [todo] 继续核对\n  - note: 还没完成'
+      checklist: [
+        {
+          item: '继续核对',
+          status: 'todo'
+        }
+      ]
     })
   })
 
@@ -41,18 +51,18 @@ describe('ai unit stable memory patch', () => {
     ).toEqual(BASE_STABLE_MEMORY)
   })
 
-  it('clears a field when the patch explicitly returns an empty string', () => {
+  it('clears checklist when the patch explicitly returns an empty array', () => {
     expect(
       applyStableMemoryPatch({
         stable: BASE_STABLE_MEMORY,
         patch: {
-          checklist: ''
+          checklist: []
         }
       })
     ).toEqual({
       currentUnderstanding: '当前理解',
       keyEvidence: '关键依据',
-      checklist: ''
+      checklist: []
     })
   })
 
@@ -67,7 +77,12 @@ describe('ai unit stable memory patch', () => {
     ).toEqual({
       currentUnderstanding: '第一行\n第二行',
       keyEvidence: '关键依据',
-      checklist: '- [todo] 继续核对\n  - note: 还没完成'
+      checklist: [
+        {
+          item: '继续核对',
+          status: 'todo'
+        }
+      ]
     })
   })
 })

@@ -101,6 +101,7 @@ export const applyBrainDecisionTransition = (input: {
 }): HumanState => {
   const watchHint = resolveBrainDecisionWatchHint({
     decision: input.decision,
+    stableMemory: input.stableMemory,
     watchHint: input.watchHint
   })
   const nextState = applyBrainDecisionState({

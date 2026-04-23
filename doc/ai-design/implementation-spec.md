@@ -78,7 +78,7 @@ stateDiagram-v2
 - 约束：输出必须通过 `ctx.chatStructured` 与 schema 校验；`memory.stable` 只能通过 patch 修改。
 - brain prompt 推荐按 `principles / decision_contract / stable_memory_contract / context_block_guide / output_contract / output_shape / examples` 组织：`principles` 承载工作方式与自主性边界，`decision_contract` 承载动作选择与 tool plan 语义，`stable_memory_contract` 承载长期任务笔记写法和更新原则，`output_contract` 只承载输出层规则。
 - 当前可直接调用的工具说明必须由 `registry -> tool spec` 统一供给；brain prompt 中的工具输入结构应来自 tool schema 的自动导出文本，并附带 tool spec examples。
-- brain prompt 中的输出 shape 应直接来自 `humanDecisionSchema` 的自动导出文本；`readyToDeliver`、stableMemory patch、action 选择约束等语义规则继续手写维护，不单独定义 display schema。
+- brain prompt 中的输出 shape 应直接来自 `humanDecisionSchema` 的自动导出文本；stableMemory patch、基于 checklist 的收口约束与 action 选择语义规则继续手写维护，不单独定义 display schema。
 
 ### 5.2 `learning`
 

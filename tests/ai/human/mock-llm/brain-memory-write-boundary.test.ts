@@ -24,14 +24,18 @@ describe('ai human mock-llm backend', () => {
                   updatedStableMemory: {
                     currentUnderstanding: '- 项目上线前需要执行复核。',
                     keyEvidence: '- 知识库显示上线前必须执行复核。',
-                    checklist: '- [todo] 确认最终负责人。\n  - note: 当前还不确定。'
+                    checklist: [
+                      {
+                        item: '确认最终负责人',
+                        status: 'todo'
+                      }
+                    ]
                   },
                   decision: {
                     summary: '先学习一个 skill，让 memory 进入下一轮 prompt。',
                     reason: '需要通过真实 graph 触发第二轮 brain。',
                     expectedOutcome: '确认 memory 在第二轮仍然可见。'
                   },
-                  readyToDeliver: false,
                   nextAction: {
                     action: 'learning',
                     wantLearnSkillIds: ['workspace-cli']
@@ -42,14 +46,30 @@ describe('ai human mock-llm backend', () => {
                 secondBrainSeesMemory =
                   user.includes('项目上线前需要执行复核') &&
                   user.includes('知识库显示上线前必须执行复核') &&
-                  user.includes('确认最终负责人') &&
-                  user.includes('当前还不确定')
+                  user.includes('确认最终负责人')
 
-                return buildCompleteTaskDecision({
+                const completeDecision = buildCompleteTaskDecision({
                   summary: 'memory 已成功跨轮保持。',
                   reason: '第二轮 prompt 已经读到了第一轮写入的 memory。',
                   expectedOutcome: '进入最终交付。'
                 })
+
+                return {
+                  updatedStableMemory: {
+                    currentUnderstanding:
+                      '- 已确认 memory 会在第二轮继续可见，且负责人事项已完成。',
+                    keyEvidence:
+                      '- 第二轮真实 brain prompt 中再次读到了第一轮写入的当前理解、关键依据和 checklist 项。',
+                    checklist: [
+                      {
+                        item: '确认最终负责人',
+                        status: 'done'
+                      }
+                    ]
+                  },
+                  decision: completeDecision.decision,
+                  nextAction: completeDecision.nextAction
+                }
               }
             ],
             'human.mouth': [

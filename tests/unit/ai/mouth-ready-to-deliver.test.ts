@@ -8,57 +8,92 @@ import { createInitialHumanState } from '../../../src/main/services/ai/human/sta
 import { applyBrainDecisionState, resolveBrainDecisionWatchHint } from '../../../src/main/services/ai/human/node/utils/stateTransitionState'
 import type { HumanDecision } from '../../../src/main/services/ai/human/types'
 
-const buildMouthDecision = (readyToDeliver: boolean): HumanDecision => ({
+const buildMouthDecision = (): HumanDecision => ({
   decision: {
     summary: '尝试收尾',
     reason: '测试 mouth 收尾契约。',
-    expectedOutcome: '验证 readyToDeliver 对 stage 的影响。'
+    expectedOutcome: '验证 checklist 对 stage 的影响。'
   },
-  readyToDeliver,
   nextAction: {
     action: 'mouth'
   }
 })
 
-describe('ai unit mouth readyToDeliver guard', () => {
-  it('keeps the state in brain when mouth is selected before readyToDeliver', () => {
+describe('ai unit mouth checklist guard', () => {
+  it('keeps the state in brain when mouth is selected before checklist is complete', () => {
     const initialState = createInitialHumanState({
       taskId: 'task-1',
       userInput: '请完成任务'
     })
-    const decision = buildMouthDecision(false)
+    const decision = buildMouthDecision()
     const watchHint = resolveBrainDecisionWatchHint({
-      decision
+      decision,
+      stableMemory: {
+        ...initialState.memory.stable,
+        checklist: [
+          {
+            item: '完成最终交付前的剩余事项',
+            status: 'todo'
+          }
+        ]
+      }
     })
     const nextState = applyBrainDecisionState({
       state: initialState,
       decision,
-      stableMemory: initialState.memory.stable,
+      stableMemory: {
+        ...initialState.memory.stable,
+        checklist: [
+          {
+            item: '完成最终交付前的剩余事项',
+            status: 'todo'
+          }
+        ]
+      },
       watchHint,
       createdAt: 1
     })
 
     expect(watchHint).toEqual({
-      code: 'brain_invalid_mouth_transition',
-      detail: {}
+      code: 'brain_checklist_incomplete',
+      detail: {
+        pendingItems: ['完成最终交付前的剩余事项']
+      }
     })
     expect(nextState.execution.stage).toBe('brain')
     expect(nextState.execution.watchHint).toBe(watchHint)
   })
 
-  it('allows mouth only when readyToDeliver is true', () => {
+  it('allows mouth only when checklist has no todo', () => {
     const initialState = createInitialHumanState({
       taskId: 'task-1',
       userInput: '请完成任务'
     })
-    const decision = buildMouthDecision(true)
+    const decision = buildMouthDecision()
     const watchHint = resolveBrainDecisionWatchHint({
-      decision
+      decision,
+      stableMemory: {
+        ...initialState.memory.stable,
+        checklist: [
+          {
+            item: '完成最终交付前的剩余事项',
+            status: 'done'
+          }
+        ]
+      }
     })
     const nextState = applyBrainDecisionState({
       state: initialState,
       decision,
-      stableMemory: initialState.memory.stable,
+      stableMemory: {
+        ...initialState.memory.stable,
+        checklist: [
+          {
+            item: '完成最终交付前的剩余事项',
+            status: 'done'
+          }
+        ]
+      },
       watchHint,
       createdAt: 1
     })
@@ -120,7 +155,6 @@ describe('ai unit mouth readyToDeliver guard', () => {
           reason: '需要根据失败信息修正参数',
           expectedOutcome: '拿到原始 schema 报错并继续收敛'
         },
-        readyToDeliver: false,
         nextAction: {
           action: 'hand',
           toolUsePlan: {
@@ -210,7 +244,6 @@ describe('ai unit mouth readyToDeliver guard', () => {
           reason: '需要按原文说明反走样处理办法',
           expectedOutcome: '拿到完整原文片段'
         },
-        readyToDeliver: false,
         nextAction: {
           action: 'hand',
           toolUsePlan: {

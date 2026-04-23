@@ -1,4 +1,4 @@
-import type { HumanStableMemory, HumanStableMemoryPatch } from '../types'
+import type { HumanChecklistItem, HumanStableMemory, HumanStableMemoryPatch } from '../types'
 
 const normalizeStableMemoryText = (value: string): string =>
   String(value || '')
@@ -7,6 +7,14 @@ const normalizeStableMemoryText = (value: string): string =>
     .map((line) => line.trimEnd())
     .join('\n')
     .trim()
+
+const normalizeChecklistItems = (items: HumanChecklistItem[]): HumanChecklistItem[] =>
+  items
+    .map((item) => ({
+      item: String(item.item || '').trim(),
+      status: item.status
+    }))
+    .filter((item) => item.item.length > 0)
 
 export const applyStableMemoryPatch = (input: {
   stable: HumanStableMemory
@@ -26,8 +34,8 @@ export const applyStableMemoryPatch = (input: {
         ? normalizeStableMemoryText(input.patch.keyEvidence)
         : input.stable.keyEvidence,
     checklist:
-      typeof input.patch.checklist === 'string'
-        ? normalizeStableMemoryText(input.patch.checklist)
+      Array.isArray(input.patch.checklist)
+        ? normalizeChecklistItems(input.patch.checklist)
         : input.stable.checklist
   }
 }

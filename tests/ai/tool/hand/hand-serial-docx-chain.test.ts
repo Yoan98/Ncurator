@@ -72,7 +72,6 @@ describe('ai tool hand backend', () => {
                 reason: '先写入，再基于最新快照读回确认，依赖同一份最新草稿。',
                 expectedOutcome: '完成替换并确认新内容可继续搜索到。'
               },
-              readyToDeliver: false,
               nextAction: {
                 action: 'hand',
                 toolUsePlan: {

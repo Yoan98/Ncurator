@@ -41,7 +41,7 @@ describe('ai unit tool prompt contract', () => {
 
     expect(shapeText).toContain('updatedStableMemory?')
     expect(shapeText).toContain('decision:')
-    expect(shapeText).toContain('readyToDeliver: boolean')
+    expect(shapeText).toContain('checklist?: Array<')
     expect(shapeText).toContain('nextAction:')
     expect(promptText).toContain('输出 JSON 结构：')
     expect(promptText).toContain('toolUsePlan')

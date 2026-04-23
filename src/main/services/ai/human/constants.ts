@@ -50,7 +50,7 @@ export const HUMAN_WATCH_HINT_CODES = [
   'hand_plan_invalid',
   'hand_tool_limit_exceeded',
   'hand_docx_positioned_write_blocked',
-  'brain_invalid_mouth_transition'
+  'brain_checklist_incomplete'
 ] as const
 
 export const HUMAN_MAX_ACTIVE_TOOLS = 20

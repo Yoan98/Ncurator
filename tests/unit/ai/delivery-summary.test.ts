@@ -28,7 +28,6 @@ describe('ai unit delivery summary', () => {
         reason: '信息已经足够。',
         expectedOutcome: '输出最终答复。'
       },
-      readyToDeliver: true,
       nextAction: {
         action: 'mouth'
       }

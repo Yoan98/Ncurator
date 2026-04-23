@@ -213,7 +213,6 @@ const renderBrainRoundDecision = (record: HumanRoundRecord): string =>
 - 你的判断：${record.decision.decision.summary}
 - 你这样判断的原因：${record.decision.decision.reason}
 - 你当时期待的结果：${record.decision.decision.expectedOutcome}
-- ${record.decision.readyToDeliver ? '你当时认为已经可以交付。' : '你当时认为还不能直接交付。'}
 ${renderDecisionNextAction(record)}
 `.trim()
 

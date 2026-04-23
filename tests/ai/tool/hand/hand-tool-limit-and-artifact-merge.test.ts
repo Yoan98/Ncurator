@@ -34,7 +34,6 @@ const buildHandState = (input: {
         reason: '验证 hand 的工具上限与 artifact 合并行为。',
         expectedOutcome: '工具执行后更新 execution.artifacts。'
       },
-      readyToDeliver: false,
       nextAction: {
         action: 'hand' as const,
         toolUsePlan: {

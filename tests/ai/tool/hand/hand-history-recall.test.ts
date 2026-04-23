@@ -41,7 +41,6 @@ describe('ai tool hand backend', () => {
                   reason: '后续需要修改文档。',
                   expectedOutcome: '补齐结构化写入能力。'
                 },
-                readyToDeliver: false,
                 nextAction: {
                   action: 'learning',
                   wantLearnSkillIds: ['docx-write']
@@ -74,7 +73,6 @@ describe('ai tool hand backend', () => {
                   reason: '已经具备 write 能力，可以执行文本替换。',
                   expectedOutcome: '拿到 changedBlocks。'
                 },
-                readyToDeliver: false,
                 nextAction: {
                   action: 'hand',
                   toolUsePlan: {
@@ -148,7 +146,6 @@ describe('ai tool hand backend', () => {
                 reason: '最近历史摘要还不够，需要看更详细的旧轮次。',
                 expectedOutcome: '加载到包含 docx_text_edit 的旧历史。'
               },
-              readyToDeliver: false,
               nextAction: {
                 action: 'hand',
                 toolUsePlan: {

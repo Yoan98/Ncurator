@@ -45,7 +45,6 @@ const buildDecision = (input: {
     reason: input.reason,
     expectedOutcome: input.expectedOutcome
   },
-  readyToDeliver: false,
   nextAction: input.nextAction
 })
 
@@ -204,7 +203,8 @@ describe('ai unit brain prompt history blocks', () => {
     expect(prompt.system).not.toContain('<autonomy_principles>')
     expect(prompt.system).not.toContain('<output_rules>')
     expect(prompt.system).not.toContain('<stable_memory_guidance>')
-    expect(prompt.system).toContain('readyToDeliver=true 只表示当前已经具备最终交付所需的信息、证据和产物')
+    expect(prompt.system).toContain('checklist 必须是结构化数组')
+    expect(prompt.system).toContain('传 [] 表示显式清空 checklist')
     expect(prompt.system).toContain('updatedStableMemory?')
     expect(prompt.system).toContain('toolUsePlan')
     expect(prompt.system).toContain('currentUnderstanding')

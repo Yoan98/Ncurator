@@ -56,7 +56,6 @@ const buildLearningDecision = (skillIds: string[]): HumanDecision => ({
     reason: '验证 learning 会加载新 skill，并跳过重复或未知 skill。',
     expectedOutcome: '写出 lastLearningOutcome 并返回 brain。'
   },
-  readyToDeliver: false,
   nextAction: {
     action: 'learning' as const,
     wantLearnSkillIds: skillIds

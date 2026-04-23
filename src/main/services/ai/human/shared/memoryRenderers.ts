@@ -1,4 +1,4 @@
-import type { HumanStableMemory, HumanState } from '../types'
+import type { HumanChecklistItem, HumanStableMemory, HumanState } from '../types'
 
 export type HumanMemoryRenderMode = 'brain_prompt' | 'mouth_prompt' | 'fallback_markdown'
 export type HumanStableMemoryField = keyof HumanStableMemory
@@ -16,11 +16,23 @@ const renderStableMemoryValue = (value: string, mode: HumanMemoryRenderMode): st
   return normalized || getRenderFallback(mode)
 }
 
+const renderChecklistItem = (item: HumanChecklistItem): string =>
+  `- [${item.status}] ${item.item}`
+
+const renderChecklistValue = (
+  checklist: HumanState['memory']['stable']['checklist'],
+  mode: HumanMemoryRenderMode
+): string =>
+  checklist.length > 0 ? checklist.map(renderChecklistItem).join('\n') : getRenderFallback(mode)
+
 export const renderHumanStableMemoryField = (input: {
   state: HumanState
   field: HumanStableMemoryField
   mode: HumanMemoryRenderMode
-}): string => renderStableMemoryValue(input.state.memory.stable[input.field], input.mode)
+}): string =>
+  input.field === 'checklist'
+    ? renderChecklistValue(input.state.memory.stable.checklist, input.mode)
+    : renderStableMemoryValue(input.state.memory.stable[input.field], input.mode)
 
 export const renderHumanStableNotes = (
   state: HumanState,

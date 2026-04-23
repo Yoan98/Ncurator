@@ -16,6 +16,8 @@ import {
   brainDecisionSchema,
   brainNextActionSchema,
   humanDecisionSchema,
+  humanChecklistItemSchema,
+  humanChecklistItemStatusSchema,
   humanExecutionSchema,
   humanHistoryToolResultSchema,
   humanLearningOutcomeSchema,
@@ -75,6 +77,8 @@ export type SkillDefinition = SkillDefinitionBase
 
 export type BrainDecision = z.infer<typeof brainDecisionSchema>
 export type BrainNextAction = z.infer<typeof brainNextActionSchema>
+export type HumanChecklistItemStatus = z.infer<typeof humanChecklistItemStatusSchema>
+export type HumanChecklistItem = z.infer<typeof humanChecklistItemSchema>
 export type HumanStableMemory = z.infer<typeof humanStableMemorySchema>
 export type HumanStableMemoryPatch = z.infer<typeof humanStableMemoryPatchSchema>
 export type HumanDecision = z.infer<typeof humanDecisionSchema>

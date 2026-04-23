@@ -39,7 +39,6 @@ export const buildLearnSkillsDecision = (input: {
 }): HumanDecision => ({
   updatedStableMemory: input.updatedStableMemory,
   decision: buildDecisionMetadata(input),
-  readyToDeliver: false,
   nextAction: {
     action: 'learning',
     wantLearnSkillIds: input.skillIds
@@ -57,7 +56,6 @@ export const buildToolDecision = (input: {
 }): HumanDecision => ({
   updatedStableMemory: input.updatedStableMemory,
   decision: buildDecisionMetadata(input),
-  readyToDeliver: false,
   nextAction: {
     action: 'hand',
     toolUsePlan: {
@@ -80,7 +78,6 @@ export const buildCompleteTaskDecision = (input: {
 }): HumanDecision => ({
   updatedStableMemory: input.updatedStableMemory,
   decision: buildDecisionMetadata(input),
-  readyToDeliver: true,
   nextAction: {
     action: 'mouth'
   }

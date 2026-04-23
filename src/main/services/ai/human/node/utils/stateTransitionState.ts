@@ -98,13 +98,22 @@ export const returnToBrainAfterTraceState = (input: {
 
 export const resolveBrainDecisionWatchHint = (input: {
   decision: HumanDecision
+  stableMemory: HumanStableMemory
   watchHint?: HumanWatchHint
 }): HumanWatchHint | undefined => {
   if (input.watchHint) return input.watchHint
-  return input.decision.nextAction.action === 'mouth' && !input.decision.readyToDeliver
+  if (input.decision.nextAction.action !== 'mouth') return undefined
+
+  const pendingItems = input.stableMemory.checklist
+    .filter((item) => item.status === 'todo')
+    .map((item) => item.item)
+
+  return pendingItems.length > 0
     ? {
-        code: 'brain_invalid_mouth_transition',
-        detail: {}
+        code: 'brain_checklist_incomplete',
+        detail: {
+          pendingItems
+        }
       }
     : undefined
 }

@@ -28,8 +28,10 @@ export const summarizeWatchHint = (hint: HumanWatchHint): string => {
       return `hand 累计工具调用次数达到 ${hint.detail.toolCallCount}，已超过临时上限 ${hint.detail.limit}。`
     case 'hand_docx_positioned_write_blocked':
       return `hand 命中复杂定位排版保护；${hint.detail.targetDescription}不能自动编辑。`
-    case 'brain_invalid_mouth_transition':
-      return 'brain 选择 mouth 时必须 readyToDeliver=true；当前结果仍未准备好收尾。'
+    case 'brain_checklist_incomplete':
+      return `brain 选择 mouth 时 checklist 仍有未完成事项；pending=${renderStringList(
+        hint.detail.pendingItems
+      )}。`
   }
 }
 
@@ -77,10 +79,11 @@ export const renderWatchHintForBrain = (hint: HumanWatchHint): string => {
         `上一轮命中了复杂定位排版保护，${hint.detail.targetDescription}不能自动编辑。`,
         '不要继续尝试修改这处区域，继续处理当前任务中其他仍可完成的部分。'
       ].join('\n')
-    case 'brain_invalid_mouth_transition':
+    case 'brain_checklist_incomplete':
       return [
-        '你上一轮选择了 mouth，但 readyToDeliver=false。',
-        '只要结果仍依赖未来工具动作，就不能选择 mouth。'
+        '你上一轮选择了 mouth，但 checklist 里仍有未完成事项。',
+        `pendingItems=${renderStringList(hint.detail.pendingItems)}`,
+        '请先完成这些事项，或将其更新为 done/obsolete 后再结束任务。'
       ].join('\n')
   }
 }

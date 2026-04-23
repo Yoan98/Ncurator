@@ -651,8 +651,8 @@
 - What：验证 checklist 作为长期任务板会在 mock-llm 下跨轮维护 todo、done 与 obsolete 状态。
 - Why：如果 checklist 不能跨轮保留并被重写成最新任务板，brain 很容易把长期记忆退化成单轮摘要。
 - How：第一轮 `brain` 写入只含 todo 的 checklist，并触发一次真实 learning；第二轮 `brain` 读取真实 prompt 后，将 checklist 重写为包含 done、todo 与 obsolete 的新版本。
-- Oracle：第二轮 `brain` prompt 中能看到第一轮写入的 checklist 与 note，任务最终完成，且新的 checklist 成功写回长期记忆。
-- Not：不验证 runtime 是否解析 checklist 结构或对其状态做额外机读校验。
+- Oracle：第二轮 `brain` prompt 中能看到第一轮写入的结构化 checklist 项，任务最终完成，且新的 checklist 成功写回长期记忆。
+- Not：不验证除 `mouth` 收口前的 todo 检查之外的更复杂 checklist 机读策略。
 - Last Run：`2026-04-16 10:37:31 +08:00`
 - Last Result：`通过`
 

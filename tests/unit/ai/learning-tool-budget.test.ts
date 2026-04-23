@@ -67,7 +67,6 @@ describe('ai unit learning tool budget', () => {
           reason: '测试学习不再受固定数量上限约束',
           expectedOutcome: '应由 active tool budget 决定是否可执行'
         },
-        readyToDeliver: false,
         nextAction: {
           action: 'learning',
           wantLearnSkillIds: ['workspace-cli', 'docx-read', 'docx-write']

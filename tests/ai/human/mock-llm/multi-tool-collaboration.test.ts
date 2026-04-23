@@ -50,7 +50,6 @@ describe('ai human mock-llm backend', () => {
                     reason: '两个动作都属于只读且可以并行。',
                     expectedOutcome: '一次 hand 同时拿到工作区路径和资料范围。'
                   },
-                  readyToDeliver: false,
                   nextAction: {
                     action: 'hand',
                     toolUsePlan: {

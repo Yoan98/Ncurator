@@ -132,8 +132,10 @@ export const humanWatchHintSchema = z.discriminatedUnion('code', [
     })
   }),
   z.object({
-    code: z.literal('brain_invalid_mouth_transition'),
-    detail: z.object({})
+    code: z.literal('brain_checklist_incomplete'),
+    detail: z.object({
+      pendingItems: z.array(z.string().min(1)).min(1)
+    })
   })
 ])
 
@@ -148,10 +150,17 @@ export const humanHistoryToolResultSchema = z.object({
   resourceContext: toolResourceContextSchema.optional()
 })
 
+export const humanChecklistItemStatusSchema = z.enum(['todo', 'done', 'obsolete'])
+
+export const humanChecklistItemSchema = z.object({
+  item: z.string().min(1),
+  status: humanChecklistItemStatusSchema
+})
+
 export const humanStableMemorySchema = z.object({
   currentUnderstanding: z.string(),
   keyEvidence: z.string(),
-  checklist: z.string()
+  checklist: z.array(humanChecklistItemSchema)
 })
 
 export const humanStableMemoryPatchSchema = humanStableMemorySchema.partial()
@@ -179,7 +188,6 @@ export const brainNextActionSchema = z.union([
 export const humanDecisionSchema = z.object({
   updatedStableMemory: humanStableMemoryPatchSchema.optional(),
   decision: brainDecisionSchema,
-  readyToDeliver: z.boolean(),
   nextAction: brainNextActionSchema
 })
 

@@ -276,8 +276,11 @@ interface HumanStableMemory {
   currentUnderstanding: string
   // 当前关键依据；记录支撑理解或下一步动作的证据、来源、关键内容与它直接支持什么，并基于旧内容累积维护。
   keyEvidence: string
-  // 当前任务板；使用 markdown 维护 todo / done / obsolete 和 note，主要承载推进状态、覆盖范围、阻塞点和失效路径，不重复 currentUnderstanding 的大段语义判断。
-  checklist: string
+  // 当前任务板；使用结构化数组维护 todo / done / obsolete 三种状态，主要承载推进状态、覆盖范围、阻塞点和失效路径，不重复 currentUnderstanding 的大段语义判断。
+  checklist: Array<{
+    item: string
+    status: 'todo' | 'done' | 'obsolete'
+  }>
 }
 
 // brain 对 stable memory 的局部补丁；缺失字段表示保持原值。
@@ -315,8 +318,6 @@ interface HumanDecision {
   updatedStableMemory?: HumanStableMemoryPatch
   // 本轮 brain 的正式决策内容。
   decision: BrainDecision
-  // 当前是否已经具备最终交付所需的信息、依据和产物。
-  readyToDeliver: boolean
   // 下一跳动作对象；决定本轮之后去 learning、hand 还是 mouth。
   nextAction: BrainNextAction
 }
@@ -566,9 +567,11 @@ type HumanWatchHint =
       }
     }
   | {
-      // brain 试图直接去 mouth，但 readyToDeliver 仍为 false。
-      code: 'brain_invalid_mouth_transition'
-      detail: {}
+      // brain 试图直接去 mouth，但 checklist 里仍有未完成事项。
+      code: 'brain_checklist_incomplete'
+      detail: {
+        pendingItems: string[]
+      }
     }
 
 interface MouthOutput {

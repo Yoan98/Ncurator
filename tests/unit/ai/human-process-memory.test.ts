@@ -16,14 +16,12 @@ const buildDecision = (input: {
   reason: string
   expectedOutcome: string
   nextAction: HumanDecision['nextAction']
-  readyToDeliver?: boolean
 }): HumanDecision => ({
   decision: {
     summary: input.summary,
     reason: input.reason,
     expectedOutcome: input.expectedOutcome
   },
-  readyToDeliver: input.readyToDeliver || false,
   nextAction: input.nextAction
 })
 
@@ -37,7 +35,6 @@ describe('ai unit human memory history', () => {
       summary: '错误地尝试直接收尾',
       reason: '测试 pre_execution_blocked。',
       expectedOutcome: '被系统拦下并回到 brain。',
-      readyToDeliver: false,
       nextAction: {
         action: 'mouth'
       }
@@ -46,10 +43,20 @@ describe('ai unit human memory history', () => {
     const nextState = applyBrainDecisionState({
       state: initialState,
       decision,
-      stableMemory: initialState.memory.stable,
+      stableMemory: {
+        ...initialState.memory.stable,
+        checklist: [
+          {
+            item: '完成最终交付前的剩余事项',
+            status: 'todo'
+          }
+        ]
+      },
       watchHint: {
-        code: 'brain_invalid_mouth_transition',
-        detail: {}
+        code: 'brain_checklist_incomplete',
+        detail: {
+          pendingItems: ['完成最终交付前的剩余事项']
+        }
       },
       createdAt: 1
     })
@@ -62,7 +69,7 @@ describe('ai unit human memory history', () => {
       execution: {
         kind: 'pre_execution_blocked',
         watchHint: {
-          code: 'brain_invalid_mouth_transition'
+          code: 'brain_checklist_incomplete'
         }
       }
     })
