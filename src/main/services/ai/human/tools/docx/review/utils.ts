@@ -45,6 +45,10 @@ export const getDocxChangeKind = (op: DocxOp): FileReviewChange['change_kind'] =
   op.type === 'update_table_cell' ? 'table_cell' : 'block'
 
 export const buildDocxChangeTitle = (op: DocxOp, change: DocxChangedBlock): string => {
+  if (op.type === 'style_text') {
+    const query = String(op.query || '').trim()
+    return query ? `更新文本样式: ${query}` : '更新文本样式'
+  }
   const baseText = String(change.afterText || change.beforeText).trim()
   const previewRaw = clipText(baseText, 28).trim()
   const preview = previewRaw.length < baseText.length ? `${previewRaw}...` : previewRaw
@@ -52,7 +56,9 @@ export const buildDocxChangeTitle = (op: DocxOp, change: DocxChangedBlock): stri
 }
 
 export const buildDocxChangeSummary = (op: DocxOp, change: DocxChangedBlock): string =>
-  `${describeDocxOp(op)} ${change.blockId}`
+  op.type === 'style_text'
+    ? `${describeDocxOp(op)} ${change.blockId}${String(op.query || '').trim() ? `: ${String(op.query).trim()}` : ''}`
+    : `${describeDocxOp(op)} ${change.blockId}`
 
 export const buildDocxChangeLocator = (change: DocxChangedBlock): JsonObject => ({
   blockId: change.blockId,

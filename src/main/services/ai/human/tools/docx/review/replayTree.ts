@@ -98,6 +98,7 @@ const buildNode = (input: {
   spec: DocxBlockSpec
   createdRevisionRef: string
   changedRevisionRef?: string
+  reviewQuery?: string
 }): DocxReplayNode => ({
   nodeId: `${input.reviewState}:${input.blockId}:${input.createdRevisionRef}:${input.changedRevisionRef || 'active'}`,
   blockId: input.blockId,
@@ -110,7 +111,8 @@ const buildNode = (input: {
   currentBlockId: input.currentBlockId,
   spec: input.spec,
   createdRevisionRef: input.createdRevisionRef,
-  changedRevisionRef: input.changedRevisionRef
+  changedRevisionRef: input.changedRevisionRef,
+  reviewQuery: input.reviewQuery
 })
 
 const reindexBodyNodes = (session: DocxReplaySession): void => {
@@ -255,7 +257,8 @@ const cloneNodeAsOldRevision = (
   nodeId: `${node.nodeId}:${reviewState}:${revisionRef}`,
   currentBlockId: undefined,
   reviewState,
-  changedRevisionRef: revisionRef
+  changedRevisionRef: revisionRef,
+  reviewQuery: undefined
 })
 
 const buildCurrentNodeFromSnapshot = (
@@ -427,10 +430,34 @@ export const applyRevisionToReplaySession = (input: {
     return
   }
 
+  if (op.type === 'style_text') {
+    const snapshotBlock = resolveSnapshotBlockForMutation({
+      session,
+      nextSnapshot,
+      createdBlocks,
+      targetBlockId
+    })
+    if (!snapshotBlock) {
+      targetNode.reviewState = 'formatted'
+      targetNode.changedRevisionRef = revisionRef
+      targetNode.reviewQuery = op.query
+      session.activeSnapshot = nextSnapshot
+      return
+    }
+
+    targetNode.reviewState = 'formatted'
+    targetNode.currentBlockId = snapshotBlock.blockId
+    targetNode.bodyIndex = snapshotBlock.bodyIndex
+    targetNode.spec = snapshotBlock.spec
+    targetNode.changedRevisionRef = revisionRef
+    targetNode.reviewQuery = op.query
+    session.activeSnapshot = nextSnapshot
+    return
+  }
+
   const oldState =
     op.type === 'replace_block' ||
     op.type === 'replace_text' ||
-    op.type === 'style_text' ||
     op.type === 'update_table_cell'
       ? 'replaced-old'
       : 'deleted'
@@ -478,6 +505,7 @@ export const projectReplayNodes = (
       if (kind === 'review') return true
       return (
         node.reviewState === 'normal' ||
+        node.reviewState === 'formatted' ||
         node.reviewState === 'inserted' ||
         node.reviewState === 'replaced-new'
       )

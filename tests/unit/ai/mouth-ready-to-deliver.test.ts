@@ -119,6 +119,7 @@ describe('ai unit mouth checklist guard', () => {
     expect(prompt).toContain('只输出最终 markdown 正文')
     expect(prompt).toContain('如果需要使用不来自当前上下文的通用知识')
     expect(prompt).toContain('补充说明')
+    expect(prompt).toContain('严格按照当前上下文信息回答，不得编造')
   })
 
   it('keeps mouth user-context blocks data-only', () => {
@@ -322,6 +323,122 @@ describe('ai unit mouth checklist guard', () => {
     expect(prompt.user).toContain('多个像素点')
     expect(prompt.user).toContain('低通滤波')
     expect(prompt.user).not.toContain('fromBlockId')
+  })
+
+  it('renders actual docx write args in mouth history for paragraph and table edits', () => {
+    const initialState = createInitialHumanState({
+      taskId: 'task-6',
+      userInput: '把主稿补充完整并插入表格'
+    })
+    const history = appendRoundRecord({
+      state: initialState,
+      decision: {
+        decision: {
+          summary: '写入主稿段落和表格',
+          reason: '当前已经明确知道要写入的正文和表格内容',
+          expectedOutcome: '让 mouth 严格依据真实写入内容回答'
+        },
+        nextAction: {
+          action: 'hand',
+          toolUsePlan: {
+            mode: 'serial',
+            calls: [
+              {
+                toolName: 'docx_paragraph_edit',
+                args: {
+                  sourcePath: 'prd.docx',
+                  action: 'replace_text',
+                  blockId: 'b:31',
+                  text: '每个探究环节应包含四个核心设计要素：探究目标、探究素材、学生活动设计、环节推进条件。'
+                }
+              },
+              {
+                toolName: 'docx_table_edit',
+                args: {
+                  sourcePath: 'prd.docx',
+                  action: 'insert_after',
+                  anchorBlockId: 'b:32',
+                  rows: [
+                    ['设计要素', '关键内容', '互动形式示例'],
+                    ['探究目标', '明确学生需达成的认知目标', '情境引入、问题聚焦、概念生成'],
+                    ['探究素材', '提供视频、图片、数据等支撑材料', '耐克迁移视频、生产地图、成本数据表']
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      },
+      execution: buildHandExecution({
+        toolUsePlan: {
+          mode: 'serial',
+          calls: [
+            {
+              toolName: 'docx_paragraph_edit',
+              args: {
+                sourcePath: 'prd.docx',
+                action: 'replace_text',
+                blockId: 'b:31',
+                text: '每个探究环节应包含四个核心设计要素：探究目标、探究素材、学生活动设计、环节推进条件。'
+              }
+            },
+            {
+              toolName: 'docx_table_edit',
+              args: {
+                sourcePath: 'prd.docx',
+                action: 'insert_after',
+                anchorBlockId: 'b:32',
+                rows: [
+                  ['设计要素', '关键内容', '互动形式示例'],
+                  ['探究目标', '明确学生需达成的认知目标', '情境引入、问题聚焦、概念生成'],
+                  ['探究素材', '提供视频、图片、数据等支撑材料', '耐克迁移视频、生产地图、成本数据表']
+                ]
+              }
+            }
+          ]
+        },
+        toolResults: [
+          {
+            toolName: 'docx_paragraph_edit',
+            ok: true,
+            code: 'ok',
+            data: {
+              ok: true,
+              code: 'ok',
+              summary: '段落replace_text 完成，共 1 处变更'
+            }
+          },
+          {
+            toolName: 'docx_table_edit',
+            ok: true,
+            code: 'ok',
+            data: {
+              ok: true,
+              code: 'ok',
+              summary: '表格insert_after 完成，共 1 处变更'
+            }
+          }
+        ]
+      }),
+      createdAt: 3
+    })
+
+    const prompt = buildMouthPrompt({
+      state: {
+        ...initialState,
+        memory: {
+          ...initialState.memory,
+          history
+        }
+      }
+    })
+
+    expect(prompt.user).toContain('`docx_paragraph_edit` 已完成实际写入。')
+    expect(prompt.user).toContain('每个探究环节应包含四个核心设计要素')
+    expect(prompt.user).toContain('`docx_table_edit` 已完成实际写入。')
+    expect(prompt.user).toContain('设计要素')
+    expect(prompt.user).toContain('互动形式示例')
+    expect(prompt.user).toContain('耐克迁移视频')
   })
 
   it('renders delivery guidance when present', () => {

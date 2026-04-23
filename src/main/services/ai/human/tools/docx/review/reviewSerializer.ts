@@ -16,7 +16,7 @@ import { projectCommittedView, projectReviewView } from './viewProjector'
 
 const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 
-type RevisionKind = 'inserted' | 'deleted'
+type RevisionKind = 'inserted' | 'deleted' | 'formatted'
 
 const ensureDirForFile = async (filePath: string): Promise<void> => {
   await fs.mkdir(path.dirname(filePath), { recursive: true })
@@ -56,6 +56,14 @@ const styleRunForRevision = (run: Element, kind: RevisionKind): void => {
     return
   }
 
+  if (kind === 'formatted') {
+    const shade = firstChildElement(rPr, 'shd') || run.ownerDocument.createElementNS(WORD_NS, 'w:shd')
+    setWordAttribute(shade, 'val', 'clear')
+    setWordAttribute(shade, 'fill', 'CFFAFE')
+    if (!shade.parentNode) rPr.appendChild(shade)
+    return
+  }
+
   const color = run.ownerDocument.createElementNS(WORD_NS, 'w:color')
   const shade = run.ownerDocument.createElementNS(WORD_NS, 'w:shd')
   setWordAttribute(color, 'val', '166534')
@@ -77,6 +85,48 @@ const applyRevisionToRuns = (element: Element, kind: RevisionKind): void => {
     }
     applyRevisionToRuns(child, kind)
   })
+}
+
+const getRunText = (run: Element): string =>
+  Array.from({ length: run.childNodes.length })
+    .map((_, index) => run.childNodes.item(index))
+    .filter(Boolean)
+    .map((child) => {
+      if (!isElementNode(child)) return child.textContent || ''
+      if (child.localName === 't') return child.textContent || ''
+      return getRunText(child)
+    })
+    .join('')
+
+const collectRunElements = (element: Element): Element[] => {
+  const result: Element[] = []
+  const stack: Element[] = [element]
+  while (stack.length > 0) {
+    const current = stack.pop()
+    if (!current) continue
+    if (current.localName === 'r') {
+      result.push(current)
+      continue
+    }
+    Array.from({ length: current.childNodes.length })
+      .map((_, index) => current.childNodes.item(index))
+      .filter(isElementNode)
+      .forEach((child) => stack.push(child))
+  }
+  return result
+}
+
+const applyFormattedMarker = (element: Element, query?: string): void => {
+  const normalizedQuery = String(query || '').trim()
+  const runs = collectRunElements(element)
+  if (runs.length === 0) return
+
+  const matchedRuns =
+    normalizedQuery.length > 0
+      ? runs.filter((run) => getRunText(run).includes(normalizedQuery))
+      : runs
+  const targetRuns = matchedRuns.length > 0 ? matchedRuns : runs
+  targetRuns.forEach((run) => styleRunForRevision(run, 'formatted'))
 }
 
 const createTextRun = (
@@ -293,6 +343,10 @@ const resolveElementForNode = (input: {
 }
 
 const applyReviewMarker = (element: Element, node: DocxReplayNode): void => {
+  if (node.reviewState === 'formatted') {
+    applyFormattedMarker(element, node.reviewQuery)
+    return
+  }
   if (node.reviewState === 'inserted' || node.reviewState === 'replaced-new') {
     applyRevisionToRuns(element, 'inserted')
     return

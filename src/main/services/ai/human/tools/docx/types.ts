@@ -267,6 +267,7 @@ export type DocxReplaySession = {
 
 export type DocxReviewState =
   | 'normal'
+  | 'formatted'
   | 'inserted'
   | 'deleted'
   | 'replaced-old'
@@ -285,6 +286,7 @@ export type DocxReplayNode = {
   spec: DocxBlockSpec
   createdRevisionRef: string
   changedRevisionRef?: string
+  reviewQuery?: string
 }
 
 export type DocxViewArtifact = {

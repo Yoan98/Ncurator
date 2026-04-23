@@ -340,7 +340,58 @@ const summarizeArrayTexts = (value: JsonValue | undefined, key: string): string[
     .filter((item): item is string => Boolean(item && item.length > 0))
 }
 
-const summarizeToolResultForMouth = (result: HumanHistoryToolResult): string => {
+const MOUTH_DOCX_TEXT_LIMIT = 420
+const MOUTH_DOCX_TABLE_MAX_ROWS = 4
+
+const clipText = (value: string, maxChars: number): string => {
+  const normalized = value.replace(/\s+/g, ' ').trim()
+  if (!normalized) return ''
+  if (normalized.length <= maxChars) return normalized
+  return `${normalized.slice(0, maxChars - 1).trim()}…`
+}
+
+const renderMouthToolArgValue = (value: JsonValue | undefined): string => {
+  if (value === undefined) return 'none'
+  return JSON.stringify(value, null, 2)
+}
+
+const buildDocxWriteFact = (input: {
+  toolName: HumanHistoryToolResult['toolName']
+  action?: string
+  target?: string
+  contentLabel: string
+  content: JsonValue | undefined
+  extraLines?: string[]
+}): string => {
+  const header = [`\`${input.toolName}\` 已完成实际写入。`]
+  if (input.action) header.push(`action=${input.action}`)
+  if (input.target) header.push(`target=${input.target}`)
+  const contentText =
+    typeof input.content === 'string'
+      ? clipText(input.content, MOUTH_DOCX_TEXT_LIMIT)
+      : renderMouthToolArgValue(input.content)
+  return [
+    header.join('；'),
+    `  - ${input.contentLabel}：`,
+    contentText
+      .split('\n')
+      .map((line) => `    ${line}`)
+      .join('\n'),
+    ...(input.extraLines || []).map((line) => `  - ${line}`)
+  ].join('\n')
+}
+
+const buildTableRowsPreview = (rows: JsonValue | undefined): JsonValue | undefined => {
+  if (!Array.isArray(rows)) return rows
+  if (rows.length <= MOUTH_DOCX_TABLE_MAX_ROWS) return rows
+  return [...rows.slice(0, MOUTH_DOCX_TABLE_MAX_ROWS), `... 其余 ${String(rows.length - MOUTH_DOCX_TABLE_MAX_ROWS)} 行省略`]
+}
+
+const summarizeToolResultForMouth = (input: {
+  result: HumanHistoryToolResult
+  call?: ToolCallParam
+}): string => {
+  const { result, call } = input
   if (result.diagnosticText) {
     return `\`${result.toolName}\` 未完成：${result.diagnosticText}`
   }
@@ -371,17 +422,67 @@ const summarizeToolResultForMouth = (result: HumanHistoryToolResult): string => 
         ? `\`${result.toolName}\` 概览到 ${String(count)} 个块：${blocks.join(' / ')}`
         : `\`${result.toolName}\` 概览到 ${String(count)} 个块。`
     }
-    case 'docx_text_edit':
     case 'docx_paragraph_edit':
-    case 'docx_heading_edit':
-    case 'docx_table_edit':
+    case 'docx_heading_edit': {
+      return buildDocxWriteFact({
+        toolName: result.toolName,
+        action: typeof call?.args.action === 'string' ? call.args.action : undefined,
+        target:
+          typeof call?.args.blockId === 'string'
+            ? `blockId=${call.args.blockId}`
+            : typeof call?.args.anchorBlockId === 'string'
+              ? `anchorBlockId=${call.args.anchorBlockId}`
+              : undefined,
+        contentLabel: '实际写入文本',
+        content: typeof call?.args.text === 'string' ? call.args.text : undefined
+      })
+    }
+    case 'docx_table_edit': {
+      const rawRows = Array.isArray(call?.args.rows) ? call.args.rows : undefined
+      const rows = buildTableRowsPreview(rawRows)
+      return buildDocxWriteFact({
+        toolName: result.toolName,
+        action: typeof call?.args.action === 'string' ? call.args.action : undefined,
+        target:
+          typeof call?.args.blockId === 'string'
+            ? `blockId=${call.args.blockId}`
+            : typeof call?.args.anchorBlockId === 'string'
+              ? `anchorBlockId=${call.args.anchorBlockId}`
+              : undefined,
+        contentLabel: '实际写入 rows',
+        content: rows,
+        extraLines: Array.isArray(rawRows) && rawRows.length > MOUTH_DOCX_TABLE_MAX_ROWS
+          ? [`原始表格总行数=${String(rawRows.length)}`]
+          : undefined
+      })
+    }
+    case 'docx_text_edit': {
+      return buildDocxWriteFact({
+        toolName: result.toolName,
+        target:
+          Array.isArray(call?.args.blockIds) && call.args.blockIds.length > 0
+            ? `blockIds=${renderMouthToolArgValue(call.args.blockIds)}`
+            : undefined,
+        contentLabel: '实际替换参数',
+        content: {
+          query: typeof call?.args.query === 'string' ? call.args.query : undefined,
+          replace: typeof call?.args.replace === 'string' ? call.args.replace : undefined
+        }
+      })
+    }
     case 'docx_text_style_edit': {
-      const summary = readStringField(result.data, 'summary')
-      const changedBlocks = Array.isArray(result.data.changedBlocks) ? result.data.changedBlocks.length : 0
-      if (summary) return `\`${result.toolName}\`：${summary}`
-      return changedBlocks > 0
-        ? `\`${result.toolName}\` 已形成 ${String(changedBlocks)} 处修改。`
-        : `\`${result.toolName}\` 已完成。`
+      return buildDocxWriteFact({
+        toolName: result.toolName,
+        target:
+          typeof call?.args.blockId === 'string'
+            ? `blockId=${call.args.blockId}`
+            : undefined,
+        contentLabel: '实际样式参数',
+        content: {
+          query: typeof call?.args.query === 'string' ? call.args.query : undefined,
+          style: isJsonObject(call?.args.style) ? call.args.style : undefined
+        }
+      })
     }
     default: {
       const summary =
@@ -410,7 +511,12 @@ const renderMouthRoundFacts = (record: HumanRoundRecord): string[] => {
       return facts
     }
     case 'hand': {
-      const facts = record.execution.toolResults.map(summarizeToolResultForMouth)
+      const facts = record.execution.toolResults.map((result, index) =>
+        summarizeToolResultForMouth({
+          result,
+          call: record.execution.toolUsePlan.calls[index]
+        })
+      )
       if (record.execution.watchHint) {
         facts.push(`收敛提示：${summarizeWatchHint(record.execution.watchHint)}`)
       }
