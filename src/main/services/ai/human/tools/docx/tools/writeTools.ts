@@ -4,6 +4,7 @@ import type {
   DocxCreatedBlock,
   DocxDetailedBlock,
   DocxOp,
+  DocxOutlineBlock,
   DocxParagraphSpec,
   DocxTableSpec,
   DocxTextStyle
@@ -54,7 +55,10 @@ const buildEditSummary = (input: {
   return `${base}${changed}${warnings}`
 }
 
-const fetchOutlineBlockIds = async (runtime: DocxToolRuntime, docId: string): Promise<string[]> => {
+const fetchOutlineBlocks = async (
+  runtime: DocxToolRuntime,
+  docId: string
+): Promise<DocxOutlineBlock[]> => {
   const response = await runtime.callWorker({
     action: 'outline',
     payload: {
@@ -70,7 +74,7 @@ const fetchOutlineBlockIds = async (runtime: DocxToolRuntime, docId: string): Pr
   if (response.payload.action !== 'outline') {
     throw new Error('worker protocol mismatch (outline)')
   }
-  return response.payload.blocks.map((block) => block.blockId)
+  return response.payload.blocks
 }
 
 const fetchDetailedBlock = async (
@@ -177,29 +181,37 @@ const failIfAnyPositionedBlocks = async (input: {
   return null
 }
 
-const createdBlocksFromDiff = async (input: {
+const resolveCreatedBlocksForOp = async (input: {
   runtime: DocxToolRuntime
   previousDocId: string
   nextDocId: string
+  op: DocxOp
 }): Promise<DocxCreatedBlock[]> => {
-  const before = new Set(await fetchOutlineBlockIds(input.runtime, input.previousDocId))
-  const afterResponse = await input.runtime.callWorker({
-    action: 'outline',
-    payload: {
-      docId: input.nextDocId,
-      maxBlocks: 5000,
-      includeTables: true,
-      includeCells: true
-    }
-  })
-  if (!afterResponse.ok) {
-    throw new Error(afterResponse.error)
+  if (input.op.type !== 'insert_before' && input.op.type !== 'insert_after') {
+    return []
   }
-  if (afterResponse.payload.action !== 'outline') {
-    throw new Error('worker protocol mismatch (outline)')
+
+  const beforeBlocks = await fetchOutlineBlocks(input.runtime, input.previousDocId)
+  const afterBlocks = await fetchOutlineBlocks(input.runtime, input.nextDocId)
+  const anchor = beforeBlocks.find((block) => block.blockId === input.op.anchorBlockId)
+  if (!anchor) {
+    return []
   }
-  return afterResponse.payload.blocks
-    .filter((block) => !before.has(block.blockId))
+
+  const insertedBodyCount = input.op.content.length
+  if (insertedBodyCount <= 0) {
+    return []
+  }
+
+  const startBodyIndex =
+    input.op.type === 'insert_before' ? anchor.bodyIndex : anchor.bodyIndex + 1
+  const endBodyIndex = startBodyIndex + insertedBodyCount - 1
+
+  return afterBlocks
+    .filter(
+      (block) =>
+        block.bodyIndex >= startBodyIndex && block.bodyIndex <= endBodyIndex
+    )
     .map((block) => ({
       blockId: block.blockId,
       type: block.type
@@ -260,10 +272,11 @@ const applySingleEdit = async (input: {
   }
 
   const createdBlocks = input.createdBlocks
-    ? await createdBlocksFromDiff({
+    ? await resolveCreatedBlocksForOp({
         runtime: input.runtime,
         previousDocId: input.currentDocId,
-        nextDocId: workerResponse.payload.newDocId
+        nextDocId: workerResponse.payload.newDocId,
+        op: input.ops[0]
       })
     : []
   const reviewOps = await input.runtime.expandOpsForReview(input.currentDocId, input.ops)

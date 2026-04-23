@@ -125,12 +125,20 @@ const reindexBodyNodes = (session: DocxReplaySession): void => {
 const isVisibleReviewState = (reviewState: DocxReviewState): boolean =>
   reviewState !== 'deleted' && reviewState !== 'replaced-old'
 
+const buildParagraphSignature = (spec: Extract<DocxBlockSpec, { kind: 'paragraph' }>): string =>
+  `p:${spec.style || 'Normal'}:${spec.runs
+    .map(
+      (run) =>
+        `${run.text}|b:${run.bold ? '1' : '0'}|i:${run.italic ? '1' : '0'}|u:${run.underline ? '1' : '0'}|c:${run.color || ''}`
+    )
+    .join('\u241D')}`
+
 const buildSpecKey = (spec: DocxBlockSpec): string => {
   if (spec.kind === 'paragraph') {
-    return `p:${spec.style || 'Normal'}:${spec.runs.map((run) => run.text).join('\n')}`
+    return buildParagraphSignature(spec)
   }
   return `t:${spec.rows
-    .map((row) => row.map((cell) => cell.paragraphs.map((paragraph) => paragraph.runs.map((run) => run.text).join('\n')).join('\u241E')).join('\u241F'))
+    .map((row) => row.map((cell) => cell.paragraphs.map((paragraph) => buildParagraphSignature(paragraph)).join('\u241E')).join('\u241F'))
     .join('\u2424')}`
 }
 
@@ -139,10 +147,17 @@ const findSnapshotMatchIndex = (input: {
   nextSnapshot: DocxReplaySnapshot
   node: DocxReplayNode
   usedBlockIds: Set<string>
+  reservedBlockIds?: ReadonlySet<string>
 }): number => {
   for (let index = input.cursor; index < input.nextSnapshot.blocks.length; index += 1) {
     const block = input.nextSnapshot.blocks[index]
-    if (input.usedBlockIds.has(block.blockId) || block.kind !== input.node.kind) continue
+    if (
+      input.usedBlockIds.has(block.blockId) ||
+      input.reservedBlockIds?.has(block.blockId) ||
+      block.kind !== input.node.kind
+    ) {
+      continue
+    }
     if (
       block.blockId === input.node.currentBlockId ||
       block.blockId === input.node.blockId ||
@@ -155,7 +170,13 @@ const findSnapshotMatchIndex = (input: {
   const nodeKey = buildSpecKey(input.node.spec)
   for (let index = input.cursor; index < input.nextSnapshot.blocks.length; index += 1) {
     const block = input.nextSnapshot.blocks[index]
-    if (input.usedBlockIds.has(block.blockId) || block.kind !== input.node.kind) continue
+    if (
+      input.usedBlockIds.has(block.blockId) ||
+      input.reservedBlockIds?.has(block.blockId) ||
+      block.kind !== input.node.kind
+    ) {
+      continue
+    }
     if (buildSpecKey(block.spec) === nodeKey) {
       return index
     }
@@ -168,8 +189,9 @@ const rebindVisibleNodesToSnapshot = (input: {
   session: DocxReplaySession
   nextSnapshot: DocxReplaySnapshot
   skipNodeIds?: ReadonlySet<string>
+  reservedBlockIds?: ReadonlySet<string>
 }): void => {
-  const { nextSnapshot, session, skipNodeIds } = input
+  const { nextSnapshot, session, skipNodeIds, reservedBlockIds } = input
   const visibleNodes = session.bodyNodeIds
     .map((nodeId) => session.nodeById.get(nodeId))
     .filter((node): node is DocxReplayNode => Boolean(node && isVisibleReviewState(node.reviewState)))
@@ -181,7 +203,8 @@ const rebindVisibleNodesToSnapshot = (input: {
       cursor,
       nextSnapshot,
       node,
-      usedBlockIds
+      usedBlockIds,
+      reservedBlockIds
     })
     if (matchIndex < 0) return
 
@@ -242,10 +265,12 @@ const resolveBodyBlocksFromCreated = (
   snapshot: DocxReplaySnapshot,
   createdBlocks: DocxCreatedBlock[]
 ): DocxReplaySnapshotBlock[] => {
-  const createdBodyIds = createdBlocks
-    .filter((block) => block.type !== 'table_cell')
-    .map((block) => block.blockId)
-  return snapshot.blocks.filter((block) => createdBodyIds.includes(block.blockId))
+  const createdBodyIds = new Set(
+    createdBlocks
+      .filter((block) => block.type !== 'table_cell')
+      .map((block) => block.blockId)
+  )
+  return snapshot.blocks.filter((block) => createdBodyIds.has(block.blockId))
 }
 
 const cloneNodeAsOldRevision = (
@@ -382,11 +407,16 @@ export const applyRevisionToReplaySession = (input: {
       op.type === 'update_table_cell')
       ? new Set([targetNodeId])
       : undefined
+  const reservedBlockIds =
+    op.type === 'insert_before' || op.type === 'insert_after'
+      ? new Set(resolveBodyBlocksFromCreated(nextSnapshot, createdBlocks).map((block) => block.blockId))
+      : undefined
 
   rebindVisibleNodesToSnapshot({
     session,
     nextSnapshot,
-    skipNodeIds: targetNodeIdsToSkip
+    skipNodeIds: targetNodeIdsToSkip,
+    reservedBlockIds
   })
 
   if (op.type === 'insert_before' || op.type === 'insert_after') {

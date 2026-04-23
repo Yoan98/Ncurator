@@ -259,6 +259,54 @@
 - Last Run：`2026-04-21 19:00:07 +08:00`
 - Last Result：`通过`
 
+##### `docx-insert-after-preserves-anchor-xml`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证纯 `insert_after` 不会改写 anchor 段落文本与 run 格式。
+- Why：结构插入的底层实现若重写 anchor，会制造伪样式漂移并污染 review 语义。
+- How：构造带 mixed-format run 的 anchor 段落，执行 `docx_paragraph_edit(insert_after)`，再读取同一 anchor。
+- Oracle：anchor 文本保持不变，run 列表逐项一致，changedBlocks 只记录 `insert_after`。
+- Not：不验证 review artifact。
+- Last Run：`待更新`
+- Last Result：`待更新`
+
+##### `docx-created-blocks-resolve-inserted-range-not-shifted-tail`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 `createdBlocks` 依据插入区间解析，而不是依据前后 `blockId` 集合差。
+- Why：当前 `blockId` 由 `bodyIndex` 派生，结构插入后下游 block 会整体漂移，集合差会天然误认旧块。
+- How：在 anchor 后插入一个段落，再检查 `createdBlocks` 与插入后 outline 的对应关系。
+- Oracle：`createdBlocks` 只命中新插入段落，不包含下游旧段落。
+- Not：不验证 table cell 创建。
+- Last Run：`待更新`
+- Last Result：`待更新`
+
+##### `docx-review-insert-does-not-duplicate-downstream-blocks`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 review artifact 中插入后下游旧块不会重复、错位。
+- Why：结构插入后的 replay 重绑若把新块误认成旧块，会直接造成审阅稿重复旧段落。
+- How：对真实 docx 执行“插段落 + 插表格”，finalize review 后直接检查 review artifact 的 outline 顺序。
+- Oracle：下游旧段落只出现一次，新增段落与表格保持稳定顺序。
+- Not：不验证 delete/replace 语义。
+- Last Run：`待更新`
+- Last Result：`待更新`
+
+##### `docx-inserted-table-created-blocks-include-table-and-cells`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证表格插入后的 `createdBlocks` 同时包含 table 与 table_cell。
+- Why：review replay 需要完整的新建结构元信息，否则插入表格容易只落 body block，缺少 cell 级引用。
+- How：执行一次 `docx_table_edit(insert_after)`，直接检查 mutation result 的 `createdBlocks`。
+- Oracle：返回 1 个 `table` 和全部对应的 `table_cell`。
+- Not：不验证 review artifact。
+- Last Run：`待更新`
+- Last Result：`待更新`
+
 ##### `docx-mixed-format-preservation`
 
 - 测试类型：`backend`

@@ -20,6 +20,7 @@ import {
 import { blockSpecText, nodeToBlockSpec } from './blockSpec'
 import { paragraphNodeToSpec } from './blockIndex'
 import { childElements, collectText, isElementNode } from './dom'
+import { createBlockElementFromSpec } from '../../utils/specDom'
 import type {
   ApplyOpsResult,
   BlockIndex
@@ -381,6 +382,57 @@ const applyStyleTextOp = async (
   }
 }
 
+const serializeElement = (element: Element): string => new XMLSerializer().serializeToString(element)
+
+const applyInsertOpWithoutMutatingAnchor = async (input: {
+  buffer: Buffer
+  op: Extract<DocxOp, { type: 'insert_after' | 'insert_before' }>
+}): Promise<{ buffer: Buffer; changed: DocxChangedBlock | null; warning?: string }> => {
+  const bundle = await loadDocxBundle(input.buffer)
+  const index = buildBlockIndex(bundle.documentDom)
+  const anchor = index.nodesById.get(input.op.anchorBlockId)
+  if (!anchor || anchor.kind === 'table_cell') {
+    return {
+      buffer: input.buffer,
+      changed: null,
+      warning: `${input.op.type} skipped: anchor block not found (${input.op.anchorBlockId})`
+    }
+  }
+
+  const parent = anchor.node.parentNode
+  if (!parent) {
+    throw new Error(`anchor block has no parent node: ${input.op.anchorBlockId}`)
+  }
+
+  const beforeText = extractBlockText(index, input.op.anchorBlockId)
+  const anchorXmlBefore = serializeElement(anchor.node)
+  const referenceNode = input.op.type === 'insert_before' ? anchor.node : anchor.node.nextSibling
+
+  input.op.content.forEach((spec) => {
+    const inserted = createBlockElementFromSpec(bundle.documentDom, spec)
+    parent.insertBefore(inserted, referenceNode)
+  })
+
+  const anchorXmlAfter = serializeElement(anchor.node)
+  if (anchorXmlBefore !== anchorXmlAfter) {
+    throw new Error(`structural insert mutated anchor xml: ${input.op.anchorBlockId}`)
+  }
+
+  const insertedText = input.op.content.map((spec) => blockSpecText(spec)).join('\n')
+  return {
+    buffer: await writeDocumentXml({ zip: bundle.zip, doc: bundle.documentDom }),
+    changed: {
+      action: input.op.type,
+      blockId: input.op.anchorBlockId,
+      beforeText,
+      afterText:
+        input.op.type === 'insert_before'
+          ? `${insertedText}\n${beforeText}`.trim()
+          : `${beforeText}\n${insertedText}`.trim()
+    }
+  }
+}
+
 const applyStructuralOp = async (input: {
   buffer: Buffer
   op:
@@ -469,33 +521,10 @@ const applyStructuralOp = async (input: {
     }
   }
 
-  const anchorId = op.anchorBlockId
-  const anchor = index.nodesById.get(anchorId)
-  if (!anchor || anchor.kind === 'table_cell') {
-    return {
-      buffer: input.buffer,
-      changed: null,
-      warning: `${op.type} skipped: anchor block not found (${anchorId})`
-    }
-  }
-  const beforeText = extractBlockText(index, anchorId)
-  const anchorSpec = nodeToBlockSpec(anchor)
-  const mergedSpecs = op.type === 'insert_before' ? [...op.content, anchorSpec] : [anchorSpec, ...op.content]
-  const next = await patchWithTag({
+  return await applyInsertOpWithoutMutatingAnchor({
     buffer: input.buffer,
-    blockId: anchorId,
-    children: specToDocxChildren(mergedSpecs)
+    op
   })
-  const insertedText = op.content.map((spec) => blockSpecText(spec)).join('\n')
-  return {
-    buffer: next,
-    changed: {
-      action: op.type,
-      blockId: anchorId,
-      beforeText,
-      afterText: op.type === 'insert_before' ? `${insertedText}\n${beforeText}`.trim() : `${beforeText}\n${insertedText}`.trim()
-    }
-  }
 }
 
 const structuralOpTargetRank = (
