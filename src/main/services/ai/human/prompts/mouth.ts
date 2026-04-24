@@ -30,6 +30,7 @@ export const buildMouthPrompt = (input: { state: HumanState; ctx?: AiRunContext 
 
   <output_contract>
     - 只输出最终 markdown 正文，不要输出 JSON 或额外说明。
+    - 禁止向用户暴露系统内部定位信息、实现细节或运行态标识，例如块编号、段落锚点、内部字段名、工具名；
   </output_contract>
 </system>
 `.trim()
