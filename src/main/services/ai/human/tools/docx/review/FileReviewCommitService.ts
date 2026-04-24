@@ -122,6 +122,7 @@ export class FileReviewCommitService {
       tempPaths.push(sourceTempPath)
 
       const committedBuffer = await fs.readFile(committedArtifactPath)
+      await fs.mkdir(path.dirname(sourceTempPath), { recursive: true })
       await fs.writeFile(sourceTempPath, committedBuffer)
       await fs.rename(sourceTempPath, detail.review.source_path)
 
@@ -130,7 +131,7 @@ export class FileReviewCommitService {
         {
           review_id: detail.review.id,
           output_path: detail.review.source_path,
-          operation: 'updated',
+          operation: detail.review.output_operation,
           checksum: stats.checksum,
           byte_size: stats.byteSize
         }

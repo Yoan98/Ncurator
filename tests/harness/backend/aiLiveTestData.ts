@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import type { SelectedReference } from '../../../src/shared/types'
+import { writeTestDocxFile } from './aiToolHarness'
 import type { BackendTestRuntime, SeedKbDocumentInput } from './test-types'
 
 export const HUMAN_RISK_REPORT_DRAFT_USER_INPUT =

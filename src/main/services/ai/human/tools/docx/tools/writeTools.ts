@@ -1,4 +1,6 @@
 import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import type {
   DocxChangedBlock,
@@ -103,7 +105,7 @@ const fetchDetailedBlock = async (
 
 const buildPositionedReadOnlyMessage = (): string => DOCX_POSITIONED_LAYOUT_PROTECTION_MESSAGE
 
-const buildCreateSummary = (sourcePath: string): string => `已创建新的 docx：${sourcePath}`
+const buildCreateSummary = (sourcePath: string): string => `已建立新的 docx 草稿会话：${sourcePath}`
 
 const documentExists = async (sourcePath: string): Promise<boolean> => {
   try {
@@ -111,6 +113,18 @@ const documentExists = async (sourcePath: string): Promise<boolean> => {
     return true
   } catch {
     return false
+  }
+}
+
+const buildCreateTargetTempPaths = async (sourcePath: string): Promise<{
+  baselinePath: string
+  workingPath: string
+}> => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-docx-create-'))
+  const baseName = path.basename(sourcePath)
+  return {
+    baselinePath: path.join(tempDir, `baseline-${baseName}`),
+    workingPath: path.join(tempDir, `working-${baseName}`)
   }
 }
 
@@ -374,98 +388,171 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         })
       }
 
-      await createDocxFile({
-        filePath: requestedSourcePath,
-        blocks: args.blocks || []
-      })
+      const tempPaths = await buildCreateTargetTempPaths(requestedSourcePath)
 
-      const resolvedTarget = await runtime.input.ctx.resolveDocxOpenTarget(requestedSourcePath)
-      const workerResponse = await runtime.callWorker({
-        action: 'open',
-        payload: {
-          sourcePath: resolvedTarget.openPath
+      try {
+        await createDocxFile({
+          filePath: tempPaths.baselinePath,
+          blocks: []
+        })
+        await createDocxFile({
+          filePath: tempPaths.workingPath,
+          blocks: args.blocks || []
+        })
+
+        const baselineOpen = await runtime.callWorker({
+          action: 'open',
+          payload: {
+            sourcePath: tempPaths.baselinePath
+          }
+        })
+        if (!baselineOpen.ok) {
+          return finalizeDocxToolFailure({
+            runtime,
+            failure: runtime.emitWorkerFailure({
+              toolName,
+              toolCallId,
+              response: baselineOpen,
+              resourceContext: runtime.buildResourceContext({
+                sourcePath: requestedSourcePath,
+                effectKind: 'mutated'
+              })
+            }),
+            activity: {
+              actionType: DOCX_CREATE_TOOL_SPEC.activityActionType!
+            }
+          })
         }
-      })
-      if (!workerResponse.ok) {
-        return finalizeDocxToolFailure({
-          runtime,
-          failure: runtime.emitWorkerFailure({
-            toolName,
-            toolCallId,
-            response: workerResponse,
-            resourceContext: runtime.buildResourceContext({
-              sourcePath: requestedSourcePath,
-              effectKind: 'mutated'
-            })
-          }),
-          activity: {
-            actionType: DOCX_CREATE_TOOL_SPEC.activityActionType!
+        if (baselineOpen.payload.action !== 'open') {
+          return finalizeDocxToolFailure({
+            runtime,
+            failure: runtime.emitFailure({
+              toolName,
+              toolCallId,
+              code: 'failed',
+              error: 'worker protocol mismatch (baseline open)',
+              resourceContext: runtime.buildResourceContext({
+                sourcePath: requestedSourcePath,
+                effectKind: 'mutated'
+              })
+            }),
+            activity: {
+              actionType: DOCX_CREATE_TOOL_SPEC.activityActionType!
+            }
+          })
+        }
+        const baselineDocId = baselineOpen.payload.docId
+
+        const workingOpen = await runtime.callWorker({
+          action: 'open',
+          payload: {
+            sourcePath: tempPaths.workingPath
           }
         })
-      }
-      if (workerResponse.payload.action !== 'open') {
-        return finalizeDocxToolFailure({
-          runtime,
-          failure: runtime.emitFailure({
-            toolName,
-            toolCallId,
-            code: 'failed',
-            error: 'worker protocol mismatch (open)',
-            resourceContext: runtime.buildResourceContext({
-              sourcePath: requestedSourcePath,
-              effectKind: 'mutated'
-            })
-          }),
-          activity: {
-            actionType: DOCX_CREATE_TOOL_SPEC.activityActionType!
-          }
+        if (!workingOpen.ok) {
+          return finalizeDocxToolFailure({
+            runtime,
+            failure: runtime.emitWorkerFailure({
+              toolName,
+              toolCallId,
+              response: workingOpen,
+              resourceContext: runtime.buildResourceContext({
+                sourcePath: requestedSourcePath,
+                effectKind: 'mutated'
+              })
+            }),
+            activity: {
+              actionType: DOCX_CREATE_TOOL_SPEC.activityActionType!
+            }
+          })
+        }
+        if (workingOpen.payload.action !== 'open') {
+          return finalizeDocxToolFailure({
+            runtime,
+            failure: runtime.emitFailure({
+              toolName,
+              toolCallId,
+              code: 'failed',
+              error: 'worker protocol mismatch (working open)',
+              resourceContext: runtime.buildResourceContext({
+                sourcePath: requestedSourcePath,
+                effectKind: 'mutated'
+              })
+            }),
+            activity: {
+              actionType: DOCX_CREATE_TOOL_SPEC.activityActionType!
+            }
+          })
+        }
+        const workingDocId = workingOpen.payload.docId
+
+        const registered = await runtime.registerCreatedDocument({
+          sourcePath: requestedSourcePath,
+          baselineDocId: baselineDocId,
+          workingDocId,
+          meta: workingOpen.payload.meta,
+          stats: workingOpen.payload.stats,
+          summary: 'create_document'
         })
-      }
-
-      const registered = await runtime.registerOpenedDocument(
-        resolvedTarget.trackedSourcePath,
-        workerResponse.payload.docId,
-        workerResponse.payload.meta,
-        workerResponse.payload.stats
-      )
-      runtime.input.ctx.trackDocxOpen({
-        docId: workerResponse.payload.docId,
-        sourcePath: resolvedTarget.trackedSourcePath,
-        replaySession: registered.session
-      })
-
-      const result = {
-        ok: true,
-        code: 'ok' as const,
-        summary: buildCreateSummary(registered.session.sourcePath),
-        sourcePath: registered.session.sourcePath,
-        currentRevisionRef: registered.currentRevisionRef,
-        created: true,
-        resourceContext: runtime.buildResourceContext({
-          sourcePath: registered.session.sourcePath,
-          effectKind: 'mutated',
-          currentRevisionRef: registered.currentRevisionRef
+        runtime.input.ctx.trackDocxOpen({
+          docId: baselineDocId,
+          sourcePath: requestedSourcePath,
+          replaySession: registered.session
         })
-      }
+        runtime.input.ctx.trackDocxChanges({
+          previousDocId: baselineDocId,
+          nextDocId: workingDocId,
+          op: { type: 'create_document' },
+          changedBlocks: registered.changedBlocks || [],
+          createdBlocks: registered.createdBlocks || [],
+          replaySession: registered.session
+        })
 
-      return finalizeDocxToolSuccess({
-        runtime,
-        toolName,
-        toolCallId,
-        result,
-        outputPreview: {
+        const result = {
           ok: true,
-          code: 'ok',
-          sourcePath: result.sourcePath,
-          currentRevisionRef: result.currentRevisionRef,
-          created: true
-        },
-        activity: {
-          actionType: DOCX_CREATE_TOOL_SPEC.activityActionType!,
-          startedSummary: `创建 docx: ${args.sourcePath}`,
-          buildCompletedSummary: (output: typeof result) => output.summary
+          code: 'ok' as const,
+          summary: buildCreateSummary(registered.session.sourcePath),
+          sourcePath: registered.session.sourcePath,
+          currentRevisionRef: registered.currentRevisionRef,
+          created: true,
+          resourceContext: runtime.buildResourceContext({
+            sourcePath: registered.session.sourcePath,
+            effectKind: 'mutated',
+            currentRevisionRef: registered.currentRevisionRef
+          })
         }
-      })
+
+        return finalizeDocxToolSuccess({
+          runtime,
+          toolName,
+          toolCallId,
+          result,
+          outputPreview: {
+            ok: true,
+            code: 'ok',
+            sourcePath: result.sourcePath,
+            currentRevisionRef: result.currentRevisionRef,
+            created: true
+          },
+          activity: {
+            actionType: DOCX_CREATE_TOOL_SPEC.activityActionType!,
+            startedSummary: `创建 docx: ${args.sourcePath}`,
+            buildCompletedSummary: (output: typeof result) => output.summary
+          }
+        })
+      } finally {
+        await Promise.all(
+          [tempPaths.baselinePath, tempPaths.workingPath, path.dirname(tempPaths.baselinePath)].map(
+            async (targetPath) => {
+              try {
+                await fs.rm(targetPath, { recursive: true, force: true })
+              } catch {
+                return
+              }
+            }
+          )
+        )
+      }
     }
   })
 

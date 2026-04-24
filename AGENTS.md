@@ -14,6 +14,7 @@
 - 当涉及 docx 实现约束、review/commit 链路、serializer 或样式继承时，必须阅读 `doc/docx-design/implementation-spec.md`
 - 当涉及单文件 `FileReview`、docx 审阅稿生成或提交尝试记录时，必须阅读 `doc/docx-design/implementation-spec.md` 与 `doc/database.md`
 - 当涉及 docx 数据结构、revision/replay node、artifact 关系或状态流转时，必须阅读 `doc/docx-design/data-definition-and-flow.md`
+- 当涉及新建 docx、create-target review、“commit 后才正式创建目标文件”语义，或 `file_review.source_path / output_operation / source_version.exists` 契约时，必须阅读 `doc/docx-design/implementation-spec.md`、`doc/docx-design/data-definition-and-flow.md` 与 `doc/database.md`
 
 ### 1.3 项目整体相关
 - 当涉及项目整体架构与技术栈时，必须阅读 `doc/architecture.md`

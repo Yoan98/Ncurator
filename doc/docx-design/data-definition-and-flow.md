@@ -9,21 +9,24 @@ flowchart TD
     A["source baseline"] --> B["初始化 replay session"]
     B --> C["生成 working draft view"]
     C --> D["AI 读取 working draft"]
-    D --> E["执行 docx edit"]
+    D --> E["执行 docx create / edit"]
     E --> F["写入 revision / 更新当前状态"]
     F --> C
     F --> G["生成 review view"]
     G --> H["用户审阅"]
     H --> I["生成 committed view"]
-    I --> J["写回 source"]
+    I --> J["覆盖写回 source"]
+    I --> K["创建目标文件"]
 ```
 
 ## 2. 核心数据
 
 ```ts
 interface DocxReplaySession {
-  // 本次会话绑定的源文件路径；初始化和最终提交都围绕它进行。
+  // 本次会话绑定的最终目标路径；update 模式下它是源文件路径，create 模式下它是 commit 输出目标路径。
   sourcePath: string
+  // 当前会话是修改已有文件还是新建目标文件。
+  targetMode: 'update' | 'create'
   // baseline 打开时对应的 worker 文档标识；用于追溯会话起点。
   sourceDocId: string
   // 当前最新状态对应的 worker 文档标识；working draft 物化时基于它生成。
@@ -88,6 +91,10 @@ interface DocxRevision {
   createdBlocks?: DocxCreatedBlock[]
 }
 
+type DocxOp =
+  | { type: 'create_document' }
+  | { type: 'insert_before' | 'insert_after' | 'replace_block' | 'replace_text' | 'replace_style' }
+
 interface DocxViewArtifact {
   // 当前 artifact 属于哪个视图。
   kind: 'working' | 'review' | 'committed'
@@ -105,6 +112,7 @@ interface DocxViewArtifact {
 - source 初始化 baseline。
 - baseline 初始化 `DocxReplaySession`。
 - 当前 session 同时得到第一版 `activeSnapshot`。
+- create-target 模式下，baseline 是空文档快照，最终目标路径只作为 commit 输出目标，不要求当前真实存在。
 
 ### 3.2 编辑
 
@@ -124,7 +132,8 @@ interface DocxViewArtifact {
 
 - 当前 session 直接投影 `committed view`。
 - committed view 物化成 `committed artifact`。
-- 最终只把 committed artifact 写回 source。
+- update 模式下，最终把 committed artifact 写回 source。
+- create-target 模式下，最终把 committed artifact 创建到目标路径；commit 前不要求该目标路径真实存在。
 
 ### 3.5 回滚
 

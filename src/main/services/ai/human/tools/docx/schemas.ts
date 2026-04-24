@@ -34,6 +34,9 @@ export const docxTextStyleSchema = z.object({
 
 export const docOpSchema = z.discriminatedUnion('type', [
   z.object({
+    type: z.literal('create_document')
+  }),
+  z.object({
     type: z.literal('replace_block'),
     blockId: z.string().min(1),
     content: blockSpecSchema

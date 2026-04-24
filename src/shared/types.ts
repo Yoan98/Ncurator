@@ -403,6 +403,7 @@ export type CommitValidationIssueCode =
   | 'review_artifact_locked'
 
 export interface DraftSourceVersion {
+  exists: boolean
   mtime_ms?: number
   byte_size?: number
   checksum?: string
@@ -424,6 +425,7 @@ export interface FileReview {
   source_document_id?: string
   source_path: string
   source_name: string
+  output_operation: AiFileArtifactOperation
   format: DraftDocumentFormat
   review_render_kind?: FileReviewRenderKind
   latest_draft_snapshot_id: string

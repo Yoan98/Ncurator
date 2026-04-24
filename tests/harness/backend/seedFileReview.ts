@@ -39,6 +39,7 @@ export const seedFileReview = async (input: {
       source_document_id: file.sourceDocumentId,
       source_path: file.sourcePath,
       source_name: file.sourceName || path.basename(file.sourcePath),
+      output_operation: file.outputOperation || 'updated',
       format: file.format || 'docx',
       review_render_kind: 'docx_block',
       latest_draft_snapshot_id: file.latestDraftSnapshotId || `${reviewId}-snapshot`,

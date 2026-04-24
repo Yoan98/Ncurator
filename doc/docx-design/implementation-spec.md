@@ -50,7 +50,8 @@ docx 子系统负责：
 ### 3.1 open
 
 - 首次打开 source 时必须初始化 baseline 与 replay session。
-- `docx_create` 成功后，也必须立即完成一次 open 与 baseline 初始化，保证后续 `docx_outline / docx_read_blocks / docx_*_edit` 可以直接接续。
+- `docx_create` 成功后，也必须立即完成一次 create-target baseline 初始化与 working open，保证后续 `docx_outline / docx_read_blocks / docx_*_edit` 可以直接接续。
+- create-target 模式下，正式目标文件在 commit 前不得落到 workspace 目标路径；`docx_create` 只能建立内部 draft target session。
 - 存在 active review 时，`resolveDocxOpenTarget` 必须返回当前 `working draft artifact`。
 - 对 AI 来说，打开 docx 的结果始终应表现为“当前最新文档”。
 
@@ -83,7 +84,8 @@ docx 子系统负责：
 
 ### 4.1 edit 主线
 
-- `docx_create` 只负责创建新的合法 docx 与初始化 session，本身不直接产出 `draft_review_ready`。
+- `docx_create` 只负责建立新的 docx draft target 与初始化 session，本身不直接产出 `draft_review_ready`。
+- 当 `docx_create` 携带初始内容时，必须立即注册一条 create revision，使 create-only 场景也能进入 review / commit 主链。
 - `docx_*_edit` 的内部语义是“对当前 session 的最新状态继续编辑”。
 - 每次 edit 成功后都必须形成一个新的 `revision`。
 - edit 结果必须回写 replay session，并更新当前最新状态。
@@ -92,6 +94,7 @@ docx 子系统负责：
 
 - worker 返回的 `changedBlocks` 必须进入 revision 摘要。
 - 新增块必须通过 `createdBlocks` 明确记录，并参与 replay session 节点更新。
+- create revision 必须生成 synthetic `changedBlocks`，把“从空 baseline 到首版工作稿”的新增内容显式纳入 review 变更集。
 - 对 `insert_before / insert_after`，`createdBlocks` 必须按插入区间解析，不能依赖前后 `blockId` 集合差。
 - 原因是当前 `blockId` 由 `bodyIndex` 派生，结构插入后下游块的 `blockId` 可能整体漂移。
 
@@ -148,11 +151,14 @@ docx 子系统负责：
 - commit 必须从 committed artifact 落盘。
 - 提交前必须做 freshness 校验。
 - 写回源文件时必须使用原子替换。
+- 对修改现有 docx 的 review，commit 以覆盖方式写回 source。
+- 对新建 docx 的 create-target review，commit 只在校验通过后原子创建最终目标文件。
 
 ### 7.3 discard
 
 - discard 只清理 review/working/committed artifact 与 session 状态。
 - discard 不得改写 source。
+- 对 create-target review，discard 后最终目标路径必须继续不存在。
 
 ## 8. 样式继承与底层执行约束
 

@@ -110,7 +110,7 @@
 - What：验证 `docx_create` 新建的 docx 能立刻进入 `outline / read / edit` 主链。
 - Why：cross-source summary 这类“先生成新 Word 文件再写内容”的真实场景，底层必须先守住 create 契约。
 - How：真实执行 `docx_create -> docx_outline -> docx_read_blocks -> docx_paragraph_edit -> docx_search`。
-- Oracle：新建结果返回稳定 `sourcePath / currentRevisionRef / created=true`；新文档可被继续读取；后续编辑会生成新 revision，且新内容可继续被搜索命中。
+- Oracle：create-target 结果返回稳定 `sourcePath / currentRevisionRef / created=true`；新文档可被继续读取；后续编辑会生成新 revision，且新内容可继续被搜索命中；正式目标路径在 commit 前不存在。
 - Not：不验证 human 是否会选择 create。
 - Last Run：`待更新`
 - Last Result：`待更新`
@@ -126,6 +126,42 @@
 - Not：不验证 UI 层如何展示报错。
 - Last Run：`待更新`
 - Last Result：`待更新`
+
+##### `docx-create-with-content-produces-review`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证仅执行 `docx_create(blocks=...)` 也能进入 review 主链并产出待确认稿。
+- Why：真实模型很可能在 create 时一次写完内容，这条能力必须被正式保护，不能强依赖后续 edit。
+- How：真实执行 `docx_create` 并直接 `finalizeDocxReviewRun`。
+- Oracle：生成 `FileReviewDetail` 与 working/review/committed artifacts；review `output_operation=created`；正式目标路径在 commit 前不存在。
+
+##### `docx-create-commit-creates-target-file`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 create-target review 只在 commit 成功后正式创建目标文件。
+- Why：这是 create-target 语义与 PRD 的核心边界。
+- How：真实执行 `docx_create -> finalize review -> persist review -> commitReview`。
+- Oracle：commit 成功；commit result `operation=created`；commit 前目标路径不存在，commit 后目标路径存在。
+
+##### `docx-create-discard-does-not-create-target-file`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 discard create-target review 不会创建正式目标文件。
+- Why：放弃修改不能留下误创建的产物。
+- How：真实执行 `docx_create -> finalize review -> persist review -> discardReview`。
+- Oracle：discard 成功；目标路径继续不存在。
+
+##### `docx-create-commit-conflict-when-target-appears-before-commit`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 create-target review 在目标路径被外部抢占创建后会触发 freshness conflict。
+- Why：新建文件的提交门禁必须显式防止“旧审阅稿覆盖新外部文件”。
+- How：真实执行 `docx_create -> finalize review -> persist review`，随后外部创建同名目标文件，再执行 `validateCommit / commitReview`。
+- Oracle：`validateCommit` 返回 `source_changed`；`commitReview` 失败并把 review 标记为 `conflicted`。
 
 ##### `docx-large-document-navigation`
 
@@ -831,7 +867,7 @@
 - What：验证 live 模式下 `human` 会读取两份已选课件，自主创建一份新的总结 docx，并把跨源总结写进去。
 - Why：真实用户常见诉求不只是“口头总结”或“补现有主稿”，也包括“新建一份能直接发出去的总结报告”；这条 case 要长期守住跨源读取、单目标写入与不覆盖原文件的正式能力，对齐 `WB-CORE-002-AC2`、`WB-CORE-003-AC1`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
 - How：注入真实 live LLM 配置；把 `深度学习.docx` 与 `图形学.docx` 作为已选资料复制进 workspace；直接输入“帮我基于我刚选的这两个文件，生成一个给同学复习用的 Word 总结文件，文件名就叫《深度学习与图形学复习总结》。里面把关键概念、出现原因和常见处理方式整理清楚；哪份资料没写你就直接说明没写。”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；事件流中至少两次 `docx_search` / `docx_read_blocks` / `docx_outline` 覆盖两份源资料；至少出现一次 `docx_create` 与一次 docx 编辑工具；存在 `draft_review_ready` 事件，最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；两份原始源 `docx` 文件未被覆盖；创建与写入请求都只应落在新建的 `深度学习与图形学复习总结.docx` 上；最终答复应包含“过拟合/过度拟合”与“反走样”两个主题。
+- Oracle：任务最终完成；事件流中至少两次 `docx_search` / `docx_read_blocks` / `docx_outline` 覆盖两份源资料；至少出现一次 `docx_create`；存在 `draft_review_ready` 事件，最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；两份原始源 `docx` 文件未被覆盖；创建目标只应落在 `深度学习与图形学复习总结.docx` 上，且正式目标路径在 commit 前不存在；最终答复应包含“过拟合/过度拟合”与“反走样”两个主题。
 - Not：不要求固定总结结构，也不要求一定生成表格。
 
 ##### `human-docx-positioned-structural-edit-fallback-live`

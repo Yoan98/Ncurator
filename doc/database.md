@@ -197,15 +197,16 @@
 | status                | Utf8             | 审阅状态 |
 | title                 | Utf8             | 审阅标题 |
 | source_document_id    | Utf8（Nullable） | 源 document ID |
-| source_path           | Utf8             | 源文件路径 |
+| source_path           | Utf8             | 源文件路径或 create-target 的最终目标路径 |
 | source_name           | Utf8             | 源文件名 |
+| output_operation      | Utf8             | 输出语义，`updated` 表示覆盖现有文件，`created` 表示 commit 时创建目标文件 |
 | format                | Utf8             | 文件格式 |
 | review_render_kind    | Utf8（Nullable） | 预览/审阅渲染类型 |
 | latest_draft_snapshot_id | Utf8          | 最新草稿快照 |
 | draft_artifact_path   | Utf8（Nullable） | 待确认稿路径 |
 | working_artifact_path | Utf8（Nullable） | working artifact 路径 |
 | committed_artifact_path | Utf8（Nullable） | committed artifact 路径 |
-| source_version_json   | Utf8             | 源版本信息 JSON |
+| source_version_json   | Utf8             | 源版本信息 JSON；create-target 下会记录 `exists=false`，表示 commit 前目标路径尚不存在 |
 | change_count          | Int32            | 变更总数 |
 | pending_change_count  | Int32            | 待决策变更数 |
 | accepted_change_count | Int32            | 已接受变更数 |

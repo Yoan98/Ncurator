@@ -338,6 +338,7 @@ const resolveSnapshotBlockForMutation = (input: {
 
 export const createReplaySessionFromSnapshot = (input: {
   sourcePath: string
+  targetMode?: DocxReplaySession['targetMode']
   sourceDocId: string
   meta: DocxReplaySession['meta']
   stats: DocxReplaySession['stats']
@@ -364,6 +365,7 @@ export const createReplaySessionFromSnapshot = (input: {
 
   return {
     sourcePath: input.sourcePath,
+    targetMode: input.targetMode || 'update',
     sourceDocId: input.sourceDocId,
     activeDocId: input.sourceDocId,
     activeRevisionRef: 'v1',
@@ -389,6 +391,23 @@ export const applyRevisionToReplaySession = (input: {
   nextSnapshot: DocxReplaySnapshot
 }): void => {
   const { session, revisionRef, op, createdBlocks, nextSnapshot } = input
+  if (op.type === 'create_document') {
+    const createdBodyBlocks = resolveBodyBlocksFromCreated(nextSnapshot, createdBlocks)
+    const insertedNodeIds = createdBodyBlocks.map((block) => {
+      const node = buildCurrentNodeFromSnapshot(
+        block,
+        revisionRef,
+        'inserted',
+        'generated'
+      )
+      session.nodeById.set(node.nodeId, node)
+      return node.nodeId
+    })
+    insertNodeIds(session, undefined, insertedNodeIds, 'after')
+    session.activeSnapshot = nextSnapshot
+    return
+  }
+
   const targetBlockId =
     op.type === 'update_table_cell' || (op.type === 'replace_text' && Array.isArray(op.blockIds) && op.blockIds[0])
       ? op.type === 'update_table_cell'

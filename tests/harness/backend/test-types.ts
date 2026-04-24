@@ -135,6 +135,7 @@ export type SeedFileReviewInput = {
     confirmBasePath?: string
     sourceName?: string
     sourceDocumentId?: string
+    outputOperation?: FileReview['output_operation']
     format?: FileReview['format']
     latestDraftSnapshotId?: string
   }

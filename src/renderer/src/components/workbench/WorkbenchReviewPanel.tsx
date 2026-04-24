@@ -9,6 +9,44 @@ import { workbenchSelectors } from '../../testing/selectors'
 
 const ACTIVE_CONFIRM_STATUSES = new Set(['pending_confirm', 'conflicted', 'failed'])
 
+const getCommitButtonLabel = (review: FileReviewDetail['review'] | null): string => {
+  if (!review) return '确认替换'
+  return review.output_operation === 'created' ? '确认创建' : '确认替换'
+}
+
+const resolveViewerTarget = (
+  review: FileReviewDetail['review'] | null,
+  isActiveConfirmSession: boolean
+): {
+  filePath?: string
+  fileName?: string
+} => {
+  if (!review) return {}
+
+  if (isActiveConfirmSession && review.draft_artifact_path) {
+    return {
+      filePath: review.draft_artifact_path,
+      fileName: `${review.source_name.replace(/\.docx$/i, '')}-审阅稿.docx`
+    }
+  }
+
+  if (review.status === 'committed') {
+    return {
+      filePath: review.source_path,
+      fileName: review.source_name
+    }
+  }
+
+  if (review.output_operation === 'updated') {
+    return {
+      filePath: review.source_path,
+      fileName: review.source_name
+    }
+  }
+
+  return {}
+}
+
 const getEndedStateMessage = (status: FileReviewDetail['review']['status']): string => {
   if (status === 'committed') {
     return '本文件修改已写回源文件。'
@@ -65,15 +103,9 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
   const isActiveConfirmSession = Boolean(
     review && review.review.draft_artifact_path && ACTIVE_CONFIRM_STATUSES.has(review.review.status)
   )
-  const reviewArtifactPath = review?.review.draft_artifact_path
-  const reviewFileName = review
-    ? `${review.review.source_name.replace(/\.docx$/i, '')}-审阅稿.docx`
-    : undefined
-  const viewerPath =
-    isActiveConfirmSession && reviewArtifactPath ? reviewArtifactPath : review?.review.source_path
-  const viewerName =
-    isActiveConfirmSession && reviewFileName ? reviewFileName : review?.review.source_name
+  const viewerTarget = resolveViewerTarget(review?.review || null, isActiveConfirmSession)
   const endedStateMessage = review ? getEndedStateMessage(review.review.status) : ''
+  const commitButtonLabel = getCommitButtonLabel(review?.review || null)
   const commitDisabled =
     !review ||
     !isActiveConfirmSession ||
@@ -173,25 +205,29 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
               )
             }
           />
-          <Button
-            type="primary"
-            size="small"
-            onClick={onCommit}
-            loading={committing}
-            disabled={commitDisabled}
-            data-testid={workbenchSelectors.reviewCommitButton}
-          >
-            确认替换
-          </Button>
-          <Button
-            size="small"
-            onClick={onDiscard}
-            loading={discarding}
-            disabled={discardDisabled}
-            data-testid={workbenchSelectors.reviewDiscardButton}
-          >
-            放弃
-          </Button>
+          {isActiveConfirmSession ? (
+            <>
+              <Button
+                type="primary"
+                size="small"
+                onClick={onCommit}
+                loading={committing}
+                disabled={commitDisabled}
+                data-testid={workbenchSelectors.reviewCommitButton}
+              >
+                {commitButtonLabel}
+              </Button>
+              <Button
+                size="small"
+                onClick={onDiscard}
+                loading={discarding}
+                disabled={discardDisabled}
+                data-testid={workbenchSelectors.reviewDiscardButton}
+              >
+                放弃
+              </Button>
+            </>
+          ) : null}
         </div>
       </div>
 
@@ -221,8 +257,8 @@ const WorkbenchReviewPanel: React.FC<WorkbenchReviewPanelProps> = ({
 
       <div className="min-h-0 flex-1 bg-[#F5F3EE] p-3">
         <EmbeddedFileViewer
-          filePath={viewerPath}
-          fileName={viewerName}
+          filePath={viewerTarget.filePath}
+          fileName={viewerTarget.fileName}
           anchorName={selectedChange?.anchor_name}
           emptyText="当前审阅稿暂时不可预览。"
         />

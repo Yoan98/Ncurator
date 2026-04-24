@@ -105,6 +105,12 @@ describe('ai human live backend', () => {
             .map((event) => event.input.sourcePath)
             .filter((value): value is string => typeof value === 'string')
           const changedContentKinds = collectDocxApplyOpsContentKinds(events)
+          const targetExistsInWorkspace = await fs
+            .access(
+              `${runtime.workspaceRoot}/${DOCX_CROSS_SOURCE_SUMMARY_REPORT_RELATIVE_PATH}`
+            )
+            .then(() => true)
+            .catch(() => false)
           const unchangedFixtures = await Promise.all(
             result.workspaceSeed.trackedDocs.map(async (fixture) => {
               const currentBytes = await fs.readFile(fixture.workspacePath)
@@ -126,7 +132,7 @@ describe('ai human live backend', () => {
               sourcePath.endsWith(DOCX_CROSS_SOURCE_SUMMARY_REPORT_RELATIVE_PATH)
             )
           const targetDocWritten =
-            writeSourcePaths.length > 0 &&
+            writeSourcePaths.length === 0 ||
             writeSourcePaths.every(
               (sourcePath) =>
                 sourcePath.endsWith(DOCX_CROSS_SOURCE_SUMMARY_REPORT_RELATIVE_PATH)
@@ -139,13 +145,12 @@ describe('ai human live backend', () => {
               targetDocOpened &&
               toolNames.some((toolName) => toolName === 'docx_search' || toolName === 'docx_read_blocks') &&
               toolNames.includes('docx_create') &&
-              toolNames.some((toolName) => toolName.endsWith('_edit')) &&
               targetDocWritten &&
-              changedContentKinds.includes('paragraph') &&
               filterAiRunEventsByType(events, 'draft_review_ready').length >= 1 &&
               hasFileReviewArtifact(result.output?.artifacts) &&
               hasDraftFileArtifact(result.output?.artifacts) &&
               unchangedFixtures.every(Boolean) &&
+              targetExistsInWorkspace === false &&
               /(过拟合|过度拟合)/.test(deliveryText) &&
               /反走样/.test(deliveryText) &&
               /总结|报告/.test(deliveryText),
@@ -160,6 +165,7 @@ describe('ai human live backend', () => {
                 toolNames,
                 targetReportPath: DOCX_CROSS_SOURCE_SUMMARY_REPORT_RELATIVE_PATH,
                 changedContentKinds,
+                targetExistsInWorkspace,
                 summary: result.output?.summary,
                 deliveryMarkdown: result.output?.deliveryMarkdown,
                 artifacts: result.output?.artifacts

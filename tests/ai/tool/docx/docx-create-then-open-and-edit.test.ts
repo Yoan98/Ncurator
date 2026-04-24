@@ -1,3 +1,4 @@
+import fs from 'node:fs/promises'
 import { describe, it } from 'vitest'
 import { createDocxToolHarness } from '../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
@@ -59,13 +60,19 @@ describe('ai tool docx backend', () => {
             sourcePath,
             query: '训练时间过久'
           })
+          const targetPath = `${runtime.workspaceRoot}/${sourcePath}`
+          const targetExists = await fs
+            .access(targetPath)
+            .then(() => true)
+            .catch(() => false)
 
           return {
             created,
             outline,
             read,
             edited,
-            search
+            search,
+            targetExists
           }
         } finally {
           await harness.release()
@@ -74,7 +81,7 @@ describe('ai tool docx backend', () => {
       assert: async (result, runtime) => {
         runtime.assertThat(
           result.created.created === true &&
-            result.created.currentRevisionRef === 'v1' &&
+            result.created.currentRevisionRef === 'v2' &&
             result.outline.blocks.some(
               (block) => block.type === 'paragraph' && block.preview.includes('过拟合：待补充')
             ) &&
@@ -93,13 +100,15 @@ describe('ai tool docx backend', () => {
         runtime.assertThat(
           result.edited.previousRevisionRef === result.created.currentRevisionRef &&
             result.edited.changedBlocks.length === 1 &&
-            result.search.matches.length === 1,
+            result.search.matches.length === 1 &&
+            result.targetExists === false,
           {
             name: 'docx-create-can-flow-into-followup-edit',
-            message: '新建 docx 应可直接进入后续编辑链路，并能被搜索工具读取新内容。',
+            message: 'create-target docx 应可直接进入后续编辑链路，并且在 commit 前不提前落正式目标文件。',
             data: {
               edited: result.edited,
-              search: result.search.matches
+              search: result.search.matches,
+              targetExists: result.targetExists
             }
           }
         )

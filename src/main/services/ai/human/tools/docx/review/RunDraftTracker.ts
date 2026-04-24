@@ -16,7 +16,8 @@ import {
   buildDocxChangeSummary,
   buildDocxChangeTitle,
   buildSourceVersion,
-  getDocxChangeKind
+  getDocxChangeKind,
+  sanitizeFileName
 } from './utils'
 import { buildDocxReviewArtifactPaths } from './viewProjection'
 import { clipText } from '../../../../utils/text'
@@ -122,6 +123,10 @@ export class RunDraftTracker {
           reviewId,
           sourceName: document.sourceName
         })
+      const sourceArtifactPath = path.join(
+        path.dirname(workingArtifactPath),
+        `source-${sanitizeFileName(document.sourceName)}`
+      )
 
       const saveResponse = await client.call({
         runId: input.runId,
@@ -137,82 +142,107 @@ export class RunDraftTracker {
         )
       }
 
-      const sourceDocument = await this.documentsStore.getDocumentByFilePath(document.sourcePath)
-      const sourceVersion = await buildSourceVersion(document.sourcePath)
-      const sourceBuffer = await fs.readFile(document.sourcePath)
-      const latestDraftBuffer = await fs.readFile(workingArtifactPath)
       const replaySession = document.replaySession
-      const reviewChanges = replaySession
-        ? this.buildReviewChanges({
-            reviewId,
-            session: replaySession,
-            now
-          })
-        : []
+      if (!replaySession) continue
 
-      if (!replaySession || reviewChanges.length === 0) continue
-
-      await materializeDocxProjectedArtifact({
-        sourceBuffer,
-        workingBuffer: latestDraftBuffer,
-        session: replaySession,
-        kind: 'review',
-        outPath: draftArtifactPath
+      const sourceSaveResponse = await client.call({
+        runId: input.runId,
+        action: 'materialize_draft',
+        payload: {
+          docId: replaySession.sourceDocId,
+          outPath: sourceArtifactPath
+        }
       })
-      await materializeDocxProjectedArtifact({
-        sourceBuffer,
-        workingBuffer: latestDraftBuffer,
-        session: replaySession,
-        kind: 'committed',
-        outPath: committedArtifactPath
-      })
-
-      replaySession.viewArtifacts.working = {
-        kind: 'working',
-        path: workingArtifactPath,
-        createdAt: now
-      }
-      replaySession.viewArtifacts.review = {
-        kind: 'review',
-        path: draftArtifactPath,
-        createdAt: now
-      }
-      replaySession.viewArtifacts.committed = {
-        kind: 'committed',
-        path: committedArtifactPath,
-        createdAt: now
+      if (!sourceSaveResponse.ok || sourceSaveResponse.payload.action !== 'materialize_draft') {
+        throw new Error(
+          sourceSaveResponse.ok
+            ? 'source draft materialization worker protocol mismatch'
+            : sourceSaveResponse.error
+        )
       }
 
-      const review: FileReview = {
-        id: reviewId,
-        session_id: state.sessionId,
-        run_id: input.runId,
-        status: 'pending_confirm',
-        title: clipText(`审阅稿：${document.sourceName}`, 80) || '审阅稿',
-        source_document_id: sourceDocument?.id,
-        source_path: document.sourcePath,
-        source_name: document.sourceName,
-        format: 'docx',
-        review_render_kind: 'docx_block',
-        latest_draft_snapshot_id: document.latestDocId,
-        draft_artifact_path: draftArtifactPath,
-        working_artifact_path: workingArtifactPath,
-        committed_artifact_path: committedArtifactPath,
-        source_version: sourceVersion,
-        change_count: reviewChanges.length,
-        pending_change_count: reviewChanges.length,
-        accepted_change_count: 0,
-        rejected_change_count: 0,
-        created_at: now,
-        updated_at: now,
-        completed_at: now
-      }
+      try {
+        const sourceDocument = await this.documentsStore.getDocumentByFilePath(document.sourcePath)
+        const sourceVersion = await buildSourceVersion(document.sourcePath)
+        const sourceBuffer = await fs.readFile(sourceArtifactPath)
+        const latestDraftBuffer = await fs.readFile(workingArtifactPath)
+        const reviewChanges = this.buildReviewChanges({
+          reviewId,
+          session: replaySession,
+          now
+        })
 
-      details.push({
-        review,
-        changes: reviewChanges,
-        commit_attempts: []
-      })
+        if (reviewChanges.length === 0) continue
+
+        await materializeDocxProjectedArtifact({
+          sourceBuffer,
+          workingBuffer: latestDraftBuffer,
+          session: replaySession,
+          kind: 'review',
+          outPath: draftArtifactPath
+        })
+        await materializeDocxProjectedArtifact({
+          sourceBuffer,
+          workingBuffer: latestDraftBuffer,
+          session: replaySession,
+          kind: 'committed',
+          outPath: committedArtifactPath
+        })
+
+        replaySession.viewArtifacts.working = {
+          kind: 'working',
+          path: workingArtifactPath,
+          createdAt: now
+        }
+        replaySession.viewArtifacts.review = {
+          kind: 'review',
+          path: draftArtifactPath,
+          createdAt: now
+        }
+        replaySession.viewArtifacts.committed = {
+          kind: 'committed',
+          path: committedArtifactPath,
+          createdAt: now
+        }
+
+        const review: FileReview = {
+          id: reviewId,
+          session_id: state.sessionId,
+          run_id: input.runId,
+          status: 'pending_confirm',
+          title: clipText(`审阅稿：${document.sourceName}`, 80) || '审阅稿',
+          source_document_id: sourceDocument?.id,
+          source_path: document.sourcePath,
+          source_name: document.sourceName,
+          output_operation: replaySession.targetMode === 'create' ? 'created' : 'updated',
+          format: 'docx',
+          review_render_kind: 'docx_block',
+          latest_draft_snapshot_id: document.latestDocId,
+          draft_artifact_path: draftArtifactPath,
+          working_artifact_path: workingArtifactPath,
+          committed_artifact_path: committedArtifactPath,
+          source_version: sourceVersion,
+          change_count: reviewChanges.length,
+          pending_change_count: reviewChanges.length,
+          accepted_change_count: 0,
+          rejected_change_count: 0,
+          created_at: now,
+          updated_at: now,
+          completed_at: now
+        }
+
+        details.push({
+          review,
+          changes: reviewChanges,
+          commit_attempts: []
+        })
+      } finally {
+        try {
+          await fs.rm(sourceArtifactPath, { force: true })
+        } catch {
+          // Ignore source artifact cleanup failures for test/runtime stability.
+        }
+      }
     }
 
     this.runDrafts.delete(input.runId)

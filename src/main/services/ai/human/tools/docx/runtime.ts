@@ -3,6 +3,7 @@ import type { AiToolCallResult, JsonObject } from '../../../../../../shared/type
 import type {
   DocxCapabilityToolsInput,
   DocxCapabilityToolsRuntimeState,
+  DocxCreatedBlock,
   DocxDetailedBlock,
   DocxOp,
   DocxReplaySession,
@@ -109,8 +110,22 @@ export type DocxToolRuntime = {
     meta?: DocxReplaySession['meta'],
     stats?: DocxReplaySession['stats']
   ) => Promise<{
+      session: DocxReplaySession
+      currentRevisionRef: string
+    }>
+  registerCreatedDocument: (input: {
+    sourcePath: string
+    baselineDocId: string
+    workingDocId: string
+    meta?: DocxReplaySession['meta']
+    stats?: DocxReplaySession['stats']
+    summary?: string
+  }) => Promise<{
     session: DocxReplaySession
+    previousRevisionRef: string
     currentRevisionRef: string
+    changedBlocks: DocxRevision['changedBlocks']
+    createdBlocks: DocxRevision['createdBlocks']
   }>
   registerRevision: (input: {
     sourcePath: string
@@ -478,6 +493,110 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     }
   }
 
+  const stringifyBlockSpec = (spec: DocxReplaySnapshot['blocks'][number]['spec']): string => {
+    if (spec.kind === 'paragraph') {
+      return spec.runs.map((run) => run.text).join('')
+    }
+    return spec.rows
+      .map((row) =>
+        row
+          .map((cell) => cell.paragraphs.map((paragraph) => paragraph.runs.map((run) => run.text).join('')).join('\n'))
+          .join('\t')
+      )
+      .join('\n')
+  }
+
+  const buildCreatedBlocksFromSnapshot = (
+    snapshot: DocxReplaySnapshot
+  ): DocxCreatedBlock[] =>
+    snapshot.blocks.flatMap((block) => [
+      {
+        blockId: block.blockId,
+        type: block.kind
+      } as const,
+      ...block.tableCellBlockIds.map((cellBlockId) => ({
+        blockId: cellBlockId,
+        type: 'table_cell' as const
+      }))
+    ])
+
+  const buildInsertedChangedBlocksFromSnapshot = (
+    snapshot: DocxReplaySnapshot
+  ): DocxRevision['changedBlocks'] =>
+    snapshot.blocks.map((block) => ({
+      action: 'inserted',
+      blockId: block.blockId,
+      beforeText: '',
+      afterText: stringifyBlockSpec(block.spec)
+    }))
+
+  const registerCreatedDocument = async (params: {
+    sourcePath: string
+    baselineDocId: string
+    workingDocId: string
+    meta?: DocxReplaySession['meta']
+    stats?: DocxReplaySession['stats']
+    summary?: string
+  }) => {
+    const normalizedSourcePath = path.resolve(params.sourcePath)
+    if (state.replaySessionBySourcePath.has(normalizedSourcePath)) {
+      throw new Error(`docx session already exists for sourcePath: ${normalizedSourcePath}`)
+    }
+
+    registerSnapshot(params.baselineDocId)
+    state.sourcePathByDocId.set(params.baselineDocId, normalizedSourcePath)
+    const baselineRevisionEntry: DocxRevision = {
+      revisionRef: 'v1',
+      docId: params.baselineDocId,
+      createdAt: Date.now()
+    }
+    state.revisionEntryByDocId.set(params.baselineDocId, baselineRevisionEntry)
+    const baselineSnapshot = await buildReplaySnapshotForDoc(params.baselineDocId)
+    const session = createReplaySessionFromSnapshot({
+      sourcePath: normalizedSourcePath,
+      targetMode: 'create',
+      sourceDocId: params.baselineDocId,
+      meta: params.meta || {
+        title: '',
+        creator: '',
+        lastModifiedBy: '',
+        description: '',
+        defaultFont: ''
+      },
+      stats: params.stats || {
+        blockCount: 0,
+        paragraphCount: 0,
+        tableCount: 0,
+        imageCount: 0,
+        charCount: 0
+      },
+      snapshot: baselineSnapshot
+    })
+    session.revisionByDocId = new Map([[params.baselineDocId, baselineRevisionEntry]])
+    state.replaySessionBySourcePath.set(normalizedSourcePath, session)
+
+    const workingSnapshot = await buildReplaySnapshotForDoc(params.workingDocId)
+    const createdBlocks = buildCreatedBlocksFromSnapshot(workingSnapshot)
+    const changedBlocks = buildInsertedChangedBlocksFromSnapshot(workingSnapshot)
+    const revisionUpdate = await registerRevision({
+      sourcePath: normalizedSourcePath,
+      previousDocId: params.baselineDocId,
+      nextDocId: params.workingDocId,
+      ops: [{ type: 'create_document' }],
+      createdBlocks,
+      changedBlocks,
+      summary: params.summary
+    })
+
+    return {
+      session,
+      previousRevisionRef: revisionUpdate.previousRevisionRef,
+      currentRevisionRef: revisionUpdate.currentRevisionRef,
+      changedBlocks,
+      createdBlocks
+    }
+  }
+
   const registerRevision = async (params: {
     sourcePath: string
     previousDocId: string
@@ -828,6 +947,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     ensureDocumentSession,
     requireDocumentSession,
     registerOpenedDocument,
+    registerCreatedDocument,
     registerRevision,
     buildRevisionHistory,
     resolveRevisionRollbackTarget,

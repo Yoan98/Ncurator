@@ -24,6 +24,8 @@ export const sanitizeFileName = (value: string): string => {
 
 export const describeDocxOp = (op: DocxOp): string => {
   switch (op.type) {
+    case 'create_document':
+      return '创建文档'
     case 'replace_block':
       return '替换块'
     case 'insert_after':
@@ -82,12 +84,19 @@ export const toReviewStatus = (
 }
 
 export const buildSourceVersion = async (sourcePath: string): Promise<DraftSourceVersion> => {
-  const stat = await fs.stat(sourcePath)
-  const buffer = await fs.readFile(sourcePath)
-  return {
-    mtime_ms: stat.mtimeMs,
-    byte_size: stat.size,
-    checksum: createHash('sha256').update(buffer).digest('hex')
+  try {
+    const stat = await fs.stat(sourcePath)
+    const buffer = await fs.readFile(sourcePath)
+    return {
+      exists: true,
+      mtime_ms: stat.mtimeMs,
+      byte_size: stat.size,
+      checksum: createHash('sha256').update(buffer).digest('hex')
+    }
+  } catch {
+    return {
+      exists: false
+    }
   }
 }
 
@@ -95,6 +104,15 @@ export const isSourceVersionFresh = async (
   sourcePath: string,
   version: DraftSourceVersion
 ): Promise<boolean> => {
+  if (!version.exists) {
+    try {
+      await fs.access(sourcePath)
+      return false
+    } catch {
+      return true
+    }
+  }
+
   try {
     const current = await buildSourceVersion(sourcePath)
     if (version.byte_size !== undefined && current.byte_size !== version.byte_size) return false
@@ -103,7 +121,7 @@ export const isSourceVersionFresh = async (
     if (version.content_hash && current.content_hash !== version.content_hash) return false
     return true
   } catch {
-    return false
+    return version.exists === false
   }
 }
 

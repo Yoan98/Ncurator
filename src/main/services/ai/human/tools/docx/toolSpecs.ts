@@ -270,12 +270,12 @@ export const DOCX_CREATE_TOOL_SPEC = {
   name: 'docx_create',
   familyId: 'docx',
   requiresWorkspace: true,
-  description: '创建一份新的 docx 文件，供后续继续读取或编辑。',
+  description: '创建一份新的 docx 草稿目标，供后续继续读取、编辑和审阅。',
   skillIds: ['docx-write'],
   schema: docxCreateSchema,
   promptSpec: {
     name: 'docx_create',
-    purpose: '先创建一份新的 docx 文件，再继续写入或编辑它。',
+    purpose: '先创建一份新的 docx 草稿目标，再继续写入或编辑它。',
     whenToUse:
       '当用户明确要你生成一份新的 Word 文件，或者当前 workspace 里还没有目标 docx 时使用。创建成功后可继续对同一路径执行 docx_outline、docx_read_blocks 和 docx_*_edit。',
     preconditions: [
@@ -286,7 +286,7 @@ export const DOCX_CREATE_TOOL_SPEC = {
       {
         name: 'sourcePath, currentRevisionRef, created',
         type: 'string | boolean',
-        description: '返回新建 docx 的路径、初始修订号以及 created=true。'
+        description: '返回新建 docx 草稿目标的路径、当前修订号以及 created=true。正式目标文件只会在后续 commit 成功后创建。'
       }
     ],
     examples: [

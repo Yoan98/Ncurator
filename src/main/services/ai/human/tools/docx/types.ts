@@ -163,6 +163,7 @@ export type DocxSearchMatch = {
 
 export type DocxChangedBlock = {
   action:
+    | 'inserted'
     | 'replace_block'
     | 'insert_after'
     | 'insert_before'
@@ -253,6 +254,7 @@ export type DocxReplaySnapshot = {
 
 export type DocxReplaySession = {
   sourcePath: string
+  targetMode: 'update' | 'create'
   sourceDocId: string
   activeDocId: string
   activeRevisionRef: string

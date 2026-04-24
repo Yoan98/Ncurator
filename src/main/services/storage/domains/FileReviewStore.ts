@@ -27,6 +27,7 @@ type FileReviewRow = {
   source_document_id?: PrimitiveRowValue
   source_path?: PrimitiveRowValue
   source_name?: PrimitiveRowValue
+  output_operation?: PrimitiveRowValue
   format?: PrimitiveRowValue
   review_render_kind?: PrimitiveRowValue
   latest_draft_snapshot_id?: PrimitiveRowValue
@@ -111,8 +112,9 @@ const parseJsonObject = (value: PrimitiveRowValue): JsonObject | undefined => {
 
 const parseSourceVersion = (value: PrimitiveRowValue): DraftSourceVersion => {
   const parsed = parseJsonObject(value)
-  if (!parsed) return {}
+  if (!parsed) return { exists: true }
   return {
+    exists: typeof parsed.exists === 'boolean' ? parsed.exists : true,
     mtime_ms: typeof parsed.mtime_ms === 'number' ? parsed.mtime_ms : undefined,
     byte_size: typeof parsed.byte_size === 'number' ? parsed.byte_size : undefined,
     checksum: typeof parsed.checksum === 'string' ? parsed.checksum : undefined,
@@ -178,6 +180,10 @@ const normalizeFormat = (value: PrimitiveRowValue): FileReview['format'] => {
   }
 }
 
+const normalizeOutputOperation = (value: PrimitiveRowValue): FileReview['output_operation'] => {
+  return value === 'created' ? 'created' : 'updated'
+}
+
 const normalizeChangeKind = (value: PrimitiveRowValue): FileReviewChange['change_kind'] => {
   const normalized = String(value ?? '').trim()
   switch (normalized) {
@@ -214,6 +220,7 @@ const toFileReview = (row: FileReviewRow): FileReview => ({
   source_document_id: toOptionalString(row.source_document_id),
   source_path: toRequiredString(row.source_path),
   source_name: toRequiredString(row.source_name),
+  output_operation: normalizeOutputOperation(row.output_operation),
   format: normalizeFormat(row.format),
   review_render_kind:
     row.review_render_kind === 'text_hunk' || row.review_render_kind === 'preview_only'
@@ -283,6 +290,7 @@ const toFileReviewWriteRow = (review: FileReview): WriteRow => ({
   source_document_id: review.source_document_id,
   source_path: review.source_path,
   source_name: review.source_name,
+  output_operation: review.output_operation,
   format: review.format,
   review_render_kind: review.review_render_kind,
   latest_draft_snapshot_id: review.latest_draft_snapshot_id,

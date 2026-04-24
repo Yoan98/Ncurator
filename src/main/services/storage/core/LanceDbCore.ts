@@ -314,6 +314,7 @@ export class LanceDbCore {
           new arrow.Field('source_document_id', new arrow.Utf8(), true),
           new arrow.Field('source_path', new arrow.Utf8()),
           new arrow.Field('source_name', new arrow.Utf8()),
+          new arrow.Field('output_operation', new arrow.Utf8()),
           new arrow.Field('format', new arrow.Utf8()),
           new arrow.Field('review_render_kind', new arrow.Utf8(), true),
           new arrow.Field('latest_draft_snapshot_id', new arrow.Utf8()),
