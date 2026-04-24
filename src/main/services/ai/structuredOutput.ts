@@ -26,14 +26,25 @@ export type NonScriptedStructuredOutputMethod = Exclude<AiStructuredOutputMethod
 
 type ErrorResponseData = string | number | boolean | null | object
 
-type ErrorLike =
-  | Error
-  | {
-      message?: string
-      response?: {
-        data?: ErrorResponseData
-      }
-    }
+type ErrorObject = Record<string, unknown>
+
+export type StructuredOutputErrorKind = 'fatal' | 'retryable' | 'capability_mismatch' | 'unknown'
+
+export type StructuredOutputErrorInfo = {
+  status?: number
+  code?: string
+  type?: string
+  param?: string
+  message: string
+  rawText: string
+}
+
+export type StructuredOutputErrorAnalysis = {
+  info: StructuredOutputErrorInfo
+  kind: StructuredOutputErrorKind
+  transportCompatibility: boolean
+  methodUnsupported: boolean
+}
 
 export type StructuredOutputProfileMetadata = {
   transport: AiStructuredOutputTransport
@@ -66,48 +77,97 @@ const STRUCTURED_OUTPUT_PROFILE_METADATA: Record<
   }
 }
 
-const toErrorLike = (value: unknown): ErrorLike => {
-  if (value instanceof Error) return value
-  if (value && typeof value === 'object') {
-    return value as Extract<ErrorLike, object>
+const getObject = (value: unknown): ErrorObject | undefined =>
+  value && typeof value === 'object' ? (value as ErrorObject) : undefined
+
+const readString = (value: unknown): string | undefined =>
+  typeof value === 'string' && value.trim() ? value.trim() : undefined
+
+const readNumber = (value: unknown): number | undefined => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) return parsed
   }
+  return undefined
+}
+
+const stringifyValue = (value: unknown): string | undefined => {
+  const direct = readString(value)
+  if (direct) return direct
+  if (value === undefined) return undefined
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return String(value)
+  }
+}
+
+const includesAny = (body: string, markers: string[]): boolean =>
+  markers.some((marker) => body.includes(marker))
+
+const normalizeSignal = (value: string | undefined): string | undefined => {
+  if (!value) return undefined
+  const normalized = value.trim()
+  return normalized ? normalized.toLowerCase() : undefined
+}
+
+export const normalizeStructuredOutputError = (error: unknown): StructuredOutputErrorInfo => {
+  const root = getObject(error)
+  const response = getObject(root?.response)
+  const responseData = response?.data as ErrorResponseData | undefined
+  const responseDataObject = getObject(responseData)
+  const providerError = getObject(responseDataObject?.error)
+
+  const message =
+    readString(providerError?.message) ||
+    readString(responseDataObject?.message) ||
+    readString(root?.message) ||
+    stringifyValue(responseData) ||
+    stringifyValue(error) ||
+    'unknown structured output error'
+
+  const status =
+    readNumber(response?.status) ||
+    readNumber(root?.status) ||
+    readNumber(responseDataObject?.status) ||
+    readNumber(providerError?.status)
+
+  const code =
+    readString(providerError?.code) ||
+    readString(responseDataObject?.code) ||
+    readString(root?.code)
+
+  const type =
+    readString(providerError?.type) ||
+    readString(responseDataObject?.type) ||
+    readString(root?.type)
+
+  const param =
+    readString(providerError?.param) ||
+    readString(responseDataObject?.param) ||
+    readString(root?.param)
+
+  const rawParts = [
+    status !== undefined ? `status=${status}` : undefined,
+    code ? `code=${code}` : undefined,
+    type ? `type=${type}` : undefined,
+    param ? `param=${param}` : undefined,
+    message,
+    stringifyValue(responseData)
+  ].filter(Boolean)
+
   return {
-    message: String(value || 'unknown structured output error')
+    status,
+    code,
+    type,
+    param,
+    message,
+    rawText: rawParts.join(' ')
   }
 }
 
-export const getErrorText = (error: unknown): string => {
-  const normalized = toErrorLike(error)
-  if (normalized instanceof Error && normalized.message.trim()) {
-    return normalized.message.trim()
-  }
-  if (typeof normalized.message === 'string' && normalized.message.trim()) {
-    return normalized.message.trim()
-  }
-  return 'unknown structured output error'
-}
-
-const getStructuredOutputErrorBody = (
-  error: unknown
-): string => {
-  const normalized = toErrorLike(error)
-  const parts = [getErrorText(normalized)]
-  const responseData =
-    'response' in normalized &&
-    normalized.response &&
-    typeof normalized.response === 'object' &&
-    'data' in normalized.response
-      ? normalized.response.data
-      : undefined
-  if (responseData !== undefined) {
-    try {
-      parts.push(JSON.stringify(responseData))
-    } catch {
-      parts.push(String(responseData))
-    }
-  }
-  return parts.join(' ')
-}
+export const getErrorText = (error: unknown): string => normalizeStructuredOutputError(error).message
 
 const matchesUnsupportedSignal = (body: string, markers: string[]): boolean => {
   const unsupportedSignals = [
@@ -120,18 +180,18 @@ const matchesUnsupportedSignal = (body: string, markers: string[]): boolean => {
     'invalid value',
     'not allowed',
     'not available',
+    'unavailable',
     'unrecognized request argument',
     'unsupported parameter'
   ]
-  return unsupportedSignals.some((signal) => body.includes(signal)) &&
-    markers.some((marker) => body.includes(marker))
+  return includesAny(body, unsupportedSignals) && includesAny(body, markers)
 }
 
-export const isTransportCompatibilityError = (
+const isTransportCompatibilityErrorInfo = (
   transport: AiStructuredOutputTransport,
-  error: unknown
+  info: StructuredOutputErrorInfo
 ): boolean => {
-  const body = getStructuredOutputErrorBody(error).toLowerCase()
+  const body = info.rawText.toLowerCase()
   if (!body) return false
 
   const providerCompatibilitySignals = [
@@ -141,6 +201,13 @@ export const isTransportCompatibilityError = (
     'cannot read properties of undefined (reading "message")'
   ]
   if (providerCompatibilitySignals.some((signal) => body.includes(signal))) {
+    return true
+  }
+
+  if (
+    transport === 'completions' &&
+    includesAny(normalizeSignal(info.type) || '', ['unsupported_legacy_protocol'])
+  ) {
     return true
   }
 
@@ -158,14 +225,22 @@ export const isTransportCompatibilityError = (
   return matchesUnsupportedSignal(body, ['/v1/responses', 'responses api', 'responses endpoint'])
 }
 
-export const isStructuredOutputTransportCompatibilityError = isTransportCompatibilityError
-
-export const isStructuredOutputMethodUnsupportedError = (
+const isMethodUnsupportedErrorInfo = (
   method: NativeStructuredOutputMethod,
-  error: unknown
+  info: StructuredOutputErrorInfo
 ): boolean => {
-  const body = getStructuredOutputErrorBody(error).toLowerCase()
+  const body = info.rawText.toLowerCase()
   if (!body) return false
+
+  const normalizedParam = normalizeSignal(info.param)
+  if (
+    normalizedParam &&
+    (normalizedParam === 'response_format' ||
+      normalizedParam === 'response_format.type' ||
+      normalizedParam === 'json_schema')
+  ) {
+    return true
+  }
 
   if (method === 'jsonSchema') {
     const invalidSchemaSignals = [
@@ -176,10 +251,8 @@ export const isStructuredOutputMethodUnsupportedError = (
       'missing required'
     ]
     if (
-      invalidSchemaSignals.some((signal) => body.includes(signal)) &&
-      ['response_format', 'response format', 'json_schema', 'json schema'].some((marker) =>
-        body.includes(marker)
-      )
+      includesAny(body, invalidSchemaSignals) &&
+      includesAny(body, ['response_format', 'response format', 'json_schema', 'json schema'])
     ) {
       return true
     }
@@ -199,6 +272,98 @@ export const isStructuredOutputMethodUnsupportedError = (
     'response format'
   ])
 }
+
+const FATAL_STATUS_CODES = new Set([401, 402, 403])
+const RETRYABLE_STATUS_CODES = new Set([408, 409, 425, 429, 500, 502, 503, 504])
+const FATAL_ERROR_CODES = new Set([
+  'invalid_api_key',
+  'insufficient_balance',
+  'quota_exceeded',
+  'invalid_authentication',
+  'authentication_error'
+])
+const RETRYABLE_ERROR_CODES = new Set([
+  'rate_limit_exceeded',
+  'timeout',
+  'request_timeout',
+  'server_error',
+  'service_unavailable'
+])
+
+export const classifyStructuredOutputError = (input: {
+  error: unknown
+  transport: AiStructuredOutputTransport
+  method: NonScriptedStructuredOutputMethod
+}): StructuredOutputErrorAnalysis => {
+  const info = normalizeStructuredOutputError(input.error)
+  const normalizedCode = normalizeSignal(info.code)
+  const normalizedType = normalizeSignal(info.type)
+  const body = info.rawText.toLowerCase()
+  const transportCompatibility = isTransportCompatibilityErrorInfo(input.transport, info)
+  const methodUnsupported =
+    input.method !== 'promptJson' && isMethodUnsupportedErrorInfo(input.method, info)
+
+  if (
+    (info.status !== undefined && FATAL_STATUS_CODES.has(info.status)) ||
+    (normalizedCode && FATAL_ERROR_CODES.has(normalizedCode)) ||
+    includesAny(body, ['insufficient balance', 'invalid api key', 'authentication failed']) ||
+    normalizedType === 'authentication_error'
+  ) {
+    return {
+      info,
+      kind: 'fatal',
+      transportCompatibility,
+      methodUnsupported
+    }
+  }
+
+  if (
+    (info.status !== undefined && RETRYABLE_STATUS_CODES.has(info.status)) ||
+    (normalizedCode && RETRYABLE_ERROR_CODES.has(normalizedCode)) ||
+    includesAny(body, [
+      'rate limit',
+      'temporarily unavailable',
+      'service unavailable',
+      'timed out',
+      'timeout'
+    ])
+  ) {
+    return {
+      info,
+      kind: 'retryable',
+      transportCompatibility,
+      methodUnsupported
+    }
+  }
+
+  if (transportCompatibility || methodUnsupported) {
+    return {
+      info,
+      kind: 'capability_mismatch',
+      transportCompatibility,
+      methodUnsupported
+    }
+  }
+
+  return {
+    info,
+    kind: 'unknown',
+    transportCompatibility,
+    methodUnsupported
+  }
+}
+
+export const isTransportCompatibilityError = (
+  transport: AiStructuredOutputTransport,
+  error: unknown
+): boolean => classifyStructuredOutputError({ error, transport, method: 'promptJson' }).transportCompatibility
+
+export const isStructuredOutputTransportCompatibilityError = isTransportCompatibilityError
+
+export const isStructuredOutputMethodUnsupportedError = (
+  method: NativeStructuredOutputMethod,
+  error: unknown
+): boolean => classifyStructuredOutputError({ error, transport: 'completions', method }).methodUnsupported
 
 export const buildStructuredOutputProfile = (
   transport: AiStructuredOutputTransport,

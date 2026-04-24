@@ -157,6 +157,55 @@ describe('ai unit structured output auto fallback', () => {
     expect(callOrder).toEqual(['completions:jsonSchema', 'completions:jsonMode'])
   })
 
+  it('falls back when response_format is unavailable and promptJson succeeds', async () => {
+    const callOrder: string[] = []
+    configureCreateChatModel(
+      {
+        'completions:jsonSchema': {
+          type: 'error',
+          error: Object.assign(new Error('This response_format type is unavailable now'), {
+            status: 400,
+            response: {
+              status: 400,
+              data: {
+                error: {
+                  param: 'response_format',
+                  message: 'This response_format type is unavailable now'
+                }
+              }
+            }
+          })
+        },
+        'completions:jsonMode': {
+          type: 'error',
+          error: new Error('response_format json_object is not supported by this provider')
+        },
+        'completions:promptJson': {
+          type: 'success',
+          output: { answer: 'from completions prompt json' }
+        }
+      },
+      callOrder
+    )
+
+    const result = await invokeStructuredChat(baseInput)
+
+    expect(result.output).toEqual({ answer: 'from completions prompt json' })
+    expect(result.transport).toBe('completions')
+    expect(result.method).toBe('promptJson')
+    expect(result.profile).toBe('completions:promptJson')
+    expect(result.fallbackChain).toEqual([
+      'completions:jsonSchema',
+      'completions:jsonMode',
+      'completions:promptJson'
+    ])
+    expect(callOrder).toEqual([
+      'completions:jsonSchema',
+      'completions:jsonMode',
+      'completions:promptJson'
+    ])
+  })
+
   it('jumps to responses when completions transport hits a compatibility error', async () => {
     const callOrder: string[] = []
     configureCreateChatModel(
@@ -314,5 +363,34 @@ describe('ai unit structured output auto fallback', () => {
       'structured_output_failed; caller=unit.test; schema=unit_schema; model=gpt-5; profile=completions:jsonMode; transport=completions; method=jsonMode; reason=network socket disconnected unexpectedly'
     )
     expect(callOrder).toEqual(['completions:jsonMode'])
+  })
+
+  it('does not downgrade retryable errors into profile fallback', async () => {
+    const callOrder: string[] = []
+    configureCreateChatModel(
+      {
+        'completions:jsonSchema': {
+          type: 'error',
+          error: Object.assign(new Error('Rate limit exceeded'), {
+            status: 429,
+            response: {
+              status: 429,
+              data: {
+                error: {
+                  code: 'rate_limit_exceeded',
+                  message: 'Rate limit exceeded'
+                }
+              }
+            }
+          })
+        }
+      },
+      callOrder
+    )
+
+    await expect(invokeStructuredChat(baseInput)).rejects.toThrow(
+      'structured_output_retryable; caller=unit.test; schema=unit_schema; model=gpt-5; profile=completions:jsonSchema; transport=completions; method=jsonSchema; reason=Rate limit exceeded'
+    )
+    expect(callOrder).toEqual(['completions:jsonSchema'])
   })
 })

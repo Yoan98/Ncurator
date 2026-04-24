@@ -13,10 +13,10 @@ import type {
 import type { AiEventDispatchContext } from './types'
 import {
   buildStructuredOutputAttemptOrder,
+  classifyStructuredOutputError,
   extractTextContent,
   getErrorText,
   getTransportBoundaryIndex,
-  isStructuredOutputMethodUnsupportedError,
   isTransportCompatibilityError,
   parseJsonObjectText,
   parsePromptJsonOutput,
@@ -373,6 +373,28 @@ const buildStructuredOutputFailure = (input: {
     ].join('; ')
   )
 
+const buildStructuredOutputRetryableFailure = (input: {
+  caller: string
+  schemaName: string
+  modelName: string
+  profile: PreferredStructuredOutputProfile
+  transport: AiStructuredOutputTransport
+  method: NonScriptedStructuredOutputMethod
+  reason: string
+}) =>
+  new Error(
+    [
+      'structured_output_retryable',
+      `caller=${input.caller}`,
+      `schema=${input.schemaName}`,
+      `model=${input.modelName}`,
+      `profile=${input.profile}`,
+      `transport=${input.transport}`,
+      `method=${input.method}`,
+      `reason=${input.reason}`
+    ].join('; ')
+  )
+
 const buildTextOutputFailure = (input: {
   caller: string
   schemaName: string
@@ -412,14 +434,30 @@ const invokeStructuredChatNative = async <T extends Record<string, unknown>>(
       }
     } catch (error) {
       const reason = getErrorText(error)
-      if (isTransportCompatibilityError(transport, error)) {
+      const errorAnalysis = classifyStructuredOutputError({
+        error,
+        transport,
+        method
+      })
+      if (errorAnalysis.kind === 'capability_mismatch' && errorAnalysis.transportCompatibility) {
         profileErrors.push(`${profile}: ${reason}`)
         index = getTransportBoundaryIndex(attemptOrder, index)
         continue
       }
-      if (method !== 'promptJson' && isStructuredOutputMethodUnsupportedError(method, error)) {
+      if (errorAnalysis.kind === 'capability_mismatch') {
         profileErrors.push(`${profile}: ${reason}`)
         continue
+      }
+      if (errorAnalysis.kind === 'retryable') {
+        throw buildStructuredOutputRetryableFailure({
+          caller: input.caller,
+          schemaName: input.schemaName,
+          modelName: input.cfg.model_name,
+          profile,
+          transport,
+          method,
+          reason
+        })
       }
       throw buildStructuredOutputFailure({
         caller: input.caller,
