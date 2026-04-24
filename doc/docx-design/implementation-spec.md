@@ -6,6 +6,7 @@
 
 docx 子系统负责：
 
+- 创建新的合法 docx 文件，并把它纳入同一条 replay / review / commit 主链。
 - 打开、读取、搜索与精读 docx。
 - 在当前最新状态上连续执行多轮编辑。
 - 生成 working / review / committed 三视图及其 artifact。
@@ -21,7 +22,7 @@ docx 子系统负责：
 ### 2.2 Read / Write tools 层
 
 - read tools 负责 `outline / search / read / history` 的 AI-facing 语义。
-- write tools 负责 `paragraph / heading / table / text / style / rollback` 的 AI-facing 语义。
+- write tools 负责 `create / paragraph / heading / table / text / style / rollback` 的 AI-facing 语义。
 - 工具层接收 `sourcePath`，但内部语义始终基于当前 session 的最新状态工作。
 
 ### 2.3 Runtime / Session 层
@@ -49,6 +50,7 @@ docx 子系统负责：
 ### 3.1 open
 
 - 首次打开 source 时必须初始化 baseline 与 replay session。
+- `docx_create` 成功后，也必须立即完成一次 open 与 baseline 初始化，保证后续 `docx_outline / docx_read_blocks / docx_*_edit` 可以直接接续。
 - 存在 active review 时，`resolveDocxOpenTarget` 必须返回当前 `working draft artifact`。
 - 对 AI 来说，打开 docx 的结果始终应表现为“当前最新文档”。
 
@@ -81,6 +83,7 @@ docx 子系统负责：
 
 ### 4.1 edit 主线
 
+- `docx_create` 只负责创建新的合法 docx 与初始化 session，本身不直接产出 `draft_review_ready`。
 - `docx_*_edit` 的内部语义是“对当前 session 的最新状态继续编辑”。
 - 每次 edit 成功后都必须形成一个新的 `revision`。
 - edit 结果必须回写 replay session，并更新当前最新状态。

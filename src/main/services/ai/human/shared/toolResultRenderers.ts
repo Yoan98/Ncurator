@@ -282,6 +282,14 @@ const renderDocxHistoryResult = (obj: JsonObject): string =>
     .filter(Boolean)
     .join('\n')
 
+const renderDocxCreateResult = (obj: JsonObject): string =>
+  renderKeyValuePairs([
+    ['sourcePath', readStringField(obj, 'sourcePath')],
+    ['currentRevisionRef', readStringField(obj, 'currentRevisionRef')],
+    ['created', renderPrimitive(obj.created)],
+    ['summary', readStringField(obj, 'summary')]
+  ])
+
 const renderHistoryHits = (value: JsonValue | undefined): string => {
   if (!Array.isArray(value) || value.length === 0) return 'none'
 
@@ -380,6 +388,8 @@ export const renderToolResultDataText = (
   if (!isJsonObject(value)) return undefined
 
   switch (result.toolName) {
+    case 'docx_create':
+      return renderDocxCreateResult(value)
     case 'docx_read_blocks':
       return renderDocxReadResult(value)
     case 'docx_search':

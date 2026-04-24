@@ -3,6 +3,7 @@ import type { z } from 'zod/v4'
 import type { RuntimeSkillId } from '../../types'
 import type { HumanToolSpec } from '../types'
 import {
+  docxCreateSchema,
   docxHeadingEditSchema,
   docxHistoryRequestSchema,
   docxOutlineRequestSchema,
@@ -45,6 +46,7 @@ type DocxToolSpec<
 }
 
 const DOCX_SOURCE_PATH_EXAMPLE = 'ai/docx/图形学.docx'
+const DOCX_CREATE_TARGET_EXAMPLE = 'ai/docx/深度学习与图形学复习总结.docx'
 const DOCX_SEARCH_LITERAL_EXAMPLE: JsonObject = {
   sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
   query: '反走样'
@@ -264,6 +266,53 @@ export const DOCX_PARAGRAPH_EDIT_TOOL_SPEC = {
   'docx-write'
 >
 
+export const DOCX_CREATE_TOOL_SPEC = {
+  name: 'docx_create',
+  familyId: 'docx',
+  requiresWorkspace: true,
+  description: '创建一份新的 docx 文件，供后续继续读取或编辑。',
+  skillIds: ['docx-write'],
+  schema: docxCreateSchema,
+  promptSpec: {
+    name: 'docx_create',
+    purpose: '先创建一份新的 docx 文件，再继续写入或编辑它。',
+    whenToUse:
+      '当用户明确要你生成一份新的 Word 文件，或者当前 workspace 里还没有目标 docx 时使用。创建成功后可继续对同一路径执行 docx_outline、docx_read_blocks 和 docx_*_edit。',
+    preconditions: [
+      'sourcePath 必须是 workspace 内的 .docx 路径。',
+      '目标路径必须当前不存在；docx_create 不会覆盖已有文件。'
+    ],
+    returns: [
+      {
+        name: 'sourcePath, currentRevisionRef, created',
+        type: 'string | boolean',
+        description: '返回新建 docx 的路径、初始修订号以及 created=true。'
+      }
+    ],
+    examples: [
+      {
+        goal: '先创建一份给同学复习用的总结文档',
+        args: {
+          sourcePath: DOCX_CREATE_TARGET_EXAMPLE,
+          blocks: [
+            {
+              type: 'heading',
+              level: 1,
+              text: '深度学习与图形学复习总结'
+            },
+            {
+              type: 'paragraph',
+              text: '请根据已选课件整理关键概念、出现原因和常见处理方式。'
+            }
+          ]
+        }
+      }
+    ]
+  },
+  resolveExecutionMeta: createDocxMutatingExecutionMeta(),
+  activityActionType: 'docx_create'
+} satisfies DocxToolSpec<z.infer<typeof docxCreateSchema>, 'docx_create', 'docx-write'>
+
 export const DOCX_HEADING_EDIT_TOOL_SPEC = {
   name: 'docx_heading_edit',
   familyId: 'docx',
@@ -469,6 +518,7 @@ export const DOCX_READ_TOOL_SPECS = [
 ] as const
 
 export const DOCX_WRITE_TOOL_SPECS = [
+  DOCX_CREATE_TOOL_SPEC,
   DOCX_PARAGRAPH_EDIT_TOOL_SPEC,
   DOCX_HEADING_EDIT_TOOL_SPEC,
   DOCX_TABLE_EDIT_TOOL_SPEC,

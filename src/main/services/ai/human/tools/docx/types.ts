@@ -4,6 +4,8 @@ import type { z } from 'zod/v4'
 import type { WorkspaceCapabilityBuildInput } from '../types'
 import {
   blockSpecSchema,
+  docxCreateBlockSchema,
+  docxCreateSchema,
   docxHeadingEditActionSchema,
   docxHeadingEditSchema,
   docxHistoryRequestSchema,
@@ -130,6 +132,8 @@ export type DocxDetailedBlock =
   | DocxDetailedCellBlock
 
 export type DocxSearchMode = z.infer<typeof docxSearchModeSchema>
+export type DocxCreateBlock = z.infer<typeof docxCreateBlockSchema>
+export type DocxCreateRequest = z.infer<typeof docxCreateSchema>
 export type DocxOutlineRequest = z.infer<typeof docxOutlineRequestSchema>
 export type DocxSearchRequest = z.infer<typeof docxSearchRequestSchema>
 export type DocxReadRequest = z.infer<typeof docxReadRequestSchema>

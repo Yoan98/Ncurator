@@ -17,6 +17,7 @@ const TOOL_LABEL_MAP: Record<string, string> = {
   docx_read_blocks: 'read',
   docx_outline: 'read',
   docx_history: 'read',
+  docx_create: 'edit',
   docx_paragraph_edit: 'edit',
   docx_heading_edit: 'edit',
   docx_table_edit: 'edit',

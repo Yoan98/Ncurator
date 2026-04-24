@@ -109,6 +109,11 @@ const buildBrainToolReturnValue = (result: HumanHistoryToolResult): JsonValue =>
   }
 
   switch (result.toolName) {
+    case 'docx_create':
+      return {
+        ...base,
+        ...pickObjectFields(result.data, ['sourcePath', 'currentRevisionRef', 'created', 'summary'])
+      }
     case 'docx_read_blocks':
       return {
         ...base,
@@ -148,6 +153,9 @@ const buildBrainToolReturnValue = (result: HumanHistoryToolResult): JsonValue =>
           'summary',
           'message',
           'error',
+          'sourcePath',
+          'currentRevisionRef',
+          'created',
           'outputPreview',
           'stdoutPreview',
           'stderrPreview',

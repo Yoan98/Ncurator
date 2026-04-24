@@ -138,6 +138,7 @@ export const countDraftFileArtifacts = (artifacts: readonly AiArtifactRef[] | un
     : 0
 
 const DOCX_WRITE_TOOL_NAMES = [
+  'docx_create',
   'docx_paragraph_edit',
   'docx_heading_edit',
   'docx_table_edit',

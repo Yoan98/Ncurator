@@ -1,0 +1,109 @@
+import { describe, it } from 'vitest'
+import { createDocxToolHarness } from '../../../harness/backend/aiToolHarness'
+import { runBackendCase } from '../../../harness/backend/run-backend-case'
+import type {
+  DocxCreateResult,
+  DocxMutationResult,
+  DocxOutlineResult,
+  DocxReadResult,
+  DocxSearchResult
+} from './testUtils'
+
+describe('ai tool docx backend', () => {
+  it('docx-create-then-open-and-edit', async () => {
+    await runBackendCase({
+      caseId: 'docx-create-then-open-and-edit',
+      harnessMode: 'tool-real',
+      domain: 'ai',
+      suite: 'tool',
+      groups: ['docx'],
+      description: '验证新创建的 docx 可以马上被读取，并继续进入后续编辑链路。',
+      fixtures: [],
+      runMode: 'single',
+      execute: async (runtime) => {
+        const harness = createDocxToolHarness(runtime)
+        try {
+          const sourcePath = 'generated-summary.docx'
+          const created = await harness.invoke<DocxCreateResult>('docx_create', {
+            sourcePath,
+            blocks: [
+              {
+                type: 'heading',
+                level: 1,
+                text: '深度学习与图形学复习总结'
+              },
+              {
+                type: 'paragraph',
+                text: '过拟合：待补充。'
+              }
+            ]
+          })
+          const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
+            sourcePath
+          })
+          const paragraphBlockId =
+            outline.blocks.find(
+              (block) => block.type === 'paragraph' && block.preview.includes('过拟合：待补充')
+            )?.blockId || ''
+          const read = await harness.invoke<DocxReadResult>('docx_read_blocks', {
+            sourcePath,
+            fromBlockId: paragraphBlockId
+          })
+          const edited = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
+            sourcePath,
+            action: 'replace_text',
+            blockId: paragraphBlockId,
+            text: '过拟合：训练时间过久时容易出现，课件没有写具体处理方法。'
+          })
+          const search = await harness.invoke<DocxSearchResult>('docx_search', {
+            sourcePath,
+            query: '训练时间过久'
+          })
+
+          return {
+            created,
+            outline,
+            read,
+            edited,
+            search
+          }
+        } finally {
+          await harness.release()
+        }
+      },
+      assert: async (result, runtime) => {
+        runtime.assertThat(
+          result.created.created === true &&
+            result.created.currentRevisionRef === 'v1' &&
+            result.outline.blocks.some(
+              (block) => block.type === 'paragraph' && block.preview.includes('过拟合：待补充')
+            ) &&
+            result.read.blocks.length === 1,
+          {
+            name: 'docx-create-produces-readable-initial-document',
+            message: 'docx_create 后应立刻生成可 outline / read 的合法 docx 文档。',
+            data: {
+              created: result.created,
+              outline: result.outline.blocks,
+              read: result.read.blocks
+            }
+          }
+        )
+
+        runtime.assertThat(
+          result.edited.previousRevisionRef === result.created.currentRevisionRef &&
+            result.edited.changedBlocks.length === 1 &&
+            result.search.matches.length === 1,
+          {
+            name: 'docx-create-can-flow-into-followup-edit',
+            message: '新建 docx 应可直接进入后续编辑链路，并能被搜索工具读取新内容。',
+            data: {
+              edited: result.edited,
+              search: result.search.matches
+            }
+          }
+        )
+      }
+    })
+  })
+})

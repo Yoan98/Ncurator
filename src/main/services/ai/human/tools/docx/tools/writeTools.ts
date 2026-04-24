@@ -1,3 +1,4 @@
+import fs from 'node:fs/promises'
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import type {
   DocxChangedBlock,
@@ -11,6 +12,7 @@ import type {
 } from '../types'
 import type { DocxToolRuntime } from '../runtime'
 import {
+  DOCX_CREATE_TOOL_SPEC,
   DOCX_HEADING_EDIT_TOOL_SPEC,
   DOCX_PARAGRAPH_EDIT_TOOL_SPEC,
   DOCX_ROLLBACK_TOOL_SPEC,
@@ -25,6 +27,7 @@ import {
 } from './workerTool'
 import type { DocxToolFailure } from '../runtime'
 import { DOCX_POSITIONED_LAYOUT_PROTECTION_MESSAGE } from '../constants'
+import { createDocxFile } from '../utils/createDocxFile'
 
 const paragraphSpecFromText = (text: string, style?: string): DocxParagraphSpec => ({
   kind: 'paragraph',
@@ -99,6 +102,17 @@ const fetchDetailedBlock = async (
 }
 
 const buildPositionedReadOnlyMessage = (): string => DOCX_POSITIONED_LAYOUT_PROTECTION_MESSAGE
+
+const buildCreateSummary = (sourcePath: string): string => `已创建新的 docx：${sourcePath}`
+
+const documentExists = async (sourcePath: string): Promise<boolean> => {
+  try {
+    await fs.access(sourcePath)
+    return true
+  } catch {
+    return false
+  }
+}
 
 const failIfPositionedBlock = async (input: {
   runtime: DocxToolRuntime
@@ -309,6 +323,152 @@ const applySingleEdit = async (input: {
 }
 
 export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInterface[] => {
+  const docxCreateTool = createDocxTool({
+    runtime,
+    name: DOCX_CREATE_TOOL_SPEC.name,
+    description: DOCX_CREATE_TOOL_SPEC.description,
+    schema: DOCX_CREATE_TOOL_SPEC.schema,
+    onError: ({ message }) => {
+      runtime.input.emitActivity({
+        actionType: DOCX_CREATE_TOOL_SPEC.activityActionType!,
+        status: 'failed',
+        summary: message
+      })
+    },
+    execute: async ({ args, toolName, toolCallId }) => {
+      const requestedSourcePath = runtime.resolveDocxPath({
+        cwd: runtime.workspaceRootPath,
+        rawPath: args.sourcePath
+      })
+      if (!requestedSourcePath) {
+        return finalizeDocxToolFailure({
+          runtime,
+          failure: runtime.emitFailure({
+            toolName,
+            toolCallId,
+            code: 'invalid_input',
+            error: 'sourcePath must be a workspace-bound .docx path'
+          }),
+          activity: {
+            actionType: DOCX_CREATE_TOOL_SPEC.activityActionType!
+          }
+        })
+      }
+
+      if (runtime.getReplaySession(requestedSourcePath) || (await documentExists(requestedSourcePath))) {
+        return finalizeDocxToolFailure({
+          runtime,
+          failure: runtime.emitFailure({
+            toolName,
+            toolCallId,
+            code: 'invalid_input',
+            error: `docx_create will not overwrite an existing file: ${requestedSourcePath}`,
+            resourceContext: runtime.buildResourceContext({
+              sourcePath: requestedSourcePath,
+              effectKind: 'mutated'
+            })
+          }),
+          activity: {
+            actionType: DOCX_CREATE_TOOL_SPEC.activityActionType!
+          }
+        })
+      }
+
+      await createDocxFile({
+        filePath: requestedSourcePath,
+        blocks: args.blocks || []
+      })
+
+      const resolvedTarget = await runtime.input.ctx.resolveDocxOpenTarget(requestedSourcePath)
+      const workerResponse = await runtime.callWorker({
+        action: 'open',
+        payload: {
+          sourcePath: resolvedTarget.openPath
+        }
+      })
+      if (!workerResponse.ok) {
+        return finalizeDocxToolFailure({
+          runtime,
+          failure: runtime.emitWorkerFailure({
+            toolName,
+            toolCallId,
+            response: workerResponse,
+            resourceContext: runtime.buildResourceContext({
+              sourcePath: requestedSourcePath,
+              effectKind: 'mutated'
+            })
+          }),
+          activity: {
+            actionType: DOCX_CREATE_TOOL_SPEC.activityActionType!
+          }
+        })
+      }
+      if (workerResponse.payload.action !== 'open') {
+        return finalizeDocxToolFailure({
+          runtime,
+          failure: runtime.emitFailure({
+            toolName,
+            toolCallId,
+            code: 'failed',
+            error: 'worker protocol mismatch (open)',
+            resourceContext: runtime.buildResourceContext({
+              sourcePath: requestedSourcePath,
+              effectKind: 'mutated'
+            })
+          }),
+          activity: {
+            actionType: DOCX_CREATE_TOOL_SPEC.activityActionType!
+          }
+        })
+      }
+
+      const registered = await runtime.registerOpenedDocument(
+        resolvedTarget.trackedSourcePath,
+        workerResponse.payload.docId,
+        workerResponse.payload.meta,
+        workerResponse.payload.stats
+      )
+      runtime.input.ctx.trackDocxOpen({
+        docId: workerResponse.payload.docId,
+        sourcePath: resolvedTarget.trackedSourcePath,
+        replaySession: registered.session
+      })
+
+      const result = {
+        ok: true,
+        code: 'ok' as const,
+        summary: buildCreateSummary(registered.session.sourcePath),
+        sourcePath: registered.session.sourcePath,
+        currentRevisionRef: registered.currentRevisionRef,
+        created: true,
+        resourceContext: runtime.buildResourceContext({
+          sourcePath: registered.session.sourcePath,
+          effectKind: 'mutated',
+          currentRevisionRef: registered.currentRevisionRef
+        })
+      }
+
+      return finalizeDocxToolSuccess({
+        runtime,
+        toolName,
+        toolCallId,
+        result,
+        outputPreview: {
+          ok: true,
+          code: 'ok',
+          sourcePath: result.sourcePath,
+          currentRevisionRef: result.currentRevisionRef,
+          created: true
+        },
+        activity: {
+          actionType: DOCX_CREATE_TOOL_SPEC.activityActionType!,
+          startedSummary: `创建 docx: ${args.sourcePath}`,
+          buildCompletedSummary: (output: typeof result) => output.summary
+        }
+      })
+    }
+  })
+
   const docxParagraphEditTool = createDocxTool({
     runtime,
     name: DOCX_PARAGRAPH_EDIT_TOOL_SPEC.name,
@@ -1067,6 +1227,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
   })
 
   return [
+    docxCreateTool,
     docxParagraphEditTool,
     docxHeadingEditTool,
     docxTableEditTool,

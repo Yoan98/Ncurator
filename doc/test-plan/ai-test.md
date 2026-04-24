@@ -103,6 +103,30 @@
 - Last Run：`2026-04-16 16:16:09 +08:00`
 - Last Result：`通过`
 
+##### `docx-create-then-open-and-edit`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 `docx_create` 新建的 docx 能立刻进入 `outline / read / edit` 主链。
+- Why：cross-source summary 这类“先生成新 Word 文件再写内容”的真实场景，底层必须先守住 create 契约。
+- How：真实执行 `docx_create -> docx_outline -> docx_read_blocks -> docx_paragraph_edit -> docx_search`。
+- Oracle：新建结果返回稳定 `sourcePath / currentRevisionRef / created=true`；新文档可被继续读取；后续编辑会生成新 revision，且新内容可继续被搜索命中。
+- Not：不验证 human 是否会选择 create。
+- Last Run：`待更新`
+- Last Result：`待更新`
+
+##### `docx-create-existing-path-guard`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 `docx_create` 不会覆盖已存在的目标路径。
+- Why：create 能力一旦允许覆盖原文件，就会破坏 docx review / commit 的基本安全边界。
+- How：先写入一份真实 docx，再对同一路径执行 `docx_create`。
+- Oracle：返回 `invalid_input`；原文件 bytes 不变；当前 run 不产生新的 docx session。
+- Not：不验证 UI 层如何展示报错。
+- Last Run：`待更新`
+- Last Result：`待更新`
+
 ##### `docx-large-document-navigation`
 
 - 测试类型：`backend`
@@ -804,10 +828,10 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 live 模式下 `human` 会读取两份已选源资料，并把跨源总结内容回写到一份独立的 docx 草稿上。
-- Why：真实用户常见诉求不只是“参考另一份文档补主稿”，还包括“把两份资料压成一份复习总结”；这条 case 要长期守住跨源读取、单目标总结成稿与不覆盖原文件的正式能力，对齐 `WB-CORE-002-AC2`、`WB-CORE-003-AC1`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
-- How：注入真实 live LLM 配置；把 `深度学习.docx`、`图形学.docx` 和 `sample-edit.docx` 作为已选资料复制进 workspace；直接输入“我想把刚选的这两份课件整理成一份发给同学复习的总结。我也放了一份 Word 草稿在旁边，你把关键概念、出现原因和常见处理方式压成一版清楚好记的总结，直接整理进那份草稿里。”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；事件流中至少两次 `docx_search` / `docx_read_blocks` / `docx_outline` 覆盖两份源资料；至少出现一次 docx 编辑工具；存在 `draft_review_ready` 事件，最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；三份原始 `docx` 文件未被覆盖；写入请求只应落在 `sample-edit.docx` 上；最终答复应包含“过拟合/过度拟合”与“反走样”两个主题。
+- What：验证 live 模式下 `human` 会读取两份已选课件，自主创建一份新的总结 docx，并把跨源总结写进去。
+- Why：真实用户常见诉求不只是“口头总结”或“补现有主稿”，也包括“新建一份能直接发出去的总结报告”；这条 case 要长期守住跨源读取、单目标写入与不覆盖原文件的正式能力，对齐 `WB-CORE-002-AC2`、`WB-CORE-003-AC1`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
+- How：注入真实 live LLM 配置；把 `深度学习.docx` 与 `图形学.docx` 作为已选资料复制进 workspace；直接输入“帮我基于我刚选的这两个文件，生成一个给同学复习用的 Word 总结文件，文件名就叫《深度学习与图形学复习总结》。里面把关键概念、出现原因和常见处理方式整理清楚；哪份资料没写你就直接说明没写。”的自然语言诉求，让真实 `human` 自主完成。
+- Oracle：任务最终完成；事件流中至少两次 `docx_search` / `docx_read_blocks` / `docx_outline` 覆盖两份源资料；至少出现一次 `docx_create` 与一次 docx 编辑工具；存在 `draft_review_ready` 事件，最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；两份原始源 `docx` 文件未被覆盖；创建与写入请求都只应落在新建的 `深度学习与图形学复习总结.docx` 上；最终答复应包含“过拟合/过度拟合”与“反走样”两个主题。
 - Not：不要求固定总结结构，也不要求一定生成表格。
 
 ##### `human-docx-positioned-structural-edit-fallback-live`

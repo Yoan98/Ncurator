@@ -86,15 +86,16 @@
 ### `docx-write`
 
 - 类型：external
-- 职责：按段落、标题、表格、文本、样式对象编辑 docx，并支持版本回滚。
+- 职责：创建或编辑 docx，包括段落、标题、表格、文本、样式调整与版本回滚。
 - 工具列表：
+  - `docx_create`
   - `docx_paragraph_edit`
   - `docx_heading_edit`
   - `docx_table_edit`
   - `docx_text_edit`
   - `docx_text_style_edit`
   - `docx_rollback`
-- 适用场景：当任务已经明确知道要改哪里、改成什么，或需要撤销当前草稿修改时使用。
+- 适用场景：当任务需要先生成一份新的 Word 文件，或已经明确知道要改哪里、改成什么，或需要撤销当前草稿修改时使用。
 
 ### `kb-document-discovery`
 

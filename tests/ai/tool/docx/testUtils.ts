@@ -158,6 +158,15 @@ export type DocxReadResult = {
   >
 }
 
+export type DocxCreateResult = {
+  ok: boolean
+  code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
+  summary: string
+  sourcePath: string
+  currentRevisionRef: string
+  created: true
+}
+
 export type DocxMutationResult = {
   ok: boolean
   code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'

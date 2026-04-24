@@ -4,9 +4,11 @@ import { loadLiveLlmConfigFromEnv, hasLiveLlmConfigInEnv } from '../../../harnes
 import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
-  buildSelectedDocxFixtureReferences,
+  buildSelectedDocxReferences,
+  captureDocxFixtureBytes,
   DOCX_CROSS_SOURCE_SUMMARY_FIXTURE_PATHS,
-  HUMAN_DOCX_CROSS_SOURCE_SUMMARY_DRAFT_USER_INPUT,
+  DOCX_CROSS_SOURCE_SUMMARY_REPORT_RELATIVE_PATH,
+  HUMAN_DOCX_CROSS_SOURCE_SUMMARY_USER_INPUT,
   resolveSelectedDocxFixtures
 } from '../../../harness/backend/aiLiveTestData'
 import {
@@ -36,7 +38,7 @@ describe('ai human live backend', () => {
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
-        description: '验证 live 模式下 human 会读取两份已选源资料，并把总结内容回写到一份总结稿 docx 上。',
+        description: '验证 live 模式下 human 会读取两份已选课件，自主创建总结 docx 并写入跨源总结。',
         fixtures: DOCX_CROSS_SOURCE_SUMMARY_FIXTURE_PATHS,
         runMode: 'single',
         runtimeModelName: hasLiveLlmConfigInEnv('primary')
@@ -47,43 +49,33 @@ describe('ai human live backend', () => {
             return {
               skipped: true,
               output: null,
-              fixtureDocs: [],
-              originalFixtureBytes: [],
+              workspaceSeed: null,
               events: []
             }
           }
 
           await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv('primary'))
-          const fixtureDocs = resolveSelectedDocxFixtures(runtime, DOCX_CROSS_SOURCE_SUMMARY_FIXTURE_PATHS)
-          const originalFixtureBytes = await Promise.all(
-            fixtureDocs.map(async (fixtureDoc) => ({
-              name: fixtureDoc.name,
-              relativePath: fixtureDoc.relativePath,
-              workspacePath: fixtureDoc.workspacePath,
-              bytes: await fs.readFile(fixtureDoc.workspacePath)
-            }))
-          )
+          const workspaceSeed = {
+            sourceDocs: resolveSelectedDocxFixtures(runtime, DOCX_CROSS_SOURCE_SUMMARY_FIXTURE_PATHS),
+            trackedDocs: await captureDocxFixtureBytes(runtime, DOCX_CROSS_SOURCE_SUMMARY_FIXTURE_PATHS)
+          }
           const runner = createHumanTestRunner(runtime, {
-            selectedReferences: buildSelectedDocxFixtureReferences(
-              runtime,
-              DOCX_CROSS_SOURCE_SUMMARY_FIXTURE_PATHS
-            )
+            selectedReferences: buildSelectedDocxReferences(workspaceSeed.sourceDocs)
           })
           const output = await runner.run({
             taskId: runtime.taskId,
-            userInput: HUMAN_DOCX_CROSS_SOURCE_SUMMARY_DRAFT_USER_INPUT
+            userInput: HUMAN_DOCX_CROSS_SOURCE_SUMMARY_USER_INPUT
           })
 
           return {
             skipped: false,
             output,
-            fixtureDocs,
-            originalFixtureBytes,
+            workspaceSeed,
             events: runtime.eventCollector.snapshot()
           }
         },
         assert: async (result, runtime) => {
-          if (result.skipped) {
+          if (result.skipped || !result.workspaceSeed) {
             runtime.assertThat(true, {
               name: 'live-config-not-provided',
               message: '未提供 live 模型配置，已跳过 human live cross-source summary draft case。'
@@ -98,6 +90,10 @@ describe('ai human live backend', () => {
             .filter((event) => event.toolName.startsWith('docx_'))
             .map((event) => event.input.sourcePath)
             .filter((value): value is string => typeof value === 'string')
+          const createSourcePaths = filterAiRunEventsByType(events, 'tool_call_started')
+            .filter((event) => event.toolName === 'docx_create')
+            .map((event) => event.input.sourcePath)
+            .filter((value): value is string => typeof value === 'string')
           const writeSourcePaths = filterAiRunEventsByType(events, 'tool_call_started')
             .filter((event) =>
               event.toolName === 'docx_paragraph_edit' ||
@@ -110,43 +106,59 @@ describe('ai human live backend', () => {
             .filter((value): value is string => typeof value === 'string')
           const changedContentKinds = collectDocxApplyOpsContentKinds(events)
           const unchangedFixtures = await Promise.all(
-            result.originalFixtureBytes.map(async (fixture) => {
+            result.workspaceSeed.trackedDocs.map(async (fixture) => {
               const currentBytes = await fs.readFile(fixture.workspacePath)
               return Buffer.compare(currentBytes, Buffer.from(fixture.bytes)) === 0
             })
           )
-          const sourceFixtures = result.fixtureDocs.filter((fixture) => fixture.name !== 'sample-edit.docx')
-          const targetFixture = result.fixtureDocs.find((fixture) => fixture.name === 'sample-edit.docx')
           const deliveryText = `${result.output?.summary || ''}\n${result.output?.deliveryMarkdown || ''}`
+          const sourceDocsOpened = result.workspaceSeed.sourceDocs.every((fixtureDoc) =>
+            openedExpectedDoc(openedSourcePaths, fixtureDoc.relativePath, fixtureDoc.name)
+          )
+          const targetDocOpened = openedExpectedDoc(
+            openedSourcePaths,
+            DOCX_CROSS_SOURCE_SUMMARY_REPORT_RELATIVE_PATH,
+            DOCX_CROSS_SOURCE_SUMMARY_REPORT_RELATIVE_PATH
+          )
+          const targetDocCreated =
+            createSourcePaths.length >= 1 &&
+            createSourcePaths.every((sourcePath) =>
+              sourcePath.endsWith(DOCX_CROSS_SOURCE_SUMMARY_REPORT_RELATIVE_PATH)
+            )
+          const targetDocWritten =
+            writeSourcePaths.length > 0 &&
+            writeSourcePaths.every(
+              (sourcePath) =>
+                sourcePath.endsWith(DOCX_CROSS_SOURCE_SUMMARY_REPORT_RELATIVE_PATH)
+            )
 
           runtime.assertThat(
             result.output?.status === 'completed' &&
-              sourceFixtures.every((fixtureDoc) =>
-                openedExpectedDoc(openedSourcePaths, fixtureDoc.relativePath, fixtureDoc.name)
-              ) &&
-              Boolean(targetFixture) &&
+              sourceDocsOpened &&
+              targetDocCreated &&
+              targetDocOpened &&
+              toolNames.some((toolName) => toolName === 'docx_search' || toolName === 'docx_read_blocks') &&
+              toolNames.includes('docx_create') &&
               toolNames.some((toolName) => toolName.endsWith('_edit')) &&
-              writeSourcePaths.length > 0 &&
-              writeSourcePaths.every(
-                (sourcePath) =>
-                  sourcePath.endsWith(targetFixture!.relativePath) ||
-                  sourcePath.endsWith(`/${targetFixture!.name}`)
-              ) &&
+              targetDocWritten &&
               changedContentKinds.includes('paragraph') &&
               filterAiRunEventsByType(events, 'draft_review_ready').length >= 1 &&
               hasFileReviewArtifact(result.output?.artifacts) &&
               hasDraftFileArtifact(result.output?.artifacts) &&
               unchangedFixtures.every(Boolean) &&
               /(过拟合|过度拟合)/.test(deliveryText) &&
-              /反走样/.test(deliveryText),
+              /反走样/.test(deliveryText) &&
+              /总结|报告/.test(deliveryText),
             {
-              name: 'human-live-cross-source-summary-writes-only-target-draft-doc',
+              name: 'human-live-cross-source-summary-writes-only-new-report-doc',
               message:
-                'live human cross-source summary case 应读取两份源资料，并只把总结内容落到 sample-edit 草稿上。',
+                'live human cross-source summary case 应读取两份源课件，自主创建总结 docx，并且只把总结写到这份新文件上。',
               data: {
                 openedSourcePaths,
+                createSourcePaths,
                 writeSourcePaths,
                 toolNames,
+                targetReportPath: DOCX_CROSS_SOURCE_SUMMARY_REPORT_RELATIVE_PATH,
                 changedContentKinds,
                 summary: result.output?.summary,
                 deliveryMarkdown: result.output?.deliveryMarkdown,

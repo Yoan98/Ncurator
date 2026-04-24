@@ -1,7 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import type { SelectedReference } from '../../../src/shared/types'
-import { writeTestDocxFile } from './aiToolHarness'
 import type { BackendTestRuntime, SeedKbDocumentInput } from './test-types'
 
 export const HUMAN_RISK_REPORT_DRAFT_USER_INPUT =
@@ -19,10 +18,10 @@ export const DOCX_MULTI_EDIT_FIXTURE_PATHS = [
   'tests/fixtures/ai/docx/交互式探究学习案例：产业转移.docx'
 ] as const
 
-export const DOCX_CROSS_SOURCE_SUMMARY_FIXTURE_PATHS = [
-  ...DOCX_READING_FIXTURE_PATHS,
-  'tests/fixtures/ai/docx/sample-edit.docx'
-] as const
+export const DOCX_CROSS_SOURCE_SUMMARY_FIXTURE_PATHS = DOCX_READING_FIXTURE_PATHS
+
+export const DOCX_CROSS_SOURCE_SUMMARY_REPORT_RELATIVE_PATH =
+  '深度学习与图形学复习总结.docx'
 
 export const DOCX_ALL_FIXTURE_PATHS = [
   ...DOCX_READING_FIXTURE_PATHS,
@@ -36,8 +35,8 @@ export const HUMAN_DOCX_CAUSE_REMEDY_READING_USER_INPUT =
 export const HUMAN_DOCX_MULTI_DOC_SUPPORTED_EDIT_USER_INPUT =
   '我在整理这版课堂方案，想把主稿里那段交互设计说明写得更落地一点。你参考我刚选的那份案例文档，把对应章节补得更清楚一些，再顺手加一个很短的对照表，方便老师一眼看懂重点。'
 
-export const HUMAN_DOCX_CROSS_SOURCE_SUMMARY_DRAFT_USER_INPUT =
-  '我想把刚选的这两份课件整理成一份发给同学复习的总结。我也放了一份 Word 草稿在旁边，你把关键概念、出现原因和常见处理方式压成一版清楚好记的总结，直接整理进那份草稿里。'
+export const HUMAN_DOCX_CROSS_SOURCE_SUMMARY_USER_INPUT =
+  '帮我基于我刚选的这两个文件，生成一个给同学复习用的 Word 总结文件，文件名就叫《深度学习与图形学复习总结》。里面把关键概念、出现原因和常见处理方式整理清楚；哪份资料没写你就直接说明没写。'
 
 export const HUMAN_DOCX_POSITIONED_STRUCTURAL_EDIT_FALLBACK_USER_INPUT =
   '我准备把这份图形学讲义发给同学复习，想把“反走样”这一节补得更容易记一些。你直接在这一节后面加一段更通俗的说明，再加一个很短的总结表，帮助大家快速区分两种常见做法。'
@@ -113,11 +112,10 @@ export const resolveSelectedDocxFixtures = (
     }
   })
 
-export const buildSelectedDocxFixtureReferences = (
-  runtime: BackendTestRuntime,
-  fixturePaths: readonly string[] = DOCX_READING_FIXTURE_PATHS
+export const buildSelectedDocxReferences = (
+  fixtures: readonly SelectedDocxFixture[]
 ): SelectedReference[] =>
-  resolveSelectedDocxFixtures(runtime, fixturePaths).map((fixture, index) => ({
+  fixtures.map((fixture, index) => ({
     kind: 'file',
     workspaceId: 'test-workspace',
     nodeId: `fixture-docx-${String(index + 1)}`,
@@ -128,6 +126,11 @@ export const buildSelectedDocxFixtureReferences = (
     kbDocumentIds: [],
     kbAvailability: 'not_indexed'
   }))
+
+export const buildSelectedDocxFixtureReferences = (
+  runtime: BackendTestRuntime,
+  fixturePaths: readonly string[] = DOCX_READING_FIXTURE_PATHS
+): SelectedReference[] => buildSelectedDocxReferences(resolveSelectedDocxFixtures(runtime, fixturePaths))
 
 export const captureDocxFixtureBytes = async (
   runtime: BackendTestRuntime,

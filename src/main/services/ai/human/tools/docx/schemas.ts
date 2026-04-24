@@ -76,6 +76,33 @@ export const openSchema = z.object({
   sourcePath: z.string().min(1)
 })
 
+export const docxCreateHeadingBlockSchema = z.object({
+  type: z.literal('heading'),
+  text: z.string().min(1),
+  level: z.number().int().min(1).max(6).optional()
+})
+
+export const docxCreateParagraphBlockSchema = z.object({
+  type: z.literal('paragraph'),
+  text: z.string()
+})
+
+export const docxCreateTableBlockSchema = z.object({
+  type: z.literal('table'),
+  rows: z.array(z.array(z.string()).min(1)).min(1)
+})
+
+export const docxCreateBlockSchema = z.discriminatedUnion('type', [
+  docxCreateHeadingBlockSchema,
+  docxCreateParagraphBlockSchema,
+  docxCreateTableBlockSchema
+])
+
+export const docxCreateSchema = z.object({
+  sourcePath: z.string().min(1),
+  blocks: z.array(docxCreateBlockSchema).optional()
+})
+
 export const outlineSchema = z.object({
   sourcePath: z.string().min(1),
   maxBlocks: z.number().int().min(1).max(2000).optional(),
