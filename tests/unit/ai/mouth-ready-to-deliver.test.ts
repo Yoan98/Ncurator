@@ -115,11 +115,10 @@ describe('ai unit mouth checklist guard', () => {
     expect(prompt).toContain('reference_scope')
     expect(prompt).toContain('delivery_guidance')
     expect(prompt).toContain('面向用户交付最终结果，而不是复述系统内部过程')
-    expect(prompt).toContain('优先将其转化为用户容易理解的最终答复')
+    expect(prompt).toContain('优先回答用户真正关心的内容')
     expect(prompt).toContain('只输出最终 markdown 正文')
-    expect(prompt).toContain('如果需要使用不来自当前上下文的通用知识')
-    expect(prompt).toContain('补充说明')
-    expect(prompt).toContain('严格按照当前上下文信息回答，不得编造')
+    expect(prompt).toContain('你不得自行判断是否使用了非本地资料')
+    expect(prompt).toContain('必须严格按照context_information的信息处理回答，不得编造不存在其中的信息')
   })
 
   it('keeps mouth user-context blocks data-only', () => {
@@ -452,13 +451,54 @@ describe('ai unit mouth checklist guard', () => {
         ...initialState,
         execution: {
           ...initialState.execution,
-          deliveryGuidance:
-            '这次没有自动修改原文档，也没有生成审阅稿。请先说明这一点，再给出手动补充建议。'
+          deliveryGuidanceItems: [
+            {
+              source: 'hand',
+              text: '这次没有自动修改原文档，也没有生成审阅稿。请先说明这一点，再给出手动补充建议。'
+            },
+            {
+              source: 'brain',
+              text: '如果保留了通用知识补充，请明确说明该部分不来自当前本地资料。'
+            }
+          ]
         }
       }
     })
 
     expect(prompt.user).toContain('<delivery_guidance>')
     expect(prompt.user).toContain('这次没有自动修改原文档')
+    expect(prompt.user).toContain('[brain]')
+  })
+
+  it('stores brain delivery guidance as structured execution items', () => {
+    const initialState = createInitialHumanState({
+      taskId: 'task-6',
+      userInput: '请完成任务'
+    })
+
+    const nextState = applyBrainDecisionState({
+      state: initialState,
+      decision: {
+        decision: {
+          summary: '准备收尾',
+          reason: '当前信息已足够形成最终答复。',
+          expectedOutcome: '把非本地补充说明交给 mouth。'
+        },
+        deliveryGuidance:
+          '如果最终答复保留了通用背景说明，请在结尾明确说明这部分不来自当前本地资料。',
+        nextAction: {
+          action: 'mouth'
+        }
+      },
+      stableMemory: initialState.memory.stable,
+      createdAt: 1
+    })
+
+    expect(nextState.execution.deliveryGuidanceItems).toEqual([
+      {
+        source: 'brain',
+        text: '如果最终答复保留了通用背景说明，请在结尾明确说明这部分不来自当前本地资料。'
+      }
+    ])
   })
 })

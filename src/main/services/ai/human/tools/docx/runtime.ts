@@ -20,6 +20,7 @@ import { createToolEventEmitter } from '../utils/toolEvents'
 import type { ToolEventEmitter } from '../utils/toolEvents'
 import {
   applyRevisionToReplaySession,
+  createEmptyReplaySnapshot,
   createReplaySessionFromSnapshot,
   createReplaySnapshot
 } from './review/replayTree'
@@ -551,7 +552,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       createdAt: Date.now()
     }
     state.revisionEntryByDocId.set(params.baselineDocId, baselineRevisionEntry)
-    const baselineSnapshot = await buildReplaySnapshotForDoc(params.baselineDocId)
+    const baselineSnapshot = createEmptyReplaySnapshot()
     const session = createReplaySessionFromSnapshot({
       sourcePath: normalizedSourcePath,
       targetMode: 'create',

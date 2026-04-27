@@ -4,7 +4,7 @@ export const TEST_LOG_SCHEMA_VERSION = 4 as const
 
 export type TestDomain = 'ai' | 'workbench' | 'settings' | 'kb-search' | 'temp'
 export type TestType = 'backend' | 'e2e'
-export type TestRunStatus = 'passed' | 'failed'
+export type TestRunStatus = 'running' | 'passed' | 'failed'
 export type TestLogStatus = 'info' | 'ok' | 'failed' | 'skipped'
 export type TestLogEventType = 'run' | 'step' | 'assertion' | 'artifact' | 'signal' | 'error'
 export type TestArtifactKind =

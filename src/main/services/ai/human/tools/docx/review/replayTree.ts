@@ -86,6 +86,12 @@ export const createReplaySnapshot = (input: {
   }
 }
 
+export const createEmptyReplaySnapshot = (): DocxReplaySnapshot => ({
+  blocks: [],
+  blockById: new Map(),
+  tableBlockIdByCellBlockId: new Map()
+})
+
 const buildNode = (input: {
   blockId: string
   bodyIndex: number

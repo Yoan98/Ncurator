@@ -9,6 +9,7 @@ import type {
   JsonObject
 } from '../../../../../../../shared/types'
 import { clipText } from '../../../../utils/text'
+import { sanitizeFileNameForPath } from '../../../../utils/fileNamePolicy'
 import type { DocxChangedBlock, DocxOp } from '../types'
 import {
   getCommittedArtifactPath,
@@ -17,9 +18,10 @@ import {
 } from './viewProjection'
 
 export const sanitizeFileName = (value: string): string => {
-  const normalized = String(value || '').trim()
-  const safe = normalized.replace(/[^\w.-]+/g, '-')
-  return safe || 'document.docx'
+  return sanitizeFileNameForPath({
+    value,
+    fallback: 'document.docx'
+  })
 }
 
 export const describeDocxOp = (op: DocxOp): string => {

@@ -4,6 +4,7 @@ import {
   buildMouthExecution,
   buildPreExecutionBlockedExecution
 } from '../../memory/roundHistory'
+import { createDeliveryGuidanceItem, mergeDeliveryGuidanceItems } from '../../shared/deliveryGuidance'
 import type {
   HumanDecision,
   HumanResult,
@@ -136,44 +137,55 @@ export const applyBrainDecisionState = (input: {
   stableMemory: HumanStableMemory
   watchHint?: HumanWatchHint
   createdAt: number
-}): HumanState => ({
-  ...input.state,
-  execution: {
-    ...input.state.execution,
-    stage: resolveBrainNextStage({
+}): HumanState => {
+  const brainDeliveryGuidance = createDeliveryGuidanceItem(
+    'brain',
+    input.decision.nextAction.action === 'mouth' ? input.decision.deliveryGuidance : undefined
+  )
+
+  return {
+    ...input.state,
+    execution: {
+      ...input.state.execution,
+      stage: resolveBrainNextStage({
+        watchHint: input.watchHint,
+        decision: input.decision
+      }),
+      status: 'running',
+      currentDecision: input.decision,
       watchHint: input.watchHint,
-      decision: input.decision
-    }),
-    status: 'running',
-    currentDecision: input.decision,
-    watchHint: input.watchHint
-  },
-  memory: {
-    stable: input.stableMemory,
-    history: input.watchHint
-      ? appendRoundRecord({
-          state: input.state,
-          decision: input.decision,
-          execution: buildPreExecutionBlockedExecution(input.watchHint),
-          createdAt: input.createdAt
-        })
-      : {
-          ...input.state.memory.history,
-          loadedHistoryContext: undefined
+      deliveryGuidanceItems: mergeDeliveryGuidanceItems(
+        input.state.execution.deliveryGuidanceItems,
+        brainDeliveryGuidance
+      )
+    },
+    memory: {
+      stable: input.stableMemory,
+      history: input.watchHint
+        ? appendRoundRecord({
+            state: input.state,
+            decision: input.decision,
+            execution: buildPreExecutionBlockedExecution(input.watchHint),
+            createdAt: input.createdAt
+          })
+        : {
+            ...input.state.memory.history,
+            loadedHistoryContext: undefined
+          }
+    },
+    trace: {
+      steps: appendHumanTraceStep({
+        steps: input.state.trace.steps,
+        item: {
+          action: 'brain_decision',
+          publicNarrative: input.decision.decision.summary,
+          resultStatus: 'ok',
+          summary: input.decision.decision.reason
         }
-  },
-  trace: {
-    steps: appendHumanTraceStep({
-      steps: input.state.trace.steps,
-      item: {
-        action: 'brain_decision',
-        publicNarrative: input.decision.decision.summary,
-        resultStatus: 'ok',
-        summary: input.decision.decision.reason
-      }
-    })
+      })
+    }
   }
-})
+}
 
 export const buildHumanResult = (input: {
   state: HumanState

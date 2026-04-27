@@ -9,7 +9,7 @@ import type {
 } from './test-types'
 import { createRealAiHarness } from './realAiHarness'
 import { collectBackendSeedArtifacts } from './seedManifest'
-import { writeRunLog, createRunId } from './write-run-log'
+import { createStreamingRunLogWriter, createRunId } from './write-run-log'
 import { cleanupWorkspace, copyFixturesIntoWorkspace, createIsolatedWorkspace } from './workspaceManager'
 import { EventCollector } from '../core/eventCollector'
 import {
@@ -83,7 +83,19 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
     groups: definition.groups || [],
     caseId: definition.caseId
   })
-  const eventCollector = new EventCollector()
+  const streamingLogWriter = createStreamingRunLogWriter({
+    scope,
+    caseId: definition.caseId,
+    runId
+  })
+  const eventCollector = new EventCollector({
+    onRuntimeEvent: (event) => {
+      streamingLogWriter.appendRuntimeEvent(event)
+    },
+    onLlmIo: (record) => {
+      streamingLogWriter.appendLlmIoRecord(record)
+    }
+  })
   const events: TestLogEvent[] = []
   let workspaceRoot = ''
   let fixtureBindings: FixtureBinding[] = []
@@ -91,11 +103,37 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
   let runtime: BackendTestRuntime | undefined
 
   const recordEvent = (input: Omit<TestLogEvent, 'ts'>): void => {
-    events.push({
+    const event = {
       ts: new Date().toISOString(),
       ...input
-    })
+    }
+    events.push(event)
+    streamingLogWriter.appendTimelineEvent(event)
   }
+
+  streamingLogWriter.init({
+    meta: {
+      schemaVersion: TEST_LOG_SCHEMA_VERSION,
+      runId,
+      caseId: definition.caseId,
+      scope,
+      startedAt: new Date(startedAtMs).toISOString(),
+      finishedAt: '',
+      status: 'running',
+      stats: {
+        durationMs: 0,
+        steps: 0,
+        assertions: 0,
+        errors: 0,
+        artifacts: 0
+      },
+      runtime: {
+        driver: 'backend',
+        target: 'node',
+        modelName: definition.runtimeModelName || null
+      }
+    }
+  })
 
   recordEvent({
     type: 'run',
@@ -200,11 +238,8 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
       }
     }
 
-    await writeRunLog({
+    await streamingLogWriter.finalize({
       meta,
-      events,
-      runtimeEvents,
-      llmIoRecords: eventCollector.snapshotLlmIo(),
       artifacts,
       seedManifest: seedArtifacts.persistedManifest
     })

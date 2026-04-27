@@ -390,4 +390,50 @@ describe('ai unit human memory history', () => {
 
     expect(filtered.map((record) => record.roundId)).toEqual([1])
   })
+
+  it('appends new structured delivery guidance instead of replacing existing items', () => {
+    const initialState = createInitialHumanState({
+      taskId: 'task-3',
+      userInput: '请完成任务'
+    })
+    const decision = buildDecision({
+      summary: '准备最终交付',
+      reason: '当前信息已足够收尾。',
+      expectedOutcome: '保留已有 hand guidance，并追加 brain guidance。',
+      nextAction: {
+        action: 'mouth'
+      }
+    })
+    const nextState = applyBrainDecisionState({
+      state: {
+        ...initialState,
+        execution: {
+          ...initialState.execution,
+          deliveryGuidanceItems: [
+            {
+              source: 'hand',
+              text: '先说明文档没有被自动修改。'
+            }
+          ]
+        }
+      },
+      decision: {
+        ...decision,
+        deliveryGuidance: '再说明通用知识补充不来自当前本地资料。'
+      },
+      stableMemory: initialState.memory.stable,
+      createdAt: 1
+    })
+
+    expect(nextState.execution.deliveryGuidanceItems).toEqual([
+      {
+        source: 'hand',
+        text: '先说明文档没有被自动修改。'
+      },
+      {
+        source: 'brain',
+        text: '再说明通用知识补充不来自当前本地资料。'
+      }
+    ])
+  })
 })

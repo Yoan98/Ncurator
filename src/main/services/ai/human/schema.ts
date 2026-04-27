@@ -188,6 +188,7 @@ export const brainNextActionSchema = z.union([
 export const humanDecisionSchema = z.object({
   updatedStableMemory: humanStableMemoryPatchSchema.optional(),
   decision: brainDecisionSchema,
+  deliveryGuidance: z.string().min(1).optional(),
   nextAction: brainNextActionSchema
 })
 
@@ -212,6 +213,11 @@ export const runtimeArtifactsSummarySchema = z.object({
   changed_files: z.array(runtimeChangedFileSchema)
 })
 
+export const deliveryGuidanceItemSchema = z.object({
+  source: z.enum(['brain', 'hand']),
+  text: z.string().min(1)
+})
+
 export const humanResultSchema = humanDeliveryPayloadSchema.extend({
   status: z.literal('completed'),
   artifacts: z.array(aiArtifactRefSchema).optional()
@@ -228,7 +234,7 @@ export const humanExecutionSchema = z.object({
   status: humanStatusSchema,
   currentDecision: humanDecisionSchema.optional(),
   watchHint: humanWatchHintSchema.optional(),
-  deliveryGuidance: z.string().min(1).optional(),
+  deliveryGuidanceItems: z.array(deliveryGuidanceItemSchema).optional(),
   lastToolResults: z.array(toolCallResultSchema).optional(),
   lastLearningOutcome: humanLearningOutcomeSchema.optional(),
   artifacts: z.array(aiArtifactRefSchema),

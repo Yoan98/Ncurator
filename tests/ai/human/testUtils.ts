@@ -75,9 +75,11 @@ export const buildCompleteTaskDecision = (input: {
   reason: string
   expectedOutcome: string
   updatedStableMemory?: HumanStableMemoryPatch
+  deliveryGuidance?: string
 }): HumanDecision => ({
   updatedStableMemory: input.updatedStableMemory,
   decision: buildDecisionMetadata(input),
+  deliveryGuidance: input.deliveryGuidance,
   nextAction: {
     action: 'mouth'
   }

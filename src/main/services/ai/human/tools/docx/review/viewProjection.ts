@@ -1,11 +1,6 @@
 import path from 'node:path'
 import type { FileReview } from '../../../../../../../shared/types'
-
-const sanitizeProjectedFileName = (value: string): string => {
-  const normalized = String(value || '').trim()
-  const safe = normalized.replace(/[^\w.-]+/g, '-')
-  return safe || 'document.docx'
-}
+import { sanitizeFileNameForPath } from '../../../../utils/fileNamePolicy'
 
 export type DocxReviewArtifactPaths = {
   draftArtifactPath: string
@@ -24,7 +19,10 @@ export const buildDocxReviewArtifactPaths = (input: {
     'file-reviews',
     input.reviewId
   )
-  const baseName = sanitizeProjectedFileName(input.sourceName)
+  const baseName = sanitizeFileNameForPath({
+    value: input.sourceName,
+    fallback: 'document.docx'
+  })
   return {
     draftArtifactPath: path.join(reviewDir, `draft-${baseName}`),
     workingArtifactPath: path.join(reviewDir, `working-${baseName}`),

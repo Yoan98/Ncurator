@@ -318,6 +318,8 @@ interface HumanDecision {
   updatedStableMemory?: HumanStableMemoryPatch
   // 本轮 brain 的正式决策内容。
   decision: BrainDecision
+  // 若最终交付必须额外补充说明，则由 brain 给 mouth 的自然语言收口要求。
+  deliveryGuidance?: string
   // 下一跳动作对象；决定本轮之后去 learning、hand 还是 mouth。
   nextAction: BrainNextAction
 }
@@ -331,8 +333,13 @@ interface HumanExecution {
   currentDecision?: HumanDecision
   // 收敛或纠偏提示；当 learning / hand / brain 触发保护逻辑时写入。
   watchHint?: HumanWatchHint
-  // 最终交付时必须吸收的额外说明；由 hand 在特殊回退场景下写入，mouth 负责转成用户可理解的话术。
-  deliveryGuidance?: string
+  // 最终交付时必须吸收的额外说明项；由 brain 或 hand 追加，mouth 负责转成用户可理解的话术。
+  deliveryGuidanceItems?: Array<{
+    // 说明项来自哪个节点；brain 用于补充非本地资料说明，hand 用于补充执行结果相关说明。
+    source: 'brain' | 'hand'
+    // 交给 mouth 的自然语言收口要求。
+    text: string
+  }>
   // 最近一次 hand 工具执行结果；主要供 runtime 排障与回放使用。
   lastToolResults?: ToolCallResult[]
   // 最近一次 learning 的真实执行结果；主要供 runtime 排障与回放使用。
@@ -1089,7 +1096,7 @@ flowchart LR
     PM[("memory.history.roundHistory / loadedHistoryContext")]
     A[("execution.artifacts")]
     WH[("execution.watchHint")]
-    DG[("execution.deliveryGuidance")]
+    DG[("execution.deliveryGuidanceItems")]
     TR[("trace.steps")]
     B["brain"]
 
@@ -1098,7 +1105,7 @@ flowchart LR
     H -->|追加 hand round 或 loaded history| PM
     H -->|从工具结构化输出提取并回写 artifacts| A
     H -->|plan 非法、超过累计工具调用临时上限或命中 positioned 保护时写入| WH
-    H -->|需要最终交付额外说明时写入| DG
+    H -->|需要最终交付额外说明时追加| DG
     H -->|追加 hand 执行轨迹| TR
     H -->|返回下一轮 brain| B
 ```
@@ -1110,7 +1117,7 @@ flowchart LR
     T[("task")]
     SM[("memory.stable")]
     PM[("memory.history.roundHistory / loadedHistoryContext")]
-    DG[("execution.deliveryGuidance")]
+    DG[("execution.deliveryGuidanceItems")]
     A[("execution.artifacts")]
     M["mouth"]
     R[("result")]
@@ -1126,5 +1133,5 @@ flowchart LR
 ```
 
 - `mouth` 不再直接消费 `brain` 的 `latest_attempt / earlier_attempts / recalled_history` 决策视图；它仍基于 `roundHistory + loadedHistoryContext`，但会渲染成一套独立的结果导向 `history` 视图。
-- `mouth` 的 prompt 输入仍以 `your_notes` 为优先事实来源；当 `your_notes` 过于概括或不足以支撑用户要求的细节时，再从结果导向的 `history`、`deliveryGuidance` 与 `runtime_artifacts` 补足用户回答所需细节，而不是依赖额外的低层 tool 参数。
+- `mouth` 的 prompt 输入仍以 `your_notes` 为优先事实来源；当 `your_notes` 过于概括或不足以支撑用户要求的细节时，再从结果导向的 `history`、`deliveryGuidanceItems` 与 `runtime_artifacts` 补足用户回答所需细节，而不是依赖额外的低层 tool 参数。
 - `mouth` 不再依赖 `execution.currentDecision` 的收口摘要来组织最终交付；若 `your_notes` 与更具体的历史/产物依据存在张力，应以更具体、可追溯的依据为准。

@@ -1,5 +1,6 @@
 import type { AiRunContext } from '../../types'
 import { getLoadedHistoryContext } from '../memory/roundHistory'
+import { renderDeliveryGuidanceItems } from '../shared/deliveryGuidance'
 import { renderMouthHistoryText } from '../shared/historyRenderers'
 import { renderHumanStableNotes } from '../shared/memoryRenderers'
 import { renderHumanArtifactLines } from '../shared/runtimeRenderers'
@@ -12,7 +13,6 @@ export const buildMouthPrompt = (input: { state: HumanState; ctx?: AiRunContext 
   <principles>
     - 你的职责是根据context_information的信息，面向用户交付最终结果，而不是复述系统内部过程。
     - 必须严格按照context_information的信息处理回答，不得编造不存在其中的信息。
-    - 如果需要使用非context_information，必须在结尾单独写“补充说明：...”，明确说明来源不是当前本地资料。
     - 优先回答用户真正关心的内容，优先使用更自然、更容易理解的表达。
     - your_notes、history、delivery_guidance 和 runtime_artifacts 主要用于核对事实和补充细节，不要求按原样转述。
   </principles>
@@ -62,7 +62,7 @@ ${renderMouthHistoryText({
   </history>
 
   <delivery_guidance>
-${input.state.execution.deliveryGuidance || 'none'}
+${renderDeliveryGuidanceItems(input.state.execution.deliveryGuidanceItems)}
   </delivery_guidance>
 
   <runtime_artifacts>

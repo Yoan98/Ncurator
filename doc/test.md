@@ -269,6 +269,7 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
 - `<runId>`
   - 单次执行唯一标识。
   - 当前格式：`YYYYMMDD-HHmmss-SSS`。
+- backend 正式 case 运行开始后，runner 应尽快创建对应 run 目录，并对 `timeline.jsonl / runtime-events.jsonl / llm-io.jsonl` 采用渐进式落盘；不得要求等到 run 结束后才首次出现日志目录。
 
 ### 5.2 `meta.json`
 
@@ -289,6 +290,7 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
 - `schemaVersion` 固定值为 `4`。
 - `scope` 格式为 `<domain>/<suite>/<groups...>`，不包含 `caseId`。
 - `status` 当前值域是 `passed` / `failed`。
+- backend run 在执行中允许临时写出 `running`；正式结束后必须收口为 `passed` 或 `failed`。
 - `stats` 当前固定字段：
   - `durationMs`
   - `steps`

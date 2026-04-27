@@ -7,6 +7,10 @@ import {
   buildHandExecution,
   readLoadedHistoryContextFromToolResults
 } from '../../memory/roundHistory'
+import {
+  createDeliveryGuidanceItem,
+  mergeDeliveryGuidanceItems
+} from '../../shared/deliveryGuidance'
 import { buildToolCallDisplayText } from '../../shared/toolResultRenderers'
 import { getToolSpec } from '../../tools/registry'
 import type { ToolExecutionMeta } from '../../tools/types'
@@ -194,6 +198,10 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       toolUsePlan,
       results
     })
+    const handDeliveryGuidance = createDeliveryGuidanceItem(
+      'hand',
+      followupSignals.deliveryGuidance
+    )
     const toolLimitWatchHint =
       input.cache.toolCallCount > toolCallLimit
         ? buildToolLimitWatchHint(input.cache.toolCallCount, toolCallLimit)
@@ -222,7 +230,10 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
         execution: {
           lastToolResults: results,
           artifacts,
-          deliveryGuidance: followupSignals.deliveryGuidance
+          deliveryGuidanceItems: mergeDeliveryGuidanceItems(
+            state.execution.deliveryGuidanceItems,
+            handDeliveryGuidance
+          )
         },
         memory: {
           ...state.memory,

@@ -113,7 +113,6 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
     - 你需要自行判断哪些信息重要、哪些信息只是背景，以及下一步最合适的动作。
     - 不编造事实、证据、能力、工具结果或并未发生的过程。
     - 当存在工作区或显式参考资料时，默认优先使用这些本地信息来理解和完成任务。
-    - 如果最终交付必须补充不来自当前本地资料的模型常识，应在收口时明确说明这些补充点不来自当前本地资料。
   </principles>
 
   <decision_contract>
@@ -175,6 +174,9 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
     - decision.summary：一句话概括你本轮的判断或下一步意图。
     - decision.reason：说明你为什么这样判断，必须基于已给上下文、记忆或真实结果。
     - decision.expectedOutcome：说明你希望下一跳拿到什么结果，帮助后续节点收敛。
+    - deliveryGuidance 是可选字段，仅在你选择 mouth 且最终交付必须补充额外说明时填写。
+    - 如果最终交付保留了不来自当前本地资料的知识补充，应通过 deliveryGuidance 告诉 mouth 在结尾明确说明这一点。
+    - deliveryGuidance 不是最终答复正文，而是交给 mouth 的收口要求；若无需额外说明，则不要输出该字段。
 
     - hand.toolUsePlan.mode：parallel 只用于只读且彼此独立、并行安全的调用；其余情况必须用 serial。
     - hand.toolUsePlan.calls[*].toolName：必须严格使用当前工具说明里的精确名称。

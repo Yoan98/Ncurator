@@ -48,7 +48,9 @@ describe('ai human mock-llm backend', () => {
                 output: buildCompleteTaskDecision({
                   summary: '已完成基础链路验证。',
                   reason: '核心链路已经真实走通，可以进入最终交付。',
-                  expectedOutcome: '输出稳定的最终结果。'
+                  expectedOutcome: '输出稳定的最终结果。',
+                  deliveryGuidance:
+                    '如果最终答复保留了对命令行用途的通用补充，请在结尾用“补充说明”明确说明这部分不来自当前本地资料。'
                 })
               }
             ],
@@ -108,6 +110,14 @@ describe('ai human mock-llm backend', () => {
             }
           }
         )
+
+        runtime.assertThat(result.mouthPrompt.includes('不来自当前本地资料') && result.mouthPrompt.includes('[brain]'), {
+          name: 'human-mainline-passes-brain-delivery-guidance-to-mouth',
+          message: 'brain 输出的 delivery guidance 应作为结构化收口说明传递给 mouth prompt。',
+          data: {
+            mouthPrompt: result.mouthPrompt
+          }
+        })
       }
     })
   })

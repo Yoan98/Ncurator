@@ -1,4 +1,5 @@
 export {
+  createStreamingRunLogWriter,
   createRunId,
   resolveRunArtifactsDir,
   resolveRunLogDir,

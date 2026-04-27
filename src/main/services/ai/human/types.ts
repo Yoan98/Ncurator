@@ -15,6 +15,7 @@ import {
 import {
   brainDecisionSchema,
   brainNextActionSchema,
+  deliveryGuidanceItemSchema,
   humanDecisionSchema,
   humanChecklistItemSchema,
   humanChecklistItemStatusSchema,
@@ -82,6 +83,7 @@ export type HumanChecklistItem = z.infer<typeof humanChecklistItemSchema>
 export type HumanStableMemory = z.infer<typeof humanStableMemorySchema>
 export type HumanStableMemoryPatch = z.infer<typeof humanStableMemoryPatchSchema>
 export type HumanDecision = z.infer<typeof humanDecisionSchema>
+export type DeliveryGuidanceItem = z.infer<typeof deliveryGuidanceItemSchema>
 
 export type ToolCallParam = z.infer<typeof toolCallParamSchema>
 export type ToolUsePlan = z.infer<typeof toolUsePlanSchema>

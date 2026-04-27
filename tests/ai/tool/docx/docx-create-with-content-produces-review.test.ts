@@ -1,5 +1,9 @@
 import fs from 'node:fs/promises'
 import { describe, it } from 'vitest'
+import {
+  buildBlockIndex,
+  loadDocxBundle
+} from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/blockIndex'
 import { createDocxToolHarness } from '../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import type { DocxCreateResult } from './testUtils'
@@ -15,6 +19,7 @@ const fileExists = async (filePath: string): Promise<boolean> => {
 
 describe('ai tool docx backend', () => {
   it('docx-create-with-content-produces-review', async () => {
+    const targetFileName = '深度学习与图形学复习总结.docx'
     await runBackendCase({
       caseId: 'docx-create-with-content-produces-review',
       harnessMode: 'tool-real',
@@ -29,7 +34,7 @@ describe('ai tool docx backend', () => {
         try {
           harness.ctx.beginDocxReviewRun()
           const created = await harness.invoke<DocxCreateResult>('docx_create', {
-            sourcePath: 'generated-summary.docx',
+            sourcePath: targetFileName,
             blocks: [
               { type: 'heading', level: 1, text: '深度学习与图形学复习总结' },
               { type: 'paragraph', text: '过拟合：训练时间过久时容易出现。' },
@@ -39,10 +44,23 @@ describe('ai tool docx backend', () => {
           const details = await harness.ctx.finalizeDocxReviewRun()
 
           const review = details[0]?.review
+          const draftBuffer = review?.draft_artifact_path
+            ? await fs.readFile(review.draft_artifact_path)
+            : null
+          const draftIndex = draftBuffer
+            ? buildBlockIndex((await loadDocxBundle(draftBuffer)).documentDom)
+            : null
+          const topHeadingOccurrences = draftIndex
+            ? draftIndex.outline.filter((block) => {
+                if (block.type !== 'paragraph') return false
+                return block.text === '深度学习与图形学复习总结'
+              }).length
+            : 0
+
           return {
             created,
             details,
-            targetExists: await fileExists(`${runtime.workspaceRoot}/generated-summary.docx`),
+            targetExists: await fileExists(`${runtime.workspaceRoot}/${targetFileName}`),
             draftExists: review?.draft_artifact_path
               ? await fileExists(review.draft_artifact_path)
               : false,
@@ -52,6 +70,11 @@ describe('ai tool docx backend', () => {
             committedExists: review?.committed_artifact_path
               ? await fileExists(review.committed_artifact_path)
               : false
+            ,
+            draftArtifactFileName: review?.draft_artifact_path
+              ? review.draft_artifact_path.split('/').pop() || ''
+              : '',
+            topHeadingOccurrences
           }
         } finally {
           await harness.release()
@@ -67,7 +90,9 @@ describe('ai tool docx backend', () => {
             result.targetExists === false &&
             result.draftExists === true &&
             result.workingExists === true &&
-            result.committedExists === true,
+            result.committedExists === true &&
+            result.draftArtifactFileName === `draft-${targetFileName}` &&
+            result.topHeadingOccurrences === 1,
           {
             name: 'docx-create-only-produces-review-artifacts',
             message: 'create-only docx 应能直接产出 review detail 与 working/review/committed artifacts，且正式目标文件在 commit 前不存在。',
