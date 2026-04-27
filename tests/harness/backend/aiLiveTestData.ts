@@ -21,8 +21,7 @@ export const DOCX_MULTI_EDIT_FIXTURE_PATHS = [
 
 export const DOCX_CROSS_SOURCE_SUMMARY_FIXTURE_PATHS = DOCX_READING_FIXTURE_PATHS
 
-export const DOCX_CROSS_SOURCE_SUMMARY_REPORT_RELATIVE_PATH =
-  '深度学习与图形学复习总结.docx'
+export const DOCX_CROSS_SOURCE_SUMMARY_REPORT_RELATIVE_PATH = '深度学习与图形学复习总结.docx'
 
 export const DOCX_ALL_FIXTURE_PATHS = [
   ...DOCX_READING_FIXTURE_PATHS,
@@ -37,7 +36,7 @@ export const HUMAN_DOCX_MULTI_DOC_SUPPORTED_EDIT_USER_INPUT =
   '我在整理这版课堂方案，想把主稿里那段交互设计说明写得更落地一点。你参考我刚选的那份案例文档，把对应章节补得更清楚一些，再顺手加一个很短的对照表，方便老师一眼看懂重点。'
 
 export const HUMAN_DOCX_CROSS_SOURCE_SUMMARY_USER_INPUT =
-  '帮我基于我刚选的这两个文件，生成一个给同学复习用的 Word 总结文件，文件名就叫《深度学习与图形学复习总结》。里面把关键概念、出现原因和常见处理方式整理清楚；哪份资料没写你就直接说明没写。'
+  '帮我基于我刚选的这两个文件，生成一个给同学复习用的总结文件。里面把关键概念、出现原因和常见处理方式整理清楚。'
 
 export const HUMAN_DOCX_POSITIONED_STRUCTURAL_EDIT_FALLBACK_USER_INPUT =
   '我准备把这份图形学讲义发给同学复习，想把“反走样”这一节补得更容易记一些。你直接在这一节后面加一段更通俗的说明，再加一个很短的总结表，帮助大家快速区分两种常见做法。'
@@ -131,7 +130,8 @@ export const buildSelectedDocxReferences = (
 export const buildSelectedDocxFixtureReferences = (
   runtime: BackendTestRuntime,
   fixturePaths: readonly string[] = DOCX_READING_FIXTURE_PATHS
-): SelectedReference[] => buildSelectedDocxReferences(resolveSelectedDocxFixtures(runtime, fixturePaths))
+): SelectedReference[] =>
+  buildSelectedDocxReferences(resolveSelectedDocxFixtures(runtime, fixturePaths))
 
 export const captureDocxFixtureBytes = async (
   runtime: BackendTestRuntime,
@@ -283,7 +283,11 @@ export const seedRiskReportWorkspace = async (
   const summaryRelativePath = 'weekly-risk-summary.txt'
   const summaryText = '请在找到正式模板后再补全文档内容。\n'
   const templateRelativePath = 'weekly-risk-report-template.docx'
-  const templatePath = await writeTestDocxFile(runtime.workspaceRoot, templateRelativePath, templateBlocks)
+  const templatePath = await writeTestDocxFile(
+    runtime.workspaceRoot,
+    templateRelativePath,
+    templateBlocks
+  )
   runtime.recordSeedWorkspaceFile({
     relativePath: templateRelativePath,
     absolutePath: templatePath,

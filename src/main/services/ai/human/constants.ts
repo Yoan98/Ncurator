@@ -54,7 +54,7 @@ export const HUMAN_WATCH_HINT_CODES = [
 ] as const
 
 export const HUMAN_MAX_ACTIVE_TOOLS = 20
-export const HUMAN_DEFAULT_TOOL_CALL_LIMIT = 50
+export const HUMAN_DEFAULT_TOOL_CALL_LIMIT = 20
 export const HUMAN_MAX_PARALLEL_TOOL_CALLS = 6
 export const HUMAN_ROUND_EXECUTION_KINDS = [
   'pre_execution_blocked',

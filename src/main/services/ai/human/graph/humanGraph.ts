@@ -8,7 +8,7 @@ import { createMouthNode } from '../node/mouthNode'
 import { createHumanRuntimeCache } from '../node/utils/runtimeCache'
 import { createHumanRunStateSchema, createInitialHumanState } from '../state/schema'
 
-const RECURSION_LIMIT = 128
+const RECURSION_LIMIT = 60
 
 export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
   const { ctx } = input
