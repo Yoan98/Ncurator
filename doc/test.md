@@ -270,6 +270,7 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
   - 单次执行唯一标识。
   - 当前格式：`YYYYMMDD-HHmmss-SSS`。
 - backend 正式 case 运行开始后，runner 应尽快创建对应 run 目录，并对 `timeline.jsonl / runtime-events.jsonl / llm-io.jsonl` 采用渐进式落盘；不得要求等到 run 结束后才首次出现日志目录。
+- backend raw logs 的完整记录以磁盘上的 JSONL 文件为唯一真相源；测试进程内允许不再长期保留这些日志的全量副本。
 
 ### 5.2 `meta.json`
 
@@ -303,6 +304,7 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
   - `modelName`
 - `meta.json` 顶层只保留上述固定字段。
 - 如果测试需要保留 fixture 依赖信息，应写在 `timeline.jsonl` 的 `run/start` 事件 `data` 中。
+- 为降低长 live run 的内存压力，`stats` 可以来自运行中计数器或基于磁盘日志的回读统计；不要求依赖内存里的全量 timeline 副本。
 
 ### 5.3 `timeline.jsonl`
 

@@ -9,6 +9,7 @@ const resolveLocalBin = (name) =>
 const PNPM_BIN = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 const VITEST_BIN = resolveLocalBin('vitest')
 const ELECTRON_VITE_BIN = resolveLocalBin('electron-vite')
+const LIVE_BACKEND_NODE_OLD_SPACE_MB = 8192
 
 const parseArgs = (argv) => {
   const parsed = {
@@ -113,10 +114,22 @@ const findTestFiles = async (input) => {
     .sort()
 }
 
+const appendNodeOption = (existing, option) => {
+  const current = String(existing || '').trim()
+  if (!current) return option
+  return current.includes(option) ? current : `${current} ${option}`.trim()
+}
+
+const buildCommandEnv = (overrides) => ({
+  ...process.env,
+  ...overrides
+})
+
 const runCommandWithFallback = (input) => {
   const primaryResult = spawnSync(input.primary.bin, input.primary.args, {
     cwd: ROOT,
-    stdio: 'inherit'
+    stdio: 'inherit',
+    env: buildCommandEnv(input.env)
   })
 
   if (!primaryResult.error) {
@@ -126,7 +139,8 @@ const runCommandWithFallback = (input) => {
 
   const fallbackResult = spawnSync(input.fallback.bin, input.fallback.args, {
     cwd: ROOT,
-    stdio: 'inherit'
+    stdio: 'inherit',
+    env: buildCommandEnv(input.env)
   })
   if (typeof fallbackResult.status === 'number') return fallbackResult.status
   return 1
@@ -136,8 +150,17 @@ const runVitest = (input) => {
   const extraArgs = input.testFiles.some((filePath) => isLiveBackendFile(filePath))
     ? ['--maxWorkers', '1']
     : []
+  const env = input.testFiles.some((filePath) => isLiveBackendFile(filePath))
+    ? {
+        NODE_OPTIONS: appendNodeOption(
+          process.env.NODE_OPTIONS,
+          `--max-old-space-size=${String(LIVE_BACKEND_NODE_OLD_SPACE_MB)}`
+        )
+      }
+    : undefined
   const commandArgs = ['--config', input.configPath, ...extraArgs, 'run', ...input.testFiles]
   return runCommandWithFallback({
+    env,
     primary: {
       bin: PNPM_BIN,
       args: ['exec', 'vitest', ...commandArgs]

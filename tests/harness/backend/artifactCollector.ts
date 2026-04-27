@@ -2,6 +2,7 @@ import { cp, mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import type { AiRunEvent } from '../../../src/shared/types'
 import type { TestArtifact } from '../core/run-log-contract'
+import { iterateJsonLines } from '../core/read-run-log'
 import { resolveRunArtifactsDir } from './write-run-log'
 
 const sanitizeFileName = (value: string): string => {
@@ -24,7 +25,7 @@ export const collectBackendRunArtifacts = async (input: {
   caseId: string
   runId: string
   workspaceRoot: string
-  runtimeEvents: readonly AiRunEvent[]
+  runtimeEventsPath: string
 }): Promise<TestArtifact[]> => {
   const artifactsDir = resolveRunArtifactsDir({
     scope: input.scope,
@@ -33,7 +34,7 @@ export const collectBackendRunArtifacts = async (input: {
   })
   const collected: TestArtifact[] = []
 
-  for (const event of input.runtimeEvents) {
+  for await (const event of iterateJsonLines<AiRunEvent>(input.runtimeEventsPath)) {
     if (event.type !== 'file_artifact') continue
     const relativePath = buildArtifactRelativePath(event)
     const targetPath = path.join(artifactsDir, relativePath)

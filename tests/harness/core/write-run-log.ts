@@ -74,6 +74,14 @@ const buildEmptySeedManifest = (): PersistedSeedManifest => ({
 
 type StreamingRunLogWriter = {
   logDir: string
+  paths: {
+    metaPath: string
+    timelinePath: string
+    runtimeEventsPath: string
+    llmIoPath: string
+    artifactsPath: string
+    seedManifestPath: string
+  }
   init: (input: { meta: TestRunMeta }) => void
   appendTimelineEvent: (event: TestLogEvent) => void
   appendRuntimeEvent: (event: AiRunEvent) => void
@@ -121,6 +129,14 @@ export const createStreamingRunLogWriter = (input: {
 
   return {
     logDir,
+    paths: {
+      metaPath,
+      timelinePath,
+      runtimeEventsPath,
+      llmIoPath,
+      artifactsPath,
+      seedManifestPath
+    },
     init: ({ meta }) => {
       enqueue(async () => {
         await mkdir(logDir, { recursive: true })

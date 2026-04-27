@@ -14,7 +14,6 @@ import { cleanupWorkspace, copyFixturesIntoWorkspace, createIsolatedWorkspace } 
 import { EventCollector } from '../core/eventCollector'
 import {
   TEST_LOG_SCHEMA_VERSION,
-  type TestArtifact,
   type TestDomain,
   type TestLogEvent,
   type TestRunMeta,
@@ -60,14 +59,18 @@ const buildTaskId = (input: {
 const buildStats = (
   startedAtMs: number,
   finishedAtMs: number,
-  events: readonly TestLogEvent[],
-  artifacts: readonly TestArtifact[]
+  counts: {
+    steps: number
+    assertions: number
+    errors: number
+  },
+  artifactCount: number
 ): TestRunMeta['stats'] => ({
   durationMs: finishedAtMs - startedAtMs,
-  steps: events.filter((event) => event.type === 'step').length,
-  assertions: events.filter((event) => event.type === 'assertion').length,
-  errors: events.filter((event) => event.type === 'error').length,
-  artifacts: artifacts.length
+  steps: counts.steps,
+  assertions: counts.assertions,
+  errors: counts.errors,
+  artifacts: artifactCount
 })
 
 export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TResult>): Promise<void> => {
@@ -89,25 +92,35 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
     runId
   })
   const eventCollector = new EventCollector({
-    onRuntimeEvent: (event) => {
-      streamingLogWriter.appendRuntimeEvent(event)
+    sink: {
+      onRuntimeEvent: (event) => {
+        streamingLogWriter.appendRuntimeEvent(event)
+      },
+      onLlmIo: (record) => {
+        streamingLogWriter.appendLlmIoRecord(record)
+      }
     },
-    onLlmIo: (record) => {
-      streamingLogWriter.appendLlmIoRecord(record)
-    }
+    retainLlmIoRecords: false,
+    llmIoPath: streamingLogWriter.paths.llmIoPath
   })
-  const events: TestLogEvent[] = []
   let workspaceRoot = ''
   let fixtureBindings: FixtureBinding[] = []
   let status: TestRunStatus = 'failed'
   let runtime: BackendTestRuntime | undefined
+  const counters = {
+    steps: 0,
+    assertions: 0,
+    errors: 0
+  }
 
   const recordEvent = (input: Omit<TestLogEvent, 'ts'>): void => {
     const event = {
       ts: new Date().toISOString(),
       ...input
     }
-    events.push(event)
+    if (event.type === 'step') counters.steps += 1
+    if (event.type === 'assertion') counters.assertions += 1
+    if (event.type === 'error') counters.errors += 1
     streamingLogWriter.appendTimelineEvent(event)
   }
 
@@ -172,6 +185,7 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
 
     try {
       const result = await definition.execute(runtime)
+      await streamingLogWriter.flush()
       await definition.assert(result, runtime)
       status = 'passed'
     } finally {
@@ -187,14 +201,14 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
     })
     throw error
   } finally {
-    const runtimeEvents = eventCollector.snapshot()
+    await streamingLogWriter.flush()
     const runArtifacts = workspaceRoot
       ? await collectBackendRunArtifacts({
           scope,
           caseId: definition.caseId,
           runId,
           workspaceRoot,
-          runtimeEvents
+          runtimeEventsPath: streamingLogWriter.paths.runtimeEventsPath
         })
       : []
     const emptySeedManifest: BackendSeedManifest = {
@@ -230,7 +244,7 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
       startedAt: new Date(startedAtMs).toISOString(),
       finishedAt: finishedAt.toISOString(),
       status,
-      stats: buildStats(startedAtMs, finishedAt.getTime(), events, artifacts),
+      stats: buildStats(startedAtMs, finishedAt.getTime(), counters, artifacts.length),
       runtime: {
         driver: 'backend',
         target: 'node',

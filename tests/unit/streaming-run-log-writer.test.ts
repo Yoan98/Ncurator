@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AiLlmIoRecord, AiRunEvent } from '../../src/shared/types'
+import { EventCollector } from '../harness/core/eventCollector'
 import {
   createStreamingRunLogWriter,
   resolveRunLogDir
@@ -135,6 +136,94 @@ describe('streaming run log writer', () => {
         await fs.readFile(path.join(logDir, 'meta.json'), 'utf8')
       ) as TestRunMeta
       expect(finalizedMeta.status).toBe('passed')
+    } finally {
+      process.chdir(previousCwd)
+    }
+  })
+
+  it('can read streamed events from disk without retaining in memory', async () => {
+    const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-streaming-collector-'))
+    createdDirs.push(tempRoot)
+    const previousCwd = process.cwd()
+    process.chdir(tempRoot)
+
+    try {
+      const scope = 'temp/unit'
+      const caseId = 'streaming-event-collector'
+      const runId = '20260427-160000-000'
+      const writer = createStreamingRunLogWriter({
+        scope,
+        caseId,
+        runId
+      })
+      writer.init({
+        meta: {
+          schemaVersion: 4,
+          runId,
+          caseId,
+          scope,
+          status: 'running',
+          startedAt: '2026-04-27T08:00:00.000Z',
+          finishedAt: '',
+          stats: {
+            durationMs: 0,
+            steps: 0,
+            assertions: 0,
+            errors: 0,
+            artifacts: 0
+          },
+          runtime: {
+            driver: 'backend',
+            target: 'node',
+            modelName: null
+          }
+        }
+      })
+
+      const collector = new EventCollector({
+        sink: {
+          onRuntimeEvent: (event) => {
+            writer.appendRuntimeEvent(event)
+          },
+          onLlmIo: (record) => {
+            writer.appendLlmIoRecord(record)
+          }
+        },
+        retainRuntimeEvents: false,
+        retainLlmIoRecords: false,
+        runtimeEventsPath: writer.paths.runtimeEventsPath,
+        llmIoPath: writer.paths.llmIoPath
+      })
+
+      collector.add({
+        type: 'run_started',
+        runId,
+        sessionId: 'disk-session',
+        createdAt: Date.now(),
+        input: 'from-disk'
+      } satisfies AiRunEvent)
+      collector.addLlmIo({
+        callId: 'call-2',
+        runId,
+        caller: 'human.brain',
+        schemaName: 'human_brain_decision',
+        model: 'test-model',
+        baseUrlHost: 'example.com',
+        system: 'sys',
+        user: 'user',
+        streamingMode: 'force_non_stream',
+        streamed: false,
+        chunkCount: 0,
+        startedAt: Date.now(),
+        completedAt: Date.now(),
+        durationMs: 1,
+        status: 'completed'
+      } satisfies AiLlmIoRecord)
+
+      await writer.flush()
+
+      expect(collector.snapshot()).toHaveLength(1)
+      expect(collector.snapshotLlmIo()).toHaveLength(1)
     } finally {
       process.chdir(previousCwd)
     }
