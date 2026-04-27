@@ -5,7 +5,11 @@ import type {
   DocxCapabilityToolsRuntimeState,
   DocxCreatedBlock,
   DocxDetailedBlock,
+  DocxOpenMeta,
+  DocxOpenStats,
   DocxOp,
+  DocxOutlineBlock,
+  DocxReadSession,
   DocxReplaySession,
   DocxReplaySnapshot,
   DocxRevision,
@@ -35,8 +39,25 @@ export type DocxToolResourceContext = {
   effectKind?: 'opened' | 'read' | 'searched' | 'mutated' | 'rolled_back' | 'history'
 }
 
-type RequireDocSessionResult =
-  | { sourcePath: string; session: DocxReplaySession; docId: string; currentRevisionRef: string }
+export type RequireReadSessionResult =
+  | {
+      sourcePath: string
+      docId: string
+      currentRevisionRef: string
+      meta: DocxOpenMeta
+      stats: DocxOpenStats
+      readSession?: DocxReadSession
+      replaySession?: DocxReplaySession
+    }
+  | { failure: DocxToolFailure }
+
+export type RequireReplaySessionResult =
+  | {
+      sourcePath: string
+      session: DocxReplaySession
+      docId: string
+      currentRevisionRef: string
+    }
   | { failure: DocxToolFailure }
 
 const isToolResultRecord = (value: AiToolCallResult['data']): value is JsonObject =>
@@ -94,32 +115,25 @@ export type DocxToolRuntime = {
   }) => DocxToolFailure
   callWorker: (request: Omit<DocxWorkerRequest, 'requestId' | 'runId'>) => Promise<DocxWorkerResponse>
   resolveDocxPath: (input: { cwd: string; rawPath: string }) => string | null
+  getReadSession: (sourcePath: string) => DocxReadSession | undefined
   getReplaySession: (sourcePath: string) => DocxReplaySession | undefined
-  ensureDocumentSession: (input: {
+  ensureReadSession: (input: {
     toolName: string
     toolCallId: string
     sourcePath: string
-  }) => Promise<RequireDocSessionResult>
-  requireDocumentSession: (input: {
+  }) => Promise<RequireReadSessionResult>
+  ensureReplaySession: (input: {
     toolName: string
     toolCallId: string
     sourcePath: string
-  }) => RequireDocSessionResult
-  registerOpenedDocument: (
-    sourcePath: string,
-    docId: string,
-    meta?: DocxReplaySession['meta'],
-    stats?: DocxReplaySession['stats']
-  ) => Promise<{
-      session: DocxReplaySession
-      currentRevisionRef: string
-    }>
+    reason?: 'history' | 'edit' | 'rollback'
+  }) => Promise<RequireReplaySessionResult>
   registerCreatedDocument: (input: {
     sourcePath: string
     baselineDocId: string
     workingDocId: string
-    meta?: DocxReplaySession['meta']
-    stats?: DocxReplaySession['stats']
+    meta?: DocxOpenMeta
+    stats?: DocxOpenStats
     summary?: string
   }) => Promise<{
     session: DocxReplaySession
@@ -172,12 +186,14 @@ export type DocxToolRuntime = {
 
 export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxToolRuntime => {
   const revisionEntryByDocId = new Map<string, DocxRevision>()
+  const readSessionBySourcePath = new Map<string, DocxReadSession>()
   const replaySessionBySourcePath = new Map<string, DocxReplaySession>()
   const state: DocxCapabilityToolsRuntimeState = {
     sourcePathByDocId: new Map(),
     semanticIndexByDocId: new Map(),
     snapshotEntryByDocId: new Map(),
     revisionEntryByDocId,
+    readSessionBySourcePath,
     replaySessionBySourcePath
   }
   const workspaceRootPath = path.resolve(input.workspaceRootPath)
@@ -279,46 +295,8 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     return resolved
   }
 
-  const buildReplaySnapshotForDoc = async (docId: string): Promise<DocxReplaySnapshot> => {
-    const outlineResponse = await callWorker({
-      action: 'outline',
-      payload: {
-        docId,
-        maxBlocks: 5000,
-        includeTables: true,
-        includeCells: true
-      }
-    })
-    if (!outlineResponse.ok) {
-      throw new Error(outlineResponse.error)
-    }
-    if (outlineResponse.payload.action !== 'outline') {
-      throw new Error('worker protocol mismatch (replay outline)')
-    }
-
-    const detailedBlocksById = new Map<string, DocxDetailedBlock>()
-    for (const block of outlineResponse.payload.blocks) {
-      const detailResponse = await callWorker({
-        action: 'get_block',
-        payload: {
-          docId,
-          blockId: block.blockId
-        }
-      })
-      if (!detailResponse.ok) {
-        throw new Error(detailResponse.error)
-      }
-      if (detailResponse.payload.action !== 'get_block') {
-        throw new Error('worker protocol mismatch (replay get_block)')
-      }
-      detailedBlocksById.set(block.blockId, detailResponse.payload.block)
-    }
-
-    return createReplaySnapshot({
-      outlineBlocks: outlineResponse.payload.blocks,
-      detailedBlocksById
-    })
-  }
+  const getReadSession = (sourcePath: string): DocxReadSession | undefined =>
+    state.readSessionBySourcePath.get(path.resolve(sourcePath))
 
   const getReplaySession = (sourcePath: string): DocxReplaySession | undefined =>
     state.replaySessionBySourcePath.get(path.resolve(sourcePath))
@@ -326,45 +304,272 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
   const getRevisionRefByDocId = (docId: string): string | undefined =>
     state.revisionEntryByDocId.get(docId)?.revisionRef
 
-  const buildSessionResult = (
+  const createReadSessionCache = (): DocxReadSession['cache'] => ({
+    outlineByCacheKey: new Map(),
+    detailByBlockId: new Map()
+  })
+
+  const cacheOutline = (
+    session: DocxReadSession | undefined,
+    key: string,
+    value: { blocks: DocxOutlineBlock[]; truncated: boolean }
+  ) => {
+    if (!session) return
+    session.cache.outlineByCacheKey.set(key, value)
+  }
+
+  const cacheDetailedBlocks = (session: DocxReadSession | undefined, blocks: readonly DocxDetailedBlock[]) => {
+    if (!session) return
+    blocks.forEach((block) => {
+      session.cache.detailByBlockId.set(block.blockId, block)
+    })
+  }
+
+  const buildReadSessionResultFromReplay = (
     sourcePath: string,
     session: DocxReplaySession
-  ): Exclude<RequireDocSessionResult, { failure: DocxToolFailure }> => ({
+  ): Exclude<RequireReadSessionResult, { failure: DocxToolFailure }> => ({
+    sourcePath,
+    docId: session.activeDocId,
+    currentRevisionRef: session.activeRevisionRef,
+    meta: session.meta,
+    stats: session.stats,
+    replaySession: session
+  })
+
+  const buildReplaySessionResult = (
+    sourcePath: string,
+    session: DocxReplaySession
+  ): Exclude<RequireReplaySessionResult, { failure: DocxToolFailure }> => ({
     sourcePath,
     session,
     docId: session.activeDocId,
     currentRevisionRef: session.activeRevisionRef
   })
 
-  const requireDocumentSession = (params: {
-    toolName: string
-    toolCallId: string
-    sourcePath: string
-  }): RequireDocSessionResult => {
-    const sourcePath = path.resolve(params.sourcePath)
-    const session = getReplaySession(sourcePath)
-    if (session) {
-      return buildSessionResult(sourcePath, session)
-    }
-    return {
-      failure: emitFailure({
-        toolName: params.toolName,
-        toolCallId: params.toolCallId,
-        code: 'invalid_input',
-        error: `sourcePath must be opened before ${params.toolName}: ${sourcePath}`,
-        resourceContext: {
-          family: 'docx',
-          sourcePath
-        }
-      })
-    }
+  const buildReadSessionResult = (
+    sourcePath: string,
+    session: DocxReadSession
+  ): Exclude<RequireReadSessionResult, { failure: DocxToolFailure }> => ({
+    sourcePath,
+    docId: session.docId,
+    currentRevisionRef: session.currentRevisionRef,
+    meta: session.meta,
+    stats: session.stats,
+    readSession: session
+  })
+
+  const registerSnapshot = (docId: string, parentDocId?: string) => {
+    state.snapshotEntryByDocId.set(docId, {
+      docId,
+      parentDocId,
+      createdAt: Date.now()
+    })
   }
 
-  const ensureDocumentSession = async (params: {
+  const openDocumentAsReadSession = async (
+    sourcePath: string
+  ): Promise<DocxReadSession> => {
+    const resolvedTarget = await input.ctx.resolveDocxOpenTarget(sourcePath)
+    const workerResponse = await callWorker({
+      action: 'open',
+      payload: {
+        sourcePath: resolvedTarget.openPath
+      }
+    })
+    if (!workerResponse.ok) {
+      throw new Error(workerResponse.error)
+    }
+    if (workerResponse.payload.action !== 'open') {
+      throw new Error('worker protocol mismatch (open)')
+    }
+    const normalizedSourcePath = path.resolve(resolvedTarget.trackedSourcePath)
+    registerSnapshot(workerResponse.payload.docId)
+    state.sourcePathByDocId.set(workerResponse.payload.docId, normalizedSourcePath)
+    const session: DocxReadSession = {
+      sourcePath: normalizedSourcePath,
+      docId: workerResponse.payload.docId,
+      meta: workerResponse.payload.meta,
+      stats: workerResponse.payload.stats,
+      currentRevisionRef: 'v1',
+      cache: createReadSessionCache()
+    }
+    state.readSessionBySourcePath.set(normalizedSourcePath, session)
+    input.ctx.trackDocxOpen({
+      docId: workerResponse.payload.docId,
+      sourcePath: normalizedSourcePath
+    })
+    return session
+  }
+
+  const fetchOutlinePage = async (inputValue: {
+    session?: DocxReadSession
+    docId: string
+    fromBodyIndex?: number
+    maxBlocks: number
+    includeTables: boolean
+    includeCells: boolean
+  }): Promise<{ blocks: DocxOutlineBlock[]; truncated: boolean }> => {
+    const cacheKey = `${String(inputValue.fromBodyIndex || 0)}:${String(inputValue.maxBlocks)}:${inputValue.includeTables ? '1' : '0'}:${inputValue.includeCells ? '1' : '0'}`
+    const cached = inputValue.session?.cache.outlineByCacheKey.get(cacheKey)
+    if (cached) {
+      return cached
+    }
+    const outlineResponse = await callWorker({
+      action: 'outline',
+      payload: {
+        docId: inputValue.docId,
+        fromBodyIndex: inputValue.fromBodyIndex,
+        maxBlocks: inputValue.maxBlocks,
+        includeTables: inputValue.includeTables,
+        includeCells: inputValue.includeCells
+      }
+    })
+    if (!outlineResponse.ok) {
+      throw new Error(outlineResponse.error)
+    }
+    if (outlineResponse.payload.action !== 'outline') {
+      throw new Error('worker protocol mismatch (outline)')
+    }
+    const result = {
+      blocks: outlineResponse.payload.blocks,
+      truncated: outlineResponse.payload.truncated
+    }
+    cacheOutline(inputValue.session || undefined, cacheKey, result)
+    return result
+  }
+
+  const fetchAllOutlineBlocks = async (inputValue: {
+    session?: DocxReadSession
+    docId: string
+    includeTables: boolean
+    includeCells: boolean
+  }): Promise<DocxOutlineBlock[]> => {
+    const pageSize = 1000
+    const blocks: DocxOutlineBlock[] = []
+    let fromBodyIndex = 0
+    while (true) {
+      const page = await fetchOutlinePage({
+        session: inputValue.session,
+        docId: inputValue.docId,
+        fromBodyIndex,
+        maxBlocks: pageSize,
+        includeTables: inputValue.includeTables,
+        includeCells: inputValue.includeCells
+      })
+      if (page.blocks.length === 0) {
+        break
+      }
+      blocks.push(...page.blocks)
+      if (!page.truncated) {
+        break
+      }
+      const lastBlock = page.blocks[page.blocks.length - 1]
+      fromBodyIndex = (lastBlock?.bodyIndex || fromBodyIndex) + 1
+    }
+    return blocks
+  }
+
+  const fetchDetailedBlocksByIds = async (
+    docId: string,
+    blockIds: string[],
+    session?: DocxReadSession
+  ): Promise<DocxDetailedBlock[]> => {
+    const cachedBlocks: DocxDetailedBlock[] = []
+    const missingBlockIds: string[] = []
+    blockIds.forEach((blockId) => {
+      const cached = session?.cache.detailByBlockId.get(blockId)
+      if (cached) {
+        cachedBlocks.push(cached)
+      } else {
+        missingBlockIds.push(blockId)
+      }
+    })
+    if (missingBlockIds.length === 0) {
+      return cachedBlocks
+    }
+    const response = await callWorker({
+      action: 'get_blocks_by_ids',
+      payload: {
+        docId,
+        blockIds: missingBlockIds
+      }
+    })
+    if (!response.ok) {
+      throw new Error(response.error)
+    }
+    if (response.payload.action !== 'get_blocks_by_ids') {
+      throw new Error('worker protocol mismatch (get_blocks_by_ids)')
+    }
+    cacheDetailedBlocks(session, response.payload.blocks)
+    const resolvedById = new Map<string, DocxDetailedBlock>()
+    cachedBlocks.forEach((block) => resolvedById.set(block.blockId, block))
+    response.payload.blocks.forEach((block) => resolvedById.set(block.blockId, block))
+    return blockIds
+      .map((blockId) => resolvedById.get(blockId))
+      .filter((block): block is DocxDetailedBlock => Boolean(block))
+  }
+
+  const buildReplaySnapshotForDoc = async (
+    docId: string,
+    session?: DocxReadSession
+  ): Promise<DocxReplaySnapshot> => {
+    const outlineBlocks = await fetchAllOutlineBlocks({
+      session,
+      docId,
+      includeTables: true,
+      includeCells: true
+    })
+    const detailedBlocks = await fetchDetailedBlocksByIds(
+      docId,
+      outlineBlocks.map((block) => block.blockId),
+      session
+    )
+    return createReplaySnapshot({
+      outlineBlocks,
+      detailedBlocksById: new Map(detailedBlocks.map((block) => [block.blockId, block] as const))
+    })
+  }
+
+  const upgradeReadSessionToReplaySession = async (
+    sourcePath: string,
+    targetMode: DocxReplaySession['targetMode']
+  ): Promise<DocxReplaySession> => {
+    const normalizedSourcePath = path.resolve(sourcePath)
+    const existingReplay = getReplaySession(normalizedSourcePath)
+    if (existingReplay) return existingReplay
+    const readSession = getReadSession(normalizedSourcePath)
+    if (!readSession) {
+      throw new Error(`read session not found for sourcePath: ${normalizedSourcePath}`)
+    }
+    const snapshot = await buildReplaySnapshotForDoc(readSession.docId, readSession)
+    const revisionEntry: DocxRevision = {
+      revisionRef: readSession.currentRevisionRef,
+      docId: readSession.docId,
+      createdAt: Date.now()
+    }
+    state.revisionEntryByDocId.set(readSession.docId, revisionEntry)
+    const session = createReplaySessionFromSnapshot({
+      sourcePath: normalizedSourcePath,
+      targetMode,
+      sourceDocId: readSession.docId,
+      meta: readSession.meta,
+      stats: readSession.stats,
+      snapshot
+    })
+    session.docIdByRevisionRef = new Map([[readSession.currentRevisionRef, readSession.docId]])
+    session.revisionRefByDocId = new Map([[readSession.docId, readSession.currentRevisionRef]])
+    session.revisionByDocId = new Map([[readSession.docId, revisionEntry]])
+    state.replaySessionBySourcePath.set(normalizedSourcePath, session)
+    state.readSessionBySourcePath.delete(normalizedSourcePath)
+    return session
+  }
+
+  const ensureReadSession = async (params: {
     toolName: string
     toolCallId: string
     sourcePath: string
-  }): Promise<RequireDocSessionResult> => {
+  }): Promise<RequireReadSessionResult> => {
     const requestedSourcePath = resolveDocxPath({
       cwd: workspaceRootPath,
       rawPath: params.sourcePath
@@ -380,117 +585,101 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       }
     }
 
-    const existingSession = getReplaySession(requestedSourcePath)
-    if (existingSession) {
-      return buildSessionResult(requestedSourcePath, existingSession)
+    const replaySession = getReplaySession(requestedSourcePath)
+    if (replaySession) {
+      return buildReadSessionResultFromReplay(requestedSourcePath, replaySession)
     }
 
-    const resolvedTarget = await input.ctx.resolveDocxOpenTarget(requestedSourcePath)
-    const workerResponse = await callWorker({
-      action: 'open',
-      payload: {
-        sourcePath: resolvedTarget.openPath
-      }
-    })
-    if (!workerResponse.ok) {
-      return {
-        failure: emitWorkerFailure({
-          toolName: params.toolName,
-          toolCallId: params.toolCallId,
-          response: workerResponse
-        })
-      }
+    const existingReadSession = getReadSession(requestedSourcePath)
+    if (existingReadSession) {
+      return buildReadSessionResult(requestedSourcePath, existingReadSession)
     }
-    if (workerResponse.payload.action !== 'open') {
+
+    try {
+      const opened = await openDocumentAsReadSession(requestedSourcePath)
+      return buildReadSessionResult(opened.sourcePath, opened)
+    } catch (error) {
       return {
         failure: emitFailure({
           toolName: params.toolName,
           toolCallId: params.toolCallId,
           code: 'failed',
-          error: 'worker protocol mismatch (open)'
+          error: error instanceof Error ? error.message : String(error)
+        })
+      }
+    }
+  }
+
+  const ensureReplaySession = async (params: {
+    toolName: string
+    toolCallId: string
+    sourcePath: string
+    reason?: 'history' | 'edit' | 'rollback'
+  }): Promise<RequireReplaySessionResult> => {
+    const requestedSourcePath = resolveDocxPath({
+      cwd: workspaceRootPath,
+      rawPath: params.sourcePath
+    })
+    if (!requestedSourcePath) {
+      return {
+        failure: emitFailure({
+          toolName: params.toolName,
+          toolCallId: params.toolCallId,
+          code: 'invalid_input',
+          error: 'sourcePath must be a workspace-bound .docx path'
         })
       }
     }
 
-    const registered = await registerOpenedDocument(
-      resolvedTarget.trackedSourcePath,
-      workerResponse.payload.docId,
-      workerResponse.payload.meta,
-      workerResponse.payload.stats
-    )
-    input.ctx.trackDocxOpen({
-      docId: workerResponse.payload.docId,
-      sourcePath: resolvedTarget.trackedSourcePath,
-      replaySession: registered.session
-    })
-    return {
-      sourcePath: registered.session.sourcePath,
-      session: registered.session,
-      docId: registered.session.activeDocId,
-      currentRevisionRef: registered.currentRevisionRef
+    const existingReplay = getReplaySession(requestedSourcePath)
+    if (existingReplay) {
+      return buildReplaySessionResult(requestedSourcePath, existingReplay)
     }
-  }
 
-  const registerSnapshot = (docId: string, parentDocId?: string) => {
-    state.snapshotEntryByDocId.set(docId, {
-      docId,
-      parentDocId,
-      createdAt: Date.now()
-    })
-  }
-
-  const registerOpenedDocument = async (
-    sourcePath: string,
-    docId: string,
-    meta?: DocxReplaySession['meta'],
-    stats?: DocxReplaySession['stats']
-  ) => {
-    const normalizedSourcePath = path.resolve(sourcePath)
-    const existing = state.replaySessionBySourcePath.get(normalizedSourcePath)
-    if (existing) {
-      return {
-        session: existing,
-        currentRevisionRef: existing.activeRevisionRef
+    let readSession = getReadSession(requestedSourcePath)
+    if (!readSession) {
+      const readResult = await ensureReadSession({
+        toolName: params.toolName,
+        toolCallId: params.toolCallId,
+        sourcePath: requestedSourcePath
+      })
+      if ('failure' in readResult) {
+        return readResult
+      }
+      readSession = readResult.readSession
+      if (!readSession) {
+        return {
+          failure: emitFailure({
+            toolName: params.toolName,
+            toolCallId: params.toolCallId,
+            code: 'failed',
+            error: 'cannot upgrade an active replay-backed read context'
+          })
+        }
       }
     }
 
-    registerSnapshot(docId)
-    state.sourcePathByDocId.set(docId, normalizedSourcePath)
-    const revisionEntry: DocxRevision = {
-      revisionRef: 'v1',
-      docId,
-      createdAt: Date.now()
-    }
-    state.revisionEntryByDocId.set(docId, revisionEntry)
-    const snapshot = await buildReplaySnapshotForDoc(docId)
-    const docIdByRef = new Map([['v1', docId]])
-    const refByDocId = new Map([[docId, 'v1']])
-    const session = createReplaySessionFromSnapshot({
-      sourcePath: normalizedSourcePath,
-      sourceDocId: docId,
-      meta: meta || {
-        title: '',
-        creator: '',
-        lastModifiedBy: '',
-        description: '',
-        defaultFont: ''
-      },
-      stats: stats || {
-        blockCount: 0,
-        paragraphCount: 0,
-        tableCount: 0,
-        imageCount: 0,
-        charCount: 0
-      },
-      snapshot
-    })
-    session.docIdByRevisionRef = docIdByRef
-    session.revisionRefByDocId = refByDocId
-    session.revisionByDocId = new Map([[docId, revisionEntry]])
-    state.replaySessionBySourcePath.set(normalizedSourcePath, session)
-    return {
-      session,
-      currentRevisionRef: 'v1'
+    try {
+      const replay = await upgradeReadSessionToReplaySession(readSession.sourcePath, 'update')
+      input.ctx.trackDocxOpen({
+        docId: replay.sourceDocId,
+        sourcePath: replay.sourcePath,
+        replaySession: replay
+      })
+      return buildReplaySessionResult(replay.sourcePath, replay)
+    } catch (error) {
+      return {
+        failure: emitFailure({
+          toolName: params.toolName,
+          toolCallId: params.toolCallId,
+          code: 'failed',
+          error: error instanceof Error ? error.message : String(error),
+          resourceContext: {
+            family: 'docx',
+            sourcePath: requestedSourcePath
+          }
+        })
+      }
     }
   }
 
@@ -501,15 +690,15 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     return spec.rows
       .map((row) =>
         row
-          .map((cell) => cell.paragraphs.map((paragraph) => paragraph.runs.map((run) => run.text).join('')).join('\n'))
+          .map((cell) =>
+            cell.paragraphs.map((paragraph) => paragraph.runs.map((run) => run.text).join('')).join('\n')
+          )
           .join('\t')
       )
       .join('\n')
   }
 
-  const buildCreatedBlocksFromSnapshot = (
-    snapshot: DocxReplaySnapshot
-  ): DocxCreatedBlock[] =>
+  const buildCreatedBlocksFromSnapshot = (snapshot: DocxReplaySnapshot): DocxCreatedBlock[] =>
     snapshot.blocks.flatMap((block) => [
       {
         blockId: block.blockId,
@@ -535,8 +724,8 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     sourcePath: string
     baselineDocId: string
     workingDocId: string
-    meta?: DocxReplaySession['meta']
-    stats?: DocxReplaySession['stats']
+    meta?: DocxOpenMeta
+    stats?: DocxOpenStats
     summary?: string
   }) => {
     const normalizedSourcePath = path.resolve(params.sourcePath)
@@ -544,6 +733,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       throw new Error(`docx session already exists for sourcePath: ${normalizedSourcePath}`)
     }
 
+    state.readSessionBySourcePath.delete(normalizedSourcePath)
     registerSnapshot(params.baselineDocId)
     state.sourcePathByDocId.set(params.baselineDocId, normalizedSourcePath)
     const baselineRevisionEntry: DocxRevision = {
@@ -872,23 +1062,15 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     const cached = state.semanticIndexByDocId.get(docId)
     if (cached) return cached
 
-    const outlineResponse = await callWorker({
-      action: 'outline',
-      payload: {
-        docId,
-        maxBlocks: 2000,
-        includeTables: true,
-        includeCells: true
-      }
+    const outline = await fetchOutlinePage({
+      docId,
+      fromBodyIndex: 0,
+      maxBlocks: 2000,
+      includeTables: true,
+      includeCells: true
     })
-    if (!outlineResponse.ok) {
-      throw new Error(outlineResponse.error)
-    }
-    if (outlineResponse.payload.action !== 'outline') {
-      throw new Error('worker protocol mismatch (semantic outline)')
-    }
 
-    const searchableBlocks = outlineResponse.payload.blocks.filter(isSemanticSearchableBlock)
+    const searchableBlocks = outline.blocks.filter(isSemanticSearchableBlock)
     const texts = searchableBlocks.map((block) => block.text.trim()).filter(Boolean)
     const blocks = searchableBlocks.filter((block) => block.text.trim().length > 0)
 
@@ -944,10 +1126,10 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     emitWorkerFailure,
     callWorker,
     resolveDocxPath,
+    getReadSession,
     getReplaySession,
-    ensureDocumentSession,
-    requireDocumentSession,
-    registerOpenedDocument,
+    ensureReadSession,
+    ensureReplaySession,
     registerCreatedDocument,
     registerRevision,
     buildRevisionHistory,

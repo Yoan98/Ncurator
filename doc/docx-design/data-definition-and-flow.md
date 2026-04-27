@@ -6,22 +6,40 @@
 
 ```mermaid
 flowchart TD
-    A["source baseline"] --> B["初始化 replay session"]
-    B --> C["生成 working draft view"]
-    C --> D["AI 读取 working draft"]
+    A["source"] --> B["初始化 read session"]
+    B --> C["AI 读取 / 搜索 / 精读"]
+    C --> D["升级为 replay session"]
     D --> E["执行 docx create / edit"]
     E --> F["写入 revision / 更新当前状态"]
-    F --> C
-    F --> G["生成 review view"]
-    G --> H["用户审阅"]
-    H --> I["生成 committed view"]
-    I --> J["覆盖写回 source"]
-    I --> K["创建目标文件"]
+    F --> G["生成 working draft view"]
+    G --> C
+    F --> H["生成 review view"]
+    H --> I["用户审阅"]
+    I --> J["生成 committed view"]
+    J --> K["覆盖写回 source"]
+    J --> L["创建目标文件"]
 ```
 
 ## 2. 核心数据
 
 ```ts
+interface DocxReadSession {
+  // 当前只读会话绑定的最终 sourcePath。
+  sourcePath: string
+  // 当前读取视角对应的 worker 文档标识。
+  docId: string
+  // 当前只读会话对应的文档元信息与统计。
+  meta: DocxOpenMeta
+  stats: DocxOpenStats
+  // 只读路径默认停留在 v1；只有升级到 replay 后才继续演化 revision。
+  currentRevisionRef: string
+  // 解析结果派生的只读缓存。
+  cache: {
+    outlineByCacheKey: Map<string, { blocks: DocxOutlineBlock[]; truncated: boolean }>
+    detailByBlockId: Map<string, DocxDetailedBlock>
+  }
+}
+
 interface DocxReplaySession {
   // 本次会话绑定的最终目标路径；update 模式下它是源文件路径，create 模式下它是 commit 输出目标路径。
   sourcePath: string
@@ -109,9 +127,9 @@ interface DocxViewArtifact {
 
 ### 3.1 打开 source
 
-- source 初始化 baseline。
-- baseline 初始化 `DocxReplaySession`。
-- 当前 session 同时得到第一版 `activeSnapshot`。
+- source 首先初始化 `DocxReadSession`。
+- 纯读取场景下，只维护解析、索引与 detail cache，不创建 replay tree。
+- 只有进入 create / edit / history / rollback / review 时，才升级初始化 `DocxReplaySession`，并释放旧的 `DocxReadSession`。
 - create-target 模式下，baseline 是空文档快照，最终目标路径只作为 commit 输出目标，不要求当前真实存在。
 
 ### 3.2 编辑

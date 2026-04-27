@@ -27,14 +27,15 @@ docx 子系统负责：
 
 ### 2.3 Runtime / Session 层
 
-- 统一维护 `sourcePath -> DocxReplaySession`。
+- 统一维护 `sourcePath -> DocxReadSession | DocxReplaySession` 两类运行态。
+- 读取阶段默认只进入 `DocxReadSession`；只有写相关动作才升级到 `DocxReplaySession`。
 - 统一维护 `revision`、open target、history、rollback 与 artifact 状态。
 - 是 read/write、worker 与 review/commit 之间的中控层。
 
 ### 2.4 Worker 层
 
-- 负责 `open / outline / get_block / search / apply_ops / validate`。
-- 负责 run 内 doc snapshot 管理与底层 buffer 执行。
+- 负责 `open / outline / get_block / get_blocks_by_ids / get_blocks_by_range / search / apply_ops / validate`。
+- 负责 run 内 doc snapshot 管理，以及解析结果、block index 与局部 detail cache 的复用。
 
 ### 2.5 OOXML Adapter 层
 
@@ -49,7 +50,9 @@ docx 子系统负责：
 
 ### 3.1 open
 
-- 首次打开 source 时必须初始化 baseline 与 replay session。
+- 首次纯读取 source 时必须初始化 `read session`，而不是直接创建 replay session。
+- 首次进入 create / edit / history / rollback / review 时，才允许升级到 replay session。
+- 从 `read session` 升级到 `replay session` 后，旧的 `read session` 必须释放，避免同一路径同时保留两套运行态缓存。
 - `docx_create` 成功后，也必须立即完成一次 create-target baseline 初始化与 working open，保证后续 `docx_outline / docx_read_blocks / docx_*_edit` 可以直接接续。
 - create-target 模式下，正式目标文件在 commit 前不得落到 workspace 目标路径；`docx_create` 只能建立内部 draft target session。
 - 存在 active review 时，`resolveDocxOpenTarget` 必须返回当前 `working draft artifact`。
@@ -59,6 +62,7 @@ docx 子系统负责：
 
 - `docx_outline` 返回当前 working draft 的结构概览。
 - 必须支持 `fromBodyIndex + maxBlocks` 分页。
+- 读取路径必须原生分页，禁止 runtime 先全量 outline 再切片。
 - 当结果被截断时，必须显式暴露“结果已截断，文档后续内容未包含”的事实。
 
 ### 3.3 search
@@ -74,6 +78,8 @@ docx 子系统负责：
 - `docx_read_blocks` 基于当前 working draft 返回连续 block 区间。
 - `fromBlockId / toBlockId` 必须按文档顺序返回闭区间内容。
 - 返回内容必须足够支撑 AI 做连续精读，而不是只返回零散片段。
+- 读取路径必须复用同一份解析结果，禁止每个 block 重新全文解析 docx。
+- replay snapshot 从 read 路径升级时也必须按完整分页构建，禁止用固定 `maxBlocks` 上限 silently 丢失长文档尾部内容。
 
 ### 3.5 history
 
@@ -85,6 +91,7 @@ docx 子系统负责：
 ### 4.1 edit 主线
 
 - `docx_create` 只负责建立新的 docx draft target 与初始化 session，本身不直接产出 `draft_review_ready`。
+- 纯读阶段不得提前建立 source baseline、active snapshot、revision tree 或 review artifact。
 - 当 `docx_create` 携带初始内容时，必须立即注册一条 create revision，使 create-only 场景也能进入 review / commit 主链。
 - `docx_*_edit` 的内部语义是“对当前 session 的最新状态继续编辑”。
 - 每次 edit 成功后都必须形成一个新的 `revision`。

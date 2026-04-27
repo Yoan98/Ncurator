@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { parentPort } from 'node:worker_threads'
-import type { DocxOutlineBlock, DocxSearchMatch } from '../types'
+import type { DocxDetailedBlock, DocxOutlineBlock, DocxSearchMatch } from '../types'
 import { applyDocxOps } from '../adapters/ooxml/opExecutor'
 import {
   buildBlockIndex,
@@ -19,9 +19,8 @@ import type { DocSnapshot, DocxWorkerRequest, DocxWorkerResponse, RunSessions } 
 
 const sessions: RunSessions = new Map()
 
-const messageText = (error: Error | string): string => {
-  return error instanceof Error ? error.message : String(error)
-}
+const messageText = (error: Error | string): string =>
+  error instanceof Error ? error.message : String(error)
 
 const getRunSession = (runId: string, create: boolean): Map<string, DocSnapshot> | null => {
   const existing = sessions.get(runId)
@@ -32,12 +31,73 @@ const getRunSession = (runId: string, create: boolean): Map<string, DocSnapshot>
   return created
 }
 
+const createDocSnapshot = async (input: {
+  docId: string
+  sourcePath: string
+  createdAt?: number
+  parentDocId?: string
+  buffer: Buffer
+}): Promise<DocSnapshot> => {
+  const bundle = await loadDocxBundle(input.buffer)
+  const index = buildBlockIndex(bundle.documentDom)
+  return {
+    docId: input.docId,
+    sourcePath: input.sourcePath,
+    createdAt: input.createdAt || Date.now(),
+    parentDocId: input.parentDocId,
+    buffer: input.buffer,
+    bundle,
+    index,
+    detailByBlockId: new Map<string, DocxDetailedBlock>()
+  }
+}
+
 const getSnapshot = (runId: string, docId: string): DocSnapshot => {
   const runSession = getRunSession(runId, false)
   if (!runSession) throw new Error(`run session not found: ${runId}`)
   const snapshot = runSession.get(docId)
   if (!snapshot) throw new Error(`doc not found: ${docId}`)
   return snapshot
+}
+
+const getDetailedBlockCached = (snapshot: DocSnapshot, blockId: string): DocxDetailedBlock | null => {
+  const cached = snapshot.detailByBlockId.get(blockId)
+  if (cached) return cached
+  const detail = getDetailedBlock(snapshot.index, blockId)
+  if (!detail) return null
+  snapshot.detailByBlockId.set(blockId, detail)
+  return detail
+}
+
+const getDetailedBlocksByIds = (
+  snapshot: DocSnapshot,
+  blockIds: readonly string[]
+): DocxDetailedBlock[] => {
+  const blocks: DocxDetailedBlock[] = []
+  for (const blockId of blockIds) {
+    const detail = getDetailedBlockCached(snapshot, blockId)
+    if (detail) {
+      blocks.push(detail)
+    }
+  }
+  return blocks
+}
+
+const getDetailedBlocksByRange = (
+  snapshot: DocSnapshot,
+  fromBlockId: string,
+  toBlockId: string
+): DocxDetailedBlock[] | null => {
+  const outline = snapshot.index.outline
+  const fromIndex = outline.findIndex((block) => block.blockId === fromBlockId)
+  const toIndex = outline.findIndex((block) => block.blockId === toBlockId)
+  if (fromIndex < 0 || toIndex < 0 || fromIndex > toIndex) {
+    return null
+  }
+  return getDetailedBlocksByIds(
+    snapshot,
+    outline.slice(fromIndex, toIndex + 1).map((block) => block.blockId)
+  )
 }
 
 const replaceAllOffsets = (text: string, query: string): Array<{ start: number; end: number }> => {
@@ -53,8 +113,7 @@ const replaceAllOffsets = (text: string, query: string): Array<{ start: number; 
   return offsets
 }
 
-const normalizeRegexPattern = (pattern: string): string =>
-  String(pattern || '').normalize('NFKC')
+const normalizeRegexPattern = (pattern: string): string => String(pattern || '').normalize('NFKC')
 
 const regexOffsets = (text: string, pattern: string): Array<{ start: number; end: number }> => {
   const offsets: Array<{ start: number; end: number }> = []
@@ -74,8 +133,7 @@ const regexOffsets = (text: string, pattern: string): Array<{ start: number; end
 
 const searchBlocks = (input: {
   blocks: DocxOutlineBlock[]
-  index: ReturnType<typeof buildBlockIndex>
-  blockText: (blockId: string) => string
+  snapshot: DocSnapshot
   query: string
   mode: 'literal' | 'regex'
   scopeBlockIds: string[]
@@ -85,7 +143,7 @@ const searchBlocks = (input: {
 
   for (const block of input.blocks) {
     if (scope && !scope.has(block.blockId)) continue
-    const text = input.blockText(block.blockId)
+    const text = extractBlockText(input.snapshot.index, block.blockId)
     const normalizedText = normalizeDocxSearchText(text)
     if (!normalizedText) continue
     const normalizedQuery =
@@ -97,7 +155,7 @@ const searchBlocks = (input: {
         ? replaceAllOffsets(normalizedText, normalizedQuery)
         : regexOffsets(normalizedText, normalizedQuery)
     if (offsets.length === 0) continue
-    const structureFacts = getBlockStructureFacts(input.index, block.blockId)
+    const structureFacts = getBlockStructureFacts(input.snapshot.index, block.blockId)
     if (!structureFacts) continue
     out.push({
       blockId: block.blockId,
@@ -110,6 +168,7 @@ const searchBlocks = (input: {
       offsets
     })
   }
+
   return out
 }
 
@@ -133,37 +192,33 @@ export const handleDocxWorkerRequest = async (
 
     if (request.action === 'open') {
       const buffer = await fs.readFile(request.payload.sourcePath)
-      const bundle = await loadDocxBundle(buffer)
-      const index = buildBlockIndex(bundle.documentDom)
-      const stats = toOpenStats(index, bundle.imageCount)
+      const docId = randomUUID()
+      const snapshot = await createDocSnapshot({
+        docId,
+        sourcePath: request.payload.sourcePath,
+        buffer
+      })
       const runSession = getRunSession(request.runId, true)
       if (!runSession) {
         throw new Error(`cannot create run session: ${request.runId}`)
       }
-      const docId = randomUUID()
-      runSession.set(docId, {
-        docId,
-        sourcePath: request.payload.sourcePath,
-        createdAt: Date.now(),
-        buffer
-      })
+      runSession.set(docId, snapshot)
       return {
         requestId: request.requestId,
         ok: true,
         payload: {
           action: 'open',
           docId,
-          meta: bundle.meta,
-          stats
+          meta: snapshot.bundle.meta,
+          stats: toOpenStats(snapshot.index, snapshot.bundle.imageCount)
         }
       }
     }
 
     if (request.action === 'outline') {
       const snapshot = getSnapshot(request.runId, request.payload.docId)
-      const bundle = await loadDocxBundle(snapshot.buffer)
-      const index = buildBlockIndex(bundle.documentDom)
-      const outline = buildOutlineOutput(index, {
+      const outline = buildOutlineOutput(snapshot.index, {
+        fromBodyIndex: request.payload.fromBodyIndex,
         maxBlocks: request.payload.maxBlocks,
         includeTables: request.payload.includeTables,
         includeCells: request.payload.includeCells
@@ -181,9 +236,7 @@ export const handleDocxWorkerRequest = async (
 
     if (request.action === 'get_block') {
       const snapshot = getSnapshot(request.runId, request.payload.docId)
-      const bundle = await loadDocxBundle(snapshot.buffer)
-      const index = buildBlockIndex(bundle.documentDom)
-      const block = getDetailedBlock(index, request.payload.blockId)
+      const block = getDetailedBlockCached(snapshot, request.payload.blockId)
       if (!block) {
         return {
           requestId: request.requestId,
@@ -202,6 +255,43 @@ export const handleDocxWorkerRequest = async (
       }
     }
 
+    if (request.action === 'get_blocks_by_ids') {
+      const snapshot = getSnapshot(request.runId, request.payload.docId)
+      return {
+        requestId: request.requestId,
+        ok: true,
+        payload: {
+          action: 'get_blocks_by_ids',
+          blocks: getDetailedBlocksByIds(snapshot, request.payload.blockIds)
+        }
+      }
+    }
+
+    if (request.action === 'get_blocks_by_range') {
+      const snapshot = getSnapshot(request.runId, request.payload.docId)
+      const blocks = getDetailedBlocksByRange(
+        snapshot,
+        request.payload.fromBlockId,
+        request.payload.toBlockId
+      )
+      if (!blocks) {
+        return {
+          requestId: request.requestId,
+          ok: false,
+          code: 'invalid_input',
+          error: 'invalid block range'
+        }
+      }
+      return {
+        requestId: request.requestId,
+        ok: true,
+        payload: {
+          action: 'get_blocks_by_range',
+          blocks
+        }
+      }
+    }
+
     if (request.action === 'search') {
       if (request.payload.mode === 'semantic') {
         return {
@@ -213,8 +303,6 @@ export const handleDocxWorkerRequest = async (
         }
       }
       const snapshot = getSnapshot(request.runId, request.payload.docId)
-      const bundle = await loadDocxBundle(snapshot.buffer)
-      const index = buildBlockIndex(bundle.documentDom)
       const mode = request.payload.mode
       if (mode === 'regex') {
         try {
@@ -229,9 +317,8 @@ export const handleDocxWorkerRequest = async (
         }
       }
       const matches = searchBlocks({
-        blocks: index.outline,
-        index,
-        blockText: (blockId) => extractBlockText(index, blockId),
+        blocks: snapshot.index.outline,
+        snapshot,
         query: request.payload.query,
         mode,
         scopeBlockIds: request.payload.scopeBlockIds
@@ -266,13 +353,14 @@ export const handleDocxWorkerRequest = async (
       const runSession = getRunSession(request.runId, true)
       if (!runSession) throw new Error(`run session missing: ${request.runId}`)
       const newDocId = randomUUID()
-      runSession.set(newDocId, {
+      const nextSnapshot = await createDocSnapshot({
         docId: newDocId,
         sourcePath: snapshot.sourcePath,
         createdAt: Date.now(),
         parentDocId: snapshot.docId,
         buffer: applied.buffer
       })
+      runSession.set(newDocId, nextSnapshot)
       return {
         requestId: request.requestId,
         ok: true,

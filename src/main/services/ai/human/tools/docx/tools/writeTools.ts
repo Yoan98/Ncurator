@@ -369,7 +369,11 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         })
       }
 
-      if (runtime.getReplaySession(requestedSourcePath) || (await documentExists(requestedSourcePath))) {
+      if (
+        runtime.getReadSession(requestedSourcePath) ||
+        runtime.getReplaySession(requestedSourcePath) ||
+        (await documentExists(requestedSourcePath))
+      ) {
         return finalizeDocxToolFailure({
           runtime,
           failure: runtime.emitFailure({
@@ -569,7 +573,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
       })
     },
     execute: async ({ args, toolName, toolCallId }) => {
-      const sessionResult = await runtime.ensureDocumentSession({
+      const sessionResult = await runtime.ensureReplaySession({
         toolName,
         toolCallId,
         sourcePath: args.sourcePath
@@ -742,7 +746,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
       })
     },
     execute: async ({ args, toolName, toolCallId }) => {
-      const sessionResult = await runtime.ensureDocumentSession({
+      const sessionResult = await runtime.ensureReplaySession({
         toolName,
         toolCallId,
         sourcePath: args.sourcePath
@@ -881,7 +885,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
       })
     },
     execute: async ({ args, toolName, toolCallId }) => {
-      const sessionResult = await runtime.ensureDocumentSession({
+      const sessionResult = await runtime.ensureReplaySession({
         toolName,
         toolCallId,
         sourcePath: args.sourcePath
@@ -1019,7 +1023,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
       })
     },
     execute: async ({ args, toolName, toolCallId }) => {
-      const sessionResult = await runtime.ensureDocumentSession({
+      const sessionResult = await runtime.ensureReplaySession({
         toolName,
         toolCallId,
         sourcePath: args.sourcePath
@@ -1136,7 +1140,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
       })
     },
     execute: async ({ args, toolName, toolCallId }) => {
-      const sessionResult = await runtime.ensureDocumentSession({
+      const sessionResult = await runtime.ensureReplaySession({
         toolName,
         toolCallId,
         sourcePath: args.sourcePath
@@ -1246,7 +1250,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
       })
     },
     execute: async ({ args, toolName, toolCallId }) => {
-      const sessionResult = await runtime.ensureDocumentSession({
+      const sessionResult = await runtime.ensureReplaySession({
         toolName,
         toolCallId,
         sourcePath: args.sourcePath

@@ -175,6 +175,46 @@
 - Last Run：`2026-04-16 16:16:08 +08:00`
 - Last Result：`通过`
 
+##### `docx-outline-read-search-do-not-create-replay-session`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证纯读 docx 工具首次访问只创建 read session，不会提前创建 replay session。
+- Why：这是 read/write session 分层重构的根契约，破坏后会让只读场景重新回到高内存 replay 路径。
+- How：真实执行 `docx_outline -> docx_read_blocks -> docx_search`，检查 runtime session 状态。
+- Oracle：三次调用都成功；`readSessionCount=1`；`replaySessionCount=0`。
+- Not：不验证编辑链路。
+
+##### `docx-read-then-edit-upgrades-to-replay-session`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证纯读后首次编辑会升级到 replay session，并释放旧 read session。
+- Why：升级动作必须把只读缓存收口掉，否则同一路径会长期保留两套运行态，违背本次重构目标。
+- How：真实执行 `docx_outline -> docx_paragraph_edit -> docx_search`，检查 runtime session 状态。
+- Oracle：编辑成功；后续搜索可命中新文本；`readSessionCount=0`；`replaySessionCount=1`。
+- Not：不验证 review/commit。
+
+##### `docx-read-then-history-upgrades-to-replay-session`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 `docx_history` 在纯读场景下会升级到 replay session，但不会伪造额外 revision。
+- Why：`docx_history` 属于 revision world，需要统一走 replay 语义，同时保持初始历史真实。
+- How：真实执行 `docx_outline -> docx_history`，检查 runtime session 状态与返回 revisions。
+- Oracle：history 成功；只返回初始 `v1`；`readSessionCount=0`；`replaySessionCount=1`。
+- Not：不验证 rollback。
+
+##### `docx-read-then-edit-preserves-long-document-tail`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证长文档在 read 分页后升级到 replay session 时不会丢失尾部 block。
+- Why：如果 replay snapshot 仍走固定 block 上限，read world 与 write world 会在长文档上出现静默分裂。
+- How：先用 `docx_outline(fromBodyIndex,maxBlocks)` 读取 5000 之后的尾部分页，再对尾部 block 执行真实 `docx_paragraph_edit` 与 `docx_search`。
+- Oracle：尾部分页返回正确 bodyIndex；尾部 block 编辑成功；后续搜索可命中新文本；`readSessionCount=0`；`replaySessionCount=1`。
+- Not：不验证 AI 的读取策略。
+
 ##### `docx-search-unicode-normalization-contract`
 
 - 测试类型：`backend`

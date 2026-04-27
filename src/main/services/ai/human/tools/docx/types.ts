@@ -252,6 +252,20 @@ export type DocxReplaySnapshot = {
   tableBlockIdByCellBlockId: Map<string, string>
 }
 
+export type DocxReadSessionCache = {
+  outlineByCacheKey: Map<string, { blocks: DocxOutlineBlock[]; truncated: boolean }>
+  detailByBlockId: Map<string, DocxDetailedBlock>
+}
+
+export type DocxReadSession = {
+  sourcePath: string
+  docId: string
+  meta: DocxOpenMeta
+  stats: DocxOpenStats
+  currentRevisionRef: string
+  cache: DocxReadSessionCache
+}
+
 export type DocxReplaySession = {
   sourcePath: string
   targetMode: 'update' | 'create'
@@ -308,5 +322,6 @@ export type DocxCapabilityToolsRuntimeState = {
   semanticIndexByDocId: Map<string, SemanticDocIndex>
   snapshotEntryByDocId: Map<string, DocxSnapshotLineageEntry>
   revisionEntryByDocId: Map<string, DocxRevision>
+  readSessionBySourcePath: Map<string, DocxReadSession>
   replaySessionBySourcePath: Map<string, DocxReplaySession>
 }

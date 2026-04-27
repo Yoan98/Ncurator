@@ -8,11 +8,14 @@ import type {
   DocxSearchMatch,
   DocxSearchMode
 } from '../types'
+import type { BlockIndex, ParsedDocxBundle } from '../adapters/ooxml/types'
 
 export type DocxWorkerAction =
   | 'open'
   | 'outline'
   | 'get_block'
+  | 'get_blocks_by_ids'
+  | 'get_blocks_by_range'
   | 'search'
   | 'apply_ops'
   | 'materialize_draft'
@@ -33,6 +36,7 @@ export type DocxWorkerRequest =
       action: 'outline'
       payload: {
         docId: string
+        fromBodyIndex?: number
         maxBlocks: number
         includeTables: boolean
         includeCells: boolean
@@ -45,6 +49,25 @@ export type DocxWorkerRequest =
       payload: {
         docId: string
         blockId: string
+      }
+    }
+  | {
+      requestId: string
+      runId: string
+      action: 'get_blocks_by_ids'
+      payload: {
+        docId: string
+        blockIds: string[]
+      }
+    }
+  | {
+      requestId: string
+      runId: string
+      action: 'get_blocks_by_range'
+      payload: {
+        docId: string
+        fromBlockId: string
+        toBlockId: string
       }
     }
   | {
@@ -100,6 +123,14 @@ export type DocxWorkerSuccessPayload =
       block: DocxDetailedBlock
     }
   | {
+      action: 'get_blocks_by_ids'
+      blocks: DocxDetailedBlock[]
+    }
+  | {
+      action: 'get_blocks_by_range'
+      blocks: DocxDetailedBlock[]
+    }
+  | {
       action: 'search'
       matches: DocxSearchMatch[]
       warnings: string[]
@@ -141,6 +172,9 @@ export type DocSnapshot = {
   createdAt: number
   parentDocId?: string
   buffer: Buffer
+  bundle: ParsedDocxBundle
+  index: BlockIndex
+  detailByBlockId: Map<string, DocxDetailedBlock>
 }
 
 export type RunSessions = Map<string, Map<string, DocSnapshot>>

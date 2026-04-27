@@ -6,15 +6,16 @@
 
 docx 子系统负责三件事：
 
-- 让 AI 在同一份文档上连续多轮编辑。
+- 让 AI 在同一份文档上高效读取，并在需要时升级到连续多轮编辑。
 - 让用户看到稳定的新增、删除和替换差异。
 - 让确认后的结果安全落盘回源文件。
 
 ## 2. 核心结构
 
-docx 子系统围绕四个对象工作：
+docx 子系统围绕五个对象工作：
 
 - `source baseline`：原始文档基线，只负责初始化和最终落盘目标。
+- `read session`：只读阶段真相，持有解析结果、索引与局部缓存。
 - `replay session`：当前会话真相，持有持续更新的最新状态。
 - `working draft view`：给 AI 读取和继续编辑的当前工作视图。
 - `review / committed view`：分别给用户审阅和最终提交。
@@ -32,18 +33,18 @@ flowchart TD
 
 - Tool API 层负责对 AI 暴露 docx 工具与 schema。
 - Read / Write tools 层负责 AI-facing 的读取、搜索、编辑与回滚语义。
-- Runtime / Session 层负责 sourcePath、revision、replay session 与 open target 的统一管理。
+- Runtime / Session 层负责 sourcePath、read session、replay session、revision 与 open target 的统一管理。
 - Worker 层负责实际文档打开、读取、搜索、编辑执行与校验。
 - OOXML Adapter 层负责 docx 结构解析、block 建模与底层 op 执行。
 - Review / Commit 层负责三视图投影、审阅稿生成、提交与丢弃。
 
 ## 4. 主流程
 
-### 4.1 初始化
+### 4.1 初始化与读取
 
-- 打开 `source` 后，先建立 baseline。
-- baseline 初始化出当前 `replay session`。
-- 此时 working draft 与 source 内容一致。
+- 纯读取阶段，打开 `source` 后先建立 `read session`。
+- `read session` 只负责解析、索引、分页读取与搜索，不建立 revision/review 状态。
+- 只有当 AI 真的要 create / edit / history / rollback / review 时，才从当前 `read session` 升级到 `replay session`。
 
 ### 4.2 持续更新当前状态
 
@@ -70,6 +71,7 @@ flowchart TD
 ## 5. 关键原则
 
 - `source` 只做基线，不做持续工作副本。
+- `read session` 只负责读取，不能提前承担审阅和提交职责。
 - `replay session` 是运行时唯一真相。
 - AI 永远只读 `working draft view`。
 - 用户永远只看 `review view`。

@@ -398,6 +398,7 @@ export const toOpenStats = (index: BlockIndex, imageCount: number): DocxOpenStat
 export const buildOutlineOutput = (
   index: BlockIndex,
   input: {
+    fromBodyIndex?: number
     maxBlocks: number
     includeTables: boolean
     includeCells: boolean
@@ -406,20 +407,21 @@ export const buildOutlineOutput = (
   blocks: DocxOutlineBlock[]
   truncated: boolean
 } => {
+  const fromBodyIndex = Math.max(0, Number(input.fromBodyIndex || 0))
+  const visibleBlocks = index.outline.filter((block) => {
+    if (block.bodyIndex < fromBodyIndex) return false
+    if (!input.includeTables && (block.type === 'table' || block.type === 'table_cell')) return false
+    if (!input.includeCells && block.type === 'table_cell') return false
+    return true
+  })
   const picked: DocxOutlineBlock[] = []
-  for (const block of index.outline) {
-    if (!input.includeTables && (block.type === 'table' || block.type === 'table_cell')) continue
-    if (!input.includeCells && block.type === 'table_cell') continue
+  for (const block of visibleBlocks) {
     picked.push(block)
     if (picked.length >= input.maxBlocks) break
   }
   return {
     blocks: picked,
-    truncated: picked.length < index.outline.filter((block) => {
-      if (!input.includeTables && (block.type === 'table' || block.type === 'table_cell')) return false
-      if (!input.includeCells && block.type === 'table_cell') return false
-      return true
-    }).length
+    truncated: picked.length < visibleBlocks.length
   }
 }
 

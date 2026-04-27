@@ -1,6 +1,6 @@
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import { buildSemanticMatches, splitEmbeddingRows } from '../semanticSearch'
-import type { DocxToolRuntime } from '../runtime'
+import type { DocxReadSession, DocxToolRuntime } from '../runtime'
 import type { DocxDetailedBlock, DocxOutlineBlock, DocxSearchMatch } from '../types'
 import {
   DOCX_HISTORY_TOOL_SPEC,
@@ -121,14 +121,39 @@ const buildReadBlock = (block: DocxDetailedBlock) => {
   }
 }
 
-const fetchOutline = async (runtime: DocxToolRuntime, docId: string) => {
-  const outlineResponse = await runtime.callWorker({
+const buildOutlineCacheKey = (input: {
+  fromBodyIndex: number
+  maxBlocks: number
+  includeTables: boolean
+  includeCells: boolean
+}): string =>
+  `${String(input.fromBodyIndex)}:${String(input.maxBlocks)}:${input.includeTables ? '1' : '0'}:${input.includeCells ? '1' : '0'}`
+
+const fetchOutline = async (input: {
+  runtime: DocxToolRuntime
+  session?: DocxReadSession
+  docId: string
+  fromBodyIndex: number
+  maxBlocks: number
+  includeTables: boolean
+  includeCells: boolean
+}) => {
+  const cacheKey = buildOutlineCacheKey({
+    fromBodyIndex: input.fromBodyIndex,
+    maxBlocks: input.maxBlocks,
+    includeTables: input.includeTables,
+    includeCells: input.includeCells
+  })
+  const cached = input.session?.cache.outlineByCacheKey.get(cacheKey)
+  if (cached) return cached
+  const outlineResponse = await input.runtime.callWorker({
     action: 'outline',
     payload: {
-      docId,
-      maxBlocks: MAX_OUTLINE_BLOCKS,
-      includeTables: true,
-      includeCells: true
+      docId: input.docId,
+      fromBodyIndex: input.fromBodyIndex,
+      maxBlocks: input.maxBlocks,
+      includeTables: input.includeTables,
+      includeCells: input.includeCells
     }
   })
   if (!outlineResponse.ok) {
@@ -137,24 +162,46 @@ const fetchOutline = async (runtime: DocxToolRuntime, docId: string) => {
   if (outlineResponse.payload.action !== 'outline') {
     throw new Error('worker protocol mismatch (outline)')
   }
-  return outlineResponse.payload.blocks
+  const result = {
+    blocks: outlineResponse.payload.blocks,
+    truncated: outlineResponse.payload.truncated
+  }
+  input.session?.cache.outlineByCacheKey.set(cacheKey, result)
+  return result
 }
 
-const fetchBlock = async (runtime: DocxToolRuntime, docId: string, blockId: string) => {
-  const blockResponse = await runtime.callWorker({
-    action: 'get_block',
+const fetchBlocksByRange = async (input: {
+  runtime: DocxToolRuntime
+  session?: DocxReadSession
+  docId: string
+  fromBlockId: string
+  toBlockId: string
+}) => {
+  const cached =
+    input.session &&
+    input.fromBlockId === input.toBlockId &&
+    input.session.cache.detailByBlockId.get(input.fromBlockId)
+  if (cached) {
+    return [cached]
+  }
+  const blockResponse = await input.runtime.callWorker({
+    action: 'get_blocks_by_range',
     payload: {
-      docId,
-      blockId
+      docId: input.docId,
+      fromBlockId: input.fromBlockId,
+      toBlockId: input.toBlockId
     }
   })
   if (!blockResponse.ok) {
     throw new Error(blockResponse.error)
   }
-  if (blockResponse.payload.action !== 'get_block') {
-    throw new Error('worker protocol mismatch (get_block)')
+  if (blockResponse.payload.action !== 'get_blocks_by_range') {
+    throw new Error('worker protocol mismatch (get_blocks_by_range)')
   }
-  return blockResponse.payload.block
+  blockResponse.payload.blocks.forEach((block) => {
+    input.session?.cache.detailByBlockId.set(block.blockId, block)
+  })
+  return blockResponse.payload.blocks
 }
 
 const executeWorkerSearch = async (input: {
@@ -237,23 +284,6 @@ const buildLiteralSearchAttempts = (query: string): Array<{ query: string; appli
   ]
 }
 
-const sliceOutlineBlocks = (input: {
-  blocks: DocxOutlineBlock[]
-  fromBodyIndex: number
-  maxBlocks: number
-}) => {
-  const fromBodyIndex = Math.max(0, input.fromBodyIndex)
-  const scopedBlocks = input.blocks.filter((block) => block.bodyIndex >= fromBodyIndex)
-  const blocks = scopedBlocks.slice(0, input.maxBlocks)
-  return {
-    blocks,
-    truncated: scopedBlocks.length > blocks.length
-  }
-}
-
-const findOutlineBlockIndex = (outline: DocxOutlineBlock[], blockId: string): number =>
-  outline.findIndex((block) => block.blockId === blockId)
-
 const buildSearchResult = (input: {
   sourcePath: string
   currentRevisionRef: string
@@ -300,16 +330,26 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
     },
     execute: async ({ args, toolName, toolCallId }) => {
       runtime.input.ctx.checkCancelled()
-      const sessionResult = await runtime.ensureDocumentSession({
+      const sessionResult = await runtime.ensureReadSession({
         toolName,
         toolCallId,
         sourcePath: args.sourcePath
       })
       if ('failure' in sessionResult) return sessionResult.failure
 
-      let allBlocks: DocxOutlineBlock[]
+      const fromBodyIndex = Math.max(0, Number(args.fromBodyIndex || 0))
+      const maxBlocks = Number(args.maxBlocks || DEFAULT_OUTLINE_BLOCKS)
+      let outlineResult: { blocks: DocxOutlineBlock[]; truncated: boolean }
       try {
-        allBlocks = await fetchOutline(runtime, sessionResult.docId)
+        outlineResult = await fetchOutline({
+          runtime,
+          session: sessionResult.readSession,
+          docId: sessionResult.docId,
+          fromBodyIndex,
+          maxBlocks,
+          includeTables: true,
+          includeCells: true
+        })
       } catch (error) {
         return finalizeDocxToolFailure({
           runtime,
@@ -331,22 +371,17 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
         })
       }
 
-      const sliced = sliceOutlineBlocks({
-        blocks: allBlocks,
-        fromBodyIndex: Number(args.fromBodyIndex || 0),
-        maxBlocks: Number(args.maxBlocks || DEFAULT_OUTLINE_BLOCKS)
-      })
       const result = {
         ok: true,
         code: 'ok' as const,
-        summary: `返回 ${String(sliced.blocks.length)} 个结构块`,
+        summary: `返回 ${String(outlineResult.blocks.length)} 个结构块`,
         sourcePath: sessionResult.sourcePath,
         currentRevisionRef: sessionResult.currentRevisionRef,
-        fromBodyIndex: Number(args.fromBodyIndex || 0),
-        returnedBlockCount: sliced.blocks.length,
-        totalBlockCount: allBlocks.length,
-        truncated: sliced.truncated,
-        blocks: sliced.blocks.map(buildOutlineBlock),
+        fromBodyIndex,
+        returnedBlockCount: outlineResult.blocks.length,
+        totalBlockCount: sessionResult.stats.blockCount,
+        truncated: outlineResult.truncated,
+        blocks: outlineResult.blocks.map(buildOutlineBlock),
         resourceContext: runtime.buildResourceContext({
           sourcePath: sessionResult.sourcePath,
           effectKind: 'read',
@@ -392,7 +427,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
     },
     execute: async ({ args, toolName, toolCallId }) => {
       runtime.input.ctx.checkCancelled()
-      const sessionResult = await runtime.ensureDocumentSession({
+      const sessionResult = await runtime.ensureReadSession({
         toolName,
         toolCallId,
         sourcePath: args.sourcePath
@@ -592,16 +627,60 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
     },
     execute: async ({ args, toolName, toolCallId }) => {
       runtime.input.ctx.checkCancelled()
-      const sessionResult = await runtime.ensureDocumentSession({
+      const sessionResult = await runtime.ensureReadSession({
         toolName,
         toolCallId,
         sourcePath: args.sourcePath
       })
       if ('failure' in sessionResult) return sessionResult.failure
 
-      let outline: DocxOutlineBlock[]
       try {
-        outline = await fetchOutline(runtime, sessionResult.docId)
+        const blocks = await fetchBlocksByRange({
+          runtime,
+          session: sessionResult.readSession,
+          docId: sessionResult.docId,
+          fromBlockId: args.fromBlockId.trim(),
+          toBlockId: (args.toBlockId || args.fromBlockId).trim()
+        })
+        const fromBlockId = args.fromBlockId.trim()
+        const toBlockId = (args.toBlockId || args.fromBlockId).trim()
+        const result = {
+          ok: true,
+          code: 'ok' as const,
+          summary: `返回 ${String(blocks.length)} 个连续块`,
+          sourcePath: sessionResult.sourcePath,
+          currentRevisionRef: sessionResult.currentRevisionRef,
+          fromBlockId,
+          toBlockId,
+          returnedBlockCount: blocks.length,
+          blocks: blocks.map(buildReadBlock),
+          resourceContext: runtime.buildResourceContext({
+            sourcePath: sessionResult.sourcePath,
+            effectKind: 'read',
+            currentRevisionRef: sessionResult.currentRevisionRef
+          })
+        }
+        return finalizeDocxToolSuccess({
+          runtime,
+          toolName,
+          toolCallId,
+          result,
+          outputPreview: {
+            ok: true,
+            code: 'ok',
+            sourcePath: result.sourcePath,
+            currentRevisionRef: result.currentRevisionRef,
+            fromBlockId: result.fromBlockId,
+            toBlockId: result.toBlockId,
+            returnedBlockCount: result.returnedBlockCount
+          },
+          draftDocId: sessionResult.docId,
+          activity: {
+            actionType: DOCX_READ_TOOL_SPEC.activityActionType!,
+            startedSummary: `精读文档区间: ${sessionResult.sourcePath}`,
+            buildCompletedSummary: (output) => `文档精读完成：${String(output.returnedBlockCount)} 个块`
+          }
+        })
       } catch (error) {
         return finalizeDocxToolFailure({
           runtime,
@@ -622,114 +701,6 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           }
         })
       }
-
-      const fromBlockId = args.fromBlockId.trim()
-      const toBlockId = (args.toBlockId || args.fromBlockId).trim()
-      const fromIndex = findOutlineBlockIndex(outline, fromBlockId)
-      const toIndex = findOutlineBlockIndex(outline, toBlockId)
-
-      if (fromIndex < 0) {
-        return finalizeDocxToolFailure({
-          runtime,
-          failure: runtime.emitFailure({
-            toolName,
-            toolCallId,
-            code: 'invalid_input',
-            error: `fromBlockId not found: ${fromBlockId}`,
-            draftDocId: sessionResult.docId,
-            resourceContext: runtime.buildResourceContext({
-              sourcePath: sessionResult.sourcePath,
-              effectKind: 'read',
-              currentRevisionRef: sessionResult.currentRevisionRef
-            })
-          }),
-          activity: {
-            actionType: DOCX_READ_TOOL_SPEC.activityActionType!
-          }
-        })
-      }
-      if (toIndex < 0) {
-        return finalizeDocxToolFailure({
-          runtime,
-          failure: runtime.emitFailure({
-            toolName,
-            toolCallId,
-            code: 'invalid_input',
-            error: `toBlockId not found: ${toBlockId}`,
-            draftDocId: sessionResult.docId,
-            resourceContext: runtime.buildResourceContext({
-              sourcePath: sessionResult.sourcePath,
-              effectKind: 'read',
-              currentRevisionRef: sessionResult.currentRevisionRef
-            })
-          }),
-          activity: {
-            actionType: DOCX_READ_TOOL_SPEC.activityActionType!
-          }
-        })
-      }
-      if (fromIndex > toIndex) {
-        return finalizeDocxToolFailure({
-          runtime,
-          failure: runtime.emitFailure({
-            toolName,
-            toolCallId,
-            code: 'invalid_input',
-            error: 'fromBlockId must not appear after toBlockId',
-            draftDocId: sessionResult.docId,
-            resourceContext: runtime.buildResourceContext({
-              sourcePath: sessionResult.sourcePath,
-              effectKind: 'read',
-              currentRevisionRef: sessionResult.currentRevisionRef
-            })
-          }),
-          activity: {
-            actionType: DOCX_READ_TOOL_SPEC.activityActionType!
-          }
-        })
-      }
-
-      const rangeBlockIds = outline.slice(fromIndex, toIndex + 1).map((block) => block.blockId)
-      const blocks = await Promise.all(
-        rangeBlockIds.map((blockId) => fetchBlock(runtime, sessionResult.docId, blockId))
-      )
-      const result = {
-        ok: true,
-        code: 'ok' as const,
-        summary: `返回 ${String(blocks.length)} 个连续块`,
-        sourcePath: sessionResult.sourcePath,
-        currentRevisionRef: sessionResult.currentRevisionRef,
-        fromBlockId,
-        toBlockId,
-        returnedBlockCount: blocks.length,
-        blocks: blocks.map(buildReadBlock),
-        resourceContext: runtime.buildResourceContext({
-          sourcePath: sessionResult.sourcePath,
-          effectKind: 'read',
-          currentRevisionRef: sessionResult.currentRevisionRef
-        })
-      }
-      return finalizeDocxToolSuccess({
-        runtime,
-        toolName,
-        toolCallId,
-        result,
-        outputPreview: {
-          ok: true,
-          code: 'ok',
-          sourcePath: result.sourcePath,
-          currentRevisionRef: result.currentRevisionRef,
-          fromBlockId: result.fromBlockId,
-          toBlockId: result.toBlockId,
-          returnedBlockCount: result.returnedBlockCount
-        },
-        draftDocId: sessionResult.docId,
-        activity: {
-          actionType: DOCX_READ_TOOL_SPEC.activityActionType!,
-          startedSummary: `精读文档区间: ${sessionResult.sourcePath}`,
-          buildCompletedSummary: (output) => `文档精读完成：${String(output.returnedBlockCount)} 个块`
-        }
-      })
     }
   })
 
@@ -747,7 +718,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
     },
     execute: async ({ args, toolName, toolCallId }) => {
       runtime.input.ctx.checkCancelled()
-      const sessionResult = await runtime.ensureDocumentSession({
+      const sessionResult = await runtime.ensureReplaySession({
         toolName,
         toolCallId,
         sourcePath: args.sourcePath
