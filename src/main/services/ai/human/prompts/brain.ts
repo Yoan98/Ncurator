@@ -124,6 +124,12 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
     - 选择 mouth：只在当前已经足够形成最终交付时；mouth 不新增事实，不继续执行工具。
   </decision_contract>
 
+  <search_strategy>
+    - 优先使用搜索类工具定位最相关的文档或内容片段，再在必要时回到原文件做精读或结构定位。
+    - 工作区中的文本通常会被建立成知识库，所以可以尝试kb类工具来定位相关内容。
+    - 尽可能避免穷举检索，优先使用有针对性的查询方式。
+  </search_strategy>
+
   <stable_memory_contract>
     - stableMemory 是持续工作的任务笔记，不是本轮摘要，也不是最终答复草稿。
     - 如果你输出某个 stableMemory 字段，表示你给出了该字段基于旧内容累积编辑后的完整最新版本。
@@ -153,6 +159,7 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
   <context_block_guide>
     - task_goal：用户原始诉求与限制。
     - reference_scope：当前工作区、默认知识范围、显式缩圈范围和可用边界。
+    - search_strategy：当前任务默认遵循的检索思路提示。
     - terminal_platform：当前 terminal 所在平台；如果你决定使用命令行，应据此选择命令语法。
     - your_notes：稳定任务笔记，按“当前理解 / 关键依据 / 检查清单”组织。
     - latest_attempt：最近一轮完整尝试记录，用于判断刚做了什么、传了什么参数、拿到了什么结果。
@@ -264,6 +271,10 @@ ${input.state.task.userInput}
   <reference_scope>
 ${renderReferenceScopeText(input.ctx.referenceScope)}
   </reference_scope>
+
+  <search_strategy>
+检索思路：先用搜索类工具定位最相关的文档或内容片段，再在必要时回到原文件做精读或结构定位。
+  </search_strategy>
 
   <terminal_platform>
 ${renderPlatformText(input.ctx)}

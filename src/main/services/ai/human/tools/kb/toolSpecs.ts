@@ -48,8 +48,8 @@ export const KB_SEARCH_TOOL_SPEC: HumanToolSpec<
   schema: KB_SEARCH_SCHEMA,
   promptSpec: {
     name: 'kb_search',
-    purpose: '在当前工作区知识库中统一执行内容搜索；默认 auto 会走最合适的检索策略。',
-    whenToUse: '当任务需要在 KB 中找事实、证据、规则、说明或引用时使用。',
+    purpose: '在当前工作区知识库中检索相关内容片段，并返回命中结果。',
+    whenToUse: '当需要在工作区知识库中按查询词或语句查找相关片段时使用。',
     preconditions: ['queryText 不能为空。', '默认搜索范围是当前工作区知识库。'],
     returns: [
       {
@@ -80,8 +80,8 @@ export const KB_LIST_DOCUMENTS_TOOL_SPEC: HumanToolSpec<
   schema: KB_LIST_DOCUMENTS_SCHEMA,
   promptSpec: {
     name: 'kb_list_documents',
-    purpose: '列出当前工作区范围内的知识库文档。',
-    whenToUse: '当需要先缩小候选文档范围、提高定位精度、或 search 结果过散时使用。',
+    purpose: '列出当前工作区知识库中的候选文档，并返回文档标识。',
+    whenToUse: '当需要查看知识库里有哪些候选文档，或需要文档级缩圈时使用。',
     preconditions: ['若已选资料和命中 chunk 已经足够，通常不需要再 list_documents。'],
     returns: [
       {

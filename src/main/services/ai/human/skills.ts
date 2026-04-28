@@ -4,10 +4,7 @@ import {
   LEARNABLE_RUNTIME_SKILL_IDS,
   RUNTIME_SKILL_IDS
 } from './constants'
-import type {
-  RuntimeSkillId,
-  SkillDefinition
-} from './types'
+import type { RuntimeSkillId, SkillDefinition } from './types'
 
 export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
   'history-recall': {
@@ -47,7 +44,8 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     countsTowardToolBudget: true,
     title: 'docx-write',
     description: '创建或编辑 docx，包括段落、标题、表格、文本、样式调整与版本回退。',
-    whenToUse: '当你需要新建一份 Word 文件、明确知道要改哪里改成什么，或需要撤销当前草稿修改时使用。',
+    whenToUse:
+      '当你需要新建一份 Word 文件、明确知道要改哪里改成什么，或需要撤销当前草稿修改时使用。',
     toolNames: [
       'docx_create',
       'docx_paragraph_edit',
@@ -64,8 +62,8 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     source: 'external',
     countsTowardToolBudget: true,
     title: 'kb-document-discovery',
-    description: '在当前工作区知识库内缩小候选文档范围。',
-    whenToUse: '当只知道主题、结果过散、或需要提高精准文档定位时使用。',
+    description: '列出当前工作区知识库中的候选文档，并返回可用于缩圈的文档标识。',
+    whenToUse: '当需要查看工作区知识库里有哪些候选文档，或需要文档级缩圈时使用。',
     toolNames: ['kb_list_documents']
   },
   'kb-evidence-query': {
@@ -74,8 +72,9 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     source: 'external',
     countsTowardToolBudget: true,
     title: 'kb-evidence-query',
-    description: '在当前工作区知识库中直接搜索内容，提取 chunk 级证据。',
-    whenToUse: '当任务需要查资料怎么写、找证据、找规则、找引用或基于资料作答时使用。',
+    description:
+      '在当前用户工作区知识库中按查询词或语句检索相关内容片段，并返回命中证据及其来源文档。',
+    whenToUse: '当需要按关键词或语义语句查找用户工作区知识库中相关内容片段时使用。',
     toolNames: ['kb_search']
   }
 }

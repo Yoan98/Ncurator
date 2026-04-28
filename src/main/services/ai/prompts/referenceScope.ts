@@ -78,7 +78,11 @@ export const renderReferenceScopeText = (scope: AiReferenceScope): string => {
 
   const defaultScopeLines =
     scope.defaultKnowledgeScope === 'current_workspace'
-      ? ['默认可用资料范围：', '- 当前工作区下全部已导入资料（包括本地文件与网页资料）。']
+      ? [
+          '默认可用检索范围：',
+          '- 当前工作区知识库中的可检索内容。',
+          '- 这些内容来自该工作区下已建立索引的本地文件和网页资料。'
+        ]
       : ['默认可用资料范围：', '- 未绑定工作区，不能假设存在可用的本地知识库默认范围。']
 
   const preferredReferenceLines = scope.hasExplicitSelectedReferences
