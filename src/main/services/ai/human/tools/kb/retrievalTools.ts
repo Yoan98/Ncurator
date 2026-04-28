@@ -172,7 +172,7 @@ export const buildKbCapabilityTools = (input: {
       }),
     {
       name: KB_SEARCH_TOOL_SPEC.name,
-      description: KB_SEARCH_TOOL_SPEC.promptSpec.purpose,
+      description: KB_SEARCH_TOOL_SPEC.promptSpec.description,
       schema: KB_SEARCH_SCHEMA
     }
   )
@@ -244,7 +244,7 @@ export const buildKbCapabilityTools = (input: {
       }),
     {
       name: KB_LIST_DOCUMENTS_TOOL_SPEC.name,
-      description: KB_LIST_DOCUMENTS_TOOL_SPEC.promptSpec.purpose,
+      description: KB_LIST_DOCUMENTS_TOOL_SPEC.promptSpec.description,
       schema: KB_LIST_DOCUMENTS_SCHEMA
     }
   )

@@ -12,9 +12,9 @@ type KbListDocumentsResult = {
 }
 
 describe('ai tool kb backend', () => {
-  it('kb-document-discovery-contract', async () => {
+  it('kb-list-documents-contract', async () => {
     await runBackendCase({
-      caseId: 'kb-document-discovery-contract',
+      caseId: 'kb-list-documents-contract',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',

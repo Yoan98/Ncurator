@@ -553,7 +553,7 @@
 
 #### `kb`
 
-##### `kb-document-discovery-contract`
+##### `kb-list-documents-contract`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
@@ -726,7 +726,7 @@
 - 实现状态：`已实现`
 - What：验证真实 `learning` 会持续记录当前 active tool 数，并在预算未超限时保留当前已学习 skill 集。
 - Why：`learning` 的 active tool 预算是后续扩展 `excel / ppt` 等新能力时的重要长期边界，正式 case 需要先守住基础统计与状态可见性。
-- How：通过 scripted structured output 依次学习 `workspace-cli + docx-read`、`docx-write`、`kb-document-discovery + kb-evidence-query`，最后进入真实 `mouth` 收束；检查最后一轮真实 `human_learning` 事件中的 `learnedSkillIds`、`availableToolNames` 与 summary。
+- How：通过 scripted structured output 依次学习 `workspace-cli + docx-read`、`docx-write`、`kb-retrieval`，最后进入真实 `mouth` 收束；检查最后一轮真实 `human_learning` 事件中的 `learnedSkillIds`、`availableToolNames` 与 summary。
 - Oracle：任务最终完成；最后一轮 `human_learning` 事件中保留全部已学习 skill，`availableToolNames` 与当前已学习 skill 的工具集合一致，summary 包含 `当前 active tools=`，且不包含 skill 淘汰文案。
 - Not：不验证超过 `20` 个 active tools 后的淘汰算法细节。
 - Last Run：`2026-04-16 10:37:31 +08:00`

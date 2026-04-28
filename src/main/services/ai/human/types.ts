@@ -66,7 +66,7 @@ export type ToolPromptExample = {
 
 export type ToolPromptSpec = {
   name: string
-  purpose: string
+  description: string
   whenToUse: string
   preconditions?: string[]
   returns: ToolPromptReturnSpec[]

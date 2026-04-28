@@ -56,26 +56,18 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
       'docx_rollback'
     ]
   },
-  'kb-document-discovery': {
-    skillId: 'kb-document-discovery',
+  'kb-retrieval': {
+    skillId: 'kb-retrieval',
     familyId: 'kb',
     source: 'external',
     countsTowardToolBudget: true,
-    title: 'kb-document-discovery',
-    description: '查询当前工作区知识库中已建立了索引的文档列表。',
-    whenToUse: '当需要查看工作区知识库中，有哪些文档已经能够被工作区知识库检索技能进行检索时使用。',
-    toolNames: ['kb_list_documents']
-  },
-  'kb-evidence-query': {
-    skillId: 'kb-evidence-query',
-    familyId: 'kb',
-    source: 'external',
-    countsTowardToolBudget: true,
-    title: 'kb-evidence-query',
-    description: `工作区知识库检索技能；在当前用户工作区知识库中按查询词或语句检索相关内容片段，并返回命中证据及其来源文档；
-    背后是通过对文档进行分块建立的fts和向量索引来实现的，因此检索的基本单位是内容块，而不是整个文档。`,
-    whenToUse: '当需要按关键词或语义语句查找用户工作区知识库中相关内容片段时使用。',
-    toolNames: ['kb_search']
+    title: 'kb-retrieval',
+    description: `工作区知识库检索技能；背后是通过对文档进行分块建立的 fts 和向量索引来实现的，因此检索的基本单位是内容块，而不是整个文档；
+    1.可查询当前工作区知识库中已建立索引的文档列表
+    2.可按查询词或语句检索本地知识库中相关内容片段，并返回命中证据及其来源文档。`,
+    whenToUse:
+      '当需要查看工作区知识库中有哪些文档能够被检索，或需要按关键词、查询词或语义语句查找相关内容片段时使用。',
+    toolNames: ['kb_list_documents', 'kb_search']
   }
 }
 

@@ -40,7 +40,7 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildLearnSkillsDecision({
-                  skillIds: ['kb-document-discovery', 'kb-evidence-query'],
+                  skillIds: ['kb-retrieval'],
                   summary: '学习 kb 相关技能',
                   reason: '继续扩大当前活跃工具集合，并验证预算统计会保持准确。',
                   expectedOutcome: '继续扩大当前 active tools，并保持所有已学习 skill 可用。'
@@ -84,7 +84,7 @@ describe('ai human mock-llm backend', () => {
         runtime.assertThat(
           result.output.status === 'completed' &&
             latestLearningStep?.learnedSkillIds.join(',') ===
-              'workspace-cli,docx-read,docx-write,kb-document-discovery,kb-evidence-query' &&
+              'workspace-cli,docx-read,docx-write,kb-retrieval' &&
             latestLearningStep?.effectiveSkillIds.includes('history-recall') &&
             latestLearningStep.availableToolNames.includes('history_search') &&
             latestLearningStep.availableToolNames.includes('history_list') &&

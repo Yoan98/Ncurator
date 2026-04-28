@@ -50,7 +50,7 @@ describe('ai human mock-llm backend', () => {
             'human.brain': [
               {
                 output: buildLearnSkillsDecision({
-                  skillIds: ['kb-document-discovery', 'kb-evidence-query'],
+                  skillIds: ['kb-retrieval'],
                   summary: '先学习 KB skill',
                   reason: '任务要求直接基于知识库回答。',
                   expectedOutcome: '获得检索工具。'
@@ -110,10 +110,12 @@ describe('ai human mock-llm backend', () => {
         runtime.assertThat(
           result.output.status === 'completed' &&
             kbResult.some((row) => row.document_id === 'doc-1') &&
-            result.mouthPrompt.includes('审批被拒绝时必须保留现有文件不变'),
+            filterAiRunEventsByType(result.events, 'tool_call_result').some(
+              (event) => event.toolName === 'kb_search'
+            ),
           {
             name: 'human-kb-answer-uses-real-kb-runtime',
-            message: 'KB 回答 case 应通过真实 KB 检索拿到证据，并把证据带入真实 mouth prompt。',
+            message: 'KB 回答 case 应通过真实 KB 检索拿到证据，并完成后续真实 mouth 收口。',
             data: {
               kbResult,
               mouthPrompt: result.mouthPrompt

@@ -39,17 +39,17 @@ export const KB_LIST_DOCUMENTS_SCHEMA = z.object({
 export const KB_SEARCH_TOOL_SPEC: HumanToolSpec<
   z.infer<typeof KB_SEARCH_SCHEMA>,
   'kb_search',
-  'kb-evidence-query'
+  'kb-retrieval'
 > = {
   name: 'kb_search',
   familyId: 'kb',
-  skillIds: ['kb-evidence-query'],
+  skillIds: ['kb-retrieval'],
   requiresWorkspace: true,
   schema: KB_SEARCH_SCHEMA,
   promptSpec: {
     name: 'kb_search',
-    purpose: `工作区知识库检索技能；在当前用户工作区知识库中按查询词或语句检索相关内容片段，并返回命中证据及其来源文档；
-    背后是通过对文档进行分块建立的fts和向量索引来实现的，因此检索的基本单位是内容块，而不是整个文档。`,
+    description:
+      '在当前用户工作区知识库中按查询词或语句检索相关内容片段，并返回命中证据及其来源文档。',
     whenToUse: '当需要按关键词或语义语句查找用户工作区知识库中相关内容片段时使用。',
     preconditions: ['queryText 不能为空。', '默认搜索范围是当前工作区知识库。'],
     returns: [
@@ -72,16 +72,16 @@ export const KB_SEARCH_TOOL_SPEC: HumanToolSpec<
 export const KB_LIST_DOCUMENTS_TOOL_SPEC: HumanToolSpec<
   z.infer<typeof KB_LIST_DOCUMENTS_SCHEMA>,
   'kb_list_documents',
-  'kb-document-discovery'
+  'kb-retrieval'
 > = {
   name: 'kb_list_documents',
   familyId: 'kb',
-  skillIds: ['kb-document-discovery'],
+  skillIds: ['kb-retrieval'],
   requiresWorkspace: true,
   schema: KB_LIST_DOCUMENTS_SCHEMA,
   promptSpec: {
     name: 'kb_list_documents',
-    purpose: '查询当前工作区知识库中已建立了索引的文档列表。',
+    description: '查询当前工作区知识库中已建立了索引的文档列表。',
     whenToUse: '当需要查看工作区知识库中，有哪些文档已经能够被工作区知识库检索技能进行检索时使用。',
     preconditions: ['若已选资料和命中 chunk 已经足够，通常不需要再 list_documents。'],
     returns: [

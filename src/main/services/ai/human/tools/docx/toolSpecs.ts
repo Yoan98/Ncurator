@@ -76,7 +76,7 @@ export const DOCX_OUTLINE_TOOL_SPEC = {
   schema: docxOutlineRequestSchema,
   promptSpec: {
     name: 'docx_outline',
-    purpose: '总揽读取 docx 的稳定结构，拿到标题、段落、表格和单元格的 blockId。',
+    description: '总揽读取 docx 的稳定结构，拿到标题、段落、表格和单元格的 blockId。',
     whenToUse: '当你需要先理解文档结构、定位标题或表格、或为后续精读/编辑拿到 blockId 时使用。',
     preconditions: ['sourcePath 必须是 workspace 内的 .docx 路径。工具会自动打开目标文档。'],
     returns: [
@@ -115,7 +115,7 @@ export const DOCX_SEARCH_TOOL_SPEC = {
   schema: docxSearchRequestSchema,
   promptSpec: {
     name: 'docx_search',
-    purpose: '先定位相关 block，再决定是否继续精读。',
+    description: '先定位相关 block，再决定是否继续精读。',
     whenToUse:
       '当你需要查找术语、换词重试、切换 regex / semantic 检索模式，或拿到 blockId 供后续 docx_read_blocks 精读时使用。',
     preconditions: ['sourcePath 必须是 workspace 内的 .docx 路径。工具会自动打开目标文档。'],
@@ -159,7 +159,7 @@ export const DOCX_READ_TOOL_SPEC = {
   schema: docxReadRequestSchema,
   promptSpec: {
     name: 'docx_read_blocks',
-    purpose: '读取一个 block，或按 block 区间连续精读一段内容。',
+    description: '读取一个 block，或按 block 区间连续精读一段内容。',
     whenToUse:
       '当你已经通过 docx_search 或 docx_outline 拿到 blockId，准备精读一个 block 或一段连续区间时使用。',
     preconditions: [
@@ -197,7 +197,7 @@ export const DOCX_HISTORY_TOOL_SPEC = {
   schema: docxHistoryRequestSchema,
   promptSpec: {
     name: 'docx_history',
-    purpose: '查看当前任务过程中这份 docx 的修订链、修订摘要和变更块。',
+    description: '查看当前任务过程中这份 docx 的修订链、修订摘要和变更块。',
     whenToUse: '当你要确认编辑历史、比较最近几次修订差异、或决定回滚到哪个修订时使用。',
     preconditions: ['sourcePath 必须是 workspace 内的 .docx 路径。工具会自动打开目标文档。'],
     returns: [
@@ -230,7 +230,7 @@ export const DOCX_PARAGRAPH_EDIT_TOOL_SPEC = {
   schema: docxParagraphEditSchema,
   promptSpec: {
     name: 'docx_paragraph_edit',
-    purpose: '按段落对象插入、替换或删除段落文本。',
+    description: '按段落对象插入、替换或删除段落文本。',
     whenToUse:
       '当你已经明确段落锚点或目标 blockId，且只需要插段落、改段落文本或删段落时使用。若命中复杂定位排版区域，任何自动编辑都会失败，此时不要重复尝试 docx 写操作。',
     preconditions: ['插入动作需要 anchorBlockId 与 text；替换/删除需要 blockId。'],
@@ -275,7 +275,7 @@ export const DOCX_CREATE_TOOL_SPEC = {
   schema: docxCreateSchema,
   promptSpec: {
     name: 'docx_create',
-    purpose: '先创建一份新的 docx 草稿目标，再继续写入或编辑它。',
+    description: '先创建一份新的 docx 草稿目标，再继续写入或编辑它。',
     whenToUse:
       '当用户明确要你生成一份新的 Word 文件，或者当前 workspace 里还没有目标 docx 时使用。创建成功后可继续对同一路径执行 docx_outline、docx_read_blocks 和 docx_*_edit。',
     preconditions: [
@@ -322,7 +322,7 @@ export const DOCX_HEADING_EDIT_TOOL_SPEC = {
   schema: docxHeadingEditSchema,
   promptSpec: {
     name: 'docx_heading_edit',
-    purpose: '按标题对象插入或替换标题文本。',
+    description: '按标题对象插入或替换标题文本。',
     whenToUse:
       '当你要在某处插入标题，或把现有标题块替换成新标题文本时使用。若命中复杂定位排版区域，任何自动编辑都会失败，此时应改为说明限制并给用户手动操作建议。',
     preconditions: ['插入动作需要 anchorBlockId；替换动作需要 blockId；level 必须是 1-6。'],
@@ -364,7 +364,7 @@ export const DOCX_TABLE_EDIT_TOOL_SPEC = {
   schema: docxTableEditSchema,
   promptSpec: {
     name: 'docx_table_edit',
-    purpose: '按表格对象插入表格或更新单元格内容。',
+    description: '按表格对象插入表格或更新单元格内容。',
     whenToUse:
       '当你需要插入一个简单二维文本表格，或更新某个 table cell 的内容时使用。若命中复杂定位排版区域，任何自动编辑都会失败，此时不要重复尝试 docx 写操作。',
     preconditions: ['插表动作需要 anchorBlockId 与 rows；改单元格动作需要 cellBlockId 与 text。'],
@@ -408,7 +408,7 @@ export const DOCX_TEXT_EDIT_TOOL_SPEC = {
   schema: docxTextEditSchema,
   promptSpec: {
     name: 'docx_text_edit',
-    purpose: '在当前 docx 中按 query 查找并替换文本，可选 blockIds 缩小范围。',
+    description: '在当前 docx 中按 query 查找并替换文本，可选 blockIds 缩小范围。',
     whenToUse:
       '当你想在一批命中文本里直接替换术语或改写短句时使用。它适合 normal 正文流里的原地改字，不适合新增结构；若命中复杂定位排版区域，也会直接失败。',
     preconditions: ['query 不能为空。'],
@@ -443,7 +443,7 @@ export const DOCX_TEXT_STYLE_EDIT_TOOL_SPEC = {
   schema: docxTextStyleEditSchema,
   promptSpec: {
     name: 'docx_text_style_edit',
-    purpose: '给现有文本片段加颜色、粗体、斜体或下划线，不改文字本身。',
+    description: '给现有文本片段加颜色、粗体、斜体或下划线，不改文字本身。',
     whenToUse:
       '当你需要把某一段已有文本标红、加粗或下划线时使用。它适合 normal 正文流里的原地样式调整，不适合新增结构；若命中复杂定位排版区域，也会直接失败。',
     preconditions: ['必须提供 blockId 与 query；style 至少要有一个字段。'],
@@ -486,7 +486,7 @@ export const DOCX_ROLLBACK_TOOL_SPEC = {
   schema: docxRollbackRequestSchema,
   promptSpec: {
     name: 'docx_rollback',
-    purpose: '把当前任务过程中的 docx 草稿切回指定 revisionRef，不覆盖原文件。',
+    description: '把当前任务过程中的 docx 草稿切回指定 revisionRef，不覆盖原文件。',
     whenToUse: '当你已经通过 docx_history 确认要回退到哪个修订时使用。',
     preconditions: ['必须先有可追溯的修订历史。'],
     returns: [

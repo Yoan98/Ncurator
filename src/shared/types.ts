@@ -600,8 +600,7 @@ export type RuntimeSkillId =
   | 'workspace-cli'
   | 'docx-read'
   | 'docx-write'
-  | 'kb-document-discovery'
-  | 'kb-evidence-query'
+  | 'kb-retrieval'
 export type AiRunEventStage =
   | 'human_brain'
   | 'human_learning'

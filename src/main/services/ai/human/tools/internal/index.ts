@@ -108,7 +108,7 @@ export const internalToolFamily: ToolFamilyDefinition = {
         }),
       {
         name: HISTORY_SEARCH_TOOL_SPEC.name,
-        description: HISTORY_SEARCH_TOOL_SPEC.promptSpec.purpose,
+        description: HISTORY_SEARCH_TOOL_SPEC.promptSpec.description,
         schema: HISTORY_SEARCH_TOOL_SPEC.schema
       }
     )
@@ -176,7 +176,7 @@ export const internalToolFamily: ToolFamilyDefinition = {
         }),
       {
         name: HISTORY_LIST_TOOL_SPEC.name,
-        description: HISTORY_LIST_TOOL_SPEC.promptSpec.purpose,
+        description: HISTORY_LIST_TOOL_SPEC.promptSpec.description,
         schema: HISTORY_LIST_TOOL_SPEC.schema
       }
     )

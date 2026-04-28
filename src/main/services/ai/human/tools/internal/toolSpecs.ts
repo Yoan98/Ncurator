@@ -34,7 +34,7 @@ export const HISTORY_SEARCH_TOOL_SPEC: HumanToolSpec<
   }),
   promptSpec: {
     name: 'history_search',
-    purpose: '按关键词搜索你自己的过程历史。',
+    description: '按关键词搜索你自己的过程历史。',
     whenToUse: '当你记得某个关键词、工具名或事实片段，想在更早轮次里重新找到它时使用。',
     preconditions: ['它只读取你自己的历史，不会访问工作区、知识库或外部文件。'],
     returns: [
@@ -66,7 +66,7 @@ export const HISTORY_LIST_TOOL_SPEC: HumanToolSpec<
   schema: historySearchFilterSchema.omit({ query: true }),
   promptSpec: {
     name: 'history_list',
-    purpose: '按 roundId 区间连续查看过程历史；不传参数时默认返回最近几轮。',
+    description: '按 roundId 区间连续查看过程历史；不传参数时默认返回最近几轮。',
     whenToUse: '当你想像往上翻历史一样连续看一段轮次，而不是按关键词搜索时使用。',
     preconditions: ['它只读取你自己的历史，不会访问工作区、知识库或外部文件。'],
     returns: [

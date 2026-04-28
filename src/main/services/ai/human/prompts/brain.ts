@@ -47,7 +47,7 @@ const renderSkillCatalogToolSpecLine = (input: {
   return `
 - 工具 ${input.spec.name}
   - 所属技能：${ownerSkills}
-  - 用途：${input.spec.promptSpec.purpose}
+  - 用途：${input.spec.promptSpec.description}
   - 前置条件：${preconditions}
   - 核心返回：${returns}
   - 结构：

@@ -37,7 +37,7 @@ describe('ai human mock-llm backend', () => {
             'human.brain': [
               {
                 output: buildLearnSkillsDecision({
-                  skillIds: ['workspace-cli', 'kb-document-discovery'],
+                  skillIds: ['workspace-cli', 'kb-retrieval'],
                   summary: '先学习 terminal 与 KB skill',
                   reason: '需要并行拿到工作区与资料列表信息。',
                   expectedOutcome: '获得两个工具家族。'

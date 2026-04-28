@@ -384,7 +384,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
       }),
     {
       name: WORKSPACE_RUN_COMMAND_TOOL_SPEC.name,
-      description: WORKSPACE_RUN_COMMAND_TOOL_SPEC.promptSpec.purpose,
+      description: WORKSPACE_RUN_COMMAND_TOOL_SPEC.promptSpec.description,
       schema: WORKSPACE_RUN_COMMAND_SCHEMA
     }
   )
