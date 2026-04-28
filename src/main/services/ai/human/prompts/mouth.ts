@@ -27,7 +27,7 @@ export const buildMouthPrompt = (input: { state: HumanState; ctx?: AiRunContext 
     - learning 负责补齐能力，本身不形成最终交付。
     - hand 负责执行真实工具、读取资料、修改文件或生成产物。
     - mouth 的职责不是继续做事，而是基于已有结果，向用户组织最终交付。
-    - 而你就是mouth这一个环节，专注于交付。
+    - 而你就是mouth这一个环节。
 
     - task_goal：用户当前要你完成或回答的事情。
     - reference_scope：当前工作区、资料范围和参考边界。
