@@ -62,8 +62,8 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     source: 'external',
     countsTowardToolBudget: true,
     title: 'kb-document-discovery',
-    description: '列出当前工作区知识库中的候选文档，并返回可用于缩圈的文档标识。',
-    whenToUse: '当需要查看工作区知识库里有哪些候选文档，或需要文档级缩圈时使用。',
+    description: '查询当前工作区知识库中已建立了索引的文档列表。',
+    whenToUse: '当需要查看工作区知识库中，有哪些文档已经能够被工作区知识库检索技能进行检索时使用。',
     toolNames: ['kb_list_documents']
   },
   'kb-evidence-query': {
@@ -72,8 +72,8 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     source: 'external',
     countsTowardToolBudget: true,
     title: 'kb-evidence-query',
-    description:
-      '在当前用户工作区知识库中按查询词或语句检索相关内容片段，并返回命中证据及其来源文档。',
+    description: `工作区知识库检索技能；在当前用户工作区知识库中按查询词或语句检索相关内容片段，并返回命中证据及其来源文档；
+    背后是通过对文档进行分块建立的fts和向量索引来实现的，因此检索的基本单位是内容块，而不是整个文档。`,
     whenToUse: '当需要按关键词或语义语句查找用户工作区知识库中相关内容片段时使用。',
     toolNames: ['kb_search']
   }

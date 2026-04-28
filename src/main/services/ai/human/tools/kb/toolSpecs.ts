@@ -48,8 +48,9 @@ export const KB_SEARCH_TOOL_SPEC: HumanToolSpec<
   schema: KB_SEARCH_SCHEMA,
   promptSpec: {
     name: 'kb_search',
-    purpose: '在当前工作区知识库中检索相关内容片段，并返回命中结果。',
-    whenToUse: '当需要在工作区知识库中按查询词或语句查找相关片段时使用。',
+    purpose: `工作区知识库检索技能；在当前用户工作区知识库中按查询词或语句检索相关内容片段，并返回命中证据及其来源文档；
+    背后是通过对文档进行分块建立的fts和向量索引来实现的，因此检索的基本单位是内容块，而不是整个文档。`,
+    whenToUse: '当需要按关键词或语义语句查找用户工作区知识库中相关内容片段时使用。',
     preconditions: ['queryText 不能为空。', '默认搜索范围是当前工作区知识库。'],
     returns: [
       {
@@ -80,8 +81,8 @@ export const KB_LIST_DOCUMENTS_TOOL_SPEC: HumanToolSpec<
   schema: KB_LIST_DOCUMENTS_SCHEMA,
   promptSpec: {
     name: 'kb_list_documents',
-    purpose: '列出当前工作区知识库中的候选文档，并返回文档标识。',
-    whenToUse: '当需要查看知识库里有哪些候选文档，或需要文档级缩圈时使用。',
+    purpose: '查询当前工作区知识库中已建立了索引的文档列表。',
+    whenToUse: '当需要查看工作区知识库中，有哪些文档已经能够被工作区知识库检索技能进行检索时使用。',
     preconditions: ['若已选资料和命中 chunk 已经足够，通常不需要再 list_documents。'],
     returns: [
       {
