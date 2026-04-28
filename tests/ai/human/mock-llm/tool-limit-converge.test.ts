@@ -20,66 +20,60 @@ describe('ai human mock-llm backend', () => {
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
-        const runner = createHumanTestRunner(
-          runtime,
-          {
-            structuredOutputScript: {
-              'human.brain': [
-                {
-                  output: buildLearnSkillsDecision({
-                    skillIds: ['workspace-cli'],
-                    summary: '学习 terminal skill',
-                    reason: '需要连续执行两次只读命令。',
-                    expectedOutcome: '获取 terminal 工具。'
-                  })
-                },
-                {
-                  output: buildToolDecision({
-                    toolName: 'workspace_run_command',
-                    args: {
-                      command: 'pwd'
-                    },
-                    summary: '执行第一轮只读命令',
-                    reason: '准备触发第二轮工具调用。',
-                    expectedOutcome: '拿到工作区路径。'
-                  })
-                },
-                {
-                  output: buildToolDecision({
-                    toolName: 'workspace_run_command',
-                    args: {
-                      command: 'ls'
-                    },
-                    summary: '执行第二轮只读命令',
-                    reason: '超过临时上限后应触发收敛提醒。',
-                    expectedOutcome: '验证 hand watch_hint。'
-                  })
-                },
-                {
-                  output: buildCompleteTaskDecision({
-                    summary: '已观察到收敛提醒。',
-                    reason: '两次真实工具调用已经满足测试目标。',
-                    expectedOutcome: '结束任务。'
-                  })
+        const runner = createHumanTestRunner(runtime, {
+          structuredOutputScript: {
+            'human.brain': [
+              {
+                output: buildLearnSkillsDecision({
+                  skillIds: ['workspace-cli'],
+                  summary: '学习 terminal skill',
+                  reason: '需要连续执行两次只读命令。',
+                  expectedOutcome: '获取 terminal 工具。'
+                })
+              },
+              {
+                output: buildToolDecision({
+                  toolName: 'workspace_run_command',
+                  args: {
+                    command: 'pwd'
+                  },
+                  summary: '执行第一轮只读命令',
+                  reason: '准备触发第二轮工具调用。',
+                  expectedOutcome: '拿到工作区路径。'
+                })
+              },
+              {
+                output: buildToolDecision({
+                  toolName: 'workspace_run_command',
+                  args: {
+                    command: 'ls'
+                  },
+                  summary: '执行第二轮只读命令',
+                  reason: '超过临时上限后应触发收敛提醒。',
+                  expectedOutcome: '验证 hand watch_hint。'
+                })
+              },
+              {
+                output: buildCompleteTaskDecision({
+                  summary: '已观察到收敛提醒。',
+                  reason: '两次真实工具调用已经满足测试目标。',
+                  expectedOutcome: '结束任务。'
+                })
+              }
+            ],
+            'human.mouth': [
+              {
+                output: {
+                  summary: '已观察到收敛提醒。',
+                  deliveryMarkdown: '# Tool Limit\n\n已验证真实 hand 节点的收敛提醒。'
                 }
-              ],
-              'human.mouth': [
-                {
-                  output: {
-                    summary: '已观察到收敛提醒。',
-                    deliveryMarkdown: '# Tool Limit\n\n已验证真实 hand 节点的收敛提醒。'
-                  }
-                }
-              ]
-            },
-            humanRuntimeOverrides: {
-              hardActionLimit: 1
-            }
+              }
+            ]
           },
-          {
+          humanRuntimeOverrides: {
             hardActionLimit: 1
           }
-        )
+        })
 
         const output = await runner.run({
           taskId: runtime.taskId,

@@ -7,7 +7,10 @@ import {
   filterRoundHistory,
   getEarlierAttemptRounds
 } from '../../../src/main/services/ai/human/memory/roundHistory'
-import { applyBrainDecisionState } from '../../../src/main/services/ai/human/node/utils/stateTransitionState'
+import {
+  applyBrainDecisionState,
+  resolveBrainDecisionWatchHint
+} from '../../../src/main/services/ai/human/node/utils/stateTransitionState'
 import { createInitialHumanState } from '../../../src/main/services/ai/human/state/schema'
 import type { HumanDecision } from '../../../src/main/services/ai/human/types'
 
@@ -73,6 +76,62 @@ describe('ai unit human memory history', () => {
         }
       }
     })
+  })
+
+  it('allows mouth when the remaining checklist items are blocked by tool limit exhaustion', () => {
+    const initialState = createInitialHumanState({
+      taskId: 'task-tool-limit',
+      userInput: '请在预算内尽量完成，否则直接说明未完成部分'
+    })
+    const decision = buildDecision({
+      summary: '工具预算已耗尽，准备直接收尾',
+      reason: '继续执行会违反当前工具次数上限。',
+      expectedOutcome: '允许基于现有结果结束任务。',
+      nextAction: {
+        action: 'mouth'
+      }
+    })
+
+    const stateWithToolLimit = {
+      ...initialState,
+      execution: {
+        ...initialState.execution,
+        watchHint: {
+          code: 'hand_tool_limit_exceeded' as const,
+          detail: {
+            toolCallCount: 41,
+            limit: 40
+          }
+        }
+      }
+    }
+    const stableMemory = {
+      ...initialState.memory.stable,
+      checklist: [
+        {
+          item: '补齐剩余文档修改',
+          status: 'todo' as const
+        }
+      ]
+    }
+    const watchHint = resolveBrainDecisionWatchHint({
+      state: stateWithToolLimit,
+      decision,
+      stableMemory
+    })
+
+    const nextState = applyBrainDecisionState({
+      state: stateWithToolLimit,
+      decision,
+      stableMemory,
+      watchHint,
+      createdAt: 2
+    })
+
+    expect(watchHint).toBeUndefined()
+    expect(nextState.execution.stage).toBe('mouth')
+    expect(nextState.execution.watchHint).toBeUndefined()
+    expect(nextState.memory.history.roundHistory).toHaveLength(0)
   })
 
   it('keeps the last round out of earlier_attempts and trims the window to twenty rounds', () => {

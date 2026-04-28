@@ -98,6 +98,7 @@ export const returnToBrainAfterTraceState = (input: {
 }
 
 export const resolveBrainDecisionWatchHint = (input: {
+  state: HumanState
   decision: HumanDecision
   stableMemory: HumanStableMemory
   watchHint?: HumanWatchHint
@@ -108,6 +109,10 @@ export const resolveBrainDecisionWatchHint = (input: {
   const pendingItems = input.stableMemory.checklist
     .filter((item) => item.status === 'todo')
     .map((item) => item.item)
+
+  if (input.state.execution.watchHint?.code === 'hand_tool_limit_exceeded') {
+    return undefined
+  }
 
   return pendingItems.length > 0
     ? {

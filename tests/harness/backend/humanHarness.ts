@@ -9,15 +9,10 @@ import type { BackendTestRuntime, CreateAiRunContextInput } from './test-types'
 
 export const createHumanTestRunner = (
   runtime: BackendTestRuntime,
-  contextInput: CreateAiRunContextInput = {},
-  options: { hardActionLimit?: number } = {}
+  contextInput: CreateAiRunContextInput = {}
 ) => {
   const ctx = runtime.createAiRunContext({
-    ...contextInput,
-    humanRuntimeOverrides: {
-      ...contextInput.humanRuntimeOverrides,
-      hardActionLimit: options.hardActionLimit ?? contextInput.humanRuntimeOverrides?.hardActionLimit
-    }
+    ...contextInput
   })
   const run = createHumanGraphRunner({ ctx })
 

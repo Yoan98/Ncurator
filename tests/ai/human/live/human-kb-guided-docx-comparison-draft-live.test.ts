@@ -48,7 +48,7 @@ describe('ai human live backend', () => {
           const workspaceSeed = await buildKbGuidedDocxWorkspaceSeed(runtime)
           await seedKbGuidedDocxKb(runtime, workspaceSeed)
 
-          const runner = createHumanTestRunner(runtime, {}, { hardActionLimit: 8 })
+          const runner = createHumanTestRunner(runtime)
           const output = await runner.run({
             taskId: runtime.taskId,
             userInput: HUMAN_KB_GUIDED_DOCX_COMPARISON_DRAFT_USER_INPUT
