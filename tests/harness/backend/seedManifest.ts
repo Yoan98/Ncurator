@@ -118,7 +118,8 @@ export const collectBackendSeedArtifacts = async (input: {
       artifacts.push({
         id: toArtifactId(file.relativePath),
         kind: 'other',
-        path: artifactPath
+        path: artifactPath,
+        fileName: path.posix.basename(sanitizeRelativePath(file.relativePath))
       })
     } catch {
       artifactPath = undefined

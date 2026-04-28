@@ -218,6 +218,7 @@ export const runE2ECase = async <TResult>(definition: E2ETestCaseDefinition<TRes
       id: nextArtifactId(),
       kind: input.kind,
       path: path.posix.join('artifacts', input.relativePath.split(path.sep).join('/')),
+      fileName: path.posix.basename(input.relativePath.split(path.sep).join('/')),
       refs: input.refs
     }
     artifacts.push(artifact)

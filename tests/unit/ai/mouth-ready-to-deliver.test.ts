@@ -116,9 +116,27 @@ describe('ai unit mouth checklist guard', () => {
     expect(prompt).toContain('delivery_guidance')
     expect(prompt).toContain('面向用户交付最终结果，而不是复述系统内部过程')
     expect(prompt).toContain('优先回答用户真正关心的内容')
+    expect(prompt).toContain('history 和 runtime_artifacts 是事实依据，不是默认输出模板')
+    expect(prompt).toContain('优先组织结果摘要')
+    expect(prompt).toContain('默认说明产出了什么、改了什么、当前状态和限制')
     expect(prompt).toContain('只输出最终 markdown 正文')
     expect(prompt).toContain('你不得自行判断是否使用了非本地资料')
+    expect(prompt).toContain('默认只总结结果，不要把产物正文或大段原始输出直接作为最终答复主体')
+    expect(prompt).toContain('不要复述 history 中的大段生成文本、写入文本或原始输出')
     expect(prompt).toContain('必须严格按照context_information的信息处理回答，不得编造不存在其中的信息')
+  })
+
+  it('keeps limited quotation available when the user explicitly asks to preview content', () => {
+    const prompt = buildMouthPrompt({
+      state: createInitialHumanState({
+        taskId: 'task-preview',
+        userInput: '请预览一下刚生成的内容，摘录几段给我看'
+      })
+    })
+
+    expect(prompt.user).toContain('请预览一下刚生成的内容')
+    expect(prompt.system).toContain('用户明确要求预览、检查内容时，才引用少量必要摘录')
+    expect(prompt.system).toContain('只有在确有必要时才引用少量摘录')
   })
 
   it('keeps mouth user-context blocks data-only', () => {
@@ -467,7 +485,7 @@ describe('ai unit mouth checklist guard', () => {
 
     expect(prompt.user).toContain('<delivery_guidance>')
     expect(prompt.user).toContain('这次没有自动修改原文档')
-    expect(prompt.user).toContain('[brain]')
+    expect(prompt.user).toContain('如果保留了通用知识补充，请明确说明该部分不来自当前本地资料。')
   })
 
   it('stores brain delivery guidance as structured execution items', () => {

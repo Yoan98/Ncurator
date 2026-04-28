@@ -1,6 +1,6 @@
 import type { JsonValue } from '../../../src/shared/types'
 
-export const TEST_LOG_SCHEMA_VERSION = 4 as const
+export const TEST_LOG_SCHEMA_VERSION = 5 as const
 
 export type TestDomain = 'ai' | 'workbench' | 'settings' | 'kb-search' | 'temp'
 export type TestType = 'backend' | 'e2e'
@@ -60,6 +60,9 @@ export type TestArtifact = {
   id: string
   kind: TestArtifactKind
   path: string
+  fileName?: string
+  capability?: string
+  artifactRole?: string
   refs?: TestArtifactRefs
 }
 

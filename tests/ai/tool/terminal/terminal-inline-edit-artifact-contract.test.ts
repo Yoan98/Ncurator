@@ -117,6 +117,16 @@ describe('ai tool terminal backend', () => {
 
     expect(captured.meta.stats.artifacts).toBe(2)
     expect(captured.artifacts.items).toHaveLength(2)
+    expect(captured.artifacts.items.map((item) => item.fileName)).toEqual(
+      expect.arrayContaining(['notes.txt', 'output.txt'])
+    )
+    expect(
+      captured.artifacts.items.every(
+        (item) =>
+          item.path.startsWith('artifacts/file-artifacts/') &&
+          (!item.fileName || !item.path.includes(item.fileName))
+      )
+    ).toBe(true)
     expect(copiedArtifacts).toContain('after\n')
     expect(copiedArtifacts).toContain('')
   })

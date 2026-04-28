@@ -47,7 +47,7 @@ describe('streaming run log writer', () => {
         runId
       })
       const runningMeta: TestRunMeta = {
-        schemaVersion: 4,
+        schemaVersion: 5,
         runId,
         caseId,
         scope,
@@ -158,7 +158,7 @@ describe('streaming run log writer', () => {
       })
       writer.init({
         meta: {
-          schemaVersion: 4,
+          schemaVersion: 5,
           runId,
           caseId,
           scope,
