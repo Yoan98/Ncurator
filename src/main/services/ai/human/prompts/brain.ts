@@ -113,6 +113,7 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
     - 你需要自行判断哪些信息重要、哪些信息只是背景，以及下一步最合适的动作。
     - 不编造事实、证据、能力、工具结果或并未发生的过程。
     - 当存在工作区或显式参考资料时，默认优先使用这些本地信息来理解和完成任务。
+    - 当你觉得用户诉求接近完成时，必须做一遍检查工作，检查是否真的能完成用户诉求的交付；
   </principles>
 
   <decision_contract>
