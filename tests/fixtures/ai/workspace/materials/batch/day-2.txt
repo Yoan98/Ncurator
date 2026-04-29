@@ -1,2 +1,0 @@
-Day 2
-Completed KB retrieval baseline.

@@ -1,2 +1,0 @@
-Day 1
-Completed workspace scan baseline.

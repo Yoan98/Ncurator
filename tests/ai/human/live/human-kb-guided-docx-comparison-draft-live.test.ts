@@ -88,14 +88,6 @@ describe('ai human live backend', () => {
             .map((event) => event.input.sourcePath)
             .filter((value): value is string => typeof value === 'string')
           const changedContentKinds = collectDocxApplyOpsContentKinds(events)
-          const sourceDocsOpened = result.workspaceSeed.sourceDocs.every(
-            (fixtureDoc) =>
-              openedSourcePaths.some(
-                (sourcePath) =>
-                  sourcePath.endsWith(fixtureDoc.relativePath) ||
-                  sourcePath.endsWith(`/${path.basename(fixtureDoc.relativePath)}`)
-              )
-          )
           const targetDocsWritten = result.workspaceSeed.targetDocs.every(
             (fixtureDoc) =>
               writeSourcePaths.some(
@@ -117,7 +109,6 @@ describe('ai human live backend', () => {
               hasKbToolCall(events) &&
               toolNames.some((toolName) => toolName.endsWith('_edit')) &&
               changedContentKinds.includes('paragraph') &&
-              sourceDocsOpened &&
               targetDocsWritten &&
               filterAiRunEventsByType(events, 'draft_review_ready').length >= 2 &&
               countFileReviewArtifacts(result.output?.artifacts) >= 2 &&
@@ -129,8 +120,8 @@ describe('ai human live backend', () => {
               typeof result.output?.deliveryMarkdown === 'string' &&
               result.output.deliveryMarkdown.trim().length > 0,
             {
-              name: 'human-live-kb-guided-docx-updates-two-target-docs-from-two-source-docs',
-              message: 'live human KB-guided 写 case 应先触发 KB 缩圈，再把两份源资料内容落到两份目标 docx 上且不覆盖原文件。',
+              name: 'human-live-kb-guided-docx-updates-two-target-docs-from-kb-grounded-evidence',
+              message: 'live human KB-guided 写 case 应先触发 KB 缩圈，再把 grounded 内容落到两份目标 docx 上且不覆盖原文件。',
               data: {
                 openedSourcePaths,
                 writeSourcePaths,

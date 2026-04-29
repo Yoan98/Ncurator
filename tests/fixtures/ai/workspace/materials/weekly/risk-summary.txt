@@ -1,3 +1,0 @@
-Weekly risk summary
-1. Approval branch requires explicit denial coverage.
-2. Terminal artifact recognition needs end-to-end assertion.

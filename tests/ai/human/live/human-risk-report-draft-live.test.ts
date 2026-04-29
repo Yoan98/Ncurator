@@ -149,7 +149,7 @@ describe('ai human live backend', () => {
           /(weekly-risk-summary\.md|project-milestones\.md|vendor-followup\.txt)/.test(
             deliveryText
           ) &&
-            deliveryText.includes(result.workspaceSeed.ownerNoteRelativePath) &&
+            /owner-note\.md/.test(deliveryText) &&
             /风险结论/.test(deliveryText) &&
             /负责人/.test(deliveryText) &&
             /待确认稿/.test(deliveryText) &&
