@@ -870,11 +870,11 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 live 模式下 `human` 会在一个真实长任务里串起模板定位、资料取证、docx 编辑与待确认稿交付。
-- Why：`human/live` 需要至少一条长期高价值复杂样例，覆盖 workspace、KB、docx 与最终交付链路。
-- How：注入真实 live LLM 配置；workspace 中动态写入带 `RISK_TODO / OWNER_TODO` 占位符的周报模板和干扰文件；seed 两份真实 KB 文档分别提供风险结论与负责人说明；直接输入“找到上周 Word 周报模板，按已选资料补全风险结论与负责人，整理成待确认稿”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；事件流中至少出现一次 `workspace_run_command`、一次 KB 检索工具调用、一次 docx 读取、一次 docx 编辑；存在 `draft_review_ready` 事件，最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；最终答复能从用户视角说明改动的是“风险结论”和“负责人说明”两处、依据分别来自 `Weekly Risk Summary.md` 与 `Owner Note.md`，并明确当前给出的是待确认稿。
-- Not：不绑定最终答案措辞，不要求固定检索工具顺序，也不要求固定使用某一种 docx 写工具。
+- What：验证 live 模式下 `human` 会在一个真实长任务里串起模板定位、工作区资料取证、docx 编辑与待确认稿交付。
+- Why：`human/live` 需要至少一条长期高价值复杂样例，覆盖 workspace 搜索、真实材料辨别、docx 写入与最终交付链路；同时守住“工作区优先”这一更接近生产用户习惯的主路径。
+- How：注入真实 live LLM 配置；workspace 中动态写入一份带 `RISK_TODO / OWNER_TODO` 占位符且正文更完整的周报模板、两份提供真实风险结论与负责人说明的文本材料，以及多份看起来像周报相关但并非最终依据的干扰文件；直接输入“找到上周 Word 周报模板，再根据工作区里的现有材料补全风险结论与负责人，整理成待确认稿”的自然语言诉求，让真实 `human` 自主完成。
+- Oracle：任务最终完成；事件流中至少出现一次 `workspace_run_command`、一次 docx 读取、一次 docx 编辑；存在 `draft_review_ready` 事件，最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；模板中的“风险结论”和“负责人说明”两处占位符被替换为实际内容，且原模板文件未被覆盖；最终答复能从用户视角说明改动的是这两处，其中负责人说明依据来自 `owner-note.md`，风险结论依据来自工作区中的风险材料（例如 `weekly-risk-summary.md`、`project-milestones.md`、`vendor-followup.txt`），并明确当前给出的是待确认稿。
+- Not：不绑定最终答案措辞，不要求固定是否使用 `docx_outline` 还是 `docx_read_blocks`，也不强制一定调用 KB；若模型仅凭工作区材料完成任务，也视为符合预期。
 - Last Run：`2026-04-16 18:37:18 +08:00`
 - Last Result：`通过`
 

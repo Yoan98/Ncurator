@@ -4,7 +4,7 @@ import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
   HUMAN_RISK_REPORT_DRAFT_USER_INPUT,
-  seedRiskReportKb,
+  hasUnchangedFileBytes,
   seedRiskReportWorkspace
 } from '../../../harness/backend/aiLiveTestData'
 import {
@@ -12,8 +12,7 @@ import {
   filterAiRunEventsByType,
   hasDocxWriteToolCall,
   hasDraftFileArtifact,
-  hasFileReviewArtifact,
-  hasKbToolCall
+  hasFileReviewArtifact
 } from '../testUtils'
 
 const hasExpectedRiskReportChanges = (
@@ -24,16 +23,27 @@ const hasExpectedRiskReportChanges = (
   }>
 ) =>
   changedBlocks.some(
-    (block) =>
-      block.blockId === 'b:1' &&
-      /风险结论/.test(block.beforeText || '') &&
-      /待跟进/.test(block.afterText || '')
+    (block) => {
+      const afterText = block.afterText || ''
+      return (
+        /本周风险结论：RISK_TODO/.test(block.beforeText || '') &&
+        afterText.startsWith('本周风险结论：') &&
+        !afterText.includes('RISK_TODO') &&
+        !afterText.includes('已解除') &&
+        /合规|待跟进/.test(afterText)
+      )
+    }
   ) &&
   changedBlocks.some(
-    (block) =>
-      block.blockId === 'b:2' &&
-      /负责人说明/.test(block.beforeText || '') &&
-      /Alice/.test(block.afterText || '')
+    (block) => {
+      const afterText = block.afterText || ''
+      return (
+        /负责人说明：OWNER_TODO/.test(block.beforeText || '') &&
+        afterText.startsWith('负责人说明：') &&
+        !afterText.includes('OWNER_TODO') &&
+        afterText.includes('Alice')
+      )
+    }
   )
 
 describe('ai human live backend', () => {
@@ -60,7 +70,6 @@ describe('ai human live backend', () => {
         }
 
         await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv('primary'))
-        await seedRiskReportKb(runtime)
         const workspaceSeed = await seedRiskReportWorkspace(runtime)
 
         const runner = createHumanTestRunner(runtime)
@@ -88,22 +97,20 @@ describe('ai human live backend', () => {
         const toolResults = filterAiRunEventsByType(result.events, 'tool_call_result')
         const toolNames = toolResults.map((event) => event.toolName)
         const changedBlocks = collectDocxWriteChangedBlocks(result.events)
-        const kbEvidenceText = JSON.stringify(
-          toolResults
-            .filter((event) => event.toolName.startsWith('kb_'))
-            .map((event) => event.outputPreview)
-        )
         const deliveryText = `${result.output?.summary || ''}\n${result.output?.deliveryMarkdown || ''}`.trim()
+        const sourceTemplateUnchanged = await hasUnchangedFileBytes(
+          result.workspaceSeed.templatePath,
+          result.workspaceSeed.originalTemplateBytes
+        )
 
         runtime.assertThat(
           result.output?.status === 'completed' &&
             toolNames.includes('workspace_run_command') &&
-            hasKbToolCall(result.events) &&
             toolNames.some((toolName) => toolName === 'docx_read_blocks' || toolName === 'docx_outline') &&
             hasDocxWriteToolCall(result.events),
           {
             name: 'human-live-risk-report-runs-required-tool-chain',
-            message: 'live human complex case 应通过 terminal、KB 与 docx 真实工具链完成周报待确认稿任务。',
+            message: 'live human complex case 应通过 workspace 与 docx 真实工具链完成周报待确认稿任务。',
             data: {
               toolNames,
               summary: result.output?.summary,
@@ -123,19 +130,28 @@ describe('ai human live backend', () => {
           }
         })
 
-        runtime.assertThat(hasExpectedRiskReportChanges(changedBlocks), {
+        runtime.assertThat(
+          hasExpectedRiskReportChanges(changedBlocks) && sourceTemplateUnchanged,
+          {
           name: 'human-live-risk-report-updates-risk-and-owner-placeholders',
-          message: 'live human complex case 应把模板中的风险结论和负责人说明两处占位符替换为实际内容。',
+          message:
+            'live human complex case 应把模板中的风险结论和负责人说明两处占位符替换为实际内容，且不覆盖原模板文件。',
           data: {
             changedBlocks,
-            toolNames
+            toolNames,
+            templatePath: result.workspaceSeed.templatePath
           }
-        })
+          }
+        )
 
         runtime.assertThat(
-          kbEvidenceText.includes('Weekly Risk Summary.md') &&
-            kbEvidenceText.includes('Owner Note.md') &&
-            deliveryText.length > 0 &&
+          /(weekly-risk-summary\.md|project-milestones\.md|vendor-followup\.txt)/.test(
+            deliveryText
+          ) &&
+            deliveryText.includes(result.workspaceSeed.ownerNoteRelativePath) &&
+            /风险结论/.test(deliveryText) &&
+            /负责人/.test(deliveryText) &&
+            /待确认稿/.test(deliveryText) &&
             filterAiRunEventsByType(result.events, 'draft_review_ready').length >= 1 &&
             hasFileReviewArtifact(result.output?.artifacts) &&
             hasDraftFileArtifact(result.output?.artifacts),
@@ -143,7 +159,6 @@ describe('ai human live backend', () => {
             name: 'human-live-risk-report-delivery-is-backed-by-evidence-and-review-artifacts',
             message: 'live human complex case 应给出最终交付，并产出 draft review 与待确认稿 artifact。',
             data: {
-              kbEvidenceText,
               toolNames,
               changedBlocks,
               summary: result.output?.summary,

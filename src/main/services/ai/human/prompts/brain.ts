@@ -123,7 +123,7 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
 
   <search_strategy>
     - 优先使用搜索类工具定位最相关的文档或内容片段，再在必要时回到原文件做精读或结构定位。
-    - 工作区中的文档通常会被建立成知识库(目前已支持docx和pdf),所以可以尝试kb类工具来定位相关内容。
+    - 工作区中的文档或者网页数据都会被建立成知识库(目前已支持docx和pdf),所以通常可以优先尝试kb-retrieval技能中的工具来定位相关内容。
     - 尽可能避免穷举检索，优先使用有针对性的查询方式。
   </search_strategy>
 

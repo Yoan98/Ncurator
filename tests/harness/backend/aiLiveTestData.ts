@@ -5,7 +5,7 @@ import { writeTestDocxFile } from './aiToolHarness'
 import type { BackendTestRuntime, SeedKbDocumentInput } from './test-types'
 
 export const HUMAN_RISK_REPORT_DRAFT_USER_INPUT =
-  '我下午要把本周风险周报发出去。工作区里应该有一份上周用过的 Word 周报模板，但我忘了文件名。你先帮我找到那份模板，再按我刚才选的资料，把本周风险结论和负责人补进去，整理成待确认稿。最后告诉我你改了哪几处，依据分别来自哪里。'
+  '我下午要把本周风险周报发出去。工作区里应该有一份上周用过的 Word 周报模板，但我忘了文件名。你先帮我找到那份模板，再根据工作区里的现有材料，把本周风险结论和负责人补进去，整理成待确认稿。最后告诉我你改了哪几处，依据分别来自哪里。'
 
 export const DOCX_READING_FIXTURE_PATHS = [
   'tests/fixtures/ai/docx/深度学习.docx',
@@ -47,32 +47,13 @@ export const HUMAN_KB_GUIDED_DOCX_COMPARISON_DRAFT_USER_INPUT =
 export const HUMAN_KB_GUIDED_DOCX_READING_USER_INPUT =
   '我工作区里应该有两份课件分别讲过过拟合和反走样，但我忘了文件名。你先帮我找出来，再告诉我这两个问题一般怎么处理。'
 
-export const RISK_REPORT_DOCUMENTS: readonly SeedKbDocumentInput[] = [
-  {
-    id: 'doc-risk-summary',
-    name: 'Weekly Risk Summary.md',
-    chunks: [
-      {
-        id: 'chunk-risk-summary-1',
-        text: '本周风险结论：在合规签署前，风险状态保持为“待跟进”。'
-      }
-    ]
-  },
-  {
-    id: 'doc-risk-owner',
-    name: 'Owner Note.md',
-    chunks: [
-      {
-        id: 'chunk-risk-owner-1',
-        text: '负责人说明：最终复核窗口由合规负责人 Alice 牵头。'
-      }
-    ]
-  }
-]
-
 export type RiskReportWorkspaceSeed = {
   templatePath: string
   templateRelativePath: string
+  riskSummaryRelativePath: string
+  ownerNoteRelativePath: string
+  expectedRiskConclusion: string
+  expectedOwnerSummary: string
   originalTemplateBytes: Uint8Array
 }
 
@@ -91,11 +72,6 @@ export type KbGuidedDocxWorkspaceSeed = {
   sourceDocs: SelectedDocxFixture[]
   targetDocs: SelectedDocxFixture[]
   trackedDocs: TrackedDocxFixtureBytes[]
-}
-
-export const seedRiskReportKb = async (runtime: BackendTestRuntime): Promise<string[]> => {
-  await runtime.seedKb(RISK_REPORT_DOCUMENTS)
-  return RISK_REPORT_DOCUMENTS.map((document) => document.id)
 }
 
 export const resolveSelectedDocxFixtures = (
@@ -250,6 +226,8 @@ export const seedKbGuidedDocxKb = async (
 export const seedRiskReportWorkspace = async (
   runtime: BackendTestRuntime
 ): Promise<RiskReportWorkspaceSeed> => {
+  const expectedRiskConclusion = '在合规签署前，风险状态保持为“待跟进”。'
+  const expectedOwnerSummary = '最终复核窗口由合规负责人 Alice 牵头。'
   const templateBlocks = [
     {
       type: 'heading' as const,
@@ -258,7 +236,25 @@ export const seedRiskReportWorkspace = async (
     },
     {
       type: 'paragraph' as const,
+      text: '适用场景：每周对外同步项目交付风险，提交前请按最新材料补齐结论和责任人。'
+    },
+    {
+      type: 'heading' as const,
+      text: '一、风险概览',
+      level: 2
+    },
+    {
+      type: 'paragraph' as const,
       text: '本周风险结论：RISK_TODO'
+    },
+    {
+      type: 'paragraph' as const,
+      text: '补充说明：如状态仍未收口，请保留一句话解释当前卡点。'
+    },
+    {
+      type: 'heading' as const,
+      text: '二、责任人与动作',
+      level: 2
     },
     {
       type: 'paragraph' as const,
@@ -266,7 +262,16 @@ export const seedRiskReportWorkspace = async (
     },
     {
       type: 'paragraph' as const,
-      text: '备注：本模板用于每周固定汇报。'
+      text: '下一步动作：请在发出前确认责任人和最终复核窗口表述一致。'
+    },
+    {
+      type: 'heading' as const,
+      text: '三、备注',
+      level: 2
+    },
+    {
+      type: 'paragraph' as const,
+      text: '备注：本模板用于每周固定汇报，归档前请勿删除历史说明。'
     }
   ]
   const notesBlocks = [
@@ -277,12 +282,93 @@ export const seedRiskReportWorkspace = async (
     },
     {
       type: 'paragraph' as const,
-      text: '这里只记录会议纪要，不是周报模板。'
+      text: '今天同步了供应商接口、法务签署和预算排期。'
+    },
+    {
+      type: 'paragraph' as const,
+      text: '这里只记录会议纪要，不是周报模板，也不作为最终口径。'
     }
   ]
-  const summaryRelativePath = 'weekly-risk-summary.txt'
-  const summaryText = '请在找到正式模板后再补全文档内容。\n'
+  const archivedReportBlocks = [
+    {
+      type: 'heading' as const,
+      text: '上周已发版风险周报（归档）',
+      level: 1
+    },
+    {
+      type: 'paragraph' as const,
+      text: '说明：本文件为上周已发送版本，仅供归档回看，不要直接复用。'
+    },
+    {
+      type: 'paragraph' as const,
+      text: '本周风险结论：供应商接口风险已解除。'
+    },
+    {
+      type: 'paragraph' as const,
+      text: '负责人说明：由交付经理 Kevin 完成收口。'
+    }
+  ]
+
   const templateRelativePath = 'weekly-risk-report-template.docx'
+  const archivedReportRelativePath = 'weekly-risk-report-2026-04-18-final.docx'
+  const notesRelativePath = 'team-sync-notes.docx'
+  const riskSummaryRelativePath = 'weekly-risk-summary.md'
+  const ownerNoteRelativePath = 'owner-note.md'
+  const summaryHintRelativePath = 'weekly-risk-summary.txt'
+  const milestonesRelativePath = 'project-milestones.md'
+  const vendorFollowupRelativePath = 'vendor-followup.txt'
+
+  const riskSummaryText = `# 本周风险结论整理
+
+背景：
+- 合规签署尚未完成，供应商仍在补充最后一版附件。
+- 对外口径需要和法务、交付两侧保持一致，不能提前写成“已解除”。
+
+建议写法：
+- 本周风险结论：${expectedRiskConclusion}
+- 备注建议：强调当前卡点仍在合规签署完成前的最终确认。
+`
+  const ownerNoteText = `# 负责人说明
+
+请在周报中使用以下责任人口径：
+- ${expectedOwnerSummary}
+- 财务接口人 Bob 负责补齐付款材料，但不作为最终 owner 对外同步。
+
+补充：
+- 如需说明动作分工，可以把 Bob 写在下一步动作，不要写进负责人主句。
+`
+  const summaryHintText = '请在找到正式模板后再补全文档内容。\n'
+  const milestonesText = `# 项目里程碑追踪
+
+- 05/02：完成供应商补件
+- 05/03：安排合规复核窗口
+- 05/05：准备周报外发
+`
+  const vendorFollowupText = `供应商跟进记录：
+- 已补齐接口清单
+- 待补最后一份合规附件
+- 该文件仅用于内部追踪，不直接作为周报结论
+`
+
+  const writeWorkspaceTextFile = async (
+    relativePath: string,
+    text: string,
+    summary: string
+  ): Promise<string> => {
+    const absolutePath = path.join(runtime.workspaceRoot, relativePath)
+    await fs.writeFile(absolutePath, text, 'utf8')
+    runtime.recordSeedWorkspaceFile({
+      relativePath,
+      absolutePath,
+      summary,
+      metadata: {
+        format: 'text',
+        text
+      }
+    })
+    return absolutePath
+  }
+
   const templatePath = await writeTestDocxFile(
     runtime.workspaceRoot,
     templateRelativePath,
@@ -298,7 +384,6 @@ export const seedRiskReportWorkspace = async (
     }
   })
 
-  const notesRelativePath = 'team-sync-notes.docx'
   const notesPath = await writeTestDocxFile(runtime.workspaceRoot, notesRelativePath, notesBlocks)
   runtime.recordSeedWorkspaceFile({
     relativePath: notesRelativePath,
@@ -310,23 +395,44 @@ export const seedRiskReportWorkspace = async (
     }
   })
 
-  const summaryPath = path.join(runtime.workspaceRoot, summaryRelativePath)
-  await fs.writeFile(summaryPath, summaryText, 'utf8')
+  const archivedReportPath = await writeTestDocxFile(
+    runtime.workspaceRoot,
+    archivedReportRelativePath,
+    archivedReportBlocks
+  )
   runtime.recordSeedWorkspaceFile({
-    relativePath: summaryRelativePath,
-    absolutePath: summaryPath,
-    summary: '风险摘要提示文本',
+    relativePath: archivedReportRelativePath,
+    absolutePath: archivedReportPath,
+    summary: '上周已发送的风险周报归档版',
     metadata: {
-      format: 'text',
-      text: summaryText
+      format: 'docx',
+      blocks: archivedReportBlocks
     }
   })
+
+  await writeWorkspaceTextFile(
+    riskSummaryRelativePath,
+    riskSummaryText,
+    '本周风险结论来源 markdown'
+  )
+  await writeWorkspaceTextFile(
+    ownerNoteRelativePath,
+    ownerNoteText,
+    '负责人说明来源 markdown'
+  )
+  await writeWorkspaceTextFile(summaryHintRelativePath, summaryHintText, '风险摘要提示文本')
+  await writeWorkspaceTextFile(milestonesRelativePath, milestonesText, '项目里程碑干扰项')
+  await writeWorkspaceTextFile(vendorFollowupRelativePath, vendorFollowupText, '供应商跟进干扰项')
 
   const originalTemplateBytes = await fs.readFile(templatePath)
 
   return {
     templatePath,
     templateRelativePath,
+    riskSummaryRelativePath,
+    ownerNoteRelativePath,
+    expectedRiskConclusion,
+    expectedOwnerSummary,
     originalTemplateBytes
   }
 }
