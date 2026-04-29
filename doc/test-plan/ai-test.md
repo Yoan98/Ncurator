@@ -86,8 +86,8 @@
 
 ### 4.1 `tool`
 
-- Last Run：`2026-04-16 18:32:26 +08:00`
-- Last Result：`通过`（`29 / 29` 个测试用例通过）
+- Last Run：`2026-04-29 16:39:22 +08:00`
+- Last Result：`通过`（`53 / 53` 个测试文件通过）
 
 #### `docx`
 
@@ -112,8 +112,8 @@
 - How：真实执行 `docx_create -> docx_outline -> docx_read_blocks -> docx_paragraph_edit -> docx_search`。
 - Oracle：create-target 结果返回稳定 `sourcePath / currentRevisionRef / created=true`；新文档可被继续读取；后续编辑会生成新 revision，且新内容可继续被搜索命中；正式目标路径在 commit 前不存在。
 - Not：不验证 human 是否会选择 create。
-- Last Run：`待更新`
-- Last Result：`待更新`
+- Last Run：`2026-04-29 16:39:16 +08:00`
+- Last Result：`通过`
 
 ##### `docx-create-existing-path-guard`
 
@@ -124,8 +124,8 @@
 - How：先写入一份真实 docx，再对同一路径执行 `docx_create`。
 - Oracle：返回 `invalid_input`；原文件 bytes 不变；当前 run 不产生新的 docx session。
 - Not：不验证 UI 层如何展示报错。
-- Last Run：`待更新`
-- Last Result：`待更新`
+- Last Run：`2026-04-29 16:39:22 +08:00`
+- Last Result：`通过`
 
 ##### `docx-create-with-content-produces-review`
 
@@ -248,8 +248,8 @@
 - How：写入只包含“过度拟合”的真实 docx，再以“过拟合”执行 `docx_search(literal)`。
 - Oracle：搜索结果命中目标 block，且显式返回 `effectiveQuery=过度拟合` 与 `appliedAliases`。
 - Not：不引入通用大词库或无限 rewrite。
-- Last Run：`待更新`
-- Last Result：`待更新`
+- Last Run：`2026-04-29 16:39:22 +08:00`
+- Last Result：`通过`
 
 ##### `docx-search-regex-contract`
 
@@ -260,8 +260,8 @@
 - How：对真实 docx 执行合法 regex 搜索与非法 regex 搜索。
 - Oracle：合法 regex 正常命中并返回 offsets；非法 regex 返回 `invalid_input`。
 - Not：不比较不同 regex 引擎的高级语义差异。
-- Last Run：`待更新`
-- Last Result：`待更新`
+- Last Run：`2026-04-29 16:39:22 +08:00`
+- Last Result：`通过`
 
 ##### `docx-search-semantic-contract`
 
@@ -272,8 +272,8 @@
 - How：在 embedding ready 前提下，对真实 docx 执行 `docx_search(mode=semantic)`。
 - Oracle：至少返回一个相关 block，且结果显式包含 `score`。
 - Not：不比较召回排序的全局最优性。
-- Last Run：`待更新`
-- Last Result：`待更新`
+- Last Run：`2026-04-29 16:39:15 +08:00`
+- Last Result：`通过`
 
 ##### `docx-read-range-contract`
 
@@ -284,8 +284,8 @@
 - How：先通过真实 `docx_outline` 定位起止 block，再执行区间 `docx_read_blocks`。
 - Oracle：返回结果按文档顺序覆盖闭区间，`returnedBlockCount` 稳定。
 - Not：不验证 AI 何时该扩大片段范围。
-- Last Run：`待更新`
-- Last Result：`待更新`
+- Last Run：`2026-04-29 16:39:18 +08:00`
+- Last Result：`通过`
 
 ##### `docx-outline-pagination-contract`
 
@@ -296,8 +296,8 @@
 - How：对长文档执行带 `fromBodyIndex` 的真实 `docx_outline`。
 - Oracle：返回结果从指定 bodyIndex 开始，且继续保留稳定的总数与截断标记。
 - Not：不验证 UI 层如何呈现分页。
-- Last Run：`待更新`
-- Last Result：`待更新`
+- Last Run：`2026-04-29 16:39:18 +08:00`
+- Last Result：`通过`
 
 ##### `docx-auto-open-no-fake-failure`
 
@@ -308,8 +308,8 @@
 - How：对未预先打开的真实 docx 直接执行 `docx_search`，检查事件流中的 tool result。
 - Oracle：同一次调用只返回一次成功结果，不出现 `sourcePath must be opened before ...`。
 - Not：不验证内部显式 require 场景。
-- Last Run：`待更新`
-- Last Result：`待更新`
+- Last Run：`2026-04-29 16:39:22 +08:00`
+- Last Result：`通过`
 
 ##### `docx-outline-truncation-contract`
 
@@ -368,8 +368,8 @@
 - How：构造带 mixed-format run 的 anchor 段落，执行 `docx_paragraph_edit(insert_after)`，再读取同一 anchor。
 - Oracle：anchor 文本保持不变，run 列表逐项一致，changedBlocks 只记录 `insert_after`。
 - Not：不验证 review artifact。
-- Last Run：`待更新`
-- Last Result：`待更新`
+- Last Run：`2026-04-29 16:39:19 +08:00`
+- Last Result：`通过`
 
 ##### `docx-created-blocks-resolve-inserted-range-not-shifted-tail`
 
@@ -380,8 +380,8 @@
 - How：在 anchor 后插入一个段落，再检查 `createdBlocks` 与插入后 outline 的对应关系。
 - Oracle：`createdBlocks` 只命中新插入段落，不包含下游旧段落。
 - Not：不验证 table cell 创建。
-- Last Run：`待更新`
-- Last Result：`待更新`
+- Last Run：`2026-04-29 16:39:19 +08:00`
+- Last Result：`通过`
 
 ##### `docx-review-insert-does-not-duplicate-downstream-blocks`
 
@@ -392,8 +392,8 @@
 - How：对真实 docx 执行“插段落 + 插表格”，finalize review 后直接检查 review artifact 的 outline 顺序。
 - Oracle：下游旧段落只出现一次，新增段落与表格保持稳定顺序。
 - Not：不验证 delete/replace 语义。
-- Last Run：`待更新`
-- Last Result：`待更新`
+- Last Run：`2026-04-29 16:39:18 +08:00`
+- Last Result：`通过`
 
 ##### `docx-inserted-table-created-blocks-include-table-and-cells`
 
@@ -404,8 +404,8 @@
 - How：执行一次 `docx_table_edit(insert_after)`，直接检查 mutation result 的 `createdBlocks`。
 - Oracle：返回 1 个 `table` 和全部对应的 `table_cell`。
 - Not：不验证 review artifact。
-- Last Run：`待更新`
-- Last Result：`待更新`
+- Last Run：`2026-04-29 16:39:19 +08:00`
+- Last Result：`通过`
 
 ##### `docx-mixed-format-preservation`
 
@@ -452,8 +452,8 @@
 - How：真实执行“插入段落 -> 改写新增段落 -> 插入表格 -> 更新新增 cell”。
 - Oracle：新增段落与新增 cell 都可继续被定位和修改，最新 working draft 只暴露最新有效内容。
 - Not：不验证 live 模型如何规划多轮编辑。
-- Last Run：`待更新`
-- Last Result：`待更新`
+- Last Run：`2026-04-29 16:39:20 +08:00`
+- Last Result：`通过`
 
 ##### `docx-review-artifact-projection`
 
@@ -488,8 +488,8 @@
 - How：构造与 live 风险周报 case 相同的模板；通过真实 docx 工具执行两处占位符替换，随后 finalize review，直接检查 review artifact；再执行真实 `commitReview`，检查源文档最终内容。
 - Oracle：review artifact 中能读到“待跟进”和“Alice”对应的修改结果；commit 成功后，源模板中两处占位符被最终内容替换，且不再保留 `RISK_TODO / OWNER_TODO`。
 - Not：不覆盖 live 模型执行路径，不要求经过 KB 或 terminal。
-- Last Run：`待更新`
-- Last Result：`待更新`
+- Last Run：`2026-04-29 16:39:14 +08:00`
+- Last Result：`通过`
 
 ##### `docx-review-discard-preserves-source`
 
@@ -500,8 +500,8 @@
 - How：真实编辑并 finalize review 后执行 discard，再检查 source 与 artifact 状态。
 - Oracle：source 内容保持原样，review/working/committed artifact 被清理，review 状态变为 `discarded`。
 - Not：不验证提交链路。
-- Last Run：`待更新`
-- Last Result：`待更新`
+- Last Run：`2026-04-29 16:39:17 +08:00`
+- Last Result：`通过`
 
 ##### `docx-review-commit-conflict`
 
@@ -512,8 +512,8 @@
 - How：真实编辑并 finalize review 后，外部改写 source，再执行 `validateCommit / commitReview`。
 - Oracle：`validateCommit` 返回 `source_changed`，`commitReview` 失败且 review 状态进入 `conflicted`。
 - Not：不验证用户如何解决冲突。
-- Last Run：`待更新`
-- Last Result：`待更新`
+- Last Run：`2026-04-29 16:39:14 +08:00`
+- Last Result：`通过`
 
 ##### `docx-history-and-rollback`
 
@@ -681,8 +681,8 @@
 
 #### `mock-llm`
 
-- Last Run：`2026-04-16 18:32:42 +08:00`
-- Last Result：`通过`（`15 / 15` 个测试用例通过）
+- Last Run：`2026-04-29 16:39:41 +08:00`
+- Last Result：`未通过`（`14 / 15` 个测试用例通过）
 
 ##### `ai-run-service-human-only`
 
@@ -825,8 +825,8 @@
 - How：构造包含长文档截断与兼容字形文本的真实 docx，通过 scripted brain 先执行 `docx_outline`、再执行 `docx_search` 与 `docx_read_blocks`，检查后续 prompt 是否包含相关事实。
 - Oracle：后续 `brain` prompt 中可读到截断文字说明、归一化搜索命中与区间精读正文，最终任务完成且不会把文档中已写内容误报为“未写”。
 - Not：不验证 live 模型在该场景下的自主策略优劣。
-- Last Run：`2026-04-16 10:37:34 +08:00`
-- Last Result：`通过`
+- Last Run：`2026-04-29 16:39:40 +08:00`
+- Last Result：`未通过`
 
 ##### `docx-search-alias-then-range-read`
 
