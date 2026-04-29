@@ -681,8 +681,8 @@
 
 #### `mock-llm`
 
-- Last Run：`2026-04-29 16:39:41 +08:00`
-- Last Result：`未通过`（`14 / 15` 个测试用例通过）
+- Last Run：`2026-04-29 17:02:09 +08:00`
+- Last Result：`通过`（`15 / 15` 个测试文件通过）
 
 ##### `ai-run-service-human-only`
 
@@ -825,8 +825,8 @@
 - How：构造包含长文档截断与兼容字形文本的真实 docx，通过 scripted brain 先执行 `docx_outline`、再执行 `docx_search` 与 `docx_read_blocks`，检查后续 prompt 是否包含相关事实。
 - Oracle：后续 `brain` prompt 中可读到截断文字说明、归一化搜索命中与区间精读正文，最终任务完成且不会把文档中已写内容误报为“未写”。
 - Not：不验证 live 模型在该场景下的自主策略优劣。
-- Last Run：`2026-04-29 16:39:40 +08:00`
-- Last Result：`未通过`
+- Last Run：`2026-04-29 17:02:09 +08:00`
+- Last Result：`通过`
 
 ##### `docx-search-alias-then-range-read`
 

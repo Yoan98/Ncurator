@@ -18,7 +18,7 @@ describe('ai human mock-llm backend', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证 human prompt 会收到 outline 截断说明与兼容字形归一后的 docx 搜索命中。',
+      description: '验证 human prompt 会收到 outline 截断与兼容字形搜索命中的结构化事实摘要。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -59,10 +59,11 @@ describe('ai human mock-llm backend', () => {
               },
               (input) => {
                 if (
-                  !input.user.includes('结果已截断') ||
-                  !input.user.includes('文档后续内容未包含')
+                  !input.user.includes('"truncated": true') ||
+                  !input.user.includes('"returnedBlockCount": 200') ||
+                  !input.user.includes('"totalBlockCount": 230')
                 ) {
-                  throw new Error('brain prompt is missing outline truncation fact exposure')
+                  throw new Error('brain prompt is missing outline truncation structured facts')
                 }
                 return buildToolDecision({
                   toolName: 'docx_search',
@@ -77,12 +78,10 @@ describe('ai human mock-llm backend', () => {
               },
               (input) => {
                 if (
-                  (!input.user.includes('返回 1 个搜索命中') &&
-                    !input.user.includes('返回 1 项') &&
-                    !input.user.includes('搜索命中')) ||
+                  !input.user.includes('"returnedMatchCount": 1') ||
                   (!input.user.includes('反⾛样') && !input.user.includes('反走样'))
                 ) {
-                  throw new Error('brain prompt is missing normalized search hit exposure')
+                  throw new Error('brain prompt is missing normalized search hit structured facts')
                 }
                 const searchResult = readLatestToolResultDataFromEvents<DocxSearchResult>(
                   runtime.eventCollector.snapshot(),
@@ -100,12 +99,15 @@ describe('ai human mock-llm backend', () => {
                 })
               },
               (input) => {
-                if (!input.user.includes('反⾛样会在采样不足时出现明显锯齿')) {
-                  throw new Error('brain prompt is missing range read fact exposure')
+                if (
+                  !input.user.includes('"returnedBlockCount": 1') ||
+                  !input.user.includes('反⾛样会在采样不足时出现明显锯齿')
+                ) {
+                  throw new Error('brain prompt is missing range read structured facts')
                 }
                 return buildCompleteTaskDecision({
                   summary: 'docx 读取事实暴露已验证。',
-                  reason: 'outline 截断说明、搜索命中与区间精读都已进入 prompt。',
+                  reason: 'outline 截断、搜索命中与区间精读都已进入 prompt 的结构化摘要。',
                   expectedOutcome: '输出最终答复。'
                 })
               }
@@ -147,8 +149,8 @@ describe('ai human mock-llm backend', () => {
             readResult.blocks.length === 1 &&
             result.output.deliveryMarkdown.includes('不应答成“未写”'),
           {
-            name: 'human-brain-sees-truncation-and-normalized-search-facts',
-            message: 'human prompt 应能读到 outline 截断说明和归一化搜索命中，并完成正确收口。',
+            name: 'human-brain-sees-truncation-and-normalized-search-structured-facts',
+            message: 'human prompt 应能读到 outline 截断、归一化搜索命中与区间精读的结构化事实摘要，并完成正确收口。',
             data: {
               searchResult,
               readResult,
