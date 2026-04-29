@@ -38,8 +38,6 @@ const renderSkillCatalogToolSpecLine = (input: {
   spec: HumanToolSpec
   skillLabels: string[]
 }): string => {
-  const preconditions = input.spec.promptSpec.preconditions?.join(' / ') || 'none'
-  const returns = input.spec.promptSpec.returns.map((item) => item.name).join(', ') || 'none'
   const schemaText = indentLines(renderToolSchemaForPrompt(input.spec.schema), 2)
   const examples = indentLines(input.spec.promptSpec.examples.map(renderToolExample).join('\n'), 2)
   const ownerSkills = input.skillLabels.join('、') || 'none'
@@ -47,10 +45,9 @@ const renderSkillCatalogToolSpecLine = (input: {
   return `
 - 工具 ${input.spec.name}
   - 所属技能：${ownerSkills}
-  - 用途：${input.spec.promptSpec.description}
-  - 前置条件：${preconditions}
-  - 核心返回：${returns}
-  - 结构：
+  - 描述：${input.spec.promptSpec.description}
+  - 适用时机：${input.spec.promptSpec.whenToUse}
+  - 调用传参：
 ${schemaText}
   - 示例：
 ${examples}

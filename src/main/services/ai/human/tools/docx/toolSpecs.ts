@@ -78,19 +78,6 @@ export const DOCX_OUTLINE_TOOL_SPEC = {
     name: 'docx_outline',
     description: '总揽读取 docx 的稳定结构，拿到标题、段落、表格和单元格的 blockId。',
     whenToUse: '当你需要先理解文档结构、定位标题或表格、或为后续精读/编辑拿到 blockId 时使用。',
-    preconditions: ['sourcePath 必须是 workspace 内的 .docx 路径。工具会自动打开目标文档。'],
-    returns: [
-      {
-        name: 'blocks',
-        type: 'Array<{ blockId: string; type: string; bodyIndex: number; preview: string }>',
-        description: '按文档顺序排列的结构块，包含标题层级、表格维度和单元格位置事实。'
-      },
-      {
-        name: 'truncated',
-        type: 'boolean',
-        description: '是否因 maxBlocks 被截断。'
-      }
-    ],
     examples: [
       {
         goal: '先看一份 docx 的整体结构和标题、表格分布',
@@ -118,19 +105,6 @@ export const DOCX_SEARCH_TOOL_SPEC = {
     description: '先定位相关 block，再决定是否继续精读。',
     whenToUse:
       '当你需要查找术语、换词重试、切换 regex / semantic 检索模式，或拿到 blockId 供后续 docx_read_blocks 精读时使用。',
-    preconditions: ['sourcePath 必须是 workspace 内的 .docx 路径。工具会自动打开目标文档。'],
-    returns: [
-      {
-        name: 'matches',
-        type: 'Array<{ blockId: string; bodyIndex: number; text: string }>',
-        description: '按命中文档顺序或相关度返回 block 命中，包含邻接 block 线索。'
-      },
-      {
-        name: 'effectiveQuery, appliedAliases, truncated',
-        type: 'string | Array<{ from: string; to: string }> | boolean',
-        description: '显式说明本次实际使用的检索词、是否触发 alias fallback，以及返回结果是否被截断。'
-      }
-    ],
     examples: [
       {
         goal: '按原词做 literal 搜索，先定位“反走样”在哪些 block',
@@ -162,21 +136,6 @@ export const DOCX_READ_TOOL_SPEC = {
     description: '读取一个 block，或按 block 区间连续精读一段内容。',
     whenToUse:
       '当你已经通过 docx_search 或 docx_outline 拿到 blockId，准备精读一个 block 或一段连续区间时使用。',
-    preconditions: [
-      '必须提供 fromBlockId。若提供 toBlockId，则会返回 [fromBlockId, toBlockId] 的闭区间内容。工具会自动打开目标文档。'
-    ],
-    returns: [
-      {
-        name: 'blocks',
-        type: 'Array<paragraph | table | table_cell>',
-        description: '按文档顺序返回连续区间内的类型化 blocks；表格会保留结构化 cell 内容。'
-      },
-      {
-        name: 'fromBlockId, toBlockId, returnedBlockCount',
-        type: 'string | number',
-        description: '显式说明本次精读覆盖的 block 区间和实际返回块数。'
-      }
-    ],
     examples: [
       {
         goal: '连续精读“反走样”一节对应的 block 区间',
@@ -199,14 +158,6 @@ export const DOCX_HISTORY_TOOL_SPEC = {
     name: 'docx_history',
     description: '查看当前任务过程中这份 docx 的修订链、修订摘要和变更块。',
     whenToUse: '当你要确认编辑历史、比较最近几次修订差异、或决定回滚到哪个修订时使用。',
-    preconditions: ['sourcePath 必须是 workspace 内的 .docx 路径。工具会自动打开目标文档。'],
-    returns: [
-      {
-        name: 'revisions',
-        type: 'Array<{ revisionRef: string; summary: string; changedBlocks: Array<object> }>',
-        description: '按当前修订到祖先修订的顺序返回修订链。'
-      }
-    ],
     examples: [
       {
         goal: '查看最近几个 docx 修订及各自改动摘要',
@@ -233,19 +184,6 @@ export const DOCX_PARAGRAPH_EDIT_TOOL_SPEC = {
     description: '按段落对象插入、替换或删除段落文本。',
     whenToUse:
       '当你已经明确段落锚点或目标 blockId，且只需要插段落、改段落文本或删段落时使用。若命中复杂定位排版区域，任何自动编辑都会失败，此时不要重复尝试 docx 写操作。',
-    preconditions: ['插入动作需要 anchorBlockId 与 text；替换/删除需要 blockId。'],
-    returns: [
-      {
-        name: 'currentRevisionRef',
-        type: 'string',
-        description: '本次段落编辑成功后的当前修订。'
-      },
-      {
-        name: 'createdBlocks',
-        type: 'Array<{ blockId: string; type: string }>',
-        description: '插入动作时创建出来的新块。'
-      }
-    ],
     examples: [
       {
         goal: '在目标段落后插入一段说明',
@@ -278,17 +216,6 @@ export const DOCX_CREATE_TOOL_SPEC = {
     description: '先创建一份新的 docx 草稿目标，再继续写入或编辑它。',
     whenToUse:
       '当用户明确要你生成一份新的 Word 文件，或者当前 workspace 里还没有目标 docx 时使用。创建成功后可继续对同一路径执行 docx_outline、docx_read_blocks 和 docx_*_edit。',
-    preconditions: [
-      'sourcePath 必须是 workspace 内的 .docx 路径。',
-      '目标路径必须当前不存在；docx_create 不会覆盖已有文件。'
-    ],
-    returns: [
-      {
-        name: 'sourcePath, currentRevisionRef, created',
-        type: 'string | boolean',
-        description: '返回新建 docx 草稿目标的路径、当前修订号以及 created=true。正式目标文件只会在后续 commit 成功后创建。'
-      }
-    ],
     examples: [
       {
         goal: '先创建一份给同学复习用的总结文档',
@@ -325,19 +252,6 @@ export const DOCX_HEADING_EDIT_TOOL_SPEC = {
     description: '按标题对象插入或替换标题文本。',
     whenToUse:
       '当你要在某处插入标题，或把现有标题块替换成新标题文本时使用。若命中复杂定位排版区域，任何自动编辑都会失败，此时应改为说明限制并给用户手动操作建议。',
-    preconditions: ['插入动作需要 anchorBlockId；替换动作需要 blockId；level 必须是 1-6。'],
-    returns: [
-      {
-        name: 'currentRevisionRef',
-        type: 'string',
-        description: '本次标题编辑成功后的当前修订。'
-      },
-      {
-        name: 'createdBlocks',
-        type: 'Array<{ blockId: string; type: string }>',
-        description: '插入动作时创建出来的新标题块。'
-      }
-    ],
     examples: [
       {
         goal: '在指定 block 后插入一个二级标题',
@@ -367,19 +281,6 @@ export const DOCX_TABLE_EDIT_TOOL_SPEC = {
     description: '按表格对象插入表格或更新单元格内容。',
     whenToUse:
       '当你需要插入一个简单二维文本表格，或更新某个 table cell 的内容时使用。若命中复杂定位排版区域，任何自动编辑都会失败，此时不要重复尝试 docx 写操作。',
-    preconditions: ['插表动作需要 anchorBlockId 与 rows；改单元格动作需要 cellBlockId 与 text。'],
-    returns: [
-      {
-        name: 'currentRevisionRef',
-        type: 'string',
-        description: '本次表格编辑成功后的当前修订。'
-      },
-      {
-        name: 'createdBlocks',
-        type: 'Array<{ blockId: string; type: string }>',
-        description: '插表动作时创建出来的新表格块与单元格块。'
-      }
-    ],
     examples: [
       {
         goal: '在指定 block 后插入一个简单对照表',
@@ -411,14 +312,6 @@ export const DOCX_TEXT_EDIT_TOOL_SPEC = {
     description: '在当前 docx 中按 query 查找并替换文本，可选 blockIds 缩小范围。',
     whenToUse:
       '当你想在一批命中文本里直接替换术语或改写短句时使用。它适合 normal 正文流里的原地改字，不适合新增结构；若命中复杂定位排版区域，也会直接失败。',
-    preconditions: ['query 不能为空。'],
-    returns: [
-      {
-        name: 'changedBlocks',
-        type: 'Array<{ blockId: string; beforeText: string; afterText: string }>',
-        description: '本次文本替换实际改动到的块。'
-      }
-    ],
     examples: [
       {
         goal: '把文中的“过拟合”统一替换成“模型过拟合”',
@@ -446,14 +339,6 @@ export const DOCX_TEXT_STYLE_EDIT_TOOL_SPEC = {
     description: '给现有文本片段加颜色、粗体、斜体或下划线，不改文字本身。',
     whenToUse:
       '当你需要把某一段已有文本标红、加粗或下划线时使用。它适合 normal 正文流里的原地样式调整，不适合新增结构；若命中复杂定位排版区域，也会直接失败。',
-    preconditions: ['必须提供 blockId 与 query；style 至少要有一个字段。'],
-    returns: [
-      {
-        name: 'changedBlocks',
-        type: 'Array<{ blockId: string; beforeText: string; afterText: string }>',
-        description: '样式修改涉及到的块；文本本身通常不变，但格式会变化。'
-      }
-    ],
     examples: [
       {
         goal: '把指定段落中“高风险”标红加粗',
@@ -488,14 +373,6 @@ export const DOCX_ROLLBACK_TOOL_SPEC = {
     name: 'docx_rollback',
     description: '把当前任务过程中的 docx 草稿切回指定 revisionRef，不覆盖原文件。',
     whenToUse: '当你已经通过 docx_history 确认要回退到哪个修订时使用。',
-    preconditions: ['必须先有可追溯的修订历史。'],
-    returns: [
-      {
-        name: 'currentRevisionRef',
-        type: 'string',
-        description: '回退后的当前修订。'
-      }
-    ],
     examples: [
       {
         goal: '把当前草稿回退到指定修订',

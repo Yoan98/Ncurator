@@ -51,14 +51,6 @@ export const KB_SEARCH_TOOL_SPEC: HumanToolSpec<
     description:
       '在当前用户工作区知识库中按查询词或语句检索相关内容片段，并返回命中证据及其来源文档。',
     whenToUse: '当需要按关键词或语义语句查找用户工作区知识库中相关内容片段时使用。',
-    preconditions: ['queryText 不能为空。', '默认搜索范围是当前工作区知识库。'],
-    returns: [
-      {
-        name: 'rows',
-        type: 'Array<chunk result>',
-        description: '命中的知识片段列表。'
-      }
-    ],
     examples: [
       {
         goal: '在当前工作区知识库中检索 approval denied 相关规范',
@@ -83,19 +75,6 @@ export const KB_LIST_DOCUMENTS_TOOL_SPEC: HumanToolSpec<
     name: 'kb_list_documents',
     description: '查询当前工作区知识库中已建立了索引的文档列表。',
     whenToUse: '当需要查看工作区知识库中，有哪些文档已经能够被工作区知识库检索技能进行检索时使用。',
-    preconditions: ['若已选资料和命中 chunk 已经足够，通常不需要再 list_documents。'],
-    returns: [
-      {
-        name: 'items',
-        type: 'Array<{ id: string; name: string; source_type: string }>',
-        description: '文档列表。'
-      },
-      {
-        name: 'total',
-        type: 'number',
-        description: '命中文档总数。'
-      }
-    ],
     examples: [
       {
         goal: '先列出名称中包含 weekly risk 的候选知识文档',

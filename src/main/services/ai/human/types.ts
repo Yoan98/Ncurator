@@ -53,12 +53,6 @@ export type ToolCallResultCode = (typeof TOOL_CALL_RESULT_CODES)[number]
 export type HumanSkillSource = (typeof HUMAN_SKILL_SOURCES)[number]
 export type HumanRoundExecutionKind = (typeof HUMAN_ROUND_EXECUTION_KINDS)[number]
 
-export type ToolPromptReturnSpec = {
-  name: string
-  type: string
-  description: string
-}
-
 export type ToolPromptExample = {
   goal: string
   args: JsonObject
@@ -68,8 +62,6 @@ export type ToolPromptSpec = {
   name: string
   description: string
   whenToUse: string
-  preconditions?: string[]
-  returns: ToolPromptReturnSpec[]
   examples: ToolPromptExample[]
 }
 

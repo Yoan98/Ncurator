@@ -35,15 +35,7 @@ export const HISTORY_SEARCH_TOOL_SPEC: HumanToolSpec<
   promptSpec: {
     name: 'history_search',
     description: '按关键词搜索你自己的过程历史。',
-    whenToUse: '当你记得某个关键词、工具名或事实片段，想在更早轮次里重新找到它时使用。',
-    preconditions: ['它只读取你自己的历史，不会访问工作区、知识库或外部文件。'],
-    returns: [
-      {
-        name: 'hits',
-        type: 'Array<{ roundId: number; matchedText: string }>',
-        description: '关键词命中的历史轮次与片段。'
-      }
-    ],
+    whenToUse: '当你需要查找之前的思考或调用记录时，且使用关键词搜索时使用。',
     examples: [
       {
         goal: '搜索之前出现过的 docx_text_edit 历史',
@@ -67,15 +59,7 @@ export const HISTORY_LIST_TOOL_SPEC: HumanToolSpec<
   promptSpec: {
     name: 'history_list',
     description: '按 roundId 区间连续查看过程历史；不传参数时默认返回最近几轮。',
-    whenToUse: '当你想像往上翻历史一样连续看一段轮次，而不是按关键词搜索时使用。',
-    preconditions: ['它只读取你自己的历史，不会访问工作区、知识库或外部文件。'],
-    returns: [
-      {
-        name: 'rounds',
-        type: 'Array<HumanRoundRecord>',
-        description: '按条件返回的连续历史轮次。'
-      }
-    ],
+    whenToUse: '当你需要查找之前的思考或调用记录时，且根据区间查找时使用。',
     examples: [
       {
         goal: '查看较早一段连续历史',
