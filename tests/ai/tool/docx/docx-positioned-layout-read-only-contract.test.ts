@@ -20,7 +20,7 @@ type PositionedOutlineResult = {
   }>
 }
 
-const POSITIONED_FIXTURE_PATH = 'tests/fixtures/ai/docx/图形学.docx'
+const POSITIONED_FIXTURE_PATH = 'tests/fixtures/workspace/学习笔记/图形学.docx'
 const POSITIONED_READ_ONLY_MESSAGE = '当前命中复杂定位排版区域，暂不支持自动编辑'
 
 describe('ai tool docx backend', () => {

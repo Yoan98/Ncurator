@@ -287,8 +287,7 @@ export function registerHandlers(services: {
     process.cwd(),
     'tests',
     'fixtures',
-    'ai',
-    'docx',
+    'workspace',
     'sample-edit.docx'
   )
 

@@ -45,8 +45,8 @@ type DocxToolSpec<
   activityActionType?: string
 }
 
-const DOCX_SOURCE_PATH_EXAMPLE = 'ai/docx/图形学.docx'
-const DOCX_CREATE_TARGET_EXAMPLE = 'ai/docx/深度学习与图形学复习总结.docx'
+const DOCX_SOURCE_PATH_EXAMPLE = '学习笔记/图形学.docx'
+const DOCX_CREATE_TARGET_EXAMPLE = '深度学习与图形学复习总结.docx'
 const DOCX_SEARCH_LITERAL_EXAMPLE: JsonObject = {
   sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
   query: '反走样'

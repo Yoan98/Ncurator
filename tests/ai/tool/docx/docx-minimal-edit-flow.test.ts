@@ -8,7 +8,7 @@ import {
   type DocxSearchResult
 } from './testUtils'
 
-const SAMPLE_DOCX_FIXTURE = path.resolve('tests/fixtures/ai/docx/sample-edit.docx')
+const SAMPLE_DOCX_FIXTURE = path.resolve('tests/fixtures/workspace/sample-edit.docx')
 
 describe('ai tool docx backend', () => {
   it('docx-minimal-edit-flow', async () => {

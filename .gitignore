@@ -6,4 +6,5 @@ out
 .eslintcache
 *.log*
 tests/logs
+tests/.cache
 artifacts/ai-test-results

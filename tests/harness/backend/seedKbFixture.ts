@@ -1,6 +1,7 @@
 import type { DocumentsStore } from '../../../src/main/services/storage/domains/DocumentsStore'
 import type { EmbeddingService } from '../../../src/main/services/vector/EmbeddingService'
 import type { SeedKbDocumentInput } from './test-types'
+import { loadOrBuildKbFixtureVectors } from './kbFixtureCache'
 
 export const seedKbFixture = async (input: {
   documentsStore: DocumentsStore
@@ -16,6 +17,11 @@ export const seedKbFixture = async (input: {
       `real KB fixture requires a ready EmbeddingService; current status=${input.embeddingService.getStatus()}`
     )
   }
+
+  const vectorSnapshot = await loadOrBuildKbFixtureVectors({
+    embeddingService: input.embeddingService,
+    documents: input.documents
+  })
 
   for (const document of input.documents) {
     const workspaceId = String(document.workspaceId || 'test-workspace').trim()
@@ -40,10 +46,19 @@ export const seedKbFixture = async (input: {
         page: chunk.page || 1
       }
     }))
-    const embeddings = await input.embeddingService.embed(chunks.map((chunk) => chunk.text))
-    const vectorList = chunks.map((_, index) =>
-      embeddings.data.slice(index * embeddings.dims[1], (index + 1) * embeddings.dims[1])
+    const cachedDocument = vectorSnapshot.documents.find(
+      (item) => item.id === document.id
     )
+    if (!cachedDocument) {
+      throw new Error(`cached KB vectors missing document: ${document.id}`)
+    }
+    const vectorList = document.chunks.map((chunk) => {
+      const cachedChunk = cachedDocument.chunks.find((item) => item.id === chunk.id)
+      if (!cachedChunk) {
+        throw new Error(`cached KB vectors missing chunk: ${document.id}/${chunk.id}`)
+      }
+      return Float32Array.from(cachedChunk.vector)
+    })
 
     await input.documentsStore.addChunks({
       vectors: vectorList,
