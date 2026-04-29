@@ -60,11 +60,8 @@ export type AiRunStartPayload = {
 export type AiWorkspaceBinding = NonNullable<AiRunStartPayload['workspace']>
 
 export type AiReferenceScope = {
-  workspace?: AiWorkspaceBinding
+  workspace: AiWorkspaceBinding
   selectedReferences: SelectedReference[]
-  hasExplicitSelectedReferences: boolean
-  hasDirectDocumentNarrowing: boolean
-  defaultKnowledgeScope: 'current_workspace' | 'unavailable'
 }
 
 export type AiApprovalRequest = {

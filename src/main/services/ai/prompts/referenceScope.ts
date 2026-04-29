@@ -1,5 +1,5 @@
 import type { KbAvailability, SelectedReference } from '../../../../shared/types'
-import type { AiReferenceScope, AiRunStartPayload } from '../types'
+import type { AiReferenceScope, AiWorkspaceBinding } from '../types'
 
 const KB_AVAILABILITY_LABEL: Record<KbAvailability, string> = {
   indexed: '已索引',
@@ -7,103 +7,60 @@ const KB_AVAILABILITY_LABEL: Record<KbAvailability, string> = {
   not_indexed: '未索引'
 }
 
-const renderSelectedReference = (reference: SelectedReference, index: number): string => {
-  const kbDocumentIds =
-    reference.kbDocumentIds.length > 0 ? reference.kbDocumentIds.join(', ') : 'none'
-
-  if (reference.kind === 'web') {
-    return [
-      `${index}. [网页资料] ${reference.name}`,
-      `   地址：${reference.url}`,
-      `   知识库可用性：${KB_AVAILABILITY_LABEL[reference.kbAvailability]}`,
-      `   kbDocumentIds：${kbDocumentIds}`
-    ].join('\n')
-  }
-
-  const typeLabel = reference.kind === 'directory' ? '本地目录' : '本地文件'
-  return [
-    `${index}. [${typeLabel}] ${reference.relativePath}`,
-    `   名称：${reference.name}`,
-    `   知识库可用性：${KB_AVAILABILITY_LABEL[reference.kbAvailability]}`,
-    `   kbDocumentIds：${kbDocumentIds}`
-  ].join('\n')
+const getReferenceTypeLabel = (reference: SelectedReference): string => {
+  if (reference.kind === 'web') return '网页资料'
+  if (reference.kind === 'directory') return '本地目录'
+  return '本地文件'
 }
 
-const renderDocumentNarrowingText = (scope: AiReferenceScope): string => {
-  const narrowedPairs = scope.selectedReferences
-    .filter((reference) => reference.kbDocumentIds.length > 0)
-    .map((reference, index) => {
-      const label =
-        reference.kind === 'web'
-          ? `${index + 1}. [网页资料] ${reference.name}`
-          : `${index + 1}. [${reference.kind === 'directory' ? '本地目录' : '本地文件'}] ${reference.name}`
-      return `${label} -> [${reference.kbDocumentIds.join(', ')}]`
-    })
+const getReferenceResourceAddress = (reference: SelectedReference): string =>
+  reference.kind === 'web' ? reference.url : reference.relativePath
 
-  if (narrowedPairs.length === 0) {
-    return [
-      '缩圈状态：',
-      '- 当前没有可直接缩圈的 kbDocumentIds。',
-      '- 这只表示当前暂时不能按已选资料做 documentIds 缩圈，不表示默认知识库范围不可用。'
-    ].join('\n')
-  }
+const renderSelectedReference = (reference: SelectedReference, index: number): string => {
+  const kbDocumentIds =
+    reference.kbDocumentIds.length > 0 ? reference.kbDocumentIds.join(', ') : '无'
 
-  return ['缩圈状态：', '- 当前已选参考资料对应的 kbDocumentIds：', ...narrowedPairs].join('\n')
+  return `${index}. ${reference.name}
+   类型：${getReferenceTypeLabel(reference)}
+   资源地址：${getReferenceResourceAddress(reference)}
+   文档知识库状态：${KB_AVAILABILITY_LABEL[reference.kbAvailability]}
+   知识库文档ID：${kbDocumentIds}`
 }
 
 export const buildReferenceScope = (input: {
-  workspace?: AiRunStartPayload['workspace']
+  workspace: AiWorkspaceBinding
   selectedReferences?: SelectedReference[]
 }): AiReferenceScope => {
   const selectedReferences = input.selectedReferences || []
 
   return {
     workspace: input.workspace,
-    selectedReferences,
-    hasExplicitSelectedReferences: selectedReferences.length > 0,
-    hasDirectDocumentNarrowing: selectedReferences.some(
-      (reference) => reference.kbDocumentIds.length > 0
-    ),
-    defaultKnowledgeScope: input.workspace ? 'current_workspace' : 'unavailable'
+    selectedReferences
   }
 }
 
 export const renderReferenceScopeText = (scope: AiReferenceScope): string => {
-  const workspaceLines = scope.workspace
-    ? [
-        `当前工作区绝对路径：${scope.workspace.rootPath}`,
-        '后续所有本地文件路径、cwd 与生成产物路径，都必须位于该工作区内；未显式指定 cwd 时，默认从该工作区根目录开始。'
-      ]
-    : ['当前工作区：未绑定（仅内部兜底场景；正常 workbench 发送前会先选择工作区）。']
+  const workspaceText = `工作区：
+- 根目录：${scope.workspace.rootPath}
+- 所有本地文件路径、cwd 和新生成的产物路径都必须位于这个工作区内。
+- 如果没有显式指定 cwd，默认从工作区根目录开始。`
 
-  const defaultScopeLines =
-    scope.defaultKnowledgeScope === 'current_workspace'
-      ? [
-          '默认可用检索范围：',
-          '- 当前工作区知识库中的可检索内容。',
-          '- 这些内容来自该工作区下已建立索引的本地文件和网页资料。'
-        ]
-      : ['默认可用资料范围：', '- 未绑定工作区，不能假设存在可用的本地知识库默认范围。']
+  const fieldGuideText = `字段说明：
+- 类型：资料来源类型，例如本地文件、本地目录、网页资料。
+- 资源地址：这份资料对应的本地路径或网页地址。
+- 文档知识库状态：这份资料本身是否可被知识库检索。
+- 知识库文档ID：这份资料在知识库中的文档标识；没有对应知识库文档时显示为“无”。`
 
-  const preferredReferenceLines = scope.hasExplicitSelectedReferences
-    ? [
-        '优先参考资料：',
-        '- 当前已显式选择的参考资料可作为优先缩圈范围；如结果不足，可回到整个当前工作区范围继续检索。',
-        ...scope.selectedReferences.map((reference, index) => renderSelectedReference(reference, index + 1))
-      ]
-    : [
-        '优先参考资料状态：',
-        '- 当前用户未显式指定优先参考资料。',
-        '- 当前应先使用默认范围，而不要把这理解成无资料可查。'
-      ]
+  const selectedReferencesText =
+    scope.selectedReferences.length > 0
+      ? `用户已选资料：
+${scope.selectedReferences.map((reference, index) => renderSelectedReference(reference, index + 1)).join('\n')}`
+      : `用户已选资料：
+- 当前没有用户显式选择的参考资料。`
 
-  return [
-    ...workspaceLines,
-    '',
-    ...defaultScopeLines,
-    '',
-    ...preferredReferenceLines,
-    '',
-    renderDocumentNarrowingText(scope)
-  ].join('\n')
+  return `${workspaceText}
+
+${fieldGuideText}
+
+${selectedReferencesText}`
 }

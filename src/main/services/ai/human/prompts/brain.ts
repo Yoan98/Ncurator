@@ -272,10 +272,6 @@ ${input.state.task.userInput}
 ${renderReferenceScopeText(input.ctx.referenceScope)}
   </reference_scope>
 
-  <search_strategy>
-检索思路：先用搜索类工具定位最相关的文档或内容片段，再在必要时回到原文件做精读或结构定位。
-  </search_strategy>
-
   <terminal_platform>
 ${renderPlatformText(input.ctx)}
   </terminal_platform>

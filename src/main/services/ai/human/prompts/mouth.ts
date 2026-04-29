@@ -7,7 +7,7 @@ import { renderHumanArtifactLines } from '../shared/runtimeRenderers'
 import { renderReferenceScopeText } from '../../prompts/referenceScope'
 import type { HumanState } from '../types'
 
-export const buildMouthPrompt = (input: { state: HumanState; ctx?: AiRunContext }) => {
+export const buildMouthPrompt = (input: { state: HumanState; ctx: AiRunContext }) => {
   const system = `
 <system>
   <principles>
@@ -57,14 +57,7 @@ ${input.state.task.userInput}
   </task_goal>
 
   <reference_scope>
-${renderReferenceScopeText(
-  input.ctx?.referenceScope || {
-    selectedReferences: [],
-    hasExplicitSelectedReferences: false,
-    hasDirectDocumentNarrowing: false,
-    defaultKnowledgeScope: 'unavailable'
-  }
-)}
+${renderReferenceScopeText(input.ctx.referenceScope)}
   </reference_scope>
 
   <your_notes>

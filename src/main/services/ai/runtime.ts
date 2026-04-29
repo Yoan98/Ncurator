@@ -19,6 +19,9 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
   }
 
   const normalizedWorkspace = normalizeWorkspaceBinding(payload.workspace)
+  if (!normalizedWorkspace) {
+    throw new Error('AI 运行必须绑定工作区，当前请求缺少工作区信息。')
+  }
   const normalizedReferences = normalizeSelectedReferences(payload.selectedReferences)
   const platform = getAiRuntimePlatform()
 
