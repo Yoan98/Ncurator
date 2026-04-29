@@ -25,16 +25,16 @@ describe('ai human mock-llm backend', () => {
             'human.brain': [
               {
                 output: buildLearnSkillsDecision({
-                  skillIds: ['workspace-cli'],
-                  summary: '第一次学习 workspace-cli',
-                  reason: '需要 terminal skill。',
+                  skillIds: ['docx-read'],
+                  summary: '第一次学习 docx-read',
+                  reason: '先补齐一个真实 external skill。',
                   expectedOutcome: '加载 tool 后继续执行。'
                 })
               },
               {
                 output: buildLearnSkillsDecision({
-                  skillIds: ['workspace-cli'],
-                  summary: '重复学习 workspace-cli',
+                  skillIds: ['docx-read'],
+                  summary: '重复学习 docx-read',
                   reason: '故意触发 learning watch_hint。',
                   expectedOutcome: '验证 watch_hint 后能继续回到 brain。'
                 })
@@ -90,7 +90,7 @@ describe('ai human mock-llm backend', () => {
                 event.source === 'learning' &&
                 event.code === 'learning_no_effect' &&
                 Array.isArray(event.detail?.duplicateSkillIds) &&
-                event.detail.duplicateSkillIds.includes('workspace-cli')
+                event.detail.duplicateSkillIds.includes('docx-read')
             ) &&
             toolResults.some((event) => event.toolName === 'workspace_run_command'),
           {
@@ -108,5 +108,5 @@ describe('ai human mock-llm backend', () => {
         )
       }
     })
-  })
+  }, 15_000)
 })

@@ -5,7 +5,8 @@ import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
   HUMAN_RISK_REPORT_DRAFT_USER_INPUT,
   hasUnchangedFileBytes,
-  seedRiskReportWorkspace
+  loadRiskReportWorkspaceSeed,
+  SHARED_WORKSPACE_FIXTURE_PATH
 } from '../../../harness/backend/aiLiveTestData'
 import {
   collectDocxWriteChangedBlocks,
@@ -55,7 +56,7 @@ describe('ai human live backend', () => {
       suite: 'human',
       groups: ['live'],
       description: '验证 live 模式下 human 会在真实长任务里串起模板定位、资料取证、docx 编辑与待确认稿交付。',
-      fixtures: [],
+      fixtures: [SHARED_WORKSPACE_FIXTURE_PATH],
       runMode: 'single',
       runtimeModelName: hasLiveLlmConfigInEnv('primary')
         ? loadLiveLlmConfigFromEnv('primary').model_name
@@ -70,7 +71,7 @@ describe('ai human live backend', () => {
         }
 
         await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv('primary'))
-        const workspaceSeed = await seedRiskReportWorkspace(runtime)
+        const workspaceSeed = await loadRiskReportWorkspaceSeed(runtime)
 
         const runner = createHumanTestRunner(runtime)
         const output = await runner.run({

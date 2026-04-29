@@ -3,7 +3,6 @@ import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
   buildCompleteTaskDecision,
-  buildLearnSkillsDecision,
   buildToolDecision,
   filterAiRunEventsByType
 } from '../testUtils'
@@ -23,14 +22,6 @@ describe('ai human mock-llm backend', () => {
         const runner = createHumanTestRunner(runtime, {
           structuredOutputScript: {
             'human.brain': [
-              {
-                output: buildLearnSkillsDecision({
-                  skillIds: ['workspace-cli'],
-                  summary: '学习 terminal skill',
-                  reason: '需要连续执行两次只读命令。',
-                  expectedOutcome: '获取 terminal 工具。'
-                })
-              },
               {
                 output: buildToolDecision({
                   toolName: 'workspace_run_command',
@@ -104,5 +95,5 @@ describe('ai human mock-llm backend', () => {
         )
       }
     })
-  })
+  }, 15_000)
 })

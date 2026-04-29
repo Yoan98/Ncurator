@@ -20,8 +20,8 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
   'workspace-cli': {
     skillId: 'workspace-cli',
     familyId: 'terminal',
-    source: 'external',
-    countsTowardToolBudget: true,
+    source: 'builtin',
+    countsTowardToolBudget: false,
     title: 'workspace-cli',
     description: '在当前 workspace 内执行单条 CLI 命令。',
     whenToUse: '当任务需要通过命令行自主完成文件浏览、搜索、读取、验证或生成中间结果时使用。',
@@ -59,8 +59,8 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
   'kb-retrieval': {
     skillId: 'kb-retrieval',
     familyId: 'kb',
-    source: 'external',
-    countsTowardToolBudget: true,
+    source: 'builtin',
+    countsTowardToolBudget: false,
     title: 'kb-retrieval',
     description: `工作区知识库检索技能；背后是通过对文档进行分块建立的 fts 和向量索引来实现的，因此检索的基本单位是内容块，而不是整个文档；
     1.可查询当前工作区知识库中已建立索引的文档列表
@@ -79,6 +79,15 @@ export const isBuiltinSkillId = (skillId: string): skillId is RuntimeSkillId =>
 
 export const isLearnableSkillId = (skillId: string): skillId is RuntimeSkillId =>
   LEARNABLE_RUNTIME_SKILL_IDS.includes(skillId as (typeof LEARNABLE_RUNTIME_SKILL_IDS)[number])
+
+export const assertExternalLearnedSkillIds = (learnedSkillIds: RuntimeSkillId[]): void => {
+  const invalidBuiltinSkillIds = learnedSkillIds.filter((skillId) => isBuiltinSkillId(skillId))
+  if (invalidBuiltinSkillIds.length === 0) return
+
+  throw new Error(
+    `learnedSkillIds 只允许 external skill，检测到 builtin skill=[${invalidBuiltinSkillIds.join(', ')}]。`
+  )
+}
 
 export const getSkillDefinition = (skillId: RuntimeSkillId): SkillDefinition => {
   const definition = SKILL_DEFINITIONS[skillId]

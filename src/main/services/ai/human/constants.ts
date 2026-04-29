@@ -1,13 +1,12 @@
 export const AI_TOOL_FAMILY_IDS = ['terminal', 'kb', 'docx', 'internal'] as const
 
-export const BUILTIN_RUNTIME_SKILL_IDS = ['history-recall'] as const
-
-export const EXTERNAL_RUNTIME_SKILL_IDS = [
+export const BUILTIN_RUNTIME_SKILL_IDS = [
+  'history-recall',
   'workspace-cli',
-  'docx-read',
-  'docx-write',
   'kb-retrieval'
 ] as const
+
+export const EXTERNAL_RUNTIME_SKILL_IDS = ['docx-read', 'docx-write'] as const
 
 export const LEARNABLE_RUNTIME_SKILL_IDS = EXTERNAL_RUNTIME_SKILL_IDS
 
@@ -45,6 +44,7 @@ export const HUMAN_HAND_PLAN_INVALID_REASONS = [
 ] as const
 export const HUMAN_WATCH_HINT_CODES = [
   'learning_no_effect',
+  'learning_builtin_skill_requested',
   'learning_tool_budget_exceeded',
   'hand_plan_invalid',
   'hand_tool_limit_exceeded',

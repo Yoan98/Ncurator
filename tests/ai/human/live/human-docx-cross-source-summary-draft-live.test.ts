@@ -9,6 +9,7 @@ import {
   DOCX_CROSS_SOURCE_SUMMARY_FIXTURE_PATHS,
   DOCX_CROSS_SOURCE_SUMMARY_REPORT_RELATIVE_PATH,
   HUMAN_DOCX_CROSS_SOURCE_SUMMARY_USER_INPUT,
+  SHARED_WORKSPACE_FIXTURE_PATH,
   resolveSelectedDocxFixtures
 } from '../../../harness/backend/aiLiveTestData'
 import {
@@ -39,7 +40,7 @@ describe('ai human live backend', () => {
         suite: 'human',
         groups: ['live'],
         description: '验证 live 模式下 human 会读取两份已选课件，自主创建总结 docx 并写入跨源总结。',
-        fixtures: DOCX_CROSS_SOURCE_SUMMARY_FIXTURE_PATHS,
+        fixtures: [SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
         runtimeModelName: hasLiveLlmConfigInEnv('primary')
           ? loadLiveLlmConfigFromEnv('primary').model_name

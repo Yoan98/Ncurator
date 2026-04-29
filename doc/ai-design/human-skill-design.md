@@ -44,6 +44,7 @@
 - 不需要经过 `learning`。
 - 不写入 `learnedSkillIds`。
 - 不计入 active tool budget。
+- 这里的“不计入 active tool budget”只表示不占 `learning` 阶段的 active tools 容量名额，不表示不计入真实工具调用次数限制。
 - 会直接出现在 `brain` 可见的 `skill_catalog` 中。
 
 ### 5.2 external skill
@@ -66,7 +67,7 @@
 
 ### `workspace-cli`
 
-- 类型：external
+- 类型：builtin
 - 职责：在当前 workspace 内执行单条 CLI 命令，让 AI 自主通过命令行完成浏览、搜索、读取、验证和生成中间结果。
 - 工具列表：
   - `workspace_run_command`
@@ -99,7 +100,7 @@
 
 ### `kb-retrieval`
 
-- 类型：external
+- 类型：builtin
 - 职责：工作区知识库检索技能；可查询当前工作区知识库中已建立索引的文档列表，也可按查询词或语句检索相关内容片段，并返回命中证据及其来源文档。背后是通过对文档进行分块建立的 fts 和向量索引来实现的，因此检索的基本单位是内容块，而不是整个文档。
 - 工具列表：
   - `kb_list_documents`
@@ -109,6 +110,7 @@
 ## 7. 与状态和 prompt 的关系
 
 - `learnedSkillIds` 只记录 external 且已经成功学习过的 skill。
+- 如果 `learnedSkillIds` 中出现 builtin skill，说明状态已经不符合当前运行时语义，应直接按状态错误处理，而不是兼容清洗。
 - `brain` 真正可见、可用的能力集合，是 builtin + learned external，也就是 effective skills。
 - `skill_catalog` 应渲染 effective skills，而不是原始文件列表或实现目录。
 - `learning` 的结果会进入 `lastLearningOutcome` 与 `roundHistory`，但 skill 的完整说明不应长期持久化进 `HumanState`。

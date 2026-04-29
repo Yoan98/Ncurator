@@ -7,6 +7,7 @@ import {
   buildSelectedDocxFixtureReferences,
   DOCX_POSITIONED_FIXTURE_PATHS,
   HUMAN_DOCX_POSITIONED_STRUCTURAL_EDIT_FALLBACK_USER_INPUT,
+  SHARED_WORKSPACE_FIXTURE_PATH,
   resolveSelectedDocxFixtures
 } from '../../../harness/backend/aiLiveTestData'
 import {
@@ -38,7 +39,7 @@ describe('ai human live backend', () => {
         groups: ['live'],
         description:
           '验证 live 模式下 human 在复杂 positioned docx 中命中写入需求时不会自动编辑，而是优雅回退并给出手动补充建议。',
-        fixtures: DOCX_POSITIONED_FIXTURE_PATHS,
+        fixtures: [SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
         runtimeModelName: hasLiveLlmConfigInEnv('primary')
           ? loadLiveLlmConfigFromEnv('primary').model_name

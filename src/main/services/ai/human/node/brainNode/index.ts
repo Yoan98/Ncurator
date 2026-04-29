@@ -3,11 +3,13 @@ import { humanDecisionSchema } from '../../schema'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { applyStableMemoryPatch } from '../../memory/stableMemory'
 import { buildBrainPrompt } from '../../prompts/brain'
+import { assertExternalLearnedSkillIds } from '../../skills'
 import { applyBrainDecisionTransition } from '../utils/stateTransitions'
 
 export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCache }) => {
   return async (state: HumanState): Promise<HumanState> => {
     input.ctx.checkCancelled()
+    assertExternalLearnedSkillIds(state.skills.learnedSkillIds)
     input.cache.currentState = state
 
     const rawOutput = await input.ctx.chatStructured({

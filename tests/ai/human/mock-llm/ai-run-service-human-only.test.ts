@@ -52,10 +52,10 @@ describe('ai human mock-llm backend', () => {
               'human.brain': [
                 {
                   output: buildLearnSkillsDecision({
-                    skillIds: ['workspace-cli'],
-                    summary: '先学习 workspace-cli',
-                    reason: '需要 terminal skill 才能执行真实只读命令。',
-                    expectedOutcome: '获得 terminal 工具并继续推进。'
+                    skillIds: ['docx-read'],
+                    summary: '先学习 docx-read',
+                    reason: '保留完整的 human 四段主链路。',
+                    expectedOutcome: '补齐一个真实 external skill 后继续推进。'
                   })
                 },
                 {

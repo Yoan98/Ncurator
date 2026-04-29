@@ -1,22 +1,32 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import type { SelectedReference } from '../../../src/shared/types'
-import { writeTestDocxFile } from './aiToolHarness'
 import type { BackendTestRuntime, SeedKbDocumentInput } from './test-types'
 
 export const HUMAN_RISK_REPORT_DRAFT_USER_INPUT =
   '我下午要把本周风险周报发出去。工作区里应该有一份上周用过的 Word 周报模板，但我忘了文件名。你先帮我找到那份模板，再根据工作区里的现有材料，把本周风险结论和负责人补进去，整理成待确认稿。最后告诉我你改了哪几处，依据分别来自哪里。'
 
+export const SHARED_WORKSPACE_FIXTURE_PATH = 'tests/fixtures/workspace' as const
+const WORKSPACE_LEARNING_FIXTURE_DIR = `${SHARED_WORKSPACE_FIXTURE_PATH}/学习笔记`
+const WORKSPACE_WORK_FIXTURE_DIR = `${SHARED_WORKSPACE_FIXTURE_PATH}/工作`
+
+export const RISK_REPORT_TEMPLATE_FIXTURE_PATH =
+  `${WORKSPACE_WORK_FIXTURE_DIR}/weekly-risk-report-template.docx` as const
+export const RISK_REPORT_SUMMARY_FIXTURE_PATH =
+  `${WORKSPACE_WORK_FIXTURE_DIR}/weekly-risk-summary.md` as const
+export const RISK_REPORT_OWNER_NOTE_FIXTURE_PATH =
+  `${WORKSPACE_WORK_FIXTURE_DIR}/owner-note.md` as const
+
 export const DOCX_READING_FIXTURE_PATHS = [
-  'tests/fixtures/ai/docx/深度学习.docx',
-  'tests/fixtures/ai/docx/图形学.docx'
+  `${WORKSPACE_LEARNING_FIXTURE_DIR}/深度学习.docx`,
+  `${WORKSPACE_LEARNING_FIXTURE_DIR}/图形学.docx`
 ] as const
 
-export const DOCX_POSITIONED_FIXTURE_PATHS = ['tests/fixtures/ai/docx/图形学.docx'] as const
+export const DOCX_POSITIONED_FIXTURE_PATHS = [`${WORKSPACE_LEARNING_FIXTURE_DIR}/图形学.docx`] as const
 
 export const DOCX_MULTI_EDIT_FIXTURE_PATHS = [
-  'tests/fixtures/ai/docx/人工智能探究课堂PRD.docx',
-  'tests/fixtures/ai/docx/交互式探究学习案例：产业转移.docx'
+  `${SHARED_WORKSPACE_FIXTURE_PATH}/人工智能探究课堂PRD.docx`,
+  `${SHARED_WORKSPACE_FIXTURE_PATH}/交互式探究学习案例：产业转移.docx`
 ] as const
 
 export const DOCX_CROSS_SOURCE_SUMMARY_FIXTURE_PATHS = DOCX_READING_FIXTURE_PATHS
@@ -26,7 +36,7 @@ export const DOCX_CROSS_SOURCE_SUMMARY_REPORT_RELATIVE_PATH = '深度学习与�
 export const DOCX_ALL_FIXTURE_PATHS = [
   ...DOCX_READING_FIXTURE_PATHS,
   ...DOCX_MULTI_EDIT_FIXTURE_PATHS,
-  'tests/fixtures/ai/docx/sample-edit.docx'
+  `${SHARED_WORKSPACE_FIXTURE_PATH}/sample-edit.docx`
 ] as const
 
 export const HUMAN_DOCX_CAUSE_REMEDY_READING_USER_INPUT =
@@ -207,7 +217,7 @@ export const seedKbGuidedDocxKb = async (
     {
       id: 'doc-sample-edit',
       name: 'sample-edit.docx',
-      filePath: resolveSelectedDocxFixtures(runtime, ['tests/fixtures/ai/docx/sample-edit.docx'])[0]
+      filePath: resolveSelectedDocxFixtures(runtime, [`${SHARED_WORKSPACE_FIXTURE_PATH}/sample-edit.docx`])[0]
         ?.workspacePath,
       chunks: [
         {
@@ -223,206 +233,21 @@ export const seedKbGuidedDocxKb = async (
   return validDocuments.map((document) => document.id)
 }
 
-export const seedRiskReportWorkspace = async (
+export const loadRiskReportWorkspaceSeed = async (
   runtime: BackendTestRuntime
 ): Promise<RiskReportWorkspaceSeed> => {
   const expectedRiskConclusion = '在合规签署前，风险状态保持为“待跟进”。'
   const expectedOwnerSummary = '最终复核窗口由合规负责人 Alice 牵头。'
-  const templateBlocks = [
-    {
-      type: 'heading' as const,
-      text: '本周风险周报',
-      level: 1
-    },
-    {
-      type: 'paragraph' as const,
-      text: '适用场景：每周对外同步项目交付风险，提交前请按最新材料补齐结论和责任人。'
-    },
-    {
-      type: 'heading' as const,
-      text: '一、风险概览',
-      level: 2
-    },
-    {
-      type: 'paragraph' as const,
-      text: '本周风险结论：RISK_TODO'
-    },
-    {
-      type: 'paragraph' as const,
-      text: '补充说明：如状态仍未收口，请保留一句话解释当前卡点。'
-    },
-    {
-      type: 'heading' as const,
-      text: '二、责任人与动作',
-      level: 2
-    },
-    {
-      type: 'paragraph' as const,
-      text: '负责人说明：OWNER_TODO'
-    },
-    {
-      type: 'paragraph' as const,
-      text: '下一步动作：请在发出前确认责任人和最终复核窗口表述一致。'
-    },
-    {
-      type: 'heading' as const,
-      text: '三、备注',
-      level: 2
-    },
-    {
-      type: 'paragraph' as const,
-      text: '备注：本模板用于每周固定汇报，归档前请勿删除历史说明。'
-    }
-  ]
-  const notesBlocks = [
-    {
-      type: 'heading' as const,
-      text: '团队同步纪要',
-      level: 1
-    },
-    {
-      type: 'paragraph' as const,
-      text: '今天同步了供应商接口、法务签署和预算排期。'
-    },
-    {
-      type: 'paragraph' as const,
-      text: '这里只记录会议纪要，不是周报模板，也不作为最终口径。'
-    }
-  ]
-  const archivedReportBlocks = [
-    {
-      type: 'heading' as const,
-      text: '上周已发版风险周报（归档）',
-      level: 1
-    },
-    {
-      type: 'paragraph' as const,
-      text: '说明：本文件为上周已发送版本，仅供归档回看，不要直接复用。'
-    },
-    {
-      type: 'paragraph' as const,
-      text: '本周风险结论：供应商接口风险已解除。'
-    },
-    {
-      type: 'paragraph' as const,
-      text: '负责人说明：由交付经理 Kevin 完成收口。'
-    }
-  ]
-
-  const templateRelativePath = 'weekly-risk-report-template.docx'
-  const archivedReportRelativePath = 'weekly-risk-report-2026-04-18-final.docx'
-  const notesRelativePath = 'team-sync-notes.docx'
-  const riskSummaryRelativePath = 'weekly-risk-summary.md'
-  const ownerNoteRelativePath = 'owner-note.md'
-  const summaryHintRelativePath = 'weekly-risk-summary.txt'
-  const milestonesRelativePath = 'project-milestones.md'
-  const vendorFollowupRelativePath = 'vendor-followup.txt'
-
-  const riskSummaryText = `# 本周风险结论整理
-
-背景：
-- 合规签署尚未完成，供应商仍在补充最后一版附件。
-- 对外口径需要和法务、交付两侧保持一致，不能提前写成“已解除”。
-
-建议写法：
-- 本周风险结论：${expectedRiskConclusion}
-- 备注建议：强调当前卡点仍在合规签署完成前的最终确认。
-`
-  const ownerNoteText = `# 负责人说明
-
-请在周报中使用以下责任人口径：
-- ${expectedOwnerSummary}
-- 财务接口人 Bob 负责补齐付款材料，但不作为最终 owner 对外同步。
-
-补充：
-- 如需说明动作分工，可以把 Bob 写在下一步动作，不要写进负责人主句。
-`
-  const summaryHintText = '请在找到正式模板后再补全文档内容。\n'
-  const milestonesText = `# 项目里程碑追踪
-
-- 05/02：完成供应商补件
-- 05/03：安排合规复核窗口
-- 05/05：准备周报外发
-`
-  const vendorFollowupText = `供应商跟进记录：
-- 已补齐接口清单
-- 待补最后一份合规附件
-- 该文件仅用于内部追踪，不直接作为周报结论
-`
-
-  const writeWorkspaceTextFile = async (
-    relativePath: string,
-    text: string,
-    summary: string
-  ): Promise<string> => {
-    const absolutePath = path.join(runtime.workspaceRoot, relativePath)
-    await fs.writeFile(absolutePath, text, 'utf8')
-    runtime.recordSeedWorkspaceFile({
-      relativePath,
-      absolutePath,
-      summary,
-      metadata: {
-        format: 'text',
-        text
-      }
-    })
-    return absolutePath
-  }
-
-  const templatePath = await writeTestDocxFile(
+  const templatePath = runtime.getFixtureWorkspacePath(RISK_REPORT_TEMPLATE_FIXTURE_PATH)
+  const templateRelativePath = path.relative(runtime.workspaceRoot, templatePath)
+  const riskSummaryRelativePath = path.relative(
     runtime.workspaceRoot,
-    templateRelativePath,
-    templateBlocks
+    runtime.getFixtureWorkspacePath(RISK_REPORT_SUMMARY_FIXTURE_PATH)
   )
-  runtime.recordSeedWorkspaceFile({
-    relativePath: templateRelativePath,
-    absolutePath: templatePath,
-    summary: '风险周报模板 docx',
-    metadata: {
-      format: 'docx',
-      blocks: templateBlocks
-    }
-  })
-
-  const notesPath = await writeTestDocxFile(runtime.workspaceRoot, notesRelativePath, notesBlocks)
-  runtime.recordSeedWorkspaceFile({
-    relativePath: notesRelativePath,
-    absolutePath: notesPath,
-    summary: '干扰项会议纪要 docx',
-    metadata: {
-      format: 'docx',
-      blocks: notesBlocks
-    }
-  })
-
-  const archivedReportPath = await writeTestDocxFile(
+  const ownerNoteRelativePath = path.relative(
     runtime.workspaceRoot,
-    archivedReportRelativePath,
-    archivedReportBlocks
+    runtime.getFixtureWorkspacePath(RISK_REPORT_OWNER_NOTE_FIXTURE_PATH)
   )
-  runtime.recordSeedWorkspaceFile({
-    relativePath: archivedReportRelativePath,
-    absolutePath: archivedReportPath,
-    summary: '上周已发送的风险周报归档版',
-    metadata: {
-      format: 'docx',
-      blocks: archivedReportBlocks
-    }
-  })
-
-  await writeWorkspaceTextFile(
-    riskSummaryRelativePath,
-    riskSummaryText,
-    '本周风险结论来源 markdown'
-  )
-  await writeWorkspaceTextFile(
-    ownerNoteRelativePath,
-    ownerNoteText,
-    '负责人说明来源 markdown'
-  )
-  await writeWorkspaceTextFile(summaryHintRelativePath, summaryHintText, '风险摘要提示文本')
-  await writeWorkspaceTextFile(milestonesRelativePath, milestonesText, '项目里程碑干扰项')
-  await writeWorkspaceTextFile(vendorFollowupRelativePath, vendorFollowupText, '供应商跟进干扰项')
 
   const originalTemplateBytes = await fs.readFile(templatePath)
 

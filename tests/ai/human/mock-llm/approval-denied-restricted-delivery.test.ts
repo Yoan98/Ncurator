@@ -5,7 +5,6 @@ import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
   buildCompleteTaskDecision,
-  buildLearnSkillsDecision,
   buildToolDecision,
   filterAiRunEventsByType
 } from '../testUtils'
@@ -27,14 +26,6 @@ describe('ai human mock-llm backend', () => {
           approvalPolicy: 'deny-medium-high',
           structuredOutputScript: {
             'human.brain': [
-              {
-                output: buildLearnSkillsDecision({
-                  skillIds: ['workspace-cli'],
-                  summary: '学习 terminal skill',
-                  reason: '需要触发一次受审批约束的命令。',
-                  expectedOutcome: '获得 terminal 工具。'
-                })
-              },
               {
                 output: buildToolDecision({
                   toolName: 'workspace_run_command',

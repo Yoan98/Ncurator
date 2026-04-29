@@ -3,6 +3,7 @@ import type { JsonObject, JsonValue } from '../../../../shared/types'
 import { aiArtifactRefSchema } from '../schema'
 import {
   AI_TOOL_FAMILY_IDS,
+  BUILTIN_RUNTIME_SKILL_IDS,
   HUMAN_HAND_PLAN_INVALID_REASONS,
   HUMAN_ROUND_EXECUTION_KINDS,
   HUMAN_SKILL_SOURCES,
@@ -98,6 +99,13 @@ export const humanWatchHintSchema = z.discriminatedUnion('code', [
       requestedSkillIds: z.array(z.string().min(1)),
       duplicateSkillIds: z.array(runtimeSkillIdSchema),
       unknownSkillIds: z.array(z.string().min(1))
+    })
+  }),
+  z.object({
+    code: z.literal('learning_builtin_skill_requested'),
+    detail: z.object({
+      requestedSkillIds: z.array(z.string().min(1)),
+      builtinSkillIds: z.array(z.enum(BUILTIN_RUNTIME_SKILL_IDS)).min(1)
     })
   }),
   z.object({
@@ -295,7 +303,15 @@ export const humanMemorySchema = z.object({
 })
 
 export const humanSkillsSchema = z.object({
-  learnedSkillIds: z.array(runtimeSkillIdSchema)
+  learnedSkillIds: z
+    .array(runtimeSkillIdSchema)
+    .refine(
+      (skillIds) =>
+        skillIds.every((skillId) => !BUILTIN_RUNTIME_SKILL_IDS.includes(skillId as (typeof BUILTIN_RUNTIME_SKILL_IDS)[number])),
+      {
+        message: 'learnedSkillIds 只允许 external skill。'
+      }
+    )
 })
 
 export const humanTraceStepSchema = z.object({

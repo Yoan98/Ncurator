@@ -42,7 +42,7 @@ describe('ai human mock-llm backend', () => {
                   },
                   nextAction: {
                     action: 'learning',
-                    wantLearnSkillIds: ['workspace-cli']
+                    wantLearnSkillIds: ['docx-read']
                   }
                 }
               },
@@ -119,5 +119,5 @@ describe('ai human mock-llm backend', () => {
         )
       }
     })
-  })
+  }, 15_000)
 })

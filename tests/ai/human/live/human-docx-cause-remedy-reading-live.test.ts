@@ -4,9 +4,9 @@ import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
   buildSelectedDocxFixtureReferences,
-  DOCX_ALL_FIXTURE_PATHS,
   DOCX_READING_FIXTURE_PATHS,
   HUMAN_DOCX_CAUSE_REMEDY_READING_USER_INPUT,
+  SHARED_WORKSPACE_FIXTURE_PATH,
   resolveSelectedDocxFixtures
 } from '../../../harness/backend/aiLiveTestData'
 import {
@@ -47,7 +47,7 @@ describe('ai human live backend', () => {
         suite: 'human',
         groups: ['live'],
         description: '验证 live 模式下 human 会基于两份已选 docx 覆盖过拟合与反走样的核心事实，并对缺失项保持保守。',
-        fixtures: DOCX_ALL_FIXTURE_PATHS,
+        fixtures: [SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
         runtimeModelName: hasLiveLlmConfigInEnv('primary')
           ? loadLiveLlmConfigFromEnv('primary').model_name

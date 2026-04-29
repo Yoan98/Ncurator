@@ -4,7 +4,10 @@ import { describe, it } from 'vitest'
 import { XMLSerializer } from '@xmldom/xmldom'
 import { loadDocxBundle } from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/blockIndex'
 import { createDocxToolHarness } from '../../../harness/backend/aiToolHarness'
-import { seedRiskReportWorkspace } from '../../../harness/backend/aiLiveTestData'
+import {
+  loadRiskReportWorkspaceSeed,
+  SHARED_WORKSPACE_FIXTURE_PATH
+} from '../../../harness/backend/aiLiveTestData'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import type { DocxMutationResult, DocxOutlineResult, DocxSearchResult } from './testUtils'
 
@@ -17,10 +20,10 @@ describe('ai tool docx backend', () => {
       suite: 'tool',
       groups: ['docx'],
       description: '验证风险周报场景在 review 生成后可检查待确认稿，并在 commit 后把结果落盘到源文档。',
-      fixtures: [],
+      fixtures: [SHARED_WORKSPACE_FIXTURE_PATH],
       runMode: 'single',
       execute: async (runtime) => {
-        const workspaceSeed = await seedRiskReportWorkspace(runtime)
+        const workspaceSeed = await loadRiskReportWorkspaceSeed(runtime)
         runtime.fileReviewService.beginRun({
           runId: runtime.runId,
           sessionId: 'docx-risk-report-review-commit-session',

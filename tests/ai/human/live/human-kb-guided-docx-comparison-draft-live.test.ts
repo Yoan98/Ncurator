@@ -6,8 +6,8 @@ import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
   buildKbGuidedDocxWorkspaceSeed,
-  DOCX_ALL_FIXTURE_PATHS,
   HUMAN_KB_GUIDED_DOCX_COMPARISON_DRAFT_USER_INPUT,
+  SHARED_WORKSPACE_FIXTURE_PATH,
   seedKbGuidedDocxKb
 } from '../../../harness/backend/aiLiveTestData'
 import {
@@ -29,7 +29,7 @@ describe('ai human live backend', () => {
         suite: 'human',
         groups: ['live'],
         description: '验证 live 模式下 human 会先用 KB 缩圈定位相关课件，再把内容回写到另外两份目标 docx。',
-        fixtures: DOCX_ALL_FIXTURE_PATHS,
+        fixtures: [SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
         runtimeModelName: hasLiveLlmConfigInEnv('primary')
           ? loadLiveLlmConfigFromEnv('primary').model_name

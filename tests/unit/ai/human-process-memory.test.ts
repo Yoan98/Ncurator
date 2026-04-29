@@ -148,7 +148,7 @@ describe('ai unit human memory history', () => {
         expectedOutcome: `第 ${round} 轮预期`,
         nextAction: {
           action: 'learning',
-          wantLearnSkillIds: ['workspace-cli']
+          wantLearnSkillIds: ['docx-read']
         }
       })
 
@@ -188,12 +188,12 @@ describe('ai unit human memory history', () => {
                   })
                 : buildLearningExecution({
                     learningOutcome: {
-                      requestedSkillIds: ['workspace-cli'],
-                      loadedSkillIds: round === 1 ? ['workspace-cli'] : [],
-                      skippedDuplicateSkillIds: round === 1 ? [] : ['workspace-cli'],
+                      requestedSkillIds: ['docx-read'],
+                      loadedSkillIds: round === 1 ? ['docx-read'] : [],
+                      skippedDuplicateSkillIds: round === 1 ? [] : ['docx-read'],
                       skippedUnknownSkillIds: [],
                       evictedSkillIds: [],
-                      activeToolCount: 1
+                      activeToolCount: 4
                     }
                   }),
             createdAt: round

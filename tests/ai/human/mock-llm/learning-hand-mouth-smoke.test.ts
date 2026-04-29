@@ -27,10 +27,10 @@ describe('ai human mock-llm backend', () => {
             'human.brain': [
               {
                 output: buildLearnSkillsDecision({
-                  skillIds: ['workspace-cli'],
-                  summary: '先学习 workspace-cli',
-                  reason: '需要先加载 terminal skill 才能进行真实工具调用。',
-                  expectedOutcome: '获得 terminal 工具后继续推进。'
+                  skillIds: ['docx-read'],
+                  summary: '先学习 docx-read',
+                  reason: '保留完整 brain -> learning -> hand -> mouth 四段主链路。',
+                  expectedOutcome: '补齐一个真实 external skill 后继续调用 builtin terminal 工具。'
                 })
               },
               {
@@ -111,14 +111,18 @@ describe('ai human mock-llm backend', () => {
           }
         )
 
-        runtime.assertThat(result.mouthPrompt.includes('不来自当前本地资料') && result.mouthPrompt.includes('[brain]'), {
-          name: 'human-mainline-passes-brain-delivery-guidance-to-mouth',
-          message: 'brain 输出的 delivery guidance 应作为结构化收口说明传递给 mouth prompt。',
-          data: {
-            mouthPrompt: result.mouthPrompt
+        runtime.assertThat(
+          result.mouthPrompt.includes('<delivery_guidance>') &&
+            result.mouthPrompt.includes('不来自当前本地资料'),
+          {
+            name: 'human-mainline-passes-brain-delivery-guidance-to-mouth',
+            message: 'brain 输出的 delivery guidance 应作为结构化收口说明传递给 mouth prompt。',
+            data: {
+              mouthPrompt: result.mouthPrompt
+            }
           }
-        })
+        )
       }
     })
-  })
+  }, 15_000)
 })

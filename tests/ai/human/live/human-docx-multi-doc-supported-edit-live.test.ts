@@ -7,6 +7,7 @@ import {
   buildSelectedDocxFixtureReferences,
   DOCX_MULTI_EDIT_FIXTURE_PATHS,
   HUMAN_DOCX_MULTI_DOC_SUPPORTED_EDIT_USER_INPUT,
+  SHARED_WORKSPACE_FIXTURE_PATH,
   resolveSelectedDocxFixtures
 } from '../../../harness/backend/aiLiveTestData'
 import {
@@ -37,7 +38,7 @@ describe('ai human live backend', () => {
         suite: 'human',
         groups: ['live'],
         description: '验证 live 模式下 human 会参考一份正常 flow docx，回写另一份目标 docx，并生成审阅稿。',
-        fixtures: DOCX_MULTI_EDIT_FIXTURE_PATHS,
+        fixtures: [SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
         runtimeModelName: hasLiveLlmConfigInEnv('primary')
           ? loadLiveLlmConfigFromEnv('primary').model_name

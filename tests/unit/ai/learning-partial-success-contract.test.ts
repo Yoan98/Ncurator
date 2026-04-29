@@ -69,29 +69,29 @@ describe('ai unit learning partial success', () => {
     const learningNode = createLearningNode({ ctx, cache })
     const baseState = createInitialHumanState({
       taskId: 'task-duplicate-plus-new',
-      userInput: '请学习 workspace-cli 和 docx-read'
+      userInput: '请学习 docx-read 和 docx-write'
     })
 
     const nextState = await learningNode({
       ...baseState,
       skills: {
-        learnedSkillIds: ['workspace-cli']
+        learnedSkillIds: ['docx-read']
       },
       execution: {
         ...baseState.execution,
-        currentDecision: buildLearningDecision(['workspace-cli', 'docx-read'])
+        currentDecision: buildLearningDecision(['docx-read', 'docx-write'])
       }
     })
 
     expect(nextState.execution.watchHint).toBeUndefined()
     expect(nextState.execution.lastLearningOutcome).toMatchObject({
-      loadedSkillIds: ['docx-read'],
-      skippedDuplicateSkillIds: ['workspace-cli'],
+      loadedSkillIds: ['docx-write'],
+      skippedDuplicateSkillIds: ['docx-read'],
       skippedUnknownSkillIds: []
     })
-    expect(nextState.skills.learnedSkillIds).toEqual(['workspace-cli', 'docx-read'])
+    expect(nextState.skills.learnedSkillIds).toEqual(['docx-read', 'docx-write'])
     expect(nextState.memory.history.roundHistory.at(-1)?.execution.kind).toBe('learning')
-    expect(cache.skillToolsets['docx-read']).toBeTruthy()
+    expect(cache.skillToolsets['docx-write']).toBeTruthy()
   })
 
   it('loads known skills while skipping unknown ones', async () => {
@@ -100,27 +100,27 @@ describe('ai unit learning partial success', () => {
     const learningNode = createLearningNode({ ctx, cache })
     const baseState = createInitialHumanState({
       taskId: 'task-unknown-plus-new',
-      userInput: '请学习 unknown-skill 和 workspace-cli'
+      userInput: '请学习 unknown-skill 和 docx-read'
     })
 
     const nextState = await learningNode({
       ...baseState,
       execution: {
         ...baseState.execution,
-        currentDecision: buildLearningDecision(['unknown-skill', 'workspace-cli'])
+        currentDecision: buildLearningDecision(['unknown-skill', 'docx-read'])
       }
     })
 
     expect(nextState.execution.watchHint).toBeUndefined()
     expect(nextState.execution.lastLearningOutcome).toMatchObject({
-      loadedSkillIds: ['workspace-cli'],
+      loadedSkillIds: ['docx-read'],
       skippedUnknownSkillIds: ['unknown-skill']
     })
-    expect(nextState.skills.learnedSkillIds).toEqual(['workspace-cli'])
+    expect(nextState.skills.learnedSkillIds).toEqual(['docx-read'])
     expect(nextState.memory.history.roundHistory.at(-1)?.execution.kind).toBe('learning')
   })
 
-  it('treats builtin-only requests as no effect', async () => {
+  it('treats builtin-only requests as invalid learning', async () => {
     const ctx = createStubAiRunContext()
     const cache = createHumanRuntimeCache()
     const learningNode = createLearningNode({ ctx, cache })
@@ -138,13 +138,39 @@ describe('ai unit learning partial success', () => {
     })
 
     expect(nextState.execution.watchHint).toMatchObject({
-      code: 'learning_no_effect'
+      code: 'learning_builtin_skill_requested',
+      detail: {
+        builtinSkillIds: ['history-recall']
+      }
     })
     expect(nextState.execution.lastLearningOutcome).toMatchObject({
       loadedSkillIds: [],
-      skippedDuplicateSkillIds: ['history-recall']
+      skippedDuplicateSkillIds: []
     })
     expect(nextState.skills.learnedSkillIds).toEqual([])
     expect(nextState.memory.history.roundHistory.at(-1)?.execution.kind).toBe('learning')
+  })
+
+  it('rejects states whose learnedSkillIds still contain builtin skills', async () => {
+    const ctx = createStubAiRunContext()
+    const cache = createHumanRuntimeCache()
+    const learningNode = createLearningNode({ ctx, cache })
+    const baseState = createInitialHumanState({
+      taskId: 'task-invalid-learned-skill-state',
+      userInput: '请继续任务'
+    })
+
+    await expect(
+      learningNode({
+        ...baseState,
+        skills: {
+          learnedSkillIds: ['workspace-cli']
+        },
+        execution: {
+          ...baseState.execution,
+          currentDecision: buildLearningDecision(['docx-read'])
+        }
+      })
+    ).rejects.toThrow('learnedSkillIds 只允许 external skill')
   })
 })

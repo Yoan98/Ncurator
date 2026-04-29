@@ -1,6 +1,7 @@
 import type { AiRunContext } from '../../../types'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { buildMouthPrompt } from '../../prompts/mouth'
+import { assertExternalLearnedSkillIds } from '../../skills'
 import { completeHumanTask } from '../utils/stateTransitions'
 import { deriveDeliverySummary } from '../../shared/deliverySummary'
 import {
@@ -16,6 +17,7 @@ export const createMouthNode = (input: {
 }) => {
   return async (state: HumanState): Promise<HumanState> => {
     input.ctx.checkCancelled()
+    assertExternalLearnedSkillIds(state.skills.learnedSkillIds)
     input.cache.currentState = state
 
     const fileReviewDetails = await input.ctx.finalizeDocxReviewRun()

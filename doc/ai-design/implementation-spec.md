@@ -85,7 +85,7 @@ stateDiagram-v2
 - 职责：装载本轮 `brain` 指定的 external skill，并更新已学习 skill 集合。
 - 主要读取：`execution.currentDecision.nextAction.wantLearnSkillIds`、`skills.learnedSkillIds`、`skills.ts`、`skillLoader`。
 - 主要回写：`skills.learnedSkillIds`、`execution.lastLearningOutcome`、`memory.history.roundHistory`、`execution.stage`、必要时 `execution.watchHint`、`trace.steps`。
-- 约束：不调用模型；builtin skill 始终可用，不进入 learning。
+- 约束：不调用模型；builtin skill 始终可用，不进入 learning。若 `brain` 仍请求学习 builtin skill，learning 应直接产出明确的无效学习信号，而不是把它当作已学习 external skill 写回状态。
 
 ### 5.3 `hand`
 

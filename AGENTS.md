@@ -5,7 +5,7 @@
 - `doc/ai-design/architecture.md`：涉及 AI 总体架构、主流程或模块职责时阅读。
 - `doc/ai-design/implementation-spec.md`：涉及 AI 实现方式、运行入口、跨层边界或运行时组织时阅读。
 - `doc/ai-design/data-definition-and-flow.md`：涉及 AI 数据结构、状态流转、历史渲染或产物关系时阅读。
-- `doc/ai-design/human-skill-design.md`：涉及 human skill 分类、能力边界、skill 基线或 tool 作用定义时阅读。
+- `doc/ai-design/human-skill-design.md`：涉及 human skill 分类、能力边界、skill 基线、builtin/external 区分，或 active tool budget 与工具调用次数边界时阅读。
 - `doc/ai-design/prompt-design.md`：涉及 prompt 结构、工具 schema、工具结果渲染、检索策略提示或 AI-facing 文案时阅读。
 
 ### 1.2 docx相关
@@ -56,6 +56,10 @@
 - 编写文档引用相关时，只需要描述什么时候需要读该文档就足够，不要添加很多细节
 - 只有当功能代码发生变动、对应测试用例文档明确要求对齐 `doc/prd/**`，或者 `doc/prd/**` 本身发生变更时，才需要对齐代码实现与 `doc/prd/**` 是否一致
 - 仅修改测试用例实现、断言方式、runner 使用、日志读取方式或其他不改变功能行为的内容时，不要求对齐 `doc/prd/**`
+
+### 测试相关
+
+- 涉及工作区语义的测试时，统一使用 `tests/fixtures/workspace` 作为共享输入目录，不再把共享 workspace 放在 `tests/fixtures/ai/**` 下维护
 
 ### 你的回复相关
 - 当对应测试用例文档明确要求引用 PRD 编号时，写正式测试或验收结论应按该文档要求执行

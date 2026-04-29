@@ -3,7 +3,6 @@ import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
   buildCompleteTaskDecision,
-  buildLearnSkillsDecision,
   buildToolDecision,
   filterAiRunEventsByType,
   readLatestToolResultDataFromEvents
@@ -48,14 +47,6 @@ describe('ai human mock-llm backend', () => {
         const runner = createHumanTestRunner(runtime, {
           structuredOutputScript: {
             'human.brain': [
-              {
-                output: buildLearnSkillsDecision({
-                  skillIds: ['kb-retrieval'],
-                  summary: '先学习 KB skill',
-                  reason: '任务要求直接基于知识库回答。',
-                  expectedOutcome: '获得检索工具。'
-                })
-              },
               {
                 output: buildToolDecision({
                   toolName: 'kb_search',

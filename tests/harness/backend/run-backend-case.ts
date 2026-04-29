@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { readdir } from 'node:fs/promises'
 import { collectBackendRunArtifacts } from './artifactCollector'
 import { assertRequiredFixtures } from './fixtureGuard'
 import type {
@@ -21,20 +22,60 @@ import {
 } from '../core/run-log-contract'
 
 const fixturesRoot = path.resolve(process.cwd(), 'tests', 'fixtures')
+const sharedWorkspaceFixtureRoot = path.join(fixturesRoot, 'workspace')
 
-const buildFixtureBindings = (fixturePaths: readonly string[], workspaceRoot: string): FixtureBinding[] => {
-  return fixturePaths.map((fixturePath) => {
-    const absoluteSource = path.resolve(fixturePath)
-    const relativeToFixtures = path.relative(fixturesRoot, absoluteSource)
-    const workspacePath = relativeToFixtures.startsWith('..')
-      ? path.join(workspaceRoot, path.basename(absoluteSource))
-      : path.join(workspaceRoot, relativeToFixtures)
+const isWithinDirectory = (targetPath: string, directoryPath: string): boolean => {
+  const relativePath = path.relative(directoryPath, targetPath)
+  return relativePath === '' || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath))
+}
 
-    return {
-      sourcePath: absoluteSource,
-      workspacePath
-    }
-  })
+const expandFixtureFilePaths = async (fixturePath: string): Promise<string[]> => {
+  const absoluteSource = path.resolve(fixturePath)
+  const entries = await readdir(absoluteSource, { withFileTypes: true })
+  const nestedFileGroups = await Promise.all(
+    entries
+      .sort((left, right) => left.name.localeCompare(right.name))
+      .map(async (entry) => {
+        const nestedPath = path.join(absoluteSource, entry.name)
+        if (entry.isDirectory()) {
+          return await expandFixtureFilePaths(nestedPath)
+        }
+        return [nestedPath]
+      })
+  )
+  return nestedFileGroups.flat()
+}
+
+const resolveFixtureWorkspacePath = (absoluteSource: string, workspaceRoot: string): string => {
+  if (isWithinDirectory(absoluteSource, sharedWorkspaceFixtureRoot)) {
+    return path.join(workspaceRoot, path.relative(sharedWorkspaceFixtureRoot, absoluteSource))
+  }
+
+  const relativeToFixtures = path.relative(fixturesRoot, absoluteSource)
+  return relativeToFixtures.startsWith('..')
+    ? path.join(workspaceRoot, path.basename(absoluteSource))
+    : path.join(workspaceRoot, relativeToFixtures)
+}
+
+const buildFixtureBindings = async (
+  fixturePaths: readonly string[],
+  workspaceRoot: string
+): Promise<FixtureBinding[]> => {
+  const expandedSourceGroups = await Promise.all(
+    fixturePaths.map(async (fixturePath) => {
+      const absoluteSource = path.resolve(fixturePath)
+      const sourceEntries = await readdir(absoluteSource, { withFileTypes: true }).catch(() => null)
+      if (!sourceEntries) {
+        return [absoluteSource]
+      }
+      return await expandFixtureFilePaths(absoluteSource)
+    })
+  )
+
+  return expandedSourceGroups.flat().map((absoluteSource) => ({
+    sourcePath: absoluteSource,
+    workspacePath: resolveFixtureWorkspacePath(absoluteSource, workspaceRoot)
+  }))
 }
 
 const toRelativeWorkspaceTarget = (workspaceRoot: string, absoluteWorkspacePath: string): string =>
@@ -163,7 +204,7 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
   try {
     await assertRequiredFixtures(definition.fixtures)
     workspaceRoot = await createIsolatedWorkspace(definition.caseId)
-    fixtureBindings = buildFixtureBindings(definition.fixtures, workspaceRoot)
+    fixtureBindings = await buildFixtureBindings(definition.fixtures, workspaceRoot)
     await copyFixturesIntoWorkspace(
       workspaceRoot,
       fixtureBindings.map((binding) => ({

@@ -75,6 +75,7 @@ tests/                   # 自动化测试
 
 - `tests/harness/**` 只放可复用的测试基础设施，不承载旧 suite 治理逻辑或旧分析文档契约。
 - `tests/fixtures/**` 只放长期复用的输入样本，不混入运行产物。
+- `tests/fixtures/workspace/` 是共享工作区输入目录；工作区语义测试统一从这里取样本。
 - `tests/ai/**` 只放 AI formal tests。
 - `tests/unit/**` 放长期保留、但不进入 formal test-plan 的 unit / helper / schema / prompt 类测试。
 - `tests/workbench/**` 按 workbench PRD 模块组织正式测试。

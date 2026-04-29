@@ -10,7 +10,7 @@ import { runBackendCase } from '../../../harness/backend/run-backend-case'
 const buildHandState = (input: {
   taskId: string
   userInput: string
-  learnedSkillIds: Array<'workspace-cli' | 'docx-read'>
+  learnedSkillIds: Array<'docx-read'>
   toolName: string
   args: Record<string, unknown>
   previousArtifacts?: AiArtifactRef[]
@@ -101,7 +101,7 @@ describe('ai tool hand backend', () => {
           buildHandState({
             taskId: runtime.taskId,
             userInput: 'create a terminal artifact',
-            learnedSkillIds: ['workspace-cli'],
+            learnedSkillIds: [],
             toolName: 'workspace_run_command',
             args: {
               command: 'touch first.txt'
@@ -113,7 +113,7 @@ describe('ai tool hand backend', () => {
           ...buildHandState({
             taskId: runtime.taskId,
             userInput: 'read the docx without creating artifacts',
-            learnedSkillIds: ['workspace-cli', 'docx-read'],
+            learnedSkillIds: ['docx-read'],
             toolName: 'docx_read_blocks',
             args: {
               sourcePath: 'artifact-merge.docx',

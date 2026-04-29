@@ -15,6 +15,7 @@ import { buildToolCallDisplayText } from '../../shared/toolResultRenderers'
 import { getToolSpec } from '../../tools/registry'
 import type { ToolExecutionMeta } from '../../tools/types'
 import type { HumanRuntimeCache, HumanState, HumanWatchHint, ToolCallResult, ToolUsePlan } from '../../types'
+import { assertExternalLearnedSkillIds } from '../../skills'
 import { executeToolCall } from './toolExecutor'
 import { deriveHandFollowupSignals, shouldStopSerialHandPlan } from './followupSignals'
 import { returnToBrain, returnToBrainAfterTrace, returnToBrainWithWatchHint } from '../utils/stateTransitions'
@@ -152,6 +153,7 @@ const executeToolUsePlan = async (input: {
 export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCache }) => {
   return async (state: HumanState): Promise<HumanState> => {
     input.ctx.checkCancelled()
+    assertExternalLearnedSkillIds(state.skills.learnedSkillIds)
     input.cache.currentState = state
     const toolCallLimit =
       input.ctx.humanRuntimeOverrides?.hardActionLimit || HUMAN_DEFAULT_TOOL_CALL_LIMIT

@@ -24,10 +24,10 @@ describe('ai human mock-llm backend', () => {
             'human.brain': [
               {
                 output: buildLearnSkillsDecision({
-                  skillIds: ['workspace-cli', 'docx-read'],
-                  summary: '先学习 terminal 和 docx-read',
+                  skillIds: ['docx-read'],
+                  summary: '先学习 docx-read',
                   reason: '准备让后续可用工具逼近预算上限。',
-                  expectedOutcome: '获得 6 个活跃工具。'
+                  expectedOutcome: '获得 4 个 active tools。'
                 })
               },
               {
@@ -35,15 +35,15 @@ describe('ai human mock-llm backend', () => {
                   skillIds: ['docx-write'],
                   summary: '再学习 docx 写入',
                   reason: '继续扩大当前活跃工具集合。',
-                  expectedOutcome: '获得 12 个活跃工具。'
+                  expectedOutcome: '获得 11 个 active tools。'
                 })
               },
               {
                 output: buildLearnSkillsDecision({
-                  skillIds: ['kb-retrieval'],
-                  summary: '学习 kb 相关技能',
-                  reason: '继续扩大当前活跃工具集合，并验证预算统计会保持准确。',
-                  expectedOutcome: '继续扩大当前 active tools，并保持所有已学习 skill 可用。'
+                  skillIds: ['workspace-cli', 'kb-retrieval'],
+                  summary: '故意请求 builtin skill',
+                  reason: '验证 builtin skill 不占 active tool budget，但仍会通过 watch_hint 提醒不要 learning。',
+                  expectedOutcome: 'active tools 保持不变，并发出 builtin learning watch_hint。'
                 })
               },
               {
@@ -83,14 +83,26 @@ describe('ai human mock-llm backend', () => {
 
         runtime.assertThat(
           result.output.status === 'completed' &&
-            latestLearningStep?.learnedSkillIds.join(',') ===
-              'workspace-cli,docx-read,docx-write,kb-retrieval' &&
+            latestLearningStep?.learnedSkillIds.join(',') === 'docx-read,docx-write' &&
             latestLearningStep?.effectiveSkillIds.includes('history-recall') &&
+            latestLearningStep?.effectiveSkillIds.includes('workspace-cli') &&
+            latestLearningStep?.effectiveSkillIds.includes('kb-retrieval') &&
             latestLearningStep.availableToolNames.includes('history_search') &&
             latestLearningStep.availableToolNames.includes('history_list') &&
-            latestLearningStep.availableToolNames.length >= 14 &&
+            latestLearningStep.availableToolNames.includes('workspace_run_command') &&
+            latestLearningStep.availableToolNames.includes('kb_list_documents') &&
+            latestLearningStep.availableToolNames.includes('kb_search') &&
+            latestLearningStep.availableToolNames.length === 16 &&
             latestLearningStep.summary.includes('当前 active tools=') &&
-            !latestLearningStep.summary.includes('已淘汰最早学习的 skill='),
+            !latestLearningStep.summary.includes('已淘汰最早学习的 skill=') &&
+            filterAiRunEventsByType(result.events, 'watch_hint').some(
+              (event) =>
+                event.source === 'learning' &&
+                event.code === 'learning_builtin_skill_requested' &&
+                Array.isArray(event.detail?.builtinSkillIds) &&
+                event.detail.builtinSkillIds.includes('workspace-cli') &&
+                event.detail.builtinSkillIds.includes('kb-retrieval')
+            ),
           {
             name: 'learning-tracks-active-tool-count-under-budget',
             message: 'learning 在预算未超限时应保留当前 skill，并把 active tool 数反映到 learning summary 中。',

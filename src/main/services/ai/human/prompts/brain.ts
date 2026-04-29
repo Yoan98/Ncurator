@@ -64,7 +64,7 @@ const renderSkillCatalogSection = (state: HumanState): string => {
     [
       `- ${definition.skillId}：${definition.description}`,
       `  - 适用场景：${definition.whenToUse}`,
-      `  - learning 时填写：${definition.skillId}`
+      definition.source === 'builtin' ? '' : `  - learning 时填写：${definition.skillId}`
     ].join('\n')
   const learnableSkillLines = listExternalSkillDefinitions()
     .filter((definition) => !state.skills.learnedSkillIds.includes(definition.skillId))

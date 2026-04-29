@@ -714,7 +714,7 @@
 - 实现状态：`已实现`
 - What：验证 `human` 在 mock-llm 模式下能稳定走通真实 `brain -> learning -> hand -> mouth` 主链路。
 - Why：这是 `human` graph 的最小真实闭环，后续所有复杂样例都建立在这条主链路之上。
-- How：通过 scripted structured output 依次驱动学习 `workspace-cli`、执行一次真实 `workspace_run_command(pwd)`，再进入真实 `mouth` 完成交付。
+- How：通过 scripted structured output 先学习一个真实 external skill（例如 `docx-read`），再直接执行一次 builtin terminal 工具 `workspace_run_command(pwd)`，最后进入真实 `mouth` 完成交付。
 - Oracle：`human_brain`、`human_learning`、`human_hand`、`human_mouth` 四个 stage 都真实出现，且至少有一次真实 terminal 工具结果与一次真实最终交付。
 - Not：不验证复杂分支、异常恢复或 live 模型质量。
 - Last Run：`2026-04-16 10:37:32 +08:00`
@@ -726,8 +726,8 @@
 - 实现状态：`已实现`
 - What：验证真实 `learning` 会持续记录当前 active tool 数，并在预算未超限时保留当前已学习 skill 集。
 - Why：`learning` 的 active tool 预算是后续扩展 `excel / ppt` 等新能力时的重要长期边界，正式 case 需要先守住基础统计与状态可见性。
-- How：通过 scripted structured output 依次学习 `workspace-cli + docx-read`、`docx-write`、`kb-retrieval`，最后进入真实 `mouth` 收束；检查最后一轮真实 `human_learning` 事件中的 `learnedSkillIds`、`availableToolNames` 与 summary。
-- Oracle：任务最终完成；最后一轮 `human_learning` 事件中保留全部已学习 skill，`availableToolNames` 与当前已学习 skill 的工具集合一致，summary 包含 `当前 active tools=`，且不包含 skill 淘汰文案。
+- How：通过 scripted structured output 依次学习 `docx-read`、`docx-write`，再故意请求 builtin skill（如 `workspace-cli + kb-retrieval`）；检查最后一轮真实 `human_learning` 事件中的 `learnedSkillIds`、`availableToolNames` 与 summary，并确认出现 builtin learning watch hint。
+- Oracle：任务最终完成；最后一轮真实 `human_learning` 事件中只保留 external skill，`availableToolNames` 同时包含 builtin 与 learned external 的工具集合，summary 包含 `当前 active tools=` 且不包含 skill 淘汰文案；builtin skill 不占 active tool budget，但后续真实执行时仍计入工具调用次数限制。
 - Not：不验证超过 `20` 个 active tools 后的淘汰算法细节。
 - Last Run：`2026-04-16 10:37:31 +08:00`
 - Last Result：`通过`
@@ -736,9 +736,9 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 duplicate learning 触发真实 `watch_hint` 后，graph 会回到 `brain` 并继续推进。
+- What：验证 duplicate external learning 触发真实 `watch_hint` 后，graph 会回到 `brain` 并继续推进。
 - Why：`watch_hint -> brain` 是 `human` 的核心收敛边之一，断掉后很多异常都无法恢复。
-- How：第一轮先学习 `workspace-cli`，第二轮故意重复学习同一个 skill 触发 learning watch hint，随后再执行一次真实 `workspace_run_command(pwd)` 并完成交付。
+- How：第一轮先学习一个 external skill（如 `docx-read`），第二轮故意重复学习同一个 external skill 触发 learning watch hint，随后再执行一次真实 `workspace_run_command(pwd)` 并完成交付。
 - Oracle：事件流中真实出现 source 为 `learning` 的 `watch_hint`，并且在它之后仍发生真实 terminal 工具调用，任务最终完成。
 - Not：不验证 live 模型是否会自然产生这类重复决策。
 - Last Run：`2026-04-16 10:37:34 +08:00`
@@ -750,7 +750,7 @@
 - 实现状态：`已实现`
 - What：验证真实工具失败结果会被 `human` 吸收，并继续收束到最终交付。
 - Why：工具失败是高频真实场景，如果失败后链路无法继续，`human` 就不具备稳定执行能力。
-- How：先学习 `workspace-cli`，再真实执行一个会失败的只读命令 `cat definitely-missing-file.txt`，随后由 `brain` 决定停止重试并进入 `mouth`。
+- How：直接真实执行一个会失败的 builtin terminal 只读命令 `cat definitely-missing-file.txt`，随后由 `brain` 决定停止重试并进入 `mouth`。
 - Oracle：真实 `workspace_run_command` 结果为失败，且 `human` 最终仍进入 `completed` 并产出最终交付。
 - Not：不验证失败后的最佳补救策略是否最优。
 - Last Run：`2026-04-16 10:37:34 +08:00`
@@ -774,7 +774,7 @@
 - 实现状态：`已实现`
 - What：验证真实审批拒绝会阻止高风险命令落地，并把限制带入最终交付。
 - Why：审批拒绝是正式生产边界，不能只靠 fake 测试覆盖。
-- How：设置 `approvalPolicy=deny-medium-high`，学习 `workspace-cli` 后尝试真实执行 `mkdir blocked-dir`，然后进入最终说明。
+- How：设置 `approvalPolicy=deny-medium-high`，直接尝试真实执行 builtin terminal 命令 `mkdir blocked-dir`，然后进入最终说明。
 - Oracle：真实工具结果返回 `approval_denied`，审批事件里存在 `approved=false`，磁盘上不会真的创建 `blocked-dir`，任务最终完成。
 - Not：不验证用户如何在 UI 中恢复被拒绝的动作。
 - Last Run：`2026-04-16 10:37:31 +08:00`
@@ -872,7 +872,7 @@
 - 实现状态：`已实现`
 - What：验证 live 模式下 `human` 会在一个真实长任务里串起模板定位、工作区资料取证、docx 编辑与待确认稿交付。
 - Why：`human/live` 需要至少一条长期高价值复杂样例，覆盖 workspace 搜索、真实材料辨别、docx 写入与最终交付链路；同时守住“工作区优先”这一更接近生产用户习惯的主路径。
-- How：注入真实 live LLM 配置；workspace 中动态写入一份带 `RISK_TODO / OWNER_TODO` 占位符且正文更完整的周报模板、两份提供真实风险结论与负责人说明的文本材料，以及多份看起来像周报相关但并非最终依据的干扰文件；直接输入“找到上周 Word 周报模板，再根据工作区里的现有材料补全风险结论与负责人，整理成待确认稿”的自然语言诉求，让真实 `human` 自主完成。
+- How：注入真实 live LLM 配置；workspace 直接使用 `tests/fixtures/workspace` 共享目录，其中 `工作/` 下预置一份带 `RISK_TODO / OWNER_TODO` 占位符且正文更完整的周报模板、两份提供真实风险结论与负责人说明的文本材料，以及多份看起来像周报相关但并非最终依据的干扰文件；直接输入“找到上周 Word 周报模板，再根据工作区里的现有材料补全风险结论与负责人，整理成待确认稿”的自然语言诉求，让真实 `human` 自主完成。
 - Oracle：任务最终完成；事件流中至少出现一次 `workspace_run_command`、一次 docx 读取、一次 docx 编辑；存在 `draft_review_ready` 事件，最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；模板中的“风险结论”和“负责人说明”两处占位符被替换为实际内容，且原模板文件未被覆盖；最终答复能从用户视角说明改动的是这两处，其中负责人说明依据来自 `owner-note.md`，风险结论依据来自工作区中的风险材料（例如 `weekly-risk-summary.md`、`project-milestones.md`、`vendor-followup.txt`），并明确当前给出的是待确认稿。
 - Not：不绑定最终答案措辞，不要求固定是否使用 `docx_outline` 还是 `docx_read_blocks`，也不强制一定调用 KB；若模型仅凭工作区材料完成任务，也视为符合预期。
 - Last Run：`2026-04-16 18:37:18 +08:00`
@@ -884,7 +884,7 @@
 - 实现状态：`已实现`
 - What：验证 live 模式下 `human` 会基于两份已选 `docx` 做跨文件精读，并准确回答“过拟合 / 反走样”的成因与处理思路；同时工作区存在其他 docx 干扰项也不会偏题。
 - Why：真实用户在复习场景里经常已经选中了资料，但 workspace 中通常不止这两份文档；这条 case 要长期守住“已选资料范围优先 + 跨文件准确回答”的正式能力，对齐 `WB-CORE-002-AC2`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
-- How：注入真实 live LLM 配置；把 `tests/fixtures/ai/docx` 目录整组 docx 复制进 workspace，其中只将 `深度学习.docx` 与 `图形学.docx` 作为已选资料；直接输入“我这两天复习的时候老把这两个概念混了。你就按我刚选的这两份课件，帮我讲清楚：过拟合和反走样分别是什么、为什么会出现、一般怎么处理。别自己补课外内容，哪份资料没写你就直接告诉我没写。”的自然语言诉求，让真实 `human` 自主完成。
+- How：注入真实 live LLM 配置；把 `tests/fixtures/workspace` 共享目录复制进 workspace，其中只将 `学习笔记/深度学习.docx` 与 `学习笔记/图形学.docx` 作为已选资料；直接输入“我这两天复习的时候老把这两个概念混了。你就按我刚选的这两份课件，帮我讲清楚：过拟合和反走样分别是什么、为什么会出现、一般怎么处理。别自己补课外内容，哪份资料没写你就直接告诉我没写。”的自然语言诉求，让真实 `human` 自主完成。
 - Oracle：任务最终完成；事件流中至少出现一次 `docx_search`，并且至少两次 `docx_read_blocks` / `docx_outline` / `docx_search` 覆盖两份已选目标文档；最终回答同时命中“过拟合”的定义/成因事实组，并对处理办法给出文档内事实或明确说明“没写”；同时命中“反走样”的成因/处理事实组；不出现 docx 编辑工具；回答不应明显被 workspace 里的其他 docx 干扰。
 - Not：不要求固定回答结构，也不对最终文案做逐字断言。
 - Last Run：`2026-04-17 20:28:14 +08:00`
@@ -926,7 +926,7 @@
 - 实现状态：`已实现`
 - What：验证 live 模式下 `human` 在不传 `selectedReferences` 且 workspace 存在整组 docx 时，会先用 KB 缩圈找出讲“反走样 / 过拟合”的两份源资料，再把内容分别回写到另外两份目标 docx。
 - Why：真实用户常常记得主题、不记得文件名，而且希望把资料内容整理回自己的教学文档；这条 case 要长期守住“工作区默认范围 + KB 缩圈 + 多源读取 + 多目标 docx 回写”的正式能力，对齐 `WB-CORE-002-AC2`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
-- How：注入真实 live LLM 配置；workspace 直接使用 `tests/fixtures/ai/docx` 目录下整组 docx，不传 `selectedReferences`；同时将 `图形学.docx`、`深度学习.docx`、`人工智能探究课堂PRD.docx` 与 `交互式探究学习案例：产业转移.docx` seed 到真实 KB；直接输入“我工作区里这几份课件和教学材料有点多，我想把里面跟反走样和过拟合有关的内容整理进两份教学文档里。你先把相关资料找出来看一遍，再把适合老师讲‘概念区分’的内容分别补到课堂 PRD 和交互式案例里，写法尽量像备课备注和课堂引导语，不要像教材摘抄。”的自然语言诉求，让真实 `human` 自主完成。
+- How：注入真实 live LLM 配置；workspace 直接使用 `tests/fixtures/workspace` 共享目录，不传 `selectedReferences`；`学习笔记/` 下放 `图形学.docx` 与 `深度学习.docx`，根目录放 `人工智能探究课堂PRD.docx` 与 `交互式探究学习案例：产业转移.docx`，同时将这四份 docx seed 到真实 KB；直接输入“我工作区里这几份课件和教学材料有点多，我想把里面跟反走样和过拟合有关的内容整理进两份教学文档里。你先把相关资料找出来看一遍，再把适合老师讲‘概念区分’的内容分别补到课堂 PRD 和交互式案例里，写法尽量像备课备注和课堂引导语，不要像教材摘抄。”的自然语言诉求，让真实 `human` 自主完成。
 - Oracle：任务最终完成；事件流中至少出现一次 KB 工具调用；后续 docx 读取覆盖 `图形学.docx` 与 `深度学习.docx` 两份源资料；至少两次允许的 docx 编辑成功，且写入目标落在 `人工智能探究课堂PRD.docx` 与 `交互式探究学习案例：产业转移.docx` 两份目标稿上；存在至少两次 `draft_review_ready` 事件，最终输出 artifacts 中同时包含两组 `draft_review` 与 `draft`；四份原始 `docx` 文件未被覆盖；最终答复明确说明找到了哪两份源资料，并分别更新了哪两份教学文档。
 - Not：不强制固定执行路径，也不要求 KB 缩圈后必须再打开所有候选资料。
 

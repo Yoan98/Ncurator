@@ -14,6 +14,10 @@ export const summarizeWatchHint = (hint: HumanWatchHint): string => {
       )}；duplicate=${renderStringList(hint.detail.duplicateSkillIds)}；unknown=${renderStringList(
         hint.detail.unknownSkillIds
       )}。`
+    case 'learning_builtin_skill_requested':
+      return `learning 请求包含 builtin skill；requested=${renderStringList(
+        hint.detail.requestedSkillIds
+      )}；builtin=${renderStringList(hint.detail.builtinSkillIds)}。`
     case 'learning_tool_budget_exceeded':
       return `learning 请求会暴露 ${hint.detail.activeToolCount} 个 active tools，超过上限 ${hint.detail.limit}。`
     case 'hand_plan_invalid':
@@ -44,6 +48,13 @@ export const renderWatchHintForBrain = (hint: HumanWatchHint): string => {
         `skippedDuplicateSkillIds=${renderStringList(hint.detail.duplicateSkillIds)}`,
         `skippedUnknownSkillIds=${renderStringList(hint.detail.unknownSkillIds)}`,
         '不要重复提交同样的 learning；只有当你能提出新的 skill 组合时才继续 learning。'
+      ].join('\n')
+    case 'learning_builtin_skill_requested':
+      return [
+        '上一轮 learning 请求了 builtin skill，因此未按该请求学习。',
+        `requestedSkillIds=${renderStringList(hint.detail.requestedSkillIds)}`,
+        `builtinSkillIds=${renderStringList(hint.detail.builtinSkillIds)}`,
+        'builtin skill 始终可用，不应再提交到 learning；请直接决定是否调用其工具，或改为学习仍属 external 的 skill。'
       ].join('\n')
     case 'learning_tool_budget_exceeded':
       return [
