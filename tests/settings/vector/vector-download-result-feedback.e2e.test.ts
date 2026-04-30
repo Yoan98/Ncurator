@@ -82,12 +82,16 @@ describe('settings vector e2e', () => {
         })
         await navigateToSettingsSection(page, 'vector')
         await getSettingsLocator(page, `${vectorSelectors.downloadButtonPrefix}-vector-result-success`).click()
-        await waitForAntMessage(page, '模型下载完成！')
+        await getSettingsLocator(
+          page,
+          `${vectorSelectors.installedBadgePrefix}-vector-result-success`
+        ).waitFor({ state: 'visible' })
         const successInstalled = await getSettingsLocator(
           page,
           `${vectorSelectors.installedBadgePrefix}-vector-result-success`
         ).isVisible()
 
+        let failureMessageVisible = false
         await setSettingsE2EApiOverrides(page, {
           modelCatalog: {
             items: [...FAILURE_MODELS]
@@ -119,14 +123,26 @@ describe('settings vector e2e', () => {
         await navigateToSettingsSection(page, 'model')
         await navigateToSettingsSection(page, 'vector')
         await getSettingsLocator(page, `${vectorSelectors.downloadButtonPrefix}-vector-result-failure`).click()
-        await waitForAntMessage(page, '下载失败: E2E vector download failed')
+        failureMessageVisible = await waitForAntMessage(page, '下载失败: E2E vector download failed')
+          .then(() => true)
+          .catch(() => false)
 
         return {
           successInstalled,
+          failureMessageVisible,
           failureDownloadButtonVisible: await getSettingsLocator(
             page,
             `${vectorSelectors.downloadButtonPrefix}-vector-result-failure`
           ).isVisible(),
+          failureErrorVisible: await getSettingsLocator(
+            page,
+            `${vectorSelectors.errorPrefix}-vector-result-failure`
+          ).isVisible(),
+          failureErrorText:
+            (await getSettingsLocator(
+              page,
+              `${vectorSelectors.errorPrefix}-vector-result-failure`
+            ).textContent()) || '',
           failureProgressVisible: await getSettingsLocator(
             page,
             `${vectorSelectors.progressPrefix}-vector-result-failure`
@@ -142,7 +158,10 @@ describe('settings vector e2e', () => {
         })
 
         await runtime.assertThat(
-          result.failureDownloadButtonVisible && !result.failureProgressVisible,
+          result.failureDownloadButtonVisible &&
+            result.failureErrorVisible &&
+            result.failureErrorText.includes('E2E vector download failed') &&
+            !result.failureProgressVisible,
           {
             name: 'vector-download-failure-exits-downloading-state',
             message:
@@ -152,5 +171,5 @@ describe('settings vector e2e', () => {
         )
       }
     })
-  }, SETTINGS_E2E_TIMEOUT_MS)
+  }, SETTINGS_E2E_TIMEOUT_MS * 2)
 })

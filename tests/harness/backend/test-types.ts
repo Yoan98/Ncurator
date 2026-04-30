@@ -215,7 +215,7 @@ export type TestCaseDefinition<TResult> = {
   caseId: string
   harnessMode: BackendHarnessMode
   testType?: Extract<TestType, 'backend'>
-  domain: Extract<TestDomain, 'ai' | 'workbench' | 'settings' | 'kb-search' | 'temp'>
+  domain: Extract<TestDomain, 'ai' | 'settings' | 'kb-search' | 'temp'>
   suite: string
   groups?: readonly string[]
   description: string

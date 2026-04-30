@@ -18,7 +18,9 @@ interface ModelInfo {
 const ModelDownloadPage: React.FC = () => {
   const [models, setModels] = useState<ModelInfo[]>([])
   const [loading, setLoading] = useState(false)
+  const [catalogError, setCatalogError] = useState('')
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
+  const [errorRepoId, setErrorRepoId] = useState<string | null>(null)
   const [downloadProgress, setDownloadProgress] = useState(0)
   const [currentFile, setCurrentFile] = useState('')
   const [fileProgress, setFileProgress] = useState({ completed: 0, total: 0 })
@@ -38,6 +40,7 @@ const ModelDownloadPage: React.FC = () => {
     }) => {
       if (data.status === 'downloading') {
         setDownloadingId(data.repoId)
+        setErrorRepoId(null)
         // Use file count for progress calculation if totalFiles is available
         // because individual file progress might be too fast or granular.
         if (data.totalFiles && data.totalFiles > 0) {
@@ -54,11 +57,13 @@ const ModelDownloadPage: React.FC = () => {
         if (data.file) setCurrentFile(data.file)
       } else if (data.status === 'completed') {
         setDownloadingId(null)
+        setErrorRepoId(null)
         setDownloadProgress(100)
         message.success('模型下载完成！')
         fetchModels() // Refresh status
       } else if (data.status === 'error') {
         setDownloadingId(null)
+        setErrorRepoId(data.repoId)
         setErrorMsg(data.error || '未知错误')
         message.error('下载失败: ' + data.error)
       }
@@ -76,8 +81,11 @@ const ModelDownloadPage: React.FC = () => {
     try {
       const list = await window.api.getModels()
       setModels(list)
+      setCatalogError('')
     } catch (e) {
       console.error(e)
+      setModels([])
+      setCatalogError('获取模型列表失败')
       message.error('获取模型列表失败')
     } finally {
       setLoading(false)
@@ -90,17 +98,25 @@ const ModelDownloadPage: React.FC = () => {
       return
     }
     setDownloadingId(repoId)
+    setErrorRepoId(null)
     setDownloadProgress(0)
+    setCurrentFile('')
+    setFileProgress({ completed: 0, total: 0 })
     setErrorMsg('')
     try {
       const res = await window.api.downloadModel(repoId)
       if (!res.success) {
         setDownloadingId(null)
+        setErrorRepoId(repoId)
         setErrorMsg(res.error || '启动下载失败')
+        message.error('下载失败: ' + (res.error || '启动下载失败'))
       }
     } catch (e: unknown) {
       setDownloadingId(null)
-      setErrorMsg(e instanceof Error ? e.message : String(e))
+      setErrorRepoId(repoId)
+      const messageText = e instanceof Error ? e.message : String(e)
+      setErrorMsg(messageText)
+      message.error('下载失败: ' + messageText)
     }
   }
 
@@ -126,6 +142,14 @@ const ModelDownloadPage: React.FC = () => {
               </Title>
             </div>
             <div className="min-h-0 flex-1 overflow-auto px-5 py-2 pr-4">
+              {catalogError ? (
+                <div
+                  className="mb-4 rounded-[18px] border border-[#F3D1C6] bg-[#FFF7F4] px-4 py-3 text-sm text-[#B5451B]"
+                  data-testid={vectorSelectors.catalogError}
+                >
+                  {catalogError}
+                </div>
+              ) : null}
               <List
                 loading={loading}
                 itemLayout="horizontal"
@@ -209,7 +233,7 @@ const ModelDownloadPage: React.FC = () => {
                             </div>
                           ) : null}
 
-                          {errorMsg && downloadingId === item.id ? (
+                          {errorMsg && errorRepoId === item.id ? (
                             <div
                               className="flex items-center gap-1 text-sm text-red-500"
                               data-testid={`${vectorSelectors.errorPrefix}-${item.id}`}

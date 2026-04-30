@@ -68,7 +68,7 @@ describe('settings web e2e', () => {
         await runtime.assertThat(
           result.visibleCardCount === 1 &&
             result.refreshCalls.length === 1 &&
-            String(result.refreshCalls[0]?.payload || '').includes('target-a'),
+            String(result.refreshCalls[0]?.payload?.webSourceId || '').includes('e2e-web-source-1'),
           {
             name: 'refresh-all-uses-visible-list-only',
             message:

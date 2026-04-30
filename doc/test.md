@@ -37,7 +37,6 @@ tests/
   fixtures/
   ai/
   unit/
-  workbench/
   settings/
   kb-search/
   temp/
@@ -61,7 +60,7 @@ tests/
 ### 2.3 稳定映射模型
 
 - `domain`
-  - 稳定业务域，例如 `ai`、`workbench`、`settings`。
+  - 稳定业务域，例如 `ai`、`settings`、`kb-search`。
 - `suite`
   - 领域内第一层稳定分类。
   - 具体取值与归属只看对应 `doc/test-plan/**`。

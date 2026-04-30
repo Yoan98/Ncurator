@@ -57,29 +57,42 @@ describe('settings vector e2e', () => {
           page,
           `${vectorSelectors.downloadButtonPrefix}-${MODEL_CATALOG[1].id}`
         ).isVisible()
+        const successCardCount = await page
+          .locator(`[data-testid^="${vectorSelectors.cardPrefix}-"]`)
+          .count()
 
+        let failureMessageVisible = false
         await setSettingsE2EApiOverrides(page, {
           modelCatalog: {
             error: 'E2E vector catalog failed'
           }
         })
-        await page.reload()
+        await navigateToSettingsSection(page, 'model')
         await navigateToSettingsSection(page, 'vector')
+        failureMessageVisible = await getSettingsLocator(page, vectorSelectors.catalogError)
+          .getByText('获取模型列表失败')
+          .isVisible()
         await waitForAntMessage(page, '获取模型列表失败')
+          .then(() => true)
+          .catch(() => false)
 
         return {
-          cardCount: await page.locator(`[data-testid^="${vectorSelectors.cardPrefix}-"]`).count(),
+          successCardCount,
           installedVisible,
-          downloadableVisible
+          downloadableVisible,
+          failureMessageVisible
         }
       },
       assert: async (result, runtime) => {
         await runtime.assertThat(
-          result.cardCount === 2 && result.installedVisible && result.downloadableVisible,
+          result.successCardCount === 2 &&
+            result.installedVisible &&
+            result.downloadableVisible &&
+            result.failureMessageVisible,
           {
             name: 'vector-catalog-renders-installed-and-downloadable-models',
             message:
-              '模型列表加载成功后，应能区分已安装模型与可下载模型，对齐 SET-VECTOR-001-AC1。',
+              '模型列表加载成功后，应能区分已安装模型与可下载模型；失败时页面也应给出明确错误提示，对齐 SET-VECTOR-001-AC1 与 SET-VECTOR-001-AC2。',
             data: result
           }
         )

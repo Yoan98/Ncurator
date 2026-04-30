@@ -166,17 +166,35 @@ export const launchElectronApp = async (): Promise<LaunchedElectronApp> => {
     electronApp,
     page,
     collectSignals: async () => {
-      const state = await page.evaluate(() => {
-        const currentWindow = window as E2EWindow
-        return (
-          currentWindow.__NCURATOR_E2E_OBSERVER__ || {
+      let state: E2EObserverState = {
+        routeEntries: [],
+        ipcInvokeEntries: [],
+        aiRunEventEntries: [],
+        domEventEntries: []
+      }
+
+      if (!page.isClosed()) {
+        try {
+          state = await page.evaluate(() => {
+            const currentWindow = window as E2EWindow
+            return (
+              currentWindow.__NCURATOR_E2E_OBSERVER__ || {
+                routeEntries: [],
+                ipcInvokeEntries: [],
+                aiRunEventEntries: [],
+                domEventEntries: []
+              }
+            )
+          })
+        } catch {
+          state = {
             routeEntries: [],
             ipcInvokeEntries: [],
             aiRunEventEntries: [],
             domEventEntries: []
           }
-        )
-      })
+        }
+      }
 
       return {
         ...state,

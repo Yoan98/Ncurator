@@ -90,6 +90,7 @@ export const settingsSelectors = {
 export const vectorSelectors = {
   page: 'vector-page',
   list: 'vector-model-list',
+  catalogError: 'vector-catalog-error',
   cardPrefix: 'vector-model-card',
   downloadButtonPrefix: 'vector-download-button',
   installedBadgePrefix: 'vector-installed-badge',

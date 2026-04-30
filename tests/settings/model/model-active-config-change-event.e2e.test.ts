@@ -51,16 +51,19 @@ describe('settings model e2e', () => {
 
         await runtime.step({
           name: 'edit-active-config',
-          message: '编辑当前激活配置并保存，触发一次模型变更事件。',
+          message: '打开当前激活配置并保存，触发一次模型变更事件。',
           run: async () => {
             await navigateToSettingsSection(page, 'model')
             await getSettingsLocator(
               page,
               `${settingsSelectors.modelEditButtonPrefix}-${SEEDED_CONFIGS[0].id}`
             ).click()
-            await getSettingsLocator(page, settingsSelectors.modelModelNameInput).fill('gpt-4.1')
+            await getSettingsLocator(page, settingsSelectors.modelNameInput).fill('当前模型-已编辑')
             await getSettingsLocator(page, settingsSelectors.modelSaveButton).click()
-            await waitForAntMessage(page, '配置已更新')
+            await page
+              .locator('tbody tr')
+              .filter({ hasText: '当前模型-已编辑' })
+              .waitFor({ state: 'visible' })
           }
         })
 
@@ -72,7 +75,13 @@ describe('settings model e2e', () => {
               page,
               `${settingsSelectors.modelActivateButtonPrefix}-${SEEDED_CONFIGS[1].id}`
             ).click()
-            await waitForAntMessage(page, '已切换当前模型')
+            await page.waitForFunction(
+              (selector) => {
+                const host = document.querySelector(selector)
+                return host instanceof HTMLElement && host.innerText.includes('gpt-4o-mini')
+              },
+              `[data-testid="${settingsSelectors.modelSummaryCurrent}"]`
+            )
           }
         })
 
