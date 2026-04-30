@@ -15,6 +15,8 @@ import type {
   HumanWatchHint
 } from '../../types'
 
+const DOCX_READ_TOOL_NAMES = new Set(['docx_outline', 'docx_read_blocks'])
+
 const docxReadSatisfiesWatchHint = (input: {
   decision: HumanDecision
   watchHint: Extract<HumanWatchHint, { code: 'docx_write_requires_readback' }>
@@ -25,7 +27,7 @@ const docxReadSatisfiesWatchHint = (input: {
     const spec = getToolSpec(call.toolName)
     if (!spec) return false
     const meta = spec.resolveExecutionMeta(call.args)
-    if (meta.mutability !== 'read_only' || meta.resourceKey !== 'docx') return false
+    if (meta.mutability !== 'read_only' || !DOCX_READ_TOOL_NAMES.has(call.toolName)) return false
     const requestedPath =
       typeof call.args.sourcePath === 'string' ? call.args.sourcePath : undefined
     if (

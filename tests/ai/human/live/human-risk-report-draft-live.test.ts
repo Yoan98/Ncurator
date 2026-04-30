@@ -1,6 +1,8 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
+import { loadDocxBundle } from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/blockIndex'
+import { XMLSerializer } from '@xmldom/xmldom'
 import { loadLiveLlmConfigFromEnv, hasLiveLlmConfigInEnv } from '../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
@@ -153,6 +155,34 @@ describe('ai human live backend', () => {
         const referencesTxtEvidence = result.workspaceSeed.relevantTxtRelativePaths.some((relativePath) =>
           deliveryText.includes(path.basename(relativePath))
         )
+        const watchHints = filterAiRunEventsByType(events, 'watch_hint')
+        const writeStartedEvents = filterAiRunEventsByType(events, 'tool_call_started').filter((event) =>
+          [
+            'docx_paragraph_edit',
+            'docx_heading_edit',
+            'docx_table_edit',
+            'docx_text_edit',
+            'docx_text_style_edit'
+          ].includes(event.toolName)
+        )
+        const readStartedEvents = filterAiRunEventsByType(events, 'tool_call_started').filter((event) =>
+          ['docx_outline', 'docx_read_blocks'].includes(event.toolName)
+        )
+        const hasReadbackAfterWrite =
+          writeStartedEvents.length === 0 ||
+          writeStartedEvents.some((writeEvent) =>
+            readStartedEvents.some(
+              (readEvent) =>
+                readEvent.createdAt >= writeEvent.createdAt &&
+                readEvent.input.sourcePath === writeEvent.input.sourcePath
+            )
+          )
+        const reviewArtifact = result.output?.artifacts?.find((artifact) => artifact.kind === 'draft_review')
+        let reviewXml = ''
+        if (reviewArtifact?.review.draftArtifactPath) {
+          const reviewBundle = await loadDocxBundle(await fs.readFile(reviewArtifact.review.draftArtifactPath))
+          reviewXml = new XMLSerializer().serializeToString(reviewBundle.documentDom)
+        }
 
         runtime.assertThat(
           result.output?.status === 'completed' &&
@@ -240,6 +270,31 @@ describe('ai human live backend', () => {
               summary: result.output?.summary,
               deliveryMarkdown: result.output?.deliveryMarkdown,
               artifacts: result.output?.artifacts
+            }
+          }
+        )
+
+        runtime.assertThat(
+          watchHints.some((event) => event.code === 'docx_write_requires_readback') &&
+            hasReadbackAfterWrite,
+          {
+            name: 'human-live-risk-report-writes-then-reads-back-latest-docx',
+            message: '同文件 docx 写后，live case 事件流里应出现 docx_write_requires_readback，并在之后出现对应 readback。',
+            data: {
+              watchHints,
+              writeStartedEvents,
+              readStartedEvents
+            }
+          }
+        )
+
+        runtime.assertThat(
+          !reviewXml.includes('review_artifact_invalid_generated'),
+          {
+            name: 'human-live-risk-report-review-hides-generated-discarded-draft',
+            message: '最终 review 不应包含 generated 中间废稿的删除项痕迹。',
+            data: {
+              reviewXmlSnippet: reviewXml.slice(0, 2000)
             }
           }
         )
