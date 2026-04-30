@@ -16,6 +16,7 @@ import { buildDocxCapabilityTools } from '../../../src/main/services/ai/human/to
 import { releaseDocxRunSession } from '../../../src/main/services/ai/human/tools/docx/worker/docxWorkerClient'
 import { buildKbCapabilityTools } from '../../../src/main/services/ai/human/tools/kb/retrievalTools'
 import { buildTerminalCapabilityTools } from '../../../src/main/services/ai/human/tools/terminal/terminalTools'
+import { createHumanRuntimeCache } from '../../../src/main/services/ai/human/node/utils/runtimeCache'
 import type { JsonObject, JsonValue } from '../../../src/shared/types'
 import type { BackendTestRuntime, CreateAiRunContextInput } from './test-types'
 
@@ -57,9 +58,11 @@ export const createDocxToolHarness = (
   contextInput: CreateAiRunContextInput = {}
 ) => {
   const ctx = runtime.createAiRunContext(contextInput)
+  const cache = createHumanRuntimeCache()
   const activities: CapturedToolActivity[] = []
   const built = buildDocxCapabilityTools({
     ctx,
+    cache,
     runId: runtime.runId,
     taskId: runtime.taskId,
     workspaceRootPath: runtime.workspaceRoot,
@@ -86,9 +89,11 @@ export const createTerminalToolHarness = (
   options: TerminalToolHarnessOptions = {}
 ) => {
   const ctx = runtime.createAiRunContext(contextInput)
+  const cache = createHumanRuntimeCache()
   const activities: CapturedToolActivity[] = []
   const built = buildTerminalCapabilityTools({
     ctx,
+    cache,
     runId: runtime.runId,
     taskId: runtime.taskId,
     workspaceRootPath: runtime.workspaceRoot,

@@ -155,21 +155,23 @@ const findSnapshotMatchIndex = (input: {
   usedBlockIds: Set<string>
   reservedBlockIds?: ReadonlySet<string>
 }): number => {
-  for (let index = input.cursor; index < input.nextSnapshot.blocks.length; index += 1) {
-    const block = input.nextSnapshot.blocks[index]
-    if (
-      input.usedBlockIds.has(block.blockId) ||
-      input.reservedBlockIds?.has(block.blockId) ||
-      block.kind !== input.node.kind
-    ) {
-      continue
-    }
-    if (
-      block.blockId === input.node.currentBlockId ||
-      block.blockId === input.node.blockId ||
-      (input.node.sourceBlockId && block.blockId === input.node.sourceBlockId)
-    ) {
-      return index
+  if (input.node.sourceOrigin === 'generated') {
+    for (let index = input.cursor; index < input.nextSnapshot.blocks.length; index += 1) {
+      const block = input.nextSnapshot.blocks[index]
+      if (
+        input.usedBlockIds.has(block.blockId) ||
+        input.reservedBlockIds?.has(block.blockId) ||
+        block.kind !== input.node.kind
+      ) {
+        continue
+      }
+      if (
+        block.blockId === input.node.currentBlockId ||
+        block.blockId === input.node.blockId ||
+        (input.node.sourceBlockId && block.blockId === input.node.sourceBlockId)
+      ) {
+        return index
+      }
     }
   }
 

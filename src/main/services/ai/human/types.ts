@@ -2,6 +2,7 @@ import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { JsonObject } from '../../../../shared/types'
 import type { z } from 'zod/v4'
 import type { AiToolFamilyId } from './tools/types'
+import type { DocxToolRuntime } from './tools/docx/runtime'
 import {
   HUMAN_ROUND_EXECUTION_KINDS,
   HUMAN_SKILL_SOURCES,
@@ -101,6 +102,7 @@ export type HumanMemoryHistory = z.infer<typeof humanMemoryHistorySchema>
 export type HumanRuntimeCache = {
   familyToolsets: Partial<Record<AiToolFamilyId, StructuredToolInterface[]>>
   skillToolsets: Partial<Record<RuntimeSkillId, StructuredToolInterface[]>>
+  docxRuntime?: DocxToolRuntime
   toolCallCount: number
   currentState?: HumanState
 }

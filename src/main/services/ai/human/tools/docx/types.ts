@@ -325,3 +325,14 @@ export type DocxCapabilityToolsRuntimeState = {
   readSessionBySourcePath: Map<string, DocxReadSession>
   replaySessionBySourcePath: Map<string, DocxReplaySession>
 }
+
+export type DocxSnapshotResolvedLocator = {
+  field: 'blockId' | 'anchorBlockId' | 'cellBlockId' | 'blockIds'
+  nodeIds: string[]
+}
+
+export type DocxSnapshotResolvedToolCall = {
+  toolName: string
+  sourcePath: string
+  locators: DocxSnapshotResolvedLocator[]
+}

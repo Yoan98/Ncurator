@@ -12,13 +12,44 @@ import {
   mergeDeliveryGuidanceItems
 } from '../../shared/deliveryGuidance'
 import { buildToolCallDisplayText } from '../../shared/toolResultRenderers'
+import { assertExternalLearnedSkillIds } from '../../skills'
 import { getToolSpec } from '../../tools/registry'
 import type { ToolExecutionMeta } from '../../tools/types'
 import type { HumanRuntimeCache, HumanState, HumanWatchHint, ToolCallResult, ToolUsePlan } from '../../types'
-import { assertExternalLearnedSkillIds } from '../../skills'
-import { executeToolCall } from './toolExecutor'
 import { deriveHandFollowupSignals, shouldStopSerialHandPlan } from './followupSignals'
+import { executeToolCall } from './toolExecutor'
 import { returnToBrain, returnToBrainAfterTrace, returnToBrainWithWatchHint } from '../utils/stateTransitions'
+
+const DOCX_SERIAL_WRITE_TOOL_NAMES = new Set([
+  'docx_paragraph_edit',
+  'docx_heading_edit',
+  'docx_table_edit',
+  'docx_text_edit',
+  'docx_text_style_edit'
+])
+
+const isDocxSerialWriteCall = (toolName: string): boolean => DOCX_SERIAL_WRITE_TOOL_NAMES.has(toolName)
+
+const readSourcePathArg = (args: JsonObject): string | undefined =>
+  typeof args.sourcePath === 'string' && args.sourcePath.trim().length > 0 ? args.sourcePath : undefined
+
+const rewriteDocxArgsWithResolvedBlocks = (input: {
+  args: JsonObject
+  resolvedLocators: Array<{
+    field: 'blockId' | 'anchorBlockId' | 'cellBlockId' | 'blockIds'
+    blockIds: string[]
+  }>
+}): JsonObject => {
+  const nextArgs: JsonObject = { ...input.args }
+  input.resolvedLocators.forEach((locator) => {
+    if (locator.field === 'blockIds') {
+      nextArgs.blockIds = locator.blockIds
+      return
+    }
+    nextArgs[locator.field] = locator.blockIds[0]
+  })
+  return nextArgs
+}
 
 export const getToolExecutionMeta = (input: {
   toolName: string
@@ -125,18 +156,171 @@ const executeToolUsePlan = async (input: {
     )
   }
 
-  const results: Awaited<ReturnType<typeof executeToolCall>>[] = []
-  for (const toolCall of input.toolUsePlan.calls) {
-    results.push(
-      await executeToolCall({
-        ctx: input.ctx,
-        cache: input.cache,
-        taskId: input.taskId,
-        learnedSkillIds: input.learnedSkillIds,
-        toolName: toolCall.toolName,
-        args: toolCall.args
-      })
-    )
+  const executeDocxWriteTransactionSegment = async (
+    segmentCalls: ToolUsePlan['calls']
+  ): Promise<ToolCallResult[]> => {
+    const runtime = input.cache.docxRuntime
+    const firstSourcePath = readSourcePathArg(segmentCalls[0]?.args || {})
+    if (!runtime || !firstSourcePath) {
+      const fallbackResults: ToolCallResult[] = []
+      for (const segmentCall of segmentCalls) {
+        fallbackResults.push(
+          await executeToolCall({
+            ctx: input.ctx,
+            cache: input.cache,
+            taskId: input.taskId,
+            learnedSkillIds: input.learnedSkillIds,
+            toolName: segmentCall.toolName,
+            args: segmentCall.args
+          })
+        )
+      }
+      return fallbackResults
+    }
+
+    const replay = await runtime.ensureReplaySession({
+      toolName: segmentCalls[0].toolName,
+      toolCallId: `human-hand-docx-serial:${input.taskId}`,
+      sourcePath: firstSourcePath,
+      reason: 'edit'
+    })
+    if ('failure' in replay) {
+      return [
+        {
+          toolName: segmentCalls[0].toolName,
+          ok: false,
+          code: replay.failure.code,
+          data: replay.failure,
+          diagnostic: {
+            message: replay.failure.error
+          },
+          resourceContext: replay.failure.resourceContext
+        }
+      ]
+    }
+
+    const resolved = await runtime.resolveSnapshotTargets({
+      sourcePath: replay.sourcePath,
+      baseRevisionRef: replay.currentRevisionRef,
+      toolCalls: segmentCalls.map((call) => ({
+        toolName: call.toolName,
+        args: call.args
+      }))
+    })
+    if (!resolved.ok) {
+      return [
+        {
+          toolName: segmentCalls[0].toolName,
+          ok: false,
+          code: 'invalid_input',
+          data: {
+            ok: false,
+            code: 'invalid_input',
+            error: resolved.error
+          },
+          diagnostic: {
+            message: resolved.error
+          },
+          resourceContext: runtime.buildResourceContext({
+            sourcePath: replay.sourcePath,
+            effectKind: 'mutated',
+            currentRevisionRef: replay.currentRevisionRef
+          })
+        }
+      ]
+    }
+
+    const segmentResults: ToolCallResult[] = []
+    for (let callIndex = 0; callIndex < segmentCalls.length; callIndex += 1) {
+      const segmentCall = segmentCalls[callIndex]
+      const resolvedCall = resolved.resolvedCalls[callIndex]
+      try {
+        const resolvedLocators = resolvedCall.locators.map((locator) => ({
+          field: locator.field,
+          blockIds: locator.nodeIds.map((nodeId) => {
+            const current = runtime.resolveCurrentBlockIdFromNodeId({
+              sourcePath: replay.sourcePath,
+              nodeId
+            })
+            if (!current.ok) {
+              throw new Error(current.error)
+            }
+            return current.blockId
+          })
+        }))
+        segmentResults.push(
+          await executeToolCall({
+            ctx: input.ctx,
+            cache: input.cache,
+            taskId: input.taskId,
+            learnedSkillIds: input.learnedSkillIds,
+            toolName: segmentCall.toolName,
+            args: rewriteDocxArgsWithResolvedBlocks({
+              args: segmentCall.args,
+              resolvedLocators
+            })
+          })
+        )
+      } catch (error) {
+        segmentResults.push({
+          toolName: segmentCall.toolName,
+          ok: false,
+          code: 'invalid_input',
+          data: {
+            ok: false,
+            code: 'invalid_input',
+            error: error instanceof Error ? error.message : String(error)
+          },
+          diagnostic: {
+            message: error instanceof Error ? error.message : String(error)
+          },
+          resourceContext: runtime.buildResourceContext({
+            sourcePath: replay.sourcePath,
+            effectKind: 'mutated',
+            currentRevisionRef: runtime.getReplaySession(replay.sourcePath)?.activeRevisionRef
+          })
+        })
+        break
+      }
+    }
+    return segmentResults
+  }
+
+  const results: ToolCallResult[] = []
+  for (let index = 0; index < input.toolUsePlan.calls.length; ) {
+    const toolCall = input.toolUsePlan.calls[index]
+    const sourcePath = readSourcePathArg(toolCall.args)
+
+    if (sourcePath && isDocxSerialWriteCall(toolCall.toolName)) {
+      const segmentCalls = [toolCall]
+      let cursor = index + 1
+      while (cursor < input.toolUsePlan.calls.length) {
+        const candidate = input.toolUsePlan.calls[cursor]
+        if (
+          !isDocxSerialWriteCall(candidate.toolName) ||
+          readSourcePathArg(candidate.args) !== sourcePath
+        ) {
+          break
+        }
+        segmentCalls.push(candidate)
+        cursor += 1
+      }
+      results.push(...(await executeDocxWriteTransactionSegment(segmentCalls)))
+      index = cursor
+    } else {
+      results.push(
+        await executeToolCall({
+          ctx: input.ctx,
+          cache: input.cache,
+          taskId: input.taskId,
+          learnedSkillIds: input.learnedSkillIds,
+          toolName: toolCall.toolName,
+          args: toolCall.args
+        })
+      )
+      index += 1
+    }
+
     if (
       input.toolUsePlan.mode === 'serial' &&
       shouldStopSerialHandPlan({

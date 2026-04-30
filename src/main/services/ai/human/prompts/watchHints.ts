@@ -32,6 +32,8 @@ export const summarizeWatchHint = (hint: HumanWatchHint): string => {
       return `hand 累计工具调用次数达到 ${hint.detail.toolCallCount}，已超过临时上限 ${hint.detail.limit}。`
     case 'hand_docx_positioned_write_blocked':
       return `hand 命中复杂定位排版保护；${hint.detail.targetDescription}不能自动编辑。`
+    case 'docx_write_requires_readback':
+      return `hand 本轮已发生 docx 写操作；必须先 readback 最新修订后，才能继续写或结束。`
     case 'brain_checklist_incomplete':
       return `brain 选择 mouth 时 checklist 仍有未完成事项；pending=${renderStringList(
         hint.detail.pendingItems
@@ -89,6 +91,14 @@ export const renderWatchHintForBrain = (hint: HumanWatchHint): string => {
       return [
         `上一轮命中了复杂定位排版保护，${hint.detail.targetDescription}不能自动编辑。`,
         '不要继续尝试修改这处区域，继续处理当前任务中其他仍可完成的部分。'
+      ].join('\n')
+    case 'docx_write_requires_readback':
+      return [
+        '上一轮 hand 已经对 docx 执行过写操作。',
+        `sourcePaths=${renderStringList(hint.detail.sourcePaths)}`,
+        `latestRevisionRefs=${renderStringList(hint.detail.latestRevisionRefs)}`,
+        `suggestedToolNames=${renderStringList(hint.detail.suggestedToolNames)}`,
+        '在继续任何 docx 写操作，或直接选择 mouth 之前，必须先对这些文档做一次 readback，并确保读到的 revision 不低于上述最新修订。'
       ].join('\n')
     case 'brain_checklist_incomplete':
       return [

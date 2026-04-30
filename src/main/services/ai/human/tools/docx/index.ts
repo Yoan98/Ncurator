@@ -6,10 +6,12 @@ import { buildDocxWriteTools } from './tools/writeTools'
 
 export const buildDocxCapabilityTools = (input: DocxCapabilityToolsInput) => {
   const runtime = createDocxToolRuntime(input)
+  input.cache.docxRuntime = runtime
 
   return {
     tools: [...buildDocxReadTools(runtime), ...buildDocxWriteTools(runtime)],
-    state: runtime.state
+    state: runtime.state,
+    runtime
   }
 }
 
@@ -18,7 +20,7 @@ export const docxToolFamily = createWorkspaceBoundToolFamily({
   descriptionForTool: (name) => `docx tool: ${name}`,
   reason: 'docx capability requires workspace binding before execution',
   error: 'workspace is required for docx capability',
-  buildWorkspaceTools: ({ ctx, runId, taskId, workspaceRootPath, emitActivity }) =>
+  buildWorkspaceTools: ({ ctx, cache, runId, taskId, workspaceRootPath, emitActivity }) =>
     buildDocxCapabilityTools({
       ctx: {
         runId: ctx.runId,
@@ -30,6 +32,7 @@ export const docxToolFamily = createWorkspaceBoundToolFamily({
         resolveDocxOpenTarget: ctx.resolveDocxOpenTarget,
         embeddingService: ctx.embeddingService
       },
+      cache,
       runId,
       taskId,
       workspaceRootPath,

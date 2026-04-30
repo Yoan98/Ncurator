@@ -4,6 +4,7 @@ import {
   buildMouthExecution,
   buildPreExecutionBlockedExecution
 } from '../../memory/roundHistory'
+import { getToolSpec } from '../../tools/registry'
 import { createDeliveryGuidanceItem, mergeDeliveryGuidanceItems } from '../../shared/deliveryGuidance'
 import type {
   HumanDecision,
@@ -13,6 +14,37 @@ import type {
   HumanTraceStep,
   HumanWatchHint
 } from '../../types'
+
+const docxReadSatisfiesWatchHint = (input: {
+  decision: HumanDecision
+  watchHint: Extract<HumanWatchHint, { code: 'docx_write_requires_readback' }>
+}): boolean => {
+  if (input.decision.nextAction.action !== 'hand') return false
+
+  return input.decision.nextAction.toolUsePlan.calls.some((call) => {
+    const spec = getToolSpec(call.toolName)
+    if (!spec) return false
+    const meta = spec.resolveExecutionMeta(call.args)
+    if (meta.mutability !== 'read_only' || meta.resourceKey !== 'docx') return false
+    const requestedPath =
+      typeof call.args.sourcePath === 'string' ? call.args.sourcePath : undefined
+    if (
+      requestedPath &&
+      input.watchHint.detail.sourcePaths.length > 0 &&
+      !input.watchHint.detail.sourcePaths.some((sourcePath) => sourcePath.endsWith(requestedPath))
+    ) {
+      return false
+    }
+    return true
+  })
+}
+
+const buildDocxReadbackBlockedHint = (
+  watchHint: Extract<HumanWatchHint, { code: 'docx_write_requires_readback' }>
+): HumanWatchHint => ({
+  code: 'docx_write_requires_readback',
+  detail: watchHint.detail
+})
 
 export type HumanTraceItemInput = {
   action: HumanTraceStep['action']
@@ -104,6 +136,18 @@ export const resolveBrainDecisionWatchHint = (input: {
   watchHint?: HumanWatchHint
 }): HumanWatchHint | undefined => {
   if (input.watchHint) return input.watchHint
+  if (input.state.execution.watchHint?.code === 'docx_write_requires_readback') {
+    if (
+      input.decision.nextAction.action === 'hand' &&
+      docxReadSatisfiesWatchHint({
+        decision: input.decision,
+        watchHint: input.state.execution.watchHint
+      })
+    ) {
+      return undefined
+    }
+    return buildDocxReadbackBlockedHint(input.state.execution.watchHint)
+  }
   if (input.decision.nextAction.action !== 'mouth') return undefined
 
   const pendingItems = input.stableMemory.checklist

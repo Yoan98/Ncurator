@@ -6,7 +6,7 @@ export const terminalToolFamily = createWorkspaceBoundToolFamily({
   descriptionForTool: () => 'Execute one shell command inside workspace.',
   reason: 'terminal_exec requires workspace binding before execution',
   error: 'workspace is required for terminal_exec',
-  buildWorkspaceTools: ({ ctx, runId, taskId, workspaceRootPath, emitActivity }) =>
+  buildWorkspaceTools: ({ ctx, cache, runId, taskId, workspaceRootPath, emitActivity }) =>
     buildTerminalCapabilityTools({
       ctx: {
         runId: ctx.runId,
@@ -14,6 +14,7 @@ export const terminalToolFamily = createWorkspaceBoundToolFamily({
         sendEvent: ctx.sendEvent,
         requestApproval: ctx.requestApproval
       },
+      cache,
       runId,
       taskId,
       workspaceRootPath,

@@ -10,9 +10,11 @@ import type {
   DocxOp,
   DocxOutlineBlock,
   DocxReadSession,
+  DocxReplayNode,
   DocxReplaySession,
   DocxReplaySnapshot,
   DocxRevision,
+  DocxSnapshotResolvedToolCall,
   DocxToolResultCode,
   SemanticDocIndex
 } from './types'
@@ -176,6 +178,24 @@ export type DocxToolRuntime = {
   expandOpsForReview: (docId: string, ops: DocxOp[]) => Promise<DocxOp[]>
   buildSemanticDocIndex: (docId: string) => Promise<SemanticDocIndex>
   getRevisionRefByDocId: (docId: string) => string | undefined
+  resolveSnapshotTargets: (input: {
+    sourcePath: string
+    baseRevisionRef: string
+    toolCalls: Array<{ toolName: string; args: JsonObject }>
+  }) => Promise<
+    | {
+        ok: true
+        sourcePath: string
+        baseRevisionRef: string
+        resolvedCalls: DocxSnapshotResolvedToolCall[]
+      }
+    | { ok: false; error: string }
+  >
+  resolveCurrentBlockIdFromNodeId: (input: {
+    sourcePath: string
+    nodeId: string
+    allowDeleted?: boolean
+  }) => { ok: true; blockId: string } | { ok: false; error: string }
   buildResourceContext: (input: {
     sourcePath: string
     effectKind: DocxToolResourceContext['effectKind']
@@ -303,6 +323,195 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
 
   const getRevisionRefByDocId = (docId: string): string | undefined =>
     state.revisionEntryByDocId.get(docId)?.revisionRef
+
+  const cloneReplaySessionAtRevision = async (inputValue: {
+    sourcePath: string
+    revisionRef: string
+  }): Promise<DocxReplaySession> => {
+    const sourcePath = path.resolve(inputValue.sourcePath)
+    const session = state.replaySessionBySourcePath.get(sourcePath)
+    if (!session) {
+      throw new Error(`docx session not found for sourcePath: ${sourcePath}`)
+    }
+    if (inputValue.revisionRef === session.activeRevisionRef) {
+      return session
+    }
+
+    const clone = createReplaySessionFromSnapshot({
+      sourcePath: session.sourcePath,
+      targetMode: session.targetMode,
+      sourceDocId: session.sourceDocId,
+      meta: session.meta,
+      stats: session.stats,
+      snapshot: session.sourceSnapshot
+    })
+    clone.docIdByRevisionRef = session.docIdByRevisionRef
+    clone.revisionRefByDocId = session.revisionRefByDocId
+    clone.revisionByDocId = session.revisionByDocId
+    clone.nextRevisionNumber = session.nextRevisionNumber
+    clone.viewArtifacts = session.viewArtifacts
+
+    const targetChain: DocxRevision[] = []
+    let cursor = inputValue.revisionRef
+    while (cursor && cursor !== 'v1') {
+      const docId = clone.docIdByRevisionRef.get(cursor)
+      const entry = docId ? clone.revisionByDocId.get(docId) : undefined
+      if (!entry) break
+      targetChain.push(entry)
+      cursor = entry.parentRevisionRef || ''
+    }
+
+    for (const revision of targetChain.reverse()) {
+      if (!revision.ops || revision.ops.length === 0) continue
+      const snapshot = await buildReplaySnapshotForDoc(revision.docId)
+      revision.ops.forEach((op) => {
+        applyRevisionToReplaySession({
+          session: clone,
+          revisionRef: revision.revisionRef,
+          op,
+          createdBlocks: revision.createdBlocks || [],
+          nextSnapshot: snapshot
+        })
+      })
+    }
+
+    const activeDocId = clone.docIdByRevisionRef.get(inputValue.revisionRef)
+    if (!activeDocId) {
+      throw new Error(`revision not tracked in docx session: ${inputValue.revisionRef}`)
+    }
+    clone.activeDocId = activeDocId
+    clone.activeRevisionRef = inputValue.revisionRef
+    return clone
+  }
+
+  const findVisibleNodeByLocator = (
+    session: DocxReplaySession,
+    blockId: string
+  ): DocxReplayNode | undefined =>
+    session.bodyNodeIds
+      .map((nodeId) => session.nodeById.get(nodeId))
+      .find(
+        (node): node is DocxReplayNode =>
+          Boolean(
+            node &&
+              node.reviewState !== 'deleted' &&
+              node.reviewState !== 'replaced-old' &&
+              (node.currentBlockId === blockId ||
+                node.blockId === blockId ||
+                node.sourceBlockId === blockId)
+          )
+      )
+
+  const resolveNodeIdsForLocatorField = (inputValue: {
+    session: DocxReplaySession
+    field: 'blockId' | 'anchorBlockId' | 'cellBlockId' | 'blockIds'
+    rawValue: JsonObject[string]
+  }): string[] => {
+    const blockIds =
+      inputValue.field === 'blockIds'
+        ? Array.isArray(inputValue.rawValue)
+          ? inputValue.rawValue.filter((value): value is string => typeof value === 'string' && value.length > 0)
+          : []
+        : typeof inputValue.rawValue === 'string' && inputValue.rawValue.length > 0
+          ? [inputValue.rawValue]
+          : []
+    return blockIds.map((blockId) => {
+      const node = findVisibleNodeByLocator(inputValue.session, blockId)
+      if (!node) {
+        throw new Error(`cannot resolve ${inputValue.field}=${blockId} in base revision`)
+      }
+      return node.nodeId
+    })
+  }
+
+  const resolveSnapshotTargets = async (inputValue: {
+    sourcePath: string
+    baseRevisionRef: string
+    toolCalls: Array<{ toolName: string; args: JsonObject }>
+  }): Promise<
+    | {
+        ok: true
+        sourcePath: string
+        baseRevisionRef: string
+        resolvedCalls: DocxSnapshotResolvedToolCall[]
+      }
+    | { ok: false; error: string }
+  > => {
+    try {
+      const session = await cloneReplaySessionAtRevision({
+        sourcePath: inputValue.sourcePath,
+        revisionRef: inputValue.baseRevisionRef
+      })
+      const resolvedCalls = inputValue.toolCalls.map((toolCall) => {
+        const locators: DocxSnapshotResolvedToolCall['locators'] = []
+        ;(['blockId', 'anchorBlockId', 'cellBlockId', 'blockIds'] as const).forEach((field) => {
+          if (!(field in toolCall.args)) return
+          locators.push({
+            field,
+            nodeIds: resolveNodeIdsForLocatorField({
+              session,
+              field,
+              rawValue: toolCall.args[field]
+            })
+          })
+        })
+        return {
+          toolName: toolCall.toolName,
+          sourcePath: path.resolve(inputValue.sourcePath),
+          locators
+        }
+      })
+      return {
+        ok: true,
+        sourcePath: path.resolve(inputValue.sourcePath),
+        baseRevisionRef: inputValue.baseRevisionRef,
+        resolvedCalls
+      }
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error)
+      }
+    }
+  }
+
+  const resolveCurrentBlockIdFromNodeId = (inputValue: {
+    sourcePath: string
+    nodeId: string
+    allowDeleted?: boolean
+  }): { ok: true; blockId: string } | { ok: false; error: string } => {
+    const session = state.replaySessionBySourcePath.get(path.resolve(inputValue.sourcePath))
+    if (!session) {
+      return {
+        ok: false,
+        error: `docx session not found for sourcePath: ${path.resolve(inputValue.sourcePath)}`
+      }
+    }
+    const node = session.nodeById.get(inputValue.nodeId)
+    if (!node) {
+      return {
+        ok: false,
+        error: `resolved node no longer exists: ${inputValue.nodeId}`
+      }
+    }
+    if (!inputValue.allowDeleted && (node.reviewState === 'deleted' || node.reviewState === 'replaced-old')) {
+      return {
+        ok: false,
+        error: `resolved node has already been removed by an earlier operation: ${inputValue.nodeId}`
+      }
+    }
+    const currentBlockId = node.currentBlockId || node.blockId || node.sourceBlockId
+    if (!currentBlockId) {
+      return {
+        ok: false,
+        error: `resolved node has no current block binding: ${inputValue.nodeId}`
+      }
+    }
+    return {
+      ok: true,
+      blockId: currentBlockId
+    }
+  }
 
   const createReadSessionCache = (): DocxReadSession['cache'] => ({
     outlineByCacheKey: new Map(),
@@ -1138,6 +1347,8 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     expandOpsForReview,
     buildSemanticDocIndex,
     getRevisionRefByDocId,
+    resolveSnapshotTargets,
+    resolveCurrentBlockIdFromNodeId,
     buildResourceContext
   }
 }

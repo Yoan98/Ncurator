@@ -39,6 +39,7 @@ export type CapabilityActivityInput = {
 
 export type WorkspaceCapabilityBuildInput<TContext = AiRunContext> = {
   ctx: TContext
+  cache: HumanRuntimeCache
   runId: string
   taskId: string
   workspaceRootPath: string

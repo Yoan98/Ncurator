@@ -3,6 +3,7 @@ import type { HumanWatchHint, ToolCallResult, ToolUsePlan } from '../../types'
 import { isDocxPositionedLayoutProtectionMessage } from '../../tools/docx/constants'
 
 const DOCX_WRITE_TOOL_NAMES = new Set([
+  'docx_create',
   'docx_paragraph_edit',
   'docx_heading_edit',
   'docx_table_edit',
@@ -83,6 +84,30 @@ export const deriveHandFollowupSignals = (input: {
       toolName: result.toolName,
       args: plannedCall?.args
     })
+  }
+
+  const docxWriteResults = input.results.filter((result) => DOCX_WRITE_TOOL_NAMES.has(result.toolName))
+  if (docxWriteResults.length > 0) {
+    const sourcePaths = [...new Set(
+      docxWriteResults
+        .map((result) => result.resourceContext?.sourcePath)
+        .filter((value): value is string => typeof value === 'string' && value.length > 0)
+    )]
+    const latestRevisionRefs = [...new Set(
+      docxWriteResults
+        .map((result) => result.resourceContext?.currentRevisionRef)
+        .filter((value): value is string => typeof value === 'string' && value.length > 0)
+    )]
+    return {
+      watchHint: {
+        code: 'docx_write_requires_readback',
+        detail: {
+          sourcePaths,
+          latestRevisionRefs,
+          suggestedToolNames: ['docx_outline', 'docx_read_blocks']
+        }
+      }
+    }
   }
 
   return {}

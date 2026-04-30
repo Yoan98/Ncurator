@@ -136,7 +136,7 @@ export const createWorkspaceBoundToolFamily = (input: {
   ) => StructuredToolInterface[]
 }): ToolFamilyDefinition => ({
   familyId: input.familyId,
-  buildTools: ({ ctx, runId, taskId }) => {
+  buildTools: ({ ctx, cache, runId, taskId }) => {
     const toolNames = listToolNamesByFamily(input.familyId)
     return buildWorkspaceBoundGuardedTools({
       toolNames,
@@ -151,6 +151,7 @@ export const createWorkspaceBoundToolFamily = (input: {
       buildWorkspaceTools: (workspaceRootPath) =>
         input.buildWorkspaceTools({
           ctx,
+          cache,
           runId,
           taskId,
           workspaceRootPath,
