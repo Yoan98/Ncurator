@@ -557,7 +557,7 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 `kb_list_documents` 在当前工作区默认范围内的真实列表、`query` 过滤与缩圈契约。
+- What：验证 `kb_list_documents` 在当前工作区默认范围内的真实列表、`sourceNameQuery` 文档名过滤与缩圈契约。
 - Why：KB 资料发现必须真实调用生产检索存储。
 - How：通过真实 `DocumentsStore.addDocument / addChunks` 导入多工作区 fixture 后执行列表查询。
 - Oracle：结果默认只包含当前工作区文档，`documentIds` 只做进一步缩圈，空结果与非空结果都稳定可断言。

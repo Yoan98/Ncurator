@@ -399,6 +399,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
                           message.error(response.error || '打开链接失败')
                         }
                       }}
+                      data-testid={importSelectors.webSourceUrlLinkButton}
                     >
                       <HiGlobeAlt className="h-3.5 w-3.5 shrink-0" />
                       {selectedWebSource.url}

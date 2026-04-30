@@ -544,6 +544,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                           message.error(response.error || '打开路径失败')
                         }
                       }}
+                      data-testid={importSelectors.workspaceOpenPathButton}
                     >
                       打开路径
                     </Button>

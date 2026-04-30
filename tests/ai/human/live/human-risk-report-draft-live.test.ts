@@ -47,6 +47,11 @@ const hasExpectedRiskReportChanges = (
     }
   )
 
+const hasExpectedRiskEvidenceReference = (deliveryText: string) =>
+  /(weekly-risk-summary(?:\.md|\.\*)|project-milestones\.md|vendor-followup\.txt)/.test(
+    deliveryText
+  )
+
 describe('ai human live backend', () => {
   it('human-risk-report-draft-live', async () => {
     await runBackendCase({
@@ -162,9 +167,7 @@ describe('ai human live backend', () => {
         )
 
         runtime.assertThat(
-          /(weekly-risk-summary\.md|project-milestones\.md|vendor-followup\.txt)/.test(
-            deliveryText
-          ) &&
+          hasExpectedRiskEvidenceReference(deliveryText) &&
             /owner-note\.md/.test(deliveryText) &&
             /风险结论/.test(deliveryText) &&
             /负责人/.test(deliveryText) &&

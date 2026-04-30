@@ -189,7 +189,7 @@ export const buildKbCapabilityTools = (input: {
           if (!workspaceId) {
             throw new Error('workspace is required for kb search')
           }
-          const query = String(args.query || '').trim() || undefined
+          const sourceNameQuery = String(args.sourceNameQuery || '').trim() || undefined
           const page = Math.max(1, Number(args.page ?? 1))
           const pageSize = Math.max(1, Math.min(MAX_LIST_PAGE_SIZE, Number(args.pageSize ?? 20)))
           const requestedDocumentIds = resolveRequestedDocumentIds(args.documentIds)
@@ -208,7 +208,7 @@ export const buildKbCapabilityTools = (input: {
           }
 
           const normalized = await ctx.documentsStore.listDocuments({
-            query,
+            sourceNameQuery,
             page,
             pageSize,
             workspaceId,

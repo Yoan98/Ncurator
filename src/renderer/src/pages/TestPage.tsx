@@ -104,7 +104,7 @@ function TestPage(): React.JSX.Element {
   const loadDocuments = async (page = docPage, pageSize = docPageSize, query = docKeyword) => {
     setDocLoading(true)
     try {
-      const res = await window.api.listDocuments({ query, page, pageSize })
+      const res = await window.api.listDocuments({ sourceNameQuery: query, page, pageSize })
       setDocItems(res.items)
       setDocTotal(res.total)
       setDocPage(page)

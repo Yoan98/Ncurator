@@ -3,6 +3,7 @@ import { Button, Progress, Typography, message, Tag, List } from 'antd'
 import { HiCloudArrowDown, HiCheckCircle, HiExclamationCircle } from 'react-icons/hi2'
 import AppPageHeader from '../components/app/AppPageHeader'
 import SettingsFloatingMenu from '../components/settings/SettingsFloatingMenu'
+import { vectorSelectors } from '../testing/selectors'
 
 const { Title } = Typography
 
@@ -104,7 +105,10 @@ const ModelDownloadPage: React.FC = () => {
   }
 
   return (
-    <div className="h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(251,245,242,0.95),_rgba(245,245,244,0.92)_42%,_#F5F5F4_72%)]">
+    <div
+      className="h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(251,245,242,0.95),_rgba(245,245,244,0.92)_42%,_#F5F5F4_72%)]"
+      data-testid={vectorSelectors.page}
+    >
       <div className="mx-auto flex h-full w-full max-w-[1360px] flex-col gap-5 px-5 py-5 lg:px-6">
         <AppPageHeader
           icon={<HiCloudArrowDown className="h-5 w-5" />}
@@ -126,11 +130,16 @@ const ModelDownloadPage: React.FC = () => {
                 loading={loading}
                 itemLayout="horizontal"
                 dataSource={models}
+                data-testid={vectorSelectors.list}
                 renderItem={(item) => (
                   <List.Item
+                    data-testid={`${vectorSelectors.cardPrefix}-${item.id}`}
                     actions={[
                       item.isDownloaded ? (
-                        <div className="flex items-center gap-2 font-medium text-green-600">
+                        <div
+                          className="flex items-center gap-2 font-medium text-green-600"
+                          data-testid={`${vectorSelectors.installedBadgePrefix}-${item.id}`}
+                        >
                           <HiCheckCircle className="text-lg" />
                           <span>已安装</span>
                         </div>
@@ -144,6 +153,7 @@ const ModelDownloadPage: React.FC = () => {
                           onClick={() => handleDownload(item.id)}
                           className="!border-none !bg-[#D97757] shadow-sm hover:!bg-[#C66A4A]"
                           disabled={!!downloadingId}
+                          data-testid={`${vectorSelectors.downloadButtonPrefix}-${item.id}`}
                         >
                           下载
                         </Button>
@@ -169,7 +179,10 @@ const ModelDownloadPage: React.FC = () => {
                           <p className="text-[#666666]">{item.description}</p>
 
                           {downloadingId === item.id ? (
-                            <div className="rounded-[18px] border border-[#E5E5E4] bg-[#F5F5F4] p-4">
+                            <div
+                              className="rounded-[18px] border border-[#E5E5E4] bg-[#F5F5F4] p-4"
+                              data-testid={`${vectorSelectors.progressPrefix}-${item.id}`}
+                            >
                               <div className="mb-2 flex justify-between text-sm">
                                 <span className="font-medium text-[#1F1F1F]">正在下载...</span>
                                 <span className="font-medium text-[#D97757]">
@@ -183,7 +196,12 @@ const ModelDownloadPage: React.FC = () => {
                                 className="!mb-2"
                               />
                               <div className="flex justify-between text-xs text-[#999999]">
-                                <span className="max-w-[200px] truncate">{currentFile}</span>
+                                <span
+                                  className="max-w-[200px] truncate"
+                                  data-testid={`${vectorSelectors.currentFilePrefix}-${item.id}`}
+                                >
+                                  {currentFile}
+                                </span>
                                 <span>
                                   {fileProgress.completed}/{fileProgress.total} 文件
                                 </span>
@@ -192,7 +210,10 @@ const ModelDownloadPage: React.FC = () => {
                           ) : null}
 
                           {errorMsg && downloadingId === item.id ? (
-                            <div className="flex items-center gap-1 text-sm text-red-500">
+                            <div
+                              className="flex items-center gap-1 text-sm text-red-500"
+                              data-testid={`${vectorSelectors.errorPrefix}-${item.id}`}
+                            >
                               <HiExclamationCircle />
                               {errorMsg}
                             </div>

@@ -17,6 +17,12 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 3. `web`
 4. `vector`
 
+当前实现摘要：
+
+- `model`：7/7 已实现；列表契约、表单、启用切换、当前配置变更事件和删除反馈都已有正式覆盖。
+- `workspace`：9/9 已实现；页面首屏、添加、扫描、加载模式、摘要状态、打开路径、移除和空态都已有正式覆盖。
+- `web`：6/6 已实现；列表筛选、添加、单条刷新、可见列表批量刷新、外链打开和删除都已有正式覆盖。
+- `vector`：4/4 已实现；该 suite 归属 `settings` 产品域，但实际运行在独立路由 `/model-download`，不作为 `SettingsPage` 内嵌 section 存在。
 
 ### 2.1 `model`
 
@@ -48,13 +54,14 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 为什么：向量模型是后续检索与知识库能力的基础依赖。
 
-怎么做：围绕模型列表、单任务下载、进度展示、完成刷新和失败反馈组织正式 case。
+怎么做：围绕模型列表、单任务下载、进度展示、完成刷新和失败反馈组织正式 case；虽然页面路由是 `/model-download`，但仍按 Settings 产品归属纳入本计划。
 
 ## 3. 领域特有规则
 
 - Settings 的用户可见行为默认归入本计划，不再单独维护 `workspace` 测试域。
 - `workspace` 在这里是 Settings 下的 suite，不是独立测试 domain。
-- 当前 `settings` 域已落地部分正式测试文件；已完成代码与 raw logs 对齐的 case 标记为 `已实现`，其余 case 继续保留 `未实现`，后续按取舍推进。
+- `vector` 属于 Settings 产品域，但页面位于独立路由 `/model-download`；测试目录与 runner 仍统一归入 `tests/settings/vector/**`。
+- 当前 `settings` 域以 `已实现 / 部分实现 / 未实现 / 待调整` 为唯一实现状态集合；本次 rebaseline 后，文档状态需与实际正式 case 文件保持同步。
 - Settings 当前不额外拆 `group`；若后续没有新增层级需求，正式 case 默认直接落在 `tests/settings/<suite>/`。
 - `How` 与 `Oracle` 必须显式映射到 [settings.md](/Users/test/work-space/NCurator-Desktop/doc/prd/settings.md) 的需求编号与验收编号。
 
@@ -65,7 +72,7 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 #### `model-config-list-contract`
 
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证大模型页初始化依赖的配置查询契约，能够返回完整配置列表并明确识别当前激活配置。
 - Why：如果列表查询或当前配置识别失真，页面首屏、页头摘要和后续编辑/启用链路都会在错误对象上继续操作。
 - How：构造至少两条模型配置，其中一条为当前激活配置；调用 Settings 大模型页使用的配置查询服务或 IPC，核对返回结果是否可直接支撑页面初始化；对齐 `SET-MODEL-001`，覆盖 `SET-MODEL-001-AC1`、`SET-MODEL-001-AC2`。
@@ -123,15 +130,15 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `model-active-config-change-event`
 
-- 测试类型：`backend`
-- 实现状态：`未实现`
+- 测试类型：`e2e`
+- 实现状态：`已实现`
 - What：验证保存当前激活配置或切换当前配置成功后，会向外派发 `check-llm-config` 事件，并使下游读取到最新配置。
 - Why：Settings 页本身只是配置入口，真正风险在于其他页面是否能感知变更；如果事件不派发，页面间状态会长期失真。
 - How：分别覆盖“编辑当前激活配置并保存成功”和“切换当前激活配置成功”两条路径，监听事件总线或 IPC 派发结果，并校验后续读取到的新激活配置；对齐 `SET-MODEL-004`，覆盖 `SET-MODEL-004-AC1`、`SET-MODEL-004-AC2`。
 - Oracle：
   - 两条成功路径都会派发 `check-llm-config` 事件，对齐 `SET-MODEL-004-AC1`。
   - 事件派发后，下游读取到的当前模型配置已经更新到最新值，不需要重启页面，对齐 `SET-MODEL-004-AC1`、`SET-MODEL-004-AC2`。
-- Not：不直接验证 workbench 页面 UI 刷新；workbench 侧展示和消费行为应在 workbench 测试计划中单独覆盖。
+- Not：不直接验证后续消费页面的 UI 刷新；这里只验证 Settings 触发的变更信号与下游可见最新配置。
 
 #### `model-delete-config-feedback`
 
@@ -173,8 +180,8 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `workspace-scan-contract`
 
-- 测试类型：`backend`
-- 实现状态：`未实现`
+- 测试类型：`e2e`
+- 实现状态：`已实现`
 - What：验证工作空间扫描请求的参数、进度事件和结果载荷契约，能支撑页面同步刷新扫描状态与目录树。
 - Why：扫描过程涉及异步状态和目录快照，如果契约不稳定，页面层再完整也会展示出错或停留在旧数据。
 - How：以选中工作空间为输入，调用扫描服务或 IPC，模拟进行中和完成态返回；对齐 `SET-WORKSPACE-003`，覆盖 `SET-WORKSPACE-003-AC1`、`SET-WORKSPACE-003-AC2`。
@@ -197,8 +204,8 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `workspace-load-mode-contract`
 
-- 测试类型：`backend`
-- 实现状态：`未实现`
+- 测试类型：`e2e`
+- 实现状态：`已实现`
 - What：验证工作空间加载时，界面选中的 `full`、`presence_only`、`changes_only` 模式会准确进入实际请求。
 - Why：加载模式会直接影响知识库构建成本与范围，如果模式在请求层丢失，页面选择就是伪状态。
 - How：分别以三种模式触发加载服务或 IPC，校验请求参数和返回载荷；对齐 `SET-WORKSPACE-004`，覆盖 `SET-WORKSPACE-004-AC1`、`SET-WORKSPACE-004-AC2`。
@@ -233,8 +240,8 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `workspace-open-path-contract`
 
-- 测试类型：`backend`
-- 实现状态：`未实现`
+- 测试类型：`e2e`
+- 实现状态：`已实现`
 - What：验证点击“打开路径”时，会通过系统能力定位当前工作空间目录。
 - Why：这是 Settings 与宿主系统的直接交互点，页面层很难补救底层调用错误。
 - How：以已选中工作空间为输入，触发“打开路径”调用，监听外壳层 IPC 或系统桥接调用；对齐 `SET-WORKSPACE-006`，覆盖 `SET-WORKSPACE-006-AC1`。
@@ -245,14 +252,14 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 #### `workspace-remove-source-contract`
 
 - 测试类型：`backend`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证移除工作空间后，该工作空间会从 Settings 列表数据源与后续资料范围依赖的数据源中同时消失。
 - Why：`SET-WORKSPACE-006-AC2` 的真实风险不只在当前列表消失，还在于其他入口是否继续拿到已删除的工作空间。
 - How：执行移除工作空间操作后，分别查询 Settings 工作空间列表数据源与后续范围选择依赖的数据源；对齐 `SET-WORKSPACE-006`，覆盖 `SET-WORKSPACE-006-AC2`。
 - Oracle：
   - 被移除工作空间不再出现在后续列表查询结果中，对齐 `SET-WORKSPACE-006-AC2`。
   - 被移除工作空间不再出现在后续资料范围可选数据源中，对齐 `SET-WORKSPACE-006-AC2`。
-- Not：不直接验证 workbench 范围选择器的 UI 展示；该 UI 行为应在 workbench 测试计划中单独覆盖。
+- Not：不直接验证后续消费入口的 UI 展示；这里只验证 Settings 列表与后续可选数据源同时清理。
 
 #### `workspace-remove-from-list`
 
@@ -264,7 +271,7 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 - Oracle：
   - 移除成功后，该工作空间从列表中消失，对齐 `SET-WORKSPACE-006-AC2`。
   - 详情区不会继续显示已删除工作空间的陈旧数据。
-- Not：不验证 workbench 会话中的范围清理展示；只覆盖 Settings 页内可见结果。
+- Not：不验证其他消费页面中的范围清理展示；只覆盖 Settings 页内可见结果。
 
 #### `workspace-empty-tree-legacy-hints`
 
@@ -320,8 +327,8 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `web-refresh-visible-list-contract`
 
-- 测试类型：`backend`
-- 实现状态：`未实现`
+- 测试类型：`e2e`
+- 实现状态：`已实现`
 - What：验证“全部抓取”只会对当前列表中的网页资料发起重新抓取，不会误触发被筛掉的项目。
 - Why：这个约束决定了筛选与批量动作是否真正联动，若契约错误，用户在小范围操作时会不知情地刷新更多网页。
 - How：在存在“当前可见列表”和“当前被筛掉列表”的前提下触发全部抓取，再覆盖当前列表为空的分支；对齐 `SET-WEB-004`，覆盖 `SET-WEB-004-AC1`，并约束 `SET-WEB-004` 的执行范围。
@@ -344,8 +351,8 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `web-open-url-contract`
 
-- 测试类型：`backend`
-- 实现状态：`未实现`
+- 测试类型：`e2e`
+- 实现状态：`已实现`
 - What：验证点击网页资料 URL 时，系统会调用默认浏览器打开原网页，而不是进入本地预览路径。
 - Why：这是 Settings 页与宿主系统的另一个直接交互点，如果打开错目标，用户会误以为原始来源地址已经丢失。
 - How：在网页资料详情中触发打开 URL 操作，监听系统浏览器打开调用参数；对齐 `SET-WEB-005`，覆盖 `SET-WEB-005-AC2`。
@@ -370,7 +377,7 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 #### `vector-model-catalog-load`
 
 - 测试类型：`e2e`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证向量模型页打开后，模型列表能成功加载并区分已安装模型与可下载模型；失败时给出明确错误提示。
 - Why：向量模型是检索能力的基础依赖，如果列表加载状态不清晰，用户无法判断是否还需要下载模型。
 - How：分别覆盖模型列表加载成功和失败两条路径；对齐 `SET-VECTOR-001`，覆盖 `SET-VECTOR-001-AC1`、`SET-VECTOR-001-AC2`。
@@ -381,8 +388,8 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `vector-download-single-task-contract`
 
-- 测试类型：`backend`
-- 实现状态：`未实现`
+- 测试类型：`e2e`
+- 实现状态：`已实现`
 - What：验证向量模型下载的单任务约束与进度事件契约，确保同一时间只能有一个下载任务，并能持续上报进度字段。
 - Why：下载任务跨时长较长且依赖宿主环境，若不先锁住底层契约，页面会很容易出现并发触发或进度丢失。
 - How：启动一个下载任务后尝试触发第二个下载，并模拟进度事件流；对齐 `SET-VECTOR-002`，覆盖 `SET-VECTOR-002-AC1`、`SET-VECTOR-002-AC2`。
@@ -394,7 +401,7 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 #### `vector-download-progress`
 
 - 测试类型：`e2e`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证下载过程中，页面会持续更新总进度、当前文件和已完成文件数，并阻止其他模型继续触发下载。
 - Why：下载过程用户等待时间长，进度和并发约束是避免重复操作与误判的关键反馈。
 - How：在向量模型页启动一个下载任务并持续注入进度更新；对齐 `SET-VECTOR-002`，覆盖 `SET-VECTOR-002-AC1`、`SET-VECTOR-002-AC2`。
@@ -406,7 +413,7 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 #### `vector-download-result-feedback`
 
 - 测试类型：`e2e`
-- 实现状态：`未实现`
+- 实现状态：`已实现`
 - What：验证向量模型下载完成后会刷新为已安装状态，下载失败时会提示失败原因并退出下载中状态。
 - Why：下载的最终状态决定用户是否可以继续使用检索能力；如果收敛不清晰，用户会反复点击下载或误判环境异常。
 - How：分别覆盖下载成功和下载失败两条路径；对齐 `SET-VECTOR-003`，覆盖 `SET-VECTOR-003-AC1`、`SET-VECTOR-003-AC2`。

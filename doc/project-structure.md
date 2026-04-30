@@ -78,7 +78,6 @@ tests/                   # 自动化测试
 - `tests/fixtures/workspace/` 是共享工作区输入目录；工作区语义测试统一从这里取样本。
 - `tests/ai/**` 只放 AI formal tests。
 - `tests/unit/**` 放长期保留、但不进入 formal test-plan 的 unit / helper / schema / prompt 类测试。
-- `tests/workbench/**` 按 workbench PRD 模块组织正式测试。
 - `tests/settings/**` 按 settings PRD 模块组织正式测试。
 - `tests/kb-search/**` 预留给检索链路测试；`tests/temp/**` 仅放按需临时排查用例。
 - `tests/logs/**` 只放每次运行的原始日志；raw logs 之外不再维护测试专用正式分析目录。
@@ -93,5 +92,5 @@ tests/                   # 自动化测试
 - `doc/prd/` 用于按产品模块维护用户可见功能规格与验收标准，例如 `workbench.md` 与 `settings.md`。
 - 用户可见功能行为变更时，应优先同步 `doc/prd/**`，再同步代码实现与测试。
 - `doc/test-plan/` 用于维护各类测试计划文档。
-- 测试计划按测试域与产品面拆分，例如 `doc/test-plan/ai-test.md`、`doc/test-plan/workbench-test.md`、`doc/test-plan/settings-test.md`。
+- 测试计划按测试域与产品面拆分，例如 `doc/test-plan/ai-test.md`、`doc/test-plan/settings-test.md`。
 - 长期维护的正式测试用例，必须先在 `doc/test-plan/**` 中定义，再落到 `tests/**` 正式目录。

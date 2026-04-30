@@ -10,7 +10,6 @@ const KB_SEARCH_EXAMPLE: JsonObject = {
 }
 
 const KB_LIST_DOCUMENTS_EXAMPLE: JsonObject = {
-  query: 'weekly risk',
   page: 1,
   pageSize: 5
 }
@@ -30,7 +29,7 @@ export const KB_SEARCH_SCHEMA = z.object({
 })
 
 export const KB_LIST_DOCUMENTS_SCHEMA = z.object({
-  query: z.string().optional(),
+  sourceNameQuery: z.string().optional(),
   page: z.number().int().min(1).optional(),
   pageSize: z.number().int().min(1).max(50).optional(),
   documentIds: z.array(z.string()).optional()
@@ -73,11 +72,13 @@ export const KB_LIST_DOCUMENTS_TOOL_SPEC: HumanToolSpec<
   schema: KB_LIST_DOCUMENTS_SCHEMA,
   promptSpec: {
     name: 'kb_list_documents',
-    description: '查询当前工作区知识库中已建立了索引的文档列表。',
-    whenToUse: '当需要查看工作区知识库中，有哪些文档已经能够被工作区知识库检索技能进行检索时使用。',
+    description:
+      '查询当前工作区知识库中已建立了索引的文档列表；可选按文档名做包含过滤。',
+    whenToUse:
+      '当需要先查看当前工作区里有哪些文档已经进入知识库，或需要按文档名缩小候选范围时使用。',
     examples: [
       {
-        goal: '先列出名称中包含 weekly risk 的候选知识文档',
+        goal: '先列出当前工作区中已经可被知识库检索的文档',
         args: KB_LIST_DOCUMENTS_EXAMPLE
       }
     ]

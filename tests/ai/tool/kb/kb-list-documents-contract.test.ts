@@ -61,8 +61,8 @@ describe('ai tool kb backend', () => {
 
         return {
           allInScope: await harness.invoke<KbListDocumentsResult>('kb_list_documents', {}),
-          queryFiltered: await harness.invoke<KbListDocumentsResult>('kb_list_documents', {
-            query: 'Guide'
+          sourceNameFiltered: await harness.invoke<KbListDocumentsResult>('kb_list_documents', {
+            sourceNameQuery: 'Guide'
           }),
           requestedSubset: await harness.invoke<KbListDocumentsResult>('kb_list_documents', {
             documentIds: ['doc-2', 'doc-3']
@@ -87,13 +87,13 @@ describe('ai tool kb backend', () => {
         )
 
         runtime.assertThat(
-          result.queryFiltered.total === 1 &&
-            result.queryFiltered.items[0]?.id === 'doc-1' &&
-            result.queryFiltered.items[0]?.name === 'AI Tool Guide.md',
+          result.sourceNameFiltered.total === 1 &&
+            result.sourceNameFiltered.items[0]?.id === 'doc-1' &&
+            result.sourceNameFiltered.items[0]?.name === 'AI Tool Guide.md',
           {
-            name: 'list-documents-supports-query-filter',
-            message: 'kb_list_documents 应支持按 query 过滤并返回稳定字段。',
-            data: result.queryFiltered
+            name: 'list-documents-supports-source-name-filter',
+            message: 'kb_list_documents 应支持按 sourceNameQuery 过滤并返回稳定字段。',
+            data: result.sourceNameFiltered
           }
         )
 

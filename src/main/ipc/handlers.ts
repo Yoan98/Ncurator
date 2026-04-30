@@ -1920,11 +1920,11 @@ export function registerHandlers(services: {
     'list-documents',
     async (
       _event,
-      payload: { query?: string; page: number; pageSize: number }
+      payload: { sourceNameQuery?: string; page: number; pageSize: number }
     ): Promise<DocumentListResponse> => {
       try {
-        const { query, page, pageSize } = payload
-        const res = await documentsStore.listDocuments({ query, page, pageSize })
+        const { sourceNameQuery, page, pageSize } = payload
+        const res = await documentsStore.listDocuments({ sourceNameQuery, page, pageSize })
         return res
       } catch (error: unknown) {
         console.error('❌ [LIST-DOCUMENTS] ERROR:', error)

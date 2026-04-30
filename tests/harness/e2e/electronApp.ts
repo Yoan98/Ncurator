@@ -8,7 +8,7 @@ import {
   type ElectronApplication,
   type Page
 } from 'playwright'
-import type { AiRunEvent } from '../../../src/shared/types'
+import type { AiRunEvent, JsonValue } from '../../../src/shared/types'
 
 type E2EConsoleLevel = 'log' | 'warning' | 'error'
 
@@ -20,11 +20,17 @@ export type E2ERouteEntry = {
 export type E2EIpcInvokeEntry = {
   ts: string
   name: string
+  payload?: JsonValue
 }
 
 export type E2EAiRunEventEntry = {
   ts: string
   event: AiRunEvent
+}
+
+export type E2EDomEventEntry = {
+  ts: string
+  name: string
 }
 
 export type E2EConsoleEntry = {
@@ -37,6 +43,7 @@ type E2EObserverState = {
   routeEntries: E2ERouteEntry[]
   ipcInvokeEntries: E2EIpcInvokeEntry[]
   aiRunEventEntries: E2EAiRunEventEntry[]
+  domEventEntries: E2EDomEventEntry[]
 }
 
 type E2EWindow = Window & {
@@ -47,6 +54,7 @@ export type E2ERuntimeSignals = {
   routeEntries: E2ERouteEntry[]
   ipcInvokeEntries: E2EIpcInvokeEntry[]
   aiRunEventEntries: E2EAiRunEventEntry[]
+  domEventEntries: E2EDomEventEntry[]
   consoleEntries: E2EConsoleEntry[]
 }
 
@@ -78,11 +86,13 @@ const installPageObservers = async (page: Page): Promise<void> => {
     const routeEntries: E2ERouteEntry[] = [{ ts: now(), route: window.location.hash || '#/' }]
     const ipcInvokeEntries: E2EIpcInvokeEntry[] = []
     const aiRunEventEntries: E2EAiRunEventEntry[] = []
+    const domEventEntries: E2EDomEventEntry[] = []
 
     currentWindow.__NCURATOR_E2E_OBSERVER__ = {
       routeEntries,
       ipcInvokeEntries,
-      aiRunEventEntries
+      aiRunEventEntries,
+      domEventEntries
     }
 
     window.addEventListener('hashchange', () => {
@@ -93,10 +103,11 @@ const installPageObservers = async (page: Page): Promise<void> => {
     })
 
     window.addEventListener('ncurator-e2e-ipc-call', (event) => {
-      const detail = (event as CustomEvent<{ name: string }>).detail
+      const detail = (event as CustomEvent<{ name: string; payload?: JsonValue }>).detail
       currentWindow.__NCURATOR_E2E_OBSERVER__?.ipcInvokeEntries.push({
         ts: now(),
-        name: detail.name
+        name: detail.name,
+        payload: detail.payload
       })
     })
 
@@ -105,6 +116,13 @@ const installPageObservers = async (page: Page): Promise<void> => {
       currentWindow.__NCURATOR_E2E_OBSERVER__?.aiRunEventEntries.push({
         ts: now(),
         event: detail
+      })
+    })
+
+    window.addEventListener('check-llm-config', () => {
+      currentWindow.__NCURATOR_E2E_OBSERVER__?.domEventEntries.push({
+        ts: now(),
+        name: 'check-llm-config'
       })
     })
   })
@@ -154,7 +172,8 @@ export const launchElectronApp = async (): Promise<LaunchedElectronApp> => {
           currentWindow.__NCURATOR_E2E_OBSERVER__ || {
             routeEntries: [],
             ipcInvokeEntries: [],
-            aiRunEventEntries: []
+            aiRunEventEntries: [],
+            domEventEntries: []
           }
         )
       })

@@ -66,13 +66,33 @@ export type DownloadProgress = {
   error?: string
 }
 
-export type E2EApiOverrides = {
+export type E2EDownloadModelResponse = {
+  success: boolean
+  error?: string
+}
+
+export type E2EModelCatalogOverride = {
+  items?: ModelInfo[]
+  error?: string
+  sequence?: Array<{
+    items?: ModelInfo[]
+    error?: string
+  }>
+}
+
+export type SettingsE2EApiOverrides = {
   pickDirectoryResponse?: PickDirectoryResponse
   workspaceListResponse?: WorkspaceListResponse
   workspaceNodesResponseByWorkspaceId?: Record<string, WorkspaceNodeListResponse>
   legacyLocalImportMigrationStatus?: LegacyLocalImportMigrationStatus | null
   llmConfigDeleteResponseById?: Record<string, { success: boolean; error?: string }>
   webSourceRefreshDelayMs?: number
+  revealPathResponseByPath?: Record<string, { success: boolean; error?: string }>
+  openExternalResponseByUrl?: Record<string, { success: boolean; error?: string }>
+  modelCatalog?: E2EModelCatalogOverride
+  downloadModelResponseByRepoId?: Record<string, E2EDownloadModelResponse>
+  downloadProgressEventsByRepoId?: Record<string, DownloadProgress[]>
+  downloadProgressDelayMs?: number
 }
 
 export type DesktopApi = {
@@ -107,7 +127,7 @@ export type DesktopApi = {
     documentIds?: string[]
   ) => Promise<SearchResult[]>
   listDocuments: (payload: {
-    query?: string
+    sourceNameQuery?: string
     page: number
     pageSize: number
   }) => Promise<{ items: DocumentRecord[]; total: number }>
@@ -150,7 +170,7 @@ export type DesktopApi = {
   llmConfigSave: (config: LLMConfig) => Promise<{ success: boolean; error?: string }>
   llmConfigDelete: (id: string) => Promise<{ success: boolean; error?: string }>
   llmConfigSetActive: (id: string) => Promise<{ success: boolean; error?: string }>
-  setE2EApiOverrides: (overrides: E2EApiOverrides) => void
+  setE2EApiOverrides: (overrides: SettingsE2EApiOverrides) => void
   clearE2EApiOverrides: () => void
   aiRuntimeSettingsGet: () => Promise<AiRuntimeSettings>
   aiRuntimeSettingsSave: (

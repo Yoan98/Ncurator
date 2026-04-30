@@ -140,7 +140,7 @@ tests/
 
 常见反例：
 
-- 为了排查某个猜想，直接在 `tests/ai/**`、`tests/workbench/**` 或 `tests/settings/**` 新增正式 case。
+- 为了排查某个猜想，直接在 `tests/ai/**` 或 `tests/settings/**` 新增正式 case。
 - 还没补 `doc/test-plan/**`，就先写正式测试代码。
 - 正式 case 的 `How` 开始直接描述内部 route、内部工具顺序或固定 plan 条数。
 
@@ -178,7 +178,7 @@ runner 不负责：
 - 写失败原因分析。
 - 写优化建议。
 
-当前常用命令按域收口如下：
+当前常用命令按域收口如下。`workbench` 不再维护 formal test-plan，对应验证改走 hand-test，不再提供 `test:workbench*` runner。
 
 - AI
   - `pnpm test:ai`
@@ -189,10 +189,6 @@ runner 不负责：
 - Unit
   - `pnpm test:unit`
   - `pnpm test:unit:ai`
-- Workbench
-  - `pnpm test:workbench`
-  - `pnpm test:workbench:backend`
-  - `pnpm test:workbench:e2e`
 - Settings
   - `pnpm test:settings`
   - `pnpm test:settings:backend`

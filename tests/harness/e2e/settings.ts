@@ -1,36 +1,40 @@
 import type { Locator, Page } from 'playwright'
 import type {
   CreateWorkspaceSourceRequest,
-  LegacyLocalImportMigrationStatus,
   LLMConfig,
-  PickDirectoryResponse,
-  WorkspaceListResponse,
-  WorkspaceMutationResponse,
-  WorkspaceNodeListResponse
+  WorkspaceMutationResponse
 } from '../../../src/shared/types'
-import { importSelectors, settingsSelectors } from '../../../src/renderer/src/testing/selectors'
+import type {
+  ModelInfo,
+  SettingsE2EApiOverrides
+} from '../../../src/preload/api'
+import { importSelectors, settingsSelectors, vectorSelectors } from '../../../src/renderer/src/testing/selectors'
 
-export type SettingsSection = 'model' | 'workspace'
+export type SettingsPageTarget = 'model' | 'workspace' | 'vector'
 
 export const SETTINGS_E2E_TIMEOUT_MS = 30_000
 export const SETTINGS_WEB_E2E_TIMEOUT_MS = SETTINGS_E2E_TIMEOUT_MS
-
-export type SettingsE2EApiOverrides = {
-  pickDirectoryResponse?: PickDirectoryResponse
-  workspaceListResponse?: WorkspaceListResponse
-  workspaceNodesResponseByWorkspaceId?: Record<string, WorkspaceNodeListResponse>
-  legacyLocalImportMigrationStatus?: LegacyLocalImportMigrationStatus | null
-  llmConfigDeleteResponseById?: Record<string, { success: boolean; error?: string }>
-  webSourceRefreshDelayMs?: number
-}
 
 const byTestId = (testId: string): string => `[data-testid="${testId}"]`
 
 const byTestIdPrefix = (testIdPrefix: string): string => `[data-testid^="${testIdPrefix}-"]`
 
-const SETTINGS_SECTION_HEADINGS: Record<SettingsSection, string> = {
+const SETTINGS_TARGET_HEADINGS: Record<SettingsPageTarget, string> = {
   model: '大模型',
-  workspace: '工作空间'
+  workspace: '工作空间',
+  vector: '向量模型'
+}
+
+const SETTINGS_TARGET_HASHES: Record<SettingsPageTarget, string> = {
+  model: '#/settings/model',
+  workspace: '#/settings/workspace',
+  vector: '#/model-download'
+}
+
+const SETTINGS_TARGET_SELECTORS: Record<SettingsPageTarget, string> = {
+  model: settingsSelectors.page,
+  workspace: settingsSelectors.page,
+  vector: vectorSelectors.page
 }
 
 export const getSettingsLocator = (page: Page, testId: string): Locator =>
@@ -41,13 +45,13 @@ export const getSettingsPrefixLocator = (page: Page, testIdPrefix: string): Loca
 
 export const navigateToSettingsSection = async (
   page: Page,
-  section: SettingsSection
+  section: SettingsPageTarget
 ): Promise<void> => {
-  await page.evaluate((nextHash) => {
+  await page.evaluate((nextHash: string) => {
     window.location.hash = nextHash
-  }, `#/settings/${section}`)
-  await getSettingsLocator(page, settingsSelectors.page).waitFor({ state: 'visible' })
-  await page.getByRole('heading', { name: SETTINGS_SECTION_HEADINGS[section] }).first().waitFor({
+  }, SETTINGS_TARGET_HASHES[section])
+  await getSettingsLocator(page, SETTINGS_TARGET_SELECTORS[section]).waitFor({ state: 'visible' })
+  await page.getByRole('heading', { name: SETTINGS_TARGET_HEADINGS[section] }).first().waitFor({
     state: 'visible'
   })
 }
@@ -85,6 +89,17 @@ export const seedModelConfigs = async (
       }
     }
   }, { configs })
+}
+
+export const seedModelCatalogOverride = async (
+  page: Page,
+  items: readonly ModelInfo[]
+): Promise<void> => {
+  await setSettingsE2EApiOverrides(page, {
+    modelCatalog: {
+      items: [...items]
+    }
+  })
 }
 
 export const createFixtureWorkspace = async (

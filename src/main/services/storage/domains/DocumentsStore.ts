@@ -134,11 +134,11 @@ export class DocumentsStore {
 
   private buildDocumentWhere(input: {
     workspaceId?: string
-    query?: string
+    sourceNameQuery?: string
     sourceType?: DocumentRecord['source_type']
     documentIds?: string[]
   }): string | undefined {
-    const query = String(input.query || '').trim()
+    const sourceNameQuery = String(input.sourceNameQuery || '').trim()
     return this.core.combineWhere([
       input.workspaceId
         ? `workspace_id = '${this.core.escapeSqlString(input.workspaceId)}'`
@@ -146,7 +146,9 @@ export class DocumentsStore {
       input.sourceType
         ? `source_type = '${this.core.escapeSqlString(input.sourceType)}'`
         : undefined,
-      query ? `name LIKE '%${this.core.escapeSqlString(query)}%'` : undefined,
+      sourceNameQuery
+        ? `name LIKE '%${this.core.escapeSqlString(sourceNameQuery)}%'`
+        : undefined,
       this.core.buildInClause('id', input.documentIds)
     ])
   }
@@ -333,16 +335,16 @@ export class DocumentsStore {
   }
 
   public async listDocuments(params: {
-    query?: string
+    sourceNameQuery?: string
     page: number
     pageSize: number
     workspaceId?: string
     documentIds?: string[]
   }): Promise<DocumentListResponse> {
-    const { query, page, pageSize, workspaceId, documentIds } = params
+    const { sourceNameQuery, page, pageSize, workspaceId, documentIds } = params
     const table = await this.core.openTable(LANCE_TABLES.DOCUMENT)
 
-    const where = this.buildDocumentWhere({ workspaceId, query, documentIds })
+    const where = this.buildDocumentWhere({ workspaceId, sourceNameQuery, documentIds })
 
     const total = await table.countRows(where)
     const skip = Math.max(0, (page - 1) * pageSize)

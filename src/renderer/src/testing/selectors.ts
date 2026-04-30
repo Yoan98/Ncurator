@@ -43,6 +43,7 @@ export const importSelectors = {
   workspaceTree: 'import-workspace-tree',
   workspaceDeleteConfirmButton: 'import-workspace-delete-confirm-button',
   workspaceDeleteCancelButton: 'import-workspace-delete-cancel-button',
+  workspaceOpenPathButton: 'import-workspace-open-path-button',
   createWorkspaceModal: 'import-create-workspace-modal',
   createWorkspaceRootInput: 'import-create-workspace-root-input',
   createWorkspaceNameInput: 'import-create-workspace-name-input',
@@ -62,7 +63,8 @@ export const importSelectors = {
   webSourceRefreshButtonPrefix: 'import-web-source-refresh-button',
   webSourceDeleteButtonPrefix: 'import-web-source-delete-button',
   webSourceDeleteConfirmButton: 'import-web-source-delete-confirm-button',
-  webSourceDeleteCancelButton: 'import-web-source-delete-cancel-button'
+  webSourceDeleteCancelButton: 'import-web-source-delete-cancel-button',
+  webSourceUrlLinkButton: 'import-web-source-url-link-button'
 } as const
 
 export const settingsSelectors = {
@@ -83,6 +85,17 @@ export const settingsSelectors = {
   modelEditButtonPrefix: 'settings-model-edit-button',
   modelActivateButtonPrefix: 'settings-model-activate-button',
   modelDeleteButtonPrefix: 'settings-model-delete-button'
+} as const
+
+export const vectorSelectors = {
+  page: 'vector-page',
+  list: 'vector-model-list',
+  cardPrefix: 'vector-model-card',
+  downloadButtonPrefix: 'vector-download-button',
+  installedBadgePrefix: 'vector-installed-badge',
+  progressPrefix: 'vector-download-progress',
+  currentFilePrefix: 'vector-download-current-file',
+  errorPrefix: 'vector-download-error'
 } as const
 
 export const workbenchSelectors = {
