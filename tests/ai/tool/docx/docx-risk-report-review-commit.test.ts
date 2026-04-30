@@ -3,11 +3,8 @@ import path from 'node:path'
 import { describe, it } from 'vitest'
 import { XMLSerializer } from '@xmldom/xmldom'
 import { loadDocxBundle } from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/blockIndex'
-import { createDocxToolHarness } from '../../../harness/backend/aiToolHarness'
-import {
-  loadRiskReportWorkspaceSeed,
-  SHARED_WORKSPACE_FIXTURE_PATH
-} from '../../../harness/backend/aiLiveTestData'
+import { createDocxToolHarness, writeTestDocxFile } from '../../../harness/backend/aiToolHarness'
+import { SHARED_WORKSPACE_FIXTURE_PATH } from '../../../harness/backend/aiLiveTestData'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import type { DocxMutationResult, DocxOutlineResult, DocxSearchResult } from './testUtils'
 
@@ -23,7 +20,26 @@ describe('ai tool docx backend', () => {
       fixtures: [SHARED_WORKSPACE_FIXTURE_PATH],
       runMode: 'single',
       execute: async (runtime) => {
-        const workspaceSeed = await loadRiskReportWorkspaceSeed(runtime)
+        const templateRelativePath = '工作/risk-report-review-source.docx'
+        await writeTestDocxFile(runtime.workspaceRoot, templateRelativePath, [
+          {
+            type: 'heading',
+            text: '项目风险周报',
+            level: 1
+          },
+          {
+            type: 'paragraph',
+            text: '本周风险结论：RISK_TODO'
+          },
+          {
+            type: 'paragraph',
+            text: '负责人说明：OWNER_TODO'
+          },
+          {
+            type: 'paragraph',
+            text: '备注：请在 review 通过后再提交正式版本。'
+          }
+        ])
         runtime.fileReviewService.beginRun({
           runId: runtime.runId,
           sessionId: 'docx-risk-report-review-commit-session',
@@ -33,15 +49,15 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
-            sourcePath: workspaceSeed.templateRelativePath
+            sourcePath: templateRelativePath
           })
           const firstEdit = await harness.invoke<DocxMutationResult>('docx_text_edit', {
-            sourcePath: workspaceSeed.templateRelativePath,
+            sourcePath: templateRelativePath,
             query: 'RISK_TODO',
-            replace: '在合规签署前，风险状态保持为“待跟进”。'
+            replace: '在最终合规签署完成前，当前风险状态仍需保持跟进。'
           })
           const secondEdit = await harness.invoke<DocxMutationResult>('docx_text_edit', {
-            sourcePath: workspaceSeed.templateRelativePath,
+            sourcePath: templateRelativePath,
             query: 'OWNER_TODO',
             replace: '最终复核窗口由合规负责人 Alice 牵头。'
           })
@@ -58,7 +74,7 @@ describe('ai tool docx backend', () => {
           const reviewRelativePath = path.relative(runtime.workspaceRoot, detail.review.draft_artifact_path)
           const reviewRisk = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: reviewRelativePath,
-            query: '待跟进'
+            query: '保持跟进'
           })
           const reviewOwner = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: reviewRelativePath,
@@ -82,19 +98,19 @@ describe('ai tool docx backend', () => {
           })
 
           const committedRisk = await harness.invoke<DocxSearchResult>('docx_search', {
-            sourcePath: workspaceSeed.templateRelativePath,
-            query: '待跟进'
+            sourcePath: templateRelativePath,
+            query: '保持跟进'
           })
           const committedOwner = await harness.invoke<DocxSearchResult>('docx_search', {
-            sourcePath: workspaceSeed.templateRelativePath,
+            sourcePath: templateRelativePath,
             query: 'Alice'
           })
           const oldRiskPlaceholder = await harness.invoke<DocxSearchResult>('docx_search', {
-            sourcePath: workspaceSeed.templateRelativePath,
+            sourcePath: templateRelativePath,
             query: 'RISK_TODO'
           })
           const oldOwnerPlaceholder = await harness.invoke<DocxSearchResult>('docx_search', {
-            sourcePath: workspaceSeed.templateRelativePath,
+            sourcePath: templateRelativePath,
             query: 'OWNER_TODO'
           })
 
@@ -146,11 +162,11 @@ describe('ai tool docx backend', () => {
 
         runtime.assertThat(
           result.reviewXml.includes('本周风险结论：RISK_TODO') &&
-            result.reviewXml.includes('本周风险结论：在合规签署前，风险状态保持为“待跟进”。') &&
+            result.reviewXml.includes('本周风险结论：在最终合规签署完成前，当前风险状态仍需保持跟进。') &&
             result.reviewXml.includes('负责人说明：OWNER_TODO') &&
             result.reviewXml.includes('负责人说明：最终复核窗口由合规负责人 Alice 牵头。') &&
             /<w:strike\/>[\s\S]*本周风险结论：RISK_TODO/.test(result.reviewXml) &&
-            /w:color w:val="166534"[\s\S]*本周风险结论：在合规签署前，风险状态保持为“待跟进”。/.test(result.reviewXml),
+            /w:color w:val="166534"[\s\S]*本周风险结论：在最终合规签署完成前，当前风险状态仍需保持跟进。/.test(result.reviewXml),
           {
             name: 'risk-report-review-artifact-keeps-old-and-new-xml-pairs',
             message: '风险周报 review artifact 的 XML 应保留旧文本删除节点和新文本新增节点，不能把红绿两份都写成新文本。',

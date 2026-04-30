@@ -1,3 +1,5 @@
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import { loadLiveLlmConfigFromEnv, hasLiveLlmConfigInEnv } from '../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
@@ -9,47 +11,20 @@ import {
   SHARED_WORKSPACE_FIXTURE_PATH
 } from '../../../harness/backend/aiLiveTestData'
 import {
-  collectDocxWriteChangedBlocks,
+  collectStartedToolStringArgs,
   filterAiRunEventsByType,
-  hasDocxWriteToolCall,
   hasDraftFileArtifact,
   hasFileReviewArtifact
 } from '../testUtils'
 
-const hasExpectedRiskReportChanges = (
-  changedBlocks: readonly Array<{
-    blockId?: string
-    beforeText?: string
-    afterText?: string
-  }>
-) =>
-  changedBlocks.some(
-    (block) => {
-      const afterText = block.afterText || ''
-      return (
-        /本周风险结论：RISK_TODO/.test(block.beforeText || '') &&
-        afterText.startsWith('本周风险结论：') &&
-        !afterText.includes('RISK_TODO') &&
-        !afterText.includes('已解除') &&
-        /合规|待跟进/.test(afterText)
-      )
-    }
-  ) &&
-  changedBlocks.some(
-    (block) => {
-      const afterText = block.afterText || ''
-      return (
-        /负责人说明：OWNER_TODO/.test(block.beforeText || '') &&
-        afterText.startsWith('负责人说明：') &&
-        !afterText.includes('OWNER_TODO') &&
-        afterText.includes('Alice')
-      )
-    }
-  )
-
-const hasExpectedRiskEvidenceReference = (deliveryText: string) =>
-  /(weekly-risk-summary(?:\.md|\.\*)|project-milestones\.md|vendor-followup\.txt)/.test(
-    deliveryText
+const openedExpectedDoc = (
+  openedSourcePaths: readonly string[],
+  expectedRelativePath: string,
+  expectedName: string
+): boolean =>
+  openedSourcePaths.some(
+    (sourcePath) =>
+      sourcePath.endsWith(expectedRelativePath) || sourcePath.endsWith(`/${expectedName}`)
   )
 
 describe('ai human live backend', () => {
@@ -60,7 +35,8 @@ describe('ai human live backend', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['live'],
-      description: '验证 live 模式下 human 会在真实长任务里串起模板定位、资料取证、docx 编辑与待确认稿交付。',
+      description:
+        '验证 live 模式下 human 会在真实长任务里串起模板定位、多源工作文档取证、新建周报 docx 与待确认稿交付。',
       fixtures: [SHARED_WORKSPACE_FIXTURE_PATH],
       runMode: 'single',
       runtimeModelName: hasLiveLlmConfigInEnv()
@@ -76,11 +52,11 @@ describe('ai human live backend', () => {
           }
         }
 
+        const workspaceSeed = await loadRiskReportWorkspaceSeed(runtime)
         await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
         const indexedFiles = await runtime.seedWorkspaceKb({
           mode: 'all-supported'
         })
-        const workspaceSeed = await loadRiskReportWorkspaceSeed(runtime)
 
         const runner = createHumanTestRunner(runtime)
         const output = await runner.run({
@@ -105,28 +81,101 @@ describe('ai human live backend', () => {
           return
         }
 
-        const toolResults = filterAiRunEventsByType(result.events, 'tool_call_result')
+        const events = result.events
+        const toolResults = filterAiRunEventsByType(events, 'tool_call_result')
         const toolNames = toolResults.map((event) => event.toolName)
         const indexedSupportedFiles = result.indexedFiles.filter(
           (file) => file.supported && file.status === 'indexed'
         )
-        const changedBlocks = collectDocxWriteChangedBlocks(result.events)
         const deliveryText = `${result.output?.summary || ''}\n${result.output?.deliveryMarkdown || ''}`.trim()
         const sourceTemplateUnchanged = await hasUnchangedFileBytes(
           result.workspaceSeed.templatePath,
           result.workspaceSeed.originalTemplateBytes
+        )
+        const trackedDocsUnchanged = await Promise.all(
+          result.workspaceSeed.trackedDocFiles.map(async (fixture) => {
+            const currentBytes = await fs.readFile(fixture.workspacePath)
+            return Buffer.compare(currentBytes, Buffer.from(fixture.bytes)) === 0
+          })
+        )
+        const openedSourcePaths = collectStartedToolStringArgs(events, 'docx_outline', 'sourcePath')
+          .concat(collectStartedToolStringArgs(events, 'docx_read_blocks', 'sourcePath'))
+          .concat(collectStartedToolStringArgs(events, 'docx_search', 'sourcePath'))
+        const createSourcePaths = collectStartedToolStringArgs(events, 'docx_create', 'sourcePath')
+        const writeSourcePaths = filterAiRunEventsByType(events, 'tool_call_started')
+          .filter((event) =>
+            [
+              'docx_paragraph_edit',
+              'docx_heading_edit',
+              'docx_table_edit',
+              'docx_text_edit',
+              'docx_text_style_edit'
+            ].includes(event.toolName)
+          )
+          .map((event) => event.input.sourcePath)
+          .filter((value): value is string => typeof value === 'string')
+        const templateOpened = openedExpectedDoc(
+          openedSourcePaths,
+          result.workspaceSeed.templateRelativePath,
+          path.basename(result.workspaceSeed.templateRelativePath)
+        )
+        const lastWeekOpened = openedExpectedDoc(
+          openedSourcePaths,
+          result.workspaceSeed.lastWeekReportRelativePath,
+          path.basename(result.workspaceSeed.lastWeekReportRelativePath)
+        )
+        const relevantDocxOpened = result.workspaceSeed.relevantDocxRelativePaths.some((relativePath) =>
+          openedExpectedDoc(openedSourcePaths, relativePath, path.basename(relativePath))
+        )
+        const txtReads = result.workspaceSeed.relevantTxtRelativePaths.filter((relativePath) =>
+          filterAiRunEventsByType(events, 'tool_call_started').some(
+            (event) =>
+              event.toolName === 'workspace_run_command' &&
+              typeof event.input.command === 'string' &&
+              event.input.command.includes(relativePath.replace('工作/', '工作/'))
+          )
+        )
+        const createdTargetInWorkDir =
+          createSourcePaths.length >= 1 &&
+          createSourcePaths.every((sourcePath) => sourcePath.startsWith('工作/'))
+        const writesStayOnCreatedDoc =
+          writeSourcePaths.length === 0 ||
+          writeSourcePaths.every((sourcePath) => createSourcePaths.includes(sourcePath))
+        const createdDocNotPreexisting =
+          createSourcePaths.length >= 1 &&
+          createSourcePaths.every(
+            (sourcePath) => !result.workspaceSeed.preexistingDocxRelativePaths.includes(sourcePath)
+          )
+        const referencesDocxEvidence =
+          result.workspaceSeed.relevantDocxRelativePaths.some((relativePath) =>
+            deliveryText.includes(path.basename(relativePath))
+          ) || deliveryText.includes(path.basename(result.workspaceSeed.lastWeekReportRelativePath))
+        const referencesTxtEvidence = result.workspaceSeed.relevantTxtRelativePaths.some((relativePath) =>
+          deliveryText.includes(path.basename(relativePath))
         )
 
         runtime.assertThat(
           result.output?.status === 'completed' &&
             toolNames.includes('workspace_run_command') &&
             toolNames.some((toolName) => toolName === 'docx_read_blocks' || toolName === 'docx_outline') &&
-            hasDocxWriteToolCall(result.events),
+            toolNames.includes('docx_create') &&
+            createdTargetInWorkDir &&
+            createdDocNotPreexisting &&
+            writesStayOnCreatedDoc &&
+            templateOpened &&
+            lastWeekOpened &&
+            relevantDocxOpened &&
+            txtReads.length >= 1,
           {
             name: 'human-live-risk-report-runs-required-tool-chain',
-            message: 'live human complex case 应通过 workspace 与 docx 真实工具链完成周报待确认稿任务。',
+            message:
+              'live human complex case 应通过 workspace、docx 读取与 docx_create 真实工具链完成本周周报待确认稿任务。',
             data: {
               toolNames,
+              openedSourcePaths,
+              createSourcePaths,
+              writeSourcePaths,
+              txtReads,
               summary: result.output?.summary,
               deliveryMarkdown: result.output?.deliveryMarkdown,
               artifacts: result.output?.artifacts
@@ -144,7 +193,7 @@ describe('ai human live backend', () => {
           }
         })
 
-        runtime.assertThat(indexedSupportedFiles.length === 8, {
+        runtime.assertThat(indexedSupportedFiles.length === 13, {
           name: 'human-live-risk-report-indexes-all-supported-workspace-files',
           message: 'risk report live case 应在运行前把共享 workspace 中全部已支持文件索引进 KB。',
           data: {
@@ -153,26 +202,33 @@ describe('ai human live backend', () => {
         })
 
         runtime.assertThat(
-          hasExpectedRiskReportChanges(changedBlocks) && sourceTemplateUnchanged,
+          sourceTemplateUnchanged &&
+            trackedDocsUnchanged.every(Boolean) &&
+            createSourcePaths.length >= 1 &&
+            !deliveryText.includes('风险已解除') &&
+            deliveryText.includes(result.workspaceSeed.expectedRiskConclusion) &&
+            deliveryText.includes(result.workspaceSeed.expectedOwnerSummary) &&
+            deliveryText.includes(result.workspaceSeed.expectedNextStep),
           {
-          name: 'human-live-risk-report-updates-risk-and-owner-placeholders',
-          message:
-            'live human complex case 应把模板中的风险结论和负责人说明两处占位符替换为实际内容，且不覆盖原模板文件。',
-          data: {
-            changedBlocks,
-            toolNames,
-            templatePath: result.workspaceSeed.templatePath
-          }
+            name: 'human-live-risk-report-creates-new-draft-without-overwriting-source-docs',
+            message:
+              'live human complex case 应新建本周周报待确认稿，不覆盖模板或既有工作 docx，并写入本周判断、负责人和动作。',
+            data: {
+              createSourcePaths,
+              writeSourcePaths,
+              trackedDocsUnchanged,
+              deliveryMarkdown: result.output?.deliveryMarkdown,
+              summary: result.output?.summary
+            }
           }
         )
 
         runtime.assertThat(
-          hasExpectedRiskEvidenceReference(deliveryText) &&
-            /owner-note\.md/.test(deliveryText) &&
-            /风险结论/.test(deliveryText) &&
+          referencesDocxEvidence &&
+            referencesTxtEvidence &&
             /负责人/.test(deliveryText) &&
             /待确认稿/.test(deliveryText) &&
-            filterAiRunEventsByType(result.events, 'draft_review_ready').length >= 1 &&
+            filterAiRunEventsByType(events, 'draft_review_ready').length >= 1 &&
             hasFileReviewArtifact(result.output?.artifacts) &&
             hasDraftFileArtifact(result.output?.artifacts),
           {
@@ -180,7 +236,7 @@ describe('ai human live backend', () => {
             message: 'live human complex case 应给出最终交付，并产出 draft review 与待确认稿 artifact。',
             data: {
               toolNames,
-              changedBlocks,
+              createSourcePaths,
               summary: result.output?.summary,
               deliveryMarkdown: result.output?.deliveryMarkdown,
               artifacts: result.output?.artifacts

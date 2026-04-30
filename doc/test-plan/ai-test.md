@@ -776,10 +776,10 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 live 模式下 `human` 会在一个真实长任务里串起模板定位、工作区资料取证、docx 编辑与待确认稿交付。
-- Why：`human/live` 需要至少一条长期高价值复杂样例，覆盖 workspace 搜索、真实材料辨别、docx 写入与最终交付链路；同时守住“共享 workspace 中全部已支持文件都已进入真实 KB，但关键事实仍可能来自非 KB 文本材料”的更真实用户环境。
-- How：注入真实 live LLM 配置；workspace 直接使用 `tests/fixtures/workspace` 共享目录，并在 run 前通过真实生产文件 ingestion 链把该目录下当前所有已支持文件（当前为全部 `docx`）索引进 KB；其中 `工作/` 下预置一份带 `RISK_TODO / OWNER_TODO` 占位符且正文更完整的周报模板、两份提供真实风险结论与负责人说明的文本材料，以及多份看起来像周报相关但并非最终依据的干扰文件；直接输入“找到上周 Word 周报模板，再根据工作区里的现有材料补全风险结论与负责人，整理成待确认稿”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；共享 workspace 中全部已支持文件均被索引；事件流中至少出现一次 `workspace_run_command`、一次 docx 读取、一次 docx 编辑；存在 `draft_review_ready` 事件，最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；模板中的“风险结论”和“负责人说明”两处占位符被替换为实际内容，且原模板文件未被覆盖；最终答复能从用户视角说明改动的是这两处，其中负责人说明依据来自 `owner-note.md`，风险结论依据来自工作区中的风险材料（例如 `weekly-risk-summary.md`、`project-milestones.md`、`vendor-followup.txt`），并明确当前给出的是待确认稿。
+- What：验证 live 模式下 `human` 会在一个真实长任务里串起模板定位、上周周报风格参考、多源工作资料取证、新建本周周报 docx 与待确认稿交付。
+- Why：`human/live` 需要至少一条长期高价值复杂样例，覆盖 workspace 搜索、真实材料辨别、跨 `docx + txt` 综合、create-target 写入与最终交付链路；同时守住“共享 workspace 中全部已支持文件都已进入真实 KB，但关键事实仍可能来自非 KB 文本材料”的更真实用户环境。
+- How：注入真实 live LLM 配置；workspace 直接使用 `tests/fixtures/workspace` 共享目录，并在 run 前通过真实生产文件 ingestion 链把该目录下当前所有已支持文件索引进 KB；随后由测试在运行时重建 `工作/` 目录：包含一份不可直接覆盖的周报模板、一份只能参考风格的上周已发版周报、多份提供本周事实的 `docx` 工作文档、数份必须读取的 `txt` 口径/跟进材料，以及少量看起来相关但不应直接采用的干扰文件；直接输入“帮我写下这周的周报，基于这个周报模版和我的工作文档信息，记得参考我上周写的周报风格来哦”的自然语言诉求，让真实 `human` 自主完成。
+- Oracle：任务最终完成；共享 workspace 中全部已支持文件均被索引；事件流中至少出现一次 `workspace_run_command`、一次 docx 读取、一次 `docx_create`；模型会打开模板、上周周报与至少一份本周 `docx`，并读取至少一份本周 `txt`；最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；正式模板与既有工作 `docx` 文件都不被覆盖；新建周报待确认稿中应写入本周整体判断、负责人说明和后续动作；最终答复能从用户视角说明依据来自哪些 `docx / txt` 材料，并明确当前给出的是待确认稿。
 - Not：不绑定最终答案措辞，不要求固定是否使用 `docx_outline` 还是 `docx_read_blocks`，也不强制一定调用 KB；若模型仅凭工作区材料完成任务，也视为符合预期。
 
 ##### `human-docx-cause-remedy-reading-live`
