@@ -96,7 +96,12 @@ export interface ModelInfo {
 
 export class ModelService {
   private static instance: ModelService
-  private static activeDownloads = new Map<string, Promise<{ success: boolean }>>()
+  private static activeDownload:
+    | {
+        repoId: string
+        task: Promise<{ success: boolean }>
+      }
+    | null = null
 
   private constructor() {}
 
@@ -538,9 +543,12 @@ export class ModelService {
     repoId: string,
     reporter?: ModelDownloadProgressReporter
   ): Promise<{ success: boolean }> {
-    const existing = ModelService.activeDownloads.get(repoId)
+    const existing = ModelService.activeDownload
     if (existing) {
-      return existing
+      if (existing.repoId === repoId) {
+        return existing.task
+      }
+      throw new Error('download already running')
     }
 
     const task = (async () => {
@@ -570,11 +578,16 @@ export class ModelService {
       }
     })()
 
-    ModelService.activeDownloads.set(repoId, task)
+    ModelService.activeDownload = {
+      repoId,
+      task
+    }
     try {
       return await task
     } finally {
-      ModelService.activeDownloads.delete(repoId)
+      if (ModelService.activeDownload?.task === task) {
+        ModelService.activeDownload = null
+      }
     }
   }
 

@@ -1,6 +1,6 @@
 import { describe, it } from 'vitest'
-import { importSelectors } from '../../../src/renderer/src/testing/selectors'
-import { runE2ECase } from '../../harness/e2e/run-e2e-case'
+import { importSelectors } from '../../../../src/renderer/src/testing/selectors'
+import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_WEB_E2E_TIMEOUT_MS,
   createFixtureWorkspace,
@@ -9,14 +9,15 @@ import {
   navigateToSettingsSection,
   seedWebSources,
   workspaceCardLocator
-} from '../../harness/e2e/settings'
+} from '../../../harness/e2e/settings'
 
-describe('settings web e2e', () => {
+describe('settings workspace web e2e', () => {
   it('web-detail-and-delete', async () => {
     await runE2ECase({
       caseId: 'web-detail-and-delete',
       domain: 'settings',
-      suite: 'web',
+      suite: 'workspace',
+      groups: ['web'],
       description: '网页资料详情区展示无错误空态，并在删除成功后刷新列表。',
       fixtures: [],
       runMode: 'single',

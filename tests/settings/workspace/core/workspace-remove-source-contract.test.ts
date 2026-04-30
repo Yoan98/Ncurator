@@ -1,6 +1,6 @@
 import { describe, it } from 'vitest'
-import type { WebSourceRecord, WorkspaceNode, WorkspaceSource } from '../../../src/shared/types'
-import { runBackendCase } from '../../harness/backend/run-backend-case'
+import type { WebSourceRecord, WorkspaceNode, WorkspaceSource } from '../../../../src/shared/types'
+import { runBackendCase } from '../../../harness/backend/run-backend-case'
 
 const NOW = 1_716_000_000_000
 
@@ -63,6 +63,7 @@ describe('settings workspace backend', () => {
       harnessMode: 'tool-real',
       domain: 'settings',
       suite: 'workspace',
+      groups: ['core'],
       description: '移除工作空间后，列表、节点与网页资料数据源都不再返回该工作空间内容。',
       fixtures: [],
       runMode: 'single',

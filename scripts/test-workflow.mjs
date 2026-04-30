@@ -90,6 +90,8 @@ const resolveScopeDir = (input) => {
 
 const isE2EFile = (filePath) => path.basename(filePath).endsWith('.e2e.test.ts')
 const isLiveBackendFile = (filePath) => filePath.includes(`${path.sep}live${path.sep}`) && !isE2EFile(filePath)
+const toCaseId = (filePath) =>
+  path.basename(filePath).replace(/\.e2e\.test\.ts$|\.test\.ts$/u, '')
 
 const findTestFiles = async (input) => {
   const scopeDir = resolveScopeDir(input)
@@ -109,7 +111,7 @@ const findTestFiles = async (input) => {
     })
     .filter((filePath) => {
       if (!input.caseId) return true
-      return path.basename(filePath, '.test.ts') === input.caseId
+      return toCaseId(filePath) === input.caseId
     })
     .sort()
 }

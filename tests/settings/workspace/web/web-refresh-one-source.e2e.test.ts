@@ -1,6 +1,6 @@
 import { describe, it } from 'vitest'
-import { importSelectors } from '../../../src/renderer/src/testing/selectors'
-import { runE2ECase } from '../../harness/e2e/run-e2e-case'
+import { importSelectors } from '../../../../src/renderer/src/testing/selectors'
+import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_WEB_E2E_TIMEOUT_MS,
   createFixtureWorkspace,
@@ -9,14 +9,15 @@ import {
   seedWebSources,
   setSettingsE2EApiOverrides,
   workspaceCardLocator
-} from '../../harness/e2e/settings'
+} from '../../../harness/e2e/settings'
 
-describe('settings web e2e', () => {
+describe('settings workspace web e2e', () => {
   it('web-refresh-one-source', async () => {
     await runE2ECase({
       caseId: 'web-refresh-one-source',
       domain: 'settings',
-      suite: 'web',
+      suite: 'workspace',
+      groups: ['web'],
       description: '单条网页资料重新抓取时展示刷新中状态，并在成功后刷新最近抓取时间。',
       fixtures: [],
       runMode: 'single',

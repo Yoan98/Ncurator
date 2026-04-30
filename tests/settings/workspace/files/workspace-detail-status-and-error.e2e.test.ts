@@ -1,12 +1,12 @@
 import { describe, it } from 'vitest'
-import { importSelectors } from '../../../src/renderer/src/testing/selectors'
-import { runE2ECase } from '../../harness/e2e/run-e2e-case'
+import { importSelectors } from '../../../../src/renderer/src/testing/selectors'
+import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_E2E_TIMEOUT_MS,
   createFixtureWorkspace,
   getSettingsLocator,
   navigateToSettingsSection
-} from '../../harness/e2e/settings'
+} from '../../../harness/e2e/settings'
 
 describe('settings workspace e2e', () => {
   it('workspace-detail-status-and-error', async () => {
@@ -14,6 +14,7 @@ describe('settings workspace e2e', () => {
       caseId: 'workspace-detail-status-and-error',
       domain: 'settings',
       suite: 'workspace',
+      groups: ['files'],
       description: '加载失败后，详情区稳定展示最近错误和摘要统计。',
       fixtures: [],
       runMode: 'single',

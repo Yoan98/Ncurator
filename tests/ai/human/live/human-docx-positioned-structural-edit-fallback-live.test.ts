@@ -18,6 +18,8 @@ import {
   runWithStructuredOutputRetry
 } from '../testUtils'
 
+const POSITIONED_FALLBACK_SUPPLEMENT_RELATIVE_PATH = '学习笔记/图形学-反走样补充说明.docx'
+
 const openedExpectedDoc = (
   openedSourcePaths: readonly string[],
   expectedRelativePath: string,
@@ -114,10 +116,24 @@ describe('ai human live backend', () => {
             event.toolName === 'docx_text_edit' ||
             event.toolName === 'docx_text_style_edit'
           )
+          const createSourcePaths = filterAiRunEventsByType(events, 'tool_call_started')
+            .filter((event) => event.toolName === 'docx_create')
+            .map((event) => event.input.sourcePath)
+            .filter((value): value is string => typeof value === 'string')
           const successfulWriteResults = writeResults.filter((event) => event.result?.ok === true)
           const failedWriteResults = writeResults.filter((event) => event.result?.ok === false)
           const watchHints = filterAiRunEventsByType(events, 'watch_hint')
           const diagnosticMessages = collectToolDiagnosticMessages(events)
+          const draftReviewArtifactCount = countFileReviewArtifacts(result.output?.artifacts)
+          const draftFileArtifactCount = countDraftFileArtifacts(result.output?.artifacts)
+          const createdIndependentSupplement =
+            createSourcePaths.length >= 1 &&
+            createSourcePaths.every((sourcePath) =>
+              sourcePath.endsWith(POSITIONED_FALLBACK_SUPPLEMENT_RELATIVE_PATH)
+            )
+          const independentSupplementArtifactsValid =
+            draftReviewArtifactCount === 1 && draftFileArtifactCount === 1
+          const noSupplementArtifacts = draftReviewArtifactCount === 0 && draftFileArtifactCount === 0
           const unchangedFixtures = await Promise.all(
             result.originalFixtureBytes.map(async (fixture) => {
               const currentBytes = await fs.readFile(fixture.workspacePath)
@@ -138,8 +154,8 @@ describe('ai human live backend', () => {
                 (event) => event.code === 'hand_docx_positioned_write_blocked'
               ) &&
               diagnosticMessages.some((message) => message.includes('当前命中复杂定位排版区域')) &&
-              countFileReviewArtifacts(result.output?.artifacts) === 0 &&
-              countDraftFileArtifacts(result.output?.artifacts) === 0 &&
+              ((createSourcePaths.length === 0 && noSupplementArtifacts) ||
+                (createdIndependentSupplement && independentSupplementArtifactsValid)) &&
               /(手动|版式|排版|没法自动|无法自动|复杂定位)/.test(deliveryText) &&
               unchangedFixtures.every(Boolean) &&
               typeof result.output?.deliveryMarkdown === 'string' &&
@@ -147,9 +163,10 @@ describe('ai human live backend', () => {
             {
               name: 'human-live-positioned-docx-stays-read-only-and-falls-back-cleanly',
               message:
-                'live human positioned case 应拒绝所有自动编辑，不生成审阅稿，并在最终答复中给出手动补充建议。',
+                'live human positioned case 应拒绝对复杂定位区域的自动编辑，并在最终答复中明确回退处理；可只给手动补充建议，也可改为生成独立补充稿。',
               data: {
                 openedSourcePaths,
+                createSourcePaths,
                 writeAttempts: structuralStarted.map((event) => ({
                   toolName: event.toolName,
                   action: event.input.action,
@@ -160,6 +177,8 @@ describe('ai human live backend', () => {
                   diagnostic: event.result?.diagnostic?.message
                 })),
                 watchHints,
+                draftReviewArtifactCount,
+                draftFileArtifactCount,
                 summary: result.output?.summary,
                 deliveryMarkdown: result.output?.deliveryMarkdown
               }

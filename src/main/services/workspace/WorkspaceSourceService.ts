@@ -198,7 +198,7 @@ export class WorkspaceSourceService {
         file_ext: fileExt.slice(1),
         exists: true,
         size: stat.size,
-        mtime_ms: stat.mtimeMs,
+        mtime_ms: Math.trunc(stat.mtimeMs),
         prepare_status: 'not_prepared',
         created_at: input.now,
         updated_at: input.now

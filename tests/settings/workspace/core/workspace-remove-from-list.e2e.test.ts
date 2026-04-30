@@ -1,12 +1,12 @@
 import { describe, it } from 'vitest'
-import { importSelectors } from '../../../src/renderer/src/testing/selectors'
-import { runE2ECase } from '../../harness/e2e/run-e2e-case'
+import { importSelectors } from '../../../../src/renderer/src/testing/selectors'
+import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_E2E_TIMEOUT_MS,
   createFixtureWorkspace,
   getSettingsLocator,
   navigateToSettingsSection
-} from '../../harness/e2e/settings'
+} from '../../../harness/e2e/settings'
 
 describe('settings workspace e2e', () => {
   it('workspace-remove-from-list', async () => {
@@ -14,6 +14,7 @@ describe('settings workspace e2e', () => {
       caseId: 'workspace-remove-from-list',
       domain: 'settings',
       suite: 'workspace',
+      groups: ['core'],
       description: '移除工作空间后，列表和详情区不再继续展示已删除项。',
       fixtures: [],
       runMode: 'single',

@@ -1,13 +1,13 @@
 import { describe, it } from 'vitest'
-import type { WorkspaceSource } from '../../../src/shared/types'
-import { importSelectors } from '../../../src/renderer/src/testing/selectors'
-import { runE2ECase } from '../../harness/e2e/run-e2e-case'
+import type { WorkspaceSource } from '../../../../src/shared/types'
+import { importSelectors } from '../../../../src/renderer/src/testing/selectors'
+import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_E2E_TIMEOUT_MS,
   getSettingsLocator,
   navigateToSettingsSection,
   setSettingsE2EApiOverrides
-} from '../../harness/e2e/settings'
+} from '../../../harness/e2e/settings'
 
 const NOW = 1_710_100_000_000
 
@@ -27,6 +27,7 @@ describe('settings workspace e2e', () => {
       caseId: 'workspace-empty-tree-legacy-hints',
       domain: 'settings',
       suite: 'workspace',
+      groups: ['core'],
       description: '工作空间页在无工作空间、无可追踪文件和旧数据迁移三类场景下展示明确提示。',
       fixtures: [],
       runMode: 'single',

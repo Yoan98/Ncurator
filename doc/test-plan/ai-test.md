@@ -909,7 +909,7 @@
 - What：验证 live 模式下 `human` 在复杂 positioned docx 中不会执行任何自动编辑，而是对命中复杂定位排版区域的写入请求做优雅回退。
 - Why：这类由 `framePr` / 绝对定位 shape 组成的 docx 即使只是原地改字，在 preview/review 语义下也可能因修订标记叠加而错位；这条 case 要长期守住“positioned 区域只读、自动写入必须拒绝并给用户手动提示”的正式能力，对齐 `WB-CORE-003-AC1`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
 - How：注入真实 live LLM 配置；只将 `图形学.docx` 作为已选资料复制进 workspace；直接输入“我准备把这份图形学讲义发给同学复习，想把‘反走样’这一节补得更容易记一些。你直接在这一节后面加一段更通俗的说明，再加一个很短的总结表，帮助大家快速区分两种常见做法。”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；事件流中至少一次 `docx_search` / `docx_read_blocks` / `docx_outline` 覆盖 `图形学.docx`；至少一次 docx 写入请求因为命中复杂定位排版区域失败，并返回稳定 `diagnostic.message`；不生成 `draft_review` 与 `draft` artifact；最终答复明确说明未自动编辑，并给出建议手动补充的内容；原始 `docx` 文件未被覆盖。
+- Oracle：任务最终完成；事件流中至少一次 `docx_search` / `docx_read_blocks` / `docx_outline` 覆盖 `图形学.docx`；至少一次 docx 写入请求因为命中复杂定位排版区域失败，并返回稳定 `diagnostic.message`；原始 `docx` 文件未被覆盖；最终答复明确说明未在原文中自动编辑，并给出回退处理。回退结果允许两种形态：一是仅给出建议手动补充的内容且不生成 `draft_review` / `draft` artifact；二是改为生成独立补充稿，并在 artifacts 中产出对应的 `draft_review` 与 `draft`。
 - Not：不要求固定使用哪一种 docx 写工具，也不要求最终答复使用固定措辞。
 - Last Run：`2026-04-29 17:13:56 +08:00`
 - Last Result：`未通过`

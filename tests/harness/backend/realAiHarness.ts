@@ -49,6 +49,8 @@ export const createRealAiHarness = async (input: {
     fixtureBindings: input.fixtureBindings,
     eventCollector: input.eventCollector,
     storageService: depsFactory.storageService,
+    workspaceSourceService: depsFactory.workspaceSourceService,
+    workspaceKnowledgePrepareService: depsFactory.workspaceKnowledgePrepareService,
     documentsStore: depsFactory.storageService.documents,
     chatStore: depsFactory.storageService.chat,
     fileReviewStore: depsFactory.storageService.fileReview,

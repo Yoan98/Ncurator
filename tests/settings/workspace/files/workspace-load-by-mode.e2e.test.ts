@@ -1,12 +1,12 @@
 import { describe, it } from 'vitest'
-import { importSelectors } from '../../../src/renderer/src/testing/selectors'
-import { runE2ECase } from '../../harness/e2e/run-e2e-case'
+import { importSelectors } from '../../../../src/renderer/src/testing/selectors'
+import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_E2E_TIMEOUT_MS,
   createFixtureWorkspace,
   getSettingsLocator,
   navigateToSettingsSection
-} from '../../harness/e2e/settings'
+} from '../../../harness/e2e/settings'
 
 describe('settings workspace e2e', () => {
   it('workspace-load-by-mode', async () => {
@@ -14,6 +14,7 @@ describe('settings workspace e2e', () => {
       caseId: 'workspace-load-by-mode',
       domain: 'settings',
       suite: 'workspace',
+      groups: ['files'],
       description: '切换加载模式并开始加载后，页面按选中模式请求并刷新加载结果。',
       fixtures: [],
       runMode: 'single',

@@ -1,6 +1,6 @@
 import { describe, it } from 'vitest'
-import { importSelectors } from '../../../src/renderer/src/testing/selectors'
-import { runE2ECase } from '../../harness/e2e/run-e2e-case'
+import { importSelectors } from '../../../../src/renderer/src/testing/selectors'
+import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_WEB_E2E_TIMEOUT_MS,
   createFixtureWorkspace,
@@ -9,14 +9,15 @@ import {
   seedWebSources,
   setSettingsE2EApiOverrides,
   workspaceCardLocator
-} from '../../harness/e2e/settings'
+} from '../../../harness/e2e/settings'
 
-describe('settings web e2e', () => {
+describe('settings workspace web e2e', () => {
   it('web-open-url-contract', async () => {
     await runE2ECase({
       caseId: 'web-open-url-contract',
       domain: 'settings',
-      suite: 'web',
+      suite: 'workspace',
+      groups: ['web'],
       description: '点击网页资料 URL 时，应通过 openExternal 打开原网页地址。',
       fixtures: [],
       runMode: 'single',

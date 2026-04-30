@@ -1,13 +1,13 @@
 import { describe, it } from 'vitest'
-import { importSelectors } from '../../../src/renderer/src/testing/selectors'
-import { runE2ECase } from '../../harness/e2e/run-e2e-case'
+import { importSelectors } from '../../../../src/renderer/src/testing/selectors'
+import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_E2E_TIMEOUT_MS,
   createFixtureWorkspace,
   getSettingsLocator,
   navigateToSettingsSection,
   setSettingsE2EApiOverrides
-} from '../../harness/e2e/settings'
+} from '../../../harness/e2e/settings'
 
 describe('settings workspace e2e', () => {
   it('workspace-open-path-contract', async () => {
@@ -15,6 +15,7 @@ describe('settings workspace e2e', () => {
       caseId: 'workspace-open-path-contract',
       domain: 'settings',
       suite: 'workspace',
+      groups: ['core'],
       description: '点击打开路径时，会以当前工作空间根目录触发 revealPath 调用。',
       fixtures: [],
       runMode: 'single',

@@ -1,6 +1,6 @@
 import { describe, it } from 'vitest'
-import { importSelectors } from '../../../src/renderer/src/testing/selectors'
-import { runE2ECase } from '../../harness/e2e/run-e2e-case'
+import { importSelectors } from '../../../../src/renderer/src/testing/selectors'
+import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_WEB_E2E_TIMEOUT_MS,
   createFixtureWorkspace,
@@ -8,14 +8,15 @@ import {
   navigateToSettingsSection,
   seedWebSources,
   workspaceCardLocator
-} from '../../harness/e2e/settings'
+} from '../../../harness/e2e/settings'
 
-describe('settings web e2e', () => {
+describe('settings workspace web e2e', () => {
   it('web-refresh-visible-list-contract', async () => {
     await runE2ECase({
       caseId: 'web-refresh-visible-list-contract',
       domain: 'settings',
-      suite: 'web',
+      suite: 'workspace',
+      groups: ['web'],
       description: '全部抓取只对当前可见列表里的网页资料触发刷新请求。',
       fixtures: [],
       runMode: 'single',
@@ -72,7 +73,7 @@ describe('settings web e2e', () => {
           {
             name: 'refresh-all-uses-visible-list-only',
             message:
-              '当前列表非空时，只有当前可见列表中的网页资料进入刷新请求，不包含被筛掉的项目，对齐 SET-WEB-004 执行范围约束。',
+              '当前列表非空时，只有当前可见列表中的网页资料进入刷新请求，不包含被筛掉的项目，对齐 SET-WEB-004-AC3。',
             data: result
           }
         )

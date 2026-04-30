@@ -7,9 +7,12 @@ import { runAiRuntimePreflight } from '../../../src/main/services/ai/runtimePref
 import type { AiApprovalDecision, AiApprovalRequest } from '../../../src/main/services/ai/types'
 import type { AiRunContext } from '../../../src/main/services/ai/types'
 import { ModelService } from '../../../src/main/services/model/ModelService'
+import { IngestionService } from '../../../src/main/services/ingestion/loader'
 import { StorageService } from '../../../src/main/services/storage/StorageService'
 import { EmbeddingService } from '../../../src/main/services/vector/EmbeddingService'
 import { ensureEmbeddingReady } from '../../../src/main/services/vector/ensureEmbeddingReady'
+import { WorkspaceKnowledgePrepareService } from '../../../src/main/services/workspace/WorkspaceKnowledgePrepareService'
+import { WorkspaceSourceService } from '../../../src/main/services/workspace/WorkspaceSourceService'
 import type { AiRuntimeSettings } from '../../../src/shared/types'
 import type { BackendHarnessMode, CreateAiRunContextInput, LiveLlmConfig } from './test-types'
 import type { EventCollector } from '../core/eventCollector'
@@ -44,6 +47,8 @@ const buildApprovalResolver = (
 export type RealAiDepsFactory = {
   storageService: StorageService
   embeddingService: EmbeddingService
+  workspaceSourceService: WorkspaceSourceService
+  workspaceKnowledgePrepareService: WorkspaceKnowledgePrepareService
   fileReviewService: FileReviewService
   ensureEmbeddingReady: () => Promise<void>
   createAiRunContext: (input?: CreateAiRunContextInput) => AiRunContext
@@ -65,6 +70,12 @@ export const createRealAiDepsFactory = async (input: {
 
   const embeddingService = new EmbeddingService()
   const modelService = ModelService.getInstance()
+  const workspaceSourceService = new WorkspaceSourceService()
+  const workspaceKnowledgePrepareService = new WorkspaceKnowledgePrepareService({
+    ingestionService: IngestionService.getInstance(),
+    embeddingService,
+    documentsStore: storageService.documents
+  })
 
   const fileReviewService = new FileReviewService(
     storageService.fileReview,
@@ -173,6 +184,8 @@ export const createRealAiDepsFactory = async (input: {
   return {
     storageService,
     embeddingService,
+    workspaceSourceService,
+    workspaceKnowledgePrepareService,
     fileReviewService,
     ensureEmbeddingReady: ensureReady,
     createAiRunContext: createContext,

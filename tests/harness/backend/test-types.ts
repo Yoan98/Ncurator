@@ -11,6 +11,8 @@ import type { FileReviewStore } from '../../../src/main/services/storage/domains
 import type { LlmConfigStore } from '../../../src/main/services/storage/domains/LlmConfigStore'
 import type { StorageService } from '../../../src/main/services/storage/StorageService'
 import type { EmbeddingService } from '../../../src/main/services/vector/EmbeddingService'
+import type { WorkspaceSourceService } from '../../../src/main/services/workspace/WorkspaceSourceService'
+import type { WorkspaceKnowledgePrepareService } from '../../../src/main/services/workspace/WorkspaceKnowledgePrepareService'
 import type {
   ChatMessage,
   ChatSessionMemory,
@@ -190,6 +192,8 @@ export type BackendTestRuntime = {
   fixtureBindings: FixtureBinding[]
   eventCollector: EventCollector
   storageService: StorageService
+  workspaceSourceService: WorkspaceSourceService
+  workspaceKnowledgePrepareService: WorkspaceKnowledgePrepareService
   documentsStore: DocumentsStore
   chatStore: ChatStore
   fileReviewStore: FileReviewStore

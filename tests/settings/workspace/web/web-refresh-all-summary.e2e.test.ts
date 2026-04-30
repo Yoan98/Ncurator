@@ -1,6 +1,6 @@
 import { describe, it } from 'vitest'
-import { importSelectors } from '../../../src/renderer/src/testing/selectors'
-import { runE2ECase } from '../../harness/e2e/run-e2e-case'
+import { importSelectors } from '../../../../src/renderer/src/testing/selectors'
+import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_WEB_E2E_TIMEOUT_MS,
   createFixtureWorkspace,
@@ -9,14 +9,15 @@ import {
   navigateToSettingsSection,
   seedWebSources,
   workspaceCardLocator
-} from '../../harness/e2e/settings'
+} from '../../../harness/e2e/settings'
 
-describe('settings web e2e', () => {
+describe('settings workspace web e2e', () => {
   it('web-refresh-all-summary', async () => {
     await runE2ECase({
       caseId: 'web-refresh-all-summary',
       domain: 'settings',
-      suite: 'web',
+      suite: 'workspace',
+      groups: ['web'],
       description: '全部抓取在空列表与非空列表场景下提供明确页面反馈。',
       fixtures: [],
       runMode: 'single',

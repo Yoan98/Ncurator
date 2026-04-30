@@ -1,12 +1,12 @@
 import { describe, it } from 'vitest'
-import { importSelectors } from '../../../src/renderer/src/testing/selectors'
-import { runE2ECase } from '../../harness/e2e/run-e2e-case'
+import { importSelectors } from '../../../../src/renderer/src/testing/selectors'
+import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_E2E_TIMEOUT_MS,
   createFixtureWorkspace,
   getSettingsLocator,
   navigateToSettingsSection
-} from '../../harness/e2e/settings'
+} from '../../../harness/e2e/settings'
 
 describe('settings workspace e2e', () => {
   it('workspace-scan-progress-refresh', async () => {
@@ -14,6 +14,7 @@ describe('settings workspace e2e', () => {
       caseId: 'workspace-scan-progress-refresh',
       domain: 'settings',
       suite: 'workspace',
+      groups: ['files'],
       description: '点击先扫描后，页面展示扫描中的状态，并在完成后刷新状态与目录树。',
       fixtures: [],
       runMode: 'single',

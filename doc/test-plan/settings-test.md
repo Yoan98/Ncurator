@@ -10,18 +10,16 @@ Settings 正式测试统一对齐 [settings.md](/Users/test/work-space/NCurator-
 
 ## 2. Suite 设计
 
-Settings 的正式测试 suite 直接对齐 PRD 模块：
+Settings 的正式测试顶层 suite 直接对齐 PRD 模块：
 
 1. `model`
 2. `workspace`
-3. `web`
-4. `vector`
+3. `vector`
 
 当前实现摘要：
 
 - `model`：7/7 已实现；列表契约、表单、启用切换、当前配置变更事件和删除反馈都已有正式覆盖。
-- `workspace`：9/9 已实现；页面首屏、添加、扫描、加载模式、摘要状态、打开路径、移除和空态都已有正式覆盖。
-- `web`：6/6 已实现；列表筛选、添加、单条刷新、可见列表批量刷新、外链打开和删除都已有正式覆盖。
+- `workspace`：19/19 已实现；当前按 `core / files / web` 三个子区域组织，覆盖页面首屏、添加、扫描、加载模式、摘要状态、路径打开、移除、空态与网页资料管理。
 - `vector`：4/4 已实现；该 suite 归属 `settings` 产品域，但实际运行在独立路由 `/model-download`，不作为 `SettingsPage` 内嵌 section 存在。
 
 ### 2.1 `model`
@@ -34,21 +32,13 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 ### 2.2 `workspace`
 
-做什么：验证工作空间管理的页面行为及其 backend 支撑契约。
+做什么：验证工作空间容器及其下属 `files`、`web` 两类子区域的页面行为和 backend / IPC 支撑契约。
 
 为什么：工作空间是本地资料进入系统的主要入口，设置结果会继续影响 workbench 的范围选择和本地执行前提。
 
-怎么做：围绕工作空间加载、创建、扫描、按模式加载、错误与摘要、打开路径、移除和空态组织正式 case；需要时在 backend 层验证直接支撑这些行为的服务与 IPC 契约。
+怎么做：先验证工作空间本体能力，再分别验证当前工作空间详情区内的本地文件视图与网页资料视图；需要时在 backend / IPC 层验证直接支撑这些行为的契约。网页资料在这里不是独立产品页，而是 `workspace detail` 下的子区域。
 
-### 2.3 `web`
-
-做什么：验证工作区内网页资料管理的页面行为及其 backend 支撑契约。
-
-为什么：网页资料和本地工作空间共同构成资料入口，不能只验证本地一侧。
-
-怎么做：围绕工作区详情中的网页资料列表、筛选、添加、单条刷新、全部抓取、详情展示、外链打开和删除组织正式 case。
-
-### 2.4 `vector`
+### 2.3 `vector`
 
 做什么：验证向量模型的加载、下载、进度和错误收敛。
 
@@ -59,10 +49,11 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 ## 3. 领域特有规则
 
 - Settings 的用户可见行为默认归入本计划，不再单独维护 `workspace` 测试域。
-- `workspace` 在这里是 Settings 下的 suite，不是独立测试 domain。
+- `workspace` 在这里是 Settings 下的 suite，不是独立测试 domain；其下统一按 `core / files / web` 组织子区域。
 - `vector` 属于 Settings 产品域，但页面位于独立路由 `/model-download`；测试目录与 runner 仍统一归入 `tests/settings/vector/**`。
 - 当前 `settings` 域以 `已实现 / 部分实现 / 未实现 / 待调整` 为唯一实现状态集合；本次 rebaseline 后，文档状态需与实际正式 case 文件保持同步。
-- Settings 当前不额外拆 `group`；若后续没有新增层级需求，正式 case 默认直接落在 `tests/settings/<suite>/`。
+- `workspace/web` 是当前工作空间详情区下的网页资料管理区域，不作为和 `workspace` 平级的独立产品能力解释。
+- Settings 正式测试遵循 `suite + groups` 模型；当前只有 `workspace` suite 继续细分 `core / files / web`，实际目录与日志 scope 也必须按该层级落地。
 - `How` 与 `Oracle` 必须显式映射到 [settings.md](/Users/test/work-space/NCurator-Desktop/doc/prd/settings.md) 的需求编号与验收编号。
 
 ## 4. 正式 Case 清单
@@ -154,6 +145,8 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 ### 4.2 `workspace`
 
+#### `workspace / core`
+
 #### `workspace-page-load-default-selection`
 
 - 测试类型：`e2e`
@@ -177,66 +170,6 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
   - 用户取消目录选择时，不创建工作空间，也不出现失败提示，对齐 `SET-WORKSPACE-002-AC1`。
   - 创建成功后，新工作空间立刻出现在列表中并成为当前选中项，对齐 `SET-WORKSPACE-002-AC2`。
 - Not：不验证后续自动扫描或自动加载；该需求未在 PRD 中定义。
-
-#### `workspace-scan-contract`
-
-- 测试类型：`e2e`
-- 实现状态：`已实现`
-- What：验证工作空间扫描请求的参数、进度事件和结果载荷契约，能支撑页面同步刷新扫描状态与目录树。
-- Why：扫描过程涉及异步状态和目录快照，如果契约不稳定，页面层再完整也会展示出错或停留在旧数据。
-- How：以选中工作空间为输入，调用扫描服务或 IPC，模拟进行中和完成态返回；对齐 `SET-WORKSPACE-003`，覆盖 `SET-WORKSPACE-003-AC1`、`SET-WORKSPACE-003-AC2`。
-- Oracle：
-  - 扫描执行中会产生可用于页面展示的动作状态或进度信息，对齐 `SET-WORKSPACE-003-AC1`。
-  - 扫描成功结果包含最近扫描时间、状态和最新目录树信息，可直接驱动页面刷新，对齐 `SET-WORKSPACE-003-AC2`。
-- Not：不验证页面上的进度文案和按钮禁用样式。
-
-#### `workspace-scan-progress-refresh`
-
-- 测试类型：`e2e`
-- 实现状态：`已实现`
-- What：验证点击“先扫描”后，页面能展示进行中状态，并在完成后刷新时间、状态和目录树。
-- Why：这是用户感知工作空间是否已被系统识别的第一条操作链路，失败会直接影响用户后续是否敢继续加载。
-- How：在工作空间详情区点击“先扫描”，观察执行中和执行完成两个阶段；对齐 `SET-WORKSPACE-003`，覆盖 `SET-WORKSPACE-003-AC1`、`SET-WORKSPACE-003-AC2`。
-- Oracle：
-  - 扫描执行中，界面存在明确的进行中状态或进度反馈，对齐 `SET-WORKSPACE-003-AC1`。
-  - 扫描成功后，最近扫描时间、状态和目录树同步刷新，对齐 `SET-WORKSPACE-003-AC2`。
-- Not：不验证加载模式和加载摘要。
-
-#### `workspace-load-mode-contract`
-
-- 测试类型：`e2e`
-- 实现状态：`已实现`
-- What：验证工作空间加载时，界面选中的 `full`、`presence_only`、`changes_only` 模式会准确进入实际请求。
-- Why：加载模式会直接影响知识库构建成本与范围，如果模式在请求层丢失，页面选择就是伪状态。
-- How：分别以三种模式触发加载服务或 IPC，校验请求参数和返回载荷；对齐 `SET-WORKSPACE-004`，覆盖 `SET-WORKSPACE-004-AC1`、`SET-WORKSPACE-004-AC2`。
-- Oracle：
-  - 三种模式都会按当前选中值原样进入实际加载请求，对齐 `SET-WORKSPACE-004-AC1`。
-  - 加载成功结果包含最近加载时间、摘要统计和状态信息，可供页面同步刷新，对齐 `SET-WORKSPACE-004-AC2`。
-- Not：不验证加载按钮的交互文案和进度视觉反馈。
-
-#### `workspace-load-by-mode`
-
-- 测试类型：`e2e`
-- 实现状态：`已实现`
-- What：验证用户切换加载模式并点击“开始加载”后，页面会按选中模式执行，并刷新最近加载时间、摘要统计和状态 badge。
-- Why：这是工作空间从“被识别”走向“可检索”的关键入口，如果页面只切换了 UI 状态而没有真正改变请求，用户后续结果会不可解释。
-- How：在同一工作空间上切换加载模式并执行加载，观察成功后的页面状态；对齐 `SET-WORKSPACE-004`，覆盖 `SET-WORKSPACE-004-AC1`、`SET-WORKSPACE-004-AC2`。
-- Oracle：
-  - 当前选中的加载模式进入实际加载请求，而不是只停留在界面展示，对齐 `SET-WORKSPACE-004-AC1`。
-  - 加载成功后，最近加载时间、摘要统计和状态 badge 同步刷新，对齐 `SET-WORKSPACE-004-AC2`。
-- Not：不覆盖扫描目录树刷新；该部分由扫描 case 负责。
-
-#### `workspace-detail-status-and-error`
-
-- 测试类型：`e2e`
-- 实现状态：`已实现`
-- What：验证详情区会稳定展示工作空间的最近错误和摘要统计，而不是只在控制台暴露状态。
-- Why：工作空间问题往往发生在扫描/加载之后，若错误与摘要不可见，用户无法判断当前资料是否可用。
-- How：准备带最近错误与摘要统计的工作空间详情数据，进入详情区查看展示；对齐 `SET-WORKSPACE-005`，覆盖 `SET-WORKSPACE-005-AC1`、`SET-WORKSPACE-005-AC2`。
-- Oracle：
-  - 有错误时，详情区能直接看到最近一次错误，对齐 `SET-WORKSPACE-005-AC1`。
-  - 详情区始终可见目录数、文件数、已加载数和待处理数，对齐 `SET-WORKSPACE-005-AC2`。
-- Not：不验证错误产生原因或统计字段的内部计算逻辑。
 
 #### `workspace-open-path-contract`
 
@@ -286,7 +219,79 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
   - 检测到旧本地导入数据时，页面顶部出现迁移清理提醒，对齐 `SET-WORKSPACE-007-AC3`。
 - Not：不验证迁移清理动作本身的执行结果；这里只验证提示出现。
 
-### 4.3 `web`
+#### `workspace / files`
+
+#### `workspace-scan-contract`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证工作空间扫描请求的参数、进度事件和结果载荷契约，能支撑页面同步刷新扫描状态与目录树。
+- Why：扫描过程涉及异步状态和目录快照，如果契约不稳定，页面层再完整也会展示出错或停留在旧数据。
+- How：以选中工作空间为输入，调用扫描服务或 IPC，模拟进行中和完成态返回；对齐 `SET-WORKSPACE-003`，覆盖 `SET-WORKSPACE-003-AC1`、`SET-WORKSPACE-003-AC2`。
+- Oracle：
+  - 扫描执行中会产生可用于页面展示的动作状态或进度信息，对齐 `SET-WORKSPACE-003-AC1`。
+  - 扫描成功结果包含最近扫描时间、状态和最新目录树信息，可直接驱动页面刷新，对齐 `SET-WORKSPACE-003-AC2`。
+- Not：不验证页面上的进度文案和按钮禁用样式。
+
+#### `workspace-scan-progress-refresh`
+
+- 测试类型：`e2e`
+- 实现状态：`已实现`
+- What：验证点击“先扫描”后，页面能展示进行中状态，并在完成后刷新时间、状态和目录树。
+- Why：这是用户感知工作空间是否已被系统识别的第一条操作链路，失败会直接影响用户后续是否敢继续加载。
+- How：在工作空间详情区点击“先扫描”，观察执行中和执行完成两个阶段；对齐 `SET-WORKSPACE-003`，覆盖 `SET-WORKSPACE-003-AC1`、`SET-WORKSPACE-003-AC2`。
+- Oracle：
+  - 扫描执行中，界面存在明确的进行中状态或进度反馈，对齐 `SET-WORKSPACE-003-AC1`。
+  - 扫描成功后，最近扫描时间、状态和目录树同步刷新，对齐 `SET-WORKSPACE-003-AC2`。
+- Not：不验证加载模式和加载摘要。
+
+#### `workspace-load-mode-contract`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证工作空间加载时，界面选中的 `full`、`presence_only`、`changes_only` 模式会准确进入实际请求。
+- Why：加载模式会直接影响知识库构建成本与范围，如果模式在请求层丢失，页面选择就是伪状态。
+- How：分别以三种模式触发加载服务或 IPC，校验请求参数和返回载荷；对齐 `SET-WORKSPACE-004`，覆盖 `SET-WORKSPACE-004-AC1`、`SET-WORKSPACE-004-AC2`。
+- Oracle：
+  - 三种模式都会按当前选中值原样进入实际加载请求，对齐 `SET-WORKSPACE-004-AC1`。
+  - 加载成功结果包含最近加载时间、摘要统计和状态信息，可供页面同步刷新，对齐 `SET-WORKSPACE-004-AC2`。
+- Not：不验证加载按钮的交互文案和进度视觉反馈。
+
+#### `workspace-load-by-mode`
+
+- 测试类型：`e2e`
+- 实现状态：`已实现`
+- What：验证用户切换加载模式并点击“开始加载”后，页面会按选中模式执行，并刷新最近加载时间、摘要统计和状态 badge。
+- Why：这是工作空间从“被识别”走向“可检索”的关键入口，如果页面只切换了 UI 状态而没有真正改变请求，用户后续结果会不可解释。
+- How：在同一工作空间上切换加载模式并执行加载，观察成功后的页面状态；对齐 `SET-WORKSPACE-004`，覆盖 `SET-WORKSPACE-004-AC1`、`SET-WORKSPACE-004-AC2`。
+- Oracle：
+  - 当前选中的加载模式进入实际加载请求，而不是只停留在界面展示，对齐 `SET-WORKSPACE-004-AC1`。
+  - 加载成功后，最近加载时间、摘要统计和状态 badge 同步刷新，对齐 `SET-WORKSPACE-004-AC2`。
+- Not：不覆盖扫描目录树刷新；该部分由扫描 case 负责。
+
+#### `workspace-detail-status-and-error`
+
+- 测试类型：`e2e`
+- 实现状态：`已实现`
+- What：验证详情区会稳定展示工作空间的最近错误和摘要统计，而不是只在控制台暴露状态。
+- Why：工作空间问题往往发生在扫描/加载之后，若错误与摘要不可见，用户无法判断当前资料是否可用。
+- How：准备带最近错误与摘要统计的工作空间详情数据，进入详情区查看展示；对齐 `SET-WORKSPACE-005`，覆盖 `SET-WORKSPACE-005-AC1`、`SET-WORKSPACE-005-AC2`。
+- Oracle：
+  - 有错误时，详情区能直接看到最近一次错误，对齐 `SET-WORKSPACE-005-AC1`。
+  - 详情区始终可见目录数、文件数、已加载数和待处理数，对齐 `SET-WORKSPACE-005-AC2`。
+- Not：不验证错误产生原因或统计字段的内部计算逻辑。
+
+#### `workspace-detail-contains-web-management`
+
+- 测试类型：`e2e`
+- 实现状态：`已实现`
+- What：验证网页资料管理区域作为当前工作空间详情区的一部分出现，而不是跳转到独立页面后才可操作。
+- Why：`SET-WORKSPACE-005-AC3` 约束的是信息架构和承载位置，而不是单个网页资料动作；若这里失效，`web` 功能即使单独可用，也已偏离 PRD。
+- How：进入工作空间页并选中某个工作空间，检查详情区内是否直接出现网页资料列表、筛选与添加入口，并确认后续网页资料操作留在当前详情区内完成；对齐 `SET-WORKSPACE-005`，覆盖 `SET-WORKSPACE-005-AC3`。
+- Oracle：
+  - 网页资料列表、筛选和添加入口直接出现在当前工作空间详情区内，对齐 `SET-WORKSPACE-005-AC3`。
+  - 网页资料管理操作在当前工作空间详情区内完成，而不是跳转到独立页面，对齐 `SET-WORKSPACE-005-AC3`。
+- Not：不展开验证网页资料的单条功能细节；这些由下列 `web` 子区域 case 覆盖。
 
 #### `web-page-load-filter-selection`
 
@@ -307,10 +312,11 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 - 实现状态：`已实现`
 - What：验证工作区内网页资料添加弹窗的空输入校验、多行 URL 提交和成功后的收尾反馈。
 - Why：网页资料导入通常成批发生，如果弹窗校验和成功收尾不稳定，用户会反复提交或误判是否已入队。
-- How：进入工作区详情并打开添加弹窗，分别覆盖空输入提交和多行 URL 成功提交；对齐 `SET-WEB-002`，覆盖 `SET-WEB-002-AC1`、`SET-WEB-002-AC2`。
+- How：进入工作区详情并打开添加弹窗，分别覆盖空输入提交和多行 URL 成功提交；对齐 `SET-WEB-002`，覆盖 `SET-WEB-002-AC1`、`SET-WEB-002-AC2`、`SET-WEB-002-AC3`。
 - Oracle：
   - 输入为空时，提交会被拦截，并提示至少输入一个 URL，对齐 `SET-WEB-002-AC1`。
   - 提交成功后，提示“网页资料已加入队列”，输入内容被清空，对齐 `SET-WEB-002-AC2`。
+  - 提交成功后，添加弹窗关闭，且当前工作区网页资料列表刷新为最新结果，对齐 `SET-WEB-002-AC3`。
 - Not：不验证后续抓取实际完成结果；这里只验证入队入口。
 
 #### `web-refresh-one-source`
@@ -331,10 +337,10 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 - 实现状态：`已实现`
 - What：验证“全部抓取”只会对当前列表中的网页资料发起重新抓取，不会误触发被筛掉的项目。
 - Why：这个约束决定了筛选与批量动作是否真正联动，若契约错误，用户在小范围操作时会不知情地刷新更多网页。
-- How：在存在“当前可见列表”和“当前被筛掉列表”的前提下触发全部抓取，再覆盖当前列表为空的分支；对齐 `SET-WEB-004`，覆盖 `SET-WEB-004-AC1`，并约束 `SET-WEB-004` 的执行范围。
+- How：在存在“当前可见列表”和“当前被筛掉列表”的前提下触发全部抓取，再覆盖当前列表为空的分支；对齐 `SET-WEB-004`，覆盖 `SET-WEB-004-AC1`、`SET-WEB-004-AC3`。
 - Oracle：
   - 当前列表为空时，不发送抓取请求，对齐 `SET-WEB-004-AC1`。
-  - 当前列表非空时，只有当前列表中的网页资料进入重新抓取请求，不包含被筛掉的项目。
+  - 当前列表非空时，只有当前列表中的网页资料进入重新抓取请求，不包含被筛掉的项目，对齐 `SET-WEB-004-AC3`。
 - Not：不验证页面上的汇总提示文案；该部分由 `web-refresh-all-summary` 覆盖。
 
 #### `web-refresh-all-summary`
@@ -372,7 +378,7 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
   - 删除成功后，该网页资料从列表中消失，对齐 `SET-WEB-005-AC3`。
 - Not：不验证 URL 外链打开；该能力由 `web-open-url-contract` 覆盖。
 
-### 4.4 `vector`
+### 4.3 `vector`
 
 #### `vector-model-catalog-load`
 
@@ -388,7 +394,7 @@ Settings 的正式测试 suite 直接对齐 PRD 模块：
 
 #### `vector-download-single-task-contract`
 
-- 测试类型：`e2e`
+- 测试类型：`backend`
 - 实现状态：`已实现`
 - What：验证向量模型下载的单任务约束与进度事件契约，确保同一时间只能有一个下载任务，并能持续上报进度字段。
 - Why：下载任务跨时长较长且依赖宿主环境，若不先锁住底层契约，页面会很容易出现并发触发或进度丢失。

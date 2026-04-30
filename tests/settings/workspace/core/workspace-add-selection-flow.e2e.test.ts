@@ -1,13 +1,13 @@
 import { describe, it } from 'vitest'
-import { importSelectors } from '../../../src/renderer/src/testing/selectors'
-import { runE2ECase } from '../../harness/e2e/run-e2e-case'
+import { importSelectors } from '../../../../src/renderer/src/testing/selectors'
+import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_E2E_TIMEOUT_MS,
   getSettingsLocator,
   getSettingsPrefixLocator,
   navigateToSettingsSection,
   setSettingsE2EApiOverrides
-} from '../../harness/e2e/settings'
+} from '../../../harness/e2e/settings'
 
 describe('settings workspace e2e', () => {
   it('workspace-add-selection-flow', async () => {
@@ -15,6 +15,7 @@ describe('settings workspace e2e', () => {
       caseId: 'workspace-add-selection-flow',
       domain: 'settings',
       suite: 'workspace',
+      groups: ['core'],
       description: '添加工作空间时，取消目录选择无副作用，成功选择后立即创建并切到新项。',
       fixtures: [],
       runMode: 'single',

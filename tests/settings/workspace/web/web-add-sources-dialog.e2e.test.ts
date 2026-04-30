@@ -1,6 +1,6 @@
 import { describe, it } from 'vitest'
-import { importSelectors } from '../../../src/renderer/src/testing/selectors'
-import { runE2ECase } from '../../harness/e2e/run-e2e-case'
+import { importSelectors } from '../../../../src/renderer/src/testing/selectors'
+import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_WEB_E2E_TIMEOUT_MS,
   createFixtureWorkspace,
@@ -8,14 +8,15 @@ import {
   getSettingsPrefixLocator,
   navigateToSettingsSection,
   workspaceCardLocator
-} from '../../harness/e2e/settings'
+} from '../../../harness/e2e/settings'
 
-describe('settings web e2e', () => {
+describe('settings workspace web e2e', () => {
   it('web-add-sources-dialog', async () => {
     await runE2ECase({
       caseId: 'web-add-sources-dialog',
       domain: 'settings',
-      suite: 'web',
+      suite: 'workspace',
+      groups: ['web'],
       description: '网页资料添加弹窗支持空输入校验、多行 URL 提交和成功后的清空收尾。',
       fixtures: [],
       runMode: 'single',
@@ -23,6 +24,7 @@ describe('settings web e2e', () => {
         const { page } = runtime
         const urlTextarea = page.getByPlaceholder('每行一个 URL')
         let emptyWarningShown = false
+        let modalClosedAfterSubmit = false
 
         await runtime.step({
           name: 'open-add-dialog',
@@ -51,10 +53,12 @@ describe('settings web e2e', () => {
 
         await runtime.step({
           name: 'submit-multi-line-urls',
-          message: '输入两行 URL 并提交，确认列表刷新。',
+          message: '输入两行 URL 并提交，确认弹窗关闭且列表刷新。',
           run: async () => {
             await urlTextarea.fill('https://example.com/one\nhttps://example.com/two')
             await getSettingsLocator(page, importSelectors.webSourceConfirmButton).click()
+            await getSettingsLocator(page, importSelectors.webSourceModal).waitFor({ state: 'hidden' })
+            modalClosedAfterSubmit = true
             await page.waitForFunction(
               (selector) => document.querySelectorAll(selector).length === 2,
               `[data-testid^="${importSelectors.webSourceCardPrefix}-"]`
@@ -73,6 +77,7 @@ describe('settings web e2e', () => {
 
         return {
           emptyWarningShown,
+          modalClosedAfterSubmit,
           cardCount: await getSettingsPrefixLocator(page, importSelectors.webSourceCardPrefix).count(),
           reopenedTextareaValue: await urlTextarea.inputValue()
         }
@@ -91,10 +96,10 @@ describe('settings web e2e', () => {
           data: result
         })
 
-        await runtime.assertThat(result.reopenedTextareaValue === '', {
-          name: 'dialog-clears-input-after-success',
+        await runtime.assertThat(result.modalClosedAfterSubmit && result.reopenedTextareaValue === '', {
+          name: 'dialog-closes-and-clears-after-success',
           message:
-            '提交成功后，再次打开添加弹窗时输入内容应已清空，说明成功收尾完成，对齐 SET-WEB-002-AC2。',
+            '提交成功后，添加弹窗应关闭，再次打开时输入内容应已清空，且当前工作区网页资料列表已刷新，对齐 SET-WEB-002-AC3。',
           data: result
         })
       }
