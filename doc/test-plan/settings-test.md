@@ -8,7 +8,27 @@ Settings 正式测试统一对齐 [settings.md](/Users/test/work-space/NCurator-
 
 正式 / temp 准入、runner、raw logs 与正式 case 共享字段，统一遵循 `doc/test.md`。
 
-## 2. Suite 设计
+## 2. 执行摘要
+
+### 2.1 按 Suite 汇总
+
+- `model`
+  - 通过率：`7 / 7`
+  - 检测时间：`2026-04-30 13:44:56 +08:00`
+- `workspace / core`
+  - 通过率：`6 / 6`
+  - 检测时间：`2026-04-30 13:45:05 +08:00`
+- `workspace / files`
+  - 通过率：`5 / 5`
+  - 检测时间：`2026-04-30 13:45:05 +08:00`
+- `workspace / web`
+  - 通过率：`8 / 8`
+  - 检测时间：`2026-04-30 12:07:37 +08:00`
+- `vector`
+  - 通过率：`4 / 4`
+  - 检测时间：`2026-04-30 12:04:18 +08:00`
+
+## 3. Suite 设计
 
 Settings 的正式测试顶层 suite 直接对齐 PRD 模块：
 
@@ -22,7 +42,7 @@ Settings 的正式测试顶层 suite 直接对齐 PRD 模块：
 - `workspace`：19/19 已实现；当前按 `core / files / web` 三个子区域组织，覆盖页面首屏、添加、扫描、加载模式、摘要状态、路径打开、移除、空态与网页资料管理。
 - `vector`：4/4 已实现；该 suite 归属 `settings` 产品域，但实际运行在独立路由 `/model-download`，不作为 `SettingsPage` 内嵌 section 存在。
 
-### 2.1 `model`
+### 3.1 `model`
 
 做什么：验证大模型配置的加载、创建、编辑、启用和删除。
 
@@ -30,7 +50,7 @@ Settings 的正式测试顶层 suite 直接对齐 PRD 模块：
 
 怎么做：围绕模型列表、表单校验、激活配置切换、配置变更事件和删除结果组织正式 case。
 
-### 2.2 `workspace`
+### 3.2 `workspace`
 
 做什么：验证工作空间容器及其下属 `files`、`web` 两类子区域的页面行为和 backend / IPC 支撑契约。
 
@@ -38,7 +58,7 @@ Settings 的正式测试顶层 suite 直接对齐 PRD 模块：
 
 怎么做：先验证工作空间本体能力，再分别验证当前工作空间详情区内的本地文件视图与网页资料视图；需要时在 backend / IPC 层验证直接支撑这些行为的契约。网页资料在这里不是独立产品页，而是 `workspace detail` 下的子区域。
 
-### 2.3 `vector`
+### 3.3 `vector`
 
 做什么：验证向量模型的加载、下载、进度和错误收敛。
 
@@ -46,7 +66,7 @@ Settings 的正式测试顶层 suite 直接对齐 PRD 模块：
 
 怎么做：围绕模型列表、单任务下载、进度展示、完成刷新和失败反馈组织正式 case；虽然页面路由是 `/model-download`，但仍按 Settings 产品归属纳入本计划。
 
-## 3. 领域特有规则
+## 4. 领域特有规则
 
 - Settings 的用户可见行为默认归入本计划，不再单独维护 `workspace` 测试域。
 - `workspace` 在这里是 Settings 下的 suite，不是独立测试 domain；其下统一按 `core / files / web` 组织子区域。
@@ -56,9 +76,9 @@ Settings 的正式测试顶层 suite 直接对齐 PRD 模块：
 - Settings 正式测试遵循 `suite + groups` 模型；当前只有 `workspace` suite 继续细分 `core / files / web`，实际目录与日志 scope 也必须按该层级落地。
 - `How` 与 `Oracle` 必须显式映射到 [settings.md](/Users/test/work-space/NCurator-Desktop/doc/prd/settings.md) 的需求编号与验收编号。
 
-## 4. 正式 Case 清单
+## 5. 正式 Case 清单
 
-### 4.1 `model`
+### 5.1 `model`
 
 #### `model-config-list-contract`
 
@@ -143,7 +163,7 @@ Settings 的正式测试顶层 suite 直接对齐 PRD 模块：
   - 删除失败时页面出现明确错误提示，对齐 `SET-MODEL-005-AC2`。
 - Not：不定义删除后默认重新选中哪一项；只验证被删项移除和失败反馈。
 
-### 4.2 `workspace`
+### 5.2 `workspace`
 
 #### `workspace / core`
 
@@ -378,7 +398,7 @@ Settings 的正式测试顶层 suite 直接对齐 PRD 模块：
   - 删除成功后，该网页资料从列表中消失，对齐 `SET-WEB-005-AC3`。
 - Not：不验证 URL 外链打开；该能力由 `web-open-url-contract` 覆盖。
 
-### 4.3 `vector`
+### 5.3 `vector`
 
 #### `vector-model-catalog-load`
 
