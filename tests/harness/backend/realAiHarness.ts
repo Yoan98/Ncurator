@@ -10,6 +10,7 @@ import { createRealAiDepsFactory } from './realAiDepsFactory'
 import { seedKbFixture } from './seedKbFixture'
 import { seedChatHistory } from './seedChatHistory'
 import { seedFileReview } from './seedFileReview'
+import { seedWorkspaceKb } from './workspaceKbSeed'
 import {
   appendSeedKbDocuments,
   appendSeedWorkspaceFile,
@@ -94,6 +95,28 @@ export const createRealAiHarness = async (input: {
         documents
       })
       appendSeedKbDocuments(seedManifest, documents)
+    },
+    seedWorkspaceKb: async (params) => {
+      await depsFactory.ensureEmbeddingReady()
+      const seeded = await seedWorkspaceKb({
+        runtime,
+        params
+      })
+      for (const result of seeded.results) {
+        if (result.status !== 'indexed') continue
+        appendSeedWorkspaceFile(seedManifest, {
+          relativePath: result.relativePath,
+          absolutePath: result.absolutePath,
+          summary: `workspace KB indexed: ${result.name}`,
+          metadata: {
+            documentId: result.documentId,
+            chunkCount: result.chunkCount,
+            cache: result.cache
+          }
+        })
+      }
+      appendSeedKbDocuments(seedManifest, seeded.kbDocuments)
+      return seeded.results
     },
     seedChatHistory: async (payload) => {
       await seedChatHistory({

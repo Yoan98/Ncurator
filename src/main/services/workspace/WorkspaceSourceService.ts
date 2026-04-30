@@ -3,8 +3,7 @@ import path from 'path'
 import crypto from 'crypto'
 import type { WorkspaceNode, WorkspacePrepareMode } from '../../../shared/types'
 import type { WorkspaceNodeDiff, WorkspaceScanResult, WorkspaceValidationResult } from './types'
-
-const SUPPORTED_FILE_EXTENSIONS = new Set(['.pdf', '.docx'])
+import { isSupportedLocalFilePath } from '../ingestion/loader'
 
 const toWorkspaceName = (rootPath: string, preferredName?: string): string => {
   const trimmed = String(preferredName || '').trim()
@@ -185,7 +184,7 @@ export class WorkspaceSourceService {
 
       if (!entry.isFile()) continue
       const fileExt = path.extname(entry.name).toLowerCase()
-      if (!SUPPORTED_FILE_EXTENSIONS.has(fileExt)) continue
+      if (!isSupportedLocalFilePath(absolutePath)) continue
 
       const stat = await fs.stat(absolutePath)
       input.nodes.push({

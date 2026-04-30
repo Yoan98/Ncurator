@@ -7,8 +7,7 @@ import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
   buildKbGuidedDocxWorkspaceSeed,
   HUMAN_KB_GUIDED_DOCX_COMPARISON_DRAFT_USER_INPUT,
-  SHARED_WORKSPACE_FIXTURE_PATH,
-  seedKbGuidedDocxKb
+  SHARED_WORKSPACE_FIXTURE_PATH
 } from '../../../harness/backend/aiLiveTestData'
 import {
   collectDocxApplyOpsContentKinds,
@@ -39,6 +38,7 @@ describe('ai human live backend', () => {
             return {
               skipped: true,
               output: null,
+              indexedFiles: [],
               workspaceSeed: null,
               events: []
             }
@@ -46,9 +46,15 @@ describe('ai human live backend', () => {
 
           await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv('primary'))
           const workspaceSeed = await buildKbGuidedDocxWorkspaceSeed(runtime)
-          await seedKbGuidedDocxKb(runtime, workspaceSeed)
+          const indexedFiles = await runtime.seedWorkspaceKb({
+            mode: 'all-supported'
+          })
 
-          const runner = createHumanTestRunner(runtime)
+          const runner = createHumanTestRunner(runtime, {
+            runtimeSettingsOverride: {
+              llmStreamingMode: 'force_non_stream'
+            }
+          })
           const output = await runner.run({
             taskId: runtime.taskId,
             userInput: HUMAN_KB_GUIDED_DOCX_COMPARISON_DRAFT_USER_INPUT
@@ -57,6 +63,7 @@ describe('ai human live backend', () => {
           return {
             skipped: false,
             output,
+            indexedFiles,
             workspaceSeed,
             events: runtime.eventCollector.snapshot()
           }
@@ -73,6 +80,9 @@ describe('ai human live backend', () => {
           const events = result.events
           const toolResults = filterAiRunEventsByType(events, 'tool_call_result')
           const toolNames = toolResults.map((event) => event.toolName)
+          const indexedSupportedFiles = result.indexedFiles.filter(
+            (file) => file.supported && file.status === 'indexed'
+          )
           const openedSourcePaths = filterAiRunEventsByType(events, 'tool_call_started')
             .filter((event) => event.toolName.startsWith('docx_'))
             .map((event) => event.input.sourcePath)
@@ -117,6 +127,7 @@ describe('ai human live backend', () => {
               /反走样/.test(deliveryText) &&
               /PRD|课堂|案例/.test(deliveryText) &&
               sourceDocsUnchanged.every(Boolean) &&
+              indexedSupportedFiles.length === 8 &&
               typeof result.output?.deliveryMarkdown === 'string' &&
               result.output.deliveryMarkdown.trim().length > 0,
             {
@@ -126,6 +137,7 @@ describe('ai human live backend', () => {
                 openedSourcePaths,
                 writeSourcePaths,
                 toolNames,
+                indexedSupportedFiles,
                 changedContentKinds,
                 summary: result.output?.summary,
                 deliveryMarkdown: result.output?.deliveryMarkdown,
@@ -136,5 +148,5 @@ describe('ai human live backend', () => {
         }
       })
     })
-  }, 600_000)
+  }, 900_000)
 })

@@ -28,6 +28,7 @@ import {
 } from '../services/sourceScope/selection'
 import { validateSelectedReferencesForRun } from '../services/sourceScope/validation'
 import { WorkspaceSourceService } from '../services/workspace/WorkspaceSourceService'
+import { WorkspaceKnowledgePrepareService } from '../services/workspace/WorkspaceKnowledgePrepareService'
 import { WebSourceService } from '../services/web/WebSourceService'
 import { v4 as uuidv4 } from 'uuid'
 import type {
@@ -267,6 +268,11 @@ export function registerHandlers(services: {
   const workspaceStore = storageService.workspace
   const fileReviewService = new FileReviewService(storageService.fileReview, documentsStore)
   const workspaceService = new WorkspaceSourceService()
+  const workspaceKnowledgePrepareService = new WorkspaceKnowledgePrepareService({
+    ingestionService,
+    embeddingService,
+    documentsStore
+  })
   const webSourceService = new WebSourceService()
 
   const emitSourceListRefresh = (sender: Electron.WebContents) => {
@@ -1580,56 +1586,17 @@ export function registerHandlers(services: {
           if (!currentNode) continue
           const documentId = currentNode.document_id || uuidv4()
           try {
-            const existingDocument = await documentsStore.getDocumentById(documentId)
-            if (existingDocument) {
-              await documentsStore.updateDocumentById(documentId, {
-                name: currentNode.name,
-                file_path: currentNode.absolute_path,
-                source_type: 'file'
-              })
-              await documentsStore.updateDocumentImportStatus(documentId, 1)
-            } else {
-              await documentsStore.addDocument({
-                id: documentId,
-                name: currentNode.name,
-                source_type: 'file',
-                workspace_id: workspaceId,
-                file_path: currentNode.absolute_path,
-                created_at: Date.now(),
-                import_status: 1
-              })
-            }
-
-            await documentsStore.deleteChunksByDocumentIds([documentId])
-            const splitDocs = await ingestionService.processFile(currentNode.absolute_path)
-            const allSplitDocs = [...splitDocs.bigSplitDocs, ...splitDocs.miniSplitDocs]
-            const vectors: Float32Array[] = []
-            for (const doc of allSplitDocs) {
-              const { data: vector } = await embeddingService.embed(doc.pageContent)
-              vectors.push(vector)
-            }
-
-            const chunks = vectors.map((_, index) => ({
-              text: allSplitDocs[index].pageContent,
-              id: uuidv4(),
-              document_id: documentId,
-              workspace_id: workspaceId,
-              document_name: currentNode.name,
-              source_type: 'file',
-              metadata: {
-                page: allSplitDocs[index].metadata.loc?.pageNumber || 1
-              }
-            }))
-
-            await documentsStore.addChunks({ vectors, chunks })
-            await documentsStore.updateDocumentImportStatus(documentId, 2)
-
+            const indexedDocument = await workspaceKnowledgePrepareService.indexLocalFile({
+              workspaceId,
+              documentId,
+              filePath: currentNode.absolute_path,
+              documentName: currentNode.name
+            })
             const preparedAt = Date.now()
-            const contentHash = await workspaceService.computeContentHash(currentNode.absolute_path)
             const preparedNode: WorkspaceNode = {
               ...currentNode,
               document_id: documentId,
-              content_hash: contentHash,
+              content_hash: indexedDocument.contentHash,
               prepare_status: 'prepared',
               last_prepared_at: preparedAt,
               last_error: undefined,

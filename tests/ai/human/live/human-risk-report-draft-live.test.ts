@@ -66,11 +66,15 @@ describe('ai human live backend', () => {
           return {
             skipped: true,
             output: null,
+            indexedFiles: [],
             events: []
           }
         }
 
         await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv('primary'))
+        const indexedFiles = await runtime.seedWorkspaceKb({
+          mode: 'all-supported'
+        })
         const workspaceSeed = await loadRiskReportWorkspaceSeed(runtime)
 
         const runner = createHumanTestRunner(runtime)
@@ -82,6 +86,7 @@ describe('ai human live backend', () => {
         return {
           skipped: false,
           output,
+          indexedFiles,
           workspaceSeed,
           events: runtime.eventCollector.snapshot()
         }
@@ -97,6 +102,9 @@ describe('ai human live backend', () => {
 
         const toolResults = filterAiRunEventsByType(result.events, 'tool_call_result')
         const toolNames = toolResults.map((event) => event.toolName)
+        const indexedSupportedFiles = result.indexedFiles.filter(
+          (file) => file.supported && file.status === 'indexed'
+        )
         const changedBlocks = collectDocxWriteChangedBlocks(result.events)
         const deliveryText = `${result.output?.summary || ''}\n${result.output?.deliveryMarkdown || ''}`.trim()
         const sourceTemplateUnchanged = await hasUnchangedFileBytes(
@@ -128,6 +136,14 @@ describe('ai human live backend', () => {
             toolNames,
             templatePath: result.workspaceSeed.templatePath,
             artifacts: result.output?.artifacts
+          }
+        })
+
+        runtime.assertThat(indexedSupportedFiles.length === 8, {
+          name: 'human-live-risk-report-indexes-all-supported-workspace-files',
+          message: 'risk report live case 应在运行前把共享 workspace 中全部已支持文件索引进 KB。',
+          data: {
+            indexedSupportedFiles
           }
         })
 
@@ -170,5 +186,5 @@ describe('ai human live backend', () => {
         )
       }
     })
-  }, 600_000)
+  }, 900_000)
 })

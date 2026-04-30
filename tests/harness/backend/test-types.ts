@@ -94,6 +94,31 @@ export type SeedKbDocumentInput = {
   chunks: readonly SeedKbChunkInput[]
 }
 
+export type WorkspaceKbSeedMode = 'all-supported' | 'include-only' | 'exclude-some'
+
+export type WorkspaceKbSeedInput = {
+  mode: WorkspaceKbSeedMode
+  relativePaths?: readonly string[]
+}
+
+export type WorkspaceKbSeedResult = {
+  relativePath: string
+  absolutePath: string
+  name: string
+  fileExt?: string
+  supported: boolean
+  status: 'indexed' | 'failed' | 'skipped'
+  documentId?: string
+  chunkCount?: number
+  kbAvailability: SelectedReference['kbAvailability']
+  kbDocumentIds: string[]
+  cache: {
+    split: boolean
+    vector: boolean
+  }
+  error?: string
+}
+
 export type SeedWorkspaceFileRecord = {
   relativePath: string
   absolutePath: string
@@ -146,6 +171,7 @@ export type CreateAiRunContextInput = {
   sessionId?: string
   userInput?: string
   selectedReferences?: SelectedReference[]
+  runtimeSettingsOverride?: Partial<AiRuntimeSettings>
   modelConfigId?: string
   approvalPolicy?: ApprovalPolicy | ApprovalResolver
   checkCancelledOverride?: () => void
@@ -179,6 +205,7 @@ export type BackendTestRuntime = {
   createHumanTaskRunner: (input?: CreateAiRunContextInput) => HumanTaskRunner
   ensureEmbeddingReady: () => Promise<void>
   seedKb: (input: readonly SeedKbDocumentInput[]) => Promise<void>
+  seedWorkspaceKb: (input: WorkspaceKbSeedInput) => Promise<WorkspaceKbSeedResult[]>
   seedChatHistory: (input: SeedChatHistoryInput) => Promise<void>
   seedFileReview: (input: SeedFileReviewInput) => Promise<{ reviewId: string }>
   seedLlmConfig: (config: LiveLlmConfig) => Promise<void>

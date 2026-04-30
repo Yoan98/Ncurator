@@ -97,6 +97,10 @@ export const createRealAiDepsFactory = async (input: {
 
     const bindWorkspace = contextInput.bindWorkspace !== false
     const approvalResolver = buildApprovalResolver(contextInput.approvalPolicy)
+    const runtimeSettings: AiRuntimeSettings = {
+      ...DEFAULT_RUNTIME_SETTINGS,
+      ...contextInput.runtimeSettingsOverride
+    }
 
     const ctx = createAiRunContext(
       {
@@ -114,7 +118,7 @@ export const createRealAiDepsFactory = async (input: {
           : undefined
       },
       {
-        runtimeSettings: DEFAULT_RUNTIME_SETTINGS,
+        runtimeSettings,
         llmStore: storageService.llm,
         chatStore: storageService.chat,
         documentsStore: storageService.documents,

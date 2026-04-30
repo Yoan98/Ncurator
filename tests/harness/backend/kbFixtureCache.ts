@@ -4,7 +4,7 @@ import path from 'node:path'
 import type { EmbeddingService } from '../../../src/main/services/vector/EmbeddingService'
 import type { SeedKbDocumentInput } from './test-types'
 
-const KB_FIXTURE_CACHE_SCHEMA_VERSION = 1
+const KB_FIXTURE_CACHE_SCHEMA_VERSION = 2
 const KB_FIXTURE_CACHE_ROOT = path.resolve(process.cwd(), 'tests', '.cache', 'kb-fixtures')
 
 type CacheableKbChunk = {
@@ -25,139 +25,99 @@ type CachedKbChunkVector = CacheableKbChunk & {
 }
 
 type CachedKbDocumentVectors = {
-  id: string
-  chunks: CachedKbChunkVector[]
-}
-
-type KbFixtureCacheFile = {
-  schemaVersion: 1
+  schemaVersion: number
   modelName: string
-  documents: CachedKbDocumentVectors[]
+  document: {
+    id: string
+    chunks: CachedKbChunkVector[]
+  }
 }
 
 type KbFixtureVectorSnapshot = {
-  documents: CachedKbDocumentVectors[]
+  documents: Array<{
+    id: string
+    chunks: CachedKbChunkVector[]
+  }>
 }
 
 const normalizeSourceType = (value?: 'file' | 'web'): 'file' | 'web' => value || 'file'
 
-const toCacheableDocuments = (documents: readonly SeedKbDocumentInput[]): CacheableKbDocument[] =>
-  [...documents]
-    .map((document) => ({
-      id: document.id,
-      name: document.name,
-      sourceType: normalizeSourceType(document.sourceType),
-      chunks: [...document.chunks]
-        .map((chunk) => ({
-          id: chunk.id,
-          text: chunk.text,
-          page: chunk.page || 1
-        }))
-        .sort((left, right) => left.id.localeCompare(right.id))
+const toCacheableDocument = (document: SeedKbDocumentInput): CacheableKbDocument => ({
+  id: document.id,
+  name: document.name,
+  sourceType: normalizeSourceType(document.sourceType),
+  chunks: [...document.chunks]
+    .map((chunk) => ({
+      id: chunk.id,
+      text: chunk.text,
+      page: chunk.page || 1
     }))
     .sort((left, right) => left.id.localeCompare(right.id))
+})
 
-const buildCacheKey = (
-  modelName: string,
-  documents: readonly CacheableKbDocument[]
-): string =>
+const buildCacheKey = (modelName: string, document: CacheableKbDocument): string =>
   createHash('sha256')
     .update(
       JSON.stringify({
         schemaVersion: KB_FIXTURE_CACHE_SCHEMA_VERSION,
         modelName,
-        documents
+        document
       })
     )
     .digest('hex')
 
 const buildCacheFilePath = (cacheKey: string): string =>
-  path.join(KB_FIXTURE_CACHE_ROOT, `${cacheKey}.json`)
+  path.join(KB_FIXTURE_CACHE_ROOT, 'documents', `${cacheKey}.json`)
 
-const loadCachedSnapshot = async (
+const loadCachedDocumentVectors = async (
   cacheFilePath: string,
   modelName: string
-): Promise<KbFixtureVectorSnapshot | null> => {
+): Promise<CachedKbDocumentVectors['document'] | null> => {
   try {
     await access(cacheFilePath)
   } catch {
     return null
   }
 
-  const file = JSON.parse(await readFile(cacheFilePath, 'utf8')) as KbFixtureCacheFile
-  if (
-    file.schemaVersion !== KB_FIXTURE_CACHE_SCHEMA_VERSION ||
-    file.modelName !== modelName
-  ) {
+  const file = JSON.parse(await readFile(cacheFilePath, 'utf8')) as CachedKbDocumentVectors
+  if (file.schemaVersion !== KB_FIXTURE_CACHE_SCHEMA_VERSION || file.modelName !== modelName) {
     return null
   }
-
-  return {
-    documents: file.documents
-  }
+  return file.document
 }
 
-const persistCachedSnapshot = async (
+const persistCachedDocumentVectors = async (
   cacheFilePath: string,
   modelName: string,
-  snapshot: KbFixtureVectorSnapshot
+  documentVectors: CachedKbDocumentVectors['document']
 ): Promise<void> => {
-  const payload: KbFixtureCacheFile = {
+  const payload: CachedKbDocumentVectors = {
     schemaVersion: KB_FIXTURE_CACHE_SCHEMA_VERSION,
     modelName,
-    documents: snapshot.documents
+    document: documentVectors
   }
-
   await mkdir(path.dirname(cacheFilePath), { recursive: true })
   await writeFile(cacheFilePath, JSON.stringify(payload), 'utf8')
 }
 
-const buildVectorSnapshot = async (
-  documents: readonly CacheableKbDocument[],
+const buildDocumentVectors = async (
+  document: CacheableKbDocument,
   embeddingService: EmbeddingService
-): Promise<KbFixtureVectorSnapshot> => {
-  if (documents.length === 0) {
+): Promise<CachedKbDocumentVectors['document']> => {
+  if (document.chunks.length === 0) {
     return {
-      documents: []
-    }
-  }
-
-  const flattenedChunks = documents.flatMap((document) =>
-    document.chunks.map((chunk) => ({
-      documentId: document.id,
-      chunk
-    }))
-  )
-  if (flattenedChunks.length === 0) {
-    return {
-      documents: documents.map((document) => ({
-        id: document.id,
-        chunks: []
-      }))
-    }
-  }
-  const embeddingTexts = flattenedChunks.map((item) => item.chunk.text)
-  const embeddings = await embeddingService.embed(embeddingTexts)
-  const vectorSize = embeddings.dims[1]
-
-  const vectors = flattenedChunks.map((_, index) =>
-    Array.from(
-      embeddings.data.slice(index * vectorSize, (index + 1) * vectorSize)
-    )
-  )
-
-  return {
-    documents: documents.map((document) => ({
       id: document.id,
-      chunks: document.chunks.map((chunk) => {
-        const flattenedIndex = flattenedChunks.findIndex(
-          (item) => item.documentId === document.id && item.chunk.id === chunk.id
-        )
-        return {
-          ...chunk,
-          vector: vectors[flattenedIndex] || []
-        }
-      })
+      chunks: []
+    }
+  }
+
+  const embeddings = await embeddingService.embed(document.chunks.map((chunk) => chunk.text))
+  const vectorSize = embeddings.dims[1]
+  return {
+    id: document.id,
+    chunks: document.chunks.map((chunk, index) => ({
+      ...chunk,
+      vector: Array.from(embeddings.data.slice(index * vectorSize, (index + 1) * vectorSize))
     }))
   }
 }
@@ -166,16 +126,21 @@ export const loadOrBuildKbFixtureVectors = async (input: {
   embeddingService: EmbeddingService
   documents: readonly SeedKbDocumentInput[]
 }): Promise<KbFixtureVectorSnapshot> => {
-  const cacheableDocuments = toCacheableDocuments(input.documents)
   const modelName = input.embeddingService.getModelName()
-  const cacheKey = buildCacheKey(modelName, cacheableDocuments)
-  const cacheFilePath = buildCacheFilePath(cacheKey)
-  const cachedSnapshot = await loadCachedSnapshot(cacheFilePath, modelName)
-  if (cachedSnapshot) {
-    return cachedSnapshot
-  }
+  const documents = await Promise.all(
+    input.documents.map(async (document) => {
+      const cacheableDocument = toCacheableDocument(document)
+      const cacheFilePath = buildCacheFilePath(buildCacheKey(modelName, cacheableDocument))
+      const cachedVectors = await loadCachedDocumentVectors(cacheFilePath, modelName)
+      if (cachedVectors) {
+        return cachedVectors
+      }
 
-  const builtSnapshot = await buildVectorSnapshot(cacheableDocuments, input.embeddingService)
-  await persistCachedSnapshot(cacheFilePath, modelName, builtSnapshot)
-  return builtSnapshot
+      const builtVectors = await buildDocumentVectors(cacheableDocument, input.embeddingService)
+      await persistCachedDocumentVectors(cacheFilePath, modelName, builtVectors)
+      return builtVectors
+    })
+  )
+
+  return { documents }
 }
