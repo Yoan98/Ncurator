@@ -42,11 +42,11 @@ describe('ai human live backend', () => {
         description: '验证 live 模式下 human 会读取两份已选课件，自主创建总结 docx 并写入跨源总结。',
         fixtures: [SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
-        runtimeModelName: hasLiveLlmConfigInEnv('primary')
-          ? loadLiveLlmConfigFromEnv('primary').model_name
+        runtimeModelName: hasLiveLlmConfigInEnv()
+          ? loadLiveLlmConfigFromEnv().model_name
           : null,
         execute: async (runtime) => {
-          if (!hasLiveLlmConfigInEnv('primary')) {
+          if (!hasLiveLlmConfigInEnv()) {
             return {
               skipped: true,
               output: null,
@@ -55,7 +55,7 @@ describe('ai human live backend', () => {
             }
           }
 
-          await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv('primary'))
+          await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
           const workspaceSeed = {
             sourceDocs: resolveSelectedDocxFixtures(runtime, DOCX_CROSS_SOURCE_SUMMARY_FIXTURE_PATHS),
             trackedDocs: await captureDocxFixtureBytes(runtime, DOCX_CROSS_SOURCE_SUMMARY_FIXTURE_PATHS)

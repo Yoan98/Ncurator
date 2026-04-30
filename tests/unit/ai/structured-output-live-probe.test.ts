@@ -15,12 +15,12 @@ describe('ai unit structured output live probe', () => {
   it(
     'probes production structured output wrapper against the current primary live model',
     async () => {
-      if (!hasLiveLlmConfigInEnv('primary')) {
+      if (!hasLiveLlmConfigInEnv()) {
         expect(true).toBe(true)
         return
       }
 
-      const cfg = loadLiveLlmConfigFromEnv('primary')
+      const cfg = loadLiveLlmConfigFromEnv()
       const probeCases: Array<{
         label: string
         preferredProfile?: PreferredStructuredOutputProfile

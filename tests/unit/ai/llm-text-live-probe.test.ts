@@ -10,12 +10,12 @@ describe('ai unit text output live probe', () => {
   it(
     'probes production text executor in both non-stream and stream modes',
     async () => {
-      if (!hasLiveLlmConfigInEnv('primary')) {
+      if (!hasLiveLlmConfigInEnv()) {
         expect(true).toBe(true)
         return
       }
 
-      const cfg = loadLiveLlmConfigFromEnv('primary') as LLMConfig
+      const cfg = loadLiveLlmConfigFromEnv() as LLMConfig
       const probeModes = ['force_non_stream', 'force_stream'] as const
       const results: Array<Record<string, unknown>> = []
 

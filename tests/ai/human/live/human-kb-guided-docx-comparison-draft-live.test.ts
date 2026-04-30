@@ -30,11 +30,11 @@ describe('ai human live backend', () => {
         description: '验证 live 模式下 human 会先用 KB 缩圈定位相关课件，再把内容回写到另外两份目标 docx。',
         fixtures: [SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
-        runtimeModelName: hasLiveLlmConfigInEnv('primary')
-          ? loadLiveLlmConfigFromEnv('primary').model_name
+        runtimeModelName: hasLiveLlmConfigInEnv()
+          ? loadLiveLlmConfigFromEnv().model_name
           : null,
         execute: async (runtime) => {
-          if (!hasLiveLlmConfigInEnv('primary')) {
+          if (!hasLiveLlmConfigInEnv()) {
             return {
               skipped: true,
               output: null,
@@ -44,7 +44,7 @@ describe('ai human live backend', () => {
             }
           }
 
-          await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv('primary'))
+          await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
           const workspaceSeed = await buildKbGuidedDocxWorkspaceSeed(runtime)
           const indexedFiles = await runtime.seedWorkspaceKb({
             mode: 'all-supported'

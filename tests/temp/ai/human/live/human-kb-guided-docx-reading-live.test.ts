@@ -25,11 +25,11 @@ describe('temp ai human live backend', () => {
         description: '观察 live 模式下 human 在工作区资料较多时，会如何用 KB 缩圈并回答过拟合与反走样的处理思路。',
         fixtures: [SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
-        runtimeModelName: hasLiveLlmConfigInEnv('primary')
-          ? loadLiveLlmConfigFromEnv('primary').model_name
+        runtimeModelName: hasLiveLlmConfigInEnv()
+          ? loadLiveLlmConfigFromEnv().model_name
           : null,
         execute: async (runtime) => {
-          if (!hasLiveLlmConfigInEnv('primary')) {
+          if (!hasLiveLlmConfigInEnv()) {
             return {
               skipped: true,
               output: null,
@@ -37,7 +37,7 @@ describe('temp ai human live backend', () => {
             }
           }
 
-          await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv('primary'))
+          await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
           await runtime.seedWorkspaceKb({
             mode: 'all-supported'
           })

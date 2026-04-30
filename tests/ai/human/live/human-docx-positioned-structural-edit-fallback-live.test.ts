@@ -43,11 +43,11 @@ describe('ai human live backend', () => {
           '验证 live 模式下 human 在复杂 positioned docx 中命中写入需求时不会自动编辑，而是优雅回退并给出手动补充建议。',
         fixtures: [SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
-        runtimeModelName: hasLiveLlmConfigInEnv('primary')
-          ? loadLiveLlmConfigFromEnv('primary').model_name
+        runtimeModelName: hasLiveLlmConfigInEnv()
+          ? loadLiveLlmConfigFromEnv().model_name
           : null,
         execute: async (runtime) => {
-          if (!hasLiveLlmConfigInEnv('primary')) {
+          if (!hasLiveLlmConfigInEnv()) {
             return {
               skipped: true,
               output: null,
@@ -57,7 +57,7 @@ describe('ai human live backend', () => {
             }
           }
 
-          await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv('primary'))
+          await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
           const fixtureDocs = resolveSelectedDocxFixtures(runtime, DOCX_POSITIONED_FIXTURE_PATHS)
           const originalFixtureBytes = await Promise.all(
             fixtureDocs.map(async (fixtureDoc) => ({

@@ -49,11 +49,11 @@ describe('ai human live backend', () => {
         description: '验证 live 模式下 human 会基于两份已选 docx 覆盖过拟合与反走样的核心事实，并对缺失项保持保守。',
         fixtures: [SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
-        runtimeModelName: hasLiveLlmConfigInEnv('primary')
-          ? loadLiveLlmConfigFromEnv('primary').model_name
+        runtimeModelName: hasLiveLlmConfigInEnv()
+          ? loadLiveLlmConfigFromEnv().model_name
           : null,
         execute: async (runtime) => {
-          if (!hasLiveLlmConfigInEnv('primary')) {
+          if (!hasLiveLlmConfigInEnv()) {
             return {
               skipped: true,
               output: null,
@@ -62,7 +62,7 @@ describe('ai human live backend', () => {
             }
           }
 
-          await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv('primary'))
+          await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
           const fixtureDocs = resolveSelectedDocxFixtures(runtime, DOCX_READING_FIXTURE_PATHS)
           const runner = createHumanTestRunner(runtime, {
             selectedReferences: buildSelectedDocxFixtureReferences(runtime, DOCX_READING_FIXTURE_PATHS)
