@@ -267,27 +267,27 @@ ${renderReferenceScopeText(input.ctx.referenceScope)}
 ${renderPlatformText(input.ctx)}
   </terminal_platform>
 
-  <memory>
-    <your_notes>
-${renderHumanStableNotes(input.state, 'brain_prompt')}
-    </your_notes>
-
-    <latest_attempt>
-${renderBrainRoundSection(getLastRoundFocus(input.state) ? [getLastRoundFocus(input.state)!] : [])}
-    </latest_attempt>
-
-    <earlier_attempts>
-${renderBrainRoundSection(getEarlierAttemptRounds(input.state))}
-    </earlier_attempts>
-
-    <recalled_history>
-${renderBrainLoadedHistoryText(getLoadedHistoryContext(input.state))}
-    </recalled_history>
-  </memory>
-
   <skill_catalog>
 ${renderSkillCatalogSection(input.state)}
   </skill_catalog>
+
+  <memory>
+    <earlier_attempts>
+    ${renderBrainRoundSection(getEarlierAttemptRounds(input.state))}
+    </earlier_attempts>
+
+    <recalled_history>
+    ${renderBrainLoadedHistoryText(getLoadedHistoryContext(input.state))}
+    </recalled_history>
+
+    <your_notes>
+    ${renderHumanStableNotes(input.state, 'brain_prompt')}
+    </your_notes>
+
+    <latest_attempt>
+    ${renderBrainRoundSection(getLastRoundFocus(input.state) ? [getLastRoundFocus(input.state)!] : [])}
+    </latest_attempt>
+  </memory>
 
   <correction_hint>
 ${input.state.execution.watchHint ? renderWatchHintForBrain(input.state.execution.watchHint) : 'none'}
