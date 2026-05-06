@@ -6,7 +6,8 @@ const { createChatModelMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('../../../src/main/services/llm/chatModel', () => ({
-  createChatModel: createChatModelMock
+  createChatModel: createChatModelMock,
+  getSupportedTransportsForConfig: () => ['responses', 'completions']
 }))
 
 import {
@@ -41,6 +42,7 @@ const schema = z.object({
 const cfg = {
   id: 'cfg-1',
   name: 'Primary',
+  providerKind: 'openai',
   base_url: 'https://example.test/v1',
   model_name: 'gpt-5',
   api_key: 'test-key',

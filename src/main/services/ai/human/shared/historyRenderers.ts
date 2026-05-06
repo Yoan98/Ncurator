@@ -33,6 +33,10 @@ const readNumberField = (obj: JsonObject, key: string): number | undefined => {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
+const setJsonFieldIfDefined = (obj: JsonObject, key: string, value: JsonValue | undefined): void => {
+  if (value !== undefined) obj[key] = value
+}
+
 const pickObjectFields = (
   obj: JsonObject,
   keys: string[]
@@ -465,6 +469,17 @@ const summarizeToolResultForMouth = (input: {
       })
     }
     case 'docx_text_edit': {
+      const content: JsonObject = {}
+      setJsonFieldIfDefined(
+        content,
+        'query',
+        typeof call?.args.query === 'string' ? call.args.query : undefined
+      )
+      setJsonFieldIfDefined(
+        content,
+        'replace',
+        typeof call?.args.replace === 'string' ? call.args.replace : undefined
+      )
       return buildDocxWriteFact({
         toolName: result.toolName,
         target:
@@ -472,13 +487,21 @@ const summarizeToolResultForMouth = (input: {
             ? `blockIds=${renderMouthToolArgValue(call.args.blockIds)}`
             : undefined,
         contentLabel: '实际替换参数',
-        content: {
-          query: typeof call?.args.query === 'string' ? call.args.query : undefined,
-          replace: typeof call?.args.replace === 'string' ? call.args.replace : undefined
-        }
+        content
       })
     }
     case 'docx_text_style_edit': {
+      const content: JsonObject = {}
+      setJsonFieldIfDefined(
+        content,
+        'query',
+        typeof call?.args.query === 'string' ? call.args.query : undefined
+      )
+      setJsonFieldIfDefined(
+        content,
+        'style',
+        isJsonObject(call?.args.style) ? call.args.style : undefined
+      )
       return buildDocxWriteFact({
         toolName: result.toolName,
         target:
@@ -486,10 +509,7 @@ const summarizeToolResultForMouth = (input: {
             ? `blockId=${call.args.blockId}`
             : undefined,
         contentLabel: '实际样式参数',
-        content: {
-          query: typeof call?.args.query === 'string' ? call.args.query : undefined,
-          style: isJsonObject(call?.args.style) ? call.args.style : undefined
-        }
+        content
       })
     }
     default: {
@@ -519,19 +539,20 @@ const renderMouthRoundFacts = (record: HumanRoundRecord): string[] => {
       return facts
     }
     case 'hand': {
-      const facts = record.execution.toolResults.map((result, index) =>
+      const execution = record.execution
+      const facts = execution.toolResults.map((result, index) =>
         summarizeToolResultForMouth({
           result,
-          call: record.execution.toolUsePlan.calls[index]
+          call: execution.toolUsePlan.calls[index]
         })
       )
-      if (record.execution.watchHint) {
-        facts.push(`收敛提示：${summarizeWatchHint(record.execution.watchHint)}`)
+      if (execution.watchHint) {
+        facts.push(`收敛提示：${summarizeWatchHint(execution.watchHint)}`)
       }
-      if (record.execution.artifactRefs && record.execution.artifactRefs.length > 0) {
+      if (execution.artifactRefs && execution.artifactRefs.length > 0) {
         facts.push(
           `形成产物：${renderInlineList(
-            record.execution.artifactRefs.map((artifact) =>
+            execution.artifactRefs.map((artifact) =>
               artifact.kind === 'file'
                 ? `\`${artifact.fileName}\``
                 : `draft review ${artifact.review.reviewId}`

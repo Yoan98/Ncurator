@@ -33,6 +33,16 @@ import type {
   DocxTableSpec
 } from '../../types'
 
+type StructuralDocxOp =
+  | Extract<DocxOp, { type: 'replace_block' }>
+  | Extract<DocxOp, { type: 'insert_after' | 'insert_before' }>
+  | Extract<DocxOp, { type: 'delete_block' }>
+  | Extract<DocxOp, { type: 'update_table_cell' }>
+
+type ExecutableDocxOp =
+  | StructuralDocxOp
+  | Extract<DocxOp, { type: 'replace_text' | 'style_text' }>
+
 const safeColor = (input: string | undefined): string | undefined => {
   const value = String(input || '').trim()
   if (!value) return undefined
@@ -435,11 +445,7 @@ const applyInsertOpWithoutMutatingAnchor = async (input: {
 
 const applyStructuralOp = async (input: {
   buffer: Buffer
-  op:
-    | Extract<DocxOp, { type: 'replace_block' }>
-    | Extract<DocxOp, { type: 'insert_after' | 'insert_before' }>
-    | Extract<DocxOp, { type: 'delete_block' }>
-    | Extract<DocxOp, { type: 'update_table_cell' }>
+  op: StructuralDocxOp
 }): Promise<{ buffer: Buffer; changed: DocxChangedBlock | null; warning?: string }> => {
   const index = await loadIndex(input.buffer)
   const op = input.op
@@ -618,13 +624,9 @@ export const applyDocxOps = async (input: {
   const changedBlocks: DocxChangedBlock[] = []
   const warnings: string[] = []
   const originalIndex = await loadIndex(input.buffer)
-  const orderedOps: DocxOp[] = []
+  const orderedOps: ExecutableDocxOp[] = []
   let segment: Array<{
-    op:
-      | Extract<DocxOp, { type: 'replace_block' }>
-      | Extract<DocxOp, { type: 'insert_after' | 'insert_before' }>
-      | Extract<DocxOp, { type: 'delete_block' }>
-      | Extract<DocxOp, { type: 'update_table_cell' }>
+    op: StructuralDocxOp
     inputOrder: number
   }> = []
 
@@ -645,6 +647,9 @@ export const applyDocxOps = async (input: {
   }
 
   input.ops.forEach((op, inputOrder) => {
+    if (op.type === 'create_document') {
+      return
+    }
     if (op.type === 'replace_text' || op.type === 'style_text') {
       flushStructuralSegment()
       orderedOps.push(op)

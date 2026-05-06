@@ -1,7 +1,7 @@
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import { buildSemanticMatches, splitEmbeddingRows } from '../semanticSearch'
-import type { DocxReadSession, DocxToolRuntime } from '../runtime'
-import type { DocxDetailedBlock, DocxOutlineBlock, DocxSearchMatch } from '../types'
+import type { DocxToolRuntime } from '../runtime'
+import type { DocxDetailedBlock, DocxOutlineBlock, DocxReadSession, DocxSearchMatch } from '../types'
 import {
   DOCX_HISTORY_TOOL_SPEC,
   DOCX_OUTLINE_TOOL_SPEC,
@@ -15,7 +15,6 @@ import {
 } from './workerTool'
 
 const DEFAULT_OUTLINE_BLOCKS = 200
-const MAX_OUTLINE_BLOCKS = 5000
 const MAX_SEARCH_MATCHES = 20
 const SEMANTIC_TOP_K = 8
 const SEMANTIC_MIN_SCORE = 0.35

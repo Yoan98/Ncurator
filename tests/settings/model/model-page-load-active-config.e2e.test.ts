@@ -13,6 +13,7 @@ const SEEDED_CONFIGS: readonly LLMConfig[] = [
   {
     id: 'model-page-load-active',
     name: '当前配置',
+    providerKind: 'openai',
     base_url: 'https://api.openai.com/v1',
     model_name: 'gpt-4o',
     api_key: 'sk-model-page-load-active',
@@ -21,6 +22,7 @@ const SEEDED_CONFIGS: readonly LLMConfig[] = [
   {
     id: 'model-page-load-standby',
     name: '备用配置',
+    providerKind: 'openai',
     base_url: 'https://api.openai.com/v1',
     model_name: 'gpt-4o-mini',
     api_key: 'sk-model-page-load-standby',

@@ -331,6 +331,7 @@ export interface DocumentListResponse {
 export type AiStructuredOutputTransport = 'completions' | 'responses'
 export type AiStructuredOutputMethod = 'jsonSchema' | 'jsonMode' | 'promptJson' | 'scripted'
 export type AiLlmStreamingMode = 'force_stream' | 'force_non_stream'
+export type LlmProviderKind = 'openai' | 'deepseek' | 'openai-compatible'
 export type PreferredStructuredOutputProfile =
   | 'completions:jsonSchema'
   | 'completions:jsonMode'
@@ -342,12 +343,25 @@ export type AiStructuredOutputProfile = PreferredStructuredOutputProfile | 'scri
 export interface LLMConfig {
   id: string
   name: string
+  providerKind: LlmProviderKind
   base_url: string
   model_name: string
   api_key: string
   is_active: boolean
   preferredStructuredOutputProfile?: PreferredStructuredOutputProfile
   preferredTransport?: AiStructuredOutputTransport
+}
+
+export type AiLlmUsage = {
+  inputTokens?: number
+  outputTokens?: number
+  totalTokens?: number
+  cachedInputTokens?: number
+  cacheMissInputTokens?: number
+  cacheWriteInputTokens?: number
+  cacheHitRate?: number
+  source: 'usage_metadata' | 'response_metadata' | 'unavailable'
+  rawUsage?: JsonObject
 }
 
 export interface ChatMessage {
@@ -636,12 +650,18 @@ export type AiLlmIoRecord = {
   taskId?: string
   caller: string
   schemaName: string
+  providerKind?: LlmProviderKind
   model: string
   baseUrlHost: string
   system: string
   user: string
   output?: JsonValue
   rawText?: string
+  usage?: AiLlmUsage
+  stablePrefixHash?: string
+  dynamicContextHash?: string
+  responseMetadata?: JsonObject
+  usageMetadata?: JsonObject
   method?: AiStructuredOutputMethod
   transport?: AiStructuredOutputTransport
   profile?: AiStructuredOutputProfile
@@ -730,9 +750,12 @@ export interface AiActivityDetails {
   callId?: string
   caller?: string
   schemaName?: string
+  providerKind?: LlmProviderKind
   model?: string
   baseUrlHost?: string
   attempt?: number
+  stablePrefixHash?: string
+  dynamicContextHash?: string
   durationMs?: number
   method?: AiStructuredOutputMethod
   transport?: AiStructuredOutputTransport
@@ -742,6 +765,9 @@ export interface AiActivityDetails {
   streamed?: boolean
   chunkCount?: number
   firstTokenLatencyMs?: number
+  usage?: AiLlmUsage
+  responseMetadata?: JsonObject
+  usageMetadata?: JsonObject
   reason?: string
 }
 

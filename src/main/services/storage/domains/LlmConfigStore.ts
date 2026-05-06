@@ -1,9 +1,11 @@
 import type { LLMConfig } from '../../../types/store'
+import { resolveLlmProviderKind } from '../../../../shared/llmProvider'
 import { LanceDbCore, LANCE_TABLES } from '../core/LanceDbCore'
 
 type LlmConfigRow = {
   id?: string | null
   name?: string | null
+  providerKind?: string | null
   base_url?: string | null
   model_name?: string | null
   api_key?: string | null
@@ -43,6 +45,10 @@ export class LlmConfigStore {
       return {
         id: String(row.id || ''),
         name: String(row.name || ''),
+        providerKind: resolveLlmProviderKind({
+          providerKind: String(row.providerKind || ''),
+          baseUrl: String(row.base_url || '')
+        }),
         base_url: String(row.base_url || ''),
         model_name: String(row.model_name || ''),
         api_key: String(row.api_key || ''),

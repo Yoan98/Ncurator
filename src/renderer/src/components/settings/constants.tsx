@@ -1,4 +1,10 @@
-import type { WorkspaceNode, WorkspaceSource, WebSourceRecord } from '../../../../shared/types'
+import type {
+  LlmProviderKind,
+  WorkspaceNode,
+  WorkspaceSource,
+  WebSourceRecord
+} from '../../../../shared/types'
+import type { ReactNode } from 'react'
 import type { SettingsSectionMeta, SettingsSectionValue } from './types'
 import { HiCloudArrowDown, HiOutlineRectangleStack, HiSparkles } from 'react-icons/hi2'
 
@@ -54,39 +60,51 @@ export const APP_MENU_ITEMS = [
   }
 ] as const
 
-export const PROVIDER_OPTIONS = [
+export const PROVIDER_OPTIONS: Array<{
+  label: string
+  providerKind: LlmProviderKind
+  value: string
+  icon: ReactNode
+  desc: string
+}> = [
   {
     label: 'OpenAI',
+    providerKind: 'openai',
     value: 'https://api.openai.com/v1',
     icon: <img src={openaiLogo} alt="OpenAI" className="w-4 h-4" />,
     desc: '官方 API'
   },
   {
     label: '阿里云百炼 (通义千问)',
+    providerKind: 'openai-compatible',
     value: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     icon: <img src={qianwenLogo} alt="Qianwen" className="w-4 h-4" />,
     desc: '官方 API'
   },
   {
     label: '火山引擎 (豆包)',
+    providerKind: 'openai-compatible',
     value: 'https://ark.cn-beijing.volces.com/api/v3',
     icon: <img src={doubaoLogo} alt="Doubao" className="w-4 h-4" />,
     desc: '官方 API'
   },
   {
     label: 'DeepSeek',
+    providerKind: 'deepseek',
     value: 'https://api.deepseek.com',
     icon: <img src={deepseekLogo} alt="DeepSeek" className="w-4 h-4" />,
     desc: '官方 API'
   },
   {
     label: 'Kimi(Moonshot)',
+    providerKind: 'openai-compatible',
     value: 'https://api.moonshot.cn/v1',
     icon: <img src={kimiLogo} alt="Kimi" className="w-4 h-4" />,
     desc: '官方 API'
   },
   {
     label: '硅基流动 (SiliconFlow)',
+    providerKind: 'openai-compatible',
     value: 'https://api.siliconflow.cn/v1',
     icon: <img src={guijiliudongLogo} alt="SiliconFlow" className="w-4 h-4" />,
     desc: '官方 API'

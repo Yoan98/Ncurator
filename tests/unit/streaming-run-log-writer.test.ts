@@ -88,10 +88,20 @@ describe('streaming run log writer', () => {
         runId,
         caller: 'human.brain',
         schemaName: 'human_brain_decision',
+        providerKind: 'deepseek',
         model: 'test-model',
         baseUrlHost: 'example.com',
         system: 'sys',
         user: 'user',
+        stablePrefixHash: 'stable-a',
+        usage: {
+          inputTokens: 100,
+          outputTokens: 10,
+          cachedInputTokens: 60,
+          cacheMissInputTokens: 40,
+          cacheHitRate: 0.6,
+          source: 'response_metadata'
+        },
         streamingMode: 'force_non_stream',
         streamed: false,
         chunkCount: 0,
@@ -135,7 +145,29 @@ describe('streaming run log writer', () => {
       const finalizedMeta = JSON.parse(
         await fs.readFile(path.join(logDir, 'meta.json'), 'utf8')
       ) as TestRunMeta
+      const cacheSummary = JSON.parse(
+        await fs.readFile(path.join(logDir, 'cache-summary.json'), 'utf8')
+      )
       expect(finalizedMeta.status).toBe('passed')
+      expect(cacheSummary).toMatchObject({
+        calls: 1,
+        inputTokens: 100,
+        cachedInputTokens: 60,
+        cacheHitRate: 0.6,
+        providerKinds: ['deepseek'],
+        byCaller: {
+          'human.brain': {
+            calls: 1,
+            cachedInputTokens: 60
+          }
+        },
+        byStablePrefixHash: {
+          'stable-a': {
+            calls: 1,
+            cachedInputTokens: 60
+          }
+        }
+      })
     } finally {
       process.chdir(previousCwd)
     }

@@ -1,13 +1,16 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { normalizeOpenAIBaseUrl } from '../../../../shared/llmBaseUrl'
 import { emitActivity } from '../../../utils/aiCapabilityUtils'
 import type { AiEventDispatchContext } from '../types'
 import type {
   AiLlmStreamingMode,
+  AiLlmUsage,
   AiStructuredOutputMethod,
   AiStructuredOutputProfile,
   AiStructuredOutputTransport,
-  JsonValue
+  JsonObject,
+  JsonValue,
+  LlmProviderKind
 } from '../../../../shared/types'
 
 export type LlmCallStreamObserver = {
@@ -25,6 +28,7 @@ type LlmCallTelemetry = {
   schemaName: string
   modelName: string
   baseUrl: string
+  providerKind?: LlmProviderKind
   streamingMode: AiLlmStreamingMode
   attempt?: number
 }
@@ -37,6 +41,9 @@ export type LlmCallExecutionResult<T> = {
   profile?: AiStructuredOutputProfile
   fallbackChain?: AiStructuredOutputProfile[]
   streamed?: boolean
+  usage?: AiLlmUsage
+  responseMetadata?: JsonObject
+  usageMetadata?: JsonObject
 }
 
 const resolveBaseUrlHost = (baseUrl: string): string => {
@@ -49,6 +56,9 @@ const resolveBaseUrlHost = (baseUrl: string): string => {
     return normalized
   }
 }
+
+const hashText = (value: string): string =>
+  createHash('sha256').update(value).digest('hex')
 
 const formatLlmActivitySummary = (input: {
   status: 'started' | 'completed' | 'failed'
@@ -81,6 +91,8 @@ export const runLlmCallWithActivity = async <T>(input: {
   const startedAt = Date.now()
   const baseUrlHost = resolveBaseUrlHost(input.telemetry.baseUrl)
   const callId = randomUUID()
+  const stablePrefixHash = hashText(input.system)
+  const dynamicContextHash = hashText(input.user)
   let chunkCount = 0
   let firstTokenAt: number | undefined
   let latestRawText = ''
@@ -89,10 +101,13 @@ export const runLlmCallWithActivity = async <T>(input: {
     callId,
     caller: input.telemetry.caller,
     schemaName: input.telemetry.schemaName,
+    providerKind: input.telemetry.providerKind,
     model: input.telemetry.modelName,
     baseUrlHost,
     attempt: input.telemetry.attempt || 1,
-    streamingMode: input.telemetry.streamingMode
+    streamingMode: input.telemetry.streamingMode,
+    stablePrefixHash,
+    dynamicContextHash
   }
 
   const normalizeOutput = (value: T): JsonValue | undefined => {
@@ -181,7 +196,10 @@ export const runLlmCallWithActivity = async <T>(input: {
         fallbackChain,
         streamed,
         chunkCount,
-        firstTokenLatencyMs
+        firstTokenLatencyMs,
+        usage: result.usage,
+        responseMetadata: result.responseMetadata,
+        usageMetadata: result.usageMetadata
       }
     })
 
@@ -191,12 +209,18 @@ export const runLlmCallWithActivity = async <T>(input: {
       taskId: input.taskId,
       caller: input.telemetry.caller,
       schemaName: input.telemetry.schemaName,
+      providerKind: input.telemetry.providerKind,
       model: input.telemetry.modelName,
       baseUrlHost,
       system: input.system,
       user: input.user,
       output: normalizeOutput(result.output),
       rawText,
+      usage: result.usage,
+      stablePrefixHash,
+      dynamicContextHash,
+      responseMetadata: result.responseMetadata,
+      usageMetadata: result.usageMetadata,
       method: result.method,
       transport: result.transport,
       profile: result.profile,
@@ -245,11 +269,14 @@ export const runLlmCallWithActivity = async <T>(input: {
       taskId: input.taskId,
       caller: input.telemetry.caller,
       schemaName: input.telemetry.schemaName,
+      providerKind: input.telemetry.providerKind,
       model: input.telemetry.modelName,
       baseUrlHost,
       system: input.system,
       user: input.user,
       rawText: latestRawText || undefined,
+      stablePrefixHash,
+      dynamicContextHash,
       fallbackChain: [],
       streamingMode: input.telemetry.streamingMode,
       streamed: chunkCount > 0,

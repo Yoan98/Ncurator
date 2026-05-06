@@ -67,7 +67,10 @@ export type ScriptedLlmStep =
 export type LlmScript = Partial<Record<string, readonly ScriptedLlmStep[]>>
 export type StructuredOutputScript = LlmScript
 
-export type LiveLlmConfig = Pick<LLMConfig, 'base_url' | 'model_name' | 'api_key'> & {
+export type LiveLlmConfig = Pick<
+  LLMConfig,
+  'providerKind' | 'base_url' | 'model_name' | 'api_key'
+> & {
   id: string
   name: string
   is_active: true

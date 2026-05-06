@@ -1,13 +1,18 @@
 import { HumanMessage, SystemMessage } from '@langchain/core/messages'
 import { z } from 'zod/v4'
-import { createChatModel } from '../llm/chatModel'
+import { createChatModel, getSupportedTransportsForConfig } from '../llm/chatModel'
+import { normalizeJsonObject, normalizeLlmUsage } from '../llm/usage'
+import { resolveLlmProviderKind } from '../../../shared/llmProvider'
 import type {
+  AiLlmUsage,
   AiLlmStreamingMode,
   AiRuntimeSettings,
   AiStructuredOutputMethod,
   AiStructuredOutputProfile,
   AiStructuredOutputTransport,
+  JsonObject,
   LLMConfig,
+  LlmProviderKind,
   PreferredStructuredOutputProfile
 } from '../../../shared/types'
 import type { AiEventDispatchContext } from './types'
@@ -26,8 +31,6 @@ import {
 } from './structuredOutput'
 import { runLlmCallWithActivity, type LlmCallExecutionResult, type LlmCallStreamObserver } from './utils/structuredChatActivity'
 
-const ALL_TRANSPORTS: AiStructuredOutputTransport[] = ['responses', 'completions']
-
 type TextContentPart = {
   text?: string
   content?: string
@@ -37,6 +40,8 @@ type TextContent = string | TextContentPart | Array<string | TextContentPart>
 
 type TextMessage = {
   content: TextContent
+  response_metadata?: Record<string, unknown>
+  usage_metadata?: Record<string, unknown>
 }
 
 type TextRunnable = {
@@ -74,6 +79,9 @@ export type AiLlmTextDriverResult = {
   rawText?: string
   transport?: AiStructuredOutputTransport
   streamed?: boolean
+  usage?: AiLlmUsage
+  responseMetadata?: JsonObject
+  usageMetadata?: JsonObject
 }
 
 export type AiLlmStructuredDriverResult = {
@@ -84,6 +92,9 @@ export type AiLlmStructuredDriverResult = {
   profile?: AiStructuredOutputProfile
   fallbackChain?: AiStructuredOutputProfile[]
   streamed?: boolean
+  usage?: AiLlmUsage
+  responseMetadata?: JsonObject
+  usageMetadata?: JsonObject
 }
 
 export type AiLlmDriver = {
@@ -141,6 +152,9 @@ export type InvokeStructuredChatResult<T extends Record<string, unknown>> = {
   profile: AiStructuredOutputProfile
   fallbackChain: AiStructuredOutputProfile[]
   streamed?: boolean
+  usage?: AiLlmUsage
+  responseMetadata?: JsonObject
+  usageMetadata?: JsonObject
 }
 
 const resolveStreamingMode = (settings: AiRuntimeSettings): AiLlmStreamingMode =>
@@ -151,12 +165,46 @@ const buildMessages = (system: string, user: string): Array<SystemMessage | Huma
   new HumanMessage(user)
 ]
 
+const resolveConfigProviderKind = (cfg: LLMConfig): LlmProviderKind =>
+  resolveLlmProviderKind({
+    providerKind: cfg.providerKind,
+    baseUrl: cfg.base_url
+  })
+
 const buildTransportAttemptOrder = (
-  preferredTransport?: AiStructuredOutputTransport
+  preferredTransport: AiStructuredOutputTransport | undefined,
+  cfg: LLMConfig
 ): AiStructuredOutputTransport[] => {
-  if (!preferredTransport) return [...ALL_TRANSPORTS]
-  return [preferredTransport, ...ALL_TRANSPORTS.filter((item) => item !== preferredTransport)]
+  const supported = getSupportedTransportsForConfig(cfg)
+  if (!preferredTransport || !supported.includes(preferredTransport)) return [...supported]
+  return [preferredTransport, ...supported.filter((item) => item !== preferredTransport)]
 }
+
+const buildStructuredAttemptOrder = (
+  preferredProfile: PreferredStructuredOutputProfile | undefined,
+  cfg: LLMConfig
+): PreferredStructuredOutputProfile[] => {
+  const supportedTransports = new Set(getSupportedTransportsForConfig(cfg))
+  return buildStructuredOutputAttemptOrder(preferredProfile).filter((profile) =>
+    supportedTransports.has(resolveStructuredOutputProfile(profile).transport)
+  )
+}
+
+const toInvocationMetadata = (input: {
+  message?: TextMessage
+  providerKind: LlmProviderKind
+}): {
+  usage: AiLlmUsage
+  responseMetadata?: JsonObject
+  usageMetadata?: JsonObject
+} => ({
+  usage: normalizeLlmUsage({
+    message: input.message,
+    providerKind: input.providerKind
+  }),
+  responseMetadata: normalizeJsonObject(input.message?.response_metadata),
+  usageMetadata: normalizeJsonObject(input.message?.usage_metadata)
+})
 
 const buildSchemaDescription = <T extends Record<string, unknown>>(
   schema: z.ZodType<T>
@@ -170,29 +218,31 @@ const streamTextFromRunnable = async (input: {
   messages: Array<SystemMessage | HumanMessage>
   observer?: LlmCallStreamObserver
   checkCancelled: () => void
-}): Promise<string> => {
+}): Promise<{ text: string; message?: TextMessage }> => {
   input.checkCancelled()
   const stream = await input.runnable.stream(input.messages)
   const chunks: string[] = []
+  let lastChunk: TextMessage | undefined
   for await (const chunk of stream) {
     input.checkCancelled()
+    lastChunk = chunk
     const text = extractTextContent(chunk.content)
     if (!text) continue
     chunks.push(text)
     input.observer?.onDelta?.(text)
   }
-  return chunks.join('')
+  return { text: chunks.join(''), message: lastChunk }
 }
 
 const invokeTextFromRunnable = async (input: {
   runnable: TextRunnable
   messages: Array<SystemMessage | HumanMessage>
   checkCancelled: () => void
-}): Promise<string> => {
+}): Promise<{ text: string; message: TextMessage }> => {
   input.checkCancelled()
   const response = await input.runnable.invoke(input.messages)
   input.checkCancelled()
-  return extractTextContent(response.content)
+  return { text: extractTextContent(response.content), message: response }
 }
 
 const createTextRunnable = (input: {
@@ -253,6 +303,7 @@ const invokeTextWithTransport = async (
   }
 ): Promise<AiLlmTextDriverResult> => {
   const streaming = input.streamingMode === 'force_stream'
+  const providerKind = resolveConfigProviderKind(input.cfg)
   const runnable = createTextRunnable({
     cfg: input.cfg,
     temperature: input.temperature,
@@ -260,7 +311,7 @@ const invokeTextWithTransport = async (
     streaming
   })
   const messages = buildMessages(input.system, input.user)
-  const rawText = streaming
+  const response = streaming
     ? await streamTextFromRunnable({
         runnable,
         messages,
@@ -272,11 +323,16 @@ const invokeTextWithTransport = async (
         messages,
         checkCancelled: input.checkCancelled
       })
+  const metadata = toInvocationMetadata({
+    message: response.message,
+    providerKind
+  })
   return {
-    output: rawText,
-    rawText,
+    output: response.text,
+    rawText: response.text,
     transport,
-    streamed: streaming
+    streamed: streaming,
+    ...metadata
   }
 }
 
@@ -288,6 +344,7 @@ const invokeStructuredWithProfile = async <T extends Record<string, unknown>>(
 ): Promise<AiLlmStructuredDriverResult> => {
   const { method, transport } = resolveStructuredOutputProfile(profile)
   const streaming = input.streamingMode === 'force_stream'
+  const providerKind = resolveConfigProviderKind(input.cfg)
   const messages = buildMessages(input.system, input.user)
 
   if (method === 'promptJson') {
@@ -297,7 +354,7 @@ const invokeStructuredWithProfile = async <T extends Record<string, unknown>>(
       transport,
       streaming
     })
-    const rawText = streaming
+    const response = streaming
       ? await streamTextFromRunnable({
           runnable,
           messages,
@@ -309,13 +366,18 @@ const invokeStructuredWithProfile = async <T extends Record<string, unknown>>(
           messages,
           checkCancelled: input.checkCancelled
         })
+    const metadata = toInvocationMetadata({
+      message: response.message,
+      providerKind
+    })
     return {
-      output: parsePromptJsonOutput(rawText),
-      rawText,
+      output: parsePromptJsonOutput(response.text),
+      rawText: response.text,
       method: 'promptJson',
       transport,
       profile,
-      streamed: streaming
+      streamed: streaming,
+      ...metadata
     }
   }
 
@@ -328,7 +390,7 @@ const invokeStructuredWithProfile = async <T extends Record<string, unknown>>(
     schemaName: input.schemaName,
     method
   })
-  const rawText = streaming
+  const response = streaming
     ? await streamTextFromRunnable({
         runnable,
         messages,
@@ -340,14 +402,19 @@ const invokeStructuredWithProfile = async <T extends Record<string, unknown>>(
         messages,
         checkCancelled: input.checkCancelled
       })
+  const metadata = toInvocationMetadata({
+    message: response.message,
+    providerKind
+  })
 
   return {
-    output: parseJsonObjectText(rawText),
-    rawText,
+    output: parseJsonObjectText(response.text),
+    rawText: response.text,
     method,
     transport,
     profile,
-    streamed: streaming
+    streamed: streaming,
+    ...metadata
   }
 }
 
@@ -418,7 +485,7 @@ const invokeStructuredChatNative = async <T extends Record<string, unknown>>(
     checkCancelled: () => void
   }
 ): Promise<AiLlmStructuredDriverResult> => {
-  const attemptOrder = buildStructuredOutputAttemptOrder(input.preferredProfile)
+  const attemptOrder = buildStructuredAttemptOrder(input.preferredProfile, input.cfg)
   const attemptedProfiles: PreferredStructuredOutputProfile[] = []
   const profileErrors: string[] = []
 
@@ -488,7 +555,7 @@ const invokeTextChatNative = async (
     checkCancelled: () => void
   }
 ): Promise<AiLlmTextDriverResult> => {
-  const attemptOrder = buildTransportAttemptOrder(input.preferredTransport)
+  const attemptOrder = buildTransportAttemptOrder(input.preferredTransport, input.cfg)
   const transportErrors: string[] = []
 
   for (const transport of attemptOrder) {
@@ -550,7 +617,10 @@ const runStructuredChatInvocation = async <T extends Record<string, unknown>>(in
       transport: result.transport,
       profile,
       fallbackChain,
-      streamed: result.streamed
+      streamed: result.streamed,
+      usage: result.usage,
+      responseMetadata: result.responseMetadata,
+      usageMetadata: result.usageMetadata
     }
   }
 
@@ -569,7 +639,10 @@ const invokeTextChat = async (input: {
       output: result.output,
       rawText: result.rawText ?? result.output,
       transport: result.transport,
-      streamed: result.streamed
+      streamed: result.streamed,
+      usage: result.usage,
+      responseMetadata: result.responseMetadata,
+      usageMetadata: result.usageMetadata
     }
   }
 
@@ -622,6 +695,7 @@ export const createAiLlmExecutor = (input: {
           schemaName: request.schemaName,
           modelName: cfg.model_name,
           baseUrl: cfg.base_url,
+          providerKind: resolveConfigProviderKind(cfg),
           streamingMode,
           attempt: 1
         },
@@ -678,6 +752,7 @@ export const createAiLlmExecutor = (input: {
           schemaName: request.schemaName,
           modelName: cfg.model_name,
           baseUrl: cfg.base_url,
+          providerKind: resolveConfigProviderKind(cfg),
           streamingMode,
           attempt: 1
         },
@@ -751,6 +826,9 @@ export const invokeStructuredChat = async <T extends Record<string, unknown>>(
     transport: result.transport,
     profile,
     fallbackChain,
-    streamed: result.streamed
+    streamed: result.streamed,
+    usage: result.usage,
+    responseMetadata: result.responseMetadata,
+    usageMetadata: result.usageMetadata
   }
 }

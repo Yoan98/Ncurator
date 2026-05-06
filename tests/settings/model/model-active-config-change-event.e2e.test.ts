@@ -12,16 +12,18 @@ import {
 
 const SEEDED_CONFIGS: readonly LLMConfig[] = [
   {
-    id: 'model-active-event-current',
-    name: '当前模型',
+    id: 'model-current',
+    name: '当前配置',
+    providerKind: 'openai',
     base_url: 'https://api.openai.com/v1',
     model_name: 'gpt-4o',
     api_key: 'sk-current',
     is_active: true
   },
   {
-    id: 'model-active-event-next',
-    name: '下一个模型',
+    id: 'model-next',
+    name: '备用配置',
+    providerKind: 'openai',
     base_url: 'https://api.openai.com/v1',
     model_name: 'gpt-4o-mini',
     api_key: 'sk-next',

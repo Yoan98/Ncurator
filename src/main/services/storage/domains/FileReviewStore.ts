@@ -4,7 +4,6 @@ import type {
   CommitResultItem,
   DraftChangeDecision,
   DraftSourceVersion,
-  DraftTextDiffHunk,
   FileReview,
   FileReviewChange,
   FileReviewStatus,
@@ -13,7 +12,14 @@ import type {
   ListFileReviewsRequest,
   ListFileReviewsResponse,
 } from '../../../types/store'
+import type { DraftTextDiffHunk } from '../../../../shared/types'
 import { LanceDbCore, LANCE_TABLES } from '../core/LanceDbCore'
+
+type DraftTextDiffHunkLineType = DraftTextDiffHunk['lines'][number]['type']
+
+const normalizeDiffHunkLineType = (value: JsonValue | undefined): DraftTextDiffHunkLineType => {
+  return value === 'added' || value === 'removed' || value === 'context' ? value : 'context'
+}
 
 type PrimitiveRowValue = string | number | boolean | null | undefined
 type WriteRow = Record<string, PrimitiveRowValue>
@@ -124,7 +130,32 @@ const parseSourceVersion = (value: PrimitiveRowValue): DraftSourceVersion => {
 
 const parseDiffHunks = (value: PrimitiveRowValue): DraftTextDiffHunk[] | undefined => {
   const parsed = parseJsonValue(value)
-  return Array.isArray(parsed) ? (parsed as DraftTextDiffHunk[]) : undefined
+  if (!Array.isArray(parsed)) return undefined
+  return parsed
+    .filter(
+      (item): item is JsonObject =>
+        Boolean(item) && typeof item === 'object' && !Array.isArray(item)
+    )
+    .map((item) => {
+      const lines = Array.isArray(item.lines)
+        ? item.lines
+            .filter(
+              (line): line is JsonObject =>
+                Boolean(line) && typeof line === 'object' && !Array.isArray(line)
+            )
+            .map((line) => ({
+              type: normalizeDiffHunkLineType(line.type),
+              value: typeof line.value === 'string' ? line.value : ''
+            }))
+        : []
+      return {
+        id: typeof item.id === 'string' ? item.id : '',
+        title: typeof item.title === 'string' ? item.title : undefined,
+        summary: typeof item.summary === 'string' ? item.summary : undefined,
+        lines
+      }
+    })
+    .filter((item) => item.id && item.lines.length > 0)
 }
 
 const parseCommitResults = (value: PrimitiveRowValue): CommitResultItem[] => {
@@ -135,13 +166,17 @@ const parseCommitResults = (value: PrimitiveRowValue): CommitResultItem[] => {
       (item): item is JsonObject =>
         Boolean(item) && typeof item === 'object' && !Array.isArray(item)
     )
-    .map((item) => ({
-      review_id: typeof item.review_id === 'string' ? item.review_id : '',
-      output_path: typeof item.output_path === 'string' ? item.output_path : '',
-      operation: item.operation === 'updated' ? 'updated' : 'created',
-      checksum: typeof item.checksum === 'string' ? item.checksum : undefined,
-      byte_size: typeof item.byte_size === 'number' ? item.byte_size : undefined
-    }))
+    .map<CommitResultItem>((item) => {
+      const operation: CommitResultItem['operation'] =
+        item.operation === 'updated' ? 'updated' : 'created'
+      return {
+        review_id: typeof item.review_id === 'string' ? item.review_id : '',
+        output_path: typeof item.output_path === 'string' ? item.output_path : '',
+        operation,
+        checksum: typeof item.checksum === 'string' ? item.checksum : undefined,
+        byte_size: typeof item.byte_size === 'number' ? item.byte_size : undefined
+      }
+    })
     .filter((item) => item.review_id && item.output_path)
 }
 

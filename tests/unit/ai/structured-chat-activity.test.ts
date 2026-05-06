@@ -22,6 +22,7 @@ describe('ai unit structured chat activity', () => {
       telemetry: {
         caller: 'unit.test',
         schemaName: 'unit_schema',
+        providerKind: 'openai-compatible',
         modelName: 'scripted-llm',
         baseUrl: 'https://scripted.local/v1',
         attempt: 1
@@ -32,7 +33,22 @@ describe('ai unit structured chat activity', () => {
         },
         method: 'scripted',
         profile: 'scripted',
-        fallbackChain: ['scripted']
+        fallbackChain: ['scripted'],
+        usage: {
+          inputTokens: 100,
+          outputTokens: 10,
+          cachedInputTokens: 40,
+          cacheHitRate: 0.4,
+          source: 'response_metadata'
+        },
+        responseMetadata: {
+          usage: {
+            prompt_tokens: 100
+          }
+        },
+        usageMetadata: {
+          input_tokens: 100
+        }
       })
     })
 
@@ -43,6 +59,22 @@ describe('ai unit structured chat activity', () => {
     expect(llmIoRecords[0]?.method).toBe('scripted')
     expect(llmIoRecords[0]?.profile).toBe('scripted')
     expect(llmIoRecords[0]?.fallbackChain).toEqual(['scripted'])
+    expect(llmIoRecords[0]).toMatchObject({
+      providerKind: 'openai-compatible',
+      stablePrefixHash: expect.any(String),
+      dynamicContextHash: expect.any(String),
+      usage: {
+        cachedInputTokens: 40
+      },
+      responseMetadata: {
+        usage: {
+          prompt_tokens: 100
+        }
+      },
+      usageMetadata: {
+        input_tokens: 100
+      }
+    })
   })
 
   it('records streamed text deltas and stream metadata', async () => {

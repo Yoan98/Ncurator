@@ -9,7 +9,6 @@ import { validateDocxBuffer } from '../adapters/ooxml/validator'
 import { createBlockElementFromSpec } from '../utils/specDom'
 import type {
   DocxBlockSpec,
-  DocxParagraphSpec,
   DocxReplayNode,
   DocxReplaySession
 } from '../types'

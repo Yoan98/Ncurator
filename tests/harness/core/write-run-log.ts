@@ -1,6 +1,7 @@
-import { appendFile, mkdir, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import type { AiLlmIoRecord, AiRunEvent } from '../../../src/shared/types'
+import { buildCacheSummary } from './cache-summary'
 import {
   TEST_LOG_SCHEMA_VERSION,
   type TestArtifactsIndex,
@@ -79,6 +80,7 @@ type StreamingRunLogWriter = {
     timelinePath: string
     runtimeEventsPath: string
     llmIoPath: string
+    cacheSummaryPath: string
     artifactsPath: string
     seedManifestPath: string
   }
@@ -104,6 +106,7 @@ export const createStreamingRunLogWriter = (input: {
   const timelinePath = path.join(logDir, 'timeline.jsonl')
   const runtimeEventsPath = path.join(logDir, 'runtime-events.jsonl')
   const llmIoPath = path.join(logDir, 'llm-io.jsonl')
+  const cacheSummaryPath = path.join(logDir, 'cache-summary.json')
   const artifactsPath = path.join(logDir, 'artifacts.json')
   const seedManifestPath = path.join(logDir, 'seed-manifest.json')
 
@@ -134,6 +137,7 @@ export const createStreamingRunLogWriter = (input: {
       timelinePath,
       runtimeEventsPath,
       llmIoPath,
+      cacheSummaryPath,
       artifactsPath,
       seedManifestPath
     },
@@ -144,6 +148,7 @@ export const createStreamingRunLogWriter = (input: {
         await writeFile(timelinePath, '', 'utf8')
         await writeFile(runtimeEventsPath, '', 'utf8')
         await writeFile(llmIoPath, '', 'utf8')
+        await writeFile(cacheSummaryPath, JSON.stringify(buildCacheSummary([]), null, 2), 'utf8')
         await writeFile(
           artifactsPath,
           JSON.stringify(toArtifactsIndex([]), null, 2),
@@ -175,6 +180,17 @@ export const createStreamingRunLogWriter = (input: {
     finalize: async ({ meta, artifacts, seedManifest }) => {
       enqueue(async () => {
         await writeFile(metaPath, JSON.stringify(meta, null, 2), 'utf8')
+        const llmIoRaw = await readFile(llmIoPath, 'utf8').catch(() => '')
+        const llmIoRecords = llmIoRaw
+          .split('\n')
+          .map((line) => line.trim())
+          .filter(Boolean)
+          .map((line) => JSON.parse(line) as AiLlmIoRecord)
+        await writeFile(
+          cacheSummaryPath,
+          JSON.stringify(buildCacheSummary(llmIoRecords), null, 2),
+          'utf8'
+        )
         await writeFile(
           artifactsPath,
           JSON.stringify(toArtifactsIndex(artifacts), null, 2),
@@ -212,6 +228,11 @@ export const writeRunLog = async (input: {
   await writeFile(
     path.join(logDir, 'llm-io.jsonl'),
     toJsonLines(input.llmIoRecords || []),
+    'utf8'
+  )
+  await writeFile(
+    path.join(logDir, 'cache-summary.json'),
+    JSON.stringify(buildCacheSummary(input.llmIoRecords || []), null, 2),
     'utf8'
   )
   await writeFile(

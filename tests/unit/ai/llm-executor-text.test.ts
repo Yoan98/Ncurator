@@ -5,7 +5,8 @@ const { createChatModelMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('../../../src/main/services/llm/chatModel', () => ({
-  createChatModel: createChatModelMock
+  createChatModel: createChatModelMock,
+  getSupportedTransportsForConfig: () => ['responses', 'completions']
 }))
 
 import { createAiLlmExecutor } from '../../../src/main/services/ai/llmExecutor'
@@ -15,6 +16,7 @@ import type { AiLlmIoRecord, AiRunEvent, LLMConfig } from '../../../src/shared/t
 const baseConfig: LLMConfig = {
   id: 'cfg-1',
   name: 'Primary',
+  providerKind: 'openai',
   base_url: 'https://example.test/v1',
   model_name: 'gpt-5',
   api_key: 'test-key',

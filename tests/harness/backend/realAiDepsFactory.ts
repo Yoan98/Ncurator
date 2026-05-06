@@ -21,6 +21,7 @@ import { createScriptedStructuredOutputDriver } from './scriptedStructuredOutput
 const SCRIPTED_LLM_CONFIG: LiveLlmConfig = {
   id: 'mock-llm-scripted',
   name: 'Mock LLM Scripted',
+  providerKind: 'openai-compatible',
   base_url: 'https://scripted.local/v1',
   model_name: 'scripted-llm',
   api_key: 'scripted',

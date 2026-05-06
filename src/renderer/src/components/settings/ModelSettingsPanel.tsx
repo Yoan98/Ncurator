@@ -6,6 +6,7 @@ import {
   Input,
   Modal,
   Popconfirm,
+  Select,
   Space,
   Table,
   Tag,
@@ -14,6 +15,7 @@ import {
 import type { TableColumnsType } from 'antd'
 import { HiCheckCircle, HiPencil, HiPlus, HiTrash } from 'react-icons/hi2'
 import type { LLMConfig } from '../../../../shared/types'
+import { inferLlmProviderKind } from '../../../../shared/llmProvider'
 import { MODEL_MAPPING, PROVIDER_OPTIONS } from './constants'
 import type { FlatModelOption, GroupedModelOption, LlmConfigFormValues } from './types'
 import { settingsSelectors } from '../../testing/selectors'
@@ -26,6 +28,10 @@ const ModelSettingsPanel: React.FC = () => {
   const [editingConfig, setEditingConfig] = useState<LLMConfig | null>(null)
   const [form] = Form.useForm<LlmConfigFormValues>()
   const currentBaseUrl = Form.useWatch('base_url', form)
+
+  const applyProviderKindFromBaseUrl = (baseUrl: string): void => {
+    form.setFieldValue('providerKind', inferLlmProviderKind(baseUrl))
+  }
 
   const loadConfigs = async (): Promise<void> => {
     setLoading(true)
@@ -69,6 +75,7 @@ const ModelSettingsPanel: React.FC = () => {
   const handleAdd = (): void => {
     setEditingConfig(null)
     form.resetFields()
+    form.setFieldValue('providerKind', 'openai-compatible')
     setIsModalOpen(true)
   }
 
@@ -124,10 +131,11 @@ const ModelSettingsPanel: React.FC = () => {
         !!editingConfig &&
         (editingConfig.base_url !== values.base_url ||
           editingConfig.model_name !== values.model_name)
-      const nextConfig: LLMConfig = {
-        id: editingConfig ? editingConfig.id : crypto.randomUUID(),
-        ...values,
-        is_active: editingConfig ? editingConfig.is_active : configs.length === 0,
+    const nextConfig: LLMConfig = {
+      id: editingConfig ? editingConfig.id : crypto.randomUUID(),
+      ...values,
+      providerKind: values.providerKind || inferLlmProviderKind(values.base_url),
+      is_active: editingConfig ? editingConfig.is_active : configs.length === 0,
         preferredStructuredOutputProfile:
           editingConfig && !shouldResetPreferredMethod
             ? editingConfig.preferredStructuredOutputProfile
@@ -171,6 +179,13 @@ const ModelSettingsPanel: React.FC = () => {
           ) : null}
         </div>
       )
+    },
+    {
+      title: '服务商适配',
+      dataIndex: 'providerKind',
+      key: 'providerKind',
+      width: 120,
+      render: (providerKind: LLMConfig['providerKind']) => <Tag>{providerKind}</Tag>
     },
     {
       title: '模型名称',
@@ -337,6 +352,11 @@ const ModelSettingsPanel: React.FC = () => {
                   </div>
                 )
               }))}
+              onSelect={(value) => applyProviderKindFromBaseUrl(String(value || ''))}
+              onBlur={() => {
+                const baseUrl = String(form.getFieldValue('base_url') || '')
+                if (baseUrl) applyProviderKindFromBaseUrl(baseUrl)
+              }}
               filterOption={(inputValue, option) => {
                 const provider = PROVIDER_OPTIONS.find((item) => item.value === option?.value)
                 const normalizedInput = inputValue.toUpperCase()
@@ -344,6 +364,21 @@ const ModelSettingsPanel: React.FC = () => {
                 const matchLabel = provider?.label.toUpperCase().includes(normalizedInput) || false
                 return matchValue || matchLabel
               }}
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="providerKind"
+            label="服务商适配"
+            rules={[{ required: true, message: '请选择服务商适配' }]}
+            help="用于选择 LangChain 服务商实现与缓存命中统计解析方式"
+          >
+            <Select
+              options={[
+                { value: 'openai', label: 'OpenAI' },
+                { value: 'deepseek', label: 'DeepSeek' },
+                { value: 'openai-compatible', label: 'OpenAI Compatible' }
+              ]}
             />
           </Form.Item>
 

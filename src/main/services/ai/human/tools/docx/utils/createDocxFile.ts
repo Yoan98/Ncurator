@@ -13,7 +13,9 @@ import {
 } from 'docx'
 import type { DocxCreateBlock } from '../types'
 
-const toHeadingLevel = (level: number | undefined): HeadingLevel => {
+type DocxHeadingLevel = (typeof HeadingLevel)[keyof typeof HeadingLevel]
+
+const toHeadingLevel = (level: number | undefined): DocxHeadingLevel => {
   switch (level) {
     case 2:
       return HeadingLevel.HEADING_2

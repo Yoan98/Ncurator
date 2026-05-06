@@ -47,6 +47,20 @@ type DocxToolSpec<
 
 const DOCX_SOURCE_PATH_EXAMPLE = '学习笔记/图形学.docx'
 const DOCX_CREATE_TARGET_EXAMPLE = '深度学习与图形学复习总结.docx'
+const DOCX_CREATE_EXAMPLE_ARGS: JsonObject = {
+  sourcePath: DOCX_CREATE_TARGET_EXAMPLE,
+  blocks: [
+    {
+      type: 'heading',
+      level: 1,
+      text: '深度学习与图形学复习总结'
+    },
+    {
+      type: 'paragraph',
+      text: '请根据已选课件整理关键概念、出现原因和常见处理方式。'
+    }
+  ]
+}
 const DOCX_SEARCH_LITERAL_EXAMPLE: JsonObject = {
   sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
   query: '反走样'
@@ -219,20 +233,7 @@ export const DOCX_CREATE_TOOL_SPEC = {
     examples: [
       {
         goal: '先创建一份给同学复习用的总结文档',
-        args: {
-          sourcePath: DOCX_CREATE_TARGET_EXAMPLE,
-          blocks: [
-            {
-              type: 'heading',
-              level: 1,
-              text: '深度学习与图形学复习总结'
-            },
-            {
-              type: 'paragraph',
-              text: '请根据已选课件整理关键概念、出现原因和常见处理方式。'
-            }
-          ]
-        }
+        args: DOCX_CREATE_EXAMPLE_ARGS
       }
     ]
   },

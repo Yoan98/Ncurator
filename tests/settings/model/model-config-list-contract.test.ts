@@ -4,16 +4,18 @@ import { runBackendCase } from '../../harness/backend/run-backend-case'
 
 const MODEL_FIXTURES: readonly LLMConfig[] = [
   {
-    id: 'settings-model-contract-active',
-    name: '主模型',
+    id: 'model-active',
+    name: '当前模型',
+    providerKind: 'openai',
     base_url: 'https://api.openai.com/v1',
     model_name: 'gpt-4o',
     api_key: 'sk-active',
     is_active: true
   },
   {
-    id: 'settings-model-contract-standby',
+    id: 'model-standby',
     name: '备用模型',
+    providerKind: 'openai',
     base_url: 'https://api.openai.com/v1',
     model_name: 'gpt-4o-mini',
     api_key: 'sk-standby',
@@ -43,7 +45,8 @@ describe('settings model backend', () => {
           listIds: list.map((item) => item.id).sort(),
           activeIds: list.filter((item) => item.is_active).map((item) => item.id),
           activeConfigId: activeConfig?.id || null,
-          activeConfigModel: activeConfig?.model_name || null
+          activeConfigModel: activeConfig?.model_name || null,
+          providerKinds: list.map((item) => item.providerKind).sort()
         }
       },
       assert: async (result, runtime) => {
@@ -59,9 +62,19 @@ describe('settings model backend', () => {
         )
 
         runtime.assertThat(
+          JSON.stringify(result.providerKinds) === JSON.stringify(['openai', 'openai']),
+          {
+            name: 'model-config-list-preserves-provider-kind',
+            message:
+              '模型配置查询应保留 providerKind，用于选择服务商适配和缓存命中统计。',
+            data: result
+          }
+        )
+
+        runtime.assertThat(
           result.activeIds.length === 1 &&
-            result.activeIds[0] === 'settings-model-contract-active' &&
-            result.activeConfigId === 'settings-model-contract-active' &&
+            result.activeIds[0] === 'model-active' &&
+            result.activeConfigId === 'model-active' &&
             result.activeConfigModel === 'gpt-4o',
           {
             name: 'model-config-list-identifies-single-active-config',

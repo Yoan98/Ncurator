@@ -123,7 +123,7 @@ export const isSourceVersionFresh = async (
     if (version.content_hash && current.content_hash !== version.content_hash) return false
     return true
   } catch {
-    return version.exists === false
+    return false
   }
 }
 

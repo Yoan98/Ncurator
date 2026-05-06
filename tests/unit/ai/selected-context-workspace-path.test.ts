@@ -17,7 +17,8 @@ describe('ai unit selected context workspace path', () => {
       })
     )
 
-    expect(text).toContain('当前工作区绝对路径：/tmp/real-workspace-root')
+    expect(text).toContain('工作区：')
+    expect(text).toContain('- 根目录：/tmp/real-workspace-root')
     expect(text).not.toContain('display-name-only')
   })
 
@@ -44,8 +45,10 @@ describe('ai unit selected context workspace path', () => {
       })
     )
 
-    expect(text).toContain('[本地文件] reports/weekly-risk.md')
-    expect(text).toContain('知识库可用性：已索引')
-    expect(text).toContain('[本地文件] weekly-risk.md -> [doc-1]')
+    expect(text).toContain('1. weekly-risk.md')
+    expect(text).toContain('类型：本地文件')
+    expect(text).toContain('资源地址：reports/weekly-risk.md')
+    expect(text).toContain('文档知识库状态：已索引')
+    expect(text).toContain('知识库文档ID：doc-1')
   })
 })

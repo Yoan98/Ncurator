@@ -14,6 +14,7 @@ const SEEDED_CONFIGS: readonly LLMConfig[] = [
   {
     id: 'model-delete-active',
     name: '当前配置',
+    providerKind: 'openai',
     base_url: 'https://api.openai.com/v1',
     model_name: 'gpt-4o',
     api_key: 'sk-model-delete-active',
@@ -21,7 +22,8 @@ const SEEDED_CONFIGS: readonly LLMConfig[] = [
   },
   {
     id: 'model-delete-success',
-    name: '待删除配置',
+    name: '删除成功配置',
+    providerKind: 'openai',
     base_url: 'https://api.openai.com/v1',
     model_name: 'gpt-4o-mini',
     api_key: 'sk-model-delete-success',
@@ -30,6 +32,7 @@ const SEEDED_CONFIGS: readonly LLMConfig[] = [
   {
     id: 'model-delete-failed',
     name: '删除失败配置',
+    providerKind: 'openai',
     base_url: 'https://api.openai.com/v1',
     model_name: 'gpt-4.1',
     api_key: 'sk-model-delete-failed',

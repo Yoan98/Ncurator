@@ -218,21 +218,22 @@ const resolveCreatedBlocksForOp = async (input: {
   if (input.op.type !== 'insert_before' && input.op.type !== 'insert_after') {
     return []
   }
+  const op = input.op
 
   const beforeBlocks = await fetchOutlineBlocks(input.runtime, input.previousDocId)
   const afterBlocks = await fetchOutlineBlocks(input.runtime, input.nextDocId)
-  const anchor = beforeBlocks.find((block) => block.blockId === input.op.anchorBlockId)
+  const anchor = beforeBlocks.find((block) => block.blockId === op.anchorBlockId)
   if (!anchor) {
     return []
   }
 
-  const insertedBodyCount = input.op.content.length
+  const insertedBodyCount = op.content.length
   if (insertedBodyCount <= 0) {
     return []
   }
 
   const startBodyIndex =
-    input.op.type === 'insert_before' ? anchor.bodyIndex : anchor.bodyIndex + 1
+    op.type === 'insert_before' ? anchor.bodyIndex : anchor.bodyIndex + 1
   const endBodyIndex = startBodyIndex + insertedBodyCount - 1
 
   return afterBlocks
