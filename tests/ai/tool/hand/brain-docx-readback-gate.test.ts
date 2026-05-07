@@ -49,7 +49,7 @@ const createStubAiRunContext = (): AiRunContext => ({
   embeddingService: undefined as never
 })
 
-const buildStateWithReadbackHint = () => ({
+const buildStateWithReadbackHint = (sourcePath = '/tmp/workspace-root/report.docx') => ({
   ...createInitialHumanState({
     taskId: 'task-brain-docx-readback-gate',
     userInput: 'test'
@@ -62,7 +62,7 @@ const buildStateWithReadbackHint = () => ({
     watchHint: {
       code: 'docx_write_requires_readback' as const,
       detail: {
-        sourcePaths: ['/tmp/workspace-root/report.docx'],
+        sourcePaths: [sourcePath],
         latestRevisionRefs: ['v3'],
         suggestedToolNames: ['docx_outline', 'docx_read_blocks']
       }
@@ -130,5 +130,83 @@ describe('ai tool hand backend', () => {
 
     expect(allowedRead.execution.stage).toBe('hand')
     expect(allowedRead.execution.watchHint).toBeUndefined()
+  })
+
+  it('allows readback when the model uses a dot-prefixed workspace relative path', () => {
+    const ctx = createStubAiRunContext()
+    const cache = createHumanRuntimeCache()
+    const baseState = buildStateWithReadbackHint('/tmp/workspace-root/工作/本周周报.docx')
+
+    const readDecision: HumanDecision = {
+      decision: {
+        summary: '先 readback',
+        reason: '满足 gate',
+        expectedOutcome: '允许进入 hand'
+      },
+      nextAction: {
+        action: 'hand',
+        toolUsePlan: {
+          mode: 'serial',
+          calls: [
+            {
+              toolName: 'docx_outline',
+              args: {
+                sourcePath: './工作/本周周报.docx'
+              }
+            }
+          ]
+        }
+      }
+    }
+
+    const allowedRead = applyBrainDecisionTransition({
+      ctx,
+      cache,
+      state: baseState,
+      decision: readDecision,
+      stableMemory: baseState.memory.stable
+    })
+
+    expect(allowedRead.execution.stage).toBe('hand')
+    expect(allowedRead.execution.watchHint).toBeUndefined()
+  })
+
+  it('keeps blocking readback attempts for a different docx path', () => {
+    const ctx = createStubAiRunContext()
+    const cache = createHumanRuntimeCache()
+    const baseState = buildStateWithReadbackHint('/tmp/workspace-root/工作/本周周报.docx')
+
+    const readDecision: HumanDecision = {
+      decision: {
+        summary: '读另一个文件',
+        reason: '故意测试 gate',
+        expectedOutcome: '应被阻断'
+      },
+      nextAction: {
+        action: 'hand',
+        toolUsePlan: {
+          mode: 'serial',
+          calls: [
+            {
+              toolName: 'docx_outline',
+              args: {
+                sourcePath: './工作/其他周报.docx'
+              }
+            }
+          ]
+        }
+      }
+    }
+
+    const blockedRead = applyBrainDecisionTransition({
+      ctx,
+      cache,
+      state: baseState,
+      decision: readDecision,
+      stableMemory: baseState.memory.stable
+    })
+
+    expect(blockedRead.execution.stage).toBe('brain')
+    expect(blockedRead.execution.watchHint?.code).toBe('docx_write_requires_readback')
   })
 })

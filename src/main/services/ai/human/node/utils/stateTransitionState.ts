@@ -1,3 +1,4 @@
+import path from 'node:path'
 import {
   appendDecisionRound,
   appendRoundRecord,
@@ -17,6 +18,23 @@ import type {
 
 const DOCX_READ_TOOL_NAMES = new Set(['docx_outline', 'docx_read_blocks'])
 
+const normalizeComparableDocxPath = (sourcePath: string): string =>
+  path.posix.normalize(sourcePath.trim().replace(/\\/g, '/')).replace(/^\.\//, '')
+
+const docxPathMatchesReadbackTarget = (input: {
+  sourcePath: string
+  requestedPath: string
+}): boolean => {
+  const sourcePath = normalizeComparableDocxPath(input.sourcePath)
+  const requestedPath = normalizeComparableDocxPath(input.requestedPath)
+  if (!sourcePath || !requestedPath) return false
+  return (
+    sourcePath === requestedPath ||
+    sourcePath.endsWith(`/${requestedPath}`) ||
+    requestedPath.endsWith(`/${sourcePath}`)
+  )
+}
+
 const docxReadSatisfiesWatchHint = (input: {
   decision: HumanDecision
   watchHint: Extract<HumanWatchHint, { code: 'docx_write_requires_readback' }>
@@ -33,7 +51,12 @@ const docxReadSatisfiesWatchHint = (input: {
     if (
       requestedPath &&
       input.watchHint.detail.sourcePaths.length > 0 &&
-      !input.watchHint.detail.sourcePaths.some((sourcePath) => sourcePath.endsWith(requestedPath))
+      !input.watchHint.detail.sourcePaths.some((sourcePath) =>
+        docxPathMatchesReadbackTarget({
+          sourcePath,
+          requestedPath
+        })
+      )
     ) {
       return false
     }
