@@ -202,10 +202,18 @@ describe('ai human live backend', () => {
         const reviewArtifact = result.output?.artifacts?.find(
           (artifact) => artifact.kind === 'draft_review'
         )
+        const draftFileArtifact = result.output?.artifacts?.find(
+          (artifact) =>
+            artifact.kind === 'file' &&
+            artifact.capability === 'docx' &&
+            artifact.artifactRole === 'draft'
+        )
         let reviewXml = ''
-        if (reviewArtifact?.review.draftArtifactPath) {
+        const draftArtifactPath =
+          draftFileArtifact?.kind === 'file' ? draftFileArtifact.path : undefined
+        if (draftArtifactPath) {
           const reviewBundle = await loadDocxBundle(
-            await fs.readFile(reviewArtifact.review.draftArtifactPath)
+            await fs.readFile(draftArtifactPath)
           )
           reviewXml = new XMLSerializer().serializeToString(reviewBundle.documentDom)
         }
@@ -280,6 +288,7 @@ describe('ai human live backend', () => {
               writeSourcePaths,
               writeRelativePaths,
               trackedDocsUnchanged,
+              draftArtifactPath,
               generatedDraftTextSnippet: generatedDraftText.slice(0, 2000),
               deliveryMarkdown: result.output?.deliveryMarkdown,
               summary: result.output?.summary
