@@ -239,7 +239,6 @@ const runTypeWorkflow = async (input) => {
         const code = runVitest(group)
         if (code !== 0) {
           exitCode = code
-          break
         }
       }
     } else {
@@ -250,10 +249,6 @@ const runTypeWorkflow = async (input) => {
       if (code !== 0) {
         exitCode = code
       }
-    }
-
-    if (exitCode !== 0) {
-      break
     }
 
     if (runDelayMs > 0 && iteration < input.runs - 1) {

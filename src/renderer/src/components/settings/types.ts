@@ -11,7 +11,7 @@ export type SettingsSectionValue = 'model' | 'workspace'
 
 export type LlmConfigFormValues = Pick<
   LLMConfig,
-  'name' | 'providerKind' | 'base_url' | 'model_name' | 'api_key'
+  'providerKind' | 'base_url' | 'api_key'
 >
 
 export type FlatModelOption = { value: string; label: string }

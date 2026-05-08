@@ -52,7 +52,6 @@ export const loadLiveLlmConfigFromEnv = (): LiveLlmConfig => {
 
   return {
     id: 'ai-live-config',
-    name: 'AI Live Config',
     providerKind: resolveLlmProviderKind({
       providerKind: readEnv('AI_LIVE_PROVIDER_KIND'),
       baseUrl

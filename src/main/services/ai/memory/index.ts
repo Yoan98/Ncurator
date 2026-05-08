@@ -4,7 +4,7 @@ import { createAiLlmExecutor } from '../llmExecutor'
 import type { ChatStore } from '../../storage/domains/ChatStore'
 import type { LlmConfigStore } from '../../storage/domains/LlmConfigStore'
 import { buildSessionMemoryPrompt } from './prompts/session'
-import type { AiLlmIoRecord, AiRunEvent, AiRuntimeSettings, LLMConfig } from '../../../../shared/types'
+import type { AiLlmIoRecord, AiRunEvent, AiRuntimeSettings, LlmRuntimeConfig } from '../../../../shared/types'
 import type { AiLlmDriver } from '../llmExecutor'
 
 const sessionMemorySchema: z.ZodType<ChatSessionMemory> = z.object({
@@ -45,6 +45,7 @@ export const updateSessionMemoryAfterRun = async (input: {
   runtimeSettings: AiRuntimeSettings
   chatStore: ChatStore
   llmStore: LlmConfigStore
+  modelName: string
   sendEvent: (event: AiRunEvent) => void
   recordLlmIo?: (record: AiLlmIoRecord) => void
   llmDriver?: AiLlmDriver
@@ -54,8 +55,13 @@ export const updateSessionMemoryAfterRun = async (input: {
 
   const prev = (await input.chatStore.getSessionMemory(sessionId)) || EMPTY_SESSION_MEMORY
 
-  let cfg = await input.llmStore.getActive()
-  if (!cfg) return
+  const activeConfig = await input.llmStore.getActive()
+  const modelName = String(input.modelName || '').trim()
+  if (!activeConfig || !modelName) return
+  let cfg: LlmRuntimeConfig = {
+    ...activeConfig,
+    model_name: modelName
+  }
 
   const llmExecutor = createAiLlmExecutor({
     eventCtx: {
@@ -64,9 +70,8 @@ export const updateSessionMemoryAfterRun = async (input: {
       recordLlmIo: input.recordLlmIo
     },
     runtimeSettings: input.runtimeSettings,
-    getConfig: async (): Promise<LLMConfig> => cfg!,
+    getConfig: async (): Promise<LlmRuntimeConfig> => cfg,
     saveConfig: async (nextConfig) => {
-      await input.llmStore.save(nextConfig)
       cfg = nextConfig
     },
     checkCancelled: () => undefined,

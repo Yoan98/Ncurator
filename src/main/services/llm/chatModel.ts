@@ -1,6 +1,6 @@
 import { ChatOpenAI } from '@langchain/openai'
 import { ChatDeepSeek } from '@langchain/deepseek'
-import type { LLMConfig } from '../../types/store'
+import type { LlmRuntimeConfig } from '../../types/store'
 import type { AiStructuredOutputTransport } from '../../../shared/types'
 import { normalizeOpenAIBaseUrl } from '../../../shared/llmBaseUrl'
 import { resolveLlmProviderKind } from '../../../shared/llmProvider'
@@ -13,7 +13,9 @@ export type ChatModelFactoryOptions = {
   streaming?: boolean
 }
 
-export const getSupportedTransportsForConfig = (cfg: LLMConfig): AiStructuredOutputTransport[] =>
+export const getSupportedTransportsForConfig = (
+  cfg: LlmRuntimeConfig
+): AiStructuredOutputTransport[] =>
   resolveLlmProviderKind({
     providerKind: cfg.providerKind,
     baseUrl: cfg.base_url
@@ -21,7 +23,7 @@ export const getSupportedTransportsForConfig = (cfg: LLMConfig): AiStructuredOut
     ? ['responses', 'completions']
     : ['completions']
 
-export const createChatModel = (cfg: LLMConfig, opts?: ChatModelFactoryOptions) => {
+export const createChatModel = (cfg: LlmRuntimeConfig, opts?: ChatModelFactoryOptions) => {
   const providerKind = resolveLlmProviderKind({
     providerKind: cfg.providerKind,
     baseUrl: cfg.base_url

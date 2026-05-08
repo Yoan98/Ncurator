@@ -7,6 +7,7 @@ import { EmbeddingService } from '../services/vector/EmbeddingService'
 import { ensureEmbeddingReady } from '../services/vector/ensureEmbeddingReady'
 import { StorageService } from '../services/storage/StorageService'
 import { ModelService } from '../services/model/ModelService'
+import { fetchLlmRemoteModels } from '../services/llm/modelCatalog'
 import { AiRunService } from '../services/ai/AiRunService'
 import { updateSessionMemoryAfterRun } from '../services/ai/memory'
 import { FileReviewService } from '../services/ai/human/tools/docx/review/FileReviewService'
@@ -39,6 +40,7 @@ import type {
   ChatMessage,
   AiRuntimeSettings,
   LLMConfig,
+  LlmModelListResponse,
   AiRunEvent,
   AiRunStartRequest,
   AiRunStartResponse,
@@ -2020,8 +2022,8 @@ export function registerHandlers(services: {
     async (event, payload: AiRunStartRequest): Promise<AiRunStartResponse> => {
       const sessionId = String(payload?.sessionId || '').trim()
       const input = String(payload?.input || '').trim()
-      const modelConfigId = payload?.modelConfigId
-        ? String(payload.modelConfigId).trim()
+      const modelName = payload?.modelName
+        ? String(payload.modelName).trim()
         : undefined
       const selectedReferences = normalizeSelectedReferences(payload?.selectedReferences)
       const workspace =
@@ -2092,7 +2094,7 @@ export function registerHandlers(services: {
               sessionId,
               input,
               selectedReferences,
-              modelConfigId,
+              modelName,
               workspace
             },
             {
@@ -2214,6 +2216,7 @@ export function registerHandlers(services: {
               userInput: input,
               assistantOutput: result.finalDeliveryMarkdown || '',
               runtimeSettings,
+              modelName: modelName || '',
               chatStore,
               llmStore,
               sendEvent,
@@ -2440,6 +2443,20 @@ export function registerHandlers(services: {
       return { success: false, error: getErrorMessage(e) }
     }
   })
+
+  ipcMain.handle(
+    'llm-config-model-list',
+    async (_event, id: string): Promise<LlmModelListResponse> => {
+      try {
+        const config = await llmStore.getById(String(id || '').trim())
+        if (!config) return { success: false, items: [], error: '配置不存在' }
+        return await fetchLlmRemoteModels(config)
+      } catch (e: unknown) {
+        console.error('[LLM-CONFIG-MODEL-LIST] Error:', e)
+        return { success: false, items: [], error: getErrorMessage(e) }
+      }
+    }
+  )
 
   ipcMain.handle('ai-runtime-settings-get', async () => {
     try {

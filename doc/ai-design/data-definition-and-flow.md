@@ -163,25 +163,19 @@ interface AiRuntimeSettings {
 interface LLMConfig {
   // 配置唯一标识。
   id: string
-  // 配置显示名称。
-  name: string
+  // 服务商适配类型。
+  providerKind: 'openai' | 'deepseek' | 'openai-compatible'
   // 模型服务基地址。
   base_url: string
-  // 实际调用的模型名。
-  model_name: string
   // 当前配置使用的 API key。
   api_key: string
   // 是否为当前可用配置。
   is_active: boolean
-  // 结构化输出路径最近一次成功的 profile；runtime 会优先复用它降低探测成本。
-  preferredStructuredOutputProfile?:
-    | 'completions:jsonSchema'
-    | 'completions:jsonMode'
-    | 'completions:promptJson'
-    | 'responses:jsonSchema'
-    | 'responses:promptJson'
-  // 文本输出路径最近一次成功的 transport；runtime 会优先复用它。
-  preferredTransport?: 'completions' | 'responses'
+}
+
+interface LlmRuntimeConfig extends LLMConfig {
+  // 本次运行实际调用的模型名，由 workbench 在当前激活配置的模型列表中选择。
+  model_name: string
 }
 ```
 

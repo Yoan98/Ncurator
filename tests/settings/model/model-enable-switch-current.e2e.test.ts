@@ -12,19 +12,15 @@ import {
 const SEEDED_CONFIGS: readonly LLMConfig[] = [
   {
     id: 'model-active',
-    name: '当前配置',
     providerKind: 'openai',
     base_url: 'https://api.openai.com/v1',
-    model_name: 'gpt-4o',
     api_key: 'sk-active-config',
     is_active: true
   },
   {
     id: 'model-next',
-    name: '待启用配置',
-    providerKind: 'openai',
-    base_url: 'https://api.openai.com/v1',
-    model_name: 'gpt-4o-mini',
+    providerKind: 'deepseek',
+    base_url: 'https://api.deepseek.com',
     api_key: 'sk-next-config',
     is_active: false
   }
@@ -36,7 +32,7 @@ describe('settings model e2e', () => {
       caseId: 'model-enable-switch-current',
       domain: 'settings',
       suite: 'model',
-      description: '启用非当前模型配置后，当前模型标识切换到目标配置。',
+      description: '启用非当前连接配置后，当前配置标识切换到目标配置。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -58,22 +54,18 @@ describe('settings model e2e', () => {
             await page.waitForFunction(
               (selector) => {
                 const host = document.querySelector(selector)
-                return host instanceof HTMLElement && host.innerText.includes('gpt-4o')
+                return host instanceof HTMLElement && host.innerText.includes('OpenAI')
               },
               `[data-testid="${settingsSelectors.modelSummaryCurrent}"]`
             )
             await getSettingsLocator(
               page,
-              `${settingsSelectors.modelActivateButtonPrefix}-model-config-next`
-            ).waitFor({ state: 'visible' })
-            await getSettingsLocator(
-              page,
-              `${settingsSelectors.modelActivateButtonPrefix}-model-config-next`
+              `${settingsSelectors.modelActivateButtonPrefix}-model-next`
             ).click()
             await page.waitForFunction(
               (selector) => {
                 const host = document.querySelector(selector)
-                return host instanceof HTMLElement && host.innerText.includes('gpt-4o-mini')
+                return host instanceof HTMLElement && host.innerText.includes('DeepSeek')
               },
               `[data-testid="${settingsSelectors.modelSummaryCurrent}"]`
             )
@@ -84,12 +76,12 @@ describe('settings model e2e', () => {
           (await getSettingsLocator(page, settingsSelectors.modelSummaryCurrent).textContent()) || ''
         const activeRowHasTag = await page
           .locator('tbody tr')
-          .filter({ hasText: '待启用配置' })
+          .filter({ hasText: 'https://api.deepseek.com' })
           .getByText('当前使用')
           .isVisible()
         const previousRowCanActivate = await getSettingsLocator(
           page,
-          `${settingsSelectors.modelActivateButtonPrefix}-model-config-active`
+          `${settingsSelectors.modelActivateButtonPrefix}-model-active`
         ).isVisible()
 
         return {
@@ -100,13 +92,13 @@ describe('settings model e2e', () => {
       },
       assert: async (result, runtime) => {
         await runtime.assertThat(
-          result.summaryCurrentText.includes('gpt-4o-mini') &&
+          result.summaryCurrentText.includes('DeepSeek') &&
             result.activeRowHasTag &&
             result.previousRowCanActivate,
           {
             name: 'enable-switches-current-config',
             message:
-              '点击“启用”后，目标配置应成为当前模型，原激活配置失去当前态并恢复可启用入口，对齐 SET-MODEL-003-AC2。',
+              '点击“启用”后，目标连接配置应成为当前配置，原激活配置失去当前态并恢复可启用入口，对齐 SET-MODEL-003-AC2。',
             data: result
           }
         )

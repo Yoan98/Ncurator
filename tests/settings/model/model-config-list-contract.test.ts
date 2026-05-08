@@ -5,19 +5,15 @@ import { runBackendCase } from '../../harness/backend/run-backend-case'
 const MODEL_FIXTURES: readonly LLMConfig[] = [
   {
     id: 'model-active',
-    name: '当前模型',
     providerKind: 'openai',
     base_url: 'https://api.openai.com/v1',
-    model_name: 'gpt-4o',
     api_key: 'sk-active',
     is_active: true
   },
   {
     id: 'model-standby',
-    name: '备用模型',
-    providerKind: 'openai',
-    base_url: 'https://api.openai.com/v1',
-    model_name: 'gpt-4o-mini',
+    providerKind: 'deepseek',
+    base_url: 'https://api.deepseek.com',
     api_key: 'sk-standby',
     is_active: false
   }
@@ -30,7 +26,7 @@ describe('settings model backend', () => {
       harnessMode: 'tool-real',
       domain: 'settings',
       suite: 'model',
-      description: '模型配置列表查询可返回全部配置，并唯一识别当前激活配置。',
+      description: '模型连接配置列表查询可返回全部配置，并唯一识别当前激活配置。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -45,7 +41,7 @@ describe('settings model backend', () => {
           listIds: list.map((item) => item.id).sort(),
           activeIds: list.filter((item) => item.is_active).map((item) => item.id),
           activeConfigId: activeConfig?.id || null,
-          activeConfigModel: activeConfig?.model_name || null,
+          baseUrls: list.map((item) => item.base_url).sort(),
           providerKinds: list.map((item) => item.providerKind).sort()
         }
       },
@@ -56,17 +52,19 @@ describe('settings model backend', () => {
           {
             name: 'model-config-list-includes-all-configs',
             message:
-              '模型配置查询应返回全部配置，不需要额外刷新即可支撑首屏初始化，对齐 SET-MODEL-001-AC1。',
+              '模型连接配置查询应返回全部配置，不需要额外刷新即可支撑首屏初始化，对齐 SET-MODEL-001-AC1。',
             data: result
           }
         )
 
         runtime.assertThat(
-          JSON.stringify(result.providerKinds) === JSON.stringify(['openai', 'openai']),
+          JSON.stringify(result.providerKinds) === JSON.stringify(['deepseek', 'openai']) &&
+            result.baseUrls.includes('https://api.openai.com/v1') &&
+            result.baseUrls.includes('https://api.deepseek.com'),
           {
-            name: 'model-config-list-preserves-provider-kind',
+            name: 'model-config-list-preserves-connection-fields',
             message:
-              '模型配置查询应保留 providerKind，用于选择服务商适配和缓存命中统计。',
+              '模型连接配置查询应保留服务商与请求地址，用于 Settings 列表和运行时连接选择。',
             data: result
           }
         )
@@ -74,8 +72,7 @@ describe('settings model backend', () => {
         runtime.assertThat(
           result.activeIds.length === 1 &&
             result.activeIds[0] === 'model-active' &&
-            result.activeConfigId === 'model-active' &&
-            result.activeConfigModel === 'gpt-4o',
+            result.activeConfigId === 'model-active',
           {
             name: 'model-config-list-identifies-single-active-config',
             message:

@@ -26,10 +26,14 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
   const platform = getAiRuntimePlatform()
 
   const getRequestedConfig = async () => {
-    const requestedId = String(payload.modelConfigId || '').trim()
-    const cfg = requestedId ? await deps.llmStore.getById(requestedId) : await deps.llmStore.getActive()
+    const modelName = String(payload.modelName || '').trim()
+    if (!modelName) throw new Error('当前配置未获取到可用模型，请先在「大模型」中刷新模型列表')
+    const cfg = await deps.llmStore.getActive()
     if (!cfg) throw new Error('未配置可用的大模型，请先在「大模型配置」中设置并启用一个模型')
-    return cfg
+    return {
+      ...cfg,
+      model_name: modelName
+    }
   }
   let requestedConfigPromise: ReturnType<typeof getRequestedConfig> | undefined
 
@@ -39,7 +43,6 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
   }
 
   const saveRequestedConfig = async (nextConfig: Awaited<ReturnType<typeof getRequestedConfig>>) => {
-    await deps.llmStore.save(nextConfig)
     requestedConfigPromise = Promise.resolve(nextConfig)
   }
 

@@ -21,6 +21,7 @@ import {
 export const createRealAiHarness = async (input: {
   definition: {
     harnessMode: BackendHarnessMode
+    runtimeModelName?: string | null
   }
   runId: string
   taskId: string
@@ -35,6 +36,7 @@ export const createRealAiHarness = async (input: {
   const depsFactory = await createRealAiDepsFactory({
     mode: input.definition.harnessMode,
     runId: input.runId,
+    runtimeModelName: input.definition.runtimeModelName,
     workspaceRoot: input.workspaceRoot,
     eventCollector: input.eventCollector
   })
@@ -45,6 +47,7 @@ export const createRealAiHarness = async (input: {
     mode: input.definition.harnessMode,
     runId: input.runId,
     taskId: input.taskId,
+    runtimeModelName: input.definition.runtimeModelName,
     workspaceRoot: input.workspaceRoot,
     fixtureBindings: input.fixtureBindings,
     eventCollector: input.eventCollector,

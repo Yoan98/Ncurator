@@ -12,19 +12,15 @@ import {
 const SEEDED_CONFIGS: readonly LLMConfig[] = [
   {
     id: 'model-page-load-active',
-    name: '当前配置',
     providerKind: 'openai',
     base_url: 'https://api.openai.com/v1',
-    model_name: 'gpt-4o',
     api_key: 'sk-model-page-load-active',
     is_active: true
   },
   {
     id: 'model-page-load-standby',
-    name: '备用配置',
-    providerKind: 'openai',
-    base_url: 'https://api.openai.com/v1',
-    model_name: 'gpt-4o-mini',
+    providerKind: 'deepseek',
+    base_url: 'https://api.deepseek.com',
     api_key: 'sk-model-page-load-standby',
     is_active: false
   }
@@ -36,7 +32,7 @@ describe('settings model e2e', () => {
       caseId: 'model-page-load-active-config',
       domain: 'settings',
       suite: 'model',
-      description: '大模型页首屏加载配置列表，并同时标记当前激活配置。',
+      description: '大模型页首屏加载连接配置列表，并同时标记当前激活配置。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -52,13 +48,13 @@ describe('settings model e2e', () => {
 
         await runtime.step({
           name: 'open-model-settings',
-          message: '进入大模型页并等待当前模型摘要完成初始化。',
+          message: '进入大模型页并等待当前配置摘要完成初始化。',
           run: async () => {
             await navigateToSettingsSection(page, 'model')
             await page.waitForFunction(
               (selector) => {
                 const host = document.querySelector(selector)
-                return host instanceof HTMLElement && host.innerText.includes('gpt-4o')
+                return host instanceof HTMLElement && host.innerText.includes('OpenAI')
               },
               `[data-testid="${settingsSelectors.modelSummaryCurrent}"]`
             )
@@ -71,7 +67,7 @@ describe('settings model e2e', () => {
             (await getSettingsLocator(page, settingsSelectors.modelSummaryCurrent).textContent()) || '',
           currentRowHasTag: await page
             .locator('tbody tr')
-            .filter({ hasText: '当前配置' })
+            .filter({ hasText: 'https://api.openai.com/v1' })
             .getByText('当前使用')
             .isVisible()
         }
@@ -84,7 +80,7 @@ describe('settings model e2e', () => {
         })
 
         await runtime.assertThat(
-          result.summaryCurrentText.includes('gpt-4o') && result.currentRowHasTag,
+          result.summaryCurrentText.includes('OpenAI') && result.currentRowHasTag,
           {
             name: 'active-config-is-marked-in-summary-and-row',
             message:

@@ -4,7 +4,7 @@ import type { SelectedReference } from '../../../src/shared/types'
 import type { BackendTestRuntime, WorkspaceKbSeedResult } from './test-types'
 
 export const HUMAN_RISK_REPORT_DRAFT_USER_INPUT =
-  '帮我写下这周的工作周报，基于这个周报模版和我工作目录下的所有工作文档信息，记得参考我上周写的周报风格来哦'
+  '帮我写下这周的工作周报，基于我工作目录下的文件信息，记得参考我上周写的周报风格来哦'
 
 export const SHARED_WORKSPACE_FIXTURE_PATH = 'tests/fixtures/workspace' as const
 const WORKSPACE_LEARNING_FIXTURE_DIR = `${SHARED_WORKSPACE_FIXTURE_PATH}/学习笔记`

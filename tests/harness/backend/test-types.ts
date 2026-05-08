@@ -21,6 +21,7 @@ import type {
   JsonObject,
   JsonValue,
   LLMConfig,
+  LlmRuntimeConfig,
   SelectedReference
 } from '../../../src/shared/types'
 import type { EventCollector } from '../core/eventCollector'
@@ -68,11 +69,10 @@ export type LlmScript = Partial<Record<string, readonly ScriptedLlmStep[]>>
 export type StructuredOutputScript = LlmScript
 
 export type LiveLlmConfig = Pick<
-  LLMConfig,
+  LlmRuntimeConfig,
   'providerKind' | 'base_url' | 'model_name' | 'api_key'
 > & {
   id: string
-  name: string
   is_active: true
 }
 
@@ -177,7 +177,7 @@ export type CreateAiRunContextInput = {
   userInput?: string
   selectedReferences?: SelectedReference[]
   runtimeSettingsOverride?: Partial<AiRuntimeSettings>
-  modelConfigId?: string
+  modelName?: string
   approvalPolicy?: ApprovalPolicy | ApprovalResolver
   checkCancelledOverride?: () => void
   humanRuntimeOverrides?: {
@@ -191,6 +191,7 @@ export type BackendTestRuntime = {
   mode: BackendHarnessMode
   runId: string
   taskId: string
+  runtimeModelName?: string | null
   workspaceRoot: string
   fixtureBindings: FixtureBinding[]
   eventCollector: EventCollector

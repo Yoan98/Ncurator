@@ -28,6 +28,7 @@ describe('ai human mock-llm backend', () => {
             runId: runtime.runId,
             sessionId: 'human-only-session',
             input: '请学习一个 skill，调用一次工具，然后直接给出最终答复。',
+            modelName: 'scripted-llm',
             workspace: {
               workspaceId: 'test-workspace',
               workspaceName: 'test-workspace',
@@ -88,7 +89,8 @@ describe('ai human mock-llm backend', () => {
 
         return {
           result,
-          events: runtime.eventCollector.snapshot()
+          events: runtime.eventCollector.snapshot(),
+          llmIoRecords: runtime.eventCollector.snapshotLlmIo()
         }
       },
       assert: async (result, runtime) => {
@@ -123,6 +125,19 @@ describe('ai human mock-llm backend', () => {
             data: {
               answerCompletedCount: answerCompletedEvents.length,
               runCompletedCount: runCompletedEvents.length
+            }
+          }
+        )
+
+        runtime.assertThat(
+          result.llmIoRecords.length >= 1 &&
+            result.llmIoRecords.every((record) => record.model === 'scripted-llm'),
+          {
+            name: 'ai-run-service-uses-requested-runtime-model-name',
+            message:
+              'AiRunService 应使用 payload.modelName 构造运行时模型配置，而不是依赖持久配置中的模型字段。',
+            data: {
+              models: result.llmIoRecords.map((record) => record.model)
             }
           }
         )

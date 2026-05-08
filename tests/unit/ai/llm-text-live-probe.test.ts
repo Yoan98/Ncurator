@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createAiLlmExecutor } from '../../../src/main/services/ai/llmExecutor'
-import type { AiRunEvent, LLMConfig } from '../../../src/shared/types'
+import type { AiRunEvent, LlmRuntimeConfig } from '../../../src/shared/types'
 import {
   hasLiveLlmConfigInEnv,
   loadLiveLlmConfigFromEnv
@@ -15,7 +15,7 @@ describe('ai unit text output live probe', () => {
         return
       }
 
-      const cfg = loadLiveLlmConfigFromEnv() as LLMConfig
+      const cfg = loadLiveLlmConfigFromEnv() as LlmRuntimeConfig
       const probeModes = ['force_non_stream', 'force_stream'] as const
       const results: Array<Record<string, unknown>> = []
 

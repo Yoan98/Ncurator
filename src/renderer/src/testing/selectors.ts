@@ -76,14 +76,14 @@ export const settingsSelectors = {
   modelSummaryCurrent: 'settings-model-summary-current',
   modelAddButton: 'settings-model-add-button',
   modelModal: 'settings-model-modal',
-  modelNameInput: 'settings-model-name-input',
+  modelProviderInput: 'settings-model-provider-input',
   modelBaseUrlInput: 'settings-model-base-url-input',
-  modelModelNameInput: 'settings-model-model-name-input',
   modelApiKeyInput: 'settings-model-api-key-input',
   modelSaveButton: 'settings-model-save-button',
   modelCancelButton: 'settings-model-cancel-button',
   modelEditButtonPrefix: 'settings-model-edit-button',
   modelActivateButtonPrefix: 'settings-model-activate-button',
+  modelRefreshButtonPrefix: 'settings-model-refresh-button',
   modelDeleteButtonPrefix: 'settings-model-delete-button'
 } as const
 

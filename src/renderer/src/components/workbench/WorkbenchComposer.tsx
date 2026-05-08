@@ -9,7 +9,13 @@ import {
   HiMagnifyingGlass,
   HiSparkles
 } from 'react-icons/hi2'
-import type { LLMConfig, ReferenceKind, SelectedReference, WorkspaceSource } from '../../../../shared/types'
+import type {
+  LLMConfig,
+  LlmRemoteModel,
+  ReferenceKind,
+  SelectedReference,
+  WorkspaceSource
+} from '../../../../shared/types'
 import { workbenchSelectors } from '../../testing/selectors'
 import type { WorkbenchMode } from './types'
 import { COMPOSER_PLACEHOLDER, COMPOSER_REFERENCE_KINDS } from './composer/constants'
@@ -40,9 +46,10 @@ type MentionContext = {
 type WorkbenchComposerProps = {
   mode: WorkbenchMode
   onModeChange: (mode: WorkbenchMode) => void
-  modelConfigs: LLMConfig[]
-  selectedModelConfigId: string | null
-  onModelConfigChange: (configId: string) => void
+  activeModelConfig: LLMConfig | null
+  remoteModels: LlmRemoteModel[]
+  selectedModelName: string | null
+  onModelNameChange: (modelName: string) => void
   workspaces: WorkspaceSource[]
   selectedWorkspaceId: string | null
   onWorkspaceChange: (workspaceId: string | null) => void
@@ -74,9 +81,10 @@ const areComposerNodesEqual = (left: ComposerNode[], right: ComposerNode[]): boo
 const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   mode,
   onModeChange,
-  modelConfigs,
-  selectedModelConfigId,
-  onModelConfigChange,
+  activeModelConfig,
+  remoteModels,
+  selectedModelName,
+  onModelNameChange,
   workspaces,
   selectedWorkspaceId,
   onWorkspaceChange,
@@ -100,14 +108,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   const [mentionLoading, setMentionLoading] = useState(false)
   const [mentionActiveIndex, setMentionActiveIndex] = useState(0)
   const [hasContent, setHasContent] = useState(false)
-
-  const selectedModel = useMemo(
-    () =>
-      modelConfigs.find((config) => config.id === selectedModelConfigId) ||
-      modelConfigs.find((config) => config.is_active) ||
-      null,
-    [modelConfigs, selectedModelConfigId]
-  )
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) || null,
@@ -810,9 +810,9 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             />
 
             <Select
-              value={selectedModel?.id}
+              value={selectedModelName || undefined}
               onChange={(nextValue) => {
-                onModelConfigChange(String(nextValue))
+                onModelNameChange(String(nextValue))
                 focusEditorAfterControlChange()
               }}
               variant="borderless"
@@ -820,12 +820,14 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               optionLabelProp="label"
               popupClassName="workbench-composer-select-dropdown"
               className="workbench-composer-select min-w-[104px]"
-              options={modelConfigs.map((config) => ({
-                value: config.id,
-                label: config.model_name,
-                title: `${config.name} · ${config.model_name}`
+              options={remoteModels.map((model) => ({
+                value: model.id,
+                label: model.label || model.id,
+                title: activeModelConfig
+                  ? `${activeModelConfig.base_url} · ${model.id}`
+                  : model.id
               }))}
-              placeholder="模型"
+              placeholder={activeModelConfig ? '刷新模型' : '模型'}
               data-testid={workbenchSelectors.modelSelect}
             />
 

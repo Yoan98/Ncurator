@@ -260,9 +260,8 @@
 | 字段名     | 类型    | 描述                                       |
 | :--------- | :------ | :----------------------------------------- |
 | id         | Utf8    | 配置唯一标识                               |
-| name       | Utf8    | 配置名称                                   |
+| providerKind | Utf8 | 服务商适配类型                             |
 | base_url   | Utf8    | API Base URL                               |
-| model_name | Utf8    | 模型名称                                   |
 | api_key    | Utf8    | API Key                                    |
 | is_active  | Boolean | 是否为当前激活配置（通常只有一个为 True）  |
 

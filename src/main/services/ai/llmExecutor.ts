@@ -12,6 +12,7 @@ import type {
   AiStructuredOutputTransport,
   JsonObject,
   LLMConfig,
+  LlmRuntimeConfig,
   LlmProviderKind,
   PreferredStructuredOutputProfile
 } from '../../../shared/types'
@@ -52,7 +53,7 @@ type TextRunnable = {
 
 type BaseLlmInvocationInput = {
   caller: string
-  cfg: LLMConfig
+  cfg: LlmRuntimeConfig
   schemaName: string
   system: string
   user: string
@@ -133,7 +134,7 @@ export type AiLlmExecutor = {
 
 export type InvokeStructuredChatInput<T extends Record<string, unknown>> = {
   caller: string
-  cfg: LLMConfig
+  cfg: LlmRuntimeConfig
   preferredProfile?: PreferredStructuredOutputProfile
   streamingMode?: AiLlmStreamingMode
   schema: z.ZodType<T>
@@ -165,6 +166,9 @@ const buildMessages = (system: string, user: string): Array<SystemMessage | Huma
   new HumanMessage(user)
 ]
 
+const MAX_CONSECUTIVE_BLANK_STREAM_CHUNKS = 512
+const MAX_CONSECUTIVE_BLANK_STREAM_MS = 120_000
+
 const resolveConfigProviderKind = (cfg: LLMConfig): LlmProviderKind =>
   resolveLlmProviderKind({
     providerKind: cfg.providerKind,
@@ -173,7 +177,7 @@ const resolveConfigProviderKind = (cfg: LLMConfig): LlmProviderKind =>
 
 const buildTransportAttemptOrder = (
   preferredTransport: AiStructuredOutputTransport | undefined,
-  cfg: LLMConfig
+  cfg: LlmRuntimeConfig
 ): AiStructuredOutputTransport[] => {
   const supported = getSupportedTransportsForConfig(cfg)
   if (!preferredTransport || !supported.includes(preferredTransport)) return [...supported]
@@ -182,7 +186,7 @@ const buildTransportAttemptOrder = (
 
 const buildStructuredAttemptOrder = (
   preferredProfile: PreferredStructuredOutputProfile | undefined,
-  cfg: LLMConfig
+  cfg: LlmRuntimeConfig
 ): PreferredStructuredOutputProfile[] => {
   const supportedTransports = new Set(getSupportedTransportsForConfig(cfg))
   return buildStructuredOutputAttemptOrder(preferredProfile).filter((profile) =>
@@ -223,11 +227,33 @@ const streamTextFromRunnable = async (input: {
   const stream = await input.runnable.stream(input.messages)
   const chunks: string[] = []
   let lastChunk: TextMessage | undefined
+  let blankChunkCount = 0
+  let blankStreakStartedAt: number | undefined
   for await (const chunk of stream) {
     input.checkCancelled()
     lastChunk = chunk
     const text = extractTextContent(chunk.content)
     if (!text) continue
+    if (text.trim()) {
+      blankChunkCount = 0
+      blankStreakStartedAt = undefined
+    } else {
+      blankChunkCount += 1
+      blankStreakStartedAt ??= Date.now()
+      const blankStreakMs = Date.now() - blankStreakStartedAt
+      if (
+        blankChunkCount > MAX_CONSECUTIVE_BLANK_STREAM_CHUNKS ||
+        blankStreakMs > MAX_CONSECUTIVE_BLANK_STREAM_MS
+      ) {
+        throw new Error(
+          [
+            'llm_stream_blank_delta_stall',
+            `blankChunks=${blankChunkCount}`,
+            `blankMs=${blankStreakMs}`
+          ].join('; ')
+        )
+      }
+    }
     chunks.push(text)
     input.observer?.onDelta?.(text)
   }
@@ -246,7 +272,7 @@ const invokeTextFromRunnable = async (input: {
 }
 
 const createTextRunnable = (input: {
-  cfg: LLMConfig
+  cfg: LlmRuntimeConfig
   temperature?: number
   transport: AiStructuredOutputTransport
   streaming: boolean
@@ -258,7 +284,7 @@ const createTextRunnable = (input: {
   }) as TextRunnable
 
 const createStructuredJsonRunnable = <T extends Record<string, unknown>>(input: {
-  cfg: LLMConfig
+  cfg: LlmRuntimeConfig
   temperature?: number
   transport: AiStructuredOutputTransport
   streaming: boolean
@@ -650,9 +676,9 @@ const invokeTextChat = async (input: {
 }
 
 const persistConfigUpdate = async (input: {
-  cfg: LLMConfig
-  nextConfig: LLMConfig
-  saveConfig: (cfg: LLMConfig) => Promise<void>
+  cfg: LlmRuntimeConfig
+  nextConfig: LlmRuntimeConfig
+  saveConfig: (cfg: LlmRuntimeConfig) => Promise<void>
   warningPrefix: string
 }): Promise<void> => {
   const changed =
@@ -670,8 +696,8 @@ const persistConfigUpdate = async (input: {
 export const createAiLlmExecutor = (input: {
   eventCtx: AiEventDispatchContext
   runtimeSettings: AiRuntimeSettings
-  getConfig: () => Promise<LLMConfig>
-  saveConfig: (cfg: LLMConfig) => Promise<void>
+  getConfig: () => Promise<LlmRuntimeConfig>
+  saveConfig: (cfg: LlmRuntimeConfig) => Promise<void>
   checkCancelled: () => void
   driver?: AiLlmDriver
 }): AiLlmExecutor => {

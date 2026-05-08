@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { createChatModel, getSupportedTransportsForConfig } from '../../../src/main/services/llm/chatModel'
-import type { LLMConfig } from '../../../src/shared/types'
+import type { LlmRuntimeConfig } from '../../../src/shared/types'
 
-const buildConfig = (input: Partial<LLMConfig>): LLMConfig => ({
+const buildConfig = (input: Partial<LlmRuntimeConfig>): LlmRuntimeConfig => ({
   id: 'cfg',
-  name: 'Config',
   providerKind: 'openai-compatible',
   base_url: 'https://example.test/v1',
   model_name: 'test-model',

@@ -726,7 +726,7 @@
 - 实现状态：`已实现`
 - What：验证 mock-llm 下 `human` 仍通过真实 docx 工具链完成打开、编辑和搜索。
 - Why：复杂 docx 编辑是 `human` 的长期高价值真实任务类型。
-- How：先写入 fixture docx，再通过真实 `docx_text_edit -> docx_search -> docx_read_blocks` 完成一次正文替换、定位和精读。
+- How：先写入 fixture docx，再通过真实 `docx_text_edit -> docx_read_blocks -> docx_search` 完成一次正文替换、写后读回和定位。
 - Oracle：真实 `docx_text_edit` 只产生一处 `changedBlocks`，真实 `docx_search` 与 `docx_read_blocks` 都能命中新文本，任务最终完成。
 - Not：不验证 review UI 或最终落盘流程。
 

@@ -25,6 +25,7 @@ import type {
   ListWebSourcesRequest,
   ListWorkspaceNodesRequest,
   LLMConfig,
+  LlmModelListResponse,
   PickDirectoryResponse,
   PrepareWorkspaceRequest,
   RefreshWebSourceRequest,
@@ -86,6 +87,7 @@ export type SettingsE2EApiOverrides = {
   workspaceNodesResponseByWorkspaceId?: Record<string, WorkspaceNodeListResponse>
   legacyLocalImportMigrationStatus?: LegacyLocalImportMigrationStatus | null
   llmConfigDeleteResponseById?: Record<string, { success: boolean; error?: string }>
+  llmModelListResponseByConfigId?: Record<string, LlmModelListResponse>
   webSourceRefreshDelayMs?: number
   revealPathResponseByPath?: Record<string, { success: boolean; error?: string }>
   openExternalResponseByUrl?: Record<string, { success: boolean; error?: string }>
@@ -170,6 +172,7 @@ export type DesktopApi = {
   llmConfigSave: (config: LLMConfig) => Promise<{ success: boolean; error?: string }>
   llmConfigDelete: (id: string) => Promise<{ success: boolean; error?: string }>
   llmConfigSetActive: (id: string) => Promise<{ success: boolean; error?: string }>
+  llmConfigModelList: (id: string) => Promise<LlmModelListResponse>
   setE2EApiOverrides: (overrides: SettingsE2EApiOverrides) => void
   clearE2EApiOverrides: () => void
   aiRuntimeSettingsGet: () => Promise<AiRuntimeSettings>

@@ -18,6 +18,7 @@ import type {
   FileReviewDetail,
   FileReview,
   LLMConfig,
+  LlmRemoteModel,
   SearchResult,
   SelectedReference,
   ValidateFileReviewCommitResponse,
@@ -137,8 +138,9 @@ const ChatPage: React.FC = () => {
   const [workspaces, setWorkspaces] = useState<WorkspaceSource[]>([])
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null)
   const [workspaceDocumentIds, setWorkspaceDocumentIds] = useState<string[]>([])
-  const [modelConfigs, setModelConfigs] = useState<LLMConfig[]>([])
-  const [selectedModelConfigId, setSelectedModelConfigId] = useState<string | null>(null)
+  const [activeModelConfig, setActiveModelConfig] = useState<LLMConfig | null>(null)
+  const [remoteModels, setRemoteModels] = useState<LlmRemoteModel[]>([])
+  const [selectedModelName, setSelectedModelName] = useState<string | null>(null)
   const [composerResetKey, setComposerResetKey] = useState(0)
   const [assistantTurns, setAssistantTurns] = useState<Record<string, AssistantTurnViewModel>>({})
   const [contentPanel, setContentPanel] = useState<WorkbenchContentPanelState>(createEmptyPanel())
@@ -359,13 +361,25 @@ const ChatPage: React.FC = () => {
   const loadModelConfigs = useCallback(async (): Promise<void> => {
     try {
       const list = await window.api.llmConfigList()
-      setModelConfigs(list)
-      setSelectedModelConfigId((current) => {
-        if (current && list.some((config) => config.id === current)) return current
-        return list.find((config) => config.is_active)?.id || list[0]?.id || null
+      const activeConfig = list.find((config) => config.is_active) || list[0] || null
+      setActiveModelConfig(activeConfig)
+      if (!activeConfig) {
+        setRemoteModels([])
+        setSelectedModelName(null)
+        return
+      }
+      const response = await window.api.llmConfigModelList(activeConfig.id)
+      const items = response.success ? response.items : []
+      setRemoteModels(items)
+      setSelectedModelName((current) => {
+        if (current && items.some((model) => model.id === current)) return current
+        return items[0]?.id || null
       })
     } catch (error) {
       console.error('Failed to load llm configs', error)
+      setActiveModelConfig(null)
+      setRemoteModels([])
+      setSelectedModelName(null)
     }
   }, [])
 
@@ -1044,6 +1058,10 @@ const ChatPage: React.FC = () => {
       message.warning('请先选择当前工作区后再发送消息')
       return
     }
+    if (!selectedModelName) {
+      message.warning('当前配置未获取到可用模型，请先在「大模型」中刷新模型列表')
+      return
+    }
 
     const userQuery = input.trim()
     const likelyExecutable =
@@ -1103,7 +1121,7 @@ const ChatPage: React.FC = () => {
         sessionId: currentSessionId,
         input: userQuery,
         selectedReferences: selectedReferences.length > 0 ? selectedReferences : undefined,
-        modelConfigId: selectedModelConfigId || undefined,
+        modelName: selectedModelName,
         workspace: createWorkspaceBinding(selectedWorkspace)
       })
       if (!response.success || !response.runId) {
@@ -1274,6 +1292,10 @@ const ChatPage: React.FC = () => {
       message.warning('请先选择当前工作区，必要时再通过 @ 插入目录或文件后继续')
       return
     }
+    if (!selectedModelName) {
+      message.warning('当前配置未获取到可用模型，请先在「大模型」中刷新模型列表')
+      return
+    }
 
     const continueMessage: ChatMessage = {
       id: crypto.randomUUID(),
@@ -1315,7 +1337,7 @@ const ChatPage: React.FC = () => {
         sessionId: currentSessionId,
         input: pendingWorkspaceRequest.input,
         selectedReferences: selectedReferences.length > 0 ? selectedReferences : undefined,
-        modelConfigId: selectedModelConfigId || undefined,
+        modelName: selectedModelName,
         workspace: createWorkspaceBinding(selectedWorkspace)
       })
       if (!response.success || !response.runId) {
@@ -1754,9 +1776,10 @@ const ChatPage: React.FC = () => {
                     <WorkbenchComposer
                       mode={composerMode}
                       onModeChange={setComposerMode}
-                      modelConfigs={modelConfigs}
-                      selectedModelConfigId={selectedModelConfigId}
-                      onModelConfigChange={setSelectedModelConfigId}
+                      activeModelConfig={activeModelConfig}
+                      remoteModels={remoteModels}
+                      selectedModelName={selectedModelName}
+                      onModelNameChange={setSelectedModelName}
                       workspaces={workspaces}
                       selectedWorkspaceId={selectedWorkspaceId}
                       onWorkspaceChange={setSelectedWorkspaceId}
@@ -1764,7 +1787,11 @@ const ChatPage: React.FC = () => {
                       onSubmit={() => void handleSend()}
                       onCancel={() => void handleCancel()}
                       loading={loading}
-                      canSubmit={Boolean(input.trim() && selectedWorkspace)}
+                      canSubmit={Boolean(
+                        input.trim() &&
+                          selectedWorkspace &&
+                          (composerMode === 'search' || selectedModelName)
+                      )}
                       showCancel={loading && composerMode === 'ai' && Boolean(aiRunId)}
                       resetKey={composerResetKey}
                     />

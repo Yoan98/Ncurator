@@ -342,14 +342,27 @@ export type AiStructuredOutputProfile = PreferredStructuredOutputProfile | 'scri
 
 export interface LLMConfig {
   id: string
-  name: string
   providerKind: LlmProviderKind
   base_url: string
-  model_name: string
   api_key: string
   is_active: boolean
+}
+
+export type LlmRuntimeConfig = LLMConfig & {
+  model_name: string
   preferredStructuredOutputProfile?: PreferredStructuredOutputProfile
   preferredTransport?: AiStructuredOutputTransport
+}
+
+export type LlmRemoteModel = {
+  id: string
+  label?: string
+}
+
+export type LlmModelListResponse = {
+  success: boolean
+  items: LlmRemoteModel[]
+  error?: string
 }
 
 export type AiLlmUsage = {
@@ -719,7 +732,7 @@ export type AiRunStartRequest = {
   sessionId: string
   input: string
   selectedReferences?: SelectedReference[]
-  modelConfigId?: string
+  modelName?: string
   workspace?: WorkspaceRuntimeBinding
 }
 

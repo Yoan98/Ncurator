@@ -13,28 +13,22 @@ import {
 const SEEDED_CONFIGS: readonly LLMConfig[] = [
   {
     id: 'model-delete-active',
-    name: '当前配置',
     providerKind: 'openai',
     base_url: 'https://api.openai.com/v1',
-    model_name: 'gpt-4o',
     api_key: 'sk-model-delete-active',
     is_active: true
   },
   {
     id: 'model-delete-success',
-    name: '删除成功配置',
-    providerKind: 'openai',
-    base_url: 'https://api.openai.com/v1',
-    model_name: 'gpt-4o-mini',
+    providerKind: 'deepseek',
+    base_url: 'https://api.deepseek.com',
     api_key: 'sk-model-delete-success',
     is_active: false
   },
   {
     id: 'model-delete-failed',
-    name: '删除失败配置',
-    providerKind: 'openai',
-    base_url: 'https://api.openai.com/v1',
-    model_name: 'gpt-4.1',
+    providerKind: 'openai-compatible',
+    base_url: 'https://models.example.test/v1',
     api_key: 'sk-model-delete-failed',
     is_active: false
   }
@@ -46,7 +40,7 @@ describe('settings model e2e', () => {
       caseId: 'model-delete-config-feedback',
       domain: 'settings',
       suite: 'model',
-      description: '删除模型配置时，成功路径刷新列表，失败路径给出明确错误提示。',
+      description: '删除连接配置时，成功路径刷新列表，失败路径给出明确错误提示。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -71,7 +65,7 @@ describe('settings model e2e', () => {
             ).click()
             await page.getByText('确定要删除此配置吗？').waitFor({ state: 'visible' })
             await page.locator('.ant-popover .ant-btn-primary').click()
-            await page.locator('tbody tr').filter({ hasText: '待删除配置' }).waitFor({
+            await page.locator('tbody tr').filter({ hasText: 'https://api.deepseek.com' }).waitFor({
               state: 'detached'
             })
           }
@@ -102,11 +96,11 @@ describe('settings model e2e', () => {
         return {
           deletedRowVisible: await page
             .locator('tbody tr')
-            .filter({ hasText: '待删除配置' })
+            .filter({ hasText: 'https://api.deepseek.com' })
             .count(),
           failedRowVisible: await page
             .locator('tbody tr')
-            .filter({ hasText: '删除失败配置' })
+            .filter({ hasText: 'https://models.example.test/v1' })
             .count(),
           tableText: (await getSettingsLocator(page, settingsSelectors.modelTable).textContent()) || ''
         }
@@ -119,7 +113,7 @@ describe('settings model e2e', () => {
         })
 
         await runtime.assertThat(
-          result.failedRowVisible === 1 && result.tableText.includes('删除失败配置'),
+          result.failedRowVisible === 1 && result.tableText.includes('https://models.example.test/v1'),
           {
             name: 'delete-failure-keeps-row-and-shows-error',
             message: '删除失败时，页面应给出明确错误提示，并保留原配置记录，对齐 SET-MODEL-005-AC2。',

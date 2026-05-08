@@ -41,7 +41,6 @@ const schema = z.object({
 
 const cfg = {
   id: 'cfg-1',
-  name: 'Primary',
   providerKind: 'openai',
   base_url: 'https://example.test/v1',
   model_name: 'gpt-5',

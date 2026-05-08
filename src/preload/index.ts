@@ -225,6 +225,16 @@ const api: DesktopApi = {
     return ipcRenderer.invoke('llm-config-delete', id)
   },
   llmConfigSetActive: (id: string) => ipcRenderer.invoke('llm-config-set-active', id),
+  llmConfigModelList: (id: string) => {
+    emitE2EIpcCall('llmConfigModelList', id)
+    const response = getE2EApiOverrides()?.llmModelListResponseByConfigId?.[
+      String(id || '').trim()
+    ]
+    if (response) {
+      return Promise.resolve(response)
+    }
+    return ipcRenderer.invoke('llm-config-model-list', id)
+  },
   setE2EApiOverrides: (overrides) => {
     if (!isE2EObserverEnabled) return
     e2eApiOverrides = overrides

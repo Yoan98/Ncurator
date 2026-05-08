@@ -9,13 +9,9 @@ import {
 } from '../../harness/e2e/settings'
 
 const fillModelForm = async (page: Page): Promise<void> => {
-  await getSettingsLocator(page, settingsSelectors.modelNameInput).fill('首个配置')
   await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput)
     .locator('input')
     .fill('https://api.openai.com/v1')
-  await getSettingsLocator(page, settingsSelectors.modelModelNameInput)
-    .locator('input')
-    .fill('gpt-4o-mini')
   await getSettingsLocator(page, settingsSelectors.modelApiKeyInput).fill('sk-first-config')
 }
 
@@ -25,7 +21,7 @@ describe('settings model e2e', () => {
       caseId: 'model-first-config-auto-activate',
       domain: 'settings',
       suite: 'model',
-      description: '模型列表为空时新增第一条配置后，会自动成为当前模型。',
+      description: '配置列表为空时新增第一条连接配置后，会自动成为当前配置。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -37,7 +33,7 @@ describe('settings model e2e', () => {
           run: async () => {
             await navigateToSettingsSection(page, 'model')
             await getSettingsLocator(page, settingsSelectors.modelAddButton).click()
-            await getSettingsLocator(page, settingsSelectors.modelNameInput).waitFor({
+            await getSettingsLocator(page, settingsSelectors.modelProviderInput).waitFor({
               state: 'visible'
             })
           }
@@ -45,14 +41,14 @@ describe('settings model e2e', () => {
 
         await runtime.step({
           name: 'create-first-config',
-          message: '填写第一条模型配置并保存。',
+          message: '填写第一条连接配置并保存。',
           run: async () => {
             await fillModelForm(page)
             await getSettingsLocator(page, settingsSelectors.modelSaveButton).click()
             await page.waitForFunction(
               (selector) => {
                 const host = document.querySelector(selector)
-                return host instanceof HTMLElement && host.innerText.includes('gpt-4o-mini')
+                return host instanceof HTMLElement && host.innerText.includes('OpenAI')
               },
               `[data-testid="${settingsSelectors.modelSummaryCurrent}"]`
             )
@@ -63,7 +59,7 @@ describe('settings model e2e', () => {
           (await getSettingsLocator(page, settingsSelectors.modelSummaryCurrent).textContent()) || ''
         const currentRowHasTag = await page
           .locator('tbody tr')
-          .filter({ hasText: '首个配置' })
+          .filter({ hasText: 'https://api.openai.com/v1' })
           .getByText('当前使用')
           .isVisible()
 
@@ -74,11 +70,11 @@ describe('settings model e2e', () => {
       },
       assert: async (result, runtime) => {
         await runtime.assertThat(
-          result.summaryCurrentText.includes('gpt-4o-mini') && result.currentRowHasTag,
+          result.summaryCurrentText.includes('OpenAI') && result.currentRowHasTag,
           {
             name: 'first-config-becomes-current',
             message:
-              '第一条模型配置保存后，应立即成为当前模型，并在页头摘要和列表行里出现当前态标识，对齐 SET-MODEL-003-AC1。',
+              '第一条连接配置保存后，应立即成为当前配置，并在页头摘要和列表行里出现当前态标识，对齐 SET-MODEL-003-AC1。',
             data: result
           }
         )

@@ -11,11 +11,10 @@ vi.mock('../../../src/main/services/llm/chatModel', () => ({
 
 import { createAiLlmExecutor } from '../../../src/main/services/ai/llmExecutor'
 import type { AiLlmDriver } from '../../../src/main/services/ai/llmExecutor'
-import type { AiLlmIoRecord, AiRunEvent, LLMConfig } from '../../../src/shared/types'
+import type { AiLlmIoRecord, AiRunEvent, LlmRuntimeConfig } from '../../../src/shared/types'
 
-const baseConfig: LLMConfig = {
+const baseConfig: LlmRuntimeConfig = {
   id: 'cfg-1',
-  name: 'Primary',
   providerKind: 'openai',
   base_url: 'https://example.test/v1',
   model_name: 'gpt-5',
@@ -31,10 +30,10 @@ describe('ai unit llm executor text path', () => {
   it('falls back from completions to responses and persists the resolved text transport', async () => {
     const events: AiRunEvent[] = []
     const llmIoRecords: AiLlmIoRecord[] = []
-    const saveConfig = vi.fn(async (_cfg: LLMConfig) => undefined)
+    const saveConfig = vi.fn(async (_cfg: LlmRuntimeConfig) => undefined)
 
     createChatModelMock.mockImplementation(
-      (_cfg: LLMConfig, options?: { transport?: 'completions' | 'responses' }) => {
+      (_cfg: LlmRuntimeConfig, options?: { transport?: 'completions' | 'responses' }) => {
         const transport = options?.transport ?? 'responses'
         return {
           invoke: async () => {
@@ -115,7 +114,7 @@ describe('ai unit llm executor text path', () => {
   it('forwards streamed text deltas through the observer and records stream metadata', async () => {
     const events: AiRunEvent[] = []
     const llmIoRecords: AiLlmIoRecord[] = []
-    const saveConfig = vi.fn(async (_cfg: LLMConfig) => undefined)
+    const saveConfig = vi.fn(async (_cfg: LlmRuntimeConfig) => undefined)
     const answerChunks: string[] = []
 
     const driver: AiLlmDriver = {
@@ -181,6 +180,83 @@ describe('ai unit llm executor text path', () => {
     expect(saveConfig).toHaveBeenCalledTimes(1)
     expect(saveConfig.mock.calls[0]?.[0]).toMatchObject({
       preferredTransport: 'responses'
+    })
+  })
+
+  it('fails early when a streamed response stalls on blank deltas', async () => {
+    const events: AiRunEvent[] = []
+    const llmIoRecords: AiLlmIoRecord[] = []
+    const saveConfig = vi.fn(async (_cfg: LlmRuntimeConfig) => undefined)
+
+    createChatModelMock.mockImplementation(() => ({
+      invoke: async () => ({
+        content: 'unexpected'
+      }),
+      stream: async () => ({
+        async *[Symbol.asyncIterator]() {
+          yield {
+            content: '{"partial":'
+          }
+          for (let index = 0; index < 513; index += 1) {
+            yield {
+              content: ' \t   '
+            }
+          }
+        }
+      }),
+      withConfig: () => {
+        throw new Error('text output should not call withConfig')
+      }
+    }))
+
+    const executor = createAiLlmExecutor({
+      eventCtx: {
+        runId: 'run-3',
+        sendEvent: (event) => events.push(event),
+        recordLlmIo: (record) => llmIoRecords.push(record)
+      },
+      runtimeSettings: {
+        llmStreamingMode: 'force_stream'
+      },
+      getConfig: async () => ({
+        ...baseConfig,
+        preferredTransport: 'completions'
+      }),
+      saveConfig,
+      checkCancelled: () => undefined
+    })
+
+    await expect(
+      executor.chatText({
+        caller: 'human.brain',
+        taskId: 'task-3',
+        schemaName: 'human_brain_decision',
+        system: 'system prompt',
+        user: 'user prompt'
+      })
+    ).rejects.toThrow('llm_stream_blank_delta_stall; blankChunks=513')
+
+    const failedActivity = events
+      .filter((event) => event.type === 'activity')
+      .find((event) => event.type === 'activity' && event.status === 'failed')
+    expect(failedActivity).toMatchObject({
+      type: 'activity',
+      actionType: 'llm_text_output',
+      status: 'failed',
+      details: {
+        streamed: true,
+        chunkCount: 513,
+        reason: expect.stringContaining('llm_stream_blank_delta_stall; blankChunks=513')
+      }
+    })
+    expect(llmIoRecords[0]).toMatchObject({
+      caller: 'human.brain',
+      schemaName: 'human_brain_decision',
+      streamingMode: 'force_stream',
+      streamed: true,
+      chunkCount: 513,
+      status: 'failed',
+      reason: expect.stringContaining('llm_stream_blank_delta_stall; blankChunks=513')
     })
   })
 })

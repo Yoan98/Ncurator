@@ -20,7 +20,6 @@ import { createScriptedStructuredOutputDriver } from './scriptedStructuredOutput
 
 const SCRIPTED_LLM_CONFIG: LiveLlmConfig = {
   id: 'mock-llm-scripted',
-  name: 'Mock LLM Scripted',
   providerKind: 'openai-compatible',
   base_url: 'https://scripted.local/v1',
   model_name: 'scripted-llm',
@@ -30,6 +29,20 @@ const SCRIPTED_LLM_CONFIG: LiveLlmConfig = {
 
 const DEFAULT_RUNTIME_SETTINGS: AiRuntimeSettings = {
   llmStreamingMode: 'force_stream'
+}
+
+const resolveRuntimeModelName = (input: {
+  mode: BackendHarnessMode
+  explicitModelName?: string
+  defaultModelName?: string | null
+}): string | undefined => {
+  const explicitModelName = String(input.explicitModelName || '').trim()
+  if (explicitModelName) return explicitModelName
+
+  const defaultModelName = String(input.defaultModelName || '').trim()
+  if (defaultModelName) return defaultModelName
+
+  return input.mode === 'mock-llm' ? SCRIPTED_LLM_CONFIG.model_name : undefined
 }
 
 const buildApprovalResolver = (
@@ -61,6 +74,7 @@ export type RealAiDepsFactory = {
 export const createRealAiDepsFactory = async (input: {
   mode: BackendHarnessMode
   runId: string
+  runtimeModelName?: string | null
   workspaceRoot: string
   eventCollector: EventCollector
 }): Promise<RealAiDepsFactory> => {
@@ -84,7 +98,8 @@ export const createRealAiDepsFactory = async (input: {
   )
 
   const seedLlmConfig = async (config: LiveLlmConfig): Promise<void> => {
-    await storageService.llm.save(config)
+    const { model_name: _modelName, ...persistedConfig } = config
+    await storageService.llm.save(persistedConfig)
     await storageService.llm.setActive(config.id)
   }
 
@@ -120,7 +135,11 @@ export const createRealAiDepsFactory = async (input: {
         sessionId: contextInput.sessionId || 'test-session',
         input: contextInput.userInput || '请处理当前测试任务。',
         selectedReferences: contextInput.selectedReferences,
-        modelConfigId: contextInput.modelConfigId,
+        modelName: resolveRuntimeModelName({
+          mode: input.mode,
+          explicitModelName: contextInput.modelName,
+          defaultModelName: input.runtimeModelName
+        }),
         workspace: bindWorkspace
           ? {
               workspaceId: 'test-workspace',

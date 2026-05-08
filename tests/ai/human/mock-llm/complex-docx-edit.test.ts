@@ -62,6 +62,22 @@ describe('ai human mock-llm backend', () => {
                   expectedOutcome: '生成新版本并返回 changedBlocks。'
                 })
               },
+              () => {
+                const applyResult = readLatestToolResultDataFromEvents<DocxMutationResult>(
+                  runtime.eventCollector.snapshot(),
+                  'docx_text_edit'
+                )
+                return buildToolDecision({
+                  toolName: 'docx_read_blocks',
+                  args: {
+                    sourcePath: 'complex-edit.docx',
+                    fromBlockId: applyResult.changedBlocks[0]!.blockId
+                  },
+                  summary: '精读新内容',
+                  reason: '验证编辑结果已经真实进入后续 docx session。',
+                  expectedOutcome: '确认新文本可被精读到。'
+                })
+              },
               {
                 output: buildToolDecision({
                   toolName: 'docx_search',
@@ -70,24 +86,8 @@ describe('ai human mock-llm backend', () => {
                     query: 'Cycle 3 cumulative draft content.'
                   },
                   summary: '搜索新内容',
-                  reason: '先定位编辑后的 block，再继续精读。',
+                  reason: '读回确认后再搜索定位编辑后的 block。',
                   expectedOutcome: '确认新文本可被搜索到。'
-                })
-              },
-              () => {
-                const searchResult = readLatestToolResultDataFromEvents<DocxSearchResult>(
-                  runtime.eventCollector.snapshot(),
-                  'docx_search'
-                )
-                return buildToolDecision({
-                  toolName: 'docx_read_blocks',
-                  args: {
-                    sourcePath: 'complex-edit.docx',
-                    fromBlockId: searchResult.matches[0]!.blockId
-                  },
-                  summary: '精读新内容',
-                  reason: '验证编辑结果已经真实进入后续 docx session。',
-                  expectedOutcome: '确认新文本可被精读到。'
                 })
               },
               {
@@ -228,6 +228,26 @@ describe('ai human mock-llm backend', () => {
                   summary: '插入补充说明',
                   reason: '先插入段落说明，后续再接表格。',
                   expectedOutcome: '生成新增段落并返回 createdBlocks。'
+                })
+              },
+              () => {
+                const paragraphEditResult = readLatestToolResultDataFromEvents<DocxMutationResult>(
+                  runtime.eventCollector.snapshot(),
+                  'docx_paragraph_edit'
+                )
+                const anchorBlockId = paragraphEditResult.createdBlocks?.[0]?.blockId
+                if (!anchorBlockId) {
+                  throw new Error('paragraph edit did not return createdBlocks')
+                }
+                return buildToolDecision({
+                  toolName: 'docx_outline',
+                  args: {
+                    sourcePath: 'complex-structured-edit.docx',
+                    maxBlocks: 80
+                  },
+                  summary: '读回新增段落',
+                  reason: '段落写入后必须先 readback 最新修订，才能继续写表格。',
+                  expectedOutcome: 'outline 中出现新增段落。'
                 })
               },
               () => {

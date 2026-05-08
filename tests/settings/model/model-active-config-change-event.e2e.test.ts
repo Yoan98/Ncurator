@@ -6,26 +6,21 @@ import {
   SETTINGS_E2E_TIMEOUT_MS,
   getSettingsLocator,
   navigateToSettingsSection,
-  seedModelConfigs,
-  waitForAntMessage
+  seedModelConfigs
 } from '../../harness/e2e/settings'
 
 const SEEDED_CONFIGS: readonly LLMConfig[] = [
   {
     id: 'model-current',
-    name: '当前配置',
     providerKind: 'openai',
     base_url: 'https://api.openai.com/v1',
-    model_name: 'gpt-4o',
     api_key: 'sk-current',
     is_active: true
   },
   {
     id: 'model-next',
-    name: '备用配置',
-    providerKind: 'openai',
-    base_url: 'https://api.openai.com/v1',
-    model_name: 'gpt-4o-mini',
+    providerKind: 'deepseek',
+    base_url: 'https://api.deepseek.com',
     api_key: 'sk-next',
     is_active: false
   }
@@ -45,7 +40,7 @@ describe('settings model e2e', () => {
 
         await runtime.step({
           name: 'seed-configs',
-          message: '预置一个当前模型和一个备用模型。',
+          message: '预置一个当前配置和一个备用配置。',
           run: async () => {
             await seedModelConfigs(page, SEEDED_CONFIGS)
           }
@@ -53,25 +48,25 @@ describe('settings model e2e', () => {
 
         await runtime.step({
           name: 'edit-active-config',
-          message: '打开当前激活配置并保存，触发一次模型变更事件。',
+          message: '打开当前激活配置并保存，触发一次配置变更事件。',
           run: async () => {
             await navigateToSettingsSection(page, 'model')
             await getSettingsLocator(
               page,
               `${settingsSelectors.modelEditButtonPrefix}-${SEEDED_CONFIGS[0].id}`
             ).click()
-            await getSettingsLocator(page, settingsSelectors.modelNameInput).fill('当前模型-已编辑')
+            await getSettingsLocator(page, settingsSelectors.modelApiKeyInput).fill('sk-current-edited')
             await getSettingsLocator(page, settingsSelectors.modelSaveButton).click()
             await page
               .locator('tbody tr')
-              .filter({ hasText: '当前模型-已编辑' })
+              .filter({ hasText: '****ited' })
               .waitFor({ state: 'visible' })
           }
         })
 
         await runtime.step({
           name: 'switch-active-config',
-          message: '切换到备用模型，触发第二次模型变更事件。',
+          message: '切换到备用配置，触发第二次配置变更事件。',
           run: async () => {
             await getSettingsLocator(
               page,
@@ -80,7 +75,7 @@ describe('settings model e2e', () => {
             await page.waitForFunction(
               (selector) => {
                 const host = document.querySelector(selector)
-                return host instanceof HTMLElement && host.innerText.includes('gpt-4o-mini')
+                return host instanceof HTMLElement && host.innerText.includes('DeepSeek')
               },
               `[data-testid="${settingsSelectors.modelSummaryCurrent}"]`
             )
@@ -97,7 +92,7 @@ describe('settings model e2e', () => {
             (await getSettingsLocator(page, settingsSelectors.modelSummaryCurrent).textContent()) || '',
           currentRowHasTag: await page
             .locator('tbody tr')
-            .filter({ hasText: '下一个模型' })
+            .filter({ hasText: 'https://api.deepseek.com' })
             .getByText('当前使用')
             .isVisible()
         }
@@ -114,13 +109,13 @@ describe('settings model e2e', () => {
         )
 
         await runtime.assertThat(
-          result.summaryText.includes('gpt-4o-mini') &&
+          result.summaryText.includes('DeepSeek') &&
             result.currentRowHasTag &&
             result.llmConfigListCalls >= 3,
           {
             name: 'latest-active-config-is-readable-after-change',
             message:
-              '事件派发后，界面后续读取到的当前模型应已经更新到最新值，不需要重启页面，对齐 SET-MODEL-004-AC1 与 SET-MODEL-004-AC2。',
+              '事件派发后，界面后续读取到的当前配置应已经更新到最新值，不需要重启页面，对齐 SET-MODEL-004-AC1 与 SET-MODEL-004-AC2。',
             data: result
           }
         )

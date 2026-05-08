@@ -48,7 +48,7 @@ export type AiRunStartPayload = {
   sessionId: string
   input: string
   selectedReferences?: SelectedReference[]
-  modelConfigId?: string
+  modelName?: string
   workspace?: {
     workspaceId: string
     workspaceName: string
