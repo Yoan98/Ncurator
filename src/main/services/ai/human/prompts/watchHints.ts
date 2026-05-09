@@ -32,6 +32,8 @@ export const summarizeWatchHint = (hint: HumanWatchHint): string => {
       return `hand 累计工具调用次数达到 ${hint.detail.toolCallCount}，已超过临时上限 ${hint.detail.limit}。`
     case 'hand_docx_positioned_write_blocked':
       return `hand 命中复杂定位排版保护；${hint.detail.targetDescription}不能自动编辑。`
+    case 'hand_docx_batch_write_halted':
+      return `hand 的 docx 批量写已安全停止；已完成 ${String(hint.detail.completedCallCount)}/${String(hint.detail.totalCallCount)} 个写操作，停止原因=${hint.detail.haltReason}。`
     case 'docx_write_requires_readback':
       return `hand 本轮已发生 docx 写操作；必须先 readback 最新修订后，才能继续写或结束。`
     case 'brain_checklist_incomplete':
@@ -91,6 +93,22 @@ export const renderWatchHintForBrain = (hint: HumanWatchHint): string => {
       return [
         `上一轮命中了复杂定位排版保护，${hint.detail.targetDescription}不能自动编辑。`,
         '不要继续尝试修改这处区域，继续处理当前任务中其他仍可完成的部分。'
+      ].join('\n')
+    case 'hand_docx_batch_write_halted':
+      return [
+        '上一轮 docx 批量写在中途安全停止。',
+        `sourcePath=${hint.detail.sourcePath}`,
+        `lastSafeRevisionRef=${hint.detail.lastSafeRevisionRef}`,
+        `completedCallCount=${String(hint.detail.completedCallCount)}`,
+        `totalCallCount=${String(hint.detail.totalCallCount)}`,
+        `haltedAtCallIndex=${String(hint.detail.haltedAtCallIndex)}`,
+        `haltReason=${hint.detail.haltReason}`,
+        `haltSummary=${hint.detail.haltSummary}`,
+        `completedItems=${renderStringList(hint.detail.completedItems)}`,
+        `pendingItems=${renderStringList(hint.detail.pendingItems)}`,
+        `failedItem=${hint.detail.failedItem}`,
+        `recoveryContext=${hint.detail.recoveryContext}`,
+        '已完成部分已写入最新安全修订；未完成部分尚未执行。后续决策必须基于当前现状自主收敛。'
       ].join('\n')
     case 'docx_write_requires_readback':
       return [

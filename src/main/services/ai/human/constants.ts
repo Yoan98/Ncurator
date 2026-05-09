@@ -40,7 +40,8 @@ export const TOOL_CALL_RESULT_CODES = [
 export const HUMAN_TOOL_USE_PLAN_MODES = ['parallel', 'serial'] as const
 export const HUMAN_HAND_PLAN_INVALID_REASONS = [
   'parallel_requires_read_only',
-  'parallel_limit_exceeded'
+  'parallel_limit_exceeded',
+  'docx_batch_write_limit_exceeded'
 ] as const
 export const HUMAN_WATCH_HINT_CODES = [
   'learning_no_effect',
@@ -49,6 +50,7 @@ export const HUMAN_WATCH_HINT_CODES = [
   'hand_plan_invalid',
   'hand_tool_limit_exceeded',
   'hand_docx_positioned_write_blocked',
+  'hand_docx_batch_write_halted',
   'docx_write_requires_readback',
   'brain_checklist_incomplete'
 ] as const

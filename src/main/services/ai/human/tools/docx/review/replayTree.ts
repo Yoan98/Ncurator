@@ -69,7 +69,16 @@ export const createReplaySnapshot = (input: {
       tableCellBlockIds:
         detail.type === 'table'
           ? detail.cells.map((cell) => cell.blockId)
-          : []
+          : [],
+      tableCells:
+        detail.type === 'table'
+          ? detail.cells.map((cell) => ({
+              blockId: cell.blockId,
+              row: cell.row,
+              col: cell.col,
+              text: cell.paragraphs.map((paragraph) => paragraph.text).join('\n')
+            }))
+          : undefined
     }
 
     blocks.push(snapshotBlock)
@@ -115,6 +124,11 @@ const buildNode = (input: {
   parentNodeId: input.parentNodeId,
   sourceBlockId: input.sourceBlockId,
   currentBlockId: input.currentBlockId,
+  predecessorNodeId: undefined,
+  successorNodeId: undefined,
+  replacedFromNodeId: undefined,
+  anchorFromNodeId: undefined,
+  anchorSide: undefined,
   spec: input.spec,
   createdRevisionRef: input.createdRevisionRef,
   changedRevisionRef: input.changedRevisionRef,
@@ -290,6 +304,7 @@ const cloneNodeAsOldRevision = (
   nodeId: `${node.nodeId}:${reviewState}:${revisionRef}`,
   currentBlockId: undefined,
   reviewState,
+  successorNodeId: undefined,
   changedRevisionRef: revisionRef,
   reviewQuery: undefined
 })
@@ -325,8 +340,8 @@ const replaceNodeWithReviewPair = (input: {
   if (index < 0) return
   input.session.nodeById.set(input.oldNode.nodeId, input.oldNode)
   input.session.nodeById.set(input.newNode.nodeId, input.newNode)
+  input.session.nodeById.set(input.targetNodeId, input.oldNode)
   input.session.bodyNodeIds.splice(index, 1, input.oldNode.nodeId, input.newNode.nodeId)
-  input.session.nodeById.delete(input.targetNodeId)
   reindexBodyNodes(input.session)
 }
 
@@ -458,6 +473,8 @@ export const applyRevisionToReplaySession = (input: {
         undefined,
         anchorNodeId
       )
+      node.anchorFromNodeId = anchorNodeId
+      node.anchorSide = op.type === 'insert_before' ? 'before' : 'after'
       session.nodeById.set(node.nodeId, node)
       return node.nodeId
     })
@@ -542,6 +559,9 @@ export const applyRevisionToReplaySession = (input: {
     targetNode.sourceOrigin,
     targetNode.sourceBlockId
   )
+  oldNode.successorNodeId = newNode.nodeId
+  newNode.predecessorNodeId = oldNode.nodeId
+  newNode.replacedFromNodeId = targetNode.nodeId
   replaceNodeWithReviewPair({
     session,
     targetNodeId,

@@ -100,14 +100,22 @@ describe('ai tool hand backend', () => {
       },
       assert: async (result, runtime) => {
         const results = result.state.execution.lastToolResults || []
+        const haltedHint =
+          typeof results[1]?.data === 'object' &&
+          results[1]?.data &&
+          !Array.isArray(results[1]?.data) &&
+          'watchHint' in results[1].data
+            ? (results[1].data as { watchHint?: { code?: string } }).watchHint
+            : undefined
         runtime.assertThat(
           results.length === 2 &&
             results[0]?.code === 'ok' &&
             results[1]?.code === 'invalid_input' &&
-            results[1]?.diagnostic?.message.includes('already been removed'),
+            haltedHint?.code === 'hand_docx_batch_write_halted' &&
+            result.state.execution.watchHint?.code === 'hand_docx_batch_write_halted',
           {
-            name: 'invalid-target-aborts-transaction-with-explicit-error',
-            message: '事务段内后续目标若已被前序操作删除，应明确失败并中止，而不是 fallback 到别的块。',
+            name: 'invalid-target-halts-transaction-with-watchhint',
+            message: '事务段内后续目标若已无法安全恢复，应停止后续写入并通过 halted watch hint 把现状交还 brain。',
             data: {
               lastToolResults: results,
               watchHint: result.state.execution.watchHint

@@ -77,6 +77,14 @@ export const deriveHandFollowupSignals = (input: {
 } => {
   for (const [index, result] of input.results.entries()) {
     if (!DOCX_WRITE_TOOL_NAMES.has(result.toolName) || result.ok) continue
+    const haltedHint = result.data && typeof result.data === 'object' && !Array.isArray(result.data)
+      ? (result.data as { watchHint?: HumanWatchHint }).watchHint
+      : undefined
+    if (haltedHint?.code === 'hand_docx_batch_write_halted') {
+      return {
+        watchHint: haltedHint
+      }
+    }
     if (!isDocxPositionedLayoutProtectionMessage(result.diagnostic?.message)) continue
 
     const plannedCall = input.toolUsePlan.calls[index]
@@ -117,4 +125,6 @@ export const shouldStopSerialHandPlan = (input: {
   toolUsePlan: ToolUsePlan
   results: readonly ToolCallResult[]
 }): boolean =>
-  deriveHandFollowupSignals(input).watchHint?.code === 'hand_docx_positioned_write_blocked'
+  ['hand_docx_positioned_write_blocked', 'hand_docx_batch_write_halted'].includes(
+    deriveHandFollowupSignals(input).watchHint?.code || ''
+  )

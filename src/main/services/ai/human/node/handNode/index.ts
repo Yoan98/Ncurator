@@ -27,11 +27,34 @@ const DOCX_SERIAL_WRITE_TOOL_NAMES = new Set([
   'docx_text_edit',
   'docx_text_style_edit'
 ])
+const DOCX_TABLE_WRITE_TOOL_NAMES = new Set(['docx_table_edit'])
+const DOCX_BATCH_WRITE_LIMIT_DEFAULT = 5
+const DOCX_BATCH_WRITE_LIMIT_WITH_TABLE = 3
+type DocxContinuationAction = 'insert_before' | 'insert_after'
+type DocxAnchorContinuation = {
+  action: DocxContinuationAction
+  blockId: string
+}
 
 const isDocxSerialWriteCall = (toolName: string): boolean => DOCX_SERIAL_WRITE_TOOL_NAMES.has(toolName)
+const buildDocxBatchWriteLimit = (calls: ToolUsePlan['calls']): number =>
+  calls.some((call) => DOCX_TABLE_WRITE_TOOL_NAMES.has(call.toolName))
+    ? DOCX_BATCH_WRITE_LIMIT_WITH_TABLE
+    : DOCX_BATCH_WRITE_LIMIT_DEFAULT
 
 const readSourcePathArg = (args: JsonObject): string | undefined =>
   typeof args.sourcePath === 'string' && args.sourcePath.trim().length > 0 ? args.sourcePath : undefined
+
+const readDocxContinuationAction = (toolName: string, args: JsonObject): DocxContinuationAction | undefined => {
+  if (
+    toolName !== 'docx_paragraph_edit' &&
+    toolName !== 'docx_heading_edit' &&
+    toolName !== 'docx_table_edit'
+  ) {
+    return undefined
+  }
+  return args.action === 'insert_before' || args.action === 'insert_after' ? args.action : undefined
+}
 
 const rewriteDocxArgsWithResolvedBlocks = (input: {
   args: JsonObject
@@ -104,7 +127,22 @@ const buildToolLimitWatchHint = (toolCallCount: number, limit: number): HumanWat
 })
 
 const validateToolUsePlan = (toolUsePlan: ToolUsePlan): HumanWatchHint | undefined => {
-  if (toolUsePlan.mode === 'serial') return undefined
+  if (toolUsePlan.mode === 'serial') {
+    const docxWriteCalls = toolUsePlan.calls.filter((item) => isDocxSerialWriteCall(item.toolName))
+    if (docxWriteCalls.length > 0) {
+      const limit = buildDocxBatchWriteLimit(docxWriteCalls)
+      if (docxWriteCalls.length > limit) {
+        return createHandPlanInvalidWatchHint({
+          mode: 'serial',
+          reason: 'docx_batch_write_limit_exceeded',
+          offendingToolNames: docxWriteCalls.map((item) => item.toolName),
+          callCount: docxWriteCalls.length,
+          limit
+        })
+      }
+    }
+    return undefined
+  }
   if (toolUsePlan.calls.length > HUMAN_MAX_PARALLEL_TOOL_CALLS) {
     return createHandPlanInvalidWatchHint({
       mode: 'parallel',
@@ -231,36 +269,112 @@ const executeToolUsePlan = async (input: {
     }
 
     const segmentResults: ToolCallResult[] = []
+    const completedItems: string[] = []
+    const anchorContinuationMap = new Map<string, DocxAnchorContinuation>()
     for (let callIndex = 0; callIndex < segmentCalls.length; callIndex += 1) {
       const segmentCall = segmentCalls[callIndex]
       const resolvedCall = resolved.resolvedCalls[callIndex]
       try {
+        const argsWithContinuation = { ...segmentCall.args }
+        const continuationAction = readDocxContinuationAction(segmentCall.toolName, segmentCall.args)
+        const continuationEntry =
+          typeof argsWithContinuation.anchorBlockId === 'string' &&
+          anchorContinuationMap.has(argsWithContinuation.anchorBlockId)
+            ? anchorContinuationMap.get(argsWithContinuation.anchorBlockId)
+            : undefined
+        const continuationAnchor =
+          continuationEntry && continuationEntry.action === continuationAction
+            ? continuationEntry.blockId
+            : undefined
+        if (
+          (segmentCall.toolName === 'docx_paragraph_edit' ||
+            segmentCall.toolName === 'docx_heading_edit' ||
+            segmentCall.toolName === 'docx_table_edit') &&
+          continuationAnchor
+        ) {
+          argsWithContinuation.anchorBlockId = continuationAnchor
+        }
         const resolvedLocators = resolvedCall.locators.map((locator) => ({
           field: locator.field,
-          blockIds: locator.nodeIds.map((nodeId) => {
-            const current = runtime.resolveCurrentBlockIdFromNodeId({
+          blockIds: continuationAnchor && locator.field === 'anchorBlockId'
+            ? [continuationAnchor]
+            : (() => {
+            const current = runtime.resolveLiveBlockIdsFromStableLocators({
               sourcePath: replay.sourcePath,
-              nodeId
+              field: locator.field,
+              stableLocators: locator.stableLocators
             })
             if (!current.ok) {
               throw new Error(current.error)
             }
-            return current.blockId
-          })
+            return current.blockIds
+          })()
         }))
-        segmentResults.push(
-          await executeToolCall({
-            ctx: input.ctx,
-            cache: input.cache,
-            taskId: input.taskId,
-            learnedSkillIds: input.learnedSkillIds,
-            toolName: segmentCall.toolName,
-            args: rewriteDocxArgsWithResolvedBlocks({
-              args: segmentCall.args,
-              resolvedLocators
-            })
+        const nextResult = await executeToolCall({
+          ctx: input.ctx,
+          cache: input.cache,
+          taskId: input.taskId,
+          learnedSkillIds: input.learnedSkillIds,
+          toolName: segmentCall.toolName,
+          args: rewriteDocxArgsWithResolvedBlocks({
+            args: argsWithContinuation,
+            resolvedLocators
           })
-        )
+        })
+        segmentResults.push(nextResult)
+        if (nextResult.ok) {
+          completedItems.push(`${segmentCall.toolName}#${String(callIndex + 1)}`)
+          const createdBlocks =
+            typeof nextResult.data === 'object' &&
+            nextResult.data &&
+            !Array.isArray(nextResult.data) &&
+            Array.isArray((nextResult.data as { createdBlocks?: Array<{ blockId: string; type?: string }> }).createdBlocks)
+              ? (nextResult.data as { createdBlocks?: Array<{ blockId: string; type?: string }> }).createdBlocks || []
+              : []
+          const lastCreatedBlockId =
+            createdBlocks
+              .filter((block) => block.type !== 'table_cell')
+              .slice(-1)[0]?.blockId ||
+            createdBlocks[createdBlocks.length - 1]?.blockId
+          if (
+            lastCreatedBlockId &&
+            typeof segmentCall.args.anchorBlockId === 'string' &&
+            segmentCall.args.anchorBlockId.length > 0 &&
+            continuationAction
+          ) {
+            anchorContinuationMap.set(segmentCall.args.anchorBlockId, {
+              action: continuationAction,
+              blockId: lastCreatedBlockId
+            })
+          }
+          continue
+        }
+
+        nextResult.data = {
+          ...(typeof nextResult.data === 'object' && nextResult.data !== null && !Array.isArray(nextResult.data)
+            ? nextResult.data
+            : {}),
+          watchHint: {
+            code: 'hand_docx_batch_write_halted',
+            detail: {
+              sourcePath: replay.sourcePath,
+              lastSafeRevisionRef:
+                runtime.getReplaySession(replay.sourcePath)?.activeRevisionRef || replay.currentRevisionRef,
+              haltedAtCallIndex: callIndex,
+              completedCallCount: completedItems.length,
+              totalCallCount: segmentCalls.length,
+              haltReason: 'locator_confidence_too_low',
+              haltSummary: nextResult.diagnostic?.message || 'docx 批量写因定位置信度不足而停止。',
+              completedItems,
+              pendingItems: segmentCalls
+                .slice(callIndex + 1)
+                .map((call, pendingIndex) => `${call.toolName}#${String(callIndex + pendingIndex + 2)}`),
+              failedItem: `${segmentCall.toolName}#${String(callIndex + 1)}`,
+              recoveryContext: `当前工作稿已停在 ${runtime.getReplaySession(replay.sourcePath)?.activeRevisionRef || replay.currentRevisionRef}；已完成写入保留，未完成写入未执行。`
+            }
+          }
+        }
+        break
       } catch (error) {
         segmentResults.push({
           toolName: segmentCall.toolName,
@@ -269,7 +383,26 @@ const executeToolUsePlan = async (input: {
           data: {
             ok: false,
             code: 'invalid_input',
-            error: error instanceof Error ? error.message : String(error)
+            error: error instanceof Error ? error.message : String(error),
+            watchHint: {
+              code: 'hand_docx_batch_write_halted',
+              detail: {
+                sourcePath: replay.sourcePath,
+                lastSafeRevisionRef:
+                  runtime.getReplaySession(replay.sourcePath)?.activeRevisionRef || replay.currentRevisionRef,
+                haltedAtCallIndex: callIndex,
+                completedCallCount: completedItems.length,
+                totalCallCount: segmentCalls.length,
+                haltReason: 'locator_confidence_too_low',
+                haltSummary: error instanceof Error ? error.message : String(error),
+                completedItems,
+                pendingItems: segmentCalls
+                  .slice(callIndex + 1)
+                  .map((call, pendingIndex) => `${call.toolName}#${String(callIndex + pendingIndex + 2)}`),
+                failedItem: `${segmentCall.toolName}#${String(callIndex + 1)}`,
+                recoveryContext: `当前工作稿已停在 ${runtime.getReplaySession(replay.sourcePath)?.activeRevisionRef || replay.currentRevisionRef}；已完成写入保留，未完成写入未执行。`
+              }
+            }
           },
           diagnostic: {
             message: error instanceof Error ? error.message : String(error)

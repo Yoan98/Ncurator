@@ -14,6 +14,7 @@ import type {
   DocxReplaySession,
   DocxReplaySnapshot,
   DocxRevision,
+  DocxStableLocator,
   DocxSnapshotResolvedToolCall,
   DocxToolResultCode,
   SemanticDocIndex
@@ -196,6 +197,12 @@ export type DocxToolRuntime = {
     nodeId: string
     allowDeleted?: boolean
   }) => { ok: true; blockId: string } | { ok: false; error: string }
+  resolveLiveBlockIdsFromStableLocators: (input: {
+    sourcePath: string
+    field: 'blockId' | 'anchorBlockId' | 'cellBlockId' | 'blockIds'
+    stableLocators: DocxStableLocator[]
+    allowDeleted?: boolean
+  }) => { ok: true; blockIds: string[] } | { ok: false; error: string }
   buildResourceContext: (input: {
     sourcePath: string
     effectKind: DocxToolResourceContext['effectKind']
@@ -402,11 +409,67 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
           )
       )
 
+  const listVisibleNodes = (session: DocxReplaySession): DocxReplayNode[] =>
+    session.bodyNodeIds
+      .map((nodeId) => session.nodeById.get(nodeId))
+      .filter(
+        (node): node is DocxReplayNode =>
+          Boolean(node && node.reviewState !== 'deleted' && node.reviewState !== 'replaced-old')
+      )
+
+  const buildContentFingerprint = (node: DocxReplayNode): string => JSON.stringify(node.spec)
+
+  const buildStableLocatorForNode = (input: {
+    session: DocxReplaySession
+    field: 'blockId' | 'anchorBlockId' | 'cellBlockId' | 'blockIds'
+    node: DocxReplayNode
+    requestedBlockId: string
+    tableBlockIdOverride?: string
+  }): DocxStableLocator => {
+    const visibleNodes = listVisibleNodes(input.session)
+    const visibleIndex = visibleNodes.findIndex((node) => node.nodeId === input.node.nodeId)
+    const previousVisibleNodeId = visibleIndex > 0 ? visibleNodes[visibleIndex - 1]?.nodeId : undefined
+    const nextVisibleNodeId =
+      visibleIndex >= 0 && visibleIndex < visibleNodes.length - 1
+        ? visibleNodes[visibleIndex + 1]?.nodeId
+        : undefined
+    const tableBlockId =
+      input.field === 'cellBlockId'
+        ? input.tableBlockIdOverride || input.session.activeSnapshot.tableBlockIdByCellBlockId.get(input.requestedBlockId)
+        : undefined
+    const tableNode = tableBlockId ? findVisibleNodeByLocator(input.session, tableBlockId) : undefined
+    const tableSnapshotBlock = tableBlockId
+      ? input.session.activeSnapshot.blockById.get(tableBlockId)
+      : undefined
+    const tableCellMeta =
+      input.field === 'cellBlockId'
+        ? tableSnapshotBlock?.tableCells?.find((cell) => cell.blockId === input.requestedBlockId)
+        : undefined
+    return {
+      nodeId: input.node.nodeId,
+      sourceBlockId: input.node.sourceBlockId,
+      currentBlockIdAtResolve: input.node.currentBlockId || input.node.blockId || input.node.sourceBlockId,
+      bodyIndexAtResolve: input.node.bodyIndex,
+      previousVisibleNodeId,
+      nextVisibleNodeId,
+      kind: input.field === 'cellBlockId' ? 'table_cell' : input.node.kind,
+      contentFingerprint: buildContentFingerprint(input.node),
+      tableNodeId: tableNode?.nodeId,
+      tableSourceBlockId: tableNode?.sourceBlockId,
+      tableFingerprint: tableNode ? buildContentFingerprint(tableNode) : undefined,
+      cellBlockId: input.field === 'cellBlockId' ? input.requestedBlockId : undefined
+      ,
+      rowIndex: tableCellMeta?.row,
+      colIndex: tableCellMeta?.col,
+      cellContentFingerprint: tableCellMeta?.text
+    }
+  }
+
   const resolveNodeIdsForLocatorField = (inputValue: {
     session: DocxReplaySession
     field: 'blockId' | 'anchorBlockId' | 'cellBlockId' | 'blockIds'
     rawValue: JsonObject[string]
-  }): string[] => {
+  }): DocxStableLocator[] => {
     const blockIds =
       inputValue.field === 'blockIds'
         ? Array.isArray(inputValue.rawValue)
@@ -416,11 +479,34 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
           ? [inputValue.rawValue]
           : []
     return blockIds.map((blockId) => {
+      if (inputValue.field === 'cellBlockId') {
+        const tableBlockId = inputValue.session.activeSnapshot.tableBlockIdByCellBlockId.get(blockId)
+        if (!tableBlockId) {
+          throw new Error(`cannot resolve ${inputValue.field}=${blockId} in base revision`)
+        }
+        const tableNode = findVisibleNodeByLocator(inputValue.session, tableBlockId)
+        if (!tableNode) {
+          throw new Error(`cannot resolve table for ${inputValue.field}=${blockId} in base revision`)
+        }
+        return buildStableLocatorForNode({
+          session: inputValue.session,
+          field: inputValue.field,
+          node: tableNode,
+          requestedBlockId: blockId,
+          tableBlockIdOverride: tableBlockId
+        })
+      }
+
       const node = findVisibleNodeByLocator(inputValue.session, blockId)
       if (!node) {
         throw new Error(`cannot resolve ${inputValue.field}=${blockId} in base revision`)
       }
-      return node.nodeId
+      return buildStableLocatorForNode({
+        session: inputValue.session,
+        field: inputValue.field,
+        node,
+        requestedBlockId: blockId
+      })
     })
   }
 
@@ -448,7 +534,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
           if (!(field in toolCall.args)) return
           locators.push({
             field,
-            nodeIds: resolveNodeIdsForLocatorField({
+            stableLocators: resolveNodeIdsForLocatorField({
               session,
               field,
               rawValue: toolCall.args[field]
@@ -510,6 +596,158 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     return {
       ok: true,
       blockId: currentBlockId
+    }
+  }
+
+  const findVisibleNodeById = (
+    session: DocxReplaySession,
+    nodeId: string | undefined
+  ): DocxReplayNode | undefined => {
+    if (!nodeId) return undefined
+    const node = session.nodeById.get(nodeId)
+    if (!node) return undefined
+    if (node.reviewState === 'deleted' || node.reviewState === 'replaced-old') return undefined
+    return node
+  }
+
+  const findVisibleNodeBySourceBlockId = (
+    session: DocxReplaySession,
+    sourceBlockId: string | undefined
+  ): DocxReplayNode[] => {
+    if (!sourceBlockId) return []
+    return listVisibleNodes(session).filter((node) => node.sourceBlockId === sourceBlockId)
+  }
+
+  const resolveVisibleCellByTableCoordinates = (input: {
+    session: DocxReplaySession
+    locator: DocxStableLocator
+  }): string | undefined => {
+    if (
+      !input.locator.tableSourceBlockId ||
+      typeof input.locator.rowIndex !== 'number' ||
+      typeof input.locator.colIndex !== 'number'
+    ) {
+      return undefined
+    }
+    const tableNode = findVisibleNodeBySourceBlockId(input.session, input.locator.tableSourceBlockId)[0]
+    if (!tableNode) return undefined
+    const tableBlockId = tableNode.currentBlockId || tableNode.blockId || tableNode.sourceBlockId
+    if (!tableBlockId) return undefined
+    const snapshotBlock = input.session.activeSnapshot.blockById.get(tableBlockId)
+    const matchedCell = snapshotBlock?.tableCells?.find(
+      (cell) => cell.row === input.locator.rowIndex && cell.col === input.locator.colIndex
+    )
+    return matchedCell?.blockId
+  }
+
+  const resolveLiveBlockIdsFromStableLocators = (inputValue: {
+    sourcePath: string
+    field: 'blockId' | 'anchorBlockId' | 'cellBlockId' | 'blockIds'
+    stableLocators: DocxStableLocator[]
+    allowDeleted?: boolean
+  }): { ok: true; blockIds: string[] } | { ok: false; error: string } => {
+    const session = state.replaySessionBySourcePath.get(path.resolve(inputValue.sourcePath))
+    if (!session) {
+      return {
+        ok: false,
+        error: `docx session not found for sourcePath: ${path.resolve(inputValue.sourcePath)}`
+      }
+    }
+
+    const resolvedBlockIds: string[] = []
+    for (const locator of inputValue.stableLocators) {
+      if (inputValue.field === 'cellBlockId') {
+        const visibleCellBlockId = resolveVisibleCellByTableCoordinates({
+          session,
+          locator
+        })
+        if (visibleCellBlockId) {
+          resolvedBlockIds.push(visibleCellBlockId)
+          continue
+        }
+      }
+
+      const visibleNode = findVisibleNodeById(session, locator.nodeId)
+      if (visibleNode) {
+        const blockId = visibleNode.currentBlockId || visibleNode.blockId || visibleNode.sourceBlockId
+        if (!blockId) {
+          return {
+            ok: false,
+            error: `resolved node has no current block binding: ${locator.nodeId}`
+          }
+        }
+        resolvedBlockIds.push(blockId)
+        continue
+      }
+
+      const historicalNode = session.nodeById.get(locator.nodeId)
+      if (historicalNode?.successorNodeId) {
+        const successor = findVisibleNodeById(session, historicalNode.successorNodeId)
+        if (inputValue.field === 'cellBlockId') {
+          const successorCellBlockId = resolveVisibleCellByTableCoordinates({
+            session,
+            locator
+          })
+          if (successorCellBlockId) {
+            resolvedBlockIds.push(successorCellBlockId)
+            continue
+          }
+        }
+        const successorBlockId = successor?.currentBlockId || successor?.blockId || successor?.sourceBlockId
+        if (successorBlockId) {
+          resolvedBlockIds.push(successorBlockId)
+          continue
+        }
+      }
+
+      const sourceMatches = findVisibleNodeBySourceBlockId(session, locator.sourceBlockId)
+      if (sourceMatches.length === 1) {
+        const blockId =
+          sourceMatches[0].currentBlockId || sourceMatches[0].blockId || sourceMatches[0].sourceBlockId
+        if (!blockId) {
+          return {
+            ok: false,
+            error: `resolved node has no current block binding: ${locator.nodeId}`
+          }
+        }
+        resolvedBlockIds.push(blockId)
+        continue
+      }
+
+      if (inputValue.field === 'cellBlockId') {
+        const recoveredCellBlockId = resolveVisibleCellByTableCoordinates({
+          session,
+          locator
+        })
+        if (recoveredCellBlockId) {
+          resolvedBlockIds.push(recoveredCellBlockId)
+          continue
+        }
+      }
+
+      const previousVisible = findVisibleNodeById(session, locator.previousVisibleNodeId)
+      const nextVisible = findVisibleNodeById(session, locator.nextVisibleNodeId)
+      if (inputValue.field === 'anchorBlockId') {
+        const neighbor = previousVisible || nextVisible
+        const blockId = neighbor?.currentBlockId || neighbor?.blockId || neighbor?.sourceBlockId
+        if (blockId) {
+          resolvedBlockIds.push(blockId)
+          continue
+        }
+      }
+
+      return {
+        ok: false,
+        error:
+          inputValue.field === 'anchorBlockId'
+            ? `cannot safely resolve anchor after earlier mutations: ${locator.nodeId}`
+            : `cannot safely resolve target after earlier mutations: ${locator.nodeId}`
+      }
+    }
+
+    return {
+      ok: true,
+      blockIds: resolvedBlockIds
     }
   }
 
@@ -1349,6 +1587,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     getRevisionRefByDocId,
     resolveSnapshotTargets,
     resolveCurrentBlockIdFromNodeId,
+    resolveLiveBlockIdsFromStableLocators,
     buildResourceContext
   }
 }

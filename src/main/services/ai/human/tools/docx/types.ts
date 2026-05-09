@@ -244,6 +244,12 @@ export type DocxReplaySnapshotBlock = {
   kind: 'paragraph' | 'table'
   spec: DocxBlockSpec
   tableCellBlockIds: string[]
+  tableCells?: Array<{
+    blockId: string
+    row: number
+    col: number
+    text: string
+  }>
 }
 
 export type DocxReplaySnapshot = {
@@ -303,6 +309,11 @@ export type DocxReplayNode = {
   parentNodeId?: string
   sourceBlockId?: string
   currentBlockId?: string
+  predecessorNodeId?: string
+  successorNodeId?: string
+  replacedFromNodeId?: string
+  anchorFromNodeId?: string
+  anchorSide?: 'before' | 'after'
   spec: DocxBlockSpec
   createdRevisionRef: string
   changedRevisionRef?: string
@@ -328,11 +339,31 @@ export type DocxCapabilityToolsRuntimeState = {
 
 export type DocxSnapshotResolvedLocator = {
   field: 'blockId' | 'anchorBlockId' | 'cellBlockId' | 'blockIds'
-  nodeIds: string[]
+  stableLocators: DocxStableLocator[]
 }
 
 export type DocxSnapshotResolvedToolCall = {
   toolName: string
   sourcePath: string
   locators: DocxSnapshotResolvedLocator[]
+}
+
+export type DocxStableLocatorKind = 'paragraph' | 'table' | 'table_cell'
+
+export type DocxStableLocator = {
+  nodeId: string
+  sourceBlockId?: string
+  currentBlockIdAtResolve?: string
+  bodyIndexAtResolve: number
+  previousVisibleNodeId?: string
+  nextVisibleNodeId?: string
+  kind: DocxStableLocatorKind
+  contentFingerprint: string
+  tableNodeId?: string
+  tableSourceBlockId?: string
+  tableFingerprint?: string
+  cellBlockId?: string
+  rowIndex?: number
+  colIndex?: number
+  cellContentFingerprint?: string
 }

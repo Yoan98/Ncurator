@@ -419,6 +419,68 @@
 - Oracle：deleted 内容命中为 0，未修改内容仍稳定命中。
 - Not：不验证 review 展示层。
 
+#### `hand`
+
+##### `hand-serial-docx-chain`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 hand 在 `serial` 模式下会按顺序执行 `docx` 写入与后续读取。
+- Why：这是 hand 承接 docx 写后读回闭环的最小基线。
+- How：真实执行 `docx_text_edit -> docx_read_blocks`。
+- Oracle：工具结果按顺序成功返回，且写后留下 `docx_write_requires_readback`。
+- Not：不验证复杂定位恢复。
+
+##### `hand-docx-batch-write-limit`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 docx 串行批量写超过单批上限时会在执行前被 hand 拦截。
+- Why：批量写护栏是降低定位漂移与错误扩散的第一层保护。
+- How：构造超过 5 个纯段落写入的 serial plan。
+- Oracle：返回 `hand_plan_invalid`，reason 为 `docx_batch_write_limit_exceeded`，且不会执行任何实际写入。
+- Not：不验证 runtime 中途风险升高后的停机。
+
+##### `hand-docx-serial-successor-chain`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证同批 docx 串行写中，`replace_text` 后继续对同一原锚点连续 `insert_after` 仍能完成。
+- Why：这是“旧 blockId 失效后靠 successor/live resolve 继续”的核心回归。
+- How：真实执行 `replace_text -> insert_after -> insert_after`，后两步都沿原始锚点继续追加。
+- Oracle：三步全部成功，新段落顺序正确，且整批结束后留下 `docx_write_requires_readback`。
+- Not：不验证表格恢复。
+
+##### `hand-docx-table-cell-stable-target`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证前序结构插入后，旧 `cellBlockId` 仍能恢复到新的 table cell 并继续写入。
+- Why：表格 cell 是批量串行写里最容易因 body block 漂移而误命中的高风险目标。
+- How：真实执行 `insert_before paragraph -> docx_table_edit(update_cell)`。
+- Oracle：第二步成功命中 `table_cell` 并更新内容，不会误落到 `table` body block，也不会静默跳过。
+- Not：不验证更复杂的表格重排。
+
+##### `hand-docx-table-mixed-chain`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证混合段落与表格的同批串行写，在 `insert_before`、`update_cell`、`insert_after` 组合下仍能稳定完成。
+- Why：这条 case 同时覆盖表格 cell 恢复与 continuation 方向保护，是更接近真实风险周报的链式写路径。
+- How：真实执行 `insert_before paragraph -> update_cell -> insert_after paragraph`，其中前后插入共用同一原锚点。
+- Oracle：前插内容位于原锚点前，后插内容位于原锚点后，表格 cell 正确更新，整批结束后留下 `docx_write_requires_readback`。
+- Not：不验证 halted watch hint 分支。
+
+##### `hand-docx-serial-snapshot-bound-edit-plan-invalid-target`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证同批写中若后续目标已被前序操作删除且无法安全恢复，会停机而不是误写。
+- Why：fail-closed 停机是批量串行写安全闭环的核心下界。
+- How：真实执行 `delete -> replace_text`，第二步继续引用已删除的原目标。
+- Oracle：前一步保留成功，第二步返回 `invalid_input`，并产出 `hand_docx_batch_write_halted`。
+- Not：不验证 brain 下一轮如何恢复。
+
 ##### `docx-multi-round-created-block-edit`
 
 - 测试类型：`backend`
