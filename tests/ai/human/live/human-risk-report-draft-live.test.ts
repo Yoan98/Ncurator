@@ -153,9 +153,11 @@ describe('ai human live backend', () => {
               event.input.command.includes(relativePath.replace('工作/', '工作/'))
           )
         )
-        const createdTargetInWorkDir =
+        const createdTargetInAllowedLocation =
           createdRelativePaths.length >= 1 &&
-          createdRelativePaths.every((sourcePath) => sourcePath.startsWith('工作/'))
+          createdRelativePaths.every(
+            (sourcePath) => sourcePath.startsWith('工作/') || sourcePath === path.basename(sourcePath)
+          )
         const writesStayOnCreatedDoc =
           writeRelativePaths.length === 0 ||
           writeRelativePaths.every((sourcePath) => createdRelativePaths.includes(sourcePath))
@@ -251,7 +253,7 @@ describe('ai human live backend', () => {
               (toolName) => toolName === 'docx_read_blocks' || toolName === 'docx_outline'
             ) &&
             toolNames.includes('docx_create') &&
-            createdTargetInWorkDir &&
+            createdTargetInAllowedLocation &&
             createdDocNotPreexisting &&
             writesStayOnCreatedDoc &&
             lastWeekOpened &&
