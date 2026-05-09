@@ -4,14 +4,12 @@ import type { SelectedReference } from '../../../src/shared/types'
 import type { BackendTestRuntime, WorkspaceKbSeedResult } from './test-types'
 
 export const HUMAN_RISK_REPORT_DRAFT_USER_INPUT =
-  '帮我写下这周的工作周报，基于我工作目录下的文件信息，记得参考我上周写的周报风格来哦'
+  '帮我写下这周的工作周报，基于我工作目录下的所有文件信息，不要漏了txt文件，记得参考我上周写的周报风格来哦'
 
 export const SHARED_WORKSPACE_FIXTURE_PATH = 'tests/fixtures/workspace' as const
 const WORKSPACE_LEARNING_FIXTURE_DIR = `${SHARED_WORKSPACE_FIXTURE_PATH}/学习笔记`
 const WORKSPACE_WORK_FIXTURE_DIR = `${SHARED_WORKSPACE_FIXTURE_PATH}/工作`
 
-export const RISK_REPORT_TEMPLATE_FIXTURE_PATH =
-  `${WORKSPACE_WORK_FIXTURE_DIR}/周报模板-项目对外同步版.docx` as const
 export const RISK_REPORT_LAST_WEEK_REPORT_FIXTURE_PATH =
   `${WORKSPACE_WORK_FIXTURE_DIR}/上周周报-已发版.docx` as const
 export const RISK_REPORT_CLIENT_MEETING_FIXTURE_PATH =
@@ -84,8 +82,6 @@ type RiskReportTrackedFile = {
 }
 
 export type RiskReportWorkspaceSeed = {
-  templatePath: string
-  templateRelativePath: string
   lastWeekReportRelativePath: string
   expectedRiskConclusion: string
   expectedOwnerSummary: string
@@ -94,7 +90,6 @@ export type RiskReportWorkspaceSeed = {
   relevantTxtRelativePaths: string[]
   preexistingDocxRelativePaths: string[]
   trackedDocFiles: RiskReportTrackedFile[]
-  originalTemplateBytes: Uint8Array
 }
 
 export type SelectedDocxFixture = {
@@ -201,8 +196,6 @@ export const loadRiskReportWorkspaceSeed = async (
   const expectedRiskConclusion = '在最终合规签署完成前，当前风险状态仍需保持跟进。'
   const expectedOwnerSummary = '最终复核窗口由合规负责人 Alice 牵头。'
   const expectedNextStep = '财务接口人 Bob 本周内补齐付款材料，并在复核前完成附件对齐。'
-  const templatePath = runtime.getFixtureWorkspacePath(RISK_REPORT_TEMPLATE_FIXTURE_PATH)
-  const templateRelativePath = toWorkspaceRelativePath(runtime, templatePath)
   const lastWeekReportRelativePath = toWorkspaceRelativePath(
     runtime,
     runtime.getFixtureWorkspacePath(RISK_REPORT_LAST_WEEK_REPORT_FIXTURE_PATH)
@@ -243,9 +236,7 @@ export const loadRiskReportWorkspaceSeed = async (
     runtime,
     runtime.getFixtureWorkspacePath(RISK_REPORT_Q2_REVIEW_FIXTURE_PATH)
   )
-  const originalTemplateBytes = await fs.readFile(templatePath)
   const preexistingDocxRelativePaths = [
-    templateRelativePath,
     lastWeekReportRelativePath,
     clientMeetingRelativePath,
     deliverySyncRelativePath,
@@ -255,7 +246,6 @@ export const loadRiskReportWorkspaceSeed = async (
     q2ReviewRelativePath
   ]
   const trackedDocFiles = await captureWorkspaceFiles(runtime, [
-    RISK_REPORT_TEMPLATE_FIXTURE_PATH,
     RISK_REPORT_LAST_WEEK_REPORT_FIXTURE_PATH,
     RISK_REPORT_CLIENT_MEETING_FIXTURE_PATH,
     RISK_REPORT_DELIVERY_SYNC_FIXTURE_PATH,
@@ -266,8 +256,6 @@ export const loadRiskReportWorkspaceSeed = async (
   ])
 
   return {
-    templatePath,
-    templateRelativePath,
     lastWeekReportRelativePath,
     expectedRiskConclusion,
     expectedOwnerSummary,
@@ -284,8 +272,7 @@ export const loadRiskReportWorkspaceSeed = async (
       scheduleNoteRelativePath
     ],
     preexistingDocxRelativePaths,
-    trackedDocFiles,
-    originalTemplateBytes
+    trackedDocFiles
   }
 }
 

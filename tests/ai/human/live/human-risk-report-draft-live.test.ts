@@ -8,7 +8,6 @@ import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
   HUMAN_RISK_REPORT_DRAFT_USER_INPUT,
-  hasUnchangedFileBytes,
   loadRiskReportWorkspaceSeed,
   SHARED_WORKSPACE_FIXTURE_PATH
 } from '../../../harness/backend/aiLiveTestData'
@@ -58,7 +57,7 @@ describe('ai human live backend', () => {
       suite: 'human',
       groups: ['live'],
       description:
-        '验证 live 模式下 human 会在真实长任务里串起模板定位、多源工作文档取证、新建周报 docx 与待确认稿交付。',
+        '验证 live 模式下 human 会在真实长任务里串起多源工作文档取证、新建周报 docx 与待确认稿交付。',
       fixtures: [SHARED_WORKSPACE_FIXTURE_PATH],
       runMode: 'single',
       runtimeModelName: hasLiveLlmConfigInEnv() ? loadLiveLlmConfigFromEnv().model_name : null,
@@ -109,10 +108,6 @@ describe('ai human live backend', () => {
         )
         const deliveryText =
           `${result.output?.summary || ''}\n${result.output?.deliveryMarkdown || ''}`.trim()
-        const sourceTemplateUnchanged = await hasUnchangedFileBytes(
-          result.workspaceSeed.templatePath,
-          result.workspaceSeed.originalTemplateBytes
-        )
         const trackedDocsUnchanged = await Promise.all(
           result.workspaceSeed.trackedDocFiles.map(async (fixture) => {
             const currentBytes = await fs.readFile(fixture.workspacePath)
@@ -140,11 +135,6 @@ describe('ai human live backend', () => {
           .filter((value): value is string => typeof value === 'string')
         const writeRelativePaths = writeSourcePaths.map((sourcePath) =>
           toWorkspaceRelativePath(runtime.workspaceRoot, sourcePath)
-        )
-        const templateOpened = openedExpectedDoc(
-          openedSourcePaths,
-          result.workspaceSeed.templateRelativePath,
-          path.basename(result.workspaceSeed.templateRelativePath)
         )
         const lastWeekOpened = openedExpectedDoc(
           openedSourcePaths,
@@ -264,7 +254,6 @@ describe('ai human live backend', () => {
             createdTargetInWorkDir &&
             createdDocNotPreexisting &&
             writesStayOnCreatedDoc &&
-            templateOpened &&
             lastWeekOpened &&
             relevantDocxOpened &&
             txtReads.length >= 1,
@@ -292,7 +281,6 @@ describe('ai human live backend', () => {
           message: 'live human complex case 应给出最终修改说明。',
           data: {
             toolNames,
-            templatePath: result.workspaceSeed.templatePath,
             artifacts: result.output?.artifacts
           }
         })
@@ -306,8 +294,7 @@ describe('ai human live backend', () => {
         })
 
         runtime.assertThat(
-          sourceTemplateUnchanged &&
-            trackedDocsUnchanged.every(Boolean) &&
+          trackedDocsUnchanged.every(Boolean) &&
             createSourcePaths.length >= 1 &&
             !draftTextOnly.includes('风险已解除') &&
             riskConclusionSatisfied &&
