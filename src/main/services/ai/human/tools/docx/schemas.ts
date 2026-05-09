@@ -175,48 +175,32 @@ export const docxParagraphEditActionSchema = z.enum([
   'delete'
 ])
 
-export const docxParagraphEditSchema = z
-  .object({
-    sourcePath: z.string().min(1),
-    action: docxParagraphEditActionSchema,
-    anchorBlockId: z.string().min(1).optional(),
-    blockId: z.string().min(1).optional(),
-    text: z.string().optional()
-  })
-  .superRefine((value, ctx) => {
-    if (value.action === 'insert_before' || value.action === 'insert_after') {
-      if (!value.anchorBlockId) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['anchorBlockId'],
-          message: 'anchorBlockId is required for paragraph insertion'
-        })
-      }
-      if (typeof value.text !== 'string') {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['text'],
-          message: 'text is required for paragraph insertion'
-        })
-      }
-      return
-    }
+const docxParagraphEditInsertBaseSchema = z.object({
+  sourcePath: z.string().min(1),
+  anchorBlockId: z.string().min(1),
+  text: z.string()
+}).strict()
 
-    if (!value.blockId) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['blockId'],
-        message: 'blockId is required for paragraph update'
-      })
-    }
-    if (value.action === 'replace_text' && typeof value.text !== 'string') {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['text'],
-        message: 'text is required for paragraph replacement'
-      })
-    }
+const docxParagraphEditTargetBaseSchema = z.object({
+  sourcePath: z.string().min(1),
+  blockId: z.string().min(1)
+}).strict()
+
+export const docxParagraphEditSchema = z.discriminatedUnion('action', [
+  docxParagraphEditInsertBaseSchema.extend({
+    action: z.literal('insert_before')
+  }),
+  docxParagraphEditInsertBaseSchema.extend({
+    action: z.literal('insert_after')
+  }),
+  docxParagraphEditTargetBaseSchema.extend({
+    action: z.literal('replace_text'),
+    text: z.string()
+  }),
+  docxParagraphEditTargetBaseSchema.extend({
+    action: z.literal('delete')
   })
+])
 
 export const docxHeadingEditActionSchema = z.enum([
   'insert_before',
@@ -224,35 +208,31 @@ export const docxHeadingEditActionSchema = z.enum([
   'replace_text'
 ])
 
-export const docxHeadingEditSchema = z
-  .object({
-    sourcePath: z.string().min(1),
-    action: docxHeadingEditActionSchema,
-    anchorBlockId: z.string().min(1).optional(),
-    blockId: z.string().min(1).optional(),
-    level: z.number().int().min(1).max(6),
-    text: z.string().min(1)
-  })
-  .superRefine((value, ctx) => {
-    if (value.action === 'insert_before' || value.action === 'insert_after') {
-      if (!value.anchorBlockId) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['anchorBlockId'],
-          message: 'anchorBlockId is required for heading insertion'
-        })
-      }
-      return
-    }
+const docxHeadingEditInsertBaseSchema = z.object({
+  sourcePath: z.string().min(1),
+  anchorBlockId: z.string().min(1),
+  level: z.number().int().min(1).max(6),
+  text: z.string().min(1)
+}).strict()
 
-    if (!value.blockId) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['blockId'],
-        message: 'blockId is required for heading replacement'
-      })
-    }
+const docxHeadingEditTargetBaseSchema = z.object({
+  sourcePath: z.string().min(1),
+  blockId: z.string().min(1),
+  level: z.number().int().min(1).max(6),
+  text: z.string().min(1)
+}).strict()
+
+export const docxHeadingEditSchema = z.discriminatedUnion('action', [
+  docxHeadingEditInsertBaseSchema.extend({
+    action: z.literal('insert_before')
+  }),
+  docxHeadingEditInsertBaseSchema.extend({
+    action: z.literal('insert_after')
+  }),
+  docxHeadingEditTargetBaseSchema.extend({
+    action: z.literal('replace_text')
   })
+])
 
 export const docxTableEditActionSchema = z.enum([
   'insert_before',
@@ -260,49 +240,29 @@ export const docxTableEditActionSchema = z.enum([
   'update_cell'
 ])
 
-export const docxTableEditSchema = z
-  .object({
-    sourcePath: z.string().min(1),
-    action: docxTableEditActionSchema,
-    anchorBlockId: z.string().min(1).optional(),
-    cellBlockId: z.string().min(1).optional(),
-    rows: z.array(z.array(z.string())).min(1).optional(),
-    text: z.string().optional()
-  })
-  .superRefine((value, ctx) => {
-    if (value.action === 'insert_before' || value.action === 'insert_after') {
-      if (!value.anchorBlockId) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['anchorBlockId'],
-          message: 'anchorBlockId is required for table insertion'
-        })
-      }
-      if (!value.rows || value.rows.length === 0) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['rows'],
-          message: 'rows are required for table insertion'
-        })
-      }
-      return
-    }
+const docxTableInsertSchema = z.object({
+  sourcePath: z.string().min(1),
+  anchorBlockId: z.string().min(1),
+  rows: z.array(z.array(z.string()).min(1)).min(1)
+}).strict()
 
-    if (!value.cellBlockId) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['cellBlockId'],
-        message: 'cellBlockId is required for table cell update'
-      })
-    }
-    if (typeof value.text !== 'string') {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['text'],
-        message: 'text is required for table cell update'
-      })
-    }
+const docxTableUpdateCellSchema = z.object({
+  sourcePath: z.string().min(1),
+  cellBlockId: z.string().min(1),
+  text: z.string()
+}).strict()
+
+export const docxTableEditSchema = z.discriminatedUnion('action', [
+  docxTableInsertSchema.extend({
+    action: z.literal('insert_before')
+  }),
+  docxTableInsertSchema.extend({
+    action: z.literal('insert_after')
+  }),
+  docxTableUpdateCellSchema.extend({
+    action: z.literal('update_cell')
   })
+])
 
 export const docxTextEditSchema = z.object({
   sourcePath: z.string().min(1),

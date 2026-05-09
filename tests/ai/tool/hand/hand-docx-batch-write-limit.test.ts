@@ -39,7 +39,7 @@ describe('ai tool hand backend', () => {
             currentDecision: {
               decision: {
                 summary: '尝试提交超限 docx 批量写',
-                reason: '验证 hand 对 docx batch limit 的拦截。',
+                reason: '验证 hand 对 docx batch limit 的前置拦截。',
                 expectedOutcome: '直接返回 hand_plan_invalid。'
               },
               nextAction: {

@@ -435,11 +435,11 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 docx 串行批量写超过单批上限时会在执行前被 hand 拦截。
-- Why：批量写护栏是降低定位漂移与错误扩散的第一层保护。
+- What：验证 docx 串行批量写超过单批上限时，不再走 plan 拦截，而是由运行时停在首个不可接受点并返回 `invalid_input`。
+- Why：这轮合同改为“schema 管参数形状，runtime 管执行安全”，批量上限也归 runtime 收口。
 - How：构造超过 5 个纯段落写入的 serial plan。
-- Oracle：返回 `hand_plan_invalid`，reason 为 `docx_batch_write_limit_exceeded`，且不会执行任何实际写入。
-- Not：不验证 runtime 中途风险升高后的停机。
+- Oracle：不再返回 `hand_plan_invalid`；若执行不能安全继续，应返回 `invalid_input` 并附带 `hand_docx_batch_write_halted`。
+- Not：不要求固定停在第几步。
 
 ##### `hand-docx-serial-successor-chain`
 

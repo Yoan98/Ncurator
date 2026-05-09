@@ -1,6 +1,6 @@
 import type { JsonObject, JsonValue } from '../../../../../shared/types'
 import { renderInlineList, renderLineList } from '../../utils/render'
-import { summarizeWatchHint, renderWatchHintForBrain } from '../prompts/watchHints'
+import { summarizeWatchHint } from '../prompts/watchHints'
 import type {
   HumanHistoryToolResult,
   HumanLoadedHistoryContext,
@@ -260,14 +260,13 @@ const renderBrainRoundExecution = (record: HumanRoundRecord): string => {
 const renderBrainRoundResult = (record: HumanRoundRecord): string => {
   switch (record.execution.kind) {
     case 'pre_execution_blocked':
-      return renderWatchHintForBrain(record.execution.watchHint)
+      return '- 本轮在执行前被系统阻断，未进入真实 tool 执行。'
     case 'learning':
       return `
 - 已加载的技能：${renderQuotedNames(record.execution.learningOutcome.loadedSkillIds)}
 - 已跳过的重复技能：${renderQuotedNames(record.execution.learningOutcome.skippedDuplicateSkillIds)}
 - 未识别的技能：${renderQuotedNames(record.execution.learningOutcome.skippedUnknownSkillIds)}
 - 当前 active tool 数：${String(record.execution.learningOutcome.activeToolCount)}
-${record.execution.watchHint ? `- 收敛提示：${renderWatchHintForBrain(record.execution.watchHint)}` : ''}
 `
         .trim()
         .replace(/\n\n+/g, '\n')
@@ -295,11 +294,8 @@ ${record.execution.watchHint ? `- 收敛提示：${renderWatchHintForBrain(recor
               }
             )}`
           : ''
-      const watchHintLine = execution.watchHint
-        ? `- 收敛提示：${renderWatchHintForBrain(execution.watchHint)}`
-        : ''
 
-      return [toolAttempts, artifactLine, watchHintLine].filter(Boolean).join('\n')
+      return [toolAttempts, artifactLine].filter(Boolean).join('\n')
     }
     case 'mouth':
       return `

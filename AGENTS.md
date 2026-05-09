@@ -20,7 +20,7 @@
 - `doc/ui-style.md`：涉及 UI 风格与通用交互规范时阅读。
 
 ### 1.4 测试相关
- - `doc/test-plan/ai-test.md`：涉及 AI、human live、formal harness、FileReview、KB tool contract，或 docx 串行批写/安全停机回归测试设计时阅读。
+- `doc/test-plan/ai-test.md`：涉及 AI、human live、formal harness、FileReview、KB tool contract，或 docx 串行批写/schema 合同/安全停机回归测试设计时阅读。
 - `doc/test-plan/settings-test.md`：涉及 Settings 测试，或需要区分 workspace 容器、files 子区域、web 子区域测试边界时阅读。
 - `doc/test.md`：涉及测试用例编写、runner、日志或测试运行机制时阅读。
 

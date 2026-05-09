@@ -86,10 +86,20 @@ export const toolCallResultSchema = z.object({
   resourceContext: toolResourceContextSchema.optional()
 })
 
-export const toolUsePlanSchema = z.object({
-  mode: humanToolUsePlanModeSchema,
+const serialToolUsePlanSchema = z.object({
+  mode: z.literal('serial'),
   calls: z.array(toolCallParamSchema).min(1)
 })
+
+const parallelToolUsePlanSchema = z.object({
+  mode: z.literal('parallel'),
+  calls: z.array(toolCallParamSchema).min(1)
+})
+
+export const toolUsePlanSchema = z.discriminatedUnion('mode', [
+  serialToolUsePlanSchema,
+  parallelToolUsePlanSchema
+])
 
 export const humanLearningOutcomeSchema = z.object({
   requestedSkillIds: z.array(z.string().min(1)),
@@ -211,7 +221,7 @@ export const brainDecisionSchema = z.object({
   expectedOutcome: z.string().min(1)
 })
 
-export const brainNextActionSchema = z.union([
+export const brainNextActionSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('learning'),
     wantLearnSkillIds: z.array(z.string().min(1)).min(1)
