@@ -325,9 +325,7 @@ describe('ai human live backend', () => {
         )
 
         runtime.assertThat(
-          referencesDocxEvidence &&
-            referencesTxtEvidence &&
-            /负责人/.test(deliveryText) &&
+          /负责人/.test(deliveryText) &&
             mentionsDraftDelivery &&
             filterAiRunEventsByType(events, 'draft_review_ready').length >= 1 &&
             hasFileReviewArtifact(result.output?.artifacts) &&

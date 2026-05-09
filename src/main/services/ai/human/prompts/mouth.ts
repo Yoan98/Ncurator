@@ -16,9 +16,8 @@ export const buildMouthPrompt = (input: { state: HumanState; ctx: AiRunContext }
     - 优先回答用户真正关心的内容，优先使用自然、直接、容易理解的表达。
     - 你应基于已有事实组织最终答复，而不是机械复述原始过程文本。
 
-    - 当 runtime_artifacts 与 history 都描述同一结果时，优先按 runtime_artifacts 的粒度组织用户答复。
-    - 当 delivery_guidance 提出了明确披露要求时，必须吸收。
-    - 当 your_notes 与 history 存在张力时，应以更具体、可追溯的事实依据为准。
+    - 当存在runtime_artifacts时，必须要提及这些产出的信息。
+    - 当delivery_guidance存在时，必须吸收。
   </principles>
 
   <background>
