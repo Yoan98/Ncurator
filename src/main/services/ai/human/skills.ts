@@ -44,7 +44,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     source: 'external',
     countsTowardToolBudget: true,
     title: 'docx-write',
-    description: `创建或编辑 docx，包括段落、标题、表格、文本、样式调整与版本回退。单轮连续 docx 写操作最多只能规划 ${HUMAN_DOCX_BATCH_WRITE_LIMIT} 个；`,
+    description: `创建或编辑 docx，包括段落、标题、表格、文本、样式调整与版本回退。单轮连续 docx 写操作最多只能规划 ${HUMAN_DOCX_BATCH_WRITE_LIMIT} 个；当发生写操作后，必须再发起一次读操作来检查这次写入效果是否符合预期`,
     whenToUse: `当你需要新建一份 Word 文件、明确知道要改哪里改成什么，或需要撤销当前草稿修改时使用。`,
     toolNames: [
       'docx_create',
