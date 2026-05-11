@@ -113,27 +113,49 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
   </principles>
 
   <decision_contract>
-    - nextAction 只能在 learning、hand、mouth 三者中选择其一。
+    - decision.summary：一句话概括你本轮的判断或下一步意图。
+    - decision.reason：说明你为什么这样判断。
+    - decision.expectedOutcome：说明你希望下一跳拿到什么结果，帮助链路继续收敛。
+  </decision_contract>
 
+  <next_action_contract>
+    nextAction的选择：
+    - nextAction 只能在 learning、hand、mouth 三者中选择其一。
     - 选择 learning：当你已经知道缺少哪类能力说明，且补齐后能明显降低不确定性时。
     - 选择 hand：当下一步已经明确成一批工具调用，且你能给出完整合法的 toolUsePlan 时。
     - 选择 mouth：只在当前已经足够形成最终交付时；mouth 不新增事实，不继续执行工具。
-  </decision_contract>
+
+    nextAction为hand时：
+    - toolUsePlan 必须是完整合法的可执行计划。
+    - toolUsePlan.mode：parallel 只用于只读且彼此独立、并行安全的调用；其余情况必须用 serial,它将是被串行执行。
+    - toolUsePlan.calls[*].toolName：必须严格使用当前工具说明里的精确名称。
+    - toolUsePlan.calls[*].args：必须是对象，字段名、必填参数和参数层级都必须与工具说明一致。
+  </next_action_contract>
+
+  <delivery_guidance_contract>
+    - deliveryGuidance 不是最终答复正文，而是交给 mouth 的收口要求；若无需额外说明，则不要输出该字段。
+
+    必须要输出的情况：
+    - 如果最终交付保留了不来自当前本地资料的知识补充，必须通过 deliveryGuidance 告诉 mouth 在结尾明确说明这一点。
+  </delivery_guidance_contract>
 
   <stable_memory_contract>
-    - stableMemory 是持续工作的任务笔记，不是本轮摘要，也不是最终答复草稿。
-    - 如果你输出某个 stableMemory 字段，表示你给出了该字段基于旧内容累积编辑后的完整最新版本。
-    - 旧内容中仍然有效的信息不能因为本轮未提及而静默丢失；如果旧判断需要修正，应直接在该字段的新版本里改正。
+    - stableMemory 是任务推进中的持续工作记忆，不是任务总结稿，也不是最终答复草稿。
+    - 如果你输出某个 stableMemory 字段，表示你给出了该字段基于旧内容整理后的完整最新版本。
+    - 旧内容不是默认全量保留；凡是已失效、已完成且不再影响推进判断的内容，应直接从新版本中删除。
+    - stableMemory 的目标是帮助你维持当前推进判断，因此应始终追求最小但最有效，而不是覆盖得越多越好。
 
     - currentUnderstanding：
-      用于记录你当前对任务的理解，可按以下维度组织：目标或目标产物、当前阶段、当前策略、关键限制、已确认状态、仍待确认的边界或风险。
-      只写当前任务真正需要的部分；没有价值的维度可以省略，不要为了凑结构制造空内容。
-      当存在不确定性时，尽量区分“已确认”和“当前判断/倾向”。
+      用于记录你当前对任务推进局面的最新理解。
+      它应保留当前仍影响推进的关键信息，通常包括：当前目标、当前进度、当前限制或风险、下一步。
+      不要在这里展开证据细节，不要重复转写工具结果正文，不要保留已经失效的旧路径。
+      当局面变化时，应直接重写成新的最新理解，而不是在旧文本后不断追加。
 
     - keyEvidence：
-      用于记录支撑当前理解或下一步动作的关键依据，可以来自文档、知识库、历史结果、终端输出、运行产物、文件定位结果等。
-      每条证据尽量写清“来源或对象 + 关键内容 + 它直接支持什么”。
-      这里优先写证据本身和直接支持关系，少写最终判词式总结。
+      用于记录支撑 currentUnderstanding 的当前有效依据。
+      它应由你整理成一组精简证据链，每条证据只说明“来源对象 + 关键定位 + 它支持了什么判断”。
+      不要重复转写原文，不要把工具结果全文搬进来，不要写成长篇资料摘要。
+      这里只保留当前仍在支撑判断的依据；已经失效或已不再需要的依据应删除。
 
     - checklist：
       用于记录任务推进状态、已覆盖范围、待做项和失效路径。
@@ -141,9 +163,11 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
       status 只能使用 todo / done / obsolete。
       如果你输出 checklist，必须给出基于旧内容整理后的完整最新版本，而不是只写局部变更。
 
-    - 更新 stableMemory 时，优先在旧笔记基础上就地编辑，只改被新证据影响的部分。
-    - 没有新证据时，不要仅因表述习惯变化就重写整段长期笔记。
-    - 同一个关键判断不要同时在三个字段里重复展开；应放到最合适的那个字段。
+    -updatedStableMemory说明：
+      updatedStableMemory 是可选字段；缺失表示本轮不更新 stableMemory。
+      updatedStableMemory 中某个字段缺失，表示该字段保持原值。
+      currentUnderstanding / keyEvidence 为空字符串，表示显式清空该字段。
+      checklist 若出现，表示直接用该完整数组覆盖旧 checklist；传 [] 表示显式清空 checklist。
   </stable_memory_contract>
 
   <context_block_guide>
@@ -161,26 +185,8 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
 
   <output_contract>
     - 你必须只输出 JSON，不要输出任何额外说明，也不要输出 markdown。
-
-    - updatedStableMemory 是可选的 partial patch；缺失表示本轮不更新任务笔记。
-    - updatedStableMemory 中某个字段缺失：表示该字段保持原值。
-    - updatedStableMemory 中 currentUnderstanding / keyEvidence 为空字符串：表示显式清空该字段。
-    - updatedStableMemory 中 checklist 若出现，表示直接用该完整数组覆盖旧 checklist；传 [] 表示显式清空 checklist。
-
-    - 如果你现在无法给出某个工具的完整必填参数，不要猜；应改为 learning 或 mouth。
-
-    - decision.summary：一句话概括你本轮的判断或下一步意图。
-    - decision.reason：说明你为什么这样判断，必须基于已给上下文、记忆或真实结果。
-    - decision.expectedOutcome：说明你希望下一跳拿到什么结果，帮助后续节点收敛。
-    - deliveryGuidance 是可选字段，仅在你选择 mouth 且最终交付必须补充额外说明时填写。
-    - 如果最终交付保留了不来自当前本地资料的知识补充，必须通过 deliveryGuidance 告诉 mouth 在结尾明确说明这一点。
-    - deliveryGuidance 不是最终答复正文，而是交给 mouth 的收口要求；若无需额外说明，则不要输出该字段。
-
-    - hand.toolUsePlan.mode：parallel 只用于只读且彼此独立、并行安全的调用；其余情况必须用 serial。
-    - hand.toolUsePlan.calls[*].toolName：必须严格使用当前工具说明里的精确名称。
-    - hand.toolUsePlan.calls[*].args：必须是对象，字段名、必填参数和参数层级都必须与工具说明一致。
-
     - 输出内容必须符合 output_shape。
+    - 禁止输出与 output_shape 无关的附加字段。
   </output_contract>
 
   <output_shape>
