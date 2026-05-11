@@ -178,7 +178,7 @@ export const classifyCommandMode = (command: string): 'read_only' | 'mutating' |
   }
 
   if (
-    /^\s*(cat|sed|head|tail|rg|grep|find|ls|pwd|stat|wc|get-content|get-childitem|select-string|git\s+status|git\s+diff|git\s+show|python\s+.*-c|python3\s+.*-c|node\s+.*-e)\b/.test(
+    /^\s*(cat|sed|head|tail|rg|grep|find|ls|pwd|stat|wc|echo|printf|get-content|get-childitem|select-string|git\s+status|git\s+diff|git\s+show)\b/.test(
       text
     )
   ) {

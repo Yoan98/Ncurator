@@ -599,9 +599,9 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 AI 可仅通过 `workspace_run_command` 真实执行目录浏览与文本读取类只读命令。
+- What：验证 AI 可仅通过 `terminal_run` 真实执行目录浏览与文本读取类只读命令。
 - Why：这是 terminal 工具最典型的只读路径。
-- How：调用 `workspace_run_command` 执行真实 shell 命令，分别完成目录浏览与文件读取。
+- How：调用 `terminal_run` 执行真实 shell 命令，分别完成目录浏览与文件读取。
 - Oracle：返回真实 stdout 片段、退出码与可消费摘要。
 - Not：不验证写操作。
 
@@ -609,9 +609,9 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 AI 可仅通过 `workspace_run_command` 真实执行只读文本搜索命令。
+- What：验证 AI 可仅通过 `terminal_run` 真实执行只读文本搜索命令。
 - Why：搜索是 terminal 工具最常见的辅助路径。
-- How：调用 `workspace_run_command` 执行真实 shell 搜索命令。
+- How：调用 `terminal_run` 执行真实 shell 搜索命令。
 - Oracle：返回可断言命中信息与正确退出状态。
 - Not：不验证修改文件。
 
@@ -621,7 +621,7 @@
 - 实现状态：`已实现`
 - What：验证危险命令与越界输入会被真实守卫拒绝。
 - Why：terminal 风险边界必须靠正式测试长期守住。
-- How：构造危险或越权命令调用 `workspace_run_command`。
+- How：构造危险或越权命令调用 `terminal_run`。
 - Oracle：返回明确拒绝，不执行实际破坏操作。
 - Not：不验证 UI 提示。
 
@@ -708,7 +708,7 @@
 - 实现状态：`已实现`
 - What：验证 `human` 在 mock-llm 模式下能稳定走通真实 `brain -> learning -> hand -> mouth` 主链路。
 - Why：这是 `human` graph 的最小真实闭环，后续所有复杂样例都建立在这条主链路之上。
-- How：通过 scripted structured output 先学习一个真实 external skill（例如 `docx-read`），再直接执行一次 builtin terminal 工具 `workspace_run_command(pwd)`，最后进入真实 `mouth` 完成交付。
+- How：通过 scripted structured output 先学习一个真实 external skill（例如 `docx-read`），再直接执行一次 builtin terminal 工具 `terminal_run(pwd)`，最后进入真实 `mouth` 完成交付。
 - Oracle：`human_brain`、`human_learning`、`human_hand`、`human_mouth` 四个 stage 都真实出现，且至少有一次真实 terminal 工具结果与一次真实最终交付。
 - Not：不验证复杂分支、异常恢复或 live 模型质量。
 
@@ -718,7 +718,7 @@
 - 实现状态：`已实现`
 - What：验证真实 `learning` 会持续记录当前 active tool 数，并在预算未超限时保留当前已学习 skill 集。
 - Why：`learning` 的 active tool 预算是后续扩展 `excel / ppt` 等新能力时的重要长期边界，正式 case 需要先守住基础统计与状态可见性。
-- How：通过 scripted structured output 依次学习 `docx-read`、`docx-write`，再故意请求 builtin skill（如 `workspace-cli + kb-retrieval`）；检查最后一轮真实 `human_learning` 事件中的 `learnedSkillIds`、`availableToolNames` 与 summary，并确认出现 builtin learning watch hint。
+- How：通过 scripted structured output 依次学习 `docx-read`、`docx-write`，再故意请求 builtin skill（如 `terminal + kb-retrieval`）；检查最后一轮真实 `human_learning` 事件中的 `learnedSkillIds`、`availableToolNames` 与 summary，并确认出现 builtin learning watch hint。
 - Oracle：任务最终完成；最后一轮真实 `human_learning` 事件中只保留 external skill，`availableToolNames` 同时包含 builtin 与 learned external 的工具集合，summary 包含 `当前 active tools=` 且不包含 skill 淘汰文案；builtin skill 不占 active tool budget，但后续真实执行时仍计入工具调用次数限制。
 - Not：不验证超过 `20` 个 active tools 后的淘汰算法细节。
 
@@ -728,7 +728,7 @@
 - 实现状态：`已实现`
 - What：验证 duplicate external learning 触发真实 `watch_hint` 后，graph 会回到 `brain` 并继续推进。
 - Why：`watch_hint -> brain` 是 `human` 的核心收敛边之一，断掉后很多异常都无法恢复。
-- How：第一轮先学习一个 external skill（如 `docx-read`），第二轮故意重复学习同一个 external skill 触发 learning watch hint，随后再执行一次真实 `workspace_run_command(pwd)` 并完成交付。
+- How：第一轮先学习一个 external skill（如 `docx-read`），第二轮故意重复学习同一个 external skill 触发 learning watch hint，随后再执行一次真实 `terminal_run(pwd)` 并完成交付。
 - Oracle：事件流中真实出现 source 为 `learning` 的 `watch_hint`，并且在它之后仍发生真实 terminal 工具调用，任务最终完成。
 - Not：不验证 live 模型是否会自然产生这类重复决策。
 
@@ -739,7 +739,7 @@
 - What：验证真实工具失败结果会被 `human` 吸收，并继续收束到最终交付。
 - Why：工具失败是高频真实场景，如果失败后链路无法继续，`human` 就不具备稳定执行能力。
 - How：直接真实执行一个会失败的 builtin terminal 只读命令 `cat definitely-missing-file.txt`，随后由 `brain` 决定停止重试并进入 `mouth`。
-- Oracle：真实 `workspace_run_command` 结果为失败，且 `human` 最终仍进入 `completed` 并产出最终交付。
+- Oracle：真实 `terminal_run` 结果为失败，且 `human` 最终仍进入 `completed` 并产出最终交付。
 - Not：不验证失败后的最佳补救策略是否最优。
 
 ##### `tool-limit-converge`
@@ -818,7 +818,7 @@
 - 实现状态：`已实现`
 - What：验证 `human` 会通过真实 `hand` 执行一次并行多工具协作。
 - Why：`human` 不能只验证单工具 happy path，还必须覆盖真实并行读工具场景。
-- How：先 seed 真实 KB 文档，再学习 terminal 与 KB skill，随后在一次 `hand` 决策中并行执行 `workspace_run_command(pwd)` 与 `kb_list_documents`。
+- How：先 seed 真实 KB 文档，再学习 terminal 与 KB skill，随后在一次 `hand` 决策中并行执行 `terminal_run(pwd)` 与 `kb_list_documents`。
 - Oracle：同一条任务中真实出现 terminal 与 KB 两类工具结果，任务最终完成。
 - Not：不验证更复杂的多轮依赖型并行调度。
 
@@ -841,7 +841,7 @@
 - What：验证 live 模式下 `human` 会在一个真实长任务里串起模板定位、上周周报风格参考、多源工作资料取证、新建本周周报 docx 与待确认稿交付。
 - Why：`human/live` 需要至少一条长期高价值复杂样例，覆盖 workspace 搜索、真实材料辨别、跨 `docx + txt` 综合、create-target 写入与最终交付链路；同时守住“共享 workspace 中全部已支持文件都已进入真实 KB，但关键事实仍可能来自非 KB 文本材料”的更真实用户环境。
 - How：注入真实 live LLM 配置；workspace 直接使用 `tests/fixtures/workspace` 共享目录，并在 run 前通过真实生产文件 ingestion 链把该目录下当前所有已支持文件索引进 KB；随后由测试在运行时重建 `工作/` 目录：包含一份不可直接覆盖的周报模板、一份只能参考风格的上周已发版周报、多份提供本周事实的 `docx` 工作文档、数份必须读取的 `txt` 口径/跟进材料，以及少量看起来相关但不应直接采用的干扰文件；直接输入“帮我写下这周的周报，基于这个周报模版和我的工作文档信息，记得参考我上周写的周报风格来哦”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；共享 workspace 中全部已支持文件均被索引；事件流中至少出现一次 `workspace_run_command`、一次 docx 读取、一次 `docx_create`；模型会打开模板、上周周报与至少一份本周 `docx`，并读取至少一份本周 `txt`；最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；正式模板与既有工作 `docx` 文件都不被覆盖；新建周报待确认稿中应写入本周整体判断、负责人说明和后续动作；最终答复能从用户视角说明依据来自哪些 `docx / txt` 材料，并明确当前给出的是待确认稿。
+- Oracle：任务最终完成；共享 workspace 中全部已支持文件均被索引；事件流中至少出现一次 `terminal_run`、至少一次真实资料读取/检索步骤（可来自 `docx_*`、`kb_*` 或其他正式支持的读工具）以及一次 `docx_create`；模型会打开模板和上周周报；最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；正式模板与既有工作 `docx` 文件都不被覆盖；新建周报待确认稿中应写入本周整体判断、负责人说明和后续动作；若发生 docx 写，则事件流中应满足写后 readback；不要求固定取证路径，不要求固定风险结论措辞，只要任务真实完成即可通过。
 - Not：不绑定最终答案措辞，不要求固定是否使用 `docx_outline` 还是 `docx_read_blocks`，也不强制一定调用 KB；若模型仅凭工作区材料完成任务，也视为符合预期。
 
 ##### `human-docx-cause-remedy-reading-live`

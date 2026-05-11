@@ -69,13 +69,13 @@ describe('ai unit learning tool budget', () => {
         },
         nextAction: {
           action: 'learning',
-          wantLearnSkillIds: ['workspace-cli', 'docx-read', 'docx-write']
+          wantLearnSkillIds: ['terminal', 'docx-read', 'docx-write']
         }
       })
     ).toMatchObject({
       nextAction: {
         action: 'learning',
-        wantLearnSkillIds: ['workspace-cli', 'docx-read', 'docx-write']
+        wantLearnSkillIds: ['terminal', 'docx-read', 'docx-write']
       }
     })
   })

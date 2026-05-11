@@ -11,6 +11,7 @@ import {
   HUMAN_STATUSES,
   HUMAN_STEP_ACTIONS,
   HUMAN_STEP_RESULT_STATUSES,
+  HUMAN_TOOL_USE_PLAN_LIMIT,
   HUMAN_TOOL_USE_PLAN_MODES,
   HUMAN_WATCH_HINT_CODES,
   RUNTIME_SKILL_IDS,
@@ -88,12 +89,12 @@ export const toolCallResultSchema = z.object({
 
 const serialToolUsePlanSchema = z.object({
   mode: z.literal('serial'),
-  calls: z.array(toolCallParamSchema).min(1)
+  calls: z.array(toolCallParamSchema).min(1).max(HUMAN_TOOL_USE_PLAN_LIMIT)
 })
 
 const parallelToolUsePlanSchema = z.object({
   mode: z.literal('parallel'),
-  calls: z.array(toolCallParamSchema).min(1)
+  calls: z.array(toolCallParamSchema).min(1).max(HUMAN_TOOL_USE_PLAN_LIMIT)
 })
 
 export const toolUsePlanSchema = z.discriminatedUnion('mode', [
@@ -177,8 +178,7 @@ export const humanWatchHintSchema = z.discriminatedUnion('code', [
     code: z.literal('docx_write_requires_readback'),
     detail: z.object({
       sourcePaths: z.array(z.string().min(1)),
-      latestRevisionRefs: z.array(z.string().min(1)),
-      suggestedToolNames: z.array(z.string().min(1)).min(1)
+      latestRevisionRefs: z.array(z.string().min(1))
     })
   }),
   z.object({

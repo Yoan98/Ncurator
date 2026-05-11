@@ -1,4 +1,5 @@
 import { describe, it } from 'vitest'
+import { HUMAN_TOOL_USE_PLAN_LIMIT } from '../../../../src/main/services/ai/human/constants'
 import { createHandNode } from '../../../../src/main/services/ai/human/node/handNode'
 import { ensureSkillTools } from '../../../../src/main/services/ai/human/node/learningNode/skillLoader'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
@@ -39,6 +40,13 @@ describe('ai tool hand backend', () => {
           runId: runtime.runId,
           taskId: runtime.taskId,
           skillId: 'docx-read'
+        })
+        ensureSkillTools({
+          cache,
+          ctx,
+          runId: runtime.runId,
+          taskId: runtime.taskId,
+          skillId: 'terminal'
         })
         ensureSkillTools({
           cache,
@@ -105,9 +113,9 @@ describe('ai tool hand backend', () => {
             ...safeState.execution,
             currentDecision: {
               decision: {
-                summary: '执行 6 个只读并行调用',
-                reason: '验证新的并行上限允许 6 个安全调用。',
-                expectedOutcome: '六个 read_only 且 parallelSafe 的调用全部真正执行。'
+                summary: '执行计划长度上限内的只读并行调用',
+                reason: '验证总计划长度上限内的 parallelSafe 调用会真正执行。',
+                expectedOutcome: '上限内的 read_only 且 parallelSafe 调用全部真正执行。'
               },
               nextAction: {
                 action: 'hand',
@@ -116,10 +124,7 @@ describe('ai tool hand backend', () => {
                   calls: [
                     { toolName: 'docx_outline', args: { sourcePath, maxBlocks: 20 } },
                     { toolName: 'docx_search', args: { sourcePath, query: 'Safety' } },
-                    { toolName: 'docx_search', args: { sourcePath, query: 'Risk' } },
-                    { toolName: 'docx_search', args: { sourcePath, query: 'monitor' } },
-                    { toolName: 'docx_search', args: { sourcePath, query: 'approval' } },
-                    { toolName: 'docx_search', args: { sourcePath, query: 'edge' } }
+                    { toolName: 'docx_search', args: { sourcePath, query: 'Risk' } }
                   ]
                 }
               }
@@ -141,9 +146,9 @@ describe('ai tool hand backend', () => {
             ...safeLimitState.execution,
             currentDecision: {
               decision: {
-                summary: '执行 7 个只读并行调用',
-                reason: '验证超过并行上限时会直接回到 brain。',
-                expectedOutcome: '写入 parallel_limit_exceeded watchHint，且不继续执行工具。'
+                summary: '执行超过总计划长度上限的并行调用',
+                reason: '验证 toolUsePlan 总长度上限会先于并行细分校验生效。',
+                expectedOutcome: '写入 tool_use_plan_limit_exceeded watchHint，且不继续执行工具。'
               },
               nextAction: {
                 action: 'hand',
@@ -153,9 +158,6 @@ describe('ai tool hand backend', () => {
                     { toolName: 'docx_outline', args: { sourcePath, maxBlocks: 20 } },
                     { toolName: 'docx_search', args: { sourcePath, query: 'Safety' } },
                     { toolName: 'docx_search', args: { sourcePath, query: 'Risk' } },
-                    { toolName: 'docx_search', args: { sourcePath, query: 'monitor' } },
-                    { toolName: 'docx_search', args: { sourcePath, query: 'approval' } },
-                    { toolName: 'docx_search', args: { sourcePath, query: 'edge' } },
                     { toolName: 'docx_search', args: { sourcePath, query: 'cases' } }
                   ]
                 }
@@ -219,15 +221,66 @@ describe('ai tool hand backend', () => {
           'tool_call_started'
         ).length
 
+        const toolStartedBeforeTerminalUnsafe = filterEventsByType(
+          runtime.eventCollector.snapshot(),
+          'tool_call_started'
+        ).length
+
+        const terminalUnsafeState = await handNode({
+          ...unsafeState,
+          skills: {
+            learnedSkillIds: ['docx-read']
+          },
+          execution: {
+            ...unsafeState.execution,
+            currentDecision: {
+              decision: {
+                summary: '并行执行内联解释器和 docx 读取',
+                reason: '验证 terminal 内联解释器命令不会被视为 parallelSafe。',
+                expectedOutcome: '写入 parallel_requires_read_only watchHint，并在执行前阻断。'
+              },
+              nextAction: {
+                action: 'hand',
+                toolUsePlan: {
+                  mode: 'parallel',
+                  calls: [
+                    {
+                      toolName: 'terminal_run',
+                      args: {
+                        command: 'python3 -c "print(1)"'
+                      }
+                    },
+                    {
+                      toolName: 'docx_outline',
+                      args: {
+                        sourcePath,
+                        maxBlocks: 20
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        })
+
+        const toolStartedAfterTerminalUnsafe = filterEventsByType(
+          runtime.eventCollector.snapshot(),
+          'tool_call_started'
+        ).length
+
         return {
           safeState,
           safeLimitState,
           limitExceededState,
           unsafeState,
+          terminalUnsafeState,
           toolStartedBeforeLimitExceeded,
           toolStartedAfterLimitExceeded,
           toolStartedBeforeUnsafe,
-          toolStartedAfterUnsafe
+          toolStartedAfterUnsafe,
+          toolStartedBeforeTerminalUnsafe,
+          toolStartedAfterTerminalUnsafe
         }
       },
       assert: async (result, runtime) => {
@@ -243,24 +296,26 @@ describe('ai tool hand backend', () => {
         )
 
         runtime.assertThat(
-          result.safeLimitState.execution.lastToolResults?.length === 6 &&
+          result.safeLimitState.execution.lastToolResults?.length === HUMAN_TOOL_USE_PLAN_LIMIT &&
             result.safeLimitState.execution.lastToolResults.every((item) => item.code === 'ok') &&
             !result.safeLimitState.execution.watchHint,
           {
-            name: 'six-safe-parallel-calls-are-allowed',
-            message: '6 个只读且 parallelSafe 的工具调用应真正执行并写回结果。',
+            name: 'safe-parallel-calls-within-tool-use-plan-limit-are-allowed',
+            message: '总计划长度上限内的只读且 parallelSafe 工具调用应真正执行并写回结果。',
             data: result.safeLimitState.execution.lastToolResults
           }
         )
 
         runtime.assertThat(
           result.limitExceededState.execution.watchHint?.code === 'hand_plan_invalid' &&
-            result.limitExceededState.execution.watchHint.detail.reason === 'parallel_limit_exceeded' &&
-            result.limitExceededState.execution.watchHint.detail.limit === 6 &&
+            result.limitExceededState.execution.watchHint.detail.reason ===
+              'tool_use_plan_limit_exceeded' &&
+            result.limitExceededState.execution.watchHint.detail.limit === HUMAN_TOOL_USE_PLAN_LIMIT &&
             result.toolStartedAfterLimitExceeded === result.toolStartedBeforeLimitExceeded,
           {
-            name: 'seven-parallel-calls-stop-before-execution',
-            message: '超过 6 个并行工具调用时应直接返回 brain 并写入 parallel_limit_exceeded。',
+            name: 'oversized-parallel-plan-stops-at-tool-use-plan-limit-before-execution',
+            message:
+              '并行计划超过总长度上限时，应先返回 tool_use_plan_limit_exceeded，而不是继续执行或进入并行细分校验。',
             data: {
               watchHint: result.limitExceededState.execution.watchHint,
               toolStartedBeforeLimitExceeded: result.toolStartedBeforeLimitExceeded,
@@ -281,6 +336,26 @@ describe('ai tool hand backend', () => {
               preservedLastToolUseResults: result.unsafeState.execution.lastToolResults,
               toolStartedBeforeUnsafe: result.toolStartedBeforeUnsafe,
               toolStartedAfterUnsafe: result.toolStartedAfterUnsafe
+            }
+          }
+        )
+
+        runtime.assertThat(
+          result.terminalUnsafeState.execution.watchHint?.code === 'hand_plan_invalid' &&
+            result.terminalUnsafeState.execution.watchHint.detail.reason ===
+              'parallel_requires_read_only' &&
+            result.terminalUnsafeState.execution.watchHint.detail.offendingToolNames.includes(
+              'terminal_run'
+            ) &&
+            result.toolStartedAfterTerminalUnsafe === result.toolStartedBeforeTerminalUnsafe,
+          {
+            name: 'inline-interpreter-terminal-command-is-not-parallel-safe',
+            message:
+              '内联解释器 terminal 命令即使可执行，也不应在 parallel hand 计划中被判定为只读并行安全。',
+            data: {
+              watchHint: result.terminalUnsafeState.execution.watchHint,
+              toolStartedBeforeTerminalUnsafe: result.toolStartedBeforeTerminalUnsafe,
+              toolStartedAfterTerminalUnsafe: result.toolStartedAfterTerminalUnsafe
             }
           }
         )

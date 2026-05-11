@@ -23,7 +23,7 @@ const TOOL_LABEL_MAP: Record<string, string> = {
   docx_table_edit: 'edit',
   docx_text_edit: 'edit',
   docx_text_style_edit: 'edit',
-  workspace_run_command: 'command',
+  terminal_run: 'command',
   read_file: 'read',
   write_file: 'edit',
   edit_file: 'edit',

@@ -2,7 +2,7 @@ export const AI_TOOL_FAMILY_IDS = ['terminal', 'kb', 'docx', 'internal'] as cons
 
 export const BUILTIN_RUNTIME_SKILL_IDS = [
   'history-recall',
-  'workspace-cli',
+  'terminal',
   'kb-retrieval'
 ] as const
 
@@ -39,6 +39,7 @@ export const TOOL_CALL_RESULT_CODES = [
 
 export const HUMAN_TOOL_USE_PLAN_MODES = ['parallel', 'serial'] as const
 export const HUMAN_HAND_PLAN_INVALID_REASONS = [
+  'tool_use_plan_limit_exceeded',
   'parallel_requires_read_only',
   'parallel_limit_exceeded',
   'docx_batch_write_limit_exceeded'
@@ -58,8 +59,8 @@ export const HUMAN_WATCH_HINT_CODES = [
 export const HUMAN_MAX_ACTIVE_TOOLS = 20
 export const HUMAN_DEFAULT_TOOL_CALL_LIMIT = 40
 export const HUMAN_MAX_PARALLEL_TOOL_CALLS = 6
-export const HUMAN_DOCX_BATCH_WRITE_LIMIT = 5
-export const HUMAN_TOOL_USE_PLAN_LIMIT = 5
+export const HUMAN_DOCX_BATCH_WRITE_LIMIT = 3
+export const HUMAN_TOOL_USE_PLAN_LIMIT = 3
 export const HUMAN_ROUND_EXECUTION_KINDS = [
   'pre_execution_blocked',
   'learning',

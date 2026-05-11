@@ -35,13 +35,13 @@ describe('ai tool terminal backend', () => {
         })
 
         return {
-          highRiskDenied: await harness.invoke<TerminalRunCommandResult>('workspace_run_command', {
+          highRiskDenied: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
             command: isWindows ? 'Remove-Item -Recurse -Force guarded' : 'rm -rf guarded'
           }),
-          relativeEscape: await harness.invoke<TerminalRunCommandResult>('workspace_run_command', {
+          relativeEscape: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
             command: isWindows ? 'Get-Content ../outside.txt' : 'cat ../outside.txt'
           }),
-          absoluteEscape: await harness.invoke<TerminalRunCommandResult>('workspace_run_command', {
+          absoluteEscape: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
             command: isWindows ? `Get-Content "${outsidePath}"` : `cat "${outsidePath}"`
           }),
           guardedStillExists: await fs

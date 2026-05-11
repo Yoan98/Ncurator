@@ -40,7 +40,7 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildLearnSkillsDecision({
-                  skillIds: ['workspace-cli', 'kb-retrieval'],
+                  skillIds: ['terminal', 'kb-retrieval'],
                   summary: '故意请求 builtin skill',
                   reason: '验证 builtin skill 不占 active tool budget，但仍会通过 watch_hint 提醒不要 learning。',
                   expectedOutcome: 'active tools 保持不变，并发出 builtin learning watch_hint。'
@@ -85,11 +85,11 @@ describe('ai human mock-llm backend', () => {
           result.output.status === 'completed' &&
             latestLearningStep?.learnedSkillIds.join(',') === 'docx-read,docx-write' &&
             latestLearningStep?.effectiveSkillIds.includes('history-recall') &&
-            latestLearningStep?.effectiveSkillIds.includes('workspace-cli') &&
+            latestLearningStep?.effectiveSkillIds.includes('terminal') &&
             latestLearningStep?.effectiveSkillIds.includes('kb-retrieval') &&
             latestLearningStep.availableToolNames.includes('history_search') &&
             latestLearningStep.availableToolNames.includes('history_list') &&
-            latestLearningStep.availableToolNames.includes('workspace_run_command') &&
+            latestLearningStep.availableToolNames.includes('terminal_run') &&
             latestLearningStep.availableToolNames.includes('kb_list_documents') &&
             latestLearningStep.availableToolNames.includes('kb_search') &&
             latestLearningStep.availableToolNames.length === 16 &&
@@ -100,7 +100,7 @@ describe('ai human mock-llm backend', () => {
                 event.source === 'learning' &&
                 event.code === 'learning_builtin_skill_requested' &&
                 Array.isArray(event.detail?.builtinSkillIds) &&
-                event.detail.builtinSkillIds.includes('workspace-cli') &&
+                event.detail.builtinSkillIds.includes('terminal') &&
                 event.detail.builtinSkillIds.includes('kb-retrieval')
             ),
           {

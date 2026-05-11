@@ -471,7 +471,7 @@ interface ToolCallParam {
 interface ToolUsePlan {
   // 执行模式；parallel 表示并行执行，serial 表示按顺序执行。
   mode: 'parallel' | 'serial'
-  // 本轮要执行的工具调用列表。
+  // 本轮要执行的工具调用列表；正式实现要求总长度不超过 HUMAN_TOOL_USE_PLAN_LIMIT。
   calls: ToolCallParam[]
 }
 
@@ -530,6 +530,16 @@ type HumanWatchHint =
       }
     }
   | {
+      // learning 请求了 builtin skill；builtin 始终可用，不进入 learned external skill 集。
+      code: 'learning_builtin_skill_requested'
+      detail: {
+        // 本轮请求学习的 skill。
+        requestedSkillIds: string[]
+        // 被识别为 builtin 的 skill。
+        builtinSkillIds: string[]
+      }
+    }
+  | {
       // learning 后有效工具数超限。
       code: 'learning_tool_budget_exceeded'
       detail: {
@@ -542,13 +552,14 @@ type HumanWatchHint =
       }
     }
   | {
-      // hand 收到非法工具计划；例如并行批次不满足只读要求，或 docx 串行写超出单轮上限。
+      // hand 收到非法工具计划；例如总长度超限、并行批次不满足只读要求，或 docx 串行写超出单轮上限。
       code: 'hand_plan_invalid'
       detail: {
         // 原始计划模式。
         mode: 'parallel' | 'serial'
         // 非法原因。
         reason:
+          | 'tool_use_plan_limit_exceeded'
           | 'parallel_requires_read_only'
           | 'parallel_limit_exceeded'
           | 'docx_batch_write_limit_exceeded'
@@ -568,6 +579,16 @@ type HumanWatchHint =
         toolCallCount: number
         // 允许上限。
         limit: number
+      }
+    }
+  | {
+      // hand 本轮已发生 docx 写；后续继续写或直接 mouth 前都必须先 readback 最新修订。
+      code: 'docx_write_requires_readback'
+      detail: {
+        // 需要先 readback 的 docx 源路径。
+        sourcePaths: string[]
+        // 对应源路径当前要求读回的最新 revision。
+        latestRevisionRefs: string[]
       }
     }
   | {

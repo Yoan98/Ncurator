@@ -55,7 +55,7 @@ const createFileArtifactRef = (input: {
 })
 
 const extractTerminalArtifacts = (result: ToolCallResult): AiArtifactRef[] => {
-  if (result.toolName !== 'workspace_run_command' || !isJsonObject(result.data)) return []
+  if (result.toolName !== 'terminal_run' || !isJsonObject(result.data)) return []
   const rawArtifacts = result.data.artifacts
   if (!Array.isArray(rawArtifacts)) return []
   return rawArtifacts.flatMap((item) => {

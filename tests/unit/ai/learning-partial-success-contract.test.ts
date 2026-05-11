@@ -164,7 +164,7 @@ describe('ai unit learning partial success', () => {
       learningNode({
         ...baseState,
         skills: {
-          learnedSkillIds: ['workspace-cli']
+          learnedSkillIds: ['terminal']
         },
         execution: {
           ...baseState.execution,

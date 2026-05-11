@@ -4,7 +4,7 @@ import { renderToolResultDataText } from '../../../src/main/services/ai/human/sh
 describe('ai unit human tool result renderers', () => {
   it('renders generic terminal-like object fields without collapsing to outputPreview only', () => {
     const rendered = renderToolResultDataText({
-      toolName: 'workspace_run_command',
+      toolName: 'terminal_run',
       data: {
         command: 'pwd',
         cwd: '/tmp/workspace',

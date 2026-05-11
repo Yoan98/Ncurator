@@ -25,6 +25,10 @@ export const summarizeWatchHint = (hint: HumanWatchHint): string => {
         ? `hand 的 parallel toolUsePlan 超出并行上限；tools=${renderStringList(
             hint.detail.offendingToolNames
           )}。`
+        : hint.detail.reason === 'tool_use_plan_limit_exceeded'
+          ? `hand 的 toolUsePlan 超出计划长度上限；tools=${renderStringList(
+              hint.detail.offendingToolNames
+            )}。`
         : `hand 的 parallel toolUsePlan 含不可并行工具；tools=${renderStringList(
             hint.detail.offendingToolNames
           )}。`
@@ -78,6 +82,8 @@ export const renderWatchHintForBrain = (hint: HumanWatchHint): string => {
         hint.detail.callCount ? `requestedCallCount=${String(hint.detail.callCount)}` : undefined,
         hint.detail.reason === 'parallel_requires_read_only'
           ? '如果包含写操作、需要最新执行结果，或工具不是只读并行安全，请改为 mode=serial。'
+          : hint.detail.reason === 'tool_use_plan_limit_exceeded'
+            ? '请缩减本轮计划中的工具调用数量，再重新决策。'
           : '请缩减并行读取工具数量，或改为 mode=serial。'
       ]
         .filter(Boolean)
@@ -115,7 +121,6 @@ export const renderWatchHintForBrain = (hint: HumanWatchHint): string => {
         '上一轮 hand 已经对 docx 执行过写操作。',
         `sourcePaths=${renderStringList(hint.detail.sourcePaths)}`,
         `latestRevisionRefs=${renderStringList(hint.detail.latestRevisionRefs)}`,
-        `suggestedToolNames=${renderStringList(hint.detail.suggestedToolNames)}`,
         '在继续任何 docx 写操作，或直接选择 mouth 之前，必须先对这些文档做一次 readback，并确保读到的 revision 不低于上述最新修订。'
       ].join('\n')
     case 'brain_checklist_incomplete':

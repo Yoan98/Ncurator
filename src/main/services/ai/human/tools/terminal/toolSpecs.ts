@@ -3,46 +3,50 @@ import type { HumanToolSpec } from '../types'
 import { analyzeTerminalCommand } from './terminalCommandPolicy'
 import { readStringArg } from '../utils/toolSpecUtils'
 
-export const WORKSPACE_RUN_COMMAND_SCHEMA = z.object({
+export const TERMINAL_RUN_SCHEMA = z.object({
   command: z.string().min(1),
   cwd: z.string().optional()
 })
 
-export const WORKSPACE_RUN_COMMAND_TOOL_SPEC: HumanToolSpec<
-  z.infer<typeof WORKSPACE_RUN_COMMAND_SCHEMA>,
-  'workspace_run_command',
-  'workspace-cli'
+export const TERMINAL_RUN_TOOL_SPEC: HumanToolSpec<
+  z.infer<typeof TERMINAL_RUN_SCHEMA>,
+  'terminal_run',
+  'terminal'
 > = {
-  name: 'workspace_run_command',
+  name: 'terminal_run',
   familyId: 'terminal',
-  skillIds: ['workspace-cli'],
+  skillIds: ['terminal'],
   requiresWorkspace: true,
-  schema: WORKSPACE_RUN_COMMAND_SCHEMA,
+  schema: TERMINAL_RUN_SCHEMA,
   promptSpec: {
-    name: 'workspace_run_command',
+    name: 'terminal_run',
     description:
-      '在 workspace 内执行单条命令，让你自主使用系统命令行完成检查、搜索、读取、验证或生成中间结果。',
+      '执行一条工作区终端命令，并返回 stdout、stderr、exitCode、是否超时或截断，以及可识别的工作区文件 artifact。',
     whenToUse:
-      '当任务需要直接通过命令行处理 workspace 内容，或需要用单条命令验证环境与结果时使用。',
+      '当你需要通过终端命令获取信息、检索内容、读取文件、检查环境、运行程序，或在工作区内生成或修改产物时使用。',
     examples: [
       {
-        goal: '在 workspace 根目录执行 pwd',
+        goal: '运行一条只读 Python 命令列出工作目录内容',
         args: {
-          command: 'pwd',
+          command: 'python3 -c "from pathlib import Path; print([p.name for p in Path(\'工作\').iterdir()])"',
           cwd: '.'
         }
       }
     ]
   },
   resolveExecutionMeta: (args) => {
+    const command = readStringArg(args, 'command') || ''
     const analysis = analyzeTerminalCommand({
-      command: readStringArg(args, 'command') || '',
+      command,
       cwd: readStringArg(args, 'cwd')
     })
+    const hasInterpreterInlineProgram =
+      /^\s*(python|python3)\b.*\s-c\b/.test(command) || /^\s*node\b.*\s-e\b/.test(command)
     if (
       analysis.riskLevel === 'low' &&
       analysis.commandMode === 'read_only' &&
-      analysis.artifactCandidates.length === 0
+      analysis.artifactCandidates.length === 0 &&
+      !hasInterpreterInlineProgram
     ) {
       return {
         mutability: 'read_only',
@@ -58,4 +62,4 @@ export const WORKSPACE_RUN_COMMAND_TOOL_SPEC: HumanToolSpec<
   }
 }
 
-export const TERMINAL_TOOL_SPECS = [WORKSPACE_RUN_COMMAND_TOOL_SPEC] as const
+export const TERMINAL_TOOL_SPECS = [TERMINAL_RUN_TOOL_SPEC] as const

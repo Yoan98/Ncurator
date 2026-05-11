@@ -63,8 +63,7 @@ const buildStateWithReadbackHint = (sourcePath = '/tmp/workspace-root/report.doc
       code: 'docx_write_requires_readback' as const,
       detail: {
         sourcePaths: [sourcePath],
-        latestRevisionRefs: ['v3'],
-        suggestedToolNames: ['docx_outline', 'docx_read_blocks']
+        latestRevisionRefs: ['v3']
       }
     }
   }

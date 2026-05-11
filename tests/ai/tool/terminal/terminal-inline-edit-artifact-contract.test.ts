@@ -37,12 +37,12 @@ describe('ai tool terminal backend', () => {
         const harness = createTerminalToolHarness(runtime)
 
         return {
-          updateExisting: await harness.invoke<TerminalRunCommandResult>('workspace_run_command', {
+          updateExisting: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
             command: isWindows
               ? 'Copy-Item -LiteralPath replacement.txt -Destination notes.txt'
               : 'cp replacement.txt notes.txt'
           }),
-          createNew: await harness.invoke<TerminalRunCommandResult>('workspace_run_command', {
+          createNew: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
             command: isWindows
               ? 'New-Item -ItemType File -Path generated/output.txt'
               : 'touch generated/output.txt'
@@ -90,7 +90,7 @@ describe('ai tool terminal backend', () => {
             artifactEvents.length >= 2,
           {
             name: 'mutating-terminal-commands-record-artifacts',
-            message: 'workspace_run_command 应识别并结构化返回更新/创建的目标文件 artifact。',
+            message: 'terminal_run 应识别并结构化返回更新/创建的目标文件 artifact。',
             data: {
               updateArtifacts: result.updateExisting.artifacts,
               createArtifacts: result.createNew.artifacts,

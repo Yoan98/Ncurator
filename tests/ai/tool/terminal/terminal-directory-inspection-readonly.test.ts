@@ -37,12 +37,15 @@ describe('ai tool terminal backend', () => {
         const harness = createTerminalToolHarness(runtime)
 
         return {
-          list: await harness.invoke<TerminalRunCommandResult>('workspace_run_command', {
+          list: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
             command: isWindows
               ? 'Get-ChildItem -LiteralPath materials -Recurse -Force'
               : 'find materials -mindepth 1 -maxdepth 2'
           }),
-          read: await harness.invoke<TerminalRunCommandResult>('workspace_run_command', {
+          echoReadOnly: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
+            command: isWindows ? 'Write-Output "terminal readonly check"' : 'echo terminal readonly check'
+          }),
+          read: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
             command: isWindows
               ? 'Get-Content -LiteralPath materials/nested/daily-note.txt'
               : 'cat materials/nested/daily-note.txt'
@@ -56,6 +59,7 @@ describe('ai tool terminal backend', () => {
 
         runtime.assertThat(
           result.list.ok &&
+            result.echoReadOnly.ok &&
             result.read.ok &&
             approvalEvents.length === 0 &&
             stepErrors.length === 0,
@@ -65,20 +69,22 @@ describe('ai tool terminal backend', () => {
             data: {
               approvals: approvalEvents.length,
               stepErrors: stepErrors.length,
-              codes: [result.list.code, result.read.code]
+              codes: [result.list.code, result.echoReadOnly.code, result.read.code]
             }
           }
         )
 
         runtime.assertThat(
           result.list.outputPreview.includes('daily-note.txt') &&
+            result.echoReadOnly.stdout.includes('terminal readonly check') &&
             result.read.stdout.includes('alpha') &&
             result.read.stdout.includes('gamma'),
           {
             name: 'readonly-shell-inspection-returns-stable-output',
-            message: 'workspace_run_command 应为目录浏览与文本读取返回可消费的稳定输出。',
+            message: 'terminal_run 应为目录浏览与文本读取返回可消费的稳定输出。',
             data: {
               list: result.list,
+              echoReadOnly: result.echoReadOnly,
               read: result.read
             }
           }

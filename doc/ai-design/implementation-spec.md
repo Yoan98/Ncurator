@@ -93,7 +93,8 @@ stateDiagram-v2
 - 主要读取：`execution.currentDecision.nextAction.toolUsePlan`、`skills.learnedSkillIds`、runtime cache 中已装载的工具、`memory.history.roundHistory`。
 - 主要回写：`execution.lastToolResults`、`memory.history.roundHistory`、`memory.history.loadedHistoryContext`、`execution.artifacts`、`execution.stage`、必要时 `execution.watchHint`、`trace.steps`。
 - 约束：不调用模型；`parallel` 只允许只读且并行安全的工具。
-- 对 docx 串行写，hand 需要执行单轮批次保护；当前正式实现要求单轮最多 5 个 docx 写调用，超过时直接返回 `hand_plan_invalid`，而不是继续落工具。只要本轮实际发生过 docx 写，后续在继续写或直接 mouth 前都必须先 readback。
+- hand 对 `toolUsePlan` 先执行总长度保护；当前正式实现要求单轮计划总调用数不超过 `HUMAN_TOOL_USE_PLAN_LIMIT`，超过时直接返回 `hand_plan_invalid(reason=tool_use_plan_limit_exceeded)`，而不是继续进入串行/并行细分校验。
+- 对 docx 串行写，hand 需要执行单轮批次保护；docx 写调用数仍受独立的 docx batch limit 约束，超过时直接返回 `hand_plan_invalid(reason=docx_batch_write_limit_exceeded)`，而不是继续落工具。只要本轮实际发生过 docx 写，后续在继续写或直接 mouth 前都必须先 readback。
 - tool 执行失败时，hand 应优先保留原始校验/运行时错误文本，并通过 `diagnostic.message` 回流给 brain 与历史渲染层；不要把错误再压缩成额外的预设分类。
 
 ### 5.4 `mouth`

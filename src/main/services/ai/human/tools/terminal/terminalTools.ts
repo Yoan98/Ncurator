@@ -21,8 +21,8 @@ import type {
   TerminalCommandApprovalRiskLevel
 } from './types'
 import {
-  WORKSPACE_RUN_COMMAND_SCHEMA,
-  WORKSPACE_RUN_COMMAND_TOOL_SPEC
+  TERMINAL_RUN_SCHEMA,
+  TERMINAL_RUN_TOOL_SPEC
 } from './toolSpecs'
 
 const isJsonObjectRecord = (value: AiToolCallResult['data']): value is JsonObject =>
@@ -169,11 +169,11 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
     taskId: input.taskId
   })
 
-  const workspaceRunCommand = tool(
+  const terminalRun = tool(
     async (args) =>
       await withToolLifecycle({
         emitter: toolEvents,
-        toolName: WORKSPACE_RUN_COMMAND_TOOL_SPEC.name,
+        toolName: TERMINAL_RUN_TOOL_SPEC.name,
         args: args as IpcJsonObject,
         execute: async (session) => {
           input.ctx.checkCancelled()
@@ -188,7 +188,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               emptyResult.error,
               undefined,
               buildTerminalToolResult({
-                toolName: WORKSPACE_RUN_COMMAND_TOOL_SPEC.name,
+                toolName: TERMINAL_RUN_TOOL_SPEC.name,
                 ok: false,
                 code: emptyResult.code,
                 data: emptyResult
@@ -211,7 +211,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               cwdError.error,
               undefined,
               buildTerminalToolResult({
-                toolName: WORKSPACE_RUN_COMMAND_TOOL_SPEC.name,
+                toolName: TERMINAL_RUN_TOOL_SPEC.name,
                 ok: false,
                 code: cwdError.code,
                 data: cwdError
@@ -232,7 +232,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               boundaryError.error,
               undefined,
               buildTerminalToolResult({
-                toolName: WORKSPACE_RUN_COMMAND_TOOL_SPEC.name,
+                toolName: TERMINAL_RUN_TOOL_SPEC.name,
                 ok: false,
                 code: boundaryError.code,
                 data: boundaryError
@@ -263,7 +263,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
                 denied.error,
                 undefined,
                 buildTerminalToolResult({
-                  toolName: WORKSPACE_RUN_COMMAND_TOOL_SPEC.name,
+                  toolName: TERMINAL_RUN_TOOL_SPEC.name,
                   ok: false,
                   code: denied.code,
                   data: denied
@@ -356,7 +356,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               stepError,
               undefined,
               buildTerminalToolResult({
-                toolName: WORKSPACE_RUN_COMMAND_TOOL_SPEC.name,
+                toolName: TERMINAL_RUN_TOOL_SPEC.name,
                 ok: false,
                 code: 'failed',
                 data: payload
@@ -373,7 +373,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             },
             undefined,
             buildTerminalToolResult({
-              toolName: WORKSPACE_RUN_COMMAND_TOOL_SPEC.name,
+              toolName: TERMINAL_RUN_TOOL_SPEC.name,
               ok: true,
               code: 'ok',
               data: payload
@@ -383,14 +383,14 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
         }
       }),
     {
-      name: WORKSPACE_RUN_COMMAND_TOOL_SPEC.name,
-      description: WORKSPACE_RUN_COMMAND_TOOL_SPEC.promptSpec.description,
-      schema: WORKSPACE_RUN_COMMAND_SCHEMA
+      name: TERMINAL_RUN_TOOL_SPEC.name,
+      description: TERMINAL_RUN_TOOL_SPEC.promptSpec.description,
+      schema: TERMINAL_RUN_SCHEMA
     }
   )
 
   return {
-    tools: [workspaceRunCommand],
+    tools: [terminalRun],
     state
   }
 }

@@ -18,15 +18,15 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     whenToUse: '当最近一轮和历史摘要还不足以定位失败模式或需要回看更早细节时使用。',
     toolNames: ['history_search', 'history_list']
   },
-  'workspace-cli': {
-    skillId: 'workspace-cli',
+  terminal: {
+    skillId: 'terminal',
     familyId: 'terminal',
     source: 'builtin',
     countsTowardToolBudget: false,
-    title: 'workspace-cli',
-    description: '在当前 workspace 内执行单条 CLI 命令。',
-    whenToUse: '当任务需要通过命令行自主完成文件浏览、搜索、读取、验证或生成中间结果时使用。',
-    toolNames: ['workspace_run_command']
+    title: 'terminal',
+    description: '在当前 workspace 边界内运行单条终端命令。',
+    whenToUse: '当你判断终端命令是推进当前任务的合适方式时使用。',
+    toolNames: ['terminal_run']
   },
   'docx-read': {
     skillId: 'docx-read',

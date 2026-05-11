@@ -2,7 +2,8 @@ import type { JsonObject } from '../../../../../../shared/types'
 import {
   HUMAN_DEFAULT_TOOL_CALL_LIMIT,
   HUMAN_DOCX_BATCH_WRITE_LIMIT,
-  HUMAN_MAX_PARALLEL_TOOL_CALLS
+  HUMAN_MAX_PARALLEL_TOOL_CALLS,
+  HUMAN_TOOL_USE_PLAN_LIMIT
 } from '../../constants'
 import type { AiRunContext } from '../../../types'
 import { extractArtifactRefsFromToolResults, mergeArtifactRefs } from '../../../utils/artifacts'
@@ -124,6 +125,15 @@ const buildToolLimitWatchHint = (toolCallCount: number, limit: number): HumanWat
 })
 
 const validateToolUsePlan = (toolUsePlan: ToolUsePlan): HumanWatchHint | undefined => {
+  if (toolUsePlan.calls.length > HUMAN_TOOL_USE_PLAN_LIMIT) {
+    return createHandPlanInvalidWatchHint({
+      mode: toolUsePlan.mode,
+      reason: 'tool_use_plan_limit_exceeded',
+      offendingToolNames: toolUsePlan.calls.map((item) => item.toolName),
+      callCount: toolUsePlan.calls.length,
+      limit: HUMAN_TOOL_USE_PLAN_LIMIT
+    })
+  }
   if (toolUsePlan.mode === 'serial') {
     const docxWriteCalls = toolUsePlan.calls.filter((item) => isDocxSerialWriteCall(item.toolName))
     if (docxWriteCalls.length > 0) {

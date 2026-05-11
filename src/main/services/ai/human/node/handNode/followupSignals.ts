@@ -111,8 +111,7 @@ export const deriveHandFollowupSignals = (input: {
         code: 'docx_write_requires_readback',
         detail: {
           sourcePaths,
-          latestRevisionRefs,
-          suggestedToolNames: ['docx_outline', 'docx_read_blocks']
+          latestRevisionRefs
         }
       }
     }

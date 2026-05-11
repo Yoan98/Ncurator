@@ -24,7 +24,7 @@ describe('ai human mock-llm backend', () => {
             'human.brain': [
               {
                 output: buildToolDecision({
-                  toolName: 'workspace_run_command',
+                  toolName: 'terminal_run',
                   args: {
                     command: 'pwd'
                   },
@@ -35,7 +35,7 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildToolDecision({
-                  toolName: 'workspace_run_command',
+                  toolName: 'terminal_run',
                   args: {
                     command: 'ls'
                   },

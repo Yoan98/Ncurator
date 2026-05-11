@@ -6,10 +6,10 @@ import {
 } from '../../../src/main/services/ai/human/skills'
 
 describe('ai unit runtime skill contract', () => {
-  it('exposes workspace-cli and kb-retrieval as builtin skills', () => {
+  it('exposes terminal and kb-retrieval as builtin skills', () => {
     expect(listBuiltinSkillDefinitions().map((definition) => definition.skillId)).toEqual([
       'history-recall',
-      'workspace-cli',
+      'terminal',
       'kb-retrieval'
     ])
     expect(listExternalSkillDefinitions().map((definition) => definition.skillId)).toEqual([
@@ -21,7 +21,7 @@ describe('ai unit runtime skill contract', () => {
   it('includes builtin skills in effective skills before any external learning', () => {
     expect(getEffectiveLearnedSkillIds([])).toEqual([
       'history-recall',
-      'workspace-cli',
+      'terminal',
       'kb-retrieval'
     ])
   })

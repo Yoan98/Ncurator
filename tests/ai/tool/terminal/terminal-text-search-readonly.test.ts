@@ -39,17 +39,17 @@ describe('ai tool terminal backend', () => {
         const harness = createTerminalToolHarness(runtime)
 
         return {
-          firstSearch: await harness.invoke<TerminalRunCommandResult>('workspace_run_command', {
+          firstSearch: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
             command: isWindows
               ? 'Get-ChildItem -Path notes -Recurse -File | Select-String -Pattern "Approval denied"'
               : 'grep -R -n "Approval denied" notes'
           }),
-          secondSearch: await harness.invoke<TerminalRunCommandResult>('workspace_run_command', {
+          secondSearch: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
             command: isWindows
               ? 'Get-ChildItem -Path notes -Recurse -File | Select-String -Pattern "artifacts"'
               : 'grep -R -n "artifacts" notes'
           }),
-          boundaryRejected: await harness.invoke<TerminalRunCommandResult>('workspace_run_command', {
+          boundaryRejected: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
             command: isWindows
               ? 'Get-ChildItem -Path ../ -Recurse -File | Select-String -Pattern "Overview"'
               : 'grep -R -n "Overview" ../'

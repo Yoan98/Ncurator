@@ -624,7 +624,7 @@ export type RuntimeIssueCode =
   | 'approval_denied'
 export type RuntimeSkillId =
   | 'history-recall'
-  | 'workspace-cli'
+  | 'terminal'
   | 'docx-read'
   | 'docx-write'
   | 'kb-retrieval'

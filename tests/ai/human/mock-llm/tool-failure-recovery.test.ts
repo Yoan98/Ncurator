@@ -24,7 +24,7 @@ describe('ai human mock-llm backend', () => {
             'human.brain': [
               {
                 output: buildToolDecision({
-                  toolName: 'workspace_run_command',
+                  toolName: 'terminal_run',
                   args: {
                     command: 'cat definitely-missing-file.txt'
                   },
@@ -64,7 +64,7 @@ describe('ai human mock-llm backend', () => {
       },
       assert: async (result, runtime) => {
         const toolResults = filterAiRunEventsByType(result.events, 'tool_call_result')
-        const failedResult = toolResults.find((event) => event.toolName === 'workspace_run_command')
+        const failedResult = toolResults.find((event) => event.toolName === 'terminal_run')
 
         runtime.assertThat(
           result.output.status === 'completed' &&

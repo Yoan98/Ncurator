@@ -86,7 +86,7 @@ describe('ai tool hand backend', () => {
           ctx,
           runId: runtime.runId,
           taskId: runtime.taskId,
-          skillId: 'workspace-cli'
+          skillId: 'terminal'
         })
         ensureSkillTools({
           cache,
@@ -102,7 +102,7 @@ describe('ai tool hand backend', () => {
             taskId: runtime.taskId,
             userInput: 'create a terminal artifact',
             learnedSkillIds: [],
-            toolName: 'workspace_run_command',
+            toolName: 'terminal_run',
             args: {
               command: 'touch first.txt'
             }
