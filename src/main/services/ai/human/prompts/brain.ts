@@ -1,5 +1,6 @@
 import type { AiRunContext } from '../../types'
 import { renderReferenceScopeText } from '../../prompts/referenceScope'
+import { HUMAN_TOOL_USE_PLAN_LIMIT } from '../constants'
 import {
   getEarlierAttemptRounds,
   getLastRoundFocus,
@@ -130,6 +131,7 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
     - toolUsePlan.mode：parallel 只用于只读且彼此独立、并行安全的调用；其余情况必须用 serial,它将是被串行执行。
     - toolUsePlan.calls[*].toolName：必须严格使用当前工具说明里的精确名称。
     - toolUsePlan.calls[*].args：必须是对象，字段名、必填参数和参数层级都必须与工具说明一致。
+    - toolUsePlan最大只允许规划${HUMAN_TOOL_USE_PLAN_LIMIT}个。
   </next_action_contract>
 
   <delivery_guidance_contract>

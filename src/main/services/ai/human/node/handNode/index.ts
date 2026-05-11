@@ -1,5 +1,9 @@
 import type { JsonObject } from '../../../../../../shared/types'
-import { HUMAN_DEFAULT_TOOL_CALL_LIMIT, HUMAN_MAX_PARALLEL_TOOL_CALLS } from '../../constants'
+import {
+  HUMAN_DEFAULT_TOOL_CALL_LIMIT,
+  HUMAN_DOCX_BATCH_WRITE_LIMIT,
+  HUMAN_MAX_PARALLEL_TOOL_CALLS
+} from '../../constants'
 import type { AiRunContext } from '../../../types'
 import { extractArtifactRefsFromToolResults, mergeArtifactRefs } from '../../../utils/artifacts'
 import {
@@ -27,9 +31,6 @@ const DOCX_SERIAL_WRITE_TOOL_NAMES = new Set([
   'docx_text_edit',
   'docx_text_style_edit'
 ])
-const DOCX_TABLE_WRITE_TOOL_NAMES = new Set(['docx_table_edit'])
-const DOCX_BATCH_WRITE_LIMIT_DEFAULT = 5
-const DOCX_BATCH_WRITE_LIMIT_WITH_TABLE = 3
 type DocxContinuationAction = 'insert_before' | 'insert_after'
 type DocxAnchorContinuation = {
   action: DocxContinuationAction
@@ -37,10 +38,6 @@ type DocxAnchorContinuation = {
 }
 
 const isDocxSerialWriteCall = (toolName: string): boolean => DOCX_SERIAL_WRITE_TOOL_NAMES.has(toolName)
-const buildDocxBatchWriteLimit = (calls: ToolUsePlan['calls']): number =>
-  calls.some((call) => DOCX_TABLE_WRITE_TOOL_NAMES.has(call.toolName))
-    ? DOCX_BATCH_WRITE_LIMIT_WITH_TABLE
-    : DOCX_BATCH_WRITE_LIMIT_DEFAULT
 
 const readSourcePathArg = (args: JsonObject): string | undefined =>
   typeof args.sourcePath === 'string' && args.sourcePath.trim().length > 0 ? args.sourcePath : undefined
@@ -130,7 +127,7 @@ const validateToolUsePlan = (toolUsePlan: ToolUsePlan): HumanWatchHint | undefin
   if (toolUsePlan.mode === 'serial') {
     const docxWriteCalls = toolUsePlan.calls.filter((item) => isDocxSerialWriteCall(item.toolName))
     if (docxWriteCalls.length > 0) {
-      const limit = buildDocxBatchWriteLimit(docxWriteCalls)
+      const limit = HUMAN_DOCX_BATCH_WRITE_LIMIT
       if (docxWriteCalls.length > limit) {
         return createHandPlanInvalidWatchHint({
           mode: 'serial',
