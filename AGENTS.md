@@ -3,9 +3,9 @@
 ## 1. 文档引用
 ### 1.1 AI相关
 - `doc/ai-design/architecture.md`：涉及 AI 总体架构、主流程或模块职责时阅读。
-- `doc/ai-design/implementation-spec.md`：涉及 AI 实现方式、运行入口、跨层边界或运行时组织时阅读。
-- `doc/ai-design/data-definition-and-flow.md`：涉及 AI 数据结构、状态流转、历史渲染或产物关系时阅读。
-- `doc/ai-design/human-skill-design.md`：涉及 human skill 分类、能力边界、skill 基线、builtin/external 区分，或 active tool budget 与工具调用次数边界时阅读。
+- `doc/ai-design/implementation-spec.md`：涉及 AI 实现方式、运行入口、跨层边界、运行时组织，或 hand 的批次保护/readback 约束时阅读。
+- `doc/ai-design/data-definition-and-flow.md`：涉及 AI 数据结构、状态流转、历史渲染、产物关系，或 watch hint / 非法 plan 枚举契约时阅读。
+- `doc/ai-design/human-skill-design.md`：涉及 human skill 分类、能力边界、skill 基线、builtin/external 区分，或 active tool budget、工具调用次数边界、docx-write 使用边界时阅读。
 - `doc/ai-design/prompt-design.md`：涉及 prompt 结构、工具 schema、工具结果渲染、检索策略提示或 AI-facing 文案时阅读。
 
 ### 1.2 docx相关
@@ -20,7 +20,7 @@
 - `doc/ui-style.md`：涉及 UI 风格与通用交互规范时阅读。
 
 ### 1.4 测试相关
-- `doc/test-plan/ai-test.md`：涉及 AI、human live、formal harness、FileReview、KB tool contract，或 docx 串行批写/schema 合同/安全停机回归测试设计时阅读。
+- `doc/test-plan/ai-test.md`：涉及 AI、human live、formal harness、FileReview、KB tool contract，或 docx 串行批写上限/readback/schema 合同/安全停机回归测试设计时阅读。
 - `doc/test-plan/settings-test.md`：涉及 Settings 测试，或需要区分 workspace 容器、files 子区域、web 子区域测试边界时阅读。
 - `doc/test.md`：涉及测试用例编写、runner、日志或测试运行机制时阅读。
 

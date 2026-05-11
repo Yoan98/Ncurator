@@ -435,11 +435,11 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 docx 串行批量写超过单批上限时，不再走 plan 拦截，而是由运行时停在首个不可接受点并返回 `invalid_input`。
-- Why：这轮合同改为“schema 管参数形状，runtime 管执行安全”，批量上限也归 runtime 收口。
+- What：验证 docx 串行批量写超过单批上限时，会在执行前被 `hand` 识别为非法 plan 并阻止执行。
+- Why：单轮 docx 串行写存在明确上限，超过上限应在真正落工具前收口，避免生成超长连续写批次。
 - How：构造超过 5 个纯段落写入的 serial plan。
-- Oracle：不再返回 `hand_plan_invalid`；若执行不能安全继续，应返回 `invalid_input` 并附带 `hand_docx_batch_write_halted`。
-- Not：不要求固定停在第几步。
+- Oracle：返回 `hand_plan_invalid`，`reason=docx_batch_write_limit_exceeded`，并带上 `callCount` 与 `limit`。
+- Not：不验证后续 readback 或分批续写策略。
 
 ##### `hand-docx-serial-successor-chain`
 

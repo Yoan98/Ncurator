@@ -542,13 +542,16 @@ type HumanWatchHint =
       }
     }
   | {
-      // hand 收到非法工具计划；例如并行批次不满足只读要求。
+      // hand 收到非法工具计划；例如并行批次不满足只读要求，或 docx 串行写超出单轮上限。
       code: 'hand_plan_invalid'
       detail: {
         // 原始计划模式。
         mode: 'parallel' | 'serial'
         // 非法原因。
-        reason: 'parallel_requires_read_only' | 'parallel_limit_exceeded'
+        reason:
+          | 'parallel_requires_read_only'
+          | 'parallel_limit_exceeded'
+          | 'docx_batch_write_limit_exceeded'
         // 导致非法的工具名。
         offendingToolNames: string[]
         // 若是数量超限，则记录本次调用数。
