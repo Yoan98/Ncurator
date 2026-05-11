@@ -28,9 +28,9 @@
   - 通过率：`15 / 15`
   - 检测时间：`2026-04-29 17:02:09 +08:00`
 - `human / live`
-  - 通过率：`1 / 1`
-  - 检测时间：`2026-05-11 18:24:16 +08:00`
-  - 备注：`本次仅重跑 `human-risk-report-draft-live` 单条 formal live case，结果通过；其余 4 条 live case 本轮未执行。`
+  - 通过率：`2 / 2`
+  - 检测时间：`2026-05-11 18:35:46 +08:00`
+  - 备注：`本次已人工复核并通过 `human-risk-report-draft-live`、`human-docx-cause-remedy-reading-live` 两条 formal live case；其余 3 条 live case 本轮尚未执行。`
 
 ## 3. Suite 设计
 
