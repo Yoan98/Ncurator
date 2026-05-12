@@ -24,9 +24,7 @@ const openedExpectedDoc = (
       sourcePath.endsWith(expectedRelativePath) || sourcePath.endsWith(`/${expectedName}`)
   )
 
-const hasCompletedDelivery = (output: { summary?: string | null; deliveryMarkdown?: string | null }): boolean =>
-  typeof output.summary === 'string' &&
-  output.summary.trim().length > 0 &&
+const hasCompletedDelivery = (output: { deliveryMarkdown?: string | null }): boolean =>
   typeof output.deliveryMarkdown === 'string' &&
   output.deliveryMarkdown.trim().length > 0
 
@@ -100,7 +98,7 @@ describe('ai human live backend', () => {
             )
             .map((event) => event.input.sourcePath)
             .filter((value): value is string => typeof value === 'string')
-          const deliveryText = `${result.output?.summary || ''}\n${result.output?.deliveryMarkdown || ''}`
+          const deliveryText = String(result.output?.deliveryMarkdown || '')
 
           runtime.assertThat(
             hasCompletedDelivery(result.output || {}) &&
@@ -123,7 +121,6 @@ describe('ai human live backend', () => {
               data: {
                 openedSourcePaths,
                 toolNames,
-                summary: result.output?.summary,
                 deliveryMarkdown: result.output?.deliveryMarkdown
               }
             }

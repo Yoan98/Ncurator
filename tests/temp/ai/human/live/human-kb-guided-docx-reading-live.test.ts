@@ -64,7 +64,7 @@ describe('temp ai human live backend', () => {
           }
 
           const toolResults = filterAiRunEventsByType(result.events, 'tool_call_result')
-          const deliveryText = `${result.output?.summary || ''}\n${result.output?.deliveryMarkdown || ''}`
+          const deliveryText = String(result.output?.deliveryMarkdown || '')
           const openedSourcePaths = collectStartedToolStringArgs(
             result.events,
             'docx_open',
@@ -82,7 +82,6 @@ describe('temp ai human live backend', () => {
               data: {
                 openedSourcePaths,
                 toolNames: toolResults.map((event) => event.toolName),
-                summary: result.output?.summary,
                 deliveryMarkdown: result.output?.deliveryMarkdown
               }
             }

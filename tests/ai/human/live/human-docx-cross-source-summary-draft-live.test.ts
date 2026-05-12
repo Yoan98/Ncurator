@@ -118,7 +118,7 @@ describe('ai human live backend', () => {
               return Buffer.compare(currentBytes, Buffer.from(fixture.bytes)) === 0
             })
           )
-          const deliveryText = `${result.output?.summary || ''}\n${result.output?.deliveryMarkdown || ''}`
+          const deliveryText = String(result.output?.deliveryMarkdown || '')
           const sourceDocsOpened = result.workspaceSeed.sourceDocs.every((fixtureDoc) =>
             openedExpectedDoc(openedSourcePaths, fixtureDoc.relativePath, fixtureDoc.name)
           )
@@ -167,7 +167,6 @@ describe('ai human live backend', () => {
                 targetReportPath: DOCX_CROSS_SOURCE_SUMMARY_REPORT_RELATIVE_PATH,
                 changedContentKinds,
                 targetExistsInWorkspace,
-                summary: result.output?.summary,
                 deliveryMarkdown: result.output?.deliveryMarkdown,
                 artifacts: result.output?.artifacts
               }

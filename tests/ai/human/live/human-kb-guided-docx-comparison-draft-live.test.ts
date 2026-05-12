@@ -112,7 +112,7 @@ describe('ai human live backend', () => {
               return Buffer.compare(currentBytes, Buffer.from(fixture.bytes)) === 0
             })
           )
-          const deliveryText = `${result.output?.summary || ''}\n${result.output?.deliveryMarkdown || ''}`
+          const deliveryText = String(result.output?.deliveryMarkdown || '')
 
           runtime.assertThat(
             result.output?.status === 'completed' &&
@@ -139,7 +139,6 @@ describe('ai human live backend', () => {
                 toolNames,
                 indexedSupportedFiles,
                 changedContentKinds,
-                summary: result.output?.summary,
                 deliveryMarkdown: result.output?.deliveryMarkdown,
                 artifacts: result.output?.artifacts
               }

@@ -103,8 +103,7 @@ describe('ai human live backend', () => {
         const indexedSupportedFiles = result.indexedFiles.filter(
           (file) => file.supported && file.status === 'indexed'
         )
-        const deliveryText =
-          `${result.output?.summary || ''}\n${result.output?.deliveryMarkdown || ''}`.trim()
+        const deliveryText = String(result.output?.deliveryMarkdown || '').trim()
         const trackedDocsUnchanged = await Promise.all(
           result.workspaceSeed.trackedDocFiles.map(async (fixture) => {
             const currentBytes = await fs.readFile(fixture.workspacePath)
@@ -273,7 +272,6 @@ describe('ai human live backend', () => {
               relevantDocxOpened,
               referencesDocxEvidence,
               referencesTxtEvidence,
-              summary: result.output?.summary,
               deliveryMarkdown: result.output?.deliveryMarkdown,
               artifacts: result.output?.artifacts
             }
@@ -281,7 +279,7 @@ describe('ai human live backend', () => {
         )
 
         runtime.assertThat(deliveryText.length > 0, {
-          name: 'human-live-risk-report-delivers-summary',
+          name: 'human-live-risk-report-delivers-final-markdown',
           message: 'live human complex case 应给出最终修改说明。',
           data: {
             toolNames,
@@ -317,8 +315,7 @@ describe('ai human live backend', () => {
               nextStepSatisfied,
               generatedDraftTextSnippet: generatedDraftText.slice(0, 2000),
               draftTextSnippet: draftTextOnly.slice(0, 2000),
-              deliveryMarkdown: result.output?.deliveryMarkdown,
-              summary: result.output?.summary
+              deliveryMarkdown: result.output?.deliveryMarkdown
             }
           }
         )
@@ -336,7 +333,6 @@ describe('ai human live backend', () => {
             data: {
               toolNames,
               createSourcePaths,
-              summary: result.output?.summary,
               deliveryMarkdown: result.output?.deliveryMarkdown,
               artifacts: result.output?.artifacts
             }
