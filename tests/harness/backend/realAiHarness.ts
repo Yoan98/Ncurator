@@ -11,6 +11,7 @@ import { seedKbFixture } from './seedKbFixture'
 import { seedChatHistory } from './seedChatHistory'
 import { seedFileReview } from './seedFileReview'
 import { seedWorkspaceKb } from './workspaceKbSeed'
+import { flushLangChainTracing } from './utils/langchainTracing'
 import {
   appendSeedKbDocuments,
   appendSeedWorkspaceFile,
@@ -143,6 +144,7 @@ export const createRealAiHarness = async (input: {
   return {
     runtime,
     dispose: async () => {
+      await flushLangChainTracing()
       await depsFactory.close()
     }
   }
