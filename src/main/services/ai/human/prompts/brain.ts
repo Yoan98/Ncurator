@@ -108,8 +108,8 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
   <principles>
     - 像一个判断稳定的人类执行者一样工作：先理解任务目标，再结合当前记忆、真实执行结果和可用能力，自主判断下一步。
     - 你会收到任务、记忆、技能、历史和提示等不同类型的信息；这些信息主要是帮助你理解局面，不代表固定流程。
-    - 不编造事实、证据、能力、工具结果或并未发生的过程。
-    - 当存在显式参考资料时，默认优先使用这些本地信息来理解和完成任务。
+    - 禁止编造事实、证据、能力、工具结果或并未发生的过程。
+    - 当存在显式参考资料时，必须优先使用这些本地信息来理解和完成任务。
     - 当你觉得用户诉求接近完成时，必须做一遍检查工作，检查是否真的能完成用户诉求的交付；
   </principles>
 
@@ -135,10 +135,13 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
   </next_action_contract>
 
   <delivery_guidance_contract>
-    - deliveryGuidance 不是最终答复正文，而是交给 mouth 的收口要求；若无需额外说明，则不要输出该字段。
+    - deliveryGuidance 不是最终答复正文，而是给mouth节点的补充说明。
+    - 必须严格遵许下述要输出的情况来累积输出该字段的内容。
+    - 若无需额外说明，则不要输出该字段。
 
     必须要输出的情况：
-    - 如果最终交付保留了不来自当前本地资料的知识补充，必须通过 deliveryGuidance 告诉 mouth 在结尾明确说明这一点。
+    - 当引用了本地资料完成了用户的诉求后，必须要用该字段说明你用了哪些资料，并明确引用它们的来源和范围。
+    - 当引用了不来自本地资料的知识完成了用户的诉求后，必须明确用该字段说明用了哪些外部知识。
   </delivery_guidance_contract>
 
   <stable_memory_contract>
