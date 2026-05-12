@@ -32,16 +32,12 @@ describe('ai human mock-llm backend', () => {
                   args: {
                     command: 'mkdir blocked-dir'
                   },
-                  summary: '执行会被拒绝的命令',
-                  reason: '验证真实审批拒绝路径。',
-                  expectedOutcome: '返回 approval_denied。'
+                  summary: '执行会被拒绝的命令'
                 })
               },
               {
                 output: buildCompleteTaskDecision({
-                  summary: '审批拒绝已被正确处理。',
-                  reason: '命令已被阻止，不应继续执行。',
-                  expectedOutcome: '对外说明限制。'
+                  summary: '审批拒绝已被正确处理。'
                 })
               }
             ],

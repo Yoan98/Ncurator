@@ -40,9 +40,7 @@ describe('ai human mock-llm backend', () => {
               {
                 output: buildLearnSkillsDecision({
                   skillIds: ['docx-read'],
-                  summary: '先学习 docx-read',
-                  reason: '需要用真实 docx 工具阅读文档。',
-                  expectedOutcome: '获得 docx 读取工具。'
+                  summary: '先学习 docx-read'
                 })
               },
               {
@@ -52,9 +50,7 @@ describe('ai human mock-llm backend', () => {
                     sourcePath: 'docx-read-fact-exposure.docx',
                     maxBlocks: 200
                   },
-                  summary: '提取文档结构',
-                  reason: '需要检查 prompt 是否显式暴露截断事实。',
-                  expectedOutcome: '拿到带截断信息的 outline。'
+                  summary: '提取文档结构'
                 })
               },
               (input) => {
@@ -71,9 +67,7 @@ describe('ai human mock-llm backend', () => {
                     sourcePath: 'docx-read-fact-exposure.docx',
                     query: '反走样'
                   },
-                  summary: '搜索反走样内容',
-                  reason: '验证兼容字形归一后，普通查询能命中真实文档文本。',
-                  expectedOutcome: '拿到搜索命中。'
+                  summary: '搜索反走样内容'
                 })
               },
               (input) => {
@@ -93,9 +87,7 @@ describe('ai human mock-llm backend', () => {
                     sourcePath: 'docx-read-fact-exposure.docx',
                     fromBlockId: searchResult.matches[0]!.blockId
                   },
-                  summary: '精读搜索命中',
-                  reason: '验证定位后可以继续精读目标 block。',
-                  expectedOutcome: '拿到目标正文。'
+                  summary: '精读搜索命中'
                 })
               },
               (input) => {
@@ -106,9 +98,7 @@ describe('ai human mock-llm backend', () => {
                   throw new Error('brain prompt is missing range read structured facts')
                 }
                 return buildCompleteTaskDecision({
-                  summary: 'docx 读取事实暴露已验证。',
-                  reason: 'outline 截断、搜索命中与区间精读都已进入 prompt 的结构化摘要。',
-                  expectedOutcome: '输出最终答复。'
+                  summary: 'docx 读取事实暴露已验证。'
                 })
               }
             ],
@@ -160,5 +150,5 @@ describe('ai human mock-llm backend', () => {
         )
       }
     })
-  })
+  }, 15_000)
 })

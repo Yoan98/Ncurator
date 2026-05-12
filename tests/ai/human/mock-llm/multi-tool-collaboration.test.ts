@@ -36,10 +36,8 @@ describe('ai human mock-llm backend', () => {
             'human.brain': [
               {
                 output: {
-                  decision: {
-                    summary: '并行执行 terminal 与 KB 工具',
-                    reason: '两个动作都属于只读且可以并行。',
-                    expectedOutcome: '一次 hand 同时拿到工作区路径和资料范围。'
+                  thought: {
+                    summary: '并行执行 terminal 与 KB 工具'
                   },
                   nextAction: {
                     action: 'hand',
@@ -63,9 +61,7 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildCompleteTaskDecision({
-                  summary: '多工具协作已完成。',
-                  reason: '并行工具调用已经带回结果。',
-                  expectedOutcome: '进入最终交付。'
+                  summary: '多工具协作已完成。'
                 })
               }
             ],

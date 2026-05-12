@@ -44,9 +44,7 @@ describe('ai human mock-llm backend', () => {
               {
                 output: buildLearnSkillsDecision({
                   skillIds: ['docx-read', 'docx-write'],
-                  summary: '先学习 docx 相关 skill',
-                  reason: '需要用真实 docx 工具完成编辑流程。',
-                  expectedOutcome: '获得 docx 工具族。'
+                  summary: '先学习 docx 相关 skill'
                 })
               },
               {
@@ -57,9 +55,7 @@ describe('ai human mock-llm backend', () => {
                     query: 'Cycle 1 draft content.',
                     replace: 'Cycle 3 cumulative draft content.'
                   },
-                  summary: '在真实 docx 上执行编辑',
-                  reason: '验证真实写工具链路。',
-                  expectedOutcome: '生成新版本并返回 changedBlocks。'
+                  summary: '在真实 docx 上执行编辑'
                 })
               },
               () => {
@@ -73,9 +69,7 @@ describe('ai human mock-llm backend', () => {
                     sourcePath: 'complex-edit.docx',
                     fromBlockId: applyResult.changedBlocks[0]!.blockId
                   },
-                  summary: '精读新内容',
-                  reason: '验证编辑结果已经真实进入后续 docx session。',
-                  expectedOutcome: '确认新文本可被精读到。'
+                  summary: '精读新内容'
                 })
               },
               {
@@ -85,16 +79,12 @@ describe('ai human mock-llm backend', () => {
                     sourcePath: 'complex-edit.docx',
                     query: 'Cycle 3 cumulative draft content.'
                   },
-                  summary: '搜索新内容',
-                  reason: '读回确认后再搜索定位编辑后的 block。',
-                  expectedOutcome: '确认新文本可被搜索到。'
+                  summary: '搜索新内容'
                 })
               },
               {
                 output: buildCompleteTaskDecision({
-                  summary: 'docx 真实链路已走通。',
-                  reason: '编辑与读回确认都已经完成。',
-                  expectedOutcome: '进入最终交付。'
+                  summary: 'docx 真实链路已走通。'
                 })
               }
             ],
@@ -191,9 +181,7 @@ describe('ai human mock-llm backend', () => {
               {
                 output: buildLearnSkillsDecision({
                   skillIds: ['docx-read', 'docx-write'],
-                  summary: '先学习 docx 读写能力',
-                  reason: '需要读取锚点并写入结构化内容。',
-                  expectedOutcome: '获得 docx 工具族。'
+                  summary: '先学习 docx 读写能力'
                 })
               },
               {
@@ -203,9 +191,7 @@ describe('ai human mock-llm backend', () => {
                     sourcePath: 'complex-structured-edit.docx',
                     maxBlocks: 60
                   },
-                  summary: '读取结构提纲',
-                  reason: '需要先定位反走样段落的锚点 blockId。',
-                  expectedOutcome: '拿到可插入的 anchorBlockId。'
+                  summary: '读取结构提纲'
                 })
               },
               () => {
@@ -225,9 +211,7 @@ describe('ai human mock-llm backend', () => {
                     anchorBlockId,
                     text: '补充说明：反走样通过平滑边缘像素来减轻锯齿感。'
                   },
-                  summary: '插入补充说明',
-                  reason: '先插入段落说明，后续再接表格。',
-                  expectedOutcome: '生成新增段落并返回 createdBlocks。'
+                  summary: '插入补充说明'
                 })
               },
               () => {
@@ -245,9 +229,7 @@ describe('ai human mock-llm backend', () => {
                     sourcePath: 'complex-structured-edit.docx',
                     maxBlocks: 80
                   },
-                  summary: '读回新增段落',
-                  reason: '段落写入后必须先 readback 最新修订，才能继续写表格。',
-                  expectedOutcome: 'outline 中出现新增段落。'
+                  summary: '读回新增段落'
                 })
               },
               () => {
@@ -270,9 +252,7 @@ describe('ai human mock-llm backend', () => {
                       ['平滑边缘，降低锯齿', '记住训练噪声，泛化变差']
                     ]
                   },
-                  summary: '插入对照表',
-                  reason: '验证 human 能提交合法的表格对象参数。',
-                  expectedOutcome: '生成包含新增表格的新版本。'
+                  summary: '插入对照表'
                 })
               },
               {
@@ -282,16 +262,12 @@ describe('ai human mock-llm backend', () => {
                     sourcePath: 'complex-structured-edit.docx',
                     maxBlocks: 80
                   },
-                  summary: '复查新版本结构',
-                  reason: '确认新增段落与表格已经进入文档结构。',
-                  expectedOutcome: 'outline 中出现 paragraph 与 table。'
+                  summary: '复查新版本结构'
                 })
               },
               {
                 output: buildCompleteTaskDecision({
-                  summary: '结构化 docx 写入已完成。',
-                  reason: '已完成定位、段落写入、表格写入和复查。',
-                  expectedOutcome: '进入最终交付。'
+                  summary: '结构化 docx 写入已完成。'
                 })
               }
             ],

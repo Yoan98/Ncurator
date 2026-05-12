@@ -54,9 +54,7 @@ describe('ai human mock-llm backend', () => {
                 {
                   output: buildLearnSkillsDecision({
                     skillIds: ['docx-read'],
-                    summary: '先学习 docx-read',
-                    reason: '保留完整的 human 四段主链路。',
-                    expectedOutcome: '补齐一个真实 external skill 后继续推进。'
+                    summary: '先学习 docx-read'
                   })
                 },
                 {
@@ -65,16 +63,12 @@ describe('ai human mock-llm backend', () => {
                     args: {
                       command: 'pwd'
                     },
-                    summary: '读取当前工作区路径',
-                    reason: '验证 run 入口切换后仍会进入真实 hand 链路。',
-                    expectedOutcome: '拿到工作区路径后结束任务。'
+                    summary: '读取当前工作区路径'
                   })
                 },
                 {
                   output: buildCompleteTaskDecision({
-                    summary: '已验证 run 入口直接进入 human。',
-                    reason: 'brain、learning、hand、mouth 已通过同一 run 完成。',
-                    expectedOutcome: '输出最终答复。'
+                    summary: '已验证 run 入口直接进入 human。'
                   })
                 }
               ],

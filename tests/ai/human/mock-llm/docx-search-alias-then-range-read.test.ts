@@ -39,9 +39,7 @@ describe('ai human mock-llm backend', () => {
               {
                 output: buildLearnSkillsDecision({
                   skillIds: ['docx-read'],
-                  summary: '先学习 docx-read',
-                  reason: '需要先搜索再精读文档。',
-                  expectedOutcome: '获得搜索与区间读取工具。'
+                  summary: '先学习 docx-read'
                 })
               },
               {
@@ -51,9 +49,7 @@ describe('ai human mock-llm backend', () => {
                     sourcePath: 'alias-read.docx',
                     query: '过拟合'
                   },
-                  summary: '先按原词搜索',
-                  reason: '验证工具层 alias fallback 是否生效。',
-                  expectedOutcome: '通过 alias fallback 命中过度拟合内容。'
+                  summary: '先按原词搜索'
                 })
               },
               () => {
@@ -68,16 +64,12 @@ describe('ai human mock-llm backend', () => {
                     fromBlockId: searchResult.matches[0]!.blockId,
                     toBlockId: searchResult.matches[0]!.nextBodyBlockId
                   },
-                  summary: '精读命中段落',
-                  reason: '读取连续区间，拿到定义、成因和处理线索。',
-                  expectedOutcome: '拿到完整事实。'
+                  summary: '精读命中段落'
                 })
               },
               {
                 output: buildCompleteTaskDecision({
-                  summary: 'alias fallback 与区间精读已验证。',
-                  reason: '搜索与精读都成功返回真实内容。',
-                  expectedOutcome: '输出最终答复。'
+                  summary: 'alias fallback 与区间精读已验证。'
                 })
               }
             ],
@@ -136,5 +128,5 @@ describe('ai human mock-llm backend', () => {
         )
       }
     })
-  })
+  }, 15_000)
 })

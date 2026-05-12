@@ -247,11 +247,9 @@ describe('ai unit human history renderers', () => {
     })
     const history = appendRoundRecord({
       state: initialState,
-      decision: {
-        decision: {
-          summary: '写入主稿段落和表格',
-          reason: '当前已经明确知道要写入的正文和表格内容',
-          expectedOutcome: '让最终交付严格依据真实写入内容回答'
+      thought: {
+        thought: {
+          summary: '写入主稿段落和表格'
         },
         nextAction: {
           action: 'hand',

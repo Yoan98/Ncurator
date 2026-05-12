@@ -28,16 +28,12 @@ describe('ai human mock-llm backend', () => {
                   args: {
                     command: 'cat definitely-missing-file.txt'
                   },
-                  summary: '执行一个会失败的只读命令',
-                  reason: '验证真实工具失败和错误恢复链路。',
-                  expectedOutcome: '拿到失败结果并继续交付限制说明。'
+                  summary: '执行一个会失败的只读命令'
                 })
               },
               {
                 output: buildCompleteTaskDecision({
-                  summary: '工具失败已被识别并吸收。',
-                  reason: '失败结果已经足够支持最终说明，不需要继续重试。',
-                  expectedOutcome: '输出明确限制。'
+                  summary: '工具失败已被识别并吸收。'
                 })
               }
             ],

@@ -31,10 +31,8 @@ describe('ai human mock-llm backend', () => {
                       }
                     ]
                   },
-                  decision: {
-                    summary: '先学习一个 skill，让 memory 进入下一轮 prompt。',
-                    reason: '需要通过真实 graph 触发第二轮 brain。',
-                    expectedOutcome: '确认 memory 在第二轮仍然可见。'
+                  thought: {
+                    summary: '先学习一个 skill，让 memory 进入下一轮 prompt。'
                   },
                   nextAction: {
                     action: 'learning',
@@ -49,9 +47,7 @@ describe('ai human mock-llm backend', () => {
                   user.includes('确认最终负责人')
 
                 const completeDecision = buildCompleteTaskDecision({
-                  summary: 'memory 已成功跨轮保持。',
-                  reason: '第二轮 prompt 已经读到了第一轮写入的 memory。',
-                  expectedOutcome: '进入最终交付。'
+                  summary: 'memory 已成功跨轮保持。'
                 })
 
                 return {
@@ -67,7 +63,7 @@ describe('ai human mock-llm backend', () => {
                       }
                     ]
                   },
-                  decision: completeDecision.decision,
+                  thought: completeDecision.thought,
                   nextAction: completeDecision.nextAction
                 }
               }

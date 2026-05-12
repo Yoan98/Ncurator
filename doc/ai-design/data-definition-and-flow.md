@@ -301,6 +301,13 @@ type BrainNextAction =
   | {
       // 下一跳直接进入 mouth 组织交付。
       action: 'mouth'
+      // 若本轮收尾引用了资料或外部知识，则由 brain 在此显式列出，并说明 usedFor。
+      references?: Array<{
+        label: string
+        path: string
+        kind: 'internal' | 'external'
+        usedFor: string
+      }>
     }
 
 interface HumanThoughtDecision {
@@ -437,8 +444,8 @@ interface HumanRoundRecord {
   roundId: number
   // 本轮记录的创建时间。
   createdAt: number
-  // 本轮 brain 产出的正式决策。
-  decision: HumanDecision
+  // 本轮 brain 产出的正式判断。
+  thought: HumanThoughtDecision
   // 本轮随后真正发生的执行结果。
   execution: HumanRoundExecution
 }
@@ -623,8 +630,6 @@ interface HumanTaskOutput {
   taskId: string
   // 当前跨层输出的状态；目前只返回 completed。
   status: 'completed'
-  // 返回给 runtime shell 的简短摘要。
-  summary: string
   // 返回给 runtime shell 的正式 markdown 交付。
   deliveryMarkdown: string
   // 返回给 runtime shell 的 artifact 列表。

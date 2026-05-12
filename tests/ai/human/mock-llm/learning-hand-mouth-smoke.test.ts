@@ -28,9 +28,7 @@ describe('ai human mock-llm backend', () => {
               {
                 output: buildLearnSkillsDecision({
                   skillIds: ['docx-read'],
-                  summary: '先学习 docx-read',
-                  reason: '保留完整 brain -> learning -> hand -> mouth 四段主链路。',
-                  expectedOutcome: '补齐一个真实 external skill 后继续调用 builtin terminal 工具。'
+                  summary: '先学习 docx-read'
                 })
               },
               {
@@ -39,18 +37,12 @@ describe('ai human mock-llm backend', () => {
                   args: {
                     command: 'pwd'
                   },
-                  summary: '读取当前工作区路径',
-                  reason: '用一次只读命令验证真实 hand 执行链路。',
-                  expectedOutcome: '拿到当前工作区路径后结束任务。'
+                  summary: '读取当前工作区路径'
                 })
               },
               {
                 output: buildCompleteTaskDecision({
-                  summary: '已完成基础链路验证。',
-                  reason: '核心链路已经真实走通，可以进入最终交付。',
-                  expectedOutcome: '输出稳定的最终结果。',
-                  deliveryGuidance:
-                    '如果最终答复保留了对命令行用途的通用补充，请在结尾用“补充说明”明确说明这部分不来自当前本地资料。'
+                  summary: '已完成基础链路验证。'
                 })
               }
             ],
@@ -113,10 +105,10 @@ describe('ai human mock-llm backend', () => {
 
         runtime.assertThat(
           result.mouthPrompt.includes('<delivery_guidance>') &&
-            result.mouthPrompt.includes('不来自当前本地资料'),
+            result.mouthPrompt.includes('none'),
           {
-            name: 'human-mainline-passes-brain-delivery-guidance-to-mouth',
-            message: 'brain 输出的 delivery guidance 应作为结构化收口说明传递给 mouth prompt。',
+            name: 'human-mainline-keeps-empty-delivery-guidance-when-no-hand-guidance',
+            message: '当 hand 未产出 guidance 时，mouth prompt 的 delivery_guidance 区块应保持 none。',
             data: {
               mouthPrompt: result.mouthPrompt
             }

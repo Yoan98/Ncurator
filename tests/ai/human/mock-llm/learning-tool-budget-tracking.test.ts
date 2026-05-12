@@ -25,32 +25,24 @@ describe('ai human mock-llm backend', () => {
               {
                 output: buildLearnSkillsDecision({
                   skillIds: ['docx-read'],
-                  summary: '先学习 docx-read',
-                  reason: '准备让后续可用工具逼近预算上限。',
-                  expectedOutcome: '获得 4 个 active tools。'
+                  summary: '先学习 docx-read'
                 })
               },
               {
                 output: buildLearnSkillsDecision({
                   skillIds: ['docx-write'],
-                  summary: '再学习 docx 写入',
-                  reason: '继续扩大当前活跃工具集合。',
-                  expectedOutcome: '获得 11 个 active tools。'
+                  summary: '再学习 docx 写入'
                 })
               },
               {
                 output: buildLearnSkillsDecision({
                   skillIds: ['terminal', 'kb-retrieval'],
-                  summary: '故意请求 builtin skill',
-                  reason: '验证 builtin skill 不占 active tool budget，但仍会通过 watch_hint 提醒不要 learning。',
-                  expectedOutcome: 'active tools 保持不变，并发出 builtin learning watch_hint。'
+                  summary: '故意请求 builtin skill'
                 })
               },
               {
                 output: buildCompleteTaskDecision({
-                  summary: '已观察到 learning 的 active tool 预算统计。',
-                  reason: '学习链路已经满足测试目标。',
-                  expectedOutcome: '结束任务。'
+                  summary: '已观察到 learning 的 active tool 预算统计。'
                 })
               }
             ],

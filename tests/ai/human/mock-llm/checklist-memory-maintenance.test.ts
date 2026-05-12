@@ -35,10 +35,8 @@ describe('ai human mock-llm backend', () => {
                       }
                     ]
                   },
-                  decision: {
-                    summary: '先学习一个 skill，让 checklist 进入下一轮 prompt。',
-                    reason: '需要通过真实 graph 触发第二轮 brain。',
-                    expectedOutcome: '确认 checklist 在下一轮仍然可见并可被重写维护。'
+                  thought: {
+                    summary: '先学习一个 skill，让 checklist 进入下一轮 prompt。'
                   },
                   nextAction: {
                     action: 'learning',
@@ -52,9 +50,7 @@ describe('ai human mock-llm backend', () => {
                   user.includes('[todo] 确认 B 事项')
 
                 const completeDecision = buildCompleteTaskDecision({
-                  summary: 'checklist 已成功跨轮维护。',
-                  reason: '第二轮 prompt 读到了旧 checklist，并将其重写为包含 done、todo、obsolete 的最新任务板。',
-                  expectedOutcome: '进入最终交付。'
+                  summary: 'checklist 已成功跨轮维护。'
                 })
 
                 return {
@@ -78,7 +74,7 @@ describe('ai human mock-llm backend', () => {
                       }
                     ]
                   },
-                  decision: completeDecision.decision,
+                  thought: completeDecision.thought,
                   nextAction: completeDecision.nextAction
                 }
               }

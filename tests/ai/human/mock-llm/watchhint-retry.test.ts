@@ -26,17 +26,13 @@ describe('ai human mock-llm backend', () => {
               {
                 output: buildLearnSkillsDecision({
                   skillIds: ['docx-read'],
-                  summary: '第一次学习 docx-read',
-                  reason: '先补齐一个真实 external skill。',
-                  expectedOutcome: '加载 tool 后继续执行。'
+                  summary: '第一次学习 docx-read'
                 })
               },
               {
                 output: buildLearnSkillsDecision({
                   skillIds: ['docx-read'],
-                  summary: '重复学习 docx-read',
-                  reason: '故意触发 learning watch_hint。',
-                  expectedOutcome: '验证 watch_hint 后能继续回到 brain。'
+                  summary: '重复学习 docx-read'
                 })
               },
               {
@@ -45,16 +41,12 @@ describe('ai human mock-llm backend', () => {
                   args: {
                     command: 'pwd'
                   },
-                  summary: '回到 brain 后执行真实工具',
-                  reason: '确认 watch_hint 不会阻断真实链路。',
-                  expectedOutcome: '拿到工作区路径并结束。'
+                  summary: '回到 brain 后执行真实工具'
                 })
               },
               {
                 output: buildCompleteTaskDecision({
-                  summary: 'watch_hint 回退后链路恢复正常。',
-                  reason: 'duplicate learning 已被真实 learning node 消化。',
-                  expectedOutcome: '结束任务。'
+                  summary: 'watch_hint 回退后链路恢复正常。'
                 })
               }
             ],

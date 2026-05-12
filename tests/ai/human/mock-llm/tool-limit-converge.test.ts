@@ -28,9 +28,7 @@ describe('ai human mock-llm backend', () => {
                   args: {
                     command: 'pwd'
                   },
-                  summary: '执行第一轮只读命令',
-                  reason: '准备触发第二轮工具调用。',
-                  expectedOutcome: '拿到工作区路径。'
+                  summary: '执行第一轮只读命令'
                 })
               },
               {
@@ -39,16 +37,12 @@ describe('ai human mock-llm backend', () => {
                   args: {
                     command: 'ls'
                   },
-                  summary: '执行第二轮只读命令',
-                  reason: '超过临时上限后应触发收敛提醒。',
-                  expectedOutcome: '验证 hand watch_hint。'
+                  summary: '执行第二轮只读命令'
                 })
               },
               {
                 output: buildCompleteTaskDecision({
-                  summary: '已观察到收敛提醒。',
-                  reason: '两次真实工具调用已经满足测试目标。',
-                  expectedOutcome: '结束任务。'
+                  summary: '已观察到收敛提醒。'
                 })
               }
             ],

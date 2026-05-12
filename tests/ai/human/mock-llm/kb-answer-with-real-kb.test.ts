@@ -55,16 +55,12 @@ describe('ai human mock-llm backend', () => {
                     strategy: 'keyword',
                     limit: 5
                   },
-                  summary: '执行真实 KB 搜索',
-                  reason: '需要先从真实知识库中找到证据。',
-                  expectedOutcome: '拿到匹配 chunk。'
+                  summary: '执行真实 KB 搜索'
                 })
               },
               {
                 output: buildCompleteTaskDecision({
-                  summary: '已拿到 KB 证据。',
-                  reason: '已有足够证据可进入最终回答。',
-                  expectedOutcome: '输出最终结果。'
+                  summary: '已拿到 KB 证据。'
                 })
               }
             ],

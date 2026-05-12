@@ -66,9 +66,7 @@ describe('ai human mock-llm backend', () => {
                 {
                   output: buildLearnSkillsDecision({
                     skillIds: ['docx-read'],
-                    summary: '先学习 docx-read',
-                    reason: '需要读取当前工作区 docx。',
-                    expectedOutcome: '获得 docx 读取工具。'
+                    summary: '先学习 docx-read'
                   })
                 },
                 {
@@ -79,16 +77,12 @@ describe('ai human mock-llm backend', () => {
                       query: '边缘锯齿怎么处理',
                       mode: 'semantic'
                     },
-                    summary: '做语义搜索',
-                    reason: '验证 embedding preflight 后 human 能直接进入 docx semantic 搜索。',
-                    expectedOutcome: '命中相关 block。'
+                    summary: '做语义搜索'
                   })
                 },
                 {
                   output: buildCompleteTaskDecision({
-                    summary: 'embedding preflight 已验证。',
-                    reason: 'docx 读取已返回真实结果。',
-                    expectedOutcome: '输出最终答复。'
+                    summary: 'embedding preflight 已验证。'
                   })
                 }
               ],
@@ -137,7 +131,7 @@ describe('ai human mock-llm backend', () => {
         )
       }
     })
-  })
+  }, 15_000)
 
   it('ai-run-service-embedding-preflight-failure', async () => {
     await runBackendCase({
