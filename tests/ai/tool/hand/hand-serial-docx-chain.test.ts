@@ -66,11 +66,9 @@ describe('ai tool hand backend', () => {
               taskId: runtime.taskId,
               userInput: '请顺序完成风险周报文档修改与预览'
             }).execution,
-            currentDecision: {
-              decision: {
-                summary: '串行完成 docx 编辑链路',
-                reason: '先写入，再基于最新快照读回确认，依赖同一份最新草稿。',
-                expectedOutcome: '完成替换并确认新内容可继续搜索到。'
+            currentThought: {
+              thought: {
+                summary: '串行完成 docx 编辑链路'
               },
               nextAction: {
                 action: 'hand',

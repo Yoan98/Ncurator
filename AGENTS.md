@@ -3,10 +3,10 @@
 ## 1. 文档引用
 ### 1.1 AI相关
 - `doc/ai-design/architecture.md`：涉及 AI 总体架构、主流程或模块职责时阅读。
-- `doc/ai-design/implementation-spec.md`：涉及 AI 实现方式、运行入口、跨层边界、运行时组织，或 hand 的批次保护/readback 约束时阅读。
-- `doc/ai-design/data-definition-and-flow.md`：涉及 AI 数据结构、状态流转、历史渲染、产物关系，或 watch hint / 非法 plan 枚举契约时阅读。
+- `doc/ai-design/implementation-spec.md`：涉及 AI 实现方式、运行入口、跨层边界、运行时组织，或 hand 的批次保护/readback 约束、mouth markdown 交付与 references 引用收口时阅读。
+- `doc/ai-design/data-definition-and-flow.md`：涉及 AI 数据结构、状态流转、历史渲染、产物关系，或 thought / references / watch hint / 非法 plan 枚举契约时阅读。
 - `doc/ai-design/human-skill-design.md`：涉及 human skill 分类、能力边界、skill 基线、builtin/external 区分，或 active tool budget、工具调用次数边界、docx-write 使用边界时阅读。
-- `doc/ai-design/prompt-design.md`：涉及 prompt 结构、工具 schema、工具结果渲染、检索策略提示或 AI-facing 文案时阅读。
+- `doc/ai-design/prompt-design.md`：涉及 prompt 结构、工具 schema、工具结果渲染、references 披露策略、检索策略提示或 AI-facing 文案时阅读。
 
 ### 1.2 docx相关
 - `doc/docx-design/architecture.md`：涉及 docx 总体架构、session/replay 主线或 baseline 机制时阅读。

@@ -14,10 +14,10 @@ import {
   TOOL_CALL_RESULT_CODES
 } from './constants'
 import {
-  brainDecisionSchema,
+  humanThoughtSchema,
   brainNextActionSchema,
   deliveryGuidanceItemSchema,
-  humanDecisionSchema,
+  humanThoughtDecisionSchema,
   humanChecklistItemSchema,
   humanChecklistItemStatusSchema,
   humanExecutionSchema,
@@ -34,6 +34,7 @@ import {
   humanTaskInputSchema,
   humanTaskOutputSchema,
   humanTraceStepSchema,
+  humanReferenceSchema,
   runtimeArtifactsSummarySchema,
   runtimeChangedFileSchema,
   humanWatchHintSchema,
@@ -69,14 +70,15 @@ export type ToolPromptSpec = {
 export type SkillDefinitionBase = z.infer<typeof skillDefinitionBaseSchema>
 export type SkillDefinition = SkillDefinitionBase
 
-export type BrainDecision = z.infer<typeof brainDecisionSchema>
+export type HumanThought = z.infer<typeof humanThoughtSchema>
 export type BrainNextAction = z.infer<typeof brainNextActionSchema>
 export type HumanChecklistItemStatus = z.infer<typeof humanChecklistItemStatusSchema>
 export type HumanChecklistItem = z.infer<typeof humanChecklistItemSchema>
 export type HumanStableMemory = z.infer<typeof humanStableMemorySchema>
 export type HumanStableMemoryPatch = z.infer<typeof humanStableMemoryPatchSchema>
-export type HumanDecision = z.infer<typeof humanDecisionSchema>
+export type HumanThoughtDecision = z.infer<typeof humanThoughtDecisionSchema>
 export type DeliveryGuidanceItem = z.infer<typeof deliveryGuidanceItemSchema>
+export type HumanReference = z.infer<typeof humanReferenceSchema>
 
 export type ToolCallParam = z.infer<typeof toolCallParamSchema>
 export type ToolUsePlan = z.infer<typeof toolUsePlanSchema>

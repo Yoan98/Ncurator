@@ -1,5 +1,5 @@
 import type {
-  HumanDecision,
+  HumanThoughtDecision,
   HumanState,
   HumanStableMemoryPatch,
   RuntimeSkillId
@@ -20,25 +20,17 @@ export const summarizeHumanSteps = (events: readonly AiRunEvent[]): string[] =>
     return `${stage}:${event.action}`
   })
 
-const buildDecisionMetadata = (input: {
-  summary: string
-  reason: string
-  expectedOutcome: string
-}) => ({
+const buildThoughtMetadata = (input: { summary: string }) => ({
   summary: input.summary,
-  reason: input.reason,
-  expectedOutcome: input.expectedOutcome
 })
 
 export const buildLearnSkillsDecision = (input: {
   skillIds: RuntimeSkillId[]
   summary: string
-  reason: string
-  expectedOutcome: string
   updatedStableMemory?: HumanStableMemoryPatch
-}): HumanDecision => ({
+}): HumanThoughtDecision => ({
   updatedStableMemory: input.updatedStableMemory,
-  decision: buildDecisionMetadata(input),
+  thought: buildThoughtMetadata(input),
   nextAction: {
     action: 'learning',
     wantLearnSkillIds: input.skillIds
@@ -49,13 +41,11 @@ export const buildToolDecision = (input: {
   toolName: string
   args: JsonObject
   summary: string
-  reason: string
-  expectedOutcome: string
   updatedStableMemory?: HumanStableMemoryPatch
   mode?: 'parallel' | 'serial'
-}): HumanDecision => ({
+}): HumanThoughtDecision => ({
   updatedStableMemory: input.updatedStableMemory,
-  decision: buildDecisionMetadata(input),
+  thought: buildThoughtMetadata(input),
   nextAction: {
     action: 'hand',
     toolUsePlan: {
@@ -72,14 +62,10 @@ export const buildToolDecision = (input: {
 
 export const buildCompleteTaskDecision = (input: {
   summary: string
-  reason: string
-  expectedOutcome: string
   updatedStableMemory?: HumanStableMemoryPatch
-  deliveryGuidance?: string
-}): HumanDecision => ({
+}): HumanThoughtDecision => ({
   updatedStableMemory: input.updatedStableMemory,
-  decision: buildDecisionMetadata(input),
-  deliveryGuidance: input.deliveryGuidance,
+  thought: buildThoughtMetadata(input),
   nextAction: {
     action: 'mouth'
   }

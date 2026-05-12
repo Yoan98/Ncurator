@@ -27,11 +27,9 @@ describe('ai unit brain watchhint prompt contract', () => {
       userInput: '继续处理 docx'
     })
 
-    state.execution.currentDecision = {
-      decision: {
+    state.execution.currentThought = {
+      thought: {
         summary: '继续处理 docx 批量写',
-        reason: '上一轮已经执行到一半，需要基于最新安全修订继续决策。',
-        expectedOutcome: '根据当前停机现状决定后续动作。'
       },
       nextAction: {
         action: 'hand',
@@ -56,11 +54,11 @@ describe('ai unit brain watchhint prompt contract', () => {
       {
         roundId: 1,
         createdAt: 1,
-        decision: state.execution.currentDecision,
+        thought: state.execution.currentThought,
         execution: {
           kind: 'hand',
-          toolUsePlan: state.execution.currentDecision.nextAction.action === 'hand'
-            ? state.execution.currentDecision.nextAction.toolUsePlan
+          toolUsePlan: state.execution.currentThought.nextAction.action === 'hand'
+            ? state.execution.currentThought.nextAction.toolUsePlan
             : { mode: 'serial', calls: [] },
           toolResults: [
             {
@@ -124,5 +122,22 @@ describe('ai unit brain watchhint prompt contract', () => {
     expect(latestAttemptSection).not.toContain('上一轮 docx 批量写在中途安全停止。')
     expect(correctionHintSection).toContain('上一轮 docx 批量写在中途安全停止。')
     expect(correctionHintSection).toContain('lastSafeRevisionRef=v2')
+  })
+
+  it('requires references disclosure when nextAction is mouth', () => {
+    const state = createInitialHumanState({
+      taskId: 'task-2',
+      userInput: '总结依据'
+    })
+
+    const prompt = buildBrainPrompt({
+      state,
+      ctx: createFakeCtx()
+    }).system
+
+    expect(prompt).toContain('nextAction为mouth时：')
+    expect(prompt).toContain('nextAction.references')
+    expect(prompt).toContain('usedFor')
+    expect(prompt).toContain('支撑了最终交付的哪些地方')
   })
 })

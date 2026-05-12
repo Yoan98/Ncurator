@@ -3,7 +3,7 @@ import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 import { applyBrainDecisionTransition } from '../../../../src/main/services/ai/human/node/utils/stateTransitions'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
-import type { HumanDecision } from '../../../../src/main/services/ai/human/types'
+import type { HumanThoughtDecision } from '../../../../src/main/services/ai/human/types'
 
 const createStubAiRunContext = (): AiRunContext => ({
   runId: 'run-brain-docx-readback-gate',
@@ -75,11 +75,9 @@ describe('ai tool hand backend', () => {
     const cache = createHumanRuntimeCache()
     const baseState = buildStateWithReadbackHint()
 
-    const mouthDecision: HumanDecision = {
-      decision: {
-        summary: '直接结束',
-        reason: '故意测试 gate',
-        expectedOutcome: '应被阻断'
+    const mouthDecision: HumanThoughtDecision = {
+      thought: {
+        summary: '直接结束'
       },
       nextAction: {
         action: 'mouth'
@@ -90,18 +88,16 @@ describe('ai tool hand backend', () => {
       ctx,
       cache,
       state: baseState,
-      decision: mouthDecision,
+      thought: mouthDecision,
       stableMemory: baseState.memory.stable
     })
 
     expect(blockedMouth.execution.stage).toBe('brain')
     expect(blockedMouth.execution.watchHint?.code).toBe('docx_write_requires_readback')
 
-    const readDecision: HumanDecision = {
-      decision: {
-        summary: '先 readback',
-        reason: '满足 gate',
-        expectedOutcome: '允许进入 hand'
+    const readDecision: HumanThoughtDecision = {
+      thought: {
+        summary: '先 readback'
       },
       nextAction: {
         action: 'hand',
@@ -123,7 +119,7 @@ describe('ai tool hand backend', () => {
       ctx,
       cache,
       state: baseState,
-      decision: readDecision,
+      thought: readDecision,
       stableMemory: baseState.memory.stable
     })
 
@@ -136,11 +132,9 @@ describe('ai tool hand backend', () => {
     const cache = createHumanRuntimeCache()
     const baseState = buildStateWithReadbackHint('/tmp/workspace-root/工作/本周周报.docx')
 
-    const readDecision: HumanDecision = {
-      decision: {
-        summary: '先 readback',
-        reason: '满足 gate',
-        expectedOutcome: '允许进入 hand'
+    const readDecision: HumanThoughtDecision = {
+      thought: {
+        summary: '先 readback'
       },
       nextAction: {
         action: 'hand',
@@ -162,7 +156,7 @@ describe('ai tool hand backend', () => {
       ctx,
       cache,
       state: baseState,
-      decision: readDecision,
+      thought: readDecision,
       stableMemory: baseState.memory.stable
     })
 
@@ -175,11 +169,9 @@ describe('ai tool hand backend', () => {
     const cache = createHumanRuntimeCache()
     const baseState = buildStateWithReadbackHint('/tmp/workspace-root/工作/本周周报.docx')
 
-    const readDecision: HumanDecision = {
-      decision: {
-        summary: '读另一个文件',
-        reason: '故意测试 gate',
-        expectedOutcome: '应被阻断'
+    const readDecision: HumanThoughtDecision = {
+      thought: {
+        summary: '读另一个文件'
       },
       nextAction: {
         action: 'hand',
@@ -201,7 +193,7 @@ describe('ai tool hand backend', () => {
       ctx,
       cache,
       state: baseState,
-      decision: readDecision,
+      thought: readDecision,
       stableMemory: baseState.memory.stable
     })
 

@@ -42,11 +42,9 @@ describe('ai tool hand backend', () => {
               taskId: runtime.taskId,
               userInput: '请修改文档'
             }).execution,
-            currentDecision: {
-              decision: {
-                summary: '执行 docx 写入',
-                reason: '验证写后收敛提示。',
-                expectedOutcome: '触发写后必须 readback 的 watch hint。'
+            currentThought: {
+              thought: {
+                summary: '执行 docx 写入'
               },
               nextAction: {
                 action: 'hand',

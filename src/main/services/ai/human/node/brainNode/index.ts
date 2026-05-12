@@ -1,5 +1,5 @@
 import type { AiRunContext } from '../../../types'
-import { humanDecisionSchema } from '../../schema'
+import { humanThoughtDecisionSchema } from '../../schema'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { applyStableMemoryPatch } from '../../memory/stableMemory'
 import { buildBrainPrompt } from '../../prompts/brain'
@@ -19,21 +19,21 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
         state,
         ctx: input.ctx
       }),
-      schema: humanDecisionSchema,
+      schema: humanThoughtDecisionSchema,
       schemaName: 'human_brain_decision',
       temperature: 0.1
     })
-    const parsedDecision = humanDecisionSchema.parse(rawOutput)
+    const parsedThought = humanThoughtDecisionSchema.parse(rawOutput)
     const stableMemory = applyStableMemoryPatch({
       stable: state.memory.stable,
-      patch: parsedDecision.updatedStableMemory
+      patch: parsedThought.updatedStableMemory
     })
 
     return applyBrainDecisionTransition({
       ctx: input.ctx,
       cache: input.cache,
       state,
-      decision: parsedDecision,
+      thought: parsedThought,
       stableMemory
     })
   }

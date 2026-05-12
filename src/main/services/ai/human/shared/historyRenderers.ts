@@ -200,19 +200,19 @@ const buildBrainToolAttemptText = (input: {
     .join('\n')
 
 const renderDecisionNextAction = (record: HumanRoundRecord): string => {
-  switch (record.decision.nextAction.action) {
+  switch (record.thought.nextAction.action) {
     case 'learning':
       return `- 你准备下一步做：准备学习 ${renderQuotedNames(
-        record.decision.nextAction.wantLearnSkillIds
+        record.thought.nextAction.wantLearnSkillIds
       )}。`
     case 'hand':
       return `- 你准备下一步做：准备进入 hand，${
-        record.decision.nextAction.toolUsePlan.mode === 'parallel'
+        record.thought.nextAction.toolUsePlan.mode === 'parallel'
           ? `以 parallel 模式并行执行 ${renderQuotedNames(
-              record.decision.nextAction.toolUsePlan.calls.map((call) => call.toolName)
+              record.thought.nextAction.toolUsePlan.calls.map((call) => call.toolName)
             )}。`
           : `以 serial 模式按顺序执行 ${renderQuotedNames(
-              record.decision.nextAction.toolUsePlan.calls.map((call) => call.toolName)
+              record.thought.nextAction.toolUsePlan.calls.map((call) => call.toolName)
             )}。`
       }`
     case 'mouth':
@@ -222,9 +222,7 @@ const renderDecisionNextAction = (record: HumanRoundRecord): string => {
 
 const renderBrainRoundDecision = (record: HumanRoundRecord): string =>
   `
-- 你的判断：${record.decision.decision.summary}
-- 你这样判断的原因：${record.decision.decision.reason}
-- 你当时期待的结果：${record.decision.decision.expectedOutcome}
+- 你的判断：${record.thought.thought.summary}
 ${renderDecisionNextAction(record)}
 `.trim()
 
@@ -298,10 +296,7 @@ const renderBrainRoundResult = (record: HumanRoundRecord): string => {
       return [toolAttempts, artifactLine].filter(Boolean).join('\n')
     }
     case 'mouth':
-      return `
-- 输出摘要：${record.execution.summary}
-${record.execution.completed ? '- 任务已完成。' : '- 任务未完成。'}
-`.trim()
+      return record.execution.completed ? '- 任务已完成。' : '- 任务未完成。'
   }
 }
 
@@ -563,7 +558,7 @@ const renderMouthRoundFacts = (record: HumanRoundRecord): string[] => {
       return facts
     }
     case 'mouth':
-      return record.execution.completed ? [`已形成最终答复：${record.execution.summary}`] : []
+      return record.execution.completed ? ['已形成最终答复。'] : []
   }
 }
 

@@ -14,11 +14,9 @@ describe('ai unit human history renderers', () => {
     })
     const history = appendRoundRecord({
       state: initialState,
-      decision: {
-        decision: {
-          summary: '重试 docx_text_edit',
-          reason: '需要根据失败信息修正参数',
-          expectedOutcome: '拿到原始 schema 报错并继续收敛'
+      thought: {
+        thought: {
+          summary: '重试 docx_text_edit'
         },
         nextAction: {
           action: 'hand',
@@ -88,11 +86,9 @@ describe('ai unit human history renderers', () => {
     })
     const history = appendRoundRecord({
       state: initialState,
-      decision: {
-        decision: {
-          summary: '重试 docx_text_edit',
-          reason: '需要根据失败信息修正参数',
-          expectedOutcome: '拿到原始 schema 报错并继续收敛'
+      thought: {
+        thought: {
+          summary: '重试 docx_text_edit'
         },
         nextAction: {
           action: 'hand',
@@ -165,11 +161,9 @@ describe('ai unit human history renderers', () => {
     })
     const history = appendRoundRecord({
       state: initialState,
-      decision: {
-        decision: {
-          summary: '读取图形学区间',
-          reason: '需要按原文说明反走样处理办法',
-          expectedOutcome: '拿到完整原文片段'
+      thought: {
+        thought: {
+          summary: '读取图形学区间'
         },
         nextAction: {
           action: 'hand',

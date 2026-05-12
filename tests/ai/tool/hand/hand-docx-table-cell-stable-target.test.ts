@@ -61,11 +61,9 @@ describe('ai tool hand backend', () => {
               taskId: runtime.taskId,
               userInput: '请插入说明并更新负责人'
             }).execution,
-            currentDecision: {
-              decision: {
-                summary: '先插段落再更新表格单元格',
-                reason: '验证旧 cellBlockId 在前序结构插入后仍能稳定命中。',
-                expectedOutcome: 'update_cell 命中原 Owner 单元格并改为 Bob。'
+            currentThought: {
+              thought: {
+                summary: '先插段落再更新表格单元格'
               },
               nextAction: {
                 action: 'hand',

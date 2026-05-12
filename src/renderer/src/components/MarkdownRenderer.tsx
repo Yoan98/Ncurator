@@ -7,6 +7,7 @@ import 'katex/dist/katex.min.css'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { Typography } from 'antd'
+import { parseRefHref, renderReferenceIcon } from './markdownReference'
 
 interface MarkdownRendererProps {
   content: string
@@ -74,16 +75,34 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
           ul: ({ children }) => <ul className="list-disc pl-5 mb-2">{children}</ul>,
           ol: ({ children }) => <ol className="list-decimal pl-5 mb-2">{children}</ol>,
           li: ({ children }) => <li className="mb-1 text-[#1F1F1F]">{children}</li>,
-          a: ({ href, children }) => (
-            <a
-              href={href}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[#D97757] hover:underline"
-            >
-              {children}
-            </a>
-          ),
+          a: ({ href, children }) => {
+            const parsed = parseRefHref(href)
+            if (parsed.type === 'reference') {
+              const label = parsed.label || String(children)
+              return (
+                <a
+                  href={href}
+                  className="inline-flex items-center gap-1 rounded-full border border-[#E8C8BD] bg-[#FFF7F2] px-2 py-0.5 text-[#B85C38] hover:bg-[#FDEADB]"
+                  data-ref-kind={parsed.kind}
+                  data-ref-path={parsed.path}
+                >
+                  {renderReferenceIcon(label, parsed.path)}
+                  <span>{children}</span>
+                </a>
+              )
+            }
+
+            return (
+              <a
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#D97757] hover:underline"
+              >
+                {children}
+              </a>
+            )
+          },
           blockquote: ({ children }) => (
             <blockquote className="border-l-4 border-[#D97757] pl-4 italic text-gray-500 my-2">
               {children}

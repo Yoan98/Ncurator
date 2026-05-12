@@ -10,7 +10,7 @@ import { HISTORY_LIST_TOOL_SPEC, HISTORY_SEARCH_TOOL_SPEC } from './toolSpecs'
 const buildSearchHits = (rounds: ReturnType<typeof filterRoundHistory>, query: string) => {
   const lowered = query.toLowerCase()
   return rounds.map((round) => {
-    const summary = round.decision.decision.summary
+    const summary = round.thought.thought.summary
     const resultSummary =
       round.execution.kind === 'hand'
         ? round.execution.toolResults
@@ -21,7 +21,7 @@ const buildSearchHits = (rounds: ReturnType<typeof filterRoundHistory>, query: s
             )
             .join('\n')
         : round.execution.kind === 'mouth'
-          ? round.execution.summary
+          ? ''
           : round.execution.kind === 'learning'
             ? round.execution.learningOutcome.loadedSkillIds.join(', ')
             : round.execution.watchHint.code
@@ -143,7 +143,7 @@ export const internalToolFamily: ToolFamilyDefinition = {
               rounds.map((round) => ({
                 roundId: round.roundId,
                 executionKind: round.execution.kind,
-                decision: round.decision.decision.summary
+                decision: round.thought.thought.summary
               })),
               undefined,
               {

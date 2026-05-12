@@ -482,11 +482,11 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
     const toolCallLimit =
       input.ctx.humanRuntimeOverrides?.hardActionLimit || HUMAN_DEFAULT_TOOL_CALL_LIMIT
 
-    if (!state.execution.currentDecision || state.execution.currentDecision.nextAction.action !== 'hand') {
+    if (!state.execution.currentThought || state.execution.currentThought.nextAction.action !== 'hand') {
       return returnToBrain(state)
     }
 
-    const { toolUsePlan } = state.execution.currentDecision.nextAction
+    const { toolUsePlan } = state.execution.currentThought.nextAction
     const invalidPlanWatchHint = validateToolUsePlan(toolUsePlan)
     if (invalidPlanWatchHint) {
       return returnToBrainWithWatchHint({

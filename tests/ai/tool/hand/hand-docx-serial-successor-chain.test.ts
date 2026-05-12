@@ -56,11 +56,9 @@ describe('ai tool hand backend', () => {
               taskId: runtime.taskId,
               userInput: '请完成风险周报剩余章节'
             }).execution,
-            currentDecision: {
-              decision: {
-                summary: '串行补全风险周报章节',
-                reason: '先替换主要风险段，再连续插入后续章节。',
-                expectedOutcome: '后续 insert_after 能跟随替换后的 successor 与新插入尾块继续执行。'
+            currentThought: {
+              thought: {
+                summary: '串行补全风险周报章节'
               },
               nextAction: {
                 action: 'hand',

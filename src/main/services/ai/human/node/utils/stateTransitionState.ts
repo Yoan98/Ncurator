@@ -6,9 +6,8 @@ import {
   buildPreExecutionBlockedExecution
 } from '../../memory/roundHistory'
 import { getToolSpec } from '../../tools/registry'
-import { createDeliveryGuidanceItem, mergeDeliveryGuidanceItems } from '../../shared/deliveryGuidance'
 import type {
-  HumanDecision,
+  HumanThoughtDecision,
   HumanResult,
   HumanStableMemory,
   HumanState,
@@ -36,12 +35,12 @@ const docxPathMatchesReadbackTarget = (input: {
 }
 
 const docxReadSatisfiesWatchHint = (input: {
-  decision: HumanDecision
+  thought: HumanThoughtDecision
   watchHint: Extract<HumanWatchHint, { code: 'docx_write_requires_readback' }>
 }): boolean => {
-  if (input.decision.nextAction.action !== 'hand') return false
+  if (input.thought.nextAction.action !== 'hand') return false
 
-  return input.decision.nextAction.toolUsePlan.calls.some((call) => {
+  return input.thought.nextAction.toolUsePlan.calls.some((call) => {
     const spec = getToolSpec(call.toolName)
     if (!spec) return false
     const meta = spec.resolveExecutionMeta(call.args)
@@ -156,16 +155,16 @@ export const returnToBrainAfterTraceState = (input: {
 
 export const resolveBrainDecisionWatchHint = (input: {
   state: HumanState
-  decision: HumanDecision
+  thought: HumanThoughtDecision
   stableMemory: HumanStableMemory
   watchHint?: HumanWatchHint
 }): HumanWatchHint | undefined => {
   if (input.watchHint) return input.watchHint
   if (input.state.execution.watchHint?.code === 'docx_write_requires_readback') {
     if (
-      input.decision.nextAction.action === 'hand' &&
+      input.thought.nextAction.action === 'hand' &&
       docxReadSatisfiesWatchHint({
-        decision: input.decision,
+        thought: input.thought,
         watchHint: input.state.execution.watchHint
       })
     ) {
@@ -173,7 +172,7 @@ export const resolveBrainDecisionWatchHint = (input: {
     }
     return buildDocxReadbackBlockedHint(input.state.execution.watchHint)
   }
-  if (input.decision.nextAction.action !== 'mouth') return undefined
+  if (input.thought.nextAction.action !== 'mouth') return undefined
 
   const pendingItems = input.stableMemory.checklist
     .filter((item) => item.status === 'todo')
@@ -195,27 +194,27 @@ export const resolveBrainDecisionWatchHint = (input: {
 
 const resolveBrainNextStage = (input: {
   watchHint?: HumanWatchHint
-  decision: HumanDecision
+  thought: HumanThoughtDecision
 }): HumanState['execution']['stage'] => {
   if (input.watchHint) return 'brain'
-  return input.decision.nextAction.action === 'learning'
+  return input.thought.nextAction.action === 'learning'
     ? 'learning'
-    : input.decision.nextAction.action === 'hand'
+    : input.thought.nextAction.action === 'hand'
       ? 'hand'
       : 'mouth'
 }
 
 export const applyBrainDecisionState = (input: {
   state: HumanState
-  decision: HumanDecision
+  thought: HumanThoughtDecision
   stableMemory: HumanStableMemory
   watchHint?: HumanWatchHint
   createdAt: number
 }): HumanState => {
-  const brainDeliveryGuidance = createDeliveryGuidanceItem(
-    'brain',
-    input.decision.nextAction.action === 'mouth' ? input.decision.deliveryGuidance : undefined
-  )
+  const references =
+    !input.watchHint && input.thought.nextAction.action === 'mouth'
+      ? input.thought.nextAction.references
+      : undefined
 
   return {
     ...input.state,
@@ -223,22 +222,19 @@ export const applyBrainDecisionState = (input: {
       ...input.state.execution,
       stage: resolveBrainNextStage({
         watchHint: input.watchHint,
-        decision: input.decision
+        thought: input.thought
       }),
       status: 'running',
-      currentDecision: input.decision,
+      currentThought: input.thought,
       watchHint: input.watchHint,
-      deliveryGuidanceItems: mergeDeliveryGuidanceItems(
-        input.state.execution.deliveryGuidanceItems,
-        brainDeliveryGuidance
-      )
+      references
     },
     memory: {
       stable: input.stableMemory,
       history: input.watchHint
         ? appendRoundRecord({
             state: input.state,
-            decision: input.decision,
+            thought: input.thought,
             execution: buildPreExecutionBlockedExecution(input.watchHint),
             createdAt: input.createdAt
           })
@@ -252,9 +248,9 @@ export const applyBrainDecisionState = (input: {
         steps: input.state.trace.steps,
         item: {
           action: 'brain_decision',
-          publicNarrative: input.decision.decision.summary,
+          publicNarrative: input.thought.thought.summary,
           resultStatus: 'ok',
-          summary: input.decision.decision.reason
+          summary: input.thought.thought.summary
         }
       })
     }
@@ -263,11 +259,9 @@ export const applyBrainDecisionState = (input: {
 
 export const buildHumanResult = (input: {
   state: HumanState
-  summary: string
   deliveryMarkdown: string
 }): HumanResult => ({
   status: 'completed',
-  summary: input.summary,
   deliveryMarkdown: input.deliveryMarkdown,
   artifacts: input.state.execution.artifacts.length > 0 ? [...input.state.execution.artifacts] : undefined
 })
@@ -287,21 +281,20 @@ export const completeHumanTaskState = (input: {
     history: appendDecisionRound({
       state: input.state,
       execution: buildMouthExecution({
-        summary: input.result.summary,
         completed: true
       })
     })
   },
   result: input.result,
   trace: {
-    steps: appendHumanTraceStep({
-      steps: input.state.trace.steps,
-      item: {
-        action: 'deliver_result',
-        publicNarrative: input.result.summary,
-        resultStatus: 'ok',
-        summary: input.result.summary
-      }
-    })
-  }
+      steps: appendHumanTraceStep({
+        steps: input.state.trace.steps,
+        item: {
+          action: 'deliver_result',
+          publicNarrative: input.result.deliveryMarkdown,
+          resultStatus: 'ok',
+          summary: '已完成最终交付'
+        }
+      })
+    }
 })

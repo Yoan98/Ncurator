@@ -72,11 +72,9 @@ describe('ai tool hand backend', () => {
               taskId: runtime.taskId,
               userInput: 'inspect docx in parallel'
             }).execution,
-            currentDecision: {
-              decision: {
-                summary: '并行读取 docx 结构和命中段落',
-                reason: '两个工具都是 read_only 且 parallelSafe。',
-                expectedOutcome: '直接返回 outline 和读取结果。'
+            currentThought: {
+              thought: {
+                summary: '并行读取 docx 结构和命中段落'
               },
               nextAction: {
                 action: 'hand',
@@ -111,11 +109,9 @@ describe('ai tool hand backend', () => {
           },
           execution: {
             ...safeState.execution,
-            currentDecision: {
-              decision: {
-                summary: '执行计划长度上限内的只读并行调用',
-                reason: '验证总计划长度上限内的 parallelSafe 调用会真正执行。',
-                expectedOutcome: '上限内的 read_only 且 parallelSafe 调用全部真正执行。'
+            currentThought: {
+              thought: {
+                summary: '执行计划长度上限内的只读并行调用'
               },
               nextAction: {
                 action: 'hand',
@@ -144,11 +140,9 @@ describe('ai tool hand backend', () => {
           },
           execution: {
             ...safeLimitState.execution,
-            currentDecision: {
-              decision: {
-                summary: '执行超过总计划长度上限的并行调用',
-                reason: '验证 toolUsePlan 总长度上限会先于并行细分校验生效。',
-                expectedOutcome: '写入 tool_use_plan_limit_exceeded watchHint，且不继续执行工具。'
+            currentThought: {
+              thought: {
+                summary: '执行超过总计划长度上限的并行调用'
               },
               nextAction: {
                 action: 'hand',
@@ -183,11 +177,9 @@ describe('ai tool hand backend', () => {
           },
           execution: {
             ...limitExceededState.execution,
-            currentDecision: {
-              decision: {
-                summary: '并行写入和读取',
-                reason: '故意构造不安全批次，验证 hand 是否拒绝。',
-                expectedOutcome: '写入 watchHint 并返回 brain。'
+            currentThought: {
+              thought: {
+                summary: '并行写入和读取'
               },
               nextAction: {
                 action: 'hand',
@@ -233,11 +225,9 @@ describe('ai tool hand backend', () => {
           },
           execution: {
             ...unsafeState.execution,
-            currentDecision: {
-              decision: {
-                summary: '并行执行内联解释器和 docx 读取',
-                reason: '验证 terminal 内联解释器命令不会被视为 parallelSafe。',
-                expectedOutcome: '写入 parallel_requires_read_only watchHint，并在执行前阻断。'
+            currentThought: {
+              thought: {
+                summary: '并行执行内联解释器和 docx 读取'
               },
               nextAction: {
                 action: 'hand',

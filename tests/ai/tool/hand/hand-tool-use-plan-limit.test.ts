@@ -34,11 +34,9 @@ describe('ai tool hand backend', () => {
               taskId: runtime.taskId,
               userInput: '请执行多个终端只读命令'
             }).execution,
-            currentDecision: {
-              decision: {
-                summary: '提交超长 toolUsePlan',
-                reason: '验证总计划长度上限优先于串行/并行细分校验生效。',
-                expectedOutcome: '直接返回 hand_plan_invalid。'
+            currentThought: {
+              thought: {
+                summary: '提交超长 toolUsePlan'
               },
               nextAction: {
                 action: 'hand',

@@ -23,7 +23,14 @@ export const jsonObjectSchema: z.ZodType<JsonObject> = z.lazy(() =>
 )
 
 export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
-  z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(jsonValueSchema), jsonObjectSchema])
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(jsonValueSchema),
+    jsonObjectSchema
+  ])
 )
 
 export const runtimeSkillIdSchema = z.enum(RUNTIME_SKILL_IDS)
@@ -215,35 +222,45 @@ export const humanStableMemorySchema = z.object({
 
 export const humanStableMemoryPatchSchema = humanStableMemorySchema.partial()
 
-export const brainDecisionSchema = z.object({
-  summary: z.string().min(1),
-  reason: z.string().min(1),
-  expectedOutcome: z.string().min(1)
+export const humanThoughtSchema = z.object({
+  summary: z.string().min(1)
+})
+
+export const humanReferenceSchema = z.object({
+  label: z.string().min(1),
+  path: z.string().min(1),
+  kind: z.enum(['internal', 'external']),
+  usedFor: z.string().min(1)
 })
 
 export const brainNextActionSchema = z.discriminatedUnion('action', [
-  z.object({
-    action: z.literal('learning'),
-    wantLearnSkillIds: z.array(z.string().min(1)).min(1)
-  }),
-  z.object({
-    action: z.literal('hand'),
-    toolUsePlan: toolUsePlanSchema
-  }),
-  z.object({
-    action: z.literal('mouth')
-  })
+  z
+    .object({
+      action: z.literal('learning'),
+      wantLearnSkillIds: z.array(z.string().min(1)).min(1)
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal('hand'),
+      toolUsePlan: toolUsePlanSchema
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal('mouth'),
+      references: z.array(humanReferenceSchema).optional()
+    })
+    .strict()
 ])
 
-export const humanDecisionSchema = z.object({
+export const humanThoughtDecisionSchema = z.object({
   updatedStableMemory: humanStableMemoryPatchSchema.optional(),
-  decision: brainDecisionSchema,
-  deliveryGuidance: z.string().min(1).optional(),
+  thought: humanThoughtSchema,
   nextAction: brainNextActionSchema
 })
 
 export const humanDeliveryPayloadSchema = z.object({
-  summary: z.string().min(1),
   deliveryMarkdown: z.string().default('')
 })
 
@@ -264,7 +281,7 @@ export const runtimeArtifactsSummarySchema = z.object({
 })
 
 export const deliveryGuidanceItemSchema = z.object({
-  source: z.enum(['brain', 'hand']),
+  source: z.literal('hand'),
   text: z.string().min(1)
 })
 
@@ -282,13 +299,14 @@ export const humanTaskOutputSchema = humanDeliveryPayloadSchema.extend({
 export const humanExecutionSchema = z.object({
   stage: humanStageSchema,
   status: humanStatusSchema,
-  currentDecision: humanDecisionSchema.optional(),
+  currentThought: humanThoughtDecisionSchema.optional(),
   watchHint: humanWatchHintSchema.optional(),
   deliveryGuidanceItems: z.array(deliveryGuidanceItemSchema).optional(),
   lastToolResults: z.array(toolCallResultSchema).optional(),
   lastLearningOutcome: humanLearningOutcomeSchema.optional(),
   artifacts: z.array(aiArtifactRefSchema),
-  runtimeArtifacts: runtimeArtifactsSummarySchema.optional()
+  runtimeArtifacts: runtimeArtifactsSummarySchema.optional(),
+  references: z.array(humanReferenceSchema).optional()
 })
 
 export const humanRoundExecutionSchema = z.discriminatedUnion('kind', [
@@ -310,7 +328,6 @@ export const humanRoundExecutionSchema = z.discriminatedUnion('kind', [
   }),
   z.object({
     kind: z.literal('mouth'),
-    summary: z.string().min(1),
     completed: z.boolean()
   })
 ])
@@ -318,7 +335,7 @@ export const humanRoundExecutionSchema = z.discriminatedUnion('kind', [
 export const humanRoundRecordSchema = z.object({
   roundId: z.number().int().min(1),
   createdAt: z.number(),
-  decision: humanDecisionSchema,
+  thought: humanThoughtDecisionSchema,
   execution: humanRoundExecutionSchema
 })
 
@@ -349,7 +366,12 @@ export const humanSkillsSchema = z.object({
     .array(runtimeSkillIdSchema)
     .refine(
       (skillIds) =>
-        skillIds.every((skillId) => !BUILTIN_RUNTIME_SKILL_IDS.includes(skillId as (typeof BUILTIN_RUNTIME_SKILL_IDS)[number])),
+        skillIds.every(
+          (skillId) =>
+            !BUILTIN_RUNTIME_SKILL_IDS.includes(
+              skillId as (typeof BUILTIN_RUNTIME_SKILL_IDS)[number]
+            )
+        ),
       {
         message: 'learnedSkillIds 只允许 external skill。'
       }

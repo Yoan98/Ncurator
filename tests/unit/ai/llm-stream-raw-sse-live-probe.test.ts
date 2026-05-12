@@ -5,7 +5,7 @@ import { z } from 'zod/v4'
 import { createChatModel } from '../../../src/main/services/llm/chatModel'
 import { normalizeOpenAIBaseUrl } from '../../../src/shared/llmBaseUrl'
 import { extractTextContent } from '../../../src/main/services/ai/structuredOutput'
-import { humanDecisionSchema } from '../../../src/main/services/ai/human/schema'
+import { humanThoughtDecisionSchema } from '../../../src/main/services/ai/human/schema'
 import type { LlmRuntimeConfig } from '../../../src/shared/types'
 import {
   hasLiveLlmConfigInEnv,
@@ -112,7 +112,7 @@ const buildCompletionsUrl = (baseUrl: string): string => {
 }
 
 const resolveProbeSchema = (schemaName: string): z.ZodType<Record<string, unknown>> =>
-  schemaName === 'human_brain_decision' ? humanDecisionSchema : schema
+  schemaName === 'human_brain_decision' ? humanThoughtDecisionSchema : schema
 
 const loadReplayPromptFromEnv = async (): Promise<ReplayPrompt | undefined> => {
   const llmIoPath = String(process.env.AI_LIVE_STREAM_PROBE_LLM_IO_PATH || '').trim()

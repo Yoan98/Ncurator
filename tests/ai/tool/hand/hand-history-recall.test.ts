@@ -35,11 +35,9 @@ describe('ai tool hand backend', () => {
             ...initialState.memory,
             history: appendRoundRecord({
               state: initialState,
-              decision: {
-                decision: {
-                  summary: '学习 docx-write',
-                  reason: '后续需要修改文档。',
-                  expectedOutcome: '补齐结构化写入能力。'
+              thought: {
+                thought: {
+                  summary: '学习 docx-write'
                 },
                 nextAction: {
                   action: 'learning',
@@ -67,11 +65,9 @@ describe('ai tool hand backend', () => {
             ...stateWithLearningRound.memory,
             history: appendRoundRecord({
               state: stateWithLearningRound,
-              decision: {
-                decision: {
-                  summary: '执行 docx 编辑',
-                  reason: '已经具备 write 能力，可以执行文本替换。',
-                  expectedOutcome: '拿到 changedBlocks。'
+              thought: {
+                thought: {
+                  summary: '执行 docx 编辑'
                 },
                 nextAction: {
                   action: 'hand',
@@ -140,11 +136,9 @@ describe('ai tool hand backend', () => {
           },
           execution: {
             ...stateWithLearningRound.execution,
-            currentDecision: {
-              decision: {
-                summary: '回看 docx 编辑相关历史',
-                reason: '最近历史摘要还不够，需要看更详细的旧轮次。',
-                expectedOutcome: '加载到包含 docx_text_edit 的旧历史。'
+            currentThought: {
+              thought: {
+                summary: '回看 docx 编辑相关历史'
               },
               nextAction: {
                 action: 'hand',

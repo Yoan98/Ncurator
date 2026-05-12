@@ -12,18 +12,14 @@ import {
   resolveBrainDecisionWatchHint
 } from '../../../src/main/services/ai/human/node/utils/stateTransitionState'
 import { createInitialHumanState } from '../../../src/main/services/ai/human/state/schema'
-import type { HumanDecision } from '../../../src/main/services/ai/human/types'
+import type { HumanThoughtDecision } from '../../../src/main/services/ai/human/types'
 
-const buildDecision = (input: {
+const buildThought = (input: {
   summary: string
-  reason: string
-  expectedOutcome: string
-  nextAction: HumanDecision['nextAction']
-}): HumanDecision => ({
-  decision: {
+  nextAction: HumanThoughtDecision['nextAction']
+}): HumanThoughtDecision => ({
+  thought: {
     summary: input.summary,
-    reason: input.reason,
-    expectedOutcome: input.expectedOutcome
   },
   nextAction: input.nextAction
 })
@@ -34,10 +30,8 @@ describe('ai unit human memory history', () => {
       taskId: 'task-1',
       userInput: '请结束任务'
     })
-    const decision = buildDecision({
+    const thought = buildThought({
       summary: '错误地尝试直接收尾',
-      reason: '测试 pre_execution_blocked。',
-      expectedOutcome: '被系统拦下并回到 brain。',
       nextAction: {
         action: 'mouth'
       }
@@ -45,7 +39,7 @@ describe('ai unit human memory history', () => {
 
     const nextState = applyBrainDecisionState({
       state: initialState,
-      decision,
+      thought,
       stableMemory: {
         ...initialState.memory.stable,
         checklist: [
@@ -68,7 +62,7 @@ describe('ai unit human memory history', () => {
     expect(nextState.memory.history.roundHistory[0]).toMatchObject({
       roundId: 1,
       createdAt: 1,
-      decision,
+      thought,
       execution: {
         kind: 'pre_execution_blocked',
         watchHint: {
@@ -83,10 +77,8 @@ describe('ai unit human memory history', () => {
       taskId: 'task-tool-limit',
       userInput: '请在预算内尽量完成，否则直接说明未完成部分'
     })
-    const decision = buildDecision({
+    const thought = buildThought({
       summary: '工具预算已耗尽，准备直接收尾',
-      reason: '继续执行会违反当前工具次数上限。',
-      expectedOutcome: '允许基于现有结果结束任务。',
       nextAction: {
         action: 'mouth'
       }
@@ -116,13 +108,13 @@ describe('ai unit human memory history', () => {
     }
     const watchHint = resolveBrainDecisionWatchHint({
       state: stateWithToolLimit,
-      decision,
+      thought,
       stableMemory
     })
 
     const nextState = applyBrainDecisionState({
       state: stateWithToolLimit,
-      decision,
+      thought,
       stableMemory,
       watchHint,
       createdAt: 2
@@ -134,6 +126,42 @@ describe('ai unit human memory history', () => {
     expect(nextState.memory.history.roundHistory).toHaveLength(0)
   })
 
+  it('clears stale execution references when next action is not mouth', () => {
+    const initialState = createInitialHumanState({
+      taskId: 'task-clear-references',
+      userInput: '继续执行'
+    })
+    const stateWithReferences = {
+      ...initialState,
+      execution: {
+        ...initialState.execution,
+        references: [
+          {
+            label: 'report.docx',
+            path: '/tmp/workspace/report.docx',
+            kind: 'internal' as const,
+            usedFor: '用于支撑上一次收尾'
+          }
+        ]
+      }
+    }
+
+    const nextState = applyBrainDecisionState({
+      state: stateWithReferences,
+      thought: buildThought({
+        summary: '还需要继续读资料',
+        nextAction: {
+          action: 'learning',
+          wantLearnSkillIds: ['history-recall']
+        }
+      }),
+      stableMemory: initialState.memory.stable,
+      createdAt: 3
+    })
+
+    expect(nextState.execution.references).toBeUndefined()
+  })
+
   it('keeps the last round out of earlier_attempts and trims the window to twenty rounds', () => {
     const initialState = createInitialHumanState({
       taskId: 'task-2',
@@ -142,10 +170,8 @@ describe('ai unit human memory history', () => {
 
     const stateWithHistory = Array.from({ length: 22 }).reduce((state, _, index) => {
       const round = index + 1
-      const decision = buildDecision({
+      const thought = buildThought({
         summary: `第 ${round} 轮决定`,
-        reason: `第 ${round} 轮原因`,
-        expectedOutcome: `第 ${round} 轮预期`,
         nextAction: {
           action: 'learning',
           wantLearnSkillIds: ['docx-read']
@@ -158,7 +184,7 @@ describe('ai unit human memory history', () => {
           ...state.memory,
           history: appendRoundRecord({
             state,
-            decision,
+            thought,
             execution:
               round % 2 === 0
                 ? buildHandExecution({
@@ -219,10 +245,8 @@ describe('ai unit human memory history', () => {
       ...initialState,
       execution: {
         ...initialState.execution,
-        currentDecision: buildDecision({
+        currentThought: buildThought({
           summary: '学习 docx-read',
-          reason: '需要读取文档结构。',
-          expectedOutcome: '补齐 docx 阅读能力。',
           nextAction: {
             action: 'learning',
             wantLearnSkillIds: ['docx-read']
@@ -266,10 +290,8 @@ describe('ai unit human memory history', () => {
 
     const nextHistory = appendRoundRecord({
       state: initialState,
-      decision: buildDecision({
+      thought: buildThought({
         summary: '读取 docx 片段',
-        reason: '需要保留完整 blocks',
-        expectedOutcome: 'history 中保留原始 data',
         nextAction: {
           action: 'hand',
           toolUsePlan: {
@@ -371,10 +393,8 @@ describe('ai unit human memory history', () => {
 
     const history = appendRoundRecord({
       state: initialState,
-      decision: buildDecision({
+      thought: buildThought({
         summary: '读取图形学文档',
-        reason: '需要确认反走样处理办法',
-        expectedOutcome: '拿到完整连续区间',
         nextAction: {
           action: 'hand',
           toolUsePlan: {
@@ -450,15 +470,13 @@ describe('ai unit human memory history', () => {
     expect(filtered.map((record) => record.roundId)).toEqual([1])
   })
 
-  it('appends new structured delivery guidance instead of replacing existing items', () => {
+  it('preserves existing hand delivery guidance items when brain enters mouth', () => {
     const initialState = createInitialHumanState({
       taskId: 'task-3',
       userInput: '请完成任务'
     })
-    const decision = buildDecision({
+    const thought = buildThought({
       summary: '准备最终交付',
-      reason: '当前信息已足够收尾。',
-      expectedOutcome: '保留已有 hand guidance，并追加 brain guidance。',
       nextAction: {
         action: 'mouth'
       }
@@ -476,10 +494,7 @@ describe('ai unit human memory history', () => {
           ]
         }
       },
-      decision: {
-        ...decision,
-        deliveryGuidance: '再说明通用知识补充不来自当前本地资料。'
-      },
+      thought,
       stableMemory: initialState.memory.stable,
       createdAt: 1
     })
@@ -488,10 +503,6 @@ describe('ai unit human memory history', () => {
       {
         source: 'hand',
         text: '先说明文档没有被自动修改。'
-      },
-      {
-        source: 'brain',
-        text: '再说明通用知识补充不来自当前本地资料。'
       }
     ])
   })

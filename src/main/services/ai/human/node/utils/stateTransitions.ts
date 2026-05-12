@@ -1,7 +1,7 @@
 import type { AiRunContext } from '../../../types'
 import type { WatchHintSource } from '../../../../../../shared/types'
 import type {
-  HumanDecision,
+  HumanThoughtDecision,
   HumanRuntimeCache,
   HumanState,
   HumanStableMemory,
@@ -95,19 +95,19 @@ export const applyBrainDecisionTransition = (input: {
   ctx: AiRunContext
   cache: HumanRuntimeCache
   state: HumanState
-  decision: HumanDecision
+  thought: HumanThoughtDecision
   stableMemory: HumanStableMemory
   watchHint?: HumanWatchHint
 }): HumanState => {
   const watchHint = resolveBrainDecisionWatchHint({
     state: input.state,
-    decision: input.decision,
+    thought: input.thought,
     stableMemory: input.stableMemory,
     watchHint: input.watchHint
   })
   const nextState = applyBrainDecisionState({
     state: input.state,
-    decision: input.decision,
+    thought: input.thought,
     stableMemory: input.stableMemory,
     watchHint,
     createdAt: Date.now()
@@ -137,13 +137,11 @@ export const completeHumanTask = (input: {
   ctx: AiRunContext
   cache: HumanRuntimeCache
   state: HumanState
-  summary: string
   deliveryMarkdown: string
   emitAnswerEvents: boolean
 }): HumanState => {
   const finalResult = buildHumanResult({
     state: input.state,
-    summary: input.summary,
     deliveryMarkdown: input.deliveryMarkdown
   })
 

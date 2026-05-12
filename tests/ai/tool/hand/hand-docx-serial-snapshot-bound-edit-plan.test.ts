@@ -55,11 +55,9 @@ describe('ai tool hand backend', () => {
               taskId: runtime.taskId,
               userInput: '请按计划连续修改同一 docx'
             }).execution,
-            currentDecision: {
-              decision: {
-                summary: '执行同文件结构写事务段',
-                reason: '先在 Alpha 前插入，再继续修改原始 Beta。',
-                expectedOutcome: '第二步仍命中原始 Beta，而不是漂移到新位置上的别的块。'
+            currentThought: {
+              thought: {
+                summary: '执行同文件结构写事务段'
               },
               nextAction: {
                 action: 'hand',

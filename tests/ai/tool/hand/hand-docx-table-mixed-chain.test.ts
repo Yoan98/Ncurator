@@ -64,11 +64,9 @@ describe('ai tool hand backend', () => {
               taskId: runtime.taskId,
               userInput: '请补全这份风险说明'
             }).execution,
-            currentDecision: {
-              decision: {
-                summary: '混合写入段落与表格',
-                reason: '验证同批内结构变动、表格 cell 恢复与锚点续挂方向不会互相污染。',
-                expectedOutcome: '说明段插到锚点前，负责人更新到 Bob，总结段插到原锚点后。'
+            currentThought: {
+              thought: {
+                summary: '混合写入段落与表格'
               },
               nextAction: {
                 action: 'hand',

@@ -3,7 +3,7 @@ import type { AiRunContext } from '../../../src/main/services/ai/types'
 import { createLearningNode } from '../../../src/main/services/ai/human/node/learningNode'
 import { createHumanRuntimeCache } from '../../../src/main/services/ai/human/node/utils/runtimeCache'
 import { createInitialHumanState } from '../../../src/main/services/ai/human/state/schema'
-import type { HumanDecision } from '../../../src/main/services/ai/human/types'
+import type { HumanThoughtDecision } from '../../../src/main/services/ai/human/types'
 
 const createStubAiRunContext = (): AiRunContext => ({
   runId: 'run-learning-unit',
@@ -50,11 +50,9 @@ const createStubAiRunContext = (): AiRunContext => ({
   embeddingService: undefined as never
 })
 
-const buildLearningDecision = (skillIds: string[]): HumanDecision => ({
-  decision: {
-    summary: '测试 learning partial success',
-    reason: '验证 learning 会加载新 skill，并跳过重复或未知 skill。',
-    expectedOutcome: '写出 lastLearningOutcome 并返回 brain。'
+const buildLearningDecision = (skillIds: string[]): HumanThoughtDecision => ({
+  thought: {
+    summary: '测试 learning partial success'
   },
   nextAction: {
     action: 'learning' as const,
@@ -79,7 +77,7 @@ describe('ai unit learning partial success', () => {
       },
       execution: {
         ...baseState.execution,
-        currentDecision: buildLearningDecision(['docx-read', 'docx-write'])
+        currentThought: buildLearningDecision(['docx-read', 'docx-write'])
       }
     })
 
@@ -107,7 +105,7 @@ describe('ai unit learning partial success', () => {
       ...baseState,
       execution: {
         ...baseState.execution,
-        currentDecision: buildLearningDecision(['unknown-skill', 'docx-read'])
+        currentThought: buildLearningDecision(['unknown-skill', 'docx-read'])
       }
     })
 
@@ -133,7 +131,7 @@ describe('ai unit learning partial success', () => {
       ...baseState,
       execution: {
         ...baseState.execution,
-        currentDecision: buildLearningDecision(['history-recall'])
+        currentThought: buildLearningDecision(['history-recall'])
       }
     })
 
@@ -168,7 +166,7 @@ describe('ai unit learning partial success', () => {
         },
         execution: {
           ...baseState.execution,
-          currentDecision: buildLearningDecision(['docx-read'])
+          currentThought: buildLearningDecision(['docx-read'])
         }
       })
     ).rejects.toThrow('learnedSkillIds 只允许 external skill')

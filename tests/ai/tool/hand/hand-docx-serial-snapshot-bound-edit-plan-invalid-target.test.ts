@@ -59,11 +59,9 @@ describe('ai tool hand backend', () => {
               taskId: runtime.taskId,
               userInput: '请连续删除再修改同一段'
             }).execution,
-            currentDecision: {
-              decision: {
-                summary: '先删再改同一目标',
-                reason: '验证目标失效时会中止事务段。',
-                expectedOutcome: '第二步明确失败。'
+            currentThought: {
+              thought: {
+                summary: '先删再改同一目标'
               },
               nextAction: {
                 action: 'hand',

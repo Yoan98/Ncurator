@@ -19,7 +19,7 @@ import {
   renderBrainOutputSchemaForPrompt,
   renderToolSchemaForPrompt
 } from '../tools/schemaPromptRenderer'
-import { humanDecisionSchema } from '../schema'
+import { humanThoughtDecisionSchema } from '../schema'
 import type { HumanState, ToolPromptExample } from '../types'
 import type { HumanToolSpec } from '../tools/types'
 import { renderWatchHintForBrain } from './watchHints'
@@ -102,7 +102,10 @@ ${effectiveToolSpecLines.join('\n') || 'none'}
 }
 
 export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }) => {
-  const outputShapeText = indentLines(renderBrainOutputSchemaForPrompt(humanDecisionSchema), 1)
+  const outputShapeText = indentLines(
+    renderBrainOutputSchemaForPrompt(humanThoughtDecisionSchema),
+    1
+  )
   const system = `
 <system>
   <principles>
@@ -113,11 +116,9 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
     - 当你觉得用户诉求接近完成时，必须做一遍检查工作，检查是否真的能完成用户诉求的交付；
   </principles>
 
-  <decision_contract>
-    - decision.summary：一句话概括你本轮的判断或下一步意图。
-    - decision.reason：说明你为什么这样判断。
-    - decision.expectedOutcome：说明你希望下一跳拿到什么结果，帮助链路继续收敛。
-  </decision_contract>
+  <thought_contract>
+    - thought.summary：一句话概括你本轮的判断或下一步意图。
+  </thought_contract>
 
   <next_action_contract>
     nextAction的选择：
@@ -132,17 +133,14 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
     - toolUsePlan.calls[*].toolName：必须严格使用当前工具说明里的精确名称。
     - toolUsePlan.calls[*].args：必须是对象，字段名、必填参数和参数层级都必须与工具说明一致。
     - toolUsePlan最大只允许规划${HUMAN_TOOL_USE_PLAN_LIMIT}个。
+
+    nextAction为mouth时：
+    - 若完成用户诉求时引用了本地资料，或引用了不来自本地资料的知识以及外部资料必须在 nextAction.references 中列出这些资料，并说明来源定位与它支撑了最终交付的哪些地方。
+    - references[*].kind,分为internal和external,分别代表着用户本地资料和外部资料。
+    - references[*].label,为资料名，比如文件名也可能是网页名等。
+    - references[*].path,为地址，比如文件地址，网页地址等，如果是非用户本地的资料，但又没有明确路径则可以写为From LLM。
+    - references[*].usedFor 必须明确描述“这条资料支撑了最终答复中的哪部分内容”，不能只写笼统用途。
   </next_action_contract>
-
-  <delivery_guidance_contract>
-    - deliveryGuidance 不是最终答复正文，而是给mouth节点的补充说明。
-    - 必须严格遵许下述要输出的情况来累积输出该字段的内容。
-    - 若无需额外说明，则不要输出该字段。
-
-    必须要输出的情况：
-    - 当引用了本地资料完成了用户的诉求后，必须要用该字段说明你用了哪些资料，并明确引用它们的来源和范围。
-    - 当引用了不来自本地资料的知识完成了用户的诉求后，必须明确用该字段说明用了哪些外部知识。
-  </delivery_guidance_contract>
 
   <stable_memory_contract>
     - stableMemory 是任务推进中的持续工作记忆，不是任务总结稿，也不是最终答复草稿。
@@ -201,10 +199,8 @@ ${outputShapeText}
   <examples>
     <example_learning>
       {
-        "decision": {
+        "thought": {
           "summary": "先学习当前缺失的技能",
-          "reason": "下一步已经明确，但仍缺少相关技能说明。",
-          "expectedOutcome": "补齐技能说明后可以决定是否调用工具。"
         },
         "nextAction": {
           "action": "learning",
@@ -215,10 +211,8 @@ ${outputShapeText}
 
     <example_tool_plan>
       {
-        "decision": {
+        "thought": {
           "summary": "下一步已经明确，准备执行真实工具调用。",
-          "reason": "当前已具备所需能力，且已经能写出完整合法的工具参数。",
-          "expectedOutcome": "拿到当前工作区路径，供后续判断继续使用。"
         },
         "nextAction": {
           "action": "hand",
@@ -249,13 +243,19 @@ ${outputShapeText}
             }
           ]
         },
-        "decision": {
-          "summary": "证据已经足够，准备结束任务",
-          "reason": "当前已拿到能直接支撑结论的依据。",
-          "expectedOutcome": "由后续表达节点整理最终结果。"
+        "thought": {
+          "summary": "证据已经足够，准备结束任务"
         },
         "nextAction": {
-          "action": "mouth"
+          "action": "mouth",
+          "references": [
+            {
+              "label": "审批制度说明.docx",
+              "path": "/workspace/审批制度说明.docx",
+              "kind": "internal",
+              "usedFor": "用于支撑最终答复中“审批驳回时保留原文件”的结论"
+            }
+          ]
         }
       }
     </example_delivery>

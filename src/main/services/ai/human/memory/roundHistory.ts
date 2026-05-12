@@ -76,17 +76,15 @@ export const buildHandExecution = (input: {
 }
 
 export const buildMouthExecution = (input: {
-  summary: string
   completed: boolean
 }): Extract<HumanRoundExecution, { kind: 'mouth' }> => ({
   kind: 'mouth',
-  summary: input.summary,
   completed: input.completed
 })
 
 export const appendRoundRecord = (input: {
   state: HumanState
-  decision: HumanRoundRecord['decision']
+  thought: HumanRoundRecord['thought']
   execution: HumanRoundExecution
   createdAt?: number
 }): HumanState['memory']['history'] => ({
@@ -96,7 +94,7 @@ export const appendRoundRecord = (input: {
     {
       roundId: nextRoundId(input.state.memory.history.roundHistory),
       createdAt: input.createdAt || Date.now(),
-      decision: input.decision,
+      thought: input.thought,
       execution: input.execution
     }
   ])
@@ -107,13 +105,13 @@ export const appendDecisionRound = (input: {
   execution: HumanRoundExecution
   createdAt?: number
 }): HumanState['memory']['history'] => {
-  if (!input.state.execution.currentDecision) {
+  if (!input.state.execution.currentThought) {
     return input.state.memory.history
   }
 
   return appendRoundRecord({
     state: input.state,
-    decision: input.state.execution.currentDecision,
+    thought: input.state.execution.currentThought,
     execution: input.execution,
     createdAt: input.createdAt
   })
@@ -132,11 +130,7 @@ export const getLoadedHistoryContext = (
 ): HumanLoadedHistoryContext | undefined => state.memory.history.loadedHistoryContext
 
 const buildRoundSearchText = (record: HumanRoundRecord): string => {
-  const segments: string[] = [
-    record.decision.decision.summary,
-    record.decision.decision.reason,
-    record.decision.decision.expectedOutcome
-  ]
+  const segments: string[] = [record.thought.thought.summary]
 
   if (record.execution.kind === 'learning') {
     segments.push(record.execution.learningOutcome.loadedSkillIds.join(' '))
@@ -150,9 +144,7 @@ const buildRoundSearchText = (record: HumanRoundRecord): string => {
         result.diagnosticText || ''
       )
     })
-  } else if (record.execution.kind === 'mouth') {
-    segments.push(record.execution.summary)
-  } else {
+  } else if (record.execution.kind !== 'mouth') {
     segments.push(record.execution.watchHint.code)
   }
 

@@ -3,7 +3,6 @@ import type { HumanRuntimeCache, HumanState } from '../../types'
 import { buildMouthPrompt } from '../../prompts/mouth'
 import { assertExternalLearnedSkillIds } from '../../skills'
 import { completeHumanTask } from '../utils/stateTransitions'
-import { deriveDeliverySummary } from '../../shared/deliverySummary'
 import {
   appendFileReviewArtifactsAndEmitEvents,
   buildRuntimeArtifactsSummaryFromFileReviewDetails,
@@ -22,7 +21,7 @@ export const createMouthNode = (input: {
 
     const fileReviewDetails = await input.ctx.finalizeDocxReviewRun()
     const runtimeArtifacts = buildRuntimeArtifactsSummaryFromFileReviewDetails(fileReviewDetails)
-    const promptState: HumanState = {
+    let promptState: HumanState = {
       ...state,
       execution: {
         ...state.execution,
@@ -78,17 +77,12 @@ export const createMouthNode = (input: {
 
     const deliveryMarkdown =
       String(rawDeliveryMarkdown || '').trim() ||
-      ['# 处理结果', '', promptState.execution.currentDecision?.decision.summary || '任务结束'].join('\n')
-    const summary = deriveDeliverySummary({
-      deliveryMarkdown,
-      state: readyState
-    })
+      ['# 处理结果', '', promptState.execution.currentThought?.thought.summary || '任务结束'].join('\n')
 
     return completeHumanTask({
       ctx: input.ctx,
       cache: input.cache,
       state: readyState,
-      summary,
       deliveryMarkdown,
       emitAnswerEvents: input.emitAnswerEvents
     })

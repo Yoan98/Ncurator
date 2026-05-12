@@ -37,11 +37,9 @@ describe('ai tool hand backend', () => {
               taskId: runtime.taskId,
               userInput: '请批量写入 docx'
             }).execution,
-            currentDecision: {
-              decision: {
-                summary: '尝试提交超限 docx 批量写',
-                reason: '验证 hand 对 docx 单轮批量写上限的前置拦截。',
-                expectedOutcome: '直接返回 hand_plan_invalid。'
+            currentThought: {
+              thought: {
+                summary: '尝试提交超限 docx 批量写'
               },
               nextAction: {
                 action: 'hand',

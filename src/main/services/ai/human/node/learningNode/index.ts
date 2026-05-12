@@ -98,11 +98,11 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
     assertExternalLearnedSkillIds(state.skills.learnedSkillIds)
     input.cache.currentState = state
 
-    if (!state.execution.currentDecision || state.execution.currentDecision.nextAction.action !== 'learning') {
+    if (!state.execution.currentThought || state.execution.currentThought.nextAction.action !== 'learning') {
       return returnToBrain(state)
     }
 
-    const requestedSkillIds = dedupeInOrder(state.execution.currentDecision.nextAction.wantLearnSkillIds)
+    const requestedSkillIds = dedupeInOrder(state.execution.currentThought.nextAction.wantLearnSkillIds)
     const requestedBuiltinSkillIds = requestedSkillIds.filter(
       (skillId): skillId is Extract<HumanWatchHint, { code: 'learning_builtin_skill_requested' }>['detail']['builtinSkillIds'][number] =>
         isBuiltinSkillId(skillId)

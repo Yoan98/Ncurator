@@ -280,13 +280,9 @@ interface HumanStableMemory {
 // brain 对 stable memory 的局部补丁；缺失字段表示保持原值。
 type HumanStableMemoryPatch = Partial<HumanStableMemory>
 
-interface BrainDecision {
-  // 对本轮决策的短摘要；便于日志、轨迹和回放快速理解。
+interface HumanThought {
+  // 对本轮判断的短摘要；便于日志、轨迹和回放快速理解。
   summary: string
-  // 做出该决策的原因；说明为什么这一步合理。
-  reason: string
-  // 期望这一步带来的结果；帮助后续判断本轮是否达到目标。
-  expectedOutcome: string
 }
 
 type BrainNextAction =
@@ -307,13 +303,11 @@ type BrainNextAction =
       action: 'mouth'
     }
 
-interface HumanDecision {
+interface HumanThoughtDecision {
   // 本轮对 stable memory 的局部覆盖更新；缺失表示不更新 stable memory。
   updatedStableMemory?: HumanStableMemoryPatch
-  // 本轮 brain 的正式决策内容。
-  decision: BrainDecision
-  // 若最终交付必须额外补充说明，则由 brain 给 mouth 的自然语言收口要求。
-  deliveryGuidance?: string
+  // 本轮 brain 的正式判断摘要。
+  thought: HumanThought
   // 下一跳动作对象；决定本轮之后去 learning、hand 还是 mouth。
   nextAction: BrainNextAction
 }
@@ -324,13 +318,13 @@ interface HumanExecution {
   // 当前 human 运行状态；与 task 是否已经结束对应。
   status: HumanStatus
   // 当前动作快照；learning / hand / mouth 都通过它读取本轮 brain 的最新决策。
-  currentDecision?: HumanDecision
+  currentThought?: HumanThoughtDecision
   // 收敛或纠偏提示；当 learning / hand / brain 触发保护逻辑时写入。
   watchHint?: HumanWatchHint
   // 最终交付时必须吸收的额外说明项；由 brain 或 hand 追加，mouth 负责转成用户可理解的话术。
   deliveryGuidanceItems?: Array<{
-    // 说明项来自哪个节点；brain 用于补充非本地资料说明，hand 用于补充执行结果相关说明。
-    source: 'brain' | 'hand'
+    // 说明项来自 hand；用于补充执行结果相关说明。
+    source: 'hand'
     // 交给 mouth 的自然语言收口要求。
     text: string
   }>
@@ -340,6 +334,13 @@ interface HumanExecution {
   lastLearningOutcome?: HumanLearningOutcome
   // 运行时收集到的结构化交付物引用；由 hand 写入，mouth 只透传。
   artifacts: AiArtifactRef[]
+  // brain 在决定 nextAction=mouth 时声明的引用资料列表；供 mouth 最终交付时按 usedFor 披露。
+  references?: Array<{
+    label: string
+    path: string
+    kind: 'internal' | 'external'
+    usedFor: string
+  }>
 }
 
 interface HumanMemoryHistory {
@@ -1053,7 +1054,7 @@ flowchart LR
     R -->|派发 taskId=runId,userInput=input| H1
     C -->|作为只读 runtime 注入| H2
     H1 -->|启动 human graph| H2
-    H2 -->|返回 taskId + status + summary + deliveryMarkdown + artifacts| R
+    H2 -->|返回 taskId + status + deliveryMarkdown + artifacts| R
     R -->|写入最终交付或失败信息| S2
 ```
 
@@ -1067,7 +1068,7 @@ flowchart LR
     SK[("skills.learnedSkillIds")]
     WH[("execution.watchHint")]
     B["brain"]
-    CD[("execution.currentDecision")]
+    CD[("execution.currentThought")]
     TR[("trace.steps")]
 
     T -->|读取 taskId + userInput| B
@@ -1080,13 +1081,13 @@ flowchart LR
     B -->|追加 brain 执行轨迹| TR
 ```
 
-- `brain` 的 prompt 应分层表达 `principles / decision_contract / stable_memory_contract / context_block_guide / output_contract / output_shape / examples`，避免把工作方式、决策语义、长期记忆契约和输出层规则混写在同一块里。
+- `brain` 的 prompt 应分层表达 `principles / thought_contract / stable_memory_contract / context_block_guide / output_contract / output_shape / examples`，避免把工作方式、决策语义、长期记忆契约和输出层规则混写在同一块里。
 
 ### `human` 阶段二：`learning` 路径的数据流转
 
 ```mermaid
 flowchart LR
-    CD[("execution.currentDecision.nextAction.wantLearnSkillIds")]
+    CD[("execution.currentThought.nextAction.wantLearnSkillIds")]
     L["learning"]
     SK[("skills.learnedSkillIds")]
     LLO[("execution.lastLearningOutcome")]
@@ -1108,11 +1109,12 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    CD[("execution.currentDecision.nextAction.toolUsePlan")]
+    CD[("execution.currentThought.nextAction.toolUsePlan")]
     H["hand"]
     LTR[("execution.lastToolResults")]
     PM[("memory.history.roundHistory / loadedHistoryContext")]
     A[("execution.artifacts")]
+    RF[("execution.references")]
     WH[("execution.watchHint")]
     DG[("execution.deliveryGuidanceItems")]
     TR[("trace.steps")]
@@ -1146,10 +1148,12 @@ flowchart LR
     PM -->|读取结果导向的 history 事实视图| M
     DG -->|存在时读取额外交付说明| M
     A -->|读取已收集的结构化 artifacts| M
-    M -->|输出 deliveryMarkdown；node 派生 summary、回写 completed result，并透传 artifacts| R
+    RF -->|读取 brain 收尾时声明的引用信息| M
+    M -->|输出 deliveryMarkdown、回写 completed result，并透传 artifacts| R
     M -->|追加 mouth 执行轨迹| TR
 ```
 
 - `mouth` 不再直接消费 `brain` 的 `latest_attempt / earlier_attempts / recalled_history` 决策视图；它仍基于 `roundHistory + loadedHistoryContext`，但会渲染成一套独立的结果导向 `history` 视图。
 - `mouth` 的 prompt 输入仍以 `your_notes` 为优先事实来源；当 `your_notes` 过于概括或不足以支撑用户要求的细节时，再从结果导向的 `history`、`deliveryGuidanceItems` 与 `runtime_artifacts` 补足用户回答所需细节，而不是依赖额外的低层 tool 参数。
-- `mouth` 不再依赖 `execution.currentDecision` 的收口摘要来组织最终交付；若 `your_notes` 与更具体的历史/产物依据存在张力，应以更具体、可追溯的依据为准。
+- `mouth` 不再依赖 `execution.currentThought` 的收口摘要来组织最终交付；若 `your_notes` 与更具体的历史/产物依据存在张力，应以更具体、可追溯的依据为准。
+- `references` 的正式来源是 `brain` 在 `nextAction.action='mouth'` 时的结构化输出；`mouth` 只负责消费并在 markdown 正文中披露这些引用及其 `usedFor`，不自行推断新的已引用来源。
