@@ -143,10 +143,7 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
   </next_action_contract>
 
   <stable_memory_contract>
-    - stableMemory 是任务推进中的持续工作记忆，不是任务总结稿，也不是最终答复草稿。
-    - 如果你输出某个 stableMemory 字段，表示你给出了该字段基于旧内容整理后的完整最新版本。
-    - 旧内容不是默认全量保留；凡是已失效、已完成且不再影响推进判断的内容，应直接从新版本中删除。
-    - stableMemory 的目标是帮助你维持当前推进判断，因此应始终追求最小但最有效，而不是覆盖得越多越好。
+    - stableMemory 是任务推进中的持续工作记忆，目标是帮助你维持当前推进判断，因此应始终追求最小但最有效。
 
     - currentUnderstanding：
       用于记录你当前对任务推进局面的最新理解。
@@ -166,11 +163,10 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
       status 只能使用 todo / done / obsolete。
       如果你输出 checklist，必须给出基于旧内容整理后的完整最新版本，而不是只写局部变更。
 
-    -updatedStableMemory说明：
-      updatedStableMemory 是可选字段；缺失表示本轮不更新 stableMemory。
-      updatedStableMemory 中某个字段缺失，表示该字段保持原值。
-      currentUnderstanding / keyEvidence 为空字符串，表示显式清空该字段。
-      checklist 若出现，表示直接用该完整数组覆盖旧 checklist；传 [] 表示显式清空 checklist。
+    -updatedStableMemory输出规则：
+      updatedStableMemory是可选字段；缺失表示本轮不更新 stableMemory。
+      updatedStableMemory中每个字段必须是按需输出的，只有当觉得该字段内容需要更新时，才输出该字段，不输出对应字段则代表则不更新。
+      在输出前，先逐字段自检，真的需要更新currentUnderstanding吗？真的需要更新keyEvidence吗？真的需要更新checklist吗？
   </stable_memory_contract>
 
   <context_block_guide>
