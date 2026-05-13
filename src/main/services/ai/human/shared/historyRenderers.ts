@@ -220,11 +220,28 @@ const renderDecisionNextAction = (record: HumanRoundRecord): string => {
   }
 }
 
+const renderThoughtTodolistUpdate = (record: HumanRoundRecord): string | undefined =>
+  record.thought.thought.todolist
+    ? [
+        '- 本轮更新待办路径：',
+        ...record.thought.thought.todolist.map((item) => `  - [${item.status}] ${item.item}`)
+      ].join('\n')
+    : undefined
+
+const renderThoughtProgressionUpdate = (record: HumanRoundRecord): string | undefined =>
+  record.thought.thought.progressionSummary
+    ? `- 本轮更新推进摘要：\n${record.thought.thought.progressionSummary}`
+    : undefined
+
 const renderBrainRoundDecision = (record: HumanRoundRecord): string =>
-  `
-- 你的判断：${record.thought.thought.summary}
-${renderDecisionNextAction(record)}
-`.trim()
+  [
+    `- 当前与下一步：${record.thought.thought.next}`,
+    renderDecisionNextAction(record),
+    renderThoughtTodolistUpdate(record),
+    renderThoughtProgressionUpdate(record)
+  ]
+    .filter(Boolean)
+    .join('\n')
 
 const renderBrainRoundExecution = (record: HumanRoundRecord): string => {
   switch (record.execution.kind) {

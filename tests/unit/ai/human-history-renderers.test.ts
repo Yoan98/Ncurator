@@ -16,7 +16,7 @@ describe('ai unit human history renderers', () => {
       state: initialState,
       thought: {
         thought: {
-          summary: '重试 docx_text_edit'
+          next: '重试 docx_text_edit'
         },
         nextAction: {
           action: 'hand',
@@ -82,7 +82,7 @@ describe('ai unit human history renderers', () => {
       state: initialState,
       thought: {
         thought: {
-          summary: '重试 docx_text_edit'
+          next: '重试 docx_text_edit'
         },
         nextAction: {
           action: 'hand',
@@ -151,7 +151,7 @@ describe('ai unit human history renderers', () => {
       state: initialState,
       thought: {
         thought: {
-          summary: '读取图形学区间'
+          next: '读取图形学区间'
         },
         nextAction: {
           action: 'hand',
@@ -237,7 +237,7 @@ describe('ai unit human history renderers', () => {
       state: initialState,
       thought: {
         thought: {
-          summary: '写入主稿段落和表格'
+          next: '写入主稿段落和表格'
         },
         nextAction: {
           action: 'hand',

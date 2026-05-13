@@ -18,18 +18,17 @@ import {
   brainNextActionSchema,
   deliveryGuidanceItemSchema,
   humanThoughtDecisionSchema,
-  humanChecklistItemSchema,
-  humanChecklistItemStatusSchema,
+  humanTodoItemSchema,
+  humanTodoItemStatusSchema,
   humanExecutionSchema,
   humanHistoryToolResultSchema,
   humanLearningOutcomeSchema,
   humanCompactBlockSchema,
   humanMemoryHistorySchema,
+  humanThoughtMemorySchema,
   humanResultSchema,
   humanRoundExecutionSchema,
   humanRoundRecordSchema,
-  humanStableMemoryPatchSchema,
-  humanStableMemorySchema,
   humanStateContractSchema,
   humanTaskInputSchema,
   humanTaskOutputSchema,
@@ -72,10 +71,9 @@ export type SkillDefinition = SkillDefinitionBase
 
 export type HumanThought = z.infer<typeof humanThoughtSchema>
 export type BrainNextAction = z.infer<typeof brainNextActionSchema>
-export type HumanChecklistItemStatus = z.infer<typeof humanChecklistItemStatusSchema>
-export type HumanChecklistItem = z.infer<typeof humanChecklistItemSchema>
-export type HumanStableMemory = z.infer<typeof humanStableMemorySchema>
-export type HumanStableMemoryPatch = z.infer<typeof humanStableMemoryPatchSchema>
+export type HumanTodoItemStatus = z.infer<typeof humanTodoItemStatusSchema>
+export type HumanTodoItem = z.infer<typeof humanTodoItemSchema>
+export type HumanThoughtMemory = z.infer<typeof humanThoughtMemorySchema>
 export type HumanThoughtDecision = z.infer<typeof humanThoughtDecisionSchema>
 export type DeliveryGuidanceItem = z.infer<typeof deliveryGuidanceItemSchema>
 export type HumanReference = z.infer<typeof humanReferenceSchema>

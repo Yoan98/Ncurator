@@ -29,7 +29,7 @@ describe('ai unit brain watchhint prompt contract', () => {
 
     state.execution.currentThought = {
       thought: {
-        summary: '继续处理 docx 批量写',
+        next: '继续处理 docx 批量写',
       },
       nextAction: {
         action: 'hand',

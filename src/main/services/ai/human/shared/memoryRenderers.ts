@@ -1,7 +1,6 @@
-import type { HumanChecklistItem, HumanStableMemory, HumanState } from '../types'
+import type { HumanState, HumanTodoItem } from '../types'
 
 export type HumanMemoryRenderMode = 'brain_prompt' | 'mouth_prompt' | 'fallback_markdown'
-export type HumanStableMemoryField = keyof HumanStableMemory
 
 const getRenderFallback = (mode: HumanMemoryRenderMode): string =>
   mode === 'fallback_markdown' ? '无' : 'none'
@@ -11,52 +10,48 @@ const normalizeMemoryText = (value: string): string =>
     .replace(/\r\n/g, '\n')
     .trim()
 
-const renderStableMemoryValue = (value: string, mode: HumanMemoryRenderMode): string => {
+const renderThoughtTextValue = (value: string, mode: HumanMemoryRenderMode): string => {
   const normalized = normalizeMemoryText(value)
   return normalized || getRenderFallback(mode)
 }
 
-const renderChecklistItem = (item: HumanChecklistItem): string =>
+const renderTodoItem = (item: HumanTodoItem): string =>
   `- [${item.status}] ${item.item}`
 
-const renderChecklistValue = (
-  checklist: HumanState['memory']['stable']['checklist'],
+const renderTodolistValue = (
+  todolist: HumanState['memory']['thought']['todolist'],
   mode: HumanMemoryRenderMode
 ): string =>
-  checklist.length > 0 ? checklist.map(renderChecklistItem).join('\n') : getRenderFallback(mode)
+  todolist.length > 0 ? todolist.map(renderTodoItem).join('\n') : getRenderFallback(mode)
 
-export const renderHumanStableMemoryField = (input: {
+export const renderHumanThoughtField = (input: {
   state: HumanState
-  field: HumanStableMemoryField
+  field: keyof HumanState['memory']['thought']
   mode: HumanMemoryRenderMode
 }): string =>
-  input.field === 'checklist'
-    ? renderChecklistValue(input.state.memory.stable.checklist, input.mode)
-    : renderStableMemoryValue(input.state.memory.stable[input.field], input.mode)
+  input.field === 'todolist'
+    ? renderTodolistValue(input.state.memory.thought.todolist, input.mode)
+    : renderThoughtTextValue(input.state.memory.thought[input.field], input.mode)
 
-export const renderHumanStableNotes = (
+export const renderHumanThought = (
   state: HumanState,
   mode: HumanMemoryRenderMode
 ): string =>
   [
-    '当前理解：',
-    renderHumanStableMemoryField({
+    '当前与下一步：',
+    renderThoughtTextValue(state.execution.currentThought?.thought.next || '', mode),
+    '',
+    '待办路径：',
+    renderHumanThoughtField({
       state,
-      field: 'currentUnderstanding',
+      field: 'todolist',
       mode
     }),
     '',
-    '关键依据：',
-    renderHumanStableMemoryField({
+    '推进摘要：',
+    renderHumanThoughtField({
       state,
-      field: 'keyEvidence',
-      mode
-    }),
-    '',
-    '检查清单：',
-    renderHumanStableMemoryField({
-      state,
-      field: 'checklist',
+      field: 'progressionSummary',
       mode
     })
   ].join('\n')

@@ -78,7 +78,7 @@ describe('ai tool hand backend', () => {
 
     const mouthDecision: HumanThoughtDecision = {
       thought: {
-        summary: '直接结束'
+        next: '直接结束'
       },
       nextAction: {
         action: 'mouth'
@@ -90,7 +90,7 @@ describe('ai tool hand backend', () => {
       cache,
       state: baseState,
       thought: mouthDecision,
-      stableMemory: baseState.memory.stable
+      thoughtMemory: baseState.memory.thought
     })
 
     expect(blockedMouth.execution.stage).toBe('brain')
@@ -98,7 +98,7 @@ describe('ai tool hand backend', () => {
 
     const readDecision: HumanThoughtDecision = {
       thought: {
-        summary: '先 readback'
+        next: '先 readback'
       },
       nextAction: {
         action: 'hand',
@@ -121,7 +121,7 @@ describe('ai tool hand backend', () => {
       cache,
       state: baseState,
       thought: readDecision,
-      stableMemory: baseState.memory.stable
+      thoughtMemory: baseState.memory.thought
     })
 
     expect(allowedRead.execution.stage).toBe('hand')
@@ -135,7 +135,7 @@ describe('ai tool hand backend', () => {
 
     const readDecision: HumanThoughtDecision = {
       thought: {
-        summary: '先 readback'
+        next: '先 readback'
       },
       nextAction: {
         action: 'hand',
@@ -158,7 +158,7 @@ describe('ai tool hand backend', () => {
       cache,
       state: baseState,
       thought: readDecision,
-      stableMemory: baseState.memory.stable
+      thoughtMemory: baseState.memory.thought
     })
 
     expect(allowedRead.execution.stage).toBe('hand')
@@ -172,7 +172,7 @@ describe('ai tool hand backend', () => {
 
     const readDecision: HumanThoughtDecision = {
       thought: {
-        summary: '读另一个文件'
+        next: '读另一个文件'
       },
       nextAction: {
         action: 'hand',
@@ -195,7 +195,7 @@ describe('ai tool hand backend', () => {
       cache,
       state: baseState,
       thought: readDecision,
-      stableMemory: baseState.memory.stable
+      thoughtMemory: baseState.memory.thought
     })
 
     expect(blockedRead.execution.stage).toBe('brain')

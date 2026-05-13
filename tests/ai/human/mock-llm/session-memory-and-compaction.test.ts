@@ -296,7 +296,7 @@ describe('ai human mock-llm backend', () => {
               state: baseState,
               thought: {
                 thought: {
-                  summary: '第一轮先学习。'
+                  next: '第一轮先学习。'
                 },
                 nextAction: {
                   action: 'learning',
@@ -325,7 +325,7 @@ describe('ai human mock-llm backend', () => {
               state: stateWithRound1,
               thought: {
                 thought: {
-                  summary: '第二轮执行一次工具。'
+                  next: '第二轮执行一次工具。'
                 },
                 nextAction: {
                   action: 'hand',
@@ -384,7 +384,7 @@ describe('ai human mock-llm backend', () => {
               state: stateWithRound2,
               thought: {
                 thought: {
-                  summary: '第三轮再执行一次工具，制造第二次压缩。'
+                  next: '第三轮再执行一次工具，制造第二次压缩。'
                 },
                 nextAction: {
                   action: 'hand',

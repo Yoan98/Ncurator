@@ -281,24 +281,25 @@ type HumanStage = 'context_budget' | 'memory_compaction' | 'brain' | 'learning' 
 // human 当前运行状态；目前基线只区分运行中和已完成。
 type HumanStatus = 'running' | 'completed'
 
-interface HumanStableMemory {
-  // 当前任务的最新长期理解；是持续工作的任务笔记，可按目标产物、当前阶段、当前策略、约束、已确认状态与仍待确认边界组织，要求基于旧内容累积维护，而不是只写本轮摘要。
-  currentUnderstanding: string
-  // 当前关键依据；记录支撑理解或下一步动作的证据、来源、关键内容与它直接支持什么，并基于旧内容累积维护。
-  keyEvidence: string
-  // 当前任务板；使用结构化数组维护 todo / done / obsolete 三种状态，主要承载推进状态、覆盖范围、阻塞点和失效路径，不重复 currentUnderstanding 的大段语义判断。
-  checklist: Array<{
-    item: string
-    status: 'todo' | 'done' | 'obsolete'
-  }>
+interface HumanTodoItem {
+  item: string
+  status: 'todo' | 'done' | 'obsolete'
 }
 
-// brain 对 stable memory 的局部补丁；缺失字段表示保持原值。
-type HumanStableMemoryPatch = Partial<HumanStableMemory>
+interface HumanThoughtMemory {
+  // 当前任务的行动路径；由 brain 输出 thought.todolist 时全量覆盖。
+  todolist: HumanTodoItem[]
+  // 当前任务推进状态的累积性理解摘要；由 brain 输出 thought.progressionSummary 时全量覆盖。
+  progressionSummary: string
+}
 
 interface HumanThought {
-  // 对本轮判断的短摘要；便于日志、轨迹和回放快速理解。
-  summary: string
+  // 每轮 brain 必填；描述当前现状、当前判断和下一步要做什么。
+  next: string
+  // 可选；行动路径初始化或调整时输出，输出时全量覆盖 memory.thought.todolist。
+  todolist?: HumanTodoItem[]
+  // 可选；推进理解、证据、失败原因或修正结论变化时输出，输出时全量覆盖 memory.thought.progressionSummary。
+  progressionSummary?: string
 }
 
 type BrainNextAction =
@@ -327,9 +328,7 @@ type BrainNextAction =
     }
 
 interface HumanThoughtDecision {
-  // 本轮对 stable memory 的局部覆盖更新；缺失表示不更新 stable memory。
-  updatedStableMemory?: HumanStableMemoryPatch
-  // 本轮 brain 的正式判断摘要。
+  // 本轮 brain 的正式任务推进思路。
   thought: HumanThought
   // 下一跳动作对象；决定本轮之后去 learning、hand 还是 mouth。
   nextAction: BrainNextAction
@@ -389,8 +388,8 @@ interface HumanState {
   // 当前 task 的执行态字段。
   execution: HumanExecution
   memory: {
-    // 已收敛下来的稳定任务笔记。
-    stable: HumanStableMemory
+    // 当前 run 内可展示的任务推进记忆。
+    thought: HumanThoughtMemory
     // 过程历史与 run 内压缩块。
     history: HumanMemoryHistory
   }
@@ -626,16 +625,14 @@ type HumanWatchHint =
       }
     }
   | {
-      // brain 试图直接去 mouth，但 checklist 里仍有未完成事项。
-      code: 'brain_checklist_incomplete'
+      // brain 试图直接去 mouth，但 todolist 里仍有未完成事项。
+      code: 'brain_todolist_incomplete'
       detail: {
         pendingItems: string[]
       }
     }
 
 interface MouthOutput {
-  // mouth 对本轮交付的简短摘要。
-  summary: string
   // mouth 生成的正式 markdown；若模型空输出，node 会先做 fallback，再写入 result。
   deliveryMarkdown: string
 }
@@ -1094,7 +1091,7 @@ flowchart LR
 ```mermaid
 flowchart LR
     T[("task")]
-    SM[("memory.stable")]
+    TM[("memory.thought")]
     HM[("memory.history.roundHistory / compactBlocks")]
     CM[("chat_session_memory")]
     SK[("skills.learnedSkillIds")]
@@ -1106,17 +1103,17 @@ flowchart LR
     TR[("trace.steps")]
 
     T -->|读取 taskId + userInput| B
-    SM -->|读取 currentUnderstanding / keyEvidence / checklist| B
+    TM -->|读取 todolist / progressionSummary| B
     HM -->|读取 compact_blocks / recent_history / latest_history| B
     CM -->|读取 session_memory| B
     SK -->|读取 learned external skills| B
     WH -->|存在时读取收敛提示| B
-    B -->|通过 updatedStableMemory patch 更新 stable memory| SM
+    B -->|通过 thought.todolist / progressionSummary 按需覆盖| TM
     B -->|写入新的当前决策快照| CD
     B -->|追加 brain 执行轨迹| TR
 ```
 
-- `brain` 的 prompt 应分层表达 `principles / thought_contract / stable_memory_contract / context_block_guide / output_contract / output_shape / examples`，避免把工作方式、决策语义、长期记忆契约和输出层规则混写在同一块里。
+- `brain` 的 prompt 应分层表达 `principles / thought_contract / next_action_contract / context_block_guide / output_contract / output_shape / examples`，避免把工作方式、thought 语义、动作路由语义和输出层规则混写在同一块里。
 
 ### `human` 阶段二：`learning` 路径的数据流转
 
@@ -1178,7 +1175,7 @@ flowchart LR
 ```mermaid
 flowchart LR
     T[("task")]
-    SM[("memory.stable")]
+    TM[("memory.thought")]
     PM[("memory.history.roundHistory / compactBlocks")]
     DG[("execution.deliveryGuidanceItems")]
     A[("execution.artifacts")]
@@ -1187,7 +1184,7 @@ flowchart LR
     TR[("trace.steps")]
 
     T -->|读取 taskId + userInput| M
-    SM -->|读取任务笔记| M
+    TM -->|读取任务推进思路| M
     PM -->|读取结果导向的 history 事实视图| M
     DG -->|存在时读取额外交付说明| M
     A -->|读取已收集的结构化 artifacts| M
@@ -1197,6 +1194,6 @@ flowchart LR
 ```
 
 - `mouth` 不直接消费 `brain` 的 `recent_history / latest_history` 决策视图；它基于 `roundHistory + compactBlocks` 渲染成一套独立的结果导向 `history` 视图。
-- `mouth` 的 prompt 输入仍以 `your_notes` 为优先事实来源；当 `your_notes` 过于概括或不足以支撑用户要求的细节时，再从结果导向的 `history`、`deliveryGuidanceItems` 与 `runtime_artifacts` 补足用户回答所需细节，而不是依赖额外的低层 tool 参数。
-- `mouth` 不再依赖 `execution.currentThought` 的收口摘要来组织最终交付；若 `your_notes` 与更具体的历史/产物依据存在张力，应以更具体、可追溯的依据为准。
+- `mouth` 的 prompt 输入仍以 `thought` 为优先事实来源；当 `thought` 过于概括或不足以支撑用户要求的细节时，再从结果导向的 `history`、`deliveryGuidanceItems` 与 `runtime_artifacts` 补足用户回答所需细节，而不是依赖额外的低层 tool 参数。
+- `mouth` 不再依赖 `execution.currentThought` 的本轮 next 来组织最终交付；若 `thought` 与更具体的历史/产物依据存在张力，应以更具体、可追溯的依据为准。
 - `references` 的正式来源是 `brain` 在 `nextAction.action='mouth'` 时的结构化输出；`mouth` 只负责消费并在 markdown 正文中披露这些引用及其 `usedFor`，不自行推断新的已引用来源。

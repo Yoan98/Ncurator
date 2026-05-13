@@ -40,8 +40,8 @@ export const summarizeWatchHint = (hint: HumanWatchHint): string => {
       return `hand 的 docx 批量写已安全停止；已完成 ${String(hint.detail.completedCallCount)}/${String(hint.detail.totalCallCount)} 个写操作，停止原因=${hint.detail.haltReason}。`
     case 'docx_write_requires_readback':
       return `hand 本轮已发生 docx 写操作；必须先 readback 最新修订后，才能继续写或结束。`
-    case 'brain_checklist_incomplete':
-      return `brain 选择 mouth 时 checklist 仍有未完成事项；pending=${renderStringList(
+    case 'brain_todolist_incomplete':
+      return `brain 选择 mouth 时 todolist 仍有未完成事项；pending=${renderStringList(
         hint.detail.pendingItems
       )}。`
   }
@@ -123,9 +123,9 @@ export const renderWatchHintForBrain = (hint: HumanWatchHint): string => {
         `latestRevisionRefs=${renderStringList(hint.detail.latestRevisionRefs)}`,
         '在继续任何 docx 写操作，或直接选择 mouth 之前，必须先对这些文档做一次 readback，并确保读到的 revision 不低于上述最新修订。'
       ].join('\n')
-    case 'brain_checklist_incomplete':
+    case 'brain_todolist_incomplete':
       return [
-        '你上一轮选择了 mouth，但 checklist 里仍有未完成事项。',
+        '你上一轮选择了 mouth，但 todolist 里仍有未完成事项。',
         `pendingItems=${renderStringList(hint.detail.pendingItems)}`,
         '请先完成这些事项，或将其更新为 done/obsolete 后再结束任务。'
       ].join('\n')

@@ -44,7 +44,7 @@ describe('ai tool hand backend', () => {
             }).execution,
             currentThought: {
               thought: {
-                summary: '执行 docx 写入'
+                next: '执行 docx 写入'
               },
               nextAction: {
                 action: 'hand',

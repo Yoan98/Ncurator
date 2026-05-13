@@ -77,7 +77,7 @@ export const createMouthNode = (input: {
 
     const deliveryMarkdown =
       String(rawDeliveryMarkdown || '').trim() ||
-      ['# 处理结果', '', promptState.execution.currentThought?.thought.summary || '任务结束'].join('\n')
+      ['# 处理结果', '', promptState.execution.currentThought?.thought.next || '任务结束'].join('\n')
 
     return completeHumanTask({
       ctx: input.ctx,

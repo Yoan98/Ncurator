@@ -16,7 +16,7 @@
 - `human` 是唯一执行核心。
 - `AiRunService` 只负责 run 生命周期，不承担任务求解。
 - `brain` 是 `human` 内唯一推理节点。
-- `memory.stable` 只允许通过 `brain.updatedStableMemory` 局部 patch 修改。
+- `memory.thought` 只允许通过 brain 输出的 `thought.todolist` 与 `thought.progressionSummary` 按需全量覆盖对应字段。
 - `execution.currentThought` 只表示当前动作快照；正式过程历史由 `memory.history.roundHistory` 承接。
 - `mouth` 只负责最终用户交付，不新增事实，不扩张 artifacts。
 - `human` 的最终输出固定为最终用户答复，不再存在内部交接格式。
@@ -76,13 +76,13 @@ stateDiagram-v2
 
 ### 5.1 `brain`
 
-- 职责：`human` 内唯一推理节点，负责基于当前任务、稳定记忆、过程历史与收敛提示产出新的 `HumanThoughtDecision`。
-- 主要读取：`task`、`memory.stable`、`memory.history.roundHistory`、`memory.history.compactBlocks`、`execution.watchHint`、`skills.learnedSkillIds`、`ctx.loadHistory()`、`ctx.referenceScope`、`ctx.workspace`。
-- 主要回写：`memory.stable`、`execution.currentThought`、`execution.stage`、`execution.watchHint`、必要时 `execution.deliveryGuidanceItems`、`trace.steps`。
-- 约束：输出必须通过 `ctx.chatStructured` 与 schema 校验；`memory.stable` 只能通过 patch 修改。
-- brain prompt 推荐按 `principles / thought_contract / stable_memory_contract / context_block_guide / output_contract / output_shape / examples` 组织：`principles` 承载工作方式与自主性边界，`thought_contract` 承载动作选择与 tool plan 语义，`stable_memory_contract` 承载长期任务笔记写法和更新原则，`output_contract` 只承载输出层规则。
+- 职责：`human` 内唯一推理节点，负责基于当前任务、任务推进思路、过程历史与收敛提示产出新的 `HumanThoughtDecision`。
+- 主要读取：`task`、`memory.thought`、`memory.history.roundHistory`、`memory.history.compactBlocks`、`execution.watchHint`、`skills.learnedSkillIds`、`ctx.loadHistory()`、`ctx.referenceScope`、`ctx.workspace`。
+- 主要回写：`memory.thought`、`execution.currentThought`、`execution.stage`、`execution.watchHint`、必要时 `execution.deliveryGuidanceItems`、`trace.steps`。
+- 约束：输出必须通过 `ctx.chatStructured` 与 schema 校验；`memory.thought` 只能通过本轮 `thought.todolist` 与 `thought.progressionSummary` 的可选输出更新。
+- brain prompt 推荐按 `principles / thought_contract / next_action_contract / context_block_guide / output_contract / output_shape / examples` 组织：`principles` 承载工作方式与自主性边界，`thought_contract` 承载任务推进思路语义，`next_action_contract` 承载动作路由语义，`output_contract` 只承载输出层规则。
 - 当前可直接调用的工具说明必须由 `registry -> tool spec` 统一供给；brain prompt 中的工具输入结构应来自 tool schema 的自动导出文本，并附带 tool spec examples。
-- brain prompt 中的输出 shape 应直接来自 `humanThoughtDecisionSchema` 的自动导出文本；stableMemory patch、基于 checklist 的收口约束与 action 选择语义规则继续手写维护，不单独定义 display schema。
+- brain prompt 中的输出 shape 应直接来自 `humanThoughtDecisionSchema` 的自动导出文本；基于 todolist 的收口约束与 action 选择语义规则继续手写维护，不单独定义 display schema。
 
 ### 5.2 `learning`
 
@@ -104,14 +104,14 @@ stateDiagram-v2
 ### 5.4 `mouth`
 
 - 职责：围绕 `task_goal` 把当前已经确定的状态组织成最终用户交付，并回写 `HumanResult`。
-- 主要读取：`task`、`reference_scope`、`memory.stable`、`memory.history.roundHistory`、`memory.history.compactBlocks`、`execution.deliveryGuidanceItems`、`execution.runtimeArtifacts`、`execution.references`。
+- 主要读取：`task`、`reference_scope`、`memory.thought`、`memory.history.roundHistory`、`memory.history.compactBlocks`、`execution.deliveryGuidanceItems`、`execution.runtimeArtifacts`、`execution.references`。
 - 主要回写：`result`、`execution.status`、`execution.stage`、`trace.steps`。
-- 约束：模型输出必须通过 `ctx.chatText`；输出面向最终用户，但必须忠实于当前整体状态；`mouth` 优先吸收 `reference_scope`、`memory.stable`、结果导向的 `history` 视图、`deliveryGuidanceItems`、changed-files 视图的 `runtimeArtifacts` 与由 `brain(nextAction=mouth)` 明确产出的 `references`，不再直接消费 review 内部结构；`mouth` 必须在 markdown 正文中显式说明引用了哪些资料完成了哪些内容，且说明这些资料分别支撑了交付中的哪些位置；若补充了外部知识，也必须通过 `references(kind=external)` 明示；若开启 `emitAnswerEvents`，增量文本通过 `answer_token` 发出，完成后通过 `answer_completed` 收口。
+- 约束：模型输出必须通过 `ctx.chatText`；输出面向最终用户，但必须忠实于当前整体状态；`mouth` 优先吸收 `reference_scope`、`memory.thought`、结果导向的 `history` 视图、`deliveryGuidanceItems`、changed-files 视图的 `runtimeArtifacts` 与由 `brain(nextAction=mouth)` 明确产出的 `references`，不再直接消费 review 内部结构；`mouth` 必须在 markdown 正文中显式说明引用了哪些资料完成了哪些内容，且说明这些资料分别支撑了交付中的哪些位置；若补充了外部知识，也必须通过 `references(kind=external)` 明示；若开启 `emitAnswerEvents`，增量文本通过 `answer_token` 发出，完成后通过 `answer_completed` 收口。
 
 ### 5.5 `context_budget`
 
 - 职责：在每次进入 `brain` 前估算当前 prompt token 使用量，并决定继续推理、触发压缩或明确失败。
-- 主要读取：`task`、`memory.stable`、`memory.history.roundHistory`、`memory.history.compactBlocks`、`ctx.loadHistory()`、`ctx.humanRuntimeOverrides.modelContextWindowTokens`。
+- 主要读取：`task`、`memory.thought`、`memory.history.roundHistory`、`memory.history.compactBlocks`、`ctx.loadHistory()`、`ctx.humanRuntimeOverrides.modelContextWindowTokens`。
 - 主要回写：`execution.contextBudget`、`execution.stage`。
 - 约束：默认上下文窗口为 `200_000 tokens`，超过 `80%` 且存在可压缩的非 latest history 时进入 `memory_compaction`；超过窗口且没有可压缩内容时发送 `runtime_issue(context_window_exceeded)` 并失败，不做静默字符串截断。
 

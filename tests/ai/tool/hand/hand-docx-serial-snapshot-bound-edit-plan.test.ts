@@ -57,7 +57,7 @@ describe('ai tool hand backend', () => {
             }).execution,
             currentThought: {
               thought: {
-                summary: '执行同文件结构写事务段'
+                next: '执行同文件结构写事务段'
               },
               nextAction: {
                 action: 'hand',

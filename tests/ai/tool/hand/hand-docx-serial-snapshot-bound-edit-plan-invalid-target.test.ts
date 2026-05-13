@@ -61,7 +61,7 @@ describe('ai tool hand backend', () => {
             }).execution,
             currentThought: {
               thought: {
-                summary: '先删再改同一目标'
+                next: '先删再改同一目标'
               },
               nextAction: {
                 action: 'hand',

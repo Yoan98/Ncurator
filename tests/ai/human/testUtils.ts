@@ -1,7 +1,7 @@
 import type {
   HumanThoughtDecision,
   HumanState,
-  HumanStableMemoryPatch,
+  HumanThought,
   RuntimeSkillId
 } from '../../../src/main/services/ai/human/types'
 import type { AiArtifactRef, AiRunEvent, JsonArray, JsonObject, JsonValue } from '../../../src/shared/types'
@@ -20,16 +20,16 @@ export const summarizeHumanSteps = (events: readonly AiRunEvent[]): string[] =>
     return `${stage}:${event.action}`
   })
 
-const buildThoughtMetadata = (input: { summary: string }) => ({
-  summary: input.summary,
+const buildThoughtMetadata = (input: { summary: string } & Partial<HumanThought>): HumanThought => ({
+  next: input.next || input.summary,
+  todolist: input.todolist,
+  progressionSummary: input.progressionSummary
 })
 
 export const buildLearnSkillsDecision = (input: {
   skillIds: RuntimeSkillId[]
   summary: string
-  updatedStableMemory?: HumanStableMemoryPatch
-}): HumanThoughtDecision => ({
-  updatedStableMemory: input.updatedStableMemory,
+} & Partial<HumanThought>): HumanThoughtDecision => ({
   thought: buildThoughtMetadata(input),
   nextAction: {
     action: 'learning',
@@ -41,10 +41,8 @@ export const buildToolDecision = (input: {
   toolName: string
   args: JsonObject
   summary: string
-  updatedStableMemory?: HumanStableMemoryPatch
   mode?: 'parallel' | 'serial'
-}): HumanThoughtDecision => ({
-  updatedStableMemory: input.updatedStableMemory,
+} & Partial<HumanThought>): HumanThoughtDecision => ({
   thought: buildThoughtMetadata(input),
   nextAction: {
     action: 'hand',
@@ -62,9 +60,7 @@ export const buildToolDecision = (input: {
 
 export const buildCompleteTaskDecision = (input: {
   summary: string
-  updatedStableMemory?: HumanStableMemoryPatch
-}): HumanThoughtDecision => ({
-  updatedStableMemory: input.updatedStableMemory,
+} & Partial<HumanThought>): HumanThoughtDecision => ({
   thought: buildThoughtMetadata(input),
   nextAction: {
     action: 'mouth'

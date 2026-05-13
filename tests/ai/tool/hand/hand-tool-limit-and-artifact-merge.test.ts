@@ -30,7 +30,7 @@ const buildHandState = (input: {
     artifacts: input.previousArtifacts || [],
     currentThought: {
       thought: {
-        summary: `调用 ${input.toolName}`
+        next: `调用 ${input.toolName}`
       },
       nextAction: {
         action: 'hand' as const,

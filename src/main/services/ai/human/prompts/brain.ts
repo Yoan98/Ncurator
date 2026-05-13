@@ -8,7 +8,7 @@ import {
   listBuiltinSkillDefinitions,
   listExternalSkillDefinitions
 } from '../skills'
-import { renderHumanStableNotes } from '../shared/memoryRenderers'
+import { renderHumanThought } from '../shared/memoryRenderers'
 import { renderBrainCompactBlocks, renderBrainRoundSection } from '../shared/historyRenderers'
 import { getToolSpec } from '../tools/registry'
 import {
@@ -118,7 +118,19 @@ export const buildBrainPrompt = (input: {
   </principles>
 
   <thought_contract>
-    - thought.summary：一句话概括你本轮的判断或下一步意图。
+    - thought 是你对当前任务推进状态的可展示工作思路，不是隐藏推理链。
+
+    - thought.next：每轮必须输出，描述当前现状、当前判断和下一步要做什么。
+
+    - thought.todolist：可选字段；只有行动路径需要初始化或调整时才输出；一旦输出必须是完整最新数组，会全量覆盖旧 todolist。
+    - todolist 用于表达根据用户诉求拆出的行动路径，它是可变的，允许任务推进中调整、废弃、重排。
+    - todolist 每项只包含 item 和 status，status 只能是 todo / done / obsolete。
+    - todolist 中 done 只表示“已处理/已尝试”，不代表成功。
+    - todolist 最后一项必须是检查项，用于检查是否已经满足用户诉求并能进入最终交付。
+
+    - thought.progressionSummary：可选字段；只有推进理解、证据、失败原因或修正结论发生变化时才输出；一旦输出会全量覆盖旧 progressionSummary。
+    - progressionSummary 是对任务推进状态的累积性理解摘要，记录已经尝试过什么、形成了什么结论、证据是什么、哪些尝试失败了以及失败原因、当前理解相较之前发生了什么修正。
+    - progressionSummary 不是逐轮流水账，只保留仍影响任务推进和最终交付的事项；
   </thought_contract>
 
   <next_action_contract>
@@ -143,39 +155,12 @@ export const buildBrainPrompt = (input: {
     - references[*].usedFor 必须明确描述“这条资料支撑了最终答复中的哪部分内容”，不能只写笼统用途。
   </next_action_contract>
 
-  <stable_memory_contract>
-    - stableMemory 是任务推进中的持续工作记忆，目标是帮助你维持当前推进判断，因此应始终追求最小但最有效。
-
-    - currentUnderstanding：
-      用于记录你当前对任务推进局面的最新理解。
-      它应保留当前仍影响推进的关键信息，通常包括：当前目标、当前进度、当前限制或风险、下一步。
-      不要在这里展开证据细节，不要重复转写工具结果正文，不要保留已经失效的旧路径。
-      当局面变化时，应直接重写成新的最新理解，而不是在旧文本后不断追加。
-
-    - keyEvidence：
-      用于记录支撑 currentUnderstanding 的当前有效依据。
-      它应由你整理成一组精简证据链，每条证据只说明“来源对象 + 关键定位 + 它支持了什么判断”。
-      不要重复转写原文，不要把工具结果全文搬进来，不要写成长篇资料摘要。
-      这里只保留当前仍在支撑判断的依据；已经失效或已不再需要的依据应删除。
-
-    - checklist：
-      用于记录任务推进状态、已覆盖范围、待做项和失效路径。
-      checklist 必须是结构化数组；每项只包含 item 和 status 两个字段。
-      status 只能使用 todo / done / obsolete。
-      如果你输出 checklist，必须给出基于旧内容整理后的完整最新版本，而不是只写局部变更。
-
-    -updatedStableMemory输出规则：
-      updatedStableMemory是可选字段；缺失表示本轮不更新 stableMemory。
-      updatedStableMemory中每个字段必须是按需输出的，只有当觉得该字段内容需要更新时，才输出该字段，不输出对应字段则代表则不更新。
-      在输出前，先逐字段自检，真的需要更新currentUnderstanding吗？真的需要更新keyEvidence吗？真的需要更新checklist吗？
-  </stable_memory_contract>
-
   <context_block_guide>
     - task_goal：用户原始诉求与限制。
     - reference_scope：当前工作区、默认知识范围、显式缩圈范围和可用边界。
     - search_strategy：当前任务默认遵循的检索思路提示。
     - terminal_platform：当前 terminal 所在平台；如果你决定使用命令行，应据此选择命令语法。
-    - your_notes：稳定任务笔记，按“当前理解 / 关键依据 / 检查清单”组织。
+    - thought：当前任务推进思路，按“当前与下一步 / 待办路径 / 推进摘要”组织。
     - session_memory：当前会话中跨任务仍有效的滚动摘要，用于理解用户在同一窗口里的连续主线、稳定偏好与当前状态。
     - recent_conversation：最近几轮真实对话内容与产物，用于判断用户刚刚说了什么、你刚刚交付了什么。
     - compact_blocks：当前任务中已压缩的过程历史，用于识别较早事实、失败路径和已验证动作。
@@ -199,7 +184,18 @@ ${outputShapeText}
     <example_learning>
       {
         "thought": {
-          "summary": "先学习当前缺失的技能",
+          "next": "当前缺少读取 docx 的能力说明，下一步先学习 docx-read。",
+          "todolist": [
+            {
+              "item": "补齐读取 docx 的能力说明",
+              "status": "todo"
+            },
+            {
+              "item": "检查是否已经满足用户诉求并能进入最终交付",
+              "status": "todo"
+            }
+          ],
+          "progressionSummary": "已根据用户诉求建立初始行动路径；当前还没有执行结果证据。"
         },
         "nextAction": {
           "action": "learning",
@@ -211,7 +207,7 @@ ${outputShapeText}
     <example_tool_plan>
       {
         "thought": {
-          "summary": "下一步已经明确，准备执行真实工具调用。",
+          "next": "下一步已经明确，准备执行真实工具调用读取当前目录。"
         },
         "nextAction": {
           "action": "hand",
@@ -232,18 +228,19 @@ ${outputShapeText}
 
     <example_delivery>
       {
-        "updatedStableMemory": {
-          "currentUnderstanding": "- 已确认审批驳回时原文件保持不变。",
-          "keyEvidence": "- kb_search 命中了审批驳回时保留原文件的制度说明。",
-          "checklist": [
+        "thought": {
+          "next": "证据已经足够，下一步进入 mouth 组织最终交付。",
+          "todolist": [
             {
               "item": "确认审批驳回时是否保留原文件",
               "status": "done"
+            },
+            {
+              "item": "检查是否已经满足用户诉求并能进入最终交付",
+              "status": "done"
             }
-          ]
-        },
-        "thought": {
-          "summary": "证据已经足够，准备结束任务"
+          ],
+          "progressionSummary": "已确认审批驳回时原文件保持不变。证据是 kb_search 命中了审批制度说明中关于审批驳回保留原文件的制度内容；当前没有失败事项。"
         },
         "nextAction": {
           "action": "mouth",
@@ -303,9 +300,9 @@ ${renderSkillCatalogSection(input.state)}
       </latest_history>
     </history>
 
-    <your_notes>
-    ${renderHumanStableNotes(input.state, 'brain_prompt')}
-    </your_notes>
+    <thought>
+    ${renderHumanThought(input.state, 'brain_prompt')}
+    </thought>
   </memory>
 
   <correction_hint>

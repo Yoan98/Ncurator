@@ -68,7 +68,7 @@ describe('ai tool hand backend', () => {
             }).execution,
             currentThought: {
               thought: {
-                summary: '串行完成 docx 编辑链路'
+                next: '串行完成 docx 编辑链路'
               },
               nextAction: {
                 action: 'hand',

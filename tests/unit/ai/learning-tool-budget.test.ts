@@ -63,7 +63,7 @@ describe('ai unit learning tool budget', () => {
     expect(
       humanThoughtDecisionSchema.parse({
         thought: {
-          summary: '学习多个技能'
+          next: '学习多个技能'
         },
         nextAction: {
           action: 'learning',

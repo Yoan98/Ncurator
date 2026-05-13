@@ -52,7 +52,7 @@ export const HUMAN_WATCH_HINT_CODES = [
   'hand_docx_positioned_write_blocked',
   'hand_docx_batch_write_halted',
   'docx_write_requires_readback',
-  'brain_checklist_incomplete'
+  'brain_todolist_incomplete'
 ] as const
 
 export const HUMAN_MAX_ACTIVE_TOOLS = 20

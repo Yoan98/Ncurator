@@ -63,7 +63,7 @@ describe('ai tool hand backend', () => {
             }).execution,
             currentThought: {
               thought: {
-                summary: '先插段落再更新表格单元格'
+                next: '先插段落再更新表格单元格'
               },
               nextAction: {
                 action: 'hand',

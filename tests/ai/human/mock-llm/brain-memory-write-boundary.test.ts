@@ -11,7 +11,7 @@ describe('ai human mock-llm backend', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证真实 graph 中第一轮 brain 写入的 stable memory patch 会在下一轮真实 prompt 中继续可见。',
+      description: '验证真实 graph 中第一轮 brain 写入的 thought memory 会在下一轮真实 prompt 中继续可见。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -21,18 +21,20 @@ describe('ai human mock-llm backend', () => {
             'human.brain': [
               {
                 output: {
-                  updatedStableMemory: {
-                    currentUnderstanding: '- 项目上线前需要执行复核。',
-                    keyEvidence: '- 知识库显示上线前必须执行复核。',
-                    checklist: [
+                  thought: {
+                    next: '先学习一个 skill，让 memory 进入下一轮 prompt。',
+                    todolist: [
                       {
                         item: '确认最终负责人',
                         status: 'todo'
+                      },
+                      {
+                        item: '检查是否已经满足用户诉求并能进入最终交付',
+                        status: 'todo'
                       }
-                    ]
-                  },
-                  thought: {
-                    summary: '先学习一个 skill，让 memory 进入下一轮 prompt。'
+                    ],
+                    progressionSummary:
+                      '已根据用户诉求建立初始行动路径。当前形成的结论是项目上线前需要执行复核，证据是知识库显示上线前必须执行复核；当前没有失败事项。'
                   },
                   nextAction: {
                     action: 'learning',
@@ -43,26 +45,25 @@ describe('ai human mock-llm backend', () => {
               ({ user }) => {
                 secondBrainSeesMemory =
                   user.includes('项目上线前需要执行复核') &&
-                  user.includes('知识库显示上线前必须执行复核') &&
                   user.includes('确认最终负责人')
 
                 const completeDecision = buildCompleteTaskDecision({
-                  summary: 'memory 已成功跨轮保持。'
+                  summary: 'memory 已成功跨轮保持。',
+                  todolist: [
+                    {
+                      item: '确认最终负责人',
+                      status: 'done'
+                    },
+                    {
+                      item: '检查是否已经满足用户诉求并能进入最终交付',
+                      status: 'done'
+                    }
+                  ],
+                  progressionSummary:
+                    '已确认 thought memory 会在第二轮继续可见，且负责人事项已完成。证据是第二轮真实 brain prompt 中再次读到了第一轮写入的 todolist 和 progressionSummary。'
                 })
 
                 return {
-                  updatedStableMemory: {
-                    currentUnderstanding:
-                      '- 已确认 memory 会在第二轮继续可见，且负责人事项已完成。',
-                    keyEvidence:
-                      '- 第二轮真实 brain prompt 中再次读到了第一轮写入的当前理解、关键依据和 checklist 项。',
-                    checklist: [
-                      {
-                        item: '确认最终负责人',
-                        status: 'done'
-                      }
-                    ]
-                  },
                   thought: completeDecision.thought,
                   nextAction: completeDecision.nextAction
                 }
@@ -94,7 +95,7 @@ describe('ai human mock-llm backend', () => {
           result.output.status === 'completed' && result.secondBrainSeesMemory,
           {
             name: 'stable-memory-patch-persists-across-real-graph-rounds',
-            message: 'updatedStableMemory 写入的任务笔记应在下一轮真实 brain prompt 中继续存在。',
+            message: 'thought 写入的任务推进记忆应在下一轮真实 brain prompt 中继续存在。',
             data: {
               secondBrainSeesMemory: result.secondBrainSeesMemory
             }

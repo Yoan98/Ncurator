@@ -9,7 +9,7 @@ import { getToolSpec } from '../../tools/registry'
 import type {
   HumanThoughtDecision,
   HumanResult,
-  HumanStableMemory,
+  HumanThoughtMemory,
   HumanState,
   HumanTraceStep,
   HumanWatchHint
@@ -156,7 +156,7 @@ export const returnToBrainAfterTraceState = (input: {
 export const resolveBrainDecisionWatchHint = (input: {
   state: HumanState
   thought: HumanThoughtDecision
-  stableMemory: HumanStableMemory
+  thoughtMemory: HumanThoughtMemory
   watchHint?: HumanWatchHint
 }): HumanWatchHint | undefined => {
   if (input.watchHint) return input.watchHint
@@ -174,7 +174,7 @@ export const resolveBrainDecisionWatchHint = (input: {
   }
   if (input.thought.nextAction.action !== 'mouth') return undefined
 
-  const pendingItems = input.stableMemory.checklist
+  const pendingItems = input.thoughtMemory.todolist
     .filter((item) => item.status === 'todo')
     .map((item) => item.item)
 
@@ -184,7 +184,7 @@ export const resolveBrainDecisionWatchHint = (input: {
 
   return pendingItems.length > 0
     ? {
-        code: 'brain_checklist_incomplete',
+        code: 'brain_todolist_incomplete',
         detail: {
           pendingItems
         }
@@ -207,7 +207,7 @@ const resolveBrainNextStage = (input: {
 export const applyBrainDecisionState = (input: {
   state: HumanState
   thought: HumanThoughtDecision
-  stableMemory: HumanStableMemory
+  thoughtMemory: HumanThoughtMemory
   watchHint?: HumanWatchHint
   createdAt: number
 }): HumanState => {
@@ -230,7 +230,7 @@ export const applyBrainDecisionState = (input: {
       references
     },
     memory: {
-      stable: input.stableMemory,
+      thought: input.thoughtMemory,
       history: input.watchHint
         ? appendRoundRecord({
             state: input.state,
@@ -247,9 +247,9 @@ export const applyBrainDecisionState = (input: {
         steps: input.state.trace.steps,
         item: {
           action: 'brain_decision',
-          publicNarrative: input.thought.thought.summary,
+          publicNarrative: input.thought.thought.next,
           resultStatus: 'ok',
-          summary: input.thought.thought.summary
+          summary: input.thought.thought.next
         }
       })
     }

@@ -53,7 +53,7 @@ const createStubAiRunContext = (): AiRunContext => ({
 
 const buildLearningDecision = (skillIds: string[]): HumanThoughtDecision => ({
   thought: {
-    summary: '测试 learning partial success'
+    next: '测试 learning partial success'
   },
   nextAction: {
     action: 'learning' as const,

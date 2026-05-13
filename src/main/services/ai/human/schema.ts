@@ -189,7 +189,7 @@ export const humanWatchHintSchema = z.discriminatedUnion('code', [
     })
   }),
   z.object({
-    code: z.literal('brain_checklist_incomplete'),
+    code: z.literal('brain_todolist_incomplete'),
     detail: z.object({
       pendingItems: z.array(z.string().min(1)).min(1)
     })
@@ -207,23 +207,22 @@ export const humanHistoryToolResultSchema = z.object({
   resourceContext: toolResourceContextSchema.optional()
 })
 
-export const humanChecklistItemStatusSchema = z.enum(['todo', 'done', 'obsolete'])
+export const humanTodoItemStatusSchema = z.enum(['todo', 'done', 'obsolete'])
 
-export const humanChecklistItemSchema = z.object({
+export const humanTodoItemSchema = z.object({
   item: z.string().min(1),
-  status: humanChecklistItemStatusSchema
+  status: humanTodoItemStatusSchema
 })
 
-export const humanStableMemorySchema = z.object({
-  currentUnderstanding: z.string(),
-  keyEvidence: z.string(),
-  checklist: z.array(humanChecklistItemSchema)
+export const humanThoughtMemorySchema = z.object({
+  todolist: z.array(humanTodoItemSchema),
+  progressionSummary: z.string()
 })
-
-export const humanStableMemoryPatchSchema = humanStableMemorySchema.partial()
 
 export const humanThoughtSchema = z.object({
-  summary: z.string().min(1)
+  next: z.string().min(1),
+  todolist: z.array(humanTodoItemSchema).optional(),
+  progressionSummary: z.string().min(1).optional()
 })
 
 export const humanReferenceSchema = z.object({
@@ -255,7 +254,6 @@ export const brainNextActionSchema = z.discriminatedUnion('action', [
 ])
 
 export const humanThoughtDecisionSchema = z.object({
-  updatedStableMemory: humanStableMemoryPatchSchema.optional(),
   thought: humanThoughtSchema,
   nextAction: brainNextActionSchema
 })
@@ -364,7 +362,7 @@ export const humanMemoryHistorySchema = z.object({
 })
 
 export const humanMemorySchema = z.object({
-  stable: humanStableMemorySchema,
+  thought: humanThoughtMemorySchema,
   history: humanMemoryHistorySchema
 })
 

@@ -19,7 +19,7 @@ const buildThought = (input: {
   nextAction: HumanThoughtDecision['nextAction']
 }): HumanThoughtDecision => ({
   thought: {
-    summary: input.summary,
+    next: input.summary,
   },
   nextAction: input.nextAction
 })
@@ -40,9 +40,9 @@ describe('ai unit human memory history', () => {
     const nextState = applyBrainDecisionState({
       state: initialState,
       thought,
-      stableMemory: {
-        ...initialState.memory.stable,
-        checklist: [
+      thoughtMemory: {
+        ...initialState.memory.thought,
+        todolist: [
           {
             item: '完成最终交付前的剩余事项',
             status: 'todo'
@@ -50,7 +50,7 @@ describe('ai unit human memory history', () => {
         ]
       },
       watchHint: {
-        code: 'brain_checklist_incomplete',
+        code: 'brain_todolist_incomplete',
         detail: {
           pendingItems: ['完成最终交付前的剩余事项']
         }
@@ -66,13 +66,13 @@ describe('ai unit human memory history', () => {
       execution: {
         kind: 'pre_execution_blocked',
         watchHint: {
-          code: 'brain_checklist_incomplete'
+          code: 'brain_todolist_incomplete'
         }
       }
     })
   })
 
-  it('allows mouth when the remaining checklist items are blocked by tool limit exhaustion', () => {
+  it('allows mouth when the remaining todolist items are blocked by tool limit exhaustion', () => {
     const initialState = createInitialHumanState({
       taskId: 'task-tool-limit',
       userInput: '请在预算内尽量完成，否则直接说明未完成部分'
@@ -97,9 +97,9 @@ describe('ai unit human memory history', () => {
         }
       }
     }
-    const stableMemory = {
-      ...initialState.memory.stable,
-      checklist: [
+    const thoughtMemory = {
+      ...initialState.memory.thought,
+      todolist: [
         {
           item: '补齐剩余文档修改',
           status: 'todo' as const
@@ -109,13 +109,13 @@ describe('ai unit human memory history', () => {
     const watchHint = resolveBrainDecisionWatchHint({
       state: stateWithToolLimit,
       thought,
-      stableMemory
+      thoughtMemory
     })
 
     const nextState = applyBrainDecisionState({
       state: stateWithToolLimit,
       thought,
-      stableMemory,
+      thoughtMemory,
       watchHint,
       createdAt: 2
     })
@@ -155,7 +155,7 @@ describe('ai unit human memory history', () => {
           wantLearnSkillIds: ['docx-read']
         }
       }),
-      stableMemory: initialState.memory.stable,
+      thoughtMemory: initialState.memory.thought,
       createdAt: 3
     })
 
@@ -455,7 +455,7 @@ describe('ai unit human memory history', () => {
         }
       },
       thought,
-      stableMemory: initialState.memory.stable,
+      thoughtMemory: initialState.memory.thought,
       createdAt: 1
     })
 

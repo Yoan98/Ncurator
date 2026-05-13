@@ -1,7 +1,7 @@
 import type { AiRunContext } from '../../types'
 import { renderDeliveryGuidanceItems } from '../shared/deliveryGuidance'
 import { renderMouthHistoryText } from '../shared/historyRenderers'
-import { renderHumanStableNotes } from '../shared/memoryRenderers'
+import { renderHumanThought } from '../shared/memoryRenderers'
 import { renderHumanReferences } from '../shared/references'
 import { renderHumanArtifactLines } from '../shared/runtimeRenderers'
 import { renderReferenceScopeText } from '../../prompts/referenceScope'
@@ -32,7 +32,7 @@ export const buildMouthPrompt = (input: { state: HumanState; ctx: AiRunContext }
 
     - task_goal：用户当前要你完成或回答的事情。
     - reference_scope：当前工作区、资料范围和参考边界。
-    - your_notes：当前任务已经收敛的高层理解、关键依据和完成情况。
+    - thought：当前任务已经收敛的推进思路、待办路径和推进摘要。
     - history：过程证据，记录已发生的关键事实、关键结果和失败信息；它可能比最终答复需要的更细。
     - delivery_guidance：上游节点明确要求你必须吸收的补充说明；
     - runtime_artifacts：结果层摘要，用于说明本次最终产出了什么、改了什么、留下了什么结果物。
@@ -62,9 +62,9 @@ ${input.state.task.userInput}
 ${renderReferenceScopeText(input.ctx.referenceScope)}
   </reference_scope>
 
-  <your_notes>
-${renderHumanStableNotes(input.state, 'mouth_prompt')}
-  </your_notes>
+  <thought>
+${renderHumanThought(input.state, 'mouth_prompt')}
+  </thought>
 
   <history>
 ${renderMouthHistoryText({

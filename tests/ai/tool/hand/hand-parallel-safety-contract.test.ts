@@ -74,7 +74,7 @@ describe('ai tool hand backend', () => {
             }).execution,
             currentThought: {
               thought: {
-                summary: '并行读取 docx 结构和命中段落'
+                next: '并行读取 docx 结构和命中段落'
               },
               nextAction: {
                 action: 'hand',
@@ -111,7 +111,7 @@ describe('ai tool hand backend', () => {
             ...safeState.execution,
             currentThought: {
               thought: {
-                summary: '执行计划长度上限内的只读并行调用'
+                next: '执行计划长度上限内的只读并行调用'
               },
               nextAction: {
                 action: 'hand',
@@ -142,7 +142,7 @@ describe('ai tool hand backend', () => {
             ...safeLimitState.execution,
             currentThought: {
               thought: {
-                summary: '执行超过总计划长度上限的并行调用'
+                next: '执行超过总计划长度上限的并行调用'
               },
               nextAction: {
                 action: 'hand',
@@ -179,7 +179,7 @@ describe('ai tool hand backend', () => {
             ...limitExceededState.execution,
             currentThought: {
               thought: {
-                summary: '并行写入和读取'
+                next: '并行写入和读取'
               },
               nextAction: {
                 action: 'hand',
@@ -227,7 +227,7 @@ describe('ai tool hand backend', () => {
             ...unsafeState.execution,
             currentThought: {
               thought: {
-                summary: '并行执行内联解释器和 docx 读取'
+                next: '并行执行内联解释器和 docx 读取'
               },
               nextAction: {
                 action: 'hand',

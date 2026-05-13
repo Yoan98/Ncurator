@@ -51,7 +51,7 @@ describe('ai unit human references', () => {
       state: initialState,
       thought: {
         thought: {
-          summary: '证据足够，准备收尾'
+          next: '证据足够，准备收尾'
         },
         nextAction: {
           action: 'mouth',
@@ -71,7 +71,7 @@ describe('ai unit human references', () => {
           ]
         }
       },
-      stableMemory: initialState.memory.stable,
+      thoughtMemory: initialState.memory.thought,
       createdAt: 1
     })
 

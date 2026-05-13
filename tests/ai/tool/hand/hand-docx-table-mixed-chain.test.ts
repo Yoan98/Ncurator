@@ -66,7 +66,7 @@ describe('ai tool hand backend', () => {
             }).execution,
             currentThought: {
               thought: {
-                summary: '混合写入段落与表格'
+                next: '混合写入段落与表格'
               },
               nextAction: {
                 action: 'hand',

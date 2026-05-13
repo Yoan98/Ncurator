@@ -86,7 +86,7 @@ describe('ai human live backend', () => {
               state: initialState,
               thought: {
                 thought: {
-                  summary: '先学习 docx-read，确认文档读取能力。'
+                  next: '先学习 docx-read，确认文档读取能力。'
                 },
                 nextAction: {
                   action: 'learning',
@@ -123,7 +123,7 @@ describe('ai human live backend', () => {
               state: stateWithOneRound,
               thought: {
                 thought: {
-                  summary: '再读取工作区路径，确认执行边界。'
+                  next: '再读取工作区路径，确认执行边界。'
                 },
                 nextAction: {
                   action: 'hand',

@@ -37,7 +37,7 @@ describe('ai human mock-llm backend', () => {
               {
                 output: {
                   thought: {
-                    summary: '并行执行 terminal 与 KB 工具'
+                    next: '并行执行 terminal 与 KB 工具'
                   },
                   nextAction: {
                     action: 'hand',

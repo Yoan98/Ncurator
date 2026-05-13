@@ -36,7 +36,7 @@ describe('ai tool hand backend', () => {
             }).execution,
             currentThought: {
               thought: {
-                summary: '提交超长 toolUsePlan'
+                next: '提交超长 toolUsePlan'
               },
               nextAction: {
                 action: 'hand',

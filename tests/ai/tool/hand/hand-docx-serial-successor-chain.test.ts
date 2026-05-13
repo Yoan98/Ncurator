@@ -58,7 +58,7 @@ describe('ai tool hand backend', () => {
             }).execution,
             currentThought: {
               thought: {
-                summary: '串行补全风险周报章节'
+                next: '串行补全风险周报章节'
               },
               nextAction: {
                 action: 'hand',
