@@ -76,15 +76,12 @@ describe('ai human mock-llm backend', () => {
         runtime.assertThat(
           result.output.status === 'completed' &&
             latestLearningStep?.learnedSkillIds.join(',') === 'docx-read,docx-write' &&
-            latestLearningStep?.effectiveSkillIds.includes('history-recall') &&
             latestLearningStep?.effectiveSkillIds.includes('terminal') &&
             latestLearningStep?.effectiveSkillIds.includes('kb-retrieval') &&
-            latestLearningStep.availableToolNames.includes('history_search') &&
-            latestLearningStep.availableToolNames.includes('history_list') &&
             latestLearningStep.availableToolNames.includes('terminal_run') &&
             latestLearningStep.availableToolNames.includes('kb_list_documents') &&
             latestLearningStep.availableToolNames.includes('kb_search') &&
-            latestLearningStep.availableToolNames.length === 16 &&
+            latestLearningStep.availableToolNames.length === 14 &&
             latestLearningStep.summary.includes('当前 active tools=') &&
             !latestLearningStep.summary.includes('已淘汰最早学习的 skill=') &&
             filterAiRunEventsByType(result.events, 'watch_hint').some(

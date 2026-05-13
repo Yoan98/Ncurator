@@ -622,8 +622,8 @@ export type RuntimeIssueCode =
   | 'workspace_path_unavailable'
   | 'scope_unavailable'
   | 'approval_denied'
+  | 'context_window_exceeded'
 export type RuntimeSkillId =
-  | 'history-recall'
   | 'terminal'
   | 'docx-read'
   | 'docx-write'
@@ -756,6 +756,19 @@ export type AiRunApprovalDecisionRequest = {
 
 export type AiRunApprovalDecisionResponse = {
   success: boolean
+  error?: string
+}
+
+export type AiContextUsageRequest = {
+  sessionId: string
+}
+
+export type AiContextUsageResponse = {
+  success: boolean
+  contextWindowTokens?: number
+  usedContextTokens?: number
+  ratio?: number
+  updatedAt?: number
   error?: string
 }
 
@@ -957,6 +970,25 @@ type AiRunEventPayload =
       text: string
     }
   | {
+      type: 'context_compaction_started'
+      runId: string
+      taskId?: string
+      targetRoundIds: number[]
+      tokenEstimateBefore: number
+      thresholdTokens: number
+      createdAt: number
+    }
+  | {
+      type: 'context_compaction_completed'
+      runId: string
+      taskId?: string
+      compactBlockId: string
+      sourceRoundIds: number[]
+      tokenEstimateBefore: number
+      tokenEstimateAfter: number
+      completedAt: number
+    }
+  | {
       type: 'runtime_issue'
       runId: string
       code: RuntimeIssueCode
@@ -985,12 +1017,23 @@ export type AiRunEvent = AiRunEventPayload & {
   stage?: AiRunEventStage
 }
 
-export type ChatSessionMemory = {
+export type SessionTaskArtifact = {
+  kind: 'file' | 'draft_review'
+  fileName?: string
+  path?: string
+  reviewId?: string
   summary: string
-  openTasks: string[]
-  userPrefs: string[]
-  pinnedFacts: string[]
-  linkedDocumentIds: string[]
+}
+
+export type ChatSessionMemory = {
+  rollingSummary: string
+  recentTaskSummaries: Array<{
+    runId: string
+    userInput: string
+    assistantOutput: string
+    artifacts: SessionTaskArtifact[]
+    completedAt: number
+  }>
 }
 
 export type ChatSessionMemoryRow = {

@@ -257,6 +257,7 @@ const api: DesktopApi = {
     emitE2EIpcCall('aiRunApprovalDecide')
     return ipcRenderer.invoke('ai-run-approval-decide', payload)
   },
+  aiContextUsageGet: (payload) => ipcRenderer.invoke('ai-context-usage-get', payload),
   fileReviewList: (payload) => ipcRenderer.invoke('file-review-list', payload),
   fileReviewGet: (payload) => ipcRenderer.invoke('file-review-get', payload),
   fileReviewValidate: (payload) => {

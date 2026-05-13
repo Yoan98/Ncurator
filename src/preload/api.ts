@@ -3,6 +3,8 @@ import type {
   AiRunApprovalDecisionRequest,
   AiRunApprovalDecisionResponse,
   AiRunCancelResponse,
+  AiContextUsageRequest,
+  AiContextUsageResponse,
   AiRunEvent,
   AiRunStartRequest,
   AiRunStartResponse,
@@ -184,6 +186,7 @@ export type DesktopApi = {
   aiRunApprovalDecide: (
     payload: AiRunApprovalDecisionRequest
   ) => Promise<AiRunApprovalDecisionResponse>
+  aiContextUsageGet: (payload: AiContextUsageRequest) => Promise<AiContextUsageResponse>
   fileReviewList: (payload?: ListFileReviewsRequest) => Promise<ListFileReviewsResponse>
   fileReviewGet: (payload: GetFileReviewRequest) => Promise<GetFileReviewResponse>
   fileReviewValidate: (payload: ValidateFileReviewCommitRequest) => Promise<ValidateFileReviewCommitResponse>

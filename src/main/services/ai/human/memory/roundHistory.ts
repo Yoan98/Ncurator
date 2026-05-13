@@ -1,14 +1,10 @@
 import { extractArtifactRefsFromToolResult, extractArtifactRefsFromToolResults } from '../../utils/artifacts'
 import {
   buildToolCallDisplayText,
-  renderToolDiagnosticText,
-  renderToolResourceContextText,
-  renderToolResultDataText
+  renderToolDiagnosticText
 } from '../shared/toolResultRenderers'
-import { historySearchFilterSchema, humanLoadedHistoryContextSchema } from '../schema'
 import type {
   HumanHistoryToolResult,
-  HumanLoadedHistoryContext,
   HumanLearningOutcome,
   HumanRoundExecution,
   HumanRoundRecord,
@@ -120,86 +116,10 @@ export const appendDecisionRound = (input: {
 export const getLastRoundFocus = (state: HumanState): HumanRoundRecord | undefined =>
   state.memory.history.roundHistory.at(-1)
 
-export const getEarlierAttemptRounds = (state: HumanState): HumanRoundRecord[] =>
+export const getRecentHistoryRounds = (state: HumanState): HumanRoundRecord[] =>
   state.memory.history.roundHistory
     .slice(0, -1)
-    .slice(-HUMAN_HISTORY_LIMITS.earlierAttemptRounds)
+    .slice(-HUMAN_HISTORY_LIMITS.recentHistoryRounds)
 
-export const getLoadedHistoryContext = (
-  state: HumanState
-): HumanLoadedHistoryContext | undefined => state.memory.history.loadedHistoryContext
-
-const buildRoundSearchText = (record: HumanRoundRecord): string => {
-  const segments: string[] = [record.thought.thought.summary]
-
-  if (record.execution.kind === 'learning') {
-    segments.push(record.execution.learningOutcome.loadedSkillIds.join(' '))
-  } else if (record.execution.kind === 'hand') {
-    record.execution.toolResults.forEach((result) => {
-      segments.push(
-        result.toolName,
-        result.summary,
-        renderToolResourceContextText(result.resourceContext) || '',
-        renderToolResultDataText(result) || '',
-        result.diagnosticText || ''
-      )
-    })
-  } else if (record.execution.kind !== 'mouth') {
-    segments.push(record.execution.watchHint.code)
-  }
-
-  return segments.join('\n').toLowerCase()
-}
-
-const withinRoundRange = (input: {
-  record: HumanRoundRecord
-  startRoundId?: number
-  endRoundId?: number
-}): boolean => {
-  if (typeof input.startRoundId === 'number' && input.record.roundId < input.startRoundId) return false
-  if (typeof input.endRoundId === 'number' && input.record.roundId > input.endRoundId) return false
-  return true
-}
-
-export const filterRoundHistory = (input: {
-  roundHistory: HumanRoundRecord[]
-  filters: HumanLoadedHistoryContext['filters']
-}): HumanRoundRecord[] => {
-  const filters = historySearchFilterSchema.parse(input.filters)
-  const limit = Math.max(1, filters.limit || HUMAN_HISTORY_LIMITS.loadedHistoryRounds)
-  const query = String(filters.query || '').trim().toLowerCase()
-
-  const scoped = input.roundHistory.filter((record) =>
-    withinRoundRange({
-      record,
-      startRoundId: filters.startRoundId,
-      endRoundId: filters.endRoundId
-    })
-  )
-
-  if (!query) {
-    return scoped.slice(-limit)
-  }
-
-  return scoped
-    .filter((record) => buildRoundSearchText(record).includes(query))
-    .slice(-limit)
-}
-
-export const buildLoadedHistoryContext = (input: {
-  filters: HumanLoadedHistoryContext['filters']
-  rounds: HumanRoundRecord[]
-}): HumanLoadedHistoryContext => ({
-  filters: historySearchFilterSchema.parse(input.filters),
-  rounds: input.rounds.slice(0, HUMAN_HISTORY_LIMITS.loadedHistoryRounds)
-})
-
-export const readLoadedHistoryContextFromToolResults = (
-  results: readonly ToolCallResult[]
-): HumanLoadedHistoryContext | undefined => {
-  const data = results.find(
-    (result) => result.toolName === 'history_search' || result.toolName === 'history_list'
-  )?.data
-  const parsed = humanLoadedHistoryContextSchema.safeParse(data)
-  return parsed.success ? parsed.data : undefined
-}
+export const getCompressibleHistoryRounds = (state: HumanState): HumanRoundRecord[] =>
+  state.memory.history.roundHistory.slice(0, -1)

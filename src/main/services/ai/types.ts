@@ -18,6 +18,7 @@ import type {
   AiRunEvent,
   AiRunEventStage,
   AiRunStatus,
+  ChatSessionMemory,
   FileReviewDetail,
   SelectedReference
 } from '../../../shared/types'
@@ -100,6 +101,7 @@ export type AiRunContext = {
   referenceScope: AiReferenceScope
   humanRuntimeOverrides?: {
     hardActionLimit?: number
+    modelContextWindowTokens?: number
   }
   workspace?: {
     workspaceId: string
@@ -134,6 +136,7 @@ export type AiRunContext = {
     maxRecentTurnsChars?: number
     maxSummaryChars?: number
   }) => Promise<{ recentTurnsText: string; sessionSummaryText: string }>
+  loadSessionMemory: () => Promise<ChatSessionMemory | null>
   trackDocxOpen: (input: {
     docId: string
     sourcePath: string

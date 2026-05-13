@@ -56,15 +56,6 @@
 
 ## 6. 当前基线 Skill 集合
 
-### `history-recall`
-
-- 类型：builtin
-- 职责：主动回看之前几轮已经做过的正式判断、执行动作和结果。
-- 工具列表：
-  - `history_search`
-  - `history_list`
-- 适用场景：当最近一轮和历史摘要还不足以定位失败模式，或需要回看更早细节时使用。
-
 ### `terminal`
 
 - 类型：builtin

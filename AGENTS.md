@@ -3,8 +3,8 @@
 ## 1. 文档引用
 ### 1.1 AI相关
 - `doc/ai-design/architecture.md`：涉及 AI 总体架构、主流程或模块职责时阅读。
-- `doc/ai-design/implementation-spec.md`：涉及 AI 实现方式、运行入口、跨层边界、运行时组织，或 hand 的批次保护/readback 约束、mouth markdown 交付与 references 引用收口时阅读。
-- `doc/ai-design/data-definition-and-flow.md`：涉及 AI 数据结构、状态流转、历史渲染、产物关系，或 thought / references / watch hint / 非法 plan 枚举契约时阅读。
+- `doc/ai-design/implementation-spec.md`：涉及 AI 实现方式、运行入口、跨层边界、运行时组织，或 context budget / memory compaction、hand 的批次保护/readback 约束、mouth markdown 交付与 references 引用收口时阅读。
+- `doc/ai-design/data-definition-and-flow.md`：涉及 AI 数据结构、状态流转、session memory、compact blocks、历史渲染、产物关系，或 thought / references / watch hint / 非法 plan 枚举契约时阅读。
 - `doc/ai-design/human-skill-design.md`：涉及 human skill 分类、能力边界、skill 基线、builtin/external 区分，或 active tool budget、工具调用次数边界、docx-write 使用边界时阅读。
 - `doc/ai-design/prompt-design.md`：涉及 prompt 结构、工具 schema、工具结果渲染、references 披露策略、检索策略提示或 AI-facing 文案时阅读。
 
@@ -25,7 +25,7 @@
 - `doc/test.md`：涉及测试用例编写、runner、日志或测试运行机制时阅读。
 
 ### 1.5 prd产品文档相关
-- `doc/prd/workbench.md`：涉及 Workbench 产品需求、交互或验收标准时阅读。
+- `doc/prd/workbench.md`：涉及 Workbench 产品需求、交互、上下文用量/压缩状态提示或验收标准时阅读。
 - `doc/prd/settings.md`：涉及 Settings 产品需求、交互、验收标准，或需要区分 workspace 容器与其 files/web 子区域设计时阅读。
 
 ## 2. 必须遵守的规则

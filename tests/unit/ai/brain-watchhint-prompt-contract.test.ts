@@ -21,7 +21,7 @@ const createFakeCtx = (): AiRunContext =>
   }) as AiRunContext
 
 describe('ai unit brain watchhint prompt contract', () => {
-  it('renders current watch hint only in correction_hint, not latest_attempt', () => {
+  it('renders current watch hint only in correction_hint, not latest_history', () => {
     const state = createInitialHumanState({
       taskId: 'task-1',
       userInput: '继续处理 docx'
@@ -116,10 +116,10 @@ describe('ai unit brain watchhint prompt contract', () => {
       ctx: createFakeCtx()
     }).user
 
-    const latestAttemptSection = prompt.match(/<latest_attempt>([\s\S]*?)<\/latest_attempt>/)?.[1] || ''
+    const latestHistorySection = prompt.match(/<latest_history>([\s\S]*?)<\/latest_history>/)?.[1] || ''
     const correctionHintSection = prompt.match(/<correction_hint>([\s\S]*?)<\/correction_hint>/)?.[1] || ''
 
-    expect(latestAttemptSection).not.toContain('上一轮 docx 批量写在中途安全停止。')
+    expect(latestHistorySection).not.toContain('上一轮 docx 批量写在中途安全停止。')
     expect(correctionHintSection).toContain('上一轮 docx 批量写在中途安全停止。')
     expect(correctionHintSection).toContain('lastSafeRevisionRef=v2')
   })

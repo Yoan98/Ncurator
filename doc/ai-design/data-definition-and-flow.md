@@ -45,6 +45,8 @@ interface AiRunContext {
   humanRuntimeOverrides?: {
     // 当前 human 允许的工具调用上限；缺失时使用系统默认值。
     hardActionLimit?: number
+    // 当前 human 使用的模型上下文窗口 token 数；缺失时默认 200_000。
+    modelContextWindowTokens?: number
   }
 
   // 当前绑定的工作区；供工具层和 prompt 直接读取基础工作区信息。
@@ -121,6 +123,9 @@ interface AiRunContext {
     // 更长期历史的摘要文本。
     sessionSummaryText: string
   }>
+
+  // 读取当前会话的持久 session memory；brain prompt 使用完整结构渲染 session_memory。
+  loadSessionMemory(): Promise<ChatSessionMemory | null>
 
   // docx 打开后记录当前 worker docId、源路径与 replay session；具体语义见 docx-design 文档。
   trackDocxOpen: (input: { docId: string; sourcePath: string; replaySession?: DocxReplaySession }) => void
@@ -254,13 +259,40 @@ type AiRunEventStage =
   | 'human_mouth'
 ```
 
+### `ChatSessionMemory`
+
+`ChatSessionMemory` 持久化在 `chat_session_memory.memory_json`，用于同一会话内跨 human task 延续上下文。它只保存任务完成后的连续性信息，不保存单次 run 内的压缩块。
+
+```ts
+type SessionTaskArtifact = {
+  kind: 'file' | 'draft_review'
+  fileName?: string
+  path?: string
+  reviewId?: string
+  summary: string
+}
+
+type ChatSessionMemory = {
+  // 由 AI 在 run 成功后重写的跨任务滚动摘要。
+  rollingSummary: string
+  // 由 runtime 真实追加的最近任务结果，不由 AI 生成。
+  recentTaskSummaries: Array<{
+    runId: string
+    userInput: string
+    assistantOutput: string
+    artifacts: SessionTaskArtifact[]
+    completedAt: number
+  }>
+}
+```
+
 ## 3. `human` 数据定义
 
 ### `HumanState`
 
 ```ts
-// human 当前所在的节点；brain 负责推理，learning 负责学 skill，hand 负责调工具，mouth 负责交付。
-type HumanStage = 'brain' | 'learning' | 'hand' | 'mouth'
+// human 当前所在的节点；context_budget 负责预算路由，memory_compaction 负责 run 内历史压缩。
+type HumanStage = 'context_budget' | 'memory_compaction' | 'brain' | 'learning' | 'hand' | 'mouth'
 
 // human 当前运行状态；目前基线只区分运行中和已完成。
 type HumanStatus = 'running' | 'completed'
@@ -351,10 +383,20 @@ interface HumanExecution {
 }
 
 interface HumanMemoryHistory {
-  // 最近几轮正式过程历史；是 brain 主要消费的过程记录来源。
+  // 当前 run 内未压缩的正式过程历史；latest history 始终保留原文。
   roundHistory: HumanRoundRecord[]
-  // 最近一次 history_search / history_list 主动加载出来的旧历史；只作为补充上下文使用。
-  loadedHistoryContext?: HumanLoadedHistoryContext
+  // 当前 run 内由 memory_compaction 生成的历史压缩块；不持久化到 session memory。
+  compactBlocks: Array<{
+    id: string
+    kind: 'history'
+    summary: string
+    source: {
+      roundIds: number[]
+    }
+    createdAt: number
+    tokenEstimateBefore?: number
+    tokenEstimateAfter?: number
+  }>
 }
 
 interface HumanState {
@@ -365,7 +407,7 @@ interface HumanState {
   memory: {
     // 已收敛下来的稳定任务笔记。
     stable: HumanStableMemory
-    // 过程历史与主动回看历史。
+    // 过程历史与 run 内压缩块。
     history: HumanMemoryHistory
   }
   skills: {
@@ -381,7 +423,7 @@ interface HumanState {
 }
 ```
 
-### `roundHistory` 与 `history_search / history_list`
+### `roundHistory` 与 `compactBlocks`
 
 ```ts
 interface HumanHistoryToolResult {
@@ -1069,16 +1111,20 @@ flowchart LR
 flowchart LR
     T[("task")]
     SM[("memory.stable")]
-    HM[("memory.history.roundHistory / loadedHistoryContext")]
+    HM[("memory.history.roundHistory / compactBlocks")]
+    CM[("chat_session_memory")]
     SK[("skills.learnedSkillIds")]
     WH[("execution.watchHint")]
+    CB["context_budget"]
+    MC["memory_compaction"]
     B["brain"]
     CD[("execution.currentThought")]
     TR[("trace.steps")]
 
     T -->|读取 taskId + userInput| B
     SM -->|读取 currentUnderstanding / keyEvidence / checklist| B
-    HM -->|读取 latest_attempt / earlier_attempts / recalled_history| B
+    HM -->|读取 compact_blocks / recent_history / latest_history| B
+    CM -->|读取 session_memory| B
     SK -->|读取 learned external skills| B
     WH -->|存在时读取收敛提示| B
     B -->|通过 updatedStableMemory patch 更新 stable memory| SM
@@ -1107,7 +1153,10 @@ flowchart LR
     L -->|追加 learning round| PM
     L -->|整轮无新 skill 或 budget 超限时写入| WH
     L -->|追加 learning 执行轨迹| TR
-    L -->|返回下一轮 brain| B
+    L -->|返回上下文预算检查| CB
+    CB -->|预算足够| B
+    CB -->|超过触发阈值且存在可压缩历史| MC
+    MC -->|写入 compactBlocks 并仅保留 latest round| CB
 ```
 
 ### `human` 阶段三：`hand` 路径的数据流转
@@ -1117,22 +1166,27 @@ flowchart LR
     CD[("execution.currentThought.nextAction.toolUsePlan")]
     H["hand"]
     LTR[("execution.lastToolResults")]
-    PM[("memory.history.roundHistory / loadedHistoryContext")]
+    PM[("memory.history.roundHistory")]
     A[("execution.artifacts")]
     RF[("execution.references")]
     WH[("execution.watchHint")]
     DG[("execution.deliveryGuidanceItems")]
     TR[("trace.steps")]
+    CB["context_budget"]
+    MC["memory_compaction"]
     B["brain"]
 
     CD -->|读取 toolUsePlan| H
     H -->|写入本轮工具结果数组| LTR
-    H -->|追加 hand round 或 loaded history| PM
+    H -->|追加 hand round| PM
     H -->|从工具结构化输出提取并回写 artifacts| A
     H -->|plan 非法、超过累计工具调用临时上限或命中 positioned 保护时写入| WH
     H -->|需要最终交付额外说明时追加| DG
     H -->|追加 hand 执行轨迹| TR
-    H -->|返回下一轮 brain| B
+    H -->|返回上下文预算检查| CB
+    CB -->|预算足够| B
+    CB -->|超过触发阈值且存在可压缩历史| MC
+    MC -->|写入 compactBlocks 并仅保留 latest round| CB
 ```
 
 ### `human` 阶段四：`mouth` 路径的数据流转
@@ -1141,7 +1195,7 @@ flowchart LR
 flowchart LR
     T[("task")]
     SM[("memory.stable")]
-    PM[("memory.history.roundHistory / loadedHistoryContext")]
+    PM[("memory.history.roundHistory / compactBlocks")]
     DG[("execution.deliveryGuidanceItems")]
     A[("execution.artifacts")]
     M["mouth"]
@@ -1158,7 +1212,7 @@ flowchart LR
     M -->|追加 mouth 执行轨迹| TR
 ```
 
-- `mouth` 不再直接消费 `brain` 的 `latest_attempt / earlier_attempts / recalled_history` 决策视图；它仍基于 `roundHistory + loadedHistoryContext`，但会渲染成一套独立的结果导向 `history` 视图。
+- `mouth` 不直接消费 `brain` 的 `recent_history / latest_history` 决策视图；它基于 `roundHistory + compactBlocks` 渲染成一套独立的结果导向 `history` 视图。
 - `mouth` 的 prompt 输入仍以 `your_notes` 为优先事实来源；当 `your_notes` 过于概括或不足以支撑用户要求的细节时，再从结果导向的 `history`、`deliveryGuidanceItems` 与 `runtime_artifacts` 补足用户回答所需细节，而不是依赖额外的低层 tool 参数。
 - `mouth` 不再依赖 `execution.currentThought` 的收口摘要来组织最终交付；若 `your_notes` 与更具体的历史/产物依据存在张力，应以更具体、可追溯的依据为准。
 - `references` 的正式来源是 `brain` 在 `nextAction.action='mouth'` 时的结构化输出；`mouth` 只负责消费并在 markdown 正文中披露这些引用及其 `usedFor`，不自行推断新的已引用来源。

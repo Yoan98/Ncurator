@@ -4,8 +4,8 @@ import {
   appendRoundRecord,
   buildHandExecution,
   buildLearningExecution,
-  filterRoundHistory,
-  getEarlierAttemptRounds
+  getCompressibleHistoryRounds,
+  getRecentHistoryRounds
 } from '../../../src/main/services/ai/human/memory/roundHistory'
 import {
   applyBrainDecisionState,
@@ -152,7 +152,7 @@ describe('ai unit human memory history', () => {
         summary: '还需要继续读资料',
         nextAction: {
           action: 'learning',
-          wantLearnSkillIds: ['history-recall']
+          wantLearnSkillIds: ['docx-read']
         }
       }),
       stableMemory: initialState.memory.stable,
@@ -162,7 +162,7 @@ describe('ai unit human memory history', () => {
     expect(nextState.execution.references).toBeUndefined()
   })
 
-  it('keeps the last round out of earlier_attempts and trims the window to twenty rounds', () => {
+  it('keeps the last round out of recent_history and trims the window to twenty rounds', () => {
     const initialState = createInitialHumanState({
       taskId: 'task-2',
       userInput: '请整理历史'
@@ -228,11 +228,56 @@ describe('ai unit human memory history', () => {
       }
     }, initialState)
 
-    const earlierAttempts = getEarlierAttemptRounds(stateWithHistory)
+    const recentHistory = getRecentHistoryRounds(stateWithHistory)
 
     expect(stateWithHistory.memory.history.roundHistory.at(-1)?.roundId).toBe(22)
-    expect(earlierAttempts.map((record) => record.roundId)).toEqual(
+    expect(recentHistory.map((record) => record.roundId)).toEqual(
       Array.from({ length: 20 }, (_, index) => index + 2)
+    )
+  })
+
+  it('uses all non-latest rounds as compaction targets', () => {
+    const initialState = createInitialHumanState({
+      taskId: 'task-compaction-targets',
+      userInput: '请整理历史'
+    })
+
+    const stateWithHistory = Array.from({ length: 30 }).reduce((state, _, index) => {
+      const round = index + 1
+      return {
+        ...state,
+        memory: {
+          ...state.memory,
+          history: appendRoundRecord({
+            state,
+            thought: buildThought({
+              summary: `第 ${round} 轮决定`,
+              nextAction: {
+                action: 'learning',
+                wantLearnSkillIds: ['docx-read']
+              }
+            }),
+            execution: buildLearningExecution({
+              learningOutcome: {
+                requestedSkillIds: ['docx-read'],
+                loadedSkillIds: round === 1 ? ['docx-read'] : [],
+                skippedDuplicateSkillIds: round === 1 ? [] : ['docx-read'],
+                skippedUnknownSkillIds: [],
+                evictedSkillIds: [],
+                activeToolCount: 4
+              }
+            }),
+            createdAt: round
+          })
+        }
+      }
+    }, initialState)
+
+    expect(getRecentHistoryRounds(stateWithHistory).map((record) => record.roundId)).toEqual(
+      Array.from({ length: 20 }, (_, index) => index + 10)
+    )
+    expect(getCompressibleHistoryRounds(stateWithHistory).map((record) => record.roundId)).toEqual(
+      Array.from({ length: 29 }, (_, index) => index + 1)
     )
   })
 
@@ -383,91 +428,6 @@ describe('ai unit human memory history', () => {
         }
       ]
     })
-  })
-
-  it('history_search can match keywords from raw tool result tail blocks', () => {
-    const initialState = createInitialHumanState({
-      taskId: 'task-5',
-      userInput: '搜索反走样处理办法'
-    })
-
-    const history = appendRoundRecord({
-      state: initialState,
-      thought: buildThought({
-        summary: '读取图形学文档',
-        nextAction: {
-          action: 'hand',
-          toolUsePlan: {
-            mode: 'serial',
-            calls: [
-              {
-                toolName: 'docx_read_blocks',
-                args: {
-                  sourcePath: 'graphics.docx',
-                  fromBlockId: 'b:19',
-                  toBlockId: 'b:26'
-                }
-              }
-            ]
-          }
-        }
-      }),
-      execution: buildHandExecution({
-        toolUsePlan: {
-          mode: 'serial',
-          calls: [
-            {
-              toolName: 'docx_read_blocks',
-              args: {
-                sourcePath: 'graphics.docx',
-                fromBlockId: 'b:19',
-                toBlockId: 'b:26'
-              }
-            }
-          ]
-        },
-        toolResults: [
-          {
-            toolName: 'docx_read_blocks',
-            ok: true,
-            code: 'ok',
-            data: {
-              ok: true,
-              code: 'ok',
-              sourcePath: 'graphics.docx',
-              fromBlockId: 'b:19',
-              toBlockId: 'b:26',
-              returnedBlockCount: 8,
-              blocks: [
-                {
-                  blockId: 'b:19',
-                  type: 'paragraph',
-                  bodyIndex: 19,
-                  text: '反走样'
-                },
-                {
-                  blockId: 'b:25',
-                  type: 'paragraph',
-                  bodyIndex: 25,
-                  text: '进行低通滤波，过滤掉高频信号，以达到反走样。'
-                }
-              ]
-            }
-          }
-        ]
-      }),
-      createdAt: 5
-    })
-
-    const filtered = filterRoundHistory({
-      roundHistory: history.roundHistory,
-      filters: {
-        query: '低通滤波',
-        limit: 1
-      }
-    })
-
-    expect(filtered.map((record) => record.roundId)).toEqual([1])
   })
 
   it('preserves existing hand delivery guidance items when brain enters mouth', () => {

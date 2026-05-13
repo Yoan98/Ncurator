@@ -36,6 +36,7 @@ const createStubAiRunContext = (): AiRunContext => ({
     recentTurnsText: '',
     sessionSummaryText: ''
   }),
+  loadSessionMemory: async () => null,
   trackDocxOpen: () => {},
   trackDocxChanges: () => {},
   resolveDocxOpenTarget: async () => {

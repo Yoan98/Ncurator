@@ -191,6 +191,13 @@
   - `WB-COMPOSER-006-AC1` 运行中才显示取消入口。
   - `WB-COMPOSER-006-AC2` 取消成功后，当前运行结束并给出已取消反馈。
 
+#### WB-COMPOSER-007 上下文用量提示
+
+- 系统行为：智能模式输入区展示当前会话上下文 token 用量圆圈，显示当前已估算 token、默认最大上下文 token 与占比；该用量在切换会话和 human run 完成后刷新。
+- 验收：
+  - `WB-COMPOSER-007-AC1` 智能模式下输入区可见上下文用量圆圈，hover 或辅助文本可读到已用 token 与最大 token。
+  - `WB-COMPOSER-007-AC2` human run 完成后，用量圆圈会基于最新会话消息与 session memory 刷新。
+
 ### 8.4 模式切换
 
 #### WB-MODE-001 模式切换不切页面
@@ -260,6 +267,13 @@
 - 验收：
   - `WB-BLOCKER-003-AC1` 智能模式下提示 AI 可能直接读取原文件，耗时更长。
   - `WB-BLOCKER-003-AC2` 搜索模式下明确说明纯搜索只覆盖可检索资料，未索引本地项不会进入候选结果，部分可检索目录只覆盖其已索引子文件。
+
+#### WB-BLOCKER-004 上下文压缩过程提示
+
+- 系统行为：当 AI 运行触发上下文压缩时，assistant turn 的过程步骤展示“正在压缩上下文”；压缩完成后更新为“已压缩历史上下文”。
+- 验收：
+  - `WB-BLOCKER-004-AC1` 收到 `context_compaction_started` 事件后，当前 assistant turn 中出现运行中的上下文压缩步骤。
+  - `WB-BLOCKER-004-AC2` 收到 `context_compaction_completed` 事件后，该步骤更新为完成态。
 
 ### 8.7 右侧内容面板
 

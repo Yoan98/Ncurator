@@ -23,7 +23,7 @@ import {
   humanExecutionSchema,
   humanHistoryToolResultSchema,
   humanLearningOutcomeSchema,
-  humanLoadedHistoryContextSchema,
+  humanCompactBlockSchema,
   humanMemoryHistorySchema,
   humanResultSchema,
   humanRoundExecutionSchema,
@@ -88,6 +88,7 @@ export type ToolCallResult = z.infer<typeof toolCallResultSchema>
 export type HumanLearningOutcome = z.infer<typeof humanLearningOutcomeSchema>
 export type HumanWatchHint = z.infer<typeof humanWatchHintSchema>
 export type HumanHistoryToolResult = z.infer<typeof humanHistoryToolResultSchema>
+export type HumanCompactBlock = z.infer<typeof humanCompactBlockSchema>
 export type HumanResult = z.infer<typeof humanResultSchema>
 export type HumanTraceStep = z.infer<typeof humanTraceStepSchema>
 export type HumanTaskInput = z.infer<typeof humanTaskInputSchema>
@@ -98,7 +99,6 @@ export type RuntimeChangedFile = z.infer<typeof runtimeChangedFileSchema>
 export type RuntimeArtifactsSummary = z.infer<typeof runtimeArtifactsSummarySchema>
 export type HumanRoundExecution = z.infer<typeof humanRoundExecutionSchema>
 export type HumanRoundRecord = z.infer<typeof humanRoundRecordSchema>
-export type HumanLoadedHistoryContext = z.infer<typeof humanLoadedHistoryContextSchema>
 export type HumanMemoryHistory = z.infer<typeof humanMemoryHistorySchema>
 
 export type HumanRuntimeCache = {

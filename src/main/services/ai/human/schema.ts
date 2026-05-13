@@ -306,7 +306,14 @@ export const humanExecutionSchema = z.object({
   lastLearningOutcome: humanLearningOutcomeSchema.optional(),
   artifacts: z.array(aiArtifactRefSchema),
   runtimeArtifacts: runtimeArtifactsSummarySchema.optional(),
-  references: z.array(humanReferenceSchema).optional()
+  references: z.array(humanReferenceSchema).optional(),
+  contextBudget: z
+    .object({
+      tokenEstimate: z.number().int().min(0),
+      contextWindowTokens: z.number().int().min(1),
+      triggerTokens: z.number().int().min(1)
+    })
+    .optional()
 })
 
 export const humanRoundExecutionSchema = z.discriminatedUnion('kind', [
@@ -339,21 +346,21 @@ export const humanRoundRecordSchema = z.object({
   execution: humanRoundExecutionSchema
 })
 
-export const historySearchFilterSchema = z.object({
-  query: z.string().min(1).optional(),
-  startRoundId: z.number().int().min(1).optional(),
-  endRoundId: z.number().int().min(1).optional(),
-  limit: z.number().int().min(1).optional()
-})
-
-export const humanLoadedHistoryContextSchema = z.object({
-  filters: historySearchFilterSchema,
-  rounds: z.array(humanRoundRecordSchema)
+export const humanCompactBlockSchema = z.object({
+  id: z.string().min(1),
+  kind: z.literal('history'),
+  summary: z.string().min(1),
+  source: z.object({
+    roundIds: z.array(z.number().int().min(1)).min(1)
+  }),
+  createdAt: z.number(),
+  tokenEstimateBefore: z.number().int().min(0).optional(),
+  tokenEstimateAfter: z.number().int().min(0).optional()
 })
 
 export const humanMemoryHistorySchema = z.object({
   roundHistory: z.array(humanRoundRecordSchema),
-  loadedHistoryContext: humanLoadedHistoryContextSchema.optional()
+  compactBlocks: z.array(humanCompactBlockSchema)
 })
 
 export const humanMemorySchema = z.object({

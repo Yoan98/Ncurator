@@ -1,5 +1,4 @@
 import type { AiRunContext } from '../../types'
-import { getLoadedHistoryContext } from '../memory/roundHistory'
 import { renderDeliveryGuidanceItems } from '../shared/deliveryGuidance'
 import { renderMouthHistoryText } from '../shared/historyRenderers'
 import { renderHumanStableNotes } from '../shared/memoryRenderers'
@@ -70,7 +69,7 @@ ${renderHumanStableNotes(input.state, 'mouth_prompt')}
   <history>
 ${renderMouthHistoryText({
   roundHistory: input.state.memory.history.roundHistory,
-  loadedHistoryContext: getLoadedHistoryContext(input.state)
+  compactBlocks: input.state.memory.history.compactBlocks
 })}
   </history>
 

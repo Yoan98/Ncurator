@@ -6,6 +6,13 @@ import type {
 
 export type WorkbenchMode = 'ai' | 'search'
 
+export type WorkbenchContextUsage = {
+  contextWindowTokens: number
+  usedContextTokens: number
+  ratio: number
+  updatedAt: number
+}
+
 export type SearchWorkbenchTurn = {
   query: string
   results: SearchResult[]

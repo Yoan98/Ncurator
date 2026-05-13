@@ -239,8 +239,7 @@ export const applyBrainDecisionState = (input: {
             createdAt: input.createdAt
           })
         : {
-            ...input.state.memory.history,
-            loadedHistoryContext: undefined
+            ...input.state.memory.history
           }
     },
     trace: {

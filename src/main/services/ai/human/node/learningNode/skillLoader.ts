@@ -11,8 +11,7 @@ const TOOL_FAMILY_BUILDERS: Record<
 > = {
   terminal: TOOL_FAMILY_DEFINITIONS.terminal.buildTools,
   kb: TOOL_FAMILY_DEFINITIONS.kb.buildTools,
-  docx: TOOL_FAMILY_DEFINITIONS.docx.buildTools,
-  internal: TOOL_FAMILY_DEFINITIONS.internal.buildTools
+  docx: TOOL_FAMILY_DEFINITIONS.docx.buildTools
 }
 
 const ensureFamilyTools = (input: {

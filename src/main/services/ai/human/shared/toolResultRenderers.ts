@@ -290,79 +290,6 @@ const renderDocxCreateResult = (obj: JsonObject): string =>
     ['summary', readStringField(obj, 'summary')]
   ])
 
-const renderHistoryHits = (value: JsonValue | undefined): string => {
-  if (!Array.isArray(value) || value.length === 0) return 'none'
-
-  return value
-    .map((item, index) => {
-      if (!isJsonObject(item)) return renderGenericArrayItem(item, index)
-      return `- ${renderKeyValuePairs([
-        ['roundId', readNumberTextField(item, 'roundId')],
-        ['stage', readStringField(item, 'stage')],
-        ['summary', readStringField(item, 'summary')],
-        ['matchedText', readStringField(item, 'matchedText')]
-      ])}`
-    })
-    .join('\n')
-}
-
-const renderHistoryRounds = (value: JsonValue | undefined): string => {
-  if (!Array.isArray(value) || value.length === 0) return 'none'
-
-  return value
-    .map((item, index) => {
-      if (!isJsonObject(item)) return renderGenericArrayItem(item, index)
-      return `- ${renderKeyValuePairs([
-        ['roundId', readNumberTextField(item, 'roundId')],
-        ['executionKind', readStringField(item, 'executionKind')],
-        ['decision', readStringField(item, 'decision')]
-      ])}`
-    })
-    .join('\n')
-}
-
-const readFiltersObject = (obj: JsonObject): JsonObject | undefined =>
-  isJsonObject(obj.filters) ? obj.filters : undefined
-
-const renderHistorySearchResult = (obj: JsonObject): string => {
-  const filters = readFiltersObject(obj)
-  return [
-    renderKeyValuePairs([
-      ['ok', renderPrimitive(obj.ok)],
-      ['code', renderPrimitive(obj.code)]
-    ]),
-    renderKeyValuePairs([
-      ['query', filters ? readStringField(filters, 'query') : undefined],
-      ['startRoundId', filters ? readNumberTextField(filters, 'startRoundId') : undefined],
-      ['endRoundId', filters ? readNumberTextField(filters, 'endRoundId') : undefined],
-      ['limit', filters ? readNumberTextField(filters, 'limit') : undefined]
-    ]),
-    'hits:',
-    renderHistoryHits(obj.hits)
-  ]
-    .filter(Boolean)
-    .join('\n')
-}
-
-const renderHistoryListResult = (obj: JsonObject): string => {
-  const filters = readFiltersObject(obj)
-  return [
-    renderKeyValuePairs([
-      ['ok', renderPrimitive(obj.ok)],
-      ['code', renderPrimitive(obj.code)]
-    ]),
-    renderKeyValuePairs([
-      ['startRoundId', filters ? readNumberTextField(filters, 'startRoundId') : undefined],
-      ['endRoundId', filters ? readNumberTextField(filters, 'endRoundId') : undefined],
-      ['limit', filters ? readNumberTextField(filters, 'limit') : undefined]
-    ]),
-    'rounds:',
-    renderHistoryRounds(obj.rounds)
-  ]
-    .filter(Boolean)
-    .join('\n')
-}
-
 export const renderToolResourceContextText = (
   resourceContext: ToolResourceContext | undefined
 ): string | undefined => {
@@ -398,10 +325,6 @@ export const renderToolResultDataText = (
       return renderDocxOutlineResult(value)
     case 'docx_history':
       return renderDocxHistoryResult(value)
-    case 'history_search':
-      return renderHistorySearchResult(value)
-    case 'history_list':
-      return renderHistoryListResult(value)
     default:
       return renderGenericObject(value)
   }

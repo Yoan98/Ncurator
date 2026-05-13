@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { appendRoundRecord, buildHandExecution } from '../../../src/main/services/ai/human/memory/roundHistory'
 import {
-  renderBrainLoadedHistoryText,
+  renderBrainRoundSection,
   renderMouthHistoryText
 } from '../../../src/main/services/ai/human/shared/historyRenderers'
 import { createInitialHumanState } from '../../../src/main/services/ai/human/state/schema'
 
 describe('ai unit human history renderers', () => {
-  it('renders brain loaded history with raw diagnostic details', () => {
+  it('renders brain history with raw diagnostic details', () => {
     const initialState = createInitialHumanState({
       taskId: 'task-history-diagnostic',
       userInput: '继续修正 docx 参数'
@@ -66,13 +66,7 @@ describe('ai unit human history renderers', () => {
       createdAt: 1
     })
 
-    const text = renderBrainLoadedHistoryText({
-      filters: {
-        query: 'docx_text_edit',
-        limit: 1
-      },
-      rounds: history.roundHistory
-    })
+    const text = renderBrainRoundSection(history.roundHistory)
 
     expect(text).toContain('调用参数：')
     expect(text).toContain('诊断：')
@@ -140,16 +134,10 @@ describe('ai unit human history renderers', () => {
 
     const text = renderMouthHistoryText({
       roundHistory: history.roundHistory,
-      loadedHistoryContext: {
-        filters: {
-          limit: 1
-        },
-        rounds: history.roundHistory
-      }
+      compactBlocks: []
     })
 
     expect(text).toContain('已发生的关键结果：')
-    expect(text).toContain('主动回看的相关事实：')
     expect(text).toContain('Received tool input did not match expected schema ✖ Invalid input → at query')
     expect(text).not.toContain('调用参数：')
   })
@@ -232,7 +220,7 @@ describe('ai unit human history renderers', () => {
 
     const text = renderMouthHistoryText({
       roundHistory: history.roundHistory,
-      loadedHistoryContext: undefined
+      compactBlocks: []
     })
 
     expect(text).toContain('多个像素点')
@@ -338,7 +326,7 @@ describe('ai unit human history renderers', () => {
 
     const text = renderMouthHistoryText({
       roundHistory: history.roundHistory,
-      loadedHistoryContext: undefined
+      compactBlocks: []
     })
 
     expect(text).toContain('`docx_paragraph_edit` 已完成实际写入。')

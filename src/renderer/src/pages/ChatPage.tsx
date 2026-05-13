@@ -39,6 +39,7 @@ import { FILE_ORIGIN_LABELS, REVIEW_STATUS_META } from '../components/workbench/
 import type {
   AssistantTurnStep,
   AssistantTurnViewModel,
+  WorkbenchContextUsage,
   ReviewWorkspaceTab,
   SearchWorkbenchTurn,
   WorkbenchContentPanelState,
@@ -142,6 +143,7 @@ const ChatPage: React.FC = () => {
   const [remoteModels, setRemoteModels] = useState<LlmRemoteModel[]>([])
   const [selectedModelName, setSelectedModelName] = useState<string | null>(null)
   const [composerResetKey, setComposerResetKey] = useState(0)
+  const [contextUsage, setContextUsage] = useState<WorkbenchContextUsage | null>(null)
   const [assistantTurns, setAssistantTurns] = useState<Record<string, AssistantTurnViewModel>>({})
   const [contentPanel, setContentPanel] = useState<WorkbenchContentPanelState>(createEmptyPanel())
   const [reviewWorkspaceTabs, setReviewWorkspaceTabs] = useState<ReviewWorkspaceTab[]>([])
@@ -344,6 +346,25 @@ const ChatPage: React.FC = () => {
       console.error('Failed to load messages', error)
     }
   }
+
+  const refreshContextUsage = useCallback(async (sessionId: string | null): Promise<void> => {
+    if (!sessionId) {
+      setContextUsage(null)
+      return
+    }
+    try {
+      const response = await window.api.aiContextUsageGet({ sessionId })
+      if (!response.success) return
+      setContextUsage({
+        contextWindowTokens: response.contextWindowTokens || 200000,
+        usedContextTokens: response.usedContextTokens || 0,
+        ratio: response.ratio || 0,
+        updatedAt: response.updatedAt || Date.now()
+      })
+    } catch {
+      // Context usage is advisory; failures should not block chat.
+    }
+  }, [])
 
   const loadWorkspaces = useCallback(async (): Promise<void> => {
     try {
@@ -659,13 +680,15 @@ const ChatPage: React.FC = () => {
       setContentPanel(createEmptyPanel())
       resetFileReviewState()
       void loadFileReviewsForSession(currentSessionId, { autoOpen: true })
+      void refreshContextUsage(currentSessionId)
     } else {
       setCurrentMessages([])
       setAssistantTurns({})
       setModalPreviewFile(null)
+      setContextUsage(null)
       resetFileReviewState()
     }
-  }, [currentSessionId])
+  }, [currentSessionId, refreshContextUsage])
 
   useEffect(() => {
     scrollToBottom()
@@ -794,6 +817,51 @@ const ChatPage: React.FC = () => {
             steps: nextSteps
           }
         })
+        return
+      }
+
+      if (event.type === 'context_compaction_started') {
+        const nextStep: AssistantTurnStep = {
+          id: `${event.taskId || event.runId}:context-compaction`,
+          summary: '正在压缩上下文',
+          tool: '上下文压缩',
+          status: 'running',
+          files: []
+        }
+        updateActiveTurn((current) => ({
+          ...current,
+          steps: current.steps.some((step) => step.id === nextStep.id)
+            ? current.steps.map((step) => (step.id === nextStep.id ? nextStep : step))
+            : [...current.steps, nextStep]
+        }))
+        return
+      }
+
+      if (event.type === 'context_compaction_completed') {
+        const stepId = `${event.taskId || event.runId}:context-compaction`
+        updateActiveTurn((current) => ({
+          ...current,
+          steps: current.steps.some((step) => step.id === stepId)
+            ? current.steps.map((step) =>
+                step.id === stepId
+                  ? {
+                      ...step,
+                      summary: '已压缩历史上下文',
+                      status: 'completed'
+                    }
+                  : step
+              )
+            : [
+                ...current.steps,
+                {
+                  id: stepId,
+                  summary: '已压缩历史上下文',
+                  tool: '上下文压缩',
+                  status: 'completed',
+                  files: []
+                }
+              ]
+        }))
         return
       }
 
@@ -1033,12 +1101,13 @@ const ChatPage: React.FC = () => {
           ...current,
           status: current.status === 'failed' ? 'failed' : 'completed'
         }))
+        void refreshContextUsage(currentSessionId)
       }
     })
     return () => {
       window.api.removeAiRunEventListeners()
     }
-  }, [aiRunId, currentSessionId, message])
+  }, [aiRunId, currentSessionId, message, refreshContextUsage])
 
   const updateSessionTitleIfNeeded = async (userQuery: string): Promise<void> => {
     if (!currentSessionId || currentMessages.length !== 0) return
@@ -1794,6 +1863,7 @@ const ChatPage: React.FC = () => {
                       )}
                       showCancel={loading && composerMode === 'ai' && Boolean(aiRunId)}
                       resetKey={composerResetKey}
+                      contextUsage={contextUsage}
                     />
 
                     {!selectedWorkspace ? (

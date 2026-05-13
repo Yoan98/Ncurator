@@ -1,47 +1,51 @@
 import { z } from 'zod/v4'
-import type { ChatSessionMemory, JsonValue } from '../../../types/store'
+import type { ChatSessionMemory } from '../../../types/store'
 import { createAiLlmExecutor } from '../llmExecutor'
 import type { ChatStore } from '../../storage/domains/ChatStore'
 import type { LlmConfigStore } from '../../storage/domains/LlmConfigStore'
 import { buildSessionMemoryPrompt } from './prompts/session'
-import type { AiLlmIoRecord, AiRunEvent, AiRuntimeSettings, LlmRuntimeConfig } from '../../../../shared/types'
+import type {
+  AiArtifactRef,
+  AiLlmIoRecord,
+  AiRunEvent,
+  AiRuntimeSettings,
+  LlmRuntimeConfig,
+  SessionTaskArtifact
+} from '../../../../shared/types'
 import type { AiLlmDriver } from '../llmExecutor'
 
-const sessionMemorySchema: z.ZodType<ChatSessionMemory> = z.object({
-  summary: z.string(),
-  openTasks: z.array(z.string()),
-  userPrefs: z.array(z.string()),
-  pinnedFacts: z.array(z.string()),
-  linkedDocumentIds: z.array(z.string())
+const rollingSummarySchema = z.object({
+  rollingSummary: z.string()
 })
 
 const EMPTY_SESSION_MEMORY: ChatSessionMemory = {
-  summary: '',
-  openTasks: [],
-  userPrefs: [],
-  pinnedFacts: [],
-  linkedDocumentIds: []
+  rollingSummary: '',
+  recentTaskSummaries: []
 }
 
-const toList = (value: JsonValue | undefined): string[] =>
-  (Array.isArray(value) ? value : []).map((item) => String(item || '').trim()).filter(Boolean)
+const SESSION_RECENT_TASK_LIMIT = 5
 
-const normalizeMemory = (input: JsonValue | undefined): ChatSessionMemory => {
-  const obj = input && typeof input === 'object' && !Array.isArray(input) ? input : {}
-  return {
-    summary: String(obj.summary || '').trim(),
-    openTasks: toList(obj.openTasks).slice(0, 20),
-    userPrefs: toList(obj.userPrefs).slice(0, 20),
-    pinnedFacts: toList(obj.pinnedFacts).slice(0, 20),
-    linkedDocumentIds: toList(obj.linkedDocumentIds).slice(0, 50)
-  }
-}
+const toSessionTaskArtifact = (artifact: AiArtifactRef): SessionTaskArtifact =>
+  artifact.kind === 'file'
+    ? {
+        kind: 'file',
+        fileName: artifact.fileName,
+        path: artifact.path,
+        reviewId: artifact.reviewId,
+        summary: artifact.summary
+      }
+    : {
+        kind: 'draft_review',
+        reviewId: artifact.review.reviewId,
+        summary: artifact.summary
+      }
 
 export const updateSessionMemoryAfterRun = async (input: {
   runId: string
   sessionId: string
   userInput: string
   assistantOutput: string
+  artifacts?: AiArtifactRef[]
   runtimeSettings: AiRuntimeSettings
   chatStore: ChatStore
   llmStore: LlmConfigStore
@@ -80,19 +84,34 @@ export const updateSessionMemoryAfterRun = async (input: {
 
   const result = await llmExecutor.chatStructured({
     caller: 'session.memory',
-    schema: sessionMemorySchema,
+    schema: rollingSummarySchema,
     schemaName: 'session_memory',
     system: buildSessionMemoryPrompt(),
     user: JSON.stringify({
-      previousMemory: prev,
-      newExchange: {
-        user: String(input.userInput || ''),
-        assistant: String(input.assistantOutput || '')
+      previousRollingSummary: prev.rollingSummary,
+      recentTaskSummaries: prev.recentTaskSummaries,
+      newTask: {
+        runId: input.runId,
+        userInput: String(input.userInput || ''),
+        assistantOutput: String(input.assistantOutput || ''),
+        artifacts: (input.artifacts || []).map(toSessionTaskArtifact)
       }
     }),
     temperature: 0.2
   })
 
-  const memory = normalizeMemory(result)
+  const memory: ChatSessionMemory = {
+    rollingSummary: String(result.rollingSummary || '').trim(),
+    recentTaskSummaries: [
+      ...prev.recentTaskSummaries,
+      {
+        runId: input.runId,
+        userInput: String(input.userInput || ''),
+        assistantOutput: String(input.assistantOutput || ''),
+        artifacts: (input.artifacts || []).map(toSessionTaskArtifact),
+        completedAt: Date.now()
+      }
+    ].slice(-SESSION_RECENT_TASK_LIMIT)
+  }
   await input.chatStore.saveSessionMemory(sessionId, memory)
 }

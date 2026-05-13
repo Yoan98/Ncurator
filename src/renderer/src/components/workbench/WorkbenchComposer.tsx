@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Button, Empty, Select, Spin } from 'antd'
+import { Button, Empty, Select, Spin, Tooltip } from 'antd'
 import {
   HiArrowUp,
   HiChevronDown,
@@ -17,7 +17,7 @@ import type {
   WorkspaceSource
 } from '../../../../shared/types'
 import { workbenchSelectors } from '../../testing/selectors'
-import type { WorkbenchMode } from './types'
+import type { WorkbenchContextUsage, WorkbenchMode } from './types'
 import { COMPOSER_PLACEHOLDER, COMPOSER_REFERENCE_KINDS } from './composer/constants'
 import type { ComposerDraftValue, ComposerNode } from './composer/types'
 import {
@@ -60,6 +60,7 @@ type WorkbenchComposerProps = {
   canSubmit: boolean
   showCancel: boolean
   resetKey: number
+  contextUsage?: WorkbenchContextUsage | null
 }
 
 const isTextNode = (value: Node | null): value is Text => value instanceof Text
@@ -94,7 +95,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   loading,
   canSubmit,
   showCancel,
-  resetKey
+  resetKey,
+  contextUsage
 }) => {
   const editorRef = useRef<HTMLSpanElement | null>(null)
   const draftNodesRef = useRef<ComposerNode[]>([])
@@ -593,6 +595,10 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 
   const localMentionOptions = mentionOptions.filter((scope) => scope.kind !== 'web')
   const webMentionOptions = mentionOptions.filter((scope) => scope.kind === 'web')
+  const contextUsagePercent = Math.max(0, Math.min(100, Math.round((contextUsage?.ratio || 0) * 100)))
+  const contextUsageTitle = contextUsage
+    ? `当前上下文约 ${contextUsage.usedContextTokens.toLocaleString()} / ${contextUsage.contextWindowTokens.toLocaleString()} tokens`
+    : '暂无上下文用量'
 
   return (
     <div className="relative">
@@ -853,6 +859,23 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {mode === 'ai' ? (
+              <Tooltip title={contextUsageTitle}>
+                <div
+                  className="relative inline-flex h-8 w-8 items-center justify-center rounded-full text-[10px] font-medium text-[#666666]"
+                  aria-label={contextUsageTitle}
+                >
+                  <div
+                    className="absolute inset-0 rounded-full"
+                    style={{
+                      background: `conic-gradient(#D97757 ${contextUsagePercent}%, #ECE7DF ${contextUsagePercent}% 100%)`
+                    }}
+                  />
+                  <div className="absolute inset-[3px] rounded-full bg-white" />
+                  <span className="relative">{contextUsagePercent}%</span>
+                </div>
+              </Tooltip>
+            ) : null}
             {showCancel ? (
               <Button
                 onClick={onCancel}

@@ -72,9 +72,14 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     const recentTurnsText = clipText(formatTurns(messages), maxRecentTurnsChars)
 
     const memory = await deps.chatStore.getSessionMemory(payload.sessionId)
-    const sessionSummaryText = clipText(String(memory?.summary || ''), maxSummaryChars)
+    const sessionSummaryText = clipText(String(memory?.rollingSummary || ''), maxSummaryChars)
 
     return { recentTurnsText, sessionSummaryText }
+  }
+
+  const loadSessionMemory: AiRunContext['loadSessionMemory'] = async () => {
+    checkCancelled()
+    return await deps.chatStore.getSessionMemory(payload.sessionId)
   }
 
   return {
@@ -92,6 +97,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     recordLlmIo: deps.recordLlmIo,
     requestApproval: deps.requestApproval,
     loadHistory,
+    loadSessionMemory,
     trackDocxOpen: ({ docId, sourcePath, replaySession }) => {
       deps.fileReviewService.registerDocxOpen({
         runId: payload.runId,

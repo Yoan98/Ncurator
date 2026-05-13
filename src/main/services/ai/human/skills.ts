@@ -8,16 +8,6 @@ import {
 import type { RuntimeSkillId, SkillDefinition } from './types'
 
 export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
-  'history-recall': {
-    skillId: 'history-recall',
-    familyId: 'internal',
-    source: 'builtin',
-    countsTowardToolBudget: false,
-    title: 'history-recall',
-    description: '回看之前几轮已经做过的正式判断、执行动作和结果。',
-    whenToUse: '当最近一轮和历史摘要还不足以定位失败模式或需要回看更早细节时使用。',
-    toolNames: ['history_search', 'history_list']
-  },
   terminal: {
     skillId: 'terminal',
     familyId: 'terminal',

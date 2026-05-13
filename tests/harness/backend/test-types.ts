@@ -182,6 +182,7 @@ export type CreateAiRunContextInput = {
   checkCancelledOverride?: () => void
   humanRuntimeOverrides?: {
     hardActionLimit?: number
+    modelContextWindowTokens?: number
   }
   llmScript?: LlmScript
   structuredOutputScript?: StructuredOutputScript

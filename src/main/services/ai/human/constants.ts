@@ -1,7 +1,6 @@
-export const AI_TOOL_FAMILY_IDS = ['terminal', 'kb', 'docx', 'internal'] as const
+export const AI_TOOL_FAMILY_IDS = ['terminal', 'kb', 'docx'] as const
 
 export const BUILTIN_RUNTIME_SKILL_IDS = [
-  'history-recall',
   'terminal',
   'kb-retrieval'
 ] as const
@@ -17,7 +16,7 @@ export const RUNTIME_SKILL_IDS = [
 
 export const HUMAN_SKILL_SOURCES = ['builtin', 'external'] as const
 
-export const HUMAN_STAGES = ['brain', 'learning', 'hand', 'mouth'] as const
+export const HUMAN_STAGES = ['brain', 'learning', 'hand', 'mouth', 'context_budget', 'memory_compaction'] as const
 export const HUMAN_STATUSES = ['running', 'completed'] as const
 
 export const HUMAN_STEP_ACTIONS = [
@@ -61,6 +60,8 @@ export const HUMAN_DEFAULT_TOOL_CALL_LIMIT = 40
 export const HUMAN_MAX_PARALLEL_TOOL_CALLS = 6
 export const HUMAN_DOCX_BATCH_WRITE_LIMIT = 3
 export const HUMAN_TOOL_USE_PLAN_LIMIT = 3
+export const DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS = 200_000
+export const CONTEXT_COMPACTION_TRIGGER_RATIO = 0.8
 export const HUMAN_ROUND_EXECUTION_KINDS = [
   'pre_execution_blocked',
   'learning',
@@ -68,5 +69,4 @@ export const HUMAN_ROUND_EXECUTION_KINDS = [
   'mouth'
 ] as const
 export const HUMAN_MAX_ROUND_HISTORY = 100
-export const HUMAN_MAX_EARLIER_ATTEMPT_ROUNDS = 20
-export const HUMAN_MAX_LOADED_HISTORY_ROUNDS = 10
+export const HUMAN_MAX_RECENT_HISTORY_ROUNDS = 20

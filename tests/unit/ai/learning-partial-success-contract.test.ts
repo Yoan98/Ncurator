@@ -38,6 +38,7 @@ const createStubAiRunContext = (): AiRunContext => ({
     recentTurnsText: '',
     sessionSummaryText: ''
   }),
+  loadSessionMemory: async () => null,
   trackDocxOpen: () => {},
   trackDocxChanges: () => {},
   resolveDocxOpenTarget: async () => {
@@ -124,21 +125,21 @@ describe('ai unit learning partial success', () => {
     const learningNode = createLearningNode({ ctx, cache })
     const baseState = createInitialHumanState({
       taskId: 'task-builtin-only',
-      userInput: '请学习 history-recall'
+      userInput: '请学习 terminal'
     })
 
     const nextState = await learningNode({
       ...baseState,
       execution: {
         ...baseState.execution,
-        currentThought: buildLearningDecision(['history-recall'])
+        currentThought: buildLearningDecision(['terminal'])
       }
     })
 
     expect(nextState.execution.watchHint).toMatchObject({
       code: 'learning_builtin_skill_requested',
       detail: {
-        builtinSkillIds: ['history-recall']
+        builtinSkillIds: ['terminal']
       }
     })
     expect(nextState.execution.lastLearningOutcome).toMatchObject({

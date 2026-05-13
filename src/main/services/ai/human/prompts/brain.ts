@@ -2,9 +2,8 @@ import type { AiRunContext } from '../../types'
 import { renderReferenceScopeText } from '../../prompts/referenceScope'
 import { HUMAN_TOOL_USE_PLAN_LIMIT } from '../constants'
 import {
-  getEarlierAttemptRounds,
   getLastRoundFocus,
-  getLoadedHistoryContext
+  getRecentHistoryRounds
 } from '../memory/roundHistory'
 import {
   getEffectiveLearnedSkillIds,
@@ -13,7 +12,10 @@ import {
   listExternalSkillDefinitions
 } from '../skills'
 import { renderHumanStableNotes } from '../shared/memoryRenderers'
-import { renderBrainLoadedHistoryText, renderBrainRoundSection } from '../shared/historyRenderers'
+import {
+  renderBrainCompactBlocks,
+  renderBrainRoundSection
+} from '../shared/historyRenderers'
 import { getToolSpec } from '../tools/registry'
 import {
   renderBrainOutputSchemaForPrompt,
@@ -101,7 +103,11 @@ ${effectiveToolSpecLines.join('\n') || 'none'}
 `.trim()
 }
 
-export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }) => {
+export const buildBrainPrompt = (input: {
+  state: HumanState
+  ctx: AiRunContext
+  sessionMemoryText?: string
+}) => {
   const outputShapeText = indentLines(
     renderBrainOutputSchemaForPrompt(humanThoughtDecisionSchema),
     1
@@ -175,9 +181,10 @@ export const buildBrainPrompt = (input: { state: HumanState; ctx: AiRunContext }
     - search_strategy：当前任务默认遵循的检索思路提示。
     - terminal_platform：当前 terminal 所在平台；如果你决定使用命令行，应据此选择命令语法。
     - your_notes：稳定任务笔记，按“当前理解 / 关键依据 / 检查清单”组织。
-    - latest_attempt：最近一轮完整尝试记录，用于判断刚做了什么、传了什么参数、拿到了什么结果。
-    - earlier_attempts：更早轮次过程链，用于识别重复路径、失败模式和已经验证过的动作。
-    - recalled_history：主动回看的详细历史；只有明确回看后才会出现，并可能附带过滤条件。
+    - session_memory：当前会话中前序任务的滚动摘要与最近任务结果，用于理解用户在同一窗口里的连续诉求。
+    - compact_blocks：当前任务中已压缩的过程历史，用于识别较早事实、失败路径和已验证动作。
+    - recent_history：当前任务中最近未压缩的过程历史，用于判断刚才已经做过什么。
+    - latest_history：最近一轮完整过程记录，用于判断刚做了什么、传了什么参数、拿到了什么结果。
     - skill_catalog：当前已生效或仍可学习的 skills，以及当前可直接调用的工具说明。
     - correction_hint：当前额外的收敛或纠偏提示；若无则为 none。
   </context_block_guide>
@@ -278,21 +285,27 @@ ${renderSkillCatalogSection(input.state)}
   </skill_catalog>
 
   <memory>
-    <earlier_attempts>
-    ${renderBrainRoundSection(getEarlierAttemptRounds(input.state))}
-    </earlier_attempts>
+    <session_memory>
+    ${input.sessionMemoryText || 'none'}
+    </session_memory>
 
-    <recalled_history>
-    ${renderBrainLoadedHistoryText(getLoadedHistoryContext(input.state))}
-    </recalled_history>
+    <history>
+      <compact_blocks>
+      ${renderBrainCompactBlocks(input.state.memory.history.compactBlocks)}
+      </compact_blocks>
+
+      <recent_history>
+      ${renderBrainRoundSection(getRecentHistoryRounds(input.state))}
+      </recent_history>
+
+      <latest_history>
+      ${renderBrainRoundSection(getLastRoundFocus(input.state) ? [getLastRoundFocus(input.state)!] : [])}
+      </latest_history>
+    </history>
 
     <your_notes>
     ${renderHumanStableNotes(input.state, 'brain_prompt')}
     </your_notes>
-
-    <latest_attempt>
-    ${renderBrainRoundSection(getLastRoundFocus(input.state) ? [getLastRoundFocus(input.state)!] : [])}
-    </latest_attempt>
   </memory>
 
   <correction_hint>

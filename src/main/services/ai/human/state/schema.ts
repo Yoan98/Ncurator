@@ -32,7 +32,8 @@ export const createDefaultHumanStableMemory = (): HumanState['memory']['stable']
 })
 
 export const createDefaultHumanMemoryHistory = (): HumanState['memory']['history'] => ({
-  roundHistory: []
+  roundHistory: [],
+  compactBlocks: []
 })
 
 export const createDefaultHumanMemory = (): HumanState['memory'] => ({

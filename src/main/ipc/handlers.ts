@@ -10,6 +10,7 @@ import { ModelService } from '../services/model/ModelService'
 import { fetchLlmRemoteModels } from '../services/llm/modelCatalog'
 import { AiRunService } from '../services/ai/AiRunService'
 import { updateSessionMemoryAfterRun } from '../services/ai/memory'
+import { getAiContextUsage } from '../services/ai/contextUsage'
 import { FileReviewService } from '../services/ai/human/tools/docx/review/FileReviewService'
 import {
   getDraftArtifactPath,
@@ -2215,6 +2216,7 @@ export function registerHandlers(services: {
               sessionId,
               userInput: input,
               assistantOutput: result.finalDeliveryMarkdown || '',
+              artifacts: result.finalArtifacts || [],
               runtimeSettings,
               modelName: modelName || '',
               chatStore,
@@ -2258,6 +2260,17 @@ export function registerHandlers(services: {
     if (!entry) return { success: false, error: 'run not found' }
     entry.cancelled = true
     return { success: true }
+  })
+
+  ipcMain.handle('ai-context-usage-get', async (_event, payload?: { sessionId?: string }) => {
+    try {
+      const sessionId = String(payload?.sessionId || '').trim()
+      if (!sessionId) return { success: false, error: 'sessionId is required' }
+      const usage = await getAiContextUsage({ sessionId, chatStore })
+      return { success: true, ...usage }
+    } catch (e) {
+      return { success: false, error: e instanceof Error ? e.message : String(e) }
+    }
   })
 
   ipcMain.handle(

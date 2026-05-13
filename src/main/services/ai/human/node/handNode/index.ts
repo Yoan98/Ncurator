@@ -10,7 +10,6 @@ import { extractArtifactRefsFromToolResults, mergeArtifactRefs } from '../../../
 import {
   appendDecisionRound,
   buildHandExecution,
-  readLoadedHistoryContextFromToolResults
 } from '../../memory/roundHistory'
 import {
   createDeliveryGuidanceItem,
@@ -537,7 +536,6 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       state.execution.artifacts,
       extractArtifactRefsFromToolResults(results)
     )
-    const loadedHistoryContext = readLoadedHistoryContextFromToolResults(results)
     const nextState = returnToBrainAfterTrace({
       ctx: input.ctx,
       cache: input.cache,
@@ -563,17 +561,14 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
         },
         memory: {
           ...state.memory,
-          history: {
-            ...appendDecisionRound({
-              state,
-              execution: buildHandExecution({
-                toolUsePlan,
-                toolResults: results,
-                watchHint
-              })
-            }),
-            loadedHistoryContext
-          }
+          history: appendDecisionRound({
+            state,
+            execution: buildHandExecution({
+              toolUsePlan,
+              toolResults: results,
+              watchHint
+            })
+          })
         }
       }
     })

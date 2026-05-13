@@ -57,14 +57,18 @@ stateDiagram-v2
     [*] --> brain
 
     brain --> learning: nextAction=learning
+    context_budget --> brain: within budget
+    context_budget --> memory_compaction: over 80% window
+    memory_compaction --> context_budget
+
     brain --> hand: nextAction=hand
     brain --> mouth: nextAction=mouth
     brain --> brain: watchHint / retry
 
-    learning --> brain
-    hand --> brain
+    learning --> context_budget
+    hand --> context_budget
 
-    mouth --> brain: status=running (rare)
+    mouth --> context_budget: status=running (rare)
     mouth --> [*]: completed
 ```
 
@@ -73,7 +77,7 @@ stateDiagram-v2
 ### 5.1 `brain`
 
 - 职责：`human` 内唯一推理节点，负责基于当前任务、稳定记忆、过程历史与收敛提示产出新的 `HumanThoughtDecision`。
-- 主要读取：`task`、`memory.stable`、`memory.history.roundHistory`、`memory.history.loadedHistoryContext`、`execution.watchHint`、`skills.learnedSkillIds`、`ctx.referenceScope`、`ctx.workspace`。
+- 主要读取：`task`、`memory.stable`、`memory.history.roundHistory`、`memory.history.compactBlocks`、`execution.watchHint`、`skills.learnedSkillIds`、`ctx.loadSessionMemory()`、`ctx.referenceScope`、`ctx.workspace`。
 - 主要回写：`memory.stable`、`execution.currentThought`、`execution.stage`、`execution.watchHint`、必要时 `execution.deliveryGuidanceItems`、`trace.steps`。
 - 约束：输出必须通过 `ctx.chatStructured` 与 schema 校验；`memory.stable` 只能通过 patch 修改。
 - brain prompt 推荐按 `principles / thought_contract / stable_memory_contract / context_block_guide / output_contract / output_shape / examples` 组织：`principles` 承载工作方式与自主性边界，`thought_contract` 承载动作选择与 tool plan 语义，`stable_memory_contract` 承载长期任务笔记写法和更新原则，`output_contract` 只承载输出层规则。
@@ -91,7 +95,7 @@ stateDiagram-v2
 
 - 职责：承接 `brain` 已经明确决定的工具调用批次，执行并回写工具结果、过程历史与 artifacts。
 - 主要读取：`execution.currentThought.nextAction.toolUsePlan`、`skills.learnedSkillIds`、runtime cache 中已装载的工具、`memory.history.roundHistory`。
-- 主要回写：`execution.lastToolResults`、`memory.history.roundHistory`、`memory.history.loadedHistoryContext`、`execution.artifacts`、`execution.stage`、必要时 `execution.watchHint`、`trace.steps`。
+- 主要回写：`execution.lastToolResults`、`memory.history.roundHistory`、`execution.artifacts`、`execution.stage`、必要时 `execution.watchHint`、`trace.steps`。
 - 约束：不调用模型；`parallel` 只允许只读且并行安全的工具。
 - hand 对 `toolUsePlan` 先执行总长度保护；当前正式实现要求单轮计划总调用数不超过 `HUMAN_TOOL_USE_PLAN_LIMIT`，超过时直接返回 `hand_plan_invalid(reason=tool_use_plan_limit_exceeded)`，而不是继续进入串行/并行细分校验。
 - 对 docx 串行写，hand 需要执行单轮批次保护；docx 写调用数仍受独立的 docx batch limit 约束，超过时直接返回 `hand_plan_invalid(reason=docx_batch_write_limit_exceeded)`，而不是继续落工具。只要本轮实际发生过 docx 写，后续在继续写或直接 mouth 前都必须先 readback。
@@ -100,13 +104,27 @@ stateDiagram-v2
 ### 5.4 `mouth`
 
 - 职责：围绕 `task_goal` 把当前已经确定的状态组织成最终用户交付，并回写 `HumanResult`。
-- 主要读取：`task`、`reference_scope`、`memory.stable`、`memory.history.roundHistory`、`memory.history.loadedHistoryContext`、`execution.deliveryGuidanceItems`、`execution.runtimeArtifacts`、`execution.references`。
+- 主要读取：`task`、`reference_scope`、`memory.stable`、`memory.history.roundHistory`、`memory.history.compactBlocks`、`execution.deliveryGuidanceItems`、`execution.runtimeArtifacts`、`execution.references`。
 - 主要回写：`result`、`execution.status`、`execution.stage`、`trace.steps`。
 - 约束：模型输出必须通过 `ctx.chatText`；输出面向最终用户，但必须忠实于当前整体状态；`mouth` 优先吸收 `reference_scope`、`memory.stable`、结果导向的 `history` 视图、`deliveryGuidanceItems`、changed-files 视图的 `runtimeArtifacts` 与由 `brain(nextAction=mouth)` 明确产出的 `references`，不再直接消费 review 内部结构；`mouth` 必须在 markdown 正文中显式说明引用了哪些资料完成了哪些内容，且说明这些资料分别支撑了交付中的哪些位置；若补充了外部知识，也必须通过 `references(kind=external)` 明示；若开启 `emitAnswerEvents`，增量文本通过 `answer_token` 发出，完成后通过 `answer_completed` 收口。
 
+### 5.5 `context_budget`
+
+- 职责：在每次进入 `brain` 前估算当前 prompt token 使用量，并决定继续推理、触发压缩或明确失败。
+- 主要读取：`task`、`memory.stable`、`memory.history.roundHistory`、`memory.history.compactBlocks`、`ctx.loadSessionMemory()`、`ctx.humanRuntimeOverrides.modelContextWindowTokens`。
+- 主要回写：`execution.contextBudget`、`execution.stage`。
+- 约束：默认上下文窗口为 `200_000 tokens`，超过 `80%` 且存在可压缩的非 latest history 时进入 `memory_compaction`；超过窗口且没有可压缩内容时发送 `runtime_issue(context_window_exceeded)` 并失败，不做静默字符串截断。
+
+### 5.6 `memory_compaction`
+
+- 职责：单独调用 AI，把当前 run 内 `roundHistory.slice(0, -1)` 压缩为 `compactBlocks(kind=history)`。
+- 主要读取：`memory.history.roundHistory`、`execution.contextBudget`。
+- 主要回写：`memory.history.compactBlocks`、`memory.history.roundHistory`、`execution.stage`。
+- 约束：`latest_history` 永远保留原文；压缩成功后只保留最新一轮 `roundHistory`，压缩块不持久化，任务完成后依赖 `session_memory` 延续跨任务信息。
+
 ## 6. 事件与交付
 
-- 正式过程事件统一使用 `human_step`、`tool_call_*`、`watch_hint`、`file_artifact`、`draft_review_ready`、`answer_token`、`answer_completed`。
+- 正式过程事件统一使用 `human_step`、`tool_call_*`、`watch_hint`、`context_compaction_started`、`context_compaction_completed`、`file_artifact`、`draft_review_ready`、`answer_token`、`answer_completed`。
 - 不再保留旧任务编排事件。
 - `HumanTaskOutput` 只包含：
   - `taskId`

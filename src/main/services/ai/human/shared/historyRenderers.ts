@@ -3,7 +3,7 @@ import { renderInlineList, renderLineList } from '../../utils/render'
 import { summarizeWatchHint } from '../prompts/watchHints'
 import type {
   HumanHistoryToolResult,
-  HumanLoadedHistoryContext,
+  HumanCompactBlock,
   HumanRoundRecord,
   ToolCallParam
 } from '../types'
@@ -317,21 +317,17 @@ ${renderBrainRoundResult(record)}
 export const renderBrainRoundSection = (records: HumanRoundRecord[]): string =>
   records.length > 0 ? records.map(renderBrainRoundRecord).join('\n\n') : 'none'
 
-export const renderBrainLoadedHistoryText = (
-  loadedHistoryContext: HumanLoadedHistoryContext | undefined
-): string =>
-  loadedHistoryContext
-    ? `
-过滤条件：query=${loadedHistoryContext.filters.query || 'none'}；startRoundId=${String(
-        loadedHistoryContext.filters.startRoundId || 'none'
-      )}；endRoundId=${String(loadedHistoryContext.filters.endRoundId || 'none')}；limit=${String(
-        loadedHistoryContext.filters.limit || loadedHistoryContext.rounds.length
-      )}
+const renderCompactBlock = (block: HumanCompactBlock): string =>
+  `
+- compact block ${block.id}
+  - kind：${block.kind}
+  - source.roundIds：${block.source.roundIds.join(', ')}
+  - summary：
+${block.summary}
+`.trim()
 
-${renderBrainRoundSection(loadedHistoryContext.rounds)}
-`
-        .trim()
-    : 'none'
+export const renderBrainCompactBlocks = (blocks: HumanCompactBlock[]): string =>
+  blocks.length > 0 ? blocks.map(renderCompactBlock).join('\n\n') : 'none'
 
 const summarizeArrayTexts = (value: JsonValue | undefined, key: string): string[] => {
   if (!Array.isArray(value)) return []
@@ -573,14 +569,20 @@ const renderMouthFactsSection = (records: HumanRoundRecord[]): string =>
 
 export const renderMouthHistoryText = (input: {
   roundHistory: HumanRoundRecord[]
-  loadedHistoryContext: HumanLoadedHistoryContext | undefined
+  compactBlocks: HumanCompactBlock[]
 }): string =>
   `
+已压缩的过程历史：
+${renderLineList(
+  input.compactBlocks.map((block) => `- ${block.summary}`),
+  {
+    fallback: 'none',
+    style: 'plain'
+  }
+)}
+
 已发生的关键结果：
 ${renderMouthFactsSection(input.roundHistory)}
-
-主动回看的相关事实：
-${renderMouthFactsSection(input.loadedHistoryContext?.rounds || [])}
 `
     .trim()
     .replace(/\n{3,}/g, '\n\n')
