@@ -13,7 +13,7 @@ import {
   HUMAN_STEP_RESULT_STATUSES,
   HUMAN_TOOL_USE_PLAN_LIMIT,
   HUMAN_TOOL_USE_PLAN_MODES,
-  HUMAN_WATCH_HINT_CODES,
+  HUMAN_DECISION_HINT_CODES,
   RUNTIME_SKILL_IDS,
   TOOL_CALL_RESULT_CODES
 } from './constants'
@@ -40,7 +40,7 @@ export const humanStageSchema = z.enum(HUMAN_STAGES)
 export const humanStatusSchema = z.enum(HUMAN_STATUSES)
 export const humanToolUsePlanModeSchema = z.enum(HUMAN_TOOL_USE_PLAN_MODES)
 export const humanHandPlanInvalidReasonSchema = z.enum(HUMAN_HAND_PLAN_INVALID_REASONS)
-export const humanWatchHintCodeSchema = z.enum(HUMAN_WATCH_HINT_CODES)
+export const humanDecisionHintCodeSchema = z.enum(HUMAN_DECISION_HINT_CODES)
 export const docxBatchHaltReasonSchema = z.enum([
   'ambiguous_successor',
   'ambiguous_table_cell',
@@ -118,7 +118,7 @@ export const humanLearningOutcomeSchema = z.object({
   activeToolCount: z.number().int().min(0)
 })
 
-export const humanWatchHintSchema = z.discriminatedUnion('code', [
+export const humanDecisionHintSchema = z.discriminatedUnion('code', [
   z.object({
     code: z.literal('learning_no_effect'),
     detail: z.object({
@@ -293,7 +293,7 @@ export const humanExecutionSchema = z.object({
   stage: humanStageSchema,
   status: humanStatusSchema,
   currentThought: humanThoughtDecisionSchema.optional(),
-  watchHint: humanWatchHintSchema.optional(),
+  pendingDecisionHint: humanDecisionHintSchema.optional(),
   deliveryGuidanceItems: z.array(deliveryGuidanceItemSchema).optional(),
   lastToolResults: z.array(toolCallResultSchema).optional(),
   lastLearningOutcome: humanLearningOutcomeSchema.optional(),
@@ -312,18 +312,18 @@ export const humanExecutionSchema = z.object({
 export const humanRoundExecutionSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('pre_execution_blocked'),
-    watchHint: humanWatchHintSchema
+    decisionHint: humanDecisionHintSchema
   }),
   z.object({
     kind: z.literal('learning'),
     learningOutcome: humanLearningOutcomeSchema,
-    watchHint: humanWatchHintSchema.optional()
+    decisionHint: humanDecisionHintSchema.optional()
   }),
   z.object({
     kind: z.literal('hand'),
     toolUsePlan: toolUsePlanSchema,
     toolResults: z.array(humanHistoryToolResultSchema),
-    watchHint: humanWatchHintSchema.optional(),
+    decisionHint: humanDecisionHintSchema.optional(),
     artifactRefs: z.array(aiArtifactRefSchema).optional()
   }),
   z.object({
@@ -341,7 +341,7 @@ export const humanRoundRecordSchema = z.object({
 
 export const humanCompactBlockSchema = z.object({
   id: z.string().min(1),
-  kind: z.literal('history'),
+  kind: z.literal('rounds'),
   summary: z.string().min(1),
   source: z.object({
     roundIds: z.array(z.number().int().min(1)).min(1)
@@ -351,14 +351,25 @@ export const humanCompactBlockSchema = z.object({
   tokenEstimateAfter: z.number().int().min(0).optional()
 })
 
-export const humanMemoryHistorySchema = z.object({
-  roundHistory: z.array(humanRoundRecordSchema),
-  compactBlocks: z.array(humanCompactBlockSchema)
+export const humanConversationTurnSchema = z.object({
+  role: z.enum(['user', 'assistant', 'system']),
+  text: z.string()
+})
+
+export const humanConversationMemorySchema = z.object({
+  summary: z.string().nullable(),
+  recentTurns: z.array(humanConversationTurnSchema)
+})
+
+export const humanTaskRunMemorySchema = z.object({
+  rounds: z.array(humanRoundRecordSchema),
+  compactions: z.array(humanCompactBlockSchema)
 })
 
 export const humanMemorySchema = z.object({
   thought: humanThoughtSchema,
-  history: humanMemoryHistorySchema
+  conversation: humanConversationMemorySchema,
+  taskRun: humanTaskRunMemorySchema
 })
 
 export const humanSkillsSchema = z.object({

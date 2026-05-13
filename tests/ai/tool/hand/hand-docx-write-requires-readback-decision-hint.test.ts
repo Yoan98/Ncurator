@@ -7,14 +7,14 @@ import { writeTestDocxFile } from '../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 
 describe('ai tool hand backend', () => {
-  it('hand-docx-write-requires-readback-watchhint', async () => {
+  it('hand-docx-write-requires-readback-decision-hint', async () => {
     await runBackendCase({
-      caseId: 'hand-docx-write-requires-readback-watchhint',
+      caseId: 'hand-docx-write-requires-readback-decision-hint',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['hand'],
-      description: '验证一轮 hand 内只要发生 docx 写操作，就会产出必须 readback 的 watch hint。',
+      description: '验证一轮 hand 内只要发生 docx 写操作，就会产出必须 readback 的 decision hint。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -72,14 +72,14 @@ describe('ai tool hand backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.state.execution.watchHint?.code === 'docx_write_requires_readback' &&
+          result.state.execution.pendingDecisionHint?.code === 'docx_write_requires_readback' &&
             result.state.execution.lastToolResults?.[0]?.toolName === 'docx_text_edit' &&
             result.state.execution.lastToolResults?.[0]?.code === 'ok',
           {
-            name: 'docx-write-produces-readback-watchhint',
-            message: '只要 hand 成功执行过 docx 写，就应把 execution.watchHint 置为 docx_write_requires_readback。',
+            name: 'docx-write-produces-readback-decision-hint',
+            message: '只要 hand 成功执行过 docx 写，就应把 execution.pendingDecisionHint 置为 docx_write_requires_readback。',
             data: {
-              watchHint: result.state.execution.watchHint,
+              decisionHint: result.state.execution.pendingDecisionHint,
               lastToolResults: result.state.execution.lastToolResults
             }
           }

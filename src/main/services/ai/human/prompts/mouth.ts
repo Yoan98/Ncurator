@@ -68,8 +68,8 @@ ${renderHumanThought(input.state, 'mouth_prompt')}
 
   <history>
 ${renderMouthHistoryText({
-  roundHistory: input.state.memory.history.roundHistory,
-  compactBlocks: input.state.memory.history.compactBlocks
+  rounds: input.state.memory.taskRun.rounds,
+  compactions: input.state.memory.taskRun.compactions
 })}
   </history>
 

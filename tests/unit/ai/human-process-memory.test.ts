@@ -6,10 +6,10 @@ import {
   buildLearningExecution,
   getCompressibleHistoryRounds,
   getRecentHistoryRounds
-} from '../../../src/main/services/ai/human/memory/roundHistory'
+} from '../../../src/main/services/ai/human/memory/rounds'
 import {
   applyBrainDecisionState,
-  resolveBrainDecisionWatchHint
+  resolveBrainDecisionHint
 } from '../../../src/main/services/ai/human/node/utils/stateTransitionState'
 import { createInitialHumanState } from '../../../src/main/services/ai/human/state/schema'
 import type { HumanThoughtDecision } from '../../../src/main/services/ai/human/types'
@@ -49,7 +49,7 @@ describe('ai unit human memory history', () => {
           }
         ]
       },
-      watchHint: {
+      decisionHint: {
         code: 'brain_todolist_incomplete',
         detail: {
           pendingItems: ['完成最终交付前的剩余事项']
@@ -58,14 +58,14 @@ describe('ai unit human memory history', () => {
       createdAt: 1
     })
 
-    expect(nextState.memory.history.roundHistory).toHaveLength(1)
-    expect(nextState.memory.history.roundHistory[0]).toMatchObject({
+    expect(nextState.memory.taskRun.rounds).toHaveLength(1)
+    expect(nextState.memory.taskRun.rounds[0]).toMatchObject({
       roundId: 1,
       createdAt: 1,
       thought,
       execution: {
         kind: 'pre_execution_blocked',
-        watchHint: {
+        decisionHint: {
           code: 'brain_todolist_incomplete'
         }
       }
@@ -88,7 +88,7 @@ describe('ai unit human memory history', () => {
       ...initialState,
       execution: {
         ...initialState.execution,
-        watchHint: {
+        pendingDecisionHint: {
           code: 'hand_tool_limit_exceeded' as const,
           detail: {
             toolCallCount: 41,
@@ -106,7 +106,7 @@ describe('ai unit human memory history', () => {
         }
       ]
     }
-    const watchHint = resolveBrainDecisionWatchHint({
+    const decisionHint = resolveBrainDecisionHint({
       state: stateWithToolLimit,
       thought,
       thoughtMemory
@@ -116,14 +116,14 @@ describe('ai unit human memory history', () => {
       state: stateWithToolLimit,
       thought,
       thoughtMemory,
-      watchHint,
+      decisionHint,
       createdAt: 2
     })
 
-    expect(watchHint).toBeUndefined()
+    expect(decisionHint).toBeUndefined()
     expect(nextState.execution.stage).toBe('mouth')
-    expect(nextState.execution.watchHint).toBeUndefined()
-    expect(nextState.memory.history.roundHistory).toHaveLength(0)
+    expect(nextState.execution.pendingDecisionHint).toBeUndefined()
+    expect(nextState.memory.taskRun.rounds).toHaveLength(0)
   })
 
   it('clears stale execution references when next action is not mouth', () => {
@@ -162,7 +162,7 @@ describe('ai unit human memory history', () => {
     expect(nextState.execution.references).toBeUndefined()
   })
 
-  it('keeps the last round out of recent_history and trims the window to twenty rounds', () => {
+  it('keeps the last round out of prior_rounds and trims the window to twenty rounds', () => {
     const initialState = createInitialHumanState({
       taskId: 'task-2',
       userInput: '请整理历史'
@@ -182,7 +182,7 @@ describe('ai unit human memory history', () => {
         ...state,
         memory: {
           ...state.memory,
-          history: appendRoundRecord({
+          taskRun: appendRoundRecord({
             state,
             thought,
             execution:
@@ -230,7 +230,7 @@ describe('ai unit human memory history', () => {
 
     const recentHistory = getRecentHistoryRounds(stateWithHistory)
 
-    expect(stateWithHistory.memory.history.roundHistory.at(-1)?.roundId).toBe(22)
+    expect(stateWithHistory.memory.taskRun.rounds.at(-1)?.roundId).toBe(22)
     expect(recentHistory.map((record) => record.roundId)).toEqual(
       Array.from({ length: 20 }, (_, index) => index + 2)
     )
@@ -248,7 +248,7 @@ describe('ai unit human memory history', () => {
         ...state,
         memory: {
           ...state.memory,
-          history: appendRoundRecord({
+          taskRun: appendRoundRecord({
             state,
             thought: buildThought({
               summary: `第 ${round} 轮决定`,
@@ -315,7 +315,7 @@ describe('ai unit human memory history', () => {
       createdAt: 99
     })
 
-    expect(nextHistory.roundHistory[0]).toMatchObject({
+    expect(nextHistory.rounds[0]).toMatchObject({
       roundId: 1,
       createdAt: 99,
       execution: {
@@ -401,12 +401,12 @@ describe('ai unit human memory history', () => {
       createdAt: 4
     })
 
-    expect(nextHistory.roundHistory[0]?.execution.kind).toBe('hand')
-    if (nextHistory.roundHistory[0]?.execution.kind !== 'hand') {
+    expect(nextHistory.rounds[0]?.execution.kind).toBe('hand')
+    if (nextHistory.rounds[0]?.execution.kind !== 'hand') {
       throw new Error('expected hand execution')
     }
 
-    expect(nextHistory.roundHistory[0].execution.toolResults[0]?.data).toEqual({
+    expect(nextHistory.rounds[0].execution.toolResults[0]?.data).toEqual({
       ok: true,
       code: 'ok',
       sourcePath: 'graphics.docx',

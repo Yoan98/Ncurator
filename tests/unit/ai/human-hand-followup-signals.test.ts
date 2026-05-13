@@ -3,7 +3,7 @@ import { deriveHandFollowupSignals } from '../../../src/main/services/ai/human/n
 import { DOCX_POSITIONED_LAYOUT_PROTECTION_MESSAGE } from '../../../src/main/services/ai/human/tools/docx/constants'
 
 describe('ai unit hand followup signals', () => {
-  it('derives positioned write watch hint and delivery guidance from protected docx writes', () => {
+  it('derives positioned write decision hint and delivery guidance from protected docx writes', () => {
     const signals = deriveHandFollowupSignals({
       toolUsePlan: {
         mode: 'serial',
@@ -36,7 +36,7 @@ describe('ai unit hand followup signals', () => {
       ]
     })
 
-    expect(signals.watchHint).toEqual({
+    expect(signals.decisionHint).toEqual({
       code: 'hand_docx_positioned_write_blocked',
       detail: {
         targetDescription: '你刚才尝试插入表格的那处位置'
@@ -46,7 +46,7 @@ describe('ai unit hand followup signals', () => {
     expect(signals.deliveryGuidance).toContain('没有生成对应的审阅稿')
   })
 
-  it('passes through halted batch write watch hint from docx batch results', () => {
+  it('passes through halted batch write decision hint from docx batch results', () => {
     const signals = deriveHandFollowupSignals({
       toolUsePlan: {
         mode: 'serial',
@@ -71,7 +71,7 @@ describe('ai unit hand followup signals', () => {
             ok: false,
             code: 'invalid_input',
             error: 'cannot safely resolve target after earlier mutations',
-            watchHint: {
+            decisionHint: {
               code: 'hand_docx_batch_write_halted',
               detail: {
                 sourcePath: 'report.docx',
@@ -95,7 +95,7 @@ describe('ai unit hand followup signals', () => {
       ]
     })
 
-    expect(signals.watchHint).toEqual({
+    expect(signals.decisionHint).toEqual({
       code: 'hand_docx_batch_write_halted',
       detail: {
         sourcePath: 'report.docx',

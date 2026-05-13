@@ -66,14 +66,14 @@ describe('ai tool hand backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.state.execution.watchHint?.code === 'hand_plan_invalid' &&
-            result.state.execution.watchHint.detail.reason === 'docx_batch_write_limit_exceeded' &&
-            result.state.execution.watchHint.detail.limit === HUMAN_DOCX_BATCH_WRITE_LIMIT,
+          result.state.execution.pendingDecisionHint?.code === 'hand_plan_invalid' &&
+            result.state.execution.pendingDecisionHint.detail.reason === 'docx_batch_write_limit_exceeded' &&
+            result.state.execution.pendingDecisionHint.detail.limit === HUMAN_DOCX_BATCH_WRITE_LIMIT,
           {
             name: 'docx-batch-write-limit-blocks-oversized-plan',
             message: `纯 docx 段落批量写超过 ${String(HUMAN_DOCX_BATCH_WRITE_LIMIT)} 个时，应在执行前直接阻止。`,
             data: {
-              watchHint: result.state.execution.watchHint,
+              decisionHint: result.state.execution.pendingDecisionHint,
               lastToolResults: result.state.execution.lastToolResults
             }
           }

@@ -1,7 +1,7 @@
 import type { AiRunContext } from '../../types'
 import { renderReferenceScopeText } from '../../prompts/referenceScope'
 import { HUMAN_TOOL_USE_PLAN_LIMIT } from '../constants'
-import { getLastRoundFocus, getRecentHistoryRounds } from '../memory/roundHistory'
+import { getLastRoundFocus, getRecentHistoryRounds } from '../memory/rounds'
 import {
   getEffectiveLearnedSkillIds,
   getSkillDefinition,
@@ -18,7 +18,7 @@ import {
 import { humanThoughtDecisionSchema } from '../schema'
 import type { HumanState, ToolPromptExample } from '../types'
 import type { HumanToolSpec } from '../tools/types'
-import { renderWatchHintForBrain } from './watchHints'
+import { renderDecisionHintForBrain } from './decisionHints'
 
 const renderToolExample = (example: ToolPromptExample, index: number): string =>
   `${index + 1}. ${example.goal}\n${JSON.stringify(example.args, null, 2)}`
@@ -100,8 +100,8 @@ ${effectiveToolSpecLines.join('\n') || 'none'}
 export const buildBrainPrompt = (input: {
   state: HumanState
   ctx: AiRunContext
-  sessionMemoryText?: string
-  recentConversationText?: string
+  conversationSummaryText?: string
+  recentTurnsText?: string
 }) => {
   const outputShapeText = indentLines(
     renderBrainOutputSchemaForPrompt(humanThoughtDecisionSchema),
@@ -161,13 +161,13 @@ export const buildBrainPrompt = (input: {
     - search_strategy：当前任务默认遵循的检索思路提示。
     - terminal_platform：当前 terminal 所在平台；如果你决定使用命令行，应据此选择命令语法。
     - thought：当前任务推进思路，按“当前与下一步 / 待办路径 / 推进摘要”组织。
-    - session_memory：当前会话中跨任务仍有效的滚动摘要，用于理解用户在同一窗口里的连续主线、稳定偏好与当前状态。
-    - recent_conversation：最近几轮真实对话内容与产物，用于判断用户刚刚说了什么、你刚刚交付了什么。
-    - compact_blocks：当前任务中已压缩的过程历史，用于识别较早事实、失败路径和已验证动作。
-    - recent_history：当前任务中最近未压缩的过程历史，用于判断最近已经做过什么。
-    - latest_history：最近一轮完整过程记录，用于判断刚做了什么、传了什么参数、拿到了什么结果。
+    - conversation_summary：当前会话中跨任务仍有效的滚动摘要，用于理解用户在同一窗口里的连续主线、稳定偏好与当前状态。
+    - recent_turns：最近几轮真实对话内容与产物，用于判断用户刚刚说了什么、你刚刚交付了什么。
+    - compactions：当前任务中已压缩的过程历史，用于识别较早事实、失败路径和已验证动作。
+    - prior_rounds：当前任务中最近未压缩的过程历史，用于判断最近已经做过什么。
+    - latest_round：最近一轮完整过程记录，用于判断刚做了什么、传了什么参数、拿到了什么结果。
     - skill_catalog：当前已生效或仍可学习的 skills，以及当前可直接调用的工具说明。
-    - correction_hint：当前额外的收敛或纠偏提示；若无则为 none。
+    - decision_hint：当前额外的收敛或纠偏提示；若无则为 none。
   </context_block_guide>
 
   <output_contract>
@@ -277,37 +277,37 @@ ${renderPlatformText(input.ctx)}
 ${renderSkillCatalogSection(input.state)}
   </skill_catalog>
 
-  <memory>
-    <session_memory>
-    ${input.sessionMemoryText || 'none'}
-    </session_memory>
+  <conversation_context>
+    <conversation_summary>
+    ${input.conversationSummaryText || 'none'}
+    </conversation_summary>
 
-    <recent_conversation>
-    ${input.recentConversationText || 'none'}
-    </recent_conversation>
+    <recent_turns>
+    ${input.recentTurnsText || 'none'}
+    </recent_turns>
+  </conversation_context>
 
-    <history>
-      <compact_blocks>
-      ${renderBrainCompactBlocks(input.state.memory.history.compactBlocks)}
-      </compact_blocks>
+  <task_run_context>
+    <compactions>
+    ${renderBrainCompactBlocks(input.state.memory.taskRun.compactions)}
+    </compactions>
 
-      <recent_history>
-      ${renderBrainRoundSection(getRecentHistoryRounds(input.state))}
-      </recent_history>
+    <prior_rounds>
+    ${renderBrainRoundSection(getRecentHistoryRounds(input.state))}
+    </prior_rounds>
 
-      <latest_history>
-      ${renderBrainRoundSection(getLastRoundFocus(input.state) ? [getLastRoundFocus(input.state)!] : [])}
-      </latest_history>
-    </history>
+    <latest_round>
+    ${renderBrainRoundSection(getLastRoundFocus(input.state) ? [getLastRoundFocus(input.state)!] : [])}
+    </latest_round>
+  </task_run_context>
 
-    <thought>
-    ${renderHumanThought(input.state, 'brain_prompt')}
-    </thought>
-  </memory>
+  <thought>
+  ${renderHumanThought(input.state, 'brain_prompt')}
+  </thought>
 
-  <correction_hint>
-${input.state.execution.watchHint ? renderWatchHintForBrain(input.state.execution.watchHint) : 'none'}
-  </correction_hint>
+  <decision_hint>
+${input.state.execution.pendingDecisionHint ? renderDecisionHintForBrain(input.state.execution.pendingDecisionHint) : 'none'}
+  </decision_hint>
 </user_context>
 `.trim()
 

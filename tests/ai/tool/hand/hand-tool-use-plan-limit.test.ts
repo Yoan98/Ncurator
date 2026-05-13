@@ -58,16 +58,16 @@ describe('ai tool hand backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.state.execution.watchHint?.code === 'hand_plan_invalid' &&
-            result.state.execution.watchHint.detail.reason === 'tool_use_plan_limit_exceeded' &&
-            result.state.execution.watchHint.detail.limit === HUMAN_TOOL_USE_PLAN_LIMIT &&
-            result.state.execution.watchHint.detail.callCount === HUMAN_TOOL_USE_PLAN_LIMIT + 1 &&
+          result.state.execution.pendingDecisionHint?.code === 'hand_plan_invalid' &&
+            result.state.execution.pendingDecisionHint.detail.reason === 'tool_use_plan_limit_exceeded' &&
+            result.state.execution.pendingDecisionHint.detail.limit === HUMAN_TOOL_USE_PLAN_LIMIT &&
+            result.state.execution.pendingDecisionHint.detail.callCount === HUMAN_TOOL_USE_PLAN_LIMIT + 1 &&
             result.state.execution.lastToolResults === undefined,
           {
             name: 'tool-use-plan-limit-blocks-oversized-plan-before-execution',
             message: 'toolUsePlan 超出总长度上限时，应在执行前直接返回 tool_use_plan_limit_exceeded。',
             data: {
-              watchHint: result.state.execution.watchHint,
+              decisionHint: result.state.execution.pendingDecisionHint,
               lastToolResults: result.state.execution.lastToolResults
             }
           }

@@ -3,7 +3,7 @@ import {
   CONTEXT_COMPACTION_TRIGGER_RATIO,
   DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
 } from './human/constants'
-import { renderSessionMemoryForBrain } from './human/shared/sessionMemoryRenderers'
+import { renderConversationMemoryForBrain } from './human/shared/conversationMemoryRenderers'
 import { estimateTextTokens } from './human/utils/tokenEstimate'
 import { formatTurns } from './utils/runContext'
 
@@ -16,10 +16,10 @@ export const getAiContextUsage = async (input: {
   ratio: number
   updatedAt: number
 }> => {
-  const memory = await input.chatStore.getSessionMemory(input.sessionId)
+  const memory = await input.chatStore.getConversationMemory(input.sessionId)
   const messages = await input.chatStore.getRecentChatMessages(input.sessionId, 12)
   const baseText = [
-    renderSessionMemoryForBrain(memory),
+    renderConversationMemoryForBrain(memory),
     formatTurns(messages)
   ].join('\n\n')
   const usedContextTokens = estimateTextTokens(baseText)

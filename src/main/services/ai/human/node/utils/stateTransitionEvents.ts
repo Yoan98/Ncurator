@@ -1,13 +1,13 @@
 import type { AiRunContext } from '../../../types'
-import type { WatchHintSource } from '../../../../../../shared/types'
+import type { DecisionHintSource } from '../../../../../../shared/types'
 import type {
   HumanRuntimeCache,
   HumanState,
   HumanTraceStep,
-  HumanWatchHint,
+  HumanDecisionHint,
   RuntimeSkillId
 } from '../../types'
-import { renderWatchHintDetail, summarizeWatchHint } from '../../prompts/watchHints'
+import { renderDecisionHintDetail, summarizeDecisionHint } from '../../prompts/decisionHints'
 import { getEffectiveLearnedSkillIds } from '../../skills'
 import { getAvailableToolNames } from './runtimeCache'
 
@@ -53,20 +53,20 @@ const buildStepToolContext = (input: {
   })
 })
 
-export const emitWatchHint = (input: {
+export const emitDecisionHint = (input: {
   ctx: AiRunContext
   taskId?: string
-  source: WatchHintSource
-  watchHint: HumanWatchHint
+  source: DecisionHintSource
+  decisionHint: HumanDecisionHint
 }) => {
   input.ctx.sendEvent({
-    type: 'watch_hint',
+    type: 'decision_hint',
     runId: input.ctx.runId,
     taskId: input.taskId,
     source: input.source,
-    code: input.watchHint.code,
-    detail: renderWatchHintDetail(input.watchHint),
-    summary: summarizeWatchHint(input.watchHint),
+    code: input.decisionHint.code,
+    detail: renderDecisionHintDetail(input.decisionHint),
+    summary: summarizeDecisionHint(input.decisionHint),
     createdAt: Date.now(),
     stage:
       input.source === 'brain'

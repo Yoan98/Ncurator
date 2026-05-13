@@ -59,7 +59,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     driver: deps.llmDriver
   })
 
-  const loadHistory: AiRunContext['loadHistory'] = async (limits) => {
+  const loadConversationContext: AiRunContext['loadConversationContext'] = async (limits) => {
     checkCancelled()
     const recentTurns = Math.max(1, Math.min(50, Number(limits?.recentTurns ?? 12)))
     const maxRecentTurnsChars = Math.max(
@@ -71,15 +71,15 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     const messages = await deps.chatStore.getRecentChatMessages(payload.sessionId, recentTurns)
     const recentTurnsText = clipText(formatTurns(messages), maxRecentTurnsChars)
 
-    const memory = await deps.chatStore.getSessionMemory(payload.sessionId)
-    const sessionSummaryText = clipText(String(memory?.rollingSummary || ''), maxSummaryChars)
+    const memory = await deps.chatStore.getConversationMemory(payload.sessionId)
+    const conversationSummaryText = clipText(String(memory?.summary || ''), maxSummaryChars)
 
-    return { recentTurnsText, sessionSummaryText }
+    return { recentTurnsText, conversationSummaryText }
   }
 
-  const loadSessionMemory: AiRunContext['loadSessionMemory'] = async () => {
+  const loadConversationMemory: AiRunContext['loadConversationMemory'] = async () => {
     checkCancelled()
-    return await deps.chatStore.getSessionMemory(payload.sessionId)
+    return await deps.chatStore.getConversationMemory(payload.sessionId)
   }
 
   return {
@@ -96,8 +96,8 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     sendEvent: deps.sendEvent,
     recordLlmIo: deps.recordLlmIo,
     requestApproval: deps.requestApproval,
-    loadHistory,
-    loadSessionMemory,
+    loadConversationContext,
+    loadConversationMemory,
     trackDocxOpen: ({ docId, sourcePath, replaySession }) => {
       deps.fileReviewService.registerDocxOpen({
         runId: payload.runId,

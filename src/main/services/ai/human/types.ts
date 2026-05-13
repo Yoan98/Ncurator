@@ -24,7 +24,9 @@ import {
   humanHistoryToolResultSchema,
   humanLearningOutcomeSchema,
   humanCompactBlockSchema,
-  humanMemoryHistorySchema,
+  humanConversationMemorySchema,
+  humanConversationTurnSchema,
+  humanTaskRunMemorySchema,
   humanResultSchema,
   humanRoundExecutionSchema,
   humanRoundRecordSchema,
@@ -35,7 +37,7 @@ import {
   humanReferenceSchema,
   runtimeArtifactsSummarySchema,
   runtimeChangedFileSchema,
-  humanWatchHintSchema,
+  humanDecisionHintSchema,
   skillDefinitionBaseSchema,
   toolCallDiagnosticSchema,
   toolCallParamSchema,
@@ -82,9 +84,9 @@ export type ToolCallDiagnostic = z.infer<typeof toolCallDiagnosticSchema>
 export type ToolResourceContext = z.infer<typeof toolResourceContextSchema>
 export type ToolCallResult = z.infer<typeof toolCallResultSchema>
 export type HumanLearningOutcome = z.infer<typeof humanLearningOutcomeSchema>
-export type HumanWatchHint = z.infer<typeof humanWatchHintSchema>
+export type HumanDecisionHint = z.infer<typeof humanDecisionHintSchema>
 export type HumanHistoryToolResult = z.infer<typeof humanHistoryToolResultSchema>
-export type HumanCompactBlock = z.infer<typeof humanCompactBlockSchema>
+export type HumanCompactionBlock = z.infer<typeof humanCompactBlockSchema>
 export type HumanResult = z.infer<typeof humanResultSchema>
 export type HumanTraceStep = z.infer<typeof humanTraceStepSchema>
 export type HumanTaskInput = z.infer<typeof humanTaskInputSchema>
@@ -95,7 +97,9 @@ export type RuntimeChangedFile = z.infer<typeof runtimeChangedFileSchema>
 export type RuntimeArtifactsSummary = z.infer<typeof runtimeArtifactsSummarySchema>
 export type HumanRoundExecution = z.infer<typeof humanRoundExecutionSchema>
 export type HumanRoundRecord = z.infer<typeof humanRoundRecordSchema>
-export type HumanMemoryHistory = z.infer<typeof humanMemoryHistorySchema>
+export type HumanConversationTurn = z.infer<typeof humanConversationTurnSchema>
+export type HumanConversationMemory = z.infer<typeof humanConversationMemorySchema>
+export type HumanTaskRunMemory = z.infer<typeof humanTaskRunMemorySchema>
 
 export type HumanRuntimeCache = {
   familyToolsets: Partial<Record<AiToolFamilyId, StructuredToolInterface[]>>

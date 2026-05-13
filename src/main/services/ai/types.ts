@@ -18,7 +18,7 @@ import type {
   AiRunEvent,
   AiRunEventStage,
   AiRunStatus,
-  ChatSessionMemory,
+  ChatConversationMemory,
   FileReviewDetail,
   SelectedReference
 } from '../../../shared/types'
@@ -131,12 +131,12 @@ export type AiRunContext = {
   sendEvent: (event: AiRunEvent) => void
   recordLlmIo?: (record: AiLlmIoRecord) => void
   requestApproval: (request: AiApprovalRequest) => Promise<AiApprovalDecision>
-  loadHistory: (limits?: {
+  loadConversationContext: (limits?: {
     recentTurns?: number
     maxRecentTurnsChars?: number
     maxSummaryChars?: number
-  }) => Promise<{ recentTurnsText: string; sessionSummaryText: string }>
-  loadSessionMemory: () => Promise<ChatSessionMemory | null>
+  }) => Promise<{ recentTurnsText: string; conversationSummaryText: string }>
+  loadConversationMemory: () => Promise<ChatConversationMemory | null>
   trackDocxOpen: (input: {
     docId: string
     sourcePath: string

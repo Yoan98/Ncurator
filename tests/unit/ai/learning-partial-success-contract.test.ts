@@ -34,11 +34,11 @@ const createStubAiRunContext = (): AiRunContext => ({
   requestApproval: async () => ({
     approved: false
   }),
-  loadHistory: async () => ({
+  loadConversationContext: async () => ({
     recentTurnsText: '',
-    sessionSummaryText: ''
+    conversationSummaryText: ''
   }),
-  loadSessionMemory: async () => null,
+  loadConversationMemory: async () => null,
   trackDocxOpen: () => {},
   trackDocxChanges: () => {},
   resolveDocxOpenTarget: async () => {
@@ -82,14 +82,14 @@ describe('ai unit learning partial success', () => {
       }
     })
 
-    expect(nextState.execution.watchHint).toBeUndefined()
+    expect(nextState.execution.pendingDecisionHint).toBeUndefined()
     expect(nextState.execution.lastLearningOutcome).toMatchObject({
       loadedSkillIds: ['docx-write'],
       skippedDuplicateSkillIds: ['docx-read'],
       skippedUnknownSkillIds: []
     })
     expect(nextState.skills.learnedSkillIds).toEqual(['docx-read', 'docx-write'])
-    expect(nextState.memory.history.roundHistory.at(-1)?.execution.kind).toBe('learning')
+    expect(nextState.memory.taskRun.rounds.at(-1)?.execution.kind).toBe('learning')
     expect(cache.skillToolsets['docx-write']).toBeTruthy()
   })
 
@@ -110,13 +110,13 @@ describe('ai unit learning partial success', () => {
       }
     })
 
-    expect(nextState.execution.watchHint).toBeUndefined()
+    expect(nextState.execution.pendingDecisionHint).toBeUndefined()
     expect(nextState.execution.lastLearningOutcome).toMatchObject({
       loadedSkillIds: ['docx-read'],
       skippedUnknownSkillIds: ['unknown-skill']
     })
     expect(nextState.skills.learnedSkillIds).toEqual(['docx-read'])
-    expect(nextState.memory.history.roundHistory.at(-1)?.execution.kind).toBe('learning')
+    expect(nextState.memory.taskRun.rounds.at(-1)?.execution.kind).toBe('learning')
   })
 
   it('treats builtin-only requests as invalid learning', async () => {
@@ -136,7 +136,7 @@ describe('ai unit learning partial success', () => {
       }
     })
 
-    expect(nextState.execution.watchHint).toMatchObject({
+    expect(nextState.execution.pendingDecisionHint).toMatchObject({
       code: 'learning_builtin_skill_requested',
       detail: {
         builtinSkillIds: ['terminal']
@@ -147,7 +147,7 @@ describe('ai unit learning partial success', () => {
       skippedDuplicateSkillIds: []
     })
     expect(nextState.skills.learnedSkillIds).toEqual([])
-    expect(nextState.memory.history.roundHistory.at(-1)?.execution.kind).toBe('learning')
+    expect(nextState.memory.taskRun.rounds.at(-1)?.execution.kind).toBe('learning')
   })
 
   it('rejects states whose learnedSkillIds still contain builtin skills', async () => {

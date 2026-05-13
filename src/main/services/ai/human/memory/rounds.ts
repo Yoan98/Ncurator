@@ -9,19 +9,19 @@ import type {
   HumanRoundExecution,
   HumanRoundRecord,
   HumanState,
-  HumanWatchHint,
+  HumanDecisionHint,
   ToolCallResult,
   ToolUsePlan
 } from '../types'
 import { HUMAN_HISTORY_LIMITS } from './constants'
 
-const nextRoundId = (roundHistory: HumanState['memory']['history']['roundHistory']): number =>
-  (roundHistory.at(-1)?.roundId || 0) + 1
+const nextRoundId = (rounds: HumanState['memory']['taskRun']['rounds']): number =>
+  (rounds.at(-1)?.roundId || 0) + 1
 
 const trimRoundHistory = (
-  roundHistory: HumanState['memory']['history']['roundHistory']
-): HumanState['memory']['history']['roundHistory'] =>
-  roundHistory.slice(-HUMAN_HISTORY_LIMITS.roundHistory)
+  rounds: HumanState['memory']['taskRun']['rounds']
+): HumanState['memory']['taskRun']['rounds'] =>
+  rounds.slice(-HUMAN_HISTORY_LIMITS.rounds)
 
 export const buildHistoryToolResult = (result: ToolCallResult): HumanHistoryToolResult => {
   const diagnosticText = renderToolDiagnosticText(result).replace(/^；/, '').trim() || undefined
@@ -41,32 +41,32 @@ export const buildHistoryToolResult = (result: ToolCallResult): HumanHistoryTool
 }
 
 export const buildPreExecutionBlockedExecution = (
-  watchHint: HumanWatchHint
+  decisionHint: HumanDecisionHint
 ): Extract<HumanRoundExecution, { kind: 'pre_execution_blocked' }> => ({
   kind: 'pre_execution_blocked',
-  watchHint
+  decisionHint
 })
 
 export const buildLearningExecution = (input: {
   learningOutcome: HumanLearningOutcome
-  watchHint?: HumanWatchHint
+  decisionHint?: HumanDecisionHint
 }): Extract<HumanRoundExecution, { kind: 'learning' }> => ({
   kind: 'learning',
   learningOutcome: input.learningOutcome,
-  watchHint: input.watchHint
+  decisionHint: input.decisionHint
 })
 
 export const buildHandExecution = (input: {
   toolUsePlan: ToolUsePlan
   toolResults: ToolCallResult[]
-  watchHint?: HumanWatchHint
+  decisionHint?: HumanDecisionHint
 }): Extract<HumanRoundExecution, { kind: 'hand' }> => {
   const artifactRefs = extractArtifactRefsFromToolResults(input.toolResults)
   return {
     kind: 'hand',
     toolUsePlan: input.toolUsePlan,
     toolResults: input.toolResults.map(buildHistoryToolResult),
-    watchHint: input.watchHint,
+    decisionHint: input.decisionHint,
     artifactRefs: artifactRefs.length > 0 ? artifactRefs : undefined
   }
 }
@@ -83,12 +83,12 @@ export const appendRoundRecord = (input: {
   thought: HumanRoundRecord['thought']
   execution: HumanRoundExecution
   createdAt?: number
-}): HumanState['memory']['history'] => ({
-  ...input.state.memory.history,
-  roundHistory: trimRoundHistory([
-    ...input.state.memory.history.roundHistory,
+}): HumanState['memory']['taskRun'] => ({
+  ...input.state.memory.taskRun,
+  rounds: trimRoundHistory([
+    ...input.state.memory.taskRun.rounds,
     {
-      roundId: nextRoundId(input.state.memory.history.roundHistory),
+      roundId: nextRoundId(input.state.memory.taskRun.rounds),
       createdAt: input.createdAt || Date.now(),
       thought: input.thought,
       execution: input.execution
@@ -100,9 +100,9 @@ export const appendDecisionRound = (input: {
   state: HumanState
   execution: HumanRoundExecution
   createdAt?: number
-}): HumanState['memory']['history'] => {
+}): HumanState['memory']['taskRun'] => {
   if (!input.state.execution.currentThought) {
-    return input.state.memory.history
+    return input.state.memory.taskRun
   }
 
   return appendRoundRecord({
@@ -114,12 +114,12 @@ export const appendDecisionRound = (input: {
 }
 
 export const getLastRoundFocus = (state: HumanState): HumanRoundRecord | undefined =>
-  state.memory.history.roundHistory.at(-1)
+  state.memory.taskRun.rounds.at(-1)
 
 export const getRecentHistoryRounds = (state: HumanState): HumanRoundRecord[] =>
-  state.memory.history.roundHistory
+  state.memory.taskRun.rounds
     .slice(0, -1)
     .slice(-HUMAN_HISTORY_LIMITS.recentHistoryRounds)
 
 export const getCompressibleHistoryRounds = (state: HumanState): HumanRoundRecord[] =>
-  state.memory.history.roundHistory.slice(0, -1)
+  state.memory.taskRun.rounds.slice(0, -1)

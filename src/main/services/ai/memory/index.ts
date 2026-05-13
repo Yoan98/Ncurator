@@ -1,9 +1,9 @@
 import { z } from 'zod/v4'
-import type { ChatSessionMemory } from '../../../types/store'
+import type { ChatConversationMemory } from '../../../types/store'
 import { createAiLlmExecutor } from '../llmExecutor'
 import type { ChatStore } from '../../storage/domains/ChatStore'
 import type { LlmConfigStore } from '../../storage/domains/LlmConfigStore'
-import { buildSessionMemoryPrompt } from './prompts/session'
+import { buildConversationMemoryPrompt } from './prompts/conversation'
 import type {
   AiArtifactRef,
   AiLlmIoRecord,
@@ -13,15 +13,15 @@ import type {
 } from '../../../../shared/types'
 import type { AiLlmDriver } from '../llmExecutor'
 
-const rollingSummarySchema = z.object({
-  rollingSummary: z.string()
+const summarySchema = z.object({
+  summary: z.string()
 })
 
-const EMPTY_SESSION_MEMORY: ChatSessionMemory = {
-  rollingSummary: ''
+const EMPTY_CONVERSATION_MEMORY: ChatConversationMemory = {
+  summary: ''
 }
 
-export const updateSessionMemoryAfterRun = async (input: {
+export const updateConversationMemoryAfterRun = async (input: {
   runId: string
   sessionId: string
   userInput: string
@@ -38,7 +38,7 @@ export const updateSessionMemoryAfterRun = async (input: {
   const sessionId = String(input.sessionId || '').trim()
   if (!sessionId) return
 
-  const prev = (await input.chatStore.getSessionMemory(sessionId)) || EMPTY_SESSION_MEMORY
+  const prev = (await input.chatStore.getConversationMemory(sessionId)) || EMPTY_CONVERSATION_MEMORY
 
   const activeConfig = await input.llmStore.getActive()
   const modelName = String(input.modelName || '').trim()
@@ -63,24 +63,24 @@ export const updateSessionMemoryAfterRun = async (input: {
     driver: input.llmDriver
   })
 
-  const prompt = buildSessionMemoryPrompt({
-    previousRollingSummary: prev.rollingSummary,
+  const prompt = buildConversationMemoryPrompt({
+    previousSummary: prev.summary,
     latestUserMessage: String(input.userInput || ''),
     latestAssistantMessage: String(input.assistantOutput || ''),
     latestArtifacts: input.artifacts || []
   })
 
   const result = await llmExecutor.chatStructured({
-    caller: 'session.memory',
-    schema: rollingSummarySchema,
-    schemaName: 'session_memory',
+    caller: 'conversation.memory',
+    schema: summarySchema,
+    schemaName: 'conversation_summary',
     system: prompt.system,
     user: prompt.user,
     temperature: 0.2
   })
 
-  const memory: ChatSessionMemory = {
-    rollingSummary: String(result.rollingSummary || '').trim()
+  const memory: ChatConversationMemory = {
+    summary: String(result.summary || '').trim()
   }
-  await input.chatStore.saveSessionMemory(sessionId, memory)
+  await input.chatStore.saveConversationMemory(sessionId, memory)
 }

@@ -20,8 +20,8 @@ const createFakeCtx = (): AiRunContext =>
     }
   }) as AiRunContext
 
-describe('ai unit brain watchhint prompt contract', () => {
-  it('renders current watch hint only in correction_hint, not latest_history', () => {
+describe('ai unit brain decision-hint prompt contract', () => {
+  it('renders current decision hint only in decision_hint, not latest_round', () => {
     const state = createInitialHumanState({
       taskId: 'task-1',
       userInput: '继续处理 docx'
@@ -50,7 +50,7 @@ describe('ai unit brain watchhint prompt contract', () => {
       }
     }
 
-    state.memory.history.roundHistory = [
+    state.memory.taskRun.rounds = [
       {
         roundId: 1,
         createdAt: 1,
@@ -74,7 +74,7 @@ describe('ai unit brain watchhint prompt contract', () => {
               diagnosticText: 'cannot safely resolve target after earlier mutations'
             }
           ],
-          watchHint: {
+          decisionHint: {
             code: 'hand_docx_batch_write_halted',
             detail: {
               sourcePath: 'report.docx',
@@ -94,7 +94,7 @@ describe('ai unit brain watchhint prompt contract', () => {
       }
     ]
 
-    state.execution.watchHint = {
+    state.execution.pendingDecisionHint = {
       code: 'hand_docx_batch_write_halted',
       detail: {
         sourcePath: 'report.docx',
@@ -116,8 +116,8 @@ describe('ai unit brain watchhint prompt contract', () => {
       ctx: createFakeCtx()
     }).user
 
-    const latestHistorySection = prompt.match(/<latest_history>([\s\S]*?)<\/latest_history>/)?.[1] || ''
-    const correctionHintSection = prompt.match(/<correction_hint>([\s\S]*?)<\/correction_hint>/)?.[1] || ''
+    const latestHistorySection = prompt.match(/<latest_round>([\s\S]*?)<\/latest_round>/)?.[1] || ''
+    const correctionHintSection = prompt.match(/<decision_hint>([\s\S]*?)<\/decision_hint>/)?.[1] || ''
 
     expect(latestHistorySection).not.toContain('上一轮 docx 批量写在中途安全停止。')
     expect(correctionHintSection).toContain('上一轮 docx 批量写在中途安全停止。')

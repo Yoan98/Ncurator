@@ -32,11 +32,11 @@ const createStubAiRunContext = (): AiRunContext => ({
   requestApproval: async () => ({
     approved: false
   }),
-  loadHistory: async () => ({
+  loadConversationContext: async () => ({
     recentTurnsText: '',
-    sessionSummaryText: ''
+    conversationSummaryText: ''
   }),
-  loadSessionMemory: async () => null,
+  loadConversationMemory: async () => null,
   trackDocxOpen: () => {},
   trackDocxChanges: () => {},
   resolveDocxOpenTarget: async () => {

@@ -1,5 +1,5 @@
 import type { JsonObject } from '../../../../../../shared/types'
-import type { HumanWatchHint, ToolCallResult, ToolUsePlan } from '../../types'
+import type { HumanDecisionHint, ToolCallResult, ToolUsePlan } from '../../types'
 import { isDocxPositionedLayoutProtectionMessage } from '../../tools/docx/constants'
 
 const DOCX_WRITE_TOOL_NAMES = new Set([
@@ -53,12 +53,12 @@ const buildPositionedWriteBlockedSignals = (input: {
   toolName: string
   args?: JsonObject
 }): {
-  watchHint: Extract<HumanWatchHint, { code: 'hand_docx_positioned_write_blocked' }>
+  decisionHint: Extract<HumanDecisionHint, { code: 'hand_docx_positioned_write_blocked' }>
   deliveryGuidance: string
 } => {
   const targetDescription = describePositionedTarget(input.toolName, input.args)
   return {
-    watchHint: {
+    decisionHint: {
       code: 'hand_docx_positioned_write_blocked',
       detail: {
         targetDescription
@@ -72,17 +72,17 @@ export const deriveHandFollowupSignals = (input: {
   toolUsePlan: ToolUsePlan
   results: readonly ToolCallResult[]
 }): {
-  watchHint?: HumanWatchHint
+  decisionHint?: HumanDecisionHint
   deliveryGuidance?: string
 } => {
   for (const [index, result] of input.results.entries()) {
     if (!DOCX_WRITE_TOOL_NAMES.has(result.toolName) || result.ok) continue
     const haltedHint = result.data && typeof result.data === 'object' && !Array.isArray(result.data)
-      ? (result.data as { watchHint?: HumanWatchHint }).watchHint
+      ? (result.data as { decisionHint?: HumanDecisionHint }).decisionHint
       : undefined
     if (haltedHint?.code === 'hand_docx_batch_write_halted') {
       return {
-        watchHint: haltedHint
+        decisionHint: haltedHint
       }
     }
     if (!isDocxPositionedLayoutProtectionMessage(result.diagnostic?.message)) continue
@@ -107,7 +107,7 @@ export const deriveHandFollowupSignals = (input: {
         .filter((value): value is string => typeof value === 'string' && value.length > 0)
     )]
     return {
-      watchHint: {
+      decisionHint: {
         code: 'docx_write_requires_readback',
         detail: {
           sourcePaths,
@@ -125,5 +125,5 @@ export const shouldStopSerialHandPlan = (input: {
   results: readonly ToolCallResult[]
 }): boolean =>
   ['hand_docx_positioned_write_blocked', 'hand_docx_batch_write_halted'].includes(
-    deriveHandFollowupSignals(input).watchHint?.code || ''
+    deriveHandFollowupSignals(input).decisionHint?.code || ''
   )

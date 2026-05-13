@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { AiRunContext } from '../../../types'
-import { getCompressibleHistoryRounds, getLastRoundFocus } from '../../memory/roundHistory'
+import { getCompressibleHistoryRounds, getLastRoundFocus } from '../../memory/rounds'
 import { CONTEXT_COMPACTION_TARGET_RATIO } from '../../constants'
 import { buildHistoryCompactionPrompt } from '../../prompts/compaction'
 import { renderBrainRoundSection } from '../../shared/historyRenderers'
@@ -28,7 +28,7 @@ export const createMemoryCompactionNode = (input: {
     }
 
     const currentHistoryBlock =
-      state.memory.history.compactBlocks.find((block) => block.kind === 'history') || null
+      state.memory.taskRun.compactions.find((block) => block.kind === 'rounds') || null
     const mergedRoundIds = Array.from(
       new Set([
         ...(currentHistoryBlock?.source.roundIds || []),
@@ -64,7 +64,7 @@ export const createMemoryCompactionNode = (input: {
     const compactBlockId = randomUUID()
     const compactBlock = {
       id: compactBlockId,
-      kind: 'history' as const,
+      kind: 'rounds' as const,
       summary: String(summary || '').trim() || '已压缩较早过程历史。',
       source: {
         roundIds: mergedRoundIds
@@ -94,12 +94,12 @@ export const createMemoryCompactionNode = (input: {
       },
       memory: {
         ...state.memory,
-        history: {
-          compactBlocks: [
-            ...state.memory.history.compactBlocks.filter((block) => block.kind !== 'history'),
+        taskRun: {
+          compactions: [
+            ...state.memory.taskRun.compactions.filter((block) => block.kind !== 'rounds'),
             compactBlock
           ],
-          roundHistory: latestRound ? [latestRound] : []
+          rounds: latestRound ? [latestRound] : []
         }
       }
     }

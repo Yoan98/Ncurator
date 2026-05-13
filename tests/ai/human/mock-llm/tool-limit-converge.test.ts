@@ -15,7 +15,7 @@ describe('ai human mock-llm backend', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证真实 hand node 超过 hardActionLimit 后会发出收敛型 watch_hint。',
+      description: '验证真实 hand node 超过 hardActionLimit 后会发出收敛型 decision_hint。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -71,20 +71,20 @@ describe('ai human mock-llm backend', () => {
         }
       },
       assert: async (result, runtime) => {
-        const watchHints = filterAiRunEventsByType(result.events, 'watch_hint')
+        const decisionHints = filterAiRunEventsByType(result.events, 'decision_hint')
 
         runtime.assertThat(
           result.output.status === 'completed' &&
-            watchHints.some(
+            decisionHints.some(
               (event) =>
                 event.source === 'hand' &&
                 event.code === 'hand_tool_limit_exceeded' &&
                 event.detail?.limit === 1
             ),
           {
-            name: 'hand-emits-tool-limit-watchhint',
-            message: '真实 hand node 超过 hardActionLimit 后应写出收敛型 watch_hint。',
-            data: watchHints
+            name: 'hand-emits-tool-limit-decision-hint',
+            message: '真实 hand node 超过 hardActionLimit 后应写出收敛型 decision_hint。',
+            data: decisionHints
           }
         )
       }

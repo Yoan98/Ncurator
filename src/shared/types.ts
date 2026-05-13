@@ -692,7 +692,7 @@ export type AiLlmIoRecord = {
 }
 export type HumanStepAction = 'brain_decision' | 'learn_skill' | 'call_tool' | 'deliver_result'
 export type HumanStepResultStatus = 'ok' | 'error'
-export type WatchHintSource = 'brain' | 'learning' | 'hand' | 'memory_reducer'
+export type DecisionHintSource = 'brain' | 'learning' | 'hand' | 'memory_reducer'
 
 export type AiRuntimeSettings = {
   llmStreamingMode: AiLlmStreamingMode
@@ -890,10 +890,10 @@ type AiRunEventPayload =
       createdAt: number
     }
   | {
-      type: 'watch_hint'
+      type: 'decision_hint'
       runId: string
       taskId?: string
-      source: WatchHintSource
+      source: DecisionHintSource
       code: string
       detail?: JsonObject
       summary: string
@@ -1018,11 +1018,11 @@ export type AiRunEvent = AiRunEventPayload & {
   stage?: AiRunEventStage
 }
 
-export type ChatSessionMemory = {
-  rollingSummary: string
+export type ChatConversationMemory = {
+  summary: string
 }
 
-export type ChatSessionMemoryRow = {
+export type ChatConversationMemoryRow = {
   session_id: string
   memory_json: string
   updated_at: number

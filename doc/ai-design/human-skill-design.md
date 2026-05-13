@@ -104,7 +104,7 @@
 - 如果 `learnedSkillIds` 中出现 builtin skill，说明状态已经不符合当前运行时语义，应直接按状态错误处理，而不是兼容清洗。
 - `brain` 真正可见、可用的能力集合，是 builtin + learned external，也就是 effective skills。
 - `skill_catalog` 应渲染 effective skills，而不是原始文件列表或实现目录。
-- `learning` 的结果会进入 `lastLearningOutcome` 与 `roundHistory`，但 skill 的完整说明不应长期持久化进 `HumanState`。
+- `learning` 的结果会进入 `lastLearningOutcome` 与 `rounds`，但 skill 的完整说明不应长期持久化进 `HumanState`。
 
 ## 8. 维护规则
 

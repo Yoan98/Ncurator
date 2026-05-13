@@ -132,7 +132,7 @@ describe('ai tool hand backend', () => {
             message: '同批 replace 后继续 insert_after 同锚点时，应通过 successor/live resolve 与 continuation 继续成功，而不是因旧 blockId 失效中断。',
             data: {
               lastToolResults: result.state.execution.lastToolResults,
-              watchHint: result.state.execution.watchHint,
+              decisionHint: result.state.execution.pendingDecisionHint,
               outline: outline.blocks
             }
           }

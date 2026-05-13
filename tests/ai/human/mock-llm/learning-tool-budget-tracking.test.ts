@@ -84,7 +84,7 @@ describe('ai human mock-llm backend', () => {
             latestLearningStep.availableToolNames.length === 14 &&
             latestLearningStep.summary.includes('当前 active tools=') &&
             !latestLearningStep.summary.includes('已淘汰最早学习的 skill=') &&
-            filterAiRunEventsByType(result.events, 'watch_hint').some(
+            filterAiRunEventsByType(result.events, 'decision_hint').some(
               (event) =>
                 event.source === 'learning' &&
                 event.code === 'learning_builtin_skill_requested' &&

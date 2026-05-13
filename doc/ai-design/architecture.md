@@ -30,7 +30,7 @@ flowchart TD
 ### `brain`
 
 - 是唯一推理节点。
-- 读取任务输入、稳定记忆、过程历史、已学习 skill 与收敛提示。
+- 读取任务输入、稳定记忆、过程历史、已学习 skill 与决策提示。
 - 决定下一步进入 `learning`、`hand` 还是 `mouth`。
 
 ### `learning`

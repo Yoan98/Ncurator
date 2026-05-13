@@ -1,9 +1,9 @@
 import type { JsonObject, JsonValue } from '../../../../../shared/types'
 import { renderInlineList, renderLineList } from '../../utils/render'
-import { summarizeWatchHint } from '../prompts/watchHints'
+import { summarizeDecisionHint } from '../prompts/decisionHints'
 import type {
   HumanHistoryToolResult,
-  HumanCompactBlock,
+  HumanCompactionBlock,
   HumanRoundRecord,
   ToolCallParam
 } from '../types'
@@ -334,16 +334,16 @@ ${renderBrainRoundResult(record)}
 export const renderBrainRoundSection = (records: HumanRoundRecord[]): string =>
   records.length > 0 ? records.map(renderBrainRoundRecord).join('\n\n') : 'none'
 
-const renderCompactBlock = (block: HumanCompactBlock): string =>
+const renderCompactBlock = (block: HumanCompactionBlock): string =>
   `
-- compact block ${block.id}
+- compaction block ${block.id}
   - kind：${block.kind}
   - source.roundIds：${block.source.roundIds.join(', ')}
   - summary：
 ${block.summary}
 `.trim()
 
-export const renderBrainCompactBlocks = (blocks: HumanCompactBlock[]): string =>
+export const renderBrainCompactBlocks = (blocks: HumanCompactionBlock[]): string =>
   blocks.length > 0 ? blocks.map(renderCompactBlock).join('\n\n') : 'none'
 
 const summarizeArrayTexts = (value: JsonValue | undefined, key: string): string[] => {
@@ -533,12 +533,12 @@ const summarizeToolResultForMouth = (input: {
 const renderMouthRoundFacts = (record: HumanRoundRecord): string[] => {
   switch (record.execution.kind) {
     case 'pre_execution_blocked':
-      return [`执行前被阻断：${summarizeWatchHint(record.execution.watchHint)}`]
+      return [`执行前被阻断：${summarizeDecisionHint(record.execution.decisionHint)}`]
     case 'learning': {
       const loaded = record.execution.learningOutcome.loadedSkillIds
       const facts = loaded.length > 0 ? [`已补齐技能：${loaded.join('、')}`] : []
-      if (record.execution.watchHint) {
-        facts.push(`收敛提示：${summarizeWatchHint(record.execution.watchHint)}`)
+      if (record.execution.decisionHint) {
+        facts.push(`决策提示：${summarizeDecisionHint(record.execution.decisionHint)}`)
       }
       return facts
     }
@@ -550,8 +550,8 @@ const renderMouthRoundFacts = (record: HumanRoundRecord): string[] => {
           call: execution.toolUsePlan.calls[index]
         })
       )
-      if (execution.watchHint) {
-        facts.push(`收敛提示：${summarizeWatchHint(execution.watchHint)}`)
+      if (execution.decisionHint) {
+        facts.push(`决策提示：${summarizeDecisionHint(execution.decisionHint)}`)
       }
       if (execution.artifactRefs && execution.artifactRefs.length > 0) {
         facts.push(
@@ -585,13 +585,13 @@ const renderMouthFactsSection = (records: HumanRoundRecord[]): string =>
   )
 
 export const renderMouthHistoryText = (input: {
-  roundHistory: HumanRoundRecord[]
-  compactBlocks: HumanCompactBlock[]
+  rounds: HumanRoundRecord[]
+  compactions: HumanCompactionBlock[]
 }): string =>
   `
 已压缩的过程历史：
 ${renderLineList(
-  input.compactBlocks.map((block) => `- ${block.summary}`),
+  input.compactions.map((block) => `- ${block.summary}`),
   {
     fallback: 'none',
     style: 'plain'
@@ -599,7 +599,7 @@ ${renderLineList(
 )}
 
 已发生的关键结果：
-${renderMouthFactsSection(input.roundHistory)}
+${renderMouthFactsSection(input.rounds)}
 `
     .trim()
     .replace(/\n{3,}/g, '\n\n')

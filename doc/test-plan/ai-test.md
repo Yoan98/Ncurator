@@ -469,7 +469,7 @@
 - Why：这条 case 同时覆盖表格 cell 恢复与 continuation 方向保护，是更接近真实风险周报的链式写路径。
 - How：真实执行 `insert_before paragraph -> update_cell -> insert_after paragraph`，其中前后插入共用同一原锚点。
 - Oracle：前插内容位于原锚点前，后插内容位于原锚点后，表格 cell 正确更新，整批结束后留下 `docx_write_requires_readback`。
-- Not：不验证 halted watch hint 分支。
+- Not：不验证 halted decision hint 分支。
 
 ##### `hand-docx-serial-snapshot-bound-edit-plan-invalid-target`
 
@@ -708,18 +708,18 @@
 - 实现状态：`已实现`
 - What：验证真实 `learning` 会持续记录当前 active tool 数，并在预算未超限时保留当前已学习 skill 集。
 - Why：`learning` 的 active tool 预算是后续扩展 `excel / ppt` 等新能力时的重要长期边界，正式 case 需要先守住基础统计与状态可见性。
-- How：通过 scripted structured output 依次学习 `docx-read`、`docx-write`，再故意请求 builtin skill（如 `terminal + kb-retrieval`）；检查最后一轮真实 `human_learning` 事件中的 `learnedSkillIds`、`availableToolNames` 与 summary，并确认出现 builtin learning watch hint。
+- How：通过 scripted structured output 依次学习 `docx-read`、`docx-write`，再故意请求 builtin skill（如 `terminal + kb-retrieval`）；检查最后一轮真实 `human_learning` 事件中的 `learnedSkillIds`、`availableToolNames` 与 summary，并确认出现 builtin learning decision hint。
 - Oracle：任务最终完成；最后一轮真实 `human_learning` 事件中只保留 external skill，`availableToolNames` 同时包含 builtin 与 learned external 的工具集合，summary 包含 `当前 active tools=` 且不包含 skill 淘汰文案；builtin skill 不占 active tool budget，但后续真实执行时仍计入工具调用次数限制。
 - Not：不验证超过 `20` 个 active tools 后的淘汰算法细节。
 
-##### `watchhint-retry`
+##### `decision-hint-retry`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 duplicate external learning 触发真实 `watch_hint` 后，graph 会回到 `brain` 并继续推进。
-- Why：`watch_hint -> brain` 是 `human` 的核心收敛边之一，断掉后很多异常都无法恢复。
-- How：第一轮先学习一个 external skill（如 `docx-read`），第二轮故意重复学习同一个 external skill 触发 learning watch hint，随后再执行一次真实 `terminal_run(pwd)` 并完成交付。
-- Oracle：事件流中真实出现 source 为 `learning` 的 `watch_hint`，并且在它之后仍发生真实 terminal 工具调用，任务最终完成。
+- What：验证 duplicate external learning 触发真实 `decision_hint` 后，graph 会回到 `brain` 并继续推进。
+- Why：`decision_hint -> brain` 是 `human` 的核心收敛边之一，断掉后很多异常都无法恢复。
+- How：第一轮先学习一个 external skill（如 `docx-read`），第二轮故意重复学习同一个 external skill 触发 learning decision hint，随后再执行一次真实 `terminal_run(pwd)` 并完成交付。
+- Oracle：事件流中真实出现 source 为 `learning` 的 `decision_hint`，并且在它之后仍发生真实 terminal 工具调用，任务最终完成。
 - Not：不验证 live 模型是否会自然产生这类重复决策。
 
 ##### `tool-failure-recovery`
@@ -736,10 +736,10 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证真实 `hand` 在超过 `hardActionLimit` 后会发出收敛型 `watch_hint`。
+- What：验证真实 `hand` 在超过 `hardActionLimit` 后会发出收敛型 `decision_hint`。
 - Why：工具调用上限是 autonomous 执行的重要失控保护，必须通过真实执行链守住。
 - How：把 `hardActionLimit` 设为 `1`，先后真实执行两次只读 terminal 命令，让第二次调用命中上限保护。
-- Oracle：事件流中出现 source 为 `hand` 且摘要包含“超过临时上限 1”的 `watch_hint`，任务最终完成。
+- Oracle：事件流中出现 source 为 `hand` 且摘要包含“超过临时上限 1”的 `decision_hint`，任务最终完成。
 - Not：不验证更高层是否继续扩展计划。
 
 ##### `approval-denied-restricted-delivery`
@@ -762,24 +762,24 @@
 - Oracle：第二轮 `brain` prompt 中出现前一轮写入的 todolist 与 progressionSummary 内容，任务最终完成。
 - Not：不验证更复杂的 memory 压缩策略。
 
-##### `session-memory-update-and-prompt`
+##### `conversation-memory-update-and-prompt`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 run 完成后写入新版 `ChatSessionMemory`，且下一次 human 的 `brain` prompt 会渲染 `session_memory`。
-- Why：跨任务连续性现在依赖持久 session memory，必须守住 AI 只更新 `rollingSummary`，近期真实对话与 artifacts 则来自 `chat_message`。
-- How：seed 会话 memory 与最近消息，调用真实 `updateSessionMemoryAfterRun`，再启动同一 session 的真实 human graph 并检查第二次 `brain` prompt。
-- Oracle：保存结构只包含新版 `rollingSummary`；下一次 `brain` prompt 同时含 `<session_memory>` 与 `<recent_conversation>`，且 recent conversation 中可看到最近 assistant 产物信息。
+- What：验证 run 完成后写入新版 `ChatConversationMemory`，且下一次 human 的 `brain` prompt 会渲染 `conversation_summary`。
+- Why：跨任务连续性现在依赖持久 conversation memory，必须守住 AI 只更新 `summary`，近期真实对话与 artifacts 则来自 `chat_message`。
+- How：seed 会话 memory 与最近消息，调用真实 `updateConversationMemoryAfterRun`，再启动同一 session 的真实 human graph 并检查第二次 `brain` prompt。
+- Oracle：保存结构只包含新版 `summary`；下一次 `brain` prompt 同时含 `<conversation_summary>` 与 `<recent_turns>`，且 recent turns 中可看到最近 assistant 产物信息。
 - Not：不验证 live 模型总结质量。
 
 ##### `context-compaction-history-block`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证低上下文窗口下真实触发 `memory_compaction`，并把较早 `roundHistory` 转成 `compact_blocks`。
+- What：验证低上下文窗口下真实触发 `memory_compaction`，并把较早 `rounds` 转成 `compactions`。
 - Why：run 内长链路压缩是防止 brain prompt 膨胀的核心保护，必须通过真实 graph 路由守住。
 - How：通过低 `modelContextWindowTokens` override 先产生多轮历史，再触发 `context_budget -> memory_compaction -> context_budget -> brain`。
-- Oracle：事件流出现 `context_compaction_started / context_compaction_completed`；`human.memory_compaction` 被调用；后续 `brain` prompt 出现 `<compact_blocks>`，且被压缩的旧 round 不再作为未压缩 recent/latest history 渲染。
+- Oracle：事件流出现 `context_compaction_started / context_compaction_completed`；`human.memory_compaction` 被调用；后续 `brain` prompt 出现 `<compactions>`，且被压缩的旧 round 不再作为未压缩 prior/latest round 渲染。
 - Not：不验证压缩摘要内容质量。
 
 ##### `todolist-memory-maintenance`
@@ -844,14 +844,14 @@
 
 #### `live`
 
-##### `human-session-memory-and-compaction-live`
+##### `human-conversation-memory-and-compaction-live`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 live 模式下 session memory 总结与 human history 压缩节点都能真实调用模型并写回结构化结果。
+- What：验证 live 模式下 conversation memory 总结与 human history 压缩节点都能真实调用模型并写回结构化结果。
 - Why：记忆与压缩是新增 AI 调用链路，必须至少有一条 live case 守住真实模型可用性。
-- How：先通过真实 `session.memory` 更新 `ChatSessionMemory`，再构造两轮 run 内 history 并直接执行真实 `memory_compaction` 节点。
-- Oracle：`rollingSummary` 非空；压缩后产生一个 `compactBlocks(kind=history)`，`roundHistory` 只保留 latest；事件流出现 `context_compaction_started / context_compaction_completed`。
+- How：先通过真实 `conversation.memory` 更新 `ChatConversationMemory`，再构造两轮 run 内 history 并直接执行真实 `memory_compaction` 节点。
+- Oracle：`summary` 非空；压缩后产生一个 `compactions(kind=rounds)`，`rounds` 只保留 latest；事件流出现 `context_compaction_started / context_compaction_completed`。
 - Not：不验证 live 模型在完整 autonomous graph 中是否自然触发压缩。
 
 ##### `human-risk-report-draft-live`
@@ -907,6 +907,6 @@
 ## 6. 验收口径
 
 - `tool` suite 必须持续守住真实工具输入输出、审批边界和 artifact 契约。
-- `human/mock-llm` 必须覆盖 `AiRunService -> human` 入口、`brain / learning / hand / mouth` 主链、memory 延续、watch hint 收敛与复杂工具协作。
+- `human/mock-llm` 必须覆盖 `AiRunService -> human` 入口、`brain / learning / hand / mouth` 主链、memory 延续、decision hint 收敛与复杂工具协作。
 - `human/live` 必须至少保留 1 条简单任务和 1 条复杂任务正式 case。
 - `human` suite 必须继续支撑 `WB-CORE-002`、`WB-CORE-003`、`WB-CORE-004`、`WB-CORE-005`、`WB-CORE-006`。

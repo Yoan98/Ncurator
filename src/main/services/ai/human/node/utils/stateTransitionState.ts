@@ -4,7 +4,7 @@ import {
   appendRoundRecord,
   buildMouthExecution,
   buildPreExecutionBlockedExecution
-} from '../../memory/roundHistory'
+} from '../../memory/rounds'
 import { getToolSpec } from '../../tools/registry'
 import type {
   HumanThoughtDecision,
@@ -12,7 +12,7 @@ import type {
   HumanThought,
   HumanState,
   HumanTraceStep,
-  HumanWatchHint
+  HumanDecisionHint
 } from '../../types'
 
 const DOCX_READ_TOOL_NAMES = new Set(['docx_outline', 'docx_read_blocks'])
@@ -34,9 +34,9 @@ const docxPathMatchesReadbackTarget = (input: {
   )
 }
 
-const docxReadSatisfiesWatchHint = (input: {
+const docxReadSatisfiesDecisionHint = (input: {
   thought: HumanThoughtDecision
-  watchHint: Extract<HumanWatchHint, { code: 'docx_write_requires_readback' }>
+  decisionHint: Extract<HumanDecisionHint, { code: 'docx_write_requires_readback' }>
 }): boolean => {
   if (input.thought.nextAction.action !== 'hand') return false
 
@@ -49,8 +49,8 @@ const docxReadSatisfiesWatchHint = (input: {
       typeof call.args.sourcePath === 'string' ? call.args.sourcePath : undefined
     if (
       requestedPath &&
-      input.watchHint.detail.sourcePaths.length > 0 &&
-      !input.watchHint.detail.sourcePaths.some((sourcePath) =>
+      input.decisionHint.detail.sourcePaths.length > 0 &&
+      !input.decisionHint.detail.sourcePaths.some((sourcePath) =>
         docxPathMatchesReadbackTarget({
           sourcePath,
           requestedPath
@@ -64,10 +64,10 @@ const docxReadSatisfiesWatchHint = (input: {
 }
 
 const buildDocxReadbackBlockedHint = (
-  watchHint: Extract<HumanWatchHint, { code: 'docx_write_requires_readback' }>
-): HumanWatchHint => ({
+  decisionHint: Extract<HumanDecisionHint, { code: 'docx_write_requires_readback' }>
+): HumanDecisionHint => ({
   code: 'docx_write_requires_readback',
-  detail: watchHint.detail
+  detail: decisionHint.detail
 })
 
 export type HumanTraceItemInput = {
@@ -133,7 +133,7 @@ export const returnToBrainState = (
 export const returnToBrainAfterTraceState = (input: {
   state: HumanState
   traceItems: HumanTraceItemInput[]
-  watchHint?: HumanWatchHint
+  decisionHint?: HumanDecisionHint
   overrides?: HumanStateOverrides<'trace'>
 }): HumanState => {
   const traceSteps = appendHumanTraceSteps({
@@ -145,7 +145,7 @@ export const returnToBrainAfterTraceState = (input: {
     ...input.overrides,
     execution: {
       ...input.overrides?.execution,
-      watchHint: input.watchHint
+      pendingDecisionHint: input.decisionHint
     },
     trace: {
       steps: traceSteps
@@ -153,24 +153,24 @@ export const returnToBrainAfterTraceState = (input: {
   })
 }
 
-export const resolveBrainDecisionWatchHint = (input: {
+export const resolveBrainDecisionHint = (input: {
   state: HumanState
   thought: HumanThoughtDecision
   thoughtMemory: HumanThought
-  watchHint?: HumanWatchHint
-}): HumanWatchHint | undefined => {
-  if (input.watchHint) return input.watchHint
-  if (input.state.execution.watchHint?.code === 'docx_write_requires_readback') {
+  decisionHint?: HumanDecisionHint
+}): HumanDecisionHint | undefined => {
+  if (input.decisionHint) return input.decisionHint
+  if (input.state.execution.pendingDecisionHint?.code === 'docx_write_requires_readback') {
     if (
       input.thought.nextAction.action === 'hand' &&
-      docxReadSatisfiesWatchHint({
+      docxReadSatisfiesDecisionHint({
         thought: input.thought,
-        watchHint: input.state.execution.watchHint
+        decisionHint: input.state.execution.pendingDecisionHint
       })
     ) {
       return undefined
     }
-    return buildDocxReadbackBlockedHint(input.state.execution.watchHint)
+    return buildDocxReadbackBlockedHint(input.state.execution.pendingDecisionHint)
   }
   if (input.thought.nextAction.action !== 'mouth') return undefined
 
@@ -178,7 +178,7 @@ export const resolveBrainDecisionWatchHint = (input: {
     .filter((item) => item.status === 'todo')
     .map((item) => item.item)
 
-  if (input.state.execution.watchHint?.code === 'hand_tool_limit_exceeded') {
+  if (input.state.execution.pendingDecisionHint?.code === 'hand_tool_limit_exceeded') {
     return undefined
   }
 
@@ -193,10 +193,10 @@ export const resolveBrainDecisionWatchHint = (input: {
 }
 
 const resolveBrainNextStage = (input: {
-  watchHint?: HumanWatchHint
+  decisionHint?: HumanDecisionHint
   thought: HumanThoughtDecision
 }): HumanState['execution']['stage'] => {
-  if (input.watchHint) return 'brain'
+  if (input.decisionHint) return 'brain'
   return input.thought.nextAction.action === 'learning'
     ? 'learning'
     : input.thought.nextAction.action === 'hand'
@@ -208,11 +208,11 @@ export const applyBrainDecisionState = (input: {
   state: HumanState
   thought: HumanThoughtDecision
   thoughtMemory: HumanThought
-  watchHint?: HumanWatchHint
+  decisionHint?: HumanDecisionHint
   createdAt: number
 }): HumanState => {
   const references =
-    !input.watchHint && input.thought.nextAction.action === 'mouth'
+    !input.decisionHint && input.thought.nextAction.action === 'mouth'
       ? input.thought.nextAction.references
       : undefined
 
@@ -221,25 +221,26 @@ export const applyBrainDecisionState = (input: {
     execution: {
       ...input.state.execution,
       stage: resolveBrainNextStage({
-        watchHint: input.watchHint,
+        decisionHint: input.decisionHint,
         thought: input.thought
       }),
       status: 'running',
       currentThought: input.thought,
-      watchHint: input.watchHint,
+      pendingDecisionHint: input.decisionHint,
       references
     },
     memory: {
+      ...input.state.memory,
       thought: input.thoughtMemory,
-      history: input.watchHint
+      taskRun: input.decisionHint
         ? appendRoundRecord({
             state: input.state,
             thought: input.thought,
-            execution: buildPreExecutionBlockedExecution(input.watchHint),
+            execution: buildPreExecutionBlockedExecution(input.decisionHint),
             createdAt: input.createdAt
           })
         : {
-            ...input.state.memory.history
+            ...input.state.memory.taskRun
           }
     },
     trace: {
@@ -277,7 +278,7 @@ export const completeHumanTaskState = (input: {
   },
   memory: {
     ...input.state.memory,
-    history: appendDecisionRound({
+    taskRun: appendDecisionRound({
       state: input.state,
       execution: buildMouthExecution({
         completed: true

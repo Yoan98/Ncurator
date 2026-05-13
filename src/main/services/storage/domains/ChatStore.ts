@@ -1,4 +1,4 @@
-import type { ChatMessage, ChatSession, ChatSessionMemory } from '../../../types/store'
+import type { ChatMessage, ChatSession, ChatConversationMemory } from '../../../types/store'
 import type { AiArtifactRef } from '../../../types/store'
 import { LanceDbCore, LANCE_TABLES } from '../core/LanceDbCore'
 
@@ -33,9 +33,9 @@ const parseArtifacts = (value: unknown): AiArtifactRef[] | undefined => {
 export class ChatStore {
   public constructor(private readonly core: LanceDbCore) {}
 
-  public async saveSessionMemory(sessionId: string, memory: ChatSessionMemory): Promise<void> {
+  public async saveConversationMemory(sessionId: string, memory: ChatConversationMemory): Promise<void> {
     const safeId = this.core.escapeSqlString(sessionId)
-    const table = await this.core.openTable(LANCE_TABLES.CHAT_SESSION_MEMORY)
+    const table = await this.core.openTable(LANCE_TABLES.CHAT_CONVERSATION_MEMORY)
     await table.delete(`session_id = '${safeId}'`)
     await table.add([
       {
@@ -46,14 +46,14 @@ export class ChatStore {
     ])
   }
 
-  public async getSessionMemory(sessionId: string): Promise<ChatSessionMemory | null> {
+  public async getConversationMemory(sessionId: string): Promise<ChatConversationMemory | null> {
     const safeId = this.core.escapeSqlString(sessionId)
-    const table = await this.core.openTable(LANCE_TABLES.CHAT_SESSION_MEMORY)
+    const table = await this.core.openTable(LANCE_TABLES.CHAT_CONVERSATION_MEMORY)
     const rows = await table.query().where(`session_id = '${safeId}'`).toArray()
     const row = rows?.[0]
     if (!row?.memory_json) return null
     try {
-      return JSON.parse(String(row.memory_json)) as ChatSessionMemory
+      return JSON.parse(String(row.memory_json)) as ChatConversationMemory
     } catch (e) {
       void e
       return null
@@ -89,7 +89,7 @@ export class ChatStore {
     const msgTable = await this.core.openTable(LANCE_TABLES.CHAT_MESSAGE)
     await msgTable.delete(`session_id = '${safeId}'`)
 
-    const memoryTable = await this.core.openTable(LANCE_TABLES.CHAT_SESSION_MEMORY)
+    const memoryTable = await this.core.openTable(LANCE_TABLES.CHAT_CONVERSATION_MEMORY)
     await memoryTable.delete(`session_id = '${safeId}'`)
   }
 

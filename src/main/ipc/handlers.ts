@@ -9,7 +9,7 @@ import { StorageService } from '../services/storage/StorageService'
 import { ModelService } from '../services/model/ModelService'
 import { fetchLlmRemoteModels } from '../services/llm/modelCatalog'
 import { AiRunService } from '../services/ai/AiRunService'
-import { updateSessionMemoryAfterRun } from '../services/ai/memory'
+import { updateConversationMemoryAfterRun } from '../services/ai/memory'
 import { getAiContextUsage } from '../services/ai/contextUsage'
 import { FileReviewService } from '../services/ai/human/tools/docx/review/FileReviewService'
 import {
@@ -2211,7 +2211,7 @@ export function registerHandlers(services: {
           }
 
           try {
-            await updateSessionMemoryAfterRun({
+            await updateConversationMemoryAfterRun({
               runId,
               sessionId,
               userInput: input,

@@ -87,8 +87,8 @@ import {
   AiRunApprovalDecisionResponse,
   JsonObject,
   JsonValue,
-  ChatSessionMemory,
-  ChatSessionMemoryRow
+  ChatConversationMemory,
+  ChatConversationMemoryRow
 } from '../../shared/types'
 
 export type {
@@ -179,8 +179,8 @@ export type {
   AiRunApprovalDecisionResponse,
   JsonObject,
   JsonValue,
-  ChatSessionMemory,
-  ChatSessionMemoryRow
+  ChatConversationMemory,
+  ChatConversationMemoryRow
 }
 
 /**

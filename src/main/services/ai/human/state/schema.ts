@@ -31,14 +31,20 @@ export const createDefaultHumanThought = (): HumanState['memory']['thought'] => 
   progressionSummary: ''
 })
 
-export const createDefaultHumanMemoryHistory = (): HumanState['memory']['history'] => ({
-  roundHistory: [],
-  compactBlocks: []
+export const createDefaultHumanConversation = (): HumanState['memory']['conversation'] => ({
+  summary: null,
+  recentTurns: []
+})
+
+export const createDefaultHumanTaskRun = (): HumanState['memory']['taskRun'] => ({
+  rounds: [],
+  compactions: []
 })
 
 export const createDefaultHumanMemory = (): HumanState['memory'] => ({
   thought: createDefaultHumanThought(),
-  history: createDefaultHumanMemoryHistory()
+  conversation: createDefaultHumanConversation(),
+  taskRun: createDefaultHumanTaskRun()
 })
 
 export const createDefaultHumanSkills = (): HumanState['skills'] => ({

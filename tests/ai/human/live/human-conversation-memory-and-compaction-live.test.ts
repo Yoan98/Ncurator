@@ -1,10 +1,10 @@
 import { describe, it } from 'vitest'
-import { updateSessionMemoryAfterRun } from '../../../../src/main/services/ai/memory'
+import { updateConversationMemoryAfterRun } from '../../../../src/main/services/ai/memory'
 import {
   appendRoundRecord,
   buildHandExecution,
   buildLearningExecution
-} from '../../../../src/main/services/ai/human/memory/roundHistory'
+} from '../../../../src/main/services/ai/human/memory/rounds'
 import { createMemoryCompactionNode } from '../../../../src/main/services/ai/human/node/memoryCompactionNode'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
@@ -13,14 +13,14 @@ import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import { filterAiRunEventsByType } from '../testUtils'
 
 describe('ai human live backend', () => {
-  it('human-session-memory-and-compaction-live', async () => {
+  it('human-conversation-memory-and-compaction-live', async () => {
     await runBackendCase({
-      caseId: 'human-session-memory-and-compaction-live',
+      caseId: 'human-conversation-memory-and-compaction-live',
       harnessMode: 'live',
       domain: 'ai',
       suite: 'human',
       groups: ['live'],
-      description: '验证 live 模式下 session memory 总结与 human history 压缩节点都能真实调用模型并写回结构化结果。',
+      description: '验证 live 模式下 conversation memory 总结与 human history 压缩节点都能真实调用模型并写回结构化结果。',
       fixtures: [],
       runMode: 'single',
       runtimeModelName: hasLiveLlmConfigInEnv() ? loadLiveLlmConfigFromEnv().model_name : null,
@@ -28,7 +28,7 @@ describe('ai human live backend', () => {
         if (!hasLiveLlmConfigInEnv()) {
           return {
             skipped: true,
-            savedRollingSummary: '',
+            savedSummary: '',
             compactBlockCount: 0,
             remainingRoundCount: 0,
             events: []
@@ -49,11 +49,11 @@ describe('ai human live backend', () => {
             }
           ],
           memory: {
-            rollingSummary: '用户正在围绕发布准备事项连续推进。'
+            summary: '用户正在围绕发布准备事项连续推进。'
           }
         })
 
-        await updateSessionMemoryAfterRun({
+        await updateConversationMemoryAfterRun({
           runId: runtime.runId,
           sessionId,
           userInput: '第一轮确认：发布前还缺少回滚负责人。',
@@ -67,7 +67,7 @@ describe('ai human live backend', () => {
           recordLlmIo: (record) => runtime.eventCollector.addLlmIo(record)
         })
 
-        const savedMemory = await runtime.chatStore.getSessionMemory(sessionId)
+        const savedMemory = await runtime.chatStore.getConversationMemory(sessionId)
         const ctx = runtime.createAiRunContext({
           sessionId,
           modelName: liveConfig.model_name
@@ -82,7 +82,7 @@ describe('ai human live backend', () => {
           ...initialState,
           memory: {
             ...initialState.memory,
-            history: appendRoundRecord({
+            taskRun: appendRoundRecord({
               state: initialState,
               thought: {
                 thought: {
@@ -119,7 +119,7 @@ describe('ai human live backend', () => {
           },
           memory: {
             ...stateWithOneRound.memory,
-            history: appendRoundRecord({
+            taskRun: appendRoundRecord({
               state: stateWithOneRound,
               thought: {
                 thought: {
@@ -174,9 +174,9 @@ describe('ai human live backend', () => {
 
         return {
           skipped: false,
-          savedRollingSummary: savedMemory?.rollingSummary || '',
-          compactBlockCount: compactedState.memory.history.compactBlocks.length,
-          remainingRoundCount: compactedState.memory.history.roundHistory.length,
+          savedSummary: savedMemory?.summary || '',
+          compactBlockCount: compactedState.memory.taskRun.compactions.length,
+          remainingRoundCount: compactedState.memory.taskRun.rounds.length,
           events: runtime.eventCollector.snapshot()
         }
       },
@@ -184,7 +184,7 @@ describe('ai human live backend', () => {
         if (result.skipped) {
           runtime.assertThat(true, {
             name: 'live-config-not-provided',
-            message: '未提供 live 模型配置，已跳过 human session memory 与 compaction live case。'
+            message: '未提供 live 模型配置，已跳过 human conversation memory 与 compaction live case。'
           })
           return
         }
@@ -192,16 +192,16 @@ describe('ai human live backend', () => {
         const startedEvents = filterAiRunEventsByType(result.events, 'context_compaction_started')
         const completedEvents = filterAiRunEventsByType(result.events, 'context_compaction_completed')
         runtime.assertThat(
-          result.savedRollingSummary.trim().length > 0 &&
+          result.savedSummary.trim().length > 0 &&
             result.compactBlockCount === 1 &&
             result.remainingRoundCount === 1 &&
             startedEvents.length === 1 &&
             completedEvents.length === 1,
           {
-            name: 'human-live-session-memory-and-compaction-ai-calls-complete',
-            message: 'live session memory 与 memory compaction 应真实调用模型，并写回 session memory / compact block。',
+            name: 'human-live-conversation-memory-and-compaction-ai-calls-complete',
+            message: 'live conversation memory 与 memory compaction 应真实调用模型，并写回 conversation memory / compaction block。',
             data: {
-              savedRollingSummary: result.savedRollingSummary,
+              savedSummary: result.savedSummary,
               compactBlockCount: result.compactBlockCount,
               remainingRoundCount: result.remainingRoundCount,
               startedEvents,

@@ -43,7 +43,7 @@ export const HUMAN_HAND_PLAN_INVALID_REASONS = [
   'parallel_limit_exceeded',
   'docx_batch_write_limit_exceeded'
 ] as const
-export const HUMAN_WATCH_HINT_CODES = [
+export const HUMAN_DECISION_HINT_CODES = [
   'learning_no_effect',
   'learning_builtin_skill_requested',
   'learning_tool_budget_exceeded',

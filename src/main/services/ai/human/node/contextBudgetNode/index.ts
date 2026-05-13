@@ -3,7 +3,7 @@ import {
   CONTEXT_COMPACTION_TRIGGER_RATIO,
   DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
 } from '../../constants'
-import { getCompressibleHistoryRounds } from '../../memory/roundHistory'
+import { getCompressibleHistoryRounds } from '../../memory/rounds'
 import { buildBrainPrompt } from '../../prompts/brain'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { estimatePromptTokens } from '../../utils/tokenEstimate'
@@ -16,12 +16,12 @@ export const createContextBudgetNode = (input: {
     input.ctx.checkCancelled()
     input.cache.currentState = state
 
-    const history = await input.ctx.loadHistory()
+    const history = await input.ctx.loadConversationContext()
     const prompt = buildBrainPrompt({
       state,
       ctx: input.ctx,
-      sessionMemoryText: history.sessionSummaryText,
-      recentConversationText: history.recentTurnsText
+      conversationSummaryText: history.conversationSummaryText,
+      recentTurnsText: history.recentTurnsText
     })
     const tokenEstimate = estimatePromptTokens(prompt)
     const contextWindowTokens =

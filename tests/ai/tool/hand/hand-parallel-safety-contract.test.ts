@@ -277,7 +277,7 @@ describe('ai tool hand backend', () => {
         runtime.assertThat(
           result.safeState.execution.lastToolResults?.length === 2 &&
             result.safeState.execution.lastToolResults.every((item) => item.code === 'ok') &&
-            !result.safeState.execution.watchHint,
+            !result.safeState.execution.pendingDecisionHint,
           {
             name: 'safe-parallel-batch-executes',
             message: '只读且 parallelSafe 的工具批次应真正执行，并写回多个 tool result。',
@@ -288,7 +288,7 @@ describe('ai tool hand backend', () => {
         runtime.assertThat(
           result.safeLimitState.execution.lastToolResults?.length === HUMAN_TOOL_USE_PLAN_LIMIT &&
             result.safeLimitState.execution.lastToolResults.every((item) => item.code === 'ok') &&
-            !result.safeLimitState.execution.watchHint,
+            !result.safeLimitState.execution.pendingDecisionHint,
           {
             name: 'safe-parallel-calls-within-tool-use-plan-limit-are-allowed',
             message: '总计划长度上限内的只读且 parallelSafe 工具调用应真正执行并写回结果。',
@@ -297,17 +297,17 @@ describe('ai tool hand backend', () => {
         )
 
         runtime.assertThat(
-          result.limitExceededState.execution.watchHint?.code === 'hand_plan_invalid' &&
-            result.limitExceededState.execution.watchHint.detail.reason ===
+          result.limitExceededState.execution.pendingDecisionHint?.code === 'hand_plan_invalid' &&
+            result.limitExceededState.execution.pendingDecisionHint.detail.reason ===
               'tool_use_plan_limit_exceeded' &&
-            result.limitExceededState.execution.watchHint.detail.limit === HUMAN_TOOL_USE_PLAN_LIMIT &&
+            result.limitExceededState.execution.pendingDecisionHint.detail.limit === HUMAN_TOOL_USE_PLAN_LIMIT &&
             result.toolStartedAfterLimitExceeded === result.toolStartedBeforeLimitExceeded,
           {
             name: 'oversized-parallel-plan-stops-at-tool-use-plan-limit-before-execution',
             message:
               '并行计划超过总长度上限时，应先返回 tool_use_plan_limit_exceeded，而不是继续执行或进入并行细分校验。',
             data: {
-              watchHint: result.limitExceededState.execution.watchHint,
+              decisionHint: result.limitExceededState.execution.pendingDecisionHint,
               toolStartedBeforeLimitExceeded: result.toolStartedBeforeLimitExceeded,
               toolStartedAfterLimitExceeded: result.toolStartedAfterLimitExceeded
             }
@@ -315,14 +315,14 @@ describe('ai tool hand backend', () => {
         )
 
         runtime.assertThat(
-          result.unsafeState.execution.watchHint?.code === 'hand_plan_invalid' &&
-            result.unsafeState.execution.watchHint.detail.reason === 'parallel_requires_read_only' &&
+          result.unsafeState.execution.pendingDecisionHint?.code === 'hand_plan_invalid' &&
+            result.unsafeState.execution.pendingDecisionHint.detail.reason === 'parallel_requires_read_only' &&
             result.toolStartedAfterUnsafe === result.toolStartedBeforeUnsafe,
           {
             name: 'unsafe-parallel-batch-stops-before-tool-execution',
-            message: 'mutating/unsafe 批次应直接返回 brain 并写入 watchHint，而不是继续执行工具。',
+            message: 'mutating/unsafe 批次应直接返回 brain 并写入 decisionHint，而不是继续执行工具。',
             data: {
-              watchHint: result.unsafeState.execution.watchHint,
+              decisionHint: result.unsafeState.execution.pendingDecisionHint,
               preservedLastToolUseResults: result.unsafeState.execution.lastToolResults,
               toolStartedBeforeUnsafe: result.toolStartedBeforeUnsafe,
               toolStartedAfterUnsafe: result.toolStartedAfterUnsafe
@@ -331,10 +331,10 @@ describe('ai tool hand backend', () => {
         )
 
         runtime.assertThat(
-          result.terminalUnsafeState.execution.watchHint?.code === 'hand_plan_invalid' &&
-            result.terminalUnsafeState.execution.watchHint.detail.reason ===
+          result.terminalUnsafeState.execution.pendingDecisionHint?.code === 'hand_plan_invalid' &&
+            result.terminalUnsafeState.execution.pendingDecisionHint.detail.reason ===
               'parallel_requires_read_only' &&
-            result.terminalUnsafeState.execution.watchHint.detail.offendingToolNames.includes(
+            result.terminalUnsafeState.execution.pendingDecisionHint.detail.offendingToolNames.includes(
               'terminal_run'
             ) &&
             result.toolStartedAfterTerminalUnsafe === result.toolStartedBeforeTerminalUnsafe,
@@ -343,7 +343,7 @@ describe('ai tool hand backend', () => {
             message:
               '内联解释器 terminal 命令即使可执行，也不应在 parallel hand 计划中被判定为只读并行安全。',
             data: {
-              watchHint: result.terminalUnsafeState.execution.watchHint,
+              decisionHint: result.terminalUnsafeState.execution.pendingDecisionHint,
               toolStartedBeforeTerminalUnsafe: result.toolStartedBeforeTerminalUnsafe,
               toolStartedAfterTerminalUnsafe: result.toolStartedAfterTerminalUnsafe
             }

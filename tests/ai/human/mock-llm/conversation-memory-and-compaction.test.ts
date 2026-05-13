@@ -1,10 +1,10 @@
 import { describe, it } from 'vitest'
-import { updateSessionMemoryAfterRun } from '../../../../src/main/services/ai/memory'
+import { updateConversationMemoryAfterRun } from '../../../../src/main/services/ai/memory'
 import {
   appendRoundRecord,
   buildHandExecution,
   buildLearningExecution
-} from '../../../../src/main/services/ai/human/memory/roundHistory'
+} from '../../../../src/main/services/ai/human/memory/rounds'
 import { createMemoryCompactionNode } from '../../../../src/main/services/ai/human/node/memoryCompactionNode'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
@@ -19,14 +19,14 @@ import {
 } from '../testUtils'
 
 describe('ai human mock-llm backend', () => {
-  it('session-memory-update-and-prompt', async () => {
+  it('conversation-memory-update-and-prompt', async () => {
     await runBackendCase({
-      caseId: 'session-memory-update-and-prompt',
+      caseId: 'conversation-memory-update-and-prompt',
       harnessMode: 'mock-llm',
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证 run 完成后写入新的 ChatSessionMemory，并在下一次 brain prompt 中渲染 session_memory。',
+      description: '验证 run 完成后写入新的 ChatConversationMemory，并在下一次 brain prompt 中渲染 conversation_summary。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -60,11 +60,11 @@ describe('ai human mock-llm backend', () => {
             }
           ],
           memory: {
-            rollingSummary: '用户正在连续处理发布准备事项；上一轮发现缺少回滚负责人。'
+            summary: '用户正在连续处理发布准备事项；上一轮发现缺少回滚负责人。'
           }
         })
 
-        await updateSessionMemoryAfterRun({
+        await updateConversationMemoryAfterRun({
           runId: runtime.runId,
           sessionId,
           userInput: '请继续检查风险项。',
@@ -87,13 +87,13 @@ describe('ai human mock-llm backend', () => {
           sendEvent: (event) => runtime.eventCollector.add(event),
           recordLlmIo: (record) => runtime.eventCollector.addLlmIo(record),
           llmDriver: createScriptedStructuredOutputDriver({
-            'session.memory': [
+            'conversation.memory': [
               ({ user }) => {
                 const readBlock = (tag: string): string =>
                   user.match(new RegExp(`<${tag}>\\s*([\\s\\S]*?)\\s*</${tag}>`))?.[1]?.trim() || ''
                 return {
-                  rollingSummary: [
-                    readBlock('previous_rolling_summary'),
+                  summary: [
+                    readBlock('previous_summary'),
                     readBlock('latest_user_message'),
                     readBlock('latest_artifacts').match(/summary=([^；\n]+)/)?.[1]
                   ].filter(Boolean).join(' / ')
@@ -103,27 +103,27 @@ describe('ai human mock-llm backend', () => {
           })
         })
 
-        const savedMemory = await runtime.chatStore.getSessionMemory(sessionId)
-        let promptContainsSessionMemory = false
+        const savedMemory = await runtime.chatStore.getConversationMemory(sessionId)
+        let promptContainsConversationMemory = false
         const runner = createHumanTestRunner(runtime, {
           sessionId,
           structuredOutputScript: {
             'human.brain': [
               ({ user }) => {
-                promptContainsSessionMemory =
-                  user.includes('<session_memory>') &&
+                promptContainsConversationMemory =
+                  user.includes('<conversation_summary>') &&
                   user.includes('用户正在连续处理发布准备事项') &&
-                  user.includes('<recent_conversation>') &&
+                  user.includes('<recent_turns>') &&
                   user.includes('上一轮完成：清单缺少回滚负责人。') &&
                   user.includes('回滚负责人草稿')
                 return buildCompleteTaskDecision({
-                  summary: '已读取 session memory。'
+                  summary: '已读取 conversation memory。'
                 })
               }
             ],
             'human.mouth': [
               {
-                text: '# Session Memory\n\n已读取 session memory。'
+                text: '# Conversation Memory\n\n已读取 conversation memory。'
               }
             ]
           }
@@ -137,20 +137,20 @@ describe('ai human mock-llm backend', () => {
         return {
           output,
           savedMemory,
-          promptContainsSessionMemory
+          promptContainsConversationMemory
         }
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
           result.output.status === 'completed' &&
-            Boolean(result.savedMemory?.rollingSummary.includes('请继续检查风险项')) &&
-            result.promptContainsSessionMemory,
+            Boolean(result.savedMemory?.summary.includes('请继续检查风险项')) &&
+            result.promptContainsConversationMemory,
           {
-            name: 'session-memory-uses-new-shape-and-enters-brain-prompt',
-            message: 'session memory 应只保存 rollingSummary，并在下一次 brain prompt 中与 recent_conversation 一起出现。',
+            name: 'conversation-memory-uses-new-shape-and-enters-brain-prompt',
+            message: 'conversation memory 应只保存 summary，并在下一次 brain prompt 中与 recent_turns 一起出现。',
             data: {
               savedMemory: result.savedMemory,
-              promptContainsSessionMemory: result.promptContainsSessionMemory
+              promptContainsConversationMemory: result.promptContainsConversationMemory
             }
           }
         )
@@ -158,14 +158,14 @@ describe('ai human mock-llm backend', () => {
     })
   }, 15_000)
 
-  it('context-compaction-history-block', async () => {
+  it('context-compaction-rounds-block', async () => {
     await runBackendCase({
-      caseId: 'context-compaction-history-block',
+      caseId: 'context-compaction-rounds-block',
       harnessMode: 'mock-llm',
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '用低上下文窗口触发压缩，验证事件流出现压缩状态且后续 prompt 使用 compact_blocks。',
+      description: '用低上下文窗口触发压缩，验证事件流出现压缩状态且后续 prompt 使用 compactions。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -193,7 +193,7 @@ describe('ai human mock-llm backend', () => {
               },
               ({ user }) => {
                 compactedPromptSeen =
-                  user.includes('<compact_blocks>') &&
+                  user.includes('<compactions>') &&
                   user.includes('已压缩：学习 docx-read 的较早过程。') &&
                   !user.includes('先学习 docx-read 以产生可压缩历史。')
                 return buildCompleteTaskDecision({
@@ -241,8 +241,8 @@ describe('ai human mock-llm backend', () => {
             compactionCalls.length === 1 &&
             result.compactedPromptSeen,
           {
-            name: 'context-compaction-routes-through-history-compact-block',
-            message: '低阈值应触发 memory_compaction，并在后续 brain prompt 中以 compact_blocks 继续渲染。',
+            name: 'context-compaction-routes-through-rounds-compaction-block',
+            message: '低阈值应触发 memory_compaction，并在后续 brain prompt 中以 compactions 继续渲染。',
             data: {
               startedEvents,
               completedEvents,
@@ -255,14 +255,14 @@ describe('ai human mock-llm backend', () => {
     })
   }, 15_000)
 
-  it('context-compaction-rolls-history-block-forward', async () => {
+  it('context-compaction-rolls-rounds-block-forward', async () => {
     await runBackendCase({
-      caseId: 'context-compaction-rolls-history-block-forward',
+      caseId: 'context-compaction-rolls-rounds-block-forward',
       harnessMode: 'mock-llm',
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证多轮压缩时会把旧 history compact summary 与新历史一起输入，并始终只保留一个 history compact block。',
+      description: '验证多轮压缩时会把旧 rounds compaction summary 与新历史一起输入，并始终只保留一个 rounds compaction block。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -289,7 +289,7 @@ describe('ai human mock-llm backend', () => {
           },
           memory: {
             ...baseState.memory,
-            history: appendRoundRecord({
+            taskRun: appendRoundRecord({
               state: baseState,
               thought: {
                 thought: {
@@ -318,7 +318,7 @@ describe('ai human mock-llm backend', () => {
           ...stateWithRound1,
           memory: {
             ...stateWithRound1.memory,
-            history: appendRoundRecord({
+            taskRun: appendRoundRecord({
               state: stateWithRound1,
               thought: {
                 thought: {
@@ -377,7 +377,7 @@ describe('ai human mock-llm backend', () => {
           ...stateWithRound2,
           memory: {
             ...stateWithRound2.memory,
-            history: appendRoundRecord({
+            taskRun: appendRoundRecord({
               state: stateWithRound2,
               thought: {
                 thought: {
@@ -452,9 +452,9 @@ describe('ai human mock-llm backend', () => {
           ...stateWithLatestRound,
           memory: {
             ...stateWithLatestRound.memory,
-            history: {
-              ...stateWithLatestRound.memory.history,
-              compactBlocks: compactedOnce.memory.history.compactBlocks
+            taskRun: {
+              ...stateWithLatestRound.memory.taskRun,
+              compactions: compactedOnce.memory.taskRun.compactions
             }
           }
         })
@@ -466,23 +466,23 @@ describe('ai human mock-llm backend', () => {
       },
       assert: async (result, runtime) => {
         const secondPrompt = result.compactionInputs[1] || ''
-        const historyBlocks = result.compactedTwice.memory.history.compactBlocks
-        const historyBlock = historyBlocks.find((block) => block.kind === 'history')
+        const roundBlocks = result.compactedTwice.memory.taskRun.compactions
+        const roundBlock = roundBlocks.find((block) => block.kind === 'rounds')
 
         runtime.assertThat(
           result.compactionInputs.length === 2 &&
             secondPrompt.includes('第一次压缩摘要：已完成学习阶段。') &&
-            historyBlocks.length === 1 &&
-            historyBlock?.summary === '第二次压缩摘要：已完成学习阶段，并执行过 pwd。' &&
-            historyBlock.source.roundIds.join(',') === '1,2' &&
-            result.compactedTwice.memory.history.roundHistory.length === 1,
+            roundBlocks.length === 1 &&
+            roundBlock?.summary === '第二次压缩摘要：已完成学习阶段，并执行过 pwd。' &&
+            roundBlock.source.roundIds.join(',') === '1,2' &&
+            result.compactedTwice.memory.taskRun.rounds.length === 1,
           {
-            name: 'context-compaction-rolling-merge-keeps-single-history-block',
-            message: '第二轮压缩应带入第一轮摘要，且最终 prompt 中只保留最新的单个 history compact block。',
+            name: 'context-compaction-rolling-merge-keeps-single-rounds-block',
+            message: '第二轮压缩应带入第一轮摘要，且最终 prompt 中只保留最新的单个 rounds compaction block。',
             data: {
               compactionInputs: result.compactionInputs,
-              compactBlocks: historyBlocks,
-              remainingRounds: result.compactedTwice.memory.history.roundHistory
+              compactions: roundBlocks,
+              remainingRounds: result.compactedTwice.memory.taskRun.rounds
             }
           }
         )

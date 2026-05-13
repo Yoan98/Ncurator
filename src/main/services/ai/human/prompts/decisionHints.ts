@@ -1,12 +1,12 @@
 import type { JsonObject } from '../../../../../shared/types'
-import type { HumanWatchHint } from '../types'
+import type { HumanDecisionHint } from '../types'
 
 const renderStringList = (items: readonly string[]): string =>
   items.length > 0 ? `[${items.join(', ')}]` : 'none'
 
-const asJsonObject = (value: HumanWatchHint['detail']): JsonObject => ({ ...value })
+const asJsonObject = (value: HumanDecisionHint['detail']): JsonObject => ({ ...value })
 
-export const summarizeWatchHint = (hint: HumanWatchHint): string => {
+export const summarizeDecisionHint = (hint: HumanDecisionHint): string => {
   switch (hint.code) {
     case 'learning_no_effect':
       return `learning 本轮没有学到新 skill；requested=${renderStringList(
@@ -47,7 +47,7 @@ export const summarizeWatchHint = (hint: HumanWatchHint): string => {
   }
 }
 
-export const renderWatchHintForBrain = (hint: HumanWatchHint): string => {
+export const renderDecisionHintForBrain = (hint: HumanDecisionHint): string => {
   switch (hint.code) {
     case 'learning_no_effect':
       return [
@@ -132,4 +132,4 @@ export const renderWatchHintForBrain = (hint: HumanWatchHint): string => {
   }
 }
 
-export const renderWatchHintDetail = (hint: HumanWatchHint): JsonObject => asJsonObject(hint.detail)
+export const renderDecisionHintDetail = (hint: HumanDecisionHint): JsonObject => asJsonObject(hint.detail)

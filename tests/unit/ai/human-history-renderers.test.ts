@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { appendRoundRecord, buildHandExecution } from '../../../src/main/services/ai/human/memory/roundHistory'
+import { appendRoundRecord, buildHandExecution } from '../../../src/main/services/ai/human/memory/rounds'
 import {
   renderBrainRoundSection,
   renderMouthHistoryText
@@ -66,7 +66,7 @@ describe('ai unit human history renderers', () => {
       createdAt: 1
     })
 
-    const text = renderBrainRoundSection(history.roundHistory)
+    const text = renderBrainRoundSection(history.rounds)
 
     expect(text).toContain('调用参数：')
     expect(text).toContain('诊断：')
@@ -133,8 +133,8 @@ describe('ai unit human history renderers', () => {
     })
 
     const text = renderMouthHistoryText({
-      roundHistory: history.roundHistory,
-      compactBlocks: []
+      rounds: history.rounds,
+      compactions: []
     })
 
     expect(text).toContain('已发生的关键结果：')
@@ -219,8 +219,8 @@ describe('ai unit human history renderers', () => {
     })
 
     const text = renderMouthHistoryText({
-      roundHistory: history.roundHistory,
-      compactBlocks: []
+      rounds: history.rounds,
+      compactions: []
     })
 
     expect(text).toContain('多个像素点')
@@ -325,8 +325,8 @@ describe('ai unit human history renderers', () => {
     })
 
     const text = renderMouthHistoryText({
-      roundHistory: history.roundHistory,
-      compactBlocks: []
+      rounds: history.rounds,
+      compactions: []
     })
 
     expect(text).toContain('`docx_paragraph_edit` 已完成实际写入。')

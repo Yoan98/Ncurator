@@ -19,7 +19,7 @@ export const LANCE_TABLES = {
   WORKSPACE_NODE: 'workspace_node',
   CHAT_SESSION: 'chat_session',
   CHAT_MESSAGE: 'chat_message',
-  CHAT_SESSION_MEMORY: 'chat_session_memory',
+  CHAT_CONVERSATION_MEMORY: 'chat_conversation_summary',
   FILE_REVIEW: 'file_review',
   FILE_REVIEW_CHANGE: 'file_review_change',
   COMMIT_ATTEMPT: 'commit_attempt',
@@ -297,7 +297,7 @@ export class LanceDbCore {
         ])
       },
       {
-        name: LANCE_TABLES.CHAT_SESSION_MEMORY,
+        name: LANCE_TABLES.CHAT_CONVERSATION_MEMORY,
         schema: new arrow.Schema([
           new arrow.Field('session_id', new arrow.Utf8()),
           new arrow.Field('memory_json', new arrow.Utf8()),

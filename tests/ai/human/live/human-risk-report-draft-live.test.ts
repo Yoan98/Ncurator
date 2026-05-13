@@ -162,7 +162,7 @@ describe('ai human live backend', () => {
           createdRelativePaths.every(
             (sourcePath) => !result.workspaceSeed.preexistingDocxRelativePaths.includes(sourcePath)
           )
-        const watchHints = filterAiRunEventsByType(events, 'watch_hint')
+        const decisionHints = filterAiRunEventsByType(events, 'decision_hint')
         const writeStartedEvents = filterAiRunEventsByType(events, 'tool_call_started').filter(
           (event) =>
             [
@@ -340,14 +340,14 @@ describe('ai human live backend', () => {
         )
 
         runtime.assertThat(
-          watchHints.some((event) => event.code === 'docx_write_requires_readback') &&
+          decisionHints.some((event) => event.code === 'docx_write_requires_readback') &&
             hasReadbackAfterWrite,
           {
             name: 'human-live-risk-report-writes-then-reads-back-latest-docx',
             message:
               '同文件 docx 写后，live case 事件流里应出现 docx_write_requires_readback，并在之后出现对应 readback。',
             data: {
-              watchHints,
+              decisionHints,
               writeStartedEvents,
               readStartedEvents,
               createdRelativePaths,

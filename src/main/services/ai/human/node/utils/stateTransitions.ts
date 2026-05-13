@@ -1,22 +1,22 @@
 import type { AiRunContext } from '../../../types'
-import type { WatchHintSource } from '../../../../../../shared/types'
+import type { DecisionHintSource } from '../../../../../../shared/types'
 import type {
   HumanThoughtDecision,
   HumanRuntimeCache,
   HumanState,
   HumanThought,
-  HumanWatchHint,
+  HumanDecisionHint,
 } from '../../types'
 import {
   emitLatestHumanStepForState,
   emitTailHumanStepsForState,
-  emitWatchHint
+  emitDecisionHint
 } from './stateTransitionEvents'
 import {
   applyBrainDecisionState,
   buildHumanResult,
   completeHumanTaskState,
-  resolveBrainDecisionWatchHint,
+  resolveBrainDecisionHint,
   returnToBrainAfterTraceState,
   returnToBrainState,
   type HumanStateOverrides,
@@ -32,24 +32,24 @@ export const returnToBrain = (
   overrides: HumanStateOverrides = {}
 ): HumanState => returnToBrainState(state, overrides)
 
-export const returnToBrainWithWatchHint = (input: {
+export const returnToBrainWithDecisionHint = (input: {
   ctx: AiRunContext
   state: HumanState
-  source: WatchHintSource
-  watchHint: HumanWatchHint
+  source: DecisionHintSource
+  decisionHint: HumanDecisionHint
   overrides?: HumanStateOverrides
 }): HumanState => {
-  emitWatchHint({
+  emitDecisionHint({
     ctx: input.ctx,
     taskId: input.state.task.taskId,
     source: input.source,
-    watchHint: input.watchHint
+    decisionHint: input.decisionHint
   })
   return returnToBrainState(input.state, {
     ...input.overrides,
     execution: {
       ...input.overrides?.execution,
-      watchHint: input.watchHint
+      pendingDecisionHint: input.decisionHint
     }
   })
 }
@@ -58,25 +58,25 @@ export const returnToBrainAfterTrace = (input: {
   ctx: AiRunContext
   cache: HumanRuntimeCache
   state: HumanState
-  source: WatchHintSource
+  source: DecisionHintSource
   traceItems: HumanTraceItemInput[]
   stage: 'human_learning' | 'human_hand'
-  watchHint?: HumanWatchHint
+  decisionHint?: HumanDecisionHint
   overrides?: HumanStateOverrides<'trace'>
 }): HumanState => {
   const nextState = returnToBrainAfterTraceState({
     state: input.state,
     traceItems: input.traceItems,
-    watchHint: input.watchHint,
+    decisionHint: input.decisionHint,
     overrides: input.overrides
   })
 
-  if (input.watchHint) {
-    emitWatchHint({
+  if (input.decisionHint) {
+    emitDecisionHint({
       ctx: input.ctx,
       taskId: input.state.task.taskId,
       source: input.source,
-      watchHint: input.watchHint
+      decisionHint: input.decisionHint
     })
   }
 
@@ -97,19 +97,19 @@ export const applyBrainDecisionTransition = (input: {
   state: HumanState
   thought: HumanThoughtDecision
   thoughtMemory: HumanThought
-  watchHint?: HumanWatchHint
+  decisionHint?: HumanDecisionHint
 }): HumanState => {
-  const watchHint = resolveBrainDecisionWatchHint({
+  const decisionHint = resolveBrainDecisionHint({
     state: input.state,
     thought: input.thought,
     thoughtMemory: input.thoughtMemory,
-    watchHint: input.watchHint
+    decisionHint: input.decisionHint
   })
   const nextState = applyBrainDecisionState({
     state: input.state,
     thought: input.thought,
     thoughtMemory: input.thoughtMemory,
-    watchHint,
+    decisionHint,
     createdAt: Date.now()
   })
 
@@ -121,12 +121,12 @@ export const applyBrainDecisionTransition = (input: {
     stage: 'human_brain'
   })
 
-  if (watchHint) {
-    emitWatchHint({
+  if (decisionHint) {
+    emitDecisionHint({
       ctx: input.ctx,
       taskId: input.state.task.taskId,
       source: 'brain',
-      watchHint
+      decisionHint
     })
   }
 

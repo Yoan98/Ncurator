@@ -156,14 +156,14 @@ describe('ai tool hand backend', () => {
         )
 
         runtime.assertThat(
-          result.secondState.execution.watchHint?.code === 'hand_tool_limit_exceeded' &&
-            result.secondState.execution.watchHint.detail.limit === 1 &&
+          result.secondState.execution.pendingDecisionHint?.code === 'hand_tool_limit_exceeded' &&
+            result.secondState.execution.pendingDecisionHint.detail.limit === 1 &&
             result.secondState.execution.lastToolResults?.[0]?.toolName === 'docx_read_blocks',
           {
-            name: 'tool-limit-produces-converging-watchhint',
-            message: '超过 hardActionLimit 后，hand 应写入收敛型 watchHint，同时保留当前工具结果。',
+            name: 'tool-limit-produces-converging-decision-hint',
+            message: '超过 hardActionLimit 后，hand 应写入收敛型 decisionHint，同时保留当前工具结果。',
             data: {
-              watchHint: result.secondState.execution.watchHint,
+              decisionHint: result.secondState.execution.pendingDecisionHint,
               lastToolUseResults: result.secondState.execution.lastToolResults
             }
           }

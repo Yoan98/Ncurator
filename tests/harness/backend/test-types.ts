@@ -15,7 +15,7 @@ import type { WorkspaceSourceService } from '../../../src/main/services/workspac
 import type { WorkspaceKnowledgePrepareService } from '../../../src/main/services/workspace/WorkspaceKnowledgePrepareService'
 import type {
   ChatMessage,
-  ChatSessionMemory,
+  ChatConversationMemory,
   FileReview,
   FileReviewStatus,
   JsonObject,
@@ -150,7 +150,7 @@ export type SeedChatHistoryInput = {
     artifacts?: ChatMessage['artifacts']
     error?: boolean
   }>
-  memory?: ChatSessionMemory
+  memory?: ChatConversationMemory
 }
 
 export type SeedFileReviewInput = {

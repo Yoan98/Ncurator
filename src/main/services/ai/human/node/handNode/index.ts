@@ -10,7 +10,7 @@ import { extractArtifactRefsFromToolResults, mergeArtifactRefs } from '../../../
 import {
   appendDecisionRound,
   buildHandExecution,
-} from '../../memory/roundHistory'
+} from '../../memory/rounds'
 import {
   createDeliveryGuidanceItem,
   mergeDeliveryGuidanceItems
@@ -19,10 +19,10 @@ import { buildToolCallDisplayText } from '../../shared/toolResultRenderers'
 import { assertExternalLearnedSkillIds } from '../../skills'
 import { getToolSpec } from '../../tools/registry'
 import type { ToolExecutionMeta } from '../../tools/types'
-import type { HumanRuntimeCache, HumanState, HumanWatchHint, ToolCallResult, ToolUsePlan } from '../../types'
+import type { HumanRuntimeCache, HumanState, HumanDecisionHint, ToolCallResult, ToolUsePlan } from '../../types'
 import { deriveHandFollowupSignals, shouldStopSerialHandPlan } from './followupSignals'
 import { executeToolCall } from './toolExecutor'
-import { returnToBrain, returnToBrainAfterTrace, returnToBrainWithWatchHint } from '../utils/stateTransitions'
+import { returnToBrain, returnToBrainAfterTrace, returnToBrainWithDecisionHint } from '../utils/stateTransitions'
 
 const DOCX_SERIAL_WRITE_TOOL_NAMES = new Set([
   'docx_paragraph_edit',
@@ -98,13 +98,13 @@ export const canBatchPlan = (input: {
   return true
 }
 
-const createHandPlanInvalidWatchHint = (input: {
+const createHandPlanInvalidDecisionHint = (input: {
   mode: ToolUsePlan['mode']
-  reason: Extract<HumanWatchHint, { code: 'hand_plan_invalid' }>['detail']['reason']
+  reason: Extract<HumanDecisionHint, { code: 'hand_plan_invalid' }>['detail']['reason']
   offendingToolNames: string[]
   callCount?: number
   limit?: number
-}): HumanWatchHint => ({
+}): HumanDecisionHint => ({
   code: 'hand_plan_invalid',
   detail: {
     mode: input.mode,
@@ -115,7 +115,7 @@ const createHandPlanInvalidWatchHint = (input: {
   }
 })
 
-const buildToolLimitWatchHint = (toolCallCount: number, limit: number): HumanWatchHint => ({
+const buildToolLimitDecisionHint = (toolCallCount: number, limit: number): HumanDecisionHint => ({
   code: 'hand_tool_limit_exceeded',
   detail: {
     toolCallCount,
@@ -123,9 +123,9 @@ const buildToolLimitWatchHint = (toolCallCount: number, limit: number): HumanWat
   }
 })
 
-const validateToolUsePlan = (toolUsePlan: ToolUsePlan): HumanWatchHint | undefined => {
+const validateToolUsePlan = (toolUsePlan: ToolUsePlan): HumanDecisionHint | undefined => {
   if (toolUsePlan.calls.length > HUMAN_TOOL_USE_PLAN_LIMIT) {
-    return createHandPlanInvalidWatchHint({
+    return createHandPlanInvalidDecisionHint({
       mode: toolUsePlan.mode,
       reason: 'tool_use_plan_limit_exceeded',
       offendingToolNames: toolUsePlan.calls.map((item) => item.toolName),
@@ -138,7 +138,7 @@ const validateToolUsePlan = (toolUsePlan: ToolUsePlan): HumanWatchHint | undefin
     if (docxWriteCalls.length > 0) {
       const limit = HUMAN_DOCX_BATCH_WRITE_LIMIT
       if (docxWriteCalls.length > limit) {
-        return createHandPlanInvalidWatchHint({
+        return createHandPlanInvalidDecisionHint({
           mode: 'serial',
           reason: 'docx_batch_write_limit_exceeded',
           offendingToolNames: docxWriteCalls.map((item) => item.toolName),
@@ -150,7 +150,7 @@ const validateToolUsePlan = (toolUsePlan: ToolUsePlan): HumanWatchHint | undefin
     return undefined
   }
   if (toolUsePlan.calls.length > HUMAN_MAX_PARALLEL_TOOL_CALLS) {
-    return createHandPlanInvalidWatchHint({
+    return createHandPlanInvalidDecisionHint({
       mode: 'parallel',
       reason: 'parallel_limit_exceeded',
       offendingToolNames: toolUsePlan.calls.map((item) => item.toolName),
@@ -170,7 +170,7 @@ const validateToolUsePlan = (toolUsePlan: ToolUsePlan): HumanWatchHint | undefin
     .map((item) => item.toolName)
 
   return offendingToolNames.length > 0
-    ? createHandPlanInvalidWatchHint({
+    ? createHandPlanInvalidDecisionHint({
         mode: 'parallel',
         reason: 'parallel_requires_read_only',
         offendingToolNames
@@ -360,7 +360,7 @@ const executeToolUsePlan = async (input: {
           ...(typeof nextResult.data === 'object' && nextResult.data !== null && !Array.isArray(nextResult.data)
             ? nextResult.data
             : {}),
-          watchHint: {
+          decisionHint: {
             code: 'hand_docx_batch_write_halted',
             detail: {
               sourcePath: replay.sourcePath,
@@ -390,7 +390,7 @@ const executeToolUsePlan = async (input: {
             ok: false,
             code: 'invalid_input',
             error: error instanceof Error ? error.message : String(error),
-            watchHint: {
+            decisionHint: {
               code: 'hand_docx_batch_write_halted',
               detail: {
                 sourcePath: replay.sourcePath,
@@ -486,22 +486,22 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
     }
 
     const { toolUsePlan } = state.execution.currentThought.nextAction
-    const invalidPlanWatchHint = validateToolUsePlan(toolUsePlan)
-    if (invalidPlanWatchHint) {
-      return returnToBrainWithWatchHint({
+    const invalidPlanDecisionHint = validateToolUsePlan(toolUsePlan)
+    if (invalidPlanDecisionHint) {
+      return returnToBrainWithDecisionHint({
         ctx: input.ctx,
         state,
         source: 'hand',
-        watchHint: invalidPlanWatchHint,
+        decisionHint: invalidPlanDecisionHint,
         overrides: {
           memory: {
             ...state.memory,
-            history: appendDecisionRound({
+            taskRun: appendDecisionRound({
               state,
               execution: buildHandExecution({
                 toolUsePlan,
                 toolResults: [],
-                watchHint: invalidPlanWatchHint
+                decisionHint: invalidPlanDecisionHint
               })
             })
           }
@@ -527,11 +527,11 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       'hand',
       followupSignals.deliveryGuidance
     )
-    const toolLimitWatchHint =
+    const toolLimitDecisionHint =
       input.cache.toolCallCount > toolCallLimit
-        ? buildToolLimitWatchHint(input.cache.toolCallCount, toolCallLimit)
+        ? buildToolLimitDecisionHint(input.cache.toolCallCount, toolCallLimit)
         : undefined
-    const watchHint = followupSignals.watchHint || toolLimitWatchHint
+    const decisionHint = followupSignals.decisionHint || toolLimitDecisionHint
     const artifacts = mergeArtifactRefs(
       state.execution.artifacts,
       extractArtifactRefsFromToolResults(results)
@@ -549,7 +549,7 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
         summary: buildToolCallDisplayText(result)
       })),
       stage: 'human_hand',
-      watchHint,
+      decisionHint,
       overrides: {
         execution: {
           lastToolResults: results,
@@ -561,12 +561,12 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
         },
         memory: {
           ...state.memory,
-          history: appendDecisionRound({
+          taskRun: appendDecisionRound({
             state,
             execution: buildHandExecution({
               toolUsePlan,
               toolResults: results,
-              watchHint
+              decisionHint
             })
           })
         }

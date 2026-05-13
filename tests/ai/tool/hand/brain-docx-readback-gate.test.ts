@@ -32,11 +32,11 @@ const createStubAiRunContext = (): AiRunContext => ({
   },
   sendEvent: () => {},
   requestApproval: async () => ({ approved: false }),
-  loadHistory: async () => ({
+  loadConversationContext: async () => ({
     recentTurnsText: '',
-    sessionSummaryText: ''
+    conversationSummaryText: ''
   }),
-  loadSessionMemory: async () => null,
+  loadConversationMemory: async () => null,
   trackDocxOpen: () => {},
   trackDocxChanges: () => {},
   resolveDocxOpenTarget: async () => {
@@ -60,7 +60,7 @@ const buildStateWithReadbackHint = (sourcePath = '/tmp/workspace-root/report.doc
       taskId: 'task-brain-docx-readback-gate',
       userInput: 'test'
     }).execution,
-    watchHint: {
+    pendingDecisionHint: {
       code: 'docx_write_requires_readback' as const,
       detail: {
         sourcePaths: [sourcePath],
@@ -94,7 +94,7 @@ describe('ai tool hand backend', () => {
     })
 
     expect(blockedMouth.execution.stage).toBe('brain')
-    expect(blockedMouth.execution.watchHint?.code).toBe('docx_write_requires_readback')
+    expect(blockedMouth.execution.pendingDecisionHint?.code).toBe('docx_write_requires_readback')
 
     const readDecision: HumanThoughtDecision = {
       thought: {
@@ -125,7 +125,7 @@ describe('ai tool hand backend', () => {
     })
 
     expect(allowedRead.execution.stage).toBe('hand')
-    expect(allowedRead.execution.watchHint).toBeUndefined()
+    expect(allowedRead.execution.pendingDecisionHint).toBeUndefined()
   })
 
   it('allows readback when the model uses a dot-prefixed workspace relative path', () => {
@@ -162,7 +162,7 @@ describe('ai tool hand backend', () => {
     })
 
     expect(allowedRead.execution.stage).toBe('hand')
-    expect(allowedRead.execution.watchHint).toBeUndefined()
+    expect(allowedRead.execution.pendingDecisionHint).toBeUndefined()
   })
 
   it('keeps blocking readback attempts for a different docx path', () => {
@@ -199,6 +199,6 @@ describe('ai tool hand backend', () => {
     })
 
     expect(blockedRead.execution.stage).toBe('brain')
-    expect(blockedRead.execution.watchHint?.code).toBe('docx_write_requires_readback')
+    expect(blockedRead.execution.pendingDecisionHint?.code).toBe('docx_write_requires_readback')
   })
 })

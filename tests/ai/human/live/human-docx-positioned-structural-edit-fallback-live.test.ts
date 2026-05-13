@@ -122,7 +122,7 @@ describe('ai human live backend', () => {
             .filter((value): value is string => typeof value === 'string')
           const successfulWriteResults = writeResults.filter((event) => event.result?.ok === true)
           const failedWriteResults = writeResults.filter((event) => event.result?.ok === false)
-          const watchHints = filterAiRunEventsByType(events, 'watch_hint')
+          const decisionHints = filterAiRunEventsByType(events, 'decision_hint')
           const diagnosticMessages = collectToolDiagnosticMessages(events)
           const draftReviewArtifactCount = countFileReviewArtifacts(result.output?.artifacts)
           const draftFileArtifactCount = countDraftFileArtifacts(result.output?.artifacts)
@@ -150,7 +150,7 @@ describe('ai human live backend', () => {
               structuralStarted.length >= 1 &&
               successfulWriteResults.length === 0 &&
               failedWriteResults.length === 1 &&
-              watchHints.some(
+              decisionHints.some(
                 (event) => event.code === 'hand_docx_positioned_write_blocked'
               ) &&
               diagnosticMessages.some((message) => message.includes('当前命中复杂定位排版区域')) &&
@@ -176,7 +176,7 @@ describe('ai human live backend', () => {
                   toolName: event.toolName,
                   diagnostic: event.result?.diagnostic?.message
                 })),
-                watchHints,
+                decisionHints,
                 draftReviewArtifactCount,
                 draftFileArtifactCount,
                 deliveryMarkdown: result.output?.deliveryMarkdown

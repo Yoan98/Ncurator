@@ -11,7 +11,7 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
     input.ctx.checkCancelled()
     assertExternalLearnedSkillIds(state.skills.learnedSkillIds)
     input.cache.currentState = state
-    const history = await input.ctx.loadHistory()
+    const history = await input.ctx.loadConversationContext()
 
     const rawOutput = await input.ctx.chatStructured({
       caller: 'human.brain',
@@ -19,8 +19,8 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
       ...buildBrainPrompt({
         state,
         ctx: input.ctx,
-        sessionMemoryText: history.sessionSummaryText,
-        recentConversationText: history.recentTurnsText
+        conversationSummaryText: history.conversationSummaryText,
+        recentTurnsText: history.recentTurnsText
       }),
       schema: humanThoughtDecisionSchema,
       schemaName: 'human_brain_decision',

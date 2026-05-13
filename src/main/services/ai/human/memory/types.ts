@@ -1,13 +1,13 @@
 import type {
-  HumanMemoryHistory,
+  HumanTaskRunMemory,
   HumanRoundExecution,
   HumanRoundRecord,
   HumanThought,
-  HumanWatchHint
+  HumanDecisionHint
 } from '../types'
 
 export type HumanHistoryRecord = HumanRoundRecord
 export type HumanHistoryExecution = HumanRoundExecution
-export type HumanHistoryHint = HumanWatchHint
-export type HumanProcessMemory = HumanMemoryHistory
+export type HumanHistoryHint = HumanDecisionHint
+export type HumanProcessMemory = HumanTaskRunMemory
 export type HumanTaskThought = HumanThought
