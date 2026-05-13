@@ -40,9 +40,6 @@ export const renderHumanThought = (
   mode: HumanMemoryRenderMode
 ): string =>
   [
-    '当前与下一步：',
-    renderThoughtTextValue(state.memory.thought.next, mode),
-    '',
     '待办路径：',
     renderHumanThoughtField({
       state,

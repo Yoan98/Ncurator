@@ -68,6 +68,12 @@ describe('ai unit human history renderers', () => {
 
     const text = renderBrainRoundSection(history.rounds)
 
+    expect(text).toContain('判断：')
+    expect(text).toContain('执行：')
+    expect(text).toContain('类型：hand')
+    expect(text).not.toContain('决策了什么：')
+    expect(text).not.toContain('做了什么：')
+    expect(text).not.toContain('结果是什么：')
     expect(text).toContain('调用参数：')
     expect(text).toContain('诊断：')
     expect(text).toContain('Received tool input did not match expected schema ✖ Invalid input → at query')

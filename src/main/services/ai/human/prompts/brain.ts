@@ -160,7 +160,7 @@ export const buildBrainPrompt = (input: {
     - reference_scope：当前工作区、默认知识范围、显式缩圈范围和可用边界。
     - search_strategy：当前任务默认遵循的检索思路提示。
     - terminal_platform：当前 terminal 所在平台；如果你决定使用命令行，应据此选择命令语法。
-    - thought：当前任务推进思路，按“当前与下一步 / 待办路径 / 推进摘要”组织。
+    - thought：当前任务的全局进度信息，按“待办路径 / 推进摘要”组织。
     - conversation_summary：当前会话中跨任务仍有效的滚动摘要，用于理解用户在同一窗口里的连续主线、稳定偏好与当前状态。
     - recent_turns：最近几轮真实对话内容与产物，用于判断用户刚刚说了什么、你刚刚交付了什么。
     - compactions：当前任务中已压缩的过程历史，用于识别较早事实、失败路径和已验证动作。
@@ -184,7 +184,7 @@ ${outputShapeText}
     <example_learning>
       {
         "thought": {
-          "next": "当前缺少读取 docx 的能力说明，下一步先学习 docx-read。",
+          "next": "当前缺少读取 docx 的能力说明，先补齐读取能力再继续判断资料内容。",
           "todolist": [
             {
               "item": "补齐读取 docx 的能力说明",
@@ -207,7 +207,7 @@ ${outputShapeText}
     <example_tool_plan>
       {
         "thought": {
-          "next": "下一步已经明确，准备执行真实工具调用读取当前目录。"
+          "next": "当前缺少工作区文件事实，先读取当前目录建立资料范围。"
         },
         "nextAction": {
           "action": "hand",
@@ -229,7 +229,7 @@ ${outputShapeText}
     <example_delivery>
       {
         "thought": {
-          "next": "证据已经足够，下一步进入 mouth 组织最终交付。",
+          "next": "审批驳回是否保留原文件已经确认，当前证据足够进入最终交付。",
           "todolist": [
             {
               "item": "确认审批驳回时是否保留原文件",

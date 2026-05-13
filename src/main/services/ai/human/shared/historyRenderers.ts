@@ -199,121 +199,74 @@ const buildBrainToolAttemptText = (input: {
     .filter(Boolean)
     .join('\n')
 
-const renderDecisionNextAction = (record: HumanRoundRecord): string => {
-  switch (record.thought.nextAction.action) {
-    case 'learning':
-      return `- 你准备下一步做：准备学习 ${renderQuotedNames(
-        record.thought.nextAction.wantLearnSkillIds
-      )}。`
-    case 'hand':
-      return `- 你准备下一步做：准备进入 hand，${
-        record.thought.nextAction.toolUsePlan.mode === 'parallel'
-          ? `以 parallel 模式并行执行 ${renderQuotedNames(
-              record.thought.nextAction.toolUsePlan.calls.map((call) => call.toolName)
-            )}。`
-          : `以 serial 模式按顺序执行 ${renderQuotedNames(
-              record.thought.nextAction.toolUsePlan.calls.map((call) => call.toolName)
-            )}。`
-      }`
-    case 'mouth':
-      return '- 你准备下一步做：准备进入 mouth 组织最终交付。'
-  }
-}
-
-const renderThoughtTodolistUpdate = (record: HumanRoundRecord): string | undefined =>
-  record.thought.thought.todolist
-    ? [
-        '- 本轮更新待办路径：',
-        ...record.thought.thought.todolist.map((item) => `  - [${item.status}] ${item.item}`)
-      ].join('\n')
-    : undefined
-
-const renderThoughtProgressionUpdate = (record: HumanRoundRecord): string | undefined =>
-  record.thought.thought.progressionSummary
-    ? `- 本轮更新推进摘要：\n${record.thought.thought.progressionSummary}`
-    : undefined
-
 const renderBrainRoundDecision = (record: HumanRoundRecord): string =>
+  `- ${record.thought.thought.next}`
+
+const renderLearningExecution = (record: Extract<HumanRoundRecord, { execution: { kind: 'learning' } }>): string =>
   [
-    `- 当前与下一步：${record.thought.thought.next}`,
-    renderDecisionNextAction(record),
-    renderThoughtTodolistUpdate(record),
-    renderThoughtProgressionUpdate(record)
+    '- 类型：learning',
+    `- 学习：${renderQuotedNames(record.execution.learningOutcome.requestedSkillIds)}`,
+    `- 学习成功：${renderQuotedNames(record.execution.learningOutcome.loadedSkillIds)}`,
+    `- 已跳过重复：${renderQuotedNames(record.execution.learningOutcome.skippedDuplicateSkillIds)}`,
+    `- 未识别：${renderQuotedNames(record.execution.learningOutcome.skippedUnknownSkillIds)}`,
+    `- 当前 active tool 数：${String(record.execution.learningOutcome.activeToolCount)}`
+  ].join('\n')
+
+const renderHandExecution = (record: Extract<HumanRoundRecord, { execution: { kind: 'hand' } }>): string => {
+  const execution = record.execution
+  const executedToolNames = execution.toolResults.map((result) => result.toolName)
+  const actualToolNames =
+    executedToolNames.length > 0
+      ? executedToolNames
+      : execution.toolUsePlan.calls.map((call) => call.toolName)
+  const toolAttempts = execution.toolResults
+    .map((result, index) =>
+      buildBrainToolAttemptText({
+        call: execution.toolUsePlan.calls[index],
+        result
+      })
+    )
+    .join('\n')
+  const artifactLine =
+    execution.artifactRefs && execution.artifactRefs.length > 0
+      ? `- 产物：${renderInlineList(
+          execution.artifactRefs.map((artifact) =>
+            artifact.kind === 'file'
+              ? `\`${artifact.fileName}\``
+              : `draft review ${artifact.review.reviewId}`
+          ),
+          {
+            separator: '、',
+            fallback: 'none'
+          }
+        )}`
+      : undefined
+
+  return [
+    '- 类型：hand',
+    `- 模式：${execution.toolUsePlan.mode}`,
+    `- 调用：${renderQuotedNames(actualToolNames)}`,
+    toolAttempts,
+    artifactLine
   ]
     .filter(Boolean)
     .join('\n')
+}
 
 const renderBrainRoundExecution = (record: HumanRoundRecord): string => {
   switch (record.execution.kind) {
     case 'pre_execution_blocked':
-      return '- 没有进入真实执行，系统在执行前阻断了这轮动作。'
+      return ['- 类型：blocked', '- 结果：系统在执行前阻断，本轮未进入真实执行。'].join('\n')
     case 'learning':
-      return '- 进入 learning，按请求尝试补齐外置技能。'
-    case 'hand': {
-      const executedToolNames = record.execution.toolResults.map((result) => result.toolName)
-      const actualToolNames =
-        executedToolNames.length > 0
-          ? executedToolNames
-          : record.execution.toolUsePlan.calls.map((call) => call.toolName)
-      return `
-- 进入 hand，执行模式是 ${record.execution.toolUsePlan.mode}。
-- ${
-        record.execution.toolUsePlan.mode === 'parallel'
-          ? `实际并行执行了 ${renderQuotedNames(actualToolNames)}。`
-          : `实际按顺序执行了 ${renderQuotedNames(actualToolNames)}。`
-      }
-- 本轮实际执行了 ${String(record.execution.toolResults.length)} 个工具调用。
-`
-        .trim()
-        .replace(/\n\n+/g, '\n')
-    }
+      return renderLearningExecution(record as Extract<HumanRoundRecord, { execution: { kind: 'learning' } }>)
+    case 'hand':
+      return renderHandExecution(record as Extract<HumanRoundRecord, { execution: { kind: 'hand' } }>)
     case 'mouth':
-      return '- 进入 mouth，组织最终说明。'
-  }
-}
-
-const renderBrainRoundResult = (record: HumanRoundRecord): string => {
-  switch (record.execution.kind) {
-    case 'pre_execution_blocked':
-      return '- 本轮在执行前被系统阻断，未进入真实 tool 执行。'
-    case 'learning':
-      return `
-- 已加载的技能：${renderQuotedNames(record.execution.learningOutcome.loadedSkillIds)}
-- 已跳过的重复技能：${renderQuotedNames(record.execution.learningOutcome.skippedDuplicateSkillIds)}
-- 未识别的技能：${renderQuotedNames(record.execution.learningOutcome.skippedUnknownSkillIds)}
-- 当前 active tool 数：${String(record.execution.learningOutcome.activeToolCount)}
-`
-        .trim()
-        .replace(/\n\n+/g, '\n')
-    case 'hand': {
-      const execution = record.execution
-      const toolAttempts = execution.toolResults
-        .map((result, index) =>
-          buildBrainToolAttemptText({
-            call: execution.toolUsePlan.calls[index],
-            result
-          })
-        )
-        .join('\n')
-      const artifactLine =
-        execution.artifactRefs && execution.artifactRefs.length > 0
-          ? `- 产物：${renderInlineList(
-              execution.artifactRefs.map((artifact) =>
-                artifact.kind === 'file'
-                  ? `\`${artifact.fileName}\``
-                  : `draft review ${artifact.review.reviewId}`
-              ),
-              {
-                separator: '、',
-                fallback: 'none'
-              }
-            )}`
-          : ''
-
-      return [toolAttempts, artifactLine].filter(Boolean).join('\n')
-    }
-    case 'mouth':
-      return record.execution.completed ? '- 任务已完成。' : '- 任务未完成。'
+      return [
+        '- 类型：mouth',
+        '- 动作：组织最终交付',
+        `- 结果：${record.execution.completed ? 'completed' : 'incomplete'}`
+      ].join('\n')
   }
 }
 
@@ -321,14 +274,11 @@ const renderBrainRoundRecord = (record: HumanRoundRecord): string =>
   `
 - 第 ${record.roundId} 轮
 
-决策了什么：
+判断：
 ${renderBrainRoundDecision(record)}
 
-做了什么：
+执行：
 ${renderBrainRoundExecution(record)}
-
-结果是什么：
-${renderBrainRoundResult(record)}
 `.trim()
 
 export const renderBrainRoundSection = (records: HumanRoundRecord[]): string =>

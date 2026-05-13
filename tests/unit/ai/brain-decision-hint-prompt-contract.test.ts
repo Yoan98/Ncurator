@@ -140,4 +140,37 @@ describe('ai unit brain decision-hint prompt contract', () => {
     expect(prompt).toContain('usedFor')
     expect(prompt).toContain('支撑了最终交付的哪些地方')
   })
+
+  it('renders thought as progress-only context and keeps rounds as judgment plus execution history', () => {
+    const state = createInitialHumanState({
+      taskId: 'task-3',
+      userInput: '继续处理资料'
+    })
+
+    state.memory.thought = {
+      next: '这段不应作为 thought 区块正文出现',
+      todolist: [
+        {
+          item: '核对资料范围',
+          status: 'todo'
+        }
+      ],
+      progressionSummary: '已建立初始推进基线。'
+    }
+
+    const prompt = buildBrainPrompt({
+      state,
+      ctx: createFakeCtx()
+    })
+
+    expect(prompt.system).toContain('thought：当前任务的全局进度信息，按“待办路径 / 推进摘要”组织。')
+    expect(prompt.system).toContain('prior_rounds：当前任务中最近未压缩的过程历史，记录更早几轮的判断与执行。')
+    expect(prompt.system).toContain('latest_round：最近一轮完整过程记录，记录刚刚这一轮的判断与执行。')
+    expect(prompt.user).toContain('待办路径：')
+    expect(prompt.user).toContain('推进摘要：')
+    expect(prompt.user).toContain('核对资料范围')
+    expect(prompt.user).toContain('已建立初始推进基线。')
+    expect(prompt.user).not.toContain('当前与下一步：')
+    expect(prompt.user).not.toContain('这段不应作为 thought 区块正文出现')
+  })
 })
