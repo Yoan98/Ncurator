@@ -73,7 +73,7 @@ export const updateConversationMemoryAfterRun = async (input: {
   const result = await llmExecutor.chatStructured({
     caller: 'conversation.memory',
     schema: summarySchema,
-    schemaName: 'conversation_summary',
+    schemaName: 'conversation_memory',
     system: prompt.system,
     user: prompt.user,
     temperature: 0.2

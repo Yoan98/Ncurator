@@ -161,7 +161,7 @@
 | title      | Utf8  | 会话标题     |
 | created_at | Int64 | 创建时间戳   |
 
-### 表: chat_conversation_summary（会话记忆表）
+### 表: chat_conversation_memory（会话记忆表）
 
 存储会话级摘要记忆，用于运行时补充上下文。
 

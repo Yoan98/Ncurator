@@ -117,10 +117,10 @@ stateDiagram-v2
 
 ### 5.6 `memory_compaction`
 
-- 职责：单独调用 AI，把当前 run 内可压缩历史压缩为 `compactions(kind=rounds)`，并与已有的 `history` compaction block 做滚动合并。
+- 职责：单独调用 AI，把当前 run 内可压缩历史压缩为 `compactions(kind=rounds)`，并与已有的 `rounds` compaction block 做滚动合并。
 - 主要读取：`memory.taskRun.rounds`、`execution.contextBudget`。
 - 主要回写：`memory.taskRun.compactions`、`memory.taskRun.rounds`、`execution.stage`。
-- 约束：`latest_round` 永远保留原文；压缩成功后只保留最新一轮 `rounds`；`kind='rounds'` 在任意时刻只保留一个有效 compaction block，新一轮压缩必须带入上一轮 `history` 摘要并替换旧块；压缩块不持久化，任务完成后依赖 `conversation_summary` 延续跨任务信息。
+- 约束：`latest_round` 永远保留原文；压缩成功后只保留最新一轮 `rounds`；`kind='rounds'` 在任意时刻只保留一个有效 compaction block，新一轮压缩必须带入上一轮 `rounds` 摘要并替换旧块；压缩块不持久化，任务完成后依赖 conversation memory 延续跨任务信息。
 
 ## 6. 事件与交付
 

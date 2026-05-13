@@ -19,7 +19,7 @@ export const LANCE_TABLES = {
   WORKSPACE_NODE: 'workspace_node',
   CHAT_SESSION: 'chat_session',
   CHAT_MESSAGE: 'chat_message',
-  CHAT_CONVERSATION_MEMORY: 'chat_conversation_summary',
+  CHAT_CONVERSATION_MEMORY: 'chat_conversation_memory',
   FILE_REVIEW: 'file_review',
   FILE_REVIEW_CHANGE: 'file_review_change',
   COMMIT_ATTEMPT: 'commit_attempt',

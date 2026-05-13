@@ -261,7 +261,7 @@ type AiRunEventStage =
 
 ### `ChatConversationMemory`
 
-`ChatConversationMemory` 持久化在 `chat_conversation_summary.memory_json`，用于同一会话内跨 human task 延续上下文。它只保存任务完成后的连续性信息，不保存单次 run 内的压缩块。
+`ChatConversationMemory` 持久化在 `chat_conversation_memory.memory_json`，用于同一会话内跨 human task 延续上下文。它只保存任务完成后的连续性信息，不保存单次 run 内的压缩块。
 
 ```ts
 type ChatConversationMemory = {
@@ -1086,7 +1086,7 @@ flowchart LR
     T[("task")]
     TM[("memory.thought")]
     HM[("memory.taskRun.rounds / compactions")]
-    CM[("chat_conversation_summary")]
+    CM[("chat_conversation_memory")]
     SK[("skills.learnedSkillIds")]
     WH[("execution.pendingDecisionHint")]
     CB["context_budget"]
