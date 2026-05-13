@@ -62,6 +62,7 @@ export const HUMAN_DOCX_BATCH_WRITE_LIMIT = 3
 export const HUMAN_TOOL_USE_PLAN_LIMIT = 3
 export const DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS = 200_000
 export const CONTEXT_COMPACTION_TRIGGER_RATIO = 0.8
+export const CONTEXT_COMPACTION_TARGET_RATIO = 0.25
 export const HUMAN_ROUND_EXECUTION_KINDS = [
   'pre_execution_blocked',
   'learning',

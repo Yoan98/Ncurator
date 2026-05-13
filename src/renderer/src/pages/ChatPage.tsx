@@ -12,6 +12,7 @@ import {
   HiViewColumns
 } from 'react-icons/hi2'
 import type {
+  AiArtifactRef,
   AiRunEvent,
   ChatMessage,
   ChatSession,
@@ -85,6 +86,75 @@ const createAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
   reviewTargets: [],
   blockers: []
 })
+
+const artifactToWorkbenchFile = (artifact: AiArtifactRef): WorkbenchFileRef | null => {
+  if (artifact.kind !== 'file') return null
+  return {
+    path: artifact.path,
+    fileName: artifact.fileName,
+    origin: artifact.reviewId ? 'edited_draft' : 'artifact',
+    summary: artifact.summary,
+    reviewId: artifact.reviewId
+  }
+}
+
+const artifactToReviewTarget = (
+  artifact: AiArtifactRef
+): AssistantTurnViewModel['reviewTargets'][number] | null => {
+  if (artifact.kind !== 'draft_review') return null
+  return {
+    reviewId: artifact.review.reviewId,
+    title: '审阅稿',
+    changeCount: artifact.review.changeCount,
+    status: 'pending_confirm'
+  }
+}
+
+const buildAssistantTurnFromMessage = (message: ChatMessage): AssistantTurnViewModel | null => {
+  if (message.role !== 'assistant') return null
+  const artifacts = message.artifacts || []
+  if (artifacts.length === 0) return null
+  return {
+    messageId: message.id,
+    finalAnswer: message.content,
+    status: 'completed',
+    steps: [],
+    readFiles: [],
+    editedFiles: dedupeFileRefs(
+      artifacts
+        .map(artifactToWorkbenchFile)
+        .filter((file): file is WorkbenchFileRef => Boolean(file))
+    ),
+    reviewTargets: artifacts
+      .map(artifactToReviewTarget)
+      .filter(
+        (
+          target
+        ): target is AssistantTurnViewModel['reviewTargets'][number] => Boolean(target)
+      ),
+    blockers: []
+  }
+}
+
+const appendArtifactForMessage = (
+  store: Record<string, AiArtifactRef[]>,
+  messageId: string,
+  artifact: AiArtifactRef
+): void => {
+  const currentArtifacts = store[messageId] || []
+  const exists = currentArtifacts.some((item) =>
+    item.kind === 'file' && artifact.kind === 'file'
+      ? item.path === artifact.path &&
+        item.reviewId === artifact.reviewId &&
+        item.summary === artifact.summary
+      : item.kind === 'draft_review' &&
+          artifact.kind === 'draft_review' &&
+          item.review.reviewId === artifact.review.reviewId
+  )
+  if (!exists) {
+    store[messageId] = [...currentArtifacts, artifact]
+  }
+}
 
 const ACTIVE_REVIEW_WORKSPACE_STATUSES = new Set<FileReview['status']>([
   'pending_confirm',
@@ -175,6 +245,7 @@ const ChatPage: React.FC = () => {
   } | null>(null)
 
   const assistantMsgIdRef = useRef<string | null>(null)
+  const assistantArtifactsRef = useRef<Record<string, AiArtifactRef[]>>({})
   const lastSubmittedInputRef = useRef('')
   const lastSubmittedReferencesRef = useRef<SelectedReference[]>([])
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -341,6 +412,18 @@ const ChatPage: React.FC = () => {
     try {
       const messages = await window.api.chatMessageList(sessionId)
       setCurrentMessages(messages)
+      assistantArtifactsRef.current = {}
+      setAssistantTurns(() => {
+        const nextTurns: Record<string, AssistantTurnViewModel> = {}
+        for (const message of messages) {
+          if (message.artifacts && message.artifacts.length > 0) {
+            assistantArtifactsRef.current[message.id] = message.artifacts
+          }
+          const turn = buildAssistantTurnFromMessage(message)
+          if (turn) nextTurns[message.id] = turn
+        }
+        return nextTurns
+      })
       scrollToBottom()
     } catch (error) {
       console.error('Failed to load messages', error)
@@ -897,6 +980,20 @@ const ChatPage: React.FC = () => {
       }
 
       if (event.type === 'file_artifact') {
+        const messageId = assistantMsgIdRef.current
+        if (messageId) {
+          appendArtifactForMessage(assistantArtifactsRef.current, messageId, {
+            kind: 'file',
+            capability: event.capability,
+            path: event.path,
+            fileName: event.fileName,
+            operation: event.operation,
+            artifactRole: event.artifactRole,
+            reviewId: event.reviewId,
+            draftSnapshotId: event.draftSnapshotId,
+            summary: event.summary
+          })
+        }
         const artifactFile: WorkbenchFileRef = {
           path: event.path,
           fileName: event.fileName,
@@ -992,6 +1089,14 @@ const ChatPage: React.FC = () => {
       }
 
       if (event.type === 'draft_review_ready') {
+        const messageId = assistantMsgIdRef.current
+        if (messageId) {
+          appendArtifactForMessage(assistantArtifactsRef.current, messageId, {
+            kind: 'draft_review',
+            review: event.review,
+            summary: '审阅稿已生成'
+          })
+        }
         updateActiveTurn((current) => ({
           ...current,
           reviewTargets: mergeReviewTargets(current.reviewTargets, {
@@ -1047,7 +1152,8 @@ const ChatPage: React.FC = () => {
           session_id: currentSessionId,
           role: 'assistant',
           content: event.text,
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          artifacts: assistantArtifactsRef.current[messageId] || []
         }
         void window.api.chatMessageSave(assistantMessage).catch(console.error)
         return
@@ -1185,6 +1291,7 @@ const ChatPage: React.FC = () => {
         timestamp: Date.now()
       }
       setCurrentMessages((previous) => [...previous, assistantMessage])
+      assistantArtifactsRef.current[assistantMessageId] = []
 
       const response = await window.api.aiRunStart({
         sessionId: currentSessionId,
@@ -1401,6 +1508,7 @@ const ChatPage: React.FC = () => {
           timestamp: Date.now()
         }
       ])
+      assistantArtifactsRef.current[assistantMessageId] = []
 
       const response = await window.api.aiRunStart({
         sessionId: currentSessionId,

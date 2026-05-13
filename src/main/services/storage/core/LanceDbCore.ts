@@ -292,6 +292,7 @@ export class LanceDbCore {
           new arrow.Field('content', new arrow.Utf8()),
           new arrow.Field('timestamp', new arrow.Int64()),
           new arrow.Field('sources', new arrow.Utf8(), true),
+          new arrow.Field('artifacts_json', new arrow.Utf8(), true),
           new arrow.Field('error', new arrow.Bool(), true)
         ])
       },

@@ -147,6 +147,7 @@ export type SeedChatHistoryInput = {
     content: string
     timestamp: number
     sources?: string
+    artifacts?: ChatMessage['artifacts']
     error?: boolean
   }>
   memory?: ChatSessionMemory

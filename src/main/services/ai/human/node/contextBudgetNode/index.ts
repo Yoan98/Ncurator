@@ -5,7 +5,6 @@ import {
 } from '../../constants'
 import { getCompressibleHistoryRounds } from '../../memory/roundHistory'
 import { buildBrainPrompt } from '../../prompts/brain'
-import { renderSessionMemoryForBrain } from '../../shared/sessionMemoryRenderers'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { estimatePromptTokens } from '../../utils/tokenEstimate'
 
@@ -17,11 +16,12 @@ export const createContextBudgetNode = (input: {
     input.ctx.checkCancelled()
     input.cache.currentState = state
 
-    const sessionMemory = await input.ctx.loadSessionMemory()
+    const history = await input.ctx.loadHistory()
     const prompt = buildBrainPrompt({
       state,
       ctx: input.ctx,
-      sessionMemoryText: renderSessionMemoryForBrain(sessionMemory)
+      sessionMemoryText: history.sessionSummaryText,
+      recentConversationText: history.recentTurnsText
     })
     const tokenEstimate = estimatePromptTokens(prompt)
     const contextWindowTokens =

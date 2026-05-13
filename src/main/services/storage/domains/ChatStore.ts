@@ -1,4 +1,5 @@
 import type { ChatMessage, ChatSession, ChatSessionMemory } from '../../../types/store'
+import type { AiArtifactRef } from '../../../types/store'
 import { LanceDbCore, LANCE_TABLES } from '../core/LanceDbCore'
 
 type ChatSessionRow = { id?: unknown; title?: unknown; created_at?: unknown }
@@ -9,6 +10,7 @@ type ChatMessageRow = {
   content?: unknown
   timestamp?: unknown
   sources?: unknown
+  artifacts_json?: unknown
   error?: unknown
 }
 
@@ -16,6 +18,16 @@ const toChatRole = (value: unknown): ChatMessage['role'] => {
   const role = String(value || '')
   if (role === 'assistant' || role === 'system') return role
   return 'user'
+}
+
+const parseArtifacts = (value: unknown): AiArtifactRef[] | undefined => {
+  if (!value) return undefined
+  try {
+    const parsed = JSON.parse(String(value)) as AiArtifactRef[]
+    return Array.isArray(parsed) ? parsed : undefined
+  } catch {
+    return undefined
+  }
 }
 
 export class ChatStore {
@@ -84,7 +96,18 @@ export class ChatStore {
   public async saveChatMessage(message: ChatMessage): Promise<void> {
     const table = await this.core.openTable(LANCE_TABLES.CHAT_MESSAGE)
     await table.delete(`id = '${this.core.escapeSqlString(message.id)}'`)
-    await table.add([{ ...message }])
+    await table.add([
+      {
+        id: message.id,
+        session_id: message.session_id,
+        role: message.role,
+        content: message.content,
+        timestamp: message.timestamp,
+        sources: message.sources,
+        error: message.error,
+        artifacts_json: message.artifacts ? JSON.stringify(message.artifacts) : undefined
+      }
+    ])
   }
 
   public async getChatMessages(sessionId: string): Promise<ChatMessage[]> {
@@ -103,6 +126,7 @@ export class ChatStore {
           content: String(row.content || ''),
           timestamp: Number(row.timestamp || 0),
           sources: row.sources ? String(row.sources) : undefined,
+          artifacts: parseArtifacts(row.artifacts_json),
           error: typeof row.error === 'boolean' ? row.error : undefined
         }
       })

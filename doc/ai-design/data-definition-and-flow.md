@@ -264,25 +264,9 @@ type AiRunEventStage =
 `ChatSessionMemory` 持久化在 `chat_session_memory.memory_json`，用于同一会话内跨 human task 延续上下文。它只保存任务完成后的连续性信息，不保存单次 run 内的压缩块。
 
 ```ts
-type SessionTaskArtifact = {
-  kind: 'file' | 'draft_review'
-  fileName?: string
-  path?: string
-  reviewId?: string
-  summary: string
-}
-
 type ChatSessionMemory = {
   // 由 AI 在 run 成功后重写的跨任务滚动摘要。
   rollingSummary: string
-  // 由 runtime 真实追加的最近任务结果，不由 AI 生成。
-  recentTaskSummaries: Array<{
-    runId: string
-    userInput: string
-    assistantOutput: string
-    artifacts: SessionTaskArtifact[]
-    completedAt: number
-  }>
 }
 ```
 

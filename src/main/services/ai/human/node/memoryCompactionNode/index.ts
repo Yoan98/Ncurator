@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import type { AiRunContext } from '../../../types'
 import { getCompressibleHistoryRounds, getLastRoundFocus } from '../../memory/roundHistory'
+import { CONTEXT_COMPACTION_TARGET_RATIO } from '../../constants'
 import { buildHistoryCompactionPrompt } from '../../prompts/compaction'
+import { renderBrainRoundSection } from '../../shared/historyRenderers'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { estimateTextTokens } from '../../utils/tokenEstimate'
 
@@ -25,6 +27,14 @@ export const createMemoryCompactionNode = (input: {
       }
     }
 
+    const currentHistoryBlock =
+      state.memory.history.compactBlocks.find((block) => block.kind === 'history') || null
+    const mergedRoundIds = Array.from(
+      new Set([
+        ...(currentHistoryBlock?.source.roundIds || []),
+        ...targetRounds.map((round) => round.roundId)
+      ])
+    )
     const tokenEstimateBefore = state.execution.contextBudget?.tokenEstimate || 0
     input.ctx.sendEvent({
       type: 'context_compaction_started',
@@ -37,7 +47,11 @@ export const createMemoryCompactionNode = (input: {
       stage: 'human_brain'
     })
 
-    const prompt = buildHistoryCompactionPrompt({ state })
+    const prompt = buildHistoryCompactionPrompt({
+      existingCompactSummary: currentHistoryBlock?.summary,
+      historyText: renderBrainRoundSection(targetRounds),
+      targetCompressionRatio: CONTEXT_COMPACTION_TARGET_RATIO
+    })
     const summary = await input.ctx.chatText({
       caller: 'human.memory_compaction',
       taskId: state.task.taskId,
@@ -53,7 +67,7 @@ export const createMemoryCompactionNode = (input: {
       kind: 'history' as const,
       summary: String(summary || '').trim() || '已压缩较早过程历史。',
       source: {
-        roundIds: targetRounds.map((round) => round.roundId)
+        roundIds: mergedRoundIds
       },
       createdAt: Date.now(),
       tokenEstimateBefore,
@@ -65,7 +79,7 @@ export const createMemoryCompactionNode = (input: {
       runId: input.ctx.runId,
       taskId: state.task.taskId,
       compactBlockId,
-      sourceRoundIds: compactBlock.source.roundIds,
+      sourceRoundIds: mergedRoundIds,
       tokenEstimateBefore,
       tokenEstimateAfter,
       completedAt: Date.now(),
@@ -81,7 +95,10 @@ export const createMemoryCompactionNode = (input: {
       memory: {
         ...state.memory,
         history: {
-          compactBlocks: [...state.memory.history.compactBlocks, compactBlock],
+          compactBlocks: [
+            ...state.memory.history.compactBlocks.filter((block) => block.kind !== 'history'),
+            compactBlock
+          ],
           roundHistory: latestRound ? [latestRound] : []
         }
       }

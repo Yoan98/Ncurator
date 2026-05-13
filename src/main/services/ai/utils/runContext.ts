@@ -1,4 +1,4 @@
-import type { KbAvailability, SelectedReference } from '../../../../shared/types'
+import type { AiArtifactRef, KbAvailability, SelectedReference } from '../../../../shared/types'
 import type { ChatMessage } from '../../../types/store'
 import type { AiRunStartPayload } from '../types'
 
@@ -88,11 +88,37 @@ export const normalizeSelectedReferences = (
 
   return normalized.length > 0 ? normalized : undefined
 }
+
+const formatArtifactRef = (artifact: AiArtifactRef): string =>
+  artifact.kind === 'file'
+    ? [
+        'file',
+        artifact.fileName ? `fileName=${artifact.fileName}` : '',
+        artifact.path ? `path=${artifact.path}` : '',
+        artifact.reviewId ? `reviewId=${artifact.reviewId}` : '',
+        artifact.artifactRole ? `artifactRole=${artifact.artifactRole}` : '',
+        artifact.summary ? `summary=${artifact.summary}` : ''
+      ]
+        .filter(Boolean)
+        .join('；')
+    : [
+        'draft_review',
+        `reviewId=${artifact.review.reviewId}`,
+        `changeCount=${String(artifact.review.changeCount)}`,
+        artifact.summary ? `summary=${artifact.summary}` : ''
+      ]
+        .filter(Boolean)
+        .join('；')
+
 export const formatTurns = (messages: ChatMessage[]): string =>
   messages
     .map((message) => {
       const role = String(message.role || 'user')
       const content = String(message.content || '')
-      return `${role}: ${content}`
+      const artifactText =
+        message.artifacts && message.artifacts.length > 0
+          ? `\nartifacts:\n${message.artifacts.map((artifact) => `- ${formatArtifactRef(artifact)}`).join('\n')}`
+          : ''
+      return `${role}: ${content}${artifactText}`
     })
     .join('\n')

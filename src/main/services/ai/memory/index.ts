@@ -9,8 +9,7 @@ import type {
   AiLlmIoRecord,
   AiRunEvent,
   AiRuntimeSettings,
-  LlmRuntimeConfig,
-  SessionTaskArtifact
+  LlmRuntimeConfig
 } from '../../../../shared/types'
 import type { AiLlmDriver } from '../llmExecutor'
 
@@ -19,26 +18,8 @@ const rollingSummarySchema = z.object({
 })
 
 const EMPTY_SESSION_MEMORY: ChatSessionMemory = {
-  rollingSummary: '',
-  recentTaskSummaries: []
+  rollingSummary: ''
 }
-
-const SESSION_RECENT_TASK_LIMIT = 5
-
-const toSessionTaskArtifact = (artifact: AiArtifactRef): SessionTaskArtifact =>
-  artifact.kind === 'file'
-    ? {
-        kind: 'file',
-        fileName: artifact.fileName,
-        path: artifact.path,
-        reviewId: artifact.reviewId,
-        summary: artifact.summary
-      }
-    : {
-        kind: 'draft_review',
-        reviewId: artifact.review.reviewId,
-        summary: artifact.summary
-      }
 
 export const updateSessionMemoryAfterRun = async (input: {
   runId: string
@@ -89,29 +70,15 @@ export const updateSessionMemoryAfterRun = async (input: {
     system: buildSessionMemoryPrompt(),
     user: JSON.stringify({
       previousRollingSummary: prev.rollingSummary,
-      recentTaskSummaries: prev.recentTaskSummaries,
-      newTask: {
-        runId: input.runId,
-        userInput: String(input.userInput || ''),
-        assistantOutput: String(input.assistantOutput || ''),
-        artifacts: (input.artifacts || []).map(toSessionTaskArtifact)
-      }
+      latestUserMessage: String(input.userInput || ''),
+      latestAssistantMessage: String(input.assistantOutput || ''),
+      latestArtifacts: input.artifacts || []
     }),
     temperature: 0.2
   })
 
   const memory: ChatSessionMemory = {
-    rollingSummary: String(result.rollingSummary || '').trim(),
-    recentTaskSummaries: [
-      ...prev.recentTaskSummaries,
-      {
-        runId: input.runId,
-        userInput: String(input.userInput || ''),
-        assistantOutput: String(input.assistantOutput || ''),
-        artifacts: (input.artifacts || []).map(toSessionTaskArtifact),
-        completedAt: Date.now()
-      }
-    ].slice(-SESSION_RECENT_TASK_LIMIT)
+    rollingSummary: String(result.rollingSummary || '').trim()
   }
   await input.chatStore.saveSessionMemory(sessionId, memory)
 }

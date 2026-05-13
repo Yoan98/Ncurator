@@ -77,7 +77,7 @@ stateDiagram-v2
 ### 5.1 `brain`
 
 - 职责：`human` 内唯一推理节点，负责基于当前任务、稳定记忆、过程历史与收敛提示产出新的 `HumanThoughtDecision`。
-- 主要读取：`task`、`memory.stable`、`memory.history.roundHistory`、`memory.history.compactBlocks`、`execution.watchHint`、`skills.learnedSkillIds`、`ctx.loadSessionMemory()`、`ctx.referenceScope`、`ctx.workspace`。
+- 主要读取：`task`、`memory.stable`、`memory.history.roundHistory`、`memory.history.compactBlocks`、`execution.watchHint`、`skills.learnedSkillIds`、`ctx.loadHistory()`、`ctx.referenceScope`、`ctx.workspace`。
 - 主要回写：`memory.stable`、`execution.currentThought`、`execution.stage`、`execution.watchHint`、必要时 `execution.deliveryGuidanceItems`、`trace.steps`。
 - 约束：输出必须通过 `ctx.chatStructured` 与 schema 校验；`memory.stable` 只能通过 patch 修改。
 - brain prompt 推荐按 `principles / thought_contract / stable_memory_contract / context_block_guide / output_contract / output_shape / examples` 组织：`principles` 承载工作方式与自主性边界，`thought_contract` 承载动作选择与 tool plan 语义，`stable_memory_contract` 承载长期任务笔记写法和更新原则，`output_contract` 只承载输出层规则。
@@ -111,16 +111,16 @@ stateDiagram-v2
 ### 5.5 `context_budget`
 
 - 职责：在每次进入 `brain` 前估算当前 prompt token 使用量，并决定继续推理、触发压缩或明确失败。
-- 主要读取：`task`、`memory.stable`、`memory.history.roundHistory`、`memory.history.compactBlocks`、`ctx.loadSessionMemory()`、`ctx.humanRuntimeOverrides.modelContextWindowTokens`。
+- 主要读取：`task`、`memory.stable`、`memory.history.roundHistory`、`memory.history.compactBlocks`、`ctx.loadHistory()`、`ctx.humanRuntimeOverrides.modelContextWindowTokens`。
 - 主要回写：`execution.contextBudget`、`execution.stage`。
 - 约束：默认上下文窗口为 `200_000 tokens`，超过 `80%` 且存在可压缩的非 latest history 时进入 `memory_compaction`；超过窗口且没有可压缩内容时发送 `runtime_issue(context_window_exceeded)` 并失败，不做静默字符串截断。
 
 ### 5.6 `memory_compaction`
 
-- 职责：单独调用 AI，把当前 run 内 `roundHistory.slice(0, -1)` 压缩为 `compactBlocks(kind=history)`。
+- 职责：单独调用 AI，把当前 run 内可压缩历史压缩为 `compactBlocks(kind=history)`，并与已有的 `history` compact block 做滚动合并。
 - 主要读取：`memory.history.roundHistory`、`execution.contextBudget`。
 - 主要回写：`memory.history.compactBlocks`、`memory.history.roundHistory`、`execution.stage`。
-- 约束：`latest_history` 永远保留原文；压缩成功后只保留最新一轮 `roundHistory`，压缩块不持久化，任务完成后依赖 `session_memory` 延续跨任务信息。
+- 约束：`latest_history` 永远保留原文；压缩成功后只保留最新一轮 `roundHistory`；`kind='history'` 在任意时刻只保留一个有效 compact block，新一轮压缩必须带入上一轮 `history` 摘要并替换旧块；压缩块不持久化，任务完成后依赖 `session_memory` 延续跨任务信息。
 
 ## 6. 事件与交付
 

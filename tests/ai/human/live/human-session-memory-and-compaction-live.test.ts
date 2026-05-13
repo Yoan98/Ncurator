@@ -29,7 +29,6 @@ describe('ai human live backend', () => {
           return {
             skipped: true,
             savedRollingSummary: '',
-            recentTaskCount: 0,
             compactBlockCount: 0,
             remainingRoundCount: 0,
             events: []
@@ -50,8 +49,7 @@ describe('ai human live backend', () => {
             }
           ],
           memory: {
-            rollingSummary: '用户正在围绕发布准备事项连续推进。',
-            recentTaskSummaries: []
+            rollingSummary: '用户正在围绕发布准备事项连续推进。'
           }
         })
 
@@ -177,7 +175,6 @@ describe('ai human live backend', () => {
         return {
           skipped: false,
           savedRollingSummary: savedMemory?.rollingSummary || '',
-          recentTaskCount: savedMemory?.recentTaskSummaries.length || 0,
           compactBlockCount: compactedState.memory.history.compactBlocks.length,
           remainingRoundCount: compactedState.memory.history.roundHistory.length,
           events: runtime.eventCollector.snapshot()
@@ -196,7 +193,6 @@ describe('ai human live backend', () => {
         const completedEvents = filterAiRunEventsByType(result.events, 'context_compaction_completed')
         runtime.assertThat(
           result.savedRollingSummary.trim().length > 0 &&
-            result.recentTaskCount === 1 &&
             result.compactBlockCount === 1 &&
             result.remainingRoundCount === 1 &&
             startedEvents.length === 1 &&
@@ -206,7 +202,6 @@ describe('ai human live backend', () => {
             message: 'live session memory 与 memory compaction 应真实调用模型，并写回 session memory / compact block。',
             data: {
               savedRollingSummary: result.savedRollingSummary,
-              recentTaskCount: result.recentTaskCount,
               compactBlockCount: result.compactBlockCount,
               remainingRoundCount: result.remainingRoundCount,
               startedEvents,

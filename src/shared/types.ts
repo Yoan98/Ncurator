@@ -385,6 +385,7 @@ export interface ChatMessage {
   timestamp: number
   // JSON string of SearchResult[]
   sources?: string
+  artifacts?: AiArtifactRef[]
   error?: boolean
 }
 
@@ -1017,23 +1018,8 @@ export type AiRunEvent = AiRunEventPayload & {
   stage?: AiRunEventStage
 }
 
-export type SessionTaskArtifact = {
-  kind: 'file' | 'draft_review'
-  fileName?: string
-  path?: string
-  reviewId?: string
-  summary: string
-}
-
 export type ChatSessionMemory = {
   rollingSummary: string
-  recentTaskSummaries: Array<{
-    runId: string
-    userInput: string
-    assistantOutput: string
-    artifacts: SessionTaskArtifact[]
-    completedAt: number
-  }>
 }
 
 export type ChatSessionMemoryRow = {

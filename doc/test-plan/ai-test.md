@@ -767,9 +767,9 @@
 - 测试类型：`backend`
 - 实现状态：`已实现`
 - What：验证 run 完成后写入新版 `ChatSessionMemory`，且下一次 human 的 `brain` prompt 会渲染 `session_memory`。
-- Why：跨任务连续性现在依赖持久 session memory，必须守住 AI 只更新 `rollingSummary`、runtime 追加真实 `recentTaskSummaries` 的边界。
-- How：seed 会话与旧 memory，调用真实 `updateSessionMemoryAfterRun`，再启动同一 session 的真实 human graph 并检查第二次 `brain` prompt。
-- Oracle：保存结构只包含新版 `rollingSummary + recentTaskSummaries` 语义；`recentTaskSummaries.artifacts` 对齐 runtime artifacts；下一次 `brain` prompt 含 `<session_memory>` 且不依赖旧字段。
+- Why：跨任务连续性现在依赖持久 session memory，必须守住 AI 只更新 `rollingSummary`，近期真实对话与 artifacts 则来自 `chat_message`。
+- How：seed 会话 memory 与最近消息，调用真实 `updateSessionMemoryAfterRun`，再启动同一 session 的真实 human graph 并检查第二次 `brain` prompt。
+- Oracle：保存结构只包含新版 `rollingSummary`；下一次 `brain` prompt 同时含 `<session_memory>` 与 `<recent_conversation>`，且 recent conversation 中可看到最近 assistant 产物信息。
 - Not：不验证 live 模型总结质量。
 
 ##### `context-compaction-history-block`
@@ -851,7 +851,7 @@
 - What：验证 live 模式下 session memory 总结与 human history 压缩节点都能真实调用模型并写回结构化结果。
 - Why：记忆与压缩是新增 AI 调用链路，必须至少有一条 live case 守住真实模型可用性。
 - How：先通过真实 `session.memory` 更新 `ChatSessionMemory`，再构造两轮 run 内 history 并直接执行真实 `memory_compaction` 节点。
-- Oracle：`rollingSummary` 非空、`recentTaskSummaries` 由 runtime 追加；压缩后产生一个 `compactBlocks(kind=history)`，`roundHistory` 只保留 latest；事件流出现 `context_compaction_started / context_compaction_completed`。
+- Oracle：`rollingSummary` 非空；压缩后产生一个 `compactBlocks(kind=history)`，`roundHistory` 只保留 latest；事件流出现 `context_compaction_started / context_compaction_completed`。
 - Not：不验证 live 模型在完整 autonomous graph 中是否自然触发压缩。
 
 ##### `human-risk-report-draft-live`

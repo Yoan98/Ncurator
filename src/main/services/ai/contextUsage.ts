@@ -5,6 +5,7 @@ import {
 } from './human/constants'
 import { renderSessionMemoryForBrain } from './human/shared/sessionMemoryRenderers'
 import { estimateTextTokens } from './human/utils/tokenEstimate'
+import { formatTurns } from './utils/runContext'
 
 export const getAiContextUsage = async (input: {
   sessionId: string
@@ -19,7 +20,7 @@ export const getAiContextUsage = async (input: {
   const messages = await input.chatStore.getRecentChatMessages(input.sessionId, 12)
   const baseText = [
     renderSessionMemoryForBrain(memory),
-    messages.map((message) => `${message.role}: ${message.content}`).join('\n')
+    formatTurns(messages)
   ].join('\n\n')
   const usedContextTokens = estimateTextTokens(baseText)
   const contextWindowTokens = DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS

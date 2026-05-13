@@ -1,10 +1,7 @@
 import type { AiRunContext } from '../../types'
 import { renderReferenceScopeText } from '../../prompts/referenceScope'
 import { HUMAN_TOOL_USE_PLAN_LIMIT } from '../constants'
-import {
-  getLastRoundFocus,
-  getRecentHistoryRounds
-} from '../memory/roundHistory'
+import { getLastRoundFocus, getRecentHistoryRounds } from '../memory/roundHistory'
 import {
   getEffectiveLearnedSkillIds,
   getSkillDefinition,
@@ -12,10 +9,7 @@ import {
   listExternalSkillDefinitions
 } from '../skills'
 import { renderHumanStableNotes } from '../shared/memoryRenderers'
-import {
-  renderBrainCompactBlocks,
-  renderBrainRoundSection
-} from '../shared/historyRenderers'
+import { renderBrainCompactBlocks, renderBrainRoundSection } from '../shared/historyRenderers'
 import { getToolSpec } from '../tools/registry'
 import {
   renderBrainOutputSchemaForPrompt,
@@ -107,6 +101,7 @@ export const buildBrainPrompt = (input: {
   state: HumanState
   ctx: AiRunContext
   sessionMemoryText?: string
+  recentConversationText?: string
 }) => {
   const outputShapeText = indentLines(
     renderBrainOutputSchemaForPrompt(humanThoughtDecisionSchema),
@@ -181,9 +176,10 @@ export const buildBrainPrompt = (input: {
     - search_strategy：当前任务默认遵循的检索思路提示。
     - terminal_platform：当前 terminal 所在平台；如果你决定使用命令行，应据此选择命令语法。
     - your_notes：稳定任务笔记，按“当前理解 / 关键依据 / 检查清单”组织。
-    - session_memory：当前会话中前序任务的滚动摘要与最近任务结果，用于理解用户在同一窗口里的连续诉求。
+    - session_memory：当前会话中跨任务仍有效的滚动摘要，用于理解用户在同一窗口里的连续主线、稳定偏好与当前状态。
+    - recent_conversation：最近几轮真实对话内容与产物，用于判断用户刚刚说了什么、你刚刚交付了什么。
     - compact_blocks：当前任务中已压缩的过程历史，用于识别较早事实、失败路径和已验证动作。
-    - recent_history：当前任务中最近未压缩的过程历史，用于判断刚才已经做过什么。
+    - recent_history：当前任务中最近未压缩的过程历史，用于判断最近已经做过什么。
     - latest_history：最近一轮完整过程记录，用于判断刚做了什么、传了什么参数、拿到了什么结果。
     - skill_catalog：当前已生效或仍可学习的 skills，以及当前可直接调用的工具说明。
     - correction_hint：当前额外的收敛或纠偏提示；若无则为 none。
@@ -288,6 +284,10 @@ ${renderSkillCatalogSection(input.state)}
     <session_memory>
     ${input.sessionMemoryText || 'none'}
     </session_memory>
+
+    <recent_conversation>
+    ${input.recentConversationText || 'none'}
+    </recent_conversation>
 
     <history>
       <compact_blocks>
