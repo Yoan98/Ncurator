@@ -9,7 +9,7 @@ import { getToolSpec } from '../../tools/registry'
 import type {
   HumanThoughtDecision,
   HumanResult,
-  HumanThoughtMemory,
+  HumanThought,
   HumanState,
   HumanTraceStep,
   HumanWatchHint
@@ -156,7 +156,7 @@ export const returnToBrainAfterTraceState = (input: {
 export const resolveBrainDecisionWatchHint = (input: {
   state: HumanState
   thought: HumanThoughtDecision
-  thoughtMemory: HumanThoughtMemory
+  thoughtMemory: HumanThought
   watchHint?: HumanWatchHint
 }): HumanWatchHint | undefined => {
   if (input.watchHint) return input.watchHint
@@ -174,7 +174,7 @@ export const resolveBrainDecisionWatchHint = (input: {
   }
   if (input.thought.nextAction.action !== 'mouth') return undefined
 
-  const pendingItems = input.thoughtMemory.todolist
+  const pendingItems = (input.thoughtMemory.todolist || [])
     .filter((item) => item.status === 'todo')
     .map((item) => item.item)
 
@@ -207,7 +207,7 @@ const resolveBrainNextStage = (input: {
 export const applyBrainDecisionState = (input: {
   state: HumanState
   thought: HumanThoughtDecision
-  thoughtMemory: HumanThoughtMemory
+  thoughtMemory: HumanThought
   watchHint?: HumanWatchHint
   createdAt: number
 }): HumanState => {

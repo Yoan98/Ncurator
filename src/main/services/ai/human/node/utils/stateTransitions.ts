@@ -4,7 +4,7 @@ import type {
   HumanThoughtDecision,
   HumanRuntimeCache,
   HumanState,
-  HumanThoughtMemory,
+  HumanThought,
   HumanWatchHint,
 } from '../../types'
 import {
@@ -96,7 +96,7 @@ export const applyBrainDecisionTransition = (input: {
   cache: HumanRuntimeCache
   state: HumanState
   thought: HumanThoughtDecision
-  thoughtMemory: HumanThoughtMemory
+  thoughtMemory: HumanThought
   watchHint?: HumanWatchHint
 }): HumanState => {
   const watchHint = resolveBrainDecisionWatchHint({

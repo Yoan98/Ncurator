@@ -89,16 +89,13 @@ describe('ai human mock-llm backend', () => {
           llmDriver: createScriptedStructuredOutputDriver({
             'session.memory': [
               ({ user }) => {
-                const parsed = JSON.parse(user) as {
-                  previousRollingSummary?: string
-                  latestUserMessage?: string
-                  latestArtifacts?: Array<{ summary?: string }>
-                }
+                const readBlock = (tag: string): string =>
+                  user.match(new RegExp(`<${tag}>\\s*([\\s\\S]*?)\\s*</${tag}>`))?.[1]?.trim() || ''
                 return {
                   rollingSummary: [
-                    parsed.previousRollingSummary,
-                    parsed.latestUserMessage,
-                    parsed.latestArtifacts?.[0]?.summary
+                    readBlock('previous_rolling_summary'),
+                    readBlock('latest_user_message'),
+                    readBlock('latest_artifacts').match(/summary=([^；\n]+)/)?.[1]
                   ].filter(Boolean).join(' / ')
                 }
               }

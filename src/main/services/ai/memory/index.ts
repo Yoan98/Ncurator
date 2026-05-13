@@ -63,17 +63,19 @@ export const updateSessionMemoryAfterRun = async (input: {
     driver: input.llmDriver
   })
 
+  const prompt = buildSessionMemoryPrompt({
+    previousRollingSummary: prev.rollingSummary,
+    latestUserMessage: String(input.userInput || ''),
+    latestAssistantMessage: String(input.assistantOutput || ''),
+    latestArtifacts: input.artifacts || []
+  })
+
   const result = await llmExecutor.chatStructured({
     caller: 'session.memory',
     schema: rollingSummarySchema,
     schemaName: 'session_memory',
-    system: buildSessionMemoryPrompt(),
-    user: JSON.stringify({
-      previousRollingSummary: prev.rollingSummary,
-      latestUserMessage: String(input.userInput || ''),
-      latestAssistantMessage: String(input.assistantOutput || ''),
-      latestArtifacts: input.artifacts || []
-    }),
+    system: prompt.system,
+    user: prompt.user,
     temperature: 0.2
   })
 

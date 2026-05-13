@@ -286,13 +286,6 @@ interface HumanTodoItem {
   status: 'todo' | 'done' | 'obsolete'
 }
 
-interface HumanThoughtMemory {
-  // 当前任务的行动路径；由 brain 输出 thought.todolist 时全量覆盖。
-  todolist: HumanTodoItem[]
-  // 当前任务推进状态的累积性理解摘要；由 brain 输出 thought.progressionSummary 时全量覆盖。
-  progressionSummary: string
-}
-
 interface HumanThought {
   // 每轮 brain 必填；描述当前现状、当前判断和下一步要做什么。
   next: string
@@ -389,7 +382,7 @@ interface HumanState {
   execution: HumanExecution
   memory: {
     // 当前 run 内可展示的任务推进记忆。
-    thought: HumanThoughtMemory
+    thought: HumanThought
     // 过程历史与 run 内压缩块。
     history: HumanMemoryHistory
   }

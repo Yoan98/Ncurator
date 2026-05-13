@@ -25,7 +25,6 @@ import {
   humanLearningOutcomeSchema,
   humanCompactBlockSchema,
   humanMemoryHistorySchema,
-  humanThoughtMemorySchema,
   humanResultSchema,
   humanRoundExecutionSchema,
   humanRoundRecordSchema,
@@ -73,7 +72,6 @@ export type HumanThought = z.infer<typeof humanThoughtSchema>
 export type BrainNextAction = z.infer<typeof brainNextActionSchema>
 export type HumanTodoItemStatus = z.infer<typeof humanTodoItemStatusSchema>
 export type HumanTodoItem = z.infer<typeof humanTodoItemSchema>
-export type HumanThoughtMemory = z.infer<typeof humanThoughtMemorySchema>
 export type HumanThoughtDecision = z.infer<typeof humanThoughtDecisionSchema>
 export type DeliveryGuidanceItem = z.infer<typeof deliveryGuidanceItemSchema>
 export type HumanReference = z.infer<typeof humanReferenceSchema>

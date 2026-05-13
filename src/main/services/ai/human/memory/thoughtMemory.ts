@@ -1,4 +1,4 @@
-import type { HumanThought, HumanThoughtMemory, HumanTodoItem } from '../types'
+import type { HumanThought, HumanTodoItem } from '../types'
 
 const normalizeThoughtText = (value: string): string =>
   String(value || '')
@@ -17,9 +17,10 @@ const normalizeTodoItems = (items: HumanTodoItem[]): HumanTodoItem[] =>
     .filter((item) => item.item.length > 0)
 
 export const applyThoughtPatch = (input: {
-  memory: HumanThoughtMemory
+  memory: HumanThought
   thought: HumanThought
-}): HumanThoughtMemory => ({
+}): HumanThought => ({
+  next: normalizeThoughtText(input.thought.next),
   todolist: Array.isArray(input.thought.todolist)
     ? normalizeTodoItems(input.thought.todolist)
     : input.memory.todolist,

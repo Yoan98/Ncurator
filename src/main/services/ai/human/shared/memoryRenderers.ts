@@ -22,7 +22,9 @@ const renderTodolistValue = (
   todolist: HumanState['memory']['thought']['todolist'],
   mode: HumanMemoryRenderMode
 ): string =>
-  todolist.length > 0 ? todolist.map(renderTodoItem).join('\n') : getRenderFallback(mode)
+  todolist && todolist.length > 0
+    ? todolist.map(renderTodoItem).join('\n')
+    : getRenderFallback(mode)
 
 export const renderHumanThoughtField = (input: {
   state: HumanState
@@ -31,7 +33,7 @@ export const renderHumanThoughtField = (input: {
 }): string =>
   input.field === 'todolist'
     ? renderTodolistValue(input.state.memory.thought.todolist, input.mode)
-    : renderThoughtTextValue(input.state.memory.thought[input.field], input.mode)
+    : renderThoughtTextValue(input.state.memory.thought[input.field] || '', input.mode)
 
 export const renderHumanThought = (
   state: HumanState,
@@ -39,7 +41,7 @@ export const renderHumanThought = (
 ): string =>
   [
     '当前与下一步：',
-    renderThoughtTextValue(state.execution.currentThought?.thought.next || '', mode),
+    renderThoughtTextValue(state.memory.thought.next, mode),
     '',
     '待办路径：',
     renderHumanThoughtField({

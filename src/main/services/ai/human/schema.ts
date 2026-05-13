@@ -214,15 +214,10 @@ export const humanTodoItemSchema = z.object({
   status: humanTodoItemStatusSchema
 })
 
-export const humanThoughtMemorySchema = z.object({
-  todolist: z.array(humanTodoItemSchema),
-  progressionSummary: z.string()
-})
-
 export const humanThoughtSchema = z.object({
   next: z.string().min(1),
   todolist: z.array(humanTodoItemSchema).optional(),
-  progressionSummary: z.string().min(1).optional()
+  progressionSummary: z.string().optional()
 })
 
 export const humanReferenceSchema = z.object({
@@ -362,7 +357,7 @@ export const humanMemoryHistorySchema = z.object({
 })
 
 export const humanMemorySchema = z.object({
-  thought: humanThoughtMemorySchema,
+  thought: humanThoughtSchema,
   history: humanMemoryHistorySchema
 })
 

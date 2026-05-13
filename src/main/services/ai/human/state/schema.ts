@@ -25,7 +25,8 @@ export const createEmptyHumanTaskInput = (): HumanTaskInput => ({
   userInput: ''
 })
 
-export const createDefaultHumanThoughtMemory = (): HumanState['memory']['thought'] => ({
+export const createDefaultHumanThought = (): HumanState['memory']['thought'] => ({
+  next: '尚未开始。',
   todolist: [],
   progressionSummary: ''
 })
@@ -36,7 +37,7 @@ export const createDefaultHumanMemoryHistory = (): HumanState['memory']['history
 })
 
 export const createDefaultHumanMemory = (): HumanState['memory'] => ({
-  thought: createDefaultHumanThoughtMemory(),
+  thought: createDefaultHumanThought(),
   history: createDefaultHumanMemoryHistory()
 })
 
