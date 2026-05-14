@@ -160,7 +160,7 @@ export const buildBrainPrompt = (input: {
     - reference_scope：当前工作区、默认知识范围、显式缩圈范围和可用边界。
     - search_strategy：当前任务默认遵循的检索思路提示。
     - terminal_platform：当前 terminal 所在平台；如果你决定使用命令行，应据此选择命令语法。
-    - thought：当前任务的全局进度信息，按“待办路径 / 推进摘要”组织。
+    - task_progress：当前任务的全局进度信息，按“待办路径 / 推进摘要”组织。
     - conversation_summary：当前会话中跨任务仍有效的滚动摘要，用于理解用户在同一窗口里的连续主线、稳定偏好与当前状态。
     - recent_turns：最近几轮真实对话内容与产物，用于判断用户刚刚说了什么、你刚刚交付了什么。
     - compactions：当前任务中已压缩的过程历史，用于识别较早事实、失败路径和已验证动作。
@@ -301,9 +301,9 @@ ${renderSkillCatalogSection(input.state)}
     </latest_round>
   </task_run_context>
 
-  <thought>
+  <task_progress>
   ${renderHumanThought(input.state, 'brain_prompt')}
-  </thought>
+  </task_progress>
 
   <decision_hint>
 ${input.state.execution.pendingDecisionHint ? renderDecisionHintForBrain(input.state.execution.pendingDecisionHint) : 'none'}

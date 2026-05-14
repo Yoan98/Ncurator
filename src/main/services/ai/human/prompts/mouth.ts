@@ -32,7 +32,7 @@ export const buildMouthPrompt = (input: { state: HumanState; ctx: AiRunContext }
 
     - task_goal：用户当前要你完成或回答的事情。
     - reference_scope：当前工作区、资料范围和参考边界。
-    - thought：当前任务已经收敛的全局进度信息，包含待办路径和推进摘要。
+    - task_progress：当前任务已经收敛的全局进度信息，包含待办路径和推进摘要。
     - history：过程证据，记录已发生的关键事实、关键结果和失败信息；它可能比最终答复需要的更细。
     - delivery_guidance：上游节点明确要求你必须吸收的补充说明；
     - runtime_artifacts：结果层摘要，用于说明本次最终产出了什么、改了什么、留下了什么结果物。
@@ -62,9 +62,9 @@ ${input.state.task.userInput}
 ${renderReferenceScopeText(input.ctx.referenceScope)}
   </reference_scope>
 
-  <thought>
+  <task_progress>
 ${renderHumanThought(input.state, 'mouth_prompt')}
-  </thought>
+  </task_progress>
 
   <history>
 ${renderMouthHistoryText({
