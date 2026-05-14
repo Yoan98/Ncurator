@@ -7,7 +7,7 @@ import { renderBrainRoundSection } from '../../shared/historyRenderers'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { estimateTextTokens } from '../../utils/tokenEstimate'
 
-export const createMemoryCompactionNode = (input: {
+export const createContextCompactionNode = (input: {
   ctx: AiRunContext
   cache: HumanRuntimeCache
 }) => {
@@ -53,7 +53,7 @@ export const createMemoryCompactionNode = (input: {
       targetCompressionRatio: CONTEXT_COMPACTION_TARGET_RATIO
     })
     const summary = await input.ctx.chatText({
-      caller: 'human.memory_compaction',
+      caller: 'human.context_compaction',
       taskId: state.task.taskId,
       system: prompt.system,
       user: prompt.user,

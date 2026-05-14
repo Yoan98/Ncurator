@@ -275,8 +275,8 @@ type ChatConversationMemory = {
 ### `HumanState`
 
 ```ts
-// human 当前所在的节点；context_budget 负责预算路由，memory_compaction 负责 run 内历史压缩。
-type HumanStage = 'context_budget' | 'memory_compaction' | 'brain' | 'learning' | 'hand' | 'mouth'
+// human 当前所在的节点；context_budget 负责预算路由，context_compaction 负责 run 内历史压缩。
+type HumanStage = 'context_budget' | 'context_compaction' | 'brain' | 'learning' | 'hand' | 'mouth'
 
 // human 当前运行状态；目前基线只区分运行中和已完成。
 type HumanStatus = 'running' | 'completed'
@@ -369,7 +369,7 @@ interface HumanExecution {
 interface HumanTaskRunMemory {
   // 当前 run 内未压缩的正式过程历史；latest history 始终保留原文。
   rounds: HumanRoundRecord[]
-  // 当前 run 内由 memory_compaction 生成的历史压缩块；不持久化到 conversation memory。
+  // 当前 run 内由 context_compaction 生成的历史压缩块；不持久化到 conversation memory。
   compactions: Array<{
     id: string
     kind: 'rounds'
@@ -1122,7 +1122,7 @@ flowchart LR
     SK[("skills.learnedSkillIds")]
     WH[("execution.pendingDecisionHint")]
     CB["context_budget"]
-    MC["memory_compaction"]
+    MC["context_compaction"]
     B["brain"]
     CD[("execution.currentThought")]
     TR[("trace.steps")]
@@ -1179,7 +1179,7 @@ flowchart LR
     DG[("execution.deliveryGuidanceItems")]
     TR[("trace.steps")]
     CB["context_budget"]
-    MC["memory_compaction"]
+    MC["context_compaction"]
     B["brain"]
 
     CD -->|读取 toolUsePlan| H

@@ -170,7 +170,7 @@ describe('ai unit context budget node', () => {
 
     const nextState = await smallWindowNode(roundState)
 
-    expect(nextState.execution.stage).toBe('memory_compaction')
+    expect(nextState.execution.stage).toBe('context_compaction')
     const event = events.find(
       (item) => item.type === 'context_budget_evaluated'
     )

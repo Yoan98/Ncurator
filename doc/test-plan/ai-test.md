@@ -776,10 +776,10 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证低上下文窗口下真实触发 `memory_compaction`，并把较早 `rounds` 转成 `compactions`。
+- What：验证低上下文窗口下真实触发 `context_compaction`，并把较早 `rounds` 转成 `compactions`。
 - Why：run 内长链路压缩是防止 brain prompt 膨胀的核心保护，必须通过真实 graph 路由守住。
-- How：通过低 `modelContextWindowTokens` override 先产生多轮历史，再触发 `context_budget -> memory_compaction -> context_budget -> brain`。
-- Oracle：事件流出现 `context_compaction_started / context_compaction_completed`；`human.memory_compaction` 被调用；后续 `brain` prompt 出现 `<compactions>`，且被压缩的旧 round 不再作为未压缩 prior/latest round 渲染。
+- How：通过低 `modelContextWindowTokens` override 先产生多轮历史，再触发 `context_budget -> context_compaction -> context_budget -> brain`。
+- Oracle：事件流出现 `context_compaction_started / context_compaction_completed`；`human.context_compaction` 被调用；后续 `brain` prompt 出现 `<compactions>`，且被压缩的旧 round 不再作为未压缩 prior/latest round 渲染。
 - Not：不验证压缩摘要内容质量。
 
 ##### `todolist-memory-maintenance`
@@ -850,7 +850,7 @@
 - 实现状态：`已实现`
 - What：验证 live 模式下 conversation memory 总结与 human history 压缩节点都能真实调用模型并写回结构化结果。
 - Why：记忆与压缩是新增 AI 调用链路，必须至少有一条 live case 守住真实模型可用性。
-- How：先通过真实 `conversation.memory` 更新 `ChatConversationMemory`，再构造两轮 run 内 history 并直接执行真实 `memory_compaction` 节点。
+- How：先通过真实 `conversation.memory` 更新 `ChatConversationMemory`，再构造两轮 run 内 history 并直接执行真实 `context_compaction` 节点。
 - Oracle：`summary` 非空；压缩后产生一个 `compactions(kind=rounds)`，`rounds` 只保留 latest；事件流出现 `context_compaction_started / context_compaction_completed`。
 - Not：不验证 live 模型在完整 autonomous graph 中是否自然触发压缩。
 

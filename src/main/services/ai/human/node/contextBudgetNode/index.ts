@@ -74,7 +74,7 @@ export const createContextBudgetNode = (input: {
       ...state,
       execution: {
         ...state.execution,
-        stage: shouldCompact ? 'memory_compaction' : 'brain',
+        stage: shouldCompact ? 'context_compaction' : 'brain',
         contextBudget: contextBudgetSnapshot
       }
     }

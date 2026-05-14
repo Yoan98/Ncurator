@@ -5,7 +5,7 @@ import {
   buildHandExecution,
   buildLearningExecution
 } from '../../../../src/main/services/ai/human/memory/rounds'
-import { createMemoryCompactionNode } from '../../../../src/main/services/ai/human/node/memoryCompactionNode'
+import { createContextCompactionNode } from '../../../../src/main/services/ai/human/node/contextCompactionNode'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 import { loadLiveLlmConfigFromEnv, hasLiveLlmConfigInEnv } from '../../../harness/backend/llmConfig'
@@ -73,7 +73,7 @@ describe('ai human live backend', () => {
           modelName: liveConfig.model_name
         })
         const cache = createHumanRuntimeCache()
-        const compactionNode = createMemoryCompactionNode({ ctx, cache })
+        const compactionNode = createContextCompactionNode({ ctx, cache })
         const initialState = createInitialHumanState({
           taskId: runtime.taskId,
           userInput: '请继续推进发布准备事项。'
@@ -201,7 +201,7 @@ describe('ai human live backend', () => {
             completedEvents.length === 1,
           {
             name: 'human-live-conversation-memory-and-compaction-ai-calls-complete',
-            message: 'live conversation memory 与 memory compaction 应真实调用模型，并写回 conversation memory / compaction block。',
+            message: 'live conversation memory 与 context compaction 应真实调用模型，并写回 conversation memory / compaction block。',
             data: {
               savedSummary: result.savedSummary,
               compactBlockCount: result.compactBlockCount,

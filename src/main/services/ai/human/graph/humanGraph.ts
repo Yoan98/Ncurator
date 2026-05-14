@@ -2,10 +2,10 @@ import { END, START, StateGraph } from '@langchain/langgraph'
 import type { AiRunContext, HumanRunDispatchOptions } from '../../types'
 import type { HumanState, HumanTaskInput, HumanTaskOutput } from '../types'
 import { createBrainNode } from '../node/brainNode'
+import { createContextCompactionNode } from '../node/contextCompactionNode'
 import { createContextBudgetNode } from '../node/contextBudgetNode'
 import { createLearningNode } from '../node/learningNode'
 import { createHandNode } from '../node/handNode'
-import { createMemoryCompactionNode } from '../node/memoryCompactionNode'
 import { createMouthNode } from '../node/mouthNode'
 import { createHumanRuntimeCache } from '../node/utils/runtimeCache'
 import { createHumanRunStateSchema, createInitialHumanState } from '../state/schema'
@@ -24,7 +24,7 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
     try {
       const cache = createHumanRuntimeCache()
       const contextBudgetNode = createContextBudgetNode({ ctx, cache })
-      const memoryCompactionNode = createMemoryCompactionNode({ ctx, cache })
+      const contextCompactionNode = createContextCompactionNode({ ctx, cache })
       const brainNode = createBrainNode({ ctx, cache })
       const learningNode = createLearningNode({ ctx, cache })
       const handNode = createHandNode({ ctx, cache })
@@ -39,9 +39,9 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
           cache.currentState = state as HumanState
           return contextBudgetNode(state as HumanState)
         })
-        .addNode('human_memory_compaction_node', (state) => {
+        .addNode('human_context_compaction_node', (state) => {
           cache.currentState = state as HumanState
-          return memoryCompactionNode(state as HumanState)
+          return contextCompactionNode(state as HumanState)
         })
         .addNode('human_brain_node', (state) => {
           cache.currentState = state as HumanState
@@ -62,12 +62,12 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
         .addEdge(START, 'human_context_budget_node')
         .addConditionalEdges('human_context_budget_node', (state) => {
           const humanState = state as HumanState
-          if (humanState.execution.stage === 'memory_compaction') {
-            return 'human_memory_compaction_node'
+          if (humanState.execution.stage === 'context_compaction') {
+            return 'human_context_compaction_node'
           }
           return 'human_brain_node'
         })
-        .addEdge('human_memory_compaction_node', 'human_context_budget_node')
+        .addEdge('human_context_compaction_node', 'human_context_budget_node')
         .addConditionalEdges('human_brain_node', (state) => {
           const humanState = state as HumanState
           if (humanState.execution.stage === 'learning') return 'human_learning_node'

@@ -5,7 +5,7 @@ import {
   buildHandExecution,
   buildLearningExecution
 } from '../../../../src/main/services/ai/human/memory/rounds'
-import { createMemoryCompactionNode } from '../../../../src/main/services/ai/human/node/memoryCompactionNode'
+import { createContextCompactionNode } from '../../../../src/main/services/ai/human/node/contextCompactionNode'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
@@ -201,7 +201,7 @@ describe('ai human mock-llm backend', () => {
                 })
               }
             ],
-            'human.memory_compaction': [
+            'human.context_compaction': [
               {
                 text: '已压缩：学习 docx-read 的较早过程。'
               }
@@ -231,7 +231,7 @@ describe('ai human mock-llm backend', () => {
         const startedEvents = filterAiRunEventsByType(result.events, 'context_compaction_started')
         const completedEvents = filterAiRunEventsByType(result.events, 'context_compaction_completed')
         const compactionCalls = result.llmIoRecords.filter(
-          (record) => record.caller === 'human.memory_compaction'
+          (record) => record.caller === 'human.context_compaction'
         )
 
         runtime.assertThat(
@@ -242,7 +242,7 @@ describe('ai human mock-llm backend', () => {
             result.compactedPromptSeen,
           {
             name: 'context-compaction-routes-through-rounds-compaction-block',
-            message: '低阈值应触发 memory_compaction，并在后续 brain prompt 中以 compactions 继续渲染。',
+            message: '低阈值应触发 context_compaction，并在后续 brain prompt 中以 compactions 继续渲染。',
             data: {
               startedEvents,
               completedEvents,
@@ -272,7 +272,7 @@ describe('ai human mock-llm backend', () => {
           },
         })
         const cache = createHumanRuntimeCache()
-        const compactionNode = createMemoryCompactionNode({ ctx, cache })
+        const compactionNode = createContextCompactionNode({ ctx, cache })
         const baseState = createInitialHumanState({
           taskId: runtime.taskId,
           userInput: '请完成一个会触发两次历史压缩的长任务。'
@@ -439,7 +439,7 @@ describe('ai human mock-llm backend', () => {
         let index = 0
         const originalChatText = ctx.chatText
         ctx.chatText = async (input) => {
-          if (input.caller === 'human.memory_compaction') {
+          if (input.caller === 'human.context_compaction') {
             compactionInputs.push(input.user)
             index += 1
             return index === 1

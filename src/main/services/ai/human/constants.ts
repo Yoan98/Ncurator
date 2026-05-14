@@ -16,7 +16,7 @@ export const RUNTIME_SKILL_IDS = [
 
 export const HUMAN_SKILL_SOURCES = ['builtin', 'external'] as const
 
-export const HUMAN_STAGES = ['brain', 'learning', 'hand', 'mouth', 'context_budget', 'memory_compaction'] as const
+export const HUMAN_STAGES = ['brain', 'learning', 'hand', 'mouth', 'context_budget', 'context_compaction'] as const
 export const HUMAN_STATUSES = ['running', 'completed'] as const
 
 export const HUMAN_STEP_ACTIONS = [
