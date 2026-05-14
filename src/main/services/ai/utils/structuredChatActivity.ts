@@ -8,6 +8,7 @@ import type {
   AiStructuredOutputMethod,
   AiStructuredOutputProfile,
   AiStructuredOutputTransport,
+  BrainContextBudgetSnapshot,
   JsonObject,
   JsonValue,
   LlmProviderKind
@@ -31,6 +32,7 @@ type LlmCallTelemetry = {
   providerKind?: LlmProviderKind
   streamingMode: AiLlmStreamingMode
   attempt?: number
+  contextBudgetSnapshot?: BrainContextBudgetSnapshot
 }
 
 export type LlmCallExecutionResult<T> = {
@@ -96,6 +98,10 @@ export const runLlmCallWithActivity = async <T>(input: {
   let chunkCount = 0
   let firstTokenAt: number | undefined
   let latestRawText = ''
+  const contextBudgetSnapshot =
+    input.telemetry.caller === 'human.brain'
+      ? input.telemetry.contextBudgetSnapshot
+      : undefined
 
   const details = {
     callId,
@@ -226,6 +232,7 @@ export const runLlmCallWithActivity = async <T>(input: {
       profile: result.profile,
       fallbackChain,
       streamingMode: input.telemetry.streamingMode,
+      contextBudgetSnapshot,
       streamed,
       chunkCount,
       firstTokenLatencyMs,
@@ -279,6 +286,7 @@ export const runLlmCallWithActivity = async <T>(input: {
       dynamicContextHash,
       fallbackChain: [],
       streamingMode: input.telemetry.streamingMode,
+      contextBudgetSnapshot,
       streamed: chunkCount > 0,
       chunkCount,
       firstTokenLatencyMs,

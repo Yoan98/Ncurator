@@ -113,7 +113,7 @@ stateDiagram-v2
 - 职责：在每次进入 `brain` 前估算当前 prompt token 使用量，并决定继续推理、触发压缩或明确失败。
 - 主要读取：`task`、`memory.thought`、`memory.taskRun.rounds`、`memory.taskRun.compactions`、`ctx.loadConversationContext()`、`ctx.humanRuntimeOverrides.modelContextWindowTokens`。
 - 主要回写：`execution.contextBudget`、`execution.stage`。
-- 约束：默认上下文窗口为 `200_000 tokens`，超过 `80%` 且存在可压缩的非 latest history 时进入 `memory_compaction`；超过窗口且没有可压缩内容时发送 `runtime_issue(context_window_exceeded)` 并失败，不做静默字符串截断。
+- 约束：默认上下文窗口为 `200_000 tokens`，超过 `80%` 且存在可压缩的非 latest history 时进入 `memory_compaction`；超过窗口且没有可压缩内容时发送 `runtime_issue(context_window_exceeded)` 并失败，不做静默字符串截断。每次预算评估都要生成一份 `BrainContextBudgetSnapshot`，写入 `execution.contextBudget`，并通过 `context_budget_evaluated` 事件落到日志；这份快照仅用于诊断和 LLM IO 关联，不进入 brain prompt。
 
 ### 5.6 `memory_compaction`
 
@@ -124,7 +124,7 @@ stateDiagram-v2
 
 ## 6. 事件与交付
 
-- 正式过程事件统一使用 `human_step`、`tool_call_*`、`decision_hint`、`context_compaction_started`、`context_compaction_completed`、`file_artifact`、`draft_review_ready`、`answer_token`、`answer_completed`。
+- 正式过程事件统一使用 `human_step`、`tool_call_*`、`decision_hint`、`context_budget_evaluated`、`context_compaction_started`、`context_compaction_completed`、`file_artifact`、`draft_review_ready`、`answer_token`、`answer_completed`。
 - 不再保留旧任务编排事件。
 - `HumanTaskOutput` 只包含：
   - `taskId`

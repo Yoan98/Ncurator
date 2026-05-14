@@ -42,7 +42,7 @@ export const createMemoryCompactionNode = (input: {
       taskId: state.task.taskId,
       targetRoundIds: targetRounds.map((round) => round.roundId),
       tokenEstimateBefore,
-      thresholdTokens: state.execution.contextBudget?.triggerTokens || 0,
+      thresholdTokens: state.execution.contextBudget?.compactionTriggerTokens || 0,
       createdAt: Date.now(),
       stage: 'human_brain'
     })

@@ -18,6 +18,7 @@ import type {
   AiRunEvent,
   AiRunEventStage,
   AiRunStatus,
+  BrainContextBudgetSnapshot,
   ChatConversationMemory,
   FileReviewDetail,
   SelectedReference
@@ -118,6 +119,7 @@ export type AiRunContext = {
     schema: z.ZodType<T>
     schemaName: string
     temperature?: number
+    contextBudgetSnapshot?: BrainContextBudgetSnapshot
   }) => Promise<T>
   chatText: (input: {
     caller: string

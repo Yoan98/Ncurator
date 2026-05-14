@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type { AiRunContext } from '../../../types'
 import {
   CONTEXT_COMPACTION_TRIGGER_RATIO,
@@ -27,9 +28,34 @@ export const createContextBudgetNode = (input: {
     const contextWindowTokens =
       input.ctx.humanRuntimeOverrides?.modelContextWindowTokens ||
       DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
-    const triggerTokens = Math.floor(contextWindowTokens * CONTEXT_COMPACTION_TRIGGER_RATIO)
+    const compactionTriggerTokens = Math.floor(
+      contextWindowTokens * CONTEXT_COMPACTION_TRIGGER_RATIO
+    )
     const targetRounds = getCompressibleHistoryRounds(state)
-    const shouldCompact = tokenEstimate > triggerTokens && targetRounds.length > 0
+    const hasCompressibleHistory = targetRounds.length > 0
+    const shouldCompact = tokenEstimate > compactionTriggerTokens && hasCompressibleHistory
+    const contextBudgetSnapshot = {
+      evaluationId: randomUUID(),
+      tokenEstimate,
+      contextWindowTokens,
+      compactionTriggerTokens,
+      hasCompressibleHistory
+    } as const
+    const createdAt = Date.now()
+    const decision = shouldCompact
+      ? 'compact'
+      : tokenEstimate > contextWindowTokens
+        ? 'fail_over_window'
+        : 'continue'
+    input.ctx.sendEvent({
+      type: 'context_budget_evaluated',
+      runId: input.ctx.runId,
+      taskId: state.task.taskId,
+      stage: 'human_brain',
+      decision,
+      snapshot: contextBudgetSnapshot,
+      createdAt
+    })
     if (tokenEstimate > contextWindowTokens && !shouldCompact) {
       const message = `当前上下文约 ${String(tokenEstimate)} tokens，超过模型窗口 ${String(contextWindowTokens)} tokens，且没有可继续压缩的过程历史。`
       input.ctx.sendEvent({
@@ -49,11 +75,7 @@ export const createContextBudgetNode = (input: {
       execution: {
         ...state.execution,
         stage: shouldCompact ? 'memory_compaction' : 'brain',
-        contextBudget: {
-          tokenEstimate,
-          contextWindowTokens,
-          triggerTokens
-        }
+        contextBudget: contextBudgetSnapshot
       }
     }
   }

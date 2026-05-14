@@ -347,6 +347,14 @@ interface HumanExecution {
   lastToolResults?: ToolCallResult[]
   // 最近一次 learning 的真实执行结果；主要供 runtime 排障与回放使用。
   lastLearningOutcome?: HumanLearningOutcome
+  // 最近一次进入 brain 前的上下文预算快照；只用于压缩路由、日志与 LLM 调用关联，不进入 prompt。
+  contextBudget?: {
+    evaluationId: string
+    tokenEstimate: number
+    contextWindowTokens: number
+    compactionTriggerTokens: number
+    hasCompressibleHistory: boolean
+  }
   // 运行时收集到的结构化交付物引用；由 hand 写入，mouth 只透传。
   artifacts: AiArtifactRef[]
   // brain 在决定 nextAction=mouth 时声明的引用资料列表；供 mouth 最终交付时按 usedFor 披露。
@@ -988,6 +996,22 @@ interface RunCancelledEvent {
   runId: string
 }
 
+interface ContextBudgetEvaluatedEvent {
+  type: 'context_budget_evaluated'
+  runId: string
+  taskId?: string
+  stage: 'human_brain'
+  decision: 'continue' | 'compact' | 'fail_over_window'
+  snapshot: {
+    evaluationId: string
+    tokenEstimate: number
+    contextWindowTokens: number
+    compactionTriggerTokens: number
+    hasCompressibleHistory: boolean
+  }
+  createdAt: number
+}
+
 interface AiLlmIoRecord {
   // 本次 LLM 调用的唯一标识。
   callId: string
@@ -1034,6 +1058,14 @@ interface AiLlmIoRecord {
   >
   // 本次调用的全局流式策略。
   streamingMode?: 'force_stream' | 'force_non_stream'
+  // 当 caller 为 human.brain 时，对应这次 brain 调用前的上下文预算快照；只用于排障与日志关联。
+  contextBudgetSnapshot?: {
+    evaluationId: string
+    tokenEstimate: number
+    contextWindowTokens: number
+    compactionTriggerTokens: number
+    hasCompressibleHistory: boolean
+  }
   // 本次调用是否实际走了流式传输。
   streamed?: boolean
   // 本次调用收到的文本 chunk 数。

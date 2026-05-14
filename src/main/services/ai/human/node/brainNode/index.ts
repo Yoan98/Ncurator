@@ -24,7 +24,8 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
       }),
       schema: humanThoughtDecisionSchema,
       schemaName: 'human_brain_decision',
-      temperature: 0.1
+      temperature: 0.1,
+      contextBudgetSnapshot: state.execution.contextBudget
     })
     const parsedThought = humanThoughtDecisionSchema.parse(rawOutput)
     const thoughtMemory = applyThoughtPatch({

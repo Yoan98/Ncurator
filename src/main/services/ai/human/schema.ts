@@ -302,9 +302,11 @@ export const humanExecutionSchema = z.object({
   references: z.array(humanReferenceSchema).optional(),
   contextBudget: z
     .object({
+      evaluationId: z.string().min(1),
       tokenEstimate: z.number().int().min(0),
       contextWindowTokens: z.number().int().min(1),
-      triggerTokens: z.number().int().min(1)
+      compactionTriggerTokens: z.number().int().min(1),
+      hasCompressibleHistory: z.boolean()
     })
     .optional()
 })

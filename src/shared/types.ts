@@ -658,6 +658,13 @@ export type AiToolCallResult = {
   diagnostic?: AiToolCallDiagnostic
   resourceContext?: AiToolResourceContext
 }
+export type BrainContextBudgetSnapshot = {
+  evaluationId: string
+  tokenEstimate: number
+  contextWindowTokens: number
+  compactionTriggerTokens: number
+  hasCompressibleHistory: boolean
+}
 export type AiLlmIoRecord = {
   callId: string
   runId: string
@@ -681,6 +688,7 @@ export type AiLlmIoRecord = {
   profile?: AiStructuredOutputProfile
   fallbackChain: AiStructuredOutputProfile[]
   streamingMode?: AiLlmStreamingMode
+  contextBudgetSnapshot?: BrainContextBudgetSnapshot
   streamed?: boolean
   chunkCount?: number
   firstTokenLatencyMs?: number
@@ -969,6 +977,15 @@ type AiRunEventPayload =
       runId: string
       taskId?: string
       text: string
+    }
+  | {
+      type: 'context_budget_evaluated'
+      runId: string
+      taskId?: string
+      stage: 'human_brain'
+      decision: 'continue' | 'compact' | 'fail_over_window'
+      snapshot: BrainContextBudgetSnapshot
+      createdAt: number
     }
   | {
       type: 'context_compaction_started'

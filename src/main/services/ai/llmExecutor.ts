@@ -10,6 +10,7 @@ import type {
   AiStructuredOutputMethod,
   AiStructuredOutputProfile,
   AiStructuredOutputTransport,
+  BrainContextBudgetSnapshot,
   JsonObject,
   LLMConfig,
   LlmRuntimeConfig,
@@ -123,6 +124,7 @@ export type AiLlmStructuredRequest<T extends Record<string, unknown>> = {
   user: string
   schema: z.ZodType<T>
   temperature?: number
+  contextBudgetSnapshot?: BrainContextBudgetSnapshot
 }
 
 export type AiLlmExecutor = {
@@ -723,7 +725,8 @@ export const createAiLlmExecutor = (input: {
           baseUrl: cfg.base_url,
           providerKind: resolveConfigProviderKind(cfg),
           streamingMode,
-          attempt: 1
+          attempt: 1,
+          contextBudgetSnapshot: request.contextBudgetSnapshot
         },
         execute: async (observer) =>
           await runStructuredChatInvocation({

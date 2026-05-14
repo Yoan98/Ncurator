@@ -102,6 +102,13 @@ describe('streaming run log writer', () => {
           cacheHitRate: 0.6,
           source: 'response_metadata'
         },
+        contextBudgetSnapshot: {
+          evaluationId: 'budget-1',
+          tokenEstimate: 1234,
+          contextWindowTokens: 200000,
+          compactionTriggerTokens: 160000,
+          hasCompressibleHistory: true
+        },
         streamingMode: 'force_non_stream',
         streamed: false,
         chunkCount: 0,
@@ -125,6 +132,15 @@ describe('streaming run log writer', () => {
       expect(timelineEvents).toHaveLength(1)
       expect(runtimeEvents).toHaveLength(1)
       expect(llmIoRecords).toHaveLength(1)
+      expect(llmIoRecords[0]).toMatchObject({
+        contextBudgetSnapshot: {
+          evaluationId: 'budget-1',
+          tokenEstimate: 1234,
+          contextWindowTokens: 200000,
+          compactionTriggerTokens: 160000,
+          hasCompressibleHistory: true
+        }
+      })
 
       await writer.finalize({
         meta: {

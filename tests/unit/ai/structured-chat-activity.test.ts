@@ -20,12 +20,20 @@ describe('ai unit structured chat activity', () => {
       system: 'system prompt',
       user: 'user prompt',
       telemetry: {
-        caller: 'unit.test',
-        schemaName: 'unit_schema',
+        caller: 'human.brain',
+        schemaName: 'human_brain_decision',
         providerKind: 'openai-compatible',
         modelName: 'scripted-llm',
         baseUrl: 'https://scripted.local/v1',
-        attempt: 1
+        streamingMode: 'force_non_stream',
+        attempt: 1,
+        contextBudgetSnapshot: {
+          evaluationId: 'budget-1',
+          tokenEstimate: 1234,
+          contextWindowTokens: 200000,
+          compactionTriggerTokens: 160000,
+          hasCompressibleHistory: true
+        }
       },
       execute: async () => ({
         output: {
@@ -60,7 +68,16 @@ describe('ai unit structured chat activity', () => {
     expect(llmIoRecords[0]?.profile).toBe('scripted')
     expect(llmIoRecords[0]?.fallbackChain).toEqual(['scripted'])
     expect(llmIoRecords[0]).toMatchObject({
+      caller: 'human.brain',
+      schemaName: 'human_brain_decision',
       providerKind: 'openai-compatible',
+      contextBudgetSnapshot: {
+        evaluationId: 'budget-1',
+        tokenEstimate: 1234,
+        contextWindowTokens: 200000,
+        compactionTriggerTokens: 160000,
+        hasCompressibleHistory: true
+      },
       stablePrefixHash: expect.any(String),
       dynamicContextHash: expect.any(String),
       usage: {
@@ -98,7 +115,14 @@ describe('ai unit structured chat activity', () => {
         modelName: 'scripted-llm',
         baseUrl: 'https://scripted.local/v1',
         streamingMode: 'force_stream',
-        attempt: 1
+        attempt: 1,
+        contextBudgetSnapshot: {
+          evaluationId: 'budget-ignore-1',
+          tokenEstimate: 999,
+          contextWindowTokens: 200000,
+          compactionTriggerTokens: 160000,
+          hasCompressibleHistory: true
+        }
       },
       execute: async (observer) => {
         observer.onDelta?.('Hello')
@@ -151,6 +175,58 @@ describe('ai unit structured chat activity', () => {
       streamed: true,
       chunkCount: 2,
       status: 'completed'
+    })
+    expect(llmIoRecords[0]?.contextBudgetSnapshot).toBeUndefined()
+  })
+
+  it('records failed human.brain llm io with context budget snapshot', async () => {
+    const events: AiRunEvent[] = []
+    const llmIoRecords: AiLlmIoRecord[] = []
+
+    await expect(
+      runStructuredChatWithActivity({
+        ctx: {
+          runId: 'run-3',
+          sendEvent: (event) => events.push(event),
+          recordLlmIo: (record) => llmIoRecords.push(record)
+        },
+        runId: 'run-3',
+        system: 'system prompt',
+        user: 'user prompt',
+        telemetry: {
+          caller: 'human.brain',
+          schemaName: 'human_brain_decision',
+          providerKind: 'openai-compatible',
+          modelName: 'scripted-llm',
+          baseUrl: 'https://scripted.local/v1',
+          streamingMode: 'force_non_stream',
+          attempt: 1,
+          contextBudgetSnapshot: {
+            evaluationId: 'budget-2',
+            tokenEstimate: 2345,
+            contextWindowTokens: 200000,
+            compactionTriggerTokens: 160000,
+            hasCompressibleHistory: false
+          }
+        },
+        execute: async () => {
+          throw new Error('structured_output_failed')
+        }
+      })
+    ).rejects.toThrow('structured_output_failed')
+
+    expect(llmIoRecords[0]).toMatchObject({
+      caller: 'human.brain',
+      schemaName: 'human_brain_decision',
+      contextBudgetSnapshot: {
+        evaluationId: 'budget-2',
+        tokenEstimate: 2345,
+        contextWindowTokens: 200000,
+        compactionTriggerTokens: 160000,
+        hasCompressibleHistory: false
+      },
+      status: 'failed',
+      reason: 'structured_output_failed'
     })
   })
 })

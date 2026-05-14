@@ -112,9 +112,11 @@ describe('ai human live backend', () => {
           execution: {
             ...stateWithOneRound.execution,
             contextBudget: {
+              evaluationId: 'budget-live-1',
               tokenEstimate: 7_000,
               contextWindowTokens: 8_000,
-              triggerTokens: 6_400
+              compactionTriggerTokens: 6_400,
+              hasCompressibleHistory: true
             }
           },
           memory: {

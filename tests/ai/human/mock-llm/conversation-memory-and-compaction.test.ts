@@ -282,9 +282,11 @@ describe('ai human mock-llm backend', () => {
           execution: {
             ...baseState.execution,
             contextBudget: {
+              evaluationId: 'budget-mock-1',
               tokenEstimate: 6_000,
               contextWindowTokens: 7_000,
-              triggerTokens: 5_600
+              compactionTriggerTokens: 5_600,
+              hasCompressibleHistory: true
             }
           },
           memory: {
