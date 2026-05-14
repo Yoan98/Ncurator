@@ -30,7 +30,6 @@
 - `human / live`
   - 通过率：`1 / 3`
   - 检测时间：`2026-05-14 15:48:30 +08:00`
-  - 备注：`本轮已重构并执行 `human-risk-report-draft-live`、`human-conversation-memory-multi-run-live`、`human-context-compaction-natural-trigger-live`。其中风险周报 case 已通过；conversation memory 最新一轮表现正确，但被 `180s` case timeout 截断，已把 timeout 调整到贴合真实双 run 成本；natural-trigger compaction 已在 `15_000` context window 下真实触发并完成，但 live 断言对措辞同义写法过严，当前已放宽到语义口径。`
   - 样例评分：
     - `human-risk-report-draft-live`：`8.5 / 10`
       - `依据：已完成多源资料取证、参考上周风格并新建周报草稿，关键事实和责任人口径正确；正文仍保留禁用措辞说明，更像待确认稿而非最干净的最终版。`
