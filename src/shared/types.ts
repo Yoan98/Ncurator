@@ -1005,6 +1005,7 @@ type AiRunEventPayload =
       tokenEstimateBefore: number
       sourceHistoryTokenEstimate: number
       tokenEstimateAfter: number
+      summaryPreview: string
       completedAt: number
     }
   | {

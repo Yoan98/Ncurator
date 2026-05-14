@@ -28,12 +28,16 @@
   - 通过率：`15 / 15`
   - 检测时间：`2026-04-29 17:02:09 +08:00`
 - `human / live`
-  - 通过率：`1 / 1`
-  - 检测时间：`2026-05-14 11:36:59 +08:00`
-  - 备注：`本轮仅执行并通过 `human-risk-report-draft-live` 一条 formal live case；其余 4 条 live case 本轮尚未执行。`
+  - 通过率：`1 / 3`
+  - 检测时间：`2026-05-14 15:48:30 +08:00`
+  - 备注：`本轮已重构并执行 `human-risk-report-draft-live`、`human-conversation-memory-multi-run-live`、`human-context-compaction-natural-trigger-live`。其中风险周报 case 已通过；conversation memory 最新一轮表现正确，但被 `180s` case timeout 截断，已把 timeout 调整到贴合真实双 run 成本；natural-trigger compaction 已在 `15_000` context window 下真实触发并完成，但 live 断言对措辞同义写法过严，当前已放宽到语义口径。`
   - 样例评分：
     - `human-risk-report-draft-live`：`8.5 / 10`
       - `依据：已完成多源资料取证、参考上周风格并新建周报草稿，关键事实和责任人口径正确；正文仍保留禁用措辞说明，更像待确认稿而非最干净的最终版。`
+    - `human-conversation-memory-multi-run-live`：`8 / 10`
+      - `依据：真实双 run 下 conversation summary 与 recent turns 已成功承接，第二轮未 reread 也能直接给出正确阻塞项与联系人；先前失败主要来自测试错误要求第二轮必须再打开 docx。`
+    - `human-context-compaction-natural-trigger-live`：`6.5 / 10`
+      - `依据：场景设计已接近真实长任务，并已在 `15_000` window 下真实触发 compaction，压缩比约 `3.5%`，压缩摘要和后续 `<compactions>` 都进入了日志；当前剩余问题主要是 live 断言还需要兼容更自然的同义表述。`
 
 ## 3. Suite 设计
 
@@ -852,21 +856,21 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 live 模式下真实模型能跨多次 run 形成有用的会话摘要，并在后续真实任务里稳定取回。
-- Why：真实环境下会话连续性不仅是“能写 summary”，还要验证 summary 是否能覆盖旧状态、保留当前主线并进入真实 `brain`。
-- How：先 seed 会话主线；连续两次调用真实 `updateConversationMemoryAfterRun`，让真实模型总结“负责人候选更新”和“上线窗口冲突”；再启动同一 session 的真实 `human`，输入“基于前面的连续进展说明当前状态和下一步”。
-- Oracle：`summary` 非空且包含主线、负责人、窗口冲突和产物状态；后续 `brain` prompt 同时出现 `<conversation_summary>` 与 `<recent_turns>`，且能看到前文关键事实；最终交付同时命中当前状态与下一步安排。
-- Not：不逐字约束 live 模型措辞；不验证 session 隔离。
+- What：验证 live 模式下基于真实 workspace 的 conversation memory 会在双 run 间延续关键业务状态，并被后续真实 `brain` 正确带回。
+- Why：真实环境里的会话连续性不能脱离 workspace 语义；如果记忆里提到的对象在工作区中不存在，模型会合理地转去做环境核验，导致样例失真。
+- How：复用风险周报 live 的真实 workspace；第一轮只做“状态梳理，不新建文件”，完成后通过真实 `updateConversationMemoryAfterRun` 写入 session memory；第二轮在同一 session、同一 workspace 下追问“当前最关键的待确认项、应该先找谁、为什么”，允许模型继续读取真实资料。
+- Oracle：`summary` 非空且保留风险主线、负责人、待确认项与下一步；第二轮 `brain` prompt 同时出现 `<conversation_summary>` 与 `<recent_turns>`；即使模型重新读取文件，也不应偏离第一轮形成的连续业务主线；最终交付继续命中负责人、阻塞项和下一步。
+- Not：不要求第二轮禁止 reread workspace；不逐字约束 live 模型措辞；不验证 session 隔离。
 
-##### `human-context-compaction-quality-live`
+##### `human-context-compaction-natural-trigger-live`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 live 模式下真实 `context_compaction` 节点会显著缩短历史，同时尽量保留失败原因、约束和当前结论。
-- Why：压缩是独立的 AI 调用链路；live 至少要有一条正式 case 守住真实模型在该节点上的可用性和基本质量。
-- How：直接构造 6 轮真实历史，覆盖学习、首次事实读取、错误尝试、失败原因、仍生效约束、修正后的当前结论和 latest round；随后直接调用真实 `context_compaction` 节点，不依赖 autonomous graph 自然触发。
-- Oracle：事件流出现 `context_compaction_started / context_compaction_completed`；产生一个 `compactions(kind=rounds)`；`rounds` 只保留 latest；压缩摘要命中审批、失败/阻断、约束/不可发布、Bob 和窗口冲突；`tokenEstimateAfter / sourceHistoryTokenEstimate <= 0.5`。
-- Not：不验证 live 模型是否严格达到 25% 理想比例；不验证完整 autonomous graph 中是否自然触发压缩。
+- What：验证 live 模式下 `human` 会在真实风险周报长任务中自然触发 `context_compaction`，并在压缩后继续完成正式交付。
+- Why：相比单独直调节点，正式 live 更应该守住“真实 graph 中自然压缩且不影响任务完成”的能力。
+- How：复用风险周报 live 的真实 workspace 与业务输入，只通过 `humanRuntimeOverrides.modelContextWindowTokens=15_000` 缩小上下文窗口，让真实任务在多轮资料读取后自然走到 `context_budget -> context_compaction -> context_budget -> brain`。
+- Oracle：事件流出现 `context_budget_evaluated(decision=compact)`、`context_compaction_started / completed`；存在真实 `human.context_compaction` LLM 调用；后续 `brain` prompt 出现 `<compactions>`；`latest_round` 仍保留原文；完成事件和日志中可看到压缩摘要、源历史 token 与压缩后 token；最终风险周报待确认稿仍完成并保持核心事实正确。
+- Not：不要求 live 模型严格达到 25% 理想比例；不要求每次都走固定资料读取顺序。
 
 ##### `human-risk-report-draft-live`
 

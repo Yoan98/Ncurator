@@ -86,6 +86,7 @@ export const createContextCompactionNode = (input: {
       tokenEstimateBefore,
       sourceHistoryTokenEstimate,
       tokenEstimateAfter,
+      summaryPreview: compactBlock.summary,
       completedAt: Date.now(),
       stage: 'human_brain'
     })
