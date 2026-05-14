@@ -45,6 +45,50 @@ const hasNextStepSemantics = (text: string, expectedNextStep: string): boolean =
   ) ||
   /Bob.*(?:负责|本周内)?.*补齐付款材料/.test(text)
 
+const normalizeAssertionText = (text: string): string => text.replace(/\s+/g, '')
+
+const hasRiskConclusionSemantics = (
+  text: string,
+  expectedRiskConclusion: string
+): boolean => {
+  const normalizedText = normalizeAssertionText(text)
+  const normalizedExpected = normalizeAssertionText(expectedRiskConclusion)
+  return (
+    normalizedText.includes(normalizedExpected) ||
+    /最终合规签署完成前[^。]{0,40}(?:仍需|继续)(?:保持|持续)跟进/.test(normalizedText)
+  )
+}
+
+const hasAffirmativeForbiddenRiskConclusion = (text: string): boolean => {
+  const normalizedText = normalizeAssertionText(text)
+  const forbiddenPhrases = ['风险已解除', '全部完成', '风险已完全收口']
+  const negationHints = ['不使用', '不要', '不建议', '避免', '不应', '禁用']
+  const sentenceBoundaryPattern = /[。；！？]/
+
+  for (const phrase of forbiddenPhrases) {
+    let index = normalizedText.indexOf(phrase)
+    while (index !== -1) {
+      const prefixText = normalizedText.slice(0, index)
+      let sentenceStart = 0
+
+      for (let i = prefixText.length - 1; i >= 0; i -= 1) {
+        if (sentenceBoundaryPattern.test(prefixText[i] || '')) {
+          sentenceStart = i + 1
+          break
+        }
+      }
+
+      const localPrefix = prefixText.slice(sentenceStart)
+      if (!negationHints.some((hint) => localPrefix.includes(hint))) {
+        return true
+      }
+      index = normalizedText.indexOf(phrase, index + phrase.length)
+    }
+  }
+
+  return false
+}
+
 describe('ai human live backend', () => {
   it('human-risk-report-draft-live', async () => {
     await runBackendCase({
@@ -231,6 +275,12 @@ describe('ai human live backend', () => {
           generatedDraftText,
           result.workspaceSeed.expectedOwnerSummary
         )
+        const riskConclusionSatisfied = hasRiskConclusionSemantics(
+          draftTextOnly,
+          result.workspaceSeed.expectedRiskConclusion
+        )
+        const hasForbiddenAffirmativeConclusion =
+          hasAffirmativeForbiddenRiskConclusion(draftTextOnly)
         const nextStepSatisfied = hasNextStepSemantics(
           generatedDraftText,
           result.workspaceSeed.expectedNextStep
@@ -298,11 +348,12 @@ describe('ai human live backend', () => {
         runtime.assertThat(
           trackedDocsUnchanged.every(Boolean) &&
             createSourcePaths.length >= 1 &&
-            !draftTextOnly.includes('风险已解除'),
+            riskConclusionSatisfied &&
+            !hasForbiddenAffirmativeConclusion,
           {
             name: 'human-live-risk-report-creates-new-draft-without-overwriting-source-docs',
             message:
-              'live human complex case 应新建本周周报待确认稿，不覆盖模板或既有工作 docx，并避免写出与本地依据冲突的绝对收口表述。',
+              'live human complex case 应新建本周周报待确认稿，不覆盖模板或既有工作 docx，并保持“仍需跟进”的风险结论，不输出正向绝对收口表述。',
             data: {
               createSourcePaths,
               createdRelativePaths,
@@ -311,6 +362,8 @@ describe('ai human live backend', () => {
               trackedDocsUnchanged,
               draftArtifactPath,
               expectedRiskConclusion: result.workspaceSeed.expectedRiskConclusion,
+              riskConclusionSatisfied,
+              hasForbiddenAffirmativeConclusion,
               ownerSummarySatisfied,
               nextStepSatisfied,
               generatedDraftTextSnippet: generatedDraftText.slice(0, 2000),

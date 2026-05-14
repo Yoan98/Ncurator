@@ -1003,6 +1003,7 @@ type AiRunEventPayload =
       compactBlockId: string
       sourceRoundIds: number[]
       tokenEstimateBefore: number
+      sourceHistoryTokenEstimate: number
       tokenEstimateAfter: number
       completedAt: number
     }

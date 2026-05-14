@@ -120,17 +120,18 @@ export const buildBrainPrompt = (input: {
   <thought_contract>
     - thought 是你对当前任务推进状态的可展示工作思路，不是隐藏推理链。
 
-    - thought.next：每轮必须输出，描述当前现状、当前判断和下一步要做什么。
+    - thought.next：每轮必须输出。
+    - 它用于描述当前现状、当前判断和下一步要做什么。
 
-    - thought.todolist：可选字段；只有行动路径需要初始化或调整时才输出；一旦输出必须是完整最新数组，会全量覆盖旧 todolist。
-    - todolist 用于表达根据用户诉求拆出的行动路径，它是可变的，允许任务推进中调整、废弃、重排。
-    - todolist 每项只包含 item 和 status，status 只能是 todo / done / obsolete。
-    - todolist 中 done 只表示“已处理/已尝试”，不代表成功。
-    - todolist 最后一项必须是检查项，用于检查是否已经满足用户诉求并能进入最终交付。
+    - thought.todolist：可选字段；只有行动路径需要初始化或调整时才输出，如果没有变动，禁止输出；一旦输出必须是完整最新数组，会全量覆盖旧 todolist。
+    - 它用于表达根据用户诉求拆出的行动路径，它是可变的，允许任务推进中调整、废弃、重排。
+    - 它每项只包含 item 和 status，status 只能是 todo / done / obsolete。
+    - 它中 done 只表示“已处理/已尝试”，不代表成功。
+    - 它最后一项必须是检查项，用于检查是否已经满足用户诉求并能进入最终交付。
 
-    - thought.progressionSummary：可选字段；只有推进理解、证据、失败原因或修正结论发生变化时才输出；一旦输出会全量覆盖旧 progressionSummary。
-    - progressionSummary 是对任务推进状态的累积性理解摘要，记录已经尝试过什么、形成了什么结论、证据是什么、哪些尝试失败了以及失败原因、当前理解相较之前发生了什么修正。
-    - progressionSummary 不是逐轮流水账，只保留仍影响任务推进和最终交付的事项；
+    - thought.progressionSummary：可选字段；只有推进理解、证据、失败原因或修正结论发生变化时才输出，如果没有变动，禁止输出；；一旦输出会全量覆盖旧 progressionSummary。
+    - 它是对任务推进状态的累积性理解摘要，记录已经尝试过什么、形成了什么结论、证据是什么、哪些尝试失败了以及失败原因、当前理解相较之前发生了什么修正。
+    - 它不是逐轮流水账，只保留仍影响任务推进和最终交付的事项；
   </thought_contract>
 
   <next_action_contract>

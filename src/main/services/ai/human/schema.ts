@@ -350,6 +350,7 @@ export const humanCompactBlockSchema = z.object({
   }),
   createdAt: z.number(),
   tokenEstimateBefore: z.number().int().min(0).optional(),
+  sourceHistoryTokenEstimate: z.number().int().min(0).optional(),
   tokenEstimateAfter: z.number().int().min(0).optional()
 })
 

@@ -47,11 +47,13 @@ export const createContextCompactionNode = (input: {
       stage: 'human_brain'
     })
 
+    const historyText = renderBrainRoundSection(targetRounds)
     const prompt = buildHistoryCompactionPrompt({
       existingCompactSummary: currentHistoryBlock?.summary,
-      historyText: renderBrainRoundSection(targetRounds),
+      historyText,
       targetCompressionRatio: CONTEXT_COMPACTION_TARGET_RATIO
     })
+    const sourceHistoryTokenEstimate = estimateTextTokens(historyText)
     const summary = await input.ctx.chatText({
       caller: 'human.context_compaction',
       taskId: state.task.taskId,
@@ -71,6 +73,7 @@ export const createContextCompactionNode = (input: {
       },
       createdAt: Date.now(),
       tokenEstimateBefore,
+      sourceHistoryTokenEstimate,
       tokenEstimateAfter
     }
 
@@ -81,6 +84,7 @@ export const createContextCompactionNode = (input: {
       compactBlockId,
       sourceRoundIds: mergedRoundIds,
       tokenEstimateBefore,
+      sourceHistoryTokenEstimate,
       tokenEstimateAfter,
       completedAt: Date.now(),
       stage: 'human_brain'

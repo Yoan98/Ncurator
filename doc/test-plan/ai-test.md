@@ -762,25 +762,25 @@
 - Oracle：第二轮 `brain` prompt 中出现前一轮写入的 todolist 与 progressionSummary 内容，任务最终完成。
 - Not：不验证更复杂的 memory 压缩策略。
 
-##### `conversation-memory-update-and-prompt`
+##### `conversation-memory-multi-run-recall`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 run 完成后写入新版 `ChatConversationMemory`，且下一次 human 的 `brain` prompt 会渲染 `conversation_summary`。
-- Why：跨任务连续性现在依赖持久 conversation memory，必须守住 AI 只更新 `summary`，近期真实对话与 artifacts 则来自 `chat_message`。
-- How：seed 会话 memory 与最近消息，调用真实 `updateConversationMemoryAfterRun`，再启动同一 session 的真实 human graph 并检查第二次 `brain` prompt。
-- Oracle：保存结构只包含新版 `summary`；下一次 `brain` prompt 同时含 `<conversation_summary>` 与 `<recent_turns>`，且 recent turns 中可看到最近 assistant 产物信息。
-- Not：不验证 live 模型总结质量。
+- What：验证同一 `session` 下连续多次 run 后，`conversation memory` 会保留稳定主线、覆盖过时状态，并在下一次真实 `brain` prompt 中带回。
+- Why：跨任务连续性依赖持久 `conversation memory`；如果只能做单次 update happy path，就无法证明旧状态会被覆盖、未解决事项会被保留。
+- How：先 seed 一条发布准备主线；连续两次调用真实 `updateConversationMemoryAfterRun`，分别写入“负责人候选为 Alice”和“负责人更新为 Bob 且上线窗口冲突待确认”；随后启动同一 session 的真实 `human` graph 并检查 prompt 与最终交付。
+- Oracle：保存下来的 `summary` 同时保留当前有效状态、未解决事项和产物状态；后续 `brain` prompt 同时含 `<conversation_summary>` 与 `<recent_turns>`；旧状态不会继续出现；最终交付会提到 Bob、上线窗口冲突和下一步安排。
+- Not：不验证 live 模型总结质量；不验证 session 隔离。
 
-##### `context-compaction-history-block`
+##### `context-compaction-ratio-and-fact-retention`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证低上下文窗口下真实触发 `context_compaction`，并把较早 `rounds` 转成 `compactions`。
-- Why：run 内长链路压缩是防止 brain prompt 膨胀的核心保护，必须通过真实 graph 路由守住。
-- How：通过低 `modelContextWindowTokens` override 先产生多轮历史，再触发 `context_budget -> context_compaction -> context_budget -> brain`。
-- Oracle：事件流出现 `context_compaction_started / context_compaction_completed`；`human.context_compaction` 被调用；后续 `brain` prompt 出现 `<compactions>`，且被压缩的旧 round 不再作为未压缩 prior/latest round 渲染。
-- Not：不验证压缩摘要内容质量。
+- What：验证 mock-llm 下的真实 `context_compaction` 节点会保留关键事实、压缩到目标比例，并让后续 `brain` 通过 `<compactions>` 继续工作。
+- Why：只验证“触发了压缩”还不够；正式回归还需要守住失败原因、约束和当前结论不被压丢，以及比例不失控。
+- How：人工构造 6 轮历史，覆盖学习、首次事实读取、错误尝试、失败原因、仍生效约束、修正后的当前结论和 latest round；先直接执行真实 `context_compaction` 节点，再执行真实 `brain` 节点检查 prompt。
+- Oracle：事件流出现 `context_compaction_started / context_compaction_completed`；只保留一个 `rounds` compaction block；`latest_round` 保留原文；压缩摘要保留审批未完成、未审批不可发布、Bob 和上线窗口冲突；后续 `brain` prompt 使用 `<compactions>` 且旧 history 不再以未压缩 rounds 渲染；`tokenEstimateAfter / sourceHistoryTokenEstimate <= 0.35`。
+- Not：不验证 live 模型自由生成下的压缩质量；不验证多次滚动压缩合并。
 
 ##### `todolist-memory-maintenance`
 
@@ -844,15 +844,25 @@
 
 #### `live`
 
-##### `human-conversation-memory-and-compaction-live`
+##### `human-conversation-memory-multi-run-live`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 live 模式下 conversation memory 总结与 human history 压缩节点都能真实调用模型并写回结构化结果。
-- Why：记忆与压缩是新增 AI 调用链路，必须至少有一条 live case 守住真实模型可用性。
-- How：先通过真实 `conversation.memory` 更新 `ChatConversationMemory`，再构造两轮 run 内 history 并直接执行真实 `context_compaction` 节点。
-- Oracle：`summary` 非空；压缩后产生一个 `compactions(kind=rounds)`，`rounds` 只保留 latest；事件流出现 `context_compaction_started / context_compaction_completed`。
-- Not：不验证 live 模型在完整 autonomous graph 中是否自然触发压缩。
+- What：验证 live 模式下真实模型能跨多次 run 形成有用的会话摘要，并在后续真实任务里稳定取回。
+- Why：真实环境下会话连续性不仅是“能写 summary”，还要验证 summary 是否能覆盖旧状态、保留当前主线并进入真实 `brain`。
+- How：先 seed 会话主线；连续两次调用真实 `updateConversationMemoryAfterRun`，让真实模型总结“负责人候选更新”和“上线窗口冲突”；再启动同一 session 的真实 `human`，输入“基于前面的连续进展说明当前状态和下一步”。
+- Oracle：`summary` 非空且包含主线、负责人、窗口冲突和产物状态；后续 `brain` prompt 同时出现 `<conversation_summary>` 与 `<recent_turns>`，且能看到前文关键事实；最终交付同时命中当前状态与下一步安排。
+- Not：不逐字约束 live 模型措辞；不验证 session 隔离。
+
+##### `human-context-compaction-quality-live`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 live 模式下真实 `context_compaction` 节点会显著缩短历史，同时尽量保留失败原因、约束和当前结论。
+- Why：压缩是独立的 AI 调用链路；live 至少要有一条正式 case 守住真实模型在该节点上的可用性和基本质量。
+- How：直接构造 6 轮真实历史，覆盖学习、首次事实读取、错误尝试、失败原因、仍生效约束、修正后的当前结论和 latest round；随后直接调用真实 `context_compaction` 节点，不依赖 autonomous graph 自然触发。
+- Oracle：事件流出现 `context_compaction_started / context_compaction_completed`；产生一个 `compactions(kind=rounds)`；`rounds` 只保留 latest；压缩摘要命中审批、失败/阻断、约束/不可发布、Bob 和窗口冲突；`tokenEstimateAfter / sourceHistoryTokenEstimate <= 0.5`。
+- Not：不验证 live 模型是否严格达到 25% 理想比例；不验证完整 autonomous graph 中是否自然触发压缩。
 
 ##### `human-risk-report-draft-live`
 

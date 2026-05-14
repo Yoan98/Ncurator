@@ -202,7 +202,11 @@ const buildBrainToolAttemptText = (input: {
 const renderBrainRoundDecision = (record: HumanRoundRecord): string =>
   `- ${record.thought.thought.next}`
 
-const renderLearningExecution = (record: Extract<HumanRoundRecord, { execution: { kind: 'learning' } }>): string =>
+const renderLearningExecution = (
+  record: HumanRoundRecord & {
+    execution: Extract<HumanRoundRecord['execution'], { kind: 'learning' }>
+  }
+): string =>
   [
     '- 类型：learning',
     `- 学习：${renderQuotedNames(record.execution.learningOutcome.requestedSkillIds)}`,
@@ -212,7 +216,11 @@ const renderLearningExecution = (record: Extract<HumanRoundRecord, { execution: 
     `- 当前 active tool 数：${String(record.execution.learningOutcome.activeToolCount)}`
   ].join('\n')
 
-const renderHandExecution = (record: Extract<HumanRoundRecord, { execution: { kind: 'hand' } }>): string => {
+const renderHandExecution = (
+  record: HumanRoundRecord & {
+    execution: Extract<HumanRoundRecord['execution'], { kind: 'hand' }>
+  }
+): string => {
   const execution = record.execution
   const executedToolNames = execution.toolResults.map((result) => result.toolName)
   const actualToolNames =
@@ -258,9 +266,13 @@ const renderBrainRoundExecution = (record: HumanRoundRecord): string => {
     case 'pre_execution_blocked':
       return ['- 类型：blocked', '- 结果：系统在执行前阻断，本轮未进入真实执行。'].join('\n')
     case 'learning':
-      return renderLearningExecution(record as Extract<HumanRoundRecord, { execution: { kind: 'learning' } }>)
+      return renderLearningExecution(record as HumanRoundRecord & {
+        execution: Extract<HumanRoundRecord['execution'], { kind: 'learning' }>
+      })
     case 'hand':
-      return renderHandExecution(record as Extract<HumanRoundRecord, { execution: { kind: 'hand' } }>)
+      return renderHandExecution(record as HumanRoundRecord & {
+        execution: Extract<HumanRoundRecord['execution'], { kind: 'hand' }>
+      })
     case 'mouth':
       return [
         '- 类型：mouth',
