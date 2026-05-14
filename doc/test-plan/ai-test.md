@@ -28,9 +28,12 @@
   - 通过率：`15 / 15`
   - 检测时间：`2026-04-29 17:02:09 +08:00`
 - `human / live`
-  - 通过率：`2 / 2`
-  - 检测时间：`2026-05-12 00:00:00 +08:00`
-  - 备注：`本次已人工复核并通过 `human-risk-report-draft-live`、`human-docx-cause-remedy-reading-live` 两条 formal live case；其余 3 条 live case 本轮尚未执行。`
+  - 通过率：`1 / 1`
+  - 检测时间：`2026-05-14 11:36:59 +08:00`
+  - 备注：`本轮仅执行并通过 `human-risk-report-draft-live` 一条 formal live case；其余 4 条 live case 本轮尚未执行。`
+  - 样例评分：
+    - `human-risk-report-draft-live`：`8.5 / 10`
+      - `依据：已完成多源资料取证、参考上周风格并新建周报草稿，关键事实和责任人口径正确；正文仍保留禁用措辞说明，更像待确认稿而非最干净的最终版。`
 
 ## 3. Suite 设计
 
@@ -83,6 +86,7 @@
 - 断言重点：完成态、关键工具调用、关键 artifact、关键事实是否成立。
 - 不对最终文案做精确文本断言。
 - transport / structured output 兼容性探针类 case，应至少分别覆盖一次 `force_non_stream` 与 `force_stream` 路径。
+- 每次 formal `human / live` 执行完成后，除更新通过率、检测时间、备注外，还要在执行摘要中补充本轮已执行样例的完成度评分及简短依据。
 
 ### 4.3 目录与命令
 
