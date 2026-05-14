@@ -1,55 +1,67 @@
 # NCurator-Desktop AI 架构设计
 
-本文定义当前正式 AI 架构。当前系统由 runtime shell 与单个 `human` 执行链组成：run 入口负责生命周期管理，`human` 负责完整任务闭环执行。
+本文只描述 AI 的总体架构主线：一次请求如何运行、run 内闭环如何推进，以及会话总结如何承接下一次对话。不展开字段、事件与状态细节。
 
 ## 1. 系统主流程
 
 ```mermaid
 flowchart TD
-    A["用户诉求"] --> B["AiRunService"]
-    B --> C["AiRunContext"]
-    C --> D["human"]
-    D --> E["brain"]
-    E -->|需要补 skill| F["learning"]
-    E -->|需要工具结果| G["hand"]
-    E -->|已经可以交付| H["mouth"]
-    F --> E
-    G --> E
-    H --> I["HumanTaskOutput"]
-    I --> J["AiRunState"]
+    U["用户输入"]
+    S["会话上下文<br/>recent messages + conversation summary"]
+    R["AiRunService"]
+    B["context_budget<br/>检查上下文预算"]
+    C["brain<br/>决定下一步"]
+    D["learning<br/>加载 external skill"]
+    E["hand<br/>执行工具"]
+    F["mouth<br/>组织最终答复"]
+    H["context_compaction<br/>压缩本次 run 的较早历史"]
+    O["最终答复"]
+    M["更新 conversation summary"]
+
+    U --> R
+    S --> R
+    R --> B
+
+    B -->|预算正常| C
+    B -->|超阈值且可压缩| H
+    H --> B
+
+    C -->|加载能力| D
+    C -->|调用工具| E
+    C -->|直接答复| F
+    C -->|decisionHint / retry| C
+
+    D --> B
+    E --> B
+    F --> O
+
+    O --> M
+    M --> S
 ```
 
-## 2. 角色职责
+## 2. 简要说明
 
-### `AiRunService`
+### 2.1 主流程
 
-- 创建 `AiRunContext`。
-- 启动一次 `human` 运行。
-- 收口 `AiRunState`，并负责取消、失败和最终结果整理。
+- 每次用户请求都会启动一个 `run`。
+- `run` 进入 `human` 后，不是直接去 `brain`，而是先做 `context_budget` 检查。
+- 预算正常时才进入 `brain` 决策下一步。
 
-### `brain`
+### 2.2 run 内闭环
 
-- 是唯一推理节点。
-- 读取任务输入、稳定记忆、过程历史、已学习 skill 与决策提示。
-- 决定下一步进入 `learning`、`hand` 还是 `mouth`。
+- `brain` 只决定下一步是 `learning`、`hand` 还是 `mouth`。
+- `learning` 负责加载 external skill。
+- `hand` 负责执行工具。
+- `learning` 和 `hand` 完成后，都会先回到 `context_budget`，再决定是否继续推进。
 
-### `learning`
+### 2.3 run 内压缩
 
-- 只负责让本轮请求的 external skill 生效。
-- 更新 `learnedSkillIds`、`lastLearningOutcome` 与相关过程历史。
+- 如果当前 prompt 过长，但较早的任务历史仍可压缩，就进入 `context_compaction`。
+- 它压缩的是当前 `run` 的较早过程历史，只服务当前 `run` 的继续推进。
+- 这部分压缩信息不会直接作为长期记忆保留到下一次对话。
 
-### `hand`
+### 2.4 会话连续性
 
-- 只负责执行工具计划。
-- 写回标准化工具结果、artifact 和过程历史。
-
-### `mouth`
-
-- 只负责组织最终用户交付。
-- 基于当前任务笔记、最近过程和 artifacts 生成最终 markdown。
-
-## 3. 运行约束
-
-- 每次 run 只启动一个 `human` 闭环。
-- `taskId` 直接由当前 `runId` 提供，`userInput` 直接使用用户原始输入。
-- 用户可见过程反馈统一基于 `human_step`、工具事件、blocker 事件和最终答案事件。
+- `mouth` 负责组织最终答复，当前正式实现里它会直接完成本次 `run`。
+- `run` 完成后，系统会基于本轮用户输入、最终答复和产物更新 `conversation summary`。
+- 下一次 `run` 会读取最近消息和这份 `summary`，形成跨轮连续性。

@@ -54,12 +54,13 @@
 
 ```mermaid
 stateDiagram-v2
-    [*] --> brain
+    [*] --> context_budget
+
+    context_budget --> brain: within budget
+    context_budget --> context_compaction: over 80% window
+    context_compaction --> context_budget
 
     brain --> learning: nextAction=learning
-    context_budget --> brain: within budget
-    context_budget --> memory_compaction: over 80% window
-    memory_compaction --> context_budget
 
     brain --> hand: nextAction=hand
     brain --> mouth: nextAction=mouth
@@ -68,7 +69,6 @@ stateDiagram-v2
     learning --> context_budget
     hand --> context_budget
 
-    mouth --> context_budget: status=running (rare)
     mouth --> [*]: completed
 ```
 
@@ -106,21 +106,21 @@ stateDiagram-v2
 - 职责：围绕 `task_goal` 把当前已经确定的状态组织成最终用户交付，并回写 `HumanResult`。
 - 主要读取：`task`、`reference_scope`、`memory.thought`、`memory.taskRun.rounds`、`memory.taskRun.compactions`、`execution.deliveryGuidanceItems`、`execution.runtimeArtifacts`、`execution.references`。
 - 主要回写：`result`、`execution.status`、`execution.stage`、`trace.steps`。
-- 约束：模型输出必须通过 `ctx.chatText`；输出面向最终用户，但必须忠实于当前整体状态；`mouth` 优先吸收 `reference_scope`、`memory.thought`、结果导向的 `history` 视图、`deliveryGuidanceItems`、changed-files 视图的 `runtimeArtifacts` 与由 `brain(nextAction=mouth)` 明确产出的 `references`，不再直接消费 review 内部结构；`mouth` 必须在 markdown 正文中显式说明引用了哪些资料完成了哪些内容，且说明这些资料分别支撑了交付中的哪些位置；若补充了外部知识，也必须通过 `references(kind=external)` 明示；若开启 `emitAnswerEvents`，增量文本通过 `answer_token` 发出，完成后通过 `answer_completed` 收口。
+- 约束：模型输出必须通过 `ctx.chatText`；输出面向最终用户，但必须忠实于当前整体状态；`mouth` 优先吸收 `reference_scope`、`memory.thought`、结果导向的 `history` 视图、`deliveryGuidanceItems`、changed-files 视图的 `runtimeArtifacts` 与由 `brain(nextAction=mouth)` 明确产出的 `references`，不再直接消费 review 内部结构；`mouth` 必须在 markdown 正文中显式说明引用了哪些资料完成了哪些内容，且说明这些资料分别支撑了交付中的哪些位置；若补充了外部知识，也必须通过 `references(kind=external)` 明示；若开启 `emitAnswerEvents`，增量文本通过 `answer_token` 发出，完成后通过 `answer_completed` 收口。当前正式实现里，`mouth` 输出后直接完成 task，不存在已命中的 `mouth -> context_budget` 继续推进路径。
 
 ### 5.5 `context_budget`
 
 - 职责：在每次进入 `brain` 前估算当前 prompt token 使用量，并决定继续推理、触发压缩或明确失败。
 - 主要读取：`task`、`memory.thought`、`memory.taskRun.rounds`、`memory.taskRun.compactions`、`ctx.loadConversationContext()`、`ctx.humanRuntimeOverrides.modelContextWindowTokens`。
 - 主要回写：`execution.contextBudget`、`execution.stage`。
-- 约束：默认上下文窗口为 `200_000 tokens`，超过 `80%` 且存在可压缩的非 latest history 时进入 `memory_compaction`；超过窗口且没有可压缩内容时发送 `runtime_issue(context_window_exceeded)` 并失败，不做静默字符串截断。每次预算评估都要生成一份 `BrainContextBudgetSnapshot`，写入 `execution.contextBudget`，并通过 `context_budget_evaluated` 事件落到日志；这份快照仅用于诊断和 LLM IO 关联，不进入 brain prompt。
+- 约束：默认上下文窗口为 `200_000 tokens`，超过 `80%` 且存在可压缩的非 latest history 时进入 `context_compaction`；超过窗口且没有可压缩内容时发送 `runtime_issue(context_window_exceeded)` 并失败，不做静默字符串截断。每次预算评估都要生成一份 `BrainContextBudgetSnapshot`，写入 `execution.contextBudget`，并通过 `context_budget_evaluated` 事件落到日志；这份快照仅用于诊断和 LLM IO 关联，不进入 brain prompt。
 
-### 5.6 `memory_compaction`
+### 5.6 `context_compaction`
 
 - 职责：单独调用 AI，把当前 run 内可压缩历史压缩为 `compactions(kind=rounds)`，并与已有的 `rounds` compaction block 做滚动合并。
 - 主要读取：`memory.taskRun.rounds`、`execution.contextBudget`。
 - 主要回写：`memory.taskRun.compactions`、`memory.taskRun.rounds`、`execution.stage`。
-- 约束：`latest_round` 永远保留原文；压缩成功后只保留最新一轮 `rounds`；`kind='rounds'` 在任意时刻只保留一个有效 compaction block，新一轮压缩必须带入上一轮 `rounds` 摘要并替换旧块；压缩块不持久化，任务完成后依赖 conversation memory 延续跨任务信息。
+- 约束：`latest_round` 永远保留原文；压缩成功后只保留最新一轮 `rounds`；`kind='rounds'` 在任意时刻只保留一个有效 compaction block，新一轮压缩必须带入上一轮 `rounds` 摘要并替换旧块；这一步压缩的是当前 run 的历史上下文，不是会话长期记忆；压缩块不持久化，任务完成后依赖 conversation memory 延续跨任务信息。
 
 ## 6. 事件与交付
 
