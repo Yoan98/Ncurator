@@ -2,31 +2,31 @@
 
 ## 1. 文档引用
 ### 1.1 AI相关
-- `doc/ai-design/architecture.md`：涉及 AI 总体架构、run 内闭环主流程、会话总结承接关系或上下文压缩在系统主线中的位置时阅读。
-- `doc/ai-design/implementation-spec.md`：涉及 AI 实现方式、运行入口、跨层边界、运行时组织，或 context budget / context compaction、hand 的批次保护/readback 约束、mouth markdown 交付与 references 引用收口时阅读。
-- `doc/ai-design/data-definition-and-flow.md`：涉及 AI 数据结构、状态流转、session memory、compact blocks、历史渲染、产物关系、brain 上下文预算快照 / llm-io 日志契约，或 thought / references / watch hint / 非法 plan 枚举契约时阅读。
-- `doc/ai-design/human-skill-design.md`：涉及 human skill 分类、能力边界、skill 基线、builtin/external 区分，或 active tool budget、工具调用次数边界、docx-write 使用边界时阅读。
-- `doc/ai-design/prompt-design.md`：涉及 prompt 结构、工具 schema、工具结果渲染、references 披露策略、检索策略提示或 AI-facing 文案时阅读。
+- `doc/ai-design/architecture.md`：涉及 AI 整体架构、模块关系或主流程时阅读。
+- `doc/ai-design/implementation-spec.md`：涉及 AI 实现规则、运行约束或执行边界时阅读。
+- `doc/ai-design/data-definition-and-flow.md`：涉及 AI 数据结构、状态流转或产物关系时阅读。
+- `doc/ai-design/human-skill-design.md`：涉及 human skill 体系、能力边界或工具使用范围时阅读。
+- `doc/ai-design/prompt-design.md`：涉及 prompt 设计、AI-facing 文案或工具描述方式时阅读。
 
 ### 1.2 docx相关
-- `doc/docx-design/architecture.md`：涉及 docx 总体架构、session/replay 主线或 baseline 机制时阅读。
-- `doc/docx-design/implementation-spec.md`：涉及 docx 实现约束、review/commit 链路、serializer 或写入规则时阅读。
-- `doc/docx-design/data-definition-and-flow.md`：涉及 docx 数据结构、revision/replay node、artifact 关系或状态流转时阅读。
+- `doc/docx-design/architecture.md`：涉及 docx 整体架构、模块关系或主流程时阅读。
+- `doc/docx-design/implementation-spec.md`：涉及 docx 实现规则、运行约束或执行边界时阅读。
+- `doc/docx-design/data-definition-and-flow.md`：涉及 docx 数据结构、状态流转或产物关系时阅读。
 
 ### 1.3 项目整体相关
-- `doc/architecture.md`：涉及项目整体架构与技术栈时阅读。
-- `doc/database.md`：涉及数据库模型、持久化结构或文件/记录关系时阅读。
-- `doc/project-structure.md`：涉及工程结构、目录归位或模块放置位置时阅读。
-- `doc/ui-style.md`：涉及 UI 风格与通用交互规范时阅读。
+- `doc/architecture.md`：涉及项目整体架构或技术栈时阅读。
+- `doc/database.md`：涉及数据库结构或持久化关系时阅读。
+- `doc/project-structure.md`：涉及工程结构或目录归位时阅读。
+- `doc/ui-style.md`：涉及 UI 风格或通用交互规范时阅读。
 
 ### 1.4 测试相关
-- `doc/test-plan/ai-test.md`：涉及 AI、human live、formal harness、FileReview、KB tool contract、conversation memory 多 run 连续性、context compaction 比例与关键信息保留，或 docx 串行批写上限/readback/schema 合同/安全停机回归测试设计，或需要维护 AI 正式测试执行摘要/通过率/live 样例评分时阅读。
-- `doc/test-plan/settings-test.md`：涉及 Settings 测试，或需要区分 workspace 容器、files 子区域、web 子区域测试边界时阅读。
-- `doc/test.md`：涉及测试用例编写、runner、日志或测试运行机制时阅读。
+- `doc/test-plan/ai-test.md`：涉及 AI 测试范围、正式 case 设计或执行摘要维护时阅读。
+- `doc/test-plan/settings-test.md`：涉及 Settings 测试范围或测试边界时阅读。
+- `doc/test.md`：涉及测试体系、runner、日志或正式测试流程时阅读。
 
 ### 1.5 prd产品文档相关
-- `doc/prd/workbench.md`：涉及 Workbench 产品需求、交互、上下文用量/压缩状态提示或验收标准时阅读。
-- `doc/prd/settings.md`：涉及 Settings 产品需求、交互、验收标准，或需要区分 workspace 容器与其 files/web 子区域设计时阅读。
+- `doc/prd/workbench.md`：涉及 Workbench 产品需求、交互或验收标准时阅读。
+- `doc/prd/settings.md`：涉及 Settings 产品需求、交互或验收标准时阅读。
 
 ## 2. 必须遵守的规则
 
