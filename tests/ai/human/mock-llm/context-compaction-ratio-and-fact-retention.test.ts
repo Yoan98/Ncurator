@@ -407,6 +407,7 @@ describe('ai human mock-llm backend', () => {
               '任务锚点：',
               '- 目标：继续一个已经执行很久的任务，并基于已有事实完成后续推进判断。',
               '- 当前交付：保留仍影响任务推进的审批与窗口事实，供后续 brain 继续决策。',
+              '- 关键引用锚点：`release-notes.txt`（已读取）；`approval-log.txt`（已读取）；`schedule-note.txt`（已读取）',
               '',
               '已确认事实：',
               '- 已补齐 docx-read 技能。',
@@ -466,6 +467,7 @@ describe('ai human mock-llm backend', () => {
             Boolean(result.compactionPrompt.includes('失败原因：审批未完成')) &&
             Boolean(result.compactionPrompt.includes('负责人 Bob 待确认')) &&
             Boolean(result.roundsBlock?.summary.includes('任务锚点：')) &&
+            Boolean(result.roundsBlock?.summary.includes('关键引用锚点：')) &&
             Boolean(result.roundsBlock?.summary.includes('已确认事实：')) &&
             Boolean(result.roundsBlock?.summary.includes('仍有效约束：')) &&
             Boolean(result.roundsBlock?.summary.includes('已尝试但未解决：')) &&

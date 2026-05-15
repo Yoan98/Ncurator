@@ -8,9 +8,9 @@ import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
   HUMAN_RISK_REPORT_DRAFT_USER_INPUT,
-  loadRiskReportWorkspaceSeed,
-  SHARED_WORKSPACE_FIXTURE_PATH
-} from '../../../harness/backend/aiLiveTestData'
+  loadRiskReportDraftWorkspaceSeed,
+  RISK_REPORT_DRAFT_SHARED_WORKSPACE_FIXTURE_PATH
+} from '../../../harness/backend/liveScenarios/riskReportDraftScenario'
 import {
   collectStartedToolStringArgs,
   filterAiRunEventsByType,
@@ -99,7 +99,7 @@ describe('ai human live backend', () => {
       groups: ['live'],
       description:
         '验证 live 模式下 human 会在真实长任务里串起多源工作文档取证、新建周报 docx 与待确认稿交付。',
-      fixtures: [SHARED_WORKSPACE_FIXTURE_PATH],
+      fixtures: [RISK_REPORT_DRAFT_SHARED_WORKSPACE_FIXTURE_PATH],
       runMode: 'single',
       runtimeModelName: hasLiveLlmConfigInEnv() ? loadLiveLlmConfigFromEnv().model_name : null,
       execute: async (runtime) => {
@@ -112,7 +112,7 @@ describe('ai human live backend', () => {
           }
         }
 
-        const workspaceSeed = await loadRiskReportWorkspaceSeed(runtime)
+        const workspaceSeed = await loadRiskReportDraftWorkspaceSeed(runtime)
         await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
         const indexedFiles = await runtime.seedWorkspaceKb({
           mode: 'all-supported'

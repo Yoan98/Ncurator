@@ -162,7 +162,7 @@ export const buildBrainPrompt = (input: {
   </next_action_contract>
 
   <context_block_guide>
-    - task_goal：用户原始诉求与限制。
+    - task_goal：用户原始诉求。
     - reference_scope：当前工作区、默认知识范围、显式缩圈范围和可用边界。
     - search_strategy：当前任务默认遵循的检索思路提示。
     - terminal_platform：当前 terminal 所在平台；如果你决定使用命令行，应据此选择命令语法。

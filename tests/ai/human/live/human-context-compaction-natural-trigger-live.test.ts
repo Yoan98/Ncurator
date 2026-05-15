@@ -6,10 +6,10 @@ import { loadLiveLlmConfigFromEnv, hasLiveLlmConfigInEnv } from '../../../harnes
 import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
-  HUMAN_RISK_REPORT_DRAFT_USER_INPUT,
-  loadRiskReportWorkspaceSeed,
-  SHARED_WORKSPACE_FIXTURE_PATH
-} from '../../../harness/backend/aiLiveTestData'
+  CONTEXT_COMPACTION_SHARED_WORKSPACE_FIXTURE_PATH,
+  HUMAN_CONTEXT_COMPACTION_USER_INPUT,
+  loadContextCompactionWorkspaceSeed
+} from '../../../harness/backend/liveScenarios/contextCompactionScenario'
 import {
   filterAiRunEventsByType,
   hasDraftFileArtifact,
@@ -61,7 +61,7 @@ describe('ai human live backend', () => {
         groups: ['live'],
         description:
           '验证 live 模式下 human 在真实风险周报长任务中会自然触发 context compaction，并在压缩后继续完成任务。',
-        fixtures: [SHARED_WORKSPACE_FIXTURE_PATH],
+        fixtures: [CONTEXT_COMPACTION_SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
         runtimeModelName: hasLiveLlmConfigInEnv() ? loadLiveLlmConfigFromEnv().model_name : null,
         execute: async (runtime) => {
@@ -76,7 +76,7 @@ describe('ai human live backend', () => {
             }
           }
 
-          const workspaceSeed = await loadRiskReportWorkspaceSeed(runtime)
+          const workspaceSeed = await loadContextCompactionWorkspaceSeed(runtime)
           await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
           const indexedFiles = await runtime.seedWorkspaceKb({
             mode: 'all-supported'
@@ -88,7 +88,7 @@ describe('ai human live backend', () => {
           })
           const output = await runner.run({
             taskId: runtime.taskId,
-            userInput: HUMAN_RISK_REPORT_DRAFT_USER_INPUT
+            userInput: HUMAN_CONTEXT_COMPACTION_USER_INPUT
           })
 
           return {
@@ -166,6 +166,7 @@ describe('ai human live backend', () => {
               Boolean(compactionRecord?.user.includes('<task_progress>')) &&
               Boolean(compactionRecord?.user.includes('<history_rounds>')) &&
               Boolean(compactionRecord?.rawText.includes('任务锚点：')) &&
+              Boolean(compactionRecord?.rawText.includes('关键引用锚点：')) &&
               Boolean(compactionRecord?.rawText.includes('已确认事实：')) &&
               Boolean(compactionRecord?.rawText.includes('仍有效约束：')) &&
               Boolean(compactionRecord?.rawText.includes('已尝试但未解决：')) &&
