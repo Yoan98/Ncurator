@@ -4,16 +4,14 @@ import { loadLiveLlmConfigFromEnv, hasLiveLlmConfigInEnv } from '../../../harnes
 import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import {
-  loadRiskReportWorkspaceSeed,
-  SHARED_WORKSPACE_FIXTURE_PATH
-} from '../../../harness/backend/aiLiveTestData'
+  CONVERSATION_MEMORY_FIRST_RUN_USER_INPUT,
+  CONVERSATION_MEMORY_SECOND_RUN_USER_INPUT,
+  CONVERSATION_MEMORY_SHARED_WORKSPACE_FIXTURE_PATH,
+  loadConversationMemoryWorkspaceSeed
+} from '../../../harness/backend/liveScenarios/conversationMemoryScenario'
 import { filterAiRunEventsByType, runWithStructuredOutputRetry } from '../testUtils'
 
 const SESSION_ID = 'live-conversation-memory-multi-run-session'
-const FIRST_RUN_USER_INPUT =
-  '先不要写周报，也不要新建文件。你先基于我工作目录下的真实材料，告诉我本周最关键的风险、负责人、待确认项和下一步。'
-const SECOND_RUN_USER_INPUT =
-  '沿着刚才那轮继续，不用重写背景，直接告诉我目前最关键的待确认项、应该先找谁、为什么。'
 
 const normalizeAssertionText = (text: string): string => text.replace(/\s+/g, '')
 
@@ -89,7 +87,7 @@ describe('ai human live backend', () => {
         groups: ['live'],
         description:
           '验证 live 模式下基于真实 workspace 的 conversation memory 会在双 run 间延续关键业务状态，并被后续真实 brain 正确带回。',
-        fixtures: [SHARED_WORKSPACE_FIXTURE_PATH],
+        fixtures: [CONVERSATION_MEMORY_SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
         runtimeModelName: hasLiveLlmConfigInEnv() ? loadLiveLlmConfigFromEnv().model_name : null,
         execute: async (runtime) => {
@@ -106,7 +104,7 @@ describe('ai human live backend', () => {
           }
 
           const liveConfig = loadLiveLlmConfigFromEnv()
-          const workspaceSeed = await loadRiskReportWorkspaceSeed(runtime)
+          const workspaceSeed = await loadConversationMemoryWorkspaceSeed(runtime)
           await runtime.seedLlmConfig(liveConfig)
           await runtime.seedWorkspaceKb({
             mode: 'all-supported'
@@ -218,7 +216,8 @@ describe('ai human live backend', () => {
               hasOwnerRecallSemantics(summary) &&
               /待确认|待跟进|未完成|复核/.test(summary) &&
               hasNextStepRecallSemantics(summary) &&
-              result.brainPrompt.includes('<conversation_summary>') &&
+              result.brainPrompt.includes('<conversation_history>') &&
+              result.brainPrompt.includes('<summary>') &&
               result.brainPrompt.includes('<recent_turns>') &&
               hasOwnerRecallSemantics(result.brainPrompt) &&
               hasRiskConclusionSemantics(result.brainPrompt, result.workspaceSeed.expectedRiskConclusion) &&
