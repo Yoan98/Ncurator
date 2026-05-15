@@ -1,7 +1,5 @@
 import path from 'node:path'
 import { describe, it } from 'vitest'
-import { loadDocxBundle } from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/blockIndex'
-import { XMLSerializer } from '@xmldom/xmldom'
 import { loadLiveLlmConfigFromEnv, hasLiveLlmConfigInEnv } from '../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
@@ -55,6 +53,40 @@ const hasExactEntityText = (text: string | undefined, entityText: string): boole
 
 const hasInventedEntityText = (text: string | undefined, inventedEntityText: string): boolean =>
   typeof text === 'string' && text.includes(inventedEntityText)
+
+type DocxOutlineBlock = {
+  preview?: string
+}
+
+type DocxOutlineResult = {
+  sourcePath?: string
+  blocks?: DocxOutlineBlock[]
+}
+
+const extractDraftReadbackText = (
+  events: ReturnType<typeof filterAiRunEventsByType>,
+  draftArtifactPath: string | undefined
+): string => {
+  if (!draftArtifactPath) {
+    return ''
+  }
+
+  const draftOutlineEvent = [...filterAiRunEventsByType(events, 'tool_call_result')]
+    .reverse()
+    .find((event) => {
+      if (event.toolName !== 'docx_outline' || !event.result?.data) {
+        return false
+      }
+      const outlineData = event.result.data as DocxOutlineResult
+      return outlineData.sourcePath === draftArtifactPath
+    })
+
+  const draftOutlineData = draftOutlineEvent?.result?.data as DocxOutlineResult | undefined
+  return (draftOutlineData?.blocks || [])
+    .map((block) => block.preview || '')
+    .join('\n')
+    .trim()
+}
 
 describe('ai human live backend', () => {
   it('human-context-compaction-natural-trigger-live', async () => {
@@ -140,14 +172,9 @@ describe('ai human live backend', () => {
               artifact.capability === 'docx' &&
               artifact.artifactRole === 'draft'
           )
-          let reviewXml = ''
           const draftArtifactPath =
             draftFileArtifact?.kind === 'file' ? draftFileArtifact.path : undefined
-          if (draftArtifactPath) {
-            const reviewBundle = await loadDocxBundle(await import('node:fs/promises').then((fs) => fs.readFile(draftArtifactPath)))
-            reviewXml = new XMLSerializer().serializeToString(reviewBundle.documentDom)
-          }
-          const generatedDraftText = `${reviewXml}\n${deliveryText}`
+          const draftReadbackText = extractDraftReadbackText(events, draftArtifactPath)
           const ratio =
             completionEvent && completionEvent.sourceHistoryTokenEstimate > 0
               ? completionEvent.tokenEstimateAfter / completionEvent.sourceHistoryTokenEstimate
@@ -187,6 +214,7 @@ describe('ai human live backend', () => {
               !hasInventedEntityText(compactionRecord?.rawText, inventedLastWeekDocName) &&
               hasExactEntityText(latestBrainRecord?.user, expectedLastWeekDocName) &&
               !hasInventedEntityText(latestBrainRecord?.user, inventedLastWeekDocName) &&
+              hasExactEntityText(deliveryText, expectedLastWeekDocName) &&
               !hasInventedEntityText(deliveryText, inventedLastWeekDocName) &&
               toolNames.includes('docx_create') &&
               hasDraftFileArtifact(result.output?.artifacts) &&
@@ -195,9 +223,13 @@ describe('ai human live backend', () => {
               createdRelativePaths.every(
                 (sourcePath) => sourcePath.startsWith('工作/') || sourcePath === path.basename(sourcePath)
               ) &&
-              hasOwnerSummarySemantics(generatedDraftText, result.workspaceSeed.expectedOwnerSummary) &&
-              hasRiskConclusionSemantics(generatedDraftText, result.workspaceSeed.expectedRiskConclusion) &&
-              hasNextStepSemantics(generatedDraftText, result.workspaceSeed.expectedNextStep),
+              Boolean(draftReadbackText) &&
+              hasOwnerSummarySemantics(draftReadbackText, result.workspaceSeed.expectedOwnerSummary) &&
+              hasRiskConclusionSemantics(
+                draftReadbackText,
+                result.workspaceSeed.expectedRiskConclusion
+              ) &&
+              hasNextStepSemantics(draftReadbackText, result.workspaceSeed.expectedNextStep),
             {
               name: 'human-live-context-compaction-natural-trigger-completes-task',
               message:
@@ -212,6 +244,7 @@ describe('ai human live backend', () => {
                 ratio,
                 toolNames,
                 artifacts: result.output?.artifacts,
+                draftReadbackText,
                 deliveryText
               }
             }

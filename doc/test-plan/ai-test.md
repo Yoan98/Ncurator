@@ -35,8 +35,8 @@
       - `依据：已完成多源资料取证、参考上周风格并新建周报草稿，关键事实和责任人口径正确；正文仍保留禁用措辞说明，更像待确认稿而非最干净的最终版。`
     - `human-conversation-memory-multi-run-live`：`8.5 / 10`
       - `依据：真实双 run 下 conversation summary 与 recent turns 已成功承接，第二轮未 reread 也能直接沿用上一轮主线做优先级判断；当前更合理的口径是允许 Alice / Bob 两种排序，但必须与职责分工和因果链保持自洽。`
-    - `human-context-compaction-natural-trigger-live`：`6.5 / 10`
-      - `依据：场景设计已接近真实长任务，并已在 `15_000` window 下真实触发 compaction，压缩比约 `3.5%`，压缩摘要和后续 `<compactions>` 都进入了日志；但本轮 live 实跑后续修稿陷入递归上限，说明压缩链路成立而最终交付稳定性仍待修复。`
+    - `human-context-compaction-natural-trigger-live`：`8.7 / 10`
+      - `依据：已在 `15_000` window 下真实触发 compaction，压缩摘要、后续 `<compactions>` 与真实草稿读回都保持了风险主线、负责人和后续动作等核心事实；最新一轮 `mouth` 也已守住真实文件名。当前主要问题已从“任务未完成”转为“旧断言过度绑定 mouth 话术”，按任务完成度应评为高分通过样例。`
 
 ## 3. Suite 设计
 
