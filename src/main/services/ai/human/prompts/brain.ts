@@ -8,8 +8,12 @@ import {
   listBuiltinSkillDefinitions,
   listExternalSkillDefinitions
 } from '../skills'
-import { renderHumanThought } from '../shared/memoryRenderers'
-import { renderBrainCompactBlocks, renderBrainRoundSection } from '../shared/historyRenderers'
+import { renderTaskProgress } from '../shared/memoryRenderers'
+import {
+  renderBrainCompactBlocks,
+  renderBrainRoundExecutionOnly,
+  renderBrainRoundSection
+} from '../shared/historyRenderers'
 import { getToolSpec } from '../tools/registry'
 import {
   renderBrainOutputSchemaForPrompt,
@@ -103,6 +107,7 @@ export const buildBrainPrompt = (input: {
   conversationSummaryText?: string
   recentTurnsText?: string
 }) => {
+  const latestRound = getLastRoundFocus(input.state)
   const outputShapeText = indentLines(
     renderBrainOutputSchemaForPrompt(humanThoughtDecisionSchema),
     1
@@ -161,12 +166,13 @@ export const buildBrainPrompt = (input: {
     - reference_scope：当前工作区、默认知识范围、显式缩圈范围和可用边界。
     - search_strategy：当前任务默认遵循的检索思路提示。
     - terminal_platform：当前 terminal 所在平台；如果你决定使用命令行，应据此选择命令语法。
-    - task_progress：当前任务的全局进度信息，按“待办路径 / 推进摘要”组织。
-    - conversation_summary：当前会话中跨任务仍有效的滚动摘要，用于理解用户在同一窗口里的连续主线、稳定偏好与当前状态。
+    - conversation_history：当前会话历史视图。
+    - summary：当前会话中跨任务仍有效的滚动摘要，用于理解用户在同一窗口里的连续主线、稳定偏好与当前状态。
     - recent_turns：最近几轮真实对话内容与产物，用于判断用户刚刚说了什么、你刚刚交付了什么。
-    - compactions：当前任务中已压缩的过程历史，用于识别较早事实、失败路径和已验证动作。
-    - prior_rounds：当前任务中最近未压缩的过程历史，用于判断最近已经做过什么。
-    - latest_round：最近一轮完整过程记录，用于判断刚做了什么、传了什么参数、拿到了什么结果。
+    - round_history：当前任务的历史证据视图。
+    - compactions：已压缩的较早历史，用于保留仍相关的客观事实、失败路径、重复尝试与背景信息。
+    - rounds：最近未压缩的历史轮次，用于查看较新的判断、执行与结果轨迹。
+    - task_progress：当前任务的全局进度信息。
     - skill_catalog：当前已生效或仍可学习的 skills，以及当前可直接调用的工具说明。
     - decision_hint：当前额外的收敛或纠偏提示；若无则为 none。
   </context_block_guide>
@@ -278,32 +284,33 @@ ${renderPlatformText(input.ctx)}
 ${renderSkillCatalogSection(input.state)}
   </skill_catalog>
 
-  <conversation_context>
-    <conversation_summary>
+  <conversation_history>
+    <summary>
     ${input.conversationSummaryText || 'none'}
-    </conversation_summary>
+    </summary>
 
     <recent_turns>
     ${input.recentTurnsText || 'none'}
     </recent_turns>
-  </conversation_context>
+  </conversation_history>
 
-  <task_run_context>
+  <round_history>
     <compactions>
     ${renderBrainCompactBlocks(input.state.memory.taskRun.compactions)}
     </compactions>
 
-    <prior_rounds>
+    <rounds>
     ${renderBrainRoundSection(getRecentHistoryRounds(input.state))}
-    </prior_rounds>
-
-    <latest_round>
-    ${renderBrainRoundSection(getLastRoundFocus(input.state) ? [getLastRoundFocus(input.state)!] : [])}
-    </latest_round>
-  </task_run_context>
+    </rounds>
+  </round_history>
 
   <task_progress>
-  ${renderHumanThought(input.state, 'brain_prompt')}
+  ${renderTaskProgress({
+    state: input.state,
+    latestRound,
+    latestExecutionText: renderBrainRoundExecutionOnly(latestRound),
+    mode: 'brain_prompt'
+  })}
   </task_progress>
 
   <decision_hint>

@@ -1,4 +1,4 @@
-import type { HumanState, HumanTodoItem } from '../types'
+import type { HumanRoundRecord, HumanState, HumanTodoItem } from '../types'
 
 export type HumanMemoryRenderMode = 'brain_prompt' | 'mouth_prompt' | 'fallback_markdown'
 
@@ -53,4 +53,46 @@ export const renderHumanThought = (
       field: 'progressionSummary',
       mode
     })
+  ].join('\n')
+
+const renderLatestDecisionText = (
+  latestRound: HumanRoundRecord | undefined,
+  mode: HumanMemoryRenderMode
+): string =>
+  latestRound?.thought.thought.next
+    ? renderThoughtTextValue(latestRound.thought.thought.next, mode)
+    : getRenderFallback(mode)
+
+const renderExecutionText = (
+  executionText: string | undefined,
+  mode: HumanMemoryRenderMode
+): string => renderThoughtTextValue(executionText || '', mode)
+
+export const renderTaskProgress = (input: {
+  state: HumanState
+  latestRound?: HumanRoundRecord
+  latestExecutionText?: string
+  mode: HumanMemoryRenderMode
+}): string =>
+  [
+    '最新一轮决策如下',
+    '待办路径：',
+    renderHumanThoughtField({
+      state: input.state,
+      field: 'todolist',
+      mode: input.mode
+    }),
+    '',
+    '推进摘要：',
+    renderHumanThoughtField({
+      state: input.state,
+      field: 'progressionSummary',
+      mode: input.mode
+    }),
+    '',
+    '判断：',
+    renderLatestDecisionText(input.latestRound, input.mode),
+    '',
+    '执行：',
+    renderExecutionText(input.latestExecutionText, input.mode)
   ].join('\n')

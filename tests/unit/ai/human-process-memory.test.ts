@@ -162,7 +162,7 @@ describe('ai unit human memory history', () => {
     expect(nextState.execution.references).toBeUndefined()
   })
 
-  it('keeps the last round out of prior_rounds and trims the window to twenty rounds', () => {
+  it('keeps the latest round out of historical rounds and trims the window to twenty rounds', () => {
     const initialState = createInitialHumanState({
       taskId: 'task-2',
       userInput: '请整理历史'

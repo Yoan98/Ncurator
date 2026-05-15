@@ -21,7 +21,7 @@ const createFakeCtx = (): AiRunContext =>
   }) as AiRunContext
 
 describe('ai unit brain decision-hint prompt contract', () => {
-  it('renders current decision hint only in decision_hint, not latest_round', () => {
+  it('renders current decision hint in decision_hint and keeps latest execution in task_progress', () => {
     const state = createInitialHumanState({
       taskId: 'task-1',
       userInput: '继续处理 docx'
@@ -111,15 +111,33 @@ describe('ai unit brain decision-hint prompt contract', () => {
       }
     }
 
+    state.memory.thought = {
+      next: '这段不应直接出现在 task_progress 的判断段落',
+      todolist: [
+        {
+          item: '修正文档写入',
+          status: 'todo'
+        }
+      ],
+      progressionSummary: '已发现批量写在中途安全停止，需要按最新执行结果重新判断。'
+    }
+
     const prompt = buildBrainPrompt({
       state,
       ctx: createFakeCtx()
     }).user
 
-    const latestHistorySection = prompt.match(/<latest_round>([\s\S]*?)<\/latest_round>/)?.[1] || ''
+    const taskProgressSection = prompt.match(/<task_progress>([\s\S]*?)<\/task_progress>/)?.[1] || ''
     const correctionHintSection = prompt.match(/<decision_hint>([\s\S]*?)<\/decision_hint>/)?.[1] || ''
 
-    expect(latestHistorySection).not.toContain('上一轮 docx 批量写在中途安全停止。')
+    expect(prompt).not.toContain('<latest_round>')
+    expect(taskProgressSection).toContain('最新一轮决策如下')
+    expect(taskProgressSection).toContain('判断：')
+    expect(taskProgressSection).toContain('继续处理 docx 批量写')
+    expect(taskProgressSection).toContain('执行：')
+    expect(taskProgressSection).toContain('类型：hand')
+    expect(taskProgressSection).toContain('cannot safely resolve target after earlier mutations')
+    expect(taskProgressSection).not.toContain('上一轮 docx 批量写在中途安全停止。')
     expect(correctionHintSection).toContain('上一轮 docx 批量写在中途安全停止。')
     expect(correctionHintSection).toContain('lastSafeRevisionRef=v2')
   })
@@ -141,7 +159,7 @@ describe('ai unit brain decision-hint prompt contract', () => {
     expect(prompt).toContain('支撑了最终交付的哪些地方')
   })
 
-  it('renders thought as progress-only context and keeps rounds as judgment plus execution history', () => {
+  it('renders conversation_history, round_history, and task_progress under the new contract', () => {
     const state = createInitialHumanState({
       taskId: 'task-3',
       userInput: '继续处理资料'
@@ -163,11 +181,22 @@ describe('ai unit brain decision-hint prompt contract', () => {
       ctx: createFakeCtx()
     })
 
-    expect(prompt.system).toContain('task_progress：当前任务的全局进度信息，按“待办路径 / 推进摘要”组织。')
-    expect(prompt.system).toContain('prior_rounds：当前任务中最近未压缩的过程历史，用于判断最近已经做过什么。')
-    expect(prompt.system).toContain('latest_round：最近一轮完整过程记录，用于判断刚做了什么、传了什么参数、拿到了什么结果。')
+    expect(prompt.system).toContain('conversation_history：当前会话历史视图。')
+    expect(prompt.system).toContain('round_history：当前任务的历史证据视图。')
+    expect(prompt.system).toContain('task_progress：当前任务的权威当前态')
+    expect(prompt.system).toContain('round_history 只是历史证据，不是主要当前态视图。')
     expect(prompt.user).toContain('<task_progress>')
     expect(prompt.user).toContain('</task_progress>')
+    expect(prompt.user).toContain('<conversation_history>')
+    expect(prompt.user).toContain('<summary>')
+    expect(prompt.user).toContain('<recent_turns>')
+    expect(prompt.user).toContain('<round_history>')
+    expect(prompt.user).toContain('<compactions>')
+    expect(prompt.user).toContain('<rounds>')
+    expect(prompt.user).not.toContain('<conversation_context>')
+    expect(prompt.user).not.toContain('<task_run_context>')
+    expect(prompt.user).not.toContain('<latest_round>')
+    expect(prompt.user).not.toContain('<prior_rounds>')
     expect(prompt.user).toContain('待办路径：')
     expect(prompt.user).toContain('推进摘要：')
     expect(prompt.user).toContain('核对资料范围')

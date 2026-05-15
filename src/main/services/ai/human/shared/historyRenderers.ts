@@ -282,6 +282,9 @@ const renderBrainRoundExecution = (record: HumanRoundRecord): string => {
   }
 }
 
+export const renderBrainRoundExecutionOnly = (record: HumanRoundRecord | undefined): string =>
+  record ? renderBrainRoundExecution(record) : 'none'
+
 const renderBrainRoundRecord = (record: HumanRoundRecord): string =>
   `
 - 第 ${record.roundId} 轮

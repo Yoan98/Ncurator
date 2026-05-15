@@ -153,9 +153,28 @@ describe('ai human live backend', () => {
               completedEvents.length >= 1 &&
               budgetEvents.some((event) => event.decision === 'compact') &&
               Boolean(compactionRecord?.rawText?.trim()) &&
+              Boolean(latestBrainRecord?.user.includes('<conversation_history>')) &&
+              Boolean(latestBrainRecord?.user.includes('<round_history>')) &&
+              Boolean(latestBrainRecord?.user.includes('<task_progress>')) &&
+              Boolean(latestBrainRecord?.user.includes('最新一轮决策如下')) &&
               Boolean(latestBrainRecord?.user.includes('<compactions>')) &&
+              Boolean(latestBrainRecord?.user.includes('<rounds>')) &&
+              !Boolean(latestBrainRecord?.user.includes('<latest_round>')) &&
               Boolean(completionEvent?.summaryPreview.trim()) &&
               ratio <= 0.5 &&
+              Boolean(compactionRecord?.user.includes('<user_goal>')) &&
+              Boolean(compactionRecord?.user.includes('<task_progress>')) &&
+              Boolean(compactionRecord?.user.includes('<history_rounds>')) &&
+              Boolean(compactionRecord?.rawText.includes('任务锚点：')) &&
+              Boolean(compactionRecord?.rawText.includes('已确认事实：')) &&
+              Boolean(compactionRecord?.rawText.includes('仍有效约束：')) &&
+              Boolean(compactionRecord?.rawText.includes('已尝试但未解决：')) &&
+              Boolean(compactionRecord?.rawText.includes('重复或低价值内容：')) &&
+              Boolean(compactionRecord?.rawText.includes('已失效或仅作背景的信息：')) &&
+              !Boolean(compactionRecord?.rawText.includes('结果与已有摘要一致')) &&
+              !Boolean(compactionRecord?.rawText.includes('已经读过了')) &&
+              !Boolean(compactionRecord?.rawText.includes('这个问题基本看过了')) &&
+              !Boolean(compactionRecord?.rawText.includes('应该不用再看了')) &&
               toolNames.includes('docx_create') &&
               hasDraftFileArtifact(result.output?.artifacts) &&
               hasFileReviewArtifact(result.output?.artifacts) &&

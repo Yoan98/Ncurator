@@ -376,10 +376,14 @@ describe('ai human mock-llm backend', () => {
               ({ user }) => {
                 compactedPromptSeen =
                   user.includes('<compactions>') &&
+                  user.includes('<task_progress>') &&
                   user.includes('审批未完成') &&
                   user.includes('未审批不可发布') &&
                   user.includes('负责人已更新为 Bob') &&
                   !user.includes('尝试直接发布，但因为审批未完成被阻断。') &&
+                  user.includes('最新一轮决策如下') &&
+                  user.includes('判断：') &&
+                  user.includes('执行：') &&
                   user.includes('最新一轮准备说明：下一步先确认窗口，再推进 Bob 的审批。')
                 return buildCompleteTaskDecision({
                   summary: '压缩后的关键信息仍完整。'
@@ -399,7 +403,31 @@ describe('ai human mock-llm backend', () => {
         ctx.chatText = async (input) => {
           if (input.caller === 'human.context_compaction') {
             compactionPrompt = input.user
-            return '已压缩：已补齐 docx-read；发布说明确认审批人缺失；错误尝试直接发布但失败原因是审批未完成；当前仍受“未审批不可发布”约束；负责人已更新为 Bob；上线窗口仍待确认。'
+            return [
+              '任务锚点：',
+              '- 目标：继续一个已经执行很久的任务，并基于已有事实完成后续推进判断。',
+              '- 当前交付：保留仍影响任务推进的审批与窗口事实，供后续 brain 继续决策。',
+              '',
+              '已确认事实：',
+              '- 已补齐 docx-read 技能。',
+              '- 发布说明显示审批人字段为空。',
+              '- 审批记录显示负责人已更新为 Bob，且仍有“未审批不可发布”约束。',
+              '- 上线窗口仍待确认。',
+              '',
+              '仍有效约束：',
+              '- 审批未完成前不能发布。',
+              '- 负责人 Bob 仍待确认。',
+              '- 上线窗口冲突尚未解除。',
+              '',
+              '已尝试但未解决：',
+              '- 曾尝试直接发布，但因审批未完成失败，问题仍未解决。',
+              '',
+              '重复或低价值内容：',
+              '- 多次围绕审批状态的读取过程与命令参数已省略，只保留结果事实。',
+              '',
+              '已失效或仅作背景的信息：',
+              '- 较早的技能补齐过程细节仅保留结论。'
+            ].join('\n')
           }
           return await originalChatText(input)
         }
@@ -432,12 +460,23 @@ describe('ai human mock-llm backend', () => {
           result.nextState.execution.stage === 'mouth' &&
             startedEvents.length === 1 &&
             completedEvents.length === 1 &&
+            Boolean(result.compactionPrompt.includes('<user_goal>')) &&
+            Boolean(result.compactionPrompt.includes('<task_progress>')) &&
+            Boolean(result.compactionPrompt.includes('<history_rounds>')) &&
             Boolean(result.compactionPrompt.includes('失败原因：审批未完成')) &&
             Boolean(result.compactionPrompt.includes('负责人 Bob 待确认')) &&
+            Boolean(result.roundsBlock?.summary.includes('任务锚点：')) &&
+            Boolean(result.roundsBlock?.summary.includes('已确认事实：')) &&
+            Boolean(result.roundsBlock?.summary.includes('仍有效约束：')) &&
+            Boolean(result.roundsBlock?.summary.includes('已尝试但未解决：')) &&
+            Boolean(result.roundsBlock?.summary.includes('重复或低价值内容：')) &&
+            Boolean(result.roundsBlock?.summary.includes('已失效或仅作背景的信息：')) &&
             Boolean(result.roundsBlock?.summary.includes('审批未完成')) &&
             Boolean(result.roundsBlock?.summary.includes('未审批不可发布')) &&
             Boolean(result.roundsBlock?.summary.includes('负责人已更新为 Bob')) &&
             Boolean(result.roundsBlock?.summary.includes('上线窗口仍待确认')) &&
+            !result.roundsBlock?.summary.includes('结果与已有摘要一致') &&
+            !result.roundsBlock?.summary.includes('已经读过了') &&
             result.remainingRounds.length === 1 &&
             result.remainingRounds[0]?.roundId === 6 &&
             result.compactedPromptSeen &&
