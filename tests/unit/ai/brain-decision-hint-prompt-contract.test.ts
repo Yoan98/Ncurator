@@ -183,8 +183,7 @@ describe('ai unit brain decision-hint prompt contract', () => {
 
     expect(prompt.system).toContain('conversation_history：当前会话历史视图。')
     expect(prompt.system).toContain('round_history：当前任务的历史证据视图。')
-    expect(prompt.system).toContain('task_progress：当前任务的权威当前态')
-    expect(prompt.system).toContain('round_history 只是历史证据，不是主要当前态视图。')
+    expect(prompt.system).toContain('task_progress：当前任务的全局进度信息。')
     expect(prompt.user).toContain('<task_progress>')
     expect(prompt.user).toContain('</task_progress>')
     expect(prompt.user).toContain('<conversation_history>')

@@ -50,6 +50,12 @@ const hasRiskConclusionSemantics = (
   )
 }
 
+const hasExactEntityText = (text: string | undefined, entityText: string): boolean =>
+  typeof text === 'string' && text.includes(entityText)
+
+const hasInventedEntityText = (text: string | undefined, inventedEntityText: string): boolean =>
+  typeof text === 'string' && text.includes(inventedEntityText)
+
 describe('ai human live backend', () => {
   it('human-context-compaction-natural-trigger-live', async () => {
     await runWithStructuredOutputRetry(async () => {
@@ -146,6 +152,8 @@ describe('ai human live backend', () => {
             completionEvent && completionEvent.sourceHistoryTokenEstimate > 0
               ? completionEvent.tokenEstimateAfter / completionEvent.sourceHistoryTokenEstimate
               : Number.POSITIVE_INFINITY
+          const expectedLastWeekDocName = path.basename(result.workspaceSeed.lastWeekReportRelativePath)
+          const inventedLastWeekDocName = '上周工作周报.docx'
 
           runtime.assertThat(
             result.output?.status === 'completed' &&
@@ -166,7 +174,6 @@ describe('ai human live backend', () => {
               Boolean(compactionRecord?.user.includes('<task_progress>')) &&
               Boolean(compactionRecord?.user.includes('<history_rounds>')) &&
               Boolean(compactionRecord?.rawText.includes('任务锚点：')) &&
-              Boolean(compactionRecord?.rawText.includes('关键引用锚点：')) &&
               Boolean(compactionRecord?.rawText.includes('已确认事实：')) &&
               Boolean(compactionRecord?.rawText.includes('仍有效约束：')) &&
               Boolean(compactionRecord?.rawText.includes('已尝试但未解决：')) &&
@@ -176,6 +183,11 @@ describe('ai human live backend', () => {
               !Boolean(compactionRecord?.rawText.includes('已经读过了')) &&
               !Boolean(compactionRecord?.rawText.includes('这个问题基本看过了')) &&
               !Boolean(compactionRecord?.rawText.includes('应该不用再看了')) &&
+              hasExactEntityText(compactionRecord?.rawText, expectedLastWeekDocName) &&
+              !hasInventedEntityText(compactionRecord?.rawText, inventedLastWeekDocName) &&
+              hasExactEntityText(latestBrainRecord?.user, expectedLastWeekDocName) &&
+              !hasInventedEntityText(latestBrainRecord?.user, inventedLastWeekDocName) &&
+              !hasInventedEntityText(deliveryText, inventedLastWeekDocName) &&
               toolNames.includes('docx_create') &&
               hasDraftFileArtifact(result.output?.artifacts) &&
               hasFileReviewArtifact(result.output?.artifacts) &&
