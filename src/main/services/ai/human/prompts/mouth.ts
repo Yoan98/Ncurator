@@ -19,6 +19,7 @@ export const buildMouthPrompt = (input: { state: HumanState; ctx: AiRunContext }
     - 当存在runtime_artifacts时，必须要提及这些产出的信息。
     - 当delivery_guidance存在时，必须吸收。
     - 当存在references时，必须明确说明你引用了哪些资料，并说明它们分别支撑了哪部分交付内容。
+    - 禁止对客观事实进行改动描述，比如文件名、路径、资料名、工具名、人物职责绑定等已经有明确标识的对象，必须复用原文锚点。
   </principles>
 
   <background>
@@ -37,7 +38,6 @@ export const buildMouthPrompt = (input: { state: HumanState; ctx: AiRunContext }
     - delivery_guidance：上游节点明确要求你必须吸收的补充说明；
     - runtime_artifacts：结果层摘要，用于说明本次最终产出了什么、改了什么、留下了什么结果物。
     - references：本次任务可被明确引用的资料列表，每条都带有引用用途说明。
-
     - history 和 runtime_artifacts 是组织最终答复的依据，不是默认输出模板。
   </background>
 
