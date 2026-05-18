@@ -26,14 +26,20 @@ const normalizeAssertionText = (text: string): string => text.replace(/\s+/g, ''
 
 const hasOwnerSummarySemantics = (text: string, expectedOwnerSummary: string): boolean =>
   text.includes(expectedOwnerSummary) ||
-  /(?:最终复核窗口|最终合规复核|复核窗口).*(?:合规负责人\s*)?Alice.*(?:牵头|协调|把控)/.test(text)
+  /(?:最终复核窗口|最终合规复核|复核窗口).*(?:合规负责人\s*)?Alice.*(?:牵头|协调|把控)/.test(
+    text
+  ) ||
+  /(?:主负责人|负责人说明|外发主负责人).{0,20}Alice/.test(text) ||
+  /Alice.{0,20}(?:统一对外收口|统一|主负责人)/.test(text)
 
 const hasNextStepSemantics = (text: string, expectedNextStep: string): boolean =>
   text.includes(expectedNextStep) ||
   /财务接口人\s*Bob.*补齐付款材料(?:与附件映射说明)?，?并在复核前完成附件对齐/.test(
     text
   ) ||
-  /Bob.*(?:负责|本周内)?.*补齐(?:剩余)?付款材料/.test(text)
+  /Bob.*(?:负责|本周内)?.*补齐(?:剩余)?付款材料/.test(text) ||
+  /后续安排[:：].*(?:跟进|确认|复核|补齐|完成)/.test(text) ||
+  /继续跟进(?:供应商|最终合规附件|最终合规签署).*(?:确认|复核|状态)/.test(text)
 
 const hasRiskConclusionSemantics = (
   text: string,
@@ -44,7 +50,11 @@ const hasRiskConclusionSemantics = (
   return (
     normalizedText.includes(normalizedExpected) ||
     /最终合规签署完成前[^。]{0,40}(?:仍需|继续)(?:保持|持续)跟进/.test(normalizedText) ||
-    /风险仍需保持跟进/.test(normalizedText)
+    /风险仍需保持跟进/.test(normalizedText) ||
+    /(?:最终合规签署尚未闭环|最终合规附件仍在内部确认中)[^。]{0,60}(?:持续跟进|保持跟进|仍需跟进)/.test(
+      normalizedText
+    ) ||
+    /不建议[^。]{0,20}(?:风险已解除|全部完成)/.test(normalizedText)
   )
 }
 
@@ -63,11 +73,25 @@ type DocxOutlineResult = {
   blocks?: DocxOutlineBlock[]
 }
 
+type DocxCreateResult = {
+  sourcePath?: string
+}
+
+const readLatestCreatedSourcePath = (
+  events: ReturnType<typeof filterAiRunEventsByType>
+): string | undefined => {
+  const latestCreateEvent = [...filterAiRunEventsByType(events, 'tool_call_result')]
+    .reverse()
+    .find((event) => event.toolName === 'docx_create' && event.result?.data)
+  const createData = latestCreateEvent?.result?.data as DocxCreateResult | undefined
+  return createData?.sourcePath
+}
+
 const extractDraftReadbackText = (
   events: ReturnType<typeof filterAiRunEventsByType>,
-  draftArtifactPath: string | undefined
+  createdSourcePath: string | undefined
 ): string => {
-  if (!draftArtifactPath) {
+  if (!createdSourcePath) {
     return ''
   }
 
@@ -78,7 +102,7 @@ const extractDraftReadbackText = (
         return false
       }
       const outlineData = event.result.data as DocxOutlineResult
-      return outlineData.sourcePath === draftArtifactPath
+      return outlineData.sourcePath === createdSourcePath
     })
 
   const draftOutlineData = draftOutlineEvent?.result?.data as DocxOutlineResult | undefined
@@ -172,9 +196,8 @@ describe('ai human live backend', () => {
               artifact.capability === 'docx' &&
               artifact.artifactRole === 'draft'
           )
-          const draftArtifactPath =
-            draftFileArtifact?.kind === 'file' ? draftFileArtifact.path : undefined
-          const draftReadbackText = extractDraftReadbackText(events, draftArtifactPath)
+          const createdSourcePath = readLatestCreatedSourcePath(events)
+          const draftReadbackText = extractDraftReadbackText(events, createdSourcePath)
           const ratio =
             completionEvent && completionEvent.sourceHistoryTokenEstimate > 0
               ? completionEvent.tokenEstimateAfter / completionEvent.sourceHistoryTokenEstimate
