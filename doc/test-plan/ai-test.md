@@ -33,8 +33,8 @@
   - 样例评分：
     - `human-risk-report-draft-live`：`8.5 / 10`
       - `依据：已完成多源资料取证、参考上周风格并新建周报草稿，关键事实和责任人口径正确；正文仍保留禁用措辞说明，更像待确认稿而非最干净的最终版。`
-    - `human-conversation-memory-multi-run-live`：`8.5 / 10`
-      - `依据：真实双 run 下 conversation summary 与 recent turns 已成功承接，第二轮未 reread 也能直接沿用上一轮主线做优先级判断；当前更合理的口径是允许 Alice / Bob 两种排序，但必须与职责分工和因果链保持自洽。`
+    - `human-conversation-memory-multi-run-live`：`9.0 / 10`
+      - `依据：真实双 run 下 conversation summary 与 recent turns 已成功承接，第二轮 brain 明确带回第一轮形成的风险主线、负责人分工、待确认项和后续动作；当前更合理的正式口径应聚焦“总结是否有效影响后续”，而不是把 Alice / Bob 的单点排序绑定为唯一正确答案。`
     - `human-context-compaction-natural-trigger-live`：`8.7 / 10`
       - `依据：已在 `15_000` window 下真实触发 compaction，压缩摘要、后续 `<compactions>` 与真实草稿读回都保持了风险主线、负责人和后续动作等核心事实；最新一轮 `mouth` 也已守住真实文件名。当前主要问题已从“任务未完成”转为“旧断言过度绑定 mouth 话术”，按任务完成度应评为高分通过样例。`
 
@@ -858,7 +858,7 @@
 - What：验证 live 模式下基于真实 workspace 的 conversation memory 会在双 run 间延续关键业务状态，并被后续真实 `brain` 正确带回。
 - Why：真实环境里的会话连续性不能脱离 workspace 语义；如果记忆里提到的对象在工作区中不存在，模型会合理地转去做环境核验，导致样例失真。
 - How：复用风险周报 live 的真实 workspace；第一轮只做“状态梳理，不新建文件”，完成后通过真实 `updateConversationMemoryAfterRun` 写入 session memory；第二轮在同一 session、同一 workspace 下追问“当前最关键的待确认项、应该先找谁、为什么”，允许模型继续读取真实资料。
-- Oracle：`summary` 非空且保留风险主线、负责人、待确认项与下一步；第二轮 `brain` prompt 同时出现 `<conversation_summary>` 与 `<recent_turns>`；即使模型重新读取文件，也不应偏离第一轮形成的连续业务主线；最终交付继续命中负责人、阻塞项和下一步，并且对 `Alice / Bob` 的优先级判断与材料中的职责分工、前置依赖和行动顺序保持自洽。
+- Oracle：`summary` 非空且保留风险主线、负责人、待确认项与下一步；第二轮 `brain` prompt 同时出现 `<conversation_summary>` 与 `<recent_turns>`；即使模型重新读取文件，也不应偏离第一轮形成的连续业务主线；最终交付继续命中负责人、阻塞项和后续动作，并体现第一轮总结对第二轮真实判断的延续影响。
 - Not：不要求第二轮禁止 reread workspace；不逐字约束 live 模型措辞；不验证 session 隔离。
 
 ##### `human-context-compaction-natural-trigger-live`

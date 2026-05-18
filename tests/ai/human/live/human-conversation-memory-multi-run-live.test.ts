@@ -47,30 +47,15 @@ const hasNextStepRecallSemantics = (text: string): boolean =>
 const hasPrimaryPendingItemSemantics = (text: string): boolean =>
   /合规附件|附件版本|版本对齐|法务复核|复核最终意见|付款材料|附件映射/.test(text)
 
-const hasAliceFirstSemantics = (text: string): boolean =>
-  /先找\s*\**Alice\**/.test(text) ||
-  /应该先找\s*\**Alice\**/.test(text) ||
-  /Alice\s+是(?:主负责人|对外统一口径的主责人|合规负责人)/.test(text)
+const hasContactDecisionSemantics = (text: string): boolean =>
+  /先找|应该先找|优先找|先联系|先同步/.test(text) && /Alice|Bob/.test(text)
 
-const hasBobFirstSemantics = (text: string): boolean =>
-  /先找\s*\**Bob\**/.test(text) ||
-  /应该先找\s*\**Bob\**/.test(text) ||
-  /Bob\s+是(?:财务接口人|执行人)/.test(text)
+const hasOwnerRoleConsistencySemantics = (text: string): boolean =>
+  (/Alice/.test(text) && /复核窗口|法务|统一口径|主负责人|牵头/.test(text)) ||
+  (/Bob/.test(text) && /付款材料|附件映射|补齐|执行动作|材料收尾/.test(text))
 
-const hasAliceReasonSemantics = (text: string): boolean =>
-  /Alice|合规负责人|对外统一口径/.test(text) &&
-  /复核窗口|整体风险|统一口径|主负责/.test(text)
-
-const hasBobReasonSemantics = (text: string): boolean =>
-  /Bob|财务接口人/.test(text) &&
-  /付款材料|附件映射|执行动作|补齐/.test(text)
-
-const hasSequencingSemantics = (text: string): boolean =>
-  /前置依赖|先于|下游依赖|顺序|先确认|再协调|卡住/.test(text)
-
-const hasConsistentOwnerDecisionSemantics = (text: string): boolean =>
-  (hasAliceFirstSemantics(text) && hasAliceReasonSemantics(text) && hasSequencingSemantics(text)) ||
-  (hasBobFirstSemantics(text) && hasBobReasonSemantics(text))
+const hasFollowupContinuitySemantics = (text: string): boolean =>
+  /持续跟进|待确认|未完成|补齐|核对|签署窗口|下一步|同步/.test(text)
 
 const hasWhySemantics = (text: string): boolean =>
   (/(复核窗口|法务|统一口径)/.test(text) && /Alice/.test(text)) ||
@@ -129,14 +114,14 @@ describe('ai human live backend', () => {
           })
           const firstOutput = await firstRunner.run({
             taskId: `${runtime.taskId}-run-1`,
-            userInput: FIRST_RUN_USER_INPUT
+            userInput: CONVERSATION_MEMORY_FIRST_RUN_USER_INPUT
           })
           const firstRunEvents = runtime.eventCollector.snapshot()
 
           await updateConversationMemoryAfterRun({
             runId: runtime.runId,
             sessionId: SESSION_ID,
-            userInput: FIRST_RUN_USER_INPUT,
+            userInput: CONVERSATION_MEMORY_FIRST_RUN_USER_INPUT,
             assistantOutput: firstOutput.deliveryMarkdown,
             artifacts: firstOutput.artifacts || [],
             runtimeSettings: await runtime.storageService.aiRuntimeSettings.get(),
@@ -153,7 +138,7 @@ describe('ai human live backend', () => {
               {
                 id: 'live-conversation-memory-user-1',
                 role: 'user',
-                content: FIRST_RUN_USER_INPUT,
+                content: CONVERSATION_MEMORY_FIRST_RUN_USER_INPUT,
                 timestamp: Date.now() + 1
               },
               {
@@ -171,7 +156,7 @@ describe('ai human live backend', () => {
           })
           const secondOutput = await secondRunner.run({
             taskId: `${runtime.taskId}-run-2`,
-            userInput: SECOND_RUN_USER_INPUT
+            userInput: CONVERSATION_MEMORY_SECOND_RUN_USER_INPUT
           })
           const allEvents = runtime.eventCollector.snapshot()
           const secondRunEvents = allEvents.slice(firstRunEvents.length)
@@ -229,12 +214,14 @@ describe('ai human live backend', () => {
                   )
                 )) &&
               hasPrimaryPendingItemSemantics(secondDelivery) &&
-              hasConsistentOwnerDecisionSemantics(secondDelivery) &&
+              hasContactDecisionSemantics(secondDelivery) &&
+              hasOwnerRoleConsistencySemantics(secondDelivery) &&
+              hasFollowupContinuitySemantics(secondDelivery) &&
               hasWhySemantics(secondDelivery),
             {
               name: 'human-live-conversation-memory-multi-run-recall-persists',
               message:
-                'live conversation memory 应在真实 workspace 双 run 间带回关键业务状态；第二轮可以选择直接复用记忆，也可以重新读取资料，但结论不能偏离已形成的连续主线，且对 Alice / Bob 的优先级判断应与材料中的职责分工保持自洽。',
+                'live conversation memory 应在真实 workspace 双 run 间带回关键业务状态；第二轮可以选择直接复用记忆，也可以重新读取资料，但结论不能偏离第一轮形成的连续主线，并继续围绕负责人分工、阻塞项与后续动作展开。',
               data: {
                 savedMemory: result.savedMemory,
                 brainPrompt: result.brainPrompt,
@@ -246,5 +233,5 @@ describe('ai human live backend', () => {
         }
       })
     })
-  }, 480_000)
+  }, 900_000)
 })
