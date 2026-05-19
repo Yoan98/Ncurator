@@ -167,7 +167,6 @@ export const createRealAiDepsFactory = async (input: {
             taskId: request.taskId,
             approvalId,
             command: request.command,
-            riskLevel: request.riskLevel,
             reason: request.reason,
             createdAt: Date.now(),
             stage: request.stage,

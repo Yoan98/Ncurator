@@ -71,7 +71,6 @@ export type AiApprovalRequest = {
   runId: string
   taskId: string
   command: string
-  riskLevel: 'medium' | 'high'
   reason: string
   internal?: boolean
   stage?: AiRunEventStage

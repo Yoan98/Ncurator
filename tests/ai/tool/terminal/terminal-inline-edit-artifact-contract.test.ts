@@ -71,7 +71,7 @@ describe('ai tool terminal backend', () => {
             data: {
               approvals: approvalEvents.map((event) => ({
                 command: event.command,
-                riskLevel: event.riskLevel
+                reason: event.reason
               })),
               notesContent: result.notesContent,
               createdExists: result.createdExists

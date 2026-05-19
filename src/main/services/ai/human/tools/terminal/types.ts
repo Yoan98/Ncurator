@@ -36,9 +36,6 @@ export type TerminalCapabilityToolsRuntimeState = {
   stepIndex: number
 }
 
-export type TerminalCommandApprovalRiskLevel = 'low' | 'medium' | 'high'
-export type TerminalCommandMode = 'read_only' | 'mutating' | 'unknown'
-
 export type ArtifactCandidate = {
   resolvedPath: string
   summary: string
@@ -47,10 +44,18 @@ export type ArtifactCandidate = {
 }
 
 export type TerminalCommandAnalysis = {
-  riskLevel: TerminalCommandApprovalRiskLevel
-  commandMode: TerminalCommandMode
   resourceKey: string
   artifactCandidates: TerminalArtifactCandidate[]
+}
+
+export type TerminalReadonlyExecutionPolicy = 'readonly_allowed' | 'approval_required'
+
+export type TerminalReadonlyPolicyResult = {
+  executionPolicy: TerminalReadonlyExecutionPolicy
+  mutability: 'read_only' | 'mutating'
+  parallelSafe: boolean
+  matchedRuleId?: string
+  reason: string
 }
 
 export type ResolvedCwd =

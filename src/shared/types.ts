@@ -947,7 +947,6 @@ type AiRunEventPayload =
       taskId: string
       approvalId: string
       command: string
-      riskLevel: 'medium' | 'high'
       reason: string
       createdAt: number
     }

@@ -106,7 +106,7 @@ interface AiRunContext {
   // 可选记录完整 LLM IO；主要用于排障、审计与回放。
   recordLlmIo?: (record: AiLlmIoRecord) => void
 
-  // 工具层统一请求审批的入口；高风险命令或写操作通过它获取用户批准。
+  // 工具层统一请求审批的入口；所有未命中正式只读指令集的 terminal 命令通过它获取用户批准。
   requestApproval: (request: AiApprovalRequest) => Promise<AiApprovalDecision>
 
   // 统一读取历史摘要与最近对话；brain 通过它拿到压缩后的历史上下文。
@@ -873,7 +873,6 @@ interface ApprovalRequiredEvent {
   taskId: string
   approvalId: string
   command: string
-  riskLevel: 'medium' | 'high'
   reason: string
   createdAt: number
 }

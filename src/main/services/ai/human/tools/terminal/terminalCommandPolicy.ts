@@ -1,7 +1,6 @@
 import { parseShellCommandSegments } from './commandParsing'
 import { collectTerminalArtifactCandidates } from './terminalArtifacts'
 import { isPathInsideRoot } from './terminalCwd'
-import { isParallelReadonlyTerminalCommand } from './parallelReadonlyCommands'
 import type { TerminalCommandAnalysis } from './types'
 import { getAiRuntimePlatform } from '../../../utils/platform'
 
@@ -114,77 +113,6 @@ export const checkWorkspaceBoundary = (
   return { ok: true }
 }
 
-export const classifyCommandRisk = (command: string): 'low' | 'medium' | 'high' => {
-  const text = String(command || '').toLowerCase()
-
-  if (
-    /\brm\s+-rf\b/.test(text) ||
-    /\bremove-item\b/.test(text) ||
-    /\bmkfs\b/.test(text) ||
-    /\bdd\b/.test(text) ||
-    /\bshutdown\b/.test(text) ||
-    /\breboot\b/.test(text) ||
-    /\bchown\b/.test(text)
-  ) {
-    return 'high'
-  }
-
-  if (
-    /\brm\b/.test(text) ||
-    /\bmv\b/.test(text) ||
-    /\bcp\b/.test(text) ||
-    /\bmkdir\b/.test(text) ||
-    /\btouch\b/.test(text) ||
-    /\bchmod\b/.test(text) ||
-    /\bcopy-item\b/.test(text) ||
-    /\bmove-item\b/.test(text) ||
-    /\bnew-item\b/.test(text) ||
-    /\bset-content\b/.test(text) ||
-    /\badd-content\b/.test(text) ||
-    /\bout-file\b/.test(text) ||
-    /\bcurl\b/.test(text) ||
-    /\bwget\b/.test(text) ||
-    /\bgit\s+push\b/.test(text) ||
-    />/.test(text)
-  ) {
-    return 'medium'
-  }
-
-  return 'low'
-}
-
-export const classifyCommandMode = (command: string): 'read_only' | 'mutating' | 'unknown' => {
-  const text = String(command || '').trim().toLowerCase()
-  if (!text) return 'unknown'
-
-  if (
-    /\brm\b/.test(text) ||
-    /\bmv\b/.test(text) ||
-    /\bcp\b/.test(text) ||
-    /\bmkdir\b/.test(text) ||
-    /\btouch\b/.test(text) ||
-    /\bchmod\b/.test(text) ||
-    /\bcopy-item\b/.test(text) ||
-    /\bmove-item\b/.test(text) ||
-    /\bremove-item\b/.test(text) ||
-    /\bnew-item\b/.test(text) ||
-    /\bset-content\b/.test(text) ||
-    /\badd-content\b/.test(text) ||
-    /\bout-file\b/.test(text) ||
-    /\bgit\s+(add|commit|push|apply|am)\b/.test(text) ||
-    /\btee\b/.test(text) ||
-    />/.test(text)
-  ) {
-    return 'mutating'
-  }
-
-  if (isParallelReadonlyTerminalCommand(text)) {
-    return 'read_only'
-  }
-
-  return 'unknown'
-}
-
 export const analyzeTerminalCommand = (input: {
   command: string
   cwd?: string
@@ -193,8 +121,6 @@ export const analyzeTerminalCommand = (input: {
   const cwd = String(input.cwd || '').trim()
 
   return {
-    riskLevel: classifyCommandRisk(command),
-    commandMode: classifyCommandMode(command),
     resourceKey: cwd || 'workspace',
     artifactCandidates: collectTerminalArtifactCandidates(command)
   }

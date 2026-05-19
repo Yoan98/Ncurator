@@ -13,12 +13,12 @@ import { createToolEventEmitter } from '../utils/toolEvents'
 import type { CapabilityActivityInput } from '../types'
 import { mergeArtifactCandidates, recordTerminalArtifacts } from './terminalArtifacts'
 import { analyzeTerminalCommand, checkWorkspaceBoundary } from './terminalCommandPolicy'
+import { analyzeReadonlyTerminalCommandPolicy } from './readonlyCommandPolicy'
 import { resolveTerminalCwd } from './terminalCwd'
 import { runTerminalCommand } from './terminalExec'
 import type {
   TerminalCapabilityToolsInput,
-  TerminalCapabilityToolsRuntimeState,
-  TerminalCommandApprovalRiskLevel
+  TerminalCapabilityToolsRuntimeState
 } from './types'
 import {
   TERMINAL_RUN_SCHEMA,
@@ -57,14 +57,13 @@ const requestTerminalCommandApproval = async (input: {
   runId: string
   taskId: string
   command: string
-  riskLevel: Exclude<TerminalCommandApprovalRiskLevel, 'low'>
+  reason: string
 }): Promise<{ approved: true } | { approved: false; error: string }> => {
   const decision = await input.ctx.requestApproval({
     runId: input.runId,
     taskId: input.taskId,
     command: input.command,
-    riskLevel: input.riskLevel,
-    reason: `command classified as ${input.riskLevel} risk`
+    reason: input.reason
   })
   if (decision.approved) return { approved: true }
   return {
@@ -245,13 +244,14 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             command,
             cwd: args.cwd
           })
-          if (analysis.riskLevel !== 'low') {
+          const readonlyPolicy = analyzeReadonlyTerminalCommandPolicy(command)
+          if (readonlyPolicy.executionPolicy !== 'readonly_allowed') {
             const approval = await requestTerminalCommandApproval({
               ctx: input.ctx,
               runId: input.runId,
               taskId: input.taskId,
               command,
-              riskLevel: analysis.riskLevel
+              reason: readonlyPolicy.reason
             })
             if (!approval.approved) {
               const denied = buildFailure({

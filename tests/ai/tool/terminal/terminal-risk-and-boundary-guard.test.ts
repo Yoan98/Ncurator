@@ -21,7 +21,7 @@ describe('ai tool terminal backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['terminal'],
-      description: '验证高风险命令审批、路径逃逸和 workspace 边界保护。',
+      description: '验证非只读命令审批、路径逃逸和 workspace 边界保护。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -35,7 +35,7 @@ describe('ai tool terminal backend', () => {
         })
 
         return {
-          highRiskDenied: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
+          nonReadonlyDenied: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
             command: isWindows ? 'Remove-Item -Recurse -Force guarded' : 'rm -rf guarded'
           }),
           relativeEscape: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
@@ -56,20 +56,20 @@ describe('ai tool terminal backend', () => {
         const stepStarted = filterEventsByType(result.events, 'terminal_step_started')
 
         runtime.assertThat(
-          result.highRiskDenied.ok === false &&
-            result.highRiskDenied.code === 'approval_denied' &&
+          result.nonReadonlyDenied.ok === false &&
+            result.nonReadonlyDenied.code === 'approval_denied' &&
             approvalEvents.some((event) =>
               event.command === (isWindows ? 'Remove-Item -Recurse -Force guarded' : 'rm -rf guarded')
             ) &&
             result.guardedStillExists,
           {
-            name: 'high-risk-commands-stop-at-approval',
-            message: '高风险 terminal 命令应先触发审批；审批拒绝后不得产生副作用。',
+            name: 'non-readonly-commands-stop-at-approval',
+            message: '非只读 terminal 命令应先触发审批；审批拒绝后不得产生副作用。',
             data: {
-              highRiskDenied: result.highRiskDenied,
+              nonReadonlyDenied: result.nonReadonlyDenied,
               approvals: approvalEvents.map((event) => ({
                 command: event.command,
-                riskLevel: event.riskLevel
+                reason: event.reason
               })),
               guardedStillExists: result.guardedStillExists
             }

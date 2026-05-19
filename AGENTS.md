@@ -21,6 +21,7 @@
 
 ### 1.4 测试相关
 - `doc/test-plan/ai-test.md`：涉及 AI 测试范围、正式 case 设计或执行摘要维护时阅读。
+- `doc/test-plan/ai-test.md`：涉及 AI 测试范围、正式 case 设计、terminal 只读/审批策略或执行摘要维护时阅读。
 - `doc/test-plan/settings-test.md`：涉及 Settings 测试范围或测试边界时阅读。
 - `doc/test.md`：涉及测试体系、runner、日志或正式测试流程时阅读。
 

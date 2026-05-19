@@ -1999,7 +1999,6 @@ const ChatPage: React.FC = () => {
                             <div className="flex flex-col gap-3">
                               <div>{pendingApprovalRequest.reason}</div>
                               <div className="text-xs text-[#8A6510]">
-                                风险级别：{pendingApprovalRequest.riskLevel} ·{' '}
                                 {pendingApprovalRequest.command}
                               </div>
                               <div className="flex gap-2">

@@ -695,7 +695,6 @@ export function registerHandlers(services: {
       taskId: input.taskId,
       approvalId,
       command: 'rm -rf /tmp/ncurator-e2e',
-      riskLevel: 'high',
       reason: 'E2E fixture 需要审批才能继续',
       createdAt: Date.now()
     })
@@ -2125,7 +2124,6 @@ export function registerHandlers(services: {
                   taskId: request.taskId,
                   approvalId,
                   command: request.command,
-                  riskLevel: request.riskLevel,
                   reason: request.reason,
                   createdAt: Date.now(),
                   internal: request.internal,

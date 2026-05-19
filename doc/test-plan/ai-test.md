@@ -627,9 +627,10 @@
 - 测试类型：`backend`
 - 实现状态：`已实现`
 - What：验证危险命令与越界输入会被真实守卫拒绝。
+- What：验证未命中只读白名单的命令与越界输入会被真实守卫拒绝。
 - Why：terminal 风险边界必须靠正式测试长期守住。
 - How：构造危险或越权命令调用 `terminal_run`。
-- Oracle：返回明确拒绝，不执行实际破坏操作。
+- Oracle：返回明确拒绝，不执行实际副作用操作。
 - Not：不验证 UI 提示。
 
 ##### `terminal-inline-edit-artifact-contract`

@@ -40,7 +40,7 @@ describe('ai tool terminal backend', () => {
           list: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
             command: isWindows
               ? 'Get-ChildItem -LiteralPath materials -Recurse -Force'
-              : 'find materials -mindepth 1 -maxdepth 2'
+              : 'ls -R materials'
           }),
           echoReadOnly: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
             command: isWindows ? 'Write-Output "terminal readonly check"' : 'echo terminal readonly check'
