@@ -2,7 +2,7 @@ import { describe, it } from 'vitest'
 import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import { filterAiRunEventsByType } from '../testUtils'
-import { buildCompleteTaskDecision, buildToolDecision } from '../testUtils'
+import { buildToolDecision } from '../testUtils'
 
 describe('ai human mock-llm backend', () => {
   it('todolist-memory-maintenance', async () => {
@@ -12,19 +12,19 @@ describe('ai human mock-llm backend', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证 todolist 作为长期任务板会在真实 graph 中跨轮维护 todo、done 与 obsolete 状态。',
+      description: '验证 todolist 会跨轮保留，且在仍有 todo 时选择 mouth 会收到强制回退提示。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
         let secondBrainSeesTodolist = false
-        let fourthBrainSeesObsolete = false
+        let thirdBrainSeesIncompleteHint = false
         const runner = createHumanTestRunner(runtime, {
           structuredOutputScript: {
             'human.brain': [
               {
                 output: {
                   thought: {
-                    next: '先学习一个 skill，让 todolist 进入下一轮 prompt。',
+                    next: '先建立任务板，再继续推进。',
                     todolist: [
                       {
                         item: '确认 A 事项',
@@ -39,7 +39,7 @@ describe('ai human mock-llm backend', () => {
                         status: 'todo'
                       }
                     ],
-                    progressionSummary: '已开始整理当前任务板。当前还没有最终证据，只先建立任务板。'
+                    progressionSummary: '已开始整理当前任务板，当前还没有最终交付依据。'
                   },
                   nextAction: {
                     action: 'learning',
@@ -53,14 +53,69 @@ describe('ai human mock-llm backend', () => {
                   user.includes('[todo] 确认 B 事项')
                 return {
                   thought: {
-                    next: '故意错误地删除旧 todo，验证系统会要求修正任务板。',
+                    next: '故意提前收口，验证仍有 todo 时会被打回。',
                     todolist: [
                       {
                         item: '确认 A 事项',
                         status: 'done'
                       },
                       {
-                        item: '跟进 C 事项',
+                        item: '确认 B 事项',
+                        status: 'todo'
+                      },
+                      {
+                        item: '检查是否已经满足用户诉求并能进入最终交付',
+                        status: 'todo'
+                      }
+                    ],
+                    progressionSummary:
+                      '已确认 todolist 会跨轮保留。当前仅完成 A，仍有未完成事项，故意尝试提前 mouth 以验证收口拦截。'
+                  },
+                  nextAction: {
+                    action: 'mouth'
+                  }
+                }
+              },
+              ({ user }) => {
+                thirdBrainSeesIncompleteHint =
+                  user.includes('你必须先完成这些事项') &&
+                  user.includes('pendingItems=[确认 B 事项, 检查是否已经满足用户诉求并能进入最终交付]')
+
+                return buildToolDecision({
+                  toolName: 'terminal_run',
+                  args: {
+                    command: 'pwd'
+                  },
+                  summary: '收到未完成 todo 的强提示后，先继续执行一个真实工具轮次。',
+                  todolist: [
+                    {
+                      item: '确认 A 事项',
+                      status: 'done'
+                    },
+                    {
+                      item: '确认 B 事项',
+                      status: 'done'
+                    },
+                    {
+                      item: '检查是否已经满足用户诉求并能进入最终交付',
+                      status: 'todo'
+                    }
+                  ],
+                  progressionSummary:
+                    '已确认 todolist 会跨轮保留，且在仍有 todo 时选择 mouth 会被真实 decision_hint 打回 brain。当前继续推进并保留最终检查项为 todo。'
+                })
+              },
+              {
+                output: {
+                  thought: {
+                    next: '所有事项已处理完，可以进入最终交付。',
+                    todolist: [
+                      {
+                        item: '确认 A 事项',
+                        status: 'done'
+                      },
+                      {
+                        item: '确认 B 事项',
                         status: 'done'
                       },
                       {
@@ -69,78 +124,20 @@ describe('ai human mock-llm backend', () => {
                       }
                     ],
                     progressionSummary:
-                      '已确认 todolist 会作为长期任务板跨轮保留，但此轮故意遗漏被放弃事项，验证系统会要求显式保留 obsolete。'
+                      '已确认 todolist 会跨轮保留，且在仍有 todo 时选择 mouth 会被打回；待所有事项不再是 todo 后，可以正常收口。'
                   },
                   nextAction: {
                     action: 'mouth'
                   }
                 }
-              },
-              ({ user }) => {
-                return buildToolDecision({
-                  toolName: 'terminal_run',
-                  args: {
-                    command: 'pwd'
-                  },
-                  summary: '先保留 obsolete，再执行一次真实工具，让下一轮 brain prompt 看见 obsolete。',
-                  todolist: [
-                    {
-                      item: '确认 A 事项',
-                      status: 'done'
-                    },
-                    {
-                      item: '跟进 C 事项',
-                      status: 'done'
-                    },
-                    {
-                      item: '确认 B 事项',
-                      status: 'obsolete'
-                    },
-                    {
-                      item: '检查是否已经满足用户诉求并能进入最终交付',
-                      status: 'todo'
-                    }
-                  ],
-                  progressionSummary:
-                    '已确认 todolist 会作为长期任务板跨轮保留，并允许在新信息下重写为最新版本。证据是第二轮真实 brain prompt 中再次读到了第一轮 todolist 的 todo 项；第三轮在 decision_hint 提示后显式保留了 obsolete 项，并继续推进。'
-                })
-              },
-              ({ user }) => {
-                fourthBrainSeesObsolete = user.includes('[obsolete] 确认 B 事项')
-
-                const completeDecision = buildCompleteTaskDecision({
-                  summary: 'todolist 已成功跨轮维护并按要求保留 obsolete。',
-                  todolist: [
-                    {
-                      item: '确认 A 事项',
-                      status: 'done'
-                    },
-                    {
-                      item: '跟进 C 事项',
-                      status: 'done'
-                    },
-                    {
-                      item: '确认 B 事项',
-                      status: 'obsolete'
-                    },
-                    {
-                      item: '检查是否已经满足用户诉求并能进入最终交付',
-                      status: 'done'
-                    }
-                  ],
-                  progressionSummary:
-                    '已确认 todolist 会作为长期任务板跨轮保留，并允许在新信息下重写为最新版本。证据是第二轮真实 brain prompt 中再次读到了第一轮 todolist 的 todo 项；第四轮真实 brain prompt 中继续看到了 obsolete 项。'
-                })
-
-                return completeDecision
               }
             ],
             'human.mouth': [
               {
                 output: {
-                  summary: 'todolist 已成功跨轮维护。',
+                  summary: 'todolist 已成功跨轮维护，并完成收口拦截验证。',
                   deliveryMarkdown:
-                    '# Todolist Memory\n\n已验证 todolist 会在下一轮真实 prompt 中继续出现，并被重写成新的任务板。'
+                    '# Todolist Memory\n\n已验证 todolist 会在下一轮真实 prompt 中继续出现，且在仍有 todo 时选择 mouth 会收到 decision hint 并返回 brain。'
                 }
               }
             ]
@@ -155,7 +152,7 @@ describe('ai human mock-llm backend', () => {
         return {
           output,
           secondBrainSeesTodolist,
-          fourthBrainSeesObsolete,
+          thirdBrainSeesIncompleteHint,
           events: runtime.eventCollector.snapshot()
         }
       },
@@ -164,20 +161,20 @@ describe('ai human mock-llm backend', () => {
         runtime.assertThat(
           result.output.status === 'completed' &&
             result.secondBrainSeesTodolist &&
-            result.fourthBrainSeesObsolete &&
+            result.thirdBrainSeesIncompleteHint &&
             decisionHints.some(
               (event) =>
-                event.code === 'brain_todolist_invalid_transition' &&
-                Array.isArray(event.detail?.droppedTodoItems) &&
-                event.detail.droppedTodoItems.includes('确认 B 事项')
+                event.code === 'brain_todolist_incomplete' &&
+                Array.isArray(event.detail?.pendingItems) &&
+                event.detail.pendingItems.includes('确认 B 事项')
             ),
           {
-            name: 'thought-todolist-persists-and-is-rewritten-across-real-graph-rounds',
+            name: 'thought-todolist-persists-and-mouth-is-blocked-while-todo-remains',
             message:
-              'todolist 应作为长期任务板在下一轮真实 brain prompt 中继续存在，并在丢弃旧 todo 时收到真实 decision_hint 后改写为 obsolete。',
+              'todolist 应作为长期任务板在下一轮真实 brain prompt 中继续存在，并在仍有 todo 时收到真实 decision_hint 后返回 brain。',
             data: {
               secondBrainSeesTodolist: result.secondBrainSeesTodolist,
-              fourthBrainSeesObsolete: result.fourthBrainSeesObsolete,
+              thirdBrainSeesIncompleteHint: result.thirdBrainSeesIncompleteHint,
               decisionHints
             }
           }

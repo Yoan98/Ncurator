@@ -140,8 +140,8 @@ export const buildBrainPrompt = (input: {
     - 该子段必须输出对任务推进状态的累积性理解摘要，可以随着推进过程累积修改，但必须保留仍影响任务推进和最终交付的事项，禁止逐轮流水账式的输出；
     - 该字段必须严格按照下方格式输出信息:
       -对用户任务整体推进现状的总览描述。
-      -每个todo项的推进理解：
-        1.todo项1的名称:
+      -每个todolist项的推进理解：
+        1.todolist项1的名称:
           - 已经尝试过什么
           - 形成了什么结论
           - 证据是什么
@@ -157,7 +157,7 @@ export const buildBrainPrompt = (input: {
 
     nextAction为hand时：
     - toolUsePlan 必须是完整合法的可执行计划。
-    - toolUsePlan.mode：parallel 只用于只工具的并行调用；其余情况必须用 serial,它将是被串行执行。
+    - toolUsePlan.mode：parallel只用于只读工具的并行调用；其余情况必须用 serial，它将被串行执行。
     - toolUsePlan.calls[*].toolName：必须严格使用当前工具说明里的精确名称。
     - toolUsePlan.calls[*].args：必须是对象，字段名、必填参数和参数层级都必须与工具说明一致。
     - toolUsePlan最大只允许规划${HUMAN_TOOL_USE_PLAN_LIMIT}个。
@@ -213,7 +213,7 @@ ${outputShapeText}
           ],
           "progressionSummary": "
             -当前任务的用户诉求是关于审批驳回时是否保留原文件，但缺少读取 docx 的能力说明，无法判断资料内容。
-            -每个todo项的推进理解：
+            -每个todolist项的推进理解：
               1.补齐读取 docx 的能力说明：
               - 已经尝试过什么：
               当前没有明确的工具调用计划，无法判断是否满足用户诉求。
@@ -276,7 +276,7 @@ ${outputShapeText}
           ],
           "progressionSummary": "
             -当前任务的用户诉求是关于审批驳回时是否保留原文件，已经确认审批驳回时会保留原文件，当前证据足够进入最终交付。
-            -每个todo项的推进理解：
+            -每个todolist项的推进理解：
               1.确认审批驳回时是否保留原文件：
               - 已经尝试过什么：
               查看了审批制度说明.docx文件的相关内容。

@@ -189,17 +189,9 @@ export const humanDecisionHintSchema = z.discriminatedUnion('code', [
     })
   }),
   z.object({
-    code: z.literal('brain_todolist_invalid_transition'),
-    detail: z.object({
-      invalidItems: z.array(z.string().min(1)).min(1),
-      droppedTodoItems: z.array(z.string().min(1))
-    })
-  }),
-  z.object({
     code: z.literal('brain_todolist_incomplete'),
     detail: z.object({
-      pendingItems: z.array(z.string().min(1)).min(1),
-      isLastRemainingTodo: z.boolean().optional()
+      pendingItems: z.array(z.string().min(1)).min(1)
     })
   })
 ])
@@ -215,7 +207,7 @@ export const humanHistoryToolResultSchema = z.object({
   resourceContext: toolResourceContextSchema.optional()
 })
 
-export const humanTodoItemStatusSchema = z.enum(['todo', 'done', 'obsolete'])
+export const humanTodoItemStatusSchema = z.enum(['todo', 'done'])
 
 export const humanTodoItemSchema = z.object({
   item: z.string().min(1),
