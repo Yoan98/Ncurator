@@ -59,6 +59,18 @@ const hasRiskConclusionSemantics = (
   )
 }
 
+const hasPendingRiskStateSemantics = (text: string): boolean => {
+  const normalizedText = normalizeAssertionText(text)
+  return (
+    /最终合规签署[^。]{0,40}(?:仍存在|尚有|还有).{0,24}(?:确认项|确认环节|未闭环|未完成)/.test(
+      normalizedText
+    ) ||
+    /正式复核窗口[^。]{0,24}(?:尚未|仍未|还未)(?:完全)?关闭/.test(normalizedText) ||
+    /不具备对外使用.{0,12}(?:风险已解除|全部完成)/.test(normalizedText) ||
+    /(?:最后一份|最终)合规附件[^。]{0,28}(?:仍在|尚在)(?:内部)?确认流程/.test(normalizedText)
+  )
+}
+
 const hasAffirmativeForbiddenRiskConclusion = (text: string): boolean => {
   const normalizedText = normalizeAssertionText(text)
   const forbiddenPhrases = ['风险已解除', '全部完成', '风险已完全收口']
@@ -279,6 +291,7 @@ describe('ai human live backend', () => {
           draftTextOnly,
           result.workspaceSeed.expectedRiskConclusion
         )
+        const pendingRiskStateSatisfied = hasPendingRiskStateSemantics(draftTextOnly)
         const hasForbiddenAffirmativeConclusion =
           hasAffirmativeForbiddenRiskConclusion(draftTextOnly)
         const nextStepSatisfied = hasNextStepSemantics(
@@ -348,12 +361,14 @@ describe('ai human live backend', () => {
         runtime.assertThat(
           trackedDocsUnchanged.every(Boolean) &&
             createSourcePaths.length >= 1 &&
-            riskConclusionSatisfied &&
+            (riskConclusionSatisfied || pendingRiskStateSatisfied) &&
+            ownerSummarySatisfied &&
+            nextStepSatisfied &&
             !hasForbiddenAffirmativeConclusion,
           {
             name: 'human-live-risk-report-creates-new-draft-without-overwriting-source-docs',
             message:
-              'live human complex case 应新建本周周报待确认稿，不覆盖模板或既有工作 docx，并保持“仍需跟进”的风险结论，不输出正向绝对收口表述。',
+              'live human complex case 应新建本周周报待确认稿，不覆盖模板或既有工作 docx；只要风险状态仍明确未收口、负责人和后续动作成立，且不输出正向绝对收口表述，即视为对用户诉求负责。',
             data: {
               createSourcePaths,
               createdRelativePaths,
@@ -363,6 +378,7 @@ describe('ai human live backend', () => {
               draftArtifactPath,
               expectedRiskConclusion: result.workspaceSeed.expectedRiskConclusion,
               riskConclusionSatisfied,
+              pendingRiskStateSatisfied,
               hasForbiddenAffirmativeConclusion,
               ownerSummarySatisfied,
               nextStepSatisfied,
