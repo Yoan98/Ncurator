@@ -325,10 +325,6 @@ ${renderReferenceScopeText(input.ctx.referenceScope)}
 ${renderPlatformText(input.ctx)}
   </terminal_platform>
 
-  <skill_catalog>
-${renderSkillCatalogSection(input.state)}
-  </skill_catalog>
-
   <conversation_history>
     <summary>
     ${input.conversationSummaryText || 'none'}
@@ -338,6 +334,10 @@ ${renderSkillCatalogSection(input.state)}
     ${input.recentTurnsText || 'none'}
     </recent_turns>
   </conversation_history>
+
+  <skill_catalog>
+${renderSkillCatalogSection(input.state)}
+  </skill_catalog>
 
   <round_history>
     <compactions>
