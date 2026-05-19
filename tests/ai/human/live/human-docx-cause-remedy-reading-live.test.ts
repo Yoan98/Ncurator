@@ -99,14 +99,19 @@ describe('ai human live backend', () => {
             .map((event) => event.input.sourcePath)
             .filter((value): value is string => typeof value === 'string')
           const deliveryText = String(result.output?.deliveryMarkdown || '')
+          const hasDocxReadTrace = toolNames.some((toolName) =>
+            ['docx_search', 'docx_read_blocks', 'docx_outline', 'docx_history'].includes(toolName)
+          )
 
           runtime.assertThat(
             hasCompletedDelivery(result.output || {}) &&
               result.fixtureDocs.every((fixtureDoc) =>
                 openedExpectedDoc(openedSourcePaths, fixtureDoc.relativePath, fixtureDoc.name)
               ) &&
-              toolNames.some((toolName) => toolName === 'docx_search') &&
-              toolNames.some((toolName) => toolName === 'docx_read_blocks' || toolName === 'docx_outline') &&
+              hasDocxReadTrace &&
+              toolNames.some(
+                (toolName) => toolName === 'docx_read_blocks' || toolName === 'docx_outline'
+              ) &&
               !toolNames.some((toolName) => toolName.endsWith('_edit')) &&
               /(过拟合|过度拟合)/.test(deliveryText) &&
               /(记住过多训练数据中的特征值|训练时间过久)/.test(deliveryText) &&
@@ -117,7 +122,7 @@ describe('ai human live backend', () => {
             {
               name: 'human-live-reads-both-selected-docx-and-explains-cause-and-remedy',
               message:
-                'live human 读 case 应打开两份已选 docx，覆盖过拟合与反走样的核心事实，并对文档未写部分保持保守表达。',
+                'live human 读 case 应真实打开两份已选 docx，覆盖过拟合与反走样的核心事实，并对文档未写部分保持保守表达；不要求固定必须经过 docx_search。',
               data: {
                 openedSourcePaths,
                 toolNames,
