@@ -36,13 +36,13 @@ export const createContextCompactionNode = (input: {
         ...targetRounds.map((round) => round.roundId)
       ])
     )
-    const tokenEstimateBefore = state.execution.contextBudget?.tokenEstimate || 0
+    const budgetTokensBefore = state.execution.contextBudget?.budgetTokens || 0
     input.ctx.sendEvent({
       type: 'context_compaction_started',
       runId: input.ctx.runId,
       taskId: state.task.taskId,
       targetRoundIds: targetRounds.map((round) => round.roundId),
-      tokenEstimateBefore,
+      budgetTokensBefore,
       thresholdTokens: state.execution.contextBudget?.compactionTriggerTokens || 0,
       createdAt: Date.now(),
       stage: 'human_brain'
@@ -80,7 +80,7 @@ export const createContextCompactionNode = (input: {
         roundIds: mergedRoundIds
       },
       createdAt: Date.now(),
-      tokenEstimateBefore,
+      tokenEstimateBefore: budgetTokensBefore,
       sourceHistoryTokenEstimate,
       tokenEstimateAfter
     }
@@ -91,13 +91,17 @@ export const createContextCompactionNode = (input: {
       taskId: state.task.taskId,
       compactBlockId,
       sourceRoundIds: mergedRoundIds,
-      tokenEstimateBefore,
+      tokenEstimateBefore: budgetTokensBefore,
       sourceHistoryTokenEstimate,
       tokenEstimateAfter,
       summaryPreview: compactBlock.summary,
       completedAt: Date.now(),
       stage: 'human_brain'
     })
+    input.cache.lastBrainInputTokens = undefined
+    input.cache.lastBrainRoundCount = undefined
+    input.cache.lastBrainUsageUnavailable = false
+    input.cache.postCompactionNeedsFreshBrainUsage = true
 
     return {
       ...state,

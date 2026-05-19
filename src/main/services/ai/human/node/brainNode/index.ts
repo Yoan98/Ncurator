@@ -13,7 +13,7 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
     input.cache.currentState = state
     const history = await input.ctx.loadConversationContext()
 
-    const rawOutput = await input.ctx.chatStructured({
+    const result = await input.ctx.chatStructured({
       caller: 'human.brain',
       taskId: state.task.taskId,
       ...buildBrainPrompt({
@@ -27,7 +27,25 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
       temperature: 0.1,
       contextBudgetSnapshot: state.execution.contextBudget
     })
-    const parsedThought = humanThoughtDecisionSchema.parse(rawOutput)
+    const inputTokens = result.usage?.inputTokens
+    if (inputTokens !== undefined) {
+      input.cache.lastBrainInputTokens = inputTokens
+      input.cache.lastBrainRoundCount = state.memory.taskRun.rounds.length
+      input.cache.postCompactionNeedsFreshBrainUsage = false
+      input.cache.lastBrainUsageUnavailable = false
+    } else {
+      input.cache.lastBrainUsageUnavailable = true
+      input.ctx.sendEvent({
+        type: 'runtime_issue',
+        runId: input.ctx.runId,
+        taskId: state.task.taskId,
+        code: 'llm_usage_unavailable',
+        message: '当前模型调用未返回 brain 输入 token usage，暂不基于真实 usage 触发上下文压缩。',
+        createdAt: Date.now(),
+        stage: 'human_brain'
+      })
+    }
+    const parsedThought = humanThoughtDecisionSchema.parse(result.output)
     const thoughtMemory = applyThoughtPatch({
       memory: state.memory.thought,
       thought: parsedThought.thought

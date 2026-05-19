@@ -130,7 +130,10 @@ export type AiLlmStructuredRequest<T extends Record<string, unknown>> = {
 export type AiLlmExecutor = {
   chatStructured: <T extends Record<string, unknown>>(
     input: AiLlmStructuredRequest<T>
-  ) => Promise<T>
+  ) => Promise<{
+    output: T
+    usage?: AiLlmUsage
+  }>
   chatText: (input: AiLlmTextRequest) => Promise<string>
 }
 
@@ -708,7 +711,10 @@ export const createAiLlmExecutor = (input: {
   return {
     chatStructured: async <T extends Record<string, unknown>>(
       request: AiLlmStructuredRequest<T>
-    ): Promise<T> => {
+    ): Promise<{
+      output: T
+      usage?: AiLlmUsage
+    }> => {
       input.checkCancelled()
       const cfg = await input.getConfig()
       const result = await runLlmCallWithActivity<Record<string, unknown>>({
@@ -763,7 +769,10 @@ export const createAiLlmExecutor = (input: {
         })
       }
 
-      return request.schema.parse(result.output)
+      return {
+        output: request.schema.parse(result.output),
+        usage: result.usage
+      }
     },
 
     chatText: async (request: AiLlmTextRequest): Promise<string> => {

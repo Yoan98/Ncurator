@@ -68,10 +68,12 @@ describe('ai unit context budget node', () => {
 
     expect(nextState.execution.stage).toBe('brain')
     expect(nextState.execution.contextBudget).toMatchObject({
-      tokenEstimate: expect.any(Number),
+      basis: 'initial',
+      budgetTokens: 0,
       contextWindowTokens: 200000,
       compactionTriggerTokens: 160000,
       hasCompressibleHistory: false,
+      usageAvailable: false,
       evaluationId: expect.any(String)
     })
     const event = events.find(
@@ -91,7 +93,6 @@ describe('ai unit context budget node', () => {
     const events: AiRunEvent[] = []
     const ctx = createBaseContext(events)
     const cache = createHumanRuntimeCache()
-    const node = createContextBudgetNode({ ctx, cache })
     const baseState = createInitialHumanState({
       taskId: 'task-2',
       userInput: '请完成一个会触发压缩的长任务。'
@@ -167,6 +168,8 @@ describe('ai unit context budget node', () => {
       ctx: ctxWithSmallWindow,
       cache
     })
+    cache.lastBrainInputTokens = 500
+    cache.lastBrainRoundCount = 1
 
     const nextState = await smallWindowNode(roundState)
 
@@ -178,45 +181,74 @@ describe('ai unit context budget node', () => {
       type: 'context_budget_evaluated',
       decision: 'compact',
       snapshot: {
+        basis: 'usage_plus_delta',
+        budgetTokens: expect.any(Number),
         hasCompressibleHistory: true,
+        usageAvailable: true,
+        lastBrainInputTokens: 500,
+        deltaTokenEstimate: expect.any(Number),
         contextWindowTokens: 600,
         compactionTriggerTokens: 480
       }
     })
   })
 
-  it('records fail_over_window decision before throwing when no compressible history exists', async () => {
+  it('records continue decision with usage_unavailable basis when brain usage is missing', async () => {
     const events: AiRunEvent[] = []
-    const ctx = {
-      ...createBaseContext(events),
-      humanRuntimeOverrides: {
-        modelContextWindowTokens: 10
-      }
-    } satisfies AiRunContext
+    const ctx = createBaseContext(events)
     const cache = createHumanRuntimeCache()
+    cache.lastBrainUsageUnavailable = true
     const node = createContextBudgetNode({ ctx, cache })
     const state = createInitialHumanState({
       taskId: 'task-3',
-      userInput: '请重复输出一段很长很长很长的描述，用于压测上下文窗口是否会超限。'.repeat(20)
+      userInput: '请确认当前任务状态。'
     })
 
-    await expect(node(state)).rejects.toThrow('超过模型窗口')
+    const nextState = await node(state)
 
+    expect(nextState.execution.stage).toBe('brain')
     const budgetEvent = events.find(
       (item) => item.type === 'context_budget_evaluated'
     )
     expect(budgetEvent).toMatchObject({
       type: 'context_budget_evaluated',
-      decision: 'fail_over_window',
+      decision: 'continue',
       snapshot: {
+        basis: 'usage_unavailable',
+        budgetTokens: 0,
+        usageAvailable: false,
         hasCompressibleHistory: false,
-        contextWindowTokens: 10
+        contextWindowTokens: 200000
       }
     })
-    const runtimeIssue = events.find((item) => item.type === 'runtime_issue')
-    expect(runtimeIssue).toMatchObject({
-      type: 'runtime_issue',
-      code: 'context_window_exceeded'
+  })
+
+  it('records continue decision with post_compaction basis after compaction clears usage baseline', async () => {
+    const events: AiRunEvent[] = []
+    const ctx = createBaseContext(events)
+    const cache = createHumanRuntimeCache()
+    cache.postCompactionNeedsFreshBrainUsage = true
+    const node = createContextBudgetNode({ ctx, cache })
+    const state = createInitialHumanState({
+      taskId: 'task-4',
+      userInput: '继续推进压缩后的任务。'
+    })
+
+    const nextState = await node(state)
+
+    expect(nextState.execution.stage).toBe('brain')
+    const budgetEvent = events.find(
+      (item) => item.type === 'context_budget_evaluated'
+    )
+    expect(budgetEvent).toMatchObject({
+      type: 'context_budget_evaluated',
+      decision: 'continue',
+      snapshot: {
+        basis: 'post_compaction',
+        budgetTokens: 0,
+        usageAvailable: false,
+        contextWindowTokens: 200000
+      }
     })
   })
 })

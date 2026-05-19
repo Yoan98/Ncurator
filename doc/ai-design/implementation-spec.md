@@ -110,10 +110,10 @@ stateDiagram-v2
 
 ### 5.5 `context_budget`
 
-- 职责：在每次进入 `brain` 前估算当前 prompt token 使用量，并决定继续推理、触发压缩或明确失败。
-- 主要读取：`task`、`memory.thought`、`memory.taskRun.rounds`、`memory.taskRun.compactions`、`ctx.loadConversationContext()`、`ctx.humanRuntimeOverrides.modelContextWindowTokens`。
+- 职责：在每次进入 `brain` 前根据最近一次 `human.brain` 服务端返回的 `usage.inputTokens` 与新增 history 增量决定继续推理或触发压缩。
+- 主要读取：`memory.taskRun.rounds`、运行时缓存中的最近一次 brain input tokens、`ctx.humanRuntimeOverrides.modelContextWindowTokens`。
 - 主要回写：`execution.contextBudget`、`execution.stage`。
-- 约束：默认上下文窗口为 `200_000 tokens`，超过 `80%` 且存在可压缩的非 latest history 时进入 `context_compaction`；超过窗口且没有可压缩内容时发送 `runtime_issue(context_window_exceeded)` 并失败，不做静默字符串截断。每次预算评估都要生成一份 `BrainContextBudgetSnapshot`，写入 `execution.contextBudget`，并通过 `context_budget_evaluated` 事件落到日志；这份快照仅用于诊断和 LLM IO 关联，不进入 brain prompt。
+- 约束：默认上下文窗口为 `200_000 tokens`，`budgetTokens=lastBrainInputTokens + deltaTokenEstimate` 超过 `80%` 且存在可压缩的非 latest history 时进入 `context_compaction`；首次进入、usage 缺失或压缩后需要重新校准时直接继续到 `brain`。每次预算评估都要生成一份 `BrainContextBudgetSnapshot`，写入 `execution.contextBudget`，并通过 `context_budget_evaluated` 事件落到日志；这份快照仅用于诊断和 LLM IO 关联，不进入 brain prompt。`human.brain` 调用未返回 `usage.inputTokens` 时发送 `runtime_issue(llm_usage_unavailable)`，但不阻塞任务。
 
 ### 5.6 `context_compaction`
 

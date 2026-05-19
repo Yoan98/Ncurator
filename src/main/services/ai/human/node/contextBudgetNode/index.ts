@@ -1,13 +1,65 @@
 import { randomUUID } from 'node:crypto'
+import type { BrainContextBudgetSnapshot } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
 import {
   CONTEXT_COMPACTION_TRIGGER_RATIO,
   DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
 } from '../../constants'
 import { getCompressibleHistoryRounds } from '../../memory/rounds'
-import { buildBrainPrompt } from '../../prompts/brain'
+import { renderBrainRoundSection } from '../../shared/historyRenderers'
 import type { HumanRuntimeCache, HumanState } from '../../types'
-import { estimatePromptTokens } from '../../utils/tokenEstimate'
+import { estimateTextTokens } from '../../utils/tokenEstimate'
+
+const buildBudgetSnapshot = (input: {
+  cache: HumanRuntimeCache
+  state: HumanState
+  contextWindowTokens: number
+  compactionTriggerTokens: number
+  hasCompressibleHistory: boolean
+}): BrainContextBudgetSnapshot => {
+  if (input.cache.postCompactionNeedsFreshBrainUsage) {
+    return {
+      evaluationId: randomUUID(),
+      basis: 'post_compaction' as const,
+      budgetTokens: 0,
+      contextWindowTokens: input.contextWindowTokens,
+      compactionTriggerTokens: input.compactionTriggerTokens,
+      hasCompressibleHistory: input.hasCompressibleHistory,
+      usageAvailable: false
+    }
+  }
+
+  const lastBrainInputTokens = input.cache.lastBrainInputTokens
+  if (lastBrainInputTokens === undefined) {
+    const basis: BrainContextBudgetSnapshot['basis'] = input.cache.lastBrainUsageUnavailable
+      ? 'usage_unavailable'
+      : 'initial'
+    return {
+      evaluationId: randomUUID(),
+      basis,
+      budgetTokens: 0,
+      contextWindowTokens: input.contextWindowTokens,
+      compactionTriggerTokens: input.compactionTriggerTokens,
+      hasCompressibleHistory: input.hasCompressibleHistory,
+      usageAvailable: false
+    }
+  }
+
+  const lastBrainRoundCount = input.cache.lastBrainRoundCount ?? input.state.memory.taskRun.rounds.length
+  const newRounds = input.state.memory.taskRun.rounds.slice(lastBrainRoundCount)
+  const deltaTokenEstimate = estimateTextTokens(renderBrainRoundSection(newRounds))
+  return {
+    evaluationId: randomUUID(),
+    basis: 'usage_plus_delta' as const,
+    budgetTokens: lastBrainInputTokens + deltaTokenEstimate,
+    contextWindowTokens: input.contextWindowTokens,
+    compactionTriggerTokens: input.compactionTriggerTokens,
+    hasCompressibleHistory: input.hasCompressibleHistory,
+    usageAvailable: true,
+    lastBrainInputTokens,
+    deltaTokenEstimate
+  }
+}
 
 export const createContextBudgetNode = (input: {
   ctx: AiRunContext
@@ -17,14 +69,6 @@ export const createContextBudgetNode = (input: {
     input.ctx.checkCancelled()
     input.cache.currentState = state
 
-    const history = await input.ctx.loadConversationContext()
-    const prompt = buildBrainPrompt({
-      state,
-      ctx: input.ctx,
-      conversationSummaryText: history.conversationSummaryText,
-      recentTurnsText: history.recentTurnsText
-    })
-    const tokenEstimate = estimatePromptTokens(prompt)
     const contextWindowTokens =
       input.ctx.humanRuntimeOverrides?.modelContextWindowTokens ||
       DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
@@ -33,20 +77,19 @@ export const createContextBudgetNode = (input: {
     )
     const targetRounds = getCompressibleHistoryRounds(state)
     const hasCompressibleHistory = targetRounds.length > 0
-    const shouldCompact = tokenEstimate > compactionTriggerTokens && hasCompressibleHistory
-    const contextBudgetSnapshot = {
-      evaluationId: randomUUID(),
-      tokenEstimate,
+    const contextBudgetSnapshot = buildBudgetSnapshot({
+      cache: input.cache,
+      state,
       contextWindowTokens,
       compactionTriggerTokens,
       hasCompressibleHistory
-    } as const
+    })
+    const shouldCompact =
+      contextBudgetSnapshot.usageAvailable &&
+      contextBudgetSnapshot.budgetTokens > compactionTriggerTokens &&
+      hasCompressibleHistory
     const createdAt = Date.now()
-    const decision = shouldCompact
-      ? 'compact'
-      : tokenEstimate > contextWindowTokens
-        ? 'fail_over_window'
-        : 'continue'
+    const decision = shouldCompact ? 'compact' : 'continue'
     input.ctx.sendEvent({
       type: 'context_budget_evaluated',
       runId: input.ctx.runId,
@@ -56,19 +99,6 @@ export const createContextBudgetNode = (input: {
       snapshot: contextBudgetSnapshot,
       createdAt
     })
-    if (tokenEstimate > contextWindowTokens && !shouldCompact) {
-      const message = `当前上下文约 ${String(tokenEstimate)} tokens，超过模型窗口 ${String(contextWindowTokens)} tokens，且没有可继续压缩的过程历史。`
-      input.ctx.sendEvent({
-        type: 'runtime_issue',
-        runId: input.ctx.runId,
-        taskId: state.task.taskId,
-        code: 'context_window_exceeded',
-        message,
-        createdAt: Date.now(),
-        stage: 'human_brain'
-      })
-      throw new Error(message)
-    }
 
     return {
       ...state,

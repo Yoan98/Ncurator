@@ -14,6 +14,7 @@ import type { ResolvedDocxOpenTarget } from './human/tools/docx/review/types'
 import type { z } from 'zod/v4'
 import type {
   AiLlmIoRecord,
+  AiLlmUsage,
   AiRuntimeSettings,
   AiRunEvent,
   AiRunEventStage,
@@ -120,7 +121,10 @@ export type AiRunContext = {
     schemaName: string
     temperature?: number
     contextBudgetSnapshot?: BrainContextBudgetSnapshot
-  }) => Promise<T>
+  }) => Promise<{
+    output: T
+    usage?: AiLlmUsage
+  }>
   chatText: (input: {
     caller: string
     taskId?: string

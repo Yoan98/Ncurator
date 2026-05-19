@@ -623,7 +623,7 @@ export type RuntimeIssueCode =
   | 'workspace_path_unavailable'
   | 'scope_unavailable'
   | 'approval_denied'
-  | 'context_window_exceeded'
+  | 'llm_usage_unavailable'
 export type RuntimeSkillId =
   | 'terminal'
   | 'docx-read'
@@ -660,10 +660,14 @@ export type AiToolCallResult = {
 }
 export type BrainContextBudgetSnapshot = {
   evaluationId: string
-  tokenEstimate: number
+  basis: 'initial' | 'usage_plus_delta' | 'post_compaction' | 'usage_unavailable'
+  budgetTokens: number
   contextWindowTokens: number
   compactionTriggerTokens: number
   hasCompressibleHistory: boolean
+  usageAvailable: boolean
+  lastBrainInputTokens?: number
+  deltaTokenEstimate?: number
 }
 export type AiLlmIoRecord = {
   callId: string
@@ -983,7 +987,7 @@ type AiRunEventPayload =
       runId: string
       taskId?: string
       stage: 'human_brain'
-      decision: 'continue' | 'compact' | 'fail_over_window'
+      decision: 'continue' | 'compact'
       snapshot: BrainContextBudgetSnapshot
       createdAt: number
     }
@@ -992,7 +996,7 @@ type AiRunEventPayload =
       runId: string
       taskId?: string
       targetRoundIds: number[]
-      tokenEstimateBefore: number
+      budgetTokensBefore: number
       thresholdTokens: number
       createdAt: number
     }

@@ -104,10 +104,14 @@ describe('streaming run log writer', () => {
         },
         contextBudgetSnapshot: {
           evaluationId: 'budget-1',
-          tokenEstimate: 1234,
+          basis: 'usage_plus_delta',
+          budgetTokens: 1234,
           contextWindowTokens: 200000,
           compactionTriggerTokens: 160000,
-          hasCompressibleHistory: true
+          hasCompressibleHistory: true,
+          usageAvailable: true,
+          lastBrainInputTokens: 1000,
+          deltaTokenEstimate: 234
         },
         streamingMode: 'force_non_stream',
         streamed: false,
@@ -135,10 +139,14 @@ describe('streaming run log writer', () => {
       expect(llmIoRecords[0]).toMatchObject({
         contextBudgetSnapshot: {
           evaluationId: 'budget-1',
-          tokenEstimate: 1234,
+          basis: 'usage_plus_delta',
+          budgetTokens: 1234,
           contextWindowTokens: 200000,
           compactionTriggerTokens: 160000,
-          hasCompressibleHistory: true
+          hasCompressibleHistory: true,
+          usageAvailable: true,
+          lastBrainInputTokens: 1000,
+          deltaTokenEstimate: 234
         }
       })
 

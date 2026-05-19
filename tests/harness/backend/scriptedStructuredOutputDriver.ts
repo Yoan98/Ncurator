@@ -3,7 +3,7 @@ import type {
   AiLlmStructuredDriverResult,
   AiLlmTextDriverResult
 } from '../../../src/main/services/ai/llmExecutor'
-import type { JsonObject } from '../../../src/shared/types'
+import type { AiLlmUsage, JsonObject } from '../../../src/shared/types'
 import type { LlmScript, ScriptedLlmCall, ScriptedLlmStep } from './test-types'
 
 const isErrorStep = (
@@ -20,6 +20,16 @@ const isTextOutputStep = (
   step: ScriptedLlmStep
 ): step is Extract<ScriptedLlmStep, { text: string }> =>
   typeof step === 'object' && step !== null && 'text' in step
+
+const estimateScriptedUsage = (input: {
+  system: string
+  user: string
+  rawText: string
+}): AiLlmUsage => ({
+  inputTokens: Math.ceil(`${input.system}\n${input.user}`.length / 3),
+  outputTokens: Math.ceil(input.rawText.length / 3),
+  source: 'usage_metadata'
+})
 
 const toChunkList = (input: {
   rawText: string
@@ -116,6 +126,11 @@ export const createScriptedStructuredOutputDriver = (script: LlmScript): AiLlmDr
           rawText,
           method: 'scripted',
           fallbackChain: ['scripted'],
+          usage: estimateScriptedUsage({
+            system: input.system,
+            user: input.user,
+            rawText
+          }),
           streamed: input.streamingMode === 'force_stream'
         }
       }
@@ -139,6 +154,11 @@ export const createScriptedStructuredOutputDriver = (script: LlmScript): AiLlmDr
           rawText,
           method: 'scripted',
           fallbackChain: ['scripted'],
+          usage: step.usage || estimateScriptedUsage({
+            system: input.system,
+            user: input.user,
+            rawText
+          }),
           streamed: input.streamingMode === 'force_stream'
         }
       }
@@ -158,6 +178,11 @@ export const createScriptedStructuredOutputDriver = (script: LlmScript): AiLlmDr
           rawText: step.text,
           method: 'scripted',
           fallbackChain: ['scripted'],
+          usage: step.usage || estimateScriptedUsage({
+            system: input.system,
+            user: input.user,
+            rawText: step.text
+          }),
           streamed: input.streamingMode === 'force_stream'
         }
       }

@@ -350,10 +350,14 @@ interface HumanExecution {
   // 最近一次进入 brain 前的上下文预算快照；只用于压缩路由、日志与 LLM 调用关联，不进入 prompt。
   contextBudget?: {
     evaluationId: string
-    tokenEstimate: number
+    basis: 'initial' | 'usage_plus_delta' | 'post_compaction' | 'usage_unavailable'
+    budgetTokens: number
     contextWindowTokens: number
     compactionTriggerTokens: number
     hasCompressibleHistory: boolean
+    usageAvailable: boolean
+    lastBrainInputTokens?: number
+    deltaTokenEstimate?: number
   }
   // 运行时收集到的结构化交付物引用；由 hand 写入，mouth 只透传。
   artifacts: AiArtifactRef[]
@@ -1001,13 +1005,17 @@ interface ContextBudgetEvaluatedEvent {
   runId: string
   taskId?: string
   stage: 'human_brain'
-  decision: 'continue' | 'compact' | 'fail_over_window'
+  decision: 'continue' | 'compact'
   snapshot: {
     evaluationId: string
-    tokenEstimate: number
+    basis: 'initial' | 'usage_plus_delta' | 'post_compaction' | 'usage_unavailable'
+    budgetTokens: number
     contextWindowTokens: number
     compactionTriggerTokens: number
     hasCompressibleHistory: boolean
+    usageAvailable: boolean
+    lastBrainInputTokens?: number
+    deltaTokenEstimate?: number
   }
   createdAt: number
 }
@@ -1061,10 +1069,14 @@ interface AiLlmIoRecord {
   // 当 caller 为 human.brain 时，对应这次 brain 调用前的上下文预算快照；只用于排障与日志关联。
   contextBudgetSnapshot?: {
     evaluationId: string
-    tokenEstimate: number
+    basis: 'initial' | 'usage_plus_delta' | 'post_compaction' | 'usage_unavailable'
+    budgetTokens: number
     contextWindowTokens: number
     compactionTriggerTokens: number
     hasCompressibleHistory: boolean
+    usageAvailable: boolean
+    lastBrainInputTokens?: number
+    deltaTokenEstimate?: number
   }
   // 本次调用是否实际走了流式传输。
   streamed?: boolean

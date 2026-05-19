@@ -26,10 +26,14 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
       ...baseState.execution,
       contextBudget: {
         evaluationId: 'budget-compaction-quality',
-        tokenEstimate: 8_200,
+        basis: 'usage_plus_delta',
+        budgetTokens: 8_200,
         contextWindowTokens: 9_000,
         compactionTriggerTokens: 7_200,
-        hasCompressibleHistory: true
+        hasCompressibleHistory: true,
+        usageAvailable: true,
+        lastBrainInputTokens: 7_000,
+        deltaTokenEstimate: 1_200
       }
     },
     memory: {

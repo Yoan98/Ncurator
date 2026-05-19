@@ -80,7 +80,7 @@ export const updateConversationMemoryAfterRun = async (input: {
   })
 
   const memory: ChatConversationMemory = {
-    summary: String(result.summary || '').trim()
+    summary: String(result.output.summary || '').trim()
   }
   await input.chatStore.saveConversationMemory(sessionId, memory)
 }

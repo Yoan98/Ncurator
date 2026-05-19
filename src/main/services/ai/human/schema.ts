@@ -303,10 +303,14 @@ export const humanExecutionSchema = z.object({
   contextBudget: z
     .object({
       evaluationId: z.string().min(1),
-      tokenEstimate: z.number().int().min(0),
+      basis: z.enum(['initial', 'usage_plus_delta', 'post_compaction', 'usage_unavailable']),
+      budgetTokens: z.number().int().min(0),
       contextWindowTokens: z.number().int().min(1),
       compactionTriggerTokens: z.number().int().min(1),
-      hasCompressibleHistory: z.boolean()
+      hasCompressibleHistory: z.boolean(),
+      usageAvailable: z.boolean(),
+      lastBrainInputTokens: z.number().int().min(0).optional(),
+      deltaTokenEstimate: z.number().int().min(0).optional()
     })
     .optional()
 })

@@ -865,10 +865,10 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 live 模式下 `human` 会在真实风险周报长任务中自然触发 `context_compaction`，并在压缩后继续完成正式交付。
+- What：验证 live 模式下 `human` 会基于真实 brain usage 与新增 history 增量在风险周报长任务中自然触发 `context_compaction`，并在压缩后继续完成正式交付。
 - Why：相比单独直调节点，正式 live 更应该守住“真实 graph 中自然压缩且不影响任务完成”的能力。
 - How：复用风险周报 live 的真实 workspace 与业务输入，只通过 `humanRuntimeOverrides.modelContextWindowTokens=15_000` 缩小上下文窗口，让真实任务在多轮资料读取后自然走到 `context_budget -> context_compaction -> context_budget -> brain`。
-- Oracle：事件流出现 `context_budget_evaluated(decision=compact)`、`context_compaction_started / completed`；存在真实 `human.context_compaction` LLM 调用；后续 `brain` prompt 出现 `<compactions>`；`latest_round` 仍保留原文；完成事件和日志中可看到压缩摘要、源历史 token 与压缩后 token；最终风险周报待确认稿仍完成并保持核心事实正确。
+- Oracle：事件流出现 `context_budget_evaluated(decision=compact)` 且 snapshot 使用 `basis=usage_plus_delta` 与 `budgetTokens`、`context_compaction_started / completed`；存在真实 `human.context_compaction` LLM 调用；后续 `brain` prompt 出现 `<compactions>`；`latest_round` 仍保留原文；完成事件和日志中可看到压缩摘要、源历史 token 与压缩后 token；最终风险周报待确认稿仍完成并保持核心事实正确。
 - Not：不要求 live 模型严格达到 25% 理想比例；不要求每次都走固定资料读取顺序。
 
 ##### `human-risk-report-draft-live`

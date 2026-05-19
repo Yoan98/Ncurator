@@ -209,7 +209,12 @@ describe('ai human live backend', () => {
             result.output?.status === 'completed' &&
               startedEvents.length >= 1 &&
               completedEvents.length >= 1 &&
-              budgetEvents.some((event) => event.decision === 'compact') &&
+              budgetEvents.some(
+                (event) =>
+                  event.decision === 'compact' &&
+                  event.snapshot.basis === 'usage_plus_delta' &&
+                  event.snapshot.budgetTokens > event.snapshot.compactionTriggerTokens
+              ) &&
               Boolean(compactionRecord?.rawText?.trim()) &&
               Boolean(latestBrainRecord?.user.includes('<conversation_history>')) &&
               Boolean(latestBrainRecord?.user.includes('<round_history>')) &&

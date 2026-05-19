@@ -18,6 +18,7 @@ import type {
   ChatConversationMemory,
   FileReview,
   FileReviewStatus,
+  AiLlmUsage,
   JsonObject,
   JsonValue,
   LLMConfig,
@@ -56,9 +57,11 @@ type ScriptedLlmStreamShape = {
 export type ScriptedLlmStep =
   | {
       output: JsonObject
+      usage?: AiLlmUsage
     } & ScriptedLlmStreamShape
   | {
       text: string
+      usage?: AiLlmUsage
     } & ScriptedLlmStreamShape
   | {
       error: string

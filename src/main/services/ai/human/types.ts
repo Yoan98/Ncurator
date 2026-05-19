@@ -107,4 +107,8 @@ export type HumanRuntimeCache = {
   docxRuntime?: DocxToolRuntime
   toolCallCount: number
   currentState?: HumanState
+  lastBrainInputTokens?: number
+  lastBrainRoundCount?: number
+  postCompactionNeedsFreshBrainUsage?: boolean
+  lastBrainUsageUnavailable?: boolean
 }

@@ -3,6 +3,28 @@ import { AIMessage } from '@langchain/core/messages'
 import { normalizeLlmUsage } from '../../../src/main/services/llm/usage'
 
 describe('ai unit llm usage normalizer', () => {
+  it('prefers usage metadata input tokens when cache details are present', () => {
+    const message = new AIMessage({
+      content: 'ok',
+      usage_metadata: {
+        input_tokens: 321,
+        output_tokens: 12,
+        total_tokens: 333,
+        input_token_details: {
+          cache_read: 111
+        }
+      }
+    })
+
+    expect(normalizeLlmUsage({ message, providerKind: 'openai' })).toMatchObject({
+      inputTokens: 321,
+      outputTokens: 12,
+      totalTokens: 333,
+      cachedInputTokens: 111,
+      source: 'usage_metadata'
+    })
+  })
+
   it('reads OpenAI cached tokens from response metadata usage', () => {
     const message = new AIMessage({
       content: 'ok',

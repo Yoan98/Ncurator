@@ -29,10 +29,14 @@ describe('ai unit structured chat activity', () => {
         attempt: 1,
         contextBudgetSnapshot: {
           evaluationId: 'budget-1',
-          tokenEstimate: 1234,
+          basis: 'usage_plus_delta',
+          budgetTokens: 1234,
           contextWindowTokens: 200000,
           compactionTriggerTokens: 160000,
-          hasCompressibleHistory: true
+          hasCompressibleHistory: true,
+          usageAvailable: true,
+          lastBrainInputTokens: 1000,
+          deltaTokenEstimate: 234
         }
       },
       execute: async () => ({
@@ -73,10 +77,14 @@ describe('ai unit structured chat activity', () => {
       providerKind: 'openai-compatible',
       contextBudgetSnapshot: {
         evaluationId: 'budget-1',
-        tokenEstimate: 1234,
+        basis: 'usage_plus_delta',
+        budgetTokens: 1234,
         contextWindowTokens: 200000,
         compactionTriggerTokens: 160000,
-        hasCompressibleHistory: true
+        hasCompressibleHistory: true,
+        usageAvailable: true,
+        lastBrainInputTokens: 1000,
+        deltaTokenEstimate: 234
       },
       stablePrefixHash: expect.any(String),
       dynamicContextHash: expect.any(String),
@@ -118,10 +126,14 @@ describe('ai unit structured chat activity', () => {
         attempt: 1,
         contextBudgetSnapshot: {
           evaluationId: 'budget-ignore-1',
-          tokenEstimate: 999,
+          basis: 'usage_plus_delta',
+          budgetTokens: 999,
           contextWindowTokens: 200000,
           compactionTriggerTokens: 160000,
-          hasCompressibleHistory: true
+          hasCompressibleHistory: true,
+          usageAvailable: true,
+          lastBrainInputTokens: 900,
+          deltaTokenEstimate: 99
         }
       },
       execute: async (observer) => {
@@ -203,10 +215,14 @@ describe('ai unit structured chat activity', () => {
           attempt: 1,
           contextBudgetSnapshot: {
             evaluationId: 'budget-2',
-            tokenEstimate: 2345,
+            basis: 'usage_plus_delta',
+            budgetTokens: 2345,
             contextWindowTokens: 200000,
             compactionTriggerTokens: 160000,
-            hasCompressibleHistory: false
+            hasCompressibleHistory: false,
+            usageAvailable: true,
+            lastBrainInputTokens: 2000,
+            deltaTokenEstimate: 345
           }
         },
         execute: async () => {
@@ -220,10 +236,14 @@ describe('ai unit structured chat activity', () => {
       schemaName: 'human_brain_decision',
       contextBudgetSnapshot: {
         evaluationId: 'budget-2',
-        tokenEstimate: 2345,
+        basis: 'usage_plus_delta',
+        budgetTokens: 2345,
         contextWindowTokens: 200000,
         compactionTriggerTokens: 160000,
-        hasCompressibleHistory: false
+        hasCompressibleHistory: false,
+        usageAvailable: true,
+        lastBrainInputTokens: 2000,
+        deltaTokenEstimate: 345
       },
       status: 'failed',
       reason: 'structured_output_failed'
