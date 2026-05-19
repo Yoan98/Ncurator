@@ -1,6 +1,7 @@
 import { parseShellCommandSegments } from './commandParsing'
 import { collectTerminalArtifactCandidates } from './terminalArtifacts'
 import { isPathInsideRoot } from './terminalCwd'
+import { isParallelReadonlyTerminalCommand } from './parallelReadonlyCommands'
 import type { TerminalCommandAnalysis } from './types'
 import { getAiRuntimePlatform } from '../../../utils/platform'
 
@@ -177,11 +178,7 @@ export const classifyCommandMode = (command: string): 'read_only' | 'mutating' |
     return 'mutating'
   }
 
-  if (
-    /^\s*(cat|sed|head|tail|rg|grep|find|ls|pwd|stat|wc|echo|printf|get-content|get-childitem|select-string|git\s+status|git\s+diff|git\s+show)\b/.test(
-      text
-    )
-  ) {
+  if (isParallelReadonlyTerminalCommand(text)) {
     return 'read_only'
   }
 

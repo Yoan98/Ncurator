@@ -5,6 +5,7 @@ import {
   buildMouthExecution,
   buildPreExecutionBlockedExecution
 } from '../../memory/rounds'
+import { validateTodoListTransition } from '../../memory/thoughtMemory'
 import { getToolSpec } from '../../tools/registry'
 import type {
   HumanThoughtDecision,
@@ -160,6 +161,14 @@ export const resolveBrainDecisionHint = (input: {
   decisionHint?: HumanDecisionHint
 }): HumanDecisionHint | undefined => {
   if (input.decisionHint) return input.decisionHint
+  const todoTransitionHint =
+    Array.isArray(input.thought.thought.todolist)
+      ? validateTodoListTransition({
+          previous: input.state.memory.thought.todolist || [],
+          next: input.thoughtMemory.todolist || []
+        })
+      : undefined
+  if (todoTransitionHint) return todoTransitionHint
   if (input.state.execution.pendingDecisionHint?.code === 'docx_write_requires_readback') {
     if (
       input.thought.nextAction.action === 'hand' &&
@@ -186,7 +195,8 @@ export const resolveBrainDecisionHint = (input: {
     ? {
         code: 'brain_todolist_incomplete',
         detail: {
-          pendingItems
+          pendingItems,
+          isLastRemainingTodo: pendingItems.length === 1
         }
       }
     : undefined

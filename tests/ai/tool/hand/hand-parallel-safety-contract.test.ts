@@ -119,8 +119,7 @@ describe('ai tool hand backend', () => {
                   mode: 'parallel',
                   calls: [
                     { toolName: 'docx_outline', args: { sourcePath, maxBlocks: 20 } },
-                    { toolName: 'docx_search', args: { sourcePath, query: 'Safety' } },
-                    { toolName: 'docx_search', args: { sourcePath, query: 'Risk' } }
+                    { toolName: 'docx_search', args: { sourcePath, query: 'Safety' } }
                   ]
                 }
               }
@@ -152,7 +151,9 @@ describe('ai tool hand backend', () => {
                     { toolName: 'docx_outline', args: { sourcePath, maxBlocks: 20 } },
                     { toolName: 'docx_search', args: { sourcePath, query: 'Safety' } },
                     { toolName: 'docx_search', args: { sourcePath, query: 'Risk' } },
-                    { toolName: 'docx_search', args: { sourcePath, query: 'cases' } }
+                    { toolName: 'docx_search', args: { sourcePath, query: 'cases' } },
+                    { toolName: 'docx_search', args: { sourcePath, query: 'monitor' } },
+                    { toolName: 'docx_search', args: { sourcePath, query: 'approval' } }
                   ]
                 }
               }
@@ -213,13 +214,48 @@ describe('ai tool hand backend', () => {
           'tool_call_started'
         ).length
 
+        const terminalReadonlySafeState = await handNode({
+          ...unsafeState,
+          skills: {
+            learnedSkillIds: []
+          },
+          execution: {
+            ...unsafeState.execution,
+            currentThought: {
+              thought: {
+                next: '并行执行两个只读 terminal 命令'
+              },
+              nextAction: {
+                action: 'hand',
+                toolUsePlan: {
+                  mode: 'parallel',
+                  calls: [
+                    {
+                      toolName: 'terminal_run',
+                      args: {
+                        command: 'pwd'
+                      }
+                    },
+                    {
+                      toolName: 'terminal_run',
+                      args: {
+                        command: 'ls .'
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        })
+
         const toolStartedBeforeTerminalUnsafe = filterEventsByType(
           runtime.eventCollector.snapshot(),
           'tool_call_started'
         ).length
 
         const terminalUnsafeState = await handNode({
-          ...unsafeState,
+          ...terminalReadonlySafeState,
           skills: {
             learnedSkillIds: ['docx-read']
           },
@@ -264,6 +300,7 @@ describe('ai tool hand backend', () => {
           safeLimitState,
           limitExceededState,
           unsafeState,
+          terminalReadonlySafeState,
           terminalUnsafeState,
           toolStartedBeforeLimitExceeded,
           toolStartedAfterLimitExceeded,
@@ -286,7 +323,7 @@ describe('ai tool hand backend', () => {
         )
 
         runtime.assertThat(
-          result.safeLimitState.execution.lastToolResults?.length === HUMAN_TOOL_USE_PLAN_LIMIT &&
+          result.safeLimitState.execution.lastToolResults?.length === 2 &&
             result.safeLimitState.execution.lastToolResults.every((item) => item.code === 'ok') &&
             !result.safeLimitState.execution.pendingDecisionHint,
           {
@@ -331,6 +368,18 @@ describe('ai tool hand backend', () => {
         )
 
         runtime.assertThat(
+          result.terminalReadonlySafeState.execution.lastToolResults?.length === 2 &&
+            result.terminalReadonlySafeState.execution.lastToolResults.every((item) => item.code === 'ok') &&
+            !result.terminalReadonlySafeState.execution.pendingDecisionHint,
+          {
+            name: 'readonly-terminal-commands-are-allowed-in-parallel',
+            message:
+              '命中 readonly 白名单的 terminal_run 应被判定为可并行执行，并真正落两次工具调用结果。',
+            data: result.terminalReadonlySafeState.execution.lastToolResults
+          }
+        )
+
+        runtime.assertThat(
           result.terminalUnsafeState.execution.pendingDecisionHint?.code === 'hand_plan_invalid' &&
             result.terminalUnsafeState.execution.pendingDecisionHint.detail.reason ===
               'parallel_requires_read_only' &&
@@ -339,9 +388,9 @@ describe('ai tool hand backend', () => {
             ) &&
             result.toolStartedAfterTerminalUnsafe === result.toolStartedBeforeTerminalUnsafe,
           {
-            name: 'inline-interpreter-terminal-command-is-not-parallel-safe',
+            name: 'non-readonly-terminal-command-is-not-parallel-safe',
             message:
-              '内联解释器 terminal 命令即使可执行，也不应在 parallel hand 计划中被判定为只读并行安全。',
+              '未命中 readonly 白名单的 terminal_run 命令不应在 parallel hand 计划中被判定为只读并行安全。',
             data: {
               decisionHint: result.terminalUnsafeState.execution.pendingDecisionHint,
               toolStartedBeforeTerminalUnsafe: result.toolStartedBeforeTerminalUnsafe,

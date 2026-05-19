@@ -189,9 +189,17 @@ export const humanDecisionHintSchema = z.discriminatedUnion('code', [
     })
   }),
   z.object({
+    code: z.literal('brain_todolist_invalid_transition'),
+    detail: z.object({
+      invalidItems: z.array(z.string().min(1)).min(1),
+      droppedTodoItems: z.array(z.string().min(1))
+    })
+  }),
+  z.object({
     code: z.literal('brain_todolist_incomplete'),
     detail: z.object({
-      pendingItems: z.array(z.string().min(1)).min(1)
+      pendingItems: z.array(z.string().min(1)).min(1),
+      isLastRemainingTodo: z.boolean().optional()
     })
   })
 ])

@@ -40,6 +40,10 @@ export const summarizeDecisionHint = (hint: HumanDecisionHint): string => {
       return `hand 的 docx 批量写已安全停止；已完成 ${String(hint.detail.completedCallCount)}/${String(hint.detail.totalCallCount)} 个写操作，停止原因=${hint.detail.haltReason}。`
     case 'docx_write_requires_readback':
       return `hand 本轮已发生 docx 写操作；必须先 readback 最新修订后，才能继续写或结束。`
+    case 'brain_todolist_invalid_transition':
+      return `brain 输出了非法的 todolist 状态迁移；invalidItems=${renderStringList(
+        hint.detail.invalidItems
+      )}；droppedTodoItems=${renderStringList(hint.detail.droppedTodoItems)}。`
     case 'brain_todolist_incomplete':
       return `brain 选择 mouth 时 todolist 仍有未完成事项；pending=${renderStringList(
         hint.detail.pendingItems
@@ -123,11 +127,22 @@ export const renderDecisionHintForBrain = (hint: HumanDecisionHint): string => {
         `latestRevisionRefs=${renderStringList(hint.detail.latestRevisionRefs)}`,
         '在继续任何 docx 写操作，或直接选择 mouth 之前，必须先对这些文档做一次 readback，并确保读到的 revision 不低于上述最新修订。'
       ].join('\n')
+    case 'brain_todolist_invalid_transition':
+      return [
+        '你上一轮输出了非法的 todolist 状态迁移。',
+        `invalidItems=${renderStringList(hint.detail.invalidItems)}`,
+        `droppedTodoItems=${renderStringList(hint.detail.droppedTodoItems)}`,
+        '已完成事项禁止回退成 todo/obsolete；被放弃的旧 todo 必须保留并改写为 obsolete；不要静默删除仍有语义价值的旧 todo。请先修正 todolist，再继续推进。'
+      ].join('\n')
     case 'brain_todolist_incomplete':
       return [
-        '你上一轮选择了 mouth，但 todolist 里仍有未完成事项。',
+        hint.detail.isLastRemainingTodo
+          ? '你上一轮选择了 mouth，但 todolist 里还剩最后一个 todo 未完成。'
+          : '你上一轮选择了 mouth，但 todolist 里仍有未完成事项。',
         `pendingItems=${renderStringList(hint.detail.pendingItems)}`,
-        '请先完成这些事项，或将其更新为 done/obsolete 后再结束任务。'
+        hint.detail.isLastRemainingTodo
+          ? '你必须先完成这最后一个 todo，或明确改写为 done/obsolete，才能再次选择 mouth。在它不再是 todo 之前，禁止再次选择 mouth；优先完成最终检查，不要继续扩写结束性叙述。'
+          : '你必须先完成这些事项，或明确改写为 done/obsolete，才能再次选择 mouth。在仍有 todo 之前，禁止再次选择 mouth；优先修正 todolist，不要继续扩写结束性叙述。'
       ].join('\n')
   }
 }

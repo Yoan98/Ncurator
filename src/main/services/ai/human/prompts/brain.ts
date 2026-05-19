@@ -131,9 +131,8 @@ export const buildBrainPrompt = (input: {
 
     - thought.todolist：
     - 它是可选择输出的字段；只有行动路径需要初始化或调整时才输出；如果没有变动，禁止输出；一旦输出必须是完整最新数组，会全量覆盖旧 todolist。
-    - 该字段必须输出根据用户任务诉求拆出的行动路径，它是可变的，允许任务推进中调整、废弃、重排。
-    - 它每项只包含 item 和 status，status 只能是 todo / done / obsolete。
-    - 它的 done 只表示“已处理/已尝试”，不代表成功。
+    - 该字段必须输出根据用户任务诉求拆出的行动路径，它是可变的，允许任务推进中因为发现更好的解决或无法推进而调整、废弃、重排。
+    - 它每项只包含 item 和 status，status 只能是 todo / done,其中todo表示待办，done表示已完成。
     - 它最后一项必须是检查项，用于检查是否已经满足用户任务诉求并能进入最终交付。
 
     - thought.progressionSummary：
@@ -157,7 +156,7 @@ export const buildBrainPrompt = (input: {
 
     nextAction为hand时：
     - toolUsePlan 必须是完整合法的可执行计划。
-    - toolUsePlan.mode：parallel 只用于只读且彼此独立、并行安全的调用；其余情况必须用 serial,它将是被串行执行。
+    - toolUsePlan.mode：parallel 只用于只工具的并行调用；其余情况必须用 serial,它将是被串行执行。
     - toolUsePlan.calls[*].toolName：必须严格使用当前工具说明里的精确名称。
     - toolUsePlan.calls[*].args：必须是对象，字段名、必填参数和参数层级都必须与工具说明一致。
     - toolUsePlan最大只允许规划${HUMAN_TOOL_USE_PLAN_LIMIT}个。

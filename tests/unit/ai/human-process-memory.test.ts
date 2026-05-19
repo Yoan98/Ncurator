@@ -7,6 +7,7 @@ import {
   getCompressibleHistoryRounds,
   getRecentHistoryRounds
 } from '../../../src/main/services/ai/human/memory/rounds'
+import { applyThoughtPatch } from '../../../src/main/services/ai/human/memory/thoughtMemory'
 import {
   applyBrainDecisionState,
   resolveBrainDecisionHint
@@ -124,6 +125,162 @@ describe('ai unit human memory history', () => {
     expect(nextState.execution.stage).toBe('mouth')
     expect(nextState.execution.pendingDecisionHint).toBeUndefined()
     expect(nextState.memory.taskRun.rounds).toHaveLength(0)
+  })
+
+  it('marks the final remaining todo in the mouth-blocked decision hint', () => {
+    const initialState = createInitialHumanState({
+      taskId: 'task-final-check',
+      userInput: '请最终交付'
+    })
+    const thought = buildThought({
+      summary: '准备直接收尾',
+      nextAction: {
+        action: 'mouth'
+      }
+    })
+    const thoughtMemory = {
+      ...initialState.memory.thought,
+      todolist: [
+        {
+          item: '检查是否已经满足用户诉求并能进入最终交付',
+          status: 'todo' as const
+        }
+      ]
+    }
+
+    const decisionHint = resolveBrainDecisionHint({
+      state: initialState,
+      thought,
+      thoughtMemory
+    })
+
+    expect(decisionHint).toEqual({
+      code: 'brain_todolist_incomplete',
+      detail: {
+        pendingItems: ['检查是否已经满足用户诉求并能进入最终交付'],
+        isLastRemainingTodo: true
+      }
+    })
+  })
+
+  it('rejects a done todo item regressing to obsolete', () => {
+    const initialState = createInitialHumanState({
+      taskId: 'task-invalid-obsolete',
+      userInput: '继续维护任务板'
+    })
+    const stateWithDone = {
+      ...initialState,
+      memory: {
+        ...initialState.memory,
+        thought: {
+          ...initialState.memory.thought,
+          todolist: [
+            {
+              item: '确认 A 事项',
+              status: 'done' as const
+            },
+            {
+              item: '检查是否已经满足用户诉求并能进入最终交付',
+              status: 'todo' as const
+            }
+          ]
+        }
+      }
+    }
+    const thought: HumanThoughtDecision = {
+      thought: {
+        next: '错误地把已完成事项改回 obsolete',
+        todolist: [
+          {
+            item: '确认 A 事项',
+            status: 'obsolete'
+          },
+          {
+            item: '检查是否已经满足用户诉求并能进入最终交付',
+            status: 'todo'
+          }
+        ]
+      },
+      nextAction: {
+        action: 'learning',
+        wantLearnSkillIds: ['docx-read']
+      }
+    }
+
+    const decisionHint = resolveBrainDecisionHint({
+      state: stateWithDone,
+      thought,
+      thoughtMemory: applyThoughtPatch({
+        memory: stateWithDone.memory.thought,
+        thought: thought.thought
+      })
+    })
+
+    expect(decisionHint).toEqual({
+      code: 'brain_todolist_invalid_transition',
+      detail: {
+        invalidItems: ['确认 A 事项'],
+        droppedTodoItems: []
+      }
+    })
+  })
+
+  it('rejects silently dropping a previously pending todo', () => {
+    const initialState = createInitialHumanState({
+      taskId: 'task-drop-todo',
+      userInput: '继续维护任务板'
+    })
+    const stateWithTodo = {
+      ...initialState,
+      memory: {
+        ...initialState.memory,
+        thought: {
+          ...initialState.memory.thought,
+          todolist: [
+            {
+              item: '确认 A 事项',
+              status: 'todo' as const
+            },
+            {
+              item: '检查是否已经满足用户诉求并能进入最终交付',
+              status: 'todo' as const
+            }
+          ]
+        }
+      }
+    }
+    const thought: HumanThoughtDecision = {
+      thought: {
+        next: '错误地删除旧 todo',
+        todolist: [
+          {
+            item: '检查是否已经满足用户诉求并能进入最终交付',
+            status: 'todo'
+          }
+        ]
+      },
+      nextAction: {
+        action: 'learning',
+        wantLearnSkillIds: ['docx-read']
+      }
+    }
+
+    const decisionHint = resolveBrainDecisionHint({
+      state: stateWithTodo,
+      thought,
+      thoughtMemory: applyThoughtPatch({
+        memory: stateWithTodo.memory.thought,
+        thought: thought.thought
+      })
+    })
+
+    expect(decisionHint).toEqual({
+      code: 'brain_todolist_invalid_transition',
+      detail: {
+        invalidItems: [],
+        droppedTodoItems: ['确认 A 事项']
+      }
+    })
   })
 
   it('clears stale execution references when next action is not mouth', () => {
