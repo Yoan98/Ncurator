@@ -95,7 +95,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     chatText: llmExecutor.chatText,
     sendEvent: deps.sendEvent,
     recordLlmIo: deps.recordLlmIo,
-    requestApproval: deps.requestApproval,
+    requestApprovalBatch: deps.requestApprovalBatch,
     loadConversationContext,
     loadConversationMemory,
     trackDocxOpen: ({ docId, sourcePath, replaySession }) => {

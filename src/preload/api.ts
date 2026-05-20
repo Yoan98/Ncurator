@@ -1,7 +1,7 @@
 import type {
   AiRuntimeSettings,
-  AiRunApprovalDecisionRequest,
-  AiRunApprovalDecisionResponse,
+  AiRunApprovalBatchDecisionRequest,
+  AiRunApprovalBatchDecisionResponse,
   AiRunCancelResponse,
   AiContextUsageRequest,
   AiContextUsageResponse,
@@ -183,9 +183,9 @@ export type DesktopApi = {
   ) => Promise<{ success: boolean; error?: string }>
   aiRunStart: (payload: AiRunStartRequest) => Promise<AiRunStartResponse>
   aiRunCancel: (runId: string) => Promise<AiRunCancelResponse>
-  aiRunApprovalDecide: (
-    payload: AiRunApprovalDecisionRequest
-  ) => Promise<AiRunApprovalDecisionResponse>
+  aiRunApprovalBatchDecide: (
+    payload: AiRunApprovalBatchDecisionRequest
+  ) => Promise<AiRunApprovalBatchDecisionResponse>
   aiContextUsageGet: (payload: AiContextUsageRequest) => Promise<AiContextUsageResponse>
   fileReviewList: (payload?: ListFileReviewsRequest) => Promise<ListFileReviewsResponse>
   fileReviewGet: (payload: GetFileReviewRequest) => Promise<GetFileReviewResponse>

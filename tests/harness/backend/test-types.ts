@@ -1,6 +1,6 @@
 import type {
-  AiApprovalDecision,
-  AiApprovalRequest,
+  AiApprovalBatchRequest,
+  AiApprovalBatchResult,
   AiRunContext
 } from '../../../src/main/services/ai/types'
 import type { HumanTaskRunner } from '../../../src/main/services/ai/types'
@@ -37,7 +37,7 @@ export type { TestDomain, TestType, TestLogEvent, TestRunMeta } from '../core/ru
 
 export type ApprovalPolicy = 'auto-approve' | 'deny-medium-high' | 'deny-all'
 
-export type ApprovalResolver = (request: AiApprovalRequest) => AiApprovalDecision
+export type ApprovalResolver = (request: AiApprovalBatchRequest) => AiApprovalBatchResult
 
 export type BackendHarnessMode = 'tool-real' | 'mock-llm' | 'live'
 

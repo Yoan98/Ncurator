@@ -97,6 +97,7 @@ stateDiagram-v2
 - 主要读取：`execution.currentThought.nextAction.toolUsePlan`、`skills.learnedSkillIds`、runtime cache 中已装载的工具、`memory.taskRun.rounds`。
 - 主要回写：`execution.lastToolResults`、`memory.taskRun.rounds`、`execution.artifacts`、`execution.stage`、必要时 `execution.pendingDecisionHint`、`trace.steps`。
 - 约束：不调用模型；`parallel` 只允许只读且并行安全的工具。对 `terminal_run` 来说，是否只读且并行安全必须由统一正式只读指令集决定。
+- 对 `serial` hand 计划，正式实现需要先做 approval preflight：遍历本轮 `toolUsePlan.calls`，收集所有未命中正式 readonly 指令集的 `terminal_run`，生成一个批量审批事件并暂停本轮执行；只要该批次未全部 `approve`，本批命令一条都不执行，并通过 `hand_approval_blocked` 回到 `brain`。
 - hand 对 `toolUsePlan` 先执行总长度保护；当前正式实现要求单轮计划总调用数不超过 `HUMAN_TOOL_USE_PLAN_LIMIT`，超过时直接返回 `hand_plan_invalid(reason=tool_use_plan_limit_exceeded)`，而不是继续进入串行/并行细分校验。
 - 对 docx 串行写，hand 需要执行单轮批次保护；docx 写调用数仍受独立的 docx batch limit 约束，超过时直接返回 `hand_plan_invalid(reason=docx_batch_write_limit_exceeded)`，而不是继续落工具。只要本轮实际发生过 docx 写，后续在继续写或直接 mouth 前都必须先 readback。
 - tool 执行失败时，hand 应优先保留原始校验/运行时错误文本，并通过 `diagnostic.message` 回流给 brain 与历史渲染层；不要把错误再压缩成额外的预设分类。

@@ -46,8 +46,8 @@ import type {
   AiRunStartRequest,
   AiRunStartResponse,
   AiRunCancelResponse,
-  AiRunApprovalDecisionRequest,
-  AiRunApprovalDecisionResponse,
+  AiRunApprovalBatchDecisionRequest,
+  AiRunApprovalBatchDecisionResponse,
   CommitFileReviewRequest,
   CommitFileReviewResponse,
   CreateWorkspaceSourceRequest,
@@ -255,13 +255,23 @@ export function registerHandlers(services: {
   const activeWorkspacePrepareJobs = new Set<string>()
   const activeAiApprovals = new Map<
     string,
-    Map<
-      string,
-      {
-        taskId: string
-        resolve: (decision: { approved: boolean; reason?: string }) => void
-      }
-    >
+    {
+      batchId: string
+      taskId: string
+      itemIds: string[]
+      resolve: (
+        result:
+          | {
+              accepted: true
+              decisions: Array<{
+                itemId: string
+                action: 'approve' | 'reject' | 'guide'
+                message?: string
+              }>
+            }
+          | { accepted: false; error: string }
+      ) => void
+    }
   >()
   const documentsStore = storageService.documents
   const chatStore = storageService.chat
@@ -684,51 +694,67 @@ export function registerHandlers(services: {
     taskId: string
     sendEvent: (event: AiRunEvent) => void
   }): Promise<boolean> => {
-    const approvals = activeAiApprovals.get(input.runId)
-    if (!approvals) return false
-
-    const approvalId = 'approval-e2e-1'
+    const batchId = 'approval-batch-e2e-1'
+    const itemId = 'approval-item-e2e-1'
 
     input.sendEvent({
-      type: 'approval_required',
+      type: 'approval_batch_required',
       runId: input.runId,
       taskId: input.taskId,
-      approvalId,
-      command: 'rm -rf /tmp/ncurator-e2e',
-      reason: 'E2E fixture 需要审批才能继续',
+      batchId,
+      items: [
+        {
+          itemId,
+          order: 0,
+          toolName: 'terminal_run',
+          command: 'rm -rf /tmp/ncurator-e2e',
+          reason: 'E2E fixture 需要审批才能继续'
+        }
+      ],
       createdAt: Date.now()
     })
 
     return await new Promise<boolean>((resolve) => {
       const timeout = setTimeout(() => {
-        approvals.delete(approvalId)
+        activeAiApprovals.delete(input.runId)
         input.sendEvent({
-          type: 'approval_decision',
+          type: 'approval_batch_decision',
           runId: input.runId,
           taskId: input.taskId,
-          approvalId,
-          approved: false,
-          reason: 'e2e_fixture_timeout',
+          batchId,
+          decisions: [
+            {
+              itemId,
+              action: 'reject',
+              message: 'e2e_fixture_timeout'
+            }
+          ],
           decidedAt: Date.now()
         })
         resolve(false)
       }, 10_000)
 
-      approvals.set(approvalId, {
+      activeAiApprovals.set(input.runId, {
+        batchId,
         taskId: input.taskId,
-        resolve: (decision) => {
+        itemIds: [itemId],
+        resolve: (result) => {
           clearTimeout(timeout)
-          approvals.delete(approvalId)
+          activeAiApprovals.delete(input.runId)
+          const decisions = result.accepted
+            ? result.decisions
+            : [{ itemId, action: 'reject' as const, message: result.error }]
           input.sendEvent({
-            type: 'approval_decision',
+            type: 'approval_batch_decision',
             runId: input.runId,
             taskId: input.taskId,
-            approvalId,
-            approved: Boolean(decision.approved),
-            reason: decision.reason,
+            batchId,
+            decisions,
             decidedAt: Date.now()
           })
-          resolve(Boolean(decision.approved))
+          resolve(
+            result.accepted && result.decisions.every((decision) => decision.action === 'approve')
+          )
         }
       })
     })
@@ -2113,82 +2139,65 @@ export function registerHandlers(services: {
               isCancelled: () => Boolean(activeAiRuns.get(runId)?.cancelled),
               sendEvent,
               recordLlmIo: services.recordLlmIo,
-              requestApproval: async (request) => {
-                const approvals = activeAiApprovals.get(runId)
-                if (!approvals) return { approved: false, reason: 'run not active' }
+              requestApprovalBatch: async (request) => {
+                if (activeAiRuns.get(runId)?.cancelled) {
+                  return { accepted: false, error: 'run not active' }
+                }
+                if (activeAiApprovals.has(runId)) {
+                  return { accepted: false, error: 'approval batch already pending' }
+                }
 
-                const approvalId = uuidv4()
                 sendEvent({
-                  type: 'approval_required',
+                  type: 'approval_batch_required',
                   runId,
                   taskId: request.taskId,
-                  approvalId,
-                  command: request.command,
-                  reason: request.reason,
+                  batchId: request.batchId,
+                  items: request.items,
                   createdAt: Date.now(),
                   internal: request.internal,
                   stage: request.stage
                 })
 
-                return await new Promise<{ approved: boolean; reason?: string }>((resolve) => {
+                return await new Promise<
+                  | {
+                      accepted: true
+                      decisions: Array<{
+                        itemId: string
+                        action: 'approve' | 'reject' | 'guide'
+                        message?: string
+                      }>
+                    }
+                  | { accepted: false; error: string }
+                >((resolve) => {
                   const timeout = setTimeout(() => {
-                    approvals.delete(approvalId)
-                    sendEvent({
-                      type: 'approval_decision',
-                      runId,
-                      taskId: request.taskId,
-                      approvalId,
-                      approved: false,
-                      reason: 'approval timeout',
-                      decidedAt: Date.now(),
-                      internal: request.internal,
-                      stage: request.stage
-                    })
-                    sendEvent({
-                      type: 'runtime_issue',
-                      runId,
-                      code: 'approval_denied',
-                      message: '审批超时，当前命令不会继续执行。',
-                      taskId: request.taskId,
-                      createdAt: Date.now(),
-                      internal: request.internal,
-                      stage: request.stage
-                    })
-                    resolve({ approved: false, reason: 'approval timeout' })
+                    activeAiApprovals.delete(runId)
+                    resolve({ accepted: false, error: 'approval timeout' })
                   }, 60_000)
 
-                  approvals.set(approvalId, {
+                  activeAiApprovals.set(runId, {
+                    batchId: request.batchId,
                     taskId: request.taskId,
-                    resolve: (decision) => {
+                    itemIds: request.items.map((item) => item.itemId),
+                    resolve: (result) => {
                       clearTimeout(timeout)
-                      approvals.delete(approvalId)
+                      activeAiApprovals.delete(runId)
                       sendEvent({
-                        type: 'approval_decision',
+                        type: 'approval_batch_decision',
                         runId,
                         taskId: request.taskId,
-                        approvalId,
-                        approved: Boolean(decision.approved),
-                        reason: decision.reason,
+                        batchId: request.batchId,
+                        decisions: result.accepted
+                          ? result.decisions
+                          : request.items.map((item) => ({
+                              itemId: item.itemId,
+                              action: 'reject' as const,
+                              message: result.error
+                            })),
                         decidedAt: Date.now(),
                         internal: request.internal,
                         stage: request.stage
                       })
-                      if (!decision.approved) {
-                        sendEvent({
-                          type: 'runtime_issue',
-                          runId,
-                          code: 'approval_denied',
-                          message: decision.reason || '审批未通过，当前命令不会继续执行。',
-                          taskId: request.taskId,
-                          createdAt: Date.now(),
-                          internal: request.internal,
-                          stage: request.stage
-                        })
-                      }
-                      resolve({
-                        approved: Boolean(decision.approved),
-                        reason: decision.reason
-                      })
+                      resolve(result)
                     }
                   })
                 })
@@ -2237,13 +2246,8 @@ export function registerHandlers(services: {
           sendEvent({ type: 'run_failed', runId, error: msg })
         } finally {
           await releaseDocxRunSession(runId)
-          const approvals = activeAiApprovals.get(runId)
-          if (approvals) {
-            for (const [approvalId, pending] of approvals.entries()) {
-              pending.resolve({ approved: false, reason: 'run closed' })
-              approvals.delete(approvalId)
-            }
-          }
+          const approval = activeAiApprovals.get(runId)
+          approval?.resolve({ accepted: false, error: 'run closed' })
           activeAiApprovals.delete(runId)
           activeAiRuns.delete(runId)
         }
@@ -2272,26 +2276,52 @@ export function registerHandlers(services: {
   })
 
   ipcMain.handle(
-    'ai-run-approval-decide',
+    'ai-run-approval-batch-decide',
     async (
       _event,
-      payload: AiRunApprovalDecisionRequest
-    ): Promise<AiRunApprovalDecisionResponse> => {
+      payload: AiRunApprovalBatchDecisionRequest
+    ): Promise<AiRunApprovalBatchDecisionResponse> => {
       const runId = String(payload?.runId || '').trim()
-      const approvalId = String(payload?.approvalId || '').trim()
-      if (!runId || !approvalId) {
-        return { success: false, error: 'runId and approvalId are required' }
+      const batchId = String(payload?.batchId || '').trim()
+      if (!runId || !batchId) {
+        return { success: false, error: 'runId and batchId are required' }
       }
 
-      const approvals = activeAiApprovals.get(runId)
-      if (!approvals) return { success: false, error: 'run not found' }
+      const pending = activeAiApprovals.get(runId)
+      if (!pending) return { success: false, error: 'run not found' }
+      if (pending.batchId !== batchId) return { success: false, error: 'approval batch not found' }
 
-      const pending = approvals.get(approvalId)
-      if (!pending) return { success: false, error: 'approval not found' }
+      const decisions = Array.isArray(payload?.decisions) ? payload.decisions : []
+      if (decisions.length !== pending.itemIds.length) {
+        return { success: false, error: 'each approval item must have exactly one decision' }
+      }
+
+      const seenIds = new Set<string>()
+      for (const decision of decisions) {
+        const itemId = String(decision?.itemId || '').trim()
+        const action = String(decision?.action || '').trim()
+        if (!itemId || !pending.itemIds.includes(itemId) || seenIds.has(itemId)) {
+          return { success: false, error: 'invalid approval decision items' }
+        }
+        if (action !== 'approve' && action !== 'reject' && action !== 'guide') {
+          return { success: false, error: 'invalid approval decision action' }
+        }
+        if (action === 'guide') {
+          const message = String(decision?.message || '').trim()
+          if (!message) {
+            return { success: false, error: 'guide decision requires non-empty message' }
+          }
+        }
+        seenIds.add(itemId)
+      }
 
       pending.resolve({
-        approved: Boolean(payload?.approved),
-        reason: payload?.reason ? String(payload.reason) : undefined
+        accepted: true,
+        decisions: decisions.map((decision) => ({
+          itemId: String(decision.itemId).trim(),
+          action: decision.action,
+          message: typeof decision.message === 'string' ? decision.message.trim() : undefined
+        }))
       })
 
       return { success: true }

@@ -52,6 +52,7 @@ export const HUMAN_DECISION_HINT_CODES = [
   'learning_builtin_skill_requested',
   'learning_tool_budget_exceeded',
   'hand_plan_invalid',
+  'hand_approval_blocked',
   'hand_tool_limit_exceeded',
   'hand_docx_positioned_write_blocked',
   'hand_docx_batch_write_halted',

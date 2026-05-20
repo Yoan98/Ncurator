@@ -72,20 +72,24 @@ describe('ai human mock-llm backend', () => {
       },
       assert: async (result, runtime) => {
         const toolResults = filterAiRunEventsByType(result.events, 'tool_call_result')
-        const approvalEvents = filterAiRunEventsByType(result.events, 'approval_decision')
-        const deniedResult = toolResults.find((event) => event.toolName === 'terminal_run')
+        const approvalEvents = filterAiRunEventsByType(result.events, 'approval_batch_decision')
+        const decisionHints = filterAiRunEventsByType(result.events, 'decision_hint')
+        const terminalResultCount = toolResults.filter((event) => event.toolName === 'terminal_run').length
+        const blockedHint = decisionHints.find((event) => event.code === 'hand_approval_blocked')
 
         runtime.assertThat(
           result.output.status === 'completed' &&
             result.blockedDirExists === false &&
-            deniedResult?.result?.code === 'approval_denied' &&
-            approvalEvents.some((event) => event.approved === false),
+            terminalResultCount === 0 &&
+            approvalEvents.some((event) => event.decisions.some((decision) => decision.action === 'reject')) &&
+            blockedHint?.detail?.reason === 'user_rejected',
           {
             name: 'approval-denial-stops-real-command-execution',
-            message: '审批拒绝后，真实 terminal 命令不应落地执行，并应把 approval_denied 传回 human。',
+            message: '审批拒绝后，真实 terminal 命令不应落地执行，并应把 hand_approval_blocked 回流给 human。',
             data: {
-              deniedResult,
-              approvalEvents
+              terminalResultCount,
+              approvalEvents,
+              blockedHint
             }
           }
         )

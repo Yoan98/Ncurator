@@ -106,8 +106,8 @@ interface AiRunContext {
   // 可选记录完整 LLM IO；主要用于排障、审计与回放。
   recordLlmIo?: (record: AiLlmIoRecord) => void
 
-  // 工具层统一请求审批的入口；所有未命中正式只读指令集的 terminal 命令通过它获取用户批准。
-  requestApproval: (request: AiApprovalRequest) => Promise<AiApprovalDecision>
+  // hand 在 serial 计划里统一请求批量审批；所有未命中正式只读指令集的 terminal 命令先进入同一审批批次。
+  requestApprovalBatch: (request: AiApprovalBatchRequest) => Promise<AiApprovalBatchResult>
 
   // 统一读取历史摘要与最近对话；brain 通过它拿到压缩后的历史上下文。
   loadConversationContext(limits?: {
@@ -867,23 +867,21 @@ interface WorkspaceRequiredEvent {
   createdAt: number
 }
 
-interface ApprovalRequiredEvent {
-  type: 'approval_required'
+interface ApprovalBatchRequiredEvent {
+  type: 'approval_batch_required'
   runId: string
   taskId: string
-  approvalId: string
-  command: string
-  reason: string
+  batchId: string
+  items: AiApprovalBatchItem[]
   createdAt: number
 }
 
-interface ApprovalDecisionEvent {
-  type: 'approval_decision'
+interface ApprovalBatchDecisionEvent {
+  type: 'approval_batch_decision'
   runId: string
   taskId: string
-  approvalId: string
-  approved: boolean
-  reason?: string
+  batchId: string
+  decisions: AiApprovalBatchDecision[]
   decidedAt: number
 }
 

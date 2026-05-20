@@ -760,14 +760,27 @@ export type AiRunCancelResponse = {
   error?: string
 }
 
-export type AiRunApprovalDecisionRequest = {
-  runId: string
-  approvalId: string
-  approved: boolean
-  reason?: string
+export type AiApprovalBatchItem = {
+  itemId: string
+  order: number
+  toolName: string
+  command: string
+  reason: string
 }
 
-export type AiRunApprovalDecisionResponse = {
+export type AiApprovalBatchDecision = {
+  itemId: string
+  action: 'approve' | 'reject' | 'guide'
+  message?: string
+}
+
+export type AiRunApprovalBatchDecisionRequest = {
+  runId: string
+  batchId: string
+  decisions: AiApprovalBatchDecision[]
+}
+
+export type AiRunApprovalBatchDecisionResponse = {
   success: boolean
   error?: string
 }
@@ -942,21 +955,19 @@ type AiRunEventPayload =
       createdAt: number
     }
   | {
-      type: 'approval_required'
+      type: 'approval_batch_required'
       runId: string
       taskId: string
-      approvalId: string
-      command: string
-      reason: string
+      batchId: string
+      items: AiApprovalBatchItem[]
       createdAt: number
     }
   | {
-      type: 'approval_decision'
+      type: 'approval_batch_decision'
       runId: string
       taskId: string
-      approvalId: string
-      approved: boolean
-      reason?: string
+      batchId: string
+      decisions: AiApprovalBatchDecision[]
       decidedAt: number
     }
   | {

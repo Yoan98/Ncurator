@@ -153,6 +153,24 @@ export const humanDecisionHintSchema = z.discriminatedUnion('code', [
     })
   }),
   z.object({
+    code: z.literal('hand_approval_blocked'),
+    detail: z.object({
+      reason: z.enum(['user_rejected', 'user_guided']),
+      batchId: z.string().min(1),
+      blockedToolNames: z.array(z.string().min(1)),
+      blockedCommands: z.array(z.string().min(1)),
+      approvedItemIds: z.array(z.string().min(1)),
+      rejectedItemIds: z.array(z.string().min(1)),
+      guidedItems: z.array(
+        z.object({
+          itemId: z.string().min(1),
+          command: z.string().min(1),
+          message: z.string().min(1)
+        })
+      )
+    })
+  }),
+  z.object({
     code: z.literal('hand_tool_limit_exceeded'),
     detail: z.object({
       toolCallCount: z.number().int().min(0),

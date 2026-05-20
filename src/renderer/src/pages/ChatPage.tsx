@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { App, Button } from 'antd'
 import {
   HiBookOpen,
+  HiChevronLeft,
+  HiChevronRight,
   HiOutlineExclamationCircle,
   HiOutlinePencilSquare,
   HiOutlineRectangleGroup,
@@ -67,8 +69,14 @@ import {
   pruneReferencesByWorkspace
 } from '../utils/reference'
 
-type ApprovalRequiredEvent = Extract<AiRunEvent, { type: 'approval_required' }>
+type ApprovalBatchRequiredEvent = Extract<AiRunEvent, { type: 'approval_batch_required' }>
+type ApprovalBatchDecisionAction = 'approve' | 'reject' | 'guide'
 type WorkspaceRequiredEvent = Extract<AiRunEvent, { type: 'workspace_required' }>
+
+type ApprovalDraftDecision = {
+  action?: ApprovalBatchDecisionAction
+  message: string
+}
 
 const createEmptyPanel = (): WorkbenchContentPanelState => ({
   kind: 'empty',
@@ -234,8 +242,12 @@ const ChatPage: React.FC = () => {
   const [draftCommitSubmitting, setDraftCommitSubmitting] = useState(false)
   const [draftDiscardSubmitting, setDraftDiscardSubmitting] = useState(false)
 
-  const [pendingApprovalRequest, setPendingApprovalRequest] =
-    useState<ApprovalRequiredEvent | null>(null)
+  const [pendingApprovalBatch, setPendingApprovalBatch] =
+    useState<ApprovalBatchRequiredEvent | null>(null)
+  const [approvalCurrentIndex, setApprovalCurrentIndex] = useState(0)
+  const [approvalDraftDecisions, setApprovalDraftDecisions] = useState<
+    Record<string, ApprovalDraftDecision>
+  >({})
   const [approvalSubmitting, setApprovalSubmitting] = useState(false)
   const [pendingWorkspaceRequest, setPendingWorkspaceRequest] = useState<{
     input: string
@@ -298,6 +310,21 @@ const ChatPage: React.FC = () => {
     () => sessions.find((session) => session.id === currentSessionId) || null,
     [currentSessionId, sessions]
   )
+
+  const currentApprovalItem = useMemo(() => {
+    if (!pendingApprovalBatch) return null
+    return pendingApprovalBatch.items[approvalCurrentIndex] || pendingApprovalBatch.items[0] || null
+  }, [approvalCurrentIndex, pendingApprovalBatch])
+
+  const approvalSubmitDisabled = useMemo(() => {
+    if (!pendingApprovalBatch || approvalSubmitting) return true
+    return pendingApprovalBatch.items.some((item) => {
+      const draft = approvalDraftDecisions[item.itemId]
+      if (!draft) return true
+      if (draft.action === 'approve' || draft.action === 'reject') return false
+      return draft.action !== 'guide' || draft.message.trim().length === 0
+    })
+  }, [approvalDraftDecisions, approvalSubmitting, pendingApprovalBatch])
 
   const scrollToBottom = (): void => {
     if (scrollRef.current) {
@@ -756,7 +783,9 @@ const ChatPage: React.FC = () => {
       setInput('')
       setSelectedReferences([])
       setComposerResetKey((value) => value + 1)
-      setPendingApprovalRequest(null)
+      setPendingApprovalBatch(null)
+      setApprovalCurrentIndex(0)
+      setApprovalDraftDecisions({})
       setApprovalSubmitting(false)
       setPendingWorkspaceRequest(null)
       setAssistantTurns({})
@@ -1036,7 +1065,9 @@ const ChatPage: React.FC = () => {
         if (!event.internal) {
           setLoading(false)
           if (event.code === 'approval_denied') {
-            setPendingApprovalRequest(null)
+            setPendingApprovalBatch(null)
+            setApprovalCurrentIndex(0)
+            setApprovalDraftDecisions({})
             setApprovalSubmitting(false)
           }
           message.warning(event.message || '当前运行被阻塞')
@@ -1049,41 +1080,41 @@ const ChatPage: React.FC = () => {
         return
       }
 
-      if (event.type === 'approval_required') {
+      if (event.type === 'approval_batch_required') {
         if (!event.internal) {
           setLoading(false)
           setApprovalSubmitting(false)
-          setPendingApprovalRequest(event)
-          message.info(`命令需要审批：${event.command}`)
+          setPendingApprovalBatch(event)
+          setApprovalCurrentIndex(0)
+          setApprovalDraftDecisions({})
+          message.info(`有 ${event.items.length} 条命令需要审核`)
         }
         updateActiveTurn((current) => ({
           ...current,
           blockers: [
             {
               kind: 'approval',
-              title: '等待审批',
-              description: `${event.reason} · ${event.command}`
+              title: '等待批量审核',
+              description: `共有 ${event.items.length} 条命令待审核`
             }
           ]
         }))
         return
       }
 
-      if (event.type === 'approval_decision') {
+      if (event.type === 'approval_batch_decision') {
         if (event.internal) return
         setApprovalSubmitting(false)
-        setPendingApprovalRequest(null)
-        if (event.approved) {
+        const allApproved = event.decisions.every((decision) => decision.action === 'approve')
+        if (allApproved) {
           setLoading(true)
-          message.success('审批已通过')
+          message.success('审核已通过')
         } else {
+          setPendingApprovalBatch(null)
+          setApprovalCurrentIndex(0)
+          setApprovalDraftDecisions({})
           setLoading(false)
-          message.warning(event.reason || '审批未通过')
-          updateActiveTurn((current) => ({
-            ...current,
-            status: 'failed',
-            error: event.reason || '审批未通过'
-          }))
+          message.warning('审核结果已提交，等待馆长继续决策')
         }
         return
       }
@@ -1435,29 +1466,60 @@ const ChatPage: React.FC = () => {
     }
   }
 
-  const handleApprovalDecision = async (approved: boolean): Promise<void> => {
-    if (!pendingApprovalRequest || approvalSubmitting) return
+  const setApprovalAction = (itemId: string, action: 'approve' | 'reject'): void => {
+    setApprovalDraftDecisions((current) => ({
+      ...current,
+      [itemId]: {
+        action,
+        message: ''
+      }
+    }))
+  }
+
+  const setApprovalGuideMessage = (itemId: string, messageText: string): void => {
+    setApprovalDraftDecisions((current) => ({
+      ...current,
+      [itemId]: {
+        action: messageText.trim().length > 0 ? 'guide' : undefined,
+        message: messageText
+      }
+    }))
+  }
+
+  const handleApprovalBatchSubmit = async (): Promise<void> => {
+    if (!pendingApprovalBatch || approvalSubmitting || approvalSubmitDisabled) return
     setApprovalSubmitting(true)
     try {
-      const response = await window.api.aiRunApprovalDecide({
-        runId: pendingApprovalRequest.runId,
-        approvalId: pendingApprovalRequest.approvalId,
-        approved,
-        reason: approved ? 'approved_in_chat_ui' : 'denied_in_chat_ui'
+      const decisions = pendingApprovalBatch.items.map((item) => {
+        const draft = approvalDraftDecisions[item.itemId]
+        return {
+          itemId: item.itemId,
+          action: (draft?.action || 'approve') as ApprovalBatchDecisionAction,
+          message: draft?.action === 'guide' ? draft.message.trim() : undefined
+        }
+      })
+      const response = await window.api.aiRunApprovalBatchDecide({
+        runId: pendingApprovalBatch.runId,
+        batchId: pendingApprovalBatch.batchId,
+        decisions
       })
       if (!response.success) {
         setApprovalSubmitting(false)
-        message.error(response.error || '审批提交失败')
+        message.error(response.error || '审核提交失败')
         return
       }
-      if (approved) {
+      const allApproved = decisions.every((decision) => decision.action === 'approve')
+      if (allApproved) {
         setLoading(true)
       } else {
         setLoading(false)
+        setPendingApprovalBatch(null)
+        setApprovalCurrentIndex(0)
+        setApprovalDraftDecisions({})
       }
     } catch (error) {
       setApprovalSubmitting(false)
-      message.error(error instanceof Error ? error.message : '审批提交失败')
+      message.error(error instanceof Error ? error.message : '审核提交失败')
     }
   }
 
@@ -1984,38 +2046,94 @@ const ChatPage: React.FC = () => {
                     ) : null}
 
                     {composerMode === 'ai' &&
-                    (pendingApprovalRequest || pendingWorkspaceRequest) ? (
+                    (pendingApprovalBatch || pendingWorkspaceRequest) ? (
                       <div
                         className="mt-3 flex items-start gap-2 rounded-[14px] border border-[#FDECC8] bg-[#FFF9ED] px-3 py-3 text-sm text-[#8A6510]"
                         data-testid={
-                          pendingApprovalRequest
-                            ? chatSelectors.approvalBanner
+                          pendingApprovalBatch
+                            ? chatSelectors.approvalBatchCard
                             : chatSelectors.workspaceBanner
                         }
                       >
                         <HiOutlineExclamationCircle className="mt-0.5 h-4 w-4 shrink-0" />
                         <div className="min-w-0 flex-1">
-                          {pendingApprovalRequest ? (
+                          {pendingApprovalBatch && currentApprovalItem ? (
                             <div className="flex flex-col gap-3">
-                              <div>{pendingApprovalRequest.reason}</div>
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="text-sm font-medium text-[#8A6510]">
+                                  审批 {approvalCurrentIndex + 1} / {pendingApprovalBatch.items.length}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    type="text"
+                                    size="small"
+                                    icon={<HiChevronLeft className="h-4 w-4" />}
+                                    disabled={approvalCurrentIndex <= 0 || approvalSubmitting}
+                                    onClick={() =>
+                                      setApprovalCurrentIndex((current) => Math.max(0, current - 1))
+                                    }
+                                    data-testid={chatSelectors.approvalBatchPrevButton}
+                                  />
+                                  <Button
+                                    type="text"
+                                    size="small"
+                                    icon={<HiChevronRight className="h-4 w-4" />}
+                                    disabled={
+                                      approvalCurrentIndex >= pendingApprovalBatch.items.length - 1 ||
+                                      approvalSubmitting
+                                    }
+                                    onClick={() =>
+                                      setApprovalCurrentIndex((current) =>
+                                        Math.min(pendingApprovalBatch.items.length - 1, current + 1)
+                                      )
+                                    }
+                                    data-testid={chatSelectors.approvalBatchNextButton}
+                                  />
+                                </div>
+                              </div>
+                              <div>{currentApprovalItem.reason}</div>
                               <div className="text-xs text-[#8A6510]">
-                                {pendingApprovalRequest.command}
+                                {currentApprovalItem.command}
                               </div>
                               <div className="flex gap-2">
                                 <Button
                                   type="primary"
-                                  onClick={() => void handleApprovalDecision(true)}
-                                  loading={approvalSubmitting}
-                                  data-testid={chatSelectors.approvalApproveButton}
+                                  onClick={() => setApprovalAction(currentApprovalItem.itemId, 'approve')}
+                                  loading={
+                                    approvalSubmitting &&
+                                    approvalDraftDecisions[currentApprovalItem.itemId]?.action === 'approve'
+                                  }
+                                  data-testid={chatSelectors.approvalBatchApproveButton}
                                 >
-                                  批准执行
+                                  同意
                                 </Button>
                                 <Button
-                                  onClick={() => void handleApprovalDecision(false)}
+                                  onClick={() => setApprovalAction(currentApprovalItem.itemId, 'reject')}
                                   disabled={approvalSubmitting}
-                                  data-testid={chatSelectors.approvalDenyButton}
+                                  data-testid={chatSelectors.approvalBatchDenyButton}
                                 >
-                                  拒绝执行
+                                  拒绝
+                                </Button>
+                              </div>
+                              <input
+                                className="w-full rounded-[10px] border border-[#E7CFA5] bg-white px-3 py-2 text-sm text-[#6F5311] outline-none placeholder:text-[#B68A2D]"
+                                placeholder="告诉馆长该怎么做"
+                                value={approvalDraftDecisions[currentApprovalItem.itemId]?.message || ''}
+                                onChange={(event) =>
+                                  setApprovalGuideMessage(currentApprovalItem.itemId, event.target.value)
+                                }
+                                disabled={approvalSubmitting}
+                                data-testid={chatSelectors.approvalBatchGuideInput}
+                              />
+                              <div className="flex justify-end">
+                                <Button
+                                  type="primary"
+                                  onClick={() => void handleApprovalBatchSubmit()}
+                                  loading={approvalSubmitting}
+                                  disabled={approvalSubmitDisabled}
+                                  data-testid={chatSelectors.approvalBatchSubmitButton}
+                                >
+                                  提交审核结果
                                 </Button>
                               </div>
                             </div>

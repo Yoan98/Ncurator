@@ -52,26 +52,6 @@ const buildFailure = <TCode extends AiTaskResultCode>(input: { code: TCode; erro
   error: input.error
 })
 
-const requestTerminalCommandApproval = async (input: {
-  ctx: TerminalToolContext
-  runId: string
-  taskId: string
-  command: string
-  reason: string
-}): Promise<{ approved: true } | { approved: false; error: string }> => {
-  const decision = await input.ctx.requestApproval({
-    runId: input.runId,
-    taskId: input.taskId,
-    command: input.command,
-    reason: input.reason
-  })
-  if (decision.approved) return { approved: true }
-  return {
-    approved: false,
-    error: decision.reason || 'approval denied'
-  }
-}
-
 const emitTerminalStepStarted = (input: {
   ctx: TerminalToolContext
   runId: string
@@ -246,31 +226,22 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
           })
           const readonlyPolicy = analyzeReadonlyTerminalCommandPolicy(command)
           if (readonlyPolicy.executionPolicy !== 'readonly_allowed') {
-            const approval = await requestTerminalCommandApproval({
-              ctx: input.ctx,
-              runId: input.runId,
-              taskId: input.taskId,
-              command,
-              reason: readonlyPolicy.reason
+            const denied = buildFailure({
+              code: 'approval_denied',
+              error: `command requires approval preflight: ${readonlyPolicy.reason}`
             })
-            if (!approval.approved) {
-              const denied = buildFailure({
-                code: 'approval_denied',
-                error: approval.error
+            session.fail(
+              denied,
+              denied.error,
+              undefined,
+              buildTerminalToolResult({
+                toolName: TERMINAL_RUN_TOOL_SPEC.name,
+                ok: false,
+                code: denied.code,
+                data: denied
               })
-              session.fail(
-                denied,
-                denied.error,
-                undefined,
-                buildTerminalToolResult({
-                  toolName: TERMINAL_RUN_TOOL_SPEC.name,
-                  ok: false,
-                  code: denied.code,
-                  data: denied
-                })
-              )
-              return denied
-            }
+            )
+            return denied
           }
 
           const artifactCandidates = mergeArtifactCandidates({

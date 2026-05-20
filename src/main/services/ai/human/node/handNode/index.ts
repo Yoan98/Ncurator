@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type { JsonObject } from '../../../../../../shared/types'
 import {
   HUMAN_DEFAULT_TOOL_CALL_LIMIT,
@@ -9,6 +10,7 @@ import type { AiRunContext } from '../../../types'
 import { extractArtifactRefsFromToolResults, mergeArtifactRefs } from '../../../utils/artifacts'
 import {
   appendDecisionRound,
+  buildPreExecutionBlockedExecution,
   buildHandExecution,
 } from '../../memory/rounds'
 import {
@@ -18,6 +20,7 @@ import {
 import { buildToolCallDisplayText } from '../../shared/toolResultRenderers'
 import { assertExternalLearnedSkillIds } from '../../skills'
 import { getToolSpec } from '../../tools/registry'
+import { analyzeReadonlyTerminalCommandPolicy } from '../../tools/terminal/readonlyCommandPolicy'
 import type { ToolExecutionMeta } from '../../tools/types'
 import type { HumanRuntimeCache, HumanState, HumanDecisionHint, ToolCallResult, ToolUsePlan } from '../../types'
 import { deriveHandFollowupSignals, shouldStopSerialHandPlan } from './followupSignals'
@@ -38,9 +41,13 @@ type DocxAnchorContinuation = {
 }
 
 const isDocxSerialWriteCall = (toolName: string): boolean => DOCX_SERIAL_WRITE_TOOL_NAMES.has(toolName)
+const isTerminalRunCall = (toolName: string): boolean => toolName === 'terminal_run'
 
 const readSourcePathArg = (args: JsonObject): string | undefined =>
   typeof args.sourcePath === 'string' && args.sourcePath.trim().length > 0 ? args.sourcePath : undefined
+
+const readTerminalCommandArg = (args: JsonObject): string | undefined =>
+  typeof args.command === 'string' && args.command.trim().length > 0 ? args.command.trim() : undefined
 
 const readDocxContinuationAction = (toolName: string, args: JsonObject): DocxContinuationAction | undefined => {
   if (
@@ -176,6 +183,86 @@ const validateToolUsePlan = (toolUsePlan: ToolUsePlan): HumanDecisionHint | unde
         offendingToolNames
       })
     : undefined
+}
+
+const collectApprovalBatchItems = (input: {
+  runId: string
+  taskId: string
+  toolUsePlan: ToolUsePlan
+}): Array<{
+  itemId: string
+  order: number
+  toolName: string
+  command: string
+  reason: string
+}> => {
+  if (input.toolUsePlan.mode !== 'serial') return []
+
+  return input.toolUsePlan.calls.flatMap((call, index) => {
+    if (!isTerminalRunCall(call.toolName)) return []
+    const command = readTerminalCommandArg(call.args)
+    if (!command) return []
+    const readonlyPolicy = analyzeReadonlyTerminalCommandPolicy(command)
+    if (readonlyPolicy.executionPolicy === 'readonly_allowed') return []
+    return [
+      {
+        itemId: randomUUID(),
+        order: index,
+        toolName: call.toolName,
+        command,
+        reason: readonlyPolicy.reason
+      }
+    ]
+  })
+}
+
+const buildApprovalBlockedDecisionHint = (input: {
+  batchId: string
+  decisions: Array<{
+    itemId: string
+    action: 'approve' | 'reject' | 'guide'
+    message?: string
+  }>
+  approvalItems: Array<{
+    itemId: string
+    order: number
+    toolName: string
+    command: string
+    reason: string
+  }>
+}): Extract<HumanDecisionHint, { code: 'hand_approval_blocked' }> => {
+  const approvedItemIds = input.decisions
+    .filter((decision) => decision.action === 'approve')
+    .map((decision) => decision.itemId)
+  const rejectedItemIds = input.decisions
+    .filter((decision) => decision.action === 'reject')
+    .map((decision) => decision.itemId)
+  const guidedItems = input.decisions
+    .filter((decision) => decision.action === 'guide')
+    .map((decision) => {
+      const matchedItem = input.approvalItems.find((item) => item.itemId === decision.itemId)
+      return matchedItem
+        ? {
+            itemId: matchedItem.itemId,
+            command: matchedItem.command,
+            message: String(decision.message || '').trim()
+          }
+        : undefined
+    })
+    .filter((item): item is { itemId: string; command: string; message: string } => Boolean(item))
+
+  return {
+    code: 'hand_approval_blocked',
+    detail: {
+      reason: rejectedItemIds.length > 0 ? 'user_rejected' : 'user_guided',
+      batchId: input.batchId,
+      blockedToolNames: input.approvalItems.map((item) => item.toolName),
+      blockedCommands: input.approvalItems.map((item) => item.command),
+      approvedItemIds,
+      rejectedItemIds,
+      guidedItems
+    }
+  }
 }
 
 const executeToolUsePlan = async (input: {
@@ -486,6 +573,11 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
     }
 
     const { toolUsePlan } = state.execution.currentThought.nextAction
+    const approvalItems = collectApprovalBatchItems({
+      runId: input.ctx.runId,
+      taskId: state.task.taskId,
+      toolUsePlan
+    })
     const invalidPlanDecisionHint = validateToolUsePlan(toolUsePlan)
     if (invalidPlanDecisionHint) {
       return returnToBrainWithDecisionHint({
@@ -507,6 +599,46 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
           }
         }
       })
+    }
+
+    if (approvalItems.length > 0) {
+      const batchId = randomUUID()
+      const approvalBatchResult = await input.ctx.requestApprovalBatch({
+        runId: input.ctx.runId,
+        taskId: state.task.taskId,
+        batchId,
+        items: approvalItems,
+        stage: 'human_hand'
+      })
+      if (!approvalBatchResult.accepted) {
+        throw new Error(approvalBatchResult.error)
+      }
+
+      const allApproved = approvalBatchResult.decisions.every(
+        (decision) => decision.action === 'approve'
+      )
+      if (!allApproved) {
+        const decisionHint = buildApprovalBlockedDecisionHint({
+          batchId,
+          decisions: approvalBatchResult.decisions,
+          approvalItems
+        })
+        return returnToBrainWithDecisionHint({
+          ctx: input.ctx,
+          state,
+          source: 'hand',
+          decisionHint,
+          overrides: {
+            memory: {
+              ...state.memory,
+              taskRun: appendDecisionRound({
+                state,
+                execution: buildPreExecutionBlockedExecution(decisionHint)
+              })
+            }
+          }
+        })
+      }
     }
 
     const learnedSkillIds = state.skills.learnedSkillIds

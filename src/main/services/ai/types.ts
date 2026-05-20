@@ -13,6 +13,8 @@ import type { FileReviewService } from './human/tools/docx/review/FileReviewServ
 import type { ResolvedDocxOpenTarget } from './human/tools/docx/review/types'
 import type { z } from 'zod/v4'
 import type {
+  AiApprovalBatchDecision,
+  AiApprovalBatchItem,
   AiLlmIoRecord,
   AiLlmUsage,
   AiRuntimeSettings,
@@ -67,18 +69,32 @@ export type AiReferenceScope = {
   selectedReferences: SelectedReference[]
 }
 
-export type AiApprovalRequest = {
+export type AiApprovalBatchRequest = {
+  runId: string
+  taskId: string
+  batchId: string
+  items: AiApprovalBatchItem[]
+  internal?: boolean
+  stage?: AiRunEventStage
+}
+
+export type AiApprovalBatchResult =
+  | {
+      accepted: true
+      decisions: AiApprovalBatchDecision[]
+    }
+  | {
+      accepted: false
+      error: string
+    }
+
+export type AiTerminalApprovalFallback = {
   runId: string
   taskId: string
   command: string
   reason: string
   internal?: boolean
   stage?: AiRunEventStage
-}
-
-export type AiApprovalDecision = {
-  approved: boolean
-  reason?: string
 }
 
 export type AiRunDeps = {
@@ -92,7 +108,7 @@ export type AiRunDeps = {
   isCancelled: () => boolean
   sendEvent: (event: AiRunEvent) => void
   recordLlmIo?: (record: AiLlmIoRecord) => void
-  requestApproval: (request: AiApprovalRequest) => Promise<AiApprovalDecision>
+  requestApprovalBatch: (request: AiApprovalBatchRequest) => Promise<AiApprovalBatchResult>
   llmDriver?: AiLlmDriver
 }
 
@@ -135,7 +151,7 @@ export type AiRunContext = {
   }) => Promise<string>
   sendEvent: (event: AiRunEvent) => void
   recordLlmIo?: (record: AiLlmIoRecord) => void
-  requestApproval: (request: AiApprovalRequest) => Promise<AiApprovalDecision>
+  requestApprovalBatch: (request: AiApprovalBatchRequest) => Promise<AiApprovalBatchResult>
   loadConversationContext: (limits?: {
     recentTurns?: number
     maxRecentTurnsChars?: number
@@ -168,7 +184,7 @@ export type AiEventDispatchContext = Pick<AiRunContext, 'runId' | 'sendEvent' | 
 
 export type TerminalToolContext = Pick<
   AiRunContext,
-  'runId' | 'checkCancelled' | 'sendEvent' | 'requestApproval'
+  'runId' | 'checkCancelled' | 'sendEvent'
 >
 
 export type KnowledgeRetrievalContext = Pick<

@@ -29,9 +29,13 @@ export const summarizeDecisionHint = (hint: HumanDecisionHint): string => {
           ? `hand 的 toolUsePlan 超出计划长度上限；tools=${renderStringList(
               hint.detail.offendingToolNames
             )}。`
-        : `hand 的 parallel toolUsePlan 含不可并行工具；tools=${renderStringList(
-            hint.detail.offendingToolNames
-          )}。`
+          : `hand 的 parallel toolUsePlan 含不可并行工具；tools=${renderStringList(
+              hint.detail.offendingToolNames
+            )}。`
+    case 'hand_approval_blocked':
+      return `hand 的审批批次未全部通过；reason=${hint.detail.reason}；blockedCommands=${renderStringList(
+        hint.detail.blockedCommands
+      )}。`
     case 'hand_tool_limit_exceeded':
       return `hand 累计工具调用次数达到 ${hint.detail.toolCallCount}，已超过临时上限 ${hint.detail.limit}。`
     case 'hand_docx_positioned_write_blocked':
@@ -85,6 +89,25 @@ export const renderDecisionHintForBrain = (hint: HumanDecisionHint): string => {
           : hint.detail.reason === 'tool_use_plan_limit_exceeded'
             ? '请缩减本轮计划中的工具调用数量，再重新决策。'
           : '请缩减并行读取工具数量，或改为 mode=serial。'
+      ]
+        .filter(Boolean)
+        .join('\n')
+    case 'hand_approval_blocked':
+      return [
+        '上一轮 hand 命中了审批批次，但本批没有全部通过，因此这些命令本轮没有执行。',
+        `reason=${hint.detail.reason}`,
+        `batchId=${hint.detail.batchId}`,
+        `blockedToolNames=${renderStringList(hint.detail.blockedToolNames)}`,
+        `blockedCommands=${renderStringList(hint.detail.blockedCommands)}`,
+        `approvedItemIds=${renderStringList(hint.detail.approvedItemIds)}`,
+        `rejectedItemIds=${renderStringList(hint.detail.rejectedItemIds)}`,
+        `guidedItems=${hint.detail.guidedItems.length > 0 ? JSON.stringify(hint.detail.guidedItems) : 'none'}`,
+        hint.detail.guidedItems.length > 0
+          ? '你必须先吸收 guidedItems 里的用户指导内容，再决定下一步。'
+          : undefined,
+        hint.detail.rejectedItemIds.length > 0
+          ? '这些被拒绝的命令不要原样再次提交同批内容。'
+          : undefined
       ]
         .filter(Boolean)
         .join('\n')

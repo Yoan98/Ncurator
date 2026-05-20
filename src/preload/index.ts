@@ -253,9 +253,9 @@ const api: DesktopApi = {
     return ipcRenderer.invoke('ai-run-start', payload)
   },
   aiRunCancel: (runId: string) => ipcRenderer.invoke('ai-run-cancel', runId),
-  aiRunApprovalDecide: (payload) => {
-    emitE2EIpcCall('aiRunApprovalDecide')
-    return ipcRenderer.invoke('ai-run-approval-decide', payload)
+  aiRunApprovalBatchDecide: (payload) => {
+    emitE2EIpcCall('aiRunApprovalBatchDecide')
+    return ipcRenderer.invoke('ai-run-approval-batch-decide', payload)
   },
   aiContextUsageGet: (payload) => ipcRenderer.invoke('ai-context-usage-get', payload),
   fileReviewList: (payload) => ipcRenderer.invoke('file-review-list', payload),

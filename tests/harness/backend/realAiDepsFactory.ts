@@ -4,7 +4,7 @@ import { createHumanGraphRunner } from '../../../src/main/services/ai/human/grap
 import { FileReviewService } from '../../../src/main/services/ai/human/tools/docx/review/FileReviewService'
 import { createAiRunContext } from '../../../src/main/services/ai/runtime'
 import { runAiRuntimePreflight } from '../../../src/main/services/ai/runtimePreflight'
-import type { AiApprovalDecision, AiApprovalRequest } from '../../../src/main/services/ai/types'
+import type { AiApprovalBatchRequest, AiApprovalBatchResult } from '../../../src/main/services/ai/types'
 import type { AiRunContext } from '../../../src/main/services/ai/types'
 import { ModelService } from '../../../src/main/services/model/ModelService'
 import { IngestionService } from '../../../src/main/services/ingestion/loader'
@@ -47,15 +47,33 @@ const resolveRuntimeModelName = (input: {
 
 const buildApprovalResolver = (
   policy: CreateAiRunContextInput['approvalPolicy']
-): ((request: AiApprovalRequest) => AiApprovalDecision) => {
+): ((request: AiApprovalBatchRequest) => AiApprovalBatchResult) => {
   if (typeof policy === 'function') return policy
   if (policy === 'deny-all') {
-    return () => ({ approved: false, reason: 'approval denied by test policy: deny-all' })
+    return (request) => ({
+      accepted: true,
+      decisions: request.items.map((item) => ({
+        itemId: item.itemId,
+        action: 'reject'
+      }))
+    })
   }
   if (policy === 'deny-medium-high') {
-    return () => ({ approved: false, reason: 'approval denied by test policy: deny-medium-high' })
+    return (request) => ({
+      accepted: true,
+      decisions: request.items.map((item) => ({
+        itemId: item.itemId,
+        action: 'reject'
+      }))
+    })
   }
-  return () => ({ approved: true })
+  return (request) => ({
+    accepted: true,
+    decisions: request.items.map((item) => ({
+      itemId: item.itemId,
+      action: 'approve'
+    }))
+  })
 }
 
 export type RealAiDepsFactory = {
@@ -159,27 +177,30 @@ export const createRealAiDepsFactory = async (input: {
         isCancelled: contextInput.checkCancelledOverride || (() => false),
         sendEvent: (event) => input.eventCollector.add(event),
         recordLlmIo: (record) => input.eventCollector.addLlmIo(record),
-        requestApproval: async (request) => {
-          const approvalId = randomUUID()
+        requestApprovalBatch: async (request) => {
           input.eventCollector.add({
-            type: 'approval_required',
+            type: 'approval_batch_required',
             runId: input.runId,
             taskId: request.taskId,
-            approvalId,
-            command: request.command,
-            reason: request.reason,
+            batchId: request.batchId,
+            items: request.items,
             createdAt: Date.now(),
             stage: request.stage,
             internal: request.internal
           })
           const decision = approvalResolver(request)
           input.eventCollector.add({
-            type: 'approval_decision',
+            type: 'approval_batch_decision',
             runId: input.runId,
             taskId: request.taskId,
-            approvalId,
-            approved: decision.approved,
-            reason: decision.reason,
+            batchId: request.batchId,
+            decisions: decision.accepted
+              ? decision.decisions
+              : request.items.map((item) => ({
+                  itemId: item.itemId,
+                  action: 'reject' as const,
+                  message: decision.error
+                })),
             decidedAt: Date.now(),
             stage: request.stage,
             internal: request.internal

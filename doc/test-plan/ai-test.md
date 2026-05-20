@@ -657,6 +657,16 @@
 - Oracle：`6` 个只读且 `parallelSafe` 的工具调用会被真实执行并正确聚合；`7` 个并行调用会在执行前被 `parallel_limit_exceeded` 拦截；包含 mutating 或非并行安全工具的批次会在执行前被 `parallel_requires_read_only` 拦截。
 - Not：不验证 `brain` 决策来源。
 
+##### `hand-terminal-approval-batch`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 `hand` 会对 `serial` 计划中的需审批 `terminal_run` 做批量预检，并在整批未全部同意时 0 执行。
+- Why：terminal 审批责任已经前移到 `hand` preflight，正式 case 必须长期守住“先整批审核，再决定是否执行”的主流程。
+- How：通过真实 `human` hand 决策构造两个需审批 terminal 命令，并让审批批次返回 `approve + guide` 混合结果。
+- Oracle：事件流出现 `approval_batch_required / approval_batch_decision`；整批在审批前不发生真实 tool execution；磁盘上不会产生任何副作用；`decision_hint(code='hand_approval_blocked')` 会回流到 `brain`。
+- Not：不验证前端审批卡片交互。
+
 ##### `hand-serial-docx-chain`
 
 - 测试类型：`backend`
@@ -756,10 +766,10 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证真实审批拒绝会阻止高风险命令落地，并把限制带入最终交付。
+- What：验证真实批量审批拒绝会阻止需审批命令落地，并把限制带入最终交付。
 - Why：审批拒绝是正式生产边界，不能只靠 fake 测试覆盖。
 - How：设置 `approvalPolicy=deny-medium-high`，直接尝试真实执行 builtin terminal 命令 `mkdir blocked-dir`，然后进入最终说明。
-- Oracle：真实工具结果返回 `approval_denied`，审批事件里存在 `approved=false`，磁盘上不会真的创建 `blocked-dir`，任务最终完成。
+- Oracle：事件流真实出现 `approval_batch_decision` 且至少一项为 `reject`；对应 terminal 命令不会真实执行；`decision_hint(code='hand_approval_blocked', reason='user_rejected')` 回流给后续 brain；磁盘上不会真的创建 `blocked-dir`，任务最终完成。
 - Not：不验证用户如何在 UI 中恢复被拒绝的动作。
 
 ##### `brain-memory-write-boundary`
