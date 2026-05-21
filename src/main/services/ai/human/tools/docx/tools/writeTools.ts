@@ -597,7 +597,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
     runtime,
     name: DOCX_CREATE_TOOL_SPEC.name,
     description: DOCX_CREATE_TOOL_SPEC.description,
-    schema: DOCX_CREATE_TOOL_SPEC.schema,
+    schema: DOCX_CREATE_TOOL_SPEC.inputSchema,
     onError: ({ message }) => {
       runtime.input.emitActivity({
         actionType: DOCX_CREATE_TOOL_SPEC.activityActionType!,
@@ -821,7 +821,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
     runtime,
     name: DOCX_PARAGRAPH_EDIT_TOOL_SPEC.name,
     description: DOCX_PARAGRAPH_EDIT_TOOL_SPEC.description,
-    schema: DOCX_PARAGRAPH_EDIT_TOOL_SPEC.schema,
+    schema: DOCX_PARAGRAPH_EDIT_TOOL_SPEC.inputSchema,
     onError: ({ message }) => {
       runtime.input.emitActivity({
         actionType: DOCX_PARAGRAPH_EDIT_TOOL_SPEC.activityActionType!,
@@ -933,7 +933,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
     runtime,
     name: DOCX_HEADING_EDIT_TOOL_SPEC.name,
     description: DOCX_HEADING_EDIT_TOOL_SPEC.description,
-    schema: DOCX_HEADING_EDIT_TOOL_SPEC.schema,
+    schema: DOCX_HEADING_EDIT_TOOL_SPEC.inputSchema,
     onError: ({ message }) => {
       runtime.input.emitActivity({
         actionType: DOCX_HEADING_EDIT_TOOL_SPEC.activityActionType!,
@@ -1049,7 +1049,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
     runtime,
     name: DOCX_TABLE_EDIT_TOOL_SPEC.name,
     description: DOCX_TABLE_EDIT_TOOL_SPEC.description,
-    schema: DOCX_TABLE_EDIT_TOOL_SPEC.schema,
+    schema: DOCX_TABLE_EDIT_TOOL_SPEC.inputSchema,
     onError: ({ message }) => {
       runtime.input.emitActivity({
         actionType: DOCX_TABLE_EDIT_TOOL_SPEC.activityActionType!,
@@ -1191,7 +1191,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
     runtime,
     name: DOCX_TEXT_EDIT_TOOL_SPEC.name,
     description: DOCX_TEXT_EDIT_TOOL_SPEC.description,
-    schema: DOCX_TEXT_EDIT_TOOL_SPEC.schema,
+    schema: DOCX_TEXT_EDIT_TOOL_SPEC.inputSchema,
     onError: ({ message }) => {
       runtime.input.emitActivity({
         actionType: DOCX_TEXT_EDIT_TOOL_SPEC.activityActionType!,
@@ -1307,7 +1307,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
     runtime,
     name: DOCX_TEXT_STYLE_EDIT_TOOL_SPEC.name,
     description: DOCX_TEXT_STYLE_EDIT_TOOL_SPEC.description,
-    schema: DOCX_TEXT_STYLE_EDIT_TOOL_SPEC.schema,
+    schema: DOCX_TEXT_STYLE_EDIT_TOOL_SPEC.inputSchema,
     onError: ({ message }) => {
       runtime.input.emitActivity({
         actionType: DOCX_TEXT_STYLE_EDIT_TOOL_SPEC.activityActionType!,
@@ -1416,7 +1416,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
     runtime,
     name: DOCX_DELETE_TOOL_SPEC.name,
     description: DOCX_DELETE_TOOL_SPEC.description,
-    schema: DOCX_DELETE_TOOL_SPEC.schema,
+    schema: DOCX_DELETE_TOOL_SPEC.inputSchema,
     onError: ({ message }) => {
       runtime.input.emitActivity({
         actionType: DOCX_DELETE_TOOL_SPEC.activityActionType!,
@@ -1523,7 +1523,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
     runtime,
     name: DOCX_ROLLBACK_TOOL_SPEC.name,
     description: DOCX_ROLLBACK_TOOL_SPEC.description,
-    schema: DOCX_ROLLBACK_TOOL_SPEC.schema,
+    schema: DOCX_ROLLBACK_TOOL_SPEC.inputSchema,
     onError: ({ message }) => {
       runtime.input.emitActivity({
         actionType: DOCX_ROLLBACK_TOOL_SPEC.activityActionType!,

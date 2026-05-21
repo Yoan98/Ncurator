@@ -14,8 +14,9 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     source: 'builtin',
     countsTowardToolBudget: false,
     title: 'terminal',
-    description: '在当前 workspace 边界内运行单条终端命令。',
-    whenToUse: '当你判断终端命令是推进当前任务的合适方式时使用。',
+    description:
+      '能力：在当前 workspace 边界内执行单条终端命令。\n结果：返回命令输出、退出状态和可识别的工作区文件产物。\n边界：命令的直接执行、并行安全与审批要求由终端命令策略决定。',
+    whenToUse: '适用于需要使用当前 workspace 终端能力的任务。',
     toolNames: ['terminal_run']
   },
   'docx-read': {
@@ -24,8 +25,9 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     source: 'external',
     countsTowardToolBudget: true,
     title: 'docx-read',
-    description: '读取 docx 结构、搜索定位、连续精读区间、查看版本历史。',
-    whenToUse: '当任务需要浏览结构、换词搜索、定位 blockId 或连续精读 docx 内容时使用。',
+    description:
+      '能力：读取 sourcePath 对应 docx 的结构、内容块、检索结果和任务内修订历史。\n结果：返回块级索引、正文内容、匹配信息或 revision 信息。\n边界：只读取 docx 内容与修订状态，不改变草稿内容。',
+    whenToUse: '适用于需要读取或理解 docx 内容与修订状态的任务。',
     toolNames: ['docx_outline', 'docx_search', 'docx_read_blocks', 'docx_history']
   },
   'docx-write': {
@@ -34,8 +36,8 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     source: 'external',
     countsTowardToolBudget: true,
     title: 'docx-write',
-    description: `创建或编辑 docx，包括段落、标题、表格、文本、样式调整与版本回退。单轮连续 docx 写操作最多只能规划 ${HUMAN_DOCX_BATCH_WRITE_LIMIT} 个；写工具会在返回结果中附带写后复核区域，可据此判断是否需要继续编辑或额外读取`,
-    whenToUse: `当你需要新建一份 Word 文件、明确知道要改哪里改成什么，或需要撤销当前草稿修改时使用。`,
+    description: `能力：创建 docx 文件内容，插入段落、标题、表格，替换文本，调整文本样式，删除完整块，切换编辑 revision。\n结果：生成新的 docx 编辑 revision，并返回变更信息与写后回读信息。\n边界：写入作用于当前任务内的编辑链路，最终落盘由 review / commit 链路处理；单轮连续 docx 写操作最多只能规划 ${HUMAN_DOCX_BATCH_WRITE_LIMIT} 个。`,
+    whenToUse: '适用于需要改变 docx 内容或编辑 revision 状态的任务。',
     toolNames: [
       'docx_create',
       'docx_paragraph_edit',
@@ -53,11 +55,9 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     source: 'builtin',
     countsTowardToolBudget: false,
     title: 'kb-retrieval',
-    description: `工作区知识库检索技能；背后是通过对文档进行分块建立的 fts 和向量索引来实现的，因此检索的基本单位是内容块，而不是整个文档；
-    1.可查询当前工作区知识库中已建立索引的文档列表
-    2.可按查询词或语句检索本地知识库中相关内容片段，并返回命中证据及其来源文档。`,
-    whenToUse:
-      '当需要查看工作区知识库中有哪些文档能够被检索，或需要按关键词、查询词或语义语句查找相关内容片段时使用。',
+    description:
+      '能力：查询当前工作区知识库中已建立索引的文档列表，或按查询词、语义语句检索相关内容片段。\n结果：返回命中证据、来源文档与内容块信息。\n边界：检索基本单位是内容块，不是整份文档。',
+    whenToUse: '适用于需要使用工作区知识库检索能力的任务。',
     toolNames: ['kb_list_documents', 'kb_search']
   }
 }

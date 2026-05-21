@@ -21,7 +21,6 @@ import type {
   TerminalCapabilityToolsRuntimeState
 } from './types'
 import {
-  TERMINAL_RUN_SCHEMA,
   TERMINAL_RUN_TOOL_SPEC
 } from './toolSpecs'
 
@@ -378,7 +377,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
     {
       name: TERMINAL_RUN_TOOL_SPEC.name,
       description: TERMINAL_RUN_TOOL_SPEC.promptSpec.description,
-      schema: TERMINAL_RUN_SCHEMA
+      schema: TERMINAL_RUN_TOOL_SPEC.inputSchema
     }
   )
 

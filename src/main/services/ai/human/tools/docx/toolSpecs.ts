@@ -20,6 +20,14 @@ import {
   createStaticExecutionMetaResolver,
   readStringArg
 } from '../utils/toolSpecUtils'
+import {
+  docxHistoryOutputSchema,
+  docxOutlineOutputSchema,
+  docxReadBlocksOutputSchema,
+  docxRollbackOutputSchema,
+  docxSearchOutputSchema,
+  docxWriteOutputSchema
+} from './outputSchemas'
 
 const createDocxReadExecutionMeta = () =>
   createStaticExecutionMetaResolver({
@@ -39,9 +47,10 @@ const createDocxMutatingExecutionMeta = () =>
 
 type DocxToolSpec<
   TArgs extends JsonObject = JsonObject,
+  TOutput extends JsonObject = JsonObject,
   TName extends string = string,
   TSkillId extends RuntimeSkillId = RuntimeSkillId
-> = HumanToolSpec<TArgs, TName, TSkillId> & {
+> = HumanToolSpec<TArgs, TOutput, TName, TSkillId> & {
   description: string
   activityActionType?: string
 }
@@ -91,11 +100,13 @@ export const DOCX_OUTLINE_TOOL_SPEC = {
   requiresWorkspace: true,
   description: '读取 docx 的整体结构提纲。',
   skillIds: ['docx-read'],
-  schema: docxOutlineRequestSchema,
+  inputSchema: docxOutlineRequestSchema,
+  outputSchema: docxOutlineOutputSchema,
   promptSpec: {
     name: 'docx_outline',
-    description: '按 percent 或 blockIndex 范围读取 docx 轻量文本地图，拿到 blockId、blockIndex 和文本预览。',
-    whenToUse: '当你需要先理解文档局部结构、定位标题或表格、或为后续精读/编辑拿到 blockId/blockIndex 时使用。',
+    description:
+      '能力：按 percent 或 blockIndex 范围读取 sourcePath 对应 docx 的块级 outline。\n结果：返回范围内每个块的文本内容、块级定位信息和结构类型信息。\n边界：返回块级文本与结构概览，不包含 runs 或表格单元格内的详细段落结构。',
+    whenToUse: '适用于需要 docx 块级 outline 信息的任务。',
     examples: [
       {
         goal: '先看一份 docx 的整体结构和标题、表格分布',
@@ -108,7 +119,12 @@ export const DOCX_OUTLINE_TOOL_SPEC = {
   },
   resolveExecutionMeta: createDocxReadExecutionMeta(),
   activityActionType: 'docx_outline'
-} satisfies DocxToolSpec<z.infer<typeof docxOutlineRequestSchema>, 'docx_outline', 'docx-read'>
+} satisfies DocxToolSpec<
+  z.infer<typeof docxOutlineRequestSchema>,
+  z.infer<typeof docxOutlineOutputSchema>,
+  'docx_outline',
+  'docx-read'
+>
 
 export const DOCX_SEARCH_TOOL_SPEC = {
   name: 'docx_search',
@@ -116,12 +132,13 @@ export const DOCX_SEARCH_TOOL_SPEC = {
   requiresWorkspace: true,
   description: '在 docx 中定位相关内容，支持 literal / regex / semantic 三种模式。',
   skillIds: ['docx-read'],
-  schema: docxSearchRequestSchema,
+  inputSchema: docxSearchRequestSchema,
+  outputSchema: docxSearchOutputSchema,
   promptSpec: {
     name: 'docx_search',
-    description: '先定位相关 block，再决定是否继续精读。',
-    whenToUse:
-      '当你需要查找术语、换词重试、切换 regex / semantic 检索模式，或拿到 blockId 供后续 docx_read_blocks 精读时使用。',
+    description:
+      '能力：在 sourcePath 对应 docx 中按 literal、regex 或 semantic 模式检索块级文本。\n结果：返回匹配块的文本、匹配位置和相关性信息。\n边界：semantic 检索依赖 embedding runtime；返回命中数量受上限限制。',
+    whenToUse: '适用于需要检索 docx 块级文本内容的任务。',
     examples: [
       {
         goal: '按原词做 literal 搜索，先定位“反走样”在哪些 block',
@@ -139,7 +156,12 @@ export const DOCX_SEARCH_TOOL_SPEC = {
   },
   resolveExecutionMeta: createDocxReadExecutionMeta(),
   activityActionType: 'docx_search'
-} satisfies DocxToolSpec<z.infer<typeof docxSearchRequestSchema>, 'docx_search', 'docx-read'>
+} satisfies DocxToolSpec<
+  z.infer<typeof docxSearchRequestSchema>,
+  z.infer<typeof docxSearchOutputSchema>,
+  'docx_search',
+  'docx-read'
+>
 
 export const DOCX_READ_TOOL_SPEC = {
   name: 'docx_read_blocks',
@@ -147,12 +169,13 @@ export const DOCX_READ_TOOL_SPEC = {
   requiresWorkspace: true,
   description: '按 blockIndex 区间或 blockIds 精读 docx 内容。',
   skillIds: ['docx-read'],
-  schema: docxReadRequestSchema,
+  inputSchema: docxReadRequestSchema,
+  outputSchema: docxReadBlocksOutputSchema,
   promptSpec: {
     name: 'docx_read_blocks',
-    description: '读取一个或多个 block，或按 blockIndex 区间连续精读一段内容。',
-    whenToUse:
-      '当你已经通过 docx_search 或 docx_outline 拿到 blockId，准备精读一个 block 或一段连续区间时使用。',
+    description:
+      '能力：按 blockId 集合或 blockIndex 闭区间读取 sourcePath 对应 docx 的详细块内容。\n结果：返回块内更细的内容结构，包括段落 runs、表格单元格和单元格段落信息。\n边界：读取指定块的详细结构，不改变 docx 内容。',
+    whenToUse: '适用于需要 docx 指定块详细内容的任务。',
     examples: [
       {
         goal: '连续精读“反走样”一节对应的 block 区间',
@@ -162,7 +185,12 @@ export const DOCX_READ_TOOL_SPEC = {
   },
   resolveExecutionMeta: createDocxReadExecutionMeta(),
   activityActionType: 'docx_read_blocks'
-} satisfies DocxToolSpec<z.infer<typeof docxReadRequestSchema>, 'docx_read_blocks', 'docx-read'>
+} satisfies DocxToolSpec<
+  z.infer<typeof docxReadRequestSchema>,
+  z.infer<typeof docxReadBlocksOutputSchema>,
+  'docx_read_blocks',
+  'docx-read'
+>
 
 export const DOCX_HISTORY_TOOL_SPEC = {
   name: 'docx_history',
@@ -170,11 +198,13 @@ export const DOCX_HISTORY_TOOL_SPEC = {
   requiresWorkspace: true,
   description: '查看当前任务过程中的 docx 修订历史。',
   skillIds: ['docx-read'],
-  schema: docxHistoryRequestSchema,
+  inputSchema: docxHistoryRequestSchema,
+  outputSchema: docxHistoryOutputSchema,
   promptSpec: {
     name: 'docx_history',
-    description: '查看当前任务过程中这份 docx 的修订链、修订摘要和变更块。',
-    whenToUse: '当你要确认编辑历史、比较最近几次修订差异、或决定回滚到哪个修订时使用。',
+    description:
+      '能力：读取 sourcePath 对应 docx 在当前任务内的编辑 revision 历史。\n结果：返回当前任务内的修订链、修订摘要和变更块信息。\n边界：历史来自当前任务的 docx 编辑链路，不是 Word 原生修订记录。',
+    whenToUse: '适用于需要 docx 编辑 revision 历史的任务。',
     examples: [
       {
         goal: '查看最近几个 docx 修订及各自改动摘要',
@@ -187,7 +217,12 @@ export const DOCX_HISTORY_TOOL_SPEC = {
   },
   resolveExecutionMeta: createDocxReadExecutionMeta(),
   activityActionType: 'docx_history'
-} satisfies DocxToolSpec<z.infer<typeof docxHistoryRequestSchema>, 'docx_history', 'docx-read'>
+} satisfies DocxToolSpec<
+  z.infer<typeof docxHistoryRequestSchema>,
+  z.infer<typeof docxHistoryOutputSchema>,
+  'docx_history',
+  'docx-read'
+>
 
 export const DOCX_PARAGRAPH_EDIT_TOOL_SPEC = {
   name: 'docx_paragraph_edit',
@@ -195,12 +230,13 @@ export const DOCX_PARAGRAPH_EDIT_TOOL_SPEC = {
   requiresWorkspace: true,
   description: '按段落对象执行插入。',
   skillIds: ['docx-write'],
-  schema: docxParagraphEditSchema,
+  inputSchema: docxParagraphEditSchema,
+  outputSchema: docxWriteOutputSchema,
   promptSpec: {
     name: 'docx_paragraph_edit',
-    description: '按段落对象插入一个或多个段落。',
-    whenToUse:
-      '当你已经明确段落锚点，且只需要插入段落时使用。替换文字用 docx_text_edit，删除完整 block 用 docx_delete。若命中复杂定位排版区域，任何自动编辑都会失败，此时不要重复尝试 docx 写操作。',
+    description:
+      '能力：以 anchorBlockId 为锚点，在其前后插入一个或多个段落块。\n结果：返回写入后的编辑状态，以及相邻区域的详细回读信息。\n边界：只创建新的段落块，不替换已有文本内容。',
+    whenToUse: '适用于需要插入 docx 段落块的任务。',
     examples: [
       {
         goal: '在目标段落后插入一段说明',
@@ -217,6 +253,7 @@ export const DOCX_PARAGRAPH_EDIT_TOOL_SPEC = {
   activityActionType: 'docx_paragraph_edit'
 } satisfies DocxToolSpec<
   z.infer<typeof docxParagraphEditSchema>,
+  z.infer<typeof docxWriteOutputSchema>,
   'docx_paragraph_edit',
   'docx-write'
 >
@@ -227,12 +264,13 @@ export const DOCX_CREATE_TOOL_SPEC = {
   requiresWorkspace: true,
   description: '创建一份新的 docx 草稿目标，供后续继续读取、编辑和审阅。',
   skillIds: ['docx-write'],
-  schema: docxCreateSchema,
+  inputSchema: docxCreateSchema,
+  outputSchema: docxWriteOutputSchema,
   promptSpec: {
     name: 'docx_create',
-    description: '先创建一份新的 docx 草稿目标，再继续写入或编辑它。',
-    whenToUse:
-      '当用户明确要你生成一份新的 Word 文件，或者当前 workspace 里还没有目标 docx 时使用。创建成功后可继续对同一路径执行 docx_outline、docx_read_blocks 和 docx_*_edit。',
+    description:
+      '能力：创建一份新的 docx 文件内容，并纳入当前任务的 docx 编辑链路。\n结果：返回创建后的编辑状态和写后回读信息。\n边界：不会覆盖已有文件；创建后先作为待审阅内容存在，commit 前不会写入最终路径。',
+    whenToUse: '适用于需要新建 docx 文件内容的任务。',
     examples: [
       {
         goal: '先创建一份给同学复习用的总结文档',
@@ -242,7 +280,12 @@ export const DOCX_CREATE_TOOL_SPEC = {
   },
   resolveExecutionMeta: createDocxMutatingExecutionMeta(),
   activityActionType: 'docx_create'
-} satisfies DocxToolSpec<z.infer<typeof docxCreateSchema>, 'docx_create', 'docx-write'>
+} satisfies DocxToolSpec<
+  z.infer<typeof docxCreateSchema>,
+  z.infer<typeof docxWriteOutputSchema>,
+  'docx_create',
+  'docx-write'
+>
 
 export const DOCX_HEADING_EDIT_TOOL_SPEC = {
   name: 'docx_heading_edit',
@@ -250,12 +293,13 @@ export const DOCX_HEADING_EDIT_TOOL_SPEC = {
   requiresWorkspace: true,
   description: '按标题对象执行插入。',
   skillIds: ['docx-write'],
-  schema: docxHeadingEditSchema,
+  inputSchema: docxHeadingEditSchema,
+  outputSchema: docxWriteOutputSchema,
   promptSpec: {
     name: 'docx_heading_edit',
-    description: '按标题对象插入一个或多个标题。',
-    whenToUse:
-      '当你要在某处插入标题时使用。替换标题文字用 docx_text_edit。若命中复杂定位排版区域，任何自动编辑都会失败，此时应改为说明限制并给用户手动操作建议。',
+    description:
+      '能力：以 anchorBlockId 为锚点，在其前后插入一个或多个指定层级的标题块。\n结果：返回写入后的编辑状态，以及相邻区域的详细回读信息。\n边界：标题以段落样式写入；不替换已有标题文字。',
+    whenToUse: '适用于需要插入 docx 标题块的任务。',
     examples: [
       {
         goal: '在指定 block 后插入一个二级标题',
@@ -270,7 +314,12 @@ export const DOCX_HEADING_EDIT_TOOL_SPEC = {
   },
   resolveExecutionMeta: createDocxMutatingExecutionMeta(),
   activityActionType: 'docx_heading_edit'
-} satisfies DocxToolSpec<z.infer<typeof docxHeadingEditSchema>, 'docx_heading_edit', 'docx-write'>
+} satisfies DocxToolSpec<
+  z.infer<typeof docxHeadingEditSchema>,
+  z.infer<typeof docxWriteOutputSchema>,
+  'docx_heading_edit',
+  'docx-write'
+>
 
 export const DOCX_TABLE_EDIT_TOOL_SPEC = {
   name: 'docx_table_edit',
@@ -278,12 +327,13 @@ export const DOCX_TABLE_EDIT_TOOL_SPEC = {
   requiresWorkspace: true,
   description: '按表格对象执行插入或改单元格。',
   skillIds: ['docx-write'],
-  schema: docxTableEditSchema,
+  inputSchema: docxTableEditSchema,
+  outputSchema: docxWriteOutputSchema,
   promptSpec: {
     name: 'docx_table_edit',
-    description: '按表格对象插入表格或更新单元格内容。',
-    whenToUse:
-      '当你需要插入一个简单二维文本表格，或更新某个 table cell 的内容时使用。若命中复杂定位排版区域，任何自动编辑都会失败，此时不要重复尝试 docx 写操作。',
+    description:
+      '能力：以 anchorBlockId 为锚点插入表格，或通过 cellBlockId 更新表格单元格文本。\n结果：返回写入后的编辑状态，以及相邻区域的详细回读信息。\n边界：插入表格使用二维文本 rows；更新单元格会把目标单元格内容替换为单段文本。',
+    whenToUse: '适用于需要插入 docx 表格或更新表格单元格文本的任务。',
     examples: [
       {
         goal: '在指定 block 后插入一个简单对照表',
@@ -301,7 +351,12 @@ export const DOCX_TABLE_EDIT_TOOL_SPEC = {
   },
   resolveExecutionMeta: createDocxMutatingExecutionMeta(),
   activityActionType: 'docx_table_edit'
-} satisfies DocxToolSpec<z.infer<typeof docxTableEditSchema>, 'docx_table_edit', 'docx-write'>
+} satisfies DocxToolSpec<
+  z.infer<typeof docxTableEditSchema>,
+  z.infer<typeof docxWriteOutputSchema>,
+  'docx_table_edit',
+  'docx-write'
+>
 
 export const DOCX_TEXT_EDIT_TOOL_SPEC = {
   name: 'docx_text_edit',
@@ -309,12 +364,13 @@ export const DOCX_TEXT_EDIT_TOOL_SPEC = {
   requiresWorkspace: true,
   description: '按 query 执行文本查找替换。',
   skillIds: ['docx-write'],
-  schema: docxTextEditSchema,
+  inputSchema: docxTextEditSchema,
+  outputSchema: docxWriteOutputSchema,
   promptSpec: {
     name: 'docx_text_edit',
-    description: '在当前 docx 中按 query 查找并替换文本，可选 blockIds 缩小范围。',
-    whenToUse:
-      '当你想在一批命中文本里直接替换术语或改写短句时使用。它适合 normal 正文流里的原地改字，不适合新增结构；若命中复杂定位排版区域，也会直接失败。',
+    description:
+      '能力：在 sourcePath 对应 docx 中按 query 执行文本查找替换，可用 blockIds 限定范围。\n结果：返回写入后的编辑状态，以及命中区域的详细回读信息。\n边界：执行文本级替换，不创建新的段落、标题或表格结构。',
+    whenToUse: '适用于需要替换 docx 现有文本内容的任务。',
     examples: [
       {
         goal: '把文中的“过拟合”统一替换成“模型过拟合”',
@@ -328,7 +384,12 @@ export const DOCX_TEXT_EDIT_TOOL_SPEC = {
   },
   resolveExecutionMeta: createDocxMutatingExecutionMeta(),
   activityActionType: 'docx_text_edit'
-} satisfies DocxToolSpec<z.infer<typeof docxTextEditSchema>, 'docx_text_edit', 'docx-write'>
+} satisfies DocxToolSpec<
+  z.infer<typeof docxTextEditSchema>,
+  z.infer<typeof docxWriteOutputSchema>,
+  'docx_text_edit',
+  'docx-write'
+>
 
 export const DOCX_TEXT_STYLE_EDIT_TOOL_SPEC = {
   name: 'docx_text_style_edit',
@@ -336,12 +397,13 @@ export const DOCX_TEXT_STYLE_EDIT_TOOL_SPEC = {
   requiresWorkspace: true,
   description: '在指定块内按 query 命中文本并应用样式。',
   skillIds: ['docx-write'],
-  schema: docxTextStyleEditSchema,
+  inputSchema: docxTextStyleEditSchema,
+  outputSchema: docxWriteOutputSchema,
   promptSpec: {
     name: 'docx_text_style_edit',
-    description: '给现有文本片段加颜色、粗体、斜体或下划线，不改文字本身。',
-    whenToUse:
-      '当你需要把某一段已有文本标红、加粗或下划线时使用。它适合 normal 正文流里的原地样式调整，不适合新增结构；若命中复杂定位排版区域，也会直接失败。',
+    description:
+      '能力：在指定 blockId 内按 query 命中文本并应用 color、bold、italic 或 underline 样式。\n结果：返回写入后的编辑状态，以及命中区域的详细回读信息。\n边界：只修改命中文本的样式，不改变文本内容。',
+    whenToUse: '适用于需要修改 docx 现有文本样式的任务。',
     examples: [
       {
         goal: '把指定段落中“高风险”标红加粗',
@@ -361,6 +423,7 @@ export const DOCX_TEXT_STYLE_EDIT_TOOL_SPEC = {
   activityActionType: 'docx_text_style_edit'
 } satisfies DocxToolSpec<
   z.infer<typeof docxTextStyleEditSchema>,
+  z.infer<typeof docxWriteOutputSchema>,
   'docx_text_style_edit',
   'docx-write'
 >
@@ -371,12 +434,13 @@ export const DOCX_DELETE_TOOL_SPEC = {
   requiresWorkspace: true,
   description: '删除一个或多个完整 docx block。',
   skillIds: ['docx-write'],
-  schema: docxDeleteSchema,
+  inputSchema: docxDeleteSchema,
+  outputSchema: docxWriteOutputSchema,
   promptSpec: {
     name: 'docx_delete',
-    description: '按 blockId 删除完整段落或表格 block，不支持 run 级删除。',
-    whenToUse:
-      '当你已经明确要删除的完整 blockId 时使用。只删除文本片段时使用 docx_text_edit 并将 replace 设为空字符串。',
+    description:
+      '能力：按 blockIds 删除一个或多个完整 docx block。\n结果：返回写入后的编辑状态，以及删除位置相邻区域的详细回读信息。\n边界：删除粒度是完整 block，不执行 run 级或文本片段级删除。',
+    whenToUse: '适用于需要删除 docx 完整块的任务。',
     examples: [
       {
         goal: '删除两个完整段落',
@@ -389,7 +453,12 @@ export const DOCX_DELETE_TOOL_SPEC = {
   },
   resolveExecutionMeta: createDocxMutatingExecutionMeta(),
   activityActionType: 'docx_delete'
-} satisfies DocxToolSpec<z.infer<typeof docxDeleteSchema>, 'docx_delete', 'docx-write'>
+} satisfies DocxToolSpec<
+  z.infer<typeof docxDeleteSchema>,
+  z.infer<typeof docxWriteOutputSchema>,
+  'docx_delete',
+  'docx-write'
+>
 
 export const DOCX_ROLLBACK_TOOL_SPEC = {
   name: 'docx_rollback',
@@ -397,11 +466,13 @@ export const DOCX_ROLLBACK_TOOL_SPEC = {
   requiresWorkspace: true,
   description: '按修订号回退当前 docx 草稿。',
   skillIds: ['docx-write'],
-  schema: docxRollbackRequestSchema,
+  inputSchema: docxRollbackRequestSchema,
+  outputSchema: docxRollbackOutputSchema,
   promptSpec: {
     name: 'docx_rollback',
-    description: '把当前任务过程中的 docx 草稿切回指定 revisionRef，不覆盖原文件。',
-    whenToUse: '当你已经通过 docx_history 确认要回退到哪个修订时使用。',
+    description:
+      '能力：按 revisionRef 切回 sourcePath 对应 docx 的当前编辑 revision。\n结果：返回回退后的编辑状态。\n边界：只切换当前任务内的编辑状态，不直接覆盖源文件。',
+    whenToUse: '适用于需要切换 docx 编辑 revision 状态的任务。',
     examples: [
       {
         goal: '把当前草稿回退到指定修订',
@@ -414,7 +485,12 @@ export const DOCX_ROLLBACK_TOOL_SPEC = {
   },
   resolveExecutionMeta: createDocxMutatingExecutionMeta(),
   activityActionType: 'docx_rollback'
-} satisfies DocxToolSpec<z.infer<typeof docxRollbackRequestSchema>, 'docx_rollback', 'docx-write'>
+} satisfies DocxToolSpec<
+  z.infer<typeof docxRollbackRequestSchema>,
+  z.infer<typeof docxRollbackOutputSchema>,
+  'docx_rollback',
+  'docx-write'
+>
 
 export const DOCX_READ_TOOL_SPECS = [
   DOCX_OUTLINE_TOOL_SPEC,

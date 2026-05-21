@@ -8,9 +8,7 @@ import type {
 import type { KnowledgeRetrievalContext } from '../../../types'
 import { normalizeForIpc } from '../../../../../utils/serialization'
 import {
-  KB_LIST_DOCUMENTS_SCHEMA,
   KB_LIST_DOCUMENTS_TOOL_SPEC,
-  KB_SEARCH_SCHEMA,
   KB_SEARCH_TOOL_SPEC
 } from './toolSpecs'
 import { withToolLifecycle } from '../utils/lifecycle'
@@ -173,7 +171,7 @@ export const buildKbCapabilityTools = (input: {
     {
       name: KB_SEARCH_TOOL_SPEC.name,
       description: KB_SEARCH_TOOL_SPEC.promptSpec.description,
-      schema: KB_SEARCH_SCHEMA
+      schema: KB_SEARCH_TOOL_SPEC.inputSchema
     }
   )
 
@@ -245,7 +243,7 @@ export const buildKbCapabilityTools = (input: {
     {
       name: KB_LIST_DOCUMENTS_TOOL_SPEC.name,
       description: KB_LIST_DOCUMENTS_TOOL_SPEC.promptSpec.description,
-      schema: KB_LIST_DOCUMENTS_SCHEMA
+      schema: KB_LIST_DOCUMENTS_TOOL_SPEC.inputSchema
     }
   )
 

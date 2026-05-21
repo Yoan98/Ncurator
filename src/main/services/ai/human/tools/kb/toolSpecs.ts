@@ -2,6 +2,7 @@ import type { JsonObject } from '../../../../../../shared/types'
 import { z } from 'zod/v4'
 import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver } from '../utils/toolSpecUtils'
+import { jsonObjectSchema } from '../../schema'
 
 const KB_SEARCH_EXAMPLE: JsonObject = {
   queryText: 'approval denied terminal artifact requirement',
@@ -35,8 +36,55 @@ export const KB_LIST_DOCUMENTS_SCHEMA = z.object({
   documentIds: z.array(z.string()).optional()
 })
 
+const kbSearchResultItemSchema = z.object({
+  id: z.string(),
+  text: z.string(),
+  document_name: z.string(),
+  document_id: z.string().optional(),
+  source_type: z.string().optional(),
+  metadata: z.union([z.string(), jsonObjectSchema]).optional(),
+  _distance: z.number().optional(),
+  created_at: z.number().optional(),
+  _score: z.number().optional(),
+  _relevance_score: z.number().optional(),
+  document: jsonObjectSchema.optional()
+})
+
+const kbListDocumentItemSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  source_type: z.string(),
+  workspace_id: z.string().optional(),
+  file_path: z.string().optional(),
+  created_at: z.number(),
+  import_status: z.number(),
+  source_id: z.string().optional(),
+  source_url: z.string().optional(),
+  source_title: z.string().optional(),
+  normalized_source_url: z.string().optional(),
+  fetched_at: z.number().optional(),
+  updated_at: z.number().optional(),
+  last_error: z.string().optional()
+})
+
+export const KB_SEARCH_OUTPUT_SCHEMA = z.union([
+  z.array(kbSearchResultItemSchema),
+  z.object({
+    items: z.array(kbSearchResultItemSchema),
+    total: z.number(),
+    error: z.string().optional()
+  })
+])
+
+export const KB_LIST_DOCUMENTS_OUTPUT_SCHEMA = z.object({
+  items: z.array(kbListDocumentItemSchema),
+  total: z.number(),
+  error: z.string().optional()
+})
+
 export const KB_SEARCH_TOOL_SPEC: HumanToolSpec<
   z.infer<typeof KB_SEARCH_SCHEMA>,
+  z.infer<typeof KB_SEARCH_OUTPUT_SCHEMA>,
   'kb_search',
   'kb-retrieval'
 > = {
@@ -44,12 +92,13 @@ export const KB_SEARCH_TOOL_SPEC: HumanToolSpec<
   familyId: 'kb',
   skillIds: ['kb-retrieval'],
   requiresWorkspace: true,
-  schema: KB_SEARCH_SCHEMA,
+  inputSchema: KB_SEARCH_SCHEMA,
+  outputSchema: KB_SEARCH_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'kb_search',
     description:
-      '在当前用户工作区知识库中按查询词或语句检索相关内容片段，并返回命中证据及其来源文档。',
-    whenToUse: '当需要按关键词或语义语句查找用户工作区知识库中相关内容片段时使用。',
+      '能力：在当前用户工作区知识库中按查询词或语义语句检索相关内容片段。\n结果：返回命中证据、来源文档与内容块信息。\n边界：检索范围来自已经建立索引的工作区知识库内容。',
+    whenToUse: '适用于需要使用工作区知识库内容检索能力的任务。',
     examples: [
       {
         goal: '在当前工作区知识库中检索 approval denied 相关规范',
@@ -62,6 +111,7 @@ export const KB_SEARCH_TOOL_SPEC: HumanToolSpec<
 
 export const KB_LIST_DOCUMENTS_TOOL_SPEC: HumanToolSpec<
   z.infer<typeof KB_LIST_DOCUMENTS_SCHEMA>,
+  z.infer<typeof KB_LIST_DOCUMENTS_OUTPUT_SCHEMA>,
   'kb_list_documents',
   'kb-retrieval'
 > = {
@@ -69,13 +119,13 @@ export const KB_LIST_DOCUMENTS_TOOL_SPEC: HumanToolSpec<
   familyId: 'kb',
   skillIds: ['kb-retrieval'],
   requiresWorkspace: true,
-  schema: KB_LIST_DOCUMENTS_SCHEMA,
+  inputSchema: KB_LIST_DOCUMENTS_SCHEMA,
+  outputSchema: KB_LIST_DOCUMENTS_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'kb_list_documents',
     description:
-      '查询当前工作区知识库中已建立了索引的文档列表；可选按文档名做包含过滤。',
-    whenToUse:
-      '当需要先查看当前工作区里有哪些文档已经进入知识库，或需要按文档名缩小候选范围时使用。',
+      '能力：查询当前工作区知识库中已建立索引的文档列表，并支持按文档名过滤。\n结果：返回可检索文档的分页列表。\n边界：只反映已经进入知识库索引的文档。',
+    whenToUse: '适用于需要查看工作区知识库可检索文档列表的任务。',
     examples: [
       {
         goal: '先列出当前工作区中已经可被知识库检索的文档',

@@ -12,8 +12,26 @@ export const TERMINAL_RUN_SCHEMA = z.object({
   cwd: z.string().optional()
 })
 
+export const TERMINAL_RUN_OUTPUT_SCHEMA = z.object({
+  command: z.string(),
+  cwd: z.string(),
+  stdout: z.string(),
+  stderr: z.string(),
+  outputPreview: z.string(),
+  exitCode: z.number().int().nullable(),
+  timedOut: z.boolean(),
+  truncated: z.boolean(),
+  artifacts: z.array(
+    z.object({
+      path: z.string(),
+      operation: z.string()
+    })
+  )
+})
+
 export const TERMINAL_RUN_TOOL_SPEC: HumanToolSpec<
   z.infer<typeof TERMINAL_RUN_SCHEMA>,
+  z.infer<typeof TERMINAL_RUN_OUTPUT_SCHEMA>,
   'terminal_run',
   'terminal'
 > = {
@@ -21,13 +39,13 @@ export const TERMINAL_RUN_TOOL_SPEC: HumanToolSpec<
   familyId: 'terminal',
   skillIds: ['terminal'],
   requiresWorkspace: true,
-  schema: TERMINAL_RUN_SCHEMA,
+  inputSchema: TERMINAL_RUN_SCHEMA,
+  outputSchema: TERMINAL_RUN_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'terminal_run',
     description:
-      '执行一条工作区终端命令，并返回 stdout、stderr、exitCode、是否超时或截断，以及可识别的工作区文件 artifact。',
-    whenToUse:
-      `当你需要通过终端命令获取信息、检索内容、读取文件、检查环境、运行程序，或在工作区内生成或修改产物时使用。只有命中以下正式 readonly 命令形态的 terminal_run 才允许直接执行并放入 parallel：${TERMINAL_READONLY_COMMAND_GUIDANCE}。其他所有 terminal_run 都必须使用 serial，并且会触发用户审批。`,
+      `能力：执行一条当前 workspace 边界内的终端命令。\n结果：返回 stdout、stderr、exitCode、超时或截断状态，以及可识别的工作区文件产物。\n边界：符合系统只读命令策略的单条简单命令可直接执行并允许并行；当前策略包含 ${TERMINAL_READONLY_COMMAND_GUIDANCE}。其他命令按审批路径执行。`,
+    whenToUse: '适用于需要使用当前 workspace 终端命令能力的任务。',
     examples: [
       {
         goal: '列出工作目录下的文件',

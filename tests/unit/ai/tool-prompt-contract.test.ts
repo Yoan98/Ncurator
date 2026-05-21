@@ -8,7 +8,7 @@ describe('ai unit tool prompt contract', () => {
     )
     const invalidExamples = ALL_TOOL_SPECS.flatMap((spec) =>
       spec.promptSpec.examples.flatMap((example, index) => {
-        const result = spec.schema.safeParse(example.args)
+        const result = spec.inputSchema.safeParse(example.args)
         return result.success ? [] : [`${spec.name}#${String(index + 1)}`]
       })
     )

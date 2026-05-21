@@ -17,7 +17,8 @@ import {
 import { getToolSpec } from '../tools/registry'
 import {
   renderBrainOutputSchemaForPrompt,
-  renderToolSchemaForPrompt
+  renderToolInputSchemaForPrompt,
+  renderToolOutputSchemaForPrompt
 } from '../tools/schemaPromptRenderer'
 import { humanThoughtDecisionSchema } from '../schema'
 import type { HumanState, ToolPromptExample } from '../types'
@@ -39,7 +40,8 @@ const renderSkillCatalogToolSpecLine = (input: {
   spec: HumanToolSpec
   skillLabels: string[]
 }): string => {
-  const schemaText = indentLines(renderToolSchemaForPrompt(input.spec.schema), 2)
+  const inputSchemaText = indentLines(renderToolInputSchemaForPrompt(input.spec.inputSchema), 2)
+  const outputSchemaText = indentLines(renderToolOutputSchemaForPrompt(input.spec.outputSchema), 2)
   const examples = indentLines(input.spec.promptSpec.examples.map(renderToolExample).join('\n'), 2)
   const ownerSkills = input.skillLabels.join('、') || 'none'
 
@@ -48,8 +50,10 @@ const renderSkillCatalogToolSpecLine = (input: {
   - 所属技能：${ownerSkills}
   - 描述：${input.spec.promptSpec.description}
   - 适用时机：${input.spec.promptSpec.whenToUse}
-  - 调用传参：
-${schemaText}
+  - 输入结构：
+${inputSchemaText}
+  - 输出结构：
+${outputSchemaText}
   - 示例：
 ${examples}
 `.trim()

@@ -389,7 +389,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
     runtime,
     name: DOCX_OUTLINE_TOOL_SPEC.name,
     description: DOCX_OUTLINE_TOOL_SPEC.description,
-    schema: DOCX_OUTLINE_TOOL_SPEC.schema,
+    schema: DOCX_OUTLINE_TOOL_SPEC.inputSchema,
     onError: ({ message }) => {
       runtime.input.emitActivity({
         actionType: DOCX_OUTLINE_TOOL_SPEC.activityActionType!,
@@ -516,7 +516,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
     runtime,
     name: DOCX_SEARCH_TOOL_SPEC.name,
     description: DOCX_SEARCH_TOOL_SPEC.description,
-    schema: DOCX_SEARCH_TOOL_SPEC.schema,
+    schema: DOCX_SEARCH_TOOL_SPEC.inputSchema,
     onError: ({ message }) => {
       runtime.input.emitActivity({
         actionType: DOCX_SEARCH_TOOL_SPEC.activityActionType!,
@@ -696,7 +696,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
     runtime,
     name: DOCX_READ_TOOL_SPEC.name,
     description: DOCX_READ_TOOL_SPEC.description,
-    schema: DOCX_READ_TOOL_SPEC.schema,
+    schema: DOCX_READ_TOOL_SPEC.inputSchema,
     onError: ({ message }) => {
       runtime.input.emitActivity({
         actionType: DOCX_READ_TOOL_SPEC.activityActionType!,
@@ -797,7 +797,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
     runtime,
     name: DOCX_HISTORY_TOOL_SPEC.name,
     description: DOCX_HISTORY_TOOL_SPEC.description,
-    schema: DOCX_HISTORY_TOOL_SPEC.schema,
+    schema: DOCX_HISTORY_TOOL_SPEC.inputSchema,
     onError: ({ message }) => {
       runtime.input.emitActivity({
         actionType: DOCX_HISTORY_TOOL_SPEC.activityActionType!,
