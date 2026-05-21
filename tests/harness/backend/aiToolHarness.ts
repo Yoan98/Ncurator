@@ -14,6 +14,7 @@ import {
 } from 'docx'
 import { buildDocxCapabilityTools } from '../../../src/main/services/ai/human/tools/docx'
 import { releaseDocxRunSession } from '../../../src/main/services/ai/human/tools/docx/worker/docxWorkerClient'
+import { DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS } from '../../../src/main/services/ai/human/constants'
 import { buildKbCapabilityTools } from '../../../src/main/services/ai/human/tools/kb/retrievalTools'
 import { buildTerminalCapabilityTools } from '../../../src/main/services/ai/human/tools/terminal/terminalTools'
 import { createHumanRuntimeCache } from '../../../src/main/services/ai/human/node/utils/runtimeCache'
@@ -74,6 +75,9 @@ export const createDocxToolHarness = (
     taskId: runtime.taskId,
     workspaceRootPath: runtime.workspaceRoot,
     safePreviewChars: 1400,
+    modelContextWindowTokens:
+      ctx.humanRuntimeOverrides?.modelContextWindowTokens ||
+      DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS,
     emitActivity: (activity) => {
       activities.push(activity)
     }

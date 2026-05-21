@@ -294,10 +294,15 @@ const buildSearchOutputPreview = (result: ReturnType<typeof buildSearchResult>) 
   totalMatchCount: result.totalMatchCount
 })
 
-const DOCX_AI_RESULT_TOKEN_LIMIT = 12_000
+const DOCX_AI_RESULT_CONTEXT_WINDOW_RATIO = 0.1
 
 const estimateDocxResultTokens = (value: unknown): number =>
   Math.ceil(JSON.stringify(value).length / 4)
+
+const getDocxAiResultTokenLimit = (runtime: DocxToolRuntime): number => {
+  const contextWindowTokens = runtime.input.modelContextWindowTokens
+  return Math.max(1, Math.floor(contextWindowTokens * DOCX_AI_RESULT_CONTEXT_WINDOW_RATIO))
+}
 
 const buildResultTooLargeFailure = (input: {
   runtime: DocxToolRuntime
@@ -323,7 +328,7 @@ const buildResultTooLargeFailure = (input: {
       toolName: input.toolName,
       totalBlockCount: input.totalBlockCount,
       estimatedTokens: input.estimatedTokens,
-      limit: DOCX_AI_RESULT_TOKEN_LIMIT,
+      limit: getDocxAiResultTokenLimit(input.runtime),
       suggestedRanges: input.suggestedRanges
     } as JsonObject,
     resourceContext: input.runtime.buildResourceContext({
@@ -423,7 +428,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
         }
         const resultBlocks = outlineBlocks.payload.blocks.map(buildOutlineBlock)
         const estimatedTokens = estimateDocxResultTokens(resultBlocks)
-        if (estimatedTokens > DOCX_AI_RESULT_TOKEN_LIMIT) {
+        if (estimatedTokens > getDocxAiResultTokenLimit(runtime)) {
           return finalizeDocxToolFailure({
             runtime,
             failure: buildResultTooLargeFailure({

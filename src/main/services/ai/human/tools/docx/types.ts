@@ -234,6 +234,7 @@ export type DocxOpenStats = {
 
 export type DocxCapabilityToolsInput = WorkspaceCapabilityBuildInput<DocxToolContext> & {
   safePreviewChars: number
+  modelContextWindowTokens: number
 }
 
 export type SemanticDocIndexEntry = {
