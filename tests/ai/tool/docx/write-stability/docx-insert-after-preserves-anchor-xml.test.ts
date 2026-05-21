@@ -45,27 +45,28 @@ describe('ai tool docx backend', () => {
         try {
           const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
             sourcePath: 'insert-after-preserves-anchor.docx',
-            maxBlocks: 20
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 19 }],
+
           })
           const anchorBlockId =
             outline.blocks.find(
               (block) =>
-                block.type === 'paragraph' && block.preview.includes('Anchor styled sentence')
+                block.type === 'paragraph' && block.text.includes('Anchor styled sentence')
             )?.blockId || ''
 
           const anchorBefore = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: 'insert-after-preserves-anchor.docx',
-            fromBlockId: anchorBlockId
+            range: { type: 'block_ids', blockIds: [anchorBlockId] }
           })
           const inserted = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
             sourcePath: 'insert-after-preserves-anchor.docx',
             action: 'insert_after',
             anchorBlockId,
-            text: 'Inserted explanation.'
+            paragraphs: ['Inserted explanation.']
           })
           const anchorAfter = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: inserted.sourcePath,
-            fromBlockId: anchorBlockId
+            range: { type: 'block_ids', blockIds: [anchorBlockId] }
           })
 
           return {

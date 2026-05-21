@@ -5,7 +5,7 @@ import {
 } from '../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import type { DocxOutlineResult, DocxReadResult } from './testUtils'
-import { findParagraphBlockIdByText } from './testUtils'
+import { findParagraphBlockIndexByText } from './testUtils'
 
 describe('ai tool docx backend', () => {
   it('docx-read-range-contract', async () => {
@@ -15,7 +15,7 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证 docx_read_blocks(fromBlockId,toBlockId) 会返回稳定的连续 blocks 区间。',
+      description: '验证 docx_read_blocks(block_index range) 会返回稳定的连续 blocks 区间。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -30,14 +30,17 @@ describe('ai tool docx backend', () => {
         try {
           const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
             sourcePath: 'range-read.docx',
-            maxBlocks: 20
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 20 }]
           })
-          const fromBlockId = findParagraphBlockIdByText(outline.blocks, '第二段。')
-          const toBlockId = findParagraphBlockIdByText(outline.blocks, '第四段。')
+          const fromBlockIndex = findParagraphBlockIndexByText(outline.blocks, '第二段。')
+          const toBlockIndex = findParagraphBlockIndexByText(outline.blocks, '第四段。')
           const read = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: 'range-read.docx',
-            fromBlockId,
-            toBlockId
+            range: {
+              type: 'block_index',
+              fromBlockIndex,
+              toBlockIndex
+            }
           })
           return {
             outline,
@@ -49,9 +52,8 @@ describe('ai tool docx backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.read.returnedBlockCount === 3 &&
-            result.read.blocks.map((block) => block.bodyIndex).join(',') === '1,2,3' &&
-            result.read.blocks.every((block) => block.type === 'paragraph'),
+          result.read.blocks.map((block) => block.blockIndex).join(',') === '1,2,3' &&
+          result.read.blocks.every((block) => block.type === 'paragraph'),
           {
             name: 'range-read-returns-contiguous-blocks-in-order',
             message: '区间精读应按文档顺序返回连续 blocks。',

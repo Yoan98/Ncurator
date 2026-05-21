@@ -226,22 +226,44 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
           })
           const readonlyPolicy = analyzeReadonlyTerminalCommandPolicy(command)
           if (readonlyPolicy.executionPolicy !== 'readonly_allowed') {
-            const denied = buildFailure({
-              code: 'approval_denied',
-              error: `command requires approval preflight: ${readonlyPolicy.reason}`
+            const approvalBatchResult = await input.ctx.requestApprovalBatch({
+              runId: input.runId,
+              taskId: input.taskId,
+              batchId: randomUUID(),
+              stage: 'human_hand',
+              internal: true,
+              items: [
+                {
+                  itemId: randomUUID(),
+                  order: 0,
+                  toolName: TERMINAL_RUN_TOOL_SPEC.name,
+                  command,
+                  reason: readonlyPolicy.reason
+                }
+              ]
             })
-            session.fail(
-              denied,
-              denied.error,
-              undefined,
-              buildTerminalToolResult({
-                toolName: TERMINAL_RUN_TOOL_SPEC.name,
-                ok: false,
-                code: denied.code,
-                data: denied
+            const approved =
+              approvalBatchResult.accepted &&
+              approvalBatchResult.decisions.length === 1 &&
+              approvalBatchResult.decisions[0]?.action === 'approve'
+            if (!approved) {
+              const denied = buildFailure({
+                code: 'approval_denied',
+                error: `command requires approval preflight: ${readonlyPolicy.reason}`
               })
-            )
-            return denied
+              session.fail(
+                denied,
+                denied.error,
+                undefined,
+                buildTerminalToolResult({
+                  toolName: TERMINAL_RUN_TOOL_SPEC.name,
+                  ok: false,
+                  code: denied.code,
+                  data: denied
+                })
+              )
+              return denied
+            }
           }
 
           const artifactCandidates = mergeArtifactCandidates({

@@ -10,14 +10,14 @@ export type IndexedNode =
   | {
       kind: 'paragraph'
       blockId: string
-      bodyIndex: number
+      blockIndex: number
       layoutMode: DocxLayoutMode
       node: Element
     }
   | {
       kind: 'table'
       blockId: string
-      bodyIndex: number
+      blockIndex: number
       layoutMode: DocxLayoutMode
       node: Element
     }
@@ -25,7 +25,7 @@ export type IndexedNode =
       kind: 'table_cell'
       blockId: string
       tableBlockId: string
-      bodyIndex: number
+      blockIndex: number
       layoutMode: DocxLayoutMode
       row: number
       col: number

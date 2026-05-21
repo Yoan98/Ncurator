@@ -88,7 +88,7 @@ describe('ai tool docx backend', () => {
         try {
           const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
             sourcePath: 'mixed-format.docx',
-            maxBlocks: 50
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 49 }]
           })
 
           const mixedParagraphBlockId = findParagraphBlockIdByText(
@@ -114,11 +114,11 @@ describe('ai tool docx backend', () => {
           })
           const preservedParagraph = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: renamedCell.sourcePath,
-            fromBlockId: mixedParagraphBlockId
+            range: { type: 'block_ids', blockIds: [mixedParagraphBlockId] }
           })
           const updatedCell = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: renamedCell.sourcePath,
-            fromBlockId: ownerCellBlockId
+            range: { type: 'block_ids', blockIds: [ownerCellBlockId] }
           })
 
           return {

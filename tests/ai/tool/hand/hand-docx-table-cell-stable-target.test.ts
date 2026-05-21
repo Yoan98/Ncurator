@@ -35,7 +35,8 @@ describe('ai tool hand backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
-          sourcePath: 'table-cell-stable-target.docx'
+          sourcePath: 'table-cell-stable-target.docx',
+          ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 49 }]
         })
         await harness.release()
 
@@ -76,7 +77,7 @@ describe('ai tool hand backend', () => {
                         sourcePath: 'table-cell-stable-target.docx',
                         action: 'insert_before',
                         anchorBlockId,
-                        text: '新增说明段落'
+                        paragraphs: ['新增说明段落']
                       }
                     },
                     {
@@ -120,10 +121,10 @@ describe('ai tool hand backend', () => {
             result.state.execution.pendingDecisionHint === undefined &&
             typeof result.state.execution.lastToolResults?.[0]?.data === 'object' &&
             result.state.execution.lastToolResults?.[0]?.data !== null &&
-            search.matches.some((match) => match.blockType === 'table_cell' && match.text === 'Bob'),
+            search.matches.some((match) => match.type === 'table_cell' && match.text === 'Bob'),
           {
             name: 'table-cell-stable-target-resolves-after-structure-shift',
-            message: '前序插入导致 bodyIndex 漂移后，旧 cellBlockId 仍应通过 stable locator 恢复到新表格 cell，而不是误落到 table body block 或直接跳过。',
+            message: '前序插入导致 blockIndex 漂移后，旧 cellBlockId 仍应通过 stable locator 恢复到新表格 cell，而不是误落到 table block 或直接跳过。',
             data: {
               lastToolResults: result.state.execution.lastToolResults,
               search

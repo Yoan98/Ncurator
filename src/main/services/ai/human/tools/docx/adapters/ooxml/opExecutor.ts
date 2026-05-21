@@ -543,10 +543,10 @@ const structuralOpTargetRank = (
 ): number => {
   if (op.type === 'insert_after' || op.type === 'insert_before') {
     const node = index.nodesById.get(op.anchorBlockId)
-    return typeof node?.bodyIndex === 'number' ? node.bodyIndex : -1
+    return typeof node?.blockIndex === 'number' ? node.blockIndex : -1
   }
   const node = index.nodesById.get(op.blockId)
-  return typeof node?.bodyIndex === 'number' ? node.bodyIndex : -1
+  return typeof node?.blockIndex === 'number' ? node.blockIndex : -1
 }
 
 const applyReplaceTextOp = async (

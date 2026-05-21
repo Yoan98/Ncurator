@@ -16,7 +16,7 @@ type PositionedOutlineResult = {
     blockId: string
     type: 'paragraph' | 'table' | 'table_cell'
     layoutMode?: 'normal' | 'positioned'
-    preview: string
+    text: string
   }>
 }
 
@@ -40,7 +40,7 @@ describe('ai tool docx backend', () => {
           const sourcePath = runtime.getFixtureWorkspacePath(POSITIONED_FIXTURE_PATH)
           const outline = await harness.invoke<PositionedOutlineResult>('docx_outline', {
             sourcePath,
-            maxBlocks: 400
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 80 }]
           })
           const positionedParagraph = outline.blocks.find(
             (block) => block.type === 'paragraph' && block.layoutMode === 'positioned'
@@ -51,7 +51,7 @@ describe('ai tool docx backend', () => {
 
           const readPositionedParagraph = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: outline.sourcePath,
-            fromBlockId: positionedParagraph.blockId
+            range: { type: 'block_ids', blockIds: [positionedParagraph.blockId] }
           })
           const paragraphText =
             readPositionedParagraph.blocks[0]?.type === 'paragraph'
@@ -72,7 +72,7 @@ describe('ai tool docx backend', () => {
               sourcePath: outline.sourcePath,
               action: 'insert_after',
               anchorBlockId: positionedParagraph.blockId,
-              text: '补充说明：这里不应自动插入。'
+              paragraphs: ['补充说明：这里不应自动插入。']
             }
           )
           const textEditFailure = await harness.invoke<DocxFailureResult>('docx_text_edit', {

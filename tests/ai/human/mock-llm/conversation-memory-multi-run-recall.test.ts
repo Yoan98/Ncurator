@@ -151,7 +151,8 @@ describe('ai human mock-llm backend', () => {
               ({ user }) => {
                 promptChecks = {
                   summarySeen:
-                    user.includes('<conversation_summary>') &&
+                    user.includes('<conversation_history>') &&
+                    user.includes('<summary>') &&
                     user.includes('回滚负责人候选已更新为 Bob') &&
                     user.includes('上线窗口冲突待确认') &&
                     user.includes('延期确认记录'),
@@ -159,8 +160,7 @@ describe('ai human mock-llm backend', () => {
                     user.includes('<recent_turns>') &&
                     user.includes('上线窗口和审批情况有更新吗？') &&
                     user.includes('风险跟踪草稿'),
-                  oldStateCleared:
-                    !user.includes('候选负责人是 Alice，但审批还没完成。')
+                  oldStateCleared: !String(savedMemory?.summary || '').includes('Alice，审批尚未完成')
                 }
                 return buildCompleteTaskDecision({
                   summary: '当前负责人候选是 Bob，审批未完成，且上线窗口冲突待确认。下一步先确认窗口，再推进审批。'

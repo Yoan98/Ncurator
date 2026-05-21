@@ -31,17 +31,17 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
-            sourcePath: 'working-draft-delete.docx'
+            sourcePath: 'working-draft-delete.docx',
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 19 }]
           })
           const deleteBlockId =
             outline.blocks.find(
-              (block) => block.type === 'paragraph' && block.preview.includes('这段需要删除')
+              (block) => block.type === 'paragraph' && block.text.includes('这段需要删除')
             )?.blockId || ''
 
-          const deleted = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
+          const deleted = await harness.invoke<DocxMutationResult>('docx_delete', {
             sourcePath: 'working-draft-delete.docx',
-            action: 'delete',
-            blockId: deleteBlockId
+            blockIds: [deleteBlockId]
           })
           const deletedSearch = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: deleted.sourcePath,

@@ -38,12 +38,13 @@ describe('ai tool hand backend', () => {
           learnedSkillIds: ['docx-read', 'docx-write'],
           toolName: 'docx_outline',
           args: {
-            sourcePath: 'invalid-target.docx'
+            sourcePath: 'invalid-target.docx',
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 19 }]
           }
         })
         const outlineData = initialOutline.data as DocxOutlineResult
         const alphaBlockId =
-          outlineData.blocks.find((block) => block.type === 'paragraph' && block.preview.includes('Alpha'))?.blockId || ''
+          outlineData.blocks.find((block) => block.type === 'paragraph' && block.text.includes('Alpha'))?.blockId || ''
 
         const handNode = createHandNode({ ctx, cache })
         const state = await handNode({
@@ -69,20 +70,19 @@ describe('ai tool hand backend', () => {
                   mode: 'serial',
                   calls: [
                     {
-                      toolName: 'docx_paragraph_edit',
+                      toolName: 'docx_delete',
                       args: {
                         sourcePath: 'invalid-target.docx',
-                        action: 'delete',
-                        blockId: alphaBlockId
+                        blockIds: [alphaBlockId]
                       }
                     },
                     {
-                      toolName: 'docx_paragraph_edit',
+                      toolName: 'docx_text_edit',
                       args: {
                         sourcePath: 'invalid-target.docx',
-                        action: 'replace_text',
-                        blockId: alphaBlockId,
-                        text: 'Should fail'
+                        query: 'Alpha',
+                        replace: 'Should fail',
+                        blockIds: [alphaBlockId]
                       }
                     }
                   ]

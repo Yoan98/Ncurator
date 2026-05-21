@@ -6,43 +6,39 @@ export type DocxOutlineResult = {
   summary: string
   sourcePath: string
   currentRevisionRef: string
-  returnedBlockCount: number
-  totalBlockCount: number
-  fromBodyIndex?: number
   blocks: Array<
     | {
         blockId: string
         type: 'paragraph'
-        bodyIndex: number
-        previousBodyBlockId?: string
-        nextBodyBlockId?: string
+        blockIndex: number
+        previousBlockId?: string
+        nextBlockId?: string
         style?: string
         headingLevel?: number
-        preview: string
+        text: string
       }
     | {
         blockId: string
         type: 'table'
-        bodyIndex: number
-        previousBodyBlockId?: string
-        nextBodyBlockId?: string
+        blockIndex: number
+        previousBlockId?: string
+        nextBlockId?: string
         rows?: number
         cols?: number
-        preview: string
+        text: string
       }
     | {
         blockId: string
         type: 'table_cell'
-        bodyIndex: number
-        previousBodyBlockId?: string
-        nextBodyBlockId?: string
+        blockIndex: number
+        previousBlockId?: string
+        nextBlockId?: string
         tableBlockId?: string
         row?: number
         col?: number
-        preview: string
+        text: string
       }
   >
-  truncated: boolean
 }
 
 export type DocxSearchResult = {
@@ -56,14 +52,14 @@ export type DocxSearchResult = {
   appliedAliases: Array<{ from: string; to: string }>
   totalMatchCount: number
   returnedMatchCount: number
-  truncated: boolean
   matches: Array<{
     blockId: string
-    blockType: 'paragraph' | 'table' | 'table_cell'
-    bodyIndex: number
-    previousBodyBlockId?: string
-    nextBodyBlockId?: string
+    type: 'paragraph' | 'table' | 'table_cell'
+    blockIndex: number
+    previousBlockId?: string
+    nextBlockId?: string
     tableBlockId?: string
+    matchedText: string
     text: string
     offsets?: Array<{ start: number; end: number }>
     score?: number
@@ -76,16 +72,15 @@ export type DocxReadResult = {
   summary: string
   sourcePath: string
   currentRevisionRef: string
-  fromBlockId: string
-  toBlockId: string
-  returnedBlockCount: number
+  fromBlockIndex?: number
+  toBlockIndex?: number
   blocks: Array<
     | {
         blockId: string
         type: 'paragraph'
-        bodyIndex: number
-        previousBodyBlockId?: string
-        nextBodyBlockId?: string
+        blockIndex: number
+        previousBlockId?: string
+        nextBlockId?: string
         text: string
         style?: string
         headingLevel?: number
@@ -100,12 +95,12 @@ export type DocxReadResult = {
     | {
         blockId: string
         type: 'table'
-        bodyIndex: number
-        previousBodyBlockId?: string
-        nextBodyBlockId?: string
+        blockIndex: number
+        previousBlockId?: string
+        nextBlockId?: string
         rows: number
         cols: number
-        preview: string
+        text: string
         cells: Array<{
           blockId: string
           row: number
@@ -113,9 +108,9 @@ export type DocxReadResult = {
           paragraphs: Array<{
             blockId: string
             type: 'paragraph'
-            bodyIndex: number
-            previousBodyBlockId?: string
-            nextBodyBlockId?: string
+            blockIndex: number
+            previousBlockId?: string
+            nextBlockId?: string
             style: string
             text: string
             runs: Array<{
@@ -131,9 +126,9 @@ export type DocxReadResult = {
     | {
         blockId: string
         type: 'table_cell'
-        bodyIndex: number
-        previousBodyBlockId?: string
-        nextBodyBlockId?: string
+        blockIndex: number
+        previousBlockId?: string
+        nextBlockId?: string
         tableBlockId: string
         row: number
         col: number
@@ -141,9 +136,9 @@ export type DocxReadResult = {
         paragraphs: Array<{
           blockId: string
           type: 'paragraph'
-          bodyIndex: number
-          previousBodyBlockId?: string
-          nextBodyBlockId?: string
+          blockIndex: number
+          previousBlockId?: string
+          nextBlockId?: string
           style: string
           text: string
           runs: Array<{
@@ -229,8 +224,17 @@ export const findParagraphBlockIdByText = (
 ): string =>
   findOutlineBlock(
     blocks,
-    (block) => block.type === 'paragraph' && block.preview.includes(textFragment)
+    (block) => block.type === 'paragraph' && block.text.includes(textFragment)
   ).blockId
+
+export const findParagraphBlockIndexByText = (
+  blocks: readonly DocxOutlineResult['blocks'],
+  textFragment: string
+): number =>
+  findOutlineBlock(
+    blocks,
+    (block) => block.type === 'paragraph' && block.text.includes(textFragment)
+  ).blockIndex
 
 export const findTableBlockId = (blocks: readonly DocxOutlineResult['blocks']): string =>
   findOutlineBlock(blocks, (block) => block.type === 'table').blockId
@@ -241,5 +245,14 @@ export const findTableCellBlockIdByText = (
 ): string =>
   findOutlineBlock(
     blocks,
-    (block) => block.type === 'table_cell' && block.preview.includes(textFragment)
+    (block) => block.type === 'table_cell' && block.text.includes(textFragment)
   ).blockId
+
+export const findTableCellBlockIndexByText = (
+  blocks: readonly DocxOutlineResult['blocks'],
+  textFragment: string
+): number =>
+  findOutlineBlock(
+    blocks,
+    (block) => block.type === 'table_cell' && block.text.includes(textFragment)
+  ).blockIndex

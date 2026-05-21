@@ -42,7 +42,8 @@ describe('ai tool docx backend', () => {
         try {
           const outlineBefore = await harness.invoke<DocxOutlineResult>('docx_outline', {
             sourcePath: 'structural-op-behavior.docx',
-            maxBlocks: 50
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 49 }],
+
           })
           const anchorBlockId = findParagraphBlockIdByText(outlineBefore.blocks, 'Anchor text.')
 
@@ -53,14 +54,15 @@ describe('ai tool docx backend', () => {
           })
           const outlineAfterReplace = await harness.invoke<DocxOutlineResult>('docx_outline', {
             sourcePath: replaceResult.sourcePath,
-            maxBlocks: 50
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 49 }],
+
           })
 
           const insertParagraph = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
             sourcePath: replaceResult.sourcePath,
             action: 'insert_after',
             anchorBlockId,
-            text: 'Extra explanation paragraph.'
+            paragraphs: ['Extra explanation paragraph.']
           })
           const paragraphBlockId = insertParagraph.createdBlocks?.[0]?.blockId || anchorBlockId
           const insertTable = await harness.invoke<DocxMutationResult>('docx_table_edit', {
@@ -71,7 +73,8 @@ describe('ai tool docx backend', () => {
           })
           const outlineAfterInsert = await harness.invoke<DocxOutlineResult>('docx_outline', {
             sourcePath: insertTable.sourcePath,
-            maxBlocks: 80
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 79 }],
+
           })
 
           return {
@@ -108,7 +111,7 @@ describe('ai tool docx backend', () => {
             result.insertTable.changedBlocks.some((block) => block.action === 'insert_after') &&
             result.outlineAfterInsert.blocks.some(
               (block) =>
-                block.type === 'paragraph' && block.preview.includes('Extra explanation paragraph.')
+                block.type === 'paragraph' && block.text.includes('Extra explanation paragraph.')
             ) &&
             result.outlineAfterInsert.blocks.some((block) => block.type === 'table') &&
             result.outlineAfterInsert.blocks.length > result.outlineAfterReplace.blocks.length,

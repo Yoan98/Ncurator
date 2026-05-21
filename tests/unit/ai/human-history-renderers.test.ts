@@ -168,8 +168,10 @@ describe('ai unit human history renderers', () => {
                 toolName: 'docx_read_blocks',
                 args: {
                   sourcePath: 'graphics.docx',
-                  fromBlockId: 'b:19',
-                  toBlockId: 'b:26'
+                  range: {
+                    type: 'block_ids',
+                    blockIds: ['b:23', 'b:25']
+                  }
                 }
               }
             ]
@@ -184,8 +186,10 @@ describe('ai unit human history renderers', () => {
               toolName: 'docx_read_blocks',
               args: {
                 sourcePath: 'graphics.docx',
-                fromBlockId: 'b:19',
-                toBlockId: 'b:26'
+                range: {
+                  type: 'block_ids',
+                  blockIds: ['b:23', 'b:25']
+                }
               }
             }
           ]
@@ -200,20 +204,19 @@ describe('ai unit human history renderers', () => {
               code: 'ok',
               sourcePath: 'graphics.docx',
               currentRevisionRef: 'v3',
-              fromBlockId: 'b:19',
-              toBlockId: 'b:26',
-              returnedBlockCount: 2,
+              fromBlockIndex: 23,
+              toBlockIndex: 25,
               blocks: [
                 {
                   blockId: 'b:23',
                   type: 'paragraph',
-                  bodyIndex: 23,
+                  blockIndex: 23,
                   text: '通过模拟一个像素内多个像素点。'
                 },
                 {
                   blockId: 'b:25',
                   type: 'paragraph',
-                  bodyIndex: 25,
+                  blockIndex: 25,
                   text: '进行低通滤波，过滤掉高频信号，以达到反走样。'
                 }
               ]
@@ -231,7 +234,7 @@ describe('ai unit human history renderers', () => {
 
     expect(text).toContain('多个像素点')
     expect(text).toContain('低通滤波')
-    expect(text).not.toContain('fromBlockId')
+    expect(text).not.toContain('legacy block id boundary')
   })
 
   it('renders actual docx write content for mouth result summarization', () => {
@@ -251,12 +254,12 @@ describe('ai unit human history renderers', () => {
             mode: 'serial',
             calls: [
               {
-                toolName: 'docx_paragraph_edit',
+                toolName: 'docx_text_edit',
                 args: {
                   sourcePath: 'prd.docx',
-                  action: 'replace_text',
-                  blockId: 'b:31',
-                  text: '每个探究环节应包含四个核心设计要素：探究目标、探究素材、学生活动设计、环节推进条件。'
+                  blockIds: ['b:31'],
+                  query: '每个探究环节应补充完整。',
+                  replace: '每个探究环节应包含四个核心设计要素：探究目标、探究素材、学生活动设计、环节推进条件。'
                 }
               },
               {
@@ -281,12 +284,12 @@ describe('ai unit human history renderers', () => {
           mode: 'serial',
           calls: [
             {
-              toolName: 'docx_paragraph_edit',
+              toolName: 'docx_text_edit',
               args: {
                 sourcePath: 'prd.docx',
-                action: 'replace_text',
-                blockId: 'b:31',
-                text: '每个探究环节应包含四个核心设计要素：探究目标、探究素材、学生活动设计、环节推进条件。'
+                blockIds: ['b:31'],
+                query: '每个探究环节应补充完整。',
+                replace: '每个探究环节应包含四个核心设计要素：探究目标、探究素材、学生活动设计、环节推进条件。'
               }
             },
             {
@@ -306,13 +309,13 @@ describe('ai unit human history renderers', () => {
         },
         toolResults: [
           {
-            toolName: 'docx_paragraph_edit',
+            toolName: 'docx_text_edit',
             ok: true,
             code: 'ok',
             data: {
               ok: true,
               code: 'ok',
-              summary: '段落replace_text 完成，共 1 处变更'
+              summary: '文本替换完成，共 1 处变更'
             }
           },
           {
@@ -335,7 +338,7 @@ describe('ai unit human history renderers', () => {
       compactions: []
     })
 
-    expect(text).toContain('`docx_paragraph_edit` 已完成实际写入。')
+    expect(text).toContain('`docx_text_edit` 已完成实际写入。')
     expect(text).toContain('每个探究环节应包含四个核心设计要素')
     expect(text).toContain('`docx_table_edit` 已完成实际写入。')
     expect(text).toContain('设计要素')

@@ -94,6 +94,7 @@ export type DocxToolFailure = {
   summary: string
   error: string
   warnings: string[]
+  decisionHint?: JsonObject
   resourceContext?: DocxToolResourceContext
 }
 
@@ -108,6 +109,7 @@ export type DocxToolRuntime = {
     code: DocxToolResultCode
     error: string
     warnings?: string[]
+    decisionHint?: JsonObject
     draftDocId?: string
     resourceContext?: DocxToolResourceContext
   }) => DocxToolFailure
@@ -214,8 +216,8 @@ export type DocxToolRuntime = {
   buildPostWriteReadback: (input: {
     docId: string
     regions: Array<{
-      fromBlockId: string
-      toBlockId: string
+      fromBlockIndex: number
+      toBlockIndex: number
     }>
   }) => Promise<DocxPostWriteReadback>
 }
@@ -248,6 +250,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     code: DocxToolResultCode
     error: string
     warnings?: string[]
+    decisionHint?: JsonObject
     resourceContext?: DocxToolResourceContext
   }): DocxToolFailure => ({
     ok: false,
@@ -255,6 +258,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     summary: params.error,
     error: params.error,
     warnings: params.warnings || [],
+    decisionHint: params.decisionHint,
     resourceContext: params.resourceContext
   })
 
@@ -264,6 +268,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     code: DocxToolResultCode
     error: string
     warnings?: string[]
+    decisionHint?: JsonObject
     draftDocId?: string
     resourceContext?: DocxToolResourceContext
   }): DocxToolFailure => {
@@ -271,6 +276,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       code: params.code,
       error: params.error,
       warnings: params.warnings,
+      decisionHint: params.decisionHint,
       resourceContext: params.resourceContext
     })
     toolEvents.emitResult({
@@ -458,7 +464,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       nodeId: input.node.nodeId,
       sourceBlockId: input.node.sourceBlockId,
       currentBlockIdAtResolve: input.node.currentBlockId || input.node.blockId || input.node.sourceBlockId,
-      bodyIndexAtResolve: input.node.bodyIndex,
+      blockIndexAtResolve: input.node.blockIndex,
       previousVisibleNodeId,
       nextVisibleNodeId,
       kind: input.field === 'cellBlockId' ? 'table_cell' : input.node.kind,
@@ -768,7 +774,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
   const cacheOutline = (
     session: DocxReadSession | undefined,
     key: string,
-    value: { blocks: DocxOutlineBlock[]; truncated: boolean }
+    value: { blocks: DocxOutlineBlock[] }
   ) => {
     if (!session) return
     session.cache.outlineByCacheKey.set(key, value)
@@ -858,25 +864,30 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     return session
   }
 
-  const fetchOutlinePage = async (inputValue: {
+  const fetchOutlineBlocks = async (inputValue: {
     session?: DocxReadSession
     docId: string
-    fromBodyIndex?: number
-    maxBlocks: number
+    ranges: Array<{
+      fromBlockIndex: number
+      toBlockIndex: number
+    }>
     includeTables: boolean
     includeCells: boolean
-  }): Promise<{ blocks: DocxOutlineBlock[]; truncated: boolean }> => {
-    const cacheKey = `${String(inputValue.fromBodyIndex || 0)}:${String(inputValue.maxBlocks)}:${inputValue.includeTables ? '1' : '0'}:${inputValue.includeCells ? '1' : '0'}`
+  }): Promise<DocxOutlineBlock[]> => {
+    const cacheKey = JSON.stringify({
+      ranges: inputValue.ranges,
+      includeTables: inputValue.includeTables,
+      includeCells: inputValue.includeCells
+    })
     const cached = inputValue.session?.cache.outlineByCacheKey.get(cacheKey)
     if (cached) {
-      return cached
+      return cached.blocks
     }
     const outlineResponse = await callWorker({
       action: 'outline',
       payload: {
         docId: inputValue.docId,
-        fromBodyIndex: inputValue.fromBodyIndex,
-        maxBlocks: inputValue.maxBlocks,
+        ranges: inputValue.ranges,
         includeTables: inputValue.includeTables,
         includeCells: inputValue.includeCells
       }
@@ -888,42 +899,10 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       throw new Error('worker protocol mismatch (outline)')
     }
     const result = {
-      blocks: outlineResponse.payload.blocks,
-      truncated: outlineResponse.payload.truncated
+      blocks: outlineResponse.payload.blocks
     }
     cacheOutline(inputValue.session || undefined, cacheKey, result)
-    return result
-  }
-
-  const fetchAllOutlineBlocks = async (inputValue: {
-    session?: DocxReadSession
-    docId: string
-    includeTables: boolean
-    includeCells: boolean
-  }): Promise<DocxOutlineBlock[]> => {
-    const pageSize = 1000
-    const blocks: DocxOutlineBlock[] = []
-    let fromBodyIndex = 0
-    while (true) {
-      const page = await fetchOutlinePage({
-        session: inputValue.session,
-        docId: inputValue.docId,
-        fromBodyIndex,
-        maxBlocks: pageSize,
-        includeTables: inputValue.includeTables,
-        includeCells: inputValue.includeCells
-      })
-      if (page.blocks.length === 0) {
-        break
-      }
-      blocks.push(...page.blocks)
-      if (!page.truncated) {
-        break
-      }
-      const lastBlock = page.blocks[page.blocks.length - 1]
-      fromBodyIndex = (lastBlock?.bodyIndex || fromBodyIndex) + 1
-    }
-    return blocks
+    return result.blocks
   }
 
   const fetchDetailedBlocksByIds = async (
@@ -970,9 +949,10 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     docId: string,
     session?: DocxReadSession
   ): Promise<DocxReplaySnapshot> => {
-    const outlineBlocks = await fetchAllOutlineBlocks({
+    const outlineBlocks = await fetchOutlineBlocks({
       session,
       docId,
+      ranges: [{ fromBlockIndex: 0, toBlockIndex: Number.MAX_SAFE_INTEGER }],
       includeTables: true,
       includeCells: true
     })
@@ -1518,15 +1498,14 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     const cached = state.semanticIndexByDocId.get(docId)
     if (cached) return cached
 
-    const outline = await fetchOutlinePage({
+    const outline = await fetchOutlineBlocks({
       docId,
-      fromBodyIndex: 0,
-      maxBlocks: 2000,
+      ranges: [{ fromBlockIndex: 0, toBlockIndex: Number.MAX_SAFE_INTEGER }],
       includeTables: true,
       includeCells: true
     })
 
-    const searchableBlocks = outline.blocks.filter(isSemanticSearchableBlock)
+    const searchableBlocks = outline.filter(isSemanticSearchableBlock)
     const texts = searchableBlocks.map((block) => block.text.trim()).filter(Boolean)
     const blocks = searchableBlocks.filter((block) => block.text.trim().length > 0)
 
@@ -1548,9 +1527,9 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       entries: blocks.map((block, indexRow) => ({
         blockId: block.blockId,
         blockType: block.type,
-        bodyIndex: block.bodyIndex,
-        previousBodyBlockId: block.previousBodyBlockId,
-        nextBodyBlockId: block.nextBodyBlockId,
+        blockIndex: block.blockIndex,
+        previousBlockId: block.previousBlockId,
+        nextBlockId: block.nextBlockId,
         tableBlockId: block.type === 'table_cell' ? block.tableBlockId : undefined,
         text: block.text,
         embedding: rows[indexRow]
@@ -1576,29 +1555,33 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
   const buildPostWriteReadback = async (input: {
     docId: string
     regions: Array<{
-      fromBlockId: string
-      toBlockId: string
+      fromBlockIndex: number
+      toBlockIndex: number
     }>
   }): Promise<DocxPostWriteReadback> => {
     const readbackRegions: DocxPostWriteReadbackRegion[] = []
     for (const region of input.regions) {
       const response = await callWorker({
-        action: 'get_blocks_by_range',
+        action: 'get_blocks_by_block_index_range',
         payload: {
           docId: input.docId,
-          fromBlockId: region.fromBlockId,
-          toBlockId: region.toBlockId
+          fromBlockIndex: region.fromBlockIndex,
+          toBlockIndex: region.toBlockIndex
         }
       })
       if (!response.ok) {
         throw new Error(response.error)
       }
-      if (response.payload.action !== 'get_blocks_by_range') {
-        throw new Error('worker protocol mismatch (get_blocks_by_range)')
+      if (response.payload.action !== 'get_blocks_by_block_index_range') {
+        throw new Error('worker protocol mismatch (get_blocks_by_block_index_range)')
       }
+      const startBlockId = response.payload.blocks[0]?.blockId
+      const endBlockId = response.payload.blocks.at(-1)?.blockId
       readbackRegions.push({
-        fromBlockId: region.fromBlockId,
-        toBlockId: region.toBlockId,
+        startBlockId: startBlockId || '',
+        fromBlockIndex: region.fromBlockIndex,
+        endBlockId: endBlockId || '',
+        toBlockIndex: region.toBlockIndex,
         blocks: response.payload.blocks
       })
     }

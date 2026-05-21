@@ -38,7 +38,8 @@ describe('ai tool hand backend', () => {
         const harness = createDocxToolHarness(runtime)
         const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
           sourcePath: 'table-mixed-chain.docx',
-          maxBlocks: 20
+          ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 19 }],
+
         })
         await harness.release()
 
@@ -79,7 +80,7 @@ describe('ai tool hand backend', () => {
                         sourcePath: 'table-mixed-chain.docx',
                         action: 'insert_before',
                         anchorBlockId,
-                        text: '补充说明：供应商附件仍待法务确认。'
+                        paragraphs: ['补充说明：供应商附件仍待法务确认。']
                       }
                     },
                     {
@@ -97,7 +98,7 @@ describe('ai tool hand backend', () => {
                         sourcePath: 'table-mixed-chain.docx',
                         action: 'insert_after',
                         anchorBlockId,
-                        text: '结论：本周先完成补件闭环，再推进外发。'
+                        paragraphs: ['结论：本周先完成补件闭环，再推进外发。']
                       }
                     }
                   ]
@@ -115,7 +116,7 @@ describe('ai tool hand backend', () => {
           toolName: 'docx_outline',
           args: {
             sourcePath: 'table-mixed-chain.docx',
-            maxBlocks: 20
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 19 }]
           }
         })
 
@@ -128,7 +129,7 @@ describe('ai tool hand backend', () => {
         const outline = result.updatedOutline.data as DocxOutlineResult
         const paragraphPreviews = outline.blocks
           .filter((block) => block.type === 'paragraph')
-          .map((block) => block.preview)
+          .map((block) => block.text)
         const supplementIndex = paragraphPreviews.indexOf('补充说明：供应商附件仍待法务确认。')
         const anchorIndex = paragraphPreviews.indexOf('二、风险跟进说明')
         const conclusionIndex = paragraphPreviews.indexOf('结论：本周先完成补件闭环，再推进外发。')
@@ -144,7 +145,7 @@ describe('ai tool hand backend', () => {
             conclusionIndex !== -1 &&
             supplementIndex < anchorIndex &&
             conclusionIndex > anchorIndex &&
-            outline.blocks.some((block) => block.type === 'table_cell' && block.preview === 'Bob'),
+            outline.blocks.some((block) => block.type === 'table_cell' && block.text === 'Bob'),
           {
             name: 'table-mixed-chain-preserves-direction-and-table-target',
             message:

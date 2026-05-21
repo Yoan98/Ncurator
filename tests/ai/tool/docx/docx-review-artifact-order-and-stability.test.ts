@@ -42,14 +42,14 @@ describe('ai tool docx backend', () => {
           })
           const anchorBlockId =
             outline.blocks.find(
-              (block) => block.type === 'paragraph' && block.preview.includes('达到反走样')
+              (block) => block.type === 'paragraph' && block.text.includes('达到反走样')
             )?.blockId || ''
 
           await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
             sourcePath: 'review-order.docx',
             action: 'insert_after',
             anchorBlockId,
-            text: '反走样可以理解为通过平滑高频锯齿来减少边缘突变。'
+            paragraphs: ['反走样可以理解为通过平滑高频锯齿来减少边缘突变。']
           })
           await harness.invoke<DocxMutationResult>('docx_table_edit', {
             sourcePath: 'review-order.docx',
@@ -76,7 +76,7 @@ describe('ai tool docx backend', () => {
             .filter((block) => block.type !== 'table_cell')
             .map((block) => ({
               type: block.type,
-              text: block.type === 'table' ? block.preview : block.text
+              text: block.type === 'table' ? block.text : block.text
             }))
 
           return {

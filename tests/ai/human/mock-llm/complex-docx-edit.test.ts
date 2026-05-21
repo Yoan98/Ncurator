@@ -67,7 +67,7 @@ describe('ai human mock-llm backend', () => {
                   toolName: 'docx_read_blocks',
                   args: {
                     sourcePath: 'complex-edit.docx',
-                    fromBlockId: applyResult.changedBlocks[0]!.blockId
+                    range: { type: 'block_ids', blockIds: [applyResult.changedBlocks[0]!.blockId] }
                   },
                   summary: '精读新内容'
                 })
@@ -189,7 +189,7 @@ describe('ai human mock-llm backend', () => {
                   toolName: 'docx_outline',
                   args: {
                     sourcePath: 'complex-structured-edit.docx',
-                    maxBlocks: 60
+                    ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 59 }]
                   },
                   summary: '读取结构提纲'
                 })
@@ -209,7 +209,7 @@ describe('ai human mock-llm backend', () => {
                     sourcePath: 'complex-structured-edit.docx',
                     action: 'insert_after',
                     anchorBlockId,
-                    text: '补充说明：反走样通过平滑边缘像素来减轻锯齿感。'
+                    paragraphs: ['补充说明：反走样通过平滑边缘像素来减轻锯齿感。']
                   },
                   summary: '插入补充说明'
                 })
@@ -227,7 +227,7 @@ describe('ai human mock-llm backend', () => {
                   toolName: 'docx_outline',
                   args: {
                     sourcePath: 'complex-structured-edit.docx',
-                    maxBlocks: 80
+                    ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 79 }]
                   },
                   summary: '读回新增段落'
                 })
@@ -260,7 +260,7 @@ describe('ai human mock-llm backend', () => {
                   toolName: 'docx_outline',
                   args: {
                     sourcePath: 'complex-structured-edit.docx',
-                    maxBlocks: 80
+                    ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 79 }]
                   },
                   summary: '复查新版本结构'
                 })
@@ -318,7 +318,7 @@ describe('ai human mock-llm backend', () => {
             outlineResult.blocks.some(
               (block) =>
                 block.type === 'paragraph' &&
-                block.preview.includes('补充说明：反走样通过平滑边缘像素来减轻锯齿感。')
+                block.text.includes('补充说明：反走样通过平滑边缘像素来减轻锯齿感。')
             ) &&
             outlineResult.blocks.some((block) => block.type === 'table'),
           {

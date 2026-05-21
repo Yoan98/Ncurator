@@ -31,7 +31,7 @@ describe('ai tool docx backend', () => {
           })
           const readBefore = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath,
-            fromBlockId: searchBefore.matches[0]!.blockId
+            range: { type: 'block_ids', blockIds: [searchBefore.matches[0]!.blockId] }
           })
           const applied = await harness.invoke<DocxMutationResult>('docx_text_edit', {
             sourcePath,
@@ -44,7 +44,7 @@ describe('ai tool docx backend', () => {
           })
           const readAfter = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: applied.sourcePath,
-            fromBlockId: searchAfter.matches[0]!.blockId
+            range: { type: 'block_ids', blockIds: [searchAfter.matches[0]!.blockId] }
           })
           return {
             searchBefore,
@@ -78,7 +78,7 @@ describe('ai tool docx backend', () => {
         runtime.assertThat(
           result.searchAfter.matches.length === 1 &&
             result.readAfter.blocks.length === 1 &&
-            result.readAfter.blocks[0]?.bodyIndex === result.readBefore.blocks[0]?.bodyIndex &&
+            result.readAfter.blocks[0]?.blockIndex === result.readBefore.blocks[0]?.blockIndex &&
             result.applied.warnings.length === 0,
           {
             name: 'minimal-edit-flow-remains-readable-after-edit',

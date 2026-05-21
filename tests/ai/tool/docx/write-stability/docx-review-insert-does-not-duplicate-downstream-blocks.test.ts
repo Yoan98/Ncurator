@@ -39,17 +39,18 @@ describe('ai tool docx backend', () => {
         try {
           const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
             sourcePath: 'review-insert-no-duplicate.docx',
-            maxBlocks: 30
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 29 }],
+
           })
           const anchorBlockId =
             outline.blocks.find(
-              (block) => block.type === 'paragraph' && block.preview.includes('概念引导。')
+              (block) => block.type === 'paragraph' && block.text.includes('概念引导。')
             )?.blockId || ''
           const insertedParagraph = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
             sourcePath: 'review-insert-no-duplicate.docx',
             action: 'insert_after',
             anchorBlockId,
-            text: '先用按钮提示解释本轮脚手架目标。'
+            paragraphs: ['先用按钮提示解释本轮脚手架目标。']
           })
           const insertedParagraphBlockId = insertedParagraph.createdBlocks?.[0]?.blockId || ''
           await harness.invoke<DocxMutationResult>('docx_table_edit', {
@@ -76,7 +77,7 @@ describe('ai tool docx backend', () => {
             .filter((block) => block.type !== 'table_cell')
             .map((block) => ({
               type: block.type,
-              text: block.type === 'table' ? block.preview : block.text
+              text: block.type === 'table' ? block.text : block.text
             }))
 
           return {

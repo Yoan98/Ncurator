@@ -194,8 +194,8 @@
 - 实现状态：`已实现`
 - What：验证长文档下的读取、定位和局部精读能力。
 - Why：长文档最容易暴露基础定位问题。
-- How：对高 block 数 fixture 真实调用 `docx_outline(fromBodyIndex,maxBlocks) / docx_search / docx_read_blocks`。
-- Oracle：长文档下仍返回稳定 block 信息、分页起点与截断标记，且能定位并精读目标 block。
+- How：对高 block 数 fixture 真实调用 `docx_outline(ranges=block_index) / docx_search / docx_read_blocks`。
+- Oracle：长文档下仍返回稳定 `blockId/blockIndex` 信息，且能定位并精读目标 block。
 - Not：不验证编辑落盘。
 
 ##### `docx-outline-read-search-do-not-create-replay-session`
@@ -234,8 +234,8 @@
 - 实现状态：`已实现`
 - What：验证长文档在 read 分页后升级到 replay session 时不会丢失尾部 block。
 - Why：如果 replay snapshot 仍走固定 block 上限，read world 与 write world 会在长文档上出现静默分裂。
-- How：先用 `docx_outline(fromBodyIndex,maxBlocks)` 读取 5000 之后的尾部分页，再对尾部 block 执行真实 `docx_paragraph_edit` 与 `docx_search`。
-- Oracle：尾部分页返回正确 bodyIndex；尾部 block 编辑成功；后续搜索可命中新文本；`readSessionCount=0`；`replaySessionCount=1`。
+- How：先用 `docx_outline(ranges=block_index)` 读取 5000 之后的尾部范围，再对尾部 block 执行真实 `docx_paragraph_edit` 与 `docx_search`。
+- Oracle：尾部范围返回正确 `blockIndex`；尾部 block 编辑成功；后续搜索可命中新文本；`readSessionCount=0`；`replaySessionCount=1`。
 - Not：不验证 AI 的读取策略。
 
 ##### `docx-search-unicode-normalization-contract`
@@ -292,20 +292,20 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 `docx_read_blocks(fromBlockId,toBlockId)` 会返回连续区间 blocks。
+- What：验证 `docx_read_blocks(range=block_index)` 会返回连续区间 blocks。
 - Why：这是“搜索 -> 精读”工作流的核心读取契约，必须长期稳定。
 - How：先通过真实 `docx_outline` 定位起止 block，再执行区间 `docx_read_blocks`。
-- Oracle：返回结果按文档顺序覆盖闭区间，`returnedBlockCount` 稳定。
+- Oracle：返回结果按文档顺序覆盖闭区间，且详细块都带 `blockId/blockIndex`。
 - Not：不验证 AI 何时该扩大片段范围。
 
 ##### `docx-outline-pagination-contract`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 `docx_outline(fromBodyIndex,maxBlocks)` 可以翻到长文档后半段。
+- What：验证 `docx_outline(ranges=block_index)` 可以读取长文档后半段。
 - Why：如果只能重复看前几百块，AI 很容易误判“文档没写”。
-- How：对长文档执行带 `fromBodyIndex` 的真实 `docx_outline`。
-- Oracle：返回结果从指定 bodyIndex 开始，且继续保留稳定的总数与截断标记。
+- How：对长文档执行带 `block_index` range 的真实 `docx_outline`。
+- Oracle：返回结果从指定 `blockIndex` 开始，并按闭区间返回目标块。
 - Not：不验证 UI 层如何呈现分页。
 
 ##### `docx-auto-open-no-fake-failure`
@@ -322,10 +322,10 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 `docx_outline` 的结果会明确暴露“已截断、后续内容未包含”的事实。
-- Why：如果只返回原始计数、不暴露截断语义，human 很容易把局部 outline 误当全文。
-- How：对长文档执行真实 `docx_outline(maxBlocks=...)`，检查返回 summary 与事件预览。
-- Oracle：返回结果既包含 `truncated=true`，也包含清晰文字说明“结果已截断，文档后续内容未包含”。
+- What：验证 `docx_outline` 结果超出 AI-facing 体积门禁时返回 `result_too_large`。
+- Why：长文档 outline 不能依赖 AI-controlled 数量上限截断，必须提示 brain 缩小范围。
+- How：对长文档执行过大的真实 `docx_outline(ranges=...)`，检查返回 code 与 decision hint。
+- Oracle：返回 `result_too_large`，且 decision hint 包含 `totalBlockCount/estimatedTokens/limit/suggestedRanges`。
 - Not：不验证 human 是否一定继续读取后续内容。
 
 ##### `docx-complex-ops-batch`
@@ -334,7 +334,7 @@
 - 实现状态：`已实现`
 - What：验证多类复杂编辑操作的真实执行契约。
 - Why：复杂写入是 docx 工具层高风险区。
-- How：覆盖 `replace_text / replace_block / insert_before / insert_after / delete_block / update_table_cell`。
+- How：覆盖 `docx_text_edit / docx_delete / docx_paragraph_edit(insert_before/insert_after) / docx_heading_edit / docx_table_edit(update_cell)`。
 - Oracle：各类 op 都能产生可继续消费的新修订与 `changedBlocks`。
 - Not：不验证上层 op 选择策略。
 
@@ -373,7 +373,7 @@
 - 测试类型：`backend`
 - 实现状态：`已实现`
 - What：验证 `createdBlocks` 依据插入区间解析，而不是依据前后 `blockId` 集合差。
-- Why：当前 `blockId` 由 `bodyIndex` 派生，结构插入后下游 block 会整体漂移，集合差会天然误认旧块。
+- Why：当前 `blockId` 由 `blockIndex` 派生，结构插入后下游 block 会整体漂移，集合差会天然误认旧块。
 - How：在 anchor 后插入一个段落，再检查 `createdBlocks` 与插入后 outline 的对应关系。
 - Oracle：`createdBlocks` 只命中新插入段落，不包含下游旧段落。
 - Not：不验证 table cell 创建。

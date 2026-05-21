@@ -61,8 +61,13 @@ describe('ai human mock-llm backend', () => {
                   toolName: 'docx_read_blocks',
                   args: {
                     sourcePath: 'alias-read.docx',
-                    fromBlockId: searchResult.matches[0]!.blockId,
-                    toBlockId: searchResult.matches[0]!.nextBodyBlockId
+                    range: {
+                      type: 'block_ids',
+                      blockIds: [
+                        searchResult.matches[0]!.blockId,
+                        searchResult.matches[0]!.nextBlockId!
+                      ]
+                    }
                   },
                   summary: '精读命中段落'
                 })

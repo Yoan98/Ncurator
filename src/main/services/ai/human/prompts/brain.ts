@@ -123,7 +123,7 @@ export const buildBrainPrompt = (input: {
   </principles>
 
   <thought_contract>
-    - thought 是你对当前任务推进状态的可展示工作思路，不是隐藏推理链。
+    - thought 是你对当前任务推进状态的工作思路，不是隐藏推理链。
 
     - thought.next：
     - 它是每轮必须输出字段。

@@ -54,9 +54,8 @@ const reduceDocxBlocks = (value: JsonValue | undefined): JsonValue | undefined =
     const reduced = pickObjectFields(item, [
       'blockId',
       'type',
-      'bodyIndex',
+      'blockIndex',
       'text',
-      'preview',
       'summary'
     ])
 
@@ -67,7 +66,7 @@ const reduceDocxBlocks = (value: JsonValue | undefined): JsonValue | undefined =
         if (Array.isArray(cell.paragraphs)) {
           reducedCell.paragraphs = cell.paragraphs.map((paragraph) => {
             if (!isJsonObject(paragraph)) return paragraph
-            return pickObjectFields(paragraph, ['blockId', 'type', 'bodyIndex', 'text', 'preview'])
+            return pickObjectFields(paragraph, ['blockId', 'type', 'blockIndex', 'text'])
           })
         }
         return reducedCell
@@ -77,7 +76,7 @@ const reduceDocxBlocks = (value: JsonValue | undefined): JsonValue | undefined =
     if (Array.isArray(item.paragraphs)) {
       reduced.paragraphs = item.paragraphs.map((paragraph) => {
         if (!isJsonObject(paragraph)) return paragraph
-        return pickObjectFields(paragraph, ['blockId', 'type', 'bodyIndex', 'text', 'preview'])
+        return pickObjectFields(paragraph, ['blockId', 'type', 'blockIndex', 'text'])
       })
     }
 
@@ -89,7 +88,7 @@ const reduceDocxSearchMatches = (value: JsonValue | undefined): JsonValue | unde
   if (!Array.isArray(value)) return undefined
   return value.map((item) => {
     if (!isJsonObject(item)) return item
-    return pickObjectFields(item, ['blockId', 'blockType', 'bodyIndex', 'text'])
+    return pickObjectFields(item, ['blockId', 'type', 'blockIndex', 'matchedText', 'text'])
   })
 }
 
@@ -104,11 +103,14 @@ const reduceDocxRevisions = (value: JsonValue | undefined): JsonValue | undefine
 const reduceDocxPostWriteReadback = (value: JsonValue | undefined): JsonValue | undefined => {
   if (!isJsonObject(value)) return undefined
   const reducedRegions = Array.isArray(value.regions)
-    ? value.regions.map((region) => {
+    ? value.regions.flatMap((region) => {
         if (!isJsonObject(region)) return region
+        const fromBlockIndex = readNumberField(region, 'fromBlockIndex')
+        const toBlockIndex = readNumberField(region, 'toBlockIndex')
+        if (fromBlockIndex === undefined || toBlockIndex === undefined) return []
         return {
-          fromBlockId: readStringField(region, 'fromBlockId'),
-          toBlockId: readStringField(region, 'toBlockId'),
+          fromBlockIndex,
+          toBlockIndex,
           ...(reduceDocxBlocks(region.blocks) ? { blocks: reduceDocxBlocks(region.blocks) } : {})
         }
       })
@@ -136,6 +138,7 @@ const buildBrainToolReturnValue = (result: HumanHistoryToolResult): JsonValue =>
     case 'docx_table_edit':
     case 'docx_text_edit':
     case 'docx_text_style_edit':
+    case 'docx_delete':
       return {
         ...base,
         ...pickObjectFields(result.data, ['sourcePath', 'previousRevisionRef', 'currentRevisionRef', 'summary', 'created']),
@@ -146,7 +149,7 @@ const buildBrainToolReturnValue = (result: HumanHistoryToolResult): JsonValue =>
     case 'docx_read_blocks':
       return {
         ...base,
-        ...pickObjectFields(result.data, ['fromBlockId', 'toBlockId', 'returnedBlockCount']),
+        ...pickObjectFields(result.data, ['fromBlockIndex', 'toBlockIndex']),
         ...(reduceDocxBlocks(result.data.blocks) ? { blocks: reduceDocxBlocks(result.data.blocks) } : {})
       }
     case 'docx_search':
@@ -165,7 +168,7 @@ const buildBrainToolReturnValue = (result: HumanHistoryToolResult): JsonValue =>
     case 'docx_outline':
       return {
         ...base,
-        ...pickObjectFields(result.data, ['returnedBlockCount', 'totalBlockCount', 'truncated']),
+        ...pickObjectFields(result.data, ['blocks']),
         ...(reduceDocxBlocks(result.data.blocks) ? { blocks: reduceDocxBlocks(result.data.blocks) } : {})
       }
     case 'docx_history':
@@ -192,12 +195,10 @@ const buildBrainToolReturnValue = (result: HumanHistoryToolResult): JsonValue =>
           'command',
           'exitCode',
           'timedOut',
-          'truncated',
-          'returnedBlockCount',
           'returnedMatchCount',
           'totalMatchCount',
-          'fromBlockId',
-          'toBlockId',
+          'fromBlockIndex',
+          'toBlockIndex',
           'items',
           'total',
           'hits',
@@ -407,7 +408,7 @@ const summarizeToolResultForMouth = (input: {
   switch (result.toolName) {
     case 'docx_read_blocks': {
       const texts = summarizeArrayTexts(result.data.blocks, 'text')
-      const count = readNumberField(result.data, 'returnedBlockCount') || texts.length
+      const count = texts.length
       return texts.length > 0
         ? `\`${result.toolName}\` 读取到 ${String(count)} 个块：${texts.join(' / ')}`
         : `\`${result.toolName}\` 读取到 ${String(count)} 个块。`
@@ -420,8 +421,8 @@ const summarizeToolResultForMouth = (input: {
         : `\`${result.toolName}\` 命中 ${String(count)} 处。`
     }
     case 'docx_outline': {
-      const blocks = summarizeArrayTexts(result.data.blocks, 'preview')
-      const count = readNumberField(result.data, 'returnedBlockCount') || blocks.length
+      const blocks = summarizeArrayTexts(result.data.blocks, 'text')
+      const count = blocks.length
       return blocks.length > 0
         ? `\`${result.toolName}\` 概览到 ${String(count)} 个块：${blocks.join(' / ')}`
         : `\`${result.toolName}\` 概览到 ${String(count)} 个块。`
@@ -438,7 +439,11 @@ const summarizeToolResultForMouth = (input: {
               ? `anchorBlockId=${call.args.anchorBlockId}`
               : undefined,
         contentLabel: '实际写入文本',
-        content: typeof call?.args.text === 'string' ? call.args.text : undefined
+        content: Array.isArray(call?.args.paragraphs)
+          ? call.args.paragraphs
+          : Array.isArray(call?.args.headings)
+            ? call.args.headings
+            : undefined
       })
     }
     case 'docx_table_edit': {
@@ -480,6 +485,21 @@ const summarizeToolResultForMouth = (input: {
             : undefined,
         contentLabel: '实际替换参数',
         content
+      })
+    }
+    case 'docx_delete': {
+      return buildDocxWriteFact({
+        toolName: result.toolName,
+        action: 'delete_block',
+        target:
+          Array.isArray(call?.args.blockIds) && call.args.blockIds.length > 0
+            ? `blockIds=${call.args.blockIds.join(',')}`
+            : undefined,
+        contentLabel: '实际删除 block',
+        content:
+          Array.isArray(call?.args.blockIds) && call.args.blockIds.length > 0
+            ? call.args.blockIds
+            : undefined
       })
     }
     case 'docx_text_style_edit': {

@@ -151,17 +151,16 @@ const renderDocxBlockLine = (value: JsonValue, index: number): string => {
 
   const blockId = readStringField(value, 'blockId') || `item-${index + 1}`
   const type = readStringField(value, 'type')
-  const bodyIndex = readNumberField(value, 'bodyIndex')
+  const blockIndex = readNumberField(value, 'blockIndex')
   const text =
     readStringField(value, 'text')
-    || readStringField(value, 'preview')
     || readStringField(value, 'summary')
     || readStringField(value, 'message')
     || ''
   const extra =
     renderKeyValuePairs([
       ['type', type],
-      ['bodyIndex', typeof bodyIndex === 'number' ? String(bodyIndex) : undefined]
+      ['blockIndex', typeof blockIndex === 'number' ? String(blockIndex) : undefined]
     ]) || undefined
 
   const baseLine = `- ${blockId}${extra ? `（${extra}）` : ''}：${text || JSON.stringify(value)}`
@@ -193,13 +192,13 @@ const renderDocxSearchMatches = (value: JsonValue | undefined): string => {
     .map((item, index) => {
       if (!isJsonObject(item)) return renderGenericArrayItem(item, index)
       const blockId = readStringField(item, 'blockId') || `item-${index + 1}`
-      const blockType = readStringField(item, 'blockType')
-      const bodyIndex = readNumberField(item, 'bodyIndex')
+      const blockType = readStringField(item, 'type')
+      const blockIndex = readNumberField(item, 'blockIndex')
       const text = readStringField(item, 'text') || JSON.stringify(item)
       const meta =
         renderKeyValuePairs([
-          ['blockType', blockType],
-          ['bodyIndex', typeof bodyIndex === 'number' ? String(bodyIndex) : undefined]
+          ['type', blockType],
+          ['blockIndex', typeof blockIndex === 'number' ? String(blockIndex) : undefined]
         ]) || undefined
       return `- ${blockId}${meta ? `（${meta}）` : ''}：${text}`
     })
@@ -227,9 +226,8 @@ const renderDocxReadResult = (obj: JsonObject): string =>
     renderKeyValuePairs([
       ['sourcePath', readStringField(obj, 'sourcePath')],
       ['currentRevisionRef', readStringField(obj, 'currentRevisionRef')],
-      ['fromBlockId', readStringField(obj, 'fromBlockId')],
-      ['toBlockId', readStringField(obj, 'toBlockId')],
-      ['returnedBlockCount', readNumberTextField(obj, 'returnedBlockCount')]
+      ['fromBlockIndex', readNumberTextField(obj, 'fromBlockIndex')],
+      ['toBlockIndex', readNumberTextField(obj, 'toBlockIndex')]
     ]),
     'blocks:',
     renderDocxBlocks(obj.blocks)
@@ -258,12 +256,8 @@ const renderDocxOutlineResult = (obj: JsonObject): string =>
     renderKeyValuePairs([
       ['sourcePath', readStringField(obj, 'sourcePath')],
       ['currentRevisionRef', readStringField(obj, 'currentRevisionRef')],
-      ['fromBodyIndex', readNumberTextField(obj, 'fromBodyIndex')],
-      ['returnedBlockCount', readNumberTextField(obj, 'returnedBlockCount')],
-      ['totalBlockCount', readNumberTextField(obj, 'totalBlockCount')],
-      ['truncated', renderPrimitive(obj.truncated)]
+      ['result', readStringField(obj, 'code')]
     ]),
-    obj.truncated === true ? '结果已截断，文档后续内容未包含。' : undefined,
     'blocks:',
     renderDocxBlocks(obj.blocks)
   ]

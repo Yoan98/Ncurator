@@ -9,6 +9,7 @@ import {
   type DocxReadResult,
   type DocxSearchResult
 } from './testUtils'
+import { findParagraphBlockIndexByText } from './testUtils'
 
 describe('ai tool docx backend', () => {
   it('docx-large-document-navigation', async () => {
@@ -38,8 +39,7 @@ describe('ai tool docx backend', () => {
         try {
           const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
             sourcePath: 'large-navigation.docx',
-            fromBodyIndex: 60,
-            maxBlocks: 10
+            ranges: [{ type: 'block_index', fromBlockIndex: 70, toBlockIndex: 79 }]
           })
           const search = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: 'large-navigation.docx',
@@ -47,7 +47,7 @@ describe('ai tool docx backend', () => {
           })
           const read = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: 'large-navigation.docx',
-            fromBlockId: search.matches[0]!.blockId
+            range: { type: 'block_ids', blockIds: [search.matches[0]!.blockId] }
           })
 
           return {
@@ -61,18 +61,14 @@ describe('ai tool docx backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.outline.totalBlockCount >= 80 &&
-            result.outline.returnedBlockCount === 10 &&
-            result.outline.truncated &&
-            (result.outline.blocks[0]?.bodyIndex || 0) >= 60,
+          result.outline.blocks.length === 10 &&
+            (result.outline.blocks[0]?.blockIndex || 0) >= 70 &&
+            result.outline.blocks[9]?.blockIndex === 79 &&
+            findParagraphBlockIndexByText(result.outline.blocks, 'target keyword appears here.') === 72,
           {
             name: 'large-document-outline-stays-stable-under-truncation',
-            message: '长文档 outline 应返回稳定 block 信息，并正确标记 maxBlocks 截断。',
-            data: {
-              totalBlockCount: result.outline.totalBlockCount,
-              outlineCount: result.outline.returnedBlockCount,
-              truncated: result.outline.truncated
-            }
+            message: '长文档 outline 应返回稳定 block 信息，并正确标记范围结果。',
+            data: result.outline
           }
         )
 

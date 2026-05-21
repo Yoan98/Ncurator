@@ -48,18 +48,19 @@ describe('ai human mock-llm backend', () => {
                   toolName: 'docx_outline',
                   args: {
                     sourcePath: 'docx-read-fact-exposure.docx',
-                    maxBlocks: 200
+                    ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 229 }]
                   },
                   summary: '提取文档结构'
                 })
               },
               (input) => {
                 if (
-                  !input.user.includes('"truncated": true') ||
-                  !input.user.includes('"returnedBlockCount": 200') ||
-                  !input.user.includes('"totalBlockCount": 230')
+                  !input.user.includes('"blocks"') ||
+                  !input.user.includes('"blockIndex": 0') ||
+                  !input.user.includes('"blockIndex": 229') ||
+                  !input.user.includes('第 230 段普通说明。')
                 ) {
-                  throw new Error('brain prompt is missing outline truncation structured facts')
+                  throw new Error('brain prompt is missing outline range structured facts')
                 }
                 return buildToolDecision({
                   toolName: 'docx_search',
@@ -85,14 +86,14 @@ describe('ai human mock-llm backend', () => {
                   toolName: 'docx_read_blocks',
                   args: {
                     sourcePath: 'docx-read-fact-exposure.docx',
-                    fromBlockId: searchResult.matches[0]!.blockId
+                    range: { type: 'block_ids', blockIds: [searchResult.matches[0]!.blockId] }
                   },
                   summary: '精读搜索命中'
                 })
               },
               (input) => {
                 if (
-                  !input.user.includes('"returnedBlockCount": 1') ||
+                  !input.user.includes('"blocks"') ||
                   !input.user.includes('反⾛样会在采样不足时出现明显锯齿')
                 ) {
                   throw new Error('brain prompt is missing range read structured facts')

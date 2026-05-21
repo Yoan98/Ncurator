@@ -35,7 +35,7 @@ interface DocxReadSession {
   currentRevisionRef: string
   // 解析结果派生的只读缓存。
   cache: {
-    outlineByCacheKey: Map<string, { blocks: DocxOutlineBlock[]; truncated: boolean }>
+    outlineByCacheKey: Map<string, { blocks: DocxOutlineBlock[] }>
     detailByBlockId: Map<string, DocxDetailedBlock>
   }
 }
@@ -111,7 +111,8 @@ interface DocxRevision {
 
 type DocxOp =
   | { type: 'create_document' }
-  | { type: 'insert_before' | 'insert_after' | 'replace_block' | 'replace_text' | 'replace_style' }
+  | { type: 'insert_before' | 'insert_after' | 'replace_block' }
+  | { type: 'delete_block' | 'update_table_cell' | 'replace_text' | 'style_text' }
 
 interface DocxViewArtifact {
   // 当前 artifact 属于哪个视图。

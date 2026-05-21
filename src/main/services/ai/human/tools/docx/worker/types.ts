@@ -16,6 +16,7 @@ export type DocxWorkerAction =
   | 'get_block'
   | 'get_blocks_by_ids'
   | 'get_blocks_by_range'
+  | 'get_blocks_by_block_index_range'
   | 'search'
   | 'apply_ops'
   | 'materialize_draft'
@@ -36,8 +37,10 @@ export type DocxWorkerRequest =
       action: 'outline'
       payload: {
         docId: string
-        fromBodyIndex?: number
-        maxBlocks: number
+        ranges: Array<{
+          fromBlockIndex: number
+          toBlockIndex: number
+        }>
         includeTables: boolean
         includeCells: boolean
       }
@@ -63,11 +66,11 @@ export type DocxWorkerRequest =
   | {
       requestId: string
       runId: string
-      action: 'get_blocks_by_range'
+      action: 'get_blocks_by_block_index_range'
       payload: {
         docId: string
-        fromBlockId: string
-        toBlockId: string
+        fromBlockIndex: number
+        toBlockIndex: number
       }
     }
   | {
@@ -116,7 +119,6 @@ export type DocxWorkerSuccessPayload =
   | {
       action: 'outline'
       blocks: DocxOutlineBlock[]
-      truncated: boolean
     }
   | {
       action: 'get_block'
@@ -127,7 +129,7 @@ export type DocxWorkerSuccessPayload =
       blocks: DocxDetailedBlock[]
     }
   | {
-      action: 'get_blocks_by_range'
+      action: 'get_blocks_by_block_index_range'
       blocks: DocxDetailedBlock[]
     }
   | {

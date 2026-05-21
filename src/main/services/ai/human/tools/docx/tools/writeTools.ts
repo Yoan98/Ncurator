@@ -18,6 +18,7 @@ import type { DocxToolRuntime } from '../runtime'
 import { DOCX_POST_WRITE_READBACK_WINDOW_POLICY } from '../writeReadbackPolicy'
 import {
   DOCX_CREATE_TOOL_SPEC,
+  DOCX_DELETE_TOOL_SPEC,
   DOCX_HEADING_EDIT_TOOL_SPEC,
   DOCX_PARAGRAPH_EDIT_TOOL_SPEC,
   DOCX_ROLLBACK_TOOL_SPEC,
@@ -71,7 +72,7 @@ const fetchOutlineBlocks = async (
     action: 'outline',
     payload: {
       docId,
-      maxBlocks: 5000,
+      ranges: [{ fromBlockIndex: 0, toBlockIndex: Number.MAX_SAFE_INTEGER }],
       includeTables: true,
       includeCells: true
     }
@@ -130,33 +131,33 @@ const toRangeRegion = (
   blocks: readonly DocxOutlineBlock[],
   startIndex: number,
   endIndex: number
-): { fromBlockId: string; toBlockId: string } | null => {
+): { startBlockId: string; endBlockId: string } | null => {
   if (blocks.length === 0) return null
   if (startIndex < 0 || endIndex < 0 || startIndex > endIndex) return null
-  const fromBlockId = blocks[startIndex]?.blockId
-  const toBlockId = blocks[endIndex]?.blockId
-  if (!fromBlockId || !toBlockId) return null
+  const startBlockId = blocks[startIndex]?.blockId
+  const endBlockId = blocks[endIndex]?.blockId
+  if (!startBlockId || !endBlockId) return null
   return {
-    fromBlockId,
-    toBlockId
+    startBlockId,
+    endBlockId
   }
 }
 
 const mergeReadbackRegions = (
   blocks: readonly DocxOutlineBlock[],
-  regions: Array<{ fromBlockId: string; toBlockId: string }>
-): Array<{ fromBlockId: string; toBlockId: string }> => {
+  regions: Array<{ startBlockId: string; endBlockId: string }>
+): Array<{ startBlockId: string; endBlockId: string }> => {
   const indexByBlockId = new Map(blocks.map((block, index) => [block.blockId, index] as const))
   const orderedRanges = regions
     .map((region) => {
-      const fromIndex = indexByBlockId.get(region.fromBlockId)
-      const toIndex = indexByBlockId.get(region.toBlockId)
+      const fromIndex = indexByBlockId.get(region.startBlockId)
+      const toIndex = indexByBlockId.get(region.endBlockId)
       if (typeof fromIndex !== 'number' || typeof toIndex !== 'number' || fromIndex > toIndex) {
         return null
       }
       return {
-        fromBlockId: region.fromBlockId,
-        toBlockId: region.toBlockId,
+        startBlockId: region.startBlockId,
+        endBlockId: region.endBlockId,
         fromIndex,
         toIndex
       }
@@ -165,8 +166,8 @@ const mergeReadbackRegions = (
       (
         region
       ): region is {
-        fromBlockId: string
-        toBlockId: string
+        startBlockId: string
+        endBlockId: string
         fromIndex: number
         toIndex: number
       } => Boolean(region)
@@ -188,7 +189,7 @@ const mergeReadbackRegions = (
 
   return merged
     .map((region) => toRangeRegion(blocks, region.fromIndex, region.toIndex))
-    .filter((region): region is { fromBlockId: string; toBlockId: string } => Boolean(region))
+    .filter((region): region is { startBlockId: string; endBlockId: string } => Boolean(region))
 }
 
 const buildCurrentOutlineReadbackRegions = (input: {
@@ -196,8 +197,8 @@ const buildCurrentOutlineReadbackRegions = (input: {
   targetBlockIds: string[]
   beforeBlockCount: number
   afterBlockCount: number
-}): Array<{ fromBlockId: string; toBlockId: string }> => {
-  const regions: Array<{ fromBlockId: string; toBlockId: string }> = []
+}): Array<{ startBlockId: string; endBlockId: string }> => {
+  const regions: Array<{ startBlockId: string; endBlockId: string }> = []
   const uniqueTargetBlockIds = [...new Set(input.targetBlockIds)]
   for (const targetBlockId of uniqueTargetBlockIds) {
     const targetIndex = getOutlineBlockIndex(input.outlineBlocks, targetBlockId)
@@ -216,9 +217,9 @@ const buildDeletedReadbackRegions = (input: {
   targetBlockIds: string[]
   beforeBlockCount: number
   afterBlockCount: number
-}): Array<{ fromBlockId: string; toBlockId: string }> => {
+}): Array<{ startBlockId: string; endBlockId: string }> => {
   const currentBlockIdSet = new Set(input.currentOutlineBlocks.map((block) => block.blockId))
-  const regions: Array<{ fromBlockId: string; toBlockId: string }> = []
+  const regions: Array<{ startBlockId: string; endBlockId: string }> = []
   const uniqueTargetBlockIds = [...new Set(input.targetBlockIds)]
 
   for (const targetBlockId of uniqueTargetBlockIds) {
@@ -232,8 +233,8 @@ const buildDeletedReadbackRegions = (input: {
       .filter((blockId) => blockId !== targetBlockId && currentBlockIdSet.has(blockId))
     if (candidateBlockIds.length === 0) continue
     regions.push({
-      fromBlockId: candidateBlockIds[0],
-      toBlockId: candidateBlockIds[candidateBlockIds.length - 1]
+      startBlockId: candidateBlockIds[0],
+      endBlockId: candidateBlockIds[candidateBlockIds.length - 1]
     })
   }
 
@@ -250,7 +251,7 @@ const buildPostWriteReadback = async (input: {
   const policy = DOCX_POST_WRITE_READBACK_WINDOW_POLICY[input.action]
   const currentOutlineBlocks = await fetchOutlineBlocks(input.runtime, input.currentDocId)
 
-  let regions: Array<{ fromBlockId: string; toBlockId: string }> = []
+  let regions: Array<{ startBlockId: string; endBlockId: string }> = []
   if (input.action === 'create_document') {
     if (currentOutlineBlocks.length > 0) {
       const endIndex = Math.min(
@@ -281,9 +282,24 @@ const buildPostWriteReadback = async (input: {
     })
   }
 
+  const indexByBlockId = new Map(currentOutlineBlocks.map((block, index) => [block.blockId, index] as const))
+  const indexRegions = regions
+    .map((region) => {
+      const fromBlockIndex = indexByBlockId.get(region.startBlockId)
+      const toBlockIndex = indexByBlockId.get(region.endBlockId)
+      if (typeof fromBlockIndex !== 'number' || typeof toBlockIndex !== 'number') {
+        return null
+      }
+      return {
+        fromBlockIndex,
+        toBlockIndex
+      }
+    })
+    .filter((region): region is { fromBlockIndex: number; toBlockIndex: number } => Boolean(region))
+
   return input.runtime.buildPostWriteReadback({
     docId: input.currentDocId,
-    regions
+    regions: indexRegions
   })
 }
 
@@ -412,14 +428,14 @@ const resolveCreatedBlocksForOp = async (input: {
     return []
   }
 
-  const startBodyIndex =
-    op.type === 'insert_before' ? anchor.bodyIndex : anchor.bodyIndex + 1
-  const endBodyIndex = startBodyIndex + insertedBodyCount - 1
+  const startBlockIndex =
+    op.type === 'insert_before' ? anchor.blockIndex : anchor.blockIndex + 1
+  const endBlockIndex = startBlockIndex + insertedBodyCount - 1
 
   return afterBlocks
     .filter(
       (block) =>
-        block.bodyIndex >= startBodyIndex && block.bodyIndex <= endBodyIndex
+        block.blockIndex >= startBlockIndex && block.blockIndex <= endBlockIndex
     )
     .map((block) => ({
       blockId: block.blockId,
@@ -540,6 +556,7 @@ const buildWriteToolResult = async (input: {
   currentRevisionRef: string
   nextDocId: string
   summary: string
+  created?: true
   changedBlocks: DocxChangedBlock[]
   createdBlocks: DocxCreatedBlock[]
   warnings: string[]
@@ -820,90 +837,28 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
       })
       if ('failure' in sessionResult) return sessionResult.failure
 
-      let op: DocxOp
-      switch (args.action) {
-        case 'insert_before':
-        case 'insert_after':
-          {
-            const failure = await failIfPositionedBlock({
-              runtime,
-              toolName,
-              toolCallId,
-              sourcePath: sessionResult.sourcePath,
-              currentRevisionRef: sessionResult.currentRevisionRef,
-              docId: sessionResult.docId,
-              blockId: args.anchorBlockId!
-            })
-            if (failure) {
-              return finalizeDocxToolFailure({
-                runtime,
-                failure,
-                activity: {
-                  actionType: DOCX_PARAGRAPH_EDIT_TOOL_SPEC.activityActionType!
-                }
-              })
-            }
+      const failure = await failIfPositionedBlock({
+        runtime,
+        toolName,
+        toolCallId,
+        sourcePath: sessionResult.sourcePath,
+        currentRevisionRef: sessionResult.currentRevisionRef,
+        docId: sessionResult.docId,
+        blockId: args.anchorBlockId!
+      })
+      if (failure) {
+        return finalizeDocxToolFailure({
+          runtime,
+          failure,
+          activity: {
+            actionType: DOCX_PARAGRAPH_EDIT_TOOL_SPEC.activityActionType!
           }
-          op = {
-            type: args.action,
-            anchorBlockId: args.anchorBlockId!,
-            content: [paragraphSpecFromText(args.text!)]
-          }
-          break
-        case 'replace_text': {
-          const failure = await failIfPositionedBlock({
-            runtime,
-            toolName,
-            toolCallId,
-            sourcePath: sessionResult.sourcePath,
-            currentRevisionRef: sessionResult.currentRevisionRef,
-            docId: sessionResult.docId,
-            blockId: args.blockId!
-          })
-          if (failure) {
-            return finalizeDocxToolFailure({
-              runtime,
-              failure,
-              activity: {
-                actionType: DOCX_PARAGRAPH_EDIT_TOOL_SPEC.activityActionType!
-              }
-            })
-          }
-          const block = await fetchDetailedBlock(runtime, sessionResult.docId, args.blockId!)
-          const style = block.type === 'paragraph' ? block.style : undefined
-          op = {
-            type: 'replace_block',
-            blockId: args.blockId!,
-            content: paragraphSpecFromText(args.text!, style)
-          }
-          break
-        }
-        case 'delete':
-          {
-            const failure = await failIfPositionedBlock({
-              runtime,
-              toolName,
-              toolCallId,
-              sourcePath: sessionResult.sourcePath,
-              currentRevisionRef: sessionResult.currentRevisionRef,
-              docId: sessionResult.docId,
-              blockId: args.blockId!
-            })
-            if (failure) {
-              return finalizeDocxToolFailure({
-                runtime,
-                failure,
-                activity: {
-                  actionType: DOCX_PARAGRAPH_EDIT_TOOL_SPEC.activityActionType!
-                }
-              })
-            }
-          }
-          op = {
-            type: 'delete_block',
-            blockId: args.blockId!
-          }
-          break
+        })
+      }
+      const op: DocxOp = {
+        type: args.action,
+        anchorBlockId: args.anchorBlockId!,
+        content: args.paragraphs.map((text) => paragraphSpecFromText(text))
       }
 
       const applied = await applySingleEdit({
@@ -915,7 +870,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         currentRevisionRef: sessionResult.currentRevisionRef,
         ops: [op],
         summary: `paragraph.${args.action}`,
-        createdBlocks: args.action === 'insert_before' || args.action === 'insert_after'
+        createdBlocks: true
       })
       if ('failure' in applied) {
         return finalizeDocxToolFailure({
@@ -946,10 +901,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         changedBlocks: applied.changedBlocks,
         createdBlocks: applied.createdBlocks,
         warnings: applied.warnings,
-        targetBlockIds:
-          args.action === 'delete'
-            ? [args.blockId!]
-            : [args.action === 'replace_text' ? args.blockId! : args.anchorBlockId!],
+        targetBlockIds: [args.anchorBlockId!],
         previousDocId: sessionResult.docId
       })
       return finalizeDocxToolSuccess({
@@ -997,56 +949,32 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
       })
       if ('failure' in sessionResult) return sessionResult.failure
 
-      const spec = paragraphSpecFromText(args.text, headingStyle(args.level))
-      let op: DocxOp
-      if (args.action === 'replace_text') {
-        const failure = await failIfPositionedBlock({
+      const failure = await failIfPositionedBlock({
+        runtime,
+        toolName,
+        toolCallId,
+        sourcePath: sessionResult.sourcePath,
+        currentRevisionRef: sessionResult.currentRevisionRef,
+        docId: sessionResult.docId,
+        blockId: args.anchorBlockId!
+      })
+      if (failure) {
+        return finalizeDocxToolFailure({
           runtime,
-          toolName,
-          toolCallId,
-          sourcePath: sessionResult.sourcePath,
-          currentRevisionRef: sessionResult.currentRevisionRef,
-          docId: sessionResult.docId,
-          blockId: args.blockId!
+          failure,
+          activity: {
+            actionType: DOCX_HEADING_EDIT_TOOL_SPEC.activityActionType!
+          }
         })
-        if (failure) {
-          return finalizeDocxToolFailure({
-            runtime,
-            failure,
-            activity: {
-              actionType: DOCX_HEADING_EDIT_TOOL_SPEC.activityActionType!
-            }
-          })
-        }
-        op = {
-          type: 'replace_block',
-          blockId: args.blockId!,
-          content: spec
-        }
-      } else {
-        const failure = await failIfPositionedBlock({
-          runtime,
-          toolName,
-          toolCallId,
-          sourcePath: sessionResult.sourcePath,
-          currentRevisionRef: sessionResult.currentRevisionRef,
-          docId: sessionResult.docId,
-          blockId: args.anchorBlockId!
-        })
-        if (failure) {
-          return finalizeDocxToolFailure({
-            runtime,
-            failure,
-            activity: {
-              actionType: DOCX_HEADING_EDIT_TOOL_SPEC.activityActionType!
-            }
-          })
-        }
-        op = {
-          type: args.action,
-          anchorBlockId: args.anchorBlockId!,
-          content: [spec]
-        }
+      }
+      const op: DocxOp = {
+        type: args.action,
+        anchorBlockId: args.anchorBlockId!,
+        content: args.headings.map((heading) => ({
+          kind: 'paragraph',
+          style: headingStyle(heading.level),
+          runs: [{ text: heading.text }]
+        }))
       }
 
       const applied = await applySingleEdit({
@@ -1057,8 +985,8 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         currentDocId: sessionResult.docId,
         currentRevisionRef: sessionResult.currentRevisionRef,
         ops: [op],
-        summary: `heading.${args.action}.level_${String(args.level)}`,
-        createdBlocks: args.action !== 'replace_text'
+        summary: `heading.${args.action}.${String(args.headings.length)}_heading(s)`,
+        createdBlocks: true
       })
       if ('failure' in applied) {
         return finalizeDocxToolFailure({
@@ -1082,17 +1010,14 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         nextDocId: applied.nextDocId,
         summary: buildEditSummary({
           toolName,
-          actionLabel: `标题${args.action}`,
+          actionLabel: `标题${args.action}.${String(args.headings.length)}项`,
           changedBlocks: applied.changedBlocks,
           warnings: applied.warnings
         }),
         changedBlocks: applied.changedBlocks,
         createdBlocks: applied.createdBlocks,
         warnings: applied.warnings,
-        targetBlockIds:
-          args.action === 'replace_text'
-            ? [args.blockId!]
-            : [args.anchorBlockId!],
+        targetBlockIds: [args.anchorBlockId!],
         previousDocId: sessionResult.docId
       })
       return finalizeDocxToolSuccess({
@@ -1487,6 +1412,113 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
     }
   })
 
+  const docxDeleteTool = createDocxTool({
+    runtime,
+    name: DOCX_DELETE_TOOL_SPEC.name,
+    description: DOCX_DELETE_TOOL_SPEC.description,
+    schema: DOCX_DELETE_TOOL_SPEC.schema,
+    onError: ({ message }) => {
+      runtime.input.emitActivity({
+        actionType: DOCX_DELETE_TOOL_SPEC.activityActionType!,
+        status: 'failed',
+        summary: message
+      })
+    },
+    execute: async ({ args, toolName, toolCallId }) => {
+      const sessionResult = await runtime.ensureReplaySession({
+        toolName,
+        toolCallId,
+        sourcePath: args.sourcePath
+      })
+      if ('failure' in sessionResult) return sessionResult.failure
+
+      const failure = await failIfAnyPositionedBlocks({
+        runtime,
+        toolName,
+        toolCallId,
+        sourcePath: sessionResult.sourcePath,
+        currentRevisionRef: sessionResult.currentRevisionRef,
+        docId: sessionResult.docId,
+        blockIds: args.blockIds
+      })
+      if (failure) {
+        return finalizeDocxToolFailure({
+          runtime,
+          failure,
+          activity: {
+            actionType: DOCX_DELETE_TOOL_SPEC.activityActionType!
+          }
+        })
+      }
+
+      const applied = await applySingleEdit({
+        runtime,
+        toolName,
+        toolCallId,
+        sourcePath: sessionResult.sourcePath,
+        currentDocId: sessionResult.docId,
+        currentRevisionRef: sessionResult.currentRevisionRef,
+        ops: args.blockIds.map((blockId) => ({
+          type: 'delete_block',
+          blockId
+        })),
+        summary: `delete:${args.blockIds.length}`,
+        createdBlocks: false
+      })
+      if ('failure' in applied) {
+        return finalizeDocxToolFailure({
+          runtime,
+          failure: applied.failure,
+          activity: {
+            actionType: DOCX_DELETE_TOOL_SPEC.activityActionType!
+          }
+        })
+      }
+
+      const result = await buildWriteToolResult({
+        runtime,
+        action: 'delete_block',
+        sourcePath: sessionResult.sourcePath,
+        previousRevisionRef: applied.previousRevisionRef,
+        currentRevisionRef: applied.currentRevisionRef,
+        nextDocId: applied.nextDocId,
+        summary: buildEditSummary({
+          toolName,
+          actionLabel: '删除 block',
+          changedBlocks: applied.changedBlocks,
+          warnings: applied.warnings
+        }),
+        changedBlocks: applied.changedBlocks,
+        createdBlocks: applied.createdBlocks,
+        warnings: applied.warnings,
+        targetBlockIds: args.blockIds,
+        previousDocId: sessionResult.docId
+      })
+      return finalizeDocxToolSuccess({
+        runtime,
+        toolName,
+        toolCallId,
+        result,
+        outputPreview: {
+          ok: true,
+          code: 'ok',
+          sourcePath: result.sourcePath,
+          previousRevisionRef: result.previousRevisionRef,
+          currentRevisionRef: result.currentRevisionRef,
+          changedCount: result.changedBlocks.length,
+          createdBlocks: result.createdBlocks,
+          postWriteReadback: result.postWriteReadback
+        },
+        draftDocId: applied.nextDocId,
+        activity: {
+          actionType: DOCX_DELETE_TOOL_SPEC.activityActionType!,
+          startedSummary: `执行删除: ${String(args.blockIds.length)} 个 block`,
+          buildCompletedSummary: (output) => output.summary
+        }
+      })
+    }
+  })
+
   const docxRollbackTool = createDocxTool({
     runtime,
     name: DOCX_ROLLBACK_TOOL_SPEC.name,
@@ -1574,6 +1606,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
     docxTableEditTool,
     docxTextEditTool,
     docxTextStyleEditTool,
+    docxDeleteTool,
     docxRollbackTool
   ]
 }

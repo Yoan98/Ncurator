@@ -48,7 +48,14 @@ const createToolInvoker = (tools: readonly ToolLike[]) => {
       if (!tool) {
         throw new Error(`tool not found: ${name}`)
       }
-      return (await tool.invoke(args)) as TResult
+      const normalizedArgs =
+        name === 'docx_outline' && !('ranges' in args)
+          ? {
+              ...args,
+              ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: Number.MAX_SAFE_INTEGER }]
+            }
+          : args
+      return (await tool.invoke(normalizedArgs)) as TResult
     }
   }
 }

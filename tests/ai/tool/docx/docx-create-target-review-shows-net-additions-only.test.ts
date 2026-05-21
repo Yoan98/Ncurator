@@ -32,25 +32,25 @@ describe('ai tool docx backend', () => {
           })
 
           const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
-            sourcePath: 'net-additions-only.docx'
+            sourcePath: 'net-additions-only.docx',
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 19 }]
           })
           const finalParagraphBlockId =
             outline.blocks.find(
-              (block) => block.type === 'paragraph' && block.preview.includes('Keep this final paragraph.')
+              (block) => block.type === 'paragraph' && block.text.includes('Keep this final paragraph.')
             )?.blockId || ''
 
           const inserted = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
             sourcePath: 'net-additions-only.docx',
             action: 'insert_after',
             anchorBlockId: finalParagraphBlockId,
-            text: 'Temporary draft that should disappear from review.'
+            paragraphs: ['Temporary draft that should disappear from review.']
           })
           const temporaryBlockId = inserted.createdBlocks?.[0]?.blockId || ''
 
-          await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
+          await harness.invoke<DocxMutationResult>('docx_delete', {
             sourcePath: 'net-additions-only.docx',
-            action: 'delete',
-            blockId: temporaryBlockId
+            blockIds: [temporaryBlockId]
           })
 
           const details = await harness.ctx.finalizeDocxReviewRun()

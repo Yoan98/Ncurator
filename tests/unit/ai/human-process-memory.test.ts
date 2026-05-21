@@ -438,8 +438,10 @@ describe('ai unit human memory history', () => {
                 toolName: 'docx_read_blocks',
                 args: {
                   sourcePath: 'graphics.docx',
-                  fromBlockId: 'b:19',
-                  toBlockId: 'b:26'
+                  range: {
+                    type: 'block_ids',
+                    blockIds: ['b:23', 'b:25']
+                  }
                 }
               }
             ]
@@ -454,8 +456,10 @@ describe('ai unit human memory history', () => {
               toolName: 'docx_read_blocks',
               args: {
                 sourcePath: 'graphics.docx',
-                fromBlockId: 'b:19',
-                toBlockId: 'b:26'
+                range: {
+                  type: 'block_ids',
+                  blockIds: ['b:23', 'b:25']
+                }
               }
             }
           ]
@@ -469,20 +473,19 @@ describe('ai unit human memory history', () => {
               ok: true,
               code: 'ok',
               sourcePath: 'graphics.docx',
-              fromBlockId: 'b:19',
-              toBlockId: 'b:26',
-              returnedBlockCount: 2,
+              fromBlockIndex: 23,
+              toBlockIndex: 25,
               blocks: [
                 {
                   blockId: 'b:23',
                   type: 'paragraph',
-                  bodyIndex: 23,
+                  blockIndex: 23,
                   text: '通过模拟一个像素内多个像素点。'
                 },
                 {
                   blockId: 'b:25',
                   type: 'paragraph',
-                  bodyIndex: 25,
+                  blockIndex: 25,
                   text: '进行低通滤波，过滤掉高频信号。'
                 }
               ]
@@ -502,20 +505,19 @@ describe('ai unit human memory history', () => {
       ok: true,
       code: 'ok',
       sourcePath: 'graphics.docx',
-      fromBlockId: 'b:19',
-      toBlockId: 'b:26',
-      returnedBlockCount: 2,
+      fromBlockIndex: 23,
+      toBlockIndex: 25,
       blocks: [
         {
           blockId: 'b:23',
           type: 'paragraph',
-          bodyIndex: 23,
+          blockIndex: 23,
           text: '通过模拟一个像素内多个像素点。'
         },
         {
           blockId: 'b:25',
           type: 'paragraph',
-          bodyIndex: 25,
+          blockIndex: 25,
           text: '进行低通滤波，过滤掉高频信号。'
         }
       ]

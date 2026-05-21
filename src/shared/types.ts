@@ -640,6 +640,7 @@ export type AiTaskResultCode =
   | 'workspace_required'
   | 'approval_denied'
   | 'invalid_input'
+  | 'result_too_large'
 export type AiToolCallDiagnostic = {
   message: string
 }

@@ -63,7 +63,7 @@ export const createReplaySnapshot = (input: {
 
     const snapshotBlock: DocxReplaySnapshotBlock = {
       blockId: block.blockId,
-      bodyIndex: block.bodyIndex,
+      blockIndex: block.blockIndex,
       kind: detail.type,
       spec: detailedBlockToSpec(detail),
       tableCellBlockIds:
@@ -103,7 +103,7 @@ export const createEmptyReplaySnapshot = (): DocxReplaySnapshot => ({
 
 const buildNode = (input: {
   blockId: string
-  bodyIndex: number
+  blockIndex: number
   kind: 'paragraph' | 'table'
   sourceOrigin: 'source' | 'generated'
   reviewState: DocxReviewState
@@ -117,7 +117,7 @@ const buildNode = (input: {
 }): DocxReplayNode => ({
   nodeId: `${input.reviewState}:${input.blockId}:${input.createdRevisionRef}:${input.changedRevisionRef || 'active'}`,
   blockId: input.blockId,
-  bodyIndex: input.bodyIndex,
+  blockIndex: input.blockIndex,
   kind: input.kind,
   sourceOrigin: input.sourceOrigin,
   reviewState: input.reviewState,
@@ -138,7 +138,7 @@ const buildNode = (input: {
 const reindexBodyNodes = (session: DocxReplaySession): void => {
   session.bodyNodeIds.forEach((nodeId, index) => {
     const node = session.nodeById.get(nodeId)
-    if (node) node.bodyIndex = index
+    if (node) node.blockIndex = index
   })
 }
 
@@ -235,7 +235,7 @@ const rebindVisibleNodesToSnapshot = (input: {
     cursor = matchIndex + 1
     if (skipNodeIds?.has(node.nodeId)) return
     node.currentBlockId = matchedBlock.blockId
-    node.bodyIndex = matchedBlock.bodyIndex
+    node.blockIndex = matchedBlock.blockIndex
     node.spec = matchedBlock.spec
   })
 }
@@ -319,7 +319,7 @@ const buildCurrentNodeFromSnapshot = (
 ): DocxReplayNode =>
   buildNode({
     blockId: snapshotBlock.blockId,
-    bodyIndex: snapshotBlock.bodyIndex,
+    blockIndex: snapshotBlock.blockIndex,
     kind: snapshotBlock.kind,
     sourceOrigin,
     reviewState,
@@ -373,7 +373,7 @@ export const createReplaySessionFromSnapshot = (input: {
   input.snapshot.blocks.forEach((block) => {
     const node = buildNode({
       blockId: block.blockId,
-      bodyIndex: block.bodyIndex,
+      blockIndex: block.blockIndex,
       kind: block.kind,
       sourceOrigin: 'source',
       reviewState: 'normal',
@@ -521,7 +521,7 @@ export const applyRevisionToReplaySession = (input: {
 
     targetNode.reviewState = 'formatted'
     targetNode.currentBlockId = snapshotBlock.blockId
-    targetNode.bodyIndex = snapshotBlock.bodyIndex
+    targetNode.blockIndex = snapshotBlock.blockIndex
     targetNode.spec = snapshotBlock.spec
     targetNode.changedRevisionRef = revisionRef
     targetNode.reviewQuery = op.query

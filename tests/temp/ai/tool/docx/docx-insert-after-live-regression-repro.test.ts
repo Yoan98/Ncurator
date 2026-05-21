@@ -62,25 +62,25 @@ describe('temp ai tool docx backend', () => {
         try {
           const outlineBefore = await harness.invoke<DocxOutlineResult>('docx_outline', {
             sourcePath: 'insert-after-live-repro.docx',
-            maxBlocks: 50
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 49 }]
           })
           const anchorBlockId =
             outlineBefore.blocks.find(
               (block) =>
                 block.type === 'paragraph' &&
-                block.preview.includes('学生可以通过点击对话中的按钮进入引导流程。')
+                block.text.includes('学生可以通过点击对话中的按钮进入引导流程。')
             )?.blockId || ''
 
           const anchorBefore = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: 'insert-after-live-repro.docx',
-            fromBlockId: anchorBlockId
+            range: { type: 'block_ids', blockIds: [anchorBlockId] }
           })
 
           const insertedParagraph = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
             sourcePath: 'insert-after-live-repro.docx',
             action: 'insert_after',
             anchorBlockId,
-            text: '学生可以根据按钮提示逐步完成脚手架操作。'
+            paragraphs: ['学生可以根据按钮提示逐步完成脚手架操作。']
           })
           const insertedParagraphBlockId = insertedParagraph.createdBlocks?.find(
             (block) => block.type === 'paragraph'
@@ -98,11 +98,11 @@ describe('temp ai tool docx backend', () => {
 
           const anchorAfter = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: insertedTable.sourcePath,
-            fromBlockId: anchorBlockId
+            range: { type: 'block_ids', blockIds: [anchorBlockId] }
           })
           const outlineAfter = await harness.invoke<DocxOutlineResult>('docx_outline', {
             sourcePath: insertedTable.sourcePath,
-            maxBlocks: 80
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 79 }]
           })
           const createdPreviews = [
             ...(insertedParagraph.createdBlocks || []),
@@ -110,7 +110,7 @@ describe('temp ai tool docx backend', () => {
           ].map((created) => ({
             ...created,
             preview:
-              outlineAfter.blocks.find((block) => block.blockId === created.blockId)?.preview || ''
+              outlineAfter.blocks.find((block) => block.blockId === created.blockId)?.text || ''
           }))
 
           const details = await runtime.fileReviewService.finalizeRunReview({

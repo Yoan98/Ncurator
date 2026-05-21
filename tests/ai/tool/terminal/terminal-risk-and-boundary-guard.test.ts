@@ -52,14 +52,17 @@ describe('ai tool terminal backend', () => {
         }
       },
       assert: async (result, runtime) => {
-        const approvalEvents = filterEventsByType(result.events, 'approval_required')
+        const approvalEvents = filterEventsByType(result.events, 'approval_batch_required')
         const stepStarted = filterEventsByType(result.events, 'terminal_step_started')
 
         runtime.assertThat(
           result.nonReadonlyDenied.ok === false &&
             result.nonReadonlyDenied.code === 'approval_denied' &&
             approvalEvents.some((event) =>
-              event.command === (isWindows ? 'Remove-Item -Recurse -Force guarded' : 'rm -rf guarded')
+              event.items.some(
+                (item) =>
+                  item.command === (isWindows ? 'Remove-Item -Recurse -Force guarded' : 'rm -rf guarded')
+              )
             ) &&
             result.guardedStillExists,
           {
@@ -68,8 +71,8 @@ describe('ai tool terminal backend', () => {
             data: {
               nonReadonlyDenied: result.nonReadonlyDenied,
               approvals: approvalEvents.map((event) => ({
-                command: event.command,
-                reason: event.reason
+                command: event.items[0]?.command,
+                reason: event.items[0]?.reason
               })),
               guardedStillExists: result.guardedStillExists
             }

@@ -35,21 +35,21 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
-            sourcePath: 'review-hide-generated-delete.docx'
+            sourcePath: 'review-hide-generated-delete.docx',
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 19 }]
           })
           const anchorBlockId =
-            outline.blocks.find((block) => block.type === 'paragraph' && block.preview.includes('Anchor paragraph.'))?.blockId || ''
+            outline.blocks.find((block) => block.type === 'paragraph' && block.text.includes('Anchor paragraph.'))?.blockId || ''
           const inserted = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
             sourcePath: 'review-hide-generated-delete.docx',
             action: 'insert_after',
             anchorBlockId,
-            text: 'Temporary generated draft.'
+            paragraphs: ['Temporary generated draft.']
           })
           const insertedBlockId = inserted.createdBlocks?.[0]?.blockId || ''
-          await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
+          await harness.invoke<DocxMutationResult>('docx_delete', {
             sourcePath: 'review-hide-generated-delete.docx',
-            action: 'delete',
-            blockId: insertedBlockId
+            blockIds: [insertedBlockId]
           })
 
           const details = await runtime.fileReviewService.finalizeRunReview({

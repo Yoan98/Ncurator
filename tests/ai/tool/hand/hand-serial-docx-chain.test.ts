@@ -87,7 +87,7 @@ describe('ai tool hand backend', () => {
                       toolName: 'docx_read_blocks',
                       args: {
                         sourcePath: 'serial-docx-chain.docx',
-                        fromBlockId: 'b:1'
+                        range: { type: 'block_ids', blockIds: ['b:1'] }
                       }
                     }
                   ]

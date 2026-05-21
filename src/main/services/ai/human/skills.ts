@@ -43,6 +43,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
       'docx_table_edit',
       'docx_text_edit',
       'docx_text_style_edit',
+      'docx_delete',
       'docx_rollback'
     ]
   },

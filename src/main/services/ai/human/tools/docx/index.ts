@@ -26,7 +26,6 @@ export const docxToolFamily = createWorkspaceBoundToolFamily({
         runId: ctx.runId,
         checkCancelled: ctx.checkCancelled,
         sendEvent: ctx.sendEvent,
-        requestApproval: ctx.requestApproval,
         trackDocxOpen: ctx.trackDocxOpen,
         trackDocxChanges: ctx.trackDocxChanges,
         resolveDocxOpenTarget: ctx.resolveDocxOpenTarget,

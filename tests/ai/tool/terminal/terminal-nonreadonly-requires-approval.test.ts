@@ -39,13 +39,15 @@ describe('ai tool terminal backend', () => {
         }
       },
       assert: async (result, runtime) => {
-        const approvalEvents = filterEventsByType(result.events, 'approval_required')
+        const approvalEvents = filterEventsByType(result.events, 'approval_batch_required')
 
         runtime.assertThat(
           result.mkdirDenied.ok === false &&
             result.mkdirDenied.code === 'approval_denied' &&
             result.blockedDirExists === false &&
-            approvalEvents.some((event) => event.command === 'mkdir blocked-dir'),
+            approvalEvents.some((event) =>
+              event.items.some((item) => item.command === 'mkdir blocked-dir')
+            ),
           {
             name: 'non-readonly-command-requires-approval-even-without-risk-tiering',
             message: '未命中只读白名单的 terminal 命令即使不是旧语义里的高危命令，也必须先审批。',
@@ -53,8 +55,8 @@ describe('ai tool terminal backend', () => {
               mkdirDenied: result.mkdirDenied,
               blockedDirExists: result.blockedDirExists,
               approvals: approvalEvents.map((event) => ({
-                command: event.command,
-                reason: event.reason
+                command: event.items[0]?.command,
+                reason: event.items[0]?.reason
               }))
             }
           }

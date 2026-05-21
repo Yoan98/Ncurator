@@ -27,11 +27,12 @@ describe('ai tool docx backend', () => {
         try {
           const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
             sourcePath: 'inserted-table-created-blocks.docx',
-            maxBlocks: 20
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 19 }],
+
           })
           const anchorBlockId =
             outline.blocks.find(
-              (block) => block.type === 'paragraph' && block.preview.includes('Anchor paragraph.')
+              (block) => block.type === 'paragraph' && block.text.includes('Anchor paragraph.')
             )?.blockId || ''
 
           const insertedTable = await harness.invoke<DocxMutationResult>('docx_table_edit', {

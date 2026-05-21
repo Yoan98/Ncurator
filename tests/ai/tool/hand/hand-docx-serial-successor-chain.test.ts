@@ -28,13 +28,14 @@ describe('ai tool hand backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
-          sourcePath: 'successor-chain.docx'
+          sourcePath: 'successor-chain.docx',
+          ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 19 }]
         })
         await harness.release()
 
         const riskBlockId =
           outline.blocks.find(
-            (block) => block.type === 'paragraph' && block.preview.includes('主要风险：RISK_TODO')
+            (block) => block.type === 'paragraph' && block.text.includes('主要风险：RISK_TODO')
           )?.blockId || ''
 
         const ctx = runtime.createAiRunContext()
@@ -62,38 +63,38 @@ describe('ai tool hand backend', () => {
               },
               nextAction: {
                 action: 'hand',
-                toolUsePlan: {
-                  mode: 'serial',
-                  calls: [
-                    {
-                      toolName: 'docx_paragraph_edit',
-                      args: {
-                        sourcePath: 'successor-chain.docx',
-                        action: 'replace_text',
-                        blockId: riskBlockId,
-                        text: '主要风险：最后一份合规附件仍在内部确认流程中。'
-                      }
-                    },
-                    {
-                      toolName: 'docx_paragraph_edit',
-                      args: {
-                        sourcePath: 'successor-chain.docx',
-                        action: 'insert_after',
-                        anchorBlockId: riskBlockId,
-                        text: '三、负责人及协同分工'
-                      }
-                    },
-                    {
-                      toolName: 'docx_paragraph_edit',
-                      args: {
-                        sourcePath: 'successor-chain.docx',
-                        action: 'insert_after',
-                        anchorBlockId: riskBlockId,
-                        text: '四、下周动作'
-                      }
-                    }
-                  ]
+            toolUsePlan: {
+              mode: 'serial',
+              calls: [
+                {
+                  toolName: 'docx_text_edit',
+                  args: {
+                    sourcePath: 'successor-chain.docx',
+                    query: '主要风险：RISK_TODO',
+                    replace: '主要风险：最后一份合规附件仍在内部确认流程中。',
+                    blockIds: [riskBlockId]
+                  }
+                },
+                {
+                  toolName: 'docx_paragraph_edit',
+                  args: {
+                    sourcePath: 'successor-chain.docx',
+                    action: 'insert_after',
+                    anchorBlockId: riskBlockId,
+                    paragraphs: ['三、负责人及协同分工']
+                  }
+                },
+                {
+                  toolName: 'docx_paragraph_edit',
+                  args: {
+                    sourcePath: 'successor-chain.docx',
+                    action: 'insert_after',
+                    anchorBlockId: riskBlockId,
+                    paragraphs: ['四、下周动作']
+                  }
                 }
+              ]
+            }
               }
             }
           }
@@ -107,7 +108,7 @@ describe('ai tool hand backend', () => {
           toolName: 'docx_outline',
           args: {
             sourcePath: 'successor-chain.docx',
-            maxBlocks: 20
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 19 }]
           }
         })
 
@@ -120,7 +121,7 @@ describe('ai tool hand backend', () => {
         const outline = result.updatedOutline.data as DocxOutlineResult
         const previews = outline.blocks
           .filter((block) => block.type === 'paragraph')
-          .map((block) => block.preview)
+          .map((block) => block.text)
         runtime.assertThat(
           result.state.execution.lastToolResults?.length === 3 &&
             result.state.execution.lastToolResults.every((item) => item.code === 'ok') &&

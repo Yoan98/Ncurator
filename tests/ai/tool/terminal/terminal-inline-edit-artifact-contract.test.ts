@@ -56,7 +56,7 @@ describe('ai tool terminal backend', () => {
         }
       },
       assert: async (result, runtime) => {
-        const approvalEvents = filterEventsByType(result.events, 'approval_required')
+        const approvalEvents = filterEventsByType(result.events, 'approval_batch_required')
         const artifactEvents = filterEventsByType(result.events, 'file_artifact')
 
         runtime.assertThat(
@@ -70,8 +70,8 @@ describe('ai tool terminal backend', () => {
             message: '文本更新与创建文件命令应被当成 mutating，并走审批后执行。',
             data: {
               approvals: approvalEvents.map((event) => ({
-                command: event.command,
-                reason: event.reason
+                command: event.items[0]?.command,
+                reason: event.items[0]?.reason
               })),
               notesContent: result.notesContent,
               createdExists: result.createdExists

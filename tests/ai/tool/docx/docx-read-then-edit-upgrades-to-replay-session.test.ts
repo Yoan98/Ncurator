@@ -31,11 +31,11 @@ describe('ai tool docx backend', () => {
           const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
             sourcePath: 'upgrade-edit.docx'
           })
-          const mutation = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
+          const mutation = await harness.invoke<DocxMutationResult>('docx_text_edit', {
             sourcePath: 'upgrade-edit.docx',
-            action: 'replace_text',
-            blockId: outline.blocks[1]!.blockId,
-            text: '已经改写后的内容。'
+            query: '需要替换的内容。',
+            replace: '已经改写后的内容。',
+            blockIds: [outline.blocks[1]!.blockId]
           })
           const search = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: 'upgrade-edit.docx',

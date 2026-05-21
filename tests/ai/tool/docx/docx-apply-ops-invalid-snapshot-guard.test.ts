@@ -62,7 +62,7 @@ describe('ai tool docx backend', () => {
           })
           const initialRead = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: 'invalid-snapshot-source.docx',
-            fromBlockId: initialSearch.matches[0]!.blockId
+            range: { type: 'block_ids', blockIds: [initialSearch.matches[0]!.blockId] }
           })
           const failedEdit = await harness.invoke<DocxFailureResult | DocxMutationResult>(
             'docx_text_edit',
@@ -78,7 +78,7 @@ describe('ai tool docx backend', () => {
           })
           const readOriginal = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: initialRead.sourcePath,
-            fromBlockId: readOriginalSearch.matches[0]!.blockId
+            range: { type: 'block_ids', blockIds: [readOriginalSearch.matches[0]!.blockId] }
           })
 
           return {

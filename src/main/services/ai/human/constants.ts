@@ -37,7 +37,8 @@ export const TOOL_CALL_RESULT_CODES = [
   'failed',
   'workspace_required',
   'approval_denied',
-  'invalid_input'
+  'invalid_input',
+  'result_too_large'
 ] as const
 
 export const HUMAN_TOOL_USE_PLAN_MODES = ['parallel', 'serial'] as const

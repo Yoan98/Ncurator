@@ -14,7 +14,7 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证 docx_outline(fromBodyIndex,maxBlocks) 可以翻到长文档后半段。',
+      description: '验证 docx_outline 的 block_index 范围可以翻到长文档后半段。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -31,8 +31,7 @@ describe('ai tool docx backend', () => {
         try {
           return await harness.invoke<DocxOutlineResult>('docx_outline', {
             sourcePath: 'outline-pagination.docx',
-            fromBodyIndex: 70,
-            maxBlocks: 10
+            ranges: [{ type: 'block_index', fromBlockIndex: 70, toBlockIndex: 79 }]
           })
         } finally {
           await harness.release()
@@ -40,14 +39,12 @@ describe('ai tool docx backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.totalBlockCount === 90 &&
-            result.returnedBlockCount === 10 &&
-            result.truncated &&
-            result.blocks[0]?.bodyIndex === 70 &&
-            result.blocks[9]?.bodyIndex === 79,
+          result.blocks.length === 10 &&
+            result.blocks[0]?.blockIndex === 70 &&
+            result.blocks[9]?.blockIndex === 79,
           {
             name: 'outline-pagination-can-browse-late-document-sections',
-            message: 'outline 应支持从指定 bodyIndex 开始分页浏览长文档。',
+            message: 'outline 应支持从指定 blockIndex 范围浏览长文档。',
             data: result
           }
         )

@@ -184,7 +184,7 @@ export type AiEventDispatchContext = Pick<AiRunContext, 'runId' | 'sendEvent' | 
 
 export type TerminalToolContext = Pick<
   AiRunContext,
-  'runId' | 'checkCancelled' | 'sendEvent'
+  'runId' | 'checkCancelled' | 'sendEvent' | 'requestApprovalBatch'
 >
 
 export type KnowledgeRetrievalContext = Pick<
@@ -197,7 +197,6 @@ export type DocxToolContext = Pick<
   | 'runId'
   | 'checkCancelled'
   | 'sendEvent'
-  | 'requestApproval'
   | 'trackDocxOpen'
   | 'trackDocxChanges'
   | 'resolveDocxOpenTarget'

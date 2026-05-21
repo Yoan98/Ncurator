@@ -73,7 +73,7 @@ const paragraphDetail = (blockId: string, paragraph: Element): DocxDetailedParag
   return {
     blockId,
     type: 'paragraph',
-    bodyIndex: -1,
+    blockIndex: -1,
     layoutMode: 'normal',
     style: paragraphStyle(paragraph),
     text,
@@ -81,7 +81,7 @@ const paragraphDetail = (blockId: string, paragraph: Element): DocxDetailedParag
   }
 }
 
-const summarizeTable = (table: Element): { rows: number; cols: number; preview: string } => {
+const summarizeTable = (table: Element): { rows: number; cols: number; text: string } => {
   const rows = childElements(table, 'tr')
   const rowCount = rows.length
   let colCount = 0
@@ -98,7 +98,7 @@ const summarizeTable = (table: Element): { rows: number; cols: number; preview: 
   return {
     rows: rowCount,
     cols: colCount,
-    preview: previewCells.filter(Boolean).join(' | ')
+    text: previewCells.filter(Boolean).join(' | ')
   }
 }
 
@@ -233,34 +233,34 @@ const tableCells = (table: Element): Array<{ row: number; col: number; cell: Ele
 
 const resolveBodyNeighbors = (
   bodyBlockIds: readonly string[],
-  bodyIndex: number
-): { previousBodyBlockId?: string; nextBodyBlockId?: string } => ({
-  previousBodyBlockId: bodyIndex > 0 ? bodyBlockIds[bodyIndex - 1] : undefined,
-  nextBodyBlockId: bodyIndex + 1 < bodyBlockIds.length ? bodyBlockIds[bodyIndex + 1] : undefined
+  blockIndex: number
+): { previousBlockId?: string; nextBlockId?: string } => ({
+  previousBlockId: blockIndex > 0 ? bodyBlockIds[blockIndex - 1] : undefined,
+  nextBlockId: blockIndex + 1 < bodyBlockIds.length ? bodyBlockIds[blockIndex + 1] : undefined
 })
 
 const withParagraphStructure = (
   bodyBlockIds: readonly string[],
-  block: Omit<DocxOutlineParagraphBlock, 'previousBodyBlockId' | 'nextBodyBlockId'>
+  block: Omit<DocxOutlineParagraphBlock, 'previousBlockId' | 'nextBlockId'>
 ): DocxOutlineParagraphBlock => ({
   ...block,
-  ...resolveBodyNeighbors(bodyBlockIds, block.bodyIndex)
+  ...resolveBodyNeighbors(bodyBlockIds, block.blockIndex)
 })
 
 const withTableStructure = (
   bodyBlockIds: readonly string[],
-  block: Omit<DocxOutlineTableBlock, 'previousBodyBlockId' | 'nextBodyBlockId'>
+  block: Omit<DocxOutlineTableBlock, 'previousBlockId' | 'nextBlockId'>
 ): DocxOutlineTableBlock => ({
   ...block,
-  ...resolveBodyNeighbors(bodyBlockIds, block.bodyIndex)
+  ...resolveBodyNeighbors(bodyBlockIds, block.blockIndex)
 })
 
 const withCellStructure = (
   bodyBlockIds: readonly string[],
-  block: Omit<DocxOutlineCellBlock, 'previousBodyBlockId' | 'nextBodyBlockId'>
+  block: Omit<DocxOutlineCellBlock, 'previousBlockId' | 'nextBlockId'>
 ): DocxOutlineCellBlock => ({
   ...block,
-  ...resolveBodyNeighbors(bodyBlockIds, block.bodyIndex)
+  ...resolveBodyNeighbors(bodyBlockIds, block.blockIndex)
 })
 
 export const buildBlockIndex = (documentDom: Document): BlockIndex => {
@@ -268,7 +268,7 @@ export const buildBlockIndex = (documentDom: Document): BlockIndex => {
   const outlineDraft: DocxOutlineBlock[] = []
   const nodesById: NodeMapById = new Map()
   const bodyBlockIds: string[] = []
-  let bodyIndex = 0
+  let blockIndex = 0
   let paragraphCount = 0
   let tableCount = 0
   let charCount = 0
@@ -281,7 +281,7 @@ export const buildBlockIndex = (documentDom: Document): BlockIndex => {
     if (child.localName === 'sectPr') continue
 
     if (child.localName === 'p') {
-      const blockId = `b:${bodyIndex}`
+      const blockId = `b:${blockIndex}`
       const text = paragraphText(child)
       const style = paragraphStyle(child)
       const layoutMode = paragraphLayoutMode(child)
@@ -289,7 +289,7 @@ export const buildBlockIndex = (documentDom: Document): BlockIndex => {
       outlineDraft.push({
         blockId,
         type: 'paragraph',
-        bodyIndex,
+        blockIndex,
         layoutMode,
         style,
         text
@@ -297,34 +297,34 @@ export const buildBlockIndex = (documentDom: Document): BlockIndex => {
       nodesById.set(blockId, {
         kind: 'paragraph',
         blockId,
-        bodyIndex,
+        blockIndex,
         layoutMode,
         node: child
       })
       paragraphCount += 1
       charCount += text.length
-      bodyIndex += 1
+      blockIndex += 1
       continue
     }
 
     if (child.localName === 'tbl') {
-      const blockId = `tbl:${bodyIndex}`
+      const blockId = `tbl:${blockIndex}`
       const tableSummary = summarizeTable(child)
       const layoutMode = tableLayoutMode(child)
       bodyBlockIds.push(blockId)
       outlineDraft.push({
         blockId,
         type: 'table',
-        bodyIndex,
+        blockIndex,
         layoutMode,
         rows: tableSummary.rows,
         cols: tableSummary.cols,
-        preview: tableSummary.preview
+        text: tableSummary.text
       })
       nodesById.set(blockId, {
         kind: 'table',
         blockId,
-        bodyIndex,
+        blockIndex,
         layoutMode,
         node: child
       })
@@ -337,7 +337,7 @@ export const buildBlockIndex = (documentDom: Document): BlockIndex => {
         outlineDraft.push({
           blockId: cellBlockId,
           type: 'table_cell',
-          bodyIndex,
+          blockIndex,
           layoutMode,
           tableBlockId: blockId,
           row: entry.row,
@@ -348,7 +348,7 @@ export const buildBlockIndex = (documentDom: Document): BlockIndex => {
           kind: 'table_cell',
           blockId: cellBlockId,
           tableBlockId: blockId,
-          bodyIndex,
+          blockIndex,
           layoutMode,
           row: entry.row,
           col: entry.col,
@@ -359,7 +359,7 @@ export const buildBlockIndex = (documentDom: Document): BlockIndex => {
         paragraphCount += paragraphs.length
         charCount += text.length
       }
-      bodyIndex += 1
+      blockIndex += 1
     }
   }
 
@@ -380,7 +380,7 @@ export const buildBlockIndex = (documentDom: Document): BlockIndex => {
     paragraphCount,
     tableCount,
     charCount,
-    bodyBlockCount: bodyIndex,
+    bodyBlockCount: blockIndex,
     cellBlockCount
   }
 }
@@ -398,30 +398,32 @@ export const toOpenStats = (index: BlockIndex, imageCount: number): DocxOpenStat
 export const buildOutlineOutput = (
   index: BlockIndex,
   input: {
-    fromBodyIndex?: number
-    maxBlocks: number
+    ranges: Array<{
+      fromBlockIndex: number
+      toBlockIndex: number
+    }>
     includeTables: boolean
     includeCells: boolean
   }
 ): {
   blocks: DocxOutlineBlock[]
-  truncated: boolean
 } => {
-  const fromBodyIndex = Math.max(0, Number(input.fromBodyIndex || 0))
+  const normalizedRanges = input.ranges
+    .map((range) => ({
+      fromBlockIndex: Math.max(0, Math.min(range.fromBlockIndex, range.toBlockIndex)),
+      toBlockIndex: Math.max(0, Math.max(range.fromBlockIndex, range.toBlockIndex))
+    }))
+    .filter((range) => range.toBlockIndex >= range.fromBlockIndex)
+
   const visibleBlocks = index.outline.filter((block) => {
-    if (block.bodyIndex < fromBodyIndex) return false
     if (!input.includeTables && (block.type === 'table' || block.type === 'table_cell')) return false
     if (!input.includeCells && block.type === 'table_cell') return false
-    return true
+    return normalizedRanges.some(
+      (range) => block.blockIndex >= range.fromBlockIndex && block.blockIndex <= range.toBlockIndex
+    )
   })
-  const picked: DocxOutlineBlock[] = []
-  for (const block of visibleBlocks) {
-    picked.push(block)
-    if (picked.length >= input.maxBlocks) break
-  }
   return {
-    blocks: picked,
-    truncated: picked.length < visibleBlocks.length
+    blocks: visibleBlocks
   }
 }
 
@@ -429,7 +431,7 @@ const buildTableDetail = (
   index: BlockIndex,
   blockId: string,
   tableNode: Element,
-  bodyIndex: number
+  blockIndex: number
 ): DocxDetailedTableBlock => {
   const tableIndexedNode = index.nodesById.get(blockId)
   const tableLayoutMode = tableIndexedNode?.kind === 'table' ? tableIndexedNode.layoutMode : 'normal'
@@ -443,7 +445,7 @@ const buildTableDetail = (
         )
         return {
           ...detail,
-          bodyIndex,
+          blockIndex,
           layoutMode: tableLayoutMode
         }
       }
@@ -459,12 +461,12 @@ const buildTableDetail = (
   return {
     blockId,
     type: 'table',
-    bodyIndex,
+    blockIndex,
     layoutMode: tableLayoutMode,
-    ...resolveBodyNeighbors(index.bodyBlockIds, bodyIndex),
+    ...resolveBodyNeighbors(index.bodyBlockIds, blockIndex),
     rows: summary.rows,
     cols: summary.cols,
-    preview: summary.preview,
+    text: summary.text,
     cells
   }
 }
@@ -475,19 +477,19 @@ export const getDetailedBlock = (index: BlockIndex, blockId: string): DocxDetail
   if (node.kind === 'paragraph') {
     return {
       ...paragraphDetail(blockId, node.node),
-      bodyIndex: node.bodyIndex,
+      blockIndex: node.blockIndex,
       layoutMode: node.layoutMode,
-      ...resolveBodyNeighbors(index.bodyBlockIds, node.bodyIndex)
+      ...resolveBodyNeighbors(index.bodyBlockIds, node.blockIndex)
     }
   }
-  if (node.kind === 'table') return buildTableDetail(index, blockId, node.node, node.bodyIndex)
+  if (node.kind === 'table') return buildTableDetail(index, blockId, node.node, node.blockIndex)
 
   const paragraphs = cellParagraphs(node.node).map((paragraph, idx) =>
     {
       const detail = paragraphDetail(`${blockId}.p:${idx + 1}`, paragraph)
       return {
         ...detail,
-        bodyIndex: node.bodyIndex,
+        blockIndex: node.blockIndex,
         layoutMode: node.layoutMode
       }
     }
@@ -495,9 +497,9 @@ export const getDetailedBlock = (index: BlockIndex, blockId: string): DocxDetail
   return {
     blockId,
     type: 'table_cell',
-    bodyIndex: node.bodyIndex,
+    blockIndex: node.blockIndex,
     layoutMode: node.layoutMode,
-    ...resolveBodyNeighbors(index.bodyBlockIds, node.bodyIndex),
+    ...resolveBodyNeighbors(index.bodyBlockIds, node.blockIndex),
     tableBlockId: node.tableBlockId,
     row: node.row,
     col: node.col,
@@ -512,9 +514,9 @@ export const getBlockStructureFacts = (
 ):
   | {
       blockType: 'paragraph' | 'table' | 'table_cell'
-      bodyIndex: number
-      previousBodyBlockId?: string
-      nextBodyBlockId?: string
+      blockIndex: number
+      previousBlockId?: string
+      nextBlockId?: string
       tableBlockId?: string
     }
   | null => {
@@ -522,8 +524,8 @@ export const getBlockStructureFacts = (
   if (!node) return null
   return {
     blockType: node.kind,
-    bodyIndex: node.bodyIndex,
-    ...resolveBodyNeighbors(index.bodyBlockIds, node.bodyIndex),
+    blockIndex: node.blockIndex,
+    ...resolveBodyNeighbors(index.bodyBlockIds, node.blockIndex),
     tableBlockId: node.kind === 'table_cell' ? node.tableBlockId : undefined
   }
 }

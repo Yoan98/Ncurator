@@ -32,7 +32,8 @@ const DOCX_SERIAL_WRITE_TOOL_NAMES = new Set([
   'docx_heading_edit',
   'docx_table_edit',
   'docx_text_edit',
-  'docx_text_style_edit'
+  'docx_text_style_edit',
+  'docx_delete'
 ])
 type DocxContinuationAction = 'insert_before' | 'insert_after'
 type DocxAnchorContinuation = {
@@ -131,15 +132,6 @@ const buildToolLimitDecisionHint = (toolCallCount: number, limit: number): Human
 })
 
 const validateToolUsePlan = (toolUsePlan: ToolUsePlan): HumanDecisionHint | undefined => {
-  if (toolUsePlan.calls.length > HUMAN_TOOL_USE_PLAN_LIMIT) {
-    return createHandPlanInvalidDecisionHint({
-      mode: toolUsePlan.mode,
-      reason: 'tool_use_plan_limit_exceeded',
-      offendingToolNames: toolUsePlan.calls.map((item) => item.toolName),
-      callCount: toolUsePlan.calls.length,
-      limit: HUMAN_TOOL_USE_PLAN_LIMIT
-    })
-  }
   if (toolUsePlan.mode === 'serial') {
     const docxWriteCalls = toolUsePlan.calls.filter((item) => isDocxSerialWriteCall(item.toolName))
     if (docxWriteCalls.length > 0) {
@@ -154,6 +146,17 @@ const validateToolUsePlan = (toolUsePlan: ToolUsePlan): HumanDecisionHint | unde
         })
       }
     }
+  }
+  if (toolUsePlan.calls.length > HUMAN_TOOL_USE_PLAN_LIMIT) {
+    return createHandPlanInvalidDecisionHint({
+      mode: toolUsePlan.mode,
+      reason: 'tool_use_plan_limit_exceeded',
+      offendingToolNames: toolUsePlan.calls.map((item) => item.toolName),
+      callCount: toolUsePlan.calls.length,
+      limit: HUMAN_TOOL_USE_PLAN_LIMIT
+    })
+  }
+  if (toolUsePlan.mode === 'serial') {
     return undefined
   }
   if (toolUsePlan.calls.length > HUMAN_MAX_PARALLEL_TOOL_CALLS) {

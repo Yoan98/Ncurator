@@ -2072,7 +2072,6 @@ export function registerHandlers(services: {
 
       const runId = uuidv4()
       activeAiRuns.set(runId, { cancelled: false, senderId: event.sender.id })
-      activeAiApprovals.set(runId, new Map())
 
       const sendEvent = (evt: AiRunEvent) => {
         if (event.sender.isDestroyed()) return

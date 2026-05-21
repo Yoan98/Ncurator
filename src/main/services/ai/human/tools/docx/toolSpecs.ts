@@ -4,6 +4,7 @@ import type { RuntimeSkillId } from '../../types'
 import type { HumanToolSpec } from '../types'
 import {
   docxCreateSchema,
+  docxDeleteSchema,
   docxHeadingEditSchema,
   docxHistoryRequestSchema,
   docxOutlineRequestSchema,
@@ -77,8 +78,11 @@ const DOCX_SEARCH_SEMANTIC_EXAMPLE: JsonObject = {
 }
 const DOCX_READ_RANGE_EXAMPLE: JsonObject = {
   sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
-  fromBlockId: 'b:19',
-  toBlockId: 'b:26'
+  range: {
+    type: 'block_index',
+    fromBlockIndex: 19,
+    toBlockIndex: 26
+  }
 }
 
 export const DOCX_OUTLINE_TOOL_SPEC = {
@@ -90,15 +94,14 @@ export const DOCX_OUTLINE_TOOL_SPEC = {
   schema: docxOutlineRequestSchema,
   promptSpec: {
     name: 'docx_outline',
-    description: '总揽读取 docx 的稳定结构，拿到标题、段落、表格和单元格的 blockId。',
-    whenToUse: '当你需要先理解文档结构、定位标题或表格、或为后续精读/编辑拿到 blockId 时使用。',
+    description: '按 percent 或 blockIndex 范围读取 docx 轻量文本地图，拿到 blockId、blockIndex 和文本预览。',
+    whenToUse: '当你需要先理解文档局部结构、定位标题或表格、或为后续精读/编辑拿到 blockId/blockIndex 时使用。',
     examples: [
       {
         goal: '先看一份 docx 的整体结构和标题、表格分布',
         args: {
           sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
-          fromBodyIndex: 0,
-          maxBlocks: 40
+          ranges: [{ type: 'percent', fromPercent: 0, toPercent: 20 }]
         }
       }
     ]
@@ -142,12 +145,12 @@ export const DOCX_READ_TOOL_SPEC = {
   name: 'docx_read_blocks',
   familyId: 'docx',
   requiresWorkspace: true,
-  description: '按 fromBlockId / toBlockId 连续精读 docx 区间。',
+  description: '按 blockIndex 区间或 blockIds 精读 docx 内容。',
   skillIds: ['docx-read'],
   schema: docxReadRequestSchema,
   promptSpec: {
     name: 'docx_read_blocks',
-    description: '读取一个 block，或按 block 区间连续精读一段内容。',
+    description: '读取一个或多个 block，或按 blockIndex 区间连续精读一段内容。',
     whenToUse:
       '当你已经通过 docx_search 或 docx_outline 拿到 blockId，准备精读一个 block 或一段连续区间时使用。',
     examples: [
@@ -190,14 +193,14 @@ export const DOCX_PARAGRAPH_EDIT_TOOL_SPEC = {
   name: 'docx_paragraph_edit',
   familyId: 'docx',
   requiresWorkspace: true,
-  description: '按段落对象执行插入、替换或删除。',
+  description: '按段落对象执行插入。',
   skillIds: ['docx-write'],
   schema: docxParagraphEditSchema,
   promptSpec: {
     name: 'docx_paragraph_edit',
-    description: '按段落对象插入、替换或删除段落文本。',
+    description: '按段落对象插入一个或多个段落。',
     whenToUse:
-      '当你已经明确段落锚点或目标 blockId，且只需要插段落、改段落文本或删段落时使用。若命中复杂定位排版区域，任何自动编辑都会失败，此时不要重复尝试 docx 写操作。',
+      '当你已经明确段落锚点，且只需要插入段落时使用。替换文字用 docx_text_edit，删除完整 block 用 docx_delete。若命中复杂定位排版区域，任何自动编辑都会失败，此时不要重复尝试 docx 写操作。',
     examples: [
       {
         goal: '在目标段落后插入一段说明',
@@ -205,7 +208,7 @@ export const DOCX_PARAGRAPH_EDIT_TOOL_SPEC = {
           sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
           action: 'insert_after',
           anchorBlockId: 'b:26',
-          text: '补充说明：反走样通过平滑边缘像素来减轻锯齿感。'
+          paragraphs: ['补充说明：反走样通过平滑边缘像素来减轻锯齿感。']
         }
       }
     ]
@@ -245,14 +248,14 @@ export const DOCX_HEADING_EDIT_TOOL_SPEC = {
   name: 'docx_heading_edit',
   familyId: 'docx',
   requiresWorkspace: true,
-  description: '按标题对象执行插入或替换。',
+  description: '按标题对象执行插入。',
   skillIds: ['docx-write'],
   schema: docxHeadingEditSchema,
   promptSpec: {
     name: 'docx_heading_edit',
-    description: '按标题对象插入或替换标题文本。',
+    description: '按标题对象插入一个或多个标题。',
     whenToUse:
-      '当你要在某处插入标题，或把现有标题块替换成新标题文本时使用。若命中复杂定位排版区域，任何自动编辑都会失败，此时应改为说明限制并给用户手动操作建议。',
+      '当你要在某处插入标题时使用。替换标题文字用 docx_text_edit。若命中复杂定位排版区域，任何自动编辑都会失败，此时应改为说明限制并给用户手动操作建议。',
     examples: [
       {
         goal: '在指定 block 后插入一个二级标题',
@@ -260,8 +263,7 @@ export const DOCX_HEADING_EDIT_TOOL_SPEC = {
           sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
           action: 'insert_after',
           anchorBlockId: 'b:26',
-          level: 2,
-          text: '反走样与过拟合对照'
+          headings: [{ level: 2, text: '反走样与过拟合对照' }]
         }
       }
     ]
@@ -363,6 +365,32 @@ export const DOCX_TEXT_STYLE_EDIT_TOOL_SPEC = {
   'docx-write'
 >
 
+export const DOCX_DELETE_TOOL_SPEC = {
+  name: 'docx_delete',
+  familyId: 'docx',
+  requiresWorkspace: true,
+  description: '删除一个或多个完整 docx block。',
+  skillIds: ['docx-write'],
+  schema: docxDeleteSchema,
+  promptSpec: {
+    name: 'docx_delete',
+    description: '按 blockId 删除完整段落或表格 block，不支持 run 级删除。',
+    whenToUse:
+      '当你已经明确要删除的完整 blockId 时使用。只删除文本片段时使用 docx_text_edit 并将 replace 设为空字符串。',
+    examples: [
+      {
+        goal: '删除两个完整段落',
+        args: {
+          sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
+          blockIds: ['b:12', 'b:13']
+        }
+      }
+    ]
+  },
+  resolveExecutionMeta: createDocxMutatingExecutionMeta(),
+  activityActionType: 'docx_delete'
+} satisfies DocxToolSpec<z.infer<typeof docxDeleteSchema>, 'docx_delete', 'docx-write'>
+
 export const DOCX_ROLLBACK_TOOL_SPEC = {
   name: 'docx_rollback',
   familyId: 'docx',
@@ -402,6 +430,7 @@ export const DOCX_WRITE_TOOL_SPECS = [
   DOCX_TABLE_EDIT_TOOL_SPEC,
   DOCX_TEXT_EDIT_TOOL_SPEC,
   DOCX_TEXT_STYLE_EDIT_TOOL_SPEC,
+  DOCX_DELETE_TOOL_SPEC,
   DOCX_ROLLBACK_TOOL_SPEC
 ] as const
 

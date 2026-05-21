@@ -28,12 +28,13 @@ describe('ai tool hand backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
-          sourcePath: 'snapshot-bound.docx'
+          sourcePath: 'snapshot-bound.docx',
+          ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 19 }]
         })
         await harness.release()
 
-        const alphaBlockId = outline.blocks.find((block) => block.type === 'paragraph' && block.preview.includes('Alpha'))?.blockId || ''
-        const betaBlockId = outline.blocks.find((block) => block.type === 'paragraph' && block.preview.includes('Beta'))?.blockId || ''
+        const alphaBlockId = outline.blocks.find((block) => block.type === 'paragraph' && block.text.includes('Alpha'))?.blockId || ''
+        const betaBlockId = outline.blocks.find((block) => block.type === 'paragraph' && block.text.includes('Beta'))?.blockId || ''
 
         const ctx = runtime.createAiRunContext()
         const cache = createHumanRuntimeCache()
@@ -70,16 +71,16 @@ describe('ai tool hand backend', () => {
                         sourcePath: 'snapshot-bound.docx',
                         action: 'insert_before',
                         anchorBlockId: alphaBlockId,
-                        text: 'Inserted before Alpha'
+                        paragraphs: ['Inserted before Alpha']
                       }
                     },
                     {
-                      toolName: 'docx_paragraph_edit',
+                      toolName: 'docx_text_edit',
                       args: {
                         sourcePath: 'snapshot-bound.docx',
-                        action: 'replace_text',
-                        blockId: betaBlockId,
-                        text: 'Beta rewritten'
+                        query: 'Beta',
+                        replace: 'Beta rewritten',
+                        blockIds: [betaBlockId]
                       }
                     }
                   ]
@@ -96,7 +97,8 @@ describe('ai tool hand backend', () => {
           learnedSkillIds: ['docx-read', 'docx-write'],
           toolName: 'docx_outline',
           args: {
-            sourcePath: 'snapshot-bound.docx'
+            sourcePath: 'snapshot-bound.docx',
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 19 }]
           }
         })
 
@@ -109,7 +111,7 @@ describe('ai tool hand backend', () => {
         const outlineData = result.updatedOutline.data as DocxOutlineResult
         const paragraphTexts = outlineData.blocks
           .filter((block) => block.type === 'paragraph')
-          .map((block) => block.preview)
+          .map((block) => block.text)
 
         runtime.assertThat(
           paragraphTexts[0] === 'Inserted before Alpha' &&

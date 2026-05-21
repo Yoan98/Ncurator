@@ -54,7 +54,7 @@ describe('ai tool docx backend', () => {
           })
           const anchorBlockId =
             outline.blocks.find(
-              (block) => block.type === 'paragraph' && block.preview.includes('结尾段落')
+              (block) => block.type === 'paragraph' && block.text.includes('结尾段落')
             )?.blockId || ''
           const tableInsert = await harness.invoke<DocxMutationResult>('docx_table_edit', {
             sourcePath: 'review-projection.docx',

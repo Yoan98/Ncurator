@@ -27,13 +27,15 @@ describe('ai tool docx backend', () => {
         try {
           const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
             sourcePath: 'read-only.docx',
-            fromBodyIndex: 0,
-            maxBlocks: 2
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 1 }]
           })
           const read = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: 'read-only.docx',
-            fromBlockId: outline.blocks[0]!.blockId,
-            toBlockId: outline.blocks[1]!.blockId
+            range: {
+              type: 'block_index',
+              fromBlockIndex: 0,
+              toBlockIndex: 1
+            }
           })
           const search = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: 'read-only.docx',

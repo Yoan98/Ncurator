@@ -64,7 +64,7 @@ describe('ai tool docx backend', () => {
         try {
           const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
             sourcePath: 'complex-ops.docx',
-            maxBlocks: 50
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 49 }]
           })
 
           const replaceBlockId = findParagraphBlockIdByText(
@@ -87,10 +87,9 @@ describe('ai tool docx backend', () => {
             query: 'Need text replacement here.',
             replace: 'Text replaced in final snapshot.'
           })
-          const deleteParagraph = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
+          const deleteParagraph = await harness.invoke<DocxMutationResult>('docx_delete', {
             sourcePath: 'complex-ops.docx',
-            action: 'delete',
-            blockId: deleteBlockId
+            blockIds: [deleteBlockId]
           })
           const updateCell = await harness.invoke<DocxMutationResult>('docx_table_edit', {
             sourcePath: 'complex-ops.docx',
@@ -102,19 +101,19 @@ describe('ai tool docx backend', () => {
             sourcePath: 'complex-ops.docx',
             action: 'insert_after',
             anchorBlockId: insertAfterAnchor,
-            text: 'Inserted after anchor.'
+            paragraphs: ['Inserted after anchor.']
           })
           const insertBefore = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
             sourcePath: 'complex-ops.docx',
             action: 'insert_before',
             anchorBlockId: insertBeforeAnchor,
-            text: 'Inserted before anchor.'
+            paragraphs: ['Inserted before anchor.']
           })
-          const replaceBlock = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
+          const replaceBlock = await harness.invoke<DocxMutationResult>('docx_text_edit', {
             sourcePath: 'complex-ops.docx',
-            action: 'replace_text',
-            blockId: replaceBlockId,
-            text: 'Replaced whole block in final snapshot.'
+            query: 'Replace whole block content.',
+            replace: 'Replaced whole block in final snapshot.',
+            blockIds: [replaceBlockId]
           })
           const searchAfter = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: 'complex-ops.docx',
@@ -122,11 +121,11 @@ describe('ai tool docx backend', () => {
           })
           const readAfter = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: 'complex-ops.docx',
-            fromBlockId: searchAfter.matches[0]!.blockId
+            range: { type: 'block_ids', blockIds: [searchAfter.matches[0]!.blockId] }
           })
           const finalOutline = await harness.invoke<DocxOutlineResult>('docx_outline', {
             sourcePath: 'complex-ops.docx',
-            maxBlocks: 80
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 79 }]
           })
 
           return {
@@ -155,10 +154,9 @@ describe('ai tool docx backend', () => {
         ]
 
         runtime.assertThat(
-          ['replace_text', 'delete_block', 'update_table_cell', 'insert_after', 'insert_before', 'replace_block'].every(
+          ['replace_text', 'delete_block', 'update_table_cell', 'insert_after', 'insert_before'].every(
             (action) => changedActions.includes(
               action as
-                | 'replace_block'
                 | 'insert_after'
                 | 'insert_before'
                 | 'delete_block'
@@ -168,7 +166,7 @@ describe('ai tool docx backend', () => {
           ),
           {
             name: 'complex-ops-batch-covers-all-op-types',
-            message: '复杂编辑 case 应覆盖六类底层变更动作，并产出新的修订摘要。',
+            message: '复杂编辑 case 应覆盖当前写工具支持的底层变更动作，并产出新的修订摘要。',
             data: {
               currentRevisionRef: result.replaceBlock.currentRevisionRef,
               changedActions
@@ -180,10 +178,13 @@ describe('ai tool docx backend', () => {
           result.searchAfter.matches.length === 1 &&
             result.readAfter.blocks.length === 1 &&
             result.finalOutline.blocks.some(
-              (block) => block.type === 'paragraph' && block.preview.includes('Inserted before anchor.')
+              (block) => block.type === 'paragraph' && block.text.includes('Inserted before anchor.')
             ) &&
             result.finalOutline.blocks.some(
-              (block) => block.type === 'table_cell' && block.preview.includes('Bob')
+              (block) => block.type === 'table_cell' && block.text.includes('Bob')
+            ) &&
+            result.finalOutline.blocks.some(
+              (block) => block.type === 'paragraph' && block.text.includes('Replaced whole block in final snapshot.')
             ) &&
             [
               result.replaceText,

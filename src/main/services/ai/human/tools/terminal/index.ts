@@ -12,7 +12,7 @@ export const terminalToolFamily = createWorkspaceBoundToolFamily({
         runId: ctx.runId,
         checkCancelled: ctx.checkCancelled,
         sendEvent: ctx.sendEvent,
-        requestApproval: ctx.requestApproval
+        requestApprovalBatch: ctx.requestApprovalBatch
       },
       cache,
       runId,

@@ -29,14 +29,13 @@ describe('ai unit human tool result renderers', () => {
       data: {
         sourcePath: 'graphics.docx',
         currentRevisionRef: 'v7',
-        fromBlockId: 'b:10',
-        toBlockId: 'b:12',
-        returnedBlockCount: 2,
+        fromBlockIndex: 10,
+        toBlockIndex: 12,
         blocks: [
           {
             blockId: 'b:10',
             type: 'paragraph',
-            bodyIndex: 10,
+            blockIndex: 10,
             text: '反走样定义',
             runs: [
               {
@@ -51,7 +50,7 @@ describe('ai unit human tool result renderers', () => {
           {
             blockId: 'b:11',
             type: 'table',
-            bodyIndex: 11,
+            blockIndex: 11,
             preview: '处理方法表',
             cells: [
               {
@@ -62,7 +61,7 @@ describe('ai unit human tool result renderers', () => {
                   {
                     blockId: 'b:11:c1:p1',
                     type: 'paragraph',
-                    bodyIndex: 11,
+                    blockIndex: 11,
                     text: '多个像素点',
                     runs: [{ text: '多个像素点' }]
                   }
@@ -76,7 +75,7 @@ describe('ai unit human tool result renderers', () => {
                   {
                     blockId: 'b:11:c2:p1',
                     type: 'paragraph',
-                    bodyIndex: 11,
+                    blockIndex: 11,
                     text: '低通滤波',
                     runs: [{ text: '低通滤波' }]
                   }

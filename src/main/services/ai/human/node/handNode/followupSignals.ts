@@ -8,7 +8,8 @@ const DOCX_WRITE_TOOL_NAMES = new Set([
   'docx_heading_edit',
   'docx_table_edit',
   'docx_text_edit',
-  'docx_text_style_edit'
+  'docx_text_style_edit',
+  'docx_delete'
 ])
 
 const asString = (value: unknown): string | undefined =>
@@ -44,6 +45,8 @@ const describePositionedTarget = (toolName: string, args: JsonObject | undefined
         : '你刚才尝试批量替换文本的那处区域'
     case 'docx_text_style_edit':
       return '你刚才尝试调整文本样式的那处区域'
+    case 'docx_delete':
+      return '你刚才尝试删除完整 block 的那处区域'
     default:
       return '你刚才尝试修改的那处目标区域'
   }

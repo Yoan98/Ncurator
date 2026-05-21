@@ -81,7 +81,7 @@ describe('ai human mock-llm backend', () => {
             latestLearningStep.availableToolNames.includes('terminal_run') &&
             latestLearningStep.availableToolNames.includes('kb_list_documents') &&
             latestLearningStep.availableToolNames.includes('kb_search') &&
-            latestLearningStep.availableToolNames.length === 14 &&
+            latestLearningStep.availableToolNames.length === 15 &&
             latestLearningStep.summary.includes('当前 active tools=') &&
             !latestLearningStep.summary.includes('已淘汰最早学习的 skill=') &&
             filterAiRunEventsByType(result.events, 'decision_hint').some(

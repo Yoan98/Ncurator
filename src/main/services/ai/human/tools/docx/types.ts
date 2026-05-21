@@ -6,6 +6,7 @@ import {
   blockSpecSchema,
   docxCreateBlockSchema,
   docxCreateSchema,
+  docxDeleteSchema,
   docxHeadingEditActionSchema,
   docxHeadingEditSchema,
   docxHistoryRequestSchema,
@@ -30,7 +31,7 @@ import {
 
 export type DocxToolResultCode = Extract<
   AiTaskResultCode,
-  'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
+  'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required' | 'result_too_large'
 >
 
 export type DocxTextRunSpec = z.infer<typeof runSpecSchema>
@@ -44,10 +45,10 @@ export type DocxLayoutMode = 'normal' | 'positioned'
 export type DocxOutlineParagraphBlock = {
   blockId: string
   type: 'paragraph'
-  bodyIndex: number
+  blockIndex: number
   layoutMode: DocxLayoutMode
-  previousBodyBlockId?: string
-  nextBodyBlockId?: string
+  previousBlockId?: string
+  nextBlockId?: string
   style: string
   text: string
 }
@@ -55,22 +56,22 @@ export type DocxOutlineParagraphBlock = {
 export type DocxOutlineTableBlock = {
   blockId: string
   type: 'table'
-  bodyIndex: number
+  blockIndex: number
   layoutMode: DocxLayoutMode
-  previousBodyBlockId?: string
-  nextBodyBlockId?: string
+  previousBlockId?: string
+  nextBlockId?: string
   rows: number
   cols: number
-  preview: string
+  text: string
 }
 
 export type DocxOutlineCellBlock = {
   blockId: string
   type: 'table_cell'
-  bodyIndex: number
+  blockIndex: number
   layoutMode: DocxLayoutMode
-  previousBodyBlockId?: string
-  nextBodyBlockId?: string
+  previousBlockId?: string
+  nextBlockId?: string
   tableBlockId: string
   row: number
   col: number
@@ -82,10 +83,10 @@ export type DocxOutlineBlock = DocxOutlineParagraphBlock | DocxOutlineTableBlock
 export type DocxDetailedParagraphBlock = {
   blockId: string
   type: 'paragraph'
-  bodyIndex: number
+  blockIndex: number
   layoutMode: DocxLayoutMode
-  previousBodyBlockId?: string
-  nextBodyBlockId?: string
+  previousBlockId?: string
+  nextBlockId?: string
   style: string
   text: string
   runs: DocxTextRunSpec[]
@@ -102,23 +103,23 @@ export type DocxDetailedTableCell = {
 export type DocxDetailedTableBlock = {
   blockId: string
   type: 'table'
-  bodyIndex: number
+  blockIndex: number
   layoutMode: DocxLayoutMode
-  previousBodyBlockId?: string
-  nextBodyBlockId?: string
+  previousBlockId?: string
+  nextBlockId?: string
   rows: number
   cols: number
-  preview: string
+  text: string
   cells: DocxDetailedTableCell[]
 }
 
 export type DocxDetailedCellBlock = {
   blockId: string
   type: 'table_cell'
-  bodyIndex: number
+  blockIndex: number
   layoutMode: DocxLayoutMode
-  previousBodyBlockId?: string
-  nextBodyBlockId?: string
+  previousBlockId?: string
+  nextBlockId?: string
   tableBlockId: string
   row: number
   col: number
@@ -132,8 +133,10 @@ export type DocxDetailedBlock =
   | DocxDetailedCellBlock
 
 export type DocxPostWriteReadbackRegion = {
-  fromBlockId: string
-  toBlockId: string
+  startBlockId: string
+  fromBlockIndex: number
+  endBlockId: string
+  toBlockIndex: number
   blocks: DocxDetailedBlock[]
 }
 
@@ -159,6 +162,7 @@ export type DocxWriteReadbackAction =
 export type DocxSearchMode = z.infer<typeof docxSearchModeSchema>
 export type DocxCreateBlock = z.infer<typeof docxCreateBlockSchema>
 export type DocxCreateRequest = z.infer<typeof docxCreateSchema>
+export type DocxDeleteRequest = z.infer<typeof docxDeleteSchema>
 export type DocxOutlineRequest = z.infer<typeof docxOutlineRequestSchema>
 export type DocxSearchRequest = z.infer<typeof docxSearchRequestSchema>
 export type DocxReadRequest = z.infer<typeof docxReadRequestSchema>
@@ -176,10 +180,11 @@ export type DocxRollbackRequest = z.infer<typeof docxRollbackRequestSchema>
 
 export type DocxSearchMatch = {
   blockId: string
-  blockType: 'paragraph' | 'table' | 'table_cell'
-  bodyIndex: number
-  previousBodyBlockId?: string
-  nextBodyBlockId?: string
+  blockIndex: number
+  type: 'paragraph' | 'table' | 'table_cell'
+  matchedText: string
+  previousBlockId?: string
+  nextBlockId?: string
   tableBlockId?: string
   text: string
   offsets?: Array<{ start: number; end: number }>
@@ -234,9 +239,9 @@ export type DocxCapabilityToolsInput = WorkspaceCapabilityBuildInput<DocxToolCon
 export type SemanticDocIndexEntry = {
   blockId: string
   blockType: 'paragraph' | 'table_cell'
-  bodyIndex: number
-  previousBodyBlockId?: string
-  nextBodyBlockId?: string
+  blockIndex: number
+  previousBlockId?: string
+  nextBlockId?: string
   tableBlockId?: string
   text: string
   embedding: Float32Array
@@ -265,7 +270,7 @@ export type DocxRevision = {
 
 export type DocxReplaySnapshotBlock = {
   blockId: string
-  bodyIndex: number
+  blockIndex: number
   kind: 'paragraph' | 'table'
   spec: DocxBlockSpec
   tableCellBlockIds: string[]
@@ -284,7 +289,7 @@ export type DocxReplaySnapshot = {
 }
 
 export type DocxReadSessionCache = {
-  outlineByCacheKey: Map<string, { blocks: DocxOutlineBlock[]; truncated: boolean }>
+  outlineByCacheKey: Map<string, { blocks: DocxOutlineBlock[] }>
   detailByBlockId: Map<string, DocxDetailedBlock>
 }
 
@@ -327,7 +332,7 @@ export type DocxReviewState =
 export type DocxReplayNode = {
   nodeId: string
   blockId: string
-  bodyIndex: number
+  blockIndex: number
   kind: 'paragraph' | 'table'
   sourceOrigin: 'source' | 'generated'
   reviewState: DocxReviewState
@@ -379,7 +384,7 @@ export type DocxStableLocator = {
   nodeId: string
   sourceBlockId?: string
   currentBlockIdAtResolve?: string
-  bodyIndexAtResolve: number
+  blockIndexAtResolve: number
   previousVisibleNodeId?: string
   nextVisibleNodeId?: string
   kind: DocxStableLocatorKind

@@ -54,7 +54,7 @@ describe('ai tool terminal backend', () => {
         }
       },
       assert: async (result, runtime) => {
-        const approvalEvents = filterEventsByType(result.events, 'approval_required')
+        const approvalEvents = filterEventsByType(result.events, 'approval_batch_required')
         const stepErrors = filterEventsByType(result.events, 'terminal_step_error')
 
         runtime.assertThat(

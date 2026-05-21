@@ -85,7 +85,7 @@ describe('ai tool hand backend', () => {
                       toolName: 'docx_outline',
                       args: {
                         sourcePath,
-                        maxBlocks: 20
+                        ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 19 }]
                       }
                     },
                     {
@@ -118,7 +118,10 @@ describe('ai tool hand backend', () => {
                 toolUsePlan: {
                   mode: 'parallel',
                   calls: [
-                    { toolName: 'docx_outline', args: { sourcePath, maxBlocks: 20 } },
+                    {
+                      toolName: 'docx_outline',
+                      args: { sourcePath, ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 19 }] }
+                    },
                     { toolName: 'docx_search', args: { sourcePath, query: 'Safety' } }
                   ]
                 }
@@ -148,7 +151,10 @@ describe('ai tool hand backend', () => {
                 toolUsePlan: {
                   mode: 'parallel',
                   calls: [
-                    { toolName: 'docx_outline', args: { sourcePath, maxBlocks: 20 } },
+                    {
+                      toolName: 'docx_outline',
+                      args: { sourcePath, ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 19 }] }
+                    },
                     { toolName: 'docx_search', args: { sourcePath, query: 'Safety' } },
                     { toolName: 'docx_search', args: { sourcePath, query: 'Risk' } },
                     { toolName: 'docx_search', args: { sourcePath, query: 'cases' } },
@@ -280,7 +286,7 @@ describe('ai tool hand backend', () => {
                       toolName: 'docx_outline',
                       args: {
                         sourcePath,
-                        maxBlocks: 20
+                        ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 19 }]
                       }
                     }
                   ]

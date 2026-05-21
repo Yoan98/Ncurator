@@ -32,7 +32,7 @@ describe('ai tool docx backend', () => {
         try {
           const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
             sourcePath: 'outline-truncation.docx',
-            maxBlocks: 10
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 9 }]
           })
           const outlineEvent = filterAiRunEventsByType(runtime.eventCollector.snapshot(), 'tool_call_result')
             .filter((event) => event.toolName === 'docx_outline')
@@ -47,26 +47,14 @@ describe('ai tool docx backend', () => {
         }
       },
       assert: async (result, runtime) => {
-        const preview =
-          result.outlineEvent && typeof result.outlineEvent.outputPreview === 'object'
-            ? result.outlineEvent.outputPreview
-            : null
-        const previewSummary =
-          preview && 'summary' in preview && typeof preview.summary === 'string'
-            ? preview.summary
-            : ''
-
         runtime.assertThat(
-          result.outline.truncated &&
-            result.outline.returnedBlockCount === 10 &&
-            result.outline.totalBlockCount > result.outline.returnedBlockCount,
+          result.outline.blocks.length === 10 &&
+            result.outline.blocks[0]?.blockIndex === 0 &&
+            result.outline.blocks[9]?.blockIndex === 9,
           {
             name: 'docx-outline-surfaces-truncation-fact',
-            message: 'outline 结果应明确暴露 returnedBlockCount、totalBlockCount 与 truncation 事实。',
-            data: {
-              outline: result.outline,
-              outputPreview: result.outlineEvent?.outputPreview
-            }
+            message: 'outline 结果应返回指定范围内的结构块。',
+            data: result.outline
           }
         )
       }

@@ -34,14 +34,14 @@ describe('ai tool docx backend', () => {
           })
           const anchorBlockId =
             outline.blocks.find(
-              (block) => block.type === 'paragraph' && block.preview.includes('锚点段落')
+              (block) => block.type === 'paragraph' && block.text.includes('锚点段落')
             )?.blockId || ''
 
           const insertParagraph = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
             sourcePath: 'multi-round-created.docx',
             action: 'insert_after',
             anchorBlockId,
-            text: '新增段落初稿。'
+            paragraphs: ['新增段落初稿。']
           })
 
           const insertedParagraphSearch = await harness.invoke<DocxSearchResult>('docx_search', {
@@ -51,12 +51,12 @@ describe('ai tool docx backend', () => {
           const insertedParagraphBlockId = insertedParagraphSearch.matches[0]?.blockId || ''
 
           const rewriteInsertedParagraph = await harness.invoke<DocxMutationResult>(
-            'docx_paragraph_edit',
+            'docx_text_edit',
             {
               sourcePath: insertParagraph.sourcePath,
-              action: 'replace_text',
-              blockId: insertedParagraphBlockId,
-              text: '新增段落二稿。'
+              query: '新增段落初稿。',
+              replace: '新增段落二稿。',
+              blockIds: [insertedParagraphBlockId]
             }
           )
 
@@ -75,7 +75,7 @@ describe('ai tool docx backend', () => {
             query: '单元格初稿'
           })
           const cellBlockId =
-            insertedCellSearch.matches.find((match) => match.blockType === 'table_cell')?.blockId ||
+            insertedCellSearch.matches.find((match) => match.type === 'table_cell')?.blockId ||
             ''
 
           const updateCreatedCell = await harness.invoke<DocxMutationResult>('docx_table_edit', {

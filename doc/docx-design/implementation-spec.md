@@ -22,7 +22,7 @@ docx 子系统负责：
 ### 2.2 Read / Write tools 层
 
 - read tools 负责 `outline / search / read / history` 的 AI-facing 语义。
-- write tools 负责 `create / paragraph / heading / table / text / style / rollback` 的 AI-facing 语义。
+- write tools 负责 `create / paragraph / heading / table / text / delete / style / rollback` 的 AI-facing 语义。
 - 工具层接收 `sourcePath`，但内部语义始终基于当前 session 的最新状态工作。
 
 ### 2.3 Runtime / Session 层
@@ -34,7 +34,7 @@ docx 子系统负责：
 
 ### 2.4 Worker 层
 
-- 负责 `open / outline / get_block / get_blocks_by_ids / get_blocks_by_range / search / apply_ops / validate`。
+- 负责 `open / outline / get_block / get_blocks_by_ids / get_blocks_by_block_index_range / search / apply_ops / validate`。
 - 负责 run 内 doc snapshot 管理，以及解析结果、block index 与局部 detail cache 的复用。
 
 ### 2.5 OOXML Adapter 层
@@ -61,9 +61,10 @@ docx 子系统负责：
 ### 3.2 outline
 
 - `docx_outline` 返回当前 working draft 的结构概览。
-- 必须支持 `fromBodyIndex + maxBlocks` 分页。
-- 读取路径必须原生分页，禁止 runtime 先全量 outline 再切片。
-- 当结果被截断时，必须显式暴露“结果已截断，文档后续内容未包含”的事实。
+- 必须支持 `ranges` 数组查询，range 类型包括 `percent` 与 `block_index`。
+- `percent` 按顶层 block 总数换算为闭区间 `blockIndex`；多个 ranges 必须合并去重后按文档顺序返回。
+- AI-facing 返回轻量块 `blockId / blockIndex / type / text`，不暴露分页或截断字段。
+- 工具结果超过 `DOCX_AI_RESULT_TOKEN_LIMIT` 时必须返回 `result_too_large`，并在 decision hint 中给出总 block 数与建议缩小范围。
 
 ### 3.3 search
 
@@ -76,14 +77,16 @@ docx 子系统负责：
 ### 3.4 read
 
 - `docx_read_blocks` 基于当前 working draft 返回连续 block 区间。
-- `fromBlockId / toBlockId` 必须按文档顺序返回闭区间内容。
+- `range.type=block_index` 必须按 `fromBlockIndex / toBlockIndex` 返回闭区间内容。
+- `range.type=block_ids` 必须按请求的 blockId 返回对应详细块。
 - 返回内容必须足够支撑 AI 做连续精读，而不是只返回零散片段。
 - 读取路径必须复用同一份解析结果，禁止每个 block 重新全文解析 docx。
-- replay snapshot 从 read 路径升级时也必须按完整分页构建，禁止用固定 `maxBlocks` 上限 silently 丢失长文档尾部内容。
+- replay snapshot 从 read 路径升级时也必须按完整结构构建，禁止用固定块数量上限 silently 丢失长文档尾部内容。
 
 ### 3.5 history
 
 - `docx_history` 统一按 `revision` 暴露历史。
+- `docx_history` 返回 revision 摘要链，同时保留每个 revision 的 `changedBlocks`，供 review / rollback 诊断使用。
 - tool result、resourceContext、history 输出与 rollback 输入都不能回退到 `version` 语义。
 
 ## 4. 编辑规范
@@ -91,11 +94,17 @@ docx 子系统负责：
 ### 4.1 edit 主线
 
 - `docx_create` 只负责建立新的 docx draft target 与初始化 session，本身不直接产出 `draft_review_ready`。
+- `docx_paragraph_edit` 只负责基于 `anchorBlockId` 插入 `paragraphs` 数组；替换文本必须使用 `docx_text_edit`。
+- `docx_heading_edit` 只负责基于 `anchorBlockId` 插入 `headings` 数组；替换标题文字必须使用 `docx_text_edit`。
+- `docx_table_edit` 保持插入表格与 `update_cell` 两类能力。
+- `docx_text_edit` 只负责 query 文本替换；`replace` 为空字符串表示删除文本片段。
+- `docx_delete` 只删除完整 block，支持一次传入多个 `blockIds`，不支持 run 级删除。
 - 纯读阶段不得提前建立 source baseline、active snapshot、revision tree 或 review artifact。
 - 当 `docx_create` 携带初始内容时，必须立即注册一条 create revision，使 create-only 场景也能进入 review / commit 主链。
 - `docx_*_edit` 的内部语义是“对当前 session 的最新状态继续编辑”。
 - 每次 edit 成功后都必须形成一个新的 `revision`。
 - edit 结果必须回写 replay session，并更新当前最新状态。
+- 写工具结果必须继续返回 `postWriteReadback.regions.blocks`，其中 block 结构同时包含 `blockId / blockIndex`。
 
 ### 4.2 changedBlocks / createdBlocks
 
@@ -103,7 +112,7 @@ docx 子系统负责：
 - 新增块必须通过 `createdBlocks` 明确记录，并参与 replay session 节点更新。
 - create revision 必须生成 synthetic `changedBlocks`，把“从空 baseline 到首版工作稿”的新增内容显式纳入 review 变更集。
 - 对 `insert_before / insert_after`，`createdBlocks` 必须按插入区间解析，不能依赖前后 `blockId` 集合差。
-- 原因是当前 `blockId` 由 `bodyIndex` 派生，结构插入后下游块的 `blockId` 可能整体漂移。
+- 原因是当前 `blockId` 由 `blockIndex` 派生，结构插入后下游块的 `blockId` 可能整体漂移。
 
 ### 4.3 rollback
 

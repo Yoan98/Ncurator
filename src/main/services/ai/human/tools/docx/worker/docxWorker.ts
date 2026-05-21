@@ -83,21 +83,17 @@ const getDetailedBlocksByIds = (
   return blocks
 }
 
-const getDetailedBlocksByRange = (
+const getDetailedBlocksByBlockIndexRange = (
   snapshot: DocSnapshot,
-  fromBlockId: string,
-  toBlockId: string
-): DocxDetailedBlock[] | null => {
-  const outline = snapshot.index.outline
-  const fromIndex = outline.findIndex((block) => block.blockId === fromBlockId)
-  const toIndex = outline.findIndex((block) => block.blockId === toBlockId)
-  if (fromIndex < 0 || toIndex < 0 || fromIndex > toIndex) {
-    return null
-  }
-  return getDetailedBlocksByIds(
-    snapshot,
-    outline.slice(fromIndex, toIndex + 1).map((block) => block.blockId)
-  )
+  fromBlockIndex: number,
+  toBlockIndex: number
+): DocxDetailedBlock[] => {
+  const start = Math.max(0, Math.min(fromBlockIndex, toBlockIndex))
+  const end = Math.max(0, Math.max(fromBlockIndex, toBlockIndex))
+  const blockIds = snapshot.index.outline
+    .filter((block) => block.blockIndex >= start && block.blockIndex <= end)
+    .map((block) => block.blockId)
+  return getDetailedBlocksByIds(snapshot, blockIds)
 }
 
 const replaceAllOffsets = (text: string, query: string): Array<{ start: number; end: number }> => {
@@ -159,10 +155,11 @@ const searchBlocks = (input: {
     if (!structureFacts) continue
     out.push({
       blockId: block.blockId,
-      blockType: structureFacts.blockType,
-      bodyIndex: structureFacts.bodyIndex,
-      previousBodyBlockId: structureFacts.previousBodyBlockId,
-      nextBodyBlockId: structureFacts.nextBodyBlockId,
+      type: structureFacts.blockType,
+      blockIndex: structureFacts.blockIndex,
+      matchedText: input.query,
+      previousBlockId: structureFacts.previousBlockId,
+      nextBlockId: structureFacts.nextBlockId,
       tableBlockId: structureFacts.tableBlockId,
       text,
       offsets
@@ -218,8 +215,7 @@ export const handleDocxWorkerRequest = async (
     if (request.action === 'outline') {
       const snapshot = getSnapshot(request.runId, request.payload.docId)
       const outline = buildOutlineOutput(snapshot.index, {
-        fromBodyIndex: request.payload.fromBodyIndex,
-        maxBlocks: request.payload.maxBlocks,
+        ranges: request.payload.ranges,
         includeTables: request.payload.includeTables,
         includeCells: request.payload.includeCells
       })
@@ -228,8 +224,7 @@ export const handleDocxWorkerRequest = async (
         ok: true,
         payload: {
           action: 'outline',
-          blocks: outline.blocks,
-          truncated: outline.truncated
+          blocks: outline.blocks
         }
       }
     }
@@ -267,27 +262,18 @@ export const handleDocxWorkerRequest = async (
       }
     }
 
-    if (request.action === 'get_blocks_by_range') {
+    if (request.action === 'get_blocks_by_block_index_range') {
       const snapshot = getSnapshot(request.runId, request.payload.docId)
-      const blocks = getDetailedBlocksByRange(
-        snapshot,
-        request.payload.fromBlockId,
-        request.payload.toBlockId
-      )
-      if (!blocks) {
-        return {
-          requestId: request.requestId,
-          ok: false,
-          code: 'invalid_input',
-          error: 'invalid block range'
-        }
-      }
       return {
         requestId: request.requestId,
         ok: true,
         payload: {
-          action: 'get_blocks_by_range',
-          blocks
+          action: 'get_blocks_by_block_index_range',
+          blocks: getDetailedBlocksByBlockIndexRange(
+            snapshot,
+            request.payload.fromBlockIndex,
+            request.payload.toBlockIndex
+          )
         }
       }
     }

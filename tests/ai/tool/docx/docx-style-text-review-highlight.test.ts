@@ -43,7 +43,7 @@ describe('ai tool docx backend', () => {
           })
           const paragraphBlockId =
             outline.blocks.find(
-              (block) => block.type === 'paragraph' && block.preview.includes('Alice')
+              (block) => block.type === 'paragraph' && block.text.includes('Alice')
             )?.blockId || ''
           const styled = await harness.invoke<DocxMutationResult>('docx_text_style_edit', {
             sourcePath: 'style-highlight.docx',

@@ -1192,7 +1192,7 @@ const ChatPage: React.FC = () => {
 
       if (event.type === 'run_failed') {
         setLoading(false)
-        setPendingApprovalRequest(null)
+        setPendingApprovalBatch(null)
         setApprovalSubmitting(false)
         updateActiveTurn((current) => ({
           ...current,
@@ -1219,7 +1219,7 @@ const ChatPage: React.FC = () => {
 
       if (event.type === 'run_cancelled') {
         setLoading(false)
-        setPendingApprovalRequest(null)
+        setPendingApprovalBatch(null)
         setApprovalSubmitting(false)
         updateActiveTurn((current) => ({
           ...current,
@@ -1232,7 +1232,7 @@ const ChatPage: React.FC = () => {
 
       if (event.type === 'run_completed') {
         setLoading(false)
-        setPendingApprovalRequest(null)
+        setPendingApprovalBatch(null)
         setApprovalSubmitting(false)
         updateActiveTurn((current) => ({
           ...current,
@@ -1284,7 +1284,7 @@ const ChatPage: React.FC = () => {
     setComposerResetKey((value) => value + 1)
     setLoading(true)
     setSearchTurn(null)
-    setPendingApprovalRequest(null)
+    setPendingApprovalBatch(null)
     setApprovalSubmitting(false)
     setPendingWorkspaceRequest(null)
     assistantMsgIdRef.current = null
@@ -1397,7 +1397,7 @@ const ChatPage: React.FC = () => {
     setComposerResetKey((value) => value + 1)
     setLoading(true)
     setAiRunId(null)
-    setPendingApprovalRequest(null)
+    setPendingApprovalBatch(null)
     setApprovalSubmitting(false)
     setPendingWorkspaceRequest(null)
 
@@ -1547,7 +1547,7 @@ const ChatPage: React.FC = () => {
 
     setLoading(true)
     setSearchTurn(null)
-    setPendingApprovalRequest(null)
+    setPendingApprovalBatch(null)
     setApprovalSubmitting(false)
     assistantMsgIdRef.current = null
     lastSubmittedInputRef.current = pendingWorkspaceRequest.input

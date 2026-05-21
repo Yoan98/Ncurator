@@ -48,7 +48,7 @@ describe('ai tool docx backend', () => {
         try {
           const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
             sourcePath: 'format-variants.docx',
-            maxBlocks: 40
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 39 }]
           })
 
           const headingBlockId = findParagraphBlockIdByText(outline.blocks, 'Weekly Format Variants')
@@ -60,17 +60,17 @@ describe('ai tool docx backend', () => {
 
           const headingBlock = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: outline.sourcePath,
-            fromBlockId: headingBlockId
+            range: { type: 'block_ids', blockIds: [headingBlockId] }
           })
           const ownerCellBlock = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: outline.sourcePath,
-            fromBlockId: ownerCellBlockId
+            range: { type: 'block_ids', blockIds: [ownerCellBlockId] }
           })
-          const updatedParagraph = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
+          const updatedParagraph = await harness.invoke<DocxMutationResult>('docx_text_edit', {
             sourcePath: outline.sourcePath,
-            action: 'replace_text',
-            blockId: narrativeBlockId,
-            text: 'Narrative paragraph updated.'
+            query: 'Narrative paragraph content.',
+            replace: 'Narrative paragraph updated.',
+            blockIds: [narrativeBlockId]
           })
           const updatedCell = await harness.invoke<DocxMutationResult>('docx_table_edit', {
             sourcePath: updatedParagraph.sourcePath,
@@ -84,7 +84,7 @@ describe('ai tool docx backend', () => {
           })
           const readUpdatedParagraph = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: updatedCell.sourcePath,
-            fromBlockId: searchUpdatedParagraph.matches[0]!.blockId
+            range: { type: 'block_ids', blockIds: [searchUpdatedParagraph.matches[0]!.blockId] }
           })
 
           return {

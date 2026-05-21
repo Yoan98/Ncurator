@@ -46,12 +46,12 @@ describe('ai tool hand backend', () => {
                 toolUsePlan: {
                   mode: 'serial',
                   calls: Array.from({ length: HUMAN_DOCX_BATCH_WRITE_LIMIT + 1 }, (_, index) => ({
-                    toolName: 'docx_paragraph_edit',
+                    toolName: 'docx_text_edit',
                     args: {
                       sourcePath: 'batch-limit.docx',
-                      action: 'replace_text',
-                      blockId: `b:${String(index)}`,
-                      text: `Paragraph ${String(index)}`
+                      query: `Paragraph ${String(index)}`,
+                      replace: `Paragraph ${String(index)} updated`,
+                      blockIds: [`b:${String(index)}`]
                     }
                   }))
                 }

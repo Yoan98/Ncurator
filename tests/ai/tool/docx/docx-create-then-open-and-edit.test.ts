@@ -40,21 +40,21 @@ describe('ai tool docx backend', () => {
             ]
           })
           const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
-            sourcePath
+            sourcePath,
+            ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 20 }]
           })
           const paragraphBlockId =
             outline.blocks.find(
-              (block) => block.type === 'paragraph' && block.preview.includes('过拟合：待补充')
+              (block) => block.type === 'paragraph' && block.text.includes('过拟合：待补充')
             )?.blockId || ''
           const read = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath,
-            fromBlockId: paragraphBlockId
+            range: { type: 'block_ids', blockIds: [paragraphBlockId] }
           })
-          const edited = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
+          const edited = await harness.invoke<DocxMutationResult>('docx_text_edit', {
             sourcePath,
-            action: 'replace_text',
-            blockId: paragraphBlockId,
-            text: '过拟合：训练时间过久时容易出现，课件没有写具体处理方法。'
+            query: '过拟合：待补充。',
+            replace: '过拟合：训练时间过久时容易出现，课件没有写具体处理方法。'
           })
           const search = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath,
@@ -83,7 +83,7 @@ describe('ai tool docx backend', () => {
           result.created.created === true &&
             result.created.currentRevisionRef === 'v2' &&
             result.outline.blocks.some(
-              (block) => block.type === 'paragraph' && block.preview.includes('过拟合：待补充')
+              (block) => block.type === 'paragraph' && block.text.includes('过拟合：待补充')
             ) &&
             result.read.blocks.length === 1,
           {
