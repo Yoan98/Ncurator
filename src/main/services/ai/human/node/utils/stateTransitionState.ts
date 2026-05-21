@@ -1,11 +1,9 @@
-import path from 'node:path'
 import {
   appendDecisionRound,
   appendRoundRecord,
   buildMouthExecution,
   buildPreExecutionBlockedExecution
 } from '../../memory/rounds'
-import { getToolSpec } from '../../tools/registry'
 import type {
   HumanThoughtDecision,
   HumanResult,
@@ -14,61 +12,6 @@ import type {
   HumanTraceStep,
   HumanDecisionHint
 } from '../../types'
-
-const DOCX_READ_TOOL_NAMES = new Set(['docx_outline', 'docx_read_blocks'])
-
-const normalizeComparableDocxPath = (sourcePath: string): string =>
-  path.posix.normalize(sourcePath.trim().replace(/\\/g, '/')).replace(/^\.\//, '')
-
-const docxPathMatchesReadbackTarget = (input: {
-  sourcePath: string
-  requestedPath: string
-}): boolean => {
-  const sourcePath = normalizeComparableDocxPath(input.sourcePath)
-  const requestedPath = normalizeComparableDocxPath(input.requestedPath)
-  if (!sourcePath || !requestedPath) return false
-  return (
-    sourcePath === requestedPath ||
-    sourcePath.endsWith(`/${requestedPath}`) ||
-    requestedPath.endsWith(`/${sourcePath}`)
-  )
-}
-
-const docxReadSatisfiesDecisionHint = (input: {
-  thought: HumanThoughtDecision
-  decisionHint: Extract<HumanDecisionHint, { code: 'docx_write_requires_readback' }>
-}): boolean => {
-  if (input.thought.nextAction.action !== 'hand') return false
-
-  return input.thought.nextAction.toolUsePlan.calls.some((call) => {
-    const spec = getToolSpec(call.toolName)
-    if (!spec) return false
-    const meta = spec.resolveExecutionMeta(call.args)
-    if (meta.mutability !== 'read_only' || !DOCX_READ_TOOL_NAMES.has(call.toolName)) return false
-    const requestedPath =
-      typeof call.args.sourcePath === 'string' ? call.args.sourcePath : undefined
-    if (
-      requestedPath &&
-      input.decisionHint.detail.sourcePaths.length > 0 &&
-      !input.decisionHint.detail.sourcePaths.some((sourcePath) =>
-        docxPathMatchesReadbackTarget({
-          sourcePath,
-          requestedPath
-        })
-      )
-    ) {
-      return false
-    }
-    return true
-  })
-}
-
-const buildDocxReadbackBlockedHint = (
-  decisionHint: Extract<HumanDecisionHint, { code: 'docx_write_requires_readback' }>
-): HumanDecisionHint => ({
-  code: 'docx_write_requires_readback',
-  detail: decisionHint.detail
-})
 
 export type HumanTraceItemInput = {
   action: HumanTraceStep['action']
@@ -160,18 +103,6 @@ export const resolveBrainDecisionHint = (input: {
   decisionHint?: HumanDecisionHint
 }): HumanDecisionHint | undefined => {
   if (input.decisionHint) return input.decisionHint
-  if (input.state.execution.pendingDecisionHint?.code === 'docx_write_requires_readback') {
-    if (
-      input.thought.nextAction.action === 'hand' &&
-      docxReadSatisfiesDecisionHint({
-        thought: input.thought,
-        decisionHint: input.state.execution.pendingDecisionHint
-      })
-    ) {
-      return undefined
-    }
-    return buildDocxReadbackBlockedHint(input.state.execution.pendingDecisionHint)
-  }
   if (input.thought.nextAction.action !== 'mouth') return undefined
 
   const pendingItems = (input.thoughtMemory.todolist || [])

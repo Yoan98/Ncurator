@@ -7,18 +7,18 @@ import { writeTestDocxFile } from '../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 
 describe('ai tool hand backend', () => {
-  it('hand-docx-write-requires-readback-decision-hint', async () => {
+  it('hand-docx-write-produces-post-write-readback', async () => {
     await runBackendCase({
-      caseId: 'hand-docx-write-requires-readback-decision-hint',
+      caseId: 'hand-docx-write-post-write-readback',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['hand'],
-      description: '验证一轮 hand 内只要发生 docx 写操作，就会产出必须 readback 的 decision hint。',
+      description: '验证一轮 hand 内发生 docx 写操作后，会返回 postWriteReadback 结果。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
-        await writeTestDocxFile(runtime.workspaceRoot, 'readback-required.docx', [
+        await writeTestDocxFile(runtime.workspaceRoot, 'post-write-readback.docx', [
           { type: 'paragraph', text: 'Original content.' }
         ])
 
@@ -54,7 +54,7 @@ describe('ai tool hand backend', () => {
                     {
                       toolName: 'docx_text_edit',
                       args: {
-                        sourcePath: 'readback-required.docx',
+                        sourcePath: 'post-write-readback.docx',
                         query: 'Original content.',
                         replace: 'Updated content.'
                       }
@@ -72,14 +72,18 @@ describe('ai tool hand backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.state.execution.pendingDecisionHint?.code === 'docx_write_requires_readback' &&
+          result.state.execution.pendingDecisionHint === undefined &&
             result.state.execution.lastToolResults?.[0]?.toolName === 'docx_text_edit' &&
-            result.state.execution.lastToolResults?.[0]?.code === 'ok',
+            result.state.execution.lastToolResults?.[0]?.code === 'ok' &&
+            typeof result.state.execution.lastToolResults?.[0]?.data === 'object' &&
+            result.state.execution.lastToolResults?.[0]?.data !== null &&
+            Array.isArray(
+              (result.state.execution.lastToolResults?.[0]?.data as { postWriteReadback?: { regions?: unknown[] } }).postWriteReadback?.regions
+            ),
           {
-            name: 'docx-write-produces-readback-decision-hint',
-            message: '只要 hand 成功执行过 docx 写，就应把 execution.pendingDecisionHint 置为 docx_write_requires_readback。',
+            name: 'docx-write-produces-post-write-readback',
+            message: '只要 hand 成功执行过 docx 写，就应返回 postWriteReadback，且不再产生旧写后阻断。',
             data: {
-              decisionHint: result.state.execution.pendingDecisionHint,
               lastToolResults: result.state.execution.lastToolResults
             }
           }

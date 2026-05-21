@@ -5,6 +5,8 @@ import type {
   DocxCapabilityToolsRuntimeState,
   DocxCreatedBlock,
   DocxDetailedBlock,
+  DocxPostWriteReadback,
+  DocxPostWriteReadbackRegion,
   DocxOpenMeta,
   DocxOpenStats,
   DocxOp,
@@ -209,6 +211,13 @@ export type DocxToolRuntime = {
     currentRevisionRef?: string
     previousRevisionRef?: string
   }) => DocxToolResourceContext
+  buildPostWriteReadback: (input: {
+    docId: string
+    regions: Array<{
+      fromBlockId: string
+      toBlockId: string
+    }>
+  }) => Promise<DocxPostWriteReadback>
 }
 
 export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxToolRuntime => {
@@ -1564,6 +1573,40 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     effectKind: params.effectKind
   })
 
+  const buildPostWriteReadback = async (input: {
+    docId: string
+    regions: Array<{
+      fromBlockId: string
+      toBlockId: string
+    }>
+  }): Promise<DocxPostWriteReadback> => {
+    const readbackRegions: DocxPostWriteReadbackRegion[] = []
+    for (const region of input.regions) {
+      const response = await callWorker({
+        action: 'get_blocks_by_range',
+        payload: {
+          docId: input.docId,
+          fromBlockId: region.fromBlockId,
+          toBlockId: region.toBlockId
+        }
+      })
+      if (!response.ok) {
+        throw new Error(response.error)
+      }
+      if (response.payload.action !== 'get_blocks_by_range') {
+        throw new Error('worker protocol mismatch (get_blocks_by_range)')
+      }
+      readbackRegions.push({
+        fromBlockId: region.fromBlockId,
+        toBlockId: region.toBlockId,
+        blocks: response.payload.blocks
+      })
+    }
+    return {
+      regions: readbackRegions
+    }
+  }
+
   return {
     input,
     state,
@@ -1588,6 +1631,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     resolveSnapshotTargets,
     resolveCurrentBlockIdFromNodeId,
     resolveLiveBlockIdsFromStableLocators,
-    buildResourceContext
+    buildResourceContext,
+    buildPostWriteReadback
   }
 }

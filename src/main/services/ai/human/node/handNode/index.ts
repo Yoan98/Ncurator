@@ -417,18 +417,19 @@ const executeToolUsePlan = async (input: {
         segmentResults.push(nextResult)
         if (nextResult.ok) {
           completedItems.push(`${segmentCall.toolName}#${String(callIndex + 1)}`)
-          const createdBlocks =
+          const readbackRegions =
             typeof nextResult.data === 'object' &&
             nextResult.data &&
             !Array.isArray(nextResult.data) &&
-            Array.isArray((nextResult.data as { createdBlocks?: Array<{ blockId: string; type?: string }> }).createdBlocks)
-              ? (nextResult.data as { createdBlocks?: Array<{ blockId: string; type?: string }> }).createdBlocks || []
+            Array.isArray((nextResult.data as { postWriteReadback?: { regions?: Array<{ blocks?: Array<{ blockId?: string; type?: string }> }> } }).postWriteReadback?.regions)
+              ? (nextResult.data as { postWriteReadback?: { regions?: Array<{ blocks?: Array<{ blockId?: string; type?: string }> }> } }).postWriteReadback?.regions || []
               : []
           const lastCreatedBlockId =
-            createdBlocks
+            readbackRegions
+              .flatMap((region) => region.blocks || [])
               .filter((block) => block.type !== 'table_cell')
               .slice(-1)[0]?.blockId ||
-            createdBlocks[createdBlocks.length - 1]?.blockId
+            readbackRegions.flatMap((region) => region.blocks || []).slice(-1)[0]?.blockId
           if (
             lastCreatedBlockId &&
             typeof segmentCall.args.anchorBlockId === 'string' &&

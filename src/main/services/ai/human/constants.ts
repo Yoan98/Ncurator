@@ -56,7 +56,6 @@ export const HUMAN_DECISION_HINT_CODES = [
   'hand_tool_limit_exceeded',
   'hand_docx_positioned_write_blocked',
   'hand_docx_batch_write_halted',
-  'docx_write_requires_readback',
   'brain_todolist_incomplete'
 ] as const
 

@@ -107,14 +107,18 @@ describe('ai tool hand backend', () => {
         runtime.assertThat(
           toolNames.join(',') === 'docx_text_edit,docx_read_blocks' &&
             result.state.execution.lastToolResults?.every((item) => item.code === 'ok') &&
-            result.state.execution.pendingDecisionHint?.code === 'docx_write_requires_readback',
+            result.state.execution.pendingDecisionHint === undefined &&
+            typeof result.state.execution.lastToolResults?.[0]?.data === 'object' &&
+            result.state.execution.lastToolResults?.[0]?.data !== null &&
+            Array.isArray(
+              (result.state.execution.lastToolResults?.[0]?.data as { postWriteReadback?: { regions?: unknown[] } }).postWriteReadback?.regions
+            ),
           {
             name: 'serial-docx-chain-executes-in-order',
-            message: 'serial 模式应按顺序执行 docx_text_edit、docx_read_blocks，并在写后留下必须 readback 的 decision hint。',
+            message: 'serial 模式应按顺序执行 docx_text_edit、docx_read_blocks，且写工具返回 postWriteReadback。',
             data: {
               toolNames,
-              lastToolUseResults: result.state.execution.lastToolResults,
-              decisionHint: result.state.execution.pendingDecisionHint
+              lastToolUseResults: result.state.execution.lastToolResults
             }
           }
         )

@@ -42,8 +42,6 @@ export const summarizeDecisionHint = (hint: HumanDecisionHint): string => {
       return `hand 命中复杂定位排版保护；${hint.detail.targetDescription}不能自动编辑。`
     case 'hand_docx_batch_write_halted':
       return `hand 的 docx 批量写已安全停止；已完成 ${String(hint.detail.completedCallCount)}/${String(hint.detail.totalCallCount)} 个写操作，停止原因=${hint.detail.haltReason}。`
-    case 'docx_write_requires_readback':
-      return `hand 本轮已发生 docx 写操作；必须先 readback 最新修订后，才能继续写或结束。`
     case 'brain_todolist_incomplete':
       return `brain 选择 mouth 时 todolist 仍有未完成事项；pending=${renderStringList(
         hint.detail.pendingItems
@@ -138,13 +136,6 @@ export const renderDecisionHintForBrain = (hint: HumanDecisionHint): string => {
         `failedItem=${hint.detail.failedItem}`,
         `recoveryContext=${hint.detail.recoveryContext}`,
         '已完成部分已写入最新安全修订；未完成部分尚未执行。后续决策必须基于当前现状自主收敛。'
-      ].join('\n')
-    case 'docx_write_requires_readback':
-      return [
-        '上一轮 hand 已经对 docx 执行过写操作。',
-        `sourcePaths=${renderStringList(hint.detail.sourcePaths)}`,
-        `latestRevisionRefs=${renderStringList(hint.detail.latestRevisionRefs)}`,
-        '在继续任何 docx 写操作，或直接选择 mouth 之前，必须先对这些文档做一次 readback，并确保读到的 revision 不低于上述最新修订。'
       ].join('\n')
     case 'brain_todolist_incomplete':
       return [

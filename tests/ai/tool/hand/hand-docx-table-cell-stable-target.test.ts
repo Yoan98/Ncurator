@@ -117,14 +117,15 @@ describe('ai tool hand backend', () => {
         runtime.assertThat(
           result.state.execution.lastToolResults?.length === 2 &&
             result.state.execution.lastToolResults.every((item) => item.code === 'ok') &&
-            result.state.execution.pendingDecisionHint?.code === 'docx_write_requires_readback' &&
+            result.state.execution.pendingDecisionHint === undefined &&
+            typeof result.state.execution.lastToolResults?.[0]?.data === 'object' &&
+            result.state.execution.lastToolResults?.[0]?.data !== null &&
             search.matches.some((match) => match.blockType === 'table_cell' && match.text === 'Bob'),
           {
             name: 'table-cell-stable-target-resolves-after-structure-shift',
             message: '前序插入导致 bodyIndex 漂移后，旧 cellBlockId 仍应通过 stable locator 恢复到新表格 cell，而不是误落到 table body block 或直接跳过。',
             data: {
               lastToolResults: result.state.execution.lastToolResults,
-              decisionHint: result.state.execution.pendingDecisionHint,
               search
             }
           }

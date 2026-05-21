@@ -136,7 +136,9 @@ describe('ai tool hand backend', () => {
         runtime.assertThat(
           result.state.execution.lastToolResults?.length === 3 &&
             result.state.execution.lastToolResults.every((item) => item.code === 'ok') &&
-            result.state.execution.pendingDecisionHint?.code === 'docx_write_requires_readback' &&
+            result.state.execution.pendingDecisionHint === undefined &&
+            typeof result.state.execution.lastToolResults?.[0]?.data === 'object' &&
+            result.state.execution.lastToolResults?.[0]?.data !== null &&
             supplementIndex !== -1 &&
             anchorIndex !== -1 &&
             conclusionIndex !== -1 &&
@@ -149,7 +151,6 @@ describe('ai tool hand backend', () => {
               '混合链式写中，insert_before 与 insert_after 不能共用错误的 continuation；同时旧 table cell 仍应稳定恢复并命中更新后的 Bob。',
             data: {
               lastToolResults: result.state.execution.lastToolResults,
-              decisionHint: result.state.execution.pendingDecisionHint,
               outline: outline.blocks
             }
           }

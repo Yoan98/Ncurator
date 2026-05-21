@@ -200,13 +200,6 @@ export const humanDecisionHintSchema = z.discriminatedUnion('code', [
     })
   }),
   z.object({
-    code: z.literal('docx_write_requires_readback'),
-    detail: z.object({
-      sourcePaths: z.array(z.string().min(1)),
-      latestRevisionRefs: z.array(z.string().min(1))
-    })
-  }),
-  z.object({
     code: z.literal('brain_todolist_incomplete'),
     detail: z.object({
       pendingItems: z.array(z.string().min(1)).min(1)

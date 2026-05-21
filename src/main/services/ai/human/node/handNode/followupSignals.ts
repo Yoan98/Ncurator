@@ -94,29 +94,6 @@ export const deriveHandFollowupSignals = (input: {
     })
   }
 
-  const docxWriteResults = input.results.filter((result) => DOCX_WRITE_TOOL_NAMES.has(result.toolName))
-  if (docxWriteResults.length > 0) {
-    const sourcePaths = [...new Set(
-      docxWriteResults
-        .map((result) => result.resourceContext?.sourcePath)
-        .filter((value): value is string => typeof value === 'string' && value.length > 0)
-    )]
-    const latestRevisionRefs = [...new Set(
-      docxWriteResults
-        .map((result) => result.resourceContext?.currentRevisionRef)
-        .filter((value): value is string => typeof value === 'string' && value.length > 0)
-    )]
-    return {
-      decisionHint: {
-        code: 'docx_write_requires_readback',
-        detail: {
-          sourcePaths,
-          latestRevisionRefs
-        }
-      }
-    }
-  }
-
   return {}
 }
 

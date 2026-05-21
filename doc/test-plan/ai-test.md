@@ -435,9 +435,9 @@
 - 测试类型：`backend`
 - 实现状态：`已实现`
 - What：验证 hand 在 `serial` 模式下会按顺序执行 `docx` 写入与后续读取。
-- Why：这是 hand 承接 docx 写后读回闭环的最小基线。
+- Why：这是 hand 承接 docx 写工具返回复核信息后继续执行后续读取的最小基线。
 - How：真实执行 `docx_text_edit -> docx_read_blocks`。
-- Oracle：工具结果按顺序成功返回，且写后留下 `docx_write_requires_readback`。
+- Oracle：工具结果按顺序成功返回，写工具结果包含 `postWriteReadback.regions`，且不产生旧写后阻断 decision hint。
 - Not：不验证复杂定位恢复。
 
 ##### `hand-docx-batch-write-limit`
@@ -448,7 +448,7 @@
 - Why：单轮 docx 串行写存在明确上限，超过上限应在真正落工具前收口，避免生成超长连续写批次。
 - How：构造超过 5 个纯段落写入的 serial plan。
 - Oracle：返回 `hand_plan_invalid`，`reason=docx_batch_write_limit_exceeded`，并带上 `callCount` 与 `limit`。
-- Not：不验证后续 readback 或分批续写策略。
+- Not：不验证后续额外读取或分批续写策略。
 
 ##### `hand-docx-serial-successor-chain`
 
@@ -457,7 +457,7 @@
 - What：验证同批 docx 串行写中，`replace_text` 后继续对同一原锚点连续 `insert_after` 仍能完成。
 - Why：这是“旧 blockId 失效后靠 successor/live resolve 继续”的核心回归。
 - How：真实执行 `replace_text -> insert_after -> insert_after`，后两步都沿原始锚点继续追加。
-- Oracle：三步全部成功，新段落顺序正确，且整批结束后留下 `docx_write_requires_readback`。
+- Oracle：三步全部成功，新段落顺序正确，且每次写工具结果包含 `postWriteReadback.regions`。
 - Not：不验证表格恢复。
 
 ##### `hand-docx-table-cell-stable-target`
@@ -477,7 +477,7 @@
 - What：验证混合段落与表格的同批串行写，在 `insert_before`、`update_cell`、`insert_after` 组合下仍能稳定完成。
 - Why：这条 case 同时覆盖表格 cell 恢复与 continuation 方向保护，是更接近真实风险周报的链式写路径。
 - How：真实执行 `insert_before paragraph -> update_cell -> insert_after paragraph`，其中前后插入共用同一原锚点。
-- Oracle：前插内容位于原锚点前，后插内容位于原锚点后，表格 cell 正确更新，整批结束后留下 `docx_write_requires_readback`。
+- Oracle：前插内容位于原锚点前，后插内容位于原锚点后，表格 cell 正确更新，且写工具结果包含 `postWriteReadback.regions`。
 - Not：不验证 halted decision hint 分支。
 
 ##### `hand-docx-serial-snapshot-bound-edit-plan-invalid-target`
@@ -818,7 +818,7 @@
 - 实现状态：`已实现`
 - What：验证 mock-llm 下 `human` 仍通过真实 docx 工具链完成打开、编辑和搜索。
 - Why：复杂 docx 编辑是 `human` 的长期高价值真实任务类型。
-- How：先写入 fixture docx，再通过真实 `docx_text_edit -> docx_read_blocks -> docx_search` 完成一次正文替换、写后读回和定位。
+- How：先写入 fixture docx，再通过真实 `docx_text_edit -> docx_read_blocks -> docx_search` 完成一次正文替换、读取确认和定位。
 - Oracle：真实 `docx_text_edit` 只产生一处 `changedBlocks`，真实 `docx_search` 与 `docx_read_blocks` 都能命中新文本，任务最终完成。
 - Not：不验证 review UI 或最终落盘流程。
 
@@ -891,7 +891,7 @@
 - What：验证 live 模式下 `human` 会在一个真实长任务里串起模板定位、上周周报风格参考、多源工作资料取证、新建本周周报 docx 与待确认稿交付。
 - Why：`human/live` 需要至少一条长期高价值复杂样例，覆盖 workspace 搜索、真实材料辨别、跨 `docx + txt` 综合、create-target 写入与最终交付链路；同时守住“共享 workspace 中全部已支持文件都已进入真实 KB，但关键事实仍可能来自非 KB 文本材料”的更真实用户环境。
 - How：注入真实 live LLM 配置；workspace 直接使用 `tests/fixtures/workspace` 共享目录，并在 run 前通过真实生产文件 ingestion 链把该目录下当前所有已支持文件索引进 KB；随后由测试在运行时重建 `工作/` 目录：包含一份不可直接覆盖的周报模板、一份只能参考风格的上周已发版周报、多份提供本周事实的 `docx` 工作文档、数份必须读取的 `txt` 口径/跟进材料，以及少量看起来相关但不应直接采用的干扰文件；直接输入“帮我写下这周的周报，基于这个周报模版和我的工作文档信息，记得参考我上周写的周报风格来哦”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；共享 workspace 中全部已支持文件均被索引；事件流中至少出现一次 `terminal_run`、至少一次真实资料读取/检索步骤（可来自 `docx_*`、`kb_*` 或其他正式支持的读工具）以及一次 `docx_create`；模型会打开模板和上周周报；最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；正式模板与既有工作 `docx` 文件都不被覆盖；新建周报待确认稿中应写入本周整体判断、负责人说明和后续动作；若发生 docx 写，则事件流中应满足写后 readback；不要求固定取证路径，不要求固定风险结论措辞，只要任务真实完成即可通过。
+- Oracle：任务最终完成；共享 workspace 中全部已支持文件均被索引；事件流中至少出现一次 `terminal_run`、至少一次真实资料读取/检索步骤（可来自 `docx_*`、`kb_*` 或其他正式支持的读工具）以及一次 `docx_create`；模型会打开模板和上周周报；最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；正式模板与既有工作 `docx` 文件都不被覆盖；新建周报待确认稿中应写入本周整体判断、负责人说明和后续动作；若发生 docx 写，则写工具结果应包含 `postWriteReadback.regions`；不要求固定取证路径，不要求固定风险结论措辞，只要任务真实完成即可通过。
 - Not：不绑定最终答案措辞，不要求固定是否使用 `docx_outline` 还是 `docx_read_blocks`，也不强制一定调用 KB；若模型仅凭工作区材料完成任务，也视为符合预期。
 
 ##### `human-docx-cause-remedy-reading-live`

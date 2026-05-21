@@ -218,8 +218,7 @@ describe('ai human live backend', () => {
           createdRelativePaths.every(
             (sourcePath) => !result.workspaceSeed.preexistingDocxRelativePaths.includes(sourcePath)
           )
-        const decisionHints = filterAiRunEventsByType(events, 'decision_hint')
-        const writeStartedEvents = filterAiRunEventsByType(events, 'tool_call_started').filter(
+        const writeResultEvents = filterAiRunEventsByType(events, 'tool_call_result').filter(
           (event) =>
             [
               'docx_create',
@@ -230,21 +229,19 @@ describe('ai human live backend', () => {
               'docx_text_style_edit'
             ].includes(event.toolName)
         )
-        const readStartedEvents = filterAiRunEventsByType(events, 'tool_call_started').filter(
-          (event) => ['docx_outline', 'docx_read_blocks'].includes(event.toolName)
-        )
-        const hasReadbackAfterWrite =
-          writeStartedEvents.length === 0 ||
-          writeStartedEvents.some((writeEvent) =>
-            readStartedEvents.some(
-              (readEvent) =>
-                readEvent.createdAt >= writeEvent.createdAt &&
-                typeof readEvent.input.sourcePath === 'string' &&
-                typeof writeEvent.input.sourcePath === 'string' &&
-                toWorkspaceRelativePath(runtime.workspaceRoot, readEvent.input.sourcePath) ===
-                  toWorkspaceRelativePath(runtime.workspaceRoot, writeEvent.input.sourcePath)
+        const hasPostWriteReadback =
+          writeResultEvents.length === 0 ||
+          writeResultEvents.some((event) => {
+            const data = event.result?.data
+            return (
+              data !== null &&
+              typeof data === 'object' &&
+              Array.isArray(
+                (data as { postWriteReadback?: { regions?: Array<object> } }).postWriteReadback
+                  ?.regions
+              )
             )
-          )
+          })
         const reviewArtifact = result.output?.artifacts?.find(
           (artifact) => artifact.kind === 'draft_review'
         )
@@ -409,16 +406,13 @@ describe('ai human live backend', () => {
         )
 
         runtime.assertThat(
-          decisionHints.some((event) => event.code === 'docx_write_requires_readback') &&
-            hasReadbackAfterWrite,
+          hasPostWriteReadback,
           {
-            name: 'human-live-risk-report-writes-then-reads-back-latest-docx',
+            name: 'human-live-risk-report-write-results-include-post-write-readback',
             message:
-              '同文件 docx 写后，live case 事件流里应出现 docx_write_requires_readback，并在之后出现对应 readback。',
+              '同文件 docx 写后，写工具结果应包含 postWriteReadback，用于 brain 判断写入效果。',
             data: {
-              decisionHints,
-              writeStartedEvents,
-              readStartedEvents,
+              writeResultEvents,
               createdRelativePaths,
               writeRelativePaths
             }

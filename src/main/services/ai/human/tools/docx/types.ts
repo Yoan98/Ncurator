@@ -131,6 +131,31 @@ export type DocxDetailedBlock =
   | DocxDetailedTableBlock
   | DocxDetailedCellBlock
 
+export type DocxPostWriteReadbackRegion = {
+  fromBlockId: string
+  toBlockId: string
+  blocks: DocxDetailedBlock[]
+}
+
+export type DocxPostWriteReadback = {
+  regions: DocxPostWriteReadbackRegion[]
+}
+
+export type DocxWriteReadbackWindowPolicy = {
+  beforeBlockCount: number
+  afterBlockCount: number
+}
+
+export type DocxWriteReadbackAction =
+  | 'create_document'
+  | 'insert_before'
+  | 'insert_after'
+  | 'replace_block'
+  | 'delete_block'
+  | 'update_table_cell'
+  | 'replace_text'
+  | 'style_text'
+
 export type DocxSearchMode = z.infer<typeof docxSearchModeSchema>
 export type DocxCreateBlock = z.infer<typeof docxCreateBlockSchema>
 export type DocxCreateRequest = z.infer<typeof docxCreateSchema>

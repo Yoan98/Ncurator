@@ -620,16 +620,6 @@ type HumanDecisionHint =
       }
     }
   | {
-      // hand 本轮已发生 docx 写；后续继续写或直接 mouth 前都必须先 readback 最新修订。
-      code: 'docx_write_requires_readback'
-      detail: {
-        // 需要先 readback 的 docx 源路径。
-        sourcePaths: string[]
-        // 对应源路径当前要求读回的最新 revision。
-        latestRevisionRefs: string[]
-      }
-    }
-  | {
       // brain 试图直接去 mouth，但 todolist 里仍有未完成事项。
       code: 'brain_todolist_incomplete'
       detail: {

@@ -101,6 +101,23 @@ const reduceDocxRevisions = (value: JsonValue | undefined): JsonValue | undefine
   })
 }
 
+const reduceDocxPostWriteReadback = (value: JsonValue | undefined): JsonValue | undefined => {
+  if (!isJsonObject(value)) return undefined
+  const reducedRegions = Array.isArray(value.regions)
+    ? value.regions.map((region) => {
+        if (!isJsonObject(region)) return region
+        return {
+          fromBlockId: readStringField(region, 'fromBlockId'),
+          toBlockId: readStringField(region, 'toBlockId'),
+          ...(reduceDocxBlocks(region.blocks) ? { blocks: reduceDocxBlocks(region.blocks) } : {})
+        }
+      })
+    : undefined
+  return {
+    ...(reducedRegions ? { regions: reducedRegions } : {})
+  }
+}
+
 const buildBrainToolReturnValue = (result: HumanHistoryToolResult): JsonValue => {
   const base: JsonObject = {
     ok: result.ok,
@@ -114,9 +131,17 @@ const buildBrainToolReturnValue = (result: HumanHistoryToolResult): JsonValue =>
 
   switch (result.toolName) {
     case 'docx_create':
+    case 'docx_paragraph_edit':
+    case 'docx_heading_edit':
+    case 'docx_table_edit':
+    case 'docx_text_edit':
+    case 'docx_text_style_edit':
       return {
         ...base,
-        ...pickObjectFields(result.data, ['sourcePath', 'currentRevisionRef', 'created', 'summary'])
+        ...pickObjectFields(result.data, ['sourcePath', 'previousRevisionRef', 'currentRevisionRef', 'summary', 'created']),
+        ...(reduceDocxPostWriteReadback(result.data.postWriteReadback)
+          ? { postWriteReadback: reduceDocxPostWriteReadback(result.data.postWriteReadback) }
+          : {})
       }
     case 'docx_read_blocks':
       return {
@@ -173,8 +198,6 @@ const buildBrainToolReturnValue = (result: HumanHistoryToolResult): JsonValue =>
           'totalMatchCount',
           'fromBlockId',
           'toBlockId',
-          'changedBlocks',
-          'createdBlocks',
           'items',
           'total',
           'hits',

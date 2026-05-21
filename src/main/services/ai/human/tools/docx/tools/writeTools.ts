@@ -10,9 +10,12 @@ import type {
   DocxOutlineBlock,
   DocxParagraphSpec,
   DocxTableSpec,
-  DocxTextStyle
+  DocxPostWriteReadback,
+  DocxTextStyle,
+  DocxWriteReadbackAction
 } from '../types'
 import type { DocxToolRuntime } from '../runtime'
+import { DOCX_POST_WRITE_READBACK_WINDOW_POLICY } from '../writeReadbackPolicy'
 import {
   DOCX_CREATE_TOOL_SPEC,
   DOCX_HEADING_EDIT_TOOL_SPEC,
@@ -106,6 +109,183 @@ const fetchDetailedBlock = async (
 const buildPositionedReadOnlyMessage = (): string => DOCX_POSITIONED_LAYOUT_PROTECTION_MESSAGE
 
 const buildCreateSummary = (sourcePath: string): string => `已建立新的 docx 草稿会话：${sourcePath}`
+
+const resolveWriteReadbackAction = (input: {
+  toolName: string
+  action: string
+}): DocxWriteReadbackAction => {
+  if (input.toolName === 'docx_create') return 'create_document'
+  if (input.toolName === 'docx_text_edit') return 'replace_text'
+  if (input.toolName === 'docx_text_style_edit') return 'style_text'
+  if (input.action === 'delete') return 'delete_block'
+  if (input.action === 'update_cell') return 'update_table_cell'
+  if (input.action === 'replace_text') return 'replace_block'
+  return input.action as DocxWriteReadbackAction
+}
+
+const getOutlineBlockIndex = (blocks: readonly DocxOutlineBlock[], blockId: string): number =>
+  blocks.findIndex((block) => block.blockId === blockId)
+
+const toRangeRegion = (
+  blocks: readonly DocxOutlineBlock[],
+  startIndex: number,
+  endIndex: number
+): { fromBlockId: string; toBlockId: string } | null => {
+  if (blocks.length === 0) return null
+  if (startIndex < 0 || endIndex < 0 || startIndex > endIndex) return null
+  const fromBlockId = blocks[startIndex]?.blockId
+  const toBlockId = blocks[endIndex]?.blockId
+  if (!fromBlockId || !toBlockId) return null
+  return {
+    fromBlockId,
+    toBlockId
+  }
+}
+
+const mergeReadbackRegions = (
+  blocks: readonly DocxOutlineBlock[],
+  regions: Array<{ fromBlockId: string; toBlockId: string }>
+): Array<{ fromBlockId: string; toBlockId: string }> => {
+  const indexByBlockId = new Map(blocks.map((block, index) => [block.blockId, index] as const))
+  const orderedRanges = regions
+    .map((region) => {
+      const fromIndex = indexByBlockId.get(region.fromBlockId)
+      const toIndex = indexByBlockId.get(region.toBlockId)
+      if (typeof fromIndex !== 'number' || typeof toIndex !== 'number' || fromIndex > toIndex) {
+        return null
+      }
+      return {
+        fromBlockId: region.fromBlockId,
+        toBlockId: region.toBlockId,
+        fromIndex,
+        toIndex
+      }
+    })
+    .filter(
+      (
+        region
+      ): region is {
+        fromBlockId: string
+        toBlockId: string
+        fromIndex: number
+        toIndex: number
+      } => Boolean(region)
+    )
+    .sort((left, right) => left.fromIndex - right.fromIndex)
+
+  const merged: Array<{ fromIndex: number; toIndex: number }> = []
+  for (const region of orderedRanges) {
+    const last = merged[merged.length - 1]
+    if (!last || region.fromIndex > last.toIndex + 1) {
+      merged.push({
+        fromIndex: region.fromIndex,
+        toIndex: region.toIndex
+      })
+      continue
+    }
+    last.toIndex = Math.max(last.toIndex, region.toIndex)
+  }
+
+  return merged
+    .map((region) => toRangeRegion(blocks, region.fromIndex, region.toIndex))
+    .filter((region): region is { fromBlockId: string; toBlockId: string } => Boolean(region))
+}
+
+const buildCurrentOutlineReadbackRegions = (input: {
+  outlineBlocks: DocxOutlineBlock[]
+  targetBlockIds: string[]
+  beforeBlockCount: number
+  afterBlockCount: number
+}): Array<{ fromBlockId: string; toBlockId: string }> => {
+  const regions: Array<{ fromBlockId: string; toBlockId: string }> = []
+  const uniqueTargetBlockIds = [...new Set(input.targetBlockIds)]
+  for (const targetBlockId of uniqueTargetBlockIds) {
+    const targetIndex = getOutlineBlockIndex(input.outlineBlocks, targetBlockId)
+    if (targetIndex < 0) continue
+    const startIndex = Math.max(0, targetIndex - input.beforeBlockCount)
+    const endIndex = Math.min(input.outlineBlocks.length - 1, targetIndex + input.afterBlockCount)
+    const region = toRangeRegion(input.outlineBlocks, startIndex, endIndex)
+    if (region) regions.push(region)
+  }
+  return mergeReadbackRegions(input.outlineBlocks, regions)
+}
+
+const buildDeletedReadbackRegions = (input: {
+  previousOutlineBlocks: DocxOutlineBlock[]
+  currentOutlineBlocks: DocxOutlineBlock[]
+  targetBlockIds: string[]
+  beforeBlockCount: number
+  afterBlockCount: number
+}): Array<{ fromBlockId: string; toBlockId: string }> => {
+  const currentBlockIdSet = new Set(input.currentOutlineBlocks.map((block) => block.blockId))
+  const regions: Array<{ fromBlockId: string; toBlockId: string }> = []
+  const uniqueTargetBlockIds = [...new Set(input.targetBlockIds)]
+
+  for (const targetBlockId of uniqueTargetBlockIds) {
+    const targetIndex = getOutlineBlockIndex(input.previousOutlineBlocks, targetBlockId)
+    if (targetIndex < 0) continue
+    const startIndex = Math.max(0, targetIndex - input.beforeBlockCount)
+    const endIndex = Math.min(input.previousOutlineBlocks.length - 1, targetIndex + input.afterBlockCount)
+    const candidateBlockIds = input.previousOutlineBlocks
+      .slice(startIndex, endIndex + 1)
+      .map((block) => block.blockId)
+      .filter((blockId) => blockId !== targetBlockId && currentBlockIdSet.has(blockId))
+    if (candidateBlockIds.length === 0) continue
+    regions.push({
+      fromBlockId: candidateBlockIds[0],
+      toBlockId: candidateBlockIds[candidateBlockIds.length - 1]
+    })
+  }
+
+  return mergeReadbackRegions(input.currentOutlineBlocks, regions)
+}
+
+const buildPostWriteReadback = async (input: {
+  runtime: DocxToolRuntime
+  action: DocxWriteReadbackAction
+  currentDocId: string
+  previousDocId?: string
+  targetBlockIds: string[]
+}): Promise<DocxPostWriteReadback> => {
+  const policy = DOCX_POST_WRITE_READBACK_WINDOW_POLICY[input.action]
+  const currentOutlineBlocks = await fetchOutlineBlocks(input.runtime, input.currentDocId)
+
+  let regions: Array<{ fromBlockId: string; toBlockId: string }> = []
+  if (input.action === 'create_document') {
+    if (currentOutlineBlocks.length > 0) {
+      const endIndex = Math.min(
+        currentOutlineBlocks.length - 1,
+        Math.max(0, policy.afterBlockCount)
+      )
+      const region = toRangeRegion(currentOutlineBlocks, 0, endIndex)
+      if (region) regions = [region]
+    }
+  } else if (input.action === 'delete_block') {
+    const previousDocId = input.previousDocId
+    if (previousDocId) {
+      const previousOutlineBlocks = await fetchOutlineBlocks(input.runtime, previousDocId)
+      regions = buildDeletedReadbackRegions({
+        previousOutlineBlocks,
+        currentOutlineBlocks,
+        targetBlockIds: input.targetBlockIds,
+        beforeBlockCount: policy.beforeBlockCount,
+        afterBlockCount: policy.afterBlockCount
+      })
+    }
+  } else {
+    regions = buildCurrentOutlineReadbackRegions({
+      outlineBlocks: currentOutlineBlocks,
+      targetBlockIds: input.targetBlockIds,
+      beforeBlockCount: policy.beforeBlockCount,
+      afterBlockCount: policy.afterBlockCount
+    })
+  }
+
+  return input.runtime.buildPostWriteReadback({
+    docId: input.currentDocId,
+    regions
+  })
+}
 
 const documentExists = async (sourcePath: string): Promise<boolean> => {
   try {
@@ -260,6 +440,21 @@ type ApplySingleEditResult =
       createdBlocks: DocxCreatedBlock[]
     }
 
+type WriteToolResult = {
+  ok: true
+  code: 'ok'
+  summary: string
+  sourcePath: string
+  previousRevisionRef?: string
+  currentRevisionRef: string
+  created?: true
+  changedBlocks: DocxChangedBlock[]
+  createdBlocks?: DocxCreatedBlock[]
+  warnings: string[]
+  postWriteReadback: DocxPostWriteReadback
+  resourceContext: ReturnType<DocxToolRuntime['buildResourceContext']>
+}
+
 const applySingleEdit = async (input: {
   runtime: DocxToolRuntime
   toolName: string
@@ -334,6 +529,49 @@ const applySingleEdit = async (input: {
     warnings: workerResponse.payload.warnings,
     nextDocId: workerResponse.payload.newDocId,
     createdBlocks
+  }
+}
+
+const buildWriteToolResult = async (input: {
+  runtime: DocxToolRuntime
+  action: DocxWriteReadbackAction
+  sourcePath: string
+  previousRevisionRef: string
+  currentRevisionRef: string
+  nextDocId: string
+  summary: string
+  changedBlocks: DocxChangedBlock[]
+  createdBlocks: DocxCreatedBlock[]
+  warnings: string[]
+  targetBlockIds: string[]
+  previousDocId?: string
+}): Promise<WriteToolResult> => {
+  const postWriteReadback = await buildPostWriteReadback({
+    runtime: input.runtime,
+    action: input.action,
+    currentDocId: input.nextDocId,
+    previousDocId: input.previousDocId,
+    targetBlockIds: input.targetBlockIds
+  })
+
+  return {
+    ok: true,
+    code: 'ok',
+    summary: input.summary,
+    sourcePath: input.sourcePath,
+    previousRevisionRef: input.previousRevisionRef,
+    currentRevisionRef: input.currentRevisionRef,
+    created: input.created,
+    changedBlocks: input.changedBlocks,
+    createdBlocks: input.createdBlocks,
+    warnings: input.warnings,
+    postWriteReadback,
+    resourceContext: input.runtime.buildResourceContext({
+      sourcePath: input.sourcePath,
+      effectKind: 'mutated',
+      previousRevisionRef: input.previousRevisionRef,
+      currentRevisionRef: input.currentRevisionRef
+    })
   }
 }
 
@@ -513,19 +751,20 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           replaySession: registered.session
         })
 
-        const result = {
-          ok: true,
-          code: 'ok' as const,
-          summary: buildCreateSummary(registered.session.sourcePath),
+        const result = await buildWriteToolResult({
+          runtime,
+          action: 'create_document',
           sourcePath: registered.session.sourcePath,
+          previousRevisionRef: registered.previousRevisionRef,
           currentRevisionRef: registered.currentRevisionRef,
+          nextDocId: workingDocId,
+          summary: buildCreateSummary(registered.session.sourcePath),
           created: true,
-          resourceContext: runtime.buildResourceContext({
-            sourcePath: registered.session.sourcePath,
-            effectKind: 'mutated',
-            currentRevisionRef: registered.currentRevisionRef
-          })
-        }
+          changedBlocks: registered.changedBlocks || [],
+          createdBlocks: registered.createdBlocks || [],
+          warnings: [],
+          targetBlockIds: []
+        })
 
         return finalizeDocxToolSuccess({
           runtime,
@@ -688,28 +927,31 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         })
       }
 
-      const result = {
-        ok: true,
-        code: 'ok' as const,
+      const result = await buildWriteToolResult({
+        runtime,
+        action: resolveWriteReadbackAction({
+          toolName,
+          action: args.action
+        }),
+        sourcePath: sessionResult.sourcePath,
+        previousRevisionRef: applied.previousRevisionRef,
+        currentRevisionRef: applied.currentRevisionRef,
+        nextDocId: applied.nextDocId,
         summary: buildEditSummary({
           toolName,
           actionLabel: `段落${args.action}`,
           changedBlocks: applied.changedBlocks,
           warnings: applied.warnings
         }),
-        sourcePath: sessionResult.sourcePath,
-        previousRevisionRef: applied.previousRevisionRef,
-        currentRevisionRef: applied.currentRevisionRef,
         changedBlocks: applied.changedBlocks,
         createdBlocks: applied.createdBlocks,
         warnings: applied.warnings,
-        resourceContext: runtime.buildResourceContext({
-          sourcePath: sessionResult.sourcePath,
-          effectKind: 'mutated',
-          previousRevisionRef: applied.previousRevisionRef,
-          currentRevisionRef: applied.currentRevisionRef
-        })
-      }
+        targetBlockIds:
+          args.action === 'delete'
+            ? [args.blockId!]
+            : [args.action === 'replace_text' ? args.blockId! : args.anchorBlockId!],
+        previousDocId: sessionResult.docId
+      })
       return finalizeDocxToolSuccess({
         runtime,
         toolName,
@@ -722,7 +964,8 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           previousRevisionRef: result.previousRevisionRef,
           currentRevisionRef: result.currentRevisionRef,
           changedCount: result.changedBlocks.length,
-          createdBlocks: result.createdBlocks
+          createdBlocks: result.createdBlocks,
+          postWriteReadback: result.postWriteReadback
         },
         draftDocId: applied.nextDocId,
         activity: {
@@ -827,28 +1070,31 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         })
       }
 
-      const result = {
-        ok: true,
-        code: 'ok' as const,
+      const result = await buildWriteToolResult({
+        runtime,
+        action: resolveWriteReadbackAction({
+          toolName,
+          action: args.action
+        }),
+        sourcePath: sessionResult.sourcePath,
+        previousRevisionRef: applied.previousRevisionRef,
+        currentRevisionRef: applied.currentRevisionRef,
+        nextDocId: applied.nextDocId,
         summary: buildEditSummary({
           toolName,
           actionLabel: `标题${args.action}`,
           changedBlocks: applied.changedBlocks,
           warnings: applied.warnings
         }),
-        sourcePath: sessionResult.sourcePath,
-        previousRevisionRef: applied.previousRevisionRef,
-        currentRevisionRef: applied.currentRevisionRef,
         changedBlocks: applied.changedBlocks,
         createdBlocks: applied.createdBlocks,
         warnings: applied.warnings,
-        resourceContext: runtime.buildResourceContext({
-          sourcePath: sessionResult.sourcePath,
-          effectKind: 'mutated',
-          previousRevisionRef: applied.previousRevisionRef,
-          currentRevisionRef: applied.currentRevisionRef
-        })
-      }
+        targetBlockIds:
+          args.action === 'replace_text'
+            ? [args.blockId!]
+            : [args.anchorBlockId!],
+        previousDocId: sessionResult.docId
+      })
       return finalizeDocxToolSuccess({
         runtime,
         toolName,
@@ -861,7 +1107,8 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           previousRevisionRef: result.previousRevisionRef,
           currentRevisionRef: result.currentRevisionRef,
           changedCount: result.changedBlocks.length,
-          createdBlocks: result.createdBlocks
+          createdBlocks: result.createdBlocks,
+          postWriteReadback: result.postWriteReadback
         },
         draftDocId: applied.nextDocId,
         activity: {
@@ -965,28 +1212,31 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         })
       }
 
-      const result = {
-        ok: true,
-        code: 'ok' as const,
+      const result = await buildWriteToolResult({
+        runtime,
+        action: resolveWriteReadbackAction({
+          toolName,
+          action: args.action
+        }),
+        sourcePath: sessionResult.sourcePath,
+        previousRevisionRef: applied.previousRevisionRef,
+        currentRevisionRef: applied.currentRevisionRef,
+        nextDocId: applied.nextDocId,
         summary: buildEditSummary({
           toolName,
           actionLabel: `表格${args.action}`,
           changedBlocks: applied.changedBlocks,
           warnings: applied.warnings
         }),
-        sourcePath: sessionResult.sourcePath,
-        previousRevisionRef: applied.previousRevisionRef,
-        currentRevisionRef: applied.currentRevisionRef,
         changedBlocks: applied.changedBlocks,
         createdBlocks: applied.createdBlocks,
         warnings: applied.warnings,
-        resourceContext: runtime.buildResourceContext({
-          sourcePath: sessionResult.sourcePath,
-          effectKind: 'mutated',
-          previousRevisionRef: applied.previousRevisionRef,
-          currentRevisionRef: applied.currentRevisionRef
-        })
-      }
+        targetBlockIds:
+          args.action === 'update_cell'
+            ? [args.cellBlockId!]
+            : [args.anchorBlockId!],
+        previousDocId: sessionResult.docId
+      })
       return finalizeDocxToolSuccess({
         runtime,
         toolName,
@@ -999,7 +1249,8 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           previousRevisionRef: result.previousRevisionRef,
           currentRevisionRef: result.currentRevisionRef,
           changedCount: result.changedBlocks.length,
-          createdBlocks: result.createdBlocks
+          createdBlocks: result.createdBlocks,
+          postWriteReadback: result.postWriteReadback
         },
         draftDocId: applied.nextDocId,
         activity: {
@@ -1084,27 +1335,25 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         })
       }
 
-      const result = {
-        ok: true,
-        code: 'ok' as const,
+      const result = await buildWriteToolResult({
+        runtime,
+        action: 'replace_text',
+        sourcePath: sessionResult.sourcePath,
+        previousRevisionRef: applied.previousRevisionRef,
+        currentRevisionRef: applied.currentRevisionRef,
+        nextDocId: applied.nextDocId,
         summary: buildEditSummary({
           toolName,
           actionLabel: '文本替换',
           changedBlocks: applied.changedBlocks,
           warnings: applied.warnings
         }),
-        sourcePath: sessionResult.sourcePath,
-        previousRevisionRef: applied.previousRevisionRef,
-        currentRevisionRef: applied.currentRevisionRef,
         changedBlocks: applied.changedBlocks,
+        createdBlocks: applied.createdBlocks,
         warnings: applied.warnings,
-        resourceContext: runtime.buildResourceContext({
-          sourcePath: sessionResult.sourcePath,
-          effectKind: 'mutated',
-          previousRevisionRef: applied.previousRevisionRef,
-          currentRevisionRef: applied.currentRevisionRef
-        })
-      }
+        targetBlockIds,
+        previousDocId: sessionResult.docId
+      })
       return finalizeDocxToolSuccess({
         runtime,
         toolName,
@@ -1116,7 +1365,8 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           sourcePath: result.sourcePath,
           previousRevisionRef: result.previousRevisionRef,
           currentRevisionRef: result.currentRevisionRef,
-          changedCount: result.changedBlocks.length
+          changedCount: result.changedBlocks.length,
+          postWriteReadback: result.postWriteReadback
         },
         draftDocId: applied.nextDocId,
         activity: {
@@ -1194,27 +1444,25 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         })
       }
 
-      const result = {
-        ok: true,
-        code: 'ok' as const,
+      const result = await buildWriteToolResult({
+        runtime,
+        action: 'style_text',
+        sourcePath: sessionResult.sourcePath,
+        previousRevisionRef: applied.previousRevisionRef,
+        currentRevisionRef: applied.currentRevisionRef,
+        nextDocId: applied.nextDocId,
         summary: buildEditSummary({
           toolName,
           actionLabel: '文本样式编辑',
           changedBlocks: applied.changedBlocks,
           warnings: applied.warnings
         }),
-        sourcePath: sessionResult.sourcePath,
-        previousRevisionRef: applied.previousRevisionRef,
-        currentRevisionRef: applied.currentRevisionRef,
         changedBlocks: applied.changedBlocks,
+        createdBlocks: applied.createdBlocks,
         warnings: applied.warnings,
-        resourceContext: runtime.buildResourceContext({
-          sourcePath: sessionResult.sourcePath,
-          effectKind: 'mutated',
-          previousRevisionRef: applied.previousRevisionRef,
-          currentRevisionRef: applied.currentRevisionRef
-        })
-      }
+        targetBlockIds: [args.blockId],
+        previousDocId: sessionResult.docId
+      })
       return finalizeDocxToolSuccess({
         runtime,
         toolName,
@@ -1226,7 +1474,8 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           sourcePath: result.sourcePath,
           previousRevisionRef: result.previousRevisionRef,
           currentRevisionRef: result.currentRevisionRef,
-          changedCount: result.changedBlocks.length
+          changedCount: result.changedBlocks.length,
+          postWriteReadback: result.postWriteReadback
         },
         draftDocId: applied.nextDocId,
         activity: {
