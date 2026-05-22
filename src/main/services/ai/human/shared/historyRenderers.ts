@@ -300,8 +300,7 @@ const renderBrainRoundExecution = (record: HumanRoundRecord): string => {
     case 'mouth':
       return [
         '- 类型：mouth',
-        '- 动作：组织最终交付',
-        `- 结果：${record.execution.completed ? 'completed' : 'incomplete'}`
+        '- 动作：组织最终交付'
       ].join('\n')
   }
 }

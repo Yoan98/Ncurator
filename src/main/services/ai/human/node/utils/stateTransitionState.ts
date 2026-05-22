@@ -1,7 +1,5 @@
 import {
-  appendDecisionRound,
   appendRoundRecord,
-  buildMouthExecution,
   buildPreExecutionBlockedExecution
 } from '../../memory/rounds'
 import type {
@@ -204,15 +202,6 @@ export const completeHumanTaskState = (input: {
     ...input.state.execution,
     stage: 'mouth',
     status: 'completed'
-  },
-  memory: {
-    ...input.state.memory,
-    taskRun: appendDecisionRound({
-      state: input.state,
-      execution: buildMouthExecution({
-        completed: true
-      })
-    })
   },
   result: input.result,
   trace: {

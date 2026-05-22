@@ -71,11 +71,9 @@ export const buildHandExecution = (input: {
   }
 }
 
-export const buildMouthExecution = (input: {
-  completed: boolean
-}): Extract<HumanRoundExecution, { kind: 'mouth' }> => ({
+export const buildMouthExecution = (): Extract<HumanRoundExecution, { kind: 'mouth' }> => ({
   kind: 'mouth',
-  completed: input.completed
+  action: 'deliver_result'
 })
 
 export const appendRoundRecord = (input: {

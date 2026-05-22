@@ -344,7 +344,7 @@ export const humanRoundExecutionSchema = z.discriminatedUnion('kind', [
   }),
   z.object({
     kind: z.literal('mouth'),
-    completed: z.boolean()
+    action: z.literal('deliver_result')
   })
 ])
 

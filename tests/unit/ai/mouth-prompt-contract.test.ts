@@ -59,7 +59,26 @@ describe('ai unit mouth prompt contract', () => {
       {
         roundId: 1,
         createdAt: 1,
-        thought: state.execution.currentThought,
+        thought: {
+          thought: {
+            next: '先整理两份资料并生成总结文件'
+          },
+          nextAction: {
+            action: 'hand',
+            toolUsePlan: {
+              mode: 'serial',
+              calls: [
+                {
+                  toolName: 'docx_create',
+                  args: {
+                    sourcePath: '深度学习与图形学复习总结.docx',
+                    paragraphs: ['总结正文']
+                  }
+                }
+              ]
+            }
+          }
+        },
         execution: {
           kind: 'hand',
           toolUsePlan: {
@@ -89,6 +108,15 @@ describe('ai unit mouth prompt contract', () => {
             }
           ]
         }
+      },
+      {
+        roundId: 2,
+        createdAt: 2,
+        thought: state.execution.currentThought,
+        execution: {
+          kind: 'mouth',
+          action: 'deliver_result'
+        }
       }
     ]
 
@@ -107,8 +135,10 @@ describe('ai unit mouth prompt contract', () => {
     expect(taskProgressSection).toContain('核对最终产物')
     expect(taskProgressSection).toContain('总结文件已写入完成，正在准备最终交付。')
     expect(taskProgressSection).toContain('复习总结文件已生成完毕，基于现有结果组织最终交付')
-    expect(taskProgressSection).toContain('类型：hand')
-    expect(taskProgressSection).toContain('深度学习与图形学复习总结.docx')
+    expect(taskProgressSection).toContain('类型：mouth')
+    expect(taskProgressSection).toContain('动作：组织最终交付')
+    expect(taskProgressSection).not.toContain('类型：hand')
     expect(taskProgressSection).not.toContain('旧 thought.next 不应直接作为 mouth task_progress 主体')
+    expect(prompt.user).toContain('深度学习与图形学复习总结.docx')
   })
 })

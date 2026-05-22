@@ -1,5 +1,6 @@
 import type { AiRunContext } from '../../../types'
 import type { HumanRuntimeCache, HumanState } from '../../types'
+import { appendDecisionRound, buildMouthExecution } from '../../memory/rounds'
 import { buildMouthPrompt } from '../../prompts/mouth'
 import { assertExternalLearnedSkillIds } from '../../skills'
 import { completeHumanTask } from '../utils/stateTransitions'
@@ -19,13 +20,25 @@ export const createMouthNode = (input: {
     assertExternalLearnedSkillIds(state.skills.learnedSkillIds)
     input.cache.currentState = state
 
+    const stateWithMouthRound: HumanState = {
+      ...state,
+      memory: {
+        ...state.memory,
+        taskRun: appendDecisionRound({
+          state,
+          execution: buildMouthExecution()
+        })
+      }
+    }
+    input.cache.currentState = stateWithMouthRound
+
     const fileReviewDetails = await input.ctx.finalizeDocxReviewRun()
     const runtimeArtifacts = buildRuntimeArtifactsSummaryFromFileReviewDetails(fileReviewDetails)
     const history = await input.ctx.loadConversationContext()
     let promptState: HumanState = {
-      ...state,
+      ...stateWithMouthRound,
       execution: {
-        ...state.execution,
+        ...stateWithMouthRound.execution,
         runtimeArtifacts
       }
     }
@@ -65,13 +78,13 @@ export const createMouthNode = (input: {
     const artifacts =
       fileReviewDetails.length > 0
         ? appendFileReviewArtifactsAndEmitEvents({
-            existingArtifacts: state.execution.artifacts,
+            existingArtifacts: stateWithMouthRound.execution.artifacts,
             details: fileReviewDetails,
             sendEvent: input.ctx.sendEvent,
             runId: input.ctx.runId,
             taskId: state.task.taskId
           })
-        : mergeArtifactRefs(state.execution.artifacts)
+        : mergeArtifactRefs(stateWithMouthRound.execution.artifacts)
     const readyState: HumanState = {
       ...promptState,
       execution: {
