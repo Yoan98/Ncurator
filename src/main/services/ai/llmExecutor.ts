@@ -113,6 +113,7 @@ export type AiLlmTextRequest = {
   system: string
   user: string
   temperature?: number
+  streamingMode?: AiLlmStreamingMode
   onTextDelta?: (text: string) => void
 }
 
@@ -124,6 +125,7 @@ export type AiLlmStructuredRequest<T extends Record<string, unknown>> = {
   user: string
   schema: z.ZodType<T>
   temperature?: number
+  streamingMode?: AiLlmStreamingMode
   contextBudgetSnapshot?: BrainContextBudgetSnapshot
 }
 
@@ -706,7 +708,7 @@ export const createAiLlmExecutor = (input: {
   checkCancelled: () => void
   driver?: AiLlmDriver
 }): AiLlmExecutor => {
-  const streamingMode = resolveStreamingMode(input.runtimeSettings)
+  const defaultStreamingMode = resolveStreamingMode(input.runtimeSettings)
 
   return {
     chatStructured: async <T extends Record<string, unknown>>(
@@ -716,6 +718,7 @@ export const createAiLlmExecutor = (input: {
       usage?: AiLlmUsage
     }> => {
       input.checkCancelled()
+      const streamingMode = request.streamingMode || defaultStreamingMode
       const cfg = await input.getConfig()
       const result = await runLlmCallWithActivity<Record<string, unknown>>({
         ctx: input.eventCtx,
@@ -777,6 +780,7 @@ export const createAiLlmExecutor = (input: {
 
     chatText: async (request: AiLlmTextRequest): Promise<string> => {
       input.checkCancelled()
+      const streamingMode = request.streamingMode || defaultStreamingMode
       const cfg = await input.getConfig()
       const result = await runLlmCallWithActivity<string>({
         ctx: input.eventCtx,

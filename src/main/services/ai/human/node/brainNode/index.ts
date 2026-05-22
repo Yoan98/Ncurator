@@ -25,6 +25,7 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
       schema: humanThoughtDecisionSchema,
       schemaName: 'human_brain_decision',
       temperature: 0.1,
+      streamingMode: 'force_non_stream',
       contextBudgetSnapshot: state.execution.contextBudget
     })
     const inputTokens = result.usage?.inputTokens

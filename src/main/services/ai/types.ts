@@ -16,6 +16,7 @@ import type {
   AiApprovalBatchDecision,
   AiApprovalBatchItem,
   AiLlmIoRecord,
+  AiLlmStreamingMode,
   AiLlmUsage,
   AiRuntimeSettings,
   AiRunEvent,
@@ -135,6 +136,7 @@ export type AiRunContext = {
     schema: z.ZodType<T>
     schemaName: string
     temperature?: number
+    streamingMode?: AiLlmStreamingMode
     contextBudgetSnapshot?: BrainContextBudgetSnapshot
   }) => Promise<{
     output: T
@@ -147,6 +149,7 @@ export type AiRunContext = {
     user: string
     schemaName: string
     temperature?: number
+    streamingMode?: AiLlmStreamingMode
     onTextDelta?: (text: string) => void
   }) => Promise<string>
   sendEvent: (event: AiRunEvent) => void
