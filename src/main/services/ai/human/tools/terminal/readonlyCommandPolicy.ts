@@ -34,6 +34,23 @@ const isGitReadonlyCommand = (tokens: readonly string[], subcommand: 'status' | 
   return !hasForbiddenToken(tokens.slice(2), ['>', '>>'])
 }
 
+const isReadonlyFindCommand = (tokens: readonly string[]): boolean => {
+  if (tokens.length === 0) return false
+  if (tokens[0]?.toLowerCase() !== 'find') return false
+
+  return !hasForbiddenToken(tokens.slice(1), [
+    '-delete',
+    '-exec',
+    '-execdir',
+    '-fprint',
+    '-fprint0',
+    '-fprintf',
+    '-fls',
+    '-ok',
+    '-okdir'
+  ])
+}
+
 const READONLY_COMMAND_RULES: ReadonlyCommandRule[] = [
   { id: 'pwd', guidance: '`pwd`', matches: ({ tokens }) => isSimpleCommand(tokens, ['pwd']) },
   { id: 'ls', guidance: '`ls`', matches: ({ tokens }) => isSimpleCommand(tokens, ['ls']) },
@@ -44,6 +61,7 @@ const READONLY_COMMAND_RULES: ReadonlyCommandRule[] = [
   { id: 'stat', guidance: '`stat`', matches: ({ tokens }) => isSimpleCommand(tokens, ['stat']) },
   { id: 'echo', guidance: '`echo`', matches: ({ tokens }) => isSimpleCommand(tokens, ['echo']) },
   { id: 'printf', guidance: '`printf`', matches: ({ tokens }) => isSimpleCommand(tokens, ['printf']) },
+  { id: 'find', guidance: '`find`', matches: ({ tokens }) => isReadonlyFindCommand(tokens) },
   { id: 'rg', guidance: '`rg`', matches: ({ tokens }) => isSimpleCommand(tokens, ['rg']) },
   { id: 'grep', guidance: '`grep`', matches: ({ tokens }) => isSimpleCommand(tokens, ['grep']) },
   {

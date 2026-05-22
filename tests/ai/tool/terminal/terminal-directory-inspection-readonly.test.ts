@@ -42,6 +42,11 @@ describe('ai tool terminal backend', () => {
               ? 'Get-ChildItem -LiteralPath materials -Recurse -Force'
               : 'ls -R materials'
           }),
+          recursiveFind: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
+            command: isWindows
+              ? 'Get-ChildItem -LiteralPath materials -Recurse -File'
+              : 'find materials -type f'
+          }),
           echoReadOnly: await harness.invoke<TerminalRunCommandResult>('terminal_run', {
             command: isWindows ? 'Write-Output "terminal readonly check"' : 'echo terminal readonly check'
           }),
@@ -59,6 +64,7 @@ describe('ai tool terminal backend', () => {
 
         runtime.assertThat(
           result.list.ok &&
+            result.recursiveFind.ok &&
             result.echoReadOnly.ok &&
             result.read.ok &&
             approvalEvents.length === 0 &&
@@ -69,13 +75,19 @@ describe('ai tool terminal backend', () => {
             data: {
               approvals: approvalEvents.length,
               stepErrors: stepErrors.length,
-              codes: [result.list.code, result.echoReadOnly.code, result.read.code]
+              codes: [
+                result.list.code,
+                result.recursiveFind.code,
+                result.echoReadOnly.code,
+                result.read.code
+              ]
             }
           }
         )
 
         runtime.assertThat(
           result.list.outputPreview.includes('daily-note.txt') &&
+            result.recursiveFind.outputPreview.includes('daily-note.txt') &&
             result.echoReadOnly.stdout.includes('terminal readonly check') &&
             result.read.stdout.includes('alpha') &&
             result.read.stdout.includes('gamma'),

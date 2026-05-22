@@ -15,6 +15,9 @@ describe('ai unit terminal command policy', () => {
     expect(analyzeReadonlyTerminalCommandPolicy('printf "%s\\n" hello').executionPolicy).toBe(
       'readonly_allowed'
     )
+    expect(analyzeReadonlyTerminalCommandPolicy('find . -type f').executionPolicy).toBe(
+      'readonly_allowed'
+    )
     expect(analyzeTerminalCommand({ command: 'echo hello world' }).artifactCandidates).toEqual([])
   })
 
@@ -37,11 +40,16 @@ describe('ai unit terminal command policy', () => {
     const echoMeta = TERMINAL_RUN_TOOL_SPEC.resolveExecutionMeta({
       command: 'echo hello world'
     })
+    const findMeta = TERMINAL_RUN_TOOL_SPEC.resolveExecutionMeta({
+      command: 'find . -type f'
+    })
 
     expect(pythonMeta.parallelSafe).toBe(false)
     expect(nodeMeta.parallelSafe).toBe(false)
     expect(echoMeta.parallelSafe).toBe(true)
     expect(echoMeta.mutability).toBe('read_only')
+    expect(findMeta.parallelSafe).toBe(true)
+    expect(findMeta.mutability).toBe('read_only')
   })
 
   it('requires approval for shell redirection and broad commands', () => {

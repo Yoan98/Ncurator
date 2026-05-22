@@ -43,8 +43,7 @@ export const TERMINAL_RUN_TOOL_SPEC: HumanToolSpec<
   outputSchema: TERMINAL_RUN_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'terminal_run',
-    description:
-      `能力：执行一条当前 workspace 边界内的终端命令。\n结果：返回 stdout、stderr、exitCode、超时或截断状态，以及可识别的工作区文件产物。\n边界：符合系统只读命令策略的单条简单命令可直接执行并允许并行；当前策略包含 ${TERMINAL_READONLY_COMMAND_GUIDANCE}。其他命令按审批路径执行。`,
+    description: `能力：执行一条当前 workspace 边界内的终端命令。\n结果：返回 stdout、stderr、exitCode、超时或截断状态，以及可识别的工作区文件产物。\n边界：只有只读指令运行并行，当前默认允许的只读指令包含 ${TERMINAL_READONLY_COMMAND_GUIDANCE}。`,
     whenToUse: '适用于需要使用当前 workspace 终端命令能力的任务。',
     examples: [
       {
@@ -63,7 +62,10 @@ export const TERMINAL_RUN_TOOL_SPEC: HumanToolSpec<
       cwd: readStringArg(args, 'cwd')
     })
     const readonlyPolicy = analyzeReadonlyTerminalCommandPolicy(command)
-    if (readonlyPolicy.executionPolicy === 'readonly_allowed' && analysis.artifactCandidates.length === 0) {
+    if (
+      readonlyPolicy.executionPolicy === 'readonly_allowed' &&
+      analysis.artifactCandidates.length === 0
+    ) {
       return {
         mutability: 'read_only',
         parallelSafe: true,
