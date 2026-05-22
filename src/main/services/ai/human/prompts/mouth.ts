@@ -1,12 +1,16 @@
 import type { AiRunContext } from '../../types'
 import { renderDeliveryGuidanceItems } from '../shared/deliveryGuidance'
-import { renderBrainCompactBlocks, renderBrainRoundSection } from '../shared/historyRenderers'
-import { renderHumanThought } from '../shared/memoryRenderers'
+import {
+  renderBrainCompactBlocks,
+  renderBrainRoundExecutionOnly,
+  renderBrainRoundSection
+} from '../shared/historyRenderers'
+import { renderTaskProgress } from '../shared/memoryRenderers'
 import { renderHumanReferences } from '../shared/references'
 import { renderHumanArtifactLines } from '../shared/runtimeRenderers'
 import { renderReferenceScopeText } from '../../prompts/referenceScope'
 import type { HumanState } from '../types'
-import { getRecentHistoryRounds } from '../memory/rounds'
+import { getLastRoundFocus, getRecentHistoryRounds } from '../memory/rounds'
 
 export const buildMouthPrompt = (input: {
   state: HumanState
@@ -14,6 +18,7 @@ export const buildMouthPrompt = (input: {
   conversationSummaryText?: string
   recentTurnsText?: string
 }) => {
+  const latestRound = getLastRoundFocus(input.state)
   const system = `
 <system>
   <principles>
@@ -40,7 +45,7 @@ export const buildMouthPrompt = (input: {
     - task_goal：用户当前要你完成或回答的事情。
     - reference_scope：当前工作区、资料范围和参考边界。
     - conversation_history：当前会话历史视图，用于理解这次最终交付与同一会话前文的连续性。
-    - task_progress：当前任务已经收敛的全局进度信息，包含待办路径和推进摘要。
+    - task_progress：当前任务已经收敛的全局进度信息，包含待办路径、推进摘要，以及最新一轮判断和执行。
     - round_history：当前任务的历史证据视图，包含已压缩的较早历史和较新的真实轮次记录。
     - delivery_guidance：上游节点明确要求你必须吸收的补充说明；
     - runtime_artifacts：结果文件事实，用于说明本次最终产出了什么文件。source_path 是原文件路径；draft_artifact_path 是新生成的待确认稿路径。
@@ -80,7 +85,12 @@ ${renderReferenceScopeText(input.ctx.referenceScope)}
   </conversation_history>
 
   <task_progress>
-${renderHumanThought(input.state, 'mouth_prompt')}
+${renderTaskProgress({
+  state: input.state,
+  latestRound,
+  latestExecutionText: renderBrainRoundExecutionOnly(latestRound),
+  mode: 'mouth_prompt'
+})}
   </task_progress>
 
   <round_history>
