@@ -185,12 +185,6 @@ export const buildRuntimeArtifactsSummaryFromFileReviewDetails = (
     source_path: detail.review.source_path,
     format: 'docx',
     change_count: detail.review.change_count,
-    summary:
-      detail.changes[0]?.summary ||
-      (detail.review.change_count > 0
-        ? `已生成 ${detail.review.change_count} 处文档修改`
-        : '已生成待确认稿'),
-    change_highlights: detail.changes.map((change) => change.title).filter(Boolean),
     draft_artifact_path: detail.review.draft_artifact_path
   }))
 })

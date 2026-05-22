@@ -21,6 +21,7 @@ export const createMouthNode = (input: {
 
     const fileReviewDetails = await input.ctx.finalizeDocxReviewRun()
     const runtimeArtifacts = buildRuntimeArtifactsSummaryFromFileReviewDetails(fileReviewDetails)
+    const history = await input.ctx.loadConversationContext()
     let promptState: HumanState = {
       ...state,
       execution: {
@@ -30,7 +31,12 @@ export const createMouthNode = (input: {
     }
     input.cache.currentState = promptState
 
-    const prompt = buildMouthPrompt({ state: promptState, ctx: input.ctx })
+    const prompt = buildMouthPrompt({
+      state: promptState,
+      ctx: input.ctx,
+      conversationSummaryText: history.conversationSummaryText,
+      recentTurnsText: history.recentTurnsText
+    })
     const rawDeliveryMarkdown = await input.ctx.chatText({
       caller: 'human.mouth',
       taskId: promptState.task.taskId,

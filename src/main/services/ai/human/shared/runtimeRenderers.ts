@@ -13,26 +13,19 @@ const renderChangedFile = (
   file: NonNullable<HumanState['execution']['runtimeArtifacts']>['changed_files'][number],
   mode: HumanRuntimeRenderMode
 ): string => {
-  const highlights =
-    file.change_highlights.length > 0
-      ? file.change_highlights.map((item) => `    - ${item}`).join('\n')
-      : '    - 未提供更细的改动标题'
-
   if (mode === 'fallback_markdown') {
-    return `${file.file_name} (${file.source_path}) - ${file.summary}`
+    const draftText = file.draft_artifact_path ? `; 待确认稿=${file.draft_artifact_path}` : ''
+    return `${file.file_name} (${file.source_path}) - ${file.format}, 改动数=${String(file.change_count)}${draftText}`
   }
 
   const draftLine = file.draft_artifact_path
-    ? `  - 待确认稿：${file.draft_artifact_path}`
+    ? `  - 待确认稿路径（新草稿文件）：${file.draft_artifact_path}`
     : undefined
   return [
     `- 文件：${file.file_name}`,
-    `  - 路径：${file.source_path}`,
+    `  - 原文件路径：${file.source_path}`,
     `  - 格式：${file.format}`,
     `  - 改动数：${file.change_count}`,
-    `  - 摘要：${file.summary}`,
-    '  - 大致改动：',
-    highlights,
     draftLine
   ]
     .filter(Boolean)

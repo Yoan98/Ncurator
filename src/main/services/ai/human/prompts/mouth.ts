@@ -1,13 +1,19 @@
 import type { AiRunContext } from '../../types'
 import { renderDeliveryGuidanceItems } from '../shared/deliveryGuidance'
-import { renderMouthHistoryText } from '../shared/historyRenderers'
+import { renderBrainCompactBlocks, renderBrainRoundSection } from '../shared/historyRenderers'
 import { renderHumanThought } from '../shared/memoryRenderers'
 import { renderHumanReferences } from '../shared/references'
 import { renderHumanArtifactLines } from '../shared/runtimeRenderers'
 import { renderReferenceScopeText } from '../../prompts/referenceScope'
 import type { HumanState } from '../types'
+import { getRecentHistoryRounds } from '../memory/rounds'
 
-export const buildMouthPrompt = (input: { state: HumanState; ctx: AiRunContext }) => {
+export const buildMouthPrompt = (input: {
+  state: HumanState
+  ctx: AiRunContext
+  conversationSummaryText?: string
+  recentTurnsText?: string
+}) => {
   const system = `
 <system>
   <principles>
@@ -33,12 +39,13 @@ export const buildMouthPrompt = (input: { state: HumanState; ctx: AiRunContext }
 
     - task_goal：用户当前要你完成或回答的事情。
     - reference_scope：当前工作区、资料范围和参考边界。
+    - conversation_history：当前会话历史视图，用于理解这次最终交付与同一会话前文的连续性。
     - task_progress：当前任务已经收敛的全局进度信息，包含待办路径和推进摘要。
-    - history：过程证据，记录已发生的关键事实、关键结果和失败信息；它可能比最终答复需要的更细。
+    - round_history：当前任务的历史证据视图，包含已压缩的较早历史和较新的真实轮次记录。
     - delivery_guidance：上游节点明确要求你必须吸收的补充说明；
-    - runtime_artifacts：结果层摘要，用于说明本次最终产出了什么、改了什么、留下了什么结果物。
+    - runtime_artifacts：结果文件事实，用于说明本次最终产出了什么文件。source_path 是原文件路径；draft_artifact_path 是新生成的待确认稿路径。
     - references：本次任务可被明确引用的资料列表，每条都带有引用用途说明。
-    - history 和 runtime_artifacts 是组织最终答复的依据，不是默认输出模板。
+    - round_history 和 runtime_artifacts 是组织最终答复的依据，不是默认输出模板。
   </background>
 
   <output_contract>
@@ -62,16 +69,29 @@ ${input.state.task.userInput}
 ${renderReferenceScopeText(input.ctx.referenceScope)}
   </reference_scope>
 
+  <conversation_history>
+    <summary>
+    ${input.conversationSummaryText || 'none'}
+    </summary>
+
+    <recent_turns>
+    ${input.recentTurnsText || 'none'}
+    </recent_turns>
+  </conversation_history>
+
   <task_progress>
 ${renderHumanThought(input.state, 'mouth_prompt')}
   </task_progress>
 
-  <history>
-${renderMouthHistoryText({
-  rounds: input.state.memory.taskRun.rounds,
-  compactions: input.state.memory.taskRun.compactions
-})}
-  </history>
+  <round_history>
+    <compactions>
+    ${renderBrainCompactBlocks(input.state.memory.taskRun.compactions)}
+    </compactions>
+
+    <rounds>
+    ${renderBrainRoundSection(getRecentHistoryRounds(input.state))}
+    </rounds>
+  </round_history>
 
   <delivery_guidance>
 ${renderDeliveryGuidanceItems(input.state.execution.deliveryGuidanceItems)}

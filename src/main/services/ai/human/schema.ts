@@ -276,8 +276,6 @@ export const runtimeChangedFileSchema = z.object({
   source_path: z.string().min(1),
   format: z.literal('docx'),
   change_count: z.number().int().min(0),
-  summary: z.string().min(1),
-  change_highlights: z.array(z.string().min(1)),
   draft_artifact_path: z.string().min(1).optional()
 })
 
