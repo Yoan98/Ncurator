@@ -463,6 +463,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           summary: `返回 ${String(resultBlocks.length)} 个结构块`,
           sourcePath: sessionResult.sourcePath,
           currentRevisionRef: sessionResult.currentRevisionRef,
+          totalBlockCount: sessionResult.stats.blockCount,
           blocks: resultBlocks,
           resourceContext: runtime.buildResourceContext({
             sourcePath: sessionResult.sourcePath,

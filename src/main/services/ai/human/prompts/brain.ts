@@ -17,8 +17,7 @@ import {
 import { getToolSpec } from '../tools/registry'
 import {
   renderBrainOutputSchemaForPrompt,
-  renderToolInputSchemaForPrompt,
-  renderToolOutputSchemaForPrompt
+  renderToolInputSchemaForPrompt
 } from '../tools/schemaPromptRenderer'
 import { humanThoughtDecisionSchema } from '../schema'
 import type { HumanState, ToolPromptExample } from '../types'
@@ -41,7 +40,6 @@ const renderSkillCatalogToolSpecLine = (input: {
   skillLabels: string[]
 }): string => {
   const inputSchemaText = indentLines(renderToolInputSchemaForPrompt(input.spec.inputSchema), 2)
-  const outputSchemaText = indentLines(renderToolOutputSchemaForPrompt(input.spec.outputSchema), 2)
   const examples = indentLines(input.spec.promptSpec.examples.map(renderToolExample).join('\n'), 2)
   const ownerSkills = input.skillLabels.join('、') || 'none'
 
@@ -52,8 +50,6 @@ const renderSkillCatalogToolSpecLine = (input: {
   - 适用时机：${input.spec.promptSpec.whenToUse}
   - 输入结构：
 ${inputSchemaText}
-  - 输出结构：
-${outputSchemaText}
   - 示例：
 ${examples}
 `.trim()
@@ -198,6 +194,7 @@ export const buildBrainPrompt = (input: {
   </output_contract>
 
   <output_shape>
+  输出 JSON 结构：
 ${outputShapeText}
   </output_shape>
 

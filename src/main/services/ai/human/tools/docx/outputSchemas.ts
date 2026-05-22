@@ -173,6 +173,7 @@ export const docxOutlineOutputSchema = docxBaseOutputSchema.extend({
   summary: z.string(),
   sourcePath: z.string(),
   currentRevisionRef: z.string(),
+  totalBlockCount: z.number().int().min(0),
   blocks: z.array(docxOutlineBlockOutputSchema)
 })
 

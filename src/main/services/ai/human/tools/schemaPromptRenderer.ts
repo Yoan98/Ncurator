@@ -169,10 +169,10 @@ export const renderSchemaShape = (schema: z.ZodType): string => {
 }
 
 export const renderToolInputSchemaForPrompt = (schema: z.ZodType): string =>
-  ['输入结构：', renderSchemaShape(schema)].join('\n')
+  renderSchemaShape(schema)
 
 export const renderToolOutputSchemaForPrompt = (schema: z.ZodType): string =>
-  ['输出结构：', renderSchemaShape(schema)].join('\n')
+  renderSchemaShape(schema)
 
 export const renderBrainOutputSchemaForPrompt = (schema: z.ZodType): string =>
-  ['输出 JSON 结构：', renderSchemaShape(schema)].join('\n')
+  renderSchemaShape(schema)
