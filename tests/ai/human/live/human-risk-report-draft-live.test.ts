@@ -55,7 +55,13 @@ const hasRiskConclusionSemantics = (
   const normalizedExpected = normalizeAssertionText(expectedRiskConclusion)
   return (
     normalizedText.includes(normalizedExpected) ||
-    /最终合规签署完成前[^。]{0,40}(?:仍需|继续)(?:保持|持续)跟进/.test(normalizedText)
+    /最终合规签署完成前[^。]{0,40}(?:仍需|继续)(?:保持|持续)跟进/.test(normalizedText) ||
+    /合规签署(?:完整)?闭环前[^。]{0,40}风险(?:状态)?(?:仍需|继续)?(?:保持|持续)?跟进/.test(
+      normalizedText
+    ) ||
+    /(?:确认事项|确认环节|最终确认)[^。]{0,28}(?:待闭环|未闭环|未完成)[^。]{0,28}(?:保持|继续|持续)跟进/.test(
+      normalizedText
+    )
   )
 }
 
@@ -65,9 +71,15 @@ const hasPendingRiskStateSemantics = (text: string): boolean => {
     /最终合规签署[^。]{0,40}(?:仍存在|尚有|还有).{0,24}(?:确认项|确认环节|未闭环|未完成)/.test(
       normalizedText
     ) ||
+    /最终合规签署[^。]{0,40}(?:确认事项|确认环节).{0,24}(?:待闭环|未闭环|未完成|待确认)/.test(
+      normalizedText
+    ) ||
     /正式复核窗口[^。]{0,24}(?:尚未|仍未|还未)(?:完全)?关闭/.test(normalizedText) ||
     /不具备对外使用.{0,12}(?:风险已解除|全部完成)/.test(normalizedText) ||
-    /(?:最后一份|最终)合规附件[^。]{0,28}(?:仍在|尚在)(?:内部)?确认流程/.test(normalizedText)
+    /(?:最后一份|最终)合规附件[^。]{0,28}(?:仍在|尚在)(?:内部)?确认流程/.test(normalizedText) ||
+    /(?:最后一份|最终)合规附件[^。]{0,28}(?:尚未|未完成).{0,20}(?:最终确认|确认)/.test(
+      normalizedText
+    )
   )
 }
 
