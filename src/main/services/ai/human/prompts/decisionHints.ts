@@ -29,6 +29,10 @@ export const summarizeDecisionHint = (hint: HumanDecisionHint): string => {
           ? `hand 的 toolUsePlan 超出计划长度上限；tools=${renderStringList(
               hint.detail.offendingToolNames
             )}。`
+            : hint.detail.reason === 'docx_single_file_write_limit_exceeded'
+              ? `hand 的 docx 写计划在同一文件内包含多次写；sourcePaths=${renderStringList(
+                  hint.detail.sourcePaths || []
+                )}；tools=${renderStringList(hint.detail.offendingToolNames)}。`
           : `hand 的 parallel toolUsePlan 含不可并行工具；tools=${renderStringList(
               hint.detail.offendingToolNames
             )}。`
@@ -80,13 +84,18 @@ export const renderDecisionHintForBrain = (hint: HumanDecisionHint): string => {
         `mode=${hint.detail.mode}`,
         `reason=${hint.detail.reason}`,
         `offendingToolNames=${renderStringList(hint.detail.offendingToolNames)}`,
+        hint.detail.sourcePaths
+          ? `sourcePaths=${renderStringList(hint.detail.sourcePaths)}`
+          : undefined,
         hint.detail.limit ? `parallelLimit=${String(hint.detail.limit)}` : undefined,
         hint.detail.callCount ? `requestedCallCount=${String(hint.detail.callCount)}` : undefined,
         hint.detail.reason === 'parallel_requires_read_only'
           ? '如果包含写操作、需要最新执行结果，或工具不是只读并行安全，请改为 mode=serial。'
           : hint.detail.reason === 'tool_use_plan_limit_exceeded'
             ? '请缩减本轮计划中的工具调用数量，再重新决策。'
-          : '请缩减并行读取工具数量，或改为 mode=serial。'
+            : hint.detail.reason === 'docx_single_file_write_limit_exceeded'
+              ? '同一文件一轮只能出现一次 docx 写工具调用。请把同类内容合并进单次写调用，不要预判未来 blockId；如需继续编辑，应先看写后回读，再到后续轮次决定下一步。'
+              : '请缩减并行读取工具数量，或改为 mode=serial。'
       ]
         .filter(Boolean)
         .join('\n')

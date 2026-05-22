@@ -1,7 +1,6 @@
 import {
   BUILTIN_RUNTIME_SKILL_IDS,
   EXTERNAL_RUNTIME_SKILL_IDS,
-  HUMAN_DOCX_BATCH_WRITE_LIMIT,
   LEARNABLE_RUNTIME_SKILL_IDS,
   RUNTIME_SKILL_IDS
 } from './constants'
@@ -36,7 +35,8 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     source: 'external',
     countsTowardToolBudget: true,
     title: 'docx-write',
-    description: `能力：创建 docx 文件内容，插入段落、标题、表格，替换文本，调整文本样式，删除完整块，切换编辑 revision。\n结果：生成新的 docx 编辑 revision，并返回变更信息与写后回读信息。\n边界：写入作用于当前任务内的编辑链路，最终落盘由 review / commit 链路处理；单轮连续 docx 写操作最多只能规划 ${HUMAN_DOCX_BATCH_WRITE_LIMIT} 个。`,
+    description:
+      '能力：创建 docx 文件内容，插入段落、标题、表格，替换文本，调整文本样式，删除完整块，切换编辑 revision。\n结果：生成新的 docx 编辑 revision，并返回变更信息与写后回读信息。\n边界：写入作用于当前任务内的编辑链路，最终落盘由 review / commit 链路处理。',
     whenToUse: '适用于需要改变 docx 内容或编辑 revision 状态的任务。',
     toolNames: [
       'docx_create',

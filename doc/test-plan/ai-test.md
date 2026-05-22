@@ -440,55 +440,55 @@
 - Oracle：工具结果按顺序成功返回，写工具结果包含 `postWriteReadback.regions`，且不产生旧写后阻断 decision hint。
 - Not：不验证复杂定位恢复。
 
-##### `hand-docx-batch-write-limit`
+##### `hand-docx-single-file-multi-write-invalid`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 docx 串行批量写超过单批上限时，会在执行前被 `hand` 识别为非法 plan 并阻止执行。
-- Why：单轮 docx 串行写存在明确上限，超过上限应在真正落工具前收口，避免生成超长连续写批次。
-- How：构造超过 5 个纯段落写入的 serial plan。
-- Oracle：返回 `hand_plan_invalid`，`reason=docx_batch_write_limit_exceeded`，并带上 `callCount` 与 `limit`。
-- Not：不验证后续额外读取或分批续写策略。
+- What：验证同一 `sourcePath` 一轮 hand 中出现第 2 次 docx 写时，会在执行前被判为非法 plan。
+- Why：单文件多步写兼容逻辑已移除，正式约束改为“同文件每轮最多一次写”。
+- How：构造同一文件上的 `docx_heading_edit -> docx_paragraph_edit` serial plan。
+- Oracle：返回 `hand_plan_invalid`，`reason=docx_single_file_write_limit_exceeded`，并带稳定 `decisionHint`、违规工具名和触发文件。
+- Not：不验证后续轮次如何改写计划。
 
-##### `hand-docx-serial-successor-chain`
-
-- 测试类型：`backend`
-- 实现状态：`已实现`
-- What：验证同批 docx 串行写中，`replace_text` 后继续对同一原锚点连续 `insert_after` 仍能完成。
-- Why：这是“旧 blockId 失效后靠 successor/live resolve 继续”的核心回归。
-- How：真实执行 `replace_text -> insert_after -> insert_after`，后两步都沿原始锚点继续追加。
-- Oracle：三步全部成功，新段落顺序正确，且每次写工具结果包含 `postWriteReadback.regions`。
-- Not：不验证表格恢复。
-
-##### `hand-docx-table-cell-stable-target`
+##### `hand-docx-multi-file-single-write-allowed`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证前序结构插入后，旧 `cellBlockId` 仍能恢复到新的 table cell 并继续写入。
-- Why：表格 cell 是批量串行写里最容易因 body block 漂移而误命中的高风险目标。
-- How：真实执行 `insert_before paragraph -> docx_table_edit(update_cell)`。
-- Oracle：第二步成功命中 `table_cell` 并更新内容，不会误落到 `table` body block，也不会静默跳过。
-- Not：不验证更复杂的表格重排。
+- What：验证一轮 hand 内对不同文件各写一次仍允许通过。
+- Why：执行模型只收缩“同文件多写”，不影响多文件 batch 的效率收益。
+- How：真实执行 `fileA:docx_text_edit -> fileB:docx_text_edit`。
+- Oracle：两次写都成功，两个文件各自推进 revision，且最新 outline 可读到更新后的内容。
+- Not：不验证跨文件更多组合。
 
-##### `hand-docx-table-mixed-chain`
-
-- 测试类型：`backend`
-- 实现状态：`已实现`
-- What：验证混合段落与表格的同批串行写，在 `insert_before`、`update_cell`、`insert_after` 组合下仍能稳定完成。
-- Why：这条 case 同时覆盖表格 cell 恢复与 continuation 方向保护，是更接近真实风险周报的链式写路径。
-- How：真实执行 `insert_before paragraph -> update_cell -> insert_after paragraph`，其中前后插入共用同一原锚点。
-- Oracle：前插内容位于原锚点前，后插内容位于原锚点后，表格 cell 正确更新，且写工具结果包含 `postWriteReadback.regions`。
-- Not：不验证 halted decision hint 分支。
-
-##### `hand-docx-serial-snapshot-bound-edit-plan-invalid-target`
+##### `hand-docx-same-file-read-write-read-allowed`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证同批写中若后续目标已被前序操作删除且无法安全恢复，会停机而不是误写。
-- Why：fail-closed 停机是批量串行写安全闭环的核心下界。
-- How：真实执行 `delete -> replace_text`，第二步继续引用已删除的原目标。
-- Oracle：前一步保留成功，第二步返回 `invalid_input`，并产出 `hand_docx_batch_write_halted`。
-- Not：不验证 brain 下一轮如何恢复。
+- What：验证同一文件在一轮中执行 `read -> write -> read` 仍允许通过。
+- Why：本次限制只针对“同一文件多次写”，不应误伤围绕单次写的读回确认流程。
+- How：真实执行 `docx_outline -> docx_text_edit -> docx_read_blocks`。
+- Oracle：三步都成功，最后一次读取能看到写后内容，且不返回 plan invalid。
+- Not：不验证额外的多次写。
+
+##### `docx-write-then-outline-percent-sees-new-block`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 docx 写后立刻使用 `docx_outline(percent)` 读取当前 working draft 时，能看到新增块。
+- Why：这直接覆盖 replay session stats 未同步导致 percent 漏块的回归问题。
+- How：真实执行一次 `docx_heading_edit`，随后立刻用 `ranges=[{type:'percent',fromPercent:0,toPercent:100}]` 读取。
+- Oracle：outline 返回新增块，且 replay session 的 `stats.blockCount` 等于当前 active revision 的真实块数。
+- Not：不验证更细的分页策略。
+
+##### `docx-replay-stats-track-active-revision`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 replay session 暴露的 `stats` 会随着 revision 前进持续对齐当前 active snapshot。
+- Why：`docx_outline(percent)`、写后读回与后续只读工具都依赖这份 stats 一致性。
+- How：真实执行“插入一段 -> 再改写该段”，分别检查 `registerRevision` 后 replay session 的 `stats.blockCount`。
+- Oracle：每次 revision 之后 `stats.blockCount` 都与当前真实 working draft 一致，不残留旧版本统计。
+- Not：不验证 imageCount 等与 replay snapshot 无关的计数来源。
 
 ##### `docx-multi-round-created-block-edit`
 

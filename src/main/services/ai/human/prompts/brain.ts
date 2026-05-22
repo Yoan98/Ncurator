@@ -165,6 +165,7 @@ export const buildBrainPrompt = (input: {
     - toolUsePlan.calls[*].toolName：必须严格使用当前工具说明里的精确名称。
     - toolUsePlan.calls[*].args：必须是对象，字段名、必填参数和参数层级都必须与工具说明一致。
     - toolUsePlan最大只允许规划${HUMAN_TOOL_USE_PLAN_LIMIT}个。
+    - 禁止在一轮 hand 中出现对同一个文件多次写工具调用。
 
     nextAction为mouth时：
     - 若完成用户诉求时引用了本地资料，或引用了不来自本地资料的知识以及外部资料必须在 nextAction.references 中列出这些资料，并说明来源定位与它支撑了最终交付的哪些地方。

@@ -46,7 +46,7 @@ export const HUMAN_HAND_PLAN_INVALID_REASONS = [
   'tool_use_plan_limit_exceeded',
   'parallel_requires_read_only',
   'parallel_limit_exceeded',
-  'docx_batch_write_limit_exceeded'
+  'docx_single_file_write_limit_exceeded'
 ] as const
 export const HUMAN_DECISION_HINT_CODES = [
   'learning_no_effect',
@@ -63,7 +63,6 @@ export const HUMAN_DECISION_HINT_CODES = [
 export const HUMAN_MAX_ACTIVE_TOOLS = 20
 export const HUMAN_DEFAULT_TOOL_CALL_LIMIT = 40
 export const HUMAN_MAX_PARALLEL_TOOL_CALLS = 6
-export const HUMAN_DOCX_BATCH_WRITE_LIMIT = 5
 export const HUMAN_TOOL_USE_PLAN_LIMIT = 5
 export const DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS = 200_000
 export const CONTEXT_COMPACTION_TRIGGER_RATIO = 0.8

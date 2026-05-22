@@ -787,17 +787,64 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     })
   }
 
+  const buildOpenStatsFromReplaySnapshot = (snapshot: DocxReplaySnapshot): DocxOpenStats => {
+    const paragraphCount = snapshot.blocks.filter((block) => block.kind === 'paragraph').length
+    const tableCount = snapshot.blocks.filter((block) => block.kind === 'table').length
+    const charCount = snapshot.blocks.reduce((total, block) => {
+      if (block.kind === 'paragraph') {
+        return total + block.spec.runs.reduce((runTotal, run) => runTotal + run.text.length, 0)
+      }
+      return (
+        total +
+        block.spec.rows.reduce(
+          (rowTotal, row) =>
+            rowTotal +
+            row.reduce(
+              (cellTotal, cell) =>
+                cellTotal +
+                cell.paragraphs.reduce(
+                  (paragraphTotal, paragraph) =>
+                    paragraphTotal +
+                    paragraph.runs.reduce((runTotal, run) => runTotal + run.text.length, 0),
+                  0
+                ),
+              0
+            ),
+          0
+        )
+      )
+    }, 0)
+
+    return {
+      blockCount: snapshot.blocks.length,
+      paragraphCount,
+      tableCount,
+      imageCount: 0,
+      charCount
+    }
+  }
+
+  const syncReplaySessionStats = (session: DocxReplaySession): void => {
+    session.stats = {
+      ...buildOpenStatsFromReplaySnapshot(session.activeSnapshot),
+      imageCount: session.stats.imageCount
+    }
+  }
+
   const buildReadSessionResultFromReplay = (
     sourcePath: string,
     session: DocxReplaySession
-  ): Exclude<RequireReadSessionResult, { failure: DocxToolFailure }> => ({
-    sourcePath,
-    docId: session.activeDocId,
-    currentRevisionRef: session.activeRevisionRef,
-    meta: session.meta,
-    stats: session.stats,
-    replaySession: session
-  })
+  ): Exclude<RequireReadSessionResult, { failure: DocxToolFailure }> => {
+    syncReplaySessionStats(session)
+    return {
+      sourcePath,
+      docId: session.activeDocId,
+      currentRevisionRef: session.activeRevisionRef,
+      meta: session.meta,
+      stats: session.stats,
+      replaySession: session
+    }
+  }
 
   const buildReplaySessionResult = (
     sourcePath: string,
@@ -1272,6 +1319,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     })
     session.activeDocId = params.nextDocId
     session.activeRevisionRef = currentRevisionRef
+    syncReplaySessionStats(session)
     return {
       currentRevisionRef,
       previousRevisionRef
@@ -1427,6 +1475,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     session.activeSnapshot = baseline.activeSnapshot
     session.nodeById = baseline.nodeById
     session.bodyNodeIds = baseline.bodyNodeIds
+    syncReplaySessionStats(session)
   }
 
   const activateRevision = async (params: {
@@ -1442,6 +1491,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     await rebuildReplaySessionAtRevision(session, params.targetRevisionRef)
     session.activeDocId = params.targetDocId
     session.activeRevisionRef = params.targetRevisionRef
+    syncReplaySessionStats(session)
     return {
       previousRevisionRef,
       currentRevisionRef: params.targetRevisionRef

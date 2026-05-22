@@ -148,6 +148,7 @@ export const humanDecisionHintSchema = z.discriminatedUnion('code', [
       mode: humanToolUsePlanModeSchema,
       reason: humanHandPlanInvalidReasonSchema,
       offendingToolNames: z.array(z.string().min(1)),
+      sourcePaths: z.array(z.string().min(1)).optional(),
       callCount: z.number().int().min(1).optional(),
       limit: z.number().int().min(1).optional()
     })

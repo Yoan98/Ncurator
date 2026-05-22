@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto'
 import type { JsonObject } from '../../../../../../shared/types'
 import {
   HUMAN_DEFAULT_TOOL_CALL_LIMIT,
-  HUMAN_DOCX_BATCH_WRITE_LIMIT,
   HUMAN_MAX_PARALLEL_TOOL_CALLS,
   HUMAN_TOOL_USE_PLAN_LIMIT
 } from '../../constants'
@@ -28,18 +27,15 @@ import { executeToolCall } from './toolExecutor'
 import { returnToBrain, returnToBrainAfterTrace, returnToBrainWithDecisionHint } from '../utils/stateTransitions'
 
 const DOCX_SERIAL_WRITE_TOOL_NAMES = new Set([
+  'docx_create',
   'docx_paragraph_edit',
   'docx_heading_edit',
   'docx_table_edit',
   'docx_text_edit',
   'docx_text_style_edit',
-  'docx_delete'
+  'docx_delete',
+  'docx_rollback'
 ])
-type DocxContinuationAction = 'insert_before' | 'insert_after'
-type DocxAnchorContinuation = {
-  action: DocxContinuationAction
-  blockId: string
-}
 
 const isDocxSerialWriteCall = (toolName: string): boolean => DOCX_SERIAL_WRITE_TOOL_NAMES.has(toolName)
 const isTerminalRunCall = (toolName: string): boolean => toolName === 'terminal_run'
@@ -49,35 +45,6 @@ const readSourcePathArg = (args: JsonObject): string | undefined =>
 
 const readTerminalCommandArg = (args: JsonObject): string | undefined =>
   typeof args.command === 'string' && args.command.trim().length > 0 ? args.command.trim() : undefined
-
-const readDocxContinuationAction = (toolName: string, args: JsonObject): DocxContinuationAction | undefined => {
-  if (
-    toolName !== 'docx_paragraph_edit' &&
-    toolName !== 'docx_heading_edit' &&
-    toolName !== 'docx_table_edit'
-  ) {
-    return undefined
-  }
-  return args.action === 'insert_before' || args.action === 'insert_after' ? args.action : undefined
-}
-
-const rewriteDocxArgsWithResolvedBlocks = (input: {
-  args: JsonObject
-  resolvedLocators: Array<{
-    field: 'blockId' | 'anchorBlockId' | 'cellBlockId' | 'blockIds'
-    blockIds: string[]
-  }>
-}): JsonObject => {
-  const nextArgs: JsonObject = { ...input.args }
-  input.resolvedLocators.forEach((locator) => {
-    if (locator.field === 'blockIds') {
-      nextArgs.blockIds = locator.blockIds
-      return
-    }
-    nextArgs[locator.field] = locator.blockIds[0]
-  })
-  return nextArgs
-}
 
 export const getToolExecutionMeta = (input: {
   toolName: string
@@ -110,6 +77,7 @@ const createHandPlanInvalidDecisionHint = (input: {
   mode: ToolUsePlan['mode']
   reason: Extract<HumanDecisionHint, { code: 'hand_plan_invalid' }>['detail']['reason']
   offendingToolNames: string[]
+  sourcePaths?: string[]
   callCount?: number
   limit?: number
 }): HumanDecisionHint => ({
@@ -118,6 +86,7 @@ const createHandPlanInvalidDecisionHint = (input: {
     mode: input.mode,
     reason: input.reason,
     offendingToolNames: input.offendingToolNames,
+    sourcePaths: input.sourcePaths,
     callCount: input.callCount,
     limit: input.limit
   }
@@ -131,20 +100,40 @@ const buildToolLimitDecisionHint = (toolCallCount: number, limit: number): Human
   }
 })
 
+const findSameFileMultiWriteDecisionHint = (
+  toolUsePlan: ToolUsePlan
+): HumanDecisionHint | undefined => {
+  if (toolUsePlan.mode !== 'serial') return undefined
+
+  const mutatingCallsBySourcePath = new Map<string, ToolUsePlan['calls']>()
+  toolUsePlan.calls.forEach((call) => {
+    if (!isDocxSerialWriteCall(call.toolName)) return
+    const sourcePath = readSourcePathArg(call.args)
+    if (!sourcePath) return
+    const existingCalls = mutatingCallsBySourcePath.get(sourcePath) || []
+    mutatingCallsBySourcePath.set(sourcePath, [...existingCalls, call])
+  })
+
+  const offendingEntries = [...mutatingCallsBySourcePath.entries()].filter(
+    ([, calls]) => calls.length > 1
+  )
+  if (offendingEntries.length === 0) return undefined
+
+  return createHandPlanInvalidDecisionHint({
+    mode: 'serial',
+    reason: 'docx_single_file_write_limit_exceeded',
+    offendingToolNames: offendingEntries.flatMap(([, calls]) => calls.map((call) => call.toolName)),
+    sourcePaths: offendingEntries.map(([sourcePath]) => sourcePath),
+    callCount: offendingEntries.reduce((total, [, calls]) => total + calls.length, 0),
+    limit: 1
+  })
+}
+
 const validateToolUsePlan = (toolUsePlan: ToolUsePlan): HumanDecisionHint | undefined => {
   if (toolUsePlan.mode === 'serial') {
-    const docxWriteCalls = toolUsePlan.calls.filter((item) => isDocxSerialWriteCall(item.toolName))
-    if (docxWriteCalls.length > 0) {
-      const limit = HUMAN_DOCX_BATCH_WRITE_LIMIT
-      if (docxWriteCalls.length > limit) {
-        return createHandPlanInvalidDecisionHint({
-          mode: 'serial',
-          reason: 'docx_batch_write_limit_exceeded',
-          offendingToolNames: docxWriteCalls.map((item) => item.toolName),
-          callCount: docxWriteCalls.length,
-          limit
-        })
-      }
+    const sameFileMultiWriteDecisionHint = findSameFileMultiWriteDecisionHint(toolUsePlan)
+    if (sameFileMultiWriteDecisionHint) {
+      return sameFileMultiWriteDecisionHint
     }
   }
   if (toolUsePlan.calls.length > HUMAN_TOOL_USE_PLAN_LIMIT) {
@@ -289,267 +278,18 @@ const executeToolUsePlan = async (input: {
       )
     )
   }
-
-  const executeDocxWriteTransactionSegment = async (
-    segmentCalls: ToolUsePlan['calls']
-  ): Promise<ToolCallResult[]> => {
-    const runtime = input.cache.docxRuntime
-    const firstSourcePath = readSourcePathArg(segmentCalls[0]?.args || {})
-    if (!runtime || !firstSourcePath) {
-      const fallbackResults: ToolCallResult[] = []
-      for (const segmentCall of segmentCalls) {
-        fallbackResults.push(
-          await executeToolCall({
-            ctx: input.ctx,
-            cache: input.cache,
-            taskId: input.taskId,
-            learnedSkillIds: input.learnedSkillIds,
-            toolName: segmentCall.toolName,
-            args: segmentCall.args
-          })
-        )
-      }
-      return fallbackResults
-    }
-
-    const replay = await runtime.ensureReplaySession({
-      toolName: segmentCalls[0].toolName,
-      toolCallId: `human-hand-docx-serial:${input.taskId}`,
-      sourcePath: firstSourcePath,
-      reason: 'edit'
-    })
-    if ('failure' in replay) {
-      return [
-        {
-          toolName: segmentCalls[0].toolName,
-          ok: false,
-          code: replay.failure.code,
-          data: replay.failure,
-          diagnostic: {
-            message: replay.failure.error
-          },
-          resourceContext: replay.failure.resourceContext
-        }
-      ]
-    }
-
-    const resolved = await runtime.resolveSnapshotTargets({
-      sourcePath: replay.sourcePath,
-      baseRevisionRef: replay.currentRevisionRef,
-      toolCalls: segmentCalls.map((call) => ({
-        toolName: call.toolName,
-        args: call.args
-      }))
-    })
-    if (!resolved.ok) {
-      return [
-        {
-          toolName: segmentCalls[0].toolName,
-          ok: false,
-          code: 'invalid_input',
-          data: {
-            ok: false,
-            code: 'invalid_input',
-            error: resolved.error
-          },
-          diagnostic: {
-            message: resolved.error
-          },
-          resourceContext: runtime.buildResourceContext({
-            sourcePath: replay.sourcePath,
-            effectKind: 'mutated',
-            currentRevisionRef: replay.currentRevisionRef
-          })
-        }
-      ]
-    }
-
-    const segmentResults: ToolCallResult[] = []
-    const completedItems: string[] = []
-    const anchorContinuationMap = new Map<string, DocxAnchorContinuation>()
-    for (let callIndex = 0; callIndex < segmentCalls.length; callIndex += 1) {
-      const segmentCall = segmentCalls[callIndex]
-      const resolvedCall = resolved.resolvedCalls[callIndex]
-      try {
-        const argsWithContinuation = { ...segmentCall.args }
-        const continuationAction = readDocxContinuationAction(segmentCall.toolName, segmentCall.args)
-        const continuationEntry =
-          typeof argsWithContinuation.anchorBlockId === 'string' &&
-          anchorContinuationMap.has(argsWithContinuation.anchorBlockId)
-            ? anchorContinuationMap.get(argsWithContinuation.anchorBlockId)
-            : undefined
-        const continuationAnchor =
-          continuationEntry && continuationEntry.action === continuationAction
-            ? continuationEntry.blockId
-            : undefined
-        if (
-          (segmentCall.toolName === 'docx_paragraph_edit' ||
-            segmentCall.toolName === 'docx_heading_edit' ||
-            segmentCall.toolName === 'docx_table_edit') &&
-          continuationAnchor
-        ) {
-          argsWithContinuation.anchorBlockId = continuationAnchor
-        }
-        const resolvedLocators = resolvedCall.locators.map((locator) => ({
-          field: locator.field,
-          blockIds: continuationAnchor && locator.field === 'anchorBlockId'
-            ? [continuationAnchor]
-            : (() => {
-            const current = runtime.resolveLiveBlockIdsFromStableLocators({
-              sourcePath: replay.sourcePath,
-              field: locator.field,
-              stableLocators: locator.stableLocators
-            })
-            if (!current.ok) {
-              throw new Error(current.error)
-            }
-            return current.blockIds
-          })()
-        }))
-        const nextResult = await executeToolCall({
-          ctx: input.ctx,
-          cache: input.cache,
-          taskId: input.taskId,
-          learnedSkillIds: input.learnedSkillIds,
-          toolName: segmentCall.toolName,
-          args: rewriteDocxArgsWithResolvedBlocks({
-            args: argsWithContinuation,
-            resolvedLocators
-          })
-        })
-        segmentResults.push(nextResult)
-        if (nextResult.ok) {
-          completedItems.push(`${segmentCall.toolName}#${String(callIndex + 1)}`)
-          const readbackRegions =
-            typeof nextResult.data === 'object' &&
-            nextResult.data &&
-            !Array.isArray(nextResult.data) &&
-            Array.isArray((nextResult.data as { postWriteReadback?: { regions?: Array<{ blocks?: Array<{ blockId?: string; type?: string }> }> } }).postWriteReadback?.regions)
-              ? (nextResult.data as { postWriteReadback?: { regions?: Array<{ blocks?: Array<{ blockId?: string; type?: string }> }> } }).postWriteReadback?.regions || []
-              : []
-          const lastCreatedBlockId =
-            readbackRegions
-              .flatMap((region) => region.blocks || [])
-              .filter((block) => block.type !== 'table_cell')
-              .slice(-1)[0]?.blockId ||
-            readbackRegions.flatMap((region) => region.blocks || []).slice(-1)[0]?.blockId
-          if (
-            lastCreatedBlockId &&
-            typeof segmentCall.args.anchorBlockId === 'string' &&
-            segmentCall.args.anchorBlockId.length > 0 &&
-            continuationAction
-          ) {
-            anchorContinuationMap.set(segmentCall.args.anchorBlockId, {
-              action: continuationAction,
-              blockId: lastCreatedBlockId
-            })
-          }
-          continue
-        }
-
-        nextResult.data = {
-          ...(typeof nextResult.data === 'object' && nextResult.data !== null && !Array.isArray(nextResult.data)
-            ? nextResult.data
-            : {}),
-          decisionHint: {
-            code: 'hand_docx_batch_write_halted',
-            detail: {
-              sourcePath: replay.sourcePath,
-              lastSafeRevisionRef:
-                runtime.getReplaySession(replay.sourcePath)?.activeRevisionRef || replay.currentRevisionRef,
-              haltedAtCallIndex: callIndex,
-              completedCallCount: completedItems.length,
-              totalCallCount: segmentCalls.length,
-              haltReason: 'locator_confidence_too_low',
-              haltSummary: nextResult.diagnostic?.message || 'docx 批量写因定位置信度不足而停止。',
-              completedItems,
-              pendingItems: segmentCalls
-                .slice(callIndex + 1)
-                .map((call, pendingIndex) => `${call.toolName}#${String(callIndex + pendingIndex + 2)}`),
-              failedItem: `${segmentCall.toolName}#${String(callIndex + 1)}`,
-              recoveryContext: `当前工作稿已停在 ${runtime.getReplaySession(replay.sourcePath)?.activeRevisionRef || replay.currentRevisionRef}；已完成写入保留，未完成写入未执行。`
-            }
-          }
-        }
-        break
-      } catch (error) {
-        segmentResults.push({
-          toolName: segmentCall.toolName,
-          ok: false,
-          code: 'invalid_input',
-          data: {
-            ok: false,
-            code: 'invalid_input',
-            error: error instanceof Error ? error.message : String(error),
-            decisionHint: {
-              code: 'hand_docx_batch_write_halted',
-              detail: {
-                sourcePath: replay.sourcePath,
-                lastSafeRevisionRef:
-                  runtime.getReplaySession(replay.sourcePath)?.activeRevisionRef || replay.currentRevisionRef,
-                haltedAtCallIndex: callIndex,
-                completedCallCount: completedItems.length,
-                totalCallCount: segmentCalls.length,
-                haltReason: 'locator_confidence_too_low',
-                haltSummary: error instanceof Error ? error.message : String(error),
-                completedItems,
-                pendingItems: segmentCalls
-                  .slice(callIndex + 1)
-                  .map((call, pendingIndex) => `${call.toolName}#${String(callIndex + pendingIndex + 2)}`),
-                failedItem: `${segmentCall.toolName}#${String(callIndex + 1)}`,
-                recoveryContext: `当前工作稿已停在 ${runtime.getReplaySession(replay.sourcePath)?.activeRevisionRef || replay.currentRevisionRef}；已完成写入保留，未完成写入未执行。`
-              }
-            }
-          },
-          diagnostic: {
-            message: error instanceof Error ? error.message : String(error)
-          },
-          resourceContext: runtime.buildResourceContext({
-            sourcePath: replay.sourcePath,
-            effectKind: 'mutated',
-            currentRevisionRef: runtime.getReplaySession(replay.sourcePath)?.activeRevisionRef
-          })
-        })
-        break
-      }
-    }
-    return segmentResults
-  }
-
   const results: ToolCallResult[] = []
-  for (let index = 0; index < input.toolUsePlan.calls.length; ) {
-    const toolCall = input.toolUsePlan.calls[index]
-    const sourcePath = readSourcePathArg(toolCall.args)
-
-    if (sourcePath && isDocxSerialWriteCall(toolCall.toolName)) {
-      const segmentCalls = [toolCall]
-      let cursor = index + 1
-      while (cursor < input.toolUsePlan.calls.length) {
-        const candidate = input.toolUsePlan.calls[cursor]
-        if (
-          !isDocxSerialWriteCall(candidate.toolName) ||
-          readSourcePathArg(candidate.args) !== sourcePath
-        ) {
-          break
-        }
-        segmentCalls.push(candidate)
-        cursor += 1
-      }
-      results.push(...(await executeDocxWriteTransactionSegment(segmentCalls)))
-      index = cursor
-    } else {
-      results.push(
-        await executeToolCall({
-          ctx: input.ctx,
-          cache: input.cache,
-          taskId: input.taskId,
-          learnedSkillIds: input.learnedSkillIds,
-          toolName: toolCall.toolName,
-          args: toolCall.args
-        })
-      )
-      index += 1
-    }
+  for (const toolCall of input.toolUsePlan.calls) {
+    results.push(
+      await executeToolCall({
+        ctx: input.ctx,
+        cache: input.cache,
+        taskId: input.taskId,
+        learnedSkillIds: input.learnedSkillIds,
+        toolName: toolCall.toolName,
+        args: toolCall.args
+      })
+    )
 
     if (
       input.toolUsePlan.mode === 'serial' &&

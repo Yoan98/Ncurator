@@ -600,7 +600,7 @@ type HumanDecisionHint =
           | 'tool_use_plan_limit_exceeded'
           | 'parallel_requires_read_only'
           | 'parallel_limit_exceeded'
-          | 'docx_batch_write_limit_exceeded'
+          | 'docx_single_file_write_limit_exceeded'
         // 导致非法的工具名。
         offendingToolNames: string[]
         // 若是数量超限，则记录本次调用数。
