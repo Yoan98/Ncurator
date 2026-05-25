@@ -282,7 +282,6 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     toolEvents.emitResult({
       toolName: params.toolName,
       toolCallId: params.toolCallId,
-      outputPreview: out,
       result: buildDocxToolCallResult({
         toolName: params.toolName,
         ok: false,

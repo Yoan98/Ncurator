@@ -226,7 +226,7 @@ export const runWithStructuredOutputRetry = async (
   throw lastError
 }
 
-export const readToolCallResultPreview = <TValue extends JsonValue>(
+export const readToolCallResultData = <TValue extends JsonValue>(
   events: readonly AiRunEvent[],
   toolName: string,
   index = -1
@@ -237,7 +237,10 @@ export const readToolCallResultPreview = <TValue extends JsonValue>(
   if (!event) {
     throw new Error(`tool_call_result not found for ${toolName} at index ${String(index)}`)
   }
-  return event.outputPreview as TValue
+  if (event.result?.data === undefined) {
+    throw new Error(`tool_call_result data missing for ${toolName} at index ${String(index)}`)
+  }
+  return event.result.data as TValue
 }
 
 export const readLatestToolResultDataFromEvents = <TValue>(

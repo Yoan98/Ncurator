@@ -7,7 +7,9 @@ import type {
   IpcJsonObject
 } from '../../../../../../shared/types'
 import type { TerminalToolContext } from '../../../types'
-import { clipTextWithMeta } from '../../../utils/text'
+import { DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS } from '../../constants'
+import type { HumanDecisionHint } from '../../types'
+import { getAiResultTokenLimit, estimateToolResultTokens } from '../utils/resultSizeGuard'
 import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import type { CapabilityActivityInput } from '../types'
@@ -79,10 +81,10 @@ const emitTerminalStepCompletion = (input: {
   stepId: string
   stepIndex: number
   command: string
-  outputPreview: string
+  cwd: string
   exitCode: number | null
   timedOut: boolean
-  truncated: boolean
+  captureLimited: boolean
   stepError?: string
   emitActivity: (activity: CapabilityActivityInput) => void
 }): void => {
@@ -94,8 +96,9 @@ const emitTerminalStepCompletion = (input: {
       stepId: input.stepId,
       stepIndex: input.stepIndex,
       command: input.command,
+      cwd: input.cwd,
       error: input.stepError,
-      outputPreview: input.outputPreview,
+      captureLimited: input.captureLimited,
       completedAt: Date.now()
     })
     input.emitActivity({
@@ -113,10 +116,10 @@ const emitTerminalStepCompletion = (input: {
     stepId: input.stepId,
     stepIndex: input.stepIndex,
     command: input.command,
-    outputPreview: input.outputPreview,
+    cwd: input.cwd,
     exitCode: input.exitCode,
     timedOut: input.timedOut,
-    truncated: input.truncated,
+    captureLimited: input.captureLimited,
     completedAt: Date.now()
   })
   input.emitActivity({
@@ -130,12 +133,43 @@ const buildTerminalStepError = (input: {
   exitCode: number | null
   timedOut: boolean
   timeoutMs: number
+  captureLimited: boolean
 }): string | undefined =>
   input.timedOut
     ? `command timed out after ${input.timeoutMs}ms`
+    : input.captureLimited
+      ? 'command output exceeded capture hard limit'
     : input.exitCode !== 0
       ? `command exited with code ${String(input.exitCode)}`
       : undefined
+
+const buildResultTooLargeDecisionHint = (input: {
+  command: string
+  cwd: string
+  estimatedTokens: number
+  limit: number
+  captureLimited: boolean
+}): Extract<HumanDecisionHint, { code: 'hand_tool_result_too_large' }> => ({
+  code: 'hand_tool_result_too_large',
+  detail: {
+    toolName: TERMINAL_RUN_TOOL_SPEC.name,
+    command: input.command,
+    cwd: input.cwd,
+    estimatedTokens: input.estimatedTokens,
+    limit: input.limit,
+    captureLimited: input.captureLimited,
+    suggestedActions: [
+      '先进入更小目录再查看',
+      '先列目录或筛文件名，再读取具体文件',
+      '避免对大范围目录直接执行全量输出命令'
+    ],
+    suggestedCommands: [
+      'ls 工作',
+      "find 工作 -maxdepth 2 -type f | rg '关键字'",
+      "rg -n '关键字' 工作"
+    ]
+  }
+})
 
 export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput) => {
   const state: TerminalCapabilityToolsRuntimeState = {
@@ -293,15 +327,14 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             command,
             cwd,
             timeoutMs: input.timeoutMs,
-            maxOutputChars: input.maxOutputChars
+            captureHardLimitChars: input.captureHardLimitChars
           })
 
-          const previewSource = [result.stdout, result.stderr].filter(Boolean).join('\n').trim()
-          const preview = clipTextWithMeta(previewSource || '(no output)', input.safePreviewChars)
           const stepError = buildTerminalStepError({
             exitCode: result.exitCode,
             timedOut: result.timedOut,
-            timeoutMs: input.timeoutMs
+            timeoutMs: input.timeoutMs,
+            captureLimited: result.captureLimited
           })
 
           const artifacts = await recordTerminalArtifacts({
@@ -320,31 +353,57 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             stepId,
             stepIndex: state.stepIndex,
             command,
-            outputPreview: preview.text,
+            cwd,
             exitCode: result.exitCode,
             timedOut: result.timedOut,
-            truncated: preview.truncated || result.truncated,
+            captureLimited: result.captureLimited,
             stepError,
             emitActivity: input.emitActivity
           })
 
+          const aiResultTokenLimit = getAiResultTokenLimit({
+            modelContextWindowTokens:
+              input.ctx.humanRuntimeOverrides?.modelContextWindowTokens
+              || DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS,
+            ratio: input.aiResultTokenLimitRatio
+          })
+          const estimatedTokens = estimateToolResultTokens(result.combinedOutput)
+          const tooLarge = !stepError && estimatedTokens > aiResultTokenLimit
+
           const payload = {
-            ok: !stepError,
-            code: (stepError ? 'failed' : 'ok') as 'failed' | 'ok',
+            ok: !stepError && !tooLarge,
+            code: (stepError ? 'failed' : tooLarge ? 'result_too_large' : 'ok') as
+              'failed' | 'ok' | 'result_too_large',
             command,
             cwd,
-            outputPreview: preview.text,
             stdout: result.stdout,
             stderr: result.stderr,
+            combinedOutput: result.combinedOutput,
             exitCode: result.exitCode,
             timedOut: result.timedOut,
-            truncated: preview.truncated || result.truncated,
+            captureLimited: result.captureLimited,
             artifacts
+          } as {
+            ok: boolean
+            code: 'failed' | 'ok' | 'result_too_large'
+            command: string
+            cwd: string
+            stdout: string
+            stderr: string
+            combinedOutput: string
+            exitCode: number | null
+            timedOut: boolean
+            captureLimited: boolean
+            artifacts: typeof artifacts
+            error?: string
+            estimatedTokens?: number
+            limit?: number
+            decisionHint?: HumanDecisionHint
           }
 
           if (stepError) {
+            payload.error = stepError
             session.fail(
-              payload,
               stepError,
               undefined,
               buildTerminalToolResult({
@@ -357,12 +416,31 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             return payload
           }
 
-          session.succeed(
-            {
+          if (tooLarge) {
+            payload.estimatedTokens = estimatedTokens
+            payload.limit = aiResultTokenLimit
+            payload.decisionHint = buildResultTooLargeDecisionHint({
               command,
-              outputPreview: payload.outputPreview,
-              artifacts
-            },
+              cwd,
+              estimatedTokens,
+              limit: aiResultTokenLimit,
+              captureLimited: result.captureLimited
+            })
+            payload.error = 'terminal result too large'
+            session.fail(
+              payload.error,
+              undefined,
+              buildTerminalToolResult({
+                toolName: TERMINAL_RUN_TOOL_SPEC.name,
+                ok: false,
+                code: 'result_too_large',
+                data: payload
+              })
+            )
+            return payload
+          }
+
+          session.succeed(
             undefined,
             buildTerminalToolResult({
               toolName: TERMINAL_RUN_TOOL_SPEC.name,

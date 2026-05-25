@@ -79,10 +79,17 @@ export const deriveHandFollowupSignals = (input: {
   deliveryGuidance?: string
 } => {
   for (const [index, result] of input.results.entries()) {
-    if (!DOCX_WRITE_TOOL_NAMES.has(result.toolName) || result.ok) continue
-    const haltedHint = result.data && typeof result.data === 'object' && !Array.isArray(result.data)
+    const toolResultHint = result.data && typeof result.data === 'object' && !Array.isArray(result.data)
       ? (result.data as { decisionHint?: HumanDecisionHint }).decisionHint
       : undefined
+    if (toolResultHint?.code === 'hand_tool_result_too_large') {
+      return {
+        decisionHint: toolResultHint
+      }
+    }
+
+    if (!DOCX_WRITE_TOOL_NAMES.has(result.toolName) || result.ok) continue
+    const haltedHint = toolResultHint
     if (haltedHint?.code === 'hand_docx_batch_write_halted') {
       return {
         decisionHint: haltedHint
@@ -104,6 +111,6 @@ export const shouldStopSerialHandPlan = (input: {
   calls: HandCallList
   results: readonly ToolCallResult[]
 }): boolean =>
-  ['hand_docx_positioned_write_blocked', 'hand_docx_batch_write_halted'].includes(
+  ['hand_tool_result_too_large', 'hand_docx_positioned_write_blocked', 'hand_docx_batch_write_halted'].includes(
     deriveHandFollowupSignals(input).decisionHint?.code || ''
   )

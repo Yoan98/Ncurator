@@ -350,13 +350,18 @@ export function registerHandlers(services: {
       taskId: input.runId,
       toolCallId: 'tool-e2e-search',
       toolName: 'kb_search',
-      outputPreview: [
-        {
-          id: 'chunk-e2e-1',
-          text: 'E2E 检索命中内容',
-          document_name: 'E2E 文档'
-        }
-      ],
+      result: {
+        toolName: 'kb_search',
+        ok: true,
+        code: 'ok',
+        data: [
+          {
+            id: 'chunk-e2e-1',
+            text: 'E2E 检索命中内容',
+            document_name: 'E2E 文档'
+          }
+        ]
+      },
       completedAt: Date.now()
     })
     await pauseForE2EFixture()

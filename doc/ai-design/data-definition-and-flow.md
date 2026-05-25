@@ -708,8 +708,6 @@ interface ToolCallResultEvent {
   toolCallId: string
   // 对应工具名。
   toolName: string
-  // 轻量时间线展示使用的输出预览。
-  outputPreview: IpcJsonValue
   // 标准化后的工具结果，供后续 AI 或排障直接消费。
   result?: AiToolCallResult
   // 若工具输出了 draft snapshot，可通过这里关联。
@@ -738,10 +736,10 @@ interface TerminalStepResultEvent {
   stepId: string
   stepIndex: number
   command: string
-  outputPreview: string
+  cwd: string
   exitCode: number | null
   timedOut: boolean
-  truncated: boolean
+  captureLimited: boolean
   completedAt: number
 }
 
@@ -752,8 +750,9 @@ interface TerminalStepErrorEvent {
   stepId: string
   stepIndex: number
   command: string
+  cwd: string
   error: string
-  outputPreview?: string
+  captureLimited: boolean
   completedAt: number
 }
 

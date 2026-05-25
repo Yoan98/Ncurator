@@ -87,11 +87,10 @@ describe('ai unit human memory renderers', () => {
             data: {
               ok: true,
               code: 'ok',
-              outputPreview: 'latest release status',
+              combinedOutput: 'latest release status',
               command: 'cat release-note.txt',
               exitCode: 0,
-              timedOut: false,
-              truncated: false
+              timedOut: false
             }
           }
         ]

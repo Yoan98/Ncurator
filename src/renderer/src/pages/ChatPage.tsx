@@ -978,8 +978,9 @@ const ChatPage: React.FC = () => {
       }
 
       if (event.type === 'tool_call_result') {
+        const toolOutput = event.result?.data
         const readFiles = extractReadableFilesFromToolOutput(
-          event.outputPreview,
+          toolOutput,
           event.toolName.includes('search') ? 'search_hit' : 'read'
         )
         if (readFiles.length > 0) {
@@ -994,7 +995,7 @@ const ChatPage: React.FC = () => {
           }))
         }
 
-        const searchResults = extractSearchResultsFromToolOutput(event.outputPreview)
+        const searchResults = extractSearchResultsFromToolOutput(toolOutput)
         if (searchResults.length > 0) {
           setModalPreviewFile(null)
           showContentPanel({

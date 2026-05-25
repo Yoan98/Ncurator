@@ -1,6 +1,5 @@
 import { spawn } from 'node:child_process'
 import type { TerminalCommandInput, TerminalCommandResult } from './types'
-import { clipTextWithMeta } from '../../../utils/text'
 import { getAiRuntimePlatform } from '../../../utils/platform'
 
 export const runTerminalCommand = async (
@@ -9,7 +8,7 @@ export const runTerminalCommand = async (
   const command = String(input.command || '').trim()
   const cwd = String(input.cwd || '').trim() || process.cwd()
   const timeoutMs = Math.max(500, Number(input.timeoutMs || 15000))
-  const maxOutputChars = Math.max(256, Number(input.maxOutputChars || 8000))
+  const captureHardLimitChars = Math.max(256, Number(input.captureHardLimitChars || 120_000))
 
   if (!command) {
     return {
@@ -17,10 +16,11 @@ export const runTerminalCommand = async (
       cwd,
       stdout: '',
       stderr: 'empty command',
+      combinedOutput: 'empty command',
       exitCode: 1,
       signal: null,
       timedOut: false,
-      truncated: false,
+      captureLimited: false,
       durationMs: 0
     }
   }
@@ -44,8 +44,9 @@ export const runTerminalCommand = async (
 
     let stdout = ''
     let stderr = ''
+    let combinedOutput = ''
     let timedOut = false
-    let truncated = false
+    let captureLimited = false
     let settled = false
 
     const appendChunk = (target: 'stdout' | 'stderr', chunk: Buffer | string) => {
@@ -54,12 +55,13 @@ export const runTerminalCommand = async (
 
       if (target === 'stdout') stdout += value
       else stderr += value
+      combinedOutput += value
 
-      if (stdout.length + stderr.length > maxOutputChars) {
-        const clipped = clipTextWithMeta(stdout + stderr, maxOutputChars)
-        stdout = clipped.text
-        stderr = ''
-        truncated = clipped.truncated
+      if (combinedOutput.length > captureHardLimitChars) {
+        stdout = stdout.slice(0, captureHardLimitChars)
+        stderr = stderr.slice(0, Math.max(0, captureHardLimitChars - stdout.length))
+        combinedOutput = combinedOutput.slice(0, captureHardLimitChars)
+        captureLimited = true
         if (!settled) {
           child.kill('SIGTERM')
         }
@@ -89,11 +91,12 @@ export const runTerminalCommand = async (
         command,
         cwd,
         stdout,
+        combinedOutput,
         stderr: `${stderr}\n${err.message}`.trim(),
         exitCode: 1,
         signal: null,
         timedOut,
-        truncated
+        captureLimited
       })
     })
 
@@ -103,10 +106,11 @@ export const runTerminalCommand = async (
         cwd,
         stdout,
         stderr,
+        combinedOutput,
         exitCode,
         signal,
         timedOut,
-        truncated
+        captureLimited
       })
     })
   })

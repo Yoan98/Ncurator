@@ -7,8 +7,8 @@ import { filterEventsByType } from '../testHelpers'
 
 type TerminalRunCommandResult = {
   ok: boolean
-  code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
-  outputPreview: string
+  code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required' | 'result_too_large'
+  combinedOutput: string
   error?: string
 }
 
@@ -78,16 +78,16 @@ describe('ai tool terminal backend', () => {
         )
 
         runtime.assertThat(
-          result.firstSearch.outputPreview.includes('release.md') &&
-            result.secondSearch.outputPreview.includes('Terminal artifacts must be recorded.') &&
+          result.firstSearch.combinedOutput.includes('release.md') &&
+            result.secondSearch.combinedOutput.includes('Terminal artifacts must be recorded.') &&
             result.boundaryRejected.ok === false &&
             result.boundaryRejected.code === 'workspace_required',
           {
             name: 'search-commands-honor-boundary-checks',
             message: '文本搜索应正确返回命中结果，并在越界路径参数下于执行前拒绝。',
             data: {
-              firstSearch: result.firstSearch.outputPreview,
-              secondSearch: result.secondSearch.outputPreview,
+              firstSearch: result.firstSearch.combinedOutput,
+              secondSearch: result.secondSearch.combinedOutput,
               boundaryRejected: result.boundaryRejected
             }
           }

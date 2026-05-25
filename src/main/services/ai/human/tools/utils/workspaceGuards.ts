@@ -63,7 +63,7 @@ export const createWorkspaceRequiredGuardTool = <TSchema extends z.ZodType>(inpu
               message: input.error
             }
           }
-          session.fail(payload, input.error, undefined, result)
+          session.fail(input.error, undefined, result)
           return payload
         }
       })

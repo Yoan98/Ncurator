@@ -163,6 +163,19 @@ export const humanDecisionHintSchema = z.discriminatedUnion('code', [
     })
   }),
   z.object({
+    code: z.literal('hand_tool_result_too_large'),
+    detail: z.object({
+      toolName: z.string().min(1),
+      command: z.string().min(1),
+      cwd: z.string().min(1),
+      estimatedTokens: z.number().int().min(1),
+      limit: z.number().int().min(1),
+      captureLimited: z.boolean(),
+      suggestedActions: z.array(z.string().min(1)).min(1),
+      suggestedCommands: z.array(z.string().min(1)).min(1)
+    })
+  }),
+  z.object({
     code: z.literal('hand_docx_positioned_write_blocked'),
     detail: z.object({
       targetDescription: z.string().min(1)

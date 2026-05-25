@@ -847,7 +847,6 @@ type AiRunEventPayload =
       taskId?: string
       toolCallId: string
       toolName: string
-      outputPreview: IpcJsonValue
       result?: AiToolCallResult
       draftRef?: AiDraftSnapshotRef
       completedAt: number
@@ -870,10 +869,10 @@ type AiRunEventPayload =
       stepId: string
       stepIndex: number
       command: string
-      outputPreview: string
+      cwd: string
       exitCode: number | null
       timedOut: boolean
-      truncated: boolean
+      captureLimited: boolean
       completedAt: number
     }
   | {
@@ -883,8 +882,9 @@ type AiRunEventPayload =
       stepId: string
       stepIndex: number
       command: string
+      cwd: string
       error: string
-      outputPreview?: string
+      captureLimited: boolean
       completedAt: number
     }
   | {

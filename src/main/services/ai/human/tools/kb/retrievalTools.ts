@@ -100,7 +100,6 @@ export const buildKbCapabilityTools = (input: {
           ) {
             const emptyRows: SearchResult[] = []
             session.succeed(
-              [],
               undefined,
               buildKbResult({
                 toolName: KB_SEARCH_TOOL_SPEC.name,
@@ -141,7 +140,6 @@ export const buildKbCapabilityTools = (input: {
           })()
           const normalized = rows.map(normalizeForIpc)
           session.succeed(
-            previewArray(normalized),
             undefined,
             buildKbResult({
               toolName: KB_SEARCH_TOOL_SPEC.name,
@@ -152,7 +150,6 @@ export const buildKbCapabilityTools = (input: {
         },
         onError: (error, session) => {
           session.fail(
-            [],
             error.message,
             undefined,
             buildKbResult({
@@ -195,7 +192,6 @@ export const buildKbCapabilityTools = (input: {
           if (Array.isArray(requestedDocumentIds) && requestedDocumentIds.length === 0) {
             const empty = { items: [], total: 0 }
             session.succeed(
-              [],
               undefined,
               buildKbResult({
                 toolName: KB_LIST_DOCUMENTS_TOOL_SPEC.name,
@@ -213,7 +209,6 @@ export const buildKbCapabilityTools = (input: {
             documentIds: requestedDocumentIds || undefined
           })
           session.succeed(
-            previewArray(normalized.items),
             undefined,
             buildKbResult({
               toolName: KB_LIST_DOCUMENTS_TOOL_SPEC.name,
@@ -224,7 +219,6 @@ export const buildKbCapabilityTools = (input: {
         },
         onError: (error, session) => {
           session.fail(
-            [],
             error.message,
             undefined,
             buildKbResult({

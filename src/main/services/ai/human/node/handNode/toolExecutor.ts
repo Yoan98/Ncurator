@@ -253,7 +253,6 @@ export const executeToolCall = async (input: {
       args: input.args as JsonObject,
       execute: async (session) => {
         session.fail(
-          result.data || { error: `当前未学习可执行工具 ${input.toolName}。` },
           resolveToolResultErrorText(result),
           undefined,
           result

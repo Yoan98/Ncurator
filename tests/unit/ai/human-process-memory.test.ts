@@ -296,7 +296,7 @@ describe('ai unit human memory history', () => {
                         data: {
                           ok: true,
                           code: 'ok',
-                          outputPreview: `/workspace/round-${round}`
+                          combinedOutput: `/workspace/round-${round}`
                         }
                       }
                     ]

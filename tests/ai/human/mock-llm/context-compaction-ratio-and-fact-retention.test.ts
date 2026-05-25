@@ -102,11 +102,13 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
               data: {
                 ok: true,
                 code: 'ok',
-                outputPreview: '发布说明显示：审批人字段为空。',
+                combinedOutput: '发布说明显示：审批人字段为空。',
+                stdout: '发布说明显示：审批人字段为空。',
+                stderr: '',
                 command: 'cat release-notes.txt',
                 exitCode: 0,
                 timedOut: false,
-                truncated: false
+                captureLimited: false
               }
             }
           ]
@@ -154,11 +156,13 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
               data: {
                 ok: false,
                 code: 'failed',
-                stderrPreview: '发布失败：审批未完成，系统禁止继续发布。',
+                combinedOutput: '发布失败：审批未完成，系统禁止继续发布。',
+                stdout: '',
+                stderr: '发布失败：审批未完成，系统禁止继续发布。',
                 command: 'release --publish',
                 exitCode: 2,
                 timedOut: false,
-                truncated: false
+                captureLimited: false
               },
               diagnostic: {
                 message: '失败原因：审批未完成，系统禁止继续发布。'
@@ -209,11 +213,13 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
               data: {
                 ok: true,
                 code: 'ok',
-                outputPreview: '审批记录显示：负责人 Bob 待确认；未审批不可发布。',
+                combinedOutput: '审批记录显示：负责人 Bob 待确认；未审批不可发布。',
+                stdout: '审批记录显示：负责人 Bob 待确认；未审批不可发布。',
+                stderr: '',
                 command: 'cat approval-log.txt',
                 exitCode: 0,
                 timedOut: false,
-                truncated: false
+                captureLimited: false
               }
             }
           ]
@@ -261,11 +267,13 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
               data: {
                 ok: true,
                 code: 'ok',
-                outputPreview: '上线窗口仍待确认，需先解决窗口冲突。',
+                combinedOutput: '上线窗口仍待确认，需先解决窗口冲突。',
+                stdout: '上线窗口仍待确认，需先解决窗口冲突。',
+                stderr: '',
                 command: 'cat schedule-note.txt',
                 exitCode: 0,
                 timedOut: false,
-                truncated: false
+                captureLimited: false
               }
             }
           ]
@@ -313,11 +321,13 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
               data: {
                 ok: true,
                 code: 'ok',
-                outputPreview: 'latest',
+                combinedOutput: 'latest',
+                stdout: 'latest',
+                stderr: '',
                 command: 'echo latest',
                 exitCode: 0,
                 timedOut: false,
-                truncated: false
+                captureLimited: false
               }
             }
           ]

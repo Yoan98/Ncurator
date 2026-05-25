@@ -6,7 +6,7 @@ export type TerminalCommandInput = {
   command: string
   cwd: string
   timeoutMs: number
-  maxOutputChars: number
+  captureHardLimitChars: number
 }
 
 export type TerminalCommandResult = {
@@ -14,10 +14,11 @@ export type TerminalCommandResult = {
   cwd: string
   stdout: string
   stderr: string
+  combinedOutput: string
   exitCode: number | null
   signal: NodeJS.Signals | null
   timedOut: boolean
-  truncated: boolean
+  captureLimited: boolean
   durationMs: number
 }
 
@@ -28,8 +29,8 @@ export type TerminalArtifactCandidate = {
 
 export type TerminalCapabilityToolsInput = WorkspaceCapabilityBuildInput<TerminalToolContext> & {
   timeoutMs: number
-  maxOutputChars: number
-  safePreviewChars: number
+  captureHardLimitChars: number
+  aiResultTokenLimitRatio: number
 }
 
 export type TerminalCapabilityToolsRuntimeState = {

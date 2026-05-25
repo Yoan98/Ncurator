@@ -20,7 +20,7 @@ export const terminalToolFamily = createWorkspaceBoundToolFamily({
       workspaceRootPath,
       emitActivity,
       timeoutMs: 15000,
-      maxOutputChars: 8000,
-      safePreviewChars: 600
+      captureHardLimitChars: 120_000,
+      aiResultTokenLimitRatio: 0.1
     }).tools
 })

@@ -75,6 +75,19 @@ export const renderDecisionHintForBrain = (hint: HumanDecisionHint): string => {
         `toolCallLimit=${String(hint.detail.limit)}`,
         '应优先考虑收敛；除非只差一次非常明确且必要的动作。'
       ].join('\n')
+    case 'hand_tool_result_too_large':
+      return [
+        '上一轮工具结果过大，不能原样继续带入后续推理。',
+        `toolName=${hint.detail.toolName}`,
+        `command=${hint.detail.command}`,
+        `cwd=${hint.detail.cwd}`,
+        `estimatedTokens=${String(hint.detail.estimatedTokens)}`,
+        `limit=${String(hint.detail.limit)}`,
+        `captureLimited=${String(hint.detail.captureLimited)}`,
+        `suggestedActions=${renderStringList(hint.detail.suggestedActions)}`,
+        `suggestedCommands=${renderStringList(hint.detail.suggestedCommands)}`,
+        '你必须缩小查询范围、进入更小目录、或先筛文件再读，禁止原样重复提交同类大结果命令。'
+      ].join('\n')
     case 'hand_docx_positioned_write_blocked':
       return [
         `上一轮命中了复杂定位排版保护，${hint.detail.targetDescription}不能自动编辑。`,

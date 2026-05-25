@@ -1,7 +1,7 @@
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import { tool } from '@langchain/core/tools'
 import type { z } from 'zod/v4'
-import type { IpcJsonValue, JsonObject } from '../../../../../../../shared/types'
+import type { JsonObject } from '../../../../../../../shared/types'
 import type { DocxToolFailure, DocxToolRuntime } from '../runtime'
 import { buildDocxToolCallResult } from '../runtime'
 import type {
@@ -54,14 +54,12 @@ export const finalizeDocxToolSuccess = <TResult extends object>(input: {
   toolName: string
   toolCallId: string
   result: TResult
-  outputPreview: IpcJsonValue
   draftDocId?: string
   activity?: DocxToolActivityConfig<TResult>
 }): TResult => {
   input.runtime.toolEvents.emitResult({
     toolName: input.toolName,
     toolCallId: input.toolCallId,
-    outputPreview: input.outputPreview,
     result: buildDocxToolCallResult({
       toolName: input.toolName,
       ok: true,
@@ -125,12 +123,10 @@ export const runDocxWorkerToolAction = async <
   ) =>
     | {
         result: TResult
-        outputPreview: IpcJsonValue
         draftDocId?: string
       }
     | Promise<{
         result: TResult
-        outputPreview: IpcJsonValue
         draftDocId?: string
       }>
 }): Promise<TResult | DocxToolFailure> => {
@@ -160,7 +156,6 @@ export const runDocxWorkerToolAction = async <
     toolName: input.toolName,
     toolCallId: input.toolCallId,
     result: success.result,
-    outputPreview: success.outputPreview,
     draftDocId: success.draftDocId,
     activity: input.activity
   })

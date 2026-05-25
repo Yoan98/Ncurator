@@ -58,8 +58,9 @@ const renderGenericArrayItem = (value: JsonValue, index: number): string => {
       || readStringField(value, 'summary')
       || readStringField(value, 'message')
       || readStringField(value, 'error')
-      || readStringField(value, 'outputPreview')
-      || readStringField(value, 'stdoutPreview')
+      || readStringField(value, 'combinedOutput')
+      || readStringField(value, 'stdout')
+      || readStringField(value, 'stderr')
       || readStringField(value, 'beforeText')
       || readStringField(value, 'afterText')
 
@@ -338,7 +339,9 @@ export const resolveToolResultErrorText = (result: Pick<ToolCallResult, 'code' |
     const explicit =
       readStringField(result.data, 'error')
       || readStringField(result.data, 'message')
-      || readStringField(result.data, 'outputPreview')
+      || readStringField(result.data, 'combinedOutput')
+      || readStringField(result.data, 'stdout')
+      || readStringField(result.data, 'stderr')
     if (explicit) return explicit
   }
 

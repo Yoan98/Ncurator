@@ -1,7 +1,6 @@
 import type {
   AiToolCallResult,
-  IpcJsonObject,
-  IpcJsonValue
+  IpcJsonObject
 } from '../../../../../../shared/types'
 import type { ToolEventEmitter } from './toolEvents'
 
@@ -9,14 +8,12 @@ export type ToolLifecycleSession = {
   toolName: string
   toolCallId: string
   emitResult: (input: {
-    outputPreview: IpcJsonValue
     result?: AiToolCallResult
     error?: string
     draftDocId?: string
   }) => void
-  succeed: (outputPreview: IpcJsonValue, draftDocId?: string, result?: AiToolCallResult) => void
+  succeed: (draftDocId?: string, result?: AiToolCallResult) => void
   fail: (
-    outputPreview: IpcJsonValue,
     error: string,
     draftDocId?: string,
     result?: AiToolCallResult
@@ -34,30 +31,27 @@ export const withToolLifecycle = async <TResult>(input: {
   const session: ToolLifecycleSession = {
     toolName: input.toolName,
     toolCallId,
-    emitResult: ({ outputPreview, result, error, draftDocId }) => {
+    emitResult: ({ result, error, draftDocId }) => {
       input.emitter.emitResult({
         toolName: input.toolName,
         toolCallId,
-        outputPreview,
         result,
         error,
         draftDocId
       })
     },
-    succeed: (outputPreview, draftDocId, result) => {
+    succeed: (draftDocId, result) => {
       input.emitter.emitResult({
         toolName: input.toolName,
         toolCallId,
-        outputPreview,
         result,
         draftDocId
       })
     },
-    fail: (outputPreview, error, draftDocId, result) => {
+    fail: (error, draftDocId, result) => {
       input.emitter.emitResult({
         toolName: input.toolName,
         toolCallId,
-        outputPreview,
         result,
         error,
         draftDocId
