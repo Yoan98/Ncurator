@@ -310,12 +310,7 @@ const buildResultTooLargeFailure = (input: {
   toolCallId: string
   sourcePath: string
   currentRevisionRef: string
-  totalBlockCount: number
   estimatedTokens: number
-  suggestedRanges: Array<
-    | { type: 'percent'; fromPercent: number; toPercent: number }
-    | { type: 'block_index'; fromBlockIndex: number; toBlockIndex: number }
-  >
 }) =>
   input.runtime.emitFailure({
     toolName: input.toolName,
@@ -324,12 +319,10 @@ const buildResultTooLargeFailure = (input: {
     error: 'docx result too large',
     warnings: [],
     decisionHint: {
-      sourcePath: input.sourcePath,
+      code: 'hand_tool_result_too_large',
       toolName: input.toolName,
-      totalBlockCount: input.totalBlockCount,
       estimatedTokens: input.estimatedTokens,
-      limit: getDocxAiResultTokenLimit(input.runtime),
-      suggestedRanges: input.suggestedRanges
+      limit: getDocxAiResultTokenLimit(input.runtime)
     } as JsonObject,
     resourceContext: input.runtime.buildResourceContext({
       sourcePath: input.sourcePath,
@@ -437,20 +430,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
               toolCallId,
               sourcePath: sessionResult.sourcePath,
               currentRevisionRef: sessionResult.currentRevisionRef,
-              totalBlockCount: sessionResult.stats.blockCount,
-              estimatedTokens,
-              suggestedRanges: [
-                {
-                  type: 'percent',
-                  fromPercent: 0,
-                  toPercent: 20
-                },
-                {
-                  type: 'block_index',
-                  fromBlockIndex: 0,
-                  toBlockIndex: Math.max(0, Math.min(20, sessionResult.stats.blockCount - 1))
-                }
-              ]
+              estimatedTokens
             }),
             activity: {
               actionType: DOCX_OUTLINE_TOOL_SPEC.activityActionType!

@@ -107,8 +107,7 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
                 stderr: '',
                 command: 'cat release-notes.txt',
                 exitCode: 0,
-                timedOut: false,
-                captureLimited: false
+                timedOut: false
               }
             }
           ]
@@ -161,8 +160,7 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
                 stderr: '发布失败：审批未完成，系统禁止继续发布。',
                 command: 'release --publish',
                 exitCode: 2,
-                timedOut: false,
-                captureLimited: false
+                timedOut: false
               },
               diagnostic: {
                 message: '失败原因：审批未完成，系统禁止继续发布。'
@@ -218,8 +216,7 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
                 stderr: '',
                 command: 'cat approval-log.txt',
                 exitCode: 0,
-                timedOut: false,
-                captureLimited: false
+                timedOut: false
               }
             }
           ]
@@ -272,8 +269,7 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
                 stderr: '',
                 command: 'cat schedule-note.txt',
                 exitCode: 0,
-                timedOut: false,
-                captureLimited: false
+                timedOut: false
               }
             }
           ]
@@ -326,8 +322,7 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
                 stderr: '',
                 command: 'echo latest',
                 exitCode: 0,
-                timedOut: false,
-                captureLimited: false
+                timedOut: false
               }
             }
           ]

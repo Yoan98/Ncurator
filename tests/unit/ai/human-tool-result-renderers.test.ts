@@ -10,8 +10,7 @@ describe('ai unit human tool result renderers', () => {
         cwd: '/tmp/workspace',
         combinedOutput: '/tmp/workspace',
         exitCode: 0,
-        timedOut: false,
-        captureLimited: false
+        timedOut: false
       }
     })
 
@@ -20,7 +19,6 @@ describe('ai unit human tool result renderers', () => {
     expect(rendered).toContain('combinedOutput=/tmp/workspace')
     expect(rendered).toContain('exitCode=0')
     expect(rendered).toContain('timedOut=false')
-    expect(rendered).toContain('captureLimited=false')
   })
 
   it('renders nested docx_read_blocks table, cell and runs details', () => {

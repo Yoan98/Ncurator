@@ -64,7 +64,7 @@ docx 子系统负责：
 - 必须支持 `ranges` 数组查询，range 类型包括 `percent` 与 `block_index`。
 - `percent` 按顶层 block 总数换算为闭区间 `blockIndex`；多个 ranges 必须合并去重后按文档顺序返回。
 - AI-facing 返回轻量块 `blockId / blockIndex / type / text`，不暴露分页或截断字段。
-- 工具结果估算体积超过当前模型 context window 的 `10%` 时必须返回 `result_too_large`，并在 decision hint 中给出总 block 数、估算 token、实际 limit 与建议缩小范围。
+- 工具结果估算体积超过当前模型 context window 的 `10%` 时必须返回 `result_too_large`，并在 decision hint 中给出工具名、估算 token 与实际 limit。
 
 ### 3.3 search
 

@@ -84,7 +84,6 @@ const emitTerminalStepCompletion = (input: {
   cwd: string
   exitCode: number | null
   timedOut: boolean
-  captureLimited: boolean
   stepError?: string
   emitActivity: (activity: CapabilityActivityInput) => void
 }): void => {
@@ -98,7 +97,6 @@ const emitTerminalStepCompletion = (input: {
       command: input.command,
       cwd: input.cwd,
       error: input.stepError,
-      captureLimited: input.captureLimited,
       completedAt: Date.now()
     })
     input.emitActivity({
@@ -119,7 +117,6 @@ const emitTerminalStepCompletion = (input: {
     cwd: input.cwd,
     exitCode: input.exitCode,
     timedOut: input.timedOut,
-    captureLimited: input.captureLimited,
     completedAt: Date.now()
   })
   input.emitActivity({
@@ -133,41 +130,23 @@ const buildTerminalStepError = (input: {
   exitCode: number | null
   timedOut: boolean
   timeoutMs: number
-  captureLimited: boolean
 }): string | undefined =>
   input.timedOut
     ? `command timed out after ${input.timeoutMs}ms`
-    : input.captureLimited
-      ? 'command output exceeded capture hard limit'
     : input.exitCode !== 0
       ? `command exited with code ${String(input.exitCode)}`
       : undefined
 
 const buildResultTooLargeDecisionHint = (input: {
-  command: string
-  cwd: string
+  toolName: string
   estimatedTokens: number
   limit: number
-  captureLimited: boolean
 }): Extract<HumanDecisionHint, { code: 'hand_tool_result_too_large' }> => ({
   code: 'hand_tool_result_too_large',
   detail: {
-    toolName: TERMINAL_RUN_TOOL_SPEC.name,
-    command: input.command,
-    cwd: input.cwd,
+    toolName: input.toolName,
     estimatedTokens: input.estimatedTokens,
-    limit: input.limit,
-    captureLimited: input.captureLimited,
-    suggestedActions: [
-      '先进入更小目录再查看',
-      '先列目录或筛文件名，再读取具体文件',
-      '避免对大范围目录直接执行全量输出命令'
-    ],
-    suggestedCommands: [
-      'ls 工作',
-      "find 工作 -maxdepth 2 -type f | rg '关键字'",
-      "rg -n '关键字' 工作"
-    ]
+    limit: input.limit
   }
 })
 
@@ -333,8 +312,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
           const stepError = buildTerminalStepError({
             exitCode: result.exitCode,
             timedOut: result.timedOut,
-            timeoutMs: input.timeoutMs,
-            captureLimited: result.captureLimited
+            timeoutMs: input.timeoutMs
           })
 
           const artifacts = await recordTerminalArtifacts({
@@ -356,7 +334,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             cwd,
             exitCode: result.exitCode,
             timedOut: result.timedOut,
-            captureLimited: result.captureLimited,
             stepError,
             emitActivity: input.emitActivity
           })
@@ -381,7 +358,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             combinedOutput: result.combinedOutput,
             exitCode: result.exitCode,
             timedOut: result.timedOut,
-            captureLimited: result.captureLimited,
             artifacts
           } as {
             ok: boolean
@@ -393,7 +369,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             combinedOutput: string
             exitCode: number | null
             timedOut: boolean
-            captureLimited: boolean
             artifacts: typeof artifacts
             error?: string
             estimatedTokens?: number
@@ -420,11 +395,9 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             payload.estimatedTokens = estimatedTokens
             payload.limit = aiResultTokenLimit
             payload.decisionHint = buildResultTooLargeDecisionHint({
-              command,
-              cwd,
+              toolName: TERMINAL_RUN_TOOL_SPEC.name,
               estimatedTokens,
-              limit: aiResultTokenLimit,
-              captureLimited: result.captureLimited
+              limit: aiResultTokenLimit
             })
             payload.error = 'terminal result too large'
             session.fail(

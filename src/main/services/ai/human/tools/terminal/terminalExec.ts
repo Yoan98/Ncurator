@@ -20,7 +20,6 @@ export const runTerminalCommand = async (
       exitCode: 1,
       signal: null,
       timedOut: false,
-      captureLimited: false,
       durationMs: 0
     }
   }
@@ -46,7 +45,6 @@ export const runTerminalCommand = async (
     let stderr = ''
     let combinedOutput = ''
     let timedOut = false
-    let captureLimited = false
     let settled = false
 
     const appendChunk = (target: 'stdout' | 'stderr', chunk: Buffer | string) => {
@@ -61,7 +59,6 @@ export const runTerminalCommand = async (
         stdout = stdout.slice(0, captureHardLimitChars)
         stderr = stderr.slice(0, Math.max(0, captureHardLimitChars - stdout.length))
         combinedOutput = combinedOutput.slice(0, captureHardLimitChars)
-        captureLimited = true
         if (!settled) {
           child.kill('SIGTERM')
         }
@@ -95,8 +92,7 @@ export const runTerminalCommand = async (
         stderr: `${stderr}\n${err.message}`.trim(),
         exitCode: 1,
         signal: null,
-        timedOut,
-        captureLimited
+        timedOut
       })
     })
 
@@ -109,8 +105,7 @@ export const runTerminalCommand = async (
         combinedOutput,
         exitCode,
         signal,
-        timedOut,
-        captureLimited
+        timedOut
       })
     })
   })

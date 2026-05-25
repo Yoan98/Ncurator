@@ -39,14 +39,6 @@ export const humanStageSchema = z.enum(HUMAN_STAGES)
 export const humanStatusSchema = z.enum(HUMAN_STATUSES)
 export const humanHandPlanInvalidReasonSchema = z.enum(HUMAN_HAND_PLAN_INVALID_REASONS)
 export const humanDecisionHintCodeSchema = z.enum(HUMAN_DECISION_HINT_CODES)
-export const docxBatchHaltReasonSchema = z.enum([
-  'ambiguous_successor',
-  'ambiguous_table_cell',
-  'anchor_deleted_unrecoverable',
-  'layout_protection',
-  'batch_write_limit_exceeded',
-  'locator_confidence_too_low'
-])
 export const humanSkillSourceSchema = z.enum(HUMAN_SKILL_SOURCES)
 export const humanRoundExecutionKindSchema = z.enum(HUMAN_ROUND_EXECUTION_KINDS)
 
@@ -166,35 +158,14 @@ export const humanDecisionHintSchema = z.discriminatedUnion('code', [
     code: z.literal('hand_tool_result_too_large'),
     detail: z.object({
       toolName: z.string().min(1),
-      command: z.string().min(1),
-      cwd: z.string().min(1),
       estimatedTokens: z.number().int().min(1),
-      limit: z.number().int().min(1),
-      captureLimited: z.boolean(),
-      suggestedActions: z.array(z.string().min(1)).min(1),
-      suggestedCommands: z.array(z.string().min(1)).min(1)
+      limit: z.number().int().min(1)
     })
   }),
   z.object({
     code: z.literal('hand_docx_positioned_write_blocked'),
     detail: z.object({
       targetDescription: z.string().min(1)
-    })
-  }),
-  z.object({
-    code: z.literal('hand_docx_batch_write_halted'),
-    detail: z.object({
-      sourcePath: z.string().min(1),
-      lastSafeRevisionRef: z.string().min(1),
-      haltedAtCallIndex: z.number().int().min(0),
-      completedCallCount: z.number().int().min(0),
-      totalCallCount: z.number().int().min(1),
-      haltReason: docxBatchHaltReasonSchema,
-      haltSummary: z.string().min(1),
-      completedItems: z.array(z.string().min(1)),
-      pendingItems: z.array(z.string().min(1)),
-      failedItem: z.string().min(1),
-      recoveryContext: z.string().min(1)
     })
   }),
   z.object({

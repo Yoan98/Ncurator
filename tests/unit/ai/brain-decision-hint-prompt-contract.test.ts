@@ -72,19 +72,9 @@ describe('ai unit brain decision-hint prompt contract', () => {
             }
           ],
           decisionHint: {
-            code: 'hand_docx_batch_write_halted',
+            code: 'hand_docx_positioned_write_blocked',
             detail: {
-              sourcePath: 'report.docx',
-              lastSafeRevisionRef: 'v2',
-              haltedAtCallIndex: 0,
-              completedCallCount: 1,
-              totalCallCount: 2,
-              haltReason: 'locator_confidence_too_low',
-              haltSummary: 'cannot safely resolve target after earlier mutations',
-              completedItems: ['docx_paragraph_edit#1'],
-              pendingItems: ['docx_paragraph_edit#2'],
-              failedItem: 'docx_paragraph_edit#2',
-              recoveryContext: '当前工作稿已停在 v2；已完成写入保留，未完成写入未执行。'
+              targetDescription: '你刚才尝试修改段落的那处位置'
             }
           }
         }
@@ -92,19 +82,9 @@ describe('ai unit brain decision-hint prompt contract', () => {
     ]
 
     state.execution.pendingDecisionHint = {
-      code: 'hand_docx_batch_write_halted',
+      code: 'hand_docx_positioned_write_blocked',
       detail: {
-        sourcePath: 'report.docx',
-        lastSafeRevisionRef: 'v2',
-        haltedAtCallIndex: 0,
-        completedCallCount: 1,
-        totalCallCount: 2,
-        haltReason: 'locator_confidence_too_low',
-        haltSummary: 'cannot safely resolve target after earlier mutations',
-        completedItems: ['docx_paragraph_edit#1'],
-        pendingItems: ['docx_paragraph_edit#2'],
-        failedItem: 'docx_paragraph_edit#2',
-        recoveryContext: '当前工作稿已停在 v2；已完成写入保留，未完成写入未执行。'
+        targetDescription: '你刚才尝试修改段落的那处位置'
       }
     }
 
@@ -116,7 +96,7 @@ describe('ai unit brain decision-hint prompt contract', () => {
           status: 'todo'
         }
       ],
-      progressionSummary: '已发现批量写在中途安全停止，需要按最新执行结果重新判断。'
+      progressionSummary: '已发现目标区域命中定位排版保护，需要按最新执行结果重新判断。'
     }
 
     const prompt = buildBrainPrompt({
@@ -134,9 +114,9 @@ describe('ai unit brain decision-hint prompt contract', () => {
     expect(taskProgressSection).toContain('执行：')
     expect(taskProgressSection).toContain('类型：hand')
     expect(taskProgressSection).toContain('cannot safely resolve target after earlier mutations')
-    expect(taskProgressSection).not.toContain('上一轮 docx 批量写在中途安全停止。')
-    expect(correctionHintSection).toContain('上一轮 docx 批量写在中途安全停止。')
-    expect(correctionHintSection).toContain('lastSafeRevisionRef=v2')
+    expect(taskProgressSection).not.toContain('刚才尝试修改的 docx 区域命中了定位排版保护')
+    expect(correctionHintSection).toContain('刚才尝试修改的 docx 区域命中了定位排版保护')
+    expect(correctionHintSection).toContain('你刚才尝试修改段落的那处位置')
   })
 
   it('requires references disclosure when nextAction is mouth', () => {

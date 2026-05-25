@@ -872,7 +872,6 @@ type AiRunEventPayload =
       cwd: string
       exitCode: number | null
       timedOut: boolean
-      captureLimited: boolean
       completedAt: number
     }
   | {
@@ -884,7 +883,6 @@ type AiRunEventPayload =
       command: string
       cwd: string
       error: string
-      captureLimited: boolean
       completedAt: number
     }
   | {

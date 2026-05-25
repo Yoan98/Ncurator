@@ -327,7 +327,7 @@
 - What：验证 `docx_outline` 结果超出 AI-facing 体积门禁时返回 `result_too_large`。
 - Why：长文档 outline 不能依赖 AI-controlled 数量上限截断，必须提示 brain 缩小范围。
 - How：对长文档执行过大的真实 `docx_outline(ranges=...)`，检查返回 code 与 decision hint。
-- Oracle：返回 `result_too_large`，且 decision hint 包含 `totalBlockCount/estimatedTokens/limit/suggestedRanges`。
+- Oracle：返回 `result_too_large`，且 decision hint 包含 `toolName/estimatedTokens/limit`。
 - Not：不验证 human 是否一定继续读取后续内容。
 
 ##### `docx-complex-ops-batch`

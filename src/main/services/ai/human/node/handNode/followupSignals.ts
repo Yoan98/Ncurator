@@ -89,12 +89,6 @@ export const deriveHandFollowupSignals = (input: {
     }
 
     if (!DOCX_WRITE_TOOL_NAMES.has(result.toolName) || result.ok) continue
-    const haltedHint = toolResultHint
-    if (haltedHint?.code === 'hand_docx_batch_write_halted') {
-      return {
-        decisionHint: haltedHint
-      }
-    }
     if (!isDocxPositionedLayoutProtectionMessage(result.diagnostic?.message)) continue
 
     const plannedCall = input.calls[index]
@@ -111,6 +105,6 @@ export const shouldStopSerialHandPlan = (input: {
   calls: HandCallList
   results: readonly ToolCallResult[]
 }): boolean =>
-  ['hand_tool_result_too_large', 'hand_docx_positioned_write_blocked', 'hand_docx_batch_write_halted'].includes(
+  ['hand_tool_result_too_large', 'hand_docx_positioned_write_blocked'].includes(
     deriveHandFollowupSignals(input).decisionHint?.code || ''
   )

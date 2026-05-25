@@ -739,7 +739,6 @@ interface TerminalStepResultEvent {
   cwd: string
   exitCode: number | null
   timedOut: boolean
-  captureLimited: boolean
   completedAt: number
 }
 
@@ -752,7 +751,6 @@ interface TerminalStepErrorEvent {
   command: string
   cwd: string
   error: string
-  captureLimited: boolean
   completedAt: number
 }
 

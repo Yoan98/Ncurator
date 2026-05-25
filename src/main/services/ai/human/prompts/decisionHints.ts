@@ -2,119 +2,50 @@ import type { JsonObject } from '../../../../../shared/types'
 import type { HumanDecisionHint } from '../types'
 
 const renderStringList = (items: readonly string[]): string =>
-  items.length > 0 ? `[${items.join(', ')}]` : 'none'
+  items.length > 0 ? items.join('、') : '无'
 
 const asJsonObject = (value: HumanDecisionHint['detail']): JsonObject => ({ ...value })
 
 export const renderDecisionHintForBrain = (hint: HumanDecisionHint): string => {
   switch (hint.code) {
     case 'learning_no_effect':
-      return [
-        '上一轮 learning 没有产生新能力。',
-        `requestedSkillIds=${renderStringList(hint.detail.requestedSkillIds)}`,
-        `skippedDuplicateSkillIds=${renderStringList(hint.detail.duplicateSkillIds)}`,
-        `skippedUnknownSkillIds=${renderStringList(hint.detail.unknownSkillIds)}`,
-        '不要重复提交同样的 learning；只有当你能提出新的 skill 组合时才继续 learning。'
-      ].join('\n')
+      return `上一轮学习没有带来新能力。请求的技能有：${renderStringList(hint.detail.requestedSkillIds)}；重复的技能有：${renderStringList(hint.detail.duplicateSkillIds)}；不存在的技能有：${renderStringList(hint.detail.unknownSkillIds)}。`
     case 'learning_builtin_skill_requested':
-      return [
-        '上一轮 learning 请求了 builtin skill，因此未按该请求学习。',
-        `requestedSkillIds=${renderStringList(hint.detail.requestedSkillIds)}`,
-        `builtinSkillIds=${renderStringList(hint.detail.builtinSkillIds)}`,
-        'builtin skill 始终可用，不应再提交到 learning；请直接决定是否调用其工具，或改为学习仍属 external 的 skill。'
-      ].join('\n')
+      return `上一轮请求学习的技能里包含内置技能，因此该学习请求没有按原样执行。请求的技能有：${renderStringList(hint.detail.requestedSkillIds)}；其中内置技能有：${renderStringList(hint.detail.builtinSkillIds)}。`
     case 'learning_tool_budget_exceeded':
-      return [
-        '上一轮 learning 没有执行，因为 active tool budget 超限。',
-        `requestedSkillIds=${renderStringList(hint.detail.requestedSkillIds)}`,
-        `activeToolCount=${String(hint.detail.activeToolCount)}`,
-        `activeToolLimit=${String(hint.detail.limit)}`,
-        '请改成更聚焦的 skill 组合。'
-      ].join('\n')
+      return `上一轮学习没有执行，因为当前可用工具数已达到上限。当前为 ${String(hint.detail.activeToolCount)}，上限为 ${String(hint.detail.limit)}；请求的技能有：${renderStringList(hint.detail.requestedSkillIds)}。`
     case 'hand_plan_invalid':
       return [
-        '上一轮 hand 的 calls 未通过执行前校验。',
-        `reason=${hint.detail.reason}`,
-        `offendingToolNames=${renderStringList(hint.detail.offendingToolNames)}`,
-        hint.detail.sourcePaths
-          ? `sourcePaths=${renderStringList(hint.detail.sourcePaths)}`
-          : undefined,
-        hint.detail.limit ? `limit=${String(hint.detail.limit)}` : undefined,
-        hint.detail.callCount ? `requestedCallCount=${String(hint.detail.callCount)}` : undefined,
-        hint.detail.reason === 'hand_call_limit_exceeded'
-          ? '请缩减本轮 calls 数量，再重新决策。'
-          : hint.detail.reason === 'docx_single_file_write_limit_exceeded'
-            ? '同一文件一轮只能出现一次 docx 写工具调用。'
-            : '请根据当前 reason 调整 calls，再重新决策。'
+        `上一轮工具调用计划没有通过执行前校验。原因是 ${hint.detail.reason}。`,
+        `涉及的工具有：${renderStringList(hint.detail.offendingToolNames)}。`,
+        hint.detail.sourcePaths ? `涉及的文件有：${renderStringList(hint.detail.sourcePaths)}。` : undefined,
+        hint.detail.callCount ? `本轮计划调用数为 ${String(hint.detail.callCount)}。` : undefined,
+        hint.detail.limit ? `当前限制为 ${String(hint.detail.limit)}。` : undefined
       ]
         .filter(Boolean)
         .join('\n')
     case 'hand_approval_blocked':
       return [
-        '上一轮 hand 命中了审批批次，但本批没有全部通过，因此这些命令本轮没有执行。',
-        `reason=${hint.detail.reason}`,
-        `batchId=${hint.detail.batchId}`,
-        `blockedToolNames=${renderStringList(hint.detail.blockedToolNames)}`,
-        `blockedCommands=${renderStringList(hint.detail.blockedCommands)}`,
-        `approvedItemIds=${renderStringList(hint.detail.approvedItemIds)}`,
-        `rejectedItemIds=${renderStringList(hint.detail.rejectedItemIds)}`,
-        `guidedItems=${hint.detail.guidedItems.length > 0 ? JSON.stringify(hint.detail.guidedItems) : 'none'}`,
+        '上一轮命中了审批批次，但本批没有全部通过，因此相关命令本轮没有执行。',
+        `审批批次是 ${hint.detail.batchId}，阻塞原因是 ${hint.detail.reason}。`,
+        `涉及的工具有：${renderStringList(hint.detail.blockedToolNames)}。`,
+        `涉及的命令有：${renderStringList(hint.detail.blockedCommands)}。`,
+        `已批准的审批项有：${renderStringList(hint.detail.approvedItemIds)}。`,
+        `已拒绝的审批项有：${renderStringList(hint.detail.rejectedItemIds)}。`,
         hint.detail.guidedItems.length > 0
-          ? '你必须先吸收 guidedItems 里的用户指导内容，再决定下一步。'
-          : undefined,
-        hint.detail.rejectedItemIds.length > 0
-          ? '这些被拒绝的命令不要原样再次提交同批内容。'
+          ? `用户补充说明的审批项有：${hint.detail.guidedItems.map((item) => `${item.itemId}（${item.command}：${item.message}）`).join('、')}。`
           : undefined
       ]
         .filter(Boolean)
         .join('\n')
     case 'hand_tool_limit_exceeded':
-      return [
-        '累计工具调用次数已经超过当前临时上限。',
-        `toolCallCount=${String(hint.detail.toolCallCount)}`,
-        `toolCallLimit=${String(hint.detail.limit)}`,
-        '应优先考虑收敛；除非只差一次非常明确且必要的动作。'
-      ].join('\n')
+      return `累计工具调用次数已经超过当前上限。当前为 ${String(hint.detail.toolCallCount)}，上限为 ${String(hint.detail.limit)}。`
     case 'hand_tool_result_too_large':
-      return [
-        '上一轮工具结果过大，不能原样继续带入后续推理。',
-        `toolName=${hint.detail.toolName}`,
-        `command=${hint.detail.command}`,
-        `cwd=${hint.detail.cwd}`,
-        `estimatedTokens=${String(hint.detail.estimatedTokens)}`,
-        `limit=${String(hint.detail.limit)}`,
-        `captureLimited=${String(hint.detail.captureLimited)}`,
-        `suggestedActions=${renderStringList(hint.detail.suggestedActions)}`,
-        `suggestedCommands=${renderStringList(hint.detail.suggestedCommands)}`,
-        '你必须缩小查询范围、进入更小目录、或先筛文件再读，禁止原样重复提交同类大结果命令。'
-      ].join('\n')
+      return `上一轮 ${hint.detail.toolName} 返回内容过大，估算约 ${String(hint.detail.estimatedTokens)} tokens，超过当前上限 ${String(hint.detail.limit)}，本轮结果不能原样继续带入后续判断。`
     case 'hand_docx_positioned_write_blocked':
-      return [
-        `上一轮命中了复杂定位排版保护，${hint.detail.targetDescription}不能自动编辑。`,
-        '不要继续尝试修改这处区域，继续处理当前任务中其他仍可完成的部分。'
-      ].join('\n')
-    case 'hand_docx_batch_write_halted':
-      return [
-        '上一轮 docx 批量写在中途安全停止。',
-        `sourcePath=${hint.detail.sourcePath}`,
-        `lastSafeRevisionRef=${hint.detail.lastSafeRevisionRef}`,
-        `completedCallCount=${String(hint.detail.completedCallCount)}`,
-        `totalCallCount=${String(hint.detail.totalCallCount)}`,
-        `haltedAtCallIndex=${String(hint.detail.haltedAtCallIndex)}`,
-        `haltReason=${hint.detail.haltReason}`,
-        `haltSummary=${hint.detail.haltSummary}`,
-        `completedItems=${renderStringList(hint.detail.completedItems)}`,
-        `pendingItems=${renderStringList(hint.detail.pendingItems)}`,
-        `failedItem=${hint.detail.failedItem}`,
-        `recoveryContext=${hint.detail.recoveryContext}`,
-        '已完成部分已写入最新安全修订；未完成部分尚未执行。后续决策必须基于当前现状自主收敛。'
-      ].join('\n')
+      return `刚才尝试修改的 docx 区域命中了定位排版保护，系统没有自动修改该位置。受影响的位置是：${hint.detail.targetDescription}。`
     case 'brain_todolist_incomplete':
-      return [
-        '你上一轮选择了 mouth，但 todolist 里仍有未完成事项。',
-        `pendingItems=${renderStringList(hint.detail.pendingItems)}`,
-        '你必须先完成这些事项，或先更新 todolist 使这些事项不再是 todo，才能再次选择 mouth。在仍有 todo 时，禁止再次选择 mouth；优先处理剩余事项，不要继续扩写结束性叙述。'
-      ].join('\n')
+      return `上一轮选择了最终交付，但当前仍有未完成事项：${renderStringList(hint.detail.pendingItems)}。`
   }
 }
 

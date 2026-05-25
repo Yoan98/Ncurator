@@ -18,7 +18,6 @@ export type TerminalCommandResult = {
   exitCode: number | null
   signal: NodeJS.Signals | null
   timedOut: boolean
-  captureLimited: boolean
   durationMs: number
 }
 

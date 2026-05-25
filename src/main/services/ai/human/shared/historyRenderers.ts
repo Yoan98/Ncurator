@@ -194,7 +194,6 @@ const buildBrainToolReturnValue = (result: HumanHistoryToolResult): JsonValue =>
           'combinedOutput',
           'exitCode',
           'timedOut',
-          'captureLimited',
           'estimatedTokens',
           'limit',
           'decisionHint',
