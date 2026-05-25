@@ -7,7 +7,7 @@
 - `doc/ai-design/data-definition-and-flow.md`：涉及 AI 数据结构、状态流转或产物关系时阅读。
 - `doc/ai-design/human-skill-design.md`：涉及 human skill 体系、能力边界或工具使用范围时阅读。
 - `doc/ai-design/prompt-design.md`：涉及 prompt 设计、AI-facing 文案或工具描述方式时阅读。
-- 涉及 terminal 批量审批预检、审批批次事件、审批阻断 decision hint 或底部审批卡片时，优先阅读 `doc/ai-design/implementation-spec.md`、`doc/ai-design/data-definition-and-flow.md` 与 `doc/prd/workbench.md`。
+- 涉及 terminal 批量审批预检、审批批次事件、审批阻断 decision hint、底部审批卡片，或 hand 串行 `calls` 执行约束时，优先阅读 `doc/ai-design/implementation-spec.md`、`doc/ai-design/data-definition-and-flow.md` 与 `doc/prd/workbench.md`。
 
 ### 1.2 docx相关
 - `doc/docx-design/architecture.md`：涉及 docx 整体架构、模块关系或主流程时阅读。

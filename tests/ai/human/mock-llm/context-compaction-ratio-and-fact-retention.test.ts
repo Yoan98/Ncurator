@@ -75,22 +75,6 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
           },
           nextAction: {
             action: 'hand',
-            toolUsePlan: {
-              mode: 'serial',
-              calls: [
-                {
-                  toolName: 'terminal_run',
-                  args: {
-                    command: 'cat release-notes.txt'
-                  }
-                }
-              ]
-            }
-          }
-        },
-        execution: buildHandExecution({
-          toolUsePlan: {
-            mode: 'serial',
             calls: [
               {
                 toolName: 'terminal_run',
@@ -99,7 +83,17 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
                 }
               }
             ]
-          },
+          }
+        },
+        execution: buildHandExecution({
+          calls: [
+            {
+              toolName: 'terminal_run',
+              args: {
+                command: 'cat release-notes.txt'
+              }
+            }
+          ],
           toolResults: [
             {
               toolName: 'terminal_run',
@@ -133,22 +127,6 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
           },
           nextAction: {
             action: 'hand',
-            toolUsePlan: {
-              mode: 'serial',
-              calls: [
-                {
-                  toolName: 'terminal_run',
-                  args: {
-                    command: 'release --publish'
-                  }
-                }
-              ]
-            }
-          }
-        },
-        execution: buildHandExecution({
-          toolUsePlan: {
-            mode: 'serial',
             calls: [
               {
                 toolName: 'terminal_run',
@@ -157,7 +135,17 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
                 }
               }
             ]
-          },
+          }
+        },
+        execution: buildHandExecution({
+          calls: [
+            {
+              toolName: 'terminal_run',
+              args: {
+                command: 'release --publish'
+              }
+            }
+          ],
           toolResults: [
             {
               toolName: 'terminal_run',
@@ -194,22 +182,6 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
           },
           nextAction: {
             action: 'hand',
-            toolUsePlan: {
-              mode: 'serial',
-              calls: [
-                {
-                  toolName: 'terminal_run',
-                  args: {
-                    command: 'cat approval-log.txt'
-                  }
-                }
-              ]
-            }
-          }
-        },
-        execution: buildHandExecution({
-          toolUsePlan: {
-            mode: 'serial',
             calls: [
               {
                 toolName: 'terminal_run',
@@ -218,7 +190,17 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
                 }
               }
             ]
-          },
+          }
+        },
+        execution: buildHandExecution({
+          calls: [
+            {
+              toolName: 'terminal_run',
+              args: {
+                command: 'cat approval-log.txt'
+              }
+            }
+          ],
           toolResults: [
             {
               toolName: 'terminal_run',
@@ -252,22 +234,6 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
           },
           nextAction: {
             action: 'hand',
-            toolUsePlan: {
-              mode: 'serial',
-              calls: [
-                {
-                  toolName: 'terminal_run',
-                  args: {
-                    command: 'cat schedule-note.txt'
-                  }
-                }
-              ]
-            }
-          }
-        },
-        execution: buildHandExecution({
-          toolUsePlan: {
-            mode: 'serial',
             calls: [
               {
                 toolName: 'terminal_run',
@@ -276,7 +242,17 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
                 }
               }
             ]
-          },
+          }
+        },
+        execution: buildHandExecution({
+          calls: [
+            {
+              toolName: 'terminal_run',
+              args: {
+                command: 'cat schedule-note.txt'
+              }
+            }
+          ],
           toolResults: [
             {
               toolName: 'terminal_run',
@@ -310,22 +286,6 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
           },
           nextAction: {
             action: 'hand',
-            toolUsePlan: {
-              mode: 'serial',
-              calls: [
-                {
-                  toolName: 'terminal_run',
-                  args: {
-                    command: 'echo latest'
-                  }
-                }
-              ]
-            }
-          }
-        },
-        execution: buildHandExecution({
-          toolUsePlan: {
-            mode: 'serial',
             calls: [
               {
                 toolName: 'terminal_run',
@@ -334,7 +294,17 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
                 }
               }
             ]
-          },
+          }
+        },
+        execution: buildHandExecution({
+          calls: [
+            {
+              toolName: 'terminal_run',
+              args: {
+                command: 'echo latest'
+              }
+            }
+          ],
           toolResults: [
             {
               toolName: 'terminal_run',

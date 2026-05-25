@@ -1,6 +1,6 @@
 import type { AiRunContext } from '../../types'
 import { renderReferenceScopeText } from '../../prompts/referenceScope'
-import { HUMAN_TOOL_USE_PLAN_LIMIT } from '../constants'
+import { HUMAN_HAND_CALL_LIMIT } from '../constants'
 import { getLastRoundFocus, getRecentHistoryRounds } from '../memory/rounds'
 import {
   getEffectiveLearnedSkillIds,
@@ -152,15 +152,14 @@ export const buildBrainPrompt = (input: {
     nextAction的选择：
     - nextAction 只能在 learning、hand、mouth 三者中选择其一。
     - 选择 learning：当你已经知道缺少哪类能力说明，且补齐后能明显降低不确定性时。
-    - 选择 hand：当下一步已经明确成一批工具调用，且你能给出完整合法的 toolUsePlan 时。
+    - 选择 hand：当下一步已经明确成一批工具调用，且你能给出完整合法的 calls 时。
     - 选择 mouth：只在当前已经足够形成最终交付时；mouth 不新增事实，不继续执行工具。
 
     nextAction为hand时：
-    - toolUsePlan 必须是完整合法的可执行计划。
-    - toolUsePlan.mode：parallel只用于只读工具的并行调用；其余情况必须用 serial，它将被串行执行。
-    - toolUsePlan.calls[*].toolName：必须严格使用当前工具说明里的精确名称。
-    - toolUsePlan.calls[*].args：必须是对象，字段名、必填参数和参数层级都必须与工具说明一致。
-    - toolUsePlan最大只允许规划${HUMAN_TOOL_USE_PLAN_LIMIT}个。
+    - calls 必须是完整合法的可执行计划，系统会按顺序串行执行。
+    - calls[*].toolName：必须严格使用当前工具说明里的精确名称。
+    - calls[*].args：必须是对象，字段名、必填参数和参数层级都必须与工具说明一致。
+    - calls 最大只允许规划${HUMAN_HAND_CALL_LIMIT}个。
     - 禁止在一轮 hand 中出现对同一个文件多次写工具调用。
 
     nextAction为mouth时：
@@ -247,17 +246,14 @@ ${outputShapeText}
         },
         "nextAction": {
           "action": "hand",
-          "toolUsePlan": {
-            "mode": "serial",
-            "calls": [
-              {
-                "toolName": "terminal_run",
-                "args": {
-                  "command": "pwd"
-                }
+          "calls": [
+            {
+              "toolName": "terminal_run",
+              "args": {
+                "command": "pwd"
               }
-            ]
-          }
+            }
+          ]
         }
       }
     </example_tool_plan>

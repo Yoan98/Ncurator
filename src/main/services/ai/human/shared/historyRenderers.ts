@@ -248,13 +248,11 @@ const renderHandExecution = (
   const execution = record.execution
   const executedToolNames = execution.toolResults.map((result) => result.toolName)
   const actualToolNames =
-    executedToolNames.length > 0
-      ? executedToolNames
-      : execution.toolUsePlan.calls.map((call) => call.toolName)
+    executedToolNames.length > 0 ? executedToolNames : execution.calls.map((call) => call.toolName)
   const toolAttempts = execution.toolResults
     .map((result, index) =>
       buildBrainToolAttemptText({
-        call: execution.toolUsePlan.calls[index],
+        call: execution.calls[index],
         result
       })
     )
@@ -276,7 +274,6 @@ const renderHandExecution = (
 
   return [
     '- 类型：hand',
-    `- 模式：${execution.toolUsePlan.mode}`,
     `- 调用：${renderQuotedNames(actualToolNames)}`,
     toolAttempts,
     artifactLine

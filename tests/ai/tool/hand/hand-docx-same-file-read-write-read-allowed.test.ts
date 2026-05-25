@@ -47,33 +47,30 @@ describe('ai tool hand backend', () => {
               },
               nextAction: {
                 action: 'hand',
-                toolUsePlan: {
-                  mode: 'serial',
-                  calls: [
-                    {
-                      toolName: 'docx_outline',
-                      args: {
-                        sourcePath: 'same-file-read-write-read.docx',
-                        ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 10 }]
-                      }
-                    },
-                    {
-                      toolName: 'docx_text_edit',
-                      args: {
-                        sourcePath: 'same-file-read-write-read.docx',
-                        query: 'Alpha',
-                        replace: 'Alpha updated'
-                      }
-                    },
-                    {
-                      toolName: 'docx_read_blocks',
-                      args: {
-                        sourcePath: 'same-file-read-write-read.docx',
-                        range: { type: 'block_ids', blockIds: ['b:0'] }
-                      }
+                calls: [
+                  {
+                    toolName: 'docx_outline',
+                    args: {
+                      sourcePath: 'same-file-read-write-read.docx',
+                      ranges: [{ type: 'block_index', fromBlockIndex: 0, toBlockIndex: 10 }]
                     }
-                  ]
-                }
+                  },
+                  {
+                    toolName: 'docx_text_edit',
+                    args: {
+                      sourcePath: 'same-file-read-write-read.docx',
+                      query: 'Alpha',
+                      replace: 'Alpha updated'
+                    }
+                  },
+                  {
+                    toolName: 'docx_read_blocks',
+                    args: {
+                      sourcePath: 'same-file-read-write-read.docx',
+                      range: { type: 'block_ids', blockIds: ['b:0'] }
+                    }
+                  }
+                ]
               }
             }
           }

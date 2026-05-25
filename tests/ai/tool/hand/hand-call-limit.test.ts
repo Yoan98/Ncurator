@@ -1,5 +1,5 @@
 import { describe, it } from 'vitest'
-import { HUMAN_TOOL_USE_PLAN_LIMIT } from '../../../../src/main/services/ai/human/constants'
+import { HUMAN_HAND_CALL_LIMIT } from '../../../../src/main/services/ai/human/constants'
 import { createHandNode } from '../../../../src/main/services/ai/human/node/handNode'
 import { ensureSkillTools } from '../../../../src/main/services/ai/human/node/learningNode/skillLoader'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
@@ -7,14 +7,14 @@ import { createInitialHumanState } from '../../../../src/main/services/ai/human/
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 
 describe('ai tool hand backend', () => {
-  it('hand-tool-use-plan-limit', async () => {
+  it('hand-call-limit', async () => {
     await runBackendCase({
-      caseId: 'hand-tool-use-plan-limit',
+      caseId: 'hand-call-limit',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['hand'],
-      description: '验证 hand 会在执行前拦截超过总计划长度上限的 toolUsePlan。',
+      description: '验证 hand 会在执行前拦截超过单轮调用上限的 calls。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -36,19 +36,16 @@ describe('ai tool hand backend', () => {
             }).execution,
             currentThought: {
               thought: {
-                next: '提交超长 toolUsePlan'
+                next: '提交超长 calls'
               },
               nextAction: {
                 action: 'hand',
-                toolUsePlan: {
-                  mode: 'serial',
-                  calls: Array.from({ length: HUMAN_TOOL_USE_PLAN_LIMIT + 1 }, () => ({
-                    toolName: 'terminal_run',
-                    args: {
-                      command: 'pwd'
-                    }
-                  }))
-                }
+                calls: Array.from({ length: HUMAN_HAND_CALL_LIMIT + 1 }, () => ({
+                  toolName: 'terminal_run',
+                  args: {
+                    command: 'pwd'
+                  }
+                }))
               }
             }
           }
@@ -59,13 +56,13 @@ describe('ai tool hand backend', () => {
       assert: async (result, runtime) => {
         runtime.assertThat(
           result.state.execution.pendingDecisionHint?.code === 'hand_plan_invalid' &&
-            result.state.execution.pendingDecisionHint.detail.reason === 'tool_use_plan_limit_exceeded' &&
-            result.state.execution.pendingDecisionHint.detail.limit === HUMAN_TOOL_USE_PLAN_LIMIT &&
-            result.state.execution.pendingDecisionHint.detail.callCount === HUMAN_TOOL_USE_PLAN_LIMIT + 1 &&
+            result.state.execution.pendingDecisionHint.detail.reason === 'hand_call_limit_exceeded' &&
+            result.state.execution.pendingDecisionHint.detail.limit === HUMAN_HAND_CALL_LIMIT &&
+            result.state.execution.pendingDecisionHint.detail.callCount === HUMAN_HAND_CALL_LIMIT + 1 &&
             result.state.execution.lastToolResults === undefined,
           {
-            name: 'tool-use-plan-limit-blocks-oversized-plan-before-execution',
-            message: 'toolUsePlan 超出总长度上限时，应在执行前直接返回 tool_use_plan_limit_exceeded。',
+            name: 'hand-call-limit-blocks-oversized-calls-before-execution',
+            message: 'calls 超出单轮调用上限时，应在执行前直接返回 hand_call_limit_exceeded。',
             data: {
               decisionHint: result.state.execution.pendingDecisionHint,
               lastToolResults: result.state.execution.lastToolResults

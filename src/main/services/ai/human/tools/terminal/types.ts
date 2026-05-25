@@ -53,7 +53,6 @@ export type TerminalReadonlyExecutionPolicy = 'readonly_allowed' | 'approval_req
 export type TerminalReadonlyPolicyResult = {
   executionPolicy: TerminalReadonlyExecutionPolicy
   mutability: 'read_only' | 'mutating'
-  parallelSafe: boolean
   matchedRuleId?: string
   reason: string
 }

@@ -111,23 +111,6 @@ describe('ai unit mouth node', () => {
         },
         nextAction: {
           action: 'hand',
-          toolUsePlan: {
-            mode: 'serial',
-            calls: [
-              {
-                toolName: 'docx_create',
-                args: {
-                  sourcePath: '深度学习与图形学复习总结.docx',
-                  paragraphs: ['总结正文']
-                }
-              }
-            ]
-          }
-        }
-      },
-      execution: buildHandExecution({
-        toolUsePlan: {
-          mode: 'serial',
           calls: [
             {
               toolName: 'docx_create',
@@ -137,7 +120,18 @@ describe('ai unit mouth node', () => {
               }
             }
           ]
-        },
+        }
+      },
+      execution: buildHandExecution({
+        calls: [
+          {
+            toolName: 'docx_create',
+            args: {
+              sourcePath: '深度学习与图形学复习总结.docx',
+              paragraphs: ['总结正文']
+            }
+          }
+        ],
         toolResults: [
           {
             toolName: 'docx_create',

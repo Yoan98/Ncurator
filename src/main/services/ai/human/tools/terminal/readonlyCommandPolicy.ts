@@ -106,7 +106,6 @@ export const analyzeReadonlyTerminalCommandPolicy = (command: string): TerminalR
     return {
       executionPolicy: 'approval_required',
       mutability: 'mutating',
-      parallelSafe: false,
       reason: 'empty command is not allowed'
     }
   }
@@ -117,7 +116,6 @@ export const analyzeReadonlyTerminalCommandPolicy = (command: string): TerminalR
     return {
       executionPolicy: 'approval_required',
       mutability: 'mutating',
-      parallelSafe: false,
       reason: 'only one simple terminal command can run without approval'
     }
   }
@@ -127,7 +125,6 @@ export const analyzeReadonlyTerminalCommandPolicy = (command: string): TerminalR
     return {
       executionPolicy: 'approval_required',
       mutability: 'mutating',
-      parallelSafe: false,
       reason: 'command uses shell features outside the approved readonly command set'
     }
   }
@@ -137,7 +134,6 @@ export const analyzeReadonlyTerminalCommandPolicy = (command: string): TerminalR
     return {
       executionPolicy: 'approval_required',
       mutability: 'mutating',
-      parallelSafe: false,
       reason: 'command is outside the approved readonly terminal command set'
     }
   }
@@ -145,7 +141,6 @@ export const analyzeReadonlyTerminalCommandPolicy = (command: string): TerminalR
   return {
     executionPolicy: 'readonly_allowed',
     mutability: 'read_only',
-    parallelSafe: true,
     matchedRuleId: matchedRule.id,
     reason: `matched readonly rule ${matchedRule.id}`
   }

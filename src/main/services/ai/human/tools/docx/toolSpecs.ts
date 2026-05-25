@@ -32,7 +32,6 @@ import {
 const createDocxReadExecutionMeta = () =>
   createStaticExecutionMetaResolver({
     mutability: 'read_only',
-    parallelSafe: true,
     getResourceKey: (args) => readStringArg(args, 'sourcePath'),
     defaultResourceKey: 'docx'
   })
@@ -40,7 +39,6 @@ const createDocxReadExecutionMeta = () =>
 const createDocxMutatingExecutionMeta = () =>
   createStaticExecutionMetaResolver({
     mutability: 'mutating',
-    parallelSafe: false,
     getResourceKey: (args) => readStringArg(args, 'sourcePath'),
     defaultResourceKey: 'docx'
   })

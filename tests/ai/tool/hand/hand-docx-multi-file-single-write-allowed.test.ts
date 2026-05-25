@@ -52,27 +52,24 @@ describe('ai tool hand backend', () => {
               },
               nextAction: {
                 action: 'hand',
-                toolUsePlan: {
-                  mode: 'serial',
-                  calls: [
-                    {
-                      toolName: 'docx_text_edit',
-                      args: {
-                        sourcePath: 'multi-file-a.docx',
-                        query: 'Alpha',
-                        replace: 'Alpha updated'
-                      }
-                    },
-                    {
-                      toolName: 'docx_text_edit',
-                      args: {
-                        sourcePath: 'multi-file-b.docx',
-                        query: 'Beta',
-                        replace: 'Beta updated'
-                      }
+                calls: [
+                  {
+                    toolName: 'docx_text_edit',
+                    args: {
+                      sourcePath: 'multi-file-a.docx',
+                      query: 'Alpha',
+                      replace: 'Alpha updated'
                     }
-                  ]
-                }
+                  },
+                  {
+                    toolName: 'docx_text_edit',
+                    args: {
+                      sourcePath: 'multi-file-b.docx',
+                      query: 'Beta',
+                      replace: 'Beta updated'
+                    }
+                  }
+                ]
               }
             }
           }

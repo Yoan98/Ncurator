@@ -17,7 +17,6 @@ const KB_LIST_DOCUMENTS_EXAMPLE: JsonObject = {
 
 const KB_EXECUTION_META = createStaticExecutionMetaResolver({
   mutability: 'read_only',
-  parallelSafe: true,
   defaultResourceKey: 'local-kb'
 })
 

@@ -34,15 +34,12 @@ const buildHandState = (input: {
       },
       nextAction: {
         action: 'hand' as const,
-        toolUsePlan: {
-          mode: 'serial' as const,
-          calls: [
-            {
-              toolName: input.toolName,
-              args: input.args
-            }
-          ]
-        }
+        calls: [
+          {
+            toolName: input.toolName,
+            args: input.args
+          }
+        ]
       }
     }
   }
@@ -115,7 +112,7 @@ describe('ai tool hand backend', () => {
             toolName: 'docx_read_blocks',
             args: {
               sourcePath: 'artifact-merge.docx',
-            range: { type: 'block_ids', blockIds: ['b:1'] }
+              range: { type: 'block_ids', blockIds: ['b:1'] }
             },
             previousArtifacts: firstState.execution.artifacts
           }),

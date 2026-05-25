@@ -21,21 +21,13 @@ export const summarizeDecisionHint = (hint: HumanDecisionHint): string => {
     case 'learning_tool_budget_exceeded':
       return `learning 请求会暴露 ${hint.detail.activeToolCount} 个 active tools，超过上限 ${hint.detail.limit}。`
     case 'hand_plan_invalid':
-      return hint.detail.reason === 'parallel_limit_exceeded'
-        ? `hand 的 parallel toolUsePlan 超出并行上限；tools=${renderStringList(
+      return hint.detail.reason === 'hand_call_limit_exceeded'
+        ? `hand 的 calls 超出单轮调用上限；tools=${renderStringList(
             hint.detail.offendingToolNames
           )}。`
-        : hint.detail.reason === 'tool_use_plan_limit_exceeded'
-          ? `hand 的 toolUsePlan 超出计划长度上限；tools=${renderStringList(
-              hint.detail.offendingToolNames
-            )}。`
-            : hint.detail.reason === 'docx_single_file_write_limit_exceeded'
-              ? `hand 的 docx 写计划在同一文件内包含多次写；sourcePaths=${renderStringList(
-                  hint.detail.sourcePaths || []
-                )}；tools=${renderStringList(hint.detail.offendingToolNames)}。`
-          : `hand 的 parallel toolUsePlan 含不可并行工具；tools=${renderStringList(
-              hint.detail.offendingToolNames
-            )}。`
+        : `hand 的 docx 写 calls 在同一文件内包含多次写；sourcePaths=${renderStringList(
+            hint.detail.sourcePaths || []
+          )}；tools=${renderStringList(hint.detail.offendingToolNames)}。`
     case 'hand_approval_blocked':
       return `hand 的审批批次未全部通过；reason=${hint.detail.reason}；blockedCommands=${renderStringList(
         hint.detail.blockedCommands
@@ -80,22 +72,17 @@ export const renderDecisionHintForBrain = (hint: HumanDecisionHint): string => {
       ].join('\n')
     case 'hand_plan_invalid':
       return [
-        '上一轮 hand 的 toolUsePlan 不合法。',
-        `mode=${hint.detail.mode}`,
+        '上一轮 hand 的 calls 未通过执行前校验。',
         `reason=${hint.detail.reason}`,
         `offendingToolNames=${renderStringList(hint.detail.offendingToolNames)}`,
         hint.detail.sourcePaths
           ? `sourcePaths=${renderStringList(hint.detail.sourcePaths)}`
           : undefined,
-        hint.detail.limit ? `parallelLimit=${String(hint.detail.limit)}` : undefined,
+        hint.detail.limit ? `limit=${String(hint.detail.limit)}` : undefined,
         hint.detail.callCount ? `requestedCallCount=${String(hint.detail.callCount)}` : undefined,
-        hint.detail.reason === 'parallel_requires_read_only'
-          ? '如果包含写操作、需要最新执行结果，或工具不是只读并行安全，请改为 mode=serial。'
-          : hint.detail.reason === 'tool_use_plan_limit_exceeded'
-            ? '请缩减本轮计划中的工具调用数量，再重新决策。'
-            : hint.detail.reason === 'docx_single_file_write_limit_exceeded'
-              ? '同一文件一轮只能出现一次 docx 写工具调用。请把同类内容合并进单次写调用，不要预判未来 blockId；如需继续编辑，应先看写后回读，再到后续轮次决定下一步。'
-              : '请缩减并行读取工具数量，或改为 mode=serial。'
+        hint.detail.reason === 'hand_call_limit_exceeded'
+          ? '请缩减本轮 calls 数量，再重新决策。'
+          : '同一文件一轮只能出现一次 docx 写工具调用。'
       ]
         .filter(Boolean)
         .join('\n')
@@ -155,4 +142,5 @@ export const renderDecisionHintForBrain = (hint: HumanDecisionHint): string => {
   }
 }
 
-export const renderDecisionHintDetail = (hint: HumanDecisionHint): JsonObject => asJsonObject(hint.detail)
+export const renderDecisionHintDetail = (hint: HumanDecisionHint): JsonObject =>
+  asJsonObject(hint.detail)

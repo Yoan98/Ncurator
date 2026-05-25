@@ -280,17 +280,14 @@ describe('ai unit human memory history', () => {
             execution:
               round % 2 === 0
                 ? buildHandExecution({
-                    toolUsePlan: {
-                      mode: 'serial',
-                      calls: [
-                        {
-                          toolName: 'terminal_run',
-                          args: {
-                            command: 'pwd'
-                          }
+                    calls: [
+                      {
+                        toolName: 'terminal_run',
+                        args: {
+                          command: 'pwd'
                         }
-                      ]
-                    },
+                      }
+                    ],
                     toolResults: [
                       {
                         toolName: 'terminal_run',
@@ -431,26 +428,6 @@ describe('ai unit human memory history', () => {
         summary: '读取 docx 片段',
         nextAction: {
           action: 'hand',
-          toolUsePlan: {
-            mode: 'serial',
-            calls: [
-              {
-                toolName: 'docx_read_blocks',
-                args: {
-                  sourcePath: 'graphics.docx',
-                  range: {
-                    type: 'block_ids',
-                    blockIds: ['b:23', 'b:25']
-                  }
-                }
-              }
-            ]
-          }
-        }
-      }),
-      execution: buildHandExecution({
-        toolUsePlan: {
-          mode: 'serial',
           calls: [
             {
               toolName: 'docx_read_blocks',
@@ -463,7 +440,21 @@ describe('ai unit human memory history', () => {
               }
             }
           ]
-        },
+        }
+      }),
+      execution: buildHandExecution({
+        calls: [
+          {
+            toolName: 'docx_read_blocks',
+            args: {
+              sourcePath: 'graphics.docx',
+              range: {
+                type: 'block_ids',
+                blockIds: ['b:23', 'b:25']
+              }
+            }
+          }
+        ],
         toolResults: [
           {
             toolName: 'docx_read_blocks',

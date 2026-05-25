@@ -48,19 +48,16 @@ describe('ai tool hand backend', () => {
               },
               nextAction: {
                 action: 'hand',
-                toolUsePlan: {
-                  mode: 'serial',
-                  calls: [
-                    {
-                      toolName: 'docx_text_edit',
-                      args: {
-                        sourcePath: 'post-write-readback.docx',
-                        query: 'Original content.',
-                        replace: 'Updated content.'
-                      }
+                calls: [
+                  {
+                    toolName: 'docx_text_edit',
+                    args: {
+                      sourcePath: 'post-write-readback.docx',
+                      query: 'Original content.',
+                      replace: 'Updated content.'
                     }
-                  ]
-                }
+                  }
+                ]
               }
             }
           }

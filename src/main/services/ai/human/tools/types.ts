@@ -23,7 +23,6 @@ export type ToolFamilyDefinition = {
 
 export type ToolExecutionMeta = {
   mutability: 'read_only' | 'mutating'
-  parallelSafe: boolean
   resourceKey?: string
 }
 

@@ -43,7 +43,7 @@ import {
   toolCallParamSchema,
   toolCallResultSchema,
   toolResourceContextSchema,
-  toolUsePlanSchema
+  handCallsSchema
 } from './schema'
 
 export type RuntimeSkillId = (typeof RUNTIME_SKILL_IDS)[number]
@@ -79,7 +79,7 @@ export type DeliveryGuidanceItem = z.infer<typeof deliveryGuidanceItemSchema>
 export type HumanReference = z.infer<typeof humanReferenceSchema>
 
 export type ToolCallParam = z.infer<typeof toolCallParamSchema>
-export type ToolUsePlan = z.infer<typeof toolUsePlanSchema>
+export type HandCallList = z.infer<typeof handCallsSchema>
 export type ToolCallDiagnostic = z.infer<typeof toolCallDiagnosticSchema>
 export type ToolResourceContext = z.infer<typeof toolResourceContextSchema>
 export type ToolCallResult = z.infer<typeof toolCallResultSchema>

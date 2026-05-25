@@ -60,22 +60,6 @@ describe('ai unit human memory renderers', () => {
         },
         nextAction: {
           action: 'hand',
-          toolUsePlan: {
-            mode: 'serial',
-            calls: [
-              {
-                toolName: 'terminal_run',
-                args: {
-                  command: 'cat release-note.txt'
-                }
-              }
-            ]
-          }
-        }
-      },
-      execution: buildHandExecution({
-        toolUsePlan: {
-          mode: 'serial',
           calls: [
             {
               toolName: 'terminal_run',
@@ -84,7 +68,17 @@ describe('ai unit human memory renderers', () => {
               }
             }
           ]
-        },
+        }
+      },
+      execution: buildHandExecution({
+        calls: [
+          {
+            toolName: 'terminal_run',
+            args: {
+              command: 'cat release-note.txt'
+            }
+          }
+        ],
         toolResults: [
           {
             toolName: 'terminal_run',

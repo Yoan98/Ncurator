@@ -469,7 +469,7 @@
 - What：验证同一文件在一轮中执行 `read -> write -> read` 仍允许通过。
 - Why：本次限制只针对“同一文件多次写”，不应误伤围绕单次写的读回确认流程。
 - How：真实执行 `docx_outline -> docx_text_edit -> docx_read_blocks`。
-- Oracle：三步都成功，最后一次读取能看到写后内容，且不返回 plan invalid。
+- Oracle：三步都成功，最后一次读取能看到写后内容，且不返回 `hand_plan_invalid`。
 - Not：不验证额外的多次写。
 
 ##### `docx-write-then-outline-percent-sees-new-block`
@@ -649,21 +649,21 @@
 
 #### `hand`
 
-##### `hand-parallel-safety-contract`
+##### `hand-tool-call-order-contract`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 `hand` 的并行工具执行上限、只读安全约束与结果聚合守卫。
-- Why：工具执行器本身必须在真实结果下稳定收敛。
-- How：通过真实 `hand` 执行安全并行批次、`6` 个只读安全并行批次、超过上限的 `7` 个并行批次以及包含 mutating 调用的不安全批次。
-- Oracle：`6` 个只读且 `parallelSafe` 的工具调用会被真实执行并正确聚合；`7` 个并行调用会在执行前被 `parallel_limit_exceeded` 拦截；包含 mutating 或非并行安全工具的批次会在执行前被 `parallel_requires_read_only` 拦截。
+- What：验证 `hand` 的多工具顺序执行、总调用数约束与结果聚合守卫。
+- Why：工具执行器本身必须在真实结果下稳定收敛，且不能再暴露并行分支复杂度。
+- How：通过真实 `hand` 执行多工具顺序调用、达到调用上限的批次，以及超过上限的批次。
+- Oracle：多工具调用会按输入顺序真实执行并正确聚合；超过 `HUMAN_HAND_CALL_LIMIT` 的批次会在执行前被 `hand_call_limit_exceeded` 拦截。
 - Not：不验证 `brain` 决策来源。
 
 ##### `hand-terminal-approval-batch`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 `hand` 会对 `serial` 计划中的需审批 `terminal_run` 做批量预检，并在整批未全部同意时 0 执行。
+- What：验证 `hand` 会对当前 `calls` 中需审批的 `terminal_run` 做批量预检，并在整批未全部同意时 0 执行。
 - Why：terminal 审批责任已经前移到 `hand` preflight，正式 case 必须长期守住“先整批审核，再决定是否执行”的主流程。
 - How：通过真实 `human` hand 决策构造两个需审批 terminal 命令，并让审批批次返回 `approve + guide` 混合结果。
 - Oracle：事件流出现 `approval_batch_required / approval_batch_decision`；整批在审批前不发生真实 tool execution；磁盘上不会产生任何副作用；`decision_hint(code='hand_approval_blocked')` 会回流到 `brain`。
@@ -673,8 +673,8 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 `hand` 在 `serial` 模式下会按顺序执行真实 docx 写入与读回确认链路。
-- Why：复杂 docx 链路依赖当前最新修订，必须通过正式 case 守住串行执行契约。
+- What：验证 `hand` 会按顺序执行真实 docx 写入与读回确认链路。
+- Why：复杂 docx 链路依赖当前最新修订，必须通过正式 case 守住顺序执行契约。
 - How：通过真实 `hand` 执行 `docx_text_edit -> docx_read_blocks`。
 - Oracle：工具结果顺序稳定、全部成功，且不会在 hand 内直接产出 docx 交付 artifact。
 - Not：不验证 `brain` 是否自然生成这条计划。
@@ -848,11 +848,11 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 `human` 会通过真实 `hand` 执行一次并行多工具协作。
-- Why：`human` 不能只验证单工具 happy path，还必须覆盖真实并行读工具场景。
-- How：先 seed 真实 KB 文档，再学习 terminal 与 KB skill，随后在一次 `hand` 决策中并行执行 `terminal_run(pwd)` 与 `kb_list_documents`。
+- What：验证 `human` 会通过真实 `hand` 执行一次顺序多工具协作。
+- Why：`human` 不能只验证单工具 happy path，还必须覆盖真实多工具串行读工具场景。
+- How：先 seed 真实 KB 文档，再学习 terminal 与 KB skill，随后在一次 `hand` 决策中按顺序执行 `terminal_run(pwd)` 与 `kb_list_documents`。
 - Oracle：同一条任务中真实出现 terminal 与 KB 两类工具结果，任务最终完成。
-- Not：不验证更复杂的多轮依赖型并行调度。
+- Not：不验证更复杂的多轮依赖型工具调度。
 
 ##### `kb-answer-with-real-kb`
 

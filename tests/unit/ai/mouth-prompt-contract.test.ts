@@ -65,24 +65,6 @@ describe('ai unit mouth prompt contract', () => {
           },
           nextAction: {
             action: 'hand',
-            toolUsePlan: {
-              mode: 'serial',
-              calls: [
-                {
-                  toolName: 'docx_create',
-                  args: {
-                    sourcePath: '深度学习与图形学复习总结.docx',
-                    paragraphs: ['总结正文']
-                  }
-                }
-              ]
-            }
-          }
-        },
-        execution: {
-          kind: 'hand',
-          toolUsePlan: {
-            mode: 'serial',
             calls: [
               {
                 toolName: 'docx_create',
@@ -92,7 +74,19 @@ describe('ai unit mouth prompt contract', () => {
                 }
               }
             ]
-          },
+          }
+        },
+        execution: {
+          kind: 'hand',
+          calls: [
+            {
+              toolName: 'docx_create',
+              args: {
+                sourcePath: '深度学习与图形学复习总结.docx',
+                paragraphs: ['总结正文']
+              }
+            }
+          ],
           toolResults: [
             {
               toolName: 'docx_create',

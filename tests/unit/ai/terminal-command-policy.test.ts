@@ -30,7 +30,7 @@ describe('ai unit terminal command policy', () => {
     )
   })
 
-  it('keeps non-readonly commands out of parallel-safe metadata', () => {
+  it('marks readonly commands as read_only and other commands as mutating', () => {
     const pythonMeta = TERMINAL_RUN_TOOL_SPEC.resolveExecutionMeta({
       command: 'python3 -c "print(1)"'
     })
@@ -44,11 +44,9 @@ describe('ai unit terminal command policy', () => {
       command: 'find . -type f'
     })
 
-    expect(pythonMeta.parallelSafe).toBe(false)
-    expect(nodeMeta.parallelSafe).toBe(false)
-    expect(echoMeta.parallelSafe).toBe(true)
+    expect(pythonMeta.mutability).toBe('mutating')
+    expect(nodeMeta.mutability).toBe('mutating')
     expect(echoMeta.mutability).toBe('read_only')
-    expect(findMeta.parallelSafe).toBe(true)
     expect(findMeta.mutability).toBe('read_only')
   })
 

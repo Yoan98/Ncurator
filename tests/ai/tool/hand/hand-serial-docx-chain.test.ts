@@ -14,7 +14,7 @@ describe('ai tool hand backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['hand'],
-      description: '验证 hand 在 serial 模式下可以顺序执行 docx 写入和读回确认链路。',
+      description: '验证 hand 会按调用顺序执行 docx 写入和读回确认链路。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -68,30 +68,27 @@ describe('ai tool hand backend', () => {
             }).execution,
             currentThought: {
               thought: {
-                next: '串行完成 docx 编辑链路'
+                next: '按顺序完成 docx 编辑链路'
               },
               nextAction: {
                 action: 'hand',
-                toolUsePlan: {
-                  mode: 'serial',
-                  calls: [
-                    {
-                      toolName: 'docx_text_edit',
-                      args: {
-                        sourcePath: 'serial-docx-chain.docx',
-                        query: 'RISK_TODO',
-                        replace: '待跟进'
-                      }
-                    },
-                    {
-                      toolName: 'docx_read_blocks',
-                      args: {
-                        sourcePath: 'serial-docx-chain.docx',
-                        range: { type: 'block_ids', blockIds: ['b:1'] }
-                      }
+                calls: [
+                  {
+                    toolName: 'docx_text_edit',
+                    args: {
+                      sourcePath: 'serial-docx-chain.docx',
+                      query: 'RISK_TODO',
+                      replace: '待跟进'
                     }
-                  ]
-                }
+                  },
+                  {
+                    toolName: 'docx_read_blocks',
+                    args: {
+                      sourcePath: 'serial-docx-chain.docx',
+                      range: { type: 'block_ids', blockIds: ['b:1'] }
+                    }
+                  }
+                ]
               }
             }
           }
@@ -115,7 +112,7 @@ describe('ai tool hand backend', () => {
             ),
           {
             name: 'serial-docx-chain-executes-in-order',
-            message: 'serial 模式应按顺序执行 docx_text_edit、docx_read_blocks，且写工具返回 postWriteReadback。',
+            message: 'hand 应按顺序执行 docx_text_edit、docx_read_blocks，且写工具返回 postWriteReadback。',
             data: {
               toolNames,
               lastToolUseResults: result.state.execution.lastToolResults

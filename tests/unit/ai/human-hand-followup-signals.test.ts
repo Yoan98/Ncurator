@@ -5,20 +5,17 @@ import { DOCX_POSITIONED_LAYOUT_PROTECTION_MESSAGE } from '../../../src/main/ser
 describe('ai unit hand followup signals', () => {
   it('derives positioned write decision hint and delivery guidance from protected docx writes', () => {
     const signals = deriveHandFollowupSignals({
-      toolUsePlan: {
-        mode: 'serial',
-        calls: [
-          {
-            toolName: 'docx_table_edit',
-            args: {
-              sourcePath: 'graphics.docx',
-              action: 'insert_after',
-              anchorBlockId: 'b:26',
-              rows: [['方法', '说明']]
-            }
+      calls: [
+        {
+          toolName: 'docx_table_edit',
+          args: {
+            sourcePath: 'graphics.docx',
+            action: 'insert_after',
+            anchorBlockId: 'b:26',
+            rows: [['方法', '说明']]
           }
-        ]
-      },
+        }
+      ],
       results: [
         {
           toolName: 'docx_table_edit',
@@ -48,20 +45,17 @@ describe('ai unit hand followup signals', () => {
 
   it('passes through halted batch write decision hint from docx batch results', () => {
     const signals = deriveHandFollowupSignals({
-      toolUsePlan: {
-        mode: 'serial',
-        calls: [
-          {
-            toolName: 'docx_paragraph_edit',
-            args: {
-              sourcePath: 'report.docx',
-              action: 'replace_text',
-              blockId: 'b:1',
-              text: 'updated'
-            }
+      calls: [
+        {
+          toolName: 'docx_paragraph_edit',
+          args: {
+            sourcePath: 'report.docx',
+            action: 'replace_text',
+            blockId: 'b:1',
+            text: 'updated'
           }
-        ]
-      },
+        }
+      ],
       results: [
         {
           toolName: 'docx_paragraph_edit',

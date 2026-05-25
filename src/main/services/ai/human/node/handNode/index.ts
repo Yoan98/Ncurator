@@ -2,8 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { JsonObject } from '../../../../../../shared/types'
 import {
   HUMAN_DEFAULT_TOOL_CALL_LIMIT,
-  HUMAN_MAX_PARALLEL_TOOL_CALLS,
-  HUMAN_TOOL_USE_PLAN_LIMIT
+  HUMAN_HAND_CALL_LIMIT
 } from '../../constants'
 import type { AiRunContext } from '../../../types'
 import { extractArtifactRefsFromToolResults, mergeArtifactRefs } from '../../../utils/artifacts'
@@ -18,10 +17,8 @@ import {
 } from '../../shared/deliveryGuidance'
 import { buildToolCallDisplayText } from '../../shared/toolResultRenderers'
 import { assertExternalLearnedSkillIds } from '../../skills'
-import { getToolSpec } from '../../tools/registry'
 import { analyzeReadonlyTerminalCommandPolicy } from '../../tools/terminal/readonlyCommandPolicy'
-import type { ToolExecutionMeta } from '../../tools/types'
-import type { HumanRuntimeCache, HumanState, HumanDecisionHint, ToolCallResult, ToolUsePlan } from '../../types'
+import type { HandCallList, HumanRuntimeCache, HumanState, HumanDecisionHint, ToolCallResult } from '../../types'
 import { deriveHandFollowupSignals, shouldStopSerialHandPlan } from './followupSignals'
 import { executeToolCall } from './toolExecutor'
 import { returnToBrain, returnToBrainAfterTrace, returnToBrainWithDecisionHint } from '../utils/stateTransitions'
@@ -46,35 +43,7 @@ const readSourcePathArg = (args: JsonObject): string | undefined =>
 const readTerminalCommandArg = (args: JsonObject): string | undefined =>
   typeof args.command === 'string' && args.command.trim().length > 0 ? args.command.trim() : undefined
 
-export const getToolExecutionMeta = (input: {
-  toolName: string
-  args: JsonObject
-}): ToolExecutionMeta => {
-  const spec = getToolSpec(input.toolName)
-  if (spec) return spec.resolveExecutionMeta(input.args)
-
-  return {
-    mutability: 'mutating',
-    parallelSafe: false
-  }
-}
-
-export const canBatchPlan = (input: {
-  actions: Array<{ toolName: string; args: JsonObject }>
-  maxParallel: number
-}): boolean => {
-  if (input.actions.length <= 1) return true
-  if (input.actions.length > input.maxParallel) return false
-
-  for (const action of input.actions) {
-    const meta = getToolExecutionMeta(action)
-    if (meta.mutability !== 'read_only' || !meta.parallelSafe) return false
-  }
-  return true
-}
-
 const createHandPlanInvalidDecisionHint = (input: {
-  mode: ToolUsePlan['mode']
   reason: Extract<HumanDecisionHint, { code: 'hand_plan_invalid' }>['detail']['reason']
   offendingToolNames: string[]
   sourcePaths?: string[]
@@ -83,7 +52,6 @@ const createHandPlanInvalidDecisionHint = (input: {
 }): HumanDecisionHint => ({
   code: 'hand_plan_invalid',
   detail: {
-    mode: input.mode,
     reason: input.reason,
     offendingToolNames: input.offendingToolNames,
     sourcePaths: input.sourcePaths,
@@ -100,13 +68,9 @@ const buildToolLimitDecisionHint = (toolCallCount: number, limit: number): Human
   }
 })
 
-const findSameFileMultiWriteDecisionHint = (
-  toolUsePlan: ToolUsePlan
-): HumanDecisionHint | undefined => {
-  if (toolUsePlan.mode !== 'serial') return undefined
-
-  const mutatingCallsBySourcePath = new Map<string, ToolUsePlan['calls']>()
-  toolUsePlan.calls.forEach((call) => {
+const findSameFileMultiWriteDecisionHint = (calls: HandCallList): HumanDecisionHint | undefined => {
+  const mutatingCallsBySourcePath = new Map<string, HandCallList>()
+  calls.forEach((call) => {
     if (!isDocxSerialWriteCall(call.toolName)) return
     const sourcePath = readSourcePathArg(call.args)
     if (!sourcePath) return
@@ -120,7 +84,6 @@ const findSameFileMultiWriteDecisionHint = (
   if (offendingEntries.length === 0) return undefined
 
   return createHandPlanInvalidDecisionHint({
-    mode: 'serial',
     reason: 'docx_single_file_write_limit_exceeded',
     offendingToolNames: offendingEntries.flatMap(([, calls]) => calls.map((call) => call.toolName)),
     sourcePaths: offendingEntries.map(([sourcePath]) => sourcePath),
@@ -129,58 +92,26 @@ const findSameFileMultiWriteDecisionHint = (
   })
 }
 
-const validateToolUsePlan = (toolUsePlan: ToolUsePlan): HumanDecisionHint | undefined => {
-  if (toolUsePlan.mode === 'serial') {
-    const sameFileMultiWriteDecisionHint = findSameFileMultiWriteDecisionHint(toolUsePlan)
-    if (sameFileMultiWriteDecisionHint) {
-      return sameFileMultiWriteDecisionHint
-    }
+const validateCalls = (calls: HandCallList): HumanDecisionHint | undefined => {
+  const sameFileMultiWriteDecisionHint = findSameFileMultiWriteDecisionHint(calls)
+  if (sameFileMultiWriteDecisionHint) {
+    return sameFileMultiWriteDecisionHint
   }
-  if (toolUsePlan.calls.length > HUMAN_TOOL_USE_PLAN_LIMIT) {
+  if (calls.length > HUMAN_HAND_CALL_LIMIT) {
     return createHandPlanInvalidDecisionHint({
-      mode: toolUsePlan.mode,
-      reason: 'tool_use_plan_limit_exceeded',
-      offendingToolNames: toolUsePlan.calls.map((item) => item.toolName),
-      callCount: toolUsePlan.calls.length,
-      limit: HUMAN_TOOL_USE_PLAN_LIMIT
+      reason: 'hand_call_limit_exceeded',
+      offendingToolNames: calls.map((item) => item.toolName),
+      callCount: calls.length,
+      limit: HUMAN_HAND_CALL_LIMIT
     })
   }
-  if (toolUsePlan.mode === 'serial') {
-    return undefined
-  }
-  if (toolUsePlan.calls.length > HUMAN_MAX_PARALLEL_TOOL_CALLS) {
-    return createHandPlanInvalidDecisionHint({
-      mode: 'parallel',
-      reason: 'parallel_limit_exceeded',
-      offendingToolNames: toolUsePlan.calls.map((item) => item.toolName),
-      callCount: toolUsePlan.calls.length,
-      limit: HUMAN_MAX_PARALLEL_TOOL_CALLS
-    })
-  }
-
-  const offendingToolNames = toolUsePlan.calls
-    .filter((item) => {
-      const meta = getToolExecutionMeta({
-        toolName: item.toolName,
-        args: item.args
-      })
-      return meta.mutability !== 'read_only' || !meta.parallelSafe
-    })
-    .map((item) => item.toolName)
-
-  return offendingToolNames.length > 0
-    ? createHandPlanInvalidDecisionHint({
-        mode: 'parallel',
-        reason: 'parallel_requires_read_only',
-        offendingToolNames
-      })
-    : undefined
+  return undefined
 }
 
 const collectApprovalBatchItems = (input: {
   runId: string
   taskId: string
-  toolUsePlan: ToolUsePlan
+  calls: HandCallList
 }): Array<{
   itemId: string
   order: number
@@ -188,9 +119,7 @@ const collectApprovalBatchItems = (input: {
   command: string
   reason: string
 }> => {
-  if (input.toolUsePlan.mode !== 'serial') return []
-
-  return input.toolUsePlan.calls.flatMap((call, index) => {
+  return input.calls.flatMap((call, index) => {
     if (!isTerminalRunCall(call.toolName)) return []
     const command = readTerminalCommandArg(call.args)
     if (!command) return []
@@ -257,29 +186,15 @@ const buildApprovalBlockedDecisionHint = (input: {
   }
 }
 
-const executeToolUsePlan = async (input: {
-  toolUsePlan: ToolUsePlan
+const executeHandCalls = async (input: {
+  calls: HandCallList
   ctx: AiRunContext
   cache: HumanRuntimeCache
   taskId: string
   learnedSkillIds: HumanState['skills']['learnedSkillIds']
 }): Promise<ToolCallResult[]> => {
-  if (input.toolUsePlan.mode === 'parallel') {
-    return Promise.all(
-      input.toolUsePlan.calls.map((toolCall) =>
-        executeToolCall({
-          ctx: input.ctx,
-          cache: input.cache,
-          taskId: input.taskId,
-          learnedSkillIds: input.learnedSkillIds,
-          toolName: toolCall.toolName,
-          args: toolCall.args
-        })
-      )
-    )
-  }
   const results: ToolCallResult[] = []
-  for (const toolCall of input.toolUsePlan.calls) {
+  for (const toolCall of input.calls) {
     results.push(
       await executeToolCall({
         ctx: input.ctx,
@@ -291,13 +206,7 @@ const executeToolUsePlan = async (input: {
       })
     )
 
-    if (
-      input.toolUsePlan.mode === 'serial' &&
-      shouldStopSerialHandPlan({
-        toolUsePlan: input.toolUsePlan,
-        results
-      })
-    ) {
+    if (shouldStopSerialHandPlan({ calls: input.calls, results })) {
       break
     }
   }
@@ -316,13 +225,13 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       return returnToBrain(state)
     }
 
-    const { toolUsePlan } = state.execution.currentThought.nextAction
+    const { calls } = state.execution.currentThought.nextAction
     const approvalItems = collectApprovalBatchItems({
       runId: input.ctx.runId,
       taskId: state.task.taskId,
-      toolUsePlan
+      calls
     })
-    const invalidPlanDecisionHint = validateToolUsePlan(toolUsePlan)
+    const invalidPlanDecisionHint = validateCalls(calls)
     if (invalidPlanDecisionHint) {
       return returnToBrainWithDecisionHint({
         ctx: input.ctx,
@@ -335,7 +244,7 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
             taskRun: appendDecisionRound({
               state,
               execution: buildHandExecution({
-                toolUsePlan,
+                calls,
                 toolResults: [],
                 decisionHint: invalidPlanDecisionHint
               })
@@ -386,8 +295,8 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
     }
 
     const learnedSkillIds = state.skills.learnedSkillIds
-    const results = await executeToolUsePlan({
-      toolUsePlan,
+    const results = await executeHandCalls({
+      calls,
       ctx: input.ctx,
       cache: input.cache,
       taskId: state.task.taskId,
@@ -396,7 +305,7 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
     input.cache.toolCallCount += results.length
 
     const followupSignals = deriveHandFollowupSignals({
-      toolUsePlan,
+      calls,
       results
     })
     const handDeliveryGuidance = createDeliveryGuidanceItem(
@@ -440,7 +349,7 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
           taskRun: appendDecisionRound({
             state,
             execution: buildHandExecution({
-              toolUsePlan,
+              calls,
               toolResults: results,
               decisionHint
             })

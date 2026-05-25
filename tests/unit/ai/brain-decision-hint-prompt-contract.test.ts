@@ -33,20 +33,17 @@ describe('ai unit brain decision-hint prompt contract', () => {
       },
       nextAction: {
         action: 'hand',
-        toolUsePlan: {
-          mode: 'serial',
-          calls: [
-            {
-              toolName: 'docx_paragraph_edit',
-              args: {
-                sourcePath: 'report.docx',
-                action: 'insert_after',
-                anchorBlockId: 'b:1',
-                text: '补充内容'
-              }
+        calls: [
+          {
+            toolName: 'docx_paragraph_edit',
+            args: {
+              sourcePath: 'report.docx',
+              action: 'insert_after',
+              anchorBlockId: 'b:1',
+              text: '补充内容'
             }
-          ]
-        }
+          }
+        ]
       }
     }
 
@@ -57,9 +54,9 @@ describe('ai unit brain decision-hint prompt contract', () => {
         thought: state.execution.currentThought,
         execution: {
           kind: 'hand',
-          toolUsePlan: state.execution.currentThought.nextAction.action === 'hand'
-            ? state.execution.currentThought.nextAction.toolUsePlan
-            : { mode: 'serial', calls: [] },
+          calls: state.execution.currentThought.nextAction.action === 'hand'
+            ? state.execution.currentThought.nextAction.calls
+            : [],
           toolResults: [
             {
               toolName: 'docx_paragraph_edit',

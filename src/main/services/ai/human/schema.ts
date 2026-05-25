@@ -11,8 +11,7 @@ import {
   HUMAN_STATUSES,
   HUMAN_STEP_ACTIONS,
   HUMAN_STEP_RESULT_STATUSES,
-  HUMAN_TOOL_USE_PLAN_LIMIT,
-  HUMAN_TOOL_USE_PLAN_MODES,
+  HUMAN_HAND_CALL_LIMIT,
   HUMAN_DECISION_HINT_CODES,
   RUNTIME_SKILL_IDS,
   TOOL_CALL_RESULT_CODES
@@ -38,7 +37,6 @@ export const toolFamilyIdSchema = z.enum(AI_TOOL_FAMILY_IDS)
 export const toolCallResultCodeSchema = z.enum(TOOL_CALL_RESULT_CODES)
 export const humanStageSchema = z.enum(HUMAN_STAGES)
 export const humanStatusSchema = z.enum(HUMAN_STATUSES)
-export const humanToolUsePlanModeSchema = z.enum(HUMAN_TOOL_USE_PLAN_MODES)
 export const humanHandPlanInvalidReasonSchema = z.enum(HUMAN_HAND_PLAN_INVALID_REASONS)
 export const humanDecisionHintCodeSchema = z.enum(HUMAN_DECISION_HINT_CODES)
 export const docxBatchHaltReasonSchema = z.enum([
@@ -94,20 +92,7 @@ export const toolCallResultSchema = z.object({
   resourceContext: toolResourceContextSchema.optional()
 })
 
-const serialToolUsePlanSchema = z.object({
-  mode: z.literal('serial'),
-  calls: z.array(toolCallParamSchema).min(1).max(HUMAN_TOOL_USE_PLAN_LIMIT)
-})
-
-const parallelToolUsePlanSchema = z.object({
-  mode: z.literal('parallel'),
-  calls: z.array(toolCallParamSchema).min(1).max(HUMAN_TOOL_USE_PLAN_LIMIT)
-})
-
-export const toolUsePlanSchema = z.discriminatedUnion('mode', [
-  serialToolUsePlanSchema,
-  parallelToolUsePlanSchema
-])
+export const handCallsSchema = z.array(toolCallParamSchema).min(1).max(HUMAN_HAND_CALL_LIMIT)
 
 export const humanLearningOutcomeSchema = z.object({
   requestedSkillIds: z.array(z.string().min(1)),
@@ -145,7 +130,6 @@ export const humanDecisionHintSchema = z.discriminatedUnion('code', [
   z.object({
     code: z.literal('hand_plan_invalid'),
     detail: z.object({
-      mode: humanToolUsePlanModeSchema,
       reason: humanHandPlanInvalidReasonSchema,
       offendingToolNames: z.array(z.string().min(1)),
       sourcePaths: z.array(z.string().min(1)).optional(),
@@ -249,7 +233,7 @@ export const brainNextActionSchema = z.discriminatedUnion('action', [
   z
     .object({
       action: z.literal('hand'),
-      toolUsePlan: toolUsePlanSchema
+      calls: handCallsSchema
     })
     .strict(),
   z
@@ -337,7 +321,7 @@ export const humanRoundExecutionSchema = z.discriminatedUnion('kind', [
   }),
   z.object({
     kind: z.literal('hand'),
-    toolUsePlan: toolUsePlanSchema,
+    calls: handCallsSchema,
     toolResults: z.array(humanHistoryToolResultSchema),
     decisionHint: humanDecisionHintSchema.optional(),
     artifactRefs: z.array(aiArtifactRefSchema).optional()

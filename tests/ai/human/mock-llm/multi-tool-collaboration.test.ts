@@ -14,7 +14,7 @@ describe('ai human mock-llm backend', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证 mock-llm 模式下 human 会通过真实 hand 并行执行多工具协作。',
+      description: '验证 mock-llm 模式下 human 会通过真实 hand 按顺序执行多工具协作。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -37,25 +37,22 @@ describe('ai human mock-llm backend', () => {
               {
                 output: {
                   thought: {
-                    next: '并行执行 terminal 与 KB 工具'
+                    next: '顺序执行 terminal 与 KB 工具'
                   },
                   nextAction: {
                     action: 'hand',
-                    toolUsePlan: {
-                      mode: 'parallel',
-                      calls: [
-                        {
-                          toolName: 'terminal_run',
-                          args: {
-                            command: 'pwd'
-                          }
-                        },
-                        {
-                          toolName: 'kb_list_documents',
-                          args: {}
+                    calls: [
+                      {
+                        toolName: 'terminal_run',
+                        args: {
+                          command: 'pwd'
                         }
-                      ]
-                    }
+                      },
+                      {
+                        toolName: 'kb_list_documents',
+                        args: {}
+                      }
+                    ]
                   }
                 }
               },
@@ -69,7 +66,7 @@ describe('ai human mock-llm backend', () => {
               {
                 output: {
                   summary: '多工具协作已完成。',
-                  deliveryMarkdown: '# Multi Tool\n\n已完成真实并行工具协作。'
+                  deliveryMarkdown: '# Multi Tool\n\n已完成真实顺序多工具协作。'
                 }
               }
             ]
@@ -78,7 +75,7 @@ describe('ai human mock-llm backend', () => {
 
         const output = await runner.run({
           taskId: runtime.taskId,
-          userInput: '请并行读取工作区路径并列出知识库文档。'
+          userInput: '请顺序读取工作区路径并列出知识库文档。'
         })
 
         return {
@@ -95,8 +92,8 @@ describe('ai human mock-llm backend', () => {
             toolNames.includes('terminal_run') &&
             toolNames.includes('kb_list_documents'),
           {
-            name: 'human-can-execute-real-parallel-multi-tool-batch',
-            message: 'human 应通过真实 hand 节点执行一次并行多工具协作。',
+            name: 'human-can-execute-real-ordered-multi-tool-batch',
+            message: 'human 应通过真实 hand 节点执行一次按顺序的多工具协作。',
             data: {
               toolNames
             }

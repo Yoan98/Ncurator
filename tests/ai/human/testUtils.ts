@@ -41,20 +41,16 @@ export const buildToolDecision = (input: {
   toolName: string
   args: JsonObject
   summary: string
-  mode?: 'parallel' | 'serial'
 } & Partial<HumanThought>): HumanThoughtDecision => ({
   thought: buildThoughtMetadata(input),
   nextAction: {
     action: 'hand',
-    toolUsePlan: {
-      mode: input.mode || 'serial',
-      calls: [
-        {
-          toolName: input.toolName,
-          args: input.args
-        }
-      ]
-    }
+    calls: [
+      {
+        toolName: input.toolName,
+        args: input.args
+      }
+    ]
   }
 })
 

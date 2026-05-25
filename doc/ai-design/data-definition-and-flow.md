@@ -106,7 +106,7 @@ interface AiRunContext {
   // 可选记录完整 LLM IO；主要用于排障、审计与回放。
   recordLlmIo?: (record: AiLlmIoRecord) => void
 
-  // hand 在 serial 计划里统一请求批量审批；所有未命中正式只读指令集的 terminal 命令先进入同一审批批次。
+  // hand 会在执行当前 calls 前统一请求批量审批；所有未命中正式只读指令集的 terminal 命令先进入同一审批批次。
   requestApprovalBatch: (request: AiApprovalBatchRequest) => Promise<AiApprovalBatchResult>
 
   // 统一读取历史摘要与最近对话；brain 通过它拿到压缩后的历史上下文。
@@ -305,8 +305,8 @@ type BrainNextAction =
   | {
       // 下一跳需要执行工具调用。
       action: 'hand'
-      // 本轮工具调用计划。
-      toolUsePlan: ToolUsePlan
+      // 本轮工具调用列表；系统会按顺序串行执行。
+      calls: ToolCallParam[]
     }
   | {
       // 下一跳直接进入 mouth 组织交付。
@@ -451,8 +451,8 @@ type HumanRoundExecution =
   | {
       // 表示本轮真正执行了 hand。
       kind: 'hand'
-      // 本轮执行的工具计划。
-      toolUsePlan: ToolUsePlan
+      // 本轮按顺序执行的工具调用列表。
+      calls: ToolCallParam[]
       // 本轮工具结果的原始历史版本；prompt/search 在读取 history 时再实时渲染。
       toolResults: HumanHistoryToolResult[]
       // 若 hand 触发了纠偏提示，则在这里补充。
@@ -496,7 +496,7 @@ interface HumanLoadedHistoryContext {
 }
 ```
 
-### `ToolUsePlan`、decision hint、result 与 trace
+### `ToolCallParam`、decision hint、result 与 trace
 
 ```ts
 interface ToolCallParam {
@@ -504,13 +504,6 @@ interface ToolCallParam {
   toolName: string
   // 传给该工具的结构化参数。
   args: JsonObject
-}
-
-interface ToolUsePlan {
-  // 执行模式；parallel 表示并行执行，serial 表示按顺序执行。
-  mode: 'parallel' | 'serial'
-  // 本轮要执行的工具调用列表；正式实现要求总长度不超过 HUMAN_TOOL_USE_PLAN_LIMIT。
-  calls: ToolCallParam[]
 }
 
 interface ToolCallResult {
@@ -590,16 +583,12 @@ type HumanDecisionHint =
       }
     }
   | {
-      // hand 收到非法工具计划；例如总长度超限、并行批次不满足只读要求，或 docx 串行写超出单轮上限。
+      // hand 收到非法工具计划；例如总长度超限，或 docx 同文件写超出单轮上限。
       code: 'hand_plan_invalid'
       detail: {
-        // 原始计划模式。
-        mode: 'parallel' | 'serial'
         // 非法原因。
         reason:
-          | 'tool_use_plan_limit_exceeded'
-          | 'parallel_requires_read_only'
-          | 'parallel_limit_exceeded'
+          | 'hand_call_limit_exceeded'
           | 'docx_single_file_write_limit_exceeded'
         // 导致非法的工具名。
         offendingToolNames: string[]
@@ -1168,7 +1157,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    CD[("execution.currentThought.nextAction.toolUsePlan")]
+    CD[("execution.currentThought.nextAction.calls")]
     H["hand"]
     LTR[("execution.lastToolResults")]
     PM[("memory.taskRun.rounds")]
@@ -1181,7 +1170,7 @@ flowchart LR
     MC["context_compaction"]
     B["brain"]
 
-    CD -->|读取 toolUsePlan| H
+    CD -->|读取 calls| H
     H -->|写入本轮工具结果数组| LTR
     H -->|追加 hand round| PM
     H -->|从工具结构化输出提取并回写 artifacts| A

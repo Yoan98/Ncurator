@@ -3,7 +3,6 @@ import type { ToolExecutionMeta, ToolExecutionMetaResolver } from '../types'
 
 export type StaticExecutionMetaConfig = {
   mutability: ToolExecutionMeta['mutability']
-  parallelSafe: boolean
   getResourceKey?: (args: JsonObject) => string | undefined
   defaultResourceKey?: string
 }
@@ -18,7 +17,6 @@ export const createStaticExecutionMetaResolver = (
 ): ToolExecutionMetaResolver => {
   return (args) => ({
     mutability: input.mutability,
-    parallelSafe: input.parallelSafe,
     resourceKey: input.getResourceKey?.(args) || input.defaultResourceKey
   })
 }

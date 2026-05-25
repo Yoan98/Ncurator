@@ -44,7 +44,7 @@ tests/                   # 自动化测试
 - `memory/**` 放 stable memory patch、history prompt builder，以及与 `rounds / compactions` 相关的共用逻辑。
 - `node/brainNode/**` 放推理、决策 contract 和脑节点特有逻辑。
 - `node/learningNode/**` 放 skill 详情加载与学习态更新。
-- `node/handNode/**` 放工具调用执行、`toolUsePlan` 校验与 `decisionHint` 生成。
+- `node/handNode/**` 放工具调用执行、`calls` 校验与 `decisionHint` 生成。
 - `node/mouthNode/**` 放最终交付生成与结果收口。
 - `node/utils/**` 只放少量跨 node 共用、且无单一归属的中性逻辑。
 - `prompts/**` 放 `human` 的 `brain` / `mouth` 提示词，以及 `decisionHint` 渲染等少量共享 prompt 片段。

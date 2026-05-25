@@ -42,29 +42,26 @@ describe('ai tool hand backend', () => {
               },
               nextAction: {
                 action: 'hand',
-                toolUsePlan: {
-                  mode: 'serial',
-                  calls: [
-                    {
-                      toolName: 'docx_heading_edit',
-                      args: {
-                        sourcePath: 'same-file-invalid.docx',
-                        anchorBlockId: 'b:1',
-                        action: 'insert_after',
-                        headings: [{ level: 2, text: '第一部分' }]
-                      }
-                    },
-                    {
-                      toolName: 'docx_paragraph_edit',
-                      args: {
-                        sourcePath: 'same-file-invalid.docx',
-                        anchorBlockId: 'b:2',
-                        action: 'insert_after',
-                        paragraphs: ['补充说明']
-                      }
+                calls: [
+                  {
+                    toolName: 'docx_heading_edit',
+                    args: {
+                      sourcePath: 'same-file-invalid.docx',
+                      anchorBlockId: 'b:1',
+                      action: 'insert_after',
+                      headings: [{ level: 2, text: '第一部分' }]
                     }
-                  ]
-                }
+                  },
+                  {
+                    toolName: 'docx_paragraph_edit',
+                    args: {
+                      sourcePath: 'same-file-invalid.docx',
+                      anchorBlockId: 'b:2',
+                      action: 'insert_after',
+                      paragraphs: ['补充说明']
+                    }
+                  }
+                ]
               }
             }
           }

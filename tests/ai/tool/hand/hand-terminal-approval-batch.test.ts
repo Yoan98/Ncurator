@@ -16,7 +16,7 @@ describe('ai tool hand backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['hand'],
-      description: '验证 hand 会对 serial 中需审批 terminal 做批量预检，并在整批未全同意时 0 执行。',
+      description: '验证 hand 会对 calls 中需审批 terminal 做批量预检，并在整批未全同意时 0 执行。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -46,23 +46,20 @@ describe('ai tool hand backend', () => {
                   },
                   nextAction: {
                     action: 'hand',
-                    toolUsePlan: {
-                      mode: 'serial',
-                      calls: [
-                        {
-                          toolName: 'terminal_run',
-                          args: {
-                            command: 'cp allowed.txt allowed-copy.txt'
-                          }
-                        },
-                        {
-                          toolName: 'terminal_run',
-                          args: {
-                            command: 'mkdir blocked-dir'
-                          }
+                    calls: [
+                      {
+                        toolName: 'terminal_run',
+                        args: {
+                          command: 'cp allowed.txt allowed-copy.txt'
                         }
-                      ]
-                    }
+                      },
+                      {
+                        toolName: 'terminal_run',
+                        args: {
+                          command: 'mkdir blocked-dir'
+                        }
+                      }
+                    ]
                   }
                 }
               },
@@ -119,7 +116,7 @@ describe('ai tool hand backend', () => {
             blockedHint?.detail?.reason === 'user_guided',
           {
             name: 'serial-terminal-approval-batch-blocks-before-execution',
-            message: 'serial 计划中的需审批 terminal 应先整批审核；只要未全部同意，本批 0 执行并回流 hand_approval_blocked。',
+            message: 'calls 中需审批 terminal 应先整批审核；只要未全部同意，本批 0 执行并回流 hand_approval_blocked。',
             data: {
               approvalRequiredEvents,
               approvalDecisionEvents,

@@ -1,5 +1,5 @@
 import type { JsonObject } from '../../../../../../shared/types'
-import type { HumanDecisionHint, ToolCallResult, ToolUsePlan } from '../../types'
+import type { HandCallList, HumanDecisionHint, ToolCallResult } from '../../types'
 import { isDocxPositionedLayoutProtectionMessage } from '../../tools/docx/constants'
 
 const DOCX_WRITE_TOOL_NAMES = new Set([
@@ -72,7 +72,7 @@ const buildPositionedWriteBlockedSignals = (input: {
 }
 
 export const deriveHandFollowupSignals = (input: {
-  toolUsePlan: ToolUsePlan
+  calls: HandCallList
   results: readonly ToolCallResult[]
 }): {
   decisionHint?: HumanDecisionHint
@@ -90,7 +90,7 @@ export const deriveHandFollowupSignals = (input: {
     }
     if (!isDocxPositionedLayoutProtectionMessage(result.diagnostic?.message)) continue
 
-    const plannedCall = input.toolUsePlan.calls[index]
+    const plannedCall = input.calls[index]
     return buildPositionedWriteBlockedSignals({
       toolName: result.toolName,
       args: plannedCall?.args
@@ -101,7 +101,7 @@ export const deriveHandFollowupSignals = (input: {
 }
 
 export const shouldStopSerialHandPlan = (input: {
-  toolUsePlan: ToolUsePlan
+  calls: HandCallList
   results: readonly ToolCallResult[]
 }): boolean =>
   ['hand_docx_positioned_write_blocked', 'hand_docx_batch_write_halted'].includes(

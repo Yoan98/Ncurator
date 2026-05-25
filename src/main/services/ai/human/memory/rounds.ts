@@ -11,7 +11,7 @@ import type {
   HumanState,
   HumanDecisionHint,
   ToolCallResult,
-  ToolUsePlan
+  HandCallList
 } from '../types'
 import { HUMAN_HISTORY_LIMITS } from './constants'
 
@@ -57,14 +57,14 @@ export const buildLearningExecution = (input: {
 })
 
 export const buildHandExecution = (input: {
-  toolUsePlan: ToolUsePlan
+  calls: HandCallList
   toolResults: ToolCallResult[]
   decisionHint?: HumanDecisionHint
 }): Extract<HumanRoundExecution, { kind: 'hand' }> => {
   const artifactRefs = extractArtifactRefsFromToolResults(input.toolResults)
   return {
     kind: 'hand',
-    toolUsePlan: input.toolUsePlan,
+    calls: input.calls,
     toolResults: input.toolResults.map(buildHistoryToolResult),
     decisionHint: input.decisionHint,
     artifactRefs: artifactRefs.length > 0 ? artifactRefs : undefined

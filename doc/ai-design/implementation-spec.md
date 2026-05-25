@@ -94,11 +94,11 @@ stateDiagram-v2
 ### 5.3 `hand`
 
 - 职责：承接 `brain` 已经明确决定的工具调用批次，执行并回写工具结果、过程历史与 artifacts。
-- 主要读取：`execution.currentThought.nextAction.toolUsePlan`、`skills.learnedSkillIds`、runtime cache 中已装载的工具、`memory.taskRun.rounds`。
+- 主要读取：`execution.currentThought.nextAction.calls`、`skills.learnedSkillIds`、runtime cache 中已装载的工具、`memory.taskRun.rounds`。
 - 主要回写：`execution.lastToolResults`、`memory.taskRun.rounds`、`execution.artifacts`、`execution.stage`、必要时 `execution.pendingDecisionHint`、`trace.steps`。
-- 约束：不调用模型；`parallel` 只允许只读且并行安全的工具。对 `terminal_run` 来说，是否只读且并行安全必须由统一正式只读指令集决定。
-- 对 `serial` hand 计划，正式实现需要先做 approval preflight：遍历本轮 `toolUsePlan.calls`，收集所有未命中正式 readonly 指令集的 `terminal_run`，生成一个批量审批事件并暂停本轮执行；只要该批次未全部 `approve`，本批命令一条都不执行，并通过 `hand_approval_blocked` 回到 `brain`。
-- hand 对 `toolUsePlan` 先执行总长度保护；当前正式实现要求单轮计划总调用数不超过 `HUMAN_TOOL_USE_PLAN_LIMIT`，超过时直接返回 `hand_plan_invalid(reason=tool_use_plan_limit_exceeded)`，而不是继续进入串行/并行细分校验。
+- 约束：不调用模型；hand 只支持按顺序串行执行 `calls`。对 `terminal_run` 来说，是否命中统一正式只读指令集只影响可否直接执行与是否需要审批，不再影响执行模式。
+- hand 正式实现需要先做 approval preflight：遍历本轮 `calls`，收集所有未命中正式 readonly 指令集的 `terminal_run`，生成一个批量审批事件并暂停本轮执行；只要该批次未全部 `approve`，本批命令一条都不执行，并通过 `hand_approval_blocked` 回到 `brain`。
+- hand 对 `calls` 先执行总长度保护；当前正式实现要求单轮调用数不超过 `HUMAN_HAND_CALL_LIMIT`，超过时直接返回 `hand_plan_invalid(reason=hand_call_limit_exceeded)`。
 - 对 docx 串行写，hand 需要执行同文件写保护；若同一 `sourcePath` 在一轮内出现多个 docx 写调用，直接返回 `hand_plan_invalid(reason=docx_single_file_write_limit_exceeded)`，而不是继续落工具。docx 写工具会在结果中返回 `postWriteReadback.regions` 作为写后复核区域，brain 可基于该结果判断是否继续编辑或额外读取。
 - tool 执行失败时，hand 应优先保留原始校验/运行时错误文本，并通过 `diagnostic.message` 回流给 brain 与历史渲染层；不要把错误再压缩成额外的预设分类。
 
