@@ -137,9 +137,11 @@ describe('ai unit learning partial success', () => {
     })
 
     expect(nextState.execution.pendingDecisionHint).toMatchObject({
-      code: 'learning_builtin_skill_requested',
+      code: 'learning_no_effect',
       detail: {
-        builtinSkillIds: ['terminal']
+        requestedSkillIds: ['terminal'],
+        duplicateSkillIds: [],
+        unknownSkillIds: []
       }
     })
     expect(nextState.execution.lastLearningOutcome).toMatchObject({

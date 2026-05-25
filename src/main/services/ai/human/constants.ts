@@ -41,16 +41,11 @@ export const TOOL_CALL_RESULT_CODES = [
   'result_too_large'
 ] as const
 
-export const HUMAN_HAND_PLAN_INVALID_REASONS = [
-  'hand_call_limit_exceeded',
-  'docx_single_file_write_limit_exceeded'
-] as const
 export const HUMAN_DECISION_HINT_CODES = [
   'learning_no_effect',
-  'learning_builtin_skill_requested',
-  'learning_tool_budget_exceeded',
-  'hand_plan_invalid',
-  'hand_approval_blocked',
+  'terminal_approval_blocked',
+  'hand_call_limit_exceeded',
+  'hand_docx_single_file_write_limit_exceeded',
   'hand_tool_limit_exceeded',
   'hand_tool_result_too_large',
   'hand_docx_positioned_write_blocked',

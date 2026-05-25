@@ -4,7 +4,6 @@ import { aiArtifactRefSchema } from '../schema'
 import {
   AI_TOOL_FAMILY_IDS,
   BUILTIN_RUNTIME_SKILL_IDS,
-  HUMAN_HAND_PLAN_INVALID_REASONS,
   HUMAN_ROUND_EXECUTION_KINDS,
   HUMAN_SKILL_SOURCES,
   HUMAN_STAGES,
@@ -37,7 +36,6 @@ export const toolFamilyIdSchema = z.enum(AI_TOOL_FAMILY_IDS)
 export const toolCallResultCodeSchema = z.enum(TOOL_CALL_RESULT_CODES)
 export const humanStageSchema = z.enum(HUMAN_STAGES)
 export const humanStatusSchema = z.enum(HUMAN_STATUSES)
-export const humanHandPlanInvalidReasonSchema = z.enum(HUMAN_HAND_PLAN_INVALID_REASONS)
 export const humanDecisionHintCodeSchema = z.enum(HUMAN_DECISION_HINT_CODES)
 export const humanSkillSourceSchema = z.enum(HUMAN_SKILL_SOURCES)
 export const humanRoundExecutionKindSchema = z.enum(HUMAN_ROUND_EXECUTION_KINDS)
@@ -105,46 +103,31 @@ export const humanDecisionHintSchema = z.discriminatedUnion('code', [
     })
   }),
   z.object({
-    code: z.literal('learning_builtin_skill_requested'),
+    code: z.literal('terminal_approval_blocked'),
     detail: z.object({
-      requestedSkillIds: z.array(z.string().min(1)),
-      builtinSkillIds: z.array(z.enum(BUILTIN_RUNTIME_SKILL_IDS)).min(1)
-    })
-  }),
-  z.object({
-    code: z.literal('learning_tool_budget_exceeded'),
-    detail: z.object({
-      requestedSkillIds: z.array(z.string().min(1)),
-      activeToolCount: z.number().int().min(0),
-      limit: z.number().int().min(1)
-    })
-  }),
-  z.object({
-    code: z.literal('hand_plan_invalid'),
-    detail: z.object({
-      reason: humanHandPlanInvalidReasonSchema,
-      offendingToolNames: z.array(z.string().min(1)),
-      sourcePaths: z.array(z.string().min(1)).optional(),
-      callCount: z.number().int().min(1).optional(),
-      limit: z.number().int().min(1).optional()
-    })
-  }),
-  z.object({
-    code: z.literal('hand_approval_blocked'),
-    detail: z.object({
-      reason: z.enum(['user_rejected', 'user_guided']),
-      batchId: z.string().min(1),
-      blockedToolNames: z.array(z.string().min(1)),
+      allowedCommands: z.array(z.string().min(1)),
       blockedCommands: z.array(z.string().min(1)),
-      approvedItemIds: z.array(z.string().min(1)),
-      rejectedItemIds: z.array(z.string().min(1)),
-      guidedItems: z.array(
+      guidance: z.array(
         z.object({
-          itemId: z.string().min(1),
           command: z.string().min(1),
           message: z.string().min(1)
         })
       )
+    })
+  }),
+  z.object({
+    code: z.literal('hand_call_limit_exceeded'),
+    detail: z.object({
+      offendingToolNames: z.array(z.string().min(1)),
+      callCount: z.number().int().min(1),
+      limit: z.number().int().min(1)
+    })
+  }),
+  z.object({
+    code: z.literal('hand_docx_single_file_write_limit_exceeded'),
+    detail: z.object({
+      offendingToolNames: z.array(z.string().min(1)),
+      sourcePaths: z.array(z.string().min(1)).min(1)
     })
   }),
   z.object({

@@ -83,15 +83,7 @@ describe('ai human mock-llm backend', () => {
             latestLearningStep.availableToolNames.includes('kb_search') &&
             latestLearningStep.availableToolNames.length === 15 &&
             latestLearningStep.summary.includes('当前 active tools=') &&
-            !latestLearningStep.summary.includes('已淘汰最早学习的 skill=') &&
-            filterAiRunEventsByType(result.events, 'decision_hint').some(
-              (event) =>
-                event.source === 'learning' &&
-                event.code === 'learning_builtin_skill_requested' &&
-                Array.isArray(event.detail?.builtinSkillIds) &&
-                event.detail.builtinSkillIds.includes('terminal') &&
-                event.detail.builtinSkillIds.includes('kb-retrieval')
-            ),
+            !latestLearningStep.summary.includes('已淘汰最早学习的 skill='),
           {
             name: 'learning-tracks-active-tool-count-under-budget',
             message: 'learning 在预算未超限时应保留当前 skill，并把 active tool 数反映到 learning summary 中。',

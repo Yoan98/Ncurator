@@ -55,8 +55,7 @@ describe('ai tool hand backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.state.execution.pendingDecisionHint?.code === 'hand_plan_invalid' &&
-            result.state.execution.pendingDecisionHint.detail.reason === 'hand_call_limit_exceeded' &&
+          result.state.execution.pendingDecisionHint?.code === 'hand_call_limit_exceeded' &&
             result.state.execution.pendingDecisionHint.detail.limit === HUMAN_HAND_CALL_LIMIT &&
             result.state.execution.pendingDecisionHint.detail.callCount === HUMAN_HAND_CALL_LIMIT + 1 &&
             result.state.execution.lastToolResults === undefined,

@@ -75,17 +75,18 @@ describe('ai human mock-llm backend', () => {
         const approvalEvents = filterAiRunEventsByType(result.events, 'approval_batch_decision')
         const decisionHints = filterAiRunEventsByType(result.events, 'decision_hint')
         const terminalResultCount = toolResults.filter((event) => event.toolName === 'terminal_run').length
-        const blockedHint = decisionHints.find((event) => event.code === 'hand_approval_blocked')
+        const blockedHint = decisionHints.find((event) => event.code === 'terminal_approval_blocked')
 
         runtime.assertThat(
-          result.output.status === 'completed' &&
+            result.output.status === 'completed' &&
             result.blockedDirExists === false &&
             terminalResultCount === 0 &&
             approvalEvents.some((event) => event.decisions.some((decision) => decision.action === 'reject')) &&
-            blockedHint?.detail?.reason === 'user_rejected',
+            Array.isArray(blockedHint?.detail?.blockedCommands) &&
+            blockedHint.detail.blockedCommands.includes('mkdir blocked-dir'),
           {
             name: 'approval-denial-stops-real-command-execution',
-            message: '审批拒绝后，真实 terminal 命令不应落地执行，并应把 hand_approval_blocked 回流给 human。',
+            message: '审批拒绝后，真实 terminal 命令不应落地执行，并应把 terminal_approval_blocked 回流给 human。',
             data: {
               terminalResultCount,
               approvalEvents,

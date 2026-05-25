@@ -73,11 +73,9 @@ describe('ai tool hand backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.state.execution.pendingDecisionHint?.code === 'hand_plan_invalid' &&
-            result.state.execution.pendingDecisionHint.detail.reason ===
-              'docx_single_file_write_limit_exceeded' &&
-            result.state.execution.pendingDecisionHint.detail.limit === 1 &&
-            result.state.execution.pendingDecisionHint.detail.sourcePaths?.includes(
+          result.state.execution.pendingDecisionHint?.code ===
+            'hand_docx_single_file_write_limit_exceeded' &&
+            result.state.execution.pendingDecisionHint.detail.sourcePaths.includes(
               'same-file-invalid.docx'
             ) &&
             result.state.execution.pendingDecisionHint.detail.offendingToolNames.join(',') ===
@@ -86,7 +84,7 @@ describe('ai tool hand backend', () => {
           {
             name: 'same-file-multi-write-plan-is-rejected',
             message:
-              '同一文件在一轮 hand 中出现第 2 次 docx 写时，应直接返回 hand_plan_invalid，并带稳定 decision hint。',
+              '同一文件在一轮 hand 中出现第 2 次 docx 写时，应直接返回 hand_docx_single_file_write_limit_exceeded，并带稳定 decision hint。',
             data: {
               decisionHint: result.state.execution.pendingDecisionHint,
               lastToolResults: result.state.execution.lastToolResults

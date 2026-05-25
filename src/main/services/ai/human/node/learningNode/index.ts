@@ -6,7 +6,6 @@ import {
   getEffectiveLearnedSkillIds,
   getSkillDefinition,
   hasSkillDefinition,
-  isBuiltinSkillId,
   isLearnableSkillId
 } from '../../skills'
 import { appendDecisionRound, buildLearningExecution } from '../../memory/rounds'
@@ -37,29 +36,6 @@ const buildNoEffectDecisionHint = (input: {
     requestedSkillIds: input.requestedSkillIds,
     duplicateSkillIds: input.duplicateSkillIds,
     unknownSkillIds: input.unknownSkillIds
-  }
-})
-
-const buildBuiltinSkillRequestedDecisionHint = (input: {
-  requestedSkillIds: string[]
-  builtinSkillIds: Extract<HumanDecisionHint, { code: 'learning_builtin_skill_requested' }>['detail']['builtinSkillIds']
-}): HumanDecisionHint => ({
-  code: 'learning_builtin_skill_requested',
-  detail: {
-    requestedSkillIds: input.requestedSkillIds,
-    builtinSkillIds: input.builtinSkillIds
-  }
-})
-
-const buildToolBudgetDecisionHint = (input: {
-  requestedSkillIds: string[]
-  activeToolCount: number
-}): HumanDecisionHint => ({
-  code: 'learning_tool_budget_exceeded',
-  detail: {
-    requestedSkillIds: input.requestedSkillIds,
-    activeToolCount: input.activeToolCount,
-    limit: HUMAN_MAX_ACTIVE_TOOLS
   }
 })
 
@@ -103,15 +79,11 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
     }
 
     const requestedSkillIds = dedupeInOrder(state.execution.currentThought.nextAction.wantLearnSkillIds)
-    const requestedBuiltinSkillIds = requestedSkillIds.filter(
-      (skillId): skillId is Extract<HumanDecisionHint, { code: 'learning_builtin_skill_requested' }>['detail']['builtinSkillIds'][number] =>
-        isBuiltinSkillId(skillId)
-    )
     const effectiveLearnedSkillIds = getEffectiveLearnedSkillIds(state.skills.learnedSkillIds)
     const duplicateSkillIds = requestedSkillIds.filter(
       (skillId): skillId is HumanLearningOutcome['skippedDuplicateSkillIds'][number] =>
         hasSkillDefinition(skillId) &&
-        !isBuiltinSkillId(skillId) &&
+        isLearnableSkillId(skillId) &&
         effectiveLearnedSkillIds.includes(skillId)
     )
     const unknownSkillIds = requestedSkillIds.filter((skillId) => !hasSkillDefinition(skillId))
@@ -119,13 +91,6 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
       (skillId): skillId is HumanLearningOutcome['loadedSkillIds'][number] =>
         isLearnableSkillId(skillId) && !state.skills.learnedSkillIds.includes(skillId)
     )
-    const builtinSkillDecisionHint =
-      requestedBuiltinSkillIds.length > 0
-        ? buildBuiltinSkillRequestedDecisionHint({
-            requestedSkillIds,
-            builtinSkillIds: requestedBuiltinSkillIds
-          })
-        : undefined
 
     if (newSkillIds.length === 0) {
       const activeToolCount = countActiveToolNamesForSkillIds({
@@ -140,13 +105,11 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
         evictedSkillIds: [],
         activeToolCount
       })
-      const noEffectDecisionHint =
-        builtinSkillDecisionHint ||
-        buildNoEffectDecisionHint({
-          requestedSkillIds,
-          duplicateSkillIds,
-          unknownSkillIds
-        })
+      const noEffectDecisionHint = buildNoEffectDecisionHint({
+        requestedSkillIds,
+        duplicateSkillIds,
+        unknownSkillIds
+      })
 
       return returnToBrainWithDecisionHint({
         ctx: input.ctx,
@@ -186,14 +149,16 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
         evictedSkillIds: [],
         activeToolCount: fittedLearnedSkills.activeToolCount
       })
+      const noEffectDecisionHint = buildNoEffectDecisionHint({
+        requestedSkillIds,
+        duplicateSkillIds,
+        unknownSkillIds
+      })
       return returnToBrainWithDecisionHint({
         ctx: input.ctx,
         state,
         source: 'learning',
-        decisionHint: buildToolBudgetDecisionHint({
-          requestedSkillIds,
-          activeToolCount: fittedLearnedSkills.activeToolCount
-        }),
+        decisionHint: noEffectDecisionHint,
         overrides: {
           execution: {
             lastLearningOutcome
@@ -204,10 +169,7 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
               state,
               execution: buildLearningExecution({
                 learningOutcome: lastLearningOutcome,
-                decisionHint: buildToolBudgetDecisionHint({
-                  requestedSkillIds,
-                  activeToolCount: fittedLearnedSkills.activeToolCount
-                })
+                decisionHint: noEffectDecisionHint
               })
             })
           }
@@ -250,7 +212,6 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
         })
       })),
       stage: 'human_learning',
-      decisionHint: builtinSkillDecisionHint,
       overrides: {
         skills: {
           learnedSkillIds
@@ -263,8 +224,7 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
           taskRun: appendDecisionRound({
             state,
             execution: buildLearningExecution({
-              learningOutcome: lastLearningOutcome,
-              decisionHint: builtinSkillDecisionHint
+              learningOutcome: lastLearningOutcome
             })
           })
         }

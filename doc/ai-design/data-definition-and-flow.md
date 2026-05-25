@@ -561,41 +561,40 @@ type HumanDecisionHint =
       }
     }
   | {
-      // learning 请求了 builtin skill；builtin 始终可用，不进入 learned external skill 集。
-      code: 'learning_builtin_skill_requested'
+      // terminal 审批未全部通过，因此相关命令本轮没有执行。
+      code: 'terminal_approval_blocked'
       detail: {
-        // 本轮请求学习的 skill。
-        requestedSkillIds: string[]
-        // 被识别为 builtin 的 skill。
-        builtinSkillIds: string[]
+        // 已允许的命令。
+        allowedCommands: string[]
+        // 未执行的命令。
+        blockedCommands: string[]
+        // 用户补充说明。
+        guidance: Array<{
+          command: string
+          message: string
+        }>
       }
     }
   | {
-      // learning 后有效工具数超限。
-      code: 'learning_tool_budget_exceeded'
+      // hand 单轮 calls 超出上限，执行前直接阻断。
+      code: 'hand_call_limit_exceeded'
       detail: {
-        // 本轮请求学习的 skill。
-        requestedSkillIds: string[]
-        // 当前有效工具数。
-        activeToolCount: number
+        // 导致超限的工具名。
+        offendingToolNames: string[]
+        // 本轮计划调用数。
+        callCount: number
         // 允许上限。
         limit: number
       }
     }
   | {
-      // hand 收到非法工具计划；例如总长度超限，或 docx 同文件写超出单轮上限。
-      code: 'hand_plan_invalid'
+      // hand 中同一文件出现多次 docx 写，执行前直接阻断。
+      code: 'hand_docx_single_file_write_limit_exceeded'
       detail: {
-        // 非法原因。
-        reason:
-          | 'hand_call_limit_exceeded'
-          | 'docx_single_file_write_limit_exceeded'
-        // 导致非法的工具名。
+        // 导致冲突的工具名。
         offendingToolNames: string[]
-        // 若是数量超限，则记录本次调用数。
-        callCount?: number
-        // 若是数量超限，则记录允许上限。
-        limit?: number
+        // 涉及文件。
+        sourcePaths: string[]
       }
     }
   | {

@@ -43,20 +43,27 @@ const readSourcePathArg = (args: JsonObject): string | undefined =>
 const readTerminalCommandArg = (args: JsonObject): string | undefined =>
   typeof args.command === 'string' && args.command.trim().length > 0 ? args.command.trim() : undefined
 
-const createHandPlanInvalidDecisionHint = (input: {
-  reason: Extract<HumanDecisionHint, { code: 'hand_plan_invalid' }>['detail']['reason']
+const createHandCallLimitDecisionHint = (input: {
   offendingToolNames: string[]
-  sourcePaths?: string[]
-  callCount?: number
-  limit?: number
+  callCount: number
+  limit: number
 }): HumanDecisionHint => ({
-  code: 'hand_plan_invalid',
+  code: 'hand_call_limit_exceeded',
   detail: {
-    reason: input.reason,
     offendingToolNames: input.offendingToolNames,
-    sourcePaths: input.sourcePaths,
     callCount: input.callCount,
     limit: input.limit
+  }
+})
+
+const createDocxSingleFileWriteLimitDecisionHint = (input: {
+  offendingToolNames: string[]
+  sourcePaths: string[]
+}): HumanDecisionHint => ({
+  code: 'hand_docx_single_file_write_limit_exceeded',
+  detail: {
+    offendingToolNames: input.offendingToolNames,
+    sourcePaths: input.sourcePaths
   }
 })
 
@@ -83,12 +90,9 @@ const findSameFileMultiWriteDecisionHint = (calls: HandCallList): HumanDecisionH
   )
   if (offendingEntries.length === 0) return undefined
 
-  return createHandPlanInvalidDecisionHint({
-    reason: 'docx_single_file_write_limit_exceeded',
+  return createDocxSingleFileWriteLimitDecisionHint({
     offendingToolNames: offendingEntries.flatMap(([, calls]) => calls.map((call) => call.toolName)),
-    sourcePaths: offendingEntries.map(([sourcePath]) => sourcePath),
-    callCount: offendingEntries.reduce((total, [, calls]) => total + calls.length, 0),
-    limit: 1
+    sourcePaths: offendingEntries.map(([sourcePath]) => sourcePath)
   })
 }
 
@@ -98,8 +102,7 @@ const validateCalls = (calls: HandCallList): HumanDecisionHint | undefined => {
     return sameFileMultiWriteDecisionHint
   }
   if (calls.length > HUMAN_HAND_CALL_LIMIT) {
-    return createHandPlanInvalidDecisionHint({
-      reason: 'hand_call_limit_exceeded',
+    return createHandCallLimitDecisionHint({
       offendingToolNames: calls.map((item) => item.toolName),
       callCount: calls.length,
       limit: HUMAN_HAND_CALL_LIMIT
@@ -138,7 +141,6 @@ const collectApprovalBatchItems = (input: {
 }
 
 const buildApprovalBlockedDecisionHint = (input: {
-  batchId: string
   decisions: Array<{
     itemId: string
     action: 'approve' | 'reject' | 'guide'
@@ -151,37 +153,33 @@ const buildApprovalBlockedDecisionHint = (input: {
     command: string
     reason: string
   }>
-}): Extract<HumanDecisionHint, { code: 'hand_approval_blocked' }> => {
-  const approvedItemIds = input.decisions
+}): Extract<HumanDecisionHint, { code: 'terminal_approval_blocked' }> => {
+  const allowedCommands = input.decisions
     .filter((decision) => decision.action === 'approve')
-    .map((decision) => decision.itemId)
-  const rejectedItemIds = input.decisions
-    .filter((decision) => decision.action === 'reject')
-    .map((decision) => decision.itemId)
-  const guidedItems = input.decisions
+    .map((decision) => input.approvalItems.find((item) => item.itemId === decision.itemId)?.command)
+    .filter((command): command is string => Boolean(command))
+  const blockedCommands = input.approvalItems
+    .filter((item) => !input.decisions.some((decision) => decision.itemId === item.itemId && decision.action === 'approve'))
+    .map((item) => item.command)
+  const guidance = input.decisions
     .filter((decision) => decision.action === 'guide')
     .map((decision) => {
       const matchedItem = input.approvalItems.find((item) => item.itemId === decision.itemId)
       return matchedItem
         ? {
-            itemId: matchedItem.itemId,
             command: matchedItem.command,
             message: String(decision.message || '').trim()
           }
         : undefined
     })
-    .filter((item): item is { itemId: string; command: string; message: string } => Boolean(item))
+    .filter((item): item is { command: string; message: string } => Boolean(item))
 
   return {
-    code: 'hand_approval_blocked',
+    code: 'terminal_approval_blocked',
     detail: {
-      reason: rejectedItemIds.length > 0 ? 'user_rejected' : 'user_guided',
-      batchId: input.batchId,
-      blockedToolNames: input.approvalItems.map((item) => item.toolName),
-      blockedCommands: input.approvalItems.map((item) => item.command),
-      approvedItemIds,
-      rejectedItemIds,
-      guidedItems
+      allowedCommands,
+      blockedCommands,
+      guidance
     }
   }
 }
@@ -272,7 +270,6 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       )
       if (!allApproved) {
         const decisionHint = buildApprovalBlockedDecisionHint({
-          batchId,
           decisions: approvalBatchResult.decisions,
           approvalItems
         })

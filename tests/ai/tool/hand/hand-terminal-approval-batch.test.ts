@@ -103,7 +103,7 @@ describe('ai tool hand backend', () => {
         const approvalDecisionEvents = filterAiRunEventsByType(result.events, 'approval_batch_decision')
         const toolStartedEvents = filterAiRunEventsByType(result.events, 'tool_call_started')
         const decisionHints = filterAiRunEventsByType(result.events, 'decision_hint')
-        const blockedHint = decisionHints.find((event) => event.code === 'hand_approval_blocked')
+        const blockedHint = decisionHints.find((event) => event.code === 'terminal_approval_blocked')
 
         runtime.assertThat(
           result.output.status === 'completed' &&
@@ -113,10 +113,19 @@ describe('ai tool hand backend', () => {
             toolStartedEvents.length === 0 &&
             result.blockedDirExists === false &&
             result.copiedFileExists === false &&
-            blockedHint?.detail?.reason === 'user_guided',
+            Array.isArray(blockedHint?.detail?.allowedCommands) &&
+            blockedHint.detail.allowedCommands.includes('cp allowed.txt allowed-copy.txt') &&
+            Array.isArray(blockedHint?.detail?.blockedCommands) &&
+            blockedHint.detail.blockedCommands.includes('mkdir blocked-dir') &&
+            Array.isArray(blockedHint?.detail?.guidance) &&
+            blockedHint.detail.guidance.some(
+              (item) =>
+                item.command === 'mkdir blocked-dir' &&
+                item.message === '先不要创建目录，先解释风险并给我备选方案'
+            ),
           {
             name: 'serial-terminal-approval-batch-blocks-before-execution',
-            message: 'calls 中需审批 terminal 应先整批审核；只要未全部同意，本批 0 执行并回流 hand_approval_blocked。',
+            message: 'calls 中需审批 terminal 应先整批审核；只要未全部同意，本批 0 执行并回流 terminal_approval_blocked。',
             data: {
               approvalRequiredEvents,
               approvalDecisionEvents,
