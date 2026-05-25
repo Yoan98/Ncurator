@@ -101,15 +101,18 @@ export const resolveBrainDecisionHint = (input: {
   decisionHint?: HumanDecisionHint
 }): HumanDecisionHint | undefined => {
   if (input.decisionHint) return input.decisionHint
+
+  if (input.state.execution.pendingDecisionHint?.code === 'hand_tool_limit_exceeded') {
+    return input.thought.nextAction.action === 'mouth'
+      ? undefined
+      : input.state.execution.pendingDecisionHint
+  }
+
   if (input.thought.nextAction.action !== 'mouth') return undefined
 
   const pendingItems = (input.thoughtMemory.todolist || [])
     .filter((item) => item.status === 'todo')
     .map((item) => item.item)
-
-  if (input.state.execution.pendingDecisionHint?.code === 'hand_tool_limit_exceeded') {
-    return undefined
-  }
 
   return pendingItems.length > 0
     ? {

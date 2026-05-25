@@ -36,10 +36,12 @@ describe('ai unit hand followup signals', () => {
     expect(signals.decisionHint).toEqual({
       code: 'hand_docx_positioned_write_blocked',
       detail: {
-        targetDescription: '你刚才尝试插入表格的那处位置'
+        targetDescription: '在 graphics.docx 中，你刚才尝试插入表格的那处位置',
+        sourcePath: 'graphics.docx'
       }
     })
-    expect(signals.deliveryGuidance).toContain('你刚才尝试插入表格的那处位置')
+    expect(signals.deliveryGuidance).toContain('在 graphics.docx 中，你刚才尝试插入表格的那处位置')
+    expect(signals.deliveryGuidance).toContain('按系统设计，这类定位区域不会被自动修改')
     expect(signals.deliveryGuidance).toContain('没有生成对应的审阅稿')
   })
 })

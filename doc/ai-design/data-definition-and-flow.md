@@ -598,6 +598,16 @@ type HumanDecisionHint =
       }
     }
   | {
+      // hand 的工具调用次数接近本轮允许上限，应尽快收尾。
+      code: 'hand_tool_limit_near_exhausted'
+      detail: {
+        // 当前累计工具调用数。
+        toolCallCount: number
+        // 允许上限。
+        limit: number
+      }
+    }
+  | {
       // hand 的工具调用次数超过本轮允许上限。
       code: 'hand_tool_limit_exceeded'
       detail: {
@@ -605,6 +615,16 @@ type HumanDecisionHint =
         toolCallCount: number
         // 允许上限。
         limit: number
+      }
+    }
+  | {
+      // docx 写入命中定位排版保护，本轮该位置不会被自动修改。
+      code: 'hand_docx_positioned_write_blocked'
+      detail: {
+        // 面向 AI 的受影响位置描述。
+        targetDescription: string
+        // 若能确定，则记录受影响文件路径。
+        sourcePath?: string
       }
     }
   | {

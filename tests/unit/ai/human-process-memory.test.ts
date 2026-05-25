@@ -127,6 +127,50 @@ describe('ai unit human memory history', () => {
     expect(nextState.memory.taskRun.rounds).toHaveLength(0)
   })
 
+  it('keeps returning the hard tool-limit hint when brain tries not to enter mouth after exhaustion', () => {
+    const initialState = createInitialHumanState({
+      taskId: 'task-tool-limit-hard-stop',
+      userInput: '超过工具预算后应直接收尾'
+    })
+    const thought = buildThought({
+      summary: '仍想继续调用工具',
+      nextAction: {
+        action: 'hand',
+        calls: [
+          {
+            toolName: 'terminal_run',
+            args: {
+              command: 'pwd'
+            }
+          }
+        ]
+      }
+    })
+
+    const hardLimitHint = {
+      code: 'hand_tool_limit_exceeded' as const,
+      detail: {
+        toolCallCount: 41,
+        limit: 40
+      }
+    }
+    const stateWithToolLimit = {
+      ...initialState,
+      execution: {
+        ...initialState.execution,
+        pendingDecisionHint: hardLimitHint
+      }
+    }
+
+    const decisionHint = resolveBrainDecisionHint({
+      state: stateWithToolLimit,
+      thought,
+      thoughtMemory: initialState.memory.thought
+    })
+
+    expect(decisionHint).toEqual(hardLimitHint)
+  })
+
   it('marks the final remaining todo in the mouth-blocked decision hint', () => {
     const initialState = createInitialHumanState({
       taskId: 'task-final-check',

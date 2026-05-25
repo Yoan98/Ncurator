@@ -131,6 +131,13 @@ export const humanDecisionHintSchema = z.discriminatedUnion('code', [
     })
   }),
   z.object({
+    code: z.literal('hand_tool_limit_near_exhausted'),
+    detail: z.object({
+      toolCallCount: z.number().int().min(0),
+      limit: z.number().int().min(1)
+    })
+  }),
+  z.object({
     code: z.literal('hand_tool_limit_exceeded'),
     detail: z.object({
       toolCallCount: z.number().int().min(0),
@@ -148,7 +155,8 @@ export const humanDecisionHintSchema = z.discriminatedUnion('code', [
   z.object({
     code: z.literal('hand_docx_positioned_write_blocked'),
     detail: z.object({
-      targetDescription: z.string().min(1)
+      targetDescription: z.string().min(1),
+      sourcePath: z.string().min(1).optional()
     })
   }),
   z.object({

@@ -100,6 +100,8 @@ stateDiagram-v2
 - hand 正式实现需要先做 approval preflight：遍历本轮 `calls`，收集所有未命中正式 readonly 指令集的 `terminal_run`，生成一个批量审批事件并暂停本轮执行；只要该批次未全部 `approve`，本批命令一条都不执行，并通过 `terminal_approval_blocked` 回到 `brain`。
 - hand 对 `calls` 先执行总长度保护；当前正式实现要求单轮调用数不超过 `HUMAN_HAND_CALL_LIMIT`，超过时直接返回 `hand_call_limit_exceeded`。
 - 对 docx 串行写，hand 需要执行同文件写保护；若同一 `sourcePath` 在一轮内出现多个 docx 写调用，直接返回 `hand_docx_single_file_write_limit_exceeded`，而不是继续落工具。docx 写工具会在结果中返回 `postWriteReadback.regions` 作为写后复核区域，brain 可基于该结果判断是否继续编辑或额外读取。
+- 对命中 docx 定位排版保护的写入，hand 应停止当前串行计划，返回 `hand_docx_positioned_write_blocked` 给 brain，并追加面向 mouth 的事实型 `deliveryGuidance`；该 hint 需要明确这类定位区域按系统设计不会被自动修改，但 brain 仍可继续处理文档中其他可修改的位置。
+- hand 需要维护累计工具预算保护；当累计工具调用次数达到上限的 `60%` 时返回 `hand_tool_limit_near_exhausted`，提醒 brain 尽快收尾；当累计工具调用次数超过上限时返回 `hand_tool_limit_exceeded`，brain 本轮必须直接进入 mouth 收尾，同时 hand 追加一条面向 mouth 的系统级 `deliveryGuidance`，要求最终交付明确说明预算耗尽造成的未完成事项。
 - tool 执行失败时，hand 应优先保留原始校验/运行时错误文本，并通过 `diagnostic.message` 回流给 brain 与历史渲染层；不要把错误再压缩成额外的预设分类。
 
 ### 5.4 `mouth`

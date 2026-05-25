@@ -46,6 +46,7 @@ export const HUMAN_DECISION_HINT_CODES = [
   'terminal_approval_blocked',
   'hand_call_limit_exceeded',
   'hand_docx_single_file_write_limit_exceeded',
+  'hand_tool_limit_near_exhausted',
   'hand_tool_limit_exceeded',
   'hand_tool_result_too_large',
   'hand_docx_positioned_write_blocked',
@@ -55,6 +56,7 @@ export const HUMAN_DECISION_HINT_CODES = [
 export const HUMAN_MAX_ACTIVE_TOOLS = 20
 export const HUMAN_DEFAULT_TOOL_CALL_LIMIT = 40
 export const HUMAN_HAND_CALL_LIMIT = 5
+export const HUMAN_TOOL_LIMIT_NEAR_EXHAUSTED_RATIO = 0.6
 export const DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS = 200_000
 export const CONTEXT_COMPACTION_TRIGGER_RATIO = 0.8
 export const CONTEXT_COMPACTION_TARGET_RATIO = 0.25

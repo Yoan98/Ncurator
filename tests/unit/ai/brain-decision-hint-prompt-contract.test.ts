@@ -74,7 +74,8 @@ describe('ai unit brain decision-hint prompt contract', () => {
           decisionHint: {
             code: 'hand_docx_positioned_write_blocked',
             detail: {
-              targetDescription: '你刚才尝试修改段落的那处位置'
+              targetDescription: '在 report.docx 中，你刚才尝试修改段落的那处位置',
+              sourcePath: 'report.docx'
             }
           }
         }
@@ -84,7 +85,8 @@ describe('ai unit brain decision-hint prompt contract', () => {
     state.execution.pendingDecisionHint = {
       code: 'hand_docx_positioned_write_blocked',
       detail: {
-        targetDescription: '你刚才尝试修改段落的那处位置'
+        targetDescription: '在 report.docx 中，你刚才尝试修改段落的那处位置',
+        sourcePath: 'report.docx'
       }
     }
 
@@ -116,7 +118,9 @@ describe('ai unit brain decision-hint prompt contract', () => {
     expect(taskProgressSection).toContain('cannot safely resolve target after earlier mutations')
     expect(taskProgressSection).not.toContain('刚才尝试修改的 docx 区域命中了定位排版保护')
     expect(correctionHintSection).toContain('刚才尝试修改的 docx 区域命中了定位排版保护')
-    expect(correctionHintSection).toContain('你刚才尝试修改段落的那处位置')
+    expect(correctionHintSection).toContain('按系统设计，这类定位区域不会被自动修改')
+    expect(correctionHintSection).toContain('仍可继续处理文档中其他可修改的位置')
+    expect(correctionHintSection).toContain('在 report.docx 中，你刚才尝试修改段落的那处位置')
   })
 
   it('requires references disclosure when nextAction is mouth', () => {

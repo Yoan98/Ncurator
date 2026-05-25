@@ -46,6 +46,90 @@ const buildHandState = (input: {
 })
 
 describe('ai tool hand backend', () => {
+  it('hand-tool-limit-near-exhausted', async () => {
+    await runBackendCase({
+      caseId: 'hand-tool-limit-near-exhausted',
+      harnessMode: 'tool-real',
+      domain: 'ai',
+      suite: 'tool',
+      groups: ['hand'],
+      description: '验证 hand 在达到工具预算 0.6 阈值后会发出尽快收尾的提示。',
+      fixtures: [],
+      runMode: 'single',
+      execute: async (runtime) => {
+        const ctx = runtime.createAiRunContext({
+          humanRuntimeOverrides: {
+            hardActionLimit: 5
+          }
+        })
+        const cache = createHumanRuntimeCache()
+
+        ensureSkillTools({
+          cache,
+          ctx,
+          runId: runtime.runId,
+          taskId: runtime.taskId,
+          skillId: 'terminal'
+        })
+
+        const handNode = createHandNode({ ctx, cache })
+        const firstState = await handNode(
+          buildHandState({
+            taskId: runtime.taskId,
+            userInput: '第一次只读命令',
+            learnedSkillIds: [],
+            toolName: 'terminal_run',
+            args: {
+              command: 'pwd'
+            }
+          })
+        )
+        const secondState = await handNode({
+          ...buildHandState({
+            taskId: runtime.taskId,
+            userInput: '第二次只读命令',
+            learnedSkillIds: [],
+            toolName: 'terminal_run',
+            args: {
+              command: 'ls'
+            }
+          }),
+          trace: firstState.trace
+        })
+        const thirdState = await handNode({
+          ...buildHandState({
+            taskId: runtime.taskId,
+            userInput: '第三次只读命令',
+            learnedSkillIds: [],
+            toolName: 'terminal_run',
+            args: {
+              command: 'pwd'
+            }
+          }),
+          trace: secondState.trace
+        })
+
+        return {
+          thirdState
+        }
+      },
+      assert: async (result, runtime) => {
+        runtime.assertThat(
+          result.thirdState.execution.pendingDecisionHint?.code === 'hand_tool_limit_near_exhausted' &&
+            result.thirdState.execution.pendingDecisionHint.detail.limit === 5 &&
+            result.thirdState.execution.pendingDecisionHint.detail.toolCallCount === 3,
+          {
+            name: 'tool-limit-near-exhausted-produces-soft-converging-decision-hint',
+            message: '达到工具预算 0.6 阈值后，hand 应写入尽快收尾的软提示。',
+            data: {
+              decisionHint: result.thirdState.execution.pendingDecisionHint
+            }
+          }
+        )
+      }
+    })
+  })
+
   it('hand-tool-limit-and-artifact-merge', async () => {
     await runBackendCase({
       caseId: 'hand-tool-limit-and-artifact-merge',
@@ -155,13 +239,17 @@ describe('ai tool hand backend', () => {
         runtime.assertThat(
           result.secondState.execution.pendingDecisionHint?.code === 'hand_tool_limit_exceeded' &&
             result.secondState.execution.pendingDecisionHint.detail.limit === 1 &&
-            result.secondState.execution.lastToolResults?.[0]?.toolName === 'docx_read_blocks',
+            result.secondState.execution.lastToolResults?.[0]?.toolName === 'docx_read_blocks' &&
+            result.secondState.execution.deliveryGuidanceItems?.some((item) =>
+              item.text.includes('工具调用预算耗尽')
+            ),
           {
             name: 'tool-limit-produces-converging-decision-hint',
-            message: '超过 hardActionLimit 后，hand 应写入收敛型 decisionHint，同时保留当前工具结果。',
+            message: '超过 hardActionLimit 后，hand 应写入强制收尾型 decisionHint、追加交付说明，并保留当前工具结果。',
             data: {
               decisionHint: result.secondState.execution.pendingDecisionHint,
-              lastToolUseResults: result.secondState.execution.lastToolResults
+              lastToolUseResults: result.secondState.execution.lastToolResults,
+              deliveryGuidanceItems: result.secondState.execution.deliveryGuidanceItems
             }
           }
         )
