@@ -7,7 +7,7 @@ import type {
   HumanDecisionHint,
   RuntimeSkillId
 } from '../../types'
-import { renderDecisionHintDetail, summarizeDecisionHint } from '../../prompts/decisionHints'
+import { renderDecisionHintDetail, renderDecisionHintForBrain } from '../../prompts/decisionHints'
 import { getEffectiveLearnedSkillIds } from '../../skills'
 import { getAvailableToolNames } from './runtimeCache'
 
@@ -66,7 +66,7 @@ export const emitDecisionHint = (input: {
     source: input.source,
     code: input.decisionHint.code,
     detail: renderDecisionHintDetail(input.decisionHint),
-    summary: summarizeDecisionHint(input.decisionHint),
+    summary: renderDecisionHintForBrain(input.decisionHint),
     createdAt: Date.now(),
     stage:
       input.source === 'brain'

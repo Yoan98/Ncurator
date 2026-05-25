@@ -1,6 +1,5 @@
 import type { JsonObject, JsonValue } from '../../../../../shared/types'
 import { renderInlineList } from '../../utils/render'
-import { summarizeDecisionHint } from '../prompts/decisionHints'
 import type {
   HumanHistoryToolResult,
   HumanCompactionBlock,

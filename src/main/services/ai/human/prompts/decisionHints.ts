@@ -6,45 +6,6 @@ const renderStringList = (items: readonly string[]): string =>
 
 const asJsonObject = (value: HumanDecisionHint['detail']): JsonObject => ({ ...value })
 
-export const summarizeDecisionHint = (hint: HumanDecisionHint): string => {
-  switch (hint.code) {
-    case 'learning_no_effect':
-      return `learning 本轮没有学到新 skill；requested=${renderStringList(
-        hint.detail.requestedSkillIds
-      )}；duplicate=${renderStringList(hint.detail.duplicateSkillIds)}；unknown=${renderStringList(
-        hint.detail.unknownSkillIds
-      )}。`
-    case 'learning_builtin_skill_requested':
-      return `learning 请求包含 builtin skill；requested=${renderStringList(
-        hint.detail.requestedSkillIds
-      )}；builtin=${renderStringList(hint.detail.builtinSkillIds)}。`
-    case 'learning_tool_budget_exceeded':
-      return `learning 请求会暴露 ${hint.detail.activeToolCount} 个 active tools，超过上限 ${hint.detail.limit}。`
-    case 'hand_plan_invalid':
-      return hint.detail.reason === 'hand_call_limit_exceeded'
-        ? `hand 的 calls 超出单轮调用上限；tools=${renderStringList(
-            hint.detail.offendingToolNames
-          )}。`
-        : `hand 的 docx 写 calls 在同一文件内包含多次写；sourcePaths=${renderStringList(
-            hint.detail.sourcePaths || []
-          )}；tools=${renderStringList(hint.detail.offendingToolNames)}。`
-    case 'hand_approval_blocked':
-      return `hand 的审批批次未全部通过；reason=${hint.detail.reason}；blockedCommands=${renderStringList(
-        hint.detail.blockedCommands
-      )}。`
-    case 'hand_tool_limit_exceeded':
-      return `hand 累计工具调用次数达到 ${hint.detail.toolCallCount}，已超过临时上限 ${hint.detail.limit}。`
-    case 'hand_docx_positioned_write_blocked':
-      return `hand 命中复杂定位排版保护；${hint.detail.targetDescription}不能自动编辑。`
-    case 'hand_docx_batch_write_halted':
-      return `hand 的 docx 批量写已安全停止；已完成 ${String(hint.detail.completedCallCount)}/${String(hint.detail.totalCallCount)} 个写操作，停止原因=${hint.detail.haltReason}。`
-    case 'brain_todolist_incomplete':
-      return `brain 选择 mouth 时 todolist 仍有未完成事项；pending=${renderStringList(
-        hint.detail.pendingItems
-      )}。`
-  }
-}
-
 export const renderDecisionHintForBrain = (hint: HumanDecisionHint): string => {
   switch (hint.code) {
     case 'learning_no_effect':
@@ -82,7 +43,9 @@ export const renderDecisionHintForBrain = (hint: HumanDecisionHint): string => {
         hint.detail.callCount ? `requestedCallCount=${String(hint.detail.callCount)}` : undefined,
         hint.detail.reason === 'hand_call_limit_exceeded'
           ? '请缩减本轮 calls 数量，再重新决策。'
-          : '同一文件一轮只能出现一次 docx 写工具调用。'
+          : hint.detail.reason === 'docx_single_file_write_limit_exceeded'
+            ? '同一文件一轮只能出现一次 docx 写工具调用。'
+            : '请根据当前 reason 调整 calls，再重新决策。'
       ]
         .filter(Boolean)
         .join('\n')
