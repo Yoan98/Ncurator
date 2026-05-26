@@ -195,7 +195,6 @@ export const buildBrainPrompt = (input: {
   </output_contract>
 
   <output_shape>
-  输出 JSON 结构：
 ${outputShapeText}
   </output_shape>
 
