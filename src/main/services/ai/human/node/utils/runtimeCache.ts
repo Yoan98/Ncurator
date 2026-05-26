@@ -12,7 +12,6 @@ export const createHumanRuntimeCache = (): HumanRuntimeCache => ({
 
 export const getAvailableToolNames = (input: {
   learnedSkillIds: RuntimeSkillId[]
-  cache: HumanRuntimeCache
 }): string[] => {
   const toolNames = new Set<string>()
   getEffectiveLearnedSkillIds(input.learnedSkillIds).forEach((skillId) => {

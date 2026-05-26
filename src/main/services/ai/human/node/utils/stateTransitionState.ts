@@ -140,6 +140,7 @@ export const applyBrainDecisionState = (input: {
   thoughtMemory: HumanThought
   decisionHint?: HumanDecisionHint
   createdAt: number
+  overrides?: HumanStateOverrides
 }): HumanState => {
   const references =
     !input.decisionHint && input.thought.nextAction.action === 'mouth'
@@ -148,8 +149,10 @@ export const applyBrainDecisionState = (input: {
 
   return {
     ...input.state,
+    ...input.overrides,
     execution: {
       ...input.state.execution,
+      ...input.overrides?.execution,
       stage: resolveBrainNextStage({
         decisionHint: input.decisionHint,
         thought: input.thought

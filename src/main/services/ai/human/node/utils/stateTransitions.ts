@@ -98,6 +98,7 @@ export const applyBrainDecisionTransition = (input: {
   thought: HumanThoughtDecision
   thoughtMemory: HumanThought
   decisionHint?: HumanDecisionHint
+  overrides?: HumanStateOverrides
 }): HumanState => {
   const decisionHint = resolveBrainDecisionHint({
     state: input.state,
@@ -110,7 +111,8 @@ export const applyBrainDecisionTransition = (input: {
     thought: input.thought,
     thoughtMemory: input.thoughtMemory,
     decisionHint,
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    overrides: input.overrides
   })
 
   emitLatestHumanStepForState({

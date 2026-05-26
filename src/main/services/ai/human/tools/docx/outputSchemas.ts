@@ -1,5 +1,5 @@
 import { z } from 'zod/v4'
-import { toolResourceContextSchema } from '../../schema'
+import { toolResourceContextSchema } from '../../toolSchemas'
 
 const docxResultCodeSchema = z.enum([
   'ok',

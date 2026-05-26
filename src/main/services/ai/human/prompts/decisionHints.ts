@@ -50,6 +50,12 @@ export const renderDecisionHintForBrain = (hint: HumanDecisionHint): string => {
         '这处位置本轮未改动，但仍可继续处理文档中其他可修改的位置。',
         `受影响的位置是：${hint.detail.targetDescription}。`
       ].join('')
+    case 'brain_output_schema_invalid':
+      return [
+        '上一轮 hand 工具调用计划的输出结构不合法，因此本轮没有进入执行。',
+        ...hint.detail.issues.map((issue) => `${issue.path}：${issue.message}`),
+        hint.detail.guidance
+      ].join('\n')
     case 'brain_todolist_incomplete':
       return `上一轮选择了最终交付，但当前仍有未完成事项：${renderStringList(hint.detail.pendingItems)}。`
   }

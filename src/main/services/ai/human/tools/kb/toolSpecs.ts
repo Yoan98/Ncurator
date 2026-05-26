@@ -2,7 +2,7 @@ import type { JsonObject } from '../../../../../../shared/types'
 import { z } from 'zod/v4'
 import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver } from '../utils/toolSpecUtils'
-import { jsonObjectSchema } from '../../schema'
+import { jsonObjectSchema } from '../../toolSchemas'
 
 const KB_SEARCH_EXAMPLE: JsonObject = {
   queryText: 'approval denied terminal artifact requirement',

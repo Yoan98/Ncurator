@@ -1,6 +1,9 @@
 import { z } from 'zod/v4'
-import type { JsonObject, JsonValue } from '../../../../shared/types'
 import { aiArtifactRefSchema } from '../schema'
+import {
+  createHandCallsSchema
+} from './toolCallSchema'
+import { jsonObjectSchema, jsonValueSchema, toolResourceContextSchema } from './toolSchemas'
 import {
   AI_TOOL_FAMILY_IDS,
   BUILTIN_RUNTIME_SKILL_IDS,
@@ -15,21 +18,6 @@ import {
   RUNTIME_SKILL_IDS,
   TOOL_CALL_RESULT_CODES
 } from './constants'
-
-export const jsonObjectSchema: z.ZodType<JsonObject> = z.lazy(() =>
-  z.object({}).catchall(jsonValueSchema)
-)
-
-export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
-  z.union([
-    z.string(),
-    z.number(),
-    z.boolean(),
-    z.null(),
-    z.array(jsonValueSchema),
-    jsonObjectSchema
-  ])
-)
 
 export const runtimeSkillIdSchema = z.enum(RUNTIME_SKILL_IDS)
 export const toolFamilyIdSchema = z.enum(AI_TOOL_FAMILY_IDS)
@@ -63,14 +51,6 @@ export const toolCallParamSchema = z.object({
 
 export const toolCallDiagnosticSchema = z.object({
   message: z.string().min(1)
-})
-
-export const toolResourceContextSchema = z.object({
-  family: z.string().min(1),
-  sourcePath: z.string().min(1).optional(),
-  currentRevisionRef: z.string().min(1).optional(),
-  previousRevisionRef: z.string().min(1).optional(),
-  effectKind: z.string().min(1).optional()
 })
 
 export const toolCallResultSchema = z.object({
@@ -160,6 +140,23 @@ export const humanDecisionHintSchema = z.discriminatedUnion('code', [
     })
   }),
   z.object({
+    code: z.literal('brain_output_schema_invalid'),
+    detail: z.object({
+      area: z.literal('nextAction.calls'),
+      summary: z.string().min(1),
+      issues: z
+        .array(
+          z.object({
+            path: z.string().min(1),
+            message: z.string().min(1)
+          })
+        )
+        .min(1)
+        .max(3),
+      guidance: z.string().min(1)
+    })
+  }),
+  z.object({
     code: z.literal('brain_todolist_incomplete'),
     detail: z.object({
       pendingItems: z.array(z.string().min(1)).min(1)
@@ -197,6 +194,34 @@ export const humanReferenceSchema = z.object({
   kind: z.enum(['internal', 'external']),
   usedFor: z.string().min(1)
 })
+
+export const createBrainNextActionSchema = (toolNames: readonly string[]) =>
+  z.discriminatedUnion('action', [
+    z
+      .object({
+        action: z.literal('learning'),
+        wantLearnSkillIds: z.array(z.string().min(1)).min(1)
+      })
+      .strict(),
+    z
+      .object({
+        action: z.literal('hand'),
+        calls: createHandCallsSchema(toolNames)
+      })
+      .strict(),
+    z
+      .object({
+        action: z.literal('mouth'),
+        references: z.array(humanReferenceSchema).optional()
+      })
+      .strict()
+  ])
+
+export const createHumanThoughtDecisionSchema = (toolNames: readonly string[]) =>
+  z.object({
+    thought: humanThoughtSchema,
+    nextAction: createBrainNextActionSchema(toolNames)
+  })
 
 export const brainNextActionSchema = z.discriminatedUnion('action', [
   z
@@ -263,6 +288,7 @@ export const humanExecutionSchema = z.object({
   status: humanStatusSchema,
   currentThought: humanThoughtDecisionSchema.optional(),
   pendingDecisionHint: humanDecisionHintSchema.optional(),
+  brainSchemaRetryCount: z.number().int().min(0).optional(),
   deliveryGuidanceItems: z.array(deliveryGuidanceItemSchema).optional(),
   lastToolResults: z.array(toolCallResultSchema).optional(),
   lastLearningOutcome: humanLearningOutcomeSchema.optional(),

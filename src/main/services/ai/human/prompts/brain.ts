@@ -19,10 +19,11 @@ import {
   renderBrainOutputSchemaForPrompt,
   renderToolInputSchemaForPrompt
 } from '../tools/schemaPromptRenderer'
-import { humanThoughtDecisionSchema } from '../schema'
+import { createHumanThoughtDecisionSchema } from '../schema'
 import type { HumanState, ToolPromptExample } from '../types'
 import type { HumanToolSpec } from '../tools/types'
 import { renderDecisionHintForBrain } from './decisionHints'
+import { getAvailableToolNames } from '../node/utils/runtimeCache'
 
 const renderToolExample = (example: ToolPromptExample, index: number): string =>
   `${index + 1}. ${example.goal}\n${JSON.stringify(example.args, null, 2)}`
@@ -107,11 +108,12 @@ export const buildBrainPrompt = (input: {
   conversationSummaryText?: string
   recentTurnsText?: string
 }) => {
+  const availableToolNames = getAvailableToolNames({
+    learnedSkillIds: input.state.skills.learnedSkillIds
+  })
   const latestRound = getLastRoundFocus(input.state)
-  const outputShapeText = indentLines(
-    renderBrainOutputSchemaForPrompt(humanThoughtDecisionSchema),
-    1
-  )
+  const thoughtDecisionSchema = createHumanThoughtDecisionSchema(availableToolNames)
+  const outputShapeText = indentLines(renderBrainOutputSchemaForPrompt(thoughtDecisionSchema), 1)
   const system = `
 <system>
   <principles>

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { JsonObject } from '../../../../../../shared/types'
+import type { JsonObject, JsonValue } from '../../../../../../shared/types'
 import {
   HUMAN_DEFAULT_TOOL_CALL_LIMIT,
   HUMAN_HAND_CALL_LIMIT,
@@ -18,11 +18,18 @@ import {
 } from '../../shared/deliveryGuidance'
 import { buildToolCallDisplayText } from '../../shared/toolResultRenderers'
 import { assertExternalLearnedSkillIds } from '../../skills'
+import { getToolSpec } from '../../tools/registry'
 import { analyzeReadonlyTerminalCommandPolicy } from '../../tools/terminal/readonlyCommandPolicy'
+import {
+  createToolCallSchema,
+  formatToolCallSchemaDiagnostic,
+  readParsedSourcePath
+} from '../../toolCallSchema'
 import type { HandCallList, HumanRuntimeCache, HumanState, HumanDecisionHint, ToolCallResult } from '../../types'
 import { deriveHandFollowupSignals, shouldStopSerialHandPlan } from './followupSignals'
 import { executeToolCall } from './toolExecutor'
 import { returnToBrain, returnToBrainAfterTrace, returnToBrainWithDecisionHint } from '../utils/stateTransitions'
+import { getAvailableToolNames } from '../utils/runtimeCache'
 
 const DOCX_SERIAL_WRITE_TOOL_NAMES = new Set([
   'docx_create',
@@ -38,11 +45,13 @@ const DOCX_SERIAL_WRITE_TOOL_NAMES = new Set([
 const isDocxSerialWriteCall = (toolName: string): boolean => DOCX_SERIAL_WRITE_TOOL_NAMES.has(toolName)
 const isTerminalRunCall = (toolName: string): boolean => toolName === 'terminal_run'
 
-const readSourcePathArg = (args: JsonObject): string | undefined =>
-  typeof args.sourcePath === 'string' && args.sourcePath.trim().length > 0 ? args.sourcePath : undefined
-
 const readTerminalCommandArg = (args: JsonObject): string | undefined =>
   typeof args.command === 'string' && args.command.trim().length > 0 ? args.command.trim() : undefined
+
+type ParsedHandCall = {
+  toolName: string
+  args: JsonObject
+}
 
 const createHandCallLimitDecisionHint = (input: {
   offendingToolNames: string[]
@@ -90,11 +99,13 @@ const buildToolLimitNearExhaustedDecisionHint = (
 const buildToolLimitDeliveryGuidance = (toolCallCount: number, limit: number): string =>
   `本轮累计工具调用次数已经超过上限，当前为 ${String(toolCallCount)}，上限为 ${String(limit)}。后续没有继续执行更多工具。最终答复中需要明确说明：已经完成了什么、哪些事项尚未继续完成，以及停止原因是工具调用预算耗尽。`
 
-const findSameFileMultiWriteDecisionHint = (calls: HandCallList): HumanDecisionHint | undefined => {
-  const mutatingCallsBySourcePath = new Map<string, HandCallList>()
+const findSameFileMultiWriteDecisionHint = (
+  calls: ParsedHandCall[]
+): HumanDecisionHint | undefined => {
+  const mutatingCallsBySourcePath = new Map<string, ParsedHandCall[]>()
   calls.forEach((call) => {
     if (!isDocxSerialWriteCall(call.toolName)) return
-    const sourcePath = readSourcePathArg(call.args)
+    const sourcePath = readParsedSourcePath(call.args)
     if (!sourcePath) return
     const existingCalls = mutatingCallsBySourcePath.get(sourcePath) || []
     mutatingCallsBySourcePath.set(sourcePath, [...existingCalls, call])
@@ -111,7 +122,7 @@ const findSameFileMultiWriteDecisionHint = (calls: HandCallList): HumanDecisionH
   })
 }
 
-const validateCalls = (calls: HandCallList): HumanDecisionHint | undefined => {
+const validateCalls = (calls: ParsedHandCall[]): HumanDecisionHint | undefined => {
   const sameFileMultiWriteDecisionHint = findSameFileMultiWriteDecisionHint(calls)
   if (sameFileMultiWriteDecisionHint) {
     return sameFileMultiWriteDecisionHint
@@ -129,7 +140,7 @@ const validateCalls = (calls: HandCallList): HumanDecisionHint | undefined => {
 const collectApprovalBatchItems = (input: {
   runId: string
   taskId: string
-  calls: HandCallList
+  calls: ParsedHandCall[]
 }): Array<{
   itemId: string
   order: number
@@ -200,7 +211,7 @@ const buildApprovalBlockedDecisionHint = (input: {
 }
 
 const executeHandCalls = async (input: {
-  calls: HandCallList
+  calls: ParsedHandCall[]
   ctx: AiRunContext
   cache: HumanRuntimeCache
   taskId: string
@@ -226,6 +237,67 @@ const executeHandCalls = async (input: {
   return results
 }
 
+const buildSchemaInvalidResult = (input: {
+  toolName: string
+  error: unknown
+  callIndex: number
+}): ToolCallResult => {
+  const diagnostic = formatToolCallSchemaDiagnostic({
+    error: input.error,
+    pathPrefix: `calls[${String(input.callIndex)}].args`
+  })
+
+  return {
+    toolName: input.toolName,
+    ok: false,
+    code: 'invalid_input',
+    data: {
+      ok: false,
+      code: 'invalid_input',
+      error: diagnostic.message
+    },
+    diagnostic: {
+      message: diagnostic.message
+    }
+  }
+}
+
+const parseHandCalls = (input: {
+  calls: HandCallList
+  learnedSkillIds: HumanState['skills']['learnedSkillIds']
+}): { ok: true; calls: ParsedHandCall[] } | { ok: false; result: ToolCallResult } => {
+  const toolCallSchema = createToolCallSchema(
+    getAvailableToolNames({
+      learnedSkillIds: input.learnedSkillIds
+    })
+  )
+
+  const parsedCalls: ParsedHandCall[] = []
+  for (const [index, call] of input.calls.entries()) {
+    const parsed = toolCallSchema.safeParse(call)
+    if (!parsed.success) {
+      return {
+        ok: false,
+        result: buildSchemaInvalidResult({
+          toolName: call.toolName,
+          error: parsed.error,
+          callIndex: index
+        })
+      }
+    }
+
+    parsedCalls.push({
+      toolName: parsed.data.toolName,
+      args: parsed.data.args as JsonObject
+    })
+  }
+
+  return {
+    ok: true,
+    calls: parsedCalls
+  }
+}
+
 export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCache }) => {
   return async (state: HumanState): Promise<HumanState> => {
     input.ctx.checkCancelled()
@@ -239,12 +311,50 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
     }
 
     const { calls } = state.execution.currentThought.nextAction
+    const parsedCallsResult = parseHandCalls({
+      calls,
+      learnedSkillIds: state.skills.learnedSkillIds
+    })
+    if (!parsedCallsResult.ok) {
+      const results = [parsedCallsResult.result]
+      return returnToBrainAfterTrace({
+        ctx: input.ctx,
+        cache: input.cache,
+        state,
+        source: 'hand',
+        traceItems: results.map((result) => ({
+          action: 'call_tool',
+          publicNarrative: buildToolCallDisplayText(result),
+          resultStatus: 'error',
+          toolName: result.toolName,
+          summary: buildToolCallDisplayText(result)
+        })),
+        stage: 'human_hand',
+        overrides: {
+          execution: {
+            lastToolResults: results
+          },
+          memory: {
+            ...state.memory,
+            taskRun: appendDecisionRound({
+              state,
+              execution: buildHandExecution({
+                calls,
+                toolResults: results
+              })
+            })
+          }
+        }
+      })
+    }
+
+    const parsedCalls = parsedCallsResult.calls
     const approvalItems = collectApprovalBatchItems({
       runId: input.ctx.runId,
       taskId: state.task.taskId,
-      calls
+      calls: parsedCalls
     })
-    const invalidPlanDecisionHint = validateCalls(calls)
+    const invalidPlanDecisionHint = validateCalls(parsedCalls)
     if (invalidPlanDecisionHint) {
       return returnToBrainWithDecisionHint({
         ctx: input.ctx,
@@ -308,7 +418,7 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
 
     const learnedSkillIds = state.skills.learnedSkillIds
     const results = await executeHandCalls({
-      calls,
+      calls: parsedCalls,
       ctx: input.ctx,
       cache: input.cache,
       taskId: state.task.taskId,

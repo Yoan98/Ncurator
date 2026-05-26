@@ -42,9 +42,9 @@ import {
   toolCallDiagnosticSchema,
   toolCallParamSchema,
   toolCallResultSchema,
-  toolResourceContextSchema,
   handCallsSchema
 } from './schema'
+import { toolResourceContextSchema } from './toolSchemas'
 
 export type RuntimeSkillId = (typeof RUNTIME_SKILL_IDS)[number]
 export type HumanStage = (typeof HUMAN_STAGES)[number]
