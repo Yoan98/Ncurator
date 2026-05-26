@@ -218,13 +218,13 @@ const renderLearningExecution = (
   }
 ): string =>
   [
-    '- 类型：learning',
-    `- 学习：${renderQuotedNames(record.execution.learningOutcome.requestedSkillIds)}`,
-    `- 学习成功：${renderQuotedNames(record.execution.learningOutcome.loadedSkillIds)}`,
-    `- 已跳过重复：${renderQuotedNames(record.execution.learningOutcome.skippedDuplicateSkillIds)}`,
-    `- 未识别：${renderQuotedNames(record.execution.learningOutcome.skippedUnknownSkillIds)}`,
-    `- 当前 active tool 数：${String(record.execution.learningOutcome.activeToolCount)}`
-  ].join('\n')
+    `- 类型：learning；学习：${renderQuotedNames(record.execution.learningOutcome.requestedSkillIds)}；学习成功：${renderQuotedNames(record.execution.learningOutcome.loadedSkillIds)}`,
+    record.execution.learningOutcome.skippedUnknownSkillIds.length > 0
+      ? `- 未识别：${renderQuotedNames(record.execution.learningOutcome.skippedUnknownSkillIds)}`
+      : undefined
+  ]
+    .filter(Boolean)
+    .join('\n')
 
 const renderHandExecution = (
   record: HumanRoundRecord & {
