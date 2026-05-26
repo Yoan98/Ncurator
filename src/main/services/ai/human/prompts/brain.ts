@@ -108,10 +108,10 @@ export const buildBrainPrompt = (input: {
   conversationSummaryText?: string
   recentTurnsText?: string
 }) => {
+  const latestRound = getLastRoundFocus(input.state)
   const availableToolNames = getAvailableToolNames({
     learnedSkillIds: input.state.skills.learnedSkillIds
   })
-  const latestRound = getLastRoundFocus(input.state)
   const thoughtDecisionSchema = createHumanThoughtDecisionSchema(availableToolNames)
   const outputShapeText = indentLines(renderBrainOutputSchemaForPrompt(thoughtDecisionSchema), 1)
   const system = `
@@ -160,7 +160,7 @@ export const buildBrainPrompt = (input: {
     nextAction为hand时：
     - calls 必须是完整合法的可执行计划，系统会按顺序串行执行。
     - calls[*].toolName：必须严格使用当前工具说明里的精确名称。
-    - calls[*].args：必须是对象，字段名、必填参数和参数层级都必须与工具说明一致。
+    - calls[*].args：必须是对象；其中真实字段、必填参数和参数层级，必须严格遵守 skill_catalog 中对应工具的输入结构与示例。
     - calls 最大只允许规划${HUMAN_HAND_CALL_LIMIT}个。
     - 禁止在一轮 hand 中出现对同一个文件多次写工具调用。
 

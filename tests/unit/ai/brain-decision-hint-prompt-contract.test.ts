@@ -140,6 +140,25 @@ describe('ai unit brain decision-hint prompt contract', () => {
     expect(prompt).toContain('支撑了最终交付的哪些地方')
   })
 
+  it('renders prompt-friendly output shape for hand calls while keeping args generic', () => {
+    const state = createInitialHumanState({
+      taskId: 'task-shape',
+      userInput: '继续处理'
+    })
+
+    const prompt = buildBrainPrompt({
+      state,
+      ctx: createFakeCtx()
+    }).system
+
+    const outputShapeSection = prompt.match(/<output_shape>([\s\S]*?)<\/output_shape>/)?.[1] || ''
+
+    expect(outputShapeSection).toContain('toolName: string')
+    expect(outputShapeSection).toContain('args: object')
+    expect(outputShapeSection).not.toContain('toolName: "terminal_run"')
+    expect(outputShapeSection).not.toContain('toolName: "docx_create"')
+  })
+
   it('renders conversation_history, round_history, and task_progress under the new contract', () => {
     const state = createInitialHumanState({
       taskId: 'task-3',

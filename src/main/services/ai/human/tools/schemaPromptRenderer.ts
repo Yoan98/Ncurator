@@ -87,6 +87,9 @@ const renderArray = (node: JsonSchemaNode, context: RenderContext, level: number
 }
 
 const renderSchemaType = (node: JsonSchemaNode, context: RenderContext, level: number): string => {
+  const displayType = typeof node['x-display-type'] === 'string' ? String(node['x-display-type']) : ''
+  if (displayType) return displayType
+
   if (typeof node.$ref === 'string' && node.$ref.startsWith('#/$defs/')) {
     return node.$ref.slice('#/$defs/'.length)
   }
@@ -145,20 +148,103 @@ const renderSchemaType = (node: JsonSchemaNode, context: RenderContext, level: n
   return 'unknown'
 }
 
-const buildSchemaRenderOutput = (schema: z.ZodType): { rootSchema: string; definitionBlocks: string[] } => {
+const cloneJsonSchemaNode = (node: JsonSchemaNode): JsonSchemaNode => {
+  const output: JsonSchemaNode = {}
+  Object.entries(node).forEach(([key, value]) => {
+    if (Array.isArray(value)) {
+      output[key] = value.map((item) => (isJsonSchemaNode(item) ? cloneJsonSchemaNode(item) : item))
+      return
+    }
+    output[key] = isJsonSchemaNode(value) ? cloneJsonSchemaNode(value) : value
+  })
+  return output
+}
+
+const compressBrainHandCallDisplay = (node: JsonSchemaNode): JsonSchemaNode => {
+  const cloned = cloneJsonSchemaNode(node)
+
+  if (Array.isArray(cloned.anyOf)) {
+    cloned.anyOf = cloned.anyOf.map((item) =>
+      isJsonSchemaNode(item) ? compressBrainHandCallDisplay(item) : item
+    )
+  }
+  if (Array.isArray(cloned.oneOf)) {
+    cloned.oneOf = cloned.oneOf.map((item) =>
+      isJsonSchemaNode(item) ? compressBrainHandCallDisplay(item) : item
+    )
+  }
+  if (Array.isArray(cloned.allOf)) {
+    cloned.allOf = cloned.allOf.map((item) =>
+      isJsonSchemaNode(item) ? compressBrainHandCallDisplay(item) : item
+    )
+  }
+
+  if (isJsonSchemaNode(cloned.properties)) {
+    Object.entries(cloned.properties).forEach(([key, value]) => {
+      if (isJsonSchemaNode(value)) {
+        cloned.properties = cloned.properties as JsonSchemaNode
+        ;(cloned.properties as JsonSchemaNode)[key] = compressBrainHandCallDisplay(value)
+      }
+    })
+  }
+
+  if (isJsonSchemaNode(cloned.items)) {
+    cloned.items = compressBrainHandCallDisplay(cloned.items)
+  } else if (Array.isArray(cloned.items)) {
+    cloned.items = cloned.items.map((item) =>
+      isJsonSchemaNode(item) ? compressBrainHandCallDisplay(item) : item
+    )
+  }
+
+  const properties = isJsonSchemaNode(cloned.properties) ? cloned.properties : undefined
+  const actionProperty = properties && isJsonSchemaNode(properties.action) ? properties.action : undefined
+  const callsProperty = properties && isJsonSchemaNode(properties.calls) ? properties.calls : undefined
+  if (actionProperty?.const === 'hand' && callsProperty) {
+    ;(cloned.properties as JsonSchemaNode).calls = {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          toolName: {
+            type: 'string'
+          },
+          args: {
+            'x-display-type': 'object'
+          }
+        },
+        required: ['toolName', 'args']
+      }
+    }
+  }
+
+  return cloned
+}
+
+const buildSchemaRenderOutput = (
+  schema: z.ZodType,
+  options?: { brainPromptFriendly?: boolean }
+): { rootSchema: string; definitionBlocks: string[] } => {
   const document = toJSONSchema(schema) as JsonSchemaNode
-  const defs = isJsonSchemaNode(document.$defs) ? (document.$defs as Record<string, JsonSchemaNode>) : {}
+  const normalizedDocument = options?.brainPromptFriendly
+    ? compressBrainHandCallDisplay(document)
+    : document
+  const defs = isJsonSchemaNode(normalizedDocument.$defs)
+    ? (normalizedDocument.$defs as Record<string, JsonSchemaNode>)
+    : {}
   const context: RenderContext = { defs }
   return {
-    rootSchema: renderSchemaType(document, context, 0),
+    rootSchema: renderSchemaType(normalizedDocument, context, 0),
     definitionBlocks: Object.entries(defs).map(
       ([name, definition]) => `${name} = ${renderSchemaType(definition, context, 0)}`
     )
   }
 }
 
-export const renderSchemaShape = (schema: z.ZodType): string => {
-  const { rootSchema, definitionBlocks } = buildSchemaRenderOutput(schema)
+export const renderSchemaShape = (
+  schema: z.ZodType,
+  options?: { brainPromptFriendly?: boolean }
+): string => {
+  const { rootSchema, definitionBlocks } = buildSchemaRenderOutput(schema, options)
 
   return [
     indentBlock(rootSchema, 1),
@@ -175,4 +261,4 @@ export const renderToolOutputSchemaForPrompt = (schema: z.ZodType): string =>
   renderSchemaShape(schema)
 
 export const renderBrainOutputSchemaForPrompt = (schema: z.ZodType): string =>
-  renderSchemaShape(schema)
+  renderSchemaShape(schema, { brainPromptFriendly: true })
