@@ -3,6 +3,50 @@ import { deriveHandFollowupSignals } from '../../../src/main/services/ai/human/n
 import { DOCX_POSITIONED_LAYOUT_PROTECTION_MESSAGE } from '../../../src/main/services/ai/human/tools/docx/constants'
 
 describe('ai unit hand followup signals', () => {
+  it('passes through hand_tool_result_too_large using the shared decision hint contract', () => {
+    const signals = deriveHandFollowupSignals({
+      calls: [
+        {
+          toolName: 'docx_outline',
+          args: {
+            sourcePath: 'oversized.docx',
+            ranges: [{ type: 'percent', fromPercent: 0, toPercent: 100 }]
+          }
+        }
+      ],
+      results: [
+        {
+          toolName: 'docx_outline',
+          ok: false,
+          code: 'result_too_large',
+          data: {
+            ok: false,
+            code: 'result_too_large',
+            error: 'docx result too large',
+            decisionHint: {
+              code: 'hand_tool_result_too_large',
+              detail: {
+                toolName: 'docx_outline',
+                estimatedTokens: 6049,
+                limit: 6000
+              }
+            }
+          }
+        }
+      ]
+    })
+
+    expect(signals.decisionHint).toEqual({
+      code: 'hand_tool_result_too_large',
+      detail: {
+        toolName: 'docx_outline',
+        estimatedTokens: 6049,
+        limit: 6000
+      }
+    })
+    expect(signals.deliveryGuidance).toBeUndefined()
+  })
+
   it('derives positioned write decision hint and delivery guidance from protected docx writes', () => {
     const signals = deriveHandFollowupSignals({
       calls: [

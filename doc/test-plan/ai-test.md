@@ -744,6 +744,16 @@
 - Oracle：事件流中真实出现 source 为 `learning` 的 `decision_hint`，并且在它之后仍发生真实 terminal 工具调用，任务最终完成。
 - Not：不验证 live 模型是否会自然产生这类重复决策。
 
+##### `decision-hint-contract-and-recovery`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 `decision_hint` 这一区域的正式 contract 稳定，且 `learning / brain / hand` 的关键来源分支都能在真实 graph 中产出 hint 并继续恢复推进。
+- Why：`decision_hint` 是 `human` graph 的统一纠偏机制；一旦某个 hint 的结构或渲染链断裂，原本可恢复的分支就会在真实任务中升级成致命异常。
+- How：在 mock-llm 下仍走真实 `human` graph、真实 learning node、真实 hand node 和真实工具；通过 scripted brain 依次触发 `learning_no_effect`、`brain_output_schema_invalid`、`hand_docx_positioned_write_blocked`、`hand_tool_result_too_large` 与 `hand_tool_limit_exceeded`，最后进入 `mouth` 收尾。
+- Oracle：事件流中真实出现上述关键 `decision_hint`，且它们都带有稳定 detail contract；`hand_tool_result_too_large` 必须来自真实 `docx_outline(result_too_large)`；在 hint 之后 graph 仍能继续回到 `brain` 并最终完成任务。
+- Not：不要求一条 case 穷举所有业务工具组合；重点是守住 `decision_hint` 的共享 contract 和关键来源回退链。
+
 ##### `tool-failure-recovery`
 
 - 测试类型：`backend`

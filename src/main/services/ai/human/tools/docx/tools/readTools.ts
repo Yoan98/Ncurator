@@ -320,9 +320,11 @@ const buildResultTooLargeFailure = (input: {
     warnings: [],
     decisionHint: {
       code: 'hand_tool_result_too_large',
-      toolName: input.toolName,
-      estimatedTokens: input.estimatedTokens,
-      limit: getDocxAiResultTokenLimit(input.runtime)
+      detail: {
+        toolName: input.toolName,
+        estimatedTokens: input.estimatedTokens,
+        limit: getDocxAiResultTokenLimit(input.runtime)
+      }
     } as JsonObject,
     resourceContext: input.runtime.buildResourceContext({
       sourcePath: input.sourcePath,
