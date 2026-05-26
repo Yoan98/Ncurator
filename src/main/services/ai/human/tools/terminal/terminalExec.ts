@@ -16,7 +16,6 @@ export const runTerminalCommand = async (
       cwd,
       stdout: '',
       stderr: 'empty command',
-      combinedOutput: 'empty command',
       exitCode: 1,
       signal: null,
       timedOut: false,
@@ -43,7 +42,6 @@ export const runTerminalCommand = async (
 
     let stdout = ''
     let stderr = ''
-    let combinedOutput = ''
     let timedOut = false
     let settled = false
 
@@ -53,12 +51,10 @@ export const runTerminalCommand = async (
 
       if (target === 'stdout') stdout += value
       else stderr += value
-      combinedOutput += value
 
-      if (combinedOutput.length > captureHardLimitChars) {
+      if (stdout.length + stderr.length > captureHardLimitChars) {
         stdout = stdout.slice(0, captureHardLimitChars)
         stderr = stderr.slice(0, Math.max(0, captureHardLimitChars - stdout.length))
-        combinedOutput = combinedOutput.slice(0, captureHardLimitChars)
         if (!settled) {
           child.kill('SIGTERM')
         }
@@ -88,7 +84,6 @@ export const runTerminalCommand = async (
         command,
         cwd,
         stdout,
-        combinedOutput,
         stderr: `${stderr}\n${err.message}`.trim(),
         exitCode: 1,
         signal: null,
@@ -102,7 +97,6 @@ export const runTerminalCommand = async (
         cwd,
         stdout,
         stderr,
-        combinedOutput,
         exitCode,
         signal,
         timedOut

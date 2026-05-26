@@ -340,7 +340,7 @@ describe('ai unit human memory history', () => {
                         data: {
                           ok: true,
                           code: 'ok',
-                          combinedOutput: `/workspace/round-${round}`
+                          stdout: `/workspace/round-${round}`
                         }
                       }
                     ]

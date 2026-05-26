@@ -102,7 +102,6 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
               data: {
                 ok: true,
                 code: 'ok',
-                combinedOutput: '发布说明显示：审批人字段为空。',
                 stdout: '发布说明显示：审批人字段为空。',
                 stderr: '',
                 command: 'cat release-notes.txt',
@@ -155,7 +154,6 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
               data: {
                 ok: false,
                 code: 'failed',
-                combinedOutput: '发布失败：审批未完成，系统禁止继续发布。',
                 stdout: '',
                 stderr: '发布失败：审批未完成，系统禁止继续发布。',
                 command: 'release --publish',
@@ -211,7 +209,6 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
               data: {
                 ok: true,
                 code: 'ok',
-                combinedOutput: '审批记录显示：负责人 Bob 待确认；未审批不可发布。',
                 stdout: '审批记录显示：负责人 Bob 待确认；未审批不可发布。',
                 stderr: '',
                 command: 'cat approval-log.txt',
@@ -264,7 +261,6 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
               data: {
                 ok: true,
                 code: 'ok',
-                combinedOutput: '上线窗口仍待确认，需先解决窗口冲突。',
                 stdout: '上线窗口仍待确认，需先解决窗口冲突。',
                 stderr: '',
                 command: 'cat schedule-note.txt',
@@ -317,7 +313,6 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
               data: {
                 ok: true,
                 code: 'ok',
-                combinedOutput: 'latest',
                 stdout: 'latest',
                 stderr: '',
                 command: 'echo latest',

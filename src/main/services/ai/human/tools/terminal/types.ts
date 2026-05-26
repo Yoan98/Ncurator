@@ -14,7 +14,6 @@ export type TerminalCommandResult = {
   cwd: string
   stdout: string
   stderr: string
-  combinedOutput: string
   exitCode: number | null
   signal: NodeJS.Signals | null
   timedOut: boolean

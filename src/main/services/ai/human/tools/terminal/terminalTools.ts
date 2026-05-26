@@ -150,6 +150,11 @@ const buildResultTooLargeDecisionHint = (input: {
   }
 })
 
+const buildTerminalTokenEstimateSource = (input: { stdout: string; stderr: string }): string => {
+  if (input.stdout && input.stderr) return `${input.stdout}\n${input.stderr}`
+  return input.stdout || input.stderr
+}
+
 export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput) => {
   const state: TerminalCapabilityToolsRuntimeState = {
     stepIndex: 0
@@ -344,7 +349,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               || DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS,
             ratio: input.aiResultTokenLimitRatio
           })
-          const estimatedTokens = estimateToolResultTokens(result.combinedOutput)
+          const estimatedTokens = estimateToolResultTokens(buildTerminalTokenEstimateSource(result))
           const tooLarge = !stepError && estimatedTokens > aiResultTokenLimit
 
           const payload = {
@@ -355,7 +360,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             cwd,
             stdout: result.stdout,
             stderr: result.stderr,
-            combinedOutput: result.combinedOutput,
             exitCode: result.exitCode,
             timedOut: result.timedOut,
             artifacts
@@ -366,7 +370,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             cwd: string
             stdout: string
             stderr: string
-            combinedOutput: string
             exitCode: number | null
             timedOut: boolean
             artifacts: typeof artifacts

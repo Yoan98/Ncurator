@@ -8,7 +8,6 @@ import { filterEventsByType } from '../testHelpers'
 type TerminalRunCommandResult = {
   ok: boolean
   code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required' | 'result_too_large'
-  combinedOutput: string
   stdout: string
 }
 
@@ -86,8 +85,8 @@ describe('ai tool terminal backend', () => {
         )
 
         runtime.assertThat(
-          result.list.combinedOutput.includes('daily-note.txt') &&
-            result.recursiveFind.combinedOutput.includes('daily-note.txt') &&
+          result.list.stdout.includes('daily-note.txt') &&
+            result.recursiveFind.stdout.includes('daily-note.txt') &&
             result.echoReadOnly.stdout.includes('terminal readonly check') &&
             result.read.stdout.includes('alpha') &&
             result.read.stdout.includes('gamma'),

@@ -19,195 +19,180 @@ const renderQuotedNames = (items: readonly string[]): string =>
     }
   )
 
+type NestedWhitelistConfig = {
+  [key: string]: true | NestedWhitelistConfig
+}
+
+const DOCX_BLOCK_WHITELIST: NestedWhitelistConfig = {
+  blockId: true,
+  type: true,
+  blockIndex: true,
+  text: true
+}
+
+const DOCX_WRITE_RESULT_WHITELIST: NestedWhitelistConfig = {
+  ok: true,
+  code: true,
+  sourcePath: true,
+  previousRevisionRef: true,
+  currentRevisionRef: true,
+  summary: true,
+  created: true,
+  postWriteReadback: {
+    regions: {
+      fromBlockIndex: true,
+      toBlockIndex: true,
+      blocks: DOCX_BLOCK_WHITELIST
+    }
+  }
+}
+
+const FALLBACK_TOOL_HISTORY_WHITELIST: NestedWhitelistConfig = {
+  ok: true,
+  code: true,
+  summary: true,
+  message: true,
+  error: true
+}
+
+const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
+  terminal_run: {
+    ok: true,
+    code: true,
+    command: true,
+    cwd: true,
+    stdout: true,
+    stderr: true,
+    exitCode: true,
+    timedOut: true,
+    estimatedTokens: true,
+    limit: true,
+    error: true
+  },
+  kb_search: {
+    ok: true,
+    code: true,
+    items: {
+      document_name: true,
+      text: true
+    }
+  },
+  kb_list_documents: {
+    ok: true,
+    code: true,
+    items: {
+      name: true
+    },
+    total: true
+  },
+  docx_outline: {
+    ok: true,
+    code: true,
+    sourcePath: true,
+    currentRevisionRef: true,
+    totalBlockCount: true,
+    blocks: DOCX_BLOCK_WHITELIST
+  },
+  docx_search: {
+    ok: true,
+    code: true,
+    sourcePath: true,
+    currentRevisionRef: true,
+    mode: true,
+    effectiveQuery: true,
+    returnedMatchCount: true,
+    totalMatchCount: true,
+    matches: {
+      blockId: true,
+      type: true,
+      blockIndex: true,
+      matchedText: true,
+      text: true
+    }
+  },
+  docx_read_blocks: {
+    ok: true,
+    code: true,
+    sourcePath: true,
+    currentRevisionRef: true,
+    fromBlockIndex: true,
+    toBlockIndex: true,
+    blocks: DOCX_BLOCK_WHITELIST
+  },
+  docx_history: {
+    ok: true,
+    code: true,
+    sourcePath: true,
+    currentRevisionRef: true,
+    revisions: {
+      revisionRef: true,
+      parentRevisionRef: true,
+      summary: true,
+      isCurrent: true
+    }
+  },
+  docx_create: DOCX_WRITE_RESULT_WHITELIST,
+  docx_paragraph_edit: DOCX_WRITE_RESULT_WHITELIST,
+  docx_heading_edit: DOCX_WRITE_RESULT_WHITELIST,
+  docx_table_edit: DOCX_WRITE_RESULT_WHITELIST,
+  docx_text_edit: DOCX_WRITE_RESULT_WHITELIST,
+  docx_text_style_edit: DOCX_WRITE_RESULT_WHITELIST,
+  docx_delete: DOCX_WRITE_RESULT_WHITELIST,
+  docx_rollback: {
+    ok: true,
+    code: true,
+    sourcePath: true,
+    previousRevisionRef: true,
+    currentRevisionRef: true,
+    summary: true
+  }
+}
+
 const renderJsonValue = (value: JsonValue | JsonObject | undefined): string =>
-  value === undefined ? 'none' : JSON.stringify(value, null, 2)
+  value === undefined ? 'none' : JSON.stringify(value)
 
-const readStringField = (obj: JsonObject, key: string): string | undefined => {
-  const value = obj[key]
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined
-}
+const filterValueByWhitelist = (
+  value: JsonValue | undefined,
+  whitelist: NestedWhitelistConfig
+): JsonValue | undefined => {
+  if (Array.isArray(value)) {
+    return value.map((item) => {
+      if (!isJsonObject(item)) return item
+      return filterValueByWhitelist(item, whitelist) ?? {}
+    })
+  }
 
-const readNumberField = (obj: JsonObject, key: string): number | undefined => {
-  const value = obj[key]
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
-}
-
-const setJsonFieldIfDefined = (obj: JsonObject, key: string, value: JsonValue | undefined): void => {
-  if (value !== undefined) obj[key] = value
-}
-
-const pickObjectFields = (
-  obj: JsonObject,
-  keys: string[]
-): JsonObject =>
-  keys.reduce<JsonObject>((acc, key) => {
-    const value = obj[key]
-    if (value !== undefined) acc[key] = value
-    return acc
-  }, {})
-
-const reduceDocxBlocks = (value: JsonValue | undefined): JsonValue | undefined => {
-  if (!Array.isArray(value)) return undefined
-  return value.map((item) => {
-    if (!isJsonObject(item)) return item
-    const reduced = pickObjectFields(item, [
-      'blockId',
-      'type',
-      'blockIndex',
-      'text',
-      'summary'
-    ])
-
-    if (Array.isArray(item.cells)) {
-      reduced.cells = item.cells.map((cell) => {
-        if (!isJsonObject(cell)) return cell
-        const reducedCell = pickObjectFields(cell, ['blockId', 'row', 'col'])
-        if (Array.isArray(cell.paragraphs)) {
-          reducedCell.paragraphs = cell.paragraphs.map((paragraph) => {
-            if (!isJsonObject(paragraph)) return paragraph
-            return pickObjectFields(paragraph, ['blockId', 'type', 'blockIndex', 'text'])
-          })
-        }
-        return reducedCell
-      })
-    }
-
-    if (Array.isArray(item.paragraphs)) {
-      reduced.paragraphs = item.paragraphs.map((paragraph) => {
-        if (!isJsonObject(paragraph)) return paragraph
-        return pickObjectFields(paragraph, ['blockId', 'type', 'blockIndex', 'text'])
-      })
-    }
-
-    return reduced
-  })
-}
-
-const reduceDocxSearchMatches = (value: JsonValue | undefined): JsonValue | undefined => {
-  if (!Array.isArray(value)) return undefined
-  return value.map((item) => {
-    if (!isJsonObject(item)) return item
-    return pickObjectFields(item, ['blockId', 'type', 'blockIndex', 'matchedText', 'text'])
-  })
-}
-
-const reduceDocxRevisions = (value: JsonValue | undefined): JsonValue | undefined => {
-  if (!Array.isArray(value)) return undefined
-  return value.map((item) => {
-    if (!isJsonObject(item)) return item
-    return pickObjectFields(item, ['revisionRef', 'parentRevisionRef', 'summary', 'isCurrent'])
-  })
-}
-
-const reduceDocxPostWriteReadback = (value: JsonValue | undefined): JsonValue | undefined => {
   if (!isJsonObject(value)) return undefined
-  const reducedRegions = Array.isArray(value.regions)
-    ? value.regions.flatMap((region) => {
-        if (!isJsonObject(region)) return region
-        const fromBlockIndex = readNumberField(region, 'fromBlockIndex')
-        const toBlockIndex = readNumberField(region, 'toBlockIndex')
-        if (fromBlockIndex === undefined || toBlockIndex === undefined) return []
-        return {
-          fromBlockIndex,
-          toBlockIndex,
-          ...(reduceDocxBlocks(region.blocks) ? { blocks: reduceDocxBlocks(region.blocks) } : {})
-        }
-      })
-    : undefined
-  return {
-    ...(reducedRegions ? { regions: reducedRegions } : {})
-  }
+
+  const reduced: JsonObject = {}
+  Object.entries(whitelist).forEach(([key, rule]) => {
+    const fieldValue = value[key]
+    if (fieldValue === undefined) return
+    if (rule === true) {
+      reduced[key] = fieldValue
+      return
+    }
+    const nestedValue = filterValueByWhitelist(fieldValue, rule)
+    if (nestedValue !== undefined) reduced[key] = nestedValue
+  })
+  return reduced
 }
 
-const buildBrainToolReturnValue = (result: HumanHistoryToolResult): JsonValue => {
-  const base: JsonObject = {
-    ok: result.ok,
-    code: result.code
-  }
-
+const buildToolHistoryReturnValue = (result: HumanHistoryToolResult): JsonValue => {
   if (!isJsonObject(result.data)) {
-    if (result.data !== undefined) base.data = result.data
-    return base
+    return {
+      ok: result.ok,
+      code: result.code,
+      ...(result.data !== undefined ? { data: result.data } : {})
+    }
   }
 
-  switch (result.toolName) {
-    case 'docx_create':
-    case 'docx_paragraph_edit':
-    case 'docx_heading_edit':
-    case 'docx_table_edit':
-    case 'docx_text_edit':
-    case 'docx_text_style_edit':
-    case 'docx_delete':
-      return {
-        ...base,
-        ...pickObjectFields(result.data, ['sourcePath', 'previousRevisionRef', 'currentRevisionRef', 'summary', 'created']),
-        ...(reduceDocxPostWriteReadback(result.data.postWriteReadback)
-          ? { postWriteReadback: reduceDocxPostWriteReadback(result.data.postWriteReadback) }
-          : {})
-      }
-    case 'docx_read_blocks':
-      return {
-        ...base,
-        ...pickObjectFields(result.data, ['fromBlockIndex', 'toBlockIndex']),
-        ...(reduceDocxBlocks(result.data.blocks) ? { blocks: reduceDocxBlocks(result.data.blocks) } : {})
-      }
-    case 'docx_search':
-      return {
-        ...base,
-        ...pickObjectFields(result.data, [
-          'mode',
-          'effectiveQuery',
-          'returnedMatchCount',
-          'totalMatchCount'
-        ]),
-        ...(reduceDocxSearchMatches(result.data.matches)
-          ? { matches: reduceDocxSearchMatches(result.data.matches) }
-          : {})
-      }
-    case 'docx_outline':
-      return {
-        ...base,
-        ...pickObjectFields(result.data, ['blocks']),
-        ...(reduceDocxBlocks(result.data.blocks) ? { blocks: reduceDocxBlocks(result.data.blocks) } : {})
-      }
-    case 'docx_history':
-      return {
-        ...base,
-        ...(reduceDocxRevisions(result.data.revisions)
-          ? { revisions: reduceDocxRevisions(result.data.revisions) }
-          : {})
-      }
-    default:
-      return {
-        ...base,
-        ...pickObjectFields(result.data, [
-          'summary',
-          'message',
-          'error',
-          'sourcePath',
-          'currentRevisionRef',
-          'created',
-          'cwd',
-          'command',
-          'stdout',
-          'stderr',
-          'combinedOutput',
-          'exitCode',
-          'timedOut',
-          'estimatedTokens',
-          'limit',
-          'decisionHint',
-          'returnedMatchCount',
-          'totalMatchCount',
-          'fromBlockIndex',
-          'toBlockIndex',
-          'items',
-          'total',
-          'hits',
-          'rounds'
-        ])
-      }
+  const config = TOOL_HISTORY_WHITELIST_BY_NAME[result.toolName] || FALLBACK_TOOL_HISTORY_WHITELIST
+  if (!TOOL_HISTORY_WHITELIST_BY_NAME[result.toolName]) {
+    console.warn(`[historyRenderers] missing tool history whitelist config for ${result.toolName}`)
   }
+
+  return filterValueByWhitelist(result.data, config) ?? {}
 }
 
 const buildBrainToolAttemptText = (input: {
@@ -216,10 +201,9 @@ const buildBrainToolAttemptText = (input: {
 }): string =>
   [
     `- \`${input.result.toolName}\``,
-    '  调用参数：',
-    renderJsonValue(input.call?.args),
-    '  返回：',
-    renderJsonValue(buildBrainToolReturnValue(input.result)),
+    `  args=${renderJsonValue(input.call?.args)}`,
+    '  result:',
+    `  ${renderJsonValue(buildToolHistoryReturnValue(input.result))}`,
     input.result.diagnosticText ? `  诊断：\n${input.result.diagnosticText}` : undefined
   ]
     .filter(Boolean)
