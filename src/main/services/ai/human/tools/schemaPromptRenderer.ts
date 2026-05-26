@@ -148,6 +148,121 @@ const renderSchemaType = (node: JsonSchemaNode, context: RenderContext, level: n
   return 'unknown'
 }
 
+const renderObjectCompact = (node: JsonSchemaNode, context: RenderContext): string => {
+  const properties = isJsonSchemaNode(node.properties) ? node.properties : {}
+  const required = new Set(
+    Array.isArray(node.required) ? node.required.map((item) => String(item)) : []
+  )
+  const propertyEntries = Object.entries(properties).flatMap(([key, value]) =>
+    isJsonSchemaNode(value) ? ([[key, value]] as Array<[string, JsonSchemaNode]>) : []
+  )
+
+  if (propertyEntries.length === 0) {
+    if (isJsonSchemaNode(node.additionalProperties)) {
+      return `{ [key: string]: ${renderSchemaTypeCompact(node.additionalProperties, context)} }`
+    }
+    return '{}'
+  }
+
+  return `{ ${propertyEntries
+    .map(([key, value]) => {
+      const optional = required.has(key) ? '' : '?'
+      return `${key}${optional}: ${renderSchemaTypeCompact(value, context)}`
+    })
+    .join(', ')} }`
+}
+
+const renderArrayCompact = (node: JsonSchemaNode, context: RenderContext): string => {
+  if (Array.isArray(node.items)) {
+    const tupleItems = node.items
+      .filter(isJsonSchemaNode)
+      .map((item) => renderSchemaTypeCompact(item, context))
+    return `[${tupleItems.join(', ')}]`
+  }
+
+  const itemSchema = isJsonSchemaNode(node.items) ? node.items : undefined
+  return `Array<${itemSchema ? renderSchemaTypeCompact(itemSchema, context) : 'unknown'}>`
+}
+
+const renderSchemaTypeCompact = (node: JsonSchemaNode, context: RenderContext): string => {
+  const displayType = typeof node['x-display-type'] === 'string' ? String(node['x-display-type']) : ''
+  if (displayType) return displayType
+
+  if (typeof node.$ref === 'string' && node.$ref.startsWith('#/$defs/')) {
+    return node.$ref.slice('#/$defs/'.length)
+  }
+
+  if (Object.prototype.hasOwnProperty.call(node, 'const')) {
+    return formatLiteral(node.const)
+  }
+
+  if (Array.isArray(node.enum) && node.enum.length > 0) {
+    return node.enum.map((value) => formatLiteral(value)).join(' | ')
+  }
+
+  const anyOf = asJsonSchemaNodeArray(node.anyOf)
+  if (anyOf.length > 0) {
+    return anyOf.map((item) => renderSchemaTypeCompact(item, context)).join(' | ')
+  }
+
+  const oneOf = asJsonSchemaNodeArray(node.oneOf)
+  if (oneOf.length > 0) {
+    return oneOf.map((item) => renderSchemaTypeCompact(item, context)).join(' | ')
+  }
+
+  const typeValue = node.type
+  if (Array.isArray(typeValue) && typeValue.length > 0) {
+    return typeValue.map((item) => formatLiteral(item)).join(' | ')
+  }
+
+  if (typeValue === 'object' || isJsonSchemaNode(node.properties)) {
+    return renderObjectCompact(node, context)
+  }
+
+  if (typeValue === 'array') {
+    return renderArrayCompact(node, context)
+  }
+
+  if (typeValue === 'string' || typeValue === 'number' || typeValue === 'integer') {
+    return String(typeValue)
+  }
+
+  if (typeValue === 'boolean') return 'boolean'
+  if (typeValue === 'null') return 'null'
+
+  const allOf = asJsonSchemaNodeArray(node.allOf)
+  if (allOf.length > 0) {
+    return allOf.map((item) => renderSchemaTypeCompact(item, context)).join(' | ')
+  }
+
+  const description = typeof node.description === 'string' ? node.description.trim() : ''
+  if (description) {
+    return description
+  }
+
+  return 'unknown'
+}
+
+const buildCompactSchemaRenderOutput = (
+  schema: z.ZodType,
+  options?: { brainPromptFriendly?: boolean }
+): { rootSchema: string; definitionBlocks: string[] } => {
+  const document = toJSONSchema(schema) as JsonSchemaNode
+  const normalizedDocument = options?.brainPromptFriendly
+    ? compressBrainHandCallDisplay(document)
+    : document
+  const defs = isJsonSchemaNode(normalizedDocument.$defs)
+    ? (normalizedDocument.$defs as Record<string, JsonSchemaNode>)
+    : {}
+  const context: RenderContext = { defs }
+  return {
+    rootSchema: renderSchemaTypeCompact(normalizedDocument, context),
+    definitionBlocks: Object.entries(defs).map(
+      ([name, definition]) => `${name} = ${renderSchemaTypeCompact(definition, context)}`
+    )
+  }
+}
+
 const cloneJsonSchemaNode = (node: JsonSchemaNode): JsonSchemaNode => {
   const output: JsonSchemaNode = {}
   Object.entries(node).forEach(([key, value]) => {
@@ -254,11 +369,29 @@ export const renderSchemaShape = (
   ].join('\n')
 }
 
-export const renderToolInputSchemaForPrompt = (schema: z.ZodType): string =>
-  renderSchemaShape(schema)
+export const renderToolInputSchemaForPrompt = (
+  schema: z.ZodType,
+  options?: { compact?: boolean }
+): string => {
+  if (!options?.compact) return renderSchemaShape(schema)
+
+  const { rootSchema, definitionBlocks } = buildCompactSchemaRenderOutput(schema)
+  return [rootSchema, ...(definitionBlocks.length > 0 ? [`补充定义：${definitionBlocks.join('；')}`] : [])].join('\n')
+}
 
 export const renderToolOutputSchemaForPrompt = (schema: z.ZodType): string =>
   renderSchemaShape(schema)
 
-export const renderBrainOutputSchemaForPrompt = (schema: z.ZodType): string =>
-  renderSchemaShape(schema, { brainPromptFriendly: true })
+export const renderBrainOutputSchemaForPrompt = (
+  schema: z.ZodType,
+  options?: { compact?: boolean }
+): string => {
+  if (!options?.compact) {
+    return renderSchemaShape(schema, { brainPromptFriendly: true })
+  }
+
+  const { rootSchema, definitionBlocks } = buildCompactSchemaRenderOutput(schema, {
+    brainPromptFriendly: true
+  })
+  return [rootSchema, ...(definitionBlocks.length > 0 ? [`补充定义：${definitionBlocks.join('；')}`] : [])].join('\n')
+}

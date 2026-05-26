@@ -26,7 +26,7 @@ import { renderDecisionHintForBrain } from './decisionHints'
 import { getAvailableToolNames } from '../node/utils/runtimeCache'
 
 const renderToolExample = (example: ToolPromptExample, index: number): string =>
-  `${index + 1}. ${example.goal}\n${JSON.stringify(example.args, null, 2)}`
+  `${index + 1}. ${example.goal}\n${JSON.stringify(example.args)}`
 
 const indentLines = (value: string, level: number): string =>
   value
@@ -40,7 +40,10 @@ const renderSkillCatalogToolSpecLine = (input: {
   spec: HumanToolSpec
   skillLabels: string[]
 }): string => {
-  const inputSchemaText = indentLines(renderToolInputSchemaForPrompt(input.spec.inputSchema), 2)
+  const inputSchemaText = indentLines(
+    renderToolInputSchemaForPrompt(input.spec.inputSchema, { compact: true }),
+    2
+  )
   const examples = indentLines(input.spec.promptSpec.examples.map(renderToolExample).join('\n'), 2)
   const ownerSkills = input.skillLabels.join('、') || 'none'
 
@@ -113,7 +116,10 @@ export const buildBrainPrompt = (input: {
     learnedSkillIds: input.state.skills.learnedSkillIds
   })
   const thoughtDecisionSchema = createHumanThoughtDecisionSchema(availableToolNames)
-  const outputShapeText = indentLines(renderBrainOutputSchemaForPrompt(thoughtDecisionSchema), 1)
+  const outputShapeText = indentLines(
+    renderBrainOutputSchemaForPrompt(thoughtDecisionSchema, { compact: true }),
+    1
+  )
   const system = `
 <system>
   <principles>
@@ -200,111 +206,106 @@ ${outputShapeText}
 
   <examples>
     <example_learning>
+${JSON.stringify({
+  thought: {
+    next: '当前缺少读取 docx 的能力说明，先补齐读取能力再继续判断资料内容。',
+    todolist: [
       {
-        "thought": {
-          "next": "当前缺少读取 docx 的能力说明，先补齐读取能力再继续判断资料内容。",
-          "todolist": [
-            {
-              "item": "补齐读取 docx 的能力说明",
-              "status": "todo"
-            },
-            {
-              "item": "检查是否已经满足用户诉求并能进入最终交付",
-              "status": "todo"
-            }
-          ],
-          "progressionSummary": "
-            -当前任务的用户诉求是关于审批驳回时是否保留原文件，但缺少读取 docx 的能力说明，无法判断资料内容。
-            -每个todolist项的推进理解：
-              1.补齐读取 docx 的能力说明：
-              - 已经尝试过什么：
-              当前没有明确的工具调用计划，无法判断是否满足用户诉求。
-              - 形成了什么结论：
-              缺少读取 docx 的能力说明。
-              - 证据是什么：
-              当前工具目录里没有可用的读取 docx 的工具，无法形成明确的工具调用计划。
-              2.检查是否已经满足用户诉求并能进入最终交付：
-              - 已经尝试过什么：
-              当前没有明确的工具调用计划，无法判断是否满足用户诉求。
-              - 形成了什么结论：
-              无法判断是否满足用户诉求。
-              - 证据是什么：
-              当前工具目录里没有可用的读取 docx 的工具，无法形成明确的工具调用计划。
-           "
-          "
-        },
-        "nextAction": {
-          "action": "learning",
-          "wantLearnSkillIds": ["docx-read"]
-        }
+        item: '补齐读取 docx 的能力说明',
+        status: 'todo'
+      },
+      {
+        item: '检查是否已经满足用户诉求并能进入最终交付',
+        status: 'todo'
       }
+    ],
+    progressionSummary: `-当前任务的用户诉求是关于审批驳回时是否保留原文件，但缺少读取 docx 的能力说明，无法判断资料内容。
+-每个todolist项的推进理解：
+  1.补齐读取 docx 的能力说明：
+  - 已经尝试过什么：
+  当前没有明确的工具调用计划，无法判断是否满足用户诉求。
+  - 形成了什么结论：
+  缺少读取 docx 的能力说明。
+  - 证据是什么：
+  当前工具目录里没有可用的读取 docx 的工具，无法形成明确的工具调用计划。
+  2.检查是否已经满足用户诉求并能进入最终交付：
+  - 已经尝试过什么：
+  当前没有明确的工具调用计划，无法判断是否满足用户诉求。
+  - 形成了什么结论：
+  无法判断是否满足用户诉求。
+  - 证据是什么：
+  当前工具目录里没有可用的读取 docx 的工具，无法形成明确的工具调用计划。`
+  },
+  nextAction: {
+    action: 'learning',
+    wantLearnSkillIds: ['docx-read']
+  }
+})}
     </example_learning>
 
     <example_tool_plan>
+${JSON.stringify({
+  thought: {
+    next: '当前缺少工作区文件事实，先读取当前目录建立资料范围。'
+  },
+  nextAction: {
+    action: 'hand',
+    calls: [
       {
-        "thought": {
-          "next": "当前缺少工作区文件事实，先读取当前目录建立资料范围。"
-        },
-        "nextAction": {
-          "action": "hand",
-          "calls": [
-            {
-              "toolName": "terminal_run",
-              "args": {
-                "command": "pwd"
-              }
-            }
-          ]
+        toolName: 'terminal_run',
+        args: {
+          command: 'pwd'
         }
       }
+    ]
+  }
+})}
     </example_tool_plan>
 
     <example_delivery>
+${JSON.stringify({
+  thought: {
+    next: '审批驳回是否保留原文件已经确认，当前证据足够进入最终交付。',
+    todolist: [
       {
-        "thought": {
-          "next": "审批驳回是否保留原文件已经确认，当前证据足够进入最终交付。",
-          "todolist": [
-            {
-              "item": "确认审批驳回时是否保留原文件",
-              "status": "done"
-            },
-            {
-              "item": "检查是否已经满足用户诉求并能进入最终交付",
-              "status": "done"
-            }
-          ],
-          "progressionSummary": "
-            -当前任务的用户诉求是关于审批驳回时是否保留原文件，已经确认审批驳回时会保留原文件，当前证据足够进入最终交付。
-            -每个todolist项的推进理解：
-              1.确认审批驳回时是否保留原文件：
-              - 已经尝试过什么：
-              查看了审批制度说明.docx文件的相关内容。
-              - 形成了什么结论：
-              审批驳回时会保留原文件。
-              - 证据是什么：
-              审批制度说明.docx文件中明确说明了审批驳回时会保留原文件。
-
-              2.检查是否已经满足用户诉求并能进入最终交付：
-              - 已经尝试过什么：
-              根据审批制度说明.docx文件的内容，判断了审批驳回时是否保留原文件。
-              - 形成了什么结论：
-              审批驳回时会保留原文件，因此满足用户诉求。
-              - 证据是什么：
-              审批制度说明.docx文件中明确说明了审批驳回时会保留原文件。
-          "
-        },
-        "nextAction": {
-          "action": "mouth",
-          "references": [
-            {
-              "label": "审批制度说明.docx",
-              "path": "/workspace/审批制度说明.docx",
-              "kind": "internal",
-              "usedFor": "用于支撑最终答复中“审批驳回时保留原文件”的结论"
-            }
-          ]
-        }
+        item: '确认审批驳回时是否保留原文件',
+        status: 'done'
+      },
+      {
+        item: '检查是否已经满足用户诉求并能进入最终交付',
+        status: 'done'
       }
+    ],
+    progressionSummary: `-当前任务的用户诉求是关于审批驳回时是否保留原文件，已经确认审批驳回时会保留原文件，当前证据足够进入最终交付。
+-每个todolist项的推进理解：
+  1.确认审批驳回时是否保留原文件：
+  - 已经尝试过什么：
+  查看了审批制度说明.docx文件的相关内容。
+  - 形成了什么结论：
+  审批驳回时会保留原文件。
+  - 证据是什么：
+  审批制度说明.docx文件中明确说明了审批驳回时会保留原文件。
+
+  2.检查是否已经满足用户诉求并能进入最终交付：
+  - 已经尝试过什么：
+  根据审批制度说明.docx文件的内容，判断了审批驳回时是否保留原文件。
+  - 形成了什么结论：
+  审批驳回时会保留原文件，因此满足用户诉求。
+  - 证据是什么：
+  审批制度说明.docx文件中明确说明了审批驳回时会保留原文件。`
+  },
+  nextAction: {
+    action: 'mouth',
+    references: [
+      {
+        label: '审批制度说明.docx',
+        path: '/workspace/审批制度说明.docx',
+        kind: 'internal',
+        usedFor: '用于支撑最终答复中“审批驳回时保留原文件”的结论'
+      }
+    ]
+  }
+})}
     </example_delivery>
   </examples>
 </system>

@@ -155,8 +155,10 @@ describe('ai unit brain decision-hint prompt contract', () => {
 
     expect(outputShapeSection).toContain('toolName: string')
     expect(outputShapeSection).toContain('args: object')
+    expect(outputShapeSection).toContain('{ thought: { next: string')
     expect(outputShapeSection).not.toContain('toolName: "terminal_run"')
     expect(outputShapeSection).not.toContain('toolName: "docx_create"')
+    expect(outputShapeSection).not.toContain('\n      thought: {')
   })
 
   it('renders conversation_history, round_history, and task_progress under the new contract', () => {
@@ -203,5 +205,41 @@ describe('ai unit brain decision-hint prompt contract', () => {
     expect(prompt.user).not.toContain('<thought>')
     expect(prompt.user).not.toContain('当前与下一步：')
     expect(prompt.user).not.toContain('这段不应作为 thought 区块正文出现')
+  })
+
+  it('renders compact json examples and compact tool input schema in brain prompt', () => {
+    const state = createInitialHumanState({
+      taskId: 'task-4',
+      userInput: '继续处理资料'
+    })
+
+    const prompt = buildBrainPrompt({
+      state,
+      ctx: createFakeCtx()
+    })
+
+    const learningExampleSection =
+      prompt.system.match(/<example_learning>([\s\S]*?)<\/example_learning>/)?.[1] || ''
+    const toolPlanExampleSection =
+      prompt.system.match(/<example_tool_plan>([\s\S]*?)<\/example_tool_plan>/)?.[1] || ''
+    const deliveryExampleSection =
+      prompt.system.match(/<example_delivery>([\s\S]*?)<\/example_delivery>/)?.[1] || ''
+
+    expect(learningExampleSection).toContain(
+      '{"thought":{"next":"当前缺少读取 docx 的能力说明，先补齐读取能力再继续判断资料内容。","todolist":[{"item":"补齐读取 docx 的能力说明","status":"todo"},{"item":"检查是否已经满足用户诉求并能进入最终交付","status":"todo"}],"progressionSummary":"-当前任务的用户诉求是关于审批驳回时是否保留原文件，但缺少读取 docx 的能力说明，无法判断资料内容。\\n-每个todolist项的推进理解：'
+    )
+    expect(toolPlanExampleSection).toContain(
+      '{"thought":{"next":"当前缺少工作区文件事实，先读取当前目录建立资料范围。"},"nextAction":{"action":"hand","calls":[{"toolName":"terminal_run","args":{"command":"pwd"}}]}}'
+    )
+    expect(deliveryExampleSection).toContain(
+      '{"thought":{"next":"审批驳回是否保留原文件已经确认，当前证据足够进入最终交付。","todolist":[{"item":"确认审批驳回时是否保留原文件","status":"done"},{"item":"检查是否已经满足用户诉求并能进入最终交付","status":"done"}],"progressionSummary":"-当前任务的用户诉求是关于审批驳回时是否保留原文件，已经确认审批驳回时会保留原文件，当前证据足够进入最终交付。\\n-每个todolist项的推进理解：'
+    )
+    expect(prompt.user).toContain('- 输入结构：\n    { command: string, cwd?: string }')
+    expect(prompt.user).toContain('{"command":"ls 工作","cwd":"."}')
+    expect(prompt.user).toContain(
+      '- 输入结构：\n    { queryText: string, strategy?: "auto" | "semantic" | "keyword", limit?: integer, sourceType?: "all" | "file" | "web", documentIds?: Array<string> }'
+    )
+    expect(prompt.user).not.toContain('{\n        command: string\n        cwd?: string\n      }')
+    expect(prompt.user).not.toContain('{\n      "command": "ls 工作"')
   })
 })
