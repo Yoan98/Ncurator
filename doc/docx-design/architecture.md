@@ -80,5 +80,4 @@ flowchart TD
 
 ## 6. 文档边界
 
-- 实现约束见 `/Users/test/work-space/NCurator-Desktop/doc/docx-design/implementation-spec.md`
-- 数据结构与状态流转见 `/Users/test/work-space/NCurator-Desktop/doc/docx-design/data-definition-and-flow.md`
+- 设计边界、核心数据与关键规则见 `/Users/test/work-space/NCurator-Desktop/doc/docx-design/design-detail.md`

@@ -3,19 +3,13 @@
 ## 1. 文档引用
 ### 1.1 AI相关
 - `doc/ai-design/architecture.md`：涉及 AI 整体架构、模块关系或主流程时阅读。
-- `doc/ai-design/implementation-spec.md`：涉及 AI 实现规则、运行约束或执行边界时阅读。
-- `doc/ai-design/data-definition-and-flow.md`：涉及 AI 数据结构、状态流转或产物关系时阅读。
+- `doc/ai-design/design-detail.md`：涉及 AI 设计边界、职责划分、核心数据、关键 contract 或关键流程时阅读。
 - `doc/ai-design/human-skill-design.md`：涉及 human skill 体系、能力边界或工具使用范围时阅读。
 - `doc/ai-design/prompt-design.md`：涉及 prompt 设计、AI-facing 文案或工具描述方式时阅读。
-- 涉及 AI 决策提示、工具结果体积限制或 terminal step 事件结构时，优先阅读 `doc/ai-design/implementation-spec.md` 与 `doc/ai-design/data-definition-and-flow.md`。
-- 涉及 terminal 批量审批预检、审批批次事件、审批阻断 decision hint、底部审批卡片，或 hand 串行 `calls` 执行约束时，优先阅读 `doc/ai-design/implementation-spec.md`、`doc/ai-design/data-definition-and-flow.md` 与 `doc/prd/workbench.md`。
-- 涉及 decision hint contract、tool result diagnostic 回流、history 中 diagnostic 的保留方式，优先阅读 `doc/ai-design/implementation-spec.md` 与 `doc/ai-design/data-definition-and-flow.md`。
-- 涉及 tool result 外层 contract、history 持久化结构、render 白名单、`工具/参数/返回` 展示格式时，优先阅读 `doc/ai-design/data-definition-and-flow.md` 与 `doc/ai-design/implementation-spec.md`。
 
 ### 1.2 docx相关
 - `doc/docx-design/architecture.md`：涉及 docx 整体架构、模块关系或主流程时阅读。
-- `doc/docx-design/implementation-spec.md`：涉及 docx 实现规则、运行约束或执行边界时阅读。
-- `doc/docx-design/data-definition-and-flow.md`：涉及 docx 数据结构、状态流转或产物关系时阅读。
+- `doc/docx-design/design-detail.md`：涉及 docx 设计边界、核心对象、关键流程、三视图关系或数据结构时阅读。
 
 ### 1.3 项目整体相关
 - `doc/architecture.md`：涉及项目整体架构或技术栈时阅读。
@@ -56,6 +50,7 @@
 ### 文档相关
 
 - 文档入口或文档变更时，需同步更新`AGENTS.md`
+- `AGENTS.md` 的“文档引用”部分仅作为文档索引使用，每个文档只能出现一次，且每条只用一句话说明什么时候需要读，新增内容必须合并到已有条目，不得重复追加同一文档
 - 编写文档引用相关时，只需要描述什么时候需要读该文档就足够，不要添加很多细节
 - 只有当功能代码发生变动、对应测试用例文档明确要求对齐 `doc/prd/**`，或者 `doc/prd/**` 本身发生变更时，才需要对齐代码实现与 `doc/prd/**` 是否一致
 - 仅修改测试用例实现、断言方式、runner 使用、日志读取方式或其他不改变功能行为的内容时，不要求对齐 `doc/prd/**`

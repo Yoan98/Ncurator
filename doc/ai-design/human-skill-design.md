@@ -5,8 +5,7 @@
 ## 1. 文档定位
 
 - 当需要判断什么能力应该被建模为 `skill` 时，阅读本文。
-- 当需要判断 `brain / learning / hand` 各自负责什么时，阅读 `implementation-spec.md`。
-- 当需要确认 `learnedSkillIds`、`skill_catalog`、`lastLearningOutcome` 等字段契约时，阅读 `data-definition-and-flow.md`。
+- 当需要判断 `brain / learning / hand` 各自负责什么，或确认相关字段契约时，阅读 `design-detail.md`。
 
 ## 2. 设计目标
 
