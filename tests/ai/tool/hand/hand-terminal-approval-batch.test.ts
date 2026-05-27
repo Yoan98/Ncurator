@@ -117,8 +117,8 @@ describe('ai tool hand backend', () => {
             blockedHint.detail.allowedCommands.includes('cp allowed.txt allowed-copy.txt') &&
             Array.isArray(blockedHint?.detail?.blockedCommands) &&
             blockedHint.detail.blockedCommands.includes('mkdir blocked-dir') &&
-            Array.isArray(blockedHint?.detail?.guidance) &&
-            blockedHint.detail.guidance.some(
+            Array.isArray(blockedHint?.detail?.notes) &&
+            blockedHint.detail.notes.some(
               (item) =>
                 item.command === 'mkdir blocked-dir' &&
                 item.message === '先不要创建目录，先解释风险并给我备选方案'

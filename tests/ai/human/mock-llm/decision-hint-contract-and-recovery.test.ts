@@ -198,9 +198,16 @@ describe('ai human mock-llm backend', () => {
             event.detail?.toolCallCount === 4 &&
             event.detail?.limit === 3
         )
-        const largeDocxFailure = toolResults.find(
-          (event) => event.toolName === 'docx_outline' && event.result?.code === 'result_too_large'
-        )
+        const largeDocxFailure = toolResults.find((event) => {
+          if (event.toolName !== 'docx_outline') return false
+          const data = event.result?.data
+          return Boolean(
+            data &&
+            typeof data === 'object' &&
+            !Array.isArray(data) &&
+            'decisionHint' in data
+          )
+        })
         const largeDocxDecisionHint = largeDocxFailure?.result?.data?.decisionHint
         const hasRecoveryAfterTooLarge = humanSteps.some(
           (event) =>
