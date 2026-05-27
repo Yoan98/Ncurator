@@ -15,8 +15,8 @@ export const renderDecisionHintForBrain = (hint: HumanDecisionHint): string => {
         '上一轮 terminal 审批没有全部通过，因此相关命令本轮没有执行。',
         `已允许的命令有：${renderStringList(hint.detail.allowedCommands)}。`,
         `未执行的命令有：${renderStringList(hint.detail.blockedCommands)}。`,
-        hint.detail.guidance.length > 0
-          ? `用户补充说明的命令有：${hint.detail.guidance.map((item) => `${item.command}（${item.message}）`).join('、')}。`
+        hint.detail.notes.length > 0
+          ? `用户补充说明的命令有：${hint.detail.notes.map((item) => `${item.command}（${item.message}）`).join('、')}。`
           : undefined
       ]
         .filter(Boolean)
@@ -53,8 +53,28 @@ export const renderDecisionHintForBrain = (hint: HumanDecisionHint): string => {
     case 'brain_output_schema_invalid':
       return [
         '上一轮 hand 工具调用计划的输出结构不合法，因此本轮没有进入执行。',
-        ...hint.detail.issues.map((issue) => `${issue.path}：${issue.message}`),
-        hint.detail.guidance
+        ...hint.detail.issues.map((issue) => `${issue.path}：${issue.message}`)
+      ].join('\n')
+    case 'hand_call_invalid':
+      return [
+        '上一轮 hand 工具调用计划中存在不合法调用，因此本轮没有进入执行。',
+        ...hint.detail.invalidCalls.map(
+          (item) => `calls[${String(item.callIndex)}] 的工具 \`${item.toolName}\`：${item.message}`
+        )
+      ].join('\n')
+    case 'hand_workspace_boundary_blocked':
+      return [
+        '上一轮 hand 工具调用命中了工作区边界保护，因此相关调用没有执行。',
+        ...hint.detail.blockedCalls.map(
+          (item) => `calls[${String(item.callIndex)}] 的工具 \`${item.toolName}\`：${item.message}`
+        )
+      ].join('\n')
+    case 'hand_tool_runtime_failed':
+      return [
+        '上一轮 hand 工具调用执行失败，需要根据失败信息调整后续方案。',
+        ...hint.detail.failedCalls.map(
+          (item) => `calls[${String(item.callIndex)}] 的工具 \`${item.toolName}\`：${item.message}`
+        )
       ].join('\n')
     case 'brain_todolist_incomplete':
       return `上一轮选择了最终交付，但当前仍有未完成事项：${renderStringList(hint.detail.pendingItems)}。`

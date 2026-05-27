@@ -912,7 +912,6 @@ type AiRunEventPayload =
       source: DecisionHintSource
       code: string
       detail?: JsonObject
-      summary: string
       createdAt: number
     }
   | {

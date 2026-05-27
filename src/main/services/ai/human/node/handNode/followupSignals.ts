@@ -1,6 +1,7 @@
 import type { JsonObject } from '../../../../../../shared/types'
 import type { HandCallList, HumanDecisionHint, ToolCallResult } from '../../types'
 import { isDocxPositionedLayoutProtectionMessage } from '../../tools/docx/constants'
+import { deriveGroupedHandFailureHints } from './decisionHints'
 
 const DOCX_WRITE_TOOL_NAMES = new Set([
   'docx_create',
@@ -86,6 +87,8 @@ export const deriveHandFollowupSignals = (input: {
   decisionHint?: HumanDecisionHint
   deliveryGuidance?: string
 } => {
+  const groupedFailureHints = deriveGroupedHandFailureHints(input)
+
   for (const [index, result] of input.results.entries()) {
     const toolResultHint = result.data && typeof result.data === 'object' && !Array.isArray(result.data)
       ? (result.data as { decisionHint?: HumanDecisionHint }).decisionHint
@@ -106,7 +109,12 @@ export const deriveHandFollowupSignals = (input: {
     })
   }
 
-  return {}
+  return {
+    decisionHint:
+      groupedFailureHints.workspaceBoundaryHint
+      || groupedFailureHints.callInvalidHint
+      || groupedFailureHints.toolRuntimeFailedHint
+  }
 }
 
 export const shouldStopSerialHandPlan = (input: {

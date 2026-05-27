@@ -95,10 +95,7 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
         decisionHint: {
           code: 'brain_output_schema_invalid',
           detail: {
-            area: 'nextAction.calls',
-            summary: diagnostic.summary,
-            issues: diagnostic.issues,
-            guidance: diagnostic.guidance
+            issues: diagnostic.issues
           }
         },
         overrides: {

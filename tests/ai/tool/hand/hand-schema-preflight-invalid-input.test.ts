@@ -69,13 +69,14 @@ describe('ai tool hand backend', () => {
       assert: async (result, runtime) => {
         const toolResult = result.state.execution.lastToolResults?.[0]
         runtime.assertThat(
-          toolResult?.code === 'invalid_input' &&
+          toolResult?.ok === false &&
             typeof toolResult.diagnostic?.message === 'string' &&
             toolResult.diagnostic.message.includes('calls[0].args') &&
-            !result.state.execution.pendingDecisionHint,
+            result.state.execution.pendingDecisionHint?.code === 'hand_call_invalid' &&
+            result.state.execution.pendingDecisionHint.detail.invalidCalls[0]?.callIndex === 0,
           {
             name: 'hand-schema-preflight-invalid-input',
-            message: 'hand preflight schema 失败时应返回 invalid_input，并保留具体 schema diagnostic。',
+            message: 'hand preflight schema 失败时应返回 invalid_input、保留具体 schema diagnostic，并提升为 hand_call_invalid。',
             data: {
               toolResult,
               pendingDecisionHint: result.state.execution.pendingDecisionHint

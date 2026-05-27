@@ -84,7 +84,7 @@ export const humanDecisionHintSchema = z.discriminatedUnion('code', [
     detail: z.object({
       allowedCommands: z.array(z.string().min(1)),
       blockedCommands: z.array(z.string().min(1)),
-      guidance: z.array(
+      notes: z.array(
         z.object({
           command: z.string().min(1),
           message: z.string().min(1)
@@ -139,8 +139,6 @@ export const humanDecisionHintSchema = z.discriminatedUnion('code', [
   z.object({
     code: z.literal('brain_output_schema_invalid'),
     detail: z.object({
-      area: z.literal('nextAction.calls'),
-      summary: z.string().min(1),
       issues: z
         .array(
           z.object({
@@ -149,14 +147,55 @@ export const humanDecisionHintSchema = z.discriminatedUnion('code', [
           })
         )
         .min(1)
-        .max(3),
-      guidance: z.string().min(1)
+        .max(3)
     })
   }),
   z.object({
     code: z.literal('brain_todolist_incomplete'),
     detail: z.object({
       pendingItems: z.array(z.string().min(1)).min(1)
+    })
+  }),
+  z.object({
+    code: z.literal('hand_call_invalid'),
+    detail: z.object({
+      invalidCalls: z
+        .array(
+          z.object({
+            callIndex: z.number().int().min(0),
+            toolName: z.string().min(1),
+            message: z.string().min(1)
+          })
+        )
+        .min(1)
+    })
+  }),
+  z.object({
+    code: z.literal('hand_workspace_boundary_blocked'),
+    detail: z.object({
+      blockedCalls: z
+        .array(
+          z.object({
+            callIndex: z.number().int().min(0),
+            toolName: z.string().min(1),
+            message: z.string().min(1)
+          })
+        )
+        .min(1)
+    })
+  }),
+  z.object({
+    code: z.literal('hand_tool_runtime_failed'),
+    detail: z.object({
+      failedCalls: z
+        .array(
+          z.object({
+            callIndex: z.number().int().min(0),
+            toolName: z.string().min(1),
+            message: z.string().min(1)
+          })
+        )
+        .min(1)
     })
   })
 ])

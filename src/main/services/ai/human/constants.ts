@@ -42,7 +42,10 @@ export const HUMAN_DECISION_HINT_CODES = [
   'hand_tool_result_too_large',
   'hand_docx_positioned_write_blocked',
   'brain_output_schema_invalid',
-  'brain_todolist_incomplete'
+  'brain_todolist_incomplete',
+  'hand_call_invalid',
+  'hand_workspace_boundary_blocked',
+  'hand_tool_runtime_failed'
 ] as const
 
 export const HUMAN_MAX_ACTIVE_TOOLS = 20

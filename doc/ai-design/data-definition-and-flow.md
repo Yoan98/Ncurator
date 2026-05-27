@@ -575,7 +575,7 @@ type HumanDecisionHint =
         // 未执行的命令。
         blockedCommands: string[]
         // 用户补充说明。
-        guidance: Array<{
+        notes: Array<{
           command: string
           message: string
         }>
@@ -634,10 +634,53 @@ type HumanDecisionHint =
       }
     }
   | {
+      // brain 输出的 hand plan 结构不合法。
+      code: 'brain_output_schema_invalid'
+      detail: {
+        issues: Array<{
+          path: string
+          message: string
+        }>
+      }
+    }
+  | {
       // brain 试图直接去 mouth，但 todolist 里仍有未完成事项。
       code: 'brain_todolist_incomplete'
       detail: {
         pendingItems: string[]
+      }
+    }
+  | {
+      // hand preflight 发现一轮 calls 中存在一个或多个非法调用。
+      code: 'hand_call_invalid'
+      detail: {
+        invalidCalls: Array<{
+          callIndex: number
+          toolName: string
+          message: string
+        }>
+      }
+    }
+  | {
+      // hand 发现一轮 calls 中存在一个或多个工作区边界阻断。
+      code: 'hand_workspace_boundary_blocked'
+      detail: {
+        blockedCalls: Array<{
+          callIndex: number
+          toolName: string
+          message: string
+        }>
+      }
+    }
+  | {
+      // hand 本轮真实执行后存在一个或多个普通运行时失败。
+      code: 'hand_tool_runtime_failed'
+      detail: {
+        failedCalls: Array<{
+          callIndex: number
+          toolName: string
+          message: string
+        }>
       }
     }
 
@@ -831,7 +874,6 @@ interface DecisionHintEvent {
   source: DecisionHintSource
   code: string
   detail?: JsonObject
-  summary: string
   createdAt: number
 }
 

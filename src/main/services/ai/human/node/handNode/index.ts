@@ -27,6 +27,7 @@ import {
 } from '../../toolCallSchema'
 import type { HandCallList, HumanRuntimeCache, HumanState, HumanDecisionHint, ToolCallResult } from '../../types'
 import { deriveHandFollowupSignals, shouldStopSerialHandPlan } from './followupSignals'
+import { buildHandCallInvalidHint } from './decisionHints'
 import { executeToolCall } from './toolExecutor'
 import { returnToBrain, returnToBrainAfterTrace, returnToBrainWithDecisionHint } from '../utils/stateTransitions'
 import { getAvailableToolNames } from '../utils/runtimeCache'
@@ -187,7 +188,7 @@ const buildApprovalBlockedDecisionHint = (input: {
   const blockedCommands = input.approvalItems
     .filter((item) => !input.decisions.some((decision) => decision.itemId === item.itemId && decision.action === 'approve'))
     .map((item) => item.command)
-  const guidance = input.decisions
+  const notes = input.decisions
     .filter((decision) => decision.action === 'guide')
     .map((decision) => {
       const matchedItem = input.approvalItems.find((item) => item.itemId === decision.itemId)
@@ -205,7 +206,7 @@ const buildApprovalBlockedDecisionHint = (input: {
     detail: {
       allowedCommands,
       blockedCommands,
-      guidance
+      notes
     }
   }
 }
@@ -262,7 +263,7 @@ const buildSchemaInvalidResult = (input: {
 const parseHandCalls = (input: {
   calls: HandCallList
   learnedSkillIds: HumanState['skills']['learnedSkillIds']
-}): { ok: true; calls: ParsedHandCall[] } | { ok: false; result: ToolCallResult } => {
+}): { ok: true; calls: ParsedHandCall[] } | { ok: false; results: ToolCallResult[] } => {
   const toolCallSchema = createToolCallSchema(
     getAvailableToolNames({
       learnedSkillIds: input.learnedSkillIds
@@ -270,23 +271,29 @@ const parseHandCalls = (input: {
   )
 
   const parsedCalls: ParsedHandCall[] = []
+  const invalidResults: ToolCallResult[] = []
   for (const [index, call] of input.calls.entries()) {
     const parsed = toolCallSchema.safeParse(call)
     if (!parsed.success) {
-      return {
-        ok: false,
-        result: buildSchemaInvalidResult({
+      invalidResults.push(buildSchemaInvalidResult({
           toolName: call.toolName,
           error: parsed.error,
           callIndex: index
-        })
-      }
+        }))
+      continue
     }
 
     parsedCalls.push({
       toolName: parsed.data.toolName,
       args: parsed.data.args as JsonObject
     })
+  }
+
+  if (invalidResults.length > 0) {
+    return {
+      ok: false,
+      results: invalidResults
+    }
   }
 
   return {
@@ -313,7 +320,17 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       learnedSkillIds: state.skills.learnedSkillIds
     })
     if (!parsedCallsResult.ok) {
-      const results = [parsedCallsResult.result]
+      const results = parsedCallsResult.results
+      const decisionHint = buildHandCallInvalidHint(
+        results.map((result) => ({
+          callIndex: Number(
+            String(result.diagnostic?.message || '').match(/^tool call schema invalid\ncalls\[(\d+)\]\.args:/)?.[1]
+            || 0
+          ),
+          toolName: result.toolName,
+          message: String(result.diagnostic?.message || result.data?.error || '').trim()
+        }))
+      )
       return returnToBrainAfterTrace({
         ctx: input.ctx,
         cache: input.cache,
@@ -327,6 +344,7 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
           summary: buildToolCallDisplayText(result)
         })),
         stage: 'human_hand',
+        decisionHint,
         overrides: {
           execution: {
             lastToolResults: results
@@ -337,7 +355,8 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
               state,
               execution: buildHandExecution({
                 calls,
-                toolResults: results
+                toolResults: results,
+                decisionHint
               })
             })
           }

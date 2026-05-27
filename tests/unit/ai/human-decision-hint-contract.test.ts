@@ -21,7 +21,7 @@ const HINT_FIXTURES: Record<(typeof HUMAN_DECISION_HINT_CODES)[number], HumanDec
     detail: {
       allowedCommands: ['pwd'],
       blockedCommands: ['mkdir blocked-dir'],
-      guidance: [
+      notes: [
         {
           command: 'mkdir blocked-dir',
           message: '请改为只读检查，不要落目录。'
@@ -76,15 +76,48 @@ const HINT_FIXTURES: Record<(typeof HUMAN_DECISION_HINT_CODES)[number], HumanDec
   brain_output_schema_invalid: {
     code: 'brain_output_schema_invalid',
     detail: {
-      area: 'nextAction.calls',
-      summary: 'hand plan 输出结构不合法',
       issues: [
         {
           path: 'nextAction.calls[0].args',
           message: 'Expected object, received string'
         }
-      ],
-      guidance: '请改为严格符合 tool schema 的 args 结构。'
+      ]
+    }
+  },
+  hand_call_invalid: {
+    code: 'hand_call_invalid',
+    detail: {
+      invalidCalls: [
+        {
+          callIndex: 0,
+          toolName: 'terminal_run',
+          message: 'tool call schema invalid\ncalls[0].args.command: Required'
+        }
+      ]
+    }
+  },
+  hand_workspace_boundary_blocked: {
+    code: 'hand_workspace_boundary_blocked',
+    detail: {
+      blockedCalls: [
+        {
+          callIndex: 1,
+          toolName: 'terminal_run',
+          message: 'workspace boundary check failed: relative path escapes workspace boundary: ../secret.txt'
+        }
+      ]
+    }
+  },
+  hand_tool_runtime_failed: {
+    code: 'hand_tool_runtime_failed',
+    detail: {
+      failedCalls: [
+        {
+          callIndex: 0,
+          toolName: 'docx_read_blocks',
+          message: 'ENOENT: no such file or directory, open missing.docx'
+        }
+      ]
     }
   },
   brain_todolist_incomplete: {

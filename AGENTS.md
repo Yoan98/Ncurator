@@ -9,6 +9,7 @@
 - `doc/ai-design/prompt-design.md`：涉及 prompt 设计、AI-facing 文案或工具描述方式时阅读。
 - 涉及 AI 决策提示、工具结果体积限制或 terminal step 事件结构时，优先阅读 `doc/ai-design/implementation-spec.md` 与 `doc/ai-design/data-definition-and-flow.md`。
 - 涉及 terminal 批量审批预检、审批批次事件、审批阻断 decision hint、底部审批卡片，或 hand 串行 `calls` 执行约束时，优先阅读 `doc/ai-design/implementation-spec.md`、`doc/ai-design/data-definition-and-flow.md` 与 `doc/prd/workbench.md`。
+- 涉及 decision hint contract、tool result diagnostic 回流、history 中 diagnostic 的保留方式，优先阅读 `doc/ai-design/implementation-spec.md` 与 `doc/ai-design/data-definition-and-flow.md`。
 - 涉及 tool result 外层 contract、history 持久化结构、render 白名单、`工具/参数/返回` 展示格式时，优先阅读 `doc/ai-design/data-definition-and-flow.md` 与 `doc/ai-design/implementation-spec.md`。
 
 ### 1.2 docx相关
