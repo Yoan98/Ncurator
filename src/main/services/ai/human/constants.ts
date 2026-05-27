@@ -53,8 +53,8 @@ export const HUMAN_DEFAULT_TOOL_CALL_LIMIT = 40
 export const HUMAN_HAND_CALL_LIMIT = 5
 export const HUMAN_TOOL_LIMIT_NEAR_EXHAUSTED_RATIO = 0.6
 export const HUMAN_BRAIN_SCHEMA_RETRY_LIMIT = 2
-// 网上推荐deepseek v4 pro是128k内比较准，但我们这里是测是在60k时就有点乱，且开始可能服务端不返回了
-export const DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS = 60_000
+// 网上推荐deepseek v4 pro是128k内比较准，但我们这里是测是在100k时就有点乱，且开始可能服务端不返回了
+export const DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS = 100_000
 export const CONTEXT_COMPACTION_TRIGGER_RATIO = 0.8
 export const CONTEXT_COMPACTION_TARGET_RATIO = 0.25
 export const HUMAN_ROUND_EXECUTION_KINDS = [
