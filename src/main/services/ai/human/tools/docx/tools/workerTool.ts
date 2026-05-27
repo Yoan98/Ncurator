@@ -43,7 +43,7 @@ export const finalizeDocxToolFailure = <TResult extends object>(input: {
     input.runtime.input.emitActivity({
       actionType: input.activity.actionType,
       status: 'failed',
-      summary: input.activity.buildFailedSummary?.(input.failure) || input.failure.summary
+      summary: input.activity.buildFailedSummary?.(input.failure) || input.failure.error
     })
   }
   return input.failure
@@ -63,7 +63,6 @@ export const finalizeDocxToolSuccess = <TResult extends object>(input: {
     result: buildDocxToolCallResult({
       toolName: input.toolName,
       ok: true,
-      code: 'ok',
       data: input.result as JsonObject
     }),
     draftDocId: input.draftDocId
@@ -99,7 +98,7 @@ export const callExpectedWorkerAction = async <TAction extends DocxWorkerAction>
     return input.runtime.emitFailure({
       toolName: input.toolName,
       toolCallId: input.toolCallId,
-      code: 'failed',
+      reason: 'failed',
       error: `worker protocol mismatch (${input.expectedAction})`,
       draftDocId: input.draftDocId
     })
@@ -191,7 +190,7 @@ export const createDocxTool = <TSchema extends z.ZodType, TResult extends object
           input.runtime.emitFailure({
             toolName,
             toolCallId,
-            code: 'failed',
+            reason: 'failed',
             error: error.message
           })
           input.onError?.({

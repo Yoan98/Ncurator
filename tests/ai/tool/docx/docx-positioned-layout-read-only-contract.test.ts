@@ -8,8 +8,6 @@ import type {
 } from './testUtils'
 
 type PositionedOutlineResult = {
-  ok: boolean
-  code: 'ok'
   sourcePath: string
   currentRevisionRef: string
   blocks: Array<{
@@ -126,8 +124,7 @@ describe('ai tool docx backend', () => {
         runtime.assertThat(
           failures.every(
             (failure) =>
-              failure.ok === false &&
-              failure.code === 'invalid_input' &&
+              failure.error.length > 0 &&
               failure.error.includes(POSITIONED_READ_ONLY_MESSAGE)
           ),
           {

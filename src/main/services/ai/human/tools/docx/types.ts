@@ -1,4 +1,3 @@
-import type { AiTaskResultCode } from '../../../../../../shared/types'
 import type { DocxToolContext } from '../../../types'
 import type { z } from 'zod/v4'
 import type { WorkspaceCapabilityBuildInput } from '../types'
@@ -28,11 +27,6 @@ import {
   tableCellSpecSchema,
   tableSpecSchema
 } from './schemas'
-
-export type DocxToolResultCode = Extract<
-  AiTaskResultCode,
-  'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required' | 'result_too_large'
->
 
 export type DocxTextRunSpec = z.infer<typeof runSpecSchema>
 export type DocxParagraphSpec = z.infer<typeof paragraphSpecSchema>

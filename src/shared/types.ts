@@ -634,13 +634,6 @@ export type AiRunEventStage =
   | 'human_learning'
   | 'human_hand'
   | 'human_mouth'
-export type AiTaskResultCode =
-  | 'ok'
-  | 'failed'
-  | 'workspace_required'
-  | 'approval_denied'
-  | 'invalid_input'
-  | 'result_too_large'
 export type AiToolCallDiagnostic = {
   message: string
 }
@@ -654,7 +647,6 @@ export type AiToolResourceContext = {
 export type AiToolCallResult = {
   toolName: string
   ok: boolean
-  code: AiTaskResultCode
   data?: JsonValue
   diagnostic?: AiToolCallDiagnostic
   resourceContext?: AiToolResourceContext

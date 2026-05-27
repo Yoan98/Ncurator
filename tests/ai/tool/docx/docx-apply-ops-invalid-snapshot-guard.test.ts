@@ -96,9 +96,7 @@ describe('ai tool docx backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.failedEdit.ok === false &&
-            result.failedEdit.code === 'failed' &&
-            result.failedEdit.error.includes('invalid docx') &&
+          result.failedEdit.error.includes('invalid docx') &&
             result.readOriginalSearch.matches.length === 1 &&
             result.readOriginal.blocks.length === 1,
           {

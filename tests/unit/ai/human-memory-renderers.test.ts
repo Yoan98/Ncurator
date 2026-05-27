@@ -86,12 +86,8 @@ describe('ai unit human memory renderers', () => {
           {
             toolName: 'terminal_run',
             ok: true,
-            code: 'ok',
             data: {
-              ok: true,
-              code: 'ok',
               stdout: 'latest release status',
-              command: 'cat release-note.txt',
               exitCode: 0,
               timedOut: false
             }
@@ -126,11 +122,11 @@ describe('ai unit human memory renderers', () => {
     expect(text).toContain('先读取 release-note.txt 确认最新状态')
     expect(text).toContain('类型：hand')
     expect(text).toContain('latest release status')
-    expect(text).toContain('args={"command":"cat release-note.txt"}')
-    expect(text).toContain('result:')
+    expect(text).toContain('参数：{"command":"cat release-note.txt"}')
+    expect(text).toContain('返回：{"stdout":"latest release status","exitCode":0,"timedOut":false}')
     expect(text).toContain('"stdout":"latest release status"')
-    expect(text).not.toContain('调用参数：')
-    expect(text).not.toContain('返回：')
+    expect(text).not.toContain('args=')
+    expect(text).not.toContain('result:')
     expect(text).not.toContain('旧 thought.next 不应直接作为 task_progress 主体')
   })
 
@@ -173,14 +169,10 @@ describe('ai unit human memory renderers', () => {
           {
             toolName: 'docx_create',
             ok: true,
-            code: 'ok',
             data: {
-              ok: true,
-              code: 'ok',
               sourcePath: 'draft.docx',
               previousRevisionRef: 'rev-1',
               currentRevisionRef: 'rev-2',
-              summary: 'updated',
               created: false,
               ignoredTopLevelField: 'drop-me',
               postWriteReadback: {
@@ -215,7 +207,7 @@ describe('ai unit human memory renderers', () => {
     const rendered = renderBrainRoundSection(taskRun.rounds)
 
     expect(rendered).toContain('第 1 轮')
-    expect(rendered).toContain('args={"sourcePath":"draft.docx","patch":"..."}')
+    expect(rendered).toContain('参数：{"sourcePath":"draft.docx","patch":"..."}')
     expect(rendered).toContain(
       '"postWriteReadback":{"regions":[{"fromBlockIndex":1,"toBlockIndex":2,"blocks":[{"blockId":"b1","type":"paragraph","blockIndex":1,"text":"hello"}]}]}'
     )
@@ -263,11 +255,7 @@ describe('ai unit human memory renderers', () => {
           {
             toolName: 'custom_tool',
             ok: false,
-            code: 'failed',
             data: {
-              ok: false,
-              code: 'failed',
-              summary: 'fallback summary',
               message: 'fallback message',
               error: 'fallback error',
               stdout: 'drop stdout',
@@ -283,9 +271,7 @@ describe('ai unit human memory renderers', () => {
 
     const rendered = renderBrainRoundSection(taskRun.rounds)
 
-    expect(rendered).toContain(
-      '"ok":false,"code":"failed","summary":"fallback summary","message":"fallback message","error":"fallback error"'
-    )
+    expect(rendered).toContain('"message":"fallback message","error":"fallback error"')
     expect(rendered).not.toContain('drop stdout')
     expect(rendered).not.toContain('"nested"')
   })

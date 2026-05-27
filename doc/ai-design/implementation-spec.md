@@ -103,6 +103,11 @@ stateDiagram-v2
 - 对命中 docx 定位排版保护的写入，hand 应停止当前串行计划，返回 `hand_docx_positioned_write_blocked` 给 brain，并追加面向 mouth 的事实型 `deliveryGuidance`；该 hint 需要明确这类定位区域按系统设计不会被自动修改，但 brain 仍可继续处理文档中其他可修改的位置。
 - hand 需要维护累计工具预算保护；当累计工具调用次数达到上限的 `60%` 时返回 `hand_tool_limit_near_exhausted`，提醒 brain 尽快收尾；当累计工具调用次数超过上限时返回 `hand_tool_limit_exceeded`，brain 本轮必须直接进入 mouth 收尾，同时 hand 追加一条面向 mouth 的系统级 `deliveryGuidance`，要求最终交付明确说明预算耗尽造成的未完成事项。
 - tool 执行失败时，hand 应优先保留原始校验/运行时错误文本，并通过 `diagnostic.message` 回流给 brain 与历史渲染层；不要把错误再压缩成额外的预设分类。
+- hand/tool 结果 contract 必须遵守“薄外层 + 真实内层 + 独立渲染白名单”：
+  - 外层只保留 `toolName`、`ok`、`data`、`diagnostic`、`resourceContext`
+  - `data` 只保留真实工具业务数据，禁止重复 `ok`、`summary`、`resourceContext` 或其他外层字段
+  - tool-result 级 `summary` 与 `code` 不再作为正式 contract 字段
+  - history / UI 文本渲染单独做白名单与格式控制，不反向约束底层结果存储
 
 ### 5.4 `mouth`
 

@@ -1,6 +1,5 @@
 import { extractArtifactRefsFromToolResult, extractArtifactRefsFromToolResults } from '../../utils/artifacts'
 import {
-  buildToolCallDisplayText,
   renderToolDiagnosticText
 } from '../shared/toolResultRenderers'
 import type {
@@ -28,8 +27,6 @@ export const buildHistoryToolResult = (result: ToolCallResult): HumanHistoryTool
   return {
     toolName: result.toolName,
     ok: result.ok,
-    code: result.code,
-    summary: buildToolCallDisplayText(result),
     data: result.data,
     diagnosticText,
     resourceContext: result.resourceContext,

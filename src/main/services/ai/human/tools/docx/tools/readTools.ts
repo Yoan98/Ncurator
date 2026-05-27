@@ -221,7 +221,7 @@ const executeWorkerSearch = async (input: {
       failure: input.runtime.emitFailure({
         toolName: input.toolName,
         toolCallId: input.toolCallId,
-        code: 'failed',
+        reason: 'failed',
         error: 'worker protocol mismatch (search)',
         draftDocId: input.docId,
         resourceContext: input.runtime.buildResourceContext({
@@ -264,9 +264,6 @@ const buildSearchResult = (input: {
   warnings: string[]
   runtime: DocxToolRuntime
 }) => ({
-  ok: true,
-  code: 'ok' as const,
-  summary: `返回 ${String(input.matches.length)} 个搜索命中`,
   sourcePath: input.sourcePath,
   currentRevisionRef: input.currentRevisionRef,
   mode: input.mode,
@@ -275,17 +272,10 @@ const buildSearchResult = (input: {
   totalMatchCount: input.totalMatchCount,
   returnedMatchCount: input.matches.length,
   matches: input.matches,
-  warnings: input.warnings,
-  resourceContext: input.runtime.buildResourceContext({
-    sourcePath: input.sourcePath,
-    effectKind: 'searched',
-    currentRevisionRef: input.currentRevisionRef
-  })
+  warnings: input.warnings
 })
 
 const buildSearchOutputPreview = (result: ReturnType<typeof buildSearchResult>) => ({
-  ok: true,
-  code: 'ok',
   sourcePath: result.sourcePath,
   currentRevisionRef: result.currentRevisionRef,
   mode: result.mode,
@@ -315,7 +305,7 @@ const buildResultTooLargeFailure = (input: {
   input.runtime.emitFailure({
     toolName: input.toolName,
     toolCallId: input.toolCallId,
-    code: 'result_too_large',
+    reason: 'result_too_large',
     error: 'docx result too large',
     warnings: [],
     decisionHint: {
@@ -440,18 +430,10 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           })
         }
         const result = {
-          ok: true,
-          code: 'ok' as const,
-          summary: `返回 ${String(resultBlocks.length)} 个结构块`,
           sourcePath: sessionResult.sourcePath,
           currentRevisionRef: sessionResult.currentRevisionRef,
           totalBlockCount: sessionResult.stats.blockCount,
-          blocks: resultBlocks,
-          resourceContext: runtime.buildResourceContext({
-            sourcePath: sessionResult.sourcePath,
-            effectKind: 'read',
-            currentRevisionRef: sessionResult.currentRevisionRef
-          })
+          blocks: resultBlocks
         }
         return finalizeDocxToolSuccess({
           runtime,
@@ -459,8 +441,6 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           toolCallId,
           result,
           outputPreview: {
-            ok: true,
-            code: 'ok',
             sourcePath: result.sourcePath,
             currentRevisionRef: result.currentRevisionRef,
             blocks: result.blocks
@@ -478,7 +458,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           failure: runtime.emitFailure({
             toolName,
             toolCallId,
-            code: 'failed',
+            reason: 'failed',
             error: error instanceof Error ? error.message : String(error),
             draftDocId: sessionResult.docId,
             resourceContext: runtime.buildResourceContext({
@@ -526,7 +506,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
             failure: runtime.emitFailure({
               toolName,
               toolCallId,
-              code: 'failed',
+              reason: 'failed',
               error: 'semantic search requires embedding runtime to be ready before entering human',
               draftDocId: sessionResult.docId,
               resourceContext: runtime.buildResourceContext({
@@ -554,7 +534,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
             failure: runtime.emitFailure({
               toolName,
               toolCallId,
-              code: 'failed',
+              reason: 'failed',
               error: 'semantic query embedding is empty',
               draftDocId: sessionResult.docId,
               resourceContext: runtime.buildResourceContext({
@@ -718,19 +698,11 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           })
         }
         const result = {
-          ok: true,
-          code: 'ok' as const,
-          summary: `返回 ${String(blocks.length)} 个连续块`,
           sourcePath: sessionResult.sourcePath,
           currentRevisionRef: sessionResult.currentRevisionRef,
           fromBlockIndex,
           toBlockIndex,
-          blocks: blocks.map(buildReadBlock),
-          resourceContext: runtime.buildResourceContext({
-            sourcePath: sessionResult.sourcePath,
-            effectKind: 'read',
-            currentRevisionRef: sessionResult.currentRevisionRef
-          })
+          blocks: blocks.map(buildReadBlock)
         }
         return finalizeDocxToolSuccess({
           runtime,
@@ -738,8 +710,6 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           toolCallId,
           result,
           outputPreview: {
-            ok: true,
-            code: 'ok',
             sourcePath: result.sourcePath,
             currentRevisionRef: result.currentRevisionRef,
             fromBlockIndex: result.fromBlockIndex,
@@ -759,7 +729,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           failure: runtime.emitFailure({
             toolName,
             toolCallId,
-            code: 'failed',
+            reason: 'failed',
             error: error instanceof Error ? error.message : String(error),
             draftDocId: sessionResult.docId,
             resourceContext: runtime.buildResourceContext({
@@ -802,9 +772,6 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
         Math.max(1, Number(args.limit || 10))
       )
       const result = {
-        ok: true,
-        code: 'ok' as const,
-        summary: `返回 ${String(revisions.length)} 个修订`,
         sourcePath: sessionResult.sourcePath,
         currentRevisionRef: sessionResult.currentRevisionRef,
         revisions: revisions.map((revision) => ({
@@ -814,12 +781,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           isCurrent: revision.isCurrent,
           summary: revision.summary || '',
           changedBlocks: revision.changedBlocks || []
-        })),
-        resourceContext: runtime.buildResourceContext({
-          sourcePath: sessionResult.sourcePath,
-          effectKind: 'history',
-          currentRevisionRef: sessionResult.currentRevisionRef
-        })
+        }))
       }
       return finalizeDocxToolSuccess({
         runtime,
@@ -827,8 +789,6 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
         toolCallId,
         result,
         outputPreview: {
-          ok: true,
-          code: 'ok',
           sourcePath: result.sourcePath,
           currentRevisionRef: result.currentRevisionRef,
           revisionCount: result.revisions.length

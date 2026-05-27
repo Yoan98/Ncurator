@@ -47,8 +47,7 @@ describe('ai tool docx backend', () => {
         runtime.assertThat(
           result.valid.matches.length === 1 &&
             result.valid.matches[0]?.offsets?.length === 1 &&
-            result.invalid.ok === false &&
-            result.invalid.code === 'invalid_input' &&
+            result.invalid.error.length > 0 &&
             result.invalid.error.includes('invalid regex pattern'),
           {
             name: 'regex-search-stays-stable-for-valid-and-invalid-patterns',

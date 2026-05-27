@@ -419,10 +419,6 @@ interface HumanHistoryToolResult {
   toolName: string
   // 这次工具调用是否成功。
   ok: boolean
-  // 标准化后的结果码；与 ToolCallResult.code 对齐。
-  code: ToolCallResult['code']
-  // 对本次工具结果的简短摘要。
-  summary: string
   // 本次工具调用的原始结构化返回；作为 history 的 canonical evidence 保存。
   data?: JsonValue
   // 诊断信息的文本化摘要。
@@ -511,23 +507,33 @@ interface ToolCallResult {
   toolName: string
   // 这次工具调用是否成功。
   ok: boolean
-  // 标准化结果码；brain 会基于它判断后续怎么处理。
-  code:
-    | 'ok'
-    | 'failed'
-    | 'workspace_required'
-    | 'approval_denied'
-    | 'invalid_input'
   // 工具返回的结构化数据；成功时通常在这里。
   data?: JsonValue
   // 失败或特殊情况的诊断信息。
   diagnostic?: ToolCallDiagnostic
+  // 资源上下文；用于运行归因、artifact 关联与后续分析。
+  resourceContext?: ToolResourceContext
 }
 
 interface ToolCallDiagnostic {
   // 原始错误文本；优先保留 schema 校验或运行时返回的 message。
   message: string
 }
+
+// tool result 当前统一采用“三层模型”：
+// 1. 薄外层：稳定 contract，仅保留 toolName / ok / data / diagnostic / resourceContext
+// 2. 真实内层：data 只保留工具真实业务数据，禁止重复外层字段
+// 3. 渲染层白名单：history / UI 独立维护展示过滤规则，不反向约束底层返回
+//
+// 统一约束：
+// - 不再在 tool result 体系内持久化 code
+// - 不再在 tool result 体系内持久化 summary
+// - ok 是唯一统一成功位
+// - diagnostic.message 是统一失败摘要来源
+// - 需要程序化分支的特殊情况应通过 decisionHint 或专门结构字段表达，而不是依赖 result.code
+//
+// 对 terminal_run，data 只保留 stdout / stderr / exitCode / timedOut / artifacts。
+// 对 docx / kb 等工具，data 只保留真实业务字段；resourceContext 只允许存在于外层。
 
 // brain 结构化输出的唯一真实来源是 humanDecisionSchema；
 // prompt 中的输出 shape 应由该 schema 自动导出，而不是再维护一份手写结构模板。

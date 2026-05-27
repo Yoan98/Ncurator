@@ -18,7 +18,6 @@ import type {
   DocxRevision,
   DocxStableLocator,
   DocxSnapshotResolvedToolCall,
-  DocxToolResultCode,
   SemanticDocIndex
 } from './types'
 import { getDocxWorkerClient } from './worker/docxWorkerClient'
@@ -71,13 +70,11 @@ const isToolResultRecord = (value: AiToolCallResult['data']): value is JsonObjec
 export const buildDocxToolCallResult = (input: {
   toolName: string
   ok: boolean
-  code: DocxToolResultCode
   data: AiToolCallResult['data']
   resourceContext?: DocxToolResourceContext
 }): AiToolCallResult => ({
   toolName: input.toolName,
   ok: input.ok,
-  code: input.code,
   data: input.data,
   resourceContext: input.resourceContext,
   diagnostic:
@@ -90,12 +87,11 @@ export const buildDocxToolCallResult = (input: {
 
 export type DocxToolFailure = {
   ok: false
-  code: DocxToolResultCode
-  summary: string
   error: string
   warnings: string[]
   decisionHint?: JsonObject
   resourceContext?: DocxToolResourceContext
+  reason?: string
 }
 
 export type DocxToolRuntime = {
@@ -106,7 +102,7 @@ export type DocxToolRuntime = {
   emitFailure: (input: {
     toolName: string
     toolCallId: string
-    code: DocxToolResultCode
+    reason: string
     error: string
     warnings?: string[]
     decisionHint?: JsonObject
@@ -247,25 +243,24 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
   })
 
   const toFailure = (params: {
-    code: DocxToolResultCode
+    reason: string
     error: string
     warnings?: string[]
     decisionHint?: JsonObject
     resourceContext?: DocxToolResourceContext
   }): DocxToolFailure => ({
     ok: false,
-    code: params.code,
-    summary: params.error,
     error: params.error,
     warnings: params.warnings || [],
     decisionHint: params.decisionHint,
-    resourceContext: params.resourceContext
+    resourceContext: params.resourceContext,
+    reason: params.reason
   })
 
   const emitFailure = (params: {
     toolName: string
     toolCallId: string
-    code: DocxToolResultCode
+    reason: string
     error: string
     warnings?: string[]
     decisionHint?: JsonObject
@@ -273,7 +268,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     resourceContext?: DocxToolResourceContext
   }): DocxToolFailure => {
     const out = toFailure({
-      code: params.code,
+      reason: params.reason,
       error: params.error,
       warnings: params.warnings,
       decisionHint: params.decisionHint,
@@ -285,7 +280,6 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       result: buildDocxToolCallResult({
         toolName: params.toolName,
         ok: false,
-        code: out.code,
         data: out,
         resourceContext: out.resourceContext
       }),
@@ -305,7 +299,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     emitFailure({
       toolName: params.toolName,
       toolCallId: params.toolCallId,
-      code: params.response.code,
+      reason: params.response.code,
       error: params.response.error,
       warnings: params.response.warnings,
       draftDocId: params.draftDocId,
@@ -1061,7 +1055,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
         failure: emitFailure({
           toolName: params.toolName,
           toolCallId: params.toolCallId,
-          code: 'invalid_input',
+          reason: 'invalid_input',
           error: 'sourcePath must be a workspace-bound .docx path'
         })
       }
@@ -1085,7 +1079,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
         failure: emitFailure({
           toolName: params.toolName,
           toolCallId: params.toolCallId,
-          code: 'failed',
+          reason: 'failed',
           error: error instanceof Error ? error.message : String(error)
         })
       }
@@ -1107,7 +1101,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
         failure: emitFailure({
           toolName: params.toolName,
           toolCallId: params.toolCallId,
-          code: 'invalid_input',
+          reason: 'invalid_input',
           error: 'sourcePath must be a workspace-bound .docx path'
         })
       }
@@ -1134,7 +1128,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
           failure: emitFailure({
             toolName: params.toolName,
             toolCallId: params.toolCallId,
-            code: 'failed',
+            reason: 'failed',
             error: 'cannot upgrade an active replay-backed read context'
           })
         }
@@ -1154,7 +1148,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
         failure: emitFailure({
           toolName: params.toolName,
           toolCallId: params.toolCallId,
-          code: 'failed',
+          reason: 'failed',
           error: error instanceof Error ? error.message : String(error),
           resourceContext: {
             family: 'docx',

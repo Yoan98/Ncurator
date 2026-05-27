@@ -31,7 +31,7 @@ const buildKbResult = (input: {
   toolName: string
   data: unknown
   ok?: boolean
-  code?: AiToolCallResult['code']
+  diagnosticMessage?: string
 }): AiToolCallResult => {
   const data = (() => {
     try {
@@ -44,9 +44,11 @@ const buildKbResult = (input: {
   return {
     toolName: input.toolName,
     ok: input.ok ?? true,
-    code: input.code || (input.ok === false ? 'failed' : 'ok'),
     data,
-    diagnostic: undefined
+    diagnostic:
+      input.ok === false && input.diagnosticMessage
+        ? { message: input.diagnosticMessage }
+        : undefined
   }
 }
 
@@ -98,15 +100,15 @@ export const buildKbCapabilityTools = (input: {
             Array.isArray(prepared.requestedDocumentIds) &&
             prepared.requestedDocumentIds.length === 0
           ) {
-            const emptyRows: SearchResult[] = []
+            const empty = { items: [] as SearchResult[], total: 0 }
             session.succeed(
               undefined,
               buildKbResult({
                 toolName: KB_SEARCH_TOOL_SPEC.name,
-                data: emptyRows
+                data: empty
               })
             )
-            return []
+            return empty
           }
 
           const rows = await (async () => {
@@ -139,14 +141,18 @@ export const buildKbCapabilityTools = (input: {
             )
           })()
           const normalized = rows.map(normalizeForIpc)
+          const payload = {
+            items: normalized,
+            total: normalized.length
+          }
           session.succeed(
             undefined,
             buildKbResult({
               toolName: KB_SEARCH_TOOL_SPEC.name,
-              data: normalized
+              data: payload
             })
           )
-          return normalized
+          return payload
         },
         onError: (error, session) => {
           session.fail(
@@ -155,12 +161,11 @@ export const buildKbCapabilityTools = (input: {
             buildKbResult({
               toolName: KB_SEARCH_TOOL_SPEC.name,
               ok: false,
-              code: 'failed',
               data: {
                 items: [],
-                total: 0,
-                error: error.message
-              }
+                total: 0
+              },
+              diagnosticMessage: error.message
             })
           )
         }
@@ -224,12 +229,11 @@ export const buildKbCapabilityTools = (input: {
             buildKbResult({
               toolName: KB_LIST_DOCUMENTS_TOOL_SPEC.name,
               ok: false,
-              code: 'failed',
               data: {
                 items: [],
-                total: 0,
-                error: error.message
-              }
+                total: 0
+              },
+              diagnosticMessage: error.message
             })
           )
         }

@@ -250,10 +250,7 @@ const buildSchemaInvalidResult = (input: {
   return {
     toolName: input.toolName,
     ok: false,
-    code: 'invalid_input',
     data: {
-      ok: false,
-      code: 'invalid_input',
       error: diagnostic.message
     },
     diagnostic: {
@@ -459,7 +456,7 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       traceItems: results.map((result) => ({
         action: 'call_tool',
         publicNarrative: buildToolCallDisplayText(result),
-        resultStatus: result.code === 'ok' ? 'ok' : 'error',
+        resultStatus: result.ok ? 'ok' : 'error',
         toolName: result.toolName,
         summary: buildToolCallDisplayText(result)
       })),

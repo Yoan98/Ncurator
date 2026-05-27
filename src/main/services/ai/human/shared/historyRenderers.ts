@@ -31,12 +31,9 @@ const DOCX_BLOCK_WHITELIST: NestedWhitelistConfig = {
 }
 
 const DOCX_WRITE_RESULT_WHITELIST: NestedWhitelistConfig = {
-  ok: true,
-  code: true,
   sourcePath: true,
   previousRevisionRef: true,
   currentRevisionRef: true,
-  summary: true,
   created: true,
   postWriteReadback: {
     regions: {
@@ -48,19 +45,12 @@ const DOCX_WRITE_RESULT_WHITELIST: NestedWhitelistConfig = {
 }
 
 const FALLBACK_TOOL_HISTORY_WHITELIST: NestedWhitelistConfig = {
-  ok: true,
-  code: true,
-  summary: true,
   message: true,
   error: true
 }
 
 const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
   terminal_run: {
-    ok: true,
-    code: true,
-    command: true,
-    cwd: true,
     stdout: true,
     stderr: true,
     exitCode: true,
@@ -70,32 +60,24 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
     error: true
   },
   kb_search: {
-    ok: true,
-    code: true,
     items: {
       document_name: true,
       text: true
     }
   },
   kb_list_documents: {
-    ok: true,
-    code: true,
     items: {
       name: true
     },
     total: true
   },
   docx_outline: {
-    ok: true,
-    code: true,
     sourcePath: true,
     currentRevisionRef: true,
     totalBlockCount: true,
     blocks: DOCX_BLOCK_WHITELIST
   },
   docx_search: {
-    ok: true,
-    code: true,
     sourcePath: true,
     currentRevisionRef: true,
     mode: true,
@@ -111,8 +93,6 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
     }
   },
   docx_read_blocks: {
-    ok: true,
-    code: true,
     sourcePath: true,
     currentRevisionRef: true,
     fromBlockIndex: true,
@@ -120,8 +100,6 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
     blocks: DOCX_BLOCK_WHITELIST
   },
   docx_history: {
-    ok: true,
-    code: true,
     sourcePath: true,
     currentRevisionRef: true,
     revisions: {
@@ -139,12 +117,9 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
   docx_text_style_edit: DOCX_WRITE_RESULT_WHITELIST,
   docx_delete: DOCX_WRITE_RESULT_WHITELIST,
   docx_rollback: {
-    ok: true,
-    code: true,
     sourcePath: true,
     previousRevisionRef: true,
     currentRevisionRef: true,
-    summary: true
   }
 }
 
@@ -180,18 +155,10 @@ const filterValueByWhitelist = (
 
 const buildToolHistoryReturnValue = (result: HumanHistoryToolResult): JsonValue => {
   if (!isJsonObject(result.data)) {
-    return {
-      ok: result.ok,
-      code: result.code,
-      ...(result.data !== undefined ? { data: result.data } : {})
-    }
+    return result.data
   }
 
   const config = TOOL_HISTORY_WHITELIST_BY_NAME[result.toolName] || FALLBACK_TOOL_HISTORY_WHITELIST
-  if (!TOOL_HISTORY_WHITELIST_BY_NAME[result.toolName]) {
-    console.warn(`[historyRenderers] missing tool history whitelist config for ${result.toolName}`)
-  }
-
   return filterValueByWhitelist(result.data, config) ?? {}
 }
 
@@ -200,10 +167,9 @@ const buildBrainToolAttemptText = (input: {
   result: HumanHistoryToolResult
 }): string =>
   [
-    `- \`${input.result.toolName}\``,
-    `  args=${renderJsonValue(input.call?.args)}`,
-    '  result:',
-    `  ${renderJsonValue(buildToolHistoryReturnValue(input.result))}`,
+    `- 工具：\`${input.result.toolName}\``,
+    `  参数：${renderJsonValue(input.call?.args)}`,
+    `  返回：${renderJsonValue(buildToolHistoryReturnValue(input.result))}`,
     input.result.diagnosticText ? `  诊断：\n${input.result.diagnosticText}` : undefined
   ]
     .filter(Boolean)

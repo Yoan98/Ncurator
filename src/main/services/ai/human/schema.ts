@@ -15,13 +15,11 @@ import {
   HUMAN_STEP_RESULT_STATUSES,
   HUMAN_HAND_CALL_LIMIT,
   HUMAN_DECISION_HINT_CODES,
-  RUNTIME_SKILL_IDS,
-  TOOL_CALL_RESULT_CODES
+  RUNTIME_SKILL_IDS
 } from './constants'
 
 export const runtimeSkillIdSchema = z.enum(RUNTIME_SKILL_IDS)
 export const toolFamilyIdSchema = z.enum(AI_TOOL_FAMILY_IDS)
-export const toolCallResultCodeSchema = z.enum(TOOL_CALL_RESULT_CODES)
 export const humanStageSchema = z.enum(HUMAN_STAGES)
 export const humanStatusSchema = z.enum(HUMAN_STATUSES)
 export const humanDecisionHintCodeSchema = z.enum(HUMAN_DECISION_HINT_CODES)
@@ -56,7 +54,6 @@ export const toolCallDiagnosticSchema = z.object({
 export const toolCallResultSchema = z.object({
   toolName: z.string().min(1),
   ok: z.boolean(),
-  code: toolCallResultCodeSchema,
   data: jsonValueSchema.optional(),
   diagnostic: toolCallDiagnosticSchema.optional(),
   resourceContext: toolResourceContextSchema.optional()
@@ -167,8 +164,6 @@ export const humanDecisionHintSchema = z.discriminatedUnion('code', [
 export const humanHistoryToolResultSchema = z.object({
   toolName: z.string().min(1),
   ok: z.boolean(),
-  code: toolCallResultCodeSchema,
-  summary: z.string().min(1),
   data: jsonValueSchema.optional(),
   diagnosticText: z.string().optional(),
   artifactRefs: z.array(aiArtifactRefSchema).optional(),

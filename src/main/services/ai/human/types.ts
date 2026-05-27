@@ -10,8 +10,7 @@ import {
   HUMAN_STAGES,
   HUMAN_STEP_ACTIONS,
   HUMAN_STEP_RESULT_STATUSES,
-  RUNTIME_SKILL_IDS,
-  TOOL_CALL_RESULT_CODES
+  RUNTIME_SKILL_IDS
 } from './constants'
 import {
   humanThoughtSchema,
@@ -51,7 +50,6 @@ export type HumanStage = (typeof HUMAN_STAGES)[number]
 export type HumanStatus = (typeof HUMAN_STATUSES)[number]
 export type HumanStepAction = (typeof HUMAN_STEP_ACTIONS)[number]
 export type HumanStepResultStatus = (typeof HUMAN_STEP_RESULT_STATUSES)[number]
-export type ToolCallResultCode = (typeof TOOL_CALL_RESULT_CODES)[number]
 export type HumanSkillSource = (typeof HUMAN_SKILL_SOURCES)[number]
 export type HumanRoundExecutionKind = (typeof HUMAN_ROUND_EXECUTION_KINDS)[number]
 

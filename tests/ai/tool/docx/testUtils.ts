@@ -1,9 +1,6 @@
 import type { DocxChangedBlock, DocxOutlineBlock } from '../../../../src/main/services/ai/human/tools/docx/types'
 
 export type DocxOutlineResult = {
-  ok: boolean
-  code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
-  summary: string
   sourcePath: string
   currentRevisionRef: string
   blocks: Array<
@@ -42,9 +39,6 @@ export type DocxOutlineResult = {
 }
 
 export type DocxSearchResult = {
-  ok: boolean
-  code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
-  summary: string
   sourcePath: string
   currentRevisionRef: string
   mode: 'literal' | 'regex' | 'semantic'
@@ -67,9 +61,6 @@ export type DocxSearchResult = {
 }
 
 export type DocxReadResult = {
-  ok: boolean
-  code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
-  summary: string
   sourcePath: string
   currentRevisionRef: string
   fromBlockIndex?: number
@@ -154,18 +145,12 @@ export type DocxReadResult = {
 }
 
 export type DocxCreateResult = {
-  ok: boolean
-  code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
-  summary: string
   sourcePath: string
   currentRevisionRef: string
   created: true
 }
 
 export type DocxMutationResult = {
-  ok: boolean
-  code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
-  summary: string
   sourcePath: string
   previousRevisionRef: string
   currentRevisionRef: string
@@ -175,9 +160,6 @@ export type DocxMutationResult = {
 }
 
 export type DocxHistoryResult = {
-  ok: boolean
-  code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
-  summary: string
   sourcePath: string
   currentRevisionRef: string
   revisions: Array<{
@@ -191,20 +173,15 @@ export type DocxHistoryResult = {
 }
 
 export type DocxRollbackResult = {
-  ok: boolean
-  code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
-  summary: string
   sourcePath: string
   currentRevisionRef: string
   previousRevisionRef: string
 }
 
 export type DocxFailureResult = {
-  ok: false
-  code: 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
-  summary: string
   error: string
   warnings: string[]
+  reason?: string
 }
 
 export const findOutlineBlock = (

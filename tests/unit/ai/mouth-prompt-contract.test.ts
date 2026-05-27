@@ -91,13 +91,10 @@ describe('ai unit mouth prompt contract', () => {
             {
               toolName: 'docx_create',
               ok: true,
-              code: 'ok',
-              summary: '已创建总结 docx',
               data: {
-                ok: true,
-                code: 'ok',
                 sourcePath: '深度学习与图形学复习总结.docx',
-                summary: '创建并写入总结正文'
+                currentRevisionRef: 'rev-1',
+                created: true
               }
             }
           ]

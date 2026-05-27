@@ -18,10 +18,7 @@ describe('ai unit hand followup signals', () => {
         {
           toolName: 'docx_outline',
           ok: false,
-          code: 'result_too_large',
           data: {
-            ok: false,
-            code: 'result_too_large',
             error: 'docx result too large',
             decisionHint: {
               code: 'hand_tool_result_too_large',
@@ -64,10 +61,7 @@ describe('ai unit hand followup signals', () => {
         {
           toolName: 'docx_table_edit',
           ok: false,
-          code: 'invalid_input',
           data: {
-            ok: false,
-            code: 'invalid_input',
             error: DOCX_POSITIONED_LAYOUT_PROTECTION_MESSAGE
           },
           diagnostic: {

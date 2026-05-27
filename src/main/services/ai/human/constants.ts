@@ -32,15 +32,6 @@ export const HUMAN_STEP_ACTIONS = [
 
 export const HUMAN_STEP_RESULT_STATUSES = ['ok', 'error'] as const
 
-export const TOOL_CALL_RESULT_CODES = [
-  'ok',
-  'failed',
-  'workspace_required',
-  'approval_denied',
-  'invalid_input',
-  'result_too_large'
-] as const
-
 export const HUMAN_DECISION_HINT_CODES = [
   'learning_no_effect',
   'terminal_approval_blocked',

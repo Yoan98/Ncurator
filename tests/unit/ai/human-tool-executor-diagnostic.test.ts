@@ -64,7 +64,6 @@ describe('ai unit human tool executor diagnostic', () => {
     })
 
     expect(result.ok).toBe(false)
-    expect(result.code).toBe('invalid_input')
     expect(result.diagnostic?.message).toBeTruthy()
     expect(result.diagnostic?.message).toContain('command')
     expect(result.diagnostic?.message).not.toContain('missingArgs')

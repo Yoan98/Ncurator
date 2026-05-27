@@ -336,10 +336,7 @@ describe('ai unit human memory history', () => {
                       {
                         toolName: 'terminal_run',
                         ok: true,
-                        code: 'ok',
                         data: {
-                          ok: true,
-                          code: 'ok',
                           stdout: `/workspace/round-${round}`
                         }
                       }
@@ -503,10 +500,7 @@ describe('ai unit human memory history', () => {
           {
             toolName: 'docx_read_blocks',
             ok: true,
-            code: 'ok',
             data: {
-              ok: true,
-              code: 'ok',
               sourcePath: 'graphics.docx',
               fromBlockIndex: 23,
               toBlockIndex: 25,
@@ -537,8 +531,6 @@ describe('ai unit human memory history', () => {
     }
 
     expect(nextHistory.rounds[0].execution.toolResults[0]?.data).toEqual({
-      ok: true,
-      code: 'ok',
       sourcePath: 'graphics.docx',
       fromBlockIndex: 23,
       toBlockIndex: 25,

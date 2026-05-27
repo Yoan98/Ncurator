@@ -61,11 +61,7 @@ describe('ai unit brain decision-hint prompt contract', () => {
             {
               toolName: 'docx_paragraph_edit',
               ok: false,
-              code: 'invalid_input',
-              summary: 'tool call failed',
               data: {
-                ok: false,
-                code: 'invalid_input',
                 error: 'cannot safely resolve target after earlier mutations'
               },
               diagnosticText: 'cannot safely resolve target after earlier mutations'

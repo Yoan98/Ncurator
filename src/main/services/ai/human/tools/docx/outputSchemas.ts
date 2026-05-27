@@ -159,18 +159,11 @@ const docxPostWriteReadbackOutputSchema = z.object({
 })
 
 const docxBaseOutputSchema = z.object({
-  ok: z.boolean(),
-  code: docxResultCodeSchema,
-  summary: z.string().optional(),
   sourcePath: z.string().optional(),
-  currentRevisionRef: z.string().optional(),
-  resourceContext: toolResourceContextSchema.optional()
+  currentRevisionRef: z.string().optional()
 })
 
 export const docxOutlineOutputSchema = docxBaseOutputSchema.extend({
-  ok: z.literal(true),
-  code: z.literal('ok'),
-  summary: z.string(),
   sourcePath: z.string(),
   currentRevisionRef: z.string(),
   totalBlockCount: z.number().int().min(0),
@@ -178,9 +171,6 @@ export const docxOutlineOutputSchema = docxBaseOutputSchema.extend({
 })
 
 export const docxSearchOutputSchema = docxBaseOutputSchema.extend({
-  ok: z.literal(true),
-  code: z.literal('ok'),
-  summary: z.string(),
   sourcePath: z.string(),
   currentRevisionRef: z.string(),
   mode: z.enum(['literal', 'regex', 'semantic']),
@@ -211,9 +201,6 @@ export const docxSearchOutputSchema = docxBaseOutputSchema.extend({
 })
 
 export const docxReadBlocksOutputSchema = docxBaseOutputSchema.extend({
-  ok: z.literal(true),
-  code: z.literal('ok'),
-  summary: z.string(),
   sourcePath: z.string(),
   currentRevisionRef: z.string(),
   fromBlockIndex: z.number().int(),
@@ -222,9 +209,6 @@ export const docxReadBlocksOutputSchema = docxBaseOutputSchema.extend({
 })
 
 export const docxHistoryOutputSchema = docxBaseOutputSchema.extend({
-  ok: z.literal(true),
-  code: z.literal('ok'),
-  summary: z.string(),
   sourcePath: z.string(),
   currentRevisionRef: z.string(),
   revisions: z.array(
@@ -240,9 +224,6 @@ export const docxHistoryOutputSchema = docxBaseOutputSchema.extend({
 })
 
 export const docxWriteOutputSchema = docxBaseOutputSchema.extend({
-  ok: z.literal(true),
-  code: z.literal('ok'),
-  summary: z.string(),
   sourcePath: z.string(),
   previousRevisionRef: z.string(),
   currentRevisionRef: z.string(),
@@ -254,9 +235,6 @@ export const docxWriteOutputSchema = docxBaseOutputSchema.extend({
 })
 
 export const docxRollbackOutputSchema = docxBaseOutputSchema.extend({
-  ok: z.literal(true),
-  code: z.literal('ok'),
-  summary: z.string(),
   sourcePath: z.string(),
   previousRevisionRef: z.string(),
   currentRevisionRef: z.string()

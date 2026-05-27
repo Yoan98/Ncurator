@@ -340,7 +340,7 @@ const failIfPositionedBlock = async (input: {
   return input.runtime.emitFailure({
     toolName: input.toolName,
     toolCallId: input.toolCallId,
-    code: 'invalid_input',
+    reason: 'invalid_input',
     error: buildPositionedReadOnlyMessage(),
     draftDocId: input.docId,
     resourceContext: input.runtime.buildResourceContext({
@@ -457,9 +457,6 @@ type ApplySingleEditResult =
     }
 
 type WriteToolResult = {
-  ok: true
-  code: 'ok'
-  summary: string
   sourcePath: string
   previousRevisionRef?: string
   currentRevisionRef: string
@@ -468,7 +465,6 @@ type WriteToolResult = {
   createdBlocks?: DocxCreatedBlock[]
   warnings: string[]
   postWriteReadback: DocxPostWriteReadback
-  resourceContext: ReturnType<DocxToolRuntime['buildResourceContext']>
 }
 
 const applySingleEdit = async (input: {
@@ -504,7 +500,7 @@ const applySingleEdit = async (input: {
       failure: input.runtime.emitFailure({
         toolName: input.toolName,
         toolCallId: input.toolCallId,
-        code: 'failed',
+        reason: 'failed',
         error: 'worker protocol mismatch (apply_ops)',
         draftDocId: input.currentDocId
       })
@@ -572,9 +568,6 @@ const buildWriteToolResult = async (input: {
   })
 
   return {
-    ok: true,
-    code: 'ok',
-    summary: input.summary,
     sourcePath: input.sourcePath,
     previousRevisionRef: input.previousRevisionRef,
     currentRevisionRef: input.currentRevisionRef,
@@ -582,13 +575,7 @@ const buildWriteToolResult = async (input: {
     changedBlocks: input.changedBlocks,
     createdBlocks: input.createdBlocks,
     warnings: input.warnings,
-    postWriteReadback,
-    resourceContext: input.runtime.buildResourceContext({
-      sourcePath: input.sourcePath,
-      effectKind: 'mutated',
-      previousRevisionRef: input.previousRevisionRef,
-      currentRevisionRef: input.currentRevisionRef
-    })
+    postWriteReadback
   }
 }
 
@@ -616,7 +603,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           failure: runtime.emitFailure({
             toolName,
             toolCallId,
-            code: 'invalid_input',
+            reason: 'invalid_input',
             error: 'sourcePath must be a workspace-bound .docx path'
           }),
           activity: {
@@ -789,8 +776,6 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           toolCallId,
           result,
           outputPreview: {
-            ok: true,
-            code: 'ok',
             sourcePath: result.sourcePath,
             currentRevisionRef: result.currentRevisionRef,
             created: true
@@ -798,7 +783,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           activity: {
             actionType: DOCX_CREATE_TOOL_SPEC.activityActionType!,
             startedSummary: `创建 docx: ${args.sourcePath}`,
-            buildCompletedSummary: (output: typeof result) => output.summary
+            buildCompletedSummary: () => `创建 docx 成功: ${args.sourcePath}`
           }
         })
       } finally {
@@ -910,8 +895,6 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         toolCallId,
         result,
         outputPreview: {
-          ok: true,
-          code: 'ok',
           sourcePath: result.sourcePath,
           previousRevisionRef: result.previousRevisionRef,
           currentRevisionRef: result.currentRevisionRef,
@@ -923,7 +906,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         activity: {
           actionType: DOCX_PARAGRAPH_EDIT_TOOL_SPEC.activityActionType!,
           startedSummary: `执行段落编辑: ${args.action}`,
-          buildCompletedSummary: (output) => output.summary
+          buildCompletedSummary: () => `段落编辑完成: ${args.action}`
         }
       })
     }
@@ -1026,8 +1009,6 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         toolCallId,
         result,
         outputPreview: {
-          ok: true,
-          code: 'ok',
           sourcePath: result.sourcePath,
           previousRevisionRef: result.previousRevisionRef,
           currentRevisionRef: result.currentRevisionRef,
@@ -1039,7 +1020,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         activity: {
           actionType: DOCX_HEADING_EDIT_TOOL_SPEC.activityActionType!,
           startedSummary: `执行标题编辑: ${args.action}`,
-          buildCompletedSummary: (output) => output.summary
+          buildCompletedSummary: () => `标题编辑完成: ${args.action}`
         }
       })
     }
@@ -1168,8 +1149,6 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         toolCallId,
         result,
         outputPreview: {
-          ok: true,
-          code: 'ok',
           sourcePath: result.sourcePath,
           previousRevisionRef: result.previousRevisionRef,
           currentRevisionRef: result.currentRevisionRef,
@@ -1181,7 +1160,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         activity: {
           actionType: DOCX_TABLE_EDIT_TOOL_SPEC.activityActionType!,
           startedSummary: `执行表格编辑: ${args.action}`,
-          buildCompletedSummary: (output) => output.summary
+          buildCompletedSummary: () => `表格编辑完成: ${args.action}`
         }
       })
     }
@@ -1285,8 +1264,6 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         toolCallId,
         result,
         outputPreview: {
-          ok: true,
-          code: 'ok',
           sourcePath: result.sourcePath,
           previousRevisionRef: result.previousRevisionRef,
           currentRevisionRef: result.currentRevisionRef,
@@ -1297,7 +1274,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         activity: {
           actionType: DOCX_TEXT_EDIT_TOOL_SPEC.activityActionType!,
           startedSummary: `执行文本替换: ${args.query}`,
-          buildCompletedSummary: (output) => output.summary
+          buildCompletedSummary: () => `文本替换完成: ${args.query}`
         }
       })
     }
@@ -1394,8 +1371,6 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         toolCallId,
         result,
         outputPreview: {
-          ok: true,
-          code: 'ok',
           sourcePath: result.sourcePath,
           previousRevisionRef: result.previousRevisionRef,
           currentRevisionRef: result.currentRevisionRef,
@@ -1406,7 +1381,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         activity: {
           actionType: DOCX_TEXT_STYLE_EDIT_TOOL_SPEC.activityActionType!,
           startedSummary: `执行文本样式编辑: ${args.query}`,
-          buildCompletedSummary: (output) => output.summary
+          buildCompletedSummary: () => `文本样式编辑完成: ${args.query}`
         }
       })
     }
@@ -1500,8 +1475,6 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         toolCallId,
         result,
         outputPreview: {
-          ok: true,
-          code: 'ok',
           sourcePath: result.sourcePath,
           previousRevisionRef: result.previousRevisionRef,
           currentRevisionRef: result.currentRevisionRef,
@@ -1513,7 +1486,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         activity: {
           actionType: DOCX_DELETE_TOOL_SPEC.activityActionType!,
           startedSummary: `执行删除: ${String(args.blockIds.length)} 个 block`,
-          buildCompletedSummary: (output) => output.summary
+          buildCompletedSummary: () => `删除完成: ${String(args.blockIds.length)} 个 block`
         }
       })
     }
@@ -1570,18 +1543,9 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         targetRevisionRef: resolved.targetRevisionRef
       })
       const result = {
-        ok: true,
-        code: 'ok' as const,
-        summary: `已切回修订 ${resolved.targetRevisionRef}`,
         sourcePath: sessionResult.sourcePath,
         previousRevisionRef: revisionState.previousRevisionRef,
-        currentRevisionRef: revisionState.currentRevisionRef,
-        resourceContext: runtime.buildResourceContext({
-          sourcePath: sessionResult.sourcePath,
-          effectKind: 'rolled_back',
-          previousRevisionRef: revisionState.previousRevisionRef,
-          currentRevisionRef: revisionState.currentRevisionRef
-        })
+        currentRevisionRef: revisionState.currentRevisionRef
       }
       return finalizeDocxToolSuccess({
         runtime,
@@ -1593,7 +1557,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         activity: {
           actionType: DOCX_ROLLBACK_TOOL_SPEC.activityActionType!,
           startedSummary: `准备回退到 ${args.revisionRef}`,
-          buildCompletedSummary: (output) => output.summary
+          buildCompletedSummary: () => `已切回修订 ${resolved.targetRevisionRef}`
         }
       })
     }

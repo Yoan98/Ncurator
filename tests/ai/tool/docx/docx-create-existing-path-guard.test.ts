@@ -47,9 +47,7 @@ describe('ai tool docx backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.failure.ok === false &&
-            result.failure.code === 'invalid_input' &&
-            result.unchanged === true,
+          result.failure.error.length > 0 && result.unchanged === true,
           {
             name: 'docx-create-refuses-existing-path',
             message: 'docx_create 遇到已存在路径时应明确失败，且不覆盖原文件。',

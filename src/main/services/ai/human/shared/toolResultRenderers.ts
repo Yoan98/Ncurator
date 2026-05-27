@@ -255,8 +255,7 @@ const renderDocxOutlineResult = (obj: JsonObject): string =>
   [
     renderKeyValuePairs([
       ['sourcePath', readStringField(obj, 'sourcePath')],
-      ['currentRevisionRef', readStringField(obj, 'currentRevisionRef')],
-      ['result', readStringField(obj, 'code')]
+      ['currentRevisionRef', readStringField(obj, 'currentRevisionRef')]
     ]),
     'blocks:',
     renderDocxBlocks(obj.blocks)
@@ -280,8 +279,7 @@ const renderDocxCreateResult = (obj: JsonObject): string =>
   renderKeyValuePairs([
     ['sourcePath', readStringField(obj, 'sourcePath')],
     ['currentRevisionRef', readStringField(obj, 'currentRevisionRef')],
-    ['created', renderPrimitive(obj.created)],
-    ['summary', readStringField(obj, 'summary')]
+    ['created', renderPrimitive(obj.created)]
   ])
 
 export const renderToolResourceContextText = (
@@ -333,7 +331,13 @@ export const buildToolCallDisplayText = (
   result: Pick<ToolCallResult, 'toolName' | 'ok'>
 ): string => `调用工具 ${result.toolName}（${result.ok ? '成功' : '失败'}）`
 
-export const resolveToolResultErrorText = (result: Pick<ToolCallResult, 'code' | 'data'>): string => {
+export const resolveToolResultErrorText = (
+  result: Pick<ToolCallResult, 'data'> & { diagnostic?: ToolCallResult['diagnostic'] }
+): string => {
+  if (result.diagnostic?.message.trim()) {
+    return result.diagnostic.message.trim()
+  }
+
   if (isJsonObject(result.data)) {
     const explicit =
       readStringField(result.data, 'error')
@@ -347,5 +351,5 @@ export const resolveToolResultErrorText = (result: Pick<ToolCallResult, 'code' |
     return result.data.trim()
   }
 
-  return `tool call failed (${result.code})`
+  return 'tool call failed'
 }

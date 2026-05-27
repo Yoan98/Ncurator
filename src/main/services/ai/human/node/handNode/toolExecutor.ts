@@ -3,15 +3,13 @@ import type { JsonObject, JsonValue } from '../../../../../../shared/types'
 import { isJsonObject } from '../../../../../utils/aiCapabilityUtils'
 import { clipText } from '../../../utils/text'
 import type { AiRunContext } from '../../../types'
-import { TOOL_CALL_RESULT_CODES } from '../../constants'
 import { ensureSkillTools } from '../learningNode/skillLoader'
 import { resolveToolResultErrorText } from '../../shared/toolResultRenderers'
 import { findEffectiveSkillIdByToolName, getEffectiveLearnedSkillIds } from '../../skills'
 import type {
   HumanRuntimeCache,
   RuntimeSkillId,
-  ToolCallResult,
-  ToolCallResultCode
+  ToolCallResult
 } from '../../types'
 import { withToolLifecycle } from '../../tools/utils/lifecycle'
 import { createToolEventEmitter } from '../../tools/utils/toolEvents'
@@ -30,22 +28,6 @@ const findTool = (input: {
   return undefined
 }
 
-const isToolCallResultCode = (value: string): value is ToolCallResultCode =>
-  TOOL_CALL_RESULT_CODES.includes(value as ToolCallResultCode)
-
-const parseToolCallResultCode = (input: {
-  code?: JsonValue
-  ok?: boolean
-  success?: boolean
-}): ToolCallResultCode => {
-  const { code, ok, success } = input
-  if (typeof code === 'string' && isToolCallResultCode(code)) {
-    return code
-  }
-
-  return ok === false || success === false ? 'failed' : 'ok'
-}
-
 const summarizePreviewRow = (value: JsonValue): string | undefined => {
   if (!isJsonObject(value)) return undefined
 
@@ -60,9 +42,7 @@ const summarizePreviewRow = (value: JsonValue): string | undefined => {
   const text =
     typeof value.text === 'string'
       ? clipText(value.text.trim().replace(/\s+/g, ' '), 80)
-      : typeof value.summary === 'string'
-        ? clipText(value.summary.trim().replace(/\s+/g, ' '), 80)
-        : ''
+      : ''
 
   if (name && text) return `${name}: ${text}`
   if (name) return name
@@ -94,7 +74,6 @@ const summarizeObjectPayload = (toolName: string, payload: JsonObject): string |
 }
 
 const inferDiagnosticMessage = (input: {
-  code: ToolCallResultCode
   message: string
   payload?: JsonObject
 }): string | undefined => {
@@ -107,7 +86,7 @@ const inferDiagnosticMessage = (input: {
     return input.message.trim()
   }
 
-  return input.code === 'invalid_input' ? 'tool call failed (invalid_input)' : undefined
+  return undefined
 }
 
 const resolvePayloadMessage = (toolName: string, payload: JsonObject): string =>
@@ -115,9 +94,7 @@ const resolvePayloadMessage = (toolName: string, payload: JsonObject): string =>
     ? payload.error
     : typeof payload.message === 'string'
       ? payload.message
-      : typeof payload.summary === 'string'
-        ? payload.summary
-        : summarizeObjectPayload(toolName, payload) || `${toolName} executed`
+      : summarizeObjectPayload(toolName, payload) || `${toolName} executed`
 
 const normalizeToolCallResult = (
   toolName: string,
@@ -125,20 +102,23 @@ const normalizeToolCallResult = (
 ): ToolCallResult => {
   if (isJsonObject(payload)) {
     const ok = payload.ok !== false && payload.success !== false
-    const code = parseToolCallResultCode({
-      code: payload.code,
-      ok: payload.ok === false ? false : payload.ok === true ? true : undefined,
-      success: payload.success === false ? false : payload.success === true ? true : undefined
-    })
     const payloadMessage = resolvePayloadMessage(toolName, payload)
+    const {
+      ok: _ignoredOk,
+      success: _ignoredSuccess,
+      code: _ignoredCode,
+      summary: _ignoredSummary,
+      resourceContext: candidateResourceContext,
+      diagnostic: _ignoredDiagnostic,
+      ...data
+    } = payload
 
     return {
       toolName,
       ok,
-      code,
-      data: payload,
+      data,
       resourceContext: (() => {
-        const candidate = payload.resourceContext
+        const candidate = candidateResourceContext
         if (
           isJsonObject(candidate) &&
           typeof candidate.family === 'string' &&
@@ -166,7 +146,6 @@ const normalizeToolCallResult = (
         ? undefined
         : (() => {
             const diagnosticMessage = inferDiagnosticMessage({
-              code,
               message: payloadMessage,
               payload
             })
@@ -179,7 +158,6 @@ const normalizeToolCallResult = (
     return {
       toolName,
       ok: true,
-      code: 'ok',
       data: payload
     }
   }
@@ -188,7 +166,6 @@ const normalizeToolCallResult = (
     return {
       toolName,
       ok: true,
-      code: 'ok',
       data: payload
     }
   }
@@ -196,7 +173,6 @@ const normalizeToolCallResult = (
   return {
     toolName,
     ok: true,
-    code: 'ok',
     data: payload
   }
 }
@@ -237,10 +213,7 @@ export const executeToolCall = async (input: {
     const result: ToolCallResult = {
       toolName: input.toolName,
       ok: false,
-      code: 'invalid_input',
       data: {
-        ok: false,
-        code: 'invalid_input',
         error: `当前未学习可执行工具 ${input.toolName}。`
       },
       diagnostic: {
@@ -270,10 +243,7 @@ export const executeToolCall = async (input: {
     return {
       toolName: input.toolName,
       ok: false,
-      code: 'invalid_input',
       data: {
-        ok: false,
-        code: 'invalid_input',
         error: message
       },
       diagnostic: {

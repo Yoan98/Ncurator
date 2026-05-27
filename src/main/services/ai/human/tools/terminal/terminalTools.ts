@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { tool } from '@langchain/core/tools'
 import type {
-  AiTaskResultCode,
   AiToolCallResult,
   JsonObject,
   IpcJsonObject
@@ -32,12 +31,10 @@ const isJsonObjectRecord = (value: AiToolCallResult['data']): value is JsonObjec
 const buildTerminalToolResult = (input: {
   toolName: string
   ok: boolean
-  code: AiTaskResultCode
   data: AiToolCallResult['data']
 }): AiToolCallResult => ({
   toolName: input.toolName,
   ok: input.ok,
-  code: input.code,
   data: input.data,
   diagnostic:
     input.ok || !isJsonObjectRecord(input.data)
@@ -47,9 +44,9 @@ const buildTerminalToolResult = (input: {
         : undefined
 })
 
-const buildFailure = <TCode extends AiTaskResultCode>(input: { code: TCode; error: string }) => ({
+const buildFailure = <TReason extends string>(input: { reason: TReason; error: string }) => ({
   ok: false as const,
-  code: input.code,
+  reason: input.reason,
   error: input.error
 })
 
@@ -176,7 +173,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
           const command = String(args.command || '').trim()
           if (!command) {
             const emptyResult = buildFailure({
-              code: 'invalid_input',
+              reason: 'invalid_input',
               error: 'empty command'
             })
             session.fail(
@@ -186,7 +183,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               buildTerminalToolResult({
                 toolName: TERMINAL_RUN_TOOL_SPEC.name,
                 ok: false,
-                code: emptyResult.code,
                 data: emptyResult
               })
             )
@@ -199,7 +195,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
           })
           if (!cwdResult.ok) {
             const cwdError = buildFailure({
-              code: cwdResult.code,
+              reason: cwdResult.code,
               error: cwdResult.error
             })
             session.fail(
@@ -209,7 +205,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               buildTerminalToolResult({
                 toolName: TERMINAL_RUN_TOOL_SPEC.name,
                 ok: false,
-                code: cwdError.code,
                 data: cwdError
               })
             )
@@ -220,7 +215,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
           const boundary = checkWorkspaceBoundary(command, input.workspaceRootPath)
           if (!boundary.ok) {
             const boundaryError = buildFailure({
-              code: 'workspace_required',
+              reason: 'workspace_required',
               error: `workspace boundary check failed: ${boundary.reason}`
             })
             session.fail(
@@ -230,7 +225,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               buildTerminalToolResult({
                 toolName: TERMINAL_RUN_TOOL_SPEC.name,
                 ok: false,
-                code: boundaryError.code,
                 data: boundaryError
               })
             )
@@ -265,7 +259,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               approvalBatchResult.decisions[0]?.action === 'approve'
             if (!approved) {
               const denied = buildFailure({
-                code: 'approval_denied',
+                reason: 'approval_denied',
                 error: `command requires approval preflight: ${readonlyPolicy.reason}`
               })
               session.fail(
@@ -275,7 +269,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
                 buildTerminalToolResult({
                   toolName: TERMINAL_RUN_TOOL_SPEC.name,
                   ok: false,
-                  code: denied.code,
                   data: denied
                 })
               )
@@ -353,27 +346,19 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
           const tooLarge = !stepError && estimatedTokens > aiResultTokenLimit
 
           const payload = {
-            ok: !stepError && !tooLarge,
-            code: (stepError ? 'failed' : tooLarge ? 'result_too_large' : 'ok') as
-              'failed' | 'ok' | 'result_too_large',
-            command,
-            cwd,
             stdout: result.stdout,
             stderr: result.stderr,
             exitCode: result.exitCode,
             timedOut: result.timedOut,
             artifacts
           } as {
-            ok: boolean
-            code: 'failed' | 'ok' | 'result_too_large'
-            command: string
-            cwd: string
             stdout: string
             stderr: string
             exitCode: number | null
             timedOut: boolean
             artifacts: typeof artifacts
             error?: string
+            reason?: 'failed' | 'result_too_large'
             estimatedTokens?: number
             limit?: number
             decisionHint?: HumanDecisionHint
@@ -387,7 +372,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               buildTerminalToolResult({
                 toolName: TERMINAL_RUN_TOOL_SPEC.name,
                 ok: false,
-                code: 'failed',
                 data: payload
               })
             )
@@ -409,7 +393,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               buildTerminalToolResult({
                 toolName: TERMINAL_RUN_TOOL_SPEC.name,
                 ok: false,
-                code: 'result_too_large',
                 data: payload
               })
             )
@@ -421,7 +404,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             buildTerminalToolResult({
               toolName: TERMINAL_RUN_TOOL_SPEC.name,
               ok: true,
-              code: 'ok',
               data: payload
             })
           )
