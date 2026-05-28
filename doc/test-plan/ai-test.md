@@ -41,6 +41,8 @@
       - `依据：真实双 run 下 conversation summary 与 recent turns 已成功承接，第二轮 brain 明确带回第一轮形成的风险主线、负责人分工、待确认项和后续动作；当前更合理的正式口径应聚焦“总结是否有效影响后续”，而不是把 Alice / Bob 的单点排序绑定为唯一正确答案。`
     - `human-context-compaction-natural-trigger-live`：`8.7 / 10`
       - `依据：已在 `15_000` window 下真实触发 compaction，压缩摘要、后续 `<compactions>` 与真实草稿读回都保持了风险主线、负责人和后续动作等核心事实；最新一轮 `mouth` 也已守住真实文件名。当前主要问题已从“任务未完成”转为“旧断言过度绑定 mouth 话术”，按任务完成度应评为高分通过样例。`
+    - `human-session-resume-with-new-selection-live`：`8.5 / 10`
+      - `依据：2026-05-28 定向复跑 1 轮，耗时约 `441s`。Run 1 在真实读取 `深度学习.docx` 并拿到过拟合事实后注入 `network_error`；Run 2 同 session 恢复后使用旧过拟合上下文，并基于新选择的 `图形学.docx` 补充反走样信息完成对比小结。最终答复同时命中过拟合与反走样关键事实，恢复效果成立；主要扣分点是仍出现 2 次 `brain_todolist_incomplete`，以及当前正式断言仍与已调整的恢复提示词不完全对齐。`
 
 ## 3. Suite 设计
 
