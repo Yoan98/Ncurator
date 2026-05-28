@@ -21,6 +21,19 @@ const isTextOutputStep = (
 ): step is Extract<ScriptedLlmStep, { text: string }> =>
   typeof step === 'object' && step !== null && 'text' in step
 
+const isWaitForAbortStep = (
+  step: ScriptedLlmStep
+): step is Extract<ScriptedLlmStep, { waitForAbort: true }> =>
+  typeof step === 'object' && step !== null && 'waitForAbort' in step
+
+const isDelayedErrorStep = (
+  step: ScriptedLlmStep
+): step is Extract<ScriptedLlmStep, { waitMs: number; thenError: string }> =>
+  typeof step === 'object' &&
+  step !== null &&
+  'waitMs' in step &&
+  'thenError' in step
+
 const estimateScriptedUsage = (input: {
   system: string
   user: string
@@ -67,6 +80,21 @@ const resolveStructuredOutput = (value: JsonObject | string): JsonObject => {
 
 export const createScriptedStructuredOutputDriver = (script: LlmScript): AiLlmDriver => {
   const callIndexes = new Map<string, number>()
+
+  const waitForAbort = async (input: {
+    signal?: AbortSignal
+    onAbortError?: string
+  }): Promise<never> =>
+    await new Promise<never>((_resolve, reject) => {
+      const abort = () => {
+        reject(new Error(input.onAbortError || 'scripted_wait_for_abort'))
+      }
+      if (input.signal?.aborted) {
+        abort()
+        return
+      }
+      input.signal?.addEventListener('abort', abort, { once: true })
+    })
 
   const nextCall = (input: {
     caller: string
@@ -137,6 +165,18 @@ export const createScriptedStructuredOutputDriver = (script: LlmScript): AiLlmDr
 
       if (isErrorStep(step)) {
         throw new Error(step.error)
+      }
+
+      if (isWaitForAbortStep(step)) {
+        return await waitForAbort({
+          signal: input.signal,
+          onAbortError: step.onAbortError
+        })
+      }
+
+      if (isDelayedErrorStep(step)) {
+        await new Promise((resolve) => setTimeout(resolve, step.waitMs))
+        throw new Error(step.thenError)
       }
 
       if (isObjectOutputStep(step)) {
@@ -218,6 +258,18 @@ export const createScriptedStructuredOutputDriver = (script: LlmScript): AiLlmDr
 
       if (isErrorStep(step)) {
         throw new Error(step.error)
+      }
+
+      if (isWaitForAbortStep(step)) {
+        return await waitForAbort({
+          signal: input.signal,
+          onAbortError: step.onAbortError
+        })
+      }
+
+      if (isDelayedErrorStep(step)) {
+        await new Promise((resolve) => setTimeout(resolve, step.waitMs))
+        throw new Error(step.thenError)
       }
 
       if (isTextOutputStep(step)) {

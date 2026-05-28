@@ -246,7 +246,7 @@ describe('ai unit llm executor text path', () => {
       details: {
         streamed: true,
         chunkCount: 513,
-        reason: expect.stringContaining('llm_stream_blank_delta_stall; blankChunks=513')
+        reason: 'error'
       }
     })
     expect(llmIoRecords[0]).toMatchObject({
@@ -257,6 +257,89 @@ describe('ai unit llm executor text path', () => {
       chunkCount: 513,
       status: 'failed',
       reason: expect.stringContaining('llm_stream_blank_delta_stall; blankChunks=513')
+    })
+  })
+
+  it('preserves cancellation errors when external abort is triggered', async () => {
+    const controller = new AbortController()
+    const driver: AiLlmDriver = {
+      chatText: async (input) =>
+        await new Promise((_resolve, reject) => {
+          input.signal?.addEventListener(
+            'abort',
+            () => reject(Object.assign(new Error('cancelled'), { code: 'CANCELLED' })),
+            { once: true }
+          )
+        })
+    }
+    const executor = createAiLlmExecutor({
+      eventCtx: {
+        runId: 'run-cancel',
+        sendEvent: () => undefined
+      },
+      runtimeSettings: {
+        llmStreamingMode: 'force_non_stream'
+      },
+      getConfig: async () => baseConfig,
+      saveConfig: async () => undefined,
+      checkCancelled: () => undefined,
+      abortSignal: controller.signal,
+      driver
+    })
+
+    const pending = executor.chatText({
+      caller: 'human.mouth',
+      taskId: 'task-cancel',
+      schemaName: 'human_mouth_markdown',
+      system: 'system prompt',
+      user: 'user prompt'
+    })
+    setTimeout(() => controller.abort(), 0)
+
+    await expect(pending).rejects.toMatchObject({
+      message: 'cancelled',
+      code: 'CANCELLED'
+    })
+  })
+
+  it('passes the fixed llm timeout into model creation', async () => {
+    createChatModelMock.mockImplementation(() => ({
+      invoke: async () => ({
+        content: 'ok'
+      }),
+      stream: async () => ({
+        async *[Symbol.asyncIterator]() {
+          yield { content: 'ok' }
+        }
+      }),
+      withConfig: () => {
+        throw new Error('text output should not call withConfig')
+      }
+    }))
+
+    const executor = createAiLlmExecutor({
+      eventCtx: {
+        runId: 'run-timeout-prop',
+        sendEvent: () => undefined
+      },
+      runtimeSettings: {
+        llmStreamingMode: 'force_non_stream'
+      },
+      getConfig: async () => baseConfig,
+      saveConfig: async () => undefined,
+      checkCancelled: () => undefined
+    })
+
+    await executor.chatText({
+      caller: 'human.mouth',
+      taskId: 'task-timeout-prop',
+      schemaName: 'human_mouth_markdown',
+      system: 'system prompt',
+      user: 'user prompt'
+    })
+
+    expect(createChatModelMock.mock.calls[0]?.[1]).toMatchObject({
+      timeout: 480000
     })
   })
 })

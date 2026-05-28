@@ -11,7 +11,7 @@ import {
 
 export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps): AiRunContext => {
   const checkCancelled = () => {
-    if (deps.isCancelled()) {
+    if (deps.abortSignal?.aborted || deps.isCancelled()) {
       const e = new Error('cancelled') as CancelledError
       e.code = 'CANCELLED'
       throw e
@@ -56,6 +56,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     getConfig: loadRequestedConfig,
     saveConfig: saveRequestedConfig,
     checkCancelled,
+    abortSignal: deps.abortSignal,
     driver: deps.llmDriver
   })
 

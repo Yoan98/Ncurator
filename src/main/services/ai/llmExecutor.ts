@@ -1,10 +1,12 @@
 import { HumanMessage, SystemMessage } from '@langchain/core/messages'
+import type { RunnableConfig } from '@langchain/core/runnables'
 import { z } from 'zod/v4'
 import { createChatModel, getSupportedTransportsForConfig } from '../llm/chatModel'
 import { normalizeJsonObject, normalizeLlmUsage } from '../llm/usage'
 import { resolveLlmProviderKind } from '../../../shared/llmProvider'
 import type {
   AiLlmUsage,
+  AiRunFailureCode,
   AiLlmStreamingMode,
   AiRuntimeSettings,
   AiStructuredOutputMethod,
@@ -18,6 +20,8 @@ import type {
   PreferredStructuredOutputProfile
 } from '../../../shared/types'
 import type { AiEventDispatchContext } from './types'
+import { AI_LLM_CALL_TIMEOUT_MS } from './constants'
+import { classifyLlmFailureCode } from './utils/runFailure'
 import {
   buildStructuredOutputAttemptOrder,
   classifyStructuredOutputError,
@@ -47,8 +51,14 @@ type TextMessage = {
 }
 
 type TextRunnable = {
-  invoke: (input: Array<SystemMessage | HumanMessage>) => Promise<TextMessage>
-  stream: (input: Array<SystemMessage | HumanMessage>) => Promise<AsyncIterable<TextMessage>>
+  invoke: (
+    input: Array<SystemMessage | HumanMessage>,
+    config?: Partial<RunnableConfig>
+  ) => Promise<TextMessage>
+  stream: (
+    input: Array<SystemMessage | HumanMessage>,
+    config?: Partial<RunnableConfig>
+  ) => Promise<AsyncIterable<TextMessage>>
   withConfig: (config: Record<string, unknown>) => TextRunnable
 }
 
@@ -61,6 +71,7 @@ type BaseLlmInvocationInput = {
   temperature?: number
   streamingMode: AiLlmStreamingMode
   observer?: LlmCallStreamObserver
+  signal?: AbortSignal
 }
 
 export type AiLlmTextInvocationInput = BaseLlmInvocationInput & {
@@ -176,6 +187,54 @@ const buildMessages = (system: string, user: string): Array<SystemMessage | Huma
 const MAX_CONSECUTIVE_BLANK_STREAM_CHUNKS = 512
 const MAX_CONSECUTIVE_BLANK_STREAM_MS = 120_000
 
+const createRunnableConfig = (signal?: AbortSignal): Partial<RunnableConfig> | undefined =>
+  signal ? { signal } : undefined
+
+const withAbortTimeout = async <T>(input: {
+  execute: (signal: AbortSignal) => Promise<T>
+  externalSignal?: AbortSignal
+  timeoutMs?: number
+}): Promise<T> => {
+  const controller = new AbortController()
+  const timeoutMs = Math.max(1, Number(input.timeoutMs || AI_LLM_CALL_TIMEOUT_MS))
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+  let cleanupAbortListener: (() => void) | undefined
+
+  const timeoutPromise = new Promise<never>((_resolve, reject) => {
+    timeoutId = setTimeout(() => {
+      const timeoutError = new Error('llm_call_timeout') as Error & { code?: string }
+      timeoutError.code = 'TIMEOUT'
+      controller.abort(timeoutError)
+      reject(timeoutError)
+    }, timeoutMs)
+  })
+
+  const externalAbortPromise = new Promise<never>((_resolve, reject) => {
+    if (!input.externalSignal) return
+    const onAbort = () => {
+      const cancelledError = new Error('cancelled') as Error & { code?: string }
+      cancelledError.code = 'CANCELLED'
+      controller.abort(cancelledError)
+      reject(cancelledError)
+    }
+    if (input.externalSignal.aborted) {
+      onAbort()
+      return
+    }
+    input.externalSignal.addEventListener('abort', onAbort, { once: true })
+    cleanupAbortListener = () => {
+      input.externalSignal?.removeEventListener('abort', onAbort)
+    }
+  })
+
+  try {
+    return await Promise.race([input.execute(controller.signal), timeoutPromise, externalAbortPromise])
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId)
+    cleanupAbortListener?.()
+  }
+}
+
 const resolveConfigProviderKind = (cfg: LLMConfig): LlmProviderKind =>
   resolveLlmProviderKind({
     providerKind: cfg.providerKind,
@@ -229,9 +288,10 @@ const streamTextFromRunnable = async (input: {
   messages: Array<SystemMessage | HumanMessage>
   observer?: LlmCallStreamObserver
   checkCancelled: () => void
+  signal?: AbortSignal
 }): Promise<{ text: string; message?: TextMessage }> => {
   input.checkCancelled()
-  const stream = await input.runnable.stream(input.messages)
+  const stream = await input.runnable.stream(input.messages, createRunnableConfig(input.signal))
   const chunks: string[] = []
   let lastChunk: TextMessage | undefined
   let blankChunkCount = 0
@@ -271,9 +331,10 @@ const invokeTextFromRunnable = async (input: {
   runnable: TextRunnable
   messages: Array<SystemMessage | HumanMessage>
   checkCancelled: () => void
+  signal?: AbortSignal
 }): Promise<{ text: string; message: TextMessage }> => {
   input.checkCancelled()
-  const response = await input.runnable.invoke(input.messages)
+  const response = await input.runnable.invoke(input.messages, createRunnableConfig(input.signal))
   input.checkCancelled()
   return { text: extractTextContent(response.content), message: response }
 }
@@ -287,7 +348,8 @@ const createTextRunnable = (input: {
   createChatModel(input.cfg, {
     temperature: input.temperature ?? 0.2,
     transport: input.transport,
-    streaming: input.streaming
+    streaming: input.streaming,
+    timeout: AI_LLM_CALL_TIMEOUT_MS
   }) as TextRunnable
 
 const createStructuredJsonRunnable = <T extends Record<string, unknown>>(input: {
@@ -349,12 +411,14 @@ const invokeTextWithTransport = async (
         runnable,
         messages,
         observer: input.observer,
-        checkCancelled: input.checkCancelled
+        checkCancelled: input.checkCancelled,
+        signal: input.signal
       })
     : await invokeTextFromRunnable({
         runnable,
         messages,
-        checkCancelled: input.checkCancelled
+        checkCancelled: input.checkCancelled,
+        signal: input.signal
       })
   const metadata = toInvocationMetadata({
     message: response.message,
@@ -392,12 +456,14 @@ const invokeStructuredWithProfile = async <T extends Record<string, unknown>>(
           runnable,
           messages,
           observer: input.observer,
-          checkCancelled: input.checkCancelled
+          checkCancelled: input.checkCancelled,
+          signal: input.signal
         })
       : await invokeTextFromRunnable({
           runnable,
           messages,
-          checkCancelled: input.checkCancelled
+          checkCancelled: input.checkCancelled,
+          signal: input.signal
         })
     const metadata = toInvocationMetadata({
       message: response.message,
@@ -428,12 +494,14 @@ const invokeStructuredWithProfile = async <T extends Record<string, unknown>>(
         runnable,
         messages,
         observer: input.observer,
-        checkCancelled: input.checkCancelled
+        checkCancelled: input.checkCancelled,
+        signal: input.signal
       })
     : await invokeTextFromRunnable({
         runnable,
         messages,
-        checkCancelled: input.checkCancelled
+        checkCancelled: input.checkCancelled,
+        signal: input.signal
       })
   const metadata = toInvocationMetadata({
     message: response.message,
@@ -638,7 +706,8 @@ const runStructuredChatInvocation = async <T extends Record<string, unknown>>(in
       user: input.request.user,
       temperature: input.request.temperature,
       streamingMode: input.request.streamingMode,
-      observer: input.request.observer
+      observer: input.request.observer,
+      signal: input.request.signal
     })
     const profile = resolveResultProfile(result)
     const fallbackChain =
@@ -706,6 +775,7 @@ export const createAiLlmExecutor = (input: {
   getConfig: () => Promise<LlmRuntimeConfig>
   saveConfig: (cfg: LlmRuntimeConfig) => Promise<void>
   checkCancelled: () => void
+  abortSignal?: AbortSignal
   driver?: AiLlmDriver
 }): AiLlmExecutor => {
   const defaultStreamingMode = resolveStreamingMode(input.runtimeSettings)
@@ -738,21 +808,27 @@ export const createAiLlmExecutor = (input: {
           contextBudgetSnapshot: request.contextBudgetSnapshot
         },
         execute: async (observer) =>
-          await runStructuredChatInvocation({
-            driver: input.driver,
-            request: {
-              caller: request.caller,
-              cfg,
-              preferredProfile: cfg.preferredStructuredOutputProfile,
-              schema: request.schema,
-              schemaName: request.schemaName,
-              system: request.system,
-              user: request.user,
-              temperature: request.temperature,
-              streamingMode,
-              observer,
-              checkCancelled: input.checkCancelled
-            }
+          await withAbortTimeout({
+            timeoutMs: AI_LLM_CALL_TIMEOUT_MS,
+            externalSignal: input.abortSignal,
+            execute: async (signal) =>
+              await runStructuredChatInvocation({
+                driver: input.driver,
+                request: {
+                  caller: request.caller,
+                  cfg,
+                  preferredProfile: cfg.preferredStructuredOutputProfile,
+                  schema: request.schema,
+                  schemaName: request.schemaName,
+                  system: request.system,
+                  user: request.user,
+                  temperature: request.temperature,
+                  streamingMode,
+                  observer,
+                  checkCancelled: input.checkCancelled,
+                  signal
+                }
+              })
           })
       })
 
@@ -800,20 +876,26 @@ export const createAiLlmExecutor = (input: {
         },
         onTextDelta: request.onTextDelta,
         execute: async (observer) =>
-          await invokeTextChat({
-            driver: input.driver,
-            request: {
-              caller: request.caller,
-              cfg,
-              preferredTransport: cfg.preferredTransport,
-              schemaName: request.schemaName,
-              system: request.system,
-              user: request.user,
-              temperature: request.temperature,
-              streamingMode,
-              observer,
-              checkCancelled: input.checkCancelled
-            }
+          await withAbortTimeout({
+            timeoutMs: AI_LLM_CALL_TIMEOUT_MS,
+            externalSignal: input.abortSignal,
+            execute: async (signal) =>
+              await invokeTextChat({
+                driver: input.driver,
+                request: {
+                  caller: request.caller,
+                  cfg,
+                  preferredTransport: cfg.preferredTransport,
+                  schemaName: request.schemaName,
+                  system: request.system,
+                  user: request.user,
+                  temperature: request.temperature,
+                  streamingMode,
+                  observer,
+                  checkCancelled: input.checkCancelled,
+                  signal
+                }
+              })
           })
       })
 
@@ -837,20 +919,25 @@ export const createAiLlmExecutor = (input: {
 export const invokeStructuredChat = async <T extends Record<string, unknown>>(
   input: InvokeStructuredChatInput<T>
 ): Promise<InvokeStructuredChatResult<T>> => {
-  const result = await runStructuredChatInvocation({
-    driver: input.driver,
-    request: {
-      caller: input.caller,
-      cfg: input.cfg,
-      preferredProfile: input.preferredProfile,
-      schema: input.schema,
-      schemaName: input.schemaName,
-      system: input.system,
-      user: input.user,
-      temperature: input.temperature,
-      streamingMode: input.streamingMode === 'force_stream' ? 'force_stream' : 'force_non_stream',
-      checkCancelled: () => undefined
-    }
+  const result = await withAbortTimeout({
+    timeoutMs: AI_LLM_CALL_TIMEOUT_MS,
+    execute: async (signal) =>
+      await runStructuredChatInvocation({
+        driver: input.driver,
+        request: {
+          caller: input.caller,
+          cfg: input.cfg,
+          preferredProfile: input.preferredProfile,
+          schema: input.schema,
+          schemaName: input.schemaName,
+          system: input.system,
+          user: input.user,
+          temperature: input.temperature,
+          streamingMode: input.streamingMode === 'force_stream' ? 'force_stream' : 'force_non_stream',
+          checkCancelled: () => undefined,
+          signal
+        }
+      })
   })
   const method = result.method || 'scripted'
   const profile = resolveResultProfile({
@@ -874,3 +961,5 @@ export const invokeStructuredChat = async <T extends Record<string, unknown>>(
     usageMetadata: result.usageMetadata
   }
 }
+
+export { classifyLlmFailureCode }

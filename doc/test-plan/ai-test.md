@@ -29,14 +29,14 @@
   - 检测时间：`2026-04-29 17:02:09 +08:00`
 - `human / live`
   - 通过率：`7 / 7`
-  - 检测时间：`2026-05-22 15:46:21 +08:00`
+  - 检测时间：`2026-05-27 17:24:46 +08:00`
   - 样例评分：
-    - `human-risk-report-draft-live`：`8.6 / 10`
-      - `依据：已完成多源资料取证、参考上周风格并新建周报草稿；风险主线、负责人和后续动作都已对齐真实诉求，整体已是可用待发稿。当前主要问题转为成稿过程偏慢，且正文仍带少量测试友好的说明性痕迹。`
-    - `human-docx-cause-remedy-reading-live`：`8.4 / 10`
-      - `依据：已真实读取两份已选课件，过拟合与反走样的定义、成因和处理思路基本答对；对课件未明确写出的处理方法也保持了保守表达。当前主要问题是 formal 断言曾过度绑定 `docx_search` 路径，而不是最终答复质量不足。`
-    - `human-docx-cross-source-summary-draft-live`：`8.8 / 10`
-      - `依据：已真实读取两份已选课件，自主创建新的总结 docx，并把两份资料中的核心概念按“关键概念 / 出现原因 / 常见处理方式”整理为可直接复习的草稿文件。整体已满足用户“生成给同学复习用的 Word 总结文件”的真实诉求；当前主要不足是个别条目仍偏归纳扩写，离最克制的贴源摘要还有少量距离。`
+    - `human-risk-report-draft-live`：`8.3 / 10`
+      - `依据：2026-05-27 复跑 3 轮均自然结束，单轮耗时约 `431s ~ 572s`；三轮都真实完成了多源资料取证、参考上周风格并新建周报草稿。按实际成稿效果看，第 2 轮最佳，整体判断和风险边界最稳；第 1 轮次之，正文已接近可外发待审稿；第 3 轮也可用，但出现过一处笔误后再修正，稳定性略弱。综合按真实产出效果计为 `8.3 / 10`。`
+    - `human-docx-cause-remedy-reading-live`：`9.0 / 10`
+      - `依据：2026-05-27 复跑 3 轮全部自然结束且通过，单轮耗时约 `249s ~ 426s`。三轮都真实读取了两份已选课件，并把过拟合 / 反走样的定义、成因和处理方法分开讲清楚；对课件未覆盖的方法也都保持了“没写就直说没写”的保守边界。第 2 轮解释最完整、类比和分层最好；第 1、3 轮也都达到高质量复习讲解水平。综合按真实答复效果计为 `9.0 / 10`。`
+    - `human-docx-cross-source-summary-draft-live`：`5.8 / 10`
+      - `依据：2026-05-27 复跑 3 轮，单轮耗时约 `587s ~ 900s`。第 1 轮真实完成并交付了一份结构完整的复习总结 docx，覆盖深度学习 7 个主题和图形学 12 个主题，实际效果接近可直接发给同学使用；第 2 轮虽读完两份源文档并搭出总结目录，但只写出标题和章节框架，随后超时；第 3 轮写出了较完整的深度学习部分与部分“出现原因”，但未补齐图形学部分，也未最终交付。按真实完成用户诉求和最终产出来看，完成度波动明显，综合计为 `5.8 / 10`。`
     - `human-conversation-memory-multi-run-live`：`9.0 / 10`
       - `依据：真实双 run 下 conversation summary 与 recent turns 已成功承接，第二轮 brain 明确带回第一轮形成的风险主线、负责人分工、待确认项和后续动作；当前更合理的正式口径应聚焦“总结是否有效影响后续”，而不是把 Alice / Bob 的单点排序绑定为唯一正确答案。`
     - `human-context-compaction-natural-trigger-live`：`8.7 / 10`
@@ -76,6 +76,7 @@
 - KB fixture 必须走真实导入、真实索引、真实检索。
 - embedding 模型缺失时，harness 应优先通过真实生产下载链自动检查并下载，不得引入测试专用 embedding 替身。
 - 旧式 fake API 一律不得进入 formal harness；一次性排查如果确实需要 fake，只允许写入 `tests/temp/**`。
+- backend/live/e2e 正式测试统一使用默认 `testTimeout=900_000`、`hookTimeout=900_000`；不再为单个正式 case 单独配置超时。
 
 ### 4.2 `mock-llm` 与 `live` 设计口径
 
@@ -803,6 +804,16 @@
 - How：先 seed 一条发布准备主线；连续两次调用真实 `updateConversationMemoryAfterRun`，分别写入“负责人候选为 Alice”和“负责人更新为 Bob 且上线窗口冲突待确认”；随后启动同一 session 的真实 `human` graph 并检查 prompt 与最终交付。
 - Oracle：保存下来的 `summary` 同时保留当前有效状态、未解决事项和产物状态；后续 `brain` prompt 同时含 `<conversation_summary>` 与 `<recent_turns>`；旧状态不会继续出现；最终交付会提到 Bob、上线窗口冲突和下一步安排。
 - Not：不验证 live 模型总结质量；不验证 session 隔离。
+
+##### `ai-run-service-resume-snapshot`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 `AiRunService` 在同一 `session` 下会对 `timeout / network_error` 保存恢复快照，并在下一次 run 自动恢复语义上下文继续完成。
+- Why：本轮重构的核心目标不是重试，而是把中断态最小持久化后交给下一次用户继续对话恢复；这条 contract 需要正式保护。
+- How：首轮通过真实 `AiRunService` 启动一次 run，让真实 `brain` 先写入可恢复状态后命中 `timeout`；第二轮在同一 session 下不再显式传引用范围与工作区，验证真实 run 会自动恢复并继续完成；同时补一条 `network_error` 分支和一条普通 `error` 分支。
+- Oracle：`timeout / network_error` 失败态会写出 `failureCode` 与 `resumeSnapshotSaved=true`，`ChatStore` 中保留最新恢复快照；下一轮同 session 会从 `context_budget -> brain` 重新开始，但带回恢复快照中的已学 skill / task run 语义；成功完成后恢复快照被清空；普通 `error` 不保存恢复快照。
+- Not：不验证 docx 临时运行态恢复；不验证 live provider 的真实网络抖动概率。
 
 ##### `context-compaction-ratio-and-fact-retention`
 

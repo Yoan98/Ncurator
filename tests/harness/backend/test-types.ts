@@ -48,6 +48,7 @@ export type ScriptedLlmCall = {
   user: string
   callIndex: number
   mode: 'structured' | 'text'
+  signal?: AbortSignal
 }
 
 type ScriptedLlmStreamShape = {
@@ -65,6 +66,14 @@ export type ScriptedLlmStep =
     } & ScriptedLlmStreamShape
   | {
       error: string
+    }
+  | {
+      waitForAbort: true
+      onAbortError?: string
+    }
+  | {
+      waitMs: number
+      thenError: string
     }
   | ((input: ScriptedLlmCall) => JsonObject | string | Promise<JsonObject | string>)
 

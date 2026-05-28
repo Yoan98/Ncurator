@@ -20,6 +20,7 @@ export const LANCE_TABLES = {
   CHAT_SESSION: 'chat_session',
   CHAT_MESSAGE: 'chat_message',
   CHAT_CONVERSATION_MEMORY: 'chat_conversation_memory',
+  CHAT_SESSION_RESUME_SNAPSHOT: 'chat_session_resume_snapshot',
   FILE_REVIEW: 'file_review',
   FILE_REVIEW_CHANGE: 'file_review_change',
   COMMIT_ATTEMPT: 'commit_attempt',
@@ -301,6 +302,20 @@ export class LanceDbCore {
         schema: new arrow.Schema([
           new arrow.Field('session_id', new arrow.Utf8()),
           new arrow.Field('memory_json', new arrow.Utf8()),
+          new arrow.Field('updated_at', new arrow.Int64())
+        ])
+      },
+      {
+        name: LANCE_TABLES.CHAT_SESSION_RESUME_SNAPSHOT,
+        schema: new arrow.Schema([
+          new arrow.Field('session_id', new arrow.Utf8()),
+          new arrow.Field('run_id', new arrow.Utf8()),
+          new arrow.Field('reason', new arrow.Utf8()),
+          new arrow.Field('user_input', new arrow.Utf8()),
+          new arrow.Field('selected_references_json', new arrow.Utf8()),
+          new arrow.Field('workspace_json', new arrow.Utf8(), true),
+          new arrow.Field('human_state_json', new arrow.Utf8()),
+          new arrow.Field('error_message', new arrow.Utf8()),
           new arrow.Field('updated_at', new arrow.Int64())
         ])
       },

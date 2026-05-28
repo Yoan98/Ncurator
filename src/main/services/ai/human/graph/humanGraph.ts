@@ -9,6 +9,12 @@ import { createHandNode } from '../node/handNode'
 import { createMouthNode } from '../node/mouthNode'
 import { createHumanRuntimeCache } from '../node/utils/runtimeCache'
 import { createHumanRunStateSchema, createInitialHumanState } from '../state/schema'
+import {
+  classifyLlmFailureCode,
+  createRecoverableHumanRunError,
+  isCancelledError,
+  isRecoverableRunErrorCode
+} from '../../utils/runFailure'
 
 const RECURSION_LIMIT = 60
 
@@ -20,9 +26,9 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
     taskInput: HumanTaskInput,
     options: HumanRunDispatchOptions = {}
   ): Promise<HumanTaskOutput> => {
+    const cache = createHumanRuntimeCache()
     ctx.beginDocxReviewRun()
     try {
-      const cache = createHumanRuntimeCache()
       const contextBudgetNode = createContextBudgetNode({ ctx, cache })
       const contextCompactionNode = createContextCompactionNode({ ctx, cache })
       const brainNode = createBrainNode({ ctx, cache })
@@ -84,7 +90,8 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
         })
         .compile()
 
-      const output = (await graph.invoke(createInitialHumanState(taskInput) as HumanState, {
+      const initialState = options.initialState || createInitialHumanState(taskInput)
+      const output = (await graph.invoke(initialState as HumanState, {
         recursionLimit: RECURSION_LIMIT
       })) as HumanState
 
@@ -96,6 +103,16 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
       }
     } catch (error) {
       ctx.discardDocxReviewRun()
+      if (!isCancelledError(error)) {
+        const code = classifyLlmFailureCode(error)
+        if (isRecoverableRunErrorCode(code)) {
+          throw createRecoverableHumanRunError({
+            reason: code,
+            error,
+            lastHumanState: cache.currentState
+          })
+        }
+      }
       throw error
     }
   }

@@ -248,5 +248,16 @@ describe('ai unit structured chat activity', () => {
       status: 'failed',
       reason: 'structured_output_failed'
     })
+    const failedActivity = events
+      .filter((event) => event.type === 'activity')
+      .find((event) => event.type === 'activity' && event.status === 'failed')
+    expect(failedActivity).toMatchObject({
+      type: 'activity',
+      actionType: 'llm_structured_output',
+      status: 'failed',
+      details: {
+        reason: 'error'
+      }
+    })
   })
 })

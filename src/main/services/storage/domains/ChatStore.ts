@@ -1,4 +1,10 @@
-import type { ChatMessage, ChatSession, ChatConversationMemory } from '../../../types/store'
+import type {
+  ChatConversationMemory,
+  ChatMessage,
+  ChatSession,
+  ChatSessionResumeSnapshot,
+  ChatSessionResumeSnapshotRow
+} from '../../../types/store'
 import type { AiArtifactRef } from '../../../types/store'
 import { LanceDbCore, LANCE_TABLES } from '../core/LanceDbCore'
 
@@ -60,6 +66,64 @@ export class ChatStore {
     }
   }
 
+  public async saveSessionResumeSnapshot(
+    sessionId: string,
+    snapshot: ChatSessionResumeSnapshot
+  ): Promise<void> {
+    const safeId = this.core.escapeSqlString(sessionId)
+    const table = await this.core.openTable(LANCE_TABLES.CHAT_SESSION_RESUME_SNAPSHOT)
+    await table.delete(`session_id = '${safeId}'`)
+    await table.add([
+      {
+        session_id: sessionId,
+        run_id: snapshot.runId,
+        reason: snapshot.reason,
+        user_input: snapshot.userInput,
+        selected_references_json: JSON.stringify(snapshot.selectedReferences || []),
+        workspace_json: snapshot.workspace ? JSON.stringify(snapshot.workspace) : undefined,
+        human_state_json: JSON.stringify(snapshot.humanState),
+        error_message: snapshot.errorMessage,
+        updated_at: snapshot.updatedAt
+      }
+    ])
+  }
+
+  public async getSessionResumeSnapshot(
+    sessionId: string
+  ): Promise<ChatSessionResumeSnapshot | null> {
+    const safeId = this.core.escapeSqlString(sessionId)
+    const table = await this.core.openTable(LANCE_TABLES.CHAT_SESSION_RESUME_SNAPSHOT)
+    const rows = await table.query().where(`session_id = '${safeId}'`).toArray()
+    const row = rows?.[0] as ChatSessionResumeSnapshotRow | undefined
+    if (!row?.human_state_json) return null
+    try {
+      const selectedReferences = JSON.parse(String(row.selected_references_json || '[]'))
+      const workspace = row.workspace_json ? JSON.parse(String(row.workspace_json)) : undefined
+      const humanState = JSON.parse(String(row.human_state_json))
+      return {
+        reason:
+          String(row.reason) === 'network_error'
+            ? 'network_error'
+            : 'timeout',
+        runId: String(row.run_id || ''),
+        userInput: String(row.user_input || ''),
+        selectedReferences: Array.isArray(selectedReferences) ? selectedReferences : [],
+        workspace,
+        humanState,
+        errorMessage: String(row.error_message || ''),
+        updatedAt: Number(row.updated_at || 0)
+      }
+    } catch {
+      return null
+    }
+  }
+
+  public async clearSessionResumeSnapshot(sessionId: string): Promise<void> {
+    const safeId = this.core.escapeSqlString(sessionId)
+    const table = await this.core.openTable(LANCE_TABLES.CHAT_SESSION_RESUME_SNAPSHOT)
+    await table.delete(`session_id = '${safeId}'`)
+  }
+
   public async saveChatSession(session: ChatSession): Promise<void> {
     const table = await this.core.openTable(LANCE_TABLES.CHAT_SESSION)
     await table.delete(`id = '${this.core.escapeSqlString(session.id)}'`)
@@ -91,6 +155,9 @@ export class ChatStore {
 
     const memoryTable = await this.core.openTable(LANCE_TABLES.CHAT_CONVERSATION_MEMORY)
     await memoryTable.delete(`session_id = '${safeId}'`)
+
+    const resumeTable = await this.core.openTable(LANCE_TABLES.CHAT_SESSION_RESUME_SNAPSHOT)
+    await resumeTable.delete(`session_id = '${safeId}'`)
   }
 
   public async saveChatMessage(message: ChatMessage): Promise<void> {

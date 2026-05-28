@@ -251,7 +251,10 @@ export function registerHandlers(services: {
   recordLlmIo?: (record: AiLlmIoRecord) => void
 }) {
   const { ingestionService, embeddingService, storageService, modelService } = services
-  const activeAiRuns = new Map<string, { cancelled: boolean; senderId: number }>()
+  const activeAiRuns = new Map<
+    string,
+    { cancelled: boolean; senderId: number; abortController: AbortController }
+  >()
   const activeWorkspacePrepareJobs = new Set<string>()
   const activeAiApprovals = new Map<
     string,
@@ -2076,7 +2079,11 @@ export function registerHandlers(services: {
       if (!input) return { success: false, error: 'input is required' }
 
       const runId = uuidv4()
-      activeAiRuns.set(runId, { cancelled: false, senderId: event.sender.id })
+      activeAiRuns.set(runId, {
+        cancelled: false,
+        senderId: event.sender.id,
+        abortController: new AbortController()
+      })
 
       const sendEvent = (evt: AiRunEvent) => {
         if (event.sender.isDestroyed()) return
@@ -2141,6 +2148,7 @@ export function registerHandlers(services: {
               },
               fileReviewService,
               isCancelled: () => Boolean(activeAiRuns.get(runId)?.cancelled),
+              abortSignal: activeAiRuns.get(runId)?.abortController.signal,
               sendEvent,
               recordLlmIo: services.recordLlmIo,
               requestApprovalBatch: async (request) => {
@@ -2217,7 +2225,13 @@ export function registerHandlers(services: {
 
           if (result.status === 'failed') {
             fileReviewService.discardRun(runId)
-            sendEvent({ type: 'run_failed', runId, error: result.error || 'failed' })
+            sendEvent({
+              type: 'run_failed',
+              runId,
+              error: result.error || 'failed',
+              code: result.failureCode,
+              resumeSnapshotSaved: result.resumeSnapshotSaved
+            })
             return
           }
 
@@ -2247,7 +2261,7 @@ export function registerHandlers(services: {
             return
           }
           const msg = e instanceof Error ? getErrorMessage(e) : String(e)
-          sendEvent({ type: 'run_failed', runId, error: msg })
+          sendEvent({ type: 'run_failed', runId, error: msg, code: 'error' })
         } finally {
           await releaseDocxRunSession(runId)
           const approval = activeAiApprovals.get(runId)
@@ -2265,6 +2279,7 @@ export function registerHandlers(services: {
     const entry = activeAiRuns.get(String(runId || ''))
     if (!entry) return { success: false, error: 'run not found' }
     entry.cancelled = true
+    entry.abortController.abort()
     return { success: true }
   })
 

@@ -171,6 +171,22 @@
 | memory_json | Utf8  | 记忆 JSON 字符串 |
 | updated_at  | Int64 | 更新时间戳 |
 
+### 表: chat_session_resume_snapshot（会话恢复快照表）
+
+存储同一会话下最近一次可恢复中断的最小 human 语义快照，仅用于 `timeout / network_error` 后的自动恢复。
+
+| 字段名                   | 类型             | 描述 |
+| :----------------------- | :--------------- | :--- |
+| session_id               | Utf8             | 关联的会话 ID；同一会话只保留最新一条 |
+| run_id                   | Utf8             | 触发快照的 run ID |
+| reason                   | Utf8             | 失败原因，固定为 `timeout` 或 `network_error` |
+| user_input               | Utf8             | 上一次中断时的用户输入 |
+| selected_references_json | Utf8             | 资料范围 JSON |
+| workspace_json           | Utf8（Nullable） | 工作区绑定 JSON |
+| human_state_json         | Utf8             | 仅包含恢复必需字段的最小 `HumanState` 片段 JSON |
+| error_message            | Utf8             | 最近失败信息 |
+| updated_at               | Int64            | 更新时间戳 |
+
 ### 表: chat_message（对话消息表）
 
 存储会话中的每一条消息记录。

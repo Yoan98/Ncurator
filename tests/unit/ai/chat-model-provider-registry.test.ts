@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createChatModel, getSupportedTransportsForConfig } from '../../../src/main/services/llm/chatModel'
+import { AI_LLM_CALL_TIMEOUT_MS } from '../../../src/main/services/ai/constants'
 import type { LlmRuntimeConfig } from '../../../src/shared/types'
 
 const buildConfig = (input: Partial<LlmRuntimeConfig>): LlmRuntimeConfig => ({
@@ -36,5 +37,18 @@ describe('ai unit chat model provider registry', () => {
     expect(
       createChatModel(buildConfig({ providerKind: 'openai-compatible' })).constructor.name
     ).toBe('ChatOpenAI')
+  })
+
+  it('forces provider retries to zero and accepts explicit timeout', () => {
+    const model = createChatModel(buildConfig({ providerKind: 'openai' }), {
+      timeout: AI_LLM_CALL_TIMEOUT_MS
+    }) as {
+      timeout?: number
+      caller?: { maxRetries?: number }
+      fields?: { maxRetries?: number }
+    }
+
+    expect(model.caller?.maxRetries ?? model.fields?.maxRetries).toBe(0)
+    expect(model.timeout).toBe(AI_LLM_CALL_TIMEOUT_MS)
   })
 })

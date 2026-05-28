@@ -44,8 +44,12 @@ export const createFailedAiRunState = (input: {
   sessionId: string
   input: string
   error: string
+  failureCode?: AiRunState['failureCode']
+  resumeSnapshotSaved?: boolean
 }): AiRunState => ({
   ...createInitialAiRunState(input),
   status: 'failed',
-  error: input.error
+  error: input.error,
+  failureCode: input.failureCode,
+  resumeSnapshotSaved: input.resumeSnapshotSaved
 })

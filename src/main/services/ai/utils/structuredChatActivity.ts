@@ -13,6 +13,7 @@ import type {
   JsonValue,
   LlmProviderKind
 } from '../../../../shared/types'
+import { classifyLlmFailureCode } from './runFailure'
 
 export type LlmCallStreamObserver = {
   onStart?: () => void
@@ -245,6 +246,7 @@ export const runLlmCallWithActivity = async <T>(input: {
   } catch (error) {
     const durationMs = Date.now() - startedAt
     const reason = error instanceof Error && error.message.trim() ? error.message.trim() : String(error || 'unknown')
+    const reasonCode = classifyLlmFailureCode(error)
     const normalizedError = error instanceof Error ? error : new Error(reason)
     observer.onError?.(normalizedError)
     const firstTokenLatencyMs = firstTokenAt ? firstTokenAt - startedAt : undefined
@@ -267,7 +269,7 @@ export const runLlmCallWithActivity = async <T>(input: {
         streamed: chunkCount > 0,
         chunkCount,
         firstTokenLatencyMs,
-        reason
+        reason: reasonCode
       }
     })
     input.ctx.recordLlmIo?.({

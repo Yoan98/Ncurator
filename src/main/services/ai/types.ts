@@ -18,16 +18,18 @@ import type {
   AiLlmIoRecord,
   AiLlmStreamingMode,
   AiLlmUsage,
+  AiRunFailureCode,
   AiRuntimeSettings,
   AiRunEvent,
   AiRunEventStage,
   AiRunStatus,
   BrainContextBudgetSnapshot,
   ChatConversationMemory,
+  ChatSessionResumeSnapshot,
   FileReviewDetail,
   SelectedReference
 } from '../../../shared/types'
-import type { HumanTaskInput, HumanTaskOutput } from './human/types'
+import type { HumanState, HumanTaskInput, HumanTaskOutput } from './human/types'
 import { aiRunStateContractSchema, aiRunStatusSchema } from './schema'
 
 export type { AiRunStatus, HumanTaskInput, HumanTaskOutput }
@@ -36,6 +38,7 @@ export type AiRunStateStatus = z.infer<typeof aiRunStatusSchema>
 
 export type HumanRunDispatchOptions = {
   emitAnswerEvents?: boolean
+  initialState?: HumanState
 }
 
 export type CancelledError = Error & { code: 'CANCELLED' }
@@ -46,6 +49,24 @@ export type HumanTaskRunner = (
 ) => Promise<HumanTaskOutput>
 
 export type AiRunState = z.infer<typeof aiRunStateContractSchema>
+
+export type HumanResumeSnapshot = Pick<
+  HumanState,
+  'memory' | 'skills'
+> & {
+  execution: Pick<
+    HumanState['execution'],
+    'pendingDecisionHint' | 'deliveryGuidanceItems' | 'artifacts' | 'brainSchemaRetryCount'
+  >
+}
+
+export type RecoverableRunErrorCode = Extract<AiRunFailureCode, 'timeout' | 'network_error'>
+
+export type RecoverableHumanRunError = Error & {
+  code: 'RECOVERABLE_HUMAN_RUN'
+  reason: RecoverableRunErrorCode
+  lastHumanState?: HumanState
+}
 
 export type AiRuntimePlatform = 'macos' | 'windows'
 
@@ -107,6 +128,7 @@ export type AiRunDeps = {
   ensureEmbeddingReady: () => Promise<void>
   fileReviewService: FileReviewService
   isCancelled: () => boolean
+  abortSignal?: AbortSignal
   sendEvent: (event: AiRunEvent) => void
   recordLlmIo?: (record: AiLlmIoRecord) => void
   requestApprovalBatch: (request: AiApprovalBatchRequest) => Promise<AiApprovalBatchResult>
@@ -182,6 +204,14 @@ export type AiRunContext = {
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService
 }
+
+export type AiRunFailureMetadata = {
+  failureCode?: AiRunFailureCode
+  resumeHumanState?: HumanState
+  resumeSnapshotSaved?: boolean
+}
+
+export type ChatSessionResumeSnapshotRecord = ChatSessionResumeSnapshot
 
 export type AiEventDispatchContext = Pick<AiRunContext, 'runId' | 'sendEvent' | 'recordLlmIo'>
 

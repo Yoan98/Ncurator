@@ -7,7 +7,6 @@ import { resolveLlmProviderKind } from '../../../shared/llmProvider'
 
 export type ChatModelFactoryOptions = {
   temperature?: number
-  maxRetries?: number
   timeout?: number
   transport?: AiStructuredOutputTransport
   streaming?: boolean
@@ -33,7 +32,7 @@ export const createChatModel = (cfg: LlmRuntimeConfig, opts?: ChatModelFactoryOp
       model: cfg.model_name,
       apiKey: cfg.api_key,
       temperature: opts?.temperature ?? 0.2,
-      maxRetries: opts?.maxRetries ?? 2,
+      maxRetries: 0,
       timeout: opts?.timeout,
       streaming: opts?.streaming === true
     })
@@ -44,7 +43,7 @@ export const createChatModel = (cfg: LlmRuntimeConfig, opts?: ChatModelFactoryOp
     apiKey: cfg.api_key,
     useResponsesApi: opts?.transport === 'responses',
     temperature: opts?.temperature ?? 0.2,
-    maxRetries: opts?.maxRetries ?? 2,
+    maxRetries: 0,
     timeout: opts?.timeout,
     streaming: opts?.streaming === true,
     configuration: {

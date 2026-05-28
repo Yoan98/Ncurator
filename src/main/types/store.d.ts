@@ -88,7 +88,9 @@ import {
   JsonObject,
   JsonValue,
   ChatConversationMemory,
-  ChatConversationMemoryRow
+  ChatConversationMemoryRow,
+  ChatSessionResumeSnapshot,
+  ChatSessionResumeSnapshotRow
 } from '../../shared/types'
 
 export type {
@@ -180,7 +182,9 @@ export type {
   JsonObject,
   JsonValue,
   ChatConversationMemory,
-  ChatConversationMemoryRow
+  ChatConversationMemoryRow,
+  ChatSessionResumeSnapshot,
+  ChatSessionResumeSnapshotRow
 }
 
 /**

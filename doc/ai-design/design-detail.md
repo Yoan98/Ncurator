@@ -30,6 +30,10 @@
 - run 入口只通过 `HumanTaskInput + emitAnswerEvents` 启动 `human`。
 - run 出口只通过 `HumanTaskOutput` 收口最终结果，不读取 `HumanState` 内部字段。
 - runtime 负责 transport、streaming、fallback、审批、事件派发、LLM IO 记录和最终状态整理。
+- AI 调用层不做自动重试；provider / SDK `maxRetries` 固定为 `0`。
+- `brain` 的 schema retry 仍保留，但它属于“模型已返回后结构不合法”的业务恢复，不属于 AI 调用重试。
+- `brain`、`mouth` 与 conversation memory 的单次模型调用统一受 8 分钟硬超时保护，并把 timeout / cancel 真实传到底层请求。
+- 同一 `session` 只保留一份最新的恢复快照；仅在 `timeout` 与 `network_error` 时保存，用于下一次 run 自动恢复语义上下文。
 
 ### 相关数据定义
 
@@ -223,7 +227,36 @@ type ChatConversationMemory = {
   // 由 AI 在 run 成功后重写的跨任务滚动摘要。
   summary: string
 }
+
+type ChatSessionResumeSnapshot = {
+  // 上一次可恢复中断的失败原因。
+  reason: 'timeout' | 'network_error'
+  // 触发快照的 run。
+  runId: string
+  // 上一次中断时的用户输入。
+  userInput: string
+  // 上一次中断时沿用的资料范围。
+  selectedReferences: SelectedReference[]
+  // 上一次中断时沿用的工作区绑定。
+  workspace?: WorkspaceRuntimeBinding
+  // 仅包含恢复必需字段的最小 HumanState 片段。
+  humanState: JsonObject
+  // 最近一次失败信息。
+  errorMessage: string
+  // 快照更新时间。
+  updatedAt: number
+}
 ```
+
+#### 运行失败与恢复规则
+
+- `AiRunState.status='failed'` 时可额外带 `failureCode`，取值固定为 `timeout | network_error | error`。
+- `run_failed` 事件只补两个最小字段：`code` 与 `resumeSnapshotSaved`。
+- LLM activity 不扩字段面；失败时仅复用已有 `details.reason`，写入 `timeout | network_error | error`。
+- `timeout` / `network_error`：保存或覆盖当前 session 的恢复快照。
+- `completed`：清空恢复快照。
+- 普通 `error` 或 `cancelled`：清空恢复快照，避免旧中断态残留。
+- 新 run 命中恢复快照后，仍从 `context_budget -> brain` 重新开始；恢复的是语义上下文，不恢复旧 run 的工具计数、审批态、context budget cache 或 docx 运行态。
 
 ## 4. Human 总体
 

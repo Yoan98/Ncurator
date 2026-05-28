@@ -1,6 +1,7 @@
 import { z } from 'zod/v4'
 import type {
   AiArtifactRef,
+  AiRunFailureCode,
   AiFileReviewArtifactRef,
   AiFileReviewRef,
   AiFileArtifactRef
@@ -43,6 +44,8 @@ export const aiRunStateFieldSchemas = {
   status: aiRunStatusSchema,
   input: z.string(),
   error: z.string().optional(),
+  failureCode: z.custom<AiRunFailureCode>().optional(),
+  resumeSnapshotSaved: z.boolean().optional(),
   finalDeliveryMarkdown: z.string().optional(),
   finalArtifacts: z.array(aiArtifactRefSchema)
 }
