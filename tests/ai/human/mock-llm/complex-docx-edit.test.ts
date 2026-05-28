@@ -146,7 +146,7 @@ describe('ai human mock-llm backend', () => {
         )
       }
     })
-  }, 15_000)
+  })
 
   it('complex-docx-insert-structured-content', async () => {
     await runBackendCase({
@@ -336,5 +336,5 @@ describe('ai human mock-llm backend', () => {
         )
       }
     })
-  }, 15_000)
+  })
 })

@@ -2247,7 +2247,8 @@ export function registerHandlers(services: {
               chatStore,
               llmStore,
               sendEvent,
-              recordLlmIo: services.recordLlmIo
+              recordLlmIo: services.recordLlmIo,
+              abortSignal: activeAiRuns.get(runId)?.abortController.signal
             })
           } catch (e) {
             void e

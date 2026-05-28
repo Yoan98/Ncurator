@@ -249,5 +249,5 @@ describe('ai human mock-llm backend', () => {
         )
       }
     })
-  }, 30_000)
+  })
 })

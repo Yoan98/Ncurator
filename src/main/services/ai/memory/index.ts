@@ -33,6 +33,7 @@ export const updateConversationMemoryAfterRun = async (input: {
   modelName: string
   sendEvent: (event: AiRunEvent) => void
   recordLlmIo?: (record: AiLlmIoRecord) => void
+  abortSignal?: AbortSignal
   llmDriver?: AiLlmDriver
 }): Promise<void> => {
   const sessionId = String(input.sessionId || '').trim()
@@ -60,6 +61,7 @@ export const updateConversationMemoryAfterRun = async (input: {
       cfg = nextConfig
     },
     checkCancelled: () => undefined,
+    abortSignal: input.abortSignal,
     driver: input.llmDriver
   })
 

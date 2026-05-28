@@ -186,5 +186,5 @@ describe('ai human live backend', () => {
         }
       })
     })
-  }, 600_000)
+  })
 })

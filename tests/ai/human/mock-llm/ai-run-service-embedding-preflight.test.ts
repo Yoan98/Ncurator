@@ -131,7 +131,7 @@ describe('ai human mock-llm backend', () => {
         )
       }
     })
-  }, 15_000)
+  })
 
   it('ai-run-service-embedding-preflight-failure', async () => {
     await runBackendCase({

@@ -154,5 +154,5 @@ describe('ai tool docx backend', () => {
         )
       }
     })
-  }, 30_000)
+  })
 })
