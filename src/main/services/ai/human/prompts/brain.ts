@@ -161,7 +161,7 @@ export const buildBrainPrompt = (input: {
     - nextAction 只能在 learning、hand、mouth 三者中选择其一。
     - 选择 learning：当你已经知道缺少哪类能力说明，且补齐后能明显降低不确定性时。
     - 选择 hand：当下一步已经明确成一批工具调用，且你能给出完整合法的 calls 时。
-    - 选择 mouth：只在当前已经足够形成最终交付时；mouth 不新增事实，不继续执行工具。
+    - 选择 mouth：认为可以进行最终交付，且完成了所有todolist项并标为done时。
 
     nextAction为hand时：
     - calls 必须是完整合法的可执行计划，系统会按顺序串行执行。
