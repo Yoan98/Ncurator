@@ -901,10 +901,10 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 live 模式下同一 session 在网络中断后可恢复旧语义上下文，同时本轮新选择文件会覆盖中断快照里的旧选择范围。
-- Why：恢复能力的真实价值是让用户在中断后继续对话；如果恢复时忽略最新诉求或最新选中文件，就会把旧 run 的入口状态错误带入新任务。
-- How：使用已有共享 workspace fixture，即 `tests/fixtures/workspace`。Run 1 选中文件 A，让真实模型读取并形成后续要沿用的判断规则/背景信息，正常完成；Run 2 同 session 使用真实 LLM executor，但临时切到不可达 `base_url` 触发 `network_error` 并保存恢复快照；Run 3 恢复真实 LLM 配置，同 session 继续提问并显式改选文件 B，要求模型基于 Run 1 的旧上下文/判断规则处理本轮新选文件 B 的新诉求。
-- Oracle：Run 2 失败为 `network_error` 且 `resumeSnapshotSaved=true`；Run 3 成功完成；Run 3 的 brain prompt / llm-io 中出现中断恢复 hint 文案，且包含本轮新选择文件 B 与 Run 1 建立的判断规则；最终交付使用文件 B 的关键事实；不得把文件 A 当作本轮当前选择文件处理；Run 3 成功后恢复快照被清空。
+- What：验证 live 模式下第一诉求已经沉淀局部事实后发生网络中断，同一 session 新诉求可恢复旧语义上下文，同时本轮新选择文件会覆盖中断快照里的旧选择范围。
+- Why：恢复能力的真实价值是让用户在长任务中断后继续对话；如果中断前已读到的事实丢失，或恢复时忽略最新诉求/最新选中文件，就会把恢复退化成重跑或错误沿用旧入口。
+- How：使用已有共享 workspace fixture，即 `tests/fixtures/workspace`。Run 1 选中文件 A `深度学习.docx`，让真实模型读取并沉淀“过拟合/过度拟合”的定义、原因和处理信息；测试 driver 在确认工具结果中已经出现过拟合事实后，于后续 `human.brain` 调用注入 `network_error`，保存恢复快照。Run 2 恢复真实 LLM 配置，同 session 继续提问并显式改选文件 B `图形学.docx`，要求保留过拟合信息并补充反走样信息形成对比小结。
+- Oracle：Run 1 注入失败为 `network_error` 且 `resumeSnapshotSaved=true`；恢复快照中能看到中断前沉淀的过拟合事实；Run 2 成功完成；Run 2 的 brain prompt / llm-io 中出现中断恢复 hint 文案，且包含本轮新选择文件 B 与恢复出的过拟合上下文；最终交付同时包含过拟合与反走样关键事实；Run 2 成功后恢复快照被清空。
 - Not：不验证真实 provider 的随机网络抖动；不要求 live 模型逐字复述 hint 文案；不恢复 docx 临时运行态。
 
 ##### `human-context-compaction-natural-trigger-live`

@@ -80,6 +80,7 @@ export type AiLlmTextInvocationInput = BaseLlmInvocationInput & {
 
 type AiLlmStructuredDriverInput = BaseLlmInvocationInput & {
   preferredProfile?: PreferredStructuredOutputProfile
+  schema: z.ZodType<Record<string, unknown>>
 }
 
 export type AiLlmStructuredInvocationInput<T extends Record<string, unknown>> =
@@ -701,6 +702,7 @@ const runStructuredChatInvocation = async <T extends Record<string, unknown>>(in
       caller: input.request.caller,
       cfg: input.request.cfg,
       preferredProfile: input.request.preferredProfile,
+      schema: input.request.schema,
       schemaName: input.request.schemaName,
       system: input.request.system,
       user: input.request.user,

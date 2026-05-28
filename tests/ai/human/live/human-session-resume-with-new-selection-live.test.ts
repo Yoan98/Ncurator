@@ -1,24 +1,33 @@
 import { describe, it } from 'vitest'
 import { AiRunService } from '../../../../src/main/services/ai/AiRunService'
-import { updateConversationMemoryAfterRun } from '../../../../src/main/services/ai/memory'
+import {
+  invokeStructuredChat,
+  type AiLlmDriver,
+  type AiLlmStructuredDriverResult,
+  type AiLlmTextDriverResult
+} from '../../../../src/main/services/ai/llmExecutor'
 import type { AiRunDeps } from '../../../../src/main/services/ai/types'
+import type { AiRunEvent, JsonObject } from '../../../../src/shared/types'
 import { hasLiveLlmConfigInEnv, loadLiveLlmConfigFromEnv } from '../../../harness/backend/llmConfig'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
-import type { BackendTestRuntime, LiveLlmConfig } from '../../../harness/backend/test-types'
+import type { BackendTestRuntime } from '../../../harness/backend/test-types'
 import {
   buildSelectedDocxFixtureReferences,
   DOCX_READING_FIXTURE_PATHS,
   SHARED_WORKSPACE_FIXTURE_PATH
 } from '../../../harness/backend/aiLiveTestData'
-import { runWithStructuredOutputRetry } from '../testUtils'
+import { filterAiRunEventsByType, runWithStructuredOutputRetry } from '../testUtils'
 
 const SESSION_ID = 'live-session-resume-with-new-selection'
-const FIRST_RUN_INPUT =
-  '请只基于我刚选的深度学习课件里“过拟合/过度拟合”命中位置附近已经写出的内容，提炼一套后续判断复习材料是否讲清楚某个概念时要沿用的检查规则。规则只需要覆盖：概念定义、出现原因、处理方式；如果资料未写某一项，就直接把“未写时要明确说明未写”写进规则里，不要继续扩展搜索其他处理方案，也不要展开讲别的概念。'
-const SECOND_RUN_INPUT =
-  '我先继续这个任务，稍后会换一个文件继续判断。'
-const THIRD_RUN_INPUT =
-  '继续，但这次改用我刚刚新选的文件。请沿用刚才那套检查规则，判断这份资料里的反走样是否讲清楚：概念定义、出现原因、处理方式；资料没写的地方要直接说明。'
+const INTERRUPTED_RUN_INPUT =
+  '我想做一个复习对比小结。请先只看我刚选的深度学习课件，整理“过拟合/过度拟合”的概念定义、出现原因、处理方式；如果资料没写某一项就标成未写。为了节省时间，请先用 docx_search 搜索“过拟合/过度拟合”来定位，再只读取命中位置附近内容，不要先做全文 outline。后面我会再选另一份课件补第二个概念。'
+const RESUMED_RUN_INPUT =
+  '继续刚才的复习对比小结，但这次我新选了图形学课件。请保留刚才已经整理到的过拟合信息，再补充这份资料里的反走样信息，最后输出一个对比小结。资料没写的地方要直接说明未写。'
+
+type LiveFaultInjectionState = {
+  shouldFailNextBrain: boolean
+  injected: boolean
+}
 
 const buildWorkspace = (runtime: BackendTestRuntime) => ({
   workspaceId: 'test-workspace',
@@ -26,18 +35,86 @@ const buildWorkspace = (runtime: BackendTestRuntime) => ({
   rootPath: runtime.workspaceRoot
 })
 
-const buildBrokenConfig = (liveConfig: LiveLlmConfig): LiveLlmConfig => ({
-  ...liveConfig,
-  id: 'ai-live-broken-network-config',
-  providerKind: 'openai-compatible',
-  base_url: 'http://127.0.0.1:9/v1'
+const eventText = (event: AiRunEvent): string => JSON.stringify(event)
+
+const hasOverfittingEvidence = (events: readonly AiRunEvent[]): boolean =>
+  filterAiRunEventsByType(events, 'tool_call_result').some((event) => {
+    const text = eventText(event)
+    return (
+      ['docx_search', 'docx_read_blocks'].includes(String(event.toolName || '')) &&
+      /深度学习\.docx/.test(text) &&
+      /(过拟合|过度拟合)/.test(text) &&
+      /(训练时间过久|记住过多训练数据|只针对于这部分训练数据|不太具有展望性)/.test(text)
+    )
+  })
+
+const hasAntiAliasingFacts = (text: string): boolean =>
+  /反走样/.test(text) &&
+  (/(采样频率低于信号频率|像素.*边界|锯齿|走样)/.test(text) ||
+    /(低通滤波|多个采样点|多个像素点|多次采样)/.test(text))
+
+const hasOverfittingFacts = (text: string): boolean =>
+  /(过拟合|过度拟合)/.test(text) &&
+  /(训练时间过久|记住过多训练数据|只针对于这部分训练数据|不太具有展望性)/.test(text)
+
+const createFaultAfterOverfittingDriver = (input: {
+  runtime: BackendTestRuntime
+  state: LiveFaultInjectionState
+}): AiLlmDriver => ({
+  chatStructured: async (request): Promise<AiLlmStructuredDriverResult> => {
+    if (request.caller === 'human.brain' && input.state.shouldFailNextBrain) {
+      input.state.shouldFailNextBrain = false
+      input.state.injected = true
+      throw new Error('fetch failed')
+    }
+
+    const result = await invokeStructuredChat({
+      caller: request.caller,
+      cfg: request.cfg,
+      preferredProfile: request.preferredProfile,
+      schema: request.schema,
+      schemaName: request.schemaName,
+      system: request.system,
+      user: request.user,
+      temperature: request.temperature,
+      streamingMode: request.streamingMode
+    })
+
+    if (
+      request.caller === 'human.brain' &&
+      !input.state.injected &&
+      hasOverfittingEvidence(input.runtime.eventCollector.snapshot())
+    ) {
+      input.state.shouldFailNextBrain = true
+    }
+
+    return {
+      output: result.output as JsonObject,
+      rawText: result.rawText,
+      method: result.method,
+      transport: result.transport,
+      profile: result.profile,
+      fallbackChain: result.fallbackChain,
+      streamed: result.streamed,
+      usage: result.usage,
+      responseMetadata: result.responseMetadata,
+      usageMetadata: result.usageMetadata
+    }
+  },
+  chatText: async (): Promise<AiLlmTextDriverResult> => {
+    if (!input.state.injected && hasOverfittingEvidence(input.runtime.eventCollector.snapshot())) {
+      input.state.injected = true
+      throw new Error('fetch failed')
+    }
+    throw new Error('fault_injection_driver_text_not_expected_before_resume')
+  }
 })
 
 const buildAiRunDeps = async (input: {
   runtime: BackendTestRuntime
-  controller?: AbortController
+  llmDriver?: AiLlmDriver
 }): Promise<AiRunDeps> => {
-  const controller = input.controller || new AbortController()
+  const controller = new AbortController()
   const runtimeSettings = await input.runtime.storageService.aiRuntimeSettings.get()
   return {
     runtimeSettings,
@@ -53,25 +130,10 @@ const buildAiRunDeps = async (input: {
     abortSignal: controller.signal,
     sendEvent: (event) => input.runtime.eventCollector.add(event),
     recordLlmIo: (record) => input.runtime.eventCollector.addLlmIo(record),
-    requestApprovalBatch: async () => ({ accepted: true, decisions: [] as never[] })
+    requestApprovalBatch: async () => ({ accepted: true, decisions: [] as never[] }),
+    llmDriver: input.llmDriver
   }
 }
-
-const hasRuleContinuity = (text: string): boolean =>
-  /概念定义|定义/.test(text) &&
-  /出现原因|原因/.test(text) &&
-  /处理方式|处理方法|怎么处理/.test(text) &&
-  /未写|没写|未提及|未说明/.test(text)
-
-const hasAntiAliasingFacts = (text: string): boolean =>
-  /反走样/.test(text) &&
-  (/(采样频率低于信号频率|像素.*边界|锯齿|走样)/.test(text) ||
-    /(低通滤波|多个采样点|多个像素点|多次采样)/.test(text))
-
-const doesNotTreatFileAAsCurrentSelection = (input: { delivery: string; fileAName: string }): boolean =>
-  !new RegExp(
-    `(当前|这次|本轮|刚刚新选).*${input.fileAName}|${input.fileAName}.*(当前|这次|本轮|刚刚新选)`
-  ).test(input.delivery)
 
 describe('ai human live backend', () => {
   it('human-session-resume-with-new-selection-live', async () => {
@@ -83,7 +145,7 @@ describe('ai human live backend', () => {
         suite: 'human',
         groups: ['live'],
         description:
-          '验证 live 模式下同一 session 在网络中断后可恢复旧语义上下文，同时本轮新选择文件会覆盖中断快照里的旧选择范围。',
+          '验证 live 模式下第一诉求已沉淀局部事实后发生网络中断，同一 session 新诉求能恢复旧语义上下文并覆盖本轮新选择文件。',
         fixtures: [SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
         runtimeModelName: hasLiveLlmConfigInEnv() ? loadLiveLlmConfigFromEnv().model_name : null,
@@ -91,13 +153,14 @@ describe('ai human live backend', () => {
           if (!hasLiveLlmConfigInEnv()) {
             return {
               skipped: true,
-              firstResult: null,
-              networkResult: null,
+              interruptedResult: null,
               resumedResult: null,
-              run3BrainPrompt: '',
-              run3Delivery: '',
               snapshotAfterNetwork: null,
               snapshotAfterResume: null,
+              injected: false,
+              overfittingEvidenceBeforeFailure: false,
+              run2BrainPrompt: '',
+              run2Delivery: '',
               fileAName: '',
               fileBName: ''
             }
@@ -110,72 +173,39 @@ describe('ai human live backend', () => {
           const fileBReferences = buildSelectedDocxFixtureReferences(runtime, [
             DOCX_READING_FIXTURE_PATHS[1]
           ])
+          const faultState: LiveFaultInjectionState = {
+            shouldFailNextBrain: false,
+            injected: false
+          }
 
           await runtime.seedLlmConfig(liveConfig)
-          const firstResult = await AiRunService.getInstance().run(
+          const interruptedResult = await AiRunService.getInstance().run(
             {
-              runId: `${runtime.runId}-run-1`,
+              runId: `${runtime.runId}-run-1-interrupted`,
               sessionId: SESSION_ID,
-              input: FIRST_RUN_INPUT,
+              input: INTERRUPTED_RUN_INPUT,
               selectedReferences: fileAReferences,
               modelName: liveConfig.model_name,
               workspace: buildWorkspace(runtime)
             },
-            await buildAiRunDeps({ runtime })
+            await buildAiRunDeps({
+              runtime,
+              llmDriver: createFaultAfterOverfittingDriver({
+                runtime,
+                state: faultState
+              })
+            })
           )
-
-          await updateConversationMemoryAfterRun({
-            runId: `${runtime.runId}-memory-1`,
-            sessionId: SESSION_ID,
-            userInput: FIRST_RUN_INPUT,
-            assistantOutput: firstResult.finalDeliveryMarkdown || '',
-            artifacts: firstResult.finalArtifacts || [],
-            runtimeSettings: await runtime.storageService.aiRuntimeSettings.get(),
-            chatStore: runtime.chatStore,
-            llmStore: runtime.llmStore,
-            modelName: liveConfig.model_name,
-            sendEvent: (event) => runtime.eventCollector.add(event),
-            recordLlmIo: (record) => runtime.eventCollector.addLlmIo(record)
-          })
-          await runtime.seedChatHistory({
-            sessionId: SESSION_ID,
-            messages: [
-              {
-                id: 'resume-selection-user-1',
-                role: 'user',
-                content: FIRST_RUN_INPUT,
-                timestamp: Date.now()
-              },
-              {
-                id: 'resume-selection-assistant-1',
-                role: 'assistant',
-                content: firstResult.finalDeliveryMarkdown || '',
-                timestamp: Date.now() + 1,
-                artifacts: firstResult.finalArtifacts
-              }
-            ]
-          })
-
-          await runtime.seedLlmConfig(buildBrokenConfig(liveConfig))
-          const networkResult = await AiRunService.getInstance().run(
-            {
-              runId: `${runtime.runId}-run-2-network`,
-              sessionId: SESSION_ID,
-              input: SECOND_RUN_INPUT,
-              selectedReferences: fileAReferences,
-              modelName: liveConfig.model_name,
-              workspace: buildWorkspace(runtime)
-            },
-            await buildAiRunDeps({ runtime })
+          const overfittingEvidenceBeforeFailure = hasOverfittingEvidence(
+            runtime.eventCollector.snapshot()
           )
           const snapshotAfterNetwork = await runtime.chatStore.getSessionResumeSnapshot(SESSION_ID)
 
-          await runtime.seedLlmConfig(liveConfig)
           const resumedResult = await AiRunService.getInstance().run(
             {
-              runId: `${runtime.runId}-run-3-resume`,
+              runId: `${runtime.runId}-run-2-resume`,
               sessionId: SESSION_ID,
-              input: THIRD_RUN_INPUT,
+              input: RESUMED_RUN_INPUT,
               selectedReferences: fileBReferences,
               modelName: liveConfig.model_name,
               workspace: buildWorkspace(runtime)
@@ -183,25 +213,27 @@ describe('ai human live backend', () => {
             await buildAiRunDeps({ runtime })
           )
           const snapshotAfterResume = await runtime.chatStore.getSessionResumeSnapshot(SESSION_ID)
-          const run3BrainPrompt =
+          const run2BrainPrompt =
             runtime.eventCollector
               .snapshotLlmIo()
               .filter(
                 (record) =>
-                  record.runId === `${runtime.runId}-run-3-resume` &&
+                  record.runId === `${runtime.runId}-run-2-resume` &&
                   record.caller === 'human.brain'
               )
-              .at(-1)?.user || ''
+              .map((record) => record.user)
+              .join('\n')
 
           return {
             skipped: false,
-            firstResult,
-            networkResult,
+            interruptedResult,
             resumedResult,
-            run3BrainPrompt,
-            run3Delivery: resumedResult.finalDeliveryMarkdown || '',
             snapshotAfterNetwork,
             snapshotAfterResume,
+            injected: faultState.injected,
+            overfittingEvidenceBeforeFailure,
+            run2BrainPrompt,
+            run2Delivery: resumedResult.finalDeliveryMarkdown || '',
             fileAName: fileAReferences[0]?.name || '',
             fileBName: fileBReferences[0]?.name || ''
           }
@@ -216,36 +248,35 @@ describe('ai human live backend', () => {
             return
           }
 
+          const snapshotText = JSON.stringify(result.snapshotAfterNetwork)
           runtime.assertThat(
-            result.firstResult?.status === 'completed' &&
-              result.networkResult?.status === 'failed' &&
-              result.networkResult.failureCode === 'network_error' &&
-              result.networkResult.resumeSnapshotSaved === true &&
+            result.injected === true &&
+              result.overfittingEvidenceBeforeFailure === true &&
+              result.interruptedResult?.status === 'failed' &&
+              result.interruptedResult.failureCode === 'network_error' &&
+              result.interruptedResult.resumeSnapshotSaved === true &&
               result.snapshotAfterNetwork?.reason === 'network_error' &&
+              /(过拟合|过度拟合)/.test(snapshotText) &&
+              /(训练时间过久|记住过多训练数据|不太具有展望性)/.test(snapshotText) &&
               result.resumedResult?.status === 'completed' &&
               result.snapshotAfterResume === null &&
-              result.run3BrainPrompt.includes('上一次运行因 network_error 中断') &&
-              result.run3BrainPrompt.includes('当前用户最新输入、当前 selected references、当前 workspace 是本轮唯一有效入口') &&
-              result.run3BrainPrompt.includes(result.fileBName) &&
-              result.run3BrainPrompt.includes('资料未写某一项，要直接说明未写') &&
-              hasRuleContinuity(result.run3BrainPrompt) &&
-              hasAntiAliasingFacts(result.run3Delivery) &&
-              result.run3Delivery.includes('反走样') &&
-              doesNotTreatFileAAsCurrentSelection({
-                delivery: result.run3Delivery,
-                fileAName: result.fileAName
-              }),
+              result.run2BrainPrompt.includes('上一次运行因 network_error 中断') &&
+              result.run2BrainPrompt.includes('当前用户最新输入、当前 selected references、当前 workspace 是本轮唯一有效入口') &&
+              result.run2BrainPrompt.includes(result.fileBName) &&
+              result.run2BrainPrompt.includes('过拟合') &&
+              hasOverfittingFacts(result.run2Delivery) &&
+              hasAntiAliasingFacts(result.run2Delivery),
             {
-              name: 'human-live-session-resume-uses-new-selection-and-old-context',
+              name: 'human-live-session-resume-keeps-interrupted-context-and-uses-new-selection',
               message:
-                'live 恢复 run 应看到恢复 hint，使用本轮新选择文件 B 的反走样事实，同时沿用第一轮建立的判断规则；不应把文件 A 的过拟合内容当作本轮交付主体。',
+                'live 恢复 run 应在第一诉求已读到过拟合事实后保存快照，并在同 session 新诉求中使用旧过拟合上下文和本轮新选图形学课件的反走样事实完成对比小结。',
               data: {
                 fileAName: result.fileAName,
                 fileBName: result.fileBName,
-                networkResult: result.networkResult,
+                interruptedResult: result.interruptedResult,
                 snapshotAfterNetwork: result.snapshotAfterNetwork,
-                run3BrainPrompt: result.run3BrainPrompt,
-                run3Delivery: result.run3Delivery
+                run2BrainPrompt: result.run2BrainPrompt,
+                run2Delivery: result.run2Delivery
               }
             }
           )
