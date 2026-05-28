@@ -14,6 +14,7 @@ import {
   finalizeDocxToolFailure,
   finalizeDocxToolSuccess
 } from './workerTool'
+import { HUMAN_TOOL_RESULT_TOKEN_LIMIT_RATIO } from '../../../constants'
 
 const MAX_SEARCH_MATCHES = 20
 const SEMANTIC_TOP_K = 8
@@ -284,14 +285,12 @@ const buildSearchOutputPreview = (result: ReturnType<typeof buildSearchResult>) 
   totalMatchCount: result.totalMatchCount
 })
 
-const DOCX_AI_RESULT_CONTEXT_WINDOW_RATIO = 0.1
-
 const estimateDocxResultTokens = (value: unknown): number =>
   Math.ceil(JSON.stringify(value).length / 4)
 
 const getDocxAiResultTokenLimit = (runtime: DocxToolRuntime): number => {
   const contextWindowTokens = runtime.input.modelContextWindowTokens
-  return Math.max(1, Math.floor(contextWindowTokens * DOCX_AI_RESULT_CONTEXT_WINDOW_RATIO))
+  return Math.max(1, Math.floor(contextWindowTokens * HUMAN_TOOL_RESULT_TOKEN_LIMIT_RATIO))
 }
 
 const buildResultTooLargeFailure = (input: {

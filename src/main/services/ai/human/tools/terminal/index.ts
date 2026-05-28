@@ -1,4 +1,5 @@
 import { createWorkspaceBoundToolFamily } from '../utils/workspaceGuards'
+import { HUMAN_TOOL_RESULT_TOKEN_LIMIT_RATIO } from '../../constants'
 import { buildTerminalCapabilityTools } from './terminalTools'
 
 export const terminalToolFamily = createWorkspaceBoundToolFamily({
@@ -21,6 +22,6 @@ export const terminalToolFamily = createWorkspaceBoundToolFamily({
       emitActivity,
       timeoutMs: 15000,
       captureHardLimitChars: 120_000,
-      aiResultTokenLimitRatio: 0.1
+      aiResultTokenLimitRatio: HUMAN_TOOL_RESULT_TOKEN_LIMIT_RATIO
     }).tools
 })
