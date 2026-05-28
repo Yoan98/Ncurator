@@ -1,4 +1,9 @@
-import type { JsonObject, SelectedReference, WorkspaceRuntimeBinding } from '../../../../shared/types'
+import type {
+  ChatSessionResumeSnapshot,
+  JsonObject,
+  SelectedReference,
+  WorkspaceRuntimeBinding
+} from '../../../../shared/types'
 import type { HumanResumeSnapshot } from '../types'
 import type { HumanState } from '../human/types'
 import { createDefaultHumanTrace, createInitialHumanState } from '../human/state/schema'
@@ -37,6 +42,7 @@ export const serializeHumanResumeSnapshot = (state: HumanState): JsonObject =>
 export const restoreHumanStateFromResumeSnapshot = (input: {
   runId: string
   userInput: string
+  reason: ChatSessionResumeSnapshot['reason']
   snapshot: JsonObject
 }): HumanState => {
   const baseState = createInitialHumanState({
@@ -63,7 +69,12 @@ export const restoreHumanStateFromResumeSnapshot = (input: {
       ...baseState.execution,
       stage: 'brain',
       status: 'running',
-      pendingDecisionHint: snapshot.execution?.pendingDecisionHint,
+      pendingDecisionHint: {
+        code: 'run_resumed_after_interruption',
+        detail: {
+          reason: input.reason
+        }
+      },
       deliveryGuidanceItems: snapshot.execution?.deliveryGuidanceItems,
       artifacts: snapshot.execution?.artifacts || [],
       brainSchemaRetryCount: snapshot.execution?.brainSchemaRetryCount

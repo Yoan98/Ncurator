@@ -8,6 +8,10 @@ const asJsonObject = (value: HumanDecisionHint['detail']): JsonObject => ({ ...v
 
 export const renderDecisionHintForBrain = (hint: HumanDecisionHint): string => {
   switch (hint.code) {
+    case 'run_resumed_after_interruption':
+      return [
+        `上一次运行因 ${hint.detail.reason} 中断，已恢复最近一次上下文信息，请根据用户诉求继续推进`
+      ].join('\n')
     case 'learning_no_effect':
       return `上一轮学习没有带来新能力。请求的技能有：${renderStringList(hint.detail.requestedSkillIds)}；重复的技能有：${renderStringList(hint.detail.duplicateSkillIds)}；不存在的技能有：${renderStringList(hint.detail.unknownSkillIds)}。`
     case 'terminal_approval_blocked':

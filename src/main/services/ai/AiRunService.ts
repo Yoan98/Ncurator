@@ -50,6 +50,7 @@ export class AiRunService {
         ? restoreHumanStateFromResumeSnapshot({
             runId: payload.runId,
             userInput: String(payload.input || ''),
+            reason: resumeSnapshot.reason,
             snapshot: resumeSnapshot.humanState
           })
         : undefined

@@ -92,11 +92,15 @@ describe('ai human mock-llm backend', () => {
 
         let restoredSkillSeen = false
         let restoredRoundSeen = false
+        let resumeHintSeen = false
         const secondDriver = createScriptedStructuredOutputDriver({
           'human.brain': [
             ({ user }) => {
               restoredSkillSeen = user.includes('docx-read')
               restoredRoundSeen = user.includes('先学习一个 skill 再继续。')
+              resumeHintSeen =
+                user.includes('上一次运行因 timeout 中断') &&
+                user.includes('当前用户最新输入、当前 selected references、当前 workspace 是本轮唯一有效入口')
               return buildCompleteTaskDecision({
                 summary: '已从恢复快照继续完成任务。'
               })
@@ -175,6 +179,7 @@ describe('ai human mock-llm backend', () => {
           resumedResult,
           restoredSkillSeen,
           restoredRoundSeen,
+          resumeHintSeen,
           clearedSnapshot,
           networkResult,
           networkSnapshot,
@@ -194,6 +199,7 @@ describe('ai human mock-llm backend', () => {
             result.resumedResult.status === 'completed' &&
             result.resumedResult.finalDeliveryMarkdown?.includes('恢复快照') === true &&
             result.clearedSnapshot === null &&
+            result.resumeHintSeen &&
             result.networkResult.status === 'failed' &&
             result.networkResult.failureCode === 'network_error' &&
             result.networkResult.resumeSnapshotSaved === true &&

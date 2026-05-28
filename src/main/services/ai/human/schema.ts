@@ -72,6 +72,12 @@ export const humanLearningOutcomeSchema = z.object({
 
 export const humanDecisionHintSchema = z.discriminatedUnion('code', [
   z.object({
+    code: z.literal('run_resumed_after_interruption'),
+    detail: z.object({
+      reason: z.enum(['timeout', 'network_error'])
+    })
+  }),
+  z.object({
     code: z.literal('learning_no_effect'),
     detail: z.object({
       requestedSkillIds: z.array(z.string().min(1)),

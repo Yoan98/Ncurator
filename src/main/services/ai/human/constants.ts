@@ -33,6 +33,7 @@ export const HUMAN_STEP_ACTIONS = [
 export const HUMAN_STEP_RESULT_STATUSES = ['ok', 'error'] as const
 
 export const HUMAN_DECISION_HINT_CODES = [
+  'run_resumed_after_interruption',
   'learning_no_effect',
   'terminal_approval_blocked',
   'hand_call_limit_exceeded',

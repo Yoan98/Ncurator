@@ -257,6 +257,7 @@ type ChatSessionResumeSnapshot = {
 - `completed`：清空恢复快照。
 - 普通 `error` 或 `cancelled`：清空恢复快照，避免旧中断态残留。
 - 新 run 命中恢复快照后，仍从 `context_budget -> brain` 重新开始；恢复的是语义上下文，不恢复旧 run 的工具计数、审批态、context budget cache 或 docx 运行态。
+- 新 run 命中恢复快照后，会向 `brain` 注入 `decision_hint(code='run_resumed_after_interruption')`，`detail` 只包含 `reason: 'timeout' | 'network_error'`；该 hint 只说明当前是中断恢复态，并强调当前最新用户输入、当前 selected references、当前 workspace 是本轮唯一有效入口。
 
 ## 4. Human 总体
 
