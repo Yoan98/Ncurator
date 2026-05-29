@@ -6,9 +6,8 @@ import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import { filterEventsByType } from '../testHelpers'
 
 type TerminalRunCommandResult = {
-  ok: boolean
-  code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required' | 'result_too_large'
   stdout: string
+  reason?: string
 }
 
 const isWindows = process.platform === 'win32'
@@ -62,10 +61,10 @@ describe('ai tool terminal backend', () => {
         const stepErrors = filterEventsByType(result.events, 'terminal_step_error')
 
         runtime.assertThat(
-          result.list.ok &&
-            result.recursiveFind.ok &&
-            result.echoReadOnly.ok &&
-            result.read.ok &&
+          !result.list.reason &&
+            !result.recursiveFind.reason &&
+            !result.echoReadOnly.reason &&
+            !result.read.reason &&
             approvalEvents.length === 0 &&
             stepErrors.length === 0,
           {
@@ -74,11 +73,11 @@ describe('ai tool terminal backend', () => {
             data: {
               approvals: approvalEvents.length,
               stepErrors: stepErrors.length,
-              codes: [
-                result.list.code,
-                result.recursiveFind.code,
-                result.echoReadOnly.code,
-                result.read.code
+              reasons: [
+                result.list.reason,
+                result.recursiveFind.reason,
+                result.echoReadOnly.reason,
+                result.read.reason
               ]
             }
           }

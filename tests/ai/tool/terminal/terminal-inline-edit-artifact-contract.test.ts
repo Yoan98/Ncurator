@@ -7,8 +7,6 @@ import { filterEventsByType } from '../testHelpers'
 import { readCapturedRunLog } from '../logHelpers'
 
 type TerminalRunCommandResult = {
-  ok: boolean
-  code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
   artifacts: Array<{ path: string; operation: 'created' | 'updated' }>
 }
 
@@ -60,8 +58,8 @@ describe('ai tool terminal backend', () => {
         const artifactEvents = filterEventsByType(result.events, 'file_artifact')
 
         runtime.assertThat(
-          result.updateExisting.ok &&
-            result.createNew.ok &&
+          !('reason' in result.updateExisting) &&
+            !('reason' in result.createNew) &&
             approvalEvents.length === 2 &&
             result.notesContent === 'after\n' &&
             result.createdExists,

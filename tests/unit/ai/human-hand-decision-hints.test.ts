@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  deriveHandFollowupSignals,
+  shouldStopSerialHandPlan
+} from '../../../src/main/services/ai/human/node/handNode/followupSignals'
+import {
   buildHandCallInvalidHint,
   buildHandToolRuntimeFailedHint,
   buildHandWorkspaceBoundaryBlockedHint,
@@ -100,5 +104,48 @@ describe('ai unit hand decision hints', () => {
         }
       ])
     )
+  })
+
+  it('promotes unusable terminal output hint to the next brain round', () => {
+    const decisionHint = {
+      code: 'hand_tool_result_unusable' as const,
+      detail: {
+        toolName: 'terminal_run',
+        reason: 'non_text_output' as const,
+        totalChars: 200,
+        nulCount: 1,
+        replacementCharCount: 0,
+        replacementCharRatio: 0,
+        controlCharCount: 80,
+        controlCharRatio: 0.4,
+        matchedSignatures: ['PK_HEADER']
+      }
+    }
+    const input = {
+      calls: [
+        {
+          toolName: 'terminal_run',
+          args: {
+            command: 'cat report.docx'
+          }
+        }
+      ],
+      results: [
+        {
+          toolName: 'terminal_run',
+          ok: false,
+          diagnostic: {
+            message: 'terminal result unusable'
+          },
+          data: {
+            reason: 'result_unusable',
+            decisionHint
+          }
+        }
+      ]
+    }
+
+    expect(deriveHandFollowupSignals(input).decisionHint).toEqual(decisionHint)
+    expect(shouldStopSerialHandPlan(input)).toBe(true)
   })
 })

@@ -149,6 +149,20 @@ export const humanDecisionHintSchema = z.discriminatedUnion('code', [
     })
   }),
   z.object({
+    code: z.literal('hand_tool_result_unusable'),
+    detail: z.object({
+      toolName: z.string().min(1),
+      reason: z.literal('non_text_output'),
+      totalChars: z.number().int().min(0),
+      nulCount: z.number().int().min(0),
+      replacementCharCount: z.number().int().min(0),
+      replacementCharRatio: z.number().min(0).max(1),
+      controlCharCount: z.number().int().min(0),
+      controlCharRatio: z.number().min(0).max(1),
+      matchedSignatures: z.array(z.string().min(1))
+    })
+  }),
+  z.object({
     code: z.literal('brain_output_schema_invalid'),
     detail: z.object({
       issues: z

@@ -88,7 +88,10 @@ export const deriveHandFollowupSignals = (input: {
     const toolResultHint = result.data && typeof result.data === 'object' && !Array.isArray(result.data)
       ? (result.data as { decisionHint?: HumanDecisionHint }).decisionHint
       : undefined
-    if (toolResultHint?.code === 'hand_tool_result_too_large') {
+    if (
+      toolResultHint?.code === 'hand_tool_result_too_large' ||
+      toolResultHint?.code === 'hand_tool_result_unusable'
+    ) {
       return {
         decisionHint: toolResultHint
       }
@@ -117,6 +120,6 @@ export const shouldStopSerialHandPlan = (input: {
   calls: HandCallList
   results: readonly ToolCallResult[]
 }): boolean =>
-  ['hand_tool_result_too_large'].includes(
+  ['hand_tool_result_too_large', 'hand_tool_result_unusable'].includes(
     deriveHandFollowupSignals(input).decisionHint?.code || ''
   )

@@ -41,7 +41,7 @@ export const TERMINAL_RUN_TOOL_SPEC: HumanToolSpec<
   outputSchema: TERMINAL_RUN_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'terminal_run',
-    description: `能力：执行一条当前 workspace 边界内的终端命令。\n结果：返回 stdout、stderr、exitCode、超时状态，以及可识别的工作区文件产物；\n边界：符合系统只读命令策略的会被直接执行；当前默认允许的只读指令包含 ${TERMINAL_READONLY_COMMAND_GUIDANCE}。其他命令将会被用户审批后再执行。默认禁止搜索隐藏文件如.*，除非用户明确允许。`,
+    description: `能力：执行一条当前 workspace 边界内的终端命令。\n结果：返回 stdout、stderr、exitCode、超时状态，以及可识别的工作区文件产物；\n边界：符合系统只读命令策略的会被直接执行；当前默认允许的只读指令包含 ${TERMINAL_READONLY_COMMAND_GUIDANCE}。其他命令将会被用户审批后再执行。默认禁止搜索隐藏文件如.*，除非用户明确允许。禁止用 terminal 读取或写入 Word / Excel / PPT / PDF 等结构化文档内容。`,
     whenToUse: '适用于需要使用当前 workspace 终端命令能力的任务。',
     examples: [
       {

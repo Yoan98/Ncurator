@@ -503,6 +503,28 @@ type HumanDecisionHint =
       }
     }
   | {
+      code: 'hand_tool_result_too_large'
+      detail: {
+        toolName: string
+        estimatedTokens: number
+        limit: number
+      }
+    }
+  | {
+      code: 'hand_tool_result_unusable'
+      detail: {
+        toolName: string
+        reason: 'non_text_output'
+        totalChars: number
+        nulCount: number
+        replacementCharCount: number
+        replacementCharRatio: number
+        controlCharCount: number
+        controlCharRatio: number
+        matchedSignatures: string[]
+      }
+    }
+  | {
       code: 'brain_output_schema_invalid'
       detail: {
         issues: Array<{
@@ -568,6 +590,7 @@ type HumanDecisionHint =
 
 - `hand` 失败时应优先保留原始校验/运行时错误文本。
 - 影响下一轮 `brain` 决策的诊断信息，应通过 `decisionHint` 回流最小结构化事实。
+- `terminal_run` 禁止用 terminal 读取或写入 Word / Excel / PPT / PDF 等结构化文档内容；若执行后返回明显非文本/二进制内容，工具必须省略原始输出，并通过 `hand_tool_result_unusable` 回流检测到的结构化特征。
 
 ## 8. Mouth
 

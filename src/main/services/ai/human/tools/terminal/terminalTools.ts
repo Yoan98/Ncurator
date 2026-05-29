@@ -17,6 +17,7 @@ import { analyzeTerminalCommand, checkWorkspaceBoundary } from './terminalComman
 import { analyzeReadonlyTerminalCommandPolicy } from './readonlyCommandPolicy'
 import { resolveTerminalCwd } from './terminalCwd'
 import { runTerminalCommand } from './terminalExec'
+import { inspectTerminalOutputQuality } from './terminalOutputQuality'
 import type {
   TerminalCapabilityToolsInput,
   TerminalCapabilityToolsRuntimeState
@@ -45,7 +46,6 @@ const buildTerminalToolResult = (input: {
 })
 
 const buildFailure = <TReason extends string>(input: { reason: TReason; error: string }) => ({
-  ok: false as const,
   reason: input.reason,
   error: input.error
 })
@@ -144,6 +144,24 @@ const buildResultTooLargeDecisionHint = (input: {
     toolName: input.toolName,
     estimatedTokens: input.estimatedTokens,
     limit: input.limit
+  }
+})
+
+const buildResultUnusableDecisionHint = (input: {
+  toolName: string
+  quality: ReturnType<typeof inspectTerminalOutputQuality>
+}): Extract<HumanDecisionHint, { code: 'hand_tool_result_unusable' }> => ({
+  code: 'hand_tool_result_unusable',
+  detail: {
+    toolName: input.toolName,
+    reason: 'non_text_output',
+    totalChars: input.quality.totalChars,
+    nulCount: input.quality.nulCount,
+    replacementCharCount: input.quality.replacementCharCount,
+    replacementCharRatio: input.quality.replacementCharRatio,
+    controlCharCount: input.quality.controlCharCount,
+    controlCharRatio: input.quality.controlCharRatio,
+    matchedSignatures: input.quality.matchedSignatures
   }
 })
 
@@ -302,6 +320,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             timeoutMs: input.timeoutMs,
             captureHardLimitChars: input.captureHardLimitChars
           })
+          const outputQuality = inspectTerminalOutputQuality(result.stdout, result.stderr)
 
           const stepError = buildTerminalStepError({
             exitCode: result.exitCode,
@@ -342,8 +361,10 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
           const tooLarge = !stepError && estimatedTokens > aiResultTokenLimit
 
           const payload = {
-            stdout: result.stdout,
-            stderr: result.stderr,
+            stdout: outputQuality.unusable
+              ? '[terminal output omitted: unusable non-text content detected]'
+              : result.stdout,
+            stderr: outputQuality.unusable ? '' : result.stderr,
             exitCode: result.exitCode,
             timedOut: result.timedOut,
             artifacts
@@ -354,13 +375,14 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             timedOut: boolean
             artifacts: typeof artifacts
             error?: string
-            reason?: 'failed' | 'result_too_large'
+            reason?: 'failed' | 'result_too_large' | 'result_unusable'
             estimatedTokens?: number
             limit?: number
             decisionHint?: HumanDecisionHint
           }
 
           if (stepError) {
+            payload.reason = 'failed'
             payload.error = stepError
             session.fail(
               stepError,
@@ -374,7 +396,27 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             return payload
           }
 
+          if (outputQuality.unusable) {
+            payload.reason = 'result_unusable'
+            payload.error = 'terminal result unusable'
+            payload.decisionHint = buildResultUnusableDecisionHint({
+              toolName: TERMINAL_RUN_TOOL_SPEC.name,
+              quality: outputQuality
+            })
+            session.fail(
+              payload.error,
+              undefined,
+              buildTerminalToolResult({
+                toolName: TERMINAL_RUN_TOOL_SPEC.name,
+                ok: false,
+                data: payload
+              })
+            )
+            return payload
+          }
+
           if (tooLarge) {
+            payload.reason = 'result_too_large'
             payload.estimatedTokens = estimatedTokens
             payload.limit = aiResultTokenLimit
             payload.decisionHint = buildResultTooLargeDecisionHint({

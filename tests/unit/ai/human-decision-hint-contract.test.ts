@@ -85,6 +85,20 @@ const HINT_FIXTURES: Record<(typeof HUMAN_DECISION_HINT_CODES)[number], HumanDec
       limit: 6000
     }
   },
+  hand_tool_result_unusable: {
+    code: 'hand_tool_result_unusable',
+    detail: {
+      toolName: 'terminal_run',
+      reason: 'non_text_output',
+      totalChars: 1200,
+      nulCount: 3,
+      replacementCharCount: 40,
+      replacementCharRatio: 0.0333,
+      controlCharCount: 420,
+      controlCharRatio: 0.35,
+      matchedSignatures: ['PK_HEADER', 'OFFICE_WORD_XML']
+    }
+  },
   brain_output_schema_invalid: {
     code: 'brain_output_schema_invalid',
     detail: {

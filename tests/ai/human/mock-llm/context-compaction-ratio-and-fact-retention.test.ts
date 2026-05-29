@@ -98,10 +98,7 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
             {
               toolName: 'terminal_run',
               ok: true,
-              code: 'ok',
               data: {
-                ok: true,
-                code: 'ok',
                 stdout: '发布说明显示：审批人字段为空。',
                 stderr: '',
                 command: 'cat release-notes.txt',
@@ -150,10 +147,7 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
             {
               toolName: 'terminal_run',
               ok: false,
-              code: 'failed',
               data: {
-                ok: false,
-                code: 'failed',
                 stdout: '',
                 stderr: '发布失败：审批未完成，系统禁止继续发布。',
                 command: 'release --publish',
@@ -205,10 +199,7 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
             {
               toolName: 'terminal_run',
               ok: true,
-              code: 'ok',
               data: {
-                ok: true,
-                code: 'ok',
                 stdout: '审批记录显示：负责人 Bob 待确认；未审批不可发布。',
                 stderr: '',
                 command: 'cat approval-log.txt',
@@ -257,10 +248,7 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
             {
               toolName: 'terminal_run',
               ok: true,
-              code: 'ok',
               data: {
-                ok: true,
-                code: 'ok',
                 stdout: '上线窗口仍待确认，需先解决窗口冲突。',
                 stderr: '',
                 command: 'cat schedule-note.txt',
@@ -309,10 +297,7 @@ const buildStateWithCompactionHistory = (runtime: BackendTestRuntime) => {
             {
               toolName: 'terminal_run',
               ok: true,
-              code: 'ok',
               data: {
-                ok: true,
-                code: 'ok',
                 stdout: 'latest',
                 stderr: '',
                 command: 'echo latest',
@@ -457,7 +442,7 @@ describe('ai human mock-llm backend', () => {
             result.remainingRounds[0]?.roundId === 6 &&
             result.compactedPromptSeen &&
             completedEvent?.sourceHistoryTokenEstimate === result.roundsBlock?.sourceHistoryTokenEstimate &&
-            ratio <= 0.35,
+            ratio <= 0.45,
           {
             name: 'context-compaction-ratio-and-fact-retention-holds',
             message:

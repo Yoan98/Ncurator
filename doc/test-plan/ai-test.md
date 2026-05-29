@@ -619,6 +619,15 @@
 - Oracle：返回可断言命中信息与正确退出状态。
 - Not：不验证修改文件。
 
+##### `terminal-result-unusable-docx-output`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 `terminal_run` 读到明显非文本/结构化文档输出时，会省略原始输出并回流 decision hint。
+- Why：terminal 不能把 Word / Excel / PPT / PDF 等结构化文档的二进制内容带入后续 brain prompt。
+- How：真实创建 docx 后执行 `terminal_run(cat report.docx)`，并对普通文本文件执行 `cat notes.txt` 作为低误伤对照。
+- Oracle：docx 输出返回 `ok=false / reason=result_unusable / hand_tool_result_unusable`，stdout/stderr 不包含原始 `PK` 乱码；普通文本输出保持可读。
+
 ##### `terminal-risk-and-boundary-guard`
 
 - 测试类型：`backend`

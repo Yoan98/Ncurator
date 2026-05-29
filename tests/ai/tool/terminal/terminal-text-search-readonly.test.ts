@@ -6,10 +6,9 @@ import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import { filterEventsByType } from '../testHelpers'
 
 type TerminalRunCommandResult = {
-  ok: boolean
-  code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required' | 'result_too_large'
   stdout: string
   stderr: string
+  reason?: 'workspace_required' | 'result_too_large' | 'result_unusable' | 'failed'
   error?: string
 }
 
@@ -62,10 +61,8 @@ describe('ai tool terminal backend', () => {
         const approvalEvents = filterEventsByType(result.events, 'approval_batch_required')
 
         runtime.assertThat(
-          result.firstSearch.ok &&
-            result.secondSearch.ok &&
-            result.firstSearch.code === 'ok' &&
-            result.secondSearch.code === 'ok' &&
+          !result.firstSearch.reason &&
+            !result.secondSearch.reason &&
             approvalEvents.length === 0,
           {
             name: 'search-commands-stay-readonly',
@@ -81,8 +78,7 @@ describe('ai tool terminal backend', () => {
         runtime.assertThat(
           result.firstSearch.stdout.includes('release.md') &&
             result.secondSearch.stdout.includes('Terminal artifacts must be recorded.') &&
-            result.boundaryRejected.ok === false &&
-            result.boundaryRejected.code === 'workspace_required',
+            result.boundaryRejected.reason === 'workspace_required',
           {
             name: 'search-commands-honor-boundary-checks',
             message: '文本搜索应正确返回命中结果，并在越界路径参数下于执行前拒绝。',

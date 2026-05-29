@@ -6,8 +6,7 @@ import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import { filterEventsByType } from '../testHelpers'
 
 type TerminalRunCommandResult = {
-  ok: boolean
-  code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
+  reason?: 'approval_denied' | 'workspace_required' | 'invalid_input' | 'failed'
   error?: string
 }
 
@@ -56,8 +55,7 @@ describe('ai tool terminal backend', () => {
         const stepStarted = filterEventsByType(result.events, 'terminal_step_started')
 
         runtime.assertThat(
-          result.nonReadonlyDenied.ok === false &&
-            result.nonReadonlyDenied.code === 'approval_denied' &&
+          result.nonReadonlyDenied.reason === 'approval_denied' &&
             approvalEvents.some((event) =>
               event.items.some(
                 (item) =>
@@ -80,10 +78,8 @@ describe('ai tool terminal backend', () => {
         )
 
         runtime.assertThat(
-          result.relativeEscape.ok === false &&
-            result.relativeEscape.code === 'workspace_required' &&
-            result.absoluteEscape.ok === false &&
-            result.absoluteEscape.code === 'workspace_required' &&
+          result.relativeEscape.reason === 'workspace_required' &&
+            result.absoluteEscape.reason === 'workspace_required' &&
             stepStarted.length === 0,
           {
             name: 'workspace-boundary-rejects-escaped-paths-before-execution',

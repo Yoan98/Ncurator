@@ -23,7 +23,6 @@ type DocxOutlineBlockPreview = {
 
 type DocxOutlineResultPreview = {
   ok: boolean
-  code: 'ok'
   sourcePath: string
   blocks: DocxOutlineBlockPreview[]
 }
@@ -232,7 +231,6 @@ describe('ai human mock-llm backend', () => {
               toolResults: toolResults.map((event) => ({
                 toolName: event.toolName,
                 ok: event.result?.ok,
-                code: event.result?.code,
                 decisionHint: event.result?.data?.decisionHint
               })),
               humanSteps: humanSteps.map((event) => ({

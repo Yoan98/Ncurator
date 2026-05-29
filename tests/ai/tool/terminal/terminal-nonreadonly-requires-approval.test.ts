@@ -6,8 +6,7 @@ import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import { filterEventsByType } from '../testHelpers'
 
 type TerminalRunCommandResult = {
-  ok: boolean
-  code: 'ok' | 'failed' | 'invalid_input' | 'approval_denied' | 'workspace_required'
+  reason?: 'approval_denied' | 'workspace_required' | 'invalid_input' | 'failed'
 }
 
 describe('ai tool terminal backend', () => {
@@ -42,8 +41,7 @@ describe('ai tool terminal backend', () => {
         const approvalEvents = filterEventsByType(result.events, 'approval_batch_required')
 
         runtime.assertThat(
-          result.mkdirDenied.ok === false &&
-            result.mkdirDenied.code === 'approval_denied' &&
+          result.mkdirDenied.reason === 'approval_denied' &&
             result.blockedDirExists === false &&
             approvalEvents.some((event) =>
               event.items.some((item) => item.command === 'mkdir blocked-dir')
