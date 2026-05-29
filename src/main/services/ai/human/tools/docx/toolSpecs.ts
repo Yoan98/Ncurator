@@ -337,7 +337,7 @@ export const DOCX_EDIT_TOOL_SPEC = {
       'action type=style_text：给指定 block 内命中的文本设置加粗、斜体、下划线、颜色等样式。',
       'action type=update_table_cell：替换指定表格单元格的文本。',
       'action type=delete_blocks：删除一个或多个完整 block。',
-      '结果：返回写入后的编辑状态，以及所有 action 完成后的相邻区域详细回读信息。继续编辑时优先使用 postWriteReadback 里的真实 blockId。',
+      '结果：返回写入后的编辑状态，以及所有 action 完成后的相邻区域详细回读信息（postWriteReadback字段），它代表着修改后最新的 docx 内容结构。',
       '边界：所有 blockId、anchorBlockId、cellBlockId、blockIds 必须来自 docx_outline、docx_search、docx_read_blocks 或 postWriteReadback 返回的真实结果，禁止推算新 blockId；禁止在同一次 actions 内引用本次刚创建、尚未回读的新 blockId。'
     ].join('\n'),
     whenToUse: '适用于需要创建或修改 docx 内容的任务。',
