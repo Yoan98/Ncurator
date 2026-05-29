@@ -177,7 +177,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               error: 'empty command'
             })
             session.fail(
-              emptyResult,
               emptyResult.error,
               undefined,
               buildTerminalToolResult({
@@ -199,7 +198,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               error: cwdResult.error
             })
             session.fail(
-              cwdError,
               cwdError.error,
               undefined,
               buildTerminalToolResult({
@@ -219,7 +217,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               error: `workspace boundary check failed: ${boundary.reason}`
             })
             session.fail(
-              boundaryError,
               boundaryError.error,
               undefined,
               buildTerminalToolResult({
@@ -263,7 +260,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
                 error: `command requires approval preflight: ${readonlyPolicy.reason}`
               })
               session.fail(
-                denied,
                 denied.error,
                 undefined,
                 buildTerminalToolResult({

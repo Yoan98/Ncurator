@@ -17,11 +17,6 @@ import { createToolEventEmitter } from '../utils/toolEvents'
 const MAX_RETRIEVAL_LIMIT = 50
 const MAX_LIST_PAGE_SIZE = 50
 
-const previewArray = <T>(rows: T[], max = 3): T[] => {
-  const list = Array.isArray(rows) ? rows : []
-  return list.slice(0, Math.max(0, max))
-}
-
 const toStringIdList = (value: string[] | undefined): string[] => {
   if (!Array.isArray(value)) return []
   return value.map((item) => String(item).trim()).filter(Boolean)

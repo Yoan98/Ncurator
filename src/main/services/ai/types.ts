@@ -224,7 +224,7 @@ export type AiEventDispatchContext = Pick<AiRunContext, 'runId' | 'sendEvent' | 
 
 export type TerminalToolContext = Pick<
   AiRunContext,
-  'runId' | 'checkCancelled' | 'sendEvent' | 'requestApprovalBatch'
+  'runId' | 'checkCancelled' | 'sendEvent' | 'requestApprovalBatch' | 'humanRuntimeOverrides'
 >
 
 export type KnowledgeRetrievalContext = Pick<

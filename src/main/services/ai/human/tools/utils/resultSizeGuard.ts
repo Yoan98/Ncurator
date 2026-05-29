@@ -1,4 +1,4 @@
-import type { JsonValue } from '../../../../../shared/types'
+import type { JsonValue } from '../../../../../../shared/types'
 import { HUMAN_TOOL_RESULT_TOKEN_LIMIT_RATIO } from '../../constants'
 import { estimateTextTokens } from '../../utils/tokenEstimate'
 
