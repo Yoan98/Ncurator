@@ -1,0 +1,137 @@
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import type {
+  DocxApplyRecord,
+  GetDocxApplyRecordRequest,
+  GetDocxApplyRecordResponse,
+  ListDocxApplyRecordsRequest,
+  ListDocxApplyRecordsResponse,
+  RevertDocxApplyRequest,
+  RevertDocxApplyResponse
+} from '../../../../../../../shared/types'
+import type { DocxApplyStore } from '../../../../../storage/domains/DocxApplyStore'
+import { RunDocxEditTracker } from './RunDocxEditTracker'
+import type { ResolvedDocxOpenTarget } from './types'
+import { calculateFileStats, fileExists } from './utils'
+
+const FORCE_REVERT_WARNING =
+  '文件在 AI 修改后又发生变化。继续回退会丢失这些后续修改，并恢复到 AI 写入前的版本。'
+
+export class DocxApplyService {
+  private readonly editTracker: RunDocxEditTracker
+
+  public constructor(private readonly docxApplyStore: DocxApplyStore) {
+    this.editTracker = new RunDocxEditTracker(docxApplyStore)
+  }
+
+  public beginRun(input: { runId: string; sessionId: string; inputText: string }): void {
+    this.editTracker.beginRun(input)
+  }
+
+  public discardRun(runId: string): void {
+    this.editTracker.discardRun(runId)
+  }
+
+  public registerDocxOpen(input: Parameters<RunDocxEditTracker['registerDocxOpen']>[0]): void {
+    this.editTracker.registerDocxOpen(input)
+  }
+
+  public registerDocxChanges(input: Parameters<RunDocxEditTracker['registerDocxChanges']>[0]): void {
+    this.editTracker.registerDocxChanges(input)
+  }
+
+  public async applyRunEdits(input: {
+    runId: string
+    workspaceRootPath: string
+  }): Promise<DocxApplyRecord[]> {
+    return await this.editTracker.applyRunEdits(input)
+  }
+
+  public async listRecords(
+    request?: ListDocxApplyRecordsRequest
+  ): Promise<ListDocxApplyRecordsResponse> {
+    return await this.docxApplyStore.listRecords(request)
+  }
+
+  public async getRecord(
+    request: GetDocxApplyRecordRequest
+  ): Promise<GetDocxApplyRecordResponse> {
+    const record = await this.docxApplyStore.getRecord(request.applyId)
+    return record ? { record } : { error: 'docx apply record not found' }
+  }
+
+  public async revertRecord(request: RevertDocxApplyRequest): Promise<RevertDocxApplyResponse> {
+    const record = await this.docxApplyStore.getRecord(request.applyId)
+    if (!record) return { success: false, error: 'docx apply record not found' }
+    if (record.status !== 'applied') {
+      return { success: false, record, error: 'current docx apply record cannot be reverted' }
+    }
+
+    const sourceExists = await fileExists(record.source_path)
+    if (!sourceExists) {
+      if (!request.force) {
+        return {
+          success: false,
+          record,
+          requiresForce: true,
+          warning: FORCE_REVERT_WARNING
+        }
+      }
+    } else if (record.after_checksum) {
+      const currentStats = await calculateFileStats(record.source_path)
+      if (currentStats.checksum !== record.after_checksum && !request.force) {
+        return {
+          success: false,
+          record,
+          requiresForce: true,
+          warning: FORCE_REVERT_WARNING
+        }
+      }
+    }
+
+    const updatedAt = Date.now()
+    try {
+      if (record.operation === 'created') {
+        await fs.rm(record.source_path, { force: true })
+      } else {
+        if (!record.before_snapshot_path) {
+          throw new Error('checkpoint snapshot is missing')
+        }
+        await fs.mkdir(path.dirname(record.source_path), { recursive: true })
+        const tempOutputPath = path.join(
+          path.dirname(record.source_path),
+          `${path.basename(record.source_path)}.revert-${record.id}.tmp`
+        )
+        await fs.copyFile(record.before_snapshot_path, tempOutputPath)
+        await fs.rename(tempOutputPath, record.source_path)
+      }
+
+      const reverted: DocxApplyRecord = {
+        ...record,
+        status: 'reverted',
+        updated_at: updatedAt,
+        reverted_at: updatedAt,
+        error: undefined
+      }
+      await this.docxApplyStore.saveRecord(reverted)
+      return { success: true, record: reverted }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      const failed: DocxApplyRecord = {
+        ...record,
+        status: 'failed',
+        updated_at: updatedAt,
+        error: message
+      }
+      await this.docxApplyStore.saveRecord(failed)
+      return { success: false, record: failed, error: message }
+    }
+  }
+
+  public async resolveDocxOpenTarget(sourcePath: string): Promise<ResolvedDocxOpenTarget> {
+    return {
+      openPath: sourcePath,
+      trackedSourcePath: sourcePath
+    }
+  }
+}

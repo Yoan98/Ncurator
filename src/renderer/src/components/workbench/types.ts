@@ -1,8 +1,4 @@
-import type {
-  DraftDocumentFormat,
-  FileReviewStatus,
-  SearchResult
-} from '../../../../shared/types'
+import type { DocxApplyStatus, SearchResult } from '../../../../shared/types'
 
 export type WorkbenchMode = 'ai' | 'search'
 
@@ -23,7 +19,7 @@ export type SearchWorkbenchTurn = {
 export type WorkbenchFileOrigin =
   | 'search_hit'
   | 'read'
-  | 'edited_draft'
+  | 'edited_file'
   | 'artifact'
   | 'preview'
   | 'source'
@@ -33,18 +29,18 @@ export type WorkbenchFileRef = {
   fileName: string
   origin: WorkbenchFileOrigin
   summary?: string
-  reviewId?: string
-  format?: DraftDocumentFormat
+  applyId?: string
+  format?: 'docx'
   pageNumber?: number
 }
 
-export type ReviewWorkspaceTab = {
+export type DocxApplyWorkspaceTab = {
   fileKey: string
-  reviewId: string
+  applyId: string
   fileName: string
   sourcePath: string
   changeCount: number
-  status: FileReviewStatus
+  status: DocxApplyStatus
   unseen: boolean
 }
 
@@ -58,11 +54,11 @@ export type AssistantTurnStep = {
   files: WorkbenchFileRef[]
 }
 
-export type AssistantTurnReviewTarget = {
-  reviewId: string
+export type AssistantTurnApplyTarget = {
+  applyId: string
   title: string
   changeCount: number
-  status?: FileReviewStatus
+  status?: DocxApplyStatus
 }
 
 export type AssistantTurnBlocker = {
@@ -79,7 +75,7 @@ export type AssistantTurnViewModel = {
   steps: AssistantTurnStep[]
   readFiles: WorkbenchFileRef[]
   editedFiles: WorkbenchFileRef[]
-  reviewTargets: AssistantTurnReviewTarget[]
+  applyTargets: AssistantTurnApplyTarget[]
   blockers: AssistantTurnBlocker[]
   error?: string
 }
@@ -103,8 +99,8 @@ export type WorkbenchContentPanelState =
       file: WorkbenchFileRef
     }
   | {
-      kind: 'review_workspace'
+      kind: 'apply_workspace'
       title: string
-      tabs: ReviewWorkspaceTab[]
+      tabs: DocxApplyWorkspaceTab[]
       activeFileKey: string | null
     }

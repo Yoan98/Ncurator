@@ -40,8 +40,8 @@ describe('backend artifact collector', () => {
         path: artifactSourcePath,
         fileName: 'draft-深度学习与图形学复习总结.docx',
         operation: 'created',
-        artifactRole: 'draft',
-        summary: 'review doc ready',
+        applyId: 'apply-123',
+        summary: 'docx applied',
         createdAt: Date.now()
       } satisfies Extract<AiRunEvent, { type: 'file_artifact' }>
       await fs.writeFile(runtimeEventsPath, `${JSON.stringify(event)}\n`, 'utf8')
@@ -60,8 +60,7 @@ describe('backend artifact collector', () => {
         kind: 'other',
         path: 'artifacts/file-artifacts/artifact-123.docx',
         fileName: 'draft-深度学习与图形学复习总结.docx',
-        capability: 'docx',
-        artifactRole: 'draft'
+        capability: 'docx'
       })
       expect(artifacts[0]?.path).not.toContain('深度学习')
 

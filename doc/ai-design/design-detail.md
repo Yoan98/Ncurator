@@ -144,9 +144,9 @@ interface AiRunContext {
     replaySession?: DocxReplaySession
   }) => void
   resolveDocxOpenTarget: (sourcePath: string) => Promise<ResolvedDocxOpenTarget>
-  beginDocxReviewRun: () => void
-  finalizeDocxReviewRun: () => Promise<FileReviewDetail[]>
-  discardDocxReviewRun: () => void
+  beginDocxApplyRun: () => void
+  applyDocxRunEdits: () => Promise<DocxApplyRecord[]>
+  discardDocxApplyRun: () => void
 
   // 当前 workspace 级知识能力。
   documentsStore: DocumentsStore
@@ -174,36 +174,23 @@ interface AiRunState {
   finalArtifacts: AiArtifactRef[]
 }
 
-type AiArtifactRef =
-  | {
-      // 表示一个真实存在的文件类产物。
-      kind: 'file'
-      // 产物由哪个能力域生成。
-      capability: 'terminal_exec' | 'docx'
-      // 文件绝对路径。
-      path: string
-      // 文件名。
-      fileName: string
-      // 创建还是更新。
-      operation: 'created' | 'updated'
-      // 产物角色；例如 draft 或 committed。
-      artifactRole?: 'draft' | 'committed'
-      // 若来自 draft review，则记录 reviewId。
-      reviewId?: string
-      // 若是 docx draft，则记录 draft snapshotId。
-      draftSnapshotId?: string
-      // 面向 AI、日志和 UI 的简洁说明。
-      summary: string
-    }
-  | {
-      // 表示一次 draft review 的聚合结果。
-      kind: 'draft_review'
-      review: {
-        reviewId: string
-        changeCount: number
-      }
-      summary: string
-    }
+type AiArtifactRef = {
+  // 表示一个真实存在的文件类产物。
+  kind: 'file'
+  // 产物由哪个能力域生成。
+  capability: 'terminal_exec' | 'docx'
+  // 文件绝对路径。
+  path: string
+  // 文件名。
+  fileName: string
+  // 创建还是更新。
+  operation: 'created' | 'updated'
+  // 若来自 docx 直接写回，则记录 applyId，供 UI 回退本次 AI 修改。
+  applyId?: string
+  // 面向 AI、日志和 UI 的简洁说明。
+  summary: string
+}
+
 
 interface HumanTaskInput {
   // 当前 human 任务 ID；当前正式实现里与 runId 对齐。

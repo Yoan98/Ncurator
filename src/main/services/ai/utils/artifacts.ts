@@ -4,9 +4,8 @@ import type {
   AiArtifactRef,
   AiFileArtifactOperation,
   AiFileArtifactRef,
-  AiFileReviewArtifactRef,
   AiRunEvent,
-  FileReviewDetail,
+  DocxApplyRecord,
   JsonObject,
   JsonValue,
   RuntimeArtifactsSummary
@@ -39,18 +38,14 @@ const createFileArtifactRef = (input: {
   artifactPath: string
   operation: AiFileArtifactOperation
   summary: string
-  artifactRole?: AiFileArtifactRef['artifactRole']
-  reviewId?: string
-  draftSnapshotId?: string
+  applyId?: string
 }): AiFileArtifactRef => ({
   kind: 'file',
   capability: input.capability,
   path: input.artifactPath,
   fileName: path.basename(input.artifactPath),
   operation: input.operation,
-  artifactRole: input.artifactRole,
-  reviewId: input.reviewId,
-  draftSnapshotId: input.draftSnapshotId,
+  applyId: input.applyId,
   summary: input.summary
 })
 
@@ -75,10 +70,7 @@ const extractTerminalArtifacts = (result: ToolCallResult): AiArtifactRef[] => {
   })
 }
 
-const getArtifactKey = (artifact: AiArtifactRef): string =>
-  artifact.kind === 'file'
-    ? `file:${artifact.path}`
-    : `draft_review:${artifact.review.reviewId}`
+const getArtifactKey = (artifact: AiArtifactRef): string => `file:${artifact.path}:${artifact.applyId || ''}`
 
 export const mergeArtifactRefs = (
   ...groups: Array<readonly AiArtifactRef[] | undefined>
@@ -102,70 +94,40 @@ export const extractArtifactRefsFromToolResults = (
 ): AiArtifactRef[] =>
   mergeArtifactRefs(...results.map((result) => extractArtifactRefsFromToolResult(result)))
 
-export const buildRunArtifactsFromFileReviewDetail = (detail: FileReviewDetail): AiArtifactRef[] => {
-  const reviewArtifact: AiFileReviewArtifactRef = {
-    kind: 'draft_review',
-    review: {
-      reviewId: detail.review.id,
-      changeCount: detail.review.change_count
-    },
-    summary: `review document ready (1 doc, ${detail.review.change_count} changes)`
-  }
+export const buildRunArtifactsFromDocxApplyRecord = (record: DocxApplyRecord): AiArtifactRef[] => [
+  createFileArtifactRef({
+    capability: 'docx',
+    artifactPath: record.source_path,
+    operation: record.operation,
+    applyId: record.id,
+    summary: `docx applied: ${record.source_name}`
+  })
+]
 
-  const draftArtifacts = detail.review.draft_artifact_path
-    ? [
-        createFileArtifactRef({
-          capability: 'docx',
-          artifactPath: detail.review.draft_artifact_path,
-          operation: 'created',
-          artifactRole: 'draft',
-          reviewId: detail.review.id,
-          draftSnapshotId: detail.review.latest_draft_snapshot_id,
-          summary: `review doc ready: ${detail.review.source_name}`
-        })
-      ]
-    : []
-
-  return mergeArtifactRefs([reviewArtifact], draftArtifacts)
-}
-
-export const appendFileReviewArtifactsAndEmitEvents = (input: {
+export const appendDocxApplyArtifactsAndEmitEvents = (input: {
   existingArtifacts?: readonly AiArtifactRef[]
-  details: readonly FileReviewDetail[]
+  records: readonly DocxApplyRecord[]
   sendEvent: (event: AiRunEvent) => void
   runId: string
   taskId: string
 }): AiArtifactRef[] => {
   const nextArtifacts = mergeArtifactRefs(
     input.existingArtifacts,
-    ...input.details.map((detail) => buildRunArtifactsFromFileReviewDetail(detail))
+    ...input.records.map((record) => buildRunArtifactsFromDocxApplyRecord(record))
   )
 
-  input.details.forEach((detail) => {
-    input.sendEvent({
-      type: 'draft_review_ready',
-      runId: input.runId,
-      review: {
-        reviewId: detail.review.id,
-        changeCount: detail.review.change_count
-      },
-      createdAt: Date.now()
-    })
-
-    if (!detail.review.draft_artifact_path) return
+  input.records.forEach((record) => {
     input.sendEvent({
       type: 'file_artifact',
       runId: input.runId,
       taskId: input.taskId,
       artifactId: uuidv4(),
       capability: 'docx',
-      path: detail.review.draft_artifact_path,
-      fileName: path.basename(detail.review.draft_artifact_path),
-      operation: 'created',
-      artifactRole: 'draft',
-      reviewId: detail.review.id,
-      draftSnapshotId: detail.review.latest_draft_snapshot_id,
-      summary: `review doc ready: ${detail.review.source_name}`,
+      path: record.source_path,
+      fileName: record.source_name,
+      operation: record.operation,
+      applyId: record.id,
+      summary: `docx applied: ${record.source_name}`,
       createdAt: Date.now()
     })
   })
@@ -173,18 +135,16 @@ export const appendFileReviewArtifactsAndEmitEvents = (input: {
   return nextArtifacts
 }
 
-/**
- * RuntimeArtifactsSummary is only for mouth consumption. It intentionally
- * exposes user-facing changed-file facts instead of internal artifact wiring.
- */
-export const buildRuntimeArtifactsSummaryFromFileReviewDetails = (
-  details: readonly FileReviewDetail[]
+export const buildRuntimeArtifactsSummaryFromDocxApplyRecords = (
+  records: readonly DocxApplyRecord[]
 ): RuntimeArtifactsSummary => ({
-  changed_files: details.map((detail) => ({
-    file_name: detail.review.source_name,
-    source_path: detail.review.source_path,
+  changed_files: records.map((record) => ({
+    file_name: record.source_name,
+    source_path: record.source_path,
     format: 'docx',
-    change_count: detail.review.change_count,
-    draft_artifact_path: detail.review.draft_artifact_path
+    change_count: record.change_count,
+    summary: `已直接修改源文件：${record.source_name}`,
+    change_highlights: [],
+    apply_id: record.id
   }))
 })

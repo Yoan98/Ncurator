@@ -90,25 +90,15 @@ export const normalizeSelectedReferences = (
 }
 
 const formatArtifactRef = (artifact: AiArtifactRef): string =>
-  artifact.kind === 'file'
-    ? [
-        'file',
-        artifact.fileName ? `fileName=${artifact.fileName}` : '',
-        artifact.path ? `path=${artifact.path}` : '',
-        artifact.reviewId ? `reviewId=${artifact.reviewId}` : '',
-        artifact.artifactRole ? `artifactRole=${artifact.artifactRole}` : '',
-        artifact.summary ? `summary=${artifact.summary}` : ''
-      ]
-        .filter(Boolean)
-        .join('；')
-    : [
-        'draft_review',
-        `reviewId=${artifact.review.reviewId}`,
-        `changeCount=${String(artifact.review.changeCount)}`,
-        artifact.summary ? `summary=${artifact.summary}` : ''
-      ]
-        .filter(Boolean)
-        .join('；')
+  [
+    'file',
+    artifact.fileName ? `fileName=${artifact.fileName}` : '',
+    artifact.path ? `path=${artifact.path}` : '',
+    artifact.applyId ? `applyId=${artifact.applyId}` : '',
+    artifact.summary ? `summary=${artifact.summary}` : ''
+  ]
+    .filter(Boolean)
+    .join('；')
 
 export const formatTurns = (messages: ChatMessage[]): string =>
   messages

@@ -25,7 +25,7 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     countsTowardToolBudget: true,
     title: 'docx-read',
     description:
-      '能力：读取 sourcePath 对应 docx 的结构、内容块、检索结果和任务内修订历史。\n结果：返回块级索引、正文内容、匹配信息或 revision 信息。\n边界：只读取 docx 内容与修订状态，不改变草稿内容。',
+      '能力：读取 sourcePath 对应 docx 的结构、内容块、检索结果和任务内修订历史。\n结果：返回块级索引、正文内容、匹配信息或 revision 信息。\n边界：只读取 docx 内容与当前任务内编辑状态，不直接覆盖源文件。',
     whenToUse: '适用于需要读取或理解 docx 内容与修订状态的任务。',
     toolNames: ['docx_outline', 'docx_search', 'docx_read_blocks', 'docx_history']
   },

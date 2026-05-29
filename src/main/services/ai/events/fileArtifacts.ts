@@ -10,9 +10,7 @@ export type EmitFileArtifactEventInput = {
   capability: AiFileArtifactCapability
   artifactPath: string
   operation: AiFileArtifactOperation
-  artifactRole?: 'draft' | 'committed'
-  reviewId?: string
-  draftSnapshotId?: string
+  applyId?: string
   summary: string
   stepId?: string
   onNonFatalError?: (reason: string) => void
@@ -29,9 +27,7 @@ export const emitFileArtifactEvent = (input: EmitFileArtifactEventInput): boolea
       path: input.artifactPath,
       fileName: path.basename(input.artifactPath),
       operation: input.operation,
-      artifactRole: input.artifactRole,
-      reviewId: input.reviewId,
-      draftSnapshotId: input.draftSnapshotId,
+      applyId: input.applyId,
       summary: input.summary,
       stepId: input.stepId,
       createdAt: Date.now()

@@ -21,7 +21,7 @@
   - `WebSourceStore`：`web_source`（网页资料来源 identity、抓取状态与来源级元数据）
   - `WorkspaceStore`：`workspace_source` / `workspace_node`（工作空间、目录树快照、准备状态与节点绑定）
   - `ChatStore`：`chat_session` / `chat_message`（会话与消息 CRUD）
-  - `FileReviewStore`：`file_review` / `file_review_change` / `commit_attempt`（单文件审阅、变更确认与提交结果）
+  - `DocxApplyStore`：`docx_apply`（docx 直接写回记录、checkpoint 与回退状态）
   - `LlmConfigStore`：`llm_config`（配置 CRUD 与激活态切换）
 - **组合根（Facade）**: `src/main/services/storage/StorageService.ts`
   - 统一持有 `core` 与各 domain store
@@ -201,73 +201,33 @@
 | sources    | Utf8（Nullable） | 引用来源（SearchResult[] 的 JSON 字符串） |
 | error      | Boolean（Nullable） | 是否出错                               |
 
-### 表: file_review（单文件审阅表）
+### 表: docx_apply（docx 直接写回记录表）
 
-存储一次 AI 运行中某个单文件的待审阅结果。当前只正式用于 `docx`，未来 `xlsx / pptx` 可沿用同一外壳。
+存储一次 AI 运行中某个 docx 文件的直接写回记录。写回前会保存当前磁盘文件 checkpoint，用于用户回退本次 AI 修改。
 
 | 字段名                | 类型             | 描述 |
 | :-------------------- | :--------------- | :--- |
-| id                    | Utf8             | 审阅 ID |
+| id                    | Utf8             | AI 修改记录 ID |
 | session_id            | Utf8             | 所属会话 |
 | run_id                | Utf8             | 所属运行 |
-| status                | Utf8             | 审阅状态 |
-| title                 | Utf8             | 审阅标题 |
-| source_document_id    | Utf8（Nullable） | 源 document ID |
-| source_path           | Utf8             | 源文件路径或 create-target 的最终目标路径 |
+| status                | Utf8             | `applied / reverted / failed` |
+| source_path           | Utf8             | 已直接写回的源文件路径 |
 | source_name           | Utf8             | 源文件名 |
-| output_operation      | Utf8             | 输出语义，`updated` 表示覆盖现有文件，`created` 表示 commit 时创建目标文件 |
-| format                | Utf8             | 文件格式 |
-| review_render_kind    | Utf8（Nullable） | 预览/审阅渲染类型 |
-| latest_draft_snapshot_id | Utf8          | 最新草稿快照 |
-| draft_artifact_path   | Utf8（Nullable） | 待确认稿路径 |
-| working_artifact_path | Utf8（Nullable） | working artifact 路径 |
-| committed_artifact_path | Utf8（Nullable） | committed artifact 路径 |
-| source_version_json   | Utf8             | 源版本信息 JSON；create-target 下会记录 `exists=false`，表示 commit 前目标路径尚不存在 |
-| change_count          | Int32            | 变更总数 |
-| pending_change_count  | Int32            | 待决策变更数 |
-| accepted_change_count | Int32            | 已接受变更数 |
-| rejected_change_count | Int32            | 已拒绝变更数 |
+| operation             | Utf8             | 实际写回语义，`updated` 表示覆盖现有文件，`created` 表示创建新文件 |
+| final_revision_ref    | Utf8             | 本次写回对应的任务内最终 revision |
+| change_count          | Int32            | 变更数量 |
+| before_exists         | Boolean          | 写回前目标文件是否存在 |
+| before_snapshot_path  | Utf8（Nullable） | 写回前 checkpoint 快照路径 |
+| before_checksum       | Utf8（Nullable） | 写回前文件 checksum |
+| before_byte_size      | Int64（Nullable）| 写回前文件大小 |
+| before_modified_at    | Int64（Nullable）| 写回前修改时间 |
+| after_checksum        | Utf8（Nullable） | 写回后文件 checksum |
+| after_byte_size       | Int64（Nullable）| 写回后文件大小 |
+| after_modified_at     | Int64（Nullable）| 写回后修改时间 |
 | created_at            | Int64            | 创建时间 |
 | updated_at            | Int64            | 更新时间 |
-| completed_at          | Int64（Nullable）| 审阅完成时间 |
-| committed_at          | Int64（Nullable）| 最终提交时间 |
+| reverted_at           | Int64（Nullable）| 回退时间 |
 | last_error            | Utf8（Nullable） | 最近错误 |
-
-### 表: file_review_change（单文件审阅变更表）
-
-存储最小审阅单元及其接受/拒绝状态。
-
-| 字段名              | 类型             | 描述 |
-| :------------------ | :--------------- | :--- |
-| id                  | Utf8             | 变更 ID |
-| review_id           | Utf8             | 所属审阅 ID |
-| order_index         | Int32            | 排序索引 |
-| change_kind         | Utf8             | 变更类型 |
-| title               | Utf8             | 变更标题 |
-| summary             | Utf8             | 变更摘要 |
-| decision            | Utf8             | `pending / accepted / rejected` |
-| before_text         | Utf8             | 变更前文本 |
-| after_text          | Utf8             | 变更后文本 |
-| locator_json        | Utf8（Nullable） | 定位信息 JSON |
-| diff_hunks_json     | Utf8（Nullable） | 统一 diff 片段 |
-| source_step_ref     | Utf8（Nullable） | 来源步骤引用 |
-| metadata_json       | Utf8（Nullable） | 附加元数据 |
-| created_at          | Int64            | 创建时间 |
-| updated_at          | Int64            | 更新时间 |
-
-### 表: commit_attempt（提交尝试表）
-
-存储审阅通过后的最终提交执行结果。
-
-| 字段名        | 类型             | 描述 |
-| :------------ | :--------------- | :--- |
-| id            | Utf8             | 提交任务 ID |
-| review_id     | Utf8             | 所属审阅 ID |
-| status        | Utf8             | 提交状态 |
-| results_json  | Utf8             | 提交结果 JSON |
-| started_at    | Int64            | 开始时间 |
-| completed_at  | Int64（Nullable）| 完成时间 |
-| error         | Utf8（Nullable） | 错误信息 |
 
 ### 表: llm_config（大模型配置表）
 

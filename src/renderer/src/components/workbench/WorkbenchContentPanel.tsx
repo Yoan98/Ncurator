@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { Button, Empty, Modal } from 'antd'
 import { HiOutlineMagnifyingGlass } from 'react-icons/hi2'
-import type { FileReviewDetail, ValidateFileReviewCommitResponse } from '../../../../shared/types'
+import type { DocxApplyRecord } from '../../../../shared/types'
 import EmbeddedFileViewer from '../fileRenders/EmbeddedFileViewer'
-import WorkbenchReviewPanel from './WorkbenchReviewPanel'
+import WorkbenchApplyPanel from './WorkbenchApplyPanel'
 import type {
   SearchWorkbenchTurn,
   WorkbenchContentPanelState,
@@ -13,16 +13,13 @@ import { workbenchSelectors } from '../../testing/selectors'
 
 type WorkbenchContentPanelProps = {
   state: WorkbenchContentPanelState
-  activeReview: FileReviewDetail | null
-  fileReviewLoading: boolean
-  draftCommitValidation: ValidateFileReviewCommitResponse | null
-  draftCommitSubmitting: boolean
-  draftDiscardSubmitting: boolean
+  activeApplyRecord: DocxApplyRecord | null
+  docxApplyLoading: boolean
+  docxApplyReverting: boolean
   modalPreviewFile: WorkbenchFileRef | null
   onOpenSearchResult: (turn: SearchWorkbenchTurn, resultIndex: number) => void
-  onSelectReviewTab: (fileKey: string) => void
-  onCommit: () => void
-  onDiscard: () => void
+  onSelectApplyTab: (fileKey: string) => void
+  onRevertApply: () => void
   onCloseModalPreview: () => void
   onOpenPath: (filePath: string) => Promise<void>
   onOpenWithApplication: (filePath: string) => Promise<void>
@@ -31,16 +28,13 @@ type WorkbenchContentPanelProps = {
 
 const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
   state,
-  activeReview,
-  fileReviewLoading,
-  draftCommitValidation,
-  draftCommitSubmitting,
-  draftDiscardSubmitting,
+  activeApplyRecord,
+  docxApplyLoading,
+  docxApplyReverting,
   modalPreviewFile,
   onOpenSearchResult,
-  onSelectReviewTab,
-  onCommit,
-  onDiscard,
+  onSelectApplyTab,
+  onRevertApply,
   onCloseModalPreview,
   onOpenPath,
   onOpenWithApplication,
@@ -187,17 +181,14 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
             </div>
           ) : null}
 
-          {state.kind === 'review_workspace' ? (
-            <WorkbenchReviewPanel
-              review={activeReview}
-              loading={fileReviewLoading}
-              validation={draftCommitValidation}
-              committing={draftCommitSubmitting}
-              discarding={draftDiscardSubmitting}
+          {state.kind === 'apply_workspace' ? (
+            <WorkbenchApplyPanel
+              record={activeApplyRecord}
+              loading={docxApplyLoading}
+              reverting={docxApplyReverting}
               tabs={state.tabs}
-              onSelectTab={onSelectReviewTab}
-              onCommit={onCommit}
-              onDiscard={onDiscard}
+              onSelectTab={onSelectApplyTab}
+              onRevert={onRevertApply}
             />
           ) : null}
         </div>

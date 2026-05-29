@@ -17,7 +17,7 @@ describe('ai unit runtime artifacts renderer', () => {
           change_count: 2,
           summary: '补充了课堂说明',
           change_highlights: ['补充交互设计说明', '新增总结表'],
-          draft_artifact_path: '/workspace/.ncurator/file-reviews/review-1/draft-sample.docx'
+          apply_id: 'apply-sample'
         }
       ]
     }
@@ -26,8 +26,8 @@ describe('ai unit runtime artifacts renderer', () => {
 
     expect(rendered).toContain('文件：sample.docx')
     expect(rendered).toContain('改动数：2')
-    expect(rendered).toContain('补充交互设计说明')
-    expect(rendered).toContain('待确认稿：/workspace/.ncurator/file-reviews/review-1/draft-sample.docx')
+    expect(rendered).toContain('原文件路径：/workspace/sample.docx')
+    expect(rendered).toContain('AI 修改记录：apply-sample')
   })
 
   it('renders empty fallback when no changed files exist', () => {
@@ -39,6 +39,6 @@ describe('ai unit runtime artifacts renderer', () => {
     const rendered = renderHumanArtifactLines(state, 'prompt')
 
     expect(rendered).toContain('本次运行未形成新的文件改动结果。')
-    expect(rendered).not.toContain('draft review')
+    expect(rendered).not.toContain('AI 修改记录')
   })
 })

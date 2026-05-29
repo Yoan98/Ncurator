@@ -10,8 +10,8 @@ import {
 } from '../../../harness/backend/liveScenarios/contextCompactionScenario'
 import {
   filterAiRunEventsByType,
-  hasDraftFileArtifact,
-  hasFileReviewArtifact,
+  hasDocxApplyArtifact,
+  hasDocxFileArtifact,
   isDocxEditCreateInput,
   runWithStructuredOutputRetry
 } from '../testUtils'
@@ -212,8 +212,8 @@ describe('ai human live backend', () => {
               !hasInventedEntityText(latestBrainRecord?.user, inventedLastWeekDocName) &&
               !hasInventedEntityText(deliveryText, inventedLastWeekDocName) &&
               toolNames.includes('docx_edit') &&
-              hasDraftFileArtifact(result.output?.artifacts) &&
-              hasFileReviewArtifact(result.output?.artifacts) &&
+              hasDocxFileArtifact(result.output?.artifacts) &&
+              hasDocxApplyArtifact(result.output?.artifacts) &&
               createSourcePaths.length >= 1 &&
               createdRelativePaths.every(
                 (sourcePath) => sourcePath.startsWith('工作/') || sourcePath === path.basename(sourcePath)
@@ -222,7 +222,7 @@ describe('ai human live backend', () => {
             {
               name: 'human-live-context-compaction-natural-trigger-completes-task',
               message:
-                '真实风险周报长任务应自然触发 context compaction，并在压缩后继续完成周报待确认稿交付。',
+                '真实风险周报长任务应自然触发 context compaction，并在压缩后继续完成周报文件交付。',
               data: {
                 startedEvents,
                 completedEvents,

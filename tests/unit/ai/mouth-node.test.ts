@@ -43,13 +43,13 @@ const createBaseContext = (input: {
     loadConversationMemory: async () => null,
     trackDocxOpen: () => undefined,
     trackDocxChanges: () => undefined,
+    trackDocxBatchChanges: () => undefined,
     resolveDocxOpenTarget: async () => {
       throw new Error('not used in mouth node test')
     },
-    beginDocxReviewRun: () => undefined,
-    finalizeDocxReviewRun: async () => [],
-    persistDocxReviewRun: async () => undefined,
-    discardDocxReviewRun: () => undefined,
+    beginDocxApplyRun: () => undefined,
+    applyDocxRunEdits: async () => [],
+    discardDocxApplyRun: () => undefined,
     documentsStore: {} as AiRunContext['documentsStore'],
     embeddingService: {} as AiRunContext['embeddingService']
   }) satisfies AiRunContext

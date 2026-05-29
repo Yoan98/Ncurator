@@ -17,8 +17,8 @@ import {
   collectStartedDocxEditSourcePaths,
   collectStartedToolStringArgs,
   filterAiRunEventsByType,
-  hasDraftFileArtifact,
-  hasFileReviewArtifact,
+  hasDocxApplyArtifact,
+  hasDocxFileArtifact,
   isDocxEditCreateInput,
   isDocxEditWriteInput
 } from '../testUtils'
@@ -135,7 +135,7 @@ describe('ai human live backend', () => {
       suite: 'human',
       groups: ['live'],
       description:
-        '验证 live 模式下 human 会在真实长任务里串起多源工作文档取证、新建周报 docx 与待确认稿交付。',
+        '验证 live 模式下 human 会在真实长任务里串起多源工作文档取证、新建周报 docx 与文件交付。',
       fixtures: [RISK_REPORT_DRAFT_SHARED_WORKSPACE_FIXTURE_PATH],
       runMode: 'single',
       runtimeModelName: hasLiveLlmConfigInEnv() ? loadLiveLlmConfigFromEnv().model_name : null,
@@ -248,24 +248,20 @@ describe('ai human live backend', () => {
               )
             )
           })
-        const reviewArtifact = result.output?.artifacts?.find(
-          (artifact) => artifact.kind === 'draft_review'
-        )
-        const draftFileArtifact = result.output?.artifacts?.find(
+        const docxFileArtifact = result.output?.artifacts?.find(
           (artifact) =>
             artifact.kind === 'file' &&
-            artifact.capability === 'docx' &&
-            artifact.artifactRole === 'draft'
+            artifact.capability === 'docx'
         )
-        const hasDraftArtifact = hasDraftFileArtifact(result.output?.artifacts)
-        let reviewXml = ''
-        const draftArtifactPath =
-          draftFileArtifact?.kind === 'file' ? draftFileArtifact.path : undefined
-        if (draftArtifactPath) {
-          reviewXml = await readDocxPlainText(draftArtifactPath)
+        const hasDocxArtifact = hasDocxFileArtifact(result.output?.artifacts)
+        let appliedDocText = ''
+        const appliedDocPath =
+          docxFileArtifact?.kind === 'file' ? docxFileArtifact.path : undefined
+        if (appliedDocPath) {
+          appliedDocText = await readDocxPlainText(appliedDocPath)
         }
-        const generatedDraftText = `${reviewXml}\n${deliveryText}`
-        const draftTextOnly = reviewXml || deliveryText
+        const generatedDraftText = `${appliedDocText}\n${deliveryText}`
+        const appliedTextOnly = appliedDocText || deliveryText
         const evidenceText = `${generatedDraftText}\n${JSON.stringify(
           result.output?.artifacts || []
         )}`
@@ -288,18 +284,18 @@ describe('ai human live backend', () => {
           result.workspaceSeed.expectedOwnerSummary
         )
         const riskConclusionSatisfied = hasRiskConclusionSemantics(
-          draftTextOnly,
+          appliedTextOnly,
           result.workspaceSeed.expectedRiskConclusion
         )
-        const pendingRiskStateSatisfied = hasPendingRiskStateSemantics(draftTextOnly)
+        const pendingRiskStateSatisfied = hasPendingRiskStateSemantics(appliedTextOnly)
         const hasForbiddenAffirmativeConclusion =
-          hasAffirmativeForbiddenRiskConclusion(draftTextOnly)
+          hasAffirmativeForbiddenRiskConclusion(appliedTextOnly)
         const nextStepSatisfied = hasNextStepSemantics(
           generatedDraftText,
           result.workspaceSeed.expectedNextStep
         )
-        const mentionsDraftDelivery =
-          /待确认稿|草稿|待发版/.test(deliveryText) || hasDraftArtifact
+        const mentionsAppliedDelivery =
+          /已生成|已创建|已修改|文件/.test(deliveryText) || hasDocxArtifact
         const hasResearchReadStep = toolNames.some((toolName) =>
           [
             'docx_outline',
@@ -322,7 +318,7 @@ describe('ai human live backend', () => {
           {
             name: 'human-live-risk-report-runs-required-tool-chain',
             message:
-              'live human complex case 应通过真实 workspace/检索读取/docx_edit(create_document) 工具链完成本周周报待确认稿任务。',
+              'live human complex case 应通过真实 workspace/检索读取/docx_edit(create_document) 工具链完成本周周报文件创建任务。',
             data: {
               toolNames,
               hasResearchReadStep,
@@ -368,14 +364,14 @@ describe('ai human live backend', () => {
           {
             name: 'human-live-risk-report-creates-new-draft-without-overwriting-source-docs',
             message:
-              'live human complex case 应新建本周周报待确认稿，不覆盖模板或既有工作 docx；只要风险状态仍明确未收口、负责人和后续动作成立，且不输出正向绝对收口表述，即视为对用户诉求负责。',
+              'live human complex case 应新建本周周报文件，不覆盖模板或既有工作 docx；只要风险状态仍明确未收口、负责人和后续动作成立，且不输出正向绝对收口表述，即视为对用户诉求负责。',
             data: {
               createSourcePaths,
               createdRelativePaths,
               writeSourcePaths,
               writeRelativePaths,
               trackedDocsUnchanged,
-              draftArtifactPath,
+              appliedDocPath,
               expectedRiskConclusion: result.workspaceSeed.expectedRiskConclusion,
               riskConclusionSatisfied,
               pendingRiskStateSatisfied,
@@ -383,7 +379,7 @@ describe('ai human live backend', () => {
               ownerSummarySatisfied,
               nextStepSatisfied,
               generatedDraftTextSnippet: generatedDraftText.slice(0, 2000),
-              draftTextSnippet: draftTextOnly.slice(0, 2000),
+              appliedTextSnippet: appliedTextOnly.slice(0, 2000),
               deliveryMarkdown: result.output?.deliveryMarkdown
             }
           }
@@ -391,14 +387,16 @@ describe('ai human live backend', () => {
 
         runtime.assertThat(
           /负责人/.test(deliveryText) &&
-            mentionsDraftDelivery &&
-            filterAiRunEventsByType(events, 'draft_review_ready').length >= 1 &&
-            hasFileReviewArtifact(result.output?.artifacts) &&
-            hasDraftArtifact,
+            mentionsAppliedDelivery &&
+            filterAiRunEventsByType(events, 'file_artifact').some(
+              (event) => event.capability === 'docx' && Boolean(event.applyId)
+            ) &&
+            hasDocxApplyArtifact(result.output?.artifacts) &&
+            hasDocxArtifact,
           {
-            name: 'human-live-risk-report-delivery-is-backed-by-evidence-and-review-artifacts',
+            name: 'human-live-risk-report-delivery-is-backed-by-evidence-and-apply-artifacts',
             message:
-              'live human complex case 应给出最终交付，并产出 draft review 与待确认稿 artifact。',
+              'live human complex case 应给出最终交付，并产出已修改文件 artifact 与 applyId。',
             data: {
               toolNames,
               createSourcePaths,
@@ -422,11 +420,11 @@ describe('ai human live backend', () => {
           }
         )
 
-        runtime.assertThat(!reviewXml.includes('review_artifact_invalid_generated'), {
-          name: 'human-live-risk-report-review-hides-generated-discarded-draft',
-          message: '最终 review 不应包含 generated 中间废稿的删除项痕迹。',
+        runtime.assertThat(!appliedDocText.includes('review_artifact_invalid_generated'), {
+          name: 'human-live-risk-report-committed-doc-hides-generated-discarded-draft',
+          message: '最终写回文档不应包含 generated 中间废稿的删除项痕迹。',
           data: {
-            reviewXmlSnippet: reviewXml.slice(0, 2000)
+            appliedDocTextSnippet: appliedDocText.slice(0, 2000)
           }
         })
       }

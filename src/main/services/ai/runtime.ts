@@ -100,7 +100,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     loadConversationContext,
     loadConversationMemory,
     trackDocxOpen: ({ docId, sourcePath, replaySession }) => {
-      deps.fileReviewService.registerDocxOpen({
+      deps.docxApplyService.registerDocxOpen({
         runId: payload.runId,
         docId,
         sourcePath,
@@ -115,7 +115,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
       createdBlocks,
       replaySession
     }) => {
-      deps.fileReviewService.registerDocxChanges({
+      deps.docxApplyService.registerDocxChanges({
         runId: payload.runId,
         previousDocId,
         nextDocId,
@@ -135,7 +135,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     }) => {
       const op = ops[0]
       if (!op) return
-      deps.fileReviewService.registerDocxChanges({
+      deps.docxApplyService.registerDocxChanges({
         runId: payload.runId,
         previousDocId,
         nextDocId,
@@ -146,26 +146,23 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
       })
     },
     resolveDocxOpenTarget: async (sourcePath) =>
-      await deps.fileReviewService.resolveDocxOpenTarget(sourcePath),
-    beginDocxReviewRun: () => {
-      deps.fileReviewService.beginRun({
+      await deps.docxApplyService.resolveDocxOpenTarget(sourcePath),
+    beginDocxApplyRun: () => {
+      deps.docxApplyService.beginRun({
         runId: payload.runId,
         sessionId: payload.sessionId,
         inputText: String(payload.input || '')
       })
     },
-    finalizeDocxReviewRun: async () => {
+    applyDocxRunEdits: async () => {
       if (!normalizedWorkspace?.rootPath) return []
-      return await deps.fileReviewService.materializeRunReview({
+      return await deps.docxApplyService.applyRunEdits({
         runId: payload.runId,
         workspaceRootPath: normalizedWorkspace.rootPath
       })
     },
-    persistDocxReviewRun: async (details) => {
-      await deps.fileReviewService.persistMaterializedReviews(details)
-    },
-    discardDocxReviewRun: () => {
-      deps.fileReviewService.discardRun(payload.runId)
+    discardDocxApplyRun: () => {
+      deps.docxApplyService.discardRun(payload.runId)
     },
     documentsStore: deps.documentsStore,
     embeddingService: deps.embeddingService

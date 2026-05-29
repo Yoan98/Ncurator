@@ -4,10 +4,10 @@ import type {
   AiRunContext
 } from '../../../src/main/services/ai/types'
 import type { HumanTaskRunner } from '../../../src/main/services/ai/types'
-import type { FileReviewService } from '../../../src/main/services/ai/human/tools/docx/review/FileReviewService'
+import type { DocxApplyService } from '../../../src/main/services/ai/human/tools/docx/review/DocxApplyService'
 import type { ChatStore } from '../../../src/main/services/storage/domains/ChatStore'
 import type { DocumentsStore } from '../../../src/main/services/storage/domains/DocumentsStore'
-import type { FileReviewStore } from '../../../src/main/services/storage/domains/FileReviewStore'
+import type { DocxApplyStore } from '../../../src/main/services/storage/domains/DocxApplyStore'
 import type { LlmConfigStore } from '../../../src/main/services/storage/domains/LlmConfigStore'
 import type { StorageService } from '../../../src/main/services/storage/StorageService'
 import type { EmbeddingService } from '../../../src/main/services/vector/EmbeddingService'
@@ -16,8 +16,6 @@ import type { WorkspaceKnowledgePrepareService } from '../../../src/main/service
 import type {
   ChatMessage,
   ChatConversationMemory,
-  FileReview,
-  FileReviewStatus,
   AiLlmUsage,
   JsonObject,
   JsonValue,
@@ -165,25 +163,6 @@ export type SeedChatHistoryInput = {
   memory?: ChatConversationMemory
 }
 
-export type SeedFileReviewInput = {
-  reviewId?: string
-  sessionId?: string
-  runId?: string
-  title?: string
-  status?: FileReviewStatus
-  createdAt?: number
-  updatedAt?: number
-  file: {
-    sourcePath: string
-    confirmBasePath?: string
-    sourceName?: string
-    sourceDocumentId?: string
-    outputOperation?: FileReview['output_operation']
-    format?: FileReview['format']
-    latestDraftSnapshotId?: string
-  }
-}
-
 export type CreateAiRunContextInput = {
   bindWorkspace?: boolean
   sessionId?: string
@@ -214,10 +193,10 @@ export type BackendTestRuntime = {
   workspaceKnowledgePrepareService: WorkspaceKnowledgePrepareService
   documentsStore: DocumentsStore
   chatStore: ChatStore
-  fileReviewStore: FileReviewStore
+  docxApplyStore: DocxApplyStore
   llmStore: LlmConfigStore
   embeddingService: EmbeddingService
-  fileReviewService: FileReviewService
+  docxApplyService: DocxApplyService
   recordEvent: (input: Omit<TestLogEvent, 'ts'>) => void
   assertThat: (condition: boolean, input: { name: string; message: string; data?: JsonValue }) => void
   getFixtureWorkspacePath: (sourcePath: string) => string
@@ -229,7 +208,6 @@ export type BackendTestRuntime = {
   seedKb: (input: readonly SeedKbDocumentInput[]) => Promise<void>
   seedWorkspaceKb: (input: WorkspaceKbSeedInput) => Promise<WorkspaceKbSeedResult[]>
   seedChatHistory: (input: SeedChatHistoryInput) => Promise<void>
-  seedFileReview: (input: SeedFileReviewInput) => Promise<{ reviewId: string }>
   seedLlmConfig: (config: LiveLlmConfig) => Promise<void>
 }
 

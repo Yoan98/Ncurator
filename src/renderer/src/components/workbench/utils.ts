@@ -1,8 +1,4 @@
 import type {
-  FileReviewChange,
-  FileReview,
-  FileReviewRenderKind,
-  DraftTextDiffHunk,
   IpcJsonArray,
   IpcJsonObject,
   IpcJsonValue,
@@ -98,7 +94,7 @@ export const getToolBadge = (toolName?: string, action?: string): string => {
 export const dedupeFileRefs = (items: WorkbenchFileRef[]): WorkbenchFileRef[] => {
   const seen = new Set<string>()
   return items.filter((item) => {
-    const key = `${item.origin}:${item.path}:${item.reviewId || ''}`
+    const key = `${item.origin}:${item.path}:${item.applyId || ''}`
     if (seen.has(key)) return false
     seen.add(key)
     return true
@@ -170,67 +166,4 @@ export const formatSessionDate = (timestamp: number): string => {
 
 export const getStepFiles = (step: AssistantTurnStep): WorkbenchFileRef[] => {
   return dedupeFileRefs(step.files)
-}
-
-export const getReviewRenderKind = (document: FileReview): FileReviewRenderKind => {
-  if (document.review_render_kind) return document.review_render_kind
-  if (document.format === 'docx') return 'docx_block'
-  if (document.format === 'md' || document.format === 'txt') return 'text_hunk'
-  if (document.format === 'xlsx') return 'sheet_range'
-  if (document.format === 'pptx') return 'slide_element'
-  return 'preview_only'
-}
-
-export const formatLocatorSummary = (change: FileReviewChange): string => {
-  const locator = change.locator
-  if (!locator) return '定位信息未结构化'
-  const section = typeof locator.section === 'string' ? locator.section : null
-  const heading = typeof locator.heading === 'string' ? locator.heading : null
-  const blockId = typeof locator.blockId === 'string' ? locator.blockId : null
-  const action = typeof locator.action === 'string' ? locator.action : null
-  const paragraphIndex =
-    typeof locator.paragraphIndex === 'number'
-      ? `第 ${locator.paragraphIndex + 1} 段`
-      : null
-  const rowIndex =
-    typeof locator.rowIndex === 'number' ? `第 ${locator.rowIndex + 1} 行` : null
-  const columnIndex =
-    typeof locator.columnIndex === 'number'
-      ? `第 ${locator.columnIndex + 1} 列`
-      : null
-
-  return (
-    [section, heading, paragraphIndex, rowIndex, columnIndex, blockId, action]
-      .filter(Boolean)
-      .join(' / ') ||
-    '定位信息未结构化'
-  )
-}
-
-export const buildFallbackDiffHunks = (change: FileReviewChange): DraftTextDiffHunk[] => {
-  if (change.diff_hunks && change.diff_hunks.length > 0) return change.diff_hunks
-  const beforeLines = String(change.before_text || '').split('\n')
-  const afterLines = String(change.after_text || '').split('\n')
-  return [
-    {
-      id: change.id,
-      title: change.title,
-      summary: change.summary,
-      lines: [
-        ...beforeLines.map((value) => ({ type: 'removed' as const, value })),
-        ...afterLines.map((value) => ({ type: 'added' as const, value }))
-      ]
-    }
-  ]
-}
-
-export const buildUnifiedDiffText = (change: FileReviewChange): string => {
-  return buildFallbackDiffHunks(change)
-    .flatMap((hunk) =>
-      hunk.lines.map(
-        (line) =>
-          `${line.type === 'added' ? '+' : line.type === 'removed' ? '-' : ' '}${line.value}`
-      )
-    )
-    .join('\n')
 }

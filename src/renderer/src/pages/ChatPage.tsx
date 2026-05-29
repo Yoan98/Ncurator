@@ -18,13 +18,11 @@ import type {
   AiRunEvent,
   ChatMessage,
   ChatSession,
-  FileReviewDetail,
-  FileReview,
+  DocxApplyRecord,
   LLMConfig,
   LlmRemoteModel,
   SearchResult,
   SelectedReference,
-  ValidateFileReviewCommitResponse,
   WorkspaceSource,
   WorkspaceRuntimeBinding
 } from '../../../shared/types'
@@ -38,12 +36,12 @@ import {
   WORKBENCH_CONTENT_PANEL_COLLAPSED_STORAGE_KEY,
   WORKBENCH_SIDEBAR_STORAGE_KEY
 } from '../components/workbench/constants'
-import { FILE_ORIGIN_LABELS, REVIEW_STATUS_META } from '../components/workbench/constants'
+import { DOCX_APPLY_STATUS_META, FILE_ORIGIN_LABELS } from '../components/workbench/constants'
 import type {
   AssistantTurnStep,
   AssistantTurnViewModel,
   WorkbenchContextUsage,
-  ReviewWorkspaceTab,
+  DocxApplyWorkspaceTab,
   SearchWorkbenchTurn,
   WorkbenchContentPanelState,
   WorkbenchFileRef,
@@ -58,9 +56,9 @@ import {
   getToolBadge
 } from '../components/workbench/utils'
 import {
-  groupReviewTargetsByRunId,
-  mergeReviewTargets
-} from '../components/workbench/reviewTargetUtils'
+  groupApplyTargetsByRunId,
+  mergeApplyTargets
+} from '../components/workbench/applyTargetUtils'
 import { chatSelectors, workbenchSelectors } from '../testing/selectors'
 import brandIcon from '../../../../resources/icon.png'
 import {
@@ -91,7 +89,7 @@ const createAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
   steps: [],
   readFiles: [],
   editedFiles: [],
-  reviewTargets: [],
+  applyTargets: [],
   blockers: []
 })
 
@@ -100,21 +98,21 @@ const artifactToWorkbenchFile = (artifact: AiArtifactRef): WorkbenchFileRef | nu
   return {
     path: artifact.path,
     fileName: artifact.fileName,
-    origin: artifact.reviewId ? 'edited_draft' : 'artifact',
+    origin: artifact.applyId ? 'edited_file' : 'artifact',
     summary: artifact.summary,
-    reviewId: artifact.reviewId
+    applyId: artifact.applyId
   }
 }
 
-const artifactToReviewTarget = (
+const artifactToApplyTarget = (
   artifact: AiArtifactRef
-): AssistantTurnViewModel['reviewTargets'][number] | null => {
-  if (artifact.kind !== 'draft_review') return null
+): AssistantTurnViewModel['applyTargets'][number] | null => {
+  if (artifact.kind !== 'file' || !artifact.applyId) return null
   return {
-    reviewId: artifact.review.reviewId,
-    title: '审阅稿',
-    changeCount: artifact.review.changeCount,
-    status: 'pending_confirm'
+    applyId: artifact.applyId,
+    title: artifact.fileName,
+    changeCount: 0,
+    status: 'applied'
   }
 }
 
@@ -133,13 +131,9 @@ const buildAssistantTurnFromMessage = (message: ChatMessage): AssistantTurnViewM
         .map(artifactToWorkbenchFile)
         .filter((file): file is WorkbenchFileRef => Boolean(file))
     ),
-    reviewTargets: artifacts
-      .map(artifactToReviewTarget)
-      .filter(
-        (
-          target
-        ): target is AssistantTurnViewModel['reviewTargets'][number] => Boolean(target)
-      ),
+    applyTargets: artifacts
+      .map(artifactToApplyTarget)
+      .filter((target): target is AssistantTurnViewModel['applyTargets'][number] => Boolean(target)),
     blockers: []
   }
 }
@@ -150,35 +144,21 @@ const appendArtifactForMessage = (
   artifact: AiArtifactRef
 ): void => {
   const currentArtifacts = store[messageId] || []
-  const exists = currentArtifacts.some((item) =>
-    item.kind === 'file' && artifact.kind === 'file'
-      ? item.path === artifact.path &&
-        item.reviewId === artifact.reviewId &&
-        item.summary === artifact.summary
-      : item.kind === 'draft_review' &&
-          artifact.kind === 'draft_review' &&
-          item.review.reviewId === artifact.review.reviewId
+  const exists = currentArtifacts.some(
+    (item) => item.path === artifact.path && item.applyId === artifact.applyId && item.summary === artifact.summary
   )
   if (!exists) {
     store[messageId] = [...currentArtifacts, artifact]
   }
 }
 
-const ACTIVE_REVIEW_WORKSPACE_STATUSES = new Set<FileReview['status']>([
-  'pending_confirm',
-  'conflicted',
-  'failed'
-])
+const ACTIVE_APPLY_WORKSPACE_STATUSES = new Set<DocxApplyRecord['status']>(['applied', 'failed'])
 
-const sortFileReviews = (items: FileReview[]): FileReview[] => {
-  const priority: Record<FileReview['status'], number> = {
-    pending_confirm: 0,
-    conflicted: 1,
-    failed: 2,
-    committing: 3,
-    committed: 4,
-    discarded: 5,
-    superseded: 6
+const sortDocxApplyRecords = (items: DocxApplyRecord[]): DocxApplyRecord[] => {
+  const priority: Record<DocxApplyRecord['status'], number> = {
+    applied: 0,
+    failed: 1,
+    reverted: 2
   }
   return [...items].sort((left, right) => {
     const priorityGap = priority[left.status] - priority[right.status]
@@ -204,7 +184,7 @@ const delay = (ms: number): Promise<void> =>
   })
 
 const ChatPage: React.FC = () => {
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
   const [currentMessages, setCurrentMessages] = useState<ChatMessage[]>([])
@@ -224,7 +204,7 @@ const ChatPage: React.FC = () => {
   const [contextUsage, setContextUsage] = useState<WorkbenchContextUsage | null>(null)
   const [assistantTurns, setAssistantTurns] = useState<Record<string, AssistantTurnViewModel>>({})
   const [contentPanel, setContentPanel] = useState<WorkbenchContentPanelState>(createEmptyPanel())
-  const [reviewWorkspaceTabs, setReviewWorkspaceTabs] = useState<ReviewWorkspaceTab[]>([])
+  const [applyWorkspaceTabs, setApplyWorkspaceTabs] = useState<DocxApplyWorkspaceTab[]>([])
   const [modalPreviewFile, setModalPreviewFile] = useState<WorkbenchFileRef | null>(null)
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     const stored = window.localStorage.getItem(WORKBENCH_SIDEBAR_STORAGE_KEY)
@@ -235,12 +215,9 @@ const ChatPage: React.FC = () => {
     return stored === null ? true : stored === 'true'
   })
 
-  const [activeFileReview, setActiveFileReview] = useState<FileReviewDetail | null>(null)
-  const [fileReviewLoading, setFileReviewLoading] = useState(false)
-  const [draftCommitValidation, setDraftCommitValidation] =
-    useState<ValidateFileReviewCommitResponse | null>(null)
-  const [draftCommitSubmitting, setDraftCommitSubmitting] = useState(false)
-  const [draftDiscardSubmitting, setDraftDiscardSubmitting] = useState(false)
+  const [activeDocxApplyRecord, setActiveDocxApplyRecord] = useState<DocxApplyRecord | null>(null)
+  const [docxApplyLoading, setDocxApplyLoading] = useState(false)
+  const [docxApplyReverting, setDocxApplyReverting] = useState(false)
 
   const [pendingApprovalBatch, setPendingApprovalBatch] =
     useState<ApprovalBatchRequiredEvent | null>(null)
@@ -347,11 +324,11 @@ const ChatPage: React.FC = () => {
     setContentPanelCollapsed(false)
   }, [])
 
-  const showReviewWorkspace = useCallback(
-    (tabs: ReviewWorkspaceTab[], activeFileKey: string | null): void => {
+  const showApplyWorkspace = useCallback(
+    (tabs: DocxApplyWorkspaceTab[], activeFileKey: string | null): void => {
       showContentPanel({
-        kind: 'review_workspace',
-        title: '修改确认',
+        kind: 'apply_workspace',
+        title: '已修改文件',
         tabs,
         activeFileKey
       })
@@ -372,10 +349,10 @@ const ChatPage: React.FC = () => {
       }
     }
 
-    if (contentPanel.kind === 'review_workspace' && activeFileReview) {
-      const statusMeta = REVIEW_STATUS_META[activeFileReview.review.status]
+    if (contentPanel.kind === 'apply_workspace' && activeDocxApplyRecord) {
+      const statusMeta = DOCX_APPLY_STATUS_META[activeDocxApplyRecord.status]
       return {
-        title: activeFileReview.review.source_name || contentPanel.title,
+        title: activeDocxApplyRecord.source_name || contentPanel.title,
         badge: statusMeta.label,
         badgeClassName: statusMeta.className
       }
@@ -388,13 +365,11 @@ const ChatPage: React.FC = () => {
     }
   }, [contentPanel, contentPanelCollapsed])
 
-  const resetFileReviewState = (): void => {
-    setActiveFileReview(null)
-    setFileReviewLoading(false)
-    setDraftCommitValidation(null)
-    setDraftCommitSubmitting(false)
-    setDraftDiscardSubmitting(false)
-    setReviewWorkspaceTabs([])
+  const resetDocxApplyState = (): void => {
+    setActiveDocxApplyRecord(null)
+    setDocxApplyLoading(false)
+    setDocxApplyReverting(false)
+    setApplyWorkspaceTabs([])
   }
 
   const updateActiveTurn = (
@@ -531,93 +506,68 @@ const ChatPage: React.FC = () => {
     }
   }
 
-  const loadFileReviewDetail = async (input: {
-    reviewId: string
-    detail?: FileReviewDetail | null
-    tabs?: ReviewWorkspaceTab[]
+  const loadDocxApplyRecord = async (input: {
+    applyId: string
+    detail?: DocxApplyRecord | null
+    tabs?: DocxApplyWorkspaceTab[]
     activeFileKey?: string | null
     openWorkspace?: boolean
   }): Promise<void> => {
-    setFileReviewLoading(true)
+    setDocxApplyLoading(true)
     try {
-      const detailResponse =
-        input.detail !== undefined ? { review: input.detail } : await window.api.fileReviewGet({ reviewId: input.reviewId })
-      if (!detailResponse.review) {
-        setActiveFileReview(null)
-        setDraftCommitValidation(null)
+      const response =
+        input.detail !== undefined
+          ? { record: input.detail }
+          : await window.api.docxApplyGet({ applyId: input.applyId })
+      if (!response.record) {
+        setActiveDocxApplyRecord(null)
         return
       }
 
-      setActiveFileReview(detailResponse.review)
-      setDraftCommitValidation(null)
+      setActiveDocxApplyRecord(response.record)
 
       if (input.openWorkspace) {
-        showReviewWorkspace(
-          input.tabs || reviewWorkspaceTabs,
-          input.activeFileKey || detailResponse.review.review.source_path || null
+        showApplyWorkspace(
+          input.tabs || applyWorkspaceTabs,
+          input.activeFileKey || response.record.source_path || null
         )
       }
     } catch (error) {
-      console.error('Failed to load draft review detail', error)
-      setActiveFileReview(null)
-      setDraftCommitValidation(null)
+      console.error('Failed to load docx apply record', error)
+      setActiveDocxApplyRecord(null)
     } finally {
-      setFileReviewLoading(false)
+      setDocxApplyLoading(false)
     }
   }
 
-  const loadFileReviewsForSession = async (
+  const loadDocxAppliesForSession = async (
     sessionId: string,
     options?: {
-      preferredReviewId?: string | null
+      preferredApplyId?: string | null
       autoOpen?: boolean
       forceOpenWorkspace?: boolean
     }
   ): Promise<void> => {
     try {
-      const shouldWaitForCompleteDetails =
-        Boolean(options?.forceOpenWorkspace) || Boolean(options?.preferredReviewId)
-      const maxAttempts = shouldWaitForCompleteDetails ? 6 : 1
-      let nextItems: FileReview[] = []
-      let activeItems: FileReview[] = []
-      let activeDetails: FileReviewDetail[] = []
+      const shouldWaitForRecords =
+        Boolean(options?.forceOpenWorkspace) || Boolean(options?.preferredApplyId)
+      const maxAttempts = shouldWaitForRecords ? 6 : 1
+      let activeRecords: DocxApplyRecord[] = []
 
       for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-        const response = await window.api.fileReviewList({ sessionId })
-        nextItems = sortFileReviews(response.items)
-        activeItems = nextItems.filter((item) =>
-          ACTIVE_REVIEW_WORKSPACE_STATUSES.has(item.status)
-        )
+        const response = await window.api.docxApplyList({ sessionId })
+        const nextItems = sortDocxApplyRecords(response.items)
+        activeRecords = nextItems.filter((item) => ACTIVE_APPLY_WORKSPACE_STATUSES.has(item.status))
 
-        if (activeItems.length === 0) {
-          activeDetails = []
-          break
-        }
-
-        const activeDetailsResponses = await Promise.all(
-          activeItems.map((item) => window.api.fileReviewGet({ reviewId: item.id }))
-        )
-        activeDetails = activeDetailsResponses
-          .map((item) => item.review)
-          .filter((item): item is FileReviewDetail => Boolean(item))
-          .sort((left, right) => right.review.updated_at - left.review.updated_at)
-
-        const missingPreferredReview =
-          options?.preferredReviewId !== undefined &&
-          options.preferredReviewId !== null &&
-          !activeDetails.some((detail) => detail.review.id === options.preferredReviewId)
-        const missingActiveDetails = activeDetails.length < activeItems.length
-
-        if (!missingPreferredReview && !missingActiveDetails) {
-          break
-        }
-
-        if (attempt < maxAttempts - 1) {
-          await delay(150)
-        }
+        const missingPreferred =
+          options?.preferredApplyId !== undefined &&
+          options.preferredApplyId !== null &&
+          !activeRecords.some((record) => record.id === options.preferredApplyId)
+        if (!missingPreferred) break
+        if (attempt < maxAttempts - 1) await delay(150)
       }
 
-      const reviewTargetsByRunId = groupReviewTargetsByRunId(activeItems)
+      const applyTargetsByRunId = groupApplyTargetsByRunId(activeRecords)
 
       setAssistantTurns((previous) => {
         const nextTurns: Record<string, AssistantTurnViewModel> = { ...previous }
@@ -625,114 +575,101 @@ const ChatPage: React.FC = () => {
           if (!turn.runId) return
           nextTurns[turn.messageId] = {
             ...turn,
-            reviewTargets: reviewTargetsByRunId.get(turn.runId) || []
+            applyTargets: applyTargetsByRunId.get(turn.runId) || []
           }
         })
         return nextTurns
       })
 
-      if (activeItems.length === 0) {
-        setReviewWorkspaceTabs([])
-        setActiveFileReview(null)
-        setDraftCommitValidation(null)
+      if (activeRecords.length === 0) {
+        setApplyWorkspaceTabs([])
+        setActiveDocxApplyRecord(null)
         setContentPanel((current) =>
-          current.kind === 'review_workspace' ? createEmptyPanel() : current
+          current.kind === 'apply_workspace' ? createEmptyPanel() : current
         )
         return
       }
 
-      const latestByFileKey = new Map<string, FileReviewDetail>()
-      activeDetails.forEach((detail) => {
-        const fileKey = detail.review.source_path
+      const latestByFileKey = new Map<string, DocxApplyRecord>()
+      activeRecords.forEach((record) => {
+        const fileKey = record.source_path
         if (!fileKey || latestByFileKey.has(fileKey)) return
-        latestByFileKey.set(fileKey, detail)
+        latestByFileKey.set(fileKey, record)
       })
 
       const currentWorkspaceFileKey =
-        contentPanel.kind === 'review_workspace'
+        contentPanel.kind === 'apply_workspace'
           ? contentPanel.activeFileKey
-          : activeFileReview?.review.source_path || null
-      const previewFileKey =
-        contentPanel.kind === 'file_preview' ? contentPanel.file.path : null
+          : activeDocxApplyRecord?.source_path || null
+      const previewFileKey = contentPanel.kind === 'file_preview' ? contentPanel.file.path : null
       const preferredFileKey =
-        options?.preferredReviewId
-          ? [...latestByFileKey.values()].find(
-              (detail) => detail.review.id === options.preferredReviewId
-            )?.review.source_path || null
+        options?.preferredApplyId
+          ? [...latestByFileKey.values()].find((record) => record.id === options.preferredApplyId)
+              ?.source_path || null
           : null
-      const nextTabs = [...latestByFileKey.values()].map((detail) => {
-        const fileKey = detail.review.source_path || detail.review.id
-        const previousTab = reviewWorkspaceTabs.find((tab) => tab.fileKey === fileKey)
+      const nextTabs = [...latestByFileKey.values()].map((record) => {
+        const fileKey = record.source_path || record.id
+        const previousTab = applyWorkspaceTabs.find((tab) => tab.fileKey === fileKey)
         const shouldMarkUnseen =
-          previousTab?.reviewId !== detail.review.id &&
+          previousTab?.applyId !== record.id &&
           currentWorkspaceFileKey !== fileKey &&
           previewFileKey !== fileKey &&
           preferredFileKey !== fileKey
 
         return {
           fileKey,
-          reviewId: detail.review.id,
-          fileName: detail.review.source_name || detail.review.title,
+          applyId: record.id,
+          fileName: record.source_name,
           sourcePath: fileKey,
-          changeCount: detail.review.pending_change_count,
-          status: detail.review.status,
+          changeCount: record.change_count,
+          status: record.status,
           unseen: shouldMarkUnseen
         }
       })
 
       const currentWorkspaceSelectionStillAvailable = Boolean(
-        currentWorkspaceFileKey &&
-          nextTabs.some((tab) => tab.fileKey === currentWorkspaceFileKey)
+        currentWorkspaceFileKey && nextTabs.some((tab) => tab.fileKey === currentWorkspaceFileKey)
       )
       const shouldKeepCurrentWorkspaceSelection =
-        contentPanel.kind === 'review_workspace' &&
+        contentPanel.kind === 'apply_workspace' &&
         currentWorkspaceSelectionStillAvailable &&
         !Boolean(options?.forceOpenWorkspace) &&
         preferredFileKey !== currentWorkspaceFileKey
       const nextSelectedFileKey =
         (shouldKeepCurrentWorkspaceSelection ? currentWorkspaceFileKey : null) ||
         preferredFileKey ||
-        (currentWorkspaceFileKey &&
-        nextTabs.some((tab) => tab.fileKey === currentWorkspaceFileKey)
+        (currentWorkspaceFileKey && nextTabs.some((tab) => tab.fileKey === currentWorkspaceFileKey)
           ? currentWorkspaceFileKey
           : nextTabs[0]?.fileKey || null)
       const normalizedTabs = nextTabs.map((tab) =>
         tab.fileKey === nextSelectedFileKey ? { ...tab, unseen: false } : tab
       )
-      setReviewWorkspaceTabs(normalizedTabs)
+      setApplyWorkspaceTabs(normalizedTabs)
 
       const nextSelectedTab =
         normalizedTabs.find((tab) => tab.fileKey === nextSelectedFileKey) || normalizedTabs[0]
-      if (!nextSelectedTab) {
-        return
-      }
+      if (!nextSelectedTab) return
 
-      const nextSelectedDetail =
-        latestByFileKey.get(nextSelectedTab.fileKey) ||
-        activeDetails.find((detail) => detail.review.id === nextSelectedTab.reviewId) ||
-        null
-      if (!nextSelectedDetail) {
-        return
-      }
+      const nextSelectedRecord = latestByFileKey.get(nextSelectedTab.fileKey) || null
+      if (!nextSelectedRecord) return
 
       const shouldOpenWorkspace =
         Boolean(options?.forceOpenWorkspace) ||
-        contentPanel.kind === 'review_workspace' ||
+        contentPanel.kind === 'apply_workspace' ||
         (Boolean(options?.autoOpen) &&
           (contentPanel.kind === 'empty' ||
             (previewFileKey !== null && previewFileKey === nextSelectedTab.fileKey)))
 
-      await loadFileReviewDetail({
-        reviewId: nextSelectedTab.reviewId,
-        detail: nextSelectedDetail,
+      await loadDocxApplyRecord({
+        applyId: nextSelectedTab.applyId,
+        detail: nextSelectedRecord,
         tabs: normalizedTabs,
         activeFileKey: nextSelectedTab.fileKey,
         openWorkspace: shouldOpenWorkspace
       })
     } catch (error) {
-      console.error('Failed to load draft reviews', error)
-      setActiveFileReview(null)
-      setDraftCommitValidation(null)
+      console.error('Failed to load docx apply records', error)
+      setActiveDocxApplyRecord(null)
     }
   }
 
@@ -790,15 +727,15 @@ const ChatPage: React.FC = () => {
       setPendingWorkspaceRequest(null)
       setAssistantTurns({})
       setContentPanel(createEmptyPanel())
-      resetFileReviewState()
-      void loadFileReviewsForSession(currentSessionId, { autoOpen: true })
+      resetDocxApplyState()
+      void loadDocxAppliesForSession(currentSessionId, { autoOpen: true })
       void refreshContextUsage(currentSessionId)
     } else {
       setCurrentMessages([])
       setAssistantTurns({})
       setModalPreviewFile(null)
       setContextUsage(null)
-      resetFileReviewState()
+      resetDocxApplyState()
     }
   }, [currentSessionId, refreshContextUsage])
 
@@ -871,24 +808,24 @@ const ChatPage: React.FC = () => {
     setModalPreviewFile(fileRef)
   }
 
-  const openFileReview = (reviewId: string): void => {
+  const openDocxApply = (applyId: string): void => {
     if (currentSessionId) {
-      void loadFileReviewsForSession(currentSessionId, {
-        preferredReviewId: reviewId,
+      void loadDocxAppliesForSession(currentSessionId, {
+        preferredApplyId: applyId,
         forceOpenWorkspace: true
       })
       return
     }
 
-    const nextTab = reviewWorkspaceTabs.find((tab) => tab.reviewId === reviewId) || null
+    const nextTab = applyWorkspaceTabs.find((tab) => tab.applyId === applyId) || null
     const nextTabs = nextTab
-      ? reviewWorkspaceTabs.map((tab) =>
+      ? applyWorkspaceTabs.map((tab) =>
           tab.fileKey === nextTab.fileKey ? { ...tab, unseen: false } : tab
         )
-      : reviewWorkspaceTabs
-    setReviewWorkspaceTabs(nextTabs)
-    void loadFileReviewDetail({
-      reviewId,
+      : applyWorkspaceTabs
+    setApplyWorkspaceTabs(nextTabs)
+    void loadDocxApplyRecord({
+      applyId,
       tabs: nextTabs,
       activeFileKey: nextTab?.fileKey || null,
       openWorkspace: true
@@ -978,7 +915,7 @@ const ChatPage: React.FC = () => {
       }
 
       if (event.type === 'tool_call_result') {
-        const toolOutput = event.result?.data
+        const toolOutput = event.result?.data ?? null
         const readFiles = extractReadableFilesFromToolOutput(
           toolOutput,
           event.toolName.includes('search') ? 'search_hit' : 'read'
@@ -1018,22 +955,28 @@ const ChatPage: React.FC = () => {
             path: event.path,
             fileName: event.fileName,
             operation: event.operation,
-            artifactRole: event.artifactRole,
-            reviewId: event.reviewId,
-            draftSnapshotId: event.draftSnapshotId,
+            applyId: event.applyId,
             summary: event.summary
           })
         }
         const artifactFile: WorkbenchFileRef = {
           path: event.path,
           fileName: event.fileName,
-          origin: event.reviewId ? 'edited_draft' : 'artifact',
+          origin: event.applyId ? 'edited_file' : 'artifact',
           summary: event.summary,
-          reviewId: event.reviewId
+          applyId: event.applyId
         }
         updateActiveTurn((current) => ({
           ...current,
-          editedFiles: dedupeFileRefs([...current.editedFiles, artifactFile])
+          editedFiles: dedupeFileRefs([...current.editedFiles, artifactFile]),
+          applyTargets: event.applyId
+            ? mergeApplyTargets(current.applyTargets, {
+                applyId: event.applyId,
+                title: event.fileName,
+                changeCount: 0,
+                status: 'applied'
+              })
+            : current.applyTargets
         }))
         return
       }
@@ -1116,36 +1059,6 @@ const ChatPage: React.FC = () => {
           setApprovalDraftDecisions({})
           setLoading(false)
           message.warning('审核结果已提交，等待馆长继续决策')
-        }
-        return
-      }
-
-      if (event.type === 'draft_review_ready') {
-        const messageId = assistantMsgIdRef.current
-        if (messageId) {
-          appendArtifactForMessage(assistantArtifactsRef.current, messageId, {
-            kind: 'draft_review',
-            review: event.review,
-            summary: '审阅稿已生成'
-          })
-        }
-        updateActiveTurn((current) => ({
-          ...current,
-          reviewTargets: mergeReviewTargets(current.reviewTargets, {
-            reviewId: event.review.reviewId,
-            title: '审阅稿',
-            changeCount: event.review.changeCount,
-            status: 'pending_confirm'
-          })
-        }))
-        if (!event.internal && currentSessionId) {
-          message.success(`审阅稿已生成：${event.review.changeCount} 处修改`)
-          const shouldAutoOpen =
-            contentPanel.kind === 'review_workspace' || contentPanel.kind === 'file_preview'
-          void loadFileReviewsForSession(currentSessionId, {
-            preferredReviewId: event.review.reviewId,
-            autoOpen: shouldAutoOpen
-          })
         }
         return
       }
@@ -1601,87 +1514,46 @@ const ChatPage: React.FC = () => {
     }
   }
 
-  const handleDraftCommit = async (): Promise<void> => {
-    if (!activeFileReview || !currentSessionId || draftCommitSubmitting) return
-    setDraftCommitSubmitting(true)
+  const handleDocxApplyRevert = async (): Promise<void> => {
+    if (!activeDocxApplyRecord || !currentSessionId || docxApplyReverting) return
+    setDocxApplyReverting(true)
     try {
-      const validation = await window.api.fileReviewValidate({
-        reviewId: activeFileReview.review.id
+      const response = await window.api.docxApplyRevert({
+        applyId: activeDocxApplyRecord.id,
+        force: false
       })
-      setDraftCommitValidation(validation)
-      if (!validation.ready) {
-        message.warning('提交前校验未通过，请先处理提示问题。')
-        return
-      }
-      const response = await window.api.fileReviewCommit({
-        reviewId: activeFileReview.review.id,
-        overwrite: true
-      })
-      if (!response.success) {
-        message.error(response.error || '提交失败')
-      } else {
-        emitSuccessMessage('审阅稿已写回源文件')
-      }
-      await loadFileReviewsForSession(currentSessionId, { autoOpen: true })
-    } catch (error) {
-      console.error(error)
-      message.error('提交草稿失败')
-    } finally {
-      setDraftCommitSubmitting(false)
-    }
-  }
-
-  const handleDraftDiscard = async (): Promise<void> => {
-    if (!activeFileReview || !currentSessionId || draftDiscardSubmitting) return
-    setDraftDiscardSubmitting(true)
-    try {
-      const discardedReviewId = activeFileReview.review.id
-      const response = await window.api.fileReviewDiscard({
-        reviewId: discardedReviewId
-      })
-      if (!response.success) {
-        message.error(response.error || '放弃审阅稿失败')
-        return
-      }
-      emitSuccessMessage('已放弃本次修改')
-      setAssistantTurns((previous) => {
-        const nextTurns: Record<string, AssistantTurnViewModel> = {}
-        Object.entries(previous).forEach(([messageId, turn]) => {
-          nextTurns[messageId] = {
-            ...turn,
-            reviewTargets: turn.reviewTargets.filter((target) => target.reviewId !== discardedReviewId)
+      if (response.requiresForce) {
+        modal.confirm({
+          title: '确认回退本次修改',
+          content: response.warning || '文件在 AI 修改后又发生变化。继续回退会丢失这些后续修改。',
+          okText: '仍然回退',
+          cancelText: '取消',
+          onOk: async () => {
+            const forced = await window.api.docxApplyRevert({
+              applyId: activeDocxApplyRecord.id,
+              force: true
+            })
+            if (!forced.success) {
+              message.error(forced.error || '回退失败')
+              return
+            }
+            emitSuccessMessage('已回退本次修改')
+            await loadDocxAppliesForSession(currentSessionId, { autoOpen: true })
           }
         })
-        return nextTurns
-      })
-
-      const remainingTabs = reviewWorkspaceTabs
-        .filter((tab) => tab.reviewId !== discardedReviewId)
-        .map((tab, index) => (index === 0 ? { ...tab, unseen: false } : tab))
-      setReviewWorkspaceTabs(remainingTabs)
-      setDraftCommitValidation(null)
-
-      if (remainingTabs.length === 0) {
-        setActiveFileReview(null)
-        setContentPanel((current) =>
-          current.kind === 'review_workspace' ? createEmptyPanel() : current
-        )
         return
       }
-
-      const nextTab = remainingTabs[0]
-      showReviewWorkspace(remainingTabs, nextTab.fileKey)
-      await loadFileReviewDetail({
-        reviewId: nextTab.reviewId,
-        tabs: remainingTabs,
-        activeFileKey: nextTab.fileKey,
-        openWorkspace: true
-      })
+      if (!response.success) {
+        message.error(response.error || '回退失败')
+        return
+      }
+      emitSuccessMessage('已回退本次修改')
+      await loadDocxAppliesForSession(currentSessionId, { autoOpen: true })
     } catch (error) {
       console.error(error)
-      message.error('放弃审阅稿失败')
+      message.error('回退失败')
     } finally {
-      setDraftDiscardSubmitting(false)
+      setDocxApplyReverting(false)
     }
   }
 
@@ -1790,7 +1662,7 @@ const ChatPage: React.FC = () => {
         onOpenFile={(file) => {
           void openFile(file)
         }}
-        onOpenReview={openFileReview}
+        onOpenApply={openDocxApply}
       />
     )
   }
@@ -2196,7 +2068,7 @@ const ChatPage: React.FC = () => {
               style={{
                 width: contentPanelCollapsed
                   ? 0
-                  : contentPanel.kind === 'review_workspace'
+                  : contentPanel.kind === 'apply_workspace'
                     ? 'min(48vw, 780px)'
                     : contentPanel.kind === 'file_preview'
                       ? 'min(46vw, 740px)'
@@ -2205,29 +2077,26 @@ const ChatPage: React.FC = () => {
             >
               <WorkbenchContentPanel
                 state={contentPanel}
-                activeReview={activeFileReview}
-                fileReviewLoading={fileReviewLoading}
-                draftCommitValidation={draftCommitValidation}
-                draftCommitSubmitting={draftCommitSubmitting}
-                draftDiscardSubmitting={draftDiscardSubmitting}
+                activeApplyRecord={activeDocxApplyRecord}
+                docxApplyLoading={docxApplyLoading}
+                docxApplyReverting={docxApplyReverting}
                 modalPreviewFile={modalPreviewFile}
                 onOpenSearchResult={(turn, resultIndex) => void openSearchResult(turn, resultIndex)}
-                onSelectReviewTab={(fileKey) => {
-                  const nextTab = reviewWorkspaceTabs.find((tab) => tab.fileKey === fileKey)
+                onSelectApplyTab={(fileKey) => {
+                  const nextTab = applyWorkspaceTabs.find((tab) => tab.fileKey === fileKey)
                   if (!nextTab) return
-                  const nextTabs = reviewWorkspaceTabs.map((tab) =>
+                  const nextTabs = applyWorkspaceTabs.map((tab) =>
                     tab.fileKey === fileKey ? { ...tab, unseen: false } : tab
                   )
-                  setReviewWorkspaceTabs(nextTabs)
-                  void loadFileReviewDetail({
-                    reviewId: nextTab.reviewId,
+                  setApplyWorkspaceTabs(nextTabs)
+                  void loadDocxApplyRecord({
+                    applyId: nextTab.applyId,
                     tabs: nextTabs,
                     activeFileKey: fileKey,
                     openWorkspace: true
                   })
                 }}
-                onCommit={() => void handleDraftCommit()}
-                onDiscard={() => void handleDraftDiscard()}
+                onRevertApply={() => void handleDocxApplyRevert()}
                 onCloseModalPreview={() => setModalPreviewFile(null)}
                 onOpenPath={openPathOrNotify}
                 onOpenWithApplication={openPathWithApplicationOrNotify}

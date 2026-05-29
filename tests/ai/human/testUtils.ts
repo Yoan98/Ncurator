@@ -122,28 +122,41 @@ export const collectStartedDocxEditSourcePaths = (
 export const hasKbToolCall = (events: readonly AiRunEvent[]): boolean =>
   filterAiRunEventsByType(events, 'tool_call_result').some((event) => event.toolName.startsWith('kb_'))
 
-export const hasFileReviewArtifact = (artifacts: readonly AiArtifactRef[] | undefined): boolean =>
-  Array.isArray(artifacts) && artifacts.some((artifact) => artifact.kind === 'draft_review')
-
-export const countFileReviewArtifacts = (artifacts: readonly AiArtifactRef[] | undefined): number =>
-  Array.isArray(artifacts) ? artifacts.filter((artifact) => artifact.kind === 'draft_review').length : 0
-
-export const hasDraftFileArtifact = (artifacts: readonly AiArtifactRef[] | undefined): boolean =>
+export const hasDocxApplyArtifact = (artifacts: readonly AiArtifactRef[] | undefined): boolean =>
   Array.isArray(artifacts) &&
   artifacts.some(
     (artifact) =>
       artifact.kind === 'file' &&
       artifact.capability === 'docx' &&
-      artifact.artifactRole === 'draft'
+      typeof artifact.applyId === 'string' &&
+      artifact.applyId.length > 0
   )
 
-export const countDraftFileArtifacts = (artifacts: readonly AiArtifactRef[] | undefined): number =>
+export const countDocxApplyArtifacts = (artifacts: readonly AiArtifactRef[] | undefined): number =>
   Array.isArray(artifacts)
     ? artifacts.filter(
         (artifact) =>
           artifact.kind === 'file' &&
           artifact.capability === 'docx' &&
-          artifact.artifactRole === 'draft'
+          typeof artifact.applyId === 'string' &&
+          artifact.applyId.length > 0
+      ).length
+    : 0
+
+export const hasDocxFileArtifact = (artifacts: readonly AiArtifactRef[] | undefined): boolean =>
+  Array.isArray(artifacts) &&
+  artifacts.some(
+    (artifact) =>
+      artifact.kind === 'file' &&
+      artifact.capability === 'docx'
+  )
+
+export const countDocxFileArtifacts = (artifacts: readonly AiArtifactRef[] | undefined): number =>
+  Array.isArray(artifacts)
+    ? artifacts.filter(
+        (artifact) =>
+          artifact.kind === 'file' &&
+          artifact.capability === 'docx'
       ).length
     : 0
 

@@ -112,7 +112,7 @@ tests/
 
 - 执行状态统一写在对应 `doc/test-plan/**` 顶部的独立“执行摘要”区域，不在 suite 小节或 case 小节重复维护。
 - 每次正式 case 执行完成后，如果该次结果要作为当前有效测试结论，必须主动更新对应 `doc/test-plan/**` 顶部“执行摘要”中的通过率、检测时间、以及该领域明确要求维护的附加摘要信息。
-- 正式 `mock-llm` case 只允许替换 LLM 输出；不得 fake tool、store、review、runner 或节点执行结果。
+- 正式 `mock-llm` case 只允许替换 LLM 输出；不得 fake tool、store、docx apply service、runner 或节点执行结果。
 
 ### 3.3 实现状态取值约定
 

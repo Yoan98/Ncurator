@@ -206,11 +206,7 @@ const renderHandExecution = (
   const artifactLine =
     execution.artifactRefs && execution.artifactRefs.length > 0
       ? `- 产物：${renderInlineList(
-          execution.artifactRefs.map((artifact) =>
-            artifact.kind === 'file'
-              ? `\`${artifact.fileName}\``
-              : `draft review ${artifact.review.reviewId}`
-          ),
+          execution.artifactRefs.map((artifact) => `\`${artifact.fileName}\``),
           {
             separator: '、',
             fallback: 'none'

@@ -62,7 +62,6 @@ export type TestArtifact = {
   path: string
   fileName?: string
   capability?: string
-  artifactRole?: string
   refs?: TestArtifactRefs
 }
 

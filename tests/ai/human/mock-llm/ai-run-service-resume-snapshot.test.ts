@@ -24,7 +24,7 @@ const buildDeps = async (
       ensureEmbeddingReady: async () => {
         await runtime.ensureEmbeddingReady()
       },
-      fileReviewService: runtime.fileReviewService,
+      docxApplyService: runtime.docxApplyService,
       isCancelled: () => controller.signal.aborted,
       abortSignal: controller.signal,
       sendEvent: (event) => runtime.eventCollector.add(event),

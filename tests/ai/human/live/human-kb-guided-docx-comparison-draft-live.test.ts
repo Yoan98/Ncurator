@@ -12,8 +12,8 @@ import {
 import {
   collectDocxApplyOpsContentKinds,
   collectStartedDocxEditSourcePaths,
-  countDraftFileArtifacts,
-  countFileReviewArtifacts,
+  countDocxApplyArtifacts,
+  countDocxFileArtifacts,
   filterAiRunEventsByType,
   hasKbToolCall,
   isDocxEditWriteInput,
@@ -113,9 +113,11 @@ describe('ai human live backend', () => {
               toolNames.includes('docx_edit') &&
               changedContentKinds.includes('paragraph') &&
               targetDocsWritten &&
-              filterAiRunEventsByType(events, 'draft_review_ready').length >= 2 &&
-              countFileReviewArtifacts(result.output?.artifacts) >= 2 &&
-              countDraftFileArtifacts(result.output?.artifacts) >= 2 &&
+              filterAiRunEventsByType(events, 'file_artifact').filter(
+                (event) => event.capability === 'docx' && Boolean(event.applyId)
+              ).length >= 2 &&
+              countDocxApplyArtifacts(result.output?.artifacts) >= 2 &&
+              countDocxFileArtifacts(result.output?.artifacts) >= 2 &&
               /(过拟合|过度拟合)/.test(deliveryText) &&
               /反走样/.test(deliveryText) &&
               /PRD|课堂|案例/.test(deliveryText) &&

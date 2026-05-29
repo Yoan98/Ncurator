@@ -258,19 +258,11 @@ const api: DesktopApi = {
     return ipcRenderer.invoke('ai-run-approval-batch-decide', payload)
   },
   aiContextUsageGet: (payload) => ipcRenderer.invoke('ai-context-usage-get', payload),
-  fileReviewList: (payload) => ipcRenderer.invoke('file-review-list', payload),
-  fileReviewGet: (payload) => ipcRenderer.invoke('file-review-get', payload),
-  fileReviewValidate: (payload) => {
-    emitE2EIpcCall('fileReviewValidate')
-    return ipcRenderer.invoke('file-review-validate', payload)
-  },
-  fileReviewCommit: (payload) => {
-    emitE2EIpcCall('fileReviewCommit')
-    return ipcRenderer.invoke('file-review-commit', payload)
-  },
-  fileReviewDiscard: (payload) => {
-    emitE2EIpcCall('fileReviewDiscard')
-    return ipcRenderer.invoke('file-review-discard', payload)
+  docxApplyList: (payload) => ipcRenderer.invoke('docx-apply-list', payload),
+  docxApplyGet: (payload) => ipcRenderer.invoke('docx-apply-get', payload),
+  docxApplyRevert: (payload) => {
+    emitE2EIpcCall('docxApplyRevert')
+    return ipcRenderer.invoke('docx-apply-revert', payload)
   },
   onAiRunEvent: (cb: (event: AiRunEvent) => void) =>
     ipcRenderer.on('ai-run-event', (_event, data) => {

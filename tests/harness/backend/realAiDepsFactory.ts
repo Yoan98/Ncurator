@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
 import { createHumanGraphRunner } from '../../../src/main/services/ai/human/graph/humanGraph'
-import { FileReviewService } from '../../../src/main/services/ai/human/tools/docx/review/FileReviewService'
+import { DocxApplyService } from '../../../src/main/services/ai/human/tools/docx/review/DocxApplyService'
 import { createAiRunContext } from '../../../src/main/services/ai/runtime'
 import { runAiRuntimePreflight } from '../../../src/main/services/ai/runtimePreflight'
 import type { AiApprovalBatchRequest, AiApprovalBatchResult } from '../../../src/main/services/ai/types'
@@ -81,7 +81,7 @@ export type RealAiDepsFactory = {
   embeddingService: EmbeddingService
   workspaceSourceService: WorkspaceSourceService
   workspaceKnowledgePrepareService: WorkspaceKnowledgePrepareService
-  fileReviewService: FileReviewService
+  docxApplyService: DocxApplyService
   ensureEmbeddingReady: () => Promise<void>
   createAiRunContext: (input?: CreateAiRunContextInput) => AiRunContext
   createHumanTaskRunner: (input?: CreateAiRunContextInput) => ReturnType<typeof createHumanGraphRunner>
@@ -110,10 +110,7 @@ export const createRealAiDepsFactory = async (input: {
     documentsStore: storageService.documents
   })
 
-  const fileReviewService = new FileReviewService(
-    storageService.fileReview,
-    storageService.documents
-  )
+  const docxApplyService = new DocxApplyService(storageService.docxApply)
 
   const seedLlmConfig = async (config: LiveLlmConfig): Promise<void> => {
     const { model_name: _modelName, ...persistedConfig } = config
@@ -173,7 +170,7 @@ export const createRealAiDepsFactory = async (input: {
         documentsStore: storageService.documents,
         embeddingService,
         ensureEmbeddingReady: ensureReady,
-        fileReviewService,
+        docxApplyService,
         isCancelled: contextInput.checkCancelledOverride || (() => false),
         sendEvent: (event) => input.eventCollector.add(event),
         recordLlmIo: (record) => input.eventCollector.addLlmIo(record),
@@ -226,7 +223,7 @@ export const createRealAiDepsFactory = async (input: {
     embeddingService,
     workspaceSourceService,
     workspaceKnowledgePrepareService,
-    fileReviewService,
+    docxApplyService,
     ensureEmbeddingReady: ensureReady,
     createAiRunContext: createContext,
     createHumanTaskRunner: (contextInput = {}) => {

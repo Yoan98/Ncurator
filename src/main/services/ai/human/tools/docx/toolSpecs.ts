@@ -389,18 +389,18 @@ export const DOCX_ROLLBACK_TOOL_SPEC = {
   name: 'docx_rollback',
   familyId: 'docx',
   requiresWorkspace: true,
-  description: '把当前 docx 草稿回到某次编辑状态。',
+  description: '把当前 docx 任务内编辑状态回到某次 revision。',
   skillIds: ['docx-write'],
   inputSchema: docxRollbackRequestSchema,
   outputSchema: docxRollbackOutputSchema,
   promptSpec: {
     name: 'docx_rollback',
     description:
-      '能力：根据 docx_history 返回的 revisionRef，把 sourcePath 对应 docx 回到某次编辑状态。\n结果：返回回退后的编辑状态。\n边界：只切换当前任务内的草稿状态，不直接覆盖源文件。',
+      '能力：根据 docx_history 返回的 revisionRef，把 sourcePath 对应 docx 的任务内编辑状态回到某次 revision。\n结果：返回回退后的编辑状态。\n边界：只切换当前任务内状态，不直接覆盖源文件。',
     whenToUse: '适用于发现前一次或某几次 docx 修改不合适，需要回到较早编辑状态的任务。',
     examples: [
       {
-        goal: '把当前草稿回退到指定修订',
+        goal: '把当前任务内编辑状态回退到指定修订',
         args: {
           sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
           revisionRef: 'v2'

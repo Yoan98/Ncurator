@@ -50,7 +50,7 @@ tests/                   # 自动化测试
 - `prompts/**` 放 `human` 的 `brain` / `mouth` 提示词，以及 `decisionHint` 渲染等少量共享 prompt 片段。
 - Tool 实现按实现域归位放在 `src/main/services/ai/human/tools/**`，例如 `docx/**`、`kb/**`、`terminal/**`。
 - `skills.ts` 与 `tools/registry.ts` 负责维护 builtin/external skill 与 tool 的映射；skill 级筛选或装配逻辑放在 registry / loader，不要求给每个 skill 单独建目录。
-- Docx 审阅相关服务放在 `src/main/services/ai/human/tools/docx/review/**`。
+- Docx replay、direct apply 与 checkpoint 回退相关服务放在 `src/main/services/ai/human/tools/docx/review/**`。
 - Human 的运行态 state schema 放在 `src/main/services/ai/human/state/schema.ts`。
 
 ## 4. `src/renderer` 放置规则

@@ -56,7 +56,6 @@ export const collectBackendRunArtifacts = async (input: {
       path: path.posix.join('artifacts', relativePath),
       fileName: event.fileName,
       capability: event.capability,
-      artifactRole: event.artifactRole,
       refs: event.stepId ? { stepId: event.stepId } : undefined
     })
   }

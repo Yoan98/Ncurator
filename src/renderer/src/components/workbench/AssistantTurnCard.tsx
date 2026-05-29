@@ -8,8 +8,9 @@ import {
 } from 'react-icons/hi2'
 import { LoadingOutlined } from '@ant-design/icons'
 import MarkdownRenderer from '../MarkdownRenderer'
-import { ASSISTANT_STEP_STATUS_META, REVIEW_STATUS_META } from './constants'
+import { ASSISTANT_STEP_STATUS_META, DOCX_APPLY_STATUS_META } from './constants'
 import type { AssistantTurnStep, AssistantTurnViewModel, WorkbenchFileRef } from './types'
+import { workbenchSelectors } from '../../testing/selectors'
 
 type AssistantTurnCardProps = {
   messageId: string
@@ -18,7 +19,7 @@ type AssistantTurnCardProps = {
   isStreaming?: boolean
   onOpenStep: (step: AssistantTurnStep) => void
   onOpenFile: (file: WorkbenchFileRef) => void
-  onOpenReview: (reviewId: string) => void
+  onOpenApply: (applyId: string) => void
 }
 
 const renderFileChip = (
@@ -45,7 +46,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   isStreaming,
   onOpenStep,
   onOpenFile,
-  onOpenReview
+  onOpenApply
 }) => {
   const [expanded, setExpanded] = useState(false)
 
@@ -55,7 +56,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
       turn.steps.length > 0 ||
       turn.readFiles.length > 0 ||
       turn.editedFiles.length > 0 ||
-      turn.reviewTargets.length > 0 ||
+      turn.applyTargets.length > 0 ||
       turn.blockers.length > 0
     )
   }, [turn])
@@ -171,29 +172,29 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                   </div>
                 ) : null}
 
-                {turn?.reviewTargets.length ? (
+                {turn?.applyTargets.length ? (
                     <div>
                       <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-[#999999]">
-                      审阅稿
+                      已修改文件
                       </div>
                     <div className="space-y-2">
-                      {turn.reviewTargets.map((review) => {
-                        const statusMeta = review.status ? REVIEW_STATUS_META[review.status] : null
+                      {turn.applyTargets.map((apply) => {
+                        const statusMeta = apply.status ? DOCX_APPLY_STATUS_META[apply.status] : null
                         return (
                           <button
-                            key={review.reviewId}
+                            key={apply.applyId}
                             type="button"
-                            onClick={() => onOpenReview(review.reviewId)}
-                            data-testid={`workbench-assistant-turn-review-${review.reviewId}`}
+                            onClick={() => onOpenApply(apply.applyId)}
+                            data-testid={`${workbenchSelectors.assistantTurnApplyPrefix}-${apply.applyId}`}
                             className="w-full rounded-2xl border border-[#F4E5DF] bg-white px-4 py-3 text-left transition-all duration-200 hover:-translate-y-[1px] hover:border-[#D97757]"
                           >
                             <div className="flex flex-wrap items-start justify-between gap-3">
                               <div>
                                 <div className="text-[13px] font-medium text-[#1F1F1F]">
-                                  {review.title}
+                                  {apply.title}
                                 </div>
                                 <div className="mt-1 text-xs text-[#666666]">
-                                  {review.changeCount} 处修改
+                                  {apply.changeCount} 处修改
                                 </div>
                               </div>
                               {statusMeta ? (

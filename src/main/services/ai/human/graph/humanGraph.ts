@@ -27,7 +27,7 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
     options: HumanRunDispatchOptions = {}
   ): Promise<HumanTaskOutput> => {
     const cache = createHumanRuntimeCache()
-    ctx.beginDocxReviewRun()
+    ctx.beginDocxApplyRun()
     try {
       const contextBudgetNode = createContextBudgetNode({ ctx, cache })
       const contextCompactionNode = createContextCompactionNode({ ctx, cache })
@@ -102,7 +102,7 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
         artifacts: output.result?.artifacts
       }
     } catch (error) {
-      ctx.discardDocxReviewRun()
+      ctx.discardDocxApplyRun()
       if (!isCancelledError(error)) {
         const code = classifyLlmFailureCode(error)
         if (isRecoverableRunErrorCode(code)) {

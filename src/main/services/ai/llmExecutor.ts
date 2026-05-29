@@ -6,7 +6,6 @@ import { normalizeJsonObject, normalizeLlmUsage } from '../llm/usage'
 import { resolveLlmProviderKind } from '../../../shared/llmProvider'
 import type {
   AiLlmUsage,
-  AiRunFailureCode,
   AiLlmStreamingMode,
   AiRuntimeSettings,
   AiStructuredOutputMethod,

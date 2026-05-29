@@ -9,7 +9,6 @@ import type { FixtureBinding } from './test-types'
 import { createRealAiDepsFactory } from './realAiDepsFactory'
 import { seedKbFixture } from './seedKbFixture'
 import { seedChatHistory } from './seedChatHistory'
-import { seedFileReview } from './seedFileReview'
 import { seedWorkspaceKb } from './workspaceKbSeed'
 import { flushLangChainTracing } from './utils/langchainTracing'
 import {
@@ -57,10 +56,10 @@ export const createRealAiHarness = async (input: {
     workspaceKnowledgePrepareService: depsFactory.workspaceKnowledgePrepareService,
     documentsStore: depsFactory.storageService.documents,
     chatStore: depsFactory.storageService.chat,
-    fileReviewStore: depsFactory.storageService.fileReview,
+    docxApplyStore: depsFactory.storageService.docxApply,
     llmStore: depsFactory.storageService.llm,
     embeddingService: depsFactory.embeddingService,
-    fileReviewService: depsFactory.fileReviewService,
+    docxApplyService: depsFactory.docxApplyService,
     recordEvent: input.recordEvent,
     assertThat: (condition, assertion) => {
       input.recordEvent({
@@ -130,12 +129,6 @@ export const createRealAiHarness = async (input: {
         payload
       })
     },
-    seedFileReview: async (payload) =>
-      await seedFileReview({
-        workspaceRoot: input.workspaceRoot,
-        fileReviewStore: depsFactory.storageService.fileReview,
-        payload
-      }),
     seedLlmConfig: async (config) => {
       await depsFactory.seedLlmConfig(config)
     }

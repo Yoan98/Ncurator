@@ -56,11 +56,11 @@ describe('ai human mock-llm backend', () => {
               ensureReadyCalls += 1
               await runtime.ensureEmbeddingReady()
             },
-            fileReviewService: runtime.fileReviewService,
+            docxApplyService: runtime.docxApplyService,
             isCancelled: () => false,
             sendEvent: (event) => runtime.eventCollector.add(event),
             recordLlmIo: (record) => runtime.eventCollector.addLlmIo(record),
-            requestApproval: async () => ({ approved: true }),
+            requestApprovalBatch: async () => ({ accepted: true, decisions: [] }),
             llmDriver: createScriptedStructuredOutputDriver({
               'human.brain': [
                 {
@@ -166,11 +166,11 @@ describe('ai human mock-llm backend', () => {
             ensureEmbeddingReady: async () => {
               throw new Error('embedding preflight failed for test')
             },
-            fileReviewService: runtime.fileReviewService,
+            docxApplyService: runtime.docxApplyService,
             isCancelled: () => false,
             sendEvent: (event) => runtime.eventCollector.add(event),
             recordLlmIo: (record) => runtime.eventCollector.addLlmIo(record),
-            requestApproval: async () => ({ approved: true }),
+            requestApprovalBatch: async () => ({ accepted: true, decisions: [] }),
             llmDriver: createScriptedStructuredOutputDriver({})
           }
         )

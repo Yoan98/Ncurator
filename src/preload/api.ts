@@ -10,19 +10,13 @@ import type {
   AiRunStartResponse,
   ChatMessage,
   ChatSession,
-  CommitFileReviewRequest,
-  CommitFileReviewResponse,
   ChunkListResponse,
   CreateWorkspaceSourceRequest,
   DeleteWebSourceRequest,
   DeleteWebSourceResponse,
   DeleteWorkspaceSourceResponse,
   DocumentRecord,
-  GetFileReviewRequest,
-  GetFileReviewResponse,
   LegacyLocalImportMigrationStatus,
-  ListFileReviewsRequest,
-  ListFileReviewsResponse,
   ListReferenceItemsRequest,
   ListWebSourcesRequest,
   ListWorkspaceNodesRequest,
@@ -34,17 +28,19 @@ import type {
   SearchResponse,
   SearchResult,
   SearchSourceFilter,
-  DiscardFileReviewRequest,
-  DiscardFileReviewResponse,
   PickApplicationResponse,
   OpenPathWithApplicationRequest,
   OpenPathWithApplicationResponse,
   ReferenceItemListResponse,
-  ValidateFileReviewCommitRequest,
-  ValidateFileReviewCommitResponse,
   WebSourceListResponse,
   WebSourceMutationResponse,
   WebIngestPayload,
+  ListDocxApplyRecordsRequest,
+  ListDocxApplyRecordsResponse,
+  GetDocxApplyRecordRequest,
+  GetDocxApplyRecordResponse,
+  RevertDocxApplyRequest,
+  RevertDocxApplyResponse,
   WorkspaceJobResponse,
   WorkspaceListResponse,
   WorkspaceMutationResponse,
@@ -187,13 +183,9 @@ export type DesktopApi = {
     payload: AiRunApprovalBatchDecisionRequest
   ) => Promise<AiRunApprovalBatchDecisionResponse>
   aiContextUsageGet: (payload: AiContextUsageRequest) => Promise<AiContextUsageResponse>
-  fileReviewList: (payload?: ListFileReviewsRequest) => Promise<ListFileReviewsResponse>
-  fileReviewGet: (payload: GetFileReviewRequest) => Promise<GetFileReviewResponse>
-  fileReviewValidate: (payload: ValidateFileReviewCommitRequest) => Promise<ValidateFileReviewCommitResponse>
-  fileReviewCommit: (payload: CommitFileReviewRequest) => Promise<CommitFileReviewResponse>
-  fileReviewDiscard: (
-    payload: DiscardFileReviewRequest
-  ) => Promise<DiscardFileReviewResponse>
+  docxApplyList: (payload?: ListDocxApplyRecordsRequest) => Promise<ListDocxApplyRecordsResponse>
+  docxApplyGet: (payload: GetDocxApplyRecordRequest) => Promise<GetDocxApplyRecordResponse>
+  docxApplyRevert: (payload: RevertDocxApplyRequest) => Promise<RevertDocxApplyResponse>
   pickApplication: () => Promise<PickApplicationResponse>
   openPathWithApplication: (
     payload: OpenPathWithApplicationRequest

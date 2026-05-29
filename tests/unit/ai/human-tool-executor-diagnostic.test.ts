@@ -29,9 +29,7 @@ const createStubAiRunContext = (): AiRunContext => ({
     throw new Error('chatText should not be called in tool executor unit tests')
   },
   sendEvent: () => {},
-  requestApproval: async () => ({
-    approved: false
-  }),
+  requestApprovalBatch: async () => ({ accepted: true, decisions: [] }),
   loadConversationContext: async () => ({
     recentTurnsText: '',
     conversationSummaryText: ''
@@ -39,9 +37,13 @@ const createStubAiRunContext = (): AiRunContext => ({
   loadConversationMemory: async () => null,
   trackDocxOpen: () => {},
   trackDocxChanges: () => {},
+  trackDocxBatchChanges: () => {},
   resolveDocxOpenTarget: async () => {
     throw new Error('resolveDocxOpenTarget should not be called in tool executor unit tests')
   },
+  beginDocxApplyRun: () => {},
+  applyDocxRunEdits: async () => [],
+  discardDocxApplyRun: () => {},
   documentsStore: undefined as never,
   embeddingService: undefined as never
 })

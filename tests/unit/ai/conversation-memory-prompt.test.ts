@@ -14,7 +14,7 @@ describe('ai unit conversation memory prompt', () => {
           path: '/workspace/risk.docx',
           fileName: 'risk.docx',
           operation: 'created',
-          artifactRole: 'draft',
+          applyId: 'apply-risk',
           summary: '风险项草稿'
         }
       ]

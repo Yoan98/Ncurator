@@ -1,6 +1,6 @@
 import type { DocxReplaySession } from '../types'
 
-export type RunDraftDocument = {
+export type RunDocxEditDocument = {
   sourcePath: string
   sourceName: string
   latestDocId: string

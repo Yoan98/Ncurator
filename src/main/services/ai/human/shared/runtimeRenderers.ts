@@ -14,19 +14,19 @@ const renderChangedFile = (
   mode: HumanRuntimeRenderMode
 ): string => {
   if (mode === 'fallback_markdown') {
-    const draftText = file.draft_artifact_path ? `; 待确认稿=${file.draft_artifact_path}` : ''
-    return `${file.file_name} (${file.source_path}) - ${file.format}, 改动数=${String(file.change_count)}${draftText}`
+    const applyText = file.apply_id ? `; applyId=${file.apply_id}` : ''
+    return `${file.file_name} (${file.source_path}) - ${file.format}, 改动数=${String(file.change_count)}${applyText}`
   }
 
-  const draftLine = file.draft_artifact_path
-    ? `  - 待确认稿路径（新草稿文件）：${file.draft_artifact_path}`
+  const applyLine = file.apply_id
+    ? `  - AI 修改记录：${file.apply_id}`
     : undefined
   return [
     `- 文件：${file.file_name}`,
     `  - 原文件路径：${file.source_path}`,
     `  - 格式：${file.format}`,
     `  - 改动数：${file.change_count}`,
-    draftLine
+    applyLine
   ]
     .filter(Boolean)
     .join('\n')

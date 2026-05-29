@@ -9,7 +9,7 @@ import type {
   DocxOp,
   DocxReplaySession
 } from './human/tools/docx/types'
-import type { FileReviewService } from './human/tools/docx/review/FileReviewService'
+import type { DocxApplyService } from './human/tools/docx/review/DocxApplyService'
 import type { ResolvedDocxOpenTarget } from './human/tools/docx/review/types'
 import type { z } from 'zod/v4'
 import type {
@@ -26,7 +26,7 @@ import type {
   BrainContextBudgetSnapshot,
   ChatConversationMemory,
   ChatSessionResumeSnapshot,
-  FileReviewDetail,
+  DocxApplyRecord,
   SelectedReference
 } from '../../../shared/types'
 import type { HumanState, HumanTaskInput, HumanTaskOutput } from './human/types'
@@ -126,7 +126,7 @@ export type AiRunDeps = {
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService
   ensureEmbeddingReady: () => Promise<void>
-  fileReviewService: FileReviewService
+  docxApplyService: DocxApplyService
   isCancelled: () => boolean
   abortSignal?: AbortSignal
   sendEvent: (event: AiRunEvent) => void
@@ -205,10 +205,9 @@ export type AiRunContext = {
     replaySession?: DocxReplaySession
   }) => void
   resolveDocxOpenTarget: (sourcePath: string) => Promise<ResolvedDocxOpenTarget>
-  beginDocxReviewRun: () => void
-  finalizeDocxReviewRun: () => Promise<FileReviewDetail[]>
-  persistDocxReviewRun: (details: readonly FileReviewDetail[]) => Promise<void>
-  discardDocxReviewRun: () => void
+  beginDocxApplyRun: () => void
+  applyDocxRunEdits: () => Promise<DocxApplyRecord[]>
+  discardDocxApplyRun: () => void
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService
 }

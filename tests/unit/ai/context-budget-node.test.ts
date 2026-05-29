@@ -34,7 +34,7 @@ const createBaseContext = (events: AiRunEvent[]): AiRunContext =>
       throw new Error('not used in context budget test')
     },
     sendEvent: (event) => events.push(event),
-    requestApproval: async () => ({ approved: true }),
+    requestApprovalBatch: async () => ({ accepted: true, decisions: [] }),
     loadConversationContext: async () => ({
       recentTurnsText: '',
       conversationSummaryText: ''
@@ -42,13 +42,13 @@ const createBaseContext = (events: AiRunEvent[]): AiRunContext =>
     loadConversationMemory: async () => null,
     trackDocxOpen: () => undefined,
     trackDocxChanges: () => undefined,
+    trackDocxBatchChanges: () => undefined,
     resolveDocxOpenTarget: async () => {
       throw new Error('not used in context budget test')
     },
-    beginDocxReviewRun: () => undefined,
-    finalizeDocxReviewRun: async () => [],
-    persistDocxReviewRun: async () => undefined,
-    discardDocxReviewRun: () => undefined,
+    beginDocxApplyRun: () => undefined,
+    applyDocxRunEdits: async () => [],
+    discardDocxApplyRun: () => undefined,
     documentsStore: {} as AiRunContext['documentsStore'],
     embeddingService: {} as AiRunContext['embeddingService']
   }) satisfies AiRunContext
@@ -70,8 +70,8 @@ describe('ai unit context budget node', () => {
     expect(nextState.execution.contextBudget).toMatchObject({
       basis: 'initial',
       budgetTokens: 0,
-      contextWindowTokens: 200000,
-      compactionTriggerTokens: 160000,
+      contextWindowTokens: 100000,
+      compactionTriggerTokens: 80000,
       hasCompressibleHistory: false,
       usageAvailable: false,
       evaluationId: expect.any(String)
@@ -218,7 +218,7 @@ describe('ai unit context budget node', () => {
         budgetTokens: 0,
         usageAvailable: false,
         hasCompressibleHistory: false,
-        contextWindowTokens: 200000
+        contextWindowTokens: 100000
       }
     })
   })
@@ -247,7 +247,7 @@ describe('ai unit context budget node', () => {
         basis: 'post_compaction',
         budgetTokens: 0,
         usageAvailable: false,
-        contextWindowTokens: 200000
+        contextWindowTokens: 100000
       }
     })
   })

@@ -5,8 +5,8 @@ import { buildMouthPrompt } from '../../prompts/mouth'
 import { assertExternalLearnedSkillIds } from '../../skills'
 import { completeHumanTask } from '../utils/stateTransitions'
 import {
-  appendFileReviewArtifactsAndEmitEvents,
-  buildRuntimeArtifactsSummaryFromFileReviewDetails,
+  appendDocxApplyArtifactsAndEmitEvents,
+  buildRuntimeArtifactsSummaryFromDocxApplyRecords,
   mergeArtifactRefs
 } from '../../../utils/artifacts'
 
@@ -32,8 +32,8 @@ export const createMouthNode = (input: {
     }
     input.cache.currentState = stateWithMouthRound
 
-    const fileReviewDetails = await input.ctx.finalizeDocxReviewRun()
-    const runtimeArtifacts = buildRuntimeArtifactsSummaryFromFileReviewDetails(fileReviewDetails)
+    const docxApplyRecords = await input.ctx.applyDocxRunEdits()
+    const runtimeArtifacts = buildRuntimeArtifactsSummaryFromDocxApplyRecords(docxApplyRecords)
     const history = await input.ctx.loadConversationContext()
     let promptState: HumanState = {
       ...stateWithMouthRound,
@@ -70,16 +70,11 @@ export const createMouthNode = (input: {
         : undefined
     })
 
-    if (fileReviewDetails.length > 0) {
-      input.ctx.checkCancelled()
-      await input.ctx.persistDocxReviewRun(fileReviewDetails)
-    }
-
     const artifacts =
-      fileReviewDetails.length > 0
-        ? appendFileReviewArtifactsAndEmitEvents({
+      docxApplyRecords.length > 0
+        ? appendDocxApplyArtifactsAndEmitEvents({
             existingArtifacts: stateWithMouthRound.execution.artifacts,
-            details: fileReviewDetails,
+            records: docxApplyRecords,
             sendEvent: input.ctx.sendEvent,
             runId: input.ctx.runId,
             taskId: state.task.taskId

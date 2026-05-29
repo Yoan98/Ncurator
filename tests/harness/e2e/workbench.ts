@@ -11,8 +11,8 @@ export const getWorkbenchLocator = (page: Page, testId: string): Locator =>
 export const getWorkbenchAssistantStepButtons = (page: Page): Locator =>
   page.locator(`button${byTestIdPrefix(workbenchSelectors.assistantTurnStepsPrefix)}`)
 
-export const getWorkbenchAssistantReviewButtons = (page: Page): Locator =>
-  page.locator(`button${byTestIdPrefix(workbenchSelectors.assistantTurnReviewPrefix)}`)
+export const getWorkbenchAssistantApplyButtons = (page: Page): Locator =>
+  page.locator(`button${byTestIdPrefix(workbenchSelectors.assistantTurnApplyPrefix)}`)
 
 export const waitForWorkbenchReady = async (page: Page): Promise<void> => {
   await getWorkbenchLocator(page, workbenchSelectors.input).waitFor({ state: 'visible' })
@@ -51,7 +51,7 @@ export const waitForAssistantTurnCount = async (page: Page, count: number): Prom
   )
 }
 
-export const waitForReviewTabCount = async (page: Page, count: number): Promise<void> => {
+export const waitForApplyTabCount = async (page: Page, count: number): Promise<void> => {
   await page.waitForFunction(
     ({ selector, minCount }) => {
       const host = document.querySelector(selector)
@@ -61,7 +61,7 @@ export const waitForReviewTabCount = async (page: Page, count: number): Promise<
       ).length >= minCount
     },
     {
-      selector: byTestId(workbenchSelectors.reviewTabs),
+      selector: byTestId(workbenchSelectors.applyTabs),
       minCount: count
     }
   )
@@ -71,9 +71,9 @@ export const expandLatestAssistantTurn = async (page: Page): Promise<void> => {
   await getWorkbenchAssistantStepButtons(page).last().click()
 }
 
-export const openLatestAssistantReview = async (page: Page): Promise<void> => {
-  const reviewButtons = getWorkbenchAssistantReviewButtons(page)
-  if ((await reviewButtons.count()) === 0) {
+export const openLatestAssistantApply = async (page: Page): Promise<void> => {
+  const applyButtons = getWorkbenchAssistantApplyButtons(page)
+  if ((await applyButtons.count()) === 0) {
     await expandLatestAssistantTurn(page)
   }
   await page.waitForFunction(
@@ -82,10 +82,10 @@ export const openLatestAssistantReview = async (page: Page): Promise<void> => {
         (button) => button instanceof HTMLElement && button.offsetParent !== null
       ),
     {
-      selector: `button${byTestIdPrefix(workbenchSelectors.assistantTurnReviewPrefix)}`
+      selector: `button${byTestIdPrefix(workbenchSelectors.assistantTurnApplyPrefix)}`
     }
   )
-  await reviewButtons.last().click()
+  await applyButtons.last().click()
 }
 
 export const openFirstEditedFileChipFromExpandedTurn = async (page: Page): Promise<void> => {

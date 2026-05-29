@@ -11,15 +11,8 @@ import { fetchLlmRemoteModels } from '../services/llm/modelCatalog'
 import { AiRunService } from '../services/ai/AiRunService'
 import { updateConversationMemoryAfterRun } from '../services/ai/memory'
 import { getAiContextUsage } from '../services/ai/contextUsage'
-import { FileReviewService } from '../services/ai/human/tools/docx/review/FileReviewService'
-import {
-  getDraftArtifactPath,
-  getWorkingArtifactPath
-} from '../services/ai/human/tools/docx/review/viewProjection'
-import {
-  getDocxWorkerClient,
-  releaseDocxRunSession
-} from '../services/ai/human/tools/docx/worker/docxWorkerClient'
+import { DocxApplyService } from '../services/ai/human/tools/docx/review/DocxApplyService'
+import { releaseDocxRunSession } from '../services/ai/human/tools/docx/worker/docxWorkerClient'
 import type { AiLlmIoRecord } from '../../shared/types'
 import {
   buildWebReferenceItem,
@@ -48,25 +41,21 @@ import type {
   AiRunCancelResponse,
   AiRunApprovalBatchDecisionRequest,
   AiRunApprovalBatchDecisionResponse,
-  CommitFileReviewRequest,
-  CommitFileReviewResponse,
+  GetDocxApplyRecordRequest,
+  GetDocxApplyRecordResponse,
+  ListDocxApplyRecordsRequest,
+  ListDocxApplyRecordsResponse,
+  RevertDocxApplyRequest,
+  RevertDocxApplyResponse,
   CreateWorkspaceSourceRequest,
-  DiscardFileReviewRequest,
-  DiscardFileReviewResponse,
   DeleteWorkspaceSourceResponse,
   ListReferenceItemsRequest,
-  ListFileReviewsRequest,
-  ListFileReviewsResponse,
   ListWorkspaceNodesRequest,
-  GetFileReviewRequest,
-  GetFileReviewResponse,
   OpenPathWithApplicationRequest,
   OpenPathWithApplicationResponse,
   PickDirectoryResponse,
   PickApplicationResponse,
   ReferenceItemListResponse,
-  ValidateFileReviewCommitRequest,
-  ValidateFileReviewCommitResponse,
   ListWebSourcesRequest,
   RefreshWebSourceRequest,
   DeleteWebSourceRequest,
@@ -282,7 +271,7 @@ export function registerHandlers(services: {
   const aiRuntimeSettingsStore = storageService.aiRuntimeSettings
   const webSourceStore = storageService.webSource
   const workspaceStore = storageService.workspace
-  const fileReviewService = new FileReviewService(storageService.fileReview, documentsStore)
+  const docxApplyService = new DocxApplyService(storageService.docxApply)
   const workspaceService = new WorkspaceSourceService()
   const workspaceKnowledgePrepareService = new WorkspaceKnowledgePrepareService({
     ingestionService,
@@ -304,14 +293,6 @@ export function registerHandlers(services: {
     if (durationMs <= 0) return
     await new Promise<void>((resolve) => setTimeout(resolve, durationMs))
   }
-
-  const E2E_REVIEW_FIXTURE_SOURCE = path.resolve(
-    process.cwd(),
-    'tests',
-    'fixtures',
-    'workspace',
-    'sample-edit.docx'
-  )
 
   const emitE2EChatArtifactFlow = async (input: {
     runId: string
@@ -398,192 +379,21 @@ export function registerHandlers(services: {
     })
   }
 
-  const stageE2EFileReview = async (input: {
-    runId: string
-    fileReviewService: FileReviewService
-    sourceFileName: string
-    acceptedReplace: string
-    rejectedReplace: string
-  }) => {
-    const workspaceRootPath = path.join('/tmp', 'ncurator-e2e-review-workspace', input.runId)
-    const sourcePath = path.join(workspaceRootPath, input.sourceFileName)
-    await fs.promises.mkdir(workspaceRootPath, { recursive: true })
-    await fs.promises.copyFile(E2E_REVIEW_FIXTURE_SOURCE, sourcePath)
-
-    const client = getDocxWorkerClient()
-    const openResponse = await client.call({
-      runId: input.runId,
-      action: 'open',
-      payload: {
-        sourcePath
-      }
-    })
-    if (!openResponse.ok || openResponse.payload.action !== 'open') {
-      throw new Error(openResponse.ok ? 'e2e review open worker mismatch' : openResponse.error)
-    }
-
-    input.fileReviewService.registerDocxOpen({
-      runId: input.runId,
-      docId: openResponse.payload.docId,
-      sourcePath
-    })
-
-    const acceptedOp = {
-      type: 'replace_text' as const,
-      query: 'Hello',
-      replace: input.acceptedReplace,
-      replaceAll: true
-    }
-    const rejectedOp = {
-      type: 'replace_text' as const,
-      query: 'fixture',
-      replace: input.rejectedReplace,
-      replaceAll: true
-    }
-
-    const applyAcceptedResponse = await client.call({
-      runId: input.runId,
-      action: 'apply_ops',
-      payload: {
-        docId: openResponse.payload.docId,
-        ops: [acceptedOp]
-      }
-    })
-    if (!applyAcceptedResponse.ok || applyAcceptedResponse.payload.action !== 'apply_ops') {
-      throw new Error(
-        applyAcceptedResponse.ok
-          ? 'e2e review apply accepted worker mismatch'
-          : applyAcceptedResponse.error
-      )
-    }
-
-    input.fileReviewService.registerDocxChanges({
-      runId: input.runId,
-      previousDocId: openResponse.payload.docId,
-      nextDocId: applyAcceptedResponse.payload.newDocId,
-      op: acceptedOp,
-      changedBlocks: applyAcceptedResponse.payload.changedBlocks,
-      createdBlocks: []
-    })
-
-    const applyRejectedResponse = await client.call({
-      runId: input.runId,
-      action: 'apply_ops',
-      payload: {
-        docId: applyAcceptedResponse.payload.newDocId,
-        ops: [rejectedOp]
-      }
-    })
-    if (!applyRejectedResponse.ok || applyRejectedResponse.payload.action !== 'apply_ops') {
-      throw new Error(
-        applyRejectedResponse.ok
-          ? 'e2e review apply rejected worker mismatch'
-          : applyRejectedResponse.error
-      )
-    }
-
-    input.fileReviewService.registerDocxChanges({
-      runId: input.runId,
-      previousDocId: applyAcceptedResponse.payload.newDocId,
-      nextDocId: applyRejectedResponse.payload.newDocId,
-      op: rejectedOp,
-      changedBlocks: applyRejectedResponse.payload.changedBlocks,
-      createdBlocks: []
-    })
-
-    return {
-      sourcePath,
-      workspaceRootPath
-    }
-  }
-
-  const createE2EFileReviews = async (input: {
-    runId: string
-    fileReviewService: FileReviewService
-    conflict: boolean
-    multiple: boolean
-    primaryDocument?: {
-      sourceFileName: string
-      acceptedReplace: string
-      rejectedReplace: string
-    }
-    secondaryDocument?: {
-      sourceFileName: string
-      acceptedReplace: string
-      rejectedReplace: string
-    }
-  }) => {
-    const stagedSources: string[] = []
-
-    const primaryDocument = input.primaryDocument || {
-      sourceFileName: input.conflict ? 'e2e-review-conflict.docx' : 'e2e-review-source-a.docx',
-      acceptedReplace: input.multiple ? 'E2E accepted paragraph A' : 'E2E accepted paragraph',
-      rejectedReplace: input.multiple ? 'E2E rejected paragraph A' : 'E2E rejected paragraph'
-    }
-    const firstDocument = await stageE2EFileReview({
-      runId: input.runId,
-      fileReviewService: input.fileReviewService,
-      sourceFileName: primaryDocument.sourceFileName,
-      acceptedReplace: primaryDocument.acceptedReplace,
-      rejectedReplace: primaryDocument.rejectedReplace
-    })
-    stagedSources.push(firstDocument.sourcePath)
-
-    if (input.multiple) {
-      const secondaryDocument = input.secondaryDocument || {
-        sourceFileName: 'e2e-review-source-b.docx',
-        acceptedReplace: 'E2E accepted paragraph B',
-        rejectedReplace: 'E2E rejected paragraph B'
-      }
-      const secondDocument = await stageE2EFileReview({
-        runId: input.runId,
-        fileReviewService: input.fileReviewService,
-        sourceFileName: secondaryDocument.sourceFileName,
-        acceptedReplace: secondaryDocument.acceptedReplace,
-        rejectedReplace: secondaryDocument.rejectedReplace
-      })
-      stagedSources.push(secondDocument.sourcePath)
-    }
-
-    const details = await input.fileReviewService.finalizeRunReview({
-      runId: input.runId,
-      workspaceRootPath: firstDocument.workspaceRootPath
-    })
-    if (details.length === 0) {
-      throw new Error('e2e review details missing after finalize')
-    }
-
-    if (input.conflict) {
-      const conflictSourcePath = stagedSources[0]
-      if (!conflictSourcePath) {
-        throw new Error('e2e conflict source path missing')
-      }
-      const sourceStat = await fs.promises.stat(conflictSourcePath)
-      const nextTime = new Date(sourceStat.mtimeMs + 120_000)
-      await fs.promises.utimes(conflictSourcePath, nextTime, nextTime)
-    }
-
-    return details
-  }
-
-  const emitE2EEditReviewFlow = async (input: {
+  const emitE2EDocxApplyFlow = async (input: {
     runId: string
     sendEvent: (event: AiRunEvent) => void
-    fileReviewService: FileReviewService
-    conflict: boolean
     multiple: boolean
-    primaryDocument?: {
-      sourceFileName: string
-      acceptedReplace: string
-      rejectedReplace: string
-    }
-    secondaryDocument?: {
-      sourceFileName: string
-      acceptedReplace: string
-      rejectedReplace: string
-    }
     answerText?: string
   }): Promise<void> => {
+    const applyEvents = input.multiple
+      ? [
+          { id: `e2e-apply-${input.runId}-a`, path: `/tmp/ncurator-e2e-apply-${input.runId}-a.docx`, fileName: 'e2e-apply-a.docx' },
+          { id: `e2e-apply-${input.runId}-b`, path: `/tmp/ncurator-e2e-apply-${input.runId}-b.docx`, fileName: 'e2e-apply-b.docx' }
+        ]
+      : [
+          { id: `e2e-apply-${input.runId}`, path: `/tmp/ncurator-e2e-apply-${input.runId}.docx`, fileName: 'e2e-apply.docx' }
+        ]
+
     input.sendEvent({
       type: 'human_step',
       runId: input.runId,
@@ -591,41 +401,28 @@ export function registerHandlers(services: {
       stepIndex: 1,
       action: 'call_tool',
       toolName: 'docx_edit',
-      publicNarrative: '生成草稿并建立审阅集合',
+      publicNarrative: '直接修改 docx 源文件',
       learnedSkillIds: [],
       effectiveSkillIds: [],
       availableToolNames: ['docx_edit'],
-      summary: 'E2E fixture 开始准备草稿审阅。',
+      summary: 'E2E fixture 已准备 docx 直接写回结果。',
       createdAt: Date.now(),
       stage: 'human_hand'
     })
     await pauseForE2EFixture()
 
-    const details = await createE2EFileReviews({
-      runId: input.runId,
-      fileReviewService: input.fileReviewService,
-      conflict: input.conflict,
-      multiple: input.multiple,
-      primaryDocument: input.primaryDocument,
-      secondaryDocument: input.secondaryDocument
-    })
-
-    details.forEach((detail) => {
-      const draftArtifactPath = getDraftArtifactPath(detail.review)
-      if (!draftArtifactPath) return
+    applyEvents.forEach((item) => {
       input.sendEvent({
         type: 'file_artifact',
         runId: input.runId,
         taskId: input.runId,
         artifactId: uuidv4(),
         capability: 'docx',
-        path: draftArtifactPath,
-        fileName: path.basename(draftArtifactPath),
-        operation: 'created',
-        artifactRole: 'draft',
-        reviewId: detail.review.id,
-        draftSnapshotId: detail.review.latest_draft_snapshot_id,
-        summary: `review doc ready: ${detail.review.source_name}`,
+        path: item.path,
+        fileName: item.fileName,
+        operation: 'updated',
+        applyId: item.id,
+        summary: `docx applied: ${item.fileName}`,
         createdAt: Date.now()
       })
     })
@@ -637,58 +434,24 @@ export function registerHandlers(services: {
       taskId: input.runId,
       stepIndex: 2,
       action: 'deliver_result',
-      publicNarrative: '暴露审阅结果并等待用户确认',
+      publicNarrative: '整理已修改文件结果',
       learnedSkillIds: [],
       effectiveSkillIds: [],
       availableToolNames: [],
-      summary: 'E2E fixture 已准备好审阅结果。',
+      summary: 'E2E fixture 已暴露 docx 直接写回结果。',
       createdAt: Date.now(),
       stage: 'human_mouth'
     })
     await pauseForE2EFixture()
 
-    details.forEach((detail) => {
-      input.sendEvent({
-        type: 'draft_review_ready',
-        runId: input.runId,
-        review: {
-          reviewId: detail.review.id,
-          changeCount: detail.review.change_count
-        },
-        createdAt: Date.now()
-      })
-    })
-    await pauseForE2EFixture()
-
-    details.forEach((detail) => {
-      const workingArtifactPath = getWorkingArtifactPath(detail.review)
-      if (!workingArtifactPath) return
-      input.sendEvent({
-        type: 'file_artifact',
-        runId: input.runId,
-        taskId: input.runId,
-        artifactId: uuidv4(),
-        capability: 'docx',
-        path: workingArtifactPath,
-        fileName: path.basename(workingArtifactPath),
-        operation: 'created',
-        artifactRole: 'draft',
-        reviewId: detail.review.id,
-        draftSnapshotId: detail.review.latest_draft_snapshot_id,
-        summary: `draft ready: ${detail.review.source_name}`,
-        createdAt: Date.now()
-      })
-    })
     input.sendEvent({
       type: 'answer_completed',
       runId: input.runId,
       text:
         input.answerText ||
-        (input.conflict
-          ? 'E2E fixture 已生成草稿审阅，并在提交前制造了源文件冲突。'
-          : input.multiple
-            ? 'E2E fixture 已生成两个审阅稿，可分别确认。'
-            : 'E2E fixture 已生成草稿审阅，可继续逐块确认并提交。')
+        (input.multiple
+          ? 'E2E fixture 已直接修改两个 docx 文件，可分别回退。'
+          : 'E2E fixture 已直接修改 docx 源文件，可回退本次修改。')
     })
     input.sendEvent({
       type: 'run_completed',
@@ -777,7 +540,7 @@ export function registerHandlers(services: {
       policyProfile?: string
     }
     sendEvent: (event: AiRunEvent) => void
-    fileReviewService: FileReviewService
+    docxApplyService: DocxApplyService
   }): Promise<boolean> => {
     if (!isE2EFixtureModeEnabled()) return false
 
@@ -871,51 +634,38 @@ export function registerHandlers(services: {
       return true
     }
 
-    if (scenario === 'chat-edit-review') {
-      await emitE2EEditReviewFlow({
+    if (scenario === 'chat-edit-apply') {
+      await emitE2EDocxApplyFlow({
         runId: input.runId,
         sendEvent: input.sendEvent,
-        fileReviewService: input.fileReviewService,
-        conflict: false,
         multiple: false
       })
       return true
     }
 
-    if (scenario === 'chat-edit-review-b') {
-      await emitE2EEditReviewFlow({
+    if (scenario === 'chat-edit-apply-b') {
+      await emitE2EDocxApplyFlow({
         runId: input.runId,
         sendEvent: input.sendEvent,
-        fileReviewService: input.fileReviewService,
-        conflict: false,
         multiple: false,
-        primaryDocument: {
-          sourceFileName: 'e2e-review-source-b.docx',
-          acceptedReplace: 'E2E accepted paragraph B',
-          rejectedReplace: 'E2E rejected paragraph B'
-        },
-        answerText: 'E2E fixture 已生成 B 文件的草稿审阅。'
+        answerText: 'E2E fixture 已直接修改 B 文件，可回退本次修改。'
       })
       return true
     }
 
-    if (scenario === 'chat-multi-review') {
-      await emitE2EEditReviewFlow({
+    if (scenario === 'chat-multi-apply') {
+      await emitE2EDocxApplyFlow({
         runId: input.runId,
         sendEvent: input.sendEvent,
-        fileReviewService: input.fileReviewService,
-        conflict: false,
         multiple: true
       })
       return true
     }
 
-    if (scenario === 'chat-review-conflict') {
-      await emitE2EEditReviewFlow({
+    if (scenario === 'chat-apply-revert-warning') {
+      await emitE2EDocxApplyFlow({
         runId: input.runId,
         sendEvent: input.sendEvent,
-        fileReviewService: input.fileReviewService,
-        conflict: true,
         multiple: false
       })
       return true
@@ -1337,7 +1087,7 @@ export function registerHandlers(services: {
         return { canceled: true, error: 'pick application currently supports macOS only' }
       }
       const dialogOptions: OpenDialogOptions = {
-        title: '选择要打开审阅稿的应用',
+        title: '选择要打开文件的应用',
         buttonLabel: '选择此应用',
         defaultPath: '/Applications',
         properties: ['openFile', 'dontAddToRecent'],
@@ -2105,7 +1855,7 @@ export function registerHandlers(services: {
       }
 
       sendEvent({ type: 'run_started', runId, sessionId, createdAt: Date.now(), input })
-      fileReviewService.beginRun({
+      docxApplyService.beginRun({
         runId,
         sessionId,
         inputText: input
@@ -2117,7 +1867,7 @@ export function registerHandlers(services: {
             inputText: input,
             workspace,
             sendEvent,
-            fileReviewService
+            docxApplyService
           })
           if (handledByE2EFixture) {
             return
@@ -2145,7 +1895,7 @@ export function registerHandlers(services: {
                   modelService
                 })
               },
-              fileReviewService,
+              docxApplyService,
               isCancelled: () => Boolean(activeAiRuns.get(runId)?.cancelled),
               abortSignal: activeAiRuns.get(runId)?.abortController.signal,
               sendEvent,
@@ -2217,13 +1967,13 @@ export function registerHandlers(services: {
           )
 
           if (result.status === 'cancelled') {
-            fileReviewService.discardRun(runId)
+            docxApplyService.discardRun(runId)
             sendEvent({ type: 'run_cancelled', runId })
             return
           }
 
           if (result.status === 'failed') {
-            fileReviewService.discardRun(runId)
+            docxApplyService.discardRun(runId)
             sendEvent({
               type: 'run_failed',
               runId,
@@ -2255,7 +2005,7 @@ export function registerHandlers(services: {
 
           sendEvent({ type: 'run_completed', runId })
         } catch (e: unknown) {
-          fileReviewService.discardRun(runId)
+          docxApplyService.discardRun(runId)
           if (activeAiRuns.get(runId)?.cancelled) {
             sendEvent({ type: 'run_cancelled', runId })
             return
@@ -2348,68 +2098,36 @@ export function registerHandlers(services: {
   )
 
   ipcMain.handle(
-    'file-review-list',
-    async (_event, payload?: ListFileReviewsRequest): Promise<ListFileReviewsResponse> => {
+    'docx-apply-list',
+    async (_event, payload?: ListDocxApplyRecordsRequest): Promise<ListDocxApplyRecordsResponse> => {
       try {
-        return await fileReviewService.listReviews(payload)
+        return await docxApplyService.listRecords(payload)
       } catch (e: unknown) {
-        console.error('[DRAFT-REVIEW-LIST] Error:', e)
+        console.error('[DOCX-APPLY-LIST] Error:', e)
         return { items: [], total: 0 }
       }
     }
   )
 
   ipcMain.handle(
-    'file-review-get',
-    async (_event, payload: GetFileReviewRequest): Promise<GetFileReviewResponse> => {
+    'docx-apply-get',
+    async (_event, payload: GetDocxApplyRecordRequest): Promise<GetDocxApplyRecordResponse> => {
       try {
-        return await fileReviewService.getReview(payload)
+        return await docxApplyService.getRecord(payload)
       } catch (e: unknown) {
-        console.error('[DRAFT-REVIEW-GET] Error:', e)
+        console.error('[DOCX-APPLY-GET] Error:', e)
         return { error: getErrorMessage(e) }
       }
     }
   )
 
   ipcMain.handle(
-    'file-review-validate',
-    async (_event, payload: ValidateFileReviewCommitRequest): Promise<ValidateFileReviewCommitResponse> => {
+    'docx-apply-revert',
+    async (_event, payload: RevertDocxApplyRequest): Promise<RevertDocxApplyResponse> => {
       try {
-        return await fileReviewService.validateCommit(payload)
+        return await docxApplyService.revertRecord(payload)
       } catch (e: unknown) {
-        console.error('[DRAFT-REVIEW-VALIDATE] Error:', e)
-        return {
-          ready: false,
-          issues: [
-            {
-              code: 'session_not_ready',
-              message: getErrorMessage(e)
-            }
-          ]
-        }
-      }
-    }
-  )
-
-  ipcMain.handle(
-    'file-review-commit',
-    async (_event, payload: CommitFileReviewRequest): Promise<CommitFileReviewResponse> => {
-      try {
-        return await fileReviewService.commitReview(payload)
-      } catch (e: unknown) {
-        console.error('[DRAFT-REVIEW-COMMIT] Error:', e)
-        return { success: false, error: getErrorMessage(e) }
-      }
-    }
-  )
-
-  ipcMain.handle(
-    'file-review-discard',
-    async (_event, payload: DiscardFileReviewRequest): Promise<DiscardFileReviewResponse> => {
-      try {
-        return await fileReviewService.discardReview(payload)
-      } catch (e: unknown) {
-        console.error('[DRAFT-REVIEW-DISCARD] Error:', e)
+        console.error('[DOCX-APPLY-REVERT] Error:', e)
         return { success: false, error: getErrorMessage(e) }
       }
     }

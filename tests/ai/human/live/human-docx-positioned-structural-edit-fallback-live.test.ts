@@ -11,8 +11,8 @@ import {
   resolveSelectedDocxFixtures
 } from '../../../harness/backend/aiLiveTestData'
 import {
-  countDraftFileArtifacts,
-  countFileReviewArtifacts,
+  countDocxApplyArtifacts,
+  countDocxFileArtifacts,
   collectToolDiagnosticMessages,
   filterAiRunEventsByType,
   isDocxEditCreateInput,
@@ -119,16 +119,16 @@ describe('ai human live backend', () => {
           const failedWriteResults = writeResults.filter((event) => event.result?.ok === false)
           const decisionHints = filterAiRunEventsByType(events, 'decision_hint')
           const diagnosticMessages = collectToolDiagnosticMessages(events)
-          const draftReviewArtifactCount = countFileReviewArtifacts(result.output?.artifacts)
-          const draftFileArtifactCount = countDraftFileArtifacts(result.output?.artifacts)
+          const docxApplyArtifactCount = countDocxApplyArtifacts(result.output?.artifacts)
+          const docxFileArtifactCount = countDocxFileArtifacts(result.output?.artifacts)
           const createdIndependentSupplement =
             createSourcePaths.length >= 1 &&
             createSourcePaths.every((sourcePath) =>
               sourcePath.endsWith(POSITIONED_FALLBACK_SUPPLEMENT_RELATIVE_PATH)
             )
           const independentSupplementArtifactsValid =
-            draftReviewArtifactCount === 1 && draftFileArtifactCount === 1
-          const noSupplementArtifacts = draftReviewArtifactCount === 0 && draftFileArtifactCount === 0
+            docxApplyArtifactCount === 1 && docxFileArtifactCount === 1
+          const noSupplementArtifacts = docxApplyArtifactCount === 0 && docxFileArtifactCount === 0
           const unchangedFixtures = await Promise.all(
             result.originalFixtureBytes.map(async (fixture) => {
               const currentBytes = await fs.readFile(fixture.workspacePath)

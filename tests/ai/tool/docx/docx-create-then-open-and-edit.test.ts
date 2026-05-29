@@ -112,7 +112,7 @@ describe('ai tool docx backend', () => {
             result.targetExists === false,
           {
             name: 'docx-create-can-flow-into-followup-edit',
-            message: 'create-target docx 应可直接进入后续编辑链路，并且在 commit 前不提前落正式目标文件。',
+            message: 'create-target docx 应可直接进入后续编辑链路，并且在 apply 前不提前落正式目标文件。',
             data: {
               edited: result.edited,
               search: result.search.matches,

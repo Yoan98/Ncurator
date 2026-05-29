@@ -125,7 +125,7 @@ const buildAiRunDeps = async (input: {
     ensureEmbeddingReady: async () => {
       await input.runtime.ensureEmbeddingReady()
     },
-    fileReviewService: input.runtime.fileReviewService,
+    docxApplyService: input.runtime.docxApplyService,
     isCancelled: () => controller.signal.aborted,
     abortSignal: controller.signal,
     sendEvent: (event) => input.runtime.eventCollector.add(event),

@@ -68,7 +68,7 @@ describe('ai human mock-llm backend', () => {
             {
               kind: 'file',
               capability: 'docx',
-              artifactRole: 'draft',
+              applyId: 'apply-rollback-owner',
               path: '/workspace/rollback-owner.docx',
               fileName: 'rollback-owner.docx',
               operation: 'created',
@@ -102,7 +102,7 @@ describe('ai human mock-llm backend', () => {
                 {
                   kind: 'file',
                   capability: 'docx',
-                  artifactRole: 'draft',
+                  applyId: 'apply-risk-tracking',
                   path: '/workspace/risk-tracking.docx',
                   fileName: 'risk-tracking.docx',
                   operation: 'created',
@@ -122,7 +122,7 @@ describe('ai human mock-llm backend', () => {
             {
               kind: 'file',
               capability: 'docx',
-              artifactRole: 'draft',
+              applyId: 'apply-delay-note',
               path: '/workspace/delay-note.docx',
               fileName: 'delay-note.docx',
               operation: 'created',

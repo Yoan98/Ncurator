@@ -28,20 +28,20 @@ export type E2EChatScenario =
   | 'chat-artifact-flow'
   | 'chat-approval'
   | 'chat-workspace'
-  | 'chat-edit-review'
-  | 'chat-edit-review-b'
-  | 'chat-multi-review'
-  | 'chat-review-conflict'
+  | 'chat-edit-apply'
+  | 'chat-edit-apply-b'
+  | 'chat-multi-apply'
+  | 'chat-apply-revert-warning'
 export type E2ESearchScenario = 'search-results'
 
 const E2E_CHAT_SCENARIO_PREFIXES: Record<E2EChatScenario, string> = {
   'chat-artifact-flow': '[e2e:chat-artifact-flow]',
   'chat-approval': '[e2e:chat-approval]',
   'chat-workspace': '[e2e:chat-workspace]',
-  'chat-edit-review': '[e2e:chat-edit-review]',
-  'chat-edit-review-b': '[e2e:chat-edit-review-b]',
-  'chat-multi-review': '[e2e:chat-multi-review]',
-  'chat-review-conflict': '[e2e:chat-review-conflict]'
+  'chat-edit-apply': '[e2e:chat-edit-apply]',
+  'chat-edit-apply-b': '[e2e:chat-edit-apply-b]',
+  'chat-multi-apply': '[e2e:chat-multi-apply]',
+  'chat-apply-revert-warning': '[e2e:chat-apply-revert-warning]'
 }
 
 const E2E_SEARCH_SCENARIO_PREFIXES: Record<E2ESearchScenario, string> = {

@@ -9,8 +9,8 @@ import {
   buildToolDecision,
   collectDocxApplyOpsContentKinds,
   filterAiRunEventsByType,
-  hasDraftFileArtifact,
-  hasFileReviewArtifact,
+  hasDocxApplyArtifact,
+  hasDocxFileArtifact,
   readToolCallResultData,
   readLatestToolResultDataFromEvents
 } from '../testUtils'
@@ -133,13 +133,15 @@ describe('ai human mock-llm backend', () => {
             applyResult.changedBlocks.length === 1 &&
             searchResult.matches.length === 1 &&
             readResult.blocks.length === 1 &&
-            hasFileReviewArtifact(result.output.artifacts) &&
-            hasDraftFileArtifact(result.output.artifacts) &&
-            filterAiRunEventsByType(result.events, 'draft_review_ready').length === 1,
+            hasDocxApplyArtifact(result.output.artifacts) &&
+            hasDocxFileArtifact(result.output.artifacts) &&
+            filterAiRunEventsByType(result.events, 'file_artifact').some(
+              (event) => event.capability === 'docx' && Boolean(event.applyId)
+            ),
           {
             name: 'human-docx-edit-uses-real-docx-production-chain',
             message:
-              'mock-llm 下的 human/docx case 应通过真实 docx 工具链完成编辑、读回确认并产出 draft review artifact。',
+              'mock-llm 下的 human/docx case 应通过真实 docx 工具链完成编辑、读回确认并直接写回源文件。',
             data: {
               applyResult,
               searchResult,
@@ -334,8 +336,8 @@ describe('ai human mock-llm backend', () => {
             tableEditResult.changedBlocks.some((block) => block.action === 'insert_after') &&
             contentKinds.includes('paragraph') &&
             contentKinds.includes('table') &&
-            hasFileReviewArtifact(result.output.artifacts) &&
-            hasDraftFileArtifact(result.output.artifacts) &&
+            hasDocxApplyArtifact(result.output.artifacts) &&
+            hasDocxFileArtifact(result.output.artifacts) &&
             outlineResult.blocks.some(
               (block) =>
                 block.type === 'paragraph' &&
@@ -345,7 +347,7 @@ describe('ai human mock-llm backend', () => {
           {
             name: 'human-docx-structured-insert-uses-legal-docx-shape',
             message:
-              'mock-llm 下的 human/docx case 应提交 paragraph/table 对象化参数、成功写入文档并产出审阅稿 artifact。',
+              'mock-llm 下的 human/docx case 应提交 paragraph/table 对象化参数、成功写入文档并产出已修改文件 artifact。',
             data: {
               paragraphEditResult,
               tableEditResult,

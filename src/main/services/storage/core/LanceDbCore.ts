@@ -21,9 +21,7 @@ export const LANCE_TABLES = {
   CHAT_MESSAGE: 'chat_message',
   CHAT_CONVERSATION_MEMORY: 'chat_conversation_memory',
   CHAT_SESSION_RESUME_SNAPSHOT: 'chat_session_resume_snapshot',
-  FILE_REVIEW: 'file_review',
-  FILE_REVIEW_CHANGE: 'file_review_change',
-  COMMIT_ATTEMPT: 'commit_attempt',
+  DOCX_APPLY: 'docx_apply',
   LLM_CONFIG: 'llm_config',
   AI_RUNTIME_SETTINGS: 'ai_runtime_settings'
 } as const
@@ -320,66 +318,29 @@ export class LanceDbCore {
         ])
       },
       {
-        name: LANCE_TABLES.FILE_REVIEW,
+        name: LANCE_TABLES.DOCX_APPLY,
         schema: new arrow.Schema([
           new arrow.Field('id', new arrow.Utf8()),
           new arrow.Field('session_id', new arrow.Utf8()),
           new arrow.Field('run_id', new arrow.Utf8()),
           new arrow.Field('status', new arrow.Utf8()),
-          new arrow.Field('title', new arrow.Utf8()),
-          new arrow.Field('source_document_id', new arrow.Utf8(), true),
           new arrow.Field('source_path', new arrow.Utf8()),
           new arrow.Field('source_name', new arrow.Utf8()),
-          new arrow.Field('output_operation', new arrow.Utf8()),
-          new arrow.Field('format', new arrow.Utf8()),
-          new arrow.Field('review_render_kind', new arrow.Utf8(), true),
-          new arrow.Field('latest_draft_snapshot_id', new arrow.Utf8()),
-          new arrow.Field('draft_artifact_path', new arrow.Utf8(), true),
-          new arrow.Field('working_artifact_path', new arrow.Utf8(), true),
-          new arrow.Field('committed_artifact_path', new arrow.Utf8(), true),
-          new arrow.Field('source_version_json', new arrow.Utf8()),
+          new arrow.Field('operation', new arrow.Utf8()),
+          new arrow.Field('final_revision_ref', new arrow.Utf8()),
           new arrow.Field('change_count', new arrow.Int32()),
-          new arrow.Field('pending_change_count', new arrow.Int32()),
-          new arrow.Field('accepted_change_count', new arrow.Int32()),
-          new arrow.Field('rejected_change_count', new arrow.Int32()),
+          new arrow.Field('before_exists', new arrow.Bool()),
+          new arrow.Field('before_snapshot_path', new arrow.Utf8(), true),
+          new arrow.Field('before_checksum', new arrow.Utf8(), true),
+          new arrow.Field('before_byte_size', new arrow.Int64(), true),
+          new arrow.Field('before_modified_at', new arrow.Int64(), true),
+          new arrow.Field('after_checksum', new arrow.Utf8(), true),
+          new arrow.Field('after_byte_size', new arrow.Int64(), true),
+          new arrow.Field('after_modified_at', new arrow.Int64(), true),
           new arrow.Field('created_at', new arrow.Int64()),
           new arrow.Field('updated_at', new arrow.Int64()),
-          new arrow.Field('completed_at', new arrow.Int64(), true),
-          new arrow.Field('committed_at', new arrow.Int64(), true),
+          new arrow.Field('reverted_at', new arrow.Int64(), true),
           new arrow.Field('last_error', new arrow.Utf8(), true)
-        ])
-      },
-      {
-        name: LANCE_TABLES.FILE_REVIEW_CHANGE,
-        schema: new arrow.Schema([
-          new arrow.Field('id', new arrow.Utf8()),
-          new arrow.Field('review_id', new arrow.Utf8()),
-          new arrow.Field('order_index', new arrow.Int32()),
-          new arrow.Field('change_kind', new arrow.Utf8()),
-          new arrow.Field('title', new arrow.Utf8()),
-          new arrow.Field('summary', new arrow.Utf8()),
-          new arrow.Field('decision', new arrow.Utf8()),
-          new arrow.Field('before_text', new arrow.Utf8(), true),
-          new arrow.Field('after_text', new arrow.Utf8(), true),
-          new arrow.Field('anchor_name', new arrow.Utf8(), true),
-          new arrow.Field('locator_json', new arrow.Utf8(), true),
-          new arrow.Field('diff_hunks_json', new arrow.Utf8(), true),
-          new arrow.Field('source_step_ref', new arrow.Utf8(), true),
-          new arrow.Field('metadata_json', new arrow.Utf8(), true),
-          new arrow.Field('created_at', new arrow.Int64()),
-          new arrow.Field('updated_at', new arrow.Int64())
-        ])
-      },
-      {
-        name: LANCE_TABLES.COMMIT_ATTEMPT,
-        schema: new arrow.Schema([
-          new arrow.Field('id', new arrow.Utf8()),
-          new arrow.Field('review_id', new arrow.Utf8()),
-          new arrow.Field('status', new arrow.Utf8()),
-          new arrow.Field('results_json', new arrow.Utf8()),
-          new arrow.Field('started_at', new arrow.Int64()),
-          new arrow.Field('completed_at', new arrow.Int64(), true),
-          new arrow.Field('error', new arrow.Utf8(), true)
         ])
       },
       {

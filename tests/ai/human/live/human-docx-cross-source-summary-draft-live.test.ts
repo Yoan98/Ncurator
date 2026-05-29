@@ -16,8 +16,8 @@ import {
   collectDocxApplyOpsContentKinds,
   collectStartedDocxEditSourcePaths,
   filterAiRunEventsByType,
-  hasDraftFileArtifact,
-  hasFileReviewArtifact,
+  hasDocxApplyArtifact,
+  hasDocxFileArtifact,
   isDocxEditCreateInput,
   isDocxEditWriteInput,
   runWithStructuredOutputRetry
@@ -141,11 +141,13 @@ describe('ai human live backend', () => {
               toolNames.some((toolName) => toolName === 'docx_search' || toolName === 'docx_read_blocks') &&
               toolNames.includes('docx_edit') &&
               targetDocWritten &&
-              filterAiRunEventsByType(events, 'draft_review_ready').length >= 1 &&
-              hasFileReviewArtifact(result.output?.artifacts) &&
-              hasDraftFileArtifact(result.output?.artifacts) &&
+              filterAiRunEventsByType(events, 'file_artifact').some(
+                (event) => event.capability === 'docx' && Boolean(event.applyId)
+              ) &&
+              hasDocxApplyArtifact(result.output?.artifacts) &&
+              hasDocxFileArtifact(result.output?.artifacts) &&
               unchangedFixtures.every(Boolean) &&
-              targetExistsInWorkspace === false &&
+              targetExistsInWorkspace === true &&
               /(过拟合|过度拟合)/.test(deliveryText) &&
               /反走样/.test(deliveryText) &&
               /总结|报告/.test(deliveryText),
