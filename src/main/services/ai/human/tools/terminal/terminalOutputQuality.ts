@@ -20,7 +20,7 @@ export type TerminalOutputQualityReport = {
 }
 
 const MIN_RATIO_CHECK_CHARS = 100
-const UNUSABLE_RATIO_THRESHOLD = 0.3
+const UNUSABLE_RATIO_THRESHOLD = 0.15
 
 const countMatches = (value: string, pattern: RegExp): number =>
   Array.from(value.matchAll(pattern)).length

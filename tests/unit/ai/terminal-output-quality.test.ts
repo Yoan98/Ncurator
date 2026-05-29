@@ -19,14 +19,14 @@ describe('ai unit terminal output quality', () => {
   })
 
   it('uses ratio thresholds for replacement and C0 control characters', () => {
-    const replacementReport = inspectTerminalOutputQuality(`${'�'.repeat(35)}${'a'.repeat(65)}`, '')
-    const controlReport = inspectTerminalOutputQuality(`${'\u0001'.repeat(30)}${'b'.repeat(70)}`, '')
+    const replacementReport = inspectTerminalOutputQuality(`${'�'.repeat(15)}${'a'.repeat(85)}`, '')
+    const controlReport = inspectTerminalOutputQuality(`${'\u0001'.repeat(15)}${'b'.repeat(85)}`, '')
 
     expect(replacementReport.unusable).toBe(true)
-    expect(replacementReport.replacementCharRatio).toBe(0.35)
+    expect(replacementReport.replacementCharRatio).toBe(0.15)
     expect(replacementReport.matchedSignatures).toContain('REPLACEMENT_CHAR_RATIO')
     expect(controlReport.unusable).toBe(true)
-    expect(controlReport.controlCharRatio).toBe(0.3)
+    expect(controlReport.controlCharRatio).toBe(0.15)
     expect(controlReport.matchedSignatures).toContain('CONTROL_CHAR_RATIO')
   })
 })
