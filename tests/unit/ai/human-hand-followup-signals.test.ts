@@ -80,7 +80,7 @@ describe('ai unit hand followup signals', () => {
         sourcePath: 'graphics.docx',
         action: 'insert_blocks',
         error: 'cannot resolve anchorBlockId=b:26 in current active snapshot',
-        diagnostic: 'cannot resolve anchorBlockId=b:26 in current active snapshot'
+        diagnostic: undefined
       }
     })
     expect(signals.deliveryGuidance).toBeUndefined()

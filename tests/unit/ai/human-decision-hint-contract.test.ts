@@ -155,4 +155,20 @@ describe('ai unit human decision hint contract', () => {
       expect(detail).toEqual(fixture.detail)
     }
   )
+
+  it('does not repeat identical docx edit error and diagnostic text', () => {
+    const rendered = renderDecisionHintForBrain({
+      code: 'hand_docx_edit_failed',
+      detail: {
+        toolName: 'docx_edit',
+        sourcePath: 'report.docx',
+        action: 'create_document',
+        error: 'docx_edit(create_document) will not overwrite an existing file: report.docx',
+        diagnostic: 'docx_edit(create_document) will not overwrite an existing file: report.docx'
+      }
+    })
+
+    expect(rendered).toContain('错误：docx_edit(create_document) will not overwrite an existing file: report.docx。')
+    expect(rendered).not.toContain('诊断：docx_edit(create_document) will not overwrite an existing file: report.docx。')
+  })
 })

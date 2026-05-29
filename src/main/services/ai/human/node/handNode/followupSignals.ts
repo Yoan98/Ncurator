@@ -42,12 +42,15 @@ const readDocxEditFailureHint = (input: {
   if (input.result.toolName !== 'docx_edit' || input.result.ok) return undefined
   const args = input.call?.args
   const data = input.result.data
+  const dataError = data && typeof data === 'object' && !Array.isArray(data)
+    ? asString((data as JsonObject).error)
+    : undefined
+  const diagnosticMessage = asString(input.result.diagnostic?.message)
   const error =
-    asString(input.result.diagnostic?.message)
-    || (data && typeof data === 'object' && !Array.isArray(data)
-      ? asString((data as JsonObject).error)
-      : undefined)
+    dataError
+    || diagnosticMessage
     || 'docx_edit failed'
+  const diagnostic = diagnosticMessage && diagnosticMessage !== error ? diagnosticMessage : undefined
   if (isDocxPositionedLayoutProtectionMessage(error)) {
     return {
       code: 'hand_docx_positioned_write_blocked',
@@ -56,7 +59,7 @@ const readDocxEditFailureHint = (input: {
 	        sourcePath: asString(args?.sourcePath),
 	        action: readDocxEditActionTypes(args),
 	        targetDescription: readDocxEditTargetDescription(args),
-	        diagnostic: asString(input.result.diagnostic?.message) || error
+	        diagnostic: diagnostic || error
 	      }
     }
   }
@@ -67,7 +70,7 @@ const readDocxEditFailureHint = (input: {
 	      sourcePath: asString(args?.sourcePath),
 	      action: readDocxEditActionTypes(args),
 	      error,
-      diagnostic: asString(input.result.diagnostic?.message)
+      diagnostic
     }
   }
 }

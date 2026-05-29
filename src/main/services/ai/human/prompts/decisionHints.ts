@@ -39,7 +39,9 @@ export const renderDecisionHintForBrain = (hint: HumanDecisionHint): string => {
         hint.detail.sourcePath ? `文件：${hint.detail.sourcePath}。` : undefined,
         hint.detail.action ? `actions：${hint.detail.action}。` : undefined,
         `错误：${hint.detail.error}。`,
-        hint.detail.diagnostic ? `诊断：${hint.detail.diagnostic}。` : undefined
+        hint.detail.diagnostic && hint.detail.diagnostic !== hint.detail.error
+          ? `诊断：${hint.detail.diagnostic}。`
+          : undefined
       ]
         .filter(Boolean)
         .join('\n')
