@@ -240,10 +240,11 @@ type DocxOp =
 ### 规则说明
 
 - `docx_edit` 通过 `actions[]` 区分写入语义，当前支持 `create_document`、`insert_blocks`、`replace_block`、`replace_text`、`style_text`、`update_table_cell`、`delete_blocks`。
-- 每次 `docx_edit` 对同一文件的一组 `actions[]` 作为一次批量写入处理；`create_document` 必须作为唯一 action，后续图片、批注、脚注、编号、页眉页脚等能力应通过新增 action 或 block 类型扩展。
+- 每次 `docx_edit` 对同一文件的一组 `actions[]` 作为一次串行编辑脚本执行：tool 开始时先把所有输入 blockId 绑定到稳定 replay locator，执行时按 action 顺序把 locator 解析为当前 worker 可用的 live blockId，全部 action 成功后才注册一次外部 revision。
+- `create_document` 必须作为唯一 action；后续图片、批注、脚注、编号、页眉页脚等能力应通过新增 action 或 block 类型扩展。
 - `docx_outline`、`docx_search`、`docx_read_blocks` 都应面向“当前最新文档”工作，而不是固定回看 source。
-- 写工具结果继续保留 `postWriteReadback.regions` 这类写后复核信息，供上层判断是否继续编辑或额外读取。
-- 每次 `docx_edit` 开始时必须以当前 `activeSnapshot / activeDocId / activeRevisionRef` 为整批 `actions[]` 的共同基准解析输入 blockId；输入 id 不在当前 snapshot、已删除或无法唯一绑定到可见 replay node 时直接失败，不猜测目标。
+- 写工具结果继续保留 `postWriteReadback.regions` 这类写后复核信息，且该回读只基于全部 action 完成后的最终文档状态生成，供上层判断是否继续编辑或额外读取。
+- 每次 `docx_edit` 开始时必须以当前 `activeSnapshot / activeDocId / activeRevisionRef` 绑定整组输入 blockId；输入 id 不在当前 snapshot、已删除或无法唯一绑定到可见 replay node 时直接失败，不猜测目标；不支持在同一次 `actions[]` 内引用本次刚创建且尚未回读的新 blockId。
 - `insert_blocks` 插入多条 block 时必须作为一次结构 op 执行，并按输入 `blocks` 顺序落入文档。
 - 复杂定位排版 block 属于 read-only 区域，写入失败应走 `hand_docx_positioned_write_blocked`，由 brain/mouth 改为人工修改建议或独立补充稿。
 

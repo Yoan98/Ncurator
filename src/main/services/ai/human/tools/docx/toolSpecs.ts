@@ -88,26 +88,28 @@ const DOCX_EDIT_CREATE_DOCUMENT_EXAMPLE: JsonObject = {
 }
 const DOCX_EDIT_INSERT_BLOCKS_EXAMPLE: JsonObject = {
   sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
-  actions: [{
-    type: 'insert_blocks',
-    position: 'after',
-    anchorBlockId: 'b:26',
-    blocks: [
-      {
-        type: 'paragraph',
-        text: '补充说明：反走样通过平滑边缘像素来减轻锯齿感。'
-      },
-      {
-        type: 'table',
-        rows: [
-          ['概念', '说明'],
-          ['反走样', '降低边缘锯齿']
-        ]
-      }
-    ]
-  }]
+  actions: [
+    {
+      type: 'insert_blocks',
+      position: 'after',
+      anchorBlockId: 'b:26',
+      blocks: [
+        {
+          type: 'paragraph',
+          text: '补充说明：反走样通过平滑边缘像素来减轻锯齿感。'
+        },
+        {
+          type: 'table',
+          rows: [
+            ['概念', '说明'],
+            ['反走样', '降低边缘锯齿']
+          ]
+        }
+      ]
+    }
+  ]
 }
-const DOCX_EDIT_BATCH_EXAMPLE: JsonObject = {
+const DOCX_EDIT_SERIAL_EXAMPLE: JsonObject = {
   sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
   actions: [
     {
@@ -129,51 +131,61 @@ const DOCX_EDIT_BATCH_EXAMPLE: JsonObject = {
 }
 const DOCX_EDIT_REPLACE_BLOCK_EXAMPLE: JsonObject = {
   sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
-  actions: [{
-    type: 'replace_block',
-    blockId: 'b:12',
-    block: {
-      type: 'heading',
-      level: 2,
-      text: '反走样的常见处理方式'
+  actions: [
+    {
+      type: 'replace_block',
+      blockId: 'b:12',
+      block: {
+        type: 'heading',
+        level: 2,
+        text: '反走样的常见处理方式'
+      }
     }
-  }]
+  ]
 }
 const DOCX_EDIT_REPLACE_TEXT_EXAMPLE: JsonObject = {
   sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
-  actions: [{
-    type: 'replace_text',
-    blockIds: ['b:26'],
-    query: '过拟合',
-    replace: '模型过拟合'
-  }]
+  actions: [
+    {
+      type: 'replace_text',
+      blockIds: ['b:26'],
+      query: '过拟合',
+      replace: '模型过拟合'
+    }
+  ]
 }
 const DOCX_EDIT_STYLE_TEXT_EXAMPLE: JsonObject = {
   sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
-  actions: [{
-    type: 'style_text',
-    blockId: 'b:26',
-    query: '反走样',
-    style: {
-      bold: true,
-      color: '2563EB'
+  actions: [
+    {
+      type: 'style_text',
+      blockId: 'b:26',
+      query: '反走样',
+      style: {
+        bold: true,
+        color: '2563EB'
+      }
     }
-  }]
+  ]
 }
 const DOCX_EDIT_UPDATE_TABLE_CELL_EXAMPLE: JsonObject = {
   sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
-  actions: [{
-    type: 'update_table_cell',
-    cellBlockId: 'tbl:3.r:2.c:1',
-    text: '平滑边缘，降低锯齿'
-  }]
+  actions: [
+    {
+      type: 'update_table_cell',
+      cellBlockId: 'tbl:3.r:2.c:1',
+      text: '平滑边缘，降低锯齿'
+    }
+  ]
 }
 const DOCX_EDIT_DELETE_BLOCKS_EXAMPLE: JsonObject = {
   sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
-  actions: [{
-    type: 'delete_blocks',
-    blockIds: ['b:31', 'b:32']
-  }]
+  actions: [
+    {
+      type: 'delete_blocks',
+      blockIds: ['b:31', 'b:32']
+    }
+  ]
 }
 
 export const DOCX_OUTLINE_TOOL_SPEC = {
@@ -317,7 +329,7 @@ export const DOCX_EDIT_TOOL_SPEC = {
   promptSpec: {
     name: 'docx_edit',
     description: [
-      '能力：创建或批量修改 docx 内容。一次 docx_edit 调用接收 actions 数组，并作为同一文件的一次批量写入处理。',
+      '能力：创建或修改 docx 内容。一次 docx_edit 调用接收 actions 数组，并严格按数组顺序串行执行；全部 action 成功后才形成一次写入结果。',
       'action type=create_document：新建 docx，并可一次写入 heading、paragraph、table；必须作为唯一 action。',
       'action type=insert_blocks：在真实 anchorBlockId 前/后插入多个 block，按输入 blocks 顺序写入。',
       'action type=replace_block：把一个完整 block 替换成新的 heading、paragraph 或 table。',
@@ -325,8 +337,8 @@ export const DOCX_EDIT_TOOL_SPEC = {
       'action type=style_text：给指定 block 内命中的文本设置加粗、斜体、下划线、颜色等样式。',
       'action type=update_table_cell：替换指定表格单元格的文本。',
       'action type=delete_blocks：删除一个或多个完整 block。',
-      '结果：返回写入后的编辑状态，以及相邻区域的详细回读信息。继续编辑时优先使用 postWriteReadback 里的真实 blockId。',
-      '边界：所有 blockId、anchorBlockId、cellBlockId、blockIds 必须来自 docx_outline、docx_search、docx_read_blocks 或 postWriteReadback 返回的真实结果，禁止推算新 blockId；'
+      '结果：返回写入后的编辑状态，以及所有 action 完成后的相邻区域详细回读信息。继续编辑时优先使用 postWriteReadback 里的真实 blockId。',
+      '边界：所有 blockId、anchorBlockId、cellBlockId、blockIds 必须来自 docx_outline、docx_search、docx_read_blocks 或 postWriteReadback 返回的真实结果，禁止推算新 blockId；禁止在同一次 actions 内引用本次刚创建、尚未回读的新 blockId。'
     ].join('\n'),
     whenToUse: '适用于需要创建或修改 docx 内容的任务。',
     examples: [
@@ -339,8 +351,8 @@ export const DOCX_EDIT_TOOL_SPEC = {
         args: DOCX_EDIT_INSERT_BLOCKS_EXAMPLE
       },
       {
-        goal: '一次批量完成多个独立修改',
-        args: DOCX_EDIT_BATCH_EXAMPLE
+        goal: '按顺序连续完成多个修改',
+        args: DOCX_EDIT_SERIAL_EXAMPLE
       },
       {
         goal: '把一个已读到的完整段落替换为标题',

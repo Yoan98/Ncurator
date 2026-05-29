@@ -12,7 +12,8 @@ import type {
   DocxOutlineBlock,
   DocxParagraphSpec,
   DocxTableSpec,
-  DocxPostWriteReadback
+  DocxPostWriteReadback,
+  DocxStableLocator
 } from '../types'
 import type { DocxToolRuntime } from '../runtime'
 import { DOCX_POST_WRITE_READBACK_WINDOW_POLICY } from '../writeReadbackPolicy'
@@ -110,36 +111,6 @@ const fetchDetailedBlock = async (
 const buildPositionedReadOnlyMessage = (): string => DOCX_POSITIONED_LAYOUT_PROTECTION_MESSAGE
 
 const buildCreateSummary = (sourcePath: string): string => `已建立新的 docx 草稿会话：${sourcePath}`
-
-const resolveCurrentSnapshotBlockIds = (input: {
-  runtime: DocxToolRuntime
-  toolName: string
-  toolCallId: string
-  sourcePath: string
-  field: 'blockId' | 'anchorBlockId' | 'cellBlockId' | 'blockIds'
-  blockIds: string[]
-  allowDeleted?: boolean
-}): string[] | DocxToolFailure => {
-  const resolved = input.runtime.resolveCurrentBlockIdsFromSnapshot({
-    sourcePath: input.sourcePath,
-    field: input.field,
-    blockIds: input.blockIds,
-    allowDeleted: input.allowDeleted
-  })
-  if (!resolved.ok) {
-    return input.runtime.emitFailure({
-      toolName: input.toolName,
-      toolCallId: input.toolCallId,
-      reason: 'invalid_input',
-      error: resolved.error,
-      resourceContext: input.runtime.buildResourceContext({
-        sourcePath: input.sourcePath,
-        effectKind: 'mutated'
-      })
-    })
-  }
-  return resolved.blockIds
-}
 
 const getOutlineBlockIndex = (blocks: readonly DocxOutlineBlock[], blockId: string): number =>
   blocks.findIndex((block) => block.blockId === blockId)
@@ -430,179 +401,13 @@ const failIfAnyPositionedBlocks = async (input: {
   return null
 }
 
-type SimulatedBodySlot =
-  | {
-      type: 'existing'
-      blockId: string
-    }
-  | {
-      type: 'created'
-      opIndex: number
-      contentIndex: number
-    }
-
-const isStructuralOp = (
-  op: DocxOp
-): op is Extract<
-  DocxOp,
-  { type: 'insert_after' | 'insert_before' | 'replace_block' | 'delete_block' | 'update_table_cell' }
-> =>
-  op.type === 'insert_after' ||
-  op.type === 'insert_before' ||
-  op.type === 'replace_block' ||
-  op.type === 'delete_block' ||
-  op.type === 'update_table_cell'
-
 const bodyBlocksOnly = (blocks: readonly DocxOutlineBlock[]): DocxOutlineBlock[] =>
   blocks.filter((block) => block.type !== 'table_cell')
-
-const structuralOpTargetRank = (
-  rankByBlockId: ReadonlyMap<string, number>,
-  op: Extract<
-    DocxOp,
-    { type: 'insert_after' | 'insert_before' | 'replace_block' | 'delete_block' | 'update_table_cell' }
-  >
-): number => {
-  const blockId = op.type === 'insert_after' || op.type === 'insert_before' ? op.anchorBlockId : op.blockId
-  return rankByBlockId.get(blockId) ?? -1
-}
-
-const orderedOpsForWorkerStructuralSegments = (
-  ops: readonly DocxOp[],
-  rankByBlockId: ReadonlyMap<string, number>
-): Array<{ op: DocxOp; opIndex: number }> => {
-  const ordered: Array<{ op: DocxOp; opIndex: number }> = []
-  let segment: Array<{
-    op: Extract<
-      DocxOp,
-      { type: 'insert_after' | 'insert_before' | 'replace_block' | 'delete_block' | 'update_table_cell' }
-    >
-    opIndex: number
-  }> = []
-
-  const flushStructuralSegment = () => {
-    if (segment.length === 0) return
-    segment
-      .slice()
-      .sort((left, right) => {
-        const leftRank = structuralOpTargetRank(rankByBlockId, left.op)
-        const rightRank = structuralOpTargetRank(rankByBlockId, right.op)
-        if (leftRank !== rightRank) return rightRank - leftRank
-        return left.opIndex - right.opIndex
-      })
-      .forEach((entry) => ordered.push(entry))
-    segment = []
-  }
-
-  ops.forEach((op, opIndex) => {
-    if (isStructuralOp(op)) {
-      segment.push({ op, opIndex })
-      return
-    }
-    flushStructuralSegment()
-    ordered.push({ op, opIndex })
-  })
-  flushStructuralSegment()
-  return ordered
-}
-
-const applySequenceChangingOp = (
-  slots: SimulatedBodySlot[],
-  entry: { op: DocxOp; opIndex: number }
-): void => {
-  const { op, opIndex } = entry
-  if (op.type === 'insert_before' || op.type === 'insert_after') {
-    const anchorIndex = slots.findIndex((slot) => slot.type === 'existing' && slot.blockId === op.anchorBlockId)
-    if (anchorIndex < 0) return
-    const createdSlots: SimulatedBodySlot[] = op.content.map((_, contentIndex) => ({
-      type: 'created',
-      opIndex,
-      contentIndex
-    }))
-    slots.splice(op.type === 'insert_before' ? anchorIndex : anchorIndex + 1, 0, ...createdSlots)
-    return
-  }
-
-  if (op.type === 'delete_block') {
-    const targetIndex = slots.findIndex((slot) => slot.type === 'existing' && slot.blockId === op.blockId)
-    if (targetIndex >= 0) slots.splice(targetIndex, 1)
-  }
-}
-
-const resolveCreatedBlocksForBatch = async (input: {
-  runtime: DocxToolRuntime
-  previousDocId: string
-  nextDocId: string
-  ops: DocxOp[]
-  createdBlockOps: boolean[]
-}): Promise<DocxCreatedBlock[][]> => {
-  const createdBlocksByOp = input.ops.map((): DocxCreatedBlock[] => [])
-  if (!input.createdBlockOps.some(Boolean)) return createdBlocksByOp
-
-  const beforeBlocks = await fetchOutlineBlocks(input.runtime, input.previousDocId)
-  const afterBlocks = await fetchOutlineBlocks(input.runtime, input.nextDocId)
-  const beforeBodyBlocks = bodyBlocksOnly(beforeBlocks)
-  const afterBodyBlocks = bodyBlocksOnly(afterBlocks)
-  const rankByBlockId = new Map(beforeBodyBlocks.map((block, index) => [block.blockId, index] as const))
-  const slots: SimulatedBodySlot[] = beforeBodyBlocks.map((block) => ({
-    type: 'existing',
-    blockId: block.blockId
-  }))
-
-  for (const entry of orderedOpsForWorkerStructuralSegments(input.ops, rankByBlockId)) {
-    applySequenceChangingOp(slots, entry)
-  }
-
-  const createdBodyBlockIdsByOp = new Map<number, Set<string>>()
-  slots.forEach((slot, index) => {
-    if (slot.type !== 'created') return
-    const afterBlock = afterBodyBlocks[index]
-    if (!afterBlock || !input.createdBlockOps[slot.opIndex]) return
-    const blockIds = createdBodyBlockIdsByOp.get(slot.opIndex) || new Set<string>()
-    blockIds.add(afterBlock.blockId)
-    createdBodyBlockIdsByOp.set(slot.opIndex, blockIds)
-  })
-
-  for (const [opIndex, bodyBlockIds] of createdBodyBlockIdsByOp) {
-    createdBlocksByOp[opIndex] = afterBlocks
-      .filter((block) => {
-        if (bodyBlockIds.has(block.blockId)) return true
-        return block.type === 'table_cell' && bodyBlockIds.has(block.tableBlockId)
-      })
-      .map((block) => ({
-        blockId: block.blockId,
-        type: block.type
-      }))
-  }
-
-  return createdBlocksByOp
-}
 
 type BatchReadbackTarget = {
   action: keyof typeof DOCX_POST_WRITE_READBACK_WINDOW_POLICY
   targetBlockIds: string[]
 }
-
-type CompiledBatchEdit = {
-  ops: DocxOp[]
-  readbackTargets: BatchReadbackTarget[]
-  createdBlockOps: boolean[]
-  summary: string
-}
-
-type ApplyBatchEditResult =
-  | {
-      failure: DocxToolFailure
-    }
-  | {
-      previousRevisionRef: string
-      currentRevisionRef: string
-      changedBlocks: DocxChangedBlock[]
-      warnings: string[]
-      nextDocId: string
-      createdBlocks: DocxCreatedBlock[]
-      createdBlocksByOp: DocxCreatedBlock[][]
-    }
 
 type WriteToolResult = {
   sourcePath: string
@@ -620,67 +425,89 @@ const actionLabel = (action: DocxEditAction): string => {
   return action.type
 }
 
-const validateBatchConflicts = (input: {
+type StableTargetField = 'blockId' | 'anchorBlockId' | 'cellBlockId' | 'blockIds'
+
+type SerialActionTarget = {
+  field: StableTargetField
+  stableLocators: DocxStableLocator[]
+}
+
+type CompiledSerialAction = {
+  action: DocxEditAction
+  targets: SerialActionTarget[]
+}
+
+type CompiledSerialEdit = {
+  actions: CompiledSerialAction[]
+  summary: string
+}
+
+type SerialActionOpRecord = {
+  op: DocxOp
+  beforeDocId: string
+  nextDocId: string
+  createdBlocks: DocxCreatedBlock[]
+}
+
+type ApplySerialEditResult =
+  | {
+      failure: DocxToolFailure
+    }
+  | {
+      previousRevisionRef: string
+      currentRevisionRef: string
+      changedBlocks: DocxChangedBlock[]
+      warnings: string[]
+      nextDocId: string
+      createdBlocks: DocxCreatedBlock[]
+      readbackTargets: BatchReadbackTarget[]
+    }
+
+const isDocxToolFailure = (
+  value: SerialActionTarget | DocxToolFailure
+): value is DocxToolFailure => 'ok' in value && value.ok === false
+
+const bindStableTarget = (input: {
   runtime: DocxToolRuntime
   toolName: string
   toolCallId: string
   sourcePath: string
-  structuralTargetKeys: string[]
-  deletedBlockIds: string[]
-  mutatedBlockIds: string[]
-}): DocxToolFailure | null => {
-  const seenTargets = new Set<string>()
-  for (const key of input.structuralTargetKeys) {
-    if (seenTargets.has(key)) {
-      return input.runtime.emitFailure({
-        toolName: input.toolName,
-        toolCallId: input.toolCallId,
-        reason: 'invalid_input',
-        error: `docx_edit batch has conflicting actions for the same target: ${key}`,
-        resourceContext: input.runtime.buildResourceContext({
-          sourcePath: input.sourcePath,
-          effectKind: 'mutated'
-        })
-      })
-    }
-    seenTargets.add(key)
-  }
-
-  const deleted = new Set(input.deletedBlockIds)
-  const conflictingMutation = input.mutatedBlockIds.find((blockId) => deleted.has(blockId))
-  if (conflictingMutation) {
+  field: StableTargetField
+  blockIds: string[]
+}): SerialActionTarget | DocxToolFailure => {
+  const resolved = input.runtime.resolveCurrentStableLocatorsFromSnapshot({
+    sourcePath: input.sourcePath,
+    field: input.field,
+    blockIds: input.blockIds
+  })
+  if (!resolved.ok) {
     return input.runtime.emitFailure({
       toolName: input.toolName,
       toolCallId: input.toolCallId,
       reason: 'invalid_input',
-      error: `docx_edit batch cannot delete and modify the same block: ${conflictingMutation}`,
+      error: resolved.error,
       resourceContext: input.runtime.buildResourceContext({
         sourcePath: input.sourcePath,
         effectKind: 'mutated'
       })
     })
   }
-  return null
+  return {
+    field: input.field,
+    stableLocators: resolved.stableLocators
+  }
 }
 
-const compileBatchEditActions = async (input: {
+const compileSerialEditActions = (input: {
   runtime: DocxToolRuntime
   toolName: string
   toolCallId: string
   sourcePath: string
-  docId: string
-  currentRevisionRef: string
   actions: DocxEditAction[]
-}): Promise<CompiledBatchEdit | { failure: DocxToolFailure }> => {
-  const ops: DocxOp[] = []
-  const readbackTargets: BatchReadbackTarget[] = []
-  const createdBlockOps: boolean[] = []
-  const positionedCheckBlockIds: string[] = []
-  const structuralTargetKeys: string[] = []
-  const deletedBlockIds: string[] = []
-  const mutatedBlockIds: string[] = []
+}): CompiledSerialEdit | { failure: DocxToolFailure } => {
+  const actions: CompiledSerialAction[] = []
 
-  for (const action of input.actions) {
+  for (const [actionIndex, action] of input.actions.entries()) {
     if (action.type === 'create_document') {
       return {
         failure: input.runtime.emitFailure({
@@ -696,8 +523,9 @@ const compileBatchEditActions = async (input: {
       }
     }
 
+    const targets: SerialActionTarget[] = []
     if (action.type === 'insert_blocks') {
-      const resolvedAnchor = resolveCurrentSnapshotBlockIds({
+      const target = bindStableTarget({
         runtime: input.runtime,
         toolName: input.toolName,
         toolCallId: input.toolCallId,
@@ -705,26 +533,14 @@ const compileBatchEditActions = async (input: {
         field: 'anchorBlockId',
         blockIds: [action.anchorBlockId]
       })
-      if (!Array.isArray(resolvedAnchor)) return { failure: resolvedAnchor }
-      const anchorBlockId = resolvedAnchor[0]
-      positionedCheckBlockIds.push(anchorBlockId)
-      structuralTargetKeys.push(`insert:${action.position}:${anchorBlockId}`)
-      const op: DocxOp = {
-        type: action.position === 'before' ? 'insert_before' : 'insert_after',
-        anchorBlockId,
-        content: action.blocks.map((block) => blockSpecFromCreateBlock(block))
-      }
-      ops.push(op)
-      createdBlockOps.push(true)
-      readbackTargets.push({
-        action: op.type,
-        targetBlockIds: [anchorBlockId]
-      })
+      if (isDocxToolFailure(target)) return { failure: target }
+      targets.push(target)
+      actions.push({ action, targets })
       continue
     }
 
     if (action.type === 'replace_block') {
-      const resolvedBlockIds = resolveCurrentSnapshotBlockIds({
+      const target = bindStableTarget({
         runtime: input.runtime,
         toolName: input.toolName,
         toolCallId: input.toolCallId,
@@ -732,61 +548,31 @@ const compileBatchEditActions = async (input: {
         field: 'blockId',
         blockIds: [action.blockId]
       })
-      if (!Array.isArray(resolvedBlockIds)) return { failure: resolvedBlockIds }
-      const blockId = resolvedBlockIds[0]
-      positionedCheckBlockIds.push(blockId)
-      structuralTargetKeys.push(`replace:${blockId}`)
-      mutatedBlockIds.push(blockId)
-      ops.push({
-        type: 'replace_block',
-        blockId,
-        content: blockSpecFromCreateBlock(action.block)
-      })
-      createdBlockOps.push(false)
-      readbackTargets.push({
-        action: 'replace_block',
-        targetBlockIds: [blockId]
-      })
+      if (isDocxToolFailure(target)) return { failure: target }
+      targets.push(target)
+      actions.push({ action, targets })
       continue
     }
 
     if (action.type === 'replace_text') {
-      const blockIds = action.blockIds
-        ? resolveCurrentSnapshotBlockIds({
-            runtime: input.runtime,
-            toolName: input.toolName,
-            toolCallId: input.toolCallId,
-            sourcePath: input.sourcePath,
-            field: 'blockIds',
-            blockIds: action.blockIds
-          })
-        : undefined
-      if (blockIds && !Array.isArray(blockIds)) return { failure: blockIds }
-      const targetBlockIds = await resolveReplaceTextTargetBlockIds({
-        runtime: input.runtime,
-        docId: input.docId,
-        query: action.query,
-        blockIds
-      })
-      positionedCheckBlockIds.push(...targetBlockIds)
-      mutatedBlockIds.push(...targetBlockIds)
-      ops.push({
-        type: 'replace_text',
-        query: action.query,
-        replace: action.replace,
-        replaceAll: true,
-        blockIds
-      })
-      createdBlockOps.push(false)
-      readbackTargets.push({
-        action: 'replace_text',
-        targetBlockIds
-      })
+      if (action.blockIds) {
+        const target = bindStableTarget({
+          runtime: input.runtime,
+          toolName: input.toolName,
+          toolCallId: input.toolCallId,
+          sourcePath: input.sourcePath,
+          field: 'blockIds',
+          blockIds: action.blockIds
+        })
+        if (isDocxToolFailure(target)) return { failure: target }
+        targets.push(target)
+      }
+      actions.push({ action, targets })
       continue
     }
 
     if (action.type === 'style_text') {
-      const resolvedBlockIds = resolveCurrentSnapshotBlockIds({
+      const target = bindStableTarget({
         runtime: input.runtime,
         toolName: input.toolName,
         toolCallId: input.toolCallId,
@@ -794,26 +580,14 @@ const compileBatchEditActions = async (input: {
         field: 'blockId',
         blockIds: [action.blockId]
       })
-      if (!Array.isArray(resolvedBlockIds)) return { failure: resolvedBlockIds }
-      const blockId = resolvedBlockIds[0]
-      positionedCheckBlockIds.push(blockId)
-      mutatedBlockIds.push(blockId)
-      ops.push({
-        type: 'style_text',
-        blockId,
-        query: action.query,
-        style: action.style
-      })
-      createdBlockOps.push(false)
-      readbackTargets.push({
-        action: 'style_text',
-        targetBlockIds: [blockId]
-      })
+      if (isDocxToolFailure(target)) return { failure: target }
+      targets.push(target)
+      actions.push({ action, targets })
       continue
     }
 
     if (action.type === 'update_table_cell') {
-      const resolvedCellIds = resolveCurrentSnapshotBlockIds({
+      const target = bindStableTarget({
         runtime: input.runtime,
         toolName: input.toolName,
         toolCallId: input.toolCallId,
@@ -821,160 +595,513 @@ const compileBatchEditActions = async (input: {
         field: 'cellBlockId',
         blockIds: [action.cellBlockId]
       })
-      if (!Array.isArray(resolvedCellIds)) return { failure: resolvedCellIds }
-      const cellBlockId = resolvedCellIds[0]
-      positionedCheckBlockIds.push(cellBlockId)
-      structuralTargetKeys.push(`update_table_cell:${cellBlockId}`)
-      mutatedBlockIds.push(cellBlockId)
-      ops.push({
-        type: 'update_table_cell',
-        blockId: cellBlockId,
-        content: [paragraphSpecFromText(action.text)]
-      })
-      createdBlockOps.push(false)
-      readbackTargets.push({
-        action: 'update_table_cell',
-        targetBlockIds: [cellBlockId]
-      })
+      if (isDocxToolFailure(target)) return { failure: target }
+      targets.push(target)
+      actions.push({ action, targets })
       continue
     }
 
-    const resolvedBlockIds = resolveCurrentSnapshotBlockIds({
-      runtime: input.runtime,
-      toolName: input.toolName,
-      toolCallId: input.toolCallId,
-      sourcePath: input.sourcePath,
-      field: 'blockIds',
-      blockIds: action.blockIds,
-      allowDeleted: false
-    })
-    if (!Array.isArray(resolvedBlockIds)) return { failure: resolvedBlockIds }
-    positionedCheckBlockIds.push(...resolvedBlockIds)
-    structuralTargetKeys.push(...resolvedBlockIds.map((blockId) => `delete:${blockId}`))
-    deletedBlockIds.push(...resolvedBlockIds)
-    ops.push(...resolvedBlockIds.map((blockId) => ({
-      type: 'delete_block' as const,
-      blockId
-    })))
-    createdBlockOps.push(...resolvedBlockIds.map(() => false))
-    readbackTargets.push({
-      action: 'delete_block',
-      targetBlockIds: resolvedBlockIds
-    })
+    if (action.type === 'delete_blocks') {
+      const target = bindStableTarget({
+        runtime: input.runtime,
+        toolName: input.toolName,
+        toolCallId: input.toolCallId,
+        sourcePath: input.sourcePath,
+        field: 'blockIds',
+        blockIds: action.blockIds
+      })
+      if (isDocxToolFailure(target)) return { failure: target }
+      targets.push(target)
+      actions.push({ action, targets })
+      continue
+    }
+
+    return {
+      failure: input.runtime.emitFailure({
+        toolName: input.toolName,
+        toolCallId: input.toolCallId,
+        reason: 'invalid_input',
+        error: `unsupported docx_edit action at index ${String(actionIndex)}`,
+        resourceContext: input.runtime.buildResourceContext({
+          sourcePath: input.sourcePath,
+          effectKind: 'mutated'
+        })
+      })
+    }
   }
 
-  const conflict = validateBatchConflicts({
-    runtime: input.runtime,
-    toolName: input.toolName,
-    toolCallId: input.toolCallId,
-    sourcePath: input.sourcePath,
-    structuralTargetKeys,
-    deletedBlockIds,
-    mutatedBlockIds
-  })
-  if (conflict) return { failure: conflict }
-
-  const positionedFailure = await failIfAnyPositionedBlocks({
-    runtime: input.runtime,
-    toolName: input.toolName,
-    toolCallId: input.toolCallId,
-    sourcePath: input.sourcePath,
-    currentRevisionRef: input.currentRevisionRef,
-    docId: input.docId,
-    blockIds: [...new Set(positionedCheckBlockIds)]
-  })
-  if (positionedFailure) return { failure: positionedFailure }
-
   return {
-    ops,
-    readbackTargets,
-    createdBlockOps,
-    summary: `edit.batch:${input.actions.map(actionLabel).join(',')}`
+    actions,
+    summary: `edit.serial:${input.actions.map(actionLabel).join(',')}`
   }
 }
 
-const applyBatchEdit = async (input: {
+const resolveSerialTargetBlockIds = (input: {
+  runtime: DocxToolRuntime
+  toolName: string
+  toolCallId: string
+  sourcePath: string
+  session: Parameters<DocxToolRuntime['resolveLiveBlockIdsFromStableLocatorsInSession']>[0]['session']
+  target: SerialActionTarget
+  allowDeleted?: boolean
+}): string[] | DocxToolFailure => {
+  const resolved = input.runtime.resolveLiveBlockIdsFromStableLocatorsInSession({
+    session: input.session,
+    field: input.target.field,
+    stableLocators: input.target.stableLocators,
+    allowDeleted: input.allowDeleted
+  })
+  if (!resolved.ok) {
+    return input.runtime.emitFailure({
+      toolName: input.toolName,
+      toolCallId: input.toolCallId,
+      reason: 'invalid_input',
+      error: resolved.error,
+      resourceContext: input.runtime.buildResourceContext({
+        sourcePath: input.sourcePath,
+        effectKind: 'mutated'
+      })
+    })
+  }
+  return resolved.blockIds
+}
+
+const findSerialTarget = (
+  action: CompiledSerialAction,
+  field: StableTargetField
+): SerialActionTarget | undefined => action.targets.find((target) => target.field === field)
+
+const buildSerialActionOps = async (input: {
   runtime: DocxToolRuntime
   toolName: string
   toolCallId: string
   sourcePath: string
   currentDocId: string
   currentRevisionRef: string
-  ops: DocxOp[]
-  summary: string
-  createdBlockOps: boolean[]
-}): Promise<ApplyBatchEditResult> => {
-  const workerResponse = await input.runtime.callWorker({
-    action: 'apply_ops',
-    payload: {
-      docId: input.currentDocId,
-      ops: input.ops
+  session: Parameters<DocxToolRuntime['resolveLiveBlockIdsFromStableLocatorsInSession']>[0]['session']
+  action: CompiledSerialAction
+}): Promise<
+  | {
+      ops: DocxOp[]
+      readbackTarget: BatchReadbackTarget
+      positionedCheckBlockIds: string[]
     }
-  })
-  if (!workerResponse.ok) {
+  | { failure: DocxToolFailure }
+> => {
+  const action = input.action.action
+
+  if (action.type === 'insert_blocks') {
+    const target = findSerialTarget(input.action, 'anchorBlockId')
+    if (!target) {
+      return {
+        failure: input.runtime.emitFailure({
+          toolName: input.toolName,
+          toolCallId: input.toolCallId,
+          reason: 'invalid_input',
+          error: 'insert_blocks missing bound anchorBlockId',
+          resourceContext: input.runtime.buildResourceContext({
+            sourcePath: input.sourcePath,
+            effectKind: 'mutated'
+          })
+        })
+      }
+    }
+    const anchorBlockIds = resolveSerialTargetBlockIds({
+      runtime: input.runtime,
+      toolName: input.toolName,
+      toolCallId: input.toolCallId,
+      sourcePath: input.sourcePath,
+      session: input.session,
+      target
+    })
+    if (!Array.isArray(anchorBlockIds)) return { failure: anchorBlockIds }
+    const anchorBlockId = anchorBlockIds[0]
+    const op: DocxOp = {
+      type: action.position === 'before' ? 'insert_before' : 'insert_after',
+      anchorBlockId,
+      content: action.blocks.map((block) => blockSpecFromCreateBlock(block))
+    }
     return {
-      failure: input.runtime.emitWorkerFailure({
-        toolName: input.toolName,
-        toolCallId: input.toolCallId,
-        response: workerResponse,
-        draftDocId: input.currentDocId
-      })
+      ops: [op],
+      readbackTarget: {
+        action: op.type,
+        targetBlockIds: [anchorBlockId]
+      },
+      positionedCheckBlockIds: [anchorBlockId]
     }
   }
-  if (workerResponse.payload.action !== 'apply_ops') {
+
+  if (action.type === 'replace_block') {
+    const target = findSerialTarget(input.action, 'blockId')
+    const blockIds = target
+      ? resolveSerialTargetBlockIds({
+          runtime: input.runtime,
+          toolName: input.toolName,
+          toolCallId: input.toolCallId,
+          sourcePath: input.sourcePath,
+          session: input.session,
+          target
+        })
+      : []
+    if (!Array.isArray(blockIds)) return { failure: blockIds }
+    const blockId = blockIds[0]
+    return {
+      ops: [{
+        type: 'replace_block',
+        blockId,
+        content: blockSpecFromCreateBlock(action.block)
+      }],
+      readbackTarget: {
+        action: 'replace_block',
+        targetBlockIds: [blockId]
+      },
+      positionedCheckBlockIds: [blockId]
+    }
+  }
+
+  if (action.type === 'replace_text') {
+    const target = findSerialTarget(input.action, 'blockIds')
+    const blockIds = target
+      ? resolveSerialTargetBlockIds({
+          runtime: input.runtime,
+          toolName: input.toolName,
+          toolCallId: input.toolCallId,
+          sourcePath: input.sourcePath,
+          session: input.session,
+          target
+        })
+      : undefined
+    if (blockIds && !Array.isArray(blockIds)) return { failure: blockIds }
+    const targetBlockIds = await resolveReplaceTextTargetBlockIds({
+      runtime: input.runtime,
+      docId: input.currentDocId,
+      query: action.query,
+      blockIds
+    })
+    return {
+      ops: [{
+        type: 'replace_text',
+        query: action.query,
+        replace: action.replace,
+        replaceAll: true,
+        blockIds
+      }],
+      readbackTarget: {
+        action: 'replace_text',
+        targetBlockIds
+      },
+      positionedCheckBlockIds: targetBlockIds
+    }
+  }
+
+  if (action.type === 'style_text') {
+    const target = findSerialTarget(input.action, 'blockId')
+    const blockIds = target
+      ? resolveSerialTargetBlockIds({
+          runtime: input.runtime,
+          toolName: input.toolName,
+          toolCallId: input.toolCallId,
+          sourcePath: input.sourcePath,
+          session: input.session,
+          target
+        })
+      : []
+    if (!Array.isArray(blockIds)) return { failure: blockIds }
+    const blockId = blockIds[0]
+    return {
+      ops: [{
+        type: 'style_text',
+        blockId,
+        query: action.query,
+        style: action.style
+      }],
+      readbackTarget: {
+        action: 'style_text',
+        targetBlockIds: [blockId]
+      },
+      positionedCheckBlockIds: [blockId]
+    }
+  }
+
+  if (action.type === 'update_table_cell') {
+    const target = findSerialTarget(input.action, 'cellBlockId')
+    const cellBlockIds = target
+      ? resolveSerialTargetBlockIds({
+          runtime: input.runtime,
+          toolName: input.toolName,
+          toolCallId: input.toolCallId,
+          sourcePath: input.sourcePath,
+          session: input.session,
+          target
+        })
+      : []
+    if (!Array.isArray(cellBlockIds)) return { failure: cellBlockIds }
+    const cellBlockId = cellBlockIds[0]
+    return {
+      ops: [{
+        type: 'update_table_cell',
+        blockId: cellBlockId,
+        content: [paragraphSpecFromText(action.text)]
+      }],
+      readbackTarget: {
+        action: 'update_table_cell',
+        targetBlockIds: [cellBlockId]
+      },
+      positionedCheckBlockIds: [cellBlockId]
+    }
+  }
+
+  const target = findSerialTarget(input.action, 'blockIds')
+  const blockIds = target
+    ? resolveSerialTargetBlockIds({
+        runtime: input.runtime,
+        toolName: input.toolName,
+        toolCallId: input.toolCallId,
+        sourcePath: input.sourcePath,
+        session: input.session,
+        target
+      })
+    : []
+  if (!Array.isArray(blockIds)) return { failure: blockIds }
+
+  const outlineBlocks = await fetchOutlineBlocks(input.runtime, input.currentDocId)
+  const rankByBlockId = new Map(
+    bodyBlocksOnly(outlineBlocks).map((block, index) => [block.blockId, index] as const)
+  )
+  const orderedBlockIds = blockIds
+    .slice()
+    .sort((left, right) => (rankByBlockId.get(right) ?? -1) - (rankByBlockId.get(left) ?? -1))
+  return {
+    ops: orderedBlockIds.map((blockId) => ({
+      type: 'delete_block' as const,
+      blockId
+    })),
+    readbackTarget: {
+      action: 'delete_block',
+      targetBlockIds: blockIds
+    },
+    positionedCheckBlockIds: blockIds
+  }
+}
+
+const resolveCreatedBlocksForSingleAction = async (input: {
+  runtime: DocxToolRuntime
+  previousDocId: string
+  nextDocId: string
+  ops: DocxOp[]
+}): Promise<DocxCreatedBlock[][]> => {
+  const createdBlocksByOp = input.ops.map((): DocxCreatedBlock[] => [])
+  const insertOpIndex = input.ops.findIndex((op) => op.type === 'insert_after' || op.type === 'insert_before')
+  if (insertOpIndex < 0) return createdBlocksByOp
+  const insertOp = input.ops[insertOpIndex]
+  if (insertOp.type !== 'insert_after' && insertOp.type !== 'insert_before') return createdBlocksByOp
+
+  const beforeBlocks = await fetchOutlineBlocks(input.runtime, input.previousDocId)
+  const afterBlocks = await fetchOutlineBlocks(input.runtime, input.nextDocId)
+  const beforeBodyBlocks = bodyBlocksOnly(beforeBlocks)
+  const afterBodyBlocks = bodyBlocksOnly(afterBlocks)
+  const anchorIndex = beforeBodyBlocks.findIndex((block) => block.blockId === insertOp.anchorBlockId)
+  if (anchorIndex < 0) return createdBlocksByOp
+
+  const startIndex = insertOp.type === 'insert_before' ? anchorIndex : anchorIndex + 1
+  const createdBodyBlockIds = new Set(
+    afterBodyBlocks
+      .slice(startIndex, startIndex + insertOp.content.length)
+      .map((block) => block.blockId)
+  )
+  createdBlocksByOp[insertOpIndex] = afterBlocks
+    .filter((block) => {
+      if (createdBodyBlockIds.has(block.blockId)) return true
+      return block.type === 'table_cell' && createdBodyBlockIds.has(block.tableBlockId)
+    })
+    .map((block) => ({
+      blockId: block.blockId,
+      type: block.type
+    }))
+
+  return createdBlocksByOp
+}
+
+const expandSerialOpRecordsForReview = async (input: {
+  runtime: DocxToolRuntime
+  records: SerialActionOpRecord[]
+}): Promise<{
+  ops: DocxOp[]
+  createdBlocksByOp: DocxCreatedBlock[][]
+  opNextDocIds: string[]
+}> => {
+  const ops: DocxOp[] = []
+  const createdBlocksByOp: DocxCreatedBlock[][] = []
+  const opNextDocIds: string[] = []
+
+  for (const record of input.records) {
+    const expanded = await input.runtime.expandOpsForReview(record.beforeDocId, [record.op])
+    expanded.forEach((op, index) => {
+      ops.push(op)
+      createdBlocksByOp.push(index === 0 ? record.createdBlocks : [])
+      opNextDocIds.push(record.nextDocId)
+    })
+  }
+
+  return {
+    ops,
+    createdBlocksByOp,
+    opNextDocIds
+  }
+}
+
+const applySerialEdit = async (input: {
+  runtime: DocxToolRuntime
+  toolName: string
+  toolCallId: string
+  sourcePath: string
+  currentDocId: string
+  currentRevisionRef: string
+  compiled: CompiledSerialEdit
+}): Promise<ApplySerialEditResult> => {
+  const cloned = input.runtime.cloneActiveReplaySession(input.sourcePath)
+  if (!cloned.ok) {
     return {
       failure: input.runtime.emitFailure({
         toolName: input.toolName,
         toolCallId: input.toolCallId,
         reason: 'failed',
-        error: 'worker protocol mismatch (apply_ops)',
-        draftDocId: input.currentDocId
+        error: cloned.error,
+        resourceContext: input.runtime.buildResourceContext({
+          sourcePath: input.sourcePath,
+          effectKind: 'mutated',
+          currentRevisionRef: input.currentRevisionRef
+        })
       })
     }
   }
-  const appliedPayload = workerResponse.payload
 
-  const createdBlocksByOp = await resolveCreatedBlocksForBatch({
-    runtime: input.runtime,
-    previousDocId: input.currentDocId,
-    nextDocId: appliedPayload.newDocId,
-    ops: input.ops,
-    createdBlockOps: input.createdBlockOps
-  })
-  const createdBlocks = createdBlocksByOp.flat()
-  const reviewOps = await input.runtime.expandOpsForReview(input.currentDocId, input.ops)
-  const reviewCreatedBlocksByOp: DocxCreatedBlock[][] = []
-  for (const reviewOp of reviewOps) {
-    const originalIndex = input.ops.indexOf(reviewOp)
-    reviewCreatedBlocksByOp.push(originalIndex >= 0 ? createdBlocksByOp[originalIndex] || [] : [])
+  const tempSession = cloned.session
+  let currentDocId = input.currentDocId
+  const opRecords: SerialActionOpRecord[] = []
+  const changedBlocks: DocxChangedBlock[] = []
+  const warnings: string[] = []
+  const readbackTargets: BatchReadbackTarget[] = []
+
+  for (const [actionIndex, action] of input.compiled.actions.entries()) {
+    const actionOps = await buildSerialActionOps({
+      runtime: input.runtime,
+      toolName: input.toolName,
+      toolCallId: input.toolCallId,
+      sourcePath: input.sourcePath,
+      currentDocId,
+      currentRevisionRef: input.currentRevisionRef,
+      session: tempSession,
+      action
+    })
+    if ('failure' in actionOps) return { failure: actionOps.failure }
+
+    const positionedFailure = await failIfAnyPositionedBlocks({
+      runtime: input.runtime,
+      toolName: input.toolName,
+      toolCallId: input.toolCallId,
+      sourcePath: input.sourcePath,
+      currentRevisionRef: input.currentRevisionRef,
+      docId: currentDocId,
+      blockIds: [...new Set(actionOps.positionedCheckBlockIds)]
+    })
+    if (positionedFailure) return { failure: positionedFailure }
+
+    const workerResponse = await input.runtime.callWorker({
+      action: 'apply_ops',
+      payload: {
+        docId: currentDocId,
+        ops: actionOps.ops
+      }
+    })
+    if (!workerResponse.ok) {
+      return {
+        failure: input.runtime.emitWorkerFailure({
+          toolName: input.toolName,
+          toolCallId: input.toolCallId,
+          response: workerResponse,
+          draftDocId: currentDocId
+        })
+      }
+    }
+    if (workerResponse.payload.action !== 'apply_ops') {
+      return {
+        failure: input.runtime.emitFailure({
+          toolName: input.toolName,
+          toolCallId: input.toolCallId,
+          reason: 'failed',
+          error: 'worker protocol mismatch (apply_ops)',
+          draftDocId: currentDocId
+        })
+      }
+    }
+    const appliedPayload = workerResponse.payload
+
+    const createdBlocksByOp = await resolveCreatedBlocksForSingleAction({
+      runtime: input.runtime,
+      previousDocId: currentDocId,
+      nextDocId: appliedPayload.newDocId,
+      ops: actionOps.ops
+    })
+
+    for (const [opIndex, op] of actionOps.ops.entries()) {
+      const record = {
+        op,
+        beforeDocId: currentDocId,
+        nextDocId: appliedPayload.newDocId,
+        createdBlocks: createdBlocksByOp[opIndex] || []
+      }
+      opRecords.push(record)
+      const reviewOps = await input.runtime.expandOpsForReview(record.beforeDocId, [record.op])
+      for (const reviewOp of reviewOps) {
+        await input.runtime.applyTempRevisionToReplaySession({
+          session: tempSession,
+          revisionRef: `serial-temp-${String(actionIndex + 1)}`,
+          op: reviewOp,
+          createdBlocks: record.createdBlocks,
+          nextDocId: record.nextDocId
+        })
+      }
+    }
+
+    changedBlocks.push(...appliedPayload.changedBlocks)
+    warnings.push(...appliedPayload.warnings)
+    readbackTargets.push(actionOps.readbackTarget)
+    currentDocId = appliedPayload.newDocId
   }
 
+  const review = await expandSerialOpRecordsForReview({
+    runtime: input.runtime,
+    records: opRecords
+  })
+  const createdBlocks = review.createdBlocksByOp.flat()
   const revisionUpdate = await input.runtime.registerRevision({
     sourcePath: input.sourcePath,
     previousDocId: input.currentDocId,
-    nextDocId: appliedPayload.newDocId,
-    ops: reviewOps,
+    nextDocId: currentDocId,
+    ops: review.ops,
     createdBlocks,
-    createdBlocksByOp: reviewCreatedBlocksByOp,
-    changedBlocks: appliedPayload.changedBlocks,
-    summary: input.summary
+    createdBlocksByOp: review.createdBlocksByOp,
+    opNextDocIds: review.opNextDocIds,
+    changedBlocks,
+    summary: input.compiled.summary
   })
   input.runtime.input.ctx.trackDocxBatchChanges({
     previousDocId: input.currentDocId,
-    nextDocId: appliedPayload.newDocId,
-    ops: input.ops,
-    changedBlocks: appliedPayload.changedBlocks,
+    nextDocId: currentDocId,
+    ops: review.ops,
+    changedBlocks,
     createdBlocks,
     replaySession: input.runtime.getReplaySession(input.sourcePath)
   })
   return {
     previousRevisionRef: revisionUpdate.previousRevisionRef,
     currentRevisionRef: revisionUpdate.currentRevisionRef,
-    changedBlocks: appliedPayload.changedBlocks,
-    warnings: appliedPayload.warnings,
-    nextDocId: appliedPayload.newDocId,
+    changedBlocks,
+    warnings,
+    nextDocId: currentDocId,
     createdBlocks,
-    createdBlocksByOp
+    readbackTargets
   }
 }
 
@@ -1256,13 +1383,11 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
       })
       if ('failure' in sessionResult) return sessionResult.failure
 
-      const compiled = await compileBatchEditActions({
+      const compiled = compileSerialEditActions({
         runtime,
         toolName,
         toolCallId,
         sourcePath: sessionResult.sourcePath,
-        docId: sessionResult.docId,
-        currentRevisionRef: sessionResult.currentRevisionRef,
         actions: args.actions
       })
       if ('failure' in compiled) {
@@ -1273,16 +1398,14 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         })
       }
 
-      const applied = await applyBatchEdit({
+      const applied = await applySerialEdit({
         runtime,
         toolName,
         toolCallId,
         sourcePath: sessionResult.sourcePath,
         currentDocId: sessionResult.docId,
         currentRevisionRef: sessionResult.currentRevisionRef,
-        ops: compiled.ops,
-        summary: compiled.summary,
-        createdBlockOps: compiled.createdBlockOps
+        compiled
       })
       if ('failure' in applied) {
         return finalizeDocxToolFailure({
@@ -1300,14 +1423,14 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         nextDocId: applied.nextDocId,
         summary: buildEditSummary({
           toolName,
-          actionLabel: `批量编辑 ${String(args.actions.length)} 个 action`,
+          actionLabel: `串行编辑 ${String(args.actions.length)} 个 action`,
           changedBlocks: applied.changedBlocks,
           warnings: applied.warnings
         }),
         changedBlocks: applied.changedBlocks,
         createdBlocks: applied.createdBlocks,
         warnings: applied.warnings,
-        readbackTargets: compiled.readbackTargets,
+        readbackTargets: applied.readbackTargets,
         previousDocId: sessionResult.docId
       })
       return finalizeDocxToolSuccess({

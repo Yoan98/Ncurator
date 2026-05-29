@@ -266,6 +266,7 @@ export type DocxRevision = {
   ops?: DocxOp[]
   createdBlocks?: DocxCreatedBlock[]
   createdBlocksByOp?: DocxCreatedBlock[][]
+  opNextDocIds?: string[]
 }
 
 export type DocxReplaySnapshotBlock = {

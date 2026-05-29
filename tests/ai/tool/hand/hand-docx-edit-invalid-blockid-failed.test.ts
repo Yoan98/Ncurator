@@ -75,7 +75,7 @@ describe('ai tool hand backend', () => {
             hint.detail.toolName === 'docx_edit' &&
             hint.detail.sourcePath === 'invalid-blockid.docx' &&
             hint.detail.action === 'insert_blocks' &&
-            hint.detail.error.includes('cannot resolve anchorBlockId=b:99 in current active snapshot'),
+            hint.detail.error.includes('cannot resolve anchorBlockId=b:99 in base revision'),
           {
             name: 'invalid-blockid-produces-unified-docx-edit-hint',
             message: '不存在/过期 blockId 写入应失败，并统一走 hand_docx_edit_failed。',

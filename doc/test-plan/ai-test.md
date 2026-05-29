@@ -333,15 +333,25 @@
 - Oracle：返回 `ok=false`，失败文本明确为结果过大，且 decision hint 包含 `toolName/estimatedTokens/limit`。
 - Not：不验证 human 是否一定继续读取后续内容。
 
-##### `docx-complex-ops-batch`
+##### `docx-complex-ops-serial-actions`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
 - What：验证多类复杂编辑操作的真实执行契约。
 - Why：复杂写入是 docx 工具层高风险区。
-- How：覆盖 `docx_edit` 的 `replace_text / delete_blocks / insert_blocks(before/after, paragraph/heading/table) / update_table_cell` action。
-- Oracle：各类 op 都能写入成功并返回可继续消费的 `postWriteReadback`。
+- How：覆盖 `docx_edit(actions[])` 按输入顺序串行执行 `replace_text / delete_blocks / insert_blocks(before/after, paragraph/heading/table) / update_table_cell` action。
+- Oracle：各类 action 都能写入成功并返回最终文档状态下可继续消费的 `postWriteReadback`。
 - Not：不验证上层 op 选择策略。
+
+##### `docx-edit-serial-actions-stability`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证单次 `docx_edit(actions[])` 内部按 action 顺序执行，并通过稳定 locator 避免前序写入造成后序 blockId 漂移。
+- Why：这是 docx 批量精细修改的核心写入契约，避免 AI 以读到的真实 blockId 连续编辑时被 blockIndex 改变误伤。
+- How：覆盖“先插入再替换原目标”、“replace 后继续引用同一原始 blockId 命中 successor”、“删除后再修改同一目标失败且不提交部分结果”。
+- Oracle：前两类成功并命中预期最终文本，失败类返回错误且 active 文档保持原状态。
+- Not：不支持同一次 actions 内引用本次刚创建且尚未回读的新 blockId。
 
 ##### `docx-format-variants-contract`
 
@@ -450,10 +460,10 @@
 - 测试类型：`backend`
 - 实现状态：`已实现`
 - What：验证同一 `sourcePath` 一轮 hand 中允许连续多个 `docx_edit`。
-- Why：hand 保持串行执行，docx 写漂移由每次 `docx_edit` 基于最新 snapshot 严格解析 blockId 解决，不再做同文件多写预拦截。
+- Why：hand 保持串行执行；跨 tool 调用的漂移由每次 `docx_edit` 基于最新 snapshot 绑定输入 blockId 解决，单个 `docx_edit(actions[])` 内的漂移由稳定 locator 串行解析解决，不再做同文件多写预拦截。
 - How：构造同一文件上的 `docx_edit(replace_text) -> docx_edit(replace_text)` serial plan。
 - Oracle：两次写入都成功，且不返回 `hand_docx_edit_failed`。
-- Not：不验证单次 `docx_edit(actions=[...])` batch transaction。
+- Not：不验证单次 `docx_edit(actions=[...])` 内部串行 transaction。
 
 ##### `hand-docx-multi-file-single-write-allowed`
 

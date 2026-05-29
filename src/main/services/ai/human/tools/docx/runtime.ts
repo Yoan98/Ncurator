@@ -152,6 +152,7 @@ export type DocxToolRuntime = {
     ops: DocxOp[]
     createdBlocks: DocxRevision['createdBlocks']
     createdBlocksByOp?: NonNullable<DocxRevision['createdBlocksByOp']>
+    opNextDocIds?: NonNullable<DocxRevision['opNextDocIds']>
     changedBlocks?: DocxRevision['changedBlocks']
     summary?: string
   }) => Promise<{ currentRevisionRef: string; previousRevisionRef: string }>
@@ -204,12 +205,32 @@ export type DocxToolRuntime = {
     stableLocators: DocxStableLocator[]
     allowDeleted?: boolean
   }) => { ok: true; blockIds: string[] } | { ok: false; error: string }
+  resolveCurrentStableLocatorsFromSnapshot: (input: {
+    sourcePath: string
+    field: 'blockId' | 'anchorBlockId' | 'cellBlockId' | 'blockIds'
+    blockIds: string[]
+  }) => { ok: true; stableLocators: DocxStableLocator[] } | { ok: false; error: string }
+  resolveLiveBlockIdsFromStableLocatorsInSession: (input: {
+    session: DocxReplaySession
+    field: 'blockId' | 'anchorBlockId' | 'cellBlockId' | 'blockIds'
+    stableLocators: DocxStableLocator[]
+    allowDeleted?: boolean
+  }) => { ok: true; blockIds: string[] } | { ok: false; error: string }
   resolveCurrentBlockIdsFromSnapshot: (input: {
     sourcePath: string
     field: 'blockId' | 'anchorBlockId' | 'cellBlockId' | 'blockIds'
     blockIds: string[]
     allowDeleted?: boolean
   }) => { ok: true; blockIds: string[] } | { ok: false; error: string }
+  cloneActiveReplaySession: (sourcePath: string) => { ok: true; session: DocxReplaySession } | { ok: false; error: string }
+  buildReplaySnapshotForDoc: (docId: string) => Promise<DocxReplaySnapshot>
+  applyTempRevisionToReplaySession: (input: {
+    session: DocxReplaySession
+    revisionRef: string
+    op: DocxOp
+    createdBlocks: DocxCreatedBlock[]
+    nextDocId: string
+  }) => Promise<void>
   buildResourceContext: (input: {
     sourcePath: string
     effectKind: DocxToolResourceContext['effectKind']
@@ -386,15 +407,19 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     for (const revision of targetChain.reverse()) {
       if (!revision.ops || revision.ops.length === 0) continue
       const snapshot = await buildReplaySnapshotForDoc(revision.docId)
-      revision.ops.forEach((op, opIndex) => {
+      for (const [opIndex, op] of revision.ops.entries()) {
+        const opNextDocId = revision.opNextDocIds?.[opIndex]
+        const opSnapshot = opNextDocId && opNextDocId !== revision.docId
+          ? await buildReplaySnapshotForDoc(opNextDocId)
+          : snapshot
         applyRevisionToReplaySession({
           session: clone,
           revisionRef: revision.revisionRef,
           op,
           createdBlocks: revision.createdBlocksByOp?.[opIndex] || revision.createdBlocks || [],
-          nextSnapshot: snapshot
+          nextSnapshot: opSnapshot
         })
-      })
+      }
     }
 
     const activeDocId = clone.docIdByRevisionRef.get(inputValue.revisionRef)
@@ -449,17 +474,14 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
         ? visibleNodes[visibleIndex + 1]?.nodeId
         : undefined
     const tableBlockId =
-      input.field === 'cellBlockId'
-        ? input.tableBlockIdOverride || input.session.activeSnapshot.tableBlockIdByCellBlockId.get(input.requestedBlockId)
-        : undefined
+      input.tableBlockIdOverride || input.session.activeSnapshot.tableBlockIdByCellBlockId.get(input.requestedBlockId)
     const tableNode = tableBlockId ? findVisibleNodeByLocator(input.session, tableBlockId) : undefined
     const tableSnapshotBlock = tableBlockId
       ? input.session.activeSnapshot.blockById.get(tableBlockId)
       : undefined
-    const tableCellMeta =
-      input.field === 'cellBlockId'
-        ? tableSnapshotBlock?.tableCells?.find((cell) => cell.blockId === input.requestedBlockId)
-        : undefined
+    const tableCellMeta = tableBlockId
+      ? tableSnapshotBlock?.tableCells?.find((cell) => cell.blockId === input.requestedBlockId)
+      : undefined
     return {
       nodeId: input.node.nodeId,
       sourceBlockId: input.node.sourceBlockId,
@@ -467,12 +489,12 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       blockIndexAtResolve: input.node.blockIndex,
       previousVisibleNodeId,
       nextVisibleNodeId,
-      kind: input.field === 'cellBlockId' ? 'table_cell' : input.node.kind,
+      kind: tableBlockId ? 'table_cell' : input.node.kind,
       contentFingerprint: buildContentFingerprint(input.node),
       tableNodeId: tableNode?.nodeId,
       tableSourceBlockId: tableNode?.sourceBlockId,
       tableFingerprint: tableNode ? buildContentFingerprint(tableNode) : undefined,
-      cellBlockId: input.field === 'cellBlockId' ? input.requestedBlockId : undefined
+      cellBlockId: tableBlockId ? input.requestedBlockId : undefined
       ,
       rowIndex: tableCellMeta?.row,
       colIndex: tableCellMeta?.col,
@@ -494,11 +516,8 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
           ? [inputValue.rawValue]
           : []
     return blockIds.map((blockId) => {
-      if (inputValue.field === 'cellBlockId') {
-        const tableBlockId = inputValue.session.activeSnapshot.tableBlockIdByCellBlockId.get(blockId)
-        if (!tableBlockId) {
-          throw new Error(`cannot resolve ${inputValue.field}=${blockId} in base revision`)
-        }
+      const tableBlockId = inputValue.session.activeSnapshot.tableBlockIdByCellBlockId.get(blockId)
+      if (tableBlockId) {
         const tableNode = findVisibleNodeByLocator(inputValue.session, tableBlockId)
         if (!tableNode) {
           throw new Error(`cannot resolve table for ${inputValue.field}=${blockId} in base revision`)
@@ -637,14 +656,12 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     session: DocxReplaySession
     locator: DocxStableLocator
   }): string | undefined => {
-    if (
-      !input.locator.tableSourceBlockId ||
-      typeof input.locator.rowIndex !== 'number' ||
-      typeof input.locator.colIndex !== 'number'
-    ) {
+    if (typeof input.locator.rowIndex !== 'number' || typeof input.locator.colIndex !== 'number') {
       return undefined
     }
-    const tableNode = findVisibleNodeBySourceBlockId(input.session, input.locator.tableSourceBlockId)[0]
+    const tableNode =
+      findVisibleNodeById(input.session, input.locator.tableNodeId) ||
+      findVisibleNodeBySourceBlockId(input.session, input.locator.tableSourceBlockId)[0]
     if (!tableNode) return undefined
     const tableBlockId = tableNode.currentBlockId || tableNode.blockId || tableNode.sourceBlockId
     if (!tableBlockId) return undefined
@@ -729,7 +746,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
         continue
       }
 
-      if (inputValue.field === 'cellBlockId') {
+      if (inputValue.field === 'cellBlockId' || locator.kind === 'table_cell') {
         const recoveredCellBlockId = resolveVisibleCellByTableCoordinates({
           session,
           locator
@@ -747,6 +764,111 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
         const blockId = neighbor?.currentBlockId || neighbor?.blockId || neighbor?.sourceBlockId
         if (blockId) {
           resolvedBlockIds.push(blockId)
+          continue
+        }
+      }
+
+      return {
+        ok: false,
+        error:
+          inputValue.field === 'anchorBlockId'
+            ? `cannot safely resolve anchor after earlier mutations: ${locator.nodeId}`
+            : `cannot safely resolve target after earlier mutations: ${locator.nodeId}`
+      }
+    }
+
+    return {
+      ok: true,
+      blockIds: resolvedBlockIds
+    }
+  }
+
+  const resolveCurrentStableLocatorsFromSnapshot = (inputValue: {
+    sourcePath: string
+    field: 'blockId' | 'anchorBlockId' | 'cellBlockId' | 'blockIds'
+    blockIds: string[]
+  }): { ok: true; stableLocators: DocxStableLocator[] } | { ok: false; error: string } => {
+    const session = state.replaySessionBySourcePath.get(path.resolve(inputValue.sourcePath))
+    if (!session) {
+      return {
+        ok: false,
+        error: `docx session not found for sourcePath: ${path.resolve(inputValue.sourcePath)}`
+      }
+    }
+    try {
+      return {
+        ok: true,
+        stableLocators: resolveNodeIdsForLocatorField({
+          session,
+          field: inputValue.field,
+          rawValue: inputValue.field === 'blockIds' ? inputValue.blockIds : inputValue.blockIds[0]
+        })
+      }
+    } catch (error) {
+      return {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error)
+      }
+    }
+  }
+
+  const resolveLiveBlockIdsFromStableLocatorsInSession = (inputValue: {
+    session: DocxReplaySession
+    field: 'blockId' | 'anchorBlockId' | 'cellBlockId' | 'blockIds'
+    stableLocators: DocxStableLocator[]
+    allowDeleted?: boolean
+  }): { ok: true; blockIds: string[] } | { ok: false; error: string } => {
+    const resolvedBlockIds: string[] = []
+    for (const locator of inputValue.stableLocators) {
+      if (inputValue.field === 'cellBlockId' || locator.kind === 'table_cell') {
+        const visibleCellBlockId = resolveVisibleCellByTableCoordinates({
+          session: inputValue.session,
+          locator
+        })
+        if (visibleCellBlockId) {
+          resolvedBlockIds.push(visibleCellBlockId)
+          continue
+        }
+      }
+
+      const visibleNode = findVisibleNodeById(inputValue.session, locator.nodeId)
+      if (visibleNode) {
+        const blockId = visibleNode.currentBlockId || visibleNode.blockId || visibleNode.sourceBlockId
+        if (!blockId) {
+          return {
+            ok: false,
+            error: `resolved node has no current block binding: ${locator.nodeId}`
+          }
+        }
+        resolvedBlockIds.push(blockId)
+        continue
+      }
+
+      const historicalNode = inputValue.session.nodeById.get(locator.nodeId)
+      if (historicalNode?.successorNodeId) {
+        if (inputValue.field === 'cellBlockId' || locator.kind === 'table_cell') {
+          const successorCellBlockId = resolveVisibleCellByTableCoordinates({
+            session: inputValue.session,
+            locator
+          })
+          if (successorCellBlockId) {
+            resolvedBlockIds.push(successorCellBlockId)
+            continue
+          }
+        }
+        const successor = findVisibleNodeById(inputValue.session, historicalNode.successorNodeId)
+        const successorBlockId = successor?.currentBlockId || successor?.blockId || successor?.sourceBlockId
+        if (successorBlockId) {
+          resolvedBlockIds.push(successorBlockId)
+          continue
+        }
+      }
+
+      if (inputValue.allowDeleted) {
+        const deletedNode = inputValue.session.nodeById.get(locator.nodeId)
+        const deletedBlockId = deletedNode?.currentBlockId || deletedNode?.blockId || deletedNode?.sourceBlockId
+        if (deletedBlockId) {
+          resolvedBlockIds.push(deletedBlockId)
           continue
         }
       }
@@ -1361,6 +1483,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     ops: DocxOp[]
     createdBlocks: DocxRevision['createdBlocks']
     createdBlocksByOp?: NonNullable<DocxRevision['createdBlocksByOp']>
+    opNextDocIds?: NonNullable<DocxRevision['opNextDocIds']>
     changedBlocks?: DocxRevision['changedBlocks']
     summary?: string
   }) => {
@@ -1389,19 +1512,24 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       summary: params.summary,
       ops: params.ops,
       createdBlocks: params.createdBlocks,
-      createdBlocksByOp: params.createdBlocksByOp
+      createdBlocksByOp: params.createdBlocksByOp,
+      opNextDocIds: params.opNextDocIds
     }
     state.revisionEntryByDocId.set(params.nextDocId, revisionEntry)
     session.revisionByDocId.set(params.nextDocId, revisionEntry)
-    params.ops.forEach((op, opIndex) => {
+    for (const [opIndex, op] of params.ops.entries()) {
+      const opNextDocId = params.opNextDocIds?.[opIndex]
+      const opSnapshot = opNextDocId && opNextDocId !== params.nextDocId
+        ? await buildReplaySnapshotForDoc(opNextDocId)
+        : nextSnapshot
       applyRevisionToReplaySession({
         session,
         revisionRef: currentRevisionRef,
         op,
         createdBlocks: params.createdBlocksByOp?.[opIndex] || params.createdBlocks || [],
-        nextSnapshot
+        nextSnapshot: opSnapshot
       })
-    })
+    }
     session.activeDocId = params.nextDocId
     session.activeRevisionRef = currentRevisionRef
     syncReplaySessionStats(session)
@@ -1409,6 +1537,52 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       currentRevisionRef,
       previousRevisionRef
     }
+  }
+
+  const cloneActiveReplaySession = (
+    sourcePath: string
+  ): { ok: true; session: DocxReplaySession } | { ok: false; error: string } => {
+    const source = state.replaySessionBySourcePath.get(path.resolve(sourcePath))
+    if (!source) {
+      return {
+        ok: false,
+        error: `docx session not found for sourcePath: ${path.resolve(sourcePath)}`
+      }
+    }
+    const clone: DocxReplaySession = {
+      ...source,
+      docIdByRevisionRef: new Map(source.docIdByRevisionRef),
+      revisionRefByDocId: new Map(source.revisionRefByDocId),
+      revisionByDocId: new Map(source.revisionByDocId),
+      nodeById: new Map(
+        [...source.nodeById.entries()].map(([nodeId, node]) => [nodeId, { ...node }] as const)
+      ),
+      bodyNodeIds: [...source.bodyNodeIds],
+      viewArtifacts: { ...source.viewArtifacts }
+    }
+    return {
+      ok: true,
+      session: clone
+    }
+  }
+
+  const applyTempRevisionToReplaySession = async (params: {
+    session: DocxReplaySession
+    revisionRef: string
+    op: DocxOp
+    createdBlocks: DocxCreatedBlock[]
+    nextDocId: string
+  }): Promise<void> => {
+    const nextSnapshot = await buildReplaySnapshotForDoc(params.nextDocId)
+    applyRevisionToReplaySession({
+      session: params.session,
+      revisionRef: params.revisionRef,
+      op: params.op,
+      createdBlocks: params.createdBlocks,
+      nextSnapshot
+    })
+    params.session.activeDocId = params.nextDocId
+    params.session.activeRevisionRef = params.revisionRef
   }
 
   const buildRevisionHistory = (
@@ -1546,15 +1720,19 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     for (const revision of targetChain.reverse()) {
       if (!revision.ops || revision.ops.length === 0) continue
       const snapshot = await buildReplaySnapshotForDoc(revision.docId)
-      revision.ops.forEach((op, opIndex) => {
+      for (const [opIndex, op] of revision.ops.entries()) {
+        const opNextDocId = revision.opNextDocIds?.[opIndex]
+        const opSnapshot = opNextDocId && opNextDocId !== revision.docId
+          ? await buildReplaySnapshotForDoc(opNextDocId)
+          : snapshot
         applyRevisionToReplaySession({
           session: baseline,
           revisionRef: revision.revisionRef,
           op,
           createdBlocks: revision.createdBlocksByOp?.[opIndex] || revision.createdBlocks || [],
-          nextSnapshot: snapshot
+          nextSnapshot: opSnapshot
         })
-      })
+      }
     }
 
     session.activeSnapshot = baseline.activeSnapshot
@@ -1749,7 +1927,12 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     resolveSnapshotTargets,
     resolveCurrentBlockIdFromNodeId,
     resolveLiveBlockIdsFromStableLocators,
+    resolveCurrentStableLocatorsFromSnapshot,
+    resolveLiveBlockIdsFromStableLocatorsInSession,
     resolveCurrentBlockIdsFromSnapshot,
+    cloneActiveReplaySession,
+    buildReplaySnapshotForDoc,
+    applyTempRevisionToReplaySession,
     buildResourceContext,
     buildPostWriteReadback
   }

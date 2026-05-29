@@ -14,14 +14,14 @@ import {
 } from './testUtils'
 
 describe('ai tool docx backend', () => {
-  it('docx-complex-ops-batch', async () => {
+  it('docx-complex-ops-serial-actions', async () => {
     await runBackendCase({
-      caseId: 'docx-complex-ops-batch',
+      caseId: 'docx-complex-ops-serial-actions',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证 paragraph/table/text 三类新 docx 编辑工具可组合完成复杂编辑。',
+      description: '验证 docx_edit(actions) 按顺序组合 paragraph/table/text 编辑完成复杂修改。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -82,7 +82,7 @@ describe('ai tool docx backend', () => {
           const deleteBlockId = findParagraphBlockIdByText(outline.blocks, 'Delete this paragraph.')
           const ownerCellBlockId = findTableCellBlockIdByText(outline.blocks, 'Alice')
 
-          const batchEdit = await harness.invoke<DocxMutationResult>('docx_edit', {
+          const serialEdit = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'complex-ops.docx',
             actions: [
               {
@@ -133,7 +133,7 @@ describe('ai tool docx backend', () => {
           })
 
           return {
-            batchEdit,
+            serialEdit,
             searchAfter,
             readAfter,
             finalOutline
@@ -144,7 +144,7 @@ describe('ai tool docx backend', () => {
       },
       assert: async (result, runtime) => {
         const changedActions = [
-          ...result.batchEdit.changedBlocks.map((block) => block.action)
+          ...result.serialEdit.changedBlocks.map((block) => block.action)
         ]
 
         runtime.assertThat(
@@ -159,10 +159,10 @@ describe('ai tool docx backend', () => {
             )
           ),
           {
-            name: 'complex-ops-batch-covers-all-op-types',
+            name: 'complex-ops-serial-actions-covers-all-op-types',
             message: '复杂编辑 case 应覆盖当前写工具支持的底层变更动作，并产出新的修订摘要。',
             data: {
-              currentRevisionRef: result.batchEdit.currentRevisionRef,
+              currentRevisionRef: result.serialEdit.currentRevisionRef,
               changedActions
             }
           }
@@ -180,15 +180,15 @@ describe('ai tool docx backend', () => {
             result.finalOutline.blocks.some(
               (block) => block.type === 'paragraph' && block.text.includes('Replaced whole block in final snapshot.')
             ) &&
-            result.batchEdit.warnings.length === 0,
+            result.serialEdit.warnings.length === 0,
           {
-            name: 'complex-ops-batch-remains-consumable-after-edits',
+            name: 'complex-ops-serial-actions-remains-consumable-after-edits',
             message: '多次对象编辑后，结果结构仍应能继续被 read/outline 消费。',
             data: {
               searchMatches: result.searchAfter.matches,
               readBlocks: result.readAfter.blocks,
               finalOutline: result.finalOutline.blocks,
-              warnings: result.batchEdit.warnings
+              warnings: result.serialEdit.warnings
             }
           }
         )

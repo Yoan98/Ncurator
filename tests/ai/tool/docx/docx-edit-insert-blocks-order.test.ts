@@ -80,14 +80,14 @@ describe('ai tool docx backend', () => {
     })
   })
 
-  it('docx-edit-batch-multiple-inserts-preserve-created-blocks', async () => {
+  it('docx-edit-serial-multiple-inserts-preserve-created-blocks', async () => {
     await runBackendCase({
-      caseId: 'docx-edit-batch-multiple-inserts-preserve-created-blocks',
+      caseId: 'docx-edit-serial-multiple-inserts-preserve-created-blocks',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证一次 docx_edit batch 内多个 insert_blocks 都能稳定写入并返回各自 createdBlocks。',
+      description: '验证一次 docx_edit(actions) 内多个 insert_blocks 会按 action 顺序稳定写入并返回各自 createdBlocks。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -151,8 +151,8 @@ describe('ai tool docx backend', () => {
           JSON.stringify(bodyTexts) === JSON.stringify(['A', 'A1', 'A2', 'B', 'C-1', 'T1 | T2', 'C']) &&
             ['A1', 'A2', 'C-1', 'T1 | T2'].every((text) => createdTexts.has(text)),
           {
-            name: 'batch-multiple-inserts-preserve-created-blocks',
-            message: '一次 batch 内多个插入应按 base snapshot 稳定落位，并正确返回新增 block。',
+            name: 'serial-multiple-inserts-preserve-created-blocks',
+            message: '一次 actions 内多个插入应按串行语义稳定落位，并正确返回新增 block。',
             data: {
               bodyTexts,
               createdBlocks: result.inserted.createdBlocks,
