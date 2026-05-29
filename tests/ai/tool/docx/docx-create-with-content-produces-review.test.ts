@@ -26,20 +26,23 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证仅执行 docx_create(blocks=...) 也能进入 review 主链并产出待确认稿。',
+      description: '验证仅执行 docx_edit(create_document, blocks=...) 也能进入 review 主链并产出待确认稿。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
         const harness = createDocxToolHarness(runtime)
         try {
           harness.ctx.beginDocxReviewRun()
-          const created = await harness.invoke<DocxCreateResult>('docx_create', {
+          const created = await harness.invoke<DocxCreateResult>('docx_edit', {
             sourcePath: targetFileName,
-            blocks: [
+            actions: [{
+              type: 'create_document',
+              blocks: [
               { type: 'heading', level: 1, text: '深度学习与图形学复习总结' },
               { type: 'paragraph', text: '过拟合：训练时间过久时容易出现。' },
               { type: 'paragraph', text: '反走样：采样频率不足时会出现锯齿。' }
             ]
+            }]
           })
           const details = await harness.ctx.finalizeDocxReviewRun()
 
@@ -82,7 +85,9 @@ describe('ai tool docx backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.created.created === true &&
+          result.created.previousRevisionRef === 'v1' &&
+            result.created.currentRevisionRef === 'v2' &&
+            result.created.createdBlocks.length >= 2 &&
             result.details.length === 1 &&
             result.details[0]?.review.output_operation === 'created' &&
             result.details[0]?.review.change_count === result.details[0]?.changes.length &&

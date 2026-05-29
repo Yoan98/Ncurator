@@ -14,7 +14,7 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证 docx_search 默认搜索全文，docx_text_edit.blockIds 只在当前文档内缩圈。',
+      description: '验证 docx_search 默认搜索全文，docx_edit(replace_text).blockIds 只在当前文档内缩圈。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -47,11 +47,14 @@ describe('ai tool docx backend', () => {
             sourcePath: outline.sourcePath,
             query: '目标术语'
           })
-          const scopedEdit = await harness.invoke<DocxMutationResult>('docx_text_edit', {
+          const scopedEdit = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: outline.sourcePath,
-            query: '目标术语',
-            replace: '限定术语',
-            blockIds: [firstScopedBlockId]
+            actions: [{
+              type: 'replace_text',
+              query: '目标术语',
+              replace: '限定术语',
+              blockIds: [firstScopedBlockId]
+            }]
           })
           const scopedRead = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: scopedEdit.sourcePath,
@@ -81,7 +84,7 @@ describe('ai tool docx backend', () => {
             result.remainingRead.matches.length === 1,
           {
             name: 'docx-search-scope-stays-explicit',
-            message: '默认搜索应覆盖全文，docx_text_edit.blockIds 只修改指定 block 范围内的结果。',
+            message: '默认搜索应覆盖全文，docx_edit(replace_text).blockIds 只修改指定 block 范围内的结果。',
             data: result
           }
         )

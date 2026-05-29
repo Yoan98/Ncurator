@@ -232,15 +232,20 @@ type DocxOp =
 ### 职责边界
 
 - Tool API 层统一定义 docx 工具名、schema 和 AI-facing 能力边界。
-- read / write tools 负责 AI-facing 语义。
+- read tools 负责读取当前文档结构、内容、检索结果和任务内历史。
+- write tools 对 AI 只暴露 `docx_edit` 与 `docx_rollback`；旧的分散写工具不再作为 AI-facing 能力出现。
 - runtime / session 层是 read/write、worker 与 review/commit 之间的中控层。
 - worker 与 OOXML adapter 负责打开、解析、执行和校验底层文档结构。
 
 ### 规则说明
 
-- `docx_create` 负责建立新的 docx draft target 与初始化 session，不直接等价于最终提交。
+- `docx_edit` 通过 `actions[]` 区分写入语义，当前支持 `create_document`、`insert_blocks`、`replace_block`、`replace_text`、`style_text`、`update_table_cell`、`delete_blocks`。
+- 每次 `docx_edit` 对同一文件的一组 `actions[]` 作为一次批量写入处理；`create_document` 必须作为唯一 action，后续图片、批注、脚注、编号、页眉页脚等能力应通过新增 action 或 block 类型扩展。
 - `docx_outline`、`docx_search`、`docx_read_blocks` 都应面向“当前最新文档”工作，而不是固定回看 source。
 - 写工具结果继续保留 `postWriteReadback.regions` 这类写后复核信息，供上层判断是否继续编辑或额外读取。
+- 每次 `docx_edit` 开始时必须以当前 `activeSnapshot / activeDocId / activeRevisionRef` 为整批 `actions[]` 的共同基准解析输入 blockId；输入 id 不在当前 snapshot、已删除或无法唯一绑定到可见 replay node 时直接失败，不猜测目标。
+- `insert_blocks` 插入多条 block 时必须作为一次结构 op 执行，并按输入 `blocks` 顺序落入文档。
+- 复杂定位排版 block 属于 read-only 区域，写入失败应走 `hand_docx_positioned_write_blocked`，由 brain/mouth 改为人工修改建议或独立补充稿。
 
 ## 10. 不纳入文档维护的实现细节范围
 

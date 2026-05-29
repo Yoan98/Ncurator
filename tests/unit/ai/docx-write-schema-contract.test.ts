@@ -1,74 +1,64 @@
 import { describe, expect, it } from 'vitest'
 import {
-  docxHeadingEditSchema,
-  docxParagraphEditSchema,
-  docxTableEditSchema
+  docxEditSchema
 } from '../../../src/main/services/ai/human/tools/docx/schemas'
 
 describe('ai unit docx write schema contract', () => {
-  it('rejects mixed locators for paragraph edit actions', () => {
+  it('accepts batch docx_edit actions', () => {
     expect(
-      docxParagraphEditSchema.safeParse({
+      docxEditSchema.safeParse({
+        sourcePath: 'a.docx',
+        actions: [
+          {
+            type: 'replace_text',
+            blockIds: ['b:1'],
+            query: '旧词',
+            replace: '新词'
+          },
+          {
+            type: 'insert_blocks',
+            position: 'after',
+            anchorBlockId: 'b:2',
+            blocks: [
+              {
+                type: 'paragraph',
+                text: '补充段落'
+              }
+            ]
+          }
+        ]
+      }).success
+    ).toBe(true)
+  })
+
+  it('rejects legacy top-level single-action docx_edit input', () => {
+    expect(
+      docxEditSchema.safeParse({
         sourcePath: 'a.docx',
         action: 'insert_after',
         anchorBlockId: 'b:1',
-        blockId: 'b:2',
-        text: 'hello'
-      }).success
-    ).toBe(false)
-
-    expect(
-      docxParagraphEditSchema.safeParse({
-        sourcePath: 'a.docx',
-        action: 'delete',
-        blockId: 'b:1',
-        anchorBlockId: 'b:2'
+        blocks: [
+          {
+            type: 'paragraph',
+            text: 'hello'
+          }
+        ]
       }).success
     ).toBe(false)
   })
 
-  it('rejects mixed locators for heading edit actions', () => {
+  it('rejects mixed locators inside a docx_edit action', () => {
     expect(
-      docxHeadingEditSchema.safeParse({
+      docxEditSchema.safeParse({
         sourcePath: 'a.docx',
-        action: 'insert_before',
-        anchorBlockId: 'b:1',
-        blockId: 'b:2',
-        level: 2,
-        text: 'Title'
-      }).success
-    ).toBe(false)
-
-    expect(
-      docxHeadingEditSchema.safeParse({
-        sourcePath: 'a.docx',
-        action: 'replace_text',
-        blockId: 'b:1',
-        anchorBlockId: 'b:2',
-        level: 2,
-        text: 'Title'
-      }).success
-    ).toBe(false)
-  })
-
-  it('rejects mixed locators for table edit actions', () => {
-    expect(
-      docxTableEditSchema.safeParse({
-        sourcePath: 'a.docx',
-        action: 'insert_after',
-        anchorBlockId: 'b:1',
-        cellBlockId: 'tbl:1.r:1.c:1',
-        rows: [['A']]
-      }).success
-    ).toBe(false)
-
-    expect(
-      docxTableEditSchema.safeParse({
-        sourcePath: 'a.docx',
-        action: 'update_cell',
-        cellBlockId: 'tbl:1.r:1.c:1',
-        anchorBlockId: 'b:1',
-        text: 'Bob'
+        actions: [
+          {
+            type: 'update_table_cell',
+            cellBlockId: 'tbl:1.r:1.c:1',
+            anchorBlockId: 'b:1',
+            text: 'Bob'
+          }
+        ]
       }).success
     ).toBe(false)
   })

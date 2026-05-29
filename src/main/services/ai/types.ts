@@ -196,6 +196,14 @@ export type AiRunContext = {
     createdBlocks: DocxCreatedBlock[]
     replaySession?: DocxReplaySession
   }) => void
+  trackDocxBatchChanges: (input: {
+    previousDocId: string
+    nextDocId: string
+    ops: DocxOp[]
+    changedBlocks: DocxChangedBlock[]
+    createdBlocks: DocxCreatedBlock[]
+    replaySession?: DocxReplaySession
+  }) => void
   resolveDocxOpenTarget: (sourcePath: string) => Promise<ResolvedDocxOpenTarget>
   beginDocxReviewRun: () => void
   finalizeDocxReviewRun: () => Promise<FileReviewDetail[]>
@@ -232,6 +240,7 @@ export type DocxToolContext = Pick<
   | 'sendEvent'
   | 'trackDocxOpen'
   | 'trackDocxChanges'
+  | 'trackDocxBatchChanges'
   | 'resolveDocxOpenTarget'
   | 'embeddingService'
 >

@@ -32,9 +32,7 @@ const DOCX_BLOCK_WHITELIST: NestedWhitelistConfig = {
 
 const DOCX_WRITE_RESULT_WHITELIST: NestedWhitelistConfig = {
   sourcePath: true,
-  previousRevisionRef: true,
-  currentRevisionRef: true,
-  created: true,
+  warnings: true,
   postWriteReadback: {
     regions: {
       fromBlockIndex: true,
@@ -109,13 +107,7 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
       isCurrent: true
     }
   },
-  docx_create: DOCX_WRITE_RESULT_WHITELIST,
-  docx_paragraph_edit: DOCX_WRITE_RESULT_WHITELIST,
-  docx_heading_edit: DOCX_WRITE_RESULT_WHITELIST,
-  docx_table_edit: DOCX_WRITE_RESULT_WHITELIST,
-  docx_text_edit: DOCX_WRITE_RESULT_WHITELIST,
-  docx_text_style_edit: DOCX_WRITE_RESULT_WHITELIST,
-  docx_delete: DOCX_WRITE_RESULT_WHITELIST,
+  docx_edit: DOCX_WRITE_RESULT_WHITELIST,
   docx_rollback: {
     sourcePath: true,
     previousRevisionRef: true,
@@ -125,6 +117,8 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
 
 const renderJsonValue = (value: JsonValue | JsonObject | undefined): string =>
   value === undefined ? 'none' : JSON.stringify(value)
+
+const toJsonValue = (value: JsonValue | undefined): JsonValue => value === undefined ? null : value
 
 const filterValueByWhitelist = (
   value: JsonValue | undefined,
@@ -155,11 +149,11 @@ const filterValueByWhitelist = (
 
 const buildToolHistoryReturnValue = (result: HumanHistoryToolResult): JsonValue => {
   if (!isJsonObject(result.data)) {
-    return result.data
+    return result.data === undefined ? null : result.data
   }
 
   const config = TOOL_HISTORY_WHITELIST_BY_NAME[result.toolName] || FALLBACK_TOOL_HISTORY_WHITELIST
-  return filterValueByWhitelist(result.data, config) ?? {}
+  return toJsonValue(filterValueByWhitelist(result.data, config) ?? {})
 }
 
 const buildBrainToolAttemptText = (input: {

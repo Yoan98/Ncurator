@@ -45,14 +45,17 @@ describe('ai tool docx backend', () => {
             outline.blocks.find(
               (block) => block.type === 'paragraph' && block.text.includes('Alice')
             )?.blockId || ''
-          const styled = await harness.invoke<DocxMutationResult>('docx_text_style_edit', {
+          const styled = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'style-highlight.docx',
-            blockId: paragraphBlockId,
-            query: 'Alice',
-            style: {
+            actions: [{
+              type: 'style_text',
+              blockId: paragraphBlockId,
+              query: 'Alice',
+              style: {
               bold: true,
               color: '2563EB'
             }
+            }]
           })
           const details = await runtime.fileReviewService.finalizeRunReview({
             runId: runtime.runId,

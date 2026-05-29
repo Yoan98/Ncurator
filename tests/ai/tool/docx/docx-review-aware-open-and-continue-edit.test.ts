@@ -65,10 +65,13 @@ describe('ai tool docx backend', () => {
             sourcePath: 'review-aware-source.docx',
             query: 'Cycle 1 draft content.'
           })
-          const applied = await harness.invoke<DocxMutationResult>('docx_text_edit', {
+          const applied = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'review-aware-source.docx',
-            query: 'Cycle 2 draft content.',
-            replace: 'Cycle 3 cumulative draft content.'
+            actions: [{
+              type: 'replace_text',
+              query: 'Cycle 2 draft content.',
+              replace: 'Cycle 3 cumulative draft content.'
+            }]
           })
           const readAfter = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: applied.sourcePath,

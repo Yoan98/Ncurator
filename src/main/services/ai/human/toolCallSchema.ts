@@ -2,10 +2,11 @@ import { z, ZodError } from 'zod/v4'
 import type { JsonObject } from '../../../../shared/types'
 import { HUMAN_HAND_CALL_LIMIT } from './constants'
 import { getToolSpec } from './tools/registry'
+import { jsonObjectSchema } from './toolSchemas'
 
 const FALLBACK_TOOL_CALL_SCHEMA = z.object({
   toolName: z.string().min(1),
-  args: z.object({}).catchall(z.unknown())
+  args: jsonObjectSchema
 })
 
 const buildToolCallOptionSchema = (toolName: string) => {
@@ -13,7 +14,7 @@ const buildToolCallOptionSchema = (toolName: string) => {
   if (!spec) {
     return z.object({
       toolName: z.literal(toolName),
-      args: z.object({}).catchall(z.unknown())
+      args: jsonObjectSchema
     })
   }
 
@@ -40,9 +41,14 @@ export const createToolCallSchema = (toolNames: readonly string[]) => {
     return buildToolCallOptionSchema(normalizedToolNames[0])
   }
 
+  type ToolCallOptionSchema = ReturnType<typeof buildToolCallOptionSchema>
   return z.discriminatedUnion(
     'toolName',
-    normalizedToolNames.map((toolName) => buildToolCallOptionSchema(toolName))
+    normalizedToolNames.map((toolName) => buildToolCallOptionSchema(toolName)) as unknown as [
+      ToolCallOptionSchema,
+      ToolCallOptionSchema,
+      ...ToolCallOptionSchema[]
+    ]
   )
 }
 
@@ -83,7 +89,7 @@ export const formatToolCallSchemaDiagnostic = (input: {
       ? input.error.issues
           .slice(0, MAX_ISSUES)
           .map((issue) => ({
-            path: formatIssuePath(issue.path, input.pathPrefix),
+            path: formatIssuePath(issue.path.filter((item): item is string | number => typeof item === 'string' || typeof item === 'number'), input.pathPrefix),
             message: issue.message
           }))
       : [

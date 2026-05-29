@@ -33,10 +33,13 @@ describe('ai tool docx backend', () => {
             sourcePath,
             range: { type: 'block_ids', blockIds: [searchBefore.matches[0]!.blockId] }
           })
-          const applied = await harness.invoke<DocxMutationResult>('docx_text_edit', {
+          const applied = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath,
-            query: 'Hello',
-            replace: 'Hi'
+            actions: [{
+              type: 'replace_text',
+              query: 'Hello',
+              replace: 'Hi'
+            }]
           })
           const searchAfter = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: applied.sourcePath,

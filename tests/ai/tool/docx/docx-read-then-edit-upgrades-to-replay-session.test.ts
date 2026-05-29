@@ -31,11 +31,14 @@ describe('ai tool docx backend', () => {
           const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
             sourcePath: 'upgrade-edit.docx'
           })
-          const mutation = await harness.invoke<DocxMutationResult>('docx_text_edit', {
+          const mutation = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'upgrade-edit.docx',
-            query: '需要替换的内容。',
-            replace: '已经改写后的内容。',
-            blockIds: [outline.blocks[1]!.blockId]
+            actions: [{
+              type: 'replace_text',
+              query: '需要替换的内容。',
+              replace: '已经改写后的内容。',
+              blockIds: [outline.blocks[1]!.blockId]
+            }]
           })
           const search = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: 'upgrade-edit.docx',
@@ -54,8 +57,8 @@ describe('ai tool docx backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.mutation.ok === true &&
-            result.search.ok === true &&
+          result.mutation.currentRevisionRef === 'v2' &&
+            result.search.currentRevisionRef === 'v2' &&
             result.search.returnedMatchCount >= 1 &&
             result.readSessionCount === 0 &&
             result.replaySessionCount === 1,

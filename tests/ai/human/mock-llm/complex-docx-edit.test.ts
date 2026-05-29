@@ -11,6 +11,7 @@ import {
   filterAiRunEventsByType,
   hasDraftFileArtifact,
   hasFileReviewArtifact,
+  readToolCallResultData,
   readLatestToolResultDataFromEvents
 } from '../testUtils'
 import { findParagraphBlockIdByText, type DocxOutlineResult } from '../../tool/docx/testUtils'
@@ -49,11 +50,14 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildToolDecision({
-                  toolName: 'docx_text_edit',
+                  toolName: 'docx_edit',
                   args: {
                     sourcePath: 'complex-edit.docx',
-                    query: 'Cycle 1 draft content.',
-                    replace: 'Cycle 3 cumulative draft content.'
+                    actions: [{
+                      type: 'replace_text',
+                      query: 'Cycle 1 draft content.',
+                      replace: 'Cycle 3 cumulative draft content.'
+                    }]
                   },
                   summary: '在真实 docx 上执行编辑'
                 })
@@ -61,7 +65,7 @@ describe('ai human mock-llm backend', () => {
               () => {
                 const applyResult = readLatestToolResultDataFromEvents<DocxMutationResult>(
                   runtime.eventCollector.snapshot(),
-                  'docx_text_edit'
+                  'docx_edit'
                 )
                 return buildToolDecision({
                   toolName: 'docx_read_blocks',
@@ -113,7 +117,7 @@ describe('ai human mock-llm backend', () => {
         const toolResults = filterAiRunEventsByType(result.events, 'tool_call_result')
         const applyResult = readLatestToolResultDataFromEvents<DocxMutationResult>(
           toolResults,
-          'docx_text_edit'
+          'docx_edit'
         )
         const searchResult = readLatestToolResultDataFromEvents<DocxSearchResult>(
           toolResults,
@@ -204,12 +208,20 @@ describe('ai human mock-llm backend', () => {
                   '达到反走样。'
                 )
                 return buildToolDecision({
-                  toolName: 'docx_paragraph_edit',
+                  toolName: 'docx_edit',
                   args: {
                     sourcePath: 'complex-structured-edit.docx',
-                    action: 'insert_after',
-                    anchorBlockId,
-                    paragraphs: ['补充说明：反走样通过平滑边缘像素来减轻锯齿感。']
+                    actions: [{
+                      type: 'insert_blocks',
+                      anchorBlockId,
+                      position: 'after',
+                      blocks: [
+                      {
+                        type: 'paragraph',
+                        text: '补充说明：反走样通过平滑边缘像素来减轻锯齿感。'
+                      }
+                    ]
+                    }]
                   },
                   summary: '插入补充说明'
                 })
@@ -217,7 +229,7 @@ describe('ai human mock-llm backend', () => {
               () => {
                 const paragraphEditResult = readLatestToolResultDataFromEvents<DocxMutationResult>(
                   runtime.eventCollector.snapshot(),
-                  'docx_paragraph_edit'
+                  'docx_edit'
                 )
                 const anchorBlockId = paragraphEditResult.createdBlocks?.[0]?.blockId
                 if (!anchorBlockId) {
@@ -235,22 +247,30 @@ describe('ai human mock-llm backend', () => {
               () => {
                 const paragraphEditResult = readLatestToolResultDataFromEvents<DocxMutationResult>(
                   runtime.eventCollector.snapshot(),
-                  'docx_paragraph_edit'
+                  'docx_edit'
                 )
                 const anchorBlockId = paragraphEditResult.createdBlocks?.[0]?.blockId
                 if (!anchorBlockId) {
                   throw new Error('paragraph edit did not return createdBlocks')
                 }
                 return buildToolDecision({
-                  toolName: 'docx_table_edit',
+                  toolName: 'docx_edit',
                   args: {
                     sourcePath: 'complex-structured-edit.docx',
-                    action: 'insert_after',
-                    anchorBlockId,
-                    rows: [
-                      ['反走样', '过拟合'],
-                      ['平滑边缘，降低锯齿', '记住训练噪声，泛化变差']
+                    actions: [{
+                      type: 'insert_blocks',
+                      anchorBlockId,
+                      position: 'after',
+                      blocks: [
+                      {
+                        type: 'table',
+                        rows: [
+                          ['反走样', '过拟合'],
+                          ['平滑边缘，降低锯齿', '记住训练噪声，泛化变差']
+                        ]
+                      }
                     ]
+                    }]
                   },
                   summary: '插入对照表'
                 })
@@ -294,13 +314,14 @@ describe('ai human mock-llm backend', () => {
       },
       assert: async (result, runtime) => {
         const toolResults = filterAiRunEventsByType(result.events, 'tool_call_result')
-        const paragraphEditResult = readLatestToolResultDataFromEvents<DocxMutationResult>(
+        const paragraphEditResult = readToolCallResultData<DocxMutationResult>(
           toolResults,
-          'docx_paragraph_edit'
+          'docx_edit',
+          -2
         )
         const tableEditResult = readLatestToolResultDataFromEvents<DocxMutationResult>(
           toolResults,
-          'docx_table_edit'
+          'docx_edit'
         )
         const outlineResult = readLatestToolResultDataFromEvents<DocxOutlineResult>(
           toolResults,

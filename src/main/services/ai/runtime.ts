@@ -125,6 +125,26 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
         replaySession
       })
     },
+    trackDocxBatchChanges: ({
+      previousDocId,
+      nextDocId,
+      ops,
+      changedBlocks,
+      createdBlocks,
+      replaySession
+    }) => {
+      const op = ops[0]
+      if (!op) return
+      deps.fileReviewService.registerDocxChanges({
+        runId: payload.runId,
+        previousDocId,
+        nextDocId,
+        op,
+        changedBlocks,
+        createdBlocks,
+        replaySession
+      })
+    },
     resolveDocxOpenTarget: async (sourcePath) =>
       await deps.fileReviewService.resolveDocxOpenTarget(sourcePath),
     beginDocxReviewRun: () => {

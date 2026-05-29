@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { JsonObject, JsonValue } from '../../../../../../shared/types'
+import type { JsonObject } from '../../../../../../shared/types'
 import {
   HUMAN_DEFAULT_TOOL_CALL_LIMIT,
   HUMAN_HAND_CALL_LIMIT,
@@ -18,12 +18,10 @@ import {
 } from '../../shared/deliveryGuidance'
 import { buildToolCallDisplayText } from '../../shared/toolResultRenderers'
 import { assertExternalLearnedSkillIds } from '../../skills'
-import { getToolSpec } from '../../tools/registry'
 import { analyzeReadonlyTerminalCommandPolicy } from '../../tools/terminal/readonlyCommandPolicy'
 import {
   createToolCallSchema,
-  formatToolCallSchemaDiagnostic,
-  readParsedSourcePath
+  formatToolCallSchemaDiagnostic
 } from '../../toolCallSchema'
 import type { HandCallList, HumanRuntimeCache, HumanState, HumanDecisionHint, ToolCallResult } from '../../types'
 import { deriveHandFollowupSignals, shouldStopSerialHandPlan } from './followupSignals'
@@ -32,18 +30,6 @@ import { executeToolCall } from './toolExecutor'
 import { returnToBrain, returnToBrainAfterTrace, returnToBrainWithDecisionHint } from '../utils/stateTransitions'
 import { getAvailableToolNames } from '../utils/runtimeCache'
 
-const DOCX_SERIAL_WRITE_TOOL_NAMES = new Set([
-  'docx_create',
-  'docx_paragraph_edit',
-  'docx_heading_edit',
-  'docx_table_edit',
-  'docx_text_edit',
-  'docx_text_style_edit',
-  'docx_delete',
-  'docx_rollback'
-])
-
-const isDocxSerialWriteCall = (toolName: string): boolean => DOCX_SERIAL_WRITE_TOOL_NAMES.has(toolName)
 const isTerminalRunCall = (toolName: string): boolean => toolName === 'terminal_run'
 
 const readTerminalCommandArg = (args: JsonObject): string | undefined =>
@@ -64,17 +50,6 @@ const createHandCallLimitDecisionHint = (input: {
     offendingToolNames: input.offendingToolNames,
     callCount: input.callCount,
     limit: input.limit
-  }
-})
-
-const createDocxSingleFileWriteLimitDecisionHint = (input: {
-  offendingToolNames: string[]
-  sourcePaths: string[]
-}): HumanDecisionHint => ({
-  code: 'hand_docx_single_file_write_limit_exceeded',
-  detail: {
-    offendingToolNames: input.offendingToolNames,
-    sourcePaths: input.sourcePaths
   }
 })
 
@@ -100,34 +75,7 @@ const buildToolLimitNearExhaustedDecisionHint = (
 const buildToolLimitDeliveryGuidance = (toolCallCount: number, limit: number): string =>
   `本轮累计工具调用次数已经超过上限，当前为 ${String(toolCallCount)}，上限为 ${String(limit)}。后续没有继续执行更多工具。最终答复中需要明确说明：已经完成了什么、哪些事项尚未继续完成，以及停止原因是工具调用预算耗尽。`
 
-const findSameFileMultiWriteDecisionHint = (
-  calls: ParsedHandCall[]
-): HumanDecisionHint | undefined => {
-  const mutatingCallsBySourcePath = new Map<string, ParsedHandCall[]>()
-  calls.forEach((call) => {
-    if (!isDocxSerialWriteCall(call.toolName)) return
-    const sourcePath = readParsedSourcePath(call.args)
-    if (!sourcePath) return
-    const existingCalls = mutatingCallsBySourcePath.get(sourcePath) || []
-    mutatingCallsBySourcePath.set(sourcePath, [...existingCalls, call])
-  })
-
-  const offendingEntries = [...mutatingCallsBySourcePath.entries()].filter(
-    ([, calls]) => calls.length > 1
-  )
-  if (offendingEntries.length === 0) return undefined
-
-  return createDocxSingleFileWriteLimitDecisionHint({
-    offendingToolNames: offendingEntries.flatMap(([, calls]) => calls.map((call) => call.toolName)),
-    sourcePaths: offendingEntries.map(([sourcePath]) => sourcePath)
-  })
-}
-
 const validateCalls = (calls: ParsedHandCall[]): HumanDecisionHint | undefined => {
-  const sameFileMultiWriteDecisionHint = findSameFileMultiWriteDecisionHint(calls)
-  if (sameFileMultiWriteDecisionHint) {
-    return sameFileMultiWriteDecisionHint
-  }
   if (calls.length > HUMAN_HAND_CALL_LIMIT) {
     return createHandCallLimitDecisionHint({
       offendingToolNames: calls.map((item) => item.toolName),
@@ -283,9 +231,10 @@ const parseHandCalls = (input: {
       continue
     }
 
+    const data = parsed.data as { toolName: string; args: JsonObject }
     parsedCalls.push({
-      toolName: parsed.data.toolName,
-      args: parsed.data.args as JsonObject
+      toolName: data.toolName,
+      args: data.args
     })
   }
 
@@ -328,7 +277,13 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
             || 0
           ),
           toolName: result.toolName,
-          message: String(result.diagnostic?.message || result.data?.error || '').trim()
+          message: String(
+            result.diagnostic?.message ||
+            (result.data && typeof result.data === 'object' && !Array.isArray(result.data)
+              ? result.data.error
+              : '') ||
+            ''
+          ).trim()
         }))
       )
       return returnToBrainAfterTrace({

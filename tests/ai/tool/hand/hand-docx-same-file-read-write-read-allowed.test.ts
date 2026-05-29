@@ -14,7 +14,7 @@ describe('ai tool hand backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['hand'],
-      description: '验证同一文件同轮 read -> write -> read 允许通过，限制只作用于多次写。',
+      description: '验证同一文件同轮 read -> docx_edit -> read 允许通过。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -56,11 +56,14 @@ describe('ai tool hand backend', () => {
                     }
                   },
                   {
-                    toolName: 'docx_text_edit',
+                    toolName: 'docx_edit',
                     args: {
                       sourcePath: 'same-file-read-write-read.docx',
-                      query: 'Alpha',
-                      replace: 'Alpha updated'
+                      actions: [{
+                        type: 'replace_text',
+                        query: 'Alpha',
+                        replace: 'Alpha updated'
+                      }]
                     }
                   },
                   {
@@ -86,14 +89,14 @@ describe('ai tool hand backend', () => {
           result.state.execution.pendingDecisionHint === undefined &&
             results.length === 3 &&
             results.map((item) => item.toolName).join(',') ===
-              'docx_outline,docx_text_edit,docx_read_blocks' &&
-            results.every((item) => item.code === 'ok') &&
+              'docx_outline,docx_edit,docx_read_blocks' &&
+            results.every((item) => item.ok) &&
             typeof results[2]?.data === 'object' &&
             results[2]?.data !== null &&
             JSON.stringify(results[2].data).includes('Alpha updated'),
           {
             name: 'same-file-read-write-read-plan-is-allowed',
-            message: '同一文件的多次读加一次写应允许通过，限制只针对同一文件多次写。',
+            message: '同一文件的读写混排应允许通过。',
             data: {
               lastToolResults: results
             }

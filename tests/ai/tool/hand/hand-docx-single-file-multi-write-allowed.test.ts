@@ -3,20 +3,26 @@ import { createHandNode } from '../../../../src/main/services/ai/human/node/hand
 import { ensureSkillTools } from '../../../../src/main/services/ai/human/node/learningNode/skillLoader'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
+import { writeTestDocxFile } from '../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 
 describe('ai tool hand backend', () => {
-  it('hand-docx-single-file-multi-write-invalid', async () => {
+  it('hand-docx-single-file-multi-write-allowed', async () => {
     await runBackendCase({
-      caseId: 'hand-docx-single-file-multi-write-invalid',
+      caseId: 'hand-docx-single-file-multi-write-allowed',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['hand'],
-      description: '验证同一文件一轮 hand 内出现两次 docx 写时，会在执行前被阻止。',
+      description: '验证同一文件一轮 hand 内允许按顺序执行多次 docx_edit。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
+        await writeTestDocxFile(runtime.workspaceRoot, 'same-file-multi-write.docx', [
+          { type: 'paragraph', text: 'Alpha TODO' },
+          { type: 'paragraph', text: 'Beta TODO' }
+        ])
+
         const ctx = runtime.createAiRunContext()
         const cache = createHumanRuntimeCache()
 
@@ -44,21 +50,25 @@ describe('ai tool hand backend', () => {
                 action: 'hand',
                 calls: [
                   {
-                    toolName: 'docx_heading_edit',
+                    toolName: 'docx_edit',
                     args: {
-                      sourcePath: 'same-file-invalid.docx',
-                      anchorBlockId: 'b:1',
-                      action: 'insert_after',
-                      headings: [{ level: 2, text: '第一部分' }]
+                      sourcePath: 'same-file-multi-write.docx',
+                      actions: [{
+                        type: 'replace_text',
+                        query: 'Alpha TODO',
+                        replace: 'Alpha done'
+                      }]
                     }
                   },
                   {
-                    toolName: 'docx_paragraph_edit',
+                    toolName: 'docx_edit',
                     args: {
-                      sourcePath: 'same-file-invalid.docx',
-                      anchorBlockId: 'b:2',
-                      action: 'insert_after',
-                      paragraphs: ['补充说明']
+                      sourcePath: 'same-file-multi-write.docx',
+                      actions: [{
+                        type: 'replace_text',
+                        query: 'Beta TODO',
+                        replace: 'Beta done'
+                      }]
                     }
                   }
                 ]
@@ -72,22 +82,17 @@ describe('ai tool hand backend', () => {
         }
       },
       assert: async (result, runtime) => {
+        const results = result.state.execution.lastToolResults || []
         runtime.assertThat(
-          result.state.execution.pendingDecisionHint?.code ===
-            'hand_docx_single_file_write_limit_exceeded' &&
-            result.state.execution.pendingDecisionHint.detail.sourcePaths.includes(
-              'same-file-invalid.docx'
-            ) &&
-            result.state.execution.pendingDecisionHint.detail.offendingToolNames.join(',') ===
-              'docx_heading_edit,docx_paragraph_edit' &&
-            (result.state.execution.lastToolResults || []).length === 0,
+          result.state.execution.pendingDecisionHint === undefined &&
+            results.length === 2 &&
+            results.every((item) => item.toolName === 'docx_edit' && item.ok),
           {
-            name: 'same-file-multi-write-plan-is-rejected',
-            message:
-              '同一文件在一轮 hand 中出现第 2 次 docx 写时，应直接返回 hand_docx_single_file_write_limit_exceeded，并带稳定 decision hint。',
+            name: 'same-file-multi-write-plan-is-executed',
+            message: '同一文件多次 docx_edit 应按 hand 顺序执行，不再被预拦截。',
             data: {
               decisionHint: result.state.execution.pendingDecisionHint,
-              lastToolResults: result.state.execution.lastToolResults
+              lastToolResults: results
             }
           }
         )

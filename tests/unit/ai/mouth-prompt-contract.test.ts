@@ -67,10 +67,13 @@ describe('ai unit mouth prompt contract', () => {
             action: 'hand',
             calls: [
               {
-                toolName: 'docx_create',
+                toolName: 'docx_edit',
                 args: {
                   sourcePath: '深度学习与图形学复习总结.docx',
-                  paragraphs: ['总结正文']
+                  actions: [{
+                    type: 'create_document',
+                    blocks: [{ type: 'paragraph', text: '总结正文' }]
+                  }]
                 }
               }
             ]
@@ -80,21 +83,40 @@ describe('ai unit mouth prompt contract', () => {
           kind: 'hand',
           calls: [
             {
-              toolName: 'docx_create',
+              toolName: 'docx_edit',
               args: {
                 sourcePath: '深度学习与图形学复习总结.docx',
-                paragraphs: ['总结正文']
+                actions: [{
+                  type: 'create_document',
+                  blocks: [{ type: 'paragraph', text: '总结正文' }]
+                }]
               }
             }
           ],
           toolResults: [
             {
-              toolName: 'docx_create',
+              toolName: 'docx_edit',
               ok: true,
               data: {
                 sourcePath: '深度学习与图形学复习总结.docx',
                 currentRevisionRef: 'rev-1',
-                created: true
+                createdBlocks: [{ blockId: 'b:0', type: 'paragraph' }],
+                postWriteReadback: {
+                  regions: [
+                    {
+                      fromBlockIndex: 0,
+                      toBlockIndex: 0,
+                      blocks: [
+                        {
+                          blockId: 'b:0',
+                          type: 'paragraph',
+                          blockIndex: 0,
+                          text: '总结正文'
+                        }
+                      ]
+                    }
+                  ]
+                }
               }
             }
           ]

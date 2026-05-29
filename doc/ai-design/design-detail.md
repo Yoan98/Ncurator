@@ -482,10 +482,23 @@ type HumanDecisionHint =
       }
     }
   | {
-      code: 'hand_docx_single_file_write_limit_exceeded'
+      code: 'hand_docx_positioned_write_blocked'
       detail: {
-        offendingToolNames: string[]
-        sourcePaths: string[]
+        toolName: 'docx_edit'
+        sourcePath?: string
+        action?: string
+        targetDescription: string
+        diagnostic?: string
+      }
+    }
+  | {
+      code: 'hand_docx_edit_failed'
+      detail: {
+        toolName: 'docx_edit'
+        sourcePath?: string
+        action?: string
+        error: string
+        diagnostic?: string
       }
     }
   | {
@@ -500,13 +513,6 @@ type HumanDecisionHint =
       detail: {
         toolCallCount: number
         limit: number
-      }
-    }
-  | {
-      code: 'hand_docx_positioned_write_blocked'
-      detail: {
-        targetDescription: string
-        sourcePath?: string
       }
     }
   | {

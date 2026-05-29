@@ -12,6 +12,7 @@ import {
   filterAiRunEventsByType,
   hasDraftFileArtifact,
   hasFileReviewArtifact,
+  isDocxEditCreateInput,
   runWithStructuredOutputRetry
 } from '../testUtils'
 
@@ -47,9 +48,14 @@ type DocxCreateResult = {
 const readLatestCreatedSourcePath = (
   events: ReturnType<typeof filterAiRunEventsByType>
 ): string | undefined => {
+  const createToolCallIds = new Set(
+    filterAiRunEventsByType(events, 'tool_call_started')
+      .filter((event) => event.toolName === 'docx_edit' && isDocxEditCreateInput(event.input))
+      .map((event) => event.toolCallId)
+  )
   const latestCreateEvent = [...filterAiRunEventsByType(events, 'tool_call_result')]
     .reverse()
-    .find((event) => event.toolName === 'docx_create' && event.result?.data)
+    .find((event) => createToolCallIds.has(event.toolCallId) && event.result?.data)
   const createData = latestCreateEvent?.result?.data as DocxCreateResult | undefined
   return createData?.sourcePath
 }
@@ -144,7 +150,7 @@ describe('ai human live backend', () => {
           const budgetEvents = filterAiRunEventsByType(events, 'context_budget_evaluated')
           const toolNames = filterAiRunEventsByType(events, 'tool_call_result').map((event) => event.toolName)
           const createSourcePaths = filterAiRunEventsByType(events, 'tool_call_started')
-            .filter((event) => event.toolName === 'docx_create')
+            .filter((event) => event.toolName === 'docx_edit' && isDocxEditCreateInput(event.input))
             .map((event) => event.input.sourcePath)
             .filter((value): value is string => typeof value === 'string')
           const createdRelativePaths = createSourcePaths.map((sourcePath) =>
@@ -205,7 +211,7 @@ describe('ai human live backend', () => {
               hasExactEntityText(latestBrainRecord?.user, expectedLastWeekDocAnchor) &&
               !hasInventedEntityText(latestBrainRecord?.user, inventedLastWeekDocName) &&
               !hasInventedEntityText(deliveryText, inventedLastWeekDocName) &&
-              toolNames.includes('docx_create') &&
+              toolNames.includes('docx_edit') &&
               hasDraftFileArtifact(result.output?.artifacts) &&
               hasFileReviewArtifact(result.output?.artifacts) &&
               createSourcePaths.length >= 1 &&

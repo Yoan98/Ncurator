@@ -34,10 +34,13 @@ describe('ai tool docx backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         try {
-          const changed = await harness.invoke<DocxMutationResult>('docx_text_edit', {
+          const changed = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'discard-review.docx',
-            query: '源文档原始内容。',
-            replace: '仅存在于工作稿中的内容。'
+            actions: [{
+              type: 'replace_text',
+              query: '源文档原始内容。',
+              replace: '仅存在于工作稿中的内容。'
+            }]
           })
           const details = await runtime.fileReviewService.finalizeRunReview({
             runId: runtime.runId,

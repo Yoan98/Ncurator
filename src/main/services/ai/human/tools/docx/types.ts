@@ -6,6 +6,8 @@ import {
   docxCreateBlockSchema,
   docxCreateSchema,
   docxDeleteSchema,
+  docxEditActionSchema,
+  docxEditSchema,
   docxHeadingEditActionSchema,
   docxHeadingEditSchema,
   docxHistoryRequestSchema,
@@ -127,9 +129,9 @@ export type DocxDetailedBlock =
   | DocxDetailedCellBlock
 
 export type DocxPostWriteReadbackRegion = {
-  startBlockId: string
+  fromBlockId: string
   fromBlockIndex: number
-  endBlockId: string
+  toBlockId: string
   toBlockIndex: number
   blocks: DocxDetailedBlock[]
 }
@@ -156,6 +158,8 @@ export type DocxWriteReadbackAction =
 export type DocxSearchMode = z.infer<typeof docxSearchModeSchema>
 export type DocxCreateBlock = z.infer<typeof docxCreateBlockSchema>
 export type DocxCreateRequest = z.infer<typeof docxCreateSchema>
+export type DocxEditAction = z.infer<typeof docxEditActionSchema>
+export type DocxEditRequest = z.infer<typeof docxEditSchema>
 export type DocxDeleteRequest = z.infer<typeof docxDeleteSchema>
 export type DocxOutlineRequest = z.infer<typeof docxOutlineRequestSchema>
 export type DocxSearchRequest = z.infer<typeof docxSearchRequestSchema>
@@ -261,6 +265,7 @@ export type DocxRevision = {
   changedBlocks?: DocxChangedBlock[]
   ops?: DocxOp[]
   createdBlocks?: DocxCreatedBlock[]
+  createdBlocksByOp?: DocxCreatedBlock[][]
 }
 
 export type DocxReplaySnapshotBlock = {

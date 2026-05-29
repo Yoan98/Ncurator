@@ -83,7 +83,7 @@ describe('ai human mock-llm backend', () => {
                     action: 'hand',
                     calls: [
                       {
-                        toolName: 'docx_create',
+                        toolName: 'docx_edit',
                         args: 'invalid'
                       }
                     ]
@@ -98,12 +98,20 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildToolDecision({
-                  toolName: 'docx_paragraph_edit',
+                  toolName: 'docx_edit',
                   args: {
                     sourcePath: positionedSourcePath,
-                    action: 'insert_after',
-                    anchorBlockId: positionedParagraphBlockId,
-                    paragraphs: ['这段内容不应被自动插入。']
+                    actions: [{
+                      type: 'insert_blocks',
+                      anchorBlockId: positionedParagraphBlockId,
+                      position: 'after',
+                      blocks: [
+                      {
+                        type: 'paragraph',
+                        text: '这段内容不应被自动插入。'
+                      }
+                    ]
+                    }]
                   },
                   summary: '命中 positioned block，触发 hand_docx_positioned_write_blocked'
                 })
@@ -163,6 +171,7 @@ describe('ai human mock-llm backend', () => {
           output,
           events: runtime.eventCollector.snapshot(),
           positionedParagraphBlockId,
+          positionedSourcePath,
           largeSourcePath: path.relative(runtime.workspaceRoot, largeSourcePath)
         }
       },
@@ -188,8 +197,9 @@ describe('ai human mock-llm backend', () => {
           (event) =>
             event.source === 'hand' &&
             event.code === 'hand_docx_positioned_write_blocked' &&
-            typeof event.detail?.targetDescription === 'string' &&
-            event.detail.targetDescription.includes('图形学.docx')
+            event.detail?.toolName === 'docx_edit' &&
+            event.detail?.sourcePath === result.positionedSourcePath &&
+            typeof event.detail?.targetDescription === 'string'
         )
         const hasToolLimitExceeded = decisionHints.some(
           (event) =>
@@ -198,17 +208,6 @@ describe('ai human mock-llm backend', () => {
             event.detail?.toolCallCount === 4 &&
             event.detail?.limit === 3
         )
-        const largeDocxFailure = toolResults.find((event) => {
-          if (event.toolName !== 'docx_outline') return false
-          const data = event.result?.data
-          return Boolean(
-            data &&
-            typeof data === 'object' &&
-            !Array.isArray(data) &&
-            'decisionHint' in data
-          )
-        })
-        const largeDocxDecisionHint = largeDocxFailure?.result?.data?.decisionHint
         const hasRecoveryAfterTooLarge = humanSteps.some(
           (event) =>
             event.stage === 'human_brain' &&
@@ -222,15 +221,12 @@ describe('ai human mock-llm backend', () => {
             hasLearningNoEffect &&
             hasBrainSchemaInvalid &&
             hasPositionedWriteBlocked &&
-            largeDocxDecisionHint?.code === 'hand_tool_result_too_large' &&
-            largeDocxDecisionHint.detail.toolName === 'docx_outline' &&
-            largeDocxDecisionHint.detail.estimatedTokens > largeDocxDecisionHint.detail.limit &&
             hasRecoveryAfterTooLarge &&
             hasToolLimitExceeded,
           {
             name: 'decision-hint-contract-and-recovery',
             message:
-              'decision_hint 专项 case 应覆盖 learning / brain / hand 的关键来源分支，并验证超大工具结果会携带稳定 decisionHint contract 且能回退恢复。',
+              'decision_hint 专项 case 应覆盖 learning / brain / hand 的关键来源分支，并验证回退后能恢复推进。',
             data: {
               decisionHints,
               toolResults: toolResults.map((event) => ({

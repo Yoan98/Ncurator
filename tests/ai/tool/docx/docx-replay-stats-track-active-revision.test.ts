@@ -32,19 +32,25 @@ describe('ai tool docx backend', () => {
           })
           const anchorBlockId = findParagraphBlockIdByText(initialOutline.blocks, '锚点段落')
 
-          const insertResult = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
+          const insertResult = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'replay-stats-active-revision.docx',
-            anchorBlockId,
-            action: 'insert_after',
-            paragraphs: ['新增段落']
+            actions: [{
+              type: 'insert_blocks',
+              anchorBlockId,
+              position: 'after',
+              blocks: [{ type: 'paragraph', text: '新增段落' }]
+            }]
           })
           const statsAfterInsert =
             harness.state.replaySessionBySourcePath.get(insertResult.sourcePath)?.stats
 
-          const rewriteResult = await harness.invoke<DocxMutationResult>('docx_text_edit', {
+          const rewriteResult = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'replay-stats-active-revision.docx',
-            query: '新增段落',
-            replace: '新增段落二稿'
+            actions: [{
+              type: 'replace_text',
+              query: '新增段落',
+              replace: '新增段落二稿'
+            }]
           })
           const statsAfterRewrite =
             harness.state.replaySessionBySourcePath.get(rewriteResult.sourcePath)?.stats

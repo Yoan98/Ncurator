@@ -93,4 +93,40 @@ describe('ai unit human tool result renderers', () => {
     expect(rendered).toContain('多个像素点')
     expect(rendered).toContain('低通滤波')
   })
+
+  it('renders docx_edit post-write readback instead of internal revision fields', () => {
+    const rendered = renderToolResultDataText({
+      toolName: 'docx_edit',
+      data: {
+        sourcePath: 'graphics.docx',
+        previousRevisionRef: 'v1',
+        currentRevisionRef: 'v2',
+        createdBlocks: [{ blockId: 'b:2', type: 'paragraph' }],
+        warnings: [],
+        postWriteReadback: {
+          regions: [
+            {
+              fromBlockIndex: 1,
+              toBlockIndex: 2,
+              blocks: [
+                {
+                  blockId: 'b:2',
+                  type: 'paragraph',
+                  blockIndex: 2,
+                  text: '补充说明'
+                }
+              ]
+            }
+          ]
+        }
+      }
+    })
+
+    expect(rendered).toContain('postWriteReadback:')
+    expect(rendered).toContain('b:2')
+    expect(rendered).toContain('补充说明')
+    expect(rendered).not.toContain('previousRevisionRef')
+    expect(rendered).not.toContain('currentRevisionRef')
+    expect(rendered).not.toContain('createdBlocks')
+  })
 })

@@ -51,15 +51,21 @@ describe('ai tool docx backend', () => {
           const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
             sourcePath: templateRelativePath
           })
-          const firstEdit = await harness.invoke<DocxMutationResult>('docx_text_edit', {
+          const firstEdit = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: templateRelativePath,
-            query: 'RISK_TODO',
-            replace: '在最终合规签署完成前，当前风险状态仍需保持跟进。'
+            actions: [{
+              type: 'replace_text',
+              query: 'RISK_TODO',
+              replace: '在最终合规签署完成前，当前风险状态仍需保持跟进。'
+            }]
           })
-          const secondEdit = await harness.invoke<DocxMutationResult>('docx_text_edit', {
+          const secondEdit = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: templateRelativePath,
-            query: 'OWNER_TODO',
-            replace: '最终复核窗口由合规负责人 Alice 牵头。'
+            actions: [{
+              type: 'replace_text',
+              query: 'OWNER_TODO',
+              replace: '最终复核窗口由合规负责人 Alice 牵头。'
+            }]
           })
 
           const details = await runtime.fileReviewService.finalizeRunReview({

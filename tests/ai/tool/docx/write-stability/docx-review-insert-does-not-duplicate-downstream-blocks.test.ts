@@ -46,21 +46,27 @@ describe('ai tool docx backend', () => {
             outline.blocks.find(
               (block) => block.type === 'paragraph' && block.text.includes('概念引导。')
             )?.blockId || ''
-          const insertedParagraph = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
+          const insertedParagraph = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'review-insert-no-duplicate.docx',
-            action: 'insert_after',
-            anchorBlockId,
-            paragraphs: ['先用按钮提示解释本轮脚手架目标。']
+            actions: [{
+              type: 'insert_blocks',
+              position: 'after',
+              anchorBlockId,
+              blocks: [{ type: 'paragraph', text: '先用按钮提示解释本轮脚手架目标。' }]
+            }]
           })
           const insertedParagraphBlockId = insertedParagraph.createdBlocks?.[0]?.blockId || ''
-          await harness.invoke<DocxMutationResult>('docx_table_edit', {
+          await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: insertedParagraph.sourcePath,
-            action: 'insert_after',
-            anchorBlockId: insertedParagraphBlockId,
-            rows: [
+            actions: [{
+              type: 'insert_blocks',
+              position: 'after',
+              anchorBlockId: insertedParagraphBlockId,
+              blocks: [{ type: 'table', rows: [
               ['提示', '动作'],
               ['开始', '进入脚手架']
-            ]
+            ] }]
+            }]
           })
 
           const details = await runtime.fileReviewService.finalizeRunReview({

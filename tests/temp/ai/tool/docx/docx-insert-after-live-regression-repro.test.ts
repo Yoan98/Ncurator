@@ -76,24 +76,40 @@ describe('temp ai tool docx backend', () => {
             range: { type: 'block_ids', blockIds: [anchorBlockId] }
           })
 
-          const insertedParagraph = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
+          const insertedParagraph = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'insert-after-live-repro.docx',
-            action: 'insert_after',
-            anchorBlockId,
-            paragraphs: ['学生可以根据按钮提示逐步完成脚手架操作。']
+            actions: [{
+              type: 'insert_blocks',
+              anchorBlockId,
+              position: 'after',
+              blocks: [
+                {
+                  type: 'paragraph',
+                  text: '学生可以根据按钮提示逐步完成脚手架操作。'
+                }
+              ]
+            }]
           })
           const insertedParagraphBlockId = insertedParagraph.createdBlocks?.find(
             (block) => block.type === 'paragraph'
           )?.blockId || ''
 
-          const insertedTable = await harness.invoke<DocxMutationResult>('docx_table_edit', {
+          const insertedTable = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: insertedParagraph.sourcePath,
-            action: 'insert_after',
-            anchorBlockId: insertedParagraphBlockId,
-            rows: [
-              ['入口按钮', '对应动作'],
-              ['开始引导', '进入脚手架']
-            ]
+            actions: [{
+              type: 'insert_blocks',
+              anchorBlockId: insertedParagraphBlockId,
+              position: 'after',
+              blocks: [
+                {
+                  type: 'table',
+                  rows: [
+                    ['入口按钮', '对应动作'],
+                    ['开始引导', '进入脚手架']
+                  ]
+                }
+              ]
+            }]
           })
 
           const anchorAfter = await harness.invoke<DocxReadResult>('docx_read_blocks', {
@@ -178,7 +194,9 @@ describe('temp ai tool docx backend', () => {
         )
 
         runtime.assertThat(
-          result.reviewOutline.filter((block) => block.text.includes('学生端脚手架引导：')).length === 1,
+          result.reviewOutline.filter((block) =>
+            String(block.text || '').includes('学生端脚手架引导：')
+          ).length === 1,
           {
             name: 'review-does-not-duplicate-downstream-tail-block',
             message: 'review artifact 中下游旧段落只应出现一次，不得因插入重绑错误而重复。',

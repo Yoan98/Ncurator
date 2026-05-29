@@ -32,11 +32,14 @@ describe('ai tool docx backend', () => {
           })
           const anchorBlockId = findParagraphBlockIdByText(beforeOutline.blocks, '导语段落')
 
-          const writeResult = await harness.invoke<DocxMutationResult>('docx_heading_edit', {
+          const writeResult = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'outline-percent-after-write.docx',
-            anchorBlockId,
-            action: 'insert_after',
-            headings: [{ level: 2, text: '第一部分：深度学习' }]
+            actions: [{
+              type: 'insert_blocks',
+              anchorBlockId,
+              position: 'after',
+              blocks: [{ type: 'heading', level: 2, text: '第一部分：深度学习' }]
+            }]
           })
 
           const afterOutline = await harness.invoke<DocxOutlineResult>('docx_outline', {

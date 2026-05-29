@@ -54,19 +54,25 @@ describe('ai tool hand backend', () => {
                 action: 'hand',
                 calls: [
                   {
-                    toolName: 'docx_text_edit',
+                    toolName: 'docx_edit',
                     args: {
                       sourcePath: 'multi-file-a.docx',
-                      query: 'Alpha',
-                      replace: 'Alpha updated'
+                      actions: [{
+                        type: 'replace_text',
+                        query: 'Alpha',
+                        replace: 'Alpha updated'
+                      }]
                     }
                   },
                   {
-                    toolName: 'docx_text_edit',
+                    toolName: 'docx_edit',
                     args: {
                       sourcePath: 'multi-file-b.docx',
-                      query: 'Beta',
-                      replace: 'Beta updated'
+                      actions: [{
+                        type: 'replace_text',
+                        query: 'Beta',
+                        replace: 'Beta updated'
+                      }]
                     }
                   }
                 ]
@@ -110,7 +116,7 @@ describe('ai tool hand backend', () => {
         runtime.assertThat(
           result.state.execution.pendingDecisionHint === undefined &&
             result.state.execution.lastToolResults?.length === 2 &&
-            result.state.execution.lastToolResults.every((item) => item.code === 'ok') &&
+            result.state.execution.lastToolResults.every((item) => item.ok) &&
             outlineA.blocks.some((block) => block.type === 'paragraph' && block.text === 'Alpha updated') &&
             outlineB.blocks.some((block) => block.type === 'paragraph' && block.text === 'Beta updated'),
           {

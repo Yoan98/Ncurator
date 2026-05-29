@@ -36,24 +36,27 @@ describe('ai tool hand backend', () => {
             ...baseState.execution,
             currentThought: {
               thought: {
-                next: '给一个双层嵌套的坏 docx_create'
+                next: '给一个双层嵌套的坏 docx_edit'
               },
               nextAction: {
                 action: 'hand',
                 calls: [
                   {
-                    toolName: 'docx_create',
+                    toolName: 'docx_edit',
                     args: {
-                      toolName: 'docx_create',
-                      args: {
-                        sourcePath: 'broken.docx',
-                        blocks: [
-                          {
-                            type: 'paragraph',
-                            text: 'hello'
-                          }
-                        ]
-                      }
+                      toolName: 'docx_edit',
+	                      args: {
+	                        sourcePath: 'broken.docx',
+	                        actions: [{
+	                          type: 'create_document',
+	                          blocks: [
+	                            {
+	                              type: 'paragraph',
+	                              text: 'hello'
+	                            }
+	                          ]
+	                        }]
+	                      }
                     }
                   }
                 ]

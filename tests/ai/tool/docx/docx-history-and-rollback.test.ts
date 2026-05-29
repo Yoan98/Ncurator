@@ -44,15 +44,21 @@ describe('ai tool docx backend', () => {
             sourcePath: 'history-rollback.docx',
             query: 'Version one.'
           })
-          const firstEdit = await harness.invoke<DocxMutationResult>('docx_text_edit', {
+          const firstEdit = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: initialSearch.sourcePath,
-            query: 'Version one.',
-            replace: 'Version two.'
+            actions: [{
+              type: 'replace_text',
+              query: 'Version one.',
+              replace: 'Version two.'
+            }]
           })
-          const secondEdit = await harness.invoke<DocxMutationResult>('docx_text_edit', {
+          const secondEdit = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: firstEdit.sourcePath,
-            query: 'Keep this line.',
-            replace: 'Keep this line, updated.'
+            actions: [{
+              type: 'replace_text',
+              query: 'Keep this line.',
+              replace: 'Keep this line, updated.'
+            }]
           })
           const history = await harness.invoke<DocxHistoryResult>('docx_history', {
             sourcePath: secondEdit.sourcePath,

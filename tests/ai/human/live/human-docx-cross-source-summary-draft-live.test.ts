@@ -14,9 +14,12 @@ import {
 } from '../../../harness/backend/aiLiveTestData'
 import {
   collectDocxApplyOpsContentKinds,
+  collectStartedDocxEditSourcePaths,
   filterAiRunEventsByType,
   hasDraftFileArtifact,
   hasFileReviewArtifact,
+  isDocxEditCreateInput,
+  isDocxEditWriteInput,
   runWithStructuredOutputRetry
 } from '../testUtils'
 
@@ -92,19 +95,10 @@ describe('ai human live backend', () => {
             .map((event) => event.input.sourcePath)
             .filter((value): value is string => typeof value === 'string')
           const createSourcePaths = filterAiRunEventsByType(events, 'tool_call_started')
-            .filter((event) => event.toolName === 'docx_create')
+            .filter((event) => event.toolName === 'docx_edit' && isDocxEditCreateInput(event.input))
             .map((event) => event.input.sourcePath)
             .filter((value): value is string => typeof value === 'string')
-          const writeSourcePaths = filterAiRunEventsByType(events, 'tool_call_started')
-            .filter((event) =>
-              event.toolName === 'docx_paragraph_edit' ||
-              event.toolName === 'docx_heading_edit' ||
-              event.toolName === 'docx_table_edit' ||
-              event.toolName === 'docx_text_edit' ||
-              event.toolName === 'docx_text_style_edit'
-            )
-            .map((event) => event.input.sourcePath)
-            .filter((value): value is string => typeof value === 'string')
+          const writeSourcePaths = collectStartedDocxEditSourcePaths(events, isDocxEditWriteInput)
           const changedContentKinds = collectDocxApplyOpsContentKinds(events)
           const targetExistsInWorkspace = await fs
             .access(
@@ -145,7 +139,7 @@ describe('ai human live backend', () => {
               targetDocCreated &&
               targetDocOpened &&
               toolNames.some((toolName) => toolName === 'docx_search' || toolName === 'docx_read_blocks') &&
-              toolNames.includes('docx_create') &&
+              toolNames.includes('docx_edit') &&
               targetDocWritten &&
               filterAiRunEventsByType(events, 'draft_review_ready').length >= 1 &&
               hasFileReviewArtifact(result.output?.artifacts) &&

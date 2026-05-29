@@ -37,11 +37,14 @@ describe('ai tool docx backend', () => {
               (block) => block.type === 'paragraph' && block.text.includes('锚点段落')
             )?.blockId || ''
 
-          const insertParagraph = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
+          const insertParagraph = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'multi-round-created.docx',
-            action: 'insert_after',
-            anchorBlockId,
-            paragraphs: ['新增段落初稿。']
+            actions: [{
+              type: 'insert_blocks',
+              position: 'after',
+              anchorBlockId,
+              blocks: [{ type: 'paragraph', text: '新增段落初稿。' }]
+            }]
           })
 
           const insertedParagraphSearch = await harness.invoke<DocxSearchResult>('docx_search', {
@@ -51,23 +54,29 @@ describe('ai tool docx backend', () => {
           const insertedParagraphBlockId = insertedParagraphSearch.matches[0]?.blockId || ''
 
           const rewriteInsertedParagraph = await harness.invoke<DocxMutationResult>(
-            'docx_text_edit',
+            'docx_edit',
             {
               sourcePath: insertParagraph.sourcePath,
-              query: '新增段落初稿。',
-              replace: '新增段落二稿。',
-              blockIds: [insertedParagraphBlockId]
+              actions: [{
+                type: 'replace_text',
+                query: '新增段落初稿。',
+                replace: '新增段落二稿。',
+                blockIds: [insertedParagraphBlockId]
+              }]
             }
           )
 
-          const insertTable = await harness.invoke<DocxMutationResult>('docx_table_edit', {
+          const insertTable = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: rewriteInsertedParagraph.sourcePath,
-            action: 'insert_after',
-            anchorBlockId: insertedParagraphBlockId,
-            rows: [
+            actions: [{
+              type: 'insert_blocks',
+              position: 'after',
+              anchorBlockId: insertedParagraphBlockId,
+              blocks: [{ type: 'table', rows: [
               ['单元格初稿', '说明'],
               ['保留项', '尾注']
-            ]
+            ] }]
+            }]
           })
 
           const insertedCellSearch = await harness.invoke<DocxSearchResult>('docx_search', {
@@ -78,11 +87,13 @@ describe('ai tool docx backend', () => {
             insertedCellSearch.matches.find((match) => match.type === 'table_cell')?.blockId ||
             ''
 
-          const updateCreatedCell = await harness.invoke<DocxMutationResult>('docx_table_edit', {
+          const updateCreatedCell = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: insertTable.sourcePath,
-            action: 'update_cell',
-            cellBlockId,
-            text: '单元格终稿'
+            actions: [{
+              type: 'update_table_cell',
+              cellBlockId,
+              text: '单元格终稿'
+            }]
           })
 
           const rewrittenParagraphSearch = await harness.invoke<DocxSearchResult>('docx_search', {

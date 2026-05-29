@@ -36,18 +36,9 @@ export const SKILL_DEFINITIONS: Record<RuntimeSkillId, SkillDefinition> = {
     countsTowardToolBudget: true,
     title: 'docx-write',
     description:
-      '能力：创建 docx 文件内容，插入段落、标题、表格，替换文本，调整文本样式，删除完整块，切换编辑 revision。\n结果：生成新的 docx 编辑 revision，并返回变更信息与写后回读信息。\n边界：写入作用于当前任务内的编辑链路，最终落盘由 review / commit 链路处理。',
-    whenToUse: '适用于需要改变 docx 内容或编辑 revision 状态的任务。',
-    toolNames: [
-      'docx_create',
-      'docx_paragraph_edit',
-      'docx_heading_edit',
-      'docx_table_edit',
-      'docx_text_edit',
-      'docx_text_style_edit',
-      'docx_delete',
-      'docx_rollback'
-    ]
+      '能力：创建新的 Word 文档，或修改已有 Word 文档中的段落、标题、表格、文本和样式。\n结果：写入后返回相邻区域的详细回读信息，方便检查写入效果或继续下一步编辑。\n边界：只能使用读取工具或写后回读返回的真实 blockId，不要推算 blockId；复杂定位排版区域可能只能给人工修改建议。',
+    whenToUse: '适用于用户要求生成、补充、改写、删除或格式化 docx 内容的任务。',
+    toolNames: ['docx_edit', 'docx_rollback']
   },
   'kb-retrieval': {
     skillId: 'kb-retrieval',

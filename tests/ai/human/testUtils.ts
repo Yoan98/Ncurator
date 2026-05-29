@@ -89,6 +89,36 @@ export const collectStartedToolStringArgs = (
     .map((input) => input[argName])
     .filter((value): value is string => typeof value === 'string')
 
+export const isDocxEditCreateInput = (input: JsonObject): boolean =>
+  Array.isArray(input.actions) &&
+  input.actions.some(
+    (action) =>
+      action &&
+      typeof action === 'object' &&
+      !Array.isArray(action) &&
+      (action as JsonObject).type === 'create_document'
+  )
+
+export const isDocxEditWriteInput = (input: JsonObject): boolean =>
+  Array.isArray(input.actions) &&
+  input.actions.some(
+    (action) =>
+      action &&
+      typeof action === 'object' &&
+      !Array.isArray(action) &&
+      typeof (action as JsonObject).type === 'string' &&
+      (action as JsonObject).type !== 'create_document'
+  )
+
+export const collectStartedDocxEditSourcePaths = (
+  events: readonly AiRunEvent[],
+  predicate: (input: JsonObject) => boolean
+): string[] =>
+  collectStartedToolInputs(events, 'docx_edit')
+    .filter(predicate)
+    .map((input) => input.sourcePath)
+    .filter((value): value is string => typeof value === 'string')
+
 export const hasKbToolCall = (events: readonly AiRunEvent[]): boolean =>
   filterAiRunEventsByType(events, 'tool_call_result').some((event) => event.toolName.startsWith('kb_'))
 
@@ -118,12 +148,7 @@ export const countDraftFileArtifacts = (artifacts: readonly AiArtifactRef[] | un
     : 0
 
 const DOCX_WRITE_TOOL_NAMES = [
-  'docx_create',
-  'docx_paragraph_edit',
-  'docx_heading_edit',
-  'docx_table_edit',
-  'docx_text_edit',
-  'docx_text_style_edit',
+  'docx_edit',
   'docx_rollback'
 ] as const
 
@@ -174,32 +199,38 @@ const collectDocxBlockKindsFromValue = (
   }
 
   const kind = value.kind
+  const type = value.type
   if (kind === 'paragraph' || kind === 'table') {
     kinds.add(kind)
+  }
+  if (type === 'paragraph' || type === 'table') {
+    kinds.add(type)
   }
 
   collectDocxBlockKindsFromValue(value.content, kinds)
   collectDocxBlockKindsFromValue(value.ops, kinds)
   collectDocxBlockKindsFromValue(value.rows, kinds)
+  collectDocxBlockKindsFromValue(value.blocks, kinds)
 }
 
 export const collectDocxApplyOpsContentKinds = (
   events: readonly AiRunEvent[]
 ): Array<'paragraph' | 'table'> => {
   const kinds = new Set<'paragraph' | 'table'>()
-  ;['docx_paragraph_edit', 'docx_heading_edit', 'docx_table_edit'].forEach((toolName) => {
-    collectStartedToolInputs(events, toolName).forEach((input) => {
-      if (toolName === 'docx_paragraph_edit' || toolName === 'docx_heading_edit') {
-        kinds.add('paragraph')
-      }
-      if (
-        toolName === 'docx_table_edit' &&
-        (input.action === 'insert_before' || input.action === 'insert_after')
-      ) {
-        kinds.add('table')
-      }
-      collectDocxBlockKindsFromValue(input, kinds)
-    })
+  collectStartedToolInputs(events, 'docx_edit').forEach((input) => {
+    if (Array.isArray(input.actions)) {
+      input.actions.forEach((action) => {
+        if (!action || typeof action !== 'object' || Array.isArray(action)) return
+        const actionInput = action as JsonObject
+        if (actionInput.type === 'insert_blocks' || actionInput.type === 'create_document') {
+          collectDocxBlockKindsFromValue(actionInput.blocks, kinds)
+        }
+        if (actionInput.type === 'replace_block') {
+          collectDocxBlockKindsFromValue(actionInput.block, kinds)
+        }
+      })
+    }
+    collectDocxBlockKindsFromValue(input, kinds)
   })
   return [...kinds]
 }

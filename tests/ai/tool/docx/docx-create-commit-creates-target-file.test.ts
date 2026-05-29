@@ -30,12 +30,15 @@ describe('ai tool docx backend', () => {
         let reviewId = ''
         try {
           harness.ctx.beginDocxReviewRun()
-          await harness.invoke<DocxCreateResult>('docx_create', {
+          await harness.invoke<DocxCreateResult>('docx_edit', {
             sourcePath: 'generated-summary.docx',
-            blocks: [
+            actions: [{
+              type: 'create_document',
+              blocks: [
               { type: 'heading', level: 1, text: '深度学习与图形学复习总结' },
               { type: 'paragraph', text: '过拟合：训练时间过久时容易出现。' }
             ]
+            }]
           })
           const details = await harness.ctx.finalizeDocxReviewRun()
           await runtime.fileReviewService.persistMaterializedReviews(details)

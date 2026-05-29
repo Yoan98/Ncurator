@@ -39,9 +39,12 @@ describe('ai tool docx backend', () => {
               (block) => block.type === 'paragraph' && block.text.includes('这段需要删除')
             )?.blockId || ''
 
-          const deleted = await harness.invoke<DocxMutationResult>('docx_delete', {
+          const deleted = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'working-draft-delete.docx',
-            blockIds: [deleteBlockId]
+            actions: [{
+              type: 'delete_blocks',
+              blockIds: [deleteBlockId]
+            }]
           })
           const deletedSearch = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: deleted.sourcePath,

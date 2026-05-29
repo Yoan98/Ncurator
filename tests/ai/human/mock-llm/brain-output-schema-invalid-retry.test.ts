@@ -30,18 +30,19 @@ describe('ai human mock-llm backend', () => {
                     action: 'hand',
                     calls: [
                       {
-                        toolName: 'docx_create',
+                        toolName: 'docx_edit',
                         args: {
-                          toolName: 'docx_create',
-                          args: {
-                            sourcePath: 'report.docx',
+                          sourcePath: 'report.docx',
+                          actions: [{
+                            type: 'create_document',
                             blocks: [
-                              {
-                                type: 'paragraph',
-                                text: 'hello'
-                              }
-                            ]
-                          }
+                            {
+                              type: 'paragraph',
+                              text: 'hello'
+                            }
+                          ],
+                            unexpected: true
+                          }]
                         }
                       }
                     ]

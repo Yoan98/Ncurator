@@ -45,20 +45,26 @@ describe('ai tool docx backend', () => {
               (block) => block.type === 'paragraph' && block.text.includes('达到反走样')
             )?.blockId || ''
 
-          await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
+          await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'review-order.docx',
-            action: 'insert_after',
-            anchorBlockId,
-            paragraphs: ['反走样可以理解为通过平滑高频锯齿来减少边缘突变。']
+            actions: [{
+              type: 'insert_blocks',
+              position: 'after',
+              anchorBlockId,
+              blocks: [{ type: 'paragraph', text: '反走样可以理解为通过平滑高频锯齿来减少边缘突变。' }]
+            }]
           })
-          await harness.invoke<DocxMutationResult>('docx_table_edit', {
+          await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'review-order.docx',
-            action: 'insert_after',
-            anchorBlockId,
-            rows: [
+            actions: [{
+              type: 'insert_blocks',
+              position: 'after',
+              anchorBlockId,
+              blocks: [{ type: 'table', rows: [
               ['反走样', '过拟合'],
               ['平滑边缘', '记住噪声']
-            ]
+            ] }]
+            }]
           })
 
           const details = await runtime.fileReviewService.finalizeRunReview({

@@ -56,9 +56,9 @@ describe('ai tool docx backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.outline.ok === true &&
-            result.read.ok === true &&
-            result.search.ok === true &&
+          result.outline.currentRevisionRef === 'v1' &&
+            result.read.currentRevisionRef === 'v1' &&
+            result.search.currentRevisionRef === 'v1' &&
             result.readSessionCount === 1 &&
             result.replaySessionCount === 0,
           {

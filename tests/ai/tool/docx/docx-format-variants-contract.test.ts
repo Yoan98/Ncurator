@@ -66,17 +66,22 @@ describe('ai tool docx backend', () => {
             sourcePath: outline.sourcePath,
             range: { type: 'block_ids', blockIds: [ownerCellBlockId] }
           })
-          const updatedParagraph = await harness.invoke<DocxMutationResult>('docx_text_edit', {
+          const updatedParagraph = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: outline.sourcePath,
-            query: 'Narrative paragraph content.',
-            replace: 'Narrative paragraph updated.',
-            blockIds: [narrativeBlockId]
+            actions: [{
+              type: 'replace_text',
+              query: 'Narrative paragraph content.',
+              replace: 'Narrative paragraph updated.',
+              blockIds: [narrativeBlockId]
+            }]
           })
-          const updatedCell = await harness.invoke<DocxMutationResult>('docx_table_edit', {
+          const updatedCell = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: updatedParagraph.sourcePath,
-            action: 'update_cell',
-            cellBlockId: ownerCellBlockId,
-            text: 'Bob'
+            actions: [{
+              type: 'update_table_cell',
+              cellBlockId: ownerCellBlockId,
+              text: 'Bob'
+            }]
           })
           const searchUpdatedParagraph = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: updatedCell.sourcePath,

@@ -21,9 +21,12 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           harness.ctx.beginDocxReviewRun()
-          await harness.invoke<DocxCreateResult>('docx_create', {
+          await harness.invoke<DocxCreateResult>('docx_edit', {
             sourcePath: 'generated-summary.docx',
-            blocks: [{ type: 'paragraph', text: '反走样：采样频率不足时会出现锯齿。' }]
+            actions: [{
+              type: 'create_document',
+              blocks: [{ type: 'paragraph', text: '反走样：采样频率不足时会出现锯齿。' }]
+            }]
           })
           const details = await harness.ctx.finalizeDocxReviewRun()
           await runtime.fileReviewService.persistMaterializedReviews(details)

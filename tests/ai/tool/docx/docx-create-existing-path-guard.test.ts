@@ -15,7 +15,7 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证 docx_create 不会覆盖已有目标路径。',
+      description: '验证 docx_edit(create_document) 不会覆盖已有目标路径。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -25,14 +25,17 @@ describe('ai tool docx backend', () => {
         const beforeBytes = await fs.readFile(existingPath)
         const harness = createDocxToolHarness(runtime)
         try {
-          const failure = await harness.invoke<DocxFailureResult>('docx_create', {
+          const failure = await harness.invoke<DocxFailureResult>('docx_edit', {
             sourcePath: 'already-exists.docx',
-            blocks: [
+            actions: [{
+              type: 'create_document',
+              blocks: [
               {
                 type: 'paragraph',
                 text: '新内容不应该覆盖旧文件。'
               }
             ]
+            }]
           })
           const afterBytes = await fs.readFile(existingPath)
 
@@ -50,7 +53,7 @@ describe('ai tool docx backend', () => {
           result.failure.error.length > 0 && result.unchanged === true,
           {
             name: 'docx-create-refuses-existing-path',
-            message: 'docx_create 遇到已存在路径时应明确失败，且不覆盖原文件。',
+            message: 'docx_edit(create_document) 遇到已存在路径时应明确失败，且不覆盖原文件。',
             data: result
           }
         )

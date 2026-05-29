@@ -31,10 +31,13 @@ describe('ai tool docx backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         try {
-          const changed = await harness.invoke<DocxMutationResult>('docx_text_edit', {
+          const changed = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'commit-conflict.docx',
-            query: '待修改的原文。',
-            replace: '工作稿中的新版本。'
+            actions: [{
+              type: 'replace_text',
+              query: '待修改的原文。',
+              replace: '工作稿中的新版本。'
+            }]
           })
           const details = await runtime.fileReviewService.finalizeRunReview({
             runId: runtime.runId,

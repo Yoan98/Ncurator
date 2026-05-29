@@ -50,11 +50,14 @@ describe('ai tool hand backend', () => {
                 action: 'hand',
                 calls: [
                   {
-                    toolName: 'docx_text_edit',
+                    toolName: 'docx_edit',
                     args: {
                       sourcePath: 'post-write-readback.docx',
-                      query: 'Original content.',
-                      replace: 'Updated content.'
+                      actions: [{
+                        type: 'replace_text',
+                        query: 'Original content.',
+                        replace: 'Updated content.'
+                      }]
                     }
                   }
                 ]
@@ -69,9 +72,9 @@ describe('ai tool hand backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.state.execution.pendingDecisionHint === undefined &&
-            result.state.execution.lastToolResults?.[0]?.toolName === 'docx_text_edit' &&
-            result.state.execution.lastToolResults?.[0]?.code === 'ok' &&
+            result.state.execution.pendingDecisionHint === undefined &&
+            result.state.execution.lastToolResults?.[0]?.toolName === 'docx_edit' &&
+            result.state.execution.lastToolResults?.[0]?.ok === true &&
             typeof result.state.execution.lastToolResults?.[0]?.data === 'object' &&
             result.state.execution.lastToolResults?.[0]?.data !== null &&
             Array.isArray(

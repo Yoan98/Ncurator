@@ -276,11 +276,33 @@ const renderDocxHistoryResult = (obj: JsonObject): string =>
     .join('\n')
 
 const renderDocxCreateResult = (obj: JsonObject): string =>
-  renderKeyValuePairs([
-    ['sourcePath', readStringField(obj, 'sourcePath')],
-    ['currentRevisionRef', readStringField(obj, 'currentRevisionRef')],
-    ['created', renderPrimitive(obj.created)]
-  ])
+  [
+    renderKeyValuePairs([
+      ['sourcePath', readStringField(obj, 'sourcePath')],
+      ['warnings', Array.isArray(obj.warnings) && obj.warnings.length > 0 ? String(obj.warnings.length) : undefined]
+    ]),
+    'postWriteReadback:',
+    renderDocxPostWriteReadback(obj.postWriteReadback)
+  ]
+    .filter(Boolean)
+    .join('\n')
+
+const renderDocxPostWriteReadback = (value: JsonValue | undefined): string => {
+  if (!isJsonObject(value) || !Array.isArray(value.regions) || value.regions.length === 0) {
+    return 'none'
+  }
+
+  return value.regions
+    .map((region, index) => {
+      if (!isJsonObject(region)) return renderGenericArrayItem(region, index)
+      const header = `region ${index + 1}：${renderKeyValuePairs([
+        ['fromBlockIndex', readNumberTextField(region, 'fromBlockIndex')],
+        ['toBlockIndex', readNumberTextField(region, 'toBlockIndex')]
+      ])}`
+      return `${header}\nblocks:\n${renderDocxBlocks(region.blocks)}`
+    })
+    .join('\n')
+}
 
 export const renderToolResourceContextText = (
   resourceContext: ToolResourceContext | undefined
@@ -307,7 +329,7 @@ export const renderToolResultDataText = (
   if (!isJsonObject(value)) return undefined
 
   switch (result.toolName) {
-    case 'docx_create':
+    case 'docx_edit':
       return renderDocxCreateResult(value)
     case 'docx_read_blocks':
       return renderDocxReadResult(value)

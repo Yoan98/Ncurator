@@ -25,10 +25,13 @@ describe('ai tool docx backend', () => {
               sourcePath: 'missing.docx',
               range: { type: 'block_ids', blockIds: ['b:0'] }
             }),
-            editInvalidPath: await harness.invoke<DocxFailureResult>('docx_text_edit', {
+            editInvalidPath: await harness.invoke<DocxFailureResult>('docx_edit', {
               sourcePath: 'missing.docx',
-              query: 'hello',
-              replace: 'hi'
+              actions: [{
+                type: 'replace_text',
+                query: 'hello',
+                replace: 'hi'
+              }]
             }),
             rollbackInvalidPath: await harness.invoke<DocxFailureResult>('docx_rollback', {
               sourcePath: 'missing.docx',

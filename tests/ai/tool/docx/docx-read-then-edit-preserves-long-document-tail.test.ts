@@ -37,11 +37,14 @@ describe('ai tool docx backend', () => {
             ranges: [{ type: 'block_index', fromBlockIndex: 5098, toBlockIndex: 5107 }]
           })
           const tailBlockId = outline.blocks[outline.blocks.length - 1]?.blockId || ''
-          const mutation = await harness.invoke<DocxMutationResult>('docx_text_edit', {
+          const mutation = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'long-tail-upgrade.docx',
-            query: '第 5105 段。',
-            replace: '尾部段落已经改写。',
-            blockIds: [tailBlockId]
+            actions: [{
+              type: 'replace_text',
+              query: '第 5105 段。',
+              replace: '尾部段落已经改写。',
+              blockIds: [tailBlockId]
+            }]
           })
           const search = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: 'long-tail-upgrade.docx',
@@ -61,12 +64,12 @@ describe('ai tool docx backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.outline.ok === true &&
+          result.outline.currentRevisionRef === 'v1' &&
             result.outline.blocks.length >= 7 &&
             result.outline.blocks[0]?.blockIndex === 5098 &&
             result.outline.blocks[result.outline.blocks.length - 1]?.blockIndex === 5104 &&
-            result.mutation.ok === true &&
-            result.search.ok === true &&
+            result.mutation.currentRevisionRef === 'v2' &&
+            result.search.currentRevisionRef === 'v2' &&
             result.search.returnedMatchCount >= 1 &&
             result.readSessionCount === 0 &&
             result.replaySessionCount === 1,

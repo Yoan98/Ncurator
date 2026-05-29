@@ -16,6 +16,12 @@ const HINT_FIXTURES: Record<(typeof HUMAN_DECISION_HINT_CODES)[number], HumanDec
       unknownSkillIds: []
     }
   },
+  run_resumed_after_interruption: {
+    code: 'run_resumed_after_interruption',
+    detail: {
+      reason: 'timeout'
+    }
+  },
   terminal_approval_blocked: {
     code: 'terminal_approval_blocked',
     detail: {
@@ -32,16 +38,29 @@ const HINT_FIXTURES: Record<(typeof HUMAN_DECISION_HINT_CODES)[number], HumanDec
   hand_call_limit_exceeded: {
     code: 'hand_call_limit_exceeded',
     detail: {
-      offendingToolNames: ['terminal_run', 'docx_outline', 'docx_read_blocks', 'kb_search', 'docx_create', 'docx_outline'],
+      offendingToolNames: ['terminal_run', 'docx_outline', 'docx_read_blocks', 'kb_search', 'docx_edit', 'docx_outline'],
       callCount: 6,
       limit: 5
     }
   },
-  hand_docx_single_file_write_limit_exceeded: {
-    code: 'hand_docx_single_file_write_limit_exceeded',
+  hand_docx_edit_failed: {
+    code: 'hand_docx_edit_failed',
     detail: {
-      offendingToolNames: ['docx_paragraph_edit', 'docx_table_edit'],
-      sourcePaths: ['report.docx']
+      toolName: 'docx_edit',
+      sourcePath: 'report.docx',
+      action: 'insert_blocks',
+      error: 'cannot resolve anchorBlockId=b:99 in current active snapshot',
+      diagnostic: 'cannot resolve anchorBlockId=b:99 in current active snapshot'
+    }
+  },
+  hand_docx_positioned_write_blocked: {
+    code: 'hand_docx_positioned_write_blocked',
+    detail: {
+      toolName: 'docx_edit',
+      sourcePath: 'graphics.docx',
+      action: 'insert_blocks',
+      targetDescription: 'b:26',
+      diagnostic: '当前命中复杂定位排版区域，暂不支持自动编辑'
     }
   },
   hand_tool_limit_near_exhausted: {
@@ -64,13 +83,6 @@ const HINT_FIXTURES: Record<(typeof HUMAN_DECISION_HINT_CODES)[number], HumanDec
       toolName: 'docx_outline',
       estimatedTokens: 6049,
       limit: 6000
-    }
-  },
-  hand_docx_positioned_write_blocked: {
-    code: 'hand_docx_positioned_write_blocked',
-    detail: {
-      targetDescription: '在 graphics.docx 中，你刚才尝试插入表格的那处位置',
-      sourcePath: 'graphics.docx'
     }
   },
   brain_output_schema_invalid: {

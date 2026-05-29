@@ -356,7 +356,6 @@ export function registerHandlers(services: {
       result: {
         toolName: 'kb_search',
         ok: true,
-        code: 'ok',
         data: [
           {
             id: 'chunk-e2e-1',
@@ -591,11 +590,11 @@ export function registerHandlers(services: {
       taskId: input.runId,
       stepIndex: 1,
       action: 'call_tool',
-      toolName: 'docx_text_edit',
+      toolName: 'docx_edit',
       publicNarrative: '生成草稿并建立审阅集合',
       learnedSkillIds: [],
       effectiveSkillIds: [],
-      availableToolNames: ['docx_text_edit'],
+      availableToolNames: ['docx_edit'],
       summary: 'E2E fixture 开始准备草稿审阅。',
       createdAt: Date.now(),
       stage: 'human_hand'

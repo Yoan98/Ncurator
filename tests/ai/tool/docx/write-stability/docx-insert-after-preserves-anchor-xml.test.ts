@@ -58,11 +58,14 @@ describe('ai tool docx backend', () => {
             sourcePath: 'insert-after-preserves-anchor.docx',
             range: { type: 'block_ids', blockIds: [anchorBlockId] }
           })
-          const inserted = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
+          const inserted = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'insert-after-preserves-anchor.docx',
-            action: 'insert_after',
-            anchorBlockId,
-            paragraphs: ['Inserted explanation.']
+            actions: [{
+              type: 'insert_blocks',
+              position: 'after',
+              anchorBlockId,
+              blocks: [{ type: 'paragraph', text: 'Inserted explanation.' }]
+            }]
           })
           const anchorAfter = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: inserted.sourcePath,

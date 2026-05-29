@@ -36,11 +36,14 @@ describe('ai tool docx backend', () => {
               (block) => block.type === 'paragraph' && block.text.includes('Anchor paragraph.')
             )?.blockId || ''
 
-          const inserted = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
+          const inserted = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'created-blocks-insert-range.docx',
-            action: 'insert_after',
-            anchorBlockId,
-            paragraphs: ['Inserted paragraph.']
+            actions: [{
+              type: 'insert_blocks',
+              position: 'after',
+              anchorBlockId,
+              blocks: [{ type: 'paragraph', text: 'Inserted paragraph.' }]
+            }]
           })
           const outlineAfter = await harness.invoke<DocxOutlineResult>('docx_outline', {
             sourcePath: inserted.sourcePath,

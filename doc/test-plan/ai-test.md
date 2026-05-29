@@ -35,8 +35,8 @@
       - `依据：2026-05-27 复跑 3 轮均自然结束，单轮耗时约 `431s ~ 572s`；三轮都真实完成了多源资料取证、参考上周风格并新建周报草稿。按实际成稿效果看，第 2 轮最佳，整体判断和风险边界最稳；第 1 轮次之，正文已接近可外发待审稿；第 3 轮也可用，但出现过一处笔误后再修正，稳定性略弱。综合按真实产出效果计为 `8.3 / 10`。`
     - `human-docx-cause-remedy-reading-live`：`9.0 / 10`
       - `依据：2026-05-27 复跑 3 轮全部自然结束且通过，单轮耗时约 `249s ~ 426s`。三轮都真实读取了两份已选课件，并把过拟合 / 反走样的定义、成因和处理方法分开讲清楚；对课件未覆盖的方法也都保持了“没写就直说没写”的保守边界。第 2 轮解释最完整、类比和分层最好；第 1、3 轮也都达到高质量复习讲解水平。综合按真实答复效果计为 `9.0 / 10`。`
-    - `human-docx-cross-source-summary-draft-live`：`4.2 / 10`
-      - `依据：2026-05-28 定向复跑 3 轮，三轮均未通过；第 1 轮 900s 超时，虽读完整体资料并创建总结 docx，但只写到深度学习前半，且出现重复段落、半句截断和单文件写入限制；第 2 轮约 685s 失败于 structured output 请求超时，已读完两份源文档但未创建交付文件；第 3 轮 900s 超时，最终创建了 77 块总结 docx，覆盖深度学习和图形学核心内容，实际成稿质量约 `8 / 10`，但未能在测试超时前自然收口。综合三轮真实交付率、稳定性和最终可用产物计为 `4.2 / 10`。`
+    - `human-docx-cross-source-summary-draft-live`：`8.2 / 10`
+      - `依据：2026-05-28 切换 flash 后定向复跑 2 轮均自然通过，单轮耗时约 `219s ~ 266s`，且不再触发 `hand_tool_result_too_large` 或单次 LLM 超时。两轮都真实读取两份源课件、创建总结 docx，并生成 draft review；第 1 轮产物覆盖深度学习与图形学两部分并按关键概念、出现原因、常见处理方式展开，但中途出现 workspace 边界误用和一次源路径拼错后恢复，且有少量通用知识扩张；第 2 轮链路更短更稳，产物结构完整但正文细节略少。综合按真实交付率、耗时稳定性和成稿可用性计为 `8.2 / 10`。`
     - `human-conversation-memory-multi-run-live`：`9.0 / 10`
       - `依据：真实双 run 下 conversation summary 与 recent turns 已成功承接，第二轮 brain 明确带回第一轮形成的风险主线、负责人分工、待确认项和后续动作；当前更合理的正式口径应聚焦“总结是否有效影响后续”，而不是把 Alice / Bob 的单点排序绑定为唯一正确答案。`
     - `human-context-compaction-natural-trigger-live`：`8.7 / 10`
@@ -133,27 +133,27 @@
 - 实现状态：`已实现`
 - What：验证最小 docx 打开、定位、编辑与继续读取链路。
 - Why：这是 docx 工具链最基础的真实生产调用闭环。
-- How：对 fixture docx 真实执行 `docx_search -> docx_read_blocks -> docx_text_edit -> docx_search -> docx_read_blocks`。
-- Oracle：返回稳定 `currentRevisionRef/previousRevisionRef`，只目标 block 进入 `changedBlocks`，且修改后的结果可继续被读取工具消费。
+- How：对 fixture docx 真实执行 `docx_search -> docx_read_blocks -> docx_edit(replace_text) -> docx_search -> docx_read_blocks`。
+- Oracle：写入成功并返回 `postWriteReadback`；只目标 block 发生变更，修改后的结果可继续被读取工具消费。
 - Not：不验证 `human` 的工具选择。
 
 ##### `docx-create-then-open-and-edit`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 `docx_create` 新建的 docx 能立刻进入 `outline / read / edit` 主链。
+- What：验证 `docx_edit(create_document)` 新建的 docx 能立刻进入 `outline / read / edit` 主链。
 - Why：cross-source summary 这类“先生成新 Word 文件再写内容”的真实场景，底层必须先守住 create 契约。
-- How：真实执行 `docx_create -> docx_outline -> docx_read_blocks -> docx_paragraph_edit -> docx_search`。
-- Oracle：create-target 结果返回稳定 `sourcePath / currentRevisionRef / created=true`；新文档可被继续读取；后续编辑会生成新 revision，且新内容可继续被搜索命中；正式目标路径在 commit 前不存在。
+- How：真实执行 `docx_edit(create_document) -> docx_outline -> docx_read_blocks -> docx_edit(insert_blocks) -> docx_search`。
+- Oracle：create-target 结果返回稳定 `sourcePath / postWriteReadback`；新文档可被继续读取；后续编辑会生成新的可读状态，且新内容可继续被搜索命中；正式目标路径在 commit 前不存在。
 - Not：不验证 human 是否会选择 create。
 
 ##### `docx-create-existing-path-guard`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 `docx_create` 不会覆盖已存在的目标路径。
+- What：验证 `docx_edit(create_document)` 不会覆盖已存在的目标路径。
 - Why：create 能力一旦允许覆盖原文件，就会破坏 docx review / commit 的基本安全边界。
-- How：先写入一份真实 docx，再对同一路径执行 `docx_create`。
+- How：先写入一份真实 docx，再对同一路径执行 `docx_edit(create_document)`。
 - Oracle：返回 `invalid_input`；原文件 bytes 不变；当前 run 不产生新的 docx session。
 - Not：不验证 UI 层如何展示报错。
 
@@ -161,9 +161,9 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证仅执行 `docx_create(blocks=...)` 也能进入 review 主链并产出待确认稿。
+- What：验证仅执行 `docx_edit(create_document, blocks=...)` 也能进入 review 主链并产出待确认稿。
 - Why：真实模型很可能在 create 时一次写完内容，这条能力必须被正式保护，不能强依赖后续 edit。
-- How：真实执行 `docx_create` 并直接 `finalizeDocxReviewRun`。
+- How：真实执行 `docx_edit(create_document)` 并直接 `finalizeDocxReviewRun`。
 - Oracle：生成 `FileReviewDetail` 与 working/review/committed artifacts；review `output_operation=created`；正式目标路径在 commit 前不存在。
 
 ##### `docx-create-commit-creates-target-file`
@@ -172,7 +172,7 @@
 - 实现状态：`已实现`
 - What：验证 create-target review 只在 commit 成功后正式创建目标文件。
 - Why：这是 create-target 语义与 PRD 的核心边界。
-- How：真实执行 `docx_create -> finalize review -> persist review -> commitReview`。
+- How：真实执行 `docx_edit(create_document) -> finalize review -> persist review -> commitReview`。
 - Oracle：commit 成功；commit result `operation=created`；commit 前目标路径不存在，commit 后目标路径存在。
 
 ##### `docx-create-discard-does-not-create-target-file`
@@ -181,7 +181,7 @@
 - 实现状态：`已实现`
 - What：验证 discard create-target review 不会创建正式目标文件。
 - Why：放弃修改不能留下误创建的产物。
-- How：真实执行 `docx_create -> finalize review -> persist review -> discardReview`。
+- How：真实执行 `docx_edit(create_document) -> finalize review -> persist review -> discardReview`。
 - Oracle：discard 成功；目标路径继续不存在。
 
 ##### `docx-create-commit-conflict-when-target-appears-before-commit`
@@ -190,7 +190,7 @@
 - 实现状态：`已实现`
 - What：验证 create-target review 在目标路径被外部抢占创建后会触发 freshness conflict。
 - Why：新建文件的提交门禁必须显式防止“旧审阅稿覆盖新外部文件”。
-- How：真实执行 `docx_create -> finalize review -> persist review`，随后外部创建同名目标文件，再执行 `validateCommit / commitReview`。
+- How：真实执行 `docx_edit(create_document) -> finalize review -> persist review`，随后外部创建同名目标文件，再执行 `validateCommit / commitReview`。
 - Oracle：`validateCommit` 返回 `source_changed`；`commitReview` 失败并把 review 标记为 `conflicted`。
 
 ##### `docx-large-document-navigation`
@@ -219,7 +219,7 @@
 - 实现状态：`已实现`
 - What：验证纯读后首次编辑会升级到 replay session，并释放旧 read session。
 - Why：升级动作必须把只读缓存收口掉，否则同一路径会长期保留两套运行态，违背本次重构目标。
-- How：真实执行 `docx_outline -> docx_paragraph_edit -> docx_search`，检查 runtime session 状态。
+- How：真实执行 `docx_outline -> docx_edit(insert_blocks) -> docx_search`，检查 runtime session 状态。
 - Oracle：编辑成功；后续搜索可命中新文本；`readSessionCount=0`；`replaySessionCount=1`。
 - Not：不验证 review/commit。
 
@@ -239,7 +239,7 @@
 - 实现状态：`已实现`
 - What：验证长文档在 read 分页后升级到 replay session 时不会丢失尾部 block。
 - Why：如果 replay snapshot 仍走固定 block 上限，read world 与 write world 会在长文档上出现静默分裂。
-- How：先用 `docx_outline(ranges=block_index)` 读取 5000 之后的尾部范围，再对尾部 block 执行真实 `docx_paragraph_edit` 与 `docx_search`。
+- How：先用 `docx_outline(ranges=block_index)` 读取 5000 之后的尾部范围，再对尾部 block 执行真实 `docx_edit(insert_blocks)` 与 `docx_search`。
 - Oracle：尾部范围返回正确 `blockIndex`；尾部 block 编辑成功；后续搜索可命中新文本；`readSessionCount=0`；`replaySessionCount=1`。
 - Not：不验证 AI 的读取策略。
 
@@ -257,7 +257,7 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 `docx_search` 默认搜索当前文档全部 block，且 `docx_text_edit.blockIds` 只在当前文档内进一步缩圈。
+- What：验证 `docx_search` 默认搜索当前文档全部 block，且 `docx_edit(replace_text).blockIds` 只在当前文档内进一步缩圈。
 - Why：这是 docx 搜索的核心契约，必须长期稳定，避免 prompt 与工具行为不一致。
 - How：对同一 doc 先执行默认搜索，再通过限定编辑范围验证后续搜索结果只影响指定 block。
 - Oracle：默认搜索可命中文档内多个 block，限定编辑后只修改指定 block 范围内的结果。
@@ -339,8 +339,8 @@
 - 实现状态：`已实现`
 - What：验证多类复杂编辑操作的真实执行契约。
 - Why：复杂写入是 docx 工具层高风险区。
-- How：覆盖 `docx_text_edit / docx_delete / docx_paragraph_edit(insert_before/insert_after) / docx_heading_edit / docx_table_edit(update_cell)`。
-- Oracle：各类 op 都能产生可继续消费的新修订与 `changedBlocks`。
+- How：覆盖 `docx_edit` 的 `replace_text / delete_blocks / insert_blocks(before/after, paragraph/heading/table) / update_table_cell` action。
+- Oracle：各类 op 都能写入成功并返回可继续消费的 `postWriteReadback`。
 - Not：不验证上层 op 选择策略。
 
 ##### `docx-format-variants-contract`
@@ -359,7 +359,7 @@
 - 实现状态：`已实现`
 - What：验证命中 positioned block 时，docx 写工具会统一拒绝自动编辑。
 - Why：复杂定位排版 docx 在 preview/review 语义下即使只是原地改字也可能因修订标记叠加而错位，这条 case 要长期守住 `positioned = read-only` 的能力边界。
-- How：对真实 `图形学.docx` 执行 `docx_outline` 定位一个 positioned block，再分别尝试 `docx_paragraph_edit`、`docx_text_edit`、`docx_text_style_edit` 与 `docx_table_edit(insert_after)`。
+- How：对真实 `图形学.docx` 执行 `docx_outline` 定位一个 positioned block，再分别尝试 `docx_edit(insert_blocks)`、`docx_edit(replace_text)`、`docx_edit(style_text)` 与 `docx_edit(update_table_cell)`。
 - Oracle：四类写入都返回 `invalid_input`；错误信息稳定包含“当前命中复杂定位排版区域，暂不支持自动编辑”；不产生新的当前修订。
 - Not：不验证 human 的回退话术，也不验证 positioned 文档中的读取质量。
 
@@ -369,7 +369,7 @@
 - 实现状态：`已实现`
 - What：验证纯 `insert_after` 不会改写 anchor 段落文本与 run 格式。
 - Why：结构插入的底层实现若重写 anchor，会制造伪样式漂移并污染 review 语义。
-- How：构造带 mixed-format run 的 anchor 段落，执行 `docx_paragraph_edit(insert_after)`，再读取同一 anchor。
+- How：构造带 mixed-format run 的 anchor 段落，执行 `docx_edit(insert_blocks after)`，再读取同一 anchor。
 - Oracle：anchor 文本保持不变，run 列表逐项一致，changedBlocks 只记录 `insert_after`。
 - Not：不验证 review artifact。
 
@@ -399,7 +399,7 @@
 - 实现状态：`已实现`
 - What：验证表格插入后的 `createdBlocks` 同时包含 table 与 table_cell。
 - Why：review replay 需要完整的新建结构元信息，否则插入表格容易只落 body block，缺少 cell 级引用。
-- How：执行一次 `docx_table_edit(insert_after)`，直接检查 mutation result 的 `createdBlocks`。
+- How：执行一次 `docx_edit(insert_blocks table after)`，直接检查 mutation result 的 `createdBlocks`。
 - Oracle：返回 1 个 `table` 和全部对应的 `table_cell`。
 - Not：不验证 review artifact。
 
@@ -419,7 +419,7 @@
 - 实现状态：`已实现`
 - What：验证 active review 下 docx 自动 open 会基于 latest working draft 继续编辑。
 - Why：多轮未确认修改能否累计，依赖 review-aware open 的真实行为。
-- How：通过真实 `FileReviewStore + FileReviewService` seed active review，再执行 `docx_read_blocks / docx_text_edit`。
+- How：通过真实 `FileReviewStore + FileReviewService` seed active review，再执行 `docx_read_blocks / docx_edit(replace_text)`。
 - Oracle：读取内容来自最新草稿而非源文件，新增修改只叠加当前 delta。
 - Not：不验证 review UI 与最终确认替换。
 
@@ -441,28 +441,28 @@
 - 实现状态：`已实现`
 - What：验证 hand 在 `serial` 模式下会按顺序执行 `docx` 写入与后续读取。
 - Why：这是 hand 承接 docx 写工具返回复核信息后继续执行后续读取的最小基线。
-- How：真实执行 `docx_text_edit -> docx_read_blocks`。
+- How：真实执行 `docx_edit(replace_text) -> docx_read_blocks`。
 - Oracle：工具结果按顺序成功返回，写工具结果包含 `postWriteReadback.regions`，且不产生旧写后阻断 decision hint。
 - Not：不验证复杂定位恢复。
 
-##### `hand-docx-single-file-multi-write-invalid`
+##### `hand-docx-single-file-multi-write-allowed`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证同一 `sourcePath` 一轮 hand 中出现第 2 次 docx 写时，会在执行前被判为非法 plan。
-- Why：单文件多步写兼容逻辑已移除，正式约束改为“同文件每轮最多一次写”。
-- How：构造同一文件上的 `docx_heading_edit -> docx_paragraph_edit` serial plan。
-- Oracle：返回 `hand_docx_single_file_write_limit_exceeded`，并带稳定 `decisionHint`、违规工具名和触发文件。
-- Not：不验证后续轮次如何改写计划。
+- What：验证同一 `sourcePath` 一轮 hand 中允许连续多个 `docx_edit`。
+- Why：hand 保持串行执行，docx 写漂移由每次 `docx_edit` 基于最新 snapshot 严格解析 blockId 解决，不再做同文件多写预拦截。
+- How：构造同一文件上的 `docx_edit(replace_text) -> docx_edit(replace_text)` serial plan。
+- Oracle：两次写入都成功，且不返回 `hand_docx_edit_failed`。
+- Not：不验证单次 `docx_edit(actions=[...])` batch transaction。
 
 ##### `hand-docx-multi-file-single-write-allowed`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
 - What：验证一轮 hand 内对不同文件各写一次仍允许通过。
-- Why：执行模型只收缩“同文件多写”，不影响多文件 batch 的效率收益。
-- How：真实执行 `fileA:docx_text_edit -> fileB:docx_text_edit`。
-- Oracle：两次写都成功，两个文件各自推进 revision，且最新 outline 可读到更新后的内容。
+- Why：hand 不再按同文件写入次数做预拦截，多文件连续写也应继续保持稳定。
+- How：真实执行 `fileA:docx_edit(replace_text) -> fileB:docx_edit(replace_text)`。
+- Oracle：两次写都成功，两个文件各自进入最新编辑状态，且最新 outline 可读到更新后的内容。
 - Not：不验证跨文件更多组合。
 
 ##### `hand-docx-same-file-read-write-read-allowed`
@@ -470,9 +470,9 @@
 - 测试类型：`backend`
 - 实现状态：`已实现`
 - What：验证同一文件在一轮中执行 `read -> write -> read` 仍允许通过。
-- Why：本次限制只针对“同一文件多次写”，不应误伤围绕单次写的读回确认流程。
-- How：真实执行 `docx_outline -> docx_text_edit -> docx_read_blocks`。
-- Oracle：三步都成功，最后一次读取能看到写后内容，且不返回 `hand_docx_single_file_write_limit_exceeded`。
+- Why：hand 允许串行读写混排，围绕单次写的读回确认流程不应被误伤。
+- How：真实执行 `docx_outline -> docx_edit(replace_text) -> docx_read_blocks`。
+- Oracle：三步都成功，最后一次读取能看到写后内容，且不返回 `hand_docx_edit_failed`。
 - Not：不验证额外的多次写。
 
 ##### `docx-write-then-outline-percent-sees-new-block`
@@ -481,7 +481,7 @@
 - 实现状态：`已实现`
 - What：验证 docx 写后立刻使用 `docx_outline(percent)` 读取当前 working draft 时，能看到新增块。
 - Why：这直接覆盖 replay session stats 未同步导致 percent 漏块的回归问题。
-- How：真实执行一次 `docx_heading_edit`，随后立刻用 `ranges=[{type:'percent',fromPercent:0,toPercent:100}]` 读取。
+- How：真实执行一次 `docx_edit(insert_blocks heading)`，随后立刻用 `ranges=[{type:'percent',fromPercent:0,toPercent:100}]` 读取。
 - Oracle：outline 返回新增块，且 replay session 的 `stats.blockCount` 等于当前 active revision 的真实块数。
 - Not：不验证更细的分页策略。
 
@@ -581,7 +581,7 @@
 - 实现状态：`已实现`
 - What：验证 `apply_ops` 产出无效 docx 时会被工程内部校验拦截。
 - Why：validate 已下沉为工程门禁，必须有正式 case 守住“坏修订不能进入当前草稿”。
-- How：对带损坏关系引用的真实 docx 执行 `docx_text_edit` 或对象编辑工具。
+- How：对带损坏关系引用的真实 docx 执行 `docx_edit(replace_text)` 或结构编辑 action。
 - Oracle：`apply_ops` 直接失败，且当前文档会话的修订引用不会推进到无效修订。
 - Not：不验证上层如何决定重试或放弃。
 
@@ -678,7 +678,7 @@
 - 实现状态：`已实现`
 - What：验证 `hand` 会按顺序执行真实 docx 写入与读回确认链路。
 - Why：复杂 docx 链路依赖当前最新修订，必须通过正式 case 守住顺序执行契约。
-- How：通过真实 `hand` 执行 `docx_text_edit -> docx_read_blocks`。
+- How：通过真实 `hand` 执行 `docx_edit(replace_text) -> docx_read_blocks`。
 - Oracle：工具结果顺序稳定、全部成功，且不会在 hand 内直接产出 docx 交付 artifact。
 - Not：不验证 `brain` 是否自然生成这条计划。
 
@@ -753,8 +753,8 @@
 - 实现状态：`已实现`
 - What：验证 `decision_hint` 这一区域的正式 contract 稳定，且 `learning / brain / hand` 的关键来源分支都能在真实 graph 中产出 hint 并继续恢复推进。
 - Why：`decision_hint` 是 `human` graph 的统一纠偏机制；一旦某个 hint 的结构或渲染链断裂，原本可恢复的分支就会在真实任务中升级成致命异常。
-- How：在 mock-llm 下仍走真实 `human` graph、真实 learning node、真实 hand node 和真实工具；通过 scripted brain 依次触发 `learning_no_effect`、`brain_output_schema_invalid`、`hand_docx_positioned_write_blocked`、`hand_tool_result_too_large` 与 `hand_tool_limit_exceeded`，最后进入 `mouth` 收尾。
-- Oracle：事件流中真实出现上述关键 `decision_hint`，且它们都带有稳定 detail contract；`hand_tool_result_too_large` 必须来自真实 `docx_outline(result_too_large)`；在 hint 之后 graph 仍能继续回到 `brain` 并最终完成任务。
+- How：在 mock-llm 下仍走真实 `human` graph、真实 learning node、真实 hand node 和真实工具；通过 scripted brain 依次触发 `learning_no_effect`、`brain_output_schema_invalid`、`hand_docx_positioned_write_blocked` 与 `hand_tool_limit_exceeded`，最后进入 `mouth` 收尾。
+- Oracle：事件流中真实出现上述关键 `decision_hint`，且它们都带有稳定 detail contract；在 hint 之后 graph 仍能继续回到 `brain` 并最终完成任务。
 - Not：不要求一条 case 穷举所有业务工具组合；重点是守住 `decision_hint` 的共享 contract 和关键来源回退链。
 
 ##### `tool-failure-recovery`
@@ -843,8 +843,8 @@
 - 实现状态：`已实现`
 - What：验证 mock-llm 下 `human` 仍通过真实 docx 工具链完成打开、编辑和搜索。
 - Why：复杂 docx 编辑是 `human` 的长期高价值真实任务类型。
-- How：先写入 fixture docx，再通过真实 `docx_text_edit -> docx_read_blocks -> docx_search` 完成一次正文替换、读取确认和定位。
-- Oracle：真实 `docx_text_edit` 只产生一处 `changedBlocks`，真实 `docx_search` 与 `docx_read_blocks` 都能命中新文本，任务最终完成。
+- How：先写入 fixture docx，再通过真实 `docx_edit(replace_text) -> docx_read_blocks -> docx_search` 完成一次正文替换、读取确认和定位。
+- Oracle：真实 `docx_edit(replace_text)` 只产生一处 `changedBlocks`，真实 `docx_search` 与 `docx_read_blocks` 都能命中新文本，任务最终完成。
 - Not：不验证 review UI 或最终落盘流程。
 
 ##### `docx-read-fact-exposure`
@@ -926,7 +926,7 @@
 - What：验证 live 模式下 `human` 会在一个真实长任务里串起模板定位、上周周报风格参考、多源工作资料取证、新建本周周报 docx 与待确认稿交付。
 - Why：`human/live` 需要至少一条长期高价值复杂样例，覆盖 workspace 搜索、真实材料辨别、跨 `docx + txt` 综合、create-target 写入与最终交付链路；同时守住“共享 workspace 中全部已支持文件都已进入真实 KB，但关键事实仍可能来自非 KB 文本材料”的更真实用户环境。
 - How：注入真实 live LLM 配置；workspace 直接使用 `tests/fixtures/workspace` 共享目录，并在 run 前通过真实生产文件 ingestion 链把该目录下当前所有已支持文件索引进 KB；随后由测试在运行时重建 `工作/` 目录：包含一份不可直接覆盖的周报模板、一份只能参考风格的上周已发版周报、多份提供本周事实的 `docx` 工作文档、数份必须读取的 `txt` 口径/跟进材料，以及少量看起来相关但不应直接采用的干扰文件；直接输入“帮我写下这周的周报，基于这个周报模版和我的工作文档信息，记得参考我上周写的周报风格来哦”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；共享 workspace 中全部已支持文件均被索引；事件流中至少出现一次 `terminal_run`、至少一次真实资料读取/检索步骤（可来自 `docx_*`、`kb_*` 或其他正式支持的读工具）以及一次 `docx_create`；模型会打开模板和上周周报；最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；正式模板与既有工作 `docx` 文件都不被覆盖；新建周报待确认稿中应写入本周整体判断、负责人说明和后续动作；若发生 docx 写，则写工具结果应包含 `postWriteReadback.regions`；不要求固定取证路径，不要求固定风险结论措辞，只要任务真实完成即可通过。
+- Oracle：任务最终完成；共享 workspace 中全部已支持文件均被索引；事件流中至少出现一次 `terminal_run`、至少一次真实资料读取/检索步骤（可来自 `docx_*`、`kb_*` 或其他正式支持的读工具）以及一次 `docx_edit(create_document)`；模型会打开模板和上周周报；最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；正式模板与既有工作 `docx` 文件都不被覆盖；新建周报待确认稿中应写入本周整体判断、负责人说明和后续动作；若发生 docx 写，则写工具结果应包含 `postWriteReadback.regions`；不要求固定取证路径，不要求固定风险结论措辞，只要任务真实完成即可通过。
 - Not：不绑定最终答案措辞，不要求固定是否使用 `docx_outline` 还是 `docx_read_blocks`，也不强制一定调用 KB；若模型仅凭工作区材料完成任务，也视为符合预期。
 
 ##### `human-docx-cause-remedy-reading-live`
@@ -946,7 +946,7 @@
 - What：验证 live 模式下 `human` 会读取两份已选课件，自主创建一份新的总结 docx，并把跨源总结写进去。
 - Why：真实用户常见诉求不只是“口头总结”或“补现有主稿”，也包括“新建一份能直接发出去的总结报告”；这条 case 要长期守住跨源读取、单目标写入与不覆盖原文件的正式能力，对齐 `WB-CORE-002-AC2`、`WB-CORE-003-AC1`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
 - How：注入真实 live LLM 配置；把 `深度学习.docx` 与 `图形学.docx` 作为已选资料复制进 workspace；直接输入“帮我基于我刚选的这两个文件，生成一个给同学复习用的 Word 总结文件，文件名就叫《深度学习与图形学复习总结》。里面把关键概念、出现原因和常见处理方式整理清楚；哪份资料没写你就直接说明没写。”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；事件流中至少两次 `docx_search` / `docx_read_blocks` / `docx_outline` 覆盖两份源资料；至少出现一次 `docx_create`；存在 `draft_review_ready` 事件，最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；两份原始源 `docx` 文件未被覆盖；创建目标只应落在 `深度学习与图形学复习总结.docx` 上，且正式目标路径在 commit 前不存在；最终答复应包含“过拟合/过度拟合”与“反走样”两个主题。
+- Oracle：任务最终完成；事件流中至少两次 `docx_search` / `docx_read_blocks` / `docx_outline` 覆盖两份源资料；至少出现一次 `docx_edit(create_document)`；存在 `draft_review_ready` 事件，最终输出 artifacts 中同时包含 `draft_review` 与 `draft`；两份原始源 `docx` 文件未被覆盖；创建目标只应落在 `深度学习与图形学复习总结.docx` 上，且正式目标路径在 commit 前不存在；最终答复应包含“过拟合/过度拟合”与“反走样”两个主题。
 - Not：不要求固定总结结构，也不要求一定生成表格。
 
 ##### `human-docx-positioned-structural-edit-fallback-live`
@@ -956,7 +956,7 @@
 - What：验证 live 模式下 `human` 在复杂 positioned docx 中不会执行任何自动编辑，而是对命中复杂定位排版区域的写入请求做优雅回退。
 - Why：这类由 `framePr` / 绝对定位 shape 组成的 docx 即使只是原地改字，在 preview/review 语义下也可能因修订标记叠加而错位；这条 case 要长期守住“positioned 区域只读、自动写入必须拒绝并给用户手动提示”的正式能力，对齐 `WB-CORE-003-AC1`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
 - How：注入真实 live LLM 配置；只将 `图形学.docx` 作为已选资料复制进 workspace；直接输入“我准备把这份图形学讲义发给同学复习，想把‘反走样’这一节补得更容易记一些。你直接在这一节后面加一段更通俗的说明，再加一个很短的总结表，帮助大家快速区分两种常见做法。”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；事件流中至少一次 `docx_search` / `docx_read_blocks` / `docx_outline` 覆盖 `图形学.docx`；至少一次 docx 写入请求因为命中复杂定位排版区域失败，并返回稳定 `diagnostic.message`；原始 `docx` 文件未被覆盖；最终答复明确说明未在原文中自动编辑，并给出回退处理。回退结果允许两种形态：一是仅给出建议手动补充的内容且不生成 `draft_review` / `draft` artifact；二是改为生成独立补充稿，并在 artifacts 中产出对应的 `draft_review` 与 `draft`。
+- Oracle：任务最终完成；事件流中至少一次 `docx_search` / `docx_read_blocks` / `docx_outline` 覆盖 `图形学.docx`；至少一次 docx 写入请求因为命中复杂定位排版区域失败，并返回稳定 `hand_docx_positioned_write_blocked` 与 `diagnostic.message`；原始 `docx` 文件未被覆盖；最终答复明确说明未在原文中自动编辑，并给出回退处理。回退结果允许两种形态：一是仅给出建议手动补充的内容且不生成 `draft_review` / `draft` artifact；二是改为生成独立补充稿，并在 artifacts 中产出对应的 `draft_review` 与 `draft`。
 - Not：不要求固定使用哪一种 docx 写工具，也不要求最终答复使用固定措辞。
 
 ##### `human-kb-guided-docx-comparison-draft-live`

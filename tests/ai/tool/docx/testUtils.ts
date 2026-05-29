@@ -146,8 +146,20 @@ export type DocxReadResult = {
 
 export type DocxCreateResult = {
   sourcePath: string
+  previousRevisionRef: string
   currentRevisionRef: string
-  created: true
+  changedBlocks: DocxChangedBlock[]
+  createdBlocks: Array<{ blockId: string; type: 'paragraph' | 'table' | 'table_cell' }>
+  warnings: string[]
+  postWriteReadback: {
+    regions: Array<{
+      fromBlockId: string
+      fromBlockIndex: number
+      toBlockId: string
+      toBlockIndex: number
+      blocks: DocxReadResult['blocks']
+    }>
+  }
 }
 
 export type DocxMutationResult = {
@@ -157,6 +169,15 @@ export type DocxMutationResult = {
   changedBlocks: DocxChangedBlock[]
   createdBlocks?: Array<{ blockId: string; type: 'paragraph' | 'table' | 'table_cell' }>
   warnings: string[]
+  postWriteReadback?: {
+    regions: Array<{
+      fromBlockId: string
+      fromBlockIndex: number
+      toBlockId: string
+      toBlockIndex: number
+      blocks: DocxReadResult['blocks']
+    }>
+  }
 }
 
 export type DocxHistoryResult = {

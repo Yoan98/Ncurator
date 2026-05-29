@@ -56,14 +56,17 @@ describe('ai tool docx backend', () => {
             outline.blocks.find(
               (block) => block.type === 'paragraph' && block.text.includes('结尾段落')
             )?.blockId || ''
-          const tableInsert = await harness.invoke<DocxMutationResult>('docx_table_edit', {
+          const tableInsert = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'review-projection.docx',
-            action: 'insert_after',
-            anchorBlockId,
-            rows: [
+            actions: [{
+              type: 'insert_blocks',
+              position: 'after',
+              anchorBlockId,
+              blocks: [{ type: 'table', rows: [
               ['反走样', '过拟合'],
               ['平滑边缘，降低锯齿', '记住训练噪声，泛化变差']
-            ]
+            ] }]
+            }]
           })
           const details = await runtime.fileReviewService.finalizeRunReview({
             runId: runtime.runId,

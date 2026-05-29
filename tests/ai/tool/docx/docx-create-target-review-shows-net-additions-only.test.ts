@@ -23,12 +23,15 @@ describe('ai tool docx backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           harness.ctx.beginDocxReviewRun()
-          await harness.invoke<DocxCreateResult>('docx_create', {
+          await harness.invoke<DocxCreateResult>('docx_edit', {
             sourcePath: 'net-additions-only.docx',
-            blocks: [
+            actions: [{
+              type: 'create_document',
+              blocks: [
               { type: 'heading', level: 1, text: 'Final Report' },
               { type: 'paragraph', text: 'Keep this final paragraph.' }
             ]
+            }]
           })
 
           const outline = await harness.invoke<DocxOutlineResult>('docx_outline', {
@@ -40,17 +43,23 @@ describe('ai tool docx backend', () => {
               (block) => block.type === 'paragraph' && block.text.includes('Keep this final paragraph.')
             )?.blockId || ''
 
-          const inserted = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
+          const inserted = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'net-additions-only.docx',
-            action: 'insert_after',
-            anchorBlockId: finalParagraphBlockId,
-            paragraphs: ['Temporary draft that should disappear from review.']
+            actions: [{
+              type: 'insert_blocks',
+              position: 'after',
+              anchorBlockId: finalParagraphBlockId,
+              blocks: [{ type: 'paragraph', text: 'Temporary draft that should disappear from review.' }]
+            }]
           })
           const temporaryBlockId = inserted.createdBlocks?.[0]?.blockId || ''
 
-          await harness.invoke<DocxMutationResult>('docx_delete', {
+          await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'net-additions-only.docx',
-            blockIds: [temporaryBlockId]
+            actions: [{
+              type: 'delete_blocks',
+              blockIds: [temporaryBlockId]
+            }]
           })
 
           const details = await harness.ctx.finalizeDocxReviewRun()

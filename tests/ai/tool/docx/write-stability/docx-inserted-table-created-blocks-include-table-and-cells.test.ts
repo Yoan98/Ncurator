@@ -35,14 +35,17 @@ describe('ai tool docx backend', () => {
               (block) => block.type === 'paragraph' && block.text.includes('Anchor paragraph.')
             )?.blockId || ''
 
-          const insertedTable = await harness.invoke<DocxMutationResult>('docx_table_edit', {
+          const insertedTable = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'inserted-table-created-blocks.docx',
-            action: 'insert_after',
-            anchorBlockId,
-            rows: [
+            actions: [{
+              type: 'insert_blocks',
+              position: 'after',
+              anchorBlockId,
+              blocks: [{ type: 'table', rows: [
               ['A', 'B'],
               ['C', 'D']
-            ]
+            ] }]
+            }]
           })
 
           return {

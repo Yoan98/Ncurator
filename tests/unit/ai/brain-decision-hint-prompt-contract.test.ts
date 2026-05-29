@@ -35,12 +35,15 @@ describe('ai unit brain decision-hint prompt contract', () => {
         action: 'hand',
         calls: [
           {
-            toolName: 'docx_paragraph_edit',
+            toolName: 'docx_edit',
             args: {
               sourcePath: 'report.docx',
-              action: 'insert_after',
-              anchorBlockId: 'b:1',
-              text: '补充内容'
+              actions: [{
+                type: 'insert_blocks',
+                position: 'after',
+                anchorBlockId: 'b:1',
+                blocks: [{ type: 'paragraph', text: '补充内容' }]
+              }]
             }
           }
         ]
@@ -59,19 +62,22 @@ describe('ai unit brain decision-hint prompt contract', () => {
             : [],
           toolResults: [
             {
-              toolName: 'docx_paragraph_edit',
+              toolName: 'docx_edit',
               ok: false,
               data: {
-                error: 'cannot safely resolve target after earlier mutations'
+                error: 'cannot resolve anchorBlockId=b:1 in current active snapshot'
               },
-              diagnosticText: 'cannot safely resolve target after earlier mutations'
+              diagnosticText: 'cannot resolve anchorBlockId=b:1 in current active snapshot'
             }
           ],
           decisionHint: {
-            code: 'hand_docx_positioned_write_blocked',
+            code: 'hand_docx_edit_failed',
             detail: {
-              targetDescription: '在 report.docx 中，你刚才尝试修改段落的那处位置',
-              sourcePath: 'report.docx'
+              toolName: 'docx_edit',
+              sourcePath: 'report.docx',
+              action: 'insert_blocks',
+              error: 'cannot resolve anchorBlockId=b:1 in current active snapshot',
+              diagnostic: 'cannot resolve anchorBlockId=b:1 in current active snapshot'
             }
           }
         }
@@ -81,8 +87,11 @@ describe('ai unit brain decision-hint prompt contract', () => {
     state.execution.pendingDecisionHint = {
       code: 'hand_docx_positioned_write_blocked',
       detail: {
-        targetDescription: '在 report.docx 中，你刚才尝试修改段落的那处位置',
-        sourcePath: 'report.docx'
+        toolName: 'docx_edit',
+        sourcePath: 'report.docx',
+        action: 'insert_blocks',
+        targetDescription: 'b:1',
+        diagnostic: '当前命中复杂定位排版区域，暂不支持自动编辑'
       }
     }
 
@@ -111,12 +120,11 @@ describe('ai unit brain decision-hint prompt contract', () => {
     expect(taskProgressSection).toContain('继续处理 docx 批量写')
     expect(taskProgressSection).toContain('执行：')
     expect(taskProgressSection).toContain('类型：hand')
-    expect(taskProgressSection).toContain('cannot safely resolve target after earlier mutations')
-    expect(taskProgressSection).not.toContain('刚才尝试修改的 docx 区域命中了定位排版保护')
+    expect(taskProgressSection).toContain('cannot resolve anchorBlockId=b:1 in current active snapshot')
+    expect(taskProgressSection).not.toContain('上一轮 docx_edit 写入失败')
     expect(correctionHintSection).toContain('刚才尝试修改的 docx 区域命中了定位排版保护')
-    expect(correctionHintSection).toContain('按系统设计，这类定位区域不会被自动修改')
-    expect(correctionHintSection).toContain('仍可继续处理文档中其他可修改的位置')
-    expect(correctionHintSection).toContain('在 report.docx 中，你刚才尝试修改段落的那处位置')
+    expect(correctionHintSection).toContain('受影响的位置是：b:1')
+    expect(correctionHintSection).toContain('不会被自动修改')
   })
 
   it('requires references disclosure when nextAction is mouth', () => {

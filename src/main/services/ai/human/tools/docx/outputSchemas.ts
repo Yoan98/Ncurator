@@ -1,7 +1,6 @@
 import { z } from 'zod/v4'
-import { toolResourceContextSchema } from '../../toolSchemas'
 
-const docxResultCodeSchema = z.enum([
+export const docxResultCodeSchema = z.enum([
   'ok',
   'failed',
   'invalid_input',
@@ -227,7 +226,6 @@ export const docxWriteOutputSchema = docxBaseOutputSchema.extend({
   sourcePath: z.string(),
   previousRevisionRef: z.string(),
   currentRevisionRef: z.string(),
-  created: z.boolean().optional(),
   changedBlocks: z.array(docxChangedBlockOutputSchema),
   createdBlocks: z.array(docxCreatedBlockOutputSchema),
   warnings: z.array(z.string()),

@@ -11,10 +11,12 @@ import {
 } from '../../../harness/backend/aiLiveTestData'
 import {
   collectDocxApplyOpsContentKinds,
+  collectStartedDocxEditSourcePaths,
   countDraftFileArtifacts,
   countFileReviewArtifacts,
   filterAiRunEventsByType,
   hasKbToolCall,
+  isDocxEditWriteInput,
   runWithStructuredOutputRetry
 } from '../testUtils'
 
@@ -87,16 +89,7 @@ describe('ai human live backend', () => {
             .filter((event) => event.toolName.startsWith('docx_'))
             .map((event) => event.input.sourcePath)
             .filter((value): value is string => typeof value === 'string')
-          const writeSourcePaths = filterAiRunEventsByType(events, 'tool_call_started')
-            .filter((event) =>
-              event.toolName === 'docx_paragraph_edit' ||
-              event.toolName === 'docx_heading_edit' ||
-              event.toolName === 'docx_table_edit' ||
-              event.toolName === 'docx_text_edit' ||
-              event.toolName === 'docx_text_style_edit'
-            )
-            .map((event) => event.input.sourcePath)
-            .filter((value): value is string => typeof value === 'string')
+          const writeSourcePaths = collectStartedDocxEditSourcePaths(events, isDocxEditWriteInput)
           const changedContentKinds = collectDocxApplyOpsContentKinds(events)
           const targetDocsWritten = result.workspaceSeed.targetDocs.every(
             (fixtureDoc) =>
@@ -117,7 +110,7 @@ describe('ai human live backend', () => {
           runtime.assertThat(
             result.output?.status === 'completed' &&
               hasKbToolCall(events) &&
-              toolNames.some((toolName) => toolName.endsWith('_edit')) &&
+              toolNames.includes('docx_edit') &&
               changedContentKinds.includes('paragraph') &&
               targetDocsWritten &&
               filterAiRunEventsByType(events, 'draft_review_ready').length >= 2 &&

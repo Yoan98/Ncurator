@@ -1,8 +1,10 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
-import { loadDocxBundle } from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/blockIndex'
-import { XMLSerializer } from '@xmldom/xmldom'
+import {
+  buildBlockIndex,
+  loadDocxBundle
+} from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/blockIndex'
 import { loadLiveLlmConfigFromEnv, hasLiveLlmConfigInEnv } from '../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
@@ -12,10 +14,13 @@ import {
   RISK_REPORT_DRAFT_SHARED_WORKSPACE_FIXTURE_PATH
 } from '../../../harness/backend/liveScenarios/riskReportDraftScenario'
 import {
+  collectStartedDocxEditSourcePaths,
   collectStartedToolStringArgs,
   filterAiRunEventsByType,
   hasDraftFileArtifact,
-  hasFileReviewArtifact
+  hasFileReviewArtifact,
+  isDocxEditCreateInput,
+  isDocxEditWriteInput
 } from '../testUtils'
 
 const openedExpectedDoc = (
@@ -46,6 +51,14 @@ const hasNextStepSemantics = (text: string, expectedNextStep: string): boolean =
   /Bob.*(?:负责|本周内)?.*补齐付款材料/.test(text)
 
 const normalizeAssertionText = (text: string): string => text.replace(/\s+/g, '')
+
+const readDocxPlainText = async (filePath: string): Promise<string> => {
+  const bundle = await loadDocxBundle(await fs.readFile(filePath))
+  return buildBlockIndex(bundle.documentDom).outline
+    .filter((block) => block.type !== 'table_cell')
+    .map((block) => block.text)
+    .join('\n')
+}
 
 const hasRiskConclusionSemantics = (
   text: string,
@@ -181,22 +194,11 @@ describe('ai human live backend', () => {
         const openedSourcePaths = collectStartedToolStringArgs(events, 'docx_outline', 'sourcePath')
           .concat(collectStartedToolStringArgs(events, 'docx_read_blocks', 'sourcePath'))
           .concat(collectStartedToolStringArgs(events, 'docx_search', 'sourcePath'))
-        const createSourcePaths = collectStartedToolStringArgs(events, 'docx_create', 'sourcePath')
+        const createSourcePaths = collectStartedDocxEditSourcePaths(events, isDocxEditCreateInput)
         const createdRelativePaths = createSourcePaths.map((sourcePath) =>
           toWorkspaceRelativePath(runtime.workspaceRoot, sourcePath)
         )
-        const writeSourcePaths = filterAiRunEventsByType(events, 'tool_call_started')
-          .filter((event) =>
-            [
-              'docx_paragraph_edit',
-              'docx_heading_edit',
-              'docx_table_edit',
-              'docx_text_edit',
-              'docx_text_style_edit'
-            ].includes(event.toolName)
-          )
-          .map((event) => event.input.sourcePath)
-          .filter((value): value is string => typeof value === 'string')
+        const writeSourcePaths = collectStartedDocxEditSourcePaths(events, isDocxEditWriteInput)
         const writeRelativePaths = writeSourcePaths.map((sourcePath) =>
           toWorkspaceRelativePath(runtime.workspaceRoot, sourcePath)
         )
@@ -231,15 +233,7 @@ describe('ai human live backend', () => {
             (sourcePath) => !result.workspaceSeed.preexistingDocxRelativePaths.includes(sourcePath)
           )
         const writeResultEvents = filterAiRunEventsByType(events, 'tool_call_result').filter(
-          (event) =>
-            [
-              'docx_create',
-              'docx_paragraph_edit',
-              'docx_heading_edit',
-              'docx_table_edit',
-              'docx_text_edit',
-              'docx_text_style_edit'
-            ].includes(event.toolName)
+          (event) => event.toolName === 'docx_edit'
         )
         const hasPostWriteReadback =
           writeResultEvents.length === 0 ||
@@ -268,10 +262,7 @@ describe('ai human live backend', () => {
         const draftArtifactPath =
           draftFileArtifact?.kind === 'file' ? draftFileArtifact.path : undefined
         if (draftArtifactPath) {
-          const reviewBundle = await loadDocxBundle(
-            await fs.readFile(draftArtifactPath)
-          )
-          reviewXml = new XMLSerializer().serializeToString(reviewBundle.documentDom)
+          reviewXml = await readDocxPlainText(draftArtifactPath)
         }
         const generatedDraftText = `${reviewXml}\n${deliveryText}`
         const draftTextOnly = reviewXml || deliveryText
@@ -323,7 +314,7 @@ describe('ai human live backend', () => {
           result.output?.status === 'completed' &&
             toolNames.includes('terminal_run') &&
             hasResearchReadStep &&
-            toolNames.includes('docx_create') &&
+            toolNames.includes('docx_edit') &&
             createdTargetInAllowedLocation &&
             createdDocNotPreexisting &&
             writesStayOnCreatedDoc &&
@@ -331,7 +322,7 @@ describe('ai human live backend', () => {
           {
             name: 'human-live-risk-report-runs-required-tool-chain',
             message:
-              'live human complex case 应通过真实 workspace/检索读取/docx_create 工具链完成本周周报待确认稿任务。',
+              'live human complex case 应通过真实 workspace/检索读取/docx_edit(create_document) 工具链完成本周周报待确认稿任务。',
             data: {
               toolNames,
               hasResearchReadStep,

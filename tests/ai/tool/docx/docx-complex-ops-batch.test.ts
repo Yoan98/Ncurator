@@ -82,38 +82,42 @@ describe('ai tool docx backend', () => {
           const deleteBlockId = findParagraphBlockIdByText(outline.blocks, 'Delete this paragraph.')
           const ownerCellBlockId = findTableCellBlockIdByText(outline.blocks, 'Alice')
 
-          const replaceText = await harness.invoke<DocxMutationResult>('docx_text_edit', {
+          const batchEdit = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'complex-ops.docx',
-            query: 'Need text replacement here.',
-            replace: 'Text replaced in final snapshot.'
-          })
-          const deleteParagraph = await harness.invoke<DocxMutationResult>('docx_delete', {
-            sourcePath: 'complex-ops.docx',
-            blockIds: [deleteBlockId]
-          })
-          const updateCell = await harness.invoke<DocxMutationResult>('docx_table_edit', {
-            sourcePath: 'complex-ops.docx',
-            action: 'update_cell',
-            cellBlockId: ownerCellBlockId,
-            text: 'Bob'
-          })
-          const insertAfter = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
-            sourcePath: 'complex-ops.docx',
-            action: 'insert_after',
-            anchorBlockId: insertAfterAnchor,
-            paragraphs: ['Inserted after anchor.']
-          })
-          const insertBefore = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
-            sourcePath: 'complex-ops.docx',
-            action: 'insert_before',
-            anchorBlockId: insertBeforeAnchor,
-            paragraphs: ['Inserted before anchor.']
-          })
-          const replaceBlock = await harness.invoke<DocxMutationResult>('docx_text_edit', {
-            sourcePath: 'complex-ops.docx',
-            query: 'Replace whole block content.',
-            replace: 'Replaced whole block in final snapshot.',
-            blockIds: [replaceBlockId]
+            actions: [
+              {
+                type: 'replace_text',
+                query: 'Need text replacement here.',
+                replace: 'Text replaced in final snapshot.'
+              },
+              {
+                type: 'delete_blocks',
+                blockIds: [deleteBlockId]
+              },
+              {
+                type: 'update_table_cell',
+                cellBlockId: ownerCellBlockId,
+                text: 'Bob'
+              },
+              {
+                type: 'insert_blocks',
+                position: 'after',
+                anchorBlockId: insertAfterAnchor,
+                blocks: [{ type: 'paragraph', text: 'Inserted after anchor.' }]
+              },
+              {
+                type: 'insert_blocks',
+                position: 'before',
+                anchorBlockId: insertBeforeAnchor,
+                blocks: [{ type: 'paragraph', text: 'Inserted before anchor.' }]
+              },
+              {
+                type: 'replace_text',
+                query: 'Replace whole block content.',
+                replace: 'Replaced whole block in final snapshot.',
+                blockIds: [replaceBlockId]
+              }
+            ]
           })
           const searchAfter = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: 'complex-ops.docx',
@@ -129,12 +133,7 @@ describe('ai tool docx backend', () => {
           })
 
           return {
-            replaceText,
-            deleteParagraph,
-            updateCell,
-            insertAfter,
-            insertBefore,
-            replaceBlock,
+            batchEdit,
             searchAfter,
             readAfter,
             finalOutline
@@ -145,12 +144,7 @@ describe('ai tool docx backend', () => {
       },
       assert: async (result, runtime) => {
         const changedActions = [
-          ...result.replaceText.changedBlocks.map((block) => block.action),
-          ...result.deleteParagraph.changedBlocks.map((block) => block.action),
-          ...result.updateCell.changedBlocks.map((block) => block.action),
-          ...result.insertAfter.changedBlocks.map((block) => block.action),
-          ...result.insertBefore.changedBlocks.map((block) => block.action),
-          ...result.replaceBlock.changedBlocks.map((block) => block.action)
+          ...result.batchEdit.changedBlocks.map((block) => block.action)
         ]
 
         runtime.assertThat(
@@ -168,7 +162,7 @@ describe('ai tool docx backend', () => {
             name: 'complex-ops-batch-covers-all-op-types',
             message: '复杂编辑 case 应覆盖当前写工具支持的底层变更动作，并产出新的修订摘要。',
             data: {
-              currentRevisionRef: result.replaceBlock.currentRevisionRef,
+              currentRevisionRef: result.batchEdit.currentRevisionRef,
               changedActions
             }
           }
@@ -186,14 +180,7 @@ describe('ai tool docx backend', () => {
             result.finalOutline.blocks.some(
               (block) => block.type === 'paragraph' && block.text.includes('Replaced whole block in final snapshot.')
             ) &&
-            [
-              result.replaceText,
-              result.deleteParagraph,
-              result.updateCell,
-              result.insertAfter,
-              result.insertBefore,
-              result.replaceBlock
-            ].every((item) => item.warnings.length === 0),
+            result.batchEdit.warnings.length === 0,
           {
             name: 'complex-ops-batch-remains-consumable-after-edits',
             message: '多次对象编辑后，结果结构仍应能继续被 read/outline 消费。',
@@ -201,14 +188,7 @@ describe('ai tool docx backend', () => {
               searchMatches: result.searchAfter.matches,
               readBlocks: result.readAfter.blocks,
               finalOutline: result.finalOutline.blocks,
-              warnings: [
-                result.replaceText.warnings,
-                result.deleteParagraph.warnings,
-                result.updateCell.warnings,
-                result.insertAfter.warnings,
-                result.insertBefore.warnings,
-                result.replaceBlock.warnings
-              ]
+              warnings: result.batchEdit.warnings
             }
           }
         )

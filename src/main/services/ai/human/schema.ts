@@ -107,10 +107,23 @@ export const humanDecisionHintSchema = z.discriminatedUnion('code', [
     })
   }),
   z.object({
-    code: z.literal('hand_docx_single_file_write_limit_exceeded'),
+    code: z.literal('hand_docx_edit_failed'),
     detail: z.object({
-      offendingToolNames: z.array(z.string().min(1)),
-      sourcePaths: z.array(z.string().min(1)).min(1)
+      toolName: z.literal('docx_edit'),
+      sourcePath: z.string().min(1).optional(),
+      action: z.string().min(1).optional(),
+      error: z.string().min(1),
+      diagnostic: z.string().min(1).optional()
+    })
+  }),
+  z.object({
+    code: z.literal('hand_docx_positioned_write_blocked'),
+    detail: z.object({
+      toolName: z.literal('docx_edit'),
+      sourcePath: z.string().min(1).optional(),
+      action: z.string().min(1).optional(),
+      targetDescription: z.string().min(1),
+      diagnostic: z.string().min(1).optional()
     })
   }),
   z.object({
@@ -133,13 +146,6 @@ export const humanDecisionHintSchema = z.discriminatedUnion('code', [
       toolName: z.string().min(1),
       estimatedTokens: z.number().int().min(1),
       limit: z.number().int().min(1)
-    })
-  }),
-  z.object({
-    code: z.literal('hand_docx_positioned_write_blocked'),
-    detail: z.object({
-      targetDescription: z.string().min(1),
-      sourcePath: z.string().min(1).optional()
     })
   }),
   z.object({

@@ -146,10 +146,13 @@ describe('ai unit human memory renderers', () => {
           action: 'hand',
           calls: [
             {
-              toolName: 'docx_create',
+              toolName: 'docx_edit',
               args: {
                 sourcePath: 'draft.docx',
-                patch: '...'
+                actions: [{
+                  type: 'create_document',
+                  blocks: [{ type: 'paragraph', text: '...' }]
+                }]
               }
             }
           ]
@@ -158,22 +161,25 @@ describe('ai unit human memory renderers', () => {
       execution: buildHandExecution({
         calls: [
           {
-            toolName: 'docx_create',
+            toolName: 'docx_edit',
             args: {
               sourcePath: 'draft.docx',
-              patch: '...'
+              actions: [{
+                type: 'create_document',
+                blocks: [{ type: 'paragraph', text: '...' }]
+              }]
             }
           }
         ],
         toolResults: [
           {
-            toolName: 'docx_create',
+            toolName: 'docx_edit',
             ok: true,
             data: {
               sourcePath: 'draft.docx',
               previousRevisionRef: 'rev-1',
               currentRevisionRef: 'rev-2',
-              created: false,
+              createdBlocks: [{ blockId: 'b:0', type: 'paragraph' }],
               ignoredTopLevelField: 'drop-me',
               postWriteReadback: {
                 ignoredObjectField: 'drop-me',
@@ -207,10 +213,15 @@ describe('ai unit human memory renderers', () => {
     const rendered = renderBrainRoundSection(taskRun.rounds)
 
     expect(rendered).toContain('第 1 轮')
-    expect(rendered).toContain('参数：{"sourcePath":"draft.docx","patch":"..."}')
+    expect(rendered).toContain(
+      '参数：{"sourcePath":"draft.docx","action":"create_document","blocks":[{"type":"paragraph","text":"..."}]}'
+    )
     expect(rendered).toContain(
       '"postWriteReadback":{"regions":[{"fromBlockIndex":1,"toBlockIndex":2,"blocks":[{"blockId":"b1","type":"paragraph","blockIndex":1,"text":"hello"}]}]}'
     )
+    expect(rendered).not.toContain('previousRevisionRef')
+    expect(rendered).not.toContain('currentRevisionRef')
+    expect(rendered).not.toContain('createdBlocks')
     expect(rendered).toContain('诊断：\ndiagnostic=write verified')
     expect(rendered).not.toContain('ignoredTopLevelField')
     expect(rendered).not.toContain('ignoredObjectField')

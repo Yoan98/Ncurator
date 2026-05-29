@@ -102,6 +102,11 @@ export const docxCreateSchema = z.object({
   blocks: z.array(docxCreateBlockSchema).optional()
 })
 
+export const docxEditCreateDocumentActionSchema = z.object({
+  type: z.literal('create_document'),
+  blocks: z.array(docxCreateBlockSchema).optional()
+}).strict()
+
 export const docxOutlineRangeSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('percent'),
@@ -168,6 +173,13 @@ export const docxParagraphEditSchema = z.discriminatedUnion('action', [
   })
 ])
 
+const docxEditInsertBlocksActionSchema = z.object({
+  type: z.literal('insert_blocks'),
+  position: z.enum(['before', 'after']),
+  anchorBlockId: z.string().min(1),
+  blocks: z.array(docxCreateBlockSchema).min(1)
+}).strict()
+
 export const docxHeadingEditActionSchema = z.enum([
   'insert_before',
   'insert_after'
@@ -221,6 +233,12 @@ export const docxTableEditSchema = z.discriminatedUnion('action', [
   })
 ])
 
+const docxEditUpdateTableCellActionSchema = z.object({
+  type: z.literal('update_table_cell'),
+  cellBlockId: z.string().min(1),
+  text: z.string()
+}).strict()
+
 export const docxTextEditSchema = z.object({
   sourcePath: z.string().min(1),
   query: z.string().min(1),
@@ -228,8 +246,26 @@ export const docxTextEditSchema = z.object({
   blockIds: z.array(z.string().min(1)).optional()
 })
 
+const docxEditReplaceBlockActionSchema = z.object({
+  type: z.literal('replace_block'),
+  blockId: z.string().min(1),
+  block: docxCreateBlockSchema
+}).strict()
+
+const docxEditReplaceTextActionSchema = z.object({
+  type: z.literal('replace_text'),
+  query: z.string().min(1),
+  replace: z.string(),
+  blockIds: z.array(z.string().min(1)).optional()
+}).strict()
+
 export const docxDeleteSchema = z.object({
   sourcePath: z.string().min(1),
+  blockIds: z.array(z.string().min(1)).min(1)
+}).strict()
+
+const docxEditDeleteBlocksActionSchema = z.object({
+  type: z.literal('delete_blocks'),
   blockIds: z.array(z.string().min(1)).min(1)
 }).strict()
 
@@ -239,6 +275,28 @@ export const docxTextStyleEditSchema = z.object({
   query: z.string().min(1),
   style: docxTextStyleSchema
 })
+
+const docxEditStyleTextActionSchema = z.object({
+  type: z.literal('style_text'),
+  blockId: z.string().min(1),
+  query: z.string().min(1),
+  style: docxTextStyleSchema
+}).strict()
+
+export const docxEditActionSchema = z.discriminatedUnion('type', [
+  docxEditCreateDocumentActionSchema,
+  docxEditInsertBlocksActionSchema,
+  docxEditReplaceBlockActionSchema,
+  docxEditReplaceTextActionSchema,
+  docxEditStyleTextActionSchema,
+  docxEditUpdateTableCellActionSchema,
+  docxEditDeleteBlocksActionSchema
+])
+
+export const docxEditSchema = z.object({
+  sourcePath: z.string().min(1),
+  actions: z.array(docxEditActionSchema).min(1)
+}).strict()
 
 export const docxHistoryRequestSchema = z.object({
   sourcePath: z.string().min(1),

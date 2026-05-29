@@ -2,40 +2,46 @@ import { describe, expect, it } from 'vitest'
 import { createToolCallSchema, formatToolCallSchemaDiagnostic } from '../../../src/main/services/ai/human/toolCallSchema'
 
 describe('ai unit tool call schema', () => {
-  it('accepts a valid docx_create call and rejects nested args wrappers', () => {
-    const schema = createToolCallSchema(['docx_create', 'terminal_run'])
+  it('accepts a valid docx_edit create_document call and rejects nested args wrappers', () => {
+    const schema = createToolCallSchema(['docx_edit', 'terminal_run'])
 
     expect(
       schema.parse({
-        toolName: 'docx_create',
+        toolName: 'docx_edit',
         args: {
           sourcePath: 'report.docx',
-          blocks: [
-            {
-              type: 'paragraph',
-              text: 'hello'
-            }
-          ]
+          actions: [{
+            type: 'create_document',
+            blocks: [
+              {
+                type: 'paragraph',
+                text: 'hello'
+              }
+            ]
+          }]
         }
       })
     ).toMatchObject({
-      toolName: 'docx_create'
+      toolName: 'docx_edit'
     })
 
     const nested = schema.safeParse({
-      toolName: 'docx_create',
-      args: {
-        toolName: 'docx_create',
+        toolName: 'docx_edit',
         args: {
-          sourcePath: 'report.docx',
-          blocks: [
-            {
-              type: 'paragraph',
-              text: 'hello'
-            }
-          ]
+          toolName: 'docx_edit',
+          args: {
+            sourcePath: 'report.docx',
+            actions: [{
+              type: 'create_document',
+              blocks: [
+                {
+                  type: 'paragraph',
+                  text: 'hello'
+                }
+              ]
+            }]
+          }
         }
-      }
     })
 
     expect(nested.success).toBe(false)

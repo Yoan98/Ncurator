@@ -74,11 +74,14 @@ describe('ai tool hand backend', () => {
                 action: 'hand',
                 calls: [
                   {
-                    toolName: 'docx_text_edit',
+                    toolName: 'docx_edit',
                     args: {
                       sourcePath: 'serial-docx-chain.docx',
-                      query: 'RISK_TODO',
-                      replace: '待跟进'
+                      actions: [{
+                        type: 'replace_text',
+                        query: 'RISK_TODO',
+                        replace: '待跟进'
+                      }]
                     }
                   },
                   {
@@ -102,8 +105,8 @@ describe('ai tool hand backend', () => {
         const toolNames = result.state.execution.lastToolResults?.map((item) => item.toolName) || []
 
         runtime.assertThat(
-          toolNames.join(',') === 'docx_text_edit,docx_read_blocks' &&
-            result.state.execution.lastToolResults?.every((item) => item.code === 'ok') &&
+          toolNames.join(',') === 'docx_edit,docx_read_blocks' &&
+            result.state.execution.lastToolResults?.every((item) => item.ok) &&
             result.state.execution.pendingDecisionHint === undefined &&
             typeof result.state.execution.lastToolResults?.[0]?.data === 'object' &&
             result.state.execution.lastToolResults?.[0]?.data !== null &&
@@ -112,7 +115,7 @@ describe('ai tool hand backend', () => {
             ),
           {
             name: 'serial-docx-chain-executes-in-order',
-            message: 'hand 应按顺序执行 docx_text_edit、docx_read_blocks，且写工具返回 postWriteReadback。',
+            message: 'hand 应按顺序执行 docx_edit、docx_read_blocks，且写工具返回 postWriteReadback。',
             data: {
               toolNames,
               lastToolUseResults: result.state.execution.lastToolResults

@@ -33,20 +33,16 @@ export const renderDecisionHintForBrain = (hint: HumanDecisionHint): string => {
       ]
         .filter(Boolean)
         .join('\n')
-    case 'hand_docx_single_file_write_limit_exceeded':
+    case 'hand_docx_edit_failed':
       return [
-        '上一轮 docx 写计划没有进入执行，因为同一文件在一轮中出现了多次写入。',
-        `涉及的文件有：${renderStringList(hint.detail.sourcePaths)}。`,
-        `涉及的工具有：${renderStringList(hint.detail.offendingToolNames)}。`
+        '上一轮 docx_edit 写入失败，需要根据失败信息调整后续方案。',
+        hint.detail.sourcePath ? `文件：${hint.detail.sourcePath}。` : undefined,
+        hint.detail.action ? `actions：${hint.detail.action}。` : undefined,
+        `错误：${hint.detail.error}。`,
+        hint.detail.diagnostic ? `诊断：${hint.detail.diagnostic}。` : undefined
       ]
         .filter(Boolean)
         .join('\n')
-    case 'hand_tool_limit_near_exhausted':
-      return `累计工具调用次数已接近当前上限。当前为 ${String(hint.detail.toolCallCount)}，上限为 ${String(hint.detail.limit)}。后续应尽快收尾，只保留完成最终交付所必需的动作。`
-    case 'hand_tool_limit_exceeded':
-      return `累计工具调用次数已经超过当前上限。当前为 ${String(hint.detail.toolCallCount)}，上限为 ${String(hint.detail.limit)}。后续不应再继续调用工具，应直接进入最终交付，并明确说明哪些事项因工具预算耗尽而未继续完成。`
-    case 'hand_tool_result_too_large':
-      return `上一轮 ${hint.detail.toolName} 返回内容过大，估算约 ${String(hint.detail.estimatedTokens)} tokens，超过当前上限 ${String(hint.detail.limit)}，本轮结果不能原样继续带入后续判断。`
     case 'hand_docx_positioned_write_blocked':
       return [
         '刚才尝试修改的 docx 区域命中了定位排版保护。',
@@ -54,6 +50,12 @@ export const renderDecisionHintForBrain = (hint: HumanDecisionHint): string => {
         '这处位置本轮未改动，但仍可继续处理文档中其他可修改的位置。',
         `受影响的位置是：${hint.detail.targetDescription}。`
       ].join('')
+    case 'hand_tool_limit_near_exhausted':
+      return `累计工具调用次数已接近当前上限。当前为 ${String(hint.detail.toolCallCount)}，上限为 ${String(hint.detail.limit)}。后续应尽快收尾，只保留完成最终交付所必需的动作。`
+    case 'hand_tool_limit_exceeded':
+      return `累计工具调用次数已经超过当前上限。当前为 ${String(hint.detail.toolCallCount)}，上限为 ${String(hint.detail.limit)}。后续不应再继续调用工具，应直接进入最终交付，并明确说明哪些事项因工具预算耗尽而未继续完成。`
+    case 'hand_tool_result_too_large':
+      return `上一轮 ${hint.detail.toolName} 返回内容过大，估算约 ${String(hint.detail.estimatedTokens)} tokens，超过当前上限 ${String(hint.detail.limit)}，本轮结果不能原样继续带入后续判断。`
     case 'brain_output_schema_invalid':
       return [
         '上一轮 hand 工具调用计划的输出结构不合法，因此本轮没有进入执行。',

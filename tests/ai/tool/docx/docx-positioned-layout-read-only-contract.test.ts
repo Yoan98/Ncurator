@@ -65,33 +65,45 @@ describe('ai tool docx backend', () => {
             limit: 10
           })
           const paragraphInsertFailure = await harness.invoke<DocxFailureResult>(
-            'docx_paragraph_edit',
+            'docx_edit',
             {
               sourcePath: outline.sourcePath,
-              action: 'insert_after',
-              anchorBlockId: positionedParagraph.blockId,
-              paragraphs: ['补充说明：这里不应自动插入。']
+              actions: [{
+                type: 'insert_blocks',
+                position: 'after',
+                anchorBlockId: positionedParagraph.blockId,
+                blocks: [{ type: 'paragraph', text: '补充说明：这里不应自动插入。' }]
+              }]
             }
           )
-          const textEditFailure = await harness.invoke<DocxFailureResult>('docx_text_edit', {
+          const textEditFailure = await harness.invoke<DocxFailureResult>('docx_edit', {
             sourcePath: outline.sourcePath,
-            query,
-            replace: `${query}（修改）`,
-            blockIds: [positionedParagraph.blockId]
+            actions: [{
+              type: 'replace_text',
+              query,
+              replace: `${query}（修改）`,
+              blockIds: [positionedParagraph.blockId]
+            }]
           })
-          const textStyleFailure = await harness.invoke<DocxFailureResult>('docx_text_style_edit', {
+          const textStyleFailure = await harness.invoke<DocxFailureResult>('docx_edit', {
             sourcePath: outline.sourcePath,
-            blockId: positionedParagraph.blockId,
-            query,
-            style: {
+            actions: [{
+              type: 'style_text',
+              blockId: positionedParagraph.blockId,
+              query,
+              style: {
               bold: true
             }
+            }]
           })
-          const tableInsertFailure = await harness.invoke<DocxFailureResult>('docx_table_edit', {
+          const tableInsertFailure = await harness.invoke<DocxFailureResult>('docx_edit', {
             sourcePath: outline.sourcePath,
-            action: 'insert_after',
-            anchorBlockId: positionedParagraph.blockId,
-            rows: [['问题类型', '核心原因']]
+            actions: [{
+              type: 'insert_blocks',
+              position: 'after',
+              anchorBlockId: positionedParagraph.blockId,
+              blocks: [{ type: 'table', rows: [['问题类型', '核心原因']] }]
+            }]
           })
           const historyAfter = await harness.invoke<DocxHistoryResult>('docx_history', {
             sourcePath: outline.sourcePath,

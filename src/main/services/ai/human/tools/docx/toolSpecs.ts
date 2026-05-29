@@ -3,23 +3,14 @@ import type { z } from 'zod/v4'
 import type { RuntimeSkillId } from '../../types'
 import type { HumanToolSpec } from '../types'
 import {
-  docxCreateSchema,
-  docxDeleteSchema,
-  docxHeadingEditSchema,
+  docxEditSchema,
   docxHistoryRequestSchema,
   docxOutlineRequestSchema,
-  docxParagraphEditSchema,
   docxReadRequestSchema,
   docxSearchRequestSchema,
-  docxRollbackRequestSchema,
-  docxTableEditSchema,
-  docxTextEditSchema,
-  docxTextStyleEditSchema
+  docxRollbackRequestSchema
 } from './schemas'
-import {
-  createStaticExecutionMetaResolver,
-  readStringArg
-} from '../utils/toolSpecUtils'
+import { createStaticExecutionMetaResolver, readStringArg } from '../utils/toolSpecUtils'
 import {
   docxHistoryOutputSchema,
   docxOutlineOutputSchema,
@@ -54,21 +45,6 @@ type DocxToolSpec<
 }
 
 const DOCX_SOURCE_PATH_EXAMPLE = '学习笔记/图形学.docx'
-const DOCX_CREATE_TARGET_EXAMPLE = '深度学习与图形学复习总结.docx'
-const DOCX_CREATE_EXAMPLE_ARGS: JsonObject = {
-  sourcePath: DOCX_CREATE_TARGET_EXAMPLE,
-  blocks: [
-    {
-      type: 'heading',
-      level: 1,
-      text: '深度学习与图形学复习总结'
-    },
-    {
-      type: 'paragraph',
-      text: '请根据已选课件整理关键概念、出现原因和常见处理方式。'
-    }
-  ]
-}
 const DOCX_SEARCH_LITERAL_EXAMPLE: JsonObject = {
   sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
   query: '反走样'
@@ -90,6 +66,114 @@ const DOCX_READ_RANGE_EXAMPLE: JsonObject = {
     fromBlockIndex: 19,
     toBlockIndex: 26
   }
+}
+const DOCX_EDIT_CREATE_DOCUMENT_EXAMPLE: JsonObject = {
+  sourcePath: '深度学习与图形学复习总结.docx',
+  actions: [
+    {
+      type: 'create_document',
+      blocks: [
+        {
+          type: 'heading',
+          level: 1,
+          text: '深度学习与图形学复习总结'
+        },
+        {
+          type: 'paragraph',
+          text: '本总结整理关键概念、出现原因和常见处理方式。'
+        }
+      ]
+    }
+  ]
+}
+const DOCX_EDIT_INSERT_BLOCKS_EXAMPLE: JsonObject = {
+  sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
+  actions: [{
+    type: 'insert_blocks',
+    position: 'after',
+    anchorBlockId: 'b:26',
+    blocks: [
+      {
+        type: 'paragraph',
+        text: '补充说明：反走样通过平滑边缘像素来减轻锯齿感。'
+      },
+      {
+        type: 'table',
+        rows: [
+          ['概念', '说明'],
+          ['反走样', '降低边缘锯齿']
+        ]
+      }
+    ]
+  }]
+}
+const DOCX_EDIT_BATCH_EXAMPLE: JsonObject = {
+  sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
+  actions: [
+    {
+      type: 'replace_block',
+      blockId: 'b:12',
+      block: {
+        type: 'heading',
+        level: 2,
+        text: '反走样的常见处理方式'
+      }
+    },
+    {
+      type: 'insert_blocks',
+      position: 'after',
+      anchorBlockId: 'b:26',
+      blocks: [{ type: 'paragraph', text: '补充说明：反走样可以降低边缘锯齿。' }]
+    }
+  ]
+}
+const DOCX_EDIT_REPLACE_BLOCK_EXAMPLE: JsonObject = {
+  sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
+  actions: [{
+    type: 'replace_block',
+    blockId: 'b:12',
+    block: {
+      type: 'heading',
+      level: 2,
+      text: '反走样的常见处理方式'
+    }
+  }]
+}
+const DOCX_EDIT_REPLACE_TEXT_EXAMPLE: JsonObject = {
+  sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
+  actions: [{
+    type: 'replace_text',
+    blockIds: ['b:26'],
+    query: '过拟合',
+    replace: '模型过拟合'
+  }]
+}
+const DOCX_EDIT_STYLE_TEXT_EXAMPLE: JsonObject = {
+  sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
+  actions: [{
+    type: 'style_text',
+    blockId: 'b:26',
+    query: '反走样',
+    style: {
+      bold: true,
+      color: '2563EB'
+    }
+  }]
+}
+const DOCX_EDIT_UPDATE_TABLE_CELL_EXAMPLE: JsonObject = {
+  sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
+  actions: [{
+    type: 'update_table_cell',
+    cellBlockId: 'tbl:3.r:2.c:1',
+    text: '平滑边缘，降低锯齿'
+  }]
+}
+const DOCX_EDIT_DELETE_BLOCKS_EXAMPLE: JsonObject = {
+  sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
+  actions: [{
+    type: 'delete_blocks',
+    blockIds: ['b:31', 'b:32']
+  }]
 }
 
 export const DOCX_OUTLINE_TOOL_SPEC = {
@@ -194,15 +278,15 @@ export const DOCX_HISTORY_TOOL_SPEC = {
   name: 'docx_history',
   familyId: 'docx',
   requiresWorkspace: true,
-  description: '查看当前任务过程中的 docx 修订历史。',
+  description: '查看当前任务中这份 docx 的编辑记录。',
   skillIds: ['docx-read'],
   inputSchema: docxHistoryRequestSchema,
   outputSchema: docxHistoryOutputSchema,
   promptSpec: {
     name: 'docx_history',
     description:
-      '能力：读取 sourcePath 对应 docx 在当前任务内的编辑 revision 历史。\n结果：返回当前任务内的修订链、修订摘要和变更块信息。\n边界：历史来自当前任务的 docx 编辑链路，不是 Word 原生修订记录。',
-    whenToUse: '适用于需要 docx 编辑 revision 历史的任务。',
+      '能力：查看 sourcePath 对应 docx 在当前任务中的编辑记录。\n结果：返回每次编辑的标识、摘要和当前所在状态。\n边界：这是当前任务内的编辑记录，不是 Word 原生修订记录。',
+    whenToUse: '适用于需要确认这份 docx 之前做过哪些编辑，或准备回到某次编辑状态的任务。',
     examples: [
       {
         goal: '查看最近几个 docx 修订及各自改动摘要',
@@ -222,239 +306,70 @@ export const DOCX_HISTORY_TOOL_SPEC = {
   'docx-read'
 >
 
-export const DOCX_PARAGRAPH_EDIT_TOOL_SPEC = {
-  name: 'docx_paragraph_edit',
+export const DOCX_EDIT_TOOL_SPEC = {
+  name: 'docx_edit',
   familyId: 'docx',
   requiresWorkspace: true,
-  description: '按段落对象执行插入。',
+  description: '创建或修改 docx 内容，并返回写入后的相邻区域回读。',
   skillIds: ['docx-write'],
-  inputSchema: docxParagraphEditSchema,
+  inputSchema: docxEditSchema,
   outputSchema: docxWriteOutputSchema,
   promptSpec: {
-    name: 'docx_paragraph_edit',
-    description:
-      '能力：以 anchorBlockId 为锚点，在其前后插入一个或多个段落块。\n结果：返回写入后的编辑状态，以及相邻区域的详细回读信息。\n边界：只创建新的段落块，不替换已有文本内容。',
-    whenToUse: '适用于需要插入 docx 段落块的任务。',
+    name: 'docx_edit',
+    description: [
+      '能力：创建或批量修改 docx 内容。一次 docx_edit 调用接收 actions 数组，并作为同一文件的一次批量写入处理。',
+      'action type=create_document：新建 docx，并可一次写入 heading、paragraph、table；必须作为唯一 action。',
+      'action type=insert_blocks：在真实 anchorBlockId 前/后插入多个 block，按输入 blocks 顺序写入。',
+      'action type=replace_block：把一个完整 block 替换成新的 heading、paragraph 或 table。',
+      'action type=replace_text：在全文或指定 blockIds 中替换文本。',
+      'action type=style_text：给指定 block 内命中的文本设置加粗、斜体、下划线、颜色等样式。',
+      'action type=update_table_cell：替换指定表格单元格的文本。',
+      'action type=delete_blocks：删除一个或多个完整 block。',
+      '结果：返回写入后的编辑状态，以及相邻区域的详细回读信息。继续编辑时优先使用 postWriteReadback 里的真实 blockId。',
+      '边界：所有 blockId、anchorBlockId、cellBlockId、blockIds 必须来自 docx_outline、docx_search、docx_read_blocks 或 postWriteReadback 返回的真实结果，禁止推算新 blockId；'
+    ].join('\n'),
+    whenToUse: '适用于需要创建或修改 docx 内容的任务。',
     examples: [
       {
-        goal: '在目标段落后插入一段说明',
-        args: {
-          sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
-          action: 'insert_after',
-          anchorBlockId: 'b:26',
-          paragraphs: ['补充说明：反走样通过平滑边缘像素来减轻锯齿感。']
-        }
+        goal: '新建一份总结文档，并写入标题和正文段落',
+        args: DOCX_EDIT_CREATE_DOCUMENT_EXAMPLE
+      },
+      {
+        goal: '在指定 block 后按顺序插入多条内容',
+        args: DOCX_EDIT_INSERT_BLOCKS_EXAMPLE
+      },
+      {
+        goal: '一次批量完成多个独立修改',
+        args: DOCX_EDIT_BATCH_EXAMPLE
+      },
+      {
+        goal: '把一个已读到的完整段落替换为标题',
+        args: DOCX_EDIT_REPLACE_BLOCK_EXAMPLE
+      },
+      {
+        goal: '在已读到的 block 内替换文本',
+        args: DOCX_EDIT_REPLACE_TEXT_EXAMPLE
+      },
+      {
+        goal: '给指定 block 内的关键词加粗并改色',
+        args: DOCX_EDIT_STYLE_TEXT_EXAMPLE
+      },
+      {
+        goal: '更新表格中的一个单元格',
+        args: DOCX_EDIT_UPDATE_TABLE_CELL_EXAMPLE
+      },
+      {
+        goal: '删除已确认多余的完整 block',
+        args: DOCX_EDIT_DELETE_BLOCKS_EXAMPLE
       }
     ]
   },
   resolveExecutionMeta: createDocxMutatingExecutionMeta(),
-  activityActionType: 'docx_paragraph_edit'
+  activityActionType: 'docx_edit'
 } satisfies DocxToolSpec<
-  z.infer<typeof docxParagraphEditSchema>,
+  z.infer<typeof docxEditSchema>,
   z.infer<typeof docxWriteOutputSchema>,
-  'docx_paragraph_edit',
-  'docx-write'
->
-
-export const DOCX_CREATE_TOOL_SPEC = {
-  name: 'docx_create',
-  familyId: 'docx',
-  requiresWorkspace: true,
-  description: '创建一份新的 docx 草稿目标，供后续继续读取、编辑和审阅。',
-  skillIds: ['docx-write'],
-  inputSchema: docxCreateSchema,
-  outputSchema: docxWriteOutputSchema,
-  promptSpec: {
-    name: 'docx_create',
-    description:
-      '能力：创建一份新的 docx 文件内容，并纳入当前任务的 docx 编辑链路。\n结果：返回创建后的编辑状态和写后回读信息。\n边界：不会覆盖已有文件；创建后先作为待审阅内容存在，commit 前不会写入最终路径。',
-    whenToUse: '适用于需要新建 docx 文件内容的任务。',
-    examples: [
-      {
-        goal: '先创建一份给同学复习用的总结文档',
-        args: DOCX_CREATE_EXAMPLE_ARGS
-      }
-    ]
-  },
-  resolveExecutionMeta: createDocxMutatingExecutionMeta(),
-  activityActionType: 'docx_create'
-} satisfies DocxToolSpec<
-  z.infer<typeof docxCreateSchema>,
-  z.infer<typeof docxWriteOutputSchema>,
-  'docx_create',
-  'docx-write'
->
-
-export const DOCX_HEADING_EDIT_TOOL_SPEC = {
-  name: 'docx_heading_edit',
-  familyId: 'docx',
-  requiresWorkspace: true,
-  description: '按标题对象执行插入。',
-  skillIds: ['docx-write'],
-  inputSchema: docxHeadingEditSchema,
-  outputSchema: docxWriteOutputSchema,
-  promptSpec: {
-    name: 'docx_heading_edit',
-    description:
-      '能力：以 anchorBlockId 为锚点，在其前后插入一个或多个指定层级的标题块。\n结果：返回写入后的编辑状态，以及相邻区域的详细回读信息。\n边界：标题以段落样式写入；不替换已有标题文字。',
-    whenToUse: '适用于需要插入 docx 标题块的任务。',
-    examples: [
-      {
-        goal: '在指定 block 后插入一个二级标题',
-        args: {
-          sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
-          action: 'insert_after',
-          anchorBlockId: 'b:26',
-          headings: [{ level: 2, text: '反走样与过拟合对照' }]
-        }
-      }
-    ]
-  },
-  resolveExecutionMeta: createDocxMutatingExecutionMeta(),
-  activityActionType: 'docx_heading_edit'
-} satisfies DocxToolSpec<
-  z.infer<typeof docxHeadingEditSchema>,
-  z.infer<typeof docxWriteOutputSchema>,
-  'docx_heading_edit',
-  'docx-write'
->
-
-export const DOCX_TABLE_EDIT_TOOL_SPEC = {
-  name: 'docx_table_edit',
-  familyId: 'docx',
-  requiresWorkspace: true,
-  description: '按表格对象执行插入或改单元格。',
-  skillIds: ['docx-write'],
-  inputSchema: docxTableEditSchema,
-  outputSchema: docxWriteOutputSchema,
-  promptSpec: {
-    name: 'docx_table_edit',
-    description:
-      '能力：以 anchorBlockId 为锚点插入表格，或通过 cellBlockId 更新表格单元格文本。\n结果：返回写入后的编辑状态，以及相邻区域的详细回读信息。\n边界：插入表格使用二维文本 rows；更新单元格会把目标单元格内容替换为单段文本。',
-    whenToUse: '适用于需要插入 docx 表格或更新表格单元格文本的任务。',
-    examples: [
-      {
-        goal: '在指定 block 后插入一个简单对照表',
-        args: {
-          sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
-          action: 'insert_after',
-          anchorBlockId: 'b:26',
-          rows: [
-            ['反走样', '过拟合'],
-            ['平滑图像边缘，降低锯齿', '记住训练噪声，泛化能力下降']
-          ]
-        }
-      }
-    ]
-  },
-  resolveExecutionMeta: createDocxMutatingExecutionMeta(),
-  activityActionType: 'docx_table_edit'
-} satisfies DocxToolSpec<
-  z.infer<typeof docxTableEditSchema>,
-  z.infer<typeof docxWriteOutputSchema>,
-  'docx_table_edit',
-  'docx-write'
->
-
-export const DOCX_TEXT_EDIT_TOOL_SPEC = {
-  name: 'docx_text_edit',
-  familyId: 'docx',
-  requiresWorkspace: true,
-  description: '按 query 执行文本查找替换。',
-  skillIds: ['docx-write'],
-  inputSchema: docxTextEditSchema,
-  outputSchema: docxWriteOutputSchema,
-  promptSpec: {
-    name: 'docx_text_edit',
-    description:
-      '能力：在 sourcePath 对应 docx 中按 query 执行文本查找替换，可用 blockIds 限定范围。\n结果：返回写入后的编辑状态，以及命中区域的详细回读信息。\n边界：执行文本级替换，不创建新的段落、标题或表格结构。',
-    whenToUse: '适用于需要替换 docx 现有文本内容的任务。',
-    examples: [
-      {
-        goal: '把文中的“过拟合”统一替换成“模型过拟合”',
-        args: {
-          sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
-          query: '过拟合',
-          replace: '模型过拟合'
-        }
-      }
-    ]
-  },
-  resolveExecutionMeta: createDocxMutatingExecutionMeta(),
-  activityActionType: 'docx_text_edit'
-} satisfies DocxToolSpec<
-  z.infer<typeof docxTextEditSchema>,
-  z.infer<typeof docxWriteOutputSchema>,
-  'docx_text_edit',
-  'docx-write'
->
-
-export const DOCX_TEXT_STYLE_EDIT_TOOL_SPEC = {
-  name: 'docx_text_style_edit',
-  familyId: 'docx',
-  requiresWorkspace: true,
-  description: '在指定块内按 query 命中文本并应用样式。',
-  skillIds: ['docx-write'],
-  inputSchema: docxTextStyleEditSchema,
-  outputSchema: docxWriteOutputSchema,
-  promptSpec: {
-    name: 'docx_text_style_edit',
-    description:
-      '能力：在指定 blockId 内按 query 命中文本并应用 color、bold、italic 或 underline 样式。\n结果：返回写入后的编辑状态，以及命中区域的详细回读信息。\n边界：只修改命中文本的样式，不改变文本内容。',
-    whenToUse: '适用于需要修改 docx 现有文本样式的任务。',
-    examples: [
-      {
-        goal: '把指定段落中“高风险”标红加粗',
-        args: {
-          sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
-          blockId: 'b:26',
-          query: '高风险',
-          style: {
-            color: 'FF0000',
-            bold: true
-          }
-        }
-      }
-    ]
-  },
-  resolveExecutionMeta: createDocxMutatingExecutionMeta(),
-  activityActionType: 'docx_text_style_edit'
-} satisfies DocxToolSpec<
-  z.infer<typeof docxTextStyleEditSchema>,
-  z.infer<typeof docxWriteOutputSchema>,
-  'docx_text_style_edit',
-  'docx-write'
->
-
-export const DOCX_DELETE_TOOL_SPEC = {
-  name: 'docx_delete',
-  familyId: 'docx',
-  requiresWorkspace: true,
-  description: '删除一个或多个完整 docx block。',
-  skillIds: ['docx-write'],
-  inputSchema: docxDeleteSchema,
-  outputSchema: docxWriteOutputSchema,
-  promptSpec: {
-    name: 'docx_delete',
-    description:
-      '能力：按 blockIds 删除一个或多个完整 docx block。\n结果：返回写入后的编辑状态，以及删除位置相邻区域的详细回读信息。\n边界：删除粒度是完整 block，不执行 run 级或文本片段级删除。',
-    whenToUse: '适用于需要删除 docx 完整块的任务。',
-    examples: [
-      {
-        goal: '删除两个完整段落',
-        args: {
-          sourcePath: DOCX_SOURCE_PATH_EXAMPLE,
-          blockIds: ['b:12', 'b:13']
-        }
-      }
-    ]
-  },
-  resolveExecutionMeta: createDocxMutatingExecutionMeta(),
-  activityActionType: 'docx_delete'
-} satisfies DocxToolSpec<
-  z.infer<typeof docxDeleteSchema>,
-  z.infer<typeof docxWriteOutputSchema>,
-  'docx_delete',
+  'docx_edit',
   'docx-write'
 >
 
@@ -462,15 +377,15 @@ export const DOCX_ROLLBACK_TOOL_SPEC = {
   name: 'docx_rollback',
   familyId: 'docx',
   requiresWorkspace: true,
-  description: '按修订号回退当前 docx 草稿。',
+  description: '把当前 docx 草稿回到某次编辑状态。',
   skillIds: ['docx-write'],
   inputSchema: docxRollbackRequestSchema,
   outputSchema: docxRollbackOutputSchema,
   promptSpec: {
     name: 'docx_rollback',
     description:
-      '能力：按 revisionRef 切回 sourcePath 对应 docx 的当前编辑 revision。\n结果：返回回退后的编辑状态。\n边界：只切换当前任务内的编辑状态，不直接覆盖源文件。',
-    whenToUse: '适用于需要切换 docx 编辑 revision 状态的任务。',
+      '能力：根据 docx_history 返回的 revisionRef，把 sourcePath 对应 docx 回到某次编辑状态。\n结果：返回回退后的编辑状态。\n边界：只切换当前任务内的草稿状态，不直接覆盖源文件。',
+    whenToUse: '适用于发现前一次或某几次 docx 修改不合适，需要回到较早编辑状态的任务。',
     examples: [
       {
         goal: '把当前草稿回退到指定修订',
@@ -497,16 +412,7 @@ export const DOCX_READ_TOOL_SPECS = [
   DOCX_HISTORY_TOOL_SPEC
 ] as const
 
-export const DOCX_WRITE_TOOL_SPECS = [
-  DOCX_CREATE_TOOL_SPEC,
-  DOCX_PARAGRAPH_EDIT_TOOL_SPEC,
-  DOCX_HEADING_EDIT_TOOL_SPEC,
-  DOCX_TABLE_EDIT_TOOL_SPEC,
-  DOCX_TEXT_EDIT_TOOL_SPEC,
-  DOCX_TEXT_STYLE_EDIT_TOOL_SPEC,
-  DOCX_DELETE_TOOL_SPEC,
-  DOCX_ROLLBACK_TOOL_SPEC
-] as const
+export const DOCX_WRITE_TOOL_SPECS = [DOCX_EDIT_TOOL_SPEC, DOCX_ROLLBACK_TOOL_SPEC] as const
 
 export const DOCX_TOOL_SPECS = [...DOCX_READ_TOOL_SPECS, ...DOCX_WRITE_TOOL_SPECS] as const
 

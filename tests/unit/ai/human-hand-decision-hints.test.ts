@@ -16,8 +16,8 @@ describe('ai unit hand decision hints', () => {
       },
       {
         callIndex: 2,
-        toolName: 'docx_create',
-        message: 'tool call schema invalid\ncalls[2].args.blocks: Required'
+        toolName: 'docx_edit',
+        message: 'tool call schema invalid\ncalls[2].args.action: Required'
       }
     ])
 
@@ -32,8 +32,8 @@ describe('ai unit hand decision hints', () => {
           },
           {
             callIndex: 2,
-            toolName: 'docx_create',
-            message: 'tool call schema invalid\ncalls[2].args.blocks: Required'
+            toolName: 'docx_edit',
+            message: 'tool call schema invalid\ncalls[2].args.action: Required'
           }
         ]
       }

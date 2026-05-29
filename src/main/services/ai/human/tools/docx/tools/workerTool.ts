@@ -54,6 +54,7 @@ export const finalizeDocxToolSuccess = <TResult extends object>(input: {
   toolName: string
   toolCallId: string
   result: TResult
+  outputPreview?: object
   draftDocId?: string
   activity?: DocxToolActivityConfig<TResult>
 }): TResult => {

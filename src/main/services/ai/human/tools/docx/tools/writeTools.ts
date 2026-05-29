@@ -5,26 +5,20 @@ import type { StructuredToolInterface } from '@langchain/core/tools'
 import type {
   DocxChangedBlock,
   DocxCreatedBlock,
+  DocxCreateBlock,
   DocxDetailedBlock,
+  DocxEditAction,
   DocxOp,
   DocxOutlineBlock,
   DocxParagraphSpec,
   DocxTableSpec,
-  DocxPostWriteReadback,
-  DocxTextStyle,
-  DocxWriteReadbackAction
+  DocxPostWriteReadback
 } from '../types'
 import type { DocxToolRuntime } from '../runtime'
 import { DOCX_POST_WRITE_READBACK_WINDOW_POLICY } from '../writeReadbackPolicy'
 import {
-  DOCX_CREATE_TOOL_SPEC,
-  DOCX_DELETE_TOOL_SPEC,
-  DOCX_HEADING_EDIT_TOOL_SPEC,
-  DOCX_PARAGRAPH_EDIT_TOOL_SPEC,
+  DOCX_EDIT_TOOL_SPEC,
   DOCX_ROLLBACK_TOOL_SPEC,
-  DOCX_TABLE_EDIT_TOOL_SPEC,
-  DOCX_TEXT_EDIT_TOOL_SPEC,
-  DOCX_TEXT_STYLE_EDIT_TOOL_SPEC
 } from '../toolSpecs'
 import {
   createDocxTool,
@@ -51,6 +45,12 @@ const tableSpecFromRows = (rows: string[][]): DocxTableSpec => ({
 })
 
 const headingStyle = (level: number): string => `Heading${String(level)}`
+
+const blockSpecFromCreateBlock = (block: DocxCreateBlock): DocxParagraphSpec | DocxTableSpec => {
+  if (block.type === 'table') return tableSpecFromRows(block.rows)
+  if (block.type === 'heading') return paragraphSpecFromText(block.text, headingStyle(block.level || 1))
+  return paragraphSpecFromText(block.text)
+}
 
 const buildEditSummary = (input: {
   toolName: string
@@ -111,17 +111,34 @@ const buildPositionedReadOnlyMessage = (): string => DOCX_POSITIONED_LAYOUT_PROT
 
 const buildCreateSummary = (sourcePath: string): string => `已建立新的 docx 草稿会话：${sourcePath}`
 
-const resolveWriteReadbackAction = (input: {
+const resolveCurrentSnapshotBlockIds = (input: {
+  runtime: DocxToolRuntime
   toolName: string
-  action: string
-}): DocxWriteReadbackAction => {
-  if (input.toolName === 'docx_create') return 'create_document'
-  if (input.toolName === 'docx_text_edit') return 'replace_text'
-  if (input.toolName === 'docx_text_style_edit') return 'style_text'
-  if (input.action === 'delete') return 'delete_block'
-  if (input.action === 'update_cell') return 'update_table_cell'
-  if (input.action === 'replace_text') return 'replace_block'
-  return input.action as DocxWriteReadbackAction
+  toolCallId: string
+  sourcePath: string
+  field: 'blockId' | 'anchorBlockId' | 'cellBlockId' | 'blockIds'
+  blockIds: string[]
+  allowDeleted?: boolean
+}): string[] | DocxToolFailure => {
+  const resolved = input.runtime.resolveCurrentBlockIdsFromSnapshot({
+    sourcePath: input.sourcePath,
+    field: input.field,
+    blockIds: input.blockIds,
+    allowDeleted: input.allowDeleted
+  })
+  if (!resolved.ok) {
+    return input.runtime.emitFailure({
+      toolName: input.toolName,
+      toolCallId: input.toolCallId,
+      reason: 'invalid_input',
+      error: resolved.error,
+      resourceContext: input.runtime.buildResourceContext({
+        sourcePath: input.sourcePath,
+        effectKind: 'mutated'
+      })
+    })
+  }
+  return resolved.blockIds
 }
 
 const getOutlineBlockIndex = (blocks: readonly DocxOutlineBlock[], blockId: string): number =>
@@ -243,44 +260,52 @@ const buildDeletedReadbackRegions = (input: {
 
 const buildPostWriteReadback = async (input: {
   runtime: DocxToolRuntime
-  action: DocxWriteReadbackAction
   currentDocId: string
   previousDocId?: string
-  targetBlockIds: string[]
+  targets: Array<{
+    action: keyof typeof DOCX_POST_WRITE_READBACK_WINDOW_POLICY
+    targetBlockIds: string[]
+  }>
 }): Promise<DocxPostWriteReadback> => {
-  const policy = DOCX_POST_WRITE_READBACK_WINDOW_POLICY[input.action]
   const currentOutlineBlocks = await fetchOutlineBlocks(input.runtime, input.currentDocId)
 
   let regions: Array<{ startBlockId: string; endBlockId: string }> = []
-  if (input.action === 'create_document') {
-    if (currentOutlineBlocks.length > 0) {
-      const endIndex = Math.min(
-        currentOutlineBlocks.length - 1,
-        Math.max(0, policy.afterBlockCount)
-      )
-      const region = toRangeRegion(currentOutlineBlocks, 0, endIndex)
-      if (region) regions = [region]
+  const previousOutlineBlocks =
+    input.previousDocId && input.targets.some((target) => target.action === 'delete_block')
+      ? await fetchOutlineBlocks(input.runtime, input.previousDocId)
+      : []
+
+  for (const target of input.targets) {
+    const policy = DOCX_POST_WRITE_READBACK_WINDOW_POLICY[target.action]
+    if (target.action === 'create_document') {
+      if (currentOutlineBlocks.length > 0) {
+        const endIndex = Math.min(
+          currentOutlineBlocks.length - 1,
+          Math.max(0, policy.afterBlockCount)
+        )
+        const region = toRangeRegion(currentOutlineBlocks, 0, endIndex)
+        if (region) regions.push(region)
+      }
+      continue
     }
-  } else if (input.action === 'delete_block') {
-    const previousDocId = input.previousDocId
-    if (previousDocId) {
-      const previousOutlineBlocks = await fetchOutlineBlocks(input.runtime, previousDocId)
-      regions = buildDeletedReadbackRegions({
+    if (target.action === 'delete_block') {
+      regions.push(...buildDeletedReadbackRegions({
         previousOutlineBlocks,
         currentOutlineBlocks,
-        targetBlockIds: input.targetBlockIds,
+        targetBlockIds: target.targetBlockIds,
         beforeBlockCount: policy.beforeBlockCount,
         afterBlockCount: policy.afterBlockCount
-      })
+      }))
+      continue
     }
-  } else {
-    regions = buildCurrentOutlineReadbackRegions({
+    regions.push(...buildCurrentOutlineReadbackRegions({
       outlineBlocks: currentOutlineBlocks,
-      targetBlockIds: input.targetBlockIds,
+      targetBlockIds: target.targetBlockIds,
       beforeBlockCount: policy.beforeBlockCount,
       afterBlockCount: policy.afterBlockCount
-    })
+    }))
   }
+  regions = mergeReadbackRegions(currentOutlineBlocks, regions)
 
   const indexByBlockId = new Map(currentOutlineBlocks.map((block, index) => [block.blockId, index] as const))
   const indexRegions = regions
@@ -405,45 +430,167 @@ const failIfAnyPositionedBlocks = async (input: {
   return null
 }
 
-const resolveCreatedBlocksForOp = async (input: {
+type SimulatedBodySlot =
+  | {
+      type: 'existing'
+      blockId: string
+    }
+  | {
+      type: 'created'
+      opIndex: number
+      contentIndex: number
+    }
+
+const isStructuralOp = (
+  op: DocxOp
+): op is Extract<
+  DocxOp,
+  { type: 'insert_after' | 'insert_before' | 'replace_block' | 'delete_block' | 'update_table_cell' }
+> =>
+  op.type === 'insert_after' ||
+  op.type === 'insert_before' ||
+  op.type === 'replace_block' ||
+  op.type === 'delete_block' ||
+  op.type === 'update_table_cell'
+
+const bodyBlocksOnly = (blocks: readonly DocxOutlineBlock[]): DocxOutlineBlock[] =>
+  blocks.filter((block) => block.type !== 'table_cell')
+
+const structuralOpTargetRank = (
+  rankByBlockId: ReadonlyMap<string, number>,
+  op: Extract<
+    DocxOp,
+    { type: 'insert_after' | 'insert_before' | 'replace_block' | 'delete_block' | 'update_table_cell' }
+  >
+): number => {
+  const blockId = op.type === 'insert_after' || op.type === 'insert_before' ? op.anchorBlockId : op.blockId
+  return rankByBlockId.get(blockId) ?? -1
+}
+
+const orderedOpsForWorkerStructuralSegments = (
+  ops: readonly DocxOp[],
+  rankByBlockId: ReadonlyMap<string, number>
+): Array<{ op: DocxOp; opIndex: number }> => {
+  const ordered: Array<{ op: DocxOp; opIndex: number }> = []
+  let segment: Array<{
+    op: Extract<
+      DocxOp,
+      { type: 'insert_after' | 'insert_before' | 'replace_block' | 'delete_block' | 'update_table_cell' }
+    >
+    opIndex: number
+  }> = []
+
+  const flushStructuralSegment = () => {
+    if (segment.length === 0) return
+    segment
+      .slice()
+      .sort((left, right) => {
+        const leftRank = structuralOpTargetRank(rankByBlockId, left.op)
+        const rightRank = structuralOpTargetRank(rankByBlockId, right.op)
+        if (leftRank !== rightRank) return rightRank - leftRank
+        return left.opIndex - right.opIndex
+      })
+      .forEach((entry) => ordered.push(entry))
+    segment = []
+  }
+
+  ops.forEach((op, opIndex) => {
+    if (isStructuralOp(op)) {
+      segment.push({ op, opIndex })
+      return
+    }
+    flushStructuralSegment()
+    ordered.push({ op, opIndex })
+  })
+  flushStructuralSegment()
+  return ordered
+}
+
+const applySequenceChangingOp = (
+  slots: SimulatedBodySlot[],
+  entry: { op: DocxOp; opIndex: number }
+): void => {
+  const { op, opIndex } = entry
+  if (op.type === 'insert_before' || op.type === 'insert_after') {
+    const anchorIndex = slots.findIndex((slot) => slot.type === 'existing' && slot.blockId === op.anchorBlockId)
+    if (anchorIndex < 0) return
+    const createdSlots: SimulatedBodySlot[] = op.content.map((_, contentIndex) => ({
+      type: 'created',
+      opIndex,
+      contentIndex
+    }))
+    slots.splice(op.type === 'insert_before' ? anchorIndex : anchorIndex + 1, 0, ...createdSlots)
+    return
+  }
+
+  if (op.type === 'delete_block') {
+    const targetIndex = slots.findIndex((slot) => slot.type === 'existing' && slot.blockId === op.blockId)
+    if (targetIndex >= 0) slots.splice(targetIndex, 1)
+  }
+}
+
+const resolveCreatedBlocksForBatch = async (input: {
   runtime: DocxToolRuntime
   previousDocId: string
   nextDocId: string
-  op: DocxOp
-}): Promise<DocxCreatedBlock[]> => {
-  if (input.op.type !== 'insert_before' && input.op.type !== 'insert_after') {
-    return []
-  }
-  const op = input.op
+  ops: DocxOp[]
+  createdBlockOps: boolean[]
+}): Promise<DocxCreatedBlock[][]> => {
+  const createdBlocksByOp = input.ops.map((): DocxCreatedBlock[] => [])
+  if (!input.createdBlockOps.some(Boolean)) return createdBlocksByOp
 
   const beforeBlocks = await fetchOutlineBlocks(input.runtime, input.previousDocId)
   const afterBlocks = await fetchOutlineBlocks(input.runtime, input.nextDocId)
-  const anchor = beforeBlocks.find((block) => block.blockId === op.anchorBlockId)
-  if (!anchor) {
-    return []
+  const beforeBodyBlocks = bodyBlocksOnly(beforeBlocks)
+  const afterBodyBlocks = bodyBlocksOnly(afterBlocks)
+  const rankByBlockId = new Map(beforeBodyBlocks.map((block, index) => [block.blockId, index] as const))
+  const slots: SimulatedBodySlot[] = beforeBodyBlocks.map((block) => ({
+    type: 'existing',
+    blockId: block.blockId
+  }))
+
+  for (const entry of orderedOpsForWorkerStructuralSegments(input.ops, rankByBlockId)) {
+    applySequenceChangingOp(slots, entry)
   }
 
-  const insertedBodyCount = op.content.length
-  if (insertedBodyCount <= 0) {
-    return []
+  const createdBodyBlockIdsByOp = new Map<number, Set<string>>()
+  slots.forEach((slot, index) => {
+    if (slot.type !== 'created') return
+    const afterBlock = afterBodyBlocks[index]
+    if (!afterBlock || !input.createdBlockOps[slot.opIndex]) return
+    const blockIds = createdBodyBlockIdsByOp.get(slot.opIndex) || new Set<string>()
+    blockIds.add(afterBlock.blockId)
+    createdBodyBlockIdsByOp.set(slot.opIndex, blockIds)
+  })
+
+  for (const [opIndex, bodyBlockIds] of createdBodyBlockIdsByOp) {
+    createdBlocksByOp[opIndex] = afterBlocks
+      .filter((block) => {
+        if (bodyBlockIds.has(block.blockId)) return true
+        return block.type === 'table_cell' && bodyBlockIds.has(block.tableBlockId)
+      })
+      .map((block) => ({
+        blockId: block.blockId,
+        type: block.type
+      }))
   }
 
-  const startBlockIndex =
-    op.type === 'insert_before' ? anchor.blockIndex : anchor.blockIndex + 1
-  const endBlockIndex = startBlockIndex + insertedBodyCount - 1
-
-  return afterBlocks
-    .filter(
-      (block) =>
-        block.blockIndex >= startBlockIndex && block.blockIndex <= endBlockIndex
-    )
-    .map((block) => ({
-      blockId: block.blockId,
-      type: block.type
-    }))
+  return createdBlocksByOp
 }
 
-type ApplySingleEditResult =
+type BatchReadbackTarget = {
+  action: keyof typeof DOCX_POST_WRITE_READBACK_WINDOW_POLICY
+  targetBlockIds: string[]
+}
+
+type CompiledBatchEdit = {
+  ops: DocxOp[]
+  readbackTargets: BatchReadbackTarget[]
+  createdBlockOps: boolean[]
+  summary: string
+}
+
+type ApplyBatchEditResult =
   | {
       failure: DocxToolFailure
     }
@@ -454,20 +601,299 @@ type ApplySingleEditResult =
       warnings: string[]
       nextDocId: string
       createdBlocks: DocxCreatedBlock[]
+      createdBlocksByOp: DocxCreatedBlock[][]
     }
 
 type WriteToolResult = {
   sourcePath: string
   previousRevisionRef?: string
   currentRevisionRef: string
-  created?: true
   changedBlocks: DocxChangedBlock[]
   createdBlocks?: DocxCreatedBlock[]
   warnings: string[]
   postWriteReadback: DocxPostWriteReadback
 }
 
-const applySingleEdit = async (input: {
+const actionLabel = (action: DocxEditAction): string => {
+  if (action.type === 'insert_blocks') return `${action.type}.${action.position}.${String(action.blocks.length)}`
+  if (action.type === 'delete_blocks') return `${action.type}.${String(action.blockIds.length)}`
+  return action.type
+}
+
+const validateBatchConflicts = (input: {
+  runtime: DocxToolRuntime
+  toolName: string
+  toolCallId: string
+  sourcePath: string
+  structuralTargetKeys: string[]
+  deletedBlockIds: string[]
+  mutatedBlockIds: string[]
+}): DocxToolFailure | null => {
+  const seenTargets = new Set<string>()
+  for (const key of input.structuralTargetKeys) {
+    if (seenTargets.has(key)) {
+      return input.runtime.emitFailure({
+        toolName: input.toolName,
+        toolCallId: input.toolCallId,
+        reason: 'invalid_input',
+        error: `docx_edit batch has conflicting actions for the same target: ${key}`,
+        resourceContext: input.runtime.buildResourceContext({
+          sourcePath: input.sourcePath,
+          effectKind: 'mutated'
+        })
+      })
+    }
+    seenTargets.add(key)
+  }
+
+  const deleted = new Set(input.deletedBlockIds)
+  const conflictingMutation = input.mutatedBlockIds.find((blockId) => deleted.has(blockId))
+  if (conflictingMutation) {
+    return input.runtime.emitFailure({
+      toolName: input.toolName,
+      toolCallId: input.toolCallId,
+      reason: 'invalid_input',
+      error: `docx_edit batch cannot delete and modify the same block: ${conflictingMutation}`,
+      resourceContext: input.runtime.buildResourceContext({
+        sourcePath: input.sourcePath,
+        effectKind: 'mutated'
+      })
+    })
+  }
+  return null
+}
+
+const compileBatchEditActions = async (input: {
+  runtime: DocxToolRuntime
+  toolName: string
+  toolCallId: string
+  sourcePath: string
+  docId: string
+  currentRevisionRef: string
+  actions: DocxEditAction[]
+}): Promise<CompiledBatchEdit | { failure: DocxToolFailure }> => {
+  const ops: DocxOp[] = []
+  const readbackTargets: BatchReadbackTarget[] = []
+  const createdBlockOps: boolean[] = []
+  const positionedCheckBlockIds: string[] = []
+  const structuralTargetKeys: string[] = []
+  const deletedBlockIds: string[] = []
+  const mutatedBlockIds: string[] = []
+
+  for (const action of input.actions) {
+    if (action.type === 'create_document') {
+      return {
+        failure: input.runtime.emitFailure({
+          toolName: input.toolName,
+          toolCallId: input.toolCallId,
+          reason: 'invalid_input',
+          error: 'docx_edit(create_document) must be the only action in a call',
+          resourceContext: input.runtime.buildResourceContext({
+            sourcePath: input.sourcePath,
+            effectKind: 'mutated'
+          })
+        })
+      }
+    }
+
+    if (action.type === 'insert_blocks') {
+      const resolvedAnchor = resolveCurrentSnapshotBlockIds({
+        runtime: input.runtime,
+        toolName: input.toolName,
+        toolCallId: input.toolCallId,
+        sourcePath: input.sourcePath,
+        field: 'anchorBlockId',
+        blockIds: [action.anchorBlockId]
+      })
+      if (!Array.isArray(resolvedAnchor)) return { failure: resolvedAnchor }
+      const anchorBlockId = resolvedAnchor[0]
+      positionedCheckBlockIds.push(anchorBlockId)
+      structuralTargetKeys.push(`insert:${action.position}:${anchorBlockId}`)
+      const op: DocxOp = {
+        type: action.position === 'before' ? 'insert_before' : 'insert_after',
+        anchorBlockId,
+        content: action.blocks.map((block) => blockSpecFromCreateBlock(block))
+      }
+      ops.push(op)
+      createdBlockOps.push(true)
+      readbackTargets.push({
+        action: op.type,
+        targetBlockIds: [anchorBlockId]
+      })
+      continue
+    }
+
+    if (action.type === 'replace_block') {
+      const resolvedBlockIds = resolveCurrentSnapshotBlockIds({
+        runtime: input.runtime,
+        toolName: input.toolName,
+        toolCallId: input.toolCallId,
+        sourcePath: input.sourcePath,
+        field: 'blockId',
+        blockIds: [action.blockId]
+      })
+      if (!Array.isArray(resolvedBlockIds)) return { failure: resolvedBlockIds }
+      const blockId = resolvedBlockIds[0]
+      positionedCheckBlockIds.push(blockId)
+      structuralTargetKeys.push(`replace:${blockId}`)
+      mutatedBlockIds.push(blockId)
+      ops.push({
+        type: 'replace_block',
+        blockId,
+        content: blockSpecFromCreateBlock(action.block)
+      })
+      createdBlockOps.push(false)
+      readbackTargets.push({
+        action: 'replace_block',
+        targetBlockIds: [blockId]
+      })
+      continue
+    }
+
+    if (action.type === 'replace_text') {
+      const blockIds = action.blockIds
+        ? resolveCurrentSnapshotBlockIds({
+            runtime: input.runtime,
+            toolName: input.toolName,
+            toolCallId: input.toolCallId,
+            sourcePath: input.sourcePath,
+            field: 'blockIds',
+            blockIds: action.blockIds
+          })
+        : undefined
+      if (blockIds && !Array.isArray(blockIds)) return { failure: blockIds }
+      const targetBlockIds = await resolveReplaceTextTargetBlockIds({
+        runtime: input.runtime,
+        docId: input.docId,
+        query: action.query,
+        blockIds
+      })
+      positionedCheckBlockIds.push(...targetBlockIds)
+      mutatedBlockIds.push(...targetBlockIds)
+      ops.push({
+        type: 'replace_text',
+        query: action.query,
+        replace: action.replace,
+        replaceAll: true,
+        blockIds
+      })
+      createdBlockOps.push(false)
+      readbackTargets.push({
+        action: 'replace_text',
+        targetBlockIds
+      })
+      continue
+    }
+
+    if (action.type === 'style_text') {
+      const resolvedBlockIds = resolveCurrentSnapshotBlockIds({
+        runtime: input.runtime,
+        toolName: input.toolName,
+        toolCallId: input.toolCallId,
+        sourcePath: input.sourcePath,
+        field: 'blockId',
+        blockIds: [action.blockId]
+      })
+      if (!Array.isArray(resolvedBlockIds)) return { failure: resolvedBlockIds }
+      const blockId = resolvedBlockIds[0]
+      positionedCheckBlockIds.push(blockId)
+      mutatedBlockIds.push(blockId)
+      ops.push({
+        type: 'style_text',
+        blockId,
+        query: action.query,
+        style: action.style
+      })
+      createdBlockOps.push(false)
+      readbackTargets.push({
+        action: 'style_text',
+        targetBlockIds: [blockId]
+      })
+      continue
+    }
+
+    if (action.type === 'update_table_cell') {
+      const resolvedCellIds = resolveCurrentSnapshotBlockIds({
+        runtime: input.runtime,
+        toolName: input.toolName,
+        toolCallId: input.toolCallId,
+        sourcePath: input.sourcePath,
+        field: 'cellBlockId',
+        blockIds: [action.cellBlockId]
+      })
+      if (!Array.isArray(resolvedCellIds)) return { failure: resolvedCellIds }
+      const cellBlockId = resolvedCellIds[0]
+      positionedCheckBlockIds.push(cellBlockId)
+      structuralTargetKeys.push(`update_table_cell:${cellBlockId}`)
+      mutatedBlockIds.push(cellBlockId)
+      ops.push({
+        type: 'update_table_cell',
+        blockId: cellBlockId,
+        content: [paragraphSpecFromText(action.text)]
+      })
+      createdBlockOps.push(false)
+      readbackTargets.push({
+        action: 'update_table_cell',
+        targetBlockIds: [cellBlockId]
+      })
+      continue
+    }
+
+    const resolvedBlockIds = resolveCurrentSnapshotBlockIds({
+      runtime: input.runtime,
+      toolName: input.toolName,
+      toolCallId: input.toolCallId,
+      sourcePath: input.sourcePath,
+      field: 'blockIds',
+      blockIds: action.blockIds,
+      allowDeleted: false
+    })
+    if (!Array.isArray(resolvedBlockIds)) return { failure: resolvedBlockIds }
+    positionedCheckBlockIds.push(...resolvedBlockIds)
+    structuralTargetKeys.push(...resolvedBlockIds.map((blockId) => `delete:${blockId}`))
+    deletedBlockIds.push(...resolvedBlockIds)
+    ops.push(...resolvedBlockIds.map((blockId) => ({
+      type: 'delete_block' as const,
+      blockId
+    })))
+    createdBlockOps.push(...resolvedBlockIds.map(() => false))
+    readbackTargets.push({
+      action: 'delete_block',
+      targetBlockIds: resolvedBlockIds
+    })
+  }
+
+  const conflict = validateBatchConflicts({
+    runtime: input.runtime,
+    toolName: input.toolName,
+    toolCallId: input.toolCallId,
+    sourcePath: input.sourcePath,
+    structuralTargetKeys,
+    deletedBlockIds,
+    mutatedBlockIds
+  })
+  if (conflict) return { failure: conflict }
+
+  const positionedFailure = await failIfAnyPositionedBlocks({
+    runtime: input.runtime,
+    toolName: input.toolName,
+    toolCallId: input.toolCallId,
+    sourcePath: input.sourcePath,
+    currentRevisionRef: input.currentRevisionRef,
+    docId: input.docId,
+    blockIds: [...new Set(positionedCheckBlockIds)]
+  })
+  if (positionedFailure) return { failure: positionedFailure }
+
+  return {
+    ops,
+    readbackTargets,
+    createdBlockOps,
+    summary: `edit.batch:${input.actions.map(actionLabel).join(',')}`
+  }
+}
+
+const applyBatchEdit = async (input: {
   runtime: DocxToolRuntime
   toolName: string
   toolCallId: string
@@ -476,8 +902,8 @@ const applySingleEdit = async (input: {
   currentRevisionRef: string
   ops: DocxOp[]
   summary: string
-  createdBlocks?: boolean
-}): Promise<ApplySingleEditResult> => {
+  createdBlockOps: boolean[]
+}): Promise<ApplyBatchEditResult> => {
   const workerResponse = await input.runtime.callWorker({
     action: 'apply_ops',
     payload: {
@@ -506,72 +932,76 @@ const applySingleEdit = async (input: {
       })
     }
   }
+  const appliedPayload = workerResponse.payload
 
-  const createdBlocks = input.createdBlocks
-    ? await resolveCreatedBlocksForOp({
-        runtime: input.runtime,
-        previousDocId: input.currentDocId,
-        nextDocId: workerResponse.payload.newDocId,
-        op: input.ops[0]
-      })
-    : []
+  const createdBlocksByOp = await resolveCreatedBlocksForBatch({
+    runtime: input.runtime,
+    previousDocId: input.currentDocId,
+    nextDocId: appliedPayload.newDocId,
+    ops: input.ops,
+    createdBlockOps: input.createdBlockOps
+  })
+  const createdBlocks = createdBlocksByOp.flat()
   const reviewOps = await input.runtime.expandOpsForReview(input.currentDocId, input.ops)
+  const reviewCreatedBlocksByOp: DocxCreatedBlock[][] = []
+  for (const reviewOp of reviewOps) {
+    const originalIndex = input.ops.indexOf(reviewOp)
+    reviewCreatedBlocksByOp.push(originalIndex >= 0 ? createdBlocksByOp[originalIndex] || [] : [])
+  }
 
   const revisionUpdate = await input.runtime.registerRevision({
     sourcePath: input.sourcePath,
     previousDocId: input.currentDocId,
-    nextDocId: workerResponse.payload.newDocId,
+    nextDocId: appliedPayload.newDocId,
     ops: reviewOps,
     createdBlocks,
-    changedBlocks: workerResponse.payload.changedBlocks,
+    createdBlocksByOp: reviewCreatedBlocksByOp,
+    changedBlocks: appliedPayload.changedBlocks,
     summary: input.summary
   })
-  input.runtime.input.ctx.trackDocxChanges({
+  input.runtime.input.ctx.trackDocxBatchChanges({
     previousDocId: input.currentDocId,
-    nextDocId: workerResponse.payload.newDocId,
-    op: input.ops[0],
-    changedBlocks: workerResponse.payload.changedBlocks,
+    nextDocId: appliedPayload.newDocId,
+    ops: input.ops,
+    changedBlocks: appliedPayload.changedBlocks,
     createdBlocks,
     replaySession: input.runtime.getReplaySession(input.sourcePath)
   })
   return {
     previousRevisionRef: revisionUpdate.previousRevisionRef,
     currentRevisionRef: revisionUpdate.currentRevisionRef,
-    changedBlocks: workerResponse.payload.changedBlocks,
-    warnings: workerResponse.payload.warnings,
-    nextDocId: workerResponse.payload.newDocId,
-    createdBlocks
+    changedBlocks: appliedPayload.changedBlocks,
+    warnings: appliedPayload.warnings,
+    nextDocId: appliedPayload.newDocId,
+    createdBlocks,
+    createdBlocksByOp
   }
 }
 
 const buildWriteToolResult = async (input: {
   runtime: DocxToolRuntime
-  action: DocxWriteReadbackAction
   sourcePath: string
   previousRevisionRef: string
   currentRevisionRef: string
   nextDocId: string
   summary: string
-  created?: true
   changedBlocks: DocxChangedBlock[]
   createdBlocks: DocxCreatedBlock[]
   warnings: string[]
-  targetBlockIds: string[]
+  readbackTargets: BatchReadbackTarget[]
   previousDocId?: string
 }): Promise<WriteToolResult> => {
   const postWriteReadback = await buildPostWriteReadback({
     runtime: input.runtime,
-    action: input.action,
     currentDocId: input.nextDocId,
     previousDocId: input.previousDocId,
-    targetBlockIds: input.targetBlockIds
+    targets: input.readbackTargets
   })
 
   return {
     sourcePath: input.sourcePath,
     previousRevisionRef: input.previousRevisionRef,
     currentRevisionRef: input.currentRevisionRef,
-    created: input.created,
     changedBlocks: input.changedBlocks,
     createdBlocks: input.createdBlocks,
     warnings: input.warnings,
@@ -580,241 +1010,245 @@ const buildWriteToolResult = async (input: {
 }
 
 export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInterface[] => {
-  const docxCreateTool = createDocxTool({
+  const docxEditTool = createDocxTool({
     runtime,
-    name: DOCX_CREATE_TOOL_SPEC.name,
-    description: DOCX_CREATE_TOOL_SPEC.description,
-    schema: DOCX_CREATE_TOOL_SPEC.inputSchema,
+    name: DOCX_EDIT_TOOL_SPEC.name,
+    description: DOCX_EDIT_TOOL_SPEC.description,
+    schema: DOCX_EDIT_TOOL_SPEC.inputSchema,
     onError: ({ message }) => {
       runtime.input.emitActivity({
-        actionType: DOCX_CREATE_TOOL_SPEC.activityActionType!,
+        actionType: DOCX_EDIT_TOOL_SPEC.activityActionType!,
         status: 'failed',
         summary: message
       })
     },
     execute: async ({ args, toolName, toolCallId }) => {
-      const requestedSourcePath = runtime.resolveDocxPath({
-        cwd: runtime.workspaceRootPath,
-        rawPath: args.sourcePath
-      })
-      if (!requestedSourcePath) {
-        return finalizeDocxToolFailure({
-          runtime,
-          failure: runtime.emitFailure({
-            toolName,
-            toolCallId,
-            reason: 'invalid_input',
-            error: 'sourcePath must be a workspace-bound .docx path'
-          }),
-          activity: {
-            actionType: DOCX_CREATE_TOOL_SPEC.activityActionType!
-          }
-        })
-      }
-
-      if (
-        runtime.getReadSession(requestedSourcePath) ||
-        runtime.getReplaySession(requestedSourcePath) ||
-        (await documentExists(requestedSourcePath))
-      ) {
-        return finalizeDocxToolFailure({
-          runtime,
-          failure: runtime.emitFailure({
-            toolName,
-            toolCallId,
-            code: 'invalid_input',
-            error: `docx_create will not overwrite an existing file: ${requestedSourcePath}`,
-            resourceContext: runtime.buildResourceContext({
-              sourcePath: requestedSourcePath,
-              effectKind: 'mutated'
-            })
-          }),
-          activity: {
-            actionType: DOCX_CREATE_TOOL_SPEC.activityActionType!
-          }
-        })
-      }
-
-      const tempPaths = await buildCreateTargetTempPaths(requestedSourcePath)
-
-      try {
-        await createDocxFile({
-          filePath: tempPaths.baselinePath,
-          blocks: []
-        })
-        await createDocxFile({
-          filePath: tempPaths.workingPath,
-          blocks: args.blocks || []
-        })
-
-        const baselineOpen = await runtime.callWorker({
-          action: 'open',
-          payload: {
-            sourcePath: tempPaths.baselinePath
-          }
-        })
-        if (!baselineOpen.ok) {
-          return finalizeDocxToolFailure({
-            runtime,
-            failure: runtime.emitWorkerFailure({
-              toolName,
-              toolCallId,
-              response: baselineOpen,
-              resourceContext: runtime.buildResourceContext({
-                sourcePath: requestedSourcePath,
-                effectKind: 'mutated'
-              })
-            }),
-            activity: {
-              actionType: DOCX_CREATE_TOOL_SPEC.activityActionType!
-            }
-          })
-        }
-        if (baselineOpen.payload.action !== 'open') {
+      const createAction = args.actions.find((action) => action.type === 'create_document')
+      if (createAction) {
+        if (args.actions.length !== 1) {
           return finalizeDocxToolFailure({
             runtime,
             failure: runtime.emitFailure({
               toolName,
               toolCallId,
-              code: 'failed',
-              error: 'worker protocol mismatch (baseline open)',
+              reason: 'invalid_input',
+              error: 'docx_edit create_document must be the only action in a call',
               resourceContext: runtime.buildResourceContext({
-                sourcePath: requestedSourcePath,
+                sourcePath: args.sourcePath,
                 effectKind: 'mutated'
               })
             }),
             activity: {
-              actionType: DOCX_CREATE_TOOL_SPEC.activityActionType!
+              actionType: DOCX_EDIT_TOOL_SPEC.activityActionType!
             }
           })
         }
-        const baselineDocId = baselineOpen.payload.docId
 
-        const workingOpen = await runtime.callWorker({
-          action: 'open',
-          payload: {
-            sourcePath: tempPaths.workingPath
-          }
+        const requestedSourcePath = runtime.resolveDocxPath({
+          cwd: runtime.workspaceRootPath,
+          rawPath: args.sourcePath
         })
-        if (!workingOpen.ok) {
-          return finalizeDocxToolFailure({
-            runtime,
-            failure: runtime.emitWorkerFailure({
-              toolName,
-              toolCallId,
-              response: workingOpen,
-              resourceContext: runtime.buildResourceContext({
-                sourcePath: requestedSourcePath,
-                effectKind: 'mutated'
-              })
-            }),
-            activity: {
-              actionType: DOCX_CREATE_TOOL_SPEC.activityActionType!
-            }
-          })
-        }
-        if (workingOpen.payload.action !== 'open') {
+        if (!requestedSourcePath) {
           return finalizeDocxToolFailure({
             runtime,
             failure: runtime.emitFailure({
               toolName,
               toolCallId,
-              code: 'failed',
-              error: 'worker protocol mismatch (working open)',
+              reason: 'invalid_input',
+              error: 'sourcePath must be a workspace-bound .docx path'
+            }),
+            activity: {
+              actionType: DOCX_EDIT_TOOL_SPEC.activityActionType!
+            }
+          })
+        }
+
+        if (
+          runtime.getReadSession(requestedSourcePath) ||
+          runtime.getReplaySession(requestedSourcePath) ||
+          (await documentExists(requestedSourcePath))
+        ) {
+          return finalizeDocxToolFailure({
+            runtime,
+            failure: runtime.emitFailure({
+              toolName,
+              toolCallId,
+              reason: 'invalid_input',
+              error: `docx_edit(create_document) will not overwrite an existing file: ${requestedSourcePath}`,
               resourceContext: runtime.buildResourceContext({
                 sourcePath: requestedSourcePath,
                 effectKind: 'mutated'
               })
             }),
             activity: {
-              actionType: DOCX_CREATE_TOOL_SPEC.activityActionType!
+              actionType: DOCX_EDIT_TOOL_SPEC.activityActionType!
             }
           })
         }
-        const workingDocId = workingOpen.payload.docId
 
-        const registered = await runtime.registerCreatedDocument({
-          sourcePath: requestedSourcePath,
-          baselineDocId: baselineDocId,
-          workingDocId,
-          meta: workingOpen.payload.meta,
-          stats: workingOpen.payload.stats,
-          summary: 'create_document'
-        })
-        runtime.input.ctx.trackDocxOpen({
-          docId: baselineDocId,
-          sourcePath: requestedSourcePath,
-          replaySession: registered.session
-        })
-        runtime.input.ctx.trackDocxChanges({
-          previousDocId: baselineDocId,
-          nextDocId: workingDocId,
-          op: { type: 'create_document' },
-          changedBlocks: registered.changedBlocks || [],
-          createdBlocks: registered.createdBlocks || [],
-          replaySession: registered.session
-        })
+        const tempPaths = await buildCreateTargetTempPaths(requestedSourcePath)
 
-        const result = await buildWriteToolResult({
-          runtime,
-          action: 'create_document',
-          sourcePath: registered.session.sourcePath,
-          previousRevisionRef: registered.previousRevisionRef,
-          currentRevisionRef: registered.currentRevisionRef,
-          nextDocId: workingDocId,
-          summary: buildCreateSummary(registered.session.sourcePath),
-          created: true,
-          changedBlocks: registered.changedBlocks || [],
-          createdBlocks: registered.createdBlocks || [],
-          warnings: [],
-          targetBlockIds: []
-        })
+        try {
+          await createDocxFile({
+            filePath: tempPaths.baselinePath,
+            blocks: []
+          })
+          await createDocxFile({
+            filePath: tempPaths.workingPath,
+            blocks: createAction.blocks || []
+          })
 
-        return finalizeDocxToolSuccess({
-          runtime,
-          toolName,
-          toolCallId,
-          result,
-          outputPreview: {
-            sourcePath: result.sourcePath,
-            currentRevisionRef: result.currentRevisionRef,
-            created: true
-          },
-          activity: {
-            actionType: DOCX_CREATE_TOOL_SPEC.activityActionType!,
-            startedSummary: `创建 docx: ${args.sourcePath}`,
-            buildCompletedSummary: () => `创建 docx 成功: ${args.sourcePath}`
-          }
-        })
-      } finally {
-        await Promise.all(
-          [tempPaths.baselinePath, tempPaths.workingPath, path.dirname(tempPaths.baselinePath)].map(
-            async (targetPath) => {
-              try {
-                await fs.rm(targetPath, { recursive: true, force: true })
-              } catch {
-                return
+          const baselineOpen = await runtime.callWorker({
+            action: 'open',
+            payload: {
+              sourcePath: tempPaths.baselinePath
+            }
+          })
+          if (!baselineOpen.ok) {
+            return finalizeDocxToolFailure({
+              runtime,
+              failure: runtime.emitWorkerFailure({
+                toolName,
+                toolCallId,
+                response: baselineOpen,
+                resourceContext: runtime.buildResourceContext({
+                  sourcePath: requestedSourcePath,
+                  effectKind: 'mutated'
+                })
+              }),
+              activity: {
+                actionType: DOCX_EDIT_TOOL_SPEC.activityActionType!
               }
+            })
+          }
+          if (baselineOpen.payload.action !== 'open') {
+            return finalizeDocxToolFailure({
+              runtime,
+              failure: runtime.emitFailure({
+                toolName,
+                toolCallId,
+                reason: 'failed',
+                error: 'worker protocol mismatch (baseline open)',
+                resourceContext: runtime.buildResourceContext({
+                  sourcePath: requestedSourcePath,
+                  effectKind: 'mutated'
+                })
+              }),
+              activity: {
+                actionType: DOCX_EDIT_TOOL_SPEC.activityActionType!
+              }
+            })
+          }
+          const baselineDocId = baselineOpen.payload.docId
+
+          const workingOpen = await runtime.callWorker({
+            action: 'open',
+            payload: {
+              sourcePath: tempPaths.workingPath
             }
+          })
+          if (!workingOpen.ok) {
+            return finalizeDocxToolFailure({
+              runtime,
+              failure: runtime.emitWorkerFailure({
+                toolName,
+                toolCallId,
+                response: workingOpen,
+                resourceContext: runtime.buildResourceContext({
+                  sourcePath: requestedSourcePath,
+                  effectKind: 'mutated'
+                })
+              }),
+              activity: {
+                actionType: DOCX_EDIT_TOOL_SPEC.activityActionType!
+              }
+            })
+          }
+          if (workingOpen.payload.action !== 'open') {
+            return finalizeDocxToolFailure({
+              runtime,
+              failure: runtime.emitFailure({
+                toolName,
+                toolCallId,
+                reason: 'failed',
+                error: 'worker protocol mismatch (working open)',
+                resourceContext: runtime.buildResourceContext({
+                  sourcePath: requestedSourcePath,
+                  effectKind: 'mutated'
+                })
+              }),
+              activity: {
+                actionType: DOCX_EDIT_TOOL_SPEC.activityActionType!
+              }
+            })
+          }
+          const workingDocId = workingOpen.payload.docId
+
+          const registered = await runtime.registerCreatedDocument({
+            sourcePath: requestedSourcePath,
+            baselineDocId,
+            workingDocId,
+            meta: workingOpen.payload.meta,
+            stats: workingOpen.payload.stats,
+            summary: 'create_document'
+          })
+          runtime.input.ctx.trackDocxOpen({
+            docId: baselineDocId,
+            sourcePath: requestedSourcePath,
+            replaySession: registered.session
+          })
+          runtime.input.ctx.trackDocxChanges({
+            previousDocId: baselineDocId,
+            nextDocId: workingDocId,
+            op: { type: 'create_document' },
+            changedBlocks: registered.changedBlocks || [],
+            createdBlocks: registered.createdBlocks || [],
+            replaySession: registered.session
+          })
+
+          const result = await buildWriteToolResult({
+            runtime,
+            sourcePath: registered.session.sourcePath,
+            previousRevisionRef: registered.previousRevisionRef,
+            currentRevisionRef: registered.currentRevisionRef,
+            nextDocId: workingDocId,
+            summary: buildCreateSummary(registered.session.sourcePath),
+            changedBlocks: registered.changedBlocks || [],
+            createdBlocks: registered.createdBlocks || [],
+            warnings: [],
+            readbackTargets: [{ action: 'create_document', targetBlockIds: [] }]
+          })
+
+          return finalizeDocxToolSuccess({
+            runtime,
+            toolName,
+            toolCallId,
+            result,
+            outputPreview: {
+              sourcePath: result.sourcePath,
+              currentRevisionRef: result.currentRevisionRef
+            },
+            activity: {
+              actionType: DOCX_EDIT_TOOL_SPEC.activityActionType!,
+              startedSummary: '执行 docx_edit: create_document',
+              buildCompletedSummary: () => 'docx_edit 完成: create_document'
+            }
+          })
+        } finally {
+          await Promise.all(
+            [tempPaths.baselinePath, tempPaths.workingPath, path.dirname(tempPaths.baselinePath)].map(
+              async (targetPath) => {
+                try {
+                  await fs.rm(targetPath, { recursive: true, force: true })
+                } catch {
+                  return
+                }
+              }
+            )
           )
-        )
+        }
       }
-    }
-  })
 
-  const docxParagraphEditTool = createDocxTool({
-    runtime,
-    name: DOCX_PARAGRAPH_EDIT_TOOL_SPEC.name,
-    description: DOCX_PARAGRAPH_EDIT_TOOL_SPEC.description,
-    schema: DOCX_PARAGRAPH_EDIT_TOOL_SPEC.inputSchema,
-    onError: ({ message }) => {
-      runtime.input.emitActivity({
-        actionType: DOCX_PARAGRAPH_EDIT_TOOL_SPEC.activityActionType!,
-        status: 'failed',
-        summary: message
-      })
-    },
-    execute: async ({ args, toolName, toolCallId }) => {
       const sessionResult = await runtime.ensureReplaySession({
         toolName,
         toolCallId,
@@ -822,71 +1256,58 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
       })
       if ('failure' in sessionResult) return sessionResult.failure
 
-      const failure = await failIfPositionedBlock({
+      const compiled = await compileBatchEditActions({
         runtime,
         toolName,
         toolCallId,
         sourcePath: sessionResult.sourcePath,
-        currentRevisionRef: sessionResult.currentRevisionRef,
         docId: sessionResult.docId,
-        blockId: args.anchorBlockId!
+        currentRevisionRef: sessionResult.currentRevisionRef,
+        actions: args.actions
       })
-      if (failure) {
+      if ('failure' in compiled) {
         return finalizeDocxToolFailure({
           runtime,
-          failure,
-          activity: {
-            actionType: DOCX_PARAGRAPH_EDIT_TOOL_SPEC.activityActionType!
-          }
+          failure: compiled.failure,
+          activity: { actionType: DOCX_EDIT_TOOL_SPEC.activityActionType! }
         })
       }
-      const op: DocxOp = {
-        type: args.action,
-        anchorBlockId: args.anchorBlockId!,
-        content: args.paragraphs.map((text) => paragraphSpecFromText(text))
-      }
 
-      const applied = await applySingleEdit({
+      const applied = await applyBatchEdit({
         runtime,
         toolName,
         toolCallId,
         sourcePath: sessionResult.sourcePath,
         currentDocId: sessionResult.docId,
         currentRevisionRef: sessionResult.currentRevisionRef,
-        ops: [op],
-        summary: `paragraph.${args.action}`,
-        createdBlocks: true
+        ops: compiled.ops,
+        summary: compiled.summary,
+        createdBlockOps: compiled.createdBlockOps
       })
       if ('failure' in applied) {
         return finalizeDocxToolFailure({
           runtime,
           failure: applied.failure,
-          activity: {
-            actionType: DOCX_PARAGRAPH_EDIT_TOOL_SPEC.activityActionType!
-          }
+          activity: { actionType: DOCX_EDIT_TOOL_SPEC.activityActionType! }
         })
       }
 
       const result = await buildWriteToolResult({
         runtime,
-        action: resolveWriteReadbackAction({
-          toolName,
-          action: args.action
-        }),
         sourcePath: sessionResult.sourcePath,
         previousRevisionRef: applied.previousRevisionRef,
         currentRevisionRef: applied.currentRevisionRef,
         nextDocId: applied.nextDocId,
         summary: buildEditSummary({
           toolName,
-          actionLabel: `段落${args.action}`,
+          actionLabel: `批量编辑 ${String(args.actions.length)} 个 action`,
           changedBlocks: applied.changedBlocks,
           warnings: applied.warnings
         }),
         changedBlocks: applied.changedBlocks,
         createdBlocks: applied.createdBlocks,
         warnings: applied.warnings,
-        targetBlockIds: [args.anchorBlockId!],
+        readbackTargets: compiled.readbackTargets,
         previousDocId: sessionResult.docId
       })
       return finalizeDocxToolSuccess({
@@ -894,599 +1315,11 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
         toolName,
         toolCallId,
         result,
-        outputPreview: {
-          sourcePath: result.sourcePath,
-          previousRevisionRef: result.previousRevisionRef,
-          currentRevisionRef: result.currentRevisionRef,
-          changedCount: result.changedBlocks.length,
-          createdBlocks: result.createdBlocks,
-          postWriteReadback: result.postWriteReadback
-        },
         draftDocId: applied.nextDocId,
         activity: {
-          actionType: DOCX_PARAGRAPH_EDIT_TOOL_SPEC.activityActionType!,
-          startedSummary: `执行段落编辑: ${args.action}`,
-          buildCompletedSummary: () => `段落编辑完成: ${args.action}`
-        }
-      })
-    }
-  })
-
-  const docxHeadingEditTool = createDocxTool({
-    runtime,
-    name: DOCX_HEADING_EDIT_TOOL_SPEC.name,
-    description: DOCX_HEADING_EDIT_TOOL_SPEC.description,
-    schema: DOCX_HEADING_EDIT_TOOL_SPEC.inputSchema,
-    onError: ({ message }) => {
-      runtime.input.emitActivity({
-        actionType: DOCX_HEADING_EDIT_TOOL_SPEC.activityActionType!,
-        status: 'failed',
-        summary: message
-      })
-    },
-    execute: async ({ args, toolName, toolCallId }) => {
-      const sessionResult = await runtime.ensureReplaySession({
-        toolName,
-        toolCallId,
-        sourcePath: args.sourcePath
-      })
-      if ('failure' in sessionResult) return sessionResult.failure
-
-      const failure = await failIfPositionedBlock({
-        runtime,
-        toolName,
-        toolCallId,
-        sourcePath: sessionResult.sourcePath,
-        currentRevisionRef: sessionResult.currentRevisionRef,
-        docId: sessionResult.docId,
-        blockId: args.anchorBlockId!
-      })
-      if (failure) {
-        return finalizeDocxToolFailure({
-          runtime,
-          failure,
-          activity: {
-            actionType: DOCX_HEADING_EDIT_TOOL_SPEC.activityActionType!
-          }
-        })
-      }
-      const op: DocxOp = {
-        type: args.action,
-        anchorBlockId: args.anchorBlockId!,
-        content: args.headings.map((heading) => ({
-          kind: 'paragraph',
-          style: headingStyle(heading.level),
-          runs: [{ text: heading.text }]
-        }))
-      }
-
-      const applied = await applySingleEdit({
-        runtime,
-        toolName,
-        toolCallId,
-        sourcePath: sessionResult.sourcePath,
-        currentDocId: sessionResult.docId,
-        currentRevisionRef: sessionResult.currentRevisionRef,
-        ops: [op],
-        summary: `heading.${args.action}.${String(args.headings.length)}_heading(s)`,
-        createdBlocks: true
-      })
-      if ('failure' in applied) {
-        return finalizeDocxToolFailure({
-          runtime,
-          failure: applied.failure,
-          activity: {
-            actionType: DOCX_HEADING_EDIT_TOOL_SPEC.activityActionType!
-          }
-        })
-      }
-
-      const result = await buildWriteToolResult({
-        runtime,
-        action: resolveWriteReadbackAction({
-          toolName,
-          action: args.action
-        }),
-        sourcePath: sessionResult.sourcePath,
-        previousRevisionRef: applied.previousRevisionRef,
-        currentRevisionRef: applied.currentRevisionRef,
-        nextDocId: applied.nextDocId,
-        summary: buildEditSummary({
-          toolName,
-          actionLabel: `标题${args.action}.${String(args.headings.length)}项`,
-          changedBlocks: applied.changedBlocks,
-          warnings: applied.warnings
-        }),
-        changedBlocks: applied.changedBlocks,
-        createdBlocks: applied.createdBlocks,
-        warnings: applied.warnings,
-        targetBlockIds: [args.anchorBlockId!],
-        previousDocId: sessionResult.docId
-      })
-      return finalizeDocxToolSuccess({
-        runtime,
-        toolName,
-        toolCallId,
-        result,
-        outputPreview: {
-          sourcePath: result.sourcePath,
-          previousRevisionRef: result.previousRevisionRef,
-          currentRevisionRef: result.currentRevisionRef,
-          changedCount: result.changedBlocks.length,
-          createdBlocks: result.createdBlocks,
-          postWriteReadback: result.postWriteReadback
-        },
-        draftDocId: applied.nextDocId,
-        activity: {
-          actionType: DOCX_HEADING_EDIT_TOOL_SPEC.activityActionType!,
-          startedSummary: `执行标题编辑: ${args.action}`,
-          buildCompletedSummary: () => `标题编辑完成: ${args.action}`
-        }
-      })
-    }
-  })
-
-  const docxTableEditTool = createDocxTool({
-    runtime,
-    name: DOCX_TABLE_EDIT_TOOL_SPEC.name,
-    description: DOCX_TABLE_EDIT_TOOL_SPEC.description,
-    schema: DOCX_TABLE_EDIT_TOOL_SPEC.inputSchema,
-    onError: ({ message }) => {
-      runtime.input.emitActivity({
-        actionType: DOCX_TABLE_EDIT_TOOL_SPEC.activityActionType!,
-        status: 'failed',
-        summary: message
-      })
-    },
-    execute: async ({ args, toolName, toolCallId }) => {
-      const sessionResult = await runtime.ensureReplaySession({
-        toolName,
-        toolCallId,
-        sourcePath: args.sourcePath
-      })
-      if ('failure' in sessionResult) return sessionResult.failure
-
-      let op: DocxOp
-      if (args.action === 'update_cell') {
-        const failure = await failIfPositionedBlock({
-          runtime,
-          toolName,
-          toolCallId,
-          sourcePath: sessionResult.sourcePath,
-          currentRevisionRef: sessionResult.currentRevisionRef,
-          docId: sessionResult.docId,
-          blockId: args.cellBlockId!
-        })
-        if (failure) {
-          return finalizeDocxToolFailure({
-            runtime,
-            failure,
-            activity: {
-              actionType: DOCX_TABLE_EDIT_TOOL_SPEC.activityActionType!
-            }
-          })
-        }
-        op = {
-          type: 'update_table_cell',
-          blockId: args.cellBlockId!,
-          content: [paragraphSpecFromText(args.text!)]
-        }
-      } else {
-        const failure = await failIfPositionedBlock({
-          runtime,
-          toolName,
-          toolCallId,
-          sourcePath: sessionResult.sourcePath,
-          currentRevisionRef: sessionResult.currentRevisionRef,
-          docId: sessionResult.docId,
-          blockId: args.anchorBlockId!
-        })
-        if (failure) {
-          return finalizeDocxToolFailure({
-            runtime,
-            failure,
-            activity: {
-              actionType: DOCX_TABLE_EDIT_TOOL_SPEC.activityActionType!
-            }
-          })
-        }
-        op = {
-          type: args.action,
-          anchorBlockId: args.anchorBlockId!,
-          content: [tableSpecFromRows(args.rows!)]
-        }
-      }
-
-      const applied = await applySingleEdit({
-        runtime,
-        toolName,
-        toolCallId,
-        sourcePath: sessionResult.sourcePath,
-        currentDocId: sessionResult.docId,
-        currentRevisionRef: sessionResult.currentRevisionRef,
-        ops: [op],
-        summary: `table.${args.action}`,
-        createdBlocks: args.action !== 'update_cell'
-      })
-      if ('failure' in applied) {
-        return finalizeDocxToolFailure({
-          runtime,
-          failure: applied.failure,
-          activity: {
-            actionType: DOCX_TABLE_EDIT_TOOL_SPEC.activityActionType!
-          }
-        })
-      }
-
-      const result = await buildWriteToolResult({
-        runtime,
-        action: resolveWriteReadbackAction({
-          toolName,
-          action: args.action
-        }),
-        sourcePath: sessionResult.sourcePath,
-        previousRevisionRef: applied.previousRevisionRef,
-        currentRevisionRef: applied.currentRevisionRef,
-        nextDocId: applied.nextDocId,
-        summary: buildEditSummary({
-          toolName,
-          actionLabel: `表格${args.action}`,
-          changedBlocks: applied.changedBlocks,
-          warnings: applied.warnings
-        }),
-        changedBlocks: applied.changedBlocks,
-        createdBlocks: applied.createdBlocks,
-        warnings: applied.warnings,
-        targetBlockIds:
-          args.action === 'update_cell'
-            ? [args.cellBlockId!]
-            : [args.anchorBlockId!],
-        previousDocId: sessionResult.docId
-      })
-      return finalizeDocxToolSuccess({
-        runtime,
-        toolName,
-        toolCallId,
-        result,
-        outputPreview: {
-          sourcePath: result.sourcePath,
-          previousRevisionRef: result.previousRevisionRef,
-          currentRevisionRef: result.currentRevisionRef,
-          changedCount: result.changedBlocks.length,
-          createdBlocks: result.createdBlocks,
-          postWriteReadback: result.postWriteReadback
-        },
-        draftDocId: applied.nextDocId,
-        activity: {
-          actionType: DOCX_TABLE_EDIT_TOOL_SPEC.activityActionType!,
-          startedSummary: `执行表格编辑: ${args.action}`,
-          buildCompletedSummary: () => `表格编辑完成: ${args.action}`
-        }
-      })
-    }
-  })
-
-  const docxTextEditTool = createDocxTool({
-    runtime,
-    name: DOCX_TEXT_EDIT_TOOL_SPEC.name,
-    description: DOCX_TEXT_EDIT_TOOL_SPEC.description,
-    schema: DOCX_TEXT_EDIT_TOOL_SPEC.inputSchema,
-    onError: ({ message }) => {
-      runtime.input.emitActivity({
-        actionType: DOCX_TEXT_EDIT_TOOL_SPEC.activityActionType!,
-        status: 'failed',
-        summary: message
-      })
-    },
-    execute: async ({ args, toolName, toolCallId }) => {
-      const sessionResult = await runtime.ensureReplaySession({
-        toolName,
-        toolCallId,
-        sourcePath: args.sourcePath
-      })
-      if ('failure' in sessionResult) return sessionResult.failure
-
-      const targetBlockIds = await resolveReplaceTextTargetBlockIds({
-        runtime,
-        docId: sessionResult.docId,
-        query: args.query,
-        blockIds: args.blockIds
-      })
-      const failure = await failIfAnyPositionedBlocks({
-        runtime,
-        toolName,
-        toolCallId,
-        sourcePath: sessionResult.sourcePath,
-        currentRevisionRef: sessionResult.currentRevisionRef,
-        docId: sessionResult.docId,
-        blockIds: targetBlockIds
-      })
-      if (failure) {
-        return finalizeDocxToolFailure({
-          runtime,
-          failure,
-          activity: {
-            actionType: DOCX_TEXT_EDIT_TOOL_SPEC.activityActionType!
-          }
-        })
-      }
-
-      const applied = await applySingleEdit({
-        runtime,
-        toolName,
-        toolCallId,
-        sourcePath: sessionResult.sourcePath,
-        currentDocId: sessionResult.docId,
-        currentRevisionRef: sessionResult.currentRevisionRef,
-        ops: [
-          {
-            type: 'replace_text',
-            query: args.query,
-            replace: args.replace,
-            replaceAll: true,
-            blockIds: args.blockIds
-          }
-        ],
-        summary: `text.replace:${args.query}`
-      })
-      if ('failure' in applied) {
-        return finalizeDocxToolFailure({
-          runtime,
-          failure: applied.failure,
-          activity: {
-            actionType: DOCX_TEXT_EDIT_TOOL_SPEC.activityActionType!
-          }
-        })
-      }
-
-      const result = await buildWriteToolResult({
-        runtime,
-        action: 'replace_text',
-        sourcePath: sessionResult.sourcePath,
-        previousRevisionRef: applied.previousRevisionRef,
-        currentRevisionRef: applied.currentRevisionRef,
-        nextDocId: applied.nextDocId,
-        summary: buildEditSummary({
-          toolName,
-          actionLabel: '文本替换',
-          changedBlocks: applied.changedBlocks,
-          warnings: applied.warnings
-        }),
-        changedBlocks: applied.changedBlocks,
-        createdBlocks: applied.createdBlocks,
-        warnings: applied.warnings,
-        targetBlockIds,
-        previousDocId: sessionResult.docId
-      })
-      return finalizeDocxToolSuccess({
-        runtime,
-        toolName,
-        toolCallId,
-        result,
-        outputPreview: {
-          sourcePath: result.sourcePath,
-          previousRevisionRef: result.previousRevisionRef,
-          currentRevisionRef: result.currentRevisionRef,
-          changedCount: result.changedBlocks.length,
-          postWriteReadback: result.postWriteReadback
-        },
-        draftDocId: applied.nextDocId,
-        activity: {
-          actionType: DOCX_TEXT_EDIT_TOOL_SPEC.activityActionType!,
-          startedSummary: `执行文本替换: ${args.query}`,
-          buildCompletedSummary: () => `文本替换完成: ${args.query}`
-        }
-      })
-    }
-  })
-
-  const docxTextStyleEditTool = createDocxTool({
-    runtime,
-    name: DOCX_TEXT_STYLE_EDIT_TOOL_SPEC.name,
-    description: DOCX_TEXT_STYLE_EDIT_TOOL_SPEC.description,
-    schema: DOCX_TEXT_STYLE_EDIT_TOOL_SPEC.inputSchema,
-    onError: ({ message }) => {
-      runtime.input.emitActivity({
-        actionType: DOCX_TEXT_STYLE_EDIT_TOOL_SPEC.activityActionType!,
-        status: 'failed',
-        summary: message
-      })
-    },
-    execute: async ({ args, toolName, toolCallId }) => {
-      const sessionResult = await runtime.ensureReplaySession({
-        toolName,
-        toolCallId,
-        sourcePath: args.sourcePath
-      })
-      if ('failure' in sessionResult) return sessionResult.failure
-
-      const failure = await failIfPositionedBlock({
-        runtime,
-        toolName,
-        toolCallId,
-        sourcePath: sessionResult.sourcePath,
-        currentRevisionRef: sessionResult.currentRevisionRef,
-        docId: sessionResult.docId,
-        blockId: args.blockId
-      })
-      if (failure) {
-        return finalizeDocxToolFailure({
-          runtime,
-          failure,
-          activity: {
-            actionType: DOCX_TEXT_STYLE_EDIT_TOOL_SPEC.activityActionType!
-          }
-        })
-      }
-
-      const applied = await applySingleEdit({
-        runtime,
-        toolName,
-        toolCallId,
-        sourcePath: sessionResult.sourcePath,
-        currentDocId: sessionResult.docId,
-        currentRevisionRef: sessionResult.currentRevisionRef,
-        ops: [
-          {
-            type: 'style_text',
-            blockId: args.blockId,
-            query: args.query,
-            style: args.style as DocxTextStyle
-          }
-        ],
-        summary: `text_style:${args.query}`
-      })
-      if ('failure' in applied) {
-        return finalizeDocxToolFailure({
-          runtime,
-          failure: applied.failure,
-          activity: {
-            actionType: DOCX_TEXT_STYLE_EDIT_TOOL_SPEC.activityActionType!
-          }
-        })
-      }
-
-      const result = await buildWriteToolResult({
-        runtime,
-        action: 'style_text',
-        sourcePath: sessionResult.sourcePath,
-        previousRevisionRef: applied.previousRevisionRef,
-        currentRevisionRef: applied.currentRevisionRef,
-        nextDocId: applied.nextDocId,
-        summary: buildEditSummary({
-          toolName,
-          actionLabel: '文本样式编辑',
-          changedBlocks: applied.changedBlocks,
-          warnings: applied.warnings
-        }),
-        changedBlocks: applied.changedBlocks,
-        createdBlocks: applied.createdBlocks,
-        warnings: applied.warnings,
-        targetBlockIds: [args.blockId],
-        previousDocId: sessionResult.docId
-      })
-      return finalizeDocxToolSuccess({
-        runtime,
-        toolName,
-        toolCallId,
-        result,
-        outputPreview: {
-          sourcePath: result.sourcePath,
-          previousRevisionRef: result.previousRevisionRef,
-          currentRevisionRef: result.currentRevisionRef,
-          changedCount: result.changedBlocks.length,
-          postWriteReadback: result.postWriteReadback
-        },
-        draftDocId: applied.nextDocId,
-        activity: {
-          actionType: DOCX_TEXT_STYLE_EDIT_TOOL_SPEC.activityActionType!,
-          startedSummary: `执行文本样式编辑: ${args.query}`,
-          buildCompletedSummary: () => `文本样式编辑完成: ${args.query}`
-        }
-      })
-    }
-  })
-
-  const docxDeleteTool = createDocxTool({
-    runtime,
-    name: DOCX_DELETE_TOOL_SPEC.name,
-    description: DOCX_DELETE_TOOL_SPEC.description,
-    schema: DOCX_DELETE_TOOL_SPEC.inputSchema,
-    onError: ({ message }) => {
-      runtime.input.emitActivity({
-        actionType: DOCX_DELETE_TOOL_SPEC.activityActionType!,
-        status: 'failed',
-        summary: message
-      })
-    },
-    execute: async ({ args, toolName, toolCallId }) => {
-      const sessionResult = await runtime.ensureReplaySession({
-        toolName,
-        toolCallId,
-        sourcePath: args.sourcePath
-      })
-      if ('failure' in sessionResult) return sessionResult.failure
-
-      const failure = await failIfAnyPositionedBlocks({
-        runtime,
-        toolName,
-        toolCallId,
-        sourcePath: sessionResult.sourcePath,
-        currentRevisionRef: sessionResult.currentRevisionRef,
-        docId: sessionResult.docId,
-        blockIds: args.blockIds
-      })
-      if (failure) {
-        return finalizeDocxToolFailure({
-          runtime,
-          failure,
-          activity: {
-            actionType: DOCX_DELETE_TOOL_SPEC.activityActionType!
-          }
-        })
-      }
-
-      const applied = await applySingleEdit({
-        runtime,
-        toolName,
-        toolCallId,
-        sourcePath: sessionResult.sourcePath,
-        currentDocId: sessionResult.docId,
-        currentRevisionRef: sessionResult.currentRevisionRef,
-        ops: args.blockIds.map((blockId) => ({
-          type: 'delete_block',
-          blockId
-        })),
-        summary: `delete:${args.blockIds.length}`,
-        createdBlocks: false
-      })
-      if ('failure' in applied) {
-        return finalizeDocxToolFailure({
-          runtime,
-          failure: applied.failure,
-          activity: {
-            actionType: DOCX_DELETE_TOOL_SPEC.activityActionType!
-          }
-        })
-      }
-
-      const result = await buildWriteToolResult({
-        runtime,
-        action: 'delete_block',
-        sourcePath: sessionResult.sourcePath,
-        previousRevisionRef: applied.previousRevisionRef,
-        currentRevisionRef: applied.currentRevisionRef,
-        nextDocId: applied.nextDocId,
-        summary: buildEditSummary({
-          toolName,
-          actionLabel: '删除 block',
-          changedBlocks: applied.changedBlocks,
-          warnings: applied.warnings
-        }),
-        changedBlocks: applied.changedBlocks,
-        createdBlocks: applied.createdBlocks,
-        warnings: applied.warnings,
-        targetBlockIds: args.blockIds,
-        previousDocId: sessionResult.docId
-      })
-      return finalizeDocxToolSuccess({
-        runtime,
-        toolName,
-        toolCallId,
-        result,
-        outputPreview: {
-          sourcePath: result.sourcePath,
-          previousRevisionRef: result.previousRevisionRef,
-          currentRevisionRef: result.currentRevisionRef,
-          changedCount: result.changedBlocks.length,
-          createdBlocks: result.createdBlocks,
-          postWriteReadback: result.postWriteReadback
-        },
-        draftDocId: applied.nextDocId,
-        activity: {
-          actionType: DOCX_DELETE_TOOL_SPEC.activityActionType!,
-          startedSummary: `执行删除: ${String(args.blockIds.length)} 个 block`,
-          buildCompletedSummary: () => `删除完成: ${String(args.blockIds.length)} 个 block`
+          actionType: DOCX_EDIT_TOOL_SPEC.activityActionType!,
+          startedSummary: `执行 docx_edit: ${args.actions.map((action) => action.type).join(', ')}`,
+          buildCompletedSummary: () => `docx_edit 完成: ${args.actions.map((action) => action.type).join(', ')}`
         }
       })
     }
@@ -1523,7 +1356,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           failure: runtime.emitFailure({
             toolName,
             toolCallId,
-            code: 'invalid_input',
+            reason: 'invalid_input',
             error: resolved.error,
             resourceContext: runtime.buildResourceContext({
               sourcePath: sessionResult.sourcePath,
@@ -1564,13 +1397,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
   })
 
   return [
-    docxCreateTool,
-    docxParagraphEditTool,
-    docxHeadingEditTool,
-    docxTableEditTool,
-    docxTextEditTool,
-    docxTextStyleEditTool,
-    docxDeleteTool,
+    docxEditTool,
     docxRollbackTool
   ]
 }

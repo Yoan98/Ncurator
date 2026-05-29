@@ -65,11 +65,14 @@ describe('ai tool docx backend', () => {
             range: { type: 'block_ids', blockIds: [initialSearch.matches[0]!.blockId] }
           })
           const failedEdit = await harness.invoke<DocxFailureResult | DocxMutationResult>(
-            'docx_text_edit',
+            'docx_edit',
             {
               sourcePath: initialRead.sourcePath,
-              query: 'Original invalid snapshot source.',
-              replace: 'Should never become the latest draft.'
+              actions: [{
+                type: 'replace_text',
+                query: 'Original invalid snapshot source.',
+                replace: 'Should never become the latest draft.'
+              }]
             }
           )
           const readOriginalSearch = await harness.invoke<DocxSearchResult>('docx_search', {

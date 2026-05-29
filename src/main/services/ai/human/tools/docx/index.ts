@@ -29,6 +29,7 @@ export const docxToolFamily = createWorkspaceBoundToolFamily({
         sendEvent: ctx.sendEvent,
         trackDocxOpen: ctx.trackDocxOpen,
         trackDocxChanges: ctx.trackDocxChanges,
+        trackDocxBatchChanges: ctx.trackDocxBatchChanges,
         resolveDocxOpenTarget: ctx.resolveDocxOpenTarget,
         embeddingService: ctx.embeddingService
       },

@@ -40,16 +40,22 @@ describe('ai tool docx backend', () => {
           })
           const anchorBlockId =
             outline.blocks.find((block) => block.type === 'paragraph' && block.text.includes('Anchor paragraph.'))?.blockId || ''
-          const inserted = await harness.invoke<DocxMutationResult>('docx_paragraph_edit', {
+          const inserted = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'review-hide-generated-delete.docx',
-            action: 'insert_after',
-            anchorBlockId,
-            paragraphs: ['Temporary generated draft.']
+            actions: [{
+              type: 'insert_blocks',
+              position: 'after',
+              anchorBlockId,
+              blocks: [{ type: 'paragraph', text: 'Temporary generated draft.' }]
+            }]
           })
           const insertedBlockId = inserted.createdBlocks?.[0]?.blockId || ''
-          await harness.invoke<DocxMutationResult>('docx_delete', {
+          await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: 'review-hide-generated-delete.docx',
-            blockIds: [insertedBlockId]
+            actions: [{
+              type: 'delete_blocks',
+              blockIds: [insertedBlockId]
+            }]
           })
 
           const details = await runtime.fileReviewService.finalizeRunReview({

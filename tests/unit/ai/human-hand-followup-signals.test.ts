@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { deriveHandFollowupSignals } from '../../../src/main/services/ai/human/node/handNode/followupSignals'
-import { DOCX_POSITIONED_LAYOUT_PROTECTION_MESSAGE } from '../../../src/main/services/ai/human/tools/docx/constants'
 
 describe('ai unit hand followup signals', () => {
   it('passes through hand_tool_result_too_large using the shared decision hint contract', () => {
@@ -44,28 +43,74 @@ describe('ai unit hand followup signals', () => {
     expect(signals.deliveryGuidance).toBeUndefined()
   })
 
-  it('derives positioned write decision hint and delivery guidance from protected docx writes', () => {
+  it('derives unified docx_edit failure decision hint from failed docx writes', () => {
     const signals = deriveHandFollowupSignals({
       calls: [
         {
-          toolName: 'docx_table_edit',
+          toolName: 'docx_edit',
           args: {
             sourcePath: 'graphics.docx',
-            action: 'insert_after',
-            anchorBlockId: 'b:26',
-            rows: [['方法', '说明']]
+            actions: [{
+              type: 'insert_blocks',
+              position: 'after',
+              anchorBlockId: 'b:26',
+              blocks: [{ type: 'table', rows: [['方法', '说明']] }]
+            }]
           }
         }
       ],
       results: [
         {
-          toolName: 'docx_table_edit',
+          toolName: 'docx_edit',
           ok: false,
           data: {
-            error: DOCX_POSITIONED_LAYOUT_PROTECTION_MESSAGE
+            error: 'cannot resolve anchorBlockId=b:26 in current active snapshot'
           },
           diagnostic: {
-            message: DOCX_POSITIONED_LAYOUT_PROTECTION_MESSAGE
+            message: 'cannot resolve anchorBlockId=b:26 in current active snapshot'
+          }
+        }
+      ]
+    })
+
+    expect(signals.decisionHint).toEqual({
+      code: 'hand_docx_edit_failed',
+      detail: {
+        toolName: 'docx_edit',
+        sourcePath: 'graphics.docx',
+        action: 'insert_blocks',
+        error: 'cannot resolve anchorBlockId=b:26 in current active snapshot',
+        diagnostic: 'cannot resolve anchorBlockId=b:26 in current active snapshot'
+      }
+    })
+    expect(signals.deliveryGuidance).toBeUndefined()
+  })
+
+  it('derives positioned docx decision hint before generic docx_edit failure', () => {
+    const signals = deriveHandFollowupSignals({
+      calls: [
+        {
+          toolName: 'docx_edit',
+          args: {
+            sourcePath: 'graphics.docx',
+            actions: [{
+              type: 'insert_blocks',
+              position: 'after',
+              anchorBlockId: 'b:26',
+              blocks: [{ type: 'paragraph', text: '补充说明' }]
+            }]
+          }
+        }
+      ],
+      results: [
+        {
+          toolName: 'docx_edit',
+          ok: false,
+          data: {
+            error: '当前命中复杂定位排版区域，暂不支持自动编辑，以避免预览修订和版式叠加导致错位；你可以手动按建议内容调整该处。'
+          },
+          diagnostic: {
+            message: '当前命中复杂定位排版区域，暂不支持自动编辑，以避免预览修订和版式叠加导致错位；你可以手动按建议内容调整该处。'
           }
         }
       ]
@@ -74,12 +119,12 @@ describe('ai unit hand followup signals', () => {
     expect(signals.decisionHint).toEqual({
       code: 'hand_docx_positioned_write_blocked',
       detail: {
-        targetDescription: '在 graphics.docx 中，你刚才尝试插入表格的那处位置',
-        sourcePath: 'graphics.docx'
+        toolName: 'docx_edit',
+        sourcePath: 'graphics.docx',
+        action: 'insert_blocks',
+        targetDescription: 'b:26',
+        diagnostic: '当前命中复杂定位排版区域，暂不支持自动编辑，以避免预览修订和版式叠加导致错位；你可以手动按建议内容调整该处。'
       }
     })
-    expect(signals.deliveryGuidance).toContain('在 graphics.docx 中，你刚才尝试插入表格的那处位置')
-    expect(signals.deliveryGuidance).toContain('按系统设计，这类定位区域不会被自动修改')
-    expect(signals.deliveryGuidance).toContain('没有生成对应的审阅稿')
   })
 })

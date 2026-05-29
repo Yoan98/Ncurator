@@ -97,20 +97,26 @@ describe('ai tool docx backend', () => {
           )
           const ownerCellBlockId = findTableCellBlockIdByText(outline.blocks, 'Owner: Alice')
 
-          const styledCell = await harness.invoke<DocxMutationResult>('docx_text_style_edit', {
+          const styledCell = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: outline.sourcePath,
-            blockId: ownerCellBlockId,
-            query: 'Alice',
-            style: {
+            actions: [{
+              type: 'style_text',
+              blockId: ownerCellBlockId,
+              query: 'Alice',
+              style: {
               italic: true,
               color: '008000'
             }
+            }]
           })
-          const renamedCell = await harness.invoke<DocxMutationResult>('docx_text_edit', {
+          const renamedCell = await harness.invoke<DocxMutationResult>('docx_edit', {
             sourcePath: styledCell.sourcePath,
-            query: 'Alice',
-            replace: 'Bob',
-            blockIds: [ownerCellBlockId]
+            actions: [{
+              type: 'replace_text',
+              query: 'Alice',
+              replace: 'Bob',
+              blockIds: [ownerCellBlockId]
+            }]
           })
           const preservedParagraph = await harness.invoke<DocxReadResult>('docx_read_blocks', {
             sourcePath: renamedCell.sourcePath,

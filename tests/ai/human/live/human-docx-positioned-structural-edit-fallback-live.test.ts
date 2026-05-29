@@ -15,6 +15,8 @@ import {
   countFileReviewArtifacts,
   collectToolDiagnosticMessages,
   filterAiRunEventsByType,
+  isDocxEditCreateInput,
+  isDocxEditWriteInput,
   runWithStructuredOutputRetry
 } from '../testUtils'
 
@@ -102,22 +104,15 @@ describe('ai human live backend', () => {
             .filter((value): value is string => typeof value === 'string')
           const structuralStarted = filterAiRunEventsByType(events, 'tool_call_started').filter(
             (event) =>
-              (event.toolName === 'docx_paragraph_edit' ||
-                event.toolName === 'docx_heading_edit' ||
-                event.toolName === 'docx_table_edit' ||
-                event.toolName === 'docx_text_edit' ||
-                event.toolName === 'docx_text_style_edit') &&
+              event.toolName === 'docx_edit' &&
+              isDocxEditWriteInput(event.input) &&
               typeof event.input.sourcePath === 'string'
           )
           const writeResults = filterAiRunEventsByType(events, 'tool_call_result').filter((event) =>
-            event.toolName === 'docx_paragraph_edit' ||
-            event.toolName === 'docx_heading_edit' ||
-            event.toolName === 'docx_table_edit' ||
-            event.toolName === 'docx_text_edit' ||
-            event.toolName === 'docx_text_style_edit'
+            structuralStarted.some((started) => started.toolCallId === event.toolCallId)
           )
           const createSourcePaths = filterAiRunEventsByType(events, 'tool_call_started')
-            .filter((event) => event.toolName === 'docx_create')
+            .filter((event) => event.toolName === 'docx_edit' && isDocxEditCreateInput(event.input))
             .map((event) => event.input.sourcePath)
             .filter((value): value is string => typeof value === 'string')
           const successfulWriteResults = writeResults.filter((event) => event.result?.ok === true)
@@ -169,7 +164,13 @@ describe('ai human live backend', () => {
                 createSourcePaths,
                 writeAttempts: structuralStarted.map((event) => ({
                   toolName: event.toolName,
-                  action: event.input.action,
+                  actions: Array.isArray(event.input.actions)
+                    ? event.input.actions.map((action) =>
+                        action && typeof action === 'object' && !Array.isArray(action)
+                          ? (action as { type?: string }).type
+                          : undefined
+                      )
+                    : [],
                   sourcePath: event.input.sourcePath
                 })),
                 failedWriteResults: failedWriteResults.map((event) => ({
