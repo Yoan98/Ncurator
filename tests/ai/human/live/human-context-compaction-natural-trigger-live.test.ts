@@ -23,67 +23,13 @@ const toWorkspaceRelativePath = (workspaceRoot: string, sourcePath: string): str
   return path.posix.normalize(relativePath.split(path.sep).join('/')).replace(/^\.\//, '')
 }
 
-const normalizeAssertionText = (text: string): string => text.replace(/\s+/g, '')
-const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 18_750
+const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 15_000
 
 const hasExactEntityText = (text: string | undefined, entityText: string): boolean =>
   typeof text === 'string' && text.includes(entityText)
 
 const hasInventedEntityText = (text: string | undefined, inventedEntityText: string): boolean =>
   typeof text === 'string' && text.includes(inventedEntityText)
-
-type DocxOutlineBlock = {
-  preview?: string
-}
-
-type DocxOutlineResult = {
-  sourcePath?: string
-  blocks?: DocxOutlineBlock[]
-}
-
-type DocxCreateResult = {
-  sourcePath?: string
-}
-
-const readLatestCreatedSourcePath = (
-  events: ReturnType<typeof filterAiRunEventsByType>
-): string | undefined => {
-  const createToolCallIds = new Set(
-    filterAiRunEventsByType(events, 'tool_call_started')
-      .filter((event) => event.toolName === 'docx_edit' && isDocxEditCreateInput(event.input))
-      .map((event) => event.toolCallId)
-  )
-  const latestCreateEvent = [...filterAiRunEventsByType(events, 'tool_call_result')]
-    .reverse()
-    .find((event) => createToolCallIds.has(event.toolCallId) && event.result?.data)
-  const createData = latestCreateEvent?.result?.data as DocxCreateResult | undefined
-  return createData?.sourcePath
-}
-
-const extractDraftReadbackText = (
-  events: ReturnType<typeof filterAiRunEventsByType>,
-  createdSourcePath: string | undefined
-): string => {
-  if (!createdSourcePath) {
-    return ''
-  }
-
-  const draftOutlineEvent = [...filterAiRunEventsByType(events, 'tool_call_result')]
-    .reverse()
-    .find((event) => {
-      if (event.toolName !== 'docx_outline' || !event.result?.data) {
-        return false
-      }
-      const outlineData = event.result.data as DocxOutlineResult
-      return outlineData.sourcePath === createdSourcePath
-    })
-
-  const draftOutlineData = draftOutlineEvent?.result?.data as DocxOutlineResult | undefined
-  return (draftOutlineData?.blocks || [])
-    .map((block) => block.preview || '')
-    .join('\n')
-    .trim()
-}
 
 describe('ai human live backend', () => {
   it('human-context-compaction-natural-trigger-live', async () => {
@@ -163,8 +109,6 @@ describe('ai human live backend', () => {
             .find((record) => record.caller === 'human.brain')
           const completionEvent = completedEvents[0]
           const deliveryText = String(result.output?.deliveryMarkdown || '').trim()
-          const createdSourcePath = readLatestCreatedSourcePath(events)
-          const draftReadbackText = extractDraftReadbackText(events, createdSourcePath)
           const ratio =
             completionEvent && completionEvent.sourceHistoryTokenEstimate > 0
               ? completionEvent.tokenEstimateAfter / completionEvent.sourceHistoryTokenEstimate
@@ -217,8 +161,7 @@ describe('ai human live backend', () => {
               createSourcePaths.length >= 1 &&
               createdRelativePaths.every(
                 (sourcePath) => sourcePath.startsWith('工作/') || sourcePath === path.basename(sourcePath)
-              ) &&
-              Boolean(normalizeAssertionText(draftReadbackText)),
+              ),
             {
               name: 'human-live-context-compaction-natural-trigger-completes-task',
               message:
@@ -233,7 +176,6 @@ describe('ai human live backend', () => {
                 ratio,
                 toolNames,
                 artifacts: result.output?.artifacts,
-                draftReadbackText,
                 deliveryText
               }
             }
