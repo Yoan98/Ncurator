@@ -96,8 +96,8 @@ export const KB_SEARCH_TOOL_SPEC: HumanToolSpec<
   promptSpec: {
     name: 'kb_search',
     description:
-      '能力：在当前用户工作区知识库中按查询词或语义语句检索相关内容片段。\n结果：返回命中证据、来源文档与内容块信息。\n边界：检索范围来自已经建立索引的工作区知识库内容；documentIds必须是kb_list_documents返回的 items[*].id 这类知识库文档 ID',
-    whenToUse: '适用于需要使用工作区知识库内容检索能力的任务；',
+      '能力：在当前用户工作区知识库中按查询词或语义语句检索相关内容片段。\n结果：返回命中证据、来源文档与内容块信息。\n边界：检索范围来自已经建立索引的工作区知识库内容。',
+    whenToUse: '适用于需要使用工作区知识库内容检索能力的任务。',
     examples: [
       {
         goal: '在当前工作区知识库中检索 approval denied 相关规范',
@@ -123,9 +123,8 @@ export const KB_LIST_DOCUMENTS_TOOL_SPEC: HumanToolSpec<
   promptSpec: {
     name: 'kb_list_documents',
     description:
-      '能力：查询当前工作区知识库中已建立索引的文档列表，并支持按文档名过滤。\n结果：返回可检索文档的分页列表；返回项里的 id 是知识库文档 ID，可用于后续 kb_search.documentIds 缩小检索范围。\n边界：只反映已经进入知识库索引的文档；sourceNameQuery 用于按文件名或标题片段过滤，documentIds 只接受知识库文档 ID，不接受文件名、相对路径或绝对路径。',
-    whenToUse:
-      '适用于需要查看工作区知识库可检索文档列表的任务；当只知道文件名、文件名片段、目录线索，或需要拿到后续 kb_search.documentIds 可用的文档 ID 时使用。',
+      '能力：查询当前工作区知识库中已建立索引的文档列表，并支持按文档名过滤。\n结果：返回可检索文档的分页列表。\n边界：只反映已经进入知识库索引的文档。',
+    whenToUse: '适用于需要查看工作区知识库可检索文档列表的任务。',
     examples: [
       {
         goal: '先列出当前工作区中已经可被知识库检索的文档',
