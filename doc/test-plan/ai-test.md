@@ -43,8 +43,8 @@
       - 依据：2026-06-01 将测试窗口调整为 `15_000` 并移除非必要的新建周报二次 outline 读回断言后，定向复跑 2 轮均通过，单轮耗时约 `217s ~ 266s`。两轮都在 budget 超过 `12_000` 阈值后触发并完成 1 次 `context_compaction`，压缩比例约 `0.067 ~ 0.068`，压缩后继续创建了本周周报 docx 并完成最终交付。当前链路已验证“自然触发压缩、压缩后继续完成任务、产出文件 artifact”三项核心目标；扣分点仅是整体耗时仍偏长。综合计为 `9.0 / 10`。
     - `human-session-resume-with-new-selection-live`：`8.5 / 10`
       - 依据：2026-06-01 全量 live 执行中产生 4 个 raw run，0 过 4 失败，单轮耗时约 `131s ~ 278s`。复查断言条件后确认 4 轮都保存了 `network_error` 快照，快照中保留过拟合事实，第二轮 prompt 也带回旧上下文与新选择的 `图形学.docx`，最终答复同时命中过拟合和反走样核心事实。正式失败的共同原因是断言绑定了一句提示词原文 `当前用户最新输入、当前 selected references、当前 workspace 是本轮唯一有效入口`，这次 prompt 没有原样出现；按用户最终诉求完成度综合计为 `8.5 / 10`。
-    - `human-docx-positioned-structural-edit-fallback-live`：`4.0 / 10`
-      - 依据：2026-06-01 全量 live 执行中产生 4 个 raw run，0 过 4 失败，其中 1 轮为 `human.brain` 连接错误，3 轮触发测试代码缺陷 `draftReviewArtifactCount is not defined`。复查后确认旧断言仍按“整篇原 docx 不应有任何自动编辑”设计，已与最新“跳过 positioned 区域、继续处理其他可安全编辑位置、最终交付说明手动处理”的设计不一致；测试需按新设计改造并修复变量名。旧口径综合计为 `4.0 / 10`。
+    - `human-docx-positioned-structural-edit-fallback-live`：`8.1 / 10`
+      - 依据：2026-06-01 按最新“跳过 positioned 区域、继续处理其他可安全编辑位置、最终交付说明手动处理”设计重构后定向复跑 2 轮，1 过 1 失败，单轮耗时约 `136s ~ 175s`。两轮都正确在 `b:26` 后插入时触发 positioned 保护，`diagnostic` 明确包含“达到反⾛样。”位置，`delivery_guidance` 进入 mouth；第 1 轮把补充内容写到文档末尾并说明用户可手动搬到原小节后，失败来自旧 artifact 形态断言过严，已调整；第 2 轮未写文件但给出可直接粘贴的手动补充内容并正式通过。按真实用户诉求综合计为 `8.1 / 10`。
     - `human-kb-guided-docx-comparison-draft-live`：`5.8 / 10`
       - 依据：2026-06-01 全量 live 执行中产生 4 个 raw run，0 过 4 失败，其中 2 轮为连接错误，1 轮为结构化输出超时，1 轮真实更新了 PRD 与交互式案例两份目标 docx，但仍未满足 KB 缩圈/grounded 写入的正式断言。按用户要把概念区分整理进两份教学文档看，有一轮交付质量较好；按稳定性和检索链路看失败率过高。综合计为 `5.8 / 10`。
 
