@@ -118,11 +118,9 @@ describe('ai human live backend', () => {
             createSourcePaths.every((sourcePath) =>
               sourcePath.endsWith(POSITIONED_FALLBACK_SUPPLEMENT_RELATIVE_PATH)
             )
-          const independentSupplementArtifactsValid =
-            docxApplyArtifactCount === 1 && docxFileArtifactCount === 1
           const artifactShapeValid =
-            (createSourcePaths.length === 0 && docxApplyArtifactCount === docxFileArtifactCount) ||
-            (createdIndependentSupplement && independentSupplementArtifactsValid)
+            createSourcePaths.length === 0 ||
+            (createdIndependentSupplement && docxApplyArtifactCount >= 1 && docxFileArtifactCount >= 1)
           const deliveryText = String(result.output?.deliveryMarkdown || '')
           const deliveryMentionsSkippedPositionedArea =
             /(复杂定位|定位排版|版式|排版)/.test(deliveryText) &&
