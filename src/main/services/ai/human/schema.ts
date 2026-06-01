@@ -122,8 +122,7 @@ export const humanDecisionHintSchema = z.discriminatedUnion('code', [
       toolName: z.literal('docx_edit'),
       sourcePath: z.string().min(1).optional(),
       action: z.string().min(1).optional(),
-      targetDescription: z.string().min(1),
-      diagnostic: z.string().min(1).optional()
+      diagnostic: z.string().min(1)
     })
   }),
   z.object({

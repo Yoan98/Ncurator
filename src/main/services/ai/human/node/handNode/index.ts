@@ -24,6 +24,7 @@ import {
   formatToolCallSchemaDiagnostic
 } from '../../toolCallSchema'
 import type { HandCallList, HumanRuntimeCache, HumanState, HumanDecisionHint, ToolCallResult } from '../../types'
+import { renderDeliveryGuidanceForMouth } from '../../prompts/deliveryGuidance'
 import { deriveHandFollowupSignals, shouldStopSerialHandPlan } from './followupSignals'
 import { buildHandCallInvalidHint } from './decisionHints'
 import { executeToolCall } from './toolExecutor'
@@ -71,9 +72,6 @@ const buildToolLimitNearExhaustedDecisionHint = (
     limit
   }
 })
-
-const buildToolLimitDeliveryGuidance = (toolCallCount: number, limit: number): string =>
-  `本轮累计工具调用次数已经超过上限，当前为 ${String(toolCallCount)}，上限为 ${String(limit)}。后续没有继续执行更多工具。最终答复中需要明确说明：已经完成了什么、哪些事项尚未继续完成，以及停止原因是工具调用预算耗尽。`
 
 const validateCalls = (calls: ParsedHandCall[]): HumanDecisionHint | undefined => {
   if (calls.length > HUMAN_HAND_CALL_LIMIT) {
@@ -401,10 +399,6 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       calls,
       results
     })
-    const handDeliveryGuidance = createDeliveryGuidanceItem(
-      'hand',
-      followupSignals.deliveryGuidance
-    )
     const toolLimitDecisionHint =
       input.cache.toolCallCount > toolCallLimit
         ? buildToolLimitDecisionHint(input.cache.toolCallCount, toolCallLimit)
@@ -412,11 +406,9 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
           ? buildToolLimitNearExhaustedDecisionHint(input.cache.toolCallCount, toolCallLimit)
           : undefined
     const decisionHint = toolLimitDecisionHint || followupSignals.decisionHint
-    const toolLimitDeliveryGuidance = createDeliveryGuidanceItem(
+    const handDeliveryGuidance = createDeliveryGuidanceItem(
       'hand',
-      toolLimitDecisionHint?.code === 'hand_tool_limit_exceeded'
-        ? buildToolLimitDeliveryGuidance(input.cache.toolCallCount, toolCallLimit)
-        : undefined
+      renderDeliveryGuidanceForMouth(decisionHint)
     )
     const artifacts = mergeArtifactRefs(
       state.execution.artifacts,
@@ -441,11 +433,8 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
           lastToolResults: results,
           artifacts,
           deliveryGuidanceItems: mergeDeliveryGuidanceItems(
-            mergeDeliveryGuidanceItems(
-              state.execution.deliveryGuidanceItems,
-              handDeliveryGuidance
-            ),
-            toolLimitDeliveryGuidance
+            state.execution.deliveryGuidanceItems,
+            handDeliveryGuidance
           )
         },
         memory: {

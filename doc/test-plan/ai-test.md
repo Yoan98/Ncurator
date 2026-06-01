@@ -44,7 +44,7 @@
     - `human-session-resume-with-new-selection-live`：`8.5 / 10`
       - 依据：2026-06-01 全量 live 执行中产生 4 个 raw run，0 过 4 失败，单轮耗时约 `131s ~ 278s`。复查断言条件后确认 4 轮都保存了 `network_error` 快照，快照中保留过拟合事实，第二轮 prompt 也带回旧上下文与新选择的 `图形学.docx`，最终答复同时命中过拟合和反走样核心事实。正式失败的共同原因是断言绑定了一句提示词原文 `当前用户最新输入、当前 selected references、当前 workspace 是本轮唯一有效入口`，这次 prompt 没有原样出现；按用户最终诉求完成度综合计为 `8.5 / 10`。
     - `human-docx-positioned-structural-edit-fallback-live`：`4.0 / 10`
-      - 依据：2026-06-01 全量 live 执行中产生 4 个 raw run，0 过 4 失败，其中 1 轮为 `human.brain` 连接错误，3 轮触发测试代码缺陷 `draftReviewArtifactCount is not defined`。从 runtime 事件看，模型实际把补充内容写入了原 `图形学.docx` 末尾并声称完成，没有按复杂定位区域要求优雅回退或生成独立补充稿；同时测试断言自身也需修正变量名。综合计为 `4.0 / 10`。
+      - 依据：2026-06-01 全量 live 执行中产生 4 个 raw run，0 过 4 失败，其中 1 轮为 `human.brain` 连接错误，3 轮触发测试代码缺陷 `draftReviewArtifactCount is not defined`。复查后确认旧断言仍按“整篇原 docx 不应有任何自动编辑”设计，已与最新“跳过 positioned 区域、继续处理其他可安全编辑位置、最终交付说明手动处理”的设计不一致；测试需按新设计改造并修复变量名。旧口径综合计为 `4.0 / 10`。
     - `human-kb-guided-docx-comparison-draft-live`：`5.8 / 10`
       - 依据：2026-06-01 全量 live 执行中产生 4 个 raw run，0 过 4 失败，其中 2 轮为连接错误，1 轮为结构化输出超时，1 轮真实更新了 PRD 与交互式案例两份目标 docx，但仍未满足 KB 缩圈/grounded 写入的正式断言。按用户要把概念区分整理进两份教学文档看，有一轮交付质量较好；按稳定性和检索链路看失败率过高。综合计为 `5.8 / 10`。
 
@@ -956,10 +956,10 @@
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证 live 模式下 `human` 在复杂 positioned docx 中不会执行任何自动编辑，而是对命中复杂定位排版区域的写入请求做优雅回退。
+- What：验证 live 模式下 `human` 在复杂 positioned docx 中会跳过命中的复杂定位排版区域，并继续尝试处理其他可安全编辑的位置。
 - Why：这类由 `framePr` / 绝对定位 shape 组成的 docx 即使只是原地改字也可能因结构重写而错位；这条 case 要长期守住“positioned 区域只读、自动写入必须拒绝并给用户手动提示”的正式能力，对齐 `WB-CORE-003-AC1`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
 - How：注入真实 live LLM 配置；只将 `图形学.docx` 作为已选资料复制进 workspace；直接输入“我准备把这份图形学讲义发给同学复习，想把‘反走样’这一节补得更容易记一些。你直接在这一节后面加一段更通俗的说明，再加一个很短的总结表，帮助大家快速区分两种常见做法。”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；事件流中至少一次 `docx_search` / `docx_read_blocks` / `docx_outline` 覆盖 `图形学.docx`；至少一次 docx 写入请求因为命中复杂定位排版区域失败，并返回稳定 `hand_docx_positioned_write_blocked` 与 `diagnostic.message`；原始 `docx` 文件未被覆盖；最终答复明确说明未在原文中自动编辑，并给出回退处理。回退结果允许两种形态：一是仅给出建议手动补充的内容且不生成 docx artifact；二是改为生成独立补充稿，并在 artifacts 中产出携带 `applyId` 的 docx file artifact。
+- Oracle：任务最终完成；事件流中至少一次 `docx_search` / `docx_read_blocks` / `docx_outline` 覆盖 `图形学.docx`；至少一次 docx 写入请求因为命中复杂定位排版区域失败，并返回稳定 `hand_docx_positioned_write_blocked` 与 `diagnostic.message`；允许后续对同一 docx 中其他可安全编辑位置写入，或改为生成独立补充稿；最终答复必须明确说明命中的复杂定位排版区域未被自动修改，需要用户手动处理，并说明实际完成的写入结果。
 - Not：不要求固定使用哪一种 docx 写工具，也不要求最终答复使用固定措辞。
 
 ##### `human-kb-guided-docx-comparison-draft-live`

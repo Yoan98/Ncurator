@@ -18,20 +18,6 @@ const readDocxEditActionTypes = (args: JsonObject | undefined): string | undefin
   return types.length > 0 ? types.join(', ') : undefined
 }
 
-const readDocxEditTargetDescription = (args: JsonObject | undefined): string => {
-  if (!Array.isArray(args?.actions)) return '复杂定位排版区域'
-  for (const action of args.actions) {
-    if (!action || typeof action !== 'object' || Array.isArray(action)) continue
-    const actionArgs = action as JsonObject
-    const target =
-      asString(actionArgs.blockId)
-      || asString(actionArgs.anchorBlockId)
-      || asString(actionArgs.cellBlockId)
-    if (target) return target
-  }
-  return '复杂定位排版区域'
-}
-
 const readDocxEditFailureHint = (input: {
   call: HandCallList[number] | undefined
   result: ToolCallResult
@@ -52,24 +38,29 @@ const readDocxEditFailureHint = (input: {
     || 'docx_edit failed'
   const diagnostic = diagnosticMessage && diagnosticMessage !== error ? diagnosticMessage : undefined
   if (isDocxPositionedLayoutProtectionMessage(error)) {
+    const toolResultHint = data && typeof data === 'object' && !Array.isArray(data)
+      ? (data as { decisionHint?: HumanDecisionHint }).decisionHint
+      : undefined
+    if (toolResultHint?.code === 'hand_docx_positioned_write_blocked') {
+      return toolResultHint
+    }
     return {
       code: 'hand_docx_positioned_write_blocked',
       detail: {
-	        toolName: 'docx_edit',
-	        sourcePath: asString(args?.sourcePath),
-	        action: readDocxEditActionTypes(args),
-	        targetDescription: readDocxEditTargetDescription(args),
-	        diagnostic: diagnostic || error
-	      }
+        toolName: 'docx_edit',
+        sourcePath: asString(args?.sourcePath),
+        action: readDocxEditActionTypes(args),
+        diagnostic: diagnostic || error
+      }
     }
   }
   return {
     code: 'hand_docx_edit_failed',
     detail: {
-	      toolName: 'docx_edit',
-	      sourcePath: asString(args?.sourcePath),
-	      action: readDocxEditActionTypes(args),
-	      error,
+      toolName: 'docx_edit',
+      sourcePath: asString(args?.sourcePath),
+      action: readDocxEditActionTypes(args),
+      error,
       diagnostic
     }
   }
@@ -80,7 +71,6 @@ export const deriveHandFollowupSignals = (input: {
   results: readonly ToolCallResult[]
 }): {
   decisionHint?: HumanDecisionHint
-  deliveryGuidance?: string
 } => {
   const groupedFailureHints = deriveGroupedHandFailureHints(input)
 

@@ -59,8 +59,7 @@ const HINT_FIXTURES: Record<(typeof HUMAN_DECISION_HINT_CODES)[number], HumanDec
       toolName: 'docx_edit',
       sourcePath: 'graphics.docx',
       action: 'insert_blocks',
-      targetDescription: 'b:26',
-      diagnostic: '当前命中复杂定位排版区域，暂不支持自动编辑'
+      diagnostic: '当前命中复杂定位排版区域：包含“达到反走样。”的区域，暂不支持自动编辑'
     }
   },
   hand_tool_limit_near_exhausted: {

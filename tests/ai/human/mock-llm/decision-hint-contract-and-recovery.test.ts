@@ -198,7 +198,8 @@ describe('ai human mock-llm backend', () => {
             event.code === 'hand_docx_positioned_write_blocked' &&
             event.detail?.toolName === 'docx_edit' &&
             event.detail?.sourcePath === result.positionedSourcePath &&
-            typeof event.detail?.targetDescription === 'string'
+            typeof event.detail?.diagnostic === 'string' &&
+            event.detail.diagnostic.includes('复杂定位排版区域')
         )
         const hasToolLimitExceeded = decisionHints.some(
           (event) =>

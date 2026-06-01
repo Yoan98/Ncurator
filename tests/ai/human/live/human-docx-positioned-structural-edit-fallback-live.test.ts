@@ -1,4 +1,3 @@
-import fs from 'node:fs/promises'
 import { describe, it } from 'vitest'
 import { loadLiveLlmConfigFromEnv, hasLiveLlmConfigInEnv } from '../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
@@ -54,21 +53,12 @@ describe('ai human live backend', () => {
               skipped: true,
               output: null,
               fixtureDocs: [],
-              originalFixtureBytes: [],
               events: []
             }
           }
 
           await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
           const fixtureDocs = resolveSelectedDocxFixtures(runtime, DOCX_POSITIONED_FIXTURE_PATHS)
-          const originalFixtureBytes = await Promise.all(
-            fixtureDocs.map(async (fixtureDoc) => ({
-              name: fixtureDoc.name,
-              relativePath: fixtureDoc.relativePath,
-              workspacePath: fixtureDoc.workspacePath,
-              bytes: await fs.readFile(fixtureDoc.workspacePath)
-            }))
-          )
           const runner = createHumanTestRunner(runtime, {
             selectedReferences: buildSelectedDocxFixtureReferences(
               runtime,
@@ -84,7 +74,6 @@ describe('ai human live backend', () => {
             skipped: false,
             output,
             fixtureDocs,
-            originalFixtureBytes,
             events: runtime.eventCollector.snapshot()
           }
         },
@@ -117,6 +106,9 @@ describe('ai human live backend', () => {
             .filter((value): value is string => typeof value === 'string')
           const successfulWriteResults = writeResults.filter((event) => event.result?.ok === true)
           const failedWriteResults = writeResults.filter((event) => event.result?.ok === false)
+          const positionedFailedWriteResults = failedWriteResults.filter((event) =>
+            String(event.result?.diagnostic?.message || '').includes('当前命中复杂定位排版区域')
+          )
           const decisionHints = filterAiRunEventsByType(events, 'decision_hint')
           const diagnosticMessages = collectToolDiagnosticMessages(events)
           const docxApplyArtifactCount = countDocxApplyArtifacts(result.output?.artifacts)
@@ -128,14 +120,14 @@ describe('ai human live backend', () => {
             )
           const independentSupplementArtifactsValid =
             docxApplyArtifactCount === 1 && docxFileArtifactCount === 1
-          const noSupplementArtifacts = docxApplyArtifactCount === 0 && docxFileArtifactCount === 0
-          const unchangedFixtures = await Promise.all(
-            result.originalFixtureBytes.map(async (fixture) => {
-              const currentBytes = await fs.readFile(fixture.workspacePath)
-              return Buffer.compare(currentBytes, Buffer.from(fixture.bytes)) === 0
-            })
-          )
+          const artifactShapeValid =
+            (createSourcePaths.length === 0 && docxApplyArtifactCount === docxFileArtifactCount) ||
+            (createdIndependentSupplement && independentSupplementArtifactsValid)
           const deliveryText = String(result.output?.deliveryMarkdown || '')
+          const deliveryMentionsSkippedPositionedArea =
+            /(复杂定位|定位排版|版式|排版)/.test(deliveryText) &&
+            /(未.{0,12}自动|没有.{0,12}自动|没法自动|无法自动|不能自动|跳过)/.test(deliveryText) &&
+            /(手动|人工)/.test(deliveryText)
 
           runtime.assertThat(
             result.output?.status === 'completed' &&
@@ -143,22 +135,19 @@ describe('ai human live backend', () => {
                 openedExpectedDoc(openedSourcePaths, fixtureDoc.relativePath, fixtureDoc.name)
               ) &&
               structuralStarted.length >= 1 &&
-              successfulWriteResults.length === 0 &&
-              failedWriteResults.length === 1 &&
+              positionedFailedWriteResults.length >= 1 &&
               decisionHints.some(
                 (event) => event.code === 'hand_docx_positioned_write_blocked'
               ) &&
               diagnosticMessages.some((message) => message.includes('当前命中复杂定位排版区域')) &&
-              ((createSourcePaths.length === 0 && noSupplementArtifacts) ||
-                (createdIndependentSupplement && independentSupplementArtifactsValid)) &&
-              /(手动|版式|排版|没法自动|无法自动|复杂定位)/.test(deliveryText) &&
-              unchangedFixtures.every(Boolean) &&
+              artifactShapeValid &&
+              deliveryMentionsSkippedPositionedArea &&
               typeof result.output?.deliveryMarkdown === 'string' &&
               result.output.deliveryMarkdown.trim().length > 0,
             {
-              name: 'human-live-positioned-docx-stays-read-only-and-falls-back-cleanly',
+              name: 'human-live-positioned-docx-skips-protected-area-and-reports-manual-fallback',
               message:
-                'live human positioned case 应拒绝对复杂定位区域的自动编辑，并在最终答复中明确回退处理；可只给手动补充建议，也可改为生成独立补充稿。',
+                'live human positioned case 应拒绝命中的复杂定位区域，允许继续处理其他可安全编辑位置，并在最终答复中说明该区域需手动处理。',
               data: {
                 openedSourcePaths,
                 createSourcePaths,
@@ -173,13 +162,14 @@ describe('ai human live backend', () => {
                     : [],
                   sourcePath: event.input.sourcePath
                 })),
+                successfulWriteResultCount: successfulWriteResults.length,
                 failedWriteResults: failedWriteResults.map((event) => ({
                   toolName: event.toolName,
                   diagnostic: event.result?.diagnostic?.message
                 })),
                 decisionHints,
-                draftReviewArtifactCount,
-                draftFileArtifactCount,
+                docxApplyArtifactCount,
+                docxFileArtifactCount,
                 deliveryMarkdown: result.output?.deliveryMarkdown
               }
             }

@@ -90,8 +90,7 @@ describe('ai unit brain decision-hint prompt contract', () => {
         toolName: 'docx_edit',
         sourcePath: 'report.docx',
         action: 'insert_blocks',
-        targetDescription: 'b:1',
-        diagnostic: '当前命中复杂定位排版区域，暂不支持自动编辑'
+        diagnostic: '当前命中复杂定位排版区域：包含“达到反走样。”的区域，暂不支持自动编辑'
       }
     }
 
@@ -123,7 +122,7 @@ describe('ai unit brain decision-hint prompt contract', () => {
     expect(taskProgressSection).toContain('cannot resolve anchorBlockId=b:1 in current active snapshot')
     expect(taskProgressSection).not.toContain('上一轮 docx_edit 写入失败')
     expect(correctionHintSection).toContain('刚才尝试修改的 docx 区域命中了定位排版保护')
-    expect(correctionHintSection).toContain('受影响的位置是：b:1')
+    expect(correctionHintSection).toContain('诊断：当前命中复杂定位排版区域：包含“达到反走样。”的区域')
     expect(correctionHintSection).toContain('不会被自动修改')
   })
 

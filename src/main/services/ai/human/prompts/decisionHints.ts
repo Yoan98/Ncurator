@@ -50,7 +50,7 @@ export const renderDecisionHintForBrain = (hint: HumanDecisionHint): string => {
         '刚才尝试修改的 docx 区域命中了定位排版保护。',
         '按系统设计，这类定位区域不会被自动修改。',
         '这处位置本轮未改动，但仍可继续处理文档中其他可修改的位置。',
-        `受影响的位置是：${hint.detail.targetDescription}。`
+        `诊断：${hint.detail.diagnostic}。`
       ].join('')
     case 'hand_tool_limit_near_exhausted':
       return `累计工具调用次数已接近当前上限。当前为 ${String(hint.detail.toolCallCount)}，上限为 ${String(hint.detail.limit)}。后续应尽快收尾，只保留完成最终交付所必需的动作。`

@@ -27,7 +27,6 @@ import {
   finalizeDocxToolSuccess
 } from './workerTool'
 import type { DocxToolFailure } from '../runtime'
-import { DOCX_POSITIONED_LAYOUT_PROTECTION_MESSAGE } from '../constants'
 import { createDocxFile } from '../utils/createDocxFile'
 
 const paragraphSpecFromText = (text: string, style?: string): DocxParagraphSpec => ({
@@ -108,9 +107,19 @@ const fetchDetailedBlock = async (
   return response.payload.block
 }
 
-const buildPositionedReadOnlyMessage = (): string => DOCX_POSITIONED_LAYOUT_PROTECTION_MESSAGE
-
 const buildCreateSummary = (sourcePath: string): string => `已建立新的 docx 草稿会话：${sourcePath}`
+
+const summarizePositionedBlockText = (block: DocxDetailedBlock): string | undefined => {
+  const normalized = block.text.replace(/\s+/g, ' ').trim()
+  if (normalized.length === 0) return undefined
+  return normalized.length > 80 ? `${normalized.slice(0, 80)}...` : normalized
+}
+
+const buildPositionedDiagnostic = (block: DocxDetailedBlock): string => {
+  const targetText = summarizePositionedBlockText(block)
+  const target = targetText ? `：包含“${targetText}”的区域` : ''
+  return `当前命中复杂定位排版区域${target}，暂不支持自动编辑，以避免预览修订和版式叠加导致错位；你可以手动按建议内容调整该处。`
+}
 
 const getOutlineBlockIndex = (blocks: readonly DocxOutlineBlock[], blockId: string): number =>
   blocks.findIndex((block) => block.blockId === blockId)
@@ -333,11 +342,20 @@ const failIfPositionedBlock = async (input: {
   if (block.layoutMode !== 'positioned') {
     return null
   }
+  const diagnostic = buildPositionedDiagnostic(block)
   return input.runtime.emitFailure({
     toolName: input.toolName,
     toolCallId: input.toolCallId,
     reason: 'invalid_input',
-    error: buildPositionedReadOnlyMessage(),
+    error: diagnostic,
+    decisionHint: {
+      code: 'hand_docx_positioned_write_blocked',
+      detail: {
+        toolName: 'docx_edit',
+        sourcePath: input.sourcePath,
+        diagnostic
+      }
+    },
     draftDocId: input.docId,
     resourceContext: input.runtime.buildResourceContext({
       sourcePath: input.sourcePath,
