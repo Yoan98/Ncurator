@@ -65,6 +65,7 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
   },
   kb_list_documents: {
     items: {
+      id: true,
       name: true
     },
     total: true

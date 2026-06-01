@@ -214,7 +214,7 @@ describe('ai unit human memory renderers', () => {
 
     expect(rendered).toContain('第 1 轮')
     expect(rendered).toContain(
-      '参数：{"sourcePath":"draft.docx","action":"create_document","blocks":[{"type":"paragraph","text":"..."}]}'
+      '参数：{"sourcePath":"draft.docx","actions":[{"type":"create_document","blocks":[{"type":"paragraph","text":"..."}]}]}'
     )
     expect(rendered).toContain(
       '"postWriteReadback":{"regions":[{"fromBlockIndex":1,"toBlockIndex":2,"blocks":[{"blockId":"b1","type":"paragraph","blockIndex":1,"text":"hello"}]}]}'
@@ -227,6 +227,69 @@ describe('ai unit human memory renderers', () => {
     expect(rendered).not.toContain('ignoredObjectField')
     expect(rendered).not.toContain('ignoredRegionField')
     expect(rendered).not.toContain('ignoredBlockField')
+  })
+
+  it('renders kb_list_documents result ids in round history', () => {
+    const initialState = createInitialHumanState({
+      taskId: 'task-history-kb-list-documents',
+      userInput: '列出知识库文档'
+    })
+
+    const taskRun = appendRoundRecord({
+      state: initialState,
+      thought: {
+        thought: {
+          next: '查看知识库可检索文档列表'
+        },
+        nextAction: {
+          action: 'hand',
+          calls: [
+            {
+              toolName: 'kb_list_documents',
+              args: {
+                page: 1,
+                pageSize: 20
+              }
+            }
+          ]
+        }
+      },
+      execution: buildHandExecution({
+        calls: [
+          {
+            toolName: 'kb_list_documents',
+            args: {
+              page: 1,
+              pageSize: 20
+            }
+          }
+        ],
+        toolResults: [
+          {
+            toolName: 'kb_list_documents',
+            ok: true,
+            data: {
+              items: [
+                {
+                  id: 'workspace-file-doc-1',
+                  name: '图形学.docx',
+                  file_path: '/tmp/workspace/学习笔记/图形学.docx'
+                }
+              ],
+              total: 1
+            }
+          }
+        ]
+      }),
+      createdAt: 1
+    })
+
+    const rendered = renderBrainRoundSection(taskRun.rounds)
+
+    expect(rendered).toContain('"id":"workspace-file-doc-1"')
+    expect(rendered).toContain('"name":"图形学.docx"')
+    expect(rendered).toContain('"total":1')
+    expect(rendered).not.toContain('file_path')
   })
 
   it('renders unconfigured tool results with fallback minimal fields only', () => {
