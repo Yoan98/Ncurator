@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
+import type { AiRunEvent, JsonObject, JsonValue } from '../../../../src/shared/types'
 import { loadLiveLlmConfigFromEnv, hasLiveLlmConfigInEnv } from '../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
@@ -19,6 +20,22 @@ import {
   isDocxEditWriteInput,
   runWithStructuredOutputRetry
 } from '../testUtils'
+
+const isJsonObject = (value: JsonValue | undefined): value is JsonObject =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const hasSuccessfulKbSearchHit = (events: readonly AiRunEvent[]): boolean =>
+  events.some((event) => {
+    if (event.type !== 'tool_call_result' || event.toolName !== 'kb_search') return false
+    const data = event.result?.data
+    if (!isJsonObject(data)) return false
+    const total = data.total
+    const items = data.items
+    return (
+      (typeof total === 'number' && total > 0) ||
+      (Array.isArray(items) && items.length > 0)
+    )
+  })
 
 describe('ai human live backend', () => {
   it('human-kb-guided-docx-comparison-draft-live', async () => {
@@ -85,6 +102,13 @@ describe('ai human live backend', () => {
           const indexedSupportedFiles = result.indexedFiles.filter(
             (file) => file.supported && file.status === 'indexed'
           )
+          const requiredIndexedRelativePaths = [
+            ...result.workspaceSeed.sourceDocs,
+            ...result.workspaceSeed.targetDocs
+          ].map((fixture) => fixture.relativePath)
+          const requiredFilesIndexed = requiredIndexedRelativePaths.every((relativePath) =>
+            indexedSupportedFiles.some((file) => file.relativePath === relativePath)
+          )
           const openedSourcePaths = filterAiRunEventsByType(events, 'tool_call_started')
             .filter((event) => event.toolName.startsWith('docx_'))
             .map((event) => event.input.sourcePath)
@@ -110,6 +134,7 @@ describe('ai human live backend', () => {
           runtime.assertThat(
             result.output?.status === 'completed' &&
               hasKbToolCall(events) &&
+              hasSuccessfulKbSearchHit(events) &&
               toolNames.includes('docx_edit') &&
               changedContentKinds.includes('paragraph') &&
               targetDocsWritten &&
@@ -122,7 +147,7 @@ describe('ai human live backend', () => {
               /反走样/.test(deliveryText) &&
               /PRD|课堂|案例/.test(deliveryText) &&
               sourceDocsUnchanged.every(Boolean) &&
-              indexedSupportedFiles.length === 8 &&
+              requiredFilesIndexed &&
               typeof result.output?.deliveryMarkdown === 'string' &&
               result.output.deliveryMarkdown.trim().length > 0,
             {
@@ -132,6 +157,7 @@ describe('ai human live backend', () => {
                 openedSourcePaths,
                 writeSourcePaths,
                 toolNames,
+                requiredIndexedRelativePaths,
                 indexedSupportedFiles,
                 changedContentKinds,
                 deliveryMarkdown: result.output?.deliveryMarkdown,
