@@ -87,7 +87,9 @@ export const settingsSelectors = {
   modelCancelButton: 'settings-model-cancel-button',
   modelEditButtonPrefix: 'settings-model-edit-button',
   modelActivateButtonPrefix: 'settings-model-activate-button',
-  modelRefreshButtonPrefix: 'settings-model-refresh-button',
+  modelListButtonPrefix: 'settings-model-list-button',
+  modelListModal: 'settings-model-list-modal',
+  modelListRetryButton: 'settings-model-list-retry-button',
   modelDeleteButtonPrefix: 'settings-model-delete-button'
 } as const
 

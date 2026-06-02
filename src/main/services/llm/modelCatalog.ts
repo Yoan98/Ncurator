@@ -27,7 +27,7 @@ const toRemoteModels = (payload: RemoteModelListPayload): LlmRemoteModel[] =>
 
 export const fetchLlmRemoteModels = async (config: LLMConfig): Promise<LlmModelListResponse> => {
   const url = buildModelListUrl(config.base_url)
-  if (!url) return { success: false, items: [], error: '请求地址不能为空' }
+  if (!url) return { success: false, items: [], error: '模型服务地址不能为空' }
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), MODEL_LIST_TIMEOUT_MS)

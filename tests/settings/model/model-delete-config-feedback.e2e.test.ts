@@ -16,21 +16,24 @@ const SEEDED_CONFIGS: readonly LLMConfig[] = [
     providerKind: 'openai',
     base_url: 'https://api.openai.com/v1',
     api_key: 'sk-model-delete-active',
-    is_active: true
+    is_active: true,
+    default_model: 'gpt-4o'
   },
   {
     id: 'model-delete-success',
     providerKind: 'deepseek',
     base_url: 'https://api.deepseek.com',
     api_key: 'sk-model-delete-success',
-    is_active: false
+    is_active: false,
+    default_model: 'deepseek-chat'
   },
   {
     id: 'model-delete-failed',
     providerKind: 'openai-compatible',
     base_url: 'https://models.example.test/v1',
     api_key: 'sk-model-delete-failed',
-    is_active: false
+    is_active: false,
+    default_model: 'custom-model'
   }
 ]
 

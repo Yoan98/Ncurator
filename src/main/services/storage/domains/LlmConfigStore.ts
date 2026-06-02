@@ -8,6 +8,7 @@ type LlmConfigRow = {
   base_url?: string | null
   api_key?: string | null
   is_active?: boolean | null
+  default_model?: string | null
 }
 
 export class LlmConfigStore {
@@ -32,7 +33,8 @@ export class LlmConfigStore {
         }),
         base_url: String(row.base_url || ''),
         api_key: String(row.api_key || ''),
-        is_active: Boolean(row.is_active)
+        is_active: Boolean(row.is_active),
+        default_model: String(row.default_model || '')
       }
     })
   }

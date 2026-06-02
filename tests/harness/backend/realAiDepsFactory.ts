@@ -24,7 +24,8 @@ const SCRIPTED_LLM_CONFIG: LiveLlmConfig = {
   base_url: 'https://scripted.local/v1',
   model_name: 'scripted-llm',
   api_key: 'scripted',
-  is_active: true
+  is_active: true,
+  default_model: 'scripted-llm'
 }
 
 const DEFAULT_RUNTIME_SETTINGS: AiRuntimeSettings = {

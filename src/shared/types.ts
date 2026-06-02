@@ -346,6 +346,7 @@ export interface LLMConfig {
   base_url: string
   api_key: string
   is_active: boolean
+  default_model: string
 }
 
 export type LlmRuntimeConfig = LLMConfig & {

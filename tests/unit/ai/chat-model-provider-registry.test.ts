@@ -10,6 +10,7 @@ const buildConfig = (input: Partial<LlmRuntimeConfig>): LlmRuntimeConfig => ({
   model_name: 'test-model',
   api_key: 'test-key',
   is_active: true,
+  default_model: 'test-model',
   ...input
 })
 

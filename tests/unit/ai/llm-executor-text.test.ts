@@ -19,7 +19,8 @@ const baseConfig: LlmRuntimeConfig = {
   base_url: 'https://example.test/v1',
   model_name: 'gpt-5',
   api_key: 'test-key',
-  is_active: true
+  is_active: true,
+  default_model: 'gpt-5'
 }
 
 describe('ai unit llm executor text path', () => {

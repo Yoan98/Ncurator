@@ -8,14 +8,16 @@ const MODEL_FIXTURES: readonly LLMConfig[] = [
     providerKind: 'openai',
     base_url: 'https://api.openai.com/v1',
     api_key: 'sk-active',
-    is_active: true
+    is_active: true,
+    default_model: 'gpt-4o'
   },
   {
     id: 'model-standby',
     providerKind: 'deepseek',
     base_url: 'https://api.deepseek.com',
     api_key: 'sk-standby',
-    is_active: false
+    is_active: false,
+    default_model: 'deepseek-chat'
   }
 ]
 
@@ -64,7 +66,7 @@ describe('settings model backend', () => {
           {
             name: 'model-config-list-preserves-connection-fields',
             message:
-              '模型连接配置查询应保留服务商与请求地址，用于 Settings 列表和运行时连接选择。',
+              '模型连接配置查询应保留模型服务和地址信息，用于 Settings 列表和运行时连接选择。',
             data: result
           }
         )

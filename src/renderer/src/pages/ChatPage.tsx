@@ -462,6 +462,12 @@ const ChatPage: React.FC = () => {
       setRemoteModels(items)
       setSelectedModelName((current) => {
         if (current && items.some((model) => model.id === current)) return current
+        if (
+          activeConfig.default_model &&
+          items.some((model) => model.id === activeConfig.default_model)
+        ) {
+          return activeConfig.default_model
+        }
         return items[0]?.id || null
       })
     } catch (error) {
@@ -471,6 +477,27 @@ const ChatPage: React.FC = () => {
       setSelectedModelName(null)
     }
   }, [])
+
+  const handleModelNameChange = useCallback(
+    (modelName: string): void => {
+      setSelectedModelName(modelName)
+      if (!activeModelConfig || activeModelConfig.default_model === modelName) return
+
+      const nextConfig: LLMConfig = {
+        ...activeModelConfig,
+        default_model: modelName
+      }
+      setActiveModelConfig(nextConfig)
+      void window.api.llmConfigSave(nextConfig).then((response) => {
+        if (!response.success) {
+          message.error(response.error || '默认模型保存失败')
+          return
+        }
+        window.dispatchEvent(new Event('check-llm-config'))
+      })
+    },
+    [activeModelConfig, message]
+  )
 
   const createNewSession = async (): Promise<void> => {
     try {
@@ -1160,7 +1187,7 @@ const ChatPage: React.FC = () => {
       return
     }
     if (!selectedModelName) {
-      message.warning('当前配置未获取到可用模型，请先在「大模型」中刷新模型列表')
+      message.warning('当前配置未获取到可用模型，请先在「大模型」中打开模型列表获取模型')
       return
     }
 
@@ -1426,7 +1453,7 @@ const ChatPage: React.FC = () => {
       return
     }
     if (!selectedModelName) {
-      message.warning('当前配置未获取到可用模型，请先在「大模型」中刷新模型列表')
+      message.warning('当前配置未获取到可用模型，请先在「大模型」中打开模型列表获取模型')
       return
     }
 
@@ -1874,7 +1901,7 @@ const ChatPage: React.FC = () => {
                       activeModelConfig={activeModelConfig}
                       remoteModels={remoteModels}
                       selectedModelName={selectedModelName}
-                      onModelNameChange={setSelectedModelName}
+                      onModelNameChange={handleModelNameChange}
                       workspaces={workspaces}
                       selectedWorkspaceId={selectedWorkspaceId}
                       onWorkspaceChange={setSelectedWorkspaceId}

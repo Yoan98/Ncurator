@@ -3,6 +3,7 @@ import { Button, Empty, Select, Spin, Tooltip } from 'antd'
 import {
   HiArrowUp,
   HiChevronDown,
+  HiCpuChip,
   HiDocumentText,
   HiFolder,
   HiGlobeAlt,
@@ -821,19 +822,34 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                 onModelNameChange(String(nextValue))
                 focusEditorAfterControlChange()
               }}
+              showSearch
+              filterOption={(inputValue, option) => {
+                const normalizedInput = inputValue.trim().toLowerCase()
+                if (!normalizedInput) return true
+                const label = String(option?.title || option?.value || '')
+                return (
+                  label.toLowerCase().includes(normalizedInput) ||
+                  String(option?.value || '').toLowerCase().includes(normalizedInput)
+                )
+              }}
               variant="borderless"
               suffixIcon={<HiChevronDown className="h-3.5 w-3.5 text-[#8F8F8C]" />}
               optionLabelProp="label"
               popupClassName="workbench-composer-select-dropdown"
-              className="workbench-composer-select min-w-[104px]"
+              className="workbench-composer-select min-w-[132px]"
               options={remoteModels.map((model) => ({
                 value: model.id,
-                label: model.label || model.id,
+                label: (
+                  <span className="flex min-w-0 items-center gap-1.5 text-[12px]">
+                    <HiCpuChip className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{model.label || model.id}</span>
+                  </span>
+                ),
                 title: activeModelConfig
-                  ? `${activeModelConfig.base_url} · ${model.id}`
-                  : model.id
+                  ? `${activeModelConfig.base_url} · ${model.label || model.id} · ${model.id}`
+                  : `${model.label || model.id} · ${model.id}`
               }))}
-              placeholder={activeModelConfig ? '刷新模型' : '模型'}
+              placeholder={activeModelConfig ? '选择模型' : '模型'}
               data-testid={workbenchSelectors.modelSelect}
             />
 
@@ -847,10 +863,15 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               suffixIcon={<HiChevronDown className="h-3.5 w-3.5 text-[#8F8F8C]" />}
               optionLabelProp="label"
               popupClassName="workbench-composer-select-dropdown"
-              className="workbench-composer-select min-w-[112px]"
+              className="workbench-composer-select min-w-[132px]"
               options={workspaces.map((workspace) => ({
                 value: workspace.id,
-                label: workspace.name,
+                label: (
+                  <span className="flex min-w-0 items-center gap-1.5 text-[12px]">
+                    <HiFolder className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{workspace.name}</span>
+                  </span>
+                ),
                 title: workspace.root_path
               }))}
               placeholder="工作区"

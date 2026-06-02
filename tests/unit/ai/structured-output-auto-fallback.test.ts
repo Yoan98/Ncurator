@@ -45,7 +45,8 @@ const cfg = {
   base_url: 'https://example.test/v1',
   model_name: 'gpt-5',
   api_key: 'test-key',
-  is_active: true
+  is_active: true,
+  default_model: 'gpt-5'
 } as const
 
 const baseInput = {

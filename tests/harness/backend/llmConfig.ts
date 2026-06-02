@@ -59,6 +59,7 @@ export const loadLiveLlmConfigFromEnv = (): LiveLlmConfig => {
     base_url: baseUrl,
     model_name: modelName,
     api_key: apiKey,
-    is_active: true
+    is_active: true,
+    default_model: modelName
   }
 }

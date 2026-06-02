@@ -84,6 +84,7 @@ export type LiveLlmConfig = Pick<
 > & {
   id: string
   is_active: true
+  default_model: string
 }
 
 export type TestRunMode = 'single' | 'repeatable'

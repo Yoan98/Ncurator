@@ -13,7 +13,7 @@ describe('settings model e2e', () => {
       caseId: 'model-create-edit-form',
       domain: 'settings',
       suite: 'model',
-      description: '新增和编辑连接配置表单提供服务商、请求地址、API Key 与必填校验。',
+      description: '新增和编辑连接配置表单提供模型服务地址、API Key 与必填校验。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -27,7 +27,7 @@ describe('settings model e2e', () => {
           run: async () => {
             await navigateToSettingsSection(page, 'model')
             await getSettingsLocator(page, settingsSelectors.modelAddButton).click()
-            await getSettingsLocator(page, settingsSelectors.modelProviderInput).waitFor({
+            await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput).waitFor({
               state: 'visible'
             })
           }
@@ -73,7 +73,7 @@ describe('settings model e2e', () => {
               page,
               `${settingsSelectors.modelEditButtonPrefix}-${createdConfigId}`
             ).click()
-            await getSettingsLocator(page, settingsSelectors.modelProviderInput).waitFor({
+            await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput).waitFor({
               state: 'visible'
             })
           }
@@ -81,11 +81,11 @@ describe('settings model e2e', () => {
 
         return {
           createFieldVisible:
-            (await getSettingsLocator(page, settingsSelectors.modelProviderInput).isVisible()) &&
             (await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput)
               .locator('input')
               .isVisible()) &&
-            (await getSettingsLocator(page, settingsSelectors.modelApiKeyInput).isVisible()),
+            (await getSettingsLocator(page, settingsSelectors.modelApiKeyInput).isVisible()) &&
+            !(await getSettingsLocator(page, settingsSelectors.modelProviderInput).isVisible()),
           validationBlocked,
           editPrefill: {
             baseUrl: await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput)
@@ -99,7 +99,7 @@ describe('settings model e2e', () => {
         await runtime.assertThat(result.createFieldVisible, {
           name: 'create-form-shows-required-fields',
           message:
-            '新增配置表单应提供服务商、请求地址和 API Key 三个核心字段，对齐 SET-MODEL-002-AC1。',
+            '新增配置表单应提供模型服务地址和 API Key，并默认隐藏服务商适配类型，对齐 SET-MODEL-002-AC1。',
           data: result
         })
 

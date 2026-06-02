@@ -27,7 +27,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
 
   const getRequestedConfig = async () => {
     const modelName = String(payload.modelName || '').trim()
-    if (!modelName) throw new Error('当前配置未获取到可用模型，请先在「大模型」中刷新模型列表')
+    if (!modelName) throw new Error('当前配置未获取到可用模型，请先在「大模型」中打开模型列表获取模型')
     const cfg = await deps.llmStore.getActive()
     if (!cfg) throw new Error('未配置可用的大模型，请先在「大模型配置」中设置并启用一个模型')
     return {

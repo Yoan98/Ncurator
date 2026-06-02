@@ -15,14 +15,16 @@ const SEEDED_CONFIGS: readonly LLMConfig[] = [
     providerKind: 'openai',
     base_url: 'https://api.openai.com/v1',
     api_key: 'sk-model-page-load-active',
-    is_active: true
+    is_active: true,
+    default_model: 'gpt-4o'
   },
   {
     id: 'model-page-load-standby',
     providerKind: 'deepseek',
     base_url: 'https://api.deepseek.com',
     api_key: 'sk-model-page-load-standby',
-    is_active: false
+    is_active: false,
+    default_model: 'deepseek-chat'
   }
 ]
 

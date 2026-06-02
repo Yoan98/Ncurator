@@ -193,12 +193,20 @@
   - `WB-COMPOSER-006-AC1` 运行中才显示取消入口。
   - `WB-COMPOSER-006-AC2` 取消成功后，当前运行结束并给出已取消反馈。
 
-#### WB-COMPOSER-007 上下文用量提示
+#### WB-COMPOSER-007 模型与工作区选择识别
+
+- 系统行为：输入区底部展示当前模式、模型和工作区选择；模型与工作区入口都有图标提示；模型下拉支持搜索，选择模型后会保存为当前模型配置的默认模型，下次进入 workbench 时优先使用该默认模型。
+- 验收：
+  - `WB-COMPOSER-007-AC1` 模型列表展开后可按模型名称搜索候选。
+  - `WB-COMPOSER-007-AC2` 选择模型后，后续进入 workbench 或刷新模型配置时优先恢复该模型配置的默认模型。
+  - `WB-COMPOSER-007-AC3` 模型选择和工作区选择入口都有可识别图标，而不是只展示纯文本。
+
+#### WB-COMPOSER-008 上下文用量提示
 
 - 系统行为：智能模式输入区展示当前会话上下文 token 用量圆圈，显示当前已估算 token、默认最大上下文 token 与占比；该用量在切换会话和 human run 完成后刷新。
 - 验收：
-  - `WB-COMPOSER-007-AC1` 智能模式下输入区可见上下文用量圆圈，hover 或辅助文本可读到已用 token 与最大 token。
-  - `WB-COMPOSER-007-AC2` human run 完成后，用量圆圈会基于最新会话消息与 session memory 刷新。
+  - `WB-COMPOSER-008-AC1` 智能模式下输入区可见上下文用量圆圈，hover 或辅助文本可读到已用 token 与最大 token。
+  - `WB-COMPOSER-008-AC2` human run 完成后，用量圆圈会基于最新会话消息与 session memory 刷新。
 
 ### 8.4 模式切换
 
