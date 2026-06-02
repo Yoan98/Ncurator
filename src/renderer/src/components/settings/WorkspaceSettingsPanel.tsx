@@ -1,21 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { Alert, Button, Empty, Modal, Progress, Segmented, Tag, Tooltip, Tree, message } from 'antd'
+import { Alert, Button, Empty, Modal, Tabs, Tooltip, Tree, message } from 'antd'
 import type {
   LegacyLocalImportMigrationStatus,
-  WorkspacePrepareMode,
-  WorkspaceSource
+  WorkspaceSource,
+  WorkspaceTreeListResponse
 } from '../../../../shared/types'
 import {
   HiArrowPath,
-  HiCheckCircle,
   HiDocumentText,
-  HiFolder,
-  HiOutlineExclamationCircle,
-  HiOutlineClock,
+  HiGlobeAlt,
+  HiOutlineArrowsPointingIn,
+  HiOutlineArrowsPointingOut,
   HiOutlineFolderPlus,
   HiOutlineQuestionMarkCircle,
   HiOutlineTrash,
-  HiOutlineWindow,
   HiSparkles
 } from 'react-icons/hi2'
 import { importSelectors, settingsSelectors } from '../../testing/selectors'
@@ -25,18 +23,12 @@ import {
   createWorkspaceTree,
   formatDateTime,
   getDefaultExpandedKeys,
+  getVisibleWorkspaceTreeEntries,
   getWorkspaceActionTooltip,
-  getVisibleWorkspaceNodes,
   getWorkspaceStatusBadge,
-  getWorkspaceStats,
   getWorkspaceTreeDisplayStrategy
 } from './utils/workspace'
-import type {
-  WorkspaceActionMap,
-  WorkspaceModeMap,
-  WorkspaceNodeMap,
-  WorkspaceProgressMap
-} from './types'
+import type { WorkspaceActionMap, WorkspaceProgressMap, WorkspaceTreeMap } from './types'
 
 const getWorkspaceNameFromPath = (rootPath: string): string => {
   const normalizedPath = rootPath.replace(/[\\/]+$/, '')
@@ -44,39 +36,15 @@ const getWorkspaceNameFromPath = (rootPath: string): string => {
   return segments[segments.length - 1] || normalizedPath
 }
 
-const WORKSPACE_LOAD_MODE_OPTIONS: Array<{
-  label: string
-  value: WorkspacePrepareMode
-  description: string
-}> = [
-  {
-    label: '全部',
-    value: 'full',
-    description: '当前目录下所有支持加载的文件都会重新加载，并覆盖旧缓存。'
-  },
-  {
-    label: '新变更',
-    value: 'presence_only',
-    description: '只同步新增和删除的文件；已有文件内容不会重新加载。'
-  },
-  {
-    label: '旧文件',
-    value: 'changes_only',
-    description: '只检查并重新加载之前已加载过且内容有变更的旧文件，不处理新增和删除。'
-  }
-]
-
-const SUPPORTED_WORKSPACE_FILE_TYPES = ['docx', 'pdf'] as const
-
 const WorkspaceSettingsPanel: React.FC = () => {
   const [workspaces, setWorkspaces] = useState<WorkspaceSource[]>([])
-  const [workspaceNodes, setWorkspaceNodes] = useState<WorkspaceNodeMap>({})
+  const [workspaceTrees, setWorkspaceTrees] = useState<WorkspaceTreeMap>({})
   const [workspaceExpandedKeys, setWorkspaceExpandedKeys] = useState<Record<string, string[]>>({})
   const [workspaceActions, setWorkspaceActions] = useState<WorkspaceActionMap>({})
   const [workspaceProgress, setWorkspaceProgress] = useState<WorkspaceProgressMap>({})
-  const [workspaceModes, setWorkspaceModes] = useState<WorkspaceModeMap>({})
   const [workspaceLoading, setWorkspaceLoading] = useState(false)
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null)
+  const [selectedTabKey, setSelectedTabKey] = useState<'files' | 'web'>('files')
   const [legacyMigrationStatus, setLegacyMigrationStatus] =
     useState<LegacyLocalImportMigrationStatus | null>(null)
   const [createSubmitting, setCreateSubmitting] = useState(false)
@@ -87,26 +55,22 @@ const WorkspaceSettingsPanel: React.FC = () => {
     [selectedWorkspaceId, workspaces]
   )
 
-  const selectedWorkspaceNodes = useMemo(
+  const selectedWorkspaceEntries = useMemo(
     () =>
       selectedWorkspaceId
-        ? getVisibleWorkspaceNodes(workspaceNodes[selectedWorkspaceId] || [])
+        ? getVisibleWorkspaceTreeEntries(workspaceTrees[selectedWorkspaceId] || [])
         : [],
-    [selectedWorkspaceId, workspaceNodes]
+    [selectedWorkspaceId, workspaceTrees]
   )
 
   const selectedWorkspaceTreeStrategy = useMemo(
-    () => getWorkspaceTreeDisplayStrategy(selectedWorkspaceNodes),
-    [selectedWorkspaceNodes]
+    () => getWorkspaceTreeDisplayStrategy(selectedWorkspaceEntries),
+    [selectedWorkspaceEntries]
   )
 
   const selectedWorkspaceTree = useMemo(
-    () => createWorkspaceTree(selectedWorkspaceNodes),
-    [selectedWorkspaceNodes]
-  )
-  const selectedWorkspaceStats = useMemo(
-    () => getWorkspaceStats(selectedWorkspaceNodes),
-    [selectedWorkspaceNodes]
+    () => createWorkspaceTree(selectedWorkspaceEntries),
+    [selectedWorkspaceEntries]
   )
 
   const selectedWorkspaceStatusBadge = useMemo(() => {
@@ -121,29 +85,39 @@ const WorkspaceSettingsPanel: React.FC = () => {
     })
   }, [selectedWorkspace, workspaceActions, workspaceProgress])
 
+  const loadWorkspaceTree = useCallback(
+    async (workspaceId: string, includeUnsupported?: boolean): Promise<WorkspaceTreeListResponse> => {
+      return await window.api.workspaceTree({
+        workspaceId,
+        includeUnsupported: Boolean(includeUnsupported)
+      })
+    },
+    []
+  )
+
   const loadWorkspaces = useCallback(async (): Promise<void> => {
     setWorkspaceLoading(true)
     try {
       const workspaceResponse = await window.api.workspaceList()
       setWorkspaces(workspaceResponse.items)
 
-      const nextNodes: WorkspaceNodeMap = {}
+      const nextTrees: WorkspaceTreeMap = {}
       await Promise.all(
         workspaceResponse.items.map(async (workspace) => {
-          const response = await window.api.workspaceNodes({ workspaceId: workspace.id })
-          nextNodes[workspace.id] = response.items
+          const response = await loadWorkspaceTree(workspace.id, true)
+          nextTrees[workspace.id] = response.items
         })
       )
 
-      setWorkspaceNodes(nextNodes)
+      setWorkspaceTrees(nextTrees)
       setWorkspaceExpandedKeys((previous) => {
         const next = { ...previous }
         workspaceResponse.items.forEach((workspace) => {
           if (!next[workspace.id]) {
-            const nodes = getVisibleWorkspaceNodes(nextNodes[workspace.id] || [])
+            const entries = getVisibleWorkspaceTreeEntries(nextTrees[workspace.id] || [])
             next[workspace.id] = getDefaultExpandedKeys(
-              nodes,
-              getWorkspaceTreeDisplayStrategy(nodes).defaultExpandDepth
+              entries,
+              getWorkspaceTreeDisplayStrategy(entries).defaultExpandDepth
             )
           }
         })
@@ -155,7 +129,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
     } finally {
       setWorkspaceLoading(false)
     }
-  }, [])
+  }, [loadWorkspaceTree])
 
   useEffect(() => {
     void loadWorkspaces()
@@ -190,6 +164,15 @@ const WorkspaceSettingsPanel: React.FC = () => {
       setSelectedWorkspaceId(workspaces[0].id)
     }
   }, [selectedWorkspaceId, workspaces])
+
+  const reloadSelectedWorkspaceTree = useCallback(async (): Promise<void> => {
+    if (!selectedWorkspaceId) return
+    const response = await loadWorkspaceTree(selectedWorkspaceId, true)
+    setWorkspaceTrees((previous) => ({
+      ...previous,
+      [selectedWorkspaceId]: response.items
+    }))
+  }, [loadWorkspaceTree, selectedWorkspaceId])
 
   const handleCreateWorkspace = async (): Promise<void> => {
     setCreateSubmitting(true)
@@ -226,31 +209,21 @@ const WorkspaceSettingsPanel: React.FC = () => {
 
   const handleWorkspaceScan = async (workspace: WorkspaceSource): Promise<void> => {
     setWorkspaceActions((previous) => ({ ...previous, [workspace.id]: 'scan' }))
-    setWorkspaceProgress((previous) => ({
-      ...previous,
-      [workspace.id]: {
-        workspace_id: workspace.id,
-        phase: 'scan',
-        total: 0,
-        completed: 0,
-        message: '正在刷新目录快照'
-      }
-    }))
-
     try {
       const response = await window.api.workspaceScan({ workspaceId: workspace.id })
       if (!response.success) {
-        message.error(response.error || '扫描失败')
+        message.error(response.error || '检查更新失败')
         return
       }
       if (response.progress) {
         setWorkspaceProgress((previous) => ({ ...previous, [workspace.id]: response.progress }))
       }
       await loadWorkspaces()
-      message.success('扫描完成')
+      await reloadSelectedWorkspaceTree()
+      message.success('已检查目录变化')
     } catch (error) {
       console.error(error)
-      message.error('扫描失败')
+      message.error('检查更新失败')
     } finally {
       setWorkspaceActions((previous) => ({ ...previous, [workspace.id]: undefined }))
       setWorkspaceProgress((previous) => ({ ...previous, [workspace.id]: undefined }))
@@ -258,37 +231,25 @@ const WorkspaceSettingsPanel: React.FC = () => {
   }
 
   const handleWorkspacePrepare = async (workspace: WorkspaceSource): Promise<void> => {
-    const mode = workspaceModes[workspace.id] || 'changes_only'
     setWorkspaceActions((previous) => ({ ...previous, [workspace.id]: 'prepare' }))
-    setWorkspaceProgress((previous) => ({
-      ...previous,
-      [workspace.id]: {
-        workspace_id: workspace.id,
-        mode,
-        phase: 'prepare',
-        total: 0,
-        completed: 0,
-        message: '正在加载资料'
-      }
-    }))
-
     try {
       const response = await window.api.workspacePrepare({
         workspaceId: workspace.id,
-        mode
+        mode: 'full'
       })
       if (!response.success) {
-        message.error(response.error || '加载失败')
+        message.error(response.error || '更新索引失败')
         return
       }
       if (response.progress) {
         setWorkspaceProgress((previous) => ({ ...previous, [workspace.id]: response.progress }))
       }
       await loadWorkspaces()
-      message.success('加载完成')
+      await reloadSelectedWorkspaceTree()
+      message.success('索引已更新')
     } catch (error) {
       console.error(error)
-      message.error('加载失败')
+      message.error('更新索引失败')
     } finally {
       setWorkspaceActions((previous) => ({ ...previous, [workspace.id]: undefined }))
       setWorkspaceProgress((previous) => ({ ...previous, [workspace.id]: undefined }))
@@ -349,7 +310,6 @@ const WorkspaceSettingsPanel: React.FC = () => {
       {legacyMigrationStatus?.hasLegacyLocalImports ? (
         <Alert
           showIcon
-          icon={<HiOutlineExclamationCircle className="h-4 w-4" />}
           className="rounded-[18px] border-[#FDECC8] bg-[#FFF9ED] text-[#666666]"
           message="检测到旧本地导入记录"
           description={`已清理 ${legacyMigrationStatus.removedDocumentCount} 条旧记录与 ${legacyMigrationStatus.removedChunkCount} 条 chunk。`}
@@ -363,33 +323,16 @@ const WorkspaceSettingsPanel: React.FC = () => {
           </div>
 
           {workspaces.length === 0 ? (
-            <div
-              className="flex min-h-0 flex-1 items-center justify-center px-6"
-              data-testid={importSelectors.workspaceEmptyState}
-            >
+            <div className="flex min-h-0 flex-1 items-center justify-center px-6">
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description={<span className="text-[#666666]">暂无工作空间</span>}
               />
             </div>
           ) : (
-            <div
-              className="flex-1 space-y-2 overflow-y-auto px-3 py-3 pr-2"
-              data-testid={importSelectors.workspaceList}
-            >
+            <div className="flex-1 space-y-2 overflow-y-auto px-3 py-3 pr-2">
               {workspaces.map((workspace) => {
-                const visibleNodes = getVisibleWorkspaceNodes(workspaceNodes[workspace.id] || [])
-                const stats = getWorkspaceStats(visibleNodes)
-                const progress = workspaceProgress[workspace.id]
                 const isSelected = workspace.id === selectedWorkspaceId
-                const statusBadge = getWorkspaceStatusBadge({
-                  status: workspace.status,
-                  lastError: workspace.last_error,
-                  lastPrepareAt: workspace.last_prepare_at,
-                  lastScanAt: workspace.last_scan_at,
-                  action: workspaceActions[workspace.id],
-                  progress
-                })
 
                 return (
                   <button
@@ -403,78 +346,25 @@ const WorkspaceSettingsPanel: React.FC = () => {
                         : 'border-[#E5E5E4] bg-white hover:border-[#D4D4D3] hover:bg-[#FCFBF8]'
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate text-[14px] font-semibold text-[#1F1F1F]">
-                          {workspace.name}
-                        </div>
-                        <div className="mt-1 truncate text-[12px] text-[#666666]">
-                          {workspace.root_path}
-                        </div>
+                    <div className="min-w-0">
+                      <div className="text-[14px] font-semibold text-[#1F1F1F]">
+                        {workspace.name}
                       </div>
-                      <StatusTag
-                        label={statusBadge.label}
-                        className={statusBadge.className}
-                        tooltip={statusBadge.tooltip}
-                        icon={statusBadge.icon}
-                      />
+                      <div className="mt-1 break-all text-[12px] text-[#666666]">
+                        {workspace.root_path}
+                      </div>
                     </div>
 
                     <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[#666666]">
                       <span className="ui-status-pill border-transparent bg-[#F7F5F1] text-[#666666]">
-                        <HiFolder className="h-3.5 w-3.5" />
-                        {stats.directoryCount}
-                      </span>
-                      <span className="ui-status-pill border-transparent bg-[#F7F5F1] text-[#666666]">
                         <HiDocumentText className="h-3.5 w-3.5" />
-                        {stats.fileCount}
+                        {workspace.indexable_file_count || 0}
                       </span>
-                      <span className="ui-status-pill border-transparent bg-[#F2F9EF] text-[#4F7A46]">
-                        <HiCheckCircle className="h-3.5 w-3.5" />
-                        {stats.preparedCount}
-                      </span>
-                      <span className="ui-status-pill border-transparent bg-[#FFF5E7] text-[#AD7B18]">
-                        <HiOutlineClock className="h-3.5 w-3.5" />
-                        {stats.unpreparedCount + stats.staleCount + stats.failedCount}
+                      <span className="ui-status-pill border-transparent bg-[#F4F6FB] text-[#5B6B8C]">
+                        <HiGlobeAlt className="h-3.5 w-3.5" />
+                        {workspace.web_source_count || 0}
                       </span>
                     </div>
-
-                    {progress ? (
-                      <div className="ui-inset mt-3 border-[#EEE7DE] bg-[#FFFEFD] px-3 py-3">
-                        <div className="mb-2 flex items-center justify-between text-[12px] text-[#666666]">
-                          <Tooltip title={progress.message || '最近任务'}>
-                            <span className="inline-flex items-center gap-1.5">
-                              {progress.phase === 'complete' ? (
-                                <HiCheckCircle className="h-3.5 w-3.5 text-[#4F7A46]" />
-                              ) : (
-                                <HiArrowPath className="h-3.5 w-3.5 animate-spin text-[#D97757]" />
-                              )}
-                              <span>{progress.message || '最近任务'}</span>
-                            </span>
-                          </Tooltip>
-                          <span>
-                            {progress.total > 0
-                              ? `${progress.completed}/${progress.total}`
-                              : progress.phase === 'complete'
-                                ? '完成'
-                                : '进行中'}
-                          </span>
-                        </div>
-                        <Progress
-                          percent={
-                            progress.total > 0
-                              ? Math.round((progress.completed / progress.total) * 100)
-                              : progress.phase === 'complete'
-                                ? 100
-                                : 0
-                          }
-                          size="small"
-                          showInfo={false}
-                          strokeColor="#D97757"
-                          trailColor="#F4E5DF"
-                        />
-                      </div>
-                    ) : null}
                   </button>
                 )
               })}
@@ -482,10 +372,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
           )}
         </section>
 
-        <section
-          className="ui-panel flex min-h-0 flex-col overflow-hidden"
-          data-testid={importSelectors.workspaceDetail}
-        >
+        <section className="ui-panel flex min-h-0 flex-col overflow-hidden">
           {selectedWorkspace ? (
             <>
               <div className="border-b border-[#E5E5E4] px-5 py-5">
@@ -509,45 +396,23 @@ const WorkspaceSettingsPanel: React.FC = () => {
                       {selectedWorkspace.root_path}
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[#666666]">
-                      <span
-                        className="ui-status-pill border-transparent bg-[#F7F5F1] text-[#666666]"
-                        data-testid={importSelectors.workspaceLastScanMeta}
-                      >
+                      <span className="ui-status-pill border-transparent bg-[#F7F5F1] text-[#666666]">
                         <HiArrowPath className="h-3.5 w-3.5" />
-                        扫描 {formatDateTime(selectedWorkspace.last_scan_at)}
+                        检查 {formatDateTime(selectedWorkspace.last_scan_at)}
                       </span>
-                      <span
-                        className="ui-status-pill border-transparent bg-[#FBF5F2] text-[#D97757]"
-                        data-testid={importSelectors.workspaceLastPrepareMeta}
-                      >
+                      <span className="ui-status-pill border-transparent bg-[#FBF5F2] text-[#D97757]">
                         <HiSparkles className="h-3.5 w-3.5" />
-                        加载 {formatDateTime(selectedWorkspace.last_prepare_at)}
+                        索引 {formatDateTime(selectedWorkspace.last_prepare_at)}
                       </span>
                     </div>
                     {selectedWorkspace.last_error ? (
-                      <div
-                        className="mt-3 rounded-[14px] border border-[#F7D5D9] bg-[#FFF2F4] px-3 py-2 text-[12px] text-[#B5455D]"
-                        data-testid={importSelectors.workspaceLastError}
-                      >
+                      <div className="mt-3 rounded-[14px] border border-[#F7D5D9] bg-[#FFF2F4] px-3 py-2 text-[12px] text-[#B5455D]">
                         {selectedWorkspace.last_error}
                       </div>
                     ) : null}
                   </div>
 
                   <div className="flex flex-wrap gap-2">
-                    <Button
-                      className="border-[#E5E5E4] bg-white text-[#1F1F1F]"
-                      icon={<HiOutlineWindow className="h-4 w-4" />}
-                      onClick={async () => {
-                        const response = await window.api.revealPath(selectedWorkspace.root_path)
-                        if (!response.success) {
-                          message.error(response.error || '打开路径失败')
-                        }
-                      }}
-                      data-testid={importSelectors.workspaceOpenPathButton}
-                    >
-                      打开路径
-                    </Button>
                     <Button
                       danger
                       icon={<HiOutlineTrash className="h-4 w-4" />}
@@ -560,248 +425,169 @@ const WorkspaceSettingsPanel: React.FC = () => {
                 </div>
               </div>
 
-              <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 pr-4">
-                <div className="grid min-h-0 gap-4 xl:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
-                  <div className="space-y-4 overflow-y-auto pr-1">
-                    <section className="ui-panel-soft p-4">
-                      <div className="flex items-center gap-1.5">
-                        <div className="text-[14px] font-semibold text-[#1F1F1F]">加载范围</div>
-                        <Tooltip title="加载会把文件文本切块并缓存，后续搜索更快，也能减少 AI 直接读取原文时的 token 消耗。">
-                          <HiOutlineQuestionMarkCircle className="h-4 w-4 cursor-help text-[#999999] transition-colors hover:text-[#D97757]" />
-                        </Tooltip>
-                      </div>
-
-                      <div className="mt-3 flex items-center gap-2">
-                        <div className="min-w-0 flex-1">
-                          <Segmented
-                            value={workspaceModes[selectedWorkspace.id] || 'changes_only'}
-                            onChange={(value) =>
-                              setWorkspaceModes((previous) => ({
-                                ...previous,
-                                [selectedWorkspace.id]: value as WorkspacePrepareMode
-                              }))
-                            }
-                            options={WORKSPACE_LOAD_MODE_OPTIONS.map((option) => ({
-                              label: option.label,
-                              value: option.value
-                            }))}
-                            className="bg-[#F5F5F4]"
-                            size="middle"
-                          />
-                        </div>
-                        <Tooltip
-                          title={
-                            <div className="max-w-[280px] space-y-1.5 text-[12px] leading-5">
-                              {WORKSPACE_LOAD_MODE_OPTIONS.map((option) => (
-                                <div key={option.value}>
-                                  <span className="font-medium">{option.label}</span>
-                                  <span>：{option.description}</span>
+              <div className="min-h-0 flex flex-1 flex-col overflow-hidden px-5 py-5 pr-4">
+                <Tabs
+                  className="flex h-full min-h-0 flex-col [&_.ant-tabs-content]:h-full [&_.ant-tabs-content-holder]:min-h-0 [&_.ant-tabs-content-holder]:flex-1 [&_.ant-tabs-nav]:mb-4 [&_.ant-tabs-tabpane]:h-full [&_.ant-tabs-tabpane]:overflow-hidden"
+                  activeKey={selectedTabKey}
+                  onChange={(key) => setSelectedTabKey(key as 'files' | 'web')}
+                  items={[
+                    {
+                      key: 'files',
+                      label: `文件 ${selectedWorkspace.indexable_file_count || 0}`,
+                      children: (
+                        <div className="flex h-full min-h-0 flex-col gap-4">
+                          <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
+                            <div className="space-y-4">
+                              <section className="ui-panel-soft p-4">
+                                <div className="flex items-center gap-1.5">
+                                  <div className="text-[14px] font-semibold text-[#1F1F1F]">索引状态</div>
+                                  <Tooltip title="索引后的文件会加速搜索，并在一定程度降低 token 消耗，减少 AI 花费哦。">
+                                    <HiOutlineQuestionMarkCircle className="h-4 w-4 cursor-help text-[#999999] transition-colors hover:text-[#D97757]" />
+                                  </Tooltip>
                                 </div>
-                              ))}
+
+                                <div className="mt-3 grid grid-cols-2 gap-2 text-[12px] text-[#666666]">
+                                  <div className="ui-inset px-3 py-3">
+                                    <div className="inline-flex items-center gap-1.5">
+                                      <HiArrowPath className="h-4 w-4 text-[#AD7B18]" />
+                                      <span>未索引</span>
+                                    </div>
+                                    <div className="mt-1 text-[16px] font-semibold text-[#1F1F1F]">
+                                      {selectedWorkspace.not_indexed_file_count || 0}
+                                    </div>
+                                  </div>
+                                  <div className="ui-inset px-3 py-3">
+                                    <div className="inline-flex items-center gap-1.5">
+                                      <HiOutlineTrash className="h-4 w-4 text-[#B5455D]" />
+                                      <span>失败</span>
+                                    </div>
+                                    <div className="mt-1 text-[16px] font-semibold text-[#1F1F1F]">
+                                      {selectedWorkspace.failed_file_count || 0}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="mt-4 grid grid-cols-2 gap-2">
+                                  <Tooltip
+                                    title={getWorkspaceActionTooltip(
+                                      'scan',
+                                      workspaceProgress[selectedWorkspace.id]
+                                    )}
+                                  >
+                                    <Button
+                                      icon={<HiArrowPath className="h-4 w-4" />}
+                                      onClick={() => void handleWorkspaceScan(selectedWorkspace)}
+                                      loading={workspaceActions[selectedWorkspace.id] === 'scan'}
+                                      className="border-[#E5E5E4] bg-white text-[#1F1F1F]"
+                                      data-testid={importSelectors.workspaceQuickScanButton}
+                                    >
+                                      检查更新
+                                    </Button>
+                                  </Tooltip>
+                                  <Tooltip
+                                    title={getWorkspaceActionTooltip(
+                                      'prepare',
+                                      workspaceProgress[selectedWorkspace.id]
+                                    )}
+                                  >
+                                    <Button
+                                      type="primary"
+                                      icon={<HiSparkles className="h-4 w-4" />}
+                                      onClick={() => void handleWorkspacePrepare(selectedWorkspace)}
+                                      loading={workspaceActions[selectedWorkspace.id] === 'prepare'}
+                                      data-testid={importSelectors.workspaceQuickPrepareButton}
+                                    >
+                                      更新索引
+                                    </Button>
+                                  </Tooltip>
+                                </div>
+                              </section>
                             </div>
-                          }
-                        >
-                          <HiOutlineQuestionMarkCircle className="h-4 w-4 shrink-0 cursor-help text-[#999999] transition-colors hover:text-[#D97757]" />
-                        </Tooltip>
-                      </div>
 
-                      <div className="mt-4 grid grid-cols-2 gap-2">
-                        <Tooltip
-                          title={getWorkspaceActionTooltip(
-                            'scan',
-                            workspaceProgress[selectedWorkspace.id]
-                          )}
-                        >
-                          <Button
-                            icon={<HiArrowPath className="h-4 w-4" />}
-                            onClick={() => void handleWorkspaceScan(selectedWorkspace)}
-                            loading={workspaceActions[selectedWorkspace.id] === 'scan'}
-                            className="border-[#E5E5E4] bg-white text-[#1F1F1F]"
-                            data-testid={importSelectors.workspaceQuickScanButton}
-                          >
-                            先扫描
-                          </Button>
-                        </Tooltip>
-                        <Tooltip
-                          title={getWorkspaceActionTooltip(
-                            'prepare',
-                            workspaceProgress[selectedWorkspace.id]
-                          )}
-                        >
-                          <Button
-                            type="primary"
-                            icon={<HiSparkles className="h-4 w-4" />}
-                            onClick={() => void handleWorkspacePrepare(selectedWorkspace)}
-                            loading={workspaceActions[selectedWorkspace.id] === 'prepare'}
-                            data-testid={importSelectors.workspaceQuickPrepareButton}
-                          >
-                            开始加载
-                          </Button>
-                        </Tooltip>
-                      </div>
-                    </section>
+                            <div className="flex min-h-0 min-w-0 flex-col">
+                              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                                <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+                                  <div className="text-[14px] font-semibold text-[#1F1F1F]">目录树</div>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  <Tooltip
+                                    title={
+                                      (workspaceExpandedKeys[selectedWorkspace.id] || []).length > 0
+                                        ? '全部折叠'
+                                        : '恢复默认展开'
+                                    }
+                                  >
+                                    <Button
+                                      size="small"
+                                      className="border-[#E5E5E4] bg-white text-[#1F1F1F]"
+                                      icon={
+                                        (workspaceExpandedKeys[selectedWorkspace.id] || []).length > 0 ? (
+                                          <HiOutlineArrowsPointingIn className="h-4 w-4" />
+                                        ) : (
+                                          <HiOutlineArrowsPointingOut className="h-4 w-4" />
+                                        )
+                                      }
+                                      onClick={() =>
+                                        setWorkspaceExpandedKeys((previous) => ({
+                                          ...previous,
+                                          [selectedWorkspace.id]:
+                                            (previous[selectedWorkspace.id] || []).length > 0
+                                              ? []
+                                              : getDefaultExpandedKeys(
+                                                  selectedWorkspaceEntries,
+                                                  selectedWorkspaceTreeStrategy.defaultExpandDepth
+                                                )
+                                        }))
+                                      }
+                                    />
+                                  </Tooltip>
+                                </div>
+                              </div>
 
-                    <section className="ui-panel p-4">
-                      <div className="text-[14px] font-semibold text-[#1F1F1F]">摘要</div>
-                      <div className="mt-3 grid grid-cols-2 gap-2 text-[12px] text-[#666666]">
-                        <div
-                          className="ui-inset px-3 py-3"
-                          data-testid={importSelectors.workspaceSummaryDirectories}
-                        >
-                          <div className="inline-flex items-center gap-1.5">
-                            <HiFolder className="h-4 w-4 text-[#8A5A2B]" />
-                            <span>目录</span>
-                          </div>
-                          <div className="mt-1 text-[16px] font-semibold text-[#1F1F1F]">
-                            {selectedWorkspaceStats.directoryCount}
+                              <div
+                                className="ui-inset flex min-h-0 flex-1 overflow-auto p-3"
+                                data-testid={importSelectors.workspaceTree}
+                              >
+                                {selectedWorkspaceEntries.length > 0 ? (
+                                  <Tree
+                                    blockNode
+                                    className="w-full"
+                                    treeData={selectedWorkspaceTree}
+                                    expandedKeys={workspaceExpandedKeys[selectedWorkspace.id] || []}
+                                    onExpand={(expandedKeys) =>
+                                      setWorkspaceExpandedKeys((previous) => ({
+                                        ...previous,
+                                        [selectedWorkspace.id]: expandedKeys.map((item) => String(item))
+                                      }))
+                                    }
+                                  />
+                                ) : (
+                                  <div className="flex min-h-0 flex-1 items-center justify-center">
+                                    <Empty
+                                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                                      description={<span className="text-[#666666]">当前目录没有可显示文件</span>}
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                           </div>
                         </div>
-                        <div
-                          className="ui-inset px-3 py-3"
-                          data-testid={importSelectors.workspaceSummaryFiles}
-                        >
-                          <div className="inline-flex items-center gap-1.5">
-                            <HiDocumentText className="h-4 w-4 text-[#666666]" />
-                            <span>文件</span>
-                          </div>
-                          <div className="mt-1 text-[16px] font-semibold text-[#1F1F1F]">
-                            {selectedWorkspaceStats.fileCount}
-                          </div>
-                        </div>
-                        <div
-                          className="ui-inset px-3 py-3"
-                          data-testid={importSelectors.workspaceSummaryPrepared}
-                        >
-                          <div className="inline-flex items-center gap-1.5">
-                            <HiCheckCircle className="h-4 w-4 text-[#4F7A46]" />
-                            <span>已加载</span>
-                          </div>
-                          <div className="mt-1 text-[16px] font-semibold text-[#1F1F1F]">
-                            {selectedWorkspaceStats.preparedCount}
-                          </div>
-                        </div>
-                        <div
-                          className="ui-inset px-3 py-3"
-                          data-testid={importSelectors.workspaceSummaryPending}
-                        >
-                          <div className="inline-flex items-center gap-1.5">
-                            <HiOutlineClock className="h-4 w-4 text-[#AD7B18]" />
-                            <span>待处理</span>
-                          </div>
-                          <div className="mt-1 text-[16px] font-semibold text-[#1F1F1F]">
-                            {selectedWorkspaceStats.unpreparedCount +
-                              selectedWorkspaceStats.staleCount +
-                              selectedWorkspaceStats.failedCount}
-                          </div>
-                        </div>
-                      </div>
-                    </section>
-                  </div>
-
-                  <div className="flex min-h-0 min-w-0 flex-col">
-                    <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                      <div className="flex min-w-0 flex-wrap items-center gap-2.5">
-                        <div className="text-[14px] font-semibold text-[#1F1F1F]">目录树</div>
-                        {SUPPORTED_WORKSPACE_FILE_TYPES.map((fileType) => (
-                          <Tag
-                            key={fileType}
-                            className="!mr-0 !inline-flex !items-center gap-1.5 !rounded-full !border !px-2.5 !py-1"
-                            style={{
-                              borderColor: '#D8EECF',
-                              backgroundColor: '#EEF8E9',
-                              color: '#4C7D37'
-                            }}
-                          >
-                            <HiCheckCircle className="h-3.5 w-3.5" />
-                            <span>{fileType}</span>
-                          </Tag>
-                        ))}
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {selectedWorkspaceTreeStrategy.isLargeTree ? (
-                          <Tag className="!mr-0 rounded-full border-[#FDECC8] bg-[#FFF9ED] text-[#AD7B18]">
-                            大目录策略
-                          </Tag>
-                        ) : null}
-                        <Button
-                          size="small"
-                          className="border-[#E5E5E4] bg-white text-[#1F1F1F]"
-                          onClick={() =>
-                            setWorkspaceExpandedKeys((previous) => ({
-                              ...previous,
-                              [selectedWorkspace.id]: getDefaultExpandedKeys(
-                                selectedWorkspaceNodes,
-                                selectedWorkspaceTreeStrategy.defaultExpandDepth
-                              )
-                            }))
-                          }
-                        >
-                          恢复默认展开
-                        </Button>
-                        <Button
-                          size="small"
-                          className="border-[#E5E5E4] bg-white text-[#1F1F1F]"
-                          onClick={() =>
-                            setWorkspaceExpandedKeys((previous) => ({
-                              ...previous,
-                              [selectedWorkspace.id]: []
-                            }))
-                          }
-                        >
-                          全部折叠
-                        </Button>
-                      </div>
-                    </div>
-
-                    {workspaceActions[selectedWorkspace.id] ? (
-                      <Alert
-                        showIcon
-                        icon={<HiOutlineExclamationCircle className="h-4 w-4" />}
-                        className="!mb-3 rounded-[16px] border-[#F4E5DF] bg-[#FBF5F2] text-[#666666]"
-                        message="扫描或加载进行中"
-                      />
-                    ) : null}
-
-                    <div
-                      className="ui-inset flex min-h-0 flex-1 overflow-hidden p-3"
-                      data-testid={importSelectors.workspaceTree}
-                    >
-                      {selectedWorkspaceNodes.length > 0 ? (
-                        <Tree
-                          blockNode
-                          height={Math.max(
-                            selectedWorkspaceTreeStrategy.isLargeTree ? 520 : 460,
-                            360
-                          )}
-                          virtual
-                          treeData={selectedWorkspaceTree}
-                          expandedKeys={workspaceExpandedKeys[selectedWorkspace.id] || []}
-                          onExpand={(expandedKeys) =>
-                            setWorkspaceExpandedKeys((previous) => ({
-                              ...previous,
-                              [selectedWorkspace.id]: expandedKeys.map((item) => String(item))
-                            }))
-                          }
+                      )
+                    },
+                    {
+                      key: 'web',
+                      label: `网页 ${selectedWorkspace.web_source_count || 0}`,
+                      children: (
+                        <WebSourcesSettingsPanel
+                          workspaceId={selectedWorkspace.id}
+                          workspaceName={selectedWorkspace.name}
+                          embedded
                         />
-                      ) : (
-                        <div className="flex min-h-0 flex-1 items-center justify-center">
-                          <Empty
-                            image={Empty.PRESENTED_IMAGE_SIMPLE}
-                            description={<span className="text-[#666666]">没有可追踪文件</span>}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-4">
-                  <WebSourcesSettingsPanel
-                    workspaceId={selectedWorkspace.id}
-                    workspaceName={selectedWorkspace.name}
-                    embedded
-                  />
-                </div>
+                      )
+                    }
+                  ]}
+                />
               </div>
             </>
           ) : (
@@ -830,7 +616,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
         className="[&_.ant-modal-content]:!rounded-[24px]"
       >
         <p className="mb-0 text-[#666666]">
-          移除后，该工作空间将不再出现在资料范围和聊天范围里。若仍需使用，请重新添加并重新加载。
+          移除后，该工作空间将不再出现在资料范围和聊天范围里。若仍需使用，请重新添加并重新建立索引。
         </p>
       </Modal>
     </div>

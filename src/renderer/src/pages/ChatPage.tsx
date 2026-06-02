@@ -1919,15 +1919,6 @@ const ChatPage: React.FC = () => {
                       contextUsage={contextUsage}
                     />
 
-                    {!selectedWorkspace ? (
-                      <div className="mt-3 flex items-start gap-2 rounded-[14px] border border-[#E5E5E4] bg-white px-3 py-3 text-sm text-[#666666]">
-                        <HiOutlineExclamationCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                        <div className="min-w-0 flex-1">
-                          请先在设置中添加并选择工作区后再发送消息。未显式插入 @ 参考资料时，系统会默认使用当前工作区中已索引文件作为本地检索范围。
-                        </div>
-                      </div>
-                    ) : null}
-
                     {composerMode === 'ai' &&
                     (pendingApprovalBatch || pendingWorkspaceRequest) ? (
                       <div

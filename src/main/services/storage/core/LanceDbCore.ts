@@ -16,6 +16,7 @@ export const LANCE_TABLES = {
   DOCUMENT: 'document',
   WEB_SOURCE: 'web_source',
   WORKSPACE_SOURCE: 'workspace_source',
+  WORKSPACE_FILE_INDEX: 'workspace_file_index',
   WORKSPACE_NODE: 'workspace_node',
   CHAT_SESSION: 'chat_session',
   CHAT_MESSAGE: 'chat_message',
@@ -247,9 +248,38 @@ export class LanceDbCore {
           new arrow.Field('last_scan_at', new arrow.Int64(), true),
           new arrow.Field('last_prepare_at', new arrow.Int64(), true),
           new arrow.Field('last_error', new arrow.Utf8(), true),
+          new arrow.Field('indexable_file_count', new arrow.Int64(), true),
+          new arrow.Field('indexed_file_count', new arrow.Int64(), true),
+          new arrow.Field('needs_update_file_count', new arrow.Int64(), true),
+          new arrow.Field('failed_file_count', new arrow.Int64(), true),
+          new arrow.Field('not_indexed_file_count', new arrow.Int64(), true),
+          new arrow.Field('web_source_count', new arrow.Int64(), true),
           new arrow.Field('created_at', new arrow.Int64()),
           new arrow.Field('updated_at', new arrow.Int64())
-        ])
+        ]),
+        recreateIfSchemaChanged: true
+      },
+      {
+        name: LANCE_TABLES.WORKSPACE_FILE_INDEX,
+        schema: new arrow.Schema([
+          new arrow.Field('id', new arrow.Utf8()),
+          new arrow.Field('workspace_id', new arrow.Utf8()),
+          new arrow.Field('relative_path', new arrow.Utf8()),
+          new arrow.Field('absolute_path', new arrow.Utf8()),
+          new arrow.Field('name', new arrow.Utf8()),
+          new arrow.Field('file_ext', new arrow.Utf8()),
+          new arrow.Field('size', new arrow.Int64(), true),
+          new arrow.Field('mtime_ms', new arrow.Int64(), true),
+          new arrow.Field('content_hash', new arrow.Utf8(), true),
+          new arrow.Field('index_status', new arrow.Utf8()),
+          new arrow.Field('document_id', new arrow.Utf8(), true),
+          new arrow.Field('indexed_at', new arrow.Int64(), true),
+          new arrow.Field('last_checked_at', new arrow.Int64(), true),
+          new arrow.Field('last_error', new arrow.Utf8(), true),
+          new arrow.Field('created_at', new arrow.Int64()),
+          new arrow.Field('updated_at', new arrow.Int64())
+        ]),
+        recreateIfSchemaChanged: true
       },
       {
         name: LANCE_TABLES.WORKSPACE_NODE,

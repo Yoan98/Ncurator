@@ -222,7 +222,64 @@ export const getE2EFixtureReferenceItems = (
       : null
   const fixtureWorkspaceReferences =
     workspaceId && e2eWorkspaceState.workspace && e2eWorkspaceState.workspace.id === workspaceId
-      ? buildWorkspaceReferenceItems(e2eWorkspaceState.workspace, e2eWorkspaceState.nodes)
+      ? buildWorkspaceReferenceItems({
+          workspace: e2eWorkspaceState.workspace,
+          entries: e2eWorkspaceState.nodes.map((node) => ({
+            id: node.id,
+            workspace_id: node.workspace_id,
+            parent_id: node.parent_id,
+            kind: node.kind,
+            name: node.name,
+            relative_path: node.relative_path,
+            absolute_path: node.absolute_path,
+            file_ext: node.file_ext,
+            supported_for_index: node.kind === 'file',
+            size: node.size,
+            mtime_ms: node.mtime_ms,
+            index_status:
+              node.prepare_status === 'prepared'
+                ? 'indexed'
+                : node.prepare_status === 'preparing'
+                  ? 'indexing'
+                  : node.prepare_status === 'stale'
+                    ? 'needs_update'
+                    : node.prepare_status === 'failed'
+                      ? 'failed'
+                      : 'not_indexed',
+            document_id: node.document_id,
+            indexed_at: node.last_prepared_at,
+            last_error: node.last_error
+          })),
+          records: e2eWorkspaceState.nodes
+            .filter((node) => node.kind === 'file')
+            .map((node) => ({
+              id: node.id,
+              workspace_id: node.workspace_id,
+              relative_path: node.relative_path,
+              absolute_path: node.absolute_path,
+              name: node.name,
+              file_ext: String(node.file_ext || '').replace(/^\./, ''),
+              size: node.size,
+              mtime_ms: node.mtime_ms,
+              content_hash: node.content_hash,
+              index_status:
+                node.prepare_status === 'prepared'
+                  ? 'indexed'
+                  : node.prepare_status === 'preparing'
+                    ? 'indexing'
+                    : node.prepare_status === 'stale'
+                      ? 'needs_update'
+                      : node.prepare_status === 'failed'
+                        ? 'failed'
+                        : 'not_indexed',
+              document_id: node.document_id,
+              indexed_at: node.last_prepared_at,
+              last_checked_at: node.updated_at,
+              last_error: node.last_error,
+              created_at: node.created_at,
+              updated_at: node.updated_at
+            }))
+        })
       : []
   const webReferences = e2eWebSourceState.items
     .filter((item) => item.workspace_id === workspaceId)

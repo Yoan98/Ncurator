@@ -8,12 +8,8 @@ import {
   HiOutlineClock,
   HiOutlineExclamationCircle
 } from 'react-icons/hi2'
-import type { WebSourceRecord, WorkspaceNode, WorkspaceSource } from '../../../../../shared/types'
-import {
-  WEB_SOURCE_STATUS_META,
-  WORKSPACE_NODE_STATUS_META,
-  WORKSPACE_STATUS_META
-} from '../constants'
+import type { WebSourceRecord, WorkspaceSource, WorkspaceTreeEntry } from '../../../../../shared/types'
+import { WEB_SOURCE_STATUS_META, WORKSPACE_STATUS_META } from '../constants'
 import type {
   StatusBadgeVisual,
   WorkspaceStatusBadgeInput,
@@ -37,16 +33,28 @@ export const getWorkspaceStatusMeta = (
   return WORKSPACE_STATUS_META[status]
 }
 
-export const getNodeStatusMeta = (
-  status: WorkspaceNode['prepare_status']
-): { label: string; className: string } => {
-  return WORKSPACE_NODE_STATUS_META[status]
-}
-
 export const getWebStatusMeta = (
   status: WebSourceRecord['import_status']
 ): { label: string; className: string } => {
   return WEB_SOURCE_STATUS_META[status]
+}
+
+export const getTreeEntryStatusMeta = (
+  entry: WorkspaceTreeEntry
+): { label: string; className: string } | null => {
+  if (entry.kind !== 'file' || !entry.supported_for_index) return null
+  switch (entry.index_status) {
+    case 'indexing':
+      return { label: '索引中', className: 'border-[#FDE2D8] bg-[#FFF3EE] text-[#C66A4A]' }
+    case 'indexed':
+      return { label: '已索引', className: 'border-[#DCEBD7] bg-[#F3FAF0] text-[#4F7A46]' }
+    case 'needs_update':
+      return { label: '需更新', className: 'border-[#FDECC8] bg-[#FFF9ED] text-[#AD7B18]' }
+    case 'failed':
+      return { label: '失败', className: 'border-[#F7D5D9] bg-[#FFF2F4] text-[#B5455D]' }
+    default:
+      return { label: '未索引', className: 'border-[#E5E5E4] bg-[#F8F8F7] text-[#666666]' }
+  }
 }
 
 export const getWorkspaceStatusBadge = (input: WorkspaceStatusBadgeInput): StatusBadgeVisual => {
@@ -54,11 +62,11 @@ export const getWorkspaceStatusBadge = (input: WorkspaceStatusBadgeInput): Statu
     input.action === 'scan' ||
     input.status === 'scanning' ||
     input.progress?.phase === 'scan' ||
-    input.progress?.phase === 'diff'
+    input.progress?.phase === 'inspect'
   ) {
     return {
       ...getWorkspaceStatusMeta('scanning'),
-      tooltip: input.progress?.message || '正在刷新目录快照，请稍候。',
+      tooltip: input.progress?.message || '正在检查目录变化，请稍候。',
       icon: <HiArrowPath className={STATUS_SPIN_ICON_CLASSNAME} />
     }
   }
@@ -66,11 +74,12 @@ export const getWorkspaceStatusBadge = (input: WorkspaceStatusBadgeInput): Statu
   if (
     input.action === 'prepare' ||
     input.status === 'preparing' ||
-    input.progress?.phase === 'prepare'
+    input.progress?.phase === 'prepare' ||
+    input.progress?.phase === 'index'
   ) {
     return {
       ...getWorkspaceStatusMeta('preparing'),
-      tooltip: input.progress?.message || '正在加载工作空间资料，请稍候。',
+      tooltip: input.progress?.message || '正在更新索引，请稍候。',
       icon: <HiArrowPath className={STATUS_SPIN_ICON_CLASSNAME} />
     }
   }
@@ -78,7 +87,7 @@ export const getWorkspaceStatusBadge = (input: WorkspaceStatusBadgeInput): Statu
   if (input.status === 'prepared') {
     return {
       ...getWorkspaceStatusMeta('prepared'),
-      tooltip: `最近加载：${formatDateTime(input.lastPrepareAt)}`,
+      tooltip: `最近索引：${formatDateTime(input.lastPrepareAt)}`,
       icon: <HiCheckCircle className={STATUS_ICON_CLASSNAME} />
     }
   }
@@ -86,7 +95,7 @@ export const getWorkspaceStatusBadge = (input: WorkspaceStatusBadgeInput): Statu
   if (input.status === 'stale') {
     return {
       ...getWorkspaceStatusMeta('stale'),
-      tooltip: '目录有变更，建议先扫描或重新加载。',
+      tooltip: '检测到目录变化，建议更新索引。',
       icon: <HiOutlineClock className={STATUS_ICON_CLASSNAME} />
     }
   }
@@ -94,7 +103,7 @@ export const getWorkspaceStatusBadge = (input: WorkspaceStatusBadgeInput): Statu
   if (input.status === 'failed') {
     return {
       ...getWorkspaceStatusMeta('failed'),
-      tooltip: input.lastError || '最近一次扫描或加载失败。',
+      tooltip: input.lastError || '最近一次索引失败。',
       icon: <HiOutlineExclamationCircle className={STATUS_ICON_CLASSNAME} />
     }
   }
@@ -109,9 +118,7 @@ export const getWorkspaceStatusBadge = (input: WorkspaceStatusBadgeInput): Statu
 
   return {
     ...getWorkspaceStatusMeta('not_prepared'),
-    tooltip: input.lastScanAt
-      ? `最近扫描：${formatDateTime(input.lastScanAt)}`
-      : '尚未扫描或加载该工作空间。',
+    tooltip: input.lastScanAt ? `最近检查：${formatDateTime(input.lastScanAt)}` : '尚未建立索引。',
     icon: <HiOutlineClock className={STATUS_ICON_CLASSNAME} />
   }
 }
@@ -121,9 +128,9 @@ export const getWorkspaceActionTooltip = (
   progress?: WorkspaceStatusBadgeInput['progress']
 ): string => {
   if (action === 'scan') {
-    return progress?.message || '刷新目录快照，并同步当前目录树状态。'
+    return progress?.message || '检查当前目录里有哪些新增、变更或删除。'
   }
-  return progress?.message || '根据当前范围重新加载工作空间资料。'
+  return progress?.message || '检查目录变化并更新可索引文件。'
 }
 
 const isHiddenPathSegment = (value: string): boolean =>
@@ -132,8 +139,93 @@ const isHiddenPathSegment = (value: string): boolean =>
     .filter(Boolean)
     .some((segment) => segment.startsWith('.'))
 
-export const getVisibleWorkspaceNodes = (nodes: WorkspaceNode[]): WorkspaceNode[] =>
-  nodes.filter((node) => !isHiddenPathSegment(node.relative_path))
+export const getVisibleWorkspaceTreeEntries = (
+  entries: WorkspaceTreeEntry[]
+): WorkspaceTreeEntry[] => entries.filter((entry) => !isHiddenPathSegment(entry.relative_path))
+
+export const createWorkspaceTree = (entries: WorkspaceTreeEntry[]): WorkspaceTreeNode[] => {
+  const sortedEntries = [...entries].sort((left, right) => {
+    if (left.kind !== right.kind) {
+      return left.kind === 'directory' ? -1 : 1
+    }
+    return left.relative_path.localeCompare(right.relative_path)
+  })
+
+  const nodeMap = new Map<string, WorkspaceTreeNode>()
+  const roots: WorkspaceTreeNode[] = []
+
+  sortedEntries.forEach((entry) => {
+    const statusMeta = getTreeEntryStatusMeta(entry)
+    const treeNode: WorkspaceTreeNode = {
+      key: entry.id,
+      title: (
+        <div className="flex min-w-0 items-center gap-2 py-1">
+          {entry.kind === 'directory' ? (
+            <HiFolder className="h-4 w-4 text-[#D97757]" />
+          ) : (
+            <HiDocumentText
+              className={`h-4 w-4 ${entry.supported_for_index ? 'text-[#666666]' : 'text-[#C9C7C3]'}`}
+            />
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[14px] text-[#1F1F1F]">{entry.name}</div>
+            <div className="truncate text-[12px] text-[#999999]">
+              {entry.relative_path || entry.absolute_path}
+            </div>
+          </div>
+          {entry.kind === 'file' ? (
+            entry.supported_for_index && statusMeta ? (
+              <Tag className={`!mr-0 rounded-full ${statusMeta.className}`}>{statusMeta.label}</Tag>
+            ) : (
+              <Tag className="!mr-0 rounded-full border-[#E5E5E4] bg-[#F8F8F7] text-[#999999]">
+                不支持
+              </Tag>
+            )
+          ) : null}
+        </div>
+      ),
+      children: []
+    }
+    nodeMap.set(entry.id, treeNode)
+  })
+
+  sortedEntries.forEach((entry) => {
+    const treeNode = nodeMap.get(entry.id)
+    if (!treeNode) return
+    if (entry.parent_id && nodeMap.has(entry.parent_id)) {
+      const parentNode = nodeMap.get(entry.parent_id)
+      parentNode?.children?.push(treeNode)
+      return
+    }
+    roots.push(treeNode)
+  })
+
+  return roots
+}
+
+export const getWorkspaceTreeDisplayStrategy = (
+  entries: WorkspaceTreeEntry[]
+): WorkspaceTreeDisplayStrategy => {
+  const directoryCount = entries.filter((entry) => entry.kind === 'directory').length
+  const totalNodes = entries.length
+  if (totalNodes >= 800 || directoryCount >= 220) {
+    return {
+      defaultExpandDepth: 1,
+      isLargeTree: true,
+      helperText: '大型目录默认仅展开首层，深层目录按需查看。'
+    }
+  }
+  return {
+    defaultExpandDepth: 2,
+    isLargeTree: totalNodes >= 260 || directoryCount >= 80,
+    helperText: '默认展开前两层目录。'
+  }
+}
+
+export const getDefaultExpandedKeys = (entries: WorkspaceTreeEntry[], depth: number): string[] =>
+  entries
+    .filter((entry) => entry.kind === 'directory' && entry.relative_path.split('/').length <= depth)
+    .map((entry) => entry.id)
 
 export const getWebStatusBadge = (
   source: Pick<WebSourceRecord, 'import_status' | 'fetched_at' | 'last_error'>,
@@ -160,101 +252,4 @@ export const getWebStatusBadge = (
     tooltip: source.last_error || '最近一次抓取失败。',
     icon: <HiOutlineExclamationCircle className={STATUS_ICON_CLASSNAME} />
   }
-}
-
-export const getWorkspaceStats = (nodes: WorkspaceNode[]) => {
-  const fileNodes = nodes.filter((node) => node.kind === 'file')
-  const directoryCount = nodes.filter((node) => node.kind === 'directory').length
-  return {
-    directoryCount,
-    fileCount: fileNodes.length,
-    preparedCount: fileNodes.filter((node) => node.prepare_status === 'prepared').length,
-    staleCount: fileNodes.filter((node) => node.prepare_status === 'stale').length,
-    failedCount: fileNodes.filter((node) => node.prepare_status === 'failed').length,
-    unpreparedCount: fileNodes.filter((node) => node.prepare_status === 'not_prepared').length
-  }
-}
-
-export const createWorkspaceTree = (nodes: WorkspaceNode[]): WorkspaceTreeNode[] => {
-  const sortedNodes = [...nodes].sort((left, right) => {
-    if (left.kind !== right.kind) {
-      return left.kind === 'directory' ? -1 : 1
-    }
-    return left.relative_path.localeCompare(right.relative_path)
-  })
-
-  const nodeMap = new Map<string, WorkspaceTreeNode>()
-  const roots: WorkspaceTreeNode[] = []
-
-  sortedNodes.forEach((node) => {
-    const statusMeta = getNodeStatusMeta(node.prepare_status)
-    const treeNode: WorkspaceTreeNode = {
-      key: node.id,
-      title: (
-        <div className="flex min-w-0 items-center gap-2 py-1">
-          {node.kind === 'directory' ? (
-            <HiFolder className="h-4 w-4 text-[#D97757]" />
-          ) : (
-            <HiDocumentText className="h-4 w-4 text-[#666666]" />
-          )}
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[14px] text-[#1F1F1F]">{node.name}</div>
-            <div className="truncate text-[12px] text-[#999999]">
-              {node.relative_path || node.absolute_path}
-            </div>
-          </div>
-          {node.kind === 'file' ? (
-            <Tag className={`!mr-0 rounded-full ${statusMeta.className}`}>{statusMeta.label}</Tag>
-          ) : null}
-        </div>
-      ),
-      children: []
-    }
-    nodeMap.set(node.id, treeNode)
-  })
-
-  sortedNodes.forEach((node) => {
-    const treeNode = nodeMap.get(node.id)
-    if (!treeNode) return
-    if (node.parent_id && nodeMap.has(node.parent_id)) {
-      const parentNode = nodeMap.get(node.parent_id)
-      parentNode?.children?.push(treeNode)
-      return
-    }
-    roots.push(treeNode)
-  })
-
-  return roots
-}
-
-export const getWorkspaceTreeDisplayStrategy = (
-  nodes: WorkspaceNode[]
-): WorkspaceTreeDisplayStrategy => {
-  const directoryCount = nodes.filter((node) => node.kind === 'directory').length
-  const totalNodes = nodes.length
-  if (totalNodes >= 800 || directoryCount >= 220) {
-    return {
-      defaultExpandDepth: 1,
-      isLargeTree: true,
-      helperText: '大型目录已切到保守展开策略：默认仅展开首层目录，深层目录按需手动展开。'
-    }
-  }
-  return {
-    defaultExpandDepth: 2,
-    isLargeTree: totalNodes >= 260 || directoryCount >= 80,
-    helperText: '默认展开到前两层目录，后续按需手动展开。'
-  }
-}
-
-export const getDefaultExpandedKeys = (nodes: WorkspaceNode[], depth: number): string[] =>
-  nodes
-    .filter((node) => node.kind === 'directory' && node.relative_path.split('/').length <= depth)
-    .map((node) => node.id)
-
-export const parseSelectors = (input: string): string[] | undefined => {
-  const values = input
-    .split(/[\n,]/g)
-    .map((item) => item.trim())
-    .filter(Boolean)
-  return values.length > 0 ? values : undefined
 }

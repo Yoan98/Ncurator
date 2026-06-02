@@ -19,6 +19,12 @@ export type WorkspacePrepareStatus =
   | 'failed'
   | 'missing'
 export type WorkspacePrepareMode = 'full' | 'presence_only' | 'changes_only'
+export type WorkspaceFileIndexStatus =
+  | 'not_indexed'
+  | 'indexing'
+  | 'indexed'
+  | 'needs_update'
+  | 'failed'
 export type ReferenceKind = 'directory' | 'file' | 'web'
 export type KbAvailability = 'indexed' | 'partial' | 'not_indexed'
 export type JsonPrimitive = string | number | boolean | null
@@ -79,6 +85,12 @@ export interface WorkspaceSource {
   last_scan_at?: number
   last_prepare_at?: number
   last_error?: string
+  indexable_file_count?: number
+  indexed_file_count?: number
+  needs_update_file_count?: number
+  failed_file_count?: number
+  not_indexed_file_count?: number
+  web_source_count?: number
   created_at: number
   updated_at: number
 }
@@ -102,6 +114,52 @@ export interface WorkspaceNode {
   last_error?: string
   created_at: number
   updated_at: number
+}
+
+export interface WorkspaceFileIndexRecord {
+  id: string
+  workspace_id: string
+  relative_path: string
+  absolute_path: string
+  name: string
+  file_ext: string
+  size?: number
+  mtime_ms?: number
+  content_hash?: string
+  index_status: WorkspaceFileIndexStatus
+  document_id?: string
+  indexed_at?: number
+  last_checked_at?: number
+  last_error?: string
+  created_at: number
+  updated_at: number
+}
+
+export interface WorkspaceTreeEntry {
+  id: string
+  workspace_id: string
+  parent_id?: string
+  kind: WorkspaceNodeKind
+  name: string
+  relative_path: string
+  absolute_path: string
+  file_ext?: string
+  supported_for_index: boolean
+  size?: number
+  mtime_ms?: number
+  index_status?: WorkspaceFileIndexStatus
+  document_id?: string
+  indexed_at?: number
+  last_error?: string
+}
+
+export interface WorkspaceFileSummary {
+  indexable_file_count: number
+  indexed_file_count: number
+  needs_update_file_count: number
+  failed_file_count: number
+  not_indexed_file_count: number
+  web_source_count: number
 }
 
 export interface WorkspaceRuntimeBinding {
@@ -151,7 +209,7 @@ export type SelectedReference = DirectoryReference | FileReference | WebReferenc
 export interface WorkspaceSyncProgress {
   workspace_id: string
   mode?: WorkspacePrepareMode
-  phase: 'scan' | 'diff' | 'prepare' | 'complete'
+  phase: 'scan' | 'diff' | 'prepare' | 'inspect' | 'index' | 'complete'
   total: number
   completed: number
   added?: number
@@ -169,6 +227,22 @@ export interface WorkspaceListResponse {
 export interface WorkspaceNodeListResponse {
   items: WorkspaceNode[]
   total: number
+}
+
+export interface WorkspaceTreeListResponse {
+  items: WorkspaceTreeEntry[]
+  total: number
+  summary: WorkspaceFileSummary
+}
+
+export interface WorkspaceTreeNodeView {
+  key: string
+  title: string
+  subtitle: string
+  kind: WorkspaceNodeKind
+  supportedForIndex: boolean
+  indexStatus?: WorkspaceFileIndexStatus
+  children?: WorkspaceTreeNodeView[]
 }
 
 export interface ReferenceItemListResponse {
@@ -231,6 +305,16 @@ export interface ScanWorkspaceRequest {
 export interface PrepareWorkspaceRequest {
   workspaceId: string
   mode: WorkspacePrepareMode
+}
+
+export interface ListWorkspaceTreeRequest {
+  workspaceId: string
+  includeUnsupported?: boolean
+}
+
+export interface SyncWorkspaceIndexRequest {
+  workspaceId: string
+  rebuild?: boolean
 }
 
 export interface WorkspaceJobResponse {

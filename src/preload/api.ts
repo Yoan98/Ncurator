@@ -20,6 +20,7 @@ import type {
   ListReferenceItemsRequest,
   ListWebSourcesRequest,
   ListWorkspaceNodesRequest,
+  ListWorkspaceTreeRequest,
   LLMConfig,
   LlmModelListResponse,
   PickDirectoryResponse,
@@ -44,7 +45,8 @@ import type {
   WorkspaceJobResponse,
   WorkspaceListResponse,
   WorkspaceMutationResponse,
-  WorkspaceNodeListResponse
+  WorkspaceNodeListResponse,
+  WorkspaceTreeListResponse
 } from '../shared/types'
 
 export type ModelInfo = {
@@ -83,6 +85,7 @@ export type SettingsE2EApiOverrides = {
   pickDirectoryResponse?: PickDirectoryResponse
   workspaceListResponse?: WorkspaceListResponse
   workspaceNodesResponseByWorkspaceId?: Record<string, WorkspaceNodeListResponse>
+  workspaceTreeResponseByWorkspaceId?: Record<string, WorkspaceTreeListResponse>
   legacyLocalImportMigrationStatus?: LegacyLocalImportMigrationStatus | null
   llmConfigDeleteResponseById?: Record<string, { success: boolean; error?: string }>
   llmModelListResponseByConfigId?: Record<string, LlmModelListResponse>
@@ -135,6 +138,7 @@ export type DesktopApi = {
   workspaceCreate: (payload: CreateWorkspaceSourceRequest) => Promise<WorkspaceMutationResponse>
   workspaceDelete: (workspaceId: string) => Promise<DeleteWorkspaceSourceResponse>
   workspaceNodes: (payload: ListWorkspaceNodesRequest) => Promise<WorkspaceNodeListResponse>
+  workspaceTree: (payload: ListWorkspaceTreeRequest) => Promise<WorkspaceTreeListResponse>
   workspaceScan: (payload: { workspaceId: string }) => Promise<WorkspaceJobResponse>
   workspacePrepare: (payload: PrepareWorkspaceRequest) => Promise<WorkspaceJobResponse>
   referenceItemList: (

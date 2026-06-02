@@ -1,4 +1,9 @@
-import type { WorkspaceNode, WorkspaceSource } from '../../../shared/types'
+import type {
+  WorkspaceFileIndexRecord,
+  WorkspaceNode,
+  WorkspaceSource,
+  WorkspaceTreeEntry
+} from '../../../shared/types'
 
 export type WorkspaceValidationResult = {
   normalizedRootPath: string
@@ -72,4 +77,23 @@ export type WorkspaceKnowledgeIndexResult = {
   usedCachedSplit: boolean
   usedCachedVectors: boolean
   chunks: WorkspaceKnowledgeIndexedChunk[]
+}
+
+export type WorkspaceTreeScanResult = {
+  workspace: WorkspaceSource
+  entries: WorkspaceTreeEntry[]
+}
+
+export type WorkspaceTreeEntryDiff = {
+  added: WorkspaceTreeEntry[]
+  removed: WorkspaceFileIndexRecord[]
+  changed: Array<{
+    entry: WorkspaceTreeEntry
+    record: WorkspaceFileIndexRecord
+  }>
+  unchanged: Array<{
+    entry: WorkspaceTreeEntry
+    record: WorkspaceFileIndexRecord
+  }>
+  untracked: WorkspaceTreeEntry[]
 }

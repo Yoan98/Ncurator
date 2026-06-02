@@ -1,6 +1,5 @@
 import type {
   LlmProviderKind,
-  WorkspaceNode,
   WorkspaceSource,
   WebSourceRecord
 } from '../../../../shared/types'
@@ -30,7 +29,7 @@ export const SETTINGS_SECTION_META: Record<SettingsSectionValue, SettingsSection
     value: 'workspace',
     label: '工作空间',
     title: '工作空间',
-    description: '管理本地项目路径、网页资料、扫描状态和加载操作。',
+    description: '管理本地项目路径、网页资料、目录变化和索引状态。',
     path: '/settings/workspace',
     icon: <HiOutlineRectangleStack className="h-5 w-5" />
   }
@@ -47,7 +46,7 @@ export const APP_MENU_ITEMS = [
   {
     key: 'workspace',
     label: '工作空间',
-    description: '本地项目路径、网页资料、扫描与加载',
+    description: '本地项目路径、网页资料、目录变化与索引',
     path: '/settings/workspace',
     icon: <HiOutlineRectangleStack className="h-4 w-4" />
   },
@@ -151,25 +150,13 @@ export const WORKSPACE_STATUS_META: Record<
   WorkspaceSource['status'],
   { label: string; className: string }
 > = {
-  not_prepared: { label: '未加载', className: 'border-[#E5E5E4] bg-[#F8F8F7] text-[#666666]' },
-  scanning: { label: '扫描中', className: 'border-[#FDE2D8] bg-[#FFF3EE] text-[#C66A4A]' },
-  preparing: { label: '加载中', className: 'border-[#FDE2D8] bg-[#FFF3EE] text-[#C66A4A]' },
-  prepared: { label: '已加载', className: 'border-[#DCEBD7] bg-[#F3FAF0] text-[#4F7A46]' },
-  stale: { label: '待更新', className: 'border-[#FDECC8] bg-[#FFF9ED] text-[#AD7B18]' },
+  not_prepared: { label: '未建立索引', className: 'border-[#E5E5E4] bg-[#F8F8F7] text-[#666666]' },
+  scanning: { label: '检查中', className: 'border-[#FDE2D8] bg-[#FFF3EE] text-[#C66A4A]' },
+  preparing: { label: '索引中', className: 'border-[#FDE2D8] bg-[#FFF3EE] text-[#C66A4A]' },
+  prepared: { label: '可用', className: 'border-[#DCEBD7] bg-[#F3FAF0] text-[#4F7A46]' },
+  stale: { label: '需更新', className: 'border-[#FDECC8] bg-[#FFF9ED] text-[#AD7B18]' },
   failed: { label: '失败', className: 'border-[#F7D5D9] bg-[#FFF2F4] text-[#B5455D]' },
   unavailable: { label: '不可用', className: 'border-[#F7D5D9] bg-[#FFF2F4] text-[#B5455D]' }
-}
-
-export const WORKSPACE_NODE_STATUS_META: Record<
-  WorkspaceNode['prepare_status'],
-  { label: string; className: string }
-> = {
-  not_prepared: { label: '未加载', className: 'border-[#E5E5E4] bg-[#F8F8F7] text-[#666666]' },
-  preparing: { label: '加载中', className: 'border-[#FDE2D8] bg-[#FFF3EE] text-[#C66A4A]' },
-  prepared: { label: '已加载', className: 'border-[#DCEBD7] bg-[#F3FAF0] text-[#4F7A46]' },
-  stale: { label: '待更新', className: 'border-[#FDECC8] bg-[#FFF9ED] text-[#AD7B18]' },
-  failed: { label: '失败', className: 'border-[#F7D5D9] bg-[#FFF2F4] text-[#B5455D]' },
-  missing: { label: '缺失', className: 'border-[#F7D5D9] bg-[#FFF2F4] text-[#B5455D]' }
 }
 
 export const WEB_SOURCE_STATUS_META: Record<

@@ -17,7 +17,6 @@ import type { AiLlmIoRecord } from '../../shared/types'
 import {
   buildWebReferenceItem,
   buildWorkspaceReferenceItems,
-  getWorkspaceScopeKey,
   referenceMatchesQuery,
   shouldIncludeReferenceInSearch
 } from '../services/sourceScope/selection'
@@ -51,6 +50,7 @@ import type {
   DeleteWorkspaceSourceResponse,
   ListReferenceItemsRequest,
   ListWorkspaceNodesRequest,
+  ListWorkspaceTreeRequest,
   OpenPathWithApplicationRequest,
   OpenPathWithApplicationResponse,
   PickDirectoryResponse,
@@ -64,12 +64,15 @@ import type {
   WebSourceMutationResponse,
   DeleteWebSourceResponse,
   WebSourceRecord,
+  WorkspaceFileIndexRecord,
   WorkspaceJobResponse,
   WorkspaceMutationResponse,
   WorkspaceNode,
   WorkspaceNodeListResponse,
+  WorkspaceTreeEntry,
+  WorkspaceTreeListResponse,
   WorkspaceSource,
-  WorkspaceListResponse
+  WorkspaceListResponse,
 } from '../types/store'
 import path from 'path'
 import fs from 'fs'
@@ -101,51 +104,66 @@ const execFileAsync = promisify(execFile)
 const getErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
 
-const deriveWorkspaceStatus = (nodes: WorkspaceNode[]): WorkspaceSource['status'] => {
-  if (nodes.some((node) => node.prepare_status === 'failed')) return 'failed'
-  if (nodes.some((node) => node.prepare_status === 'stale')) return 'stale'
-  if (nodes.some((node) => node.prepare_status === 'preparing')) return 'preparing'
-  if (nodes.some((node) => node.prepare_status === 'prepared')) return 'prepared'
+const deriveWorkspaceStatus = (input: {
+  records: WorkspaceFileIndexRecord[]
+  indexing?: boolean
+}): WorkspaceSource['status'] => {
+  if (input.indexing || input.records.some((item) => item.index_status === 'indexing')) {
+    return 'preparing'
+  }
+  if (input.records.some((item) => item.index_status === 'failed')) return 'failed'
+  if (input.records.some((item) => item.index_status === 'needs_update')) return 'stale'
+  if (input.records.some((item) => item.index_status === 'indexed')) return 'prepared'
+  if (input.records.some((item) => item.index_status === 'not_indexed')) return 'not_prepared'
   return 'not_prepared'
 }
 
-const mergeScannedNodes = (params: {
-  existingNodes: WorkspaceNode[]
-  nextNodes: WorkspaceNode[]
-  changedNodes: WorkspaceNode[]
+const toLegacyWorkspaceNodes = (input: {
+  entries: WorkspaceTreeEntry[]
+  records: WorkspaceFileIndexRecord[]
   now: number
 }): WorkspaceNode[] => {
-  const existingMap = new Map(
-    params.existingNodes.map((node) => [getWorkspaceScopeKey(node), node] as const)
-  )
-  const changedKeys = new Set(params.changedNodes.map((node) => getWorkspaceScopeKey(node)))
+  const recordMap = new Map(input.records.map((record) => [record.relative_path, record] as const))
 
-  return params.nextNodes.map((node) => {
-    const existingNode = existingMap.get(getWorkspaceScopeKey(node))
-    if (!existingNode) return node
-    if (changedKeys.has(getWorkspaceScopeKey(node)) && node.kind === 'file') {
+  return input.entries
+    .filter((entry) => entry.kind === 'directory' || entry.supported_for_index)
+    .map((entry) => {
+      const record = entry.kind === 'file' ? recordMap.get(entry.relative_path) : undefined
+      const prepareStatus =
+        entry.kind === 'directory'
+          ? 'not_prepared'
+          : record?.index_status === 'indexed'
+            ? 'prepared'
+            : record?.index_status === 'indexing'
+              ? 'preparing'
+              : record?.index_status === 'needs_update'
+                ? 'stale'
+                : record?.index_status === 'failed'
+                  ? 'failed'
+                  : 'not_prepared'
+
       return {
-        ...node,
-        document_id: existingNode.document_id,
-        content_hash: node.content_hash || existingNode.content_hash,
-        last_prepared_at: existingNode.last_prepared_at,
-        last_error: existingNode.last_error,
-        prepare_status: existingNode.document_id ? 'stale' : 'not_prepared',
-        created_at: existingNode.created_at,
-        updated_at: params.now
-      }
-    }
-    return {
-      ...node,
-      content_hash: existingNode.content_hash,
-      document_id: existingNode.document_id,
-      last_prepared_at: existingNode.last_prepared_at,
-      last_error: existingNode.last_error,
-      prepare_status: existingNode.prepare_status,
-      created_at: existingNode.created_at,
-      updated_at: params.now
-    }
-  })
+        id: entry.id,
+        workspace_id: entry.workspace_id,
+        parent_id: entry.parent_id,
+        kind: entry.kind,
+        name: entry.name,
+        relative_path: entry.relative_path,
+        absolute_path: entry.absolute_path,
+        file_ext: entry.file_ext,
+        exists: true,
+        size: entry.size,
+        mtime_ms: entry.mtime_ms,
+        content_hash: record?.content_hash,
+        prepare_status: prepareStatus,
+        document_id: record?.document_id,
+        last_prepared_at: record?.indexed_at,
+        last_error: record?.last_error,
+        created_at: record?.created_at || input.now,
+        updated_at: record?.updated_at || input.now
+      } satisfies WorkspaceNode
+    })
+    .sort((a, b) => a.relative_path.localeCompare(b.relative_path))
 }
 
 const toTrimmedStringList = (values: string[] | undefined): string[] =>
@@ -292,6 +310,57 @@ export function registerHandlers(services: {
     const durationMs = getE2EFixtureWorkspaceDelayMs(phase)
     if (durationMs <= 0) return
     await new Promise<void>((resolve) => setTimeout(resolve, durationMs))
+  }
+
+  const hydrateWorkspaceSummary = async (workspace: WorkspaceSource): Promise<WorkspaceSource> => {
+    await ensureWebSourcesHydrated()
+    const webSourceCount = (await webSourceStore.listWebSources(workspace.id)).length
+    const summary = await workspaceStore.refreshWorkspaceSummary(workspace.id, webSourceCount)
+    const status = deriveWorkspaceStatus({
+      records: await workspaceStore.listWorkspaceFileIndexRecords(workspace.id)
+    })
+    const nextWorkspace: WorkspaceSource = {
+      ...workspace,
+      ...summary,
+      status
+    }
+    await workspaceStore.saveWorkspace(nextWorkspace)
+    return nextWorkspace
+  }
+
+  const readWorkspaceTree = async (
+    workspaceId: string,
+    includeUnsupported = false
+  ): Promise<WorkspaceTreeListResponse> => {
+    const workspace = await workspaceStore.getWorkspaceById(workspaceId)
+    if (!workspace) {
+      return {
+        items: [],
+        total: 0,
+        summary: workspaceStore.getEmptySummary()
+      }
+    }
+
+    const scanResult = await workspaceService.scanWorkspaceTree({
+      workspaceId,
+      rootPath: workspace.root_path,
+      workspaceName: workspace.name
+    })
+    const records = await workspaceStore.listWorkspaceFileIndexRecords(workspaceId)
+    const merged = workspaceService.mergeTreeWithIndex({
+      entries: scanResult.entries,
+      records
+    })
+    const visibleItems = includeUnsupported ? merged : merged.filter((item) => item.kind === 'directory' || item.supported_for_index)
+    const summary = await workspaceStore.refreshWorkspaceSummary(
+      workspaceId,
+      workspace.web_source_count || 0
+    )
+    return {
+      items: visibleItems,
+      total: visibleItems.length,
+      summary
+    }
   }
 
   const emitE2EChatArtifactFlow = async (input: {
@@ -1115,7 +1184,8 @@ export function registerHandlers(services: {
     try {
       const fixtureList = getE2EFixtureWorkspaceList()
       if (fixtureList) return fixtureList
-      const items = await workspaceStore.listWorkspaces()
+      const workspaces = await workspaceStore.listWorkspaces()
+      const items = await Promise.all(workspaces.map((workspace) => hydrateWorkspaceSummary(workspace)))
       return { items, total: items.length }
     } catch (error: unknown) {
       console.error('❌ [WORKSPACE-LIST] ERROR:', error)
@@ -1142,15 +1212,46 @@ export function registerHandlers(services: {
         )
 
         const workspaceId = uuidv4()
-        const scanResult = await workspaceService.scanWorkspace({
+        const now = Date.now()
+        const scanResult = await workspaceService.scanWorkspaceTree({
           workspaceId,
           rootPath: payload.rootPath,
-          workspaceName: payload.name
+          workspaceName: payload.name,
+          now
         })
-        await workspaceStore.saveWorkspace(scanResult.workspace)
-        await workspaceStore.replaceWorkspaceNodes(workspaceId, scanResult.nodes)
+        const supportedEntries = scanResult.entries.filter(
+          (entry) => entry.kind === 'file' && entry.supported_for_index
+        )
+        const records = supportedEntries.map((entry) =>
+          workspaceService.buildWorkspaceFileIndexRecord({
+            workspaceId,
+            entry,
+            now
+          })
+        )
+        await workspaceStore.saveWorkspace({
+          ...scanResult.workspace,
+          indexable_file_count: records.length,
+          not_indexed_file_count: records.length,
+          indexed_file_count: 0,
+          needs_update_file_count: 0,
+          failed_file_count: 0,
+          web_source_count: 0
+        })
+        await workspaceStore.replaceWorkspaceFileIndexRecords(workspaceId, records)
         emitSourceListRefresh(event.sender)
-        return { success: true, workspace: scanResult.workspace }
+        return {
+          success: true,
+          workspace: await hydrateWorkspaceSummary({
+            ...scanResult.workspace,
+            indexable_file_count: records.length,
+            not_indexed_file_count: records.length,
+            indexed_file_count: 0,
+            needs_update_file_count: 0,
+            failed_file_count: 0,
+            web_source_count: 0
+          })
+        }
       } catch (error: unknown) {
         console.error('❌ [WORKSPACE-CREATE] ERROR:', error)
         return { success: false, error: getErrorMessage(error) }
@@ -1182,15 +1283,36 @@ export function registerHandlers(services: {
       try {
         const fixtureNodes = getE2EFixtureWorkspaceNodes(String(payload.workspaceId || '').trim())
         if (fixtureNodes) return fixtureNodes
-        const items = await workspaceStore.listWorkspaceNodes({
-          workspaceId: String(payload.workspaceId || '').trim(),
-          parentId: payload.parentId ? String(payload.parentId).trim() : undefined,
-          kind: payload.kind
-        })
+        const workspaceId = String(payload.workspaceId || '').trim()
+        const tree = await readWorkspaceTree(workspaceId, false)
+        const records = await workspaceStore.listWorkspaceFileIndexRecords(workspaceId)
+        const now = Date.now()
+        let items = toLegacyWorkspaceNodes({ entries: tree.items, records, now })
+        if (payload.parentId) {
+          items = items.filter((item) => item.parent_id === String(payload.parentId).trim())
+        }
+        if (payload.kind) {
+          items = items.filter((item) => item.kind === payload.kind)
+        }
         return { items, total: items.length }
       } catch (error: unknown) {
         console.error('❌ [WORKSPACE-NODES] ERROR:', error)
         return { items: [], total: 0 }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'workspace-tree',
+    async (_event, payload: ListWorkspaceTreeRequest): Promise<WorkspaceTreeListResponse> => {
+      try {
+        return await readWorkspaceTree(
+          String(payload.workspaceId || '').trim(),
+          Boolean(payload.includeUnsupported)
+        )
+      } catch (error: unknown) {
+        console.error('❌ [WORKSPACE-TREE] ERROR:', error)
+        return { items: [], total: 0, summary: workspaceStore.getEmptySummary() }
       }
     }
   )
@@ -1210,51 +1332,84 @@ export function registerHandlers(services: {
         if (!currentWorkspace) {
           return { success: false, error: 'workspace not found' }
         }
-
-        const existingNodes = await workspaceStore.listWorkspaceNodes({ workspaceId })
+        const existingRecords = await workspaceStore.listWorkspaceFileIndexRecords(workspaceId)
         const now = Date.now()
-        const scanResult = await workspaceService.scanWorkspace({
+        const scanResult = await workspaceService.scanWorkspaceTree({
           workspaceId,
           rootPath: currentWorkspace.root_path,
           workspaceName: currentWorkspace.name,
           now
         })
-        const diff = await workspaceService.diffWorkspaceNodes({
-          existingNodes,
-          nextNodes: scanResult.nodes,
-          mode: 'full'
+        const diff = await workspaceService.diffWorkspaceTreeAgainstIndex({
+          entries: scanResult.entries,
+          records: existingRecords
         })
-        const mergedNodes = mergeScannedNodes({
-          existingNodes,
-          nextNodes: scanResult.nodes,
-          changedNodes: diff.changed,
-          now
-        })
-        const nextStatus =
-          diff.changed.length > 0 || diff.added.length > 0 || diff.removed.length > 0
-            ? 'stale'
-            : currentWorkspace.status
-        const nextWorkspace: WorkspaceSource = {
-          ...currentWorkspace,
-          ...scanResult.workspace,
-          status: nextStatus,
-          created_at: currentWorkspace.created_at,
-          last_prepare_at: currentWorkspace.last_prepare_at,
-          last_error: currentWorkspace.last_error,
-          updated_at: now
+
+        const nextRecords: WorkspaceFileIndexRecord[] = []
+        const removedDocumentIds = diff.removed
+          .map((record) => record.document_id)
+          .filter((documentId): documentId is string => Boolean(documentId))
+
+        for (const item of diff.unchanged) {
+          nextRecords.push(
+            workspaceService.buildWorkspaceFileIndexRecord({
+              workspaceId,
+              entry: item.entry,
+              previous: item.record,
+              now
+            })
+          )
+        }
+        for (const item of diff.changed) {
+          nextRecords.push({
+            ...workspaceService.buildWorkspaceFileIndexRecord({
+              workspaceId,
+              entry: item.entry,
+              previous: item.record,
+              now
+            }),
+            content_hash: item.record.content_hash,
+            index_status: item.record.document_id ? 'needs_update' : 'not_indexed',
+            document_id: item.record.document_id,
+            indexed_at: item.record.indexed_at,
+            last_error: item.record.last_error
+          })
+        }
+        for (const entry of diff.added) {
+          nextRecords.push(
+            workspaceService.buildWorkspaceFileIndexRecord({
+              workspaceId,
+              entry,
+              now
+            })
+          )
         }
 
+        await workspaceStore.replaceWorkspaceFileIndexRecords(workspaceId, nextRecords)
+        if (removedDocumentIds.length > 0) {
+          await documentsStore.deleteDocumentsByIds(removedDocumentIds)
+        }
+        const summary = await workspaceStore.refreshWorkspaceSummary(
+          workspaceId,
+          currentWorkspace.web_source_count || 0
+        )
+        const nextWorkspace: WorkspaceSource = {
+          ...currentWorkspace,
+          ...summary,
+          status: deriveWorkspaceStatus({ records: nextRecords }),
+          last_scan_at: now,
+          updated_at: now
+        }
         await workspaceStore.saveWorkspace(nextWorkspace)
-        await workspaceStore.replaceWorkspaceNodes(workspaceId, mergedNodes)
 
         return {
           success: true,
           workspaceId,
           progress: {
             workspace_id: workspaceId,
-            phase: 'scan',
-            total: mergedNodes.length,
-            completed: mergedNodes.length,
+            phase: 'inspect',
+            total: nextRecords.length,
+            completed: nextRecords.length,
             added: diff.added.length,
             updated: diff.changed.length,
             removed: diff.removed.length
@@ -1295,145 +1450,157 @@ export function registerHandlers(services: {
           return { success: false, error: 'workspace not found' }
         }
 
-        const existingNodes = await workspaceStore.listWorkspaceNodes({ workspaceId })
         const prepareStartedAt = Date.now()
-        const scanResult = await workspaceService.scanWorkspace({
+        const scanResult = await workspaceService.scanWorkspaceTree({
           workspaceId,
           rootPath: currentWorkspace.root_path,
           workspaceName: currentWorkspace.name,
           now: prepareStartedAt
         })
-        const diff = await workspaceService.diffWorkspaceNodes({
-          existingNodes,
-          nextNodes: scanResult.nodes,
-          mode
+        const existingRecords = await workspaceStore.listWorkspaceFileIndexRecords(workspaceId)
+        const diff = await workspaceService.diffWorkspaceTreeAgainstIndex({
+          entries: scanResult.entries,
+          records: existingRecords
         })
-        const mergedNodes = mergeScannedNodes({
-          existingNodes,
-          nextNodes: scanResult.nodes,
-          changedNodes: diff.changed,
-          now: prepareStartedAt
-        })
+        const recordMap = new Map(
+          existingRecords.map((record) => [record.relative_path, record] as const)
+        )
 
-        const nodeMap = new Map(
-          mergedNodes.map((node) => [getWorkspaceScopeKey(node), node] as const)
-        )
-        const basePrepareTargets = [...diff.added, ...diff.changed].filter(
-          (node) => node.kind === 'file'
-        )
-        const basePrepareKeys = new Set(
-          basePrepareTargets.map((node) => getWorkspaceScopeKey(node))
-        )
-        const retryTargets = mergedNodes.filter(
-          (node) =>
-            node.kind === 'file' &&
-            (node.prepare_status === 'not_prepared' ||
-              node.prepare_status === 'failed' ||
-              node.prepare_status === 'stale') &&
-            !basePrepareKeys.has(getWorkspaceScopeKey(node))
-        )
-        const prepareTargets = [...basePrepareTargets, ...retryTargets]
-        for (const target of prepareTargets) {
-          const key = getWorkspaceScopeKey(target)
-          const currentNode = nodeMap.get(key)
-          if (!currentNode) continue
-          nodeMap.set(key, {
-            ...currentNode,
-            prepare_status: 'preparing',
-            last_error: undefined,
-            updated_at: Date.now()
+        for (const item of diff.added) {
+          recordMap.set(
+            item.relative_path,
+            workspaceService.buildWorkspaceFileIndexRecord({
+              workspaceId,
+              entry: item,
+              now: prepareStartedAt
+            })
+          )
+        }
+        for (const item of diff.changed) {
+          recordMap.set(item.entry.relative_path, {
+            ...workspaceService.buildWorkspaceFileIndexRecord({
+              workspaceId,
+              entry: item.entry,
+              previous: item.record,
+              now: prepareStartedAt
+            }),
+            content_hash: item.record.content_hash,
+            index_status: item.record.document_id ? 'needs_update' : 'not_indexed',
+            document_id: item.record.document_id,
+            indexed_at: item.record.indexed_at,
+            last_error: item.record.last_error
           })
         }
 
-        await workspaceStore.saveWorkspace({
-          ...currentWorkspace,
-          ...scanResult.workspace,
-          status: 'preparing',
-          created_at: currentWorkspace.created_at,
-          last_prepare_at: currentWorkspace.last_prepare_at,
-          updated_at: prepareStartedAt,
-          last_error: undefined
-        })
-        await workspaceStore.replaceWorkspaceNodes(workspaceId, Array.from(nodeMap.values()))
-
         const removedDocumentIds = diff.removed
-          .filter((node) => node.kind === 'file' && node.document_id)
-          .map((node) => node.document_id as string)
+          .map((record) => record.document_id)
+          .filter((documentId): documentId is string => Boolean(documentId))
         if (removedDocumentIds.length > 0) {
           await documentsStore.deleteDocumentsByIds(removedDocumentIds)
         }
+        for (const record of diff.removed) {
+          recordMap.delete(record.relative_path)
+        }
+
+        const prepareTargets = Array.from(recordMap.values()).filter(
+          (record) =>
+            record.index_status === 'not_indexed' ||
+            record.index_status === 'needs_update' ||
+            record.index_status === 'failed'
+        )
+
+        await workspaceStore.upsertWorkspaceFileIndexRecords(
+          prepareTargets.map((record) => ({
+            ...record,
+            index_status: 'indexing',
+            last_error: undefined,
+            last_checked_at: prepareStartedAt,
+            updated_at: prepareStartedAt
+          }))
+        )
+        await workspaceStore.saveWorkspace({
+          ...currentWorkspace,
+          status: 'preparing',
+          last_error: undefined,
+          last_scan_at: scanResult.workspace.last_scan_at,
+          updated_at: prepareStartedAt
+        })
 
         let completed = 0
         let failed = 0
         for (const target of prepareTargets) {
-          const key = getWorkspaceScopeKey(target)
-          const currentNode = nodeMap.get(key)
-          if (!currentNode) continue
-          const documentId = currentNode.document_id || uuidv4()
+          const currentRecord = recordMap.get(target.relative_path) || target
+          const documentId = currentRecord.document_id || uuidv4()
           try {
             const indexedDocument = await workspaceKnowledgePrepareService.indexLocalFile({
               workspaceId,
               documentId,
-              filePath: currentNode.absolute_path,
-              documentName: currentNode.name
+              filePath: currentRecord.absolute_path,
+              documentName: currentRecord.name
             })
             const preparedAt = Date.now()
-            const preparedNode: WorkspaceNode = {
-              ...currentNode,
+            const preparedRecord: WorkspaceFileIndexRecord = {
+              ...currentRecord,
               document_id: documentId,
               content_hash: indexedDocument.contentHash,
-              prepare_status: 'prepared',
-              last_prepared_at: preparedAt,
+              index_status: 'indexed',
+              indexed_at: preparedAt,
+              last_checked_at: preparedAt,
               last_error: undefined,
               updated_at: preparedAt
             }
-            nodeMap.set(key, preparedNode)
-            await workspaceStore.updateWorkspaceNode(preparedNode.id, {
-              document_id: preparedNode.document_id,
-              content_hash: preparedNode.content_hash,
-              prepare_status: preparedNode.prepare_status,
-              last_prepared_at: preparedNode.last_prepared_at,
-              last_error: preparedNode.last_error,
-              updated_at: preparedNode.updated_at
+            recordMap.set(currentRecord.relative_path, preparedRecord)
+            await workspaceStore.updateWorkspaceFileIndexRecord(preparedRecord.id, {
+              document_id: preparedRecord.document_id,
+              content_hash: preparedRecord.content_hash,
+              index_status: preparedRecord.index_status,
+              indexed_at: preparedRecord.indexed_at,
+              last_checked_at: preparedRecord.last_checked_at,
+              last_error: preparedRecord.last_error,
+              updated_at: preparedRecord.updated_at
             })
             completed += 1
           } catch (error: unknown) {
             failed += 1
             await documentsStore.updateDocumentImportStatus(documentId, 3).catch(() => {})
             const failedAt = Date.now()
-            const failedNode: WorkspaceNode = {
-              ...currentNode,
+            const failedRecord: WorkspaceFileIndexRecord = {
+              ...currentRecord,
               document_id: documentId,
-              prepare_status: 'failed',
+              index_status: 'failed',
+              last_checked_at: failedAt,
               last_error: getErrorMessage(error),
               updated_at: failedAt
             }
-            nodeMap.set(key, failedNode)
-            await workspaceStore.updateWorkspaceNode(failedNode.id, {
-              document_id: failedNode.document_id,
-              prepare_status: failedNode.prepare_status,
-              last_error: failedNode.last_error,
-              updated_at: failedNode.updated_at
+            recordMap.set(currentRecord.relative_path, failedRecord)
+            await workspaceStore.updateWorkspaceFileIndexRecord(failedRecord.id, {
+              document_id: failedRecord.document_id,
+              index_status: failedRecord.index_status,
+              last_checked_at: failedRecord.last_checked_at,
+              last_error: failedRecord.last_error,
+              updated_at: failedRecord.updated_at
             })
           }
         }
 
-        const finalNodes = Array.from(nodeMap.values()).sort((a, b) =>
+        const finalRecords = Array.from(recordMap.values()).sort((a, b) =>
           a.relative_path.localeCompare(b.relative_path)
         )
         const finishedAt = Date.now()
+        const summary = await workspaceStore.refreshWorkspaceSummary(
+          workspaceId,
+          currentWorkspace.web_source_count || 0
+        )
         const nextWorkspace: WorkspaceSource = {
           ...currentWorkspace,
-          ...scanResult.workspace,
-          status: deriveWorkspaceStatus(finalNodes),
-          created_at: currentWorkspace.created_at,
+          ...summary,
+          status: deriveWorkspaceStatus({ records: finalRecords }),
           last_scan_at: scanResult.workspace.last_scan_at,
           last_prepare_at: finishedAt,
           updated_at: finishedAt,
           last_error: failed > 0 ? `${failed} file(s) failed during prepare` : undefined
         }
         await workspaceStore.saveWorkspace(nextWorkspace)
-        await workspaceStore.replaceWorkspaceNodes(workspaceId, finalNodes)
         emitSourceListRefresh(event.sender)
 
         return {
@@ -1442,7 +1609,7 @@ export function registerHandlers(services: {
           progress: {
             workspace_id: workspaceId,
             mode,
-            phase: 'complete',
+            phase: 'index',
             total: prepareTargets.length,
             completed,
             added: diff.added.length,
@@ -1563,8 +1730,15 @@ export function registerHandlers(services: {
         if (workspaceIdFilter) {
           const workspace = await workspaceStore.getWorkspaceById(workspaceIdFilter)
           if (workspace) {
-            const nodes = await workspaceStore.listWorkspaceNodes({ workspaceId: workspace.id })
-            localReferences.push(...buildWorkspaceReferenceItems(workspace, nodes))
+            const tree = await readWorkspaceTree(workspace.id, false)
+            const records = await workspaceStore.listWorkspaceFileIndexRecords(workspace.id)
+            localReferences.push(
+              ...buildWorkspaceReferenceItems({
+                workspace,
+                entries: tree.items,
+                records
+              })
+            )
           }
         }
 

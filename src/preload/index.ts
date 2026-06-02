@@ -116,6 +116,15 @@ const api: DesktopApi = {
     }
     return ipcRenderer.invoke('workspace-nodes', payload)
   },
+  workspaceTree: (payload) => {
+    const overrides = getE2EApiOverrides()
+    const workspaceId = String(payload?.workspaceId || '').trim()
+    const response = overrides?.workspaceTreeResponseByWorkspaceId?.[workspaceId]
+    if (response) {
+      return Promise.resolve(response)
+    }
+    return ipcRenderer.invoke('workspace-tree', payload)
+  },
   workspaceScan: (payload) => {
     emitE2EIpcCall('workspaceScan', {
       workspaceId: String(payload.workspaceId || '').trim()

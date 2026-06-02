@@ -19,14 +19,14 @@
 - **领域表操作（Domains）**: `src/main/services/storage/domains/*Store.ts`
   - `DocumentsStore`：`document` / `chunk`（导入、分页、混合检索、删除）
   - `WebSourceStore`：`web_source`（网页资料来源 identity、抓取状态与来源级元数据）
-  - `WorkspaceStore`：`workspace_source` / `workspace_node`（工作空间、目录树快照、准备状态与节点绑定）
+  - `WorkspaceStore`：`workspace_source` / `workspace_file_index`（工作空间、文件索引状态、摘要统计）
   - `ChatStore`：`chat_session` / `chat_message`（会话与消息 CRUD）
   - `DocxApplyStore`：`docx_apply`（docx 直接写回记录、checkpoint 与回退状态）
   - `LlmConfigStore`：`llm_config`（配置 CRUD 与激活态切换）
 - **组合根（Facade）**: `src/main/services/storage/StorageService.ts`
   - 统一持有 `core` 与各 domain store
   - 应用启动时在 `src/main/index.ts` 调用 `await storageService.initialize()`
-  - 初始化阶段会执行一次旧本地导入清理迁移：清理未绑定 `workspace_node.document_id` 的历史本地 file documents
+  - 初始化阶段会执行一次旧本地导入清理迁移：清理未绑定当前工作空间文件索引记录的历史本地 file documents
 
 ### 约束与最佳实践
 
@@ -81,7 +81,7 @@
 - 3: 导入失败
 
 说明：
-- `source_type='file'` 的 document 仅表示“已准备的本地文件索引文档”，其真相来源必须可由 `workspace_node.document_id` 反向找到。
+- `source_type='file'` 的 document 仅表示“已准备的本地文件索引文档”，其真相来源必须可由 `workspace_file_index.document_id` 反向找到。
 - `source_type='web'` 的 document 由 `web_source.document_id` 绑定到网页资料来源。
 - 当前实现要求本地文档与网页文档都归属于某个工作区，KB 默认检索直接按 `workspace_id` 收口。
 
@@ -112,7 +112,7 @@
 
 ### 表: workspace_source（工作空间来源表）
 
-存储用户配置的本地工作空间及其最近扫描/准备状态。
+存储用户配置的本地工作空间及其最近检查/索引状态与资料摘要。
 
 | 字段名          | 类型             | 描述                                   |
 | :-------------- | :--------------- | :------------------------------------- |
@@ -120,34 +120,38 @@
 | name            | Utf8             | 显示名称                               |
 | root_path       | Utf8             | 规范化后的工作空间根路径               |
 | status          | Utf8             | 工作空间状态                           |
-| last_scan_at    | Int64（Nullable）| 最近扫描时间                           |
-| last_prepare_at | Int64（Nullable）| 最近准备时间                           |
-| last_error      | Utf8（Nullable） | 最近一次扫描/准备错误                  |
+| last_scan_at    | Int64（Nullable）| 最近检查目录变化时间                   |
+| last_prepare_at | Int64（Nullable）| 最近索引更新时间                       |
+| last_error      | Utf8（Nullable） | 最近一次检查/索引错误                  |
+| indexable_file_count   | Int64（Nullable）| 当前可索引文件数                    |
+| indexed_file_count     | Int64（Nullable）| 当前已索引文件数                    |
+| needs_update_file_count| Int64（Nullable）| 当前需更新索引文件数                |
+| failed_file_count      | Int64（Nullable）| 当前索引失败文件数                  |
+| not_indexed_file_count | Int64（Nullable）| 当前未索引文件数                    |
+| web_source_count       | Int64（Nullable）| 当前网页资料数                      |
 | created_at      | Int64            | 创建时间戳                             |
 | updated_at      | Int64            | 更新时间戳                             |
 
-### 表: workspace_node（工作空间节点快照表）
+### 表: workspace_file_index（工作空间文件索引状态表）
 
-存储目录树快照中的目录/文件节点，以及文件节点与已准备 document 的绑定关系。
+存储工作空间下支持索引文件的持久化索引状态；目录树本身运行时直接读取真实文件系统。
 
 | 字段名           | 类型             | 描述                                           |
 | :--------------- | :--------------- | :--------------------------------------------- |
-| id               | Utf8             | 节点唯一标识                                   |
+| id               | Utf8             | 索引记录唯一标识                               |
 | workspace_id     | Utf8             | 所属工作空间                                   |
-| parent_id        | Utf8（Nullable） | 父目录节点 ID                                  |
-| kind             | Utf8             | `directory` 或 `file`                          |
-| name             | Utf8             | 节点名称                                       |
 | relative_path    | Utf8             | 相对工作空间根路径                             |
-| absolute_path    | Utf8             | 当前扫描到的绝对路径                           |
-| file_ext         | Utf8（Nullable） | 文件扩展名（仅文件节点）                       |
-| exists           | Bool             | 当前扫描快照中是否存在                         |
+| absolute_path    | Utf8             | 最近一次检查到的绝对路径                       |
+| name             | Utf8             | 文件名                                         |
+| file_ext         | Utf8             | 文件扩展名                                     |
 | size             | Int64（Nullable）| 文件大小                                       |
 | mtime_ms         | Int64（Nullable）| 文件修改时间                                   |
-| content_hash     | Utf8（Nullable） | 内容哈希，用于差异检测与准备状态同步           |
-| prepare_status   | Utf8             | `not_prepared/preparing/prepared/stale/failed/missing` |
+| content_hash     | Utf8（Nullable） | 最近一次成功索引对应的内容哈希                 |
+| index_status     | Utf8             | `not_indexed/indexing/indexed/needs_update/failed` |
 | document_id      | Utf8（Nullable） | 关联的已准备 document ID                       |
-| last_prepared_at | Int64（Nullable）| 最近一次准备完成时间                           |
-| last_error       | Utf8（Nullable） | 最近一次节点级错误                             |
+| indexed_at       | Int64（Nullable）| 最近一次索引完成时间                           |
+| last_checked_at  | Int64（Nullable）| 最近一次检查目录变化时间                       |
+| last_error       | Utf8（Nullable） | 最近一次文件级索引错误                         |
 | created_at       | Int64            | 创建时间戳                                     |
 | updated_at       | Int64            | 更新时间戳                                     |
 

@@ -5,34 +5,36 @@ import type {
   SelectedReference,
   WebReference,
   WebSourceRecord,
-  WorkspaceNode,
-  WorkspaceSource
+  WorkspaceFileIndexRecord,
+  WorkspaceSource,
+  WorkspaceTreeEntry
 } from '../../../shared/types'
 
-export const getWorkspaceScopeKey = (node: Pick<WorkspaceNode, 'kind' | 'relative_path'>): string =>
-  `${node.kind}:${node.relative_path}`
+export const getWorkspaceScopeKey = (
+  node: Pick<WorkspaceTreeEntry, 'kind' | 'relative_path'>
+): string => `${node.kind}:${node.relative_path}`
 
-const isIndexedWorkspaceFile = (node: WorkspaceNode): boolean =>
-  node.kind === 'file' && node.prepare_status === 'prepared' && Boolean(node.document_id)
+const isIndexedWorkspaceFile = (record?: WorkspaceFileIndexRecord): boolean =>
+  Boolean(record && record.index_status === 'indexed' && record.document_id)
 
-const collectIndexedFileNodes = (nodes: WorkspaceNode[]): WorkspaceNode[] =>
-  nodes.filter(isIndexedWorkspaceFile)
+const collectIndexedFileRecords = (records: WorkspaceFileIndexRecord[]): WorkspaceFileIndexRecord[] =>
+  records.filter((record) => isIndexedWorkspaceFile(record))
 
-const collectIndexedDocumentIds = (nodes: WorkspaceNode[]): string[] =>
+const collectIndexedDocumentIds = (records: WorkspaceFileIndexRecord[]): string[] =>
   Array.from(
     new Set(
-      collectIndexedFileNodes(nodes)
-        .map((node) => node.document_id)
+      collectIndexedFileRecords(records)
+        .map((record) => record.document_id)
         .filter(Boolean)
     )
   ) as string[]
 
-const collectNotIndexedFileCount = (nodes: WorkspaceNode[]): number =>
-  nodes.filter((node) => node.kind === 'file' && !isIndexedWorkspaceFile(node)).length
+const collectNotIndexedFileCount = (records: WorkspaceFileIndexRecord[]): number =>
+  records.filter((record) => !isIndexedWorkspaceFile(record)).length
 
-const resolveDirectoryAvailability = (nodes: WorkspaceNode[]): KbAvailability => {
-  const fileCount = nodes.filter((node) => node.kind === 'file').length
-  const indexedCount = collectIndexedFileNodes(nodes).length
+const resolveDirectoryAvailability = (records: WorkspaceFileIndexRecord[]): KbAvailability => {
+  const fileCount = records.length
+  const indexedCount = collectIndexedFileRecords(records).length
   if (fileCount === 0 || indexedCount === 0) return 'not_indexed'
   if (indexedCount === fileCount) return 'indexed'
   return 'partial'
@@ -40,8 +42,9 @@ const resolveDirectoryAvailability = (nodes: WorkspaceNode[]): KbAvailability =>
 
 export const isLocalReference = (reference: SelectedReference): boolean => reference.kind !== 'web'
 
-export const buildWorkspaceDefaultDocumentIds = (nodes: WorkspaceNode[]): string[] =>
-  collectIndexedDocumentIds(nodes.filter((node) => node.kind === 'file'))
+export const buildWorkspaceDefaultDocumentIds = (
+  records: WorkspaceFileIndexRecord[]
+): string[] => collectIndexedDocumentIds(records)
 
 export const shouldIncludeReferenceInSearch = (reference: SelectedReference): boolean =>
   reference.kbDocumentIds.length > 0
@@ -74,45 +77,53 @@ export const collectReferenceDocumentIds = (references?: SelectedReference[]): s
     )
   ).filter(Boolean)
 
-export const buildWorkspaceReferenceItems = (
-  workspace: WorkspaceSource,
-  nodes: WorkspaceNode[]
-): SelectedReference[] => {
-  const fileNodes = nodes.filter((node) => node.kind === 'file')
-  const directoryNodes = nodes.filter((node) => node.kind === 'directory')
+export const buildWorkspaceReferenceItems = (input: {
+  workspace: WorkspaceSource
+  entries: WorkspaceTreeEntry[]
+  records: WorkspaceFileIndexRecord[]
+}): SelectedReference[] => {
+  const { workspace, entries, records } = input
+  const directoryEntries = entries.filter((entry) => entry.kind === 'directory')
+  const fileEntries = entries.filter(
+    (entry) => entry.kind === 'file' && entry.supported_for_index
+  )
+  const recordMap = new Map(records.map((record) => [record.relative_path, record] as const))
 
-  const directoryReferences: DirectoryReference[] = directoryNodes.map((node) => {
-    const descendantFiles = fileNodes.filter((fileNode) =>
-      fileNode.relative_path.startsWith(`${node.relative_path}/`)
+  const directoryReferences: DirectoryReference[] = directoryEntries.map((entry) => {
+    const descendantRecords = records.filter((record) =>
+      record.relative_path.startsWith(`${entry.relative_path}/`)
     )
-    const indexedFileCount = collectIndexedFileNodes(descendantFiles).length
-    const notIndexedFileCount = collectNotIndexedFileCount(descendantFiles)
+    const indexedFileCount = collectIndexedFileRecords(descendantRecords).length
+    const notIndexedFileCount = collectNotIndexedFileCount(descendantRecords)
 
     return {
       kind: 'directory',
       workspaceId: workspace.id,
-      nodeId: node.id,
-      name: node.name,
-      relativePath: node.relative_path,
-      absolutePath: node.absolute_path,
-      kbDocumentIds: collectIndexedDocumentIds(descendantFiles),
-      kbAvailability: resolveDirectoryAvailability(descendantFiles),
+      nodeId: entry.id,
+      name: entry.name,
+      relativePath: entry.relative_path,
+      absolutePath: entry.absolute_path,
+      kbDocumentIds: collectIndexedDocumentIds(descendantRecords),
+      kbAvailability: resolveDirectoryAvailability(descendantRecords),
       indexedFileCount,
       notIndexedFileCount
     }
   })
 
-  const fileReferences: FileReference[] = fileNodes.map((node) => ({
-    kind: 'file',
-    workspaceId: workspace.id,
-    nodeId: node.id,
-    name: node.name,
-    relativePath: node.relative_path,
-    absolutePath: node.absolute_path,
-    fileExt: node.file_ext || undefined,
-    kbDocumentIds: isIndexedWorkspaceFile(node) && node.document_id ? [node.document_id] : [],
-    kbAvailability: isIndexedWorkspaceFile(node) ? 'indexed' : 'not_indexed'
-  }))
+  const fileReferences: FileReference[] = fileEntries.map((entry) => {
+    const record = recordMap.get(entry.relative_path)
+    return {
+      kind: 'file',
+      workspaceId: workspace.id,
+      nodeId: entry.id,
+      name: entry.name,
+      relativePath: entry.relative_path,
+      absolutePath: entry.absolute_path,
+      fileExt: entry.file_ext || undefined,
+      kbDocumentIds: isIndexedWorkspaceFile(record) && record?.document_id ? [record.document_id] : [],
+      kbAvailability: isIndexedWorkspaceFile(record) ? 'indexed' : 'not_indexed'
+    }
+  })
 
   return [...directoryReferences, ...fileReferences]
 }
