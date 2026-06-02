@@ -55,7 +55,6 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
     return (
       turn.steps.length > 0 ||
       turn.readFiles.length > 0 ||
-      turn.editedFiles.length > 0 ||
       turn.applyTargets.length > 0 ||
       turn.blockers.length > 0
     )
@@ -90,7 +89,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                     读取 {turn?.readFiles.length || 0}
                   </span>
                   <span className="ui-status-pill border-transparent bg-white text-[#666666]">
-                    修改 {turn?.editedFiles.length || 0}
+                    修改 {turn?.applyTargets.length || 0}
                   </span>
                 </div>
               </div>
@@ -161,22 +160,11 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                   </div>
                 ) : null}
 
-                {turn?.editedFiles.length ? (
+                {turn?.applyTargets.length ? (
                   <div>
                     <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-[#999999]">
                       修改的文件
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      {turn.editedFiles.map((file) => renderFileChip(file, onOpenFile))}
-                    </div>
-                  </div>
-                ) : null}
-
-                {turn?.applyTargets.length ? (
-                    <div>
-                      <div className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-[#999999]">
-                      已修改文件
-                      </div>
                     <div className="space-y-2">
                       {turn.applyTargets.map((apply) => {
                         const statusMeta = apply.status ? DOCX_APPLY_STATUS_META[apply.status] : null

@@ -1,12 +1,17 @@
 import fs from 'node:fs/promises'
-import path from 'node:path'
 import { describe, it } from 'vitest'
+import JSZip from 'jszip'
 import {
   createDocxToolHarness,
   writeTestDocxFile
 } from '../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 import type { DocxMutationResult, DocxSearchResult } from './testUtils'
+
+const readDocumentXml = async (filePath: string): Promise<string> => {
+  const zip = await JSZip.loadAsync(await fs.readFile(filePath))
+  return await zip.file('word/document.xml')!.async('string')
+}
 
 describe('ai tool docx backend', () => {
   it('docx-direct-apply-checkpoint-revert', async () => {
@@ -45,6 +50,10 @@ describe('ai tool docx backend', () => {
             mode: 'literal'
           })
           const record = records[0]
+          const sourceXmlAfterApply = await readDocumentXml(sourcePath)
+          const diffXml = record?.preview_diff_artifact_path
+            ? await readDocumentXml(record.preview_diff_artifact_path)
+            : ''
           const revert = record
             ? await runtime.docxApplyService.revertRecord({ applyId: record.id })
             : { success: false }
@@ -54,6 +63,8 @@ describe('ai tool docx backend', () => {
             edited,
             records,
             sourceChangedAfterApply: Buffer.compare(beforeBytes, afterBytes) !== 0,
+            sourceXmlAfterApply,
+            diffXml,
             revertedMatchesBefore: Buffer.compare(beforeBytes, revertedBytes) === 0,
             searchAfterApply,
             revert
@@ -70,6 +81,9 @@ describe('ai tool docx backend', () => {
             result.records[0]?.operation === 'updated' &&
             result.records[0]?.before_exists === true &&
             Boolean(result.records[0]?.before_snapshot_path) &&
+            Boolean(result.records[0]?.preview_diff_artifact_path) &&
+            Boolean(result.records[0]?.preview_diff_checksum) &&
+            result.records[0]?.preview_diff_byte_size > 0 &&
             result.sourceChangedAfterApply === true &&
             result.searchAfterApply.matches.length === 1,
           {
@@ -78,6 +92,26 @@ describe('ai tool docx backend', () => {
             data: {
               records: result.records,
               searchAfterApply: result.searchAfterApply.matches
+            }
+          }
+        )
+
+        runtime.assertThat(
+          result.diffXml.includes('w:fill="FDECEC"') &&
+            result.diffXml.includes('w:strike') &&
+            result.diffXml.includes('w:fill="E9F7EF"') &&
+            !result.sourceXmlAfterApply.includes('w:fill="FDECEC"') &&
+            !result.sourceXmlAfterApply.includes('w:fill="E9F7EF"'),
+          {
+            name: 'docx-apply-diff-preview-has-markers-but-source-is-clean',
+            message: 'apply 应生成带红绿标注的系统内 diff 预览稿，但真实源文件保持净稿。',
+            data: {
+              record: result.records[0],
+              diffHasDeletedMarker: result.diffXml.includes('w:fill="FDECEC"'),
+              diffHasInsertedMarker: result.diffXml.includes('w:fill="E9F7EF"'),
+              sourceHasMarkers:
+                result.sourceXmlAfterApply.includes('w:fill="FDECEC"') ||
+                result.sourceXmlAfterApply.includes('w:fill="E9F7EF"')
             }
           }
         )
@@ -155,7 +189,7 @@ describe('ai tool docx backend', () => {
         runtime.assertThat(
           result.guardedRevert.success === false &&
             result.guardedRevert.requiresForce === true &&
-            Boolean(result.guardedRevert.warning),
+            Boolean(result.guardedRevert.warning?.includes('恢复到这次修改前')),
           {
             name: 'docx-revert-detects-post-apply-user-change',
             message: 'AI 写回后文件又变化时，force=false 回退应先返回 requiresForce 风险提示。',

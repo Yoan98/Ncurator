@@ -19,7 +19,6 @@ export type SearchWorkbenchTurn = {
 export type WorkbenchFileOrigin =
   | 'search_hit'
   | 'read'
-  | 'edited_file'
   | 'artifact'
   | 'preview'
   | 'source'
@@ -74,7 +73,6 @@ export type AssistantTurnViewModel = {
   status: 'running' | 'completed' | 'failed'
   steps: AssistantTurnStep[]
   readFiles: WorkbenchFileRef[]
-  editedFiles: WorkbenchFileRef[]
   applyTargets: AssistantTurnApplyTarget[]
   blockers: AssistantTurnBlocker[]
   error?: string

@@ -13,6 +13,9 @@ type WorkbenchApplyPanelProps = {
   tabs: DocxApplyWorkspaceTab[]
   onSelectTab: (fileKey: string) => void
   onRevert: () => void
+  onOpenPath: (filePath: string) => Promise<void>
+  onOpenWithApplication: (filePath: string) => Promise<void>
+  onRevealPath: (filePath: string) => Promise<void>
 }
 
 const WorkbenchApplyPanel: React.FC<WorkbenchApplyPanelProps> = ({
@@ -21,7 +24,10 @@ const WorkbenchApplyPanel: React.FC<WorkbenchApplyPanelProps> = ({
   reverting,
   tabs,
   onSelectTab,
-  onRevert
+  onRevert,
+  onOpenPath,
+  onOpenWithApplication,
+  onRevealPath
 }) => {
   const statusMeta = record ? DOCX_APPLY_STATUS_META[record.status] : null
   const canRevert = Boolean(record && record.status === 'applied' && !reverting)
@@ -29,7 +35,7 @@ const WorkbenchApplyPanel: React.FC<WorkbenchApplyPanelProps> = ({
   useEffect(() => undefined, [record?.id])
 
   const viewerTarget = useMemo(
-    () => ({ filePath: record?.source_path, fileName: record?.source_name }),
+    () => ({ filePath: record?.preview_diff_artifact_path, fileName: record?.source_name }),
     [record]
   )
 
@@ -92,6 +98,15 @@ const WorkbenchApplyPanel: React.FC<WorkbenchApplyPanelProps> = ({
             </span>
           ) : null}
           <span className="text-xs text-[#666666]">{record.change_count} 处修改</span>
+          <Button size="small" onClick={() => void onOpenPath(record.source_path)}>
+            系统打开
+          </Button>
+          <Button size="small" onClick={() => void onOpenWithApplication(record.source_path)}>
+            其他应用
+          </Button>
+          <Button size="small" onClick={() => void onRevealPath(record.source_path)}>
+            定位
+          </Button>
           <Button
             type="primary"
             size="small"

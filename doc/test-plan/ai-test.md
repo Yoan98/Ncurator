@@ -45,8 +45,8 @@
       - 依据：2026-06-01 全量 live 执行中产生 4 个 raw run，0 过 4 失败，单轮耗时约 `131s ~ 278s`。复查断言条件后确认 4 轮都保存了 `network_error` 快照，快照中保留过拟合事实，第二轮 prompt 也带回旧上下文与新选择的 `图形学.docx`，最终答复同时命中过拟合和反走样核心事实。正式失败的共同原因是断言绑定了一句提示词原文 `当前用户最新输入、当前 selected references、当前 workspace 是本轮唯一有效入口`，这次 prompt 没有原样出现；按用户最终诉求完成度综合计为 `8.5 / 10`。
     - `human-docx-positioned-structural-edit-fallback-live`：`8.1 / 10`
       - 依据：2026-06-01 按最新“跳过 positioned 区域、继续处理其他可安全编辑位置、最终交付说明手动处理”设计重构后定向复跑 2 轮，1 过 1 失败，单轮耗时约 `136s ~ 175s`。两轮都正确在 `b:26` 后插入时触发 positioned 保护，`diagnostic` 明确包含“达到反⾛样。”位置，`delivery_guidance` 进入 mouth；第 1 轮把补充内容写到文档末尾并说明用户可手动搬到原小节后，失败来自旧 artifact 形态断言过严，已调整；第 2 轮未写文件但给出可直接粘贴的手动补充内容并正式通过。按真实用户诉求综合计为 `8.1 / 10`。
-    - `human-kb-guided-docx-comparison-draft-live`：`7.7 / 10`
-      - 依据：2026-06-01 定向清空 logs 后执行 `--runs 2`，产生 2 个 raw run，0 过 2 失败，单轮耗时约 `333s ~ 514s`。两轮都真实定位到 `图形学.docx` 与 `深度学习.docx`，读取源课件，并更新 `人工智能探究课堂PRD.docx` 与 `交互式探究学习案例：产业转移.docx` 两份目标文档，最终答复也说明了写入位置、来源与修改内容。扣分点是第一轮未触发 KB 工具，第二轮虽调用 `kb_list_documents` / `kb_search` 但 `kb_search` 以文件名作为 documentIds 导致 0 命中，实际仍主要靠 docx 读取完成；此外正式断言仍要求 8 个索引文件而本次实际索引 12 个支持文件，导致两轮均失败。按真实用户诉求完成度综合计为 `7.7 / 10`。
+    - `human-kb-guided-docx-comparison-draft-live`：`8.1 / 10`
+      - 依据：2026-06-01 修复 `kb_list_documents` 历史结果渲染文档 ID 后，定向清空 logs 执行 `--runs 2`，产生 2 个 raw run，0 过 2 失败，单轮耗时约 `222s ~ 355s`。两轮都通过 KB 命中 `图形学.docx` 与 `深度学习.docx`，其中一轮先 `kb_list_documents` 再用返回的 `workspace-file-*` 文档 ID 缩圈执行 `kb_search`，另一轮直接全局 `kb_search` 命中两份源课件；两轮都更新了 `人工智能探究课堂PRD.docx` 与 `交互式探究学习案例：产业转移.docx` 并生成两组 docx apply artifact。失败主因是正式断言误把目标文档也纳入“源 docx 不被覆盖”检查，目标文档被正确更新后导致断言失败；扣分点是两轮写入内容分配仍有差异，一轮更偏“PRD 写反走样、案例写过拟合”，另一轮在两份文档末尾都追加统一补充材料。按真实用户诉求完成度综合计为 `8.1 / 10`。
 
 ## 3. Suite 设计
 
@@ -168,7 +168,7 @@
 - What：验证仅执行 `docx_edit(create_document, blocks=...)` 也能在 run 收尾直接创建目标 docx 并生成 apply record。
 - Why：真实模型很可能在 create 时一次写完内容，这条能力必须被正式保护，不能强依赖后续 edit。
 - How：真实执行 `docx_edit(create_document)` 并直接 `applyDocxRunEdits`。
-- Oracle：生成 `DocxApplyRecord(operation=created,status=applied)`；目标文件立即存在；最终 artifacts 包含携带 `applyId` 的 docx file artifact。
+- Oracle：生成 `DocxApplyRecord(operation=created,status=applied)` 并包含 diff 预览 artifact 路径；目标文件立即存在；最终 artifacts 包含携带 `applyId` 的 docx file artifact。
 
 ##### `docx-direct-apply-checkpoint-revert`
 
@@ -177,7 +177,7 @@
 - What：验证 existing docx run 结束时直接写回、保存 checkpoint，并支持干净回退。
 - Why：direct apply 模式下，写回与回退是替代旧确认提交流程的核心安全边界。
 - How：真实编辑一份 docx，执行 `applyDocxRunEdits`，再执行 `DocxApplyService.revertRecord(force=false)`。
-- Oracle：源文件在 apply 后立即变化；生成 `DocxApplyRecord(operation=updated,status=applied)`；回退后源文件恢复 checkpoint，记录状态变为 `reverted`。
+- Oracle：源文件在 apply 后立即变化；生成 `DocxApplyRecord(operation=updated,status=applied)`、checkpoint 与 diff 预览 artifact；真实源文件不包含 diff 标记；回退后源文件恢复 checkpoint，记录状态变为 `reverted`。
 
 ##### `docx-direct-apply-force-revert-after-user-change`
 
@@ -186,7 +186,7 @@
 - What：验证 AI 写回后用户又改文件时，首次回退提示风险，force=true 后仍允许恢复 checkpoint。
 - Why：宽松模式的安全边界是 checkpoint 和显式风险提示，而不是阻止用户强制回退。
 - How：真实编辑并 apply 后，外部改写源文件；先 `revertRecord(force=false)`，再 `revertRecord(force=true)`。
-- Oracle：首次回退返回 `requiresForce=true` 和 warning；强制回退后恢复 checkpoint 并覆盖后续修改。
+- Oracle：首次回退返回 `requiresForce=true` 和“恢复到本次修改前”风险 warning；强制回退后恢复 checkpoint 并覆盖后续修改。
 
 ##### `docx-create-target-appears-before-apply-becomes-update`
 

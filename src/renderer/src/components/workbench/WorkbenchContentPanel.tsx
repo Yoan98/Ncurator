@@ -189,6 +189,9 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
               tabs={state.tabs}
               onSelectTab={onSelectApplyTab}
               onRevert={onRevertApply}
+              onOpenPath={onOpenPath}
+              onOpenWithApplication={onOpenWithApplication}
+              onRevealPath={onRevealPath}
             />
           ) : null}
         </div>

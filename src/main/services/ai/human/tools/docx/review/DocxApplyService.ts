@@ -15,7 +15,7 @@ import type { ResolvedDocxOpenTarget } from './types'
 import { calculateFileStats, fileExists } from './utils'
 
 const FORCE_REVERT_WARNING =
-  '文件在 AI 修改后又发生变化。继续回退会丢失这些后续修改，并恢复到 AI 写入前的版本。'
+  '当前文件在这次 AI 修改后又发生了变化。继续操作会恢复到这次修改前的版本，并丢失之后的修改。'
 
 export class DocxApplyService {
   private readonly editTracker: RunDocxEditTracker

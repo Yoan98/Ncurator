@@ -4,6 +4,7 @@ import { sanitizeFileNameForPath } from '../../../../utils/fileNamePolicy'
 export type DocxApplyArtifactPaths = {
   workDir: string
   committedArtifactPath: string
+  diffArtifactPath: string
   beforeSnapshotPath: string
 }
 
@@ -25,6 +26,7 @@ export const buildDocxApplyArtifactPaths = (input: {
   return {
     workDir,
     committedArtifactPath: path.join(workDir, `committed-${baseName}`),
+    diffArtifactPath: path.join(workDir, `diff-${baseName}`),
     beforeSnapshotPath: path.join(workDir, `before-${baseName}`)
   }
 }

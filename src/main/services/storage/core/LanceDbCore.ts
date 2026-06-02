@@ -319,6 +319,7 @@ export class LanceDbCore {
       },
       {
         name: LANCE_TABLES.DOCX_APPLY,
+        recreateIfSchemaChanged: true,
         schema: new arrow.Schema([
           new arrow.Field('id', new arrow.Utf8()),
           new arrow.Field('session_id', new arrow.Utf8()),
@@ -334,6 +335,9 @@ export class LanceDbCore {
           new arrow.Field('before_checksum', new arrow.Utf8(), true),
           new arrow.Field('before_byte_size', new arrow.Int64(), true),
           new arrow.Field('before_modified_at', new arrow.Int64(), true),
+          new arrow.Field('preview_diff_artifact_path', new arrow.Utf8()),
+          new arrow.Field('preview_diff_checksum', new arrow.Utf8()),
+          new arrow.Field('preview_diff_byte_size', new arrow.Int64()),
           new arrow.Field('after_checksum', new arrow.Utf8(), true),
           new arrow.Field('after_byte_size', new arrow.Int64(), true),
           new arrow.Field('after_modified_at', new arrow.Int64(), true),

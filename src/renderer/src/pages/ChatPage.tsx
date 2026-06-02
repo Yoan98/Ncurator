@@ -88,21 +88,9 @@ const createAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
   status: 'running',
   steps: [],
   readFiles: [],
-  editedFiles: [],
   applyTargets: [],
   blockers: []
 })
-
-const artifactToWorkbenchFile = (artifact: AiArtifactRef): WorkbenchFileRef | null => {
-  if (artifact.kind !== 'file') return null
-  return {
-    path: artifact.path,
-    fileName: artifact.fileName,
-    origin: artifact.applyId ? 'edited_file' : 'artifact',
-    summary: artifact.summary,
-    applyId: artifact.applyId
-  }
-}
 
 const artifactToApplyTarget = (
   artifact: AiArtifactRef
@@ -126,11 +114,6 @@ const buildAssistantTurnFromMessage = (message: ChatMessage): AssistantTurnViewM
     status: 'completed',
     steps: [],
     readFiles: [],
-    editedFiles: dedupeFileRefs(
-      artifacts
-        .map(artifactToWorkbenchFile)
-        .filter((file): file is WorkbenchFileRef => Boolean(file))
-    ),
     applyTargets: artifacts
       .map(artifactToApplyTarget)
       .filter((target): target is AssistantTurnViewModel['applyTargets'][number] => Boolean(target)),
@@ -328,7 +311,7 @@ const ChatPage: React.FC = () => {
     (tabs: DocxApplyWorkspaceTab[], activeFileKey: string | null): void => {
       showContentPanel({
         kind: 'apply_workspace',
-        title: '已修改文件',
+        title: '修改的文件',
         tabs,
         activeFileKey
       })
@@ -552,22 +535,24 @@ const ChatPage: React.FC = () => {
       const shouldWaitForRecords =
         Boolean(options?.forceOpenWorkspace) || Boolean(options?.preferredApplyId)
       const maxAttempts = shouldWaitForRecords ? 6 : 1
+      let allRecords: DocxApplyRecord[] = []
       let activeRecords: DocxApplyRecord[] = []
 
       for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         const response = await window.api.docxApplyList({ sessionId })
         const nextItems = sortDocxApplyRecords(response.items)
+        allRecords = nextItems
         activeRecords = nextItems.filter((item) => ACTIVE_APPLY_WORKSPACE_STATUSES.has(item.status))
 
         const missingPreferred =
           options?.preferredApplyId !== undefined &&
           options.preferredApplyId !== null &&
-          !activeRecords.some((record) => record.id === options.preferredApplyId)
+          !allRecords.some((record) => record.id === options.preferredApplyId)
         if (!missingPreferred) break
         if (attempt < maxAttempts - 1) await delay(150)
       }
 
-      const applyTargetsByRunId = groupApplyTargetsByRunId(activeRecords)
+      const applyTargetsByRunId = groupApplyTargetsByRunId(allRecords)
 
       setAssistantTurns((previous) => {
         const nextTurns: Record<string, AssistantTurnViewModel> = { ...previous }
@@ -581,7 +566,15 @@ const ChatPage: React.FC = () => {
         return nextTurns
       })
 
-      if (activeRecords.length === 0) {
+      const preferredRecord =
+        options?.preferredApplyId
+          ? allRecords.find((record) => record.id === options.preferredApplyId) || null
+          : null
+      const workspaceRecords = preferredRecord
+        ? allRecords.filter((record) => record.run_id === preferredRecord.run_id)
+        : activeRecords
+
+      if (workspaceRecords.length === 0) {
         setApplyWorkspaceTabs([])
         setActiveDocxApplyRecord(null)
         setContentPanel((current) =>
@@ -591,7 +584,7 @@ const ChatPage: React.FC = () => {
       }
 
       const latestByFileKey = new Map<string, DocxApplyRecord>()
-      activeRecords.forEach((record) => {
+      workspaceRecords.forEach((record) => {
         const fileKey = record.source_path
         if (!fileKey || latestByFileKey.has(fileKey)) return
         latestByFileKey.set(fileKey, record)
@@ -602,11 +595,7 @@ const ChatPage: React.FC = () => {
           ? contentPanel.activeFileKey
           : activeDocxApplyRecord?.source_path || null
       const previewFileKey = contentPanel.kind === 'file_preview' ? contentPanel.file.path : null
-      const preferredFileKey =
-        options?.preferredApplyId
-          ? [...latestByFileKey.values()].find((record) => record.id === options.preferredApplyId)
-              ?.source_path || null
-          : null
+      const preferredFileKey = preferredRecord?.source_path || null
       const nextTabs = [...latestByFileKey.values()].map((record) => {
         const fileKey = record.source_path || record.id
         const previousTab = applyWorkspaceTabs.find((tab) => tab.fileKey === fileKey)
@@ -959,16 +948,8 @@ const ChatPage: React.FC = () => {
             summary: event.summary
           })
         }
-        const artifactFile: WorkbenchFileRef = {
-          path: event.path,
-          fileName: event.fileName,
-          origin: event.applyId ? 'edited_file' : 'artifact',
-          summary: event.summary,
-          applyId: event.applyId
-        }
         updateActiveTurn((current) => ({
           ...current,
-          editedFiles: dedupeFileRefs([...current.editedFiles, artifactFile]),
           applyTargets: event.applyId
             ? mergeApplyTargets(current.applyTargets, {
                 applyId: event.applyId,
@@ -1524,9 +1505,11 @@ const ChatPage: React.FC = () => {
       })
       if (response.requiresForce) {
         modal.confirm({
-          title: '确认回退本次修改',
-          content: response.warning || '文件在 AI 修改后又发生变化。继续回退会丢失这些后续修改。',
-          okText: '仍然回退',
+          title: '恢复到本次修改前？',
+          content:
+            response.warning ||
+            '当前文件在这次 AI 修改后又发生了变化。继续操作会恢复到这次修改前的版本，并丢失之后的修改。',
+          okText: '恢复到此前版本',
           cancelText: '取消',
           onOk: async () => {
             const forced = await window.api.docxApplyRevert({

@@ -24,6 +24,9 @@ type DocxApplyRow = {
   before_checksum?: PrimitiveRowValue
   before_byte_size?: PrimitiveRowValue
   before_modified_at?: PrimitiveRowValue
+  preview_diff_artifact_path?: PrimitiveRowValue
+  preview_diff_checksum?: PrimitiveRowValue
+  preview_diff_byte_size?: PrimitiveRowValue
   after_checksum?: PrimitiveRowValue
   after_byte_size?: PrimitiveRowValue
   after_modified_at?: PrimitiveRowValue
@@ -77,6 +80,9 @@ const toDocxApplyRecord = (row: DocxApplyRow): DocxApplyRecord => ({
   before_checksum: toOptionalString(row.before_checksum),
   before_byte_size: toOptionalNumber(row.before_byte_size),
   before_modified_at: toOptionalNumber(row.before_modified_at),
+  preview_diff_artifact_path: toRequiredString(row.preview_diff_artifact_path),
+  preview_diff_checksum: toRequiredString(row.preview_diff_checksum),
+  preview_diff_byte_size: toRequiredNumber(row.preview_diff_byte_size),
   after_checksum: toOptionalString(row.after_checksum),
   after_byte_size: toOptionalNumber(row.after_byte_size),
   after_modified_at: toOptionalNumber(row.after_modified_at),
@@ -109,6 +115,9 @@ const toDocxApplyWriteRow = (record: DocxApplyRecord): WriteRow => ({
   before_checksum: record.before_checksum,
   before_byte_size: record.before_byte_size,
   before_modified_at: record.before_modified_at,
+  preview_diff_artifact_path: record.preview_diff_artifact_path,
+  preview_diff_checksum: record.preview_diff_checksum,
+  preview_diff_byte_size: record.preview_diff_byte_size,
   after_checksum: record.after_checksum,
   after_byte_size: record.after_byte_size,
   after_modified_at: record.after_modified_at,

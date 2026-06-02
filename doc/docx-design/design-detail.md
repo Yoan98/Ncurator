@@ -67,12 +67,13 @@
 
 - `working view` 给 AI 读取和继续编辑，只保留当前有效内容。
 - `committed view` 给最终写回使用，去除任务内审阅态标记。
+- `diff preview artifact` 给系统内 apply 预览使用，保留任务内新增、删除与替换标记，不写回真实源文件。
 
 ### 相关数据定义
 
 ```ts
 interface DocxViewArtifact {
-  kind: 'working' | 'committed'
+  kind: 'working' | 'review' | 'committed'
   path: string
   createdAt: number
 }
@@ -87,6 +88,7 @@ DocxReplaySession -> working/committed views -> artifacts
 ```
 
 - `working artifact` 对应 AI 读取的当前工作态。
+- `review artifact` 对应系统内 diff 预览稿，只用于用户查看本次 AI 修改差异。
 - `committed artifact` 对应最终写回源文件的正式文档。
 - artifact 都只能从当前 session 单向生成。
 
@@ -129,6 +131,9 @@ interface DocxApplyRecord {
   before_exists: boolean
   before_snapshot_path?: string
   before_checksum?: string
+  preview_diff_artifact_path: string
+  preview_diff_checksum: string
+  preview_diff_byte_size: number
   after_checksum?: string
   created_at: number
   updated_at: number
@@ -141,6 +146,7 @@ interface DocxApplyRecord {
 
 - 采用宽松写回模式：apply 前不校验 replay 初始化版本是否仍等于当前磁盘版本。
 - apply 前总是以当前磁盘文件作为 checkpoint；若文件不存在则记录 `before_exists=false`。
+- apply 同时生成系统内 diff 预览 artifact；diff 预览粒度为一次 AI run 内每个被修改文件一份，不按单次工具调用拆分。
 - operation 以实际磁盘行为为准：写回前存在则 `updated`，不存在则 `created`。
 - revert 默认校验当前文件 checksum 是否等于 `after_checksum`；若不一致，UI 必须提示继续回退会丢失后续修改。
 - 用户确认后允许 force revert；updated 恢复 checkpoint，created 删除文件。

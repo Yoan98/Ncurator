@@ -123,11 +123,16 @@ describe('ai human live backend', () => {
                   sourcePath.endsWith(`/${path.basename(fixtureDoc.relativePath)}`)
               )
           )
+          const sourceDocRelativePaths = new Set(
+            result.workspaceSeed.sourceDocs.map((fixture) => fixture.relativePath)
+          )
           const sourceDocsUnchanged = await Promise.all(
-            result.workspaceSeed.trackedDocs.map(async (fixture) => {
+            result.workspaceSeed.trackedDocs
+              .filter((fixture) => sourceDocRelativePaths.has(fixture.relativePath))
+              .map(async (fixture) => {
               const currentBytes = await fs.readFile(fixture.workspacePath)
               return Buffer.compare(currentBytes, Buffer.from(fixture.bytes)) === 0
-            })
+              })
           )
           const deliveryText = String(result.output?.deliveryMarkdown || '')
 
@@ -157,6 +162,8 @@ describe('ai human live backend', () => {
                 openedSourcePaths,
                 writeSourcePaths,
                 toolNames,
+                sourceDocRelativePaths: [...sourceDocRelativePaths],
+                sourceDocsUnchanged,
                 requiredIndexedRelativePaths,
                 indexedSupportedFiles,
                 changedContentKinds,

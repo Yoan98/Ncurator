@@ -412,6 +412,9 @@ export interface DocxApplyRecord {
   before_checksum?: string
   before_byte_size?: number
   before_modified_at?: number
+  preview_diff_artifact_path: string
+  preview_diff_checksum: string
+  preview_diff_byte_size: number
   after_checksum?: string
   after_byte_size?: number
   after_modified_at?: number

@@ -23,7 +23,6 @@ export const DOCX_APPLY_STATUS_META: Record<DocxApplyStatus, { label: string; cl
 export const FILE_ORIGIN_LABELS: Record<WorkbenchFileOrigin, string> = {
   search_hit: '搜索命中',
   read: '读取',
-  edited_file: '已修改',
   artifact: '产物',
   preview: '预览',
   source: '源文件'

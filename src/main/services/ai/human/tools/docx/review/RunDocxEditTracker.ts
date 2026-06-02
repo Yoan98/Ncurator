@@ -179,6 +179,14 @@ export class RunDocxEditTracker {
       kind: 'committed',
       outPath: paths.committedArtifactPath
     })
+    await materializeDocxProjectedArtifact({
+      sourceBuffer,
+      workingBuffer,
+      session: replaySession,
+      kind: 'review',
+      outPath: paths.diffArtifactPath
+    })
+    const diffStats = await calculateFileStats(paths.diffArtifactPath)
 
     const beforeExists = await fileExists(input.document.sourcePath)
     const operation = beforeExists ? 'updated' : 'created'
@@ -233,6 +241,9 @@ export class RunDocxEditTracker {
       before_checksum: beforeChecksum,
       before_byte_size: beforeByteSize,
       before_modified_at: beforeModifiedAt,
+      preview_diff_artifact_path: paths.diffArtifactPath,
+      preview_diff_checksum: diffStats.checksum,
+      preview_diff_byte_size: diffStats.byteSize,
       after_checksum: afterStats.checksum,
       after_byte_size: afterStats.byteSize,
       after_modified_at: afterStats.modifiedAt,
