@@ -17,7 +17,7 @@
 2. 纯读取场景停留在 `read session`，只做解析、索引、搜索和精读。
 3. 进入 create、edit、history 或 rollback 后，升级到 `replay session`。
 4. 编辑始终写入当前 session 的最新状态，并生成新的 revision。
-5. 当前 session 可以投影出 `working` 和 `committed` 两类视图。
+5. 当前 session 维护最新工作态，apply 时可以投影出 `review` 和 `committed` 两类视图。
 6. run 收尾时从 `committed view` 直接写回源文件，并记录 `DocxApplyRecord`。
 7. 用户回退围绕 `DocxApplyRecord` 和 checkpoint 展开，不依赖任务内 revision 重放。
 
@@ -69,28 +69,18 @@
 - `committed view` 给最终写回使用，去除任务内审阅态标记。
 - `diff preview artifact` 给系统内 apply 预览使用，保留任务内新增、删除与替换标记，不写回真实源文件。
 
-### 相关数据定义
-
-```ts
-interface DocxViewArtifact {
-  kind: 'working' | 'review' | 'committed'
-  path: string
-  createdAt: number
-}
-```
-
 ### 规则说明
 
 视图关系固定为：
 
 ```text
-DocxReplaySession -> working/committed views -> artifacts
+DocxReplaySession -> working state -> review/committed view projections
 ```
 
-- `working artifact` 对应 AI 读取的当前工作态。
-- `review artifact` 对应系统内 diff 预览稿，只用于用户查看本次 AI 修改差异。
-- `committed artifact` 对应最终写回源文件的正式文档。
-- artifact 都只能从当前 session 单向生成。
+- `working state` 对应 AI 读取和继续编辑的当前任务态，只在任务内使用。
+- `review view` 对应系统内 diff 预览稿，只用于用户查看本次 AI 修改差异。
+- `committed view` 对应最终写回源文件的正式文档净稿。
+- apply 时只持久化 `DocxApplyRecord`、checkpoint 和 diff 预览稿；不再维护 session 级 artifact registry。
 
 ## 7. Edit / History / Rollback
 

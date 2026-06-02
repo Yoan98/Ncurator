@@ -221,6 +221,9 @@
 | before_checksum       | Utf8（Nullable） | 写回前文件 checksum |
 | before_byte_size      | Int64（Nullable）| 写回前文件大小 |
 | before_modified_at    | Int64（Nullable）| 写回前修改时间 |
+| preview_diff_artifact_path | Utf8       | 系统内 diff 预览稿路径 |
+| preview_diff_checksum | Utf8             | 系统内 diff 预览稿 checksum |
+| preview_diff_byte_size | Int64           | 系统内 diff 预览稿大小 |
 | after_checksum        | Utf8（Nullable） | 写回后文件 checksum |
 | after_byte_size       | Int64（Nullable）| 写回后文件大小 |
 | after_modified_at     | Int64（Nullable）| 写回后修改时间 |

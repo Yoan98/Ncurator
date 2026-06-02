@@ -319,7 +319,6 @@ export type DocxReplaySession = {
   revisionByDocId: Map<string, DocxRevision>
   nodeById: Map<string, DocxReplayNode>
   bodyNodeIds: string[]
-  viewArtifacts: Partial<Record<DocxViewArtifact['kind'], DocxViewArtifact>>
 }
 
 export type DocxReviewState =
@@ -349,14 +348,6 @@ export type DocxReplayNode = {
   createdRevisionRef: string
   changedRevisionRef?: string
   reviewQuery?: string
-}
-
-export type DocxViewArtifact = {
-  kind: 'working' | 'review' | 'committed'
-  path: string
-  checksum?: string
-  byteSize?: number
-  createdAt: number
 }
 
 export type DocxCapabilityToolsRuntimeState = {

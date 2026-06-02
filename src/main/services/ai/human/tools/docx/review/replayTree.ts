@@ -401,8 +401,7 @@ export const createReplaySessionFromSnapshot = (input: {
     revisionRefByDocId: new Map([[input.sourceDocId, 'v1']]),
     revisionByDocId: new Map(),
     nodeById,
-    bodyNodeIds,
-    viewArtifacts: {}
+    bodyNodeIds
   }
 }
 
@@ -573,7 +572,7 @@ export const applyRevisionToReplaySession = (input: {
 
 export const projectReplayNodes = (
   session: DocxReplaySession,
-  kind: 'working' | 'review' | 'committed'
+  kind: 'review' | 'committed'
 ): DocxReplayNode[] =>
   session.bodyNodeIds
     .map((nodeId) => session.nodeById.get(nodeId))

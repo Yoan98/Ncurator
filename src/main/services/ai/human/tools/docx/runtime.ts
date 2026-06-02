@@ -392,7 +392,6 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     clone.revisionRefByDocId = session.revisionRefByDocId
     clone.revisionByDocId = session.revisionByDocId
     clone.nextRevisionNumber = session.nextRevisionNumber
-    clone.viewArtifacts = session.viewArtifacts
 
     const targetChain: DocxRevision[] = []
     let cursor = inputValue.revisionRef
@@ -1557,8 +1556,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       nodeById: new Map(
         [...source.nodeById.entries()].map(([nodeId, node]) => [nodeId, { ...node }] as const)
       ),
-      bodyNodeIds: [...source.bodyNodeIds],
-      viewArtifacts: { ...source.viewArtifacts }
+      bodyNodeIds: [...source.bodyNodeIds]
     }
     return {
       ok: true,
@@ -1715,7 +1713,6 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     baseline.revisionRefByDocId = session.revisionRefByDocId
     baseline.revisionByDocId = session.revisionByDocId
     baseline.nextRevisionNumber = session.nextRevisionNumber
-    baseline.viewArtifacts = session.viewArtifacts
 
     for (const revision of targetChain.reverse()) {
       if (!revision.ops || revision.ops.length === 0) continue

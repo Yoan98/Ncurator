@@ -214,12 +214,6 @@ export class RunDocxEditTracker {
     await fs.rename(tempOutputPath, input.document.sourcePath)
     const afterStats = await calculateFileStats(input.document.sourcePath)
 
-    replaySession.viewArtifacts.committed = {
-      kind: 'committed',
-      path: input.document.sourcePath,
-      createdAt: Date.now()
-    }
-
     try {
       await fs.rm(sourceArtifactPath, { force: true })
     } catch {
