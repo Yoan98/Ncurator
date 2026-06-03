@@ -2,28 +2,18 @@ export type DocumentSourceType = 'file' | 'web'
 export type DocumentImportStatus = 1 | 2 | 3
 export type SearchSourceFilter = 'all' | DocumentSourceType
 export type WebSourceIdentityKind = 'normalized_url'
-export type WorkspaceSourceStatus =
-  | 'not_prepared'
-  | 'scanning'
-  | 'preparing'
-  | 'prepared'
-  | 'stale'
-  | 'failed'
-  | 'unavailable'
-export type WorkspaceNodeKind = 'directory' | 'file'
-export type WorkspacePrepareStatus =
-  | 'not_prepared'
-  | 'preparing'
-  | 'prepared'
-  | 'stale'
-  | 'failed'
-  | 'missing'
-export type WorkspacePrepareMode = 'full' | 'presence_only' | 'changes_only'
-export type WorkspaceFileIndexStatus =
-  | 'not_indexed'
+export type WebSourceIndexStatus =
+  | 'needs_index'
+  | 'crawling'
+  | 'crawl_failed'
   | 'indexing'
   | 'indexed'
-  | 'needs_update'
+  | 'index_failed'
+export type WorkspaceNodeKind = 'directory' | 'file'
+export type WorkspaceFileIndexStatus =
+  | 'needs_index'
+  | 'indexing'
+  | 'indexed'
   | 'failed'
 export type ReferenceKind = 'directory' | 'file' | 'web'
 export type KbAvailability = 'indexed' | 'partial' | 'not_indexed'
@@ -68,10 +58,17 @@ export interface WebSourceRecord {
   url: string
   title?: string
   document_id?: string
-  import_status: DocumentImportStatus
+  index_status: WebSourceIndexStatus
   include_selectors?: string[]
   exclude_selectors?: string[]
   fetched_at?: number
+  last_checked_at?: number
+  last_crawled_at?: number
+  last_indexed_at?: number
+  etag?: string
+  last_modified?: string
+  content_length?: number
+  content_hash?: string
   last_error?: string
   created_at: number
   updated_at: number
@@ -80,38 +77,7 @@ export interface WebSourceRecord {
 export interface WorkspaceSource {
   id: string
   name: string
-  root_path: string
-  status: WorkspaceSourceStatus
-  last_scan_at?: number
-  last_prepare_at?: number
-  last_error?: string
-  indexable_file_count?: number
-  indexed_file_count?: number
-  needs_update_file_count?: number
-  failed_file_count?: number
-  not_indexed_file_count?: number
-  web_source_count?: number
-  created_at: number
-  updated_at: number
-}
-
-export interface WorkspaceNode {
-  id: string
-  workspace_id: string
-  parent_id?: string
-  kind: WorkspaceNodeKind
-  name: string
-  relative_path: string
-  absolute_path: string
-  file_ext?: string
-  exists: boolean
-  size?: number
-  mtime_ms?: number
-  content_hash?: string
-  prepare_status: WorkspacePrepareStatus
-  document_id?: string
-  last_prepared_at?: number
-  last_error?: string
+  root_path?: string
   created_at: number
   updated_at: number
 }
@@ -154,12 +120,21 @@ export interface WorkspaceTreeEntry {
 }
 
 export interface WorkspaceFileSummary {
-  indexable_file_count: number
+  file_count: number
   indexed_file_count: number
-  needs_update_file_count: number
+  needs_index_count: number
   failed_file_count: number
-  not_indexed_file_count: number
-  web_source_count: number
+}
+
+export interface WorkspaceWebSummary {
+  web_count: number
+  needs_index_count: number
+  failed_count: number
+}
+
+export interface WorkspaceListItem extends WorkspaceSource {
+  file_count: number
+  web_count: number
 }
 
 export interface WorkspaceRuntimeBinding {
@@ -208,7 +183,6 @@ export type SelectedReference = DirectoryReference | FileReference | WebReferenc
 
 export interface WorkspaceSyncProgress {
   workspace_id: string
-  mode?: WorkspacePrepareMode
   phase: 'scan' | 'diff' | 'prepare' | 'inspect' | 'index' | 'complete'
   total: number
   completed: number
@@ -220,12 +194,7 @@ export interface WorkspaceSyncProgress {
 }
 
 export interface WorkspaceListResponse {
-  items: WorkspaceSource[]
-  total: number
-}
-
-export interface WorkspaceNodeListResponse {
-  items: WorkspaceNode[]
+  items: WorkspaceListItem[]
   total: number
 }
 
@@ -253,6 +222,7 @@ export interface ReferenceItemListResponse {
 export interface WebSourceListResponse {
   items: WebSourceRecord[]
   total: number
+  summary: WorkspaceWebSummary
 }
 
 export interface LegacyLocalImportMigrationStatus {
@@ -263,21 +233,18 @@ export interface LegacyLocalImportMigrationStatus {
 }
 
 export interface CreateWorkspaceSourceRequest {
-  rootPath: string
-  name?: string
-}
-
-export interface UpdateWorkspaceSourceRequest {
-  workspaceId: string
-  name?: string
-  status?: WorkspaceSourceStatus
-  lastError?: string
+  name: string
 }
 
 export interface WorkspaceMutationResponse {
   success: boolean
   workspace?: WorkspaceSource
   error?: string
+}
+
+export interface SetWorkspaceRootPathRequest {
+  workspaceId: string
+  rootPath: string
 }
 
 export interface PickDirectoryResponse {
@@ -292,29 +259,17 @@ export interface DeleteWorkspaceSourceResponse {
   error?: string
 }
 
-export interface ListWorkspaceNodesRequest {
-  workspaceId: string
-  parentId?: string
-  kind?: WorkspaceNodeKind
-}
-
 export interface ScanWorkspaceRequest {
   workspaceId: string
 }
 
 export interface PrepareWorkspaceRequest {
   workspaceId: string
-  mode: WorkspacePrepareMode
 }
 
 export interface ListWorkspaceTreeRequest {
   workspaceId: string
   includeUnsupported?: boolean
-}
-
-export interface SyncWorkspaceIndexRequest {
-  workspaceId: string
-  rebuild?: boolean
 }
 
 export interface WorkspaceJobResponse {
@@ -327,6 +282,14 @@ export interface WorkspaceJobResponse {
 export interface RefreshWebSourceRequest {
   workspaceId: string
   webSourceId: string
+}
+
+export interface ScanWebSourcesRequest {
+  workspaceId: string
+}
+
+export interface PrepareWebSourcesRequest {
+  workspaceId: string
 }
 
 export interface DeleteWebSourceRequest {

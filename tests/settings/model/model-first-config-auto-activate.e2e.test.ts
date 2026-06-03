@@ -33,7 +33,7 @@ describe('settings model e2e', () => {
           run: async () => {
             await navigateToSettingsSection(page, 'model')
             await getSettingsLocator(page, settingsSelectors.modelAddButton).click()
-            await getSettingsLocator(page, settingsSelectors.modelProviderInput).waitFor({
+            await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput).waitFor({
               state: 'visible'
             })
           }

@@ -9,58 +9,70 @@ describe('settings workspace backend', () => {
       domain: 'settings',
       suite: 'workspace',
       groups: ['files'],
-      description: '工作空间扫描服务返回可支撑页面刷新的 progress 与最新列表数据源。',
+      description: '工作空间扫描服务生成文件索引记录，并由派生摘要支撑页面刷新。',
       fixtures: ['tests/fixtures/workspace'],
       runMode: 'single',
       execute: async (runtime) => {
-        const scanResult = await runtime.workspaceSourceService.scanWorkspace({
+        const now = Date.now()
+        const scanResult = await runtime.workspaceSourceService.scanWorkspaceTree({
           workspaceId: 'workspace-scan-contract',
           rootPath: runtime.workspaceRoot,
-          workspaceName: '扫描契约工作区'
+          workspaceName: '扫描契约工作区',
+          now
         })
+        const records = scanResult.entries
+          .filter((entry) => entry.kind === 'file' && entry.supported_for_index)
+          .map((entry) =>
+            runtime.workspaceSourceService.buildWorkspaceFileIndexRecord({
+              workspaceId: scanResult.workspace.id,
+              entry,
+              now
+            })
+          )
 
         await runtime.storageService.workspace.saveWorkspace(scanResult.workspace)
-        await runtime.storageService.workspace.replaceWorkspaceNodes(
+        await runtime.storageService.workspace.replaceWorkspaceFileIndexRecords(
           scanResult.workspace.id,
-          scanResult.nodes
+          records
         )
 
-        const workspaceList = await runtime.storageService.workspace.listWorkspaces()
+        const savedWorkspace = await runtime.storageService.workspace.getWorkspaceById(
+          scanResult.workspace.id
+        )
+        const fileSummary = await runtime.storageService.workspace.getWorkspaceFileSummary(
+          scanResult.workspace.id
+        )
 
         return {
-          scanResponse: {
-            success: true,
-            progress: {
-              workspace_id: scanResult.workspace.id,
-              phase: 'scan',
-              total: scanResult.nodes.length,
-              completed: scanResult.nodes.length
-            }
+          progress: {
+            workspace_id: scanResult.workspace.id,
+            phase: 'inspect' as const,
+            total: records.length,
+            completed: records.length
           },
-          workspaceList
+          savedWorkspace,
+          fileSummary
         }
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.scanResponse.success &&
-            result.scanResponse.progress.phase === 'scan' &&
-            typeof result.scanResponse.progress.completed === 'number',
+          result.progress.phase === 'inspect' && typeof result.progress.completed === 'number',
           {
             name: 'workspace-scan-returns-progress-shape',
             message:
-              '扫描执行结果应返回可用于页面展示的 progress 字段，对齐 SET-WORKSPACE-003-AC1。',
+              '检查目录变化的结果应返回可用于页面展示的 progress 字段，对齐 SET-WORKSPACE-003-AC1。',
             data: result
           }
         )
 
         runtime.assertThat(
-          result.workspaceList.length === 1 &&
-            result.workspaceList[0]?.status === 'not_prepared' &&
-            typeof result.workspaceList[0]?.last_scan_at === 'number',
+          Boolean(result.savedWorkspace?.root_path) &&
+            !('status' in (result.savedWorkspace || {})) &&
+            result.fileSummary.file_count === result.progress.total,
           {
-            name: 'workspace-scan-updates-list-refresh-source',
+            name: 'workspace-scan-derives-summary-from-file-index',
             message:
-              '扫描成功后，列表数据源应包含最新扫描时间与状态，可直接支撑页面刷新，对齐 SET-WORKSPACE-003-AC2。',
+              '扫描成功后，工作空间本体只保留容器信息，文件数量与需索引摘要由文件索引记录派生，对齐 SET-WORKSPACE-003-AC2、SET-WORKSPACE-005-AC2。',
             data: result
           }
         )

@@ -13,7 +13,7 @@
 
 ### 1.3 项目整体相关
 - `doc/architecture.md`：涉及项目整体架构或技术栈时阅读。
-- `doc/database.md`：涉及数据库结构、工作空间索引状态存储或持久化关系时阅读。
+- `doc/database.md`：涉及数据库结构、具名工作空间/网页索引状态存储或持久化关系时阅读。
 - `doc/project-structure.md`：涉及工程结构或目录归位时阅读。
 - `doc/ui-style.md`：涉及 UI 风格或通用交互规范时阅读。
 
@@ -24,7 +24,7 @@
 
 ### 1.5 prd产品文档相关
 - `doc/prd/workbench.md`：涉及 Workbench 产品需求、交互或验收标准时阅读。
-- `doc/prd/settings.md`：涉及 Settings 产品需求、工作空间资料/索引交互或验收标准时阅读。
+- `doc/prd/settings.md`：涉及 Settings 产品需求、具名工作空间资料/索引交互或验收标准时阅读。
 
 ## 2. 必须遵守的规则
 

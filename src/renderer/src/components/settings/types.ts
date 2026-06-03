@@ -1,9 +1,8 @@
 import type { ReactNode } from 'react'
 import type {
   LLMConfig,
-  WorkspaceTreeEntry,
-  WorkspaceSource,
-  WorkspaceSyncProgress
+  WorkspaceSyncProgress,
+  WorkspaceTreeEntry
 } from '../../../../shared/types'
 
 export type SettingsSectionValue = 'model' | 'workspace'
@@ -45,15 +44,4 @@ export type StatusBadgeVisual = {
   className: string
   tooltip: string
   icon: ReactNode
-}
-
-export type WorkspaceAction = 'scan' | 'prepare'
-
-export type WorkspaceStatusBadgeInput = {
-  status: WorkspaceSource['status']
-  lastScanAt?: number
-  lastPrepareAt?: number
-  lastError?: string
-  action?: WorkspaceAction
-  progress?: WorkspaceSyncProgress
 }

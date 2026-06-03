@@ -1,5 +1,9 @@
 import { describe, it } from 'vitest'
-import type { WebSourceRecord, WorkspaceNode, WorkspaceSource } from '../../../../src/shared/types'
+import type {
+  WebSourceRecord,
+  WorkspaceFileIndexRecord,
+  WorkspaceSource
+} from '../../../../src/shared/types'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 
 const NOW = 1_716_000_000_000
@@ -8,40 +12,27 @@ const WORKSPACE: WorkspaceSource = {
   id: 'settings-workspace-remove-contract',
   name: '待移除工作区',
   root_path: '/tmp/settings-workspace-remove-contract',
-  status: 'prepared',
   created_at: NOW,
   updated_at: NOW
 }
 
-const WORKSPACE_NODES: WorkspaceNode[] = [
-  {
-    id: 'settings-workspace-remove-contract-dir',
-    workspace_id: WORKSPACE.id,
-    kind: 'directory',
-    name: 'docs',
-    relative_path: 'docs',
-    absolute_path: `${WORKSPACE.root_path}/docs`,
-    exists: true,
-    prepare_status: 'not_prepared',
-    created_at: NOW,
-    updated_at: NOW
-  },
-  {
-    id: 'settings-workspace-remove-contract-file',
-    workspace_id: WORKSPACE.id,
-    parent_id: 'settings-workspace-remove-contract-dir',
-    kind: 'file',
-    name: 'brief.md',
-    relative_path: 'docs/brief.md',
-    absolute_path: `${WORKSPACE.root_path}/docs/brief.md`,
-    file_ext: 'md',
-    exists: true,
-    prepare_status: 'prepared',
-    document_id: 'settings-workspace-remove-contract-doc',
-    created_at: NOW,
-    updated_at: NOW
-  }
-]
+const FILE_RECORD: WorkspaceFileIndexRecord = {
+  id: 'settings-workspace-remove-contract-file',
+  workspace_id: WORKSPACE.id,
+  relative_path: 'docs/brief.docx',
+  absolute_path: `${WORKSPACE.root_path}/docs/brief.docx`,
+  name: 'brief.docx',
+  file_ext: 'docx',
+  size: 128,
+  mtime_ms: NOW,
+  content_hash: 'fixture-hash',
+  index_status: 'indexed',
+  document_id: 'settings-workspace-remove-contract-doc',
+  indexed_at: NOW,
+  last_checked_at: NOW,
+  created_at: NOW,
+  updated_at: NOW
+}
 
 const WEB_SOURCE: WebSourceRecord = {
   id: 'settings-workspace-remove-contract-web',
@@ -51,7 +42,10 @@ const WEB_SOURCE: WebSourceRecord = {
   url: 'https://example.com/remove-contract',
   title: '待移除网页资料',
   document_id: 'settings-workspace-remove-contract-web-doc',
-  import_status: 2,
+  index_status: 'indexed',
+  fetched_at: NOW,
+  last_crawled_at: NOW,
+  last_indexed_at: NOW,
   created_at: NOW,
   updated_at: NOW
 }
@@ -64,25 +58,27 @@ describe('settings workspace backend', () => {
       domain: 'settings',
       suite: 'workspace',
       groups: ['core'],
-      description: '移除工作空间后，列表、节点与网页资料数据源都不再返回该工作空间内容。',
+      description: '移除工作空间后，文件索引记录与网页资料记录都应一并清理。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
         await runtime.storageService.workspace.saveWorkspace(WORKSPACE)
-        await runtime.storageService.workspace.replaceWorkspaceNodes(WORKSPACE.id, WORKSPACE_NODES)
+        await runtime.storageService.workspace.replaceWorkspaceFileIndexRecords(WORKSPACE.id, [
+          FILE_RECORD
+        ])
         await runtime.storageService.webSource.saveWebSource(WEB_SOURCE)
 
         await runtime.storageService.workspace.deleteWorkspace(WORKSPACE.id)
 
         const workspaces = await runtime.storageService.workspace.listWorkspaces()
-        const nodes = await runtime.storageService.workspace.listWorkspaceNodes({
-          workspaceId: WORKSPACE.id
-        })
+        const fileRecords = await runtime.storageService.workspace.listWorkspaceFileIndexRecords(
+          WORKSPACE.id
+        )
         const webSources = await runtime.storageService.webSource.listWebSources(WORKSPACE.id)
 
         return {
           remainingWorkspaceIds: workspaces.map((item) => item.id),
-          remainingNodeCount: nodes.length,
+          remainingFileRecordIds: fileRecords.map((item) => item.id),
           remainingWebSourceIds: webSources.map((item) => item.id)
         }
       },
@@ -95,12 +91,11 @@ describe('settings workspace backend', () => {
         })
 
         runtime.assertThat(
-          result.remainingNodeCount === 0 &&
-            !result.remainingWebSourceIds.includes(WEB_SOURCE.id),
+          result.remainingFileRecordIds.length === 0 && result.remainingWebSourceIds.length === 0,
           {
-            name: 'removed-workspace-clears-followup-reference-sources',
+            name: 'removed-workspace-clears-file-and-web-sources',
             message:
-              '移除成功后，该工作空间的本地节点与网页资料数据源都应同时消失，对齐 SET-WORKSPACE-006-AC2。',
+              '移除成功后，该工作空间的文件索引记录与网页资料记录都应同时消失，对齐 SET-WORKSPACE-006-AC2。',
             data: result
           }
         )

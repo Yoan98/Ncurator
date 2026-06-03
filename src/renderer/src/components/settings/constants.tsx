@@ -1,8 +1,4 @@
-import type {
-  LlmProviderKind,
-  WorkspaceSource,
-  WebSourceRecord
-} from '../../../../shared/types'
+import type { LlmProviderKind } from '../../../../shared/types'
 import type { ReactNode } from 'react'
 import type { SettingsSectionMeta, SettingsSectionValue } from './types'
 import { HiCloudArrowDown, HiOutlineRectangleStack, HiSparkles } from 'react-icons/hi2'
@@ -144,26 +140,4 @@ export const MODEL_MAPPING: Record<string, { value: string; label: string }[]> =
     { value: 'Qwen/Qwen2.5-7B-Instruct', label: 'Qwen 2.5 7B' },
     { value: 'Qwen/Qwen2.5-Coder-32B-Instruct', label: 'Qwen 2.5 Coder 32B' }
   ]
-}
-
-export const WORKSPACE_STATUS_META: Record<
-  WorkspaceSource['status'],
-  { label: string; className: string }
-> = {
-  not_prepared: { label: '未建立索引', className: 'border-[#E5E5E4] bg-[#F8F8F7] text-[#666666]' },
-  scanning: { label: '检查中', className: 'border-[#FDE2D8] bg-[#FFF3EE] text-[#C66A4A]' },
-  preparing: { label: '索引中', className: 'border-[#FDE2D8] bg-[#FFF3EE] text-[#C66A4A]' },
-  prepared: { label: '可用', className: 'border-[#DCEBD7] bg-[#F3FAF0] text-[#4F7A46]' },
-  stale: { label: '需更新', className: 'border-[#FDECC8] bg-[#FFF9ED] text-[#AD7B18]' },
-  failed: { label: '失败', className: 'border-[#F7D5D9] bg-[#FFF2F4] text-[#B5455D]' },
-  unavailable: { label: '不可用', className: 'border-[#F7D5D9] bg-[#FFF2F4] text-[#B5455D]' }
-}
-
-export const WEB_SOURCE_STATUS_META: Record<
-  WebSourceRecord['import_status'],
-  { label: string; className: string }
-> = {
-  1: { label: '处理中', className: 'border-[#FDE2D8] bg-[#FFF3EE] text-[#C66A4A]' },
-  2: { label: '已抓取', className: 'border-[#DCEBD7] bg-[#F3FAF0] text-[#4F7A46]' },
-  3: { label: '失败', className: 'border-[#F7D5D9] bg-[#FFF2F4] text-[#B5455D]' }
 }

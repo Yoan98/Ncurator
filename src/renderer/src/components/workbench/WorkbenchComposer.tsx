@@ -872,7 +872,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                     <span className="truncate">{workspace.name}</span>
                   </span>
                 ),
-                title: workspace.root_path
+                title: workspace.root_path || '未设置文件目录'
               }))}
               placeholder="工作区"
               data-testid={workbenchSelectors.workspaceSelect}

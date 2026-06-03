@@ -128,12 +128,24 @@ export class IngestionService {
     excludeSelectors?: string[]
   }) {
     const { title, text } = await this.loadWebPageText(payload)
+    return this.processWebText({
+      url: payload.url,
+      title,
+      text
+    })
+  }
+
+  public async processWebText(payload: {
+    url: string
+    title?: string
+    text: string
+  }) {
     const docs = [
       new Document({
-        pageContent: text,
+        pageContent: payload.text,
         metadata: {
           url: payload.url,
-          title: title || '',
+          title: payload.title || '',
           source_type: 'web'
         }
       })
@@ -141,7 +153,7 @@ export class IngestionService {
     const { bigSplitDocs, miniSplitDocs } = await this.splitDocuments(docs)
 
     return {
-      title,
+      title: payload.title,
       bigSplitDocs,
       miniSplitDocs
     }

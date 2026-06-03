@@ -4,9 +4,7 @@ import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_E2E_TIMEOUT_MS,
   getSettingsLocator,
-  getSettingsPrefixLocator,
-  navigateToSettingsSection,
-  setSettingsE2EApiOverrides
+  navigateToSettingsSection
 } from '../../../harness/e2e/settings'
 
 describe('settings workspace e2e', () => {
@@ -16,92 +14,85 @@ describe('settings workspace e2e', () => {
       domain: 'settings',
       suite: 'workspace',
       groups: ['core'],
-      description: '添加工作空间时，取消目录选择无副作用，成功选择后立即创建并切到新项。',
+      description: '添加工作空间时按名称创建空容器，并在成功后自动切到新工作空间。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
         const { page } = runtime
-        const workspaceDetail = getSettingsLocator(page, importSelectors.workspaceDetail)
+        let emptyNameBlocked = false
 
         await runtime.step({
           name: 'open-empty-workspace-page',
-          message: '进入空工作空间页，并把目录选择器先设为取消返回。',
+          message: '进入空工作空间页并打开创建工作空间弹窗。',
           run: async () => {
-            await setSettingsE2EApiOverrides(page, {
-              pickDirectoryResponse: {
-                canceled: true
-              }
-            })
             await navigateToSettingsSection(page, 'workspace')
             await getSettingsLocator(page, importSelectors.workspaceEmptyState).waitFor({
               state: 'visible'
             })
-          }
-        })
-
-        await runtime.step({
-          name: 'cancel-directory-selection',
-          message: '点击添加工作空间并确认取消路径不会创建记录。',
-          run: async () => {
             await getSettingsLocator(page, importSelectors.createWorkspaceButton).click()
           }
         })
 
-        const afterCancelCardCount = await getSettingsPrefixLocator(
-          page,
-          importSelectors.workspaceCardPrefix
-        ).count()
-        const createFailureVisible = await page.getByText('创建工作空间失败').isVisible().catch(() => false)
+        await runtime.step({
+          name: 'block-empty-name',
+          message: '不输入名称直接提交，确认页面拦截空名称创建。',
+          run: async () => {
+            await getSettingsLocator(page, importSelectors.createWorkspaceConfirmButton).click()
+            emptyNameBlocked = true
+          }
+        })
 
         await runtime.step({
-          name: 'select-directory-successfully',
-          message: '把目录选择器设为成功返回，再次添加工作空间并等待新项自动选中。',
+          name: 'create-workspace-by-name',
+          message: '输入工作空间名称并创建，等待左侧列表和右侧详情同步更新。',
           run: async () => {
-            await setSettingsE2EApiOverrides(page, {
-              pickDirectoryResponse: {
-                canceled: false,
-                path: '/tmp/ncurator-e2e-settings-created'
-              }
-            })
-            await getSettingsLocator(page, importSelectors.createWorkspaceButton).click()
+            await getSettingsLocator(page, importSelectors.createWorkspaceNameInput).fill(
+              '新工作空间'
+            )
+            await getSettingsLocator(page, importSelectors.createWorkspaceConfirmButton).click()
             await getSettingsLocator(
               page,
               `${importSelectors.workspaceCardPrefix}-e2e-import-workspace-1`
             ).waitFor({ state: 'visible' })
-            await workspaceDetail
-              .getByText('/tmp/ncurator-e2e-settings-created', { exact: true })
+            await getSettingsLocator(page, importSelectors.workspaceDetail)
+              .getByRole('heading', { name: '新工作空间' })
               .waitFor({ state: 'visible' })
           }
         })
 
+        const detailText =
+          (await getSettingsLocator(page, importSelectors.workspaceDetail).textContent()) || ''
+
         return {
-          afterCancelCardCount,
-          createFailureVisible,
-          finalCardCount: await getSettingsPrefixLocator(page, importSelectors.workspaceCardPrefix).count(),
-          createdWorkspaceVisible: await workspaceDetail
-            .getByRole('heading', { name: 'ncurator-e2e-settings-created' })
+          emptyNameBlocked,
+          createModalStillVisible: await getSettingsLocator(
+            page,
+            importSelectors.createWorkspaceNameInput
+          ).isVisible(),
+          workspaceCardCount: await getSettingsLocator(page, importSelectors.workspaceList)
+            .locator('button')
+            .count(),
+          createdWorkspaceVisible: await getSettingsLocator(page, importSelectors.workspaceDetail)
+            .getByRole('heading', { name: '新工作空间' })
             .isVisible(),
-          createdRootPathVisible: await workspaceDetail
-            .getByText('/tmp/ncurator-e2e-settings-created', { exact: true })
-            .isVisible()
+          showsUnboundRootHint: detailText.includes('未设置工作文件地址')
         }
       },
       assert: async (result, runtime) => {
-        await runtime.assertThat(result.afterCancelCardCount === 0 && !result.createFailureVisible, {
-          name: 'cancel-pick-directory-has-no-side-effects',
-          message:
-            '用户取消目录选择时，不应创建工作空间，也不应弹出失败提示，对齐 SET-WORKSPACE-002-AC1。',
+        await runtime.assertThat(result.emptyNameBlocked && result.createModalStillVisible, {
+          name: 'empty-name-is-blocked',
+          message: '工作空间名称为空时不允许提交创建，对齐 SET-WORKSPACE-002-AC1。',
           data: result
         })
 
         await runtime.assertThat(
-          result.finalCardCount === 1 &&
+          result.workspaceCardCount === 1 &&
             result.createdWorkspaceVisible &&
-            result.createdRootPathVisible,
+            result.showsUnboundRootHint,
           {
-            name: 'successful-create-selects-new-workspace',
+            name: 'created-workspace-is-selected-immediately',
             message:
-              '创建成功后，新工作空间应立刻出现在列表中并成为当前选中项，对齐 SET-WORKSPACE-002-AC2。',
+              '创建成功后，新工作空间应立刻进入列表并成为当前选中项，同时作为空容器显示未绑定文件目录，对齐 SET-WORKSPACE-002-AC2。',
             data: result
           }
         )

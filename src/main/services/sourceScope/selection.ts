@@ -134,6 +134,6 @@ export const buildWebReferenceItem = (source: WebSourceRecord): WebReference => 
   webSourceId: source.id,
   name: source.title || source.url,
   url: source.url,
-  kbDocumentIds: source.document_id && source.import_status === 2 ? [source.document_id] : [],
-  kbAvailability: source.document_id && source.import_status === 2 ? 'indexed' : 'not_indexed'
+  kbDocumentIds: source.document_id && source.index_status === 'indexed' ? [source.document_id] : [],
+  kbAvailability: source.document_id && source.index_status === 'indexed' ? 'indexed' : 'not_indexed'
 })

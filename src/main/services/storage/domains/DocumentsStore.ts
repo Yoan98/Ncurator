@@ -80,7 +80,7 @@ type WebSourceRow = Record<string, unknown> & {
   url?: unknown
   title?: unknown
   document_id?: unknown
-  import_status?: unknown
+  index_status?: unknown
   fetched_at?: unknown
   last_error?: unknown
   created_at?: unknown
@@ -89,8 +89,7 @@ type WebSourceRow = Record<string, unknown> & {
 
 const toWebSourceRecord = (value: unknown): WebSourceRecord => {
   const row = asRecord(value) as WebSourceRow
-  const status = toNumber(row.import_status, 2)
-  const importStatus = (status === 1 ? 1 : status === 3 ? 3 : 2) as 1 | 2 | 3
+  const rawIndexStatus = toOptionalString(row.index_status)
   return {
     id: toString(row.id),
     workspace_id: toString(row.workspace_id),
@@ -99,7 +98,14 @@ const toWebSourceRecord = (value: unknown): WebSourceRecord => {
     url: toString(row.url),
     title: toOptionalString(row.title),
     document_id: toOptionalString(row.document_id),
-    import_status: importStatus,
+    index_status:
+      rawIndexStatus === 'crawling' ||
+      rawIndexStatus === 'crawl_failed' ||
+      rawIndexStatus === 'indexing' ||
+      rawIndexStatus === 'indexed' ||
+      rawIndexStatus === 'index_failed'
+        ? rawIndexStatus
+        : 'needs_index',
     fetched_at: toOptionalNumber(row.fetched_at),
     last_error: toOptionalString(row.last_error),
     created_at: toNumber(row.created_at, 0),

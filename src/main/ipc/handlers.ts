@@ -49,13 +49,15 @@ import type {
   CreateWorkspaceSourceRequest,
   DeleteWorkspaceSourceResponse,
   ListReferenceItemsRequest,
-  ListWorkspaceNodesRequest,
   ListWorkspaceTreeRequest,
   OpenPathWithApplicationRequest,
   OpenPathWithApplicationResponse,
+  PrepareWebSourcesRequest,
   PickDirectoryResponse,
   PickApplicationResponse,
   ReferenceItemListResponse,
+  ScanWebSourcesRequest,
+  SetWorkspaceRootPathRequest,
   ListWebSourcesRequest,
   RefreshWebSourceRequest,
   DeleteWebSourceRequest,
@@ -67,9 +69,7 @@ import type {
   WorkspaceFileIndexRecord,
   WorkspaceJobResponse,
   WorkspaceMutationResponse,
-  WorkspaceNode,
-  WorkspaceNodeListResponse,
-  WorkspaceTreeEntry,
+  WorkspaceListItem,
   WorkspaceTreeListResponse,
   WorkspaceSource,
   WorkspaceListResponse,
@@ -88,83 +88,24 @@ import {
   getE2EFixtureWebSourceList,
   getE2EFixtureWorkspaceList,
   getE2EFixtureWorkspaceDelayMs,
-  getE2EFixtureWorkspaceNodes,
   getE2EFixtureReferenceItems,
   ingestE2EFixtureWebSource,
   ingestE2EFixtureWebSources,
   isE2EFixtureModeEnabled,
   matchE2EChatScenario,
+  prepareE2EFixtureWebSources,
   prepareE2EFixtureWorkspace,
   refreshE2EFixtureWebSource,
-  scanE2EFixtureWorkspace
+  scanE2EFixtureWebSources,
+  scanE2EFixtureWorkspace,
+  getE2EFixtureWorkspaceTree,
+  setE2EFixtureWorkspaceRootPath
 } from '../testing/e2eFixtures'
 
 const jieba = Jieba.withDict(dict)
 const execFileAsync = promisify(execFile)
 const getErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
-
-const deriveWorkspaceStatus = (input: {
-  records: WorkspaceFileIndexRecord[]
-  indexing?: boolean
-}): WorkspaceSource['status'] => {
-  if (input.indexing || input.records.some((item) => item.index_status === 'indexing')) {
-    return 'preparing'
-  }
-  if (input.records.some((item) => item.index_status === 'failed')) return 'failed'
-  if (input.records.some((item) => item.index_status === 'needs_update')) return 'stale'
-  if (input.records.some((item) => item.index_status === 'indexed')) return 'prepared'
-  if (input.records.some((item) => item.index_status === 'not_indexed')) return 'not_prepared'
-  return 'not_prepared'
-}
-
-const toLegacyWorkspaceNodes = (input: {
-  entries: WorkspaceTreeEntry[]
-  records: WorkspaceFileIndexRecord[]
-  now: number
-}): WorkspaceNode[] => {
-  const recordMap = new Map(input.records.map((record) => [record.relative_path, record] as const))
-
-  return input.entries
-    .filter((entry) => entry.kind === 'directory' || entry.supported_for_index)
-    .map((entry) => {
-      const record = entry.kind === 'file' ? recordMap.get(entry.relative_path) : undefined
-      const prepareStatus =
-        entry.kind === 'directory'
-          ? 'not_prepared'
-          : record?.index_status === 'indexed'
-            ? 'prepared'
-            : record?.index_status === 'indexing'
-              ? 'preparing'
-              : record?.index_status === 'needs_update'
-                ? 'stale'
-                : record?.index_status === 'failed'
-                  ? 'failed'
-                  : 'not_prepared'
-
-      return {
-        id: entry.id,
-        workspace_id: entry.workspace_id,
-        parent_id: entry.parent_id,
-        kind: entry.kind,
-        name: entry.name,
-        relative_path: entry.relative_path,
-        absolute_path: entry.absolute_path,
-        file_ext: entry.file_ext,
-        exists: true,
-        size: entry.size,
-        mtime_ms: entry.mtime_ms,
-        content_hash: record?.content_hash,
-        prepare_status: prepareStatus,
-        document_id: record?.document_id,
-        last_prepared_at: record?.indexed_at,
-        last_error: record?.last_error,
-        created_at: record?.created_at || input.now,
-        updated_at: record?.updated_at || input.now
-      } satisfies WorkspaceNode
-    })
-    .sort((a, b) => a.relative_path.localeCompare(b.relative_path))
-}
 
 const toTrimmedStringList = (values: string[] | undefined): string[] =>
   Array.isArray(values) ? values.map((value) => String(value).trim()).filter(Boolean) : []
@@ -312,20 +253,19 @@ export function registerHandlers(services: {
     await new Promise<void>((resolve) => setTimeout(resolve, durationMs))
   }
 
-  const hydrateWorkspaceSummary = async (workspace: WorkspaceSource): Promise<WorkspaceSource> => {
+  const hydrateWorkspaceListItem = async (
+    workspace: WorkspaceSource
+  ): Promise<WorkspaceListItem> => {
     await ensureWebSourcesHydrated()
-    const webSourceCount = (await webSourceStore.listWebSources(workspace.id)).length
-    const summary = await workspaceStore.refreshWorkspaceSummary(workspace.id, webSourceCount)
-    const status = deriveWorkspaceStatus({
-      records: await workspaceStore.listWorkspaceFileIndexRecords(workspace.id)
-    })
-    const nextWorkspace: WorkspaceSource = {
+    const [fileSummary, webSummary] = await Promise.all([
+      workspaceStore.getWorkspaceFileSummary(workspace.id),
+      webSourceStore.getWorkspaceWebSummary(workspace.id)
+    ])
+    return {
       ...workspace,
-      ...summary,
-      status
+      file_count: fileSummary.file_count,
+      web_count: webSummary.web_count
     }
-    await workspaceStore.saveWorkspace(nextWorkspace)
-    return nextWorkspace
   }
 
   const readWorkspaceTree = async (
@@ -334,6 +274,13 @@ export function registerHandlers(services: {
   ): Promise<WorkspaceTreeListResponse> => {
     const workspace = await workspaceStore.getWorkspaceById(workspaceId)
     if (!workspace) {
+      return {
+        items: [],
+        total: 0,
+        summary: workspaceStore.getEmptySummary()
+      }
+    }
+    if (!workspace.root_path) {
       return {
         items: [],
         total: 0,
@@ -351,11 +298,10 @@ export function registerHandlers(services: {
       entries: scanResult.entries,
       records
     })
-    const visibleItems = includeUnsupported ? merged : merged.filter((item) => item.kind === 'directory' || item.supported_for_index)
-    const summary = await workspaceStore.refreshWorkspaceSummary(
-      workspaceId,
-      workspace.web_source_count || 0
-    )
+    const visibleItems = includeUnsupported
+      ? merged
+      : merged.filter((item) => item.kind === 'directory' || item.supported_for_index)
+    const summary = await workspaceStore.getWorkspaceFileSummary(workspaceId)
     return {
       items: visibleItems,
       total: visibleItems.length,
@@ -770,7 +716,12 @@ export function registerHandlers(services: {
             url,
             title: document.source_title || document.name,
             document_id: document.id,
-            import_status: document.import_status,
+            index_status:
+              document.import_status === 2
+                ? 'indexed'
+                : document.import_status === 3
+                  ? 'index_failed'
+                  : 'indexing',
             fetched_at: document.fetched_at || document.created_at,
             last_error: document.last_error,
             updated_at: now
@@ -783,8 +734,10 @@ export function registerHandlers(services: {
           normalizedUrl,
           title: document.source_title || document.name,
           documentId: document.id,
-          importStatus: document.import_status,
+          indexStatus: document.import_status === 2 ? 'indexed' : document.import_status === 3 ? 'index_failed' : 'indexing',
           fetchedAt: document.fetched_at || document.created_at,
+          lastCrawledAt: document.fetched_at || document.created_at,
+          lastIndexedAt: document.import_status === 2 ? document.fetched_at || document.created_at : undefined,
           lastError: document.last_error,
           now
         })
@@ -792,6 +745,52 @@ export function registerHandlers(services: {
       } catch (error) {
         void error
       }
+    }
+  }
+
+  const inspectWebSourceRecord = async (source: WebSourceRecord): Promise<WebSourceRecord> => {
+    const now = Date.now()
+    await webSourceStore.updateWebSource(source.id, {
+      index_status: 'crawling',
+      last_error: undefined,
+      updated_at: now
+    })
+
+    try {
+      const inspection = await webSourceService.inspectUrl({
+        url: source.url,
+        includeSelectors: source.include_selectors,
+        excludeSelectors: source.exclude_selectors
+      })
+      const changed = !source.content_hash || source.content_hash !== inspection.contentHash
+      const inspectedAt = Date.now()
+      const nextSource: WebSourceRecord = {
+        ...source,
+        title: inspection.title || source.title,
+        index_status: changed ? 'needs_index' : source.index_status === 'indexed' ? 'indexed' : 'needs_index',
+        last_checked_at: inspectedAt,
+        last_crawled_at: inspectedAt,
+        fetched_at: source.fetched_at,
+        etag: inspection.etag,
+        last_modified: inspection.lastModified,
+        content_length: inspection.contentLength,
+        content_hash: inspection.contentHash,
+        last_error: undefined,
+        updated_at: inspectedAt
+      }
+      await webSourceStore.saveWebSource(nextSource)
+      return nextSource
+    } catch (error: unknown) {
+      const failedAt = Date.now()
+      const failedSource: WebSourceRecord = {
+        ...source,
+        index_status: 'crawl_failed',
+        last_checked_at: failedAt,
+        last_error: getErrorMessage(error),
+        updated_at: failedAt
+      }
+      await webSourceStore.saveWebSource(failedSource)
+      throw error
     }
   }
 
@@ -804,7 +803,7 @@ export function registerHandlers(services: {
     const nextPendingSource: WebSourceRecord = {
       ...source,
       document_id: nextDocumentId,
-      import_status: 1,
+      index_status: 'crawling',
       last_error: undefined,
       updated_at: now
     }
@@ -840,11 +839,49 @@ export function registerHandlers(services: {
 
     emitSourceListRefresh(event.sender)
 
+    let inspection: Awaited<ReturnType<WebSourceService['inspectUrl']>>
     try {
-      const splitDocs = await ingestionService.processWebUrl({
+      inspection = await webSourceService.inspectUrl({
         url: source.url,
         includeSelectors: source.include_selectors,
         excludeSelectors: source.exclude_selectors
+      })
+    } catch (error: unknown) {
+      await documentsStore.updateDocumentImportStatus(nextDocumentId, 3).catch(() => {})
+      const failedAt = Date.now()
+      const failedSource: WebSourceRecord = {
+        ...nextPendingSource,
+        index_status: 'crawl_failed',
+        last_checked_at: failedAt,
+        last_error: getErrorMessage(error),
+        updated_at: failedAt
+      }
+      await webSourceStore.saveWebSource(failedSource)
+      emitSourceListRefresh(event.sender)
+      throw error
+    }
+
+    const crawledAt = Date.now()
+    const crawlingDoneSource: WebSourceRecord = {
+      ...nextPendingSource,
+      title: inspection.title || nextPendingSource.title,
+      index_status: 'indexing',
+      last_checked_at: crawledAt,
+      last_crawled_at: crawledAt,
+      etag: inspection.etag,
+      last_modified: inspection.lastModified,
+      content_length: inspection.contentLength,
+      content_hash: inspection.contentHash,
+      updated_at: crawledAt
+    }
+    await webSourceStore.saveWebSource(crawlingDoneSource)
+    emitSourceListRefresh(event.sender)
+
+    try {
+      const splitDocs = await ingestionService.processWebText({
+        url: source.url,
+        title: inspection.title,
+        text: inspection.text
       })
       const documentName = splitDocs.title?.trim() || source.url
       await documentsStore.updateDocumentById(nextDocumentId, {
@@ -880,10 +917,11 @@ export function registerHandlers(services: {
       await documentsStore.updateDocumentImportStatus(nextDocumentId, 2)
 
       const refreshedSource: WebSourceRecord = {
-        ...nextPendingSource,
+        ...crawlingDoneSource,
         title: documentName,
-        import_status: 2,
+        index_status: 'indexed',
         fetched_at: Date.now(),
+        last_indexed_at: Date.now(),
         last_error: undefined,
         updated_at: Date.now()
       }
@@ -893,8 +931,8 @@ export function registerHandlers(services: {
     } catch (error: unknown) {
       await documentsStore.updateDocumentImportStatus(nextDocumentId, 3).catch(() => {})
       const failedSource: WebSourceRecord = {
-        ...nextPendingSource,
-        import_status: 3,
+        ...crawlingDoneSource,
+        index_status: 'index_failed',
         last_error: getErrorMessage(error),
         updated_at: Date.now()
       }
@@ -933,7 +971,7 @@ export function registerHandlers(services: {
             normalizedUrl,
             includeSelectors: payload.includeSelectors,
             excludeSelectors: payload.excludeSelectors,
-            importStatus: 1
+            indexStatus: 'needs_index'
           })
         const nextSource: WebSourceRecord = {
           ...source,
@@ -942,23 +980,27 @@ export function registerHandlers(services: {
           normalized_url: normalizedUrl,
           include_selectors: payload.includeSelectors,
           exclude_selectors: payload.excludeSelectors,
+          index_status: 'needs_index',
+          last_error: undefined,
           updated_at: Date.now()
         }
         if (!existing) {
           await webSourceStore.saveWebSource(nextSource)
-        } else {
-          await webSourceStore.updateWebSource(existing.id, {
-            url,
-            include_selectors: payload.includeSelectors,
-            exclude_selectors: payload.excludeSelectors,
-            updated_at: nextSource.updated_at
+          } else {
+            await webSourceStore.updateWebSource(existing.id, {
+              url,
+              include_selectors: payload.includeSelectors,
+              exclude_selectors: payload.excludeSelectors,
+              index_status: 'needs_index',
+              last_error: undefined,
+              updated_at: nextSource.updated_at
           })
         }
-        const refreshed = await refreshWebSourceRecord(event, nextSource)
+        emitSourceListRefresh(event.sender)
         return {
           success: true,
-          count: refreshed.chunkCount,
-          source: refreshed.source
+          count: 0,
+          source: nextSource
         }
       } catch (error: unknown) {
         console.error('❌ [INGEST-WEB] ERROR:', error)
@@ -1007,7 +1049,7 @@ export function registerHandlers(services: {
               normalizedUrl,
               includeSelectors: item.includeSelectors,
               excludeSelectors: item.excludeSelectors,
-              importStatus: 1
+              indexStatus: 'needs_index'
             })
           const nextSource: WebSourceRecord = {
             ...source,
@@ -1016,6 +1058,8 @@ export function registerHandlers(services: {
             normalized_url: normalizedUrl,
             include_selectors: item.includeSelectors,
             exclude_selectors: item.excludeSelectors,
+            index_status: 'needs_index',
+            last_error: undefined,
             updated_at: Date.now()
           }
           if (!existing) {
@@ -1025,6 +1069,8 @@ export function registerHandlers(services: {
               url,
               include_selectors: item.includeSelectors,
               exclude_selectors: item.excludeSelectors,
+              index_status: 'needs_index',
+              last_error: undefined,
               updated_at: nextSource.updated_at
             })
           }
@@ -1032,22 +1078,6 @@ export function registerHandlers(services: {
         }
 
         emitSourceListRefresh(event.sender)
-
-        const concurrency = Math.max(1, WEB_INGEST_CONCURRENCY)
-        let index = 0
-        const runOne = async () => {
-          for (;;) {
-            const current = preparedSources[index++]
-            if (!current) return
-            try {
-              await refreshWebSourceRecord(event, current)
-            } catch (error) {
-              console.error('❌ [INGEST-WEBS] ERROR:', error)
-            }
-          }
-        }
-
-        await Promise.all(Array.from({ length: concurrency }, () => runOne()))
         return { success: true, created: preparedSources.length }
       } catch (error: unknown) {
         console.error('❌ [INGEST-WEBS] ERROR:', error)
@@ -1185,7 +1215,9 @@ export function registerHandlers(services: {
       const fixtureList = getE2EFixtureWorkspaceList()
       if (fixtureList) return fixtureList
       const workspaces = await workspaceStore.listWorkspaces()
-      const items = await Promise.all(workspaces.map((workspace) => hydrateWorkspaceSummary(workspace)))
+      const items = await Promise.all(
+        workspaces.map((workspace) => hydrateWorkspaceListItem(workspace))
+      )
       return { items, total: items.length }
     } catch (error: unknown) {
       console.error('❌ [WORKSPACE-LIST] ERROR:', error)
@@ -1197,60 +1229,34 @@ export function registerHandlers(services: {
     'workspace-create',
     async (event, payload: CreateWorkspaceSourceRequest): Promise<WorkspaceMutationResponse> => {
       try {
+        const fixtureRootPath = String(
+          (payload as CreateWorkspaceSourceRequest & { rootPath?: string })?.rootPath || ''
+        ).trim()
         const fixtureCreate = createE2EFixtureWorkspace({
-          rootPath: payload.rootPath,
+          rootPath: fixtureRootPath,
           name: payload.name
         })
         if (fixtureCreate) {
           emitSourceListRefresh(event.sender)
           return fixtureCreate
         }
-        const existingWorkspaces = await workspaceStore.listWorkspaces()
-        await workspaceService.assertNoNestedWorkspace(
-          payload.rootPath,
-          existingWorkspaces.map((workspace) => workspace.root_path)
-        )
-
+        const name = String(payload.name || '').trim()
+        if (!name) {
+          return { success: false, error: '工作空间名称不能为空' }
+        }
         const workspaceId = uuidv4()
         const now = Date.now()
-        const scanResult = await workspaceService.scanWorkspaceTree({
-          workspaceId,
-          rootPath: payload.rootPath,
-          workspaceName: payload.name,
-          now
-        })
-        const supportedEntries = scanResult.entries.filter(
-          (entry) => entry.kind === 'file' && entry.supported_for_index
-        )
-        const records = supportedEntries.map((entry) =>
-          workspaceService.buildWorkspaceFileIndexRecord({
-            workspaceId,
-            entry,
-            now
-          })
-        )
-        await workspaceStore.saveWorkspace({
-          ...scanResult.workspace,
-          indexable_file_count: records.length,
-          not_indexed_file_count: records.length,
-          indexed_file_count: 0,
-          needs_update_file_count: 0,
-          failed_file_count: 0,
-          web_source_count: 0
-        })
-        await workspaceStore.replaceWorkspaceFileIndexRecords(workspaceId, records)
+        const workspace: WorkspaceSource = {
+          id: workspaceId,
+          name,
+          created_at: now,
+          updated_at: now
+        }
+        await workspaceStore.saveWorkspace(workspace)
         emitSourceListRefresh(event.sender)
         return {
           success: true,
-          workspace: await hydrateWorkspaceSummary({
-            ...scanResult.workspace,
-            indexable_file_count: records.length,
-            not_indexed_file_count: records.length,
-            indexed_file_count: 0,
-            needs_update_file_count: 0,
-            failed_file_count: 0,
-            web_source_count: 0
-          })
+          workspace
         }
       } catch (error: unknown) {
         console.error('❌ [WORKSPACE-CREATE] ERROR:', error)
@@ -1269,6 +1275,7 @@ export function registerHandlers(services: {
           return fixtureResponse
         }
         await workspaceStore.deleteWorkspace(String(workspaceId || '').trim())
+        emitSourceListRefresh(event.sender)
         return { success: true, deletedWorkspaceId: String(workspaceId || '').trim() }
       } catch (error: unknown) {
         console.error('❌ [WORKSPACE-DELETE] ERROR:', error)
@@ -1278,26 +1285,61 @@ export function registerHandlers(services: {
   )
 
   ipcMain.handle(
-    'workspace-nodes',
-    async (_event, payload: ListWorkspaceNodesRequest): Promise<WorkspaceNodeListResponse> => {
+    'workspace-set-root-path',
+    async (event, payload: SetWorkspaceRootPathRequest): Promise<WorkspaceMutationResponse> => {
       try {
-        const fixtureNodes = getE2EFixtureWorkspaceNodes(String(payload.workspaceId || '').trim())
-        if (fixtureNodes) return fixtureNodes
-        const workspaceId = String(payload.workspaceId || '').trim()
-        const tree = await readWorkspaceTree(workspaceId, false)
-        const records = await workspaceStore.listWorkspaceFileIndexRecords(workspaceId)
+        const workspaceId = String(payload?.workspaceId || '').trim()
+        const rootPath = String(payload?.rootPath || '').trim()
+        if (!workspaceId) return { success: false, error: 'workspaceId is required' }
+        if (!rootPath) return { success: false, error: '文件目录不能为空' }
+
+        const fixtureResponse = setE2EFixtureWorkspaceRootPath(workspaceId, rootPath)
+        if (fixtureResponse) {
+          emitSourceListRefresh(event.sender)
+          return fixtureResponse
+        }
+
+        const currentWorkspace = await workspaceStore.getWorkspaceById(workspaceId)
+        if (!currentWorkspace) {
+          return { success: false, error: 'workspace not found' }
+        }
+        const existingWorkspaces = await workspaceStore.listWorkspaces()
+        await workspaceService.assertNoNestedWorkspace(
+          rootPath,
+          existingWorkspaces
+            .filter((workspace) => workspace.id !== workspaceId && workspace.root_path)
+            .map((workspace) => workspace.root_path || '')
+        )
+
         const now = Date.now()
-        let items = toLegacyWorkspaceNodes({ entries: tree.items, records, now })
-        if (payload.parentId) {
-          items = items.filter((item) => item.parent_id === String(payload.parentId).trim())
+        const scanResult = await workspaceService.scanWorkspaceTree({
+          workspaceId,
+          rootPath,
+          workspaceName: currentWorkspace.name,
+          now
+        })
+        const supportedEntries = scanResult.entries.filter(
+          (entry) => entry.kind === 'file' && entry.supported_for_index
+        )
+        const records = supportedEntries.map((entry) =>
+          workspaceService.buildWorkspaceFileIndexRecord({
+            workspaceId,
+            entry,
+            now
+          })
+        )
+        await workspaceStore.replaceWorkspaceFileIndexRecords(workspaceId, records)
+        const workspace: WorkspaceSource = {
+          ...currentWorkspace,
+          root_path: scanResult.workspace.root_path,
+          updated_at: now
         }
-        if (payload.kind) {
-          items = items.filter((item) => item.kind === payload.kind)
-        }
-        return { items, total: items.length }
+        await workspaceStore.saveWorkspace(workspace)
+        emitSourceListRefresh(event.sender)
+        return { success: true, workspace }
       } catch (error: unknown) {
-        console.error('❌ [WORKSPACE-NODES] ERROR:', error)
-        return { items: [], total: 0 }
+        console.error('❌ [WORKSPACE-SET-ROOT-PATH] ERROR:', error)
+        return { success: false, error: getErrorMessage(error) }
       }
     }
   )
@@ -1306,6 +1348,11 @@ export function registerHandlers(services: {
     'workspace-tree',
     async (_event, payload: ListWorkspaceTreeRequest): Promise<WorkspaceTreeListResponse> => {
       try {
+        const fixtureTree = getE2EFixtureWorkspaceTree(
+          String(payload.workspaceId || '').trim(),
+          Boolean(payload.includeUnsupported)
+        )
+        if (fixtureTree) return fixtureTree
         return await readWorkspaceTree(
           String(payload.workspaceId || '').trim(),
           Boolean(payload.includeUnsupported)
@@ -1331,6 +1378,9 @@ export function registerHandlers(services: {
         const currentWorkspace = await workspaceStore.getWorkspaceById(workspaceId)
         if (!currentWorkspace) {
           return { success: false, error: 'workspace not found' }
+        }
+        if (!currentWorkspace.root_path) {
+          return { success: false, error: '请先设置工作文件地址' }
         }
         const existingRecords = await workspaceStore.listWorkspaceFileIndexRecords(workspaceId)
         const now = Date.now()
@@ -1369,7 +1419,7 @@ export function registerHandlers(services: {
               now
             }),
             content_hash: item.record.content_hash,
-            index_status: item.record.document_id ? 'needs_update' : 'not_indexed',
+            index_status: 'needs_index',
             document_id: item.record.document_id,
             indexed_at: item.record.indexed_at,
             last_error: item.record.last_error
@@ -1389,18 +1439,7 @@ export function registerHandlers(services: {
         if (removedDocumentIds.length > 0) {
           await documentsStore.deleteDocumentsByIds(removedDocumentIds)
         }
-        const summary = await workspaceStore.refreshWorkspaceSummary(
-          workspaceId,
-          currentWorkspace.web_source_count || 0
-        )
-        const nextWorkspace: WorkspaceSource = {
-          ...currentWorkspace,
-          ...summary,
-          status: deriveWorkspaceStatus({ records: nextRecords }),
-          last_scan_at: now,
-          updated_at: now
-        }
-        await workspaceStore.saveWorkspace(nextWorkspace)
+        emitSourceListRefresh(event.sender)
 
         return {
           success: true,
@@ -1424,20 +1463,15 @@ export function registerHandlers(services: {
 
   ipcMain.handle(
     'workspace-prepare',
-    async (
-      event,
-      payload: { workspaceId: string; mode?: string }
-    ): Promise<WorkspaceJobResponse> => {
+    async (event, payload: { workspaceId: string }): Promise<WorkspaceJobResponse> => {
       const workspaceId = String(payload.workspaceId || '').trim()
-      const mode =
-        payload.mode === 'presence_only' || payload.mode === 'changes_only' ? payload.mode : 'full'
       if (!workspaceId) return { success: false, error: 'workspaceId is required' }
       if (activeWorkspacePrepareJobs.has(workspaceId)) {
         return { success: false, error: 'workspace prepare already running' }
       }
 
       await waitForE2EFixtureDelay('prepare')
-      const fixtureResponse = prepareE2EFixtureWorkspace(workspaceId, mode)
+      const fixtureResponse = prepareE2EFixtureWorkspace(workspaceId)
       if (fixtureResponse) {
         emitSourceListRefresh(event.sender)
         return fixtureResponse
@@ -1448,6 +1482,9 @@ export function registerHandlers(services: {
         const currentWorkspace = await workspaceStore.getWorkspaceById(workspaceId)
         if (!currentWorkspace) {
           return { success: false, error: 'workspace not found' }
+        }
+        if (!currentWorkspace.root_path) {
+          return { success: false, error: '请先设置工作文件地址' }
         }
 
         const prepareStartedAt = Date.now()
@@ -1485,7 +1522,7 @@ export function registerHandlers(services: {
               now: prepareStartedAt
             }),
             content_hash: item.record.content_hash,
-            index_status: item.record.document_id ? 'needs_update' : 'not_indexed',
+            index_status: 'needs_index',
             document_id: item.record.document_id,
             indexed_at: item.record.indexed_at,
             last_error: item.record.last_error
@@ -1503,10 +1540,7 @@ export function registerHandlers(services: {
         }
 
         const prepareTargets = Array.from(recordMap.values()).filter(
-          (record) =>
-            record.index_status === 'not_indexed' ||
-            record.index_status === 'needs_update' ||
-            record.index_status === 'failed'
+          (record) => record.index_status === 'needs_index' || record.index_status === 'failed'
         )
 
         await workspaceStore.upsertWorkspaceFileIndexRecords(
@@ -1518,13 +1552,6 @@ export function registerHandlers(services: {
             updated_at: prepareStartedAt
           }))
         )
-        await workspaceStore.saveWorkspace({
-          ...currentWorkspace,
-          status: 'preparing',
-          last_error: undefined,
-          last_scan_at: scanResult.workspace.last_scan_at,
-          updated_at: prepareStartedAt
-        })
 
         let completed = 0
         let failed = 0
@@ -1583,24 +1610,6 @@ export function registerHandlers(services: {
           }
         }
 
-        const finalRecords = Array.from(recordMap.values()).sort((a, b) =>
-          a.relative_path.localeCompare(b.relative_path)
-        )
-        const finishedAt = Date.now()
-        const summary = await workspaceStore.refreshWorkspaceSummary(
-          workspaceId,
-          currentWorkspace.web_source_count || 0
-        )
-        const nextWorkspace: WorkspaceSource = {
-          ...currentWorkspace,
-          ...summary,
-          status: deriveWorkspaceStatus({ records: finalRecords }),
-          last_scan_at: scanResult.workspace.last_scan_at,
-          last_prepare_at: finishedAt,
-          updated_at: finishedAt,
-          last_error: failed > 0 ? `${failed} file(s) failed during prepare` : undefined
-        }
-        await workspaceStore.saveWorkspace(nextWorkspace)
         emitSourceListRefresh(event.sender)
 
         return {
@@ -1608,7 +1617,6 @@ export function registerHandlers(services: {
           workspaceId,
           progress: {
             workspace_id: workspaceId,
-            mode,
             phase: 'index',
             total: prepareTargets.length,
             completed,
@@ -1619,11 +1627,6 @@ export function registerHandlers(services: {
           }
         }
       } catch (error: unknown) {
-        await workspaceStore.updateWorkspace(workspaceId, {
-          status: 'failed',
-          last_error: getErrorMessage(error),
-          updated_at: Date.now()
-        })
         return { success: false, error: getErrorMessage(error), workspaceId }
       } finally {
         activeWorkspacePrepareJobs.delete(workspaceId)
@@ -1634,18 +1637,120 @@ export function registerHandlers(services: {
   ipcMain.handle(
     'web-source-list',
     async (_event, payload: ListWebSourcesRequest): Promise<WebSourceListResponse> => {
-    try {
-      const workspaceId = String(payload?.workspaceId || '').trim()
-      if (!workspaceId) return { items: [], total: 0 }
-      const fixtureList = getE2EFixtureWebSourceList(workspaceId)
-      if (fixtureList) return fixtureList
-      await ensureWebSourcesHydrated()
-      const items = await webSourceStore.listWebSources(workspaceId)
-      return { items, total: items.length }
-    } catch (error: unknown) {
-      console.error('❌ [WEB-SOURCE-LIST] ERROR:', error)
-      return { items: [], total: 0 }
+      try {
+        const workspaceId = String(payload?.workspaceId || '').trim()
+        if (!workspaceId) {
+          return { items: [], total: 0, summary: { web_count: 0, needs_index_count: 0, failed_count: 0 } }
+        }
+        const fixtureList = getE2EFixtureWebSourceList(workspaceId)
+        if (fixtureList) return fixtureList
+        await ensureWebSourcesHydrated()
+        const [items, summary] = await Promise.all([
+          webSourceStore.listWebSources(workspaceId),
+          webSourceStore.getWorkspaceWebSummary(workspaceId)
+        ])
+        return { items, total: items.length, summary }
+      } catch (error: unknown) {
+        console.error('❌ [WEB-SOURCE-LIST] ERROR:', error)
+        return { items: [], total: 0, summary: { web_count: 0, needs_index_count: 0, failed_count: 0 } }
+      }
     }
+  )
+
+  ipcMain.handle(
+    'web-sources-scan',
+    async (event, payload: ScanWebSourcesRequest): Promise<WorkspaceJobResponse> => {
+      const workspaceId = String(payload?.workspaceId || '').trim()
+      if (!workspaceId) return { success: false, error: 'workspaceId is required' }
+      try {
+        const fixtureResponse = scanE2EFixtureWebSources(workspaceId)
+        if (fixtureResponse) {
+          emitSourceListRefresh(event.sender)
+          return fixtureResponse
+        }
+        await ensureWebSourcesHydrated()
+        const sources = await webSourceStore.listWebSources(workspaceId)
+        let completed = 0
+        let failed = 0
+        for (const source of sources) {
+          try {
+            await inspectWebSourceRecord(source)
+            completed += 1
+          } catch (error) {
+            void error
+            failed += 1
+          }
+        }
+        emitSourceListRefresh(event.sender)
+        return {
+          success: true,
+          workspaceId,
+          progress: {
+            workspace_id: workspaceId,
+            phase: 'inspect',
+            total: sources.length,
+            completed,
+            failed
+          }
+        }
+      } catch (error: unknown) {
+        return { success: false, workspaceId, error: getErrorMessage(error) }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'web-sources-prepare',
+    async (event, payload: PrepareWebSourcesRequest): Promise<WorkspaceJobResponse> => {
+      const workspaceId = String(payload?.workspaceId || '').trim()
+      if (!workspaceId) return { success: false, error: 'workspaceId is required' }
+      try {
+        const fixtureResponse = prepareE2EFixtureWebSources(workspaceId)
+        if (fixtureResponse) {
+          emitSourceListRefresh(event.sender)
+          return fixtureResponse
+        }
+        await ensureWebSourcesHydrated()
+        const sources = await webSourceStore.listWebSources(workspaceId)
+        const targets = sources.filter(
+          (source) =>
+            source.index_status === 'needs_index' ||
+            source.index_status === 'crawl_failed' ||
+            source.index_status === 'index_failed'
+        )
+        let completed = 0
+        let failed = 0
+        const concurrency = Math.max(1, WEB_INGEST_CONCURRENCY)
+        let index = 0
+        const runOne = async (): Promise<void> => {
+          for (;;) {
+            const current = targets[index++]
+            if (!current) return
+            try {
+              await refreshWebSourceRecord(event, current)
+              completed += 1
+            } catch (error) {
+              void error
+              failed += 1
+            }
+          }
+        }
+        await Promise.all(Array.from({ length: concurrency }, () => runOne()))
+        emitSourceListRefresh(event.sender)
+        return {
+          success: true,
+          workspaceId,
+          progress: {
+            workspace_id: workspaceId,
+            phase: 'index',
+            total: targets.length,
+            completed,
+            failed
+          }
+        }
+      } catch (error: unknown) {
+        return { success: false, workspaceId, error: getErrorMessage(error) }
+      }
     }
   )
 

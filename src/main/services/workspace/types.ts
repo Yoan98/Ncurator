@@ -1,6 +1,5 @@
 import type {
   WorkspaceFileIndexRecord,
-  WorkspaceNode,
   WorkspaceSource,
   WorkspaceTreeEntry
 } from '../../../shared/types'
@@ -8,18 +7,6 @@ import type {
 export type WorkspaceValidationResult = {
   normalizedRootPath: string
   displayName: string
-}
-
-export type WorkspaceScanResult = {
-  workspace: WorkspaceSource
-  nodes: WorkspaceNode[]
-}
-
-export type WorkspaceNodeDiff = {
-  added: WorkspaceNode[]
-  removed: WorkspaceNode[]
-  changed: WorkspaceNode[]
-  unchanged: WorkspaceNode[]
 }
 
 export type WorkspaceKnowledgeChunkSnapshot = {

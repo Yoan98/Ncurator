@@ -19,7 +19,6 @@ import type {
   LegacyLocalImportMigrationStatus,
   ListReferenceItemsRequest,
   ListWebSourcesRequest,
-  ListWorkspaceNodesRequest,
   ListWorkspaceTreeRequest,
   LLMConfig,
   LlmModelListResponse,
@@ -32,10 +31,13 @@ import type {
   PickApplicationResponse,
   OpenPathWithApplicationRequest,
   OpenPathWithApplicationResponse,
+  PrepareWebSourcesRequest,
   ReferenceItemListResponse,
+  ScanWebSourcesRequest,
   WebSourceListResponse,
   WebSourceMutationResponse,
   WebIngestPayload,
+  SetWorkspaceRootPathRequest,
   ListDocxApplyRecordsRequest,
   ListDocxApplyRecordsResponse,
   GetDocxApplyRecordRequest,
@@ -45,7 +47,6 @@ import type {
   WorkspaceJobResponse,
   WorkspaceListResponse,
   WorkspaceMutationResponse,
-  WorkspaceNodeListResponse,
   WorkspaceTreeListResponse
 } from '../shared/types'
 
@@ -84,7 +85,6 @@ export type E2EModelCatalogOverride = {
 export type SettingsE2EApiOverrides = {
   pickDirectoryResponse?: PickDirectoryResponse
   workspaceListResponse?: WorkspaceListResponse
-  workspaceNodesResponseByWorkspaceId?: Record<string, WorkspaceNodeListResponse>
   workspaceTreeResponseByWorkspaceId?: Record<string, WorkspaceTreeListResponse>
   legacyLocalImportMigrationStatus?: LegacyLocalImportMigrationStatus | null
   llmConfigDeleteResponseById?: Record<string, { success: boolean; error?: string }>
@@ -136,8 +136,8 @@ export type DesktopApi = {
   }) => Promise<{ items: DocumentRecord[]; total: number }>
   workspaceList: () => Promise<WorkspaceListResponse>
   workspaceCreate: (payload: CreateWorkspaceSourceRequest) => Promise<WorkspaceMutationResponse>
+  workspaceSetRootPath: (payload: SetWorkspaceRootPathRequest) => Promise<WorkspaceMutationResponse>
   workspaceDelete: (workspaceId: string) => Promise<DeleteWorkspaceSourceResponse>
-  workspaceNodes: (payload: ListWorkspaceNodesRequest) => Promise<WorkspaceNodeListResponse>
   workspaceTree: (payload: ListWorkspaceTreeRequest) => Promise<WorkspaceTreeListResponse>
   workspaceScan: (payload: { workspaceId: string }) => Promise<WorkspaceJobResponse>
   workspacePrepare: (payload: PrepareWorkspaceRequest) => Promise<WorkspaceJobResponse>
@@ -145,6 +145,8 @@ export type DesktopApi = {
     payload: ListReferenceItemsRequest
   ) => Promise<ReferenceItemListResponse>
   webSourceList: (payload: ListWebSourcesRequest) => Promise<WebSourceListResponse>
+  webSourcesScan: (payload: ScanWebSourcesRequest) => Promise<WorkspaceJobResponse>
+  webSourcesPrepare: (payload: PrepareWebSourcesRequest) => Promise<WorkspaceJobResponse>
   webSourceRefresh: (payload: RefreshWebSourceRequest) => Promise<WebSourceMutationResponse>
   webSourceDelete: (payload: DeleteWebSourceRequest) => Promise<DeleteWebSourceResponse>
   legacyLocalImportMigrationStatus: () => Promise<LegacyLocalImportMigrationStatus | null>
@@ -157,8 +159,7 @@ export type DesktopApi = {
     ids: string[]
   ) => Promise<{ success: boolean; deletedDocs?: number; deletedChunks?: number; error?: string }>
   dropDocumentsTable: () => Promise<{ success: boolean; existed?: boolean; error?: string }>
-  sourceListRefresh: (cb: () => void) => void
-  removeSourceListRefreshListeners: () => void
+  sourceListRefresh: (cb: () => void) => () => void
   downloadModel: (repoId: string) => Promise<{ success: boolean; error?: string }>
   onDownloadProgress: (cb: (progressData: DownloadProgress) => void) => void
   removeDownloadProgressListeners: () => void

@@ -3,16 +3,13 @@ import {
   HiArrowPath,
   HiCheckCircle,
   HiDocumentText,
-  HiExclamationTriangle,
   HiFolder,
   HiOutlineClock,
   HiOutlineExclamationCircle
 } from 'react-icons/hi2'
-import type { WebSourceRecord, WorkspaceSource, WorkspaceTreeEntry } from '../../../../../shared/types'
-import { WEB_SOURCE_STATUS_META, WORKSPACE_STATUS_META } from '../constants'
+import type { WebSourceRecord, WorkspaceTreeEntry } from '../../../../../shared/types'
 import type {
   StatusBadgeVisual,
-  WorkspaceStatusBadgeInput,
   WorkspaceTreeDisplayStrategy,
   WorkspaceTreeNode
 } from '../types'
@@ -21,22 +18,10 @@ const STATUS_SPIN_ICON_CLASSNAME = 'h-3.5 w-3.5 animate-spin'
 const STATUS_ICON_CLASSNAME = 'h-3.5 w-3.5'
 
 export const formatDateTime = (value?: number): string => {
-  if (!value) return '未执行'
+  if (!value) return '暂无记录'
   return new Date(value).toLocaleString('zh-CN', {
     hour12: false
   })
-}
-
-export const getWorkspaceStatusMeta = (
-  status: WorkspaceSource['status']
-): { label: string; className: string } => {
-  return WORKSPACE_STATUS_META[status]
-}
-
-export const getWebStatusMeta = (
-  status: WebSourceRecord['import_status']
-): { label: string; className: string } => {
-  return WEB_SOURCE_STATUS_META[status]
 }
 
 export const getTreeEntryStatusMeta = (
@@ -48,84 +33,16 @@ export const getTreeEntryStatusMeta = (
       return { label: '索引中', className: 'border-[#FDE2D8] bg-[#FFF3EE] text-[#C66A4A]' }
     case 'indexed':
       return { label: '已索引', className: 'border-[#DCEBD7] bg-[#F3FAF0] text-[#4F7A46]' }
-    case 'needs_update':
-      return { label: '需更新', className: 'border-[#FDECC8] bg-[#FFF9ED] text-[#AD7B18]' }
     case 'failed':
       return { label: '失败', className: 'border-[#F7D5D9] bg-[#FFF2F4] text-[#B5455D]' }
     default:
-      return { label: '未索引', className: 'border-[#E5E5E4] bg-[#F8F8F7] text-[#666666]' }
-  }
-}
-
-export const getWorkspaceStatusBadge = (input: WorkspaceStatusBadgeInput): StatusBadgeVisual => {
-  if (
-    input.action === 'scan' ||
-    input.status === 'scanning' ||
-    input.progress?.phase === 'scan' ||
-    input.progress?.phase === 'inspect'
-  ) {
-    return {
-      ...getWorkspaceStatusMeta('scanning'),
-      tooltip: input.progress?.message || '正在检查目录变化，请稍候。',
-      icon: <HiArrowPath className={STATUS_SPIN_ICON_CLASSNAME} />
-    }
-  }
-
-  if (
-    input.action === 'prepare' ||
-    input.status === 'preparing' ||
-    input.progress?.phase === 'prepare' ||
-    input.progress?.phase === 'index'
-  ) {
-    return {
-      ...getWorkspaceStatusMeta('preparing'),
-      tooltip: input.progress?.message || '正在更新索引，请稍候。',
-      icon: <HiArrowPath className={STATUS_SPIN_ICON_CLASSNAME} />
-    }
-  }
-
-  if (input.status === 'prepared') {
-    return {
-      ...getWorkspaceStatusMeta('prepared'),
-      tooltip: `最近索引：${formatDateTime(input.lastPrepareAt)}`,
-      icon: <HiCheckCircle className={STATUS_ICON_CLASSNAME} />
-    }
-  }
-
-  if (input.status === 'stale') {
-    return {
-      ...getWorkspaceStatusMeta('stale'),
-      tooltip: '检测到目录变化，建议更新索引。',
-      icon: <HiOutlineClock className={STATUS_ICON_CLASSNAME} />
-    }
-  }
-
-  if (input.status === 'failed') {
-    return {
-      ...getWorkspaceStatusMeta('failed'),
-      tooltip: input.lastError || '最近一次索引失败。',
-      icon: <HiOutlineExclamationCircle className={STATUS_ICON_CLASSNAME} />
-    }
-  }
-
-  if (input.status === 'unavailable') {
-    return {
-      ...getWorkspaceStatusMeta('unavailable'),
-      tooltip: input.lastError || '当前工作空间路径不可用。',
-      icon: <HiExclamationTriangle className={STATUS_ICON_CLASSNAME} />
-    }
-  }
-
-  return {
-    ...getWorkspaceStatusMeta('not_prepared'),
-    tooltip: input.lastScanAt ? `最近检查：${formatDateTime(input.lastScanAt)}` : '尚未建立索引。',
-    icon: <HiOutlineClock className={STATUS_ICON_CLASSNAME} />
+      return { label: '需索引', className: 'border-[#E5E5E4] bg-[#F8F8F7] text-[#666666]' }
   }
 }
 
 export const getWorkspaceActionTooltip = (
   action: 'scan' | 'prepare',
-  progress?: WorkspaceStatusBadgeInput['progress']
+  progress?: { message?: string }
 ): string => {
   if (action === 'scan') {
     return progress?.message || '检查当前目录里有哪些新增、变更或删除。'
@@ -228,28 +145,58 @@ export const getDefaultExpandedKeys = (entries: WorkspaceTreeEntry[], depth: num
     .map((entry) => entry.id)
 
 export const getWebStatusBadge = (
-  source: Pick<WebSourceRecord, 'import_status' | 'fetched_at' | 'last_error'>,
+  source: Pick<WebSourceRecord, 'index_status' | 'last_indexed_at' | 'last_error'>,
   isRefreshing: boolean
 ): StatusBadgeVisual => {
-  if (isRefreshing || source.import_status === 1) {
+  if (isRefreshing || source.index_status === 'crawling') {
     return {
-      ...getWebStatusMeta(1),
-      tooltip: isRefreshing ? '正在重新抓取网页资料，请稍候。' : '网页资料正在抓取中。',
+      label: '爬取中',
+      className: 'border-[#FDE2D8] bg-[#FFF3EE] text-[#C66A4A]',
+      tooltip: '正在爬取网页正文。',
       icon: <HiArrowPath className={STATUS_SPIN_ICON_CLASSNAME} />
     }
   }
 
-  if (source.import_status === 2) {
+  if (source.index_status === 'indexing') {
     return {
-      ...getWebStatusMeta(2),
-      tooltip: `最近抓取：${formatDateTime(source.fetched_at)}`,
+      label: '索引中',
+      className: 'border-[#FDE2D8] bg-[#FFF3EE] text-[#C66A4A]',
+      tooltip: '正在建立网页索引。',
+      icon: <HiArrowPath className={STATUS_SPIN_ICON_CLASSNAME} />
+    }
+  }
+
+  if (source.index_status === 'indexed') {
+    return {
+      label: '已索引',
+      className: 'border-[#DCEBD7] bg-[#F3FAF0] text-[#4F7A46]',
+      tooltip: `最近索引：${formatDateTime(source.last_indexed_at)}`,
       icon: <HiCheckCircle className={STATUS_ICON_CLASSNAME} />
     }
   }
 
+  if (source.index_status === 'crawl_failed') {
+    return {
+      label: '爬取失败',
+      className: 'border-[#F7D5D9] bg-[#FFF2F4] text-[#B5455D]',
+      tooltip: source.last_error || '最近一次网页爬取失败。',
+      icon: <HiOutlineExclamationCircle className={STATUS_ICON_CLASSNAME} />
+    }
+  }
+
+  if (source.index_status === 'index_failed') {
+    return {
+      label: '索引失败',
+      className: 'border-[#F7D5D9] bg-[#FFF2F4] text-[#B5455D]',
+      tooltip: source.last_error || '最近一次网页索引失败。',
+      icon: <HiOutlineExclamationCircle className={STATUS_ICON_CLASSNAME} />
+    }
+  }
+
   return {
-    ...getWebStatusMeta(3),
-    tooltip: source.last_error || '最近一次抓取失败。',
-    icon: <HiOutlineExclamationCircle className={STATUS_ICON_CLASSNAME} />
+    label: '需索引',
+    className: 'border-[#FDECC8] bg-[#FFF9ED] text-[#AD7B18]',
+    tooltip: '网页需要建立或更新索引。',
+    icon: <HiOutlineClock className={STATUS_ICON_CLASSNAME} />
   }
 }

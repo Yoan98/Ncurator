@@ -104,7 +104,7 @@ export const seedModelCatalogOverride = async (
 
 export const createFixtureWorkspace = async (
   page: Page,
-  payload: CreateWorkspaceSourceRequest
+  payload: CreateWorkspaceSourceRequest & { rootPath?: string }
 ): Promise<WorkspaceMutationResponse> => {
   const response = await page.evaluate(async (input) => {
     return await window.api.workspaceCreate(input)

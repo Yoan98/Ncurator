@@ -106,16 +106,8 @@ const api: DesktopApi = {
     return ipcRenderer.invoke('workspace-list')
   },
   workspaceCreate: (payload) => ipcRenderer.invoke('workspace-create', payload),
+  workspaceSetRootPath: (payload) => ipcRenderer.invoke('workspace-set-root-path', payload),
   workspaceDelete: (workspaceId: string) => ipcRenderer.invoke('workspace-delete', workspaceId),
-  workspaceNodes: (payload) => {
-    const overrides = getE2EApiOverrides()
-    const workspaceId = String(payload?.workspaceId || '').trim()
-    const response = overrides?.workspaceNodesResponseByWorkspaceId?.[workspaceId]
-    if (response) {
-      return Promise.resolve(response)
-    }
-    return ipcRenderer.invoke('workspace-nodes', payload)
-  },
   workspaceTree: (payload) => {
     const overrides = getE2EApiOverrides()
     const workspaceId = String(payload?.workspaceId || '').trim()
@@ -132,9 +124,8 @@ const api: DesktopApi = {
     return ipcRenderer.invoke('workspace-scan', payload)
   },
   workspacePrepare: (payload) => {
-    emitE2EIpcCall(`workspacePrepare:${payload.mode}`, {
-      workspaceId: String(payload.workspaceId || '').trim(),
-      mode: payload.mode
+    emitE2EIpcCall('workspacePrepare', {
+      workspaceId: String(payload.workspaceId || '').trim()
     })
     return ipcRenderer.invoke('workspace-prepare', payload)
   },
@@ -143,6 +134,8 @@ const api: DesktopApi = {
     return ipcRenderer.invoke('reference-item-list', payload)
   },
   webSourceList: (payload) => ipcRenderer.invoke('web-source-list', payload),
+  webSourcesScan: (payload) => ipcRenderer.invoke('web-sources-scan', payload),
+  webSourcesPrepare: (payload) => ipcRenderer.invoke('web-sources-prepare', payload),
   webSourceRefresh: async (payload) => {
     emitE2EIpcCall('webSourceRefresh', {
       workspaceId: String(payload.workspaceId || '').trim(),
@@ -166,8 +159,13 @@ const api: DesktopApi = {
     ipcRenderer.invoke('delete-documents', ids),
   dropDocumentsTable: (): Promise<{ success: boolean; existed?: boolean; error?: string }> =>
     ipcRenderer.invoke('drop-documents-table'),
-  sourceListRefresh: (cb: () => void) => ipcRenderer.on('source-list-refresh', () => cb()),
-  removeSourceListRefreshListeners: () => ipcRenderer.removeAllListeners('source-list-refresh'),
+  sourceListRefresh: (cb: () => void) => {
+    const listener = (): void => cb()
+    ipcRenderer.on('source-list-refresh', listener)
+    return () => {
+      ipcRenderer.removeListener('source-list-refresh', listener)
+    }
+  },
   downloadModel: async (repoId: string): Promise<{ success: boolean; error?: string }> => {
     const safeRepoId = String(repoId || '').trim()
     emitE2EIpcCall('downloadModel', safeRepoId)

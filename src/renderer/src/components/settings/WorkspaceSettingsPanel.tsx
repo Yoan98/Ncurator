@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { Alert, Button, Empty, Modal, Tabs, Tooltip, Tree, message } from 'antd'
+import { Alert, Button, Empty, Input, Modal, Tabs, Tooltip, Tree, message } from 'antd'
 import type {
   LegacyLocalImportMigrationStatus,
-  WorkspaceSource,
+  WorkspaceListItem,
   WorkspaceTreeListResponse
 } from '../../../../shared/types'
 import {
@@ -17,28 +17,22 @@ import {
   HiSparkles
 } from 'react-icons/hi2'
 import { importSelectors, settingsSelectors } from '../../testing/selectors'
-import StatusTag from './StatusTag'
 import WebSourcesSettingsPanel from './WebSourcesSettingsPanel'
 import {
   createWorkspaceTree,
-  formatDateTime,
   getDefaultExpandedKeys,
   getVisibleWorkspaceTreeEntries,
   getWorkspaceActionTooltip,
-  getWorkspaceStatusBadge,
   getWorkspaceTreeDisplayStrategy
 } from './utils/workspace'
 import type { WorkspaceActionMap, WorkspaceProgressMap, WorkspaceTreeMap } from './types'
 
-const getWorkspaceNameFromPath = (rootPath: string): string => {
-  const normalizedPath = rootPath.replace(/[\\/]+$/, '')
-  const segments = normalizedPath.split(/[\\/]/).filter(Boolean)
-  return segments[segments.length - 1] || normalizedPath
-}
-
 const WorkspaceSettingsPanel: React.FC = () => {
-  const [workspaces, setWorkspaces] = useState<WorkspaceSource[]>([])
+  const [workspaces, setWorkspaces] = useState<WorkspaceListItem[]>([])
   const [workspaceTrees, setWorkspaceTrees] = useState<WorkspaceTreeMap>({})
+  const [workspaceTreeSummaries, setWorkspaceTreeSummaries] = useState<
+    Record<string, WorkspaceTreeListResponse['summary']>
+  >({})
   const [workspaceExpandedKeys, setWorkspaceExpandedKeys] = useState<Record<string, string[]>>({})
   const [workspaceActions, setWorkspaceActions] = useState<WorkspaceActionMap>({})
   const [workspaceProgress, setWorkspaceProgress] = useState<WorkspaceProgressMap>({})
@@ -47,6 +41,8 @@ const WorkspaceSettingsPanel: React.FC = () => {
   const [selectedTabKey, setSelectedTabKey] = useState<'files' | 'web'>('files')
   const [legacyMigrationStatus, setLegacyMigrationStatus] =
     useState<LegacyLocalImportMigrationStatus | null>(null)
+  const [createModalVisible, setCreateModalVisible] = useState(false)
+  const [createWorkspaceName, setCreateWorkspaceName] = useState('')
   const [createSubmitting, setCreateSubmitting] = useState(false)
   const [deleteWorkspaceId, setDeleteWorkspaceId] = useState<string | null>(null)
 
@@ -73,18 +69,6 @@ const WorkspaceSettingsPanel: React.FC = () => {
     [selectedWorkspaceEntries]
   )
 
-  const selectedWorkspaceStatusBadge = useMemo(() => {
-    if (!selectedWorkspace) return null
-    return getWorkspaceStatusBadge({
-      status: selectedWorkspace.status,
-      lastError: selectedWorkspace.last_error,
-      lastPrepareAt: selectedWorkspace.last_prepare_at,
-      lastScanAt: selectedWorkspace.last_scan_at,
-      action: workspaceActions[selectedWorkspace.id],
-      progress: workspaceProgress[selectedWorkspace.id]
-    })
-  }, [selectedWorkspace, workspaceActions, workspaceProgress])
-
   const loadWorkspaceTree = useCallback(
     async (workspaceId: string, includeUnsupported?: boolean): Promise<WorkspaceTreeListResponse> => {
       return await window.api.workspaceTree({
@@ -102,14 +86,17 @@ const WorkspaceSettingsPanel: React.FC = () => {
       setWorkspaces(workspaceResponse.items)
 
       const nextTrees: WorkspaceTreeMap = {}
+      const nextSummaries: Record<string, WorkspaceTreeListResponse['summary']> = {}
       await Promise.all(
         workspaceResponse.items.map(async (workspace) => {
           const response = await loadWorkspaceTree(workspace.id, true)
           nextTrees[workspace.id] = response.items
+          nextSummaries[workspace.id] = response.summary
         })
       )
 
       setWorkspaceTrees(nextTrees)
+      setWorkspaceTreeSummaries(nextSummaries)
       setWorkspaceExpandedKeys((previous) => {
         const next = { ...previous }
         workspaceResponse.items.forEach((workspace) => {
@@ -143,11 +130,11 @@ const WorkspaceSettingsPanel: React.FC = () => {
   }, [])
 
   useEffect(() => {
-    window.api.sourceListRefresh(() => {
+    const unsubscribe = window.api.sourceListRefresh(() => {
       void loadWorkspaces()
     })
     return () => {
-      window.api.removeSourceListRefreshListeners()
+      unsubscribe()
     }
   }, [loadWorkspaces])
 
@@ -172,31 +159,40 @@ const WorkspaceSettingsPanel: React.FC = () => {
       ...previous,
       [selectedWorkspaceId]: response.items
     }))
+    setWorkspaceTreeSummaries((previous) => ({
+      ...previous,
+      [selectedWorkspaceId]: response.summary
+    }))
   }, [loadWorkspaceTree, selectedWorkspaceId])
 
+  const selectedWorkspaceSummary = useMemo(
+    () =>
+      (selectedWorkspaceId ? workspaceTreeSummaries[selectedWorkspaceId] : undefined) || {
+        file_count: 0,
+        indexed_file_count: 0,
+        needs_index_count: 0,
+        failed_file_count: 0
+      },
+    [selectedWorkspaceId, workspaceTreeSummaries]
+  )
+
   const handleCreateWorkspace = async (): Promise<void> => {
+    const name = createWorkspaceName.trim()
+    if (!name) {
+      message.warning('请输入工作空间名称')
+      return
+    }
     setCreateSubmitting(true)
     try {
-      const selection = await window.api.pickDirectory()
-      if (selection.error) {
-        message.error(selection.error)
-        return
-      }
-      if (selection.canceled || !selection.path) {
-        return
-      }
-
-      const rootPath = selection.path.trim()
-      const response = await window.api.workspaceCreate({
-        rootPath,
-        name: getWorkspaceNameFromPath(rootPath)
-      })
+      const response = await window.api.workspaceCreate({ name })
       if (!response.success || !response.workspace) {
         message.error(response.error || '创建工作空间失败')
         return
       }
 
       message.success('工作空间已加入 Workspace')
+      setCreateModalVisible(false)
+      setCreateWorkspaceName('')
       await loadWorkspaces()
       setSelectedWorkspaceId(response.workspace.id)
     } catch (error) {
@@ -207,7 +203,30 @@ const WorkspaceSettingsPanel: React.FC = () => {
     }
   }
 
-  const handleWorkspaceScan = async (workspace: WorkspaceSource): Promise<void> => {
+  const handleSetWorkspaceRootPath = async (workspace: WorkspaceListItem): Promise<void> => {
+    const selection = await window.api.pickDirectory()
+    if (selection.error) {
+      message.error(selection.error)
+      return
+    }
+    if (selection.canceled || !selection.path) {
+      return
+    }
+
+    const response = await window.api.workspaceSetRootPath({
+      workspaceId: workspace.id,
+      rootPath: selection.path.trim()
+    })
+    if (!response.success) {
+      message.error(response.error || '设置工作文件地址失败')
+      return
+    }
+    message.success('工作文件地址已设置')
+    await loadWorkspaces()
+    await reloadSelectedWorkspaceTree()
+  }
+
+  const handleWorkspaceScan = async (workspace: WorkspaceListItem): Promise<void> => {
     setWorkspaceActions((previous) => ({ ...previous, [workspace.id]: 'scan' }))
     try {
       const response = await window.api.workspaceScan({ workspaceId: workspace.id })
@@ -230,12 +249,11 @@ const WorkspaceSettingsPanel: React.FC = () => {
     }
   }
 
-  const handleWorkspacePrepare = async (workspace: WorkspaceSource): Promise<void> => {
+  const handleWorkspacePrepare = async (workspace: WorkspaceListItem): Promise<void> => {
     setWorkspaceActions((previous) => ({ ...previous, [workspace.id]: 'prepare' }))
     try {
       const response = await window.api.workspacePrepare({
-        workspaceId: workspace.id,
-        mode: 'full'
+        workspaceId: workspace.id
       })
       if (!response.success) {
         message.error(response.error || '更新索引失败')
@@ -297,7 +315,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
             <Button
               type="primary"
               icon={<HiOutlineFolderPlus className="h-4 w-4" />}
-              onClick={() => void handleCreateWorkspace()}
+              onClick={() => setCreateModalVisible(true)}
               loading={createSubmitting}
               data-testid={importSelectors.createWorkspaceButton}
             >
@@ -323,14 +341,20 @@ const WorkspaceSettingsPanel: React.FC = () => {
           </div>
 
           {workspaces.length === 0 ? (
-            <div className="flex min-h-0 flex-1 items-center justify-center px-6">
+            <div
+              className="flex min-h-0 flex-1 items-center justify-center px-6"
+              data-testid={importSelectors.workspaceEmptyState}
+            >
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description={<span className="text-[#666666]">暂无工作空间</span>}
               />
             </div>
           ) : (
-            <div className="flex-1 space-y-2 overflow-y-auto px-3 py-3 pr-2">
+            <div
+              className="flex-1 space-y-2 overflow-y-auto px-3 py-3 pr-2"
+              data-testid={importSelectors.workspaceList}
+            >
               {workspaces.map((workspace) => {
                 const isSelected = workspace.id === selectedWorkspaceId
 
@@ -351,18 +375,18 @@ const WorkspaceSettingsPanel: React.FC = () => {
                         {workspace.name}
                       </div>
                       <div className="mt-1 break-all text-[12px] text-[#666666]">
-                        {workspace.root_path}
+                        {workspace.root_path || '未设置文件目录'}
                       </div>
                     </div>
 
                     <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[#666666]">
                       <span className="ui-status-pill border-transparent bg-[#F7F5F1] text-[#666666]">
                         <HiDocumentText className="h-3.5 w-3.5" />
-                        {workspace.indexable_file_count || 0}
+                        {workspace.file_count}
                       </span>
                       <span className="ui-status-pill border-transparent bg-[#F4F6FB] text-[#5B6B8C]">
                         <HiGlobeAlt className="h-3.5 w-3.5" />
-                        {workspace.web_source_count || 0}
+                        {workspace.web_count}
                       </span>
                     </div>
                   </button>
@@ -372,7 +396,10 @@ const WorkspaceSettingsPanel: React.FC = () => {
           )}
         </section>
 
-        <section className="ui-panel flex min-h-0 flex-col overflow-hidden">
+        <section
+          className="ui-panel flex min-h-0 flex-col overflow-hidden"
+          data-testid={importSelectors.workspaceDetail}
+        >
           {selectedWorkspace ? (
             <>
               <div className="border-b border-[#E5E5E4] px-5 py-5">
@@ -382,34 +409,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                       <h3 className="text-[16px] font-semibold text-[#1F1F1F]">
                         {selectedWorkspace.name}
                       </h3>
-                      {selectedWorkspaceStatusBadge ? (
-                        <StatusTag
-                          label={selectedWorkspaceStatusBadge.label}
-                          className={selectedWorkspaceStatusBadge.className}
-                          tooltip={selectedWorkspaceStatusBadge.tooltip}
-                          icon={selectedWorkspaceStatusBadge.icon}
-                          dataTestId={importSelectors.workspaceStatus}
-                        />
-                      ) : null}
                     </div>
-                    <div className="mt-2 break-all text-[12px] text-[#666666]">
-                      {selectedWorkspace.root_path}
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[#666666]">
-                      <span className="ui-status-pill border-transparent bg-[#F7F5F1] text-[#666666]">
-                        <HiArrowPath className="h-3.5 w-3.5" />
-                        检查 {formatDateTime(selectedWorkspace.last_scan_at)}
-                      </span>
-                      <span className="ui-status-pill border-transparent bg-[#FBF5F2] text-[#D97757]">
-                        <HiSparkles className="h-3.5 w-3.5" />
-                        索引 {formatDateTime(selectedWorkspace.last_prepare_at)}
-                      </span>
-                    </div>
-                    {selectedWorkspace.last_error ? (
-                      <div className="mt-3 rounded-[14px] border border-[#F7D5D9] bg-[#FFF2F4] px-3 py-2 text-[12px] text-[#B5455D]">
-                        {selectedWorkspace.last_error}
-                      </div>
-                    ) : null}
                   </div>
 
                   <div className="flex flex-wrap gap-2">
@@ -433,11 +433,24 @@ const WorkspaceSettingsPanel: React.FC = () => {
                   items={[
                     {
                       key: 'files',
-                      label: `文件 ${selectedWorkspace.indexable_file_count || 0}`,
+                      label: `文件 ${selectedWorkspace.file_count}`,
                       children: (
                         <div className="flex h-full min-h-0 flex-col gap-4">
                           <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
                             <div className="space-y-4">
+                              <section className="ui-panel-soft p-4">
+                                <div className="text-[14px] font-semibold text-[#1F1F1F]">文件目录</div>
+                                <div className="mt-2 break-all text-[12px] leading-5 text-[#666666]">
+                                  {selectedWorkspace.root_path || '未设置工作文件地址'}
+                                </div>
+                                <Button
+                                  className="mt-4 w-full border-[#E5E5E4] bg-white text-[#1F1F1F]"
+                                  onClick={() => void handleSetWorkspaceRootPath(selectedWorkspace)}
+                                >
+                                  设置工作文件地址
+                                </Button>
+                              </section>
+
                               <section className="ui-panel-soft p-4">
                                 <div className="flex items-center gap-1.5">
                                   <div className="text-[14px] font-semibold text-[#1F1F1F]">索引状态</div>
@@ -450,10 +463,10 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                   <div className="ui-inset px-3 py-3">
                                     <div className="inline-flex items-center gap-1.5">
                                       <HiArrowPath className="h-4 w-4 text-[#AD7B18]" />
-                                      <span>未索引</span>
+                                      <span>需索引</span>
                                     </div>
                                     <div className="mt-1 text-[16px] font-semibold text-[#1F1F1F]">
-                                      {selectedWorkspace.not_indexed_file_count || 0}
+                                      {selectedWorkspaceSummary.needs_index_count}
                                     </div>
                                   </div>
                                   <div className="ui-inset px-3 py-3">
@@ -462,7 +475,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                       <span>失败</span>
                                     </div>
                                     <div className="mt-1 text-[16px] font-semibold text-[#1F1F1F]">
-                                      {selectedWorkspace.failed_file_count || 0}
+                                      {selectedWorkspaceSummary.failed_file_count}
                                     </div>
                                   </div>
                                 </div>
@@ -577,7 +590,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                     },
                     {
                       key: 'web',
-                      label: `网页 ${selectedWorkspace.web_source_count || 0}`,
+                      label: `网页 ${selectedWorkspace.web_count}`,
                       children: (
                         <WebSourcesSettingsPanel
                           workspaceId={selectedWorkspace.id}
@@ -618,6 +631,34 @@ const WorkspaceSettingsPanel: React.FC = () => {
         <p className="mb-0 text-[#666666]">
           移除后，该工作空间将不再出现在资料范围和聊天范围里。若仍需使用，请重新添加并重新建立索引。
         </p>
+      </Modal>
+
+      <Modal
+        title="添加工作空间"
+        open={createModalVisible}
+        confirmLoading={createSubmitting}
+        onCancel={() => {
+          setCreateModalVisible(false)
+          setCreateWorkspaceName('')
+        }}
+        onOk={() => void handleCreateWorkspace()}
+        okText="添加"
+        cancelText="取消"
+        okButtonProps={{ 'data-testid': importSelectors.createWorkspaceConfirmButton }}
+        cancelButtonProps={{ 'data-testid': importSelectors.createWorkspaceCancelButton }}
+        data-testid={importSelectors.createWorkspaceModal}
+        className="[&_.ant-modal-content]:!rounded-[24px]"
+      >
+        <div className="space-y-2 pt-2">
+          <div className="text-sm font-medium text-[#1F1F1F]">工作空间名称</div>
+          <Input
+            value={createWorkspaceName}
+            onChange={(event) => setCreateWorkspaceName(event.target.value)}
+            onPressEnter={() => void handleCreateWorkspace()}
+            placeholder="输入工作空间名称"
+            data-testid={importSelectors.createWorkspaceNameInput}
+          />
+        </div>
       </Modal>
     </div>
   )

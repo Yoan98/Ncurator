@@ -86,14 +86,14 @@
 
 ### 4.2 `mock-llm` 与 `live` 设计口径
 
-#### `mock-llm`
+#### mock-llm 类别
 
 - 目的：快速定位非 LLM 问题，并验证每个关键节点、关键边在真实生产 graph 中都能跑通。
 - 允许：脚本化 LLM 输入输出。
 - 不允许：脚本化 runtime 节点执行结果。
 - 断言重点：节点流转、工具调用、审批事件、artifact、memory、错误收敛、状态收口。
 
-#### `live`
+#### live 类别
 
 - 目的：验证真实业务场景在真实生产调用下可以完成。
 - case 设计必须使用真实用户风格输入，不得把内部固定工具顺序写进用户输入。
@@ -129,7 +129,7 @@
 ### 5.1 `tool`
 
 
-#### `docx`
+#### docx 类别
 
 ##### `docx-minimal-edit-flow`
 
@@ -169,6 +169,7 @@
 - Why：真实模型很可能在 create 时一次写完内容，这条能力必须被正式保护，不能强依赖后续 edit。
 - How：真实执行 `docx_edit(create_document)` 并直接 `applyDocxRunEdits`。
 - Oracle：生成 `DocxApplyRecord(operation=created,status=applied)` 并包含 diff 预览 artifact 路径；目标文件立即存在；最终 artifacts 包含携带 `applyId` 的 docx file artifact。
+- Not：不验证 `human` 是否会自然选择一次性创建完整文档。
 
 ##### `docx-direct-apply-checkpoint-revert`
 
@@ -178,6 +179,7 @@
 - Why：direct apply 模式下，写回与回退是替代旧确认提交流程的核心安全边界。
 - How：真实编辑一份 docx，执行 `applyDocxRunEdits`，再执行 `DocxApplyService.revertRecord(force=false)`。
 - Oracle：源文件在 apply 后立即变化；生成 `DocxApplyRecord(operation=updated,status=applied)`、checkpoint 与 diff 预览 artifact；真实源文件不包含 diff 标记；回退后源文件恢复 checkpoint，记录状态变为 `reverted`。
+- Not：不验证用户界面的回退入口展示。
 
 ##### `docx-direct-apply-force-revert-after-user-change`
 
@@ -187,6 +189,7 @@
 - Why：宽松模式的安全边界是 checkpoint 和显式风险提示，而不是阻止用户强制回退。
 - How：真实编辑并 apply 后，外部改写源文件；先 `revertRecord(force=false)`，再 `revertRecord(force=true)`。
 - Oracle：首次回退返回 `requiresForce=true` 和“恢复到本次修改前”风险 warning；强制回退后恢复 checkpoint 并覆盖后续修改。
+- Not：不验证 UI 二次确认文案。
 
 ##### `docx-create-target-appears-before-apply-becomes-update`
 
@@ -196,6 +199,7 @@
 - Why：新建文件写回前若目标已被外部创建，应按 update 语义备份当前文件并覆盖，回退可恢复外部创建版本。
 - How：真实执行 `docx_edit(create_document)` 建立 replay session，随后外部创建同名目标文件，再执行 `applyDocxRunEdits` 和回退。
 - Oracle：生成 `DocxApplyRecord(operation=updated,before_exists=true)`；回退后恢复外部创建的文件。
+- Not：不验证目标文件由真实用户还是测试进程创建。
 
 ##### `docx-large-document-navigation`
 
@@ -447,7 +451,7 @@
 - Oracle：deleted 内容命中为 0，未修改内容仍稳定命中。
 - Not：不验证 UI 展示层。
 
-#### `hand`
+#### docx hand 类别
 
 ##### `hand-serial-docx-chain`
 
@@ -579,7 +583,7 @@
 - Oracle：`apply_ops` 直接失败，且当前文档会话的修订引用不会推进到无效修订。
 - Not：不验证上层如何决定重试或放弃。
 
-#### `kb`
+#### kb 类别
 
 ##### `kb-list-documents-contract`
 
@@ -601,7 +605,7 @@
 - Oracle：三种检索都返回稳定 `rows`，默认受当前工作区约束，且遵守 `documentIds` 缩圈语义。
 - Not：不比较召回优劣。
 
-#### `terminal`
+#### terminal 类别
 
 ##### `terminal-directory-inspection-readonly`
 
@@ -631,12 +635,12 @@
 - Why：terminal 不能把 Word / Excel / PPT / PDF 等结构化文档的二进制内容带入后续 brain prompt。
 - How：真实创建 docx 后执行 `terminal_run(cat report.docx)`，并对普通文本文件执行 `cat notes.txt` 作为低误伤对照。
 - Oracle：docx 输出返回 `ok=false / reason=result_unusable / hand_tool_result_unusable`，stdout/stderr 不包含原始 `PK` 乱码；普通文本输出保持可读。
+- Not：不验证所有二进制格式的 MIME 识别覆盖率。
 
 ##### `terminal-risk-and-boundary-guard`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证危险命令与越界输入会被真实守卫拒绝。
 - What：验证未命中只读白名单的命令与越界输入会被真实守卫拒绝。
 - Why：terminal 风险边界必须靠正式测试长期守住。
 - How：构造危险或越权命令调用 `terminal_run`。
@@ -653,7 +657,7 @@
 - Oracle：artifact 信息完整，修改结果与磁盘状态一致。
 - Not：不验证上层审批流。
 
-#### `hand`
+#### human hand 类别
 
 ##### `hand-tool-call-order-contract`
 
@@ -697,7 +701,7 @@
 
 ### 5.2 `human`
 
-#### `mock-llm`
+#### mock-llm 类别
 
 
 ##### `ai-run-service-human-only`
@@ -890,7 +894,7 @@
 - Oracle：真实 KB 检索结果中包含目标文档 `doc-1` 的证据，且这条证据文本会进入真实 `mouth` prompt，任务最终完成。
 - Not：不验证答案措辞或检索召回优劣。
 
-#### `live`
+#### live 类别
 
 ##### `human-conversation-memory-multi-run-live`
 

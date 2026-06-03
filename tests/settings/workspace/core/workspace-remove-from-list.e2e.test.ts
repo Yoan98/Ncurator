@@ -5,6 +5,7 @@ import {
   SETTINGS_E2E_TIMEOUT_MS,
   createFixtureWorkspace,
   getSettingsLocator,
+  getSettingsPrefixLocator,
   navigateToSettingsSection
 } from '../../../harness/e2e/settings'
 
@@ -35,7 +36,7 @@ describe('settings workspace e2e', () => {
 
         await runtime.step({
           name: 'remove-workspace',
-          message: '在详情区点击移除并确认删除。',
+          message: '在详情区点击移除并确认删除，等待左侧空态出现。',
           run: async () => {
             await getSettingsLocator(page, importSelectors.workspaceRemoveButton).click()
             await getSettingsLocator(page, importSelectors.workspaceDeleteConfirmButton).click()
@@ -48,10 +49,7 @@ describe('settings workspace e2e', () => {
         return {
           listEmptyVisible: await getSettingsLocator(page, importSelectors.workspaceEmptyState).isVisible(),
           detailPromptVisible: await page.getByText('选择一个工作空间').isVisible(),
-          remainingCards: await getSettingsLocator(page, importSelectors.workspaceList)
-            .locator('button')
-            .count()
-            .catch(() => 0)
+          remainingCards: await getSettingsPrefixLocator(page, importSelectors.workspaceCardPrefix).count()
         }
       },
       assert: async (result, runtime) => {

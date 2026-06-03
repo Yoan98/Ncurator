@@ -9,13 +9,14 @@ import type {
   WebSourceListResponse,
   WebSourceMutationResponse,
   WebSourceRecord,
+  WorkspaceFileIndexRecord,
   WorkspaceJobResponse,
+  WorkspaceListItem,
   WorkspaceMutationResponse,
-  WorkspaceNode,
-  WorkspaceNodeListResponse,
-  WorkspacePrepareMode,
   WorkspaceSource,
-  WorkspaceListResponse
+  WorkspaceTreeEntry,
+  WorkspaceListResponse,
+  WorkspaceTreeListResponse
 } from '../../shared/types'
 import {
   buildWebReferenceItem,
@@ -62,18 +63,19 @@ type E2EWorkspaceFixtureMode = 'normal' | 'scan_error' | 'prepare_error'
 
 type E2EWorkspaceFixtureState = {
   workspace: WorkspaceSource | null
-  nodes: WorkspaceNode[]
+  entries: WorkspaceTreeEntry[]
+  records: WorkspaceFileIndexRecord[]
   mode: E2EWorkspaceFixtureMode
   scanDelayMs: number
   prepareDelayMs: number
 }
 
-type E2ECreateImportWorkspaceNodesInput = {
+type E2ECreateImportWorkspaceFixtureInput = {
   workspaceId: string
   rootPath: string
   now: number
   prepared: boolean
-  filePrepareStatus?: WorkspaceNode['prepare_status']
+  fileStatus?: WorkspaceFileIndexRecord['index_status']
   fileLastError?: string
 }
 
@@ -81,41 +83,57 @@ type E2EWebSourceFixtureState = {
   items: WebSourceRecord[]
 }
 
-const createImportWorkspaceNodes = (input: E2ECreateImportWorkspaceNodesInput): WorkspaceNode[] => {
-  const directoryNode: WorkspaceNode = {
+const createImportWorkspaceFixture = (
+  input: E2ECreateImportWorkspaceFixtureInput
+): {
+  entries: WorkspaceTreeEntry[]
+  records: WorkspaceFileIndexRecord[]
+} => {
+  const directoryEntry: WorkspaceTreeEntry = {
     id: `${input.workspaceId}-dir-docs`,
     workspace_id: input.workspaceId,
     kind: 'directory',
     name: 'docs',
     relative_path: 'docs',
     absolute_path: `${input.rootPath}/docs`,
-    exists: true,
-    prepare_status: 'not_prepared',
-    created_at: input.now,
-    updated_at: input.now
+    supported_for_index: false
   }
-  const fileNode: WorkspaceNode = {
+  const fileEntry: WorkspaceTreeEntry = {
     id: `${input.workspaceId}-file-brief`,
     workspace_id: input.workspaceId,
-    parent_id: directoryNode.id,
+    parent_id: directoryEntry.id,
     kind: 'file',
     name: 'brief.txt',
     relative_path: 'docs/brief.txt',
     absolute_path: `${input.rootPath}/docs/brief.txt`,
-    file_ext: '.txt',
-    exists: true,
+    file_ext: 'txt',
+    supported_for_index: true,
+    size: 128,
+    mtime_ms: input.now
+  }
+  const fileRecord: WorkspaceFileIndexRecord = {
+    id: `${input.workspaceId}-record-brief`,
+    workspace_id: input.workspaceId,
+    relative_path: 'docs/brief.txt',
+    absolute_path: `${input.rootPath}/docs/brief.txt`,
+    name: 'brief.txt',
+    file_ext: 'txt',
     size: 128,
     mtime_ms: input.now,
     content_hash: input.prepared ? 'e2e-import-hash' : undefined,
-    prepare_status: input.prepared ? 'prepared' : input.filePrepareStatus || 'not_prepared',
+    index_status: input.prepared ? 'indexed' : input.fileStatus || 'needs_index',
     document_id: input.prepared ? E2E_IMPORT_DOCUMENT_ID : undefined,
-    last_prepared_at: input.prepared ? input.now : undefined,
+    indexed_at: input.prepared ? input.now : undefined,
+    last_checked_at: input.now,
     last_error: input.fileLastError,
     created_at: input.now,
     updated_at: input.now
   }
 
-  return [directoryNode, fileNode]
+  return {
+    entries: [directoryEntry, fileEntry],
+    records: [fileRecord]
+  }
 }
 
 const deriveWorkspaceFixtureMode = (rootPath: string): E2EWorkspaceFixtureMode => {
@@ -165,8 +183,10 @@ const upsertFixtureWebSource = (input: WebIngestPayload): WebSourceRecord => {
         title: buildFixtureWebTitle(url),
         include_selectors: input.includeSelectors,
         exclude_selectors: input.excludeSelectors,
-        import_status: 2,
+        index_status: 'indexed',
         fetched_at: now,
+        last_crawled_at: now,
+        last_indexed_at: now,
         last_error: undefined,
         updated_at: now
       }
@@ -178,10 +198,12 @@ const upsertFixtureWebSource = (input: WebIngestPayload): WebSourceRecord => {
         url,
         title: buildFixtureWebTitle(url),
         document_id: `e2e-web-document-${e2eWebSourceState.items.length + 1}`,
-        import_status: 2,
+        index_status: 'indexed',
         include_selectors: input.includeSelectors,
         exclude_selectors: input.excludeSelectors,
         fetched_at: now,
+        last_crawled_at: now,
+        last_indexed_at: now,
         created_at: now,
         updated_at: now
       }
@@ -199,7 +221,8 @@ const upsertFixtureWebSource = (input: WebIngestPayload): WebSourceRecord => {
 
 const e2eWorkspaceState: E2EWorkspaceFixtureState = {
   workspace: null,
-  nodes: [],
+  entries: [],
+  records: [],
   mode: 'normal',
   scanDelayMs: 0,
   prepareDelayMs: 0
@@ -224,61 +247,8 @@ export const getE2EFixtureReferenceItems = (
     workspaceId && e2eWorkspaceState.workspace && e2eWorkspaceState.workspace.id === workspaceId
       ? buildWorkspaceReferenceItems({
           workspace: e2eWorkspaceState.workspace,
-          entries: e2eWorkspaceState.nodes.map((node) => ({
-            id: node.id,
-            workspace_id: node.workspace_id,
-            parent_id: node.parent_id,
-            kind: node.kind,
-            name: node.name,
-            relative_path: node.relative_path,
-            absolute_path: node.absolute_path,
-            file_ext: node.file_ext,
-            supported_for_index: node.kind === 'file',
-            size: node.size,
-            mtime_ms: node.mtime_ms,
-            index_status:
-              node.prepare_status === 'prepared'
-                ? 'indexed'
-                : node.prepare_status === 'preparing'
-                  ? 'indexing'
-                  : node.prepare_status === 'stale'
-                    ? 'needs_update'
-                    : node.prepare_status === 'failed'
-                      ? 'failed'
-                      : 'not_indexed',
-            document_id: node.document_id,
-            indexed_at: node.last_prepared_at,
-            last_error: node.last_error
-          })),
-          records: e2eWorkspaceState.nodes
-            .filter((node) => node.kind === 'file')
-            .map((node) => ({
-              id: node.id,
-              workspace_id: node.workspace_id,
-              relative_path: node.relative_path,
-              absolute_path: node.absolute_path,
-              name: node.name,
-              file_ext: String(node.file_ext || '').replace(/^\./, ''),
-              size: node.size,
-              mtime_ms: node.mtime_ms,
-              content_hash: node.content_hash,
-              index_status:
-                node.prepare_status === 'prepared'
-                  ? 'indexed'
-                  : node.prepare_status === 'preparing'
-                    ? 'indexing'
-                    : node.prepare_status === 'stale'
-                      ? 'needs_update'
-                      : node.prepare_status === 'failed'
-                        ? 'failed'
-                        : 'not_indexed',
-              document_id: node.document_id,
-              indexed_at: node.last_prepared_at,
-              last_checked_at: node.updated_at,
-              last_error: node.last_error,
-              created_at: node.created_at,
-              updated_at: node.updated_at
-            }))
+          entries: e2eWorkspaceState.entries,
+          records: e2eWorkspaceState.records
         })
       : []
   const webReferences = e2eWebSourceState.items
@@ -301,10 +271,74 @@ export const getE2EFixtureReferenceItems = (
 export const getE2EFixtureWorkspaceList = (): WorkspaceListResponse | null => {
   if (!isE2EFixtureModeEnabled()) return null
 
-  const items = e2eWorkspaceState.workspace ? [e2eWorkspaceState.workspace] : []
+  const items: WorkspaceListItem[] = e2eWorkspaceState.workspace
+    ? [
+        {
+          ...e2eWorkspaceState.workspace,
+          file_count: e2eWorkspaceState.records.length,
+          web_count: e2eWebSourceState.items.filter(
+            (item) => item.workspace_id === e2eWorkspaceState.workspace?.id
+          ).length
+        }
+      ]
+    : []
   return {
     items,
     total: items.length
+  }
+}
+
+export const getE2EFixtureWorkspaceTree = (
+  workspaceId: string,
+  includeUnsupported = false
+): WorkspaceTreeListResponse | null => {
+  if (!isE2EFixtureModeEnabled()) return null
+  if (!e2eWorkspaceState.workspace || e2eWorkspaceState.workspace.id !== workspaceId) {
+    return {
+      items: [],
+      total: 0,
+      summary: {
+        file_count: 0,
+        indexed_file_count: 0,
+        needs_index_count: 0,
+        failed_file_count: 0
+      }
+    }
+  }
+
+  const recordMap = new Map(
+    e2eWorkspaceState.records.map((record) => [record.relative_path, record] as const)
+  )
+  const items = e2eWorkspaceState.entries
+    .map((entry) => {
+      if (entry.kind !== 'file' || !entry.supported_for_index) return entry
+      const record = recordMap.get(entry.relative_path)
+      if (!record) return entry
+      return {
+        ...entry,
+        index_status: record.index_status,
+        document_id: record.document_id,
+        indexed_at: record.indexed_at,
+        last_error: record.last_error
+      }
+    })
+    .filter((entry) => includeUnsupported || entry.kind === 'directory' || entry.supported_for_index)
+
+  const summary = {
+    file_count: e2eWorkspaceState.records.length,
+    indexed_file_count: e2eWorkspaceState.records.filter((item) => item.index_status === 'indexed')
+      .length,
+    needs_index_count: e2eWorkspaceState.records.filter(
+      (item) => item.index_status === 'needs_index'
+    ).length,
+    failed_file_count: e2eWorkspaceState.records.filter((item) => item.index_status === 'failed')
+      .length
+  }
+
+  return {
+    items,
+    total: items.length,
+    summary
   }
 }
 
@@ -315,26 +349,31 @@ export const createE2EFixtureWorkspace = (input: {
   if (!isE2EFixtureModeEnabled()) return null
 
   const now = Date.now()
-  const rootPath = String(input.rootPath || '').trim() || E2E_IMPORT_ROOT_PATH
+  const rootPath = String(input.rootPath || '').trim()
   const workspace: WorkspaceSource = {
     id: E2E_IMPORT_WORKSPACE_ID,
     name: String(input.name || '').trim() || 'E2E 导入工作区',
-    root_path: rootPath,
-    status: 'not_prepared',
-    last_scan_at: now,
+    root_path: rootPath || undefined,
     created_at: now,
     updated_at: now
   }
   e2eWorkspaceState.workspace = workspace
-  e2eWorkspaceState.mode = deriveWorkspaceFixtureMode(rootPath)
-  e2eWorkspaceState.scanDelayMs = deriveWorkspaceFixtureDelayMs(rootPath, 'scan')
-  e2eWorkspaceState.prepareDelayMs = deriveWorkspaceFixtureDelayMs(rootPath, 'prepare')
-  e2eWorkspaceState.nodes = createImportWorkspaceNodes({
-    workspaceId: workspace.id,
-    rootPath: workspace.root_path,
-    now,
-    prepared: false
-  })
+  e2eWorkspaceState.mode = deriveWorkspaceFixtureMode(rootPath || E2E_IMPORT_ROOT_PATH)
+  e2eWorkspaceState.scanDelayMs = deriveWorkspaceFixtureDelayMs(rootPath || E2E_IMPORT_ROOT_PATH, 'scan')
+  e2eWorkspaceState.prepareDelayMs = deriveWorkspaceFixtureDelayMs(rootPath || E2E_IMPORT_ROOT_PATH, 'prepare')
+  if (workspace.root_path) {
+    const fixture = createImportWorkspaceFixture({
+      workspaceId: workspace.id,
+      rootPath: workspace.root_path,
+      now,
+      prepared: false
+    })
+    e2eWorkspaceState.entries = fixture.entries
+    e2eWorkspaceState.records = fixture.records
+  } else {
+    e2eWorkspaceState.entries = []
+    e2eWorkspaceState.records = []
+  }
 
   return {
     success: true,
@@ -354,7 +393,8 @@ export const deleteE2EFixtureWorkspace = (
   }
 
   e2eWorkspaceState.workspace = null
-  e2eWorkspaceState.nodes = []
+  e2eWorkspaceState.entries = []
+  e2eWorkspaceState.records = []
   e2eWorkspaceState.mode = 'normal'
   e2eWorkspaceState.scanDelayMs = 0
   e2eWorkspaceState.prepareDelayMs = 0
@@ -366,24 +406,58 @@ export const deleteE2EFixtureWorkspace = (
   }
 }
 
-export const getE2EFixtureWorkspaceNodes = (workspaceId: string): WorkspaceNodeListResponse | null => {
-  if (!isE2EFixtureModeEnabled()) return null
-  if (!e2eWorkspaceState.workspace || e2eWorkspaceState.workspace.id !== workspaceId) {
-    return {
-      items: [],
-      total: 0
-    }
-  }
-
-  return {
-    items: e2eWorkspaceState.nodes,
-    total: e2eWorkspaceState.nodes.length
-  }
-}
-
 export const getE2EFixtureWorkspaceDelayMs = (phase: 'scan' | 'prepare'): number => {
   if (!isE2EFixtureModeEnabled()) return 0
   return phase === 'scan' ? e2eWorkspaceState.scanDelayMs : e2eWorkspaceState.prepareDelayMs
+}
+
+export const setE2EFixtureWorkspaceRootPath = (
+  workspaceId: string,
+  rootPath: string
+): WorkspaceMutationResponse | null => {
+  if (!isE2EFixtureModeEnabled()) return null
+  if (!e2eWorkspaceState.workspace || e2eWorkspaceState.workspace.id !== workspaceId) {
+    return {
+      success: false,
+      error: 'workspace not found'
+    }
+  }
+
+  const now = Date.now()
+  const normalizedRootPath = String(rootPath || '').trim()
+  e2eWorkspaceState.workspace = {
+    ...e2eWorkspaceState.workspace,
+    root_path: normalizedRootPath || undefined,
+    updated_at: now
+  }
+  e2eWorkspaceState.mode = deriveWorkspaceFixtureMode(normalizedRootPath || E2E_IMPORT_ROOT_PATH)
+  e2eWorkspaceState.scanDelayMs = deriveWorkspaceFixtureDelayMs(
+    normalizedRootPath || E2E_IMPORT_ROOT_PATH,
+    'scan'
+  )
+  e2eWorkspaceState.prepareDelayMs = deriveWorkspaceFixtureDelayMs(
+    normalizedRootPath || E2E_IMPORT_ROOT_PATH,
+    'prepare'
+  )
+
+  if (normalizedRootPath) {
+    const fixture = createImportWorkspaceFixture({
+      workspaceId,
+      rootPath: normalizedRootPath,
+      now,
+      prepared: false
+    })
+    e2eWorkspaceState.entries = fixture.entries
+    e2eWorkspaceState.records = fixture.records
+  } else {
+    e2eWorkspaceState.entries = []
+    e2eWorkspaceState.records = []
+  }
+
+  return {
+    success: true,
+    workspace: e2eWorkspaceState.workspace
+  }
 }
 
 export const scanE2EFixtureWorkspace = (workspaceId: string): WorkspaceJobResponse | null => {
@@ -397,25 +471,26 @@ export const scanE2EFixtureWorkspace = (workspaceId: string): WorkspaceJobRespon
 
   const now = Date.now()
   if (e2eWorkspaceState.mode === 'scan_error') {
-    e2eWorkspaceState.workspace = {
-      ...e2eWorkspaceState.workspace,
-      status: 'failed',
-      last_scan_at: now,
-      updated_at: now,
-      last_error: 'E2E fixture scan failed'
-    }
     return {
       success: false,
       workspaceId,
       error: 'E2E fixture scan failed'
     }
   }
-
-  e2eWorkspaceState.workspace = {
-    ...e2eWorkspaceState.workspace,
-    status: 'stale',
-    last_scan_at: now,
-    updated_at: now
+  if (e2eWorkspaceState.workspace.root_path) {
+    const fixture = createImportWorkspaceFixture({
+      workspaceId,
+      rootPath: e2eWorkspaceState.workspace.root_path,
+      now,
+      prepared: false
+    })
+    e2eWorkspaceState.entries = fixture.entries
+    e2eWorkspaceState.records = fixture.records.map((record) => ({
+      ...record,
+      index_status: 'needs_index',
+      updated_at: now,
+      last_checked_at: now
+    }))
   }
 
   return {
@@ -424,8 +499,8 @@ export const scanE2EFixtureWorkspace = (workspaceId: string): WorkspaceJobRespon
     progress: {
       workspace_id: workspaceId,
       phase: 'scan',
-      total: e2eWorkspaceState.nodes.length,
-      completed: e2eWorkspaceState.nodes.length,
+      total: e2eWorkspaceState.records.length,
+      completed: e2eWorkspaceState.records.length,
       added: 0,
       updated: 1,
       removed: 0,
@@ -434,10 +509,7 @@ export const scanE2EFixtureWorkspace = (workspaceId: string): WorkspaceJobRespon
   }
 }
 
-export const prepareE2EFixtureWorkspace = (
-  workspaceId: string,
-  mode: WorkspacePrepareMode
-): WorkspaceJobResponse | null => {
+export const prepareE2EFixtureWorkspace = (workspaceId: string): WorkspaceJobResponse | null => {
   if (!isE2EFixtureModeEnabled()) return null
   if (!e2eWorkspaceState.workspace || e2eWorkspaceState.workspace.id !== workspaceId) {
     return {
@@ -448,22 +520,16 @@ export const prepareE2EFixtureWorkspace = (
 
   const now = Date.now()
   if (e2eWorkspaceState.mode === 'prepare_error') {
-    e2eWorkspaceState.workspace = {
-      ...e2eWorkspaceState.workspace,
-      status: 'failed',
-      last_scan_at: e2eWorkspaceState.workspace.last_scan_at || now,
-      last_prepare_at: now,
-      updated_at: now,
-      last_error: 'E2E fixture prepare failed'
-    }
-    e2eWorkspaceState.nodes = createImportWorkspaceNodes({
+    const fixture = createImportWorkspaceFixture({
       workspaceId,
-      rootPath: e2eWorkspaceState.workspace.root_path,
+      rootPath: e2eWorkspaceState.workspace.root_path || E2E_IMPORT_ROOT_PATH,
       now,
       prepared: false,
-      filePrepareStatus: 'failed',
+      fileStatus: 'failed',
       fileLastError: 'E2E fixture prepare failed'
     })
+    e2eWorkspaceState.entries = fixture.entries
+    e2eWorkspaceState.records = fixture.records
     return {
       success: false,
       workspaceId,
@@ -471,27 +537,20 @@ export const prepareE2EFixtureWorkspace = (
     }
   }
 
-  e2eWorkspaceState.workspace = {
-    ...e2eWorkspaceState.workspace,
-    status: 'prepared',
-    last_scan_at: e2eWorkspaceState.workspace.last_scan_at || now,
-    last_prepare_at: now,
-    updated_at: now,
-    last_error: undefined
-  }
-  e2eWorkspaceState.nodes = createImportWorkspaceNodes({
+  const fixture = createImportWorkspaceFixture({
     workspaceId,
-    rootPath: e2eWorkspaceState.workspace.root_path,
+    rootPath: e2eWorkspaceState.workspace.root_path || E2E_IMPORT_ROOT_PATH,
     now,
     prepared: true
   })
+  e2eWorkspaceState.entries = fixture.entries
+  e2eWorkspaceState.records = fixture.records
 
   return {
     success: true,
     workspaceId,
     progress: {
       workspace_id: workspaceId,
-      mode,
       phase: 'complete',
       total: 1,
       completed: 1,
@@ -548,9 +607,118 @@ export const ingestE2EFixtureWebSources = (
 export const getE2EFixtureWebSourceList = (workspaceId: string): WebSourceListResponse | null => {
   if (!isE2EFixtureModeEnabled()) return null
   const items = e2eWebSourceState.items.filter((item) => item.workspace_id === workspaceId)
+  const summary = {
+    web_count: items.length,
+    needs_index_count: items.filter((item) => item.index_status === 'needs_index').length,
+    failed_count: items.filter(
+      (item) => item.index_status === 'crawl_failed' || item.index_status === 'index_failed'
+    ).length
+  }
   return {
     items,
-    total: items.length
+    total: items.length,
+    summary
+  }
+}
+
+export const scanE2EFixtureWebSources = (workspaceId: string): WorkspaceJobResponse | null => {
+  if (!isE2EFixtureModeEnabled()) return null
+
+  const items = e2eWebSourceState.items.filter((item) => item.workspace_id === workspaceId)
+  if (items.length === 0) {
+    return {
+      success: true,
+      workspaceId,
+      progress: {
+        workspace_id: workspaceId,
+        phase: 'inspect',
+        total: 0,
+        completed: 0,
+        failed: 0,
+        message: 'E2E fixture web scan complete'
+      }
+    }
+  }
+
+  const now = Date.now()
+  e2eWebSourceState.items = e2eWebSourceState.items.map((item) => {
+    if (item.workspace_id !== workspaceId) return item
+    return {
+      ...item,
+      index_status: item.index_status === 'indexed' ? 'needs_index' : item.index_status,
+      last_checked_at: now,
+      updated_at: now
+    }
+  })
+
+  return {
+    success: true,
+    workspaceId,
+    progress: {
+      workspace_id: workspaceId,
+      phase: 'inspect',
+      total: items.length,
+      completed: items.length,
+      failed: 0,
+      message: 'E2E fixture web scan complete'
+    }
+  }
+}
+
+export const prepareE2EFixtureWebSources = (workspaceId: string): WorkspaceJobResponse | null => {
+  if (!isE2EFixtureModeEnabled()) return null
+
+  const targets = e2eWebSourceState.items.filter(
+    (item) =>
+      item.workspace_id === workspaceId &&
+      (item.index_status === 'needs_index' ||
+        item.index_status === 'crawl_failed' ||
+        item.index_status === 'index_failed')
+  )
+  const startedAt = Date.now()
+  let failed = 0
+
+  e2eWebSourceState.items = e2eWebSourceState.items.map((item) => {
+    if (item.workspace_id !== workspaceId) return item
+    const target = targets.find((candidate) => candidate.id === item.id)
+    if (!target) return item
+
+    if (item.url.includes(E2E_WEB_REFRESH_ERROR_MARKER)) {
+      failed += 1
+      return {
+        ...item,
+        index_status: 'crawl_failed',
+        last_checked_at: startedAt,
+        last_error: 'E2E fixture web refresh failed',
+        updated_at: startedAt
+      }
+    }
+
+    return {
+      ...item,
+      title: buildFixtureWebTitle(item.url),
+      document_id: item.document_id || `e2e-web-document-${item.id}`,
+      index_status: 'indexed',
+      fetched_at: startedAt,
+      last_checked_at: startedAt,
+      last_crawled_at: startedAt,
+      last_indexed_at: startedAt,
+      last_error: undefined,
+      updated_at: startedAt
+    }
+  })
+
+  return {
+    success: true,
+    workspaceId,
+    progress: {
+      workspace_id: workspaceId,
+      phase: 'index',
+      total: targets.length,
+      completed: targets.length - failed,
+      failed,
+      message: 'E2E fixture web prepare complete'
+    }
   }
 }
 
@@ -573,7 +741,7 @@ export const refreshE2EFixtureWebSource = (
   if (source.url.includes(E2E_WEB_REFRESH_ERROR_MARKER)) {
     const failed: WebSourceRecord = {
       ...source,
-      import_status: 3,
+      index_status: 'crawl_failed',
       last_error: 'E2E fixture web refresh failed',
       updated_at: Date.now()
     }
@@ -589,8 +757,10 @@ export const refreshE2EFixtureWebSource = (
   const refreshed: WebSourceRecord = {
     ...source,
     title: buildFixtureWebTitle(source.url),
-    import_status: 2,
+    index_status: 'indexed',
     fetched_at: Date.now(),
+    last_crawled_at: Date.now(),
+    last_indexed_at: Date.now(),
     last_error: undefined,
     updated_at: Date.now()
   }

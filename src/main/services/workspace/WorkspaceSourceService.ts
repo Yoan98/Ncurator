@@ -109,8 +109,6 @@ export class WorkspaceSourceService {
         id: input.workspaceId,
         name: toWorkspaceName(normalizedRootPath, input.workspaceName || displayName),
         root_path: normalizedRootPath,
-        status: 'not_prepared',
-        last_scan_at: now,
         created_at: now,
         updated_at: now
       },
@@ -204,7 +202,7 @@ export class WorkspaceSourceService {
       size: input.entry.size,
       mtime_ms: input.entry.mtime_ms,
       content_hash: input.previous?.content_hash,
-      index_status: input.previous?.index_status || 'not_indexed',
+      index_status: input.previous?.index_status || 'needs_index',
       document_id: input.previous?.document_id,
       indexed_at: input.previous?.indexed_at,
       last_checked_at: input.now,

@@ -3,14 +3,14 @@ import path from 'path'
 import type { AiRunEvent, SelectedReference } from '../../../shared/types'
 
 type WorkspaceLookup = {
-  getWorkspaceById: (id: string) => Promise<{ id: string; root_path: string } | null>
+  getWorkspaceById: (id: string) => Promise<{ id: string; root_path?: string } | null>
 }
 
 type WebSourceLookup = {
   getWebSourceById: (
     id: string,
     workspaceId?: string
-  ) => Promise<{ id: string; workspace_id: string; import_status: number; document_id?: string } | null>
+  ) => Promise<{ id: string; workspace_id: string; index_status: string; document_id?: string } | null>
 }
 
 const isPathWithinWorkspace = (workspaceRootPath: string, targetPath: string): boolean => {
@@ -62,6 +62,18 @@ export const validateSelectedReferencesForRun = async (params: {
           createdAt: getNow()
         })
         return { ok: false, error: 'workspace missing' }
+      }
+
+      if (!workspace.root_path) {
+        params.sendEvent({
+          type: 'runtime_issue',
+          runId: params.runId,
+          code: 'workspace_path_unavailable',
+          message: '当前工作空间尚未设置工作文件地址。',
+          workspaceId,
+          createdAt: getNow()
+        })
+        return { ok: false, error: 'workspace path unavailable' }
       }
 
       if (!pathExists(workspace.root_path)) {
@@ -116,7 +128,12 @@ export const validateSelectedReferencesForRun = async (params: {
     }
 
     const source = await params.webSourceStore.getWebSourceById(reference.webSourceId, workspaceId)
-    if (!source || source.workspace_id !== workspaceId || source.import_status !== 2 || !source.document_id) {
+    if (
+      !source ||
+      source.workspace_id !== workspaceId ||
+      source.index_status !== 'indexed' ||
+      !source.document_id
+    ) {
       params.sendEvent({
         type: 'runtime_issue',
         runId: params.runId,

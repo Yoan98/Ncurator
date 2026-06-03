@@ -18,7 +18,7 @@ describe('settings workspace web e2e', () => {
       domain: 'settings',
       suite: 'workspace',
       groups: ['web'],
-      description: '网页资料详情区展示无错误空态，并在删除成功后刷新列表。',
+      description: '网页列表项展示关键信息，并在删除成功后刷新列表。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -26,7 +26,7 @@ describe('settings workspace web e2e', () => {
 
         await runtime.step({
           name: 'seed-web-source',
-          message: '预置工作区与一条网页资料并进入工作区详情。',
+          message: '预置工作区与一条网页资料并进入网页 tab。',
           run: async () => {
             const workspace = await createFixtureWorkspace(page, {
               rootPath: '/tmp/settings-web-detail-delete-workspace',
@@ -35,13 +35,19 @@ describe('settings workspace web e2e', () => {
             await seedWebSources(page, workspace.workspace!.id, ['https://example.com/detail-delete'])
             await navigateToSettingsSection(page, 'workspace')
             await workspaceCardLocator(page, workspace.workspace!.id).click()
-            await getSettingsLocator(page, `${importSelectors.webSourceDeleteButtonPrefix}-e2e-web-source-1`).waitFor({
+            await page.getByRole('tab', { name: '网页 1' }).click()
+            await getSettingsLocator(
+              page,
+              `${importSelectors.webSourceDeleteButtonPrefix}-e2e-web-source-1`
+            ).waitFor({
               state: 'visible'
             })
           }
         })
 
-        const noErrorVisible = await page.getByText('暂无抓取错误').isVisible()
+        const webCardText =
+          (await getSettingsLocator(page, `${importSelectors.webSourceCardPrefix}-e2e-web-source-1`).textContent()) ||
+          ''
 
         await runtime.step({
           name: 'delete-web-source',
@@ -52,22 +58,29 @@ describe('settings workspace web e2e', () => {
               `${importSelectors.webSourceDeleteButtonPrefix}-e2e-web-source-1`
             ).click()
             await getSettingsLocator(page, importSelectors.webSourceDeleteConfirmButton).click()
-            await page.getByText('暂无网页资料').waitFor({ state: 'visible' })
+            await page.getByText('暂无网页').waitFor({ state: 'visible' })
           }
         })
 
         return {
-          noErrorVisible,
-          emptyStateVisible: await page.getByText('暂无网页资料').isVisible(),
+          webCardText,
+          emptyStateVisible: await page.getByText('暂无网页').isVisible(),
           remainingCards: await getSettingsPrefixLocator(page, importSelectors.webSourceCardPrefix).count()
         }
       },
       assert: async (result, runtime) => {
-        await runtime.assertThat(result.noErrorVisible, {
-          name: 'detail-shows-no-error-state',
-          message: '没有抓取错误时，详情区应明确显示“暂无抓取错误”，对齐 SET-WEB-005-AC1。',
-          data: result
-        })
+        await runtime.assertThat(
+          result.webCardText.includes('Fixture') &&
+            result.webCardText.includes('https://example.com/detail-delete') &&
+            result.webCardText.includes('已索引') &&
+            result.webCardText.includes('抓取'),
+          {
+            name: 'web-list-item-shows-required-fields',
+            message:
+              '网页列表项应展示标题、URL、状态和抓取时间，对齐 SET-WEB-005-AC1。',
+            data: result
+          }
+        )
 
         await runtime.assertThat(result.emptyStateVisible && result.remainingCards === 0, {
           name: 'delete-removes-web-source-from-list',

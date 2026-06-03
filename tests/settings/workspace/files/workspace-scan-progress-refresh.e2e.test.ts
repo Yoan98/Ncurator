@@ -15,87 +15,78 @@ describe('settings workspace e2e', () => {
       domain: 'settings',
       suite: 'workspace',
       groups: ['files'],
-      description: '点击先扫描后，页面展示扫描中的状态，并在完成后刷新状态与目录树。',
+      description: '点击检查更新后，页面展示执行中状态，并在完成后刷新目录树和索引摘要。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
         const { page } = runtime
-        let scanMetaBefore = ''
+        let workspaceId = ''
         let inProgressVisible = false
 
         await runtime.step({
           name: 'seed-workspace',
-          message: '创建一条 E2E fixture 工作空间并进入工作空间设置页。',
+          message: '创建一条带扫描延迟的 fixture 工作空间并进入工作空间页。',
           run: async () => {
-            await createFixtureWorkspace(page, {
+            const workspace = await createFixtureWorkspace(page, {
               rootPath: '/tmp/ncurator-e2e-settings-workspace-scan-delay',
               name: '扫描工作区'
             })
+            workspaceId = workspace.workspace!.id
             await navigateToSettingsSection(page, 'workspace')
             await getSettingsLocator(page, importSelectors.workspaceQuickScanButton).waitFor({
               state: 'visible'
             })
-            scanMetaBefore =
-              (await getSettingsLocator(page, importSelectors.workspaceLastScanMeta).textContent()) ||
-              ''
           }
         })
 
         await runtime.step({
           name: 'scan-workspace',
-          message: '点击先扫描并等待扫描完成后的刷新状态。',
+          message: '点击检查更新并等待接口完成，确认按钮出现执行中状态。',
           run: async () => {
             await getSettingsLocator(page, importSelectors.workspaceQuickScanButton).click()
             await page.waitForFunction(
-              (selector) => {
-                const host = document.querySelector(selector)
-                return host instanceof HTMLElement && host.innerText.includes('扫描中')
-              },
-              `[data-testid="${importSelectors.workspaceStatus}"]`
+              (selector) => document.querySelector(selector)?.className.includes('ant-btn-loading'),
+              `[data-testid="${importSelectors.workspaceQuickScanButton}"]`
             )
             inProgressVisible = true
-            await page.waitForFunction(
-              (selector) => {
-                const host = document.querySelector(selector)
-                return host instanceof HTMLElement && host.innerText.includes('待更新')
-              },
-              `[data-testid="${importSelectors.workspaceStatus}"]`
-            )
+            await page.waitForFunction(async (selectedWorkspaceId) => {
+              const response = await window.api.workspaceTree({
+                workspaceId: String(selectedWorkspaceId || ''),
+                includeUnsupported: true
+              })
+              return response.summary.needs_index_count === 1 && response.items.length > 0
+            }, workspaceId)
           }
         })
 
-        const scanMetaAfter =
-          (await getSettingsLocator(page, importSelectors.workspaceLastScanMeta).textContent()) || ''
-        const statusText =
-          (await getSettingsLocator(page, importSelectors.workspaceStatus).textContent()) || ''
-        const treeText = (await getSettingsLocator(page, importSelectors.workspaceTree).textContent()) || ''
+        const treeResponse = await page.evaluate(async (selectedWorkspaceId) => {
+          return await window.api.workspaceTree({
+            workspaceId: String(selectedWorkspaceId || ''),
+            includeUnsupported: true
+          })
+        }, workspaceId)
 
         return {
-          scanMetaBefore,
-          scanMetaAfter,
-          statusText,
           inProgressVisible,
-          treeText
+          summary: treeResponse.summary,
+          itemNames: treeResponse.items.map((item) => item.name)
         }
       },
       assert: async (result, runtime) => {
-        await runtime.assertThat(
-          result.inProgressVisible || result.statusText.includes('待更新'),
-          {
-            name: 'scan-progress-is-visible',
-            message: '扫描执行中，界面应出现明确的进行中状态或进度反馈，对齐 SET-WORKSPACE-003-AC1。',
-            data: result
-          }
-        )
+        await runtime.assertThat(result.inProgressVisible, {
+          name: 'scan-progress-is-visible',
+          message: '检查更新执行中，界面应出现明确的进行中反馈，对齐 SET-WORKSPACE-003-AC1。',
+          data: result
+        })
 
         await runtime.assertThat(
-          result.statusText.includes('待更新') &&
-            result.scanMetaBefore !== result.scanMetaAfter &&
-            result.treeText.includes('brief.txt'),
+          result.summary.file_count === 1 &&
+            result.summary.needs_index_count === 1 &&
+            result.itemNames.includes('brief.txt'),
           {
-            name: 'scan-refreshes-status-and-tree',
+            name: 'scan-refreshes-summary-and-tree',
             message:
-              '扫描成功后，最近扫描信息、状态 badge 和目录树应同步刷新，对齐 SET-WORKSPACE-003-AC2。',
+              '检查成功后，文件索引摘要和目录树内容都应同步刷新，对齐 SET-WORKSPACE-003-AC2。',
             data: result
           }
         )

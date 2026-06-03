@@ -2,8 +2,7 @@ import type {
   WorkspaceFileIndexRecord,
   WorkspaceFileIndexStatus,
   WorkspaceFileSummary,
-  WorkspaceSource,
-  WorkspaceSourceStatus
+  WorkspaceSource
 } from '../../../types/store'
 import { LanceDbCore, LANCE_TABLES } from '../core/LanceDbCore'
 
@@ -14,16 +13,6 @@ type WorkspaceSourceRow = {
   id?: PrimitiveRowValue
   name?: PrimitiveRowValue
   root_path?: PrimitiveRowValue
-  status?: PrimitiveRowValue
-  last_scan_at?: PrimitiveRowValue
-  last_prepare_at?: PrimitiveRowValue
-  last_error?: PrimitiveRowValue
-  indexable_file_count?: PrimitiveRowValue
-  indexed_file_count?: PrimitiveRowValue
-  needs_update_file_count?: PrimitiveRowValue
-  failed_file_count?: PrimitiveRowValue
-  not_indexed_file_count?: PrimitiveRowValue
-  web_source_count?: PrimitiveRowValue
   created_at?: PrimitiveRowValue
   updated_at?: PrimitiveRowValue
 }
@@ -48,12 +37,10 @@ type WorkspaceFileIndexRow = {
 }
 
 const EMPTY_SUMMARY: WorkspaceFileSummary = {
-  indexable_file_count: 0,
+  file_count: 0,
   indexed_file_count: 0,
-  needs_update_file_count: 0,
-  failed_file_count: 0,
-  not_indexed_file_count: 0,
-  web_source_count: 0
+  needs_index_count: 0,
+  failed_file_count: 0
 }
 
 const toOptionalString = (value: PrimitiveRowValue): string | undefined => {
@@ -75,48 +62,22 @@ const toRequiredNumber = (value: PrimitiveRowValue, fallback = 0): number => {
   return Number.isFinite(next) ? next : fallback
 }
 
-const normalizeWorkspaceStatus = (value: PrimitiveRowValue): WorkspaceSourceStatus => {
-  const normalized = String(value ?? '').trim()
-  switch (normalized) {
-    case 'scanning':
-    case 'preparing':
-    case 'prepared':
-    case 'stale':
-    case 'failed':
-    case 'unavailable':
-      return normalized
-    default:
-      return 'not_prepared'
-  }
-}
-
 const normalizeIndexStatus = (value: PrimitiveRowValue): WorkspaceFileIndexStatus => {
   const normalized = String(value ?? '').trim()
   switch (normalized) {
     case 'indexing':
     case 'indexed':
-    case 'needs_update':
     case 'failed':
       return normalized
     default:
-      return 'not_indexed'
+      return 'needs_index'
   }
 }
 
 const toWorkspaceSource = (row: WorkspaceSourceRow): WorkspaceSource => ({
   id: toRequiredString(row.id),
   name: toRequiredString(row.name),
-  root_path: toRequiredString(row.root_path),
-  status: normalizeWorkspaceStatus(row.status),
-  last_scan_at: toOptionalNumber(row.last_scan_at),
-  last_prepare_at: toOptionalNumber(row.last_prepare_at),
-  last_error: toOptionalString(row.last_error),
-  indexable_file_count: toRequiredNumber(row.indexable_file_count, 0),
-  indexed_file_count: toRequiredNumber(row.indexed_file_count, 0),
-  needs_update_file_count: toRequiredNumber(row.needs_update_file_count, 0),
-  failed_file_count: toRequiredNumber(row.failed_file_count, 0),
-  not_indexed_file_count: toRequiredNumber(row.not_indexed_file_count, 0),
-  web_source_count: toRequiredNumber(row.web_source_count, 0),
+  root_path: toOptionalString(row.root_path),
   created_at: toRequiredNumber(row.created_at),
   updated_at: toRequiredNumber(row.updated_at)
 })
@@ -156,16 +117,6 @@ const toWorkspaceSourceWriteRow = (workspace: WorkspaceSource): WorkspaceWriteRo
   id: workspace.id,
   name: workspace.name,
   root_path: workspace.root_path,
-  status: workspace.status,
-  last_scan_at: workspace.last_scan_at,
-  last_prepare_at: workspace.last_prepare_at,
-  last_error: workspace.last_error,
-  indexable_file_count: workspace.indexable_file_count,
-  indexed_file_count: workspace.indexed_file_count,
-  needs_update_file_count: workspace.needs_update_file_count,
-  failed_file_count: workspace.failed_file_count,
-  not_indexed_file_count: workspace.not_indexed_file_count,
-  web_source_count: workspace.web_source_count,
   created_at: workspace.created_at,
   updated_at: workspace.updated_at
 })
@@ -216,6 +167,7 @@ export class WorkspaceStore {
   }
 
   public async getWorkspaceByRootPath(rootPath: string): Promise<WorkspaceSource | null> {
+    if (!String(rootPath || '').trim()) return null
     const table = await this.core.openTable(LANCE_TABLES.WORKSPACE_SOURCE)
     const rows = (await table
       .query()
@@ -228,24 +180,7 @@ export class WorkspaceStore {
 
   public async updateWorkspace(
     id: string,
-    values: Partial<
-      Pick<
-        WorkspaceSource,
-        | 'name'
-        | 'root_path'
-        | 'status'
-        | 'last_scan_at'
-        | 'last_prepare_at'
-        | 'last_error'
-        | 'indexable_file_count'
-        | 'indexed_file_count'
-        | 'needs_update_file_count'
-        | 'failed_file_count'
-        | 'not_indexed_file_count'
-        | 'web_source_count'
-        | 'updated_at'
-      >
-    >
+    values: Partial<Pick<WorkspaceSource, 'name' | 'root_path' | 'updated_at'>>
   ): Promise<void> {
     const nextValues = omitUndefined(values)
     if (Object.keys(nextValues).length === 0) return
@@ -369,24 +304,14 @@ export class WorkspaceStore {
     )
   }
 
-  public async refreshWorkspaceSummary(
-    workspaceId: string,
-    webSourceCount?: number
-  ): Promise<WorkspaceFileSummary> {
+  public async getWorkspaceFileSummary(workspaceId: string): Promise<WorkspaceFileSummary> {
     const records = await this.listWorkspaceFileIndexRecords(workspaceId)
-    const summary: WorkspaceFileSummary = {
-      indexable_file_count: records.length,
+    return {
+      file_count: records.length,
       indexed_file_count: records.filter((item) => item.index_status === 'indexed').length,
-      needs_update_file_count: records.filter((item) => item.index_status === 'needs_update').length,
-      failed_file_count: records.filter((item) => item.index_status === 'failed').length,
-      not_indexed_file_count: records.filter((item) => item.index_status === 'not_indexed').length,
-      web_source_count: webSourceCount ?? 0
+      needs_index_count: records.filter((item) => item.index_status === 'needs_index').length,
+      failed_file_count: records.filter((item) => item.index_status === 'failed').length
     }
-    await this.updateWorkspace(workspaceId, {
-      ...summary,
-      updated_at: Date.now()
-    })
-    return summary
   }
 
   public getEmptySummary(): WorkspaceFileSummary {

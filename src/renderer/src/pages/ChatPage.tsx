@@ -153,7 +153,7 @@ const sortDocxApplyRecords = (items: DocxApplyRecord[]): DocxApplyRecord[] => {
 const createWorkspaceBinding = (
   workspace: WorkspaceSource | null
 ): WorkspaceRuntimeBinding | undefined =>
-  workspace
+  workspace?.root_path
     ? {
         workspaceId: workspace.id,
         workspaceName: workspace.name,
@@ -709,9 +709,9 @@ const ChatPage: React.FC = () => {
     const refreshSources = (): void => {
       void loadWorkspaces()
     }
-    window.api.sourceListRefresh(refreshSources)
+    const unsubscribe = window.api.sourceListRefresh(refreshSources)
     return () => {
-      window.api.removeSourceListRefreshListeners()
+      unsubscribe()
     }
   }, [loadWorkspaces])
 
@@ -1310,7 +1310,7 @@ const ChatPage: React.FC = () => {
     const userQuery = input.trim()
     const hasStrictScope = selectedReferences.length > 0 || Boolean(selectedWorkspace)
     if (hasStrictScope && kbScopeDocumentIds.length === 0) {
-      message.warning('当前搜索范围没有已加载资料，无法执行纯搜索。')
+      message.warning('当前搜索范围没有已索引资料，无法执行纯搜索。')
       return
     }
 

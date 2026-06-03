@@ -28,7 +28,7 @@ describe('settings workspace web e2e', () => {
 
         await runtime.step({
           name: 'open-add-dialog',
-          message: '创建工作区，进入工作区详情并打开添加网页弹窗。',
+          message: '创建工作区，进入网页 tab 并打开添加网页弹窗。',
           run: async () => {
             const workspace = await createFixtureWorkspace(page, {
               rootPath: '/tmp/settings-web-add-dialog-workspace',
@@ -36,6 +36,7 @@ describe('settings workspace web e2e', () => {
             })
             await navigateToSettingsSection(page, 'workspace')
             await workspaceCardLocator(page, workspace.workspace!.id).click()
+            await page.getByRole('tab', { name: '网页 0' }).click()
             await getSettingsLocator(page, importSelectors.webSourceOpenModalButton).click()
             await urlTextarea.waitFor({ state: 'visible' })
           }
@@ -91,8 +92,7 @@ describe('settings workspace web e2e', () => {
 
         await runtime.assertThat(result.cardCount === 2, {
           name: 'multi-line-submit-adds-sources',
-          message:
-            '多行 URL 提交成功后，应把对应网页资料加入列表，满足入队入口的成功反馈，对齐 SET-WEB-002-AC2。',
+          message: '多行 URL 提交成功后，应把对应网页资料加入当前工作区列表，对齐 SET-WEB-002-AC2。',
           data: result
         })
 

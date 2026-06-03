@@ -1,4 +1,9 @@
-import type { DocumentImportStatus, WebSourceIdentityKind, WebSourceRecord } from '../../../types/store'
+import type {
+  WebSourceIdentityKind,
+  WebSourceIndexStatus,
+  WebSourceRecord,
+  WorkspaceWebSummary
+} from '../../../types/store'
 import { LanceDbCore, LANCE_TABLES } from '../core/LanceDbCore'
 
 type PrimitiveRowValue = string | number | boolean | null | undefined
@@ -11,10 +16,17 @@ type WebSourceRow = {
   url?: PrimitiveRowValue
   title?: PrimitiveRowValue
   document_id?: PrimitiveRowValue
-  import_status?: PrimitiveRowValue
+  index_status?: PrimitiveRowValue
   include_selectors_json?: PrimitiveRowValue
   exclude_selectors_json?: PrimitiveRowValue
   fetched_at?: PrimitiveRowValue
+  last_checked_at?: PrimitiveRowValue
+  last_crawled_at?: PrimitiveRowValue
+  last_indexed_at?: PrimitiveRowValue
+  etag?: PrimitiveRowValue
+  last_modified?: PrimitiveRowValue
+  content_length?: PrimitiveRowValue
+  content_hash?: PrimitiveRowValue
   last_error?: PrimitiveRowValue
   created_at?: PrimitiveRowValue
   updated_at?: PrimitiveRowValue
@@ -52,15 +64,22 @@ const parseStringArray = (value: PrimitiveRowValue): string[] | undefined => {
   }
 }
 
-const normalizeImportStatus = (value: PrimitiveRowValue): DocumentImportStatus => {
-  const next = Number(value)
-  if (next === 1) return 1
-  if (next === 3) return 3
-  return 2
-}
-
 const normalizeIdentityKind = (value: PrimitiveRowValue): WebSourceIdentityKind =>
   String(value ?? '').trim() === 'normalized_url' ? 'normalized_url' : 'normalized_url'
+
+const normalizeIndexStatus = (value: PrimitiveRowValue): WebSourceIndexStatus => {
+  const next = String(value ?? '').trim()
+  switch (next) {
+    case 'crawling':
+    case 'crawl_failed':
+    case 'indexing':
+    case 'indexed':
+    case 'index_failed':
+      return next
+    default:
+      return 'needs_index'
+  }
+}
 
 const toWebSourceRecord = (row: WebSourceRow): WebSourceRecord => ({
   id: toRequiredString(row.id),
@@ -70,10 +89,17 @@ const toWebSourceRecord = (row: WebSourceRow): WebSourceRecord => ({
   url: toRequiredString(row.url),
   title: toOptionalString(row.title),
   document_id: toOptionalString(row.document_id),
-  import_status: normalizeImportStatus(row.import_status),
+  index_status: normalizeIndexStatus(row.index_status),
   include_selectors: parseStringArray(row.include_selectors_json),
   exclude_selectors: parseStringArray(row.exclude_selectors_json),
   fetched_at: toOptionalNumber(row.fetched_at),
+  last_checked_at: toOptionalNumber(row.last_checked_at),
+  last_crawled_at: toOptionalNumber(row.last_crawled_at),
+  last_indexed_at: toOptionalNumber(row.last_indexed_at),
+  etag: toOptionalString(row.etag),
+  last_modified: toOptionalString(row.last_modified),
+  content_length: toOptionalNumber(row.content_length),
+  content_hash: toOptionalString(row.content_hash),
   last_error: toOptionalString(row.last_error),
   created_at: toRequiredNumber(row.created_at),
   updated_at: toRequiredNumber(row.updated_at)
@@ -115,10 +141,17 @@ export class WebSourceStore {
         url: source.url,
         title: source.title,
         document_id: source.document_id,
-        import_status: source.import_status,
+        index_status: source.index_status,
         include_selectors_json: stringifyStringArray(source.include_selectors),
         exclude_selectors_json: stringifyStringArray(source.exclude_selectors),
         fetched_at: source.fetched_at,
+        last_checked_at: source.last_checked_at,
+        last_crawled_at: source.last_crawled_at,
+        last_indexed_at: source.last_indexed_at,
+        etag: source.etag,
+        last_modified: source.last_modified,
+        content_length: source.content_length,
+        content_hash: source.content_hash,
         last_error: source.last_error,
         created_at: source.created_at,
         updated_at: source.updated_at
@@ -192,10 +225,17 @@ export class WebSourceStore {
         | 'title'
         | 'document_id'
         | 'workspace_id'
-        | 'import_status'
+        | 'index_status'
         | 'include_selectors'
         | 'exclude_selectors'
         | 'fetched_at'
+        | 'last_checked_at'
+        | 'last_crawled_at'
+        | 'last_indexed_at'
+        | 'etag'
+        | 'last_modified'
+        | 'content_length'
+        | 'content_hash'
         | 'last_error'
         | 'updated_at'
       >
@@ -206,10 +246,17 @@ export class WebSourceStore {
       title: values.title,
       document_id: values.document_id,
       workspace_id: values.workspace_id,
-      import_status: values.import_status,
+      index_status: values.index_status,
       include_selectors_json: stringifyStringArray(values.include_selectors),
       exclude_selectors_json: stringifyStringArray(values.exclude_selectors),
       fetched_at: values.fetched_at,
+      last_checked_at: values.last_checked_at,
+      last_crawled_at: values.last_crawled_at,
+      last_indexed_at: values.last_indexed_at,
+      etag: values.etag,
+      last_modified: values.last_modified,
+      content_length: values.content_length,
+      content_hash: values.content_hash,
       last_error: values.last_error,
       updated_at: values.updated_at
     })
@@ -229,5 +276,17 @@ export class WebSourceStore {
     ])
     if (!where) return
     await table.delete(where)
+  }
+
+  public async getWorkspaceWebSummary(workspaceId: string): Promise<WorkspaceWebSummary> {
+    const sources = await this.listWebSources(workspaceId)
+    return {
+      web_count: sources.length,
+      needs_index_count: sources.filter((source) => source.index_status === 'needs_index').length,
+      failed_count: sources.filter(
+        (source) =>
+          source.index_status === 'crawl_failed' || source.index_status === 'index_failed'
+      ).length
+    }
   }
 }

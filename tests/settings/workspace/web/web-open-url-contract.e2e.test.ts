@@ -18,7 +18,7 @@ describe('settings workspace web e2e', () => {
       domain: 'settings',
       suite: 'workspace',
       groups: ['web'],
-      description: '点击网页资料 URL 时，应通过 openExternal 打开原网页地址。',
+      description: '点击网页资料打开按钮时，应通过 openExternal 打开原网页地址。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -39,7 +39,11 @@ describe('settings workspace web e2e', () => {
 
         await navigateToSettingsSection(page, 'workspace')
         await workspaceCardLocator(page, workspace.workspace!.id).click()
-        await getSettingsLocator(page, importSelectors.webSourceUrlLinkButton).click()
+        await page.getByRole('tab', { name: '网页 1' }).click()
+        await getSettingsLocator(
+          page,
+          `${importSelectors.webSourceUrlLinkButtonPrefix}-e2e-web-source-1`
+        ).click()
         const signals = await runtime.collectSignals()
 
         return {
@@ -51,9 +55,9 @@ describe('settings workspace web e2e', () => {
         await runtime.assertThat(
           result.openExternalCalls.some((entry) => entry.payload === result.targetUrl),
           {
-            name: 'web-url-opens-original-url',
+            name: 'web-open-uses-original-url',
             message:
-              '点击网页资料 URL 时，应调用 openExternal 打开原网页地址，而不是进入本地预览路径，对齐 SET-WEB-005-AC2。',
+              '点击“打开”后，应调用 openExternal 打开原网页地址，而不是进入本地预览，对齐 SET-WEB-005-AC2。',
             data: result
           }
         )

@@ -1,5 +1,5 @@
 import { describe, it } from 'vitest'
-import type { WorkspaceSource } from '../../../../src/shared/types'
+import type { WorkspaceListItem } from '../../../../src/shared/types'
 import { importSelectors } from '../../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
@@ -11,12 +11,12 @@ import {
 
 const NOW = 1_710_100_000_000
 
-const EMPTY_TREE_WORKSPACE: WorkspaceSource = {
+const EMPTY_TREE_WORKSPACE: WorkspaceListItem = {
   id: 'workspace-empty-tree',
   name: '空目录工作空间',
   root_path: '/tmp/ncurator-e2e-workspace-empty-tree',
-  status: 'not_prepared',
-  last_scan_at: NOW,
+  file_count: 0,
+  web_count: 0,
   created_at: NOW,
   updated_at: NOW
 }
@@ -28,7 +28,7 @@ describe('settings workspace e2e', () => {
       domain: 'settings',
       suite: 'workspace',
       groups: ['core'],
-      description: '工作空间页在无工作空间、无可追踪文件和旧数据迁移三类场景下展示明确提示。',
+      description: '无工作空间、空目录树和旧数据迁移三类提示都能被明确展示。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -36,18 +36,23 @@ describe('settings workspace e2e', () => {
 
         await runtime.step({
           name: 'show-empty-tree-and-legacy-hint',
-          message: '注入空目录工作空间与旧本地导入迁移提示，并进入工作空间页。',
+          message: '先注入空目录工作空间与旧导入迁移提示，确认目录树空态和提醒可见。',
           run: async () => {
-            await navigateToSettingsSection(page, 'model')
             await setSettingsE2EApiOverrides(page, {
               workspaceListResponse: {
                 items: [EMPTY_TREE_WORKSPACE],
                 total: 1
               },
-              workspaceNodesResponseByWorkspaceId: {
+              workspaceTreeResponseByWorkspaceId: {
                 'workspace-empty-tree': {
                   items: [],
-                  total: 0
+                  total: 0,
+                  summary: {
+                    file_count: 0,
+                    indexed_file_count: 0,
+                    needs_index_count: 0,
+                    failed_file_count: 0
+                  }
                 }
               },
               legacyLocalImportMigrationStatus: {
@@ -57,24 +62,24 @@ describe('settings workspace e2e', () => {
               }
             })
             await navigateToSettingsSection(page, 'workspace')
-            await page.getByText('没有可追踪文件').waitFor({ state: 'visible' })
+            await page.getByText('当前目录没有可显示文件').waitFor({ state: 'visible' })
             await page.getByText('检测到旧本地导入记录').waitFor({ state: 'visible' })
           }
         })
 
-        const emptyTreeVisible = await page.getByText('没有可追踪文件').isVisible()
+        const emptyTreeVisible = await page.getByText('当前目录没有可显示文件').isVisible()
         const legacyHintVisible = await page.getByText('检测到旧本地导入记录').isVisible()
 
         await runtime.step({
           name: 'show-no-workspace-empty-state',
-          message: '切换到无工作空间响应并重新进入工作空间页，确认详情区不是空白。',
+          message: '再切到无工作空间响应，确认左侧和详情区都给出明确空态。',
           run: async () => {
             await setSettingsE2EApiOverrides(page, {
               workspaceListResponse: {
                 items: [],
                 total: 0
               },
-              workspaceNodesResponseByWorkspaceId: {},
+              workspaceTreeResponseByWorkspaceId: {},
               legacyLocalImportMigrationStatus: null
             })
             await navigateToSettingsSection(page, 'model')
@@ -101,14 +106,14 @@ describe('settings workspace e2e', () => {
           {
             name: 'no-workspace-shows-explicit-empty-state',
             message:
-              '没有工作空间时，详情区应展示明确空态提示，而不是空白页，对齐 SET-WORKSPACE-007-AC1。',
+              '没有工作空间时，左侧列表和详情区都应呈现明确空态，而不是空白页，对齐 SET-WORKSPACE-007-AC1。',
             data: result
           }
         )
 
         await runtime.assertThat(result.emptyTreeVisible, {
-          name: 'empty-tree-shows-no-trackable-files-hint',
-          message: '没有可追踪文件时，目录树区域应显示“没有可追踪文件”，对齐 SET-WORKSPACE-007-AC2。',
+          name: 'empty-tree-shows-file-empty-state',
+          message: '当前目录没有可显示文件时，目录树区域应展示明确空态，对齐 SET-WORKSPACE-007-AC2。',
           data: result
         })
 
