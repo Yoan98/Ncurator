@@ -94,15 +94,6 @@ const buildElectronLaunchEnv = (userDataDir: string): NodeJS.ProcessEnv => {
   return env
 }
 
-const logLaunchEnvProbe = (env: NodeJS.ProcessEnv): void => {
-  if (process.env.NCURATOR_E2E_ENV_PROBE !== '1') return
-  const parentNpmKeys = Object.keys(process.env).filter((key) => key.startsWith('npm_')).sort()
-  const childNpmKeys = Object.keys(env).filter((key) => key.startsWith('npm_')).sort()
-  process.stdout.write(
-    `[e2e-env-probe] parentNpmKeys=${JSON.stringify(parentNpmKeys)} childNpmKeys=${JSON.stringify(childNpmKeys)} parentPathHead=${JSON.stringify((process.env.PATH || '').split(':').slice(0, 8))}\n`
-  )
-}
-
 const installPageObservers = async (page: Page): Promise<void> => {
   await page.waitForFunction(() => Boolean(window.api))
 
@@ -160,7 +151,6 @@ export const launchElectronApp = async (): Promise<LaunchedElectronApp> => {
   const consoleEntries: E2EConsoleEntry[] = []
   const userDataDir = await mkdtemp(path.join(os.tmpdir(), 'ncurator-e2e-user-data-'))
   const launchEnv = buildElectronLaunchEnv(userDataDir)
-  logLaunchEnvProbe(launchEnv)
   const electronApp = await electron.launch({
     executablePath: electronPath,
     args: ['.'],
