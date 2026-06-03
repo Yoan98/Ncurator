@@ -4,11 +4,12 @@ import type {
   LLMConfig,
   WorkspaceMutationResponse
 } from '../../../src/shared/types'
-import type {
-  ModelInfo,
-  SettingsE2EApiOverrides
-} from '../../../src/preload/api'
-import { importSelectors, settingsSelectors, vectorSelectors } from '../../../src/renderer/src/testing/selectors'
+import type { ModelInfo, SettingsE2EApiOverrides } from '../../../src/preload/api'
+import {
+  importSelectors,
+  settingsSelectors,
+  vectorSelectors
+} from '../../../src/renderer/src/testing/selectors'
 
 export type SettingsPageTarget = 'model' | 'workspace' | 'vector'
 
@@ -81,14 +82,17 @@ export const seedModelConfigs = async (
   page: Page,
   configs: readonly LLMConfig[]
 ): Promise<void> => {
-  await page.evaluate(async (input) => {
-    for (const config of input.configs) {
-      const response = await window.api.llmConfigSave(config)
-      if (!response.success) {
-        throw new Error(response.error || 'failed to save llm config fixture')
+  await page.evaluate(
+    async (input) => {
+      for (const config of input.configs) {
+        const response = await window.api.llmConfigSave(config)
+        if (!response.success) {
+          throw new Error(response.error || 'failed to save llm config fixture')
+        }
       }
-    }
-  }, { configs })
+    },
+    { configs }
+  )
 }
 
 export const seedModelCatalogOverride = async (
@@ -120,17 +124,37 @@ export const seedWebSources = async (
   workspaceId: string,
   urls: readonly string[]
 ): Promise<void> => {
-  await page.evaluate(async (input) => {
-    const response = await window.api.ingestWebs(
-      input.urls.map((url) => ({
-        workspaceId: input.workspaceId,
-        url
-      }))
-    )
-    if (!response.success) {
-      throw new Error(response.error || 'failed to ingest web source fixtures')
+  await page.evaluate(
+    async (input) => {
+      const response = await window.api.ingestWebs(
+        input.urls.map((url) => ({
+          workspaceId: input.workspaceId,
+          url
+        }))
+      )
+      if (!response.success) {
+        throw new Error(response.error || 'failed to ingest web source fixtures')
+      }
+    },
+    { workspaceId, urls }
+  )
+}
+
+export const waitForWebIndexJobIdle = async (page: Page, workspaceId: string): Promise<void> => {
+  const deadline = Date.now() + 5000
+  for (;;) {
+    const response = await page.evaluate(async (selectedWorkspaceId) => {
+      return await window.api.workspaceIndexJobGet({
+        workspaceId: String(selectedWorkspaceId || ''),
+        sourceKind: 'web'
+      })
+    }, workspaceId)
+    if (response.success && !response.job) return
+    if (Date.now() >= deadline) {
+      throw new Error('web index job did not become idle')
     }
-  }, { workspaceId, urls })
+    await page.waitForTimeout(100)
+  }
 }
 
 export const workspaceCardLocator = (page: Page, workspaceId: string): Locator =>

@@ -18,15 +18,16 @@
 - `workspace / core`
   - 登记 case：`6`
   - 通过率：`6 / 6`
-  - 检测时间：`2026-06-02 18:32:28 +08:00`
+  - 检测时间：`2026-06-03 13:12:07 +08:00`
 - `workspace / files`
-  - 登记 case：`5`
-  - 通过率：`5 / 5`
-  - 检测时间：`2026-06-02 18:32:28 +08:00`
+  - 登记 case：`8`
+  - 通过率：`8 / 8`
+  - 检测时间：`2026-06-03 13:12:07 +08:00`
 - `workspace / web`
-  - 登记 case：`6`
-  - 通过率：`6 / 6`
-  - 检测时间：`2026-06-02 18:32:06 +08:00`
+  - 登记 case：`7`
+  - 通过率：`7 / 7`
+  - 检测时间：`2026-06-03 13:12:07 +08:00`
+  - 备注：本轮 `workspace` 范围 E2E 与 Settings backend 已通过；完整 `settings:e2e` 在当前机器上仍因 Electron 原生启动 `SIGABRT` 中断，未作为通过结论记录。
 - `vector`
   - 登记 case：`4`
   - 通过率：`3 / 3`（e2e）
@@ -199,14 +200,24 @@ Settings 的正式测试顶层 suite 直接对齐 PRD 模块：
 
 ### 4.3 `workspace / files`
 
+#### `workspace-index-job-store-contract`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 `workspace_index_job` 支持创建、读取 active、更新阶段进度和批量失败收敛。
+- Why：文件和网页索引进度恢复都依赖同一张持久化 job 表，必须先稳定底层 store contract。
+- How：预置同一工作区下多个 running job，更新其中一个任务进度后读取 active job，再调用失败收敛逻辑。
+- Oracle：active 查询返回同资料类型最新 running job，对齐 `SET-WORKSPACE-004-AC3`；进度更新可持久化读取，对齐 `SET-WORKSPACE-004-AC4`；running job 可批量收敛为失败，对齐 `SET-WORKSPACE-004-AC5`、`SET-WEB-004-AC6`。
+- Not：不验证前端订阅事件和按钮禁用，这些由 E2E case 覆盖。
+
 #### `workspace-scan-contract`
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证目录检查会生成文件索引记录，并由派生摘要驱动页面刷新。
+- What：验证目录检查会生成文件索引记录，并由持久化 job 与派生摘要驱动页面刷新。
 - Why：文件数、需索引数等摘要已不再缓存到 `workspace_source`，这里的契约必须稳定。
 - How：扫描真实工作目录，写入 `workspace_source` 与 `workspace_file_index` 后读取派生摘要。
-- Oracle：检查结果包含可供页面展示的 progress 信息，对齐 `SET-WORKSPACE-003-AC1`；工作空间本体只保留容器字段，文件摘要从文件索引记录派生，对齐 `SET-WORKSPACE-003-AC2`、`SET-WORKSPACE-005-AC2`。
+- Oracle：检查任务包含可供页面恢复的持久化 job 信息，对齐 `SET-WORKSPACE-003-AC1`、`SET-WORKSPACE-003-AC3`；工作空间本体只保留容器字段，文件摘要从文件索引记录派生，对齐 `SET-WORKSPACE-003-AC2`、`SET-WORKSPACE-005-AC2`。
 - Not：不验证前端按钮状态和目录树视觉展示。
 
 #### `workspace-scan-progress-refresh`
@@ -216,7 +227,7 @@ Settings 的正式测试顶层 suite 直接对齐 PRD 模块：
 - What：验证点击“检查更新”后，页面会刷新文件树和需索引摘要。
 - Why：这是用户识别“哪些文件该重新建索引”的第一步。
 - How：创建一条带扫描延迟的 fixture 工作空间，触发检查更新并读取刷新后的文件树响应。
-- Oracle：检查过程中出现明确的进行中反馈，对齐 `SET-WORKSPACE-003-AC1`；检查成功后，文件树和需索引摘要同步刷新，对齐 `SET-WORKSPACE-003-AC2`。
+- Oracle：检查过程中出现持久化进度反馈，且检查更新/更新索引按钮同时禁用，对齐 `SET-WORKSPACE-003-AC1`；检查成功后，文件树和需索引摘要同步刷新，对齐 `SET-WORKSPACE-003-AC2`。
 - Not：不验证真实大目录性能和文件系统权限失败分支。
 
 #### `workspace-prepare-contract`
@@ -226,7 +237,7 @@ Settings 的正式测试顶层 suite 直接对齐 PRD 模块：
 - What：验证更新索引只处理 `需索引 / 失败` 文件，不再暴露旧三种处理模式。
 - Why：新模型的核心是增量索引，不再允许“模式选择”成为伪交互。
 - How：构造 `needs_index / failed / indexed` 三类记录，验证实际目标集。
-- Oracle：更新索引的目标仅包含 `needs_index` 与 `failed`，对齐 `SET-WORKSPACE-004-AC1`；契约中不再向产品模型暴露 `full / presence_only / changes_only` 等旧模式，对齐 `SET-WORKSPACE-004`。
+- Oracle：更新索引的目标仅包含 `needs_index` 与 `failed`，对齐 `SET-WORKSPACE-004-AC1`；同一工作区文件任务重复启动返回已有 running job，对齐 `SET-WORKSPACE-004-AC3`；契约中不再向产品模型暴露 `full / presence_only / changes_only` 等旧模式，对齐 `SET-WORKSPACE-004`。
 - Not：不验证真实 embedding、chunk 写入和单文件索引失败细节。
 
 #### `workspace-prepare-refresh`
@@ -236,8 +247,18 @@ Settings 的正式测试顶层 suite 直接对齐 PRD 模块：
 - What：验证点击“更新索引”后，文件状态会刷新为已索引并同步更新摘要。
 - Why：这是“索引已经可用”的核心用户反馈链路。
 - How：创建一条带索引延迟的 fixture 工作空间，触发更新索引并读取刷新后的文件树响应。
-- Oracle：更新索引过程中出现明确的进行中反馈，对齐 `SET-WORKSPACE-004-AC1`；更新成功后，`indexed / needs_index` 摘要和节点状态同步刷新，对齐 `SET-WORKSPACE-004-AC2`。
+- Oracle：更新索引过程中出现持久化总进度，且检查更新/更新索引按钮同时禁用，对齐 `SET-WORKSPACE-004-AC3`；更新成功后，`indexed / needs_index` 摘要和节点状态同步刷新，对齐 `SET-WORKSPACE-004-AC2`。
 - Not：不验证向量内容质量和搜索召回结果。
+
+#### `workspace-prepare-progress-restore`
+
+- 测试类型：`e2e`
+- 实现状态：`已实现`
+- What：验证文件索引执行中离开并返回工作空间页后，进度块和按钮状态会恢复。
+- Why：索引任务已切换为持久化后台 job，页面生命周期不能影响用户对任务状态的判断。
+- How：创建带 prepare 延迟的 fixture 工作空间，触发更新索引后切到其他设置页，再返回工作空间页读取 active job 与 UI 状态。
+- Oracle：返回后仍能看到 running job 对应的进度块，且检查更新/更新索引按钮继续禁用，对齐 `SET-WORKSPACE-004-AC4`。
+- Not：不模拟真实 Electron 进程退出；中断收敛由 `workspace-interrupted-job-recovery-contract` 覆盖。
 
 #### `workspace-detail-status-and-error`
 
@@ -248,6 +269,16 @@ Settings 的正式测试顶层 suite 直接对齐 PRD 模块：
 - How：创建一条 prepare 会失败的 fixture 工作空间，触发更新索引并读取刷新后的文件树响应。
 - Oracle：文件 tab 始终展示需索引数与失败数，对齐 `SET-WORKSPACE-005-AC2`；文件索引失败后，失败状态和错误信息保留在文件级记录中，对齐 `SET-WORKSPACE-008-AC2`。
 - Not：不验证错误文案的逐字 UI 展示，也不验证恢复失败文件后的二次成功链路。
+
+#### `workspace-interrupted-job-recovery-contract`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证启动恢复会把遗留的工作空间索引任务和条目级执行中状态收敛为失败。
+- Why：程序被直接关闭时退出钩子不可靠，必须靠下次启动恢复避免长期停留在索引中。
+- How：预置 running job、文件 `indexing`、网页 `crawling / indexing`，调用存储恢复逻辑。
+- Oracle：running job 被标记为失败，对齐 `SET-WORKSPACE-004-AC5`、`SET-WEB-004-AC6`；文件和网页执行中状态分别收敛为失败状态，对齐 `SET-WORKSPACE-004-AC5`、`SET-WEB-004-AC6`。
+- Not：不模拟真实操作系统强杀，只验证启动恢复的数据收敛规则。
 
 ### 4.4 `workspace / web`
 
@@ -278,7 +309,7 @@ Settings 的正式测试顶层 suite 直接对齐 PRD 模块：
 - What：验证点击“检查更新”后，网页状态会刷新为需索引，并同步更新摘要统计。
 - Why：网页和文件一样，需要先判断“内容是否变了”再决定是否重建索引。
 - How：预置一条已索引网页，执行“检查更新”并读取刷新后的网页列表。
-- Oracle：检查成功后，网页列表状态与需索引摘要同步刷新，对齐 `SET-WEB-003-AC2`。
+- Oracle：检查执行中出现持久化进度，且检查更新/更新索引按钮同时禁用，对齐 `SET-WEB-003-AC1`；检查成功后，网页列表状态与需索引摘要同步刷新，对齐 `SET-WEB-003-AC2`。
 - Not：不验证真实网页 HTTP 缓存头、正文 diff 算法和网络失败分支。
 
 #### `web-prepare-summary`
@@ -288,8 +319,18 @@ Settings 的正式测试顶层 suite 直接对齐 PRD 模块：
 - What：验证点击“更新索引”后，网页会区分成功索引与爬取失败，并刷新摘要统计。
 - Why：网页索引是“爬取 + 建索引”两阶段链路，失败类型必须可区分。
 - How：预置一条成功网页和一条带失败标记的网页，先执行“检查更新”，再执行“更新索引”。
-- Oracle：成功处理的网页转为已索引，对齐 `SET-WEB-004-AC2`；失败网页被标记为爬取失败，失败数量同步更新，对齐 `SET-WEB-004-AC3`。
+- Oracle：更新索引执行中出现抓取/索引分阶段进度，且检查更新/更新索引按钮同时禁用，对齐 `SET-WEB-004-AC4`；成功处理的网页转为已索引，对齐 `SET-WEB-004-AC2`；失败网页被标记为爬取失败，失败数量同步更新，对齐 `SET-WEB-004-AC3`。
 - Not：不验证真实网页正文切块、embedding 写入质量和索引失败以外的网络细节。
+
+#### `web-prepare-progress-restore`
+
+- 测试类型：`e2e`
+- 实现状态：`已实现`
+- What：验证网页索引执行中离开并返回网页 tab 后，分阶段进度块和按钮状态会恢复。
+- Why：网页索引包含抓取与索引两阶段，恢复时不能只恢复“执行中”标签而丢失当前阶段。
+- How：创建带 prepare 延迟的 fixture 工作区，触发网页更新索引后切到其他设置页，再返回网页 tab 读取 active job 与进度文案。
+- Oracle：返回后仍能看到 running job 对应的分阶段进度，且检查更新/更新索引按钮继续禁用，对齐 `SET-WEB-004-AC5`。
+- Not：不验证无抓取动作时直接展示第二步的真实内容缓存分支；该分支由后端 job 状态能力保留。
 
 #### `web-detail-and-delete`
 

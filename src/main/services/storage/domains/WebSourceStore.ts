@@ -289,4 +289,21 @@ export class WebSourceStore {
       ).length
     }
   }
+
+  public async failRunningSources(message: string, now = Date.now()): Promise<number> {
+    const table = await this.core.openTable(LANCE_TABLES.WEB_SOURCE)
+    const rows = (await table
+      .query()
+      .where("index_status IN ('crawling','indexing')")
+      .toArray()) as WebSourceRow[]
+    const sources = rows.map(toWebSourceRecord)
+    for (const source of sources) {
+      await this.updateWebSource(source.id, {
+        index_status: source.index_status === 'crawling' ? 'crawl_failed' : 'index_failed',
+        last_error: message,
+        updated_at: now
+      })
+    }
+    return sources.length
+  }
 }

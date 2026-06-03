@@ -66,13 +66,17 @@ import type {
   WebSourceMutationResponse,
   DeleteWebSourceResponse,
   WebSourceRecord,
+  WorkspaceIndexJobRecord,
+  WorkspaceIndexJobGetRequest,
+  WorkspaceIndexJobResponse,
+  WorkspaceIndexJobSourceKind,
   WorkspaceFileIndexRecord,
   WorkspaceJobResponse,
   WorkspaceMutationResponse,
   WorkspaceListItem,
   WorkspaceTreeListResponse,
   WorkspaceSource,
-  WorkspaceListResponse,
+  WorkspaceListResponse
 } from '../types/store'
 import path from 'path'
 import fs from 'fs'
@@ -110,9 +114,7 @@ const getErrorMessage = (error: unknown): string =>
 const toTrimmedStringList = (values: string[] | undefined): string[] =>
   Array.isArray(values) ? values.map((value) => String(value).trim()).filter(Boolean) : []
 
-const normalizeKbAvailability = (
-  value: string | undefined
-): SelectedReference['kbAvailability'] =>
+const normalizeKbAvailability = (value: string | undefined): SelectedReference['kbAvailability'] =>
   value === 'indexed' || value === 'partial' || value === 'not_indexed' ? value : 'not_indexed'
 
 const normalizeSelectedReferences = (
@@ -163,15 +165,17 @@ const normalizeSelectedReferences = (
     })
     .filter((reference) => {
       if (reference.kind === 'web') {
-        return Boolean(reference.workspaceId && reference.webSourceId && reference.name && reference.url)
+        return Boolean(
+          reference.workspaceId && reference.webSourceId && reference.name && reference.url
+        )
       }
 
       return Boolean(
         reference.workspaceId &&
-          reference.nodeId &&
-          reference.name &&
-          reference.relativePath &&
-          reference.absolutePath
+        reference.nodeId &&
+        reference.name &&
+        reference.relativePath &&
+        reference.absolutePath
       )
     })
 
@@ -203,7 +207,7 @@ export function registerHandlers(services: {
     string,
     { cancelled: boolean; senderId: number; abortController: AbortController }
   >()
-  const activeWorkspacePrepareJobs = new Set<string>()
+  const activeWorkspaceIndexJobs = new Set<string>()
   const activeAiApprovals = new Map<
     string,
     {
@@ -230,6 +234,7 @@ export function registerHandlers(services: {
   const aiRuntimeSettingsStore = storageService.aiRuntimeSettings
   const webSourceStore = storageService.webSource
   const workspaceStore = storageService.workspace
+  const workspaceIndexJobStore = storageService.workspaceIndexJob
   const docxApplyService = new DocxApplyService(storageService.docxApply)
   const workspaceService = new WorkspaceSourceService()
   const workspaceKnowledgePrepareService = new WorkspaceKnowledgePrepareService({
@@ -240,11 +245,105 @@ export function registerHandlers(services: {
   const webSourceService = new WebSourceService()
 
   const emitSourceListRefresh = (sender: Electron.WebContents) => {
+    if (sender.isDestroyed()) return
     sender.send('source-list-refresh')
+  }
+
+  const emitSourceListRefreshToAll = () => {
+    BrowserWindow.getAllWindows().forEach((window) => {
+      if (!window.webContents.isDestroyed()) {
+        window.webContents.send('source-list-refresh')
+      }
+    })
+  }
+
+  const emitWorkspaceIndexJobProgress = (job: WorkspaceIndexJobRecord) => {
+    BrowserWindow.getAllWindows().forEach((window) => {
+      if (!window.webContents.isDestroyed()) {
+        window.webContents.send('workspace-index-job-progress', job)
+      }
+    })
+  }
+
+  const getWorkspaceIndexJobKey = (
+    workspaceId: string,
+    sourceKind: WorkspaceIndexJobSourceKind
+  ): string => `${workspaceId}:${sourceKind}`
+
+  const saveAndEmitWorkspaceIndexJob = async (
+    job: WorkspaceIndexJobRecord
+  ): Promise<WorkspaceIndexJobRecord> => {
+    await workspaceIndexJobStore.saveJob(job)
+    emitWorkspaceIndexJobProgress(job)
+    return job
+  }
+
+  const updateAndEmitWorkspaceIndexJob = async (
+    job: WorkspaceIndexJobRecord,
+    values: Partial<
+      Pick<
+        WorkspaceIndexJobRecord,
+        | 'status'
+        | 'phase'
+        | 'step_index'
+        | 'step_total'
+        | 'total_count'
+        | 'processed_count'
+        | 'failed_count'
+        | 'target_ids'
+        | 'message'
+        | 'last_error'
+        | 'updated_at'
+        | 'finished_at'
+      >
+    >
+  ): Promise<WorkspaceIndexJobRecord> => {
+    await workspaceIndexJobStore.updateJob(job.id, values)
+    const nextJob = (await workspaceIndexJobStore.getJobById(job.id)) || {
+      ...job,
+      ...values
+    }
+    emitWorkspaceIndexJobProgress(nextJob)
+    return nextJob
+  }
+
+  const createWorkspaceIndexJob = (input: {
+    workspaceId: string
+    sourceKind: WorkspaceIndexJobSourceKind
+    action: 'scan' | 'prepare'
+    phase: WorkspaceIndexJobRecord['phase']
+    stepIndex: number
+    stepTotal: number
+    totalCount?: number
+    targetIds?: string[]
+    message?: string
+  }): WorkspaceIndexJobRecord => {
+    const now = Date.now()
+    return {
+      id: uuidv4(),
+      workspace_id: input.workspaceId,
+      source_kind: input.sourceKind,
+      action: input.action,
+      status: 'running',
+      phase: input.phase,
+      step_index: input.stepIndex,
+      step_total: input.stepTotal,
+      total_count: input.totalCount || 0,
+      processed_count: 0,
+      failed_count: 0,
+      target_ids: input.targetIds || [],
+      message: input.message,
+      started_at: now,
+      updated_at: now
+    }
   }
 
   const pauseForE2EFixture = async (): Promise<void> => {
     await new Promise<void>((resolve) => setTimeout(resolve, 30))
+  }
+
+  const pauseForE2EFixtureVisiblePhase = async (): Promise<void> => {
+    await new Promise<void>((resolve) => setTimeout(resolve, 150))
   }
 
   const waitForE2EFixtureDelay = async (phase: 'scan' | 'prepare'): Promise<void> => {
@@ -306,6 +405,423 @@ export function registerHandlers(services: {
       items: visibleItems,
       total: visibleItems.length,
       summary
+    }
+  }
+
+  const runFileScanJob = async (input: {
+    sender: Electron.WebContents
+    job: WorkspaceIndexJobRecord
+  }): Promise<void> => {
+    let job = input.job
+    const workspaceId = job.workspace_id
+    try {
+      const currentWorkspace = await workspaceStore.getWorkspaceById(workspaceId)
+      if (!currentWorkspace) throw new Error('workspace not found')
+      if (!currentWorkspace.root_path) throw new Error('请先设置工作文件地址')
+
+      await waitForE2EFixtureDelay('scan')
+      const existingRecords = await workspaceStore.listWorkspaceFileIndexRecords(workspaceId)
+      const now = Date.now()
+      const scanResult = await workspaceService.scanWorkspaceTree({
+        workspaceId,
+        rootPath: currentWorkspace.root_path,
+        workspaceName: currentWorkspace.name,
+        now
+      })
+      const diff = await workspaceService.diffWorkspaceTreeAgainstIndex({
+        entries: scanResult.entries,
+        records: existingRecords
+      })
+
+      const nextRecords: WorkspaceFileIndexRecord[] = []
+      const removedDocumentIds = diff.removed
+        .map((record) => record.document_id)
+        .filter((documentId): documentId is string => Boolean(documentId))
+
+      for (const item of diff.unchanged) {
+        nextRecords.push(
+          workspaceService.buildWorkspaceFileIndexRecord({
+            workspaceId,
+            entry: item.entry,
+            previous: item.record,
+            now
+          })
+        )
+      }
+      for (const item of diff.changed) {
+        nextRecords.push({
+          ...workspaceService.buildWorkspaceFileIndexRecord({
+            workspaceId,
+            entry: item.entry,
+            previous: item.record,
+            now
+          }),
+          content_hash: item.record.content_hash,
+          index_status: 'needs_index',
+          document_id: item.record.document_id,
+          indexed_at: item.record.indexed_at,
+          last_error: item.record.last_error
+        })
+      }
+      for (const entry of diff.added) {
+        nextRecords.push(
+          workspaceService.buildWorkspaceFileIndexRecord({
+            workspaceId,
+            entry,
+            now
+          })
+        )
+      }
+
+      await workspaceStore.replaceWorkspaceFileIndexRecords(workspaceId, nextRecords)
+      if (removedDocumentIds.length > 0) {
+        await documentsStore.deleteDocumentsByIds(removedDocumentIds)
+      }
+      job = await updateAndEmitWorkspaceIndexJob(job, {
+        status: 'succeeded',
+        phase: 'complete',
+        total_count: nextRecords.length,
+        processed_count: nextRecords.length,
+        message: `检查完成，新增 ${diff.added.length}，变更 ${diff.changed.length}，移除 ${diff.removed.length}`,
+        updated_at: Date.now(),
+        finished_at: Date.now()
+      })
+      emitSourceListRefresh(input.sender)
+      emitSourceListRefreshToAll()
+      void job
+    } catch (error) {
+      const message = getErrorMessage(error)
+      await updateAndEmitWorkspaceIndexJob(job, {
+        status: 'failed',
+        last_error: message,
+        message,
+        updated_at: Date.now(),
+        finished_at: Date.now()
+      })
+    } finally {
+      activeWorkspaceIndexJobs.delete(getWorkspaceIndexJobKey(workspaceId, 'file'))
+    }
+  }
+
+  const runE2EWorkspaceIndexJob = async (input: {
+    sender: Electron.WebContents
+    job: WorkspaceIndexJobRecord
+    delayPhase?: 'scan' | 'prepare'
+    run: () => WorkspaceJobResponse | null
+  }): Promise<void> => {
+    const job = input.job
+    try {
+      if (input.delayPhase) {
+        await waitForE2EFixtureDelay(input.delayPhase)
+      } else {
+        await pauseForE2EFixture()
+      }
+      const response = input.run()
+      if (!response?.success) {
+        const message = response?.error || 'E2E fixture job failed'
+        await updateAndEmitWorkspaceIndexJob(job, {
+          status: 'failed',
+          message,
+          last_error: message,
+          updated_at: Date.now(),
+          finished_at: Date.now()
+        })
+        return
+      }
+      const progress = response.progress
+      const failedCount = progress?.failed || 0
+      await updateAndEmitWorkspaceIndexJob(job, {
+        status: failedCount > 0 ? 'failed' : 'succeeded',
+        phase: 'complete',
+        total_count: progress?.total || job.total_count,
+        processed_count: progress?.completed || progress?.total || job.total_count,
+        failed_count: failedCount,
+        message: progress?.message || 'E2E fixture job complete',
+        updated_at: Date.now(),
+        finished_at: Date.now()
+      })
+      emitSourceListRefresh(input.sender)
+      emitSourceListRefreshToAll()
+    } finally {
+      activeWorkspaceIndexJobs.delete(getWorkspaceIndexJobKey(job.workspace_id, job.source_kind))
+    }
+  }
+
+  const runE2EWebPrepareJob = async (input: {
+    sender: Electron.WebContents
+    job: WorkspaceIndexJobRecord
+  }): Promise<void> => {
+    let job = input.job
+    const workspaceId = job.workspace_id
+    try {
+      const currentList = getE2EFixtureWebSourceList(workspaceId)
+      const targets = (currentList?.items || []).filter(
+        (item) =>
+          item.index_status === 'needs_index' ||
+          item.index_status === 'crawl_failed' ||
+          item.index_status === 'index_failed'
+      )
+      job = await updateAndEmitWorkspaceIndexJob(job, {
+        phase: targets.length > 0 ? 'crawl' : 'index',
+        step_index: targets.length > 0 ? 1 : 2,
+        step_total: 2,
+        total_count: targets.length,
+        target_ids: targets.map((item) => item.id),
+        message:
+          targets.length > 0
+            ? `步骤 1/2 抓取网页：0/${targets.length}`
+            : '步骤 2/2 建立索引：无需处理',
+        updated_at: Date.now()
+      })
+      await waitForE2EFixtureDelay('prepare')
+      if (targets.length > 0) {
+        job = await updateAndEmitWorkspaceIndexJob(job, {
+          processed_count: targets.length,
+          message: `步骤 1/2 抓取网页：${targets.length}/${targets.length}`,
+          updated_at: Date.now()
+        })
+      }
+      job = await updateAndEmitWorkspaceIndexJob(job, {
+        phase: 'index',
+        step_index: 2,
+        step_total: 2,
+        total_count: targets.length,
+        processed_count: 0,
+        failed_count: 0,
+        message: `步骤 2/2 建立索引：0/${targets.length}`,
+        updated_at: Date.now()
+      })
+      await pauseForE2EFixtureVisiblePhase()
+
+      const response = prepareE2EFixtureWebSources(workspaceId)
+      if (!response?.success) {
+        const message = response?.error || 'E2E fixture web prepare failed'
+        await updateAndEmitWorkspaceIndexJob(job, {
+          status: 'failed',
+          message,
+          last_error: message,
+          updated_at: Date.now(),
+          finished_at: Date.now()
+        })
+        return
+      }
+      const progress = response.progress
+      const failedCount = progress?.failed || 0
+      await updateAndEmitWorkspaceIndexJob(job, {
+        status: failedCount > 0 ? 'failed' : 'succeeded',
+        phase: 'complete',
+        total_count: progress?.total || targets.length,
+        processed_count: progress?.completed || progress?.total || targets.length,
+        failed_count: failedCount,
+        message: progress?.message || 'E2E fixture web prepare complete',
+        updated_at: Date.now(),
+        finished_at: Date.now()
+      })
+      emitSourceListRefresh(input.sender)
+      emitSourceListRefreshToAll()
+    } finally {
+      activeWorkspaceIndexJobs.delete(getWorkspaceIndexJobKey(workspaceId, 'web'))
+    }
+  }
+
+  const collectFilePrepareTargets = async (input: {
+    workspaceId: string
+    workspace: WorkspaceSource
+    now: number
+  }): Promise<{
+    targets: WorkspaceFileIndexRecord[]
+    recordMap: Map<string, WorkspaceFileIndexRecord>
+    added: number
+    updated: number
+    removed: number
+  }> => {
+    const scanResult = await workspaceService.scanWorkspaceTree({
+      workspaceId: input.workspaceId,
+      rootPath: input.workspace.root_path || '',
+      workspaceName: input.workspace.name,
+      now: input.now
+    })
+    const existingRecords = await workspaceStore.listWorkspaceFileIndexRecords(input.workspaceId)
+    const diff = await workspaceService.diffWorkspaceTreeAgainstIndex({
+      entries: scanResult.entries,
+      records: existingRecords
+    })
+    const recordMap = new Map(
+      existingRecords.map((record) => [record.relative_path, record] as const)
+    )
+
+    for (const item of diff.added) {
+      recordMap.set(
+        item.relative_path,
+        workspaceService.buildWorkspaceFileIndexRecord({
+          workspaceId: input.workspaceId,
+          entry: item,
+          now: input.now
+        })
+      )
+    }
+    for (const item of diff.changed) {
+      recordMap.set(item.entry.relative_path, {
+        ...workspaceService.buildWorkspaceFileIndexRecord({
+          workspaceId: input.workspaceId,
+          entry: item.entry,
+          previous: item.record,
+          now: input.now
+        }),
+        content_hash: item.record.content_hash,
+        index_status: 'needs_index',
+        document_id: item.record.document_id,
+        indexed_at: item.record.indexed_at,
+        last_error: item.record.last_error
+      })
+    }
+
+    const removedDocumentIds = diff.removed
+      .map((record) => record.document_id)
+      .filter((documentId): documentId is string => Boolean(documentId))
+    if (removedDocumentIds.length > 0) {
+      await documentsStore.deleteDocumentsByIds(removedDocumentIds)
+    }
+    for (const record of diff.removed) {
+      recordMap.delete(record.relative_path)
+    }
+
+    const targets = Array.from(recordMap.values()).filter(
+      (record) => record.index_status === 'needs_index' || record.index_status === 'failed'
+    )
+
+    return {
+      targets,
+      recordMap,
+      added: diff.added.length,
+      updated: diff.changed.length,
+      removed: diff.removed.length
+    }
+  }
+
+  const runFilePrepareJob = async (input: {
+    sender: Electron.WebContents
+    job: WorkspaceIndexJobRecord
+  }): Promise<void> => {
+    let job = input.job
+    const workspaceId = job.workspace_id
+    try {
+      const currentWorkspace = await workspaceStore.getWorkspaceById(workspaceId)
+      if (!currentWorkspace) throw new Error('workspace not found')
+      if (!currentWorkspace.root_path) throw new Error('请先设置工作文件地址')
+
+      await waitForE2EFixtureDelay('prepare')
+      const prepareStartedAt = Date.now()
+      const { targets, recordMap, added, updated, removed } = await collectFilePrepareTargets({
+        workspaceId,
+        workspace: currentWorkspace,
+        now: prepareStartedAt
+      })
+      job = await updateAndEmitWorkspaceIndexJob(job, {
+        total_count: targets.length,
+        target_ids: targets.map((record) => record.id),
+        message: `准备更新 ${targets.length} 个文件`,
+        updated_at: Date.now()
+      })
+
+      await workspaceStore.upsertWorkspaceFileIndexRecords(
+        targets.map((record) => ({
+          ...record,
+          index_status: 'indexing',
+          last_error: undefined,
+          last_checked_at: prepareStartedAt,
+          updated_at: prepareStartedAt
+        }))
+      )
+      emitSourceListRefresh(input.sender)
+      emitSourceListRefreshToAll()
+
+      let processed = 0
+      let failed = 0
+      for (const target of targets) {
+        const currentRecord = recordMap.get(target.relative_path) || target
+        const documentId = currentRecord.document_id || uuidv4()
+        try {
+          const indexedDocument = await workspaceKnowledgePrepareService.indexLocalFile({
+            workspaceId,
+            documentId,
+            filePath: currentRecord.absolute_path,
+            documentName: currentRecord.name
+          })
+          const preparedAt = Date.now()
+          const preparedRecord: WorkspaceFileIndexRecord = {
+            ...currentRecord,
+            document_id: documentId,
+            content_hash: indexedDocument.contentHash,
+            index_status: 'indexed',
+            indexed_at: preparedAt,
+            last_checked_at: preparedAt,
+            last_error: undefined,
+            updated_at: preparedAt
+          }
+          recordMap.set(currentRecord.relative_path, preparedRecord)
+          await workspaceStore.updateWorkspaceFileIndexRecord(preparedRecord.id, {
+            document_id: preparedRecord.document_id,
+            content_hash: preparedRecord.content_hash,
+            index_status: preparedRecord.index_status,
+            indexed_at: preparedRecord.indexed_at,
+            last_checked_at: preparedRecord.last_checked_at,
+            last_error: preparedRecord.last_error,
+            updated_at: preparedRecord.updated_at
+          })
+        } catch (error) {
+          failed += 1
+          await documentsStore.updateDocumentImportStatus(documentId, 3).catch(() => {})
+          const failedAt = Date.now()
+          const failedRecord: WorkspaceFileIndexRecord = {
+            ...currentRecord,
+            document_id: documentId,
+            index_status: 'failed',
+            last_checked_at: failedAt,
+            last_error: getErrorMessage(error),
+            updated_at: failedAt
+          }
+          recordMap.set(currentRecord.relative_path, failedRecord)
+          await workspaceStore.updateWorkspaceFileIndexRecord(failedRecord.id, {
+            document_id: failedRecord.document_id,
+            index_status: failedRecord.index_status,
+            last_checked_at: failedRecord.last_checked_at,
+            last_error: failedRecord.last_error,
+            updated_at: failedRecord.updated_at
+          })
+        }
+        processed += 1
+        job = await updateAndEmitWorkspaceIndexJob(job, {
+          processed_count: processed,
+          failed_count: failed,
+          message: `已处理 ${processed}/${targets.length}`,
+          updated_at: Date.now()
+        })
+        emitSourceListRefresh(input.sender)
+        emitSourceListRefreshToAll()
+      }
+
+      await updateAndEmitWorkspaceIndexJob(job, {
+        status: failed > 0 ? 'failed' : 'succeeded',
+        phase: 'complete',
+        message:
+          failed > 0
+            ? `索引完成，失败 ${failed} 个；新增 ${added}，变更 ${updated}，移除 ${removed}`
+            : `索引完成；新增 ${added}，变更 ${updated}，移除 ${removed}`,
+        updated_at: Date.now(),
+        finished_at: Date.now()
+      })
+    } catch (error) {
+      const message = getErrorMessage(error)
+      await updateAndEmitWorkspaceIndexJob(job, {
+        status: 'failed',
+        last_error: message,
+        message,
+        updated_at: Date.now(),
+        finished_at: Date.now()
+      })
+    } finally {
+      activeWorkspaceIndexJobs.delete(getWorkspaceIndexJobKey(workspaceId, 'file'))
     }
   }
 
@@ -402,11 +918,23 @@ export function registerHandlers(services: {
   }): Promise<void> => {
     const applyEvents = input.multiple
       ? [
-          { id: `e2e-apply-${input.runId}-a`, path: `/tmp/ncurator-e2e-apply-${input.runId}-a.docx`, fileName: 'e2e-apply-a.docx' },
-          { id: `e2e-apply-${input.runId}-b`, path: `/tmp/ncurator-e2e-apply-${input.runId}-b.docx`, fileName: 'e2e-apply-b.docx' }
+          {
+            id: `e2e-apply-${input.runId}-a`,
+            path: `/tmp/ncurator-e2e-apply-${input.runId}-a.docx`,
+            fileName: 'e2e-apply-a.docx'
+          },
+          {
+            id: `e2e-apply-${input.runId}-b`,
+            path: `/tmp/ncurator-e2e-apply-${input.runId}-b.docx`,
+            fileName: 'e2e-apply-b.docx'
+          }
         ]
       : [
-          { id: `e2e-apply-${input.runId}`, path: `/tmp/ncurator-e2e-apply-${input.runId}.docx`, fileName: 'e2e-apply.docx' }
+          {
+            id: `e2e-apply-${input.runId}`,
+            path: `/tmp/ncurator-e2e-apply-${input.runId}.docx`,
+            fileName: 'e2e-apply.docx'
+          }
         ]
 
     input.sendEvent({
@@ -708,7 +1236,10 @@ export function registerHandlers(services: {
       if (!rawUrl) continue
       try {
         const { url, normalizedUrl } = webSourceService.normalizeUrl(rawUrl)
-        const existing = await webSourceStore.getWebSourceByNormalizedUrl(normalizedUrl, workspaceId)
+        const existing = await webSourceStore.getWebSourceByNormalizedUrl(
+          normalizedUrl,
+          workspaceId
+        )
         const now = Date.now()
         if (existing) {
           await webSourceStore.updateWebSource(existing.id, {
@@ -734,10 +1265,16 @@ export function registerHandlers(services: {
           normalizedUrl,
           title: document.source_title || document.name,
           documentId: document.id,
-          indexStatus: document.import_status === 2 ? 'indexed' : document.import_status === 3 ? 'index_failed' : 'indexing',
+          indexStatus:
+            document.import_status === 2
+              ? 'indexed'
+              : document.import_status === 3
+                ? 'index_failed'
+                : 'indexing',
           fetchedAt: document.fetched_at || document.created_at,
           lastCrawledAt: document.fetched_at || document.created_at,
-          lastIndexedAt: document.import_status === 2 ? document.fetched_at || document.created_at : undefined,
+          lastIndexedAt:
+            document.import_status === 2 ? document.fetched_at || document.created_at : undefined,
           lastError: document.last_error,
           now
         })
@@ -767,7 +1304,11 @@ export function registerHandlers(services: {
       const nextSource: WebSourceRecord = {
         ...source,
         title: inspection.title || source.title,
-        index_status: changed ? 'needs_index' : source.index_status === 'indexed' ? 'indexed' : 'needs_index',
+        index_status: changed
+          ? 'needs_index'
+          : source.index_status === 'indexed'
+            ? 'indexed'
+            : 'needs_index',
         last_checked_at: inspectedAt,
         last_crawled_at: inspectedAt,
         fetched_at: source.fetched_at,
@@ -780,7 +1321,7 @@ export function registerHandlers(services: {
       }
       await webSourceStore.saveWebSource(nextSource)
       return nextSource
-    } catch (error: unknown) {
+    } catch (error) {
       const failedAt = Date.now()
       const failedSource: WebSourceRecord = {
         ...source,
@@ -846,7 +1387,7 @@ export function registerHandlers(services: {
         includeSelectors: source.include_selectors,
         excludeSelectors: source.exclude_selectors
       })
-    } catch (error: unknown) {
+    } catch (error) {
       await documentsStore.updateDocumentImportStatus(nextDocumentId, 3).catch(() => {})
       const failedAt = Date.now()
       const failedSource: WebSourceRecord = {
@@ -928,7 +1469,7 @@ export function registerHandlers(services: {
       await webSourceStore.saveWebSource(refreshedSource)
       emitSourceListRefresh(event.sender)
       return { source: refreshedSource, chunkCount: chunks.length }
-    } catch (error: unknown) {
+    } catch (error) {
       await documentsStore.updateDocumentImportStatus(nextDocumentId, 3).catch(() => {})
       const failedSource: WebSourceRecord = {
         ...crawlingDoneSource,
@@ -942,11 +1483,359 @@ export function registerHandlers(services: {
     }
   }
 
+  const crawlWebSourceForIndexJob = async (
+    sender: Electron.WebContents,
+    source: WebSourceRecord
+  ): Promise<{
+    source: WebSourceRecord
+    documentId: string
+    inspection: Awaited<ReturnType<WebSourceService['inspectUrl']>>
+  }> => {
+    const now = Date.now()
+    const nextDocumentId = source.document_id || uuidv4()
+    const nextPendingSource: WebSourceRecord = {
+      ...source,
+      document_id: nextDocumentId,
+      index_status: 'crawling',
+      last_error: undefined,
+      updated_at: now
+    }
+    await webSourceStore.saveWebSource(nextPendingSource)
+
+    const existingDocument = source.document_id
+      ? await documentsStore.getDocumentById(source.document_id)
+      : null
+    if (existingDocument) {
+      await documentsStore.updateDocumentById(existingDocument.id, {
+        name: source.title || source.url,
+        file_path: source.url,
+        source_type: 'web',
+        workspace_id: source.workspace_id
+      })
+      await documentsStore.updateDocumentImportStatus(existingDocument.id, 1)
+      await documentsStore.deleteChunksByDocumentIds([existingDocument.id])
+    } else {
+      await documentsStore.addDocument({
+        id: nextDocumentId,
+        name: source.title || source.url,
+        source_type: 'web',
+        workspace_id: source.workspace_id,
+        file_path: source.url,
+        created_at: now,
+        import_status: 1,
+        source_id: source.id,
+        source_url: source.url,
+        source_title: source.title,
+        normalized_source_url: source.normalized_url
+      })
+    }
+
+    emitSourceListRefresh(sender)
+    emitSourceListRefreshToAll()
+
+    try {
+      const inspection = await webSourceService.inspectUrl({
+        url: source.url,
+        includeSelectors: source.include_selectors,
+        excludeSelectors: source.exclude_selectors
+      })
+      const crawledAt = Date.now()
+      const crawlingDoneSource: WebSourceRecord = {
+        ...nextPendingSource,
+        title: inspection.title || nextPendingSource.title,
+        index_status: 'indexing',
+        last_checked_at: crawledAt,
+        last_crawled_at: crawledAt,
+        etag: inspection.etag,
+        last_modified: inspection.lastModified,
+        content_length: inspection.contentLength,
+        content_hash: inspection.contentHash,
+        updated_at: crawledAt
+      }
+      await webSourceStore.saveWebSource(crawlingDoneSource)
+      emitSourceListRefresh(sender)
+      emitSourceListRefreshToAll()
+      return { source: crawlingDoneSource, documentId: nextDocumentId, inspection }
+    } catch (error) {
+      await documentsStore.updateDocumentImportStatus(nextDocumentId, 3).catch(() => {})
+      const failedAt = Date.now()
+      const failedSource: WebSourceRecord = {
+        ...nextPendingSource,
+        index_status: 'crawl_failed',
+        last_checked_at: failedAt,
+        last_error: getErrorMessage(error),
+        updated_at: failedAt
+      }
+      await webSourceStore.saveWebSource(failedSource)
+      emitSourceListRefresh(sender)
+      emitSourceListRefreshToAll()
+      throw error
+    }
+  }
+
+  const indexCrawledWebSourceForIndexJob = async (input: {
+    sender: Electron.WebContents
+    source: WebSourceRecord
+    documentId: string
+    inspection: Awaited<ReturnType<WebSourceService['inspectUrl']>>
+  }): Promise<void> => {
+    try {
+      const splitDocs = await ingestionService.processWebText({
+        url: input.source.url,
+        title: input.inspection.title,
+        text: input.inspection.text
+      })
+      const documentName = splitDocs.title?.trim() || input.source.url
+      await documentsStore.updateDocumentById(input.documentId, {
+        name: documentName,
+        file_path: input.source.url,
+        source_type: 'web',
+        workspace_id: input.source.workspace_id
+      })
+
+      const allSplitDocs = [...splitDocs.bigSplitDocs, ...splitDocs.miniSplitDocs]
+      const allChunkVectors: Float32Array[] = []
+      for (const doc of allSplitDocs) {
+        const { data: vector } = await embeddingService.embed(doc.pageContent)
+        allChunkVectors.push(vector)
+      }
+
+      const chunks = allChunkVectors.map((_, index) => ({
+        text: allSplitDocs[index].pageContent,
+        id: uuidv4(),
+        document_id: input.documentId,
+        workspace_id: input.source.workspace_id,
+        document_name: documentName,
+        source_type: 'web',
+        metadata: {
+          page: 1
+        }
+      }))
+
+      await documentsStore.addChunks({
+        vectors: allChunkVectors,
+        chunks
+      })
+      await documentsStore.updateDocumentImportStatus(input.documentId, 2)
+
+      const indexedAt = Date.now()
+      const refreshedSource: WebSourceRecord = {
+        ...input.source,
+        title: documentName,
+        index_status: 'indexed',
+        fetched_at: indexedAt,
+        last_indexed_at: indexedAt,
+        last_error: undefined,
+        updated_at: indexedAt
+      }
+      await webSourceStore.saveWebSource(refreshedSource)
+      emitSourceListRefresh(input.sender)
+      emitSourceListRefreshToAll()
+    } catch (error) {
+      await documentsStore.updateDocumentImportStatus(input.documentId, 3).catch(() => {})
+      const failedSource: WebSourceRecord = {
+        ...input.source,
+        index_status: 'index_failed',
+        last_error: getErrorMessage(error),
+        updated_at: Date.now()
+      }
+      await webSourceStore.saveWebSource(failedSource)
+      emitSourceListRefresh(input.sender)
+      emitSourceListRefreshToAll()
+      throw error
+    }
+  }
+
+  const runWebScanJob = async (input: {
+    sender: Electron.WebContents
+    job: WorkspaceIndexJobRecord
+  }): Promise<void> => {
+    let job = input.job
+    const workspaceId = job.workspace_id
+    try {
+      await ensureWebSourcesHydrated()
+      const sources = await webSourceStore.listWebSources(workspaceId)
+      job = await updateAndEmitWorkspaceIndexJob(job, {
+        total_count: sources.length,
+        target_ids: sources.map((source) => source.id),
+        message: `准备检查 ${sources.length} 个网页`,
+        updated_at: Date.now()
+      })
+      let processed = 0
+      let failed = 0
+      for (const source of sources) {
+        try {
+          await inspectWebSourceRecord(source)
+        } catch (error) {
+          void error
+          failed += 1
+        }
+        processed += 1
+        job = await updateAndEmitWorkspaceIndexJob(job, {
+          processed_count: processed,
+          failed_count: failed,
+          message: `已检查 ${processed}/${sources.length}`,
+          updated_at: Date.now()
+        })
+        emitSourceListRefresh(input.sender)
+        emitSourceListRefreshToAll()
+      }
+      await updateAndEmitWorkspaceIndexJob(job, {
+        status: failed > 0 ? 'failed' : 'succeeded',
+        phase: 'complete',
+        message: failed > 0 ? `检查完成，失败 ${failed} 个` : '检查完成',
+        updated_at: Date.now(),
+        finished_at: Date.now()
+      })
+    } catch (error) {
+      const message = getErrorMessage(error)
+      await updateAndEmitWorkspaceIndexJob(job, {
+        status: 'failed',
+        last_error: message,
+        message,
+        updated_at: Date.now(),
+        finished_at: Date.now()
+      })
+    } finally {
+      activeWorkspaceIndexJobs.delete(getWorkspaceIndexJobKey(workspaceId, 'web'))
+    }
+  }
+
+  const runWebPrepareJob = async (input: {
+    sender: Electron.WebContents
+    job: WorkspaceIndexJobRecord
+  }): Promise<void> => {
+    let job = input.job
+    const workspaceId = job.workspace_id
+    try {
+      await ensureWebSourcesHydrated()
+      const sources = await webSourceStore.listWebSources(workspaceId)
+      const targets = sources.filter(
+        (source) =>
+          source.index_status === 'needs_index' ||
+          source.index_status === 'crawl_failed' ||
+          source.index_status === 'index_failed'
+      )
+      job = await updateAndEmitWorkspaceIndexJob(job, {
+        phase: targets.length > 0 ? 'crawl' : 'index',
+        step_index: targets.length > 0 ? 1 : 2,
+        step_total: 2,
+        total_count: targets.length,
+        target_ids: targets.map((source) => source.id),
+        message:
+          targets.length > 0
+            ? `步骤 1/2 抓取网页：0/${targets.length}`
+            : '步骤 2/2 建立索引：无需处理',
+        updated_at: Date.now()
+      })
+
+      const crawledSources: Array<{
+        source: WebSourceRecord
+        documentId: string
+        inspection: Awaited<ReturnType<WebSourceService['inspectUrl']>>
+      }> = []
+      let crawlProcessed = 0
+      let crawlFailed = 0
+      const concurrency = Math.max(1, WEB_INGEST_CONCURRENCY)
+      let crawlIndex = 0
+      const runCrawlOne = async (): Promise<void> => {
+        for (;;) {
+          const current = targets[crawlIndex++]
+          if (!current) return
+          try {
+            const crawled = await crawlWebSourceForIndexJob(input.sender, current)
+            crawledSources.push(crawled)
+          } catch (error) {
+            void error
+            crawlFailed += 1
+          }
+          crawlProcessed += 1
+          job = await updateAndEmitWorkspaceIndexJob(job, {
+            processed_count: crawlProcessed,
+            failed_count: crawlFailed,
+            message: `步骤 1/2 抓取网页：${crawlProcessed}/${targets.length}`,
+            updated_at: Date.now()
+          })
+        }
+      }
+      await Promise.all(Array.from({ length: concurrency }, () => runCrawlOne()))
+
+      job = await updateAndEmitWorkspaceIndexJob(job, {
+        phase: 'index',
+        step_index: 2,
+        step_total: 2,
+        total_count: crawledSources.length,
+        processed_count: 0,
+        failed_count: 0,
+        target_ids: crawledSources.map((item) => item.source.id),
+        message: `步骤 2/2 建立索引：0/${crawledSources.length}`,
+        updated_at: Date.now()
+      })
+
+      let indexProcessed = 0
+      let indexFailed = 0
+      let indexIndex = 0
+      const runIndexOne = async (): Promise<void> => {
+        for (;;) {
+          const current = crawledSources[indexIndex++]
+          if (!current) return
+          try {
+            await indexCrawledWebSourceForIndexJob({
+              sender: input.sender,
+              source: current.source,
+              documentId: current.documentId,
+              inspection: current.inspection
+            })
+          } catch (error) {
+            void error
+            indexFailed += 1
+          }
+          indexProcessed += 1
+          job = await updateAndEmitWorkspaceIndexJob(job, {
+            processed_count: indexProcessed,
+            failed_count: indexFailed,
+            message: `步骤 2/2 建立索引：${indexProcessed}/${crawledSources.length}`,
+            updated_at: Date.now()
+          })
+        }
+      }
+      await Promise.all(Array.from({ length: concurrency }, () => runIndexOne()))
+
+      const totalFailed = crawlFailed + indexFailed
+      await updateAndEmitWorkspaceIndexJob(job, {
+        status: totalFailed > 0 ? 'failed' : 'succeeded',
+        phase: 'complete',
+        total_count: targets.length,
+        processed_count: targets.length,
+        failed_count: totalFailed,
+        message: totalFailed > 0 ? `网页索引完成，失败 ${totalFailed} 个` : '网页索引完成',
+        updated_at: Date.now(),
+        finished_at: Date.now()
+      })
+    } catch (error) {
+      const message = getErrorMessage(error)
+      await updateAndEmitWorkspaceIndexJob(job, {
+        status: 'failed',
+        last_error: message,
+        message,
+        updated_at: Date.now(),
+        finished_at: Date.now()
+      })
+    } finally {
+      activeWorkspaceIndexJobs.delete(getWorkspaceIndexJobKey(workspaceId, 'web'))
+    }
+  }
+
   ipcMain.handle(
     'ingest-web',
     async (
       event,
-      payload: { workspaceId: string; url: string; includeSelectors?: string[]; excludeSelectors?: string[] }
+      payload: {
+        workspaceId: string
+        url: string
+        includeSelectors?: string[]
+        excludeSelectors?: string[]
+      }
     ) => {
       try {
         const fixtureResponse = ingestE2EFixtureWebSource(payload)
@@ -962,7 +1851,10 @@ export function registerHandlers(services: {
         const workspace = await workspaceStore.getWorkspaceById(workspaceId)
         if (!workspace) throw new Error('工作区不存在')
         const { url, normalizedUrl } = webSourceService.normalizeUrl(rawUrl)
-        const existing = await webSourceStore.getWebSourceByNormalizedUrl(normalizedUrl, workspaceId)
+        const existing = await webSourceStore.getWebSourceByNormalizedUrl(
+          normalizedUrl,
+          workspaceId
+        )
         const source =
           existing ||
           webSourceService.createWebSource({
@@ -986,14 +1878,14 @@ export function registerHandlers(services: {
         }
         if (!existing) {
           await webSourceStore.saveWebSource(nextSource)
-          } else {
-            await webSourceStore.updateWebSource(existing.id, {
-              url,
-              include_selectors: payload.includeSelectors,
-              exclude_selectors: payload.excludeSelectors,
-              index_status: 'needs_index',
-              last_error: undefined,
-              updated_at: nextSource.updated_at
+        } else {
+          await webSourceStore.updateWebSource(existing.id, {
+            url,
+            include_selectors: payload.includeSelectors,
+            exclude_selectors: payload.excludeSelectors,
+            index_status: 'needs_index',
+            last_error: undefined,
+            updated_at: nextSource.updated_at
           })
         }
         emitSourceListRefresh(event.sender)
@@ -1002,7 +1894,7 @@ export function registerHandlers(services: {
           count: 0,
           source: nextSource
         }
-      } catch (error: unknown) {
+      } catch (error) {
         console.error('❌ [INGEST-WEB] ERROR:', error)
         return { success: false, error: getErrorMessage(error) }
       }
@@ -1079,7 +1971,7 @@ export function registerHandlers(services: {
 
         emitSourceListRefresh(event.sender)
         return { success: true, created: preparedSources.length }
-      } catch (error: unknown) {
+      } catch (error) {
         console.error('❌ [INGEST-WEBS] ERROR:', error)
         return { success: false, error: getErrorMessage(error) }
       }
@@ -1097,7 +1989,7 @@ export function registerHandlers(services: {
       }
       await shell.openExternal(parsed.toString())
       return { success: true }
-    } catch (error: unknown) {
+    } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }
   })
@@ -1111,7 +2003,7 @@ export function registerHandlers(services: {
       const err = await shell.openPath(resolved)
       if (err) return { success: false, error: err }
       return { success: true }
-    } catch (error: unknown) {
+    } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }
   })
@@ -1136,7 +2028,7 @@ export function registerHandlers(services: {
 
         await execFileAsync('/usr/bin/open', ['-a', appPath, filePath])
         return { success: true }
-      } catch (error: unknown) {
+      } catch (error) {
         return { success: false, error: getErrorMessage(error) }
       }
     }
@@ -1150,7 +2042,7 @@ export function registerHandlers(services: {
       if (!fs.existsSync(resolved)) return { success: false, error: 'path not found' }
       shell.showItemInFolder(resolved)
       return { success: true }
-    } catch (error: unknown) {
+    } catch (error) {
       return { success: false, error: getErrorMessage(error) }
     }
   })
@@ -1175,7 +2067,7 @@ export function registerHandlers(services: {
         return { canceled: true }
       }
       return { canceled: false, path: result.filePaths[0] }
-    } catch (error: unknown) {
+    } catch (error) {
       return { canceled: true, error: getErrorMessage(error) }
     }
   })
@@ -1205,7 +2097,7 @@ export function registerHandlers(services: {
         return { canceled: true }
       }
       return { canceled: false, appPath: result.filePaths[0] }
-    } catch (error: unknown) {
+    } catch (error) {
       return { canceled: true, error: getErrorMessage(error) }
     }
   })
@@ -1219,7 +2111,7 @@ export function registerHandlers(services: {
         workspaces.map((workspace) => hydrateWorkspaceListItem(workspace))
       )
       return { items, total: items.length }
-    } catch (error: unknown) {
+    } catch (error) {
       console.error('❌ [WORKSPACE-LIST] ERROR:', error)
       return { items: [], total: 0 }
     }
@@ -1258,7 +2150,7 @@ export function registerHandlers(services: {
           success: true,
           workspace
         }
-      } catch (error: unknown) {
+      } catch (error) {
         console.error('❌ [WORKSPACE-CREATE] ERROR:', error)
         return { success: false, error: getErrorMessage(error) }
       }
@@ -1277,7 +2169,7 @@ export function registerHandlers(services: {
         await workspaceStore.deleteWorkspace(String(workspaceId || '').trim())
         emitSourceListRefresh(event.sender)
         return { success: true, deletedWorkspaceId: String(workspaceId || '').trim() }
-      } catch (error: unknown) {
+      } catch (error) {
         console.error('❌ [WORKSPACE-DELETE] ERROR:', error)
         return { success: false, error: getErrorMessage(error) }
       }
@@ -1337,7 +2229,7 @@ export function registerHandlers(services: {
         await workspaceStore.saveWorkspace(workspace)
         emitSourceListRefresh(event.sender)
         return { success: true, workspace }
-      } catch (error: unknown) {
+      } catch (error) {
         console.error('❌ [WORKSPACE-SET-ROOT-PATH] ERROR:', error)
         return { success: false, error: getErrorMessage(error) }
       }
@@ -1357,7 +2249,7 @@ export function registerHandlers(services: {
           String(payload.workspaceId || '').trim(),
           Boolean(payload.includeUnsupported)
         )
-      } catch (error: unknown) {
+      } catch (error) {
         console.error('❌ [WORKSPACE-TREE] ERROR:', error)
         return { items: [], total: 0, summary: workspaceStore.getEmptySummary() }
       }
@@ -1368,13 +2260,34 @@ export function registerHandlers(services: {
     'workspace-scan',
     async (event, payload: { workspaceId: string }): Promise<WorkspaceJobResponse> => {
       try {
-        await waitForE2EFixtureDelay('scan')
-        const fixtureResponse = scanE2EFixtureWorkspace(String(payload.workspaceId || '').trim())
-        if (fixtureResponse) {
-          emitSourceListRefresh(event.sender)
-          return fixtureResponse
-        }
         const workspaceId = String(payload.workspaceId || '').trim()
+        if (!workspaceId) return { success: false, error: 'workspaceId is required' }
+        if (isE2EFixtureModeEnabled()) {
+          const jobKey = getWorkspaceIndexJobKey(workspaceId, 'file')
+          const activeJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'file')
+          if (activeJob) return { success: true, workspaceId, job: activeJob }
+          const job = await saveAndEmitWorkspaceIndexJob(
+            createWorkspaceIndexJob({
+              workspaceId,
+              sourceKind: 'file',
+              action: 'scan',
+              phase: 'scan',
+              stepIndex: 1,
+              stepTotal: 1,
+              message: '正在检查目录变化'
+            })
+          )
+          activeWorkspaceIndexJobs.add(jobKey)
+          void runE2EWorkspaceIndexJob({
+            sender: event.sender,
+            job,
+            delayPhase: 'scan',
+            run: () => scanE2EFixtureWorkspace(workspaceId)
+          })
+          return { success: true, workspaceId, job }
+        }
+        const activeJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'file')
+        if (activeJob) return { success: true, workspaceId, job: activeJob }
         const currentWorkspace = await workspaceStore.getWorkspaceById(workspaceId)
         if (!currentWorkspace) {
           return { success: false, error: 'workspace not found' }
@@ -1382,79 +2295,28 @@ export function registerHandlers(services: {
         if (!currentWorkspace.root_path) {
           return { success: false, error: '请先设置工作文件地址' }
         }
-        const existingRecords = await workspaceStore.listWorkspaceFileIndexRecords(workspaceId)
-        const now = Date.now()
-        const scanResult = await workspaceService.scanWorkspaceTree({
-          workspaceId,
-          rootPath: currentWorkspace.root_path,
-          workspaceName: currentWorkspace.name,
-          now
-        })
-        const diff = await workspaceService.diffWorkspaceTreeAgainstIndex({
-          entries: scanResult.entries,
-          records: existingRecords
-        })
 
-        const nextRecords: WorkspaceFileIndexRecord[] = []
-        const removedDocumentIds = diff.removed
-          .map((record) => record.document_id)
-          .filter((documentId): documentId is string => Boolean(documentId))
-
-        for (const item of diff.unchanged) {
-          nextRecords.push(
-            workspaceService.buildWorkspaceFileIndexRecord({
-              workspaceId,
-              entry: item.entry,
-              previous: item.record,
-              now
-            })
-          )
+        const jobKey = getWorkspaceIndexJobKey(workspaceId, 'file')
+        if (activeWorkspaceIndexJobs.has(jobKey)) {
+          const runningJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'file')
+          if (runningJob) return { success: true, workspaceId, job: runningJob }
+          return { success: false, workspaceId, error: 'workspace file job already running' }
         }
-        for (const item of diff.changed) {
-          nextRecords.push({
-            ...workspaceService.buildWorkspaceFileIndexRecord({
-              workspaceId,
-              entry: item.entry,
-              previous: item.record,
-              now
-            }),
-            content_hash: item.record.content_hash,
-            index_status: 'needs_index',
-            document_id: item.record.document_id,
-            indexed_at: item.record.indexed_at,
-            last_error: item.record.last_error
+        const job = await saveAndEmitWorkspaceIndexJob(
+          createWorkspaceIndexJob({
+            workspaceId,
+            sourceKind: 'file',
+            action: 'scan',
+            phase: 'scan',
+            stepIndex: 1,
+            stepTotal: 1,
+            message: '正在检查目录变化'
           })
-        }
-        for (const entry of diff.added) {
-          nextRecords.push(
-            workspaceService.buildWorkspaceFileIndexRecord({
-              workspaceId,
-              entry,
-              now
-            })
-          )
-        }
-
-        await workspaceStore.replaceWorkspaceFileIndexRecords(workspaceId, nextRecords)
-        if (removedDocumentIds.length > 0) {
-          await documentsStore.deleteDocumentsByIds(removedDocumentIds)
-        }
-        emitSourceListRefresh(event.sender)
-
-        return {
-          success: true,
-          workspaceId,
-          progress: {
-            workspace_id: workspaceId,
-            phase: 'inspect',
-            total: nextRecords.length,
-            completed: nextRecords.length,
-            added: diff.added.length,
-            updated: diff.changed.length,
-            removed: diff.removed.length
-          }
-        }
-      } catch (error: unknown) {
+        )
+        activeWorkspaceIndexJobs.add(jobKey)
+        void runFileScanJob({ sender: event.sender, job })
+        return { success: true, workspaceId, job }
+      } catch (error) {
         console.error('❌ [WORKSPACE-SCAN] ERROR:', error)
         return { success: false, error: getErrorMessage(error) }
       }
@@ -1466,19 +2328,34 @@ export function registerHandlers(services: {
     async (event, payload: { workspaceId: string }): Promise<WorkspaceJobResponse> => {
       const workspaceId = String(payload.workspaceId || '').trim()
       if (!workspaceId) return { success: false, error: 'workspaceId is required' }
-      if (activeWorkspacePrepareJobs.has(workspaceId)) {
-        return { success: false, error: 'workspace prepare already running' }
-      }
-
-      await waitForE2EFixtureDelay('prepare')
-      const fixtureResponse = prepareE2EFixtureWorkspace(workspaceId)
-      if (fixtureResponse) {
-        emitSourceListRefresh(event.sender)
-        return fixtureResponse
-      }
-
-      activeWorkspacePrepareJobs.add(workspaceId)
       try {
+        if (isE2EFixtureModeEnabled()) {
+          const activeJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'file')
+          if (activeJob) return { success: true, workspaceId, job: activeJob }
+          const jobKey = getWorkspaceIndexJobKey(workspaceId, 'file')
+          const job = await saveAndEmitWorkspaceIndexJob(
+            createWorkspaceIndexJob({
+              workspaceId,
+              sourceKind: 'file',
+              action: 'prepare',
+              phase: 'index',
+              stepIndex: 1,
+              stepTotal: 1,
+              message: '正在准备文件索引'
+            })
+          )
+          activeWorkspaceIndexJobs.add(jobKey)
+          void runE2EWorkspaceIndexJob({
+            sender: event.sender,
+            job,
+            delayPhase: 'prepare',
+            run: () => prepareE2EFixtureWorkspace(workspaceId)
+          })
+          return { success: true, workspaceId, job }
+        }
+        const activeJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'file')
+        if (activeJob) return { success: true, workspaceId, job: activeJob }
+
         const currentWorkspace = await workspaceStore.getWorkspaceById(workspaceId)
         if (!currentWorkspace) {
           return { success: false, error: 'workspace not found' }
@@ -1487,149 +2364,28 @@ export function registerHandlers(services: {
           return { success: false, error: '请先设置工作文件地址' }
         }
 
-        const prepareStartedAt = Date.now()
-        const scanResult = await workspaceService.scanWorkspaceTree({
-          workspaceId,
-          rootPath: currentWorkspace.root_path,
-          workspaceName: currentWorkspace.name,
-          now: prepareStartedAt
-        })
-        const existingRecords = await workspaceStore.listWorkspaceFileIndexRecords(workspaceId)
-        const diff = await workspaceService.diffWorkspaceTreeAgainstIndex({
-          entries: scanResult.entries,
-          records: existingRecords
-        })
-        const recordMap = new Map(
-          existingRecords.map((record) => [record.relative_path, record] as const)
-        )
-
-        for (const item of diff.added) {
-          recordMap.set(
-            item.relative_path,
-            workspaceService.buildWorkspaceFileIndexRecord({
-              workspaceId,
-              entry: item,
-              now: prepareStartedAt
-            })
-          )
+        const jobKey = getWorkspaceIndexJobKey(workspaceId, 'file')
+        if (activeWorkspaceIndexJobs.has(jobKey)) {
+          const runningJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'file')
+          if (runningJob) return { success: true, workspaceId, job: runningJob }
+          return { success: false, workspaceId, error: 'workspace file job already running' }
         }
-        for (const item of diff.changed) {
-          recordMap.set(item.entry.relative_path, {
-            ...workspaceService.buildWorkspaceFileIndexRecord({
-              workspaceId,
-              entry: item.entry,
-              previous: item.record,
-              now: prepareStartedAt
-            }),
-            content_hash: item.record.content_hash,
-            index_status: 'needs_index',
-            document_id: item.record.document_id,
-            indexed_at: item.record.indexed_at,
-            last_error: item.record.last_error
-          })
-        }
-
-        const removedDocumentIds = diff.removed
-          .map((record) => record.document_id)
-          .filter((documentId): documentId is string => Boolean(documentId))
-        if (removedDocumentIds.length > 0) {
-          await documentsStore.deleteDocumentsByIds(removedDocumentIds)
-        }
-        for (const record of diff.removed) {
-          recordMap.delete(record.relative_path)
-        }
-
-        const prepareTargets = Array.from(recordMap.values()).filter(
-          (record) => record.index_status === 'needs_index' || record.index_status === 'failed'
-        )
-
-        await workspaceStore.upsertWorkspaceFileIndexRecords(
-          prepareTargets.map((record) => ({
-            ...record,
-            index_status: 'indexing',
-            last_error: undefined,
-            last_checked_at: prepareStartedAt,
-            updated_at: prepareStartedAt
-          }))
-        )
-
-        let completed = 0
-        let failed = 0
-        for (const target of prepareTargets) {
-          const currentRecord = recordMap.get(target.relative_path) || target
-          const documentId = currentRecord.document_id || uuidv4()
-          try {
-            const indexedDocument = await workspaceKnowledgePrepareService.indexLocalFile({
-              workspaceId,
-              documentId,
-              filePath: currentRecord.absolute_path,
-              documentName: currentRecord.name
-            })
-            const preparedAt = Date.now()
-            const preparedRecord: WorkspaceFileIndexRecord = {
-              ...currentRecord,
-              document_id: documentId,
-              content_hash: indexedDocument.contentHash,
-              index_status: 'indexed',
-              indexed_at: preparedAt,
-              last_checked_at: preparedAt,
-              last_error: undefined,
-              updated_at: preparedAt
-            }
-            recordMap.set(currentRecord.relative_path, preparedRecord)
-            await workspaceStore.updateWorkspaceFileIndexRecord(preparedRecord.id, {
-              document_id: preparedRecord.document_id,
-              content_hash: preparedRecord.content_hash,
-              index_status: preparedRecord.index_status,
-              indexed_at: preparedRecord.indexed_at,
-              last_checked_at: preparedRecord.last_checked_at,
-              last_error: preparedRecord.last_error,
-              updated_at: preparedRecord.updated_at
-            })
-            completed += 1
-          } catch (error: unknown) {
-            failed += 1
-            await documentsStore.updateDocumentImportStatus(documentId, 3).catch(() => {})
-            const failedAt = Date.now()
-            const failedRecord: WorkspaceFileIndexRecord = {
-              ...currentRecord,
-              document_id: documentId,
-              index_status: 'failed',
-              last_checked_at: failedAt,
-              last_error: getErrorMessage(error),
-              updated_at: failedAt
-            }
-            recordMap.set(currentRecord.relative_path, failedRecord)
-            await workspaceStore.updateWorkspaceFileIndexRecord(failedRecord.id, {
-              document_id: failedRecord.document_id,
-              index_status: failedRecord.index_status,
-              last_checked_at: failedRecord.last_checked_at,
-              last_error: failedRecord.last_error,
-              updated_at: failedRecord.updated_at
-            })
-          }
-        }
-
-        emitSourceListRefresh(event.sender)
-
-        return {
-          success: true,
-          workspaceId,
-          progress: {
-            workspace_id: workspaceId,
+        const job = await saveAndEmitWorkspaceIndexJob(
+          createWorkspaceIndexJob({
+            workspaceId,
+            sourceKind: 'file',
+            action: 'prepare',
             phase: 'index',
-            total: prepareTargets.length,
-            completed,
-            added: diff.added.length,
-            updated: diff.changed.length,
-            removed: diff.removed.length,
-            failed
-          }
-        }
-      } catch (error: unknown) {
+            stepIndex: 1,
+            stepTotal: 1,
+            message: '正在准备文件索引'
+          })
+        )
+        activeWorkspaceIndexJobs.add(jobKey)
+        void runFilePrepareJob({ sender: event.sender, job })
+        return { success: true, workspaceId, job }
+      } catch (error) {
         return { success: false, error: getErrorMessage(error), workspaceId }
-      } finally {
-        activeWorkspacePrepareJobs.delete(workspaceId)
       }
     }
   )
@@ -1640,7 +2396,11 @@ export function registerHandlers(services: {
       try {
         const workspaceId = String(payload?.workspaceId || '').trim()
         if (!workspaceId) {
-          return { items: [], total: 0, summary: { web_count: 0, needs_index_count: 0, failed_count: 0 } }
+          return {
+            items: [],
+            total: 0,
+            summary: { web_count: 0, needs_index_count: 0, failed_count: 0 }
+          }
         }
         const fixtureList = getE2EFixtureWebSourceList(workspaceId)
         if (fixtureList) return fixtureList
@@ -1650,9 +2410,28 @@ export function registerHandlers(services: {
           webSourceStore.getWorkspaceWebSummary(workspaceId)
         ])
         return { items, total: items.length, summary }
-      } catch (error: unknown) {
+      } catch (error) {
         console.error('❌ [WEB-SOURCE-LIST] ERROR:', error)
-        return { items: [], total: 0, summary: { web_count: 0, needs_index_count: 0, failed_count: 0 } }
+        return {
+          items: [],
+          total: 0,
+          summary: { web_count: 0, needs_index_count: 0, failed_count: 0 }
+        }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'workspace-index-job-get',
+    async (_event, payload: WorkspaceIndexJobGetRequest): Promise<WorkspaceIndexJobResponse> => {
+      try {
+        const workspaceId = String(payload?.workspaceId || '').trim()
+        const sourceKind = payload?.sourceKind === 'web' ? 'web' : 'file'
+        if (!workspaceId) return { success: false, error: 'workspaceId is required' }
+        const job = await workspaceIndexJobStore.getActiveJob(workspaceId, sourceKind)
+        return { success: true, job: job || undefined }
+      } catch (error) {
+        return { success: false, error: getErrorMessage(error) }
       }
     }
   )
@@ -1663,37 +2442,52 @@ export function registerHandlers(services: {
       const workspaceId = String(payload?.workspaceId || '').trim()
       if (!workspaceId) return { success: false, error: 'workspaceId is required' }
       try {
-        const fixtureResponse = scanE2EFixtureWebSources(workspaceId)
-        if (fixtureResponse) {
-          emitSourceListRefresh(event.sender)
-          return fixtureResponse
+        if (isE2EFixtureModeEnabled()) {
+          const activeJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'web')
+          if (activeJob) return { success: true, workspaceId, job: activeJob }
+          const jobKey = getWorkspaceIndexJobKey(workspaceId, 'web')
+          const job = await saveAndEmitWorkspaceIndexJob(
+            createWorkspaceIndexJob({
+              workspaceId,
+              sourceKind: 'web',
+              action: 'scan',
+              phase: 'scan',
+              stepIndex: 1,
+              stepTotal: 1,
+              message: '正在检查网页更新'
+            })
+          )
+          activeWorkspaceIndexJobs.add(jobKey)
+          void runE2EWorkspaceIndexJob({
+            sender: event.sender,
+            job,
+            run: () => scanE2EFixtureWebSources(workspaceId)
+          })
+          return { success: true, workspaceId, job }
         }
-        await ensureWebSourcesHydrated()
-        const sources = await webSourceStore.listWebSources(workspaceId)
-        let completed = 0
-        let failed = 0
-        for (const source of sources) {
-          try {
-            await inspectWebSourceRecord(source)
-            completed += 1
-          } catch (error) {
-            void error
-            failed += 1
-          }
+        const activeJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'web')
+        if (activeJob) return { success: true, workspaceId, job: activeJob }
+        const jobKey = getWorkspaceIndexJobKey(workspaceId, 'web')
+        if (activeWorkspaceIndexJobs.has(jobKey)) {
+          const runningJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'web')
+          if (runningJob) return { success: true, workspaceId, job: runningJob }
+          return { success: false, workspaceId, error: 'workspace web job already running' }
         }
-        emitSourceListRefresh(event.sender)
-        return {
-          success: true,
-          workspaceId,
-          progress: {
-            workspace_id: workspaceId,
-            phase: 'inspect',
-            total: sources.length,
-            completed,
-            failed
-          }
-        }
-      } catch (error: unknown) {
+        const job = await saveAndEmitWorkspaceIndexJob(
+          createWorkspaceIndexJob({
+            workspaceId,
+            sourceKind: 'web',
+            action: 'scan',
+            phase: 'scan',
+            stepIndex: 1,
+            stepTotal: 1,
+            message: '正在检查网页更新'
+          })
+        )
+        activeWorkspaceIndexJobs.add(jobKey)
+        void runWebScanJob({ sender: event.sender, job })
+        return { success: true, workspaceId, job }
+      } catch (error) {
         return { success: false, workspaceId, error: getErrorMessage(error) }
       }
     }
@@ -1705,50 +2499,51 @@ export function registerHandlers(services: {
       const workspaceId = String(payload?.workspaceId || '').trim()
       if (!workspaceId) return { success: false, error: 'workspaceId is required' }
       try {
-        const fixtureResponse = prepareE2EFixtureWebSources(workspaceId)
-        if (fixtureResponse) {
-          emitSourceListRefresh(event.sender)
-          return fixtureResponse
+        if (isE2EFixtureModeEnabled()) {
+          const activeJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'web')
+          if (activeJob) return { success: true, workspaceId, job: activeJob }
+          const jobKey = getWorkspaceIndexJobKey(workspaceId, 'web')
+          const job = await saveAndEmitWorkspaceIndexJob(
+            createWorkspaceIndexJob({
+              workspaceId,
+              sourceKind: 'web',
+              action: 'prepare',
+              phase: 'crawl',
+              stepIndex: 1,
+              stepTotal: 2,
+              message: '正在准备网页索引'
+            })
+          )
+          activeWorkspaceIndexJobs.add(jobKey)
+          void runE2EWebPrepareJob({
+            sender: event.sender,
+            job
+          })
+          return { success: true, workspaceId, job }
         }
-        await ensureWebSourcesHydrated()
-        const sources = await webSourceStore.listWebSources(workspaceId)
-        const targets = sources.filter(
-          (source) =>
-            source.index_status === 'needs_index' ||
-            source.index_status === 'crawl_failed' ||
-            source.index_status === 'index_failed'
+        const activeJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'web')
+        if (activeJob) return { success: true, workspaceId, job: activeJob }
+        const jobKey = getWorkspaceIndexJobKey(workspaceId, 'web')
+        if (activeWorkspaceIndexJobs.has(jobKey)) {
+          const runningJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'web')
+          if (runningJob) return { success: true, workspaceId, job: runningJob }
+          return { success: false, workspaceId, error: 'workspace web job already running' }
+        }
+        const job = await saveAndEmitWorkspaceIndexJob(
+          createWorkspaceIndexJob({
+            workspaceId,
+            sourceKind: 'web',
+            action: 'prepare',
+            phase: 'crawl',
+            stepIndex: 1,
+            stepTotal: 2,
+            message: '正在准备网页索引'
+          })
         )
-        let completed = 0
-        let failed = 0
-        const concurrency = Math.max(1, WEB_INGEST_CONCURRENCY)
-        let index = 0
-        const runOne = async (): Promise<void> => {
-          for (;;) {
-            const current = targets[index++]
-            if (!current) return
-            try {
-              await refreshWebSourceRecord(event, current)
-              completed += 1
-            } catch (error) {
-              void error
-              failed += 1
-            }
-          }
-        }
-        await Promise.all(Array.from({ length: concurrency }, () => runOne()))
-        emitSourceListRefresh(event.sender)
-        return {
-          success: true,
-          workspaceId,
-          progress: {
-            workspace_id: workspaceId,
-            phase: 'index',
-            total: targets.length,
-            completed,
-            failed
-          }
-        }
-      } catch (error: unknown) {
+        activeWorkspaceIndexJobs.add(jobKey)
+        void runWebPrepareJob({ sender: event.sender, job })
+        return { success: true, workspaceId, job }
+      } catch (error) {
         return { success: false, workspaceId, error: getErrorMessage(error) }
       }
     }
@@ -1779,7 +2574,7 @@ export function registerHandlers(services: {
         }
         const refreshed = await refreshWebSourceRecord(event, source)
         return { success: true, source: refreshed.source }
-      } catch (error: unknown) {
+      } catch (error) {
         console.error('❌ [WEB-SOURCE-REFRESH] ERROR:', error)
         return { success: false, error: getErrorMessage(error) }
       }
@@ -1811,7 +2606,7 @@ export function registerHandlers(services: {
         await webSourceStore.deleteWebSource(safeId, workspaceId)
         emitSourceListRefresh(event.sender)
         return { success: true, deletedWebSourceId: safeId }
-      } catch (error: unknown) {
+      } catch (error) {
         console.error('❌ [WEB-SOURCE-DELETE] ERROR:', error)
         return { success: false, error: getErrorMessage(error) }
       }
@@ -1861,7 +2656,7 @@ export function registerHandlers(services: {
           )
 
         return { items: allReferences, total: allReferences.length }
-      } catch (error: unknown) {
+      } catch (error) {
         console.error('❌ [REFERENCE-ITEM-LIST] ERROR:', error)
         return { items: [], total: 0 }
       }
@@ -1895,7 +2690,7 @@ export function registerHandlers(services: {
           results: finalResults,
           tokens
         }
-      } catch (error: unknown) {
+      } catch (error) {
         console.error('❌ [SEARCH] ERROR:', error)
         throw error
       }
@@ -1916,7 +2711,7 @@ export function registerHandlers(services: {
         const normalized = results.map(normalizeForIpc)
         // console.log('🔎 [FTS-SEARCH] RESULTS:', normalized)
         return normalized
-      } catch (error: unknown) {
+      } catch (error) {
         console.error('❌ [FTS-SEARCH] ERROR:', error)
         return []
       }
@@ -1944,7 +2739,7 @@ export function registerHandlers(services: {
         const normalized = results.map(normalizeForIpc)
         console.log('🔎 [VECTOR-SEARCH] RESULTS:', normalized)
         return normalized
-      } catch (error: unknown) {
+      } catch (error) {
         console.error('❌ [VECTOR-SEARCH] ERROR:', error)
         return []
       }
@@ -1973,7 +2768,7 @@ export function registerHandlers(services: {
         const normalized = results.map(normalizeForIpc)
         console.log('🔎 [HYBRID-SEARCH] RESULTS:', normalized)
         return normalized
-      } catch (error: unknown) {
+      } catch (error) {
         console.error('❌ [HYBRID-SEARCH] ERROR:', error)
         return []
       }
@@ -1990,7 +2785,7 @@ export function registerHandlers(services: {
         const { sourceNameQuery, page, pageSize } = payload
         const res = await documentsStore.listDocuments({ sourceNameQuery, page, pageSize })
         return res
-      } catch (error: unknown) {
+      } catch (error) {
         console.error('❌ [LIST-DOCUMENTS] ERROR:', error)
         return { items: [], total: 0 }
       }
@@ -2008,7 +2803,7 @@ export function registerHandlers(services: {
         const res = await documentsStore.listChunks({ query, page, pageSize })
         const normalized = res.items.map(normalizeForIpc)
         return { items: normalized, total: res.total }
-      } catch (error: unknown) {
+      } catch (error) {
         console.error('❌ [LIST-CHUNKS] ERROR:', error)
         return { items: [], total: 0 }
       }
@@ -2020,7 +2815,7 @@ export function registerHandlers(services: {
       const result = await documentsStore.dropDocumentsStorage()
       console.log('🗑️ [DROP-DOCUMENTS] DONE:', result)
       return { success: true, existed: result.existed }
-    } catch (error: unknown) {
+    } catch (error) {
       console.error('❌ [DROP-DOCUMENTS] ERROR:', error)
       return { success: false, error: getErrorMessage(error) }
     }
@@ -2033,7 +2828,7 @@ export function registerHandlers(services: {
       console.log('🗑️ [DELETE-DOCUMENTS] DONE:', res)
       emitSourceListRefresh(event.sender)
       return res
-    } catch (error: unknown) {
+    } catch (error) {
       console.error('❌ [DELETE-DOCUMENTS] ERROR:', error)
       return { success: false, error: getErrorMessage(error) }
     }
@@ -2046,7 +2841,7 @@ export function registerHandlers(services: {
       }
       const buffer = fs.readFileSync(filePath)
       return buffer
-    } catch (error: unknown) {
+    } catch (error) {
       console.error('❌ [READ-FILE] ERROR:', error)
       throw error
     }
@@ -2060,7 +2855,7 @@ export function registerHandlers(services: {
       // After successful download, re-initialize embedding service
       await embeddingService.initialize()
       return result
-    } catch (error: unknown) {
+    } catch (error) {
       console.error('❌ [DOWNLOAD-MODEL] ERROR:', error)
       return { success: false, error: getErrorMessage(error) }
     }
@@ -2069,7 +2864,7 @@ export function registerHandlers(services: {
   ipcMain.handle('get-models', async () => {
     try {
       return modelService.getModels()
-    } catch (error: unknown) {
+    } catch (error) {
       console.error('❌ [GET-MODELS] ERROR:', error)
       return []
     }
@@ -2084,9 +2879,7 @@ export function registerHandlers(services: {
     async (event, payload: AiRunStartRequest): Promise<AiRunStartResponse> => {
       const sessionId = String(payload?.sessionId || '').trim()
       const input = String(payload?.input || '').trim()
-      const modelName = payload?.modelName
-        ? String(payload.modelName).trim()
-        : undefined
+      const modelName = payload?.modelName ? String(payload.modelName).trim() : undefined
       const selectedReferences = normalizeSelectedReferences(payload?.selectedReferences)
       const workspace =
         payload?.workspace &&
@@ -2101,7 +2894,7 @@ export function registerHandlers(services: {
                 ? String(payload.workspace.policyProfile)
                 : undefined
             }
-            : undefined
+          : undefined
       const e2eFixtureScenario = isE2EFixtureModeEnabled() ? matchE2EChatScenario(input) : null
       if (!sessionId) return { success: false, error: 'sessionId is required' }
       if (!input) return { success: false, error: 'input is required' }
@@ -2378,7 +3171,10 @@ export function registerHandlers(services: {
 
   ipcMain.handle(
     'docx-apply-list',
-    async (_event, payload?: ListDocxApplyRecordsRequest): Promise<ListDocxApplyRecordsResponse> => {
+    async (
+      _event,
+      payload?: ListDocxApplyRecordsRequest
+    ): Promise<ListDocxApplyRecordsResponse> => {
       try {
         return await docxApplyService.listRecords(payload)
       } catch (e: unknown) {

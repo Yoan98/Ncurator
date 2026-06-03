@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Alert, Button, Empty, Input, Modal, Tabs, Tooltip, Tree, message } from 'antd'
 import type {
+  WorkspaceIndexJobRecord,
   LegacyLocalImportMigrationStatus,
   WorkspaceListItem,
   WorkspaceTreeListResponse
@@ -18,14 +19,14 @@ import {
 } from 'react-icons/hi2'
 import { importSelectors, settingsSelectors } from '../../testing/selectors'
 import WebSourcesSettingsPanel from './WebSourcesSettingsPanel'
+import WorkspaceIndexJobProgress from './WorkspaceIndexJobProgress'
 import {
   createWorkspaceTree,
   getDefaultExpandedKeys,
   getVisibleWorkspaceTreeEntries,
-  getWorkspaceActionTooltip,
   getWorkspaceTreeDisplayStrategy
 } from './utils/workspace'
-import type { WorkspaceActionMap, WorkspaceProgressMap, WorkspaceTreeMap } from './types'
+import type { WorkspaceJobMap, WorkspaceTreeMap } from './types'
 
 const WorkspaceSettingsPanel: React.FC = () => {
   const [workspaces, setWorkspaces] = useState<WorkspaceListItem[]>([])
@@ -34,8 +35,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
     Record<string, WorkspaceTreeListResponse['summary']>
   >({})
   const [workspaceExpandedKeys, setWorkspaceExpandedKeys] = useState<Record<string, string[]>>({})
-  const [workspaceActions, setWorkspaceActions] = useState<WorkspaceActionMap>({})
-  const [workspaceProgress, setWorkspaceProgress] = useState<WorkspaceProgressMap>({})
+  const [workspaceIndexJobs, setWorkspaceIndexJobs] = useState<WorkspaceJobMap>({})
   const [workspaceLoading, setWorkspaceLoading] = useState(false)
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null)
   const [selectedTabKey, setSelectedTabKey] = useState<'files' | 'web'>('files')
@@ -49,6 +49,11 @@ const WorkspaceSettingsPanel: React.FC = () => {
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) || null,
     [selectedWorkspaceId, workspaces]
+  )
+
+  const selectedWorkspaceIndexJob = useMemo(
+    () => (selectedWorkspaceId ? workspaceIndexJobs[selectedWorkspaceId] : undefined),
+    [selectedWorkspaceId, workspaceIndexJobs]
   )
 
   const selectedWorkspaceEntries = useMemo(
@@ -139,6 +144,18 @@ const WorkspaceSettingsPanel: React.FC = () => {
   }, [loadWorkspaces])
 
   useEffect(() => {
+    const handleProgress = (job: WorkspaceIndexJobRecord): void => {
+      if (job.source_kind !== 'file') return
+      setWorkspaceIndexJobs((previous) => ({
+        ...previous,
+        [job.workspace_id]: job.status === 'running' ? job : undefined
+      }))
+      void loadWorkspaces()
+    }
+    return window.api.onWorkspaceIndexJobProgress(handleProgress)
+  }, [loadWorkspaces])
+
+  useEffect(() => {
     if (workspaces.length === 0) {
       setSelectedWorkspaceId(null)
       return
@@ -151,6 +168,20 @@ const WorkspaceSettingsPanel: React.FC = () => {
       setSelectedWorkspaceId(workspaces[0].id)
     }
   }, [selectedWorkspaceId, workspaces])
+
+  useEffect(() => {
+    if (!selectedWorkspaceId) return
+    void window.api
+      .workspaceIndexJobGet({ workspaceId: selectedWorkspaceId, sourceKind: 'file' })
+      .then((response) => {
+        if (!response.success) return
+        setWorkspaceIndexJobs((previous) => ({
+          ...previous,
+          [selectedWorkspaceId]: response.job?.status === 'running' ? response.job : undefined
+        }))
+      })
+      .catch(console.error)
+  }, [selectedWorkspaceId])
 
   const reloadSelectedWorkspaceTree = useCallback(async (): Promise<void> => {
     if (!selectedWorkspaceId) return
@@ -227,30 +258,24 @@ const WorkspaceSettingsPanel: React.FC = () => {
   }
 
   const handleWorkspaceScan = async (workspace: WorkspaceListItem): Promise<void> => {
-    setWorkspaceActions((previous) => ({ ...previous, [workspace.id]: 'scan' }))
     try {
       const response = await window.api.workspaceScan({ workspaceId: workspace.id })
       if (!response.success) {
         message.error(response.error || '检查更新失败')
         return
       }
-      if (response.progress) {
-        setWorkspaceProgress((previous) => ({ ...previous, [workspace.id]: response.progress }))
+      if (response.job) {
+        setWorkspaceIndexJobs((previous) => ({ ...previous, [workspace.id]: response.job }))
       }
       await loadWorkspaces()
       await reloadSelectedWorkspaceTree()
-      message.success('已检查目录变化')
     } catch (error) {
       console.error(error)
       message.error('检查更新失败')
-    } finally {
-      setWorkspaceActions((previous) => ({ ...previous, [workspace.id]: undefined }))
-      setWorkspaceProgress((previous) => ({ ...previous, [workspace.id]: undefined }))
     }
   }
 
   const handleWorkspacePrepare = async (workspace: WorkspaceListItem): Promise<void> => {
-    setWorkspaceActions((previous) => ({ ...previous, [workspace.id]: 'prepare' }))
     try {
       const response = await window.api.workspacePrepare({
         workspaceId: workspace.id
@@ -259,18 +284,14 @@ const WorkspaceSettingsPanel: React.FC = () => {
         message.error(response.error || '更新索引失败')
         return
       }
-      if (response.progress) {
-        setWorkspaceProgress((previous) => ({ ...previous, [workspace.id]: response.progress }))
+      if (response.job) {
+        setWorkspaceIndexJobs((previous) => ({ ...previous, [workspace.id]: response.job }))
       }
       await loadWorkspaces()
       await reloadSelectedWorkspaceTree()
-      message.success('索引已更新')
     } catch (error) {
       console.error(error)
       message.error('更新索引失败')
-    } finally {
-      setWorkspaceActions((previous) => ({ ...previous, [workspace.id]: undefined }))
-      setWorkspaceProgress((previous) => ({ ...previous, [workspace.id]: undefined }))
     }
   }
 
@@ -482,15 +503,13 @@ const WorkspaceSettingsPanel: React.FC = () => {
 
                                 <div className="mt-4 grid grid-cols-2 gap-2">
                                   <Tooltip
-                                    title={getWorkspaceActionTooltip(
-                                      'scan',
-                                      workspaceProgress[selectedWorkspace.id]
-                                    )}
+                                    title="检查当前目录里有哪些新增、变更或删除。"
                                   >
                                     <Button
                                       icon={<HiArrowPath className="h-4 w-4" />}
                                       onClick={() => void handleWorkspaceScan(selectedWorkspace)}
-                                      loading={workspaceActions[selectedWorkspace.id] === 'scan'}
+                                      disabled={Boolean(selectedWorkspaceIndexJob)}
+                                      loading={selectedWorkspaceIndexJob?.action === 'scan'}
                                       className="border-[#E5E5E4] bg-white text-[#1F1F1F]"
                                       data-testid={importSelectors.workspaceQuickScanButton}
                                     >
@@ -498,22 +517,24 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                     </Button>
                                   </Tooltip>
                                   <Tooltip
-                                    title={getWorkspaceActionTooltip(
-                                      'prepare',
-                                      workspaceProgress[selectedWorkspace.id]
-                                    )}
+                                    title="检查目录变化并更新可索引文件。"
                                   >
                                     <Button
                                       type="primary"
                                       icon={<HiSparkles className="h-4 w-4" />}
                                       onClick={() => void handleWorkspacePrepare(selectedWorkspace)}
-                                      loading={workspaceActions[selectedWorkspace.id] === 'prepare'}
+                                      disabled={Boolean(selectedWorkspaceIndexJob)}
+                                      loading={selectedWorkspaceIndexJob?.action === 'prepare'}
                                       data-testid={importSelectors.workspaceQuickPrepareButton}
                                     >
                                       更新索引
                                     </Button>
                                   </Tooltip>
                                 </div>
+                                <WorkspaceIndexJobProgress
+                                  job={selectedWorkspaceIndexJob}
+                                  testId={importSelectors.workspaceIndexJobProgress}
+                                />
                               </section>
                             </div>
 

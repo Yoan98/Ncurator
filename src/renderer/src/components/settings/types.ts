@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import type {
   LLMConfig,
-  WorkspaceSyncProgress,
+  WorkspaceIndexJobRecord,
   WorkspaceTreeEntry
 } from '../../../../shared/types'
 
@@ -22,8 +22,7 @@ export type WorkspaceTreeNode = {
 }
 
 export type WorkspaceTreeMap = Record<string, WorkspaceTreeEntry[]>
-export type WorkspaceActionMap = Record<string, 'scan' | 'prepare' | undefined>
-export type WorkspaceProgressMap = Record<string, WorkspaceSyncProgress | undefined>
+export type WorkspaceJobMap = Record<string, WorkspaceIndexJobRecord | undefined>
 export type WorkspaceTreeDisplayStrategy = {
   defaultExpandDepth: number
   isLargeTree: boolean

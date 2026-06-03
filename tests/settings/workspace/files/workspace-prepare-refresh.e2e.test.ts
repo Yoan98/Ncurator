@@ -51,7 +51,8 @@ describe('settings workspace e2e', () => {
       execute: async (runtime) => {
         const { page } = runtime
         let workspaceId = ''
-        let prepareLoadingVisible = false
+        let prepareProgressVisible = false
+        let buttonsDisabled = false
 
         await runtime.step({
           name: 'seed-workspace',
@@ -74,11 +75,13 @@ describe('settings workspace e2e', () => {
           message: '点击更新索引并等待文件状态转为已索引。',
           run: async () => {
             await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).click()
-            await page.waitForFunction(
-              (selector) => document.querySelector(selector)?.className.includes('ant-btn-loading'),
-              `[data-testid="${importSelectors.workspaceQuickPrepareButton}"]`
-            )
-            prepareLoadingVisible = true
+            await getSettingsLocator(page, importSelectors.workspaceIndexJobProgress).waitFor({
+              state: 'visible'
+            })
+            prepareProgressVisible = true
+            buttonsDisabled =
+              (await getSettingsLocator(page, importSelectors.workspaceQuickScanButton).isDisabled()) &&
+              (await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).isDisabled())
           }
         })
         const treeResponse = await waitForWorkspaceTree(
@@ -89,7 +92,8 @@ describe('settings workspace e2e', () => {
         )
 
         return {
-          prepareLoadingVisible,
+          prepareProgressVisible,
+          buttonsDisabled,
           summary: treeResponse.summary,
           fileStatuses: treeResponse.items
             .filter((item) => item.kind === 'file')
@@ -97,9 +101,9 @@ describe('settings workspace e2e', () => {
         }
       },
       assert: async (result, runtime) => {
-        await runtime.assertThat(result.prepareLoadingVisible, {
+        await runtime.assertThat(result.prepareProgressVisible && result.buttonsDisabled, {
           name: 'prepare-progress-is-visible',
-          message: '更新索引执行中，界面应出现明确的进行中反馈，对齐 SET-WORKSPACE-004-AC1。',
+          message: '更新索引执行中，界面应展示持久化总进度并禁用两个索引操作按钮，对齐 SET-WORKSPACE-004-AC3。',
           data: result
         })
 

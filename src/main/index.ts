@@ -89,6 +89,10 @@ app.whenReady().then(async () => {
 
   registerHandlers({ ingestionService, embeddingService, storageService, modelService })
 
+  app.on('before-quit', () => {
+    void storageService.failInterruptedWorkspaceIndexJobs()
+  })
+
   createWindow()
 
   app.on('activate', function () {

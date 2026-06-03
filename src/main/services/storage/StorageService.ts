@@ -5,6 +5,7 @@ import { DocxApplyStore } from './domains/DocxApplyStore'
 import { DocumentsStore } from './domains/DocumentsStore'
 import { LlmConfigStore } from './domains/LlmConfigStore'
 import { WebSourceStore } from './domains/WebSourceStore'
+import { WorkspaceIndexJobStore } from './domains/WorkspaceIndexJobStore'
 import { WorkspaceStore } from './domains/WorkspaceStore'
 import { LegacyLocalImportMigration } from './migrations/LegacyLocalImportMigration'
 import type { LegacyLocalImportMigrationStatus } from '../../../shared/types'
@@ -20,6 +21,7 @@ export class StorageService {
   public readonly llm: LlmConfigStore
   public readonly aiRuntimeSettings: AiRuntimeSettingsStore
   public readonly workspace: WorkspaceStore
+  public readonly workspaceIndexJob: WorkspaceIndexJobStore
   private legacyLocalImportMigrationStatus: LegacyLocalImportMigrationStatus | null = null
 
   public constructor(input: { dbPath?: string } = {}) {
@@ -31,6 +33,7 @@ export class StorageService {
     this.llm = new LlmConfigStore(this.core)
     this.aiRuntimeSettings = new AiRuntimeSettingsStore(this.core)
     this.workspace = new WorkspaceStore(this.core)
+    this.workspaceIndexJob = new WorkspaceIndexJobStore(this.core)
   }
 
   public static getInstance(): StorageService {
@@ -42,8 +45,20 @@ export class StorageService {
 
   public async initialize(): Promise<void> {
     await this.core.initialize()
+    await this.failInterruptedWorkspaceIndexJobs()
     const migration = new LegacyLocalImportMigration(this.documents, this.workspace)
     this.legacyLocalImportMigrationStatus = await migration.run()
+  }
+
+  public async failInterruptedWorkspaceIndexJobs(
+    message = '程序关闭导致索引中断'
+  ): Promise<void> {
+    const now = Date.now()
+    await Promise.all([
+      this.workspaceIndexJob.failRunningJobs(message, now),
+      this.workspace.failIndexingFileRecords(message, now),
+      this.webSource.failRunningSources(message, now)
+    ])
   }
 
   public getLegacyLocalImportMigrationStatus(): LegacyLocalImportMigrationStatus | null {

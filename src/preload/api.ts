@@ -44,6 +44,9 @@ import type {
   GetDocxApplyRecordResponse,
   RevertDocxApplyRequest,
   RevertDocxApplyResponse,
+  WorkspaceIndexJobGetRequest,
+  WorkspaceIndexJobRecord,
+  WorkspaceIndexJobResponse,
   WorkspaceJobResponse,
   WorkspaceListResponse,
   WorkspaceMutationResponse,
@@ -141,6 +144,8 @@ export type DesktopApi = {
   workspaceTree: (payload: ListWorkspaceTreeRequest) => Promise<WorkspaceTreeListResponse>
   workspaceScan: (payload: { workspaceId: string }) => Promise<WorkspaceJobResponse>
   workspacePrepare: (payload: PrepareWorkspaceRequest) => Promise<WorkspaceJobResponse>
+  workspaceIndexJobGet: (payload: WorkspaceIndexJobGetRequest) => Promise<WorkspaceIndexJobResponse>
+  onWorkspaceIndexJobProgress: (cb: (job: WorkspaceIndexJobRecord) => void) => () => void
   referenceItemList: (
     payload: ListReferenceItemsRequest
   ) => Promise<ReferenceItemListResponse>

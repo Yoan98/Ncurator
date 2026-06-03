@@ -22,6 +22,7 @@ describe('settings workspace e2e', () => {
         const { page } = runtime
         let workspaceId = ''
         let inProgressVisible = false
+        let buttonsDisabled = false
 
         await runtime.step({
           name: 'seed-workspace',
@@ -44,11 +45,13 @@ describe('settings workspace e2e', () => {
           message: '点击检查更新并等待接口完成，确认按钮出现执行中状态。',
           run: async () => {
             await getSettingsLocator(page, importSelectors.workspaceQuickScanButton).click()
-            await page.waitForFunction(
-              (selector) => document.querySelector(selector)?.className.includes('ant-btn-loading'),
-              `[data-testid="${importSelectors.workspaceQuickScanButton}"]`
-            )
+            await getSettingsLocator(page, importSelectors.workspaceIndexJobProgress).waitFor({
+              state: 'visible'
+            })
             inProgressVisible = true
+            buttonsDisabled =
+              (await getSettingsLocator(page, importSelectors.workspaceQuickScanButton).isDisabled()) &&
+              (await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).isDisabled())
             await page.waitForFunction(async (selectedWorkspaceId) => {
               const response = await window.api.workspaceTree({
                 workspaceId: String(selectedWorkspaceId || ''),
@@ -68,14 +71,15 @@ describe('settings workspace e2e', () => {
 
         return {
           inProgressVisible,
+          buttonsDisabled,
           summary: treeResponse.summary,
           itemNames: treeResponse.items.map((item) => item.name)
         }
       },
       assert: async (result, runtime) => {
-        await runtime.assertThat(result.inProgressVisible, {
+        await runtime.assertThat(result.inProgressVisible && result.buttonsDisabled, {
           name: 'scan-progress-is-visible',
-          message: '检查更新执行中，界面应出现明确的进行中反馈，对齐 SET-WORKSPACE-003-AC1。',
+          message: '检查更新执行中，界面应展示持久化进度并禁用两个索引操作按钮，对齐 SET-WORKSPACE-003-AC1。',
           data: result
         })
 

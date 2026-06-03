@@ -17,6 +17,7 @@ export const LANCE_TABLES = {
   WEB_SOURCE: 'web_source',
   WORKSPACE_SOURCE: 'workspace_source',
   WORKSPACE_FILE_INDEX: 'workspace_file_index',
+  WORKSPACE_INDEX_JOB: 'workspace_index_job',
   CHAT_SESSION: 'chat_session',
   CHAT_MESSAGE: 'chat_message',
   CHAT_CONVERSATION_MEMORY: 'chat_conversation_memory',
@@ -274,6 +275,29 @@ export class LanceDbCore {
           new arrow.Field('last_error', new arrow.Utf8(), true),
           new arrow.Field('created_at', new arrow.Int64()),
           new arrow.Field('updated_at', new arrow.Int64())
+        ]),
+        recreateIfSchemaChanged: true
+      },
+      {
+        name: LANCE_TABLES.WORKSPACE_INDEX_JOB,
+        schema: new arrow.Schema([
+          new arrow.Field('id', new arrow.Utf8()),
+          new arrow.Field('workspace_id', new arrow.Utf8()),
+          new arrow.Field('source_kind', new arrow.Utf8()),
+          new arrow.Field('action', new arrow.Utf8()),
+          new arrow.Field('status', new arrow.Utf8()),
+          new arrow.Field('phase', new arrow.Utf8()),
+          new arrow.Field('step_index', new arrow.Int64()),
+          new arrow.Field('step_total', new arrow.Int64()),
+          new arrow.Field('total_count', new arrow.Int64()),
+          new arrow.Field('processed_count', new arrow.Int64()),
+          new arrow.Field('failed_count', new arrow.Int64()),
+          new arrow.Field('target_ids_json', new arrow.Utf8()),
+          new arrow.Field('message', new arrow.Utf8(), true),
+          new arrow.Field('last_error', new arrow.Utf8(), true),
+          new arrow.Field('started_at', new arrow.Int64()),
+          new arrow.Field('updated_at', new arrow.Int64()),
+          new arrow.Field('finished_at', new arrow.Int64(), true)
         ]),
         recreateIfSchemaChanged: true
       },

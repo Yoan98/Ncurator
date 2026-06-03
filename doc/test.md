@@ -204,6 +204,7 @@ runner 支持的过滤参数：
 
 - 不带 `--type` 时，runner 会先收集普通测试，再收集 `.e2e.test.ts`。
 - `--type` 取值为 `backend` 或 `e2e`。
+- E2E case 通过 runner 按文件串行执行，每个文件独立启动并关闭一个 Electron app；runner 会在相邻 E2E 文件之间默认等待 1 秒，也可通过 `--run-delay-ms` 覆盖，且任一 E2E 文件失败后立即停止后续文件，避免连续原生启动过快导致不稳定。
 - 如果需要继续收窄到某个 `suite`、`group` 或单条 `case`，统一通过 runner 参数过滤。
 - `--group` 只在目标 `suite` 确实存在额外子目录时使用；如果 case 直接位于 `suite` 根目录，则不需要 `--group`。
 

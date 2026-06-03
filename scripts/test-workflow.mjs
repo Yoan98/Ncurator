@@ -10,6 +10,7 @@ const PNPM_BIN = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 const VITEST_BIN = resolveLocalBin('vitest')
 const ELECTRON_VITE_BIN = resolveLocalBin('electron-vite')
 const LIVE_BACKEND_NODE_OLD_SPACE_MB = 8192
+const DEFAULT_E2E_FILE_DELAY_MS = 1000
 
 const parseArgs = (argv) => {
   const parsed = {
@@ -89,9 +90,9 @@ const resolveScopeDir = (input) => {
 }
 
 const isE2EFile = (filePath) => path.basename(filePath).endsWith('.e2e.test.ts')
-const isLiveBackendFile = (filePath) => filePath.includes(`${path.sep}live${path.sep}`) && !isE2EFile(filePath)
-const toCaseId = (filePath) =>
-  path.basename(filePath).replace(/\.e2e\.test\.ts$|\.test\.ts$/u, '')
+const isLiveBackendFile = (filePath) =>
+  filePath.includes(`${path.sep}live${path.sep}`) && !isE2EFile(filePath)
+const toCaseId = (filePath) => path.basename(filePath).replace(/\.e2e\.test\.ts$|\.test\.ts$/u, '')
 
 const findTestFiles = async (input) => {
   const scopeDir = resolveScopeDir(input)
@@ -149,9 +150,10 @@ const runCommandWithFallback = (input) => {
 }
 
 const runVitest = (input) => {
-  const extraArgs = input.testFiles.some((filePath) => isLiveBackendFile(filePath))
-    ? ['--maxWorkers', '1']
-    : []
+  const requiresSingleWorker =
+    input.configPath.includes('e2e') ||
+    input.testFiles.some((filePath) => isLiveBackendFile(filePath))
+  const extraArgs = requiresSingleWorker ? ['--maxWorkers', '1'] : []
   const env = input.testFiles.some((filePath) => isLiveBackendFile(filePath))
     ? {
         NODE_OPTIONS: appendNodeOption(
@@ -160,7 +162,7 @@ const runVitest = (input) => {
         )
       }
     : undefined
-  const commandArgs = ['--config', input.configPath, ...extraArgs, 'run', ...input.testFiles]
+  const commandArgs = ['run', '--config', input.configPath, ...extraArgs, ...input.testFiles]
   return runCommandWithFallback({
     env,
     primary: {
@@ -193,7 +195,39 @@ const buildE2EApp = () => {
 }
 
 const formatScope = (input) =>
-  [[input.domain, input.suite, ...input.groups].filter(Boolean).join('/'), input.type].filter(Boolean).join(' ')
+  [[input.domain, input.suite, ...input.groups].filter(Boolean).join('/'), input.type]
+    .filter(Boolean)
+    .join(' ')
+
+const runE2ETestFilesSerially = async (testFiles, requestedDelayMs) => {
+  const e2eFileDelayMs = requestedDelayMs > 0 ? requestedDelayMs : DEFAULT_E2E_FILE_DELAY_MS
+  let exitCode = 0
+
+  for (let index = 0; index < testFiles.length; index += 1) {
+    const testFile = testFiles[index]
+    process.stdout.write(
+      `[test-workflow] e2e ${String(index + 1)}/${String(testFiles.length)} ${path.relative(ROOT, testFile)}\n`
+    )
+    const code = runVitest({
+      configPath: 'vitest.e2e.config.mts',
+      testFiles: [testFile]
+    })
+    if (code !== 0) {
+      process.stdout.write(
+        `[test-workflow] e2e failed; stopping remaining files to avoid repeated Electron launches\n`
+      )
+      return code
+    }
+    if (e2eFileDelayMs > 0 && index < testFiles.length - 1) {
+      process.stdout.write(
+        `[test-workflow] waiting ${String(e2eFileDelayMs)}ms before next e2e file\n`
+      )
+      await sleep(e2eFileDelayMs)
+    }
+  }
+
+  return exitCode
+}
 
 const runTypeWorkflow = async (input) => {
   const testFiles = await findTestFiles(input)
@@ -211,15 +245,9 @@ const runTypeWorkflow = async (input) => {
 
   let exitCode = 0
   const { liveFiles } =
-    input.type === 'backend'
-      ? partitionBackendTestFiles(testFiles)
-      : { liveFiles: [] }
+    input.type === 'backend' ? partitionBackendTestFiles(testFiles) : { liveFiles: [] }
   const runDelayMs =
-    input.runs > 1 && liveFiles.length > 0
-      ? input.runDelayMs > 0
-        ? input.runDelayMs
-        : 3000
-      : 0
+    input.runs > 1 && liveFiles.length > 0 ? (input.runDelayMs > 0 ? input.runDelayMs : 3000) : 0
 
   for (let iteration = 0; iteration < input.runs; iteration += 1) {
     if (input.type === 'backend') {
@@ -242,10 +270,7 @@ const runTypeWorkflow = async (input) => {
         }
       }
     } else {
-      const code = runVitest({
-        configPath: 'vitest.e2e.config.mts',
-        testFiles
-      })
+      const code = await runE2ETestFilesSerially(testFiles, input.runDelayMs)
       if (code !== 0) {
         exitCode = code
       }

@@ -193,6 +193,31 @@ export interface WorkspaceSyncProgress {
   message?: string
 }
 
+export type WorkspaceIndexJobSourceKind = 'file' | 'web'
+export type WorkspaceIndexJobAction = 'scan' | 'prepare'
+export type WorkspaceIndexJobStatus = 'running' | 'succeeded' | 'failed'
+export type WorkspaceIndexJobPhase = 'scan' | 'crawl' | 'index' | 'complete'
+
+export interface WorkspaceIndexJobRecord {
+  id: string
+  workspace_id: string
+  source_kind: WorkspaceIndexJobSourceKind
+  action: WorkspaceIndexJobAction
+  status: WorkspaceIndexJobStatus
+  phase: WorkspaceIndexJobPhase
+  step_index: number
+  step_total: number
+  total_count: number
+  processed_count: number
+  failed_count: number
+  target_ids: string[]
+  message?: string
+  last_error?: string
+  started_at: number
+  updated_at: number
+  finished_at?: number
+}
+
 export interface WorkspaceListResponse {
   items: WorkspaceListItem[]
   total: number
@@ -275,7 +300,19 @@ export interface ListWorkspaceTreeRequest {
 export interface WorkspaceJobResponse {
   success: boolean
   workspaceId?: string
+  job?: WorkspaceIndexJobRecord
   progress?: WorkspaceSyncProgress
+  error?: string
+}
+
+export interface WorkspaceIndexJobGetRequest {
+  workspaceId: string
+  sourceKind: WorkspaceIndexJobSourceKind
+}
+
+export interface WorkspaceIndexJobResponse {
+  success: boolean
+  job?: WorkspaceIndexJobRecord
   error?: string
 }
 

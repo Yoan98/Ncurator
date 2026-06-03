@@ -20,6 +20,7 @@
   - `DocumentsStore`：`document` / `chunk`（导入、分页、混合检索、删除）
   - `WebSourceStore`：`web_source`（网页资料来源 identity、网页爬取/索引状态与来源级元数据）
   - `WorkspaceStore`：`workspace_source` / `workspace_file_index`（具名工作空间、可选文件目录绑定、文件索引状态、摘要统计）
+  - `WorkspaceIndexJobStore`：`workspace_index_job`（文件/网页检查与索引批次进度）
   - `ChatStore`：`chat_session` / `chat_message`（会话与消息 CRUD）
   - `DocxApplyStore`：`docx_apply`（docx 直接写回记录、checkpoint 与回退状态）
   - `LlmConfigStore`：`llm_config`（配置 CRUD 与激活态切换）
@@ -155,6 +156,35 @@
 | last_error       | Utf8（Nullable） | 最近一次文件级索引错误                         |
 | created_at       | Int64            | 创建时间戳                                     |
 | updated_at       | Int64            | 更新时间戳                                     |
+
+### 表: workspace_index_job（工作空间索引批次任务表）
+
+存储工作空间文件/网页检查与索引的持久化批次进度；文件/网页条目状态仍是资料级真相，`workspace_index_job` 只表示当前批次任务进度。
+
+| 字段名          | 类型             | 描述                                                     |
+| :-------------- | :--------------- | :------------------------------------------------------- |
+| id              | Utf8             | 任务唯一标识                                             |
+| workspace_id    | Utf8             | 所属工作空间                                             |
+| source_kind     | Utf8             | 资料类型：`file / web`                                   |
+| action          | Utf8             | 动作：`scan / prepare`                                   |
+| status          | Utf8             | 任务状态：`running / succeeded / failed`                 |
+| phase           | Utf8             | 当前阶段：`scan / crawl / index / complete`              |
+| step_index      | Int64            | 当前步骤序号                                             |
+| step_total      | Int64            | 总步骤数                                                 |
+| total_count     | Int64            | 当前阶段或任务总处理数量                                 |
+| processed_count | Int64            | 当前阶段或任务已处理数量                                 |
+| failed_count    | Int64            | 当前阶段或任务失败数量                                   |
+| target_ids_json | Utf8             | 本次任务目标文件索引记录 ID 或网页来源 ID 的 JSON 字符串 |
+| message         | Utf8（Nullable） | 当前进度文案                                             |
+| last_error      | Utf8（Nullable） | 最近失败原因                                             |
+| started_at      | Int64            | 任务开始时间戳                                           |
+| updated_at      | Int64            | 最近更新时间戳                                           |
+| finished_at     | Int64（Nullable）| 任务结束时间戳                                           |
+
+说明：
+- 同一 `workspace_id + source_kind` 同时只允许一个 `running` 任务；重复启动时返回已有任务。
+- 文件检查/索引和网页检查/索引执行中，页面通过该表恢复按钮禁用和进度条。
+- 应用启动时会把遗留 `running` 任务标记为 `failed`，同时把文件 `indexing` 收敛为 `failed`，网页 `crawling` 收敛为 `crawl_failed`、`indexing` 收敛为 `index_failed`。
 
 ### 表: chat_session（对话会话表）
 

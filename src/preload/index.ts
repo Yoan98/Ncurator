@@ -4,6 +4,7 @@ import type {
   AiRunEvent,
   JsonValue,
   SearchSourceFilter,
+  WorkspaceIndexJobRecord,
 } from '../shared/types'
 import type { DesktopApi, DownloadProgress, SettingsE2EApiOverrides } from './api'
 
@@ -11,6 +12,7 @@ const isE2EObserverEnabled = process.env.NCURATOR_E2E_MODE === '1'
 let e2eApiOverrides: SettingsE2EApiOverrides | null = null
 let modelCatalogCallCount = 0
 const downloadProgressListeners = new Set<(progressData: DownloadProgress) => void>()
+const workspaceIndexJobProgressListeners = new Set<(job: WorkspaceIndexJobRecord) => void>()
 
 const emitE2EIpcCall = (name: string, payload?: JsonValue): void => {
   if (!isE2EObserverEnabled) return
@@ -128,6 +130,13 @@ const api: DesktopApi = {
       workspaceId: String(payload.workspaceId || '').trim()
     })
     return ipcRenderer.invoke('workspace-prepare', payload)
+  },
+  workspaceIndexJobGet: (payload) => ipcRenderer.invoke('workspace-index-job-get', payload),
+  onWorkspaceIndexJobProgress: (cb) => {
+    workspaceIndexJobProgressListeners.add(cb)
+    return () => {
+      workspaceIndexJobProgressListeners.delete(cb)
+    }
   },
   referenceItemList: (payload) => {
     emitE2EIpcCall('referenceItemList')
@@ -281,6 +290,12 @@ const api: DesktopApi = {
 
 ipcRenderer.on('download-progress', (_event, data: DownloadProgress) => {
   emitDownloadProgress(data)
+})
+
+ipcRenderer.on('workspace-index-job-progress', (_event, data: WorkspaceIndexJobRecord) => {
+  for (const listener of workspaceIndexJobProgressListeners) {
+    listener(data)
+  }
 })
 
 // Use `contextBridge` APIs to expose Electron APIs to

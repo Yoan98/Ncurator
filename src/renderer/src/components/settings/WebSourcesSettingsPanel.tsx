@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { Button, Empty, Input, Modal, Tooltip, message } from 'antd'
 import type {
+  WorkspaceIndexJobRecord,
   WebSourceListResponse,
-  WebSourceRecord,
-  WorkspaceSyncProgress
+  WebSourceRecord
 } from '../../../../shared/types'
 import {
   HiArrowTopRightOnSquare,
@@ -15,6 +15,7 @@ import {
 } from 'react-icons/hi2'
 import { importSelectors } from '../../testing/selectors'
 import StatusTag from './StatusTag'
+import WorkspaceIndexJobProgress from './WorkspaceIndexJobProgress'
 import { formatDateTime, getWebStatusBadge } from './utils/workspace'
 
 type WebSourcesSettingsPanelProps = {
@@ -22,8 +23,6 @@ type WebSourcesSettingsPanelProps = {
   workspaceName?: string
   embedded?: boolean
 }
-
-type WebAction = 'scan' | 'prepare'
 
 const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
   workspaceId
@@ -34,8 +33,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
   const [webUrlsText, setWebUrlsText] = useState('')
   const [webUrlsError, setWebUrlsError] = useState('')
   const [webSubmitting, setWebSubmitting] = useState(false)
-  const [webAction, setWebAction] = useState<WebAction | null>(null)
-  const [webProgress, setWebProgress] = useState<WorkspaceSyncProgress | undefined>(undefined)
+  const [webIndexJob, setWebIndexJob] = useState<WorkspaceIndexJobRecord | undefined>(undefined)
   const [deleteWebSource, setDeleteWebSource] = useState<WebSourceRecord | null>(null)
   const [webSummary, setWebSummary] = useState<WebSourceListResponse['summary']>({
     web_count: 0,
@@ -79,6 +77,29 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
     }
   }, [loadWebSources])
 
+  useEffect(() => {
+    if (!workspaceId) {
+      setWebIndexJob(undefined)
+      return
+    }
+    void window.api
+      .workspaceIndexJobGet({ workspaceId, sourceKind: 'web' })
+      .then((response) => {
+        if (!response.success) return
+        setWebIndexJob(response.job?.status === 'running' ? response.job : undefined)
+      })
+      .catch(console.error)
+  }, [workspaceId])
+
+  useEffect(() => {
+    const handleProgress = (job: WorkspaceIndexJobRecord): void => {
+      if (job.source_kind !== 'web' || job.workspace_id !== workspaceId) return
+      setWebIndexJob(job.status === 'running' ? job : undefined)
+      void loadWebSources()
+    }
+    return window.api.onWorkspaceIndexJobProgress(handleProgress)
+  }, [loadWebSources, workspaceId])
+
   const handleWebImport = async (): Promise<void> => {
     const urls = webUrlsText
       .split('\n')
@@ -116,43 +137,33 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
 
   const handleScanWebSources = async (): Promise<void> => {
     if (!workspaceId) return
-    setWebAction('scan')
     try {
       const response = await window.api.webSourcesScan({ workspaceId })
       if (!response.success) {
         message.error(response.error || '检查网页更新失败')
         return
       }
-      setWebProgress(response.progress)
+      setWebIndexJob(response.job)
       await loadWebSources()
-      message.success('已检查网页更新')
     } catch (error) {
       console.error(error)
       message.error('检查网页更新失败')
-    } finally {
-      setWebAction(null)
-      setWebProgress(undefined)
     }
   }
 
   const handlePrepareWebSources = async (): Promise<void> => {
     if (!workspaceId) return
-    setWebAction('prepare')
     try {
       const response = await window.api.webSourcesPrepare({ workspaceId })
       if (!response.success) {
         message.error(response.error || '更新网页索引失败')
         return
       }
-      setWebProgress(response.progress)
+      setWebIndexJob(response.job)
       await loadWebSources()
-      message.success('网页索引已更新')
     } catch (error) {
       console.error(error)
       message.error('更新网页索引失败')
-    } finally {
-      setWebAction(null)
-      setWebProgress(undefined)
     }
   }
 
@@ -231,7 +242,8 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
             <Button
               icon={<HiArrowPath className="h-4 w-4" />}
               onClick={() => void handleScanWebSources()}
-              loading={webAction === 'scan'}
+              disabled={Boolean(webIndexJob)}
+              loading={webIndexJob?.action === 'scan'}
               className="border-[#E5E5E4] bg-white text-[#1F1F1F]"
             >
               检查更新
@@ -240,18 +252,16 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
               type="primary"
               icon={<HiSparkles className="h-4 w-4" />}
               onClick={() => void handlePrepareWebSources()}
-              loading={webAction === 'prepare'}
+              disabled={Boolean(webIndexJob)}
+              loading={webIndexJob?.action === 'prepare'}
             >
               更新索引
             </Button>
           </div>
-
-          {webProgress ? (
-            <div className="mt-3 text-[12px] text-[#666666]">
-              {webProgress.completed}/{webProgress.total}
-              {webProgress.failed ? `，失败 ${webProgress.failed}` : ''}
-            </div>
-          ) : null}
+          <WorkspaceIndexJobProgress
+            job={webIndexJob}
+            testId={importSelectors.webSourceIndexJobProgress}
+          />
         </section>
       </div>
 

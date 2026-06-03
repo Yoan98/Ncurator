@@ -42,25 +42,45 @@ describe('settings workspace backend', () => {
         const fileSummary = await runtime.storageService.workspace.getWorkspaceFileSummary(
           scanResult.workspace.id
         )
+        const nowForJob = Date.now()
+        const job = {
+          id: 'workspace-scan-contract-job',
+          workspace_id: scanResult.workspace.id,
+          source_kind: 'file' as const,
+          action: 'scan' as const,
+          status: 'running' as const,
+          phase: 'scan' as const,
+          step_index: 1,
+          step_total: 1,
+          total_count: records.length,
+          processed_count: 0,
+          failed_count: 0,
+          target_ids: records.map((record) => record.id),
+          message: '检查目录变化',
+          started_at: nowForJob,
+          updated_at: nowForJob
+        }
+        await runtime.storageService.workspaceIndexJob.saveJob(job)
+        const activeJob = await runtime.storageService.workspaceIndexJob.getActiveJob(
+          scanResult.workspace.id,
+          'file'
+        )
 
         return {
-          progress: {
-            workspace_id: scanResult.workspace.id,
-            phase: 'inspect' as const,
-            total: records.length,
-            completed: records.length
-          },
+          activeJob,
           savedWorkspace,
           fileSummary
         }
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.progress.phase === 'inspect' && typeof result.progress.completed === 'number',
+          result.activeJob?.status === 'running' &&
+            result.activeJob.phase === 'scan' &&
+            result.activeJob.total_count === result.fileSummary.file_count,
           {
-            name: 'workspace-scan-returns-progress-shape',
+            name: 'workspace-scan-creates-persistent-job',
             message:
-              '检查目录变化的结果应返回可用于页面展示的 progress 字段，对齐 SET-WORKSPACE-003-AC1。',
+              '检查目录变化应具备可用于页面恢复的持久化 job 信息，对齐 SET-WORKSPACE-003-AC1、SET-WORKSPACE-003-AC3。',
             data: result
           }
         )
@@ -68,7 +88,7 @@ describe('settings workspace backend', () => {
         runtime.assertThat(
           Boolean(result.savedWorkspace?.root_path) &&
             !('status' in (result.savedWorkspace || {})) &&
-            result.fileSummary.file_count === result.progress.total,
+            result.fileSummary.file_count === result.activeJob?.total_count,
           {
             name: 'workspace-scan-derives-summary-from-file-index',
             message:

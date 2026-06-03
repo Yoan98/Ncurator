@@ -317,4 +317,19 @@ export class WorkspaceStore {
   public getEmptySummary(): WorkspaceFileSummary {
     return { ...EMPTY_SUMMARY }
   }
+
+  public async failIndexingFileRecords(message: string, now = Date.now()): Promise<number> {
+    const table = await this.core.openTable(LANCE_TABLES.WORKSPACE_FILE_INDEX)
+    const rows = (await table.query().where("index_status = 'indexing'").toArray()) as WorkspaceFileIndexRow[]
+    const records = rows.map(toWorkspaceFileIndexRecord)
+    for (const record of records) {
+      await this.updateWorkspaceFileIndexRecord(record.id, {
+        index_status: 'failed',
+        last_error: message,
+        last_checked_at: now,
+        updated_at: now
+      })
+    }
+    return records.length
+  }
 }
