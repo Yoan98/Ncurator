@@ -591,7 +591,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                 {selectedWorkspaceEntries.length > 0 ? (
                                   <Tree
                                     blockNode
-                                    className="w-full"
+                                    className="workspace-file-tree w-full"
                                     treeData={selectedWorkspaceTree}
                                     expandedKeys={workspaceExpandedKeys[selectedWorkspace.id] || []}
                                     onExpand={(expandedKeys) =>

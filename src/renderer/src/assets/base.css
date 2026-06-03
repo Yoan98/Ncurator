@@ -220,6 +220,30 @@ mark {
   color: #9b9b97 !important;
 }
 
+.workspace-file-tree.ant-tree,
+.workspace-file-tree.ant-tree .ant-tree-list,
+.workspace-file-tree.ant-tree .ant-tree-list-holder,
+.workspace-file-tree.ant-tree .ant-tree-list-holder-inner {
+  background: transparent;
+}
+
+.workspace-file-tree.ant-tree {
+  color: var(--color-text-primary);
+}
+
+.workspace-file-tree.ant-tree .ant-tree-treenode {
+  border-radius: var(--ui-radius-control);
+  transition: background-color var(--ui-transition);
+}
+
+.workspace-file-tree.ant-tree .ant-tree-treenode:hover {
+  background: #ffffff;
+}
+
+.workspace-file-tree.ant-tree .ant-tree-node-content-wrapper {
+  background: transparent !important;
+}
+
 .workbench-composer-select.ant-select .ant-select-arrow {
   inset-inline-end: 6px !important;
 }
