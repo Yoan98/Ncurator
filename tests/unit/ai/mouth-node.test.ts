@@ -95,7 +95,6 @@ describe('ai unit mouth node', () => {
         action: 'mouth',
         references: [
           {
-            kind: 'internal',
             label: '深度学习.docx',
             path: '学习笔记/深度学习.docx',
             usedFor: '支撑深度学习部分的总结内容'

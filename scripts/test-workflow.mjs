@@ -12,6 +12,14 @@ const ELECTRON_VITE_BIN = resolveLocalBin('electron-vite')
 const LIVE_BACKEND_NODE_OLD_SPACE_MB = 8192
 const DEFAULT_E2E_FILE_DELAY_MS = 1000
 
+const removeNpmLifecycleEnv = () => {
+  for (const key of Object.keys(process.env)) {
+    if (key.startsWith('npm_')) {
+      delete process.env[key]
+    }
+  }
+}
+
 const parseArgs = (argv) => {
   const parsed = {
     domain: '',
@@ -123,16 +131,33 @@ const appendNodeOption = (existing, option) => {
   return current.includes(option) ? current : `${current} ${option}`.trim()
 }
 
-const buildCommandEnv = (overrides) => ({
-  ...process.env,
-  ...overrides
-})
+const buildCommandEnv = (overrides, options = {}) => {
+  const env = {}
+  for (const [key, value] of Object.entries(process.env)) {
+    if (options.omitNpmEnv && key.startsWith('npm_')) continue
+    env[key] = value
+  }
+  return {
+    ...env,
+    ...overrides
+  }
+}
 
 const runCommandWithFallback = (input) => {
+  if (input.preferFallback) {
+    const fallbackResult = spawnSync(input.fallback.bin, input.fallback.args, {
+      cwd: ROOT,
+      stdio: 'inherit',
+      env: buildCommandEnv(input.env, { omitNpmEnv: input.omitNpmEnv })
+    })
+    if (typeof fallbackResult.status === 'number') return fallbackResult.status
+    return 1
+  }
+
   const primaryResult = spawnSync(input.primary.bin, input.primary.args, {
     cwd: ROOT,
     stdio: 'inherit',
-    env: buildCommandEnv(input.env)
+    env: buildCommandEnv(input.env, { omitNpmEnv: input.omitNpmEnv })
   })
 
   if (!primaryResult.error) {
@@ -143,7 +168,7 @@ const runCommandWithFallback = (input) => {
   const fallbackResult = spawnSync(input.fallback.bin, input.fallback.args, {
     cwd: ROOT,
     stdio: 'inherit',
-    env: buildCommandEnv(input.env)
+    env: buildCommandEnv(input.env, { omitNpmEnv: input.omitNpmEnv })
   })
   if (typeof fallbackResult.status === 'number') return fallbackResult.status
   return 1
@@ -165,6 +190,8 @@ const runVitest = (input) => {
   const commandArgs = ['run', '--config', input.configPath, ...extraArgs, ...input.testFiles]
   return runCommandWithFallback({
     env,
+    omitNpmEnv: input.configPath.includes('e2e'),
+    preferFallback: input.configPath.includes('e2e'),
     primary: {
       bin: PNPM_BIN,
       args: ['exec', 'vitest', ...commandArgs]
@@ -288,6 +315,7 @@ const runTypeWorkflow = async (input) => {
 }
 
 const main = async () => {
+  removeNpmLifecycleEnv()
   const args = parseArgs(process.argv.slice(2))
 
   if (!args.domain) {

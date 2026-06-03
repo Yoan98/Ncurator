@@ -15,7 +15,6 @@ export type ParsedRefLink =
       type: 'reference'
       label: string
       path: string
-      kind: string
     }
   | {
       type: 'normal'
@@ -32,11 +31,18 @@ export const parseRefHref = (href?: string): ParsedRefLink => {
 
   try {
     const url = new URL(href)
+    const label = decodeURIComponent(url.searchParams.get('label') || '')
+    const path = decodeURIComponent(url.searchParams.get('path') || '')
+    if (!label || !path) {
+      return {
+        type: 'normal',
+        href
+      }
+    }
     return {
       type: 'reference',
-      label: decodeURIComponent(url.searchParams.get('label') || ''),
-      path: decodeURIComponent(url.searchParams.get('path') || ''),
-      kind: decodeURIComponent(url.searchParams.get('kind') || '')
+      label,
+      path
     }
   } catch {
     return {

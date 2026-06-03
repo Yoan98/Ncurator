@@ -739,7 +739,6 @@ interface HumanExecution {
   references?: Array<{
     label: string
     path: string
-    kind: 'internal' | 'external'
     usedFor: string
   }>
 }

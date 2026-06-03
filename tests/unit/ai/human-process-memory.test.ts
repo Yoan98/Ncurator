@@ -275,7 +275,6 @@ describe('ai unit human memory history', () => {
           {
             label: 'report.docx',
             path: '/tmp/workspace/report.docx',
-            kind: 'internal' as const,
             usedFor: '用于支撑上一次收尾'
           }
         ]

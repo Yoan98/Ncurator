@@ -29,7 +29,7 @@ export const buildMouthPrompt = (input: {
 
     - 当存在runtime_artifacts时，必须要提及这些产出的信息。
     - 当delivery_guidance存在时，必须吸收。
-    - 当存在references时，必须其中信息，明确说明引用了哪些资料来分别支撑了哪部分交付内容。
+    - 当存在references时，必须吸收其中信息，明确说明引用了哪些资料来分别支撑了哪部分交付内容。
 
     - 禁止对客观事实进行改动描述，比如文件名、路径、资料名、工具名、人物职责绑定等已经有明确标识的对象，必须复用原文锚点。
     - 禁止向用户暴露系统内部定位信息、实现细节或运行态标识，例如块编号(如b:xxx这类内部工具的标定为)、段落锚点、内部字段名、工具名等。
@@ -56,7 +56,7 @@ export const buildMouthPrompt = (input: {
   <output_contract>
     - 只输出最终 markdown 正文，不要输出 JSON 或额外说明。
     - 如果任务结果已经体现在文件、命令结果或其他产物中，默认只总结结果，不要把产物正文或大段原始输出直接作为最终答复主体。
-    - 如果有用到引用资料，必须在正文相关位置引用对应 markdown 引用片段，并说明它完成了什么内容，使用该格式 [资料名](ncurator://ref?label=...&path=...&kind=...)。
+    - 如果有用到引用资料，必须在正文相关位置引用对应 markdown 引用片段，并用一句话简洁说明它支撑了什么内容，引用片段必须直接使用 references 中提供的 markdown 链接样式，不要改写 label 或 path。
   </output_contract>
 </system>
 `.trim()

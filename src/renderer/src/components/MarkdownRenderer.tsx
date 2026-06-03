@@ -83,7 +83,6 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
                 <a
                   href={href}
                   className="inline-flex items-center gap-1 rounded-full border border-[#E8C8BD] bg-[#FFF7F2] px-2 py-0.5 text-[#B85C38] hover:bg-[#FDEADB]"
-                  data-ref-kind={parsed.kind}
                   data-ref-path={parsed.path}
                 >
                   {renderReferenceIcon(label, parsed.path)}

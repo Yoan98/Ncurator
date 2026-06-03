@@ -16,7 +16,6 @@ describe('ai unit human references', () => {
           {
             label: 'report.docx',
             path: '/tmp/workspace/report.docx',
-            kind: 'internal',
             usedFor: '用于支撑最终答复中的周报结论'
           }
         ]
@@ -33,7 +32,6 @@ describe('ai unit human references', () => {
           {
             label: 'report.docx',
             path: '/tmp/workspace/report.docx',
-            kind: 'internal',
             usedFor: 'invalid'
           }
         ]
@@ -59,13 +57,11 @@ describe('ai unit human references', () => {
             {
               label: 'report.docx',
               path: '/tmp/workspace/report.docx',
-              kind: 'internal',
               usedFor: '用于支撑最终答复中的周报结论'
             },
             {
               label: '审批规则常识',
               path: 'knowledge://approval-rules',
-              kind: 'external',
               usedFor: '用于补充最终答复中的通用审批背景说明'
             }
           ]
@@ -79,13 +75,11 @@ describe('ai unit human references', () => {
       {
         label: 'report.docx',
         path: '/tmp/workspace/report.docx',
-        kind: 'internal',
         usedFor: '用于支撑最终答复中的周报结论'
       },
       {
         label: '审批规则常识',
         path: 'knowledge://approval-rules',
-        kind: 'external',
         usedFor: '用于补充最终答复中的通用审批背景说明'
       }
     ])
@@ -96,7 +90,6 @@ describe('ai unit human references', () => {
       buildReferenceMarkdown({
         label: 'report.docx',
         path: '/tmp/workspace/report.docx',
-        kind: 'internal',
         usedFor: '用于周报撰写'
       })
     ).toContain('ncurator://ref?')

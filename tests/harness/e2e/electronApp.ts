@@ -77,6 +77,32 @@ const ensureBuiltAppExists = async (): Promise<void> => {
   await access(OUT_MAIN_ENTRY)
 }
 
+const buildElectronLaunchEnv = (userDataDir: string): NodeJS.ProcessEnv => {
+  const env: NodeJS.ProcessEnv = {}
+
+  for (const [key, value] of Object.entries(process.env)) {
+    if (key.startsWith('npm_')) continue
+    if (value !== undefined) {
+      env[key] = value
+    }
+  }
+
+  env.NCURATOR_E2E_MODE = '1'
+  env.NCURATOR_E2E_WINDOW_MODE = process.env.NCURATOR_E2E_WINDOW_MODE || 'background'
+  env.NCURATOR_USER_DATA_PATH = userDataDir
+
+  return env
+}
+
+const logLaunchEnvProbe = (env: NodeJS.ProcessEnv): void => {
+  if (process.env.NCURATOR_E2E_ENV_PROBE !== '1') return
+  const parentNpmKeys = Object.keys(process.env).filter((key) => key.startsWith('npm_')).sort()
+  const childNpmKeys = Object.keys(env).filter((key) => key.startsWith('npm_')).sort()
+  process.stdout.write(
+    `[e2e-env-probe] parentNpmKeys=${JSON.stringify(parentNpmKeys)} childNpmKeys=${JSON.stringify(childNpmKeys)} parentPathHead=${JSON.stringify((process.env.PATH || '').split(':').slice(0, 8))}\n`
+  )
+}
+
 const installPageObservers = async (page: Page): Promise<void> => {
   await page.waitForFunction(() => Boolean(window.api))
 
@@ -133,16 +159,13 @@ export const launchElectronApp = async (): Promise<LaunchedElectronApp> => {
 
   const consoleEntries: E2EConsoleEntry[] = []
   const userDataDir = await mkdtemp(path.join(os.tmpdir(), 'ncurator-e2e-user-data-'))
+  const launchEnv = buildElectronLaunchEnv(userDataDir)
+  logLaunchEnvProbe(launchEnv)
   const electronApp = await electron.launch({
     executablePath: electronPath,
     args: ['.'],
     cwd: process.cwd(),
-    env: {
-      ...process.env,
-      NCURATOR_E2E_MODE: '1',
-      NCURATOR_E2E_WINDOW_MODE: process.env.NCURATOR_E2E_WINDOW_MODE || 'background',
-      NCURATOR_USER_DATA_PATH: userDataDir
-    }
+    env: launchEnv
   })
 
   const page = await electronApp.firstWindow()

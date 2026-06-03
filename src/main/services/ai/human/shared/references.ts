@@ -4,11 +4,17 @@ const normalizePath = (value: string): string => value.trim()
 
 const isHttpUrl = (value: string): boolean => /^https?:\/\//i.test(value)
 
+const inferReferenceSourceText = (path: string): string => {
+  const normalizedPath = normalizePath(path).toLowerCase()
+  if (isHttpUrl(normalizedPath)) return '外部网页资料'
+  if (normalizedPath.startsWith('knowledge://')) return '工作区内部知识检索资料'
+  return '用户本地资料'
+}
+
 export const buildReferenceMarkdown = (reference: HumanReference): string => {
   const encodedLabel = encodeURIComponent(reference.label)
   const encodedPath = encodeURIComponent(normalizePath(reference.path))
-  const encodedKind = encodeURIComponent(reference.kind)
-  return `[${reference.label}](ncurator://ref?label=${encodedLabel}&path=${encodedPath}&kind=${encodedKind})`
+  return `[${reference.label}](ncurator://ref?label=${encodedLabel}&path=${encodedPath})`
 }
 
 export const renderHumanReferences = (references: HumanReference[] | undefined): string => {
@@ -16,7 +22,7 @@ export const renderHumanReferences = (references: HumanReference[] | undefined):
   return references
     .map(
       (reference, index) =>
-        `${index + 1}. ${buildReferenceMarkdown(reference)}\n   kind: ${reference.kind}\n   path: ${reference.path}\n   usedFor: ${reference.usedFor}`
+        `${index + 1}. 引用资料：${reference.label}\n   - 支撑内容：${reference.usedFor}\n   - 资料地址：${reference.path}\n   - 资料来源：${inferReferenceSourceText(reference.path)}\n   - 正文引用片段：${buildReferenceMarkdown(reference)}`
     )
     .join('\n')
 }
