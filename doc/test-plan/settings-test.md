@@ -234,7 +234,7 @@ Settings 的正式测试顶层 suite 直接对齐 PRD 模块：
 
 - 测试类型：`backend`
 - 实现状态：`已实现`
-- What：验证更新索引只处理 `需索引 / 失败` 文件，不再暴露旧三种处理模式。
+- What：验证更新索引只处理 `可索引 / 失败` 文件，不再暴露旧三种处理模式。
 - Why：新模型的核心是增量索引，不再允许“模式选择”成为伪交互。
 - How：构造 `needs_index / failed / indexed` 三类记录，验证实际目标集。
 - Oracle：更新索引的目标仅包含 `needs_index` 与 `failed`，对齐 `SET-WORKSPACE-004-AC1`；同一工作区文件任务重复启动返回已有 running job，对齐 `SET-WORKSPACE-004-AC3`；契约中不再向产品模型暴露 `full / presence_only / changes_only` 等旧模式，对齐 `SET-WORKSPACE-004`。

@@ -92,7 +92,7 @@ describe('settings workspace backend', () => {
           {
             name: 'workspace-scan-derives-summary-from-file-index',
             message:
-              '扫描成功后，工作空间本体只保留容器信息，文件数量与需索引摘要由文件索引记录派生，对齐 SET-WORKSPACE-003-AC2、SET-WORKSPACE-005-AC2。',
+              '扫描成功后，工作空间本体只保留容器信息，文件数量与可索引摘要由文件索引记录派生，对齐 SET-WORKSPACE-003-AC2、SET-WORKSPACE-005-AC2。',
             data: result
           }
         )

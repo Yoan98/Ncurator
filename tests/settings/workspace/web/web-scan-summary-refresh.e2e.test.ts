@@ -19,7 +19,7 @@ describe('settings workspace web e2e', () => {
         domain: 'settings',
         suite: 'workspace',
         groups: ['web'],
-        description: '点击检查更新后，网页列表状态会刷新为需索引，并同步更新摘要统计。',
+        description: '点击检查更新后，网页列表状态会刷新为可索引，并同步更新摘要统计。',
         fixtures: [],
         runMode: 'single',
         execute: async (runtime) => {
@@ -46,7 +46,7 @@ describe('settings workspace web e2e', () => {
 
           await runtime.step({
             name: 'scan-web-sources',
-            message: '点击检查更新，确认网页状态与摘要切换到需索引。',
+            message: '点击检查更新，确认网页状态与摘要切换到可索引。',
             run: async () => {
               await page.getByRole('button', { name: '检查更新' }).click()
               await page.getByTestId(importSelectors.webSourceIndexJobProgress).waitFor({
@@ -85,7 +85,7 @@ describe('settings workspace web e2e', () => {
             {
               name: 'scan-refreshes-web-summary-and-status',
               message:
-                '检查更新成功后，网页摘要中的需索引数和列表项状态都应同步刷新，对齐 SET-WEB-003-AC2。',
+                '检查更新成功后，网页摘要中的可索引数和列表项状态都应同步刷新，对齐 SET-WEB-003-AC2。',
               data: result
             }
           )

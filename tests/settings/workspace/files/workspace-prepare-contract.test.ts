@@ -1,5 +1,8 @@
 import { describe, it } from 'vitest'
-import type { WorkspaceFileIndexRecord, WorkspaceIndexJobRecord } from '../../../../src/shared/types'
+import type {
+  WorkspaceFileIndexRecord,
+  WorkspaceIndexJobRecord
+} from '../../../../src/shared/types'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 
 const NOW = 1_716_200_000_000
@@ -34,7 +37,7 @@ describe('settings workspace backend', () => {
       domain: 'settings',
       suite: 'workspace',
       groups: ['files'],
-      description: '更新索引只处理需索引和失败文件，不再暴露旧三种处理模式。',
+      description: '更新索引只处理可索引和失败文件，不再暴露旧三种处理模式。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -84,7 +87,7 @@ describe('settings workspace backend', () => {
           {
             name: 'prepare-targets-only-include-incremental-records',
             message:
-              '更新索引应只处理需索引和失败文件，符合增量索引策略，对齐 SET-WORKSPACE-004-AC1。',
+              '更新索引应只处理可索引和失败文件，符合增量索引策略，对齐 SET-WORKSPACE-004-AC1。',
             data: result
           }
         )
@@ -103,8 +106,7 @@ describe('settings workspace backend', () => {
 
         runtime.assertThat(!result.includesLegacyMode, {
           name: 'prepare-no-longer-exposes-legacy-modes',
-          message:
-              '文件索引更新契约不再向产品模型暴露旧三种处理模式，对齐 SET-WORKSPACE-004。',
+          message: '文件索引更新契约不再向产品模型暴露旧三种处理模式，对齐 SET-WORKSPACE-004。',
           data: result
         })
       }

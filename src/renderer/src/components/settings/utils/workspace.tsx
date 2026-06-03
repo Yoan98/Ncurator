@@ -8,11 +8,7 @@ import {
   HiOutlineExclamationCircle
 } from 'react-icons/hi2'
 import type { WebSourceRecord, WorkspaceTreeEntry } from '../../../../../shared/types'
-import type {
-  StatusBadgeVisual,
-  WorkspaceTreeDisplayStrategy,
-  WorkspaceTreeNode
-} from '../types'
+import type { StatusBadgeVisual, WorkspaceTreeDisplayStrategy, WorkspaceTreeNode } from '../types'
 
 const STATUS_SPIN_ICON_CLASSNAME = 'h-3.5 w-3.5 animate-spin'
 const STATUS_ICON_CLASSNAME = 'h-3.5 w-3.5'
@@ -36,7 +32,7 @@ export const getTreeEntryStatusMeta = (
     case 'failed':
       return { label: '失败', className: 'border-[#F7D5D9] bg-[#FFF2F4] text-[#B5455D]' }
     default:
-      return { label: '需索引', className: 'border-[#E5E5E4] bg-[#F8F8F7] text-[#666666]' }
+      return { label: '可索引', className: 'border-[#E5E5E4] bg-[#F8F8F7] text-[#666666]' }
   }
 }
 
@@ -194,7 +190,7 @@ export const getWebStatusBadge = (
   }
 
   return {
-    label: '需索引',
+    label: '可索引',
     className: 'border-[#FDECC8] bg-[#FFF9ED] text-[#AD7B18]',
     tooltip: '网页需要建立或更新索引。',
     icon: <HiOutlineClock className={STATUS_ICON_CLASSNAME} />

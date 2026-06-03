@@ -75,7 +75,10 @@ const WorkspaceSettingsPanel: React.FC = () => {
   )
 
   const loadWorkspaceTree = useCallback(
-    async (workspaceId: string, includeUnsupported?: boolean): Promise<WorkspaceTreeListResponse> => {
+    async (
+      workspaceId: string,
+      includeUnsupported?: boolean
+    ): Promise<WorkspaceTreeListResponse> => {
       return await window.api.workspaceTree({
         workspaceId,
         includeUnsupported: Boolean(includeUnsupported)
@@ -460,7 +463,9 @@ const WorkspaceSettingsPanel: React.FC = () => {
                           <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,320px)_minmax(0,1fr)]">
                             <div className="space-y-4">
                               <section className="ui-panel-soft p-4">
-                                <div className="text-[14px] font-semibold text-[#1F1F1F]">文件目录</div>
+                                <div className="text-[14px] font-semibold text-[#1F1F1F]">
+                                  文件目录
+                                </div>
                                 <div className="mt-2 break-all text-[12px] leading-5 text-[#666666]">
                                   {selectedWorkspace.root_path || '未设置工作文件地址'}
                                 </div>
@@ -474,7 +479,9 @@ const WorkspaceSettingsPanel: React.FC = () => {
 
                               <section className="ui-panel-soft p-4">
                                 <div className="flex items-center gap-1.5">
-                                  <div className="text-[14px] font-semibold text-[#1F1F1F]">索引状态</div>
+                                  <div className="text-[14px] font-semibold text-[#1F1F1F]">
+                                    索引状态
+                                  </div>
                                   <Tooltip title="索引后的文件会加速搜索，并在一定程度降低 token 消耗，减少 AI 花费哦。">
                                     <HiOutlineQuestionMarkCircle className="h-4 w-4 cursor-help text-[#999999] transition-colors hover:text-[#D97757]" />
                                   </Tooltip>
@@ -484,7 +491,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                   <div className="ui-inset px-3 py-3">
                                     <div className="inline-flex items-center gap-1.5">
                                       <HiArrowPath className="h-4 w-4 text-[#AD7B18]" />
-                                      <span>需索引</span>
+                                      <span>可索引</span>
                                     </div>
                                     <div className="mt-1 text-[16px] font-semibold text-[#1F1F1F]">
                                       {selectedWorkspaceSummary.needs_index_count}
@@ -502,9 +509,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                 </div>
 
                                 <div className="mt-4 grid grid-cols-2 gap-2">
-                                  <Tooltip
-                                    title="检查当前目录里有哪些新增、变更或删除。"
-                                  >
+                                  <Tooltip title="检查当前目录里有哪些新增、变更或删除。">
                                     <Button
                                       icon={<HiArrowPath className="h-4 w-4" />}
                                       onClick={() => void handleWorkspaceScan(selectedWorkspace)}
@@ -516,9 +521,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                       检查更新
                                     </Button>
                                   </Tooltip>
-                                  <Tooltip
-                                    title="检查目录变化并更新可索引文件。"
-                                  >
+                                  <Tooltip title="检查目录变化并更新可索引文件。">
                                     <Button
                                       type="primary"
                                       icon={<HiSparkles className="h-4 w-4" />}
@@ -541,7 +544,9 @@ const WorkspaceSettingsPanel: React.FC = () => {
                             <div className="flex min-h-0 min-w-0 flex-col">
                               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                                 <div className="flex min-w-0 flex-wrap items-center gap-2.5">
-                                  <div className="text-[14px] font-semibold text-[#1F1F1F]">目录树</div>
+                                  <div className="text-[14px] font-semibold text-[#1F1F1F]">
+                                    目录树
+                                  </div>
                                 </div>
                                 <div className="flex flex-wrap gap-2">
                                   <Tooltip
@@ -555,7 +560,8 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                       size="small"
                                       className="border-[#E5E5E4] bg-white text-[#1F1F1F]"
                                       icon={
-                                        (workspaceExpandedKeys[selectedWorkspace.id] || []).length > 0 ? (
+                                        (workspaceExpandedKeys[selectedWorkspace.id] || []).length >
+                                        0 ? (
                                           <HiOutlineArrowsPointingIn className="h-4 w-4" />
                                         ) : (
                                           <HiOutlineArrowsPointingOut className="h-4 w-4" />
@@ -591,7 +597,9 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                     onExpand={(expandedKeys) =>
                                       setWorkspaceExpandedKeys((previous) => ({
                                         ...previous,
-                                        [selectedWorkspace.id]: expandedKeys.map((item) => String(item))
+                                        [selectedWorkspace.id]: expandedKeys.map((item) =>
+                                          String(item)
+                                        )
                                       }))
                                     }
                                   />
@@ -599,7 +607,11 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                   <div className="flex min-h-0 flex-1 items-center justify-center">
                                     <Empty
                                       image={Empty.PRESENTED_IMAGE_SIMPLE}
-                                      description={<span className="text-[#666666]">当前目录没有可显示文件</span>}
+                                      description={
+                                        <span className="text-[#666666]">
+                                          当前目录没有可显示文件
+                                        </span>
+                                      }
                                     />
                                   </div>
                                 )}

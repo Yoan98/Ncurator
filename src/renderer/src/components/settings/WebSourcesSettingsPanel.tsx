@@ -24,9 +24,7 @@ type WebSourcesSettingsPanelProps = {
   embedded?: boolean
 }
 
-const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
-  workspaceId
-}) => {
+const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ workspaceId }) => {
   const [webSources, setWebSources] = useState<WebSourceRecord[]>([])
   const [webLoading, setWebLoading] = useState(false)
   const [webModalVisible, setWebModalVisible] = useState(false)
@@ -221,7 +219,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
             <div className="ui-inset px-3 py-3">
               <div className="inline-flex items-center gap-1.5">
                 <HiArrowPath className="h-4 w-4 text-[#AD7B18]" />
-                <span>需索引</span>
+                <span>可索引</span>
               </div>
               <div className="mt-1 text-[16px] font-semibold text-[#1F1F1F]">
                 {webSummary.needs_index_count}
@@ -276,9 +274,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description={
-                  <span className="text-[#666666]">
-                    {webLoading ? '正在加载网页' : '暂无网页'}
-                  </span>
+                  <span className="text-[#666666]">{webLoading ? '正在加载网页' : '暂无网页'}</span>
                 }
               />
             </div>
@@ -307,7 +303,9 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
                             tooltip={statusBadge.tooltip}
                             icon={statusBadge.icon}
                           />
-                          <span>抓取 {formatDateTime(source.last_crawled_at || source.fetched_at)}</span>
+                          <span>
+                            抓取 {formatDateTime(source.last_crawled_at || source.fetched_at)}
+                          </span>
                         </div>
                       </div>
                       <div className="flex shrink-0 flex-wrap gap-2">
