@@ -38,6 +38,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ works
     needs_index_count: 0,
     failed_count: 0
   })
+  const actionableWebIndexCount = webSummary.needs_index_count + webSummary.failed_count
 
   const loadWebSources = useCallback(async (): Promise<void> => {
     if (!workspaceId) {
@@ -215,24 +216,26 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ works
             </Tooltip>
           </div>
 
-          <div className="mt-3 grid grid-cols-2 gap-2 text-[12px] text-[#666666]">
+          <div className="mt-3 text-[12px] text-[#666666]">
             <div className="ui-inset px-3 py-3">
               <div className="inline-flex items-center gap-1.5">
                 <HiArrowPath className="h-4 w-4 text-[#AD7B18]" />
                 <span>可索引</span>
               </div>
-              <div className="mt-1 text-[16px] font-semibold text-[#1F1F1F]">
-                {webSummary.needs_index_count}
+              <div
+                className="mt-1 text-[16px] font-semibold text-[#1F1F1F]"
+                data-testid={importSelectors.webSourceActionableIndexCount}
+              >
+                {actionableWebIndexCount}
               </div>
-            </div>
-            <div className="ui-inset px-3 py-3">
-              <div className="inline-flex items-center gap-1.5">
-                <HiOutlineTrash className="h-4 w-4 text-[#B5455D]" />
-                <span>失败</span>
-              </div>
-              <div className="mt-1 text-[16px] font-semibold text-[#1F1F1F]">
-                {webSummary.failed_count}
-              </div>
+              {webSummary.failed_count > 0 ? (
+                <div
+                  className="mt-1 text-[11px] text-[#B5455D]"
+                  data-testid={importSelectors.webSourceActionableFailedHint}
+                >
+                  含失败 {webSummary.failed_count} 个
+                </div>
+              ) : null}
             </div>
           </div>
 
@@ -282,6 +285,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ works
             <div className="w-full space-y-2">
               {webSources.map((source) => {
                 const statusBadge = getWebStatusBadge(source, false)
+                const lastUpdatedAt = source.last_crawled_at || source.fetched_at
                 return (
                   <div
                     key={source.id}
@@ -304,7 +308,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({ works
                             icon={statusBadge.icon}
                           />
                           <span>
-                            抓取 {formatDateTime(source.last_crawled_at || source.fetched_at)}
+                            最近更新时间: {lastUpdatedAt ? formatDateTime(lastUpdatedAt) : '无'}
                           </span>
                         </div>
                       </div>

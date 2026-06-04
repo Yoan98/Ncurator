@@ -18,9 +18,12 @@ const getJobTitle = (job: WorkspaceIndexJobRecord): string => {
 
 const WorkspaceIndexJobProgress: React.FC<WorkspaceIndexJobProgressProps> = ({ job, testId }) => {
   if (!job || job.status !== 'running') return null
+  const title = getJobTitle(job)
   const total = Math.max(0, job.total_count)
   const done = Math.min(total, Math.max(0, job.processed_count + job.failed_count))
   const percent = total > 0 ? Math.round((done / total) * 100) : 0
+  const message = job.message || '正在处理'
+  const shouldHideMessage = message.startsWith(`${title}：`) || message === title
 
   return (
     <div
@@ -28,7 +31,7 @@ const WorkspaceIndexJobProgress: React.FC<WorkspaceIndexJobProgressProps> = ({ j
       data-testid={testId}
     >
       <div className="flex items-center justify-between gap-3 text-[12px]">
-        <span className="font-medium text-[#1F1F1F]">{getJobTitle(job)}</span>
+        <span className="font-medium text-[#1F1F1F]">{title}</span>
         <span className="shrink-0 text-[#999999]">{percent}%</span>
       </div>
       <Progress
@@ -39,13 +42,11 @@ const WorkspaceIndexJobProgress: React.FC<WorkspaceIndexJobProgressProps> = ({ j
         trailColor="#F1EFEC"
         className="mt-1.5"
       />
-      <div className="mt-1 flex items-center justify-between gap-3 text-[11px] text-[#666666]">
-        <span className="truncate">{job.message || '正在处理'}</span>
-        <span className="shrink-0">
-          已处理 {done}/{total}
-          {job.failed_count ? `，失败 ${job.failed_count}` : ''}
-        </span>
-      </div>
+      {shouldHideMessage ? null : (
+        <div className="mt-1 text-[11px] text-[#666666]">
+          <span className="block truncate">{message}</span>
+        </div>
+      )}
     </div>
   )
 }

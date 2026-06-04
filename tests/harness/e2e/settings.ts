@@ -206,6 +206,25 @@ export const getWorkspaceIndexCounts = async (
   }
 }
 
+export const getWebSourceIndexCounts = async (
+  page: Page
+): Promise<{ actionableCount: number; failedHint: string }> => {
+  return await page.evaluate((selectors) => {
+    const actionableCountText = document
+      .querySelector(`[data-testid="${selectors.actionableCount}"]`)
+      ?.textContent?.trim()
+    const failedHint =
+      document.querySelector(`[data-testid="${selectors.failedHint}"]`)?.textContent?.trim() || ''
+    return {
+      actionableCount: Number(actionableCountText || 0),
+      failedHint
+    }
+  }, {
+    actionableCount: importSelectors.webSourceActionableIndexCount,
+    failedHint: importSelectors.webSourceActionableFailedHint
+  })
+}
+
 export const seedWebSources = async (
   page: Page,
   workspaceId: string,

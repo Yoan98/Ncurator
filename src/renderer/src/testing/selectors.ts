@@ -50,6 +50,8 @@ export const importSelectors = {
   webSourceList: 'import-web-source-list',
   webSourceCardPrefix: 'import-web-source-card',
   webSourceOpenModalButton: 'import-web-source-open-modal-button',
+  webSourceActionableIndexCount: 'import-web-source-actionable-index-count',
+  webSourceActionableFailedHint: 'import-web-source-actionable-failed-hint',
   webSourceIndexJobProgress: 'import-web-source-index-job-progress',
   webSourceModal: 'import-web-source-modal',
   webSourceUrlInput: 'import-web-source-url-input',

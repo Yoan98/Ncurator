@@ -5,6 +5,7 @@ import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_WEB_E2E_TIMEOUT_MS,
   createFixtureWorkspace,
+  getWebSourceIndexCounts,
   navigateToSettingsSection,
   seedWebSources,
   waitForWebIndexJobIdle,
@@ -50,6 +51,7 @@ describe('settings workspace web e2e', () => {
           let buttonsDisabled = false
           let crawlStepVisible = false
           let indexStepVisible = false
+          let progressText = ''
 
           await runtime.step({
             name: 'seed-web-sources',
@@ -88,12 +90,14 @@ describe('settings workspace web e2e', () => {
               await progressBlock.getByText('步骤 2/2 建立索引', { exact: true }).waitFor({
                 state: 'visible'
               })
+              progressText = (await progressBlock.innerText()) || ''
               indexStepVisible = true
               progressVisible = true
               buttonsDisabled =
                 (await page.getByRole('button', { name: '检查更新' }).isDisabled()) &&
                 (await page.getByRole('button', { name: '更新索引' }).isDisabled())
               await waitForPreparedWebSources(page, workspaceId)
+              await waitForWebIndexJobIdle(page, workspaceId)
             }
           })
 
@@ -102,12 +106,15 @@ describe('settings workspace web e2e', () => {
               workspaceId: String(selectedWorkspaceId || '')
             })
           }, workspaceId)
+          const uiSummary = await getWebSourceIndexCounts(page)
 
           return {
             progressVisible,
             buttonsDisabled,
             crawlStepVisible,
             indexStepVisible,
+            progressText,
+            uiSummary,
             summary: webList.summary,
             statuses: webList.items.map((item) => item.index_status)
           }
@@ -122,6 +129,18 @@ describe('settings workspace web e2e', () => {
               name: 'prepare-web-progress-is-visible',
               message:
                 '网页索引执行中应展示抓取/索引进度并禁用两个索引操作按钮，对齐 SET-WEB-004-AC4。',
+              data: result
+            }
+          )
+
+          await runtime.assertThat(
+            result.uiSummary.actionableCount === 1 &&
+              result.uiSummary.failedHint === '含失败 1 个' &&
+              !result.progressText.includes('已处理'),
+            {
+              name: 'prepare-summary-and-progress-copy-match-file-view',
+              message:
+                '网页 tab 的可索引数应包含失败网页，并且进度块只保留左侧运行文案，不再单独展示“已处理”区域。',
               data: result
             }
           )
