@@ -27,6 +27,16 @@ export type WorkspaceKnowledgeVectorSnapshot = {
   vectors: number[][]
 }
 
+export type WorkspaceKnowledgeChunkInput = {
+  id: string
+  text: string
+  document_id: string
+  workspace_id: string
+  document_name: string
+  source_type: 'file'
+  metadata: { page: number }
+}
+
 export type WorkspaceKnowledgeCache = {
   loadSplitSnapshot: (input: {
     contentHash: string

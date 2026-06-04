@@ -2,6 +2,8 @@ import type { Locator, Page } from 'playwright'
 import type {
   CreateWorkspaceSourceRequest,
   LLMConfig,
+  WorkspaceIndexJobRecord,
+  WorkspaceTreeListResponse,
   WorkspaceMutationResponse
 } from '../../../src/shared/types'
 import type { ModelInfo, SettingsE2EApiOverrides } from '../../../src/preload/api'
@@ -14,6 +16,7 @@ import {
 export type SettingsPageTarget = 'model' | 'workspace' | 'vector'
 
 export const SETTINGS_E2E_TIMEOUT_MS = 30_000
+export const SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS = 180_000
 export const SETTINGS_WEB_E2E_TIMEOUT_MS = SETTINGS_E2E_TIMEOUT_MS
 
 const byTestId = (testId: string): string => `[data-testid="${testId}"]`
@@ -117,6 +120,89 @@ export const createFixtureWorkspace = async (
     throw new Error(response.error || 'failed to create workspace fixture')
   }
   return response
+}
+
+export const createRealWorkspaceWithRoot = async (
+  page: Page,
+  input: { name: string; rootPath: string }
+): Promise<WorkspaceMutationResponse> => {
+  const response = await page.evaluate(async (payload) => {
+    const created = await window.api.workspaceCreate({ name: payload.name })
+    if (!created.success || !created.workspace) {
+      return created
+    }
+    const rooted = await window.api.workspaceSetRootPath({
+      workspaceId: created.workspace.id,
+      rootPath: payload.rootPath
+    })
+    if (!rooted.success) {
+      return rooted
+    }
+    return rooted
+  }, input)
+  if (!response.success || !response.workspace) {
+    throw new Error(response.error || 'failed to create real workspace')
+  }
+  return response
+}
+
+export const readWorkspaceTree = async (
+  page: Page,
+  workspaceId: string
+): Promise<WorkspaceTreeListResponse> =>
+  await page.evaluate(async (selectedWorkspaceId) => {
+    return await window.api.workspaceTree({
+      workspaceId: selectedWorkspaceId,
+      includeUnsupported: true
+    })
+  }, workspaceId)
+
+export const waitForFileIndexJobIdle = async (
+  page: Page,
+  workspaceId: string,
+  timeoutMs = SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS
+): Promise<{ lastRunningJob?: WorkspaceIndexJobRecord; tree: WorkspaceTreeListResponse }> => {
+  const deadline = Date.now() + timeoutMs
+  let lastRunningJob: WorkspaceIndexJobRecord | undefined
+  let tree = await readWorkspaceTree(page, workspaceId)
+
+  for (;;) {
+    const response = await page.evaluate(async (selectedWorkspaceId) => {
+      return await window.api.workspaceIndexJobGet({
+        workspaceId: selectedWorkspaceId,
+        sourceKind: 'file'
+      })
+    }, workspaceId)
+    if (!response.success) {
+      throw new Error(response.error || 'failed to read file index job')
+    }
+    if (!response.job) {
+      return {
+        lastRunningJob,
+        tree: await readWorkspaceTree(page, workspaceId)
+      }
+    }
+    lastRunningJob = response.job
+    tree = await readWorkspaceTree(page, workspaceId)
+    if (Date.now() >= deadline) {
+      throw new Error('file index job did not become idle')
+    }
+    await page.waitForTimeout(500)
+  }
+}
+
+export const getWorkspaceIndexCounts = async (
+  page: Page
+): Promise<{ actionableCount: number; failedCount: number }> => {
+  return {
+    actionableCount: Number(
+      (await getSettingsLocator(page, importSelectors.workspaceActionableIndexCount).textContent()) ||
+        0
+    ),
+    failedCount: Number(
+      (await getSettingsLocator(page, importSelectors.workspaceFailedIndexCount).textContent()) || 0
+    )
+  }
 }
 
 export const seedWebSources = async (

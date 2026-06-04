@@ -5,6 +5,7 @@ import type { DocumentsStore } from '../storage/domains/DocumentsStore'
 import type { EmbeddingService } from '../vector/EmbeddingService'
 import { IngestionService, isSupportedLocalFilePath } from '../ingestion/loader'
 import type {
+  WorkspaceKnowledgeChunkInput,
   WorkspaceKnowledgeIndexInput,
   WorkspaceKnowledgeIndexResult,
   WorkspaceKnowledgeSplitSnapshot,
@@ -12,6 +13,7 @@ import type {
 } from './types'
 
 const CHUNK_ID_SCHEMA_VERSION = 'workspace-knowledge-chunk-v1'
+const WORKSPACE_KNOWLEDGE_EMBEDDING_BATCH_SIZE = 1
 
 const buildChunkId = (input: {
   documentId: string
@@ -70,14 +72,17 @@ export class WorkspaceKnowledgePrepareService {
           modelName: this.deps.embeddingService.getModelName()
         })
       : null
-    const vectorSnapshot =
-      cachedVectors && cachedVectors.vectors.length === splitSnapshot.chunks.length
+    const hasUsableCachedVectors =
+      Boolean(cachedVectors) && cachedVectors?.vectors.length === splitSnapshot.chunks.length
+    const vectorSnapshot = input.cache
+      ? hasUsableCachedVectors
         ? cachedVectors
         : await this.buildVectorSnapshot({
             splitSnapshot,
             modelName: this.deps.embeddingService.getModelName()
           })
-    if ((!cachedVectors || cachedVectors.vectors.length !== splitSnapshot.chunks.length) && input.cache) {
+      : null
+    if (!hasUsableCachedVectors && vectorSnapshot && input.cache) {
       await input.cache.saveVectorSnapshot(vectorSnapshot)
     }
 
@@ -123,10 +128,14 @@ export class WorkspaceKnowledgePrepareService {
       }))
 
       if (chunks.length > 0) {
-        await this.deps.documentsStore.addChunks({
-          vectors: vectorSnapshot.vectors.map((vector) => Float32Array.from(vector)),
-          chunks
-        })
+        if (vectorSnapshot) {
+          await this.addChunksFromVectorSnapshot({
+            chunks,
+            vectors: vectorSnapshot.vectors
+          })
+        } else {
+          await this.addChunksWithBatchedEmbedding(chunks)
+        }
       }
       await this.deps.documentsStore.updateDocumentImportStatus(input.documentId, 2)
 
@@ -138,8 +147,7 @@ export class WorkspaceKnowledgePrepareService {
         contentHash,
         chunkCount: chunks.length,
         usedCachedSplit: Boolean(cachedSplit),
-        usedCachedVectors:
-          Boolean(cachedVectors) && cachedVectors?.vectors.length === splitSnapshot.chunks.length,
+        usedCachedVectors: hasUsableCachedVectors,
         chunks: chunks.map((chunk) => ({
           id: chunk.id,
           text: chunk.text,
@@ -187,17 +195,77 @@ export class WorkspaceKnowledgePrepareService {
       }
     }
 
-    const embeddings = await this.deps.embeddingService.embed(
-      input.splitSnapshot.chunks.map((chunk) => chunk.text)
-    )
-    const vectorSize = embeddings.dims[1]
+    const vectors: number[][] = []
+    for (
+      let start = 0;
+      start < input.splitSnapshot.chunks.length;
+      start += WORKSPACE_KNOWLEDGE_EMBEDDING_BATCH_SIZE
+    ) {
+      const batchChunks = input.splitSnapshot.chunks.slice(
+        start,
+        start + WORKSPACE_KNOWLEDGE_EMBEDDING_BATCH_SIZE
+      )
+      const embeddings = await this.deps.embeddingService.embed(
+        batchChunks.map((chunk) => chunk.text)
+      )
+      const vectorSize = embeddings.dims[1]
+      vectors.push(
+        ...batchChunks.map((_, index) =>
+          Array.from(embeddings.data.slice(index * vectorSize, (index + 1) * vectorSize))
+        )
+      )
+    }
+
     return {
       contentHash: input.splitSnapshot.contentHash,
       fileExt: input.splitSnapshot.fileExt,
       modelName: input.modelName,
-      vectors: input.splitSnapshot.chunks.map((_, index) =>
-        Array.from(embeddings.data.slice(index * vectorSize, (index + 1) * vectorSize))
+      vectors
+    }
+  }
+
+  private async addChunksFromVectorSnapshot(input: {
+    chunks: WorkspaceKnowledgeChunkInput[]
+    vectors: number[][]
+  }): Promise<void> {
+    for (
+      let start = 0;
+      start < input.chunks.length;
+      start += WORKSPACE_KNOWLEDGE_EMBEDDING_BATCH_SIZE
+    ) {
+      const batchChunks = input.chunks.slice(
+        start,
+        start + WORKSPACE_KNOWLEDGE_EMBEDDING_BATCH_SIZE
       )
+      const batchVectors = input.vectors
+        .slice(start, start + batchChunks.length)
+        .map((vector) => Float32Array.from(vector))
+      await this.deps.documentsStore.addChunks({
+        vectors: batchVectors,
+        chunks: batchChunks
+      })
+    }
+  }
+
+  private async addChunksWithBatchedEmbedding(
+    chunks: WorkspaceKnowledgeChunkInput[]
+  ): Promise<void> {
+    for (
+      let start = 0;
+      start < chunks.length;
+      start += WORKSPACE_KNOWLEDGE_EMBEDDING_BATCH_SIZE
+    ) {
+      const batchChunks = chunks.slice(start, start + WORKSPACE_KNOWLEDGE_EMBEDDING_BATCH_SIZE)
+      const embeddings = await this.deps.embeddingService.embed(
+        batchChunks.map((chunk) => chunk.text)
+      )
+      const vectorSize = embeddings.dims[1]
+      await this.deps.documentsStore.addChunks({
+        vectors: batchChunks.map((_, index) =>
+          Float32Array.from(embeddings.data.slice(index * vectorSize, (index + 1) * vectorSize))
+        ),
+        chunks: batchChunks
+      })
     }
   }
 }

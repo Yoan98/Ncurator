@@ -724,15 +724,17 @@ export function registerHandlers(services: {
         updated_at: Date.now()
       })
 
-      await workspaceStore.upsertWorkspaceFileIndexRecords(
-        targets.map((record) => ({
-          ...record,
-          index_status: 'indexing',
-          last_error: undefined,
-          last_checked_at: prepareStartedAt,
-          updated_at: prepareStartedAt
-        }))
-      )
+      for (const record of targets) {
+        await workspaceStore.upsertWorkspaceFileIndexRecords([
+          {
+            ...record,
+            index_status: 'indexing',
+            last_error: undefined,
+            last_checked_at: prepareStartedAt,
+            updated_at: prepareStartedAt
+          }
+        ])
+      }
       emitSourceListRefresh(input.sender)
       emitSourceListRefreshToAll()
 
@@ -741,6 +743,10 @@ export function registerHandlers(services: {
       for (const target of targets) {
         const currentRecord = recordMap.get(target.relative_path) || target
         const documentId = currentRecord.document_id || uuidv4()
+        job = await updateAndEmitWorkspaceIndexJob(job, {
+          message: `正在处理 ${processed + 1}/${targets.length}：${currentRecord.relative_path}`,
+          updated_at: Date.now()
+        })
         try {
           const indexedDocument = await workspaceKnowledgePrepareService.indexLocalFile({
             workspaceId,

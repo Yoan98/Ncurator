@@ -65,6 +65,8 @@ export type LaunchedElectronApp = {
   close: (input: { tracePath: string }) => Promise<void>
 }
 
+export type ElectronLaunchMode = 'fixture' | 'real'
+
 const OUT_MAIN_ENTRY = path.resolve(process.cwd(), 'out', 'main', 'index.js')
 
 const toConsoleLevel = (message: ConsoleMessage): E2EConsoleLevel => {
@@ -73,11 +75,29 @@ const toConsoleLevel = (message: ConsoleMessage): E2EConsoleLevel => {
   return 'log'
 }
 
+const pushProcessLog = (
+  entries: E2EConsoleEntry[],
+  level: E2EConsoleLevel,
+  source: string,
+  chunk: Buffer | string
+): void => {
+  const text = String(chunk)
+  if (!text.trim()) return
+  entries.push({
+    ts: new Date().toISOString(),
+    level,
+    text: `[${source}] ${text.trim()}`
+  })
+}
+
 const ensureBuiltAppExists = async (): Promise<void> => {
   await access(OUT_MAIN_ENTRY)
 }
 
-const buildElectronLaunchEnv = (userDataDir: string): NodeJS.ProcessEnv => {
+const buildElectronLaunchEnv = (
+  userDataDir: string,
+  launchMode: ElectronLaunchMode
+): NodeJS.ProcessEnv => {
   const env: NodeJS.ProcessEnv = {}
 
   for (const [key, value] of Object.entries(process.env)) {
@@ -87,7 +107,11 @@ const buildElectronLaunchEnv = (userDataDir: string): NodeJS.ProcessEnv => {
     }
   }
 
-  env.NCURATOR_E2E_MODE = '1'
+  if (launchMode === 'fixture') {
+    env.NCURATOR_E2E_MODE = '1'
+  } else {
+    delete env.NCURATOR_E2E_MODE
+  }
   env.NCURATOR_E2E_WINDOW_MODE = process.env.NCURATOR_E2E_WINDOW_MODE || 'background'
   env.NCURATOR_USER_DATA_PATH = userDataDir
 
@@ -145,17 +169,34 @@ const installPageObservers = async (page: Page): Promise<void> => {
   })
 }
 
-export const launchElectronApp = async (): Promise<LaunchedElectronApp> => {
+export const launchElectronApp = async (
+  input: { launchMode?: ElectronLaunchMode } = {}
+): Promise<LaunchedElectronApp> => {
   await ensureBuiltAppExists()
 
   const consoleEntries: E2EConsoleEntry[] = []
   const userDataDir = await mkdtemp(path.join(os.tmpdir(), 'ncurator-e2e-user-data-'))
-  const launchEnv = buildElectronLaunchEnv(userDataDir)
+  const launchEnv = buildElectronLaunchEnv(userDataDir, input.launchMode || 'fixture')
   const electronApp = await electron.launch({
     executablePath: electronPath,
     args: ['.'],
     cwd: process.cwd(),
     env: launchEnv
+  })
+  const electronProcess = electronApp.process()
+  electronProcess?.stdout?.on('data', (chunk) => {
+    pushProcessLog(consoleEntries, 'log', 'main:stdout', chunk)
+  })
+  electronProcess?.stderr?.on('data', (chunk) => {
+    pushProcessLog(consoleEntries, 'error', 'main:stderr', chunk)
+  })
+  electronProcess?.on('exit', (code, signal) => {
+    pushProcessLog(
+      consoleEntries,
+      code === 0 ? 'log' : 'error',
+      'main:exit',
+      `code=${String(code)} signal=${String(signal)}`
+    )
   })
 
   const page = await electronApp.firstWindow()
@@ -215,10 +256,20 @@ export const launchElectronApp = async (): Promise<LaunchedElectronApp> => {
       }
     },
     close: async (input) => {
-      await page.context().tracing.stop({
-        path: input.tracePath
-      })
-      await electronApp.close()
+      if (!page.isClosed()) {
+        try {
+          await page.context().tracing.stop({
+            path: input.tracePath
+          })
+        } catch (error) {
+          pushProcessLog(consoleEntries, 'warning', 'trace', error instanceof Error ? error.message : String(error))
+        }
+      }
+      try {
+        await electronApp.close()
+      } catch (error) {
+        pushProcessLog(consoleEntries, 'warning', 'electron-close', error instanceof Error ? error.message : String(error))
+      }
       await rm(userDataDir, { recursive: true, force: true })
     }
   }

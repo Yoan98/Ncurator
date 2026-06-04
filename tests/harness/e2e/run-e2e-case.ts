@@ -14,7 +14,7 @@ import {
   type TestRunStatus
 } from '../core/run-log-contract'
 import { createRunId, resolveRunArtifactsDir, writeRunLog } from '../core/write-run-log'
-import { launchElectronApp, type E2ERuntimeSignals } from './electronApp'
+import { launchElectronApp, type E2ERuntimeSignals, type ElectronLaunchMode } from './electronApp'
 
 export type E2ETestRunMode = 'single' | 'repeatable'
 
@@ -67,6 +67,7 @@ export type E2ETestCaseDefinition<TResult> = {
   groups?: readonly string[]
   description: string
   fixtures: readonly string[]
+  launchMode?: ElectronLaunchMode
   runMode: E2ETestRunMode
   execute: (runtime: E2ETestRuntime) => Promise<TResult>
   assert: (result: TResult, runtime: E2ETestRuntime) => Promise<void>
@@ -194,7 +195,9 @@ export const runE2ECase = async <TResult>(definition: E2ETestCaseDefinition<TRes
   let assertionCounter = 0
   let artifactCounter = 0
   let lastStepId: string | null = null
-  const launchedApp = await launchElectronApp()
+  const launchedApp = await launchElectronApp({
+    launchMode: definition.launchMode
+  })
 
   const pushEvent = (event: TestLogEvent): void => {
     events.push(event)
@@ -243,6 +246,25 @@ export const runE2ECase = async <TResult>(definition: E2ETestCaseDefinition<TRes
     const relativePath = path.posix.join('screenshots', `${input.name}.png`)
     const absolutePath = path.join(logDirArtifacts, relativePath)
     await mkdir(path.dirname(absolutePath), { recursive: true })
+    if (launchedApp.page.isClosed()) {
+      recordEvent({
+        type: 'signal',
+        name: 'screenshot-skipped',
+        status: 'info',
+        message: '页面已关闭，跳过失败截图',
+        data: {
+          name: input.name
+        }
+      })
+      const placeholderPath = path.join(logDirArtifacts, relativePath)
+      await writeFile(placeholderPath, 'page already closed; screenshot skipped', 'utf8')
+      return captureArtifact({
+        kind: 'other',
+        relativePath,
+        message: '页面已关闭，保存截图占位文件',
+        refs: input.refs
+      })
+    }
     await launchedApp.page.screenshot({
       path: absolutePath
     })
@@ -338,6 +360,7 @@ export const runE2ECase = async <TResult>(definition: E2ETestCaseDefinition<TRes
     data: {
       description: definition.description,
       fixtures: definition.fixtures.map((fixturePath) => path.resolve(fixturePath)),
+      launchMode: definition.launchMode || 'fixture',
       runMode: definition.runMode
     }
   })

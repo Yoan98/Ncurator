@@ -210,6 +210,9 @@ const WorkspaceSettingsPanel: React.FC = () => {
     [selectedWorkspaceId, workspaceTreeSummaries]
   )
 
+  const selectedWorkspaceActionableIndexCount =
+    selectedWorkspaceSummary.needs_index_count + selectedWorkspaceSummary.failed_file_count
+
   const handleCreateWorkspace = async (): Promise<void> => {
     const name = createWorkspaceName.trim()
     if (!name) {
@@ -493,8 +496,11 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                       <HiArrowPath className="h-4 w-4 text-[#AD7B18]" />
                                       <span>可索引</span>
                                     </div>
-                                    <div className="mt-1 text-[16px] font-semibold text-[#1F1F1F]">
-                                      {selectedWorkspaceSummary.needs_index_count}
+                                    <div
+                                      className="mt-1 text-[16px] font-semibold text-[#1F1F1F]"
+                                      data-testid={importSelectors.workspaceActionableIndexCount}
+                                    >
+                                      {selectedWorkspaceActionableIndexCount}
                                     </div>
                                   </div>
                                   <div className="ui-inset px-3 py-3">
@@ -502,7 +508,10 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                       <HiOutlineTrash className="h-4 w-4 text-[#B5455D]" />
                                       <span>失败</span>
                                     </div>
-                                    <div className="mt-1 text-[16px] font-semibold text-[#1F1F1F]">
+                                    <div
+                                      className="mt-1 text-[16px] font-semibold text-[#1F1F1F]"
+                                      data-testid={importSelectors.workspaceFailedIndexCount}
+                                    >
                                       {selectedWorkspaceSummary.failed_file_count}
                                     </div>
                                   </div>

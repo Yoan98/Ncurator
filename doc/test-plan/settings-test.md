@@ -20,9 +20,10 @@
   - 通过率：`6 / 6`
   - 检测时间：`2026-06-03 13:12:07 +08:00`
 - `workspace / files`
-  - 登记 case：`8`
-  - 通过率：`8 / 8`
-  - 检测时间：`2026-06-03 13:12:07 +08:00`
+  - 登记 case：`11`
+  - 通过率：`11 / 11`
+  - 检测时间：`2026-06-04 12:01:40 +08:00`
+  - 备注：既有 8 条沿用上一轮通过结论；本轮补充通过 `workspace-prepare-real-fixture-refresh`、`workspace-prepare-failed-retry`、`workspace-prepare-file-failure-isolated` 三条真实工作区更新索引 E2E。
 - `workspace / web`
   - 登记 case：`7`
   - 通过率：`7 / 7`
@@ -249,6 +250,36 @@ Settings 的正式测试顶层 suite 直接对齐 PRD 模块：
 - How：创建一条带索引延迟的 fixture 工作空间，触发更新索引并读取刷新后的文件树响应。
 - Oracle：更新索引过程中出现持久化总进度，且检查更新/更新索引按钮同时禁用，对齐 `SET-WORKSPACE-004-AC3`；更新成功后，`indexed / needs_index` 摘要和节点状态同步刷新，对齐 `SET-WORKSPACE-004-AC2`。
 - Not：不验证向量内容质量和搜索召回结果。
+
+#### `workspace-prepare-real-fixture-refresh`
+
+- 测试类型：`e2e`
+- 实现状态：`已实现`
+- What：验证 Settings 页面点击“更新索引”时，会对共享真实工作区 fixture 中的支持文件执行真实索引链路，并完成状态收敛。
+- Why：现有文件索引 E2E 主要使用 fake workspace fixture，不能覆盖真实 docx 加载、切分、embedding 与本地索引写入；该链路是用户手动点击更新索引时最容易出现闪退的真实风险面。
+- How：把 `tests/fixtures/workspace` 原样复制到隔离临时目录，关闭 fake e2e workspace fixture，创建工作空间并绑定该目录，从 Settings 文件 tab 点击“更新索引”，轮询持久化 job、摘要和文件节点状态。
+- Oracle：更新索引执行中出现持久化进度且两个索引操作按钮禁用，对齐 `SET-WORKSPACE-004-AC3`；任务结束后应用仍存活，支持文件状态收敛为 `indexed / failed`，文件摘要同步刷新，对齐 `SET-WORKSPACE-004-AC1`、`SET-WORKSPACE-004-AC2`。
+- Not：不验证检索召回排序和向量语义质量；只验证真实文件索引链路不会停留在执行中或导致页面不可用。
+
+#### `workspace-prepare-failed-retry`
+
+- 测试类型：`e2e`
+- 实现状态：`已实现`
+- What：验证已有失败文件再次点击“更新索引”时会被纳入本次处理范围，并且文件 tab 的可索引数量包含失败数量。
+- Why：失败文件是用户最常见的重试对象，如果失败记录不再进入目标集，或者 UI 不把失败数算进可操作数量，用户会误判“没有东西可更新”。
+- How：创建真实工作空间并绑定共享 workspace fixture 的隔离副本，先通过测试注入或服务契约制造一个 `failed` 文件索引记录，再从 Settings 文件 tab 点击“更新索引”，读取 active job 的目标数量、文件摘要和页面可索引数字。
+- Oracle：本次 job 的目标数量包含失败文件，对齐 `SET-WORKSPACE-004-AC1`；页面“可索引”数字等于 `needs_index_count + failed_file_count`，且失败文件重试后状态发生收敛，对齐 `SET-WORKSPACE-004-AC2`、`SET-WORKSPACE-005-AC2`。
+- Not：不要求失败文件最终一定成功；允许因真实文件内容或环境依赖再次失败，但必须确认发生了重试。
+
+#### `workspace-prepare-file-failure-isolated`
+
+- 测试类型：`e2e`
+- 实现状态：`已实现`
+- What：验证单个文件索引失败不会导致 Settings 页面或 Electron 应用退出，并会留下文件级失败状态与错误信息。
+- Why：真实更新索引可能遇到损坏文件、过大文件或 loader/native 异常；单文件失败必须被隔离为资料级失败，不能拖垮整个应用。
+- How：在真实工作空间隔离目录中放入一个会触发索引失败的支持文件和一个可索引文件，从 Settings 文件 tab 点击“更新索引”，观察 job、页面存活状态、成功文件与失败文件状态。
+- Oracle：应用在索引结束后仍可响应 IPC 和页面查询，对齐 `SET-WORKSPACE-004-AC5` 的失败收敛语义；失败文件保留 `failed / last_error`，其他文件不因该失败丢失状态，对齐 `SET-WORKSPACE-004-AC2`、`SET-WORKSPACE-008-AC2`。
+- Not：不模拟操作系统强杀；如果 native 崩溃导致进程退出，该 case 应失败并作为后续 worker/child process 隔离修复的回归目标。
 
 #### `workspace-prepare-progress-restore`
 
