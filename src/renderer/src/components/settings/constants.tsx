@@ -12,6 +12,8 @@ import guijiliudongLogo from '../../assets/img/guijiliudong.png'
 
 export const SETTINGS_SECTION_ORDER: SettingsSectionValue[] = ['model', 'workspace']
 
+export const WORKSPACE_TREE_FILE_NAME_MAX_WIDTH = 'min(34rem, calc(100vw - 20rem))'
+
 export const SETTINGS_SECTION_META: Record<SettingsSectionValue, SettingsSectionMeta> = {
   model: {
     value: 'model',

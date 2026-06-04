@@ -441,6 +441,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 
   useEffect(() => {
     const handleSelectionChange = (): void => {
+      if (isComposingRef.current) return
       const editor = editorRef.current
       const selection = window.getSelection()
       if (!editor || !selection) return
@@ -463,26 +464,10 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     }
   }, [refreshMentionContext])
 
-  useEffect(() => {
-    const editor = editorRef.current
-    if (!editor) return
-
-    const handleNativeBeforeInput = (event: InputEvent): void => {
-      if (event.isComposing || isComposingRef.current) return
-      if (event.inputType !== 'insertText' || !event.data) return
-      event.preventDefault()
-      insertTextAtSelection(event.data)
-    }
-
-    editor.addEventListener('beforeinput', handleNativeBeforeInput)
-    return () => {
-      editor.removeEventListener('beforeinput', handleNativeBeforeInput)
-    }
-  }, [insertTextAtSelection])
-
   useLayoutEffect(() => {
     const editor = editorRef.current
     if (!editor) return
+    if (isComposingRef.current) return
     const expectedNodes = draftNodesRef.current
     const currentNodes = readComposerNodesFromEditor(editor, knownScopesRef.current)
     if (areComposerNodesEqual(currentNodes, expectedNodes)) return
@@ -494,8 +479,14 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   })
 
   const handleEditorInput = (): void => {
+    if (isComposingRef.current) {
+      const editor = editorRef.current
+      const hasText = Boolean(editor?.textContent?.trim())
+      const hasScopeToken = Boolean(editor?.querySelector('[data-role="scope-token"]'))
+      setHasContent(hasText || hasScopeToken)
+      return
+    }
     scheduleDraftSyncFromEditor()
-    if (isComposingRef.current) return
     scheduleMentionRefresh()
   }
 
@@ -764,10 +755,18 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             }}
             onCompositionStart={() => {
               isComposingRef.current = true
+              if (draftSyncFrameRef.current !== null) {
+                window.cancelAnimationFrame(draftSyncFrameRef.current)
+                draftSyncFrameRef.current = null
+              }
+              if (mentionRefreshFrameRef.current !== null) {
+                window.cancelAnimationFrame(mentionRefreshFrameRef.current)
+                mentionRefreshFrameRef.current = null
+              }
             }}
             onCompositionEnd={() => {
               isComposingRef.current = false
-              syncDraftFromEditor()
+              scheduleDraftSyncFromEditor()
               scheduleMentionRefresh()
             }}
           />

@@ -1,4 +1,4 @@
-import { Tag } from 'antd'
+import { Tag, Tooltip } from 'antd'
 import {
   HiArrowPath,
   HiCheckCircle,
@@ -8,6 +8,7 @@ import {
   HiOutlineExclamationCircle
 } from 'react-icons/hi2'
 import type { WebSourceRecord, WorkspaceTreeEntry } from '../../../../../shared/types'
+import { WORKSPACE_TREE_FILE_NAME_MAX_WIDTH } from '../constants'
 import type { StatusBadgeVisual, WorkspaceTreeDisplayStrategy, WorkspaceTreeNode } from '../types'
 
 const STATUS_SPIN_ICON_CLASSNAME = 'h-3.5 w-3.5 animate-spin'
@@ -69,25 +70,35 @@ export const createWorkspaceTree = (entries: WorkspaceTreeEntry[]): WorkspaceTre
 
   sortedEntries.forEach((entry) => {
     const statusMeta = getTreeEntryStatusMeta(entry)
+    const fileNameNode = (
+      <Tooltip title={entry.name} placement="topLeft">
+        <span
+          className="block min-w-0 truncate text-[14px] leading-6 text-[#1F1F1F]"
+          style={{ maxWidth: WORKSPACE_TREE_FILE_NAME_MAX_WIDTH }}
+        >
+          {entry.name}
+        </span>
+      </Tooltip>
+    )
     const treeNode: WorkspaceTreeNode = {
       key: entry.id,
       title: (
-        <div className="flex min-w-0 items-center gap-2 py-1">
+        <div className="grid w-full min-w-0 max-w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 py-1">
           {entry.kind === 'directory' ? (
-            <HiFolder className="h-4 w-4 text-[#D97757]" />
+            <HiFolder className="h-4 w-4 shrink-0 text-[#D97757]" />
           ) : (
             <HiDocumentText
-              className={`h-4 w-4 ${entry.supported_for_index ? 'text-[#666666]' : 'text-[#C9C7C3]'}`}
+              className={`h-4 w-4 shrink-0 ${entry.supported_for_index ? 'text-[#666666]' : 'text-[#C9C7C3]'}`}
             />
           )}
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[14px] leading-6 text-[#1F1F1F]">{entry.name}</div>
-          </div>
+          <div className="min-w-0">{fileNameNode}</div>
           {entry.kind === 'file' ? (
             entry.supported_for_index && statusMeta ? (
-              <Tag className={`!mr-0 rounded-full ${statusMeta.className}`}>{statusMeta.label}</Tag>
+              <Tag className={`!mr-0 shrink-0 rounded-full ${statusMeta.className}`}>
+                {statusMeta.label}
+              </Tag>
             ) : (
-              <Tag className="!mr-0 rounded-full border-[#E5E5E4] bg-[#F8F8F7] text-[#999999]">
+              <Tag className="!mr-0 shrink-0 rounded-full border-[#E5E5E4] bg-[#F8F8F7] text-[#999999]">
                 不支持
               </Tag>
             )

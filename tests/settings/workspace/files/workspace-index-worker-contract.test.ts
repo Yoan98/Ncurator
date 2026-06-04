@@ -7,7 +7,12 @@ import {
   WORKSPACE_EMBEDDING_BATCH_MAX_CHARS,
   WORKSPACE_EMBEDDING_CHUNK_MAX_CHARS
 } from '../../../../src/main/services/workspace/constants'
-import { createWorkspaceEmbeddingBatches } from '../../../../src/main/services/workspace/utils/knowledge'
+import { IngestionService } from '../../../../src/main/services/ingestion/loader'
+import {
+  buildWorkspaceKnowledgeSplitSnapshot,
+  computeWorkspaceFileContentHash,
+  createWorkspaceEmbeddingBatches
+} from '../../../../src/main/services/workspace/utils/knowledge'
 import { handleWorkspaceIndexWorkerRequest } from '../../../../src/main/services/workspace/worker/workspaceIndexWorker'
 import { WorkspaceIndexWorkerClient } from '../../../../src/main/services/workspace/worker/workspaceIndexWorkerClient'
 import type { WorkspaceIndexWorkerRequest } from '../../../../src/main/services/workspace/types'
@@ -27,7 +32,7 @@ describe('settings workspace backend', () => {
       suite: 'workspace',
       groups: ['files'],
       description: 'workspace 文件索引 worker 协议与 embedding batch 限制保持稳定。',
-      fixtures: [],
+      fixtures: ['tests/fixtures/workspace'],
       runMode: 'single',
       execute: async (runtime) => {
         const normalChunks = [
@@ -81,6 +86,31 @@ describe('settings workspace backend', () => {
           }
         }
         const workerSuccess = await handleWorkspaceIndexWorkerRequest(workerRequest)
+        const pdfFilePath = path.join(runtime.workspaceRoot, '学习笔记', '深度学习.pdf')
+        const pdfContentHash = await computeWorkspaceFileContentHash(pdfFilePath)
+        const pdfSplitSnapshot = await buildWorkspaceKnowledgeSplitSnapshot({
+          ingestionService: IngestionService.getInstance(),
+          filePath: pdfFilePath,
+          contentHash: pdfContentHash,
+          fileExt: '.pdf'
+        })
+        const pdfWorkerSuccess = await handleWorkspaceIndexWorkerRequest({
+          requestId: 'worker-contract-pdf-success',
+          action: 'prepare_file',
+          payload: {
+            workspaceId: 'workspace-index-worker-contract',
+            documentId: 'worker-contract-pdf-document',
+            filePath: pdfFilePath,
+            documentName: '深度学习.pdf',
+            cachedSplit: pdfSplitSnapshot,
+            cachedVectors: {
+              contentHash: pdfContentHash,
+              fileExt: '.pdf',
+              modelName: 'cached-model',
+              vectors: pdfSplitSnapshot.chunks.map(() => [0.1, 0.2, 0.3])
+            }
+          }
+        })
         const workerFailure = await handleWorkspaceIndexWorkerRequest({
           ...workerRequest,
           requestId: 'worker-contract-error',
@@ -163,6 +193,7 @@ parentPort.on('message', (request) => {
           ),
           hardLimitError,
           workerSuccess,
+          pdfWorkerSuccess,
           workerFailure,
           exitError,
           exitRecovery
@@ -205,6 +236,19 @@ parentPort.on('message', (request) => {
             name: 'worker-success-returns-main-process-persistable-payload',
             message:
               'worker 成功时应返回 split/chunks/vectors，供 main process 后续写 DocumentStore 与 LanceDB。',
+            data: result
+          }
+        )
+
+        runtime.assertThat(
+          result.pdfWorkerSuccess.ok &&
+            result.pdfWorkerSuccess.payload?.fileExt === '.pdf' &&
+            result.pdfWorkerSuccess.payload.chunkCount > 0 &&
+            result.pdfWorkerSuccess.payload.chunks.some((chunk) => chunk.text.includes('深度学习')),
+          {
+            name: 'worker-pdf-success-uses-supported-loader-version',
+            message:
+              'workspace worker 应能解析共享 workspace fixture 中的 PDF，并返回可写入本地索引的 chunk，对齐 SET-WORKSPACE-004-AC1。',
             data: result
           }
         )

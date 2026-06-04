@@ -160,10 +160,11 @@
 
 #### WB-COMPOSER-002 键盘行为
 
-- 系统行为：`Enter` 发送，`Shift + Enter` 插入换行。
+- 系统行为：`Enter` 发送，`Shift + Enter` 插入换行；中文等输入法组词期间不应被输入区同步、光标恢复或候选刷新打断。
 - 验收：
   - `WB-COMPOSER-002-AC1` 按 `Enter` 后触发当前模式对应的发送逻辑。
   - `WB-COMPOSER-002-AC2` 按 `Shift + Enter` 后，输入区保留内容并新增换行，不触发发送。
+  - `WB-COMPOSER-002-AC3` 使用中文输入法快速输入时，输入区不会中断组词并遗留未确认的英文拼音字符。
 
 #### WB-COMPOSER-003 智能模式发送路径
 
