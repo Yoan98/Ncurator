@@ -68,11 +68,12 @@ describe('settings workspace e2e', () => {
       },
       assert: async (result, runtime) => {
         await runtime.assertThat(
-          result.firstCounts.actionableCount === 1 && result.firstCounts.failedCount === 1,
+          result.firstCounts.actionableCount === 1 &&
+            result.firstCounts.failedHint.includes('含失败 1 个'),
           {
             name: 'failed-count-is-actionable',
             message:
-              '文件失败后，文件 tab 的可索引数量应包含失败数量，对齐 SET-WORKSPACE-005-AC2。',
+              '文件失败后，可索引数量应包含失败数量，并以小号文案提示含失败数量，对齐 SET-WORKSPACE-005-AC2。',
             data: result
           }
         )

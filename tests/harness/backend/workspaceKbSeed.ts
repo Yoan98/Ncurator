@@ -5,7 +5,6 @@ import {
   SPLITTER_BIG_CHUNK_SETTING,
   SPLITTER_MINI_CHUNK_SIZE
 } from '../../../src/main/utils/constant'
-import { IngestionService } from '../../../src/main/services/ingestion/loader'
 import { WorkspaceKnowledgePrepareService } from '../../../src/main/services/workspace/WorkspaceKnowledgePrepareService'
 import { WorkspaceSourceService } from '../../../src/main/services/workspace/WorkspaceSourceService'
 import type {
@@ -205,7 +204,6 @@ export const seedWorkspaceKb = async (input: {
   const workspaceService = new WorkspaceSourceService()
   const cache = new WorkspaceKbFixtureCache()
   const prepareService = new WorkspaceKnowledgePrepareService({
-    ingestionService: IngestionService.getInstance(),
     embeddingService: input.runtime.embeddingService,
     documentsStore: input.runtime.documentsStore
   })

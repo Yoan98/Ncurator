@@ -20,10 +20,10 @@
   - 通过率：`6 / 6`
   - 检测时间：`2026-06-03 13:12:07 +08:00`
 - `workspace / files`
-  - 登记 case：`11`
-  - 通过率：`11 / 11`
-  - 检测时间：`2026-06-04 12:01:40 +08:00`
-  - 备注：既有 8 条沿用上一轮通过结论；本轮补充通过 `workspace-prepare-real-fixture-refresh`、`workspace-prepare-failed-retry`、`workspace-prepare-file-failure-isolated` 三条真实工作区更新索引 E2E。
+  - 登记 case：`12`
+  - 通过率：`12 / 12`
+  - 检测时间：`2026-06-04 13:51:28 +08:00`
+  - 备注：本轮新增并通过 `workspace-index-worker-contract`；重跑通过 `workspace-prepare-real-fixture-refresh`、`workspace-prepare-failed-retry`、`workspace-prepare-file-failure-isolated`、`workspace-detail-status-and-error` 四条关键 E2E，其余 7 条沿用上一轮通过结论。
 - `workspace / web`
   - 登记 case：`7`
   - 通过率：`7 / 7`
@@ -268,7 +268,7 @@ Settings 的正式测试顶层 suite 直接对齐 PRD 模块：
 - What：验证已有失败文件再次点击“更新索引”时会被纳入本次处理范围，并且文件 tab 的可索引数量包含失败数量。
 - Why：失败文件是用户最常见的重试对象，如果失败记录不再进入目标集，或者 UI 不把失败数算进可操作数量，用户会误判“没有东西可更新”。
 - How：创建真实工作空间并绑定共享 workspace fixture 的隔离副本，先通过测试注入或服务契约制造一个 `failed` 文件索引记录，再从 Settings 文件 tab 点击“更新索引”，读取 active job 的目标数量、文件摘要和页面可索引数字。
-- Oracle：本次 job 的目标数量包含失败文件，对齐 `SET-WORKSPACE-004-AC1`；页面“可索引”数字等于 `needs_index_count + failed_file_count`，且失败文件重试后状态发生收敛，对齐 `SET-WORKSPACE-004-AC2`、`SET-WORKSPACE-005-AC2`。
+- Oracle：本次 job 的目标数量包含失败文件，对齐 `SET-WORKSPACE-004-AC1`；页面“可索引”数字等于 `needs_index_count + failed_file_count`，并在存在失败文件时展示 `含失败 N 个` 辅助文案，且失败文件重试后状态发生收敛，对齐 `SET-WORKSPACE-004-AC2`、`SET-WORKSPACE-005-AC2`。
 - Not：不要求失败文件最终一定成功；允许因真实文件内容或环境依赖再次失败，但必须确认发生了重试。
 
 #### `workspace-prepare-file-failure-isolated`
@@ -295,11 +295,21 @@ Settings 的正式测试顶层 suite 直接对齐 PRD 模块：
 
 - 测试类型：`e2e`
 - 实现状态：`已实现`
-- What：验证文件 tab 持续展示需索引/失败摘要，并在索引失败后保留文件级错误状态。
+- What：验证文件 tab 用可索引数承载失败提示，并在索引失败后保留文件级错误状态；目录树文件项不再展示文件名下方辅助字项。
 - Why：文件问题通常发生在索引阶段，如果失败只留在控制台，用户无法判断资料是否可用。
 - How：创建一条 prepare 会失败的 fixture 工作空间，触发更新索引并读取刷新后的文件树响应。
-- Oracle：文件 tab 始终展示需索引数与失败数，对齐 `SET-WORKSPACE-005-AC2`；文件索引失败后，失败状态和错误信息保留在文件级记录中，对齐 `SET-WORKSPACE-008-AC2`。
+- Oracle：文件 tab 的可索引数字包含失败数量并展示 `含失败 N 个` 辅助文案，对齐 `SET-WORKSPACE-005-AC2`；文件索引失败后，失败状态和错误信息保留在文件级记录中，目录树文件项只保留文件名与状态标记，对齐 `SET-WORKSPACE-008-AC2`。
 - Not：不验证错误文案的逐字 UI 展示，也不验证恢复失败文件后的二次成功链路。
+
+#### `workspace-index-worker-contract`
+
+- 测试类型：`backend`
+- 实现状态：`已实现`
+- What：验证 workspace 文件索引 worker 协议与 embedding batch 限制。
+- Why：更新索引的稳定性依赖文件级 worker 响应和受控 batch，若 batch 过大或 worker 错误不能文件级收敛，真实工作区更新索引可能重新出现卡顿或闪退。
+- How：用纯函数覆盖 batch 组装规则；用 cached split/vector 请求覆盖 worker 成功响应；用不支持文件请求覆盖 worker JS error 返回；用临时 worker 脚本模拟非 0 exit 后重建 worker。
+- Oracle：batch 同时满足最多 `4` 个 chunk 和最多 `12000` 字符，单 chunk 超过 `12000` 时单独 embed，单 chunk 超过 `40000` 时失败；worker 成功返回 main 可写库的 split/chunks/vectors，worker JS error 返回文件级失败响应，worker exit 会让当前请求失败并在下一次文件请求中重建 worker，对齐 `SET-WORKSPACE-004-AC1`、`SET-WORKSPACE-004-AC2`。
+- Not：不验证真实 embedding 语义质量；不验证 native crash 进程隔离，若 worker_threads 仍遇到原生崩溃，应升级到进程级隔离方案。
 
 #### `workspace-interrupted-job-recovery-contract`
 

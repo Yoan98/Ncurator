@@ -7,6 +7,7 @@ import {
   SETTINGS_E2E_TIMEOUT_MS,
   createFixtureWorkspace,
   getSettingsLocator,
+  getWorkspaceIndexCounts,
   navigateToSettingsSection
 } from '../../../harness/e2e/settings'
 
@@ -77,9 +78,12 @@ describe('settings workspace e2e', () => {
           workspaceId,
           (response) => response.summary.failed_file_count === 1
         )
+        const counts = await getWorkspaceIndexCounts(page)
 
         return {
           summary: treeResponse.summary,
+          counts,
+          treeText: (await getSettingsLocator(page, importSelectors.workspaceTree).textContent()) || '',
           failedItems: treeResponse.items
             .filter((item) => item.kind === 'file' && item.index_status === 'failed')
             .map((item) => ({
@@ -90,10 +94,14 @@ describe('settings workspace e2e', () => {
       },
       assert: async (result, runtime) => {
         await runtime.assertThat(
-          result.summary.needs_index_count === 0 && result.summary.failed_file_count === 1,
+          result.summary.needs_index_count === 0 &&
+            result.summary.failed_file_count === 1 &&
+            result.counts.actionableCount === 1 &&
+            result.counts.failedHint.includes('含失败 1 个'),
           {
-            name: 'workspace-summary-shows-needs-index-and-failed-counts',
-            message: '文件 tab 应稳定展示需索引数与失败数，对齐 SET-WORKSPACE-005-AC2。',
+            name: 'workspace-summary-shows-actionable-count-with-failed-hint',
+            message:
+              '文件 tab 应用可索引数包含失败数量，并用辅助文案展示失败数量，对齐 SET-WORKSPACE-005-AC2。',
             data: result
           }
         )
@@ -109,6 +117,13 @@ describe('settings workspace e2e', () => {
             data: result
           }
         )
+
+        await runtime.assertThat(!result.treeText.includes('/'), {
+          name: 'workspace-tree-removes-file-subtitle-path',
+          message:
+            '目录树文件项不应再展示文件名下方的路径辅助字项，对齐 SET-WORKSPACE-008-AC2。',
+          data: result
+        })
       }
     })
   }, SETTINGS_E2E_TIMEOUT_MS)

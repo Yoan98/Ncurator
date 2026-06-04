@@ -7,7 +7,6 @@ import { runAiRuntimePreflight } from '../../../src/main/services/ai/runtimePref
 import type { AiApprovalBatchRequest, AiApprovalBatchResult } from '../../../src/main/services/ai/types'
 import type { AiRunContext } from '../../../src/main/services/ai/types'
 import { ModelService } from '../../../src/main/services/model/ModelService'
-import { IngestionService } from '../../../src/main/services/ingestion/loader'
 import { StorageService } from '../../../src/main/services/storage/StorageService'
 import { EmbeddingService } from '../../../src/main/services/vector/EmbeddingService'
 import { ensureEmbeddingReady } from '../../../src/main/services/vector/ensureEmbeddingReady'
@@ -106,7 +105,6 @@ export const createRealAiDepsFactory = async (input: {
   const modelService = ModelService.getInstance()
   const workspaceSourceService = new WorkspaceSourceService()
   const workspaceKnowledgePrepareService = new WorkspaceKnowledgePrepareService({
-    ingestionService: IngestionService.getInstance(),
     embeddingService,
     documentsStore: storageService.documents
   })

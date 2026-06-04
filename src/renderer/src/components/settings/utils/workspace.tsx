@@ -81,10 +81,7 @@ export const createWorkspaceTree = (entries: WorkspaceTreeEntry[]): WorkspaceTre
             />
           )}
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[14px] text-[#1F1F1F]">{entry.name}</div>
-            <div className="truncate text-[12px] text-[#999999]">
-              {entry.relative_path || entry.absolute_path}
-            </div>
+            <div className="truncate text-[14px] leading-6 text-[#1F1F1F]">{entry.name}</div>
           </div>
           {entry.kind === 'file' ? (
             entry.supported_for_index && statusMeta ? (

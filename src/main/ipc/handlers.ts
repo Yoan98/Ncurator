@@ -238,7 +238,6 @@ export function registerHandlers(services: {
   const docxApplyService = new DocxApplyService(storageService.docxApply)
   const workspaceService = new WorkspaceSourceService()
   const workspaceKnowledgePrepareService = new WorkspaceKnowledgePrepareService({
-    ingestionService,
     embeddingService,
     documentsStore
   })

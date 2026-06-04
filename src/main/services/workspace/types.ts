@@ -27,6 +27,14 @@ export type WorkspaceKnowledgeVectorSnapshot = {
   vectors: number[][]
 }
 
+export type WorkspaceKnowledgeVectorBatchInput = {
+  chunks: WorkspaceKnowledgeChunkSnapshot[]
+}
+
+export type WorkspaceKnowledgeVectorBuildResult = {
+  vectors: number[][]
+}
+
 export type WorkspaceKnowledgeChunkInput = {
   id: string
   text: string
@@ -60,6 +68,15 @@ export type WorkspaceKnowledgeIndexInput = {
   cache?: WorkspaceKnowledgeCache
 }
 
+export type WorkspaceKnowledgePrepareWorkerInput = {
+  workspaceId: string
+  documentId: string
+  filePath: string
+  documentName: string
+  cachedSplit?: WorkspaceKnowledgeSplitSnapshot | null
+  cachedVectors?: WorkspaceKnowledgeVectorSnapshot | null
+}
+
 export type WorkspaceKnowledgeIndexedChunk = WorkspaceKnowledgeChunkSnapshot & {
   id: string
 }
@@ -74,6 +91,43 @@ export type WorkspaceKnowledgeIndexResult = {
   usedCachedSplit: boolean
   usedCachedVectors: boolean
   chunks: WorkspaceKnowledgeIndexedChunk[]
+}
+
+export type WorkspaceKnowledgePrepareWorkerResult = Omit<
+  WorkspaceKnowledgeIndexResult,
+  'usedCachedSplit' | 'usedCachedVectors' | 'chunks'
+> & {
+  splitSnapshot: WorkspaceKnowledgeSplitSnapshot
+  vectorSnapshot: WorkspaceKnowledgeVectorSnapshot
+  chunks: WorkspaceKnowledgeChunkInput[]
+}
+
+export type WorkspaceIndexWorkerRequest = {
+  requestId: string
+  action: 'prepare_file'
+  payload: WorkspaceKnowledgePrepareWorkerInput
+}
+
+export type WorkspaceIndexWorkerResponse = {
+  requestId: string
+  ok: boolean
+  payload?: WorkspaceKnowledgePrepareWorkerResult
+  error?: string
+}
+
+export type WorkspaceIndexWorkerPendingRequest = {
+  resolve: (response: WorkspaceIndexWorkerResponse) => void
+  reject: (error: Error) => void
+  timeout: NodeJS.Timeout
+}
+
+export type WorkspaceIndexWorkerRequestHandler = (
+  request: WorkspaceIndexWorkerRequest
+) => Promise<WorkspaceIndexWorkerResponse>
+
+export type WorkspaceIndexWorkerClientOptions = {
+  workerUrl?: URL
+  fallbackHandler?: WorkspaceIndexWorkerRequestHandler
 }
 
 export type WorkspaceTreeScanResult = {

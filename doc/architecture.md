@@ -36,6 +36,7 @@
 - 进程分工
   - Renderer 负责 UI 展示与交互
   - Main 负责 AI 编排、数据库访问、资料处理和审阅流程
+  - Workspace 文件索引中，Main 负责扫描、任务状态和 LanceDB/DocumentStore 写入，`worker_threads` 负责文件解析、split 和 embedding
   - Shared 负责 IPC 契约与跨进程共享类型
 
 ## 3. 核心模块

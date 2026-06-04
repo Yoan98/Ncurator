@@ -490,7 +490,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                   </Tooltip>
                                 </div>
 
-                                <div className="mt-3 grid grid-cols-2 gap-2 text-[12px] text-[#666666]">
+                                <div className="mt-3 text-[12px] text-[#666666]">
                                   <div className="ui-inset px-3 py-3">
                                     <div className="inline-flex items-center gap-1.5">
                                       <HiArrowPath className="h-4 w-4 text-[#AD7B18]" />
@@ -502,18 +502,14 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                     >
                                       {selectedWorkspaceActionableIndexCount}
                                     </div>
-                                  </div>
-                                  <div className="ui-inset px-3 py-3">
-                                    <div className="inline-flex items-center gap-1.5">
-                                      <HiOutlineTrash className="h-4 w-4 text-[#B5455D]" />
-                                      <span>失败</span>
-                                    </div>
-                                    <div
-                                      className="mt-1 text-[16px] font-semibold text-[#1F1F1F]"
-                                      data-testid={importSelectors.workspaceFailedIndexCount}
-                                    >
-                                      {selectedWorkspaceSummary.failed_file_count}
-                                    </div>
+                                    {selectedWorkspaceSummary.failed_file_count > 0 ? (
+                                      <div
+                                        className="mt-1 text-[11px] text-[#B5455D]"
+                                        data-testid={importSelectors.workspaceActionableFailedHint}
+                                      >
+                                        含失败 {selectedWorkspaceSummary.failed_file_count} 个
+                                      </div>
+                                    ) : null}
                                   </div>
                                 </div>
 

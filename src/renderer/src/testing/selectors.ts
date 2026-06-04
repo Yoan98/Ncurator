@@ -36,7 +36,7 @@ export const importSelectors = {
   workspaceQuickScanButton: 'import-workspace-quick-scan-button',
   workspaceQuickPrepareButton: 'import-workspace-quick-prepare-button',
   workspaceActionableIndexCount: 'import-workspace-actionable-index-count',
-  workspaceFailedIndexCount: 'import-workspace-failed-index-count',
+  workspaceActionableFailedHint: 'import-workspace-actionable-failed-hint',
   workspaceIndexJobProgress: 'import-workspace-index-job-progress',
   workspaceRemoveButton: 'import-workspace-remove-button',
   workspaceTree: 'import-workspace-tree',

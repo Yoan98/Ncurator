@@ -193,15 +193,16 @@ export const waitForFileIndexJobIdle = async (
 
 export const getWorkspaceIndexCounts = async (
   page: Page
-): Promise<{ actionableCount: number; failedCount: number }> => {
+): Promise<{ actionableCount: number; failedHint: string }> => {
+  const failedHintLocator = getSettingsLocator(page, importSelectors.workspaceActionableFailedHint)
   return {
     actionableCount: Number(
       (await getSettingsLocator(page, importSelectors.workspaceActionableIndexCount).textContent()) ||
         0
     ),
-    failedCount: Number(
-      (await getSettingsLocator(page, importSelectors.workspaceFailedIndexCount).textContent()) || 0
-    )
+    failedHint: (await failedHintLocator.count())
+      ? (await failedHintLocator.textContent()) || ''
+      : ''
   }
 }
 
