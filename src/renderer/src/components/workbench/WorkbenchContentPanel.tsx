@@ -13,11 +13,7 @@ import type { DocxApplyRecord, SearchResult } from '../../../../shared/types'
 import TextHighlighter from '../TextHighlighter'
 import FileRender, { FileRenderViewer } from '../fileRenders'
 import WorkbenchApplyPanel from './WorkbenchApplyPanel'
-import type {
-  SearchWorkbenchTurn,
-  WorkbenchContentPanelState,
-  WorkbenchFileRef
-} from './types'
+import type { SearchWorkbenchTurn, WorkbenchContentPanelState, WorkbenchFileRef } from './types'
 import { workbenchSelectors } from '../../testing/selectors'
 
 type WorkbenchContentPanelProps = {
@@ -194,7 +190,7 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
                               {relevancePercent !== null ? (
                                 <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-[#D97757]">
                                   <HiSparkles className="h-3.5 w-3.5" />
-                                  相关度 {relevancePercent}%
+                                  <span>{relevancePercent}%</span>
                                 </span>
                               ) : null}
                             </div>
