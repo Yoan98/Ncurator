@@ -1,8 +1,17 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Button, Empty, Modal } from 'antd'
-import { HiOutlineMagnifyingGlass } from 'react-icons/hi2'
-import type { DocxApplyRecord } from '../../../../shared/types'
-import EmbeddedFileViewer from '../fileRenders/EmbeddedFileViewer'
+import { Button, Empty, Tooltip } from 'antd'
+import {
+  HiArrowTopRightOnSquare,
+  HiDocumentText,
+  HiEye,
+  HiGlobeAlt,
+  HiMapPin,
+  HiOutlineMagnifyingGlass,
+  HiSparkles
+} from 'react-icons/hi2'
+import type { DocxApplyRecord, SearchResult } from '../../../../shared/types'
+import TextHighlighter from '../TextHighlighter'
+import FileRender, { FileRenderViewer } from '../fileRenders'
 import WorkbenchApplyPanel from './WorkbenchApplyPanel'
 import type {
   SearchWorkbenchTurn,
@@ -26,6 +35,35 @@ type WorkbenchContentPanelProps = {
   onRevealPath: (filePath: string) => Promise<void>
 }
 
+const createSearchTurnSnapshot = (
+  state: Extract<WorkbenchContentPanelState, { kind: 'search_list' }>,
+  results: SearchResult[]
+): SearchWorkbenchTurn => ({
+  query: state.query,
+  results,
+  tokens: state.tokens,
+  createdAt: Date.now()
+})
+
+const getRelevancePercent = (
+  result: SearchResult,
+  scoreExtrema: { min: number; max: number } | null
+): number | null => {
+  const rawScore = result._relevance_score ?? result._score
+  if (rawScore === undefined || !Number.isFinite(rawScore)) return null
+  if (rawScore >= 0 && rawScore <= 1) {
+    return Math.round(rawScore * 100)
+  }
+  if (rawScore > 1 && rawScore <= 100) {
+    return Math.round(rawScore)
+  }
+  if (!scoreExtrema || scoreExtrema.max === scoreExtrema.min) {
+    return 100
+  }
+  const ratio = (rawScore - scoreExtrema.min) / (scoreExtrema.max - scoreExtrema.min)
+  return Math.round(40 + ratio * 60)
+}
+
 const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
   state,
   activeApplyRecord,
@@ -47,12 +85,54 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
     setSelectedSearchIndex(0)
   }, [searchResetKey])
 
-  const selectedSearchResult = useMemo(() => {
-    if (state.kind !== 'search_list') return null
-    return state.results[selectedSearchIndex] || state.results[0] || null
-  }, [selectedSearchIndex, state])
+  const sortedSearchResults = useMemo(() => {
+    if (state.kind !== 'search_list') return []
+    const getRawScore = (result: SearchResult): number =>
+      result._relevance_score ?? result._score ?? Number.NEGATIVE_INFINITY
+    return [...state.results].sort((left, right) => getRawScore(right) - getRawScore(left))
+  }, [state])
 
-  const modalTitle = modalPreviewFile?.fileName || '文件预览'
+  const scoreExtrema = useMemo(() => {
+    if (state.kind !== 'search_list') return null
+    const scores = sortedSearchResults
+      .map((result) => result._relevance_score ?? result._score)
+      .filter((score): score is number => Number.isFinite(score))
+    if (scores.length === 0) return null
+    return {
+      min: Math.min(...scores),
+      max: Math.max(...scores)
+    }
+  }, [sortedSearchResults, state])
+
+  const modalDocuments = useMemo(
+    () =>
+      modalPreviewFile
+        ? [
+            {
+              filePath: modalPreviewFile.path,
+              fileName: modalPreviewFile.fileName,
+              metadata: modalPreviewFile.pageNumber
+                ? { pageNumber: modalPreviewFile.pageNumber }
+                : undefined
+            }
+          ]
+        : [],
+    [modalPreviewFile]
+  )
+
+  const previewDocuments = useMemo(
+    () =>
+      state.kind === 'file_preview'
+        ? [
+            {
+              filePath: state.file.path,
+              fileName: state.file.fileName,
+              metadata: state.file.pageNumber ? { pageNumber: state.file.pageNumber } : undefined
+            }
+          ]
+        : [],
+    [state]
+  )
 
   return (
     <>
@@ -82,8 +162,12 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
                 className="min-h-0 flex-1 space-y-2 overflow-auto pr-1"
                 data-testid={workbenchSelectors.searchResults}
               >
-                {state.results.map((result, index) => {
+                {sortedSearchResults.map((result, index) => {
                   const active = index === selectedSearchIndex
+                  const relevancePercent = getRelevancePercent(result, scoreExtrema)
+                  const isWeb = result.source_type === 'web'
+                  const resultPath = result.document?.file_path
+                  const turnSnapshot = createSearchTurnSnapshot(state, sortedSearchResults)
                   return (
                     <button
                       key={result.id}
@@ -97,86 +181,96 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
-                          <div className="text-[13px] font-medium text-[#1F1F1F]">
-                            {result.document_name}
+                          <div className="flex items-center gap-2">
+                            {isWeb ? (
+                              <HiGlobeAlt className="h-3.5 w-3.5 shrink-0 text-[#4F6B95]" />
+                            ) : (
+                              <HiDocumentText className="h-3.5 w-3.5 shrink-0 text-[#D97757]" />
+                            )}
+                            <div className="min-w-0 flex items-center gap-2">
+                              <span className="truncate text-[13px] font-medium text-[#1F1F1F]">
+                                {result.document_name}
+                              </span>
+                              {relevancePercent !== null ? (
+                                <span className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-[#D97757]">
+                                  <HiSparkles className="h-3.5 w-3.5" />
+                                  相关度 {relevancePercent}%
+                                </span>
+                              ) : null}
+                            </div>
                           </div>
-                          <div className="mt-2 line-clamp-4 text-xs leading-relaxed text-[#666666]">
-                            {result.text}
-                          </div>
+                          <TextHighlighter
+                            text={result.text}
+                            keywords={state.tokens}
+                            className="mt-2 line-clamp-6 text-xs leading-relaxed text-[#666666]"
+                          />
                         </div>
-                        <span className="rounded-full border border-[#E5E5E4] bg-[#F8F8F7] px-2.5 py-1 text-[11px] text-[#666666]">
-                          {result.source_type === 'web' ? '网页' : '本地'}
-                        </span>
+
+                        <div className="flex shrink-0 items-center gap-1">
+                          {isWeb ? (
+                            <Tooltip title="打开网页">
+                              <Button
+                                type="text"
+                                size="small"
+                                icon={<HiArrowTopRightOnSquare className="h-4 w-4" />}
+                                onClick={(event) => {
+                                  event.stopPropagation()
+                                  void onOpenSearchResult(turnSnapshot, index)
+                                }}
+                              />
+                            </Tooltip>
+                          ) : (
+                            <>
+                              <Tooltip title="预览文件">
+                                <Button
+                                  type="text"
+                                  size="small"
+                                  icon={<HiEye className="h-4 w-4" />}
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    void onOpenSearchResult(turnSnapshot, index)
+                                  }}
+                                />
+                              </Tooltip>
+                              <Tooltip title="定位文件">
+                                <Button
+                                  type="text"
+                                  size="small"
+                                  disabled={!resultPath}
+                                  icon={<HiMapPin className="h-4 w-4" />}
+                                  onClick={(event) => {
+                                    event.stopPropagation()
+                                    if (!resultPath) return
+                                    void onRevealPath(resultPath)
+                                  }}
+                                />
+                              </Tooltip>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </button>
                   )
                 })}
               </div>
-
-              {selectedSearchResult ? (
-                <div className="mt-4 rounded-[16px] border border-[#E5E5E4] bg-white px-4 py-4">
-                  <div className="text-[12px] font-medium uppercase tracking-[0.16em] text-[#999999]">
-                    当前命中
-                  </div>
-                  <div className="mt-3 text-[13px] font-semibold text-[#1F1F1F]">
-                    {selectedSearchResult.document_name}
-                  </div>
-                  <div className="mt-2 text-xs leading-6 text-[#666666]">
-                    {selectedSearchResult.text}
-                  </div>
-                  <div className="mt-4">
-                    <Button
-                      type="primary"
-                      onClick={() =>
-                        onOpenSearchResult(
-                          {
-                            query: state.query,
-                            results: state.results,
-                            tokens: state.tokens,
-                            createdAt: Date.now()
-                          },
-                          selectedSearchIndex
-                        )
-                      }
-                    >
-                      {selectedSearchResult.source_type === 'web' ? '打开网页' : '预览文件'}
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
             </div>
           ) : null}
 
           {state.kind === 'file_preview' ? (
             <div className="flex h-full min-h-0 flex-col">
-              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-[#E5E5E4] bg-[#FCFBF8] px-4 py-3">
+              <div className="flex shrink-0 items-center gap-3 border-b border-[#E5E5E4] bg-[#FCFBF8] px-4 py-3">
                 <div className="min-w-0">
                   <div className="truncate text-[13px] font-semibold text-[#1F1F1F]">
                     {state.file.fileName}
                   </div>
                   <div className="mt-1 truncate text-xs text-[#999999]">{state.file.path}</div>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Button size="small" onClick={() => void onOpenPath(state.file.path)}>
-                    系统打开
-                  </Button>
-                  <Button
-                    size="small"
-                    onClick={() => void onOpenWithApplication(state.file.path)}
-                  >
-                    其他应用
-                  </Button>
-                  <Button size="small" onClick={() => void onRevealPath(state.file.path)}>
-                    定位
-                  </Button>
-                </div>
               </div>
-              <div className="min-h-0 flex-1 bg-[#F5F3EE] p-3" data-testid={workbenchSelectors.documentView}>
-                <EmbeddedFileViewer
-                  filePath={state.file.path}
-                  fileName={state.file.fileName}
-                  pageNumber={state.file.pageNumber}
-                />
+              <div
+                className="min-h-0 flex-1 bg-[#F5F3EE] p-3"
+                data-testid={workbenchSelectors.documentView}
+              >
+                <FileRenderViewer documents={previewDocuments} />
               </div>
             </div>
           ) : null}
@@ -197,45 +291,13 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
         </div>
       </aside>
 
-      <Modal
-        title={modalTitle}
+      <FileRender
+        title={modalPreviewFile?.fileName || '文件预览'}
         open={Boolean(modalPreviewFile)}
         onCancel={onCloseModalPreview}
-        width="72vw"
-        data-testid={workbenchSelectors.previewModal}
-        footer={
-          modalPreviewFile ? (
-            [
-              <Button key="system" onClick={() => void onOpenPath(modalPreviewFile.path)}>
-                系统打开
-              </Button>,
-              <Button
-                key="external"
-                onClick={() => void onOpenWithApplication(modalPreviewFile.path)}
-              >
-                其他应用
-              </Button>,
-              <Button key="reveal" onClick={() => void onRevealPath(modalPreviewFile.path)}>
-                定位
-              </Button>,
-              <Button key="close" type="primary" onClick={onCloseModalPreview}>
-                关闭
-              </Button>
-            ]
-          ) : null
-        }
-        destroyOnClose
-      >
-        {modalPreviewFile ? (
-          <div className="h-[72vh] min-h-[480px] bg-[#F5F3EE] p-1">
-            <EmbeddedFileViewer
-              filePath={modalPreviewFile.path}
-              fileName={modalPreviewFile.fileName}
-              pageNumber={modalPreviewFile.pageNumber}
-            />
-          </div>
-        ) : null}
-      </Modal>
+        documents={modalDocuments}
+        modalTestId={workbenchSelectors.previewModal}
+      />
     </>
   )
 }

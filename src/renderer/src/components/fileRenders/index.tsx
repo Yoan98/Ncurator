@@ -1,216 +1,323 @@
-import React, { useEffect, useState, useRef } from 'react'
-import { Modal, Spin } from 'antd'
+import React, { useEffect, useState } from 'react'
+import { Empty, Modal, Spin } from 'antd'
 import DocViewer, { DocViewerRenderers } from 'react-doc-viewer'
 import type { IDocument } from 'react-doc-viewer'
 import CustomPDFRenderer from './pdf'
 import CustomMarkdownRenderer from './markdown'
 import CustomDocxRenderer from './docx'
 
-export interface FileRenderDocument extends IDocument {
+export type FileRenderMetadata = {
+  pageNumber?: number
+  anchorName?: string
+}
+
+export type FileRenderDocument = {
+  uri?: string
+  fileType?: string
+  fileData?: string | ArrayBuffer | Blob | File
   fileName?: string
-  filePath?: string // Add filePath support
-  metadata?: {
-    pageNumber?: number
-  }
-  // Standard IDocument has uri and fileData.
-  // We add 'file' for direct File object support which some custom renderers might use.
+  filePath?: string
+  metadata?: FileRenderMetadata
   file?: File | Blob
 }
 
-interface FileRenderProps {
+type LoadedFileRenderDocument = IDocument & {
+  fileName?: string
+  filePath?: string
+  metadata?: FileRenderMetadata
+  file?: File | Blob
+}
+
+type FileRenderViewerProps = {
+  documents: FileRenderDocument[]
+  emptyText?: string
+  className?: string
+}
+
+type FileRenderProps = {
   open: boolean
   documents: FileRenderDocument[]
   onCancel: () => void
+  title?: string
+  modalTestId?: string
 }
 
-const FileRender: React.FC<FileRenderProps> = React.memo(({ open, documents, onCancel }) => {
-  FileRender.displayName = 'FileRender'
-  const [loadedDocuments, setLoadedDocuments] = useState<FileRenderDocument[]>([])
+const getMimeType = (filename: string): string => {
+  const extension = filename.split('.').pop()?.toLowerCase()
+  switch (extension) {
+    case 'pdf':
+      return 'application/pdf'
+    case 'docx':
+      return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    case 'md':
+      return 'text/markdown'
+    case 'txt':
+      return 'text/plain'
+    default:
+      return 'application/octet-stream'
+  }
+}
+
+const getFileType = (filename: string): string => {
+  return filename.split('.').pop()?.toLowerCase() || ''
+}
+
+const getFileName = (document: FileRenderDocument): string => {
+  if (document.fileName) return document.fileName
+  if (document.file instanceof File && document.file.name) return document.file.name
+  if (document.fileData instanceof File && document.fileData.name) return document.fileData.name
+  if (document.filePath) {
+    const parts = document.filePath.split(/[\\/]/)
+    return parts[parts.length - 1] || 'document'
+  }
+  return 'document'
+}
+
+const createFileFromBlob = (blob: Blob, fileName: string): File => {
+  return blob instanceof File
+    ? blob
+    : new File([blob], fileName, {
+        type: blob.type || getMimeType(fileName)
+      })
+}
+
+const createObjectUrl = (file: File, createdUrls: string[]): string => {
+  const objectUrl = URL.createObjectURL(file)
+  createdUrls.push(objectUrl)
+  return objectUrl
+}
+
+const getSerializableFileData = (
+  fileData: FileRenderDocument['fileData']
+): string | ArrayBuffer | undefined => {
+  if (typeof fileData === 'string' || fileData instanceof ArrayBuffer) {
+    return fileData
+  }
+  return undefined
+}
+
+const prepareDocument = async (
+  document: FileRenderDocument,
+  createdUrls: string[]
+): Promise<LoadedFileRenderDocument | null> => {
+  const fileName = getFileName(document)
+  const fileType = document.fileType || getFileType(fileName)
+  const fileData = getSerializableFileData(document.fileData)
+  const sourceBlob =
+    document.file instanceof Blob
+      ? document.file
+      : document.fileData instanceof Blob
+        ? document.fileData
+        : null
+
+  if (sourceBlob) {
+    const file = createFileFromBlob(sourceBlob, fileName)
+    return {
+      ...document,
+      uri: document.uri || createObjectUrl(file, createdUrls),
+      fileData,
+      fileName,
+      fileType,
+      file,
+      metadata: document.metadata
+    }
+  }
+
+  if (document.filePath) {
+    const buffer = await window.api.readFile(document.filePath)
+    const file = new File([new Uint8Array(buffer)], fileName, {
+      type: getMimeType(fileName)
+    })
+    return {
+      ...document,
+      uri: createObjectUrl(file, createdUrls),
+      fileData,
+      fileName,
+      fileType,
+      file,
+      metadata: document.metadata
+    }
+  }
+
+  if (document.uri) {
+    return {
+      uri: document.uri,
+      fileType,
+      fileData,
+      fileName,
+      filePath: document.filePath,
+      metadata: document.metadata
+    }
+  }
+
+  return {
+    uri: '',
+    fileType,
+    fileData,
+    fileName,
+    filePath: document.filePath,
+    metadata: document.metadata
+  }
+}
+
+const usePreparedDocuments = (
+  documents: FileRenderDocument[]
+): { documents: LoadedFileRenderDocument[]; loading: boolean } => {
+  const [loadedDocuments, setLoadedDocuments] = useState<LoadedFileRenderDocument[]>([])
   const [loading, setLoading] = useState(false)
 
-  // Use ref to track created URLs for cleanup, avoiding closure stale state issues
-  const createdUrlsRef = useRef<string[]>([])
-  const isMountedRef = useRef(false)
-
   useEffect(() => {
-    isMountedRef.current = true
-    return () => {
-      isMountedRef.current = false
-    }
-  }, [])
+    let createdUrls: string[] = []
 
-  useEffect(() => {
-    // Cleanup previous URLs when documents change or modal closes
-    const cleanupUrls = () => {
-      createdUrlsRef.current.forEach((url) => URL.revokeObjectURL(url))
-      createdUrlsRef.current = []
+    const cleanupUrls = (): void => {
+      createdUrls.forEach((url) => URL.revokeObjectURL(url))
+      createdUrls = []
     }
 
-    if (!open || !documents || documents.length === 0) {
+    if (documents.length === 0) {
       cleanupUrls()
       setLoadedDocuments([])
-      return
+      setLoading(false)
+      return cleanupUrls
     }
 
-    const loadFiles = async () => {
-      setLoading(true)
+    let cancelled = false
 
-      // Cleanup previous URLs before loading new ones
+    const loadDocuments = async (): Promise<void> => {
+      setLoading(true)
       cleanupUrls()
 
       try {
-        const newDocs = await Promise.all(
-          documents.map(async (doc) => {
-            // If already has file object, return as is
-            if (doc.file) return doc
-
-            // If has filePath, load it via IPC
-            if (doc.filePath) {
-              try {
-                const buffer = await window.api.readFile(doc.filePath)
-                const blob = new Blob([new Uint8Array(buffer)], {
-                  type: getMimeType(doc.fileName || doc.filePath || '')
-                })
-
-                // Create a File object if possible, or just use Blob with name
-                const file = new File([blob], doc.fileName || 'document', {
-                  type: getMimeType(doc.fileName || doc.filePath || '')
-                })
-
-                // Create object URL for uri (required by react-doc-viewer)
-                const objectUrl = URL.createObjectURL(file)
-                createdUrlsRef.current.push(objectUrl)
-
-                return {
-                  ...doc,
-                  uri: objectUrl,
-                  file: file,
-                  fileType: getFileType(doc.fileName || doc.filePath || '')
-                }
-              } catch (e) {
-                console.error('Failed to load file:', doc.filePath, e)
-                return doc
-              }
-            }
-
-            return doc
-          })
+        const preparedDocuments = await Promise.all(
+          documents.map((document) => prepareDocument(document, createdUrls))
         )
-
-        if (isMountedRef.current) {
-          setLoadedDocuments(newDocs)
+        const validDocuments = preparedDocuments.filter(
+          (document): document is LoadedFileRenderDocument => document !== null && Boolean(document.uri)
+        )
+        if (!cancelled) {
+          setLoadedDocuments(validDocuments)
         } else {
-          // If unmounted, cleanup immediately
           cleanupUrls()
         }
       } catch (error) {
-        console.error('Error loading documents:', error)
+        console.error('Failed to load file preview', error)
+        if (!cancelled) {
+          setLoadedDocuments([])
+        }
       } finally {
-        if (isMountedRef.current) {
+        if (!cancelled) {
           setLoading(false)
         }
       }
     }
 
-    loadFiles()
+    void loadDocuments()
 
-    // Cleanup on unmount or re-run
     return () => {
-      // We don't revoke here immediately if it's just a re-render,
-      // but we do if the component is unmounting or dependency changing.
-      // However, since we are cleaning up at the start of the effect,
-      // we only need to ensure cleanup on unmount.
-      // But useEffect cleanup runs before the next effect run.
-      // So we can just rely on the next run's cleanup or explicit cleanup call.
-
-      // Actually, to be safe and avoid memory leaks if the component unmounts:
-      // We should verify if we want to cleanup.
-      // The cleanup function runs:
-      // 1. Before re-running the effect (dependencies changed)
-      // 2. When component unmounts
-
-      // If dependencies changed, we want to cleanup old URLs.
-      // If unmounts, we want to cleanup.
-      // So yes, we should cleanup here.
-      // BUT, we need to be careful not to cleanup URLs that are still being used if the logic was slightly different.
-      // In this case, we regenerate everything when documents/open changes, so it is safe to cleanup.
-
-      // However, there is a race condition:
-      // loadFiles is async. If the effect cleanup runs while loadFiles is pending,
-      // we need to make sure we don't set state, AND we cleanup any URLs created in that pending promise.
-      // We handle "don't set state" via isMountedRef.
-      // We handle "cleanup created URLs" via logic inside loadFiles (if !isMountedRef.current cleanup).
-
-      // For URLs created in previous successful runs:
-      createdUrlsRef.current.forEach((url) => URL.revokeObjectURL(url))
-      createdUrlsRef.current = []
+      cancelled = true
+      cleanupUrls()
     }
-  }, [documents, open])
+  }, [documents])
 
-  // Helper to guess mime type
-  const getMimeType = (filename: string) => {
-    const ext = filename.split('.').pop()?.toLowerCase()
-    switch (ext) {
-      case 'pdf':
-        return 'application/pdf'
-      case 'docx':
-        return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-      case 'md':
-        return 'text/markdown'
-      default:
-        return 'application/octet-stream'
-    }
+  return {
+    documents: loadedDocuments,
+    loading
+  }
+}
+
+const renderers = [CustomPDFRenderer, CustomMarkdownRenderer, CustomDocxRenderer, ...DocViewerRenderers]
+
+export const FileRenderViewer: React.FC<FileRenderViewerProps> = ({
+  documents,
+  emptyText = '选择一个文件后在这里查看内容。',
+  className
+}) => {
+  const { documents: loadedDocuments, loading } = usePreparedDocuments(documents)
+
+  if (documents.length === 0) {
+    return (
+      <div
+        className={`flex h-full items-center justify-center rounded-2xl border border-dashed border-[#E5E5E4] bg-[#FAFAF9] ${
+          className || ''
+        }`}
+      >
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={<span className="text-[#666666]">{emptyText}</span>}
+        />
+      </div>
+    )
   }
 
-  // Helper to guess file extension for react-doc-viewer
-  const getFileType = (filename: string) => {
-    return filename.split('.').pop()?.toLowerCase() || ''
+  if (loading) {
+    return (
+      <div
+        className={`flex h-full items-center justify-center rounded-2xl border border-[#E5E5E4] bg-white ${
+          className || ''
+        }`}
+      >
+        <Spin size="large" />
+      </div>
+    )
   }
 
-  // If no documents, don't render anything (or render empty modal)
-  if (!documents || documents.length === 0) {
-    return null
+  if (loadedDocuments.length === 0) {
+    return (
+      <div
+        className={`flex h-full items-center justify-center rounded-2xl border border-[#E5E5E4] bg-white ${
+          className || ''
+        }`}
+      >
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="文件暂时无法预览" />
+      </div>
+    )
   }
 
   return (
+    <div
+      className={`h-full overflow-hidden rounded-2xl border border-[#E5E5E4] bg-white ${
+        className || ''
+      }`}
+    >
+      <DocViewer
+        className="h-full w-full"
+        style={{ height: '100%', width: '100%' }}
+        documents={loadedDocuments}
+        pluginRenderers={renderers}
+        config={{
+          header: {
+            disableHeader: true,
+            disableFileName: true,
+            retainURLParams: false
+          }
+        }}
+      />
+    </div>
+  )
+}
+
+const FileRender: React.FC<FileRenderProps> = ({
+  open,
+  documents,
+  onCancel,
+  title,
+  modalTestId
+}) => {
+  return (
     <Modal
       className="file-preview-modal"
-      width="90vw"
-      style={{ top: 20 }}
-      styles={{ body: { height: '85vh', padding: 0, overflow: 'hidden' } }}
+      width="72vw"
+      styles={{ body: { height: '72vh', minHeight: 480, padding: 4, overflow: 'hidden' } }}
       destroyOnClose
       footer={null}
-      centered
-      title={documents[0]?.fileName || 'File Viewer'}
+      title={title || documents[0]?.fileName || '文件预览'}
       open={open}
       onCancel={onCancel}
+      data-testid={modalTestId}
     >
-      {loading ? (
-        <div className="h-full w-full flex items-center justify-center">
-          <Spin size="large" tip="Loading file..." />
-        </div>
-      ) : (
-        <DocViewer
-          className="h-full w-full"
-          style={{ height: '100%', width: '100%' }}
-          documents={loadedDocuments}
-          pluginRenderers={[
-            CustomPDFRenderer,
-            CustomMarkdownRenderer,
-            CustomDocxRenderer,
-            ...DocViewerRenderers
-          ]}
-          config={{
-            header: {
-              disableHeader: true,
-              disableFileName: true,
-              retainURLParams: false
-            }
-          }}
-        />
-      )}
+      <FileRenderViewer documents={documents} />
     </Modal>
   )
-})
+}
 
 export default FileRender

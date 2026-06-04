@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo } from 'react'
+import React, { useMemo } from 'react'
 import { Button, Spin } from 'antd'
 import type { DocxApplyRecord } from '../../../../shared/types'
-import EmbeddedFileViewer from '../fileRenders/EmbeddedFileViewer'
+import { FileRenderViewer } from '../fileRenders'
 import { DOCX_APPLY_STATUS_META } from './constants'
 import type { DocxApplyWorkspaceTab } from './types'
 import { workbenchSelectors } from '../../testing/selectors'
@@ -32,10 +32,16 @@ const WorkbenchApplyPanel: React.FC<WorkbenchApplyPanelProps> = ({
   const statusMeta = record ? DOCX_APPLY_STATUS_META[record.status] : null
   const canRevert = Boolean(record && record.status === 'applied' && !reverting)
 
-  useEffect(() => undefined, [record?.id])
-
-  const viewerTarget = useMemo(
-    () => ({ filePath: record?.preview_diff_artifact_path, fileName: record?.source_name }),
+  const viewerDocuments = useMemo(
+    () =>
+      record?.preview_diff_artifact_path && record.source_name
+        ? [
+            {
+              filePath: record.preview_diff_artifact_path,
+              fileName: record.source_name
+            }
+          ]
+        : [],
     [record]
   )
 
@@ -133,11 +139,7 @@ const WorkbenchApplyPanel: React.FC<WorkbenchApplyPanelProps> = ({
       ) : null}
 
       <div className="min-h-0 flex-1 bg-[#F5F3EE] p-3">
-        <EmbeddedFileViewer
-          filePath={viewerTarget.filePath}
-          fileName={viewerTarget.fileName}
-          emptyText="当前文件暂时不可预览。"
-        />
+        <FileRenderViewer documents={viewerDocuments} emptyText="当前文件暂时不可预览。" />
       </div>
     </div>
   )

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import jsPreviewDocx from '@js-preview/docx'
+import type { DocRendererProps, IDocument } from 'react-doc-viewer'
 import '@js-preview/docx/lib/index.css'
 import './index.css'
 import { workbenchSelectors } from '../../testing/selectors'
@@ -9,18 +10,10 @@ type DocViewerMetadata = {
   pageNumber?: number
 }
 
-type DocViewerDocument = {
+type DocViewerDocument = Omit<IDocument, 'fileData'> & {
   file?: File | Blob
-  uri?: string
+  fileData?: string | ArrayBuffer | Blob | File
   metadata?: DocViewerMetadata
-}
-
-type DocViewerMainState = {
-  currentDocument?: DocViewerDocument | null
-}
-
-type CustomDocxRendererProps = {
-  mainState: DocViewerMainState
 }
 
 const scrollToAnchor = (container: HTMLDivElement, anchorName?: string): void => {
@@ -42,8 +35,8 @@ const scrollToAnchor = (container: HTMLDivElement, anchorName?: string): void =>
   })
 }
 
-const CustomDocxRenderer = ({ mainState }: CustomDocxRendererProps) => {
-  const { currentDocument } = mainState
+const CustomDocxRenderer = ({ mainState }: DocRendererProps) => {
+  const currentDocument = mainState.currentDocument as DocViewerDocument | undefined
   const containerRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -53,6 +46,14 @@ const CustomDocxRenderer = ({ mainState }: CustomDocxRendererProps) => {
     let cancelled = false
     const renderDocx = async (): Promise<void> => {
       let file = currentDocument.file
+      if (!file && currentDocument.fileData instanceof Blob) {
+        file = currentDocument.fileData
+      }
+      if (!file && currentDocument.fileData instanceof ArrayBuffer) {
+        file = new Blob([currentDocument.fileData], {
+          type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        })
+      }
       if (!file && currentDocument.uri) {
         try {
           const response = await fetch(currentDocument.uri)
@@ -65,12 +66,7 @@ const CustomDocxRenderer = ({ mainState }: CustomDocxRendererProps) => {
       if (!file || cancelled) return
 
       container.innerHTML = ''
-      const previewer = jsPreviewDocx.init(container, {
-        renderChanges: true,
-        inWrapper: true,
-        ignoreWidth: true,
-        ignoreHeight: true
-      })
+      const previewer = jsPreviewDocx.init(container)
       try {
         await previewer.preview(file)
         if (!cancelled) {

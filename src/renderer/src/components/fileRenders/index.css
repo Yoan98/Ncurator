@@ -13,17 +13,3 @@
     color: #b42318 !important;
     text-decoration: line-through !important;
 }
-
-.docx-content .docx-wrapper {
-    align-items: stretch !important;
-    background: transparent !important;
-    padding: 12px !important;
-    padding-bottom: 12px !important;
-}
-
-.docx-content .docx-wrapper > section.docx {
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08) !important;
-    margin-bottom: 14px !important;
-    max-width: none !important;
-    width: 100% !important;
-}
