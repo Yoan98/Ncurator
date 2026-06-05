@@ -1,28 +1,11 @@
 import type {
+  AiRunEvent,
   IpcJsonArray,
   IpcJsonObject,
   IpcJsonValue,
   SearchResult
 } from '../../../../shared/types'
-import type { AssistantTurnStep, WorkbenchFileRef } from './types'
-
-const TOOL_LABEL_MAP: Record<string, string> = {
-  kb_search: 'search',
-  kb_list_documents: 'search',
-  docx_search: 'search',
-  docx_read_blocks: 'read',
-  docx_outline: 'read',
-  docx_history: 'read',
-  docx_edit: 'edit',
-  terminal_run: 'command',
-  read_file: 'read',
-  write_file: 'edit',
-  edit_file: 'edit',
-  run_command: 'command',
-  terminal: 'command',
-  preview: 'preview',
-  validate: 'validate'
-}
+import type { AssistantProcessItem, WorkbenchFileRef } from './types'
 
 const getPageNumberFromMetadata = (metadata: SearchResult['metadata']): number | undefined => {
   if (!metadata) return undefined
@@ -82,13 +65,116 @@ const createFileRefFromObject = (
   }
 }
 
-export const getToolBadge = (toolName?: string, action?: string): string => {
-  if (!toolName && !action) return 'step'
-  if (toolName && TOOL_LABEL_MAP[toolName]) return TOOL_LABEL_MAP[toolName]
-  if (action === 'call_tool') return 'tool'
-  if (action === 'deliver_result') return 'deliver'
-  if (action === 'learn_skill') return 'learn'
-  return toolName || action || 'step'
+export const getAssistantToolNarrative = (toolName?: string): string => {
+  if (!toolName) return '俺在继续处理任务'
+  if (toolName === 'terminal_run' || toolName === 'terminal') return '俺在跑命令呢，等等俺'
+  if (toolName === 'docx_edit') return '俺正在写 docx 中'
+  if (toolName === 'docx_search') return '俺在 docx 里找相关内容'
+  if (
+    toolName === 'docx_read_blocks' ||
+    toolName === 'docx_outline' ||
+    toolName === 'docx_history'
+  ) {
+    return '俺在读 docx 内容'
+  }
+  if (toolName === 'kb_search' || toolName === 'kb_list_documents') return '俺在资料里找线索'
+  if (toolName.includes('search')) return '俺在找相关线索'
+  if (toolName.includes('read')) return '俺在读取资料'
+  if (toolName.includes('write') || toolName.includes('edit')) return '俺正在写文件'
+  if (toolName.includes('command') || toolName.includes('terminal')) return '俺在跑命令呢，等等俺'
+  return '俺在调用工具处理任务'
+}
+
+export const buildAssistantProcessText = (event: AiRunEvent): string | null => {
+  if (event.type === 'human_step') {
+    if (event.toolName) return getAssistantToolNarrative(event.toolName)
+    if (event.action === 'learn_skill') return '俺在补齐要用的能力'
+    if (event.action === 'deliver_result') return '俺在整理最后的回答'
+    if (event.publicNarrative.trim()) return event.publicNarrative
+    return event.summary || '俺在判断下一步怎么做'
+  }
+  if (event.type === 'tool_call_started') return getAssistantToolNarrative(event.toolName)
+  if (event.type === 'tool_call_result') {
+    if (event.error || event.result?.ok === false) return '这一步没跑通，俺在换个办法'
+    return '这一步处理完了'
+  }
+  if (event.type === 'context_compaction_started') return '内容有点多，俺先整理下上下文'
+  if (event.type === 'context_compaction_completed') return '上下文整理好了，俺继续'
+  if (event.type === 'file_artifact') return '文件处理好了，俺放到修改记录里了'
+  if (event.type === 'workspace_required') return '这一步需要先补充工作区'
+  if (event.type === 'runtime_issue') return event.message || '当前运行被阻塞了'
+  if (event.type === 'approval_batch_required') return '这一步要你确认后俺才能继续'
+  if (event.type === 'approval_batch_decision') return '审核结果俺收到了'
+  if (event.type === 'run_failed') return '任务失败了，俺把原因放下面'
+  if (event.type === 'run_cancelled') return '任务已取消'
+  if (event.type === 'run_completed') return '处理完成'
+  return null
+}
+
+export const createAssistantThinkingItem = (messageId: string): AssistantProcessItem => ({
+  id: `${messageId}:thinking`,
+  text: '让俺想想',
+  status: 'running',
+  createdAt: Date.now(),
+  sourceEventType: 'thinking'
+})
+
+export const createAssistantProcessItem = (
+  event: AiRunEvent,
+  options?: { id?: string; text?: string }
+): AssistantProcessItem | null => {
+  const text = options?.text || buildAssistantProcessText(event)
+  if (!text) return null
+  const fallbackId =
+    event.type === 'human_step'
+      ? `${event.taskId}:${event.stepIndex}`
+      : event.type === 'tool_call_started' || event.type === 'tool_call_result'
+        ? event.toolCallId
+        : event.type === 'file_artifact'
+          ? event.artifactId
+          : `${event.runId}:${event.type}`
+  const status =
+    event.type === 'approval_batch_required' || event.type === 'workspace_required'
+      ? 'waiting'
+      : event.type === 'run_failed' ||
+          event.type === 'run_cancelled' ||
+          event.type === 'runtime_issue' ||
+          (event.type === 'tool_call_result' && (event.error || event.result?.ok === false))
+        ? 'failed'
+        : event.type === 'tool_call_started' || event.type === 'context_compaction_started'
+          ? 'running'
+          : 'completed'
+
+  return {
+    id: options?.id || fallbackId,
+    text,
+    status,
+    createdAt:
+      'createdAt' in event
+        ? event.createdAt
+        : 'completedAt' in event
+          ? event.completedAt
+          : 'decidedAt' in event
+            ? event.decidedAt
+            : Date.now(),
+    sourceEventType: event.type
+  }
+}
+
+export const mergeAssistantProcessItem = (
+  current: AssistantProcessItem[],
+  next: AssistantProcessItem
+): AssistantProcessItem[] => {
+  const nextItems = current.filter((item) => item.id !== next.id)
+  if (next.status !== 'running') {
+    return [
+      ...nextItems.map((item) =>
+        item.status === 'running' ? { ...item, status: 'completed' as const } : item
+      ),
+      next
+    ]
+  }
+  return [...nextItems, next]
 }
 
 export const dedupeFileRefs = (items: WorkbenchFileRef[]): WorkbenchFileRef[] => {
@@ -162,8 +248,4 @@ export const extractSearchResultsFromToolOutput = (output: IpcJsonValue): Search
 export const formatSessionDate = (timestamp: number): string => {
   const date = new Date(timestamp)
   return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })
-}
-
-export const getStepFiles = (step: AssistantTurnStep): WorkbenchFileRef[] => {
-  return dedupeFileRefs(step.files)
 }

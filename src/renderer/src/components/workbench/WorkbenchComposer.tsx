@@ -796,7 +796,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                   label: (
                     <span className="flex items-center gap-1.5 text-[12px]">
                       <HiSparkles className="h-3.5 w-3.5" />
-                      <span>智能</span>
+                      <span>大聪明</span>
                     </span>
                   )
                 },
@@ -805,7 +805,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                   label: (
                     <span className="flex items-center gap-1.5 text-[12px]">
                       <HiMagnifyingGlass className="h-3.5 w-3.5" />
-                      <span>搜索</span>
+                      <span>没头脑</span>
                     </span>
                   )
                 }

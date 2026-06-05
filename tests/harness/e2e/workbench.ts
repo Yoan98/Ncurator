@@ -23,7 +23,7 @@ export const switchWorkbenchMode = async (
   mode: 'ai' | 'search'
 ): Promise<void> => {
   await getWorkbenchLocator(page, workbenchSelectors.modeSwitch).click()
-  const optionName = mode === 'ai' ? '智能' : '搜索'
+  const optionName = mode === 'ai' ? '大聪明' : '没头脑'
   const dropdownOption = page
     .locator('.ant-select-dropdown .ant-select-item-option')
     .filter({ hasText: optionName })

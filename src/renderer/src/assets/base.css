@@ -167,6 +167,25 @@ mark {
   animation: slideInRight 0.3s ease-out forwards;
 }
 
+@keyframes workbenchThinkingFlow {
+  0% {
+    background-position: 120% 0;
+  }
+  100% {
+    background-position: -120% 0;
+  }
+}
+
+.workbench-thinking-shimmer {
+  color: #9f6b56;
+  background-image: linear-gradient(90deg, #9f6b56 0%, #d97757 42%, #f0b39b 50%, #d97757 58%, #9f6b56 100%);
+  background-size: 220% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: workbenchThinkingFlow 1.5s ease-in-out infinite;
+}
+
 .workbench-scope-select.ant-select .ant-select-selector {
   min-height: 40px !important;
   border-radius: 16px !important;

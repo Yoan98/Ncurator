@@ -86,6 +86,9 @@ importers:
       pdf-parse:
         specifier: ^1.1.1
         version: 1.1.1
+      pdfjs-dist:
+        specifier: 5.4.296
+        version: 5.4.296
       react-doc-viewer:
         specifier: ^0.1.15
         version: 0.1.15(@babel/core@7.28.5)(@types/react@19.2.7)(encoding@0.1.13)(react-dom@19.2.3(react@19.2.3))(react-is@18.3.1)(react@19.2.3)

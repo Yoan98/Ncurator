@@ -10,7 +10,6 @@ import {
   HiOutlineViewColumns,
   HiRectangleGroup,
   HiTrash,
-  HiUser,
   HiViewColumns
 } from 'react-icons/hi2'
 import type {
@@ -38,7 +37,6 @@ import {
 } from '../components/workbench/constants'
 import { DOCX_APPLY_STATUS_META, FILE_ORIGIN_LABELS } from '../components/workbench/constants'
 import type {
-  AssistantTurnStep,
   AssistantTurnViewModel,
   WorkbenchContextUsage,
   DocxApplyWorkspaceTab,
@@ -48,12 +46,14 @@ import type {
   WorkbenchMode
 } from '../components/workbench/types'
 import {
+  createAssistantProcessItem,
+  createAssistantThinkingItem,
   dedupeFileRefs,
   extractReadableFilesFromToolOutput,
   extractSearchResultsFromToolOutput,
   formatSessionDate,
   getSearchResultFileRef,
-  getToolBadge
+  mergeAssistantProcessItem
 } from '../components/workbench/utils'
 import {
   groupApplyTargetsByRunId,
@@ -84,10 +84,10 @@ const createEmptyPanel = (): WorkbenchContentPanelState => ({
 
 const createAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
   messageId,
-  finalAnswer: '',
   status: 'running',
-  steps: [],
-  readFiles: [],
+  processItems: [createAssistantThinkingItem(messageId)],
+  finalAnswerMarkdown: '',
+  artifacts: [],
   applyTargets: [],
   blockers: []
 })
@@ -110,10 +110,18 @@ const buildAssistantTurnFromMessage = (message: ChatMessage): AssistantTurnViewM
   if (artifacts.length === 0) return null
   return {
     messageId: message.id,
-    finalAnswer: message.content,
     status: 'completed',
-    steps: [],
-    readFiles: [],
+    processItems: [],
+    finalAnswerMarkdown: message.content,
+    artifacts: artifacts.map((artifact) => ({
+      path: artifact.path,
+      fileName: artifact.fileName,
+      origin: 'artifact',
+      summary: artifact.summary,
+      applyId: artifact.applyId,
+      operation: artifact.operation,
+      format: artifact.capability === 'docx' ? 'docx' : undefined
+    })),
     applyTargets: artifacts
       .map(artifactToApplyTarget)
       .filter((target): target is AssistantTurnViewModel['applyTargets'][number] => Boolean(target)),
@@ -175,7 +183,6 @@ const ChatPage: React.FC = () => {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [aiRunId, setAiRunId] = useState<string | null>(null)
-  const [searchTurn, setSearchTurn] = useState<SearchWorkbenchTurn | null>(null)
   const [selectedReferences, setSelectedReferences] = useState<SelectedReference[]>([])
   const [workspaces, setWorkspaces] = useState<WorkspaceSource[]>([])
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null)
@@ -649,7 +656,7 @@ const ChatPage: React.FC = () => {
       const shouldKeepCurrentWorkspaceSelection =
         contentPanel.kind === 'apply_workspace' &&
         currentWorkspaceSelectionStillAvailable &&
-        !Boolean(options?.forceOpenWorkspace) &&
+        !options?.forceOpenWorkspace &&
         preferredFileKey !== currentWorkspaceFileKey
       const nextSelectedFileKey =
         (shouldKeepCurrentWorkspaceSelection ? currentWorkspaceFileKey : null) ||
@@ -731,7 +738,6 @@ const ChatPage: React.FC = () => {
       void loadMessages(currentSessionId)
       setLoading(false)
       setAiRunId(null)
-      setSearchTurn(null)
       setModalPreviewFile(null)
       setInput('')
       setSelectedReferences([])
@@ -820,7 +826,6 @@ const ChatPage: React.FC = () => {
       message.warning('未找到文件路径')
       return
     }
-    setSearchTurn(turn)
     setModalPreviewFile(fileRef)
   }
 
@@ -854,80 +859,12 @@ const ChatPage: React.FC = () => {
     window.api.onAiRunEvent((event) => {
       if (event.runId !== aiRunId) return
 
-      if (event.type === 'human_step') {
-        const nextStep: AssistantTurnStep = {
-          id: `${event.taskId}:${event.stepIndex}`,
-          summary: event.summary || event.publicNarrative,
-          tool: getToolBadge(event.toolName, event.action),
-          status:
-            event.resultStatus === 'error'
-              ? 'failed'
-              : event.draftRef
-                ? 'review_needed'
-                : 'completed',
-          files: []
-        }
-        updateActiveTurn((current) => {
-          const stepIndex = current.steps.findIndex((item) => item.id === nextStep.id)
-          if (stepIndex === -1) {
-            return {
-              ...current,
-              steps: [...current.steps, nextStep]
-            }
-          }
-          const nextSteps = [...current.steps]
-          nextSteps[stepIndex] = nextStep
-          return {
-            ...current,
-            steps: nextSteps
-          }
-        })
-        return
-      }
-
-      if (event.type === 'context_compaction_started') {
-        const nextStep: AssistantTurnStep = {
-          id: `${event.taskId || event.runId}:context-compaction`,
-          summary: '正在压缩上下文',
-          tool: '上下文压缩',
-          status: 'running',
-          files: []
-        }
+      const processItem = createAssistantProcessItem(event)
+      if (processItem) {
         updateActiveTurn((current) => ({
           ...current,
-          steps: current.steps.some((step) => step.id === nextStep.id)
-            ? current.steps.map((step) => (step.id === nextStep.id ? nextStep : step))
-            : [...current.steps, nextStep]
+          processItems: mergeAssistantProcessItem(current.processItems, processItem)
         }))
-        return
-      }
-
-      if (event.type === 'context_compaction_completed') {
-        const stepId = `${event.taskId || event.runId}:context-compaction`
-        updateActiveTurn((current) => ({
-          ...current,
-          steps: current.steps.some((step) => step.id === stepId)
-            ? current.steps.map((step) =>
-                step.id === stepId
-                  ? {
-                      ...step,
-                      summary: '已压缩历史上下文',
-                      status: 'completed'
-                    }
-                  : step
-              )
-            : [
-                ...current.steps,
-                {
-                  id: stepId,
-                  summary: '已压缩历史上下文',
-                  tool: '上下文压缩',
-                  status: 'completed',
-                  files: []
-                }
-              ]
-        }))
-        return
       }
 
       if (event.type === 'tool_call_result') {
@@ -939,12 +876,7 @@ const ChatPage: React.FC = () => {
         if (readFiles.length > 0) {
           updateActiveTurn((current) => ({
             ...current,
-            readFiles: dedupeFileRefs([...current.readFiles, ...readFiles]),
-            steps: current.steps.map((step) =>
-              step.tool === getToolBadge(event.toolName)
-                ? { ...step, files: dedupeFileRefs([...step.files, ...readFiles]) }
-                : step
-            )
+            artifacts: dedupeFileRefs([...current.artifacts, ...readFiles])
           }))
         }
 
@@ -977,6 +909,18 @@ const ChatPage: React.FC = () => {
         }
         updateActiveTurn((current) => ({
           ...current,
+          artifacts: dedupeFileRefs([
+            ...current.artifacts,
+            {
+              path: event.path,
+              fileName: event.fileName,
+              origin: 'artifact',
+              summary: event.summary,
+              applyId: event.applyId,
+              operation: event.operation,
+              format: event.capability === 'docx' ? 'docx' : undefined
+            }
+          ]),
           applyTargets: event.applyId
             ? mergeApplyTargets(current.applyTargets, {
                 applyId: event.applyId,
@@ -1083,7 +1027,19 @@ const ChatPage: React.FC = () => {
         )
         updateActiveTurn((current) => ({
           ...current,
-          finalAnswer: `${current.finalAnswer}${event.token}`
+          finalAnswerMarkdown: `${current.finalAnswerMarkdown}${event.token}`,
+          processItems: mergeAssistantProcessItem(
+            current.processItems.map((item) =>
+              item.status === 'running' ? { ...item, status: 'completed' } : item
+            ),
+            {
+              id: `${messageId}:answer-started`,
+              text: '俺想好了，开始说',
+              status: 'completed',
+              createdAt: Date.now(),
+              sourceEventType: 'answer_token'
+            }
+          )
         }))
         scrollToBottom()
         return
@@ -1097,7 +1053,7 @@ const ChatPage: React.FC = () => {
         )
         updateActiveTurn((current) => ({
           ...current,
-          finalAnswer: event.text,
+          finalAnswerMarkdown: event.text,
           status: 'completed'
         }))
         const assistantMessage: ChatMessage = {
@@ -1129,7 +1085,7 @@ const ChatPage: React.FC = () => {
                 ? {
                     ...item,
                     error: true,
-                    content: `${item.content || ''}\n\n[失败] ${event.error}`
+                    content: `${item.content || ''}\n\n**[失败]** ${event.error}`
                   }
                 : item
             )
@@ -1205,7 +1161,6 @@ const ChatPage: React.FC = () => {
     setSelectedReferences([])
     setComposerResetKey((value) => value + 1)
     setLoading(true)
-    setSearchTurn(null)
     setPendingApprovalBatch(null)
     setApprovalSubmitting(false)
     setPendingWorkspaceRequest(null)
@@ -1355,13 +1310,6 @@ const ChatPage: React.FC = () => {
       setCurrentMessages((previous) => [...previous, assistantMessage])
       void window.api.chatMessageSave(assistantMessage).catch(console.error)
 
-      const nextTurn: SearchWorkbenchTurn = {
-        query: userQuery,
-        results,
-        tokens: response.tokens,
-        createdAt: Date.now()
-      }
-      setSearchTurn(nextTurn)
       setModalPreviewFile(null)
       showContentPanel({
         kind: 'search_list',
@@ -1468,7 +1416,6 @@ const ChatPage: React.FC = () => {
     void window.api.chatMessageSave(continueMessage).catch(console.error)
 
     setLoading(true)
-    setSearchTurn(null)
     setPendingApprovalBatch(null)
     setApprovalSubmitting(false)
     assistantMsgIdRef.current = null
@@ -1599,12 +1546,9 @@ const ChatPage: React.FC = () => {
     }
 
     return (
-      <div key={messageItem.id} className="flex flex-row-reverse gap-3">
-        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-[#E5E5E4] bg-white text-[#1F1F1F] shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-          <HiUser className="h-[18px] w-[18px]" />
-        </div>
+      <div key={messageItem.id} className="flex justify-end">
         <div className="max-w-[78%]">
-          <div className="rounded-[20px] rounded-br-[10px] border border-[#E5E5E4] bg-white px-4 py-3.5 text-[14px] leading-7 text-[#1F1F1F] shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+          <div className="rounded-[20px] border border-[#E5E5E4] bg-white px-4 py-3.5 text-[14px] leading-7 text-[#1F1F1F] shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
             {messageItem.content}
           </div>
           {sources.length > 0 ? (
@@ -1634,11 +1578,8 @@ const ChatPage: React.FC = () => {
     const turn = assistantTurns[messageItem.id]
     if (!turn) {
       return (
-        <div key={messageItem.id} className="flex gap-3">
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-[#F4E5DF] bg-[#FBF5F2] text-[#D97757]">
-            <HiBookOpen className="h-[18px] w-[18px]" />
-          </div>
-          <div className="max-w-[82%] rounded-[20px] rounded-bl-[10px] border border-[#EAE2DD] bg-white px-4 py-3.5 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+        <div key={messageItem.id} className="w-full">
+          <div className="rounded-[20px] border border-[#EAE2DD] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
             <MarkdownRenderer content={messageItem.content} />
           </div>
         </div>
@@ -1649,26 +1590,8 @@ const ChatPage: React.FC = () => {
       <AssistantTurnCard
         key={messageItem.id}
         messageId={messageItem.id}
-        content={messageItem.content}
         turn={turn}
         isStreaming={loading && assistantMsgIdRef.current === messageItem.id}
-        onOpenStep={(step) => {
-          const firstFile = step.files[0]
-          if (firstFile) {
-            void openFile(firstFile)
-            return
-          }
-          if (searchTurn) {
-            setModalPreviewFile(null)
-            showContentPanel({
-              kind: 'search_list',
-              title: '搜索结果',
-              query: searchTurn.query,
-              results: searchTurn.results,
-              tokens: searchTurn.tokens
-            })
-          }
-        }}
         onOpenFile={(file) => {
           void openFile(file)
         }}
@@ -1864,7 +1787,7 @@ const ChatPage: React.FC = () => {
             <div className="min-w-0 flex-1">
               <div className="flex h-full min-h-0 flex-col">
                 <div className="min-h-0 flex-1 overflow-y-auto px-6 pt-4" ref={scrollRef}>
-                  <div className="mx-auto flex max-w-[860px] flex-col gap-5 pb-8">
+                  <div className="mx-auto flex max-w-[920px] flex-col gap-5 pb-8">
                     {currentMessages.length === 0 ? (
                       <div className="relative flex min-h-[58vh] items-center justify-center overflow-hidden px-8 py-12 text-center">
                         <div className="absolute inset-x-[12%] top-[18%] h-44 rounded-full bg-[radial-gradient(circle,rgba(251,245,242,0.98),rgba(251,245,242,0.58)_42%,rgba(245,245,244,0)_76%)] blur-2xl" />

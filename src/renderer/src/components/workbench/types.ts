@@ -1,4 +1,4 @@
-import type { DocxApplyStatus, SearchResult } from '../../../../shared/types'
+import type { AiRunEvent, DocxApplyStatus, SearchResult } from '../../../../shared/types'
 
 export type WorkbenchMode = 'ai' | 'search'
 
@@ -16,12 +16,7 @@ export type SearchWorkbenchTurn = {
   createdAt: number
 }
 
-export type WorkbenchFileOrigin =
-  | 'search_hit'
-  | 'read'
-  | 'artifact'
-  | 'preview'
-  | 'source'
+export type WorkbenchFileOrigin = 'search_hit' | 'read' | 'artifact' | 'preview' | 'source'
 
 export type WorkbenchFileRef = {
   path: string
@@ -33,6 +28,18 @@ export type WorkbenchFileRef = {
   pageNumber?: number
 }
 
+export type AssistantProcessStatus = 'running' | 'completed' | 'failed' | 'waiting'
+
+export type AssistantProcessSourceEventType = 'thinking' | AiRunEvent['type']
+
+export type AssistantProcessItem = {
+  id: string
+  text: string
+  status: AssistantProcessStatus
+  createdAt: number
+  sourceEventType: AssistantProcessSourceEventType
+}
+
 export type DocxApplyWorkspaceTab = {
   fileKey: string
   applyId: string
@@ -41,16 +48,6 @@ export type DocxApplyWorkspaceTab = {
   changeCount: number
   status: DocxApplyStatus
   unseen: boolean
-}
-
-export type AssistantStepStatus = 'running' | 'completed' | 'review_needed' | 'failed'
-
-export type AssistantTurnStep = {
-  id: string
-  summary: string
-  tool: string
-  status: AssistantStepStatus
-  files: WorkbenchFileRef[]
 }
 
 export type AssistantTurnApplyTarget = {
@@ -66,13 +63,17 @@ export type AssistantTurnBlocker = {
   description: string
 }
 
+export type AssistantArtifactItem = WorkbenchFileRef & {
+  operation?: 'created' | 'updated'
+}
+
 export type AssistantTurnViewModel = {
   messageId: string
   runId?: string
-  finalAnswer: string
   status: 'running' | 'completed' | 'failed'
-  steps: AssistantTurnStep[]
-  readFiles: WorkbenchFileRef[]
+  processItems: AssistantProcessItem[]
+  finalAnswerMarkdown: string
+  artifacts: AssistantArtifactItem[]
   applyTargets: AssistantTurnApplyTarget[]
   blockers: AssistantTurnBlocker[]
   error?: string

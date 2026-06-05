@@ -57,6 +57,7 @@
     "mammoth": "^1.11.0",
     "mark.js": "^8.11.1",
     "pdf-parse": "^1.1.1",
+    "pdfjs-dist": "5.4.296",
     "react-doc-viewer": "^0.1.15",
     "react-icons": "^5.5.0",
     "react-markdown": "^10.1.0",

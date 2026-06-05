@@ -1,16 +1,17 @@
 import { useState, useEffect } from 'react'
 import { pdfjs, Document, Page } from 'react-pdf'
 import { Pagination } from 'antd'
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import type { DocRenderer, DocRendererProps } from 'react-doc-viewer'
+import type { PDFDocumentProxy } from 'pdfjs-dist/types/src/display/api'
+import type { LoadedFileRenderDocument } from './types'
 import 'react-pdf/dist/Page/AnnotationLayer.css'
 import 'react-pdf/dist/Page/TextLayer.css'
 
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url
-).toString()
+pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
-const CustomPDFRenderer = ({ mainState }) => {
-  const { currentDocument } = mainState
+const CustomPDFRenderer: DocRenderer = ({ mainState }: DocRendererProps) => {
+  const currentDocument = mainState.currentDocument as LoadedFileRenderDocument | undefined
   const [numPages, setNumPages] = useState(0)
   const [pageNumber, setPageNumber] = useState(1)
 
@@ -22,16 +23,23 @@ const CustomPDFRenderer = ({ mainState }) => {
 
   if (!currentDocument) return null
 
-  // Support fileData, file object, or uri
-  const file = currentDocument.fileData || currentDocument.file || currentDocument.uri
+  const file =
+    currentDocument.fileData instanceof Uint8Array ||
+    currentDocument.fileData instanceof ArrayBuffer
+      ? { data: currentDocument.fileData }
+      : currentDocument.uri || currentDocument.file
 
   if (!file) return null
 
-  const onDocumentLoadSuccess = ({ numPages }) => {
-    setNumPages(numPages)
+  const onDocumentLoadSuccess = (pdf: PDFDocumentProxy): void => {
+    setNumPages(pdf.numPages)
   }
 
-  const onPageChange = (page) => {
+  const onDocumentLoadError = (error: Error): void => {
+    console.error('Failed to render PDF preview', error)
+  }
+
+  const onPageChange = (page: number): void => {
     setPageNumber(page)
   }
 
@@ -43,6 +51,7 @@ const CustomPDFRenderer = ({ mainState }) => {
       <Document
         file={file}
         onLoadSuccess={onDocumentLoadSuccess}
+        onLoadError={onDocumentLoadError}
         loading={
           <div className="flex items-center justify-center h-full text-gray-400">
             Loading PDF...
