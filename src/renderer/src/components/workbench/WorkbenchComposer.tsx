@@ -721,7 +721,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       ) : null}
 
       <div
-        className="rounded-[24px] border border-[#E8E2DA] bg-white px-3.5 pb-2.5 pt-2.5 shadow-[0_8px_24px_rgba(31,31,31,0.06)] transition-all duration-200 focus-within:border-[#D97757] focus-within:ring-4 focus-within:ring-[#F4E5DF]"
+        className="rounded-[24px] border border-[#E8E2DA] bg-white px-3.5 pb-2 pt-2.5 shadow-[0_8px_24px_rgba(31,31,31,0.06)] transition-all duration-200 focus-within:border-[#D97757] focus-within:ring-4 focus-within:ring-[#F4E5DF]"
         data-testid={workbenchSelectors.referenceField}
         onMouseDown={(event) => {
           const target = event.target
@@ -780,7 +780,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           </div>
         </div>
 
-        <div className="mt-2 flex items-center justify-between gap-3 border-t border-[#F3EEE6] pt-2">
+        <div className="mt-1.5 flex items-center justify-between gap-3 border-t border-[#F3EEE6] pt-1.5">
           <div className="flex min-w-0 items-center gap-1.5 text-[#7B7B79]">
             <Select
               value={mode}
@@ -882,7 +882,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             {mode === 'ai' ? (
               <Tooltip title={contextUsageTitle}>
                 <div
-                  className="relative inline-flex h-8 w-8 items-center justify-center rounded-full text-[10px] font-medium text-[#666666]"
+                  className="relative inline-flex h-7 w-7 items-center justify-center rounded-full text-[9px] font-medium text-[#666666]"
                   aria-label={contextUsageTitle}
                 >
                   <div
@@ -900,7 +900,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               <Button
                 onClick={onCancel}
                 size="small"
-                className="h-8 rounded-full border-[#E5E5E4] bg-white px-3 text-[12px] text-[#666666] shadow-none"
+                className="h-7 rounded-full border-[#E5E5E4] bg-white px-2.5 text-[12px] text-[#666666] shadow-none"
                 data-testid={workbenchSelectors.cancelButton}
               >
                 取消
@@ -910,7 +910,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               type="button"
               onClick={onSubmit}
               disabled={loading || !canSubmit}
-              className={`inline-flex h-9 w-9 items-center justify-center rounded-full text-white transition ${
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-white transition ${
                 loading || !canSubmit
                   ? 'bg-[#D8D8D6]'
                   : 'bg-[#D97757] shadow-[0_6px_14px_rgba(217,119,87,0.18)] hover:-translate-y-[1px] hover:bg-[#C66A4A]'
@@ -918,7 +918,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               data-testid={workbenchSelectors.sendButton}
               aria-label={mode === 'ai' ? '发送智能请求' : '执行搜索'}
             >
-              {loading ? <Spin size="small" /> : <HiArrowUp className="h-4.5 w-4.5" />}
+              {loading ? <Spin size="small" /> : <HiArrowUp className="h-4 w-4" />}
             </button>
           </div>
         </div>

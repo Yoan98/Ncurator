@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo } from 'react'
 import { Tooltip } from 'antd'
-import { HiChevronDown, HiOutlineDocumentText } from 'react-icons/hi2'
+import { HiOutlineDocumentText } from 'react-icons/hi2'
 import MarkdownRenderer from '../MarkdownRenderer'
 import { DOCX_APPLY_STATUS_META } from './constants'
 import type { AssistantArtifactItem, AssistantProcessItem, AssistantTurnViewModel } from './types'
@@ -76,18 +76,12 @@ const renderArtifactChip = (
 const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   messageId,
   turn,
-  isStreaming,
   onOpenFile,
   onOpenApply
 }) => {
-  const [processCollapsed, setProcessCollapsed] = useState(false)
   const processItems = useMemo(() => turn?.processItems || [], [turn?.processItems])
   const finalAnswerMarkdown = turn?.finalAnswerMarkdown || ''
   const hasFinalAnswer = finalAnswerMarkdown.trim().length > 0
-  const visibleProcessItems = useMemo(() => {
-    if (!processCollapsed) return processItems
-    return processItems.slice(-1)
-  }, [processCollapsed, processItems])
   const latestProcessId = processItems.at(-1)?.id
 
   if (!turn) {
@@ -99,24 +93,13 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
       <div className="space-y-4">
         {processItems.length > 0 ? (
           <div
-            className={`border-l border-[#E6DDD5] pl-4 transition-opacity duration-200 ${
+            className={`transition-opacity duration-200 ${
               turn.status === 'completed' && hasFinalAnswer ? 'opacity-75' : ''
             }`}
             data-testid={`${workbenchSelectors.assistantProcessPrefix}-${messageId}`}
           >
-            <button
-              type="button"
-              className="mb-2 flex w-full items-center justify-between gap-3 text-left text-[12px] font-medium uppercase tracking-[0.14em] text-[#AAA6A0]"
-              onClick={() => setProcessCollapsed((current) => !current)}
-              data-testid={`${workbenchSelectors.assistantTurnStepsPrefix}-${messageId}`}
-            >
-              <span>{turn.status === 'running' || isStreaming ? '过程流' : '刚才干了啥'}</span>
-              <HiChevronDown
-                className={`h-4 w-4 text-[#AAA6A0] transition-transform duration-200 ${processCollapsed ? '-rotate-90' : ''}`}
-              />
-            </button>
             <div className="space-y-1.5">
-              {visibleProcessItems.map((item) => (
+              {processItems.map((item) => (
                 <AssistantProcessText
                   key={item.id}
                   item={item}

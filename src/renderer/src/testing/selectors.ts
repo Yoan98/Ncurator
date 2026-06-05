@@ -115,7 +115,6 @@ export const workbenchSelectors = {
   contentPanel: 'workbench-content-panel',
   contentPanelTitle: 'workbench-content-panel-title',
   assistantTurnPrefix: 'workbench-assistant-turn',
-  assistantTurnStepsPrefix: 'workbench-assistant-turn-steps',
   assistantProcessPrefix: 'workbench-assistant-process',
   assistantProcessItemPrefix: 'workbench-assistant-process-item',
   assistantFinalAnswerPrefix: 'workbench-assistant-final-answer',

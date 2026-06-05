@@ -1,3 +1,4 @@
+import React from 'react'
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import AssistantTurnCard from '../../../src/renderer/src/components/workbench/AssistantTurnCard'

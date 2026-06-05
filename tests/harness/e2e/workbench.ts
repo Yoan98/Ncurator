@@ -8,8 +8,8 @@ const byTestIdPrefix = (testIdPrefix: string): string => `[data-testid^="${testI
 export const getWorkbenchLocator = (page: Page, testId: string): Locator =>
   page.locator(byTestId(testId))
 
-export const getWorkbenchAssistantStepButtons = (page: Page): Locator =>
-  page.locator(`button${byTestIdPrefix(workbenchSelectors.assistantTurnStepsPrefix)}`)
+export const getWorkbenchAssistantProcesses = (page: Page): Locator =>
+  page.locator(byTestIdPrefix(workbenchSelectors.assistantProcessPrefix))
 
 export const getWorkbenchAssistantApplyButtons = (page: Page): Locator =>
   page.locator(`button${byTestIdPrefix(workbenchSelectors.assistantTurnApplyPrefix)}`)
@@ -45,7 +45,7 @@ export const waitForAssistantTurnCount = async (page: Page, count: number): Prom
   await page.waitForFunction(
     ({ selector, minCount }) => document.querySelectorAll(selector).length >= minCount,
     {
-      selector: `button${byTestIdPrefix(workbenchSelectors.assistantTurnStepsPrefix)}`,
+      selector: byTestIdPrefix(workbenchSelectors.assistantProcessPrefix),
       minCount: count
     }
   )
@@ -67,15 +67,8 @@ export const waitForApplyTabCount = async (page: Page, count: number): Promise<v
   )
 }
 
-export const expandLatestAssistantTurn = async (page: Page): Promise<void> => {
-  await getWorkbenchAssistantStepButtons(page).last().click()
-}
-
 export const openLatestAssistantApply = async (page: Page): Promise<void> => {
   const applyButtons = getWorkbenchAssistantApplyButtons(page)
-  if ((await applyButtons.count()) === 0) {
-    await expandLatestAssistantTurn(page)
-  }
   await page.waitForFunction(
     ({ selector }) =>
       Array.from(document.querySelectorAll(selector)).some(

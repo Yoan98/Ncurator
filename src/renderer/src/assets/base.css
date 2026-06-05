@@ -219,7 +219,7 @@ mark {
 }
 
 .workbench-composer-select.ant-select .ant-select-selector {
-  min-height: 28px !important;
+  min-height: 24px !important;
   padding: 0 6px !important;
   border-radius: 999px !important;
   box-shadow: none !important;
@@ -231,7 +231,7 @@ mark {
 
 .workbench-composer-select.ant-select .ant-select-selection-item,
 .workbench-composer-select.ant-select .ant-select-selection-placeholder {
-  line-height: 28px !important;
+  line-height: 24px !important;
   font-size: 12px !important;
 }
 

@@ -217,7 +217,7 @@
 
 #### WB-COMPOSER-009 消息流布局
 
-- 系统行为：workbench 消息区移除用户与 assistant 头像；assistant 回复以左对齐内容流展示，过程流与最终 mouth 输出共用消息 rail，最终 markdown 输出不再使用独立背景卡片；用户消息保持右对齐，并使用更紧凑的消息泡样式。
+- 系统行为：workbench 消息区移除用户与 assistant 头像；assistant 回复以左对齐内容流展示，过程流不展示独立标题或左侧竖线，且与最终 mouth 输出共用消息 rail；最终 markdown 输出不再使用独立背景卡片；用户消息保持右对齐，并使用更紧凑的消息泡样式。
 - 验收：
   - `WB-COMPOSER-009-AC1` 用户与 assistant 消息都不再展示头像或头像占位。
   - `WB-COMPOSER-009-AC2` assistant 过程流和最终输出左边缘与底部 composer 内容 rail 对齐。
