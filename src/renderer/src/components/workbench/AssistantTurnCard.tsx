@@ -67,16 +67,13 @@ const AssistantProcessThoughtList: React.FC<{ thoughts: AssistantProcessThought[
   </div>
 )
 
-const AssistantProcessGroupView: React.FC<{ group: AssistantProcessGroup; forceOpen: boolean }> = ({
-  group,
-  forceOpen
-}) => {
+const AssistantProcessGroupView: React.FC<{ group: AssistantProcessGroup }> = ({ group }) => {
   const isRunning = group.status === 'running'
   const groupText = getGroupText(group)
   return (
     <details
       className="group/process"
-      open={forceOpen || isRunning || group.items.length === 0 ? true : undefined}
+      open={group.items.length === 0 ? true : undefined}
       data-testid={`${workbenchSelectors.assistantProcessItemPrefix}-${group.id}`}
     >
       <summary className="flex list-none items-start rounded-xl outline-none [&::-webkit-details-marker]:hidden">
@@ -150,11 +147,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                 <AssistantProcessThoughtList thoughts={processThoughts} />
               ) : null}
               {processGroups.map((group) => (
-                <AssistantProcessGroupView
-                  key={group.id}
-                  group={group}
-                  forceOpen={turn.status === 'running'}
-                />
+                <AssistantProcessGroupView key={group.id} group={group} />
               ))}
             </div>
           </div>

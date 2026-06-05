@@ -318,14 +318,9 @@ const ChatPage: React.FC = () => {
   }, [approvalCurrentIndex, pendingApprovalBatch])
 
   const approvalSubmitDisabled = useMemo(() => {
-    if (!pendingApprovalBatch || approvalSubmitting) return true
-    return pendingApprovalBatch.items.some((item) => {
-      const draft = approvalDraftDecisions[item.itemId]
-      if (!draft) return true
-      if (draft.action === 'approve' || draft.action === 'reject') return false
-      return draft.action !== 'guide' || draft.message.trim().length === 0
-    })
-  }, [approvalDraftDecisions, approvalSubmitting, pendingApprovalBatch])
+    if (!currentApprovalItem || approvalSubmitting) return true
+    return (approvalDraftDecisions[currentApprovalItem.itemId]?.message || '').trim().length === 0
+  }, [approvalDraftDecisions, approvalSubmitting, currentApprovalItem])
 
   const scrollToBottom = (): void => {
     if (scrollRef.current) {
@@ -1460,16 +1455,6 @@ const ChatPage: React.FC = () => {
     }
   }
 
-  const setApprovalAction = (itemId: string, action: 'approve' | 'reject'): void => {
-    setApprovalDraftDecisions((current) => ({
-      ...current,
-      [itemId]: {
-        action,
-        message: ''
-      }
-    }))
-  }
-
   const setApprovalGuideMessage = (itemId: string, messageText: string): void => {
     setApprovalDraftDecisions((current) => ({
       ...current,
@@ -1480,16 +1465,27 @@ const ChatPage: React.FC = () => {
     }))
   }
 
-  const handleApprovalBatchSubmit = async (): Promise<void> => {
-    if (!pendingApprovalBatch || approvalSubmitting || approvalSubmitDisabled) return
+  const clearApprovalState = (): void => {
+    setPendingApprovalBatch(null)
+    setApprovalCurrentIndex(0)
+    setApprovalDraftDecisions({})
+  }
+
+  const flushApprovalBatch = async (
+    draftDecisions: Record<string, ApprovalDraftDecision>
+  ): Promise<void> => {
+    if (!pendingApprovalBatch || approvalSubmitting) return
     setApprovalSubmitting(true)
     try {
       const decisions = pendingApprovalBatch.items.map((item) => {
-        const draft = approvalDraftDecisions[item.itemId]
+        const draft = draftDecisions[item.itemId]
+        if (!draft?.action) {
+          throw new Error('审批项尚未完成')
+        }
         return {
           itemId: item.itemId,
-          action: (draft?.action || 'approve') as ApprovalBatchDecisionAction,
-          message: draft?.action === 'guide' ? draft.message.trim() : undefined
+          action: draft.action as ApprovalBatchDecisionAction,
+          message: draft.action === 'guide' ? draft.message.trim() : undefined
         }
       })
       const response = await window.api.aiRunApprovalBatchDecide({
@@ -1503,18 +1499,60 @@ const ChatPage: React.FC = () => {
         return
       }
       const allApproved = decisions.every((decision) => decision.action === 'approve')
+      clearApprovalState()
       if (allApproved) {
         setLoading(true)
       } else {
         setLoading(false)
-        setPendingApprovalBatch(null)
-        setApprovalCurrentIndex(0)
-        setApprovalDraftDecisions({})
       }
+      setApprovalSubmitting(false)
     } catch (error) {
       setApprovalSubmitting(false)
       message.error(error instanceof Error ? error.message : '审核提交失败')
     }
+  }
+
+  const handleApprovalDecision = async (input: {
+    itemId: string
+    action: ApprovalBatchDecisionAction
+    message?: string
+  }): Promise<void> => {
+    if (!pendingApprovalBatch || approvalSubmitting) return
+    const nextDraftDecisions: Record<string, ApprovalDraftDecision> = {
+      ...approvalDraftDecisions,
+      [input.itemId]: {
+        action: input.action,
+        message: input.action === 'guide' ? input.message || '' : ''
+      }
+    }
+
+    const nextPendingIndex = pendingApprovalBatch.items.findIndex(
+      (item, index) => index > approvalCurrentIndex && !nextDraftDecisions[item.itemId]?.action
+    )
+    const firstPendingIndex = pendingApprovalBatch.items.findIndex(
+      (item) => !nextDraftDecisions[item.itemId]?.action
+    )
+    const hasRemainingUndecided = pendingApprovalBatch.items.some(
+      (item) => !nextDraftDecisions[item.itemId]?.action
+    )
+
+    if (hasRemainingUndecided && (nextPendingIndex >= 0 || firstPendingIndex >= 0)) {
+      setApprovalDraftDecisions(nextDraftDecisions)
+      setApprovalCurrentIndex(nextPendingIndex >= 0 ? nextPendingIndex : firstPendingIndex)
+      return
+    }
+
+    await flushApprovalBatch(nextDraftDecisions)
+  }
+
+  const handleApprovalBatchSubmit = async (): Promise<void> => {
+    if (!currentApprovalItem || approvalSubmitting || approvalSubmitDisabled) return
+    const messageText = approvalDraftDecisions[currentApprovalItem.itemId]?.message || ''
+    await handleApprovalDecision({
+      itemId: currentApprovalItem.itemId,
+      action: 'guide',
+      message: messageText.trim()
+    })
   }
 
   const handleContinueWithWorkspace = async (): Promise<void> => {
@@ -1945,7 +1983,7 @@ const ChatPage: React.FC = () => {
                   <div className="mx-auto max-w-[920px]">
                     {composerMode === 'ai' && (pendingApprovalBatch || pendingWorkspaceRequest) ? (
                       <div
-                        className="mb-3 flex items-start gap-3 rounded-[14px] border border-[#FDECC8] bg-[#FFF9ED] px-3 py-3 text-sm text-[#8A6510]"
+                        className="mb-3 flex items-start gap-3 rounded-[14px] border border-[#F3E6C7] bg-[#FFFCF6] px-3 py-3 text-sm text-[#7A6530]"
                         data-testid={
                           pendingApprovalBatch
                             ? chatSelectors.approvalBatchCard
@@ -1957,7 +1995,7 @@ const ChatPage: React.FC = () => {
                           {pendingApprovalBatch && currentApprovalItem ? (
                             <div className="flex flex-col gap-3">
                               <div className="flex items-center justify-between gap-3">
-                                <div className="text-sm font-semibold text-[#8A6510]">
+                                <div className="text-sm font-semibold text-[#7A6530]">
                                   审批 {approvalCurrentIndex + 1} /{' '}
                                   {pendingApprovalBatch.items.length}
                                 </div>
@@ -1990,8 +2028,8 @@ const ChatPage: React.FC = () => {
                                 </div>
                               </div>
 
-                              <div className="flex items-center gap-3">
-                                <code className="min-w-0 flex-1 overflow-x-auto whitespace-pre rounded-[10px] border border-[#E7CFA5] bg-white/80 px-3 py-2 font-mono text-[14px] leading-6 text-[#6F5311]">
+                              <div className="flex items-start gap-3">
+                                <code className="min-w-0 flex-1 overflow-hidden whitespace-pre-wrap break-words rounded-[10px] border border-[#EDE0C7] bg-[#FFFEFB] px-3 py-2 font-mono text-[14px] leading-6 text-[#6D5A2B]">
                                   {currentApprovalItem.command}
                                 </code>
                                 <div className="flex shrink-0 items-center gap-2">
@@ -2006,7 +2044,10 @@ const ChatPage: React.FC = () => {
                                     className="!flex !h-9 !w-9 !items-center !justify-center !rounded-[10px] !p-0"
                                     icon={<HiCheck className="h-4 w-4" />}
                                     onClick={() =>
-                                      setApprovalAction(currentApprovalItem.itemId, 'approve')
+                                      void handleApprovalDecision({
+                                        itemId: currentApprovalItem.itemId,
+                                        action: 'approve'
+                                      })
                                     }
                                     loading={
                                       approvalSubmitting &&
@@ -2026,7 +2067,10 @@ const ChatPage: React.FC = () => {
                                     className="!flex !h-9 !w-9 !items-center !justify-center !rounded-[10px] !p-0"
                                     icon={<HiXMark className="h-4 w-4" />}
                                     onClick={() =>
-                                      setApprovalAction(currentApprovalItem.itemId, 'reject')
+                                      void handleApprovalDecision({
+                                        itemId: currentApprovalItem.itemId,
+                                        action: 'reject'
+                                      })
                                     }
                                     disabled={approvalSubmitting}
                                     data-testid={chatSelectors.approvalBatchDenyButton}
@@ -2036,7 +2080,7 @@ const ChatPage: React.FC = () => {
 
                               <div className="flex items-center gap-2">
                                 <input
-                                  className="min-w-0 flex-1 rounded-[10px] border border-[#E7CFA5] bg-white px-3 py-2 text-sm text-[#6F5311] outline-none placeholder:text-[#B68A2D] focus:border-[#D97757] focus:ring-2 focus:ring-[#F4E5DF]"
+                                  className="min-w-0 flex-1 rounded-[10px] border border-[#EDE0C7] bg-[#FFFEFB] px-3 py-2 text-sm text-[#6D5A2B] outline-none placeholder:text-[#C3A56A] focus:border-[#D9A07A] focus:ring-2 focus:ring-[#F6EADF]"
                                   placeholder="告诉馆长该怎么做"
                                   value={
                                     approvalDraftDecisions[currentApprovalItem.itemId]?.message ||
@@ -2053,7 +2097,7 @@ const ChatPage: React.FC = () => {
                                 />
                                 <Button
                                   type="primary"
-                                  className="!flex !h-9 !items-center !gap-1 !rounded-[10px]"
+                                  className="!flex !h-9 !items-center !gap-1 !rounded-[10px] !border-0 !bg-[#D98A67] hover:!bg-[#CC7A56]"
                                   icon={<HiArrowUp className="h-4 w-4" />}
                                   onClick={() => void handleApprovalBatchSubmit()}
                                   loading={approvalSubmitting}
@@ -2069,7 +2113,7 @@ const ChatPage: React.FC = () => {
                           {pendingWorkspaceRequest ? (
                             <div className="flex flex-col gap-3">
                               <div>{pendingWorkspaceRequest.reason}</div>
-                              <div className="text-xs text-[#8A6510]">
+                              <div className="text-xs text-[#7A6530]">
                                 请选择当前工作区，必要时再通过 @ 插入目录或文件后继续运行。
                               </div>
                               <div className="flex gap-2">

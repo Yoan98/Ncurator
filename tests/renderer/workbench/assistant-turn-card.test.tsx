@@ -154,7 +154,7 @@ describe('AssistantTurnCard', () => {
   })
 
   it('renders tool group with emphasized file name in expanded tool sentence', () => {
-    render(
+    const { container } = render(
       <AssistantTurnCard
         messageId="assistant-1"
         turn={createTurn({
@@ -171,5 +171,9 @@ describe('AssistantTurnCard', () => {
     expect(fileName.className).toContain('font-semibold')
     expect(screen.getByText('文件的结构')).toBeTruthy()
     expect(screen.queryByText('这一步处理完了')).toBeNull()
+    const details = container.querySelector(
+      '[data-testid="workbench-assistant-process-item-run-1:skill:docx-reader"]'
+    )
+    expect(details?.hasAttribute('open')).toBe(false)
   })
 })
