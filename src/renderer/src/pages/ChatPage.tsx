@@ -60,6 +60,7 @@ import {
   getSearchResultFileRef,
   readWorkbenchModePreference,
   reduceAssistantProcessGroups,
+  reduceAssistantProcessThoughts,
   readWorkbenchModelPreference,
   readWorkbenchWorkspacePreference,
   resolveWorkbenchModelSelection,
@@ -98,6 +99,7 @@ const createEmptyPanel = (): WorkbenchContentPanelState => ({
 const createAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
   messageId,
   status: 'running',
+  processThoughts: [],
   processGroups: [createAssistantThinkingGroup(messageId)],
   finalAnswerMarkdown: '',
   artifacts: [],
@@ -108,6 +110,7 @@ const createAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
 const createSearchAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
   messageId,
   status: 'running',
+  processThoughts: [],
   processGroups: [createSearchProcessGroup(messageId)],
   finalAnswerMarkdown: '',
   artifacts: [],
@@ -134,6 +137,7 @@ const buildAssistantTurnFromMessage = (message: ChatMessage): AssistantTurnViewM
   return {
     messageId: message.id,
     status: 'completed',
+    processThoughts: [],
     processGroups: [],
     finalAnswerMarkdown: message.content,
     artifacts: artifacts.map((artifact) => ({
@@ -213,6 +217,7 @@ const ChatPage: React.FC = () => {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [aiRunId, setAiRunId] = useState<string | null>(null)
+  const [cancellingRun, setCancellingRun] = useState(false)
   const [selectedReferences, setSelectedReferences] = useState<SelectedReference[]>([])
   const [workspaces, setWorkspaces] = useState<WorkspaceSource[]>([])
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(() =>
@@ -793,6 +798,7 @@ const ChatPage: React.FC = () => {
       void loadMessages(currentSessionId)
       setLoading(false)
       setAiRunId(null)
+      setCancellingRun(false)
       setModalPreviewFile(null)
       setInput('')
       setSelectedReferences([])
@@ -916,6 +922,7 @@ const ChatPage: React.FC = () => {
 
       updateActiveTurn((current) => ({
         ...current,
+        processThoughts: reduceAssistantProcessThoughts(current.processThoughts, event),
         processGroups: reduceAssistantProcessGroups(current.processGroups, event)
       }))
 
@@ -1112,6 +1119,8 @@ const ChatPage: React.FC = () => {
 
       if (event.type === 'run_failed') {
         setLoading(false)
+        setAiRunId(null)
+        setCancellingRun(false)
         setPendingApprovalBatch(null)
         setApprovalSubmitting(false)
         updateActiveTurn((current) => ({
@@ -1139,6 +1148,8 @@ const ChatPage: React.FC = () => {
 
       if (event.type === 'run_cancelled') {
         setLoading(false)
+        setAiRunId(null)
+        setCancellingRun(false)
         setPendingApprovalBatch(null)
         setApprovalSubmitting(false)
         updateActiveTurn((current) => ({
@@ -1152,6 +1163,8 @@ const ChatPage: React.FC = () => {
 
       if (event.type === 'run_completed') {
         setLoading(false)
+        setAiRunId(null)
+        setCancellingRun(false)
         setPendingApprovalBatch(null)
         setApprovalSubmitting(false)
         updateActiveTurn((current) => ({
@@ -1175,6 +1188,10 @@ const ChatPage: React.FC = () => {
   }
 
   const handleSend = async (): Promise<void> => {
+    if (composerMode === 'ai' && aiRunId) {
+      await handleCancel()
+      return
+    }
     if (composerMode === 'search') {
       await handleSearchSend()
       return
@@ -1203,6 +1220,7 @@ const ChatPage: React.FC = () => {
     setSelectedReferences([])
     setComposerResetKey((value) => value + 1)
     setLoading(true)
+    setCancellingRun(false)
     setPendingApprovalBatch(null)
     setApprovalSubmitting(false)
     setPendingWorkspaceRequest(null)
@@ -1315,6 +1333,7 @@ const ChatPage: React.FC = () => {
     setSelectedReferences([])
     setComposerResetKey((value) => value + 1)
     setLoading(true)
+    setCancellingRun(false)
     setAiRunId(null)
     setPendingApprovalBatch(null)
     setApprovalSubmitting(false)
@@ -1427,11 +1446,16 @@ const ChatPage: React.FC = () => {
   }
 
   const handleCancel = async (): Promise<void> => {
-    if (!aiRunId) return
+    if (!aiRunId || cancellingRun) return
+    setCancellingRun(true)
     try {
       const response = await window.api.aiRunCancel(aiRunId)
-      if (!response.success) message.error(response.error || '取消失败')
+      if (!response.success) {
+        setCancellingRun(false)
+        message.error(response.error || '取消失败')
+      }
     } catch (error) {
+      setCancellingRun(false)
       message.error(error instanceof Error ? error.message : '取消失败')
     }
   }
@@ -1516,6 +1540,7 @@ const ChatPage: React.FC = () => {
     void window.api.chatMessageSave(continueMessage).catch(console.error)
 
     setLoading(true)
+    setCancellingRun(false)
     setPendingApprovalBatch(null)
     setApprovalSubmitting(false)
     assistantMsgIdRef.current = null
@@ -2078,12 +2103,13 @@ const ChatPage: React.FC = () => {
                       onSubmit={() => void handleSend()}
                       onCancel={() => void handleCancel()}
                       loading={loading}
+                      cancelling={cancellingRun}
                       canSubmit={Boolean(
                         input.trim() &&
                         selectedWorkspace &&
                         (composerMode === 'search' || selectedModelName)
                       )}
-                      showCancel={loading && composerMode === 'ai' && Boolean(aiRunId)}
+                      showCancel={composerMode === 'ai' && Boolean(aiRunId)}
                       resetKey={composerResetKey}
                       contextUsage={contextUsage}
                     />

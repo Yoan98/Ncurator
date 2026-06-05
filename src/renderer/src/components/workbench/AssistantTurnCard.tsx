@@ -6,6 +6,7 @@ import { DOCX_APPLY_STATUS_META } from './constants'
 import type {
   AssistantArtifactItem,
   AssistantProcessGroup,
+  AssistantProcessThought,
   AssistantRichTextSegment,
   AssistantTurnViewModel
 } from './types'
@@ -53,13 +54,29 @@ const renderSegments = (
   </span>
 )
 
-const AssistantProcessGroupView: React.FC<{ group: AssistantProcessGroup }> = ({ group }) => {
+const AssistantProcessThoughtList: React.FC<{ thoughts: AssistantProcessThought[] }> = ({
+  thoughts
+}) => (
+  <div
+    className="space-y-1.5 text-[14px] leading-7 text-[#6F6A64]"
+    data-testid={workbenchSelectors.assistantThoughts}
+  >
+    {thoughts.map((thought) => (
+      <div key={thought.id}>{thought.text}</div>
+    ))}
+  </div>
+)
+
+const AssistantProcessGroupView: React.FC<{ group: AssistantProcessGroup; forceOpen: boolean }> = ({
+  group,
+  forceOpen
+}) => {
   const isRunning = group.status === 'running'
   const groupText = getGroupText(group)
   return (
     <details
       className="group/process"
-      open={isRunning || group.items.length === 0 ? true : undefined}
+      open={forceOpen || isRunning || group.items.length === 0 ? true : undefined}
       data-testid={`${workbenchSelectors.assistantProcessItemPrefix}-${group.id}`}
     >
       <summary className="flex list-none items-start rounded-xl outline-none [&::-webkit-details-marker]:hidden">
@@ -110,6 +127,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   onOpenApply
 }) => {
   const processGroups = useMemo(() => turn?.processGroups || [], [turn?.processGroups])
+  const processThoughts = useMemo(() => turn?.processThoughts || [], [turn?.processThoughts])
   const finalAnswerMarkdown = turn?.finalAnswerMarkdown || ''
   const hasFinalAnswer = finalAnswerMarkdown.trim().length > 0
 
@@ -120,16 +138,23 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   return (
     <div className="w-full" data-testid={`workbench-assistant-turn-${messageId}`}>
       <div className="space-y-4">
-        {processGroups.length > 0 ? (
+        {processThoughts.length > 0 || processGroups.length > 0 ? (
           <div
             className={`transition-opacity duration-200 ${
               turn.status === 'completed' && hasFinalAnswer ? 'opacity-75' : ''
             }`}
             data-testid={`${workbenchSelectors.assistantProcessPrefix}-${messageId}`}
           >
-            <div className="space-y-2">
+            <div className="space-y-3">
+              {processThoughts.length > 0 ? (
+                <AssistantProcessThoughtList thoughts={processThoughts} />
+              ) : null}
               {processGroups.map((group) => (
-                <AssistantProcessGroupView key={group.id} group={group} />
+                <AssistantProcessGroupView
+                  key={group.id}
+                  group={group}
+                  forceOpen={turn.status === 'running'}
+                />
               ))}
             </div>
           </div>

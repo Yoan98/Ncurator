@@ -823,6 +823,13 @@ type AiRunEventPayload =
       failedAt: number
     }
   | {
+      type: 'assistant_process_thought'
+      runId: string
+      thoughtId: string
+      text: string
+      createdAt: number
+    }
+  | {
       type: 'tool_call_started'
       runId: string
       taskId?: string

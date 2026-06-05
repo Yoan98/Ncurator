@@ -19,6 +19,7 @@ vi.mock('../../../src/renderer/src/components/MarkdownRenderer', () => ({
 const createTurn = (overrides: Partial<AssistantTurnViewModel> = {}): AssistantTurnViewModel => ({
   messageId: 'assistant-1',
   status: 'running',
+  processThoughts: [],
   processGroups: [createAssistantThinkingGroup('assistant-1')],
   finalAnswerMarkdown: '',
   artifacts: [],
@@ -121,6 +122,35 @@ describe('AssistantTurnCard', () => {
     expect(screen.getByTestId('mock-markdown-renderer').textContent).toContain('## 最终结果')
     expect(finalAnswer.className).not.toContain('bg-white')
     expect(process.className).not.toContain('bg-')
+  })
+
+  it('renders public thought text above skill and tool process groups', () => {
+    render(
+      <AssistantTurnCard
+        messageId="assistant-1"
+        turn={createTurn({
+          processThoughts: [
+            {
+              id: 'thought-1',
+              text: '俺先看一下文档结构，再决定读哪些细节。',
+              createdAt: 1,
+              sourceEventType: 'assistant_process_thought'
+            }
+          ],
+          processGroups: [createToolGroup()]
+        })}
+        isStreaming
+        onOpenFile={vi.fn()}
+        onOpenApply={vi.fn()}
+      />
+    )
+
+    const thoughts = screen.getByTestId('workbench-assistant-thoughts')
+    const processGroup = screen.getByTestId('workbench-assistant-process-item-run-1:skill:docx-reader')
+    expect(screen.getByText('俺先看一下文档结构，再决定读哪些细节。')).toBeTruthy()
+    expect(
+      thoughts.compareDocumentPosition(processGroup) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
   })
 
   it('renders tool group with emphasized file name in expanded tool sentence', () => {

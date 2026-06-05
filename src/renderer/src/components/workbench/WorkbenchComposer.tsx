@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Button, Empty, Select, Spin, Tooltip } from 'antd'
+import { Empty, Select, Spin, Tooltip } from 'antd'
 import {
   HiArrowUp,
   HiChevronDown,
@@ -8,7 +8,8 @@ import {
   HiFolder,
   HiGlobeAlt,
   HiMagnifyingGlass,
-  HiSparkles
+  HiSparkles,
+  HiStop
 } from 'react-icons/hi2'
 import type {
   LLMConfig,
@@ -58,6 +59,7 @@ type WorkbenchComposerProps = {
   onSubmit: () => void
   onCancel: () => void
   loading: boolean
+  cancelling?: boolean
   canSubmit: boolean
   showCancel: boolean
   resetKey: number
@@ -94,6 +96,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   onSubmit,
   onCancel,
   loading,
+  cancelling = false,
   canSubmit,
   showCancel,
   resetKey,
@@ -896,29 +899,33 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                 </div>
               </Tooltip>
             ) : null}
-            {showCancel ? (
-              <Button
-                onClick={onCancel}
-                size="small"
-                className="h-7 rounded-full border-[#E5E5E4] bg-white px-2.5 text-[12px] text-[#666666] shadow-none"
-                data-testid={workbenchSelectors.cancelButton}
-              >
-                取消
-              </Button>
-            ) : null}
             <button
               type="button"
-              onClick={onSubmit}
-              disabled={loading || !canSubmit}
+              onClick={showCancel ? onCancel : onSubmit}
+              disabled={showCancel ? cancelling : loading || !canSubmit}
               className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-white transition ${
-                loading || !canSubmit
+                showCancel
+                  ? cancelling
+                    ? 'bg-[#D8D8D6]'
+                    : 'bg-[#B5455D] shadow-[0_6px_14px_rgba(181,69,93,0.16)] hover:-translate-y-[1px] hover:bg-[#9F3C52]'
+                  : loading || !canSubmit
                   ? 'bg-[#D8D8D6]'
                   : 'bg-[#D97757] shadow-[0_6px_14px_rgba(217,119,87,0.18)] hover:-translate-y-[1px] hover:bg-[#C66A4A]'
               }`}
               data-testid={workbenchSelectors.sendButton}
-              aria-label={mode === 'ai' ? '发送智能请求' : '执行搜索'}
+              aria-label={showCancel ? '停止本次运行' : mode === 'ai' ? '发送智能请求' : '执行搜索'}
             >
-              {loading ? <Spin size="small" /> : <HiArrowUp className="h-4 w-4" />}
+              {showCancel ? (
+                cancelling ? (
+                  <Spin size="small" />
+                ) : (
+                  <HiStop className="h-4 w-4" />
+                )
+              ) : loading ? (
+                <Spin size="small" />
+              ) : (
+                <HiArrowUp className="h-4 w-4" />
+              )}
             </button>
           </div>
         </div>

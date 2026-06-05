@@ -3099,10 +3099,14 @@ export function registerHandlers(services: {
   )
 
   ipcMain.handle('ai-run-cancel', async (_event, runId: string): Promise<AiRunCancelResponse> => {
-    const entry = activeAiRuns.get(String(runId || ''))
+    const normalizedRunId = String(runId || '')
+    const entry = activeAiRuns.get(normalizedRunId)
     if (!entry) return { success: false, error: 'run not found' }
     entry.cancelled = true
     entry.abortController.abort()
+    const approval = activeAiApprovals.get(normalizedRunId)
+    approval?.resolve({ accepted: false, error: 'run cancelled' })
+    activeAiApprovals.delete(normalizedRunId)
     return { success: true }
   })
 

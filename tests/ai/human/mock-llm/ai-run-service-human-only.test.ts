@@ -107,6 +107,10 @@ describe('ai human mock-llm backend', () => {
           result.events,
           'assistant_process_item_completed'
         )
+        const processThoughtEvents = filterAiRunEventsByType(
+          result.events,
+          'assistant_process_thought'
+        )
         const stages = new Set(humanSteps.map((event) => event.stage))
 
         runtime.assertThat(
@@ -168,12 +172,17 @@ describe('ai human mock-llm backend', () => {
             Boolean(terminalGroupStarted) &&
             Boolean(terminalItemStarted) &&
             Boolean(terminalItemCompleted) &&
+            processThoughtEvents.some((event) => event.text.includes('先学习 docx-read')) &&
             processItemStartedEvents.every((event) => event.display.kind === 'tool'),
           {
             name: 'assistant-process-events-follow-human-lifecycle',
             message:
-              'Assistant process 协议应按 human 生命周期发出 learning running/completed 与 hand 工具组/工具项事件，mouth 不作为过程项展示。',
+              'Assistant process 协议应按 human 生命周期发出公开思路、learning running/completed 与 hand 工具组/工具项事件，mouth 不作为过程项展示。',
             data: {
+              processThoughts: processThoughtEvents.map((event) => ({
+                thoughtId: event.thoughtId,
+                text: event.text
+              })),
               processGroupStarted: processGroupStartedEvents.map((event) => ({
                 groupId: event.groupId,
                 kind: event.kind,

@@ -32,6 +32,24 @@ export const getSkillKeyFromToolName = (toolName: string): string => {
 export const getToolProcessGroupId = (runId: string, toolName: string): string =>
   `${runId}:skill:${getSkillKeyFromToolName(toolName)}`
 
+export const emitAssistantProcessThought = (input: {
+  sendEvent: SendEvent
+  runId: string
+  text: string
+  createdAt?: number
+}): void => {
+  const text = input.text.trim()
+  if (!text) return
+  const createdAt = input.createdAt || Date.now()
+  input.sendEvent({
+    type: 'assistant_process_thought',
+    runId: input.runId,
+    thoughtId: `${input.runId}:thought:${createdAt}`,
+    text,
+    createdAt
+  })
+}
+
 export const emitThinkingStarted = (input: {
   sendEvent: SendEvent
   runId: string

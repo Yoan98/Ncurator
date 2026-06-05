@@ -4,7 +4,8 @@ import {
   buildAssistantProcessText,
   createAssistantThinkingGroup,
   createSearchProcessGroup,
-  reduceAssistantProcessGroups
+  reduceAssistantProcessGroups,
+  reduceAssistantProcessThoughts
 } from '../../../src/renderer/src/components/workbench/utils'
 
 const toText = (segments: { text: string }[]): string =>
@@ -65,6 +66,25 @@ const itemCompleted = (overrides: {
 })
 
 describe('workbench assistant process groups', () => {
+  it('collects public thought text from assistant_process_thought events', () => {
+    const thoughts = reduceAssistantProcessThoughts([], {
+      type: 'assistant_process_thought',
+      runId: 'run-1',
+      thoughtId: 'thought-1',
+      text: '俺先看一下文档结构。',
+      createdAt: 1
+    })
+
+    expect(thoughts).toEqual([
+      {
+        id: 'thought-1',
+        text: '俺先看一下文档结构。',
+        createdAt: 1,
+        sourceEventType: 'assistant_process_thought'
+      }
+    ])
+  })
+
   it('replaces local thinking placeholder with backend thinking event', () => {
     const groups = reduceAssistantProcessGroups(
       [createAssistantThinkingGroup('assistant-1')],

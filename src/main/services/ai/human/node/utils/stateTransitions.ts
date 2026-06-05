@@ -22,6 +22,7 @@ import {
   type HumanStateOverrides,
   type HumanTraceItemInput
 } from './stateTransitionState'
+import { emitAssistantProcessThought } from '../../../events/processEvents'
 
 export type { HumanTraceItemInput } from './stateTransitionState'
 
@@ -121,6 +122,11 @@ export const applyBrainDecisionTransition = (input: {
     taskId: input.state.task.taskId,
     state: nextState,
     stage: 'human_brain'
+  })
+  emitAssistantProcessThought({
+    sendEvent: input.ctx.sendEvent,
+    runId: input.ctx.runId,
+    text: input.thought.thought.next
   })
 
   if (decisionHint) {

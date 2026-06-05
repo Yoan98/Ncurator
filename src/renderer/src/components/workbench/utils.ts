@@ -17,6 +17,7 @@ import {
 import type {
   AssistantProcessGroup,
   AssistantProcessGroupItem,
+  AssistantProcessThought,
   AssistantProcessIconKind,
   AssistantProcessSkillKey,
   AssistantProcessStatus,
@@ -496,6 +497,24 @@ export const completeAssistantProcessGroups = (
       items: nextItems
     }
   })
+
+export const reduceAssistantProcessThoughts = (
+  current: AssistantProcessThought[],
+  event: AiRunEvent
+): AssistantProcessThought[] => {
+  if (event.type !== 'assistant_process_thought') return current
+  const text = event.text.trim()
+  if (!text) return current
+  const next: AssistantProcessThought = {
+    id: event.thoughtId,
+    text,
+    createdAt: event.createdAt,
+    sourceEventType: event.type
+  }
+  return [...current.filter((item) => item.id !== next.id), next].sort(
+    (left, right) => left.createdAt - right.createdAt
+  )
+}
 
 const upsertGroupFromDisplayEvent = (
   current: AssistantProcessGroup[],

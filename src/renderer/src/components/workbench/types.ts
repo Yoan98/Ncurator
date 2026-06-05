@@ -105,6 +105,13 @@ export type AssistantProcessGroup = {
   skillId?: RuntimeSkillId
 }
 
+export type AssistantProcessThought = {
+  id: string
+  text: string
+  createdAt: number
+  sourceEventType: Extract<AiRunEvent['type'], 'assistant_process_thought'>
+}
+
 export type DocxApplyWorkspaceTab = {
   fileKey: string
   applyId: string
@@ -136,6 +143,7 @@ export type AssistantTurnViewModel = {
   messageId: string
   runId?: string
   status: 'running' | 'completed' | 'failed'
+  processThoughts: AssistantProcessThought[]
   processGroups: AssistantProcessGroup[]
   finalAnswerMarkdown: string
   artifacts: AssistantArtifactItem[]
