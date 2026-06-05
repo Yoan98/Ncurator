@@ -96,10 +96,10 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
 
   return (
     <div className="w-full" data-testid={`workbench-assistant-turn-${messageId}`}>
-      <div className="space-y-3">
+      <div className="space-y-4">
         {processItems.length > 0 ? (
           <div
-            className={`rounded-[18px] border border-[#ECE7DF] bg-[#FCFBF8] px-4 py-3 transition-opacity duration-200 ${
+            className={`border-l border-[#E6DDD5] pl-4 transition-opacity duration-200 ${
               turn.status === 'completed' && hasFinalAnswer ? 'opacity-75' : ''
             }`}
             data-testid={`${workbenchSelectors.assistantProcessPrefix}-${messageId}`}
@@ -129,7 +129,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
 
         {hasFinalAnswer ? (
           <div
-            className="rounded-[20px] border border-[#EAE2DD] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)]"
+            className="min-w-0 text-[15px] leading-7 text-[#1F1F1F]"
             data-testid={`${workbenchSelectors.assistantFinalAnswerPrefix}-${messageId}`}
           >
             <MarkdownRenderer content={finalAnswerMarkdown} />

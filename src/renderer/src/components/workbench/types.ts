@@ -2,6 +2,13 @@ import type { AiRunEvent, DocxApplyStatus, SearchResult } from '../../../../shar
 
 export type WorkbenchMode = 'ai' | 'search'
 
+export type WorkbenchPreferenceStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
+
+export type WorkbenchModelPreference = {
+  configId: string
+  modelName: string
+}
+
 export type WorkbenchContextUsage = {
   contextWindowTokens: number
   usedContextTokens: number

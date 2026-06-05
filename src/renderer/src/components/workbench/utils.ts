@@ -3,9 +3,22 @@ import type {
   IpcJsonArray,
   IpcJsonObject,
   IpcJsonValue,
-  SearchResult
+  LlmRemoteModel,
+  SearchResult,
+  WorkspaceSource
 } from '../../../../shared/types'
-import type { AssistantProcessItem, WorkbenchFileRef } from './types'
+import {
+  WORKBENCH_PREFERENCE_MODE_STORAGE_KEY,
+  WORKBENCH_PREFERENCE_MODEL_STORAGE_KEY,
+  WORKBENCH_PREFERENCE_WORKSPACE_STORAGE_KEY
+} from './constants'
+import type {
+  AssistantProcessItem,
+  WorkbenchFileRef,
+  WorkbenchMode,
+  WorkbenchModelPreference,
+  WorkbenchPreferenceStorage
+} from './types'
 
 const getPageNumberFromMetadata = (metadata: SearchResult['metadata']): number | undefined => {
   if (!metadata) return undefined
@@ -23,6 +36,9 @@ const getPageNumberFromMetadata = (metadata: SearchResult['metadata']): number |
 const isIpcJsonObject = (value: IpcJsonValue): value is IpcJsonObject => {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
+
+const isWorkbenchMode = (value: string | null): value is WorkbenchMode =>
+  value === 'ai' || value === 'search'
 
 const readStringField = (value: IpcJsonObject, key: string): string | undefined => {
   const record = value as Record<string, IpcJsonValue>
@@ -111,13 +127,19 @@ export const buildAssistantProcessText = (event: AiRunEvent): string | null => {
   return null
 }
 
-export const createAssistantThinkingItem = (messageId: string): AssistantProcessItem => ({
+export const createAssistantPlaceholderItem = (
+  messageId: string,
+  text = '让俺想想'
+): AssistantProcessItem => ({
   id: `${messageId}:thinking`,
-  text: '让俺想想',
+  text,
   status: 'running',
   createdAt: Date.now(),
   sourceEventType: 'thinking'
 })
+
+export const createAssistantThinkingItem = (messageId: string): AssistantProcessItem =>
+  createAssistantPlaceholderItem(messageId)
 
 export const createAssistantProcessItem = (
   event: AiRunEvent,
@@ -248,4 +270,97 @@ export const extractSearchResultsFromToolOutput = (output: IpcJsonValue): Search
 export const formatSessionDate = (timestamp: number): string => {
   const date = new Date(timestamp)
   return date.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit' })
+}
+
+export const readWorkbenchModePreference = (storage: WorkbenchPreferenceStorage): WorkbenchMode => {
+  const stored = storage.getItem(WORKBENCH_PREFERENCE_MODE_STORAGE_KEY)
+  return isWorkbenchMode(stored) ? stored : 'ai'
+}
+
+export const writeWorkbenchModePreference = (
+  storage: WorkbenchPreferenceStorage,
+  mode: WorkbenchMode
+): void => {
+  storage.setItem(WORKBENCH_PREFERENCE_MODE_STORAGE_KEY, mode)
+}
+
+export const readWorkbenchWorkspacePreference = (
+  storage: WorkbenchPreferenceStorage
+): string | null => {
+  const stored = storage.getItem(WORKBENCH_PREFERENCE_WORKSPACE_STORAGE_KEY)
+  return stored && stored.trim() ? stored : null
+}
+
+export const writeWorkbenchWorkspacePreference = (
+  storage: WorkbenchPreferenceStorage,
+  workspaceId: string | null
+): void => {
+  if (!workspaceId) {
+    storage.removeItem(WORKBENCH_PREFERENCE_WORKSPACE_STORAGE_KEY)
+    return
+  }
+  storage.setItem(WORKBENCH_PREFERENCE_WORKSPACE_STORAGE_KEY, workspaceId)
+}
+
+export const resolveWorkbenchWorkspaceSelection = (
+  workspaces: WorkspaceSource[],
+  preferredWorkspaceId: string | null
+): string | null => {
+  if (
+    preferredWorkspaceId &&
+    workspaces.some((workspace) => workspace.id === preferredWorkspaceId)
+  ) {
+    return preferredWorkspaceId
+  }
+  return workspaces[0]?.id || null
+}
+
+export const readWorkbenchModelPreference = (
+  storage: WorkbenchPreferenceStorage
+): WorkbenchModelPreference | null => {
+  const raw = storage.getItem(WORKBENCH_PREFERENCE_MODEL_STORAGE_KEY)
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as { configId?: string; modelName?: string }
+    if (!parsed.configId || !parsed.modelName) return null
+    return {
+      configId: parsed.configId,
+      modelName: parsed.modelName
+    }
+  } catch {
+    return null
+  }
+}
+
+export const writeWorkbenchModelPreference = (
+  storage: WorkbenchPreferenceStorage,
+  preference: WorkbenchModelPreference | null
+): void => {
+  if (!preference) {
+    storage.removeItem(WORKBENCH_PREFERENCE_MODEL_STORAGE_KEY)
+    return
+  }
+  storage.setItem(WORKBENCH_PREFERENCE_MODEL_STORAGE_KEY, JSON.stringify(preference))
+}
+
+export const resolveWorkbenchModelSelection = (input: {
+  configId: string
+  models: LlmRemoteModel[]
+  defaultModelName?: string | null
+  preference: WorkbenchModelPreference | null
+}): string | null => {
+  const { configId, defaultModelName, models, preference } = input
+  const preferredModelName =
+    preference?.configId === configId ? preference.modelName : defaultModelName || null
+  if (preferredModelName && models.some((model) => model.id === preferredModelName)) {
+    return preferredModelName
+  }
+  if (
+    defaultModelName &&
+    preferredModelName !== defaultModelName &&
+    models.some((model) => model.id === defaultModelName)
+  ) {
+    return defaultModelName
+  }
+  return models[0]?.id || null
 }

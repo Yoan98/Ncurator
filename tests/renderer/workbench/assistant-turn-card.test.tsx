@@ -44,6 +44,32 @@ describe('AssistantTurnCard', () => {
     expect(screen.queryByTestId('workbench-assistant-final-answer-assistant-1')).toBeNull()
   })
 
+  it('renders search placeholder with the same streaming surface before final text', () => {
+    render(
+      <AssistantTurnCard
+        messageId="assistant-search-1"
+        turn={createTurn({
+          messageId: 'assistant-search-1',
+          processItems: [
+            {
+              id: 'assistant-search-1:thinking',
+              text: '俺正在搜索中',
+              status: 'running',
+              createdAt: 1,
+              sourceEventType: 'thinking'
+            }
+          ]
+        })}
+        isStreaming
+        onOpenFile={vi.fn()}
+        onOpenApply={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText('俺正在搜索中')).toBeTruthy()
+    expect(screen.queryByTestId('workbench-assistant-final-answer-assistant-search-1')).toBeNull()
+  })
+
   it('renders markdown final answer below process stream', () => {
     render(
       <AssistantTurnCard
@@ -80,5 +106,8 @@ describe('AssistantTurnCard', () => {
     ).toBeTruthy()
     expect(screen.getByTestId('mock-markdown-renderer').textContent).toContain('## 最终结果')
     expect(screen.getByTestId('mock-markdown-renderer').textContent).toContain('- 已完成')
+    expect(finalAnswer.className).not.toContain('bg-white')
+    expect(finalAnswer.className).not.toContain('rounded')
+    expect(process.className).not.toContain('bg-')
   })
 })

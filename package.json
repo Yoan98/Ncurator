@@ -16,6 +16,7 @@
     "test:ai:tool": "node scripts/test-workflow.mjs --domain ai --suite tool --type backend",
     "test:ai:human:mock-llm": "node scripts/test-workflow.mjs --domain ai --suite human --group mock-llm --type backend",
     "test:ai:human:live": "node scripts/test-workflow.mjs --domain ai --suite human --group live --type backend",
+    "test:renderer": "vitest run --config vitest.renderer.config.mts",
     "test:unit": "node scripts/test-workflow.mjs --domain unit --type backend",
     "test:unit:ai": "node scripts/test-workflow.mjs --domain unit --suite ai --type backend",
     "test:settings": "node scripts/test-workflow.mjs --domain settings",

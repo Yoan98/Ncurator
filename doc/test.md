@@ -175,7 +175,7 @@ runner 不负责：
 - 写失败原因分析。
 - 写优化建议。
 
-当前常用命令按域收口如下。`workbench` 不再维护 formal test-plan，对应端到端体验验证改走 hand-test，不再提供 `test:workbench*` runner；Workbench renderer UI 的长期辅助契约可放入 `tests/renderer/**`，一次性视觉或交互排查放入 `tests/temp/**`，不得直接新增未登记的 formal workbench case。
+当前常用命令按域收口如下。`workbench` 不再维护 formal test-plan，对应端到端体验验证改走 hand-test，不再提供 `test:workbench*` runner；Workbench renderer UI 的长期辅助契约可放入 `tests/renderer/**`，通过 `pnpm test:renderer` 执行；一次性视觉或交互排查放入 `tests/temp/**`，不得直接新增未登记的 formal workbench case。
 
 - AI
   - `pnpm test:ai`
@@ -183,6 +183,8 @@ runner 不负责：
   - `pnpm test:ai:tool`
   - `pnpm test:ai:human:mock-llm`
   - `pnpm test:ai:human:live`
+- Renderer
+  - `pnpm test:renderer`
 - Unit
   - `pnpm test:unit`
   - `pnpm test:unit:ai`

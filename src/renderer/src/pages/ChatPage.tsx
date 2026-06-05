@@ -32,10 +32,11 @@ import AssistantTurnCard from '../components/workbench/AssistantTurnCard'
 import WorkbenchComposer from '../components/workbench/WorkbenchComposer'
 import WorkbenchContentPanel from '../components/workbench/WorkbenchContentPanel'
 import {
+  DOCX_APPLY_STATUS_META,
+  FILE_ORIGIN_LABELS,
   WORKBENCH_CONTENT_PANEL_COLLAPSED_STORAGE_KEY,
   WORKBENCH_SIDEBAR_STORAGE_KEY
 } from '../components/workbench/constants'
-import { DOCX_APPLY_STATUS_META, FILE_ORIGIN_LABELS } from '../components/workbench/constants'
 import type {
   AssistantTurnViewModel,
   WorkbenchContextUsage,
@@ -46,6 +47,7 @@ import type {
   WorkbenchMode
 } from '../components/workbench/types'
 import {
+  createAssistantPlaceholderItem,
   createAssistantProcessItem,
   createAssistantThinkingItem,
   dedupeFileRefs,
@@ -53,7 +55,15 @@ import {
   extractSearchResultsFromToolOutput,
   formatSessionDate,
   getSearchResultFileRef,
-  mergeAssistantProcessItem
+  mergeAssistantProcessItem,
+  readWorkbenchModePreference,
+  readWorkbenchModelPreference,
+  readWorkbenchWorkspacePreference,
+  resolveWorkbenchModelSelection,
+  resolveWorkbenchWorkspaceSelection,
+  writeWorkbenchModePreference,
+  writeWorkbenchModelPreference,
+  writeWorkbenchWorkspacePreference
 } from '../components/workbench/utils'
 import {
   groupApplyTargetsByRunId,
@@ -92,6 +102,16 @@ const createAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
   blockers: []
 })
 
+const createSearchAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
+  messageId,
+  status: 'running',
+  processItems: [createAssistantPlaceholderItem(messageId, '俺正在搜索中')],
+  finalAnswerMarkdown: '',
+  artifacts: [],
+  applyTargets: [],
+  blockers: []
+})
+
 const artifactToApplyTarget = (
   artifact: AiArtifactRef
 ): AssistantTurnViewModel['applyTargets'][number] | null => {
@@ -124,7 +144,9 @@ const buildAssistantTurnFromMessage = (message: ChatMessage): AssistantTurnViewM
     })),
     applyTargets: artifacts
       .map(artifactToApplyTarget)
-      .filter((target): target is AssistantTurnViewModel['applyTargets'][number] => Boolean(target)),
+      .filter((target): target is AssistantTurnViewModel['applyTargets'][number] =>
+        Boolean(target)
+      ),
     blockers: []
   }
 }
@@ -136,7 +158,10 @@ const appendArtifactForMessage = (
 ): void => {
   const currentArtifacts = store[messageId] || []
   const exists = currentArtifacts.some(
-    (item) => item.path === artifact.path && item.applyId === artifact.applyId && item.summary === artifact.summary
+    (item) =>
+      item.path === artifact.path &&
+      item.applyId === artifact.applyId &&
+      item.summary === artifact.summary
   )
   if (!exists) {
     store[messageId] = [...currentArtifacts, artifact]
@@ -179,13 +204,17 @@ const ChatPage: React.FC = () => {
   const [sessions, setSessions] = useState<ChatSession[]>([])
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
   const [currentMessages, setCurrentMessages] = useState<ChatMessage[]>([])
-  const [composerMode, setComposerMode] = useState<WorkbenchMode>('ai')
+  const [composerMode, setComposerMode] = useState<WorkbenchMode>(() =>
+    readWorkbenchModePreference(window.localStorage)
+  )
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [aiRunId, setAiRunId] = useState<string | null>(null)
   const [selectedReferences, setSelectedReferences] = useState<SelectedReference[]>([])
   const [workspaces, setWorkspaces] = useState<WorkspaceSource[]>([])
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null)
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(() =>
+    readWorkbenchWorkspacePreference(window.localStorage)
+  )
   const [workspaceDocumentIds, setWorkspaceDocumentIds] = useState<string[]>([])
   const [activeModelConfig, setActiveModelConfig] = useState<LLMConfig | null>(null)
   const [remoteModels, setRemoteModels] = useState<LlmRemoteModel[]>([])
@@ -229,15 +258,12 @@ const ChatPage: React.FC = () => {
   const lastSubmittedReferencesRef = useRef<SelectedReference[]>([])
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  const kbScopeDocumentIds = useMemo(
-    () => {
-      const explicitIds = collectReferenceDocumentIds(selectedReferences)
-      if (explicitIds.length > 0) return explicitIds
-      if (selectedWorkspaceId) return workspaceDocumentIds
-      return []
-    },
-    [selectedReferences, selectedWorkspaceId, workspaceDocumentIds]
-  )
+  const kbScopeDocumentIds = useMemo(() => {
+    const explicitIds = collectReferenceDocumentIds(selectedReferences)
+    if (explicitIds.length > 0) return explicitIds
+    if (selectedWorkspaceId) return workspaceDocumentIds
+    return []
+  }, [selectedReferences, selectedWorkspaceId, workspaceDocumentIds])
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) || null,
@@ -445,10 +471,12 @@ const ChatPage: React.FC = () => {
     try {
       const response = await window.api.workspaceList()
       setWorkspaces(response.items)
-      setSelectedWorkspaceId((current) => {
-        if (current && response.items.some((workspace) => workspace.id === current)) return current
-        return response.items[0]?.id || null
-      })
+      const nextWorkspaceId = resolveWorkbenchWorkspaceSelection(
+        response.items,
+        readWorkbenchWorkspacePreference(window.localStorage)
+      )
+      setSelectedWorkspaceId(nextWorkspaceId)
+      writeWorkbenchWorkspacePreference(window.localStorage, nextWorkspaceId)
     } catch (error) {
       console.error('Failed to load workspaces', error)
     }
@@ -467,16 +495,22 @@ const ChatPage: React.FC = () => {
       const response = await window.api.llmConfigModelList(activeConfig.id)
       const items = response.success ? response.items : []
       setRemoteModels(items)
-      setSelectedModelName((current) => {
-        if (current && items.some((model) => model.id === current)) return current
-        if (
-          activeConfig.default_model &&
-          items.some((model) => model.id === activeConfig.default_model)
-        ) {
-          return activeConfig.default_model
-        }
-        return items[0]?.id || null
+      const nextModelName = resolveWorkbenchModelSelection({
+        configId: activeConfig.id,
+        models: items,
+        defaultModelName: activeConfig.default_model,
+        preference: readWorkbenchModelPreference(window.localStorage)
       })
+      setSelectedModelName(nextModelName)
+      writeWorkbenchModelPreference(
+        window.localStorage,
+        nextModelName
+          ? {
+              configId: activeConfig.id,
+              modelName: nextModelName
+            }
+          : null
+      )
     } catch (error) {
       console.error('Failed to load llm configs', error)
       setActiveModelConfig(null)
@@ -488,6 +522,15 @@ const ChatPage: React.FC = () => {
   const handleModelNameChange = useCallback(
     (modelName: string): void => {
       setSelectedModelName(modelName)
+      writeWorkbenchModelPreference(
+        window.localStorage,
+        activeModelConfig
+          ? {
+              configId: activeModelConfig.id,
+              modelName
+            }
+          : null
+      )
       if (!activeModelConfig || activeModelConfig.default_model === modelName) return
 
       const nextConfig: LLMConfig = {
@@ -505,6 +548,16 @@ const ChatPage: React.FC = () => {
     },
     [activeModelConfig, message]
   )
+
+  const handleModeChange = useCallback((mode: WorkbenchMode): void => {
+    setComposerMode(mode)
+    writeWorkbenchModePreference(window.localStorage, mode)
+  }, [])
+
+  const handleWorkspaceChange = useCallback((workspaceId: string | null): void => {
+    setSelectedWorkspaceId(workspaceId)
+    writeWorkbenchWorkspacePreference(window.localStorage, workspaceId)
+  }, [])
 
   const createNewSession = async (): Promise<void> => {
     try {
@@ -600,10 +653,9 @@ const ChatPage: React.FC = () => {
         return nextTurns
       })
 
-      const preferredRecord =
-        options?.preferredApplyId
-          ? allRecords.find((record) => record.id === options.preferredApplyId) || null
-          : null
+      const preferredRecord = options?.preferredApplyId
+        ? allRecords.find((record) => record.id === options.preferredApplyId) || null
+        : null
       const workspaceRecords = preferredRecord
         ? allRecords.filter((record) => record.run_id === preferredRecord.run_id)
         : activeRecords
@@ -1288,8 +1340,28 @@ const ChatPage: React.FC = () => {
     setCurrentMessages((previous) => [...previous, userMessage])
     void window.api.chatMessageSave(userMessage).catch(console.error)
 
+    let assistantMessageId: string | null = null
+    let assistantMessage: ChatMessage | null = null
+
     try {
       await updateSessionTitleIfNeeded(userQuery)
+      const nextAssistantMessageId = crypto.randomUUID()
+      assistantMessageId = nextAssistantMessageId
+      setAssistantTurns((previous) => ({
+        ...previous,
+        [nextAssistantMessageId]: createSearchAssistantTurn(nextAssistantMessageId)
+      }))
+
+      const nextAssistantMessage: ChatMessage = {
+        id: nextAssistantMessageId,
+        session_id: currentSessionId,
+        role: 'assistant',
+        content: '',
+        timestamp: Date.now()
+      }
+      assistantMessage = nextAssistantMessage
+      setCurrentMessages((previous) => [...previous, nextAssistantMessage])
+
       const response = await window.api.search(
         userQuery,
         'all',
@@ -1300,15 +1372,30 @@ const ChatPage: React.FC = () => {
         results.length > 0
           ? `已在当前资料范围中找到 ${results.length} 条结果，右侧可以直接查看命中详情。`
           : '未在当前资料范围中找到匹配结果。'
-      const assistantMessage: ChatMessage = {
-        id: crypto.randomUUID(),
-        session_id: currentSessionId,
-        role: 'assistant',
-        content: assistantContent,
-        timestamp: Date.now()
-      }
-      setCurrentMessages((previous) => [...previous, assistantMessage])
-      void window.api.chatMessageSave(assistantMessage).catch(console.error)
+      const completedAssistantMessageId = assistantMessageId
+      const completedAssistantMessage = assistantMessage
+      completedAssistantMessage.content = assistantContent
+      setCurrentMessages((previous) =>
+        previous.map((item) =>
+          item.id === completedAssistantMessageId ? completedAssistantMessage : item
+        )
+      )
+      void window.api.chatMessageSave(completedAssistantMessage).catch(console.error)
+      setAssistantTurns((previous) => ({
+        ...previous,
+        [completedAssistantMessageId]: {
+          ...(previous[completedAssistantMessageId] ||
+            createSearchAssistantTurn(completedAssistantMessageId)),
+          status: 'completed',
+          processItems: [
+            {
+              ...createAssistantPlaceholderItem(completedAssistantMessageId, '俺正在搜索中'),
+              status: 'completed'
+            }
+          ],
+          finalAnswerMarkdown: assistantContent
+        }
+      }))
 
       setModalPreviewFile(null)
       showContentPanel({
@@ -1320,6 +1407,32 @@ const ChatPage: React.FC = () => {
       })
     } catch (error) {
       console.error(error)
+      if (assistantMessageId && assistantMessage) {
+        const failedAssistantMessageId = assistantMessageId
+        const failedAssistantMessage = assistantMessage
+        failedAssistantMessage.content = '搜索失败了，请稍后再试。'
+        setCurrentMessages((previous) =>
+          previous.map((item) =>
+            item.id === failedAssistantMessageId ? failedAssistantMessage : item
+          )
+        )
+        setAssistantTurns((previous) => ({
+          ...previous,
+          [failedAssistantMessageId]: {
+            ...(previous[failedAssistantMessageId] ||
+              createSearchAssistantTurn(failedAssistantMessageId)),
+            status: 'failed',
+            processItems: [
+              {
+                ...createAssistantPlaceholderItem(failedAssistantMessageId, '俺正在搜索中'),
+                status: 'failed'
+              }
+            ],
+            finalAnswerMarkdown: '搜索失败了，请稍后再试。',
+            error: '搜索失败了，请稍后再试。'
+          }
+        }))
+      }
       message.error('搜索失败')
     } finally {
       setLoading(false)
@@ -1547,8 +1660,8 @@ const ChatPage: React.FC = () => {
 
     return (
       <div key={messageItem.id} className="flex justify-end">
-        <div className="max-w-[78%]">
-          <div className="rounded-[20px] border border-[#E5E5E4] bg-white px-4 py-3.5 text-[14px] leading-7 text-[#1F1F1F] shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+        <div className="max-w-[66%]">
+          <div className="rounded-[18px] bg-[#EDE5DF] px-3.5 py-2.5 text-[14px] leading-6 text-[#2F2925]">
             {messageItem.content}
           </div>
           {sources.length > 0 ? (
@@ -1579,7 +1692,7 @@ const ChatPage: React.FC = () => {
     if (!turn) {
       return (
         <div key={messageItem.id} className="w-full">
-          <div className="rounded-[20px] border border-[#EAE2DD] bg-white px-5 py-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+          <div className="min-w-0 text-[15px] leading-7 text-[#1F1F1F]">
             <MarkdownRenderer content={messageItem.content} />
           </div>
         </div>
@@ -1820,30 +1933,29 @@ const ChatPage: React.FC = () => {
                   <div className="mx-auto max-w-[920px]">
                     <WorkbenchComposer
                       mode={composerMode}
-                      onModeChange={setComposerMode}
+                      onModeChange={handleModeChange}
                       activeModelConfig={activeModelConfig}
                       remoteModels={remoteModels}
                       selectedModelName={selectedModelName}
                       onModelNameChange={handleModelNameChange}
                       workspaces={workspaces}
                       selectedWorkspaceId={selectedWorkspaceId}
-                      onWorkspaceChange={setSelectedWorkspaceId}
+                      onWorkspaceChange={handleWorkspaceChange}
                       onDraftChange={handleComposerDraftChange}
                       onSubmit={() => void handleSend()}
                       onCancel={() => void handleCancel()}
                       loading={loading}
                       canSubmit={Boolean(
                         input.trim() &&
-                          selectedWorkspace &&
-                          (composerMode === 'search' || selectedModelName)
+                        selectedWorkspace &&
+                        (composerMode === 'search' || selectedModelName)
                       )}
                       showCancel={loading && composerMode === 'ai' && Boolean(aiRunId)}
                       resetKey={composerResetKey}
                       contextUsage={contextUsage}
                     />
 
-                    {composerMode === 'ai' &&
-                    (pendingApprovalBatch || pendingWorkspaceRequest) ? (
+                    {composerMode === 'ai' && (pendingApprovalBatch || pendingWorkspaceRequest) ? (
                       <div
                         className="mt-3 flex items-start gap-2 rounded-[14px] border border-[#FDECC8] bg-[#FFF9ED] px-3 py-3 text-sm text-[#8A6510]"
                         data-testid={
@@ -1858,7 +1970,8 @@ const ChatPage: React.FC = () => {
                             <div className="flex flex-col gap-3">
                               <div className="flex items-center justify-between gap-3">
                                 <div className="text-sm font-medium text-[#8A6510]">
-                                  审批 {approvalCurrentIndex + 1} / {pendingApprovalBatch.items.length}
+                                  审批 {approvalCurrentIndex + 1} /{' '}
+                                  {pendingApprovalBatch.items.length}
                                 </div>
                                 <div className="flex items-center gap-1">
                                   <Button
@@ -1876,8 +1989,8 @@ const ChatPage: React.FC = () => {
                                     size="small"
                                     icon={<HiChevronRight className="h-4 w-4" />}
                                     disabled={
-                                      approvalCurrentIndex >= pendingApprovalBatch.items.length - 1 ||
-                                      approvalSubmitting
+                                      approvalCurrentIndex >=
+                                        pendingApprovalBatch.items.length - 1 || approvalSubmitting
                                     }
                                     onClick={() =>
                                       setApprovalCurrentIndex((current) =>
@@ -1895,17 +2008,22 @@ const ChatPage: React.FC = () => {
                               <div className="flex gap-2">
                                 <Button
                                   type="primary"
-                                  onClick={() => setApprovalAction(currentApprovalItem.itemId, 'approve')}
+                                  onClick={() =>
+                                    setApprovalAction(currentApprovalItem.itemId, 'approve')
+                                  }
                                   loading={
                                     approvalSubmitting &&
-                                    approvalDraftDecisions[currentApprovalItem.itemId]?.action === 'approve'
+                                    approvalDraftDecisions[currentApprovalItem.itemId]?.action ===
+                                      'approve'
                                   }
                                   data-testid={chatSelectors.approvalBatchApproveButton}
                                 >
                                   同意
                                 </Button>
                                 <Button
-                                  onClick={() => setApprovalAction(currentApprovalItem.itemId, 'reject')}
+                                  onClick={() =>
+                                    setApprovalAction(currentApprovalItem.itemId, 'reject')
+                                  }
                                   disabled={approvalSubmitting}
                                   data-testid={chatSelectors.approvalBatchDenyButton}
                                 >
@@ -1915,9 +2033,14 @@ const ChatPage: React.FC = () => {
                               <input
                                 className="w-full rounded-[10px] border border-[#E7CFA5] bg-white px-3 py-2 text-sm text-[#6F5311] outline-none placeholder:text-[#B68A2D]"
                                 placeholder="告诉馆长该怎么做"
-                                value={approvalDraftDecisions[currentApprovalItem.itemId]?.message || ''}
+                                value={
+                                  approvalDraftDecisions[currentApprovalItem.itemId]?.message || ''
+                                }
                                 onChange={(event) =>
-                                  setApprovalGuideMessage(currentApprovalItem.itemId, event.target.value)
+                                  setApprovalGuideMessage(
+                                    currentApprovalItem.itemId,
+                                    event.target.value
+                                  )
                                 }
                                 disabled={approvalSubmitting}
                                 data-testid={chatSelectors.approvalBatchGuideInput}
@@ -1966,13 +2089,16 @@ const ChatPage: React.FC = () => {
                         data-testid={workbenchSelectors.referenceAiWarning}
                       >
                         <HiOutlineExclamationCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                        <span>已选本地参考资料含未完全索引内容，AI 可能需要直接读取原文件，耗时更长。</span>
+                        <span>
+                          已选本地参考资料含未完全索引内容，AI 可能需要直接读取原文件，耗时更长。
+                        </span>
                       </div>
                     ) : null}
 
                     {composerMode === 'search' &&
                     selectedReferences.some(
-                      (reference) => reference.kind === 'directory' && reference.kbAvailability === 'partial'
+                      (reference) =>
+                        reference.kind === 'directory' && reference.kbAvailability === 'partial'
                     ) ? (
                       <div
                         className="mt-3 flex items-start gap-2 rounded-[14px] border border-[#FDECC8] bg-[#FFF9ED] px-3 py-2.5 text-sm text-[#8A6510]"

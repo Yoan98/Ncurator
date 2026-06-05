@@ -1,29 +1,35 @@
 # NCurator-Desktop（AI 项目规则）
 
 ## 1. 文档引用
+
 ### 1.1 AI相关
+
 - `doc/ai-design/architecture.md`：涉及 AI 整体架构、模块关系或主流程时阅读。
 - `doc/ai-design/design-detail.md`：涉及 AI 设计边界、职责划分、核心数据、关键 contract 或关键流程时阅读。
 - `doc/ai-design/human-skill-design.md`：涉及 human skill 体系、能力边界或工具使用范围时阅读。
 - `doc/ai-design/prompt-design.md`：涉及 prompt 设计、AI-facing 文案或工具描述方式时阅读。
 
 ### 1.2 docx相关
+
 - `doc/docx-design/architecture.md`：涉及 docx 整体架构、模块关系或主流程时阅读。
 - `doc/docx-design/design-detail.md`：涉及 docx 设计边界、核心对象、关键流程、三视图关系或数据结构时阅读。
 
 ### 1.3 项目整体相关
+
 - `doc/architecture.md`：涉及项目整体架构或技术栈时阅读。
 - `doc/database.md`：涉及数据库结构、具名工作空间/网页索引状态存储或持久化关系时阅读。
 - `doc/project-structure.md`：涉及工程结构或目录归位时阅读。
 - `doc/ui-style.md`：涉及 UI 风格或通用交互规范时阅读。
 
 ### 1.4 测试相关
+
 - `doc/test-plan/ai-test.md`：涉及 AI 测试范围、正式 case 设计或执行摘要维护时阅读。
 - `doc/test-plan/settings-test.md`：涉及 Settings 测试范围或测试边界时阅读。
-- `doc/test.md`：涉及测试体系、runner、日志或正式测试流程时阅读。
+- `doc/test.md`：涉及测试体系、runner、renderer 辅助测试命令或正式测试流程时阅读。
 
 ### 1.5 prd产品文档相关
-- `doc/prd/workbench.md`：涉及 Workbench 产品需求、交互或验收标准时阅读。
+
+- `doc/prd/workbench.md`：涉及 Workbench 产品需求、消息流交互或 composer 偏好验收标准时阅读。
 - `doc/prd/settings.md`：涉及 Settings 产品需求、具名工作空间资料/索引交互或验收标准时阅读。
 
 ## 2. 必须遵守的规则
@@ -60,5 +66,6 @@
 - 涉及工作区语义的测试时，统一使用 `tests/fixtures/workspace` 作为共享输入目录，不再把共享 workspace 放在 `tests/fixtures/ai/**` 下维护
 
 ### 你的回复相关
+
 - 当对应测试用例文档明确要求引用 PRD 编号时，写正式测试或验收结论应按该文档要求执行
 - 最终回复涉及功能实现时，应说明已验证和未验证项；只有在对应测试用例文档明确要求或 `doc/prd/**` 发生变更时，才需要说明 PRD 对齐情况
