@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { pdfjs, Document, Page } from 'react-pdf'
 import { Pagination } from 'antd'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
@@ -10,16 +10,44 @@ import 'react-pdf/dist/Page/TextLayer.css'
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
+const createPageNumbers = (numPages: number): number[] => {
+  return Array.from({ length: numPages }, (_, index) => index + 1)
+}
+
+const clampPageNumber = (pageNumber: number, numPages: number): number => {
+  if (numPages <= 0) return 1
+  return Math.min(Math.max(pageNumber, 1), numPages)
+}
+
 const CustomPDFRenderer: DocRenderer = ({ mainState }: DocRendererProps) => {
   const currentDocument = mainState.currentDocument as LoadedFileRenderDocument | undefined
   const [numPages, setNumPages] = useState(0)
   const [pageNumber, setPageNumber] = useState(1)
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
+  const pageRefs = useRef<Record<number, HTMLDivElement | null>>({})
+  const pageNumbers = useMemo(() => createPageNumbers(numPages), [numPages])
 
   useEffect(() => {
-    if (currentDocument?.metadata?.pageNumber) {
-      setPageNumber(currentDocument.metadata.pageNumber)
-    }
+    setNumPages(0)
+    setPageNumber(currentDocument?.metadata?.pageNumber || 1)
+    pageRefs.current = {}
   }, [currentDocument])
+
+  useEffect(() => {
+    if (numPages <= 0) return
+    const targetPage = clampPageNumber(pageNumber, numPages)
+    if (targetPage !== pageNumber) {
+      setPageNumber(targetPage)
+      return
+    }
+
+    window.requestAnimationFrame(() => {
+      pageRefs.current[targetPage]?.scrollIntoView({
+        block: 'start',
+        inline: 'nearest'
+      })
+    })
+  }, [numPages, pageNumber])
 
   if (!currentDocument) return null
 
@@ -40,13 +68,14 @@ const CustomPDFRenderer: DocRenderer = ({ mainState }: DocRendererProps) => {
   }
 
   const onPageChange = (page: number): void => {
-    setPageNumber(page)
+    setPageNumber(clampPageNumber(page, numPages))
   }
 
   return (
     <div
       id="my-pdf-renderer"
-      className="relative flex justify-center bg-gray-100/50 p-4 h-full w-full overflow-auto"
+      ref={scrollContainerRef}
+      className="relative h-full w-full overflow-auto bg-gray-100/50 p-4"
     >
       <Document
         file={file}
@@ -57,17 +86,27 @@ const CustomPDFRenderer: DocRenderer = ({ mainState }: DocRendererProps) => {
             Loading PDF...
           </div>
         }
-        className="shadow-lg"
+        className="mx-auto flex w-fit flex-col items-center gap-4 pb-20"
       >
-        <Page
-          pageNumber={pageNumber}
-          renderTextLayer={true}
-          renderAnnotationLayer={true}
-          scale={1.0}
-          className="mb-4"
-        />
+        {pageNumbers.map((page) => (
+          <div
+            key={page}
+            ref={(element) => {
+              pageRefs.current[page] = element
+            }}
+            data-pdf-page={page}
+            className="shadow-lg"
+          >
+            <Page
+              pageNumber={page}
+              renderTextLayer={true}
+              renderAnnotationLayer={true}
+              scale={1.0}
+            />
+          </div>
+        ))}
         {numPages > 1 && (
-          <div className="absolute bottom-8 left-1/2 -translate-x-1/2 min-w-[200px] z-10 opacity-20 hover:opacity-100 transition-opacity duration-300 bg-white/80 backdrop-blur-sm rounded-full p-2 shadow-md">
+          <div className="sticky bottom-4 left-1/2 z-10 w-fit min-w-[200px] -translate-x-1/2 rounded-full bg-white/80 p-2 opacity-20 shadow-md backdrop-blur-sm transition-opacity duration-300 hover:opacity-100">
             <Pagination
               current={pageNumber}
               total={numPages}
