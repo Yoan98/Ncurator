@@ -4,6 +4,7 @@ import type {
   IpcJsonObject,
   IpcJsonValue,
   LlmRemoteModel,
+  RuntimeSkillId,
   SearchResult,
   WorkspaceSource
 } from '../../../../shared/types'
@@ -13,6 +14,8 @@ import {
   WORKBENCH_PREFERENCE_WORKSPACE_STORAGE_KEY
 } from './constants'
 import type {
+  AssistantToolDetail,
+  AssistantToolName,
   AssistantProcessItem,
   WorkbenchFileRef,
   WorkbenchMode,
@@ -54,6 +57,465 @@ const readNestedObject = (value: IpcJsonObject, key: string): IpcJsonObject | un
     : undefined
 }
 
+const isAssistantToolName = (toolName: string): toolName is AssistantToolName =>
+  toolName === 'terminal_run' ||
+  toolName === 'kb_search' ||
+  toolName === 'kb_list_documents' ||
+  toolName === 'docx_outline' ||
+  toolName === 'docx_search' ||
+  toolName === 'docx_read_blocks' ||
+  toolName === 'docx_history' ||
+  toolName === 'docx_edit' ||
+  toolName === 'docx_rollback' ||
+  toolName === 'unnamed'
+
+const normalizeToolName = (toolName: string): AssistantToolName =>
+  isAssistantToolName(toolName) ? toolName : 'unnamed'
+
+const getEventTimestamp = (event: AiRunEvent): number =>
+  'createdAt' in event
+    ? event.createdAt
+    : 'completedAt' in event
+      ? event.completedAt
+      : 'decidedAt' in event
+        ? event.decidedAt
+        : Date.now()
+
+const getSkillDisplayName = (skillId?: RuntimeSkillId): string => {
+  if (skillId === 'terminal') return '跑指令能力'
+  if (skillId === 'kb-retrieval') return '资料检索能力'
+  if (skillId === 'docx-read' || skillId === 'docx-write') return '文档处理能力'
+  return '新能力'
+}
+
+const readStringValue = (value: IpcJsonObject, key: string): string | undefined => {
+  const candidate = value[key]
+  return typeof candidate === 'string' && candidate.trim() ? candidate.trim() : undefined
+}
+
+const readNumberValue = (value: IpcJsonObject, key: string): number | undefined => {
+  const candidate = value[key]
+  return typeof candidate === 'number' && Number.isFinite(candidate) ? candidate : undefined
+}
+
+const readFirstStringValue = (value: IpcJsonObject, keys: string[]): string | undefined => {
+  for (const key of keys) {
+    const candidate = readStringValue(value, key)
+    if (candidate) return candidate
+  }
+  return undefined
+}
+
+const addToolDetail = (
+  details: AssistantToolDetail[],
+  label: string,
+  value: string | number | undefined
+): void => {
+  const text = String(value ?? '').trim()
+  if (!text) return
+  details.push({ label, value: text })
+}
+
+const readDocxReadRange = (input: IpcJsonObject): string | undefined => {
+  const from =
+    readNumberValue(input, 'fromBlockIndex') ??
+    readNumberValue(input, 'fromIndex') ??
+    readNumberValue(input, 'startIndex')
+  const to =
+    readNumberValue(input, 'toBlockIndex') ??
+    readNumberValue(input, 'toIndex') ??
+    readNumberValue(input, 'endIndex')
+  if (typeof from === 'number' && typeof to === 'number') return `${from} - ${to}`
+  if (typeof from === 'number') return `从 ${from} 开始`
+  if (typeof to === 'number') return `到 ${to} 结束`
+  return undefined
+}
+
+const readDocxEditActionTypes = (input: IpcJsonObject): string | undefined => {
+  const actions = (input as Record<string, IpcJsonValue>).actions
+  if (!Array.isArray(actions)) return undefined
+  const actionTypes = actions
+    .map((action) =>
+      action && typeof action === 'object' && !Array.isArray(action)
+        ? readStringValue(action, 'type')
+        : undefined
+    )
+    .filter((actionType): actionType is string => Boolean(actionType))
+  return actionTypes.length > 0 ? actionTypes.join('、') : undefined
+}
+
+const buildToolDetails = (
+  toolName: AssistantToolName,
+  input: IpcJsonObject
+): AssistantToolDetail[] => {
+  const details: AssistantToolDetail[] = []
+  if (toolName === 'kb_search') {
+    addToolDetail(details, '查询词', readFirstStringValue(input, ['queryText', 'query']))
+    addToolDetail(details, '策略', readStringValue(input, 'strategy') || 'auto')
+    return details
+  }
+  if (toolName === 'kb_list_documents') {
+    addToolDetail(details, '过滤词', readFirstStringValue(input, ['sourceNameQuery', 'query']))
+    addToolDetail(
+      details,
+      '分页',
+      `第 ${readNumberValue(input, 'page') ?? 1} 页，每页 ${readNumberValue(input, 'pageSize') ?? 5} 条`
+    )
+    return details
+  }
+  if (toolName === 'terminal_run') {
+    addToolDetail(details, '命令', readStringValue(input, 'command'))
+    addToolDetail(details, 'cwd', readStringValue(input, 'cwd'))
+    return details
+  }
+  if (toolName === 'docx_search') {
+    addToolDetail(details, '目标文件', readFirstStringValue(input, ['sourcePath', 'path']))
+    addToolDetail(details, '查询词', readFirstStringValue(input, ['query', 'queryText', 'keyword']))
+    return details
+  }
+  if (
+    toolName === 'docx_read_blocks' ||
+    toolName === 'docx_outline' ||
+    toolName === 'docx_history'
+  ) {
+    addToolDetail(details, '文件名', readFirstStringValue(input, ['sourcePath', 'path']))
+    addToolDetail(details, '读取范围', readDocxReadRange(input) || '默认范围')
+    return details
+  }
+  if (toolName === 'docx_edit') {
+    addToolDetail(details, '目标文件', readFirstStringValue(input, ['sourcePath', 'path']))
+    addToolDetail(details, '操作类型', readDocxEditActionTypes(input))
+    return details
+  }
+  if (toolName === 'docx_rollback') {
+    addToolDetail(details, '目标文件', readFirstStringValue(input, ['sourcePath', 'path']))
+    addToolDetail(details, '操作类型', 'rollback')
+  }
+  return details
+}
+
+const getToolIconKind = (toolName: AssistantToolName) => {
+  if (toolName === 'terminal_run') return 'terminal' as const
+  if (toolName === 'docx_edit' || toolName === 'docx_rollback') return 'edit' as const
+  if (toolName === 'kb_search' || toolName === 'docx_search') return 'search-doc' as const
+  if (
+    toolName === 'kb_list_documents' ||
+    toolName === 'docx_outline' ||
+    toolName === 'docx_read_blocks' ||
+    toolName === 'docx_history'
+  ) {
+    return 'document' as const
+  }
+  return 'default' as const
+}
+
+const getToolStatusText = (
+  toolName: AssistantToolName,
+  status: 'active' | 'completed' | 'failed'
+): string => {
+  if (toolName === 'kb_search') {
+    if (status === 'active') return '俺正在搜索知识库线索'
+    if (status === 'completed') return '已完成搜索知识库线索'
+    return '搜索知识库线索失败了'
+  }
+  if (toolName === 'kb_list_documents') {
+    if (status === 'active') return '俺正在查看知识库资料'
+    if (status === 'completed') return '已完成查看知识库资料'
+    return '查看知识库资料失败了'
+  }
+  if (toolName === 'terminal_run') {
+    if (status === 'active') return '俺正在跑指令'
+    if (status === 'completed') return '已完成跑指令'
+    return '跑指令失败了'
+  }
+  if (toolName === 'docx_search') {
+    if (status === 'active') return '俺正在文档里查找内容'
+    if (status === 'completed') return '已完成文档内容查找'
+    return '文档内容查找失败了'
+  }
+  if (toolName === 'docx_read_blocks') {
+    if (status === 'active') return '俺正在读取文档内容'
+    if (status === 'completed') return '已完成文档内容读取'
+    return '文档内容读取失败了'
+  }
+  if (toolName === 'docx_outline') {
+    if (status === 'active') return '俺正在查看文档结构'
+    if (status === 'completed') return '已完成文档结构查看'
+    return '文档结构查看失败了'
+  }
+  if (toolName === 'docx_history') {
+    if (status === 'active') return '俺正在查看文档历史'
+    if (status === 'completed') return '已完成文档历史查看'
+    return '文档历史查看失败了'
+  }
+  if (toolName === 'docx_edit') {
+    if (status === 'active') return '俺正在编辑文档'
+    if (status === 'completed') return '已完成文档编辑'
+    return '文档编辑失败了'
+  }
+  if (toolName === 'docx_rollback') {
+    if (status === 'active') return '俺正在回退文档修改'
+    if (status === 'completed') return '已完成文档修改回退'
+    return '文档修改回退失败了'
+  }
+  if (status === 'active') return '未命名'
+  if (status === 'completed') return '已完成未命名步骤'
+  return '未命名步骤失败了'
+}
+
+const getLearningStatusText = (
+  skillId: RuntimeSkillId | undefined,
+  status: 'active' | 'completed' | 'failed'
+): string => {
+  const skillName = getSkillDisplayName(skillId)
+  if (status === 'active') return `俺在学习${skillName}`
+  if (status === 'completed') return `已学会${skillName}`
+  return `学习${skillName}失败了`
+}
+
+const getMouthStatusText = (status: 'active' | 'completed' | 'failed'): string => {
+  if (status === 'active') return '让俺收尾下'
+  if (status === 'completed') return '已完成收尾总结'
+  return '收尾总结失败了'
+}
+
+const getCompactionStatusText = (status: 'active' | 'completed' | 'failed'): string => {
+  if (status === 'active') return '让俺整理下，东西太多'
+  if (status === 'completed') return '已整理好上下文'
+  return '上下文整理失败了'
+}
+
+const buildProcessItem = (input: {
+  id: string
+  nodeKind: AssistantProcessItem['nodeKind']
+  variant: AssistantProcessItem['variant']
+  status: AssistantProcessItem['status']
+  isCurrent: boolean
+  createdAt: number
+  sourceEventType: AssistantProcessItem['sourceEventType']
+  iconKind: AssistantProcessItem['iconKind']
+  text?: string
+  details?: AssistantToolDetail[]
+  toolName?: AssistantToolName
+  skillId?: RuntimeSkillId
+}): AssistantProcessItem => ({
+  id: input.id,
+  nodeKind: input.nodeKind,
+  variant: input.variant,
+  text: input.text || '',
+  status: input.status,
+  isCurrent: input.isCurrent,
+  createdAt: input.createdAt,
+  sourceEventType: input.sourceEventType,
+  iconKind: input.iconKind,
+  details: input.details || [],
+  toolName: input.toolName,
+  skillId: input.skillId
+})
+
+const applyProcessItemState = (
+  item: AssistantProcessItem,
+  status: AssistantProcessItem['status'],
+  isCurrent: boolean
+): AssistantProcessItem => {
+  if (item.variant === 'hand_tool') {
+    return {
+      ...item,
+      status,
+      isCurrent,
+      text: getToolStatusText(item.toolName || 'unnamed', status)
+    }
+  }
+  if (item.variant === 'learning_skill') {
+    return {
+      ...item,
+      status,
+      isCurrent,
+      text: getLearningStatusText(item.skillId, status)
+    }
+  }
+  if (item.variant === 'mouth_summary') {
+    return {
+      ...item,
+      status,
+      isCurrent,
+      text: getMouthStatusText(status)
+    }
+  }
+  if (item.variant === 'context_compaction') {
+    return {
+      ...item,
+      status,
+      isCurrent,
+      text: getCompactionStatusText(status)
+    }
+  }
+  return {
+    ...item,
+    status,
+    isCurrent
+  }
+}
+
+const removeCurrentBrainPlaceholders = (items: AssistantProcessItem[]): AssistantProcessItem[] =>
+  items.filter((item) => !(item.variant === 'brain_placeholder' && item.isCurrent))
+
+const settleCurrentItemsForNextBrain = (items: AssistantProcessItem[]): AssistantProcessItem[] =>
+  items
+    .filter((item) => item.variant !== 'brain_placeholder')
+    .map((item) =>
+      item.isCurrent
+        ? applyProcessItemState(
+            item,
+            item.status === 'failed'
+              ? 'failed'
+              : item.status === 'completed'
+                ? 'completed'
+                : 'completed',
+            false
+          )
+        : item
+    )
+
+const clearCurrentFlags = (items: AssistantProcessItem[]): AssistantProcessItem[] =>
+  items
+    .filter((item) => item.variant !== 'brain_placeholder')
+    .map((item) => (item.isCurrent ? applyProcessItemState(item, item.status, false) : item))
+
+const upsertProcessItem = (
+  items: AssistantProcessItem[],
+  next: AssistantProcessItem
+): AssistantProcessItem[] => {
+  const existing = items.find((item) => item.id === next.id)
+  const merged =
+    existing && existing.details.length > 0 && next.details.length === 0
+      ? { ...next, details: existing.details }
+      : next
+  return [...items.filter((item) => item.id !== next.id), merged].sort(
+    (left, right) => left.createdAt - right.createdAt
+  )
+}
+
+const createBrainPlaceholderFromEvent = (event: AiRunEvent): AssistantProcessItem =>
+  buildProcessItem({
+    id: `${event.runId}:brain:${getEventTimestamp(event)}`,
+    nodeKind: 'brain',
+    variant: 'brain_placeholder',
+    status: 'active',
+    isCurrent: true,
+    createdAt: getEventTimestamp(event),
+    sourceEventType: event.type,
+    iconKind: 'brain',
+    text: '让俺想想'
+  })
+
+const createSearchPlaceholderItem = (messageId: string): AssistantProcessItem =>
+  buildProcessItem({
+    id: `${messageId}:search`,
+    nodeKind: 'search',
+    variant: 'search_placeholder',
+    status: 'active',
+    isCurrent: true,
+    createdAt: Date.now(),
+    sourceEventType: 'thinking',
+    iconKind: 'search',
+    text: '让俺找找'
+  })
+
+const createBrainThoughtItem = (
+  event: Extract<AiRunEvent, { type: 'human_step' }>
+): AssistantProcessItem =>
+  buildProcessItem({
+    id: `${event.taskId}:brain:${event.stepIndex}`,
+    nodeKind: 'brain',
+    variant: 'brain_thought',
+    status: event.resultStatus === 'error' ? 'failed' : 'active',
+    isCurrent: true,
+    createdAt: event.createdAt,
+    sourceEventType: event.type,
+    iconKind: 'brain',
+    text: event.publicNarrative.trim() || event.summary || '俺在判断下一步怎么做'
+  })
+
+const createLearningItem = (
+  event: Extract<AiRunEvent, { type: 'human_step' }>
+): AssistantProcessItem =>
+  buildProcessItem({
+    id: `${event.taskId}:learning:${event.stepIndex}:${event.skillId || 'unknown'}`,
+    nodeKind: 'learning',
+    variant: 'learning_skill',
+    status: event.resultStatus === 'error' ? 'failed' : 'active',
+    isCurrent: true,
+    createdAt: event.createdAt,
+    sourceEventType: event.type,
+    iconKind: 'learning',
+    text: getLearningStatusText(
+      event.skillId,
+      event.resultStatus === 'error' ? 'failed' : 'active'
+    ),
+    skillId: event.skillId
+  })
+
+const createMouthItem = (
+  event: Extract<AiRunEvent, { type: 'human_step' }>
+): AssistantProcessItem =>
+  buildProcessItem({
+    id: `${event.taskId}:mouth:${event.stepIndex}`,
+    nodeKind: 'mouth',
+    variant: 'mouth_summary',
+    status: event.resultStatus === 'error' ? 'failed' : 'active',
+    isCurrent: event.resultStatus !== 'error',
+    createdAt: event.createdAt,
+    sourceEventType: event.type,
+    iconKind: 'mouth',
+    text: getMouthStatusText(event.resultStatus === 'error' ? 'failed' : 'active')
+  })
+
+const createHandToolItem = (
+  event: Extract<AiRunEvent, { type: 'tool_call_started' | 'tool_call_result' }>
+): AssistantProcessItem => {
+  const toolName = normalizeToolName(event.toolName)
+  const status =
+    event.type === 'tool_call_result'
+      ? event.error || event.result?.ok === false
+        ? 'failed'
+        : 'completed'
+      : 'active'
+  return buildProcessItem({
+    id: event.toolCallId,
+    nodeKind: 'hand',
+    variant: 'hand_tool',
+    status,
+    isCurrent: event.type === 'tool_call_started',
+    createdAt: getEventTimestamp(event),
+    sourceEventType: event.type,
+    iconKind: getToolIconKind(toolName),
+    text: getToolStatusText(toolName, status),
+    details: event.type === 'tool_call_started' ? buildToolDetails(toolName, event.input) : [],
+    toolName
+  })
+}
+
+const createCompactionItem = (
+  event: Extract<
+    AiRunEvent,
+    { type: 'context_compaction_started' | 'context_compaction_completed' }
+  >
+): AssistantProcessItem =>
+  buildProcessItem({
+    id: `${event.runId}:context-compaction`,
+    nodeKind: 'context_compaction',
+    variant: 'context_compaction',
+    status: event.type === 'context_compaction_completed' ? 'completed' : 'active',
+    isCurrent: event.type === 'context_compaction_started',
+    createdAt: getEventTimestamp(event),
+    sourceEventType: event.type,
+    iconKind: 'compaction',
+    text: getCompactionStatusText(
+      event.type === 'context_compaction_completed' ? 'completed' : 'active'
+    )
+  })
+
 const createFileRefFromObject = (
   item: IpcJsonObject,
   origin: WorkbenchFileRef['origin']
@@ -81,62 +543,63 @@ const createFileRefFromObject = (
   }
 }
 
-export const getAssistantToolNarrative = (toolName?: string): string => {
-  if (!toolName) return '俺在继续处理任务'
-  if (toolName === 'terminal_run' || toolName === 'terminal') return '俺在跑命令呢，等等俺'
-  if (toolName === 'docx_edit') return '俺正在写 docx 中'
-  if (toolName === 'docx_search') return '俺在 docx 里找相关内容'
-  if (
-    toolName === 'docx_read_blocks' ||
-    toolName === 'docx_outline' ||
-    toolName === 'docx_history'
-  ) {
-    return '俺在读 docx 内容'
-  }
-  if (toolName === 'kb_search' || toolName === 'kb_list_documents') return '俺在资料里找线索'
-  if (toolName.includes('search')) return '俺在找相关线索'
-  if (toolName.includes('read')) return '俺在读取资料'
-  if (toolName.includes('write') || toolName.includes('edit')) return '俺正在写文件'
-  if (toolName.includes('command') || toolName.includes('terminal')) return '俺在跑命令呢，等等俺'
-  return '俺在调用工具处理任务'
-}
+export const getAssistantToolNarrative = (toolName?: string): string =>
+  getToolStatusText(normalizeToolName(String(toolName || '')), 'active')
 
 export const buildAssistantProcessText = (event: AiRunEvent): string | null => {
   if (event.type === 'human_step') {
-    if (event.toolName) return getAssistantToolNarrative(event.toolName)
-    if (event.action === 'learn_skill') return '俺在补齐要用的能力'
-    if (event.action === 'deliver_result') return '俺在整理最后的回答'
-    if (event.publicNarrative.trim()) return event.publicNarrative
-    return event.summary || '俺在判断下一步怎么做'
+    if (event.stage === 'human_learning' || event.action === 'learn_skill') {
+      return getLearningStatusText(
+        event.skillId,
+        event.resultStatus === 'error' ? 'failed' : 'active'
+      )
+    }
+    if (event.stage === 'human_mouth' || event.action === 'deliver_result') {
+      return getMouthStatusText(event.resultStatus === 'error' ? 'failed' : 'active')
+    }
+    if (event.stage === 'human_brain') {
+      return event.publicNarrative.trim() || event.summary || '俺在判断下一步怎么做'
+    }
+    return null
   }
-  if (event.type === 'tool_call_started') return getAssistantToolNarrative(event.toolName)
-  if (event.type === 'tool_call_result') {
-    if (event.error || event.result?.ok === false) return '这一步没跑通，俺在换个办法'
-    return '这一步处理完了'
+  if (event.type === 'tool_call_started' || event.type === 'tool_call_result') {
+    return getToolStatusText(
+      normalizeToolName(event.toolName),
+      event.type === 'tool_call_started'
+        ? 'active'
+        : event.error || event.result?.ok === false
+          ? 'failed'
+          : 'completed'
+    )
   }
-  if (event.type === 'context_compaction_started') return '内容有点多，俺先整理下上下文'
-  if (event.type === 'context_compaction_completed') return '上下文整理好了，俺继续'
-  if (event.type === 'file_artifact') return '文件处理好了，俺放到修改记录里了'
-  if (event.type === 'workspace_required') return '这一步需要先补充工作区'
-  if (event.type === 'runtime_issue') return event.message || '当前运行被阻塞了'
-  if (event.type === 'approval_batch_required') return '这一步要你确认后俺才能继续'
-  if (event.type === 'approval_batch_decision') return '审核结果俺收到了'
-  if (event.type === 'run_failed') return '任务失败了，俺把原因放下面'
-  if (event.type === 'run_cancelled') return '任务已取消'
-  if (event.type === 'run_completed') return '处理完成'
+  if (
+    event.type === 'context_compaction_started' ||
+    event.type === 'context_compaction_completed'
+  ) {
+    return getCompactionStatusText(
+      event.type === 'context_compaction_started' ? 'active' : 'completed'
+    )
+  }
   return null
 }
 
 export const createAssistantPlaceholderItem = (
   messageId: string,
-  text = '让俺想想'
-): AssistantProcessItem => ({
-  id: `${messageId}:thinking`,
-  text,
-  status: 'running',
-  createdAt: Date.now(),
-  sourceEventType: 'thinking'
-})
+  text = '让俺想下'
+): AssistantProcessItem =>
+  text === '让俺找找'
+    ? createSearchPlaceholderItem(messageId)
+    : buildProcessItem({
+        id: `${messageId}:brain`,
+        nodeKind: 'brain',
+        variant: 'brain_placeholder',
+        status: 'active',
+        isCurrent: true,
+        createdAt: Date.now(),
+        sourceEventType: 'thinking',
+        iconKind: 'brain',
+        text
+      })
 
 export const createAssistantThinkingItem = (messageId: string): AssistantProcessItem =>
   createAssistantPlaceholderItem(messageId)
@@ -145,59 +608,124 @@ export const createAssistantProcessItem = (
   event: AiRunEvent,
   options?: { id?: string; text?: string }
 ): AssistantProcessItem | null => {
-  const text = options?.text || buildAssistantProcessText(event)
-  if (!text) return null
-  const fallbackId =
-    event.type === 'human_step'
-      ? `${event.taskId}:${event.stepIndex}`
-      : event.type === 'tool_call_started' || event.type === 'tool_call_result'
-        ? event.toolCallId
-        : event.type === 'file_artifact'
-          ? event.artifactId
-          : `${event.runId}:${event.type}`
-  const status =
-    event.type === 'approval_batch_required' || event.type === 'workspace_required'
-      ? 'waiting'
-      : event.type === 'run_failed' ||
-          event.type === 'run_cancelled' ||
-          event.type === 'runtime_issue' ||
-          (event.type === 'tool_call_result' && (event.error || event.result?.ok === false))
-        ? 'failed'
-        : event.type === 'tool_call_started' || event.type === 'context_compaction_started'
-          ? 'running'
-          : 'completed'
-
-  return {
-    id: options?.id || fallbackId,
-    text,
-    status,
-    createdAt:
-      'createdAt' in event
-        ? event.createdAt
-        : 'completedAt' in event
-          ? event.completedAt
-          : 'decidedAt' in event
-            ? event.decidedAt
-            : Date.now(),
-    sourceEventType: event.type
+  if (event.type === 'human_step') {
+    if (event.stage === 'human_hand') return null
+    if (event.stage === 'human_learning' || event.action === 'learn_skill') {
+      const learningItem = createLearningItem(event)
+      return options?.text ? { ...learningItem, text: options.text } : learningItem
+    }
+    if (event.stage === 'human_mouth' || event.action === 'deliver_result') {
+      const mouthItem = createMouthItem(event)
+      return options?.text ? { ...mouthItem, text: options.text } : mouthItem
+    }
+    const thoughtItem = createBrainThoughtItem(event)
+    return options?.text ? { ...thoughtItem, text: options.text } : thoughtItem
   }
+  if (event.type === 'tool_call_started' || event.type === 'tool_call_result') {
+    const toolItem = createHandToolItem(event)
+    return options?.text ? { ...toolItem, text: options.text } : toolItem
+  }
+  if (
+    event.type === 'context_compaction_started' ||
+    event.type === 'context_compaction_completed'
+  ) {
+    const compactionItem = createCompactionItem(event)
+    return options?.text ? { ...compactionItem, text: options.text } : compactionItem
+  }
+  return null
+}
+
+export const reduceAssistantProcessItems = (
+  current: AssistantProcessItem[],
+  event: AiRunEvent
+): AssistantProcessItem[] => {
+  if (event.type === 'human_step') {
+    if (event.stage === 'human_hand') return current
+    if (event.stage === 'human_brain') {
+      const next = createBrainThoughtItem(event)
+      return upsertProcessItem(
+        removeCurrentBrainPlaceholders(settleCurrentItemsForNextBrain(current)),
+        next
+      )
+    }
+    if (event.stage === 'human_learning' || event.action === 'learn_skill') {
+      return upsertProcessItem(current, createLearningItem(event))
+    }
+    if (event.stage === 'human_mouth' || event.action === 'deliver_result') {
+      const currentHasCompletedMouth = current.some(
+        (item) => item.nodeKind === 'mouth' && item.status === 'completed'
+      )
+      if (currentHasCompletedMouth) return current
+      return upsertProcessItem(removeCurrentBrainPlaceholders(current), createMouthItem(event))
+    }
+    return current
+  }
+
+  if (event.type === 'tool_call_started') {
+    return upsertProcessItem(current, createHandToolItem(event))
+  }
+
+  if (event.type === 'tool_call_result') {
+    const withCompletedTool = upsertProcessItem(current, createHandToolItem(event))
+    const settled = settleCurrentItemsForNextBrain(withCompletedTool)
+    return upsertProcessItem(settled, createBrainPlaceholderFromEvent(event))
+  }
+
+  if (event.type === 'context_compaction_started') {
+    return upsertProcessItem(current, createCompactionItem(event))
+  }
+
+  if (event.type === 'context_compaction_completed') {
+    const withCompletedCompaction = upsertProcessItem(current, createCompactionItem(event))
+    const settled = settleCurrentItemsForNextBrain(withCompletedCompaction)
+    return upsertProcessItem(settled, createBrainPlaceholderFromEvent(event))
+  }
+
+  if (event.type === 'answer_token') {
+    const nextItems = removeCurrentBrainPlaceholders(current)
+    const hasActiveMouth = nextItems.some(
+      (item) => item.nodeKind === 'mouth' && item.status === 'active'
+    )
+    if (hasActiveMouth) return nextItems
+    return upsertProcessItem(
+      nextItems,
+      buildProcessItem({
+        id: `${event.runId}:mouth`,
+        nodeKind: 'mouth',
+        variant: 'mouth_summary',
+        status: 'active',
+        isCurrent: true,
+        createdAt: Date.now(),
+        sourceEventType: event.type,
+        iconKind: 'mouth',
+        text: getMouthStatusText('active')
+      })
+    )
+  }
+
+  if (event.type === 'answer_completed') {
+    return current
+      .filter((item) => item.variant !== 'brain_placeholder')
+      .map((item) =>
+        item.nodeKind === 'mouth' ? applyProcessItemState(item, 'completed', false) : item
+      )
+  }
+
+  if (
+    event.type === 'run_failed' ||
+    event.type === 'runtime_issue' ||
+    event.type === 'run_cancelled'
+  ) {
+    return clearCurrentFlags(current)
+  }
+
+  return current
 }
 
 export const mergeAssistantProcessItem = (
   current: AssistantProcessItem[],
   next: AssistantProcessItem
-): AssistantProcessItem[] => {
-  const nextItems = current.filter((item) => item.id !== next.id)
-  if (next.status !== 'running') {
-    return [
-      ...nextItems.map((item) =>
-        item.status === 'running' ? { ...item, status: 'completed' as const } : item
-      ),
-      next
-    ]
-  }
-  return [...nextItems, next]
-}
+): AssistantProcessItem[] => upsertProcessItem(current, next)
 
 export const dedupeFileRefs = (items: WorkbenchFileRef[]): WorkbenchFileRef[] => {
   const seen = new Set<string>()

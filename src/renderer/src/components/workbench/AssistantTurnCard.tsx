@@ -1,9 +1,22 @@
 import React, { useMemo } from 'react'
 import { Tooltip } from 'antd'
-import { HiOutlineDocumentText } from 'react-icons/hi2'
+import {
+  HiChevronDown,
+  HiCodeBracketSquare,
+  HiDocumentText,
+  HiMagnifyingGlass,
+  HiMiniSparkles,
+  HiOutlineDocumentText,
+  HiPencilSquare,
+  HiSparkles
+} from 'react-icons/hi2'
 import MarkdownRenderer from '../MarkdownRenderer'
 import { DOCX_APPLY_STATUS_META } from './constants'
-import type { AssistantArtifactItem, AssistantProcessItem, AssistantTurnViewModel } from './types'
+import type {
+  AssistantArtifactItem,
+  AssistantProcessIconKind,
+  AssistantTurnViewModel
+} from './types'
 import { workbenchSelectors } from '../../testing/selectors'
 
 type AssistantTurnCardProps = {
@@ -14,45 +27,92 @@ type AssistantTurnCardProps = {
   onOpenApply: (applyId: string) => void
 }
 
-const getProcessStatusClassName = (status: AssistantProcessItem['status']): string => {
-  if (status === 'running') return 'text-[#D97757]'
-  if (status === 'waiting') return 'text-[#8A6510]'
+const getProcessStatusClassName = (
+  status: AssistantTurnViewModel['processItems'][number]['status']
+): string => {
+  if (status === 'active') return 'text-[#D97757]'
   if (status === 'failed') return 'text-[#B5455D]'
   return 'text-[#8A8884]'
 }
 
-const AssistantProcessText: React.FC<{ item: AssistantProcessItem; latest: boolean }> = ({
-  item,
-  latest
+const getProcessIcon = (iconKind: AssistantProcessIconKind): React.ReactNode => {
+  if (iconKind === 'terminal') return <HiCodeBracketSquare className="h-4 w-4" />
+  if (iconKind === 'edit') {
+    return <HiPencilSquare className="h-4 w-4" />
+  }
+  if (iconKind === 'search' || iconKind === 'search-doc') {
+    return <HiMagnifyingGlass className="h-4 w-4" />
+  }
+  if (iconKind === 'document') {
+    return <HiDocumentText className="h-4 w-4" />
+  }
+  if (iconKind === 'learning') return <HiMiniSparkles className="h-4 w-4" />
+  if (iconKind === 'mouth') return <HiSparkles className="h-4 w-4" />
+  if (iconKind === 'compaction') return <HiSparkles className="h-4 w-4" />
+  return <HiSparkles className="h-4 w-4" />
+}
+
+const AssistantProcessText: React.FC<{ item: AssistantTurnViewModel['processItems'][number] }> = ({
+  item
 }) => {
-  const flow = item.status === 'running' || item.status === 'waiting'
+  const flow = item.isCurrent
   return (
     <div
-      className={`group flex items-start gap-3 text-[14px] leading-7 ${getProcessStatusClassName(item.status)}`}
+      className={`group text-[14px] leading-7 ${getProcessStatusClassName(item.status)}`}
       data-testid={`${workbenchSelectors.assistantProcessItemPrefix}-${item.id}`}
     >
-      <span
-        className={`mt-[11px] h-1.5 w-1.5 shrink-0 rounded-full ${
-          item.status === 'failed'
-            ? 'bg-[#B5455D]'
-            : item.status === 'waiting'
-              ? 'bg-[#D9A441]'
-              : item.status === 'running'
-                ? 'bg-[#D97757]'
-                : 'bg-[#D4D4D3]'
-        }`}
-      />
-      <span
-        className={
-          flow && latest
-            ? 'workbench-thinking-shimmer inline-block font-medium'
-            : item.status === 'completed'
-              ? 'text-[#8A8884]'
-              : 'font-medium'
-        }
-      >
-        {item.text}
-      </span>
+      <details className="group/details">
+        <summary
+          className={`flex list-none items-start gap-2.5 rounded-xl outline-none [&::-webkit-details-marker]:hidden ${
+            item.details.length > 0 ? 'cursor-pointer' : 'cursor-default'
+          }`}
+          onClick={(event) => {
+            if (item.details.length === 0) event.preventDefault()
+          }}
+        >
+          {item.isCurrent ? (
+            <span
+              className={`mt-[11px] h-1.5 w-1.5 shrink-0 rounded-full ${
+                item.status === 'failed' ? 'bg-[#B5455D]' : 'bg-[#D97757]'
+              }`}
+            />
+          ) : (
+            <span className="w-1.5 shrink-0" />
+          )}
+          <span
+            className={`mt-[3px] inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${
+              flow ? 'bg-[#FBF5F2] text-[#D97757]' : 'bg-transparent text-[#A8A6A1]'
+            }`}
+          >
+            {getProcessIcon(item.iconKind)}
+          </span>
+          <span
+            className={`inline-flex items-center gap-1 ${
+              flow
+                ? 'workbench-thinking-shimmer font-medium'
+                : item.status === 'completed'
+                  ? 'text-[#8A8884]'
+                  : 'font-medium'
+            }`}
+          >
+            <span>{item.text}</span>
+            {item.details.length > 0 ? (
+              <HiChevronDown className="mt-[1px] h-4 w-4 shrink-0 text-[#AAA6A0] transition-transform duration-200 group-open/details:rotate-180" />
+            ) : null}
+          </span>
+          {item.details.length > 0 ? <span className="sr-only">展开详情</span> : null}
+        </summary>
+        {item.details.length > 0 ? (
+          <div className="ml-[48px] mt-1.5 space-y-1 rounded-xl bg-[#FAFAF9] px-3 py-2 text-[12px] leading-5 text-[#666666]">
+            {item.details.map((detail) => (
+              <div key={`${detail.label}-${detail.value}`} className="flex gap-2">
+                <span className="shrink-0 text-[#999999]">{detail.label}</span>
+                <span className="min-w-0 break-words text-[#555555]">{detail.value}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </details>
     </div>
   )
 }
@@ -82,7 +142,6 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   const processItems = useMemo(() => turn?.processItems || [], [turn?.processItems])
   const finalAnswerMarkdown = turn?.finalAnswerMarkdown || ''
   const hasFinalAnswer = finalAnswerMarkdown.trim().length > 0
-  const latestProcessId = processItems.at(-1)?.id
 
   if (!turn) {
     return null
@@ -100,11 +159,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
           >
             <div className="space-y-1.5">
               {processItems.map((item) => (
-                <AssistantProcessText
-                  key={item.id}
-                  item={item}
-                  latest={item.id === latestProcessId}
-                />
+                <AssistantProcessText key={item.id} item={item} />
               ))}
             </div>
           </div>

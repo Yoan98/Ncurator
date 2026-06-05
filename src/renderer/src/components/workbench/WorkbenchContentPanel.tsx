@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo } from 'react'
 import { Button, Empty, Tooltip } from 'antd'
 import {
   HiArrowTopRightOnSquare,
@@ -74,13 +74,6 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
   onOpenWithApplication,
   onRevealPath
 }) => {
-  const [selectedSearchIndex, setSelectedSearchIndex] = useState(0)
-  const searchResetKey = state.kind === 'search_list' ? state.query : state.kind
-
-  useEffect(() => {
-    setSelectedSearchIndex(0)
-  }, [searchResetKey])
-
   const sortedSearchResults = useMemo(() => {
     if (state.kind !== 'search_list') return []
     const getRawScore = (result: SearchResult): number =>
@@ -159,21 +152,14 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
                 data-testid={workbenchSelectors.searchResults}
               >
                 {sortedSearchResults.map((result, index) => {
-                  const active = index === selectedSearchIndex
                   const relevancePercent = getRelevancePercent(result, scoreExtrema)
                   const isWeb = result.source_type === 'web'
                   const resultPath = result.document?.file_path
                   const turnSnapshot = createSearchTurnSnapshot(state, sortedSearchResults)
                   return (
-                    <button
+                    <div
                       key={result.id}
-                      type="button"
-                      onClick={() => setSelectedSearchIndex(index)}
-                      className={`w-full rounded-[16px] border px-4 py-3 text-left transition-all ${
-                        active
-                          ? 'border-[#D97757] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
-                          : 'border-[#E5E5E4] bg-white hover:border-[#D97757]'
-                      }`}
+                      className="w-full rounded-[16px] border border-[#E5E5E4] bg-white px-4 py-3 text-left transition-all hover:border-[#D97757]"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
@@ -245,7 +231,7 @@ const WorkbenchContentPanel: React.FC<WorkbenchContentPanelProps> = ({
                           )}
                         </div>
                       </div>
-                    </button>
+                    </div>
                   )
                 })}
               </div>

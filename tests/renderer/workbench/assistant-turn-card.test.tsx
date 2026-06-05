@@ -16,10 +16,15 @@ const createTurn = (overrides: Partial<AssistantTurnViewModel> = {}): AssistantT
   processItems: [
     {
       id: 'assistant-1:thinking',
-      text: '让俺想想',
-      status: 'running',
+      nodeKind: 'brain',
+      variant: 'brain_placeholder',
+      text: '让俺想下',
+      status: 'active',
+      isCurrent: true,
       createdAt: 1,
-      sourceEventType: 'thinking'
+      sourceEventType: 'thinking',
+      iconKind: 'brain',
+      details: []
     }
   ],
   finalAnswerMarkdown: '',
@@ -41,7 +46,7 @@ describe('AssistantTurnCard', () => {
       />
     )
 
-    expect(screen.getByText('让俺想想')).toBeTruthy()
+    expect(screen.getByText('让俺想下')).toBeTruthy()
     expect(screen.queryByTestId('workbench-assistant-final-answer-assistant-1')).toBeNull()
   })
 
@@ -54,10 +59,15 @@ describe('AssistantTurnCard', () => {
           processItems: [
             {
               id: 'assistant-search-1:thinking',
-              text: '俺正在搜索中',
-              status: 'running',
+              nodeKind: 'search',
+              variant: 'search_placeholder',
+              text: '让俺找找',
+              status: 'active',
+              isCurrent: true,
               createdAt: 1,
-              sourceEventType: 'thinking'
+              sourceEventType: 'thinking',
+              iconKind: 'search',
+              details: []
             }
           ]
         })}
@@ -67,7 +77,7 @@ describe('AssistantTurnCard', () => {
       />
     )
 
-    expect(screen.getByText('俺正在搜索中')).toBeTruthy()
+    expect(screen.getByText('让俺找找')).toBeTruthy()
     expect(screen.queryByTestId('workbench-assistant-final-answer-assistant-search-1')).toBeNull()
   })
 
@@ -79,18 +89,16 @@ describe('AssistantTurnCard', () => {
           status: 'completed',
           processItems: [
             {
-              id: 'assistant-1:thinking',
-              text: '让俺想想',
+              id: 'assistant-1:step',
+              nodeKind: 'brain',
+              variant: 'brain_thought',
+              text: '俺在整理最后的回答',
               status: 'completed',
+              isCurrent: false,
               createdAt: 1,
-              sourceEventType: 'thinking'
-            },
-            {
-              id: 'assistant-1:answer-started',
-              text: '俺想好了，开始说',
-              status: 'completed',
-              createdAt: 2,
-              sourceEventType: 'answer_token'
+              sourceEventType: 'human_step',
+              iconKind: 'brain',
+              details: []
             }
           ],
           finalAnswerMarkdown: '## 最终结果\n\n- 已完成'
@@ -110,5 +118,41 @@ describe('AssistantTurnCard', () => {
     expect(finalAnswer.className).not.toContain('bg-white')
     expect(finalAnswer.className).not.toContain('rounded')
     expect(process.className).not.toContain('bg-')
+  })
+
+  it('renders tool process rows with compact expandable details', () => {
+    render(
+      <AssistantTurnCard
+        messageId="assistant-1"
+        turn={createTurn({
+          processItems: [
+            {
+              id: 'tool-1',
+              nodeKind: 'hand',
+              variant: 'hand_tool',
+              toolName: 'kb_search',
+              text: '俺正在搜索知识库线索',
+              details: [
+                { label: '查询词', value: 'langchain' },
+                { label: '策略', value: 'auto' }
+              ],
+              status: 'active',
+              isCurrent: true,
+              createdAt: 1,
+              sourceEventType: 'tool_call_started',
+              iconKind: 'search-doc'
+            }
+          ]
+        })}
+        isStreaming
+        onOpenFile={vi.fn()}
+        onOpenApply={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText('俺正在搜索知识库线索')).toBeTruthy()
+    expect(screen.getByText('查询词')).toBeTruthy()
+    expect(screen.getByText('langchain')).toBeTruthy()
+    expect(screen.queryByText('这一步处理完了')).toBeNull()
   })
 })

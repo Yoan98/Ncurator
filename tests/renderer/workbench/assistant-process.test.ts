@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { AiRunEvent } from '../../../src/shared/types'
 import {
   buildAssistantProcessText,
-  createAssistantProcessItem
+  createAssistantProcessItem,
+  reduceAssistantProcessItems
 } from '../../../src/renderer/src/components/workbench/utils'
 
 const baseEvent = {
@@ -29,10 +30,75 @@ describe('workbench assistant process narrative', () => {
       createdAt: 2
     }
 
-    expect(buildAssistantProcessText(docxEvent)).toBe('俺正在写 docx 中')
-    expect(buildAssistantProcessText(terminalEvent)).toBe('俺在跑命令呢，等等俺')
+    expect(buildAssistantProcessText(docxEvent)).toBe('俺正在编辑文档')
+    expect(buildAssistantProcessText(terminalEvent)).toBe('俺正在跑指令')
     expect(buildAssistantProcessText(docxEvent)).not.toContain('docx_edit')
     expect(buildAssistantProcessText(terminalEvent)).not.toContain('terminal_run')
+  })
+
+  it('merges tool start and result into one process row without completion filler text', () => {
+    const started: AiRunEvent = {
+      ...baseEvent,
+      type: 'tool_call_started',
+      toolCallId: 'tool-1',
+      toolName: 'kb_search',
+      input: {
+        queryText: 'langchain',
+        strategy: 'auto'
+      },
+      createdAt: 1
+    }
+    const completed: AiRunEvent = {
+      ...baseEvent,
+      type: 'tool_call_result',
+      toolCallId: 'tool-1',
+      toolName: 'kb_search',
+      result: {
+        toolName: 'kb_search',
+        ok: true,
+        data: []
+      },
+      completedAt: 2
+    }
+
+    const startedItem = createAssistantProcessItem(started)
+    const completedItem = createAssistantProcessItem(completed)
+
+    expect(startedItem).toMatchObject({
+      id: 'tool-1',
+      nodeKind: 'hand',
+      variant: 'hand_tool',
+      toolName: 'kb_search',
+      text: '俺正在搜索知识库线索',
+      status: 'active',
+      isCurrent: true,
+      details: [
+        { label: '查询词', value: 'langchain' },
+        { label: '策略', value: 'auto' }
+      ]
+    })
+    expect(completedItem).toMatchObject({
+      id: 'tool-1',
+      nodeKind: 'hand',
+      text: '已完成搜索知识库线索',
+      status: 'completed'
+    })
+    expect(completedItem?.text).not.toBe('这一步处理完了')
+    expect(reduceAssistantProcessItems([startedItem!], completed)).toMatchObject([
+      {
+        id: 'tool-1',
+        text: '已完成搜索知识库线索',
+        status: 'completed',
+        isCurrent: false
+      },
+      {
+        nodeKind: 'brain',
+        variant: 'brain_placeholder',
+        text: '让俺想想',
+        status: 'active',
+        isCurrent: true
+      }
+    ])
   })
 
   it('maps context compaction to natural process text', () => {
@@ -57,12 +123,12 @@ describe('workbench assistant process narrative', () => {
     }
 
     expect(createAssistantProcessItem(started)).toMatchObject({
-      text: '内容有点多，俺先整理下上下文',
-      status: 'running',
+      text: '让俺整理下，东西太多',
+      status: 'active',
       sourceEventType: 'context_compaction_started'
     })
     expect(createAssistantProcessItem(completed)).toMatchObject({
-      text: '上下文整理好了，俺继续',
+      text: '已整理好上下文',
       status: 'completed',
       sourceEventType: 'context_compaction_completed'
     })

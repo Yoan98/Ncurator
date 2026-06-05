@@ -48,15 +48,14 @@ import type {
 } from '../components/workbench/types'
 import {
   createAssistantPlaceholderItem,
-  createAssistantProcessItem,
   createAssistantThinkingItem,
   dedupeFileRefs,
   extractReadableFilesFromToolOutput,
   extractSearchResultsFromToolOutput,
   formatSessionDate,
   getSearchResultFileRef,
-  mergeAssistantProcessItem,
   readWorkbenchModePreference,
+  reduceAssistantProcessItems,
   readWorkbenchModelPreference,
   readWorkbenchWorkspacePreference,
   resolveWorkbenchModelSelection,
@@ -105,7 +104,7 @@ const createAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
 const createSearchAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
   messageId,
   status: 'running',
-  processItems: [createAssistantPlaceholderItem(messageId, '俺正在搜索中')],
+  processItems: [createAssistantPlaceholderItem(messageId, '让俺找找')],
   finalAnswerMarkdown: '',
   artifacts: [],
   applyTargets: [],
@@ -911,13 +910,10 @@ const ChatPage: React.FC = () => {
     window.api.onAiRunEvent((event) => {
       if (event.runId !== aiRunId) return
 
-      const processItem = createAssistantProcessItem(event)
-      if (processItem) {
-        updateActiveTurn((current) => ({
-          ...current,
-          processItems: mergeAssistantProcessItem(current.processItems, processItem)
-        }))
-      }
+      updateActiveTurn((current) => ({
+        ...current,
+        processItems: reduceAssistantProcessItems(current.processItems, event)
+      }))
 
       if (event.type === 'tool_call_result') {
         const toolOutput = event.result?.data ?? null
@@ -1079,19 +1075,7 @@ const ChatPage: React.FC = () => {
         )
         updateActiveTurn((current) => ({
           ...current,
-          finalAnswerMarkdown: `${current.finalAnswerMarkdown}${event.token}`,
-          processItems: mergeAssistantProcessItem(
-            current.processItems.map((item) =>
-              item.status === 'running' ? { ...item, status: 'completed' } : item
-            ),
-            {
-              id: `${messageId}:answer-started`,
-              text: '俺想好了，开始说',
-              status: 'completed',
-              createdAt: Date.now(),
-              sourceEventType: 'answer_token'
-            }
-          )
+          finalAnswerMarkdown: `${current.finalAnswerMarkdown}${event.token}`
         }))
         scrollToBottom()
         return
@@ -1387,12 +1371,7 @@ const ChatPage: React.FC = () => {
           ...(previous[completedAssistantMessageId] ||
             createSearchAssistantTurn(completedAssistantMessageId)),
           status: 'completed',
-          processItems: [
-            {
-              ...createAssistantPlaceholderItem(completedAssistantMessageId, '俺正在搜索中'),
-              status: 'completed'
-            }
-          ],
+          processItems: [],
           finalAnswerMarkdown: assistantContent
         }
       }))
@@ -1424,7 +1403,7 @@ const ChatPage: React.FC = () => {
             status: 'failed',
             processItems: [
               {
-                ...createAssistantPlaceholderItem(failedAssistantMessageId, '俺正在搜索中'),
+                ...createAssistantPlaceholderItem(failedAssistantMessageId, '让俺找找'),
                 status: 'failed'
               }
             ],

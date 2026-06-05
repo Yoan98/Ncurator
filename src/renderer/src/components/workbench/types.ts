@@ -1,4 +1,9 @@
-import type { AiRunEvent, DocxApplyStatus, SearchResult } from '../../../../shared/types'
+import type {
+  AiRunEvent,
+  DocxApplyStatus,
+  RuntimeSkillId,
+  SearchResult
+} from '../../../../shared/types'
 
 export type WorkbenchMode = 'ai' | 'search'
 
@@ -35,17 +40,72 @@ export type WorkbenchFileRef = {
   pageNumber?: number
 }
 
-export type AssistantProcessStatus = 'running' | 'completed' | 'failed' | 'waiting'
+export type AssistantProcessStatus = 'active' | 'completed' | 'failed'
 
 export type AssistantProcessSourceEventType = 'thinking' | AiRunEvent['type']
 
-export type AssistantProcessItem = {
+export type AssistantProcessNodeKind =
+  | 'brain'
+  | 'hand'
+  | 'learning'
+  | 'mouth'
+  | 'context_compaction'
+  | 'search'
+
+export type AssistantProcessVariant =
+  | 'brain_placeholder'
+  | 'brain_thought'
+  | 'hand_tool'
+  | 'learning_skill'
+  | 'mouth_summary'
+  | 'context_compaction'
+  | 'search_placeholder'
+
+export type AssistantToolName =
+  | 'terminal_run'
+  | 'kb_search'
+  | 'kb_list_documents'
+  | 'docx_outline'
+  | 'docx_search'
+  | 'docx_read_blocks'
+  | 'docx_history'
+  | 'docx_edit'
+  | 'docx_rollback'
+  | 'unnamed'
+
+export type AssistantToolDetail = {
+  label: string
+  value: string
+}
+
+export type AssistantProcessIconKind =
+  | 'brain'
+  | 'search'
+  | 'terminal'
+  | 'document'
+  | 'search-doc'
+  | 'edit'
+  | 'learning'
+  | 'mouth'
+  | 'compaction'
+  | 'default'
+
+export type AssistantBaseProcessItem = {
   id: string
+  nodeKind: AssistantProcessNodeKind
+  variant: AssistantProcessVariant
   text: string
   status: AssistantProcessStatus
+  isCurrent: boolean
   createdAt: number
   sourceEventType: AssistantProcessSourceEventType
+  iconKind: AssistantProcessIconKind
+  details: AssistantToolDetail[]
+  toolName?: AssistantToolName
+  skillId?: RuntimeSkillId
 }
+
+export type AssistantProcessItem = AssistantBaseProcessItem
 
 export type DocxApplyWorkspaceTab = {
   fileKey: string
